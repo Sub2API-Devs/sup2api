@@ -6,38 +6,37 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../runtime/bun-runtime.js";
-import { be } from "./lib/sign-stream.js";
-import { Le } from "./lib/verify-stream.js";
+import { require_sign_stream } from "./lib/sign-stream.js";
+import { require_verify_stream } from "./lib/verify-stream.js";
 
 //@ chunk-82d8c88w.js:10995-11321 cjs-fingerprint
-var H6t = x(function (mr) {
-  var Re = be(),
-    O = Le(),
-    dr = [
-      "HS256",
-      "HS384",
-      "HS512",
-      "RS256",
-      "RS384",
-      "RS512",
-      "PS256",
-      "PS384",
-      "PS512",
-      "ES256",
-      "ES384",
-      "ES512",
-    ];
-  mr.ALGORITHMS = dr;
-  mr.sign = Re.sign;
-  mr.verify = O.verify;
-  mr.decode = O.decode;
-  mr.isValid = O.isValid;
-  mr.createSign = function (r) {
-    return new Re(r);
+var require_jws = x(function (cjsExports) {
+  var SignStream = require_sign_stream();
+  var VerifyStream = require_verify_stream();
+  var ALGORITHMS = [
+    "HS256",
+    "HS384",
+    "HS512",
+    "RS256",
+    "RS384",
+    "RS512",
+    "PS256",
+    "PS384",
+    "PS512",
+    "ES256",
+    "ES384",
+    "ES512",
+  ];
+  cjsExports.ALGORITHMS = ALGORITHMS;
+  cjsExports.sign = SignStream.sign;
+  cjsExports.verify = VerifyStream.verify;
+  cjsExports.decode = VerifyStream.decode;
+  cjsExports.isValid = VerifyStream.isValid;
+  cjsExports.createSign = function (opts) {
+    return new SignStream(opts);
   };
-  mr.createVerify = function (r) {
-    return new O(r);
+  cjsExports.createVerify = function (opts) {
+    return new VerifyStream(opts);
   };
 });
-
-export { H6t };
+export { require_jws };

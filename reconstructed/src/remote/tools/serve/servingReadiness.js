@@ -23,86 +23,88 @@ import { initializeGrowthBook } from "../../../services/analytics/growthbook.js"
 import { logForDebugging } from "../../../utils/debug.js";
 
 //@ chunk-t28c2dsj.js:522-533 placement
-var f = 3000;
+var FIRST_FLAG_FETCH_WAIT_MS = 3000;
+//@ chunk-t28c2dsj.js:533-665 placement
 /**
  * 远程工具服务就绪闸：等待插件 hook、托管设置、策略限制与首次开关拉取。
  */
-//@ chunk-t28c2dsj.js:533-665 placement
 function createServingReadiness(e = {}) {
-  let r = e.firstFlagFetchWaitMs ?? f,
-    o = !1,
-    i;
+  let firstFlagFetchWaitMs = e.firstFlagFetchWaitMs ?? FIRST_FLAG_FETCH_WAIT_MS;
+  let o = false;
+  let i;
   return {
     get ready() {
       return o;
     },
     whenReady: () =>
-      (i ??= awaitServingReadiness(r).then(() => {
-        ((o = !0), warnMissingPluginHooks());
+      (i ??= awaitServingReadiness(firstFlagFetchWaitMs).then(() => {
+        o = true;
+        warnMissingPluginHooks();
       })),
   };
 }
+//@ chunk-t28c2dsj.js:665-1252 placement
 /**
  * 并行等待插件 hook、远程托管设置、策略限制、首次开关拉取
  */
-//@ chunk-t28c2dsj.js:665-1252 placement
-async function awaitServingReadiness(e) {
+async function awaitServingReadiness(budgetMs) {
   let startTime = performance.now();
   try {
     getHooksConfigFromSnapshot();
   } catch (error) {
     logError(toError(error));
   }
-  let o = !1,
-    [i, a, m, g] = await Promise.all([
-      timedWait("the plugin-hook registration pass", async () => {
-        await pendingPluginHookRegistration();
-      }),
-      timedWait("the remote managed-settings load", waitForRemoteManagedSettingsToLoad),
-      timedWait("the policy-limits load", waitForPolicyLimitsToLoad),
-      timedWait("the first flag fetch", async () => {
-        let { timedOut: timedOut } = await waitForInitialize({
-          initialize: initializeGrowthBook,
-          budgetMs: e,
-        });
-        o = !timedOut;
-      }),
-    ]);
+  let o = false;
+  let [i, a, m, g] = await Promise.all([
+    timedWait("the plugin-hook registration pass", async () => {
+      await pendingPluginHookRegistration();
+    }),
+    timedWait("the remote managed-settings load", waitForRemoteManagedSettingsToLoad),
+    timedWait("the policy-limits load", waitForPolicyLimitsToLoad),
+    timedWait("the first flag fetch", async () => {
+      let { timedOut } = await waitForInitialize({
+        initialize: initializeGrowthBook,
+        budgetMs,
+      });
+      o = !timedOut;
+    }),
+  ]);
   logForDebugging(
     `[remote-tools] ready to judge calls after ${Math.round(performance.now() - startTime)}ms: waited ${i}ms for plugin hooks, ${a}ms for remote managed settings, ${m}ms for policy limits, ${g}ms for the first flag fetch (${o ? "landed" : "not heard in time"})`,
   );
 }
+//@ chunk-t28c2dsj.js:1252-1456 placement
 /**
  * 计时等待一个前置步骤，失败继续
  */
-//@ chunk-t28c2dsj.js:1252-1456 placement
 async function timedWait(e, r) {
   let startTime = performance.now();
   try {
     await r();
   } catch (error) {
-    (logForDebugging(`[remote-tools] waiting for ${e} failed; serving goes on without it`, {
+    logForDebugging(`[remote-tools] waiting for ${e} failed; serving goes on without it`, {
       level: "error",
-    }),
-      logError(toError(error)));
+    });
+    logError(toError(error));
   }
   return Math.round(performance.now() - startTime);
 }
+//@ chunk-t28c2dsj.js:1456-1673 placement
 /**
  * 服务调用缺少插件下发的 hook 时报错
  */
-//@ chunk-t28c2dsj.js:1456-1673 placement
 async function warnMissingPluginHooks() {
   try {
-    let e = (await pluginHooksUnknownCause(!1)) ?? (await failedPluginHookRegistration());
-    if (e !== void 0)
+    let e = (await pluginHooksUnknownCause(false)) ?? (await failedPluginHookRegistration());
+    if (e !== undefined)
       logForDebugging(
         `[remote-tools] plugin-delivered hooks are missing from the calls this machine serves, as from its own: ${e}`,
-        { level: "error" },
+        {
+          level: "error",
+        },
       );
   } catch (error) {
     logError(toError(error));
   }
 }
-
 export { createServingReadiness };

@@ -11,7 +11,7 @@
 import { posix } from "path";
 import { isTextOrJsonDeltaEvent, hasUltrathinkKeyword } from "./goalCheckIn.js";
 import { isBgSession } from "../utils/concurrentSessions.js";
-import { D2 } from "../utils/planTiers.js";
+import { usesPayAsYouGo } from "../utils/planTiers.js";
 import {
   hasFreshGrowthBookFeatures,
   initializeGrowthBook,
@@ -21,11 +21,11 @@ import { withTimeout, withDeadline, raceWithAbortSignal } from "../utils/sleep.j
 import { logForDebugging, createAttachmentMessage_2 } from "../utils/debug.js";
 import { toError, errorMessage, isAbortError } from "../utils/errors.js";
 import { logError } from "../utils/log.js";
-import { hri, yri } from "../services/compact/compactSettings.js";
+import { isPlainHeronEnabled, isGentleAnchorEnabled } from "../services/compact/compactSettings.js";
 import { shouldEnforceUnknownModelWindow } from "../utils/context.js";
 import { logEvent } from "../services/analytics/index.js";
 import { fromEnum, fromEnumOpt, lit } from "../services/analytics/safeMetadata.js";
-import { fse } from "../services/compact/autoCompactWindow.js";
+import { windowSource } from "../services/compact/autoCompactWindow.js";
 import { agentTypeForTelemetry } from "../services/analytics/metadata.js";
 import { isOver1mThreshold } from "../utils/model/configs.js";
 import { getSdkBetas, mainAgentId } from "../bootstrap/state.js";
@@ -38,32 +38,40 @@ import { hasClientDataCacheSlot } from "../utils/config.js";
 import { getModelContextInfo } from "../utils/model/modelContextInfo.js";
 import { isFoamySpringEnabled } from "../services/analytics/growthbookGates.js";
 import { isClaudeAiChatCowork } from "../utils/entrypointKinds.js";
-import { isTurnCompanion, isToolResultMessage, hasSuccessfulToolCall, nXt } from "../utils/messages.js";
+import {
+  isTurnCompanion,
+  isToolResultMessage,
+  hasSuccessfulToolCall,
+  LINKED_BUT_NOT_SENT_PREFIX,
+} from "../utils/messages.js";
 import { SEND_USER_FILE_TOOL_NAME } from "../tools/SendUserFileTool/prompt.js";
 import { getOutputsRoot, getHomeFilesRoot } from "../utils/stageFileRoots.js";
 import { urlPatternToRegex } from "../utils/stringUtils.js";
 import { replaceInlineCode } from "../commands/model/modelMessages.js";
-import { readUntrustedArray, Uf } from "../utils/untrustedArray.js";
+import { readUntrustedArray, UNREADABLE_ARRAY } from "../utils/untrustedArray.js";
 import { escapeForTag } from "../utils/sanitization.js";
 import { BRIEF_TOOL_NAME } from "../tools/BriefTool/prompt.js";
 
+//@ chunk-ha3km179.js:69131-69853 placement
 /**
  * 排空工具结果流，等待未完成工具和唤醒。
  */
-//@ chunk-ha3km179.js:69131-69853 placement
 async function* drainToolResults(e, n, r) {
-  let s = Symbol.asyncIterator in e ? e[Symbol.asyncIterator]() : e[Symbol.iterator](),
-    h,
-    y = n(),
-    S = 0;
+  let s = Symbol.asyncIterator in e ? e[Symbol.asyncIterator]() : e[Symbol.iterator]();
+  let h;
+  let y = n();
+  let S = 0;
   try {
-    while (!0) {
+    while (true) {
       let M = n();
-      if (M !== y) ((y = M), (S = 0));
-      if (h === void 0 && !M.hasUnfinishedTools() && !M.hasWakeSince(S)) {
+      if (M !== y) {
+        y = M;
+        S = 0;
+      }
+      if (h === undefined && !M.hasUnfinishedTools() && !M.hasWakeSince(S)) {
         let T = await s.next();
         while (
-          r !== void 0 &&
+          r !== undefined &&
           !T.done &&
           isTextOrJsonDeltaEvent(T.value) &&
           n() === M &&
@@ -76,38 +84,56 @@ async function* drainToolResults(e, n, r) {
         yield T.value;
         continue;
       }
-      h ??= Promise.resolve(s.next()).then((T) => ({ kind: "stream", r: T }));
-      let winner = await Promise.race([h, M.waitForDrainable(S).then((T) => ({ kind: "drain", gen: T }))]);
+      h ??= Promise.resolve(s.next()).then((T) => ({
+        kind: "stream",
+        r: T,
+      }));
+      let winner = await Promise.race([
+        h,
+        M.waitForDrainable(S).then((gen) => ({
+          kind: "drain",
+          gen,
+        })),
+      ]);
       if (winner.kind === "drain") {
-        ((S = winner.gen), yield { type: "tool_drain_tick" });
+        S = winner.gen;
+        yield {
+          type: "tool_drain_tick",
+        };
         continue;
       }
-      if (((h = void 0), winner.r.done)) return;
+      h = undefined;
+      if (winner.r.done) return;
       yield winner.r.value;
     }
   } finally {
-    Promise.resolve(s.return?.(void 0)).catch(() => {});
+    Promise.resolve(s.return?.(undefined)).catch(() => {});
   }
 }
 //@ chunk-ha3km179.js:69853-69923 placement
-var hf = 4000,
-  Ql = "bg consent gate: own GrowthBook evaluation not ready";
+/**
+ * 4000
+ */
+var GROWTHBOOK_READY_TIMEOUT_MS = 4000;
+var GROWTHBOOK_TIMEOUT_TEXT = "bg consent gate: own GrowthBook evaluation not ready";
+//@ chunk-ha3km179.js:69923-70258 placement
 /**
  * 后台会话等待自身 GrowthBook 评估就绪（超时用缓存）。
  */
-//@ chunk-ha3km179.js:69923-70258 placement
 async function awaitBgConsentGate() {
   try {
-    if (!isBgSession() || D2() || hasFreshGrowthBookFeatures()) return;
+    if (!isBgSession() || usesPayAsYouGo() || hasFreshGrowthBookFeatures()) return;
     let now = Date.now();
     try {
-      (await withTimeout(initializeGrowthBook(), hf, Ql),
-        logForDebugging(`bg consent gate: waited ${Date.now() - now}ms for own GrowthBook evaluation`));
+      await withTimeout(initializeGrowthBook(), GROWTHBOOK_READY_TIMEOUT_MS, GROWTHBOOK_TIMEOUT_TEXT);
+      logForDebugging(`bg consent gate: waited ${Date.now() - now}ms for own GrowthBook evaluation`);
     } catch (error) {
-      let r = toError(error);
+      let error_2 = toError(error);
       logForDebugging(
-        `bg consent gate: proceeding on cached flags after ${Date.now() - now}ms (${r.message === Ql ? "timeout" : r.name})`,
-        { level: "warn" },
+        `bg consent gate: proceeding on cached flags after ${Date.now() - now}ms (${error_2.message === GROWTHBOOK_TIMEOUT_TEXT ? "timeout" : error_2.name})`,
+        {
+          level: "warn",
+        },
       );
     }
   } catch (error) {
@@ -116,14 +142,14 @@ async function awaitBgConsentGate() {
 }
 //@ chunk-ha3km179.js:70258-70366 placement
 function createDisposableGuard(e) {
-  let n = !0;
+  let n = true;
   return {
     disarm() {
-      n = !1;
+      n = false;
     },
     [Symbol.dispose]() {
       if (!n) return;
-      n = !1;
+      n = false;
       try {
         e();
       } catch (error) {
@@ -133,78 +159,82 @@ function createDisposableGuard(e) {
   };
 }
 //@ chunk-ha3km179.js:70366-70566 placement
-function shouldBypassPtlPreempt(e, n, r, s) {
+function shouldBypassPtlPreempt(attemptModelFacts, autoCompactWindow, querySource, compactFailure) {
   try {
-    if (!hri() || !shouldEnforceUnknownModelWindow(e)) return !1;
-    return (
-      logEvent("tengu_ptl_preempt_bypassed", {
-        windowSource: fromEnum(fse(e, n)),
-        querySource: agentTypeForTelemetry(r),
-        compactFailureReason: fromEnumOpt(s?.reason),
-      }),
-      !0
-    );
+    if (!isPlainHeronEnabled() || !shouldEnforceUnknownModelWindow(attemptModelFacts)) return false;
+    logEvent("tengu_ptl_preempt_bypassed", {
+      windowSource: fromEnum(windowSource(attemptModelFacts, autoCompactWindow)),
+      querySource: agentTypeForTelemetry(querySource),
+      compactFailureReason: fromEnumOpt(compactFailure?.reason),
+    });
+    return true;
   } catch (error) {
-    return (logError(error), !1);
+    logError(error);
+    return false;
   }
 }
+//@ chunk-ha3km179.js:70566-70867 placement
 /**
  * 汇总压缩检查事实用于遥测。
  */
-//@ chunk-ha3km179.js:70566-70867 placement
-function compactCheckFacts({
-  outcome: outcome,
-  compactionCheckFacts: compactionCheckFacts,
-  blockingCheck: blockingCheck,
-  configuredWindow: configuredWindow,
-}) {
+function compactCheckFacts({ outcome, compactionCheckFacts, blockingCheck, configuredWindow }) {
   try {
     return {
       loopTopOutcome: fromEnum(outcome.kind),
-      thresholdSource: fromEnum(fse(compactionCheckFacts, configuredWindow)),
+      thresholdSource: fromEnum(windowSource(compactionCheckFacts, configuredWindow)),
       compactCheckContextWindow: compactionCheckFacts.contextWindow,
       blockingCheckContextWindow: blockingCheck.facts.contextWindow,
       blockingCheckTokenCount: blockingCheck.tokenCount,
     };
   } catch (error) {
-    return (logError(error), {});
+    logError(error);
+    return {};
   }
 }
 //@ chunk-ha3km179.js:70867-71166 placement
-function isCompactNotNeededAtLimit(e, n, r) {
+function isCompactNotNeededAtLimit(autocompactOutcome, attemptModelFacts, r) {
   try {
     if (
-      e.kind !== "not_needed" ||
-      e.consecutiveFailures !== void 0 ||
-      isOver1mThreshold(n.model, getSdkBetas()) ||
-      n.contextWindow < n.apiContextWindowWithoutOptIn ||
-      !yri()
+      autocompactOutcome.kind !== "not_needed" ||
+      autocompactOutcome.consecutiveFailures !== undefined ||
+      isOver1mThreshold(attemptModelFacts.model, getSdkBetas()) ||
+      attemptModelFacts.contextWindow < attemptModelFacts.apiContextWindowWithoutOptIn ||
+      !isGentleAnchorEnabled()
     )
-      return !1;
-    return (logFeatureOk("compact_not_needed_at_blocking_limit", r), !0);
+      return false;
+    logFeatureOk("compact_not_needed_at_blocking_limit", r);
+    return true;
   } catch (error) {
-    return (logFeatureBad("compact_not_needed_at_blocking_limit", "check_threw"), logError(error), !1);
+    logFeatureBad("compact_not_needed_at_blocking_limit", "check_threw");
+    logError(error);
+    return false;
   }
 }
 //@ chunk-ha3km179.js:71166-71241 placement
-function Xl(e) {
+/**
+ * 是否应排空工具
+ */
+function canDrainTools(e) {
   return !e.foldSuspended && (!e.isMainThread || !e.lastIteration);
 }
 //@ chunk-ha3km179.js:71241-71267 placement
-async function Jl(e, n, r) {}
+/**
+ * 空实现
+ */
+async function noopAsyncDrain(toolUseContext, queueFilterForThread, r) {}
+//@ chunk-ha3km179.js:71267-71727 placement
 /**
  * 是否在发送前预防提示过长。
  */
-//@ chunk-ha3km179.js:71267-71727 placement
-function shouldPreemptPromptTooLong(e, n, r, s) {
+function shouldPreemptPromptTooLong(e, mainLoopModel, effortValue, deps) {
   try {
     if (!(
-      shouldUltrathinkRaiseEffort(n, r) &&
+      shouldUltrathinkRaiseEffort(mainLoopModel, effortValue) &&
       e.some(
         (S) =>
           S.mode === "prompt" &&
           !S.isMeta &&
-          S.shouldQuery !== !1 &&
+          S.shouldQuery !== false &&
           isHumanOrigin(S.origin) &&
           !S.textNotTyped &&
           hasUltrathinkKeyword({
@@ -216,46 +246,66 @@ function shouldPreemptPromptTooLong(e, n, r, s) {
       )
     ))
       return;
-    let y = createAttachmentMessage_2({ type: "ultrathink_effort" }, s);
-    return (
-      logFeatureOk("ultrathink_boost"),
-      logEvent("tengu_ultrathink", {}),
-      createAgentStatusEmitter(mainAgentId()).setTurnEffort("xhigh"),
-      { layer: { kind: "effort", effort: "xhigh" }, reminder: y }
+    let reminder = createAttachmentMessage_2(
+      {
+        type: "ultrathink_effort",
+      },
+      deps,
     );
+    logFeatureOk("ultrathink_boost");
+    logEvent("tengu_ultrathink", {});
+    createAgentStatusEmitter(mainAgentId()).setTurnEffort("xhigh");
+    return {
+      layer: {
+        kind: "effort",
+        effort: "xhigh",
+      },
+      reminder,
+    };
   } catch (error) {
     logError(error);
     return;
   }
 }
 //@ chunk-ha3km179.js:71727-71739 placement
-var _f = 1500;
+/**
+ * 1500
+ */
+var MCP_SETTLE_WAIT_MS = 1500;
+//@ chunk-ha3km179.js:71739-72230 placement
 /**
  * 等待 MCP 连接稳定（tengu_deep_shore）。
  */
-//@ chunk-ha3km179.js:71739-72230 placement
 async function awaitMcpSettle(
   e,
-  { storageV5: storageV5, credentials: credentials, abortController: { signal: s } },
-  h = _f,
+  { storageV5, credentials, abortController: { signal } },
+  h = MCP_SETTLE_WAIT_MS,
 ) {
   try {
-    let y = ensureClientDataFetch(storageV5, credentials);
-    if (y !== void 0 && getFeatureValue_CACHED_MAY_BE_STALE("tengu_deep_shore", !0)) {
-      let startTime = performance.now(),
-        M = await withDeadline(
-          raceWithAbortSignal(y, s, () => Error("interrupted")).then(
-            () => !0,
-            () => !1,
-          ),
-          h,
+    let clientDataFetch = ensureClientDataFetch(storageV5, credentials);
+    if (clientDataFetch !== undefined && getFeatureValue_CACHED_MAY_BE_STALE("tengu_deep_shore", true)) {
+      let startTime = performance.now();
+      let M = await withDeadline(
+        raceWithAbortSignal(clientDataFetch, signal, () => Error("interrupted")).then(
+          () => true,
+          () => false,
         ),
-        rounded = Math.round(performance.now() - startTime);
-      if (M === void 0)
-        (markClientDataFetchOver(y),
-          logFeatureSad("model_client_data_wait", "timeout", { waited_ms: rounded }));
-      else if (!M) logFeatureSad("model_client_data_wait", "interrupted", { waited_ms: rounded });
-      else if (hasClientDataCacheSlot()) logFeatureOk("model_client_data_wait", { waited_ms: rounded });
+        h,
+      );
+      let waitedMs = Math.round(performance.now() - startTime);
+      if (M === undefined) {
+        markClientDataFetchOver(clientDataFetch);
+        logFeatureSad("model_client_data_wait", "timeout", {
+          waited_ms: waitedMs,
+        });
+      } else if (!M)
+        logFeatureSad("model_client_data_wait", "interrupted", {
+          waited_ms: waitedMs,
+        });
+      else if (hasClientDataCacheSlot())
+        logFeatureOk("model_client_data_wait", {
+          waited_ms: waitedMs,
+        });
     }
   } catch (error) {
     logError(error);
@@ -263,9 +313,9 @@ async function awaitMcpSettle(
   return getModelContextInfo(e);
 }
 //@ chunk-ha3km179.js:72230-72338 placement
-function runBookkeepingSafe(e) {
+function runBookkeepingSafe(onThrow) {
   try {
-    e();
+    onThrow();
   } catch (error) {
     logForDebugging(`[end-turn] bookkeeping threw and was skipped: ${errorMessage(error)}`, {
       level: "error",
@@ -273,117 +323,122 @@ function runBookkeepingSafe(e) {
   }
 }
 //@ chunk-ha3km179.js:72338-72533 placement
-function shouldRunMcpStopHooks({ requested: requested, lastIteration: lastIteration }) {
+function shouldRunMcpStopHooks({ requested, lastIteration }) {
   try {
     return (
       requested === "mcp_meta_blockable" &&
       !lastIteration &&
-      getFeatureValue_CACHED_MAY_BE_STALE("tengu_glittery_mitten", !0)
+      getFeatureValue_CACHED_MAY_BE_STALE("tengu_glittery_mitten", true)
     );
   } catch (error) {
-    return (
-      runBookkeepingSafe(() => logFeatureSad("query_mcp_end_turn_stop_hooks", "gate_threw")),
-      logError(error),
-      !1
-    );
+    runBookkeepingSafe(() => logFeatureSad("query_mcp_end_turn_stop_hooks", "gate_threw"));
+    logError(error);
+    return false;
   }
 }
+//@ chunk-ha3km179.js:72533-73053 placement
 /**
  * 安全运行 stop hooks（异常时上报并结束）。
  */
-//@ chunk-ha3km179.js:72533-73053 placement
-async function* runStopHooksSafely({
-  throughStopHooks: throughStopHooks,
-  onThrow: onThrow,
-  queryChainId: queryChainId,
-  queryDepth: queryDepth,
-}) {
+async function* runStopHooksSafely({ throughStopHooks, onThrow, queryChainId, queryDepth }) {
   let h;
   try {
     h = yield* throughStopHooks();
   } catch (error) {
     let S = isAbortError(error);
     if (!S) logError(error);
-    return (
-      runBookkeepingSafe(() => logFeatureSad("query_mcp_end_turn_stop_hooks", S ? "aborted" : "pass_threw")),
-      runBookkeepingSafe(onThrow),
-      { reason: "completed" }
-    );
+    runBookkeepingSafe(() => logFeatureSad("query_mcp_end_turn_stop_hooks", S ? "aborted" : "pass_threw"));
+    runBookkeepingSafe(onThrow);
+    return {
+      reason: "completed",
+    };
   }
-  return (
-    runBookkeepingSafe(() => {
-      if (typeof h === "string")
-        logEvent("tengu_mcp_end_turn_overridden_by_stop_hook", {
-          queryChainId: queryChainId,
-          queryDepth: queryDepth,
-        });
-      else
-        logEvent("tengu_mcp_tool_result_ended_turn", {
-          queryChainId: queryChainId,
-          queryDepth: queryDepth,
-          source: lit("mcp_meta_blockable"),
-          terminalReason: fromEnum(h.reason),
-        });
-      logFeatureOk("query_mcp_end_turn_stop_hooks");
-    }),
-    h
-  );
+  runBookkeepingSafe(() => {
+    if (typeof h === "string")
+      logEvent("tengu_mcp_end_turn_overridden_by_stop_hook", {
+        queryChainId,
+        queryDepth,
+      });
+    else
+      logEvent("tengu_mcp_tool_result_ended_turn", {
+        queryChainId,
+        queryDepth,
+        source: lit("mcp_meta_blockable"),
+        terminalReason: fromEnum(h.reason),
+      });
+    logFeatureOk("query_mcp_end_turn_stop_hooks");
+  });
+  return h;
 }
 //@ chunk-ha3km179.js:73053-73133 placement
-var nd = { silent_turn: "tool_ended_silent", reply_errored: "tool_ended_after_error" };
+/**
+ * 静默/报错两种原因
+ */
+var REPLY_GATE_SILENT_REASONS = {
+  silent_turn: "tool_ended_silent",
+  reply_errored: "tool_ended_after_error",
+};
 //@ chunk-ha3km179.js:73133-73186 placement
-function Ur(e, n) {
+/**
+ * 记录策略失败
+ */
+function logReplyGatePolicy(e, n) {
   logFeatureBad("projects_reply_gate_policy", e, n);
 }
 //@ chunk-ha3km179.js:73186-73214 placement
 var TENGU_JOYFUL_GLOBE = "tengu_joyful_globe";
 //@ chunk-ha3km179.js:73214-73250 placement
-function Nr() {
-  return isFoamySpringEnabled() && getFeatureValue_CACHED_MAY_BE_STALE(TENGU_JOYFUL_GLOBE, !0);
+/**
+ * foamy spring + tengu_joyful_globe
+ */
+function isJoyfulGlobeOn() {
+  return isFoamySpringEnabled() && getFeatureValue_CACHED_MAY_BE_STALE(TENGU_JOYFUL_GLOBE, true);
 }
 //@ chunk-ha3km179.js:73280-73338 placement
-function si() {
-  return isClaudeAiChatCowork() && getFeatureValue_CACHED_MAY_BE_STALE("tengu_resilient_galaxy", !1);
+/**
+ * cowork + tengu_resilient_galaxy
+ */
+function isResilientGalaxyOn() {
+  return isClaudeAiChatCowork() && getFeatureValue_CACHED_MAY_BE_STALE("tengu_resilient_galaxy", false);
 }
 //@ chunk-ha3km179.js:73338-73480 placement
-function endsWithReminder(e) {
-  if (!si()) return !1;
-  let last = e.findLast(
+function endsWithReminder(messagesForQuery) {
+  if (!isResilientGalaxyOn()) return false;
+  let last = messagesForQuery.findLast(
     (r) =>
       r.type === "assistant" ||
       isQueuedCommandAttachment(r) ||
       isReminderMessage(r) ||
       (r.type === "user" && !isTurnCompanion(r)),
   );
-  return last !== void 0 && isReminderMessage(last);
+  return last !== undefined && isReminderMessage(last);
 }
+//@ chunk-ha3km179.js:73480-74891 placement
 /**
  * 判断上一回合的提醒状态。
  */
-//@ chunk-ha3km179.js:73480-74891 placement
-function lastTurnReminderState(e) {
-  let sliced = e.slice(
-      e.findLastIndex(
-        (M) =>
-          isQueuedCommandAttachment(M) ||
-          (M.type === "user" && !isToolResultMessage(M) && !isTurnCompanion(M)),
-      ) + 1,
-    ),
-    lastIndex = sliced.findLastIndex(isReminderMessage);
+function lastTurnReminderState(messages) {
+  let sliced = messages.slice(
+    messages.findLastIndex(
+      (M) =>
+        isQueuedCommandAttachment(M) || (M.type === "user" && !isToolResultMessage(M) && !isTurnCompanion(M)),
+    ) + 1,
+  );
+  let lastIndex = sliced.findLastIndex(isReminderMessage);
   if (lastIndex !== -1) {
-    let sliced_2 = sliced.slice(lastIndex + 1);
+    let messages = sliced.slice(lastIndex + 1);
     return {
       kind: "reminded",
-      sent: hasSuccessfulToolCall(sliced_2, SEND_USER_FILE_TOOL_NAME),
-      textLength: collectUserFacingTexts(sliced_2).join("").trim().length,
+      sent: hasSuccessfulToolCall(messages, SEND_USER_FILE_TOOL_NAME),
+      textLength: collectUserFacingTexts(messages).join("").trim().length,
     };
   }
-  let s = [getOutputsRoot(), getHomeFilesRoot(), "/tmp"],
-    regExp = new RegExp(
-      `\\]\\(<?(?:computer://|file://)?((?:${s.map(urlPatternToRegex).join("|")})/[^\\s)>]{1,500})`,
-      "g",
-    ),
-    y = new Map();
+  let s = [getOutputsRoot(), getHomeFilesRoot(), "/tmp"];
+  let regExp = new RegExp(
+    `\\]\\(<?(?:computer://|file://)?((?:${s.map(urlPatternToRegex).join("|")})/[^\\s)>]{1,500})`,
+    "g",
+  );
+  let y = new Map();
   for (let M of collectUserFacingTexts(sliced)) {
     let R = replaceInlineCode(M.replace(/(```|~~~)[\s\S]*?(?:\1|$)/g, ""), () => "");
     for (let [, T = ""] of R.matchAll(regExp)) {
@@ -394,7 +449,7 @@ function lastTurnReminderState(e) {
       if (!w.includes("/.") && /\.[a-z0-9]+$/i.test(w)) y.set(posix.basename(w), T);
     }
   }
-  for (let M of y.size > 0 ? e : []) {
+  for (let M of y.size > 0 ? messages : []) {
     if (M.type !== "assistant") continue;
     for (let R of M.message.content) {
       if (
@@ -406,14 +461,17 @@ function lastTurnReminderState(e) {
       )
         continue;
       let T = readUntrustedArray(R.input.files) ?? [R.input.files];
-      for (let w of T === Uf ? [] : T) if (typeof w === "string") y.delete(posix.basename(w));
+      for (let w of T === UNREADABLE_ARRAY ? [] : T) if (typeof w === "string") y.delete(posix.basename(w));
     }
   }
-  if (y.size === 0) return { kind: "skip" };
+  if (y.size === 0)
+    return {
+      kind: "skip",
+    };
   let joined = [...y.values()].slice(0, 5).map(escapeForTag).join(", ");
   return {
     kind: "remind",
-    text: `${nXt} ${joined}. The user did not write this note and cannot see it. It is about your reply above only. A link to a file that you did not send may not open for them. If they should have a file, call ${SEND_USER_FILE_TOOL_NAME} with it now, then say in one short line that you sent it, or that the send failed. If they should have none, end your turn with no text. Do not repeat your reply, and do not mention this note.`,
+    text: `${LINKED_BUT_NOT_SENT_PREFIX} ${joined}. The user did not write this note and cannot see it. It is about your reply above only. A link to a file that you did not send may not open for them. If they should have a file, call ${SEND_USER_FILE_TOOL_NAME} with it now, then say in one short line that you sent it, or that the send failed. If they should have none, end your turn with no text. Do not repeat your reply, and do not mention this note.`,
   };
 }
 //@ chunk-ha3km179.js:74891-74973 placement = buildTranscriptEntries (0.777)
@@ -424,15 +482,15 @@ function isQueuedCommandAttachment(message) {
 function isReminderMessage(e) {
   return (
     e.type === "user" &&
-    e.isMeta === !0 &&
+    e.isMeta === true &&
     typeof e.message.content === "string" &&
-    e.message.content.startsWith(nXt)
+    e.message.content.startsWith(LINKED_BUT_NOT_SENT_PREFIX)
   );
 }
+//@ chunk-ha3km179.js:75098-75409 placement = collectRecentSuccessfulTools (0.869)
 /**
  * 收集助手文本块与 SendUserMessage 调用的 message 文本。旧版名 collectRecentSuccessfulTools 为错配；归属存疑。
  */
-//@ chunk-ha3km179.js:75098-75409 placement = collectRecentSuccessfulTools (0.869)
 function collectUserFacingTexts(e) {
   let n = [];
   for (let r of e) {
@@ -451,7 +509,6 @@ function collectUserFacingTexts(e) {
   }
   return n;
 }
-
 export {
   awaitMcpSettle,
   createDisposableGuard,
@@ -463,13 +520,13 @@ export {
   endsWithReminder,
   shouldRunMcpStopHooks,
   runStopHooksSafely,
-  Xl,
-  Jl,
+  canDrainTools,
+  noopAsyncDrain,
   shouldPreemptPromptTooLong,
-  Ur,
-  si,
+  logReplyGatePolicy,
+  isResilientGalaxyOn,
   lastTurnReminderState,
-  Nr,
+  isJoyfulGlobeOn,
   runBookkeepingSafe,
-  nd,
+  REPLY_GATE_SILENT_REASONS,
 };

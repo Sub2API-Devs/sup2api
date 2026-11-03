@@ -6,105 +6,116 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { Ee } from "../core/util.cjs";
-import { hb } from "../core/visit.cjs";
-import { ra } from "./schemas.cjs";
+import { require_util } from "../core/util.cjs";
+import { require_visit } from "../core/visit.cjs";
+import { require_schemas_2 } from "./schemas.cjs";
 
 //@ chunk-1ny7cxrt.js:649068-650685 cjs-fingerprint
-var VT = x(function (Jr) {
-  var DQ =
-      (Jr && Jr.__createBinding) ||
-      (Object.create
-        ? function (e, t, n, o) {
-            if (o === void 0) o = n;
-            var ownPropertyDescriptor = Object.getOwnPropertyDescriptor(t, n);
-            if (
-              !ownPropertyDescriptor ||
-              ("get" in ownPropertyDescriptor
-                ? !t.__esModule
-                : ownPropertyDescriptor.writable || ownPropertyDescriptor.configurable)
-            )
-              ownPropertyDescriptor = {
-                enumerable: !0,
-                get: function () {
-                  return t[n];
-                },
-              };
-            Object.defineProperty(e, o, ownPropertyDescriptor);
-          }
-        : function (e, t, n, o) {
-            if (o === void 0) o = n;
-            e[o] = t[n];
-          }),
-    MQ =
-      (Jr && Jr.__setModuleDefault) ||
-      (Object.create
-        ? function (e, t) {
-            Object.defineProperty(e, "default", { enumerable: !0, value: t });
-          }
-        : function (e, t) {
-            e.default = t;
-          }),
-    jQ =
-      (Jr && Jr.__importStar) ||
-      function (e) {
-        if (e && e.__esModule) return e;
-        var t = {};
-        if (e != null) {
-          for (var key in e)
-            if (key !== "default" && Object.prototype.hasOwnProperty.call(e, key)) DQ(t, e, key);
+var require_in_out = x(function (cjsExports) {
+  var __createBinding =
+    (cjsExports && cjsExports.__createBinding) ||
+    (Object.create
+      ? function (o_2, m, k, k2) {
+          if (k2 === undefined) k2 = k;
+          var desc = Object.getOwnPropertyDescriptor(m, k);
+          if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable))
+            desc = {
+              enumerable: true,
+              get: function () {
+                return m[k];
+              },
+            };
+          Object.defineProperty(o_2, k2, desc);
         }
-        return (MQ(t, e), t);
-      };
-  Object.defineProperty(Jr, "__esModule", { value: !0 });
-  Jr.input = UQ;
-  Jr.output = zQ;
-  var Fh = Ee(),
-    Bh = hb(),
-    xQ = jQ(ra());
-  function LQ(e, t) {
-    if (!t?.length) return e;
-    let def = e._zod.def;
-    return Fh.clone(e, Fh.mergeDefs(def, { checks: [...(def.checks ?? []), ...t] }), { parent: !0 });
+      : function (o_2, m, k, k2) {
+          if (k2 === undefined) k2 = k;
+          o_2[k2] = m[k];
+        });
+  var __setModuleDefault =
+    (cjsExports && cjsExports.__setModuleDefault) ||
+    (Object.create
+      ? function (o, v) {
+          Object.defineProperty(o, "default", {
+            enumerable: true,
+            value: v,
+          });
+        }
+      : function (o, v) {
+          o.default = v;
+        });
+  var __importStar =
+    (cjsExports && cjsExports.__importStar) ||
+    function (mod) {
+      if (mod && mod.__esModule) return mod;
+      var result = {};
+      if (mod != null) {
+        for (var k in mod)
+          if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k))
+            __createBinding(result, mod, k);
+      }
+      __setModuleDefault(result, mod);
+      return result;
+    };
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.input = input;
+  cjsExports.output = output;
+  var util_js_1 = require_util();
+  var visit_js_1 = require_visit();
+  var schemas = __importStar(require_schemas_2());
+  function withChecks(side, checks) {
+    if (!checks?.length) return side;
+    let def = side._zod.def;
+    return util_js_1.clone(
+      side,
+      util_js_1.mergeDefs(def, {
+        checks: [...(def.checks ?? []), ...checks],
+      }),
+      {
+        parent: true,
+      },
+    );
   }
-  function ZT(e) {
-    return LQ(e.out, e.checks);
+  function outSide(def) {
+    return withChecks(def.out, def.checks);
   }
-  function NQ(e) {
-    return e.in._zod.traits.has("$ZodTransform") ? ZT(e) : e.in;
+  function inSide(def) {
+    return def.in._zod.traits.has("$ZodTransform") ? outSide(def) : def.in;
   }
-  function UQ(e) {
-    return Bh.visit(e, {
-      pipe: (t) => NQ(t._zod.def),
-      default: (t, n) => (n ? xQ.optional(t._zod.def.innerType) : t),
-      catch: (t, n) => (n ? t._zod.def.innerType : t),
+  function input(schema) {
+    return visit_js_1.visit(schema, {
+      pipe: (s) => inSide(s._zod.def),
+      default: (s, rewritten) => (rewritten ? schemas.optional(s._zod.def.innerType) : s),
+      catch: (s, rewritten) => (rewritten ? s._zod.def.innerType : s),
     });
   }
-  function zQ(e) {
-    return Bh.visit(e, { pipe: (t) => ZT(t._zod.def), prefault: (t, n) => (n ? t._zod.def.innerType : t) });
+  function output(schema) {
+    return visit_js_1.visit(schema, {
+      pipe: (s) => outSide(s._zod.def),
+      prefault: (s, rewritten) => (rewritten ? s._zod.def.innerType : s),
+    });
   }
   (function () {
-    var ownPropertyNames = Object.getOwnPropertyNames(Jr);
-    for (var t = 0; t < ownPropertyNames.length; t++) {
-      var ownPropertyDescriptor = Object.getOwnPropertyDescriptor(Jr, ownPropertyNames[t]);
-      if (!ownPropertyDescriptor || !ownPropertyDescriptor.get || !ownPropertyDescriptor.configurable)
-        continue;
-      var o;
+    var keys = Object.getOwnPropertyNames(cjsExports);
+    for (var i = 0; i < keys.length; i++) {
+      var desc = Object.getOwnPropertyDescriptor(cjsExports, keys[i]);
+      if (!desc || !desc.get || !desc.configurable) continue;
+      var value;
       try {
-        o = ownPropertyDescriptor.get();
-      } catch (error) {
+        value = desc.get();
+      } catch (e) {
         continue;
       }
-      if (o === void 0) continue;
-      Object.defineProperty(Jr, ownPropertyNames[t], {
-        value: o,
-        writable: !1,
-        enumerable: ownPropertyDescriptor.enumerable,
-        configurable: !1,
+      if (value === undefined) continue;
+      Object.defineProperty(cjsExports, keys[i], {
+        value,
+        writable: false,
+        enumerable: desc.enumerable,
+        configurable: false,
       });
     }
-    Object.freeze(Jr);
+    Object.freeze(cjsExports);
   })();
 });
-
-export { VT };
+export { require_in_out };

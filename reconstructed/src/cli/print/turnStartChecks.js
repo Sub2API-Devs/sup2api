@@ -8,40 +8,18 @@
  * pieces: chunk-tyg7f3ek.js (31)
  * attribution: placement 31
  */
-import {
-  randomUUID,
-  randomUUID as randomUUID_2,
-  randomUUID as randomUUID_3,
-  randomUUID as randomUUID_4,
-  randomUUID as randomUUID_5,
-  randomUUID as randomUUID_6,
-  randomUUID as randomUUID_7,
-  randomUUID as randomUUID_8,
-  randomUUID as randomUUID_9,
-  randomUUID as randomUUID_10,
-  randomUUID as randomUUID_11,
-  randomUUID as randomUUID_12,
-  randomUUID as randomUUID_13,
-  randomUUID as randomUUID_14,
-  randomUUID as randomUUID_15,
-  randomUUID as randomUUID_16,
-  randomUUID as randomUUID_17,
-  randomUUID as randomUUID_18,
-  randomUUID as randomUUID_19,
-  randomUUID as randomUUID_20,
-  randomUUID as randomUUID_21,
-} from "crypto";
+import { randomUUID } from "crypto";
 import {
   getAdminRequestPhase,
   adminRequestKeyForRateLimit,
   isAdminLimitRequestGateOn,
   isSameAdminRequestKey,
-  bN,
+  ADMIN_REQUEST_SETTLED_COOLDOWN_MS,
   setAdminRequestPhase,
-  wN,
+  EXTRA_USAGE_CHECK_TIMEOUT_MS,
   getAdminRequestState,
   readAdminLimitRequestConfig,
-  vN,
+  ADMIN_REQUEST_FILING_TIMEOUT_MS,
   isValidAdminRequestLabel,
   subscribeAdminRequestPhase,
 } from "./adminRequestFrames.js";
@@ -64,19 +42,23 @@ import { logFeatureBad, logFeatureOk, logFeatureSad } from "../../services/analy
 import { logEvent } from "../../services/analytics/index.js";
 import { lit, fromEnum } from "../../services/analytics/safeMetadata.js";
 import { fileAdminLimitRequest as fileAdminLimitRequest_2 } from "../../services/api/adminRequests.js";
-import { oPs, getOfferBanner, Jre } from "../../services/usageCreditOffers.js";
+import {
+  offerCreditAtBand,
+  getOfferBanner,
+  onCreditOfferPromptChange,
+} from "../../services/usageCreditOffers.js";
 import {
   buildRateLimitInfo,
   forwardRateLimitEventToBridge,
-  Ikr,
+  forwardRateLimitEvent,
   createRateLimitEventThrottle,
 } from "./rateLimitForwarding.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { isQuotaRejectedReemitEnabled } from "../../bridge/bridgeGates.js";
 import { setTaskNotificationListener, enqueueTaskNotification } from "../../utils/task/taskNotifications.js";
-import { A4e, Npe } from "../../services/mcp/client.js";
+import { getConnectTimeoutMs, TRANSPORT_FALLBACK_TIMEOUT_MS } from "../../services/mcp/client.js";
 import { logForDiagnosticsNoPII } from "../../utils/diagLogs.js";
-import { Br, ayi } from "../../utils/startupTiming.js";
+import { recordPhase, recordFirstMessageReadFromSpawn } from "../../utils/startupTiming.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import {
   logSuggestionOutcome,
@@ -88,20 +70,30 @@ import { getSessionId, getSyncedPluginReloadDebt, getSyncedPluginDirs } from "..
 import { getLastCacheSafeParams, isMainThreadCacheWarm } from "../../utils/forkedAgent.js";
 import { getTurnOrigin } from "../../utils/messages/promptOrigin.js";
 import { isSessionRefsSyncEnabled } from "../../utils/claudeAiSync/sessionRefsGate.js";
-import { sJ, wie, Hkt, Hee, eot } from "../../services/plugins/accountSync/syncedPluginHooks.js";
-import { Jbt, isSkillsAsPluginsActive, rerunPluginsSync } from "../../utils/claudeAiSync/skillsSync.js";
+import {
+  refreshSyncVeto,
+  syncSettingsEnabled,
+  isPluginsSyncEligible,
+  isNotFoundServerError,
+  isSyncRefusal,
+} from "../../services/plugins/accountSync/syncedPluginHooks.js";
+import {
+  isPluginsSyncActive,
+  isSkillsAsPluginsActive,
+  rerunPluginsSync,
+} from "../../utils/claudeAiSync/skillsSync.js";
 import {
   listAccountPlugins,
   listErrorTelemetry,
   pluginListFingerprint,
 } from "../../services/plugins/accountSync/listPlugins.js";
 import { headlessProfilerCheckpoint } from "../../utils/headlessProfiler.js";
-import { startEventLoopLagMonitor, bjn } from "../../utils/eventLoopLag.js";
+import { startEventLoopLagMonitor, LAG_SAMPLE_INTERVAL_MS } from "../../utils/eventLoopLag.js";
 import { awaitFirstSkillsList } from "../../services/skillsSync/skillsSync.js";
 import { addStartupContext } from "../../utils/startupProfiler.js";
 import { remoteToolsState } from "../../remote/tools/callResults.js";
 import { getPluginRegistry } from "../../utils/plugins/pluginLoadState.js";
-import { J_ } from "../../utils/plugins/marketplaceNames.js";
+import { marketplaceNameAnswerState } from "../../utils/plugins/marketplaceNames.js";
 import { waitForOrganizationAnswer, askOrganizationOnce } from "../../utils/plugins/commandSource.js";
 import { getPrefixServerKey } from "../../components/agents/ToolSelector.js";
 import { count } from "../../utils/collections.js";
@@ -123,135 +115,188 @@ import { extractTextContent_2 } from "../../utils/messages.js";
 import { TASK_UPDATE_TOOL_NAME } from "../../tools/TaskUpdateTool/constants.js";
 import { TASK_CREATED_RE } from "../../utils/task/framework.js";
 
+//@ chunk-tyg7f3ek.js:181110-181791 placement
 /**
  * 遇到组织/席位额度上限的限流事件时，评估是否可在 IDE 横幅中"向管理员申请额度"。
  */
-//@ chunk-tyg7f3ek.js:181110-181791 placement
-function evaluateAdminRequestWall(e) {
-  let n = getAdminRequestPhase(),
-    r = adminRequestKeyForRateLimit(e),
-    s = getSubscriptionType();
+function evaluateAdminRequestWall(currentLimits) {
+  let adminRequestPhase = getAdminRequestPhase();
+  let r = adminRequestKeyForRateLimit(currentLimits);
+  let subscriptionType = getSubscriptionType();
   if (
     r === null ||
     !isAdminLimitRequestGateOn() ||
     !isVsCodeTopSession() ||
     !isFirstPartyApiBackend() ||
-    (s !== "team" && s !== "enterprise") ||
+    (subscriptionType !== "team" && subscriptionType !== "enterprise") ||
     isConsumerPlan() ||
     !isExtraUsageAllowed() ||
-    (e.upgradePaths !== void 0 && !e.upgradePaths.includes("overage")) ||
+    (currentLimits.upgradePaths !== undefined && !currentLimits.upgradePaths.includes("overage")) ||
     isEssentialTrafficOnly()
   )
     return;
-  let h = { key: r, reason: e.overageDisabledReason ?? "unknown", accountEpoch: getLimitsAccountEpoch() },
-    y = null;
-  if (n.phase !== "idle" && isSameAdminRequestKey(n.wall, h))
-    switch (n.phase) {
+  let h = {
+    key: r,
+    reason: currentLimits.overageDisabledReason ?? "unknown",
+    accountEpoch: getLimitsAccountEpoch(),
+  };
+  let y = null;
+  if (adminRequestPhase.phase !== "idle" && isSameAdminRequestKey(adminRequestPhase.wall, h))
+    switch (adminRequestPhase.phase) {
       case "checking":
       case "sending":
         return;
       case "quiet":
       case "ready":
       case "sent":
-        if (Date.now() - n.settledAt < bN) return;
-        y = n;
+        if (Date.now() - adminRequestPhase.settledAt < ADMIN_REQUEST_SETTLED_COOLDOWN_MS) return;
+        y = adminRequestPhase;
     }
-  else if (n.phase === "sending") return;
-  (setAdminRequestPhase({ phase: "checking", wall: h, standing: y }),
-    trackAdminRequest(
-      withDeadline(
-        runExtraUsage({ openInBrowser: !1 }, void 0).then(
-          (S) => ({ outcome: "answered", result: S }),
-          (S) => (logError(toError(S)), { outcome: "threw" }),
-        ),
-        wN,
-      ).then((S) => {
-        settleAdminRequestCheck(h, S ?? { outcome: "timed_out" }, y !== null);
-      }),
-    ));
+  else if (adminRequestPhase.phase === "sending") return;
+  setAdminRequestPhase({
+    phase: "checking",
+    wall: h,
+    standing: y,
+  });
+  trackAdminRequest(
+    withDeadline(
+      runExtraUsage(
+        {
+          openInBrowser: false,
+        },
+        undefined,
+      ).then(
+        (result) => ({
+          outcome: "answered",
+          result,
+        }),
+        (error) => {
+          logError(toError(error));
+          return {
+            outcome: "threw",
+          };
+        },
+      ),
+      EXTRA_USAGE_CHECK_TIMEOUT_MS,
+    ).then((S) => {
+      settleAdminRequestCheck(
+        h,
+        S ?? {
+          outcome: "timed_out",
+        },
+        y !== null,
+      );
+    }),
+  );
 }
 //@ chunk-tyg7f3ek.js:181791-181902 placement
 function trackAdminRequest(e) {
-  let n = getAdminRequestState(),
-    r = e
-      .catch((s) => {
-        logError(toError(s));
-      })
-      .finally(() => {
-        if (n.pending === r) n.pending = null;
-      });
-  n.pending = r;
+  let adminRequestState = getAdminRequestState();
+  let r = e
+    .catch((error) => {
+      logError(toError(error));
+    })
+    .finally(() => {
+      if (adminRequestState.pending === r) adminRequestState.pending = null;
+    });
+  adminRequestState.pending = r;
 }
 //@ chunk-tyg7f3ek.js:181902-182987 placement
-function settleAdminRequestCheck(e, n, r) {
-  let s = getAdminRequestPhase();
-  if (s.phase !== "checking" || !isSameAdminRequestKey(s.wall, e)) return;
-  let now = Date.now(),
-    standing = s.standing;
+function settleAdminRequestCheck(e, n, recheck) {
+  let adminRequestPhase = getAdminRequestPhase();
+  if (adminRequestPhase.phase !== "checking" || !isSameAdminRequestKey(adminRequestPhase.wall, e)) return;
+  let settledAt = Date.now();
+  let standing = adminRequestPhase.standing;
   switch (n.outcome) {
     case "timed_out":
     case "threw": {
       let L = n.outcome === "timed_out" ? "checks_timeout" : "checks_failed";
-      (logFeatureBad("ide_admin_limit_request", L),
-        setAdminRequestPhase(
-          standing === null
-            ? { phase: "quiet", wall: e, cause: L, settledAt: now }
-            : { ...standing, settledAt: now },
-        ));
+      logFeatureBad("ide_admin_limit_request", L);
+      setAdminRequestPhase(
+        standing === null
+          ? {
+              phase: "quiet",
+              wall: e,
+              cause: L,
+              settledAt,
+            }
+          : {
+              ...standing,
+              settledAt,
+            },
+      );
       return;
     }
     case "answered":
       break;
   }
-  let S = n.result,
-    R = adminRequestVerdict(S, e.reason);
+  let S = n.result;
+  let R = adminRequestVerdict(S, e.reason);
   if (R === "usage_unread" && standing !== null) {
-    setAdminRequestPhase({ ...standing, settledAt: now });
+    setAdminRequestPhase({
+      ...standing,
+      settledAt,
+    });
     return;
   }
   if (R === "nothing_to_file" || R === "usage_unread") {
-    setAdminRequestPhase({ phase: "quiet", wall: e, cause: R, settledAt: now });
+    setAdminRequestPhase({
+      phase: "quiet",
+      wall: e,
+      cause: R,
+      settledAt,
+    });
     return;
   }
-  let w = readAdminLimitRequestConfig(),
-    P = S.type === "confirm-admin-request" ? S.checked : !0;
-  if (
-    (logEvent("tengu_tallow_quoit_wall", {
-      surface: lit("ide_banner"),
-      reason: fromEnum(e.reason),
-      verdict: fromEnum(R),
-      offered: w !== null,
-      checked: P,
-      recheck: r,
-    }),
-    w === null)
-  ) {
-    setAdminRequestPhase({ phase: "quiet", wall: e, cause: "flag_off", settledAt: now });
+  let adminLimitRequestConfig = readAdminLimitRequestConfig();
+  let checked = S.type === "confirm-admin-request" ? S.checked : true;
+  logEvent("tengu_tallow_quoit_wall", {
+    surface: lit("ide_banner"),
+    reason: fromEnum(e.reason),
+    verdict: fromEnum(R),
+    offered: adminLimitRequestConfig !== null,
+    checked,
+    recheck,
+  });
+  if (adminLimitRequestConfig === null) {
+    setAdminRequestPhase({
+      phase: "quiet",
+      wall: e,
+      cause: "flag_off",
+      settledAt,
+    });
     return;
   }
   if (standing?.phase === "sent" && (R === "pending" || (S.type === "confirm-admin-request" && !S.checked))) {
-    setAdminRequestPhase({ ...standing, copy: w, settledAt: now });
+    setAdminRequestPhase({
+      ...standing,
+      copy: adminLimitRequestConfig,
+      settledAt,
+    });
     return;
   }
   setAdminRequestPhase({
     phase: "ready",
     wall: e,
     verdict: R,
-    extraUsage: S.type === "confirm-admin-request" ? S.extraUsage : void 0,
-    copy: w,
-    checked: P,
-    settledAt: now,
-    lastFileFailed: !1,
+    extraUsage: S.type === "confirm-admin-request" ? S.extraUsage : undefined,
+    copy: adminLimitRequestConfig,
+    checked,
+    settledAt,
+    lastFileFailed: false,
     revision: 0,
   });
 }
 //@ chunk-tyg7f3ek.js:182987-183389 placement
-function adminRequestVerdict(e, n) {
+function adminRequestVerdict(e, reason) {
   switch (e.type) {
     case "confirm-admin-request":
-      if (e.extraUsage === void 0) return "usage_unread";
+      if (e.extraUsage === undefined) return "usage_unread";
       if (e.extraUsage === null) return "nothing_to_file";
-      if (n === "org_level_disabled_until" && !(e.extraUsage.is_enabled && !e.extraUsage.disabled_reason))
+      if (
+        reason === "org_level_disabled_until" &&
+        !(e.extraUsage.is_enabled && !e.extraUsage.disabled_reason)
+      )
         return "nothing_to_file";
       return "can_ask";
     case "message":
@@ -272,8 +317,12 @@ function adminRequestBannerState(e) {
         doneLabel: e.copy.doneLabel,
         confirm: e.copy.confirm,
         confirmPrompt: e.copy.confirmPrompt,
-        ...(e.lastFileFailed && { lastFileFailed: !0 }),
-        ...(e.revision > 0 && { revision: e.revision }),
+        ...(e.lastFileFailed && {
+          lastFileFailed: true,
+        }),
+        ...(e.revision > 0 && {
+          revision: e.revision,
+        }),
       };
     case "sent":
       return {
@@ -287,41 +336,48 @@ function adminRequestBannerState(e) {
 }
 //@ chunk-tyg7f3ek.js:183796-184193 placement
 function adminRequestStateForEvent(e) {
-  let n = adminRequestKeyForRateLimit(e),
-    r = getAdminRequestPhase();
+  let n = adminRequestKeyForRateLimit(e);
+  let adminRequestPhase = getAdminRequestPhase();
   if (
     n === null ||
-    r.phase === "idle" ||
-    r.wall.key !== n ||
-    r.wall.accountEpoch !== getLimitsAccountEpoch() ||
+    adminRequestPhase.phase === "idle" ||
+    adminRequestPhase.wall.key !== n ||
+    adminRequestPhase.wall.accountEpoch !== getLimitsAccountEpoch() ||
     !isAdminLimitRequestGateOn() ||
     isEssentialTrafficOnly()
   )
     return;
-  switch (r.phase) {
+  switch (adminRequestPhase.phase) {
     case "checking":
-      return r.standing === null ? void 0 : adminRequestBannerState(r.standing);
+      return adminRequestPhase.standing === null
+        ? undefined
+        : adminRequestBannerState(adminRequestPhase.standing);
     case "quiet":
     case "ready":
     case "sent":
-      return adminRequestBannerState(r);
+      return adminRequestBannerState(adminRequestPhase);
     case "sending":
       return {
         state: "sending",
-        label: r.copy.label,
-        doneLabel: r.copy.doneLabel,
-        confirm: r.copy.confirm,
-        confirmPrompt: r.copy.confirmPrompt,
+        label: adminRequestPhase.copy.label,
+        doneLabel: adminRequestPhase.copy.doneLabel,
+        confirm: adminRequestPhase.copy.confirm,
+        confirmPrompt: adminRequestPhase.copy.confirmPrompt,
       };
   }
 }
+//@ chunk-tyg7f3ek.js:184193-184895 placement
 /**
  * 用户确认后提交"向管理员申请额度"请求并上报 tengu_tallow_quoit_filed。
  */
-//@ chunk-tyg7f3ek.js:184193-184895 placement
 function fileAdminLimitRequest() {
-  let e = getAdminRequestPhase(),
-    n = e.phase === "ready" ? e : e.phase === "checking" && e.standing?.phase === "ready" ? e.standing : null;
+  let adminRequestPhase = getAdminRequestPhase();
+  let n =
+    adminRequestPhase.phase === "ready"
+      ? adminRequestPhase
+      : adminRequestPhase.phase === "checking" && adminRequestPhase.standing?.phase === "ready"
+        ? adminRequestPhase.standing
+        : null;
   if (n === null || n.verdict !== "can_ask") {
     logFeatureBad("ide_admin_limit_request", "click_without_ask");
     return;
@@ -337,155 +393,196 @@ function fileAdminLimitRequest() {
           : null;
   if (r !== null) {
     logFeatureBad("ide_admin_limit_request", r);
-    let R = { ...n, lastFileFailed: !0, revision: n.revision + 1 };
-    setAdminRequestPhase(e.phase === "checking" ? { ...e, standing: R } : R);
+    let R = {
+      ...n,
+      lastFileFailed: true,
+      revision: n.revision + 1,
+    };
+    setAdminRequestPhase(
+      adminRequestPhase.phase === "checking"
+        ? {
+            ...adminRequestPhase,
+            standing: R,
+          }
+        : R,
+    );
     return;
   }
-  let { wall: wall, extraUsage: extraUsage, copy: copy } = n;
-  setAdminRequestPhase({ phase: "sending", wall: wall, extraUsage: extraUsage, copy: copy });
-  let S = !1;
+  let { wall, extraUsage, copy } = n;
+  setAdminRequestPhase({
+    phase: "sending",
+    wall,
+    extraUsage,
+    copy,
+  });
+  let S = false;
   trackAdminRequest(
     withDeadline(
-      fileAdminLimitRequest_2(extraUsage, void 0, (R) => {
-        ((S = !0), markAdminRequestSent(wall, R));
+      fileAdminLimitRequest_2(extraUsage, undefined, (R) => {
+        S = true;
+        markAdminRequestSent(wall, R);
       }),
-      vN,
+      ADMIN_REQUEST_FILING_TIMEOUT_MS,
     ).then((R) => {
       reportAdminRequestFiled(wall, R?.outcome ?? (S ? "granted" : "failed"));
     }),
   );
 }
 //@ chunk-tyg7f3ek.js:184895-185073 placement
-function markAdminRequestSent(e, n) {
-  let r = getAdminRequestPhase();
-  if (r.phase !== "sending" || !isSameAdminRequestKey(r.wall, e)) return;
+function markAdminRequestSent(wall, n) {
+  let adminRequestPhase = getAdminRequestPhase();
+  if (adminRequestPhase.phase !== "sending" || !isSameAdminRequestKey(adminRequestPhase.wall, wall)) return;
   setAdminRequestPhase({
     phase: "sent",
-    wall: e,
-    copy: isValidAdminRequestLabel(n) ? { ...r.copy, doneLabel: n } : r.copy,
-    alreadyFiled: !1,
+    wall,
+    copy: isValidAdminRequestLabel(n)
+      ? {
+          ...adminRequestPhase.copy,
+          doneLabel: n,
+        }
+      : adminRequestPhase.copy,
+    alreadyFiled: false,
     settledAt: Date.now(),
   });
 }
 //@ chunk-tyg7f3ek.js:185073-185803 placement
-function reportAdminRequestFiled(e, n) {
+function reportAdminRequestFiled(wall, n) {
   let r = n === "filed" || n === "already_filed" || n === "granted";
-  if ((logEvent("tengu_tallow_quoit_filed", { surface: lit("ide_banner"), outcome: fromEnum(n) }), r))
-    logFeatureOk("ide_admin_limit_request");
+  logEvent("tengu_tallow_quoit_filed", {
+    surface: lit("ide_banner"),
+    outcome: fromEnum(n),
+  });
+  if (r) logFeatureOk("ide_admin_limit_request");
   else logFeatureBad("ide_admin_limit_request", n);
-  let s = getAdminRequestPhase();
-  if (n === "granted" && s.phase === "sent" && isSameAdminRequestKey(s.wall, e)) {
+  let adminRequestPhase = getAdminRequestPhase();
+  if (
+    n === "granted" &&
+    adminRequestPhase.phase === "sent" &&
+    isSameAdminRequestKey(adminRequestPhase.wall, wall)
+  ) {
     evaluateAdminRequestWall(getCurrentLimits());
     return;
   }
-  if (s.phase !== "sending" || !isSameAdminRequestKey(s.wall, e)) return;
-  let now = Date.now();
+  if (adminRequestPhase.phase !== "sending" || !isSameAdminRequestKey(adminRequestPhase.wall, wall)) return;
+  let settledAt = Date.now();
   switch (n) {
     case "granted":
     case "filed":
     case "already_filed":
       setAdminRequestPhase({
         phase: "sent",
-        wall: e,
-        copy: s.copy,
+        wall,
+        copy: adminRequestPhase.copy,
         alreadyFiled: n === "already_filed",
-        settledAt: now,
+        settledAt,
       });
       break;
     case "refused":
-      setAdminRequestPhase({ phase: "quiet", wall: e, cause: "refused", settledAt: now });
+      setAdminRequestPhase({
+        phase: "quiet",
+        wall,
+        cause: "refused",
+        settledAt,
+      });
       break;
     case "failed":
       setAdminRequestPhase({
         phase: "ready",
-        wall: e,
+        wall,
         verdict: "can_ask",
-        extraUsage: s.extraUsage,
-        copy: s.copy,
-        checked: !0,
-        settledAt: now,
-        lastFileFailed: !0,
+        extraUsage: adminRequestPhase.extraUsage,
+        copy: adminRequestPhase.copy,
+        checked: true,
+        settledAt,
+        lastFileFailed: true,
         revision: 0,
       });
       break;
   }
   evaluateAdminRequestWall(getCurrentLimits());
 }
+//@ chunk-tyg7f3ek.js:185803-186643 placement
 /**
  * 把限流事件转成 SDK rate_limit_event 帧发给宿主，并附带额度申请横幅状态。
  */
-//@ chunk-tyg7f3ek.js:185803-186643 placement
-function createRateLimitFrameRelay({ emit: emit, sessionState: sessionState, bridgeHandle: bridgeHandle }) {
-  let s = null,
-    h = void 0,
-    y = !1,
-    S = (G) => {
-      let Z = y;
-      y = !0;
-      try {
-        let re = G.status === "rejected";
-        if (re) oPs(G);
-        evaluateAdminRequestWall(G);
-        let Ae = re ? adminRequestStateForEvent(G) : void 0,
-          Ue = buildRateLimitInfo(G, re ? getOfferBanner() : void 0, Ae);
-        if (!Ue) return;
-        ((s = re ? G : null), (h = Ae), emit(Ue));
-        let ce = bridgeHandle();
-        if (ce) forwardRateLimitEventToBridge(ce, Ue);
-        else {
-          let nt = Ikr(sessionState, Ue);
-          if (nt) sessionState.notifyMetadataChanged(nt);
-        }
-      } catch (error) {
-        logForDebugging(`[rateLimitFrames] listener failed: ${errorMessage(error)}`, { level: "error" });
-      } finally {
-        y = Z;
+function createRateLimitFrameRelay({ emit, sessionState, bridgeHandle }) {
+  let s = null;
+  let h = undefined;
+  let y = false;
+  let S = (G) => {
+    let Z = y;
+    y = true;
+    try {
+      let re = G.status === "rejected";
+      if (re) offerCreditAtBand(G);
+      evaluateAdminRequestWall(G);
+      let Ae = re ? adminRequestStateForEvent(G) : undefined;
+      let rateLimitInfo = buildRateLimitInfo(G, re ? getOfferBanner() : undefined, Ae);
+      if (!rateLimitInfo) return;
+      s = re ? G : null;
+      h = Ae;
+      emit(rateLimitInfo);
+      let ce = bridgeHandle();
+      if (ce) forwardRateLimitEventToBridge(ce, rateLimitInfo);
+      else {
+        let nt = forwardRateLimitEvent(sessionState, rateLimitInfo);
+        if (nt) sessionState.notifyMetadataChanged(nt);
       }
-    },
-    R = onLimitsStatusChanged(S),
-    w = createRateLimitEventThrottle(),
-    P = onQuotaRejected((G) => {
-      if (isQuotaRejectedReemitEnabled() && w(G)) S(G);
-    }),
-    L = null,
-    q = Jre(() => {
-      if (y || s === null || L === s || getOfferBanner() === void 0) return;
-      ((L = s), S(s));
-    }),
-    x = subscribeAdminRequestPhase(() => {
-      if (y || s === null) return;
-      let G = adminRequestStateForEvent(s);
-      if (
-        G === void 0 || h === void 0
-          ? G === h
-          : G.state === h.state &&
-            G.lastFileFailed === h.lastFileFailed &&
-            G.revision === h.revision &&
-            G.label === h.label &&
-            G.doneLabel === h.doneLabel &&
-            G.confirm === h.confirm &&
-            G.confirmPrompt === h.confirmPrompt
-      )
-        return;
-      S(s);
-    });
+    } catch (error) {
+      logForDebugging(`[rateLimitFrames] listener failed: ${errorMessage(error)}`, {
+        level: "error",
+      });
+    } finally {
+      y = Z;
+    }
+  };
+  let R = onLimitsStatusChanged(S);
+  let rateLimitEventThrottle = createRateLimitEventThrottle();
+  let P = onQuotaRejected((G) => {
+    if (isQuotaRejectedReemitEnabled() && rateLimitEventThrottle(G)) S(G);
+  });
+  let L = null;
+  let q = onCreditOfferPromptChange(() => {
+    if (y || s === null || L === s || getOfferBanner() === undefined) return;
+    L = s;
+    S(s);
+  });
+  let x = subscribeAdminRequestPhase(() => {
+    if (y || s === null) return;
+    let G = adminRequestStateForEvent(s);
+    if (
+      G === undefined || h === undefined
+        ? G === h
+        : G.state === h.state &&
+          G.lastFileFailed === h.lastFileFailed &&
+          G.revision === h.revision &&
+          G.label === h.label &&
+          G.doneLabel === h.doneLabel &&
+          G.confirm === h.confirm &&
+          G.confirmPrompt === h.confirmPrompt
+    )
+      return;
+    S(s);
+  });
   return () => {
-    (R(), P(), q(), x());
+    R();
+    P();
+    q();
+    x();
   };
 }
 //@ chunk-tyg7f3ek.js:186643-186749 placement
-function installSdkEventDrain({ drain: drain, emit: emit }) {
+function installSdkEventDrain({ drain, emit }) {
   let r = () => {
     for (let s of drain()) emit(s);
   };
-  return (
-    setTaskNotificationListener(r),
-    {
-      close: () => {
-        (setTaskNotificationListener(null), r());
-      },
-    }
-  );
+  setTaskNotificationListener(r);
+  return {
+    close: () => {
+      setTaskNotificationListener(null);
+      r();
+    },
+  };
 }
 //@ chunk-tyg7f3ek.js:186749-188220 placement
 class SdkMcpServerWait {
@@ -494,9 +591,12 @@ class SdkMcpServerWait {
   updateSdkMcp;
   relayWaitLeftMs;
   waitedFor = new WeakSet();
-  firstQueryReleased = !1;
-  constructor({ sdkUrl: e, unconnectedServers: n, updateSdkMcp: r, relayWaitLeftMs: s }) {
-    ((this.sdkUrl = e), (this.unconnectedServers = n), (this.updateSdkMcp = r), (this.relayWaitLeftMs = s));
+  firstQueryReleased = false;
+  constructor({ sdkUrl, unconnectedServers, updateSdkMcp, relayWaitLeftMs }) {
+    this.sdkUrl = sdkUrl;
+    this.unconnectedServers = unconnectedServers;
+    this.updateSdkMcp = updateSdkMcp;
+    this.relayWaitLeftMs = relayWaitLeftMs;
   }
   noteEntryWait() {
     if (this.sdkUrl) for (let e of this.unconnectedServers()) this.waitedFor.add(e);
@@ -505,85 +605,93 @@ class SdkMcpServerWait {
     return Boolean(this.sdkUrl) && !this.firstQueryReleased;
   }
   markFirstQueryReleased() {
-    this.firstQueryReleased = !0;
+    this.firstQueryReleased = true;
   }
   join(e) {
-    if (!this.sdkUrl || e.shouldQuery === !1) return null;
-    let filtered = this.unconnectedServers().filter((S) => !this.waitedFor.has(S)),
-      r = filtered.length;
-    if (r === 0) return (this.markFirstQueryReleased(), null);
+    if (!this.sdkUrl || e.shouldQuery === false) return null;
+    let filtered = this.unconnectedServers().filter((S) => !this.waitedFor.has(S));
+    let r = filtered.length;
+    if (r === 0) {
+      this.markFirstQueryReleased();
+      return null;
+    }
     for (let S of filtered) this.waitedFor.add(S);
-    let max = Math.max(A4e(), this.relayWaitLeftMs?.() ?? 0),
-      startTime = performance.now(),
-      updateSdkMcp = this.updateSdkMcp("skip");
-    return (
-      updateSdkMcp.then(
-        () => this.markFirstQueryReleased(),
-        () => this.markFirstQueryReleased(),
-      ),
-      withDeadline(
-        updateSdkMcp.then(() => !0),
-        max,
-      )
-        .then((S) => {
-          this.markFirstQueryReleased();
-          let R = S !== !0;
-          if (R) updateSdkMcp.catch(logError);
-          let rounded = Math.round(performance.now() - startTime),
-            mapped = this.unconnectedServers()
-              .filter((L) => filtered.includes(L))
-              .map((L) => L.name);
-          if (
-            (logForDiagnosticsNoPII(R ? "warn" : "info", "sdk_mcp_first_query_wait", {
-              budget_ms: max,
-              waited_ms: rounded,
-              pending_servers: r,
-              timed_out: R,
-              still_pending_servers: mapped.length,
-            }),
-            Br("sdk_mcp_first_query_wait_ms", rounded, startTime),
-            mapped.length > 0)
-          )
-            logForDebugging(
-              `Waited ${rounded} ms for SDK MCP servers that are still connecting (${mapped.join(", ")}); this turn starts without their tools, which become available when they connect.`,
-              { level: "warn" },
-            );
-        })
-        .catch(logError)
+    let max = Math.max(getConnectTimeoutMs(), this.relayWaitLeftMs?.() ?? 0);
+    let startTime = performance.now();
+    let y = this.updateSdkMcp("skip");
+    y.then(
+      () => this.markFirstQueryReleased(),
+      () => this.markFirstQueryReleased(),
     );
+    return withDeadline(
+      y.then(() => true),
+      max,
+    )
+      .then((S) => {
+        this.markFirstQueryReleased();
+        let R = S !== true;
+        if (R) y.catch(logError);
+        let rounded = Math.round(performance.now() - startTime);
+        let mapped = this.unconnectedServers()
+          .filter((L) => filtered.includes(L))
+          .map((L) => L.name);
+        logForDiagnosticsNoPII(R ? "warn" : "info", "sdk_mcp_first_query_wait", {
+          budget_ms: max,
+          waited_ms: rounded,
+          pending_servers: r,
+          timed_out: R,
+          still_pending_servers: mapped.length,
+        });
+        recordPhase("sdk_mcp_first_query_wait_ms", rounded, startTime);
+        if (mapped.length > 0)
+          logForDebugging(
+            `Waited ${rounded} ms for SDK MCP servers that are still connecting (${mapped.join(", ")}); this turn starts without their tools, which become available when they connect.`,
+            {
+              level: "warn",
+            },
+          );
+      })
+      .catch(logError);
   }
 }
 //@ chunk-tyg7f3ek.js:188257-188353 placement
-var MN = new Set(["scheduled", "task_notification", "auto_continuation", "host_synthetic", "system"]);
+var NON_HUMAN_TURN_ORIGINS = new Set([
+  "scheduled",
+  "task_notification",
+  "auto_continuation",
+  "host_synthetic",
+  "system",
+]);
 //@ chunk-tyg7f3ek.js:188353-188415 placement
-function jC(e) {
+function pausedSuggestionReasonSafe(e) {
   try {
     return pausedPromptSuggestionReason(e);
   } catch (error) {
-    return (logError(toError(error)), null);
+    logError(toError(error));
+    return null;
   }
 }
 //@ chunk-tyg7f3ek.js:188415-188593 placement
-function pausedPromptSuggestionReason({ paused: paused, turnOrigin: turnOrigin }) {
+function pausedPromptSuggestionReason({ paused, turnOrigin }) {
   let r;
   if (paused) r = "host_paused";
   else {
     let s = turnOrigin();
-    if (s === void 0 || !MN.has(s)) return null;
+    if (s === undefined || !NON_HUMAN_TURN_ORIGINS.has(s)) return null;
     r = "not_user_started";
   }
-  return getFeatureValue_CACHED_MAY_BE_STALE("tengu_chomp_sable", !1) ? r : null;
+  return getFeatureValue_CACHED_MAY_BE_STALE("tengu_chomp_sable", false) ? r : null;
 }
 //@ chunk-tyg7f3ek.js:188593-188606 placement
-var IN = 30000;
+var PROMPT_SUGGESTION_TIMEOUT_MS = 30000;
+//@ chunk-tyg7f3ek.js:188606-191278 placement
 /**
  * SDK 模式下在轮次之间生成并发送 prompt_suggestion（仅缓存热时）。
  */
-//@ chunk-tyg7f3ek.js:188606-191278 placement
 class PromptSuggestionEmitter {
   abortController = null;
   inflightPromise = null;
-  paused = !1;
+  paused = false;
   lastEmitted = null;
   pendingSuggestion = null;
   pendingLastEmittedEntry = null;
@@ -595,39 +703,37 @@ class PromptSuggestionEmitter {
   turnOrigin;
   generate;
   constructor({
-    emit: e,
-    promptSuggestions: n,
-    shuttingDown: r,
-    holdsResults: s,
-    cacheSafeParams: h,
-    turnOrigin: y,
-    generate: S,
+    emit,
+    promptSuggestions,
+    shuttingDown,
+    holdsResults,
+    cacheSafeParams,
+    turnOrigin,
+    generate,
   }) {
-    ((this.emit = e),
-      (this.promptSuggestions = n),
-      (this.shuttingDown = r),
-      (this.holdsResults = s),
-      (this.cacheSafeParams = h),
-      (this.turnOrigin = y),
-      (this.generate = S));
+    this.emit = emit;
+    this.promptSuggestions = promptSuggestions;
+    this.shuttingDown = shuttingDown;
+    this.holdsResults = holdsResults;
+    this.cacheSafeParams = cacheSafeParams;
+    this.turnOrigin = turnOrigin;
+    this.generate = generate;
   }
-  setPaused(e) {
-    this.paused = e;
+  setPaused(paused) {
+    this.paused = paused;
   }
   onCommand(e, n) {
-    if (e.shouldQuery === !1) return;
-    if (
-      (this.abortController?.abort(),
-      (this.abortController = null),
-      (this.pendingSuggestion = null),
-      (this.pendingLastEmittedEntry = null),
-      this.lastEmitted && e.mode === "prompt")
-    ) {
-      let r = typeof n === "string" ? n : n.find((s) => s.type === "text")?.text;
-      if (typeof r === "string")
+    if (e.shouldQuery === false) return;
+    this.abortController?.abort();
+    this.abortController = null;
+    this.pendingSuggestion = null;
+    this.pendingLastEmittedEntry = null;
+    if (this.lastEmitted && e.mode === "prompt") {
+      let userInput = typeof n === "string" ? n : n.find((s) => s.type === "text")?.text;
+      if (typeof userInput === "string")
         logSuggestionOutcome(
           this.lastEmitted.text,
-          r,
+          userInput,
           this.lastEmitted.emittedAt,
           this.lastEmitted.generationRequestId,
         );
@@ -637,15 +743,18 @@ class PromptSuggestionEmitter {
   afterResult(e) {
     if (
       !this.promptSuggestions() ||
-      e.shouldQuery === !1 ||
+      e.shouldQuery === false ||
       this.shuttingDown() ||
-      env.CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION === !1
+      env.CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION === false
     )
       return;
     this.abortController?.abort();
     let abortController = new AbortController();
     this.abortController = abortController;
-    let r = jC({ paused: this.paused, turnOrigin: this.turnOrigin });
+    let r = pausedSuggestionReasonSafe({
+      paused: this.paused,
+      turnOrigin: this.turnOrigin,
+    });
     if (r) {
       try {
         logSuggestionSuppressed(r, "sdk");
@@ -654,31 +763,39 @@ class PromptSuggestionEmitter {
       }
       return;
     }
-    let cacheSafeParams = this.cacheSafeParams();
-    if (!cacheSafeParams) {
+    let s = this.cacheSafeParams();
+    if (!s) {
       logSuggestionSuppressed("sdk_no_params", "sdk");
       return;
     }
-    let h = { promise: null };
-    ((h.promise = (async () => {
+    let h = {
+      promise: null,
+    };
+    h.promise = (async () => {
       try {
-        let generate = await this.generate(abortController, cacheSafeParams);
-        if (!generate || abortController.signal.aborted) return;
+        let y = await this.generate(abortController, s);
+        if (!y || abortController.signal.aborted) return;
         let S = {
-            type: "prompt_suggestion",
-            suggestion: generate.suggestion,
-            uuid: randomUUID_7(),
-            session_id: getSessionId(),
-          },
-          R = {
-            text: generate.suggestion,
-            emittedAt: Date.now(),
-            generationRequestId: generate.generationRequestId,
+          type: "prompt_suggestion",
+          suggestion: y.suggestion,
+          uuid: randomUUID(),
+          session_id: getSessionId(),
+        };
+        let R = {
+          text: y.suggestion,
+          emittedAt: Date.now(),
+          generationRequestId: y.generationRequestId,
+        };
+        if (this.holdsResults()) {
+          this.pendingSuggestion = S;
+          this.pendingLastEmittedEntry = {
+            text: R.text,
+            generationRequestId: R.generationRequestId,
           };
-        if (this.holdsResults())
-          ((this.pendingSuggestion = S),
-            (this.pendingLastEmittedEntry = { text: R.text, generationRequestId: R.generationRequestId }));
-        else ((this.lastEmitted = R), this.emit(S));
+        } else {
+          this.lastEmitted = R;
+          this.emit(S);
+        }
       } catch (error) {
         if (error instanceof Error && (error.name === "AbortError" || error.name === "APIUserAbortError")) {
           logSuggestionSuppressed("aborted", "sdk");
@@ -688,79 +805,91 @@ class PromptSuggestionEmitter {
       } finally {
         if (this.inflightPromise === h.promise) this.inflightPromise = null;
       }
-    })()),
-      (this.inflightPromise = h.promise));
+    })();
+    this.inflightPromise = h.promise;
   }
   emitPending() {
     if (this.pendingSuggestion) {
-      if ((this.emit(this.pendingSuggestion), this.pendingLastEmittedEntry))
-        ((this.lastEmitted = { ...this.pendingLastEmittedEntry, emittedAt: Date.now() }),
-          (this.pendingLastEmittedEntry = null));
+      this.emit(this.pendingSuggestion);
+      if (this.pendingLastEmittedEntry) {
+        this.lastEmitted = {
+          ...this.pendingLastEmittedEntry,
+          emittedAt: Date.now(),
+        };
+        this.pendingLastEmittedEntry = null;
+      }
       this.pendingSuggestion = null;
     }
   }
   discard() {
-    (this.abortController?.abort(),
-      (this.abortController = null),
-      (this.lastEmitted = null),
-      (this.pendingSuggestion = null));
+    this.abortController?.abort();
+    this.abortController = null;
+    this.lastEmitted = null;
+    this.pendingSuggestion = null;
   }
   abort() {
     this.abortController?.abort();
   }
   settle() {
     if (this.inflightPromise) return this.settleInflight(this.inflightPromise);
-    (this.abortController?.abort(), (this.abortController = null));
+    this.abortController?.abort();
+    this.abortController = null;
     return;
   }
   async settleInflight(e) {
-    let n = setTimeout((r) => r?.abort(), IN, this.abortController);
+    let timer = setTimeout((r) => r?.abort(), PROMPT_SUGGESTION_TIMEOUT_MS, this.abortController);
     try {
       await e;
     } finally {
-      clearTimeout(n);
+      clearTimeout(timer);
     }
-    (this.abortController?.abort(), (this.abortController = null));
+    this.abortController?.abort();
+    this.abortController = null;
   }
 }
 //@ chunk-tyg7f3ek.js:191278-191524 placement
-function createPromptSuggestionEmitter({ messages: messages, getAppState: getAppState, ...r }) {
+function createPromptSuggestionEmitter({ messages, getAppState, ...r }) {
   return new PromptSuggestionEmitter({
     ...r,
     cacheSafeParams: getLastCacheSafeParams,
     turnOrigin: () => getTurnOrigin(messages),
-    generate: (s, h) => {
-      if (!isMainThreadCacheWarm())
-        return (
-          logSuggestionSuppressed("cache_cold", "sdk", { cacheColdBy: "prefix_not_warm" }),
-          Promise.resolve(null)
-        );
-      return tryGenerateSuggestion(s, messages, getAppState, h, "sdk");
+    generate: (abortController, h) => {
+      if (!isMainThreadCacheWarm()) {
+        logSuggestionSuppressed("cache_cold", "sdk", {
+          cacheColdBy: "prefix_not_warm",
+        });
+        return Promise.resolve(null);
+      }
+      return tryGenerateSuggestion(abortController, messages, getAppState, h, "sdk");
     },
   });
 }
 //@ chunk-tyg7f3ek.js:191524-191928 placement
-var ACCOUNT_PLUGINS_CHECK_CONSTANTS = "tengu_ccr_plugins_turn_start_check_enabled",
-  DN = !0,
-  X_ = 60000,
-  FN = 2,
-  xN = 1800000,
-  ty = 5000,
-  ny = 30000,
-  rp = 3,
-  zC = 2,
-  ACCOUNT_PLUGINS_UNCHECKED = "account-plugins-unchecked",
-  LN = "Couldn't check your plugins for updates. The versions already loaded are still in use.",
-  ACCOUNT_PLUGINS_NOT_RELOADED = "account-plugins-not-reloaded",
-  NN =
-    "Couldn't finish reloading your plugins after a change. Parts of their earlier versions may still be in use until a reload succeeds.";
+/**
+ * 账号插件启动检查：特性默认值、检查间隔与退避（60s 起、2 倍、30 分钟上限）、超时与连续拒绝上限，以及两项未检查/未重载提示文本。
+ */
+var ACCOUNT_PLUGINS_CHECK_CONSTANTS = "tengu_ccr_plugins_turn_start_check_enabled";
+var ACCOUNT_PLUGINS_CHECK_DEFAULT = true;
+var ACCOUNT_PLUGINS_CHECK_INTERVAL_MS = 60000;
+var ACCOUNT_PLUGINS_MIN_CHECKS = 2;
+var ACCOUNT_PLUGINS_CHANGE_TTL_MS = 1800000;
+var ACCOUNT_PLUGINS_RETRY_MS = 5000;
+var ACCOUNT_PLUGINS_CHECK_TIMEOUT_MS = 30000;
+var ACCOUNT_PLUGINS_MAX_REFUSALS = 3;
+var ACCOUNT_PLUGINS_REFUSAL_LIMIT = 2;
+var ACCOUNT_PLUGINS_UNCHECKED = "account-plugins-unchecked";
+var ACCOUNT_PLUGINS_UNCHECKED_TEXT =
+  "Couldn't check your plugins for updates. The versions already loaded are still in use.";
+var ACCOUNT_PLUGINS_NOT_RELOADED = "account-plugins-not-reloaded";
+var ACCOUNT_PLUGINS_NOT_RELOADED_TEXT =
+  "Couldn't finish reloading your plugins after a change. Parts of their earlier versions may still be in use until a reload succeeds.";
 //@ chunk-tyg7f3ek.js:191928-192027 placement
-function YC(e) {
+function isAccountPluginsCheckEnabled(session) {
   return (
-    env.CLAUDE_CODE_REMOTE === !0 &&
-    env.CLAUDE_CODE_SYNC_PLUGINS === !0 &&
-    !isSessionRefsSyncEnabled(e) &&
-    getFeatureValue_CACHED_MAY_BE_STALE(ACCOUNT_PLUGINS_CHECK_CONSTANTS, DN)
+    env.CLAUDE_CODE_REMOTE === true &&
+    env.CLAUDE_CODE_SYNC_PLUGINS === true &&
+    !isSessionRefsSyncEnabled(session) &&
+    getFeatureValue_CACHED_MAY_BE_STALE(ACCOUNT_PLUGINS_CHECK_CONSTANTS, ACCOUNT_PLUGINS_CHECK_DEFAULT)
   );
 }
 //@ chunk-tyg7f3ek.js:192027-192130 placement
@@ -769,103 +898,108 @@ var notifyAccountPluginsUnchecked = () =>
     type: "system",
     subtype: "notification",
     key: ACCOUNT_PLUGINS_UNCHECKED,
-    text: LN,
+    text: ACCOUNT_PLUGINS_UNCHECKED_TEXT,
     priority: "medium",
     color: "warning",
   });
+//@ chunk-tyg7f3ek.js:192130-195841 placement
 /**
  * CCR 会话每轮开始检查账户插件是否有更新（tengu_ccr_plugins_turn_start_check_enabled），失败/拒绝时告知用户。
  */
-//@ chunk-tyg7f3ek.js:192130-195841 placement
 class AccountPluginsChecker {
   session;
   credentials;
   checkedAt;
   failuresInARow = 0;
-  isChecking = !1;
+  isChecking = false;
   refusalsInARow = 0;
   roundAtRefusal = null;
-  isToldOfRefusal = !1;
+  isToldOfRefusal = false;
   unlandedStamp = null;
   unlandedRounds = 0;
   unlandedRoundAt = 0;
   failedReloads = 0;
   failedReloadAt = 0;
   reloadedAtFailedReload = null;
-  constructor(e, n) {
-    ((this.session = e), (this.credentials = n), (this.checkedAt = e.host.clock.now()));
+  constructor(session, credentials) {
+    this.session = session;
+    this.credentials = credentials;
+    this.checkedAt = session.host.clock.now();
   }
-  atTurnStart(e = !0) {
-    let now = this.session.host.clock.now();
-    if (!this.isDueAt(now)) return;
-    return (
-      (this.checkedAt = now),
-      (this.isChecking = !0),
-      this.syncedIfListingChanged()
-        .then(
-          (r) => (
-            logForDiagnosticsNoPII("info", "plugins_sync_turn_start_check_done", {
-              is_changed: r,
-              is_waited_for: e,
-              duration_ms: this.session.host.clock.now() - now,
-            }),
-            r
-          ),
-        )
-        .finally(() => {
-          this.isChecking = !1;
-        })
-    );
+  atTurnStart(isWaitedFor = true) {
+    let n = this.session.host.clock.now();
+    if (!this.isDueAt(n)) return;
+    this.checkedAt = n;
+    this.isChecking = true;
+    return this.syncedIfListingChanged()
+      .then((r) => {
+        logForDiagnosticsNoPII("info", "plugins_sync_turn_start_check_done", {
+          is_changed: r,
+          is_waited_for: isWaitedFor,
+          duration_ms: this.session.host.clock.now() - n,
+        });
+        return r;
+      })
+      .finally(() => {
+        this.isChecking = false;
+      });
   }
   isDueAt(e) {
-    let n = e - this.checkedAt,
-      pluginsSync = this.session.pluginsSync;
+    let n = e - this.checkedAt;
+    let pluginsSync = this.session.pluginsSync;
     if (
       this.refusalsInARow > 0 &&
       pluginsSync.firstSyncPromise !== this.roundAtRefusal &&
       pluginsSync.accountListing === "listed"
     )
       this.refusalsInARow = 0;
-    return !this.isChecking && this.refusalsInARow < zC && (n < 0 || n >= X_) && YC(this.session);
+    return (
+      !this.isChecking &&
+      this.refusalsInARow < ACCOUNT_PLUGINS_REFUSAL_LIMIT &&
+      (n < 0 || n >= ACCOUNT_PLUGINS_CHECK_INTERVAL_MS) &&
+      isAccountPluginsCheckEnabled(this.session)
+    );
   }
   isCheckDue() {
     return this.isDueAt(this.session.host.clock.now());
   }
   hasLandedChange() {
-    let e = getSyncedPluginReloadDebt();
-    return e.changesLanded !== e.changesReloaded && YC(this.session);
+    let syncedPluginReloadDebt = getSyncedPluginReloadDebt();
+    return (
+      syncedPluginReloadDebt.changesLanded !== syncedPluginReloadDebt.changesReloaded &&
+      isAccountPluginsCheckEnabled(this.session)
+    );
   }
   isReloadOwed() {
     return !getSyncedPluginReloadDebt().reloadHeld && this.hasLandedChange();
   }
   isReloadTryDue() {
     let e = this.session.host.clock.now() - this.failedReloadAt;
-    return !(this.failedReloads > 0 && e >= 0 && e < X_);
+    return !(this.failedReloads > 0 && e >= 0 && e < ACCOUNT_PLUGINS_CHECK_INTERVAL_MS);
   }
   reloadEnded(e, n) {
-    let s = n === this.reloadedAtFailedReload ? this.failedReloads : 0;
-    if (
-      ((this.failedReloads = e ? s + 1 : 0),
-      (this.failedReloadAt = this.session.host.clock.now()),
-      (this.reloadedAtFailedReload = getSyncedPluginReloadDebt().changesReloaded),
-      e)
-    )
+    let failedReloads = n === this.reloadedAtFailedReload ? this.failedReloads : 0;
+    this.failedReloads = e ? failedReloads + 1 : 0;
+    this.failedReloadAt = this.session.host.clock.now();
+    this.reloadedAtFailedReload = getSyncedPluginReloadDebt().changesReloaded;
+    if (e)
       logForDiagnosticsNoPII("warn", "plugins_sync_turn_start_reload_failed", {
         failures_in_a_row: this.failedReloads,
       });
-    if (e && this.failedReloads === rp)
-      (logFeatureSad("plugins_sync_turn_start_check", "reload_failed", {
+    if (e && this.failedReloads === ACCOUNT_PLUGINS_MAX_REFUSALS) {
+      logFeatureSad("plugins_sync_turn_start_check", "reload_failed", {
         failures_in_a_row: this.failedReloads,
-        hosted: !0,
-      }),
-        enqueueTaskNotification({
-          type: "system",
-          subtype: "notification",
-          key: ACCOUNT_PLUGINS_NOT_RELOADED,
-          text: NN,
-          priority: "medium",
-          color: "warning",
-        }));
+        hosted: true,
+      });
+      enqueueTaskNotification({
+        type: "system",
+        subtype: "notification",
+        key: ACCOUNT_PLUGINS_NOT_RELOADED,
+        text: ACCOUNT_PLUGINS_NOT_RELOADED_TEXT,
+        priority: "medium",
+        color: "warning",
+      });
+    }
   }
   reloadedElsewhere() {
     this.failedReloads = 0;
@@ -876,73 +1010,99 @@ class AccountPluginsChecker {
   async syncedIfListingChanged() {
     try {
       let pluginsSync = this.session.pluginsSync;
-      if ((await pluginsSync.firstSyncPromise?.catch(() => {}), sJ(), !Jbt(this.session) || !wie() || Hkt()))
-        return !1;
-      let firstSyncPromise = pluginsSync.firstSyncPromise,
-        s = await listAccountPlugins({
-          isBackground: !0,
-          credentials: this.credentials,
-          ...(isSkillsAsPluginsActive(this.session) && { convertedSkillsAsPlugins: !0 }),
+      await pluginsSync.firstSyncPromise?.catch(() => {});
+      refreshSyncVeto();
+      if (!isPluginsSyncActive(this.session) || !syncSettingsEnabled() || isPluginsSyncEligible())
+        return false;
+      let roundAtRefusal = pluginsSync.firstSyncPromise;
+      let s = await listAccountPlugins({
+        isBackground: true,
+        credentials: this.credentials,
+        ...(isSkillsAsPluginsActive(this.session) && {
+          convertedSkillsAsPlugins: true,
         }),
-        h = !s.success && !Hee(s),
-        y = h && eot(s);
-      if (y)
-        (this.refusalsInARow++,
-          (this.roundAtRefusal = firstSyncPromise),
-          logForDiagnosticsNoPII("warn", "plugins_sync_turn_start_check_refused", {
-            refusals_in_a_row: this.refusalsInARow,
-            ...listErrorTelemetry(s),
-          }),
-          logFeatureSad("plugins_sync_turn_start_check", "list_refused", {
-            refusals_in_a_row: this.refusalsInARow,
-          }));
-      if (y && this.refusalsInARow >= zC && !this.isToldOfRefusal && getSyncedPluginDirs().length > 0)
-        ((this.isToldOfRefusal = !0), notifyAccountPluginsUnchecked());
-      if (y) return !1;
-      if (((this.refusalsInARow = 0), h)) return (this.noteFailure("list_failed", listErrorTelemetry(s)), !1);
-      if (s.success && s.degraded === !0) return (this.noteFailure("list_degraded", {}), !1);
+      });
+      let h = !s.success && !isNotFoundServerError(s);
+      let y = h && isSyncRefusal(s);
+      if (y) {
+        this.refusalsInARow++;
+        this.roundAtRefusal = roundAtRefusal;
+        logForDiagnosticsNoPII("warn", "plugins_sync_turn_start_check_refused", {
+          refusals_in_a_row: this.refusalsInARow,
+          ...listErrorTelemetry(s),
+        });
+        logFeatureSad("plugins_sync_turn_start_check", "list_refused", {
+          refusals_in_a_row: this.refusalsInARow,
+        });
+      }
+      if (
+        y &&
+        this.refusalsInARow >= ACCOUNT_PLUGINS_REFUSAL_LIMIT &&
+        !this.isToldOfRefusal &&
+        getSyncedPluginDirs().length > 0
+      ) {
+        this.isToldOfRefusal = true;
+        notifyAccountPluginsUnchecked();
+      }
+      if (y) return false;
+      this.refusalsInARow = 0;
+      if (h) {
+        this.noteFailure("list_failed", listErrorTelemetry(s));
+        return false;
+      }
+      if (s.success && s.degraded === true) {
+        this.noteFailure("list_degraded", {});
+        return false;
+      }
       this.failuresInARow = 0;
-      let w = pluginListFingerprint(s.success ? s.plugins : []),
-        P = this.session.host.clock.now() - this.unlandedRoundAt,
-        L = w === this.unlandedStamp && P >= 0 && P < Math.min(X_ * FN ** this.unlandedRounds, xN);
-      if (!(w !== pluginsSync.listedStamp && !L)) return !1;
-      let changesLanded = getSyncedPluginReloadDebt().changesLanded,
-        G = await rerunPluginsSync(this.session, this.credentials);
-      if (pluginsSync.listedStamp === null)
-        ((this.unlandedRounds = w === this.unlandedStamp ? this.unlandedRounds + 1 : 1),
-          (this.unlandedStamp = w),
-          (this.unlandedRoundAt = this.session.host.clock.now()),
-          logFeatureSad("plugins_sync_turn_start_check", "round_incomplete", {
-            rounds_for_listing: this.unlandedRounds,
-          }));
-      else this.unlandedStamp = null;
+      let w = pluginListFingerprint(s.success ? s.plugins : []);
+      let P = this.session.host.clock.now() - this.unlandedRoundAt;
+      let L =
+        w === this.unlandedStamp &&
+        P >= 0 &&
+        P <
+          Math.min(
+            ACCOUNT_PLUGINS_CHECK_INTERVAL_MS * ACCOUNT_PLUGINS_MIN_CHECKS ** this.unlandedRounds,
+            ACCOUNT_PLUGINS_CHANGE_TTL_MS,
+          );
+      if (!(w !== pluginsSync.listedStamp && !L)) return false;
+      let changesLanded = getSyncedPluginReloadDebt().changesLanded;
+      let G = await rerunPluginsSync(this.session, this.credentials);
+      if (pluginsSync.listedStamp === null) {
+        this.unlandedRounds = w === this.unlandedStamp ? this.unlandedRounds + 1 : 1;
+        this.unlandedStamp = w;
+        this.unlandedRoundAt = this.session.host.clock.now();
+        logFeatureSad("plugins_sync_turn_start_check", "round_incomplete", {
+          rounds_for_listing: this.unlandedRounds,
+        });
+      } else this.unlandedStamp = null;
       if (pluginsSync.listedStamp !== null && G) logFeatureOk("plugins_sync_turn_start_check");
       return G || getSyncedPluginReloadDebt().changesLanded !== changesLanded;
     } catch (error) {
-      return (logError(error), (this.refusalsInARow = 0), this.noteFailure("error", {}), !1);
+      logError(error);
+      this.refusalsInARow = 0;
+      this.noteFailure("error", {});
+      return false;
     }
   }
   noteFailure(e, n) {
-    if (
-      (this.failuresInARow++,
-      logForDiagnosticsNoPII("warn", "plugins_sync_turn_start_check_failed", {
-        failure: e,
-        failures_in_a_row: this.failuresInARow,
-        ...n,
-      }),
-      logFeatureSad("plugins_sync_turn_start_check", e, {
-        failures_in_a_row: this.failuresInARow,
-        hosted: !0,
-      }),
-      this.failuresInARow === rp)
-    )
-      notifyAccountPluginsUnchecked();
+    this.failuresInARow++;
+    logForDiagnosticsNoPII("warn", "plugins_sync_turn_start_check_failed", {
+      failure: e,
+      failures_in_a_row: this.failuresInARow,
+      ...n,
+    });
+    logFeatureSad("plugins_sync_turn_start_check", e, {
+      failures_in_a_row: this.failuresInARow,
+      hosted: true,
+    });
+    if (this.failuresInARow === ACCOUNT_PLUGINS_MAX_REFUSALS) notifyAccountPluginsUnchecked();
   }
 }
+//@ chunk-tyg7f3ek.js:195841-211742 placement
 /**
  * 轮次开始前的检查集合：延迟命令、SessionStart 钩子、SDK MCP 更新、插件检查、parked 权限退役等。
  */
-//@ chunk-tyg7f3ek.js:195841-211742 placement
 class TurnStartChecks {
   deferredCommandsJoin;
   parkedPermissionRetirement;
@@ -964,7 +1124,7 @@ class TurnStartChecks {
   backgroundInstall;
   refreshPluginState;
   refillMarketplaces;
-  isRefillLanded = !1;
+  isRefillLanded = false;
   applyPluginMcpDiff;
   connectedNonDynamicMcpServerNames;
   serverNamesOwnedBeforePluginsSync;
@@ -974,7 +1134,7 @@ class TurnStartChecks {
   mcpPrewaitPromise;
   firstCommandMountJoin;
   mcpPrewait;
-  firstCommandTaken = !1;
+  firstCommandTaken = false;
   waitForPendingMcp;
   store;
   allMcpClients;
@@ -984,252 +1144,262 @@ class TurnStartChecks {
   enterPhase;
   session;
   accountPluginsFreshness;
-  isPastFirstTake = !1;
-  accountPluginsNeedReload = !1;
+  isPastFirstTake = false;
+  accountPluginsNeedReload = false;
   unwaitedAccountPluginsCheck;
-  isAccountPluginsReloadRunning = !1;
+  isAccountPluginsReloadRunning = false;
   accountPluginsReloadsStarted = 0;
   triesSkippedForRunningReload = 0;
-  firstMessageRecorded = !1;
+  firstMessageRecorded = false;
   sdkMcpBackgroundRetry;
   skillsSync;
   accountSkillsSyncRepopulatePending;
-  pluginsSyncNeedsRefresh = !1;
+  pluginsSyncNeedsRefresh = false;
   serversStartedSinceKick = new Set();
-  lateForwardedInstallNeedsRefresh = !1;
-  backgroundRefreshEnabled = !1;
+  lateForwardedInstallNeedsRefresh = false;
+  backgroundRefreshEnabled = false;
   constructor({
-    deferredCommandsJoin: e,
-    parkedPermissionRetirement: n,
-    takeClaimSessionStartHooks: r = () => {
+    deferredCommandsJoin,
+    parkedPermissionRetirement,
+    takeClaimSessionStartHooks = () => {
       return;
     },
-    takeNewPluginsSessionStart: s = () => {
+    takeNewPluginsSessionStart = () => {
       return;
     },
-    runSessionStartHooksOfNewPlugins: h = () => {
+    runSessionStartHooksOfNewPlugins = () => {
       return;
     },
-    sdkUrl: y,
-    sdkMcpUpdateKind: S,
-    sdkMcpServersPending: R,
-    sdkToolRelistPending: w,
-    updateSdkMcp: P,
-    noteSdkEntryWait: L = () => {},
-    skillsSync: q,
-    skillsSyncStartedAt: x,
-    accountSkillsSyncRepopulate: G,
-    refreshCurrentCommands: Z,
-    pluginStateRefreshTickets: re,
-    pluginStartupPending: Ae,
-    resolveDeferredPluginStartup: Ue,
-    closePluginInstallBracket: ce,
-    backgroundInstall: nt,
-    refreshPluginState: ie,
-    refillMarketplaces: Se,
-    applyPluginMcpDiff: me,
-    connectedNonDynamicMcpServerNames: Me,
-    serverNamesOwnedBeforePluginsSync: Ee,
-    pendingPluginRefresh: He,
-    pluginRefreshJoined: Xe,
-    mcpClientCountAtKick: We,
-    mcpPrewaitPromise: St,
-    firstCommandMountJoin: wt,
-    mcpPrewait: Lt,
-    waitForPendingMcp: pn,
-    store: _n,
-    allMcpClients: Mn,
-    registerElicitationHandlers: jn,
-    registerChannelHandler: Jn,
-    buildAllTools: ze,
-    enterPhase: Dr,
-    session: $r,
-    credentials: $n,
+    sdkUrl,
+    sdkMcpUpdateKind,
+    sdkMcpServersPending,
+    sdkToolRelistPending,
+    updateSdkMcp,
+    noteSdkEntryWait = () => {},
+    skillsSync,
+    skillsSyncStartedAt,
+    accountSkillsSyncRepopulate,
+    refreshCurrentCommands,
+    pluginStateRefreshTickets,
+    pluginStartupPending,
+    resolveDeferredPluginStartup,
+    closePluginInstallBracket,
+    backgroundInstall,
+    refreshPluginState,
+    refillMarketplaces,
+    applyPluginMcpDiff,
+    connectedNonDynamicMcpServerNames,
+    serverNamesOwnedBeforePluginsSync,
+    pendingPluginRefresh,
+    pluginRefreshJoined,
+    mcpClientCountAtKick,
+    mcpPrewaitPromise,
+    firstCommandMountJoin,
+    mcpPrewait,
+    waitForPendingMcp,
+    store,
+    allMcpClients,
+    registerElicitationHandlers,
+    registerChannelHandler,
+    buildAllTools,
+    enterPhase,
+    session,
+    credentials,
   }) {
-    ((this.deferredCommandsJoin = e),
-      (this.parkedPermissionRetirement = n),
-      (this.takeClaimSessionStartHooks = r),
-      (this.takeNewPluginsSessionStart = s),
-      (this.runSessionStartHooksOfNewPlugins = h),
-      (this.sdkUrl = y),
-      (this.sdkMcpUpdateKind = S),
-      (this.sdkMcpServersPending = R),
-      (this.sdkToolRelistPending = w),
-      (this.updateSdkMcp = P),
-      (this.noteSdkEntryWait = L),
-      (this.skillsSync = q),
-      (this.skillsSyncStartedAt = x),
-      (this.accountSkillsSyncRepopulatePending = G),
-      (this.refreshCurrentCommands = Z),
-      (this.pluginStateRefreshTickets = re),
-      (this.pluginStartupPending = Ae),
-      (this.resolveDeferredPluginStartup = Ue),
-      (this.closePluginInstallBracket = ce),
-      (this.backgroundInstall = nt),
-      (this.refreshPluginState = ie),
-      (this.refillMarketplaces = Se),
-      (this.applyPluginMcpDiff = me),
-      (this.connectedNonDynamicMcpServerNames = Me),
-      (this.serverNamesOwnedBeforePluginsSync = Ee),
-      (this.pendingPluginRefresh = He),
-      (this.pluginRefreshJoined = Xe),
-      (this.mcpClientCountAtKick = We),
-      (this.mcpPrewaitPromise = St),
-      (this.firstCommandMountJoin = wt),
-      (this.mcpPrewait = Lt),
-      (this.waitForPendingMcp = pn),
-      (this.store = _n),
-      (this.allMcpClients = Mn),
-      (this.registerElicitationHandlers = jn),
-      (this.registerChannelHandler = Jn),
-      (this.buildAllTools = ze),
-      (this.enterPhase = Dr),
-      (this.session = $r),
-      (this.accountPluginsFreshness = new AccountPluginsChecker($r, $n)));
+    this.deferredCommandsJoin = deferredCommandsJoin;
+    this.parkedPermissionRetirement = parkedPermissionRetirement;
+    this.takeClaimSessionStartHooks = takeClaimSessionStartHooks;
+    this.takeNewPluginsSessionStart = takeNewPluginsSessionStart;
+    this.runSessionStartHooksOfNewPlugins = runSessionStartHooksOfNewPlugins;
+    this.sdkUrl = sdkUrl;
+    this.sdkMcpUpdateKind = sdkMcpUpdateKind;
+    this.sdkMcpServersPending = sdkMcpServersPending;
+    this.sdkToolRelistPending = sdkToolRelistPending;
+    this.updateSdkMcp = updateSdkMcp;
+    this.noteSdkEntryWait = noteSdkEntryWait;
+    this.skillsSync = skillsSync;
+    this.skillsSyncStartedAt = skillsSyncStartedAt;
+    this.accountSkillsSyncRepopulatePending = accountSkillsSyncRepopulate;
+    this.refreshCurrentCommands = refreshCurrentCommands;
+    this.pluginStateRefreshTickets = pluginStateRefreshTickets;
+    this.pluginStartupPending = pluginStartupPending;
+    this.resolveDeferredPluginStartup = resolveDeferredPluginStartup;
+    this.closePluginInstallBracket = closePluginInstallBracket;
+    this.backgroundInstall = backgroundInstall;
+    this.refreshPluginState = refreshPluginState;
+    this.refillMarketplaces = refillMarketplaces;
+    this.applyPluginMcpDiff = applyPluginMcpDiff;
+    this.connectedNonDynamicMcpServerNames = connectedNonDynamicMcpServerNames;
+    this.serverNamesOwnedBeforePluginsSync = serverNamesOwnedBeforePluginsSync;
+    this.pendingPluginRefresh = pendingPluginRefresh;
+    this.pluginRefreshJoined = pluginRefreshJoined;
+    this.mcpClientCountAtKick = mcpClientCountAtKick;
+    this.mcpPrewaitPromise = mcpPrewaitPromise;
+    this.firstCommandMountJoin = firstCommandMountJoin;
+    this.mcpPrewait = mcpPrewait;
+    this.waitForPendingMcp = waitForPendingMcp;
+    this.store = store;
+    this.allMcpClients = allMcpClients;
+    this.registerElicitationHandlers = registerElicitationHandlers;
+    this.registerChannelHandler = registerChannelHandler;
+    this.buildAllTools = buildAllTools;
+    this.enterPhase = enterPhase;
+    this.session = session;
+    this.accountPluginsFreshness = new AccountPluginsChecker(session, credentials);
   }
   notePluginsSyncLanded() {
-    this.pluginsSyncNeedsRefresh = !0;
+    this.pluginsSyncNeedsRefresh = true;
   }
   noteLateForwardedInstall() {
-    this.lateForwardedInstallNeedsRefresh = !0;
+    this.lateForwardedInstallNeedsRefresh = true;
   }
   noteReloadedByHost(e) {
-    if (getSyncedPluginReloadDebt().reloadsCompleted !== e)
-      ((this.accountPluginsNeedReload = !1), this.accountPluginsFreshness.reloadedElsewhere());
+    if (getSyncedPluginReloadDebt().reloadsCompleted !== e) {
+      this.accountPluginsNeedReload = false;
+      this.accountPluginsFreshness.reloadedElsewhere();
+    }
   }
   noteServersStartedSinceKick(e) {
     for (let n of e) this.serversStartedSinceKick.add(n);
   }
   *beforeDrain() {
     if (this.deferredCommandsJoin) yield this.deferredCommandsJoin;
-    let parkedPermissionRetirement = this.parkedPermissionRetirement();
-    if (parkedPermissionRetirement) yield parkedPermissionRetirement;
+    let e = this.parkedPermissionRetirement();
+    if (e) yield e;
     headlessProfilerCheckpoint("run_entry");
-    let n, r, s, h, y;
-    if (!this.firstMessageRecorded)
-      ((this.firstMessageRecorded = !0),
-        (n = performance.now()),
-        Br("first_message_read_ms", n, 0),
-        ayi(),
-        (r = process.cpuUsage()),
-        (s = startEventLoopLagMonitor(bjn)));
+    let n;
+    let r;
+    let s;
+    let h;
+    let y;
+    if (!this.firstMessageRecorded) {
+      this.firstMessageRecorded = true;
+      n = performance.now();
+      recordPhase("first_message_read_ms", n, 0);
+      recordFirstMessageReadFromSpawn();
+      r = process.cpuUsage();
+      s = startEventLoopLagMonitor(LAG_SAMPLE_INTERVAL_MS);
+    }
     try {
       this.enterPhase("sdk_mcp_update");
       let startTime = performance.now();
       if (this.sdkUrl) {
         this.noteSdkEntryWait();
-        let sdkMcpUpdateKind = this.sdkMcpUpdateKind(),
-          sdkToolRelistPending = this.sdkToolRelistPending();
-        if (sdkMcpUpdateKind !== "retry_failed" || (sdkToolRelistPending && !this.sdkMcpBackgroundRetry)) {
-          let updateSdkMcp = this.updateSdkMcp("skip");
-          if (sdkMcpUpdateKind !== "none" || sdkToolRelistPending) {
-            let sdkUpdateWaitBudgetMs = this.sdkUpdateWaitBudgetMs();
+        let P = this.sdkMcpUpdateKind();
+        let L = this.sdkToolRelistPending();
+        if (P !== "retry_failed" || (L && !this.sdkMcpBackgroundRetry)) {
+          let q = this.updateSdkMcp("skip");
+          if (P !== "none" || L) {
+            let x = this.sdkUpdateWaitBudgetMs();
             if (
               (yield withDeadline(
-                updateSdkMcp.then(() => !0),
-                sdkUpdateWaitBudgetMs,
-              )) !== !0
+                q.then(() => true),
+                x,
+              )) !== true
             ) {
-              updateSdkMcp.catch(logError);
-              let sdkMcpServersPending = this.sdkMcpServersPending(),
-                relayMarked = this.mcpPrewait.relayMarked,
-                relayHold = this.mcpPrewait.relayHold;
-              (logEvent("tengu_sdk_mcp_update_wait_timeout", {
-                budget_ms: sdkUpdateWaitBudgetMs,
-                pending_servers: sdkMcpServersPending,
+              q.catch(logError);
+              let pendingServers = this.sdkMcpServersPending();
+              let relayMarked = this.mcpPrewait.relayMarked;
+              let relayHold = this.mcpPrewait.relayHold;
+              logEvent("tengu_sdk_mcp_update_wait_timeout", {
+                budget_ms: x,
+                pending_servers: pendingServers,
                 relay_marked: relayMarked,
                 relay_hold: relayHold,
-              }),
-                logForDiagnosticsNoPII("warn", "sdk_mcp_update_wait_timeout", {
-                  budget_ms: sdkUpdateWaitBudgetMs,
-                  pending_servers: sdkMcpServersPending,
-                  relay_marked: relayMarked,
-                  relay_hold: relayHold,
-                }));
+              });
+              logForDiagnosticsNoPII("warn", "sdk_mcp_update_wait_timeout", {
+                budget_ms: x,
+                pending_servers: pendingServers,
+                relay_marked: relayMarked,
+                relay_hold: relayHold,
+              });
             }
-          } else yield updateSdkMcp;
+          } else yield q;
         }
-        if (!this.sdkMcpBackgroundRetry && this.sdkMcpUpdateKind() === "retry_failed")
-          (logForDiagnosticsNoPII("info", "sdk_mcp_retry_not_awaited"),
-            (this.sdkMcpBackgroundRetry = this.updateSdkMcp()
-              .catch(logError)
-              .finally(() => {
-                this.sdkMcpBackgroundRetry = void 0;
-              })));
+        if (!this.sdkMcpBackgroundRetry && this.sdkMcpUpdateKind() === "retry_failed") {
+          logForDiagnosticsNoPII("info", "sdk_mcp_retry_not_awaited");
+          this.sdkMcpBackgroundRetry = this.updateSdkMcp()
+            .catch(logError)
+            .finally(() => {
+              this.sdkMcpBackgroundRetry = undefined;
+            });
+        }
       } else yield this.updateSdkMcp();
-      (Br("sdk_mcp_update_ms", performance.now() - startTime, startTime),
-        headlessProfilerCheckpoint("after_updateSdkMcp"),
-        this.enterPhase("entry_joins"));
-      let takeClaimSessionStartHooks = this.takeClaimSessionStartHooks();
-      if (takeClaimSessionStartHooks) {
+      recordPhase("sdk_mcp_update_ms", performance.now() - startTime, startTime);
+      headlessProfilerCheckpoint("after_updateSdkMcp");
+      this.enterPhase("entry_joins");
+      let R = this.takeClaimSessionStartHooks();
+      if (R) {
         let startTime = performance.now();
-        (yield takeClaimSessionStartHooks,
-          Br("claim_hooks_join_ms", performance.now() - startTime, startTime),
-          headlessProfilerCheckpoint("after_claimSessionStartHooks"));
+        yield R;
+        recordPhase("claim_hooks_join_ms", performance.now() - startTime, startTime);
+        headlessProfilerCheckpoint("after_claimSessionStartHooks");
       }
       if (this.skillsSync) {
         let startTime = performance.now();
-        if (
-          (yield awaitFirstSkillsList(this.skillsSync, this.skillsSyncStartedAt),
-          Br("skills_sync_wait_ms", performance.now() - startTime, startTime),
-          env.CLAUDE_CODE_CCR_FOLD_FIRST_TURN_RESCAN && this.pluginStartupPending())
-        )
-          ((y = this.pluginStateRefreshTickets().started), addStartupContext({ fold_first_turn_rescan: 1 }));
-        else {
+        yield awaitFirstSkillsList(this.skillsSync, this.skillsSyncStartedAt);
+        recordPhase("skills_sync_wait_ms", performance.now() - startTime, startTime);
+        if (env.CLAUDE_CODE_CCR_FOLD_FIRST_TURN_RESCAN && this.pluginStartupPending()) {
+          y = this.pluginStateRefreshTickets().started;
+          addStartupContext({
+            fold_first_turn_rescan: 1,
+          });
+        } else {
           let startTime = performance.now();
-          (yield this.refreshCurrentCommands(),
-            Br("skills_sync_commands_refresh_ms", performance.now() - startTime, startTime));
+          yield this.refreshCurrentCommands();
+          recordPhase("skills_sync_commands_refresh_ms", performance.now() - startTime, startTime);
         }
         this.skillsSync = null;
       } else if (this.accountSkillsSyncRepopulatePending) {
-        if (((this.accountSkillsSyncRepopulatePending = !1), remoteToolsState().firstRoundEmitted))
-          yield this.refreshCurrentCommands();
+        this.accountSkillsSyncRepopulatePending = false;
+        if (remoteToolsState().firstRoundEmitted) yield this.refreshCurrentCommands();
       }
       if (this.pluginStartupPending()) yield this.resolveDeferredPluginStartup();
-      if (y !== void 0)
-        if (this.pluginStateRefreshTickets().lastCompletedStart > y) Br("skills_sync_commands_refresh_ms", 0);
+      if (y !== undefined)
+        if (this.pluginStateRefreshTickets().lastCompletedStart > y)
+          recordPhase("skills_sync_commands_refresh_ms", 0);
         else {
           let startTime = performance.now();
-          (yield this.refreshCurrentCommands(),
-            Br("skills_sync_commands_refresh_ms", performance.now() - startTime, startTime));
+          yield this.refreshCurrentCommands();
+          recordPhase("skills_sync_commands_refresh_ms", performance.now() - startTime, startTime);
         }
-      let takeNewPluginsSessionStart = this.takeNewPluginsSessionStart();
-      if (takeNewPluginsSessionStart) {
+      let w = this.takeNewPluginsSessionStart();
+      if (w) {
         let startTime = performance.now();
-        (yield takeNewPluginsSessionStart,
-          Br("new_plugin_hooks_join_ms", performance.now() - startTime, startTime));
+        yield w;
+        recordPhase("new_plugin_hooks_join_ms", performance.now() - startTime, startTime);
       }
     } finally {
-      ((h = s?.stop()), this.closePluginInstallBracket());
+      h = s?.stop();
+      this.closePluginInstallBracket();
     }
-    if (
-      ((this.backgroundRefreshEnabled = env.CLAUDE_CODE_ENABLE_BACKGROUND_PLUGIN_REFRESH),
-      n !== void 0 && r && h !== void 0)
-    ) {
-      Br("first_message_handle_ms", performance.now() - n, n);
-      let cpuUsage = process.cpuUsage(r);
-      (Br("first_message_handle_cpu_ms", (cpuUsage.user + cpuUsage.system) / 1000),
-        Br("first_message_handle_loop_lag_ms", h));
+    this.backgroundRefreshEnabled = env.CLAUDE_CODE_ENABLE_BACKGROUND_PLUGIN_REFRESH;
+    if (n !== undefined && r && h !== undefined) {
+      recordPhase("first_message_handle_ms", performance.now() - n, n);
+      let S = process.cpuUsage(r);
+      recordPhase("first_message_handle_cpu_ms", (S.user + S.system) / 1000);
+      recordPhase("first_message_handle_loop_lag_ms", h);
     }
   }
   sdkUpdateWaitBudgetMs() {
-    let e = A4e(),
-      n =
-        this.mcpPrewait.relayHold && !this.firstCommandTaken
-          ? this.mcpPrewait.freshWaitDeadlineMs?.()
-          : void 0;
-    return n === void 0 ? e : Math.max(e, n);
+    let connectTimeoutMs = getConnectTimeoutMs();
+    let n =
+      this.mcpPrewait.relayHold && !this.firstCommandTaken
+        ? this.mcpPrewait.freshWaitDeadlineMs?.()
+        : undefined;
+    return n === undefined ? connectTimeoutMs : Math.max(connectTimeoutMs, n);
   }
   async loopTop() {
-    let lateForwardedInstallNeedsRefresh = this.lateForwardedInstallNeedsRefresh,
-      organizationAsk = getPluginRegistry().organizationAsk;
-    if (organizationAsk.isCommandHeld && J_() === "unanswered") {
+    let lateForwardedInstallNeedsRefresh = this.lateForwardedInstallNeedsRefresh;
+    let organizationAsk = getPluginRegistry().organizationAsk;
+    if (organizationAsk.isCommandHeld && marketplaceNameAnswerState() === "unanswered") {
       let S = organizationAsk.answerWait !== null;
-      if ((await waitForOrganizationAnswer(), S)) askOrganizationOnce();
+      await waitForOrganizationAnswer();
+      if (S) askOrganizationOnce();
     }
-    let r = organizationAsk.isCommandHeld && J_() !== "unanswered",
-      isRefillLanded = this.isRefillLanded,
-      h = r || isRefillLanded;
+    let r = organizationAsk.isCommandHeld && marketplaceNameAnswerState() !== "unanswered";
+    let isRefillLanded = this.isRefillLanded;
+    let h = r || isRefillLanded;
     if (
       ((this.backgroundRefreshEnabled && this.backgroundInstall?.needsRefresh) ||
         this.pluginsSyncNeedsRefresh ||
@@ -1237,89 +1407,92 @@ class TurnStartChecks {
         h) &&
       !this.isReloadHeldByHost()
     ) {
-      if (this.backgroundInstall) this.backgroundInstall.needsRefresh = !1;
+      if (this.backgroundInstall) this.backgroundInstall.needsRefresh = false;
       let pluginsSyncNeedsRefresh = this.pluginsSyncNeedsRefresh;
-      ((this.pluginsSyncNeedsRefresh = !1), (this.lateForwardedInstallNeedsRefresh = !1));
-      let landedRoundAtLoopTop = this.landedRoundAtLoopTop(),
-        w = 0;
+      this.pluginsSyncNeedsRefresh = false;
+      this.lateForwardedInstallNeedsRefresh = false;
+      let R = this.landedRoundAtLoopTop();
+      let w = 0;
       try {
-        let P = getSyncedPluginReloadDebt(),
-          reloadsCompleted = P.reloadsCompleted;
-        w = P.changesReloaded;
+        let syncedPluginReloadDebt = getSyncedPluginReloadDebt();
+        let reloadsCompleted = syncedPluginReloadDebt.reloadsCompleted;
+        w = syncedPluginReloadDebt.changesReloaded;
         let q =
           pluginsSyncNeedsRefresh && !lateForwardedInstallNeedsRefresh
             ? await this.serverNamesOwnedBeforePluginsSync()
-            : void 0;
-        if (
-          (await this.refreshPluginState(),
-          (organizationAsk.isCommandHeld &&= !r),
-          (this.isRefillLanded &&= !isRefillLanded),
-          r && organizationAsk.isMarketplaceHeld)
-        )
-          ((organizationAsk.isMarketplaceHeld = !1),
-            this.refillMarketplaces().then((Ae) => {
-              this.isRefillLanded ||= Ae;
-            }, logError));
-        let x = lateForwardedInstallNeedsRefresh || q !== void 0,
-          G = !1;
+            : undefined;
+        await this.refreshPluginState();
+        organizationAsk.isCommandHeld &&= !r;
+        this.isRefillLanded &&= !isRefillLanded;
+        if (r && organizationAsk.isMarketplaceHeld) {
+          organizationAsk.isMarketplaceHeld = false;
+          this.refillMarketplaces().then((Ae) => {
+            this.isRefillLanded ||= Ae;
+          }, logError);
+        }
+        let x = lateForwardedInstallNeedsRefresh || q !== undefined;
+        let G = false;
         if (lateForwardedInstallNeedsRefresh)
           G = await this.applyPluginMcpDiff(
             this.connectedNonDynamicMcpServerNames(),
             "late_plugin_install",
           ).then(
-            () => !1,
-            (Ae) => (
-              logForDebugging(`late plugin install: applyPluginMcpDiff failed: ${errorMessage(Ae)}`, {
+            () => false,
+            (error) => {
+              logForDebugging(`late plugin install: applyPluginMcpDiff failed: ${errorMessage(error)}`, {
                 level: "error",
-              }),
-              !0
-            ),
+              });
+              return true;
+            },
           );
         else if (q)
           G = await this.applyPluginMcpDiff(q, "plugins_sync").then(
-            () => !1,
-            (Ae) => (
-              logForDebugging(`late plugins sync: applyPluginMcpDiff failed: ${errorMessage(Ae)}`, {
+            () => false,
+            (error) => {
+              logForDebugging(`late plugins sync: applyPluginMcpDiff failed: ${errorMessage(error)}`, {
                 level: "error",
-              }),
-              !0
-            ),
+              });
+              return true;
+            },
           );
-        else if (landedRoundAtLoopTop === "due")
+        else if (R === "due")
           G = await this.applyPluginMcpDiff(
             this.connectedNonDynamicMcpServerNames(),
             "plugins_sync",
             "account_plugins",
           ).then(
-            () => !1,
-            (Ae) => (
-              logForDebugging(`account plugins freshness: MCP diff failed: ${errorMessage(Ae)}`, {
+            () => false,
+            (error) => {
+              logForDebugging(`account plugins freshness: MCP diff failed: ${errorMessage(error)}`, {
                 level: "error",
-              }),
-              !0
-            ),
+              });
+              return true;
+            },
           );
-        else if (landedRoundAtLoopTop === "waiting")
-          ((this.accountPluginsNeedReload = !0), this.accountPluginsFreshness.reloadLeftToNextTry());
+        else if (R === "waiting") {
+          this.accountPluginsNeedReload = true;
+          this.accountPluginsFreshness.reloadLeftToNextTry();
+        }
         if (h && !x)
           await this.applyPluginMcpDiff(this.connectedNonDynamicMcpServerNames(), "plugins_sync").catch(
-            (Ae) => {
-              logForDebugging(`released command source: applyPluginMcpDiff failed: ${errorMessage(Ae)}`, {
+            (error) => {
+              logForDebugging(`released command source: applyPluginMcpDiff failed: ${errorMessage(error)}`, {
                 level: "error",
               });
             },
           );
-        if (landedRoundAtLoopTop === "due" || (landedRoundAtLoopTop === "waiting" && x)) {
-          let Ae = G || P.reloadsCompleted === reloadsCompleted;
-          ((this.accountPluginsNeedReload = Ae), this.accountPluginsFreshness.reloadEnded(Ae, w));
+        if (R === "due" || (R === "waiting" && x)) {
+          let Ae = G || syncedPluginReloadDebt.reloadsCompleted === reloadsCompleted;
+          this.accountPluginsNeedReload = Ae;
+          this.accountPluginsFreshness.reloadEnded(Ae, w);
         }
         let re = (pluginsSyncNeedsRefresh || h) && this.runSessionStartHooksOfNewPlugins();
         if (re) await re;
       } catch (error) {
         logError(error);
-        let L = landedRoundAtLoopTop !== "none";
+        let L = R !== "none";
         if (L) {
-          this.accountPluginsNeedReload = !0;
+          this.accountPluginsNeedReload = true;
           try {
             this.accountPluginsFreshness.reloadEnded(L, w);
           } catch (error) {
@@ -1335,12 +1508,10 @@ class TurnStartChecks {
     try {
       return getSyncedPluginReloadDebt().reloadHeld;
     } catch (error) {
-      return (
-        logForDebugging(`account plugins freshness: host's hold not read: ${errorMessage(error)}`, {
-          level: "error",
-        }),
-        !1
-      );
+      logForDebugging(`account plugins freshness: host's hold not read: ${errorMessage(error)}`, {
+        level: "error",
+      });
+      return false;
     }
   }
   landedRoundAtLoopTop() {
@@ -1348,73 +1519,94 @@ class TurnStartChecks {
       if (!this.accountPluginsFreshness.hasLandedChange()) return "none";
       return this.accountPluginsFreshness.isReloadTryDue() ? "due" : "waiting";
     } catch (error) {
-      return (
-        logForDebugging(`account plugins freshness: landed rounds not read: ${errorMessage(error)}`, {
-          level: "error",
-        }),
-        "none"
-      );
+      logForDebugging(`account plugins freshness: landed rounds not read: ${errorMessage(error)}`, {
+        level: "error",
+      });
+      return "none";
     }
   }
   accountPluginsJoin(e) {
     try {
-      let n = this.isPastFirstTake ? this.unwaitedAccountPluginsCheck : void 0;
-      if (n === void 0 && this.isPastFirstTake && this.accountPluginsFreshness.isCheckDue() && !e()) {
+      let unwaitedAccountPluginsCheck = this.isPastFirstTake ? this.unwaitedAccountPluginsCheck : undefined;
+      if (
+        unwaitedAccountPluginsCheck === undefined &&
+        this.isPastFirstTake &&
+        this.accountPluginsFreshness.isCheckDue() &&
+        !e()
+      ) {
         let h = () => {
-          let y = this.accountPluginsFreshness.atTurnStart(!1)?.then(
-            (S) => ((this.accountPluginsNeedReload ||= S), S),
-            (S) => (
-              logForDebugging(`account plugins freshness: unwaited check failed: ${errorMessage(S)}`, {
+          let y = this.accountPluginsFreshness.atTurnStart(false)?.then(
+            (S) => {
+              this.accountPluginsNeedReload ||= S;
+              return S;
+            },
+            (error) => {
+              logForDebugging(`account plugins freshness: unwaited check failed: ${errorMessage(error)}`, {
                 level: "error",
-              }),
-              !1
-            ),
+              });
+              return false;
+            },
           );
-          if (y === void 0) return;
-          ((this.unwaitedAccountPluginsCheck = y),
-            y.finally(() => {
-              if (this.unwaitedAccountPluginsCheck === y) this.unwaitedAccountPluginsCheck = void 0;
-            }));
+          if (y === undefined) return;
+          this.unwaitedAccountPluginsCheck = y;
+          y.finally(() => {
+            if (this.unwaitedAccountPluginsCheck === y) this.unwaitedAccountPluginsCheck = undefined;
+          });
         };
-        if (!this.isAccountPluginsReloadOwed()) return (h(), null);
-        return this.reloadChangedAccountPlugins(!1)
+        if (!this.isAccountPluginsReloadOwed()) {
+          h();
+          return null;
+        }
+        return this.reloadChangedAccountPlugins(false)
           .then(h)
-          .catch((y) =>
-            logForDebugging(`account plugins freshness: join failed: ${errorMessage(y)}`, { level: "error" }),
+          .catch((error) =>
+            logForDebugging(`account plugins freshness: join failed: ${errorMessage(error)}`, {
+              level: "error",
+            }),
           );
       }
-      let r = n === void 0 && this.isPastFirstTake ? this.accountPluginsFreshness.atTurnStart() : void 0,
-        s = n !== void 0 && e() ? n : r;
-      if (((this.isPastFirstTake = !0), s === void 0 && !this.isAccountPluginsReloadOwed())) return null;
+      let r =
+        unwaitedAccountPluginsCheck === undefined && this.isPastFirstTake
+          ? this.accountPluginsFreshness.atTurnStart()
+          : undefined;
+      let s = unwaitedAccountPluginsCheck !== undefined && e() ? unwaitedAccountPluginsCheck : r;
+      this.isPastFirstTake = true;
+      if (s === undefined && !this.isAccountPluginsReloadOwed()) return null;
       return (
-        s === void 0
-          ? Promise.resolve(!1)
+        s === undefined
+          ? Promise.resolve(false)
           : withDeadline(
-              s.then((h) => ((this.accountPluginsNeedReload ||= h), h)),
-              ty,
+              s.then((h) => {
+                this.accountPluginsNeedReload ||= h;
+                return h;
+              }),
+              ACCOUNT_PLUGINS_RETRY_MS,
               (h, y) => this.session.host.clock.setTimeout(h, y),
             ).then((h) => {
-              if (h === void 0) {
-                if (n !== void 0 && this.unwaitedAccountPluginsCheck === n)
-                  this.unwaitedAccountPluginsCheck = void 0;
+              if (h === undefined) {
+                if (
+                  unwaitedAccountPluginsCheck !== undefined &&
+                  this.unwaitedAccountPluginsCheck === unwaitedAccountPluginsCheck
+                )
+                  this.unwaitedAccountPluginsCheck = undefined;
                 logForDiagnosticsNoPII("warn", "plugins_sync_turn_start_check_wait_timeout", {
-                  waited_ms: ty,
+                  waited_ms: ACCOUNT_PLUGINS_RETRY_MS,
                 });
               }
-              return h === !0;
+              return h === true;
             })
       )
         .then((h) => this.reloadChangedAccountPlugins(h))
-        .catch((h) =>
-          logForDebugging(`account plugins freshness: join failed: ${errorMessage(h)}`, { level: "error" }),
+        .catch((error) =>
+          logForDebugging(`account plugins freshness: join failed: ${errorMessage(error)}`, {
+            level: "error",
+          }),
         );
     } catch (error) {
-      return (
-        logForDebugging(`account plugins freshness: check not started: ${errorMessage(error)}`, {
-          level: "error",
-        }),
-        null
-      );
+      logForDebugging(`account plugins freshness: check not started: ${errorMessage(error)}`, {
+        level: "error",
+      });
+      return null;
     }
   }
   isAccountPluginsReloadOwed() {
@@ -1428,50 +1620,59 @@ class TurnStartChecks {
     let n = e || this.isAccountPluginsReloadOwed();
     if (this.isReloadHeldByHost() || !n) return;
     if (this.isAccountPluginsReloadRunning) {
-      if (this.accountPluginsFreshness.isReloadTryDue())
-        (this.triesSkippedForRunningReload++,
-          (this.accountPluginsNeedReload = !0),
-          this.accountPluginsFreshness.reloadEnded(!0, getSyncedPluginReloadDebt().changesReloaded),
-          (this.isAccountPluginsReloadRunning = this.triesSkippedForRunningReload < rp - 1));
+      if (this.accountPluginsFreshness.isReloadTryDue()) {
+        this.triesSkippedForRunningReload++;
+        this.accountPluginsNeedReload = true;
+        this.accountPluginsFreshness.reloadEnded(true, getSyncedPluginReloadDebt().changesReloaded);
+        this.isAccountPluginsReloadRunning =
+          this.triesSkippedForRunningReload < ACCOUNT_PLUGINS_MAX_REFUSALS - 1;
+      }
       return;
     }
     if (!this.accountPluginsNeedReload)
       logForDiagnosticsNoPII("info", "plugins_sync_turn_start_reload_of_landed_round");
-    this.accountPluginsNeedReload = !1;
-    let changesReloaded = getSyncedPluginReloadDebt().changesReloaded,
-      s = !1;
-    ((this.isAccountPluginsReloadRunning = !0), (this.triesSkippedForRunningReload = 0));
-    let h = ++this.accountPluginsReloadsStarted,
-      y = this.reloadAccountPlugins()
-        .then((R) => {
-          this.isAccountPluginsReloadRunning &&= this.accountPluginsReloadsStarted !== h;
-          let w = s && !R;
-          if (((this.accountPluginsNeedReload = w ? !1 : this.accountPluginsNeedReload || R), !s || !R))
-            this.accountPluginsFreshness.reloadEnded(R, changesReloaded);
-          return !0;
-        })
-        .catch(
-          (R) => (
-            logForDebugging(`account plugins freshness: reload not recorded: ${errorMessage(R)}`, {
-              level: "error",
-            }),
-            !0
-          ),
-        );
-    if ((await withDeadline(y, ny, (R, w) => this.session.host.clock.setTimeout(R, w))) !== !0)
-      ((s = !0),
-        (this.accountPluginsNeedReload = !0),
-        logForDiagnosticsNoPII("warn", "plugins_sync_turn_start_reload_wait_timeout", { waited_ms: ny }),
-        this.accountPluginsFreshness.reloadEnded(!0, changesReloaded));
+    this.accountPluginsNeedReload = false;
+    let changesReloaded = getSyncedPluginReloadDebt().changesReloaded;
+    let s = false;
+    this.isAccountPluginsReloadRunning = true;
+    this.triesSkippedForRunningReload = 0;
+    let h = ++this.accountPluginsReloadsStarted;
+    let y = this.reloadAccountPlugins()
+      .then((R) => {
+        this.isAccountPluginsReloadRunning &&= this.accountPluginsReloadsStarted !== h;
+        let w = s && !R;
+        this.accountPluginsNeedReload = w ? false : this.accountPluginsNeedReload || R;
+        if (!s || !R) this.accountPluginsFreshness.reloadEnded(R, changesReloaded);
+        return true;
+      })
+      .catch((error) => {
+        logForDebugging(`account plugins freshness: reload not recorded: ${errorMessage(error)}`, {
+          level: "error",
+        });
+        return true;
+      });
+    if (
+      (await withDeadline(y, ACCOUNT_PLUGINS_CHECK_TIMEOUT_MS, (R, w) =>
+        this.session.host.clock.setTimeout(R, w),
+      )) !== true
+    ) {
+      s = true;
+      this.accountPluginsNeedReload = true;
+      logForDiagnosticsNoPII("warn", "plugins_sync_turn_start_reload_wait_timeout", {
+        waited_ms: ACCOUNT_PLUGINS_CHECK_TIMEOUT_MS,
+      });
+      this.accountPluginsFreshness.reloadEnded(true, changesReloaded);
+    }
   }
   async reloadAccountPlugins() {
-    let e = getSyncedPluginReloadDebt(),
-      reloadsCompleted = e.reloadsCompleted,
-      r = !1;
+    let syncedPluginReloadDebt = getSyncedPluginReloadDebt();
+    let reloadsCompleted = syncedPluginReloadDebt.reloadsCompleted;
+    let r = false;
     try {
       await this.refreshPluginState();
     } catch (error) {
-      ((r = !0), logError(error));
+      r = true;
+      logError(error);
     }
     if (!r)
       try {
@@ -1481,78 +1682,82 @@ class TurnStartChecks {
           "account_plugins",
         );
       } catch (error) {
-        ((r = !0),
-          logForDebugging(`account plugins freshness: MCP diff failed: ${errorMessage(error)}`, {
-            level: "error",
-          }));
+        r = true;
+        logForDebugging(`account plugins freshness: MCP diff failed: ${errorMessage(error)}`, {
+          level: "error",
+        });
       }
-    return r || e.reloadsCompleted === reloadsCompleted;
+    return r || syncedPluginReloadDebt.reloadsCompleted === reloadsCompleted;
   }
   *firstCommand() {
-    let pendingPluginRefresh = this.pendingPluginRefresh();
-    if (pendingPluginRefresh) {
+    let e = this.pendingPluginRefresh();
+    if (e) {
       let startTime = performance.now();
-      (yield pendingPluginRefresh,
-        this.pluginRefreshJoined(),
-        Br("registry_refresh_join_ms", performance.now() - startTime, startTime));
+      yield e;
+      this.pluginRefreshJoined();
+      recordPhase("registry_refresh_join_ms", performance.now() - startTime, startTime);
     }
-    (headlessProfilerCheckpoint("before_mcp_prewait"), this.enterPhase("mcp_prewait"));
-    let startTime = performance.now(),
-      policyAtFirstCommand = this.mcpPrewait.policyAtFirstCommand(),
-      { waitForDeferrable: waitForDeferrable, firstTurnHold: firstTurnHold } = policyAtFirstCommand,
-      serversToSkipNow = this.mcpPrewait.serversToSkipNow(policyAtFirstCommand.skipFullyDeferredServers),
-      S = waitForDeferrable && !this.mcpPrewait.waitForDeferrable,
-      R =
-        !this.firstCommandTaken &&
-        this.store
-          .getState()
-          .mcp.clients.some(
-            (client) =>
-              client.type === "pending" &&
-              this.mcpPrewait.skippedAtKick.has(client.name) &&
-              !serversToSkipNow.has(client.name),
-          ),
-      w = waitForDeferrable || this.firstCommandTaken ? void 0 : this.mcpPrewait.requiredServersNow(),
-      P =
-        w === void 0
-          ? []
-          : this.store
-              .getState()
-              .mcp.clients.filter(
-                (client) => client.type === "pending" && w.has(getPrefixServerKey(client.name)),
-              ),
-      L =
-        !this.mcpPrewait.waitForDeferrable &&
-        P.some((re) => !this.mcpPrewait.requiredAtKick.has(getPrefixServerKey(re.name))),
-      q = this.store.getState().mcp.clients.length > this.mcpClientCountAtKick,
-      x = new Set(this.serversStartedSinceKick);
+    headlessProfilerCheckpoint("before_mcp_prewait");
+    this.enterPhase("mcp_prewait");
+    let startTime = performance.now();
+    let r = this.mcpPrewait.policyAtFirstCommand();
+    let { waitForDeferrable, firstTurnHold } = r;
+    let y = this.mcpPrewait.serversToSkipNow(r.skipFullyDeferredServers);
+    let S = waitForDeferrable && !this.mcpPrewait.waitForDeferrable;
+    let R =
+      !this.firstCommandTaken &&
+      this.store
+        .getState()
+        .mcp.clients.some(
+          (client) =>
+            client.type === "pending" &&
+            this.mcpPrewait.skippedAtKick.has(client.name) &&
+            !y.has(client.name),
+        );
+    let w = waitForDeferrable || this.firstCommandTaken ? undefined : this.mcpPrewait.requiredServersNow();
+    let P =
+      w === undefined
+        ? []
+        : this.store
+            .getState()
+            .mcp.clients.filter(
+              (client) => client.type === "pending" && w.has(getPrefixServerKey(client.name)),
+            );
+    let L =
+      !this.mcpPrewait.waitForDeferrable &&
+      P.some((re) => !this.mcpPrewait.requiredAtKick.has(getPrefixServerKey(re.name)));
+    let q = this.store.getState().mcp.clients.length > this.mcpClientCountAtKick;
+    let x = new Set(this.serversStartedSinceKick);
     this.serversStartedSinceKick.clear();
     let deadlineMs = this.mcpPrewait.deadlineMs;
     if (q || S || R || L || x.size > 0) {
-      let re = this.firstCommandTaken ? this.mcpPrewait.laterWakes : void 0;
-      ((deadlineMs = re
-        ? re.deadlineMs
-        : (this.mcpPrewait.freshWaitDeadlineMs?.() ??
-          (S ? policyAtFirstCommand.deadlineMs : this.mcpPrewait.deadlineMs))),
-        yield this.waitForPendingMcp(deadlineMs, {
-          skipTelemetry: this.mcpClientCountAtKick > 0 && !S && !R && !L && x.size === 0,
-          waitForDeferrable: waitForDeferrable,
-          firstTurnHold: firstTurnHold,
-          requiredServerNames: w,
-          ...(x.size > 0 && { alsoWaitFor: x }),
-          ...(serversToSkipNow.size > 0 && { skipServerNames: serversToSkipNow }),
-          localOnly: re ? re.localOnly : this.mcpPrewait.localOnly,
-          coordinatorMainThreadOnly: this.mcpPrewait.coordinatorMainThreadOnly,
-          relayMarked: this.mcpPrewait.relayMarked,
-          relayHold: this.mcpPrewait.relayHold,
-          relayHoldFollowsBootVerdict: this.mcpPrewait.relayHoldFollowsBootVerdict,
-          permissionPromptToolServerName: this.mcpPrewait.permissionPromptToolServerName,
-        }));
+      let laterWakes = this.firstCommandTaken ? this.mcpPrewait.laterWakes : undefined;
+      deadlineMs = laterWakes
+        ? laterWakes.deadlineMs
+        : (this.mcpPrewait.freshWaitDeadlineMs?.() ?? (S ? r.deadlineMs : this.mcpPrewait.deadlineMs));
+      yield this.waitForPendingMcp(deadlineMs, {
+        skipTelemetry: this.mcpClientCountAtKick > 0 && !S && !R && !L && x.size === 0,
+        waitForDeferrable,
+        firstTurnHold,
+        requiredServerNames: w,
+        ...(x.size > 0 && {
+          alsoWaitFor: x,
+        }),
+        ...(y.size > 0 && {
+          skipServerNames: y,
+        }),
+        localOnly: laterWakes ? laterWakes.localOnly : this.mcpPrewait.localOnly,
+        coordinatorMainThreadOnly: this.mcpPrewait.coordinatorMainThreadOnly,
+        relayMarked: this.mcpPrewait.relayMarked,
+        relayHold: this.mcpPrewait.relayHold,
+        relayHoldFollowsBootVerdict: this.mcpPrewait.relayHoldFollowsBootVerdict,
+        permissionPromptToolServerName: this.mcpPrewait.permissionPromptToolServerName,
+      });
     } else yield this.mcpPrewaitPromise;
     if (!this.firstCommandTaken)
       logEvent("tengu_headless_mcp_first_turn_join", {
         firstTurnHold: fromEnum(firstTurnHold),
-        waitForDeferrable: waitForDeferrable,
+        waitForDeferrable,
         blockedMs: Math.round(performance.now() - startTime),
         freshWait: fromEnum(
           S
@@ -1572,29 +1777,29 @@ class TurnStartChecks {
         relayMarked: this.mcpPrewait.relayMarked,
         relayHold: this.mcpPrewait.relayHold,
         relayHoldFollowsBootVerdict: this.mcpPrewait.relayHoldFollowsBootVerdict,
-        deadlineMs: deadlineMs ?? Npe,
+        deadlineMs: deadlineMs ?? TRANSPORT_FALLBACK_TIMEOUT_MS,
       });
-    ((this.firstCommandTaken = !0),
-      Br("mcp_prewait_ms", performance.now() - startTime, startTime),
-      headlessProfilerCheckpoint("after_mcp_prewait"),
-      this.enterPhase("first_command"));
-    let firstCommandMountJoin = this.firstCommandMountJoin(performance.now() - startTime);
-    if (firstCommandMountJoin) yield firstCommandMountJoin;
+    this.firstCommandTaken = true;
+    recordPhase("mcp_prewait_ms", performance.now() - startTime, startTime);
+    headlessProfilerCheckpoint("after_mcp_prewait");
+    this.enterPhase("first_command");
+    let Z = this.firstCommandMountJoin(performance.now() - startTime);
+    if (Z) yield Z;
   }
   sdkToolRelistJoin(e) {
-    if (e.shouldQuery === !1 || this.sdkMcpBackgroundRetry || !this.sdkToolRelistPending()) return null;
-    let sdkUpdateWaitBudgetMs = this.sdkUpdateWaitBudgetMs(),
-      startTime = performance.now(),
-      updateSdkMcp = this.updateSdkMcp("skip");
+    if (e.shouldQuery === false || this.sdkMcpBackgroundRetry || !this.sdkToolRelistPending()) return null;
+    let n = this.sdkUpdateWaitBudgetMs();
+    let startTime = performance.now();
+    let s = this.updateSdkMcp("skip");
     return withDeadline(
-      updateSdkMcp.then(() => !0),
-      sdkUpdateWaitBudgetMs,
+      s.then(() => true),
+      n,
     )
       .then((h) => {
-        let y = h !== !0;
-        if (y) updateSdkMcp.catch(logError);
+        let y = h !== true;
+        if (y) s.catch(logError);
         logForDiagnosticsNoPII(y ? "warn" : "info", "sdk_mcp_relist_wait", {
-          budget_ms: sdkUpdateWaitBudgetMs,
+          budget_ms: n,
           waited_ms: Math.round(performance.now() - startTime),
           timed_out: y,
           tools_change_still_pending: this.sdkToolRelistPending(),
@@ -1603,43 +1808,44 @@ class TurnStartChecks {
       .catch(logError);
   }
   wireTurn() {
-    let state = this.store.getState(),
-      allMcpClients = this.allMcpClients(state);
-    this.registerElicitationHandlers(allMcpClients);
-    for (let r of allMcpClients) this.registerChannelHandler(r);
+    let state = this.store.getState();
+    let n = this.allMcpClients(state);
+    this.registerElicitationHandlers(n);
+    for (let r of n) this.registerChannelHandler(r);
     return this.buildAllTools(state);
   }
 }
 //@ chunk-tyg7f3ek.js:211742-211867 placement
-var MAX_PREWAIT_SERVERS = 64,
-  MAX_SERVER_NAME_LENGTH = 256,
-  SDK_MCP_WAIT_MS = 5000,
-  EMPTY_MCP_WIRING = {
-    startupClients: () => [],
-    sdkClients: () => [],
-    dynamicClients: () => [],
-    markDynamicServerDisabled: () => {},
-  };
+var MAX_PREWAIT_SERVERS = 64;
+var MAX_SERVER_NAME_LENGTH = 256;
+var SDK_MCP_WAIT_MS = 5000;
+var EMPTY_MCP_WIRING = {
+  startupClients: () => [],
+  sdkClients: () => [],
+  dynamicClients: () => [],
+  markDynamicServerDisabled: () => {},
+};
 //@ chunk-tyg7f3ek.js:211867-214082 placement
 class CloudPluginSwitches {
   io;
   isKept = isSelfHostedRemoteEnvironment();
-  isUnread = !1;
+  isUnread = false;
   switchedOnWhileUnread = new Set();
   foundLate = new Set();
   switchedOffByThisWorker = new Set();
-  constructor(e) {
-    this.io = e;
+  constructor(io) {
+    this.io = io;
   }
   async restore(e, n) {
     if (!this.isKept) return;
     let restoredWorkerState = await this.io.restoredWorkerState;
     if (restoredWorkerState === null) {
-      this.isKept = !1;
+      this.isKept = false;
       return;
     }
-    if (restoredWorkerState.readFailed === !0) {
-      ((this.isUnread = !0), logFeatureSad("mcp_switched_off_record", "unread_at_boot"));
+    if (restoredWorkerState.readFailed === true) {
+      this.isUnread = true;
+      logFeatureSad("mcp_switched_off_record", "unread_at_boot");
       return;
     }
     let s = new Set(normalizeServerNameList(restoredWorkerState.internal?.disabled_mcp_servers));
@@ -1654,28 +1860,31 @@ class CloudPluginSwitches {
       return;
     }
     for (let w of s) this.switchedOffByThisWorker.add(w);
-    let h = { ...e, replyNow: null },
-      engineState = e.engineState(),
-      S = new Set();
+    let h = {
+      ...e,
+      replyNow: null,
+    };
+    let y = e.engineState();
+    let S = new Set();
     await Promise.all(
-      engineState.mcp.clients
+      y.mcp.clients
         .filter((client) => s.has(client.name) && client.type !== "disabled")
-        .map(async (w) => {
-          let P = !1;
+        .map(async (client) => {
+          let P = false;
           try {
             await withDeadline(
               (async () =>
-                reconnectMcpServerByName(h, EMPTY_MCP_WIRING, w.name, w.config, engineState, () =>
-                  this.switchedOffByThisWorker.has(w.name),
+                reconnectMcpServerByName(h, EMPTY_MCP_WIRING, client.name, client.config, y, () =>
+                  this.switchedOffByThisWorker.has(client.name),
                 ))().finally(() => {
-                P = !0;
+                P = true;
               }),
               SDK_MCP_WAIT_MS,
             );
           } catch (error) {
             logError(toError(error));
           }
-          if (!P) S.add(w.name);
+          if (!P) S.add(client.name);
         }),
     );
     let filtered = e
@@ -1683,7 +1892,9 @@ class CloudPluginSwitches {
       .mcp.clients.filter((client) => s.has(client.name) && client.type !== "disabled");
     for (let w of filtered) markServerDisabled_2(h, EMPTY_MCP_WIRING, w.name);
     if (filtered.length === 0) {
-      logFeatureOk("mcp_switched_off_record", { server_count: s.size });
+      logFeatureOk("mcp_switched_off_record", {
+        server_count: s.size,
+      });
       return;
     }
     if (filtered.some((w) => S.has(w.name))) logFeatureSad("mcp_switched_off_record", "close_timed_out");
@@ -1691,7 +1902,8 @@ class CloudPluginSwitches {
   }
   switchSaved(e, n) {
     if (!this.isKept) return;
-    if ((this.switchedOffByThisWorker.delete(e), n)) this.foundLate.delete(e);
+    this.switchedOffByThisWorker.delete(e);
+    if (n) this.foundLate.delete(e);
     else if (getSwitchedOffMcpServers().includes(e)) this.switchedOffByThisWorker.add(e);
     if (!this.isUnread) {
       this.write();
@@ -1703,12 +1915,12 @@ class CloudPluginSwitches {
   }
   async readThenWrite() {
     let e = await this.io.rereadWorkerState().catch(() => null);
-    if (e === null || e.readFailed === !0) {
+    if (e === null || e.readFailed === true) {
       logFeatureSad("mcp_switched_off_record", "unread_at_switch");
       return;
     }
     if (this.isUnread) {
-      this.isUnread = !1;
+      this.isUnread = false;
       for (let n of normalizeServerNameList(e.internal?.disabled_mcp_servers))
         if (!this.switchedOnWhileUnread.has(n)) this.foundLate.add(n);
       this.switchedOnWhileUnread.clear();
@@ -1722,40 +1934,42 @@ class CloudPluginSwitches {
         ...getSwitchedOffMcpServers(),
         ...this.switchedOffByThisWorker,
       ]);
-      this.io.sessionState.notifyInternalMetadataChanged({ disabled_mcp_servers: e.length > 0 ? e : null });
+      this.io.sessionState.notifyInternalMetadataChanged({
+        disabled_mcp_servers: e.length > 0 ? e : null,
+      });
     } catch (error) {
-      (logError(toError(error)), logFeatureSad("mcp_switched_off_record", "write_failed"));
+      logError(toError(error));
+      logFeatureSad("mcp_switched_off_record", "write_failed");
     }
   }
 }
 //@ chunk-tyg7f3ek.js:214082-214252 placement
-function normalizeServerNameList(e) {
-  let n = Array.isArray(e) ? e : [],
-    r = new Set();
+function normalizeServerNameList(disabledMcpServers) {
+  let n = Array.isArray(disabledMcpServers) ? disabledMcpServers : [];
+  let r = new Set();
   for (let s of n)
     if (
       typeof s === "string" &&
       s.length > 0 &&
       s.length <= MAX_SERVER_NAME_LENGTH &&
       !isClaudeInChromeMCPServer(s)
-    )
-      (r.delete(s), r.add(s));
+    ) {
+      r.delete(s);
+      r.add(s);
+    }
   return [...r].slice(-MAX_PREWAIT_SERVERS);
 }
 //@ chunk-tyg7f3ek.js:214252-214647 placement
-function retirementPromptRows({
-  sessionId: sessionId,
-  prompt: prompt,
-  listed: listed,
-  retirementRows: retirementRows,
-  othersToCome: othersToCome,
-}) {
+function retirementPromptRows({ sessionId, prompt, listed, retirementRows, othersToCome }) {
   let y = [];
   try {
     y = retirementRows
       .filter((S) => S.type === "user")
       .flatMap((S) => Array.from(normalizeMessage(S)))
-      .map((S) => ({ ...S, session_id: sessionId }));
+      .map((S) => ({
+        ...S,
+        session_id: sessionId,
+      }));
   } catch (error) {
     logError(error);
   }
@@ -1767,81 +1981,96 @@ function retirementPromptRows({
         ["This reply was stopped while a tool call waited for permission."],
         prompt,
       ),
-      ...(listed !== void 0 && { user_message_uuids: listed }),
+      ...(listed !== undefined && {
+        user_message_uuids: listed,
+      }),
       terminal_reason: "aborted_tools",
-      ...(othersToCome > 0 && { queued_turn_count: othersToCome }),
+      ...(othersToCome > 0 && {
+        queued_turn_count: othersToCome,
+      }),
     },
   ];
 }
 //@ chunk-tyg7f3ek.js:214647-214678 placement
-var TASK_UPDATE_PREFIX = "Updated task #",
-  qu = 1e6;
+var TASK_UPDATE_PREFIX = "Updated task #";
+var MAX_TASK_NUMBER = 1e6;
 //@ chunk-tyg7f3ek.js:214678-214747 placement
 function parseTaskNumber(e) {
   let n = Number(e);
-  return /^\d+$/.test(e) && n <= qu ? n : void 0;
+  return /^\d+$/.test(e) && n <= MAX_TASK_NUMBER ? n : undefined;
 }
 //@ chunk-tyg7f3ek.js:214747-215311 placement
-var taskToolInputFields = (e, n) => (isPlainObject_2(e) ? e[n] : void 0),
-  $N = (e) =>
-    (e.name === TASK_CREATE_TOOL_NAME ? coerceTaskCreateInput(e.input) : normalizeTaskInputAliases(e.input))
-      ?.input ?? e.input,
-  nP = (e) => {
-    let n = (h) => {
-        let y = taskToolInputFields(e, h);
-        return typeof y === "string" ? y : void 0;
-      },
-      r = (h) => {
-        let y = taskToolInputFields(e, h);
-        return Array.isArray(y) ? y.filter((S) => typeof S === "string") : void 0;
-      },
-      s = taskToolInputFields(e, "metadata");
-    return {
-      subject: n("subject"),
-      description: n("description"),
-      activeForm: n("activeForm"),
-      status: n("status"),
-      owner: n("owner"),
-      metadata: isPlainObject_2(s) ? s : void 0,
-      addBlocks: r("addBlocks"),
-      addBlockedBy: r("addBlockedBy"),
-    };
-  },
-  KN = (e) =>
-    typeof e.content === "string"
-      ? e.content
-      : Array.isArray(e.content)
-        ? extractTextContent_2(e.content)
-        : "";
+/**
+ * 任务工具记录提取辅助：从 tool_use/tool_result 输入里取字段、拼出任务创建/更新参数与结果文本。
+ */
+var taskToolInputFields = (e, n) => (isPlainObject_2(e) ? e[n] : undefined);
+var taskToolInputForTelemetry = (e) =>
+  (e.name === TASK_CREATE_TOOL_NAME ? coerceTaskCreateInput(e.input) : normalizeTaskInputAliases(e.input))
+    ?.input ?? e.input;
+var taskInputFieldNames = (e) => {
+  let n = (h) => {
+    let y = taskToolInputFields(e, h);
+    return typeof y === "string" ? y : undefined;
+  };
+  let r = (h) => {
+    let y = taskToolInputFields(e, h);
+    return Array.isArray(y) ? y.filter((S) => typeof S === "string") : undefined;
+  };
+  let s = taskToolInputFields(e, "metadata");
+  return {
+    subject: n("subject"),
+    description: n("description"),
+    activeForm: n("activeForm"),
+    status: n("status"),
+    owner: n("owner"),
+    metadata: isPlainObject_2(s) ? s : undefined,
+    addBlocks: r("addBlocks"),
+    addBlockedBy: r("addBlockedBy"),
+  };
+};
+var toolResultText = (e) =>
+  typeof e.content === "string" ? e.content : Array.isArray(e.content) ? extractTextContent_2(e.content) : "";
 //@ chunk-tyg7f3ek.js:215311-216137 placement
-function* taskToolCallsInTranscript(e, n = () => !1) {
+function* taskToolCallsInTranscript(e, n = () => false) {
   let r = new Map();
   for (let [s, h] of e.entries())
     if (h.type === "assistant") {
-      let y = h.message.id ?? h.uuid ?? `row ${s}`;
+      let response = h.message.id ?? h.uuid ?? `row ${s}`;
       for (let S of h.message.content)
         if (S.type === "tool_use" && (S.name === TASK_CREATE_TOOL_NAME || S.name === TASK_UPDATE_TOOL_NAME))
-          r.set(S.id, { use: S, response: y, askedEarlier: n(h, s) });
+          r.set(S.id, {
+            use: S,
+            response,
+            askedEarlier: n(h, s),
+          });
     }
   for (let [s, h] of e.entries())
     if (h.type === "user" && typeof h.message.content !== "string")
       for (let y of h.message.content) {
         if (y.type !== "tool_result") continue;
         let S = r.get(y.tool_use_id);
-        if (S === void 0) continue;
-        if ((r.delete(y.tool_use_id), y.is_error === !0)) continue;
-        let R = KN(y),
-          w = $N(S.use);
+        if (S === undefined) continue;
+        r.delete(y.tool_use_id);
+        if (y.is_error === true) continue;
+        let R = toolResultText(y);
+        let w = taskToolInputForTelemetry(S.use);
         if (S.use.name === TASK_CREATE_TOOL_NAME) {
           let P = R.match(TASK_CREATED_RE)?.[1];
-          if (P !== void 0)
-            yield { kind: "create", taskId: P, named: nP(w), result: y, answeredEarlier: n(h, s), ...S };
+          if (P !== undefined)
+            yield {
+              kind: "create",
+              taskId: P,
+              named: taskInputFieldNames(w),
+              result: y,
+              answeredEarlier: n(h, s),
+              ...S,
+            };
         } else if (R.startsWith(TASK_UPDATE_PREFIX)) {
           let P = taskToolInputFields(w, "taskId");
           yield {
             kind: "update",
             taskId: typeof P === "string" ? P : "",
-            named: nP(w),
+            named: taskInputFieldNames(w),
             result: y,
             answeredEarlier: n(h, s),
             ...S,
@@ -1849,7 +2078,6 @@ function* taskToolCallsInTranscript(e, n = () => !1) {
         }
       }
 }
-
 export {
   CloudPluginSwitches,
   retirementPromptRows,
@@ -1859,7 +2087,7 @@ export {
   fileAdminLimitRequest,
   TurnStartChecks,
   SdkMcpServerWait,
-  qu,
+  MAX_TASK_NUMBER,
   parseTaskNumber,
   taskToolCallsInTranscript,
 };

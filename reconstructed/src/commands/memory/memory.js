@@ -18,10 +18,13 @@ import { getErrnoCode, errorMessage } from "../../utils/errors.js";
 import { openFileInExternalEditor } from "../../utils/editor.js";
 import { env } from "../../utils/env.js";
 import { logForDebugging } from "../../utils/debug.js";
-import { e, r } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Dialog } from "../../components/design-system/Dialog.js";
 import { Box, Text } from "../../ink/components/Text.js";
-import { re } from "../../../vendor/@inquirer/figures/dist/esm/index.js";
+import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/index.js";
 import { fo } from "../../../vendor/react/cjs/react.production.js";
 import { WorkerBadge } from "../../components/permissions/WorkerBadge.js";
 import { MemoryFileSelector } from "../../components/memory/MemoryFileSelector.js";
@@ -29,78 +32,93 @@ import { LearnMoreLink } from "../../components/LearnMoreLink.js";
 
 //@ chunk-c55mbvfz.js:41910-42077 file-last-pair
 function call(onDone) {
-  let _ = homedir(),
-    C = getCwd(),
-    v = onDone.startsWith(_) ? "~" + onDone.slice(_.length) : null,
-    T = onDone.startsWith(C) ? "./" + relative(C, onDone) : null;
+  let _ = homedir();
+  let cwd = getCwd();
+  let v = onDone.startsWith(_) ? "~" + onDone.slice(_.length) : null;
+  let T = onDone.startsWith(cwd) ? "./" + relative(cwd, onDone) : null;
   if (v && T) return v.length <= T.length ? v : T;
   return v || T || onDone;
 }
 //@ chunk-c55mbvfz.js:42077-43674 fingerprint = MemoryCommand (0.697)
-function MemoryCommand({
-  session: session,
-  commandContext: commandContext,
-  addedInstructionFiles: addedInstructionFiles,
-  onDone: onDone,
-}) {
+function MemoryCommand({ session, commandContext, addedInstructionFiles, onDone }) {
   let handleSelectMemoryFile = async (memoryPath) => {
+    try {
+      if (memoryPath.includes(getClaudeConfigDir())) await getFsImplementation().mkdir(getClaudeConfigDir());
       try {
-        if (memoryPath.includes(getClaudeConfigDir()))
-          await getFsImplementation().mkdir(getClaudeConfigDir());
-        try {
-          await writeFile(memoryPath, "", { encoding: "utf8", flag: "wx" });
-        } catch (error) {
-          if (getErrnoCode(error) !== "EEXIST") throw error;
-        }
-        if (!openFileInExternalEditor(memoryPath)) {
-          onDone(
-            `Couldn't open ${call(memoryPath)} in an editor. If no editor is configured, set $EDITOR or $VISUAL, then run /memory again.`,
-            { display: "system" },
-          );
-          return;
-        }
-        let editorSource = "default",
-          editorValue = "";
-        if (env.VISUAL) ((editorSource = "$VISUAL"), (editorValue = env.VISUAL));
-        else if (env.EDITOR) ((editorSource = "$EDITOR"), (editorValue = env.EDITOR));
-        let I = editorSource !== "default" ? `Using ${editorSource}="${editorValue}".` : "",
-          L = I
-            ? `> ${I} To change editor, set $EDITOR or $VISUAL environment variable.`
-            : "> To use a different editor, set the $EDITOR or $VISUAL environment variable.",
-          U = isSafeMode()
-            ? `
+        await writeFile(memoryPath, "", {
+          encoding: "utf8",
+          flag: "wx",
+        });
+      } catch (e) {
+        if (getErrnoCode(e) !== "EEXIST") throw e;
+      }
+      if (!openFileInExternalEditor(memoryPath)) {
+        onDone(
+          `Couldn't open ${call(memoryPath)} in an editor. If no editor is configured, set $EDITOR or $VISUAL, then run /memory again.`,
+          {
+            display: "system",
+          },
+        );
+        return;
+      }
+      let editorSource = "default";
+      let editorValue = "";
+      if (env.VISUAL) {
+        editorSource = "$VISUAL";
+        editorValue = env.VISUAL;
+      } else if (env.EDITOR) {
+        editorSource = "$EDITOR";
+        editorValue = env.EDITOR;
+      }
+      let editorInfo = editorSource !== "default" ? `Using ${editorSource}="${editorValue}".` : "";
+      let editorHint = editorInfo
+        ? `> ${editorInfo} To change editor, set $EDITOR or $VISUAL environment variable.`
+        : "> To use a different editor, set the $EDITOR or $VISUAL environment variable.";
+      let U = isSafeMode()
+        ? `
 
 > Safe mode: this session doesn't load CLAUDE.md files, so changes take effect after you ${getSafeModeExitHint()}.`
-            : "";
-        onDone(
-          `Opened ${call(memoryPath)}${U}
+        : "";
+      onDone(
+        `Opened ${call(memoryPath)}${U}
 
-${L}`,
-          { display: "system" },
-        );
-      } catch (error) {
-        (logForDebugging(`Failed to open memory file ${memoryPath}: ${error}`, { level: "error" }),
-          onDone(`Couldn't open ${call(memoryPath)}: ${errorMessage(error)}`, { display: "system" }));
-      }
-    },
-    handleCancel = () => {
-      onDone("Cancelled memory editing", { display: "system" });
-    };
-  return e(Dialog, {
+${editorHint}`,
+        {
+          display: "system",
+        },
+      );
+    } catch (error) {
+      logForDebugging(`Failed to open memory file ${memoryPath}: ${error}`, {
+        level: "error",
+      });
+      onDone(`Couldn't open ${call(memoryPath)}: ${errorMessage(error)}`, {
+        display: "system",
+      });
+    }
+  };
+  let handleCancel = () => {
+    onDone("Cancelled memory editing", {
+      display: "system",
+    });
+  };
+  return jsxProd_default(Dialog, {
     title: "Memory",
     onCancel: handleCancel,
     color: "remember",
-    children: r(Box, {
+    children: jsxProd_default_2(Box, {
       flexDirection: "column",
       gap: 1,
       children: [
         isSafeMode() &&
-          r(Box, {
+          jsxProd_default_2(Box, {
             flexDirection: "column",
             children: [
-              r(Text, { color: "suggestion", children: [re.info, " Safe mode"] }),
-              r(Text, {
-                dimColor: !0,
+              jsxProd_default_2(Text, {
+                color: "suggestion",
+                children: [figures_default.info, " Safe mode"],
+              }),
+              jsxProd_default_2(Text, {
+                dimColor: true,
                 children: [
                   "CLAUDE.md files aren't loaded into this session. You can still edit them \u2014 changes take effect after you",
                   " ",
@@ -110,20 +128,24 @@ ${L}`,
               }),
             ],
           }),
-        e(fo, {
-          fallback: e(WorkerBadge, { message: "Loading\u2026", dimColor: !0 }),
-          children: e(MemoryFileSelector, {
-            session: session,
-            commandContext: commandContext,
-            addedInstructionFiles: addedInstructionFiles,
+        jsxProd_default(fo, {
+          fallback: jsxProd_default(WorkerBadge, {
+            message: "Loading\u2026",
+            dimColor: true,
+          }),
+          children: jsxProd_default(MemoryFileSelector, {
+            session,
+            commandContext,
+            addedInstructionFiles,
             onSelect: handleSelectMemoryFile,
             onCancel: handleCancel,
           }),
         }),
-        e(LearnMoreLink, { url: "https://code.claude.com/docs/en/memory" }),
+        jsxProd_default(LearnMoreLink, {
+          url: "https://code.claude.com/docs/en/memory",
+        }),
       ],
     }),
   });
 }
-
 export { MemoryCommand };

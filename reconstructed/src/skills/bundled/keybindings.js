@@ -25,7 +25,7 @@ import {
   loadKeybindingsSyncWithWarnings,
 } from "../../keybindings/loadUserBindings.js";
 import { getActionDisplayText } from "../../keybindings/match.js";
-import { d$s } from "../../keybindings/cycleModeBinding.js";
+import { cycleModeBindingName } from "../../keybindings/cycleModeBinding.js";
 
 //@ chunk-hantmvxa.js:173895-173991 fingerprint = generateContextsTable (1)
 function generateContextsTable() {
@@ -41,36 +41,40 @@ function generateContextsTable() {
 function generateActionsTable() {
   let actionInfo = {};
   for (let block of DEFAULT_BINDINGS)
-    for (let [s, r] of Object.entries(block.bindings))
-      if (r) {
-        if (!actionInfo[r]) actionInfo[r] = { keys: [], context: block.context };
-        actionInfo[r].keys.push(s);
+    for (let [key, action] of Object.entries(block.bindings))
+      if (action) {
+        if (!actionInfo[action])
+          actionInfo[action] = {
+            keys: [],
+            context: block.context,
+          };
+        actionInfo[action].keys.push(key);
       }
   return markdownTable(
     ["Action", "Default Key(s)", "Context"],
     KEYBINDING_ACTIONS.filter(isDocumentedAction).map((action) => {
-      let info = actionInfo[action],
-        r = info ? info.keys.map((key) => `\`${key}\``).join(", ") : "(none)",
-        h = info ? info.context : inferContextFromAction(action);
-      return [`\`${action}\``, r, h];
+      let info = actionInfo[action];
+      let keys = info ? info.keys.map((k) => `\`${k}\``).join(", ") : "(none)";
+      let context = info ? info.context : inferContextFromAction(action);
+      return [`\`${action}\``, keys, context];
     }),
   );
 }
 //@ chunk-hantmvxa.js:174320-174810 layout
 function isDocumentedAction(e) {
-  if (e === "chat:cycleProactivity" || e.startsWith("proactivityMenu:")) return !1;
-  if (e === "chat:attentionUp" || e === "chat:attentionDown") return !1;
+  if (e === "chat:cycleProactivity" || e.startsWith("proactivityMenu:")) return false;
+  if (e === "chat:attentionUp" || e === "chat:attentionDown") return false;
   if (e === "chat:increaseEffort" || e === "chat:decreaseEffort") return isEffortHintFlagOn();
-  if (e === "strip:tabNext" || e === "strip:tabPrevious" || e === "strip:viewAll") return !1;
-  if (e.startsWith("strip:")) return !1;
-  if (e === "plugin:cycleMarketplace") return !0;
-  if (e === "agents:setGroup") return !1;
-  if (e.startsWith("feedbackSurvey:") || e === "effortSlider:adaptive") return !1;
-  return !0;
+  if (e === "strip:tabNext" || e === "strip:tabPrevious" || e === "strip:viewAll") return false;
+  if (e.startsWith("strip:")) return false;
+  if (e === "plugin:cycleMarketplace") return true;
+  if (e === "agents:setGroup") return false;
+  if (e.startsWith("feedbackSurvey:") || e === "effortSlider:adaptive") return false;
+  return true;
 }
 //@ chunk-hantmvxa.js:174810-174882 layout
 function isDocumentedContext(e) {
-  if (e === "ProactivityMenu") return !1;
+  if (e === "ProactivityMenu") return false;
   return !TEMPLATE_EXCLUDED_CONTEXTS.includes(e);
 }
 //@ chunk-hantmvxa.js:174882-175379 fingerprint = inferContextFromAction (0.92)
@@ -106,209 +110,234 @@ function generateReservedShortcuts() {
   let lines = [];
   lines.push("### Non-rebindable (errors)");
   for (let n of NON_REBINDABLE) lines.push(`- \`${n.key}\` \u2014 ${n.reason}`);
-  (lines.push(""), lines.push("### Terminal reserved (errors/warnings)"));
+  lines.push("");
+  lines.push("### Terminal reserved (errors/warnings)");
   for (let n of TERMINAL_RESERVED)
     lines.push(
       `- \`${n.key}\` \u2014 ${n.reason} (${n.severity === "error" ? "will not work" : "may conflict"})`,
     );
-  (lines.push(""), lines.push("### macOS reserved (errors)"));
+  lines.push("");
+  lines.push("### macOS reserved (errors)");
   for (let n of MACOS_RESERVED) lines.push(`- \`${n.key}\` \u2014 ${n.reason}`);
   return lines.join(`
 `);
 }
+//@ chunk-hantmvxa.js:175809-180828 fingerprint = SECTION_DOCTOR (0.46)
 /**
  * keybindings-help 提示词所用的示例 keybindings.json、解绑/改绑/组合键示例与各段说明文本。
  */
-//@ chunk-hantmvxa.js:175809-180828 fingerprint = SECTION_DOCTOR (0.46)
 var EXAMPLE_KEYBINDINGS_FILE = {
-    $schema: "https://www.schemastore.org/claude-code-keybindings.json",
-    $docs: "https://code.claude.com/docs/en/keybindings",
-    bindings: [{ context: "Chat", bindings: { "ctrl+e": "chat:externalEditor" } }],
+  $schema: "https://www.schemastore.org/claude-code-keybindings.json",
+  $docs: "https://code.claude.com/docs/en/keybindings",
+  bindings: [
+    {
+      context: "Chat",
+      bindings: {
+        "ctrl+e": "chat:externalEditor",
+      },
+    },
+  ],
+};
+var EXAMPLE_UNBIND = {
+  context: "Chat",
+  bindings: {
+    "ctrl+s": null,
   },
-  EXAMPLE_UNBIND = { context: "Chat", bindings: { "ctrl+s": null } },
-  EXAMPLE_REBIND = { context: "Chat", bindings: { "ctrl+g": null, "ctrl+e": "chat:externalEditor" } },
-  EXAMPLE_CHORD = { context: "Global", bindings: { "ctrl+k ctrl+t": "app:toggleTodos" } },
-  joined = [
-    "# Keybindings Skill",
-    "",
-    "Create or modify `~/.claude/keybindings.json` to customize keyboard shortcuts.",
-    "",
-    "## CRITICAL: Read Before Write",
-    "",
-    "**Always read `~/.claude/keybindings.json` first** (it may not exist yet). Merge changes with existing bindings \u2014 never replace the entire file.",
-    "",
-    "- Use **Edit** tool for modifications to existing files",
-    "- Use **Write** tool only if the file does not exist yet",
-  ].join(`
-`),
-  joined_2 = [
-    "## File Format",
-    "",
-    "```json",
-    jsonStringify(EXAMPLE_KEYBINDINGS_FILE, null, 2),
-    "```",
-    "",
-    "Always include the `$schema` and `$docs` fields.",
-  ].join(`
-`),
-  joined_3 = [
-    "## Keystroke Syntax",
-    "",
-    "**Modifiers** (combine with `+`):",
-    "- `ctrl` (alias: `control`)",
-    "- `alt` (aliases: `opt`, `option`) \u2014 note: `alt` and `meta` are identical in terminals",
-    "- `shift`",
-    "- `meta` \u2014 same key as `alt` in terminals (Option key on macOS)",
-    "- `cmd` (aliases: `command`, `super`, `win`) \u2014 Command key on macOS, Windows key on Windows, Super key on Linux; not the same as `meta`. Most terminals never send it (only ones that report the Super modifier, such as through the Kitty keyboard protocol or xterm `modifyOtherKeys`), so prefer `ctrl` for bindings that should work everywhere",
-    "",
-    "**Special keys**: `escape`/`esc`, `enter`/`return`, `tab`, `space`, `backspace`, `delete`, `up`, `down`, `left`, `right`",
-    "",
-    "**Chords**: Space-separated keystrokes, e.g. `ctrl+k ctrl+s` (3-second timeout between keystrokes)",
-    "",
-    "**Examples**: `ctrl+shift+p`, `alt+enter`, `ctrl+k ctrl+n`",
-  ].join(`
-`),
-  joined_4 = [
-    "## Unbinding Default Shortcuts",
-    "",
-    "Set a key to `null` to remove its default binding:",
-    "",
-    "```json",
-    jsonStringify(EXAMPLE_UNBIND, null, 2),
-    "```",
-  ].join(`
-`),
-  joined_5 = [
-    "## How User Bindings Interact with Defaults",
-    "",
-    "- User bindings are **additive** \u2014 they are appended after the default bindings",
-    "- To **move** a binding to a different key: unbind the old key (`null`) AND add the new binding",
-    "- A context only needs to appear in the user's file if they want to change something in that context",
-  ].join(`
-`),
-  joined_6 = [
-    "## Common Patterns",
-    "",
-    "### Rebind a key",
-    "To change the external editor shortcut from `ctrl+g` to `ctrl+e`:",
-    "```json",
-    jsonStringify(EXAMPLE_REBIND, null, 2),
-    "```",
-    "",
-    "### Add a chord binding",
-    "```json",
-    jsonStringify(EXAMPLE_CHORD, null, 2),
-    "```",
-  ].join(`
-`),
-  joined_7 = [
-    "## Behavioral Rules",
-    "",
-    "1. Only include contexts the user wants to change (minimal overrides)",
-    "2. Validate that actions and contexts are from the known lists below",
-    "3. Warn the user proactively if they choose a key that conflicts with reserved shortcuts or common tools like tmux (`ctrl+b`) and screen (`ctrl+a`)",
-    "4. When adding a new binding for an existing action, the new binding is additive (existing default still works unless explicitly unbound)",
-    "5. To fully replace a default binding, unbind the old key AND add the new one",
-  ].join(`
-`),
-  joined_8 = [
-    "## Validation",
-    "",
-    "Claude Code validates `~/.claude/keybindings.json` when it loads; warnings go to the debug log. After editing the file, re-check it against the rules below and fix anything that matches.",
-    "",
-    "### Common Issues and Fixes",
-    "",
-    markdownTable(
-      ["Issue", "Cause", "Fix"],
-      [
-        [
-          '`keybindings.json must have a "bindings" array`',
-          "Missing wrapper object",
-          'Wrap bindings in `{ "bindings": [...] }`',
-        ],
-        [
-          '`"bindings" must be an array`',
-          "`bindings` is not an array",
-          'Set `"bindings"` to an array: `[{ context: ..., bindings: ... }]`',
-        ],
-        [
-          '`Unknown context "X"`',
-          "Typo or invalid context name",
-          "Use exact context names from the Available Contexts table",
-        ],
-        [
-          '`"X" is not a modifier, so "Y" ... applies to "Z" instead`',
-          "Error: `X` comes before the key in `Y` but is not a modifier (a typo such as `ctl` for `ctrl`, or two keys joined with `+` instead of a space), so it is dropped and the binding applies to `Z`",
-          "Correct the modifier using the Keystroke Syntax list (the message suggests the corrected keystroke when it can), or put a space between the keystrokes of a chord",
-        ],
-        [
-          '`Duplicate key "X" in Y bindings`',
-          "Same key defined twice in one context",
-          "Remove the duplicate; JSON uses only the last value",
-        ],
-        [
-          '`"X" may not work: ...`',
-          "Key conflicts with terminal/OS reserved shortcut",
-          "Choose a different key (see Reserved Shortcuts section)",
-        ],
-        [
-          '`Invalid action for "X"`',
-          "Action value is not a string or null",
-          'Actions must be strings like `"app:help"` or `null` to unbind',
-        ],
-      ],
-    ),
-    "",
-    "### Example validation warnings (debug log)",
-    "",
-    "```",
-    "[keybindings] Found 2 validation issue(s)",
-    '[keybindings] [error] Unknown context "chat" \u2014 Valid contexts: Global, Chat, Autocomplete, ...',
-    '[keybindings] [warning] "ctrl+c" may not work: Terminal interrupt (SIGINT)',
-    "```",
-    "",
-    "**Errors** prevent bindings from working and must be fixed. **Warnings** indicate potential conflicts but the binding may still work.",
-  ].join(`
+};
+var EXAMPLE_REBIND = {
+  context: "Chat",
+  bindings: {
+    "ctrl+g": null,
+    "ctrl+e": "chat:externalEditor",
+  },
+};
+var EXAMPLE_CHORD = {
+  context: "Global",
+  bindings: {
+    "ctrl+k ctrl+t": "app:toggleTodos",
+  },
+};
+var joined = [
+  "# Keybindings Skill",
+  "",
+  "Create or modify `~/.claude/keybindings.json` to customize keyboard shortcuts.",
+  "",
+  "## CRITICAL: Read Before Write",
+  "",
+  "**Always read `~/.claude/keybindings.json` first** (it may not exist yet). Merge changes with existing bindings \u2014 never replace the entire file.",
+  "",
+  "- Use **Edit** tool for modifications to existing files",
+  "- Use **Write** tool only if the file does not exist yet",
+].join(`
 `);
+var joined_2 = [
+  "## File Format",
+  "",
+  "```json",
+  jsonStringify(EXAMPLE_KEYBINDINGS_FILE, null, 2),
+  "```",
+  "",
+  "Always include the `$schema` and `$docs` fields.",
+].join(`
+`);
+var joined_3 = [
+  "## Keystroke Syntax",
+  "",
+  "**Modifiers** (combine with `+`):",
+  "- `ctrl` (alias: `control`)",
+  "- `alt` (aliases: `opt`, `option`) \u2014 note: `alt` and `meta` are identical in terminals",
+  "- `shift`",
+  "- `meta` \u2014 same key as `alt` in terminals (Option key on macOS)",
+  "- `cmd` (aliases: `command`, `super`, `win`) \u2014 Command key on macOS, Windows key on Windows, Super key on Linux; not the same as `meta`. Most terminals never send it (only ones that report the Super modifier, such as through the Kitty keyboard protocol or xterm `modifyOtherKeys`), so prefer `ctrl` for bindings that should work everywhere",
+  "",
+  "**Special keys**: `escape`/`esc`, `enter`/`return`, `tab`, `space`, `backspace`, `delete`, `up`, `down`, `left`, `right`",
+  "",
+  "**Chords**: Space-separated keystrokes, e.g. `ctrl+k ctrl+s` (3-second timeout between keystrokes)",
+  "",
+  "**Examples**: `ctrl+shift+p`, `alt+enter`, `ctrl+k ctrl+n`",
+].join(`
+`);
+var joined_4 = [
+  "## Unbinding Default Shortcuts",
+  "",
+  "Set a key to `null` to remove its default binding:",
+  "",
+  "```json",
+  jsonStringify(EXAMPLE_UNBIND, null, 2),
+  "```",
+].join(`
+`);
+var joined_5 = [
+  "## How User Bindings Interact with Defaults",
+  "",
+  "- User bindings are **additive** \u2014 they are appended after the default bindings",
+  "- To **move** a binding to a different key: unbind the old key (`null`) AND add the new binding",
+  "- A context only needs to appear in the user's file if they want to change something in that context",
+].join(`
+`);
+var joined_6 = [
+  "## Common Patterns",
+  "",
+  "### Rebind a key",
+  "To change the external editor shortcut from `ctrl+g` to `ctrl+e`:",
+  "```json",
+  jsonStringify(EXAMPLE_REBIND, null, 2),
+  "```",
+  "",
+  "### Add a chord binding",
+  "```json",
+  jsonStringify(EXAMPLE_CHORD, null, 2),
+  "```",
+].join(`
+`);
+var joined_7 = [
+  "## Behavioral Rules",
+  "",
+  "1. Only include contexts the user wants to change (minimal overrides)",
+  "2. Validate that actions and contexts are from the known lists below",
+  "3. Warn the user proactively if they choose a key that conflicts with reserved shortcuts or common tools like tmux (`ctrl+b`) and screen (`ctrl+a`)",
+  "4. When adding a new binding for an existing action, the new binding is additive (existing default still works unless explicitly unbound)",
+  "5. To fully replace a default binding, unbind the old key AND add the new one",
+].join(`
+`);
+var joined_8 = [
+  "## Validation",
+  "",
+  "Claude Code validates `~/.claude/keybindings.json` when it loads; warnings go to the debug log. After editing the file, re-check it against the rules below and fix anything that matches.",
+  "",
+  "### Common Issues and Fixes",
+  "",
+  markdownTable(
+    ["Issue", "Cause", "Fix"],
+    [
+      [
+        '`keybindings.json must have a "bindings" array`',
+        "Missing wrapper object",
+        'Wrap bindings in `{ "bindings": [...] }`',
+      ],
+      [
+        '`"bindings" must be an array`',
+        "`bindings` is not an array",
+        'Set `"bindings"` to an array: `[{ context: ..., bindings: ... }]`',
+      ],
+      [
+        '`Unknown context "X"`',
+        "Typo or invalid context name",
+        "Use exact context names from the Available Contexts table",
+      ],
+      [
+        '`"X" is not a modifier, so "Y" ... applies to "Z" instead`',
+        "Error: `X` comes before the key in `Y` but is not a modifier (a typo such as `ctl` for `ctrl`, or two keys joined with `+` instead of a space), so it is dropped and the binding applies to `Z`",
+        "Correct the modifier using the Keystroke Syntax list (the message suggests the corrected keystroke when it can), or put a space between the keystrokes of a chord",
+      ],
+      [
+        '`Duplicate key "X" in Y bindings`',
+        "Same key defined twice in one context",
+        "Remove the duplicate; JSON uses only the last value",
+      ],
+      [
+        '`"X" may not work: ...`',
+        "Key conflicts with terminal/OS reserved shortcut",
+        "Choose a different key (see Reserved Shortcuts section)",
+      ],
+      [
+        '`Invalid action for "X"`',
+        "Action value is not a string or null",
+        'Actions must be strings like `"app:help"` or `null` to unbind',
+      ],
+    ],
+  ),
+  "",
+  "### Example validation warnings (debug log)",
+  "",
+  "```",
+  "[keybindings] Found 2 validation issue(s)",
+  '[keybindings] [error] Unknown context "chat" \u2014 Valid contexts: Global, Chat, Autocomplete, ...',
+  '[keybindings] [warning] "ctrl+c" may not work: Terminal interrupt (SIGINT)',
+  "```",
+  "",
+  "**Errors** prevent bindings from working and must be fixed. **Warnings** indicate potential conflicts but the binding may still work.",
+].join(`
+`);
+//@ chunk-hantmvxa.js:180828-181417 fingerprint = registerKeybindingsSkill (1)
 /**
  * 注册 keybindings-help 内置 skill（只供模型调用）：生成上下文表、动作表、保留快捷键清单和 ~/.claude/keybindings.json 示例；isKeybindingCustomizationEnabled 门控。
  */
-//@ chunk-hantmvxa.js:180828-181417 fingerprint = registerKeybindingsSkill (1)
 function registerKeybindingsSkill() {
   registerBundledSkill({
     name: "keybindings-help",
     description:
       'Use when the user wants to customize keyboard shortcuts, rebind keys, add chord bindings, or modify ~/.claude/keybindings.json. Examples: "rebind ctrl+s", "add a chord shortcut", "change the submit key", "customize keybindings".',
     allowedTools: ["Read"],
-    userInvocable: !1,
+    userInvocable: false,
     isEnabled: isKeybindingCustomizationEnabled,
-    async getPromptForCommand(e) {
-      let contextsTable = generateContextsTable(),
-        actionsTable = generateActionsTable(),
-        reservedShortcuts = generateReservedShortcuts(),
-        sections = [
-          joined,
-          joined_2,
-          joined_3,
-          joined_4,
-          joined_5,
-          joined_6,
-          joined_7,
-          joined_8,
-          `## Reserved Shortcuts
+    async getPromptForCommand(args) {
+      let contextsTable = generateContextsTable();
+      let actionsTable = generateActionsTable();
+      let reservedShortcuts = generateReservedShortcuts();
+      let sections = [
+        joined,
+        joined_2,
+        joined_3,
+        joined_4,
+        joined_5,
+        joined_6,
+        joined_7,
+        joined_8,
+        `## Reserved Shortcuts
 
 ${reservedShortcuts}`,
-          `## Available Contexts
+        `## Available Contexts
 
 ${contextsTable}`,
-          `## Available Actions
+        `## Available Actions
 
 ${actionsTable}`,
-        ];
-      if (e)
+      ];
+      if (args)
         sections.push(`## User Request
 
-${e}`);
+${args}`);
       return [
         {
           type: "text",
@@ -333,7 +362,6 @@ function markdownTable(headers, rows) {
 //@ chunk-4t8fx0s8.js:21139-21206 fingerprint = UNBIND_EXAMPLE (0.6)
 function UNBIND_EXAMPLE() {
   let e = keybindingsState.bindings ?? loadKeybindingsSyncWithWarnings();
-  return getActionDisplayText(d$s(e), "Chat", e);
+  return getActionDisplayText(cycleModeBindingName(e), "Chat", e);
 }
-
 export { UNBIND_EXAMPLE, registerKeybindingsSkill };

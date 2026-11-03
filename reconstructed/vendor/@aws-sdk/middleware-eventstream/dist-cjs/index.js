@@ -7,11 +7,15 @@
  */
 
 //@ chunk-3cddmtk7.js:863-1049 esm-fingerprint
-function ae(e) {
-  let { signer: signer, signer: signer_2 } = e,
-    merged = Object.assign(e, { eventSigner: signer, messageSigner: signer_2 }),
-    eventStreamPayloadHandlerProvider = merged.eventStreamPayloadHandlerProvider(merged);
-  return Object.assign(merged, { eventStreamPayloadHandler: eventStreamPayloadHandlerProvider });
+function resolveEventStreamConfig(e) {
+  let { signer, signer: signer_2 } = e;
+  let newInput = Object.assign(e, {
+    eventSigner: signer,
+    messageSigner: signer_2,
+  });
+  let eventStreamPayloadHandler = newInput.eventStreamPayloadHandlerProvider(newInput);
+  return Object.assign(newInput, {
+    eventStreamPayloadHandler,
+  });
 }
-
-export { ae };
+export { resolveEventStreamConfig };

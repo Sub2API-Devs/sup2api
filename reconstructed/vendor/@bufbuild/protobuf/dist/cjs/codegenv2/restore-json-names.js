@@ -6,19 +6,21 @@
  * attribution: cjs-require-graph 1
  */
 import { x } from "../../../../../../runtime/bun-runtime.js";
-import { Ec } from "../reflect/names.js";
-import { xl } from "../reflect/unsafe.js";
+import { require_names } from "../reflect/names.js";
+import { require_unsafe } from "../reflect/unsafe.js";
 
 //@ chunk-fq0cr76a.js:361489-361746 cjs-require-graph
-var r_ = x(function (Zk) {
-  Object.defineProperty(Zk, "__esModule", { value: !0 });
-  Zk.restoreJsonNames = Yk;
-  var qk = Ec(),
-    jk = xl();
-  function Yk(e) {
-    for (let n of e.field) if (!jk.unsafeIsSetExplicit(n, "jsonName")) n.jsonName = qk.protoCamelCase(n.name);
-    e.nestedType.forEach(Yk);
+var require_restore_json_names = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.restoreJsonNames = restoreJsonNames;
+  var names_js_1 = require_names();
+  var unsafe_js_1 = require_unsafe();
+  function restoreJsonNames(message) {
+    for (let f of message.field)
+      if (!unsafe_js_1.unsafeIsSetExplicit(f, "jsonName")) f.jsonName = names_js_1.protoCamelCase(f.name);
+    message.nestedType.forEach(restoreJsonNames);
   }
 });
-
-export { r_ };
+export { require_restore_json_names };

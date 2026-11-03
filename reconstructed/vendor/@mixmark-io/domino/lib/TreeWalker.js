@@ -6,64 +6,95 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { xe } from "./Node.js";
-import { hr } from "./NodeFilter.js";
-import { On } from "./NodeTraversal.js";
-import { ee } from "./utils.js";
+import { require_Node } from "./Node.js";
+import { require_NodeFilter } from "./NodeFilter.js";
+import { require_NodeTraversal } from "./NodeTraversal.js";
+import { require_utils } from "./utils.js";
 
 //@ chunk-vwj6ccer.js:68270-71450 cjs-fingerprint
-var u0 = x(function (Ld, o0) {
-  o0.exports = c0;
-  var fx = xe(),
-    fe = hr(),
-    a0 = On(),
-    s0 = ee(),
-    qn = { first: "firstChild", last: "lastChild", next: "firstChild", previous: "lastChild" },
-    Hn = { first: "nextSibling", last: "previousSibling", next: "nextSibling", previous: "previousSibling" };
-  function n0(e, t) {
-    var r, a, s, c, d;
-    a = e._currentNode[qn[t]];
-    while (a !== null) {
-      if (((c = e._internalFilter(a)), c === fe.FILTER_ACCEPT)) return ((e._currentNode = a), a);
-      if (c === fe.FILTER_SKIP) {
-        if (((r = a[qn[t]]), r !== null)) {
-          a = r;
+var require_TreeWalker = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = TreeWalker;
+  var Node = require_Node();
+  var NodeFilter = require_NodeFilter();
+  var NodeTraversal = require_NodeTraversal();
+  var utils = require_utils();
+  var mapChild = {
+    first: "firstChild",
+    last: "lastChild",
+    next: "firstChild",
+    previous: "lastChild",
+  };
+  var mapSibling = {
+    first: "nextSibling",
+    last: "previousSibling",
+    next: "nextSibling",
+    previous: "previousSibling",
+  };
+  function traverseChildren(tw, type) {
+    var child;
+    var node;
+    var parent;
+    var result;
+    var sibling;
+    node = tw._currentNode[mapChild[type]];
+    while (node !== null) {
+      result = tw._internalFilter(node);
+      if (result === NodeFilter.FILTER_ACCEPT) {
+        tw._currentNode = node;
+        return node;
+      }
+      if (result === NodeFilter.FILTER_SKIP) {
+        child = node[mapChild[type]];
+        if (child !== null) {
+          node = child;
           continue;
         }
       }
-      while (a !== null) {
-        if (((d = a[Hn[t]]), d !== null)) {
-          a = d;
+      while (node !== null) {
+        sibling = node[mapSibling[type]];
+        if (sibling !== null) {
+          node = sibling;
           break;
         }
-        if (((s = a.parentNode), s === null || s === e.root || s === e._currentNode)) return null;
-        else a = s;
+        parent = node.parentNode;
+        if (parent === null || parent === tw.root || parent === tw._currentNode) return null;
+        else node = parent;
       }
     }
     return null;
   }
-  function i0(e, t) {
-    var r, a, s;
-    if (((r = e._currentNode), r === e.root)) return null;
-    while (!0) {
-      s = r[Hn[t]];
-      while (s !== null) {
-        if (((r = s), (a = e._internalFilter(r)), a === fe.FILTER_ACCEPT)) return ((e._currentNode = r), r);
-        if (((s = r[qn[t]]), a === fe.FILTER_REJECT || s === null)) s = r[Hn[t]];
+  function traverseSiblings(tw, type) {
+    var node;
+    var result;
+    var sibling;
+    node = tw._currentNode;
+    if (node === tw.root) return null;
+    while (true) {
+      sibling = node[mapSibling[type]];
+      while (sibling !== null) {
+        node = sibling;
+        result = tw._internalFilter(node);
+        if (result === NodeFilter.FILTER_ACCEPT) {
+          tw._currentNode = node;
+          return node;
+        }
+        sibling = node[mapChild[type]];
+        if (result === NodeFilter.FILTER_REJECT || sibling === null) sibling = node[mapSibling[type]];
       }
-      if (((r = r.parentNode), r === null || r === e.root)) return null;
-      if (e._internalFilter(r) === fe.FILTER_ACCEPT) return null;
+      node = node.parentNode;
+      if (node === null || node === tw.root) return null;
+      if (tw._internalFilter(node) === NodeFilter.FILTER_ACCEPT) return null;
     }
   }
-  function c0(e, t, r) {
-    if (!e || !e.nodeType) s0.NotSupportedError();
-    ((this._root = e),
-      (this._whatToShow = Number(t) || 0),
-      (this._filter = r || null),
-      (this._active = !1),
-      (this._currentNode = e));
+  function TreeWalker(root, whatToShow, filter) {
+    if (!root || !root.nodeType) utils.NotSupportedError();
+    this._root = root;
+    this._whatToShow = Number(whatToShow) || 0;
+    this._filter = filter || null;
+    this._active = false;
+    this._currentNode = root;
   }
-  Object.defineProperties(c0.prototype, {
+  Object.defineProperties(TreeWalker.prototype, {
     root: {
       get: function () {
         return this._root;
@@ -83,91 +114,130 @@ var u0 = x(function (Ld, o0) {
       get: function () {
         return this._currentNode;
       },
-      set: function (t) {
-        if (!(t instanceof fx)) throw TypeError("Not a Node");
-        this._currentNode = t;
+      set: function (v) {
+        if (!(v instanceof Node)) throw TypeError("Not a Node");
+        this._currentNode = v;
       },
     },
     _internalFilter: {
-      value: function (t) {
-        var r, a;
-        if (this._active) s0.InvalidStateError();
-        if (!((1 << (t.nodeType - 1)) & this._whatToShow)) return fe.FILTER_SKIP;
-        if (((a = this._filter), a === null)) r = fe.FILTER_ACCEPT;
+      value: function (node) {
+        var result;
+        var filter;
+        if (this._active) utils.InvalidStateError();
+        if (!((1 << (node.nodeType - 1)) & this._whatToShow)) return NodeFilter.FILTER_SKIP;
+        filter = this._filter;
+        if (filter === null) result = NodeFilter.FILTER_ACCEPT;
         else {
-          this._active = !0;
+          this._active = true;
           try {
-            if (typeof a === "function") r = a(t);
-            else r = a.acceptNode(t);
+            if (typeof filter === "function") result = filter(node);
+            else result = filter.acceptNode(node);
           } finally {
-            this._active = !1;
+            this._active = false;
           }
         }
-        return +r;
+        return +result;
       },
     },
     parentNode: {
       value: function () {
-        var _currentNode = this._currentNode;
-        while (_currentNode !== this.root) {
-          if (((_currentNode = _currentNode.parentNode), _currentNode === null)) return null;
-          if (this._internalFilter(_currentNode) === fe.FILTER_ACCEPT)
-            return ((this._currentNode = _currentNode), _currentNode);
+        var node = this._currentNode;
+        while (node !== this.root) {
+          node = node.parentNode;
+          if (node === null) return null;
+          if (this._internalFilter(node) === NodeFilter.FILTER_ACCEPT) {
+            this._currentNode = node;
+            return node;
+          }
         }
         return null;
       },
     },
     firstChild: {
       value: function () {
-        return n0(this, "first");
+        return traverseChildren(this, "first");
       },
     },
     lastChild: {
       value: function () {
-        return n0(this, "last");
+        return traverseChildren(this, "last");
       },
     },
     previousSibling: {
       value: function () {
-        return i0(this, "previous");
+        return traverseSiblings(this, "previous");
       },
     },
     nextSibling: {
       value: function () {
-        return i0(this, "next");
+        return traverseSiblings(this, "next");
       },
     },
     previousNode: {
       value: function () {
-        var t, r, a, s;
-        t = this._currentNode;
-        while (t !== this._root) {
-          for (a = t.previousSibling; a; a = t.previousSibling) {
-            if (((t = a), (r = this._internalFilter(t)), r === fe.FILTER_REJECT)) continue;
-            for (s = t.lastChild; s; s = t.lastChild)
-              if (((t = s), (r = this._internalFilter(t)), r === fe.FILTER_REJECT)) break;
-            if (r === fe.FILTER_ACCEPT) return ((this._currentNode = t), t);
+        var node;
+        var result;
+        var previousSibling;
+        var lastChild;
+        node = this._currentNode;
+        while (node !== this._root) {
+          for (
+            previousSibling = node.previousSibling;
+            previousSibling;
+            previousSibling = node.previousSibling
+          ) {
+            node = previousSibling;
+            result = this._internalFilter(node);
+            if (result === NodeFilter.FILTER_REJECT) continue;
+            for (lastChild = node.lastChild; lastChild; lastChild = node.lastChild) {
+              node = lastChild;
+              result = this._internalFilter(node);
+              if (result === NodeFilter.FILTER_REJECT) break;
+            }
+            if (result === NodeFilter.FILTER_ACCEPT) {
+              this._currentNode = node;
+              return node;
+            }
           }
-          if (t === this.root || t.parentNode === null) return null;
-          if (((t = t.parentNode), this._internalFilter(t) === fe.FILTER_ACCEPT))
-            return ((this._currentNode = t), t);
+          if (node === this.root || node.parentNode === null) return null;
+          node = node.parentNode;
+          if (this._internalFilter(node) === NodeFilter.FILTER_ACCEPT) {
+            this._currentNode = node;
+            return node;
+          }
         }
         return null;
       },
     },
     nextNode: {
       value: function () {
-        var t, r, a, s;
-        ((t = this._currentNode), (r = fe.FILTER_ACCEPT));
-        e: while (!0) {
-          for (a = t.firstChild; a; a = t.firstChild)
-            if (((t = a), (r = this._internalFilter(t)), r === fe.FILTER_ACCEPT))
-              return ((this._currentNode = t), t);
-            else if (r === fe.FILTER_REJECT) break;
-          for (s = a0.nextSkippingChildren(t, this.root); s; s = a0.nextSkippingChildren(t, this.root))
-            if (((t = s), (r = this._internalFilter(t)), r === fe.FILTER_ACCEPT))
-              return ((this._currentNode = t), t);
-            else if (r === fe.FILTER_SKIP) continue e;
+        var node;
+        var result;
+        var firstChild;
+        var nextSibling;
+        node = this._currentNode;
+        result = NodeFilter.FILTER_ACCEPT;
+        e: while (true) {
+          for (firstChild = node.firstChild; firstChild; firstChild = node.firstChild) {
+            node = firstChild;
+            result = this._internalFilter(node);
+            if (result === NodeFilter.FILTER_ACCEPT) {
+              this._currentNode = node;
+              return node;
+            } else if (result === NodeFilter.FILTER_REJECT) break;
+          }
+          for (
+            nextSibling = NodeTraversal.nextSkippingChildren(node, this.root);
+            nextSibling;
+            nextSibling = NodeTraversal.nextSkippingChildren(node, this.root)
+          ) {
+            node = nextSibling;
+            result = this._internalFilter(node);
+            if (result === NodeFilter.FILTER_ACCEPT) {
+              this._currentNode = node;
+              return node;
+            } else if (result === NodeFilter.FILTER_SKIP) continue e;
+          }
           return null;
         }
       },
@@ -179,5 +249,4 @@ var u0 = x(function (Ld, o0) {
     },
   });
 });
-
-export { u0 };
+export { require_TreeWalker };

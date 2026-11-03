@@ -11,5 +11,4 @@
 
 //@ chunk-5h6419ks.js:191-217 placement
 var PUSHNOTIFICATION = "PushNotification";
-
 export { PUSHNOTIFICATION };

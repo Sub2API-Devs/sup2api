@@ -10,9 +10,9 @@
  */
 import * as pathModule from "path";
 import { pathToFileURL } from "url";
-import { ai, n_ } from "../../utils/networkPaths.js";
+import { isNonWslUncPath, isNetworkOrSpecialPath } from "../../utils/networkPaths.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { zodStrictObject, U, o, E, u } from "../../../vendor/zod/v4/classic/schemas.js";
+import { zodStrictObject, _enum, string, E, u } from "../../../vendor/zod/v4/classic/schemas.js";
 import { buildTool } from "../../services/tools/permissionCheckGuard.js";
 import { LSP_TOOL_NAME, LSP_TOOL_DESCRIPTION, renderToolUseMessage } from "./UI.js";
 import {
@@ -39,7 +39,7 @@ import { openReadBoundToApproval } from "../../utils/fsSafety/pathRevalidation.j
 import { recordPluginUsage, buildPluginEventFieldsFromId } from "../../utils/telemetry/pluginTelemetry.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
-import { af } from "../../utils/plugins/pluginPolicy.js";
+import { policyEnabledPluginNameSet } from "../../utils/plugins/pluginPolicy.js";
 import { uniq } from "../../utils/collections.js";
 import { execFileNoThrowWithCwd } from "../../utils/execFileNoThrow.js";
 import { buildGitConfigScopedEnv } from "../../utils/git/gitConfigEnv.js";
@@ -54,90 +54,101 @@ import {
   formatOutgoingCallsResult,
 } from "./formatters.js";
 
+//@ chunk-kxyd0g16.js:94254-94337 fingerprint = toLocation (1)
 /**
  * LocationLink 转 Location（targetUri + targetSelectionRange/targetRange）。
  */
-//@ chunk-kxyd0g16.js:94254-94337 fingerprint = toLocation (1)
 function toLocation(item) {
-  return { uri: item.targetUri, range: item.targetSelectionRange || item.targetRange };
+  return {
+    uri: item.targetUri,
+    range: item.targetSelectionRange || item.targetRange,
+  };
 }
+//@ chunk-kxyd0g16.js:94337-94374 fingerprint = isLocationLink (1)
 /**
  * 是否为 LSP LocationLink（含 targetUri）。
  */
-//@ chunk-kxyd0g16.js:94337-94374 fingerprint = isLocationLink (1)
 function isLocationLink(item) {
   return "targetUri" in item;
 }
 //@ chunk-kxyd0g16.js:103223-103289 placement
-function xe(e, r) {
-  let trimmed = e.trim();
-  return ai(trimmed) || n_(trimmed) || ai(r) || n_(r);
+/**
+ * 判断路径（或其对照写法）是否为 UNC/网络路径。
+ */
+function hasUncOrNetworkPath(filePath, r) {
+  let trimmed = filePath.trim();
+  return (
+    isNonWslUncPath(trimmed) ||
+    isNetworkOrSpecialPath(trimmed) ||
+    isNonWslUncPath(r) ||
+    isNetworkOrSpecialPath(r)
+  );
 }
 //@ chunk-kxyd0g16.js:103920-105186 fingerprint = outputSchema (0.801)
-var MAX_LSP_FILE_SIZE_BYTES = 1e7,
-  lspInputSchema = DoctorLazy(() =>
-    zodStrictObject({
-      operation: U([
-        "goToDefinition",
-        "findReferences",
-        "hover",
-        "documentSymbol",
-        "workspaceSymbol",
-        "goToImplementation",
-        "prepareCallHierarchy",
-        "incomingCalls",
-        "outgoingCalls",
-      ]).describe("The LSP operation to perform"),
-      filePath: o().describe("The absolute or relative path to the file"),
-      line: E().int().positive().describe("The line number (1-based, as shown in editors)"),
-      character: E().int().positive().describe("The character offset (1-based, as shown in editors)"),
-      query: o()
-        .optional()
-        .describe(
-          "The symbol name or partial name to search for (workspaceSymbol only). Most language servers return no results for an empty query, so always provide it when using workspaceSymbol.",
-        ),
-    }),
-  ),
-  lspOutputSchema = DoctorLazy(() =>
-    u({
-      operation: U([
-        "goToDefinition",
-        "findReferences",
-        "hover",
-        "documentSymbol",
-        "workspaceSymbol",
-        "goToImplementation",
-        "prepareCallHierarchy",
-        "incomingCalls",
-        "outgoingCalls",
-      ]).describe("The LSP operation that was performed"),
-      result: o().describe("The formatted result of the LSP operation"),
-      filePath: o().describe("The file path the operation was performed on"),
-      resultCount: E()
-        .int()
-        .nonnegative()
-        .optional()
-        .describe("Number of results (definitions, references, symbols)"),
-      fileCount: E().int().nonnegative().optional().describe("Number of files containing results"),
-    }),
-  );
+var MAX_LSP_FILE_SIZE_BYTES = 1e7;
+var lspInputSchema = DoctorLazy(() =>
+  zodStrictObject({
+    operation: _enum([
+      "goToDefinition",
+      "findReferences",
+      "hover",
+      "documentSymbol",
+      "workspaceSymbol",
+      "goToImplementation",
+      "prepareCallHierarchy",
+      "incomingCalls",
+      "outgoingCalls",
+    ]).describe("The LSP operation to perform"),
+    filePath: string().describe("The absolute or relative path to the file"),
+    line: E().int().positive().describe("The line number (1-based, as shown in editors)"),
+    character: E().int().positive().describe("The character offset (1-based, as shown in editors)"),
+    query: string()
+      .optional()
+      .describe(
+        "The symbol name or partial name to search for (workspaceSymbol only). Most language servers return no results for an empty query, so always provide it when using workspaceSymbol.",
+      ),
+  }),
+);
+var lspOutputSchema = DoctorLazy(() =>
+  u({
+    operation: _enum([
+      "goToDefinition",
+      "findReferences",
+      "hover",
+      "documentSymbol",
+      "workspaceSymbol",
+      "goToImplementation",
+      "prepareCallHierarchy",
+      "incomingCalls",
+      "outgoingCalls",
+    ]).describe("The LSP operation that was performed"),
+    result: string().describe("The formatted result of the LSP operation"),
+    filePath: string().describe("The file path the operation was performed on"),
+    resultCount: E()
+      .int()
+      .nonnegative()
+      .optional()
+      .describe("Number of results (definitions, references, symbols)"),
+    fileCount: E().int().nonnegative().optional().describe("Number of files containing results"),
+  }),
+);
+//@ chunk-kxyd0g16.js:105853-109919 fingerprint = LSPTool (0.883)
 /**
  * LSP 工具定义（name "LSP"）。shouldDefer，只在有 LSP 服务器曾连接（hasEverConnected）时启用；只读、可并发；九种操作；文件需存在且不超过 10MB；结果过滤 gitignore 位置后格式化。
  */
-//@ chunk-kxyd0g16.js:105853-109919 fingerprint = LSPTool (0.883)
 var LSPTool = buildTool({
   name: LSP_TOOL_NAME,
   searchHint: "code intelligence (definitions, references, symbols, hover)",
   backgrounding: "never",
   maxResultSizeChars: 1e5,
-  isLsp: !0,
+  isLsp: true,
   async description() {
     return LSP_TOOL_DESCRIPTION;
   },
   userFacingName() {
     return "LSP";
   },
-  shouldDefer: !0,
+  shouldDefer: true,
   isEnabled() {
     return hasLspEverConnected();
   },
@@ -148,91 +159,117 @@ var LSPTool = buildTool({
     return lspOutputSchema();
   },
   isConcurrencySafe() {
-    return !0;
+    return true;
   },
   isReadOnly() {
-    return !0;
+    return true;
   },
   ruleContentField: "filePath",
-  getPath({ filePath: e }) {
-    return expandPath(e);
+  getPath({ filePath }) {
+    return expandPath(filePath);
   },
   async prompt() {
     return LSP_TOOL_DESCRIPTION;
   },
-  renderToolUseMessage: renderToolUseMessage,
+  renderToolUseMessage,
   create(e) {
     return {
       async validateInput(input) {
-        let safeParse = lspToolInputSchema().safeParse(input);
-        if (!safeParse.success)
-          return { result: !1, message: `Invalid input: ${safeParse.error.message}`, errorCode: 3 };
-        let s = getFsImplementation(),
-          f = expandPath(input.filePath);
-        if (xe(input.filePath, f) || isNetworkJunction(findIntermediateUncJunction(s, f)))
-          return { result: !0 };
-        let h;
+        let parseResult = lspToolInputSchema().safeParse(input);
+        if (!parseResult.success)
+          return {
+            result: false,
+            message: `Invalid input: ${parseResult.error.message}`,
+            errorCode: 3,
+          };
+        let fsImplementation = getFsImplementation();
+        let absolutePath = expandPath(input.filePath);
+        if (
+          hasUncOrNetworkPath(input.filePath, absolutePath) ||
+          isNetworkJunction(findIntermediateUncJunction(fsImplementation, absolutePath))
+        )
+          return {
+            result: true,
+          };
+        let stats;
         try {
-          h = await s.stat(f);
+          stats = await fsImplementation.stat(absolutePath);
         } catch (error) {
           if (isENOENT(error))
-            return { result: !1, message: `File does not exist: ${input.filePath}`, errorCode: 1 };
-          let k = toError(error);
-          return (
-            logForDebugging(
-              `Failed to access file stats for LSP operation on ${input.filePath}: ${k.message}`,
-              { level: "error" },
-            ),
-            { result: !1, message: `Cannot access file: ${input.filePath}. ${k.message}`, errorCode: 4 }
+            return {
+              result: false,
+              message: `File does not exist: ${input.filePath}`,
+              errorCode: 1,
+            };
+          let err = toError(error);
+          logForDebugging(
+            `Failed to access file stats for LSP operation on ${input.filePath}: ${err.message}`,
+            {
+              level: "error",
+            },
           );
+          return {
+            result: false,
+            message: `Cannot access file: ${input.filePath}. ${err.message}`,
+            errorCode: 4,
+          };
         }
-        if (!h.isFile())
-          return { result: !1, message: `Path is not a file: ${input.filePath}`, errorCode: 2 };
-        return { result: !0 };
+        if (!stats.isFile())
+          return {
+            result: false,
+            message: `Path is not a file: ${input.filePath}`,
+            errorCode: 2,
+          };
+        return {
+          result: true,
+        };
       },
-      async checkPermissions(r, n) {
-        let s = expandPath(r.filePath),
-          f = walkPermissionCheckPaths(s);
-        return (
-          e.session.writePermissionStash.stash(n.toolUseId, s, f.spellings, "read"),
-          checkReadPermissionForTool(LSPTool, r, e.permissions(), f)
-        );
+      async checkPermissions(input, n) {
+        let s = expandPath(input.filePath);
+        let f = walkPermissionCheckPaths(s);
+        e.session.writePermissionStash.stash(n.toolUseId, s, f.spellings, "read");
+        return checkReadPermissionForTool(LSPTool, input, e.permissions(), f);
       },
       async call(input, n) {
-        let absolutePath = expandPath(input.filePath),
-          f = consumeReadPermission({ toolUseId: n.toolUseId, session: e.session }, absolutePath),
-          h = getCwd();
+        let absolutePath = expandPath(input.filePath);
+        let f = consumeReadPermission(
+          {
+            toolUseId: n.toolUseId,
+            session: e.session,
+          },
+          absolutePath,
+        );
+        let cwd = getCwd();
         if (getInitializationStatus().status === "pending") await waitForLspInitialization();
         let lspManager = getLspServerManager();
         if (!lspManager) {
-          let R = getInitializationStatus();
-          if (R.status === "failed")
-            return (
-              logForDebugging(`LSP initialization failed: ${R.error.message}`, { level: "error" }),
-              {
-                data: {
-                  operation: input.operation,
-                  result: `LSP initialization failed: ${R.error.message}`,
-                  filePath: input.filePath,
-                },
-              }
-            );
-          return (
-            logError(Error("LSP server manager not initialized when tool was called")),
-            {
+          let initializationStatus = getInitializationStatus();
+          if (initializationStatus.status === "failed") {
+            logForDebugging(`LSP initialization failed: ${initializationStatus.error.message}`, {
+              level: "error",
+            });
+            return {
               data: {
                 operation: input.operation,
-                result: "LSP server manager not initialized. This may indicate a startup issue.",
+                result: `LSP initialization failed: ${initializationStatus.error.message}`,
                 filePath: input.filePath,
               },
-            }
-          );
+            };
+          }
+          logError(Error("LSP server manager not initialized when tool was called"));
+          return {
+            data: {
+              operation: input.operation,
+              result: "LSP server manager not initialized. This may indicate a startup issue.",
+              filePath: input.filePath,
+            },
+          };
         }
-        let { method: method, params: params } = getMethodAndParams(input, absolutePath);
+        let { method, params } = getMethodAndParams(input, absolutePath);
         try {
           if (!lspManager.isFileOpen(absolutePath)) {
-            let q = await openReadBoundToApproval(absolutePath, f, n.signal),
-              handle = q.handle;
+            let readBoundToApproval = await openReadBoundToApproval(absolutePath, f, n.signal);
+            let handle = readBoundToApproval.handle;
             try {
               let stats = await handle.stat();
               if (stats.size > MAX_LSP_FILE_SIZE_BYTES)
@@ -243,36 +280,38 @@ var LSPTool = buildTool({
                     filePath: input.filePath,
                   },
                 };
-              let content = await handle.readFile({ encoding: "utf-8" });
-              await lspManager.openFile(absolutePath, content);
+              let fileContent = await handle.readFile({
+                encoding: "utf-8",
+              });
+              await lspManager.openFile(absolutePath, fileContent);
             } finally {
-              await q.close();
+              await readBoundToApproval.close();
             }
           }
-          let sendRequest = await lspManager.sendRequest(absolutePath, method, params);
-          if (sendRequest === void 0)
-            return (
-              logForDebugging(
-                `No LSP server available for file type ${pathModule.extname(absolutePath)} for operation ${input.operation} on file ${input.filePath}`,
-              ),
-              {
-                data: {
-                  operation: input.operation,
-                  result: `No LSP server available for file type: ${pathModule.extname(absolutePath)}`,
-                  filePath: input.filePath,
-                },
-              }
+          let result = await lspManager.sendRequest(absolutePath, method, params);
+          if (result === undefined) {
+            logForDebugging(
+              `No LSP server available for file type ${pathModule.extname(absolutePath)} for operation ${input.operation} on file ${input.filePath}`,
             );
-          let I = lspManager.getServerForFile(absolutePath)?.config?.pluginSource;
-          if (I)
-            (recordPluginUsage(I),
-              logEvent("tengu_plugin_lsp_request", {
-                operation: fromEnum(input.operation),
-                ...buildPluginEventFieldsFromId(I, af()),
-              }));
+            return {
+              data: {
+                operation: input.operation,
+                result: `No LSP server available for file type: ${pathModule.extname(absolutePath)}`,
+                filePath: input.filePath,
+              },
+            };
+          }
+          let pluginSource = lspManager.getServerForFile(absolutePath)?.config?.pluginSource;
+          if (pluginSource) {
+            recordPluginUsage(pluginSource);
+            logEvent("tengu_plugin_lsp_request", {
+              operation: fromEnum(input.operation),
+              ...buildPluginEventFieldsFromId(pluginSource, policyEnabledPluginNameSet()),
+            });
+          }
           if (input.operation === "incomingCalls" || input.operation === "outgoingCalls") {
-            let q = sendRequest;
-            if (!q || q.length === 0)
+            let callItems = result;
+            if (!callItems || callItems.length === 0)
               return {
                 data: {
                   operation: input.operation,
@@ -282,119 +321,176 @@ var LSPTool = buildTool({
                   fileCount: 0,
                 },
               };
-            let P =
+            let callMethod =
               input.operation === "incomingCalls"
                 ? "callHierarchy/incomingCalls"
                 : "callHierarchy/outgoingCalls";
-            if (
-              ((sendRequest = await lspManager.sendRequest(absolutePath, P, { item: q[0] })),
-              sendRequest === void 0)
-            )
-              logForDebugging(`LSP server returned undefined for ${P} on ${input.filePath}`);
+            result = await lspManager.sendRequest(absolutePath, callMethod, {
+              item: callItems[0],
+            });
+            if (result === undefined)
+              logForDebugging(`LSP server returned undefined for ${callMethod} on ${input.filePath}`);
           }
           if (
-            sendRequest &&
-            Array.isArray(sendRequest) &&
+            result &&
+            Array.isArray(result) &&
             (input.operation === "findReferences" ||
               input.operation === "goToDefinition" ||
               input.operation === "goToImplementation" ||
               input.operation === "workspaceSymbol")
           )
             if (input.operation === "workspaceSymbol") {
-              let q = sendRequest,
-                mapped = q.filter((Q) => Q?.location?.uri).map((Q) => Q.location),
-                L = await filterGitIgnoredLocations(mapped, h),
-                W = new Set(L.map((Q) => Q.uri));
-              sendRequest = q.filter((Q) => !Q?.location?.uri || W.has(Q.location.uri));
+              let symbols = result;
+              let locations = symbols
+                .filter((symbol) => symbol?.location?.uri)
+                .map((symbol) => symbol.location);
+              let filteredLocations = await filterGitIgnoredLocations(locations, cwd);
+              let filteredUris = new Set(filteredLocations.map((filteredLocation) => filteredLocation.uri));
+              result = symbols.filter(
+                (symbol) => !symbol?.location?.uri || filteredUris.has(symbol.location.uri),
+              );
             } else {
-              let mapped = sendRequest.map(toLocation_2),
-                P = await filterGitIgnoredLocations(mapped, h),
-                L = new Set(P.map((W) => W.uri));
-              sendRequest = sendRequest.filter((W) => {
-                let Q = toLocation_2(W);
-                return !Q.uri || L.has(Q.uri);
+              let locations = result.map(toLocation_2);
+              let filteredLocations = await filterGitIgnoredLocations(locations, cwd);
+              let filteredUris = new Set(filteredLocations.map((filteredLocation) => filteredLocation.uri));
+              result = result.filter((item) => {
+                let loc = toLocation_2(item);
+                return !loc.uri || filteredUris.has(loc.uri);
               });
             }
-          let {
-            formatted: formatted,
-            resultCount: resultCount,
-            fileCount: fileCount,
-          } = formatResult(input.operation, sendRequest, h);
+          let { formatted, resultCount, fileCount } = formatResult(input.operation, result, cwd);
           return {
             data: {
               operation: input.operation,
               result: formatted,
               filePath: input.filePath,
-              resultCount: resultCount,
-              fileCount: fileCount,
+              resultCount,
+              fileCount,
             },
           };
         } catch (error) {
           let message = toError(error).message;
-          return (
-            logForDebugging(
-              `LSP tool request failed for ${input.operation} on ${input.filePath}: ${message}`,
-              { level: "error" },
-            ),
-            {
-              data: {
-                operation: input.operation,
-                result: `Error performing ${input.operation}: ${message}`,
-                filePath: input.filePath,
-              },
-            }
-          );
+          logForDebugging(`LSP tool request failed for ${input.operation} on ${input.filePath}: ${message}`, {
+            level: "error",
+          });
+          return {
+            data: {
+              operation: input.operation,
+              result: `Error performing ${input.operation}: ${message}`,
+              filePath: input.filePath,
+            },
+          };
         }
       },
     };
   },
-  mapToolResultToToolResultBlockParam(e, r) {
-    return { tool_use_id: r, type: "tool_result", content: e.result };
+  mapToolResultToToolResultBlockParam(output, toolUseID) {
+    return {
+      tool_use_id: toolUseID,
+      type: "tool_result",
+      content: output.result,
+    };
   },
 });
+//@ chunk-kxyd0g16.js:109919-110976 fingerprint = getMethodAndParams (1)
 /**
  * 把工具输入转换为 LSP 方法与参数（1 基行列转 0 基，文件转 file:// URI）。
  */
-//@ chunk-kxyd0g16.js:109919-110976 fingerprint = getMethodAndParams (1)
 function getMethodAndParams(input, absolutePath) {
-  let uri = pathToFileURL(absolutePath).href,
-    position = { line: input.line - 1, character: input.character - 1 };
+  let uri = pathToFileURL(absolutePath).href;
+  let position = {
+    line: input.line - 1,
+    character: input.character - 1,
+  };
   switch (input.operation) {
     case "goToDefinition":
       return {
         method: "textDocument/definition",
-        params: { textDocument: { uri: uri }, position: position },
+        params: {
+          textDocument: {
+            uri,
+          },
+          position,
+        },
       };
     case "findReferences":
       return {
         method: "textDocument/references",
-        params: { textDocument: { uri: uri }, position: position, context: { includeDeclaration: !0 } },
+        params: {
+          textDocument: {
+            uri,
+          },
+          position,
+          context: {
+            includeDeclaration: true,
+          },
+        },
       };
     case "hover":
-      return { method: "textDocument/hover", params: { textDocument: { uri: uri }, position: position } };
+      return {
+        method: "textDocument/hover",
+        params: {
+          textDocument: {
+            uri,
+          },
+          position,
+        },
+      };
     case "documentSymbol":
-      return { method: "textDocument/documentSymbol", params: { textDocument: { uri: uri } } };
+      return {
+        method: "textDocument/documentSymbol",
+        params: {
+          textDocument: {
+            uri,
+          },
+        },
+      };
     case "workspaceSymbol":
-      return { method: "workspace/symbol", params: { query: input.query ?? "" } };
+      return {
+        method: "workspace/symbol",
+        params: {
+          query: input.query ?? "",
+        },
+      };
     case "goToImplementation":
       return {
         method: "textDocument/implementation",
-        params: { textDocument: { uri: uri }, position: position },
+        params: {
+          textDocument: {
+            uri,
+          },
+          position,
+        },
       };
     case "prepareCallHierarchy":
       return {
         method: "textDocument/prepareCallHierarchy",
-        params: { textDocument: { uri: uri }, position: position },
+        params: {
+          textDocument: {
+            uri,
+          },
+          position,
+        },
       };
     case "incomingCalls":
       return {
         method: "textDocument/prepareCallHierarchy",
-        params: { textDocument: { uri: uri }, position: position },
+        params: {
+          textDocument: {
+            uri,
+          },
+          position,
+        },
       };
     case "outgoingCalls":
       return {
         method: "textDocument/prepareCallHierarchy",
-        params: { textDocument: { uri: uri }, position: position },
+        params: {
+          textDocument: {
+            uri,
+          },
+          position,
+        },
       };
   }
 }
@@ -418,10 +514,10 @@ function uriToFilePath(uri) {
   } catch {}
   return filePath;
 }
+//@ chunk-kxyd0g16.js:111268-111776 fingerprint = filterGitIgnoredLocations (1)
 /**
  * 用 git check-ignore 批量过滤 LSP 返回位置中被 gitignore 的文件。
  */
-//@ chunk-kxyd0g16.js:111268-111776 fingerprint = filterGitIgnoredLocations (1)
 async function filterGitIgnoredLocations(locations, cwd) {
   if (locations.length === 0) return locations;
   let uriToPath = new Map();
@@ -429,16 +525,16 @@ async function filterGitIgnoredLocations(locations, cwd) {
     if (loc.uri && !uriToPath.has(loc.uri)) uriToPath.set(loc.uri, uriToFilePath(loc.uri));
   let uniquePaths = uniq(uriToPath.values());
   if (uniquePaths.length === 0) return locations;
-  let ignoredPaths = new Set(),
-    BATCH_SIZE = 50;
-  for (let y = 0; y < uniquePaths.length; y += BATCH_SIZE) {
-    let batch = uniquePaths.slice(y, y + BATCH_SIZE),
-      result = await execFileNoThrowWithCwd("git", ["check-ignore", ...batch], {
-        cwd: cwd,
-        preserveOutputOnError: !1,
-        timeout: 5000,
-        env: buildGitConfigScopedEnv(),
-      });
+  let ignoredPaths = new Set();
+  let BATCH_SIZE = 50;
+  for (let i = 0; i < uniquePaths.length; i += BATCH_SIZE) {
+    let batch = uniquePaths.slice(i, i + BATCH_SIZE);
+    let result = await execFileNoThrowWithCwd("git", ["check-ignore", ...batch], {
+      cwd,
+      preserveOutputOnError: false,
+      timeout: 5000,
+      env: buildGitConfigScopedEnv(),
+    });
     if (result.code === 0 && result.stdout)
       for (let line of result.stdout.split(`
 `)) {
@@ -459,22 +555,27 @@ function isLocationLink_2(item) {
 //@ chunk-kxyd0g16.js:111813-111914 layout = toLocation (1)
 function toLocation_2(item) {
   if (isLocationLink_2(item))
-    return { uri: item.targetUri, range: item.targetSelectionRange || item.targetRange };
+    return {
+      uri: item.targetUri,
+      range: item.targetSelectionRange || item.targetRange,
+    };
   return item;
 }
+//@ chunk-kxyd0g16.js:111914-114110 fingerprint = formatResult (0.96)
 /**
  * 按操作类型格式化 LSP 结果，返回 {formatted, resultCount, fileCount}。
  */
-//@ chunk-kxyd0g16.js:111914-114110 fingerprint = formatResult (0.96)
 function formatResult(operation, result, cwd) {
   switch (operation) {
     case "goToDefinition": {
-      let locations = (Array.isArray(result) ? result : result ? [result] : []).map(toLocation_2),
-        invalidLocations = locations.filter((loc) => !loc || !loc.uri);
+      let locations = (Array.isArray(result) ? result : result ? [result] : []).map(toLocation_2);
+      let invalidLocations = locations.filter((loc) => !loc || !loc.uri);
       if (invalidLocations.length > 0)
         logForDebugging(
           `LSP server returned ${invalidLocations.length} location(s) with undefined URI for goToDefinition on ${cwd}. This indicates malformed data from the LSP server.`,
-          { level: "error" },
+          {
+            level: "error",
+          },
         );
       let validLocations = locations.filter((loc) => loc && loc.uri);
       return {
@@ -484,14 +585,16 @@ function formatResult(operation, result, cwd) {
       };
     }
     case "findReferences": {
-      let s = result || [],
-        invalidLocations = s.filter((loc) => !loc || !loc.uri);
+      let locations = result || [];
+      let invalidLocations = locations.filter((loc) => !loc || !loc.uri);
       if (invalidLocations.length > 0)
         logForDebugging(
           `LSP server returned ${invalidLocations.length} location(s) with undefined URI for findReferences on ${cwd}. This indicates malformed data from the LSP server.`,
-          { level: "error" },
+          {
+            level: "error",
+          },
         );
-      let validLocations = s.filter((loc) => loc && loc.uri);
+      let validLocations = locations.filter((loc) => loc && loc.uri);
       return {
         formatted: formatFindReferencesResult(result, cwd),
         resultCount: validLocations.length,
@@ -505,24 +608,27 @@ function formatResult(operation, result, cwd) {
         fileCount: result ? 1 : 0,
       };
     case "documentSymbol": {
-      let s = result || [],
-        h = s.length > 0 && s[0] && "range" in s[0] ? countSymbols(s) : s.length;
+      let symbols = result || [];
+      let resultCount =
+        symbols.length > 0 && symbols[0] && "range" in symbols[0] ? countSymbols(symbols) : symbols.length;
       return {
         formatted: formatDocumentSymbolResult(result, cwd),
-        resultCount: h,
-        fileCount: s.length > 0 ? 1 : 0,
+        resultCount,
+        fileCount: symbols.length > 0 ? 1 : 0,
       };
     }
     case "workspaceSymbol": {
-      let s = result || [],
-        invalidSymbols = s.filter((sym) => !sym || !sym.location || !sym.location.uri);
+      let symbols = result || [];
+      let invalidSymbols = symbols.filter((sym) => !sym || !sym.location || !sym.location.uri);
       if (invalidSymbols.length > 0)
         logForDebugging(
           `LSP server returned ${invalidSymbols.length} symbol(s) with undefined location URI for workspaceSymbol on ${cwd}. This indicates malformed data from the LSP server.`,
-          { level: "error" },
+          {
+            level: "error",
+          },
         );
-      let validSymbols = s.filter((sym) => sym && sym.location && sym.location.uri),
-        locations = validSymbols.map((k) => k.location);
+      let validSymbols = symbols.filter((sym) => sym && sym.location && sym.location.uri);
+      let locations = validSymbols.map((validSymbol) => validSymbol.location);
       return {
         formatted: formatWorkspaceSymbolResult(result, cwd),
         resultCount: validSymbols.length,
@@ -530,12 +636,14 @@ function formatResult(operation, result, cwd) {
       };
     }
     case "goToImplementation": {
-      let locations = (Array.isArray(result) ? result : result ? [result] : []).map(toLocation_2),
-        invalidLocations = locations.filter((loc) => !loc || !loc.uri);
+      let locations = (Array.isArray(result) ? result : result ? [result] : []).map(toLocation_2);
+      let invalidLocations = locations.filter((loc) => !loc || !loc.uri);
       if (invalidLocations.length > 0)
         logForDebugging(
           `LSP server returned ${invalidLocations.length} location(s) with undefined URI for goToImplementation on ${cwd}. This indicates malformed data from the LSP server.`,
-          { level: "error" },
+          {
+            level: "error",
+          },
         );
       let validLocations = locations.filter((loc) => loc && loc.uri);
       return {
@@ -545,30 +653,29 @@ function formatResult(operation, result, cwd) {
       };
     }
     case "prepareCallHierarchy": {
-      let s = result || [];
+      let items = result || [];
       return {
         formatted: formatPrepareCallHierarchyResult(result, cwd),
-        resultCount: s.length,
-        fileCount: s.length > 0 ? new Set(s.map((f) => f.uri).filter((f) => f)).size : 0,
+        resultCount: items.length,
+        fileCount: items.length > 0 ? new Set(items.map((item) => item.uri).filter((f) => f)).size : 0,
       };
     }
     case "incomingCalls": {
-      let s = result || [];
+      let calls = result || [];
       return {
         formatted: formatIncomingCallsResult(result, cwd),
-        resultCount: s.length,
-        fileCount: s.length > 0 ? new Set(s.map((f) => f.from?.uri).filter((f) => f)).size : 0,
+        resultCount: calls.length,
+        fileCount: calls.length > 0 ? new Set(calls.map((f) => f.from?.uri).filter((f) => f)).size : 0,
       };
     }
     case "outgoingCalls": {
-      let s = result || [];
+      let calls = result || [];
       return {
         formatted: formatOutgoingCallsResult(result, cwd),
-        resultCount: s.length,
-        fileCount: s.length > 0 ? new Set(s.map((f) => f.to?.uri).filter((f) => f)).size : 0,
+        resultCount: calls.length,
+        fileCount: calls.length > 0 ? new Set(calls.map((f) => f.to?.uri).filter((f) => f)).size : 0,
       };
     }
   }
 }
-
-export { LSPTool, isLocationLink, toLocation, xe };
+export { LSPTool, isLocationLink, toLocation, hasUncOrNetworkPath };

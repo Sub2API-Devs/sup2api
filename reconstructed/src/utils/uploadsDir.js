@@ -18,61 +18,87 @@ import {
 } from "../bootstrap/state.js";
 import { getClaudeConfigDir } from "./envUtils.js";
 import { getAttachmentsRoot } from "./stageFileRoots.js";
-import { qEr } from "./windowsProfileFolders.js";
+import { hasTrailingOrReservedName } from "./windowsProfileFolders.js";
 
 //@ chunk-f87fzzk4.js:411-458 placement
-function NA() {
+/**
+ * 当前会话的 uploads 目录。
+ */
+function sessionUploadsDir() {
   return getSessionUploadsDirOverride() ?? join(getLocalUploadsRoot() ?? getUploadsDir(), getSessionId());
 }
+//@ chunk-f87fzzk4.js:458-498 placement = uploadsDir (1)
 /**
  * uploads 目录路径。
  */
-//@ chunk-f87fzzk4.js:458-498 placement = uploadsDir (1)
 function getUploadsDir() {
   return join(getClaudeConfigDir(), "uploads");
 }
 //@ chunk-f87fzzk4.js:498-540 placement
-function y4e() {
+/**
+ * uploads 根的候选列表。
+ */
+function uploadsRootCandidates() {
   return [getUploadsDir(), getLocalUploadsRoot() ?? getAttachmentsRoot()];
 }
 //@ chunk-f87fzzk4.js:540-579 placement
-function iwn(t, e) {
-  return `${t}-${u(e)}`;
+/**
+ * 生成带哈希前缀的上传文件名。
+ */
+function hashPrefixedFileName(t, e) {
+  return `${t}-${savedNameWithUnderscore(e)}`;
 }
 //@ chunk-f87fzzk4.js:579-663 placement
-function m3r(t) {
-  return createHash("sha256").update(t.toLowerCase()).digest("hex").slice(0, 8);
+/**
+ * 内容小写后的 8 位 sha256 前缀。
+ */
+function shortContentHash(fileUuid) {
+  return createHash("sha256").update(fileUuid.toLowerCase()).digest("hex").slice(0, 8);
 }
 //@ chunk-f87fzzk4.js:663-690 placement
-var a = /^[A-Za-z0-9_-]{8}-/;
+var HASH_PREFIX_RE = /^[A-Za-z0-9_-]{8}-/;
 //@ chunk-f87fzzk4.js:690-736 placement
-function o(t) {
-  return qEr(t.replace(/_+$/, ""));
+function needsTrailingUnderscore(t) {
+  return hasTrailingOrReservedName(t.replace(/_+$/, ""));
 }
 //@ chunk-f87fzzk4.js:736-770 placement
-function u(t) {
-  return o(t) ? t + "_" : t;
+function savedNameWithUnderscore(t) {
+  return needsTrailingUnderscore(t) ? t + "_" : t;
 }
 //@ chunk-f87fzzk4.js:770-866 placement
-function Mai(t) {
-  let replaced = t.replace(a, "");
-  if (replaced.endsWith("_") && o(replaced)) return replaced.slice(0, -1);
+/**
+ * 去哈希前缀的显示文件名。
+ */
+function uploadDisplayName(t) {
+  let replaced = t.replace(HASH_PREFIX_RE, "");
+  if (replaced.endsWith("_") && needsTrailingUnderscore(replaced)) return replaced.slice(0, -1);
   return replaced || t;
 }
 //@ chunk-f87fzzk4.js:866-877 placement
-var c = 1024;
+var MAX_ATTACHMENT_DIGESTS = 1024;
 //@ chunk-f87fzzk4.js:877-997 placement
 function rememberAttachmentDigest(t, e) {
   let n = humanAttachmentDigestRegistry();
-  if (!n.has(t) && n.size >= c) {
+  if (!n.has(t) && n.size >= MAX_ATTACHMENT_DIGESTS) {
     let r = n.keys().next().value;
-    if (r !== void 0) n.delete(r);
+    if (r !== undefined) n.delete(r);
   }
   n.set(t, e);
 }
 //@ chunk-f87fzzk4.js:997-1033 placement
-function Dot(t) {
-  return humanAttachmentDigestRegistry().get(t);
+/**
+ * 取附件摘要登记表里的项。
+ */
+function attachmentDigestOf(real) {
+  return humanAttachmentDigestRegistry().get(real);
 }
-
-export { NA, y4e, Dot, iwn, m3r, rememberAttachmentDigest, getUploadsDir, Mai };
+export {
+  sessionUploadsDir,
+  uploadsRootCandidates,
+  attachmentDigestOf,
+  hashPrefixedFileName,
+  shortContentHash,
+  rememberAttachmentDigest,
+  getUploadsDir,
+  uploadDisplayName,
+};

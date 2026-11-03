@@ -5,16 +5,16 @@
  * pieces: chunk-mrx6y2r5.js (1)
  * attribution: esm-fingerprint 1
  */
-import { q } from "./logging.js";
+import { formatError } from "./logging.js";
 
 //@ chunk-mrx6y2r5.js:311732-312006 esm-fingerprint
-function kc(e, t) {
-  if (!t.match(/^[0-9a-zA-Z-._ ]+$/)) {
-    let r = Error(
+function checkSubscription(logger, subscription) {
+  if (!subscription.match(/^[0-9a-zA-Z-._ ]+$/)) {
+    let error = Error(
       "Invalid subscription provided. You can locate your subscription by following the instructions listed here: https://learn.microsoft.com/azure/azure-portal/get-subscription-tenant-id.",
     );
-    throw (e.info(q("", r)), r);
+    logger.info(formatError("", error));
+    throw error;
   }
 }
-
-export { kc };
+export { checkSubscription };

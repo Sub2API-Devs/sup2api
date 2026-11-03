@@ -8,24 +8,41 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-vwj6ccer.js:235461-235789 cjs-fingerprint
-var kc = x(function ($d, Dc) {
-  var create = Object.create(null, {
-    appCodeName: { value: "Mozilla" },
-    appName: { value: "Netscape" },
-    appVersion: { value: "4.0" },
-    platform: { value: "" },
-    product: { value: "Gecko" },
-    productSub: { value: "20100101" },
-    userAgent: { value: "" },
-    vendor: { value: "" },
-    vendorSub: { value: "" },
+var require_NavigatorID = x(function (cjsExports, cjsModule) {
+  var NavigatorID = Object.create(null, {
+    appCodeName: {
+      value: "Mozilla",
+    },
+    appName: {
+      value: "Netscape",
+    },
+    appVersion: {
+      value: "4.0",
+    },
+    platform: {
+      value: "",
+    },
+    product: {
+      value: "Gecko",
+    },
+    productSub: {
+      value: "20100101",
+    },
+    userAgent: {
+      value: "",
+    },
+    vendor: {
+      value: "",
+    },
+    vendorSub: {
+      value: "",
+    },
     taintEnabled: {
       value: function () {
-        return !1;
+        return false;
       },
     },
   });
-  Dc.exports = create;
+  cjsModule.exports = NavigatorID;
 });
-
-export { kc };
+export { require_NavigatorID };

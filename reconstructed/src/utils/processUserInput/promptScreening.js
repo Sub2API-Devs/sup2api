@@ -18,64 +18,78 @@ import { createUserInterruptionMessage } from "../messages.js";
 import { unwrapAbortReason } from "../abortController.js";
 
 //@ chunk-xx1vmpsq.js:60683-60725 placement
-function Fn(e, s) {
-  return e.dropped !== !0 && s;
+function keepUnlessDropped(screened, s) {
+  return screened.dropped !== true && s;
 }
 //@ chunk-xx1vmpsq.js:60725-60799 placement
-function ws({ since: since, isRunReached: isRunReached }) {
-  return hasHookRegistrationChanged(since) || hasPromptSubmitHooks({ isRunReached: isRunReached });
+/**
+ * needsRescreen：钩子注册变化时需要重新筛查。
+ */
+function needsRescreen({ since, isRunReached }) {
+  return (
+    hasHookRegistrationChanged(since) ||
+    hasPromptSubmitHooks({
+      isRunReached,
+    })
+  );
 }
+//@ chunk-xx1vmpsq.js:60799-60959 placement
 /**
  * 筛查结果仍有效时结算记录并回调，返回是否结算。
  */
-//@ chunk-xx1vmpsq.js:60799-60959 placement
-function settleScreening({
-  recording: recording,
-  onScreened: onScreened,
-  screened: screened,
-  isRunReached: isRunReached,
-  since: since,
-}) {
-  let w = ws({ since: since, isRunReached: isRunReached });
-  if (Fn(screened, w)) return !1;
-  return (recording?.settled(screened), onScreened?.(screened), !0);
+function settleScreening({ recording, onScreened, screened, isRunReached, since }) {
+  let w = needsRescreen({
+    since,
+    isRunReached,
+  });
+  if (keepUnlessDropped(screened, w)) return false;
+  recording?.settled(screened);
+  onScreened?.(screened);
+  return true;
 }
 //@ chunk-xx1vmpsq.js:60959-61048 placement
-function us(e, s) {
-  return e.dropped === !0 || e.rewritten !== void 0 || s === void 0 ? e : { rewritten: s };
+/**
+ * withRewriteState：附加改写状态。
+ */
+function withRewriteState(e, s) {
+  return e.dropped === true || e.rewritten !== undefined || s === undefined
+    ? e
+    : {
+        rewritten: s,
+      };
 }
+//@ chunk-xx1vmpsq.js:61048-61175 placement
 /**
  * 结算筛查结果：结果未知时标为 noVerdict，否则结算记录并回调。
  */
-//@ chunk-xx1vmpsq.js:61048-61175 placement
-function settleScreeningResult({
-  result: e,
-  screened: screened,
-  isUnknown: isUnknown,
-  recording: recording,
-  onScreened: onScreened,
-}) {
-  if (Fn(screened, isUnknown)) {
-    e.noVerdict = !0;
+function settleScreeningResult({ result: e, screened, isUnknown, recording, onScreened }) {
+  if (keepUnlessDropped(screened, isUnknown)) {
+    e.noVerdict = true;
     return;
   }
-  (recording?.settled(screened), onScreened?.(screened));
+  recording?.settled(screened);
+  onScreened?.(screened);
 }
+//@ chunk-xx1vmpsq.js:61175-61407 placement
 /**
  * 输入处理被中断时的结果：附加中断标记消息（关闭时不保留消息）。
  */
-//@ chunk-xx1vmpsq.js:61175-61407 placement
-function interruptedInputResult(e, s, n) {
-  let { signal: signal } = s.abortController,
-    r = isNullRenderingAttachment_2(e.messages, s),
-    w = interruptedCommandResult({
-      signal: signal,
-      typed: [],
-      marker: createUserInterruptionMessage({ toolUse: !1 }),
-      isQueuedByPlugin: n,
+function interruptedInputResult(e, context, isQueuedByPlugin) {
+  let { signal } = context.abortController;
+  let r = isNullRenderingAttachment_2(e.messages, context);
+  let w = interruptedCommandResult({
+    signal,
+    typed: [],
+    marker: createUserInterruptionMessage({
+      toolUse: false,
     }),
-    T = unwrapAbortReason(signal.reason) === "shutdown";
-  return { ...w, messages: T ? [] : [...r, ...w.messages], interrupted: !0 };
+    isQueuedByPlugin,
+  });
+  let T = unwrapAbortReason(signal.reason) === "shutdown";
+  return {
+    ...w,
+    messages: T ? [] : [...r, ...w.messages],
+    interrupted: true,
+  };
 }
-
-export { settleScreening, us, ws, interruptedInputResult, settleScreeningResult };
+export { settleScreening, withRewriteState, needsRescreen, interruptedInputResult, settleScreeningResult };

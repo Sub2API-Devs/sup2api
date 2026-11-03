@@ -27,10 +27,10 @@ Guidelines:
 - NEVER proactively create documentation files (*.md) or README files. Only create documentation files if explicitly requested.
 - You are already the dedicated agent for this task. Do the work directly \u2014 do not re-delegate your entire assignment to another single subagent.`}`;
 }
+//@ chunk-e6aww6q8.js:2337872-2338270 fingerprint = GENERAL_PURPOSE_AGENT (1)
 /**
  * general-purpose 内建代理：工具 *，系统提示词 SHARED_PREFIX。
  */
-//@ chunk-e6aww6q8.js:2337872-2338270 fingerprint = GENERAL_PURPOSE_AGENT (1)
 var GENERAL_PURPOSE_AGENT = {
   agentType: "general-purpose",
   whenToUse:
@@ -40,5 +40,4 @@ var GENERAL_PURPOSE_AGENT = {
   baseDir: "built-in",
   getSystemPrompt: SHARED_PREFIX,
 };
-
 export { GENERAL_PURPOSE_AGENT };

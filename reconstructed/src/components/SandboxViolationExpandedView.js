@@ -8,23 +8,26 @@
  * pieces: chunk-18hwfzwa.js (4)
  * attribution: fingerprint 2, placement 2
  */
-import { e, r } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+} from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Box, Text } from "../ink/components/Text.js";
 import { formatClockTime } from "../bridge/bridgeStatusUtil.js";
 import { w } from "../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
-import { y, P, j } from "../../vendor/react/cjs/react.production.js";
+import { y, P, init_react_production } from "../../vendor/react/cjs/react.production.js";
 import { SandboxManager } from "../utils/sandbox/sandbox-adapter.js";
 import { getPlatform } from "../utils/platform.js";
 
 //@ chunk-18hwfzwa.js:107469-107652 fingerprint = _temp (1)
 function renderViolationLine(v, i) {
-  return e(
+  return jsxProd_default(
     Box,
     {
       paddingLeft: 2,
-      children: r(Text, {
-        dimColor: !0,
+      children: jsxProd_default_2(Text, {
+        dimColor: true,
         children: [formatClockTime(v.timestamp), v.command ? ` ${v.command}:` : "", " ", v.line],
       }),
     },
@@ -33,72 +36,88 @@ function renderViolationLine(v, i) {
 }
 //@ chunk-18hwfzwa.js:107833-108843 fingerprint = SandboxViolationExpandedView (0.667)
 function SandboxViolationExpandedView() {
-  let $ = w(15),
-    x;
-  if ($[0] === MEMO_CACHE_SENTINEL) ((x = []), ($[0] = x));
-  else x = $[0];
-  let [D, L] = y(x),
-    [ee, ke] = y(0),
-    Re,
-    Be;
-  if ($[1] === MEMO_CACHE_SENTINEL)
-    ((Re = () => {
+  let $ = w(15);
+  let t0;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    t0 = [];
+    $[0] = t0;
+  } else t0 = $[0];
+  let [violations, setViolations] = y(t0);
+  let [totalCount, setTotalCount] = y(0);
+  let t1;
+  let t2;
+  if ($[1] === MEMO_CACHE_SENTINEL) {
+    t1 = () => {
       let store = SandboxManager.getSandboxViolationStore();
       return store.subscribe((allViolations) => {
-        (L(allViolations.slice(-10)), ke(store.getTotalCount()));
+        setViolations(allViolations.slice(-10));
+        setTotalCount(store.getTotalCount());
       });
-    }),
-      (Be = []),
-      ($[1] = Re),
-      ($[2] = Be));
-  else ((Re = $[1]), (Be = $[2]));
-  if ((P(Re, Be), !SandboxManager.isSandboxingEnabled() || getPlatform() === "linux")) {
+    };
+    t2 = [];
+    $[1] = t1;
+    $[2] = t2;
+  } else {
+    t1 = $[1];
+    t2 = $[2];
+  }
+  P(t1, t2);
+  if (!SandboxManager.isSandboxingEnabled() || getPlatform() === "linux") {
     return null;
   }
-  if (ee === 0) {
+  if (totalCount === 0) {
     return null;
   }
-  const t3 = ee === 1 ? "operation" : "operations";
-  let Xe;
-  if ($[3] !== t3 || $[4] !== ee)
-    ((Xe = e(Box, {
+  const t3 = totalCount === 1 ? "operation" : "operations";
+  let t4;
+  if ($[3] !== t3 || $[4] !== totalCount) {
+    t4 = jsxProd_default(Box, {
       marginLeft: 0,
-      children: r(Text, {
+      children: jsxProd_default_2(Text, {
         color: "permission",
-        children: ["\u29C8 Sandbox blocked ", ee, " total", " ", t3],
+        children: ["\u29C8 Sandbox blocked ", totalCount, " total", " ", t3],
       }),
-    })),
-      ($[3] = t3),
-      ($[4] = ee),
-      ($[5] = Xe));
-  else Xe = $[5];
-  let rt;
-  if ($[6] !== D) ((rt = D.map(renderViolationLine)), ($[6] = D), ($[7] = rt));
-  else rt = $[7];
-  const t6 = Math.min(10, D.length);
-  let At;
-  if ($[8] !== t6 || $[9] !== ee)
-    ((At = e(Box, {
+    });
+    $[3] = t3;
+    $[4] = totalCount;
+    $[5] = t4;
+  } else t4 = $[5];
+  let t5;
+  if ($[6] !== violations) {
+    t5 = violations.map(renderViolationLine);
+    $[6] = violations;
+    $[7] = t5;
+  } else t5 = $[7];
+  const min = Math.min(10, violations.length);
+  let t7;
+  if ($[8] !== min || $[9] !== totalCount) {
+    t7 = jsxProd_default(Box, {
       paddingLeft: 2,
-      children: r(Text, { dimColor: !0, children: ["\u2026 showing last ", t6, " of ", ee] }),
-    })),
-      ($[8] = t6),
-      ($[9] = ee),
-      ($[10] = At));
-  else At = $[10];
-  let It;
-  if ($[11] !== Xe || $[12] !== rt || $[13] !== At)
-    ((It = r(Box, { flexDirection: "column", marginTop: 1, children: [Xe, rt, At] })),
-      ($[11] = Xe),
-      ($[12] = rt),
-      ($[13] = At),
-      ($[14] = It));
-  else It = $[14];
-  return It;
+      children: jsxProd_default_2(Text, {
+        dimColor: true,
+        children: ["\u2026 showing last ", min, " of ", totalCount],
+      }),
+    });
+    $[8] = min;
+    $[9] = totalCount;
+    $[10] = t7;
+  } else t7 = $[10];
+  let t8;
+  if ($[11] !== t4 || $[12] !== t5 || $[13] !== t7) {
+    t8 = jsxProd_default_2(Box, {
+      flexDirection: "column",
+      marginTop: 1,
+      children: [t4, t5, t7],
+    });
+    $[11] = t4;
+    $[12] = t5;
+    $[13] = t7;
+    $[14] = t8;
+  } else t8 = $[14];
+  return t8;
 }
 //@ chunk-18hwfzwa.js:108843-108847 placement
-j();
+init_react_production();
 //@ chunk-18hwfzwa.js:108847-108851 placement
-j();
-
+init_react_production();
 export { SandboxViolationExpandedView };

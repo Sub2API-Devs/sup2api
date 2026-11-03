@@ -10,9 +10,9 @@
  */
 import { env } from "../../utils/env.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../analytics/growthbook.js";
-import { TENGU_COBALT_PLINTH_LARCH, B_t, canCreateFromType } from "./createFromType.js";
+import { TENGU_COBALT_PLINTH_LARCH, artifactTypesEnabled, canCreateFromType } from "./createFromType.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, A, oe, o, M, E, U, T } from "../../../vendor/zod/v4/classic/schemas.js";
+import { u, array, unknown, string, M, E, _enum, literal } from "../../../vendor/zod/v4/classic/schemas.js";
 import { ARTIFACT_SLUG_RE, BASE58_UUID_LENGTH } from "../../tools/ArtifactTool/constants.js";
 import { truncateSingleLine, sanitizeDisplayTitle } from "../../utils/textNormalize.js";
 import { markAttestation, revokeAttestations, REVOCABLE_INSTANCE_KINDS } from "./typeInstances.js";
@@ -34,7 +34,12 @@ import { sleep } from "../../utils/sleep.js";
 import { parseRetryAfterMs } from "../../bridge/debugUtils.js";
 import { describeArtifactAuthFailure, isFrameMultiFileEnabled } from "./frameFlags.js";
 import { denyPolicyBody, errBody } from "./publishErrors.js";
-import { UK, latinLetterConfusableClass, Mso, N3e } from "../../utils/confusables.js";
+import {
+  TAG_BRACKET_CLASSES,
+  latinLetterConfusableClass,
+  CONNECTOR_CHAR_CLASS,
+  COLON_CHAR_CLASS,
+} from "../../utils/confusables.js";
 import { normalizeQuotes } from "./pageRuntimes.js";
 import {
   DECISION_SURFACE_BRACKETS_RE,
@@ -49,15 +54,21 @@ import { isPlainObject } from "../../utils/isPlainObject.js";
 import { CAPABILITY_NAME_REGEX } from "./capabilityDeclaration.js";
 import { validateReadPath } from "./publishPaths.js";
 import { countCharInString, truncateCodePoints } from "../../utils/stringUtils.js";
-import { t0 } from "../mcp/schemaParse.js";
-import { aK } from "./textSanitize.js";
+import { parseToolOutputSchema } from "../mcp/schemaParse.js";
+import { isMeaningfulFlag } from "./textSanitize.js";
 import { getAttestationKind } from "./attestation.js";
 import { ARTIFACT_LIST_RELS } from "./listArtifacts.js";
 import { fromEnum } from "../analytics/safeMetadata.js";
-import { gF, getFetchErrorText } from "./webfetchRead.js";
+import { webfetchReadFile, getFetchErrorText } from "./webfetchRead.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { extractPageText, stripControlChars } from "./audience.js";
-import { Sh, pDi, mDi, ARTIFACT_TYPE_INSTRUCTIONS, hDi } from "../../constants/xml.js";
+import {
+  ARTIFACT_CONTENT_AUTHORED_TAG,
+  ARTIFACT_INSTRUCTIONS_BELOW_PUBLISHER,
+  ARTIFACT_INSTRUCTIONS_BELOW_FOUND,
+  ARTIFACT_TYPE_INSTRUCTIONS,
+  ARTIFACT_INSTRUCTIONS_ABOVE_THIRD_PARTY,
+} from "../../constants/xml.js";
 import { buildSpellingNoteForText } from "./artifactPromptText.js";
 import { getLiveState } from "../liveReplica/liveReplica.js";
 import { createCombinedAbortSignal } from "../../utils/combinedAbortSignal.js";
@@ -66,30 +77,30 @@ import { createCombinedAbortSignal } from "../../utils/combinedAbortSignal.js";
 function isArtifactTypeCatalogEnabled() {
   return (
     env.CLAUDE_CODE_ARTIFACT_TYPE_CATALOG ??
-    getFeatureValue_CACHED_MAY_BE_STALE(TENGU_COBALT_PLINTH_LARCH, !0)
+    getFeatureValue_CACHED_MAY_BE_STALE(TENGU_COBALT_PLINTH_LARCH, true)
   );
 }
 //@ chunk-w08rdxhd.js:28375-28435 placement
 function isArtifactQuickstartEnabled() {
-  return env.CLAUDE_CODE_ARTIFACT_QUICKSTART ?? !0;
+  return env.CLAUDE_CODE_ARTIFACT_QUICKSTART ?? true;
 }
 //@ chunk-w08rdxhd.js:28435-28454 placement
 var ANTHROPIC = "anthropic";
 //@ chunk-w08rdxhd.js:28454-28636 placement
-function getTypesListPath(e, r = !1) {
+function getTypesListPath(query, r = false) {
   let s = [
     ...(r ? [`scopes=${ANTHROPIC}`] : []),
-    ...(e === void 0 || e === "" ? [] : [`q=${encodeURIComponent(e)}`]),
+    ...(query === undefined || query === "" ? [] : [`q=${encodeURIComponent(query)}`]),
   ];
   return s.length === 0 ? "/api/frame/types" : `/api/frame/types?${s.join("&")}`;
 }
 //@ chunk-w08rdxhd.js:28636-28701 placement
-function It(e) {
+function typeApiPath(e) {
   return `/api/frame/types/${encodeURIComponent(e)}`;
 }
 //@ chunk-w08rdxhd.js:28701-28816 placement
-function getTypeInstancesPath(e, r) {
-  return `/api/frame/types/${encodeURIComponent(e)}/instances?limit=${TYPE_INSTANCES_LIMIT}${r === "all" ? "" : `&rel=${r}`}`;
+function getTypeInstancesPath(e, scope) {
+  return `/api/frame/types/${encodeURIComponent(e)}/instances?limit=${TYPE_INSTANCES_LIMIT}${scope === "all" ? "" : `&rel=${scope}`}`;
 }
 //@ chunk-w08rdxhd.js:28816-28947 placement
 function getTypeFilePath(e, r) {
@@ -98,166 +109,146 @@ function getTypeFilePath(e, r) {
     .map((s) => encodeURIComponent(s))
     .join("/")}`;
 }
+//@ chunk-w08rdxhd.js:28947-29057 placement
 /**
  * 类型目录的大小/数量上限常量与列表等级顺序（core、solution、community）。
  */
-//@ chunk-w08rdxhd.js:28947-29057 placement
-var MAX_TYPE_FILE_BYTES = 4194304,
-  TYPE_DESCRIBE_MAX_BYTES = 1048576,
-  TYPE_LISTING_MAX_BYTES = 1048576,
-  TYPE_INSTANCES_LIMIT = 200,
-  LIST_DESCRIPTION_MAX_RUNES = 240,
-  DETAIL_DESCRIPTION_MAX_RUNES = 1200,
-  CAPABILITY_NAMES_MAX = 16,
-  MAX_TYPE_FILE_ENTRIES = 4096,
-  TYPE_TIER_ORDER = ["core", "solution", "community"];
+var MAX_TYPE_FILE_BYTES = 4194304;
+var TYPE_DESCRIBE_MAX_BYTES = 1048576;
+var TYPE_LISTING_MAX_BYTES = 1048576;
+var TYPE_INSTANCES_LIMIT = 200;
+var LIST_DESCRIPTION_MAX_RUNES = 240;
+var DETAIL_DESCRIPTION_MAX_RUNES = 1200;
+var CAPABILITY_NAMES_MAX = 16;
+var MAX_TYPE_FILE_ENTRIES = 4096;
+var TYPE_TIER_ORDER = ["core", "solution", "community"];
 //@ chunk-w08rdxhd.js:29057-29100 placement
-function isKnownTier(e) {
-  return TYPE_TIER_ORDER.some((r) => r === e);
+function isKnownTier(tier) {
+  return TYPE_TIER_ORDER.some((r) => r === tier);
 }
+//@ chunk-w08rdxhd.js:29100-29991 placement
 /**
  * 类型目录接口的响应 schema：类型列表、类型条目的 listing（scope/tier）、类型摘要、类型详情（文件、能力、可创建）、类型文件条目与文件内容；以及描述不可用的提示与类型说明文件名 SKILL.md。
  */
-//@ chunk-w08rdxhd.js:29100-29991 placement
 var TYPES_LIST_SCHEMA = DoctorLazy(() =>
-    u({
-      types: A(oe()).nullable(),
-      next_page_token: o()
-        .optional()
-        .catch(void 0),
-    }),
-  ),
-  TYPE_LISTING_SCHEMA = DoctorLazy(() =>
-    u({
-      scope: o()
-        .optional()
-        .catch(void 0),
-      tier: o()
-        .optional()
-        .catch(void 0),
-    }),
-  ),
-  TYPE_SUMMARY_SCHEMA = DoctorLazy(() =>
-    u({
-      slug: o().regex(ARTIFACT_SLUG_RE),
-      title: o()
-        .max(2048)
-        .optional()
-        .catch(void 0),
-      description: o()
-        .max(8192)
-        .optional()
-        .catch(void 0),
-      listings: A(oe())
-        .optional()
-        .catch(void 0),
-      release: u({
-        version: o()
-          .optional()
-          .catch(void 0),
-      })
-        .optional()
-        .catch(void 0),
-    }),
-  ),
-  TYPE_DETAIL_SCHEMA = DoctorLazy(() =>
-    TYPE_SUMMARY_SCHEMA().extend({
-      files: A(oe())
-        .optional()
-        .catch(void 0),
-      capabilities: oe().optional(),
-      creatable: M()
-        .optional()
-        .catch(void 0),
-    }),
-  ),
-  TYPE_FILE_ENTRY_SCHEMA = DoctorLazy(() =>
-    u({
-      path: o().min(1).max(512),
-      size: E()
-        .int()
-        .min(0)
-        .optional()
-        .catch(void 0),
-      content_type: o()
-        .max(128)
-        .optional()
-        .catch(void 0),
-    }),
-  ),
-  TYPE_FILE_TEXT_SCHEMA = DoctorLazy(() =>
-    u({
-      path: o(),
-      chars: E()
-        .int()
-        .min(0)
-        .optional()
-        .catch(void 0),
-      truncated: M()
-        .optional()
-        .catch(void 0),
-      text: o(),
-    }),
-  ),
-  TYPE_DESCRIBE_UNAVAILABLE_MESSAGE = "describing an Artifact type is not available in this session",
-  TYPE_INSTRUCTIONS_FILE = "SKILL.md";
+  u({
+    types: array(unknown()).nullable(),
+    next_page_token: string().optional().catch(undefined),
+  }),
+);
+var TYPE_LISTING_SCHEMA = DoctorLazy(() =>
+  u({
+    scope: string().optional().catch(undefined),
+    tier: string().optional().catch(undefined),
+  }),
+);
+var TYPE_SUMMARY_SCHEMA = DoctorLazy(() =>
+  u({
+    slug: string().regex(ARTIFACT_SLUG_RE),
+    title: string().max(2048).optional().catch(undefined),
+    description: string().max(8192).optional().catch(undefined),
+    listings: array(unknown()).optional().catch(undefined),
+    release: u({
+      version: string().optional().catch(undefined),
+    })
+      .optional()
+      .catch(undefined),
+  }),
+);
+var TYPE_DETAIL_SCHEMA = DoctorLazy(() =>
+  TYPE_SUMMARY_SCHEMA().extend({
+    files: array(unknown()).optional().catch(undefined),
+    capabilities: unknown().optional(),
+    creatable: M().optional().catch(undefined),
+  }),
+);
+var TYPE_FILE_ENTRY_SCHEMA = DoctorLazy(() =>
+  u({
+    path: string().min(1).max(512),
+    size: E().int().min(0).optional().catch(undefined),
+    content_type: string().max(128).optional().catch(undefined),
+  }),
+);
+var TYPE_FILE_TEXT_SCHEMA = DoctorLazy(() =>
+  u({
+    path: string(),
+    chars: E().int().min(0).optional().catch(undefined),
+    truncated: M().optional().catch(undefined),
+    text: string(),
+  }),
+);
+var TYPE_DESCRIBE_UNAVAILABLE_MESSAGE = "describing an Artifact type is not available in this session";
+var TYPE_INSTRUCTIONS_FILE = "SKILL.md";
 //@ chunk-w08rdxhd.js:29991-30050 placement
-function He(e, r) {
-  return e === void 0 ? void 0 : (truncateSingleLine(e, r) ?? void 0);
+function singleLineOrUndefined(description, r) {
+  return description === undefined ? undefined : (truncateSingleLine(description, r) ?? undefined);
 }
 //@ chunk-w08rdxhd.js:30050-30266 placement
-function getBestAnthropicTier(e) {
+function getBestAnthropicTier(listings) {
   let r;
-  for (let s of e ?? []) {
-    let safeParse = TYPE_LISTING_SCHEMA().safeParse(s);
-    if (!safeParse.success || safeParse.data.scope !== ANTHROPIC || !isKnownTier(safeParse.data.tier))
-      continue;
-    let index = TYPE_TIER_ORDER.indexOf(safeParse.data.tier);
-    r = r === void 0 ? index : Math.min(r, index);
+  for (let s of listings ?? []) {
+    let n = TYPE_LISTING_SCHEMA().safeParse(s);
+    if (!n.success || n.data.scope !== ANTHROPIC || !isKnownTier(n.data.tier)) continue;
+    let index = TYPE_TIER_ORDER.indexOf(n.data.tier);
+    r = r === undefined ? index : Math.min(r, index);
   }
-  return r === void 0 ? void 0 : TYPE_TIER_ORDER[r];
+  return r === undefined ? undefined : TYPE_TIER_ORDER[r];
 }
 //@ chunk-w08rdxhd.js:30266-30368 placement
-function isAnthropicListed(e) {
-  return (e ?? []).some((r) => {
-    let safeParse = TYPE_LISTING_SCHEMA().safeParse(r);
-    return safeParse.success && safeParse.data.scope === ANTHROPIC;
+function isAnthropicListed(listings) {
+  return (listings ?? []).some((r) => {
+    let s = TYPE_LISTING_SCHEMA().safeParse(r);
+    return s.success && s.data.scope === ANTHROPIC;
   });
 }
 //@ chunk-w08rdxhd.js:30368-30459 placement
-function Be(e, r, s) {
-  if (isAnthropicListed(r)) markAttestation(e, "first_party_type", s);
-  else revokeAttestations(e, ["first_party_type"], s);
+function updateFirstPartyAttestation(slug, listings, s) {
+  if (isAnthropicListed(listings)) markAttestation(slug, "first_party_type", s);
+  else revokeAttestations(slug, ["first_party_type"], s);
 }
 //@ chunk-w08rdxhd.js:30459-30726 placement
 function toTypeSummaryRow(e, r) {
-  let s = getBestAnthropicTier(e.listings),
-    n = He(e.description, r),
-    a = e.release?.version,
-    l = sanitizeDisplayTitle(e.title ?? "");
+  let bestAnthropicTier = getBestAnthropicTier(e.listings);
+  let n = singleLineOrUndefined(e.description, r);
+  let version = e.release?.version;
+  let l = sanitizeDisplayTitle(e.title ?? "");
   return {
     typeUrl: artifactViewerUrl(e.slug),
     title: l ?? "Untitled",
-    ...(l === null && { untitled: !0 }),
-    ...(n !== void 0 && { description: n }),
-    ...(s !== void 0 && { tier: s }),
-    ...(a !== void 0 && VER_SHAPE.test(a) && { release: a }),
+    ...(l === null && {
+      untitled: true,
+    }),
+    ...(n !== undefined && {
+      description: n,
+    }),
+    ...(bestAnthropicTier !== undefined && {
+      tier: bestAnthropicTier,
+    }),
+    ...(version !== undefined &&
+      VER_SHAPE.test(version) && {
+        release: version,
+      }),
   };
 }
 //@ chunk-w08rdxhd.js:30726-30815 placement
-function re(e) {
-  return e.ok && e.fromFrame && e.status === 404 && (e.route === "relay" || isFrameNotFoundBody(e.data));
+function isFrameNotFound(frameWithRetry) {
+  return (
+    frameWithRetry.ok &&
+    frameWithRetry.fromFrame &&
+    frameWithRetry.status === 404 &&
+    (frameWithRetry.route === "relay" || isFrameNotFoundBody(frameWithRetry.data))
+  );
 }
+//@ chunk-w08rdxhd.js:30815-31709 placement
 /**
  * 经中继 GET 类型目录接口：首次网络错误、5xx、带 retry-after 的 429/503 或中继不可用时等待后重试一次；响应超过大小上限时打点并返回 oversize。
  */
-//@ chunk-w08rdxhd.js:30815-31709 placement
 async function fetchFrameWithRetry(path, options) {
-  for (let s = 0; ; s++) {
+  for (let j = 0; ; j++) {
     let response;
     try {
       response = await frameApi.getRelayBound(path, {
-        refreshOAuth: !0,
+        refreshOAuth: true,
         headers: buildFrameHeaders(),
         timeout: 15000,
         maxContentLength: options.maxContentLength,
@@ -267,59 +258,77 @@ async function fetchFrameWithRetry(path, options) {
       });
     } catch (error) {
       if (isCancel(error) || options.signal.aborted) throw error;
-      if (isMaxContentLengthError(error))
-        return (
-          logFeatureBad(options.feature, "oversize_body", {
-            ...(me.has(options.feature) && { wire: wireOfThrow(error) }),
+      if (isMaxContentLengthError(error)) {
+        logFeatureBad(options.feature, "oversize_body", {
+          ...(TYPE_CATALOG_FEATURES.has(options.feature) && {
+            wire: wireOfThrow(error),
           }),
-          { threw: !0, oversize: !0 }
-        );
-      if (s === 0) {
-        await sleep(300 + Math.random() * 500, options.signal, { throwOnAbort: !0 });
+        });
+        return {
+          threw: true,
+          oversize: true,
+        };
+      }
+      if (j === 0) {
+        await sleep(300 + Math.random() * 500, options.signal, {
+          throwOnAbort: true,
+        });
         continue;
       }
-      return (
-        logFeatureBad(options.feature, "request_error", {
-          ...(me.has(options.feature) && { wire: wireOfThrow(error) }),
+      logFeatureBad(options.feature, "request_error", {
+        ...(TYPE_CATALOG_FEATURES.has(options.feature) && {
+          wire: wireOfThrow(error),
         }),
-        { threw: !0, oversize: !1 }
-      );
+      });
+      return {
+        threw: true,
+        oversize: false,
+      };
     }
     let retryAfter =
       response.ok && (response.status === 503 || response.status === 429)
         ? response.response?.headers?.["retry-after"]
-        : void 0;
+        : undefined;
     if (
       ((response.ok && (response.status >= 500 || typeof retryAfter === "string")) ||
         (isRelayUnsent(response) &&
           response.reason === "relay-unavailable" &&
           (response.status === 0 || response.status >= 499))) &&
-      s === 0
+      j === 0
     ) {
       let h =
         typeof retryAfter === "string"
           ? Math.min(parseRetryAfterMs(retryAfter) ?? 1000, 5000)
           : 300 + Math.random() * 500;
-      await sleep(h, options.signal, { throwOnAbort: !0 });
+      await sleep(h, options.signal, {
+        throwOnAbort: true,
+      });
       continue;
     }
     return response;
   }
 }
 //@ chunk-w08rdxhd.js:31709-31774 placement
-var me = new Set(["artifact_type_list", "artifact_type_instances"]);
+var TYPE_CATALOG_FEATURES = new Set(["artifact_type_list", "artifact_type_instances"]);
+//@ chunk-w08rdxhd.js:31774-32601 placement
 /**
  * 把类型目录请求的失败（未认证、中继错误、403 被策略拒绝、429、503、其他 HTTP 错误）转成给模型的错误文字并打点，返回 {err, reason}。
  */
-//@ chunk-w08rdxhd.js:31774-32601 placement
 function describeFrameReadFailure(response, feature, what) {
-  let fail = (a, l) => (
+  let fail = (a, err) => {
     logFeatureBad(feature, a, {
-      ...(response.ok && { status: response.status }),
-      ...(me.has(feature) && { wire: wireOf(response) }),
-    }),
-    { err: l, reason: a }
-  );
+      ...(response.ok && {
+        status: response.status,
+      }),
+      ...(TYPE_CATALOG_FEATURES.has(feature) && {
+        wire: wireOf(response),
+      }),
+    });
+    return {
+      err,
+      reason: a,
+    };
+  };
   if (!response.ok)
     return fail(
       "not_ok",
@@ -350,17 +359,17 @@ function describeFrameReadFailure(response, feature, what) {
 }
 //@ chunk-w08rdxhd.js:32601-34592 placement
 async function listArtifactTypes(e) {
-  let r = e.firstParty === !0,
-    now = Date.now(),
-    n = await fetchFrameWithRetry(getTypesListPath(e.query, r), {
-      signal: e.signal,
-      maxContentLength: MAX_TYPE_FILE_BYTES,
-      feature: "artifact_type_list",
-      credentials: e.credentials,
-      httpOnly: e.httpOnly,
-    });
-  if ("threw" in n)
-    return n.oversize
+  let r = e.firstParty === true;
+  let now = Date.now();
+  let frameWithRetry = await fetchFrameWithRetry(getTypesListPath(e.query, r), {
+    signal: e.signal,
+    maxContentLength: MAX_TYPE_FILE_BYTES,
+    feature: "artifact_type_list",
+    credentials: e.credentials,
+    httpOnly: e.httpOnly,
+  });
+  if ("threw" in frameWithRetry)
+    return frameWithRetry.oversize
       ? {
           err: "the Artifact type listing could not be read (the response was larger than this client accepts)",
           reason: "oversize_body",
@@ -369,80 +378,116 @@ async function listArtifactTypes(e) {
           err: "the Artifact type listing could not be read (network error) \u2014 retry",
           reason: "request_error",
         };
-  let a = wireOf(n);
-  if (isRelayUnsent(n))
-    return (
-      logFeatureSad("artifact_type_list", "relay_unserved", { status: n.status, wire: a }),
-      { err: null, rows: [], dropped: 0, more: !1, unavailable: !0 }
-    );
-  if (re(n))
-    return (
-      logFeatureSad("artifact_type_list", "catalog_off", { wire: a }),
-      { err: null, rows: [], dropped: 0, more: !1, unavailable: !0 }
-    );
-  if (!n.ok || !n.fromFrame || n.status !== 200) {
-    let R = describeFrameReadFailure(n, "artifact_type_list", "the Artifact type listing");
-    return n.ok &&
-      n.fromFrame &&
-      n.status === 403 &&
-      typeof n.data === "string" &&
-      n.data.startsWith(CCR_CREDENTIAL_REFUSED_PREFIX)
-      ? { ...R, reason: "ccr_credential_refused" }
+  let wire = wireOf(frameWithRetry);
+  if (isRelayUnsent(frameWithRetry)) {
+    logFeatureSad("artifact_type_list", "relay_unserved", {
+      status: frameWithRetry.status,
+      wire,
+    });
+    return {
+      err: null,
+      rows: [],
+      dropped: 0,
+      more: false,
+      unavailable: true,
+    };
+  }
+  if (isFrameNotFound(frameWithRetry)) {
+    logFeatureSad("artifact_type_list", "catalog_off", {
+      wire,
+    });
+    return {
+      err: null,
+      rows: [],
+      dropped: 0,
+      more: false,
+      unavailable: true,
+    };
+  }
+  if (!frameWithRetry.ok || !frameWithRetry.fromFrame || frameWithRetry.status !== 200) {
+    let R = describeFrameReadFailure(frameWithRetry, "artifact_type_list", "the Artifact type listing");
+    return frameWithRetry.ok &&
+      frameWithRetry.fromFrame &&
+      frameWithRetry.status === 403 &&
+      typeof frameWithRetry.data === "string" &&
+      frameWithRetry.data.startsWith(CCR_CREDENTIAL_REFUSED_PREFIX)
+      ? {
+          ...R,
+          reason: "ccr_credential_refused",
+        }
       : R;
   }
-  let safeParse = TYPES_LIST_SCHEMA().safeParse(n.data);
-  if (!safeParse.success)
-    return (
-      logFeatureBad("artifact_type_list", "malformed_body", { wire: a }),
-      { err: "the Artifact type listing could not be read (malformed response)", reason: "malformed_body" }
-    );
-  let h = safeParse.data.types ?? [],
-    mapped = h.map((R) => {
-      let safeParse = TYPE_SUMMARY_SCHEMA().safeParse(R);
-      return safeParse.success ? safeParse.data : void 0;
+  let l = TYPES_LIST_SCHEMA().safeParse(frameWithRetry.data);
+  if (!l.success) {
+    logFeatureBad("artifact_type_list", "malformed_body", {
+      wire,
     });
-  for (let R of mapped) if (R !== void 0) Be(R.slug, R.listings, now);
-  let x = [],
-    w = 0,
-    k = 0;
+    return {
+      err: "the Artifact type listing could not be read (malformed response)",
+      reason: "malformed_body",
+    };
+  }
+  let types = l.data.types ?? [];
+  let mapped = types.map((type) => {
+    let L = TYPE_SUMMARY_SCHEMA().safeParse(type);
+    return L.success ? L.data : undefined;
+  });
+  for (let R of mapped) if (R !== undefined) updateFirstPartyAttestation(R.slug, R.listings, now);
+  let x = [];
+  let w = 0;
+  let k = 0;
   for (let R of mapped) {
     if (x.length >= TYPE_INSTANCES_LIMIT) break;
-    if (R === void 0) {
+    if (R === undefined) {
       w++;
       continue;
     }
     let L = isAnthropicListed(R.listings);
     if (r && !L) {
-      if (R.listings === void 0) w++;
+      if (R.listings === undefined) w++;
       else k++;
       continue;
     }
     x.push(toTypeSummaryRow(R, LIST_DESCRIPTION_MAX_RUNES));
   }
-  if (h.length > k && x.length === 0)
-    return (
-      logFeatureBad("artifact_type_list", "all_rows_dropped", { wire: a }),
-      {
-        err: "the Artifact type listing could not be read (response rows were unreadable)",
-        reason: "all_rows_dropped",
-      }
-    );
-  let I =
-    x.length + w + k < h.length ||
-    (typeof safeParse.data.next_page_token === "string" && safeParse.data.next_page_token !== "");
-  if (w > 0) logFeatureSad("artifact_type_list", "rows_dropped", { count: w, wire: a });
+  if (types.length > k && x.length === 0) {
+    logFeatureBad("artifact_type_list", "all_rows_dropped", {
+      wire,
+    });
+    return {
+      err: "the Artifact type listing could not be read (response rows were unreadable)",
+      reason: "all_rows_dropped",
+    };
+  }
+  let more =
+    x.length + w + k < types.length ||
+    (typeof l.data.next_page_token === "string" && l.data.next_page_token !== "");
+  if (w > 0)
+    logFeatureSad("artifact_type_list", "rows_dropped", {
+      count: w,
+      wire,
+    });
   else
     logFeatureOk("artifact_type_list", {
       n_types: x.length,
-      queried: e.query !== void 0 && e.query !== "",
-      more: I,
-      wire: a,
+      queried: e.query !== undefined && e.query !== "",
+      more,
+      wire,
     });
-  return { err: null, rows: x, dropped: w, more: I, unavailable: !1 };
+  return {
+    err: null,
+    rows: x,
+    dropped: w,
+    more,
+    unavailable: false,
+  };
 }
 //@ chunk-w08rdxhd.js:34592-34695 placement
-var regExp = new RegExp(`[${UK.open}${UK.close}]`, "gu"),
-  Bt = /[\u2012-\u2015\u2E3A\u2E3B\uFE31\uFE32\uFE58]/gu;
+/**
+ * 弯引号与各种短横线的替换正则，用于清洗类型目录文本。
+ */
+var regExp = new RegExp(`[${TAG_BRACKET_CLASSES.open}${TAG_BRACKET_CLASSES.close}]`, "gu");
+var DASH_VARIANT_RE = /[\u2012-\u2015\u2E3A\u2E3B\uFE31\uFE32\uFE58]/gu;
 //@ chunk-w08rdxhd.js:34695-34877 placement
 function typeRowTitle(e) {
   return scrubArtifactLinks(
@@ -450,7 +495,7 @@ function typeRowTitle(e) {
       .replaceAll("\\", " ")
       .replace(regExp, " ")
       .replace(DECISION_SURFACE_BRACKETS_RE, " ")
-      .replace(Bt, "-"),
+      .replace(DASH_VARIANT_RE, "-"),
   )
     .replace(getTypeUrlLabelRegex(), "(label removed)")
     .replace(/\s+/g, " ")
@@ -467,31 +512,37 @@ function confusableWordPattern(e) {
     .join("");
 }
 //@ chunk-w08rdxhd.js:34983-35046 placement
-var Yt = ".\\u00B7\\u2027\\uFF0E\\u2024\\u30FB\\u2219\\u22C5",
-  fe;
+/**
+ * “type url”标签匹配用的分隔符字符集与惰性正则。
+ */
+var TYPE_URL_SEPARATORS = ".\\u00B7\\u2027\\uFF0E\\u2024\\u30FB\\u2219\\u22C5";
+var typeUrlLabelRegex;
+//@ chunk-w08rdxhd.js:35046-35365 placement
 /**
  * 惰性构造匹配"type url"标签（中间可夹杂分隔符、格式字符或组合符号）的正则，用于识别伪造的类型链接标签。
  */
-//@ chunk-w08rdxhd.js:35046-35365 placement
 function getTypeUrlLabelRegex() {
-  if (fe === void 0) {
-    let s = `(?:[\\s\\p{Cf}\\p{M}]*[${Mso}/${N3e}][\\s\\p{Cf}\\p{M}]*|[\\s\\p{Cf}\\p{M}]*[${Yt}][\\p{Cf}\\p{M}]*|[\\s\\p{Cf}\\p{M}]*)`;
-    fe = new RegExp(
-      `(?<![A-Za-z0-9_])${confusableWordPattern("type")}${s}${confusableWordPattern("url")}(?![A-Za-z0-9_])(?=\\s*[${N3e}\\u1361\\u1365\\u1804\\uA6F4\\u2E35\\u0903\\u0F7F])`,
+  if (typeUrlLabelRegex === undefined) {
+    let s = `(?:[\\s\\p{Cf}\\p{M}]*[${CONNECTOR_CHAR_CLASS}/${COLON_CHAR_CLASS}][\\s\\p{Cf}\\p{M}]*|[\\s\\p{Cf}\\p{M}]*[${TYPE_URL_SEPARATORS}][\\p{Cf}\\p{M}]*|[\\s\\p{Cf}\\p{M}]*)`;
+    typeUrlLabelRegex = new RegExp(
+      `(?<![A-Za-z0-9_])${confusableWordPattern("type")}${s}${confusableWordPattern("url")}(?![A-Za-z0-9_])(?=\\s*[${COLON_CHAR_CLASS}\\u1361\\u1365\\u1804\\uA6F4\\u2E35\\u0903\\u0F7F])`,
       "gu",
     );
   }
-  return fe;
+  return typeUrlLabelRegex;
 }
 //@ chunk-w08rdxhd.js:35365-35372 placement
-var pe;
+/**
+ * 清洗链接的易混字符/UUID/路径片段模式集合（惰性构造）。
+ */
+var linkScrubPatterns;
+//@ chunk-w08rdxhd.js:35372-35766 placement
 /**
  * 惰性构造清洗链接用的模式集合：拉丁字母易混字符、UUID 状片段、artifact/code 路径片段等。
  */
-//@ chunk-w08rdxhd.js:35372-35766 placement
 function getLinkScrubPatterns() {
-  if (pe === void 0)
-    pe = {
+  if (linkScrubPatterns === undefined)
+    linkScrubPatterns = {
       confusable: [..."abcdefghijklmnopqrstuvwxyz"].map((s) => [
         s,
         new RegExp(`^[${latinLetterConfusableClass(s)}]$`, "u"),
@@ -505,70 +556,78 @@ function getLinkScrubPatterns() {
       ],
       slash: /^[/\u2044\u2215\uFF0F\u29F8\u27CB\u2571\u3033\u2CDC\u1735\u31D3]$/u,
     };
-  return pe;
+  return linkScrubPatterns;
 }
 //@ chunk-w08rdxhd.js:35766-35817 placement
-var Vt = /^[1-9A-HJ-NP-Za-km-z]$/,
-  he = /^[0-9A-Za-z]$/;
+var BASE58_CHAR_RE = /^[1-9A-HJ-NP-Za-km-z]$/;
+var ALNUM_CHAR_RE = /^[0-9A-Za-z]$/;
+//@ chunk-w08rdxhd.js:35817-36759 placement
 /**
  * 在文字里找出伪装的 artifact 链接或 ID（同形字母、UUID 形状、base58 UUID、/artifact/ 路径），把包含它们的整个词替换成 "(link removed)"。
  */
-//@ chunk-w08rdxhd.js:35817-36759 placement
 function scrubArtifactLinks(text) {
-  let { confusable: confusable, marks: marks, slash: slash } = getLinkScrubPatterns(),
-    chars = [...text],
-    folded = "",
-    indexMap = [],
-    S = [];
-  chars.forEach((y, d) => {
-    let normalized = y.normalize("NFKC"),
-      matches = /^[A-Za-z]\p{M}+$/u.test(y.normalize("NFD")),
-      N = /^\s$/u.test(y)
-        ? " "
-        : /^[0-9A-Za-z]+$/.test(normalized)
-          ? normalized
-          : matches
-            ? y.normalize("NFD")[0]
-            : /^[\p{Cf}\p{M}]$/u.test(y)
-              ? ""
-              : /^\p{Nd}$/u.test(y)
-                ? "1"
-                : slash.test(normalized)
-                  ? "/"
-                  : (confusable.find(([, O]) => O.test(y))?.[0] ?? ".");
-    for (let O of N) ((folded += O), indexMap.push(d), S.push(!he.test(y) && !matches));
+  let { confusable, marks, slash } = getLinkScrubPatterns();
+  let chars = [...text];
+  let folded = "";
+  let indexMap = [];
+  let S = [];
+  chars.forEach((char, d) => {
+    let normalized = char.normalize("NFKC");
+    let matches = /^[A-Za-z]\p{M}+$/u.test(char.normalize("NFD"));
+    let N = /^\s$/u.test(char)
+      ? " "
+      : /^[0-9A-Za-z]+$/.test(normalized)
+        ? normalized
+        : matches
+          ? char.normalize("NFD")[0]
+          : /^[\p{Cf}\p{M}]$/u.test(char)
+            ? ""
+            : /^\p{Nd}$/u.test(char)
+              ? "1"
+              : slash.test(normalized)
+                ? "/"
+                : (confusable.find(([, O]) => O.test(char))?.[0] ?? ".");
+    for (let O of N) {
+      folded += O;
+      indexMap.push(d);
+      S.push(!ALNUM_CHAR_RE.test(char) && !matches);
+    }
   });
-  let x = new Set(),
-    w = (y, d) => {
-      for (let z = y; z < y + d; z++) x.add(indexMap[z]);
-    };
-  for (let y of marks) for (let d of folded.matchAll(y)) w(d.index, d[0].length);
+  let x = new Set();
+  let w = (y, d) => {
+    for (let z = y; z < y + d; z++) x.add(indexMap[z]);
+  };
+  for (let mark of marks) for (let d of folded.matchAll(mark)) w(d.index, d[0].length);
   let k = BASE58_UUID_LENGTH;
-  for (let y = 0; y + k <= folded.length; y++) {
-    let sliced = folded.slice(y, y + k),
-      z = indexMap[y],
-      C = indexMap[y + k - 1];
+  for (let j = 0; j + k <= folded.length; j++) {
+    let sliced = folded.slice(j, j + k);
+    let z = indexMap[j];
+    let C = indexMap[j + k - 1];
     if (
-      ![...sliced].every((N) => Vt.test(N)) ||
-      indexMap[y - 1] === z ||
-      indexMap[y + k] === C ||
-      he.test(chars[z - 1] ?? "") ||
-      he.test(chars[C + 1] ?? "")
+      ![...sliced].every((N) => BASE58_CHAR_RE.test(N)) ||
+      indexMap[j - 1] === z ||
+      indexMap[j + k] === C ||
+      ALNUM_CHAR_RE.test(chars[z - 1] ?? "") ||
+      ALNUM_CHAR_RE.test(chars[C + 1] ?? "")
     )
       continue;
-    if (S.slice(y, y + k).some(Boolean) || decodeBase58Uuid(sliced) !== null) w(y, k);
+    if (S.slice(j, j + k).some(Boolean) || decodeBase58Uuid(sliced) !== null) w(j, k);
   }
   if (x.size === 0) return text;
-  let I = "",
-    R = "",
-    L = !1;
-  return (
-    chars.forEach((y, d) => {
-      if (/^\s$/u.test(y)) ((I += (L ? "(link removed)" : R) + y), (R = ""), (L = !1));
-      else ((R += y), (L ||= x.has(d)));
-    }),
-    I + (L ? "(link removed)" : R)
-  );
+  let I = "";
+  let R = "";
+  let L = false;
+  chars.forEach((char, d) => {
+    if (/^\s$/u.test(char)) {
+      I += (L ? "(link removed)" : R) + char;
+      R = "";
+      L = false;
+    } else {
+      R += char;
+      L ||= x.has(d);
+    }
+  });
+  return I + (L ? "(link removed)" : R);
 }
 //@ chunk-w08rdxhd.js:36759-36925 placement
 function typeRowDescription(e) {
@@ -591,174 +650,238 @@ function typeNameKey(e) {
     .trim();
 }
 //@ chunk-w08rdxhd.js:37047-37131 placement
-var Pe = `"${QUOTE_HOMOGLYPHS.source.slice(1, -1)}`,
-  regExp_2 = new RegExp(`^[${Pe}]([\\s\\S]*)[${Pe}]$`, "u");
+var QUOTE_HOMOGLYPH_CLASS = `"${QUOTE_HOMOGLYPHS.source.slice(1, -1)}`;
+var QUOTED_TEXT_RE = new RegExp(`^[${QUOTE_HOMOGLYPH_CLASS}]([\\s\\S]*)[${QUOTE_HOMOGLYPH_CLASS}]$`, "u");
 //@ chunk-w08rdxhd.js:37131-37180 placement
 function typeNameWithoutQuotes(e) {
-  return e.trim().replace(regExp_2, "$1");
+  return e.trim().replace(QUOTED_TEXT_RE, "$1");
 }
 //@ chunk-w08rdxhd.js:37180-37243 placement
-var Kt = 3,
-  De = (e) => [...e].length >= Kt,
-  K = (e) => e.replaceAll(" ", "");
+var MIN_TYPE_NAME_CHARS = 3;
+var isLongEnoughName = (e) => [...e].length >= MIN_TYPE_NAME_CHARS;
+var normalizeSpaces = (e) => e.replaceAll(" ", "");
 //@ chunk-w08rdxhd.js:37243-37281 placement
 function typeNameMatchKey(e) {
-  return K(typeNameKey(typeNameWithoutQuotes(e)));
+  return normalizeSpaces(typeNameKey(typeNameWithoutQuotes(e)));
 }
 //@ chunk-w08rdxhd.js:37281-37326 placement
 function typeTitleMatchKeys(e) {
-  return uniq([K(typeNameKey(e)), typeNameMatchKey(e)]);
+  return uniq([normalizeSpaces(typeNameKey(e)), typeNameMatchKey(e)]);
 }
 //@ chunk-w08rdxhd.js:37326-37891 placement
 function typesNamed(e, r) {
   let s = typeNameKey(typeNameWithoutQuotes(r));
-  if (s === "") return { named: [], exact: !1 };
-  let n = typeNameMatchKey(r),
-    a = K(typeNameKey(r)),
-    l = !1,
-    h = [],
-    S = [],
-    x = [];
+  if (s === "")
+    return {
+      named: [],
+      exact: false,
+    };
+  let n = typeNameMatchKey(r);
+  let a = normalizeSpaces(typeNameKey(r));
+  let l = false;
+  let h = [];
+  let S = [];
+  let x = [];
   for (let R of e) {
     let L = R.untitled ? "" : typeNameKey(R.title);
     if (L === "") continue;
-    let y = K(L);
+    let y = normalizeSpaces(L);
     if (y === n) {
-      ((l = !0), h.push(R));
+      l = true;
+      h.push(R);
       continue;
     }
     let d = y === a;
     if (d) h.push(R);
-    if (De(y) && n.includes(y)) S.push(R);
-    else if (d || (De(n) && L.includes(s))) x.push(R);
+    if (isLongEnoughName(y) && n.includes(y)) S.push(R);
+    else if (d || (isLongEnoughName(n) && L.includes(s))) x.push(R);
   }
-  if (l) return { named: h, exact: !0 };
+  if (l)
+    return {
+      named: h,
+      exact: true,
+    };
   let w = [...S, ...x];
-  if (w.length < 2 || x.length > 0) return { named: w, exact: !1 };
-  let mapped = S.map((R) => K(typeNameKey(R.title))),
-    filtered = S.filter((R, L) => mapped.every((y, d) => d === L || mapped[L].includes(y)));
-  return { named: filtered.length === 1 ? filtered : w, exact: !1 };
+  if (w.length < 2 || x.length > 0)
+    return {
+      named: w,
+      exact: false,
+    };
+  let mapped = S.map((R) => normalizeSpaces(typeNameKey(R.title)));
+  let filtered = S.filter((R, L) => mapped.every((y, d) => d === L || mapped[L].includes(y)));
+  return {
+    named: filtered.length === 1 ? filtered : w,
+    exact: false,
+  };
 }
 //@ chunk-w08rdxhd.js:37891-38365 placement
 async function findArtifactTypeByName(e, r) {
-  let s = await listArtifactTypes({ ...r, firstParty: !0 });
+  let s = await listArtifactTypes({
+    ...r,
+    firstParty: true,
+  });
   if (s.err !== null && s.reason !== "ccr_credential_refused")
-    return { err: s.err, reason: `name_${s.reason}` };
-  if (s.err !== null || s.unavailable) return { err: null, found: void 0, unavailable: !0 };
-  let n = s.more || s.dropped > 0 || s.rows.some((row) => row.untitled),
-    { named: named, exact: exact } = typesNamed(s.rows, e);
-  return named.length === 1 && named[0] !== void 0 && (exact || !n)
-    ? { err: null, found: named[0], exact: exact }
-    : { err: null, found: void 0, named: named.length > 1 ? named : [], listed: s.rows.length, partial: n };
+    return {
+      err: s.err,
+      reason: `name_${s.reason}`,
+    };
+  if (s.err !== null || s.unavailable)
+    return {
+      err: null,
+      found: undefined,
+      unavailable: true,
+    };
+  let n = s.more || s.dropped > 0 || s.rows.some((h) => h.untitled);
+  let { named, exact } = typesNamed(s.rows, e);
+  return named.length === 1 && named[0] !== undefined && (exact || !n)
+    ? {
+        err: null,
+        found: named[0],
+        exact,
+      }
+    : {
+        err: null,
+        found: undefined,
+        named: named.length > 1 ? named : [],
+        listed: s.rows.length,
+        partial: n,
+      };
 }
 //@ chunk-w08rdxhd.js:38365-38638 placement
 var TYPE_NOT_FOUND_MESSAGE_2 =
   "Artifact type not found in this account's catalog \u2014 check the link (use a `type_url` from action \"list_types\"); a type that exists but isn't listed for this account, a single-file page, or the catalog not being available to this account all answer this way";
 //@ chunk-w08rdxhd.js:38638-40526 placement
 async function describeArtifactType(e, r) {
-  if (!ARTIFACT_SLUG_RE.test(e))
-    return (
-      logFeatureBad("artifact_type_describe", "invalid_slug"),
-      { err: "type_url does not name an Artifact type", reason: "invalid_slug" }
-    );
-  let now = Date.now(),
-    n = await fetchFrameWithRetry(It(e), {
-      signal: r.signal,
-      maxContentLength: TYPE_DESCRIBE_MAX_BYTES,
-      feature: "artifact_type_describe",
-      credentials: r.credentials,
-    });
-  if ("threw" in n)
-    return n.oversize
+  if (!ARTIFACT_SLUG_RE.test(e)) {
+    logFeatureBad("artifact_type_describe", "invalid_slug");
+    return {
+      err: "type_url does not name an Artifact type",
+      reason: "invalid_slug",
+    };
+  }
+  let now = Date.now();
+  let frameWithRetry = await fetchFrameWithRetry(typeApiPath(e), {
+    signal: r.signal,
+    maxContentLength: TYPE_DESCRIBE_MAX_BYTES,
+    feature: "artifact_type_describe",
+    credentials: r.credentials,
+  });
+  if ("threw" in frameWithRetry)
+    return frameWithRetry.oversize
       ? {
           err: "the Artifact type could not be read (the response was larger than this client accepts)",
           reason: "oversize_body",
         }
-      : { err: "the Artifact type could not be read (network error) \u2014 retry", reason: "request_error" };
-  if (isRelayUnsent(n))
-    return (
-      logFeatureBad("artifact_type_describe", "relay_unserved", { status: n.status }),
-      { err: TYPE_DESCRIBE_UNAVAILABLE_MESSAGE, reason: "relay_unserved" }
-    );
-  if (re(n))
-    return (
-      logFeatureSad("artifact_type_describe", "not_found"),
-      { err: TYPE_NOT_FOUND_MESSAGE_2, reason: "not_found" }
-    );
-  if (!n.ok || !n.fromFrame || n.status !== 200) {
-    let I = describeFrameReadFailure(n, "artifact_type_describe", "the Artifact type");
-    return n.ok &&
-      n.fromFrame &&
-      n.status === 403 &&
-      typeof n.data === "string" &&
-      n.data.startsWith(CCR_CREDENTIAL_REFUSED_PREFIX)
-      ? { ...I, reason: "ccr_credential_refused" }
+      : {
+          err: "the Artifact type could not be read (network error) \u2014 retry",
+          reason: "request_error",
+        };
+  if (isRelayUnsent(frameWithRetry)) {
+    logFeatureBad("artifact_type_describe", "relay_unserved", {
+      status: frameWithRetry.status,
+    });
+    return {
+      err: TYPE_DESCRIBE_UNAVAILABLE_MESSAGE,
+      reason: "relay_unserved",
+    };
+  }
+  if (isFrameNotFound(frameWithRetry)) {
+    logFeatureSad("artifact_type_describe", "not_found");
+    return {
+      err: TYPE_NOT_FOUND_MESSAGE_2,
+      reason: "not_found",
+    };
+  }
+  if (!frameWithRetry.ok || !frameWithRetry.fromFrame || frameWithRetry.status !== 200) {
+    let I = describeFrameReadFailure(frameWithRetry, "artifact_type_describe", "the Artifact type");
+    return frameWithRetry.ok &&
+      frameWithRetry.fromFrame &&
+      frameWithRetry.status === 403 &&
+      typeof frameWithRetry.data === "string" &&
+      frameWithRetry.data.startsWith(CCR_CREDENTIAL_REFUSED_PREFIX)
+      ? {
+          ...I,
+          reason: "ccr_credential_refused",
+        }
       : I;
   }
-  let safeParse = TYPE_DETAIL_SCHEMA().safeParse(n.data);
-  if (!safeParse.success || safeParse.data.slug !== e)
-    return (
-      logFeatureBad("artifact_type_describe", "malformed_body"),
-      { err: "the Artifact type could not be read (malformed response)", reason: "malformed_body" }
-    );
-  let l = safeParse.data;
-  Be(l.slug, l.listings, now);
-  let h = [],
-    S = l.files ?? [];
-  for (let I of S.slice(0, MAX_TYPE_FILE_ENTRIES)) {
-    let safeParse = TYPE_FILE_ENTRY_SCHEMA().safeParse(I);
-    if (safeParse.success && isSafeDisplayName(safeParse.data.path)) h.push(safeParse.data.path);
+  let a = TYPE_DETAIL_SCHEMA().safeParse(frameWithRetry.data);
+  if (!a.success || a.data.slug !== e) {
+    logFeatureBad("artifact_type_describe", "malformed_body");
+    return {
+      err: "the Artifact type could not be read (malformed response)",
+      reason: "malformed_body",
+    };
   }
-  let x = S.length - h.length,
-    w = l.capabilities == null ? void 0 : isPlainObject(l.capabilities) ? l.capabilities : "malformed",
-    sliced = Object.keys(w !== void 0 && w !== "malformed" ? w : {})
-      .filter((I) => CAPABILITY_NAME_REGEX.test(I))
-      .sort()
-      .slice(0, CAPABILITY_NAMES_MAX);
-  return (
-    logFeatureOk("artifact_type_describe", {
-      n_files: h.length,
-      n_capabilities: sliced.length,
-      ships_instructions: h.includes(TYPE_INSTRUCTIONS_FILE),
-      ...(l.creatable !== void 0 && { creatable: l.creatable }),
+  let l = a.data;
+  updateFirstPartyAttestation(l.slug, l.listings, now);
+  let h = [];
+  let files = l.files ?? [];
+  for (let file of files.slice(0, MAX_TYPE_FILE_ENTRIES)) {
+    let R = TYPE_FILE_ENTRY_SCHEMA().safeParse(file);
+    if (R.success && isSafeDisplayName(R.data.path)) h.push(R.data.path);
+  }
+  let filesOmitted = files.length - h.length;
+  let w = l.capabilities == null ? undefined : isPlainObject(l.capabilities) ? l.capabilities : "malformed";
+  let sliced = Object.keys(w !== undefined && w !== "malformed" ? w : {})
+    .filter((key) => CAPABILITY_NAME_REGEX.test(key))
+    .sort()
+    .slice(0, CAPABILITY_NAMES_MAX);
+  logFeatureOk("artifact_type_describe", {
+    n_files: h.length,
+    n_capabilities: sliced.length,
+    ships_instructions: h.includes(TYPE_INSTRUCTIONS_FILE),
+    ...(l.creatable !== undefined && {
+      creatable: l.creatable,
     }),
-    {
-      err: null,
-      detail: {
-        ...toTypeSummaryRow(l, DETAIL_DESCRIPTION_MAX_RUNES),
-        files: h,
-        filesOmitted: x,
-        shipsInstructions: h.includes(TYPE_INSTRUCTIONS_FILE),
-        firstParty: isAnthropicListed(l.listings),
-        capabilities: sliced,
-        ...(w !== void 0 && { declaration: w }),
-        ...(l.creatable !== void 0 && { creatable: l.creatable }),
-      },
-    }
-  );
+  });
+  return {
+    err: null,
+    detail: {
+      ...toTypeSummaryRow(l, DETAIL_DESCRIPTION_MAX_RUNES),
+      files: h,
+      filesOmitted,
+      shipsInstructions: h.includes(TYPE_INSTRUCTIONS_FILE),
+      firstParty: isAnthropicListed(l.listings),
+      capabilities: sliced,
+      ...(w !== undefined && {
+        declaration: w,
+      }),
+      ...(l.creatable !== undefined && {
+        creatable: l.creatable,
+      }),
+    },
+  };
 }
 //@ chunk-w08rdxhd.js:40526-40535 placement
-var Xt = 5;
+var MAX_PATH_SEGMENTS = 5;
 //@ chunk-w08rdxhd.js:40535-42679 placement
-async function readArtifactTypeFile(e, r, s) {
-  if (!ARTIFACT_SLUG_RE.test(e))
-    return (
-      logFeatureBad("artifact_type_file_read", "invalid_slug"),
-      {
-        kind: "unavailable",
-        why: "the link does not name an Artifact type \u2014 nothing to retry",
-        reason: "invalid_slug",
-      }
-    );
+async function readArtifactTypeFile(slug, r, s) {
+  if (!ARTIFACT_SLUG_RE.test(slug)) {
+    logFeatureBad("artifact_type_file_read", "invalid_slug");
+    return {
+      kind: "unavailable",
+      why: "the link does not name an Artifact type \u2014 nothing to retry",
+      reason: "invalid_slug",
+    };
+  }
   let n = validateReadPath(r);
-  if ("errMsg" in n || n.key !== r)
-    return (logFeatureSad("artifact_type_file_read", "invalid_path"), { kind: "withheld" });
-  if (countCharInString(r, "/") + 1 > Xt)
-    return (logFeatureSad("artifact_type_file_read", "too_deep"), { kind: "withheld" });
+  if ("errMsg" in n || n.key !== r) {
+    logFeatureSad("artifact_type_file_read", "invalid_path");
+    return {
+      kind: "withheld",
+    };
+  }
+  if (countCharInString(r, "/") + 1 > MAX_PATH_SEGMENTS) {
+    logFeatureSad("artifact_type_file_read", "too_deep");
+    return {
+      kind: "withheld",
+    };
+  }
   let a;
   try {
-    a = await frameApi.getRelayBound(getTypeFilePath(e, r), {
-      refreshOAuth: !0,
+    a = await frameApi.getRelayBound(getTypeFilePath(slug, r), {
+      refreshOAuth: true,
       headers: buildFrameHeaders(),
       timeout: 15000,
       maxContentLength: TYPE_LISTING_MAX_BYTES,
@@ -768,68 +891,102 @@ async function readArtifactTypeFile(e, r, s) {
   } catch (error) {
     if (isCancel(error) || s.signal.aborted) throw error;
     let k = isMaxContentLengthError(error);
-    return (
-      logFeatureBad("artifact_type_file_read", k ? "oversize_body" : "request_error"),
-      k
-        ? {
-            kind: "unavailable",
-            why: "the answer was larger than this client accepts \u2014 nothing to retry",
-            reason: "oversize_body",
-          }
-        : { kind: "unavailable", why: "a network error \u2014 retry shortly", reason: "request_error" }
-    );
+    logFeatureBad("artifact_type_file_read", k ? "oversize_body" : "request_error");
+    return k
+      ? {
+          kind: "unavailable",
+          why: "the answer was larger than this client accepts \u2014 nothing to retry",
+          reason: "oversize_body",
+        }
+      : {
+          kind: "unavailable",
+          why: "a network error \u2014 retry shortly",
+          reason: "request_error",
+        };
   }
-  if (isRelayUnsent(a))
-    return (
-      logFeatureSad("artifact_type_file_read", "relay_unserved", { status: a.status }),
-      { kind: "withheld" }
-    );
+  if (isRelayUnsent(a)) {
+    logFeatureSad("artifact_type_file_read", "relay_unserved", {
+      status: a.status,
+    });
+    return {
+      kind: "withheld",
+    };
+  }
   if (!a.ok) {
-    let { reason: reason } = describeFrameReadFailure(a, "artifact_type_file_read", "the type file");
-    return { kind: "unavailable", why: catalogErrorMessage(reason), reason: reason };
+    let { reason } = describeFrameReadFailure(a, "artifact_type_file_read", "the type file");
+    return {
+      kind: "unavailable",
+      why: catalogErrorMessage(reason),
+      reason,
+    };
   }
-  if (re(a))
-    return (
-      logFeatureSad("artifact_type_file_read", "withheld", { relay: a.route === "relay" }),
-      { kind: "withheld" }
-    );
+  if (isFrameNotFound(a)) {
+    logFeatureSad("artifact_type_file_read", "withheld", {
+      relay: a.route === "relay",
+    });
+    return {
+      kind: "withheld",
+    };
+  }
   if (
     a.ok &&
     a.fromFrame &&
     a.status === 403 &&
     typeof a.data === "string" &&
     a.data.startsWith(CCR_CREDENTIAL_REFUSED_PREFIX)
-  )
-    return (logFeatureSad("artifact_type_file_read", "ccr_credential_refused"), { kind: "withheld" });
-  if (a.ok && a.fromFrame && a.status === 415)
-    return (logFeatureSad("artifact_type_file_read", "not_text"), { kind: "not_text" });
-  if (a.ok && a.fromFrame && a.status === 413)
-    return (logFeatureSad("artifact_type_file_read", "too_large"), { kind: "too_large" });
-  if (!a.fromFrame || a.status !== 200) {
-    let { reason: reason } = describeFrameReadFailure(a, "artifact_type_file_read", "the type file");
-    return { kind: "unavailable", why: catalogErrorMessage(reason), reason: reason };
+  ) {
+    logFeatureSad("artifact_type_file_read", "ccr_credential_refused");
+    return {
+      kind: "withheld",
+    };
   }
-  let safeParse = TYPE_FILE_TEXT_SCHEMA().safeParse(a.data);
-  if (!safeParse.success || safeParse.data.path !== r)
-    return (
-      logFeatureBad("artifact_type_file_read", "malformed_body"),
-      {
-        kind: "unavailable",
-        why: "the answer was malformed \u2014 nothing to retry",
-        reason: "malformed_body",
-      }
-    );
-  let h = instructionsFromText(safeParse.data.text, !0),
-    S = h.clipped || safeParse.data.truncated === !0,
-    max = Math.max(h.chars, safeParse.data.chars ?? 0);
-  return (
-    logFeatureOk("artifact_type_file_read", { chars: max, clipped: S, relay: a.route === "relay" }),
-    { kind: "read", text: h.text, chars: max, clipped: S }
-  );
+  if (a.ok && a.fromFrame && a.status === 415) {
+    logFeatureSad("artifact_type_file_read", "not_text");
+    return {
+      kind: "not_text",
+    };
+  }
+  if (a.ok && a.fromFrame && a.status === 413) {
+    logFeatureSad("artifact_type_file_read", "too_large");
+    return {
+      kind: "too_large",
+    };
+  }
+  if (!a.fromFrame || a.status !== 200) {
+    let { reason } = describeFrameReadFailure(a, "artifact_type_file_read", "the type file");
+    return {
+      kind: "unavailable",
+      why: catalogErrorMessage(reason),
+      reason,
+    };
+  }
+  let l = TYPE_FILE_TEXT_SCHEMA().safeParse(a.data);
+  if (!l.success || l.data.path !== r) {
+    logFeatureBad("artifact_type_file_read", "malformed_body");
+    return {
+      kind: "unavailable",
+      why: "the answer was malformed \u2014 nothing to retry",
+      reason: "malformed_body",
+    };
+  }
+  let h = instructionsFromText(l.data.text, true);
+  let clipped = h.clipped || l.data.truncated === true;
+  let chars = Math.max(h.chars, l.data.chars ?? 0);
+  logFeatureOk("artifact_type_file_read", {
+    chars,
+    clipped,
+    relay: a.route === "relay",
+  });
+  return {
+    kind: "read",
+    text: h.text,
+    chars,
+    clipped,
+  };
 }
 //@ chunk-w08rdxhd.js:42679-43120 placement
-function catalogErrorMessage(e) {
-  switch (e) {
+function catalogErrorMessage(reason) {
+  switch (reason) {
     case "rate_limited":
       return "the catalog is rate limited \u2014 retry in a little while";
     case "unavailable":
@@ -846,146 +1003,159 @@ function catalogErrorMessage(e) {
   }
 }
 //@ chunk-w08rdxhd.js:43120-43735 placement
-async function readTypeOwnInstructions(e, r, s, n, a) {
-  let l = n !== void 0 && n.length > 0 ? n : void 0;
-  if (l !== void 0 && !l.includes(TYPE_INSTRUCTIONS_FILE)) return { kind: "none" };
-  let h = await readArtifactTypeFile(e.slug, TYPE_INSTRUCTIONS_FILE, { signal: r, credentials: s });
-  switch (h.kind) {
+async function readTypeOwnInstructions(e, signal, credentials, files, a) {
+  let l = files !== undefined && files.length > 0 ? files : undefined;
+  if (l !== undefined && !l.includes(TYPE_INSTRUCTIONS_FILE))
+    return {
+      kind: "none",
+    };
+  let artifactTypeFile = await readArtifactTypeFile(e.slug, TYPE_INSTRUCTIONS_FILE, {
+    signal,
+    credentials,
+  });
+  switch (artifactTypeFile.kind) {
     case "read":
-      return h.text.trim() === "" ? { kind: "none" } : { ...h, fromType: !0 };
+      return artifactTypeFile.text.trim() === ""
+        ? {
+            kind: "none",
+          }
+        : {
+            ...artifactTypeFile,
+            fromType: true,
+          };
     case "not_text":
-      return { kind: "unavailable", why: "the file is not text", known: !0 };
+      return {
+        kind: "unavailable",
+        why: "the file is not text",
+        known: true,
+      };
     case "too_large":
-      return { kind: "unavailable", why: "the file is larger than this read accepts", known: !0 };
+      return {
+        kind: "unavailable",
+        why: "the file is larger than this read accepts",
+        known: true,
+      };
     case "withheld":
     case "unavailable":
       return a
-        ? readTypeInstructions(e, r, s, n)
+        ? readTypeInstructions(e, signal, credentials, files)
         : {
             kind: "unavailable",
-            why: h.kind === "withheld" ? "the type catalog does not serve it to this session yet" : h.why,
-            known: l !== void 0,
+            why:
+              artifactTypeFile.kind === "withheld"
+                ? "the type catalog does not serve it to this session yet"
+                : artifactTypeFile.why,
+            known: l !== undefined,
           };
   }
 }
 //@ chunk-w08rdxhd.js:43735-43801 placement
-var Ke = ["org", "user"],
-  Zt = ["owner", "users", "org", "public", "other"];
+var LIST_SCOPES = ["org", "user"];
+var AUDIENCE_KINDS = ["owner", "users", "org", "public", "other"];
 //@ chunk-w08rdxhd.js:43801-43838 placement
-function Qt(e) {
-  return Zt.includes(e);
+function isAudienceKind(e) {
+  return AUDIENCE_KINDS.includes(e);
 }
 //@ chunk-w08rdxhd.js:43838-43871 placement
-var Jt = new Set(["org", "public"]);
+var PUBLIC_AUDIENCES = new Set(["org", "public"]);
 //@ chunk-w08rdxhd.js:43871-43962 placement
 function isSharedWithUser(e) {
-  return e.rel === "shared" && typeof e.audience === "string" && !Jt.has(e.audience);
+  return e.rel === "shared" && typeof e.audience === "string" && !PUBLIC_AUDIENCES.has(e.audience);
 }
+//@ chunk-w08rdxhd.js:43962-44774 placement
 /**
  * 类型实例接口的 schema：实例行（slug、标题、描述、创建时间、关系、受众、是否默认/置顶/外部写过、所有者类型）、实例列表、默认实例，以及不可用时的空结果。
  */
-//@ chunk-w08rdxhd.js:43962-44774 placement
 var TYPE_INSTANCE_SCHEMA = DoctorLazy(() =>
-    u({
-      slug: o().regex(ARTIFACT_SLUG_RE),
-      title: o()
-        .max(2048)
-        .optional()
-        .catch(void 0),
-      description: o()
-        .max(8192)
-        .optional()
-        .catch(void 0),
-      created_at: t0({ offset: !0 })
-        .optional()
-        .catch(void 0),
-      rel: o()
-        .optional()
-        .catch(void 0),
-      audience: o()
-        .min(1)
-        .transform((e) => (Qt(e) ? e : "other"))
-        .optional()
-        .catch(void 0),
-      default: U(Ke)
-        .optional()
-        .catch(void 0),
-      pinned: T(!0)
-        .optional()
-        .catch(void 0),
-      outsidersMayHaveWritten: T(!0)
-        .optional()
-        .catch((e) => (aK(e.input) ? !0 : void 0)),
-      owner: u({
-        kind: o()
-          .optional()
-          .catch(void 0),
-      })
-        .optional()
-        .catch(void 0),
-    }),
-  ),
-  SERVICE_ACCOUNT = "service_account",
-  TYPE_INSTANCES_SCHEMA = DoctorLazy(() =>
-    u({
-      instances: A(oe()).nullable(),
-      next_page_token: o()
-        .optional()
-        .catch(void 0),
-      default: oe().optional(),
-    }),
-  ),
-  DEFAULT_INSTANCE_SCHEMA = DoctorLazy(() =>
-    u({
-      effective: o()
-        .regex(ARTIFACT_SLUG_RE)
-        .optional()
-        .catch(void 0),
-      scope: U(Ke)
-        .optional()
-        .catch(void 0),
-    }),
-  ),
-  UNAVAILABLE_INSTANCES = { err: null, rows: [], dropped: 0, overflow: !1, unavailable: !0 };
+  u({
+    slug: string().regex(ARTIFACT_SLUG_RE),
+    title: string().max(2048).optional().catch(undefined),
+    description: string().max(8192).optional().catch(undefined),
+    created_at: parseToolOutputSchema({
+      offset: true,
+    })
+      .optional()
+      .catch(undefined),
+    rel: string().optional().catch(undefined),
+    audience: string()
+      .min(1)
+      .transform((e) => (isAudienceKind(e) ? e : "other"))
+      .optional()
+      .catch(undefined),
+    default: _enum(LIST_SCOPES).optional().catch(undefined),
+    pinned: literal(true).optional().catch(undefined),
+    outsidersMayHaveWritten: literal(true)
+      .optional()
+      .catch((error) => (isMeaningfulFlag(error.input) ? true : undefined)),
+    owner: u({
+      kind: string().optional().catch(undefined),
+    })
+      .optional()
+      .catch(undefined),
+  }),
+);
+var SERVICE_ACCOUNT = "service_account";
+var TYPE_INSTANCES_SCHEMA = DoctorLazy(() =>
+  u({
+    instances: array(unknown()).nullable(),
+    next_page_token: string().optional().catch(undefined),
+    default: unknown().optional(),
+  }),
+);
+var DEFAULT_INSTANCE_SCHEMA = DoctorLazy(() =>
+  u({
+    effective: string().regex(ARTIFACT_SLUG_RE).optional().catch(undefined),
+    scope: _enum(LIST_SCOPES).optional().catch(undefined),
+  }),
+);
+var UNAVAILABLE_INSTANCES = {
+  err: null,
+  rows: [],
+  dropped: 0,
+  overflow: false,
+  unavailable: true,
+};
 //@ chunk-w08rdxhd.js:44774-44845 placement
-function ze(e) {
-  return e.default !== void 0 ? 0 : e.rel === "mine" ? 1 : isSharedWithUser(e) ? 2 : 3;
+function artifactListOrder(e) {
+  return e.default !== undefined ? 0 : e.rel === "mine" ? 1 : isSharedWithUser(e) ? 2 : 3;
 }
 //@ chunk-w08rdxhd.js:44845-45127 placement
-function recordInstanceKind(e, r, s, n, a) {
+function recordInstanceKind(e, r, scope, n, a) {
   let l =
-    e.pinned === !0
+    e.pinned === true
       ? "org_pinned_instance"
       : e.owner?.kind === SERVICE_ACCOUNT && getAttestationKind(r) === "first_party_type"
         ? "pipeline_instance"
         : n
           ? "template_instance"
-          : void 0;
+          : undefined;
   revokeAttestations(
     e.slug,
     REVOCABLE_INSTANCE_KINDS.filter((S) => S !== l),
     a,
   );
-  let any = ARTIFACT_LIST_RELS.some((S) => S === e.rel && (s === "all" || S === s));
-  if (l !== void 0 && any) markAttestation(e.slug, l, a);
+  let any = ARTIFACT_LIST_RELS.some((S) => S === e.rel && (scope === "all" || S === scope));
+  if (l !== undefined && any) markAttestation(e.slug, l, a);
 }
 //@ chunk-w08rdxhd.js:45127-48011 placement
 async function listTypeInstances(e, r) {
-  if (!ARTIFACT_SLUG_RE.test(e))
-    return (
-      logFeatureBad("artifact_type_instances", "invalid_slug"),
-      { err: "type_url does not name an Artifact type", reason: "invalid_slug" }
-    );
-  let now = Date.now(),
-    n = await fetchFrameWithRetry(getTypeInstancesPath(e, r.scope), {
-      signal: r.signal,
-      maxContentLength: MAX_TYPE_FILE_BYTES,
-      feature: "artifact_type_instances",
-      credentials: r.credentials,
-      httpOnly: r.httpOnly,
-    });
-  if ("threw" in n)
-    return n.oversize
+  if (!ARTIFACT_SLUG_RE.test(e)) {
+    logFeatureBad("artifact_type_instances", "invalid_slug");
+    return {
+      err: "type_url does not name an Artifact type",
+      reason: "invalid_slug",
+    };
+  }
+  let now = Date.now();
+  let frameWithRetry = await fetchFrameWithRetry(getTypeInstancesPath(e, r.scope), {
+    signal: r.signal,
+    maxContentLength: MAX_TYPE_FILE_BYTES,
+    feature: "artifact_type_instances",
+    credentials: r.credentials,
+    httpOnly: r.httpOnly,
+  });
+  if ("threw" in frameWithRetry)
+    return frameWithRetry.oversize
       ? {
           err: "the Artifacts made from this type could not be listed (the response was larger than this client accepts)",
           reason: "oversize_body",
@@ -994,152 +1164,211 @@ async function listTypeInstances(e, r) {
           err: "the Artifacts made from this type could not be listed (network error) \u2014 retry",
           reason: "request_error",
         };
-  let a = wireOf(n);
-  if (isRelayUnsent(n))
-    return (
-      logFeatureSad("artifact_type_instances", "relay_unserved", { status: n.status, wire: a }),
-      UNAVAILABLE_INSTANCES
-    );
-  if (re(n))
-    return (logFeatureSad("artifact_type_instances", "not_found", { wire: a }), UNAVAILABLE_INSTANCES);
+  let wire = wireOf(frameWithRetry);
+  if (isRelayUnsent(frameWithRetry)) {
+    logFeatureSad("artifact_type_instances", "relay_unserved", {
+      status: frameWithRetry.status,
+      wire,
+    });
+    return UNAVAILABLE_INSTANCES;
+  }
+  if (isFrameNotFound(frameWithRetry)) {
+    logFeatureSad("artifact_type_instances", "not_found", {
+      wire,
+    });
+    return UNAVAILABLE_INSTANCES;
+  }
   if (
-    n.ok &&
-    n.fromFrame &&
-    n.status === 403 &&
-    typeof n.data === "string" &&
-    n.data.startsWith(CCR_CREDENTIAL_REFUSED_PREFIX)
-  )
-    return (
-      logFeatureSad("artifact_type_instances", "ccr_credential_refused", { wire: a }),
-      UNAVAILABLE_INSTANCES
+    frameWithRetry.ok &&
+    frameWithRetry.fromFrame &&
+    frameWithRetry.status === 403 &&
+    typeof frameWithRetry.data === "string" &&
+    frameWithRetry.data.startsWith(CCR_CREDENTIAL_REFUSED_PREFIX)
+  ) {
+    logFeatureSad("artifact_type_instances", "ccr_credential_refused", {
+      wire,
+    });
+    return UNAVAILABLE_INSTANCES;
+  }
+  if (!frameWithRetry.ok || !frameWithRetry.fromFrame || frameWithRetry.status !== 200)
+    return describeFrameReadFailure(
+      frameWithRetry,
+      "artifact_type_instances",
+      "the Artifacts made from this type",
     );
-  if (!n.ok || !n.fromFrame || n.status !== 200)
-    return describeFrameReadFailure(n, "artifact_type_instances", "the Artifacts made from this type");
-  let safeParse = TYPE_INSTANCES_SCHEMA().safeParse(n.data);
-  if (!safeParse.success)
-    return (
-      logFeatureBad("artifact_type_instances", "malformed_body", { wire: a }),
-      {
-        err: "the Artifacts made from this type could not be listed (malformed response)",
-        reason: "malformed_body",
-      }
-    );
-  let h = safeParse.data.instances ?? [],
-    S = isPlainObject(safeParse.data.default),
-    x = S ? DEFAULT_INSTANCE_SCHEMA().safeParse(safeParse.data.default) : void 0,
-    w = [],
-    k = 0;
-  for (let [C, N] of h.entries()) {
-    let safeParse = TYPE_INSTANCE_SCHEMA().safeParse(N);
-    if (!safeParse.success) {
+  let l = TYPE_INSTANCES_SCHEMA().safeParse(frameWithRetry.data);
+  if (!l.success) {
+    logFeatureBad("artifact_type_instances", "malformed_body", {
+      wire,
+    });
+    return {
+      err: "the Artifacts made from this type could not be listed (malformed response)",
+      reason: "malformed_body",
+    };
+  }
+  let instances = l.data.instances ?? [];
+  let S = isPlainObject(l.data.default);
+  let x = S ? DEFAULT_INSTANCE_SCHEMA().safeParse(l.data.default) : undefined;
+  let w = [];
+  let k = 0;
+  for (let [C, N] of instances.entries()) {
+    let O = TYPE_INSTANCE_SCHEMA().safeParse(N);
+    if (!O.success) {
       if (C < TYPE_INSTANCES_LIMIT) k++;
       continue;
     }
-    if ((recordInstanceKind(safeParse.data, e, r.scope, S, now), C < TYPE_INSTANCES_LIMIT))
-      w.push(safeParse.data);
+    recordInstanceKind(O.data, e, r.scope, S, now);
+    if (C < TYPE_INSTANCES_LIMIT) w.push(O.data);
   }
-  if (h.length > 0 && w.length === 0)
-    return (
-      logFeatureBad("artifact_type_instances", "all_rows_dropped", { wire: a }),
-      {
-        err: "the Artifacts made from this type could not be listed (response rows were unreadable)",
-        reason: "all_rows_dropped",
-      }
-    );
-  let I = (C) => w.find((N) => N.default === C)?.slug,
-    R = ((x?.success ? x.data.effective : void 0) ?? I("user") ?? I("org"))?.toLowerCase(),
-    L =
-      R === void 0
-        ? void 0
-        : ((x?.success ? x.data.scope : void 0) ??
-          w.find((C) => C.slug.toLowerCase() === R)?.default ??
-          "org"),
-    y = [],
-    d = !1;
+  if (instances.length > 0 && w.length === 0) {
+    logFeatureBad("artifact_type_instances", "all_rows_dropped", {
+      wire,
+    });
+    return {
+      err: "the Artifacts made from this type could not be listed (response rows were unreadable)",
+      reason: "all_rows_dropped",
+    };
+  }
+  let I = (C) => w.find((N) => N.default === C)?.slug;
+  let lower = ((x?.success ? x.data.effective : undefined) ?? I("user") ?? I("org"))?.toLowerCase();
+  let L =
+    lower === undefined
+      ? undefined
+      : ((x?.success ? x.data.scope : undefined) ??
+        w.find((C) => C.slug.toLowerCase() === lower)?.default ??
+        "org");
+  let y = [];
+  let d = false;
   for (let C of w) {
     let found = ARTIFACT_LIST_RELS.find((X) => X === C.rel);
-    if (found === void 0 || (r.scope !== "all" && found !== r.scope)) {
+    if (found === undefined || (r.scope !== "all" && found !== r.scope)) {
       k++;
       continue;
     }
-    let O = !d && C.slug.toLowerCase() === R;
-    if (O) d = !0;
-    let Y = He(C.description, LIST_DESCRIPTION_MAX_RUNES);
+    let O = !d && C.slug.toLowerCase() === lower;
+    if (O) d = true;
+    let Y = singleLineOrUndefined(C.description, LIST_DESCRIPTION_MAX_RUNES);
     y.push({
       url: artifactViewerUrl(C.slug),
       title: sanitizeDisplayTitle(C.title ?? "") ?? "Untitled",
-      ...(Y !== void 0 && { description: Y }),
-      ...(C.created_at !== void 0 && { createdAt: C.created_at }),
+      ...(Y !== undefined && {
+        description: Y,
+      }),
+      ...(C.created_at !== undefined && {
+        createdAt: C.created_at,
+      }),
       rel: found,
-      ...(found === "shared" && C.audience !== void 0 && { audience: C.audience }),
-      ...(O && L !== void 0 && { default: L }),
-      ...(found === "mine" && C.outsidersMayHaveWritten === !0 && { outsidersMayHaveWritten: !0 }),
+      ...(found === "shared" &&
+        C.audience !== undefined && {
+          audience: C.audience,
+        }),
+      ...(O &&
+        L !== undefined && {
+          default: L,
+        }),
+      ...(found === "mine" &&
+        C.outsidersMayHaveWritten === true && {
+          outsidersMayHaveWritten: true,
+        }),
     });
   }
-  y.sort((C, N) => ze(C) - ze(N) || C.title.localeCompare(N.title));
-  let z =
-    h.length > TYPE_INSTANCES_LIMIT ||
-    (typeof safeParse.data.next_page_token === "string" && safeParse.data.next_page_token !== "");
-  if (k > 0) logFeatureSad("artifact_type_instances", "rows_dropped", { count: k, wire: a });
+  y.sort((C, N) => artifactListOrder(C) - artifactListOrder(N) || C.title.localeCompare(N.title));
+  let overflow =
+    instances.length > TYPE_INSTANCES_LIMIT ||
+    (typeof l.data.next_page_token === "string" && l.data.next_page_token !== "");
+  if (k > 0)
+    logFeatureSad("artifact_type_instances", "rows_dropped", {
+      count: k,
+      wire,
+    });
   else
     logFeatureOk("artifact_type_instances", {
       n_instances: y.length,
       scope: fromEnum(r.scope),
       curated: S,
-      has_default: y.some((C) => C.default !== void 0),
+      has_default: y.some((C) => C.default !== undefined),
       n_shared_with_user: count(y, isSharedWithUser),
-      overflow: z,
-      wire: a,
+      overflow,
+      wire,
     });
-  return { err: null, rows: y, dropped: k, overflow: z, unavailable: !1 };
+  return {
+    err: null,
+    rows: y,
+    dropped: k,
+    overflow,
+    unavailable: false,
+  };
 }
 //@ chunk-w08rdxhd.js:48011-48039 placement
-var _e = 20000,
-  an = 300,
-  TYPE_INSTRUCTIONS_READ_MS = 1e4;
+/**
+ * 类型说明文本的内联上限 20000 字符、服务端行 300 字符与待读时长。
+ */
+var MAX_INLINE_TYPE_TEXT_CHARS = 20000;
+var MAX_SERVER_LINE_CHARS = 300;
+var TYPE_INSTRUCTIONS_READ_MS = 1e4;
 //@ chunk-w08rdxhd.js:48039-48339 placement
 function instructionsWhy(e) {
   if (e.deterministic === "egress-blocked" || /network allowlist blocks|needs outbound HTTPS to/.test(e.err))
     return "Artifact files can't be fetched directly from this environment, or the file is not there";
   return scrubArtifactEnvelopeTags(
-    scrubServerLine(e.err, an)
+    scrubServerLine(e.err, MAX_SERVER_LINE_CHARS)
       .replace(DECISION_SURFACE_BRACKETS_RE, " ")
       .replace(/[[\]]/g, " ")
       .replace(/[.\s]+$/u, ""),
   );
 }
 //@ chunk-w08rdxhd.js:48339-48898 placement
-async function readTypeInstructions(e, r, s, n) {
-  let a = n !== void 0 && n.length > 0 ? n : void 0;
-  if (a !== void 0 && !a.includes(TYPE_INSTRUCTIONS_FILE)) return { kind: "none" };
-  let l = await gF({ ...e, file: TYPE_INSTRUCTIONS_FILE }, r, s, "artifact_type_instructions_read");
+async function readTypeInstructions(e, signal, s, n) {
+  let a = n !== undefined && n.length > 0 ? n : undefined;
+  if (a !== undefined && !a.includes(TYPE_INSTRUCTIONS_FILE))
+    return {
+      kind: "none",
+    };
+  let l = await webfetchReadFile(
+    {
+      ...e,
+      file: TYPE_INSTRUCTIONS_FILE,
+    },
+    signal,
+    s,
+    "artifact_type_instructions_read",
+  );
   if (l.err !== null) {
-    if (l.missingFile === !0 && a === void 0) return { kind: "none" };
-    let h = getFetchErrorText(l);
-    if (h !== l.err) logForDebugging(`[artifact] type instructions read failed: ${l.err}`);
+    if (l.missingFile === true && a === undefined)
+      return {
+        kind: "none",
+      };
+    let fetchErrorText = getFetchErrorText(l);
+    if (fetchErrorText !== l.err) logForDebugging(`[artifact] type instructions read failed: ${l.err}`);
     return {
       kind: "unavailable",
       why:
-        l.missingFile === !0
+        l.missingFile === true
           ? "the file is not on the version of the Artifact that was read"
-          : instructionsWhy({ ...l, err: h }),
-      known: a !== void 0,
+          : instructionsWhy({
+              ...l,
+              err: fetchErrorText,
+            }),
+      known: a !== undefined,
     };
   }
-  if (l.html.trim() === "") return { kind: "none" };
-  return instructionsFromText(l.html, a !== void 0);
+  if (l.html.trim() === "")
+    return {
+      kind: "none",
+    };
+  return instructionsFromText(l.html, a !== undefined);
 }
 //@ chunk-w08rdxhd.js:48898-49034 placement
-function instructionsFromText(e, r) {
-  let s = extractPageText(stripControlChars(e)),
-    n = Array.from(s).length,
-    a = n > _e;
+function instructionsFromText(e, fromType) {
+  let pageText = extractPageText(stripControlChars(e));
+  let n = Array.from(pageText).length;
+  let a = n > MAX_INLINE_TYPE_TEXT_CHARS;
   return {
     kind: "read",
-    text: a ? extractPageText(truncateCodePoints(s, _e)) : s,
+    text: a ? extractPageText(truncateCodePoints(pageText, MAX_INLINE_TYPE_TEXT_CHARS)) : pageText,
     chars: n,
     clipped: a,
-    fromType: r,
+    fromType,
   };
 }
 //@ chunk-w08rdxhd.js:49034-49644 placement
@@ -1158,37 +1387,39 @@ function renderTypeInstructions(e, r) {
     case "read":
       return `
 
-${Sh}
-${buildSpellingNoteForText(e.text)}${r ?? (e.fromType ? pDi : mDi)}
+${ARTIFACT_CONTENT_AUTHORED_TAG}
+${buildSpellingNoteForText(e.text)}${r ?? (e.fromType ? ARTIFACT_INSTRUCTIONS_BELOW_PUBLISHER : ARTIFACT_INSTRUCTIONS_BELOW_FOUND)}
 <${ARTIFACT_TYPE_INSTRUCTIONS}>
 ${e.text}${
         e.clipped
           ? `
-[\u2026clipped at ${_e} of ${e.chars} characters]`
+[\u2026clipped at ${MAX_INLINE_TYPE_TEXT_CHARS} of ${e.chars} characters]`
           : ""
       }
 </${ARTIFACT_TYPE_INSTRUCTIONS}>
 
-${hDi}${replRouteSection(e.text)}`;
+${ARTIFACT_INSTRUCTIONS_ABOVE_THIRD_PARTY}${replRouteSection(e.text)}`;
   }
 }
 //@ chunk-w08rdxhd.js:49644-49656 placement
-var on = 2048;
+var MAX_FRONTMATTER_CHARS = 2048;
 //@ chunk-w08rdxhd.js:49656-49827 placement
-function instructionsTypeKey(e) {
-  let match = /^\s*---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(truncateCodePoints(e, on));
+function instructionsTypeKey(text) {
+  let match = /^\s*---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(
+    truncateCodePoints(text, MAX_FRONTMATTER_CHARS),
+  );
   if (match === null) return;
   return /^name:[ \t]*["']?([A-Za-z0-9_-]+)["']?[ \t]*$/m.exec(match[1])?.[1];
 }
 //@ chunk-w08rdxhd.js:49827-50069 placement
-function replRouteSection(e) {
+function replRouteSection(text) {
   {
-    let { artifactReplToolPresent: artifactReplToolPresent } = require("./chunk-6jghtm4d.js");
+    let { artifactReplToolPresent } = require("./chunk-6jghtm4d.js");
     if (!artifactReplToolPresent()) return "";
-    let { REPL_ROUTE_SECTION_BY_TYPE_KEY: REPL_ROUTE_SECTION_BY_TYPE_KEY } = require("./chunk-thjasdp6.js"),
-      n = instructionsTypeKey(e),
-      a = n === void 0 ? void 0 : REPL_ROUTE_SECTION_BY_TYPE_KEY.get(n);
-    return a === void 0
+    let { REPL_ROUTE_SECTION_BY_TYPE_KEY } = require("./chunk-thjasdp6.js");
+    let n = instructionsTypeKey(text);
+    let a = n === undefined ? undefined : REPL_ROUTE_SECTION_BY_TYPE_KEY.get(n);
+    return a === undefined
       ? ""
       : `
 
@@ -1197,15 +1428,13 @@ ${a}`;
   return "";
 }
 //@ chunk-w08rdxhd.js:50069-50308 placement
-function replRouteTwoSteps(e) {
+function replRouteTwoSteps(text) {
   {
-    let { artifactReplToolPresent: artifactReplToolPresent } = require("./chunk-6jghtm4d.js");
+    let { artifactReplToolPresent } = require("./chunk-6jghtm4d.js");
     if (!artifactReplToolPresent()) return null;
-    let {
-        REPL_ROUTE_TWO_STEPS_BY_TYPE_KEY: REPL_ROUTE_TWO_STEPS_BY_TYPE_KEY,
-      } = require("./chunk-thjasdp6.js"),
-      n = instructionsTypeKey(e);
-    if (n === void 0) return null;
+    let { REPL_ROUTE_TWO_STEPS_BY_TYPE_KEY } = require("./chunk-thjasdp6.js");
+    let n = instructionsTypeKey(text);
+    if (n === undefined) return null;
     return REPL_ROUTE_TWO_STEPS_BY_TYPE_KEY.get(n) ?? null;
   }
   return null;
@@ -1213,31 +1442,37 @@ function replRouteTwoSteps(e) {
 //@ chunk-w08rdxhd.js:50308-50407 placement
 function typeCatalogOnForSession() {
   let frozenArtifactTypes = getLiveState().frozenArtifactTypes;
-  return frozenArtifactTypes !== void 0
+  return frozenArtifactTypes !== undefined
     ? frozenArtifactTypes.typeCatalogOn
-    : B_t() && isFrameMultiFileEnabled() && isArtifactTypeCatalogEnabled();
+    : artifactTypesEnabled() && isFrameMultiFileEnabled() && isArtifactTypeCatalogEnabled();
 }
 //@ chunk-w08rdxhd.js:50407-50511 placement
 function quickstartOnForSession() {
   let frozenArtifactTypes = getLiveState().frozenArtifactTypes;
-  return frozenArtifactTypes !== void 0
-    ? frozenArtifactTypes.quickstartOn === !0
+  return frozenArtifactTypes !== undefined
+    ? frozenArtifactTypes.quickstartOn === true
     : typeCatalogOnForSession() && canCreateFromType() && isArtifactQuickstartEnabled();
 }
 //@ chunk-w08rdxhd.js:50511-50785 placement
-async function typeInstructionsForRead(e, r, s) {
+async function typeInstructionsForRead(parsedArtifact, signal, credentials) {
   if (!typeCatalogOnForSession()) return null;
-  let n = createCombinedAbortSignal(r, { timeoutMs: TYPE_INSTRUCTIONS_READ_MS, refTimer: !0 });
+  let combinedAbortSignal = createCombinedAbortSignal(signal, {
+    timeoutMs: TYPE_INSTRUCTIONS_READ_MS,
+    refTimer: true,
+  });
   try {
-    return await readTypeInstructions(e, n.signal, s);
+    return await readTypeInstructions(parsedArtifact, combinedAbortSignal.signal, credentials);
   } catch (error) {
-    if (r.aborted || !n.signal.aborted) throw error;
-    return { kind: "unavailable", why: "reading the instructions took too long", known: !1 };
+    if (signal.aborted || !combinedAbortSignal.signal.aborted) throw error;
+    return {
+      kind: "unavailable",
+      why: "reading the instructions took too long",
+      known: false,
+    };
   } finally {
-    n.cleanup();
+    combinedAbortSignal.cleanup();
   }
 }
-
 export {
   describeArtifactType,
   typeNameWithoutQuotes,

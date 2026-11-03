@@ -5,48 +5,45 @@
  * pieces: chunk-hwmsct5x.js (1)
  * attribution: esm-fingerprint 1
  */
-import { Y } from "../../../core/resource.mjs";
-import { Zr } from "./api-keys.mjs";
-import { to } from "./external-keys.mjs";
-import { Gs } from "./federation/federation.mjs";
-import { no } from "./invites.mjs";
-import { Ys } from "./service-accounts/service-accounts.mjs";
-import { io } from "./users.mjs";
-import { Ks } from "./workspaces/workspaces.mjs";
-import { so } from "./rate-limits.mjs";
-import { eo } from "./compliance-settings.mjs";
+import { APIResource } from "../../../core/resource.mjs";
+import { APIKeys } from "./api-keys.mjs";
+import { ExternalKeys } from "./external-keys.mjs";
+import { Federation } from "./federation/federation.mjs";
+import { Invites } from "./invites.mjs";
+import { ServiceAccounts } from "./service-accounts/service-accounts.mjs";
+import { Users } from "./users.mjs";
+import { Workspaces_3 } from "./workspaces/workspaces.mjs";
+import { RateLimits } from "./rate-limits.mjs";
+import { ComplianceSettings } from "./compliance-settings.mjs";
 
 //@ chunk-hwmsct5x.js:129152-129788 esm-fingerprint
-var Vs = (() => {
-  class e extends Y {
+var Organization = (() => {
+  class Organization extends APIResource {
     constructor() {
       super(...arguments);
-      ((this.apiKeys = new Zr(this._client)),
-        (this.externalKeys = new to(this._client)),
-        (this.federation = new Gs(this._client)),
-        (this.invites = new no(this._client)),
-        (this.serviceAccounts = new Ys(this._client)),
-        (this.users = new io(this._client)),
-        (this.workspaces = new Ks(this._client)),
-        (this.rateLimits = new so(this._client)),
-        (this.complianceSettings = new eo(this._client)));
+      this.apiKeys = new APIKeys(this._client);
+      this.externalKeys = new ExternalKeys(this._client);
+      this.federation = new Federation(this._client);
+      this.invites = new Invites(this._client);
+      this.serviceAccounts = new ServiceAccounts(this._client);
+      this.users = new Users(this._client);
+      this.workspaces = new Workspaces_3(this._client);
+      this.rateLimits = new RateLimits(this._client);
+      this.complianceSettings = new ComplianceSettings(this._client);
     }
-    retrieve(n) {
-      return this._client.get("/v1/organizations/me?beta=true", n);
+    retrieve(options) {
+      return this._client.get("/v1/organizations/me?beta=true", options);
     }
   }
-  return (
-    (e.APIKeys = Zr),
-    (e.ExternalKeys = to),
-    (e.Federation = Gs),
-    (e.Invites = no),
-    (e.ServiceAccounts = Ys),
-    (e.Users = io),
-    (e.Workspaces = Ks),
-    (e.RateLimits = so),
-    (e.ComplianceSettings = eo),
-    e
-  );
+  Organization.APIKeys = APIKeys;
+  Organization.ExternalKeys = ExternalKeys;
+  Organization.Federation = Federation;
+  Organization.Invites = Invites;
+  Organization.ServiceAccounts = ServiceAccounts;
+  Organization.Users = Users;
+  Organization.Workspaces = Workspaces_3;
+  Organization.RateLimits = RateLimits;
+  Organization.ComplianceSettings = ComplianceSettings;
+  return Organization;
 })();
-
-export { Vs };
+export { Organization };

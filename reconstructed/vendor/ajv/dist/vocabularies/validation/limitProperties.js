@@ -6,31 +6,32 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../runtime/bun-runtime.js";
-import { uh } from "../../compile/codegen/index.js";
+import { require_codegen_2 } from "../../compile/codegen/index.js";
 
 //@ chunk-s82q9s4x.js:86590-87116 cjs-fingerprint
-var Do = x(function (Ao) {
-  Object.defineProperty(Ao, "__esModule", { value: !0 });
-  var ie = uh(),
-    vf = {
-      message({ keyword: e, schemaCode: t }) {
-        return ie.str`must NOT have ${e === "maxProperties" ? "more" : "fewer"} than ${t} properties`;
-      },
-      params: ({ schemaCode: schemaCode }) => ie._`{limit: ${schemaCode}}`,
+var require_limitProperties = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  var codegen_1 = require_codegen_2();
+  var error = {
+    message({ keyword, schemaCode }) {
+      return codegen_1.str`must NOT have ${keyword === "maxProperties" ? "more" : "fewer"} than ${schemaCode} properties`;
     },
-    wf = {
-      keyword: ["maxProperties", "minProperties"],
-      type: "object",
-      schemaType: "number",
-      $data: !0,
-      error: vf,
-      code(e) {
-        let { keyword: keyword, data: r, schemaCode: schemaCode } = e,
-          n = keyword === "maxProperties" ? ie.operators.GT : ie.operators.LT;
-        e.fail$data(ie._`Object.keys(${r}).length ${n} ${schemaCode}`);
-      },
-    };
-  Ao.default = wf;
+    params: ({ schemaCode }) => codegen_1._`{limit: ${schemaCode}}`,
+  };
+  var def = {
+    keyword: ["maxProperties", "minProperties"],
+    type: "object",
+    schemaType: "number",
+    $data: true,
+    error,
+    code(cxt) {
+      let { keyword, data, schemaCode } = cxt;
+      let op = keyword === "maxProperties" ? codegen_1.operators.GT : codegen_1.operators.LT;
+      cxt.fail$data(codegen_1._`Object.keys(${data}).length ${op} ${schemaCode}`);
+    },
+  };
+  cjsExports.default = def;
 });
-
-export { Do };
+export { require_limitProperties };

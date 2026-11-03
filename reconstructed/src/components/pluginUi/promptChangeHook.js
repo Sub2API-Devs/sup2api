@@ -16,96 +16,138 @@ import { tellOnce } from "../../plugins/functionHooks/ui/renderNotices.js";
 import { errorMessage } from "../../utils/errors.js";
 
 //@ chunk-18hwfzwa.js:1807723-1807785 placement
-function WRt() {
+function hasPromptChangeHookingSite() {
   try {
     return hasModuleHookingSite("prompt.change");
   } catch {
-    return !1;
+    return false;
   }
 }
 //@ chunk-18hwfzwa.js:1807785-1807823 placement
-var freeze_5 = Object.freeze({ kind: "clear" });
+var jRt = Object.freeze({
+  kind: "clear",
+});
 //@ chunk-18hwfzwa.js:1807823-1807862 placement
-var freeze_6 = Object.freeze({ kind: "engine" });
+var qRt = Object.freeze({
+  kind: "engine",
+});
 //@ chunk-18hwfzwa.js:1807862-1807995 placement
 function promptChangeOrigin(h, x) {
-  let D = h.after === "" ? freeze_5 : freeze_6,
-    origin = h.origin;
-  if (origin === void 0 || origin.kind === "composer") return D;
+  let D = h.after === "" ? jRt : qRt;
+  let origin = h.origin;
+  if (origin === undefined || origin.kind === "composer") return D;
   return origin.kind === "landing" ? (x ?? D) : origin;
 }
 //@ chunk-18hwfzwa.js:1807995-1808005 placement
-var KRt = 8;
+var MAX_STALLED_PLUGINS = 8;
 //@ chunk-18hwfzwa.js:1808005-1808064 placement
-function GRt(h, x) {
-  return NO_CORE_AT_CHAIN_BOTTOM("prompt.change", { signal: x })(h);
+function raiseCorePromptChange(h, signal) {
+  return NO_CORE_AT_CHAIN_BOTTOM("prompt.change", {
+    signal,
+  })(h);
 }
 //@ chunk-18hwfzwa.js:1808064-1808313 placement
 function warnPromptChangeStalled(h) {
-  let joined = uniq(h).toSorted().join(", "),
-    D = `prompt.change: ${h.length} dispatches in a row for fills by ${joined}; not raised again until the box changes another way`;
-  (logForDebugging(D, { level: "warn" }),
-    tellOnce({ key: `prompt.change stalled ${joined}`, lead: "hooks", text: D }));
+  let joined = uniq(h).toSorted().join(", ");
+  let D = `prompt.change: ${h.length} dispatches in a row for fills by ${joined}; not raised again until the box changes another way`;
+  logForDebugging(D, {
+    level: "warn",
+  });
+  tellOnce({
+    key: `prompt.change stalled ${joined}`,
+    lead: "hooks",
+    text: D,
+  });
 }
 //@ chunk-18hwfzwa.js:1808313-1809318 placement
 function raisePromptChange(h, x = {}) {
-  let D = x.raise ?? GRt,
-    L = x.later ?? queueMicrotask,
-    ee = x.isHooked ?? WRt,
-    ke = x.report ?? ((Dt) => logForDebugging(Dt)),
-    Re = x.stall ?? warnPromptChangeStalled,
-    abortController = new AbortController(),
-    He,
-    We,
-    ze,
-    Xe,
-    rt = [],
-    kt = !1,
-    At = !1,
-    It = !1;
+  let raise = x.raise ?? raiseCorePromptChange;
+  let later = x.later ?? queueMicrotask;
+  let isHooked = x.isHooked ?? hasPromptChangeHookingSite;
+  let ke = x.report ?? ((Dt) => logForDebugging(Dt));
+  let stall = x.stall ?? warnPromptChangeStalled;
+  let abortController = new AbortController();
+  let He;
+  let We;
+  let ze;
+  let Xe;
+  let rt = [];
+  let kt = false;
+  let At = false;
+  let It = false;
   function Ot(Dt) {
-    if (Dt.kind !== "plugin") return !1;
-    let Lt = rt.length >= KRt;
-    if (Lt && !kt) ((kt = !0), Re(rt));
-    return ((rt = Lt ? rt : [...rt, Dt.name]), Lt);
+    if (Dt.kind !== "plugin") return false;
+    let Lt = rt.length >= MAX_STALLED_PLUGINS;
+    if (Lt && !kt) {
+      kt = true;
+      stall(rt);
+    }
+    rt = Lt ? rt : [...rt, Dt.name];
+    return Lt;
   }
   function Et() {
-    It = !1;
+    It = false;
     let Dt = ze;
-    if (At || abortController.signal.aborted || He === void 0 || Dt === void 0) return;
-    let oo = h(),
-      Xt = We !== void 0 && oo.text !== We,
-      io = oo.text !== He || Xt;
-    if (((He = void 0), (We = void 0), (ze = void 0), !io || !ee() || Ot(Dt))) return;
-    ((At = !0),
-      new Promise((so) => so(D({ ...oo, origin: Dt }, abortController.signal)))
-        .catch((so) => {
-          ke(`prompt.change: ${errorMessage(so)}`);
-        })
-        .finally(() => {
-          At = !1;
-        })
-        .then(Et));
+    if (At || abortController.signal.aborted || He === undefined || Dt === undefined) return;
+    let oo = h();
+    let Xt = We !== undefined && oo.text !== We;
+    let io = oo.text !== He || Xt;
+    He = undefined;
+    We = undefined;
+    ze = undefined;
+    if (!io || !isHooked() || Ot(Dt)) return;
+    At = true;
+    new Promise((resolve) =>
+      resolve(
+        raise(
+          {
+            ...oo,
+            origin: Dt,
+          },
+          abortController.signal,
+        ),
+      ),
+    )
+      .catch((error) => {
+        ke(`prompt.change: ${errorMessage(error)}`);
+      })
+      .finally(() => {
+        At = false;
+      })
+      .then(Et);
   }
   return {
     changed: (Dt) => {
       let Lt = Dt.origin?.kind === "composer";
       if (abortController.signal.aborted) return;
-      if (((Xe = Lt ? void 0 : promptChangeOrigin(Dt, Xe)), Xe?.kind !== "plugin")) ((rt = []), (kt = !1));
-      if (Xe === void 0) {
-        We = He === void 0 ? void 0 : Dt.after;
+      Xe = Lt ? undefined : promptChangeOrigin(Dt, Xe);
+      if (Xe?.kind !== "plugin") {
+        rt = [];
+        kt = false;
+      }
+      if (Xe === undefined) {
+        We = He === undefined ? undefined : Dt.after;
         return;
       }
-      if (!ee()) {
-        ((He = void 0), (We = void 0), (ze = void 0));
+      if (!isHooked()) {
+        He = undefined;
+        We = undefined;
+        ze = undefined;
         return;
       }
-      if (((He ??= Dt.before), (ze = Xe), !It && !At)) ((It = !0), L(Et));
+      He ??= Dt.before;
+      ze = Xe;
+      if (!It && !At) {
+        It = true;
+        later(Et);
+      }
     },
     dispose: () => {
-      ((He = void 0), (We = void 0), (ze = void 0), abortController.abort());
+      He = undefined;
+      We = undefined;
+      ze = undefined;
+      abortController.abort();
     },
   };
 }
-
 export { raisePromptChange };

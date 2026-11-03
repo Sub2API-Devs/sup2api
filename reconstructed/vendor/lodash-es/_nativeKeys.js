@@ -5,10 +5,9 @@
  * pieces: chunk-z0q4jgnc.js (1)
  * attribution: placement 1
  */
-import { sdo } from "./_overArg.js";
+import { overArg_default } from "./_overArg.js";
 
 //@ chunk-z0q4jgnc.js:643-679 placement
-var Fr = sdo(Object.keys, Object),
-  H = Fr;
-
-export { H };
+var nativeKeys = overArg_default(Object.keys, Object);
+var nativeKeys_default = nativeKeys;
+export { nativeKeys_default };

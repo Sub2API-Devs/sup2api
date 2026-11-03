@@ -19,14 +19,14 @@ import { formatOnlyWhileDisabledHint } from "./marketplaceNames.js";
 function pluginWarningText(e) {
   return stripInvisibleKeepEmoji(pluginWarningMessage(e));
 }
+//@ chunk-f3qhjfah.js:19966-23045 placement
 /**
  * 插件组件冲突警告文本（manifest 遮蔽目录、MCP 服务器重名/重复、mcpb 需要配置、技能重名…）。
  */
-//@ chunk-f3qhjfah.js:19966-23045 placement
 function pluginWarningMessage(e) {
   switch (e.type) {
     case "folder-shadowed-by-manifest": {
-      let n = De(e.manifestFields);
+      let n = quoteAndJoinNames(e.manifestFields);
       return `Default ${quotedPrintable(e.component)}/ folder is ignored because the manifest sets ${n}`;
     }
     case "mcp-server-suppressed-duplicate": {
@@ -42,8 +42,8 @@ function pluginWarningMessage(e) {
         ? `Removed from the "${quotedPrintable(e.marketplace)}" marketplace`
         : `Renamed to "${quotedPrintable(e.renamedTo)}" in the "${quotedPrintable(e.marketplace)}" marketplace`;
     case "lsp-extension-conflict": {
-      let n = e.activeServer.startsWith("plugin:") ? e.activeServer.split(":")[1] : void 0,
-        r = n ? `plugin "${quotedPrintable(n)}"` : `"${quotedPrintable(e.activeServer)}"`;
+      let n = e.activeServer.startsWith("plugin:") ? e.activeServer.split(":")[1] : undefined;
+      let r = n ? `plugin "${quotedPrintable(n)}"` : `"${quotedPrintable(e.activeServer)}"`;
       return `LSP server "${quotedPrintable(e.serverName)}" is not used for ${quotedPrintable(e.extension)} files \u2014 ${r} already registered a server for that extension`;
     }
     case "project-scope-suppressed-untrusted":
@@ -58,12 +58,12 @@ function pluginWarningMessage(e) {
     case "hooks-module-left-out-by-name":
       return `Its hooks module does not load. "${quotedPrintable(e.heldBy)}" holds the same plugin name and comes first`;
     case "hooks-passed-over": {
-      let joined = e.patterns.map((pattern) => quotedPrintable(pattern)).join(", "),
-        mapped = (e.reopened ?? []).map(
-          (s) =>
-            `. ${quotedPrintable(s.plugin)} may reopen ` +
-            s.patterns.map((pattern) => quotedPrintable(pattern)).join(", "),
-        );
+      let joined = e.patterns.map((pattern) => quotedPrintable(pattern)).join(", ");
+      let mapped = (e.reopened ?? []).map(
+        (s) =>
+          `. ${quotedPrintable(s.plugin)} may reopen ` +
+          s.patterns.map((pattern) => quotedPrintable(pattern)).join(", "),
+      );
       return (
         `Its hooks on ${joined} do not run here: where an organization manages Claude Code, these events pass over the plugins you install${mapped.length > 0 ? ", unless one reopens them" : ""}` +
         mapped.join("")
@@ -91,7 +91,7 @@ function pluginWarningFixText(e) {
 function pluginWarningFix(e) {
   switch (e.type) {
     case "folder-shadowed-by-manifest": {
-      let n = De(e.manifestFields);
+      let n = quoteAndJoinNames(e.manifestFields);
       if (e.manifestFields.length === 1)
         return `Remove ${n} from .claude-plugin/plugin.json (or SKILL.md frontmatter) to auto-load the folder, or add the folder's files to the ${n} list if you want both`;
       return `Remove ${n} from .claude-plugin/plugin.json (or SKILL.md frontmatter) to auto-load the folder`;
@@ -167,8 +167,7 @@ function pluginWarningFix(e) {
   }
 }
 //@ chunk-f3qhjfah.js:27079-27136 placement
-function De(e) {
-  return e.map((n) => `"${n}"`).join(" and ");
+function quoteAndJoinNames(manifestFields) {
+  return manifestFields.map((n) => `"${n}"`).join(" and ");
 }
-
 export { pluginWarningText, pluginWarningFixText };

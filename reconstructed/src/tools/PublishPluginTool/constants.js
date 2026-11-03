@@ -22,18 +22,42 @@ import { isRemoteCowork } from "../../utils/entrypointKinds.js";
 import { printableName } from "../../utils/printableName.js";
 import { getOauthConfig } from "../../constants/oauth.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, o, U, A, E, M, zodStrictObject, T } from "../../../vendor/zod/v4/classic/schemas.js";
-import { AS } from "../../utils/commitAttribution.js";
+import {
+  u,
+  string,
+  _enum,
+  array,
+  E,
+  M,
+  zodStrictObject,
+  literal,
+} from "../../../vendor/zod/v4/classic/schemas.js";
+import { SHA256_HEX_RE } from "../../utils/commitAttribution.js";
 
 //@ chunk-hcckvqyb.js:764-799 placement
-var ie = (e, t) => ({ kind: e, details: t });
+/**
+ * 构造拒绝详情对象 {kind, details}。
+ */
+var refusalDetail = (kind, details) => ({
+  kind,
+  details,
+});
 //@ chunk-hcckvqyb.js:799-851 placement
-var Qh = (e, t = []) => ({ kind: "refused", refusal: ie(e, t) });
+/**
+ * 构造拒绝结果 {kind:"refused", refusal}。
+ */
+var refusalResult = (kind, details = []) => ({
+  kind: "refused",
+  refusal: refusalDetail(kind, details),
+});
 //@ chunk-hcckvqyb.js:851-1049 placement
 var CLOUD_SESSION_PUBLISH_TEXT =
   "Publishing from a cloud session isn't offered yet, and the plugin's files are in this cloud session, where the Claude app or a terminal on your computer can't reach them. Nothing was sent.";
 //@ chunk-hcckvqyb.js:1049-1092 placement
-var re = () => !getIsNonInteractiveSession() && !env.DISABLE_LOGIN_COMMAND;
+/**
+ * 交互式会话且未禁用登录命令时才能提示 claude.ai 登录。
+ */
+var canOfferClaudeAiSignIn = () => !getIsNonInteractiveSession() && !env.DISABLE_LOGIN_COMMAND;
 //@ chunk-hcckvqyb.js:1092-1230 placement
 var isPolicyUnloaded = () => {
   let e = policyDenyKind(ALLOW_PLUGIN_PUBLISH_KEY);
@@ -41,7 +65,10 @@ var isPolicyUnloaded = () => {
     (e === "cache_miss" || e === "route_missing") &&
     !isPolicyDeniedByRefusedCacheHint(ALLOW_PLUGIN_PUBLISH_KEY) &&
     isPolicyAllowedInResponse(
-      { restrictions: {}, compliance_taints: [] },
+      {
+        restrictions: {},
+        compliance_taints: [],
+      },
       ALLOW_PLUGIN_PUBLISH_KEY,
       getComplianceTaints(),
     )
@@ -51,11 +78,17 @@ var isPolicyUnloaded = () => {
 var POLICY_UNLOADED_TEXT =
   "Claude Code couldn't load your organization's policy, so publishing from here is off for now: try again in a moment, or publish this plugin from claude.ai. Nothing was sent.";
 //@ chunk-hcckvqyb.js:1413-1430 placement
-var kOr = 52428800;
+/**
+ * 发布插件的大小上限（50 MiB）。
+ */
+var MAX_PUBLISH_BYTES = 52428800;
 //@ chunk-hcckvqyb.js:1430-1442 placement
-var oTo = 1e4;
+/**
+ * 发布插件的文件数上限（10000）。
+ */
+var MAX_PUBLISH_FILES = 1e4;
 //@ chunk-hcckvqyb.js:1442-6560 placement
-var freeze = Object.freeze({
+var le = Object.freeze({
   "flag-off": "Publishing plugins isn't available in this session. Nothing was sent.",
   "third-party":
     "Publishing goes through claude.ai, and this session uses another provider. Nothing was sent.",
@@ -83,8 +116,8 @@ var freeze = Object.freeze({
   "not-a-plugin":
     "That folder holds no plugin: no manifest, commands, skills, agents or hooks. Nothing was sent.",
   findings: "The plugin didn't pass validation. Fix these, then publish again. Nothing was sent.",
-  "too-many-files": `The plugin has more than ${oTo} files to send. Name what isn't part of it in .gitignore. Nothing was sent.`,
-  "too-large": `The plugin is larger than ${formatFileSize(kOr)}, the most publishing sends. Nothing was published.`,
+  "too-many-files": `The plugin has more than ${MAX_PUBLISH_FILES} files to send. Name what isn't part of it in .gitignore. Nothing was sent.`,
+  "too-large": `The plugin is larger than ${formatFileSize(MAX_PUBLISH_BYTES)}, the most publishing sends. Nothing was published.`,
   unreadable: "Part of the folder couldn't be read, so nothing was sent.",
   changed: "The folder changed while it was being published, so nothing was sent. Publish again.",
   unwritten: "The manifest couldn't be written to .claude-plugin/plugin.json, so nothing was sent.",
@@ -125,11 +158,11 @@ var freeze = Object.freeze({
 var NO_CLAUDE_AI_SIGNIN_TEXT =
   "Publishing needs a claude.ai sign-in, and this session has none it can publish on. Publish this plugin from claude.ai, or ask Claude to publish it from a session signed in to claude.ai.";
 //@ chunk-hcckvqyb.js:6755-6891 placement
-function publishRefusalText(e) {
-  if (e === "signed-out" && !re()) return NO_CLAUDE_AI_SIGNIN_TEXT;
-  if (e === "policy" && isPolicyUnloaded()) return POLICY_UNLOADED_TEXT;
-  if (e === "cloud-session" && isRemoteCowork()) return CLOUD_SESSION_PUBLISH_TEXT;
-  return freeze[e];
+function publishRefusalText(kind) {
+  if (kind === "signed-out" && !canOfferClaudeAiSignIn()) return NO_CLAUDE_AI_SIGNIN_TEXT;
+  if (kind === "policy" && isPolicyUnloaded()) return POLICY_UNLOADED_TEXT;
+  if (kind === "cloud-session" && isRemoteCowork()) return CLOUD_SESSION_PUBLISH_TEXT;
+  return le[kind];
 }
 //@ chunk-hcckvqyb.js:6891-7129 placement
 function sharePublishedLines(e) {
@@ -143,9 +176,13 @@ function sharePublishedLines(e) {
     : [];
 }
 //@ chunk-hcckvqyb.js:7129-7210 placement
-var sTo = (e) => `${getOauthConfig().CLAUDE_AI_ORIGIN}/customize/plugins/` + encodeURIComponent(e);
+/**
+ * 生成 claude.ai 上插件管理页的链接。
+ */
+var pluginCustomizeUrl = (e) =>
+  `${getOauthConfig().CLAUDE_AI_ORIGIN}/customize/plugins/` + encodeURIComponent(e);
 //@ chunk-hcckvqyb.js:7210-7708 placement
-var freeze_2 = Object.freeze({
+var fe = Object.freeze({
   published: "published to your organization's library.",
   "in-review":
     "uploaded to your shelf and sent to your organization for an administrator's review. It reaches the library once approved.",
@@ -154,103 +191,178 @@ var freeze_2 = Object.freeze({
     "uploaded to your own shelf on claude.ai, and not submitted yet: its scan was still running when the wait for it ended. Submit it from claude.ai once the scan has passed.",
 });
 //@ chunk-hcckvqyb.js:7708-7718 placement
-var me = 40;
+/**
+ * 安全扫描结论的最大展示字符数（40）。
+ */
+var MAX_SCAN_VERDICT_CHARS = 40;
 //@ chunk-hcckvqyb.js:7718-7813 placement
-var z0s = (e) =>
-  [e.verdict ?? ""].filter(Boolean).map((t) => "Security scan on claude.ai: " + printableName(t, me));
+/**
+ * 把扫描结论渲染成“Security scan on claude.ai: …”行。
+ */
+var securityScanLines = (e) =>
+  [e.verdict ?? ""]
+    .filter(Boolean)
+    .map((t) => "Security scan on claude.ai: " + printableName(t, MAX_SCAN_VERDICT_CHARS));
 //@ chunk-hcckvqyb.js:7813-8111 placement
 var publishOutcomeLines = (e) => [
-  freeze_2[e.kind],
-  ...[e].flatMap((t) => ("verdict" in t ? [t] : [])).flatMap(z0s),
+  fe[e.kind],
+  ...[e].flatMap((t) => ("verdict" in t ? [t] : [])).flatMap(securityScanLines),
   ...[e]
     .filter((t) => "isUnscanned" in t && t.isUnscanned)
     .map(() => "claude.ai didn't run a security scan on this plugin."),
   ...sharePublishedLines(e),
-  ...[e].flatMap((t) => ("id" in t ? [t.id] : [])).map((t) => `Follow it on claude.ai: ${sTo(t)}`),
+  ...[e]
+    .flatMap((t) => ("id" in t ? [t.id] : []))
+    .map((t) => `Follow it on claude.ai: ${pluginCustomizeUrl(t)}`),
 ];
 //@ chunk-hcckvqyb.js:8111-8173 placement
-var TOr = (e) => printableName([e.name, e.version].filter(Boolean).join(" "));
+/**
+ * 把插件名与版本拼成展示名。
+ */
+var pluginNameLine = (manifest) => printableName([manifest.name, manifest.version].filter(Boolean).join(" "));
 //@ chunk-hcckvqyb.js:8173-8249 placement
-var ce = " (the plugin's own version; the library numbers its copies itself)";
+/**
+ * 说明版本号来自插件自身而非库。
+ */
+var OWN_VERSION_NOTE = " (the plugin's own version; the library numbers its copies itself)";
 //@ chunk-hcckvqyb.js:8249-8286 placement
-var ge = (e) => TOr(e) + (e.version ? ce : "");
+/**
+ * 插件名加版本说明，作为发布结果首行的前缀。
+ */
+var pluginNameWithNote = (manifest) => pluginNameLine(manifest) + (manifest.version ? OWN_VERSION_NOTE : "");
+//@ chunk-hcckvqyb.js:8286-8439 placement
 /**
  * 把插件发布结果转为展示行：被拒时给出拒绝原因说明与细节；否则按结果种类给出状态、扫描结论、未扫描提示、分享链接与 claude.ai 跟踪链接，首行前缀插件名。
  */
-//@ chunk-hcckvqyb.js:8286-8439 placement
 function publishResultLines(e) {
   return e.kind === "refused"
     ? [publishRefusalText(e.refusal.kind), ...e.refusal.details.map((detail) => printableName(detail))]
-    : publishOutcomeLines(e).map((s, r) => (r === 0 ? `${ge(e.manifest)}: ` : "") + s);
+    : publishOutcomeLines(e).map((s, r) => (r === 0 ? `${pluginNameWithNote(e.manifest)}: ` : "") + s);
 }
 //@ chunk-hcckvqyb.js:8439-8477 placement
-var be = (e) => ({ type: "other", reason: e });
+/**
+ * 构造 {type:"other", reason} 形式的拒绝原因。
+ */
+var denialReason = (reason) => ({
+  type: "other",
+  reason,
+});
 //@ chunk-hcckvqyb.js:8477-8540 placement
-var ye = (e) => ({ behavior: "deny", message: e, decisionReason: be(e) });
+/**
+ * 构造 behavior=deny 的权限结果。
+ */
+var denyWithMessage = (reason) => ({
+  behavior: "deny",
+  message: reason,
+  decisionReason: denialReason(reason),
+});
 //@ chunk-hcckvqyb.js:8540-8585 placement
-var aTo = (e, t = []) =>
-  ye(
-    publishResultLines(Qh(e, t)).join(`
+/**
+ * 把发布拒绝结果转成带展示文本的 deny 权限结果。
+ */
+var publishRefusalDenial = (kind, details = []) =>
+  denyWithMessage(
+    publishResultLines(refusalResult(kind, details)).join(`
 `),
   );
 //@ chunk-hcckvqyb.js:8585-8597 placement
-var j0s = 300;
+/**
+ * 发布审批问题里步骤文本的最大长度（300）。
+ */
+var MAX_PUBLISH_STEPS = 300;
 //@ chunk-hcckvqyb.js:8597-8609 placement
-var xe = 4000;
+/**
+ * 单个写入文本的最大字符数（4000）。
+ */
+var MAX_PUBLISH_WRITE_TEXT_CHARS = 4000;
 //@ chunk-hcckvqyb.js:8609-8620 placement
-var Ae = 128;
+/**
+ * 路径字段的额外字符余量。
+ */
+var MAX_PATH_EXTRA_CHARS = 128;
 //@ chunk-hcckvqyb.js:8620-8633 placement
-var rsn = 4096;
+/**
+ * 单个路径字段的基础上限（4096）。
+ */
+var MAX_PUBLISH_PATH_CHARS = 4096;
 //@ chunk-hcckvqyb.js:8633-8650 placement
-var doe = 2 * rsn + Ae;
+/**
+ * 单个路径字段的最大字符数（2*4096+128）。
+ */
+var MAX_PUBLISH_META_CHARS = 2 * MAX_PUBLISH_PATH_CHARS + MAX_PATH_EXTRA_CHARS;
 //@ chunk-hcckvqyb.js:8650-8662 placement
-var osn = 500;
+/**
+ * 审批问题中各列表的最大条目数（500）。
+ */
+var MAX_PUBLISH_LIST_ITEMS = 500;
+//@ chunk-hcckvqyb.js:8662-10431 placement
 /**
  * 发布插件审批问题的数据结构：确认所绑定的摘要、组织、插件、目标文件夹、新建/替换、步骤、警告、写入的 manifest、发送的文件清单与大小、留在本机的条目及原因、完整清单文件。
  */
-//@ chunk-hcckvqyb.js:8662-10431 placement
 var PUBLISH_QUESTION_SCHEMA = DoctorLazy(() =>
   u({
-    digest: o().regex(AS).describe("What a yes binds to: the publish is of this, or refused."),
-    title: o().max(doe),
-    organization: u({ id: o().max(doe), name: o().max(doe).optional() }),
-    plugin: u({ name: o().max(doe), version: o().max(doe).optional() }),
-    folder: o().max(doe),
-    mode: U(["new", "replace"]).describe("Whether a plugin of this name on the shelf is replaced."),
-    steps: A(o().max(doe)).max(osn).describe("What a yes sets off, a sentence each, in order."),
-    warnings: A(o().max(doe))
-      .max(osn)
+    digest: string()
+      .regex(SHA256_HEX_RE)
+      .describe("What a yes binds to: the publish is of this, or refused."),
+    title: string().max(MAX_PUBLISH_META_CHARS),
+    organization: u({
+      id: string().max(MAX_PUBLISH_META_CHARS),
+      name: string().max(MAX_PUBLISH_META_CHARS).optional(),
+    }),
+    plugin: u({
+      name: string().max(MAX_PUBLISH_META_CHARS),
+      version: string().max(MAX_PUBLISH_META_CHARS).optional(),
+    }),
+    folder: string().max(MAX_PUBLISH_META_CHARS),
+    mode: _enum(["new", "replace"]).describe("Whether a plugin of this name on the shelf is replaced."),
+    steps: array(string().max(MAX_PUBLISH_META_CHARS))
+      .max(MAX_PUBLISH_LIST_ITEMS)
+      .describe("What a yes sets off, a sentence each, in order."),
+    warnings: array(string().max(MAX_PUBLISH_META_CHARS))
+      .max(MAX_PUBLISH_LIST_ITEMS)
       .describe(
         "What the person is warned of, a sentence each: a file sent although its name is one a secret hides under, and that other entries stay behind unnamed.",
       ),
-    writes: u({ path: o().max(doe), text: o().max(xe) })
+    writes: u({
+      path: string().max(MAX_PUBLISH_META_CHARS),
+      text: string().max(MAX_PUBLISH_WRITE_TEXT_CHARS),
+    })
       .optional()
       .describe("The manifest a yes writes into the folder first, if any."),
-    sends: u({ files: E(), bytes: E() }).describe("The whole count and size of what is sent."),
-    files: A(
+    sends: u({
+      files: E(),
+      bytes: E(),
+    }).describe("The whole count and size of what is sent."),
+    files: array(
       u({
-        path: o().max(doe),
+        path: string().max(MAX_PUBLISH_META_CHARS),
         bytes: E(),
-        sha256: o().regex(AS),
+        sha256: string().regex(SHA256_HEX_RE),
         runs: M().describe("Whether it is sent as runnable."),
       }),
     )
-      .max(osn)
+      .max(MAX_PUBLISH_LIST_ITEMS)
       .describe("The files sent, in the order of their paths."),
     staying: E().describe("How many entries stay on the machine and are counted here."),
-    stays: A(
+    stays: array(
       u({
-        path: o().max(doe),
-        why: U(["link", "hard-link", "ignored", "secret", "never", "generated", "special", "backslash"]),
-        words: o().max(doe),
+        path: string().max(MAX_PUBLISH_META_CHARS),
+        why: _enum(["link", "hard-link", "ignored", "secret", "never", "generated", "special", "backslash"]),
+        words: string().max(MAX_PUBLISH_META_CHARS),
       }),
     )
-      .max(osn)
+      .max(MAX_PUBLISH_LIST_ITEMS)
       .describe("The entries that stay and are named, each with why."),
-    list: u({ sha256: o().regex(AS), path: o().max(doe).optional() }).describe(
+    list: u({
+      sha256: string().regex(SHA256_HEX_RE),
+      path: string().max(MAX_PUBLISH_META_CHARS).optional(),
+    }).describe(
       "The list, a line each, of every file sent and every entry that stays and is named, and a last line saying so where entries stay unnamed: its sha256, and the file that holds it.",
     ),
-    unnamed: u({ files: E(), stays: E() })
+    unnamed: u({
+      files: E(),
+      stays: E(),
+    })
       .optional()
       .describe(
         "Present only when the lists are over the bound: how many files and entries they do not name. The list file names them.",
@@ -258,32 +370,44 @@ var PUBLISH_QUESTION_SCHEMA = DoctorLazy(() =>
   }),
 );
 //@ chunk-hcckvqyb.js:10431-10443 placement
-var we = 1024;
+/**
+ * 单条文件说明的最大字符数（1024）。
+ */
+var MAX_PUBLISH_FILE_NOTE_CHARS = 1024;
 //@ chunk-hcckvqyb.js:10443-10454 placement
-var Re = doe;
+/**
+ * shown 字段的最大长度。
+ */
+var MAX_PUBLISH_SHOWN_CHARS = MAX_PUBLISH_META_CHARS;
 //@ chunk-hcckvqyb.js:10454-10465 placement
-var Se = 100;
+/**
+ * 审批问题文本的额外长度余量（100）。
+ */
+var MAX_PUBLISH_QUESTION_EXTRA = 100;
 //@ chunk-hcckvqyb.js:10465-10481 placement
-var Oe = 2 * osn + Se;
+/**
+ * 审批问题整体允许的最大长度。
+ */
+var MAX_PUBLISH_QUESTION_CHARS = 2 * MAX_PUBLISH_LIST_ITEMS + MAX_PUBLISH_QUESTION_EXTRA;
+//@ chunk-hcckvqyb.js:10481-11516 placement
 /**
  * PublishPlugin 工具的输入结构：插件目录、发布目标（组织库）、无 manifest 时用的描述、是否替换同名插件，以及由工具自己填写的 shown/question 字段。
  */
-//@ chunk-hcckvqyb.js:10481-11516 placement
 var PUBLISH_PLUGIN_INPUT_SCHEMA = DoctorLazy(() =>
   zodStrictObject({
-    path: o()
+    path: string()
       .min(1)
-      .max(we)
+      .max(MAX_PUBLISH_FILE_NOTE_CHARS)
       .describe(
         "The plugin's folder on this machine: the one that holds .claude-plugin/plugin.json, or a mod's hooks/ where there is no manifest yet.",
       ),
-    destination: T("organization")
+    destination: literal("organization")
       .optional()
       .describe(
         "Where to publish. The one destination is the library of the organization the session is signed in to.",
       ),
-    description: o()
-      .max(j0s)
+    description: string()
+      .max(MAX_PUBLISH_STEPS)
       .optional()
       .describe(
         "What the plugin does, in a sentence: used only for a manifest written for a folder that has none.",
@@ -293,8 +417,8 @@ var PUBLISH_PLUGIN_INPUT_SCHEMA = DoctorLazy(() =>
       .describe(
         "True only when the person said to replace the plugin of the same name that is already in their uploads on claude.ai.",
       ),
-    shown: A(o().max(Re))
-      .max(Oe)
+    shown: array(string().max(MAX_PUBLISH_SHOWN_CHARS))
+      .max(MAX_PUBLISH_QUESTION_CHARS)
       .optional()
       .describe(
         "Leave out. The tool fills it for the question the person answers: the organization, the folder, the steps, and the files sent.",
@@ -307,41 +431,46 @@ var PUBLISH_PLUGIN_INPUT_SCHEMA = DoctorLazy(() =>
   }),
 );
 //@ chunk-hcckvqyb.js:11516-11528 placement
-var ze = 4000;
+/**
+ * 输出展示行的最大长度（4000）。
+ */
+var MAX_PUBLISH_OUTPUT_LINE_CHARS = 4000;
 //@ chunk-hcckvqyb.js:11528-11619 placement
-var Ce = (e) => ({
+/**
+ * 把发布结果转成工具输出对象（状态、拒绝原因与展示行）。
+ */
+var publishResultToToolOutput = (e) => ({
   state: e.kind,
-  refusal: e.kind === "refused" ? e.refusal.kind : void 0,
+  refusal: e.kind === "refused" ? e.refusal.kind : undefined,
   lines: publishResultLines(e),
 });
+//@ chunk-hcckvqyb.js:11619-11744 placement
 /**
  * PublishPlugin 工具的输出结构：状态（已发布/审核中/发布中/已上架/被拒）、拒绝原因与展示行。
  */
-//@ chunk-hcckvqyb.js:11619-11744 placement
 var PUBLISH_PLUGIN_OUTPUT_SCHEMA = DoctorLazy(() =>
   zodStrictObject({
-    state: U(["published", "in-review", "publishing", "on-shelf", "refused"]),
-    refusal: o().optional(),
-    lines: A(o()),
+    state: _enum(["published", "in-review", "publishing", "on-shelf", "refused"]),
+    refusal: string().optional(),
+    lines: array(string()),
   }),
 );
-
 export {
-  Qh,
-  oTo,
-  j0s,
-  kOr,
-  sTo,
-  z0s,
-  TOr,
+  refusalResult,
+  MAX_PUBLISH_FILES,
+  MAX_PUBLISH_STEPS,
+  MAX_PUBLISH_BYTES,
+  pluginCustomizeUrl,
+  securityScanLines,
+  pluginNameLine,
   PUBLISH_QUESTION_SCHEMA,
-  doe,
-  ze,
+  MAX_PUBLISH_META_CHARS,
+  MAX_PUBLISH_OUTPUT_LINE_CHARS,
   PUBLISH_PLUGIN_INPUT_SCHEMA,
   PUBLISH_PLUGIN_OUTPUT_SCHEMA,
-  aTo,
-  Ce,
+  publishRefusalDenial,
+  publishResultToToolOutput,
   publishResultLines,
-  rsn,
-  osn,
+  MAX_PUBLISH_PATH_CHARS,
+  MAX_PUBLISH_LIST_ITEMS,
 };

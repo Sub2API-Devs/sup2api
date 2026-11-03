@@ -12,7 +12,7 @@ import { PROPOSED_OUTCOMES } from "../plugins/bundled/youShouldKnow/NoteCard.js"
 
 //@ chunk-bss4k1z9.js:20132-20331 fingerprint = semanticNumber (0.481)
 function semanticNumber(inner) {
-  if (typeof inner !== "object" || !inner) return !1;
+  if (typeof inner !== "object" || !inner) return false;
   let t = inner;
   return (
     Number.isFinite(t.number) &&
@@ -22,5 +22,4 @@ function semanticNumber(inner) {
     PROPOSED_OUTCOMES.some((o) => o === t.outcome)
   );
 }
-
 export { semanticNumber };

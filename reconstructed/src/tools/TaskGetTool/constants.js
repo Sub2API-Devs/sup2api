@@ -9,10 +9,9 @@
  * attribution: fingerprint 1
  */
 
+//@ chunk-hg2zbde4.js:3974-3991 fingerprint = TASK_GET_TOOL_NAME (1)
 /**
  * "TaskGet"。
  */
-//@ chunk-hg2zbde4.js:3974-3991 fingerprint = TASK_GET_TOOL_NAME (1)
 var TASK_GET_TOOL_NAME = "TaskGet";
-
 export { TASK_GET_TOOL_NAME };

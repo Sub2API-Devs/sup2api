@@ -5,28 +5,32 @@
  * pieces: chunk-hwmsct5x.js (2)
  * attribution: esm-fingerprint 2
  */
-import { sd } from "../_vendor/partial-json-parser/parser.mjs";
+import { partialParse } from "../_vendor/partial-json-parser/parser.mjs";
 
 //@ chunk-hwmsct5x.js:94109-94129 esm-fingerprint
-var Gt = "__json_buf";
+var JSON_BUF_PROPERTY = "__json_buf";
 //@ chunk-hwmsct5x.js:94129-94397 esm-fingerprint
-function Is(e, n) {
-  let r = {};
-  for (let y of Object.keys(e)) if (y !== "input") r[y] = e[y];
-  Object.defineProperty(r, Gt, { value: n, enumerable: !1, writable: !0 });
-  let s,
-    h = !1;
-  return (
-    Object.defineProperty(r, "input", {
-      enumerable: !0,
-      configurable: !0,
-      get() {
-        if (!h) ((s = n ? sd(n) : {}), (h = !0));
-        return s;
-      },
-    }),
-    r
-  );
+function withLazyInput(prev, jsonBuf) {
+  let next = {};
+  for (let key of Object.keys(prev)) if (key !== "input") next[key] = prev[key];
+  Object.defineProperty(next, JSON_BUF_PROPERTY, {
+    value: jsonBuf,
+    enumerable: false,
+    writable: true,
+  });
+  let input;
+  let parsed = false;
+  Object.defineProperty(next, "input", {
+    enumerable: true,
+    configurable: true,
+    get() {
+      if (!parsed) {
+        input = jsonBuf ? partialParse(jsonBuf) : {};
+        parsed = true;
+      }
+      return input;
+    },
+  });
+  return next;
 }
-
-export { Gt, Is };
+export { JSON_BUF_PROPERTY, withLazyInput };

@@ -17,57 +17,76 @@ import { INLINE_PLUGIN_MARKETPLACE } from "../telemetry/pluginTelemetry.js";
 var TRUSTED_SETTING_SOURCES = ["userSettings", "flagSettings", "policySettings"];
 //@ chunk-5a30rzw4.js:361-664 placement
 function trustedPluginSetting(t) {
-  let i = new Set(getEnabledSettingSources()),
-    e = pluginIdAliases(t),
-    n,
-    r;
+  let i = new Set(getEnabledSettingSources());
+  let e = pluginIdAliases(t);
+  let n;
+  let r;
   for (let s of TRUSTED_SETTING_SOURCES) {
     if (!i.has(s)) continue;
-    let g = getSettingsForSource(s)?.pluginConfigs;
+    let pluginConfigs = getSettingsForSource(s)?.pluginConfigs;
     for (let u of e) {
-      let o = g?.[u];
-      if (o?.options) n = { ...n, ...o.options };
+      let o = pluginConfigs?.[u];
+      if (o?.options)
+        n = {
+          ...n,
+          ...o.options,
+        };
       if (o?.mcpServers) {
         r = r ?? {};
-        for (let [l, c] of Object.entries(o.mcpServers)) r[l] = { ...r[l], ...c };
+        for (let [key, value] of Object.entries(o.mcpServers))
+          r[key] = {
+            ...r[key],
+            ...value,
+          };
       }
     }
   }
-  return { options: n, mcpServers: r };
+  return {
+    options: n,
+    mcpServers: r,
+  };
 }
 //@ chunk-5a30rzw4.js:664-831 placement
 function pluginIdAliases(t) {
   let i = legacyPluginIds(t);
   if (i.length > 0) return [...i.toReversed(), t];
-  let e = `@${INLINE_PLUGIN_MARKETPLACE}`,
-    n = t.endsWith(e) ? t.slice(0, -e.length) : "";
+  let e = `@${INLINE_PLUGIN_MARKETPLACE}`;
+  let n = t.endsWith(e) ? t.slice(0, -e.length) : "";
   return n !== "" && !n.includes("@") ? [n, t] : [t];
 }
 //@ chunk-5a30rzw4.js:831-969 placement
-function trustedEnabledPlugins(t) {
-  let i = new Set(getEnabledSettingSources()),
-    e;
+function trustedEnabledPlugins(pluginId) {
+  let i = new Set(getEnabledSettingSources());
+  let e;
   for (let n of TRUSTED_SETTING_SOURCES) {
     if (!i.has(n)) continue;
-    let r = lookupByPluginAliases(getSettingsForSource(n)?.enabledPlugins, t);
-    if (r !== void 0) e = r;
+    let r = lookupByPluginAliases(getSettingsForSource(n)?.enabledPlugins, pluginId);
+    if (r !== undefined) e = r;
   }
   return e;
 }
 //@ chunk-5a30rzw4.js:969-1165 placement
 function pluginSettingWriteTarget(t, i) {
-  let e = canonicalPluginId(i),
-    n = legacyPluginIds(e);
-  if (n.length === 0) return { deciding: i, written: i, replaced: [] };
-  let filtered = n.filter((s) => t?.[s] !== void 0);
-  return { deciding: t?.[e] === void 0 ? (filtered[0] ?? e) : e, written: e, replaced: filtered };
+  let e = canonicalPluginId(i);
+  let n = legacyPluginIds(e);
+  if (n.length === 0)
+    return {
+      deciding: i,
+      written: i,
+      replaced: [],
+    };
+  let filtered = n.filter((s) => t?.[s] !== undefined);
+  return {
+    deciding: t?.[e] === undefined ? (filtered[0] ?? e) : e,
+    written: e,
+    replaced: filtered,
+  };
 }
 //@ chunk-5a30rzw4.js:1165-1254 placement
-function lookupByPluginAliases(t, i) {
+function lookupByPluginAliases(enabledPlugins, i) {
   let e = canonicalPluginId(i);
-  return [e, ...legacyPluginIds(e), i].map((n) => t?.[n]).find((n) => n !== void 0);
+  return [e, ...legacyPluginIds(e), i].map((n) => enabledPlugins?.[n]).find((n) => n !== undefined);
 }
-
 export {
   pluginSettingWriteTarget,
   lookupByPluginAliases,

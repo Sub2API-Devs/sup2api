@@ -5,72 +5,100 @@
  * pieces: chunk-hwmsct5x.js (1)
  * attribution: esm-fingerprint 1
  */
-import { Y } from "../core/resource.mjs";
-import { ee } from "../core/pagination.mjs";
-import { T } from "../internal/headers.mjs";
+import { APIResource } from "../core/resource.mjs";
+import { TokenPage } from "../core/pagination.mjs";
+import { buildHeaders } from "../internal/headers.mjs";
 import { I } from "../internal/utils/path.mjs";
 import { ut } from "../internal/uploads.mjs";
 import { is } from "../internal/stainless-helper-header.mjs";
 
 //@ chunk-hwmsct5x.js:145854-146814 esm-fingerprint
-class qn extends Y {
-  list(e = {}, n) {
-    let { workspace_id: workspace_id, ...s } = e ?? {};
-    return this._client.getAPIList("/v1/files", ee, {
-      query: s,
-      ...n,
-      headers: T([
-        { ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0) },
-        n?.headers,
+class Files_2 extends APIResource {
+  list(params = {}, options) {
+    let { workspace_id, ...query } = params ?? {};
+    return this._client.getAPIList("/v1/files", TokenPage, {
+      query,
+      ...options,
+      headers: buildHeaders([
+        {
+          ...(workspace_id != null
+            ? {
+                "anthropic-workspace-id": workspace_id,
+              }
+            : undefined),
+        },
+        options?.headers,
       ]),
     });
   }
-  delete(e, n = {}, r) {
-    let { workspace_id: workspace_id } = n ?? {};
-    return this._client.delete(I`/v1/files/${e}`, {
-      ...r,
-      headers: T([
-        { ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0) },
-        r?.headers,
+  delete(fileID, params = {}, options) {
+    let { workspace_id } = params ?? {};
+    return this._client.delete(I`/v1/files/${fileID}`, {
+      ...options,
+      headers: buildHeaders([
+        {
+          ...(workspace_id != null
+            ? {
+                "anthropic-workspace-id": workspace_id,
+              }
+            : undefined),
+        },
+        options?.headers,
       ]),
     });
   }
-  download(e, n = {}, r) {
-    let { workspace_id: workspace_id } = n ?? {};
-    return this._client.get(I`/v1/files/${e}/content`, {
-      ...r,
-      headers: T([
+  download(fileID, params = {}, options) {
+    let { workspace_id } = params ?? {};
+    return this._client.get(I`/v1/files/${fileID}/content`, {
+      ...options,
+      headers: buildHeaders([
         {
           Accept: "application/binary",
-          ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0),
+          ...(workspace_id != null
+            ? {
+                "anthropic-workspace-id": workspace_id,
+              }
+            : undefined),
         },
-        r?.headers,
+        options?.headers,
       ]),
-      __binaryResponse: !0,
+      __binaryResponse: true,
     });
   }
-  retrieveMetadata(e, n = {}, r) {
-    let { workspace_id: workspace_id } = n ?? {};
-    return this._client.get(I`/v1/files/${e}`, {
-      ...r,
-      headers: T([
-        { ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0) },
-        r?.headers,
+  retrieveMetadata(fileID, params = {}, options) {
+    let { workspace_id } = params ?? {};
+    return this._client.get(I`/v1/files/${fileID}`, {
+      ...options,
+      headers: buildHeaders([
+        {
+          ...(workspace_id != null
+            ? {
+                "anthropic-workspace-id": workspace_id,
+              }
+            : undefined),
+        },
+        options?.headers,
       ]),
     });
   }
-  upload(e, n) {
-    let { workspace_id: workspace_id, ...s } = e;
+  upload(params, options) {
+    let { workspace_id, ...body } = params;
     return this._client.post(
       "/v1/files",
       ut(
         {
-          body: s,
-          ...n,
-          headers: T([
-            { ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0) },
-            is(s.file),
-            n?.headers,
+          body,
+          ...options,
+          headers: buildHeaders([
+            {
+              ...(workspace_id != null
+                ? {
+                    "anthropic-workspace-id": workspace_id,
+                  }
+                : undefined),
+            },
+            is(body.file),
+            options?.headers,
           ]),
         },
         this._client,
@@ -78,5 +106,4 @@ class qn extends Y {
     );
   }
 }
-
-export { qn };
+export { Files_2 };

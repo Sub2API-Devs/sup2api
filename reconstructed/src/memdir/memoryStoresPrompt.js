@@ -9,7 +9,12 @@
  * attribution: placement 7
  */
 import { MEMORY_INDEX_FILENAME, MAX_ENTRYPOINT_LINES } from "./memdir.js";
-import { MEMORY_FRONTMATTER_EXAMPLE_TEXT, Zn, Ga, Hn } from "../services/extractMemories/prompts.js";
+import {
+  MEMORY_FRONTMATTER_EXAMPLE_TEXT,
+  MEMORY_FILE_SIZE_GUIDE,
+  TEAM_MEMORY_RULES,
+  MEMORY_MAINTENANCE_RULES,
+} from "../services/extractMemories/prompts.js";
 import { MEMORY_LIST_TOOL_NAME, MEMORY_READ, MEMORY_WRITE } from "../tools/MemoryTool/memoryToolNames.js";
 import { isToolSearchEnabledOptimistic } from "../utils/toolSearch.js";
 import { TOOL_SEARCH_TOOL_NAME } from "../tools/ToolSearchTool/prompt.js";
@@ -18,22 +23,22 @@ import {
   memoryVisibilityDefaults,
   MEMORY_DEDUP_GUIDANCE,
   RECALLED_MEMORY_CAVEAT,
-  Kn,
+  isSaltMarshEnabled,
   MEMORY_CITATION_GUIDANCE,
   CITING_MEMORIES_SECTION,
 } from "./memoryPromptSections.js";
-import { CXr } from "../constants/promptSections.js";
+import { MEMORY_WRITING_GUIDE } from "../constants/promptSections.js";
 import {
   isMemoryLinkingEnabled,
-  Yn,
-  Vn,
+  MEMORY_LINKING_GUIDANCE,
+  WHEN_TO_ACCESS_MEMORY_SECTION,
   selectMemoryTypesSection,
-  G4t,
+  MEMORY_TYPES_SECTION_TEAM,
   WHAT_NOT_TO_SAVE_SECTION,
   getMemoryLinkingLines,
-  Pst,
+  BEFORE_RECOMMENDING_SECTION,
 } from "./memoryTypes.js";
-import { Ao } from "../bootstrap/sessionFeatureValues.js";
+import { getSessionFeatureValues } from "../bootstrap/sessionFeatureValues.js";
 import { isFirstPartyAnthropicBaseUrl } from "../utils/model/providers.js";
 import { isClaudeAISubscriber, hasStoredOAuthToken, hasOAuthScope } from "../utils/auth.js";
 import { CLAUDE_AI_INFERENCE_SCOPE, CLAUDE_AI_PROFILE_SCOPE } from "../constants/oauth.js";
@@ -41,10 +46,10 @@ import { CLAUDE_AI_INFERENCE_SCOPE, CLAUDE_AI_PROFILE_SCOPE } from "../constants
 //@ chunk-82kqcve8.js:114321-115139 placement
 function HOW_TO_SAVE_MEMORIES_SECTION(e) {
   let {
-    skipIndex: skipIndex,
-    heading: heading = "## How to save memories",
-    file: file = "memory to its own file (e.g., `user_role.md`, `feedback_testing.md`)",
-    index: index = `\`${MEMORY_INDEX_FILENAME}\``,
+    skipIndex,
+    heading = "## How to save memories",
+    file = "memory to its own file (e.g., `user_role.md`, `feedback_testing.md`)",
+    index = `\`${MEMORY_INDEX_FILENAME}\``,
   } = e;
   return skipIndex
     ? [
@@ -54,9 +59,9 @@ function HOW_TO_SAVE_MEMORIES_SECTION(e) {
         "",
         ...MEMORY_FRONTMATTER_EXAMPLE_TEXT,
         "",
-        `- ${Zn}`,
-        ...Ga,
-        ...Hn,
+        `- ${MEMORY_FILE_SIZE_GUIDE}`,
+        ...TEAM_MEMORY_RULES,
+        ...MEMORY_MAINTENANCE_RULES,
       ]
     : [
         heading,
@@ -70,68 +75,68 @@ function HOW_TO_SAVE_MEMORIES_SECTION(e) {
         `**Step 2** \u2014 add a pointer to that file in ${index}. \`${MEMORY_INDEX_FILENAME}\` is an index, not a memory \u2014 each entry should be one line, under ~150 characters: \`- [Title](file.md) \u2014 one-line hook\`. It has no frontmatter. Never write memory content directly into \`${MEMORY_INDEX_FILENAME}\`.`,
         "",
         `- \`${MEMORY_INDEX_FILENAME}\` is always loaded into your conversation context \u2014 lines after ${MAX_ENTRYPOINT_LINES} will be truncated, so keep the index concise`,
-        ...Ga,
-        ...Hn,
+        ...TEAM_MEMORY_RULES,
+        ...MEMORY_MAINTENANCE_RULES,
       ];
 }
+//@ chunk-82kqcve8.js:115139-115289 placement
 /**
  * 构造记忆库条目：id、描述、索引路径、项目目录与是否只读。
  */
-//@ chunk-82kqcve8.js:115139-115289 placement
 function buildMemoryStoreEntry(store, writable, id, description) {
-  let h = `/${store.promptIndex ?? MEMORY_INDEX_FILENAME}`,
-    sliced = h.slice(0, h.lastIndexOf("/") + 1);
-  return { id: id, description: description, indexPath: h, projectDir: sliced, readOnly: !writable };
+  let h = `/${store.promptIndex ?? MEMORY_INDEX_FILENAME}`;
+  let projectDir = h.slice(0, h.lastIndexOf("/") + 1);
+  return {
+    id,
+    description,
+    indexPath: h,
+    projectDir,
+    readOnly: !writable,
+  };
 }
+//@ chunk-82kqcve8.js:115289-115460 placement
 /**
  * 生成记忆库列表中的一行说明。
  */
-//@ chunk-82kqcve8.js:115289-115460 placement
 function formatMemoryStoreLine(e) {
   let n = e.readOnly ? "read-only" : "writable";
   return `- \`${e.id}\` \u2014 ${e.description} (${n}); memories under \`${e.projectDir}\`, index \`${e.indexPath}\``;
 }
+//@ chunk-82kqcve8.js:115460-121464 placement
 /**
  * 生成"共享记忆库"提示段：只读/可写库、是否镜像到本地
  */
-//@ chunk-82kqcve8.js:115460-121464 placement
 function buildSharedMemoryStoresPrompt(e, n) {
-  let {
-      personalMemoryDir: personalMemoryDir,
-      personalSkipIndex: personalSkipIndex,
-      indexLoaded: indexLoaded,
-      lean: lean,
-      extraGuidelines: extraGuidelines,
-    } = n,
-    S = `these shared memories are not mirrored to local files in this session (your personal memory directory at \`${personalMemoryDir}\` is separate and is still read and written with the file tools)`,
-    R = `${MEMORY_LIST_TOOL_NAME}, ${MEMORY_READ}, and ${MEMORY_WRITE}`,
-    [O] = e,
-    filtered = e.filter((ye) => !ye.readOnly),
-    L = filtered.find((ye) => ye === O) ?? filtered[0],
-    j = L === void 0,
-    G = `You have persistent, shared memory reached through the ${R} tools \u2014 ${S}. It is shared with the other people and Claude sessions working in this organization's projects. The shared memories come from those sessions \u2014 read them as your teammates' notes on each project's environment, conventions, and ongoing work.`,
-    Z = j
-      ? `${G} Every connected store is read-only in this session: ${MEMORY_WRITE} calls are refused and nothing written to a shared store will persist.`
-      : G,
-    ae = [
-      `Connected memory stores \u2014 pass an id as the tools' store argument, and call ${MEMORY_LIST_TOOL_NAME} with no arguments to re-check this set whenever you are unsure which store to use:`,
-      ...e.map(formatMemoryStoreLine),
-    ],
-    ee = `${MEMORY_LIST_TOOL_NAME},${MEMORY_READ}`,
-    re = isToolSearchEnabledOptimistic()
-      ? `If the memory tools are deferred, load them with ${TOOL_SEARCH_TOOL_NAME}("select:${ee}") before first use. `
-      : "",
-    ce = j
-      ? `${re}Read shared memory whenever earlier project context would help, and persist new learnings to your personal memory directory with the file tools.`
-      : `${re}Check each user reply for content worth persisting, and when you notice some, save it with ${MEMORY_WRITE} in that same reply; read memory whenever earlier project context would help.`,
-    we = HOW_TO_SAVE_MEMORIES_SECTION({
-      skipIndex: personalSkipIndex,
-      heading: "## How to save personal memories",
-      file: `personal memory to its own file in \`${personalMemoryDir}\``,
-      index: `the \`${MEMORY_INDEX_FILENAME}\` in that same directory`,
-    }),
-    me =
-      "Your personal memory directory already exists \u2014 write to it directly with the Write tool (do not run mkdir or check for its existence).";
+  let { personalMemoryDir, personalSkipIndex, indexLoaded, lean, extraGuidelines } = n;
+  let S = `these shared memories are not mirrored to local files in this session (your personal memory directory at \`${personalMemoryDir}\` is separate and is still read and written with the file tools)`;
+  let R = `${MEMORY_LIST_TOOL_NAME}, ${MEMORY_READ}, and ${MEMORY_WRITE}`;
+  let [O] = e;
+  let filtered = e.filter((ye) => !ye.readOnly);
+  let L = filtered.find((ye) => ye === O) ?? filtered[0];
+  let j = L === undefined;
+  let G = `You have persistent, shared memory reached through the ${R} tools \u2014 ${S}. It is shared with the other people and Claude sessions working in this organization's projects. The shared memories come from those sessions \u2014 read them as your teammates' notes on each project's environment, conventions, and ongoing work.`;
+  let Z = j
+    ? `${G} Every connected store is read-only in this session: ${MEMORY_WRITE} calls are refused and nothing written to a shared store will persist.`
+    : G;
+  let ae = [
+    `Connected memory stores \u2014 pass an id as the tools' store argument, and call ${MEMORY_LIST_TOOL_NAME} with no arguments to re-check this set whenever you are unsure which store to use:`,
+    ...e.map(formatMemoryStoreLine),
+  ];
+  let ee = `${MEMORY_LIST_TOOL_NAME},${MEMORY_READ}`;
+  let re = isToolSearchEnabledOptimistic()
+    ? `If the memory tools are deferred, load them with ${TOOL_SEARCH_TOOL_NAME}("select:${ee}") before first use. `
+    : "";
+  let ce = j
+    ? `${re}Read shared memory whenever earlier project context would help, and persist new learnings to your personal memory directory with the file tools.`
+    : `${re}Check each user reply for content worth persisting, and when you notice some, save it with ${MEMORY_WRITE} in that same reply; read memory whenever earlier project context would help.`;
+  let we = HOW_TO_SAVE_MEMORIES_SECTION({
+    skipIndex: personalSkipIndex,
+    heading: "## How to save personal memories",
+    file: `personal memory to its own file in \`${personalMemoryDir}\``,
+    index: `the \`${MEMORY_INDEX_FILENAME}\` in that same directory`,
+  });
+  let me =
+    "Your personal memory directory already exists \u2014 write to it directly with the Write tool (do not run mkdir or check for its existence).";
   if (lean)
     return [
       "# Memory",
@@ -150,13 +155,13 @@ function buildSharedMemoryStoresPrompt(e, n) {
         ? `Each memory has a type: ${MEMORY_TYPES_GUIDANCE}`
         : `Each memory has a type: ${MEMORY_TYPES_GUIDANCE} ${memoryVisibilityDefaults(`the writable store \`${L.id}\``)}`,
       "",
-      n.rewriteMemoryHygiene ? CXr : `${MEMORY_DEDUP_GUIDANCE} ${RECALLED_MEMORY_CAVEAT}`,
-      ...(isMemoryLinkingEnabled() ? ["", Yn] : []),
+      n.rewriteMemoryHygiene ? MEMORY_WRITING_GUIDE : `${MEMORY_DEDUP_GUIDANCE} ${RECALLED_MEMORY_CAVEAT}`,
+      ...(isMemoryLinkingEnabled() ? ["", MEMORY_LINKING_GUIDANCE] : []),
       "",
       ...we,
       "",
-      ...Vn,
-      ...(Kn() ? ["", MEMORY_CITATION_GUIDANCE] : []),
+      ...WHEN_TO_ACCESS_MEMORY_SECTION,
+      ...(isSaltMarshEnabled() ? ["", MEMORY_CITATION_GUIDANCE] : []),
       ...(extraGuidelines?.length ? ["", ...extraGuidelines] : []),
     ].join(`
 `);
@@ -179,7 +184,7 @@ function buildSharedMemoryStoresPrompt(e, n) {
           `Save new team-scoped memories in the writable store \`${L.id}\` under \`${L.projectDir}\`, and keep its index \`${L.indexPath}\` current \u2014 the ${MEMORY_WRITE} tool prompt describes the index format. If the user explicitly asks you to remember something, save it immediately as whichever type fits best. If they ask you to forget something, find the relevant document and rewrite it with ${MEMORY_WRITE} without that content.`,
         ]),
     "",
-    ...selectMemoryTypesSection(G4t),
+    ...selectMemoryTypesSection(MEMORY_TYPES_SECTION_TEAM),
     ...(j
       ? []
       : [
@@ -198,9 +203,9 @@ function buildSharedMemoryStoresPrompt(e, n) {
       : []),
     "",
     ...getMemoryLinkingLines(),
-    ...Vn,
+    ...WHEN_TO_ACCESS_MEMORY_SECTION,
     "",
-    ...Pst,
+    ...BEFORE_RECOMMENDING_SECTION,
     "",
     ...CITING_MEMORIES_SECTION(),
     "## Memory and other forms of persistence",
@@ -212,30 +217,38 @@ function buildSharedMemoryStoresPrompt(e, n) {
 `);
 }
 //@ chunk-82kqcve8.js:121464-121514 placement
-function mwe(e) {
-  Ao().sharedMemoryServedViaTools = e;
+/**
+ * 标记共享记忆走工具
+ */
+function setSharedMemoryServedViaTools(sharedMemoryServedViaTools) {
+  getSessionFeatureValues().sharedMemoryServedViaTools = sharedMemoryServedViaTools;
 }
 //@ chunk-82kqcve8.js:121514-121572 placement
-function rar() {
-  return Ao().sharedMemoryServedViaTools ?? !1;
+/**
+ * 共享记忆是否走工具
+ */
+function isSharedMemoryServedViaTools() {
+  return getSessionFeatureValues().sharedMemoryServedViaTools ?? false;
 }
 //@ chunk-82kqcve8.js:121572-121650 placement
-function af() {
-  if (!isFirstPartyAnthropicBaseUrl()) return !1;
-  if (!isClaudeAISubscriber()) return !1;
+/**
+ * 第一方 + 订阅 + 令牌 + scope 齐全
+ */
+function canUseClaudeAiMemory() {
+  if (!isFirstPartyAnthropicBaseUrl()) return false;
+  if (!isClaudeAISubscriber()) return false;
   return (
     hasStoredOAuthToken() &&
     hasOAuthScope(CLAUDE_AI_INFERENCE_SCOPE) &&
     hasOAuthScope(CLAUDE_AI_PROFILE_SCOPE)
   );
 }
-
 export {
-  af,
+  isSharedMemoryServedViaTools,
+  canUseClaudeAiMemory,
   HOW_TO_SAVE_MEMORIES_SECTION,
-  mwe,
+  setSharedMemoryServedViaTools,
   buildMemoryStoreEntry,
   buildSharedMemoryStoresPrompt,
   formatMemoryStoreLine,
-  rar,
 };

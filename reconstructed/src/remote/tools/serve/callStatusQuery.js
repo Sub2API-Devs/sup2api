@@ -10,40 +10,61 @@
  */
 import { clipText, ANTHROPIC_REMOTETOOLEXECUTION } from "../protocolSchemas.js";
 import { REMOTE_TOOL_PROTOCOL_VERSION } from "../protocolConstants.js";
-import { DISOWNED, cer, JOINED_RETRY, REPLACED_BY_RETRY, LOST_IN_RESTART } from "../servedCallLog.js";
+import {
+  DISOWNED,
+  TERMINAL_CALL_STATES,
+  JOINED_RETRY,
+  REPLACED_BY_RETRY,
+  LOST_IN_RESTART,
+} from "../servedCallLog.js";
 import { withdrawnRequestMessage } from "../../../services/remoteTools/hostRefusals.js";
 
 //@ chunk-tr0s0d0k.js:6396-6588 placement
-function withdrawnEnvelope({ target: target, callId: callId, reason: reason, message: message }) {
+function withdrawnEnvelope({ target, callId, reason, message }) {
   let s = clipText(message);
   return {
     envelope: {
       v: REMOTE_TOOL_PROTOCOL_VERSION,
       outcome: "refused",
       call_id: callId,
-      target: target,
+      target,
       code: "withdrawn",
-      reason: reason,
+      reason,
       message: s,
     },
-    content: [{ type: "text", text: s }],
+    content: [
+      {
+        type: "text",
+        text: s,
+      },
+    ],
   };
 }
 //@ chunk-tr0s0d0k.js:6588-6836 placement
-function failedEnvelope(e, n, o, r, s = {}) {
+function failedEnvelope(target, facts, code, r, s = {}) {
   let d = clipText(r);
   return {
     envelope: {
       v: REMOTE_TOOL_PROTOCOL_VERSION,
       outcome: "failed",
-      ...(n.envelope && { call_id: n.envelope.call_id }),
-      target: e,
-      code: o,
+      ...(facts.envelope && {
+        call_id: facts.envelope.call_id,
+      }),
+      target,
+      code,
       message: d,
       ...s.partial,
-      ...(s.notes !== void 0 && s.notes.length > 0 && { notes: s.notes }),
+      ...(s.notes !== undefined &&
+        s.notes.length > 0 && {
+          notes: s.notes,
+        }),
     },
-    content: [{ type: "text", text: d }],
+    content: [
+      {
+        type: "text",
+        text: d,
+      },
+    ],
   };
 }
 //@ chunk-tr0s0d0k.js:6836-6908 placement
@@ -53,32 +74,48 @@ function isPlainObject(e) {
 //@ chunk-tr0s0d0k.js:6908-7485 placement
 function isSessionDenial(e) {
   if (e?.envelope.outcome === "completed") {
-    let { disposition: disposition } = e.envelope;
+    let { disposition } = e.envelope;
     return disposition === "ask_expired" || disposition === "denied_by_session"
-      ? { state: "failed", code: disposition }
-      : { state: "completed", isError: e.envelope.is_error };
+      ? {
+          state: "failed",
+          code: disposition,
+        }
+      : {
+          state: "completed",
+          isError: e.envelope.is_error,
+        };
   }
-  if (e?.envelope.outcome === "needs_approval") return { state: "asked", askId: e.envelope.ask_id };
+  if (e?.envelope.outcome === "needs_approval")
+    return {
+      state: "asked",
+      askId: e.envelope.ask_id,
+    };
   return {
     state: "failed",
-    ...((e?.envelope.outcome === "failed" || e?.envelope.outcome === "refused") && { code: e.envelope.code }),
-    ...(e?.ranNothing === !0 && { ranNothing: !0 }),
+    ...((e?.envelope.outcome === "failed" || e?.envelope.outcome === "refused") && {
+      code: e.envelope.code,
+    }),
+    ...(e?.ranNothing === true && {
+      ranNothing: true,
+    }),
     ...(e?.envelope.outcome === "refused" &&
-      e.envelope.reason !== void 0 &&
-      e.envelope.reason !== "unrecognized" && { endedAs: e.envelope.reason }),
+      e.envelope.reason !== undefined &&
+      e.envelope.reason !== "unrecognized" && {
+        endedAs: e.envelope.reason,
+      }),
   };
 }
 //@ chunk-tr0s0d0k.js:7485-7986 placement
-function describeLateArrival(e, n) {
+function describeLateArrival(name, n) {
   if (n.state === "failed" && n.code === DISOWNED) {
     let sliced = new Date(n.servedAt).toISOString().slice(11, 19);
-    return `This call reached ${e} only after the session had been told (at ${sliced} UTC) that it never arrived here \u2014 it was not run.`;
+    return `This call reached ${name} only after the session had been told (at ${sliced} UTC) that it never arrived here \u2014 it was not run.`;
   }
   return n.state === "failed" &&
-    n.code !== void 0 &&
-    (cer.has(n.code) || n.code === "stale" || n.ranNothing === !0)
-    ? `This request was already answered on ${e}: nothing was run for it (${describeCallState(n)}).`
-    : `This call was already delivered to ${e} (${describeCallState(n)}) \u2014 it was not run again.`;
+    n.code !== undefined &&
+    (TERMINAL_CALL_STATES.has(n.code) || n.code === "stale" || n.ranNothing === true)
+    ? `This request was already answered on ${name}: nothing was run for it (${describeCallState(n)}).`
+    : `This call was already delivered to ${name} (${describeCallState(n)}) \u2014 it was not run again.`;
 }
 //@ chunk-tr0s0d0k.js:7986-9018 placement
 function describeCallState(e) {
@@ -96,7 +133,7 @@ function describeCallState(e) {
       switch (e.code) {
         case "timed_out":
         case "cancelled":
-          return e.ranNothing === !0
+          return e.ranNothing === true
             ? `it ended as ${e.code} at ${sliced} UTC`
             : `it ended as ${e.code} at ${sliced} UTC; if it had started, it may have partially run`;
         case JOINED_RETRY:
@@ -111,70 +148,88 @@ function describeCallState(e) {
   }
 }
 //@ chunk-tr0s0d0k.js:9018-9305 placement
-function rebindEnvelopeCallId(e, n) {
-  let { envelope: envelope } = e;
-  if (envelope.call_id === n) return e;
-  if (envelope.outcome !== "needs_approval" || envelope.elicitation === void 0)
-    return { ...e, envelope: { ...envelope, call_id: n } };
+function rebindEnvelopeCallId(e, callId) {
+  let { envelope } = e;
+  if (envelope.call_id === callId) return e;
+  if (envelope.outcome !== "needs_approval" || envelope.elicitation === undefined)
+    return {
+      ...e,
+      envelope: {
+        ...envelope,
+        call_id: callId,
+      },
+    };
   let r = envelope.elicitation._meta[ANTHROPIC_REMOTETOOLEXECUTION];
   return {
     ...e,
     envelope: {
       ...envelope,
-      call_id: n,
+      call_id: callId,
       elicitation: {
         ...envelope.elicitation,
-        _meta: { [ANTHROPIC_REMOTETOOLEXECUTION]: { ...r, call_id: n } },
+        _meta: {
+          [ANTHROPIC_REMOTETOOLEXECUTION]: {
+            ...r,
+            call_id: callId,
+          },
+        },
       },
     },
   };
 }
 //@ chunk-tr0s0d0k.js:9305-9473 placement
-function markReplayed(e, n) {
-  let { envelope: envelope } = e;
+function markReplayed(e, servedAt) {
+  let { envelope } = e;
   switch (envelope.outcome) {
     case "completed":
     case "refused":
     case "failed":
-      return { ...e, envelope: { ...envelope, replayed: !0, served_at: n } };
+      return {
+        ...e,
+        envelope: {
+          ...envelope,
+          replayed: true,
+          served_at: servedAt,
+        },
+      };
     default:
       return e;
   }
 }
 //@ chunk-tr0s0d0k.js:9473-10107 placement
-function callStillRunningText({
-  target: target,
-  callId: callId,
-  state: state,
-  sinceMs: sinceMs,
-  hostEpoch: hostEpoch,
-  outputTail: outputTail,
-}) {
-  let max = Math.max(0, Math.round(sinceMs / 1000)),
-    p =
-      state === "running"
-        ? `This call is still running on ${target.name} (received ${max} s ago); its outcome is not known yet.`
-        : state === "admitting"
-          ? `This call was received on ${target.name} ${max} s ago and is still being admitted; nothing has started yet.`
-          : `This call is waiting on ${target.name} for the session's approval (received ${max} s ago); nothing has run yet.`;
+function callStillRunningText({ target, callId, state, sinceMs, hostEpoch, outputTail }) {
+  let max = Math.max(0, Math.round(sinceMs / 1000));
+  let text =
+    state === "running"
+      ? `This call is still running on ${target.name} (received ${max} s ago); its outcome is not known yet.`
+      : state === "admitting"
+        ? `This call was received on ${target.name} ${max} s ago and is still being admitted; nothing has started yet.`
+        : `This call is waiting on ${target.name} for the session's approval (received ${max} s ago); nothing has run yet.`;
   return {
     envelope: {
       v: REMOTE_TOOL_PROTOCOL_VERSION,
       outcome: "in_progress",
       call_id: callId,
-      target: target,
-      state: state,
+      target,
+      state,
       since_ms: Math.max(0, Math.floor(sinceMs)),
       host_epoch: hostEpoch,
-      ...(outputTail !== void 0 && { output_tail: outputTail }),
+      ...(outputTail !== undefined && {
+        output_tail: outputTail,
+      }),
     },
-    content: [{ type: "text", text: p }],
+    content: [
+      {
+        type: "text",
+        text,
+      },
+    ],
   };
 }
 //@ chunk-tr0s0d0k.js:10107-10604 placement
-function noCallRecordText({ target: target, callId: callId, hostEpoch: hostEpoch }) {
+function noCallRecordText({ target, callId, hostEpoch }) {
   let r =
-    hostEpoch === void 0
+    hostEpoch === undefined
       ? `${target.name} has no record of this call (it may never have arrived, or its record here was dropped); nothing is running for it here now.`
       : `${target.name} has no record of this call: it never arrived here, or this machine's Claude Code has restarted since; nothing is running for it here.`;
   return {
@@ -182,38 +237,54 @@ function noCallRecordText({ target: target, callId: callId, hostEpoch: hostEpoch
       v: REMOTE_TOOL_PROTOCOL_VERSION,
       outcome: "refused",
       call_id: callId,
-      target: target,
+      target,
       code: "unknown_call",
       message: r,
-      ...(hostEpoch !== void 0 && { host_epoch: hostEpoch }),
+      ...(hostEpoch !== undefined && {
+        host_epoch: hostEpoch,
+      }),
     },
-    content: [{ type: "text", text: r }],
+    content: [
+      {
+        type: "text",
+        text: r,
+      },
+    ],
   };
 }
 //@ chunk-tr0s0d0k.js:10604-10966 placement
-function envelopeFromRecord(e, n, o) {
-  if (o.state === "failed" && o.code === "withdrawn" && o.endedAs !== void 0)
+function envelopeFromRecord(e, n, summary) {
+  if (summary.state === "failed" && summary.code === "withdrawn" && summary.endedAs !== undefined)
     return withdrawnEnvelope({
       target: e,
       callId: n,
-      reason: o.endedAs,
-      message: o.endedMessage ?? withdrawnRequestMessage({ targetName: e.name, reason: o.endedAs }),
+      reason: summary.endedAs,
+      message:
+        summary.endedMessage ??
+        withdrawnRequestMessage({
+          targetName: e.name,
+          reason: summary.endedAs,
+        }),
     });
-  let s = [{ type: "text", text: describeLateArrival(e.name, o) }];
+  let content = [
+    {
+      type: "text",
+      text: describeLateArrival(e.name, summary),
+    },
+  ];
   return {
     envelope: {
       v: REMOTE_TOOL_PROTOCOL_VERSION,
       outcome: "completed",
       call_id: n,
       target: e,
-      is_error: !0,
-      content: s,
+      is_error: true,
+      content,
       disposition: "duplicate_call",
     },
-    content: s,
+    content,
   };
 }
-
 export {
   isSessionDenial,
   failedEnvelope,

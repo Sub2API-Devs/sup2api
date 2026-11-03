@@ -6,126 +6,147 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { Tn } from "./forge.js";
-import { Xa } from "./aes.js";
-import { US } from "./tls.js";
+import { require_forge } from "./forge.js";
+import { require_aes } from "./aes.js";
+import { require_tls } from "./tls.js";
 
 //@ chunk-fq0cr76a.js:249438-252318 cjs-fingerprint
-var $A = x(function (Ufe, MA) {
-  var sl = Tn();
-  Xa();
-  US();
-  var Di = (MA.exports = sl.tls);
-  Di.CipherSuites.TLS_RSA_WITH_AES_128_CBC_SHA = {
+var require_aesCipherSuites = x(function (cjsExports, cjsModule) {
+  var forge = require_forge();
+  require_aes();
+  require_tls();
+  var tls = (cjsModule.exports = forge.tls);
+  tls.CipherSuites.TLS_RSA_WITH_AES_128_CBC_SHA = {
     id: [0, 47],
     name: "TLS_RSA_WITH_AES_128_CBC_SHA",
-    initSecurityParameters: function (e) {
-      ((e.bulk_cipher_algorithm = Di.BulkCipherAlgorithm.aes),
-        (e.cipher_type = Di.CipherType.block),
-        (e.enc_key_length = 16),
-        (e.block_length = 16),
-        (e.fixed_iv_length = 16),
-        (e.record_iv_length = 16),
-        (e.mac_algorithm = Di.MACAlgorithm.hmac_sha1),
-        (e.mac_length = 20),
-        (e.mac_key_length = 20));
+    initSecurityParameters: function (sp) {
+      sp.bulk_cipher_algorithm = tls.BulkCipherAlgorithm.aes;
+      sp.cipher_type = tls.CipherType.block;
+      sp.enc_key_length = 16;
+      sp.block_length = 16;
+      sp.fixed_iv_length = 16;
+      sp.record_iv_length = 16;
+      sp.mac_algorithm = tls.MACAlgorithm.hmac_sha1;
+      sp.mac_length = 20;
+      sp.mac_key_length = 20;
     },
-    initConnectionState: FA,
+    initConnectionState,
   };
-  Di.CipherSuites.TLS_RSA_WITH_AES_256_CBC_SHA = {
+  tls.CipherSuites.TLS_RSA_WITH_AES_256_CBC_SHA = {
     id: [0, 53],
     name: "TLS_RSA_WITH_AES_256_CBC_SHA",
-    initSecurityParameters: function (e) {
-      ((e.bulk_cipher_algorithm = Di.BulkCipherAlgorithm.aes),
-        (e.cipher_type = Di.CipherType.block),
-        (e.enc_key_length = 32),
-        (e.block_length = 16),
-        (e.fixed_iv_length = 16),
-        (e.record_iv_length = 16),
-        (e.mac_algorithm = Di.MACAlgorithm.hmac_sha1),
-        (e.mac_length = 20),
-        (e.mac_key_length = 20));
+    initSecurityParameters: function (sp) {
+      sp.bulk_cipher_algorithm = tls.BulkCipherAlgorithm.aes;
+      sp.cipher_type = tls.CipherType.block;
+      sp.enc_key_length = 32;
+      sp.block_length = 16;
+      sp.fixed_iv_length = 16;
+      sp.record_iv_length = 16;
+      sp.mac_algorithm = tls.MACAlgorithm.hmac_sha1;
+      sp.mac_length = 20;
+      sp.mac_key_length = 20;
     },
-    initConnectionState: FA,
+    initConnectionState,
   };
-  function FA(e, n, r) {
-    var s = n.entity === sl.tls.ConnectionEnd.client;
-    ((e.read.cipherState = {
-      init: !1,
-      cipher: sl.cipher.createDecipher("AES-CBC", s ? r.keys.server_write_key : r.keys.client_write_key),
-      iv: s ? r.keys.server_write_IV : r.keys.client_write_IV,
-    }),
-      (e.write.cipherState = {
-        init: !1,
-        cipher: sl.cipher.createCipher("AES-CBC", s ? r.keys.client_write_key : r.keys.server_write_key),
-        iv: s ? r.keys.client_write_IV : r.keys.server_write_IV,
-      }),
-      (e.read.cipherFunction = x6),
-      (e.write.cipherFunction = b6),
-      (e.read.macLength = e.write.macLength = r.mac_length),
-      (e.read.macFunction = e.write.macFunction = Di.hmac_sha1));
+  function initConnectionState(state, c, sp) {
+    var client = c.entity === forge.tls.ConnectionEnd.client;
+    state.read.cipherState = {
+      init: false,
+      cipher: forge.cipher.createDecipher(
+        "AES-CBC",
+        client ? sp.keys.server_write_key : sp.keys.client_write_key,
+      ),
+      iv: client ? sp.keys.server_write_IV : sp.keys.client_write_IV,
+    };
+    state.write.cipherState = {
+      init: false,
+      cipher: forge.cipher.createCipher(
+        "AES-CBC",
+        client ? sp.keys.client_write_key : sp.keys.server_write_key,
+      ),
+      iv: client ? sp.keys.client_write_IV : sp.keys.server_write_IV,
+    };
+    state.read.cipherFunction = decrypt_aes_cbc_sha1;
+    state.write.cipherFunction = encrypt_aes_cbc_sha1;
+    state.read.macLength = state.write.macLength = sp.mac_length;
+    state.read.macFunction = state.write.macFunction = tls.hmac_sha1;
   }
-  function b6(e, n) {
-    var r = !1,
-      macFunction = n.macFunction(n.macKey, n.sequenceNumber, e);
-    (e.fragment.putBytes(macFunction), n.updateSequenceNumber());
-    var h;
-    if (e.version.minor === Di.Versions.TLS_1_0.minor) h = n.cipherState.init ? null : n.cipherState.iv;
-    else h = sl.random.getBytesSync(16);
-    n.cipherState.init = !0;
-    var cipher = n.cipherState.cipher;
-    if ((cipher.start({ iv: h }), e.version.minor >= Di.Versions.TLS_1_1.minor)) cipher.output.putBytes(h);
-    if ((cipher.update(e.fragment), cipher.finish(S6)))
-      ((e.fragment = cipher.output), (e.length = e.fragment.length()), (r = !0));
-    return r;
-  }
-  function S6(e, n, r) {
-    if (!r) {
-      var s = e - (n.length() % e);
-      n.fillWithByte(s - 1, s);
+  function encrypt_aes_cbc_sha1(record, s_2) {
+    var rval = false;
+    var mac = s_2.macFunction(s_2.macKey, s_2.sequenceNumber, record);
+    record.fragment.putBytes(mac);
+    s_2.updateSequenceNumber();
+    var iv;
+    if (record.version.minor === tls.Versions.TLS_1_0.minor)
+      iv = s_2.cipherState.init ? null : s_2.cipherState.iv;
+    else iv = forge.random.getBytesSync(16);
+    s_2.cipherState.init = true;
+    var cipher = s_2.cipherState.cipher;
+    cipher.start({
+      iv,
+    });
+    if (record.version.minor >= tls.Versions.TLS_1_1.minor) cipher.output.putBytes(iv);
+    cipher.update(record.fragment);
+    if (cipher.finish(encrypt_aes_cbc_sha1_padding)) {
+      record.fragment = cipher.output;
+      record.length = record.fragment.length();
+      rval = true;
     }
-    return !0;
+    return rval;
   }
-  function E6(e, n, r) {
-    var s = !0;
-    if (r) {
-      var h = n.length(),
-        last = n.last();
-      for (var b = h - 1 - last; b < h - 1; ++b) s = s && n.at(b) == last;
-      if (s) n.truncate(last + 1);
+  function encrypt_aes_cbc_sha1_padding(blockSize, input, decrypt) {
+    if (!decrypt) {
+      var padding = blockSize - (input.length() % blockSize);
+      input.fillWithByte(padding - 1, padding);
     }
-    return s;
+    return true;
   }
-  function x6(e, n) {
-    var r = !1,
-      s;
-    if (e.version.minor === Di.Versions.TLS_1_0.minor) s = n.cipherState.init ? null : n.cipherState.iv;
-    else s = e.fragment.getBytes(16);
-    n.cipherState.init = !0;
-    var cipher = n.cipherState.cipher;
-    (cipher.start({ iv: s }), cipher.update(e.fragment), (r = cipher.finish(E6)));
-    var macLength = n.macLength,
-      bytesSync = sl.random.getBytesSync(macLength),
-      S = cipher.output.length();
-    if (S >= macLength)
-      ((e.fragment = cipher.output.getBytes(S - macLength)), (bytesSync = cipher.output.getBytes(macLength)));
-    else e.fragment = cipher.output.getBytes();
-    ((e.fragment = sl.util.createBuffer(e.fragment)), (e.length = e.fragment.length()));
-    var macFunction = n.macFunction(n.macKey, n.sequenceNumber, e);
-    return (n.updateSequenceNumber(), (r = _6(n.macKey, bytesSync, macFunction) && r), r);
+  function decrypt_aes_cbc_sha1_padding(blockSize, output, decrypt) {
+    var rval = true;
+    if (decrypt) {
+      var len = output.length();
+      var paddingLength = output.last();
+      for (var i = len - 1 - paddingLength; i < len - 1; ++i) rval = rval && output.at(i) == paddingLength;
+      if (rval) output.truncate(paddingLength + 1);
+    }
+    return rval;
   }
-  function _6(e, n, r) {
-    var create = sl.hmac.create();
-    return (
-      create.start("SHA1", e),
-      create.update(n),
-      (n = create.digest().getBytes()),
-      create.start(null, null),
-      create.update(r),
-      (r = create.digest().getBytes()),
-      n === r
-    );
+  function decrypt_aes_cbc_sha1(record, s_2) {
+    var rval = false;
+    var iv;
+    if (record.version.minor === tls.Versions.TLS_1_0.minor)
+      iv = s_2.cipherState.init ? null : s_2.cipherState.iv;
+    else iv = record.fragment.getBytes(16);
+    s_2.cipherState.init = true;
+    var cipher = s_2.cipherState.cipher;
+    cipher.start({
+      iv,
+    });
+    cipher.update(record.fragment);
+    rval = cipher.finish(decrypt_aes_cbc_sha1_padding);
+    var macLen = s_2.macLength;
+    var mac = forge.random.getBytesSync(macLen);
+    var len = cipher.output.length();
+    if (len >= macLen) {
+      record.fragment = cipher.output.getBytes(len - macLen);
+      mac = cipher.output.getBytes(macLen);
+    } else record.fragment = cipher.output.getBytes();
+    record.fragment = forge.util.createBuffer(record.fragment);
+    record.length = record.fragment.length();
+    var mac2 = s_2.macFunction(s_2.macKey, s_2.sequenceNumber, record);
+    s_2.updateSequenceNumber();
+    rval = compareMacs(s_2.macKey, mac, mac2) && rval;
+    return rval;
+  }
+  function compareMacs(key, mac1, mac2) {
+    var hmac = forge.hmac.create();
+    hmac.start("SHA1", key);
+    hmac.update(mac1);
+    mac1 = hmac.digest().getBytes();
+    hmac.start(null, null);
+    hmac.update(mac2);
+    mac2 = hmac.digest().getBytes();
+    return mac1 === mac2;
   }
 });
-
-export { $A };
+export { require_aesCipherSuites };

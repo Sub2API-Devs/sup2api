@@ -16,62 +16,71 @@ import { logFeatureOk, logFeatureSad, logFeatureBad } from "../analytics/feature
 import { logError } from "../../utils/log.js";
 
 //@ chunk-qmsrnapp.js:55415-55451 placement
-var AWAY_RECHECK_DELAYS_MS = [30000, 120000, 300000],
-  Un = 0.2;
+/**
+ * 机器离开后重新检查的延迟序列与抖动比例。
+ */
+var AWAY_RECHECK_DELAYS_MS = [30000, 120000, 300000];
+var AWAY_RECHECK_JITTER_RATIO = 0.2;
 //@ chunk-qmsrnapp.js:55451-57051 placement
 class AwayRecheck {
-  #e = void 0;
+  #e = undefined;
   #t = new Map();
   #n = new AbortController();
   #o = [];
   start(e) {
-    if (this.#e !== void 0) return;
-    ((this.#e = e),
-      (this.#n = new AbortController()),
-      (this.#o = [
-        e.registry.onModelToldAway((n) => {
-          this.#s(e, n);
-        }),
-        e.registry.onHostStatusChange((n) => {
-          switch (n.change) {
-            case "back":
-              this.#r(n.name);
-              return;
-            case "away":
-              if (n.toldModel) this.#s(e, n.name);
-          }
-        }),
-        e.registry.onAwayEpisodeDropped((n) => {
-          this.#r(n);
-        }),
-      ]));
+    if (this.#e !== undefined) return;
+    this.#e = e;
+    this.#n = new AbortController();
+    this.#o = [
+      e.registry.onModelToldAway((n) => {
+        this.#s(e, n);
+      }),
+      e.registry.onHostStatusChange((n) => {
+        switch (n.change) {
+          case "back":
+            this.#r(n.name);
+            return;
+          case "away":
+            if (n.toldModel) this.#s(e, n.name);
+        }
+      }),
+      e.registry.onAwayEpisodeDropped((n) => {
+        this.#r(n);
+      }),
+    ];
   }
   checking(e) {
-    return this.#t.has(e) || (this.#e?.registry.awayEpisode(e)?.toldModel === !1 && this.#e.isEnabled());
+    return this.#t.has(e) || (this.#e?.registry.awayEpisode(e)?.toldModel === false && this.#e.isEnabled());
   }
   dispose() {
     for (let e of this.#o) e();
-    for (let e of [...this.#t.keys()]) this.#r(e);
-    (this.#n.abort(), (this.#o = []), (this.#e = void 0));
+    for (let key of [...this.#t.keys()]) this.#r(key);
+    this.#n.abort();
+    this.#o = [];
+    this.#e = undefined;
   }
   #r(e) {
-    (this.#t.get(e)?.cancelTimer(), this.#t.delete(e));
+    this.#t.get(e)?.cancelTimer();
+    this.#t.delete(e);
   }
   #s(e, n) {
-    let awayEpisode = e.registry.awayEpisode(n);
-    if (awayEpisode === void 0 || !e.isEnabled() || this.#t.has(n)) return;
+    let o = e.registry.awayEpisode(n);
+    if (o === undefined || !e.isEnabled() || this.#t.has(n)) return;
     let mapped = AWAY_RECHECK_DELAYS_MS.map(
-        (u) =>
-          awayEpisode.awaySince +
-          backoffDelayMs({
-            attempt: 1,
-            baseMs: u,
-            jitter: { kind: "symmetric", ratio: Un },
-            random: e.random,
-          }),
-      ),
-      now = e.registry.now(),
-      i = count(mapped, (u) => u <= now);
+      (baseMs) =>
+        o.awaySince +
+        backoffDelayMs({
+          attempt: 1,
+          baseMs,
+          jitter: {
+            kind: "symmetric",
+            ratio: AWAY_RECHECK_JITTER_RATIO,
+          },
+          random: e.random,
+        }),
+    );
+    let s = e.registry.now();
+    let i = count(mapped, (u) => u <= s);
     this.#i(e, n, mapped, Math.max(0, i - 1));
   }
   #i(e, n, o, r) {
@@ -96,22 +105,24 @@ class AwayRecheck {
       let s = await e.registry
         .entries()
         .find((h) => h.name === n)
-        ?.transport.probeLive?.({ signal: this.#n.signal });
-      if (s === !0) logFeatureOk("rtc_away_recheck");
+        ?.transport.probeLive?.({
+          signal: this.#n.signal,
+        });
+      if (s === true) logFeatureOk("rtc_away_recheck");
       if (this.#t.get(n) !== o) return;
-      let now = e.registry.now(),
-        index = o.dueAts.findIndex((dueAt, p) => p > r && dueAt > now);
-      if (s === !0 || index === -1) {
-        if ((this.#t.delete(n), s !== !0))
-          logFeatureSad("rtc_away_recheck", s === !1 ? "exhausted" : "inconclusive");
+      let i = e.registry.now();
+      let index = o.dueAts.findIndex((dueAt, p) => p > r && dueAt > i);
+      if (s === true || index === -1) {
+        this.#t.delete(n);
+        if (s !== true) logFeatureSad("rtc_away_recheck", s === false ? "exhausted" : "inconclusive");
         return;
       }
       this.#i(e, n, o.dueAts, index);
     } catch (error) {
-      if ((logError(error), logFeatureBad("rtc_away_recheck", "probe_threw"), this.#t.get(n) === o))
-        this.#t.delete(n);
+      logError(error);
+      logFeatureBad("rtc_away_recheck", "probe_threw");
+      if (this.#t.get(n) === o) this.#t.delete(n);
     }
   }
 }
-
 export { AwayRecheck };

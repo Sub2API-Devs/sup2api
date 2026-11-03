@@ -20,9 +20,9 @@ import {
 var rootedPathOf = (e) => `/${e.replace(/^\/+/, "")}`;
 //@ chunk-wyqg6m3h.js:26891-27044 placement
 function isGeneratedFile(e) {
-  let lower = baseNameOf(e).toLowerCase(),
-    r = rootedPathOf(e),
-    any = GENERATED_SUFFIXES.some((n) => lower.endsWith(n));
+  let lower = baseNameOf(e).toLowerCase();
+  let r = rootedPathOf(e);
+  let any = GENERATED_SUFFIXES.some((n) => lower.endsWith(n));
   return (
     GENERATED_FILENAMES.has(lower) ||
     any ||
@@ -53,18 +53,18 @@ var TEST_FILENAME_PATTERNS = Object.freeze([
 ]);
 //@ chunk-wyqg6m3h.js:27289-27384 placement
 function isTestFile(e) {
-  let o = baseNameOf(e),
-    r = rootedPathOf(e);
+  let o = baseNameOf(e);
+  let r = rootedPathOf(e);
   return TEST_DIRECTORIES.some((s) => r.includes(s)) || TEST_FILENAME_PATTERNS.some((s) => s.test(o));
 }
 //@ chunk-wyqg6m3h.js:27384-27409 placement
-var isNoiseFile = (e) => isTestFile(e) || isGeneratedFile(e);
+var isNoiseFile = (path) => isTestFile(path) || isGeneratedFile(path);
 //@ chunk-wyqg6m3h.js:27409-27468 placement
 var COMMAND_DESCRIPTION = "Toggle the diff panel showing uncommitted changes";
 //@ chunk-wyqg6m3h.js:27468-27482 placement
 var COMMAND_NAME = "diff";
 //@ chunk-wyqg6m3h.js:27482-27506 placement
-var baseStoreKeyOf = (e) => `base:${e}`;
+var baseStoreKeyOf = (toplevel) => `base:${toplevel}`;
 //@ chunk-wyqg6m3h.js:27506-27520 placement
 var STORE_OPEN_KEY = "open";
 //@ chunk-wyqg6m3h.js:27520-27534 placement
@@ -100,7 +100,10 @@ var RESIZE_TERMINAL_TEXT = "Resize your terminal to at least 110 columns to show
 var untrackedWithheldTextOf = (e) =>
   `Untracked files unavailable (${e.words.lister} could not list them); not counted`;
 //@ chunk-wyqg6m3h.js:28287-28319 placement
-var COMMAND_SPEC = { name: COMMAND_NAME, description: COMMAND_DESCRIPTION };
+var COMMAND_SPEC = {
+  name: COMMAND_NAME,
+  description: COMMAND_DESCRIPTION,
+};
 //@ chunk-wyqg6m3h.js:28319-28379 placement
 var isRecord = (e) => typeof e === "object" && e !== null && !Array.isArray(e);
 //@ chunk-wyqg6m3h.js:28379-28418 placement = CODE_EDITING_TOOLS (1)
@@ -108,16 +111,15 @@ var CODE_EDITING_TOOLS = ["Edit", "Write", "NotebookEdit"];
 //@ chunk-wyqg6m3h.js:28418-28495 placement
 function mayHaveWritten(e) {
   let o = e;
-  return o === void 0 || (o.deny === void 0 && o.isReadOnly !== !0);
+  return o === undefined || (o.deny === undefined && o.isReadOnly !== true);
 }
 //@ chunk-wyqg6m3h.js:28495-28524 placement
 var SHELL_TOOLS = ["Bash", "PowerShell"];
+//@ chunk-wyqg6m3h.js:28524-28543 placement = TODO_WRITE_TOOL_NAME (1)
 /**
  * "TodoWrite"（另一块中的副本）。
  */
-//@ chunk-wyqg6m3h.js:28524-28543 placement = TODO_WRITE_TOOL_NAME (1)
 var TODO_TOOL = "TodoWrite";
-
 export {
   TODO_TOOL,
   isRecord,

@@ -7,10 +7,9 @@
  */
 
 //@ chunk-3wydcdvj.js:4532-4720 esm-fingerprint
-var cS = (e) => {
-  if (typeof globalThis.process < "u") return globalThis.process.env?.[e]?.trim() || void 0;
-  if (typeof globalThis.Deno < "u") return globalThis.Deno.env?.get?.(e)?.trim() || void 0;
+var readEnv = (env) => {
+  if (typeof globalThis.process !== "undefined") return globalThis.process.env?.[env]?.trim() || undefined;
+  if (typeof globalThis.Deno !== "undefined") return globalThis.Deno.env?.get?.(env)?.trim() || undefined;
   return;
 };
-
-export { cS };
+export { readEnv };

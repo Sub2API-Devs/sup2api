@@ -8,11 +8,10 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-wr8v03d0.js:269-440 cjs-fingerprint
-var s_s = x(function (N) {
-  var G = (e) =>
-    (typeof ArrayBuffer === "function" && e instanceof ArrayBuffer) ||
-    Object.prototype.toString.call(e) === "[object ArrayBuffer]";
-  N.isArrayBuffer = G;
+var require_is_array_buffer = x(function (cjsExports) {
+  var isArrayBuffer = (arg) =>
+    (typeof ArrayBuffer === "function" && arg instanceof ArrayBuffer) ||
+    Object.prototype.toString.call(arg) === "[object ArrayBuffer]";
+  cjsExports.isArrayBuffer = isArrayBuffer;
 });
-
-export { s_s };
+export { require_is_array_buffer };

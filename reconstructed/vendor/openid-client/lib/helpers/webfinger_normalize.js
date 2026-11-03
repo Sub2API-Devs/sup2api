@@ -8,33 +8,32 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-1ny7cxrt.js:68948-69495 cjs-fingerprint
-var ik = x(function (Qve, rk) {
-  var gB = /^\d+$/;
-  function yB(e) {
-    if (e.includes("://")) return !0;
-    let t = e.replace(/(\/|\?)/g, "#").split("#")[0];
-    if (t.includes(":")) {
-      let index = t.indexOf(":"),
-        sliced = t.slice(index + 1);
-      if (!gB.test(sliced)) return !0;
+var require_webfinger_normalize = x(function (cjsExports, cjsModule) {
+  var PORT = /^\d+$/;
+  function hasScheme(input) {
+    if (input.includes("://")) return true;
+    let authority = input.replace(/(\/|\?)/g, "#").split("#")[0];
+    if (authority.includes(":")) {
+      let index = authority.indexOf(":");
+      let hostOrPort = authority.slice(index + 1);
+      if (!PORT.test(hostOrPort)) return true;
     }
-    return !1;
+    return false;
   }
-  function _B(e) {
-    if (!e.includes("@")) return !1;
-    let parts = e.split("@"),
-      n = parts[parts.length - 1];
-    return !(n.includes(":") || n.includes("/") || n.includes("?"));
+  function acctSchemeAssumed(input) {
+    if (!input.includes("@")) return false;
+    let parts = input.split("@");
+    let host = parts[parts.length - 1];
+    return !(host.includes(":") || host.includes("/") || host.includes("?"));
   }
-  function bB(e) {
-    if (typeof e !== "string") throw TypeError("input must be a string");
-    let t;
-    if (yB(e)) t = e;
-    else if (_B(e)) t = `acct:${e}`;
-    else t = `https://${e}`;
-    return t.split("#")[0];
+  function normalize(input) {
+    if (typeof input !== "string") throw TypeError("input must be a string");
+    let output;
+    if (hasScheme(input)) output = input;
+    else if (acctSchemeAssumed(input)) output = `acct:${input}`;
+    else output = `https://${input}`;
+    return output.split("#")[0];
   }
-  rk.exports = bB;
+  cjsModule.exports = normalize;
 });
-
-export { ik };
+export { require_webfinger_normalize };

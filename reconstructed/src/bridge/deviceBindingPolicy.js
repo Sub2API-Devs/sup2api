@@ -13,16 +13,18 @@ import { getAPIProvider } from "../utils/model/providers.js";
 import { isPolicyAllowed } from "../services/policyLimits/policyEvidence.js";
 
 //@ chunk-es7kd72c.js:299-336 placement
-function hCe() {
-  return getDeviceBindingRefusal() === void 0;
+/**
+ * 设备绑定是否允许：getDeviceBindingRefusal() 为 undefined 即为允许（仅必要流量/非第一方为 egress，组织策略为 policy_org）。
+ */
+function isDeviceBindingAllowed() {
+  return getDeviceBindingRefusal() === undefined;
 }
+//@ chunk-es7kd72c.js:336-450 placement
 /**
  * 设备绑定被拒原因：仅必要流量模式或非第一方 API 时返回 "egress"；组织策略不允许 allow_remote_sessions 时返回 "policy_org"；否则 undefined（允许）。
  */
-//@ chunk-es7kd72c.js:336-450 placement
 function getDeviceBindingRefusal() {
   if (isEssentialTrafficOnly() || getAPIProvider() !== "firstParty") return "egress";
-  return isPolicyAllowed("allow_remote_sessions") ? void 0 : "policy_org";
+  return isPolicyAllowed("allow_remote_sessions") ? undefined : "policy_org";
 }
-
-export { getDeviceBindingRefusal, hCe };
+export { getDeviceBindingRefusal, isDeviceBindingAllowed };

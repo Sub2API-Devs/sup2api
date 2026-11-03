@@ -9,12 +9,16 @@
  * attribution: fingerprint 2, callgraph-witnessed 1
  */
 import { w } from "../../vendor/react/compiler-runtime.js";
-import { Me } from "./design-system/ThemeProvider.js";
+import { useTheme_2 } from "./design-system/ThemeProvider.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 import { MessageActionsKeybindings } from "./messageActions.js";
 import { getTerminalIdeType, isJetBrainsIde, toIDEDisplayName } from "../utils/ide.js";
 import { env } from "../utils/env.js";
-import { e, r, Fragment } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+  Fragment,
+} from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Box } from "../ink/components/Text.js";
 import { BulletRow } from "./design-system/BulletRow.js";
 import { DiffStatCounts } from "./PrBadge.js";
@@ -25,143 +29,205 @@ import { saveGlobalConfig, getGlobalConfig } from "../utils/config.js";
 import { logFeatureOk } from "../services/analytics/featureTelemetry.js";
 
 //@ chunk-18hwfzwa.js:1192350-1194346 fingerprint = IdeOnboardingDialog (0.623)
-function IdeOnboardingDialog(t0) {
-  let $ = w(22),
-    { onDone: onDone, installationStatus: installationStatus } = t0,
-    { storageV5: storageV5 } = Me();
+function IdeOnboardingDialog(props) {
+  let $ = w(22);
+  let { onDone, installationStatus } = props;
+  let { storageV5 } = useTheme_2();
   markDialogAsShown(storageV5);
-  let ke;
-  if ($[0] !== onDone) ((ke = { "confirm:yes": onDone, "confirm:no": onDone }), ($[0] = onDone), ($[1] = ke));
-  else ke = $[1];
-  let Re;
-  if ($[2] === MEMO_CACHE_SENTINEL) ((Re = { context: "Confirmation" }), ($[2] = Re));
-  else Re = $[2];
-  MessageActionsKeybindings(ke, Re);
-  let Be;
-  if ($[3] !== installationStatus?.ideType)
-    ((Be = installationStatus?.ideType ?? getTerminalIdeType()),
-      ($[3] = installationStatus?.ideType),
-      ($[4] = Be));
-  else Be = $[4];
-  let He = Be,
-    isJetBrains = isJetBrainsIde(He),
-    ze;
-  if ($[5] !== He) ((ze = toIDEDisplayName(He)), ($[5] = He), ($[6] = ze));
-  else ze = $[6];
-  let Xe = ze,
-    installedVersion = installationStatus?.installedVersion,
-    kt = isJetBrains ? "plugin" : "extension",
-    At = env.platform === "darwin" ? "Cmd+Option+K" : "Ctrl+Alt+K",
-    It;
-  if ($[7] === MEMO_CACHE_SENTINEL) ((It = e(Text, { color: "claude", children: "\u273B " })), ($[7] = It));
-  else It = $[7];
-  let Ot;
-  if ($[8] !== Xe)
-    ((Ot = r(Fragment, { children: [It, r(Text, { children: ["Welcome to Claude Code for ", Xe] })] })),
-      ($[8] = Xe),
-      ($[9] = Ot));
-  else Ot = $[9];
-  const Et = installedVersion ? `installed ${kt} v${installedVersion}` : void 0;
-  let Dt;
-  if ($[10] === MEMO_CACHE_SENTINEL)
-    ((Dt = e(Text, { color: "suggestion", children: "\u29C9 open files" })), ($[10] = Dt));
-  else Dt = $[10];
-  let Lt;
-  if ($[11] === MEMO_CACHE_SENTINEL)
-    ((Lt = r(BulletRow, {
+  let t1;
+  if ($[0] !== onDone) {
+    t1 = {
+      "confirm:yes": onDone,
+      "confirm:no": onDone,
+    };
+    $[0] = onDone;
+    $[1] = t1;
+  } else t1 = $[1];
+  let t2;
+  if ($[2] === MEMO_CACHE_SENTINEL) {
+    t2 = {
+      context: "Confirmation",
+    };
+    $[2] = t2;
+  } else t2 = $[2];
+  MessageActionsKeybindings(t1, t2);
+  let t3;
+  if ($[3] !== installationStatus?.ideType) {
+    t3 = installationStatus?.ideType ?? getTerminalIdeType();
+    $[3] = installationStatus?.ideType;
+    $[4] = t3;
+  } else t3 = $[4];
+  let ideType = t3;
+  let isJetBrains = isJetBrainsIde(ideType);
+  let t4;
+  if ($[5] !== ideType) {
+    t4 = toIDEDisplayName(ideType);
+    $[5] = ideType;
+    $[6] = t4;
+  } else t4 = $[6];
+  let ideName = t4;
+  let installedVersion = installationStatus?.installedVersion;
+  let pluginOrExtension = isJetBrains ? "plugin" : "extension";
+  let mentionShortcut = env.platform === "darwin" ? "Cmd+Option+K" : "Ctrl+Alt+K";
+  let t5;
+  if ($[7] === MEMO_CACHE_SENTINEL) {
+    t5 = jsxProd_default(Text, {
+      color: "claude",
+      children: "\u273B ",
+    });
+    $[7] = t5;
+  } else t5 = $[7];
+  let title;
+  if ($[8] !== ideName) {
+    title = jsxProd_default_2(Fragment, {
+      children: [
+        t5,
+        jsxProd_default_2(Text, {
+          children: ["Welcome to Claude Code for ", ideName],
+        }),
+      ],
+    });
+    $[8] = ideName;
+    $[9] = title;
+  } else title = $[9];
+  const subtitle = installedVersion ? `installed ${pluginOrExtension} v${installedVersion}` : undefined;
+  let t8;
+  if ($[10] === MEMO_CACHE_SENTINEL) {
+    t8 = jsxProd_default(Text, {
+      color: "suggestion",
+      children: "\u29C9 open files",
+    });
+    $[10] = t8;
+  } else t8 = $[10];
+  let t9;
+  if ($[11] === MEMO_CACHE_SENTINEL) {
+    t9 = jsxProd_default_2(BulletRow, {
       children: [
         "Claude has context of ",
-        Dt,
+        t8,
         " ",
         "and ",
-        e(Text, { color: "suggestion", children: "\u29C9 selected lines" }),
+        jsxProd_default(Text, {
+          color: "suggestion",
+          children: "\u29C9 selected lines",
+        }),
       ],
-    })),
-      ($[11] = Lt));
-  else Lt = $[11];
+    });
+    $[11] = t9;
+  } else t9 = $[11];
   let oo;
-  if ($[12] === MEMO_CACHE_SENTINEL)
-    ((oo = r(BulletRow, {
+  if ($[12] === MEMO_CACHE_SENTINEL) {
+    oo = jsxProd_default_2(BulletRow, {
       children: [
         "Review Claude Code's changes",
         " ",
-        e(DiffStatCounts, { added: 11, removed: 22 }),
+        jsxProd_default(DiffStatCounts, {
+          added: 11,
+          removed: 22,
+        }),
         " in the comfort of your IDE",
       ],
-    })),
-      ($[12] = oo));
-  else oo = $[12];
-  let Xt;
-  if ($[13] === MEMO_CACHE_SENTINEL)
-    ((Xt = r(BulletRow, { children: ["Cmd+Esc", e(Text, { dimColor: !0, children: " for Quick Launch" })] })),
-      ($[13] = Xt));
-  else Xt = $[13];
-  let io;
-  if ($[14] === MEMO_CACHE_SENTINEL)
-    ((io = r(Box, {
+    });
+    $[12] = oo;
+  } else oo = $[12];
+  let t12;
+  if ($[13] === MEMO_CACHE_SENTINEL) {
+    t12 = jsxProd_default_2(BulletRow, {
+      children: [
+        "Cmd+Esc",
+        jsxProd_default(Text, {
+          dimColor: true,
+          children: " for Quick Launch",
+        }),
+      ],
+    });
+    $[13] = t12;
+  } else t12 = $[13];
+  let children;
+  if ($[14] === MEMO_CACHE_SENTINEL) {
+    children = jsxProd_default_2(Box, {
       flexDirection: "column",
       gap: 1,
       children: [
-        Lt,
+        t9,
         oo,
-        Xt,
-        r(BulletRow, {
-          children: [At, e(Text, { dimColor: !0, children: " to reference files or lines in your input" })],
+        t12,
+        jsxProd_default_2(BulletRow, {
+          children: [
+            mentionShortcut,
+            jsxProd_default(Text, {
+              dimColor: true,
+              children: " to reference files or lines in your input",
+            }),
+          ],
         }),
       ],
-    })),
-      ($[14] = io));
-  else io = $[14];
-  let so;
-  if ($[15] !== onDone || $[16] !== Ot || $[17] !== Et)
-    ((so = e(Dialog, {
-      title: Ot,
-      subtitle: Et,
+    });
+    $[14] = children;
+  } else children = $[14];
+  let t14;
+  if ($[15] !== onDone || $[16] !== title || $[17] !== subtitle) {
+    t14 = jsxProd_default(Dialog, {
+      title,
+      subtitle,
       color: "ide",
       onCancel: onDone,
-      hideInputGuide: !0,
-      children: io,
-    })),
-      ($[15] = onDone),
-      ($[16] = Ot),
-      ($[17] = Et),
-      ($[18] = so));
-  else so = $[18];
-  let po;
-  if ($[19] === MEMO_CACHE_SENTINEL)
-    ((po = e(Box, {
+      hideInputGuide: true,
+      children,
+    });
+    $[15] = onDone;
+    $[16] = title;
+    $[17] = subtitle;
+    $[18] = t14;
+  } else t14 = $[18];
+  let t15;
+  if ($[19] === MEMO_CACHE_SENTINEL) {
+    t15 = jsxProd_default(Box, {
       paddingX: 1,
-      children: r(Text, {
-        dimColor: !0,
-        italic: !0,
-        children: ["Press ", e(KeyboardShortcutHint, { chord: "enter", action: "continue" })],
+      children: jsxProd_default_2(Text, {
+        dimColor: true,
+        italic: true,
+        children: [
+          "Press ",
+          jsxProd_default(KeyboardShortcutHint, {
+            chord: "enter",
+            action: "continue",
+          }),
+        ],
       }),
-    })),
-      ($[19] = po));
-  else po = $[19];
-  let ao;
-  if ($[20] !== so) ((ao = r(Fragment, { children: [so, po] })), ($[20] = so), ($[21] = ao));
-  else ao = $[21];
-  return ao;
+    });
+    $[19] = t15;
+  } else t15 = $[19];
+  let t16;
+  if ($[20] !== t14) {
+    t16 = jsxProd_default_2(Fragment, {
+      children: [t14, t15],
+    });
+    $[20] = t14;
+    $[21] = t16;
+  } else t16 = $[21];
+  return t16;
 }
 //@ chunk-18hwfzwa.js:1194346-1194526 callgraph-witnessed = markDialogAsShown (0.626)
-function markDialogAsShown(h) {
+function markDialogAsShown(storageV5) {
   if (hasIdeOnboardingDialogBeenShown()) return;
   let terminal = envDynamicProbe.terminal || "unknown";
-  (saveGlobalConfig(
+  saveGlobalConfig(
     (current) => ({
       ...current,
-      hasIdeOnboardingBeenShown: { ...current.hasIdeOnboardingBeenShown, [terminal]: !0 },
+      hasIdeOnboardingBeenShown: {
+        ...current.hasIdeOnboardingBeenShown,
+        [terminal]: true,
+      },
     }),
-    h,
-  ),
-    logFeatureOk("onboarding_ide_dialog_shown"));
+    storageV5,
+  );
+  logFeatureOk("onboarding_ide_dialog_shown");
 }
 //@ chunk-e6aww6q8.js:3248805-3248901 fingerprint = hasIdeOnboardingDialogBeenShown (1)
 function hasIdeOnboardingDialogBeenShown() {
-  let config = getGlobalConfig(),
-    terminal = envDynamicProbe.terminal || "unknown";
-  return config.hasIdeOnboardingBeenShown?.[terminal] === !0;
+  let config = getGlobalConfig();
+  let terminal = envDynamicProbe.terminal || "unknown";
+  return config.hasIdeOnboardingBeenShown?.[terminal] === true;
 }
-
 export { IdeOnboardingDialog, hasIdeOnboardingDialogBeenShown };

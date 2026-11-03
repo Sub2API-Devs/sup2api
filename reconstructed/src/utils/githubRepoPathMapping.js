@@ -13,81 +13,94 @@ import { detectCurrentRepository, parseGitHubRepository } from "./detectReposito
 import { logForDebugging } from "./debug.js";
 import { getOriginalCwd } from "../bootstrap/state.js";
 import { findGitRoot } from "./git.js";
-import { Mn } from "./pathClassification.js";
+import { identity } from "./pathClassification.js";
 import { getGlobalConfig, saveGlobalConfig } from "./config.js";
 import { pathExists } from "./fsSafety/atomicWriteStaging.js";
 import { getRemoteUrlForDir } from "./git/gitFilesystem.js";
 
 //@ chunk-md1x7k3r.js:493-997 fingerprint = updateGithubRepoPathMapping (0.935)
-async function updateGithubRepoPathMapping(r) {
+async function updateGithubRepoPathMapping(storageV5) {
   try {
     let repo = await detectCurrentRepository();
     if (!repo) {
       logForDebugging("Not in a GitHub repository, skipping path mapping update");
       return;
     }
-    let cwd = getOriginalCwd(),
-      s = findGitRoot(cwd) ?? cwd,
-      currentPath;
+    let cwd = getOriginalCwd();
+    let s = findGitRoot(cwd) ?? cwd;
+    let currentPath;
     try {
-      currentPath = Mn(await realpath(s));
+      currentPath = identity(await realpath(s));
     } catch {
       currentPath = s;
     }
-    let repoKey = repo.toLowerCase(),
-      p = getGlobalConfig().githubRepoPaths?.[repoKey] ?? [];
+    let repoKey = repo.toLowerCase();
+    let p = getGlobalConfig().githubRepoPaths?.[repoKey] ?? [];
     if (p[0] === currentPath) {
       logForDebugging(`Path ${currentPath} already tracked for repo ${repoKey}`);
       return;
     }
-    let withoutCurrent = p.filter((c) => c !== currentPath),
-      updatedPaths = [currentPath, ...withoutCurrent];
-    (await saveGlobalConfig(
-      (current) => ({ ...current, githubRepoPaths: { ...current.githubRepoPaths, [repoKey]: updatedPaths } }),
-      r,
-    ),
-      logForDebugging(`Added ${currentPath} to tracked paths for repo ${repoKey}`));
+    let withoutCurrent = p.filter((c) => c !== currentPath);
+    let updatedPaths = [currentPath, ...withoutCurrent];
+    await saveGlobalConfig(
+      (current) => ({
+        ...current,
+        githubRepoPaths: {
+          ...current.githubRepoPaths,
+          [repoKey]: updatedPaths,
+        },
+      }),
+      storageV5,
+    );
+    logForDebugging(`Added ${currentPath} to tracked paths for repo ${repoKey}`);
   } catch (error) {
     logForDebugging(`Error updating repo path mapping: ${error}`);
   }
 }
 //@ chunk-md1x7k3r.js:997-1076 fingerprint = getKnownPathsForRepo (1)
 function getKnownPathsForRepo(repo) {
-  let config = getGlobalConfig(),
-    repoKey = repo.toLowerCase();
+  let config = getGlobalConfig();
+  let repoKey = repo.toLowerCase();
   return config.githubRepoPaths?.[repoKey] ?? [];
 }
 //@ chunk-md1x7k3r.js:1076-1162 file-local
 async function filterExistingPaths(paths) {
   let results = await Promise.all(paths.map(pathExists));
-  return paths.filter((e, n) => results[n]);
+  return paths.filter((path, i) => results[i]);
 }
 //@ chunk-md1x7k3r.js:1162-1309 file-local
 async function validateRepoAtPath(path, expectedRepo) {
   try {
     let remoteUrl = await getRemoteUrlForDir(path);
-    if (!remoteUrl) return !1;
+    if (!remoteUrl) return false;
     let actualRepo = parseGitHubRepository(remoteUrl);
-    if (!actualRepo) return !1;
+    if (!actualRepo) return false;
     return actualRepo.toLowerCase() === expectedRepo.toLowerCase();
   } catch {
-    return !1;
+    return false;
   }
 }
 //@ chunk-md1x7k3r.js:1309-1598 fingerprint = removePathFromRepo (1)
-function removePathFromRepo(r, o, e) {
-  let config = getGlobalConfig(),
-    repoKey = r.toLowerCase(),
-    existingPaths = config.githubRepoPaths?.[repoKey] ?? [],
-    updatedPaths = existingPaths.filter((path) => path !== o);
+function removePathFromRepo(repo, pathToRemove, storageV5) {
+  let config = getGlobalConfig();
+  let repoKey = repo.toLowerCase();
+  let existingPaths = config.githubRepoPaths?.[repoKey] ?? [];
+  let updatedPaths = existingPaths.filter((path) => path !== pathToRemove);
   if (updatedPaths.length === existingPaths.length) return;
-  let updatedMapping = { ...config.githubRepoPaths };
+  let updatedMapping = {
+    ...config.githubRepoPaths,
+  };
   if (updatedPaths.length === 0) delete updatedMapping[repoKey];
   else updatedMapping[repoKey] = updatedPaths;
-  (saveGlobalConfig((current) => ({ ...current, githubRepoPaths: updatedMapping }), e),
-    logForDebugging(`Removed ${o} from tracked paths for repo ${repoKey}`));
+  saveGlobalConfig(
+    (current) => ({
+      ...current,
+      githubRepoPaths: updatedMapping,
+    }),
+    storageV5,
+  );
+  logForDebugging(`Removed ${pathToRemove} from tracked paths for repo ${repoKey}`);
 }
-
 export {
   getKnownPathsForRepo,
   filterExistingPaths,

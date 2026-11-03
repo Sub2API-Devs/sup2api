@@ -9,47 +9,52 @@
  * attribution: fingerprint 3, callgraph-witnessed 1, file-local 1, sole-consumer 6
  */
 import { randomUUID } from "crypto";
-import { ySr } from "../utils/remoteEnvironment.js";
+import { persistsTransport } from "../utils/remoteEnvironment.js";
 import { createSignal } from "../utils/signal.js";
 import { Stream } from "../utils/stream.js";
 import { env } from "../utils/env.js";
 import {
   parseIntEnv,
-  ge,
+  DEFAULT_MAX_LINE_CHARS,
   configProbeEnv,
-  M,
+  CONTROL_RESPONSE_TYPE,
   STDIN_LIMITS,
-  ke,
+  MAX_STDIN_CHARS_PER_LINE,
   inputTooLargeError,
   dialogSourceAttr,
   errorFieldText,
   isKnownControlSubtype,
-  W,
-  ce,
+  OAUTH_TOKEN_ENV_NAMES,
+  TOKEN_REFRESH_SUBTYPES,
   subtypeOf,
   truncatedErrorText,
   permissionResponseTelemetry,
-  F,
-  fe,
-  he,
-  _e,
-  me,
+  SDK_STALL_TIMEOUT_MS,
+  SDK_SCHEMA_SAMPLE_RATE,
+  MAX_SAMPLED_SDK_FRAME_CHARS,
+  SETTINGS_JSON_SCHEMA,
+  SDK_SCHEMA_CHECK_INTERVAL_MS,
   classifyStreamError,
   parseControlResponse,
-  z,
+  MAX_LIVE_DEVICE_REQUESTS,
   deliveryOutcome,
   normalizeDeliveryState,
-  pe,
+  MCP_MESSAGE_TIMEOUT_MS,
   CONTROL_TIMEOUTS,
-  le,
-  ue,
+  CONTROL_REQUEST_LONG_TIMEOUT_MS,
+  HOST_AUTH_REFRESH_TIMEOUT_MS,
   matchRequestId,
   knownSubtypeOrUndefined,
 } from "./structuredIOProtocol.js";
-import { Aa, withTimeout } from "../utils/sleep.js";
+import { systemClock, withTimeout } from "../utils/sleep.js";
 import { writeToStdout, drainStdoutBeforeExit } from "../utils/process.js";
 import { SessionStateTracker } from "../utils/sessionState.js";
-import { JZe, isUserInitiatedInboundEvent, RKs, QZe } from "./transports/streamEventCoalescing.js";
+import {
+  isPermissionPromptSubtype,
+  isUserInitiatedInboundEvent,
+  noteInteractiveInput,
+  isOwnerAccountOnlyWriters,
+} from "./transports/streamEventCoalescing.js";
 import {
   rememberResolvedPromptRequestId,
   rememberElicitationRequestId,
@@ -62,28 +67,32 @@ import { jsonStringify, jsonParse } from "../utils/slowOperations.js";
 import { yieldToEventLoop } from "../native-ts/file-index/index.js";
 import { logForDiagnosticsNoPII, flushDiagnosticLogs } from "../utils/diagLogs.js";
 import { isTerminalShutdown, heldUntilExit } from "../utils/terminalShutdown.js";
-import { oIr, PLs, createPermissionAsker } from "../services/pushNotifications/permissionPush.js";
+import {
+  isInterruptModeOn,
+  stripServerPolicyAskOnly,
+  createPermissionAsker,
+} from "../services/pushNotifications/permissionPush.js";
 import { ASKUSERQUESTION } from "../tools/AskUserQuestionTool/prompt.js";
 import { StreamClosedAbortError, errorMessage, AbortError, isAbortError } from "../utils/errors.js";
-import { oKo, WVr } from "./toolPermissionStream.js";
+import { TOOL_PERMISSION_STREAM_CLOSED_TEXT, STREAM_CLOSED_TEXT } from "./toolPermissionStream.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../services/analytics/growthbook.js";
 import { logEvent } from "../services/analytics/index.js";
 import { fromEnum, lit, fromEnumOpt } from "../services/analytics/safeMetadata.js";
 import { MCP_ELICITATION_DIALOG_TOOL, dialogPermissionRequest } from "../utils/teleport/sessionCreate.js";
-import { gn } from "../utils/shortHash.js";
-import { yW } from "../services/api/logging.js";
+import { shortHash } from "../utils/shortHash.js";
+import { entrypointForTelemetry } from "../services/api/logging.js";
 import { isValidBridgeToolName, humanizeToolName } from "../bridge/bridgePermissionResponse.js";
 import { getApprovalTicket } from "../bridge/bridgePermissionCallbacks.js";
 import { ENUM_PROMPT } from "../components/nudges/nudgeIds.js";
-import { Wo } from "../utils/json.js";
+import { stripBom } from "../utils/json.js";
 import { normalizeControlMessage } from "../utils/controlMessageCompat.js";
 import { ndjsonStringify } from "./ndjsonSafeStringify.js";
 import {
   isLauncherStartedProcess,
   holdPushedLauncherHostLogin,
   isLauncherStartupAsk,
-  RRi,
-  CRi,
+  clearLauncherLoginEnd,
+  recordLauncherLoginEnd,
 } from "../utils/auth/launcherHostLogin.js";
 import {
   clearOAuthTokenCache,
@@ -97,12 +106,19 @@ import { emitCredentialChange } from "../utils/auth/credentialEpoch.js";
 import { isHostDialogApproval } from "../components/permissions/hooks.js";
 import { stripLiveOnlyMarker } from "../bridge/controlRequests.js";
 import { getRiskColor } from "../bridge/mcpApprovalTickets.js";
-import { shouldRejectUiControl, Fce } from "./sdkMcpManifests.js";
-import { Vt } from "../utils/agentId.js";
+import { shouldRejectUiControl, canServeManifests } from "./sdkMcpManifests.js";
+import { normalizeUuidOrNull } from "../utils/agentId.js";
 import { logError } from "../utils/log.js";
-import { Phr, isAskWithdrawnByAsker } from "../utils/abortController.js";
-import { tlo } from "./handlers/util.js";
-import { jls, Mls, Uxn, Bxn, Dls, Lls } from "../entrypoints/sdk/controlSchemas.js";
+import { MONOTONIC_TIMER_RECHECK_MS, isAskWithdrawnByAsker } from "../utils/abortController.js";
+import { LAZY_COMPONENT_REGISTRY } from "./handlers/util.js";
+import {
+  StdoutMessageSchema,
+  ElicitationResponseSchema,
+  UserDialogResponseSchema,
+  OAuthTokenRefreshResponseSchema,
+  RemoteControlWorkSecretResponseSchema,
+  HostAuthTokenRefreshResponseSchema,
+} from "../entrypoints/sdk/controlSchemas.js";
 import { sanitizeJsonPath } from "../services/daemon/sessionCron.js";
 import { decisionReasonCode, HOOK_REWRITE_HEADLESS_DENY_REASON } from "../types/permissions.js";
 import { serializeDecisionReason } from "../utils/permissions/decisionReasons.js";
@@ -110,7 +126,7 @@ import { getSessionId, noteSdkHostHookAnswered } from "../bootstrap/state.js";
 import { MARKETPLACE_ONLY_MANIFEST_FIELDS } from "../utils/plugins/validatePlugin.js";
 import { hookJSONOutputSchema } from "../types/hooks.js";
 import { logFeatureOk, logFeatureSad } from "../services/analytics/featureTelemetry.js";
-import { oe, u, qne } from "../../vendor/zod/v4/classic/schemas.js";
+import { unknown, u, qne } from "../../vendor/zod/v4/classic/schemas.js";
 import {
   ServingInstanceGoneError,
   RequestNotDeliveredError,
@@ -118,7 +134,7 @@ import {
   RequestWithdrawnUnsentError,
 } from "../services/remoteTools/servingErrors.js";
 import { isPlainObject } from "../utils/isPlainObject.js";
-import { lci } from "../services/requestUserDialog.js";
+import { clampDialogTimeoutMs } from "../services/requestUserDialog.js";
 import {
   isMisleadingConsentHost,
   consentHostEntry,
@@ -130,7 +146,10 @@ import {
   schedulePermissionNotify,
   applyPermissionPromptResult,
 } from "../utils/permissions/PermissionPromptToolResultSchema.js";
-import { normalizePermissionUpdate, Mar } from "../utils/permissions/permissionRulePayload.js";
+import {
+  normalizePermissionUpdate,
+  filterPermissionUpdatePayload,
+} from "../utils/permissions/permissionRulePayload.js";
 import {
   applyPermissionUpdates,
   persistPermissionUpdates,
@@ -140,17 +159,17 @@ import {
   applyUpdatesToSessionContext,
   applyPermissionAnswer,
   listAnswerTighteningRules,
-  d0e,
+  isUnchangedAnswerInput,
   denyChangedAnswerInput,
 } from "../utils/permissions/permissionAnswer.js";
-import { R4n } from "../services/mcp/SdkControlTransport.js";
+import { isJsonRpcRequest } from "../services/mcp/SdkControlTransport.js";
 import { createCombinedAbortSignal } from "../utils/combinedAbortSignal.js";
-import { kR } from "../../vendor/zod/v4/classic/errors.js";
+import { ZodError } from "../../vendor/zod/v4/classic/errors.js";
 import { drainRegisteredWriteQueues } from "../utils/settings/writeQueues.js";
 import { getToolPermissionContext } from "../utils/permissions/toolPermissionContext.js";
 import { executePermissionRequestHooks } from "../utils/hooks.js";
 import {
-  obe,
+  shouldReplaceMemoryInput,
   guardHookUpdatedInput,
   checkRuleBasedPermissions,
   isInteractionStillOwed,
@@ -160,38 +179,46 @@ import {
   validatePermissionRequestUpdatedInput,
 } from "../utils/hooks/hookUpdatedInput.js";
 
+//@ chunk-na0b3c5q.js:9613-51278 callgraph-witnessed = StructuredIO (0.256)
 /**
  * StructuredIO：stream-json 协议的本地实现。read() 按行（\n）读 stdin，processLine 解析每行：keep_alive 丢弃、update_environment_variables 按白名单应用、control_response 匹配挂起请求、control_request 交给调用方、user/assistant/system 消息透传；sendRequest 发出 control_request（can_use_tool、hook_callback、elicitation、mcp_message…）并等待回复；write 输出 NDJSON。
  */
-//@ chunk-na0b3c5q.js:9613-51278 callgraph-witnessed = StructuredIO (0.256)
 class StructuredIO {
   input;
   replayUserMessages;
   maxLineChars;
   isRemoteTransport() {
-    return !1;
+    return false;
   }
-  uiSurfaceFrameOf(e, s) {
+  uiSurfaceFrameOf(e, isAnySurfaceAttached) {
     let redactsWhatItPersists = this.redactsWhatItPersists();
     return this.isRemoteTransport()
       ? {
-          isRemoteTransport: !0,
-          redactsWhatItPersists: redactsWhatItPersists,
-          isAnySurfaceAttached: s,
-          createdAt: void 0,
-          sessionWriters: void 0,
-          isAtFloor: !1,
-          leavesBelowFloor: !1,
+          isRemoteTransport: true,
+          redactsWhatItPersists,
+          isAnySurfaceAttached,
+          createdAt: undefined,
+          sessionWriters: undefined,
+          isAtFloor: false,
+          leavesBelowFloor: false,
         }
-      : { isRemoteTransport: !1, redactsWhatItPersists: redactsWhatItPersists, isAnySurfaceAttached: s };
+      : {
+          isRemoteTransport: false,
+          redactsWhatItPersists,
+          isAnySurfaceAttached,
+        };
   }
   surfaceRequestJudgedAt(e) {
     let s = this.surfaceRequestsJudgedAt.get(e) ?? Date.now();
-    return (this.surfaceRequestsJudgedAt.set(e, s), s);
+    this.surfaceRequestsJudgedAt.set(e, s);
+    return s;
   }
   surfaceRequestsJudgedAt = new WeakMap();
   redactsWhatItPersists() {
-    return ySr({ hostedWorker: this.isHostedWorker, transportPersists: this.persistsOutboundFrames });
+    return persistsTransport({
+      hostedWorker: this.isHostedWorker,
+      transportPersists: this.persistsOutboundFrames,
+    });
   }
   uiSurfaceChannel() {
     return {
@@ -204,14 +231,14 @@ class StructuredIO {
     return;
   }
   surfaceClientAttached(e, s) {
-    return !0;
+    return true;
   }
   controlRequestEnded(e) {}
   answersSurfaceRefusal(e) {
-    return !0;
+    return true;
   }
   surfaceSenderStands(e) {
-    return !0;
+    return true;
   }
   setSurfaceRoster(e) {}
   setSubscribersReportedListener(e) {}
@@ -227,7 +254,7 @@ class StructuredIO {
   deviceRequests = new Map();
   publishedPendingActionDetails = new Map();
   backgroundPromptIds = new Set();
-  flipBackLeftToUnpublishedAsk = !1;
+  flipBackLeftToUnpublishedAsk = false;
   streamCloseInterruptRequestIds = new Set();
   hostDialogAttestations = new Map();
   approvalTickets = new Map();
@@ -245,18 +272,21 @@ class StructuredIO {
     return Promise.resolve(null);
   }
   readProjectsBinding() {
-    return Promise.resolve({ read: !0, assertion: void 0 });
+    return Promise.resolve({
+      read: true,
+      assertion: undefined,
+    });
   }
   workerEpoch() {
     return 0;
   }
   hydratePrefetch = Promise.resolve(null);
-  inputClosed = !1;
-  hasUnconsumedInput = !1;
+  inputClosed = false;
+  hasUnconsumedInput = false;
   answerLinesWritten = 0;
   answerLinesRead = 0;
   receivedAnswersRead;
-  tracksRequestDelivery = !1;
+  tracksRequestDelivery = false;
   unexpectedResponseCallback;
   unclaimedResponseObserver;
   resolvedToolUseIds = new Set();
@@ -265,87 +295,91 @@ class StructuredIO {
   personsOwnPrepends = new WeakSet();
   prependWaker = null;
   stallTimer;
-  stallFired = !1;
+  stallFired = false;
   stallLastWriteAtMs = 0;
   stallLastWriteType;
   sdkSchemaStretchSampled;
   sdkSchemaKept = new Map();
-  sdkSchemaResultWritten = !1;
+  sdkSchemaResultWritten = false;
   sdkSchemaCheckTimer;
   createdAt = Date.now();
   onControlRequestSent;
   onControlRequestResolved;
   onStreamClosedWithParkedQuestion;
   onUserDialogParked;
-  hostAnswersElicitations = !0;
+  hostAnswersElicitations = true;
   onCommandLifecycle;
   resultDelivery;
-  commandLifecycleForwarderInstalled = !1;
-  hostOwnsStdinOrigin = !0;
-  persistsOutboundFrames = !1;
+  commandLifecycleForwarderInstalled = false;
+  hostOwnsStdinOrigin = true;
+  persistsOutboundFrames = false;
   get isHostedWorker() {
-    return !1;
+    return false;
   }
   readOwnClientEvent(e) {
-    return Promise.resolve({ kind: "unavailable", why: "no_session_channel" });
+    return Promise.resolve({
+      kind: "unavailable",
+      why: "no_session_channel",
+    });
   }
   sessionState;
   outbound = new Stream();
   heldUntilInit = [];
   streamEventHold =
-    env.CLAUDE_CODE_STREAM_EVENT_HOLD_MS === void 0
-      ? void 0
+    env.CLAUDE_CODE_STREAM_EVENT_HOLD_MS === undefined
+      ? undefined
       : parseIntEnv(
           {
             holdMs: env.CLAUDE_CODE_STREAM_EVENT_HOLD_MS,
-            clock: Aa,
+            clock: systemClock,
             print: (e, s) => {
-              (this.trackWrite(e),
-                writeToStdout(
-                  s +
-                    `
+              this.trackWrite(e);
+              writeToStdout(
+                s +
+                  `
 `,
-                ));
+              );
             },
           },
           env.CLAUDE_CODE_STREAM_EVENT_MAX_LINE_BYTES,
         );
-  constructor(e, s, n, r = ge) {
-    this.input = e;
-    this.replayUserMessages = s;
-    this.maxLineChars = r;
-    ((this.input = e),
-      (this.sessionState = n ?? new SessionStateTracker()),
-      (this.sessionState.getPendingActionDetails = (o) => {
-        let h = [];
-        for (let [m, y] of this.publishedPendingActionDetails)
-          if (this.pendingRequests.has(m) || m === o) h.push(y);
-        return h;
-      }),
-      this.sessionState.stateChanged.subscribe((o) => {
-        if (o !== "requires_action") this.flipBackLeftToUnpublishedAsk = !1;
-        if (o === "idle") this.endSdkSchemaStretch();
-      }),
-      (this.structuredInput = this.read()));
+  constructor(input, replayUserMessages, sessionState, maxLineChars = DEFAULT_MAX_LINE_CHARS) {
+    this.input = input;
+    this.replayUserMessages = replayUserMessages;
+    this.maxLineChars = maxLineChars;
+    this.input = input;
+    this.sessionState = sessionState ?? new SessionStateTracker();
+    this.sessionState.getPendingActionDetails = (o) => {
+      let h = [];
+      for (let [m, y] of this.publishedPendingActionDetails)
+        if (this.pendingRequests.has(m) || m === o) h.push(y);
+      return h;
+    };
+    this.sessionState.stateChanged.subscribe((o) => {
+      if (o !== "requires_action") this.flipBackLeftToUnpublishedAsk = false;
+      if (o === "idle") this.endSdkSchemaStretch();
+    });
+    this.structuredInput = this.read();
   }
   trackResolvedToolUseId(e) {
     if (e.request.subtype === "can_use_tool") this.resolvedToolUseIds.add(e.request.tool_use_id);
-    if (JZe(e)) rememberResolvedPromptRequestId(e.request_id);
+    if (isPermissionPromptSubtype(e)) rememberResolvedPromptRequestId(e.request_id);
   }
   watchConfirmAnswerEvent(e) {
-    this.confirmAnswerEventIds.set(e, void 0);
+    this.confirmAnswerEventIds.set(e, undefined);
   }
   noteConfirmAnswerEvent(e, s) {
     if (
       e.request.subtype === "can_use_tool" &&
       this.confirmAnswerEventIds.has(e.request.tool_use_id) &&
-      this.confirmAnswerEventIds.get(e.request.tool_use_id) === void 0
+      this.confirmAnswerEventIds.get(e.request.tool_use_id) === undefined
     )
       this.confirmAnswerEventIds.set(e.request.tool_use_id, s);
   }
   takeConfirmAnswerEventId(e) {
     let s = this.confirmAnswerEventIds.get(e);
-    return (this.confirmAnswerEventIds.delete(e), s);
+    this.confirmAnswerEventIds.delete(e);
+    return s;
   }
   flushInternalEvents() {
     return Promise.resolve();
@@ -372,22 +406,22 @@ class StructuredIO {
     return;
   }
   withdrawQueuedRequest(e) {
-    return !1;
+    return false;
   }
   flushDeliveryAcks() {
     return Promise.resolve();
   }
   flushDeliveryAcksConfirmed() {
-    return Promise.resolve(!0);
+    return Promise.resolve(true);
   }
   flushClientEvents() {
-    return Promise.resolve(!0);
+    return Promise.resolve(true);
   }
   flushInternalEventsConfirmed() {
-    return Promise.resolve(!0);
+    return Promise.resolve(true);
   }
   flushSessionState() {
-    return Promise.resolve(!0);
+    return Promise.resolve(true);
   }
   get sessionStatePatchesRefused() {
     return 0;
@@ -402,31 +436,38 @@ class StructuredIO {
     return 0;
   }
   repliesLeftForNextProcess = 0;
-  prependUserMessage(e, s = "process") {
+  prependUserMessage(content, s = "process") {
     if (configProbeEnv()) {
       logForDebugging(
         "Dropped a user message that this process queued for itself: CLAUDE_CODE_CONFIG_PROBE is set, so it only answers its host's requests",
       );
       return;
     }
-    (this.prependedLines.push({
+    this.prependedLines.push({
       line: jsonStringify({
         type: "user",
         session_id: "",
-        message: { role: "user", content: e },
+        message: {
+          role: "user",
+          content,
+        },
         parent_tool_use_id: null,
       }),
-      hostLocal: !0,
+      hostLocal: true,
       personsOwn: s === "person",
-    }),
-      this.prependWaker?.());
+    });
+    this.prependWaker?.();
   }
   readAgain(e) {
-    (this.prependedLines.push({ line: jsonStringify(e), hostLocal: !1, personsOwn: !1 }),
-      this.prependWaker?.());
+    this.prependedLines.push({
+      line: jsonStringify(e),
+      hostLocal: false,
+      personsOwn: false,
+    });
+    this.prependWaker?.();
   }
   noteInputWritten(e) {
-    let index = e.indexOf(M);
+    let index = e.indexOf(CONTROL_RESPONSE_TYPE);
     while (index !== -1) {
       let index_2 = e.indexOf(
         `
@@ -434,16 +475,21 @@ class StructuredIO {
         index,
       );
       if (index_2 === -1) return;
-      (this.answerLinesWritten++, (index = e.indexOf(M, index_2)));
+      this.answerLinesWritten++;
+      index = e.indexOf(CONTROL_RESPONSE_TYPE, index_2);
     }
   }
   whenReceivedAnswersRead() {
     if (this.answerLinesWritten <= this.answerLinesRead) return;
-    return ((this.receivedAnswersRead ??= Promise.withResolvers()), this.receivedAnswersRead.promise);
+    this.receivedAnswersRead ??= Promise.withResolvers();
+    return this.receivedAnswersRead.promise;
   }
   noteAnswerLinesRead(e) {
-    if (((this.answerLinesRead = e), this.answerLinesWritten <= e))
-      (this.receivedAnswersRead?.resolve(), (this.receivedAnswersRead = void 0));
+    this.answerLinesRead = e;
+    if (this.answerLinesWritten <= e) {
+      this.receivedAnswersRead?.resolve();
+      this.receivedAnswersRead = undefined;
+    }
   }
   isLocallyPrependedMessage(e) {
     return this.locallyPrependedMessages.has(e);
@@ -461,97 +507,127 @@ class StructuredIO {
     return;
   }
   async *read() {
-    let e = "",
-      s = [],
-      n = 0,
-      r = !1,
-      o = 0,
-      h = 0,
-      m = !1;
+    let e = "";
+    let s = [];
+    let n = 0;
+    let r = false;
+    let o = 0;
+    let h = 0;
+    let m = false;
     function y(w) {
-      if ((o++, (h += w.length), m)) return;
-      ((m = !0),
-        yieldToEventLoop().then(() => {
-          ((o = 0), (h = 0), (m = !1));
-        }));
+      o++;
+      h += w.length;
+      if (m) return;
+      m = true;
+      yieldToEventLoop().then(() => {
+        o = 0;
+        h = 0;
+        m = false;
+      });
     }
     let q = async function* () {
-        for (;;) {
-          if (o >= STDIN_LIMITS || h >= ke) (await yieldToEventLoop(), (o = 0), (h = 0));
-          let w = !1;
-          while (this.prependedLines.length > 0) {
-            let { line: line, hostLocal: hostLocal, personsOwn: personsOwn } = this.prependedLines.shift();
-            ((w = !0), y(line));
-            let processLine = await this.processLine(line);
-            if (processLine) {
-              if (hostLocal) this.locallyPrependedMessages.add(processLine);
-              if (personsOwn) this.personsOwnPrepends.add(processLine);
-              (logForDiagnosticsNoPII("info", "cli_stdin_message_parsed", describeInputLineLazy(processLine)),
-                yield processLine);
-            }
-          }
-          if (w) continue;
-          let index = e.indexOf(`
-`);
-          if (index === -1) break;
-          let sliced = e.slice(0, index);
-          ((e = e.slice(index + 1)), y(sliced));
-          let processLine = await this.processLine(sliced);
-          if (processLine)
-            (logForDiagnosticsNoPII("info", "cli_stdin_message_parsed", describeInputLineLazy(processLine)),
-              (this.hasUnconsumedInput = e.trim().length > 0),
-              yield processLine);
-          if (this.answerLinesRead < this.answerLinesWritten && sliced.includes(M))
-            this.noteAnswerLinesRead(this.answerLinesRead + 1);
+      for (;;) {
+        if (o >= STDIN_LIMITS || h >= MAX_STDIN_CHARS_PER_LINE) {
+          await yieldToEventLoop();
+          o = 0;
+          h = 0;
         }
-        this.hasUnconsumedInput = e.trim().length > 0;
-      }.bind(this),
-      R = this.input[Symbol.asyncIterator](),
-      S = null,
-      k = !1;
+        let w = false;
+        while (this.prependedLines.length > 0) {
+          let { line, hostLocal, personsOwn } = this.prependedLines.shift();
+          w = true;
+          y(line);
+          let T = await this.processLine(line);
+          if (T) {
+            if (hostLocal) this.locallyPrependedMessages.add(T);
+            if (personsOwn) this.personsOwnPrepends.add(T);
+            logForDiagnosticsNoPII("info", "cli_stdin_message_parsed", describeInputLineLazy(T));
+            yield T;
+          }
+        }
+        if (w) continue;
+        let index = e.indexOf(`
+`);
+        if (index === -1) break;
+        let sliced = e.slice(0, index);
+        e = e.slice(index + 1);
+        y(sliced);
+        let O = await this.processLine(sliced);
+        if (O) {
+          logForDiagnosticsNoPII("info", "cli_stdin_message_parsed", describeInputLineLazy(O));
+          this.hasUnconsumedInput = e.trim().length > 0;
+          yield O;
+        }
+        if (this.answerLinesRead < this.answerLinesWritten && sliced.includes(CONTROL_RESPONSE_TYPE))
+          this.noteAnswerLinesRead(this.answerLinesRead + 1);
+      }
+      this.hasUnconsumedInput = e.trim().length > 0;
+    }.bind(this);
+    let R = this.input[Symbol.asyncIterator]();
+    let S = null;
+    let k = false;
     try {
       for (;;) {
         if (r || this.prependedLines.length > 0) {
-          if (s.length > 0) ((e += s.join("")), (s = []));
-          if ((yield* q(), (n = e.length), n > this.maxLineChars))
-            (logForDiagnosticsNoPII("warn", "cli_stream_json_line_budget", { at: "tail" }),
-              await this.exitOnFatalInput(inputTooLargeError(this.maxLineChars)));
-          r = !1;
+          if (s.length > 0) {
+            e += s.join("");
+            s = [];
+          }
+          yield* q();
+          n = e.length;
+          if (n > this.maxLineChars) {
+            logForDiagnosticsNoPII("warn", "cli_stream_json_line_budget", {
+              at: "tail",
+            });
+            await this.exitOnFatalInput(inputTooLargeError(this.maxLineChars));
+          }
+          r = false;
         }
         S ??= R.next();
         let winner = await Promise.race([
-          S.then(() => !1),
-          new Promise((O) => {
-            this.prependWaker = () => O(!0);
+          S.then(() => false),
+          new Promise((resolve) => {
+            this.prependWaker = () => resolve(true);
           }),
         ]);
-        if (((this.prependWaker = null), winner)) continue;
+        this.prependWaker = null;
+        if (winner) continue;
         let C = await S;
-        if (((S = null), C.done)) {
-          k = !0;
+        S = null;
+        if (C.done) {
+          k = true;
           break;
         }
         n += C.value.length;
         let included = C.value.includes(`
 `);
-        if (!included && n > this.maxLineChars)
-          (logForDiagnosticsNoPII("warn", "cli_stream_json_line_budget", { at: "block" }),
-            await this.exitOnFatalInput(inputTooLargeError(this.maxLineChars)));
-        if ((s.push(C.value), included)) r = !0;
-        else if (!this.hasUnconsumedInput && /\S/.test(C.value)) this.hasUnconsumedInput = !0;
+        if (!included && n > this.maxLineChars) {
+          logForDiagnosticsNoPII("warn", "cli_stream_json_line_budget", {
+            at: "block",
+          });
+          await this.exitOnFatalInput(inputTooLargeError(this.maxLineChars));
+        }
+        s.push(C.value);
+        if (included) r = true;
+        else if (!this.hasUnconsumedInput && /\S/.test(C.value)) this.hasUnconsumedInput = true;
       }
     } finally {
-      if (((this.prependWaker = null), this.noteAnswerLinesRead(Number.POSITIVE_INFINITY), !k))
-        await R.return?.();
+      this.prependWaker = null;
+      this.noteAnswerLinesRead(Number.POSITIVE_INFINITY);
+      if (!k) await R.return?.();
     }
-    if (s.length > 0) ((e += s.join("")), (s = []));
+    if (s.length > 0) {
+      e += s.join("");
+      s = [];
+    }
     if (e) {
-      let processLine = await this.processLine(e);
-      if (((this.hasUnconsumedInput = !1), processLine)) yield processLine;
+      let w = await this.processLine(e);
+      this.hasUnconsumedInput = false;
+      if (w) yield w;
     }
-    this.inputClosed = !0;
+    this.inputClosed = true;
     let A = isTerminalShutdown();
-    if (!A && oIr()) {
+    if (!A && isInterruptModeOn()) {
       for (let [w, C] of this.pendingRequests.entries())
         if (
           !C.forwarded &&
@@ -561,9 +637,9 @@ class StructuredIO {
           this.streamCloseInterruptRequestIds.add(w);
       if (this.streamCloseInterruptRequestIds.size > 0) this.onStreamClosedWithParkedQuestion?.();
     }
-    for (let w of this.pendingRequests.values()) {
-      if (A && this.asksOurHuman(w)) continue;
-      w.reject(new StreamClosedAbortError(oKo));
+    for (let pendingRequest of this.pendingRequests.values()) {
+      if (A && this.asksOurHuman(pendingRequest)) continue;
+      pendingRequest.reject(new StreamClosedAbortError(TOOL_PERMISSION_STREAM_CLOSED_TEXT));
     }
   }
   hasPendingRequests() {
@@ -574,47 +650,53 @@ class StructuredIO {
   }
   getPendingPermissionRequests() {
     return Array.from(this.pendingRequests.values())
-      .map((e) => e.request)
+      .map((entry) => entry.request)
       .filter((e) => e.request.subtype === "can_use_tool");
   }
   getPendingUserDialogRequests() {
     return Array.from(this.pendingRequests.values())
-      .map((e) => e.request)
+      .map((entry) => entry.request)
       .filter((e) => e.request.subtype === "request_user_dialog");
   }
   getPendingElicitationRequests() {
-    return getFeatureValue_CACHED_MAY_BE_STALE("tengu_iterative_aurora", !1) === !0
+    return getFeatureValue_CACHED_MAY_BE_STALE("tengu_iterative_aurora", false) === true
       ? Array.from(this.pendingRequests.values())
-          .map((e) => e.request)
+          .map((entry) => entry.request)
           .filter((e) => e.request.subtype === "elicitation")
-      : void 0;
+      : undefined;
   }
   hasPendingPrompt() {
-    for (let { request: request } of this.pendingRequests.values()) if (JZe(request)) return !0;
-    return !1;
+    for (let { request } of this.pendingRequests.values())
+      if (isPermissionPromptSubtype(request)) return true;
+    return false;
   }
   hasStandingPrompt() {
-    if (this.sessionState.getState() !== "requires_action") return !1;
+    if (this.sessionState.getState() !== "requires_action") return false;
     if (this.flipBackLeftToUnpublishedAsk) return this.hasPendingPrompt();
-    for (let e of this.publishedPendingActionDetails.keys()) if (this.pendingRequests.has(e)) return !0;
-    return !1;
+    for (let key of this.publishedPendingActionDetails.keys()) if (this.pendingRequests.has(key)) return true;
+    return false;
   }
   hasTurnPrompt() {
-    for (let e of this.publishedPendingActionDetails.keys()) if (!this.backgroundPromptIds.has(e)) return !0;
-    return !1;
+    for (let key of this.publishedPendingActionDetails.keys())
+      if (!this.backgroundPromptIds.has(key)) return true;
+    return false;
   }
   listTurnPrompts() {
-    return [...this.publishedPendingActionDetails.keys()].filter((e) => !this.backgroundPromptIds.has(e));
+    return [...this.publishedPendingActionDetails.keys()].filter((key) => !this.backgroundPromptIds.has(key));
   }
   retireSdkHostHookCallbacks(e) {
-    (this.sdkHostHookGeneration++, (this.retiredHostHookAnswer = e));
+    this.sdkHostHookGeneration++;
+    this.retiredHostHookAnswer = e;
     let s = 0;
     for (let [n, r] of Array.from(this.pendingRequests)) {
       let request = r.request.request;
       if (request.subtype !== "hook_callback") continue;
-      let h = e(request.input),
-        m = r.schema ? r.schema.parse(h) : h;
-      (this.pendingRequests.delete(n), this.enqueueCancelRequest(n), r.resolve(m), s++);
+      let h = e(request.input);
+      let m = r.schema ? r.schema.parse(h) : h;
+      this.pendingRequests.delete(n);
+      this.enqueueCancelRequest(n);
+      r.resolve(m);
+      s++;
     }
     return s;
   }
@@ -622,149 +704,153 @@ class StructuredIO {
     let e;
     for (let [s, n] of this.publishedPendingActionDetails) if (this.pendingRequests.has(s)) e = n;
     if (!e) {
-      ((this.flipBackLeftToUnpublishedAsk = this.sessionState.getState() === "requires_action"),
-        this.sessionState.forgetWrittenLead());
+      this.flipBackLeftToUnpublishedAsk = this.sessionState.getState() === "requires_action";
+      this.sessionState.forgetWrittenLead();
       return;
     }
-    (this.sessionState.republishPendingAction(e),
-      logEvent("tengu_pending_action_republished", {
-        survivor_kind: fromEnum(
-          e.tool_name === MCP_ELICITATION_DIALOG_TOOL
-            ? "elicitation"
-            : e.tool_name.startsWith("dialog:")
-              ? "dialog"
-              : "permission",
-        ),
-        pending_permission_requests: this.getPendingPermissionRequests().length,
-        pending_dialog_requests: this.getPendingUserDialogRequests().length,
-      }));
+    this.sessionState.republishPendingAction(e);
+    logEvent("tengu_pending_action_republished", {
+      survivor_kind: fromEnum(
+        e.tool_name === MCP_ELICITATION_DIALOG_TOOL
+          ? "elicitation"
+          : e.tool_name.startsWith("dialog:")
+            ? "dialog"
+            : "permission",
+      ),
+      pending_permission_requests: this.getPendingPermissionRequests().length,
+      pending_dialog_requests: this.getPendingUserDialogRequests().length,
+    });
   }
   cancelPendingUserDialogs(e, s) {
     let n = 0;
-    for (let { request: request } of Array.from(this.pendingRequests.values())) {
+    for (let { request } of Array.from(this.pendingRequests.values())) {
       if (request.request.subtype !== "request_user_dialog" || request.request.dialog_kind !== e) continue;
       if (!this.cancelDialogByMachine(request.request_id, "moved_on")) continue;
-      (logEvent("tengu_request_user_dialog_implicit_cancel", {
-        dialog_kind: gn(e),
+      logEvent("tengu_request_user_dialog_implicit_cancel", {
+        dialog_kind: shortHash(e),
         ...dialogSourceAttr(e, request.request.payload),
         reason: fromEnum(s),
-      }),
-        (n += 1));
+      });
+      n += 1;
     }
     return n;
   }
   cancelDialogsANewPromptCloses(e) {
     let s = 0;
-    for (let n of Array.from(this.dialogsANewPromptCloses)) {
-      let r = this.pendingRequests.get(n)?.request.request;
-      if (r?.subtype !== "request_user_dialog" || !this.cancelDialogByMachine(n, "moved_on")) continue;
-      (logEvent("tengu_request_user_dialog_implicit_cancel", {
-        dialog_kind: gn(r.dialog_kind),
-        ...dialogSourceAttr(r.dialog_kind, r.payload),
+    for (let dialogsANewPromptClose of Array.from(this.dialogsANewPromptCloses)) {
+      let request = this.pendingRequests.get(dialogsANewPromptClose)?.request.request;
+      if (
+        request?.subtype !== "request_user_dialog" ||
+        !this.cancelDialogByMachine(dialogsANewPromptClose, "moved_on")
+      )
+        continue;
+      logEvent("tengu_request_user_dialog_implicit_cancel", {
+        dialog_kind: shortHash(request.dialog_kind),
+        ...dialogSourceAttr(request.dialog_kind, request.payload),
         reason: fromEnum(e),
-      }),
-        (s += 1));
+      });
+      s += 1;
     }
     return s;
   }
   logDialogsLeftUp(e) {
     for (let dialogsANewPromptClose of this.dialogsANewPromptCloses) {
-      let n = this.pendingRequests.get(dialogsANewPromptClose)?.request.request;
-      if (n?.subtype === "request_user_dialog")
+      let request = this.pendingRequests.get(dialogsANewPromptClose)?.request.request;
+      if (request?.subtype === "request_user_dialog")
         logEvent("tengu_request_user_dialog_left_up", {
-          dialog_kind: gn(n.dialog_kind),
-          ...dialogSourceAttr(n.dialog_kind, n.payload),
-          ...(e !== void 0 && { client_platform: yW(e) }),
+          dialog_kind: shortHash(request.dialog_kind),
+          ...dialogSourceAttr(request.dialog_kind, request.payload),
+          ...(e !== undefined && {
+            client_platform: entrypointForTelemetry(e),
+          }),
         });
     }
   }
   cancelDialogByMachine(e, s) {
-    if (!this.pendingRequests.has(e) || isTerminalShutdown()) return !1;
-    let injectControlResponse = this.injectControlResponse({
+    if (!this.pendingRequests.has(e) || isTerminalShutdown()) return false;
+    let n = this.injectControlResponse({
       type: "control_response",
-      response: { subtype: "success", request_id: e, response: { behavior: "cancelled" } },
+      response: {
+        subtype: "success",
+        request_id: e,
+        response: {
+          behavior: "cancelled",
+        },
+      },
     });
-    if (injectControlResponse) this.unansweredSettleHandlers.get(e)?.(s);
-    return injectControlResponse;
+    if (n) this.unansweredSettleHandlers.get(e)?.(s);
+    return n;
   }
-  setUnexpectedResponseCallback(e) {
-    this.unexpectedResponseCallback = e;
+  setUnexpectedResponseCallback(unexpectedResponseCallback) {
+    this.unexpectedResponseCallback = unexpectedResponseCallback;
   }
-  setUnclaimedResponseObserver(e) {
-    this.unclaimedResponseObserver = e;
+  setUnclaimedResponseObserver(unclaimedResponseObserver) {
+    this.unclaimedResponseObserver = unclaimedResponseObserver;
   }
-  setMainLoopLiveness(e) {
-    this.mainLoopLiveness = e;
+  setMainLoopLiveness(mainLoopLiveness) {
+    this.mainLoopLiveness = mainLoopLiveness;
   }
   mainLoopLiveness;
   ignoresErrorShapedDialogResponse(e, s) {
     if (s.subtype !== "error" || e.request.request.subtype !== "request_user_dialog" || e.forwarded)
-      return !1;
-    return (
-      logEvent("tengu_request_user_dialog_response_ignored", {
-        shape: fromEnum("error"),
-        dialog_kind: gn(e.request.request.dialog_kind),
-        ...dialogSourceAttr(e.request.request.dialog_kind, e.request.request.payload),
-      }),
-      logForDebugging(
-        `Ignoring error-shaped control_response for parked request_user_dialog request_id=${s.request_id} \u2014 not a human choice; dialog stays parked (error: ${errorFieldText(s.error)})`,
-      ),
-      !0
+      return false;
+    logEvent("tengu_request_user_dialog_response_ignored", {
+      shape: fromEnum("error"),
+      dialog_kind: shortHash(e.request.request.dialog_kind),
+      ...dialogSourceAttr(e.request.request.dialog_kind, e.request.request.payload),
+    });
+    logForDebugging(
+      `Ignoring error-shaped control_response for parked request_user_dialog request_id=${s.request_id} \u2014 not a human choice; dialog stays parked (error: ${errorFieldText(s.error)})`,
     );
+    return true;
   }
   ignoresErrorShapedUiHostResponse(e, s) {
-    let { subtype: subtype } = e.request.request;
-    if (s.subtype !== "error" || !isKnownControlSubtype(e.request.request)) return !1;
-    return (
-      logForDebugging(
-        `Ignoring error-shaped control_response for ${subtype} request_id=${s.request_id} - not the named client's answer; still waiting (error: ${errorFieldText(s.error)})`,
-      ),
-      !0
+    let { subtype } = e.request.request;
+    if (s.subtype !== "error" || !isKnownControlSubtype(e.request.request)) return false;
+    logForDebugging(
+      `Ignoring error-shaped control_response for ${subtype} request_id=${s.request_id} - not the named client's answer; still waiting (error: ${errorFieldText(s.error)})`,
     );
+    return true;
   }
   asksOurHuman(e) {
-    return !e.forwarded && JZe(e.request);
+    return !e.forwarded && isPermissionPromptSubtype(e.request);
   }
   get pendingHumanRequestCount() {
     let e = 0;
-    for (let s of this.pendingRequests.values()) if (this.asksOurHuman(s)) e++;
+    for (let pendingRequest of this.pendingRequests.values()) if (this.asksOurHuman(pendingRequest)) e++;
     return e;
   }
   ignoresResponseAtShutdown(e, s) {
-    if (!this.asksOurHuman(e) || !isTerminalShutdown()) return !1;
-    return (
-      logForDebugging(
-        `Leaving control_response for request_id=${s.request_id} to the next process \u2014 this one is shutting down and settles no question`,
-      ),
-      this.repliesLeftForNextProcess++,
-      !0
+    if (!this.asksOurHuman(e) || !isTerminalShutdown()) return false;
+    logForDebugging(
+      `Leaving control_response for request_id=${s.request_id} to the next process \u2014 this one is shutting down and settles no question`,
     );
+    this.repliesLeftForNextProcess++;
+    return true;
   }
   ignoresUnsettlingDeviceResponse(e, s) {
     let n = this.deviceRequests.get(s.request_id);
-    if (!n) return !1;
+    if (!n) return false;
     let subtype = e.request.request.subtype;
-    if (s.subtype === "error")
-      return (
-        (n.errorRepliesIgnored += 1),
-        logForDebugging(
-          `Ignoring error-shaped control_response for device ${subtype} request_id=${s.request_id} \u2014 not the device's answer; still waiting (error: ${errorFieldText(s.error)})`,
-        ),
-        !0
+    if (s.subtype === "error") {
+      n.errorRepliesIgnored += 1;
+      logForDebugging(
+        `Ignoring error-shaped control_response for device ${subtype} request_id=${s.request_id} \u2014 not the device's answer; still waiting (error: ${errorFieldText(s.error)})`,
       );
-    if (!n.accepts(s.response))
-      return (
-        (n.malformedRepliesIgnored += 1),
-        logForDebugging(
-          `Ignoring malformed control_response for device ${subtype} request_id=${s.request_id} \u2014 not an answer to it; still waiting`,
-        ),
-        !0
+      return true;
+    }
+    if (!n.accepts(s.response)) {
+      n.malformedRepliesIgnored += 1;
+      logForDebugging(
+        `Ignoring malformed control_response for device ${subtype} request_id=${s.request_id} \u2014 not an answer to it; still waiting`,
       );
-    return !1;
+      return true;
+    }
+    return false;
   }
   hasCanUseToolNameMismatch(e, s) {
     let request = e.request.request;
-    if (request.subtype !== "can_use_tool" || s.subtype !== "success") return !1;
+    if (request.subtype !== "can_use_tool" || s.subtype !== "success") return false;
     return isValidBridgeToolName(s.response?.toolName, request.tool_name, s.request_id);
   }
   rememberApprovalTicket(e, s, n) {
@@ -775,100 +861,97 @@ class StructuredIO {
       !this.hostDialogAttestations.has(e)
     )
       return;
-    let r = getApprovalTicket(n.response);
-    if (r !== void 0) this.approvalTickets.set(e, r);
+    let approvalTicket = getApprovalTicket(n.response);
+    if (approvalTicket !== undefined) this.approvalTickets.set(e, approvalTicket);
   }
   injectRemoteControlResponse(e) {
-    let s = this.pendingRequests.get(e.response?.request_id ?? "")?.request.request;
+    let request = this.pendingRequests.get(e.response?.request_id ?? "")?.request.request;
     return (
-      !(s?.subtype === "request_user_dialog" && s.dialog_kind === ENUM_PROMPT) &&
+      !(request?.subtype === "request_user_dialog" && request.dialog_kind === ENUM_PROMPT) &&
       this.injectControlResponse(e)
     );
   }
   injectControlResponse(e) {
     let s = this.blankedPromptDenyTarget(e.response) ?? e.response?.request_id;
-    if (!s) return !1;
-    let n = this.pendingRequests.get(s);
-    if (!n)
-      return (
-        logEvent("tengu_inject_control_response_unknown_id", {
-          pending_control_requests: this.pendingRequests.size,
-        }),
-        !1
-      );
-    if (this.ignoresErrorShapedDialogResponse(n, e.response)) return !1;
-    if (this.ignoresErrorShapedUiHostResponse(n, e.response)) return !1;
-    if (this.ignoresResponseAtShutdown(n, e.response)) return !1;
-    if (this.ignoresUnsettlingDeviceResponse(n, e.response)) return !1;
-    if (this.hasCanUseToolNameMismatch(n, e.response)) return !1;
-    if (
-      (this.trackResolvedToolUseId(n.request),
-      this.pendingRequests.delete(s),
-      this.rememberApprovalTicket(s, n, e.response),
-      s !== e.response?.request_id)
-    )
-      this.onControlRequestResolved?.(s);
-    if ((this.sendCancelRequest(s), e.response.subtype === "error")) n.reject(Error(e.response.error));
-    else {
-      let response = e.response.response;
-      if (n.schema)
-        try {
-          n.resolve(n.schema.parse(response));
-        } catch (error) {
-          n.reject(error);
-        }
-      else n.resolve({});
+    if (!s) return false;
+    let request = this.pendingRequests.get(s);
+    if (!request) {
+      logEvent("tengu_inject_control_response_unknown_id", {
+        pending_control_requests: this.pendingRequests.size,
+      });
+      return false;
     }
-    return !0;
+    if (this.ignoresErrorShapedDialogResponse(request, e.response)) return false;
+    if (this.ignoresErrorShapedUiHostResponse(request, e.response)) return false;
+    if (this.ignoresResponseAtShutdown(request, e.response)) return false;
+    if (this.ignoresUnsettlingDeviceResponse(request, e.response)) return false;
+    if (this.hasCanUseToolNameMismatch(request, e.response)) return false;
+    this.trackResolvedToolUseId(request.request);
+    this.pendingRequests.delete(s);
+    this.rememberApprovalTicket(s, request, e.response);
+    if (s !== e.response?.request_id) this.onControlRequestResolved?.(s);
+    this.sendCancelRequest(s);
+    if (e.response.subtype === "error") request.reject(Error(e.response.error));
+    else {
+      let result = e.response.response;
+      if (request.schema)
+        try {
+          request.resolve(request.schema.parse(result));
+        } catch (error) {
+          request.reject(error);
+        }
+      else request.resolve({});
+    }
+    return true;
   }
-  setOnControlRequestSent(e) {
-    this.onControlRequestSent = e;
+  setOnControlRequestSent(onControlRequestSent) {
+    this.onControlRequestSent = onControlRequestSent;
   }
-  setOnControlRequestResolved(e) {
-    this.onControlRequestResolved = e;
+  setOnControlRequestResolved(onControlRequestResolved) {
+    this.onControlRequestResolved = onControlRequestResolved;
   }
-  setOnStreamClosedWithParkedQuestion(e) {
-    this.onStreamClosedWithParkedQuestion = e;
+  setOnStreamClosedWithParkedQuestion(onStreamClosedWithParkedQuestion) {
+    this.onStreamClosedWithParkedQuestion = onStreamClosedWithParkedQuestion;
   }
   async processLine(e) {
     if (!e.trim()) return;
-    e = Wo(e);
+    e = stripBom(e);
     try {
-      let s = normalizeControlMessage(jsonParse(e));
-      if (s.type === "keep_alive") return;
-      if (s.type === "update_environment_variables") {
+      let riskLevel = normalizeControlMessage(jsonParse(e));
+      if (riskLevel.type === "keep_alive") return;
+      if (riskLevel.type === "update_environment_variables") {
         if (!this.acceptsInboundEnvUpdates()) {
-          let variables = s.variables,
-            A = typeof variables === "object" && variables !== null ? Object.keys(variables) : [],
-            filtered = A.filter((O) => W.has(O)),
-            C = A.length - filtered.length,
-            E = C > 0 ? filtered.concat(`${C} other`) : filtered;
-          (logForDebugging(
+          let variables = riskLevel.variables;
+          let A = typeof variables === "object" && variables !== null ? Object.keys(variables) : [];
+          let filtered = A.filter((O) => OAUTH_TOKEN_ENV_NAMES.has(O));
+          let C = A.length - filtered.length;
+          let E = C > 0 ? filtered.concat(`${C} other`) : filtered;
+          logForDebugging(
             `[structuredIO] refused update_environment_variables: this worker does not take environment updates from its inbound stream (keys: ${E.join(", ") || "none"})`,
-            { level: "warn" },
-          ),
-            this.retireDroppedFrame("uuid" in s ? s.uuid : void 0));
+            {
+              level: "warn",
+            },
+          );
+          this.retireDroppedFrame("uuid" in riskLevel ? riskLevel.uuid : undefined);
           return;
         }
-        let variables = s.variables;
+        let variables = riskLevel.variables;
         if (
           typeof variables !== "object" ||
           variables === null ||
           Array.isArray(variables) ||
           Object.values(variables).some((k) => typeof k !== "string")
         ) {
-          if (
-            (logForDebugging(
-              "[structuredIO] dropped update_environment_variables: variables must be an object of string values",
-            ),
-            typeof s.request_id === "string" && s.request_id)
-          )
+          logForDebugging(
+            "[structuredIO] dropped update_environment_variables: variables must be an object of string values",
+          );
+          if (typeof riskLevel.request_id === "string" && riskLevel.request_id)
             this.writeActivityLine(
               ndjsonStringify({
                 type: "control_response",
                 response: {
                   subtype: "error",
-                  request_id: s.request_id,
+                  request_id: riskLevel.request_id,
                   error: "update_environment_variables: variables must be an object of string values",
                 },
               }) +
@@ -877,41 +960,52 @@ class StructuredIO {
             );
           return;
         }
-        let r = [],
-          o = [],
-          h = !1,
-          m = !1,
-          y,
-          q = !1,
-          R;
-        for (let [k, A] of Object.entries(s.variables)) {
-          if (!W.has(k)) {
-            o.push(k);
+        let r = [];
+        let o = [];
+        let h = false;
+        let m = false;
+        let y;
+        let q = false;
+        let R;
+        for (let [key, value] of Object.entries(riskLevel.variables)) {
+          if (!OAUTH_TOKEN_ENV_NAMES.has(key)) {
+            o.push(key);
             continue;
           }
-          if (k === "CLAUDE_CODE_SESSIONS_OAUTH_TOKEN") {
-            y = A;
+          if (key === "CLAUDE_CODE_SESSIONS_OAUTH_TOKEN") {
+            y = value;
             continue;
           }
-          if (k === "CLAUDE_CODE_OAUTH_TOKEN" && isLauncherStartedProcess()) {
-            let w = holdPushedLauncherHostLogin(A);
-            if (w === null) o.push(k);
-            else ((h = !0), w.then(() => clearOAuthTokenCache()));
+          if (key === "CLAUDE_CODE_OAUTH_TOKEN" && isLauncherStartedProcess()) {
+            let w = holdPushedLauncherHostLogin(value);
+            if (w === null) o.push(key);
+            else {
+              h = true;
+              w.then(() => clearOAuthTokenCache());
+            }
             continue;
           }
-          if (k === "CLAUDE_CODE_OAUTH_TOKEN" && hostSessionsBearerOffered() && !isClaudeAISignInToken(A))
-            ((q = !0), (R = claudeAISignInTokenInForce()));
-          if (!applySessionTokenEnv(k, A)) process.env[k] = A;
-          r.push(k);
+          if (
+            key === "CLAUDE_CODE_OAUTH_TOKEN" &&
+            hostSessionsBearerOffered() &&
+            !isClaudeAISignInToken(value)
+          ) {
+            q = true;
+            R = claudeAISignInTokenInForce();
+          }
+          if (!applySessionTokenEnv(key, value)) process.env[key] = value;
+          r.push(key);
         }
         let S = h || r.includes("CLAUDE_CODE_OAUTH_TOKEN");
         if (S) {
-          if ((clearOAuthTokenCache(), h || q)) forgetHeldHostSessionsBearer(R);
+          clearOAuthTokenCache();
+          if (h || q) forgetHeldHostSessionsBearer(R);
         }
-        if (y !== void 0)
-          if (hostSessionsBearerOffered() && acceptPushedHostSessionsBearer(y))
-            ((m = !0), r.push("CLAUDE_CODE_SESSIONS_OAUTH_TOKEN"));
-          else o.push("CLAUDE_CODE_SESSIONS_OAUTH_TOKEN");
+        if (y !== undefined)
+          if (hostSessionsBearerOffered() && acceptPushedHostSessionsBearer(y)) {
+            m = true;
+            r.push("CLAUDE_CODE_SESSIONS_OAUTH_TOKEN");
+          } else o.push("CLAUDE_CODE_SESSIONS_OAUTH_TOKEN");
         if (o.length > 0)
           logForDebugging(`[structuredIO] refused update_environment_variables keys: ${o.join(", ")}`);
         if (!S && (!m || r.length > 1)) emitCredentialChange();
@@ -921,78 +1015,84 @@ class StructuredIO {
           );
         if (r.length > 0)
           logForDebugging(`[structuredIO] applied update_environment_variables: ${r.join(", ")}`);
-        if (typeof s.request_id === "string" && s.request_id)
+        if (typeof riskLevel.request_id === "string" && riskLevel.request_id)
           this.writeActivityLine(
             ndjsonStringify({
               type: "control_response",
-              response: { subtype: "success", request_id: s.request_id },
+              response: {
+                subtype: "success",
+                request_id: riskLevel.request_id,
+              },
             }) +
               `
 `,
           );
         return;
       }
-      if (s.type === "control_response") {
-        let n = "uuid" in s && typeof s.uuid === "string" ? s.uuid : void 0,
-          response = s.response;
+      if (riskLevel.type === "control_response") {
+        let uuid = "uuid" in riskLevel && typeof riskLevel.uuid === "string" ? riskLevel.uuid : undefined;
+        let response = riskLevel.response;
         if (typeof response !== "object" || response === null || Array.isArray(response)) {
-          if (n) this.onCommandLifecycle?.(n, "completed");
+          if (uuid) this.onCommandLifecycle?.(uuid, "completed");
           logForDebugging("[structuredIO] dropped control_response with malformed response payload");
           return;
         }
-        if (isLauncherStartupAsk(s.response.request_id)) {
-          if (n) this.onCommandLifecycle?.(n, "completed");
+        if (isLauncherStartupAsk(riskLevel.response.request_id)) {
+          if (uuid) this.onCommandLifecycle?.(uuid, "completed");
           return;
         }
-        let o = this.blankedPromptDenyTarget(s.response) ?? s.response.request_id,
-          h = this.pendingRequests.get(o);
+        let o = this.blankedPromptDenyTarget(riskLevel.response) ?? riskLevel.response.request_id;
+        let h = this.pendingRequests.get(o);
         if (!h) {
-          let settleUnknownResponse = this.settleUnknownResponse(s, n);
-          if (settleUnknownResponse !== void 0) await settleUnknownResponse;
+          let y = this.settleUnknownResponse(riskLevel, uuid);
+          if (y !== undefined) await y;
           return;
         }
         if (isTerminalShutdown() && this.asksOurHuman(h)) {
-          (logForDebugging(
+          logForDebugging(
             `Leaving control_response for request_id=${o} to the next process \u2014 this one is shutting down and settles no question`,
-          ),
-            this.repliesLeftForNextProcess++);
+          );
+          this.repliesLeftForNextProcess++;
           return;
         }
-        if (n) this.onCommandLifecycle?.(n, "completed");
-        if (this.ignoresErrorShapedDialogResponse(h, s.response)) return;
-        if (this.ignoresErrorShapedUiHostResponse(h, s.response)) return;
-        if (this.ignoresUnsettlingDeviceResponse(h, s.response)) return;
-        if (this.hasCanUseToolNameMismatch(h, s.response)) return;
+        if (uuid) this.onCommandLifecycle?.(uuid, "completed");
+        if (this.ignoresErrorShapedDialogResponse(h, riskLevel.response)) return;
+        if (this.ignoresErrorShapedUiHostResponse(h, riskLevel.response)) return;
+        if (this.ignoresUnsettlingDeviceResponse(h, riskLevel.response)) return;
+        if (this.hasCanUseToolNameMismatch(h, riskLevel.response)) return;
+        this.trackResolvedToolUseId(h.request);
+        this.pendingRequests.delete(o);
         if (
-          (this.trackResolvedToolUseId(h.request),
-          this.pendingRequests.delete(o),
           this.hostOwnsStdinOrigin &&
-            !h.forwarded &&
-            this.hostDialogAttestations.has(o) &&
-            h.request.request.subtype === "can_use_tool" &&
-            s.response.subtype === "success" &&
-            isHostDialogApproval(s.response.response))
+          !h.forwarded &&
+          this.hostDialogAttestations.has(o) &&
+          h.request.request.subtype === "can_use_tool" &&
+          riskLevel.response.subtype === "success" &&
+          isHostDialogApproval(riskLevel.response.response)
         )
-          this.hostDialogAttestations.set(o, !0);
-        if (
-          (this.rememberApprovalTicket(o, h, s.response),
-          h.request.request.subtype === "can_use_tool" && this.onControlRequestResolved)
-        )
+          this.hostDialogAttestations.set(o, true);
+        this.rememberApprovalTicket(o, h, riskLevel.response);
+        if (h.request.request.subtype === "can_use_tool" && this.onControlRequestResolved)
           this.onControlRequestResolved(o);
-        if (o !== s.response.request_id) this.enqueueCancelRequest(o);
+        if (o !== riskLevel.response.request_id) this.enqueueCancelRequest(o);
         if (
           h.request.request.subtype === "elicitation" &&
-          getFeatureValue_CACHED_MAY_BE_STALE("tengu_humming_waterfall", !1) === !0
+          getFeatureValue_CACHED_MAY_BE_STALE("tengu_humming_waterfall", false) === true
         )
           this.sendCancelRequest(o);
-        if (JZe(h.request) && !(h.forwarded && s.response.subtype === "error"))
-          (this.recordUserDrivenInbound(s), this.recordAnsweredPrompt(s, h.request.request.subtype));
-        if (s.response.subtype === "error") {
-          h.reject(Error(s.response.error));
+        if (
+          isPermissionPromptSubtype(h.request) &&
+          !(h.forwarded && riskLevel.response.subtype === "error")
+        ) {
+          this.recordUserDrivenInbound(riskLevel);
+          this.recordAnsweredPrompt(riskLevel, h.request.request.subtype);
+        }
+        if (riskLevel.response.subtype === "error") {
+          h.reject(Error(riskLevel.response.error));
           return;
         }
-        let response_2 = s.response.response;
-        if (!h.forwarded) this.noteConfirmAnswerEvent(h.request, n);
+        let response_2 = riskLevel.response.response;
+        if (!h.forwarded) this.noteConfirmAnswerEvent(h.request, uuid);
         if (h.schema)
           try {
             h.resolve(h.schema.parse(response_2));
@@ -1000,115 +1100,130 @@ class StructuredIO {
             h.reject(error);
           }
         else h.resolve({});
-        if (this.replayUserMessages && !ce.has(h.request.request.subtype))
-          return stripLiveOnlyMarker(getRiskColor(s));
+        if (this.replayUserMessages && !TOKEN_REFRESH_SUBTYPES.has(h.request.request.subtype))
+          return stripLiveOnlyMarker(getRiskColor(riskLevel));
         return;
       }
       if (
-        s.type !== "workflow_launch" &&
-        s.type !== "user" &&
+        riskLevel.type !== "workflow_launch" &&
+        riskLevel.type !== "user" &&
         !(
-          s.type === "control_request" &&
+          riskLevel.type === "control_request" &&
           shouldRejectUiControl(
-            subtypeOf(s.request),
-            () => this.uiSurfaceFrameOf(s, !1),
-            () => this.surfaceRequestJudgedAt(s),
+            subtypeOf(riskLevel.request),
+            () => this.uiSurfaceFrameOf(riskLevel, false),
+            () => this.surfaceRequestJudgedAt(riskLevel),
           )
         ) &&
-        isUserInitiatedInboundEvent(s, { hostOwnsOrigin: this.hostOwnsStdinOrigin })
+        isUserInitiatedInboundEvent(riskLevel, {
+          hostOwnsOrigin: this.hostOwnsStdinOrigin,
+        })
       )
-        this.recordUserDrivenInbound(s);
+        this.recordUserDrivenInbound(riskLevel);
       if (
-        s.type !== "user" &&
-        s.type !== "bash_command" &&
-        s.type !== "control_request" &&
-        s.type !== "control_cancel_request" &&
-        s.type !== "assistant" &&
-        s.type !== "system" &&
-        s.type !== "queued_notification" &&
-        s.type !== "session_notice" &&
-        s.type !== "workflow_launch"
+        riskLevel.type !== "user" &&
+        riskLevel.type !== "bash_command" &&
+        riskLevel.type !== "control_request" &&
+        riskLevel.type !== "control_cancel_request" &&
+        riskLevel.type !== "assistant" &&
+        riskLevel.type !== "system" &&
+        riskLevel.type !== "queued_notification" &&
+        riskLevel.type !== "session_notice" &&
+        riskLevel.type !== "workflow_launch"
       ) {
-        let n = s.type;
-        (logForDebugging(
+        let n = riskLevel.type;
+        logForDebugging(
           `Ignoring unknown message type: ${typeof n === "string" ? truncatedErrorText(n) : `(a value of JSON type ${typeof n})`}`,
-          { level: "warn" },
-        ),
-          this.retireDroppedFrame(typeof s === "object" && s !== null && "uuid" in s ? s.uuid : void 0));
+          {
+            level: "warn",
+          },
+        );
+        this.retireDroppedFrame(
+          typeof riskLevel === "object" && riskLevel !== null && "uuid" in riskLevel
+            ? riskLevel.uuid
+            : undefined,
+        );
         return;
       }
-      if (s.type === "workflow_launch") return s;
-      if (s.type === "control_request") {
+      if (riskLevel.type === "workflow_launch") return riskLevel;
+      if (riskLevel.type === "control_request") {
         if (this.isRemoteTransport()) {
-          let request = s.request,
-            r = typeof request !== "object" || request === null || Array.isArray(request);
+          let request = riskLevel.request;
+          let r = typeof request !== "object" || request === null || Array.isArray(request);
           if (r || !("subtype" in request) || typeof request.subtype !== "string") {
-            (logEvent("tengu_sdk_malformed_input", {
+            logEvent("tengu_sdk_malformed_input", {
               message_type: lit("control_request"),
               reason: fromEnum(r ? "missing_request" : "subtype_not_string"),
               transport: lit("remote"),
               outcome: lit("dropped"),
-              has_event_uuid: "uuid" in s && Vt(s.uuid) !== null,
-            }),
-              logForDebugging("Dropping control_request: missing request object or non-string subtype", {
-                level: "warn",
-              }),
-              this.retireDroppedFrame("uuid" in s ? s.uuid : void 0));
+              has_event_uuid: "uuid" in riskLevel && normalizeUuidOrNull(riskLevel.uuid) !== null,
+            });
+            logForDebugging("Dropping control_request: missing request object or non-string subtype", {
+              level: "warn",
+            });
+            this.retireDroppedFrame("uuid" in riskLevel ? riskLevel.uuid : undefined);
             return;
           }
-        } else if (!s.request) return this.exitOnFatalInput("Error: Missing request on control_request");
-        return s;
+        } else if (!riskLevel.request)
+          return this.exitOnFatalInput("Error: Missing request on control_request");
+        return riskLevel;
       }
-      if (s.type === "control_cancel_request") return typeof s.request_id === "string" ? s : void 0;
-      if (s.type === "assistant" || s.type === "system") return s;
-      if (s.type === "bash_command") return s;
-      if (s.type === "queued_notification") return s;
-      if (s.type === "session_notice") return s;
-      if (s.message?.role !== "user") {
+      if (riskLevel.type === "control_cancel_request")
+        return typeof riskLevel.request_id === "string" ? riskLevel : undefined;
+      if (riskLevel.type === "assistant" || riskLevel.type === "system") return riskLevel;
+      if (riskLevel.type === "bash_command") return riskLevel;
+      if (riskLevel.type === "queued_notification") return riskLevel;
+      if (riskLevel.type === "session_notice") return riskLevel;
+      if (riskLevel.message?.role !== "user") {
         if (!this.isRemoteTransport())
           return this.exitOnFatalInput(
-            `Error: Expected message role 'user', got '${truncatedErrorText(String(s.message?.role))}'`,
+            `Error: Expected message role 'user', got '${truncatedErrorText(String(riskLevel.message?.role))}'`,
           );
-        let n = extractPlainUserMessage(s.message),
-          r =
-            n === void 0
-              ? "dropped"
-              : !n.plain
-                ? "unwrap_refused"
-                : env.CLAUDE_CODE_DISABLE_NESTED_USER_REPAIR
-                  ? "repair_disabled"
-                  : "repaired",
-          o = classifyMessageRoleShape(s.message),
-          h = Vt(s.uuid) !== null;
-        if (
-          (logEvent("tengu_sdk_malformed_input", {
-            message_type: lit("user"),
-            reason: lit("invalid_message_role"),
-            transport: lit("remote"),
-            outcome: fromEnum(r),
-            wire_shape: fromEnum(o),
-            has_event_uuid: h,
-          }),
-          logForDiagnosticsNoPII("warn", "cli_malformed_user_message", {
-            outcome: r,
-            wire_shape: o,
-            has_event_uuid: h,
-          }),
-          n === void 0 || r !== "repaired")
-        ) {
-          (logForDebugging(
+        let plainUserMessage = extractPlainUserMessage(riskLevel.message);
+        let r =
+          plainUserMessage === undefined
+            ? "dropped"
+            : !plainUserMessage.plain
+              ? "unwrap_refused"
+              : env.CLAUDE_CODE_DISABLE_NESTED_USER_REPAIR
+                ? "repair_disabled"
+                : "repaired";
+        let o = classifyMessageRoleShape(riskLevel.message);
+        let h = normalizeUuidOrNull(riskLevel.uuid) !== null;
+        logEvent("tengu_sdk_malformed_input", {
+          message_type: lit("user"),
+          reason: lit("invalid_message_role"),
+          transport: lit("remote"),
+          outcome: fromEnum(r),
+          wire_shape: fromEnum(o),
+          has_event_uuid: h,
+        });
+        logForDiagnosticsNoPII("warn", "cli_malformed_user_message", {
+          outcome: r,
+          wire_shape: o,
+          has_event_uuid: h,
+        });
+        if (plainUserMessage === undefined || r !== "repaired") {
+          logForDebugging(
             `Dropping malformed user message (${r}, ${o}, event uuid ${h ? "present" : "absent"}): expected message role 'user'`,
-            { level: "warn" },
-          ),
-            this.retireDroppedFrame(s.uuid));
+            {
+              level: "warn",
+            },
+          );
+          this.retireDroppedFrame(riskLevel.uuid);
           return;
         }
-        let m = s;
-        ((m.message = n.inner), logForDebugging("Repaired a nested user message (one level)"));
+        let m = riskLevel;
+        m.message = plainUserMessage.inner;
+        logForDebugging("Repaired a nested user message (one level)");
       }
-      if (isUserInitiatedInboundEvent(s, { hostOwnsOrigin: this.hostOwnsStdinOrigin }))
-        this.recordUserDrivenInbound(s);
-      return s;
+      if (
+        isUserInitiatedInboundEvent(riskLevel, {
+          hostOwnsOrigin: this.hostOwnsStdinOrigin,
+        })
+      )
+        this.recordUserDrivenInbound(riskLevel);
+      return riskLevel;
     } catch (error) {
       return this.exitOnFatalInput(formatStreamInputParseError(e, error));
     }
@@ -1130,179 +1245,203 @@ class StructuredIO {
           ? r.suppressed_request_id === n
           : r.request_id === n && this.sessionState.isWrittenSlim(r)) &&
         this.pendingRequests.get(n)?.request.request.subtype === "can_use_tool"
-      )
-        return (
-          logForDebugging(
-            `[structuredIO] deny keyed on toolUseID=${toolUseID} settles its blanked prompt request_id=${n}`,
-          ),
-          n
+      ) {
+        logForDebugging(
+          `[structuredIO] deny keyed on toolUseID=${toolUseID} settles its blanked prompt request_id=${n}`,
         );
+        return n;
+      }
     return;
   }
-  settleUnknownResponse(e, s) {
+  settleUnknownResponse(riskLevel, s) {
     if (isTerminalShutdown()) {
       logForDebugging(
-        `Leaving control_response for request_id=${e.response.request_id} to the next process \u2014 this one is shutting down and settles no question`,
+        `Leaving control_response for request_id=${riskLevel.response.request_id} to the next process \u2014 this one is shutting down and settles no question`,
       );
       return;
     }
     if (s) this.onCommandLifecycle?.(s, "completed");
-    let n = this.timedOutUserDialogs.get(e.response.request_id);
+    let n = this.timedOutUserDialogs.get(riskLevel.response.request_id);
     if (n) {
-      this.timedOutUserDialogs.delete(e.response.request_id);
-      let h = e.response.subtype === "success" ? e.response.response?.behavior : void 0,
-        subtype = e.response.subtype;
-      (logEvent("tengu_request_user_dialog_late_answer", {
-        dialog_kind: gn(n.dialogKind),
+      this.timedOutUserDialogs.delete(riskLevel.response.request_id);
+      let behavior =
+        riskLevel.response.subtype === "success" ? riskLevel.response.response?.behavior : undefined;
+      let subtype = riskLevel.response.subtype;
+      logEvent("tengu_request_user_dialog_late_answer", {
+        dialog_kind: shortHash(n.dialogKind),
         ...n.source,
         lateness_ms: Date.now() - n.timedOutAt,
         response_subtype: fromEnum(subtype === "success" || subtype === "error" ? subtype : "other"),
-        behavior: fromEnum(h === "completed" || h === "cancelled" ? h : h === void 0 ? "absent" : "other"),
-      }),
-        logForDebugging(
-          `Ignoring late request_user_dialog answer for request_id=${e.response.request_id}: the park deadline already settled this dialog as cancelled ${Date.now() - n.timedOutAt}ms ago`,
-        ));
-      return;
-    }
-    let r = e.response.subtype === "success" ? e.response.response : void 0,
-      o = r?.toolUseID;
-    if (typeof o === "string" && this.resolvedToolUseIds.has(o)) {
+        behavior: fromEnum(
+          behavior === "completed" || behavior === "cancelled"
+            ? behavior
+            : behavior === undefined
+              ? "absent"
+              : "other",
+        ),
+      });
       logForDebugging(
-        `Ignoring duplicate control_response for already-resolved toolUseID=${o} request_id=${e.response.request_id}`,
+        `Ignoring late request_user_dialog answer for request_id=${riskLevel.response.request_id}: the park deadline already settled this dialog as cancelled ${Date.now() - n.timedOutAt}ms ago`,
       );
       return;
     }
-    if (this.unexpectedResponseCallback === void 0) {
+    let response = riskLevel.response.subtype === "success" ? riskLevel.response.response : undefined;
+    let toolUseID = response?.toolUseID;
+    if (typeof toolUseID === "string" && this.resolvedToolUseIds.has(toolUseID)) {
+      logForDebugging(
+        `Ignoring duplicate control_response for already-resolved toolUseID=${toolUseID} request_id=${riskLevel.response.request_id}`,
+      );
+      return;
+    }
+    if (this.unexpectedResponseCallback === undefined) {
       try {
         this.unclaimedResponseObserver?.({
-          answerKind: e.response.subtype === "success" ? permissionResponseTelemetry(r) : {},
-          toolUseId: typeof o === "string" ? o : void 0,
+          answerKind: riskLevel.response.subtype === "success" ? permissionResponseTelemetry(response) : {},
+          toolUseId: typeof toolUseID === "string" ? toolUseID : undefined,
         });
       } catch (error) {
         logError(error);
       }
       return;
     }
-    return this.unexpectedResponseCallback(getRiskColor(e), getApprovalTicket(r));
+    return this.unexpectedResponseCallback(getRiskColor(riskLevel), getApprovalTicket(response));
   }
   resetStallWatchdog() {
-    this.stallFired = !1;
+    this.stallFired = false;
   }
   recordUserDrivenInbound(e) {
-    RKs();
+    noteInteractiveInput();
   }
   recordAnsweredPrompt(e, s) {}
   retireDroppedFrame(e) {
-    let s = Vt(e);
+    let s = normalizeUuidOrNull(e);
     if (s) this.onCommandLifecycle?.(s, "completed");
   }
   trackWrite(e) {
     if (e.type === "result" || this.stallFired) {
-      if (this.stallTimer !== void 0) (clearTimeout(this.stallTimer), (this.stallTimer = void 0));
-    } else if (
-      ((this.stallLastWriteAtMs = performance.now()),
-      (this.stallLastWriteType = e.type),
-      this.stallTimer === void 0)
-    )
-      this.armStallTimer(F);
+      if (this.stallTimer !== undefined) {
+        clearTimeout(this.stallTimer);
+        this.stallTimer = undefined;
+      }
+    } else {
+      this.stallLastWriteAtMs = performance.now();
+      this.stallLastWriteType = e.type;
+      if (this.stallTimer === undefined) this.armStallTimer(SDK_STALL_TIMEOUT_MS);
+    }
     let s = e.type === "result" && this.resultDelivery ? this.resultDelivery.stamp(e) : e;
     if (s.type !== "system") this.sampleForSdkSchemaCheck(s);
-    if (s.type === "result") ((this.sdkSchemaResultWritten = !0), this.armSdkSchemaCheck());
+    if (s.type === "result") {
+      this.sdkSchemaResultWritten = true;
+      this.armSdkSchemaCheck();
+    }
     return s;
   }
   armStallTimer(e) {
-    ((this.stallTimer = setTimeout(() => {
-      this.stallTimer = void 0;
-      let s = this.stallLastWriteAtMs + F - performance.now();
-      if (s > Phr) {
+    this.stallTimer = setTimeout(() => {
+      this.stallTimer = undefined;
+      let s = this.stallLastWriteAtMs + SDK_STALL_TIMEOUT_MS - performance.now();
+      if (s > MONOTONIC_TIMER_RECHECK_MS) {
         this.armStallTimer(s);
         return;
       }
       if (this.sessionState.getState() !== "running") return;
-      ((this.stallFired = !0),
-        logEvent("tengu_sdk_stall", {
-          session_age_ms: Date.now() - this.createdAt,
-          session_state: fromEnum(this.sessionState.getState()),
-          last_message_type: fromEnumOpt(this.stallLastWriteType),
-          pending_control_requests: this.pendingRequests.size,
-        }));
-    }, e)),
-      this.stallTimer.unref());
+      this.stallFired = true;
+      logEvent("tengu_sdk_stall", {
+        session_age_ms: Date.now() - this.createdAt,
+        session_state: fromEnum(this.sessionState.getState()),
+        last_message_type: fromEnumOpt(this.stallLastWriteType),
+        pending_control_requests: this.pendingRequests.size,
+      });
+    }, e);
+    this.stallTimer.unref();
   }
   sampleForSdkSchemaCheck(e) {
-    if (((this.sdkSchemaStretchSampled ??= Math.random() < fe), !this.sdkSchemaStretchSampled)) return;
-    let s = this.sdkSchemaKept.get(e.type) ?? { frames: 0, json: void 0 };
-    if (((s.frames += 1), this.sdkSchemaKept.set(e.type, s), Math.random() >= 1 / s.frames)) return;
+    this.sdkSchemaStretchSampled ??= Math.random() < SDK_SCHEMA_SAMPLE_RATE;
+    if (!this.sdkSchemaStretchSampled) return;
+    let s = this.sdkSchemaKept.get(e.type) ?? {
+      frames: 0,
+      json: undefined,
+    };
+    s.frames += 1;
+    this.sdkSchemaKept.set(e.type, s);
+    if (Math.random() >= 1 / s.frames) return;
     try {
       let n = jsonStringify(e);
-      if (n.length <= he) s.json = n;
+      if (n.length <= MAX_SAMPLED_SDK_FRAME_CHARS) s.json = n;
     } catch {}
   }
   sdkSchemaFramesKept() {
-    for (let e of this.sdkSchemaKept.values()) if (e.json !== void 0) return !0;
-    return !1;
+    for (let e of this.sdkSchemaKept.values()) if (e.json !== undefined) return true;
+    return false;
   }
   endSdkSchemaStretch() {
     if (this.sdkSchemaFramesKept()) {
       this.armSdkSchemaCheck();
       return;
     }
-    ((this.sdkSchemaStretchSampled = void 0), this.sdkSchemaKept.clear());
+    this.sdkSchemaStretchSampled = undefined;
+    this.sdkSchemaKept.clear();
   }
   armSdkSchemaCheck() {
     if (!this.sdkSchemaFramesKept() || !this.sdkSchemaResultWritten) return;
-    (clearTimeout(this.sdkSchemaCheckTimer),
-      (this.sdkSchemaCheckTimer = setTimeout(() => {
-        if (this.sessionState.getState() !== "idle" || this.inputClosed || isTerminalShutdown()) return;
-        let e = [...this.sdkSchemaKept.entries()];
-        (this.sdkSchemaKept.clear(), (this.sdkSchemaStretchSampled = void 0));
-        let builtCount = tlo.builtCount();
-        try {
-          let n = jls();
-          for (let [r, { json: json }] of e) {
-            if (json === void 0) continue;
-            let h = jsonParse(json),
-              safeParse = n.safeParse(h);
-            if (!safeParse.success)
-              logEvent("tengu_sdk_schema_violation", {
-                message_type: fromEnum(r),
-                error_path: sanitizeJsonPath(safeParse.error.issues[0]?.path, _e),
-              });
-          }
-        } catch (error) {
-          logForDebugging(
-            `Could not check the sampled frames against the SDK output schema; they are dropped: ${errorMessage(error)}`,
-          );
-        } finally {
-          tlo.releaseBuiltSince(builtCount);
+    clearTimeout(this.sdkSchemaCheckTimer);
+    this.sdkSchemaCheckTimer = setTimeout(() => {
+      if (this.sessionState.getState() !== "idle" || this.inputClosed || isTerminalShutdown()) return;
+      let e = [...this.sdkSchemaKept.entries()];
+      this.sdkSchemaKept.clear();
+      this.sdkSchemaStretchSampled = undefined;
+      let s = LAZY_COMPONENT_REGISTRY.builtCount();
+      try {
+        let n = StdoutMessageSchema();
+        for (let [r, { json }] of e) {
+          if (json === undefined) continue;
+          let h = jsonParse(json);
+          let m = n.safeParse(h);
+          if (!m.success)
+            logEvent("tengu_sdk_schema_violation", {
+              message_type: fromEnum(r),
+              error_path: sanitizeJsonPath(m.error.issues[0]?.path, SETTINGS_JSON_SCHEMA),
+            });
         }
-      }, me)),
-      this.sdkSchemaCheckTimer.unref());
+      } catch (error) {
+        logForDebugging(
+          `Could not check the sampled frames against the SDK output schema; they are dropped: ${errorMessage(error)}`,
+        );
+      } finally {
+        LAZY_COMPONENT_REGISTRY.releaseBuiltSince(s);
+      }
+    }, SDK_SCHEMA_CHECK_INTERVAL_MS);
+    this.sdkSchemaCheckTimer.unref();
   }
   writeActivityLine(e) {
-    (this.streamEventHold?.release(), writeToStdout(e));
+    this.streamEventHold?.release();
+    writeToStdout(e);
   }
   acceptsInboundEnvUpdates() {
-    return !0;
+    return true;
   }
-  exitOnFatalInput(e) {
-    return (this.stopHoldingStreamEvents(), exitWithMessage(e));
+  exitOnFatalInput(message) {
+    this.stopHoldingStreamEvents();
+    return exitWithMessage(message);
   }
   stopHoldingStreamEvents() {
     this.streamEventHold?.stop();
   }
   async write(e) {
-    if (this.streamEventHold !== void 0 && this.streamEventHold.keeps(e)) return;
-    let heldDueBefore = this.heldDueBefore(e);
-    if (heldDueBefore.length > 0) (await this.writeHeld(heldDueBefore), this.streamEventHold?.release());
-    let trackWrite = this.trackWrite(e);
+    if (this.streamEventHold !== undefined && this.streamEventHold.keeps(e)) return;
+    let s = this.heldDueBefore(e);
+    if (s.length > 0) {
+      await this.writeHeld(s);
+      this.streamEventHold?.release();
+    }
+    let n = this.trackWrite(e);
     writeToStdout(
-      ndjsonStringify(trackWrite) +
+      ndjsonStringify(n) +
         `
 `,
     );
-    let heldDueAfter = this.heldDueAfter(trackWrite);
-    if (heldDueAfter.length > 0) await this.writeHeld(heldDueAfter);
+    let r = this.heldDueAfter(n);
+    if (r.length > 0) await this.writeHeld(r);
   }
   writeAfterInit(e) {
     this.heldUntilInit.push(e);
@@ -1318,63 +1457,77 @@ class StructuredIO {
       try {
         await this.write(s);
       } catch (error) {
-        logForDebugging(`held frame write failed: ${error}`, { level: "warn" });
+        logForDebugging(`held frame write failed: ${error}`, {
+          level: "warn",
+        });
       }
   }
-  passControlRequestToHost(e, { requestId: requestId, schema: schema, signal: signal }) {
+  passControlRequestToHost(e, { requestId, schema, signal }) {
     if (this.pendingRequests.has(requestId))
       return Promise.reject(new AbortError("a control request with this request_id is already pending"));
-    return this.sendRequest(e, schema, signal, { requestId: requestId, forwarded: !0 });
+    return this.sendRequest(e, schema, signal, {
+      requestId,
+      forwarded: true,
+    });
   }
-  async sendRequest(
-    e,
-    s,
-    n,
-    { requestId: requestId = randomUUID(), forwarded: forwarded = !1, deviceHook: deviceHook = !1 } = {},
-  ) {
-    let m = { type: "control_request", request_id: requestId, request: e },
-      y = { ...m, request: PLs(e) },
-      q = !forwarded && JZe(m);
+  async sendRequest(e, schema, n, { requestId = randomUUID(), forwarded = false, deviceHook = false } = {}) {
+    let m = {
+      type: "control_request",
+      request_id: requestId,
+      request: e,
+    };
+    let y = {
+      ...m,
+      request: stripServerPolicyAskOnly(e),
+    };
+    let q = !forwarded && isPermissionPromptSubtype(m);
     if (q && isTerminalShutdown() && !n?.aborted) return heldUntilExit();
     if (e.subtype === "elicitation" && !forwarded) rememberElicitationRequestId(requestId);
     else if (isKnownControlSubtype(e) && !forwarded) rememberHostAskRequestId(requestId);
-    else if (!forwarded && !deviceHook) rememberOutboundRequestId(requestId, { automated: !q });
+    else if (!forwarded && !deviceHook)
+      rememberOutboundRequestId(requestId, {
+        automated: !q,
+      });
     else if (deviceHook) rememberDeviceOutboundRequestId(requestId);
-    if (this.inputClosed) throw new StreamClosedAbortError(WVr);
+    if (this.inputClosed) throw new StreamClosedAbortError(STREAM_CLOSED_TEXT);
     if (n?.aborted) throw new AbortError("Request aborted");
-    if ((this.outbound.enqueue(forwarded ? y : m), e.subtype === "can_use_tool" && this.onControlRequestSent))
-      this.onControlRequestSent(y);
+    this.outbound.enqueue(forwarded ? y : m);
+    if (e.subtype === "can_use_tool" && this.onControlRequestSent) this.onControlRequestSent(y);
     if (q) this.sessionState.beginUserDecision();
     let R = () => {
       if (q && isTerminalShutdown()) return;
-      if (m.request.subtype === "can_use_tool" && n !== void 0 && isAskWithdrawnByAsker(n))
+      if (m.request.subtype === "can_use_tool" && n !== undefined && isAskWithdrawnByAsker(n))
         this.answerOwnWithdrawnAsk(requestId, m.request.tool_use_id);
       this.enqueueCancelRequest(requestId);
       let k = this.pendingRequests.get(requestId);
       if (k) {
-        if (
-          (this.trackResolvedToolUseId(k.request),
-          k.request.request.subtype === "can_use_tool" && this.onControlRequestResolved)
-        )
+        this.trackResolvedToolUseId(k.request);
+        if (k.request.request.subtype === "can_use_tool" && this.onControlRequestResolved)
           this.onControlRequestResolved(requestId);
-        (this.pendingRequests.delete(requestId), k.reject(new AbortError()));
+        this.pendingRequests.delete(requestId);
+        k.reject(new AbortError());
       }
     };
-    if (n) n.addEventListener("abort", R, { once: !0 });
+    if (n)
+      n.addEventListener("abort", R, {
+        once: true,
+      });
     let S;
     try {
-      return await new Promise((k, A) => {
-        ((S = {
+      return await new Promise((resolve, reject) => {
+        S = {
           request: y,
           resolve: (w) => {
-            k(w);
+            resolve(w);
           },
-          reject: A,
-          schema: s,
-          ...(forwarded && { forwarded: forwarded }),
-        }),
-          this.pendingRequests.set(requestId, S),
-          this.requestPending.emit());
+          reject,
+          schema,
+          ...(forwarded && {
+            forwarded,
+          }),
+        };
+        this.pendingRequests.set(requestId, S);
+        this.requestPending.emit();
       });
     } finally {
       if (n) n.removeEventListener("abort", R);
@@ -1382,14 +1535,14 @@ class StructuredIO {
       if (q) this.sessionState.endUserDecision();
     }
   }
-  emitPermissionDenied(e, s, n, r) {
+  emitPermissionDenied(toolName, toolUseId, agentId, r) {
     let decisionReason = r.decisionReason;
     this.outbound.enqueue({
       type: "system",
       subtype: "permission_denied",
-      tool_name: e,
-      tool_use_id: s,
-      agent_id: n,
+      tool_name: toolName,
+      tool_use_id: toolUseId,
+      agent_id: agentId,
       decision_reason_type: decisionReason?.type,
       decision_reason_code: decisionReasonCode(decisionReason),
       decision_reason: serializeDecisionReason(decisionReason),
@@ -1402,50 +1555,52 @@ class StructuredIO {
     return createPermissionAsker(e, this.permissionPromptHost(e.kind, s));
   }
   keptAsk;
-  holdKeptAsk(e) {
-    this.keptAsk = e;
+  holdKeptAsk(keptAsk) {
+    this.keptAsk = keptAsk;
   }
   permissionPromptHost(e, s) {
     return {
-      keptAskFor: (n) => (this.keptAsk?.card.tool_use_id === n ? this.keptAsk : void 0),
-      request: (n, r, o) => (
-        this.hostDialogAttestations.set(o, !1),
-        this.sendRequest(n, MARKETPLACE_ONLY_MANIFEST_FIELDS(e), r, { requestId: o })
-      ),
+      keptAskFor: (n) => (this.keptAsk?.card.tool_use_id === n ? this.keptAsk : undefined),
+      request: (n, r, o) => {
+        this.hostDialogAttestations.set(o, false);
+        return this.sendRequest(n, MARKETPLACE_ONLY_MANIFEST_FIELDS(e), r, {
+          requestId: o,
+        });
+      },
       isPending: (n) => this.pendingRequests.has(n),
       interruptedAtStreamClose: (n) => this.streamCloseInterruptRequestIds.has(n),
       answeredAtHostDialog: (n) => {
-        let r = this.hostDialogAttestations.get(n) === !0;
-        if (r) this.hostDialogAttestations.set(n, !1);
+        let r = this.hostDialogAttestations.get(n) === true;
+        if (r) this.hostDialogAttestations.set(n, false);
         return r;
       },
       takeApprovalTicket: (n) => {
         let r = this.approvalTickets.get(n);
-        return (this.approvalTickets.delete(n), r);
+        this.approvalTickets.delete(n);
+        return r;
       },
       emitPermissionDenied: (n, r, o, h) => this.emitPermissionDenied(n, r, o, h),
       promptShown:
         s &&
         ((n, r, o, h) => {
-          if ((this.publishedPendingActionDetails.set(n, r), h !== void 0)) this.backgroundPromptIds.add(n);
-          if (o !== void 0) this.sessionState.notifyNestedPromptBlocking(o);
+          this.publishedPendingActionDetails.set(n, r);
+          if (h !== undefined) this.backgroundPromptIds.add(n);
+          if (o !== undefined) this.sessionState.notifyNestedPromptBlocking(o);
           s(r);
         }),
       promptSettled: (n, r) => this.settlePermissionPrompt(n, r),
     };
   }
   settlePermissionPrompt(e, s) {
-    if (s !== void 0) this.sessionState.notifyNestedPromptUnblocking(s);
-    (this.hostDialogAttestations.delete(e),
-      this.approvalTickets.delete(e),
-      this.settlePublishedPrompt(e, !0));
+    if (s !== undefined) this.sessionState.notifyNestedPromptUnblocking(s);
+    this.hostDialogAttestations.delete(e);
+    this.approvalTickets.delete(e);
+    this.settlePublishedPrompt(e, true);
   }
   settlePublishedPrompt(e, s) {
-    if (
-      (this.publishedPendingActionDetails.delete(e),
-      this.backgroundPromptIds.delete(e),
-      !this.hasPendingPrompt())
-    ) {
+    this.publishedPendingActionDetails.delete(e);
+    this.backgroundPromptIds.delete(e);
+    if (!this.hasPendingPrompt()) {
       this.flipBackFromRequiresAction();
       return;
     }
@@ -1456,127 +1611,168 @@ class StructuredIO {
     if (isTerminalShutdown()) return;
     let e = this.sessionState.heldRequiresAction?.();
     if (e) {
-      ((this.flipBackLeftToUnpublishedAsk = !1), this.sessionState.notifyStateChanged("requires_action", e));
+      this.flipBackLeftToUnpublishedAsk = false;
+      this.sessionState.notifyStateChanged("requires_action", e);
       return;
     }
-    this.sessionState.notifyStateChanged(this.mainLoopLiveness?.() === !1 ? "idle" : "running");
+    this.sessionState.notifyStateChanged(this.mainLoopLiveness?.() === false ? "idle" : "running");
   }
-  createHookCallback(e, s) {
+  createHookCallback(callbackId, timeout) {
     let sdkHostHookGeneration = this.sdkHostHookGeneration;
     return {
       type: "callback",
-      timeout: s,
-      callback: async (r, o, h) => {
+      timeout,
+      callback: async (input, toolUseID, abort) => {
         if (sdkHostHookGeneration !== this.sdkHostHookGeneration && this.retiredHostHookAnswer)
-          return this.retiredHostHookAnswer(r);
+          return this.retiredHostHookAnswer(input);
         try {
-          let sendRequest = await this.sendRequest(
-            { subtype: "hook_callback", callback_id: e, input: r, tool_use_id: o || void 0 },
+          let result = await this.sendRequest(
+            {
+              subtype: "hook_callback",
+              callback_id: callbackId,
+              input,
+              tool_use_id: toolUseID || undefined,
+            },
             hookJSONOutputSchema(),
-            h,
+            abort,
           );
-          return (noteSdkHostHookAnswered(), sendRequest);
+          noteSdkHostHookAnswered();
+          return result;
         } catch (error) {
           if (isAbortError(error)) throw error;
-          return (noteSdkHostHookAnswered(), console.error(`Error in hook callback ${e}:`, error), {});
+          noteSdkHostHookAnswered();
+          console.error(`Error in hook callback ${callbackId}:`, error);
+          return {};
         }
       },
     };
   }
   async sendUiHostRequest(e, s, n) {
-    if (!Fce(this.uiSurfaceChannel())) return;
-    let isRemoteTransport = this.isRemoteTransport(),
-      o = randomUUID();
-    if (isRemoteTransport) this.trackDeviceRequest(o, "host_ask", () => !0);
-    let timeout = AbortSignal.timeout(n),
-      m = await this.sendRequest(e, s, timeout, { requestId: o })
-        .then(
-          (y) => ({ answer: y, failure: void 0 }),
-          (y) => ({ answer: void 0, failure: classifyStreamError(y, timeout) }),
-        )
-        .finally(() => this.deviceRequests.delete(o));
-    if (isRemoteTransport && m.failure === void 0) logFeatureOk("plugin_function_hooks_host_ask");
-    else if (isRemoteTransport && m.failure !== void 0)
-      logFeatureSad("plugin_function_hooks_host_ask", m.failure);
+    if (!canServeManifests(this.uiSurfaceChannel())) return;
+    let r = this.isRemoteTransport();
+    let o = randomUUID();
+    if (r) this.trackDeviceRequest(o, "host_ask", () => true);
+    let h = AbortSignal.timeout(n);
+    let m = await this.sendRequest(e, s, h, {
+      requestId: o,
+    })
+      .then(
+        (answer) => ({
+          answer,
+          failure: undefined,
+        }),
+        (error) => ({
+          answer: undefined,
+          failure: classifyStreamError(error, h),
+        }),
+      )
+      .finally(() => this.deviceRequests.delete(o));
+    if (r && m.failure === undefined) logFeatureOk("plugin_function_hooks_host_ask");
+    else if (r && m.failure !== undefined) logFeatureSad("plugin_function_hooks_host_ask", m.failure);
     return m.answer;
   }
   takesUiHostAsks() {
-    return !this.isRemoteTransport() || QZe(this.sessionWriters());
+    return !this.isRemoteTransport() || isOwnerAccountOnlyWriters(this.sessionWriters());
   }
   async sendUiHostAsk(e, s, n) {
-    if (!Fce(this.uiSurfaceChannel())) return { answer: void 0, cause: "not_asked" };
-    let timeout = AbortSignal.timeout(n);
+    if (!canServeManifests(this.uiSurfaceChannel()))
+      return {
+        answer: undefined,
+        cause: "not_asked",
+      };
+    let r = AbortSignal.timeout(n);
     try {
-      return { answer: await this.sendRequest(e, s, timeout), cause: void 0 };
+      return {
+        answer: await this.sendRequest(e, s, r),
+        cause: undefined,
+      };
     } catch (error) {
-      return { answer: void 0, cause: classifyStreamError(error, timeout) };
+      return {
+        answer: undefined,
+        cause: classifyStreamError(error, r),
+      };
     }
   }
   sendDeviceHookCallback(e) {
-    let s = randomUUID(),
-      trackDeviceRequest = this.trackDeviceRequest(s, "hook", (m) => parseControlResponse(m) !== null),
-      abortController = new AbortController(),
-      o = e.signal ? AbortSignal.any([e.signal, abortController.signal]) : abortController.signal,
-      h = this.sendRequest(
-        {
-          subtype: "hook_callback",
-          callback_id: e.callbackId,
-          input: e.input,
-          tool_use_id: e.toolUseID || void 0,
-          issued_at: Math.trunc(e.issuedAt),
-          deadline_ms: Math.max(1, Math.ceil(e.deadlineMs)),
+    let s = randomUUID();
+    let n = this.trackDeviceRequest(s, "hook", (m) => parseControlResponse(m) !== null);
+    let abortController = new AbortController();
+    let o = e.signal ? AbortSignal.any([e.signal, abortController.signal]) : abortController.signal;
+    let reply = this.sendRequest(
+      {
+        subtype: "hook_callback",
+        callback_id: e.callbackId,
+        input: e.input,
+        tool_use_id: e.toolUseID || undefined,
+        issued_at: Math.trunc(e.issuedAt),
+        deadline_ms: Math.max(1, Math.ceil(e.deadlineMs)),
+      },
+      unknown(),
+      o,
+      {
+        requestId: s,
+        deviceHook: true,
+      },
+    )
+      .then(
+        (m) => {
+          let controlResponse = parseControlResponse(m);
+          return controlResponse === null
+            ? {
+                malformed: true,
+              }
+            : {
+                answer: controlResponse,
+              };
         },
-        oe(),
-        o,
-        { requestId: s, deviceHook: !0 },
+        (error) => {
+          if (isAbortError(error)) throw error;
+          logForDebugging(
+            `Device hook_callback request_id=${s} settled with a non-answer; treating as no opinion`,
+            {
+              level: "warn",
+            },
+          );
+          return {
+            malformed: true,
+          };
+        },
       )
-        .then(
-          (m) => {
-            let y = parseControlResponse(m);
-            return y === null ? { malformed: !0 } : { answer: y };
-          },
-          (m) => {
-            if (isAbortError(m)) throw m;
-            return (
-              logForDebugging(
-                `Device hook_callback request_id=${s} settled with a non-answer; treating as no opinion`,
-                { level: "warn" },
-              ),
-              { malformed: !0 }
-            );
-          },
-        )
-        .finally(() => {
-          this.deviceRequests.delete(s);
-        });
+      .finally(() => {
+        this.deviceRequests.delete(s);
+      });
     return {
       requestId: s,
-      reply: h,
+      reply,
       cancel: () => abortController.abort(),
-      errorRepliesIgnored: () => trackDeviceRequest.errorRepliesIgnored,
-      malformedRepliesIgnored: () => trackDeviceRequest.malformedRepliesIgnored,
+      errorRepliesIgnored: () => n.errorRepliesIgnored,
+      malformedRepliesIgnored: () => n.malformedRepliesIgnored,
     };
   }
-  trackDeviceRequest(e, s, n, r, o) {
-    if (this.deviceRequests.size >= z)
+  trackDeviceRequest(e, kind, accepts, instanceId, onUpload) {
+    if (this.deviceRequests.size >= MAX_LIVE_DEVICE_REQUESTS)
       logForDebugging(
-        `Device request bookkeeping past its expected ceiling (${z} live requests); keeping all of them`,
-        { level: "warn" },
+        `Device request bookkeeping past its expected ceiling (${MAX_LIVE_DEVICE_REQUESTS} live requests); keeping all of them`,
+        {
+          level: "warn",
+        },
       );
     let h = {
-      kind: s,
+      kind,
       errorRepliesIgnored: 0,
       malformedRepliesIgnored: 0,
       delivery: "queued",
-      instanceId: r,
-      accepts: n,
-      onUpload: o,
+      instanceId,
+      accepts,
+      onUpload,
     };
-    return (this.deviceRequests.set(e, h), h);
+    this.deviceRequests.set(e, h);
+    return h;
   }
   waitsOnHostAsk() {
-    for (let e of this.deviceRequests.values()) if (e.kind === "host_ask") return !0;
-    return !1;
+    for (let deviceRequest of this.deviceRequests.values())
+      if (deviceRequest.kind === "host_ask") return true;
+    return false;
   }
   liveDeviceRequestKind(e) {
     return this.deviceRequests.get(e)?.kind;
@@ -1587,88 +1783,88 @@ class StructuredIO {
       if (o.kind !== "served_call" || o.instanceId !== e) continue;
       let h = this.pendingRequests.get(r);
       if (!h) continue;
-      (this.enqueueCancelRequest(r),
-        this.pendingRequests.delete(r),
-        h.reject(new ServingInstanceGoneError(s)),
-        n++);
+      this.enqueueCancelRequest(r);
+      this.pendingRequests.delete(r);
+      h.reject(new ServingInstanceGoneError(s));
+      n++;
     }
     return n;
   }
   withdrawStandingServedCall(e) {
-    if (this.pendingRequests.has(e)) return !1;
-    return (this.enqueueCancelRequest(e), !0);
+    if (this.pendingRequests.has(e)) return false;
+    this.enqueueCancelRequest(e);
+    return true;
   }
   noteRequestsUpload(e, s) {
     let n = 0;
     for (let r of e) {
       let o = this.deviceRequests.get(r);
-      if (o === void 0) continue;
+      if (o === undefined) continue;
       let h = deliveryOutcome(o.delivery, s);
-      if (h !== o.delivery) ((o.delivery = h), n++);
+      if (h !== o.delivery) {
+        o.delivery = h;
+        n++;
+      }
       try {
         o.onUpload?.(s);
       } catch (error) {
         logForDebugging(
           `A served call's upload listener threw (${s}); the delivery ledger is unaffected: ${errorMessage(error)}`,
-          { level: "warn" },
+          {
+            level: "warn",
+          },
         );
       }
     }
     return n;
   }
-  rejectUndeliveredRequests(e, s) {
+  rejectUndeliveredRequests(e, status) {
     let n = 0;
     for (let r of e) {
       let o = this.deviceRequests.get(r);
       if (o?.kind !== "served_call") continue;
       let h = this.pendingRequests.get(r);
       if (!h) continue;
-      (this.pendingRequests.delete(r),
-        h.reject(
-          this.tracksRequestDelivery && o.delivery === "queued"
-            ? new RequestNotDeliveredError(s)
-            : new RequestDeliveryUnknownError(s),
-        ),
-        n++);
+      this.pendingRequests.delete(r);
+      h.reject(
+        this.tracksRequestDelivery && o.delivery === "queued"
+          ? new RequestNotDeliveredError(status)
+          : new RequestDeliveryUnknownError(status),
+      );
+      n++;
     }
     return n;
   }
   sendServedCallRequest(e) {
     let s = randomUUID();
     if (this.inputClosed) {
-      let reject = Promise.reject(new StreamClosedAbortError(WVr));
-      return (
-        reject.catch(() => {}),
-        {
-          requestId: s,
-          sent: !1,
-          delivery: () => "queued",
-          withdraw: () => !1,
-          reply: reject,
-          cancel: () => {},
-          errorRepliesIgnored: () => 0,
-        }
-      );
+      let m = Promise.reject(new StreamClosedAbortError(STREAM_CLOSED_TEXT));
+      m.catch(() => {});
+      return {
+        requestId: s,
+        sent: false,
+        delivery: () => "queued",
+        withdraw: () => false,
+        reply: m,
+        cancel: () => {},
+        errorRepliesIgnored: () => 0,
+      };
     }
-    let trackDeviceRequest = this.trackDeviceRequest(
-        s,
-        "served_call",
-        e.accepts,
-        e.request.instance_id,
-        e.onUpload,
-      ),
-      abortController = new AbortController(),
-      o = e.signal ? AbortSignal.any([e.signal, abortController.signal]) : abortController.signal,
-      h = this.sendRequest(e.request, oe(), o, { requestId: s, deviceHook: !0 }).finally(() => {
-        this.deviceRequests.delete(s);
-      });
+    let n = this.trackDeviceRequest(s, "served_call", e.accepts, e.request.instance_id, e.onUpload);
+    let abortController = new AbortController();
+    let o = e.signal ? AbortSignal.any([e.signal, abortController.signal]) : abortController.signal;
+    let reply = this.sendRequest(e.request, unknown(), o, {
+      requestId: s,
+      deviceHook: true,
+    }).finally(() => {
+      this.deviceRequests.delete(s);
+    });
     return {
       requestId: s,
-      sent: !0,
-      delivery: () =>
-        this.tracksRequestDelivery ? normalizeDeliveryState(trackDeviceRequest.delivery) : "untracked",
+      sent: true,
+      delivery: () => (this.tracksRequestDelivery ? normalizeDeliveryState(n.delivery) : "untracked"),
       withdraw: () => this.withdrawUnsentServedCall(s),
-      reply: h,
+      reply,
       cancel: () => {
         if (this.pendingRequests.has(s)) {
           abortController.abort();
@@ -1676,217 +1872,278 @@ class StructuredIO {
         }
         this.enqueueCancelRequest(s);
       },
-      errorRepliesIgnored: () => trackDeviceRequest.errorRepliesIgnored,
+      errorRepliesIgnored: () => n.errorRepliesIgnored,
     };
   }
   askToAnnounce(e, s) {
-    this.sendRequest(e, oe(), s, { deviceHook: !0 }).catch(() => {});
+    this.sendRequest(e, unknown(), s, {
+      deviceHook: true,
+    }).catch(() => {});
   }
   withdrawUnsentServedCall(e) {
-    let s = this.deviceRequests.get(e),
-      n = this.pendingRequests.get(e);
-    if (!this.tracksRequestDelivery || n === void 0 || s?.kind !== "served_call" || s.delivery !== "queued")
-      return !1;
-    if (!this.withdrawQueuedRequest(e)) return !1;
-    return (this.pendingRequests.delete(e), n.reject(new RequestWithdrawnUnsentError()), !0);
+    let s = this.deviceRequests.get(e);
+    let n = this.pendingRequests.get(e);
+    if (
+      !this.tracksRequestDelivery ||
+      n === undefined ||
+      s?.kind !== "served_call" ||
+      s.delivery !== "queued"
+    )
+      return false;
+    if (!this.withdrawQueuedRequest(e)) return false;
+    this.pendingRequests.delete(e);
+    n.reject(new RequestWithdrawnUnsentError());
+    return true;
   }
-  async handleElicitation(e, s, n, r, o, h, m, y, q = !1) {
-    if (!this.hostAnswersElicitations) return { action: "cancel" };
+  async handleElicitation(mcpServerName, message, n, r, o, url, elicitationId, y, q = false) {
+    if (!this.hostAnswersElicitations)
+      return {
+        action: "cancel",
+      };
     if (isTerminalShutdown()) {
-      if (r?.aborted) return { action: "cancel" };
+      if (r?.aborted)
+        return {
+          action: "cancel",
+        };
       return heldUntilExit();
     }
-    if (this.inputClosed || r?.aborted) return { action: "cancel" };
-    let R = randomUUID(),
-      S = {
-        tool_name: MCP_ELICITATION_DIALOG_TOOL,
-        display_tool_name: "Claude needs your input",
-        action_description: "Answer the MCP server's question to continue",
-        tool_use_id: "",
-        request_id: R,
+    if (this.inputClosed || r?.aborted)
+      return {
+        action: "cancel",
       };
-    if ((this.publishedPendingActionDetails.set(R, S), q)) this.backgroundPromptIds.add(R);
-    (this.sessionState.notifyStateChanged("requires_action", S), this.onUserDialogParked?.(S));
-    let k = n?.properties;
+    let R = randomUUID();
+    let S = {
+      tool_name: MCP_ELICITATION_DIALOG_TOOL,
+      display_tool_name: "Claude needs your input",
+      action_description: "Answer the MCP server's question to continue",
+      tool_use_id: "",
+      request_id: R,
+    };
+    this.publishedPendingActionDetails.set(R, S);
+    if (q) this.backgroundPromptIds.add(R);
+    this.sessionState.notifyStateChanged("requires_action", S);
+    this.onUserDialogParked?.(S);
+    let properties = n?.properties;
     try {
       return await this.sendRequest(
         {
           subtype: "elicitation",
-          mcp_server_name: e,
-          message: s,
+          mcp_server_name: mcpServerName,
+          message,
           mode: o,
-          url: h,
-          elicitation_id: m,
+          url,
+          elicitation_id: elicitationId,
           requested_schema: n,
-          property_order: o !== "url" && isPlainObject(k) ? Object.keys(k) : void 0,
+          property_order: o !== "url" && isPlainObject(properties) ? Object.keys(properties) : undefined,
           title: y?.title,
           display_name: y?.displayName,
           description: y?.description,
         },
-        Mls(),
+        ElicitationResponseSchema(),
         r,
-        { requestId: R },
+        {
+          requestId: R,
+        },
       );
     } catch {
-      return { action: "cancel" };
+      return {
+        action: "cancel",
+      };
     } finally {
       this.settlePublishedPrompt(R, !r?.aborted);
     }
   }
   async requestUserDialog(e, s, n) {
     if (isTerminalShutdown()) {
-      if (n?.signal?.aborted) return { behavior: "cancelled" };
+      if (n?.signal?.aborted)
+        return {
+          behavior: "cancelled",
+        };
       return heldUntilExit();
     }
-    let r = randomUUID(),
-      o = dialogPermissionRequest(e, s, r, n?.toolUseId);
-    (this.publishedPendingActionDetails.set(r, o),
-      this.sessionState.notifyStateChanged("requires_action", o),
-      this.onUserDialogParked?.(o));
+    let requestId = randomUUID();
+    let o = dialogPermissionRequest(e, s, requestId, n?.toolUseId);
+    this.publishedPendingActionDetails.set(requestId, o);
+    this.sessionState.notifyStateChanged("requires_action", o);
+    this.onUserDialogParked?.(o);
     let h = dialogSourceAttr(e, s);
-    if (
-      (logEvent("tengu_request_user_dialog_requires_action", { dialog_kind: gn(e), ...h }),
-      n?.onSettledUnanswered)
-    )
-      this.unansweredSettleHandlers.set(r, n.onSettledUnanswered);
-    if (n?.closesOnNewPrompt) this.dialogsANewPromptCloses.add(r);
-    let m = lci(n?.parkTimeoutMs),
-      y;
-    if (m > 0)
-      ((y = setTimeout(
-        (R, S, k, A) => {
-          if (
-            (this.timedOutUserDialogs.set(R, { dialogKind: S, timedOutAt: Date.now(), source: A }),
-            !this.cancelDialogByMachine(R, "deadline"))
-          ) {
+    logEvent("tengu_request_user_dialog_requires_action", {
+      dialog_kind: shortHash(e),
+      ...h,
+    });
+    if (n?.onSettledUnanswered) this.unansweredSettleHandlers.set(requestId, n.onSettledUnanswered);
+    if (n?.closesOnNewPrompt) this.dialogsANewPromptCloses.add(requestId);
+    let m = clampDialogTimeoutMs(n?.parkTimeoutMs);
+    let y;
+    if (m > 0) {
+      y = setTimeout(
+        (R, S, timeoutMs, A) => {
+          this.timedOutUserDialogs.set(R, {
+            dialogKind: S,
+            timedOutAt: Date.now(),
+            source: A,
+          });
+          if (!this.cancelDialogByMachine(R, "deadline")) {
             this.timedOutUserDialogs.delete(R);
             return;
           }
-          logEvent("tengu_request_user_dialog_timeout", { dialog_kind: gn(S), ...A, timeout_ms: k });
+          logEvent("tengu_request_user_dialog_timeout", {
+            dialog_kind: shortHash(S),
+            ...A,
+            timeout_ms: timeoutMs,
+          });
         },
         m,
-        r,
+        requestId,
         e,
         m,
         h,
-      )),
-        y.unref());
-    let q = !this.inputClosed && n?.signal?.aborted !== !0;
+      );
+      y.unref();
+    }
+    let q = !this.inputClosed && n?.signal?.aborted !== true;
     try {
       return await this.sendRequest(
-        { subtype: "request_user_dialog", dialog_kind: e, payload: s, tool_use_id: n?.toolUseId },
-        Uxn(),
+        {
+          subtype: "request_user_dialog",
+          dialog_kind: e,
+          payload: s,
+          tool_use_id: n?.toolUseId,
+        },
+        UserDialogResponseSchema(),
         n?.signal,
-        { requestId: r },
+        {
+          requestId,
+        },
       );
     } catch {
-      return { behavior: "cancelled" };
+      return {
+        behavior: "cancelled",
+      };
     } finally {
-      if (y !== void 0) clearTimeout(y);
-      if (
-        (this.unansweredSettleHandlers.delete(r),
-        this.dialogsANewPromptCloses.delete(r),
-        e === ENUM_PROMPT && q)
-      )
-        this.sendCancelRequest(r);
-      this.settlePublishedPrompt(r, !this.timedOutUserDialogs.has(r));
+      if (y !== undefined) clearTimeout(y);
+      this.unansweredSettleHandlers.delete(requestId);
+      this.dialogsANewPromptCloses.delete(requestId);
+      if (e === ENUM_PROMPT && q) this.sendCancelRequest(requestId);
+      this.settlePublishedPrompt(requestId, !this.timedOutUserDialogs.has(requestId));
     }
   }
   createSandboxAskCallback(e, s, n, r) {
-    let o = new Map(),
-      h = async (m) => {
-        if (isMisleadingConsentHost(m))
-          return (
-            logForDebugging(
-              `[StructuredIO] Refusing a sandbox network ask for a host srt would re-spell: ${jsonStringify(m)}`,
-              { level: "warn" },
-            ),
-            !1
-          );
-        try {
-          let y = {
-              type: "addRules",
-              rules: [{ toolName: WEBFETCH, ruleContent: `domain:${consentHostEntry(m)}` }],
-              behavior: "allow",
-              destination: sandboxHostGrantDestination() ?? "session",
+    let o = new Map();
+    let h = async (host) => {
+      if (isMisleadingConsentHost(host)) {
+        logForDebugging(
+          `[StructuredIO] Refusing a sandbox network ask for a host srt would re-spell: ${jsonStringify(host)}`,
+          {
+            level: "warn",
+          },
+        );
+        return false;
+      }
+      try {
+        let y = {
+          type: "addRules",
+          rules: [
+            {
+              toolName: WEBFETCH,
+              ruleContent: `domain:${consentHostEntry(host)}`,
             },
-            q = schedulePermissionNotify(humanizeToolName(SANDBOX_NETWORK_ACCESS_TOOL_NAME), n, r),
-            R;
-          try {
-            R = await this.sendRequest(
-              {
-                subtype: "can_use_tool",
-                tool_name: SANDBOX_NETWORK_ACCESS_TOOL_NAME,
-                display_name: humanizeToolName(SANDBOX_NETWORK_ACCESS_TOOL_NAME),
-                input: { host: m },
-                permission_suggestions: [y],
-                tool_use_id: randomUUID(),
-                description: `Allow network connection to ${m}?`,
+          ],
+          behavior: "allow",
+          destination: sandboxHostGrantDestination() ?? "session",
+        };
+        let q = schedulePermissionNotify(humanizeToolName(SANDBOX_NETWORK_ACCESS_TOOL_NAME), n, r);
+        let R;
+        try {
+          R = await this.sendRequest(
+            {
+              subtype: "can_use_tool",
+              tool_name: SANDBOX_NETWORK_ACCESS_TOOL_NAME,
+              display_name: humanizeToolName(SANDBOX_NETWORK_ACCESS_TOOL_NAME),
+              input: {
+                host,
               },
-              MARKETPLACE_ONLY_MANIFEST_FIELDS(e.kind),
-            );
-          } finally {
-            if ((q(), this.flipBackLeftToUnpublishedAsk && !this.hasPendingPrompt()))
-              this.flipBackFromRequiresAction();
-          }
-          if (R.behavior !== "allow") return !1;
-          let updatedPermissions = R.updatedPermissions;
-          switch (e.kind) {
-            case "launcher":
-              if (updatedPermissions && updatedPermissions.length > 0) {
-                let k = normalizePermissionUpdate(updatedPermissions, void 0);
-                (s?.(
-                  (A) => (
-                    (k = normalizePermissionUpdate(updatedPermissions, void 0, A)),
-                    applyPermissionUpdates(A, k)
-                  ),
-                ),
-                  await persistPermissionUpdates(k, n));
-              }
-              break;
-            case "strict":
-              if (
-                (s
-                  ? applyUpdatesToSessionContext(
-                      e,
-                      applyPermissionAnswer(updatedPermissions, e.limits),
-                      SANDBOX_NETWORK_ACCESS_TOOL_NAME,
-                      s,
-                      listAnswerTighteningRules(updatedPermissions, e.limits.ruleLength),
-                    )
-                  : listAnswerTighteningRules(updatedPermissions, e.limits.ruleLength).length) > 0
-              )
-                return (
-                  logForDebugging(
-                    "refused a sandbox network answer: a deny or ask rule that the answer added, or may have added, is not among the session's rules",
-                    { level: "warn" },
-                  ),
-                  !1
-                );
-              break;
-          }
-          return (SandboxManager.addSessionAllowedHost(m), !0);
-        } catch {
-          return !1;
+              permission_suggestions: [y],
+              tool_use_id: randomUUID(),
+              description: `Allow network connection to ${host}?`,
+            },
+            MARKETPLACE_ONLY_MANIFEST_FIELDS(e.kind),
+          );
+        } finally {
+          q();
+          if (this.flipBackLeftToUnpublishedAsk && !this.hasPendingPrompt())
+            this.flipBackFromRequiresAction();
         }
-      };
+        if (R.behavior !== "allow") return false;
+        let updatedPermissions = R.updatedPermissions;
+        switch (e.kind) {
+          case "launcher":
+            if (updatedPermissions && updatedPermissions.length > 0) {
+              let k = normalizePermissionUpdate(updatedPermissions, undefined);
+              s?.((A) => {
+                k = normalizePermissionUpdate(updatedPermissions, undefined, A);
+                return applyPermissionUpdates(A, k);
+              });
+              await persistPermissionUpdates(k, n);
+            }
+            break;
+          case "strict":
+            if (
+              (s
+                ? applyUpdatesToSessionContext(
+                    e,
+                    applyPermissionAnswer(updatedPermissions, e.limits),
+                    SANDBOX_NETWORK_ACCESS_TOOL_NAME,
+                    s,
+                    listAnswerTighteningRules(updatedPermissions, e.limits.ruleLength),
+                  )
+                : listAnswerTighteningRules(updatedPermissions, e.limits.ruleLength).length) > 0
+            ) {
+              logForDebugging(
+                "refused a sandbox network answer: a deny or ask rule that the answer added, or may have added, is not among the session's rules",
+                {
+                  level: "warn",
+                },
+              );
+              return false;
+            }
+            break;
+        }
+        SandboxManager.addSessionAllowedHost(host);
+        return true;
+      } catch {
+        return false;
+      }
+    };
     return (m) => {
-      let host = m.host,
-        q = o.get(host);
+      let host = m.host;
+      let q = o.get(host);
       if (q) return q;
       let R = h(host).finally(() => {
         o.delete(host);
       });
-      return (o.set(host, R), R);
+      o.set(host, R);
+      return R;
     };
   }
-  async sendMcpMessage(e, s, n = pe) {
-    let o = R4n(s) ? void 0 : createCombinedAbortSignal(void 0, { timeoutMs: n, refTimer: !0 });
+  async sendMcpMessage(serverName, s, timeoutMs = MCP_MESSAGE_TIMEOUT_MS) {
+    let o = isJsonRpcRequest(s)
+      ? undefined
+      : createCombinedAbortSignal(undefined, {
+          timeoutMs,
+          refTimer: true,
+        });
     try {
       return (
         await this.sendRequest(
-          { subtype: "mcp_message", server_name: e, message: s },
-          u({ mcp_response: qne().optional() }),
+          {
+            subtype: "mcp_message",
+            server_name: serverName,
+            message: s,
+          },
+          u({
+            mcp_response: qne().optional(),
+          }),
           o?.signal,
         )
       ).mcp_response;
@@ -1895,110 +2152,139 @@ class StructuredIO {
     }
   }
   async requestOAuthTokenRefresh() {
-    let askHostForOAuthToken = await this.askHostForOAuthToken();
-    if (typeof askHostForOAuthToken.accessToken === "string" && askHostForOAuthToken.accessToken)
-      return (RRi(), askHostForOAuthToken.accessToken);
-    if (askHostForOAuthToken.reason !== void 0) CRi(askHostForOAuthToken.reason);
+    let e = await this.askHostForOAuthToken();
+    if (typeof e.accessToken === "string" && e.accessToken) {
+      clearLauncherLoginEnd();
+      return e.accessToken;
+    }
+    if (e.reason !== undefined) recordLauncherLoginEnd(e.reason);
     return null;
   }
   async requestHostSessionsBearer() {
-    let now = Date.now(),
-      askHostForOAuthToken = await this.askHostForOAuthToken("sessions"),
-      n = askHostForOAuthToken.accessToken || null;
-    if (n !== null && isClaudeAISignInToken(n))
-      ((n = null),
-        logEvent("tengu_sdk_oauth_refresh_unfulfilled", {
-          outcome: fromEnum("sign_in_token"),
-          reason: fromEnum("none"),
-          kind: fromEnum("sessions"),
-          duration_ms: Date.now() - now,
-        }),
-        logForDebugging(
-          "[host-sessions-bearer] the host answered the cloud-sessions token request with its sign-in token; ignoring it, cloud-sessions calls keep the sign-in token",
-          { level: "warn" },
-        ));
-    else if (n === null)
+    let now = Date.now();
+    let s = await this.askHostForOAuthToken("sessions");
+    let accessToken = s.accessToken || null;
+    if (accessToken !== null && isClaudeAISignInToken(accessToken)) {
+      accessToken = null;
+      logEvent("tengu_sdk_oauth_refresh_unfulfilled", {
+        outcome: fromEnum("sign_in_token"),
+        reason: fromEnum("none"),
+        kind: fromEnum("sessions"),
+        duration_ms: Date.now() - now,
+      });
       logForDebugging(
-        `[host-sessions-bearer] the host has no cloud-sessions token (${askHostForOAuthToken.reason ?? "no reason given"}); cloud-sessions calls use the sign-in token until a later ask brings one`,
-        { level: "warn" },
+        "[host-sessions-bearer] the host answered the cloud-sessions token request with its sign-in token; ignoring it, cloud-sessions calls keep the sign-in token",
+        {
+          level: "warn",
+        },
       );
-    return askHostForOAuthToken.reason === void 0
-      ? { accessToken: n }
-      : { accessToken: n, reason: askHostForOAuthToken.reason };
+    } else if (accessToken === null)
+      logForDebugging(
+        `[host-sessions-bearer] the host has no cloud-sessions token (${s.reason ?? "no reason given"}); cloud-sessions calls use the sign-in token until a later ask brings one`,
+        {
+          level: "warn",
+        },
+      );
+    return s.reason === undefined
+      ? {
+          accessToken,
+        }
+      : {
+          accessToken,
+          reason: s.reason,
+        };
   }
   async askHostForOAuthToken(e) {
-    let now = Date.now(),
-      n;
+    let now = Date.now();
+    let n;
     try {
       n = await this.sendRequest(
-        e === void 0 ? { subtype: "oauth_token_refresh" } : { subtype: "oauth_token_refresh", kind: e },
-        Bxn(),
+        e === undefined
+          ? {
+              subtype: "oauth_token_refresh",
+            }
+          : {
+              subtype: "oauth_token_refresh",
+              kind: e,
+            },
+        OAuthTokenRefreshResponseSchema(),
         AbortSignal.timeout(CONTROL_TIMEOUTS),
       );
     } catch (error) {
-      throw (
-        logEvent("tengu_sdk_oauth_refresh_unfulfilled", {
-          outcome: fromEnum(
-            error instanceof StreamClosedAbortError
-              ? "stream_closed"
-              : isAbortError(error)
-                ? "timeout"
-                : error instanceof kR
-                  ? "invalid_response"
-                  : "error",
-          ),
-          reason: fromEnum("none"),
-          kind: fromEnum(e ?? "sign_in"),
-          duration_ms: Date.now() - now,
-        }),
-        error
-      );
-    }
-    if (typeof n.accessToken === "string" && n.accessToken) return n;
-    return (
       logEvent("tengu_sdk_oauth_refresh_unfulfilled", {
-        outcome: fromEnum(n.reason !== void 0 ? "declined" : "null"),
-        reason: fromEnum(n.reason ?? "none"),
+        outcome: fromEnum(
+          error instanceof StreamClosedAbortError
+            ? "stream_closed"
+            : isAbortError(error)
+              ? "timeout"
+              : error instanceof ZodError
+                ? "invalid_response"
+                : "error",
+        ),
+        reason: fromEnum("none"),
         kind: fromEnum(e ?? "sign_in"),
         duration_ms: Date.now() - now,
-      }),
-      n
-    );
+      });
+      throw error;
+    }
+    if (typeof n.accessToken === "string" && n.accessToken) return n;
+    logEvent("tengu_sdk_oauth_refresh_unfulfilled", {
+      outcome: fromEnum(n.reason !== undefined ? "declined" : "null"),
+      reason: fromEnum(n.reason ?? "none"),
+      kind: fromEnum(e ?? "sign_in"),
+      duration_ms: Date.now() - now,
+    });
+    return n;
   }
-  async requestRemoteControlWorkSecret(e) {
+  async requestRemoteControlWorkSecret(sessionId) {
     try {
       return (
         (
           await this.sendRequest(
-            { subtype: "remote_control_work_secret", session_id: e },
-            Dls(),
-            AbortSignal.timeout(le),
+            {
+              subtype: "remote_control_work_secret",
+              session_id: sessionId,
+            },
+            RemoteControlWorkSecretResponseSchema(),
+            AbortSignal.timeout(CONTROL_REQUEST_LONG_TIMEOUT_MS),
           )
         ).work_secret || null
       );
     } catch (error) {
-      return (
-        logForDebugging(
-          `[bridge:work-secret] host work-secret request failed (${error instanceof Error ? error.name : "unknown"})`,
-          { level: "warn" },
-        ),
-        null
+      logForDebugging(
+        `[bridge:work-secret] host work-secret request failed (${error instanceof Error ? error.name : "unknown"})`,
+        {
+          level: "warn",
+        },
       );
+      return null;
     }
   }
-  async requestHostAuthTokenRefresh(e = ue) {
-    return this.sendRequest({ subtype: "host_auth_token_refresh" }, Lls(), AbortSignal.timeout(e));
+  async requestHostAuthTokenRefresh(e = HOST_AUTH_REFRESH_TIMEOUT_MS) {
+    return this.sendRequest(
+      {
+        subtype: "host_auth_token_refresh",
+      },
+      HostAuthTokenRefreshResponseSchema(),
+      AbortSignal.timeout(e),
+    );
   }
-  enqueueCancelRequest(e) {
-    this.outbound.enqueue({ type: "control_cancel_request", request_id: e });
+  enqueueCancelRequest(requestId) {
+    this.outbound.enqueue({
+      type: "control_cancel_request",
+      request_id: requestId,
+    });
   }
   sendCancelRequest(e) {
     if (!this.outbound.ended) {
       this.enqueueCancelRequest(e);
       return;
     }
-    this.write({ type: "control_cancel_request", request_id: e }).catch((s) => {
-      logForDebugging(`control_cancel_request for request_id=${e} not written: ${errorMessage(s)}`, {
+    this.write({
+      type: "control_cancel_request",
+      request_id: e,
+    }).catch((error) => {
+      logForDebugging(`control_cancel_request for request_id=${e} not written: ${errorMessage(error)}`, {
         level: "error",
       });
     });
@@ -2009,31 +2295,42 @@ class StructuredIO {
 async function exitWithMessage(message) {
   console.error(message);
   let s = Date.now() + 2000;
-  (await withTimeout(drainRegisteredWriteQueues(), 2000, "write queue drain timeout (exit)").catch(() => {}),
-    await withTimeout(
-      flushDiagnosticLogs(),
-      Math.max(0, s - Date.now()),
-      "diagnostic log flush timeout (exit)",
-    ).catch(() => {}),
-    await drainStdoutBeforeExit(Math.max(0, s - Date.now()), { scaleBudgetToQueue: !1 }),
-    process.exit(1));
+  await withTimeout(drainRegisteredWriteQueues(), 2000, "write queue drain timeout (exit)").catch(() => {});
+  await withTimeout(
+    flushDiagnosticLogs(),
+    Math.max(0, s - Date.now()),
+    "diagnostic log flush timeout (exit)",
+  ).catch(() => {});
+  await drainStdoutBeforeExit(Math.max(0, s - Date.now()), {
+    scaleBudgetToQueue: false,
+  });
+  process.exit(1);
 }
 //@ chunk-na0b3c5q.js:51576-51664 sole-consumer
-var we = new Set(["type", "message", "uuid", "session_id", "parent_tool_use_id", "timestamp"]);
+var MESSAGE_FIELD_NAMES = new Set([
+  "type",
+  "message",
+  "uuid",
+  "session_id",
+  "parent_tool_use_id",
+  "timestamp",
+]);
 //@ chunk-na0b3c5q.js:51664-51754 sole-consumer
-function Ae([e, s]) {
-  return we.has(e) || (e === "isSynthetic" && s === !1) || (e === "shouldQuery" && s === !0);
+function isPlainMessageField([e, s]) {
+  return (
+    MESSAGE_FIELD_NAMES.has(e) || (e === "isSynthetic" && s === false) || (e === "shouldQuery" && s === true)
+  );
 }
+//@ chunk-na0b3c5q.js:51754-52136 sole-consumer
 /**
  * 给 stream-json 输入里的 message 字段分类（无消息、非对象、无 role、role 为 null/数组/对象/字符串/其他），用于解析失败遥测。
  */
-//@ chunk-na0b3c5q.js:51754-52136 sole-consumer
-function classifyMessageRoleShape(e) {
-  if (e === void 0 || e === null) return "no_message";
-  if (typeof e !== "object" || Array.isArray(e)) return "non_object_message";
-  if (!("role" in e)) return "no_role";
-  let role = e.role;
-  if (role === void 0) return "no_role";
+function classifyMessageRoleShape(message) {
+  if (message === undefined || message === null) return "no_message";
+  if (typeof message !== "object" || Array.isArray(message)) return "non_object_message";
+  if (!("role" in message)) return "no_role";
+  let role = message.role;
+  if (role === undefined) return "no_role";
   if (role === null) return "role_null";
   if (Array.isArray(role)) return "role_array";
   switch (typeof role) {
@@ -2045,52 +2342,60 @@ function classifyMessageRoleShape(e) {
       return "role_other";
   }
 }
+//@ chunk-na0b3c5q.js:52136-52455 sole-consumer
 /**
  * 若输入行是 user 消息（content 为字符串或数组），返回 {inner, plain}；plain 表示外层只含已知字段。
  */
-//@ chunk-na0b3c5q.js:52136-52455 sole-consumer
-function extractPlainUserMessage(e) {
-  if (typeof e !== "object" || e === null || !("message" in e)) return;
-  let message = e.message;
+function extractPlainUserMessage(message) {
+  if (typeof message !== "object" || message === null || !("message" in message)) return;
+  let message_2 = message.message;
   if (
-    typeof message !== "object" ||
-    message === null ||
-    !("role" in message) ||
-    message.role !== "user" ||
-    !("content" in message) ||
-    (typeof message.content !== "string" && !Array.isArray(message.content))
+    typeof message_2 !== "object" ||
+    message_2 === null ||
+    !("role" in message_2) ||
+    message_2.role !== "user" ||
+    !("content" in message_2) ||
+    (typeof message_2.content !== "string" && !Array.isArray(message_2.content))
   )
     return;
-  return { inner: message, plain: (!("type" in e) || e.type === "user") && Object.entries(e).every(Ae) };
+  return {
+    inner: message_2,
+    plain:
+      (!("type" in message) || message.type === "user") && Object.entries(message).every(isPlainMessageField),
+  };
 }
 //@ chunk-na0b3c5q.js:52455-52638 sole-consumer
-function formatStreamInputParseError(e, s) {
-  return `Error parsing streaming input line (type=${/"type"\s*:\s*"([\w-]{1,40})"/.exec(e)?.[1] ?? "unknown"}, ${e.length} chars): ${s instanceof Error ? s.name : typeof s}`;
+function formatStreamInputParseError(e, error) {
+  return `Error parsing streaming input line (type=${/"type"\s*:\s*"([\w-]{1,40})"/.exec(e)?.[1] ?? "unknown"}, ${e.length} chars): ${error instanceof Error ? error.name : typeof error}`;
 }
 //@ chunk-na0b3c5q.js:52638-52781 sole-consumer
 function describeInputLineLazy(e) {
   return () => ({
     type: e.type,
-    ...(e.type === "user" && { uuid: matchRequestId(e.uuid) }),
-    ...(e.type === "control_request" && { subtype: knownSubtypeOrUndefined(e.request.subtype) }),
+    ...(e.type === "user" && {
+      uuid: matchRequestId(e.uuid),
+    }),
+    ...(e.type === "control_request" && {
+      subtype: knownSubtypeOrUndefined(e.request.subtype),
+    }),
   });
 }
+//@ chunk-6j594vm1.js:19866-21542 fingerprint = executePermissionRequestHooksForSDK (0.516)
 /**
  * SDK 模式下先执行 PermissionRequest 钩子，钩子给出 allow/deny 时直接返回。
  */
-//@ chunk-6j594vm1.js:19866-21542 fingerprint = executePermissionRequestHooksForSDK (0.516)
-async function executePermissionRequestHooksForSDK(n, e, d, r, m, s, y, f) {
-  if (m.forRemoteExecution === !0) return;
-  let permissionMode = getToolPermissionContext(m).mode,
-    hookGenerator = executePermissionRequestHooks(
-      e.name,
-      d,
-      r,
-      m,
-      permissionMode,
-      s,
-      m.abortController.signal,
-    );
+async function executePermissionRequestHooksForSDK(n, e, toolUseId, updatedInput, m, suggestions, y, f) {
+  if (m.forRemoteExecution === true) return;
+  let permissionMode = getToolPermissionContext(m).mode;
+  let hookGenerator = executePermissionRequestHooks(
+    e.name,
+    toolUseId,
+    updatedInput,
+    m,
+    permissionMode,
+    suggestions,
+    m.abortController.signal,
+  );
   for await (let hookResult of hookGenerator)
     if (
       hookResult.permissionRequestResult &&
@@ -2099,35 +2404,53 @@ async function executePermissionRequestHooksForSDK(n, e, d, r, m, s, y, f) {
     ) {
       let decision = hookResult.permissionRequestResult;
       if (decision.behavior === "allow") {
-        let updatedInput = decision.updatedInput;
+        let updatedInput_2 = decision.updatedInput;
         switch (n.kind) {
           case "launcher":
             break;
           case "strict":
-            if (!d0e(updatedInput, r))
-              return { decision: denyChangedAnswerInput(e.name, d), interrupt: !1, permanent: !1 };
-            updatedInput = void 0;
+            if (!isUnchangedAnswerInput(updatedInput_2, updatedInput))
+              return {
+                decision: denyChangedAnswerInput(e.name, toolUseId),
+                interrupt: false,
+                permanent: false,
+              };
+            updatedInput_2 = undefined;
             break;
         }
-        if (obe(e, r, updatedInput, !0))
+        if (shouldReplaceMemoryInput(e, updatedInput, updatedInput_2, true))
           return {
             decision: guardAccountMemoryHookRewrite(e, "PermissionRequest"),
-            interrupt: !1,
-            permanent: !1,
+            interrupt: false,
+            permanent: false,
           };
-        let b = await validatePermissionRequestUpdatedInput(e, updatedInput, r, (P) =>
-          e.validateInput?.(P, { ...m, toolUseId: d }),
+        let b = await validatePermissionRequestUpdatedInput(e, updatedInput_2, updatedInput, (P) =>
+          e.validateInput?.(P, {
+            ...m,
+            toolUseId,
+          }),
         );
-        if (b.deny !== void 0) return { decision: b.deny, interrupt: !1, permanent: !1 };
-        updatedInput = b.input;
-        let C = updatedInput || r;
-        if (updatedInput) {
+        if (b.deny !== undefined)
+          return {
+            decision: b.deny,
+            interrupt: false,
+            permanent: false,
+          };
+        updatedInput_2 = b.input;
+        let C = updatedInput_2 || updatedInput;
+        if (updatedInput_2) {
           let updatedContext = guardHookUpdatedInput(
             await checkRuleBasedPermissions(
               e,
               C,
-              { ...m, toolUseId: d, permissionRound: void 0 },
-              { hookUpdatedInput: updatedInput },
+              {
+                ...m,
+                toolUseId,
+                permissionRound: undefined,
+              },
+              {
+                hookUpdatedInput: updatedInput_2,
+              },
             ),
             e.name,
           );
@@ -2141,31 +2464,41 @@ async function executePermissionRequestHooksForSDK(n, e, d, r, m, s, y, f) {
                       decisionReason: updatedContext.decisionReason ?? HOOK_REWRITE_HEADLESS_DENY_REASON,
                       decideLocation: "ask-path",
                     }
-                  : { ...updatedContext, decideLocation: "ask-path" },
-              interrupt: !1,
-              permanent: !1,
+                  : {
+                      ...updatedContext,
+                      decideLocation: "ask-path",
+                    },
+              interrupt: false,
+              permanent: false,
             };
         }
-        if (y.hostDisplay !== void 0 || isInteractionStillOwed(e, updatedInput)) return;
-        let { applied: applied, lostTightenings: lostTightenings } = f()
-          ? { applied: [], lostTightenings: 0 }
+        if (y.hostDisplay !== undefined || isInteractionStillOwed(e, updatedInput_2)) return;
+        let { applied, lostTightenings } = f()
+          ? {
+              applied: [],
+              lostTightenings: 0,
+            }
           : applyPermissionPromptResult(
               n,
-              decision.updatedPermissions && Mar(decision.updatedPermissions, getToolPermissionContext(m)),
+              decision.updatedPermissions &&
+                filterPermissionUpdatePayload(decision.updatedPermissions, getToolPermissionContext(m)),
               e,
-              r,
+              updatedInput,
               m,
-              y.suppressAlwaysAllowRule === !0,
+              y.suppressAlwaysAllowRule === true,
             );
         if (lostTightenings > 0) return;
         return {
           decision: {
             behavior: "allow",
             updatedInput: C,
-            userModified: !1,
-            decisionReason: { type: "hook", hookName: "PermissionRequest" },
+            userModified: false,
+            decisionReason: {
+              type: "hook",
+              hookName: "PermissionRequest",
+            },
           },
-          interrupt: !1,
+          interrupt: false,
           permanent: applied.some((prev) => supportsPersistence(prev.destination)),
         };
       } else
@@ -2173,19 +2506,22 @@ async function executePermissionRequestHooksForSDK(n, e, d, r, m, s, y, f) {
           decision: {
             behavior: "deny",
             message: decision.message || "Permission denied by PermissionRequest hook",
-            decisionReason: { type: "hook", hookName: "PermissionRequest" },
+            decisionReason: {
+              type: "hook",
+              hookName: "PermissionRequest",
+            },
             decideLocation: "ask-path",
           },
-          interrupt: decision.interrupt === !0,
-          permanent: !1,
+          interrupt: decision.interrupt === true,
+          permanent: false,
         };
     }
   return;
 }
+//@ chunk-e6aww6q8.js:2818055-2818085 fingerprint = SANDBOX_NETWORK_ACCESS_TOOL_NAME (1)
 /**
  * 沙箱网络访问权限请求的工具名 SandboxNetworkAccess。
  */
-//@ chunk-e6aww6q8.js:2818055-2818085 fingerprint = SANDBOX_NETWORK_ACCESS_TOOL_NAME (1)
 var SANDBOX_NETWORK_ACCESS_TOOL_NAME = "SandboxNetworkAccess";
 //@ chunk-fp6aqx1j.js:18843-19042 fingerprint = buildRequiresActionDetails (0.512)
 function buildRequiresActionDetails(e) {
@@ -2198,7 +2534,6 @@ function buildRequiresActionDetails(e) {
     tool_use_id: e.tool_use_id,
   };
 }
-
 export {
   SANDBOX_NETWORK_ACCESS_TOOL_NAME,
   executePermissionRequestHooksForSDK,

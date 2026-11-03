@@ -8,56 +8,55 @@
 import { x } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-b7dyevzy.js:8871-9832 cjs-fingerprint
-var U = x(function (At) {
-  function Ot(t, e) {
-    if (Math.abs(t.length - e.length) > 3) return Math.max(t.length, e.length);
-    let i = [];
-    for (let n = 0; n <= t.length; n++) i[n] = [n];
-    for (let n = 0; n <= e.length; n++) i[0][n] = n;
-    for (let n = 1; n <= e.length; n++)
-      for (let s = 1; s <= t.length; s++) {
-        let r = 1;
-        if (t[s - 1] === e[n - 1]) r = 0;
-        else r = 1;
-        if (
-          ((i[s][n] = Math.min(i[s - 1][n] + 1, i[s][n - 1] + 1, i[s - 1][n - 1] + r)),
-          s > 1 && n > 1 && t[s - 1] === e[n - 2] && t[s - 2] === e[n - 1])
-        )
-          i[s][n] = Math.min(i[s][n], i[s - 2][n - 2] + 1);
+var require_suggestSimilar = x(function (cjsExports) {
+  function editDistance(a, b) {
+    if (Math.abs(a.length - b.length) > 3) return Math.max(a.length, b.length);
+    let d = [];
+    for (let i = 0; i <= a.length; i++) d[i] = [i];
+    for (let j = 0; j <= b.length; j++) d[0][j] = j;
+    for (let j = 1; j <= b.length; j++)
+      for (let i = 1; i <= a.length; i++) {
+        let cost = 1;
+        if (a[i - 1] === b[j - 1]) cost = 0;
+        else cost = 1;
+        d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + cost);
+        if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1])
+          d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
       }
-    return i[t.length][e.length];
+    return d[a.length][b.length];
   }
-  function Ct(t, e) {
-    if (!e || e.length === 0) return "";
-    e = Array.from(new Set(e));
-    let startsWith = t.startsWith("--");
-    if (startsWith) ((t = t.slice(2)), (e = e.map((a) => a.slice(2))));
-    let n = [],
-      s = 3,
-      r = 0.4;
-    if (
-      (e.forEach((a) => {
-        if (a.length <= 1) return;
-        let o = Ot(t, a),
-          max = Math.max(t.length, a.length);
-        if ((max - o) / max > r) {
-          if (o < s) ((s = o), (n = [a]));
-          else if (o === s) n.push(a);
-        }
-      }),
-      n.sort((a, o) => a.localeCompare(o)),
-      startsWith)
-    )
-      n = n.map((a) => `--${a}`);
-    if (n.length > 1)
+  function suggestSimilar(word, candidates) {
+    if (!candidates || candidates.length === 0) return "";
+    candidates = Array.from(new Set(candidates));
+    let searchingOptions = word.startsWith("--");
+    if (searchingOptions) {
+      word = word.slice(2);
+      candidates = candidates.map((candidate) => candidate.slice(2));
+    }
+    let similar = [];
+    let bestDistance = 3;
+    let minSimilarity = 0.4;
+    candidates.forEach((candidate) => {
+      if (candidate.length <= 1) return;
+      let distance = editDistance(word, candidate);
+      let length = Math.max(word.length, candidate.length);
+      if ((length - distance) / length > minSimilarity) {
+        if (distance < bestDistance) {
+          bestDistance = distance;
+          similar = [candidate];
+        } else if (distance === bestDistance) similar.push(candidate);
+      }
+    });
+    similar.sort((a, b) => a.localeCompare(b));
+    if (searchingOptions) similar = similar.map((candidate) => `--${candidate}`);
+    if (similar.length > 1)
       return `
-(Did you mean one of ${n.join(", ")}?)`;
-    if (n.length === 1)
+(Did you mean one of ${similar.join(", ")}?)`;
+    if (similar.length === 1)
       return `
-(Did you mean ${n[0]}?)`;
+(Did you mean ${similar[0]}?)`;
     return "";
   }
-  At.suggestSimilar = Ct;
+  cjsExports.suggestSimilar = suggestSimilar;
 });
-
-export { U };
+export { require_suggestSimilar };

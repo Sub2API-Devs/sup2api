@@ -13,7 +13,7 @@ import { stat } from "fs/promises";
 import { getOriginalCwdOrNull, getPermissionScreenAnchor, getOriginalCwd } from "../../bootstrap/state.js";
 import { expandPath, NullBytePathError } from "../../utils/path.js";
 import { logError } from "../../utils/log.js";
-import { ai } from "../../utils/networkPaths.js";
+import { isNonWslUncPath } from "../../utils/networkPaths.js";
 import { entryReachesForeignNetwork } from "../../utils/fsOperations.js";
 import { isFsInaccessible, getErrnoCode } from "../../utils/errors.js";
 import {
@@ -26,48 +26,81 @@ import { jsonStringify } from "../../utils/slowOperations.js";
 
 //@ chunk-m4knadjm.js:578-1599 fingerprint = validateDirectoryForWorkspace (0.585)
 async function validateDirectoryForWorkspace(directoryPath, permissionContext) {
-  if (!directoryPath) return { resultType: "emptyPath" };
+  if (!directoryPath)
+    return {
+      resultType: "emptyPath",
+    };
   if (getOriginalCwdOrNull() === null)
-    return { resultType: "invalidPath", directoryPath: directoryPath, containsNullByte: !1 };
-  let e;
+    return {
+      resultType: "invalidPath",
+      directoryPath,
+      containsNullByte: false,
+    };
+  let absolutePath;
   try {
-    e = resolve(expandPath(directoryPath));
+    absolutePath = resolve(expandPath(directoryPath));
   } catch (error) {
     let i = error instanceof NullBytePathError;
     if (!i) logError(Error("validateDirectoryForWorkspace: expandPath threw"));
-    return { resultType: "invalidPath", directoryPath: directoryPath, containsNullByte: i };
+    return {
+      resultType: "invalidPath",
+      directoryPath,
+      containsNullByte: i,
+    };
   }
-  if (ai(directoryPath) || (await entryReachesForeignNetwork(e, getPermissionScreenAnchor())))
-    return { resultType: "networkPath", directoryPath: directoryPath, absolutePath: e };
+  if (
+    isNonWslUncPath(directoryPath) ||
+    (await entryReachesForeignNetwork(absolutePath, getPermissionScreenAnchor()))
+  )
+    return {
+      resultType: "networkPath",
+      directoryPath,
+      absolutePath,
+    };
   try {
-    if (!(await stat(e)).isDirectory())
-      return { resultType: "notADirectory", directoryPath: directoryPath, absolutePath: e };
-  } catch (error) {
-    if (!isFsInaccessible(error))
+    if (!(await stat(absolutePath)).isDirectory())
+      return {
+        resultType: "notADirectory",
+        directoryPath,
+        absolutePath,
+      };
+  } catch (e) {
+    if (!isFsInaccessible(e))
       logError(
         Object.assign(Error("validateDirectoryForWorkspace: unexpected stat errno"), {
-          code: getErrnoCode(error),
+          code: getErrnoCode(e),
         }),
       );
-    return { resultType: "pathNotFound", directoryPath: directoryPath, absolutePath: e };
+    return {
+      resultType: "pathNotFound",
+      directoryPath,
+      absolutePath,
+    };
   }
-  let n =
-      permissionContext.blockReadsOutsideWorkingDirectories ||
-      permissionContext.blockWritesOutsideWorkingDirectories
-        ? blockReadsWorkingDirectories(permissionContext)
-        : allWorkingDirectories(permissionContext),
-    s = getOriginalCwd();
-  for (let workingDir of n)
-    if (pathInWorkingPath(e, workingDir, { caseFold: !1 }))
+  let currentWorkingDirs =
+    permissionContext.blockReadsOutsideWorkingDirectories ||
+    permissionContext.blockWritesOutsideWorkingDirectories
+      ? blockReadsWorkingDirectories(permissionContext)
+      : allWorkingDirectories(permissionContext);
+  let originalCwd = getOriginalCwd();
+  for (let workingDir of currentWorkingDirs)
+    if (
+      pathInWorkingPath(absolutePath, workingDir, {
+        caseFold: false,
+      })
+    )
       return {
         resultType: "alreadyInWorkingDirectory",
-        directoryPath: directoryPath,
-        absolutePath: e,
-        workingDir: workingDir,
-        isExactMatch: resolve(workingDir) === e,
-        isOriginalCwd: workingDir === s,
+        directoryPath,
+        absolutePath,
+        workingDir,
+        isExactMatch: resolve(workingDir) === absolutePath,
+        isOriginalCwd: workingDir === originalCwd,
       };
-  return { resultType: "success", absolutePath: e };
+  return {
+    resultType: "success",
+    absolutePath,
+  };
 }
 //@ chunk-m4knadjm.js:1599-3015 fingerprint = addDirHelpMessage (0.67)
 function addDirHelpMessage(result) {
@@ -75,10 +108,10 @@ function addDirHelpMessage(result) {
     case "emptyPath":
       return "Please provide a directory path.";
     case "invalidPath": {
-      let bold = sequential.bold(jsonStringify(result.directoryPath));
+      let r = sequential.bold(jsonStringify(result.directoryPath));
       return result.containsNullByte
-        ? `Path ${bold} contains a null character, so it can't be used as a working directory. Remove the null character from the path or from the settings entry that lists it.`
-        : `Path ${bold} couldn't be resolved, so it can't be used as a working directory. Check the path or the settings entry that lists it.`;
+        ? `Path ${r} contains a null character, so it can't be used as a working directory. Remove the null character from the path or from the settings entry that lists it.`
+        : `Path ${r} couldn't be resolved, so it can't be used as a working directory. Check the path or the settings entry that lists it.`;
     }
     case "pathNotFound":
       return `Path ${sequential.bold(result.absolutePath)} was not found.`;
@@ -89,17 +122,16 @@ function addDirHelpMessage(result) {
       return `${sequential.bold(result.directoryPath)} is not a directory. Did you mean to add the parent directory ${sequential.bold(parentDir)}?`;
     }
     case "alreadyInWorkingDirectory": {
-      let bold = sequential.bold(result.directoryPath);
+      let r = sequential.bold(result.directoryPath);
       if (result.isExactMatch)
         return result.isOriginalCwd
-          ? `${bold} is already the current working directory.`
-          : `${bold} is already added as a working directory.`;
+          ? `${r} is already the current working directory.`
+          : `${r} is already added as a working directory.`;
       let e = result.isOriginalCwd ? "the current working directory" : "the additional working directory";
-      return `${bold} is already accessible within ${e} ${sequential.bold(result.workingDir)}.`;
+      return `${r} is already accessible within ${e} ${sequential.bold(result.workingDir)}.`;
     }
     case "success":
       return `Added ${sequential.bold(result.absolutePath)} as a working directory.`;
   }
 }
-
 export { validateDirectoryForWorkspace, addDirHelpMessage };

@@ -5,89 +5,132 @@
  * pieces: chunk-mrx6y2r5.js (3)
  * attribution: esm-layout 1, esm-fingerprint 2
  */
-import { f } from "../../lib/index-node-DhUjlPuB.js";
+import { Constants } from "../../lib/index-node-DhUjlPuB.js";
 
 //@ chunk-mrx6y2r5.js:102514-102520 esm-layout
-var G;
+var LogLevel;
 //@ chunk-mrx6y2r5.js:102520-102657 esm-fingerprint
-(function (e) {
-  ((e[(e.Error = 0)] = "Error"),
-    (e[(e.Warning = 1)] = "Warning"),
-    (e[(e.Info = 2)] = "Info"),
-    (e[(e.Verbose = 3)] = "Verbose"),
-    (e[(e.Trace = 4)] = "Trace"));
-})(G || (G = {}));
+(function (LogLevel) {
+  LogLevel[(LogLevel.Error = 0)] = "Error";
+  LogLevel[(LogLevel.Warning = 1)] = "Warning";
+  LogLevel[(LogLevel.Info = 2)] = "Info";
+  LogLevel[(LogLevel.Verbose = 3)] = "Verbose";
+  LogLevel[(LogLevel.Trace = 4)] = "Trace";
+})(LogLevel || (LogLevel = {}));
 //@ chunk-mrx6y2r5.js:102657-104712 esm-fingerprint
-class Ue {
-  constructor(e, t, r) {
-    this.level = G.Info;
-    let n = () => {
-        return;
-      },
-      o = e || Ue.createDefaultLoggerOptions();
-    ((this.localCallback = o.loggerCallback || n),
-      (this.piiLoggingEnabled = o.piiLoggingEnabled || !1),
-      (this.level = typeof o.logLevel === "number" ? o.logLevel : G.Info),
-      (this.correlationId = o.correlationId || f.EMPTY_STRING),
-      (this.packageName = t || f.EMPTY_STRING),
-      (this.packageVersion = r || f.EMPTY_STRING));
+class Logger {
+  constructor(loggerOptions, packageName, packageVersion) {
+    this.level = LogLevel.Info;
+    let defaultLoggerCallback = () => {
+      return;
+    };
+    let setLoggerOptions = loggerOptions || Logger.createDefaultLoggerOptions();
+    this.localCallback = setLoggerOptions.loggerCallback || defaultLoggerCallback;
+    this.piiLoggingEnabled = setLoggerOptions.piiLoggingEnabled || false;
+    this.level = typeof setLoggerOptions.logLevel === "number" ? setLoggerOptions.logLevel : LogLevel.Info;
+    this.correlationId = setLoggerOptions.correlationId || Constants.EMPTY_STRING;
+    this.packageName = packageName || Constants.EMPTY_STRING;
+    this.packageVersion = packageVersion || Constants.EMPTY_STRING;
   }
   static createDefaultLoggerOptions() {
-    return { loggerCallback: () => {}, piiLoggingEnabled: !1, logLevel: G.Info };
+    return {
+      loggerCallback: () => {},
+      piiLoggingEnabled: false,
+      logLevel: LogLevel.Info,
+    };
   }
-  clone(e, t, r) {
-    return new Ue(
+  clone(packageName, packageVersion, correlationId) {
+    return new Logger(
       {
         loggerCallback: this.localCallback,
         piiLoggingEnabled: this.piiLoggingEnabled,
         logLevel: this.level,
-        correlationId: r || this.correlationId,
+        correlationId: correlationId || this.correlationId,
       },
-      e,
-      t,
+      packageName,
+      packageVersion,
     );
   }
-  logMessage(e, t) {
-    if (t.logLevel > this.level || (!this.piiLoggingEnabled && t.containsPii)) return;
-    let o = `${`[${new Date().toUTCString()}] : [${t.correlationId || this.correlationId || ""}]`} : ${this.packageName}@${this.packageVersion} : ${G[t.logLevel]} - ${e}`;
-    this.executeCallback(t.logLevel, o, t.containsPii || !1);
+  logMessage(logMessage, options) {
+    if (options.logLevel > this.level || (!this.piiLoggingEnabled && options.containsPii)) return;
+    let o = `${`[${new Date().toUTCString()}] : [${options.correlationId || this.correlationId || ""}]`} : ${this.packageName}@${this.packageVersion} : ${LogLevel[options.logLevel]} - ${logMessage}`;
+    this.executeCallback(options.logLevel, o, options.containsPii || false);
   }
-  executeCallback(e, t, r) {
-    if (this.localCallback) this.localCallback(e, t, r);
+  executeCallback(level, message, containsPii) {
+    if (this.localCallback) this.localCallback(level, message, containsPii);
   }
-  error(e, t) {
-    this.logMessage(e, { logLevel: G.Error, containsPii: !1, correlationId: t || f.EMPTY_STRING });
+  error(message, correlationId) {
+    this.logMessage(message, {
+      logLevel: LogLevel.Error,
+      containsPii: false,
+      correlationId: correlationId || Constants.EMPTY_STRING,
+    });
   }
-  errorPii(e, t) {
-    this.logMessage(e, { logLevel: G.Error, containsPii: !0, correlationId: t || f.EMPTY_STRING });
+  errorPii(message, correlationId) {
+    this.logMessage(message, {
+      logLevel: LogLevel.Error,
+      containsPii: true,
+      correlationId: correlationId || Constants.EMPTY_STRING,
+    });
   }
-  warning(e, t) {
-    this.logMessage(e, { logLevel: G.Warning, containsPii: !1, correlationId: t || f.EMPTY_STRING });
+  warning(message, correlationId) {
+    this.logMessage(message, {
+      logLevel: LogLevel.Warning,
+      containsPii: false,
+      correlationId: correlationId || Constants.EMPTY_STRING,
+    });
   }
-  warningPii(e, t) {
-    this.logMessage(e, { logLevel: G.Warning, containsPii: !0, correlationId: t || f.EMPTY_STRING });
+  warningPii(message, correlationId) {
+    this.logMessage(message, {
+      logLevel: LogLevel.Warning,
+      containsPii: true,
+      correlationId: correlationId || Constants.EMPTY_STRING,
+    });
   }
-  info(e, t) {
-    this.logMessage(e, { logLevel: G.Info, containsPii: !1, correlationId: t || f.EMPTY_STRING });
+  info(message, correlationId) {
+    this.logMessage(message, {
+      logLevel: LogLevel.Info,
+      containsPii: false,
+      correlationId: correlationId || Constants.EMPTY_STRING,
+    });
   }
-  infoPii(e, t) {
-    this.logMessage(e, { logLevel: G.Info, containsPii: !0, correlationId: t || f.EMPTY_STRING });
+  infoPii(message, correlationId) {
+    this.logMessage(message, {
+      logLevel: LogLevel.Info,
+      containsPii: true,
+      correlationId: correlationId || Constants.EMPTY_STRING,
+    });
   }
-  verbose(e, t) {
-    this.logMessage(e, { logLevel: G.Verbose, containsPii: !1, correlationId: t || f.EMPTY_STRING });
+  verbose(message, correlationId) {
+    this.logMessage(message, {
+      logLevel: LogLevel.Verbose,
+      containsPii: false,
+      correlationId: correlationId || Constants.EMPTY_STRING,
+    });
   }
-  verbosePii(e, t) {
-    this.logMessage(e, { logLevel: G.Verbose, containsPii: !0, correlationId: t || f.EMPTY_STRING });
+  verbosePii(message, correlationId) {
+    this.logMessage(message, {
+      logLevel: LogLevel.Verbose,
+      containsPii: true,
+      correlationId: correlationId || Constants.EMPTY_STRING,
+    });
   }
-  trace(e, t) {
-    this.logMessage(e, { logLevel: G.Trace, containsPii: !1, correlationId: t || f.EMPTY_STRING });
+  trace(message, correlationId) {
+    this.logMessage(message, {
+      logLevel: LogLevel.Trace,
+      containsPii: false,
+      correlationId: correlationId || Constants.EMPTY_STRING,
+    });
   }
-  tracePii(e, t) {
-    this.logMessage(e, { logLevel: G.Trace, containsPii: !0, correlationId: t || f.EMPTY_STRING });
+  tracePii(message, correlationId) {
+    this.logMessage(message, {
+      logLevel: LogLevel.Trace,
+      containsPii: true,
+      correlationId: correlationId || Constants.EMPTY_STRING,
+    });
   }
   isPiiLoggingEnabled() {
-    return this.piiLoggingEnabled || !1;
+    return this.piiLoggingEnabled || false;
   }
 }
-
-export { G, Ue };
+export { LogLevel, Logger };

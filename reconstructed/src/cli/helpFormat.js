@@ -12,33 +12,39 @@ import { bunStringWidth } from "../ink/stringWidth.js";
 import { repeatString } from "../utils/stringUtils.js";
 
 //@ chunk-b7dyevzy.js:35767-35796 placement
-var w = 2,
-  E = 2,
-  Lt = 36,
-  Rt = 30,
-  tt = 4;
+var HELP_INDENT = 2;
+var HELP_COLUMN_GAP = 2;
+var HELP_TERM_WIDTH = 36;
+var HELP_MIN_DESC_WIDTH = 30;
+var HELP_SUBCOMMAND_INDENT = 4;
 //@ chunk-b7dyevzy.js:35796-36090 placement
 function wrapHelpText(t, e) {
-  let max = Math.max(e, 1),
-    n = [];
-  for (let s of t.split(`
+  let max = Math.max(e, 1);
+  let n = [];
+  for (let line of t.split(`
 `)) {
-    let match = s.match(/\s*\S+/g);
+    let match = line.match(/\s*\S+/g);
     if (!match) {
       n.push("");
       continue;
     }
-    let a = "",
-      o = 0,
-      h = !1;
+    let a = "";
+    let o = 0;
+    let h = false;
     for (let u of match) {
       let c = bunStringWidth(u);
-      if (!h) ((a = u), (o = c), (h = !0));
-      else if (o + c <= max) ((a += u), (o += c));
-      else {
+      if (!h) {
+        a = u;
+        o = c;
+        h = true;
+      } else if (o + c <= max) {
+        a += u;
+        o += c;
+      } else {
         n.push(a);
         let replaced = u.replace(/^\s+/, "");
-        ((a = replaced), (o = bunStringWidth(replaced)));
+        a = replaced;
+        o = bunStringWidth(replaced);
       }
     }
     n.push(a);
@@ -46,117 +52,116 @@ function wrapHelpText(t, e) {
   return n.join(`
 `);
 }
+//@ chunk-b7dyevzy.js:36090-36451 placement
 /**
  * 格式化帮助中的一项：名称列对齐后接说明；说明多行或列宽不够时换行缩进。
  */
-//@ chunk-b7dyevzy.js:36090-36451 placement
-function formatHelpItem(t, e, i, n) {
-  let repeat = " ".repeat(w);
-  if (!e) return repeat + t;
+function formatHelpItem(t, e, i, helpWidth) {
+  let s = " ".repeat(HELP_INDENT);
+  if (!e) return s + t;
   let r = bunStringWidth(t);
   if (
     e.includes(`
 `)
   ) {
-    let c = r <= i ? repeatString(" ", i - r + E) : " ".repeat(E);
-    return (repeat + t + c + e).replace(
+    let c = r <= i ? repeatString(" ", i - r + HELP_COLUMN_GAP) : " ".repeat(HELP_COLUMN_GAP);
+    return (s + t + c + e).replace(
       /\n/g,
       `
-` + repeat,
+` + s,
     );
   }
-  let a = n - w - i - E;
-  if (r <= i && a >= Rt) {
-    let c = repeatString(" ", i - r + E),
-      repeat_2 = " ".repeat(w + i + E),
-      _ = wrapHelpText(e, a);
+  let a = helpWidth - HELP_INDENT - i - HELP_COLUMN_GAP;
+  if (r <= i && a >= HELP_MIN_DESC_WIDTH) {
+    let c = repeatString(" ", i - r + HELP_COLUMN_GAP);
+    let d = " ".repeat(HELP_INDENT + i + HELP_COLUMN_GAP);
+    let _ = wrapHelpText(e, a);
     return (
-      repeat +
+      s +
       t +
       c +
       _.replace(
         /\n/g,
         `
-` + repeat_2,
+` + d,
       )
     );
   }
-  let repeat_2 = " ".repeat(w + tt),
-    h = n - w - tt,
-    u = wrapHelpText(e, h);
+  let o = " ".repeat(HELP_INDENT + HELP_SUBCOMMAND_INDENT);
+  let h = helpWidth - HELP_INDENT - HELP_SUBCOMMAND_INDENT;
+  let u = wrapHelpText(e, h);
   return (
-    repeat +
+    s +
     t +
     `
 ` +
-    repeat_2 +
+    o +
     u.replace(
       /\n/g,
       `
-` + repeat_2,
+` + o,
     )
   );
 }
 //@ chunk-b7dyevzy.js:36451-36510 placement
-function y(t, e, i) {
+function pushHelpSection(lines, e, i) {
   if (i.length === 0) return;
-  t.push(e, ...i, "");
+  lines.push(e, ...i, "");
 }
+//@ chunk-b7dyevzy.js:36510-37116 placement
 /**
  * 生成 commander 命令的帮助文本：Usage、描述，以及 Arguments/Options/Global Options/Commands 各段。
  */
-//@ chunk-b7dyevzy.js:36510-37116 placement
 function formatCommandHelp(command, helper) {
-  let helpWidth = helper.helpWidth || 80,
-    min = Math.min(helper.padWidth(command, helper), Lt),
-    lines = [`Usage: ${helper.commandUsage(command)}`, ""],
-    commandDescription = helper.commandDescription(command);
-  if (commandDescription.length > 0) lines.push(wrapHelpText(commandDescription, helpWidth), "");
-  if (
-    (y(
-      lines,
-      "Arguments:",
-      helper
-        .visibleArguments(command)
-        .map((a) => formatHelpItem(helper.argumentTerm(a), helper.argumentDescription(a), min, helpWidth)),
-    ),
-    y(
-      lines,
-      "Options:",
-      helper
-        .visibleOptions(command)
-        .map((a) => formatHelpItem(helper.optionTerm(a), helper.optionDescription(a), min, helpWidth)),
-    ),
-    helper.showGlobalOptions)
-  )
-    y(
+  let helpWidth = helper.helpWidth || 80;
+  let min = Math.min(helper.padWidth(command, helper), HELP_TERM_WIDTH);
+  let lines = [`Usage: ${helper.commandUsage(command)}`, ""];
+  let r = helper.commandDescription(command);
+  if (r.length > 0) lines.push(wrapHelpText(r, helpWidth), "");
+  pushHelpSection(
+    lines,
+    "Arguments:",
+    helper
+      .visibleArguments(command)
+      .map((a) => formatHelpItem(helper.argumentTerm(a), helper.argumentDescription(a), min, helpWidth)),
+  );
+  pushHelpSection(
+    lines,
+    "Options:",
+    helper
+      .visibleOptions(command)
+      .map((a) => formatHelpItem(helper.optionTerm(a), helper.optionDescription(a), min, helpWidth)),
+  );
+  if (helper.showGlobalOptions)
+    pushHelpSection(
       lines,
       "Global Options:",
       helper
         .visibleGlobalOptions(command)
         .map((a) => formatHelpItem(helper.optionTerm(a), helper.optionDescription(a), min, helpWidth)),
     );
-  return (
-    y(
-      lines,
-      "Commands:",
-      helper
-        .visibleCommands(command)
-        .map((a) =>
-          formatHelpItem(helper.subcommandTerm(a), helper.subcommandDescription(a), min, helpWidth),
-        ),
-    ),
-    lines.join(`
-`)
+  pushHelpSection(
+    lines,
+    "Commands:",
+    helper
+      .visibleCommands(command)
+      .map((a) => formatHelpItem(helper.subcommandTerm(a), helper.subcommandDescription(a), min, helpWidth)),
   );
+  return lines.join(`
+`);
 }
 //@ chunk-b7dyevzy.js:37116-37320 placement
 function createHelpConfig() {
   let t = (e) => e.long?.replace(/^--/, "") ?? e.short?.replace(/^-/, "") ?? "";
   return Object.assign(
-    { sortSubcommands: !0, sortOptions: !0, formatHelp: formatCommandHelp },
-    { compareOptions: (e, i) => t(e).localeCompare(t(i)) },
+    {
+      sortSubcommands: true,
+      sortOptions: true,
+      formatHelp: formatCommandHelp,
+    },
+    {
+      compareOptions: (e, i) => t(e).localeCompare(t(i)),
+    },
   );
 }
-
 export { createHelpConfig };

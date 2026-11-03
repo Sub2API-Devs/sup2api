@@ -6,24 +6,23 @@
  * attribution: esm-layout 1, esm-fingerprint 1
  */
 import { Xa } from "../../../../../runtime/bun-runtime.js";
-import { E, j, wr } from "../../webapi/lib/content_encryption.js";
+import { init_content_encryption_2, j, wr } from "../../webapi/lib/content_encryption.js";
 
 //@ chunk-2tyrgda4.js:3970-3996 esm-layout
-var Ne = Xa(() => {
-  E();
+var init_timing_safe_equal = Xa(() => {
+  init_content_encryption_2();
   j = wr;
 });
 //@ chunk-2tyrgda4.js:3996-4322 esm-fingerprint
-var Er = (e, t) => {
-    if (!(e instanceof Uint8Array)) throw TypeError("First argument must be a buffer");
-    if (!(t instanceof Uint8Array)) throw TypeError("Second argument must be a buffer");
-    if (e.length !== t.length) throw TypeError("Input buffers must have the same length");
-    let r = e.length,
-      o = 0,
-      n = -1;
-    while (++n < r) o |= e[n] ^ t[n];
-    return o === 0;
-  },
-  ut;
-
-export { ut, Er, Ne };
+var timingSafeEqual = (a, b) => {
+  if (!(a instanceof Uint8Array)) throw TypeError("First argument must be a buffer");
+  if (!(b instanceof Uint8Array)) throw TypeError("Second argument must be a buffer");
+  if (a.length !== b.length) throw TypeError("Input buffers must have the same length");
+  let len = a.length;
+  let out = 0;
+  let i = -1;
+  while (++i < len) out |= a[i] ^ b[i];
+  return out === 0;
+};
+var timingSafeEqual_default;
+export { timingSafeEqual_default, timingSafeEqual, init_timing_safe_equal };

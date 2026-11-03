@@ -1,5 +1,8 @@
 /**
  * services/artifacts/comments/commentState.ts
+ *
+ * 2.1.316 新增：Artifact 评论的本地状态：记录本会话发出的回复 ID（有上限）、已见评论与回复跟踪。
+ *
  * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
  * new in 2.1.316 (2.1.88 has no file at this path)
  * pieces: chunk-b0a246e7.js (12)
@@ -11,168 +14,230 @@ import { extractMentions } from "./commentMentions.js";
 
 //@ chunk-b0a246e7.js:3569-3580 placement
 var MAX_TRACKED_REPLY_IDS = 256;
+//@ chunk-b0a246e7.js:3580-3701 placement
 /**
  * 记录由本会话发出的 Artifact 评论回复 ID（有上限）。
  */
-//@ chunk-b0a246e7.js:3580-3701 placement
 function rememberPostedReplyId(replyId) {
   let postedReplyIds = getLiveState().postedReplyIds;
-  if ((postedReplyIds.add(replyId), postedReplyIds.size > MAX_TRACKED_REPLY_IDS)) {
+  postedReplyIds.add(replyId);
+  if (postedReplyIds.size > MAX_TRACKED_REPLY_IDS) {
     let n = postedReplyIds.values().next().value;
-    if (n !== void 0) postedReplyIds.delete(n);
+    if (n !== undefined) postedReplyIds.delete(n);
   }
 }
+//@ chunk-b0a246e7.js:3701-3759 placement
 /**
  * 是否是本会话发出的评论回复。
  */
-//@ chunk-b0a246e7.js:3701-3759 placement
 function isOwnPostedReply(replyId) {
   return replyId !== "" && getLiveState().postedReplyIds.has(replyId);
 }
+//@ chunk-b0a246e7.js:3759-3898 placement
 /**
  * 把本会话发出的回复标为"干净"（未被改写）。
  */
-//@ chunk-b0a246e7.js:3759-3898 placement
 function markReplyClean(replyId) {
   if (!isOwnPostedReply(replyId)) return;
   let cleanReplyIds = getLiveState().cleanReplyIds;
-  if ((cleanReplyIds.add(replyId), cleanReplyIds.size > MAX_TRACKED_REPLY_IDS)) {
+  cleanReplyIds.add(replyId);
+  if (cleanReplyIds.size > MAX_TRACKED_REPLY_IDS) {
     let n = cleanReplyIds.values().next().value;
-    if (n !== void 0) cleanReplyIds.delete(n);
+    if (n !== undefined) cleanReplyIds.delete(n);
   }
 }
+//@ chunk-b0a246e7.js:3898-3947 placement
 /**
  * 本会话是否发过 Artifact 评论回复。
  */
-//@ chunk-b0a246e7.js:3898-3947 placement
 function hasPostedReplies() {
   return getLiveState().postedReplyIds.size > 0;
 }
+//@ chunk-b0a246e7.js:3947-4022 placement
 /**
  * 只接受 owner / editor / commenter 三种访问级别。
  */
-//@ chunk-b0a246e7.js:3947-4022 placement
 function normalizeCommentAccess(role) {
-  return role === "owner" || role === "editor" || role === "commenter" ? role : void 0;
+  return role === "owner" || role === "editor" || role === "commenter" ? role : undefined;
 }
+//@ chunk-b0a246e7.js:4022-4128 placement
 /**
  * 评论作者类别：degraded → unknown，无角色 → human，有角色 → agent。
  */
-//@ chunk-b0a246e7.js:4022-4128 placement
 function getCommentAuthorKind(comment) {
   if (comment.role === "degraded") return "unknown";
-  return comment.role === void 0 || comment.role === "" ? "human" : "agent";
+  return comment.role === undefined || comment.role === "" ? "human" : "agent";
 }
+//@ chunk-b0a246e7.js:4128-4305 placement
 /**
  * 评论是否可信：代理评论须是本会话发出的干净回复，人类评论须来自指定账户且提及的账户也都匹配。
  */
-//@ chunk-b0a246e7.js:4128-4305 placement
 function isTrustedComment(comment, account) {
-  let n = getCommentAuthorKind(comment);
+  let commentAuthorKind = getCommentAuthorKind(comment);
   return (
-    (n === "agent"
+    (commentAuthorKind === "agent"
       ? isOwnPostedReply(comment.id) && getLiveState().cleanReplyIds.has(comment.id)
-      : n === "human" && comment.postedByArtifact !== !0 && isOwnPrincipal(comment.account, account)) &&
+      : commentAuthorKind === "human" &&
+        comment.postedByArtifact !== true &&
+        isOwnPrincipal(comment.account, account)) &&
     extractMentions(comment.text).every((r) => isOwnPrincipal(r, account))
   );
 }
+//@ chunk-b0a246e7.js:4305-4399 placement
 /**
  * 解析 ISO 时间字符串为毫秒，失败返回 null。
  */
-//@ chunk-b0a246e7.js:4305-4399 placement
 function parseTimestamp(value) {
-  if (value === void 0) return null;
-  let parse = Date.parse(value);
-  return Number.isFinite(parse) ? parse : null;
+  if (value === undefined) return null;
+  let timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) ? timestamp : null;
 }
+//@ chunk-b0a246e7.js:4399-4526 placement = findMissedTasks (0.461)
 /**
  * 是否有任一项的 toClaudeAt 晚于参照项的 createdAt。与 cron 无关（Artifact 评论）。
  */
-//@ chunk-b0a246e7.js:4399-4526 placement = findMissedTasks (0.461)
 function hasCommentSentAfter(comments, reference) {
-  let n = parseTimestamp(reference.createdAt);
-  if (n === null) return !1;
-  return comments.some((r) => {
-    let o = parseTimestamp(r.toClaudeAt);
-    return o !== null && o > n;
+  let timestamp = parseTimestamp(reference.createdAt);
+  if (timestamp === null) return false;
+  return comments.some((t) => {
+    let next = parseTimestamp(t.toClaudeAt);
+    return next !== null && next > timestamp;
   });
 }
+//@ chunk-b0a246e7.js:4526-4944 placement
 /**
  * 线程中等待 Claude 回复的人类评论（在最后一条代理回复之后发给 Claude、且未被标记解决）。
  */
-//@ chunk-b0a246e7.js:4526-4944 placement
-function getCommentsAwaitingReply(e) {
+function getCommentsAwaitingReply(thread) {
   if (
-    e.commentsDegraded === !0 ||
-    e.resolvedDegraded === !0 ||
-    e.comments.some((comment) => getCommentAuthorKind(comment) === "unknown")
+    thread.commentsDegraded === true ||
+    thread.resolvedDegraded === true ||
+    thread.comments.some((comment) => getCommentAuthorKind(comment) === "unknown")
   )
     return [];
-  let lastIndex = e.comments.findLastIndex((o) => getCommentAuthorKind(o) === "agent"),
-    n = lastIndex >= 0 ? e.comments[lastIndex] : void 0,
-    r = e.resolved ? { id: "resolution-gesture", account: "", text: "", createdAt: e.resolvedAt } : void 0;
-  return e.comments.filter(
+  let lastIndex = thread.comments.findLastIndex((comment) => getCommentAuthorKind(comment) === "agent");
+  let n = lastIndex >= 0 ? thread.comments[lastIndex] : undefined;
+  let r = thread.resolved
+    ? {
+        id: "resolution-gesture",
+        account: "",
+        text: "",
+        createdAt: thread.resolvedAt,
+      }
+    : undefined;
+  return thread.comments.filter(
     (comment, u) =>
       getCommentAuthorKind(comment) === "human" &&
       parseTimestamp(comment.toClaudeAt) !== null &&
-      (n === void 0 || u > lastIndex || hasCommentSentAfter([comment], n)) &&
-      (r === void 0 || hasCommentSentAfter([comment], r)),
+      (n === undefined || u > lastIndex || hasCommentSentAfter([comment], n)) &&
+      (r === undefined || hasCommentSentAfter([comment], r)),
   );
 }
+//@ chunk-b0a246e7.js:4944-6506 placement
 /**
  * 把评论线程序列化为给模型的结构（锚点、评论、awaiting_reply 等字段）。
  */
-//@ chunk-b0a246e7.js:4944-6506 placement
-function serializeCommentThreads(e) {
-  return e.map((t) => {
+function serializeCommentThreads(threads) {
+  return threads.map((t) => {
     let n = new Set(getCommentsAwaitingReply(t));
     return {
       id: t.id,
-      ...(t.createdAt !== void 0 && { created_at: t.createdAt }),
+      ...(t.createdAt !== undefined && {
+        created_at: t.createdAt,
+      }),
       resolved: t.resolved,
-      ...(t.resolvedDegraded && { resolved_degraded: !0 }),
-      ...(t.resolvedByClaude && { resolved_by_claude: !0 }),
+      ...(t.resolvedDegraded && {
+        resolved_degraded: true,
+      }),
+      ...(t.resolvedByClaude && {
+        resolved_by_claude: true,
+      }),
       claude_activated: t.claudeActivated,
-      ...(t.activatedAtDegraded && { activated_degraded: !0 }),
-      ...(t.carried && { carried: !0 }),
-      ...(t.commentsDegraded && { comments_degraded: !0 }),
-      ...(t.anchorPath !== void 0 && !t.anchorPathUnreadable && { anchor_path: t.anchorPath }),
-      ...(t.spanQuote !== void 0 && { span_quote: t.spanQuote }),
-      ...(t.anchorFile !== void 0 && { anchor_file: t.anchorFile }),
-      ...(t.anchorFileDegraded && { anchor_file_degraded: !0 }),
-      ...(t.anchorFileSha !== void 0 && { anchor_file_sha: t.anchorFileSha }),
-      ...(t.anchorMovedAt !== void 0 && { anchor_moved_at: t.anchorMovedAt }),
-      ...(t.anchorLabel !== void 0 && { anchor_label: t.anchorLabel }),
-      ...(t.anchorDetail !== void 0 && { anchor_detail: t.anchorDetail }),
-      ...(t.region && { anchor_region: !0 }),
+      ...(t.activatedAtDegraded && {
+        activated_degraded: true,
+      }),
+      ...(t.carried && {
+        carried: true,
+      }),
+      ...(t.commentsDegraded && {
+        comments_degraded: true,
+      }),
+      ...(t.anchorPath !== undefined &&
+        !t.anchorPathUnreadable && {
+          anchor_path: t.anchorPath,
+        }),
+      ...(t.spanQuote !== undefined && {
+        span_quote: t.spanQuote,
+      }),
+      ...(t.anchorFile !== undefined && {
+        anchor_file: t.anchorFile,
+      }),
+      ...(t.anchorFileDegraded && {
+        anchor_file_degraded: true,
+      }),
+      ...(t.anchorFileSha !== undefined && {
+        anchor_file_sha: t.anchorFileSha,
+      }),
+      ...(t.anchorMovedAt !== undefined && {
+        anchor_moved_at: t.anchorMovedAt,
+      }),
+      ...(t.anchorLabel !== undefined && {
+        anchor_label: t.anchorLabel,
+      }),
+      ...(t.anchorDetail !== undefined && {
+        anchor_detail: t.anchorDetail,
+      }),
+      ...(t.region && {
+        anchor_region: true,
+      }),
       comments: t.comments.map((comment) => {
-        let o = getCommentAuthorKind(comment),
-          u = parseTimestamp(comment.toClaudeAt) !== null,
-          c = comment.toClaudeAtDegraded === !0 || (comment.toClaudeAt !== void 0 && !u),
-          a = u || c;
+        let commentAuthorKind = getCommentAuthorKind(comment);
+        let u = parseTimestamp(comment.toClaudeAt) !== null;
+        let c = comment.toClaudeAtDegraded === true || (comment.toClaudeAt !== undefined && !u);
+        let a = u || c;
         return {
           id: comment.id,
           account: comment.account,
-          ...(comment.role !== void 0 && { role: comment.role }),
+          ...(comment.role !== undefined && {
+            role: comment.role,
+          }),
           text: comment.text,
-          ...(comment.createdAt !== void 0 && { created_at: comment.createdAt }),
-          ...(o === "human" &&
+          ...(comment.createdAt !== undefined && {
+            created_at: comment.createdAt,
+          }),
+          ...(commentAuthorKind === "human" &&
             u && {
-              sent_to_claude: !0,
-              ...(comment.sentByViewer !== void 0 && { sent_by_viewer: comment.sentByViewer }),
+              sent_to_claude: true,
+              ...(comment.sentByViewer !== undefined && {
+                sent_by_viewer: comment.sentByViewer,
+              }),
             }),
-          ...(((o === "human" && c) || (o === "unknown" && a)) && { sent_to_claude_degraded: !0 }),
-          ...(comment.postedByArtifact && { posted_by_artifact: !0 }),
-          ...(n.has(comment) && { awaiting_reply: !0 }),
-          ...(o === "human" && comment.presence !== void 0 && { presence: comment.presence }),
-          ...(o === "human" && comment.access !== void 0 && { access: comment.access }),
-          ...(o === "human" && comment.outside && { outside: !0 }),
+          ...(((commentAuthorKind === "human" && c) || (commentAuthorKind === "unknown" && a)) && {
+            sent_to_claude_degraded: true,
+          }),
+          ...(comment.postedByArtifact && {
+            posted_by_artifact: true,
+          }),
+          ...(n.has(comment) && {
+            awaiting_reply: true,
+          }),
+          ...(commentAuthorKind === "human" &&
+            comment.presence !== undefined && {
+              presence: comment.presence,
+            }),
+          ...(commentAuthorKind === "human" &&
+            comment.access !== undefined && {
+              access: comment.access,
+            }),
+          ...(commentAuthorKind === "human" &&
+            comment.outside && {
+              outside: true,
+            }),
         };
       }),
     };
   });
 }
-
 export {
   isTrustedComment,
   getCommentAuthorKind,

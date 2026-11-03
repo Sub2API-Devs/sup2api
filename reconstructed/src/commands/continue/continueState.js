@@ -8,12 +8,12 @@
  * pieces: chunk-mw789w2b.js (11)
  * attribution: placement 11
  */
-import { j, y, P } from "../../../vendor/react/cjs/react.production.js";
+import { init_react_production, y, P } from "../../../vendor/react/cjs/react.production.js";
 import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
 import { getRootSession } from "../../bootstrap/state.js";
 
 //@ chunk-mw789w2b.js:268-272 placement
-j();
+init_react_production();
 //@ chunk-mw789w2b.js:272-291 placement
 var CONTINUE_COMMAND = "continue";
 //@ chunk-mw789w2b.js:291-460 placement
@@ -28,53 +28,49 @@ function normalizeContinueInput(t, e, n) {
   return t;
 }
 //@ chunk-mw789w2b.js:460-516 placement
-class o {
+class ContinueState {
   lastResult = null;
   listeners = new Set();
   inFlight = null;
 }
 //@ chunk-mw789w2b.js:516-540 placement
-var l = new SessionRootSlot(() => new o());
+var CONTINUE_STATE_SLOT = new SessionRootSlot(() => new ContinueState());
 //@ chunk-mw789w2b.js:540-570 placement
-function i() {
-  return l.of(getRootSession());
+function continueState() {
+  return CONTINUE_STATE_SLOT.of(getRootSession());
 }
 //@ chunk-mw789w2b.js:570-641 placement
 function publishContinueResult(t) {
-  let e = i();
+  let e = continueState();
   e.lastResult = t;
   for (let listener of e.listeners) listener(t);
 }
 //@ chunk-mw789w2b.js:641-676 placement
 function getContinueInFlight() {
-  return i().inFlight;
+  return continueState().inFlight;
 }
 //@ chunk-mw789w2b.js:676-707 placement
-function setContinueInFlight(t) {
-  i().inFlight = t;
+function setContinueInFlight(inFlight) {
+  continueState().inFlight = inFlight;
 }
 //@ chunk-mw789w2b.js:707-750 placement
 function resetContinueState() {
-  (publishContinueResult(null), (i().inFlight = null));
+  publishContinueResult(null);
+  continueState().inFlight = null;
 }
 //@ chunk-mw789w2b.js:750-897 placement
 function useContinueResult() {
-  let [t, e] = y(() => i().lastResult);
-  return (
-    P(() => {
-      let n = i();
-      return (
-        e(n.lastResult),
-        n.listeners.add(e),
-        () => {
-          n.listeners.delete(e);
-        }
-      );
-    }, []),
-    t
-  );
+  let [t, e] = y(() => continueState().lastResult);
+  P(() => {
+    let n = continueState();
+    e(n.lastResult);
+    n.listeners.add(e);
+    return () => {
+      n.listeners.delete(e);
+    };
+  }, []);
+  return t;
 }
-
 export {
   resetContinueState,
   CONTINUE_COMMAND,

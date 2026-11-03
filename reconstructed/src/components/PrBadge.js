@@ -5,16 +5,26 @@
  *
  * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/PrBadge.tsx
- * pieces: chunk-qgpgvvwv.js (7)
- * attribution: fingerprint 2, layout 4, placement 1
+ * pieces: chunk-qgpgvvwv.js (10)
+ * attribution: placement 4, fingerprint 2, layout 4
  */
-import { P } from "../../vendor/react/cjs/react.production.js";
+import { init_react_production, P } from "../../vendor/react/cjs/react.production.js";
 import { w } from "../../vendor/react/compiler-runtime.js";
 import { useAppState } from "../state/AppState.js";
-import { See } from "../utils/ghPrStatus.js";
-import { r, Fragment, e } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { expandPrUrlIfTemplate } from "../utils/ghPrStatus.js";
+import {
+  jsxProd_default_2,
+  Fragment,
+  jsxProd_default,
+} from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Link } from "../ink/components/Text.js";
 
+//@ chunk-qgpgvvwv.js:595-599 placement
+init_react_production();
+//@ chunk-qgpgvvwv.js:599-603 placement
+init_react_production();
+//@ chunk-qgpgvvwv.js:603-624 placement
+var CURRENT_PR = "current-pr";
 //@ chunk-qgpgvvwv.js:808-976 fingerprint = getPrStatusColor (1)
 function getPrStatusColor(state) {
   switch (state) {
@@ -31,129 +41,163 @@ function getPrStatusColor(state) {
   }
 }
 //@ chunk-qgpgvvwv.js:976-1001 layout
-function S(s, o, d) {
+function noopPrAction(s, o, d) {
   return;
 }
 //@ chunk-qgpgvvwv.js:1001-1085 layout
-function jho(s, o, d) {
+/**
+ * 函数 usePrActionEffect（PR 动作 effect）；位于「PR 徽章：PR 号 + 审查状态颜色（approved/changes_requested/pending/merged…）」模块。
+ */
+function usePrActionEffect(s, url, kind) {
   P(() => {
-    if (o === void 0) return;
-    S(s, o, d === "cr" || d === "mr");
-  }, [s, o, d]);
+    if (url === undefined) return;
+    noopPrAction(s, url, kind === "cr" || kind === "mr");
+  }, [s, url, kind]);
 }
 //@ chunk-qgpgvvwv.js:1085-1135 layout
-function fe(ge) {
+function selectPrUrlTemplate(ge) {
   return ge.settings?.prUrlTemplate;
 }
 //@ chunk-qgpgvvwv.js:1135-2596 fingerprint = PrBadge (0.723)
-function PrBadge(t0) {
-  let $ = w(41),
-    {
-      number: number,
-      url: url,
-      reviewState: reviewState,
-      bold: bold,
-      color: color,
-      dimColor: dimColor,
-      inverse: inverse,
-      underline: underline,
-      hidePrefix: hidePrefix,
-      kind: kind,
-    } = t0,
-    be = underline === void 0 ? !0 : underline,
-    R = kind === "cr" && !1,
-    m = kind === "mr",
-    C = m ? "!" : "#",
-    I = useAppState(fe),
-    ee;
-  if ($[0] !== R || $[1] !== m || $[2] !== I || $[3] !== url)
-    ((ee = R || m ? url : See(url, I)), ($[0] = R), ($[1] = m), ($[2] = I), ($[3] = url), ($[4] = ee));
-  else ee = $[4];
-  let v = ee,
-    re,
-    oe;
-  if ($[5] !== R || $[6] !== m || $[7] !== url || $[8] !== v)
-    ((re = () => {
-      S(v, url, R || m);
-    }),
-      (oe = [v, url, R, m]),
-      ($[5] = R),
-      ($[6] = m),
-      ($[7] = url),
-      ($[8] = v),
-      ($[9] = re),
-      ($[10] = oe));
-  else ((re = $[9]), (oe = $[10]));
+function PrBadge(props) {
+  let $ = w(41);
+  let { number, url, reviewState, bold, color, dimColor, inverse, underline, hidePrefix, kind } = props;
+  let be = underline === undefined ? true : underline;
+  let R = kind === "cr" && false;
+  let m = kind === "mr";
+  let C = m ? "!" : "#";
+  let appState = useAppState(selectPrUrlTemplate);
+  let ee;
+  if ($[0] !== R || $[1] !== m || $[2] !== appState || $[3] !== url) {
+    ee = R || m ? url : expandPrUrlIfTemplate(url, appState);
+    $[0] = R;
+    $[1] = m;
+    $[2] = appState;
+    $[3] = url;
+    $[4] = ee;
+  } else ee = $[4];
+  let v = ee;
+  let re;
+  let oe;
+  if ($[5] !== R || $[6] !== m || $[7] !== url || $[8] !== v) {
+    re = () => {
+      noopPrAction(v, url, R || m);
+    };
+    oe = [v, url, R, m];
+    $[5] = R;
+    $[6] = m;
+    $[7] = url;
+    $[8] = v;
+    $[9] = re;
+    $[10] = oe;
+  } else {
+    re = $[9];
+    oe = $[10];
+  }
   P(re, oe);
   let te;
-  if ($[11] !== color || $[12] !== reviewState)
-    ((te = color ?? getPrStatusColor_2(reviewState)), ($[11] = color), ($[12] = reviewState), ($[13] = te));
-  else te = $[13];
-  let _ = te,
-    k = !inverse && (dimColor || (!_ && !bold)),
-    ne;
-  if ($[14] !== bold || $[15] !== k || $[16] !== C || $[17] !== inverse || $[18] !== number || $[19] !== _)
-    ((ne = r(Text, { color: _, dimColor: k, bold: bold, inverse: inverse, children: [C, number] })),
-      ($[14] = bold),
-      ($[15] = k),
-      ($[16] = C),
-      ($[17] = inverse),
-      ($[18] = number),
-      ($[19] = _),
-      ($[20] = ne));
-  else ne = $[20];
-  let B = ne,
-    U;
-  if ($[21] !== bold || $[22] !== dimColor || $[23] !== hidePrefix || $[24] !== m)
-    ((U =
+  if ($[11] !== color || $[12] !== reviewState) {
+    te = color ?? getPrStatusColor_2(reviewState);
+    $[11] = color;
+    $[12] = reviewState;
+    $[13] = te;
+  } else te = $[13];
+  let _ = te;
+  let dimColor_2 = !inverse && (dimColor || (!_ && !bold));
+  let ne;
+  if (
+    $[14] !== bold ||
+    $[15] !== dimColor_2 ||
+    $[16] !== C ||
+    $[17] !== inverse ||
+    $[18] !== number ||
+    $[19] !== _
+  ) {
+    ne = jsxProd_default_2(Text, {
+      color: _,
+      dimColor: dimColor_2,
+      bold,
+      inverse,
+      children: [C, number],
+    });
+    $[14] = bold;
+    $[15] = dimColor_2;
+    $[16] = C;
+    $[17] = inverse;
+    $[18] = number;
+    $[19] = _;
+    $[20] = ne;
+  } else ne = $[20];
+  let fallback = ne;
+  let U;
+  if ($[21] !== bold || $[22] !== dimColor || $[23] !== hidePrefix || $[24] !== m) {
+    U =
       !hidePrefix &&
-      r(Fragment, { children: [e(Text, { dimColor: dimColor || !bold, children: m ? "MR" : "PR" }), " "] })),
-      ($[21] = bold),
-      ($[22] = dimColor),
-      ($[23] = hidePrefix),
-      ($[24] = m),
-      ($[25] = U));
-  else U = $[25];
-  const D = !inverse && be;
-  let F;
+      jsxProd_default_2(Fragment, {
+        children: [
+          jsxProd_default(Text, {
+            dimColor: dimColor || !bold,
+            children: m ? "MR" : "PR",
+          }),
+          " ",
+        ],
+      });
+    $[21] = bold;
+    $[22] = dimColor;
+    $[23] = hidePrefix;
+    $[24] = m;
+    $[25] = U;
+  } else U = $[25];
+  const underline_2 = !inverse && be;
+  let children;
   if (
     $[26] !== bold ||
-    $[27] !== k ||
+    $[27] !== dimColor_2 ||
     $[28] !== C ||
     $[29] !== inverse ||
     $[30] !== number ||
     $[31] !== _ ||
-    $[32] !== D
-  )
-    ((F = r(Text, {
+    $[32] !== underline_2
+  ) {
+    children = jsxProd_default_2(Text, {
       color: _,
-      dimColor: k,
-      underline: D,
-      bold: bold,
-      inverse: inverse,
+      dimColor: dimColor_2,
+      underline: underline_2,
+      bold,
+      inverse,
       children: [C, number],
-    })),
-      ($[26] = bold),
-      ($[27] = k),
-      ($[28] = C),
-      ($[29] = inverse),
-      ($[30] = number),
-      ($[31] = _),
-      ($[32] = D),
-      ($[33] = F));
-  else F = $[33];
+    });
+    $[26] = bold;
+    $[27] = dimColor_2;
+    $[28] = C;
+    $[29] = inverse;
+    $[30] = number;
+    $[31] = _;
+    $[32] = underline_2;
+    $[33] = children;
+  } else children = $[33];
   let O;
-  if ($[34] !== B || $[35] !== F || $[36] !== v)
-    ((O = e(Link, { url: v, fallback: B, assumeSupport: !0, children: F })),
-      ($[34] = B),
-      ($[35] = F),
-      ($[36] = v),
-      ($[37] = O));
-  else O = $[37];
+  if ($[34] !== fallback || $[35] !== children || $[36] !== v) {
+    O = jsxProd_default(Link, {
+      url: v,
+      fallback,
+      assumeSupport: true,
+      children,
+    });
+    $[34] = fallback;
+    $[35] = children;
+    $[36] = v;
+    $[37] = O;
+  } else O = $[37];
   let ie;
-  if ($[38] !== O || $[39] !== U)
-    ((ie = r(Text, { children: [U, O] })), ($[38] = O), ($[39] = U), ($[40] = ie));
-  else ie = $[40];
+  if ($[38] !== O || $[39] !== U) {
+    ie = jsxProd_default_2(Text, {
+      children: [U, O],
+    });
+    $[38] = O;
+    $[39] = U;
+    $[40] = ie;
+  } else ie = $[40];
   return ie;
 }
 //@ chunk-qgpgvvwv.js:2596-2763 layout = getPrStatusColor (1)
@@ -171,36 +215,53 @@ function getPrStatusColor_2(state) {
       return;
   }
 }
+//@ chunk-qgpgvvwv.js:2763-3227 placement
 /**
  * 显示增删行数（+N 绿色、-N 红色），都为 0 时不渲染。
  */
-//@ chunk-qgpgvvwv.js:2763-3227 placement
-function DiffStatCounts(s) {
-  let $ = w(10),
-    { added: added, removed: removed, bold: bold } = s;
+function DiffStatCounts(props) {
+  let $ = w(10);
+  let { added, removed, bold } = props;
   if (added === 0 && removed === 0) {
     return null;
   }
   let c;
-  if ($[0] !== added || $[1] !== bold)
-    ((c = added > 0 && r(Text, { color: "diffAddedWord", bold: bold, children: ["+", added] })),
-      ($[0] = added),
-      ($[1] = bold),
-      ($[2] = c));
-  else c = $[2];
+  if ($[0] !== added || $[1] !== bold) {
+    c =
+      added > 0 &&
+      jsxProd_default_2(Text, {
+        color: "diffAddedWord",
+        bold,
+        children: ["+", added],
+      });
+    $[0] = added;
+    $[1] = bold;
+    $[2] = c;
+  } else c = $[2];
   const b = added > 0 && removed > 0 && " ";
   let a;
-  if ($[3] !== bold || $[4] !== removed)
-    ((a = removed > 0 && r(Text, { color: "diffRemovedWord", bold: bold, children: ["-", removed] })),
-      ($[3] = bold),
-      ($[4] = removed),
-      ($[5] = a));
-  else a = $[5];
+  if ($[3] !== bold || $[4] !== removed) {
+    a =
+      removed > 0 &&
+      jsxProd_default_2(Text, {
+        color: "diffRemovedWord",
+        bold,
+        children: ["-", removed],
+      });
+    $[3] = bold;
+    $[4] = removed;
+    $[5] = a;
+  } else a = $[5];
   let x;
-  if ($[6] !== c || $[7] !== b || $[8] !== a)
-    ((x = r(Text, { children: [c, b, a] })), ($[6] = c), ($[7] = b), ($[8] = a), ($[9] = x));
-  else x = $[9];
+  if ($[6] !== c || $[7] !== b || $[8] !== a) {
+    x = jsxProd_default_2(Text, {
+      children: [c, b, a],
+    });
+    $[6] = c;
+    $[7] = b;
+    $[8] = a;
+    $[9] = x;
+  } else x = $[9];
   return x;
 }
-
-export { DiffStatCounts, jho, PrBadge, getPrStatusColor };
+export { DiffStatCounts, usePrActionEffect, CURRENT_PR, PrBadge, getPrStatusColor };

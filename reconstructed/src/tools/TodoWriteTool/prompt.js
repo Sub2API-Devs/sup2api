@@ -8,23 +8,28 @@
  * pieces: chunk-kxyd0g16.js (3)
  * attribution: placement 2, fingerprint 1
  */
-import { gD } from "../../utils/model/promptBundles.js";
+import { leanPromptOf } from "../../utils/model/promptBundles.js";
 import { FILE_EDIT_TOOL_NAME } from "../FileEditTool/constants.js";
 
+//@ chunk-kxyd0g16.js:51559-51963 placement
 /**
  * TodoWrite 工具说明。
  */
-//@ chunk-kxyd0g16.js:51559-51963 placement
 var TODO_WRITE_DESCRIPTION_2 =
   'Create and update a task list for the current session. The list is rendered to the user as your working plan.\n\n- Each todo has `content`, `status` ("pending" | "in_progress" | "completed"), and `activeForm` (present-tense label shown while in progress).\n- Send the full list each call; it replaces the previous one.\n- Keep one item `in_progress` at a time and mark it `completed` when done.';
 //@ chunk-kxyd0g16.js:51963-52020 placement
-function Ro(e, r) {
-  return gD({ model: e, leanPrompt: r }) ? TODO_WRITE_DESCRIPTION_2 : TODO_WRITE_PROMPT;
+function todoWritePromptFor(model, leanPrompt) {
+  return leanPromptOf({
+    model,
+    leanPrompt,
+  })
+    ? TODO_WRITE_DESCRIPTION_2
+    : TODO_WRITE_PROMPT;
 }
+//@ chunk-kxyd0g16.js:52020-61420 fingerprint = DESCRIPTION (1)
 /**
  * TodoWrite 提示词与描述。
  */
-//@ chunk-kxyd0g16.js:52020-61420 fingerprint = DESCRIPTION (1)
 var TODO_WRITE_PROMPT = `Use this tool to create and manage a structured task list for your current coding session. This helps you track progress, organize complex tasks, and demonstrate thoroughness to the user.
 It also helps the user understand the progress of the task and overall progress of their requests.
 
@@ -203,8 +208,7 @@ The assistant did not use the todo list because this is a single command executi
      - activeForm: "Fixing authentication bug"
 
 When in doubt, use this tool. Being proactive with task management demonstrates attentiveness and ensures you complete all requirements successfully.
-`,
-  TODO_WRITE_DESCRIPTION =
-    "Update the todo list for the current session. To be used proactively and often to track progress and pending tasks. Make sure that at least one task is in_progress at all times. Always provide both content (imperative) and activeForm (present continuous) for each task.";
-
-export { TODO_WRITE_DESCRIPTION, Ro };
+`;
+var TODO_WRITE_DESCRIPTION =
+  "Update the todo list for the current session. To be used proactively and often to track progress and pending tasks. Make sure that at least one task is in_progress at all times. Always provide both content (imperative) and activeForm (present continuous) for each task.";
+export { TODO_WRITE_DESCRIPTION, todoWritePromptFor };

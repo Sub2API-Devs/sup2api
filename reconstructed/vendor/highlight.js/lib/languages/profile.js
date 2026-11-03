@@ -8,27 +8,42 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:372222-372714 cjs-fingerprint
-var Zi = x(function (Cg, Xi) {
-  function zp(e) {
+var require_profile = x(function (cjsExports, cjsModule) {
+  function profile(hljs) {
     return {
       name: "Python profiler",
       contains: [
-        e.C_NUMBER_MODE,
-        { begin: "[a-zA-Z_][\\da-zA-Z_]+\\.[\\da-zA-Z_]{1,3}", end: ":", excludeEnd: !0 },
+        hljs.C_NUMBER_MODE,
+        {
+          begin: "[a-zA-Z_][\\da-zA-Z_]+\\.[\\da-zA-Z_]{1,3}",
+          end: ":",
+          excludeEnd: true,
+        },
         {
           begin: "(ncalls|tottime|cumtime)",
           end: "$",
           keywords: "ncalls tottime|10 cumtime|10 filename",
           relevance: 10,
         },
-        { begin: "function calls", end: "$", contains: [e.C_NUMBER_MODE], relevance: 10 },
-        e.APOS_STRING_MODE,
-        e.QUOTE_STRING_MODE,
-        { className: "string", begin: "\\(", end: "\\)$", excludeBegin: !0, excludeEnd: !0, relevance: 0 },
+        {
+          begin: "function calls",
+          end: "$",
+          contains: [hljs.C_NUMBER_MODE],
+          relevance: 10,
+        },
+        hljs.APOS_STRING_MODE,
+        hljs.QUOTE_STRING_MODE,
+        {
+          className: "string",
+          begin: "\\(",
+          end: "\\)$",
+          excludeBegin: true,
+          excludeEnd: true,
+          relevance: 0,
+        },
       ],
     };
   }
-  Xi.exports = zp;
+  cjsModule.exports = profile;
 });
-
-export { Zi };
+export { require_profile };

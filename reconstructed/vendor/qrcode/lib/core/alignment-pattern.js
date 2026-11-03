@@ -6,31 +6,32 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { N } from "./utils.js";
+import { require_utils } from "./utils.js";
 
 //@ chunk-spjgqa4y.js:2536-2981 cjs-fingerprint
-var Dt = x(function (ci) {
-  var getSymbolSize = N().getSymbolSize;
-  ci.getRowColCoords = function (e) {
-    if (e === 1) return [];
-    let r = Math.floor(e / 7) + 2,
-      n = getSymbolSize(e),
-      i = n === 145 ? 26 : Math.ceil((n - 13) / (2 * r - 2)) * 2,
-      o = [n - 7];
-    for (let s = 1; s < r - 1; s++) o[s] = o[s - 1] - i;
-    return (o.push(6), o.reverse());
+var require_alignment_pattern = x(function (cjsExports) {
+  var getSymbolSize = require_utils().getSymbolSize;
+  cjsExports.getRowColCoords = function (version) {
+    if (version === 1) return [];
+    let posCount = Math.floor(version / 7) + 2;
+    let size = getSymbolSize(version);
+    let intervals = size === 145 ? 26 : Math.ceil((size - 13) / (2 * posCount - 2)) * 2;
+    let positions = [size - 7];
+    for (let i = 1; i < posCount - 1; i++) positions[i] = positions[i - 1] - intervals;
+    positions.push(6);
+    return positions.reverse();
   };
-  ci.getPositions = function (e) {
-    let r = [],
-      rowColCoords = ci.getRowColCoords(e),
-      i = rowColCoords.length;
-    for (let o = 0; o < i; o++)
-      for (let s = 0; s < i; s++) {
-        if ((o === 0 && s === 0) || (o === 0 && s === i - 1) || (o === i - 1 && s === 0)) continue;
-        r.push([rowColCoords[o], rowColCoords[s]]);
+  cjsExports.getPositions = function (version) {
+    let coords = [];
+    let pos = cjsExports.getRowColCoords(version);
+    let posLength = pos.length;
+    for (let i = 0; i < posLength; i++)
+      for (let j = 0; j < posLength; j++) {
+        if ((i === 0 && j === 0) || (i === 0 && j === posLength - 1) || (i === posLength - 1 && j === 0))
+          continue;
+        coords.push([pos[i], pos[j]]);
       }
-    return r;
+    return coords;
   };
 });
-
-export { Dt };
+export { require_alignment_pattern };

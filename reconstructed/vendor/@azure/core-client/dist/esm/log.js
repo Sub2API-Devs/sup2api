@@ -8,6 +8,5 @@
 import { Pt } from "../../../logger/dist/esm/index.js";
 
 //@ chunk-mrx6y2r5.js:79630-79655 esm-fingerprint
-var Md = Pt("core-client");
-
-export { Md };
+var logger_3 = Pt("core-client");
+export { logger_3 };

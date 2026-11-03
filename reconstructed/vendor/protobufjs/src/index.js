@@ -12,13 +12,12 @@ import { Qd } from "./parse.js";
 import { th } from "./common.js";
 
 //@ chunk-pwh5dx3n.js:142798-142957 cjs-fingerprint
-var qs = x(function (bA, rh) {
-  var Jt = (rh.exports = Wd());
-  Jt.build = "full";
-  Jt.tokenize = ao();
-  Jt.parse = Qd();
-  Jt.common = th();
-  Jt.Root._configure(Jt.Type, Jt.parse, Jt.common);
+var qs = x(function (cjsExports, cjsModule) {
+  var protobuf = (cjsModule.exports = Wd());
+  protobuf.build = "full";
+  protobuf.tokenize = ao();
+  protobuf.parse = Qd();
+  protobuf.common = th();
+  protobuf.Root._configure(protobuf.Type, protobuf.parse, protobuf.common);
 });
-
 export { qs };

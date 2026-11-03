@@ -7,20 +7,19 @@
  */
 
 //@ chunk-r0ads4ty.js:614-840 esm-fingerprint
-function At(e, t) {
+function logForDebugging(message, options) {
   if (!process.env.SRT_DEBUG) return;
-  let r = t?.level || "info",
-    n = "[SandboxDebug]";
-  switch (r) {
+  let level = options?.level || "info";
+  let prefix = "[SandboxDebug]";
+  switch (level) {
     case "error":
-      console.error(`${n} ${e}`);
+      console.error(`${prefix} ${message}`);
       break;
     case "warn":
-      console.warn(`${n} ${e}`);
+      console.warn(`${prefix} ${message}`);
       break;
     default:
-      console.error(`${n} ${e}`);
+      console.error(`${prefix} ${message}`);
   }
 }
-
-export { At };
+export { logForDebugging };

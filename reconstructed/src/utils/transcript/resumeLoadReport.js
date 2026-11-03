@@ -10,7 +10,7 @@
  */
 import { SYNTHETIC_MODEL } from "../../constants/messages.js";
 import { getDiagnosticLogFile, logForDiagnosticsNoPII } from "../diagLogs.js";
-import { weakMap_2, weakMap_3, weakMap_5, AHe, weakMap_4 } from "./resumeAnnouncements.js";
+import { weakMap_2, weakMap_3, weakMap_5, MAX_ANNOUNCEMENTS, weakMap_4 } from "./resumeAnnouncements.js";
 import { logError } from "../log.js";
 import { count } from "../collections.js";
 
@@ -21,11 +21,11 @@ function listBlockTypes(content) {
     : [];
 }
 //@ chunk-e6aww6q8.js:313344-313532 placement
-function hasVisibleText(e) {
-  if (typeof e === "string") return e.trim() !== "";
+function hasVisibleText(content) {
+  if (typeof content === "string") return content.trim() !== "";
   return (
-    Array.isArray(e) &&
-    e.some(
+    Array.isArray(content) &&
+    content.some(
       (n) =>
         typeof n === "object" &&
         n !== null &&
@@ -35,18 +35,18 @@ function hasVisibleText(e) {
     )
   );
 }
+//@ chunk-e6aww6q8.js:313532-314111 placement
 /**
  * 把转录末条消息归类用于恢复报告：助手消息分 synthetic/calls/text/thinking/blank，用户消息分 tool_result/summary/meta/prompt，其余按类型。
  */
-//@ chunk-e6aww6q8.js:313532-314111 placement
 function classifyTailMessage(e) {
-  if (e === void 0) return "none";
-  let n = e.message?.content,
-    r = listBlockTypes(n);
+  if (e === undefined) return "none";
+  let content = e.message?.content;
+  let r = listBlockTypes(content);
   if (e.type === "assistant") {
     if (e.isApiErrorMessage || e.message?.model === SYNTHETIC_MODEL) return "assistant_synthetic";
     if (r.includes("tool_use")) return "assistant_calls";
-    if (hasVisibleText(n)) return "assistant_text";
+    if (hasVisibleText(content)) return "assistant_text";
     return r.some((s) => s === "thinking" || s === "redacted_thinking")
       ? "assistant_thinking"
       : "assistant_blank";
@@ -59,133 +59,147 @@ function classifyTailMessage(e) {
   return e.type === "attachment" || e.type === "system" ? e.type : "other";
 }
 //@ chunk-e6aww6q8.js:314111-314271 placement
-function secondsBetween(e, n) {
-  let parse = Date.parse(e ?? ""),
-    s = typeof n === "number" ? n : Date.parse(n ?? "");
-  return Number.isFinite(parse) && Number.isFinite(s) ? Math.round((s - parse) / 1000) : void 0;
+function secondsBetween(timestamp, timestamp_2) {
+  let timestamp_3 = Date.parse(timestamp ?? "");
+  let s = typeof timestamp_2 === "number" ? timestamp_2 : Date.parse(timestamp_2 ?? "");
+  return Number.isFinite(timestamp_3) && Number.isFinite(s)
+    ? Math.round((s - timestamp_3) / 1000)
+    : undefined;
 }
 //@ chunk-e6aww6q8.js:314271-314359 placement
-function PHe(e) {
+function isCountedRow(e) {
   return !e.isSidechain && !(e.type === "system" && e.subtype === "file_snapshot");
 }
 //@ chunk-e6aww6q8.js:314359-314399 placement
-function Hxt(e, n) {
-  if (getDiagnosticLogFile()) weakMap_2.set(e, n);
+function recordLoadReportFor(messages, n) {
+  if (getDiagnosticLogFile()) weakMap_2.set(messages, n);
 }
 //@ chunk-e6aww6q8.js:314399-314453 placement
-function Bxt(e, n) {
-  if (typeof n === "string") weakMap_3.set(e, n);
+function rememberValidatedTip(e, updatedAt) {
+  if (typeof updatedAt === "string") weakMap_3.set(e, updatedAt);
 }
 //@ chunk-e6aww6q8.js:314453-314505 placement
-function DHe(e) {
-  return e === void 0 ? void 0 : weakMap_3.get(e);
+function validatedTipOf(validatedCCRTip) {
+  return validatedCCRTip === undefined ? undefined : weakMap_3.get(validatedCCRTip);
 }
 //@ chunk-e6aww6q8.js:314505-314565 placement
-function F9(e, n, r) {
-  if (getDiagnosticLogFile()) weakMap_5.set(e, { sessionId: n, note: r });
+function rememberHydrateNote(project, sessionId, note) {
+  if (getDiagnosticLogFile())
+    weakMap_5.set(project, {
+      sessionId,
+      note,
+    });
 }
 //@ chunk-e6aww6q8.js:314565-314636 placement
-function Uxt(e, n, r, s) {
+function recordLoadReportSafely(e, messages, transcript, s) {
   if (!getDiagnosticLogFile()) return;
   try {
-    recordLoadReport(e, n, r, s);
+    recordLoadReport(e, messages, transcript, s);
   } catch (error) {
     logError(error);
   }
 }
+//@ chunk-e6aww6q8.js:314636-315072 placement
 /**
  * 记录本次加载的行数与被排除的可见行（供恢复报告）。
  */
-//@ chunk-e6aww6q8.js:314636-315072 placement
 function recordLoadReport(e, n, r, s) {
   let h = s && weakMap_5.get(s.writer);
   if (s) weakMap_5.delete(s.writer);
   let y = 0;
-  for (let L of n.values()) if (PHe(L)) y++;
-  let S = [],
-    w = 0;
-  if (y > count(r, PHe)) {
+  for (let L of n.values()) if (isCountedRow(L)) y++;
+  let S = [];
+  let w = 0;
+  if (y > count(r, isCountedRow)) {
     let L = new Set();
     for (let G of r) L.add(G.uuid);
     for (let G of n.values()) {
-      if (!PHe(G) || L.has(G.uuid)) continue;
-      if ((w++, S.push(G), S.length > 2 * AHe)) S.splice(0, AHe);
+      if (!isCountedRow(G) || L.has(G.uuid)) continue;
+      w++;
+      S.push(G);
+      if (S.length > 2 * MAX_ANNOUNCEMENTS) S.splice(0, MAX_ANNOUNCEMENTS);
     }
   }
   weakMap_4.set(e, {
-    hydrate: h?.sessionId === s?.sessionId ? h?.note : void 0,
+    hydrate: h?.sessionId === s?.sessionId ? h?.note : undefined,
     pick: weakMap_2.get(n),
     rowsLoaded: n.size,
     leftOutTotal: w,
-    leftOut: S.slice(-AHe),
+    leftOut: S.slice(-MAX_ANNOUNCEMENTS),
   });
 }
 //@ chunk-e6aww6q8.js:315072-315114 placement
-function jxt(e) {
+function reportResumeLoad(e) {
   try {
     buildResumeLoadReport(e);
   } catch (error) {
     logError(error);
   }
 }
+//@ chunk-e6aww6q8.js:315114-318109 placement
 /**
  * 生成恢复加载报告，记录加载了哪些消息。
  */
-//@ chunk-e6aww6q8.js:315114-318109 placement
 function buildResumeLoadReport({
-  log: log,
-  stored: stored,
-  verdict: verdict,
-  rescueSuppressed: rescueSuppressed,
-  rewound: rewound,
-  autoResume: autoResume,
-  openerVouched: openerVouched,
-  supersededCalls: supersededCalls,
-  cutOffCalls: cutOffCalls,
-  isTypedPrompt: isTypedPrompt,
+  log,
+  stored,
+  verdict,
+  rescueSuppressed,
+  rewound,
+  autoResume,
+  openerVouched,
+  supersededCalls,
+  cutOffCalls,
+  isTypedPrompt,
 }) {
   let q = weakMap_4.get(log);
-  if (q === void 0) return;
+  if (q === undefined) return;
   weakMap_4.delete(log);
-  let { hydrate: hydrate } = q;
+  let { hydrate } = q;
   if (verdict === "none" && q.leftOut.length === 0) return;
-  let leftOut = q.leftOut,
-    lastIndex = stored.findLastIndex(isTypedPrompt),
-    we = stored[Math.max(lastIndex, 0)]?.timestamp,
-    Ee = we === void 0 ? [] : leftOut.filter((Ie) => typeof Ie.timestamp === "string" && Ie.timestamp > we),
-    filtered = Ee.filter(isTypedPrompt);
+  let leftOut = q.leftOut;
+  let lastIndex = stored.findLastIndex(isTypedPrompt);
+  let timestamp = stored[Math.max(lastIndex, 0)]?.timestamp;
+  let Ee =
+    timestamp === undefined
+      ? []
+      : leftOut.filter((Ie) => typeof Ie.timestamp === "string" && Ie.timestamp > timestamp);
+  let filtered = Ee.filter(isTypedPrompt);
   if (verdict === "none" && filtered.length === 0) return;
   logForDiagnosticsNoPII("warn", "resume_load_report", () => {
-    let filtered_2 = Ee.filter((Zt) => classifyTailMessage(Zt) === "assistant_text"),
-      lastIndex_2 = stored.findLastIndex((Zt) => Zt.type === "user" || Zt.type === "assistant"),
-      We = stored[lastIndex_2],
-      { pick: pick } = q,
-      lt = pick?.checkpoint,
-      Je = new Set([lt, pick?.lastRow, pick?.newestRow, ...leftOut.map((Zt) => Zt.parentUuid)]),
-      nt = new Map();
+    let filtered_2 = Ee.filter((Zt) => classifyTailMessage(Zt) === "assistant_text");
+    let lastIndex_2 = stored.findLastIndex((Zt) => Zt.type === "user" || Zt.type === "assistant");
+    let We = stored[lastIndex_2];
+    let { pick } = q;
+    let checkpoint = pick?.checkpoint;
+    let Je = new Set([checkpoint, pick?.lastRow, pick?.newestRow, ...leftOut.map((Zt) => Zt.parentUuid)]);
+    let nt = new Map();
     stored.forEach((Zt, rn) => {
       if (Je.has(Zt.uuid)) nt.set(Zt.uuid, rn);
     });
-    let pt = new Map(leftOut.map((Zt) => [Zt.uuid, Zt])),
-      Et = filtered.at(-1) ?? filtered_2.at(-1) ?? Ee.at(-1),
-      yt,
-      gt,
-      At = !1,
-      It = new Set();
-    for (let Zt = Et; Zt !== void 0 && !It.has(Zt.uuid); Zt = pt.get(Zt.parentUuid ?? "")) {
-      if ((It.add(Zt.uuid), (yt = Zt), (gt = nt.get(Zt.parentUuid ?? "")), gt !== void 0)) break;
-      At = Boolean(Zt.parentUuid) && !pt.has(Zt.parentUuid ?? "");
+    let pt = new Map(leftOut.map((Zt) => [Zt.uuid, Zt]));
+    let Et = filtered.at(-1) ?? filtered_2.at(-1) ?? Ee.at(-1);
+    let yt;
+    let gt;
+    let forkWalkParentNotFound = false;
+    let It = new Set();
+    for (let Zt = Et; Zt !== undefined && !It.has(Zt.uuid); Zt = pt.get(Zt.parentUuid ?? "")) {
+      It.add(Zt.uuid);
+      yt = Zt;
+      gt = nt.get(Zt.parentUuid ?? "");
+      if (gt !== undefined) break;
+      forkWalkParentNotFound = Boolean(Zt.parentUuid) && !pt.has(Zt.parentUuid ?? "");
     }
-    let Yt = lastIndex === -1 ? [] : stored.slice(lastIndex + 1),
-      qt = nt.get(lt ?? "");
+    let Yt = lastIndex === -1 ? [] : stored.slice(lastIndex + 1);
+    let qt = nt.get(checkpoint ?? "");
     return {
-      verdict: verdict,
+      verdict,
       rescue_suppressed: rescueSuppressed,
-      rewound: rewound,
+      rewound,
       auto_resume: autoResume,
       opener_vouched: openerVouched,
       superseded_calls: supersededCalls,
-      ...(cutOffCalls !== void 0 && {
+      ...(cutOffCalls !== undefined && {
         interrupted_tail_kind: cutOffCalls.tailKind,
         cut_off_calls_shown: cutOffCalls.shown,
         cut_off_calls_answered_in_turn: cutOffCalls.inTurn,
@@ -206,21 +220,22 @@ function buildResumeLoadReport({
       later_rows_left_out: Ee.length,
       rows_left_out: q.leftOutTotal,
       rows_left_out_capped: q.leftOutTotal > leftOut.length,
-      fork_rows_above_tail: gt === void 0 ? -1 : Math.max(lastIndex_2 - gt, 0),
-      fork_inside_last_turn: gt !== void 0 && lastIndex !== -1 && gt >= lastIndex,
-      fork_walk_parent_not_found: At,
+      fork_rows_above_tail: gt === undefined ? -1 : Math.max(lastIndex_2 - gt, 0),
+      fork_inside_last_turn: gt !== undefined && lastIndex !== -1 && gt >= lastIndex,
+      fork_walk_parent_not_found: forkWalkParentNotFound,
       branch_first_row: classifyTailMessage(yt),
       branch_tip_row: classifyTailMessage(Et),
       seconds_tail_to_branch_first: secondsBetween(We?.timestamp, yt?.timestamp),
       seconds_tail_to_branch_tip: secondsBetween(We?.timestamp, Et?.timestamp),
       chose: pick?.chose ?? "none",
-      pruned_before_fold: pick?.prunedBeforeFold ?? !1,
-      has_checkpoint: lt !== void 0,
-      checkpoint_ever_explicit: pick?.checkpointEverExplicit ?? !1,
-      checkpoint_names_tail: qt !== void 0 && qt >= lastIndex_2,
-      checkpoint_in_conversation: qt !== void 0,
+      pruned_before_fold: pick?.prunedBeforeFold ?? false,
+      has_checkpoint: checkpoint !== undefined,
+      checkpoint_ever_explicit: pick?.checkpointEverExplicit ?? false,
+      checkpoint_names_tail: qt !== undefined && qt >= lastIndex_2,
+      checkpoint_in_conversation: qt !== undefined,
       checkpoint_has_child:
-        (qt !== void 0 && qt < lastIndex_2) || (lt !== void 0 && leftOut.some((Zt) => Zt.parentUuid === lt)),
+        (qt !== undefined && qt < lastIndex_2) ||
+        (checkpoint !== undefined && leftOut.some((Zt) => Zt.parentUuid === checkpoint)),
       rows_after_last_checkpoint: pick?.rowsAfterLastCheckpoint ?? -1,
       last_row_in_conversation: nt.has(pick?.lastRow ?? ""),
       newest_row_in_conversation: nt.has(pick?.newestRow ?? ""),
@@ -241,46 +256,58 @@ function buildResumeLoadReport({
 //@ chunk-e6aww6q8.js:318109-318129 placement
 var weakMap_6 = new WeakMap();
 //@ chunk-e6aww6q8.js:318129-318163 placement
-function zxt(e) {
+function conversationChainOf(e) {
   return weakMap_6.get(e);
 }
+//@ chunk-e6aww6q8.js:318163-318486 placement
 /**
  * 跟踪显式回退检查点后被剪掉的行。
  */
-//@ chunk-e6aww6q8.js:318163-318486 placement
-function createRewindTracker(e) {
+function createRewindTracker(messages) {
   let n = new Set();
   return {
     noteCheckpoint(r) {
-      if (r.explicit !== !0) return;
-      if (r.rewound !== !0 || r.cutUuid === void 0) {
+      if (r.explicit !== true) return;
+      if (r.rewound !== true || r.cutUuid === undefined) {
         n.clear();
         return;
       }
-      let s = e.get(r.cutUuid);
-      if (s === void 0) return;
-      if ((dropAncestorsUntilBoundary(n, e, s), !Xxt(s))) n.add(s.uuid);
+      let s = messages.get(r.cutUuid);
+      if (s === undefined) return;
+      dropAncestorsUntilBoundary(n, messages, s);
+      if (!isConversationRow(s)) n.add(s.uuid);
     },
     noteRow(r) {
-      if (n.size > 0) dropAncestorsUntilBoundary(n, e, r);
+      if (n.size > 0) dropAncestorsUntilBoundary(n, messages, r);
     },
     noteCompactBoundary() {
       n.clear();
     },
     publish() {
-      if (n.size > 0) weakMap_6.set(e, n);
+      if (n.size > 0) weakMap_6.set(messages, n);
     },
   };
 }
 //@ chunk-e6aww6q8.js:318486-318653 placement
 function dropAncestorsUntilBoundary(e, n, r) {
-  let s = r.parentUuid ? n.get(r.parentUuid) : void 0;
-  for (let h = 0; h < 64 && s !== void 0 && !Xxt(s); h++)
-    (e.delete(s.uuid), (s = s.parentUuid ? n.get(s.parentUuid) : void 0));
+  let s = r.parentUuid ? n.get(r.parentUuid) : undefined;
+  for (let idx = 0; idx < 64 && s !== undefined && !isConversationRow(s); idx++) {
+    e.delete(s.uuid);
+    s = s.parentUuid ? n.get(s.parentUuid) : undefined;
+  }
 }
 //@ chunk-e6aww6q8.js:318653-318714 placement
-function Xxt(e) {
+function isConversationRow(e) {
   return e.type === "user" || e.type === "assistant";
 }
-
-export { classifyTailMessage, jxt, Bxt, DHe, F9, zxt, createRewindTracker, Hxt, Uxt };
+export {
+  classifyTailMessage,
+  reportResumeLoad,
+  rememberValidatedTip,
+  validatedTipOf,
+  rememberHydrateNote,
+  conversationChainOf,
+  createRewindTracker,
+  recordLoadReportFor,
+  recordLoadReportSafely,
+};

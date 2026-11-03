@@ -11,5 +11,4 @@
 
 //@ chunk-5pxmrqzn.js:191-208 placement
 var MONITOR = "Monitor";
-
 export { MONITOR };

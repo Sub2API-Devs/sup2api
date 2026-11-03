@@ -8,26 +8,46 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:330060-330609 cjs-fingerprint
-var Mi = x(function (bg, hi) {
-  function xp(e) {
-    let COMMENT = e.COMMENT(/\{/, /\}/, { contains: ["self"] });
+var require_parser3 = x(function (cjsExports, cjsModule) {
+  function parser3(hljs) {
+    let CURLY_SUBCOMMENT = hljs.COMMENT(/\{/, /\}/, {
+      contains: ["self"],
+    });
     return {
       name: "Parser3",
       subLanguage: "xml",
       relevance: 0,
       contains: [
-        e.COMMENT("^#", "$"),
-        e.COMMENT(/\^rem\{/, /\}/, { relevance: 10, contains: [COMMENT] }),
-        { className: "meta", begin: "^@(?:BASE|USE|CLASS|OPTIONS)$", relevance: 10 },
-        { className: "title", begin: "@[\\w\\-]+\\[[\\w^;\\-]*\\](?:\\[[\\w^;\\-]*\\])?(?:.*)$" },
-        { className: "variable", begin: /\$\{?[\w\-.:]+\}?/ },
-        { className: "keyword", begin: /\^[\w\-.:]+/ },
-        { className: "number", begin: "\\^#[0-9a-fA-F]+" },
-        e.C_NUMBER_MODE,
+        hljs.COMMENT("^#", "$"),
+        hljs.COMMENT(/\^rem\{/, /\}/, {
+          relevance: 10,
+          contains: [CURLY_SUBCOMMENT],
+        }),
+        {
+          className: "meta",
+          begin: "^@(?:BASE|USE|CLASS|OPTIONS)$",
+          relevance: 10,
+        },
+        {
+          className: "title",
+          begin: "@[\\w\\-]+\\[[\\w^;\\-]*\\](?:\\[[\\w^;\\-]*\\])?(?:.*)$",
+        },
+        {
+          className: "variable",
+          begin: /\$\{?[\w\-.:]+\}?/,
+        },
+        {
+          className: "keyword",
+          begin: /\^[\w\-.:]+/,
+        },
+        {
+          className: "number",
+          begin: "\\^#[0-9a-fA-F]+",
+        },
+        hljs.C_NUMBER_MODE,
       ],
     };
   }
-  hi.exports = xp;
+  cjsModule.exports = parser3;
 });
-
-export { Mi };
+export { require_parser3 };

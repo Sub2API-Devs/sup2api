@@ -11,9 +11,15 @@
 import { findInCauseChain } from "../../utils/errors.js";
 
 //@ chunk-gr2vfhah.js:657-672 placement
-var hAi = 600000;
+/**
+ * 流错误重试窗口上限 10 分钟；取升级后或首次重试窗口。
+ */
+var MAX_RETRY_WINDOW_MS = 600000;
 //@ chunk-gr2vfhah.js:672-739 placement
-function Poo(e) {
+/**
+ * 导出函数 `retryWindowFor`：参数 e，返回 e.escalated ? e.retryWindowMs : e.firstWindowMs。
+ */
+function retryWindowFor(e) {
   return e.escalated ? e.retryWindowMs : e.firstWindowMs;
 }
 //@ chunk-gr2vfhah.js:739-946 placement
@@ -21,17 +27,20 @@ class StreamNoResponseError extends Error {
   deadline;
   sleptMs;
   code = "StreamNoResponse";
-  constructor(e, t) {
+  constructor(deadline, sleptMs) {
     super("No response from API within the first-byte window");
-    this.deadline = e;
-    this.sleptMs = t;
+    this.deadline = deadline;
+    this.sleptMs = sleptMs;
     this.name = "StreamNoResponseError";
   }
 }
 //@ chunk-gr2vfhah.js:946-1029 placement
-function Yxn(e) {
-  let t = findInCauseChain(e, (r) => r instanceof StreamNoResponseError);
-  return t instanceof StreamNoResponseError ? t : void 0;
+/**
+ * 导出函数 `findStreamNoResponseError`：参数 e，返回 t instanceof StreamNoResponseError ? t : void 0。
+ */
+function findStreamNoResponseError(error) {
+  let inCauseChain = findInCauseChain(error, (r) => r instanceof StreamNoResponseError);
+  return inCauseChain instanceof StreamNoResponseError ? inCauseChain : undefined;
 }
 //@ chunk-gr2vfhah.js:11749-11871 placement
 class StreamNoEventsError extends Error {
@@ -45,8 +54,9 @@ class StreamMalformedEventError extends Error {
   blockState;
   constructor(e) {
     super("Content block not found");
-    if (((this.name = "StreamMalformedEventError"), (this.blockState = e), e === "closed"))
-      this.message = "Content block already closed";
+    this.name = "StreamMalformedEventError";
+    this.blockState = e;
+    if (e === "closed") this.message = "Content block already closed";
     if (e === "unreadable") this.message = "Stream event unreadable";
   }
 }
@@ -60,12 +70,12 @@ class StreamTruncatedError extends Error {
 }
 //@ chunk-gr2vfhah.js:12280-12659 placement
 function classifyStreamError({
-  connDetails: connDetails,
-  isStaleConnection: isStaleConnection,
-  isContextHintSse: isContextHintSse,
-  streamIdleAborted: streamIdleAborted,
-  noEvents: noEvents,
-  malformedStream: malformedStream,
+  connDetails,
+  isStaleConnection,
+  isContextHintSse,
+  streamIdleAborted,
+  noEvents,
+  malformedStream,
 }) {
   if (connDetails?.code === "StreamSuspended") return "stream_suspended";
   if (connDetails?.code === "StreamTruncated") return "stream_truncated";
@@ -76,14 +86,13 @@ function classifyStreamError({
   if (malformedStream) return "malformed_stream";
   return "other";
 }
-
 export {
   StreamMalformedEventError,
   StreamTruncatedError,
   StreamNoEventsError,
   classifyStreamError,
-  Yxn,
-  Poo,
-  hAi,
+  findStreamNoResponseError,
+  retryWindowFor,
+  MAX_RETRY_WINDOW_MS,
   StreamNoResponseError,
 };

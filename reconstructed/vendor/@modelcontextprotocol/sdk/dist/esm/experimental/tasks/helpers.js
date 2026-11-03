@@ -7,32 +7,35 @@
  */
 
 //@ chunk-zykv69v4.js:28190-28439 esm-fingerprint
-function kGn(e, t, r) {
-  if (!e) throw Error(`${r} does not support task creation (required for ${t})`);
-  switch (t) {
+function assertToolsCallTaskCapability(requests, method, entityName) {
+  if (!requests) throw Error(`${entityName} does not support task creation (required for ${method})`);
+  switch (method) {
     case "tools/call":
-      if (!e.tools?.call)
-        throw Error(`${r} does not support task creation for tools/call (required for ${t})`);
+      if (!requests.tools?.call)
+        throw Error(`${entityName} does not support task creation for tools/call (required for ${method})`);
       break;
     default:
       break;
   }
 }
 //@ chunk-zykv69v4.js:28439-28875 esm-fingerprint
-function TGn(e, t, r) {
-  if (!e) throw Error(`${r} does not support task creation (required for ${t})`);
-  switch (t) {
+function assertClientRequestTaskCapability(requests, method, entityName) {
+  if (!requests) throw Error(`${entityName} does not support task creation (required for ${method})`);
+  switch (method) {
     case "sampling/createMessage":
-      if (!e.sampling?.createMessage)
-        throw Error(`${r} does not support task creation for sampling/createMessage (required for ${t})`);
+      if (!requests.sampling?.createMessage)
+        throw Error(
+          `${entityName} does not support task creation for sampling/createMessage (required for ${method})`,
+        );
       break;
     case "elicitation/create":
-      if (!e.elicitation?.create)
-        throw Error(`${r} does not support task creation for elicitation/create (required for ${t})`);
+      if (!requests.elicitation?.create)
+        throw Error(
+          `${entityName} does not support task creation for elicitation/create (required for ${method})`,
+        );
       break;
     default:
       break;
   }
 }
-
-export { TGn, kGn };
+export { assertClientRequestTaskCapability, assertToolsCallTaskCapability };

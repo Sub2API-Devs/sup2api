@@ -6,19 +6,18 @@
  * attribution: cjs-require-graph 2
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { hs } from "./compare-build.js";
+import { require_compare_build } from "./compare-build.js";
 
 //@ chunk-bwbq4xvm.js:11963-12051 cjs-require-graph
-var Fi = x(function (c2, Ki) {
-  var Uv = hs(),
-    qv = (e, s) => e.sort((n, r) => Uv(n, r, s));
-  Ki.exports = qv;
+var require_sort = x(function (cjsExports, cjsModule) {
+  var compareBuild = require_compare_build();
+  var sort = (list, loose) => list.sort((a, b) => compareBuild(a, b, loose));
+  cjsModule.exports = sort;
 });
 //@ chunk-bwbq4xvm.js:12051-12139 cjs-require-graph
-var Yi = x(function (h2, Wi) {
-  var Vv = hs(),
-    jv = (e, s) => e.sort((n, r) => Vv(r, n, s));
-  Wi.exports = jv;
+var require_sort_2 = x(function (cjsExports, cjsModule) {
+  var compareBuild = require_compare_build();
+  var sort = (list, loose) => list.sort((n, r) => compareBuild(r, n, loose));
+  cjsModule.exports = sort;
 });
-
-export { Fi, Yi };
+export { require_sort, require_sort_2 };

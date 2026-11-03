@@ -8,15 +8,17 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-s82q9s4x.js:51973-52170 cjs-fingerprint
-var elr = x(function (In) {
-  Object.defineProperty(In, "__esModule", { value: !0 });
-  class Rn extends Error {
-    constructor(e) {
+var require_validation_error_2 = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  class ValidationError extends Error {
+    constructor(errors) {
       super("validation failed");
-      ((this.errors = e), (this.ajv = this.validation = !0));
+      this.errors = errors;
+      this.ajv = this.validation = true;
     }
   }
-  In.default = Rn;
+  cjsExports.default = ValidationError;
 });
-
-export { elr };
+export { require_validation_error_2 };

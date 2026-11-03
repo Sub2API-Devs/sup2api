@@ -5,63 +5,64 @@
  * pieces: chunk-h87x8cg3.js (2)
  * attribution: esm-fingerprint 2
  */
-import { pr } from "../../../sdk/core/error.mjs";
+import { AnthropicError } from "../../../sdk/core/error.mjs";
 
 //@ chunk-h87x8cg3.js:9374-9460 esm-fingerprint
-function Y(e) {
-  return e.replace(/[^A-Za-z0-9\-._~!$&'()*+,;=:@]+/g, encodeURIComponent);
+function encodeURIPath(str) {
+  return str.replace(/[^A-Za-z0-9\-._~!$&'()*+,;=:@]+/g, encodeURIComponent);
 }
 //@ chunk-h87x8cg3.js:9460-10486 esm-fingerprint
-var freeze = Object.freeze(Object.create(null)),
-  Be = (e = Y) =>
-    function (r, ...n) {
-      if (r.length === 1) return r[0];
-      let s = !1,
-        o = [],
-        reduced = r.reduce((u, p, m) => {
-          if (/[?#]/.test(p)) s = !0;
-          let h = n[m],
-            y = (s ? encodeURIComponent : e)("" + h);
-          if (
-            m !== n.length &&
-            (h == null ||
-              (typeof h === "object" &&
-                h.toString ===
-                  Object.getPrototypeOf(Object.getPrototypeOf(h.hasOwnProperty ?? freeze) ?? freeze)
-                    ?.toString))
-          )
-            ((y = h + ""),
-              o.push({
-                start: u.length + p.length,
-                length: y.length,
-                error: `Value of type ${Object.prototype.toString.call(h).slice(8, -1)} is not a valid path parameter`,
-              }));
-          return u + p + (m === n.length ? "" : y);
-        }, ""),
-        a = reduced.split(/[?#]/, 1)[0],
-        d = /(?<=^|\/)(?:\.|%2e){1,2}(?=\/|$)/gi,
-        l;
-      while ((l = d.exec(a)) !== null)
-        o.push({
-          start: l.index,
-          length: l[0].length,
-          error: `Value "${l[0]}" can't be safely passed as a path parameter`,
+var EMPTY = Object.freeze(Object.create(null));
+var createPathTagFunction = (pathEncoder = encodeURIPath) =>
+  function (statics, ...params) {
+    if (statics.length === 1) return statics[0];
+    let postPath = false;
+    let invalidSegments = [];
+    let path = statics.reduce((previousValue, currentValue, index) => {
+      if (/[?#]/.test(currentValue)) postPath = true;
+      let value = params[index];
+      let encoded = (postPath ? encodeURIComponent : pathEncoder)("" + value);
+      if (
+        index !== params.length &&
+        (value == null ||
+          (typeof value === "object" &&
+            value.toString ===
+              Object.getPrototypeOf(Object.getPrototypeOf(value.hasOwnProperty ?? EMPTY) ?? EMPTY)?.toString))
+      ) {
+        encoded = value + "";
+        invalidSegments.push({
+          start: previousValue.length + currentValue.length,
+          length: encoded.length,
+          error: `Value of type ${Object.prototype.toString.call(value).slice(8, -1)} is not a valid path parameter`,
         });
-      if ((o.sort((u, p) => u.start - p.start), o.length > 0)) {
-        let u = 0,
-          reduced_2 = o.reduce((m, h) => {
-            let repeat = " ".repeat(h.start - u),
-              repeat_2 = "^".repeat(h.length);
-            return ((u = h.start + h.length), m + repeat + repeat_2);
-          }, "");
-        throw new pr(`Path parameters result in path with invalid segments:
-${o.map((m) => m.error).join(`
-`)}
-${reduced}
-${reduced_2}`);
       }
-      return reduced;
-    },
-  L = Be(Y);
-
+      return previousValue + currentValue + (index === params.length ? "" : encoded);
+    }, "");
+    let pathOnly = path.split(/[?#]/, 1)[0];
+    let invalidSegmentPattern = /(?<=^|\/)(?:\.|%2e){1,2}(?=\/|$)/gi;
+    let match;
+    while ((match = invalidSegmentPattern.exec(pathOnly)) !== null)
+      invalidSegments.push({
+        start: match.index,
+        length: match[0].length,
+        error: `Value "${match[0]}" can't be safely passed as a path parameter`,
+      });
+    invalidSegments.sort((a, b) => a.start - b.start);
+    if (invalidSegments.length > 0) {
+      let lastEnd = 0;
+      let underline = invalidSegments.reduce((acc, segment) => {
+        let spaces = " ".repeat(segment.start - lastEnd);
+        let arrows = "^".repeat(segment.length);
+        lastEnd = segment.start + segment.length;
+        return acc + spaces + arrows;
+      }, "");
+      throw new AnthropicError(`Path parameters result in path with invalid segments:
+${invalidSegments.map((e) => e.error).join(`
+`)}
+${path}
+${underline}`);
+    }
+    return path;
+  };
+var L = createPathTagFunction(encodeURIPath);
 export { L };

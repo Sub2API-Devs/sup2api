@@ -6,63 +6,66 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { Tn } from "./forge.js";
-import { Zn } from "./util.js";
-import { Ci } from "./random.js";
-import { Ef } from "./jsbn.js";
+import { require_forge } from "./forge.js";
+import { require_util } from "./util.js";
+import { require_random } from "./random.js";
+import { require_jsbn } from "./jsbn.js";
 
 //@ chunk-fq0cr76a.js:274277-275290 cjs-fingerprint
-var lC = x(function (Vfe, aC) {
-  var bi = Tn();
-  Zn();
-  Ci();
-  Ef();
-  aC.exports = bi.kem = bi.kem || {};
-  var BigInteger = bi.jsbn.BigInteger;
-  bi.kem.rsa = {};
-  bi.kem.rsa.create = function (e, n) {
-    n = n || {};
-    var r = n.prng || bi.random,
-      s = {};
-    return (
-      (s.encrypt = function (h, y) {
-        var ceil = Math.ceil(h.n.bitLength() / 8),
-          S;
-        do S = new BigInteger(bi.util.bytesToHex(r.getBytesSync(ceil)), 16).mod(h.n);
-        while (S.compareTo(BigInteger.ONE) <= 0);
-        S = bi.util.hexToBytes(S.toString(16));
-        var w = ceil - S.length;
-        if (w > 0) S = bi.util.fillString(String.fromCharCode(0), w) + S;
-        var encrypt = h.encrypt(S, "NONE"),
-          generate = e.generate(S, y);
-        return { encapsulation: encrypt, key: generate };
-      }),
-      (s.decrypt = function (h, y, b) {
-        var decrypt = h.decrypt(y, "NONE");
-        return e.generate(decrypt, b);
-      }),
-      s
-    );
+var require_kem = x(function (cjsExports, cjsModule) {
+  var forge = require_forge();
+  require_util();
+  require_random();
+  require_jsbn();
+  cjsModule.exports = forge.kem = forge.kem || {};
+  var BigInteger = forge.jsbn.BigInteger;
+  forge.kem.rsa = {};
+  forge.kem.rsa.create = function (kdf, options) {
+    options = options || {};
+    var prng = options.prng || forge.random;
+    var kem = {};
+    kem.encrypt = function (publicKey, keyLength) {
+      var byteLength = Math.ceil(publicKey.n.bitLength() / 8);
+      var r;
+      do r = new BigInteger(forge.util.bytesToHex(prng.getBytesSync(byteLength)), 16).mod(publicKey.n);
+      while (r.compareTo(BigInteger.ONE) <= 0);
+      r = forge.util.hexToBytes(r.toString(16));
+      var zeros = byteLength - r.length;
+      if (zeros > 0) r = forge.util.fillString(String.fromCharCode(0), zeros) + r;
+      var encapsulation = publicKey.encrypt(r, "NONE");
+      var key = kdf.generate(r, keyLength);
+      return {
+        encapsulation,
+        key,
+      };
+    };
+    kem.decrypt = function (privateKey, encapsulation, keyLength) {
+      var r = privateKey.decrypt(encapsulation, "NONE");
+      return kdf.generate(r, keyLength);
+    };
+    return kem;
   };
-  bi.kem.kdf1 = function (e, n) {
-    oC(this, e, 0, n || e.digestLength);
+  forge.kem.kdf1 = function (md, digestLength) {
+    _createKDF(this, md, 0, digestLength || md.digestLength);
   };
-  bi.kem.kdf2 = function (e, n) {
-    oC(this, e, 1, n || e.digestLength);
+  forge.kem.kdf2 = function (md, digestLength) {
+    _createKDF(this, md, 1, digestLength || md.digestLength);
   };
-  function oC(e, n, r, s) {
-    e.generate = function (h, y) {
-      var b = new bi.util.ByteBuffer(),
-        S = Math.ceil(y / s) + r,
-        w = new bi.util.ByteBuffer();
-      for (var R = r; R < S; ++R) {
-        (w.putInt32(R), n.start(), n.update(h + w.getBytes()));
-        var digest = n.digest();
-        b.putBytes(digest.getBytes(s));
+  function _createKDF(kdf, md, counterStart, digestLength) {
+    kdf.generate = function (x, length) {
+      var key = new forge.util.ByteBuffer();
+      var k = Math.ceil(length / digestLength) + counterStart;
+      var c = new forge.util.ByteBuffer();
+      for (var i = counterStart; i < k; ++i) {
+        c.putInt32(i);
+        md.start();
+        md.update(x + c.getBytes());
+        var hash = md.digest();
+        key.putBytes(hash.getBytes(digestLength));
       }
-      return (b.truncate(b.length() - y), b.getBytes());
+      key.truncate(key.length() - length);
+      return key.getBytes();
     };
   }
 });
-
-export { lC };
+export { require_kem };

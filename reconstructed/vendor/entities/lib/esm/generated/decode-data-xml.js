@@ -18,5 +18,4 @@ var uint16Array_2 = new Uint16Array(
     .split("")
     .map((e) => e.charCodeAt(0)),
 );
-
 export { uint16Array, uint16Array_2 };

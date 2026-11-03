@@ -12,27 +12,38 @@ import { BASH_TOOL_NAME } from "../BashTool/toolName.js";
 import { POWERSHELL_TOOL_NAME } from "../PowerShellTool/toolName.js";
 
 //@ chunk-vf6hkvee.js:230-253 placement
-var r = new Set([BASH_TOOL_NAME, POWERSHELL_TOOL_NAME]);
+/**
+ * shell 工具名的集合（Bash、PowerShell）。
+ */
+var SHELL_TOOL_NAMES = new Set([BASH_TOOL_NAME, POWERSHELL_TOOL_NAME]);
 //@ chunk-vf6hkvee.js:253-285 placement
-function xTe(e) {
-  return r.has(e);
+/**
+ * 判断工具名是否为 shell 工具。
+ */
+function isShellToolName(e) {
+  return SHELL_TOOL_NAMES.has(e);
 }
 //@ chunk-vf6hkvee.js:285-321 placement
-function QOs(e, n) {
-  return xTe(e) ? e : n;
+/**
+ * 是 shell 工具则返回该名，否则返回默认名。
+ */
+function shellToolOrDefault(name, servedShellToolName) {
+  return isShellToolName(name) ? name : servedShellToolName;
 }
+//@ chunk-vf6hkvee.js:321-433 placement
 /**
  * 截断输出时建议的过滤命令（PowerShell 或 head/tail/grep）。
  */
-//@ chunk-vf6hkvee.js:321-433 placement
-function outputFilterHint(e) {
-  return e === POWERSHELL_TOOL_NAME
+function outputFilterHint(name) {
+  return name === POWERSHELL_TOOL_NAME
     ? "Select-Object -First, Select-Object -Last or Select-String"
     : "head, tail or grep";
 }
 //@ chunk-vf6hkvee.js:433-481 placement
-function FL(e) {
-  return e.isMcp !== !0 && xTe(e.name);
+/**
+ * 判断是否为非 MCP 的 shell 工具。
+ */
+function isNonMcpShellTool(e) {
+  return e.isMcp !== true && isShellToolName(e.name);
 }
-
-export { xTe, FL, outputFilterHint, QOs };
+export { isShellToolName, isNonMcpShellTool, outputFilterHint, shellToolOrDefault };

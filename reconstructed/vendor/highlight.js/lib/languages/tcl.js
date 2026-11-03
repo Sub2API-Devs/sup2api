@@ -8,11 +8,14 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:492016-493931 cjs-fingerprint
-var Oo = x(function (db, Ro) {
-  function Zm(e) {
-    let regex = e.regex,
-      n = /[a-zA-Z_][a-zA-Z0-9_]*/,
-      a = { className: "number", variants: [e.BINARY_NUMBER_MODE, e.C_NUMBER_MODE] };
+var require_tcl = x(function (cjsExports, cjsModule) {
+  function tcl(hljs) {
+    let regex = hljs.regex;
+    let TCL_IDENT = /[a-zA-Z_][a-zA-Z0-9_]*/;
+    let NUMBER = {
+      className: "number",
+      variants: [hljs.BINARY_NUMBER_MODE, hljs.C_NUMBER_MODE],
+    };
     return {
       name: "Tcl",
       aliases: ["tk"],
@@ -137,39 +140,48 @@ var Oo = x(function (db, Ro) {
         "while",
       ],
       contains: [
-        e.COMMENT(";[ \\t]*#", "$"),
-        e.COMMENT("^[ \\t]*#", "$"),
+        hljs.COMMENT(";[ \\t]*#", "$"),
+        hljs.COMMENT("^[ \\t]*#", "$"),
         {
           beginKeywords: "proc",
           end: "[\\{]",
-          excludeEnd: !0,
+          excludeEnd: true,
           contains: [
             {
               className: "title",
               begin: "[ \\t\\n\\r]+(::)?[a-zA-Z_]((::)?[a-zA-Z0-9_])*",
               end: "[ \\t\\n\\r]",
-              endsWithParent: !0,
-              excludeEnd: !0,
+              endsWithParent: true,
+              excludeEnd: true,
             },
           ],
         },
         {
           className: "variable",
           variants: [
-            { begin: regex.concat(/\$/, regex.optional(/::/), n, "(::", n, ")*") },
-            { begin: "\\$\\{(::)?[a-zA-Z_]((::)?[a-zA-Z0-9_])*", end: "\\}", contains: [a] },
+            {
+              begin: regex.concat(/\$/, regex.optional(/::/), TCL_IDENT, "(::", TCL_IDENT, ")*"),
+            },
+            {
+              begin: "\\$\\{(::)?[a-zA-Z_]((::)?[a-zA-Z0-9_])*",
+              end: "\\}",
+              contains: [NUMBER],
+            },
           ],
         },
         {
           className: "string",
-          contains: [e.BACKSLASH_ESCAPE],
-          variants: [e.inherit(e.QUOTE_STRING_MODE, { illegal: null })],
+          contains: [hljs.BACKSLASH_ESCAPE],
+          variants: [
+            hljs.inherit(hljs.QUOTE_STRING_MODE, {
+              illegal: null,
+            }),
+          ],
         },
-        a,
+        NUMBER,
       ],
     };
   }
-  Ro.exports = Zm;
+  cjsModule.exports = tcl;
 });
-
-export { Oo };
+export { require_tcl };

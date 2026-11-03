@@ -5,16 +5,18 @@
  * pieces: chunk-hwmsct5x.js (1)
  * attribution: esm-fingerprint 1
  */
-import { Y } from "../../../core/resource.mjs";
+import { APIResource } from "../../../core/resource.mjs";
 
 //@ chunk-hwmsct5x.js:119462-119673 esm-fingerprint
-class eo extends Y {
-  retrieve(e) {
-    return this._client.get("/v1/organizations/compliance_settings?beta=true", e);
+class ComplianceSettings extends APIResource {
+  retrieve(options) {
+    return this._client.get("/v1/organizations/compliance_settings?beta=true", options);
   }
-  update(e, n) {
-    return this._client.post("/v1/organizations/compliance_settings?beta=true", { body: e, ...n });
+  update(body, options) {
+    return this._client.post("/v1/organizations/compliance_settings?beta=true", {
+      body,
+      ...options,
+    });
   }
 }
-
-export { eo };
+export { ComplianceSettings };

@@ -12,42 +12,48 @@ import { createInterface } from "readline";
 import { DoctorLazy } from "../cli/handlers/util.js";
 import { create, create_2, create_25 } from "../../vendor/zod/lib/index.mjs";
 import {
-  inn,
-  snn,
-  onn,
-  ann,
-  cnn,
-  unn,
-  lnn,
-  dnn,
+  FINGERPRINT_LABEL,
+  CERT_ROTATED_MESSAGE,
+  FIRST_TRUST_MESSAGE,
+  TRUST_ACCEPT_LABEL,
+  PIN_MISMATCH_MESSAGE,
+  LOGIN_FAILED_MESSAGE,
+  TRUST_DECLINE_LABEL,
+  TRUST_REJECTED_MESSAGE,
   GatewayLoginFlow,
-  rnn,
+  NO_GATEWAY_URL_MESSAGE,
 } from "../services/oauth/gatewayLogin/GatewayLogin.js";
 import { isValidBrowserUrl } from "../utils/browser.js";
 import { jsonStringify } from "../utils/slowOperations.js";
-import { ql } from "../utils/stringUtils.js";
+import { cleanForDisplay } from "../utils/stringUtils.js";
 import { safeParseJSON } from "../utils/json.js";
 import { logForDebugging } from "../utils/debug.js";
 import { errorMessage } from "../utils/errors.js";
 import { normalizeGatewayUrl } from "../services/gateway/hostCheck.js";
 
 //@ chunk-gy23bf9p.js:3682-3741 placement
-var h = 1,
-  w = DoctorLazy(() => create({ state: create_2(), shown: create_2(), accept: create_25(!0) }));
+var SIGN_IN_STATE_VERSION = 1;
+var signInStateSchema = DoctorLazy(() =>
+  create({
+    state: create_2(),
+    shown: create_2(),
+    accept: create_25(true),
+  }),
+);
 //@ chunk-gy23bf9p.js:3741-3827 placement
-function S(e) {
-  let { origin: origin, pathname: pathname } = new URL(e);
+function originPathOf(url) {
+  let { origin, pathname } = new URL(url);
   return `${origin}${pathname}`.replace(/\/+$/, "");
 }
+//@ chunk-gy23bf9p.js:3827-4416 placement
 /**
  * 按登录状态（输入网关 URL / 信任指纹 / 确认账号）给出提示框的标题、展示值、说明与确认/取消按钮文字。
  */
-//@ chunk-gy23bf9p.js:3827-4416 placement
-function describeSignInPrompt(e, n) {
+function describeSignInPrompt(e, target) {
   switch (e.state) {
     case "url_input":
       return {
-        shown: S(n.url),
+        shown: originPathOf(target.url),
         shownLabel: "Gateway URL:",
         title: "Sign in to Cloud gateway?",
         confirmLabel: "Connect",
@@ -56,12 +62,15 @@ function describeSignInPrompt(e, n) {
     case "trust_prompt":
       return {
         shown: e.fingerprint,
-        shownLabel: inn,
+        shownLabel: FINGERPRINT_LABEL,
         title: `Trust gateway ${e.hostname}?`,
-        detail: [e.previouslyPinned ? snn : onn, ...(e.route ? [`Connecting ${e.route}`] : [])].join(`
+        detail: [
+          e.previouslyPinned ? CERT_ROTATED_MESSAGE : FIRST_TRUST_MESSAGE,
+          ...(e.route ? [`Connecting ${e.route}`] : []),
+        ].join(`
 
 `),
-        confirmLabel: ann,
+        confirmLabel: TRUST_ACCEPT_LABEL,
         cancelLabel: "Cancel sign-in",
       };
     case "confirm_account":
@@ -69,8 +78,8 @@ function describeSignInPrompt(e, n) {
         shown: e.email,
         shownLabel: "Account:",
         title: "Signed in to Cloud gateway",
-        detail: cnn,
-        confirmLabel: unn,
+        detail: PIN_MISMATCH_MESSAGE,
+        confirmLabel: LOGIN_FAILED_MESSAGE,
         cancelLabel: "Cancel sign-in",
       };
     default:
@@ -78,28 +87,40 @@ function describeSignInPrompt(e, n) {
   }
 }
 //@ chunk-gy23bf9p.js:4416-4467 placement
-function o(e) {
-  return isValidBrowserUrl(e) ? new URL(e).href : void 0;
+function validBrowserUrlHref(e) {
+  return isValidBrowserUrl(e) ? new URL(e).href : undefined;
 }
 //@ chunk-gy23bf9p.js:4467-4750 placement
 function serializeSignInState(e, n) {
   return jsonStringify({
-    version: h,
+    version: SIGN_IN_STATE_VERSION,
     state: e.state,
     ...n,
     ...(e.state === "polling" && {
-      detail: lnn,
-      userCode: ql(e.userCode),
-      verificationUriLabel: dnn,
-      verificationUri: o(e.verificationUri),
-      browserUrl: o(e.browserUrl),
+      detail: TRUST_DECLINE_LABEL,
+      userCode: cleanForDisplay(e.userCode),
+      verificationUriLabel: TRUST_REJECTED_MESSAGE,
+      verificationUri: validBrowserUrlHref(e.verificationUri),
+      browserUrl: validBrowserUrlHref(e.browserUrl),
     }),
-    ...(e.state === "error" && { message: ql(e.message), detail: e.detail && ql(e.detail) }),
+    ...(e.state === "error" && {
+      message: cleanForDisplay(e.message),
+      detail: e.detail && cleanForDisplay(e.detail),
+    }),
   });
 }
 //@ chunk-gy23bf9p.js:4750-4827 placement
-async function l(e, n) {
-  return (await e(serializeSignInState({ state: "error", message: n }, void 0)), !1);
+async function finishSignInWithError(write, message) {
+  await write(
+    serializeSignInState(
+      {
+        state: "error",
+        message,
+      },
+      undefined,
+    ),
+  );
+  return false;
 }
 //@ chunk-gy23bf9p.js:4827-6085 placement
 class CloudGatewaySignInFlow {
@@ -108,10 +129,10 @@ class CloudGatewaySignInFlow {
   signIn;
   ended = Promise.withResolvers();
   lastWrite = Promise.resolve();
-  constructor(e, n, r) {
-    this.target = e;
-    this.write = n;
-    this.signIn = new GatewayLoginFlow(r, () => {});
+  constructor(target, write, credentials) {
+    this.target = target;
+    this.write = write;
+    this.signIn = new GatewayLoginFlow(credentials, () => {});
   }
   report() {
     let snapshot = this.signIn.status.getSnapshot();
@@ -123,18 +144,20 @@ class CloudGatewaySignInFlow {
       this.ended.resolve(snapshot.state === "done");
   }
   cancel() {
-    let { state: state } = this.signIn.status.getSnapshot();
+    let { state } = this.signIn.status.getSnapshot();
     if (state !== "saving" && state !== "done") this.signIn.cancel();
   }
-  async readAnswers(e) {
+  async readAnswers(input) {
     try {
-      for await (let n of createInterface({ input: e })) {
-        let snapshot = this.signIn.status.getSnapshot(),
-          safeParse = w().safeParse(safeParseJSON(n, !1));
+      for await (let n of createInterface({
+        input,
+      })) {
+        let snapshot = this.signIn.status.getSnapshot();
+        let i = signInStateSchema().safeParse(safeParseJSON(n, false));
         if (
-          !safeParse.success ||
-          safeParse.data.state !== snapshot.state ||
-          safeParse.data.shown !== describeSignInPrompt(snapshot, this.target)?.shown
+          !i.success ||
+          i.data.state !== snapshot.state ||
+          i.data.shown !== describeSignInPrompt(snapshot, this.target)?.shown
         )
           return;
         switch (snapshot.state) {
@@ -151,38 +174,41 @@ class CloudGatewaySignInFlow {
         }
       }
     } catch (error) {
-      logForDebugging(`[gateway-login] reading answers failed: ${errorMessage(error)}`, { level: "error" });
+      logForDebugging(`[gateway-login] reading answers failed: ${errorMessage(error)}`, {
+        level: "error",
+      });
     } finally {
       this.cancel();
     }
   }
   async run(e, n) {
-    if (
-      (this.signIn.status.subscribe(() => this.report()),
-      this.report(),
-      n.addEventListener("abort", () => this.cancel(), { once: !0 }),
-      n.aborted)
-    )
-      this.cancel();
+    this.signIn.status.subscribe(() => this.report());
+    this.report();
+    n.addEventListener("abort", () => this.cancel(), {
+      once: true,
+    });
+    if (n.aborted) this.cancel();
     this.readAnswers(e);
     let promise = await this.ended.promise;
-    return (await Promise.all([this.lastWrite, this.signIn.revoking]), promise);
+    await Promise.all([this.lastWrite, this.signIn.revoking]);
+    return promise;
   }
 }
 //@ chunk-gy23bf9p.js:6085-6277 placement
-async function runCloudGatewaySignIn({
-  gateway: gateway,
-  stdin: stdin,
-  write: write,
-  signal: signal,
-  credentials: credentials,
-}) {
-  if (gateway.url === void 0) return l(write, rnn);
-  let a;
+async function runCloudGatewaySignIn({ gateway, stdin, write, signal, credentials }) {
+  if (gateway.url === undefined) return finishSignInWithError(write, NO_GATEWAY_URL_MESSAGE);
+  let url;
   try {
-    a = normalizeGatewayUrl(gateway.url);
+    url = normalizeGatewayUrl(gateway.url);
   } catch (error) {
-    return l(write, errorMessage(error));
+    return finishSignInWithError(write, errorMessage(error));
   }
-  return new CloudGatewaySignInFlow({ ...gateway, url: a }, write, credentials).run(stdin, signal);
+  return new CloudGatewaySignInFlow(
+    {
+      ...gateway,
+      url,
+    },
+    write,
+    credentials,
+  ).run(stdin, signal);
 }

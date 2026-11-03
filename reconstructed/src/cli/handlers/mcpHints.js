@@ -13,18 +13,23 @@ import { suggestClosestName } from "../../utils/settings/managedEnvKeys.js";
 
 //@ chunk-sey2c4wh.js:264-735 placement
 function formatUnknownMcpServerHint(t, n) {
-  let e = replaceControlChars(t),
-    sorted = n.map(replaceControlChars).sort(),
-    s = suggestClosestName(
-      e,
-      sorted.map((d) => ({ name: d })),
-      { maxEditDistance: 2 },
-    );
+  let e = replaceControlChars(t);
+  let sorted = n.map(replaceControlChars).sort();
+  let s = suggestClosestName(
+    e,
+    sorted.map((name) => ({
+      name,
+    })),
+    {
+      maxEditDistance: 2,
+    },
+  );
   if (s) return `No MCP server named "${e}". Did you mean "${s}"? Run \`claude mcp list\` to see all.`;
   if (sorted.length === 0) return `No MCP server named "${e}". Run \`claude mcp add\` to add one.`;
-  let o = 8,
-    joined = sorted.slice(0, o).join(", "),
-    i = sorted.length > o ? ` (and ${sorted.length - o} more \u2014 run \`claude mcp list\` to see all)` : "";
+  let o = 8;
+  let joined = sorted.slice(0, o).join(", ");
+  let i =
+    sorted.length > o ? ` (and ${sorted.length - o} more \u2014 run \`claude mcp list\` to see all)` : "";
   return `No MCP server named "${e}". Configured servers: ${joined}${i}`;
 }
 //@ chunk-sey2c4wh.js:735-1040 placement
@@ -38,5 +43,4 @@ function formatMcpServerNotFoundMessage(t, n, e) {
       : "")
   );
 }
-
 export { formatMcpServerNotFoundMessage, formatUnknownMcpServerHint };

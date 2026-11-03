@@ -24,27 +24,27 @@ import {
   cellAtIndex,
 } from "./screen.js";
 import { BIDI_CONTROL_RANGES } from "./render-border.js";
-import { kBe } from "./colorize.js";
-import { a2t } from "./terminalImages.js";
+import { levelGeneration } from "./colorize.js";
+import { MAX_SEGMENT_CELLS } from "./terminalImages.js";
 import { DEFAULT_TAB_WIDTH } from "./wrapAnsi.js";
 import { dropItalicIfStandout, downgradeTrueColorCodes } from "./terminalColorSupport.js";
 import { needsBidiReorder } from "./bidi.js";
 import { unionRect } from "./layout/geometry.js";
-import { hd } from "./layout/node.js";
+import { replaceInvalidUtf16 } from "./layout/node.js";
 import { logForDebugging } from "../utils/debug.js";
 import { LINK_END, link } from "./termio/osc.js";
 import { RESET } from "./outputReplay.js";
 import { getGraphemeSegmenter } from "../utils/intl.js";
 
 //@ chunk-bzr73sfg.js:276084-276116 sole-consumer
-var RUN_SHIFT = 10,
-  WIDTH_BITS = 255,
-  TAB_FLAG = 256,
-  MAX_SGR_KEYS_BEFORE_RESET = 2048;
+var RUN_SHIFT = 10;
+var WIDTH_BITS = 255;
+var TAB_FLAG = 256;
+var MAX_SGR_KEYS_BEFORE_RESET = 2048;
+//@ chunk-bzr73sfg.js:276116-279287 sole-consumer
 /**
  * Output 的行切分器，包装原生 Bun.ant.CellSegmenter：segment(text, reorder) 把带 ANSI 的一行切成字素格（cells：[字素下标, 宽度|制表符位|段号<<10]）与样式/链接段（runs：[sgr 键下标, uri 下标]）；width() 算显示宽度（制表位展开）；keepColumns() 只保留裁剪区内的格；paint() 调原生 paint 把格写进屏幕，字素用 charIndices() 映射到屏幕字符池、样式段用 runWords() 映射成 packWord1（SGR 键 → AnsiCode → StylePool id，链接 → 超链接池）。原生驻留表过大或样式池/chalk 换代时重建。
  */
-//@ chunk-bzr73sfg.js:276116-279287 sole-consumer
 class LineCellSegmenter {
   stylePool;
   charPool;
@@ -52,7 +52,7 @@ class LineCellSegmenter {
   cells = new Int32Array(512);
   runs = new Int32Array(512);
   count = 0;
-  reordered = !1;
+  reordered = false;
   graphemes = this.native.graphemes;
   sgrKeys = this.native.sgrKeys;
   sgrCloseKeys = this.native.sgrCloseKeys;
@@ -61,7 +61,7 @@ class LineCellSegmenter {
   charMapLength = 0;
   styleIds = new Int32Array(64);
   styleGeneration;
-  chalkGeneration = kBe();
+  chalkGeneration = levelGeneration();
   linkIds = new Int32Array(16);
   hyperlinkPool;
   words = new Int32Array(64);
@@ -71,41 +71,50 @@ class LineCellSegmenter {
     this.styleGeneration = stylePool.generation;
   }
   segment(n, u) {
-    if (this.sgrKeys.length > a2t || this.uris.length > a2t || this.graphemes.length > 4 * a2t)
+    if (
+      this.sgrKeys.length > MAX_SEGMENT_CELLS ||
+      this.uris.length > MAX_SEGMENT_CELLS ||
+      this.graphemes.length > 4 * MAX_SEGMENT_CELLS
+    )
       this.resetNative();
     this.refreshGenerations();
-    let segment = this.native.segment(n, this.cells, this.runs, u);
-    if (segment < 0) {
-      let max = Math.max(-segment, this.cells.length);
-      ((this.cells = new Int32Array(2 * max)),
-        (this.runs = new Int32Array(2 * max)),
-        (segment = this.native.segment(n, this.cells, this.runs, u)));
+    let f = this.native.segment(n, this.cells, this.runs, u);
+    if (f < 0) {
+      let max = Math.max(-f, this.cells.length);
+      this.cells = new Int32Array(2 * max);
+      this.runs = new Int32Array(2 * max);
+      f = this.native.segment(n, this.cells, this.runs, u);
     }
-    return ((this.count = segment), (this.reordered = u), segment);
+    this.count = f;
+    this.reordered = u;
+    return f;
   }
   width(n, u, f) {
-    let segment = this.segment(n, f),
-      p = u;
-    for (let g = 0; g < segment; g++) {
-      let E = this.cells[2 * g + 1];
+    let m = this.segment(n, f);
+    let p = u;
+    for (let idx = 0; idx < m; idx++) {
+      let E = this.cells[2 * idx + 1];
       p += (E & TAB_FLAG) !== 0 ? DEFAULT_TAB_WIDTH - (p % DEFAULT_TAB_WIDTH) : E & WIDTH_BITS;
     }
     return p - u;
   }
   keepColumns(n, u, f) {
-    let m = n,
-      max = Math.max(n, u),
-      g = 0;
-    for (let E = 0; E < this.count; E++) {
-      let T = this.cells[2 * E + 1],
-        A = m + ((T & TAB_FLAG) !== 0 ? DEFAULT_TAB_WIDTH - (m % DEFAULT_TAB_WIDTH) : T & WIDTH_BITS);
+    let m = n;
+    let max = Math.max(n, u);
+    let g = 0;
+    for (let idx = 0; idx < this.count; idx++) {
+      let T = this.cells[2 * idx + 1];
+      let A = m + ((T & TAB_FLAG) !== 0 ? DEFAULT_TAB_WIDTH - (m % DEFAULT_TAB_WIDTH) : T & WIDTH_BITS);
       if (m >= u && m < f && A <= f) {
         if (g === 0) max = m;
-        ((this.cells[2 * g] = this.cells[2 * E]), (this.cells[2 * g + 1] = T), g++);
+        this.cells[2 * g] = this.cells[2 * idx];
+        this.cells[2 * g + 1] = T;
+        g++;
       }
       m = A;
     }
-    return ((this.count = g), max);
+    this.count = g;
+    return max;
   }
   trailingSpaces() {
     let n = 0;
@@ -125,24 +134,28 @@ class LineCellSegmenter {
   runWords(n) {
     let count = this.count;
     if (count === 0) return this.words;
-    if (this.hyperlinkPool !== n) ((this.hyperlinkPool = n), this.linkIds.fill(0));
+    if (this.hyperlinkPool !== n) {
+      this.hyperlinkPool = n;
+      this.linkIds.fill(0);
+    }
     let f = this.cells[2 * count - 1] >>> RUN_SHIFT;
-    if (this.reordered) for (let p = 0; p < count; p++) f = Math.max(f, this.cells[2 * p + 1] >>> RUN_SHIFT);
+    if (this.reordered)
+      for (let idx = 0; idx < count; idx++) f = Math.max(f, this.cells[2 * idx + 1] >>> RUN_SHIFT);
     let m = f + 1;
     this.words = growInt32Array(this.words, m, 0);
-    for (let p = 0; p < m; p++) {
-      let g = this.runs[2 * p + 1],
-        E = 0;
+    for (let idx = 0; idx < m; idx++) {
+      let g = this.runs[2 * idx + 1];
+      let E = 0;
       if (g !== 0) {
-        if (
-          ((this.linkIds = growInt32Array(this.linkIds, g + 1, this.linkIds.length)),
-          (E = this.linkIds[g]),
-          E === 0)
-        )
-          ((E = n.intern(this.uris[g]) + 1), (this.linkIds[g] = E));
+        this.linkIds = growInt32Array(this.linkIds, g + 1, this.linkIds.length);
+        E = this.linkIds[g];
+        if (E === 0) {
+          E = n.intern(this.uris[g]) + 1;
+          this.linkIds[g] = E;
+        }
         E -= 1;
       }
-      this.words[p] = packWord1(this.styleId(this.runs[2 * p]), E, 0);
+      this.words[idx] = packWord1(this.styleId(this.runs[2 * idx]), E, 0);
     }
     return this.words;
   }
@@ -154,48 +167,51 @@ class LineCellSegmenter {
       m,
       this.cells,
       this.count,
-      void 0,
+      undefined,
       this.charIndices(),
       this.runWords(p),
     );
   }
   refreshGenerations() {
-    let n = kBe();
+    let n = levelGeneration();
     if (this.stylePool.generation === this.styleGeneration && n === this.chalkGeneration) return;
-    if (
-      ((this.styleGeneration = this.stylePool.generation),
-      (this.chalkGeneration = n),
-      this.sgrKeys.length > MAX_SGR_KEYS_BEFORE_RESET)
-    )
-      this.resetNative();
+    this.styleGeneration = this.stylePool.generation;
+    this.chalkGeneration = n;
+    if (this.sgrKeys.length > MAX_SGR_KEYS_BEFORE_RESET) this.resetNative();
     else this.styleIds.fill(0);
   }
   resetNative() {
-    ((this.native = createScreenSegmenter(BIDI_CONTROL_RANGES)),
-      (this.graphemes = this.native.graphemes),
-      (this.sgrKeys = this.native.sgrKeys),
-      (this.sgrCloseKeys = this.native.sgrCloseKeys),
-      (this.uris = this.native.uris),
-      (this.charMapLength = 0),
-      this.linkIds.fill(0),
-      (this.styleIds = new Int32Array(64)));
+    this.native = createScreenSegmenter(BIDI_CONTROL_RANGES);
+    this.graphemes = this.native.graphemes;
+    this.sgrKeys = this.native.sgrKeys;
+    this.sgrCloseKeys = this.native.sgrCloseKeys;
+    this.uris = this.native.uris;
+    this.charMapLength = 0;
+    this.linkIds.fill(0);
+    this.styleIds = new Int32Array(64);
   }
   styleId(n) {
     this.styleIds = growInt32Array(this.styleIds, n + 1, this.styleIds.length);
     let u = this.styleIds[n];
-    if (u === 0)
-      ((u = this.stylePool.intern(dropItalicIfStandout(downgradeTrueColorCodes(this.ansiCodes(n)))) + 1),
-        (this.styleIds[n] = u));
+    if (u === 0) {
+      u = this.stylePool.intern(dropItalicIfStandout(downgradeTrueColorCodes(this.ansiCodes(n)))) + 1;
+      this.styleIds[n] = u;
+    }
     return u - 1;
   }
   ansiCodes(n) {
     if (n === 0) return [];
-    let parts = this.sgrKeys[n].split("\x00"),
-      parts_2 = this.sgrCloseKeys[n].split("\x00"),
-      m = [];
-    for (let p = 0; p < parts.length; p++) {
-      let g = parts[p];
-      if (SGR_CODE_RE.test(g)) m.push({ type: "ansi", code: g, endCode: parts_2[p] });
+    let parts = this.sgrKeys[n].split("\x00");
+    let parts_2 = this.sgrCloseKeys[n].split("\x00");
+    let m = [];
+    for (let idx = 0; idx < parts.length; idx++) {
+      let g = parts[idx];
+      if (SGR_CODE_RE.test(g))
+        m.push({
+          type: "ansi",
+          code: g,
+          endCode: parts_2[idx],
+        });
     }
     return m;
   }
@@ -210,11 +226,14 @@ function growInt32Array(array, minLength, keep) {
   return int32Array;
 }
 //@ chunk-bzr73sfg.js:279505-279540 affinity
-var DIRECTION_MARKS = { ltr: "\u200E", rtl: "\u200F" };
+var DIRECTION_MARKS = {
+  ltr: "\u200E",
+  rtl: "\u200F",
+};
+//@ chunk-bzr73sfg.js:279540-279648 fingerprint = intersectClip (1)
 /**
  * 两个裁剪矩形求交（未定义的边视为无限）。
  */
-//@ chunk-bzr73sfg.js:279540-279648 fingerprint = intersectClip (1)
 function intersectClip(parent, child) {
   if (!parent) return child;
   return {
@@ -226,63 +245,63 @@ function intersectClip(parent, child) {
 }
 //@ chunk-bzr73sfg.js:279648-279900 layout = intersectClip (0.795)
 function isClipRedundant(outerClip, clip, rect) {
-  if (clip === void 0) return !0;
-  let m = maxDefined(outerClip?.x1, rect?.x) ?? -1 / 0,
-    p = maxDefined(outerClip?.y1, rect?.y) ?? -1 / 0,
-    g = minDefined(outerClip?.x2, rect && rect.x + rect.width) ?? 1 / 0,
-    E = minDefined(outerClip?.y2, rect && rect.y + rect.height) ?? 1 / 0;
-  if (m >= g || p >= E) return !0;
+  if (clip === undefined) return true;
+  let m = maxDefined(outerClip?.x1, rect?.x) ?? -1 / 0;
+  let p = maxDefined(outerClip?.y1, rect?.y) ?? -1 / 0;
+  let g = minDefined(outerClip?.x2, rect && rect.x + rect.width) ?? 1 / 0;
+  let E = minDefined(outerClip?.y2, rect && rect.y + rect.height) ?? 1 / 0;
+  if (m >= g || p >= E) return true;
   return (
     m >= (clip.x1 ?? -1 / 0) && g <= (clip.x2 ?? 1 / 0) && p >= (clip.y1 ?? -1 / 0) && E <= (clip.y2 ?? 1 / 0)
   );
 }
 //@ chunk-bzr73sfg.js:279900-279984 file-local
 function maxDefined(a, b) {
-  if (a === void 0) return b;
-  if (b === void 0) return a;
+  if (a === undefined) return b;
+  if (b === undefined) return a;
   return Math.max(a, b);
 }
 //@ chunk-bzr73sfg.js:279984-280068 file-local
 function minDefined(a, b) {
-  if (a === void 0) return b;
-  if (b === void 0) return a;
+  if (a === undefined) return b;
+  if (b === undefined) return a;
   return Math.min(a, b);
 }
 //@ chunk-bzr73sfg.js:280068-280078 layout
 var NO_ABSOLUTE_CLEARS = [];
+//@ chunk-bzr73sfg.js:280078-285029 fingerprint = Output (0.81)
 /**
  * 渲染操作缓冲：renderNodeToOutput 往里记 write/blit/shift/clear/clip/noSelect 操作，get() 依次落到屏幕：clear 只扩大 damage（绝对定位节点的清除会阻止被其覆盖的 blit）；blit 从上一帧拷贝未变子树；write 按裁剪区截断文字（Bun.sliceAnsi）后用 LineCellSegmenter 切分并 paint，同时写软换行标记；最后应用 noSelect。writeDirected 支持 RTL 文本右对齐。写入远多于拷贝时记日志。
  */
-//@ chunk-bzr73sfg.js:280078-285029 fingerprint = Output (0.81)
 class Output {
   width;
   height;
   screen;
   operations = [];
   lineCells;
-  constructor(n) {
-    let { width: width, height: height, stylePool: stylePool, screen: screen } = n;
-    ((this.width = width),
-      (this.height = height),
-      (this.screen = screen),
-      (this.lineCells = new LineCellSegmenter(stylePool, screen.charPool)),
-      resetScreen(screen, width, height));
+  constructor(options) {
+    let { width, height, stylePool, screen } = options;
+    this.width = width;
+    this.height = height;
+    this.screen = screen;
+    this.lineCells = new LineCellSegmenter(stylePool, screen.charPool);
+    resetScreen(screen, width, height);
   }
-  reset(n, u, f) {
-    ((this.width = n),
-      (this.height = u),
-      (this.screen = f),
-      (this.operations.length = 0),
-      resetScreen(f, n, u));
+  reset(width, height, screen) {
+    this.width = width;
+    this.height = height;
+    this.screen = screen;
+    this.operations.length = 0;
+    resetScreen(screen, width, height);
   }
-  blit(n, u, f, m, p, g) {
+  blit(src, x, y, width, height, g) {
     this.operations.push({
       type: "blit",
-      src: n,
-      x: u,
-      y: f,
-      width: m,
-      height: p,
+      src,
+      x,
+      y,
+      width,
+      height,
       restoreNoSelect: g?.restoreNoSelect,
       unclipped: g?.unclipped,
     });
@@ -296,303 +315,376 @@ class Output {
         operation.y < n.y + n.height &&
         n.y < operation.y + operation.height
       )
-        return !0;
-    return !1;
+        return true;
+    return false;
   }
-  shift(n, u, f) {
-    this.operations.push({ type: "shift", top: n, bottom: u, n: f });
+  shift(top, bottom, n) {
+    this.operations.push({
+      type: "shift",
+      top,
+      bottom,
+      n,
+    });
   }
-  clear(n, u) {
-    this.operations.push({ type: "clear", region: n, fromAbsolute: u });
+  clear(region, fromAbsolute) {
+    this.operations.push({
+      type: "clear",
+      region,
+      fromAbsolute,
+    });
   }
-  noSelect(n) {
-    this.operations.push({ type: "noSelect", region: n, value: 1 });
+  noSelect(region) {
+    this.operations.push({
+      type: "noSelect",
+      region,
+      value: 1,
+    });
   }
-  clearNoSelect(n) {
-    this.operations.push({ type: "noSelect", region: n, value: 0 });
+  clearNoSelect(region) {
+    this.operations.push({
+      type: "noSelect",
+      region,
+      value: 0,
+    });
   }
-  write(n, u, f, m) {
-    if (!f) return;
-    this.operations.push({ type: "write", x: n, y: u, text: f, softWrap: m });
+  write(x, y, text, softWrap) {
+    if (!text) return;
+    this.operations.push({
+      type: "write",
+      x,
+      y,
+      text,
+      softWrap,
+    });
   }
-  writeDirected(n, u, f, m, p, g) {
-    if (!isDirectionalWrite(p)) {
+  writeDirected(n, u, f, m, direction, g) {
+    if (!isDirectionalWrite(direction)) {
       this.write(n, u, f, m);
       return;
     }
-    if (p === "ltr") {
-      if (f) this.operations.push({ type: "write", x: n, y: u, text: f, softWrap: m, direction: p });
+    if (direction === "ltr") {
+      if (f)
+        this.operations.push({
+          type: "write",
+          x: n,
+          y: u,
+          text: f,
+          softWrap: m,
+          direction,
+        });
       return;
     }
-    let parts = f.split(`
-`),
-      min = Math.min(parts.length, this.height - u);
+    let lines = f.split(`
+`);
+    let min = Math.min(lines.length, this.height - u);
     for (let max = Math.max(0, -u); max < min; max++) {
-      let D = parts[max],
-        width = this.lineCells.width(D, n, !1),
-        _ = m?.[max + 1] ?? SoftWrapKind.HardBreak,
-        U = _ === SoftWrapKind.HardBreak ? 0 : this.lineCells.trailingSpaces(),
-        L = _ === SoftWrapKind.Continuation && U < width,
-        P = width - Math.min(U, Math.max(width - g, +L));
+      let D = lines[max];
+      let O = this.lineCells.width(D, n, false);
+      let _ = m?.[max + 1] ?? SoftWrapKind.HardBreak;
+      let U = _ === SoftWrapKind.HardBreak ? 0 : this.lineCells.trailingSpaces();
+      let L = _ === SoftWrapKind.Continuation && U < O;
+      let P = O - Math.min(U, Math.max(O - g, +L));
       if (P > 0)
         this.operations.push({
           type: "write",
           x: n + Math.max(0, g - P),
           y: u + max,
-          text: P < width ? Bun.sliceAnsi(D, 0, P) : D,
-          direction: p,
+          text: P < O ? Bun.sliceAnsi(D, 0, P) : D,
+          direction,
         });
     }
   }
   paintedWidth(n, u) {
     return this.lineCells.width(n, u, needsBidiReorder());
   }
-  clip(n) {
-    this.operations.push({ type: "clip", clip: n });
+  clip(clip) {
+    this.operations.push({
+      type: "clip",
+      clip,
+    });
   }
   unclip() {
-    this.operations.push({ type: "unclip" });
+    this.operations.push({
+      type: "unclip",
+    });
   }
   get() {
-    let screen = this.screen,
-      width = this.width,
-      height = this.height,
-      m = 0,
-      p = 0,
-      g = [];
-    for (let _ = 0; _ < this.operations.length; _++) {
-      let U = this.operations[_];
+    let screen = this.screen;
+    let screenWidth = this.width;
+    let screenHeight = this.height;
+    let blitCells = 0;
+    let writeCells = 0;
+    let g = [];
+    for (let idx = 0; idx < this.operations.length; idx++) {
+      let U = this.operations[idx];
       if (U.type !== "clear") continue;
-      let { x: L, y: P, width: width_2, height: height_2 } = U.region,
-        max = Math.max(0, L),
-        max_2 = Math.max(0, P),
-        min = Math.min(L + width_2, width),
-        min_2 = Math.min(P + height_2, height);
-      if (max >= min || max_2 >= min_2) continue;
-      let J = { x: max, y: max_2, width: min - max, height: min_2 - max_2 };
-      if (((screen.damage = screen.damage ? unionRect(screen.damage, J) : J), U.fromAbsolute))
-        g.push({ rect: J, opIndex: _ });
+      let { x, y, width, height } = U.region;
+      let startX = Math.max(0, x);
+      let startY = Math.max(0, y);
+      let maxX = Math.min(x + width, screenWidth);
+      let maxY = Math.min(y + height, screenHeight);
+      if (startX >= maxX || startY >= maxY) continue;
+      let rect = {
+        x: startX,
+        y: startY,
+        width: maxX - startX,
+        height: maxY - startY,
+      };
+      screen.damage = screen.damage ? unionRect(screen.damage, rect) : rect;
+      if (U.fromAbsolute)
+        g.push({
+          rect,
+          opIndex: idx,
+        });
     }
-    let E = [],
-      T = [];
-    for (let _ = 0; _ < this.operations.length; _++) {
-      let U = this.operations[_];
-      switch (U.type) {
+    let clips = [];
+    let T = [];
+    for (let idx = 0; idx < this.operations.length; idx++) {
+      let operation = this.operations[idx];
+      switch (operation.type) {
         case "clear":
           continue;
         case "clip":
-          E.push(intersectClip(E.at(-1), U.clip));
+          clips.push(intersectClip(clips.at(-1), operation.clip));
           continue;
         case "unclip":
-          E.pop();
+          clips.pop();
           continue;
         case "blit": {
-          let { src: src, x: P, y: z, width: width_2, height: height_2 } = U,
-            K = U.unclipped ? void 0 : E.at(-1),
-            max = Math.max(P, K?.x1 ?? 0),
-            max_2 = Math.max(z, K?.y1 ?? 0),
-            min = Math.min(z + height_2, height, src.height, K?.y2 ?? 1 / 0),
-            min_2 = Math.min(P + width_2, width, src.width, K?.x2 ?? 1 / 0);
-          if (max >= min_2 || max_2 >= min) continue;
-          let ee = g.length === 0 ? NO_ABSOLUTE_CLEARS : g.filter((ne) => ne.opIndex > _);
+          let { src, x: regionX, y: regionY, width: regionWidth, height: regionHeight } = operation;
+          let clip = operation.unclipped ? undefined : clips.at(-1);
+          let startX = Math.max(regionX, clip?.x1 ?? 0);
+          let startY = Math.max(regionY, clip?.y1 ?? 0);
+          let maxY = Math.min(regionY + regionHeight, screenHeight, src.height, clip?.y2 ?? 1 / 0);
+          let maxX = Math.min(regionX + regionWidth, screenWidth, src.width, clip?.x2 ?? 1 / 0);
+          if (startX >= maxX || startY >= maxY) continue;
+          let ee = g.length === 0 ? NO_ABSOLUTE_CLEARS : g.filter((ne) => ne.opIndex > idx);
           if (ee.length === 0) {
-            if (
-              (blitRegion(screen, src, max, max_2, min_2, min),
-              (m += (min - max_2) * (min_2 - max)),
-              U.restoreNoSelect)
-            )
-              T.push({ opIndex: _, src: src, x1: max, y1: max_2, x2: min_2, y2: min });
+            blitRegion(screen, src, startX, startY, maxX, maxY);
+            blitCells += (maxY - startY) * (maxX - startX);
+            if (operation.restoreNoSelect)
+              T.push({
+                opIndex: idx,
+                src,
+                x1: startX,
+                y1: startY,
+                x2: maxX,
+                y2: maxY,
+              });
             continue;
           }
-          let ae = max_2;
-          for (let ne = max_2; ne <= min; ne++)
+          let rowStart = startY;
+          for (let row = startY; row <= maxY; row++)
             if (
-              (ne < min &&
+              (row < maxY &&
                 ee.some(
-                  ({ rect: rect }) =>
-                    ne >= rect.y &&
-                    ne < rect.y + rect.height &&
-                    max >= rect.x &&
-                    min_2 <= rect.x + rect.width,
+                  ({ rect }) =>
+                    row >= rect.y &&
+                    row < rect.y + rect.height &&
+                    startX >= rect.x &&
+                    maxX <= rect.x + rect.width,
                 )) ||
-              ne === min
+              row === maxY
             ) {
-              if (ne > ae) {
-                if (
-                  (blitRegion(screen, src, max, ae, min_2, ne),
-                  (m += (ne - ae) * (min_2 - max)),
-                  U.restoreNoSelect)
-                )
-                  T.push({ opIndex: _, src: src, x1: max, y1: ae, x2: min_2, y2: ne });
+              if (row > rowStart) {
+                blitRegion(screen, src, startX, rowStart, maxX, row);
+                blitCells += (row - rowStart) * (maxX - startX);
+                if (operation.restoreNoSelect)
+                  T.push({
+                    opIndex: idx,
+                    src,
+                    x1: startX,
+                    y1: rowStart,
+                    x2: maxX,
+                    y2: row,
+                  });
               }
-              ae = ne + 1;
+              rowStart = row + 1;
             }
           continue;
         }
         case "shift": {
-          shiftRows(screen, U.top, U.bottom, U.n);
+          shiftRows(screen, operation.top, operation.bottom, operation.n);
           continue;
         }
         case "write": {
-          let { text: text, softWrap: softWrap, direction: direction } = U,
-            { x: G, y: X } = U,
-            parts = text.split(`
-`),
-            q = 0,
-            Y = 0,
-            J,
-            at = E.at(-1);
-          if (at) {
-            let ne = typeof at?.x1 === "number" && typeof at?.x2 === "number",
-              de = typeof at?.y1 === "number" && typeof at?.y2 === "number",
-              se = needsBidiReorder(),
-              ye = ne && isDirectionalWrite(direction);
-            if (ne && G > at.x2) continue;
-            if (de) {
-              let ue = parts.length;
-              if (X + ue < at.y1 || X > at.y2) continue;
+          let { text, softWrap, direction } = operation;
+          let { x: startCol, y } = operation;
+          let lines = text.split(`
+`);
+          let swFrom = 0;
+          let Y = 0;
+          let clip;
+          let clip_2 = clips.at(-1);
+          if (clip_2) {
+            let clipHorizontally = typeof clip_2?.x1 === "number" && typeof clip_2?.x2 === "number";
+            let clipVertically = typeof clip_2?.y1 === "number" && typeof clip_2?.y2 === "number";
+            let se = needsBidiReorder();
+            let ye = clipHorizontally && isDirectionalWrite(direction);
+            if (clipHorizontally && startCol > clip_2.x2) continue;
+            if (clipVertically) {
+              let height = lines.length;
+              if (y + height < clip_2.y1 || y > clip_2.y2) continue;
             }
-            if (ne) {
-              let ue = 0,
-                ce = parts.length,
-                pe = X;
-              if (de)
-                ((ue = X < at.y1 ? at.y1 - X : 0),
-                  (ce = X + parts.length > at.y2 ? at.y2 - X : ce),
-                  (pe = X < at.y1 ? at.y1 : X));
-              ce = Math.min(ce, ue + (height - pe));
-              let Se = !1;
-              if (
-                ((parts = parts.map((xe, fe) => {
-                  if (fe < ue - 1 || fe >= ce) return xe;
-                  let ge = G < at.x1 ? at.x1 - G : 0,
-                    width = this.lineCells.width(xe, G, se);
-                  if (G + width >= at.x1) Se = !0;
-                  if (ye || (ge === 0 && G + width <= at.x2)) return xe;
-                  let Fe = hd(xe),
-                    Ne = at.x2 - G,
-                    sliceAnsi = Bun.sliceAnsi(Fe, ge, Ne),
-                    max = Math.max(G, at.x1),
-                    Ae = at.x2 - max;
-                  while (Ne > ge && this.lineCells.width(sliceAnsi, max, se) > Ae)
-                    (Ne--, (sliceAnsi = Bun.sliceAnsi(Fe, ge, Ne)));
-                  return sliceAnsi;
-                })),
-                !Se)
-              )
-                continue;
-              if (ye) J = at;
-              if (G < at.x1) G = at.x1;
-            }
-            if (de) {
-              let ue = X < at.y1 ? at.y1 - X : 0,
-                ce = parts.length,
-                pe = X + ce > at.y2 ? at.y2 - X : ce;
-              if (softWrap && ue > 0 && (softWrap[ue] ?? SoftWrapKind.HardBreak) !== SoftWrapKind.HardBreak) {
-                let Se = J ? U.x : G,
-                  xe = Se + this.lineCells.width(parts[ue - 1], Se, se);
-                Y = packSoftWrap(J ? Math.min(Math.max(xe, G), J.x2) : xe, G);
+            if (clipHorizontally) {
+              let ue = 0;
+              let ce = lines.length;
+              let pe = y;
+              if (clipVertically) {
+                ue = y < clip_2.y1 ? clip_2.y1 - y : 0;
+                ce = y + lines.length > clip_2.y2 ? clip_2.y2 - y : ce;
+                pe = y < clip_2.y1 ? clip_2.y1 : y;
               }
-              if (((parts = parts.slice(ue, pe)), (q = ue), X < at.y1)) X = at.y1;
+              ce = Math.min(ce, ue + (screenHeight - pe));
+              let Se = false;
+              lines = lines.map((line, fe) => {
+                if (fe < ue - 1 || fe >= ce) return line;
+                let ge = startCol < clip_2.x1 ? clip_2.x1 - startCol : 0;
+                let we = this.lineCells.width(line, startCol, se);
+                if (startCol + we >= clip_2.x1) Se = true;
+                if (ye || (ge === 0 && startCol + we <= clip_2.x2)) return line;
+                let Fe = replaceInvalidUtf16(line);
+                let Ne = clip_2.x2 - startCol;
+                let Ce = Bun.sliceAnsi(Fe, ge, Ne);
+                let max = Math.max(startCol, clip_2.x1);
+                let Ae = clip_2.x2 - max;
+                while (Ne > ge && this.lineCells.width(Ce, max, se) > Ae) {
+                  Ne--;
+                  Ce = Bun.sliceAnsi(Fe, ge, Ne);
+                }
+                return Ce;
+              });
+              if (!Se) continue;
+              if (ye) clip = clip_2;
+              if (startCol < clip_2.x1) startCol = clip_2.x1;
+            }
+            if (clipVertically) {
+              let from = y < clip_2.y1 ? clip_2.y1 - y : 0;
+              let height = lines.length;
+              let to = y + height > clip_2.y2 ? clip_2.y2 - y : height;
+              if (
+                softWrap &&
+                from > 0 &&
+                (softWrap[from] ?? SoftWrapKind.HardBreak) !== SoftWrapKind.HardBreak
+              ) {
+                let Se = clip ? operation.x : startCol;
+                let xe = Se + this.lineCells.width(lines[from - 1], Se, se);
+                Y = packSoftWrap(clip ? Math.min(Math.max(xe, startCol), clip.x2) : xe, startCol);
+              }
+              lines = lines.slice(from, to);
+              swFrom = from;
+              if (y < clip_2.y1) y = clip_2.y1;
             }
           }
-          let softWrap_2 = screen.softWrap,
-            ae = 0;
-          for (let ne of parts) {
-            let de = X + ae;
-            if (de >= height) break;
-            let se = writeLineToScreen(screen, ne, J ? U.x : G, de, this.lineCells, direction, J);
-            if (((p += se - G), softWrap)) {
-              let ye = softWrap[q + ae];
-              ((softWrap_2[de] =
-                ye === SoftWrapKind.HardBreak || ye === void 0
+          let swBits = screen.softWrap;
+          let offsetY = 0;
+          for (let line of lines) {
+            let lineY = y + offsetY;
+            if (lineY >= screenHeight) break;
+            let contentEnd = writeLineToScreen(
+              screen,
+              line,
+              clip ? operation.x : startCol,
+              lineY,
+              this.lineCells,
+              direction,
+              clip,
+            );
+            writeCells += contentEnd - startCol;
+            if (softWrap) {
+              let isSW = softWrap[swFrom + offsetY];
+              swBits[lineY] =
+                isSW === SoftWrapKind.HardBreak || isSW === undefined
                   ? 0
-                  : ye === SoftWrapKind.ContinuationElidedSep
+                  : isSW === SoftWrapKind.ContinuationElidedSep
                     ? Y | SW_ELIDED_SEP
-                    : Y),
-                (Y = packSoftWrap(se, G)));
+                    : Y;
+              Y = packSoftWrap(contentEnd, startCol);
             }
-            ae++;
+            offsetY++;
           }
           continue;
         }
       }
     }
-    let A = [],
-      D = 0;
-    for (let _ = 0; _ < this.operations.length; _++) {
-      let U = this.operations[_];
+    let A = [];
+    let D = 0;
+    for (let idx = 0; idx < this.operations.length; idx++) {
+      let U = this.operations[idx];
       if (U.type === "clip") A.push(intersectClip(A.at(-1), U.clip));
       else if (U.type === "unclip") A.pop();
       else if (U.type === "blit")
-        while (D < T.length && T[D].opIndex === _) {
-          let { src: src, x1: x1, y1: y1, x2: x2, y2: y2 } = T[D];
-          (copyNoSelectRegion(screen, src, x1, y1, x2, y2), D++);
+        while (D < T.length && T[D].opIndex === idx) {
+          let { src, x1, y1, x2, y2 } = T[D];
+          copyNoSelectRegion(screen, src, x1, y1, x2, y2);
+          D++;
         }
       else if (U.type === "noSelect") {
-        let { x: L, y: P, width: width, height: height } = U.region,
-          at = A.at(-1),
-          max = Math.max(L, at?.x1 ?? 0),
-          max_2 = Math.max(P, at?.y1 ?? 0),
-          min = Math.min(L + width, at?.x2 ?? 1 / 0),
-          min_2 = Math.min(P + height, at?.y2 ?? 1 / 0);
+        let { x: L, y: P, width, height } = U.region;
+        let last = A.at(-1);
+        let max = Math.max(L, last?.x1 ?? 0);
+        let max_2 = Math.max(P, last?.y1 ?? 0);
+        let min = Math.min(L + width, last?.x2 ?? 1 / 0);
+        let min_2 = Math.min(P + height, last?.y2 ?? 1 / 0);
         if (min > max && min_2 > max_2)
           if (U.value === 1) markNoSelect(screen, max, max_2, min - max, min_2 - max_2);
           else clearNoSelect(screen, max, max_2, min - max, min_2 - max_2);
       }
     }
-    let O = m + p;
-    if (O > 1000 && p > m)
+    let totalCells = blitCells + writeCells;
+    if (totalCells > 1000 && writeCells > blitCells)
       logForDebugging(
-        `High write ratio: blit=${m}, write=${p} (${((p / O) * 100).toFixed(1)}% writes), screen=${height}x${width}`,
+        `High write ratio: blit=${blitCells}, write=${writeCells} (${((writeCells / totalCells) * 100).toFixed(1)}% writes), screen=${screenHeight}x${screenWidth}`,
       );
     return screen;
   }
 }
 //@ chunk-bzr73sfg.js:285029-285068 sole-consumer
 function isDirectionalWrite(direction) {
-  return direction !== void 0 && needsBidiReorder();
+  return direction !== undefined && needsBidiReorder();
 }
+//@ chunk-bzr73sfg.js:285068-285211 sole-consumer
 /**
  * 把一行写进屏幕：有方向时前置 LRM/RLM，交给 LineCellSegmenter 切分（必要时双向重排），按裁剪区保留列，paint 后返回结束列。
  */
-//@ chunk-bzr73sfg.js:285068-285211 sole-consumer
 function writeLineToScreen(screen, line, x, y, segmenter, direction, clip) {
   let T = isDirectionalWrite(direction) ? DIRECTION_MARKS[direction] + line : line;
-  if ((segmenter.segment(T, needsBidiReorder()), clip !== void 0))
-    x = segmenter.keepColumns(x, clip.x1, clip.x2);
+  segmenter.segment(T, needsBidiReorder());
+  if (clip !== undefined) x = segmenter.keepColumns(x, clip.x1, clip.x2);
   return segmenter.count === 0 ? x : paintSegments(screen, x, y, segmenter);
 }
+//@ chunk-ag5x7vhf.js:17851-18348 fingerprint = writeLineToScreen (0.806)
 /**
  * 把屏幕的一行转回带样式与超链接的 ANSI 字符串（跳过占位格，去掉行尾无效空格），renderToScreen 用来把离屏渲染结果变成文本行。
  */
-//@ chunk-ag5x7vhf.js:17851-18348 fingerprint = writeLineToScreen (0.806)
 function serializeScreenRow(screen, stylePool, row) {
-  let width = screen.width,
-    k = row * width,
-    _ = -1;
-  for (let L = width - 1; L >= 0; L--) {
-    let V = cellAtIndex(screen, k + L);
+  let width = screen.width;
+  let k = row * width;
+  let _ = -1;
+  for (let idx = width - 1; idx >= 0; idx--) {
+    let V = cellAtIndex(screen, k + idx);
     if (V.width === 2) continue;
-    if (V.char === " " && (V.styleId & 1) === 0 && V.hyperlink === void 0) continue;
-    _ = L;
+    if (V.char === " " && (V.styleId & 1) === 0 && V.hyperlink === undefined) continue;
+    _ = idx;
     break;
   }
   if (_ < 0) return "";
-  let I = "",
-    none = stylePool.none,
-    A;
-  for (let L = 0; L <= _; L++) {
-    let V = cellAtIndex(screen, k + L);
+  let I = "";
+  let none = stylePool.none;
+  let A;
+  for (let idx = 0; idx <= _; idx++) {
+    let V = cellAtIndex(screen, k + idx);
     if (V.width === 2 || V.width === 3) continue;
     if (V.hyperlink !== A) {
-      if (A !== void 0) I += LINK_END;
-      if (V.hyperlink !== void 0) I += link(V.hyperlink);
+      if (A !== undefined) I += LINK_END;
+      if (V.hyperlink !== undefined) I += link(V.hyperlink);
       A = V.hyperlink;
     }
-    ((I += stylePool.transition(none, V.styleId)), (none = V.styleId), (I += V.char));
+    I += stylePool.transition(none, V.styleId);
+    none = V.styleId;
+    I += V.char;
   }
-  if (A !== void 0) I += LINK_END;
+  if (A !== undefined) I += LINK_END;
   if (none !== stylePool.none) I += RESET;
   return I;
 }
@@ -603,5 +695,4 @@ function countGraphemes(e) {
   for (let r of getGraphemeSegmenter().segment(e)) t++;
   return t;
 }
-
 export { countGraphemes, serializeScreenRow, Output, intersectClip, isClipRedundant };

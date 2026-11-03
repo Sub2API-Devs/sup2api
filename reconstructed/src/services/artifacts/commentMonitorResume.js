@@ -9,25 +9,28 @@
  * attribution: placement 32
  */
 import { open } from "fs/promises";
-import { Ns, $s } from "../../cli/print/turnStreaming.js";
+import {
+  MAX_ARTIFACT_COMMENT_TRANSCRIPT_BYTES,
+  ARTIFACT_COMMENT_MONITOR_NAME,
+} from "../../cli/print/turnStreaming.js";
 import { mergeArtifactCommentMonitorEntries, loadTranscriptFromFile } from "../../utils/sessionStorage.js";
 import {
   readCommentMonitorIntent,
   takeRestoredMonitorIntents,
-  Ozn,
+  tornStopIntents,
   applyRemoteStops,
 } from "./commentMonitor.js";
-import { FT, sIe, getLiveState } from "../liveReplica/liveReplica.js";
+import { REFUSED_CAPACITY_HINT, REFUSED_CAPACITY_WINDOW, getLiveState } from "../liveReplica/liveReplica.js";
 import {
-  Min,
+  holderElsewhereText,
   describeHolderWithOthers,
   getHolderTelemetry,
-  Rzn,
+  describeHolderWithOthersComments,
   dropGoneHolders,
   findLiveReplyHolder,
 } from "./comments/replyYield.js";
 import { plural } from "../../utils/stringUtils.js";
-import { Zz, ATTACHED } from "../../tools/ArtifactTool/artifactResumeCarry.js";
+import { nonOpenedFrameUrls, ATTACHED } from "../../tools/ArtifactTool/artifactResumeCarry.js";
 import {
   parseArtifactUrl,
   ARTIFACT_SLUG_RE,
@@ -38,12 +41,17 @@ import { logFeatureSad, logFeatureOk } from "../analytics/featureTelemetry.js";
 import { fromEnum } from "../analytics/safeMetadata.js";
 import { claudeAiEnvironment } from "../../constants/claudeAiOrigin.js";
 import { maybeSubscribeFrameLive, slugRepliesWiredHere, onArmSettled } from "./frameLive.js";
-import { B9 } from "./comments/repliesConsent.js";
+import { isConsentUiKind } from "./comments/repliesConsent.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { errorMessage } from "../../utils/errors.js";
 import { logError } from "../../utils/log.js";
 import { count } from "../../utils/collections.js";
-import { $Us, formatAutoReplyNotice, BRo, oAe } from "../artifactComments/autoReplyNotices.js";
+import {
+  takeUnattendedReplies,
+  formatAutoReplyNotice,
+  addUnattendedReplies,
+  canAutoReply,
+} from "../artifactComments/autoReplyNotices.js";
 import { createSystemMessage } from "../../utils/messages.js";
 import { isBgSession, isActingAsBgJob } from "../../utils/concurrentSessions.js";
 import { getSessionId } from "../../bootstrap/state.js";
@@ -57,23 +65,23 @@ import { derivePublishContextFrom, mainObservedArtifactVersion } from "./readObs
 import { isTopHostSession, isClaudecodeSession, isVsCodeTopSession } from "../../utils/sessionShape.js";
 import { isArtifactReadOnlySurface } from "./artifactToolGates.js";
 import { isStorageV5Enabled } from "../../utils/hoverRest.js";
-import { Xb } from "./artifactAvailability.js";
+import { isArtifactsAvailable } from "./artifactAvailability.js";
 
 //@ chunk-0sfjpx19.js:91945-92607 placement
 async function readCommentMonitorLogTail(e) {
-  let { path: path, sessionId: sessionId, fromByte: fromByte, baseline: baseline } = e,
-    y = e.maxAppendedBytes ?? Ns,
-    _;
+  let { path, sessionId, fromByte, baseline } = e;
+  let maxAppendedBytes = e.maxAppendedBytes ?? MAX_ARTIFACT_COMMENT_TRANSCRIPT_BYTES;
+  let _;
   try {
     let w = await open(path, "r");
     try {
-      let { size: size } = await w.stat();
-      if (size < fromByte || size - fromByte > y) return null;
-      let T = fromByte > 0 ? 1 : 0,
-        alloc = Buffer.alloc(size - fromByte + T),
-        { bytesRead: bytesRead } = await w.read(alloc, 0, alloc.length, fromByte - T);
-      if (bytesRead !== alloc.length) return null;
-      _ = alloc.toString("utf8");
+      let { size } = await w.stat();
+      if (size < fromByte || size - fromByte > maxAppendedBytes) return null;
+      let T = fromByte > 0 ? 1 : 0;
+      let D = Buffer.alloc(size - fromByte + T);
+      let { bytesRead } = await w.read(D, 0, D.length, fromByte - T);
+      if (bytesRead !== D.length) return null;
+      _ = D.toString("utf8");
     } finally {
       await w.close();
     }
@@ -89,19 +97,19 @@ async function readCommentMonitorLogTail(e) {
     _ = _.slice(1);
   }
   let b = {
-      type: "artifact-comment-monitor",
-      v: 1,
-      sessionId: sessionId,
-      artifacts: Object.fromEntries(baseline),
-    },
-    parts = _.split(`
+    type: "artifact-comment-monitor",
+    v: 1,
+    sessionId,
+    artifacts: Object.fromEntries(baseline),
+  };
+  let lines = _.split(`
 `);
-  if (parts.pop() !== "") return null;
-  for (let w of parts) {
-    if (!w.includes($s)) continue;
+  if (lines.pop() !== "") return null;
+  for (let line of lines) {
+    if (!line.includes(ARTIFACT_COMMENT_MONITOR_NAME)) continue;
     let S;
     try {
-      S = JSON.parse(w);
+      S = JSON.parse(line);
     } catch {
       return null;
     }
@@ -110,27 +118,23 @@ async function readCommentMonitorLogTail(e) {
   return readCommentMonitorIntent(b);
 }
 //@ chunk-0sfjpx19.js:92607-92744 placement
-function isCommentMonitorNotification(e, n) {
+function isCommentMonitorNotification(sessionId, n) {
   return (
     typeof n === "object" &&
     n !== null &&
     "type" in n &&
     n.type === "artifact-comment-monitor" &&
     "sessionId" in n &&
-    n.sessionId === e
+    n.sessionId === sessionId
   );
 }
 //@ chunk-0sfjpx19.js:92744-92793 placement
-var Io = `past the limit of ${FT} watched at once`;
+var watchLimitText = `past the limit of ${REFUSED_CAPACITY_HINT} watched at once`;
 //@ chunk-0sfjpx19.js:92793-94278 placement
-function formatAutoReplyNotResumedShort(
-  e,
-  n,
-  { backgroundSession: backgroundSession, liveHolder: liveHolder, jobStamped: jobStamped },
-) {
-  let y = `Automatic replies didn't resume for ${e}`,
-    _ = backgroundSession ? "open this session and " : "",
-    b = backgroundSession ? "open this session and publish it again" : "publish it again here";
+function formatAutoReplyNotResumedShort(e, n, { backgroundSession, liveHolder, jobStamped }) {
+  let y = `Automatic replies didn't resume for ${e}`;
+  let _ = backgroundSession ? "open this session and " : "";
+  let b = backgroundSession ? "open this session and publish it again" : "publish it again here";
   switch (n) {
     case "auto_replies_disabled":
       return `${y} \xB7 turned off in this session`;
@@ -146,7 +150,7 @@ function formatAutoReplyNotResumedShort(
     case "arm_in_flight":
       return `Automatic replies for ${e} were still starting \xB7 /tasks to check`;
     case "held_by_live_session":
-      return `Automatic replies didn't resume here for ${e} \xB7 this conversation is also open in ${Min(liveHolder)}; ${describeCloseHolders(liveHolder)}${liveHolder?.surface === "background" || jobStamped ? ", then publish it again here" : " and resume again here"}`;
+      return `Automatic replies didn't resume here for ${e} \xB7 this conversation is also open in ${holderElsewhereText(liveHolder)}; ${describeCloseHolders(liveHolder)}${liveHolder?.surface === "background" || jobStamped ? ", then publish it again here" : " and resume again here"}`;
     case "held_by_job":
       return `Automatic replies didn't resume here for ${e} \xB7 a background agent keeps them while it runs; if it has ended, publish it again here`;
     case "other_org":
@@ -155,55 +159,46 @@ function formatAutoReplyNotResumedShort(
       return `${y} \xB7 a public Artifact from outside your organization can't be watched`;
     case "watch_cap":
     case "watch_cap_reconnect":
-      return `${y} \xB7 ${Io}; ${_}publish it again`;
+      return `${y} \xB7 ${watchLimitText}; ${_}publish it again`;
     default:
       return `${y} \xB7 ${_}publish it again`;
   }
 }
 //@ chunk-0sfjpx19.js:94278-94832 placement
 function formatAutoReplyNotResumedList(e, n, r) {
-  let s = e.length - 1,
-    h = `${e[0] ?? "these Artifacts"}${s > 0 ? ` and ${s} more` : ""}`,
-    y = s > 0 ? "one" : "it",
-    _ = `Automatic replies didn't resume for ${h}`;
+  let s = e.length - 1;
+  let h = `${e[0] ?? "these Artifacts"}${s > 0 ? ` and ${s} more` : ""}`;
+  let y = s > 0 ? "one" : "it";
+  let _ = `Automatic replies didn't resume for ${h}`;
   switch (n) {
     case "watch_cap":
-      return `${_} \xB7 ${Io}; publish ${y} again`;
+      return `${_} \xB7 ${watchLimitText}; publish ${y} again`;
     case "unprovable":
     case "switched":
       return `${_} \xB7 ask Claude to watch ${y}, or publish it again`;
     case "incomplete":
       return `${_} \xB7 ask Claude to watch ${y}, then publish it`;
     case "held":
-      return `Automatic replies didn't resume here for ${h} \xB7 this conversation is also open in ${Min(r)}; ${describeCloseHolders(r)} first, then publish again here`;
+      return `Automatic replies didn't resume here for ${h} \xB7 this conversation is also open in ${holderElsewhereText(r)}; ${describeCloseHolders(r)} first, then publish again here`;
   }
 }
 //@ chunk-0sfjpx19.js:94832-95047 placement
 function describeCloseHolders(e) {
-  let n = e?.others ?? 0;
+  let others = e?.others ?? 0;
   if (e?.surface === "background")
-    return `stop that agent with \`claude agents\`${n > 0 ? ` and close the other ${plural(n, "session")}` : ""}`;
-  return n > 0 ? "close those sessions" : "close that session";
+    return `stop that agent with \`claude agents\`${others > 0 ? ` and close the other ${plural(others, "session")}` : ""}`;
+  return others > 0 ? "close those sessions" : "close that session";
 }
+//@ chunk-0sfjpx19.js:95047-99325 placement
 /**
  * 生成"自动回复未恢复"的说明（repl/短格式，指导重新发布或让 Claude 再监视）。
  */
-//@ chunk-0sfjpx19.js:95047-99325 placement
-function formatAutoReplyNotResumed(
-  e,
-  n,
-  {
-    backgroundSession: backgroundSession,
-    liveHolder: liveHolder,
-    jobStamped: jobStamped = !1,
-    ui: ui = "repl",
-  },
-) {
+function formatAutoReplyNotResumed(e, n, { backgroundSession, liveHolder, jobStamped = false, ui = "repl" }) {
   if (ui === "replShort")
     return formatAutoReplyNotResumedShort(e, n, {
-      backgroundSession: backgroundSession,
-      liveHolder: liveHolder,
-      jobStamped: jobStamped,
+      backgroundSession,
+      liveHolder,
+      jobStamped,
     });
   let _ = backgroundSession
     ? "Open this session and ask Claude to watch it again"
@@ -231,8 +226,8 @@ function formatAutoReplyNotResumed(
         : `Automatic replies for ${e} are still starting up; /tasks will show whether they came back.`;
     case "held_by_live_session":
       return ui === "host"
-        ? `Artifact comment monitor for ${e} didn't resume its automatic replies here: this conversation is also open in ${Min(liveHolder)}, which may already be replying to this artifact's comments. ${describeMonitorHolder(liveHolder, jobStamped, ui)}`
-        : `Artifact comment monitor for ${e} didn't resume its automatic replies here: this conversation is also open in ${Min(liveHolder)}, which may already be replying to this Artifact's comments. ${describeMonitorHolder(liveHolder, jobStamped, ui)}`;
+        ? `Artifact comment monitor for ${e} didn't resume its automatic replies here: this conversation is also open in ${holderElsewhereText(liveHolder)}, which may already be replying to this artifact's comments. ${describeMonitorHolder(liveHolder, jobStamped, ui)}`
+        : `Artifact comment monitor for ${e} didn't resume its automatic replies here: this conversation is also open in ${holderElsewhereText(liveHolder)}, which may already be replying to this Artifact's comments. ${describeMonitorHolder(liveHolder, jobStamped, ui)}`;
     case "held_by_job":
       return ui === "host"
         ? `Artifact comment monitor for ${e} didn't resume its automatic replies here: they were last turned on from a background agent of this conversation, which keeps them while it runs. If that agent has ended, publish the artifact again here to turn them back on.`
@@ -249,79 +244,86 @@ function formatAutoReplyNotResumed(
         : `Artifact comment monitor for ${e} didn't resume: this is a public Artifact from outside your organization. It can be read here, but its comments can't be watched from this account.`;
     case "watch_cap":
     case "watch_cap_reconnect":
-      return `Artifact comment monitor for ${e} didn't resume: this session can watch at most ${FT} artifacts at once. ${backgroundSession ? "Open this session and publish the artifact again" : "Publish the artifact again"} to turn automatic replies back on. If that's refused too, ask Claude to stop watching one first.`;
+      return `Artifact comment monitor for ${e} didn't resume: this session can watch at most ${REFUSED_CAPACITY_HINT} artifacts at once. ${backgroundSession ? "Open this session and publish the artifact again" : "Publish the artifact again"} to turn automatic replies back on. If that's refused too, ask Claude to stop watching one first.`;
     default:
       return formatRepublishHint(e, "it couldn't restart in this session", backgroundSession);
   }
 }
 //@ chunk-0sfjpx19.js:99325-99849 placement
-function describeMonitorHolder(e, n, r) {
-  let s = e?.others ?? 0,
-    h = r === "host" ? "artifact" : "Artifact";
-  if (e?.surface === "background") {
-    let b = s > 0 ? ` and close the other ${plural(s, "session")}` : "";
+function describeMonitorHolder(liveHolder, jobStamped, r) {
+  let others = liveHolder?.others ?? 0;
+  let h = r === "host" ? "artifact" : "Artifact";
+  if (liveHolder?.surface === "background") {
+    let b = others > 0 ? ` and close the other ${plural(others, "session")}` : "";
     return `${r === "host" ? "Stop that agent" : "Stop it with `claude agents`"}${b}, then publish the ${h} again here to turn them back on.`;
   }
-  let y = s > 0 ? "Close those sessions" : "Close that session",
-    _ = s > 0 ? "keep using them there" : "keep using it there";
-  return n
+  let y = others > 0 ? "Close those sessions" : "Close that session";
+  let _ = others > 0 ? "keep using them there" : "keep using it there";
+  return jobStamped
     ? `${y}, then publish the ${h} again here to move the replies.`
     : `${y} and resume again here to move the replies, or ${_}.`;
 }
 //@ chunk-0sfjpx19.js:99849-100051 placement
-function formatRepublishHint(e, n, r) {
-  return `Artifact comment monitor for ${e} didn't resume: ${n}. ${r ? "Open this session and publish the Artifact again" : "Publish the Artifact again"} to turn automatic replies back on.`;
+function formatRepublishHint(e, n, backgroundSession) {
+  return `Artifact comment monitor for ${e} didn't resume: ${n}. ${backgroundSession ? "Open this session and publish the Artifact again" : "Publish the Artifact again"} to turn automatic replies back on.`;
 }
 //@ chunk-0sfjpx19.js:100051-100213 placement
 function summarizeResumeLosses(e) {
   return {
-    countsAsLoss: e.some((n) => n.stale !== !0),
-    warnings: e
-      .slice(0, sIe)
-      .map((n) => ({ slug: n.slug, reason: n.stale === !0 ? "stale_handoff" : "unavailable" })),
+    countsAsLoss: e.some((n) => n.stale !== true),
+    warnings: e.slice(0, REFUSED_CAPACITY_WINDOW).map((n) => ({
+      slug: n.slug,
+      reason: n.stale === true ? "stale_handoff" : "unavailable",
+    })),
   };
 }
+//@ chunk-0sfjpx19.js:100213-100532 placement
 /**
  * 从会话记录里找出最近引用的 artifact（不是目标 slug 时）：在 frameUrls 里匹配同 slug 的链接，返回 slug、查看链接与已读版本；无版本时只认附件路径。
  */
-//@ chunk-0sfjpx19.js:100213-100532 placement
 function findAttachedArtifactRef(e, n) {
-  let r = e.artifactRefs?.[0]?.slug;
-  if (r === void 0 || r === n) return null;
-  let s = e.artifactReadVersions?.[r] || void 0;
-  for (let [h, y] of Zz(e.frameUrls ?? {})) {
-    let _ = parseArtifactUrl(y.url);
-    if (_ === null || _.slug !== r) continue;
-    if (s === void 0 && !h.startsWith(ATTACHED)) return null;
-    return { slug: r, url: artifactViewerUrlFor(_), ...(s !== void 0 && { version: s }) };
+  let slug = e.artifactRefs?.[0]?.slug;
+  if (slug === undefined || slug === n) return null;
+  let s = e.artifactReadVersions?.[slug] || undefined;
+  for (let [h, y] of nonOpenedFrameUrls(e.frameUrls ?? {})) {
+    let artifactUrl = parseArtifactUrl(y.url);
+    if (artifactUrl === null || artifactUrl.slug !== slug) continue;
+    if (s === undefined && !h.startsWith(ATTACHED)) return null;
+    return {
+      slug,
+      url: artifactViewerUrlFor(artifactUrl),
+      ...(s !== undefined && {
+        version: s,
+      }),
+    };
   }
   return null;
 }
 //@ chunk-0sfjpx19.js:100532-100675 placement
 function formatNotResumedPrefix(e) {
-  let sliced = e.slice(0, 2),
-    r = e.length - sliced.length;
+  let sliced = e.slice(0, 2);
+  let r = e.length - sliced.length;
   return `Automatic replies were not resumed for ${sliced.join(", ")}${r > 0 ? ` and ${r} more` : ""}`;
 }
 //@ chunk-0sfjpx19.js:100675-101053 placement
 function describeUnprovableResume(e, n = "unprovable", r = "repl") {
   if (r === "replShort") return formatAutoReplyNotResumedList(e, n);
   return n === "watch_cap"
-    ? `${formatNotResumedPrefix(e)}: this session can watch at most ${FT} artifacts at once. Publish one of these again to turn its replies back on. If that's refused too, ask Claude to stop watching one first.`
+    ? `${formatNotResumedPrefix(e)}: this session can watch at most ${REFUSED_CAPACITY_HINT} artifacts at once. Publish one of these again to turn its replies back on. If that's refused too, ask Claude to stop watching one first.`
     : `${formatNotResumedPrefix(e)}. Ask Claude to watch one of these, or publish it again, to turn its replies back on.`;
 }
+//@ chunk-0sfjpx19.js:101053-101307 placement
 /**
  * 会话内切换对话后评论监听不会恢复的提示：列出 artifact，建议重新发布或让 Claude 重新监听（短格式时只给列表）。
  */
-//@ chunk-0sfjpx19.js:101053-101307 placement
 function describeNotResumedAfterSwitch(e, n = "repl") {
   if (n === "replShort") return formatAutoReplyNotResumedList(e, "switched");
   return `${formatNotResumedPrefix(e)} \u2014 switching conversations inside a session doesn't bring comment monitors back. Publish the Artifact again, or ask Claude to watch it, to turn its replies back on.`;
 }
+//@ chunk-0sfjpx19.js:101307-101535 placement
 /**
  * 会话保存的监听状态不完整、自动回复未恢复的提示（短格式时只给列表）。
  */
-//@ chunk-0sfjpx19.js:101307-101535 placement
 function describeNotResumedIncomplete(e, n = "repl") {
   if (n === "replShort") return formatAutoReplyNotResumedList(e, "incomplete");
   return `${formatNotResumedPrefix(e)}: this conversation's saved watch state was incomplete. Ask Claude to watch one of these; replies come back with the next publish after that.`;
@@ -329,27 +331,27 @@ function describeNotResumedIncomplete(e, n = "repl") {
 //@ chunk-0sfjpx19.js:101535-102325 placement
 function describeHeldMonitor(e, n, r = "repl") {
   if (r === "replShort") return formatAutoReplyNotResumedList(e, "held", n);
-  let s = n?.others ?? 0,
-    h =
-      n !== void 0
-        ? `it is also open in ${describeHolderWithOthers(n)}`
-        : "another live session of it is running",
-    y =
-      s > 0
-        ? "If one of those sessions holds these monitors, replies continue there, and publishing again here while it does would make two sessions reply"
-        : "If that session holds these monitors, replies continue there, and publishing again here while it does would make both sessions reply",
-    _ = s > 0 ? ` and close the other ${plural(s, "session")}` : "",
-    b =
-      n?.surface === "background"
-        ? `stop that agent${r === "host" ? "" : " with `claude agents`"}${_}`
-        : s > 0
-          ? "close those sessions"
-          : "close that session";
+  let others = n?.others ?? 0;
+  let h =
+    n !== undefined
+      ? `it is also open in ${describeHolderWithOthers(n)}`
+      : "another live session of it is running";
+  let y =
+    others > 0
+      ? "If one of those sessions holds these monitors, replies continue there, and publishing again here while it does would make two sessions reply"
+      : "If that session holds these monitors, replies continue there, and publishing again here while it does would make both sessions reply";
+  let _ = others > 0 ? ` and close the other ${plural(others, "session")}` : "";
+  let b =
+    n?.surface === "background"
+      ? `stop that agent${r === "host" ? "" : " with `claude agents`"}${_}`
+      : others > 0
+        ? "close those sessions"
+        : "close that session";
   return `${formatNotResumedPrefix(e)} in this conversation \u2014 ${h}. ${y}; ${b} first, then publish the ${r === "host" ? "artifact" : "Artifact"} again here to move them.`;
 }
 //@ chunk-0sfjpx19.js:102325-102405 placement
-function $o(e, n) {
-  return Uo(e, n) ?? (n === "unknown" ? "holder_unknown" : "unavailable");
+function heldReasonOrFallback(holder, n) {
+  return heldReasonFor(holder, n) ?? (n === "unknown" ? "holder_unknown" : "unavailable");
 }
 //@ chunk-0sfjpx19.js:102405-102896 placement
 function classifyMonitorHold(e, n) {
@@ -369,28 +371,33 @@ function classifyMonitorHold(e, n) {
     job_stamped: n.jobStamped,
     takeover: fromEnum(n.takeover),
     job_holder: fromEnum(n.jobHolder),
-    ...(n.surface !== void 0 && { surface: n.surface }),
-    holder_count: n.liveHolder !== void 0 ? 1 + n.otherHolders : 0,
-    ...(n.liveHolder !== void 0 && getHolderTelemetry(n.liveHolder, n.now)),
+    ...(n.surface !== undefined && {
+      surface: n.surface,
+    }),
+    holder_count: n.liveHolder !== undefined ? 1 + n.otherHolders : 0,
+    ...(n.liveHolder !== undefined && getHolderTelemetry(n.liveHolder, n.now)),
   });
 }
 //@ chunk-0sfjpx19.js:102896-102991 placement
-function Uo(e, n) {
+function heldReasonFor(e, n) {
   if (n === "live") return "held_by_live_session";
   return e === "bg" ? "held_by_job" : null;
 }
 //@ chunk-0sfjpx19.js:102991-103069 placement
-function Ho(e, n, r, s = "repl") {
+function resumeNotice(e, n, r, s = "repl") {
   return n === "live" ? describeHeldMonitor(e, r, s) : describeUnprovableResume(e, "unprovable", s);
 }
 //@ chunk-0sfjpx19.js:103069-103122 placement
-function EAs(e, n) {
-  return listOtherArmedSlugs(e, {}).filter((r) => !n(r));
+/**
+ * 导出函数 `otherArmedSlugs`：参数 e, n，返回 listOtherArmedSlugs(e, {}).filter((r) => !n(r))。
+ */
+function otherArmedSlugs(e, isAutoReactWired) {
+  return listOtherArmedSlugs(e, {}).filter((r) => !isAutoReactWired(r));
 }
 //@ chunk-0sfjpx19.js:103122-103283 placement
 function getCommentsUnavailableReason(e) {
-  if (e.tool === void 0 || e.commentVerbsInSchema !== !0) return "comments_unavailable";
-  if (e.autoReactEnabled === !1) return "auto_replies_disabled";
+  if (e.tool === undefined || e.commentVerbsInSchema !== true) return "comments_unavailable";
+  if (e.autoReactEnabled === false) return "auto_replies_disabled";
   return null;
 }
 //@ chunk-0sfjpx19.js:103283-103385 placement
@@ -398,12 +405,20 @@ function getResumeIssueLevel(e) {
   return e === "stop_latched" || e === "recorded_stop" || e === "arm_in_flight" ? "notice" : "warning";
 }
 //@ chunk-0sfjpx19.js:103385-103569 placement
-function findResumeTarget(e, n, r) {
-  let s = findAttachedArtifactRef(e, n) ?? findLatestArmedSlug(e, n, r);
+function findResumeTarget(frameState, startupWatchSlug, r) {
+  let s =
+    findAttachedArtifactRef(frameState, startupWatchSlug) ??
+    findLatestArmedSlug(frameState, startupWatchSlug, r);
   if (s === null) return null;
   let h = r?.get(s.slug);
   return h?.state === "armed"
-    ? { slug: s.slug, url: s.url, ...(h.holder !== void 0 && { holder: h.holder }) }
+    ? {
+        slug: s.slug,
+        url: s.url,
+        ...(h.holder !== undefined && {
+          holder: h.holder,
+        }),
+      }
     : null;
 }
 //@ chunk-0sfjpx19.js:103569-103775 placement
@@ -412,49 +427,59 @@ function listOtherArmedSlugs(e, n) {
     .filter(
       ([r, s]) =>
         s.state === "armed" &&
-        s.holder === void 0 &&
+        s.holder === undefined &&
         r !== n.targetSlug &&
         r !== n.excludeSlug &&
-        !(n.named?.has(r) ?? !1),
+        !(n.named?.has(r) ?? false),
     )
     .sort(([, r], [, s]) => s.writtenAtMs - r.writtenAtMs)
     .map(([r]) => r);
 }
+//@ chunk-0sfjpx19.js:103775-104077 placement
 /**
  * 在评论监控记录中找出最近写入、未被持有且不是当前 artifact 的已布防 slug，用于恢复会话时提示。
  */
-//@ chunk-0sfjpx19.js:103775-104077 placement
 function findLatestArmedSlug(e, n, r) {
-  if (r === void 0) return null;
-  if (n !== void 0 && e.artifactRefs?.[0]?.slug === n) return null;
+  if (r === undefined) return null;
+  if (n !== undefined && e.artifactRefs?.[0]?.slug === n) return null;
   let s;
   for (let [h, y] of r)
     if (
       y.state === "armed" &&
-      y.holder === void 0 &&
+      y.holder === undefined &&
       h !== n &&
       ARTIFACT_SLUG_RE.test(h) &&
-      (s === void 0 || y.writtenAtMs > s[1].writtenAtMs)
+      (s === undefined || y.writtenAtMs > s[1].writtenAtMs)
     )
       s = [h, y];
-  return s === void 0
+  return s === undefined
     ? null
-    : { slug: s[0], url: artifactViewerUrlFor({ slug: s[0], env: claudeAiEnvironment() }) };
+    : {
+        slug: s[0],
+        url: artifactViewerUrlFor({
+          slug: s[0],
+          env: claudeAiEnvironment(),
+        }),
+      };
 }
 //@ chunk-0sfjpx19.js:104077-104978 placement
 function describeWsOpenOutcome(e) {
-  let { slug: slug, url: url, record: record } = e;
+  let { slug, url, record } = e;
   (e.arm ?? maybeSubscribeFrameLive)({
-    slug: slug,
-    url: url,
+    slug,
+    url,
     publishContext: e.publishContext,
     getKnownVer: () => e.getKnownVer(slug),
-    sessionResume: !0,
-    ...(e.seedFromBoot && { seedKnownVerFromBoot: !0 }),
+    sessionResume: true,
+    ...(e.seedFromBoot && {
+      seedKnownVerFromBoot: true,
+    }),
     tool: e.tool,
-    commentVerbsInSchema: !0,
-    ...(record?.title !== void 0 && { title: record.title }),
-    resumedPublishConsent: !0,
+    commentVerbsInSchema: true,
+    ...(record?.title !== undefined && {
+      title: record.title,
+    }),
+    resumedPublishConsent: true,
     onOpen: () => {},
     onGiveUp: () => e.onCarriedSkip?.(slug, "ws_open_error"),
     context: e.context,
@@ -465,10 +490,10 @@ function describeWsOpenOutcome(e) {
       else if (y.outcome === "armed" && y.degraded === "not_editor") e.onCarriedSkip?.(slug, "not_editor");
       else if (
         y.outcome === "already_watching" &&
-        y.taskId !== void 0 &&
-        getLiveState().live.supervisors.get(slug)?.autoReactWiring !== void 0
+        y.taskId !== undefined &&
+        getLiveState().live.supervisors.get(slug)?.autoReactWiring !== undefined
       );
-      else if (y.outcome === "already_watching" && y.taskId === void 0)
+      else if (y.outcome === "already_watching" && y.taskId === undefined)
         e.onCarriedSkip?.(slug, "arm_in_flight");
       else if (y.outcome === "already_watching") e.onNotArmed?.(slug);
     },
@@ -477,72 +502,85 @@ function describeWsOpenOutcome(e) {
     },
   );
 }
+//@ chunk-0sfjpx19.js:104978-108279 placement
 /**
  * 决定恢复时为哪个 Artifact 重新武装评论监视（记录不完整、已停止、被其他会话持有）。
  */
-//@ chunk-0sfjpx19.js:104978-108279 placement
 function planCommentMonitorRearm(e) {
-  let {
-      state: state,
-      excludeSlug: excludeSlug,
-      getKnownVer: getKnownVer,
-      context: context,
-      publishContext: publishContext,
-    } = e,
-    _ = e.arm ?? maybeSubscribeFrameLive,
-    b = publishContext !== "bg_session" && B9(publishContext) ? e.resumedIntent : void 0,
-    k = findAttachedArtifactRef(state, excludeSlug),
-    w = k ?? findLatestArmedSlug(state, excludeSlug, b),
-    S = k?.version === void 0,
-    T = w === null ? void 0 : b?.get(w.slug),
-    D = new Set(),
-    E = (z) => (e.tornStops?.has(z) === !0 ? "record_incomplete" : "recorded_stop"),
-    N = new Set(),
-    G = excludeSlug === void 0 ? FT : FT - 1,
-    R = 0;
-  if (e.carried !== void 0 && e.carried.length > 0) {
-    let z = claudeAiEnvironment(),
-      V = [];
-    for (let j of e.carried.slice(0, sIe)) {
-      let pe = artifactViewerUrlFor({ slug: j.slug, env: z });
+  let { state, excludeSlug, getKnownVer, context, publishContext } = e;
+  let arm = e.arm ?? maybeSubscribeFrameLive;
+  let resumedIntent =
+    publishContext !== "bg_session" && isConsentUiKind(publishContext) ? e.resumedIntent : undefined;
+  let attachedArtifactRef = findAttachedArtifactRef(state, excludeSlug);
+  let w = attachedArtifactRef ?? findLatestArmedSlug(state, excludeSlug, resumedIntent);
+  let seedFromBoot = attachedArtifactRef?.version === undefined;
+  let record = w === null ? undefined : resumedIntent?.get(w.slug);
+  let D = new Set();
+  let E = (slug) => (e.tornStops?.has(slug) === true ? "record_incomplete" : "recorded_stop");
+  let N = new Set();
+  let G = excludeSlug === undefined ? REFUSED_CAPACITY_HINT : REFUSED_CAPACITY_HINT - 1;
+  let R = 0;
+  if (e.carried !== undefined && e.carried.length > 0) {
+    let env = claudeAiEnvironment();
+    let V = [];
+    for (let j of e.carried.slice(0, REFUSED_CAPACITY_WINDOW)) {
+      let pe = artifactViewerUrlFor({
+        slug: j.slug,
+        env,
+      });
       if (parseArtifactUrl(pe)?.slug !== j.slug) continue;
       if (j.slug === excludeSlug) continue;
-      if (j.stale === !0) {
-        if (e.resumedIntent?.get(j.slug)?.state === "stopped")
-          (e.onCarriedSkip?.(j.slug, E(j.slug)), N.add(j.slug));
-        else if (b?.get(j.slug)?.state !== "armed")
-          (e.onCarriedSkip?.(j.slug, "stale_handoff"), N.add(j.slug));
+      if (j.stale === true) {
+        if (e.resumedIntent?.get(j.slug)?.state === "stopped") {
+          e.onCarriedSkip?.(j.slug, E(j.slug));
+          N.add(j.slug);
+        } else if (resumedIntent?.get(j.slug)?.state !== "armed") {
+          e.onCarriedSkip?.(j.slug, "stale_handoff");
+          N.add(j.slug);
+        }
         continue;
       }
       N.add(j.slug);
-      let me = getCommentsUnavailableReason(e);
-      if (me !== null) {
-        e.onCarriedSkip?.(j.slug, me);
+      let commentsUnavailableReason = getCommentsUnavailableReason(e);
+      if (commentsUnavailableReason !== null) {
+        e.onCarriedSkip?.(j.slug, commentsUnavailableReason);
         continue;
       }
       if (D.has(j.slug)) continue;
-      if ((D.add(j.slug), V.length >= G)) {
+      D.add(j.slug);
+      if (V.length >= G) {
         e.onCarriedSkip?.(j.slug, "watch_cap");
         continue;
       }
-      V.push({ entry: j, url: pe });
+      V.push({
+        entry: j,
+        url: pe,
+      });
     }
-    if (((R = V.length), V.length > 0)) e.parkInFlight?.park(V.map((j) => j.entry));
-    for (let { entry: entry, url: url } of V)
-      _({
+    R = V.length;
+    if (V.length > 0) e.parkInFlight?.park(V.map((j) => j.entry));
+    for (let { entry, url } of V)
+      arm({
         slug: entry.slug,
-        url: url,
-        publishContext: publishContext,
+        url,
+        publishContext,
         getKnownVer: () => getKnownVer(entry.slug),
-        ...(e.tool !== void 0 && { tool: e.tool }),
-        ...(e.commentVerbsInSchema !== void 0 && { commentVerbsInSchema: e.commentVerbsInSchema }),
-        ...(entry.title !== void 0 && { title: entry.title }),
-        carriedPublishConsent: !0,
-        sessionResume: !0,
-        context: context,
+        ...(e.tool !== undefined && {
+          tool: e.tool,
+        }),
+        ...(e.commentVerbsInSchema !== undefined && {
+          commentVerbsInSchema: e.commentVerbsInSchema,
+        }),
+        ...(entry.title !== undefined && {
+          title: entry.title,
+        }),
+        carriedPublishConsent: true,
+        sessionResume: true,
+        context,
       }).then(
         (me) => {
-          if ((e.parkInFlight?.release(entry.slug), me.outcome === "skipped")) {
+          e.parkInFlight?.release(entry.slug);
+          if (me.outcome === "skipped") {
             if (me.reason !== "cancelled") e.onCarriedSkip?.(entry.slug, me.reason);
           } else if (me.outcome === "armed" && me.degraded === "not_editor")
             e.onCarriedSkip?.(entry.slug, "not_editor");
@@ -551,545 +589,666 @@ function planCommentMonitorRearm(e) {
         () => {},
       );
   }
-  let P = e.holderProbe ?? "unknown",
-    U = P === "live" ? (e.freedSlugs ?? new Set()) : void 0,
-    L = (z) => (U?.has(z) === !0 ? "none" : P),
-    oe = Uo(T?.holder, w !== null ? L(w.slug) : P),
-    te = (z) => {
-      if (b === void 0) return;
-      for (let ce of e.tornStops ?? [])
-        if (ce !== w?.slug && ce !== excludeSlug && !N.has(ce) && b.get(ce)?.state === "stopped")
-          e.onCarriedSkip?.(ce, "record_incomplete");
-      if (P === "live" && (U === void 0 || U.size === 0)) return;
-      let filtered = listOtherArmedSlugs(b, {
-          ...(w !== null && { targetSlug: w.slug }),
-          ...(excludeSlug !== void 0 && { excludeSlug: excludeSlug }),
-          named: N,
-        }).filter((ce) => ARTIFACT_SLUG_RE.test(ce) && (U === void 0 || U.has(ce))),
-        j = (P === "none" || U !== void 0) && getCommentsUnavailableReason(e) === null ? e.tool : void 0,
-        pe = j !== void 0 ? Math.max(0, G - R - (z ? 1 : 0)) : 0,
-        sliced = filtered.slice(0, pe);
-      if (filtered.length > sliced.length)
-        e.onRecordedNotResumed?.(filtered.slice(sliced.length), j !== void 0 ? "watch_cap" : "unprovable");
-      if (j !== void 0)
-        for (let ce of sliced)
-          ne(
-            j,
-            ce,
-            artifactViewerUrlFor({ slug: ce, env: claudeAiEnvironment() }),
-            b.get(ce),
-            getKnownVer(ce) === void 0,
-          );
-    };
+  let holderProbe = e.holderProbe ?? "unknown";
+  let U = holderProbe === "live" ? (e.freedSlugs ?? new Set()) : undefined;
+  let L = (slug) => (U?.has(slug) === true ? "none" : holderProbe);
+  let oe = heldReasonFor(record?.holder, w !== null ? L(w.slug) : holderProbe);
+  let te = (z) => {
+    if (resumedIntent === undefined) return;
+    for (let ce of e.tornStops ?? [])
+      if (ce !== w?.slug && ce !== excludeSlug && !N.has(ce) && resumedIntent.get(ce)?.state === "stopped")
+        e.onCarriedSkip?.(ce, "record_incomplete");
+    if (holderProbe === "live" && (U === undefined || U.size === 0)) return;
+    let filtered = listOtherArmedSlugs(resumedIntent, {
+      ...(w !== null && {
+        targetSlug: w.slug,
+      }),
+      ...(excludeSlug !== undefined && {
+        excludeSlug,
+      }),
+      named: N,
+    }).filter((ce) => ARTIFACT_SLUG_RE.test(ce) && (U === undefined || U.has(ce)));
+    let tool =
+      (holderProbe === "none" || U !== undefined) && getCommentsUnavailableReason(e) === null
+        ? e.tool
+        : undefined;
+    let pe = tool !== undefined ? Math.max(0, G - R - (z ? 1 : 0)) : 0;
+    let sliced = filtered.slice(0, pe);
+    if (filtered.length > sliced.length)
+      e.onRecordedNotResumed?.(
+        filtered.slice(sliced.length),
+        tool !== undefined ? "watch_cap" : "unprovable",
+      );
+    if (tool !== undefined)
+      for (let ce of sliced)
+        ne(
+          tool,
+          ce,
+          artifactViewerUrlFor({
+            slug: ce,
+            env: claudeAiEnvironment(),
+          }),
+          resumedIntent.get(ce),
+          getKnownVer(ce) === undefined,
+        );
+  };
   if (w === null || D.has(w.slug)) {
-    te(!1);
+    te(false);
     return;
   }
-  if (T?.state === "stopped") {
+  if (record?.state === "stopped") {
     if (!N.has(w.slug)) e.onCarriedSkip?.(w.slug, E(w.slug));
-    te(!1);
+    te(false);
     return;
   }
-  let Q = !1;
-  if (T?.state === "armed" && N.has(w.slug));
-  else if (T?.state === "armed" && oe !== null) e.onCarriedSkip?.(w.slug, oe);
-  else if (T?.state === "armed")
-    if (P === "unknown") e.onCarriedSkip?.(w.slug, "holder_unknown");
+  let Q = false;
+  if (record?.state === "armed" && N.has(w.slug));
+  else if (record?.state === "armed" && oe !== null) e.onCarriedSkip?.(w.slug, oe);
+  else if (record?.state === "armed")
+    if (holderProbe === "unknown") e.onCarriedSkip?.(w.slug, "holder_unknown");
     else {
-      let z = getCommentsUnavailableReason(e);
-      if (z !== null) e.onCarriedSkip?.(w.slug, z);
-      else Q = !0;
+      let commentsUnavailableReason = getCommentsUnavailableReason(e);
+      if (commentsUnavailableReason !== null) e.onCarriedSkip?.(w.slug, commentsUnavailableReason);
+      else Q = true;
     }
-  function ne(z, V, j, pe, me) {
+  function ne(tool, slug, url, record, seedFromBoot) {
     describeWsOpenOutcome({
-      slug: V,
-      url: j,
-      record: pe,
-      seedFromBoot: me,
-      tool: z,
-      context: context,
-      publishContext: publishContext,
-      getKnownVer: getKnownVer,
-      ...(e.onCarriedSkip !== void 0 && { onCarriedSkip: e.onCarriedSkip }),
-      ...(e.onNotArmed !== void 0 && { onNotArmed: e.onNotArmed }),
-      arm: _,
+      slug,
+      url,
+      record,
+      seedFromBoot,
+      tool,
+      context,
+      publishContext,
+      getKnownVer,
+      ...(e.onCarriedSkip !== undefined && {
+        onCarriedSkip: e.onCarriedSkip,
+      }),
+      ...(e.onNotArmed !== undefined && {
+        onNotArmed: e.onNotArmed,
+      }),
+      arm,
     });
   }
   if (R >= G) {
     if (Q) e.onCarriedSkip?.(w.slug, "watch_cap");
-    te(!1);
+    te(false);
     return;
   }
-  if (Q && e.tool !== void 0) ne(e.tool, w.slug, w.url, T, S);
+  if (Q && e.tool !== undefined) ne(e.tool, w.slug, w.url, record, seedFromBoot);
   else
-    _({
+    arm({
       slug: w.slug,
       url: w.url,
-      publishContext: publishContext,
+      publishContext,
       getKnownVer: () => getKnownVer(w.slug),
-      sessionResume: !0,
-      ...(S && { seedKnownVerFromBoot: !0 }),
-      context: context,
+      sessionResume: true,
+      ...(seedFromBoot && {
+        seedKnownVerFromBoot: true,
+      }),
+      context,
     }).catch(() => {});
-  te(!0);
+  te(true);
 }
+//@ chunk-0sfjpx19.js:108279-108400 placement
 /**
  * 恢复会话时重新开启评论监听，异常只记日志不抛出。
  */
-//@ chunk-0sfjpx19.js:108279-108400 placement
-function rearmOnResumeSafe(e, n, r) {
+function rearmOnResumeSafe(e, n, orchestration) {
   try {
-    rearmCommentMonitorsOnResume(e, n, r);
+    rearmCommentMonitorsOnResume(e, n, orchestration);
   } catch (error) {
-    (logForDebugging(`[frame-live] resume re-arm prelude failed: ${errorMessage(error)}`, { level: "error" }),
-      logError(error));
+    logForDebugging(`[frame-live] resume re-arm prelude failed: ${errorMessage(error)}`, {
+      level: "error",
+    });
+    logError(error);
   }
 }
+//@ chunk-0sfjpx19.js:108400-116982 placement
 /**
  * 恢复时重新订阅 Artifact 评论（frame-live），记录结果并通知（约 8.5 KB）。
  */
-//@ chunk-0sfjpx19.js:108400-116982 placement
 function rearmCommentMonitorsOnResume(e, n, r) {
-  let { initialMessages: initialMessages, startupWatchSlug: startupWatchSlug, storageV5: storageV5 } = e,
-    { emit: emit } = n,
-    carried = n.carried,
-    k = fromEnum(n.publishContext === "bg_session" ? "bg_session" : n.ui),
-    w = "unknown",
-    S = !1,
-    T,
-    D = [],
-    E = !1,
-    N,
-    G = "not_attempted",
-    R = (re) => (T !== void 0 ? Rzn(T, D.length, re) : void 0),
-    P = 0,
-    U = new Set(),
-    L = new Set(),
-    oe = !1,
-    te = !1,
-    Q = new Map(),
-    ne = !1,
-    z = !1,
-    V = [],
-    j = new Map(),
-    pe = (re, x, se, Z) => {
-      if (te || oe || (re !== "held_by_live_session" && re !== "held_by_job" && re !== "holder_unknown"))
-        return;
-      ((te = !0),
-        classifyMonitorHold(re, {
-          path: x,
-          probed: S,
-          liveHolder: T,
-          otherHolders: D.length,
-          monitors: Math.max(1, P),
-          jobStamped: se !== void 0 ? U.has(se) || j.has(se) : U.size > 0 || j.size > 0,
-          jobHolder: se !== void 0 ? (j.get(se) ?? "none") : "none",
-          takeover: G,
-          surface: k,
-          now: Z,
-        }));
-    },
-    me = (re, x = new Set()) => {
-      let se = count([...L], (ue) => !x.has(ue)),
-        filtered = [...U].filter((ue) => !x.has(ue));
-      if (w !== "none" && se > 0)
-        pe(w === "live" ? "held_by_live_session" : "holder_unknown", re, void 0, Date.now());
-      else if (filtered.length > 0) pe("held_by_job", re, filtered[0], Date.now());
-    },
-    ce = (re, x, se) => {
-      let Z = Q.get(re);
-      if (ne && Z !== void 0 && (Z !== "held_by_live_session" || se === Z)) return;
-      Q.set(re, se);
-      let now = Date.now();
-      pe(se, "rearm", re, now);
-      let ae = $Us(re);
-      (se === "held_by_live_session" && z
-        ? (we) => {
-            V.push({ slug: re, messages: we });
-          }
-        : emit)([
-        ...(ae > 0 ? [formatAutoReplyNotice(ae, { where: ` on ${x}`, stop: "" })] : []),
-        createSystemMessage(
-          formatAutoReplyNotResumed(x, se, {
-            backgroundSession: isBgSession(),
-            ui: pt(n),
-            liveHolder: R(now),
-            jobStamped: U.has(re),
-          }),
-          getResumeIssueLevel(se),
-        ),
-      ]);
-    },
-    Fe = (re) => {
-      let x = summarizeResumeLosses(re);
-      if (x.countsAsLoss) logFeatureSad("artifact_live_subscribe", "carried_consent_dropped", { surface: k });
-      let se = claudeAiEnvironment();
-      for (let warning of x.warnings) {
-        let ue = artifactViewerUrlFor({ slug: warning.slug, env: se });
-        if (parseArtifactUrl(ue)?.slug !== warning.slug) continue;
-        ce(warning.slug, ue, warning.reason);
-      }
-    },
-    Ne = (r?.readRecords ?? takeRestoredMonitorIntents)({
-      ...(startupWatchSlug !== void 0 && { excludeSlug: startupWatchSlug }),
-      ...(storageV5 !== void 0 && { storageV5: storageV5 }),
+  let { initialMessages, startupWatchSlug, storageV5 } = e;
+  let { emit } = n;
+  let carried = n.carried;
+  let surface = fromEnum(n.publishContext === "bg_session" ? "bg_session" : n.ui);
+  let w = "unknown";
+  let probed = false;
+  let T;
+  let D = [];
+  let holdersIncomplete = false;
+  let N;
+  let G = "not_attempted";
+  let R = (re) => (T !== undefined ? describeHolderWithOthersComments(T, D.length, re) : undefined);
+  let P = 0;
+  let U = new Set();
+  let L = new Set();
+  let oe = false;
+  let te = false;
+  let Q = new Map();
+  let ne = false;
+  let z = false;
+  let V = [];
+  let j = new Map();
+  let pe = (re, path, se, now) => {
+    if (te || oe || (re !== "held_by_live_session" && re !== "held_by_job" && re !== "holder_unknown"))
+      return;
+    te = true;
+    classifyMonitorHold(re, {
+      path,
+      probed,
+      liveHolder: T,
+      otherHolders: D.length,
+      monitors: Math.max(1, P),
+      jobStamped: se !== undefined ? U.has(se) || j.has(se) : U.size > 0 || j.size > 0,
+      jobHolder: se !== undefined ? (j.get(se) ?? "none") : "none",
+      takeover: G,
+      surface,
+      now,
+    });
+  };
+  let me = (re, x = new Set()) => {
+    let se = count([...L], (ue) => !x.has(ue));
+    let filtered = [...U].filter((ue) => !x.has(ue));
+    if (w !== "none" && se > 0)
+      pe(w === "live" ? "held_by_live_session" : "holder_unknown", re, undefined, Date.now());
+    else if (filtered.length > 0) pe("held_by_job", re, filtered[0], Date.now());
+  };
+  let ce = (slug, x, se) => {
+    let Z = Q.get(slug);
+    if (ne && Z !== undefined && (Z !== "held_by_live_session" || se === Z)) return;
+    Q.set(slug, se);
+    let now = Date.now();
+    pe(se, "rearm", slug, now);
+    let ae = takeUnattendedReplies(slug);
+    (se === "held_by_live_session" && z
+      ? (messages) => {
+          V.push({
+            slug,
+            messages,
+          });
+        }
+      : emit)([
+      ...(ae > 0
+        ? [
+            formatAutoReplyNotice(ae, {
+              where: ` on ${x}`,
+              stop: "",
+            }),
+          ]
+        : []),
+      createSystemMessage(
+        formatAutoReplyNotResumed(x, se, {
+          backgroundSession: isBgSession(),
+          ui: uiKind(n),
+          liveHolder: R(now),
+          jobStamped: U.has(slug),
+        }),
+        getResumeIssueLevel(se),
+      ),
+    ]);
+  };
+  let Fe = (entries) => {
+    let x = summarizeResumeLosses(entries);
+    if (x.countsAsLoss)
+      logFeatureSad("artifact_live_subscribe", "carried_consent_dropped", {
+        surface,
+      });
+    let env = claudeAiEnvironment();
+    for (let warning of x.warnings) {
+      let ue = artifactViewerUrlFor({
+        slug: warning.slug,
+        env,
+      });
+      if (parseArtifactUrl(ue)?.slug !== warning.slug) continue;
+      ce(warning.slug, ue, warning.reason);
+    }
+  };
+  let Ne = (r?.readRecords ?? takeRestoredMonitorIntents)({
+    ...(startupWatchSlug !== undefined && {
+      excludeSlug: startupWatchSlug,
     }),
-    ke = getSessionId(),
-    Pe = (re) => {
-      z = !1;
-      let splice = V.splice(0);
-      if (getSessionId() !== ke) return;
-      let flattened = splice.flatMap((Z) => Z.messages.slice(0, -1));
-      if (flattened.length > 0) emit(flattened);
-      for (let Z of splice) {
-        if (re === "drop" || slugRepliesWiredHere(Z.slug)) continue;
-        if (re === "say") emit(Z.messages.slice(-1));
-        else ce(Z.slug, artifactViewerUrlFor({ slug: Z.slug, env: claudeAiEnvironment() }), re);
-      }
-    },
-    Ie = () => Pe("say");
+    ...(storageV5 !== undefined && {
+      storageV5,
+    }),
+  });
+  let sessionId = getSessionId();
+  let Pe = (re) => {
+    z = false;
+    let x = V.splice(0);
+    if (getSessionId() !== sessionId) return;
+    let flattened = x.flatMap((Z) => Z.messages.slice(0, -1));
+    if (flattened.length > 0) emit(flattened);
+    for (let Z of x) {
+      if (re === "drop" || slugRepliesWiredHere(Z.slug)) continue;
+      if (re === "say") emit(Z.messages.slice(-1));
+      else
+        ce(
+          Z.slug,
+          artifactViewerUrlFor({
+            slug: Z.slug,
+            env: claudeAiEnvironment(),
+          }),
+          re,
+        );
+    }
+  };
+  let Ie = () => Pe("say");
   if ((!initialMessages || initialMessages.length === 0) && Ne.size === 0) return;
   if (
-    carried === void 0 &&
+    carried === undefined &&
     Ne.size === 0 &&
     findAttachedArtifactRef(n.readFrameState(), startupWatchSlug) === null
   )
     return;
-  let M = isActingAsBgJob() ? void 0 : Ne,
-    q = () => {
-      let filtered = [...(M ?? new Map()).entries()].filter(([, x]) => x.state === "armed");
-      ((P = filtered.length),
-        (U = new Set(filtered.filter(([, x]) => x.holder === "bg").map(([x]) => x))),
-        (L = new Set(filtered.filter(([, x]) => x.holder !== "bg").map(([x]) => x))));
-    };
+  let M = isActingAsBgJob() ? undefined : Ne;
+  let q = () => {
+    let filtered = [...(M ?? new Map()).entries()].filter(([, x]) => x.state === "armed");
+    P = filtered.length;
+    U = new Set(filtered.filter(([, x]) => x.holder === "bg").map(([x]) => x));
+    L = new Set(filtered.filter(([, x]) => x.holder !== "bg").map(([x]) => x));
+  };
   q();
-  let le = () => findResumeTarget(n.readFrameState(), startupWatchSlug, M),
-    be = (re = []) => {
-      let x = le(),
-        se = new Set(re.map((he) => he.slug)),
-        Z = [];
-      if (x !== null && !se.has(x.slug)) {
-        let he = $o(x.holder, w),
-          now = Date.now();
-        (pe(he, "cannot_run", x.slug, now),
-          Z.push(
-            formatAutoReplyNotResumed(x.url, he, {
-              backgroundSession: isBgSession(),
-              ui: pt(n),
-              liveHolder: R(now),
-              jobStamped: x.holder === "bg",
+  let le = () => findResumeTarget(n.readFrameState(), startupWatchSlug, M);
+  let be = (re = []) => {
+    let x = le();
+    let se = new Set(re.map((he) => he.slug));
+    let Z = [];
+    if (x !== null && !se.has(x.slug)) {
+      let he = heldReasonOrFallback(x.holder, w);
+      let now = Date.now();
+      pe(he, "cannot_run", x.slug, now);
+      Z.push(
+        formatAutoReplyNotResumed(x.url, he, {
+          backgroundSession: isBgSession(),
+          ui: uiKind(n),
+          liveHolder: R(now),
+          jobStamped: x.holder === "bg",
+        }),
+      );
+    }
+    let env = claudeAiEnvironment();
+    let ae =
+      M === undefined
+        ? []
+        : listOtherArmedSlugs(M, {
+            ...(x !== null && {
+              targetSlug: x.slug,
             }),
-          ));
-      }
-      let ue = claudeAiEnvironment(),
-        ae =
-          M === void 0
-            ? []
-            : listOtherArmedSlugs(M, {
-                ...(x !== null && { targetSlug: x.slug }),
-                ...(startupWatchSlug !== void 0 && { excludeSlug: startupWatchSlug }),
-                named: se,
-              }).map((he) => artifactViewerUrlFor({ slug: he, env: ue }));
-      if (ae.length > 0) me("cannot_run");
-      if (Z.length > 0 || ae.length > 0)
-        emit([
-          ...Z.map((he) => createSystemMessage(he, "warning")),
-          ...(ae.length > 0 ? [createSystemMessage(Ho(ae, w, R(Date.now()), pt(n)), "notice")] : []),
-        ]);
-    },
-    Se = !1,
-    ve;
+            ...(startupWatchSlug !== undefined && {
+              excludeSlug: startupWatchSlug,
+            }),
+            named: se,
+          }).map((slug) =>
+            artifactViewerUrlFor({
+              slug,
+              env,
+            }),
+          );
+    if (ae.length > 0) me("cannot_run");
+    if (Z.length > 0 || ae.length > 0)
+      emit([
+        ...Z.map((he) => createSystemMessage(he, "warning")),
+        ...(ae.length > 0
+          ? [createSystemMessage(resumeNotice(ae, w, R(Date.now()), uiKind(n)), "notice")]
+          : []),
+      ]);
+  };
+  let Se = false;
+  let ve;
   n.gate()
-    .then(async ({ toolUseContext: toolUseContext, allowed: allowed }) => {
-      let se = await carried?.adopted,
-        Z = se?.entries ?? [],
-        ue = se?.park,
-        ae = Z.length > 0 && ue !== void 0 ? ue.take() : [];
-      if (Z.length > 0 && ue !== void 0 && ae.length === 0) return;
-      ve = Z;
-      for (let J of Z.slice(0, sIe)) if (J.unattendedReplies !== void 0) BRo(J.slug, J.unattendedReplies);
-      let any = Z.some((J) => J.stale !== !0);
-      if (allowed && M !== void 0 && U.size > 0 && n.jobHolderVerdicts !== void 0)
+    .then(async ({ toolUseContext, allowed }) => {
+      let adopted = await carried?.adopted;
+      let entries = adopted?.entries ?? [];
+      let park = adopted?.park;
+      let ae = entries.length > 0 && park !== undefined ? park.take() : [];
+      if (entries.length > 0 && park !== undefined && ae.length === 0) return;
+      ve = entries;
+      for (let entry of entries.slice(0, REFUSED_CAPACITY_WINDOW))
+        if (entry.unattendedReplies !== undefined) addUnattendedReplies(entry.slug, entry.unattendedReplies);
+      let any = entries.some((entry) => entry.stale !== true);
+      if (allowed && M !== undefined && U.size > 0 && n.jobHolderVerdicts !== undefined)
         try {
-          ((j = await n.jobHolderVerdicts(M, storageV5, Date.now())), (M = dropGoneHolders(M, j)), q());
+          j = await n.jobHolderVerdicts(M, storageV5, Date.now());
+          M = dropGoneHolders(M, j);
+          q();
           let J = count([...j.values()], (ie) => ie === "gone");
-          if (J > 0) logFeatureOk("artifact_live_subscribe", { job_holder_gone: J, surface: k });
+          if (J > 0)
+            logFeatureOk("artifact_live_subscribe", {
+              job_holder_gone: J,
+              surface,
+            });
         } catch {
-          logFeatureSad("artifact_live_subscribe", "job_holder_probe_failed", { surface: k });
-        }
-      let filtered = [...(M ?? new Map()).values()].filter((J) => J.state === "armed"),
-        Je = filtered.length > 0,
-        any_2 = filtered.some((J) => J.holder !== "bg"),
-        kn = async () =>
-          findLiveReplyHolder({
-            records: await (
-              r?.listSessionRecords ?? (await import("./chunk-ewxn4535.js")).listRegisteredSessionRecords
-            )(),
-            sessionId: ke,
-            selfPid: process.pid,
-            isRunning: r?.isRunning ?? isProcessRunning,
-            isSameProcess: r?.isSameProcess ?? provenSameProcessAsync,
+          logFeatureSad("artifact_live_subscribe", "job_holder_probe_failed", {
+            surface,
           });
+        }
+      let filtered = [...(M ?? new Map()).values()].filter((J) => J.state === "armed");
+      let Je = filtered.length > 0;
+      let any_2 = filtered.some((J) => J.holder !== "bg");
+      let kn = async () =>
+        findLiveReplyHolder({
+          records: await (
+            r?.listSessionRecords ?? (await import("./chunk-ewxn4535.js")).listRegisteredSessionRecords
+          )(),
+          sessionId,
+          selfPid: process.pid,
+          isRunning: r?.isRunning ?? isProcessRunning,
+          isSameProcess: r?.isSameProcess ?? provenSameProcessAsync,
+        });
       if (allowed && (le() !== null || Je))
         try {
           let J = await kn();
-          ((S = !0),
-            (w = J.verdict),
-            (T = J.holder),
-            (D = J.otherHolders ?? []),
-            (E = J.verdict === "live" && J.unproven === !0));
+          probed = true;
+          w = J.verdict;
+          T = J.holder;
+          D = J.otherHolders ?? [];
+          holdersIncomplete = J.verdict === "live" && J.unproven === true;
         } catch {
-          ((oe = !0), logFeatureSad("artifact_live_subscribe", "holder_probe_failed", { surface: k }));
+          oe = true;
+          logFeatureSad("artifact_live_subscribe", "holder_probe_failed", {
+            surface,
+          });
         }
-      let Be = findAttachedArtifactRef(n.readFrameState(), startupWatchSlug),
-        wn =
-          M === void 0
-            ? []
-            : [...M.entries()]
-                .filter(
-                  ([J, ie]) =>
-                    ie.state === "armed" &&
-                    ie.holder !== "bg" &&
-                    J !== startupWatchSlug &&
-                    !Z.some((_e) => _e.slug === J),
-                )
-                .sort(
-                  ([J, ie], [_e, Ae]) =>
-                    Number(_e === Be?.slug) - Number(J === Be?.slug) || Ae.writtenAtMs - ie.writtenAtMs,
-                )
-                .map(([J]) => J)
-                .slice(
+      let attachedArtifactRef = findAttachedArtifactRef(n.readFrameState(), startupWatchSlug);
+      let wn =
+        M === undefined
+          ? []
+          : [...M.entries()]
+              .filter(
+                ([J, ie]) =>
+                  ie.state === "armed" &&
+                  ie.holder !== "bg" &&
+                  J !== startupWatchSlug &&
+                  !entries.some((entry) => entry.slug === J),
+              )
+              .sort(
+                ([J, ie], [_e, Ae]) =>
+                  Number(_e === attachedArtifactRef?.slug) - Number(J === attachedArtifactRef?.slug) ||
+                  Ae.writtenAtMs - ie.writtenAtMs,
+              )
+              .map(([J]) => J)
+              .slice(
+                0,
+                Math.max(
                   0,
-                  Math.max(
-                    0,
-                    FT -
-                      (startupWatchSlug !== void 0 ? 1 : 0) -
-                      Z.length -
-                      (Be !== null && M?.get(Be.slug) === void 0 && !Z.some((J) => J.slug === Be.slug)
-                        ? 1
-                        : 0),
-                  ),
+                  REFUSED_CAPACITY_HINT -
+                    (startupWatchSlug !== undefined ? 1 : 0) -
+                    entries.length -
+                    (attachedArtifactRef !== null &&
+                    M?.get(attachedArtifactRef.slug) === undefined &&
+                    !entries.some((entry) => entry.slug === attachedArtifactRef.slug)
+                      ? 1
+                      : 0),
                 ),
-        gt = r?.isCommentWakeEnabled ?? isAutoreactArmed;
+              );
+      let isCommentWakeEnabled = r?.isCommentWakeEnabled ?? isAutoreactArmed;
       if (
         w === "live" &&
-        T !== void 0 &&
+        T !== undefined &&
         wn.length > 0 &&
-        getSessionId() === ke &&
+        getSessionId() === sessionId &&
         !isBgSession() &&
         n.mayRequestTakeover()
       )
         if (
           toolUseContext.options.tools.some((tool) => toolMatchesName(tool, ARTIFACT_TOOL_NAME)) &&
           n.commentsGateOpen() &&
-          gt()
+          isCommentWakeEnabled()
         ) {
           let ie = await (
             r?.requestReplyTakeover ?? (await import("./chunk-4te7h8m1.js")).requestReplyTakeover
-          )({ holders: [T, ...D], holdersIncomplete: E, conversationId: ke, slugs: wn, reason: "resume" });
-          if (((G = ie.kind), ie.armable.size > 0)) N = ie;
+          )({
+            holders: [T, ...D],
+            holdersIncomplete,
+            conversationId: sessionId,
+            slugs: wn,
+            reason: "resume",
+          });
+          G = ie.kind;
+          if (ie.armable.size > 0) N = ie;
         } else G = "cannot_arm";
-      let We = N?.armable ?? new Set(),
-        tt = (J) => {
-          let filtered = [...J].filter((_e) => We.has(_e) && !slugRepliesWiredHere(_e));
-          if (filtered.length > 0) N?.undo(new Set(filtered));
-        };
-      if (getSessionId() !== ke) N?.undo();
-      let nt = le(),
-        Sn =
-          allowed && (any || (((nt !== null && nt.holder !== "bg") || any_2) && w === "none") || We.size > 0),
-        Wr = Sn ? n.commentsGateOpen : void 0,
-        ht;
-      if (Sn) ht = gt();
-      let found = toolUseContext.options.tools.find((tool) => toolMatchesName(tool, ARTIFACT_TOOL_NAME)),
-        vn = hiddenBuiltInArtifactTool(),
-        An = found ?? (vn !== void 0 && !hasReplyAllowRule(toolUseContext) ? vn : void 0),
-        Rn = Wr?.() ?? !1;
-      if (Z.length > 0 && oAe())
+      let We = N?.armable ?? new Set();
+      let tt = (J) => {
+        let filtered = [...J].filter((_e) => We.has(_e) && !slugRepliesWiredHere(_e));
+        if (filtered.length > 0) N?.undo(new Set(filtered));
+      };
+      if (getSessionId() !== sessionId) N?.undo();
+      let nt = le();
+      let Sn =
+        allowed && (any || (((nt !== null && nt.holder !== "bg") || any_2) && w === "none") || We.size > 0);
+      let commentsGateOpen = Sn ? n.commentsGateOpen : undefined;
+      let ht;
+      if (Sn) ht = isCommentWakeEnabled();
+      let found = toolUseContext.options.tools.find((tool) => toolMatchesName(tool, ARTIFACT_TOOL_NAME));
+      let vn = hiddenBuiltInArtifactTool();
+      let An = found ?? (vn !== undefined && !hasReplyAllowRule(toolUseContext) ? vn : undefined);
+      let Rn = commentsGateOpen?.() ?? false;
+      if (entries.length > 0 && canAutoReply())
         carried?.discloseUnattended({
-          willRearm: ht === !0 && found !== void 0 && !isBuiltInArtifactHiddenForMcp() && Rn,
+          willRearm: ht === true && found !== undefined && !isBuiltInArtifactHiddenForMcp() && Rn,
         });
       if (!allowed) {
-        if ((Fe(Z), getSessionId() === ke)) be(Z);
+        Fe(entries);
+        if (getSessionId() === sessionId) be(entries);
         return;
       }
-      if (getSessionId() !== ke) {
-        if (((Se = !0), ve !== void 0)) Fe(ve);
+      if (getSessionId() !== sessionId) {
+        Se = true;
+        if (ve !== undefined) Fe(ve);
         return;
       }
-      Se = !0;
+      Se = true;
       let Mn = (J) =>
-          planCommentMonitorRearm({
-            state: n.readFrameState(),
-            ...(startupWatchSlug !== void 0 && { excludeSlug: startupWatchSlug }),
-            getKnownVer: n.getKnownVer,
-            context: toolUseContext,
-            publishContext: n.publishContext,
-            carried: J.carried,
-            ...(J.intent !== void 0 && { resumedIntent: J.intent, tornStops: Ozn() }),
-            holderProbe: J.holderProbe,
-            ...(J.freedSlugs.size > 0 && { freedSlugs: J.freedSlugs }),
-            ...(J.autoReactEnabled !== void 0 && { autoReactEnabled: J.autoReactEnabled }),
-            tool: An,
-            commentVerbsInSchema: J.commentVerbsInSchema,
-            onNotArmed: (ie) => {
-              tt([ie]);
-            },
-            onRecordedNotResumed: (ie, _e) => {
-              tt(ie);
-              let Ae = claudeAiEnvironment();
-              emit([
-                createSystemMessage(
-                  describeUnprovableResume(
-                    ie.map((Me) => artifactViewerUrlFor({ slug: Me, env: Ae })),
-                    _e,
-                    pt(n),
-                  ),
-                  "notice",
-                ),
-              ]);
-            },
-            onCarriedSkip: (ie, _e) => {
-              if ((ce(ie, artifactViewerUrlFor({ slug: ie, env: claudeAiEnvironment() }), _e), !We.has(ie)))
-                return;
-              if (_e === "arm_in_flight" && getLiveState().live.inFlightWiredIntent.has(ie)) {
-                onArmSettled(ie, () => tt([ie]));
-                return;
-              }
-              tt([ie]);
-            },
-            ...(carried !== void 0 && { onCarriedArmed: carried.onCarriedArmed }),
-            parkInFlight: {
-              park: (ie) => {
-                if (ue === void 0) return;
-                let _e = new Set(ie.map((Ae) => Ae.slug));
-                ue.repark(
-                  ae
-                    .filter((Ae) => _e.has(Ae.slug))
-                    .map(({ unattendedReplies: unattendedReplies, ...Me }) => Me),
-                );
-              },
-              release: (ie) => {
-                if (ue !== void 0) ue.release(ie);
-              },
-            },
-            ...(r?.arm !== void 0 && { arm: r.arm }),
+        planCommentMonitorRearm({
+          state: n.readFrameState(),
+          ...(startupWatchSlug !== undefined && {
+            excludeSlug: startupWatchSlug,
           }),
-        xn = n.reprobeHeldAfterMs !== void 0 && w === "live" && We.size === 0 && any_2 && An !== void 0;
-      ((z = xn),
-        Mn({
-          holderProbe: w,
-          carried: Z,
-          freedSlugs: We,
-          autoReactEnabled: ht,
-          commentVerbsInSchema: Rn,
-          intent: M,
-        }));
+          getKnownVer: n.getKnownVer,
+          context: toolUseContext,
+          publishContext: n.publishContext,
+          carried: J.carried,
+          ...(J.intent !== undefined && {
+            resumedIntent: J.intent,
+            tornStops: tornStopIntents(),
+          }),
+          holderProbe: J.holderProbe,
+          ...(J.freedSlugs.size > 0 && {
+            freedSlugs: J.freedSlugs,
+          }),
+          ...(J.autoReactEnabled !== undefined && {
+            autoReactEnabled: J.autoReactEnabled,
+          }),
+          tool: An,
+          commentVerbsInSchema: J.commentVerbsInSchema,
+          onNotArmed: (ie) => {
+            tt([ie]);
+          },
+          onRecordedNotResumed: (ie, _e) => {
+            tt(ie);
+            let env = claudeAiEnvironment();
+            emit([
+              createSystemMessage(
+                describeUnprovableResume(
+                  ie.map((slug) =>
+                    artifactViewerUrlFor({
+                      slug,
+                      env,
+                    }),
+                  ),
+                  _e,
+                  uiKind(n),
+                ),
+                "notice",
+              ),
+            ]);
+          },
+          onCarriedSkip: (ie, _e) => {
+            ce(
+              ie,
+              artifactViewerUrlFor({
+                slug: ie,
+                env: claudeAiEnvironment(),
+              }),
+              _e,
+            );
+            if (!We.has(ie)) return;
+            if (_e === "arm_in_flight" && getLiveState().live.inFlightWiredIntent.has(ie)) {
+              onArmSettled(ie, () => tt([ie]));
+              return;
+            }
+            tt([ie]);
+          },
+          ...(carried !== undefined && {
+            onCarriedArmed: carried.onCarriedArmed,
+          }),
+          parkInFlight: {
+            park: (ie) => {
+              if (park === undefined) return;
+              let _e = new Set(ie.map((Ae) => Ae.slug));
+              park.repark(ae.filter((Ae) => _e.has(Ae.slug)).map(({ unattendedReplies, ...Me }) => Me));
+            },
+            release: (ie) => {
+              if (park !== undefined) park.release(ie);
+            },
+          },
+          ...(r?.arm !== undefined && {
+            arm: r.arm,
+          }),
+        });
+      let xn =
+        n.reprobeHeldAfterMs !== undefined && w === "live" && We.size === 0 && any_2 && An !== undefined;
+      z = xn;
+      Mn({
+        holderProbe: w,
+        carried: entries,
+        freedSlugs: We,
+        autoReactEnabled: ht,
+        commentVerbsInSchema: Rn,
+        intent: M,
+      });
       let jr = async () => {
-        let J = r?.isShuttingDown ?? (await import("./chunk-r3wdn2dp.js")).isShuttingDown;
-        if (nt !== null) await new Promise((Me) => onArmSettled(nt.slug, Me));
-        if (getSessionId() !== ke || J()) {
+        let isShuttingDown = r?.isShuttingDown ?? (await import("./chunk-r3wdn2dp.js")).isShuttingDown;
+        if (nt !== null) await new Promise((resolve) => onArmSettled(nt.slug, resolve));
+        if (getSessionId() !== sessionId || isShuttingDown()) {
           Ie();
           return;
         }
         let ie = () =>
-            kn().then(
-              (Me) => Me.verdict,
-              () => {
-                return;
-              },
-            ),
-          _e = await ie();
-        if (_e === void 0) {
-          (logFeatureSad("artifact_live_subscribe", "holder_reprobe_failed", { surface: k }), Ie());
-          return;
-        }
-        if (
-          (logFeatureOk("artifact_live_subscribe", {
-            holder_gone_on_reprobe: _e === "none",
-            reprobe_verdict: fromEnum(_e),
-            surface: k,
-          }),
-          _e !== "none" || getSessionId() !== ke || J())
-        ) {
+          kn().then(
+            (Me) => Me.verdict,
+            () => {
+              return;
+            },
+          );
+        let _e = await ie();
+        if (_e === undefined) {
+          logFeatureSad("artifact_live_subscribe", "holder_reprobe_failed", {
+            surface,
+          });
           Ie();
           return;
         }
-        let Ae = M;
-        if (n.rereadRecords !== void 0 && M !== void 0) {
+        logFeatureOk("artifact_live_subscribe", {
+          holder_gone_on_reprobe: _e === "none",
+          reprobe_verdict: fromEnum(_e),
+          surface,
+        });
+        if (_e !== "none" || getSessionId() !== sessionId || isShuttingDown()) {
+          Ie();
+          return;
+        }
+        let intent = M;
+        if (n.rereadRecords !== undefined && M !== undefined) {
           let Me = await n.rereadRecords(M).catch(() => null);
           if (Me === null) {
-            (logFeatureSad("artifact_live_subscribe", "records_reread_failed", { surface: k }),
-              Pe("record_incomplete"));
+            logFeatureSad("artifact_live_subscribe", "records_reread_failed", {
+              surface,
+            });
+            Pe("record_incomplete");
             return;
           }
-          let yt = new Map(),
-            In = new Map();
+          let yt = new Map();
+          let In = new Map();
           for (let [kt, zr] of M) {
             let rt = Me.get(kt);
-            if (rt === void 0) continue;
+            if (rt === undefined) continue;
             if (rt.state === "stopped" && zr.state === "armed") yt.set(kt, rt.writtenAtMs);
             In.set(kt, rt);
           }
-          if (yt.size > 0) applyRemoteStops(yt, { storageV5: storageV5 });
-          Ae = In;
+          if (yt.size > 0)
+            applyRemoteStops(yt, {
+              storageV5,
+            });
+          intent = In;
           let _t = await ie();
-          if (_t !== "none" || getSessionId() !== ke || J()) {
-            if (_t === void 0)
-              logFeatureSad("artifact_live_subscribe", "holder_reprobe_failed", { surface: k });
+          if (_t !== "none" || getSessionId() !== sessionId || isShuttingDown()) {
+            if (_t === undefined)
+              logFeatureSad("artifact_live_subscribe", "holder_reprobe_failed", {
+                surface,
+              });
             Pe(_t === "live" ? "say" : "holder_unknown");
             return;
           }
         }
-        ((w = "none"),
-          (T = void 0),
-          (D = []),
-          Pe("drop"),
-          (ne = !0),
-          Mn({
-            holderProbe: "none",
-            carried: [],
-            freedSlugs: new Set(),
-            autoReactEnabled: gt(),
-            commentVerbsInSchema: n.commentsGateOpen(),
-            intent: Ae,
-          }));
+        w = "none";
+        T = undefined;
+        D = [];
+        Pe("drop");
+        ne = true;
+        Mn({
+          holderProbe: "none",
+          carried: [],
+          freedSlugs: new Set(),
+          autoReactEnabled: isCommentWakeEnabled(),
+          commentVerbsInSchema: n.commentsGateOpen(),
+          intent,
+        });
       };
-      if (xn && n.reprobeHeldAfterMs !== void 0)
+      if (xn && n.reprobeHeldAfterMs !== undefined)
         (
           r?.schedule ??
           ((ie, _e) => {
             setTimeout(ie, _e).unref();
           })
         )(() => {
-          jr().catch((ie) => {
-            (Ie(),
-              logForDebugging(`[frame-live] resume re-probe failed: ${errorMessage(ie)}`, {
-                level: "error",
-              }));
+          jr().catch((error) => {
+            Ie();
+            logForDebugging(`[frame-live] resume re-probe failed: ${errorMessage(error)}`, {
+              level: "error",
+            });
           });
         }, n.reprobeHeldAfterMs);
-      me("rearm", new Set(Z.map((J) => J.slug)));
+      me("rearm", new Set(entries.map((entry) => entry.slug)));
     })
-    .catch((re) => {
-      if (
-        (logForDebugging(`[frame-live] resume re-arm failed: ${errorMessage(re)}`, { level: "error" }),
-        Ie(),
-        Se)
-      )
-        return;
-      if ((N?.undo(), getSessionId() === ke)) be(ve);
-      if (ve !== void 0) {
-        if (oAe()) carried?.discloseUnattended({ willRearm: !1 });
+    .catch((error) => {
+      logForDebugging(`[frame-live] resume re-arm failed: ${errorMessage(error)}`, {
+        level: "error",
+      });
+      Ie();
+      if (Se) return;
+      N?.undo();
+      if (getSessionId() === sessionId) be(ve);
+      if (ve !== undefined) {
+        if (canAutoReply())
+          carried?.discloseUnattended({
+            willRearm: false,
+          });
         Fe(ve);
         return;
       }
       carried?.adopted?.then((x) => {
-        if (x === void 0 || x.entries.length === 0) return;
-        if (x.park !== void 0 && x.park.take().length === 0) return;
-        for (let se of x.entries.slice(0, sIe))
-          if (se.unattendedReplies !== void 0) BRo(se.slug, se.unattendedReplies);
-        if (oAe()) carried?.discloseUnattended({ willRearm: !1 });
+        if (x === undefined || x.entries.length === 0) return;
+        if (x.park !== undefined && x.park.take().length === 0) return;
+        for (let entry of x.entries.slice(0, REFUSED_CAPACITY_WINDOW))
+          if (entry.unattendedReplies !== undefined)
+            addUnattendedReplies(entry.slug, entry.unattendedReplies);
+        if (canAutoReply())
+          carried?.discloseUnattended({
+            willRearm: false,
+          });
         Fe(x.entries);
       });
     });
@@ -1097,16 +1256,16 @@ function rearmCommentMonitorsOnResume(e, n, r) {
 //@ chunk-0sfjpx19.js:116982-118512 placement
 function rearmHeadlessCommentMonitors(e) {
   {
-    let { hostInitialized: hostInitialized, getAppState: getAppState, deps: deps } = e,
-      h;
+    let { hostInitialized, getAppState, deps } = e;
+    let h;
     try {
-      if (
-        ((h =
-          deps?.publishContext ??
-          derivePublishContextFrom({ agentId: void 0, isNonInteractiveSession: !0 }).publishContext),
-        h !== "interactive")
-      )
-        return;
+      h =
+        deps?.publishContext ??
+        derivePublishContextFrom({
+          agentId: undefined,
+          isNonInteractiveSession: true,
+        }).publishContext;
+      if (h !== "interactive") return;
       if (
         !(
           deps?.hostOwned ??
@@ -1117,72 +1276,81 @@ function rearmHeadlessCommentMonitors(e) {
       )
         return;
     } catch (error) {
-      (logForDebugging(`[frame-live] headless resume re-arm gate failed: ${errorMessage(error)}`, {
+      logForDebugging(`[frame-live] headless resume re-arm gate failed: ${errorMessage(error)}`, {
         level: "error",
-      }),
-        logError(error));
+      });
+      logError(error);
       return;
     }
     let y =
-        deps?.warmFlags ??
-        (async () => {
-          let { initializeGrowthBook: initializeGrowthBook } = await import("./chunk-6df1d6re.js");
-          return initializeGrowthBook();
-        }),
-      _ =
-        deps?.egressAllowed ??
-        (async (T, D) => {
-          let { isArtifactFetchEnabled: isArtifactFetchEnabled } = await import("./chunk-h6p2kdzg.js");
-          return isArtifactFetchEnabled(T, D, { promptless: !0 });
-        }),
-      b = () => {
-        let T = getAppState();
-        return {
-          artifactRefs: T.artifactRefs,
-          artifactReadVersions: T.artifactReadVersions,
-          frameUrls: T.frameUrls,
-        };
-      },
-      transcriptAnchor = e.transcriptAnchor,
-      w = isStorageV5Enabled() && e.storageV5 !== void 0,
-      S = async (T) => {
-        if (transcriptAnchor === void 0) return null;
-        if (w) {
-          let D = await loadTranscriptFromFile(transcriptAnchor.path, e.storageV5);
-          if (D.artifactCommentMonitor === void 0) return new Map(T);
-          let E = !1,
-            N = readCommentMonitorIntent(D.artifactCommentMonitor, {
-              onTornStop: () => {
-                E = !0;
-              },
-            });
-          return E ? null : N;
-        }
-        return readCommentMonitorLogTail({
-          path: transcriptAnchor.path,
-          sessionId: getSessionId(),
-          fromByte: transcriptAnchor.size,
-          baseline: T,
+      deps?.warmFlags ??
+      (async () => {
+        let { initializeGrowthBook } = await import("./chunk-6df1d6re.js");
+        return initializeGrowthBook();
+      });
+    let _ =
+      deps?.egressAllowed ??
+      (async (T, D) => {
+        let { isArtifactFetchEnabled } = await import("./chunk-h6p2kdzg.js");
+        return isArtifactFetchEnabled(T, D, {
+          promptless: true,
         });
+      });
+    let readFrameState = () => {
+      let appState = getAppState();
+      return {
+        artifactRefs: appState.artifactRefs,
+        artifactReadVersions: appState.artifactReadVersions,
+        frameUrls: appState.frameUrls,
       };
+    };
+    let transcriptAnchor = e.transcriptAnchor;
+    let w = isStorageV5Enabled() && e.storageV5 !== undefined;
+    let S = async (T) => {
+      if (transcriptAnchor === undefined) return null;
+      if (w) {
+        let transcriptFromFile = await loadTranscriptFromFile(transcriptAnchor.path, e.storageV5);
+        if (transcriptFromFile.artifactCommentMonitor === undefined) return new Map(T);
+        let E = false;
+        let commentMonitorIntent = readCommentMonitorIntent(transcriptFromFile.artifactCommentMonitor, {
+          onTornStop: () => {
+            E = true;
+          },
+        });
+        return E ? null : commentMonitorIntent;
+      }
+      return readCommentMonitorLogTail({
+        path: transcriptAnchor.path,
+        sessionId: getSessionId(),
+        fromByte: transcriptAnchor.size,
+        baseline: T,
+      });
+    };
     rearmOnResumeSafe(
-      { initialMessages: e.initialMessages, storageV5: e.storageV5 },
+      {
+        initialMessages: e.initialMessages,
+        storageV5: e.storageV5,
+      },
       {
         publishContext: h,
         ui: "host",
-        shortNotices: () => !1,
+        shortNotices: () => false,
         emit: e.emit,
         reprobeHeldAfterMs: deps?.reprobeHeldAfterMs ?? 1e4,
         gate: async () => {
-          (await y().catch(() => null), await hostInitialized);
-          let context = e.buildContext(),
-            D = await _(context.options.tools, getAppState().toolPermissionContext);
-          return { toolUseContext: context, allowed: D };
+          await y().catch(() => null);
+          await hostInitialized;
+          let context = e.buildContext();
+          let allowed = await _(context.options.tools, getAppState().toolPermissionContext);
+          return {
+            toolUseContext: context,
+            allowed,
+          };
         },
-        readFrameState: b,
+        readFrameState,
         getKnownVer: (T) => mainObservedArtifactVersion(getAppState(), T),
-        commentsGateOpen: deps?.commentsGateOpen ?? Xb,
-        mayRequestTakeover: () => !1,
+        commentsGateOpen: deps?.commentsGateOpen ?? isArtifactsAvailable,
+        mayRequestTakeover: () => false,
         rereadRecords: deps?.rereadRecords ?? S,
       },
       deps?.orchestration,
@@ -1190,13 +1358,12 @@ function rearmHeadlessCommentMonitors(e) {
   }
 }
 //@ chunk-0sfjpx19.js:118512-118583 placement
-function pt(e) {
+function uiKind(e) {
   return e.ui === "repl" && e.shortNotices() ? "replShort" : e.ui;
 }
-
 export {
   describeNotResumedIncomplete,
-  EAs,
+  otherArmedSlugs,
   classifyMonitorHold,
   describeHeldMonitor,
   describeNotResumedAfterSwitch,

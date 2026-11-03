@@ -6,67 +6,67 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { Tn } from "./forge.js";
-import { Xi } from "./asn1.js";
-import { Zn } from "./util.js";
+import { require_forge } from "./forge.js";
+import { require_asn1 } from "./asn1.js";
+import { require_util } from "./util.js";
 
 //@ chunk-fq0cr76a.js:152921-158192 cjs-fingerprint
-var TS = x(function (Ife, yA) {
-  var uu = Tn();
-  Xi();
-  Zn();
-  var asn1 = uu.asn1,
-    du = (yA.exports = uu.pkcs7asn1 = uu.pkcs7asn1 || {});
-  uu.pkcs7 = uu.pkcs7 || {};
-  uu.pkcs7.asn1 = du;
-  var mA = {
+var require_pkcs7asn1 = x(function (cjsExports, cjsModule) {
+  var forge = require_forge();
+  require_asn1();
+  require_util();
+  var asn1 = forge.asn1;
+  var p7v = (cjsModule.exports = forge.pkcs7asn1 = forge.pkcs7asn1 || {});
+  forge.pkcs7 = forge.pkcs7 || {};
+  forge.pkcs7.asn1 = p7v;
+  var contentInfoValidator = {
     name: "ContentInfo",
     tagClass: asn1.Class.UNIVERSAL,
     type: asn1.Type.SEQUENCE,
-    constructed: !0,
+    constructed: true,
     value: [
       {
         name: "ContentInfo.ContentType",
         tagClass: asn1.Class.UNIVERSAL,
         type: asn1.Type.OID,
-        constructed: !1,
+        constructed: false,
         capture: "contentType",
       },
       {
         name: "ContentInfo.content",
         tagClass: asn1.Class.CONTEXT_SPECIFIC,
         type: 0,
-        constructed: !0,
-        optional: !0,
+        constructed: true,
+        optional: true,
         captureAsn1: "content",
       },
     ],
   };
-  du.contentInfoValidator = mA;
-  var gA = {
+  p7v.contentInfoValidator = contentInfoValidator;
+  var encryptedContentInfoValidator = {
     name: "EncryptedContentInfo",
     tagClass: asn1.Class.UNIVERSAL,
     type: asn1.Type.SEQUENCE,
-    constructed: !0,
+    constructed: true,
     value: [
       {
         name: "EncryptedContentInfo.contentType",
         tagClass: asn1.Class.UNIVERSAL,
         type: asn1.Type.OID,
-        constructed: !1,
+        constructed: false,
         capture: "contentType",
       },
       {
         name: "EncryptedContentInfo.contentEncryptionAlgorithm",
         tagClass: asn1.Class.UNIVERSAL,
         type: asn1.Type.SEQUENCE,
-        constructed: !0,
+        constructed: true,
         value: [
           {
             name: "EncryptedContentInfo.contentEncryptionAlgorithm.algorithm",
             tagClass: asn1.Class.UNIVERSAL,
             type: asn1.Type.OID,
-            constructed: !1,
+            constructed: false,
             capture: "encAlgorithm",
           },
           {
@@ -85,73 +85,73 @@ var TS = x(function (Ife, yA) {
       },
     ],
   };
-  du.envelopedDataValidator = {
+  p7v.envelopedDataValidator = {
     name: "EnvelopedData",
     tagClass: asn1.Class.UNIVERSAL,
     type: asn1.Type.SEQUENCE,
-    constructed: !0,
+    constructed: true,
     value: [
       {
         name: "EnvelopedData.Version",
         tagClass: asn1.Class.UNIVERSAL,
         type: asn1.Type.INTEGER,
-        constructed: !1,
+        constructed: false,
         capture: "version",
       },
       {
         name: "EnvelopedData.RecipientInfos",
         tagClass: asn1.Class.UNIVERSAL,
         type: asn1.Type.SET,
-        constructed: !0,
+        constructed: true,
         captureAsn1: "recipientInfos",
       },
-    ].concat(gA),
+    ].concat(encryptedContentInfoValidator),
   };
-  du.encryptedDataValidator = {
+  p7v.encryptedDataValidator = {
     name: "EncryptedData",
     tagClass: asn1.Class.UNIVERSAL,
     type: asn1.Type.SEQUENCE,
-    constructed: !0,
+    constructed: true,
     value: [
       {
         name: "EncryptedData.Version",
         tagClass: asn1.Class.UNIVERSAL,
         type: asn1.Type.INTEGER,
-        constructed: !1,
+        constructed: false,
         capture: "version",
       },
-    ].concat(gA),
+    ].concat(encryptedContentInfoValidator),
   };
-  var DG = {
+  var signerValidator = {
     name: "SignerInfo",
     tagClass: asn1.Class.UNIVERSAL,
     type: asn1.Type.SEQUENCE,
-    constructed: !0,
+    constructed: true,
     value: [
       {
         name: "SignerInfo.version",
         tagClass: asn1.Class.UNIVERSAL,
         type: asn1.Type.INTEGER,
-        constructed: !1,
+        constructed: false,
       },
       {
         name: "SignerInfo.issuerAndSerialNumber",
         tagClass: asn1.Class.UNIVERSAL,
         type: asn1.Type.SEQUENCE,
-        constructed: !0,
+        constructed: true,
         value: [
           {
             name: "SignerInfo.issuerAndSerialNumber.issuer",
             tagClass: asn1.Class.UNIVERSAL,
             type: asn1.Type.SEQUENCE,
-            constructed: !0,
+            constructed: true,
             captureAsn1: "issuer",
           },
           {
             name: "SignerInfo.issuerAndSerialNumber.serialNumber",
             tagClass: asn1.Class.UNIVERSAL,
             type: asn1.Type.INTEGER,
-            constructed: !1,
+            constructed: false,
             capture: "serial",
           },
         ],
@@ -160,21 +160,21 @@ var TS = x(function (Ife, yA) {
         name: "SignerInfo.digestAlgorithm",
         tagClass: asn1.Class.UNIVERSAL,
         type: asn1.Type.SEQUENCE,
-        constructed: !0,
+        constructed: true,
         value: [
           {
             name: "SignerInfo.digestAlgorithm.algorithm",
             tagClass: asn1.Class.UNIVERSAL,
             type: asn1.Type.OID,
-            constructed: !1,
+            constructed: false,
             capture: "digestAlgorithm",
           },
           {
             name: "SignerInfo.digestAlgorithm.parameter",
             tagClass: asn1.Class.UNIVERSAL,
-            constructed: !1,
+            constructed: false,
             captureAsn1: "digestParameter",
-            optional: !0,
+            optional: true,
           },
         ],
       },
@@ -182,67 +182,67 @@ var TS = x(function (Ife, yA) {
         name: "SignerInfo.authenticatedAttributes",
         tagClass: asn1.Class.CONTEXT_SPECIFIC,
         type: 0,
-        constructed: !0,
-        optional: !0,
+        constructed: true,
+        optional: true,
         capture: "authenticatedAttributes",
       },
       {
         name: "SignerInfo.digestEncryptionAlgorithm",
         tagClass: asn1.Class.UNIVERSAL,
         type: asn1.Type.SEQUENCE,
-        constructed: !0,
+        constructed: true,
         capture: "signatureAlgorithm",
       },
       {
         name: "SignerInfo.encryptedDigest",
         tagClass: asn1.Class.UNIVERSAL,
         type: asn1.Type.OCTETSTRING,
-        constructed: !1,
+        constructed: false,
         capture: "signature",
       },
       {
         name: "SignerInfo.unauthenticatedAttributes",
         tagClass: asn1.Class.CONTEXT_SPECIFIC,
         type: 1,
-        constructed: !0,
-        optional: !0,
+        constructed: true,
+        optional: true,
         capture: "unauthenticatedAttributes",
       },
     ],
   };
-  du.signedDataValidator = {
+  p7v.signedDataValidator = {
     name: "SignedData",
     tagClass: asn1.Class.UNIVERSAL,
     type: asn1.Type.SEQUENCE,
-    constructed: !0,
+    constructed: true,
     value: [
       {
         name: "SignedData.Version",
         tagClass: asn1.Class.UNIVERSAL,
         type: asn1.Type.INTEGER,
-        constructed: !1,
+        constructed: false,
         capture: "version",
       },
       {
         name: "SignedData.DigestAlgorithms",
         tagClass: asn1.Class.UNIVERSAL,
         type: asn1.Type.SET,
-        constructed: !0,
+        constructed: true,
         captureAsn1: "digestAlgorithms",
       },
-      mA,
+      contentInfoValidator,
       {
         name: "SignedData.Certificates",
         tagClass: asn1.Class.CONTEXT_SPECIFIC,
         type: 0,
-        optional: !0,
+        optional: true,
         captureAsn1: "certificates",
       },
       {
         name: "SignedData.CertificateRevocationLists",
         tagClass: asn1.Class.CONTEXT_SPECIFIC,
         type: 1,
-        optional: !0,
+        optional: true,
         captureAsn1: "crls",
       },
       {
@@ -250,42 +250,42 @@ var TS = x(function (Ife, yA) {
         tagClass: asn1.Class.UNIVERSAL,
         type: asn1.Type.SET,
         capture: "signerInfos",
-        optional: !0,
-        value: [DG],
+        optional: true,
+        value: [signerValidator],
       },
     ],
   };
-  du.recipientInfoValidator = {
+  p7v.recipientInfoValidator = {
     name: "RecipientInfo",
     tagClass: asn1.Class.UNIVERSAL,
     type: asn1.Type.SEQUENCE,
-    constructed: !0,
+    constructed: true,
     value: [
       {
         name: "RecipientInfo.version",
         tagClass: asn1.Class.UNIVERSAL,
         type: asn1.Type.INTEGER,
-        constructed: !1,
+        constructed: false,
         capture: "version",
       },
       {
         name: "RecipientInfo.issuerAndSerial",
         tagClass: asn1.Class.UNIVERSAL,
         type: asn1.Type.SEQUENCE,
-        constructed: !0,
+        constructed: true,
         value: [
           {
             name: "RecipientInfo.issuerAndSerial.issuer",
             tagClass: asn1.Class.UNIVERSAL,
             type: asn1.Type.SEQUENCE,
-            constructed: !0,
+            constructed: true,
             captureAsn1: "issuer",
           },
           {
             name: "RecipientInfo.issuerAndSerial.serialNumber",
             tagClass: asn1.Class.UNIVERSAL,
             type: asn1.Type.INTEGER,
-            constructed: !1,
+            constructed: false,
             capture: "serial",
           },
         ],
@@ -294,21 +294,21 @@ var TS = x(function (Ife, yA) {
         name: "RecipientInfo.keyEncryptionAlgorithm",
         tagClass: asn1.Class.UNIVERSAL,
         type: asn1.Type.SEQUENCE,
-        constructed: !0,
+        constructed: true,
         value: [
           {
             name: "RecipientInfo.keyEncryptionAlgorithm.algorithm",
             tagClass: asn1.Class.UNIVERSAL,
             type: asn1.Type.OID,
-            constructed: !1,
+            constructed: false,
             capture: "encAlgorithm",
           },
           {
             name: "RecipientInfo.keyEncryptionAlgorithm.parameter",
             tagClass: asn1.Class.UNIVERSAL,
-            constructed: !1,
+            constructed: false,
             captureAsn1: "encParameter",
-            optional: !0,
+            optional: true,
           },
         ],
       },
@@ -316,11 +316,10 @@ var TS = x(function (Ife, yA) {
         name: "RecipientInfo.encryptedKey",
         tagClass: asn1.Class.UNIVERSAL,
         type: asn1.Type.OCTETSTRING,
-        constructed: !1,
+        constructed: false,
         capture: "encKey",
       },
     ],
   };
 });
-
-export { TS };
+export { require_pkcs7asn1 };

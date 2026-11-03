@@ -13,32 +13,36 @@ import { receiveAgentMessage, teammateMessageOrigin } from "../../plugins/functi
 import { logForDebugging } from "../debug.js";
 import { jsonStringify } from "../slowOperations.js";
 
+//@ chunk-e6aww6q8.js:3309320-3309765 placement
 /**
  * 让邮箱消息经过接收 hook 过滤，已验证的用户消息直接放行。
  */
-//@ chunk-e6aww6q8.js:3309320-3309765 placement
 async function filterMailboxThroughReceiveHooks(e, n) {
   let r = [];
   for (let s of e) {
-    let provenanceOf = n.provenanceOf(s);
-    if (n.isPassedThrough?.(s) === !0 || (provenanceOf === "verified" && s.from === USER)) {
-      r.push({ ...s, provenance: provenanceOf });
+    let h = n.provenanceOf(s);
+    if (n.isPassedThrough?.(s) === true || (h === "verified" && s.from === USER)) {
+      r.push({
+        ...s,
+        provenance: h,
+      });
       continue;
     }
-    let S = await receiveAgentMessage(
-      teammateMessageOrigin(s, provenanceOf === "verified"),
-      s.text,
-      n.agentId,
-    );
-    if (S.consumed !== void 0) {
+    let S = await receiveAgentMessage(teammateMessageOrigin(s, h === "verified"), s.text, n.agentId);
+    if (S.consumed !== undefined) {
       logForDebugging(
         `[TeammateMailbox] entry from ${jsonStringify(s.from)} consumed by a session.receive hook (${S.consumed}); not delivered`,
       );
       continue;
     }
-    r.push({ ...s, ...(S.text !== s.text && { text: S.text }), provenance: provenanceOf });
+    r.push({
+      ...s,
+      ...(S.text !== s.text && {
+        text: S.text,
+      }),
+      provenance: h,
+    });
   }
   return r;
 }
-
 export { filterMailboxThroughReceiveHooks };

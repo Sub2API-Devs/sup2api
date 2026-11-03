@@ -14,17 +14,16 @@ var regExp = new RegExp(
   "(^|\\s)(?:[^\\p{L}\\s]|[\\u02D0\\u02D1\\u0887\\u0971\\u1427\\u18DF\\uA4F8-\\uA4FD\\uA78F\\u318D\\u119E\\u11A2\\u{10781}\\u{10782}\\u{1BC84}\\u{1BC94}])+(?=\\s|$)",
   "gu",
 );
+//@ chunk-dg7knv65.js:380-989 placement
 /**
  * 独立符号/emoji 匹配用的正则：标点与符号类字符（排除常见 ASCII 标点与 emoji 表现形式）、空白外观字符、不可见符号、组合记号。
  */
-//@ chunk-dg7knv65.js:380-989 placement
 var STANDALONE_SYMBOL_PATTERN =
-    "(?:[\\u{26AB}]|(?![\\u0021-\\u007E\\u00A1\\u00BF\\u055D\\u060C\\u061B\\u061F\\u0964\\u0965\\u0F0B\\u0F0C\\u2026\\u22EF\\u3001\\uFE19\\uFF01\\uFF0C\\uFF1F]|\\p{Emoji_Presentation})[\\p{Po}\\p{Sm}\\p{Sk}\\p{So}\\u02D0\\u02D1\\u0887\\u0971\\u1427\\u18DF\\uA4F8-\\uA4FD\\uA78F\\u318D\\u119E\\u11A2\\u{10781}\\u{10782}\\u{1BC84}\\u{1BC94}])",
-  BLANK_LOOKALIKE_RE = /[\u2800\u3164\u115F\u1160\uFFA0]/gu,
-  INVISIBLE_SYMBOL_RE = /[\u{1D159}\u{13441}\u{13442}\uFFFC]/gu,
-  COMBINING_MARK_RE = new RegExp(
-    "(^|[^\\p{L}\\p{M}]|[\\u02D0\\u02D1\\u0887\\u0971\\u1427\\u18DF\\uA4F8-\\uA4FD\\uA78F\\u318D\\u119E\\u11A2\\u{10781}\\u{10782}\\u{1BC84}\\u{1BC94}])\\p{M}+",
-    "gu",
-  );
-
+  "(?:[\\u{26AB}]|(?![\\u0021-\\u007E\\u00A1\\u00BF\\u055D\\u060C\\u061B\\u061F\\u0964\\u0965\\u0F0B\\u0F0C\\u2026\\u22EF\\u3001\\uFE19\\uFF01\\uFF0C\\uFF1F]|\\p{Emoji_Presentation})[\\p{Po}\\p{Sm}\\p{Sk}\\p{So}\\u02D0\\u02D1\\u0887\\u0971\\u1427\\u18DF\\uA4F8-\\uA4FD\\uA78F\\u318D\\u119E\\u11A2\\u{10781}\\u{10782}\\u{1BC84}\\u{1BC94}])";
+var BLANK_LOOKALIKE_RE = /[\u2800\u3164\u115F\u1160\uFFA0]/gu;
+var INVISIBLE_SYMBOL_RE = /[\u{1D159}\u{13441}\u{13442}\uFFFC]/gu;
+var COMBINING_MARK_RE = new RegExp(
+  "(^|[^\\p{L}\\p{M}]|[\\u02D0\\u02D1\\u0887\\u0971\\u1427\\u18DF\\uA4F8-\\uA4FD\\uA78F\\u318D\\u119E\\u11A2\\u{10781}\\u{10782}\\u{1BC84}\\u{1BC94}])\\p{M}+",
+  "gu",
+);
 export { STANDALONE_SYMBOL_PATTERN, BLANK_LOOKALIKE_RE, INVISIBLE_SYMBOL_RE, regExp, COMBINING_MARK_RE };

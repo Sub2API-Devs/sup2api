@@ -10,37 +10,36 @@
  */
 import { getIsNonInteractiveSession } from "../../bootstrap/state.js";
 
+//@ chunk-e6aww6q8.js:1694938-1694962 affinity
 /**
  * isContextGridDisabled：构建期常量 false。
  */
-//@ chunk-e6aww6q8.js:1694938-1694962 affinity
-function aen() {
-  return !1;
+function isContextCommandForceHidden() {
+  return false;
 }
+//@ chunk-e6aww6q8.js:1694962-1695347 fingerprint = contextNonInteractive (0.582)
 /**
  * /context 命令对象（local-jsx）；描述：Visualize current context usage as a colored grid；isEnabled: ()=>!_e()&&!aen()；实现 chunk-10q8r8ck.js 的 Yn。
  */
-//@ chunk-e6aww6q8.js:1694962-1695347 fingerprint = contextNonInteractive (0.582)
 var contextCommand = {
-    name: "context",
-    description: "Visualize current context usage as a colored grid",
-    argumentHint: "[all]",
-    isEnabled: () => !getIsNonInteractiveSession() && !aen(),
-    type: "local-jsx",
-    thinClientDispatch: "control-request",
+  name: "context",
+  description: "Visualize current context usage as a colored grid",
+  argumentHint: "[all]",
+  isEnabled: () => !getIsNonInteractiveSession() && !isContextCommandForceHidden(),
+  type: "local-jsx",
+  thinClientDispatch: "control-request",
+};
+var contextNonInteractiveCommand = {
+  type: "local",
+  name: "context",
+  supportsNonInteractive: true,
+  description: "Show current context usage",
+  get isHidden() {
+    return !getIsNonInteractiveSession();
   },
-  contextNonInteractiveCommand = {
-    type: "local",
-    name: "context",
-    supportsNonInteractive: !0,
-    description: "Show current context usage",
-    get isHidden() {
-      return !getIsNonInteractiveSession();
-    },
-    isEnabled() {
-      return getIsNonInteractiveSession();
-    },
-    load: () => import("./chunk-mszdds2y.js"),
-  };
-
+  isEnabled() {
+    return getIsNonInteractiveSession();
+  },
+  load: () => import("./chunk-mszdds2y.js"),
+};
 export { contextCommand, contextNonInteractiveCommand };

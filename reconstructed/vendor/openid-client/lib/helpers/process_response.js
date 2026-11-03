@@ -6,55 +6,65 @@
  * attribution: cjs-fingerprint 1
  */
 import { x, importMetaRequire } from "../../../../runtime/bun-runtime.js";
-import { Ki } from "../errors.js";
-import { cy } from "./www_authenticate_parser.js";
+import { require_errors } from "../errors.js";
+import { require_www_authenticate_parser } from "./www_authenticate_parser.js";
 
 //@ chunk-1ny7cxrt.js:9227-10006 cjs-fingerprint
-var pf = x(function (xve, DO) {
-  var { STATUS_CODES: STATUS_CODES } = importMetaRequire("http"),
-    { format: format } = importMetaRequire("util"),
-    { OPError: OPError } = Ki(),
-    fF = cy(),
-    pF = (e) => {
-      let t = fF(e.headers["www-authenticate"]);
-      if (t.error) throw new OPError(t, e);
-    },
-    hF = (e) => {
-      let t = !1;
-      try {
-        let n;
-        if (typeof e.body !== "object" || Buffer.isBuffer(e.body)) n = JSON.parse(e.body);
-        else n = e.body;
-        if (((t = typeof n.error === "string" && n.error.length), t))
-          Object.defineProperty(e, "body", { value: n, configurable: !0 });
-      } catch (error) {}
-      return t;
-    };
-  function mF(e, { statusCode: t = 200, body: n = !0, bearer: o = !1 } = {}) {
-    if (e.statusCode !== t) {
-      if (o) pF(e);
-      if (hF(e)) throw new OPError(e.body, e);
+var require_process_response = x(function (cjsExports, cjsModule) {
+  var { STATUS_CODES } = importMetaRequire("http");
+  var { format } = importMetaRequire("util");
+  var { OPError } = require_errors();
+  var parseWwwAuthenticate = require_www_authenticate_parser();
+  var throwAuthenticateErrors = (response) => {
+    let params = parseWwwAuthenticate(response.headers["www-authenticate"]);
+    if (params.error) throw new OPError(params, response);
+  };
+  var isStandardBodyError = (response) => {
+    let result = false;
+    try {
+      let jsonbody;
+      if (typeof response.body !== "object" || Buffer.isBuffer(response.body))
+        jsonbody = JSON.parse(response.body);
+      else jsonbody = response.body;
+      result = typeof jsonbody.error === "string" && jsonbody.error.length;
+      if (result)
+        Object.defineProperty(response, "body", {
+          value: jsonbody,
+          configurable: true,
+        });
+    } catch (err) {}
+    return result;
+  };
+  function processResponse(response, { statusCode = 200, body = true, bearer = false } = {}) {
+    if (response.statusCode !== statusCode) {
+      if (bearer) throwAuthenticateErrors(response);
+      if (isStandardBodyError(response)) throw new OPError(response.body, response);
       throw new OPError(
         {
           error: format(
             "expected %i %s, got: %i %s",
-            t,
-            STATUS_CODES[t],
-            e.statusCode,
-            STATUS_CODES[e.statusCode],
+            statusCode,
+            STATUS_CODES[statusCode],
+            response.statusCode,
+            STATUS_CODES[response.statusCode],
           ),
         },
-        e,
+        response,
       );
     }
-    if (n && !e.body)
+    if (body && !response.body)
       throw new OPError(
-        { error: format("expected %i %s with body but no body was returned", t, STATUS_CODES[t]) },
-        e,
+        {
+          error: format(
+            "expected %i %s with body but no body was returned",
+            statusCode,
+            STATUS_CODES[statusCode],
+          ),
+        },
+        response,
       );
-    return e.body;
+    return response.body;
   }
-  DO.exports = mF;
+  cjsModule.exports = processResponse;
 });
-
-export { pf };
+export { require_process_response };

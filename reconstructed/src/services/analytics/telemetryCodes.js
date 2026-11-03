@@ -9,10 +9,10 @@
  * attribution: placement 4
  */
 
+//@ chunk-aepeg2w5.js:697195-737244 placement
 /**
  * 遥测代码登记表（所有 f()/m() 使用的代码名）。
  */
-//@ chunk-aepeg2w5.js:697195-737244 placement
 var TELEMETRY_CODES = [
   "advisor_fable_consent",
   "agent_handback_pointer_notice",
@@ -1626,31 +1626,35 @@ var TELEMETRY_CODES = [
   "ccr_full_cpu_log",
   "ccr_idle_cpu_mark",
 ];
+//@ chunk-aepeg2w5.js:737244-737446 placement
 /**
  * 额外登记的遥测代码组与合并后的全集。
  */
-//@ chunk-aepeg2w5.js:737244-737446 placement
-var EXTRA_TELEMETRY_CODES = [],
-  PLUGIN_DIRECTORY_CODES = ["plugin_directory_catalog", "plugin_directory_switch", "plugin_directory_toggle"],
-  yz = [],
-  bz = [],
-  IDE_MODS_CODES = ["ide_mods_surface_attach"],
-  vz = [],
-  Ez = [],
-  ALL_TELEMETRY_CODES = [
-    ...TELEMETRY_CODES,
-    ...EXTRA_TELEMETRY_CODES,
-    ...PLUGIN_DIRECTORY_CODES,
-    ...yz,
-    ...bz,
-    ...IDE_MODS_CODES,
-    ...vz,
-    ...Ez,
-  ];
+var EXTRA_TELEMETRY_CODES = [];
+var PLUGIN_DIRECTORY_CODES = [
+  "plugin_directory_catalog",
+  "plugin_directory_switch",
+  "plugin_directory_toggle",
+];
+var EXTRA_CODES_A = [];
+var EXTRA_CODES_B = [];
+var IDE_MODS_CODES = ["ide_mods_surface_attach"];
+var EXTRA_CODES_C = [];
+var EXTRA_CODES_D = [];
+var ALL_TELEMETRY_CODES = [
+  ...TELEMETRY_CODES,
+  ...EXTRA_TELEMETRY_CODES,
+  ...PLUGIN_DIRECTORY_CODES,
+  ...EXTRA_CODES_A,
+  ...EXTRA_CODES_B,
+  ...IDE_MODS_CODES,
+  ...EXTRA_CODES_C,
+  ...EXTRA_CODES_D,
+];
+//@ chunk-aepeg2w5.js:737446-739129 placement
 /**
  * 已退役/特殊的遥测代码表。
  */
-//@ chunk-aepeg2w5.js:737446-739129 placement
 var RETIRED_TELEMETRY_CODES = [
   "managed_settings_stored_login_refused",
   "tips_content_link_table",
@@ -1716,26 +1720,28 @@ var RETIRED_TELEMETRY_CODES = [
   ...[],
   ...[],
 ];
+//@ chunk-aepeg2w5.js:739129-739399 placement
 /**
  * 技能来源与配置作用域的取值集合。
  */
-//@ chunk-aepeg2w5.js:739129-739399 placement
 var SKILL_SOURCES = {
-    userSettings: !0,
-    projectSettings: !0,
-    localSettings: !0,
-    flagSettings: !0,
-    policySettings: !0,
-    builtin: !0,
-    mcp: !0,
-    plugin: !0,
-    bundled: !0,
-    memoryStore: !0,
-    plugin_skills_dir: !0,
-    plugin_other: !0,
-  },
-  keys = Object.keys(SKILL_SOURCES),
-  CONFIG_SCOPES = { managed_rules_only: !0, personal_config: !0 },
-  keys_2 = Object.keys(CONFIG_SCOPES);
-
+  userSettings: true,
+  projectSettings: true,
+  localSettings: true,
+  flagSettings: true,
+  policySettings: true,
+  builtin: true,
+  mcp: true,
+  plugin: true,
+  bundled: true,
+  memoryStore: true,
+  plugin_skills_dir: true,
+  plugin_other: true,
+};
+var keys = Object.keys(SKILL_SOURCES);
+var CONFIG_SCOPES = {
+  managed_rules_only: true,
+  personal_config: true,
+};
+var keys_2 = Object.keys(CONFIG_SCOPES);
 export { ALL_TELEMETRY_CODES, keys, keys_2 };

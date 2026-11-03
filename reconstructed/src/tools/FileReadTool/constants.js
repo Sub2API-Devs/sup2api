@@ -10,17 +10,19 @@
  */
 import path from "path";
 
+//@ chunk-r2j5awry.js:211-290 placement = IMAGE_EXTENSIONS (0.825)
 /**
  * Read 工具名 "Read"、参数名 "allow_large"、图片扩展名集合（png/jpg/jpeg/gif/webp）。
  */
-//@ chunk-r2j5awry.js:211-290 placement = IMAGE_EXTENSIONS (0.825)
-var FILE_READ_TOOL_NAME = "Read",
-  ALLOW_LARGE_PARAM = "allow_large",
-  IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "gif", "webp"]);
+var FILE_READ_TOOL_NAME = "Read";
+var ALLOW_LARGE_PARAM = "allow_large";
+var IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "gif", "webp"]);
 //@ chunk-r2j5awry.js:290-377 placement
-function Mge(t) {
+/**
+ * 判断扩展名是否为受支持的图片格式或 pdf（大小写不敏感）。
+ */
+function isImageOrPdfExtension(t) {
   let sliced = path.extname(t).toLowerCase().slice(1);
   return IMAGE_EXTENSIONS.has(sliced) || sliced === "pdf";
 }
-
-export { FILE_READ_TOOL_NAME, ALLOW_LARGE_PARAM, Mge, IMAGE_EXTENSIONS };
+export { FILE_READ_TOOL_NAME, ALLOW_LARGE_PARAM, isImageOrPdfExtension, IMAGE_EXTENSIONS };

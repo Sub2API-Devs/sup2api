@@ -9,15 +9,14 @@
  * attribution: placement 1
  */
 import { createLazySignal } from "../../utils/signal.js";
-import { ht } from "./cliOwnedClients.js";
+import { getCliOwnedState } from "./cliOwnedClients.js";
 
+//@ chunk-stemk4wd.js:263-389 placement
 /**
  * MCP 连接相关的进程级信号：认证丢失、重新认证后重连、缓存收编、缓存拨号失败。
  */
-//@ chunk-stemk4wd.js:263-389 placement
-var AUTH_LOST_SIGNAL = createLazySignal(() => ht().authLost),
-  REAUTH_RECONNECT_SIGNAL = createLazySignal(() => ht().reauthReconnect),
-  CACHED_ADOPT_SIGNAL = createLazySignal(() => ht().cachedAdopt),
-  CACHED_DIAL_FAILED_SIGNAL = createLazySignal(() => ht().cachedDialFailed);
-
+var AUTH_LOST_SIGNAL = createLazySignal(() => getCliOwnedState().authLost);
+var REAUTH_RECONNECT_SIGNAL = createLazySignal(() => getCliOwnedState().reauthReconnect);
+var CACHED_ADOPT_SIGNAL = createLazySignal(() => getCliOwnedState().cachedAdopt);
+var CACHED_DIAL_FAILED_SIGNAL = createLazySignal(() => getCliOwnedState().cachedDialFailed);
 export { CACHED_ADOPT_SIGNAL, CACHED_DIAL_FAILED_SIGNAL, REAUTH_RECONNECT_SIGNAL, AUTH_LOST_SIGNAL };

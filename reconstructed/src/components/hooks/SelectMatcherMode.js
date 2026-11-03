@@ -8,12 +8,15 @@
  * pieces: chunk-bajxb7bf.js (4)
  * attribution: placement 1, file-local 1, fingerprint 2
  */
-import { j } from "../../../vendor/react/cjs/react.production.js";
-import { e, r } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { OrderedListWithItem } from "../CustomSelect/selectTable.js";
 import { Text } from "../../ink/components/Text.js";
 import { hookSourceInlineDisplayString } from "../../utils/hooks/hooksSettings.js";
-import { Mu, plural } from "../../utils/stringUtils.js";
+import { escapeControlCharsForDisplay, plural } from "../../utils/stringUtils.js";
 import { w } from "../../../vendor/react/compiler-runtime.js";
 import { uniq } from "../../utils/collections.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
@@ -22,111 +25,137 @@ import { HintText } from "../design-system/HintText.js";
 import { Dialog } from "../design-system/Dialog.js";
 
 //@ chunk-bajxb7bf.js:43222-43226 placement
-j();
+init_react_production();
 //@ chunk-bajxb7bf.js:43226-43257 file-local
-function Mr(h) {
+function hookSource(h) {
   return h.source;
 }
 //@ chunk-bajxb7bf.js:43257-43462 fingerprint = _temp3 (0.838)
 function renderMatcherItem(item) {
-  return e(
+  return jsxProd_default(
     OrderedListWithItem.Item,
     {
-      icon: r(Text, {
-        dimColor: !0,
+      icon: jsxProd_default_2(Text, {
+        dimColor: true,
         children: ["[", item.sources.map(hookSourceInlineDisplayString).join(", "), "]"],
       }),
-      label: item.matcher ? Mu(item.matcher) : "(all)",
+      label: item.matcher ? escapeControlCharsForDisplay(item.matcher) : "(all)",
       meta: [`${item.hookCount} ${plural(item.hookCount, "hook")}`],
     },
     item.matcher,
   );
 }
 //@ chunk-bajxb7bf.js:43462-44720 fingerprint = SelectMatcherMode (0.657)
-function SelectMatcherMode(t0) {
-  let $ = w(26),
-    {
-      selectedEvent: selectedEvent,
-      matchersForSelectedEvent: matchersForSelectedEvent,
-      hooksByEventAndMatcher: hooksByEventAndMatcher,
-      eventDescription: eventDescription,
-      onSelect: onSelect,
-      onCancel: onCancel,
-    } = t0,
-    k;
+function SelectMatcherMode(props) {
+  let $ = w(26);
+  let {
+    selectedEvent,
+    matchersForSelectedEvent,
+    hooksByEventAndMatcher,
+    eventDescription,
+    onSelect,
+    onCancel,
+  } = props;
+  let t1;
   if ($[0] !== hooksByEventAndMatcher || $[1] !== matchersForSelectedEvent || $[2] !== selectedEvent) {
-    let C;
-    if ($[4] !== hooksByEventAndMatcher || $[5] !== selectedEvent)
-      ((C = (matcher) => {
+    let t2;
+    if ($[4] !== hooksByEventAndMatcher || $[5] !== selectedEvent) {
+      t2 = (matcher) => {
         let hooks = hooksByEventAndMatcher[selectedEvent]?.[matcher] || [];
-        let g = uniq(hooks.map(Mr));
-        return { matcher: matcher, sources: g, hookCount: hooks.length };
-      }),
-        ($[4] = hooksByEventAndMatcher),
-        ($[5] = selectedEvent),
-        ($[6] = C));
-    else C = $[6];
-    k = matchersForSelectedEvent.map(C);
-    (($[0] = hooksByEventAndMatcher), ($[1] = matchersForSelectedEvent), ($[2] = selectedEvent), ($[3] = k));
-  } else k = $[3];
-  let matchersWithSources = k;
+        let sources = uniq(hooks.map(hookSource));
+        return {
+          matcher,
+          sources,
+          hookCount: hooks.length,
+        };
+      };
+      $[4] = hooksByEventAndMatcher;
+      $[5] = selectedEvent;
+      $[6] = t2;
+    } else t2 = $[6];
+    t1 = matchersForSelectedEvent.map(t2);
+    $[0] = hooksByEventAndMatcher;
+    $[1] = matchersForSelectedEvent;
+    $[2] = selectedEvent;
+    $[3] = t1;
+  } else t1 = $[3];
+  let matchersWithSources = t1;
   if (matchersForSelectedEvent.length === 0) {
-    const t2 = `${selectedEvent} - Matchers`;
-    let P, _;
-    if ($[7] === MEMO_CACHE_SENTINEL)
-      ((P = e(KeyboardShortcutHint, { chord: "escape", action: "go back" })),
-        (_ = e(HintText, {
-          hint: "To add hooks, edit settings.json directly or ask Claude",
-          children: "No hooks configured for this event",
-        })),
-        ($[7] = P),
-        ($[8] = _));
-    else ((P = $[7]), (_ = $[8]));
+    const title = `${selectedEvent} - Matchers`;
+    let inputGuide;
+    let children;
+    if ($[7] === MEMO_CACHE_SENTINEL) {
+      inputGuide = jsxProd_default(KeyboardShortcutHint, {
+        chord: "escape",
+        action: "go back",
+      });
+      children = jsxProd_default(HintText, {
+        hint: "To add hooks, edit settings.json directly or ask Claude",
+        children: "No hooks configured for this event",
+      });
+      $[7] = inputGuide;
+      $[8] = children;
+    } else {
+      inputGuide = $[7];
+      children = $[8];
+    }
     let b;
-    if ($[9] !== eventDescription || $[10] !== onCancel || $[11] !== t2)
-      ((b = e(Dialog, {
-        title: t2,
+    if ($[9] !== eventDescription || $[10] !== onCancel || $[11] !== title) {
+      b = jsxProd_default(Dialog, {
+        title,
         subtitle: eventDescription,
-        onCancel: onCancel,
-        inputGuide: P,
-        children: _,
-      })),
-        ($[9] = eventDescription),
-        ($[10] = onCancel),
-        ($[11] = t2),
-        ($[12] = b));
-    else b = $[12];
+        onCancel,
+        inputGuide,
+        children,
+      });
+      $[9] = eventDescription;
+      $[10] = onCancel;
+      $[11] = title;
+      $[12] = b;
+    } else b = $[12];
     return b;
   }
-  const t2 = `${selectedEvent} - Matchers`;
-  let P;
-  if ($[13] !== matchersWithSources || $[14] !== onSelect)
-    ((P = (E) => {
+  const title = `${selectedEvent} - Matchers`;
+  let onSelect_2;
+  if ($[13] !== matchersWithSources || $[14] !== onSelect) {
+    onSelect_2 = (E) => {
       let B = matchersWithSources[E];
       if (B) onSelect(B.matcher);
-    }),
-      ($[13] = matchersWithSources),
-      ($[14] = onSelect),
-      ($[15] = P));
-  else P = $[15];
-  let _;
-  if ($[16] !== matchersWithSources)
-    ((_ = matchersWithSources.map(renderMatcherItem)), ($[16] = matchersWithSources), ($[17] = _));
-  else _ = $[17];
-  let b;
-  if ($[18] !== P || $[19] !== _)
-    ((b = e(OrderedListWithItem, { onSelect: P, children: _ })), ($[18] = P), ($[19] = _), ($[20] = b));
-  else b = $[20];
+    };
+    $[13] = matchersWithSources;
+    $[14] = onSelect;
+    $[15] = onSelect_2;
+  } else onSelect_2 = $[15];
+  let children;
+  if ($[16] !== matchersWithSources) {
+    children = matchersWithSources.map(renderMatcherItem);
+    $[16] = matchersWithSources;
+    $[17] = children;
+  } else children = $[17];
+  let children_2;
+  if ($[18] !== onSelect_2 || $[19] !== children) {
+    children_2 = jsxProd_default(OrderedListWithItem, {
+      onSelect: onSelect_2,
+      children,
+    });
+    $[18] = onSelect_2;
+    $[19] = children;
+    $[20] = children_2;
+  } else children_2 = $[20];
   let N;
-  if ($[21] !== eventDescription || $[22] !== onCancel || $[23] !== t2 || $[24] !== b)
-    ((N = e(Dialog, { title: t2, subtitle: eventDescription, onCancel: onCancel, children: b })),
-      ($[21] = eventDescription),
-      ($[22] = onCancel),
-      ($[23] = t2),
-      ($[24] = b),
-      ($[25] = N));
-  else N = $[25];
+  if ($[21] !== eventDescription || $[22] !== onCancel || $[23] !== title || $[24] !== children_2) {
+    N = jsxProd_default(Dialog, {
+      title,
+      subtitle: eventDescription,
+      onCancel,
+      children: children_2,
+    });
+    $[21] = eventDescription;
+    $[22] = onCancel;
+    $[23] = title;
+    $[24] = children_2;
+    $[25] = N;
+  } else N = $[25];
   return N;
 }
-
 export { SelectMatcherMode };

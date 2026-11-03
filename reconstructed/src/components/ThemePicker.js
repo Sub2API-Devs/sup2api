@@ -8,11 +8,11 @@
  * pieces: chunk-5je9hz27.js (5)
  * attribution: placement 1, fingerprint 2, layout 2
  */
-import { j, R, P, y, Se } from "../../vendor/react/cjs/react.production.js";
+import { init_react_production, R, P, y, Se } from "../../vendor/react/cjs/react.production.js";
 import { customThemeRef, parseCustomThemeRef } from "../utils/customThemes.js";
 import { w } from "../../vendor/react/compiler-runtime.js";
 import {
-  Me,
+  useTheme_2,
   useTheme,
   useThemeSetting,
   usePreviewTheme,
@@ -21,22 +21,30 @@ import {
 import { useTerminalSize } from "../hooks/useTerminalSize.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 import { getColorModuleUnavailableReason } from "./StructuredDiff/colorDiff.js";
-import { Gyo } from "../native-ts/color-diff/index.js";
+import { getColorSyntaxTheme } from "../native-ts/color-diff/index.js";
 import { useAppState, useSetAppState } from "../state/AppState.js";
 import { useRegisterKeybindingContext } from "../keybindings/KeybindingContext.js";
 import { useShortcutDisplay } from "../keybindings/useShortcutDisplay.js";
 import { updateSettingsForSource } from "../utils/settings/settings.js";
 import { useKeybinding, useGlobalExitKeybindings } from "../keybindings/useKeybinding.js";
 import { gracefulShutdown } from "../utils/gracefulShutdown.js";
-import { $V, NV, ScrollColumn } from "./design-system/ScrollColumn.js";
-import { $E } from "./ScrollViewportContext.js";
+import {
+  useScrollColumnContext,
+  SCROLL_COLUMN_MIN_ROWS,
+  ScrollColumn,
+} from "./design-system/ScrollColumn.js";
+import { scrollViewportContext } from "./ScrollViewportContext.js";
 import { topWithin } from "../ink/hooks/useTerminalHooks.js";
 import { useMeasured } from "../ink/components/Input.js";
-import { e, r, Fragment } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+  Fragment,
+} from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Box } from "../ink/components/Text.js";
-import { skt } from "../utils/theme.js";
+import { isSelectableThemeName } from "../utils/theme.js";
 import { OrderedListWithItem } from "./CustomSelect/selectTable.js";
-import { StatusIcon, Qmt } from "./design-system/StatusIcon.js";
+import { StatusIcon, maxStatusIconWidth } from "./design-system/StatusIcon.js";
 import { DiffFrame } from "./FileEditToolDiff.js";
 import { StructuredDiff } from "./StructuredDiff.js";
 import { env } from "../utils/env.js";
@@ -44,7 +52,7 @@ import { Byline } from "./design-system/Byline.js";
 import { KeyboardShortcutHint } from "./design-system/KeyboardShortcutHint.js";
 
 //@ chunk-5je9hz27.js:1146-1150 placement
-j();
+init_react_production();
 //@ chunk-5je9hz27.js:1150-1212 fingerprint = _temp (1)
 function selectSettingsSyntaxHighlightingDisabled(s) {
   return s.settings.syntaxHighlightingDisabled;
@@ -58,314 +66,445 @@ function toCustomThemeOption(xe) {
   };
 }
 //@ chunk-5je9hz27.js:1331-1361 layout
-var Ye = "__new_custom_theme__";
+var NEW_CUSTOM_THEME = "__new_custom_theme__";
+//@ chunk-5je9hz27.js:1361-8399 fingerprint = ThemePicker (0.724)
 /**
  * 主题选择器：列出 dark/light/daltonized/ansi 等主题，选中即预览（含 diff 示例），ctrl+t 切换语法高亮，确定后写入 userSettings。
  */
-//@ chunk-5je9hz27.js:1361-8399 fingerprint = ThemePicker (0.724)
-function ThemePicker(t0) {
-  let $ = w(109),
-    {
-      onThemeSelect: onThemeSelect,
-      showIntroText: t1,
-      helpText: t2,
-      showHelpTextBelow: t3,
-      hideEscToCancel: t4,
-      skipExitHandling: t5,
-      onCancel: onCancelProp,
-      onCustomTheme: onCustomTheme,
-    } = t0,
-    g = t1 === void 0 ? !1 : t1,
-    c = t2 === void 0 ? "" : t2,
-    x = t3 === void 0 ? !1 : t3,
-    X = t4 === void 0 ? !1 : t4,
-    p = t5 === void 0 ? !1 : t5,
-    { storageV5: storageV5 } = Me(),
-    [Ie] = useTheme(),
-    themeSetting = useThemeSetting(),
-    { columns: columns } = useTerminalSize(),
-    vt;
-  if ($[0] === MEMO_CACHE_SENTINEL) ((vt = getColorModuleUnavailableReason()), ($[0] = vt));
-  else vt = $[0];
-  let Le = vt,
-    Tt;
-  if ($[1] !== Ie) ((Tt = Le === null ? Gyo(Ie) : null), ($[1] = Ie), ($[2] = Tt));
-  else Tt = $[2];
-  let z = Tt,
-    { setPreviewTheme: setPreviewTheme, cancelPreview: cancelPreview } = usePreviewTheme(),
-    d = R(void 0),
-    wt;
-  if ($[3] !== cancelPreview)
-    ((wt = (wo) => {
+function ThemePicker(props) {
+  let $ = w(109);
+  let {
+    onThemeSelect,
+    showIntroText,
+    helpText,
+    showHelpTextBelow,
+    hideEscToCancel,
+    skipExitHandling,
+    onCancel: onCancelProp,
+    onCustomTheme,
+  } = props;
+  let g = showIntroText === undefined ? false : showIntroText;
+  let c = helpText === undefined ? "" : helpText;
+  let x = showHelpTextBelow === undefined ? false : showHelpTextBelow;
+  let X = hideEscToCancel === undefined ? false : hideEscToCancel;
+  let p = skipExitHandling === undefined ? false : skipExitHandling;
+  let { storageV5 } = useTheme_2();
+  let [theme] = useTheme();
+  let themeSetting = useThemeSetting();
+  let { columns } = useTerminalSize();
+  let vt;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    vt = getColorModuleUnavailableReason();
+    $[0] = vt;
+  } else vt = $[0];
+  let colorModuleUnavailableReason = vt;
+  let Tt;
+  if ($[1] !== theme) {
+    Tt = colorModuleUnavailableReason === null ? getColorSyntaxTheme(theme) : null;
+    $[1] = theme;
+    $[2] = Tt;
+  } else Tt = $[2];
+  let syntaxTheme = Tt;
+  let { setPreviewTheme, cancelPreview } = usePreviewTheme();
+  let d = R(undefined);
+  let wt;
+  if ($[3] !== cancelPreview) {
+    wt = (wo) => {
       let Ct = Symbol("commit");
       d.current = Ct;
       let bt = () => {
-        if (d.current === Ct) ((d.current = void 0), cancelPreview());
+        if (d.current === Ct) {
+          d.current = undefined;
+          cancelPreview();
+        }
       };
       Promise.resolve(wo).then(bt, bt);
-    }),
-      ($[3] = cancelPreview),
-      ($[4] = wt));
-  else wt = $[4];
-  let T = wt,
-    St,
-    yt;
-  if ($[5] !== cancelPreview)
-    ((yt = () => () => {
-      if (d.current === void 0) cancelPreview();
-    }),
-      (St = [cancelPreview]),
-      ($[5] = cancelPreview),
-      ($[6] = St),
-      ($[7] = yt));
-  else ((St = $[6]), (yt = $[7]));
+    };
+    $[3] = cancelPreview;
+    $[4] = wt;
+  } else wt = $[4];
+  let T = wt;
+  let St;
+  let yt;
+  if ($[5] !== cancelPreview) {
+    yt = () => () => {
+      if (d.current === undefined) cancelPreview();
+    };
+    St = [cancelPreview];
+    $[5] = cancelPreview;
+    $[6] = St;
+    $[7] = yt;
+  } else {
+    St = $[6];
+    yt = $[7];
+  }
   P(yt, St);
-  let W = useAppState(selectSettingsSyntaxHighlightingDisabled) ?? !1,
-    setAppState = useSetAppState();
+  let W = useAppState(selectSettingsSyntaxHighlightingDisabled) ?? false;
+  let setAppState = useSetAppState();
   useRegisterKeybindingContext("ThemePicker");
-  let syntaxToggleShortcut = useShortcutDisplay("theme:toggleSyntaxHighlighting", "ThemePicker", "ctrl+t"),
-    Pt;
-  if ($[8] !== setAppState || $[9] !== storageV5 || $[10] !== W)
-    ((Pt = () => {
-      if (Le === null) {
+  let syntaxToggleShortcut = useShortcutDisplay("theme:toggleSyntaxHighlighting", "ThemePicker", "ctrl+t");
+  let Pt;
+  if ($[8] !== setAppState || $[9] !== storageV5 || $[10] !== W) {
+    Pt = () => {
+      if (colorModuleUnavailableReason === null) {
         let newValue = !W;
-        (updateSettingsForSource("userSettings", { syntaxHighlightingDisabled: newValue }, void 0, storageV5),
-          setAppState((prev) => ({
-            ...prev,
-            settings: { ...prev.settings, syntaxHighlightingDisabled: newValue },
-          })));
+        updateSettingsForSource(
+          "userSettings",
+          {
+            syntaxHighlightingDisabled: newValue,
+          },
+          undefined,
+          storageV5,
+        );
+        setAppState((prev) => ({
+          ...prev,
+          settings: {
+            ...prev.settings,
+            syntaxHighlightingDisabled: newValue,
+          },
+        }));
       }
-    }),
-      ($[8] = setAppState),
-      ($[9] = storageV5),
-      ($[10] = W),
-      ($[11] = Pt));
-  else Pt = $[11];
+    };
+    $[8] = setAppState;
+    $[9] = storageV5;
+    $[10] = W;
+    $[11] = Pt;
+  } else Pt = $[11];
   let Ot;
-  if ($[12] === MEMO_CACHE_SENTINEL) ((Ot = { context: "ThemePicker" }), ($[12] = Ot));
-  else Ot = $[12];
+  if ($[12] === MEMO_CACHE_SENTINEL) {
+    Ot = {
+      context: "ThemePicker",
+    };
+    $[12] = Ot;
+  } else Ot = $[12];
   useKeybinding("theme:toggleSyntaxHighlighting", Pt, Ot);
   let Dt;
-  if ($[13] !== cancelPreview || $[14] !== onCancelProp)
-    ((Dt = () => {
-      ((d.current = void 0), cancelPreview(), onCancelProp?.());
-    }),
-      ($[13] = cancelPreview),
-      ($[14] = onCancelProp),
-      ($[15] = Dt));
-  else Dt = $[15];
-  let Y = Dt,
-    It;
-  if ($[16] !== Y || $[17] !== cancelPreview || $[18] !== p)
-    ((It = p
+  if ($[13] !== cancelPreview || $[14] !== onCancelProp) {
+    Dt = () => {
+      d.current = undefined;
+      cancelPreview();
+      onCancelProp?.();
+    };
+    $[13] = cancelPreview;
+    $[14] = onCancelProp;
+    $[15] = Dt;
+  } else Dt = $[15];
+  let Y = Dt;
+  let It;
+  if ($[16] !== Y || $[17] !== cancelPreview || $[18] !== p) {
+    It = p
       ? Y
       : async () => {
-          (cancelPreview(), await gracefulShutdown(0));
-        }),
-      ($[16] = Y),
-      ($[17] = cancelPreview),
-      ($[18] = p),
-      ($[19] = It));
-  else It = $[19];
+          cancelPreview();
+          await gracefulShutdown(0);
+        };
+    $[16] = Y;
+    $[17] = cancelPreview;
+    $[18] = p;
+    $[19] = It;
+  } else It = $[19];
   let Et;
-  if ($[20] === MEMO_CACHE_SENTINEL) ((Et = { context: "Select" }), ($[20] = Et));
-  else Et = $[20];
+  if ($[20] === MEMO_CACHE_SENTINEL) {
+    Et = {
+      context: "Select",
+    };
+    $[20] = Et;
+  } else Et = $[20];
   useKeybinding("select:cancel", It, Et);
-  let exitState = useGlobalExitKeybindings(p ? Y : void 0),
-    { customThemes: customThemes } = useCustomThemes(),
-    Mt,
-    Lt,
-    _t,
-    At,
-    Rt,
-    Bt,
-    Nt;
-  if ($[21] === MEMO_CACHE_SENTINEL)
-    ((Mt = { label: "Auto (match terminal)", value: "auto" }),
-      (Lt = { label: "Dark mode", value: "dark" }),
-      (_t = { label: "Light mode", value: "light" }),
-      (At = { label: "Dark mode (colorblind-friendly)", value: "dark-daltonized" }),
-      (Rt = { label: "Light mode (colorblind-friendly)", value: "light-daltonized" }),
-      (Bt = { label: "Dark mode (ANSI colors only)", value: "dark-ansi" }),
-      (Nt = { label: "Light mode (ANSI colors only)", value: "light-ansi" }),
-      ($[21] = Mt),
-      ($[22] = Lt),
-      ($[23] = _t),
-      ($[24] = At),
-      ($[25] = Rt),
-      ($[26] = Bt),
-      ($[27] = Nt));
-  else ((Mt = $[21]), (Lt = $[22]), (_t = $[23]), (At = $[24]), (Rt = $[25]), (Bt = $[26]), (Nt = $[27]));
+  let exitState = useGlobalExitKeybindings(p ? Y : undefined);
+  let { customThemes } = useCustomThemes();
+  let Mt;
+  let Lt;
+  let _t;
+  let At;
+  let Rt;
+  let Bt;
+  let Nt;
+  if ($[21] === MEMO_CACHE_SENTINEL) {
+    Mt = {
+      label: "Auto (match terminal)",
+      value: "auto",
+    };
+    Lt = {
+      label: "Dark mode",
+      value: "dark",
+    };
+    _t = {
+      label: "Light mode",
+      value: "light",
+    };
+    At = {
+      label: "Dark mode (colorblind-friendly)",
+      value: "dark-daltonized",
+    };
+    Rt = {
+      label: "Light mode (colorblind-friendly)",
+      value: "light-daltonized",
+    };
+    Bt = {
+      label: "Dark mode (ANSI colors only)",
+      value: "dark-ansi",
+    };
+    Nt = {
+      label: "Light mode (ANSI colors only)",
+      value: "light-ansi",
+    };
+    $[21] = Mt;
+    $[22] = Lt;
+    $[23] = _t;
+    $[24] = At;
+    $[25] = Rt;
+    $[26] = Bt;
+    $[27] = Nt;
+  } else {
+    Mt = $[21];
+    Lt = $[22];
+    _t = $[23];
+    At = $[24];
+    Rt = $[25];
+    Bt = $[26];
+    Nt = $[27];
+  }
   let $t;
   if ($[28] !== customThemes || $[29] !== onCustomTheme) {
     const mapped = customThemes.map(toCustomThemeOption);
     let I;
-    if ($[31] !== onCustomTheme)
-      ((I = onCustomTheme ? [{ label: "New custom theme\u2026", value: Ye }] : []),
-        ($[31] = onCustomTheme),
-        ($[32] = I));
-    else I = $[32];
+    if ($[31] !== onCustomTheme) {
+      I = onCustomTheme
+        ? [
+            {
+              label: "New custom theme\u2026",
+              value: NEW_CUSTOM_THEME,
+            },
+          ]
+        : [];
+      $[31] = onCustomTheme;
+      $[32] = I;
+    } else I = $[32];
     $t = [Mt, Lt, _t, At, Rt, Bt, Nt, ...mapped, ...I];
-    (($[28] = customThemes), ($[29] = onCustomTheme), ($[30] = $t));
+    $[28] = customThemes;
+    $[29] = onCustomTheme;
+    $[30] = $t;
   } else $t = $[30];
-  let a = $t,
-    index = a.findIndex((Co) => Co.value === themeSetting),
-    [b, Ut] = y(a[Math.max(0, index)]?.value ?? themeSetting),
-    [bo, So] = y(!1),
-    [Ft, yo] = y(index !== -1);
-  if (!Ft && !bo && index !== -1) (yo(!0), Ut(themeSetting));
+  let a = $t;
+  let index = a.findIndex((Co) => Co.value === themeSetting);
+  let [b, Ut] = y(a[Math.max(0, index)]?.value ?? themeSetting);
+  let [bo, So] = y(false);
+  let [Ft, yo] = y(index !== -1);
+  if (!Ft && !bo && index !== -1) {
+    yo(true);
+    Ut(themeSetting);
+  }
   let Q;
-  if ($[33] !== b) ((Q = parseCustomThemeRef(b)), ($[33] = b), ($[34] = Q));
-  else Q = $[34];
-  let ee = Q,
-    I;
-  if ($[35] !== customThemes || $[36] !== ee)
-    ((I = ee ? customThemes.find((Po) => Po.slug === ee) : void 0),
-      ($[35] = customThemes),
-      ($[36] = ee),
-      ($[37] = I));
-  else I = $[37];
-  let f = I,
-    Ne = useShortcutDisplay("theme:editCustom", "ThemePicker", "ctrl+e"),
-    Vt;
-  if ($[38] !== f || $[39] !== T || $[40] !== onCustomTheme)
-    ((Vt = () => {
-      if (f && onCustomTheme && d.current === void 0) T(onCustomTheme(f));
-    }),
-      ($[38] = f),
-      ($[39] = T),
-      ($[40] = onCustomTheme),
-      ($[41] = Vt));
-  else Vt = $[41];
+  if ($[33] !== b) {
+    Q = parseCustomThemeRef(b);
+    $[33] = b;
+    $[34] = Q;
+  } else Q = $[34];
+  let ee = Q;
+  let I;
+  if ($[35] !== customThemes || $[36] !== ee) {
+    I = ee ? customThemes.find((customTheme) => customTheme.slug === ee) : undefined;
+    $[35] = customThemes;
+    $[36] = ee;
+    $[37] = I;
+  } else I = $[37];
+  let f = I;
+  let chord = useShortcutDisplay("theme:editCustom", "ThemePicker", "ctrl+e");
+  let Vt;
+  if ($[38] !== f || $[39] !== T || $[40] !== onCustomTheme) {
+    Vt = () => {
+      if (f && onCustomTheme && d.current === undefined) T(onCustomTheme(f));
+    };
+    $[38] = f;
+    $[39] = T;
+    $[40] = onCustomTheme;
+    $[41] = Vt;
+  } else Vt = $[41];
   let Gt;
-  if ($[42] === MEMO_CACHE_SENTINEL) ((Gt = { context: "ThemePicker" }), ($[42] = Gt));
-  else Gt = $[42];
+  if ($[42] === MEMO_CACHE_SENTINEL) {
+    Gt = {
+      context: "ThemePicker",
+    };
+    $[42] = Gt;
+  } else Gt = $[42];
   useKeybinding("theme:editCustom", Vt, Gt);
-  let h = $V(),
-    E = Se($E),
-    Xt = R(null),
-    zt;
-  if ($[43] !== h)
-    ((zt = () => {
+  let scrollColumnContext = useScrollColumnContext();
+  let E = Se(scrollViewportContext);
+  let Xt = R(null);
+  let zt;
+  if ($[43] !== scrollColumnContext) {
+    zt = () => {
       let $e = Xt.current;
       if ($e === null) {
         return 0;
       }
-      let te = h?.box.current ?? $e;
-      while (h === null && te.parentNode !== void 0) te = te.parentNode;
+      let te = scrollColumnContext?.box.current ?? $e;
+      while (scrollColumnContext === null && te.parentNode !== undefined) te = te.parentNode;
       return Math.max(0, topWithin($e, te));
-    }),
-      ($[43] = h),
-      ($[44] = zt));
-  else zt = $[44];
-  let ko = useMeasured(zt),
-    oe = g ? 0 : ko + (X ? 1 : 0),
-    ne;
-  if ($[45] !== g)
-    ((ne = g
-      ? e(Text, { children: "Let's get started." })
-      : e(Text, { bold: !0, color: "permission", children: "Theme" })),
-      ($[45] = g),
-      ($[46] = ne));
-  else ne = $[46];
+    };
+    $[43] = scrollColumnContext;
+    $[44] = zt;
+  } else zt = $[44];
+  let measured = useMeasured(zt);
+  let oe = g ? 0 : measured + (X ? 1 : 0);
+  let ne;
+  if ($[45] !== g) {
+    ne = g
+      ? jsxProd_default(Text, {
+          children: "Let's get started.",
+        })
+      : jsxProd_default(Text, {
+          bold: true,
+          color: "permission",
+          children: "Theme",
+        });
+    $[45] = g;
+    $[46] = ne;
+  } else ne = $[46];
   let Wt;
-  if ($[47] === MEMO_CACHE_SENTINEL)
-    ((Wt = e(Text, { bold: !0, children: "Choose the text style that looks best with your terminal" })),
-      ($[47] = Wt));
-  else Wt = $[47];
+  if ($[47] === MEMO_CACHE_SENTINEL) {
+    Wt = jsxProd_default(Text, {
+      bold: true,
+      children: "Choose the text style that looks best with your terminal",
+    });
+    $[47] = Wt;
+  } else Wt = $[47];
   let ie;
-  if ($[48] !== c || $[49] !== x)
-    ((ie = c && !x && e(Text, { dimColor: !0, children: c })), ($[48] = c), ($[49] = x), ($[50] = ie));
-  else ie = $[50];
+  if ($[48] !== c || $[49] !== x) {
+    ie =
+      c &&
+      !x &&
+      jsxProd_default(Text, {
+        dimColor: true,
+        children: c,
+      });
+    $[48] = c;
+    $[49] = x;
+    $[50] = ie;
+  } else ie = $[50];
   let se;
-  if ($[51] !== ie)
-    ((se = r(Box, { flexDirection: "column", children: [Wt, ie] })), ($[51] = ie), ($[52] = se));
-  else se = $[52];
-  const Ue = Ft ? "on-saved-theme" : "on-first-theme",
-    max = Math.max(0, index);
-  let le;
-  if ($[53] !== cancelPreview || $[54] !== b || $[55] !== setPreviewTheme || $[56] !== a)
-    ((le = (setting) => {
+  if ($[51] !== ie) {
+    se = jsxProd_default_2(Box, {
+      flexDirection: "column",
+      children: [Wt, ie],
+    });
+    $[51] = ie;
+    $[52] = se;
+  } else se = $[52];
+  const Ue = Ft ? "on-saved-theme" : "on-first-theme";
+  const defaultFocusIndex = Math.max(0, index);
+  let onFocus;
+  if ($[53] !== cancelPreview || $[54] !== b || $[55] !== setPreviewTheme || $[56] !== a) {
+    onFocus = (setting) => {
       let M = a[setting]?.value;
-      if (M === void 0 || M === b || d.current !== void 0) {
+      if (M === undefined || M === b || d.current !== undefined) {
         return;
       }
-      if ((Ut(M), So(!0), skt(M))) setPreviewTheme(M);
+      Ut(M);
+      So(true);
+      if (isSelectableThemeName(M)) setPreviewTheme(M);
       else cancelPreview();
-    }),
-      ($[53] = cancelPreview),
-      ($[54] = b),
-      ($[55] = setPreviewTheme),
-      ($[56] = a),
-      ($[57] = le));
-  else le = $[57];
-  let ae;
+    };
+    $[53] = cancelPreview;
+    $[54] = b;
+    $[55] = setPreviewTheme;
+    $[56] = a;
+    $[57] = onFocus;
+  } else onFocus = $[57];
+  let onSelect;
   if (
     $[58] !== cancelPreview ||
     $[59] !== T ||
     $[60] !== onCustomTheme ||
     $[61] !== onThemeSelect ||
     $[62] !== a
-  )
-    ((ae = (setting_0) => {
+  ) {
+    onSelect = (setting_0) => {
       let Ve = a[setting_0]?.value;
-      if (Ve === void 0 || d.current !== void 0) {
+      if (Ve === undefined || d.current !== undefined) {
         return;
       }
-      if (!skt(Ve)) {
-        (cancelPreview(), onCustomTheme?.(void 0));
+      if (!isSelectableThemeName(Ve)) {
+        cancelPreview();
+        onCustomTheme?.(undefined);
         return;
       }
       T(onThemeSelect(Ve));
-    }),
-      ($[58] = cancelPreview),
-      ($[59] = T),
-      ($[60] = onCustomTheme),
-      ($[61] = onThemeSelect),
-      ($[62] = a),
-      ($[63] = ae));
-  else ae = $[63];
-  let re;
-  if ($[64] !== a || $[65] !== themeSetting)
-    ((re = a.map((L) =>
-      e(
+    };
+    $[58] = cancelPreview;
+    $[59] = T;
+    $[60] = onCustomTheme;
+    $[61] = onThemeSelect;
+    $[62] = a;
+    $[63] = onSelect;
+  } else onSelect = $[63];
+  let children;
+  if ($[64] !== a || $[65] !== themeSetting) {
+    children = a.map((L) =>
+      jsxProd_default(
         OrderedListWithItem.Item,
         {
           label: L.label,
           icon:
             L.value === themeSetting
-              ? e(StatusIcon, { status: "success", "aria-label": "current:" })
-              : e(Text, { "aria-hidden": !0, children: " ".repeat(Qmt()) }),
-          meta: L.origin === void 0 ? void 0 : [L.origin],
+              ? jsxProd_default(StatusIcon, {
+                  status: "success",
+                  "aria-label": "current:",
+                })
+              : jsxProd_default(Text, {
+                  "aria-hidden": true,
+                  children: " ".repeat(maxStatusIconWidth()),
+                }),
+          meta: L.origin === undefined ? undefined : [L.origin],
         },
         L.value,
       ),
-    )),
-      ($[64] = a),
-      ($[65] = themeSetting),
-      ($[66] = re));
-  else re = $[66];
+    );
+    $[64] = a;
+    $[65] = themeSetting;
+    $[66] = children;
+  } else children = $[66];
   let me;
-  if ($[67] !== Ue || $[68] !== max || $[69] !== le || $[70] !== ae || $[71] !== re)
-    ((me = e(OrderedListWithItem, { defaultFocusIndex: max, onFocus: le, onSelect: ae, children: re }, Ue)),
-      ($[67] = Ue),
-      ($[68] = max),
-      ($[69] = le),
-      ($[70] = ae),
-      ($[71] = re),
-      ($[72] = me));
-  else me = $[72];
+  if (
+    $[67] !== Ue ||
+    $[68] !== defaultFocusIndex ||
+    $[69] !== onFocus ||
+    $[70] !== onSelect ||
+    $[71] !== children
+  ) {
+    me = jsxProd_default(
+      OrderedListWithItem,
+      {
+        defaultFocusIndex,
+        onFocus,
+        onSelect,
+        children,
+      },
+      Ue,
+    );
+    $[67] = Ue;
+    $[68] = defaultFocusIndex;
+    $[69] = onFocus;
+    $[70] = onSelect;
+    $[71] = children;
+    $[72] = me;
+  } else me = $[72];
   let ce;
-  if ($[73] !== ne || $[74] !== se || $[75] !== me)
-    ((ce = r(Box, { flexDirection: "column", gap: 1, children: [ne, se, me] })),
-      ($[73] = ne),
-      ($[74] = se),
-      ($[75] = me),
-      ($[76] = ce));
-  else ce = $[76];
-  let Yt;
-  if ($[77] === MEMO_CACHE_SENTINEL)
-    ((Yt = {
+  if ($[73] !== ne || $[74] !== se || $[75] !== me) {
+    ce = jsxProd_default_2(Box, {
+      flexDirection: "column",
+      gap: 1,
+      children: [ne, se, me],
+    });
+    $[73] = ne;
+    $[74] = se;
+    $[75] = me;
+    $[76] = ce;
+  } else ce = $[76];
+  let patch;
+  if ($[77] === MEMO_CACHE_SENTINEL) {
+    patch = {
       oldStart: 1,
       newStart: 1,
       oldLines: 3,
@@ -376,57 +515,81 @@ function ThemePicker(t0) {
         '+  console.log("Hello, Claude!");',
         " }",
       ],
-    }),
-      ($[77] = Yt));
-  else Yt = $[77];
-  const Ge = columns - 6;
+    };
+    $[77] = patch;
+  } else patch = $[77];
+  const width = columns - 6;
   let de;
-  if ($[78] !== Ge)
-    ((de = e(DiffFrame, {
+  if ($[78] !== width) {
+    de = jsxProd_default(DiffFrame, {
       paddingX: 0,
-      children: e(StructuredDiff, { patch: Yt, dim: !1, filePath: "demo.js", firstLine: null, width: Ge }),
-    })),
-      ($[78] = Ge),
-      ($[79] = de));
-  else de = $[79];
+      children: jsxProd_default(StructuredDiff, {
+        patch,
+        dim: false,
+        filePath: "demo.js",
+        firstLine: null,
+        width,
+      }),
+    });
+    $[78] = width;
+    $[79] = de;
+  } else de = $[79];
   const Xe =
-    Le === "env"
+    colorModuleUnavailableReason === "env"
       ? `Syntax highlighting disabled (via CLAUDE_CODE_SYNTAX_HIGHLIGHT=${env.CLAUDE_CODE_SYNTAX_HIGHLIGHT})`
       : W
         ? `Syntax highlighting disabled (${syntaxToggleShortcut} to enable)`
-        : z
-          ? `Syntax theme: ${z.theme}${z.source ? ` (from ${z.source})` : ""} (${syntaxToggleShortcut} to disable)`
+        : syntaxTheme
+          ? `Syntax theme: ${syntaxTheme.theme}${syntaxTheme.source ? ` (from ${syntaxTheme.source})` : ""} (${syntaxToggleShortcut} to disable)`
           : `Syntax highlighting enabled (${syntaxToggleShortcut} to disable)`;
   let he;
-  if ($[80] !== Xe) ((he = r(Text, { dimColor: !0, children: [" ", Xe] })), ($[80] = Xe), ($[81] = he));
-  else he = $[81];
+  if ($[80] !== Xe) {
+    he = jsxProd_default_2(Text, {
+      dimColor: true,
+      children: [" ", Xe],
+    });
+    $[80] = Xe;
+    $[81] = he;
+  } else he = $[81];
   let ue;
-  if ($[82] !== de || $[83] !== he)
-    ((ue = r(Box, { flexDirection: "column", width: "100%", children: [de, he] })),
-      ($[82] = de),
-      ($[83] = he),
-      ($[84] = ue));
-  else ue = $[84];
+  if ($[82] !== de || $[83] !== he) {
+    ue = jsxProd_default_2(Box, {
+      flexDirection: "column",
+      width: "100%",
+      children: [de, he],
+    });
+    $[82] = de;
+    $[83] = he;
+    $[84] = ue;
+  } else ue = $[84];
   let jt;
-  if ($[85] !== ce || $[86] !== ue)
-    ((jt = r(Box, { ref: Xt, flexDirection: "column", gap: 1, children: [ce, ue] })),
-      ($[85] = ce),
-      ($[86] = ue),
-      ($[87] = jt));
-  else jt = $[87];
-  let ze = jt,
-    ge;
-  if ($[88] !== h?.rows || $[89] !== oe || $[90] !== E)
-    ((ge = E && { ...E, rows: Math.max(0, (h?.rows ?? E.rows) - oe) }),
-      ($[88] = h?.rows),
-      ($[89] = oe),
-      ($[90] = E),
-      ($[91] = ge));
-  else ge = $[91];
-  const We = (h?.reserve ?? NV) + oe;
+  if ($[85] !== ce || $[86] !== ue) {
+    jt = jsxProd_default_2(Box, {
+      ref: Xt,
+      flexDirection: "column",
+      gap: 1,
+      children: [ce, ue],
+    });
+    $[85] = ce;
+    $[86] = ue;
+    $[87] = jt;
+  } else jt = $[87];
+  let ze = jt;
+  let value;
+  if ($[88] !== scrollColumnContext?.rows || $[89] !== oe || $[90] !== E) {
+    value = E && {
+      ...E,
+      rows: Math.max(0, (scrollColumnContext?.rows ?? E.rows) - oe),
+    };
+    $[88] = scrollColumnContext?.rows;
+    $[89] = oe;
+    $[90] = E;
+    $[91] = value;
+  } else value = $[91];
+  const reserve = (scrollColumnContext?.reserve ?? SCROLL_COLUMN_MIN_ROWS) + oe;
   let pe;
   if (
-    $[92] !== Ne ||
+    $[92] !== chord ||
     $[93] !== exitState ||
     $[94] !== f ||
     $[95] !== c ||
@@ -435,57 +598,84 @@ function ThemePicker(t0) {
     $[98] !== x ||
     $[99] !== g ||
     $[100] !== p
-  )
-    ((pe =
+  ) {
+    pe =
       !g &&
-      r(Box, {
+      jsxProd_default_2(Box, {
         marginTop: 1,
         children: [
-          x && c && e(Box, { marginLeft: 3, children: e(Text, { dimColor: !0, children: c }) }),
+          x &&
+            c &&
+            jsxProd_default(Box, {
+              marginLeft: 3,
+              children: jsxProd_default(Text, {
+                dimColor: true,
+                children: c,
+              }),
+            }),
           !X &&
-            e(Box, {
-              children: e(Text, {
-                dimColor: !0,
-                italic: !0,
+            jsxProd_default(Box, {
+              children: jsxProd_default(Text, {
+                dimColor: true,
+                italic: true,
                 children: exitState.pending
-                  ? r(Fragment, {
+                  ? jsxProd_default_2(Fragment, {
                       children: ["Press ", exitState.keyName, " again to", " ", p ? "cancel" : "exit"],
                     })
-                  : r(Byline, {
+                  : jsxProd_default_2(Byline, {
                       children: [
-                        e(KeyboardShortcutHint, { chord: "enter", action: "select" }),
-                        f && onCustomTheme && e(KeyboardShortcutHint, { chord: Ne, action: "edit" }),
-                        e(KeyboardShortcutHint, { chord: "escape", action: "cancel" }),
+                        jsxProd_default(KeyboardShortcutHint, {
+                          chord: "enter",
+                          action: "select",
+                        }),
+                        f &&
+                          onCustomTheme &&
+                          jsxProd_default(KeyboardShortcutHint, {
+                            chord,
+                            action: "edit",
+                          }),
+                        jsxProd_default(KeyboardShortcutHint, {
+                          chord: "escape",
+                          action: "cancel",
+                        }),
                       ],
                     }),
               }),
             }),
         ],
-      })),
-      ($[92] = Ne),
-      ($[93] = exitState),
-      ($[94] = f),
-      ($[95] = c),
-      ($[96] = X),
-      ($[97] = onCustomTheme),
-      ($[98] = x),
-      ($[99] = g),
-      ($[100] = p),
-      ($[101] = pe));
-  else pe = $[101];
-  let fe;
-  if ($[102] !== ze || $[103] !== We || $[104] !== pe)
-    ((fe = r(ScrollColumn, { reserve: We, children: [ze, pe] })),
-      ($[102] = ze),
-      ($[103] = We),
-      ($[104] = pe),
-      ($[105] = fe));
-  else fe = $[105];
+      });
+    $[92] = chord;
+    $[93] = exitState;
+    $[94] = f;
+    $[95] = c;
+    $[96] = X;
+    $[97] = onCustomTheme;
+    $[98] = x;
+    $[99] = g;
+    $[100] = p;
+    $[101] = pe;
+  } else pe = $[101];
+  let children_2;
+  if ($[102] !== ze || $[103] !== reserve || $[104] !== pe) {
+    children_2 = jsxProd_default_2(ScrollColumn, {
+      reserve,
+      children: [ze, pe],
+    });
+    $[102] = ze;
+    $[103] = reserve;
+    $[104] = pe;
+    $[105] = children_2;
+  } else children_2 = $[105];
   let qt;
-  if ($[106] !== ge || $[107] !== fe)
-    ((qt = e($E, { value: ge, children: fe })), ($[106] = ge), ($[107] = fe), ($[108] = qt));
-  else qt = $[108];
+  if ($[106] !== value || $[107] !== children_2) {
+    qt = jsxProd_default(scrollViewportContext, {
+      value,
+      children: children_2,
+    });
+    $[106] = value;
+    $[107] = children_2;
+    $[108] = qt;
+  } else qt = $[108];
   return qt;
 }
-
 export { ThemePicker };

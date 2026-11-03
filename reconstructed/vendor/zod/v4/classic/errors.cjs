@@ -6,119 +6,133 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { Wr } from "../core/index.cjs";
-import { Ee } from "../core/util.cjs";
+import { require_core_2 } from "../core/index.cjs";
+import { require_util } from "../core/util.cjs";
 
 //@ chunk-1ny7cxrt.js:591116-593194 cjs-fingerprint
-var ib = x(function (Pr) {
-  var EX =
-      (Pr && Pr.__createBinding) ||
-      (Object.create
-        ? function (e, t, n, o) {
-            if (o === void 0) o = n;
-            var ownPropertyDescriptor = Object.getOwnPropertyDescriptor(t, n);
-            if (
-              !ownPropertyDescriptor ||
-              ("get" in ownPropertyDescriptor
-                ? !t.__esModule
-                : ownPropertyDescriptor.writable || ownPropertyDescriptor.configurable)
-            )
-              ownPropertyDescriptor = {
-                enumerable: !0,
-                get: function () {
-                  return t[n];
-                },
-              };
-            Object.defineProperty(e, o, ownPropertyDescriptor);
-          }
-        : function (e, t, n, o) {
-            if (o === void 0) o = n;
-            e[o] = t[n];
-          }),
-    PX =
-      (Pr && Pr.__setModuleDefault) ||
-      (Object.create
-        ? function (e, t) {
-            Object.defineProperty(e, "default", { enumerable: !0, value: t });
-          }
-        : function (e, t) {
-            e.default = t;
-          }),
-    dT =
-      (Pr && Pr.__importStar) ||
-      function (e) {
-        if (e && e.__esModule) return e;
-        var t = {};
-        if (e != null) {
-          for (var key in e)
-            if (key !== "default" && Object.prototype.hasOwnProperty.call(e, key)) EX(t, e, key);
+var require_errors_3 = x(function (cjsExports) {
+  var __createBinding =
+    (cjsExports && cjsExports.__createBinding) ||
+    (Object.create
+      ? function (o_2, m, k, k2) {
+          if (k2 === undefined) k2 = k;
+          var desc = Object.getOwnPropertyDescriptor(m, k);
+          if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable))
+            desc = {
+              enumerable: true,
+              get: function () {
+                return m[k];
+              },
+            };
+          Object.defineProperty(o_2, k2, desc);
         }
-        return (PX(t, e), t);
-      };
-  Object.defineProperty(Pr, "__esModule", { value: !0 });
-  Pr.ZodRealError = Pr.ZodError = void 0;
-  var Ch = dT(Wr()),
-    pT = Wr(),
-    cT = dT(Ee()),
-    weakSet = new WeakSet([Object.prototype, Error.prototype]);
-  function Ih(e, t, n) {
-    Object.defineProperty(e, t, {
-      configurable: !0,
-      enumerable: !1,
+      : function (o_2, m, k, k2) {
+          if (k2 === undefined) k2 = k;
+          o_2[k2] = m[k];
+        });
+  var __setModuleDefault =
+    (cjsExports && cjsExports.__setModuleDefault) ||
+    (Object.create
+      ? function (o, v) {
+          Object.defineProperty(o, "default", {
+            enumerable: true,
+            value: v,
+          });
+        }
+      : function (o, v) {
+          o.default = v;
+        });
+  var __importStar =
+    (cjsExports && cjsExports.__importStar) ||
+    function (mod) {
+      if (mod && mod.__esModule) return mod;
+      var result = {};
+      if (mod != null) {
+        for (var k in mod)
+          if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k))
+            __createBinding(result, mod, k);
+      }
+      __setModuleDefault(result, mod);
+      return result;
+    };
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.ZodRealError = cjsExports.ZodError = undefined;
+  var core = __importStar(require_core_2());
+  var index_js_1 = require_core_2();
+  var util = __importStar(require_util());
+  var _installedErrorProtos = new WeakSet([Object.prototype, Error.prototype]);
+  function _lazyMethod(proto, key, make) {
+    Object.defineProperty(proto, key, {
+      configurable: true,
+      enumerable: false,
       get() {
-        let o = n(this);
-        return (Object.defineProperty(this, t, { value: o, configurable: !0, writable: !0 }), o);
+        let value = make(this);
+        Object.defineProperty(this, key, {
+          value,
+          configurable: true,
+          writable: true,
+        });
+        return value;
       },
-      set(o) {
-        Object.defineProperty(this, t, { value: o, configurable: !0, writable: !0 });
+      set(value) {
+        Object.defineProperty(this, key, {
+          value,
+          configurable: true,
+          writable: true,
+        });
       },
     });
   }
-  var hT = (e, t) => {
-    (pT.$ZodError.init(e, t), (e.name = "ZodError"));
-    let prototypeOf = Object.getPrototypeOf(e);
-    if (weakSet.has(prototypeOf)) return;
-    (weakSet.add(prototypeOf),
-      Ih(prototypeOf, "format", (o) => (r) => Ch.formatError(o, r)),
-      Ih(prototypeOf, "flatten", (o) => (r) => Ch.flattenError(o, r)),
-      Ih(prototypeOf, "addIssue", (o) => (r) => {
-        (o.issues.push(r), (o.message = JSON.stringify(o.issues, cT.jsonStringifyReplacer, 2)));
-      }),
-      Ih(prototypeOf, "addIssues", (o) => (r) => {
-        (o.issues.push(...r), (o.message = JSON.stringify(o.issues, cT.jsonStringifyReplacer, 2)));
-      }),
-      Object.defineProperty(prototypeOf, "isEmpty", {
-        configurable: !0,
-        enumerable: !1,
-        get() {
-          return this.issues.length === 0;
-        },
-      }));
+  var initializer = (inst, issues) => {
+    index_js_1.$ZodError.init(inst, issues);
+    inst.name = "ZodError";
+    let proto = Object.getPrototypeOf(inst);
+    if (_installedErrorProtos.has(proto)) return;
+    _installedErrorProtos.add(proto);
+    _lazyMethod(proto, "format", (o) => (mapper) => core.formatError(o, mapper));
+    _lazyMethod(proto, "flatten", (o) => (mapper) => core.flattenError(o, mapper));
+    _lazyMethod(proto, "addIssue", (o) => (issue) => {
+      o.issues.push(issue);
+      o.message = JSON.stringify(o.issues, util.jsonStringifyReplacer, 2);
+    });
+    _lazyMethod(proto, "addIssues", (o) => (issues) => {
+      o.issues.push(...issues);
+      o.message = JSON.stringify(o.issues, util.jsonStringifyReplacer, 2);
+    });
+    Object.defineProperty(proto, "isEmpty", {
+      configurable: true,
+      enumerable: false,
+      get() {
+        return this.issues.length === 0;
+      },
+    });
   };
-  Pr.ZodError = Ch.$constructor("ZodError", hT);
-  Pr.ZodRealError = Ch.$constructor("ZodError", hT, void 0, { Parent: Error });
+  cjsExports.ZodError = core.$constructor("ZodError", initializer);
+  cjsExports.ZodRealError = core.$constructor("ZodError", initializer, undefined, {
+    Parent: Error,
+  });
   (function () {
-    var ownPropertyNames = Object.getOwnPropertyNames(Pr);
-    for (var t = 0; t < ownPropertyNames.length; t++) {
-      var ownPropertyDescriptor = Object.getOwnPropertyDescriptor(Pr, ownPropertyNames[t]);
-      if (!ownPropertyDescriptor || !ownPropertyDescriptor.get || !ownPropertyDescriptor.configurable)
-        continue;
-      var o;
+    var keys = Object.getOwnPropertyNames(cjsExports);
+    for (var i = 0; i < keys.length; i++) {
+      var desc = Object.getOwnPropertyDescriptor(cjsExports, keys[i]);
+      if (!desc || !desc.get || !desc.configurable) continue;
+      var value;
       try {
-        o = ownPropertyDescriptor.get();
-      } catch (error) {
+        value = desc.get();
+      } catch (e) {
         continue;
       }
-      if (o === void 0) continue;
-      Object.defineProperty(Pr, ownPropertyNames[t], {
-        value: o,
-        writable: !1,
-        enumerable: ownPropertyDescriptor.enumerable,
-        configurable: !1,
+      if (value === undefined) continue;
+      Object.defineProperty(cjsExports, keys[i], {
+        value,
+        writable: false,
+        enumerable: desc.enumerable,
+        configurable: false,
       });
     }
-    Object.freeze(Pr);
+    Object.freeze(cjsExports);
   })();
 });
-
-export { ib };
+export { require_errors_3 };

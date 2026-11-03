@@ -10,25 +10,34 @@
  */
 import { readFile, readdir } from "fs/promises";
 import { release } from "os";
-import { ge } from "./identity.js";
+import { identity } from "./identity.js";
 import { getFsImplementation } from "./fsOperations.js";
 import { logError } from "./log.js";
 import { logForDebugging } from "./debug.js";
 import { uniqueArray } from "../plugins/bundled/telemetry/environment.js";
 
 //@ chunk-znrryf4y.js:418-457 sole-consumer
-var d = ge({ value: !1 }, (e) => {
-  e.value = !1;
-});
+var platformOverride = identity(
+  {
+    value: false,
+  },
+  (e) => {
+    e.value = false;
+  },
+);
 //@ chunk-znrryf4y.js:457-485 affinity
-function c() {
-  return d.value;
+function platformOverrideValue() {
+  return platformOverride.value;
 }
 //@ chunk-znrryf4y.js:485-606 fingerprint = getWslVersion (0.646)
 function getWslVersion_2() {
-  if (c()) return;
+  if (platformOverrideValue()) return;
   try {
-    return getFsImplementation().readFileSync("/proc/version", { encoding: "utf8" }).toLowerCase();
+    return getFsImplementation()
+      .readFileSync("/proc/version", {
+        encoding: "utf8",
+      })
+      .toLowerCase();
   } catch {
     return;
   }
@@ -40,119 +49,131 @@ class PlatformDetector {
   sources;
   primedProcVersion;
   fallbackProcVersion;
-  fallbackProcVersionRead = !1;
+  fallbackProcVersionRead = false;
   platform;
   wslVersion = null;
   macOSMajorVersion = null;
   linuxDistroInfo;
-  constructor(e) {
-    this.sources = e;
+  constructor(sources) {
+    this.sources = sources;
   }
   kernelString() {
-    if (this.primedProcVersion !== void 0) return this.primedProcVersion;
-    if (!this.fallbackProcVersionRead)
-      ((this.fallbackProcVersion = this.sources.readProcVersionSync()), (this.fallbackProcVersionRead = !0));
+    if (this.primedProcVersion !== undefined) return this.primedProcVersion;
+    if (!this.fallbackProcVersionRead) {
+      this.fallbackProcVersion = this.sources.readProcVersionSync();
+      this.fallbackProcVersionRead = true;
+    }
     return this.fallbackProcVersion;
   }
   getPlatform() {
-    if (this.platform !== void 0) return this.platform;
+    if (this.platform !== undefined) return this.platform;
     try {
       if (this.sources.platform === "darwin") this.platform = "macos";
       else if (this.sources.platform === "win32") this.platform = "windows";
-      else if (this.sources.platform === "linux")
+      else if (this.sources.platform === "linux") {
         if (this.sources.env.WSL_DISTRO_NAME || this.sources.env.WSL_INTEROP) this.platform = "wsl";
         else {
-          let kernelString = this.kernelString();
-          this.platform = kernelString !== void 0 && oDt(kernelString) ? "wsl" : "linux";
+          let e = this.kernelString();
+          this.platform = e !== undefined && looksLikeWslVersion(e) ? "wsl" : "linux";
         }
-      else this.platform = "unknown";
+      } else this.platform = "unknown";
     } catch (error) {
-      (logError(error), (this.platform = "unknown"));
+      logError(error);
+      this.platform = "unknown";
     }
     return this.platform;
   }
   getWslVersion() {
     if (this.wslVersion !== null) return this.wslVersion;
     if (this.sources.platform !== "linux") {
-      this.wslVersion = void 0;
+      this.wslVersion = undefined;
       return;
     }
-    let kernelString = this.kernelString();
-    if (kernelString === void 0) {
-      this.wslVersion = void 0;
+    let e = this.kernelString();
+    if (e === undefined) {
+      this.wslVersion = undefined;
       return;
     }
-    let match = kernelString.match(/wsl(\d+)/);
+    let match = e.match(/wsl(\d+)/);
     if (match && match[1]) this.wslVersion = match[1];
-    else if (kernelString.includes("microsoft")) this.wslVersion = "1";
-    else this.wslVersion = void 0;
+    else if (e.includes("microsoft")) this.wslVersion = "1";
+    else this.wslVersion = undefined;
     return this.wslVersion;
   }
   getMacOSMajorVersion() {
     if (this.macOSMajorVersion !== null) return this.macOSMajorVersion;
     if (this.sources.platform !== "darwin") {
-      this.macOSMajorVersion = void 0;
+      this.macOSMajorVersion = undefined;
       return;
     }
     let match = this.sources.osRelease().match(/^(\d+)\./);
-    return (
-      (this.macOSMajorVersion = match && match[1] ? parseInt(match[1], 10) - 9 : void 0),
-      this.macOSMajorVersion
-    );
+    this.macOSMajorVersion = match && match[1] ? parseInt(match[1], 10) - 9 : undefined;
+    return this.macOSMajorVersion;
   }
   getLinuxDistroInfo() {
     return (this.linuxDistroInfo ??= this.readLinuxDistroInfo());
   }
   async readLinuxDistroInfo() {
     if (this.sources.platform !== "linux") return;
-    let e = { linuxKernel: this.sources.osRelease() };
+    let result = {
+      linuxKernel: this.sources.osRelease(),
+    };
     try {
-      let osRelease = await this.sources.readOsRelease();
-      for (let s of osRelease.split(`
+      let content = await this.sources.readOsRelease();
+      for (let line of content.split(`
 `)) {
-        let match = s.match(/^(ID|VERSION_ID)=(.*)$/);
+        let match = line.match(/^(ID|VERSION_ID)=(.*)$/);
         if (match && match[1] && match[2]) {
-          let replaced = match[2].replace(/^"|"$/g, "");
-          if (match[1] === "ID") e.linuxDistroId = replaced;
-          else e.linuxDistroVersion = replaced;
+          let value = match[2].replace(/^"|"$/g, "");
+          if (match[1] === "ID") result.linuxDistroId = value;
+          else result.linuxDistroVersion = value;
         }
       }
     } catch {}
-    return e;
+    return result;
   }
   async prime() {
-    if (this.primedProcVersion !== void 0 || this.sources.platform !== "linux") return;
+    if (this.primedProcVersion !== undefined || this.sources.platform !== "linux") return;
     try {
       let procVersion = await this.sources.readProcVersion();
       this.primedProcVersion = procVersion.toLowerCase();
     } catch (error) {
-      logForDebugging(`Failed to read /proc/version for WSL detection: ${error}`, { level: "error" });
+      logForDebugging(`Failed to read /proc/version for WSL detection: ${error}`, {
+        level: "error",
+      });
       return;
     }
-    ((this.platform = void 0), (this.wslVersion = null));
+    this.platform = undefined;
+    this.wslVersion = null;
   }
 }
 //@ chunk-znrryf4y.js:2923-2929 layout
-var h;
+var platformDetectorCache;
 //@ chunk-znrryf4y.js:2929-3134 layout
 function getPlatformDetector() {
-  return (h ??= new PlatformDetector({
+  return (platformDetectorCache ??= new PlatformDetector({
     platform: "linux",
     env: process.env,
     readProcVersionSync: getWslVersion_2,
-    readProcVersion: () => readFile("/proc/version", { encoding: "utf8" }),
+    readProcVersion: () =>
+      readFile("/proc/version", {
+        encoding: "utf8",
+      }),
     osRelease: release,
     readOsRelease: () => readFile("/etc/os-release", "utf8"),
   }));
 }
 //@ chunk-znrryf4y.js:3134-3168 layout
-function XMi() {
+/**
+ * primePlatform：预取平台信息。
+ */
+function primePlatform() {
   return getPlatformDetector().prime();
 }
+//@ chunk-znrryf4y.js:3168-3206 layout
 /**
  * 当前平台：macos / windows / wsl / linux（linux 构建在检测器里固化 platform=linux，再按 /proc/version 判 WSL）。
  */
-//@ chunk-znrryf4y.js:3168-3206 layout
 function getPlatform() {
   return getPlatformDetector().getPlatform();
 }
@@ -174,11 +195,17 @@ function getWslVersion() {
   return getPlatformDetector().getWslVersion();
 }
 //@ chunk-znrryf4y.js:3373-3420 layout
-function Iwr() {
+/**
+ * linuxDistroInfo：Linux 发行版信息。
+ */
+function linuxDistroInfo() {
   return getPlatformDetector().getLinuxDistroInfo();
 }
 //@ chunk-znrryf4y.js:3420-3469 layout
-function JMi() {
+/**
+ * macOSMajorVersion：macOS 主版本号。
+ */
+function macOSMajorVersion() {
   return getPlatformDetector().getMacOSMajorVersion();
 }
 //@ chunk-znrryf4y.js:3469-3618 layout = VCS_MARKERS (1)
@@ -197,9 +224,9 @@ async function detectVcs(dir) {
   let detected = new Set();
   if (process.env.P4PORT) detected.add("perforce");
   try {
-    let targetDir = dir ?? getFsImplementation().cwd(),
-      entries = new Set(await readdir(targetDir));
-    for (let [i, a] of VCS_MARKERS_2) if (entries.has(i)) detected.add(a);
+    let targetDir = dir ?? getFsImplementation().cwd();
+    let entries = new Set(await readdir(targetDir));
+    for (let [marker, vcs] of VCS_MARKERS_2) if (entries.has(marker)) detected.add(vcs);
   } catch {}
   return [...detected];
 }
@@ -215,42 +242,44 @@ var VCS_MARKERS = [
   [".sl", "sapling"],
 ];
 //@ chunk-4m46mxx9.js:18237-18436 shared-adjacent = detectVcs (0.773)
-async function detectVcs_2(e, t, r) {
+async function detectVcs_2(list, t, hasP4Port) {
   let i;
   try {
-    i = await e(t);
+    i = await list(t);
   } catch {
     i = [];
   }
-  let entries = new Set(i.map((o) => o.name)),
-    a = uniqueArray([
-      ...(r ? ["perforce"] : []),
-      ...VCS_MARKERS.flatMap(([o, c]) => (entries.has(o) ? [c] : [])),
-    ]);
-  return a.length > 0 ? a.join(",") : void 0;
+  let entries = new Set(i.map((o) => o.name));
+  let a = uniqueArray([
+    ...(hasP4Port ? ["perforce"] : []),
+    ...VCS_MARKERS.flatMap(([o, c]) => (entries.has(o) ? [c] : [])),
+  ]);
+  return a.length > 0 ? a.join(",") : undefined;
 }
 //@ chunk-9m6032j0.js:191-257 placement
-function oDt(n) {
+/**
+ * looksLikeWslVersion：版本串像 WSL。
+ */
+function looksLikeWslVersion(n) {
   return n.includes("microsoft") || n.includes("wsl");
 }
 //@ chunk-qchp9vrd.js:201680-201749 fingerprint = SUPPORTED_PLATFORMS (1)
 function SUPPORTED_PLATFORMS() {
-  let e = getPlatform();
-  return e === "macos" || e === "windows" || e === "wsl";
+  let platform = getPlatform();
+  return platform === "macos" || platform === "windows" || platform === "wsl";
 }
-
 export {
   getPlatform,
   getPlatformDisplayName,
-  Iwr,
+  linuxDistroInfo,
   detectVcs,
   getWslVersion,
   SUPPORTED_PLATFORMS_2,
   VCS_MARKERS,
   detectVcs_2,
-  JMi,
-  XMi,
+  macOSMajorVersion,
+  primePlatform,
   getWslVersion_2,
-  oDt,
+  looksLikeWslVersion,
   SUPPORTED_PLATFORMS,
 };

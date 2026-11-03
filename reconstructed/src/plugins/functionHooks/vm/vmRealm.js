@@ -8,50 +8,65 @@
  * pieces: chunk-4121qate.js (18)
  * attribution: placement 18
  */
-import * as vmModule from "vm";
+import "vm";
 import * as vmModule_2 from "vm";
-import * as vmModule_3 from "vm";
-import * as vmModule_4 from "vm";
-import * as vmModule_5 from "vm";
-import * as vmModule_6 from "vm";
-import * as vmModule_7 from "vm";
-import * as vmModule_8 from "vm";
-import * as vmModule_9 from "vm";
-import * as vmModule_10 from "vm";
-import * as vmModule_11 from "vm";
-import * as vmModule_12 from "vm";
-import * as vmModule_13 from "vm";
-import * as vmModule_14 from "vm";
+import "vm";
+import "vm";
+import "vm";
+import "vm";
+import "vm";
+import "vm";
+import "vm";
+import "vm";
+import "vm";
+import "vm";
+import "vm";
+import "vm";
 import { CLONE_DEPTH_THRESHOLD } from "../../../utils/structuredCloneLimits.js";
 import { copyAcrossVmBoundary } from "./boundaryCopy.js";
 import { sanitizeAndLogError } from "../../../components/Feedback.js";
 import { SubAgentContext } from "../../../components/CtrlOToExpand.js";
 
 //@ chunk-4121qate.js:49745-49840 placement
-var Yp = Symbol("compile with no import() hook"),
-  freeze = Object.freeze({ importModuleDynamically: Yp });
+/**
+ * 无 import 钩子标记
+ */
+var NO_IMPORT_HOOK = Symbol("compile with no import() hook");
+var vUe = Object.freeze({
+  importModuleDynamically: NO_IMPORT_HOOK,
+});
+//@ chunk-4121qate.js:49840-50178 placement
 /**
  * 校验 VM 编译选项：importModuleDynamically 必须是函数或"无 import 钩子"标记，后者返回 undefined。
  */
-//@ chunk-4121qate.js:49840-50178 placement
 function vmImportOptions(e) {
-  let o = e?.importModuleDynamically;
-  if (o === Yp) return;
-  if (typeof o !== "function")
+  let importModuleDynamically = e?.importModuleDynamically;
+  if (importModuleDynamically === NO_IMPORT_HOOK) return;
+  if (typeof importModuleDynamically !== "function")
     throw TypeError(
       "The options argument of hardenVMIntrinsics and createVMIntakeWalkers must be either { importModuleDynamically: <function> } or COMPILE_WITHOUT_IMPORT_HOOK, which src/utils/vmHardening.ts exports",
     );
-  return { importModuleDynamically: o };
+  return {
+    importModuleDynamically,
+  };
 }
 //@ chunk-4121qate.js:50178-50243 placement
-function B5e(e, o) {
-  if (o != null) return { timeout: o };
-  return { timeout: e };
+/**
+ * 构造 timeout 选项
+ */
+function timeoutOption(timeout, o) {
+  if (o != null)
+    return {
+      timeout: o,
+    };
+  return {
+    timeout,
+  };
 }
+//@ chunk-4121qate.js:50243-56738 placement
 /**
  * 创建钩子运行用的隔离 VM realm，装入全局与宿主函数包装
  */
-//@ chunk-4121qate.js:50243-56738 placement
 function createVmRealm(e, o) {
   vmModule_2.runInContext(
     `(() => {
@@ -185,22 +200,31 @@ function createVmRealm(e, o) {
   );
 }
 //@ chunk-4121qate.js:56738-56820 placement
-function cfr(e) {
+/**
+ * 删除 Error.captureStackTrace
+ */
+function removeCaptureStackTrace(e) {
   vmModule_2.runInContext("'use strict'; delete Error.captureStackTrace", e);
 }
 //@ chunk-4121qate.js:56820-56909 placement
-function $An(e) {
-  return vmModule_2.runInContext("(async v => ({__proto__: null, v: await v}))", e);
+/**
+ * 空原型包装 await
+ */
+function awaitAsNullProto(vmContext) {
+  return vmModule_2.runInContext("(async v => ({__proto__: null, v: await v}))", vmContext);
 }
 //@ chunk-4121qate.js:56909-56984 placement
-function FAn(e) {
+/**
+ * 直接调用函数
+ */
+function callWithArgs(e) {
   return vmModule_2.runInContext("((fn, ...args) => fn(...args))", e);
 }
+//@ chunk-4121qate.js:56984-57646 placement
 /**
  * 在 VM 上下文中创建读取抛出值 name/message/stack 的函数（各字段独立 try，取不到时用默认值）。
  */
-//@ chunk-4121qate.js:56984-57646 placement
-function createVmErrorDescriber(e) {
+function createVmErrorDescriber(vmContext) {
   return vmModule_2.runInContext(
     `(e => {
       let name = 'Error', message = '', stack = ''
@@ -217,30 +241,38 @@ function createVmErrorDescriber(e) {
       try { const v = e?.stack; if (typeof v === 'string') stack = v } catch {}
       return { __proto__: null, name, message, stack }
     })`,
-    e,
+    vmContext,
   );
 }
+//@ chunk-4121qate.js:57646-57891 placement
 /**
  * 在 VM 上下文中创建把值复制进 VM 的 copy 函数（数组长度上限、原型键处理）。
  */
-//@ chunk-4121qate.js:57646-57891 placement
 function createVmInboundCopier(
   e,
-  { arrayLengthCap: o, protoKey: r } = { arrayLengthCap: CLONE_DEPTH_THRESHOLD, protoKey: "left-out" },
+  { arrayLengthCap: o, protoKey: r } = {
+    arrayLengthCap: CLONE_DEPTH_THRESHOLD,
+    protoKey: "left-out",
+  },
 ) {
   return vmModule_2.runInContext(
     `(() => {
       'use strict';
-      ${copyAcrossVmBoundary({ arrayLengthCap: o, isLeaving: !1, isListSeenFirst: !1, protoKey: r })}
+      ${copyAcrossVmBoundary({
+        arrayLengthCap: o,
+        isLeaving: false,
+        isListSeenFirst: false,
+        protoKey: r,
+      })}
       return copy
     })()`,
     e,
   );
 }
+//@ chunk-4121qate.js:57891-58479 placement
 /**
  * 把抛出值重新封装为冻结纯错误对象的源码。
  */
-//@ chunk-4121qate.js:57891-58479 placement
 var RESEAL_ERROR_SOURCE = `(e) => {
   let name = 'Error', message = '', stack
   try { const v = e?.name; if (typeof v === 'string') name = v } catch {}
@@ -261,10 +293,10 @@ var RESEAL_ERROR_SOURCE = `(e) => {
     toString: toStr,
   })
 }`;
+//@ chunk-4121qate.js:58479-58803 placement
 /**
  * 在 VM 上下文中创建宿主函数包装：同步抛错重新封装为冻结的纯错误对象。
  */
-//@ chunk-4121qate.js:58479-58803 placement
 function createVmHostFnWrapper(e) {
   return vmModule_2.runInContext(
     `(() => {
@@ -331,10 +363,10 @@ function VM_HOST_FN_WRAPPER(e) {
     e,
   );
 }
+//@ chunk-4121qate.js:60519-60910 placement
 /**
  * 在 VM 上下文中创建函数包装：调用返回的 Promise 被拒绝时把原因交给日志回调。
  */
-//@ chunk-4121qate.js:60519-60910 placement
 function createVmRejectionWatcher(e, o) {
   return vmModule_2.runInContext(
     `((onRejection) => {
@@ -350,31 +382,48 @@ function createVmRejectionWatcher(e, o) {
     e,
   )(sanitizeAndLogError(o));
 }
+//@ chunk-4121qate.js:60910-61097 placement
 /**
  * 创建冻结的纯错误对象（name、message、stack、toString），可安全跨越 VM 边界抛出。
  */
-//@ chunk-4121qate.js:60910-61097 placement
 function createSealedError(e, o = "Error", r) {
   let n = () => `${o}: ${e}`;
-  return (
-    Object.setPrototypeOf(n, null),
-    Object.freeze(n),
-    Object.freeze({ __proto__: null, name: o, message: e, stack: r ?? `${o}: ${e}`, toString: n })
-  );
+  Object.setPrototypeOf(n, null);
+  Object.freeze(n);
+  return Object.freeze({
+    __proto__: null,
+    name: o,
+    message: e,
+    stack: r ?? `${o}: ${e}`,
+    toString: n,
+  });
 }
 //@ chunk-4121qate.js:61097-61104 placement
-var Ln;
+/**
+ * 懒创建的错误读取器
+ */
+var lazyErrorReader;
+//@ chunk-4121qate.js:61104-61903 placement
 /**
  * 获取（懒创建）在隔离 VM 中读取抛出值 msg/name/stack 的函数。
  */
-//@ chunk-4121qate.js:61104-61903 placement
 function getThrownValueDescriber() {
-  if (!Ln) {
-    let e = SubAgentContext({ __proto__: null }, { codeGeneration: { strings: !1, wasm: !1 } });
-    (cfr(e),
-      createVmRealm(e, freeze),
-      (Ln = vmModule_2.runInContext(
-        `(e => {
+  if (!lazyErrorReader) {
+    let e = SubAgentContext(
+      {
+        __proto__: null,
+      },
+      {
+        codeGeneration: {
+          strings: false,
+          wasm: false,
+        },
+      },
+    );
+    removeCaptureStackTrace(e);
+    createVmRealm(e, vUe);
+    lazyErrorReader = vmModule_2.runInContext(
+      `(e => {
         // Independent try blocks \u2014 a throwing .name getter must not discard
         // an already-validated .message (and vice versa).
         let msg, name = 'Error', stack
@@ -392,10 +441,10 @@ function getThrownValueDescriber() {
         } catch {}
         return { __proto__: null, msg, name, stack }
       })`,
-        e,
-      )));
+      e,
+    );
   }
-  return Ln;
+  return lazyErrorReader;
 }
 //@ chunk-4121qate.js:61903-62161 placement
 function describeThrownValue(e) {
@@ -404,21 +453,23 @@ function describeThrownValue(e) {
     return {
       msg: typeof o.msg === "string" ? o.msg : "<unprintable thrown value>",
       name: typeof o.name === "string" ? o.name : "Error",
-      stack: typeof o.stack === "string" ? o.stack : void 0,
+      stack: typeof o.stack === "string" ? o.stack : undefined,
     };
   } catch {
-    return { msg: "<unprintable thrown value>", name: "Error" };
+    return {
+      msg: "<unprintable thrown value>",
+      name: "Error",
+    };
   }
 }
+//@ chunk-4121qate.js:62161-62271 placement
 /**
  * 日志参数文本：原始值转字符串，对象与函数给 "[类型]"。
  */
-//@ chunk-4121qate.js:62161-62271 placement
 function describeLogArg(e) {
   if (e == null || (typeof e !== "object" && typeof e !== "function")) return String(e);
   return `[${typeof e}]`;
 }
-
 export {
   describeLogArg,
   describeThrownValue,
@@ -426,13 +477,13 @@ export {
   vmImportOptions,
   createVmInboundCopier,
   createVmRealm,
-  freeze,
-  FAn,
+  vUe,
+  callWithArgs,
   createVmErrorDescriber,
   VM_HOST_FN_WRAPPER,
   createVmRejectionWatcher,
-  cfr,
+  removeCaptureStackTrace,
   createVmHostFnWrapper,
-  $An,
-  B5e,
+  awaitAsNullProto,
+  timeoutOption,
 };

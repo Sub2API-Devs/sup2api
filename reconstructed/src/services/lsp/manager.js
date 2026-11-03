@@ -15,63 +15,72 @@ import { isCustomizationDisabled } from "../../utils/settings/customizationDisab
 import { createLSPServerManager } from "./LSPServerManager.js";
 import { logFeatureOk, logFeatureBad, logFeatureSad } from "../analytics/featureTelemetry.js";
 import { registerLSPNotificationHandlers } from "./passiveFeedback.js";
-import { Wee } from "../../utils/plugins/pluginScopedWrite.js";
+import { logPluginScopedError } from "../../utils/plugins/pluginScopedWrite.js";
 import { errorMessage } from "../../utils/errors.js";
 
+//@ chunk-e6aww6q8.js:4641689-4641986 placement
 /**
  * 远程会话（CLAUDE_CODE_REMOTE / REMOTE_SESSION_ID / REMOTE_ENVIRONMENT_TYPE）且 GrowthBook tengu_moonlit_panda 为 true 时，延后 LSP 初始化。
  */
-//@ chunk-e6aww6q8.js:4641689-4641986 placement
 function shouldDeferLspForRemoteSession() {
   if (!(
-    env.CLAUDE_CODE_REMOTE === !0 ||
+    env.CLAUDE_CODE_REMOTE === true ||
     Boolean(env.CLAUDE_CODE_REMOTE_SESSION_ID) ||
     Boolean(env.CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE)
   ))
-    return !1;
-  let n = getFeatureValueWithSource_CACHED_MAY_BE_STALE("tengu_moonlit_panda", !1);
-  return (
-    logForDebugging(
-      `[LSP MANAGER] Remote session: tengu_moonlit_panda=${String(n.value)} (source: ${n.source})`,
-    ),
-    n.value === !0
+    return false;
+  let n = getFeatureValueWithSource_CACHED_MAY_BE_STALE("tengu_moonlit_panda", false);
+  logForDebugging(
+    `[LSP MANAGER] Remote session: tengu_moonlit_panda=${String(n.value)} (source: ${n.source})`,
   );
+  return n.value === true;
 }
+//@ chunk-e6aww6q8.js:4641986-4644165 fingerprint = initializeLspServerManager (0.49)
 /**
  * LSP 管理器单例工厂：持有 manager、initState(not-started/pending/success/failed)、代次号。initialize() 在 --bare 等禁用 lspServers 时跳过、远程会话按 tengu_moonlit_panda 延后，否则创建 LSPServerManager 并异步 initialize，成功后注册诊断处理器；reinitialize() 关掉旧实例按上次参数重建（插件刷新后）；另有 getStatus/isConnected/hasEverConnected/waitForInitialization/shutdown。
  */
-//@ chunk-e6aww6q8.js:4641986-4644165 fingerprint = initializeLspServerManager (0.49)
 function createLspManagerSingleton() {
-  let manager,
-    initState = "not-started",
-    initError,
-    generation = 0,
-    initPromise,
-    lastContext,
-    deferredForRemote = !1;
+  let manager;
+  let initState = "not-started";
+  let initError;
+  let generation = 0;
+  let initPromise;
+  let lastContext;
+  let deferredForRemote = false;
   function getManager() {
     if (initState === "failed") return;
     return manager;
   }
   function getStatus() {
     if (initState === "failed")
-      return { status: "failed", error: initError || Error("Initialization failed") };
-    if (initState === "not-started") return { status: "not-started" };
-    if (initState === "pending") return { status: "pending" };
-    return { status: "success" };
+      return {
+        status: "failed",
+        error: initError || Error("Initialization failed"),
+      };
+    if (initState === "not-started")
+      return {
+        status: "not-started",
+      };
+    if (initState === "pending")
+      return {
+        status: "pending",
+      };
+    return {
+      status: "success",
+    };
   }
   function isConnected() {
-    if (initState === "failed") return !1;
-    let Ae = getManager();
-    if (!Ae) return !1;
-    let allServers = Ae.getAllServers();
-    if (allServers.size === 0) return !1;
-    for (let Me of allServers.values()) if (Me.state !== "error") return !0;
-    return !1;
+    if (initState === "failed") return false;
+    let manager = getManager();
+    if (!manager) return false;
+    let servers = manager.getAllServers();
+    if (servers.size === 0) return false;
+    for (let server of servers.values()) if (server.state !== "error") return true;
+    return false;
   }
-  let everConnected = !1;
+  let everConnected = false;
   function hasEverConnected() {
-    if (!everConnected && isConnected()) everConnected = !0;
+    if (!everConnected && isConnected()) everConnected = true;
     return everConnected;
   }
   async function waitForInitialization() {
@@ -81,116 +90,121 @@ function createLspManagerSingleton() {
   function initialize(context, storageV5, credentials) {
     if (isCustomizationDisabled("lspServers")) return;
     if (shouldDeferLspForRemoteSession()) {
-      ((lastContext = context), (deferredForRemote = !0), (everConnected = !1), generation++);
+      lastContext = context;
+      deferredForRemote = true;
+      everConnected = false;
+      generation++;
       return;
     }
-    if (
-      ((deferredForRemote = !1),
-      logForDebugging("[LSP MANAGER] initializeLspServerManager() called"),
-      manager !== void 0 && initState !== "failed")
-    ) {
+    deferredForRemote = false;
+    logForDebugging("[LSP MANAGER] initializeLspServerManager() called");
+    if (manager !== undefined && initState !== "failed") {
       logForDebugging("[LSP MANAGER] Already initialized or initializing, skipping");
       return;
     }
-    if (initState === "failed") ((manager = void 0), (initError = void 0));
-    ((lastContext = context),
-      (manager = createLSPServerManager(storageV5, credentials)),
-      (initState = "pending"),
-      logForDebugging("[LSP MANAGER] Created manager instance, state=pending"));
+    if (initState === "failed") {
+      manager = undefined;
+      initError = undefined;
+    }
+    lastContext = context;
+    manager = createLSPServerManager(storageV5, credentials);
+    initState = "pending";
+    logForDebugging("[LSP MANAGER] Created manager instance, state=pending");
     let currentGeneration = ++generation;
-    (logForDebugging(`[LSP MANAGER] Starting async initialization (generation ${currentGeneration})`),
-      (initPromise = manager
-        .initialize()
-        .then(() => {
-          if (currentGeneration === generation) {
-            if (
-              ((initState = "success"),
-              logForDebugging("LSP server manager initialized successfully"),
-              logFeatureOk("lsp_init"),
-              manager)
-            ) {
-              if (
-                (registerLSPNotificationHandlers(manager, context),
-                manager.getAllServers().size === 0 && !manager.didLastConfigLoadFail())
-              )
-                everConnected = !1;
-            }
+    logForDebugging(`[LSP MANAGER] Starting async initialization (generation ${currentGeneration})`);
+    initPromise = manager
+      .initialize()
+      .then(() => {
+        if (currentGeneration === generation) {
+          initState = "success";
+          logForDebugging("LSP server manager initialized successfully");
+          logFeatureOk("lsp_init");
+          if (manager) {
+            registerLSPNotificationHandlers(manager, context);
+            if (manager.getAllServers().size === 0 && !manager.didLastConfigLoadFail()) everConnected = false;
           }
-        })
-        .catch((error) => {
-          if (currentGeneration === generation)
-            ((initState = "failed"),
-              (initError = error),
-              (manager = void 0),
-              Wee(error, "Failed to initialize LSP server manager"),
-              logForDebugging(`Failed to initialize LSP server manager: ${errorMessage(error)}`),
-              logFeatureBad("lsp_init", "lsp_init_failed"));
-        })));
-  }
-  function reinitialize(Ae, Ie) {
-    let Me = lastContext;
-    if ((initState === "not-started" && !deferredForRemote) || Me === void 0) return;
-    if ((logForDebugging("[LSP MANAGER] reinitializeLspServerManager() called"), manager))
-      manager.shutdown().catch((We) => {
-        logForDebugging(`[LSP MANAGER] old instance shutdown during reinit failed: ${errorMessage(We)}`);
+        }
+      })
+      .catch((error) => {
+        if (currentGeneration === generation) {
+          initState = "failed";
+          initError = error;
+          manager = undefined;
+          logPluginScopedError(error, "Failed to initialize LSP server manager");
+          logForDebugging(`Failed to initialize LSP server manager: ${errorMessage(error)}`);
+          logFeatureBad("lsp_init", "lsp_init_failed");
+        }
       });
-    ((manager = void 0), (initState = "not-started"), (initError = void 0), initialize(Me, Ae, Ie));
+  }
+  function reinitialize(storageV5, credentials) {
+    let context = lastContext;
+    if ((initState === "not-started" && !deferredForRemote) || context === undefined) return;
+    logForDebugging("[LSP MANAGER] reinitializeLspServerManager() called");
+    if (manager)
+      manager.shutdown().catch((error) => {
+        logForDebugging(`[LSP MANAGER] old instance shutdown during reinit failed: ${errorMessage(error)}`);
+      });
+    manager = undefined;
+    initState = "not-started";
+    initError = undefined;
+    initialize(context, storageV5, credentials);
   }
   async function shutdown() {
-    if (manager === void 0) {
-      deferredForRemote = !1;
+    if (manager === undefined) {
+      deferredForRemote = false;
       return;
     }
     try {
-      (await manager.shutdown(),
-        logForDebugging("LSP server manager shut down successfully"),
-        logFeatureOk("lsp_shutdown"));
+      await manager.shutdown();
+      logForDebugging("LSP server manager shut down successfully");
+      logFeatureOk("lsp_shutdown");
     } catch (error) {
-      (logFeatureSad("lsp_shutdown", "lsp_shutdown_failed"),
-        logForDebugging(`Failed to shutdown LSP server manager: ${errorMessage(error)}`, { level: "error" }));
+      logFeatureSad("lsp_shutdown", "lsp_shutdown_failed");
+      logForDebugging(`Failed to shutdown LSP server manager: ${errorMessage(error)}`, {
+        level: "error",
+      });
     } finally {
-      ((manager = void 0),
-        (initState = "not-started"),
-        (initError = void 0),
-        (initPromise = void 0),
-        (lastContext = void 0),
-        generation++);
+      manager = undefined;
+      initState = "not-started";
+      initError = undefined;
+      initPromise = undefined;
+      lastContext = undefined;
+      generation++;
     }
   }
   return {
     get: getManager,
-    getStatus: getStatus,
-    isConnected: isConnected,
-    hasEverConnected: hasEverConnected,
-    waitForInitialization: waitForInitialization,
-    initialize: initialize,
-    reinitialize: reinitialize,
-    shutdown: shutdown,
+    getStatus,
+    isConnected,
+    hasEverConnected,
+    waitForInitialization,
+    initialize,
+    reinitialize,
+    shutdown,
   };
 }
+//@ chunk-e6aww6q8.js:4644165-4644313 placement
 /**
  * LSP 管理器单例，并解构导出 getLspServerManager/getInitializationStatus/isLspConnected/hasLspEverConnected/waitForLspInitialization/initializeLspServerManager/reinitializeLspServerManager/shutdownLspServerManager。
  */
-//@ chunk-e6aww6q8.js:4644165-4644313 placement
-var lspManagerSingleton = createLspManagerSingleton(),
-  {
-    get: getLspServerManager,
-    getStatus: getInitializationStatus,
-    isConnected: isLspConnected,
-    hasEverConnected: hasLspEverConnected,
-    waitForInitialization: waitForLspInitialization,
-    initialize: initializeLspServerManager,
-    reinitialize: reinitializeLspServerManager,
-    shutdown: shutdownLspServerManager,
-  } = lspManagerSingleton;
+var lspManagerSingleton = createLspManagerSingleton();
+var {
+  get: getLspServerManager,
+  getStatus: getInitializationStatus,
+  isConnected: isLspConnected,
+  hasEverConnected: hasLspEverConnected,
+  waitForInitialization: waitForLspInitialization,
+  initialize: initializeLspServerManager,
+  reinitialize: reinitializeLspServerManager,
+  shutdown: shutdownLspServerManager,
+} = lspManagerSingleton;
+//@ chunk-aepeg2w5.js:288956-288982 placement
 /**
  * LSP 管理器（外部构建为 null）。
  */
-//@ chunk-aepeg2w5.js:288956-288982 placement
 function getLspManager() {
   return null;
 }
-
 export {
   getLspManager,
   reinitializeLspServerManager,

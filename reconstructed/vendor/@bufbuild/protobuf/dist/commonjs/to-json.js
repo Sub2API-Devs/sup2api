@@ -6,304 +6,335 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../runtime/bun-runtime.js";
-import { Ns } from "../cjs/descriptors.js";
-import { Ec } from "../cjs/reflect/names.js";
-import { Po } from "../cjs/reflect/reflect.js";
-import { Os, hy } from "../../../../@anthropic-ai/bedrock-sdk/core/error.js";
-import { Fu } from "../cjs/wkt/wrappers.js";
-import { gp } from "./extensions.js";
-import { Dg } from "../cjs/reflect/reflect-check.js";
+import { require_descriptors } from "../cjs/descriptors.js";
+import { require_names } from "../cjs/reflect/names.js";
+import { require_reflect } from "../cjs/reflect/reflect.js";
+import { require_error_4, require_error_5 } from "../../../../@anthropic-ai/bedrock-sdk/core/error.js";
+import { require_wrappers } from "../cjs/wkt/wrappers.js";
+import { require_extensions } from "./extensions.js";
+import { require_reflect_check } from "../cjs/reflect/reflect-check.js";
 
 //@ chunk-fq0cr76a.js:449273-456071 cjs-fingerprint
-var UP = x(function (LP) {
-  Object.defineProperty(LP, "__esModule", { value: !0 });
-  LP.toJson = kP;
-  LP.toJsonString = vJ;
-  LP.enumToJson = wJ;
-  var or = Ns(),
-    rd = Ec(),
-    gy = Po(),
-    IP = Os(),
-    yy = Fu(),
-    NP = hy(),
-    my = gp(),
-    ai = Dg(),
-    EJ = 3,
-    xJ = 2,
-    CP = { alwaysEmitImplicit: !1, enumAsInteger: !1, useProtoFieldName: !1 };
-  function _J(e) {
-    return e ? Object.assign(Object.assign({}, CP), e) : CP;
+var require_to_json = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.toJson = toJson;
+  cjsExports.toJsonString = toJsonString;
+  cjsExports.enumToJson = enumToJson;
+  var descriptors_js_1 = require_descriptors();
+  var names_js_1 = require_names();
+  var reflect_js_1 = require_reflect();
+  var index_js_1 = require_error_4();
+  var wrappers_js_1 = require_wrappers();
+  var index_js_2 = require_error_5();
+  var extensions_js_1 = require_extensions();
+  var reflect_check_js_1 = require_reflect_check();
+  var LEGACY_REQUIRED = 3;
+  var IMPLICIT = 2;
+  var jsonWriteDefaults = {
+    alwaysEmitImplicit: false,
+    enumAsInteger: false,
+    useProtoFieldName: false,
+  };
+  function makeWriteOptions(options) {
+    return options ? Object.assign(Object.assign({}, jsonWriteDefaults), options) : jsonWriteDefaults;
   }
-  function kP(e, n, r) {
-    return bp(gy.reflect(e, n), _J(r));
+  function toJson(schema, message, options) {
+    return reflectToJson(reflect_js_1.reflect(schema, message), makeWriteOptions(options));
   }
-  function vJ(e, n, r) {
-    var s;
-    let h = kP(e, n, r);
+  function toJsonString(schema, message, options) {
+    var _a;
+    let jsonValue = toJson(schema, message, options);
     return JSON.stringify(
-      h,
+      jsonValue,
       null,
-      (s = r === null || r === void 0 ? void 0 : r.prettySpaces) !== null && s !== void 0 ? s : 0,
+      (_a = options === null || options === undefined ? undefined : options.prettySpaces) !== null &&
+        _a !== undefined
+        ? _a
+        : 0,
     );
   }
-  function wJ(e, n) {
-    var r;
-    if (e.typeName == "google.protobuf.NullValue") return null;
-    let s = (r = e.value[n]) === null || r === void 0 ? void 0 : r.name;
-    if (s === void 0) throw Error(`${n} is not a value in ${e}`);
-    return s;
+  function enumToJson(descEnum, value) {
+    var _a;
+    if (descEnum.typeName == "google.protobuf.NullValue") return null;
+    let name = (_a = descEnum.value[value]) === null || _a === undefined ? undefined : _a.name;
+    if (name === undefined) throw Error(`${value} is not a value in ${descEnum}`);
+    return name;
   }
-  function bp(e, n) {
-    var r;
-    let s = DP(e, n);
-    if (s !== void 0) return s;
-    let h = {};
-    for (let sortedField of e.sortedFields) {
-      if (!e.isSet(sortedField)) {
-        if (sortedField.presence == EJ)
-          throw Error(`cannot encode ${sortedField} to JSON: required field not set`);
-        if (!n.alwaysEmitImplicit || sortedField.presence !== xJ) continue;
+  function reflectToJson(msg, opts) {
+    var _a;
+    let wktJson = tryWktToJson(msg, opts);
+    if (wktJson !== undefined) return wktJson;
+    let json = {};
+    for (let f of msg.sortedFields) {
+      if (!msg.isSet(f)) {
+        if (f.presence == LEGACY_REQUIRED) throw Error(`cannot encode ${f} to JSON: required field not set`);
+        if (!opts.alwaysEmitImplicit || f.presence !== IMPLICIT) continue;
       }
-      let b = RP(sortedField, e.get(sortedField), n);
-      if (b !== void 0) h[CJ(sortedField, n)] = b;
+      let jsonValue = fieldToJson(f, msg.get(f), opts);
+      if (jsonValue !== undefined) json[jsonName(f, opts)] = jsonValue;
     }
-    if (n.registry) {
-      let y = new Set();
-      for (let { no: no } of (r = e.getUnknown()) !== null && r !== void 0 ? r : [])
-        if (!y.has(no)) {
-          y.add(no);
-          let extensionFor = n.registry.getExtensionFor(e.desc, no);
-          if (!extensionFor) continue;
-          let extension = my.getExtension(e.message, extensionFor),
-            [R, D] = my.createExtensionContainer(extensionFor, extension),
-            O = RP(D, R.get(D), n);
-          if (O !== void 0) h[extensionFor.jsonName] = O;
+    if (opts.registry) {
+      let tagSeen = new Set();
+      for (let { no } of (_a = msg.getUnknown()) !== null && _a !== undefined ? _a : [])
+        if (!tagSeen.has(no)) {
+          tagSeen.add(no);
+          let extension = opts.registry.getExtensionFor(msg.desc, no);
+          if (!extension) continue;
+          let value = extensions_js_1.getExtension(msg.message, extension);
+          let [container, field] = extensions_js_1.createExtensionContainer(extension, value);
+          let jsonValue = fieldToJson(field, container.get(field), opts);
+          if (jsonValue !== undefined) json[extension.jsonName] = jsonValue;
         }
     }
-    return h;
+    return json;
   }
-  function RP(e, n, r) {
-    switch (e.fieldKind) {
+  function fieldToJson(f, val, opts) {
+    switch (f.fieldKind) {
       case "scalar":
-        return by(e, n);
+        return scalarToJson(f, val);
       case "message":
-        return bp(n, r);
+        return reflectToJson(val, opts);
       case "enum":
-        return x_(e.enum, n, r.enumAsInteger);
+        return enumToJsonInternal(f.enum, val, opts.enumAsInteger);
       case "list":
-        return AJ(n, r);
+        return listToJson(val, opts);
       case "map":
-        return TJ(n, r);
+        return mapToJson(val, opts);
     }
   }
-  function TJ(e, n) {
-    let field = e.field(),
-      s = {};
-    switch (field.mapKind) {
+  function mapToJson(map, opts) {
+    let f = map.field();
+    let jsonObj = {};
+    switch (f.mapKind) {
       case "scalar":
-        for (let [h, y] of e) s[h] = by(field, y);
+        for (let [entryKey, entryValue] of map) jsonObj[entryKey] = scalarToJson(f, entryValue);
         break;
       case "message":
-        for (let [h, y] of e) s[h] = bp(y, n);
+        for (let [entryKey, entryValue] of map) jsonObj[entryKey] = reflectToJson(entryValue, opts);
         break;
       case "enum":
-        for (let [h, y] of e) s[h] = x_(field.enum, y, n.enumAsInteger);
+        for (let [entryKey, entryValue] of map)
+          jsonObj[entryKey] = enumToJsonInternal(f.enum, entryValue, opts.enumAsInteger);
         break;
     }
-    return n.alwaysEmitImplicit || e.size > 0 ? s : void 0;
+    return opts.alwaysEmitImplicit || map.size > 0 ? jsonObj : undefined;
   }
-  function AJ(e, n) {
-    let field = e.field(),
-      s = [];
-    switch (field.listKind) {
+  function listToJson(list, opts) {
+    let f = list.field();
+    let jsonArr = [];
+    switch (f.listKind) {
       case "scalar":
-        for (let h of e) s.push(by(field, h));
+        for (let item of list) jsonArr.push(scalarToJson(f, item));
         break;
       case "enum":
-        for (let h of e) s.push(x_(field.enum, h, n.enumAsInteger));
+        for (let item of list) jsonArr.push(enumToJsonInternal(f.enum, item, opts.enumAsInteger));
         break;
       case "message":
-        for (let h of e) s.push(bp(h, n));
+        for (let item of list) jsonArr.push(reflectToJson(item, opts));
         break;
     }
-    return n.alwaysEmitImplicit || s.length > 0 ? s : void 0;
+    return opts.alwaysEmitImplicit || jsonArr.length > 0 ? jsonArr : undefined;
   }
-  function x_(e, n, r) {
-    var s;
-    if (typeof n != "number")
-      throw Error(`cannot encode ${e} to JSON: expected number, got ${ai.formatVal(n)}`);
-    if (e.typeName == "google.protobuf.NullValue") return null;
-    if (r) return n;
-    let h = e.value[n];
-    return (s = h === null || h === void 0 ? void 0 : h.name) !== null && s !== void 0 ? s : n;
+  function enumToJsonInternal(desc, value, enumAsInteger) {
+    var _a;
+    if (typeof value != "number")
+      throw Error(
+        `cannot encode ${desc} to JSON: expected number, got ${reflect_check_js_1.formatVal(value)}`,
+      );
+    if (desc.typeName == "google.protobuf.NullValue") return null;
+    if (enumAsInteger) return value;
+    let val = desc.value[value];
+    return (_a = val === null || val === undefined ? undefined : val.name) !== null && _a !== undefined
+      ? _a
+      : value;
   }
-  function by(e, n) {
-    var r, s, h, y, b, S;
-    switch (e.scalar) {
-      case or.ScalarType.INT32:
-      case or.ScalarType.SFIXED32:
-      case or.ScalarType.SINT32:
-      case or.ScalarType.FIXED32:
-      case or.ScalarType.UINT32:
-        if (typeof n != "number")
+  function scalarToJson(field, value) {
+    var _a;
+    var _b;
+    var _c;
+    var _d;
+    var _e;
+    var _f;
+    switch (field.scalar) {
+      case descriptors_js_1.ScalarType.INT32:
+      case descriptors_js_1.ScalarType.SFIXED32:
+      case descriptors_js_1.ScalarType.SINT32:
+      case descriptors_js_1.ScalarType.FIXED32:
+      case descriptors_js_1.ScalarType.UINT32:
+        if (typeof value != "number")
           throw Error(
-            `cannot encode ${e} to JSON: ${(r = ai.checkField(e, n)) === null || r === void 0 ? void 0 : r.message}`,
+            `cannot encode ${field} to JSON: ${(_a = reflect_check_js_1.checkField(field, value)) === null || _a === undefined ? undefined : _a.message}`,
           );
-        return n;
-      case or.ScalarType.FLOAT:
-      case or.ScalarType.DOUBLE:
-        if (typeof n != "number")
+        return value;
+      case descriptors_js_1.ScalarType.FLOAT:
+      case descriptors_js_1.ScalarType.DOUBLE:
+        if (typeof value != "number")
           throw Error(
-            `cannot encode ${e} to JSON: ${(s = ai.checkField(e, n)) === null || s === void 0 ? void 0 : s.message}`,
+            `cannot encode ${field} to JSON: ${(_b = reflect_check_js_1.checkField(field, value)) === null || _b === undefined ? undefined : _b.message}`,
           );
-        if (Number.isNaN(n)) return "NaN";
-        if (n === Number.POSITIVE_INFINITY) return "Infinity";
-        if (n === Number.NEGATIVE_INFINITY) return "-Infinity";
-        return n;
-      case or.ScalarType.STRING:
-        if (typeof n != "string")
+        if (Number.isNaN(value)) return "NaN";
+        if (value === Number.POSITIVE_INFINITY) return "Infinity";
+        if (value === Number.NEGATIVE_INFINITY) return "-Infinity";
+        return value;
+      case descriptors_js_1.ScalarType.STRING:
+        if (typeof value != "string")
           throw Error(
-            `cannot encode ${e} to JSON: ${(h = ai.checkField(e, n)) === null || h === void 0 ? void 0 : h.message}`,
+            `cannot encode ${field} to JSON: ${(_c = reflect_check_js_1.checkField(field, value)) === null || _c === undefined ? undefined : _c.message}`,
           );
-        return n;
-      case or.ScalarType.BOOL:
-        if (typeof n != "boolean")
+        return value;
+      case descriptors_js_1.ScalarType.BOOL:
+        if (typeof value != "boolean")
           throw Error(
-            `cannot encode ${e} to JSON: ${(y = ai.checkField(e, n)) === null || y === void 0 ? void 0 : y.message}`,
+            `cannot encode ${field} to JSON: ${(_d = reflect_check_js_1.checkField(field, value)) === null || _d === undefined ? undefined : _d.message}`,
           );
-        return n;
-      case or.ScalarType.UINT64:
-      case or.ScalarType.FIXED64:
-      case or.ScalarType.INT64:
-      case or.ScalarType.SFIXED64:
-      case or.ScalarType.SINT64:
-        if (typeof n == "bigint" || typeof n == "string" || (typeof n == "number" && Number.isInteger(n)))
-          return n.toString();
+        return value;
+      case descriptors_js_1.ScalarType.UINT64:
+      case descriptors_js_1.ScalarType.FIXED64:
+      case descriptors_js_1.ScalarType.INT64:
+      case descriptors_js_1.ScalarType.SFIXED64:
+      case descriptors_js_1.ScalarType.SINT64:
+        if (
+          typeof value == "bigint" ||
+          typeof value == "string" ||
+          (typeof value == "number" && Number.isInteger(value))
+        )
+          return value.toString();
         throw Error(
-          `cannot encode ${e} to JSON: ${(b = ai.checkField(e, n)) === null || b === void 0 ? void 0 : b.message}`,
+          `cannot encode ${field} to JSON: ${(_e = reflect_check_js_1.checkField(field, value)) === null || _e === undefined ? undefined : _e.message}`,
         );
-      case or.ScalarType.BYTES:
-        if (n instanceof Uint8Array) return NP.base64Encode(n);
+      case descriptors_js_1.ScalarType.BYTES:
+        if (value instanceof Uint8Array) return index_js_2.base64Encode(value);
         throw Error(
-          `cannot encode ${e} to JSON: ${(S = ai.checkField(e, n)) === null || S === void 0 ? void 0 : S.message}`,
+          `cannot encode ${field} to JSON: ${(_f = reflect_check_js_1.checkField(field, value)) === null || _f === undefined ? undefined : _f.message}`,
         );
     }
   }
-  function CJ(e, n) {
-    return n.useProtoFieldName ? e.name : e.jsonName;
+  function jsonName(f, opts) {
+    return opts.useProtoFieldName ? f.name : f.jsonName;
   }
-  function DP(e, n) {
-    if (!e.desc.typeName.startsWith("google.protobuf.")) return;
-    switch (e.desc.typeName) {
+  function tryWktToJson(msg, opts) {
+    if (!msg.desc.typeName.startsWith("google.protobuf.")) return;
+    switch (msg.desc.typeName) {
       case "google.protobuf.Any":
-        return RJ(e.message, n);
+        return anyToJson(msg.message, opts);
       case "google.protobuf.Timestamp":
-        return kJ(e.message);
+        return timestampToJson(msg.message);
       case "google.protobuf.Duration":
-        return IJ(e.message);
+        return durationToJson(msg.message);
       case "google.protobuf.FieldMask":
-        return NJ(e.message);
+        return fieldMaskToJson(msg.message);
       case "google.protobuf.Struct":
-        return OP(e.message);
+        return structToJson(msg.message);
       case "google.protobuf.Value":
-        return __(e.message);
+        return valueToJson(msg.message);
       case "google.protobuf.ListValue":
-        return PP(e.message);
+        return listValueToJson(msg.message);
       default:
-        if (yy.isWrapperDesc(e.desc)) {
-          let r = e.desc.fields[0];
-          return by(r, e.get(r));
+        if (wrappers_js_1.isWrapperDesc(msg.desc)) {
+          let valueField = msg.desc.fields[0];
+          return scalarToJson(valueField, msg.get(valueField));
         }
         return;
     }
   }
-  function RJ(e, n) {
-    if (e.typeUrl === "") return {};
-    let { registry: registry } = n,
-      s,
-      h;
+  function anyToJson(val, opts) {
+    if (val.typeUrl === "") return {};
+    let { registry } = opts;
+    let message;
+    let desc;
     if (registry) {
-      if (((s = IP.anyUnpack(e, registry)), s)) h = registry.getMessage(s.$typeName);
+      message = index_js_1.anyUnpack(val, registry);
+      if (message) desc = registry.getMessage(message.$typeName);
     }
-    if (!h || !s)
-      throw Error(`cannot encode message ${e.$typeName} to JSON: "${e.typeUrl}" is not in the type registry`);
-    let reflect = gy.reflect(h, s),
-      b = yy.hasCustomJsonRepresentation(h) ? { value: DP(reflect, n) } : bp(reflect, n);
-    return ((b["@type"] = e.typeUrl), b);
+    if (!desc || !message)
+      throw Error(
+        `cannot encode message ${val.$typeName} to JSON: "${val.typeUrl}" is not in the type registry`,
+      );
+    let reflected = reflect_js_1.reflect(desc, message);
+    let json = wrappers_js_1.hasCustomJsonRepresentation(desc)
+      ? {
+          value: tryWktToJson(reflected, opts),
+        }
+      : reflectToJson(reflected, opts);
+    json["@type"] = val.typeUrl;
+    return json;
   }
-  function IJ(e) {
-    let n = Number(e.seconds),
-      nanos = e.nanos;
-    if (n > 315576000000 || n < -315576000000)
-      throw Error(`cannot encode message ${e.$typeName} to JSON: value out of range`);
-    if ((n > 0 && nanos < 0) || (n < 0 && nanos > 0))
-      throw Error(`cannot encode message ${e.$typeName} to JSON: nanos sign must match seconds sign`);
-    let str = e.seconds.toString();
+  function durationToJson(val) {
+    let seconds = Number(val.seconds);
+    let nanos = val.nanos;
+    if (seconds > 315576000000 || seconds < -315576000000)
+      throw Error(`cannot encode message ${val.$typeName} to JSON: value out of range`);
+    if ((seconds > 0 && nanos < 0) || (seconds < 0 && nanos > 0))
+      throw Error(`cannot encode message ${val.$typeName} to JSON: nanos sign must match seconds sign`);
+    let text = val.seconds.toString();
     if (nanos !== 0) {
-      let str_2 = Math.abs(nanos).toString();
-      if (((str_2 = "0".repeat(9 - str_2.length) + str_2), str_2.substring(3) === "000000"))
-        str_2 = str_2.substring(0, 3);
-      else if (str_2.substring(6) === "000") str_2 = str_2.substring(0, 6);
-      if (((str += "." + str_2), nanos < 0 && n == 0)) str = "-" + str;
+      let nanosStr = Math.abs(nanos).toString();
+      nanosStr = "0".repeat(9 - nanosStr.length) + nanosStr;
+      if (nanosStr.substring(3) === "000000") nanosStr = nanosStr.substring(0, 3);
+      else if (nanosStr.substring(6) === "000") nanosStr = nanosStr.substring(0, 6);
+      text += "." + nanosStr;
+      if (nanos < 0 && seconds == 0) text = "-" + text;
     }
-    return str + "s";
+    return text + "s";
   }
-  function NJ(e) {
-    return e.paths
-      .map((path) => {
-        if (rd.protoSnakeCase(rd.protoCamelCase(path)) !== path)
+  function fieldMaskToJson(val) {
+    return val.paths
+      .map((p) => {
+        if (names_js_1.protoSnakeCase(names_js_1.protoCamelCase(p)) !== p)
           throw Error(
-            `cannot encode message ${e.$typeName} to JSON: lowerCamelCase of path name "${path}" is irreversible`,
+            `cannot encode message ${val.$typeName} to JSON: lowerCamelCase of path name "${p}" is irreversible`,
           );
-        return rd.protoCamelCase(path);
+        return names_js_1.protoCamelCase(p);
       })
       .join(",");
   }
-  function OP(e) {
-    let n = {};
-    for (let [r, s] of Object.entries(e.fields)) n[r] = __(s);
-    return n;
+  function structToJson(val) {
+    let json = {};
+    for (let [k, v] of Object.entries(val.fields)) json[k] = valueToJson(v);
+    return json;
   }
-  function __(e) {
-    switch (e.kind.case) {
+  function valueToJson(val) {
+    switch (val.kind.case) {
       case "nullValue":
         return null;
       case "numberValue":
-        if (!Number.isFinite(e.kind.value)) throw Error(`${e.$typeName} cannot be NaN or Infinity`);
-        return e.kind.value;
+        if (!Number.isFinite(val.kind.value)) throw Error(`${val.$typeName} cannot be NaN or Infinity`);
+        return val.kind.value;
       case "boolValue":
-        return e.kind.value;
+        return val.kind.value;
       case "stringValue":
-        return e.kind.value;
+        return val.kind.value;
       case "structValue":
-        return OP(e.kind.value);
+        return structToJson(val.kind.value);
       case "listValue":
-        return PP(e.kind.value);
+        return listValueToJson(val.kind.value);
       default:
-        throw Error(`${e.$typeName} must have a value`);
+        throw Error(`${val.$typeName} must have a value`);
     }
   }
-  function PP(e) {
-    return e.values.map(__);
+  function listValueToJson(val) {
+    return val.values.map(valueToJson);
   }
-  function kJ(e) {
-    let n = Number(e.seconds) * 1000;
-    if (n < Date.parse("0001-01-01T00:00:00Z") || n > Date.parse("9999-12-31T23:59:59Z"))
+  function timestampToJson(val) {
+    let ms = Number(val.seconds) * 1000;
+    if (ms < Date.parse("0001-01-01T00:00:00Z") || ms > Date.parse("9999-12-31T23:59:59Z"))
       throw Error(
-        `cannot encode message ${e.$typeName} to JSON: must be from 0001-01-01T00:00:00Z to 9999-12-31T23:59:59Z inclusive`,
+        `cannot encode message ${val.$typeName} to JSON: must be from 0001-01-01T00:00:00Z to 9999-12-31T23:59:59Z inclusive`,
       );
-    if (e.nanos < 0) throw Error(`cannot encode message ${e.$typeName} to JSON: nanos must not be negative`);
-    if (e.nanos > 999999999)
-      throw Error(`cannot encode message ${e.$typeName} to JSON: nanos must not be greater than 99999999`);
-    let r = "Z";
-    if (e.nanos > 0) {
-      let substring = (e.nanos + 1e9).toString().substring(1);
-      if (substring.substring(3) === "000000") r = "." + substring.substring(0, 3) + "Z";
-      else if (substring.substring(6) === "000") r = "." + substring.substring(0, 6) + "Z";
-      else r = "." + substring + "Z";
+    if (val.nanos < 0)
+      throw Error(`cannot encode message ${val.$typeName} to JSON: nanos must not be negative`);
+    if (val.nanos > 999999999)
+      throw Error(`cannot encode message ${val.$typeName} to JSON: nanos must not be greater than 99999999`);
+    let z = "Z";
+    if (val.nanos > 0) {
+      let nanosStr = (val.nanos + 1e9).toString().substring(1);
+      if (nanosStr.substring(3) === "000000") z = "." + nanosStr.substring(0, 3) + "Z";
+      else if (nanosStr.substring(6) === "000") z = "." + nanosStr.substring(0, 6) + "Z";
+      else z = "." + nanosStr + "Z";
     }
-    return new Date(n).toISOString().replace(".000Z", r);
+    return new Date(ms).toISOString().replace(".000Z", z);
   }
 });
-
-export { UP };
+export { require_to_json };

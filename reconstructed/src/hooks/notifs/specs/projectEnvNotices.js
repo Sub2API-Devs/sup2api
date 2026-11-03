@@ -11,11 +11,11 @@
 import { saveGlobalConfig, getGlobalConfig } from "../../../utils/config.js";
 import { isProTrialExpiredWithDisabledCredits } from "../../../services/api/proTrial.js";
 import { NOOP_HELPERS } from "../../useCommandKeybindings.js";
-import { wt } from "../../../remote/remoteMode.js";
-import { g5e } from "../../../utils/managedEnvSafety.js";
+import { isRemoteSessionAvailable } from "../../../remote/remoteMode.js";
+import { isRemoteLikeEnv } from "../../../utils/managedEnvSafety.js";
 import {
   isClaudeInChromeWiredThisSession,
-  shouldEnableClaudeInChrome,
+  shouldEnableClaudeInChrome as shouldEnableClaudeInChrome_2,
 } from "../../../utils/claudeInChrome/setup.js";
 import { getChromeFlagOverride } from "../../../bootstrap/state.js";
 import { isClaudeAISubscriber, getSubscriptionType } from "../../../utils/auth.js";
@@ -24,7 +24,7 @@ import {
   getSettingsForSource,
   projectSettingsAliasesUserSettings,
 } from "../../../utils/settings/settings.js";
-import { isDangerousEnvVar, Q_r } from "../../../utils/managedEnvConstants.js";
+import { isDangerousEnvVar, OAUTH_ENV_VARS } from "../../../utils/managedEnvConstants.js";
 import { isEnvTruthy } from "../../../utils/envUtils.js";
 import { plural } from "../../../utils/stringUtils.js";
 import { env } from "../../../utils/env.js";
@@ -38,8 +38,8 @@ import { isEssentialTrafficOnly } from "../../../utils/privacyLevel.js";
 import { isPolicyAllowed as isPolicyAllowed_2 } from "../../../services/policyLimits/policyEvidence.js";
 import {
   ALLOW_PROMO_OFFERS,
-  lD,
-  D2,
+  isUsageBasedBilling,
+  usesPayAsYouGo,
   hasUsageCreditsConsent,
   isConsumerPlan,
 } from "../../../utils/planTiers.js";
@@ -57,18 +57,21 @@ var promptQueueUseCountNoticeSpec = {
   id: "prompt-queue-use-count",
   deps: (h) => [h.queuedCommandCount, h.storageV5],
   setup() {
-    let h = !1;
-    return ({ queuedCommandCount: queuedCommandCount, storageV5: storageV5 }) => {
+    let h = false;
+    return ({ queuedCommandCount, storageV5 }) => {
       if (queuedCommandCount < 1) {
-        h = !1;
+        h = false;
         return;
       }
       if (h) return;
-      ((h = !0),
-        saveGlobalConfig(
-          (L) => ({ ...L, promptQueueUseCount: (L.promptQueueUseCount ?? 0) + 1 }),
-          storageV5,
-        ));
+      h = true;
+      saveGlobalConfig(
+        (L) => ({
+          ...L,
+          promptQueueUseCount: (L.promptQueueUseCount ?? 0) + 1,
+        }),
+        storageV5,
+      );
     };
   },
 };
@@ -76,20 +79,32 @@ var promptQueueUseCountNoticeSpec = {
 var proTrialExpiredAutoOpenNoticeSpec = {
   id: "pro-trial-expired-auto-open",
   setup() {
-    return ({ submitPrompt: submitPrompt }) => {
+    return ({ submitPrompt }) => {
       if (!isProTrialExpiredWithDisabledCredits()) return;
-      submitPrompt("/pro-trial-expired", NOOP_HELPERS, { inputModeOverride: "prompt" });
+      submitPrompt("/pro-trial-expired", NOOP_HELPERS, {
+        inputModeOverride: "prompt",
+      });
     };
   },
 };
 //@ chunk-18hwfzwa.js:1776424-1776472 placement
-var projectChromeEnvNoticeSpec = { id: "project-chrome-env", setup: () => projectChromeEnvNotice };
+var projectChromeEnvNoticeSpec = {
+  id: "project-chrome-env",
+  setup: () => projectChromeEnvNotice,
+};
+//@ chunk-18hwfzwa.js:1776472-1776826 placement
 /**
  * 项目设置里设置了 CLAUDE_CODE_ENABLE_CFC 时提示：项目不能开启 Claude in Chrome，需用 /chrome 或 --chrome 自行开启。
  */
-//@ chunk-18hwfzwa.js:1776472-1776826 placement
-function projectChromeEnvNotice({ addNotification: addNotification }) {
-  if (wt() || g5e() || isClaudeInChromeWiredThisSession() || !zKo() || !projectEnablesChrome()) return;
+function projectChromeEnvNotice({ addNotification }) {
+  if (
+    isRemoteSessionAvailable() ||
+    isRemoteLikeEnv() ||
+    isClaudeInChromeWiredThisSession() ||
+    !shouldEnableClaudeInChrome() ||
+    !projectEnablesChrome()
+  )
+    return;
   addNotification({
     key: "project-chrome-env",
     kind: "warning",
@@ -100,44 +115,54 @@ function projectChromeEnvNotice({ addNotification: addNotification }) {
   });
 }
 //@ chunk-18hwfzwa.js:1776826-1776874 placement
-function zKo() {
-  return getChromeFlagOverride() !== !1 && shouldEnableClaudeInChrome(!0) && isClaudeAISubscriber();
+function shouldEnableClaudeInChrome() {
+  return getChromeFlagOverride() !== false && shouldEnableClaudeInChrome_2(true) && isClaudeAISubscriber();
 }
 //@ chunk-18hwfzwa.js:1776874-1777161 placement
 function projectEnablesChrome() {
-  let h = getEnabledSettingSources(),
-    at = h
-      .flatMap((D) =>
-        Object.entries(getSettingsForSource(D)?.env ?? {})
-          .filter(([L]) => L.toUpperCase() === "CLAUDE_CODE_ENABLE_CFC")
-          .map(([, L]) => ({ source: D, value: L })),
-      )
-      .at(-1);
+  let enabledSettingSources = getEnabledSettingSources();
+  let last = enabledSettingSources
+    .flatMap((enabledSettingSource) =>
+      Object.entries(getSettingsForSource(enabledSettingSource)?.env ?? {})
+        .filter(([key]) => key.toUpperCase() === "CLAUDE_CODE_ENABLE_CFC")
+        .map(([, value]) => ({
+          source: enabledSettingSource,
+          value,
+        })),
+    )
+    .at(-1);
   return (
-    at !== void 0 &&
-    isDangerousEnvVar(at.source) &&
-    isEnvTruthy(at.value) &&
-    !(at.source === "projectSettings" && h.includes("userSettings") && projectSettingsAliasesUserSettings())
+    last !== undefined &&
+    isDangerousEnvVar(last.source) &&
+    isEnvTruthy(last.value) &&
+    !(
+      last.source === "projectSettings" &&
+      enabledSettingSources.includes("userSettings") &&
+      projectSettingsAliasesUserSettings()
+    )
   );
 }
 //@ chunk-18hwfzwa.js:1777161-1777210 placement
-var projectSignInEnvNoticeSpec = { id: "project-sign-in-env", setup: () => projectSignInEnvNotice };
+var projectSignInEnvNoticeSpec = {
+  id: "project-sign-in-env",
+  setup: () => projectSignInEnvNotice,
+};
+//@ chunk-18hwfzwa.js:1777210-1777754 placement
 /**
  * 项目设置里设置了登录相关环境变量时提示它们被忽略（项目不能设定你的 claude.ai 登录）。
  */
-//@ chunk-18hwfzwa.js:1777210-1777754 placement
-function projectSignInEnvNotice({ addNotification: addNotification }) {
-  if (wt()) return;
-  let sources = getHooksSources(),
-    first = sources[0];
-  if (first === void 0) return;
-  let files = new Set(sources.flatMap(({ files: files }) => files)),
-    where = files.size === 1 ? [...files][0] : "this project's settings files",
-    moreCount = sources.length - 1,
-    summary =
-      moreCount === 0
-        ? `${first.name} in ${where} is ignored`
-        : `${first.name} and ${moreCount} more ${plural(moreCount, "sign-in variable")} in ${where} are ignored`;
+function projectSignInEnvNotice({ addNotification }) {
+  if (isRemoteSessionAvailable()) return;
+  let sources = getHooksSources();
+  let first = sources[0];
+  if (first === undefined) return;
+  let files = new Set(sources.flatMap(({ files }) => files));
+  let where = files.size === 1 ? [...files][0] : "this project's settings files";
+  let moreCount = sources.length - 1;
+  let summary =
+    moreCount === 0
+      ? `${first.name} in ${where} is ignored`
+      : `${first.name} and ${moreCount} more ${plural(moreCount, "sign-in variable")} in ${where} are ignored`;
   addNotification({
     key: "project-sign-in-env",
     kind: "warning",
@@ -158,23 +183,35 @@ function getHooksSources() {
         projectSettingsAliasesUserSettings()
       ),
   );
-  return Q_r.flatMap((x) => {
+  return OAUTH_ENV_VARS.flatMap((x) => {
     if (env[x]) return [];
     let mapped = filtered
-      .filter((L) => Object.keys(getSettingsForSource(L)?.env ?? {}).some((ee) => ee.toUpperCase() === x))
+      .filter((settings) =>
+        Object.keys(getSettingsForSource(settings)?.env ?? {}).some((key) => key.toUpperCase() === x),
+      )
       .map((L) => (L === "localSettings" ? ".claude/settings.local.json" : ".claude/settings.json"));
-    return mapped.length > 0 ? [{ name: x, files: mapped }] : [];
+    return mapped.length > 0
+      ? [
+          {
+            name: x,
+            files: mapped,
+          },
+        ]
+      : [];
   });
 }
 //@ chunk-18hwfzwa.js:1778113-1778164 placement
-var projectTelemetryEnvNoticeSpec = { id: "project-telemetry-env", setup: () => projectTelemetryEnvNotice };
+var projectTelemetryEnvNoticeSpec = {
+  id: "project-telemetry-env",
+  setup: () => projectTelemetryEnvNotice,
+};
+//@ chunk-18hwfzwa.js:1778164-1778531 placement
 /**
  * 项目设置里设置了遥测相关环境变量时提示，可用 /status 查看哪些被忽略、哪些关闭了遥测。
  */
-//@ chunk-18hwfzwa.js:1778164-1778531 placement
-function projectTelemetryEnvNotice({ addNotification: addNotification }) {
-  if (wt()) return;
-  let { ignored: ignored, turnedOff: turnedOff } = formatIgnoredTelemetryEnvNotice();
+function projectTelemetryEnvNotice({ addNotification }) {
+  if (isRemoteSessionAvailable()) return;
+  let { ignored, turnedOff } = formatIgnoredTelemetryEnvNotice();
   if (ignored.length === 0 && turnedOff.length === 0) return;
   addNotification({
     key: "project-telemetry-env",
@@ -185,96 +222,100 @@ function projectTelemetryEnvNotice({ addNotification: addNotification }) {
     timeoutMs: 15000,
   });
 }
+//@ chunk-18hwfzwa.js:1778531-1779429 placement
 /**
  * 启动通知"promo-credit-check"：随机延迟后、每个登录每天最多一次，查询用量接口中的促销额度窗口并把结果写入全局配置 promoCreditCheck。
  */
-//@ chunk-18hwfzwa.js:1778531-1779429 placement
-var PROMO_CHECK_INTERVAL_MS = 86400000,
-  PROMO_CHECK_MIN_DELAY_MS = 5000,
-  PROMO_CHECK_JITTER_MS = 25000,
-  promoCreditCheckSpec = {
-    id: "promo-credit-check",
-    setup() {
-      let h = !1;
-      return ({ session: session, storageV5: storageV5, credentials: credentials, clock: clock }) => {
-        if (h) return;
-        h = !0;
-        let ke = PROMO_CHECK_MIN_DELAY_MS + Math.floor(Math.random() * PROMO_CHECK_JITTER_MS);
-        return clock.setTimeout(() => {
-          if (
-            !isPromoCreditNoticeEligible(session) ||
-            isEssentialTrafficOnly() ||
-            !isPolicyAllowed_2(ALLOW_PROMO_OFFERS)
-          )
-            return;
-          let Re = getPromoLoginKey(),
-            promoCreditCheck = getGlobalConfig().promoCreditCheck,
-            now = Date.now(),
-            We = promoCreditCheck?.login === Re ? now - promoCreditCheck.askedAtMs : -1;
-          if (Re === null || (We >= 0 && We < PROMO_CHECK_INTERVAL_MS)) return;
-          (saveGlobalConfig(
-            (ze) => ({
-              ...ze,
-              promoCreditCheck: {
-                login: Re,
-                askedAtMs: now,
-                answer: ze.promoCreditCheck?.login === Re ? ze.promoCreditCheck.answer : void 0,
-              },
-            }),
-            storageV5,
-          ),
-            fetchUsageWithModelScopes(storageV5, credentials)
-              .then((ze) => {
-                if (ze.status !== "ok") {
-                  logFeatureSad("promo_credit_check", "usage_unavailable");
-                  return;
-                }
-                if (
-                  (logFeatureOk("promo_credit_check"),
-                  getPromoLoginKey() !== Re || !isPolicyAllowed_2(ALLOW_PROMO_OFFERS))
-                )
-                  return;
-                let wattle_ember = ze.utilization.wattle_ember,
-                  rt = {
-                    atMs: Date.now(),
-                    open: hasRemainingPromoCredit(wattle_ember, Date.now()),
-                    endsAt: wattle_ember?.resets_at ?? null,
-                  };
-                saveGlobalConfig(
-                  (kt) =>
-                    kt.promoCreditCheck?.login === Re
-                      ? { ...kt, promoCreditCheck: { ...kt.promoCreditCheck, answer: rt } }
-                      : kt,
-                  storageV5,
-                );
-              })
-              .catch(logError));
-        }, ke);
-      };
-    },
-  };
+var PROMO_CHECK_INTERVAL_MS = 86400000;
+var PROMO_CHECK_MIN_DELAY_MS = 5000;
+var PROMO_CHECK_JITTER_MS = 25000;
+var promoCreditCheckSpec = {
+  id: "promo-credit-check",
+  setup() {
+    let h = false;
+    return ({ session, storageV5, credentials, clock }) => {
+      if (h) return;
+      h = true;
+      let ke = PROMO_CHECK_MIN_DELAY_MS + Math.floor(Math.random() * PROMO_CHECK_JITTER_MS);
+      return clock.setTimeout(() => {
+        if (
+          !isPromoCreditNoticeEligible(session) ||
+          isEssentialTrafficOnly() ||
+          !isPolicyAllowed_2(ALLOW_PROMO_OFFERS)
+        )
+          return;
+        let promoLoginKey = getPromoLoginKey();
+        let promoCreditCheck = getGlobalConfig().promoCreditCheck;
+        let now = Date.now();
+        let We = promoCreditCheck?.login === promoLoginKey ? now - promoCreditCheck.askedAtMs : -1;
+        if (promoLoginKey === null || (We >= 0 && We < PROMO_CHECK_INTERVAL_MS)) return;
+        saveGlobalConfig(
+          (ze) => ({
+            ...ze,
+            promoCreditCheck: {
+              login: promoLoginKey,
+              askedAtMs: now,
+              answer: ze.promoCreditCheck?.login === promoLoginKey ? ze.promoCreditCheck.answer : undefined,
+            },
+          }),
+          storageV5,
+        );
+        fetchUsageWithModelScopes(storageV5, credentials)
+          .then((usageWithModelScopes) => {
+            if (usageWithModelScopes.status !== "ok") {
+              logFeatureSad("promo_credit_check", "usage_unavailable");
+              return;
+            }
+            logFeatureOk("promo_credit_check");
+            if (getPromoLoginKey() !== promoLoginKey || !isPolicyAllowed_2(ALLOW_PROMO_OFFERS)) return;
+            let wattleEmber = usageWithModelScopes.utilization.wattle_ember;
+            let answer = {
+              atMs: Date.now(),
+              open: hasRemainingPromoCredit(wattleEmber, Date.now()),
+              endsAt: wattleEmber?.resets_at ?? null,
+            };
+            saveGlobalConfig(
+              (kt) =>
+                kt.promoCreditCheck?.login === promoLoginKey
+                  ? {
+                      ...kt,
+                      promoCreditCheck: {
+                        ...kt.promoCreditCheck,
+                        answer,
+                      },
+                    }
+                  : kt,
+              storageV5,
+            );
+          })
+          .catch(logError);
+      }, ke);
+    };
+  },
+};
 //@ chunk-18hwfzwa.js:1779429-1779933 placement
 var fableUsageCreditsNoticeSpec = {
   id: "fable-usage-credits",
   deps: (h) => [h.addNotification],
   setup() {
-    let h = !1;
-    return ({ addNotification: addNotification }) =>
+    let h = false;
+    return ({ addNotification }) =>
       onOverageInUse((D, L, ee) => {
         let ke = usageCreditsOnlyFamily(D);
-        if (ke === void 0) return;
+        if (ke === undefined) return;
         if (L || ee) return;
-        if (lD()) return;
-        if (D2()) return;
+        if (isUsageBasedBilling()) return;
+        if (usesPayAsYouGo()) return;
         if (hasUsageCreditsConsent(ke)) {
-          if (!h)
-            ((h = !0),
-              addNotification({
-                kind: "contextual",
-                key: "fable-credits-info",
-                text: `${renderUsageCreditsOnlyModelName(D)} is drawing from usage credits`,
-                priority: "medium",
-              }));
+          if (!h) {
+            h = true;
+            addNotification({
+              kind: "contextual",
+              key: "fable-credits-info",
+              text: `${renderUsageCreditsOnlyModelName(D)} is drawing from usage credits`,
+              priority: "medium",
+            });
+          }
           return;
         }
         addNotification({
@@ -289,10 +330,12 @@ var fableUsageCreditsNoticeSpec = {
 };
 //@ chunk-18hwfzwa.js:1779933-1780037 placement
 function billingContextForRateLimit() {
-  let h = getSubscriptionType();
-  return { hasBillingAccess: isConsumerPlan(), isTeamOrEnterprise: h === "team" || h === "enterprise" };
+  let subscriptionType = getSubscriptionType();
+  return {
+    hasBillingAccess: isConsumerPlan(),
+    isTeamOrEnterprise: subscriptionType === "team" || subscriptionType === "enterprise",
+  };
 }
-
 export {
   promoCreditCheckSpec,
   projectTelemetryEnvNoticeSpec,

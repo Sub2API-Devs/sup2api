@@ -8,18 +8,20 @@
 import { x } from "../../runtime/bun-runtime.js";
 
 //@ chunk-mrx6y2r5.js:15499-15734 cjs-fingerprint
-var Cf = x(function (fL, Ef) {
-  var QT = "[object String]",
-    JT = Object.prototype,
-    toString = JT.toString,
-    isArray = Array.isArray;
-  function eE(e) {
-    return !!e && typeof e == "object";
+var require_lodash_isstring = x(function (cjsExports, cjsModule) {
+  var stringTag = "[object String]";
+  var objectProto = Object.prototype;
+  var objectToString = objectProto.toString;
+  var isArray = Array.isArray;
+  function isObjectLike(value) {
+    return !!value && typeof value == "object";
   }
-  function tE(e) {
-    return typeof e == "string" || (!isArray(e) && eE(e) && toString.call(e) == QT);
+  function isString(value) {
+    return (
+      typeof value == "string" ||
+      (!isArray(value) && isObjectLike(value) && objectToString.call(value) == stringTag)
+    );
   }
-  Ef.exports = tE;
+  cjsModule.exports = isString;
 });
-
-export { Cf };
+export { require_lodash_isstring };

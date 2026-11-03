@@ -14,62 +14,82 @@ import { isViolinRibEnabled } from "../../../services/analytics/violinRibGate.js
 import { hostProfileSharing, gatherHostProfile } from "../../../utils/toolchainDetection.js";
 import { logError } from "../../../utils/log.js";
 import { toError } from "../../../utils/errors.js";
-import { xXr, PXr, IXr } from "../protocolConstants.js";
+import { MAX_INVENTORY_TOOLS, MAX_NONNEGATIVE_INT, MAX_INVENTORY_JSON_BYTES } from "../protocolConstants.js";
 import { withDeadline } from "../../../utils/sleep.js";
 import { logFeatureBad, logFeatureSad, logFeatureOk } from "../../../services/analytics/featureTelemetry.js";
 import { jsonStringify } from "../../../utils/slowOperations.js";
 
 //@ chunk-5mav84cq.js:587-679 placement
-var c = ["gcloud", "aws", "az", "gh", "brew", "apt", "sqlite3", "ffmpeg", "rg", "jq"],
-  s = 2000,
-  a = 2n ** 30n;
+var INVENTORY_PROBE_COMMANDS = ["gcloud", "aws", "az", "gh", "brew", "apt", "sqlite3", "ffmpeg", "rg", "jq"];
+var INVENTORY_PROBE_TIMEOUT_MS = 2000;
+var BYTES_PER_GIB = 2n ** 30n;
 //@ chunk-5mav84cq.js:679-761 placement
 function isHostInventoryShared() {
   try {
     return isViolinRibEnabled() && hostProfileSharing("basic") !== "off";
   } catch (error) {
-    return (logError(toError(error)), !1);
+    logError(toError(error));
+    return false;
   }
 }
+//@ chunk-5mav84cq.js:761-1539 placement
 /**
  * 远程工具服务启动时收集主机工具清单（gcloud、brew、sqlite3、ffmpeg 等）。
  */
-//@ chunk-5mav84cq.js:761-1539 placement
 async function gatherHostInventory(t) {
   try {
     if (!isHostInventoryShared()) return;
-    let [e, r] = await Promise.all([
+    let [hostProfile, r] = await Promise.all([
       gatherHostProfile({
-        includeMcpServers: !1,
-        signal: AbortSignal.timeout(s),
-        alsoLookFor: c,
-        maxTools: xXr,
+        includeMcpServers: false,
+        signal: AbortSignal.timeout(INVENTORY_PROBE_TIMEOUT_MS),
+        alsoLookFor: INVENTORY_PROBE_COMMANDS,
+        maxTools: MAX_INVENTORY_TOOLS,
       }),
-      withDeadline(statfs(t, { bigint: !0 }), s).catch(() => {
+      withDeadline(
+        statfs(t, {
+          bigint: true,
+        }),
+        INVENTORY_PROBE_TIMEOUT_MS,
+      ).catch(() => {
         return;
       }),
     ]);
-    if (e === void 0) {
+    if (hostProfile === undefined) {
       logFeatureBad("remote_tools_host_inventory", "unsupported_platform");
       return;
     }
-    let n = r === void 0 ? -1n : r.bavail * r.bsize;
-    if (!e.complete) logFeatureSad("remote_tools_host_inventory", "deadline");
+    let n = r === undefined ? -1n : r.bavail * r.bsize;
+    if (!hostProfile.complete) logFeatureSad("remote_tools_host_inventory", "deadline");
     else if (n < 0n) logFeatureSad("remote_tools_host_inventory", "disk_unread");
     else logFeatureOk("remote_tools_host_inventory");
     let i = {
-        ...(!e.complete && { incomplete: !0 }),
-        cpus: availableParallelism(),
-        memory_gb: Math.round(totalmem() / Number(a)),
-        ...(n >= 0n && { disk_free_gb: Math.min(Number(n / a), PXr) }),
-      },
-      tools = e.profile.tools;
-    while (tools.length > 0 && jsonStringify({ tools: tools, ...i }).length > IXr) tools = tools.slice(0, -1);
-    return { tools: tools, ...i };
+      ...(!hostProfile.complete && {
+        incomplete: true,
+      }),
+      cpus: availableParallelism(),
+      memory_gb: Math.round(totalmem() / Number(BYTES_PER_GIB)),
+      ...(n >= 0n && {
+        disk_free_gb: Math.min(Number(n / BYTES_PER_GIB), MAX_NONNEGATIVE_INT),
+      }),
+    };
+    let tools = hostProfile.profile.tools;
+    while (
+      tools.length > 0 &&
+      jsonStringify({
+        tools,
+        ...i,
+      }).length > MAX_INVENTORY_JSON_BYTES
+    )
+      tools = tools.slice(0, -1);
+    return {
+      tools,
+      ...i,
+    };
   } catch (error) {
-    (logError(toError(error)), logFeatureBad("remote_tools_host_inventory", "error"));
+    logError(toError(error));
+    logFeatureBad("remote_tools_host_inventory", "error");
     return;
   }
 }
-
 export { isHostInventoryShared };

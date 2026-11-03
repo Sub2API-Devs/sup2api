@@ -8,7 +8,7 @@
  * pieces: chunk-hntsfzas.js (29)
  * attribution: placement 11, fingerprint 7, layout 11
  */
-import { win32, posix, join, join as join_2, delimiter } from "path";
+import { win32, posix, join, delimiter } from "path";
 import { realpath, lstat } from "fs/promises";
 import { homedir } from "os";
 import { getOsRelease } from "./nativeInstaller/packageManagers.js";
@@ -22,11 +22,11 @@ import { HostScoped } from "./hostScoped.js";
 import { whichAsync } from "./which.js";
 import { getFsImplementation } from "./fsOperations.js";
 import { execFileNoThrow } from "./execFileNoThrow.js";
-import { IMe } from "../remote/remoteMode.js";
+import { preferRemoteValue } from "../remote/remoteMode.js";
 import { getCwd } from "./cwd.js";
 import { getGlobalConfig, getAutoUpdaterDisabledReason, formatAutoUpdaterDisabledReason } from "./config.js";
 import { getOtelHeadersHelperLastFailure } from "./auth.js";
-import { bV, oEr } from "./stringUtils.js";
+import { clippedMessage, MAX_CLIP_CHARS } from "./stringUtils.js";
 import { env } from "./env.js";
 import { getUserBinDir } from "./xdg.js";
 import { isInstallLinkOrMissing, isNpmSymlink } from "./nativeInstaller/installer.js";
@@ -42,68 +42,112 @@ import { getRipgrepStatus_2 } from "./ripgrep.js";
 import { readUpdateResult } from "./nativeInstaller/updateResult.js";
 
 //@ chunk-hntsfzas.js:4993-5029 placement
-function y() {
+/**
+ * 取当前宿主的发行版探测对象。
+ */
+function osReleaseProbe() {
   return getOsRelease.of(getRootSession().host);
 }
 //@ chunk-hntsfzas.js:5029-5068 placement
-function D() {
-  return y().detectPacman();
+/**
+ * 判断是否由 pacman 安装。
+ */
+function detectPacman() {
+  return osReleaseProbe().detectPacman();
 }
 //@ chunk-hntsfzas.js:5068-5104 placement
-function E() {
-  return y().detectDeb();
+/**
+ * 判断是否由 deb 包安装。
+ */
+function detectDeb() {
+  return osReleaseProbe().detectDeb();
 }
 //@ chunk-hntsfzas.js:5104-5140 placement
-function O() {
-  return y().detectRpm();
+/**
+ * 判断是否由 rpm 包安装。
+ */
+function detectRpm() {
+  return osReleaseProbe().detectRpm();
 }
 //@ chunk-hntsfzas.js:5140-5176 placement
-function T() {
-  return y().detectApk();
+/**
+ * 判断是否由 apk 包安装。
+ */
+function detectApk() {
+  return osReleaseProbe().detectApk();
 }
 //@ chunk-hntsfzas.js:5176-5219 placement
-function N6n() {
-  return y().detectHomebrew();
+/**
+ * 判断是否由 Homebrew 安装。
+ */
+function detectHomebrew() {
+  return osReleaseProbe().detectHomebrew();
 }
 //@ chunk-hntsfzas.js:5219-5267 placement
-function Pbt() {
-  return y().getHomebrewCaskName();
+/**
+ * 取 Homebrew cask 的名称。
+ */
+function getHomebrewCaskName() {
+  return osReleaseProbe().getHomebrewCaskName();
 }
 //@ chunk-hntsfzas.js:5267-5306 placement
-function H() {
-  return y().detectWinget();
+/**
+ * 判断是否由 winget 安装。
+ */
+function detectWinget() {
+  return osReleaseProbe().detectWinget();
 }
 //@ chunk-hntsfzas.js:5306-5343 placement
-function U() {
-  return y().detectMise();
+/**
+ * 判断是否由 mise 管理。
+ */
+function detectMise() {
+  return osReleaseProbe().detectMise();
 }
 //@ chunk-hntsfzas.js:5343-5380 placement
-function j() {
-  return y().detectAsdf();
+/**
+ * 判断是否由 asdf 管理。
+ */
+function detectAsdf() {
+  return osReleaseProbe().detectAsdf();
 }
 //@ chunk-hntsfzas.js:5380-5426 placement
-function _2e() {
-  return y().getPackageManager();
+/**
+ * 返回探测到的包管理器名称。
+ */
+function getPackageManager() {
+  return osReleaseProbe().getPackageManager();
 }
 //@ chunk-hntsfzas.js:5426-5595 fingerprint = getNormalizedPaths (1)
 function getNormalizedPaths() {
-  let e = process.argv[1] || "",
-    n = process.execPath || process.argv[0] || "";
-  if (getPlatform() === "windows")
-    ((e = e.split(win32.sep).join(posix.sep)), (n = n.split(win32.sep).join(posix.sep)));
-  return [e, n];
+  let invokedPath = process.argv[1] || "";
+  let execPath = process.execPath || process.argv[0] || "";
+  if (getPlatform() === "windows") {
+    invokedPath = invokedPath.split(win32.sep).join(posix.sep);
+    execPath = execPath.split(win32.sep).join(posix.sep);
+  }
+  return [invokedPath, execPath];
 }
+//@ chunk-hntsfzas.js:5595-6352 fingerprint = getCurrentInstallationType (0.877)
 /**
  * 判断当前安装类型：npm-local/npm-global/native/package-manager/development/unknown。
  */
-//@ chunk-hntsfzas.js:5595-6352 fingerprint = getCurrentInstallationType (0.877)
 async function getCurrentInstallationType() {
-  let [e, n] = getNormalizedPaths();
+  let [invokedPath, n] = getNormalizedPaths();
   if (isStandaloneExecutable()) {
     let l = getClaudeConfigDir().replace(/\\/g, "/").replace(/\/+$/, "") + "/local/node_modules/";
     if (n.startsWith(l)) return "npm-local";
     if (n.includes("/node_modules/@anthropic-ai/")) return "npm-global";
-    if (N6n() || H() || U() || j() || (await D()) || (await E()) || (await O()) || (await T()))
+    if (
+      detectHomebrew() ||
+      detectWinget() ||
+      detectMise() ||
+      detectAsdf() ||
+      (await detectPacman()) ||
+      (await detectDeb()) ||
+      (await detectRpm()) ||
+      (await detectApk())
+    )
       return "package-manager";
     return "native";
   }
@@ -116,37 +160,37 @@ async function getCurrentInstallationType() {
       "/opt/homebrew/bin",
       "/usr/local/bin",
       "/.nvm/versions/node/",
-    ].some((path) => e.includes(path))
+    ].some((path) => invokedPath.includes(path))
   )
     return "npm-global";
-  if (e.includes("/npm/") || e.includes("/nvm/")) return "npm-global";
-  let npmConfigResult = await safeExecShell("npm config get prefix", { reject: !1 }),
-    globalPrefix = npmConfigResult.exitCode === 0 ? npmConfigResult.stdout.trim() : null;
-  if (globalPrefix && e.startsWith(globalPrefix)) return "npm-global";
+  if (invokedPath.includes("/npm/") || invokedPath.includes("/nvm/")) return "npm-global";
+  let npmConfigResult = await safeExecShell("npm config get prefix", {
+    reject: false,
+  });
+  let globalPrefix = npmConfigResult.exitCode === 0 ? npmConfigResult.stdout.trim() : null;
+  if (globalPrefix && invokedPath.startsWith(globalPrefix)) return "npm-global";
   return "unknown";
 }
 //@ chunk-hntsfzas.js:6352-6373 layout
 class InstallTypeProbeState {
-  attempted = !1;
+  attempted = false;
 }
 //@ chunk-hntsfzas.js:6373-6396 layout
 var installTypeProbeSlot = new HostScoped(() => new InstallTypeProbeState());
+//@ chunk-hntsfzas.js:6396-6443 layout
 /**
  * 本进程是否已探测过安装类型。
  */
-//@ chunk-hntsfzas.js:6396-6443 layout
 function wasInstallTypeProbed() {
   return installTypeProbeSlot.of(getRootSession().host).attempted;
 }
+//@ chunk-hntsfzas.js:6443-6510 layout
 /**
  * 探测并记住安装类型（getCurrentInstallationType 的记录版）。
  */
-//@ chunk-hntsfzas.js:6443-6510 layout
 async function getCurrentInstallationTypeProbed() {
-  return (
-    (installTypeProbeSlot.of(getRootSession().host).attempted = !0),
-    await getCurrentInstallationType()
-  );
+  installTypeProbeSlot.of(getRootSession().host).attempted = true;
+  return await getCurrentInstallationType();
 }
 //@ chunk-hntsfzas.js:6510-6798 fingerprint = getInstallationPath (0.831)
 async function getInstallationPath() {
@@ -159,10 +203,8 @@ async function getInstallationPath() {
       if (path) return path;
     } catch {}
     try {
-      return (
-        await getFsImplementation().stat(join(homedir(), ".local/bin/claude")),
-        join(homedir(), ".local/bin/claude")
-      );
+      await getFsImplementation().stat(join(homedir(), ".local/bin/claude"));
+      return join(homedir(), ".local/bin/claude");
     } catch {}
     return "native";
   }
@@ -174,10 +216,14 @@ async function getInstallationPath() {
 }
 //@ chunk-hntsfzas.js:6916-9456 fingerprint = detectMultipleInstallations (0.812)
 async function detectMultipleInstallations() {
-  let fs = getFsImplementation(),
-    installations = [],
-    localPath = join(homedir(), ".claude", "local");
-  if (await localInstallationExists()) installations.push({ type: "npm-local", path: localPath });
+  let fs = getFsImplementation();
+  let installations = [];
+  let localPath = join(homedir(), ".claude", "local");
+  if (await localInstallationExists())
+    installations.push({
+      type: "npm-local",
+      path: localPath,
+    });
   let packagesToCheck = ["@anthropic-ai/claude-code"];
   if (
     {
@@ -216,92 +262,113 @@ async function detectMultipleInstallations() {
         DD_SOURCEMAP_GROUP: "default",
       }.PACKAGE_URL,
     );
-  let r = await execFileNoThrow("npm", ["-g", "config", "get", "prefix"], { cwd: IMe(getCwd(), homedir()) });
-  if (r.code === 0 && r.stdout) {
-    let npmPrefix = r.stdout.trim(),
-      isWindows = getPlatform() === "windows",
-      m = isWindows ? join(npmPrefix, "claude") : join(npmPrefix, "bin", "claude"),
-      A = !1;
+  let npmResult = await execFileNoThrow("npm", ["-g", "config", "get", "prefix"], {
+    cwd: preferRemoteValue(getCwd(), homedir()),
+  });
+  if (npmResult.code === 0 && npmResult.stdout) {
+    let npmPrefix = npmResult.stdout.trim();
+    let isWindows = getPlatform() === "windows";
+    let globalBinPath = isWindows ? join(npmPrefix, "claude") : join(npmPrefix, "bin", "claude");
+    let globalBinExists = false;
     try {
-      (await fs.stat(m), (A = !0));
+      await fs.stat(globalBinPath);
+      globalBinExists = true;
     } catch {}
-    if (A) {
-      let f = !1;
+    if (globalBinExists) {
+      let isCurrentHomebrewInstallation = false;
       try {
-        if ((await realpath(m)).includes("/Caskroom/")) f = N6n();
+        if ((await realpath(globalBinPath)).includes("/Caskroom/"))
+          isCurrentHomebrewInstallation = detectHomebrew();
       } catch {}
-      if (!f) {
-        let g = !1;
+      if (!isCurrentHomebrewInstallation) {
+        let g = false;
         for (let w of packagesToCheck) {
           let P = isWindows ? join(npmPrefix, "node_modules", w) : join(npmPrefix, "lib", "node_modules", w);
           try {
-            (await fs.stat(P), (g = !0));
+            await fs.stat(P);
+            g = true;
             break;
           } catch {}
         }
-        if (g) installations.push({ type: "npm-global", path: m });
+        if (g)
+          installations.push({
+            type: "npm-global",
+            path: globalBinPath,
+          });
       }
     } else
       for (let packageName of packagesToCheck) {
-        let g = isWindows
+        let globalPackagePath = isWindows
           ? join(npmPrefix, "node_modules", packageName)
           : join(npmPrefix, "lib", "node_modules", packageName);
         try {
-          (await fs.stat(g), installations.push({ type: "npm-global-orphan", path: g }));
+          await fs.stat(globalPackagePath);
+          installations.push({
+            type: "npm-global-orphan",
+            path: globalPackagePath,
+          });
         } catch {}
       }
   }
   let nativeBinPath = join(homedir(), ".local", "bin", "claude");
   try {
-    (await fs.stat(nativeBinPath), installations.push({ type: "native", path: nativeBinPath }));
+    await fs.stat(nativeBinPath);
+    installations.push({
+      type: "native",
+      path: nativeBinPath,
+    });
   } catch {}
   if (getGlobalConfig().installMethod === "native") {
     let nativeDataPath = join(homedir(), ".local", "share", "claude");
     try {
-      if ((await fs.stat(nativeDataPath), !installations.some((b) => b.type === "native")))
-        installations.push({ type: "native", path: nativeDataPath });
+      await fs.stat(nativeDataPath);
+      if (!installations.some((i) => i.type === "native"))
+        installations.push({
+          type: "native",
+          path: nativeDataPath,
+        });
     } catch {}
   }
   return installations;
 }
 //@ chunk-hntsfzas.js:9456-9735 layout
-function isPathInList(e, n) {
-  let a = getPlatform() === "windows",
-    o = n;
-  if (a) o = n.split(win32.sep).join(posix.sep).toLowerCase();
-  return e.some((r) => {
-    let l = r;
-    if (a) l = r.split(win32.sep).join(posix.sep).toLowerCase();
-    let replaced = l.replace(/\/+$/, ""),
-      replaced_2 = r.replace(/[/\\]+$/, "");
-    return replaced === o || replaced_2 === "~/.local/bin" || replaced_2 === "$HOME/.local/bin";
+function isPathInList(pathDirectories, localBinPath) {
+  let a = getPlatform() === "windows";
+  let o = localBinPath;
+  if (a) o = localBinPath.split(win32.sep).join(posix.sep).toLowerCase();
+  return pathDirectories.some((dir) => {
+    let normalizedDir = dir;
+    if (a) normalizedDir = dir.split(win32.sep).join(posix.sep).toLowerCase();
+    let trimmedDir = normalizedDir.replace(/\/+$/, "");
+    let trimmedRawDir = dir.replace(/[/\\]+$/, "");
+    return trimmedDir === o || trimmedRawDir === "~/.local/bin" || trimmedRawDir === "$HOME/.local/bin";
   });
 }
+//@ chunk-hntsfzas.js:9735-12337 fingerprint = detectConfigurationIssues (0.792)
 /**
  * 检测配置问题：otelHeadersHelper 失败、PATH 缺 ~/.local/bin、沙箱设置等，返回 {issue,fix}。
  */
-//@ chunk-hntsfzas.js:9735-12337 fingerprint = detectConfigurationIssues (0.792)
 async function detectConfigurationIssues(type) {
-  let warnings = [],
-    a = getOtelHeadersHelperLastFailure();
-  if (a)
+  let warnings = [];
+  let otelHeadersHelperLastFailure = getOtelHeadersHelperLastFailure();
+  if (otelHeadersHelperLastFailure)
     warnings.push({
-      issue: `otelHeadersHelper is configured but its last invocation failed: ${bV(a, oEr)}`,
+      issue: `otelHeadersHelper is configured but its last invocation failed: ${clippedMessage(otelHeadersHelperLastFailure, MAX_CLIP_CHARS)}`,
       fix: "Run the configured helper manually and confirm it prints a JSON object of string header values. If the value is a file path, confirm the file exists and is executable.",
     });
   let config = getGlobalConfig();
   if (type === "development") return warnings;
   if (type === "native") {
-    let pathDirectories = (env.PATH || "").split(delimiter),
-      homeDir = homedir(),
-      localBinPath = join(homeDir, ".local", "bin"),
-      m = join(getUserBinDir(), "claude");
-    if (!(await isInstallLinkOrMissing(m)) && !(await isNpmSymlink(m).catch(() => !1)))
+    let path = (env.PATH || "").split(delimiter);
+    let homeDir = homedir();
+    let localBinPath = join(homeDir, ".local", "bin");
+    let m = join(getUserBinDir(), "claude");
+    if (!(await isInstallLinkOrMissing(m)) && !(await isNpmSymlink(m).catch(() => false)))
       warnings.push({
         issue: `${m} was not created by the native installer (it is not a symlink into the versions/ directory), so auto-update leaves it untouched.`,
         fix: `If you put a launcher wrapper there on purpose, this is expected \u2014 new versions still install under $XDG_DATA_HOME/claude/versions, your launcher decides what runs, and automatic version cleanup is disabled on this machine (the installer cannot tell which version your launcher needs, so it keeps them all). To let Claude Code manage the launcher again, remove ${m} and run \`claude update\`.`,
       });
-    if (!isPathInList(pathDirectories, localBinPath))
+    if (!isPathInList(path, localBinPath))
       if (getPlatform() === "windows") {
         let windowsLocalBinPath = localBinPath.split(posix.sep).join(win32.sep);
         warnings.push({
@@ -309,12 +376,12 @@ async function detectConfigurationIssues(type) {
           fix: "Add it by opening: System Properties \u2192 Environment Variables \u2192 Edit User PATH \u2192 New \u2192 Add the path above. Then restart your terminal.",
         });
       } else {
-        let shellType = getShellType(),
-          configFile = getShellConfigPaths()[shellType],
-          P = configFile ? configFile.replace(homedir(), "~") : "your shell config file";
+        let shellType = getShellType();
+        let configFile = getShellConfigPaths()[shellType];
+        let displayPath = configFile ? configFile.replace(homedir(), "~") : "your shell config file";
         warnings.push({
           issue: "Native installation exists but ~/.local/bin is not in your PATH",
-          fix: `Run: echo 'export PATH="$HOME/.local/bin:$PATH"' >> ${P} then open a new terminal or run: source ${P}`,
+          fix: `Run: echo 'export PATH="$HOME/.local/bin:$PATH"' >> ${displayPath} then open a new terminal or run: source ${displayPath}`,
         });
       }
   }
@@ -335,8 +402,8 @@ async function detectConfigurationIssues(type) {
       issue: "Local installation exists but not being used",
       fix: "Consider using native installation: `claude install`",
     });
-  let existingAlias = await findClaudeAlias(),
-    validAlias = await findValidClaudeAlias();
+  let existingAlias = await findClaudeAlias();
+  let validAlias = await findValidClaudeAlias();
   if (type === "npm-local") {
     if (!(await whichAsync("claude")) && !validAlias)
       if (existingAlias)
@@ -384,8 +451,8 @@ function getMaskCredentialWarnings() {
 //@ chunk-hntsfzas.js:13789-14105 fingerprint = detectLinuxGlobPatternWarnings (0.937)
 function detectLinuxGlobPatternWarnings() {
   if (getPlatform() !== "linux") return [];
-  let warnings = [],
-    globPatterns = SandboxManager.getLinuxGlobPatternWarnings();
+  let warnings = [];
+  let globPatterns = SandboxManager.getLinuxGlobPatternWarnings();
   if (globPatterns.length > 0) {
     let a = summarizeList(globPatterns);
     warnings.push({
@@ -397,23 +464,23 @@ function detectLinuxGlobPatternWarnings() {
 }
 //@ chunk-hntsfzas.js:14105-14968 layout
 async function findLeftoverSandboxMasks() {
-  let e = getPlatform();
-  if (e !== "linux" && e !== "wsl") return [];
+  let platform = getPlatform();
+  if (platform !== "linux" && platform !== "wsl") return [];
   if (!SandboxManager.isSandboxingEnabled()) return [];
   let config = SandboxManager.getConfig();
-  if (config === void 0 || config.filesystem.disabled) return [];
-  let { denyWithinAllow: denyWithinAllow } = SandboxManager.getFsWriteConfig(),
-    results = await Promise.all(
-      denyWithinAllow.map(async (l) => {
-        try {
-          let c = await lstat(l);
-          return c.isFile() && c.size === 0 && (c.mode & 146) === 0 && c.nlink === 1;
-        } catch {
-          return !1;
-        }
-      }),
-    ),
-    r = new Set(denyWithinAllow.filter((l, c) => results[c]));
+  if (config === undefined || config.filesystem.disabled) return [];
+  let { denyWithinAllow } = SandboxManager.getFsWriteConfig();
+  let results = await Promise.all(
+    denyWithinAllow.map(async (l) => {
+      try {
+        let c = await lstat(l);
+        return c.isFile() && c.size === 0 && (c.mode & 146) === 0 && c.nlink === 1;
+      } catch {
+        return false;
+      }
+    }),
+  );
+  let r = new Set(denyWithinAllow.filter((l, c) => results[c]));
   if (r.size === 0) return [];
   return [
     {
@@ -452,78 +519,88 @@ async function getWindowsSandboxStartupIssue() {
     !SandboxManager.isSandboxEnabledInSettings()
   )
     return [];
-  let e = await getWindowsSandboxUserStatus();
-  return e === void 0
+  let windowsSandboxUserStatus = await getWindowsSandboxUserStatus();
+  return windowsSandboxUserStatus === undefined
     ? []
     : [
         {
           issue: "The sandbox is turned on but can't start, because of the Windows Secondary Logon service",
-          fix: e,
+          fix: windowsSandboxUserStatus,
         },
       ];
 }
+//@ chunk-hntsfzas.js:16491-21476 fingerprint = getDoctorDiagnostic (0.78)
 /**
  * getDoctorDiagnostic：安装类型、版本、路径、多重安装、自动更新状态、包管理器、ripgrep 状态与各类配置警告（claude doctor 的数据源）。
  */
-//@ chunk-hntsfzas.js:16491-21476 fingerprint = getDoctorDiagnostic (0.78)
-async function getDoctorDiagnostic({ probeKeychain: probeKeychain = !1, storageV5: storageV5 } = {}) {
-  let installationType = await getCurrentInstallationTypeProbed(),
-    o =
-      typeof {
-        ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
-        PACKAGE_URL: "@anthropic-ai/claude-code",
-        README_URL: "https://code.claude.com/docs/en/overview",
-        VERSION: "2.1.316",
-        FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-        BUILD_TIME: "2026-10-30T23:28:13Z",
-        GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
-        HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
-        DD_SOURCEMAP_GROUP: "default",
-      } < "u" &&
-      {
-        ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
-        PACKAGE_URL: "@anthropic-ai/claude-code",
-        README_URL: "https://code.claude.com/docs/en/overview",
-        VERSION: "2.1.316",
-        FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-        BUILD_TIME: "2026-10-30T23:28:13Z",
-        GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
-        HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
-        DD_SOURCEMAP_GROUP: "default",
-      }.VERSION
-        ? `${{ ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues", PACKAGE_URL: "@anthropic-ai/claude-code", README_URL: "https://code.claude.com/docs/en/overview", VERSION: "2.1.316", FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues", BUILD_TIME: "2026-10-30T23:28:13Z", GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1", HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js", DD_SOURCEMAP_GROUP: "default" }.VERSION}${getBuildRefSuffix()}`
-        : "unknown",
-    installationPath = await getInstallationPath(),
-    invokedBinary = getTeammateCommand(),
-    multipleInstallations = await detectMultipleInstallations(),
-    warnings = await detectConfigurationIssues(installationType),
-    { checkInstall: checkInstall } = await import("./chunk-vgwfkbv7.js");
+async function getDoctorDiagnostic({ probeKeychain = false, storageV5 } = {}) {
+  let installationType = await getCurrentInstallationTypeProbed();
+  let version =
+    typeof {
+      ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
+      PACKAGE_URL: "@anthropic-ai/claude-code",
+      README_URL: "https://code.claude.com/docs/en/overview",
+      VERSION: "2.1.316",
+      FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
+      BUILD_TIME: "2026-10-30T23:28:13Z",
+      GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+      HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
+      DD_SOURCEMAP_GROUP: "default",
+    } !== "undefined" &&
+    {
+      ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
+      PACKAGE_URL: "@anthropic-ai/claude-code",
+      README_URL: "https://code.claude.com/docs/en/overview",
+      VERSION: "2.1.316",
+      FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
+      BUILD_TIME: "2026-10-30T23:28:13Z",
+      GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+      HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
+      DD_SOURCEMAP_GROUP: "default",
+    }.VERSION
+      ? `${
+          {
+            ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
+            PACKAGE_URL: "@anthropic-ai/claude-code",
+            README_URL: "https://code.claude.com/docs/en/overview",
+            VERSION: "2.1.316",
+            FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
+            BUILD_TIME: "2026-10-30T23:28:13Z",
+            GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+            HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
+            DD_SOURCEMAP_GROUP: "default",
+          }.VERSION
+        }${getBuildRefSuffix()}`
+      : "unknown";
+  let installationPath = await getInstallationPath();
+  let invokedBinary = getTeammateCommand();
+  let multipleInstallations = await detectMultipleInstallations();
+  let warnings = await detectConfigurationIssues(installationType);
+  let { checkInstall } = await import("./chunk-vgwfkbv7.js");
   for (let h of await checkInstall())
     if (h.type === "error")
-      warnings.push({ issue: h.message, fix: "Run claude install to repair the installation." });
-  if (
-    (warnings.push(...detectLinuxGlobPatternWarnings()),
-    warnings.push(...getUnbracketedIpv6DomainIssues()),
-    SandboxManager.isSandboxingEnabled())
-  )
-    await SandboxManager.checkDependenciesAsync();
+      warnings.push({
+        issue: h.message,
+        fix: "Run claude install to repair the installation.",
+      });
+  warnings.push(...detectLinuxGlobPatternWarnings());
+  warnings.push(...getUnbracketedIpv6DomainIssues());
+  if (SandboxManager.isSandboxingEnabled()) await SandboxManager.checkDependenciesAsync();
   let m = describeDeniesOnAnotherHost();
   if (m) warnings.push(m);
-  if (
-    (warnings.push(...getUnbracketedIpv6InjectHostIssues()),
-    warnings.push(...getMaskCredentialWarnings()),
-    warnings.push(...(await findLeftoverSandboxMasks())),
-    warnings.push(...(await getWindowsSandboxStartupIssue())),
-    probeKeychain)
-  ) {
+  warnings.push(...getUnbracketedIpv6InjectHostIssues());
+  warnings.push(...getMaskCredentialWarnings());
+  warnings.push(...(await findLeftoverSandboxMasks()));
+  warnings.push(...(await getWindowsSandboxStartupIssue()));
+  if (probeKeychain) {
     let h = await noopNull();
     if (h) warnings.push(h);
   }
   if (installationType === "native") {
     let npmInstalls = multipleInstallations.filter(
-        (u) => u.type === "npm-global" || u.type === "npm-global-orphan" || u.type === "npm-local",
-      ),
-      isWindows = getPlatform() === "windows";
+      (i) => i.type === "npm-global" || i.type === "npm-global-orphan" || i.type === "npm-local",
+    );
+    let isWindows = getPlatform() === "windows";
     for (let install of npmInstalls)
       if (install.type === "npm-global") {
         let uninstallCmd = "npm -g uninstall @anthropic-ai/claude-code";
@@ -551,7 +628,19 @@ async function getDoctorDiagnostic({ probeKeychain: probeKeychain = !1, storageV
             DD_SOURCEMAP_GROUP: "default",
           }.PACKAGE_URL !== "@anthropic-ai/claude-code"
         )
-          uninstallCmd += ` && npm -g uninstall ${{ ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues", PACKAGE_URL: "@anthropic-ai/claude-code", README_URL: "https://code.claude.com/docs/en/overview", VERSION: "2.1.316", FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues", BUILD_TIME: "2026-10-30T23:28:13Z", GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1", HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js", DD_SOURCEMAP_GROUP: "default" }.PACKAGE_URL}`;
+          uninstallCmd += ` && npm -g uninstall ${
+            {
+              ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
+              PACKAGE_URL: "@anthropic-ai/claude-code",
+              README_URL: "https://code.claude.com/docs/en/overview",
+              VERSION: "2.1.316",
+              FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
+              BUILD_TIME: "2026-10-30T23:28:13Z",
+              GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+              HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
+              DD_SOURCEMAP_GROUP: "default",
+            }.PACKAGE_URL
+          }`;
         warnings.push({
           issue: `Leftover npm global installation at ${install.path}`,
           fix: `Run: ${uninstallCmd}`,
@@ -567,43 +656,47 @@ async function getDoctorDiagnostic({ probeKeychain: probeKeychain = !1, storageV
           fix: isWindows ? `Run: rmdir /s /q "${install.path}"` : `Run: rm -rf ${install.path}`,
         });
   }
-  let configInstallMethod = getGlobalConfig().installMethod || "not set",
-    hasUpdatePermissions = null;
+  let configInstallMethod = getGlobalConfig().installMethod || "not set";
+  let hasUpdatePermissions = null;
   if (installationType === "npm-global") {
-    if (
-      ((hasUpdatePermissions = (await checkGlobalInstallPermissions()).hasPermissions),
-      !hasUpdatePermissions && !getAutoUpdaterDisabledReason())
-    )
+    hasUpdatePermissions = (await checkGlobalInstallPermissions()).hasPermissions;
+    if (!hasUpdatePermissions && !getAutoUpdaterDisabledReason())
       warnings.push({
         issue: "Can't auto-update: npm global folder isn't writable",
         fix: "Run `claude install` to switch to the native installer (no sudo)\nOr reinstall with a sudo-free npm (e.g. via nvm)\nOr `npm config set prefix ~/.npm-global`, add ~/.npm-global/bin to PATH, then reinstall",
       });
   }
-  let ripgrepStatusRaw = getRipgrepStatus_2(),
-    ripgrepStatus = {
-      working: ripgrepStatusRaw.working ?? !0,
-      mode: ripgrepStatusRaw.mode,
-      systemPath: ripgrepStatusRaw.mode === "system" ? ripgrepStatusRaw.path : null,
-    },
-    K = installationType === "package-manager" ? await _2e() : void 0,
-    V = await readUpdateResult(storageV5);
+  let ripgrepStatusRaw = getRipgrepStatus_2();
+  let ripgrepStatus = {
+    working: ripgrepStatusRaw.working ?? true,
+    mode: ripgrepStatusRaw.mode,
+    systemPath: ripgrepStatusRaw.mode === "system" ? ripgrepStatusRaw.path : null,
+  };
+  let packageManager = installationType === "package-manager" ? await getPackageManager() : undefined;
+  let lastUpdateResult = await readUpdateResult(storageV5);
   return {
-    installationType: installationType,
-    version: o,
-    installationPath: installationPath,
-    invokedBinary: invokedBinary,
-    configInstallMethod: configInstallMethod,
+    installationType,
+    version,
+    installationPath,
+    invokedBinary,
+    configInstallMethod,
     autoUpdates: (() => {
       let reason = getAutoUpdaterDisabledReason();
       return reason ? `disabled (${formatAutoUpdaterDisabledReason(reason)})` : "enabled";
     })(),
-    hasUpdatePermissions: hasUpdatePermissions,
-    lastUpdateResult: V,
-    multipleInstallations: multipleInstallations,
-    warnings: warnings,
-    packageManager: K,
-    ripgrepStatus: ripgrepStatus,
+    hasUpdatePermissions,
+    lastUpdateResult,
+    multipleInstallations,
+    warnings,
+    packageManager,
+    ripgrepStatus,
   };
 }
-
-export { getDoctorDiagnostic, getCurrentInstallationTypeProbed, Pbt, N6n, _2e, wasInstallTypeProbed };
+export {
+  getDoctorDiagnostic,
+  getCurrentInstallationTypeProbed,
+  getHomebrewCaskName,
+  detectHomebrew,
+  getPackageManager,
+  wasInstallTypeProbed,
+};

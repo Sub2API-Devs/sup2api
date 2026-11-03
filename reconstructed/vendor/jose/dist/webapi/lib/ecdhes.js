@@ -5,57 +5,73 @@
  * pieces: chunk-5h78gfwc.js (5)
  * attribution: esm-layout 1, esm-fingerprint 4
  */
-import { E_2, fe, A } from "./buffer_utils.js";
-import { je } from "./helpers.js";
-import { H } from "./crypto_key.js";
+import { concat, fe, encode } from "./buffer_utils.js";
+import { digest } from "./helpers.js";
+import { checkEncCryptoKey } from "./crypto_key.js";
 
 //@ chunk-5h78gfwc.js:12812-12852 esm-layout
-function Ie(e) {
-  return E_2(fe(e.length), e);
+function lengthAndInput(input) {
+  return concat(fe(input.length), input);
 }
 //@ chunk-5h78gfwc.js:12852-13109 esm-fingerprint
-async function Ft(e, t, r) {
-  let n = t >> 3,
-    i = 32,
-    ceil = Math.ceil(n / 32),
-    uint8Array = new Uint8Array(ceil * 32);
-  for (let s = 1; s <= ceil; s++) {
-    let uint8Array_2 = new Uint8Array(4 + e.length + r.length);
-    (uint8Array_2.set(fe(s), 0), uint8Array_2.set(e, 4), uint8Array_2.set(r, 4 + e.length));
-    let d = await je("sha256", uint8Array_2);
-    uint8Array.set(d, (s - 1) * 32);
+async function concatKdf(Z, L, OtherInfo) {
+  let dkLen = L >> 3;
+  let hashLen = 32;
+  let reps = Math.ceil(dkLen / 32);
+  let dk = new Uint8Array(reps * 32);
+  for (let i = 1; i <= reps; i++) {
+    let hashInput = new Uint8Array(4 + Z.length + OtherInfo.length);
+    hashInput.set(fe(i), 0);
+    hashInput.set(Z, 4);
+    hashInput.set(OtherInfo, 4 + Z.length);
+    let hashResult = await digest("sha256", hashInput);
+    dk.set(hashResult, (i - 1) * 32);
   }
-  return uint8Array.slice(0, n);
+  return dk.slice(0, dkLen);
 }
 //@ chunk-5h78gfwc.js:13109-13386 esm-fingerprint
-async function He(e, t, r, n, i = new Uint8Array(), o = new Uint8Array()) {
-  (H(e, "ECDH"), H(t, "ECDH", "deriveBits"));
-  let a = Ie(A(r)),
-    s = Ie(i),
-    p = Ie(o),
-    d = fe(n),
-    uint8Array = new Uint8Array(),
-    m = E_2(a, s, p, d, uint8Array),
-    uint8Array_2 = new Uint8Array(
-      await crypto.subtle.deriveBits({ name: e.algorithm.name, public: e }, t, kt(e)),
-    );
-  return Ft(uint8Array_2, n, m);
+async function deriveKey(
+  publicKey,
+  privateKey,
+  algorithm,
+  keyLength,
+  apu = new Uint8Array(),
+  apv = new Uint8Array(),
+) {
+  checkEncCryptoKey(publicKey, "ECDH");
+  checkEncCryptoKey(privateKey, "ECDH", "deriveBits");
+  let algorithmID = lengthAndInput(encode(algorithm));
+  let partyUInfo = lengthAndInput(apu);
+  let partyVInfo = lengthAndInput(apv);
+  let suppPubInfo = fe(keyLength);
+  let suppPrivInfo = new Uint8Array();
+  let otherInfo = concat(algorithmID, partyUInfo, partyVInfo, suppPubInfo, suppPrivInfo);
+  let Z = new Uint8Array(
+    await crypto.subtle.deriveBits(
+      {
+        name: publicKey.algorithm.name,
+        public: publicKey,
+      },
+      privateKey,
+      getEcdhBitLength(publicKey),
+    ),
+  );
+  return concatKdf(Z, keyLength, otherInfo);
 }
 //@ chunk-5h78gfwc.js:13386-13512 esm-fingerprint
-function kt(e) {
-  if (e.algorithm.name === "X25519") return 256;
-  return Math.ceil(parseInt(e.algorithm.namedCurve.slice(-3), 10) / 8) << 3;
+function getEcdhBitLength(publicKey) {
+  if (publicKey.algorithm.name === "X25519") return 256;
+  return Math.ceil(parseInt(publicKey.algorithm.namedCurve.slice(-3), 10) / 8) << 3;
 }
 //@ chunk-5h78gfwc.js:13512-13647 esm-fingerprint
-function Je(e) {
-  switch (e.algorithm.namedCurve) {
+function allowed(key) {
+  switch (key.algorithm.namedCurve) {
     case "P-256":
     case "P-384":
     case "P-521":
-      return !0;
+      return true;
     default:
-      return e.algorithm.name === "X25519";
+      return key.algorithm.name === "X25519";
   }
 }
-
-export { Je, He };
+export { allowed, deriveKey };

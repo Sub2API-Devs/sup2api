@@ -14,32 +14,36 @@ var TOOL_VALIDATION_CONFIG = {
   filePatternTools: ["Read", "Write", "Edit", "Glob", "NotebookRead", "NotebookEdit", "Cd"],
   bashPrefixTools: ["Bash"],
   customValidation: {
-    WebSearch: (e) => {
-      if (e.includes("*") || e.includes("?"))
+    WebSearch: (content) => {
+      if (content.includes("*") || content.includes("?"))
         return {
-          valid: !1,
+          valid: false,
           error: "WebSearch does not support wildcards",
           suggestion: "Use exact search terms without * or ?",
           examples: ["WebSearch(claude ai)", "WebSearch(typescript tutorial)"],
         };
-      return { valid: !0 };
+      return {
+        valid: true,
+      };
     },
-    WebFetch: (e) => {
-      if (e.includes("://") || e.startsWith("http"))
+    WebFetch: (content) => {
+      if (content.includes("://") || content.startsWith("http"))
         return {
-          valid: !1,
+          valid: false,
           error: "WebFetch permissions use domain format, not URLs",
           suggestion: 'Use "domain:hostname" format',
           examples: ["WebFetch(domain:example.com)", "WebFetch(domain:github.com)"],
         };
-      if (!e.startsWith("domain:"))
+      if (!content.startsWith("domain:"))
         return {
-          valid: !1,
+          valid: false,
           error: 'WebFetch permissions must use "domain:" prefix',
           suggestion: 'Use "domain:hostname" format',
           examples: ["WebFetch(domain:example.com)", "WebFetch(domain:*.google.com)"],
         };
-      return { valid: !0 };
+      return {
+        valid: true,
+      };
     },
   },
 };
@@ -55,7 +59,6 @@ function isBashPrefixTool(toolName) {
 function getCustomValidation(toolName) {
   return Object.hasOwn(TOOL_VALIDATION_CONFIG.customValidation, toolName)
     ? TOOL_VALIDATION_CONFIG.customValidation[toolName]
-    : void 0;
+    : undefined;
 }
-
 export { TOOL_VALIDATION_CONFIG, isFilePatternTool, getCustomValidation, isBashPrefixTool };

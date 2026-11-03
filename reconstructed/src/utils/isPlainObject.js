@@ -9,12 +9,11 @@
  * attribution: placement 1
  */
 
+//@ chunk-n3a8e1qg.js:191-261 placement
 /**
  * 是否为非数组对象。
  */
-//@ chunk-n3a8e1qg.js:191-261 placement
 function isPlainObject(n) {
   return typeof n === "object" && n !== null && !Array.isArray(n);
 }
-
 export { isPlainObject };

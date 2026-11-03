@@ -8,19 +8,17 @@
  * pieces: chunk-e6aww6q8.js (1)
  * attribution: fingerprint 1
  */
-
+//@ chunk-e6aww6q8.js:1732261-1732452 fingerprint = installSlackApp (0.894)
 /**
  * /install-slack-app 命令对象（local）；描述：Install the Claude Slack app；availability ["claude-ai"]；实现 chunk-xarcg2hx.js 的 p。
  */
-//@ chunk-e6aww6q8.js:1732261-1732452 fingerprint = installSlackApp (0.894)
 var installSlackAppCommandDefinition = {
-    type: "local",
-    name: "install-slack-app",
-    description: "Install the Claude Slack app",
-    availability: ["claude-ai"],
-    supportsNonInteractive: !1,
-    load: () => import("./chunk-xarcg2hx.js"),
-  },
-  installSlackAppCommand = installSlackAppCommandDefinition;
-
+  type: "local",
+  name: "install-slack-app",
+  description: "Install the Claude Slack app",
+  availability: ["claude-ai"],
+  supportsNonInteractive: false,
+  load: () => import("./chunk-xarcg2hx.js"),
+};
+var installSlackAppCommand = installSlackAppCommandDefinition;
 export { installSlackAppCommand };

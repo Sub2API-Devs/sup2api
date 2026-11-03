@@ -13,10 +13,9 @@ import { getFeatureValue_CACHED_MAY_BE_STALE } from "../analytics/growthbook.js"
 //@ chunk-qmsrnapp.js:40892-40968 placement
 function isAwayRecheckOnCached() {
   try {
-    return getFeatureValue_CACHED_MAY_BE_STALE("tengu_violin_winding", !1) === !0;
+    return getFeatureValue_CACHED_MAY_BE_STALE("tengu_violin_winding", false) === true;
   } catch {
-    return !1;
+    return false;
   }
 }
-
 export { isAwayRecheckOnCached };

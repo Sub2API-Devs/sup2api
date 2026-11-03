@@ -9,25 +9,25 @@
  * attribution: placement 1
  */
 import { isBgSession } from "../../utils/concurrentSessions.js";
-import { hkt } from "../../context/replRootContext.js";
+import { getRootSessionOverride } from "../../context/replRootContext.js";
 
+//@ chunk-adzz9hc5.js:3344-3692 placement
 /**
  * /stop 命令对象（local-jsx）；描述：Stop this background session; transcript and worktree are kept；isEnabled: ()=>Ft()||hkt()!==null；实现 chunk-t85zxbmt.js 的 cho。
  */
-//@ chunk-adzz9hc5.js:3344-3692 placement
 var stopCommandDefinition = {
-    type: "local-jsx",
-    name: "stop",
-    description: "Stop this background session; transcript and worktree are kept",
-    immediate: !0,
-    isEnabled: () => isBgSession() || hkt() !== null,
-  },
-  stopNonInteractiveCommand = {
-    type: "local",
-    name: "stop",
-    supportsNonInteractive: !0,
-    description: "Stop this background session; transcript and worktree are kept",
-    isEnabled: isBgSession,
-    load: () => import("./chunk-zsxk930s.js"),
-  },
-  stopCommand = stopCommandDefinition;
+  type: "local-jsx",
+  name: "stop",
+  description: "Stop this background session; transcript and worktree are kept",
+  immediate: true,
+  isEnabled: () => isBgSession() || getRootSessionOverride() !== null,
+};
+var stopNonInteractiveCommand = {
+  type: "local",
+  name: "stop",
+  supportsNonInteractive: true,
+  description: "Stop this background session; transcript and worktree are kept",
+  isEnabled: isBgSession,
+  load: () => import("./chunk-zsxk930s.js"),
+};
+var stopCommand = stopCommandDefinition;

@@ -8,10 +8,10 @@
  * pieces: chunk-4m46mxx9.js (1), chunk-aepeg2w5.js (1), chunk-cdz6g143.js (1), chunk-cxdk9p3j.js (1), chunk-jhrww53q.js (38)
  * attribution: fingerprint 12, placement 4, facade-exports 8, layout 17, callgraph-witnessed 1
  */
-import { join, join as join_2, resolve, delimiter, delimiter as delimiter_2 } from "path";
+import { join, resolve, delimiter } from "path";
 import { homedir } from "os";
-import { readlink, readdir, readdir as readdir_2, access, readFile } from "fs/promises";
-import { constants, constants as constants_2 } from "fs";
+import { readlink, readdir, access, readFile } from "fs/promises";
+import { constants } from "fs";
 import { isDiskless, getRootSession } from "../bootstrap/state.js";
 import {
   getFsImplementation,
@@ -20,9 +20,9 @@ import {
 } from "./fsOperations.js";
 import { getClaudeConfigDir, isEnvTruthy } from "./envUtils.js";
 import { fileSuffixForOauthConfig, OAUTH_GLOBAL_FILE_SUFFIXES } from "../constants/oauth.js";
-import { whichAsync, w0 } from "./which.js";
-import { AV } from "./networkPaths.js";
-import { Eh } from "./pathClassification.js";
+import { whichAsync, bunWhichSync } from "./which.js";
+import { isNetworkishPath } from "./networkPaths.js";
+import { hasDotDotSegment } from "./pathClassification.js";
 import { getPlatform } from "./platform.js";
 import { uniq } from "./collections.js";
 import { withTimeout } from "./sleep.js";
@@ -36,46 +36,52 @@ import { errorMessage } from "./errors.js";
 import { CREDENTIALS_FILE_NAME, DEVICE_KEYS_FILE_NAME } from "./auth.js";
 
 //@ chunk-jhrww53q.js:49649-49673 placement
-function p() {
+/**
+ * 无盘会话时直接返回真（跳过环境探测）。
+ */
+function isDisklessEnvProbe() {
   return isDiskless();
 }
 //@ chunk-jhrww53q.js:49673-49764 fingerprint = isWslEnvironment (1)
 function isWslEnvironment() {
-  if (p()) return !1;
+  if (isDisklessEnvProbe()) return false;
   return getFsImplementation().existsSync("/proc/sys/fs/binfmt_misc/WSLInterop");
 }
+//@ chunk-jhrww53q.js:49764-49897 placement = readFileSafe (0.594)
 /**
  * 读取 /sys/hypervisor/uuid（判断云主机），误归到 utils/file。
  */
-//@ chunk-jhrww53q.js:49764-49897 placement = readFileSafe (0.594)
 function readFileSafe() {
-  if (p()) return;
+  if (isDisklessEnvProbe()) return;
   try {
     return getFsImplementation()
-      .readFileSync("/sys/hypervisor/uuid", { encoding: "utf8" })
+      .readFileSync("/sys/hypervisor/uuid", {
+        encoding: "utf8",
+      })
       .trim()
       .toLowerCase();
   } catch {
     return;
   }
 }
+//@ chunk-jhrww53q.js:49964-50152 placement
 /**
  * 确定全局配置文件：若 <配置目录>/.config.json 存在且非空（或可写且默认文件不存在）用它；否则用 $CLAUDE_CONFIG_DIR 或 HOME 下的 .claude<后缀>.json（后缀随 OAuth 环境：''、-staging-oauth、-local-oauth、-custom-oauth）。
  */
-//@ chunk-jhrww53q.js:49964-50152 placement
 function resolveGlobalClaudeFile() {
   if (isDiskless()) return getDefaultGlobalClaudeFile();
-  let o = join(getClaudeConfigDir(), ".config.json"),
-    t = getDefaultGlobalClaudeFile();
+  let o = join(getClaudeConfigDir(), ".config.json");
+  let defaultGlobalClaudeFile = getDefaultGlobalClaudeFile();
   try {
     let stats = getFsImplementation().statSync(o);
     if (
       stats.isFile() &&
-      (stats.size > 0 || ((stats.mode & 146) !== 0 && !getFsImplementation().existsSync(t)))
+      (stats.size > 0 ||
+        ((stats.mode & 146) !== 0 && !getFsImplementation().existsSync(defaultGlobalClaudeFile)))
     )
       return o;
   } catch {}
-  return t;
+  return defaultGlobalClaudeFile;
 }
 //@ chunk-jhrww53q.js:50152-50243 placement
 function getDefaultGlobalClaudeFile() {
@@ -91,7 +97,10 @@ function describeGlobalConfigFile() {
   return isDiskless() ? "the global config" : getGlobalClaudeFile();
 }
 //@ chunk-jhrww53q.js:50341-50373 layout
-async function V_() {
+/**
+ * 探测内网可访问性（当前恒返回 null）。
+ */
+async function probeInternalNetworkAccess() {
   return null;
 }
 //@ chunk-jhrww53q.js:50373-50433 callgraph-witnessed = isCommandAvailable (0)
@@ -99,7 +108,7 @@ async function isCommandAvailable(command) {
   try {
     return !!(await whichAsync(command));
   } catch {
-    return !1;
+    return false;
   }
 }
 //@ chunk-jhrww53q.js:50433-50571 fingerprint = detectPackageManagers (1)
@@ -118,81 +127,89 @@ async function detectRuntimes() {
   if (await isCommandAvailable("node")) runtimes.push("node");
   return runtimes;
 }
+//@ chunk-jhrww53q.js:50709-51001 layout
 /**
  * 构建工具名与 PATH 扫描超时。
  */
-//@ chunk-jhrww53q.js:50709-51001 layout
 var BUILD_TOOL_NAMES = [
-    "git",
-    "node",
-    "npm",
-    "npx",
-    "yarn",
-    "pnpm",
-    "bun",
-    "deno",
-    "tsc",
-    "python",
-    "python3",
-    "py",
-    "pip",
-    "uv",
-    "poetry",
-    "ruby",
-    "gem",
-    "bundle",
-    "rake",
-    "dotnet",
-    "msbuild",
-    "nuget",
-    "cl",
-    "nmake",
-    "cmake",
-    "ninja",
-    "make",
-    "gcc",
-    "g++",
-    "clang",
-    "cargo",
-    "rustc",
-    "go",
-    "java",
-    "javac",
-    "mvn",
-    "gradle",
-    "docker",
-  ],
-  PATH_SCAN_TIMEOUT_MS = 1000;
+  "git",
+  "node",
+  "npm",
+  "npx",
+  "yarn",
+  "pnpm",
+  "bun",
+  "deno",
+  "tsc",
+  "python",
+  "python3",
+  "py",
+  "pip",
+  "uv",
+  "poetry",
+  "ruby",
+  "gem",
+  "bundle",
+  "rake",
+  "dotnet",
+  "msbuild",
+  "nuget",
+  "cl",
+  "nmake",
+  "cmake",
+  "ninja",
+  "make",
+  "gcc",
+  "g++",
+  "clang",
+  "cargo",
+  "rustc",
+  "go",
+  "java",
+  "javac",
+  "mvn",
+  "gradle",
+  "docker",
+];
+var PATH_SCAN_TIMEOUT_MS = 1000;
 //@ chunk-jhrww53q.js:51001-51082 layout
-async function k_(o) {
+/**
+ * 判断符号链接是否指向 App Installer（读不到视为否）。
+ */
+async function isAppInstallerLink(o) {
   try {
     return /appinstaller/i.test(await readlink(o));
   } catch {
-    return !1;
+    return false;
   }
 }
 //@ chunk-jhrww53q.js:51082-51160 layout
-async function w_s(o) {
-  if (o === "" || AV(o) || Eh(o)) return !1;
+/**
+ * 判断该路径是否值得扫进 PATH 候选（跳过不安全与已有拼写的路径）。
+ */
+async function isScanCandidate(o) {
+  if (o === "" || isNetworkishPath(o) || hasDotDotSegment(o)) return false;
   return !(await hasUntouchableRecordSpellingStrictAsync(resolve(o)));
 }
 //@ chunk-jhrww53q.js:51160-51943 layout
 async function scanPathForExecutables(o, t) {
-  let _ = getPlatform() === "windows",
-    E = new Set(o),
-    r = _ ? (process.env.PATHEXT ?? ".COM;.EXE;.BAT;.CMD").toLowerCase().split(";").filter(Boolean) : [],
-    n = uniq(
-      (process.env.PATH ?? "")
-        .split(delimiter)
-        .map((s) => s.replace(/^"|"$/g, ""))
-        .filter(Boolean),
-    );
+  let _ = getPlatform() === "windows";
+  let E = new Set(o);
+  let r = _ ? (process.env.PATHEXT ?? ".COM;.EXE;.BAT;.CMD").toLowerCase().split(";").filter(Boolean) : [];
+  let n = uniq(
+    (process.env.PATH ?? "")
+      .split(delimiter)
+      .map((s) => s.replace(/^"|"$/g, ""))
+      .filter(Boolean),
+  );
   await Promise.all(
     n.map(async (s) => {
-      if (!(await w_s(s))) return;
+      if (!(await isScanCandidate(s))) return;
       let e;
       try {
-        e = await readdir(s, { withFileTypes: !0 });
+        e = await readdir(s, {
+          withFileTypes: true,
+        });
       } catch {
         return;
       }
@@ -201,14 +218,14 @@ async function scanPathForExecutables(o, t) {
         if (C.isDirectory()) continue;
         let S = C.name;
         if (_) {
-          let lower = S.toLowerCase(),
-            index = lower.lastIndexOf(".");
+          let lower = S.toLowerCase();
+          let index = lower.lastIndexOf(".");
           if (index <= 0 || !r.includes(lower.slice(index))) continue;
           S = lower.slice(0, index);
         }
         if (!E.has(S) || t.has(S)) continue;
         if (_) {
-          if (D && (await k_(join(s, C.name)))) continue;
+          if (D && (await isAppInstallerLink(join(s, C.name)))) continue;
         } else {
           let O = join(s, C.name);
           if (
@@ -240,18 +257,21 @@ async function detectBuildTools() {
   return BUILD_TOOL_NAMES.filter((t) => o.has(t));
 }
 //@ chunk-jhrww53q.js:52078-52128 layout
-function qMi() {
+/**
+ * 返回探测到的构建工具列表。
+ */
+function detectedBuildTools() {
   return getEnvProbe().getDetectedBuildTools();
 }
 //@ chunk-jhrww53q.js:52128-52268 fingerprint = isNpmFromWindowsPath (0.798)
 function isNpmFromWindowsPath(o) {
   try {
-    if (!o.isWslEnvironment()) return !1;
-    let t = w0("npm");
-    if (t === null) return !1;
+    if (!o.isWslEnvironment()) return false;
+    let t = bunWhichSync("npm");
+    if (t === null) return false;
     return t.startsWith("/mnt/c/");
-  } catch (error) {
-    return !1;
+  } catch (_error) {
+    return false;
   }
 }
 //@ chunk-jhrww53q.js:52268-52344 fingerprint = isConductor (1)
@@ -277,10 +297,10 @@ var JETBRAINS_IDES = [
   "jetbrains",
   "androidstudio",
 ];
+//@ chunk-jhrww53q.js:52519-52730 layout
 /**
  * 应用路径是否 Windsurf/Devin。
  */
-//@ chunk-jhrww53q.js:52519-52730 layout
 function isWindsurfOrDevin(o) {
   let lower = o.toLowerCase();
   return (
@@ -355,14 +375,17 @@ class EnvProbe {
   fallbackWslInteropExists;
   fallbackHypervisorUuid;
   fallbackDockerenvExists;
-  constructor(o) {
-    this.sources = o;
+  constructor(sources) {
+    this.sources = sources;
   }
   getGlobalClaudeFile() {
     return (this.globalClaudeFile ??= resolveGlobalClaudeFile());
   }
   seedGlobalClaudeFile(o) {
-    if (this.globalClaudeFile === void 0) return ((this.globalClaudeFile = o), "seeded");
+    if (this.globalClaudeFile === undefined) {
+      this.globalClaudeFile = o;
+      return "seeded";
+    }
     return this.globalClaudeFile === o ? "unchanged" : "conflict";
   }
   getPackageManagers() {
@@ -393,36 +416,41 @@ class EnvProbe {
     );
   }
   detectDeploymentEnvironment() {
-    return (this.deploymentEnvironment ??= detectDeploymentEnvironment(this));
+    return (this.deploymentEnvironment ??= detectDeploymentEnvironment_2(this));
   }
   async prime() {
-    if (this.primedWslInteropExists !== void 0 || p()) return;
+    if (this.primedWslInteropExists !== undefined || isDisklessEnvProbe()) return;
     let [o, t, _] = await Promise.all([
       access("/proc/sys/fs/binfmt_misc/WSLInterop").then(
-        () => !0,
-        () => !1,
+        () => true,
+        () => false,
       ),
-      readFile("/sys/hypervisor/uuid", { encoding: "utf8" }).then(
-        (E) => E.trim().toLowerCase(),
+      readFile("/sys/hypervisor/uuid", {
+        encoding: "utf8",
+      }).then(
+        (file) => file.trim().toLowerCase(),
         () => {
           return;
         },
       ),
       access("/.dockerenv").then(
-        () => !0,
-        () => !1,
+        () => true,
+        () => false,
       ),
     ]);
-    ((this.primedWslInteropExists = o),
-      (this.primedHypervisorUuid = t ?? ""),
-      (this.primedDockerenvExists = _),
-      (this.wslEnvironment = void 0),
-      (this.npmFromWindowsPath = void 0),
-      (this.deploymentEnvironment = void 0));
+    this.primedWslInteropExists = o;
+    this.primedHypervisorUuid = t ?? "";
+    this.primedDockerenvExists = _;
+    this.wslEnvironment = undefined;
+    this.npmFromWindowsPath = undefined;
+    this.deploymentEnvironment = undefined;
   }
 }
 //@ chunk-jhrww53q.js:56364-56461 layout
-var z_ = new HostScoped(
+/**
+ * 按宿主隔离的环境探测器（WSL 互操作、hypervisor UUID、dockerenv）。
+ */
+var envProbeByHost = new HostScoped(
   () =>
     new EnvProbe({
       wslInteropExistsSync: isWslEnvironment,
@@ -432,22 +460,31 @@ var z_ = new HostScoped(
 );
 //@ chunk-jhrww53q.js:56461-56497 layout
 function getEnvProbe() {
-  return z_.of(getRootSession().host);
+  return envProbeByHost.of(getRootSession().host);
 }
 //@ chunk-jhrww53q.js:56497-56531 layout
-function YMi() {
+/**
+ * 预热环境探测器。
+ */
+function primeEnvProbe() {
   return getEnvProbe().prime();
 }
 //@ chunk-jhrww53q.js:56531-56578 layout
-function Rwr() {
+/**
+ * 判断 /.dockerenv 是否存在。
+ */
+function isDockerenvPresent() {
   return getEnvProbe().isDockerenvPresent();
 }
 //@ chunk-jhrww53q.js:56578-56632 layout
-function J() {
+/**
+ * 探测部署环境。
+ */
+function detectDeploymentEnvironment() {
   return getEnvProbe().detectDeploymentEnvironment();
 }
 //@ chunk-jhrww53q.js:56632-58727 fingerprint = detectDeploymentEnvironment (0.881)
-function detectDeploymentEnvironment(o) {
+function detectDeploymentEnvironment_2(o) {
   if (isEnvTruthy(process.env.CODESPACES)) return "codespaces";
   if (process.env.GITPOD_WORKSPACE_ID) return "gitpod";
   if (isEnvTruthy(process.env.CODER) || process.env.CODER_WORKSPACE_NAME) return "coder";
@@ -479,7 +516,7 @@ function detectDeploymentEnvironment(o) {
   if (isEnvTruthy(process.env.GITLAB_CI)) return "gitlab-ci";
   if (process.env.CIRCLECI) return "circleci";
   if (process.env.BUILDKITE) return "buildkite";
-  if (isEnvTruthy(!1)) return "ci";
+  if (isEnvTruthy(false)) return "ci";
   if (process.env.KUBERNETES_SERVICE_HOST) return "kubernetes";
   if (o.isDockerenvPresent()) return "docker";
   if (env_2.platform === "darwin") return "unknown-darwin";
@@ -491,21 +528,21 @@ function detectDeploymentEnvironment(o) {
 function isSSHSession_2() {
   return !!(process.env.SSH_CONNECTION || process.env.SSH_CLIENT || process.env.SSH_TTY);
 }
+//@ chunk-jhrww53q.js:58822-58982 layout
 /**
  * 由服务端或 SSH 守护进程启动。
  */
-//@ chunk-jhrww53q.js:58822-58982 layout
 function isSpawnedByServer() {
   return (
-    process.env.CLAUDE_CODE_SPAWNED_BY_SERVER !== void 0 ||
-    process.env.CLAUDE_SSH_DAEMON_CHILD !== void 0 ||
-    process.env.CLAUDE_SSH_RUN_DIR !== void 0
+    process.env.CLAUDE_CODE_SPAWNED_BY_SERVER !== undefined ||
+    process.env.CLAUDE_SSH_DAEMON_CHILD !== undefined ||
+    process.env.CLAUDE_SSH_RUN_DIR !== undefined
   );
 }
 //@ chunk-jhrww53q.js:58982-59422 fingerprint = env (0.871)
 var env_2 = {
-  probeInternalNetworkAccess: V_,
-  isCI: isEnvTruthy(!1),
+  probeInternalNetworkAccess,
+  isCI: isEnvTruthy(false),
   platform: ["win32", "darwin"].includes("linux") ? "linux" : "linux",
   arch: "x64",
   nodeVersion: process.version,
@@ -524,8 +561,8 @@ var env_2 = {
   isNpmFromWindowsPath() {
     return getEnvProbe().isNpmFromWindowsPath();
   },
-  isConductor: isConductor,
-  detectDeploymentEnvironment: J,
+  isConductor,
+  detectDeploymentEnvironment,
 };
 //@ chunk-jhrww53q.js:59422-59550 facade-exports = getHostPlatformForAnalytics (1)
 function getHostPlatformForAnalytics() {
@@ -554,9 +591,9 @@ var SHELL_NAMES = new Set([
   "ion",
 ]);
 //@ chunk-jhrww53q.js:59689-59824 facade-exports
-function normalizeShellNameForAnalytics(o) {
-  if (!o) return fromSanitizer_SANITIZER_OUTPUT_ONLY("none");
-  let replaced = o
+function normalizeShellNameForAnalytics(shellPath) {
+  if (!shellPath) return fromSanitizer_SANITIZER_OUTPUT_ONLY("none");
+  let replaced = shellPath
     .split(/[/\\]/)
     .pop()
     .toLowerCase()
@@ -570,17 +607,20 @@ function getShellForAnalytics() {
 //@ chunk-jhrww53q.js:75963-76138 facade-exports
 function declaredEnvVarNames(o) {
   let t = weakMap.get(o);
-  if (t === void 0) return [];
+  if (t === undefined) return [];
   if (t !== null) return Object.keys(t);
   let prototypeOf = Object.getPrototypeOf(o);
-  return Object.keys(o).filter((E) => prototypeOf === null || !(E in prototypeOf));
+  return Object.keys(o).filter((key) => prototypeOf === null || !(key in prototypeOf));
 }
 //@ chunk-jhrww53q.js:76138-76237 facade-exports
-var env = createEnvAccessor(ALL_ENV_VARS, env_2),
-  jl = {},
-  antEnv = createEnvAccessor(jl, null),
-  udsInboxShape = require("./chunk-zya51bzb.js").udsInboxShape,
-  udsEnv = createEnvAccessor(udsInboxShape, null);
+/**
+ * antEnv 使用的空环境表（不声明任何变量）。
+ */
+var env = createEnvAccessor(ALL_ENV_VARS, env_2);
+var EMPTY_ANT_ENV = {};
+var antEnv = createEnvAccessor(EMPTY_ANT_ENV, null);
+var udsInboxShape = require("./chunk-zya51bzb.js").udsInboxShape;
+var udsEnv = createEnvAccessor(udsInboxShape, null);
 //@ chunk-4m46mxx9.js:12064-12238 fingerprint = JETBRAINS_IDES (1)
 var JETBRAINS_IDES_2 = [
   "pycharm",
@@ -601,30 +641,33 @@ var JETBRAINS_IDES_2 = [
   "androidstudio",
 ];
 //@ chunk-aepeg2w5.js:751986-752249 fingerprint = hasInternetAccess (0.427)
-async function hasInternetAccess() {
+async function hasInternetAccess_2() {
   try {
-    let { externalHttp: externalHttp } = await import("./chunk-tkdf9y00.js");
-    return (await externalHttp.head("http://1.1.1.1", { signal: AbortSignal.timeout(1000) }), !0);
+    let { externalHttp } = await import("./chunk-tkdf9y00.js");
+    await externalHttp.head("http://1.1.1.1", {
+      signal: AbortSignal.timeout(1000),
+    });
+    return true;
   } catch (error) {
-    return (
-      logForDebugging(
-        `internet access probe failed (${errorMessage(error)}); treating outbound internet as unreachable`,
-      ),
-      !1
+    logForDebugging(
+      `internet access probe failed (${errorMessage(error)}); treating outbound internet as unreachable`,
     );
+    return false;
   }
 }
 //@ chunk-cdz6g143.js:519-632 fingerprint = getGlobalClaudeFile (0.833)
-var LEGACY_CONFIG_JSON = ".config.json",
-  Z8o = `.claude${OAUTH_GLOBAL_FILE_SUFFIXES[0]}.json`,
-  mapped = OAUTH_GLOBAL_FILE_SUFFIXES.map((o) => `.claude${o}.json`),
-  xli = [...mapped, LEGACY_CONFIG_JSON, CREDENTIALS_FILE_NAME, DEVICE_KEYS_FILE_NAME];
+/**
+ * 带第一个 OAUTH 后缀的全局配置文件默认名（.claude<后缀>.json）。
+ */
+var LEGACY_CONFIG_JSON = ".config.json";
+var OAUTH_SUFFIXED_CONFIG_FILE_NAME = `.claude${OAUTH_GLOBAL_FILE_SUFFIXES[0]}.json`;
+var mapped = OAUTH_GLOBAL_FILE_SUFFIXES.map((o) => `.claude${o}.json`);
+var GLOBAL_CLAUDE_FILE_NAMES = [...mapped, LEGACY_CONFIG_JSON, CREDENTIALS_FILE_NAME, DEVICE_KEYS_FILE_NAME];
 //@ chunk-cxdk9p3j.js:1606-1705 fingerprint = isSSHSession (1)
 function isSSHSession() {
-  if (getPlatform() !== "windows") return !1;
+  if (getPlatform() !== "windows") return false;
   return Boolean(env.SSH_CONNECTION || env.SSH_CLIENT || env.SSH_TTY);
 }
-
 export {
   env,
   antEnv,
@@ -635,22 +678,22 @@ export {
   describeGlobalConfigFile,
   getHostPlatformForAnalytics,
   getShellForAnalytics,
+  scanPathForExecutables,
   JETBRAINS_IDES,
   BUILD_TOOL_NAMES,
-  scanPathForExecutables,
-  w_s,
+  isScanCandidate,
   JETBRAINS_IDES_2,
-  hasInternetAccess,
-  Rwr,
-  p,
+  hasInternetAccess_2,
+  isDockerenvPresent,
+  isDisklessEnvProbe,
   getDefaultGlobalClaudeFile,
   mapped,
   LEGACY_CONFIG_JSON,
-  YMi,
+  primeEnvProbe,
   isSSHSession,
   normalizeShellNameForAnalytics,
-  qMi,
+  detectedBuildTools,
   isWindsurfOrDevin,
-  Z8o,
-  xli,
+  OAUTH_SUFFIXED_CONFIG_FILE_NAME,
+  GLOBAL_CLAUDE_FILE_NAMES,
 };

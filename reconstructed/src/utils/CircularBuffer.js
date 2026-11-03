@@ -19,41 +19,41 @@ class CircularBuffer {
     this.capacity = e;
     this.buffer = Array(e);
   }
-  add(e) {
-    if (
-      ((this.buffer[this.head] = e), (this.head = (this.head + 1) % this.capacity), this.size < this.capacity)
-    )
-      this.size++;
+  add(item) {
+    this.buffer[this.head] = item;
+    this.head = (this.head + 1) % this.capacity;
+    if (this.size < this.capacity) this.size++;
   }
-  addAll(e) {
-    for (let n of e) this.add(n);
+  addAll(items) {
+    for (let item of items) this.add(item);
   }
-  getRecent(e) {
-    let n = [],
-      r = this.size < this.capacity ? 0 : this.head,
-      min = Math.min(e, this.size);
-    for (let h = 0; h < min; h++) {
-      let y = (r + this.size - min + h) % this.capacity;
-      n.push(this.buffer[y]);
+  getRecent(count) {
+    let result = [];
+    let start = this.size < this.capacity ? 0 : this.head;
+    let available = Math.min(count, this.size);
+    for (let i = 0; i < available; i++) {
+      let index = (start + this.size - available + i) % this.capacity;
+      result.push(this.buffer[index]);
     }
-    return n;
+    return result;
   }
   toArray() {
     if (this.size === 0) return [];
-    let e = [],
-      n = this.size < this.capacity ? 0 : this.head;
-    for (let r = 0; r < this.size; r++) {
-      let s = (n + r) % this.capacity;
-      e.push(this.buffer[s]);
+    let result = [];
+    let start = this.size < this.capacity ? 0 : this.head;
+    for (let i = 0; i < this.size; i++) {
+      let index = (start + i) % this.capacity;
+      result.push(this.buffer[index]);
     }
-    return e;
+    return result;
   }
   clear() {
-    ((this.buffer.length = 0), (this.head = 0), (this.size = 0));
+    this.buffer.length = 0;
+    this.head = 0;
+    this.size = 0;
   }
   length() {
     return this.size;
   }
 }
-
 export { CircularBuffer };

@@ -13,103 +13,154 @@ import { dataIdAttributeLength } from "./pageRuntimes.js";
 //@ chunk-jv307fw4.js:16408-16426 placement
 var PASSIVE = "passive";
 //@ chunk-jv307fw4.js:16426-16451 placement
-function hFr(e) {
+/**
+ * 导出函数 `parseHtml`：参数 e，返回 e。
+ */
+function parseHtml(e) {
   return e;
 }
 //@ chunk-jv307fw4.js:16451-16550 placement
-function abt(e, n) {
+/**
+ * 导出函数 `attrOf`：参数 e, n，返回 e.attrs?.find((s) => s.name.toLowerCase() === lower)?.value。
+ */
+function attrOf(e, n) {
   let lower = n.toLowerCase();
-  return e.attrs?.find((s) => s.name.toLowerCase() === lower)?.value;
+  return e.attrs?.find((attr) => attr.name.toLowerCase() === lower)?.value;
 }
 //@ chunk-jv307fw4.js:16550-16585 placement
-var Et = /^[a-z0-9][a-z0-9-]{0,63}$/;
+var SAFE_SCRIPT_ID_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
 //@ chunk-jv307fw4.js:16585-16750 placement
-function findIdAttributeTags(e, n) {
-  let r = `id="${n}"`,
-    s = [],
-    index = e.indexOf(r);
+function findIdAttributeTags(html, id) {
+  let r = `id="${id}"`;
+  let s = [];
+  let index = html.indexOf(r);
   while (index !== -1) {
-    let l = index + r.length,
-      d = l + dataIdAttributeLength(e, l);
-    if (e.charCodeAt(d) === 62) s.push([index, d + 1]);
-    index = e.indexOf(r, l);
+    let l = index + r.length;
+    let d = l + dataIdAttributeLength(html, l);
+    if (html.charCodeAt(d) === 62) s.push([index, d + 1]);
+    index = html.indexOf(r, l);
   }
   return s;
 }
 //@ chunk-jv307fw4.js:16750-16902 placement
-async function findElementsByIdSafe(e, n) {
+async function findElementsByIdSafe(html, id) {
   try {
-    let { nestingBudgetExceeded: nestingBudgetExceeded } = await import("./chunk-kpk3x82b.js");
-    if (nestingBudgetExceeded(e)) return null;
-    return await findElementsById(e, n);
+    let { nestingBudgetExceeded } = await import("./chunk-kpk3x82b.js");
+    if (nestingBudgetExceeded(html)) return null;
+    return await findElementsById(html, id);
   } catch {
     return null;
   }
 }
+//@ chunk-jv307fw4.js:16902-17326 placement
 /**
  * 解析 HTML 并遍历所有节点（包括 template 内容），找出 id 等于给定值的元素及其是否位于 template 中。
  */
-//@ chunk-jv307fw4.js:16902-17326 placement
 async function findElementsById(e, n) {
-  let { parse: parse } = await import("./chunk-ytv6b64r.js"),
-    s = hFr(parse(e, { sourceCodeLocationInfo: !0 })),
-    a = [],
-    l = [{ node: s, inTemplate: !1 }];
+  let { parse } = await import("./chunk-ytv6b64r.js");
+  let node = parseHtml(
+    parse(e, {
+      sourceCodeLocationInfo: true,
+    }),
+  );
+  let a = [];
+  let l = [
+    {
+      node,
+      inTemplate: false,
+    },
+  ];
   for (;;) {
     let d = l.pop();
-    if (d === void 0) break;
-    let { node: node, inTemplate: inTemplate } = d;
-    if (node.tagName !== void 0) {
-      if (abt(node, "id") === n) a.push({ node: node, inTemplate: inTemplate });
+    if (d === undefined) break;
+    let { node, inTemplate } = d;
+    if (node.tagName !== undefined) {
+      if (attrOf(node, "id") === n)
+        a.push({
+          node,
+          inTemplate,
+        });
     }
-    for (let T of node.childNodes ?? []) l.push({ node: T, inTemplate: inTemplate });
-    for (let T of node.content?.childNodes ?? []) l.push({ node: T, inTemplate: !0 });
+    for (let node_2 of node.childNodes ?? [])
+      l.push({
+        node: node_2,
+        inTemplate,
+      });
+    for (let node_2 of node.content?.childNodes ?? [])
+      l.push({
+        node: node_2,
+        inTemplate: true,
+      });
   }
   return a;
 }
+//@ chunk-jv307fw4.js:17326-18001 placement
 /**
  * 从页面 HTML 中提取 id 为给定值的 <script type="application/json"> 内容：先用字符串查找，再用 HTML 解析器核对唯一、不在 template 内、类型正确且位置一致；不确定时返回 ambiguous，找不到返回 null。
  */
-//@ chunk-jv307fw4.js:17326-18001 placement
 async function extractJsonScriptById(html, id) {
-  if (!Et.test(id)) return { ambiguous: !0 };
+  if (!SAFE_SCRIPT_ID_RE.test(id))
+    return {
+      ambiguous: true,
+    };
   let textMatches = findIdAttributeTags(html, id);
   if (textMatches.length === 0) {
-    let P = await findElementsByIdSafe(html, id);
-    if (P === null) return { ambiguous: !0 };
-    return P.length === 0 ? null : { ambiguous: !0 };
+    let elementsById = await findElementsByIdSafe(html, id);
+    if (elementsById === null)
+      return {
+        ambiguous: true,
+      };
+    return elementsById.length === 0
+      ? null
+      : {
+          ambiguous: true,
+        };
   }
-  if (textMatches.length !== 1) return { ambiguous: !0 };
-  let [s, a] = textMatches[0],
-    parsedMatches = await findElementsByIdSafe(html, id);
+  if (textMatches.length !== 1)
+    return {
+      ambiguous: true,
+    };
+  let [s, a] = textMatches[0];
+  let parsedMatches = await findElementsByIdSafe(html, id);
   if (parsedMatches === null || parsedMatches.length !== 1 || parsedMatches[0].inTemplate)
-    return { ambiguous: !0 };
-  let node = parsedMatches[0].node,
-    lower = (abt(node, "type") ?? "").trim().toLowerCase(),
-    startTag = node.sourceCodeLocation?.startTag,
-    endTag = node.sourceCodeLocation?.endTag;
+    return {
+      ambiguous: true,
+    };
+  let node = parsedMatches[0].node;
+  let lower = (attrOf(node, "type") ?? "").trim().toLowerCase();
+  let startTag = node.sourceCodeLocation?.startTag;
+  let endTag = node.sourceCodeLocation?.endTag;
   if (
     (node.tagName ?? "").toLowerCase() !== "script" ||
     lower !== "application/json" ||
-    startTag === void 0 ||
+    startTag === undefined ||
     startTag === null ||
-    endTag === void 0 ||
+    endTag === undefined ||
     endTag === null
   )
-    return { ambiguous: !0 };
-  if (s < startTag.startOffset || a !== startTag.endOffset) return { ambiguous: !0 };
-  return { json: html.slice(startTag.endOffset, endTag.startOffset) };
+    return {
+      ambiguous: true,
+    };
+  if (s < startTag.startOffset || a !== startTag.endOffset)
+    return {
+      ambiguous: true,
+    };
+  return {
+    json: html.slice(startTag.endOffset, endTag.startOffset),
+  };
 }
 //@ chunk-jv307fw4.js:18001-18033 placement
-var St = 600000,
-  We = /^(\d{1,15})-/;
+/**
+ * 接受“版本号时间戳不超前”的容差 10 分钟与版本串前缀正则。
+ */
+var MAX_VERSION_AHEAD_MS = 600000;
+var VERSION_TS_PREFIX_RE = /^(\d{1,15})-/;
+//@ chunk-jv307fw4.js:18033-18146 placement
 /**
  * 接受版本号时间戳不超前于当前时间（允许少量偏差）的版本字符串，否则返回 undefined。
  */
-//@ chunk-jv307fw4.js:18033-18146 placement
 function acceptVersionNotAhead(e) {
-  let n = e === void 0 ? void 0 : We.exec(e)?.[1];
-  return n !== void 0 && Number(n) * 1000 <= Date.now() + St ? e : void 0;
+  let n = e === undefined ? undefined : VERSION_TS_PREFIX_RE.exec(e)?.[1];
+  return n !== undefined && Number(n) * 1000 <= Date.now() + MAX_VERSION_AHEAD_MS ? e : undefined;
 }
-
-export { extractJsonScriptById, hFr, abt, PASSIVE, acceptVersionNotAhead, We };
+export { extractJsonScriptById, parseHtml, attrOf, PASSIVE, acceptVersionNotAhead, VERSION_TS_PREFIX_RE };

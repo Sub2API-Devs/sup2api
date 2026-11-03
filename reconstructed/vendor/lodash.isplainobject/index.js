@@ -8,39 +8,38 @@
 import { x } from "../../runtime/bun-runtime.js";
 
 //@ chunk-mrx6y2r5.js:14888-15499 cjs-fingerprint
-var Tf = x(function (hL, yf) {
-  var $T = "[object Object]";
-  function BT(e) {
-    var t = !1;
-    if (e != null && typeof e.toString != "function")
+var require_lodash_isplainobject = x(function (cjsExports, cjsModule) {
+  var objectTag = "[object Object]";
+  function isHostObject(value) {
+    var result = false;
+    if (value != null && typeof value.toString != "function")
       try {
-        t = !!(e + "");
-      } catch (error) {}
-    return t;
+        result = !!(value + "");
+      } catch (e) {}
+    return result;
   }
-  function zT(e, t) {
-    return function (r) {
-      return e(t(r));
+  function overArg(func, transform) {
+    return function (arg) {
+      return func(transform(arg));
     };
   }
-  var GT = Function.prototype,
-    pf = Object.prototype,
-    toString = GT.toString,
-    hasOwnProperty = pf.hasOwnProperty,
-    KT = toString.call(Object),
-    toString_2 = pf.toString,
-    jT = zT(Object.getPrototypeOf, Object);
-  function YT(e) {
-    return !!e && typeof e == "object";
+  var funcProto = Function.prototype;
+  var objectProto = Object.prototype;
+  var funcToString = funcProto.toString;
+  var hasOwnProperty = objectProto.hasOwnProperty;
+  var objectCtorString = funcToString.call(Object);
+  var objectToString = objectProto.toString;
+  var getPrototype = overArg(Object.getPrototypeOf, Object);
+  function isObjectLike(value) {
+    return !!value && typeof value == "object";
   }
-  function WT(e) {
-    if (!YT(e) || toString_2.call(e) != $T || BT(e)) return !1;
-    var t = jT(e);
-    if (t === null) return !0;
-    var r = hasOwnProperty.call(t, "constructor") && t.constructor;
-    return typeof r == "function" && r instanceof r && toString.call(r) == KT;
+  function isPlainObject(value) {
+    if (!isObjectLike(value) || objectToString.call(value) != objectTag || isHostObject(value)) return false;
+    var proto = getPrototype(value);
+    if (proto === null) return true;
+    var Ctor = hasOwnProperty.call(proto, "constructor") && proto.constructor;
+    return typeof Ctor == "function" && Ctor instanceof Ctor && funcToString.call(Ctor) == objectCtorString;
   }
-  yf.exports = WT;
+  cjsModule.exports = isPlainObject;
 });
-
-export { Tf };
+export { require_lodash_isplainobject };

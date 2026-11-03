@@ -5,202 +5,294 @@
  * pieces: chunk-mrx6y2r5.js (8)
  * attribution: esm-fingerprint 8
  */
-import { ei, ht } from "../index.js";
-import { ft } from "./operationHelpers.js";
-import { Wr } from "../../../core-rest-pipeline/dist/esm/policies/tracingPolicy.js";
+import { ei, MapperTypeNames } from "../index.js";
+import { getOperationRequestInfo } from "./operationHelpers.js";
+import { RestError_default } from "../../../core-rest-pipeline/dist/esm/policies/tracingPolicy.js";
 
 //@ chunk-mrx6y2r5.js:69687-69800 esm-fingerprint
-var qp = ["application/json", "text/json"],
-  Kp = ["application/xml", "application/atom+xml"],
-  DESERIALIZATIONPOLICY = "deserializationPolicy";
+var defaultJsonContentTypes = ["application/json", "text/json"];
+var defaultXmlContentTypes = ["application/xml", "application/atom+xml"];
+var deserializationPolicyName = "deserializationPolicy";
 //@ chunk-mrx6y2r5.js:69800-70392 esm-fingerprint
-function vd(e = {}) {
-  var t, r, n, o, i, s, a;
-  let c =
-      (r = (t = e.expectedContentTypes) === null || t === void 0 ? void 0 : t.json) !== null && r !== void 0
-        ? r
-        : qp,
-    l =
-      (o = (n = e.expectedContentTypes) === null || n === void 0 ? void 0 : n.xml) !== null && o !== void 0
-        ? o
-        : Kp,
-    { parseXML: parseXML, serializerOptions: serializerOptions } = e,
-    m = {
-      xml: {
-        rootName:
-          (i =
-            serializerOptions === null || serializerOptions === void 0
-              ? void 0
-              : serializerOptions.xml.rootName) !== null && i !== void 0
-            ? i
-            : "",
-        includeRoot:
-          (s =
-            serializerOptions === null || serializerOptions === void 0
-              ? void 0
-              : serializerOptions.xml.includeRoot) !== null && s !== void 0
-            ? s
-            : !1,
-        xmlCharKey:
-          (a =
-            serializerOptions === null || serializerOptions === void 0
-              ? void 0
-              : serializerOptions.xml.xmlCharKey) !== null && a !== void 0
-            ? a
-            : ei,
-      },
-    };
+function deserializationPolicy(options = {}) {
+  var _a;
+  var _b;
+  var _c;
+  var _d;
+  var _e;
+  var _f;
+  var _g;
+  let jsonContentTypes =
+    (_b = (_a = options.expectedContentTypes) === null || _a === undefined ? undefined : _a.json) !== null &&
+    _b !== undefined
+      ? _b
+      : defaultJsonContentTypes;
+  let xmlContentTypes =
+    (_d = (_c = options.expectedContentTypes) === null || _c === undefined ? undefined : _c.xml) !== null &&
+    _d !== undefined
+      ? _d
+      : defaultXmlContentTypes;
+  let { parseXML, serializerOptions } = options;
+  let options_2 = {
+    xml: {
+      rootName:
+        (_e =
+          serializerOptions === null || serializerOptions === undefined
+            ? undefined
+            : serializerOptions.xml.rootName) !== null && _e !== undefined
+          ? _e
+          : "",
+      includeRoot:
+        (_f =
+          serializerOptions === null || serializerOptions === undefined
+            ? undefined
+            : serializerOptions.xml.includeRoot) !== null && _f !== undefined
+          ? _f
+          : false,
+      xmlCharKey:
+        (_g =
+          serializerOptions === null || serializerOptions === undefined
+            ? undefined
+            : serializerOptions.xml.xmlCharKey) !== null && _g !== undefined
+          ? _g
+          : ei,
+    },
+  };
   return {
-    name: DESERIALIZATIONPOLICY,
-    async sendRequest(p, y) {
-      let T = await y(p);
-      return Wp(c, l, T, m, parseXML);
+    name: deserializationPolicyName,
+    async sendRequest(request, next) {
+      let response = await next(request);
+      return deserializeResponseBody(jsonContentTypes, xmlContentTypes, response, options_2, parseXML);
     },
   };
 }
 //@ chunk-mrx6y2r5.js:70392-70643 esm-fingerprint
-function jp(e) {
-  let t,
-    request = e.request,
-    n = ft(request),
-    o = n === null || n === void 0 ? void 0 : n.operationSpec;
-  if (o)
-    if (!(n === null || n === void 0 ? void 0 : n.operationResponseGetter)) t = o.responses[e.status];
-    else t = n === null || n === void 0 ? void 0 : n.operationResponseGetter(o, e);
-  return t;
+function getOperationResponseMap(parsedResponse) {
+  let result;
+  let request = parsedResponse.request;
+  let operationInfo = getOperationRequestInfo(request);
+  let operationSpec =
+    operationInfo === null || operationInfo === undefined ? undefined : operationInfo.operationSpec;
+  if (operationSpec)
+    if (
+      !(operationInfo === null || operationInfo === undefined
+        ? undefined
+        : operationInfo.operationResponseGetter)
+    )
+      result = operationSpec.responses[parsedResponse.status];
+    else
+      result =
+        operationInfo === null || operationInfo === undefined
+          ? undefined
+          : operationInfo.operationResponseGetter(operationSpec, parsedResponse);
+  return result;
 }
 //@ chunk-mrx6y2r5.js:70643-70807 esm-fingerprint
-function Yp(e) {
-  let request = e.request,
-    r = ft(request),
-    n = r === null || r === void 0 ? void 0 : r.shouldDeserialize,
-    o;
-  if (n === void 0) o = !0;
-  else if (typeof n === "boolean") o = n;
-  else o = n(e);
-  return o;
+function shouldDeserializeResponse(parsedResponse) {
+  let request = parsedResponse.request;
+  let operationInfo = getOperationRequestInfo(request);
+  let shouldDeserialize =
+    operationInfo === null || operationInfo === undefined ? undefined : operationInfo.shouldDeserialize;
+  let result;
+  if (shouldDeserialize === undefined) result = true;
+  else if (typeof shouldDeserialize === "boolean") result = shouldDeserialize;
+  else result = shouldDeserialize(parsedResponse);
+  return result;
 }
 //@ chunk-mrx6y2r5.js:70807-71688 esm-fingerprint
-async function Wp(e, t, r, n, o) {
-  let i = await Xp(e, t, r, n, o);
-  if (!Yp(i)) return i;
-  let s = ft(i.request),
-    a = s === null || s === void 0 ? void 0 : s.operationSpec;
-  if (!a || !a.responses) return i;
-  let c = jp(i),
-    { error: error, shouldReturnResponse: shouldReturnResponse } = Jp(i, a, c, n);
+async function deserializeResponseBody(jsonContentTypes, xmlContentTypes, response, options, parseXML) {
+  let parsedResponse = await parse(jsonContentTypes, xmlContentTypes, response, options, parseXML);
+  if (!shouldDeserializeResponse(parsedResponse)) return parsedResponse;
+  let operationInfo = getOperationRequestInfo(parsedResponse.request);
+  let operationSpec =
+    operationInfo === null || operationInfo === undefined ? undefined : operationInfo.operationSpec;
+  if (!operationSpec || !operationSpec.responses) return parsedResponse;
+  let responseSpec = getOperationResponseMap(parsedResponse);
+  let { error, shouldReturnResponse } = handleErrorResponse(
+    parsedResponse,
+    operationSpec,
+    responseSpec,
+    options,
+  );
   if (error) throw error;
-  else if (shouldReturnResponse) return i;
-  if (c) {
-    if (c.bodyMapper) {
-      let parsedBody = i.parsedBody;
-      if (a.isXML && c.bodyMapper.type.name === ht.Sequence)
-        parsedBody = typeof parsedBody === "object" ? parsedBody[c.bodyMapper.xmlElementName] : [];
+  else if (shouldReturnResponse) return parsedResponse;
+  if (responseSpec) {
+    if (responseSpec.bodyMapper) {
+      let valueToDeserialize = parsedResponse.parsedBody;
+      if (operationSpec.isXML && responseSpec.bodyMapper.type.name === MapperTypeNames.Sequence)
+        valueToDeserialize =
+          typeof valueToDeserialize === "object"
+            ? valueToDeserialize[responseSpec.bodyMapper.xmlElementName]
+            : [];
       try {
-        i.parsedBody = a.serializer.deserialize(c.bodyMapper, parsedBody, "operationRes.parsedBody", n);
-      } catch (error) {
-        throw new Wr(`Error ${error} occurred in deserializing the responseBody - ${i.bodyAsText}`, {
-          statusCode: i.status,
-          request: i.request,
-          response: i,
-        });
+        parsedResponse.parsedBody = operationSpec.serializer.deserialize(
+          responseSpec.bodyMapper,
+          valueToDeserialize,
+          "operationRes.parsedBody",
+          options,
+        );
+      } catch (deserializeError) {
+        throw new RestError_default(
+          `Error ${deserializeError} occurred in deserializing the responseBody - ${parsedResponse.bodyAsText}`,
+          {
+            statusCode: parsedResponse.status,
+            request: parsedResponse.request,
+            response: parsedResponse,
+          },
+        );
       }
-    } else if (a.httpMethod === "HEAD") i.parsedBody = r.status >= 200 && r.status < 300;
-    if (c.headersMapper)
-      i.parsedHeaders = a.serializer.deserialize(
-        c.headersMapper,
-        i.headers.toJSON(),
+    } else if (operationSpec.httpMethod === "HEAD")
+      parsedResponse.parsedBody = response.status >= 200 && response.status < 300;
+    if (responseSpec.headersMapper)
+      parsedResponse.parsedHeaders = operationSpec.serializer.deserialize(
+        responseSpec.headersMapper,
+        parsedResponse.headers.toJSON(),
         "operationRes.parsedHeaders",
-        { xml: {}, ignoreUnknownProperties: !0 },
+        {
+          xml: {},
+          ignoreUnknownProperties: true,
+        },
       );
   }
-  return i;
+  return parsedResponse;
 }
 //@ chunk-mrx6y2r5.js:71688-71786 esm-fingerprint
-function Qp(e) {
-  let keys = Object.keys(e.responses);
-  return keys.length === 0 || (keys.length === 1 && keys[0] === "default");
+function isOperationSpecEmpty(operationSpec) {
+  let expectedStatusCodes = Object.keys(operationSpec.responses);
+  return (
+    expectedStatusCodes.length === 0 ||
+    (expectedStatusCodes.length === 1 && expectedStatusCodes[0] === "default")
+  );
 }
 //@ chunk-mrx6y2r5.js:71786-73127 esm-fingerprint
-function Jp(e, t, r, n) {
-  var o, i, s, a, c;
-  let l = 200 <= e.status && e.status < 300;
-  if (Qp(t) ? l : !!r)
-    if (r) {
-      if (!r.isError) return { error: null, shouldReturnResponse: !1 };
-    } else return { error: null, shouldReturnResponse: !1 };
-  let u = r !== null && r !== void 0 ? r : t.responses.default,
-    m = ((o = e.request.streamResponseStatusCodes) === null || o === void 0 ? void 0 : o.has(e.status))
-      ? `Unexpected status code: ${e.status}`
-      : e.bodyAsText,
-    p = new Wr(m, { statusCode: e.status, request: e.request, response: e });
+function handleErrorResponse(parsedResponse, operationSpec, responseSpec, options) {
+  var _a;
+  var _b;
+  var _c;
+  var _d;
+  var _e;
+  let isSuccessByStatus = 200 <= parsedResponse.status && parsedResponse.status < 300;
+  if (isOperationSpecEmpty(operationSpec) ? isSuccessByStatus : !!responseSpec)
+    if (responseSpec) {
+      if (!responseSpec.isError)
+        return {
+          error: null,
+          shouldReturnResponse: false,
+        };
+    } else
+      return {
+        error: null,
+        shouldReturnResponse: false,
+      };
+  let errorResponseSpec =
+    responseSpec !== null && responseSpec !== undefined ? responseSpec : operationSpec.responses.default;
+  let initialErrorMessage = (
+    (_a = parsedResponse.request.streamResponseStatusCodes) === null || _a === undefined
+      ? undefined
+      : _a.has(parsedResponse.status)
+  )
+    ? `Unexpected status code: ${parsedResponse.status}`
+    : parsedResponse.bodyAsText;
+  let error = new RestError_default(initialErrorMessage, {
+    statusCode: parsedResponse.status,
+    request: parsedResponse.request,
+    response: parsedResponse,
+  });
   if (
-    !u &&
+    !errorResponseSpec &&
     !(
-      ((s = (i = e.parsedBody) === null || i === void 0 ? void 0 : i.error) === null || s === void 0
-        ? void 0
-        : s.code) &&
-      ((c = (a = e.parsedBody) === null || a === void 0 ? void 0 : a.error) === null || c === void 0
-        ? void 0
-        : c.message)
+      ((_c = (_b = parsedResponse.parsedBody) === null || _b === undefined ? undefined : _b.error) === null ||
+      _c === undefined
+        ? undefined
+        : _c.code) &&
+      ((_e = (_d = parsedResponse.parsedBody) === null || _d === undefined ? undefined : _d.error) === null ||
+      _e === undefined
+        ? undefined
+        : _e.message)
     )
   )
-    throw p;
-  let y = u === null || u === void 0 ? void 0 : u.bodyMapper,
-    T = u === null || u === void 0 ? void 0 : u.headersMapper;
+    throw error;
+  let defaultBodyMapper =
+    errorResponseSpec === null || errorResponseSpec === undefined ? undefined : errorResponseSpec.bodyMapper;
+  let defaultHeadersMapper =
+    errorResponseSpec === null || errorResponseSpec === undefined
+      ? undefined
+      : errorResponseSpec.headersMapper;
   try {
-    if (e.parsedBody) {
-      let parsedBody = e.parsedBody,
-        v;
-      if (y) {
-        let B = parsedBody;
-        if (t.isXML && y.type.name === ht.Sequence) {
-          B = [];
-          let xmlElementName = y.xmlElementName;
-          if (typeof parsedBody === "object" && xmlElementName) B = parsedBody[xmlElementName];
+    if (parsedResponse.parsedBody) {
+      let parsedBody = parsedResponse.parsedBody;
+      let deserializedError;
+      if (defaultBodyMapper) {
+        let valueToDeserialize = parsedBody;
+        if (operationSpec.isXML && defaultBodyMapper.type.name === MapperTypeNames.Sequence) {
+          valueToDeserialize = [];
+          let elementName = defaultBodyMapper.xmlElementName;
+          if (typeof parsedBody === "object" && elementName) valueToDeserialize = parsedBody[elementName];
         }
-        v = t.serializer.deserialize(y, B, "error.response.parsedBody", n);
+        deserializedError = operationSpec.serializer.deserialize(
+          defaultBodyMapper,
+          valueToDeserialize,
+          "error.response.parsedBody",
+          options,
+        );
       }
-      let U = parsedBody.error || v || parsedBody;
-      if (((p.code = U.code), U.message)) p.message = U.message;
-      if (y) p.response.parsedBody = v;
+      let internalError = parsedBody.error || deserializedError || parsedBody;
+      error.code = internalError.code;
+      if (internalError.message) error.message = internalError.message;
+      if (defaultBodyMapper) error.response.parsedBody = deserializedError;
     }
-    if (e.headers && T)
-      p.response.parsedHeaders = t.serializer.deserialize(
-        T,
-        e.headers.toJSON(),
+    if (parsedResponse.headers && defaultHeadersMapper)
+      error.response.parsedHeaders = operationSpec.serializer.deserialize(
+        defaultHeadersMapper,
+        parsedResponse.headers.toJSON(),
         "operationRes.parsedHeaders",
       );
-  } catch (error) {
-    p.message = `Error "${error.message}" occurred in deserializing the responseBody - "${e.bodyAsText}" for the default response.`;
+  } catch (defaultError) {
+    error.message = `Error "${defaultError.message}" occurred in deserializing the responseBody - "${parsedResponse.bodyAsText}" for the default response.`;
   }
-  return { error: p, shouldReturnResponse: !1 };
+  return {
+    error,
+    shouldReturnResponse: false,
+  };
 }
 //@ chunk-mrx6y2r5.js:73127-73790 esm-fingerprint
-async function Xp(e, t, r, n, o) {
-  var i;
+async function parse(jsonContentTypes, xmlContentTypes, operationResponse, opts, parseXML) {
+  var _a;
   if (
-    !((i = r.request.streamResponseStatusCodes) === null || i === void 0 ? void 0 : i.has(r.status)) &&
-    r.bodyAsText
+    !((_a = operationResponse.request.streamResponseStatusCodes) === null || _a === undefined
+      ? undefined
+      : _a.has(operationResponse.status)) &&
+    operationResponse.bodyAsText
   ) {
-    let bodyAsText = r.bodyAsText,
-      a = r.headers.get("Content-Type") || "",
-      c = !a ? [] : a.split(";").map((l) => l.toLowerCase());
+    let text = operationResponse.bodyAsText;
+    let contentType = operationResponse.headers.get("Content-Type") || "";
+    let contentComponents = !contentType
+      ? []
+      : contentType.split(";").map((component) => component.toLowerCase());
     try {
-      if (c.length === 0 || c.some((l) => e.indexOf(l) !== -1))
-        return ((r.parsedBody = JSON.parse(bodyAsText)), r);
-      else if (c.some((l) => t.indexOf(l) !== -1)) {
-        if (!o) throw Error("Parsing XML not supported.");
-        let l = await o(bodyAsText, n.xml);
-        return ((r.parsedBody = l), r);
+      if (
+        contentComponents.length === 0 ||
+        contentComponents.some((component) => jsonContentTypes.indexOf(component) !== -1)
+      ) {
+        operationResponse.parsedBody = JSON.parse(text);
+        return operationResponse;
+      } else if (contentComponents.some((component) => xmlContentTypes.indexOf(component) !== -1)) {
+        if (!parseXML) throw Error("Parsing XML not supported.");
+        let body = await parseXML(text, opts.xml);
+        operationResponse.parsedBody = body;
+        return operationResponse;
       }
-    } catch (error) {
-      let d = `Error "${error}" occurred while parsing the response body - ${r.bodyAsText}.`,
-        u = error.code || Wr.PARSE_ERROR;
-      throw new Wr(d, { code: u, statusCode: r.status, request: r.request, response: r });
+    } catch (err) {
+      let msg = `Error "${err}" occurred while parsing the response body - ${operationResponse.bodyAsText}.`;
+      let errCode = err.code || RestError_default.PARSE_ERROR;
+      throw new RestError_default(msg, {
+        code: errCode,
+        statusCode: operationResponse.status,
+        request: operationResponse.request,
+        response: operationResponse,
+      });
     }
   }
-  return r;
+  return operationResponse;
 }
-
-export { vd };
+export { deserializationPolicy };

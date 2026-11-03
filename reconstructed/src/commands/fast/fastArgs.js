@@ -16,24 +16,33 @@ import {
 } from "../../utils/fastMode.js";
 import { getMainLoopModel } from "../../utils/model/model.js";
 import { isVsCodeTopSession } from "../../utils/sessionShape.js";
-import { _N } from "../../utils/promptSubmissionOrigin.js";
+import { isBridgeOrVerifiedSlackTurn } from "../../utils/promptSubmissionOrigin.js";
 import { toggleFastMode } from "./fast.js";
 import { isBridgeOrTransport } from "../../cli/transportState.js";
 
+//@ chunk-vr5qyyg8.js:12230-13030 placement
 /**
  * /fast [on|off]：切换快速模式，不可用时返回原因。
  */
-//@ chunk-vr5qyyg8.js:12230-13030 placement
 async function runFastCommand(args, context) {
   if (!isFastModeEnabled())
-    return { type: "text", value: getFastModeUnavailableMessage() ?? "Fast mode is not available" };
-  let lower = args.trim().toLowerCase(),
-    t;
-  if (lower === "on") t = !0;
-  else if (lower === "off") t = !1;
+    return {
+      type: "text",
+      value: getFastModeUnavailableMessage() ?? "Fast mode is not available",
+    };
+  let lower = args.trim().toLowerCase();
+  let t;
+  if (lower === "on") t = true;
+  else if (lower === "off") t = false;
   else if (lower === "") t = !context.options.fastMode || isMainModelFastRejected(getMainLoopModel());
-  else return { type: "text", value: `Unknown argument "${lower}". Use: /fast [on|off]` };
-  let i = !context.options.isNonInteractiveSession || (isVsCodeTopSession() && !_N(context));
+  else
+    return {
+      type: "text",
+      value: `Unknown argument "${lower}". Use: /fast [on|off]`,
+    };
+  let i =
+    !context.options.isNonInteractiveSession ||
+    (isVsCodeTopSession() && !isBridgeOrVerifiedSlackTurn(context));
   return {
     type: "text",
     value: await toggleFastMode(
@@ -45,8 +54,8 @@ async function runFastCommand(args, context) {
       i,
       context.storageV5,
       () => prefetchFastModeStatus(context.storageV5, context.credentials),
-      void 0,
-      void 0,
+      undefined,
+      undefined,
       (r, a) =>
         context.rowCommit.savedFastModeToggle(
           r,
@@ -57,7 +66,9 @@ async function runFastCommand(args, context) {
             storageV5: context.storageV5,
             dispatchedOverBridge: context.dispatchedOverBridge,
             submissionVerifiedSlackHumanTurn: context.submissionVerifiedSlackHumanTurn,
-            options: { mcpClients: [] },
+            options: {
+              mcpClients: [],
+            },
           },
           a,
           () => isBridgeOrTransport(context.session),

@@ -17,55 +17,62 @@ import {
 } from "../utils/auth.js";
 import { getIsNonInteractiveSession } from "../bootstrap/state.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../services/analytics/growthbook.js";
-import { Pri } from "./bridge/c4eUpsellRegistry.js";
+import { registerC4EUpsellGate } from "./bridge/c4eUpsellRegistry.js";
 import { logEvent } from "../services/analytics/index.js";
 import { fromEnum } from "../services/analytics/safeMetadata.js";
 import { isRemoteControlHardDisabled } from "../bridge/bridgeEntitlement.js";
 import { REMOTE_CONTROL_DISABLED_BY_POLICY_MESSAGE } from "../bridge/remoteControlPolicy.js";
 
+//@ chunk-e6aww6q8.js:2035684-2035730 placement
 /**
  * isApiKeyOnlyUser：Oi() 且 Slt()。
  */
-//@ chunk-e6aww6q8.js:2035684-2035730 placement
-function jwt() {
-  if (!isFirstPartyAnthropicBaseUrl()) return !1;
+function is1PApiCustomerOnFirstParty() {
+  if (!isFirstPartyAnthropicBaseUrl()) return false;
   return is1PApiCustomer();
 }
+//@ chunk-e6aww6q8.js:2035730-2035804 placement
 /**
  * isEnterpriseUpsellEnabled：tengu_c4e_slash_upsell。
  */
-//@ chunk-e6aww6q8.js:2035730-2035804 placement
 function isEnterpriseUpsellEnabled() {
   return (
-    !Kor() &&
-    jwt() &&
+    !isSubscriber() &&
+    is1PApiCustomerOnFirstParty() &&
     !getIsNonInteractiveSession() &&
-    getFeatureValue_CACHED_MAY_BE_STALE("tengu_c4e_slash_upsell", !1)
+    getFeatureValue_CACHED_MAY_BE_STALE("tengu_c4e_slash_upsell", false)
   );
 }
 //@ chunk-e6aww6q8.js:2035804-2035841 placement
-Pri({ isC4EUpsellCommandEnabled: isEnterpriseUpsellEnabled });
+registerC4EUpsellGate({
+  isC4EUpsellCommandEnabled: isEnterpriseUpsellEnabled,
+});
+//@ chunk-e6aww6q8.js:2035841-2035964 placement = hasAnthropicApiKeyAuth (1)
 /**
  * isSignedOut：无 OAuth 也无 API key。
  */
-//@ chunk-e6aww6q8.js:2035841-2035964 placement = hasAnthropicApiKeyAuth (1)
 function isSignedOut() {
   try {
     return (
       getAuthTokenSource().source === "none" &&
-      getAnthropicApiKeyWithSourceSafe({ skipRetrievingKeyFromApiKeyHelper: !0 }).source === "none"
+      getAnthropicApiKeyWithSourceSafe({
+        skipRetrievingKeyFromApiKeyHelper: true,
+      }).source === "none"
     );
   } catch {
-    return !1;
+    return false;
   }
 }
+//@ chunk-e6aww6q8.js:2035964-2036363 placement
 /**
  * getEnterpriseUpsellMessage：policy_disabled / signed_out / c4e 三种文案。
  */
-//@ chunk-e6aww6q8.js:2035964-2036363 placement
 function getEnterpriseUpsellMessage(spec) {
   if (spec.managedDisabled?.isDisabled())
-    return { variant: "policy_disabled", value: spec.managedDisabled.reason };
+    return {
+      variant: "policy_disabled",
+      value: spec.managedDisabled.reason,
+    };
   if (isSignedOut())
     return {
       variant: "signed_out",
@@ -76,10 +83,10 @@ function getEnterpriseUpsellMessage(spec) {
     value: `/${spec.name} is available with Claude for Enterprise \u2014 ask your admin about migrating from API-key access.`,
   };
 }
+//@ chunk-e6aww6q8.js:2036363-2036726 placement
 /**
  * createEnterpriseUpsellCommand：隐藏 local 命令，提示需要 Claude for Enterprise。
  */
-//@ chunk-e6aww6q8.js:2036363-2036726 placement
 function createEnterpriseUpsellCommand(spec) {
   return {
     type: "local",
@@ -87,34 +94,35 @@ function createEnterpriseUpsellCommand(spec) {
     aliases: spec.aliases,
     description: `${spec.description} \u2014 available with Claude for Enterprise`,
     isEnabled: isEnterpriseUpsellEnabled,
-    isHidden: !0,
-    supportsNonInteractive: !1,
+    isHidden: true,
+    supportsNonInteractive: false,
     load: () =>
       Promise.resolve({
         call: async () => {
-          let { variant: variant, value: r } = getEnterpriseUpsellMessage(spec);
-          return (
-            logEvent("tengu_c4e_slash_upsell_shown", {
-              command: fromEnum(spec.name),
-              variant: fromEnum(variant),
-            }),
-            { type: "text", value: r }
-          );
+          let { variant, value: r } = getEnterpriseUpsellMessage(spec);
+          logEvent("tengu_c4e_slash_upsell_shown", {
+            command: fromEnum(spec.name),
+            variant: fromEnum(variant),
+          });
+          return {
+            type: "text",
+            value: r,
+          };
         },
       }),
   };
 }
+//@ chunk-e6aww6q8.js:2036726-2036753 placement
 /**
  * isClaudeAiSubscriberForUpsell：vt()。
  */
-//@ chunk-e6aww6q8.js:2036726-2036753 placement
-function Kor() {
+function isSubscriber() {
   return isClaudeAISubscriber();
 }
+//@ chunk-e6aww6q8.js:2036753-2037425 placement
 /**
  * ENTERPRISE_UPSELL_COMMANDS：ultraplan/ultrareview/teleport/remote-control/schedule/autofix-pr 的升级提示存根。
  */
-//@ chunk-e6aww6q8.js:2036753-2037425 placement
 var ENTERPRISE_UPSELL_COMMANDS = [
   createEnterpriseUpsellCommand({
     name: "ultraplan",
@@ -149,6 +157,9 @@ var ENTERPRISE_UPSELL_COMMANDS = [
   }),
 ];
 //@ chunk-e6aww6q8.js:2037425-2037476 placement = default (1)
-var Crn = { isEnabled: () => !1, isHidden: !0, name: "stub" };
-
-export { jwt, Crn, ENTERPRISE_UPSELL_COMMANDS };
+var stubC4EUpsellCommand = {
+  isEnabled: () => false,
+  isHidden: true,
+  name: "stub",
+};
+export { is1PApiCustomerOnFirstParty, stubC4EUpsellCommand, ENTERPRISE_UPSELL_COMMANDS };

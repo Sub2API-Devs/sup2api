@@ -10,7 +10,7 @@
  */
 import { getCredentialRoad } from "../../bootstrap/state.js";
 import {
-  yMn,
+  readWellKnownCredentialToken,
   CCR_OAUTH_TOKEN_PATH,
   CCR_API_KEY_PATH,
   getOAuthTokenFromFileDescriptor,
@@ -22,65 +22,94 @@ import { isFirstPartyAnthropicHost } from "../../utils/model/providers.js";
 import { isChildSession, isClaudecodeSession } from "../../utils/sessionShape.js";
 
 //@ chunk-mmkhgzzy.js:425-436 placement
-var o = null;
+var claimContext = null;
 //@ chunk-mmkhgzzy.js:436-456 placement
-function q_i(n) {
-  o = n;
+/**
+ * 函数 setClaimContext（设置认领上下文）。
+ */
+function setClaimContext(n) {
+  claimContext = n;
 }
 //@ chunk-mmkhgzzy.js:456-500 placement
-function iAn() {
-  return o?.credential() ?? null;
+/**
+ * 函数 claimedCredential（认领到的凭据）。
+ */
+function claimedCredential() {
+  return claimContext?.credential() ?? null;
 }
 //@ chunk-mmkhgzzy.js:500-549 placement
-function Y_i() {
-  return o?.road() ?? "none_at_claim";
+/**
+ * 函数 claimRoadHint（认领路径提示）。
+ */
+function claimRoadHint() {
+  return claimContext?.road() ?? "none_at_claim";
 }
+//@ chunk-mmkhgzzy.js:549-808 placement
 /**
  * 判断认领凭证的来源：认领时没有凭证、来自环境变量，或来自文件描述符等其他通道。
  */
-//@ chunk-mmkhgzzy.js:549-808 placement
-function credentialRoad(n, e) {
-  if (e === null) return "none_at_claim";
-  let t = e.kind === "bearer",
-    i = t ? "CLAUDE_CODE_OAUTH_TOKEN" : "ANTHROPIC_API_KEY",
-    u = t ? "CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR" : "CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR";
-  return r(n[i]) === void 0 ? (getCredentialRoad(u) ?? "none") : "env_var";
+function credentialRoad(claimLaunchEnv, launchCredential) {
+  if (launchCredential === null) return "none_at_claim";
+  let t = launchCredential.kind === "bearer";
+  let i = t ? "CLAUDE_CODE_OAUTH_TOKEN" : "ANTHROPIC_API_KEY";
+  let u = t ? "CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR" : "CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR";
+  return trimmedOrUndefined(claimLaunchEnv[i]) === undefined ? (getCredentialRoad(u) ?? "none") : "env_var";
 }
+//@ chunk-mmkhgzzy.js:808-1346 placement
 /**
  * 预热备用进程认领会话时读取凭据：CCR 环境下从固定路径读 OAuth token 或 API key（二者都有时视为冲突返回 null）；否则依次从环境变量与文件描述符读取，返回 {kind:"bearer"|"key"}。
  */
-//@ chunk-mmkhgzzy.js:808-1346 placement
-function claimedCredential(env) {
+function claimedCredential_2(env) {
   if (_(env)) {
-    let ccrOAuthToken = r(yMn(CCR_OAUTH_TOKEN_PATH, "OAuth token")),
-      ccrApiKey = r(yMn(CCR_API_KEY_PATH, "API key"));
-    if (ccrOAuthToken !== void 0 && ccrApiKey !== void 0) return null;
-    return ccrOAuthToken === void 0 ? c(ccrApiKey) : { kind: "bearer", token: ccrOAuthToken };
+    let ccrOAuthToken = trimmedOrUndefined(readWellKnownCredentialToken(CCR_OAUTH_TOKEN_PATH, "OAuth token"));
+    let ccrApiKey = trimmedOrUndefined(readWellKnownCredentialToken(CCR_API_KEY_PATH, "API key"));
+    if (ccrOAuthToken !== undefined && ccrApiKey !== undefined) return null;
+    return ccrOAuthToken === undefined
+      ? toKeyCredential(ccrApiKey)
+      : {
+          kind: "bearer",
+          token: ccrOAuthToken,
+        };
   }
-  let hasOAuthTokenFd = a(env, "CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR"),
-    hasApiKeyFd = a(env, "CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR"),
-    oauthToken =
-      r(env.CLAUDE_CODE_OAUTH_TOKEN) ?? (hasOAuthTokenFd ? r(getOAuthTokenFromFileDescriptor()) : void 0),
-    apiKey = r(env.ANTHROPIC_API_KEY) ?? (hasApiKeyFd ? r(getApiKeyFromFileDescriptor()) : void 0);
-  if (oauthToken !== void 0) return { kind: "bearer", token: oauthToken };
-  if (apiKey !== void 0) return { kind: "key", key: apiKey };
+  let hasOAuthTokenFd = hasNonEmptyEnv(env, "CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR");
+  let hasApiKeyFd = hasNonEmptyEnv(env, "CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR");
+  let oauthToken =
+    trimmedOrUndefined(env.CLAUDE_CODE_OAUTH_TOKEN) ??
+    (hasOAuthTokenFd ? trimmedOrUndefined(getOAuthTokenFromFileDescriptor()) : undefined);
+  let apiKey =
+    trimmedOrUndefined(env.ANTHROPIC_API_KEY) ??
+    (hasApiKeyFd ? trimmedOrUndefined(getApiKeyFromFileDescriptor()) : undefined);
+  if (oauthToken !== undefined)
+    return {
+      kind: "bearer",
+      token: oauthToken,
+    };
+  if (apiKey !== undefined)
+    return {
+      kind: "key",
+      key: apiKey,
+    };
   if (hasOAuthTokenFd || hasApiKeyFd) return null;
-  let fdOAuthToken = r(getOAuthTokenFromFileDescriptor());
-  if (fdOAuthToken !== void 0) return { kind: "bearer", token: fdOAuthToken };
-  return c(r(getApiKeyFromFileDescriptor()));
+  let fdOAuthToken = trimmedOrUndefined(getOAuthTokenFromFileDescriptor());
+  if (fdOAuthToken !== undefined)
+    return {
+      kind: "bearer",
+      token: fdOAuthToken,
+    };
+  return toKeyCredential(trimmedOrUndefined(getApiKeyFromFileDescriptor()));
 }
+//@ chunk-mmkhgzzy.js:1346-1603 placement
 /**
  * 判断预热备用进程的认证是否不适合被认领：无认证、第三方提供商、自定义 base URL，否则返回 null。
  */
-//@ chunk-mmkhgzzy.js:1346-1603 placement
 function spareAuthIneligibility() {
-  let n = o?.env();
-  if (n === void 0) return "no_auth";
+  let n = claimContext?.env();
+  if (n === undefined) return "no_auth";
   if ([...PROVIDER_ENV_FLAGS, "CLAUDE_CODE_USE_GATEWAY"].some((i) => isEnvTruthy(n[i])))
     return "third_party_provider";
-  let t = r(n.ANTHROPIC_BASE_URL);
-  if (t !== void 0 && !isFirstPartyAnthropicHost(t)) return "custom_base_url";
-  return iAn() === null ? "no_auth" : null;
+  let t = trimmedOrUndefined(n.ANTHROPIC_BASE_URL);
+  if (t !== undefined && !isFirstPartyAnthropicHost(t)) return "custom_base_url";
+  return claimedCredential() === null ? "no_auth" : null;
 }
 //@ chunk-mmkhgzzy.js:1603-1710 placement
 var OAUTH_OVERRIDE_ENV_VARS = [
@@ -90,31 +119,55 @@ var OAUTH_OVERRIDE_ENV_VARS = [
   "CLAUDE_CODE_CUSTOM_OAUTH_URL",
 ];
 //@ chunk-mmkhgzzy.js:1710-1786 placement
-function ORt() {
-  let n = o?.env() ?? {};
+/**
+ * 函数 envDriftDetected（当前环境与认领时不一致）。
+ */
+function envDriftDetected() {
+  let n = claimContext?.env() ?? {};
   return OAUTH_OVERRIDE_ENV_VARS.some((e) => process.env[e] !== n[e]);
 }
 //@ chunk-mmkhgzzy.js:1786-1882 placement
-function Q_i() {
-  let n = o?.env();
-  return n === void 0 || _(n) ? void 0 : r(n.CLAUDE_CODE_SUBSCRIPTION_TYPE);
+/**
+ * 函数 claimedSubscriptionType（认领时的订阅类型）。
+ */
+function claimedSubscriptionType() {
+  let n = claimContext?.env();
+  return n === undefined || _(n) ? undefined : trimmedOrUndefined(n.CLAUDE_CODE_SUBSCRIPTION_TYPE);
 }
 //@ chunk-mmkhgzzy.js:1882-1967 placement
 function _(n) {
-  return isChildSession() || isClaudecodeSession() || a(n, "CLAUDE_CODE_CHILD_SESSION") || a(n, "CLAUDECODE");
+  return (
+    isChildSession() ||
+    isClaudecodeSession() ||
+    hasNonEmptyEnv(n, "CLAUDE_CODE_CHILD_SESSION") ||
+    hasNonEmptyEnv(n, "CLAUDECODE")
+  );
 }
 //@ chunk-mmkhgzzy.js:1967-2007 placement
-function a(n, e) {
-  return r(n[e]) !== void 0;
+function hasNonEmptyEnv(env, e) {
+  return trimmedOrUndefined(env[e]) !== undefined;
 }
 //@ chunk-mmkhgzzy.js:2007-2063 placement
-function c(n) {
-  return n === void 0 ? null : { kind: "key", key: n };
+function toKeyCredential(n) {
+  return n === undefined
+    ? null
+    : {
+        kind: "key",
+        key: n,
+      };
 }
 //@ chunk-mmkhgzzy.js:2063-2120 placement
-function r(n) {
+function trimmedOrUndefined(n) {
   let e = n?.trim() ?? "";
-  return e === "" ? void 0 : e;
+  return e === "" ? undefined : e;
 }
-
-export { spareAuthIneligibility, iAn, ORt, Y_i, Q_i, q_i, claimedCredential, credentialRoad };
+export {
+  spareAuthIneligibility,
+  claimedCredential,
+  envDriftDetected,
+  claimRoadHint,
+  claimedSubscriptionType,
+  setClaimContext,
+  claimedCredential_2,
+  credentialRoad,
+};

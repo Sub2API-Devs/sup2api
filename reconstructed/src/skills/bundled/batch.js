@@ -16,34 +16,34 @@ import { AGENT } from "../../tools/AgentTool/constants.js";
 import { registerBundledSkill } from "../bundledSkills.js";
 import { findCanonicalGitRoot } from "../../utils/git.js";
 import { getCwd } from "../../utils/cwd.js";
-import { GKe } from "../../tools/AgentTool/agentLaunch.js";
+import { canRunAgentInWorktree } from "../../tools/AgentTool/agentLaunch.js";
 
 //@ chunk-hantmvxa.js:27126-27141 placement
-function Ct() {}
+function noopBatchSkillStub() {}
+//@ chunk-hantmvxa.js:27141-28149 placement
 /**
  * /batch 常量：并行代理数下限 5、上限 30，以及每个 worker 完成后需执行的收尾指令（code-review、测试、开 PR）。
  */
-//@ chunk-hantmvxa.js:27141-28149 placement
-var MIN_AGENTS = 5,
-  MAX_AGENTS = 30,
-  WORKER_INSTRUCTIONS = `After you finish implementing the change:
+var MIN_AGENTS = 5;
+var MAX_AGENTS = 30;
+var WORKER_INSTRUCTIONS = `After you finish implementing the change:
 1. **Code review** \u2014 Invoke the \`${SKILL}\` tool with \`skill: "code-review"\` to find correctness bugs (it reports findings; it does not edit code). Fix any findings it surfaces before continuing.
 2. **Run unit tests** \u2014 Run the project's test suite (check for package.json scripts, Makefile targets, or common commands like \`npm test\`, \`bun test\`, \`pytest\`, \`go test\`). If tests fail, fix them.
 3. **Test end-to-end** \u2014 Follow the e2e test recipe from the coordinator's prompt (below). If the recipe says to skip e2e for this unit, skip it.
 4. **Commit and push** \u2014 Commit all changes with a clear message, push the branch, and create a PR with \`gh pr create\`. Use a descriptive title. If \`gh\` is not available or the push fails, note it in your final message.
 5. **Report** \u2014 End with a single line: \`PR: <url>\` so the coordinator can track it. If no PR was created, end with \`PR: none \u2014 <reason>\`.`;
+//@ chunk-hantmvxa.js:28149-32262 fingerprint = buildPrompt (0.923)
 /**
  * /batch 的主提示词：研究、拆分单元、并行派发 worktree 代理、汇总 PR 的流程说明。
  */
-//@ chunk-hantmvxa.js:28149-32262 fingerprint = buildPrompt (0.923)
-function buildPrompt(e, n) {
+function buildPrompt(instruction, n) {
   return `# Batch: Parallel Work Orchestration
 
 You are orchestrating a large, parallelizable change across this codebase.
 
 ## User Instruction
 
-${e}
+${instruction}
 
 ## Phase 1: Research and Plan (Plan Mode)
 
@@ -125,10 +125,10 @@ Examples:
   /batch migrate from react to vue
   /batch replace all uses of lodash with native equivalents
   /batch add type annotations to all untyped function parameters`;
+//@ chunk-hantmvxa.js:33464-34162 fingerprint = registerBatchSkill (0.889)
 /**
  * 注册 /batch 内置 skill：把大规模机械改动拆成 5–30 个 worktree 子代理并行执行、各开 PR；不在 git 仓库且没有 WorktreeCreate 钩子时直接返回说明。只能用户调用。
  */
-//@ chunk-hantmvxa.js:33464-34162 fingerprint = registerBatchSkill (0.889)
 function registerBatchSkill() {
   registerBundledSkill({
     name: "batch",
@@ -138,16 +138,32 @@ function registerBatchSkill() {
     whenToUse:
       "Use when the user wants to make a sweeping, mechanical change across many files (migrations, refactors, bulk renames) that can be decomposed into independent parallel units.",
     argumentHint: "<instruction>",
-    userInvocable: !0,
-    disableModelInvocation: !0,
-    async getPromptForCommand(e) {
-      let instruction = e.trim();
-      if (!instruction) return [{ type: "text", text: MISSING_INSTRUCTION_MESSAGE }];
-      let s = findCanonicalGitRoot(getCwd()) !== null;
-      if (!s && !GKe()) return [{ type: "text", text: NOT_A_GIT_REPO_MESSAGE }];
-      return [{ type: "text", text: buildPrompt(instruction, s ? "" : buildVcsSection()) }];
+    userInvocable: true,
+    disableModelInvocation: true,
+    async getPromptForCommand(args) {
+      let instruction = args.trim();
+      if (!instruction)
+        return [
+          {
+            type: "text",
+            text: MISSING_INSTRUCTION_MESSAGE,
+          },
+        ];
+      let isGit = findCanonicalGitRoot(getCwd()) !== null;
+      if (!isGit && !canRunAgentInWorktree())
+        return [
+          {
+            type: "text",
+            text: NOT_A_GIT_REPO_MESSAGE,
+          },
+        ];
+      return [
+        {
+          type: "text",
+          text: buildPrompt(instruction, isGit ? "" : buildVcsSection()),
+        },
+      ];
     },
   });
 }
-
-export { registerBatchSkill, Ct };
+export { registerBatchSkill, noopBatchSkillStub };

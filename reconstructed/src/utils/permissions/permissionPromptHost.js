@@ -8,57 +8,104 @@
  * pieces: chunk-e6aww6q8.js (12)
  * attribution: placement 12
  */
-import { ge } from "../identity.js";
+import { identity as identity_2 } from "../identity.js";
 import { isVsCodeOrDesktop } from "../sessionShape.js";
 
 //@ chunk-e6aww6q8.js:48613-48680 placement
-function lyt(e, n) {
-  return e?.behavior === "deny" ? n : (e?.updatedInput ?? n);
+/**
+ * updatedInputOrOriginal：拒绝时保留原输入，否则用更新后的输入。
+ */
+function updatedInputOrOriginal(decided, n) {
+  return decided?.behavior === "deny" ? n : (decided?.updatedInput ?? n);
 }
 //@ chunk-e6aww6q8.js:48680-48715 placement
-var U4s = ["host", "none"],
-  NONE = "none";
+/**
+ * PERMISSION_PROMPT_HOST_KINDS：权限提示宿主的两种取值。
+ */
+var PERMISSION_PROMPT_HOST_KINDS = ["host", "none"];
+var NONE = "none";
 //@ chunk-e6aww6q8.js:48715-48749 placement
-function Z_e(e) {
-  return e === "none";
+/**
+ * isNoPromptHost：宿主为 “none”。
+ */
+function isNoPromptHost(permissionPrompts) {
+  return permissionPrompts === "none";
 }
 //@ chunk-e6aww6q8.js:48749-48816 placement
-function i8n({ permissionPromptTool: permissionPromptTool, sdkUrl: sdkUrl }) {
+/**
+ * effectivePermissionPromptTool：有效的权限提示工具（stdio 优先）。
+ */
+function effectivePermissionPromptTool({ permissionPromptTool, sdkUrl }) {
   return sdkUrl ? "stdio" : permissionPromptTool;
 }
 //@ chunk-e6aww6q8.js:48816-48862 placement
-function zue(e) {
-  return e !== void 0 && e !== "none";
+/**
+ * hasPermissionPromptTool：指定了非 none 的权限提示工具。
+ */
+function hasPermissionPromptTool(permissionPromptToolName) {
+  return permissionPromptToolName !== undefined && permissionPromptToolName !== "none";
 }
 //@ chunk-e6aww6q8.js:48862-48933 placement
-var dle = ge({ person: null, host: dyt() }, (e) => {
-  ((e.person = null), (e.host = dyt()));
-});
+var permissionPromptHostState = identity_2(
+  {
+    person: null,
+    host: emptyPermissionPromptHost(),
+  },
+  (e) => {
+    e.person = null;
+    e.host = emptyPermissionPromptHost();
+  },
+);
 //@ chunk-e6aww6q8.js:48933-48971 placement
-function v8n(e) {
-  return ((dle.person = e), e);
+/**
+ * setPermissionPromptPerson：设置提示宿主为“人”。
+ */
+function setPermissionPromptPerson(e) {
+  permissionPromptHostState.person = e;
+  return e;
 }
 //@ chunk-e6aww6q8.js:48971-49004 placement
-function zjt() {
-  return dle.person;
+/**
+ * getPermissionPromptPerson：取提示宿主的人。
+ */
+function getPermissionPromptPerson() {
+  return permissionPromptHostState.person;
 }
 //@ chunk-e6aww6q8.js:49004-49047 placement
-function Fet(e, n, r) {
-  return ((dle.host[e] = r), n);
+/**
+ * setPermissionPromptHostProbe：登记某类宿主的探测函数。
+ */
+function setPermissionPromptHostProbe(e, n, r) {
+  permissionPromptHostState.host[e] = r;
+  return n;
 }
 //@ chunk-e6aww6q8.js:49047-49209 placement
 function getPermissionPromptHostKind(e) {
-  if (e === "served") return KLe("servedCall") ? "servedCall" : null;
-  if (KLe("promptTool")) return "promptTool";
-  return KLe("callback") && !isVsCodeOrDesktop() ? "callback" : null;
+  if (e === "served") return isPermissionPromptHostKind("servedCall") ? "servedCall" : null;
+  if (isPermissionPromptHostKind("promptTool")) return "promptTool";
+  return isPermissionPromptHostKind("callback") && !isVsCodeOrDesktop() ? "callback" : null;
 }
 //@ chunk-e6aww6q8.js:49209-49253 placement
-function KLe(e) {
-  return dle.host[e]?.() === !0;
+function isPermissionPromptHostKind(e) {
+  return permissionPromptHostState.host[e]?.() === true;
 }
 //@ chunk-e6aww6q8.js:49253-49322 placement
-function dyt() {
-  return { callback: null, promptTool: null, servedCall: null };
+function emptyPermissionPromptHost() {
+  return {
+    callback: null,
+    promptTool: null,
+    servedCall: null,
+  };
 }
-
-export { zue, zjt, Z_e, NONE, U4s, i8n, Fet, v8n, getPermissionPromptHostKind, lyt };
+export {
+  hasPermissionPromptTool,
+  getPermissionPromptPerson,
+  isNoPromptHost,
+  NONE,
+  PERMISSION_PROMPT_HOST_KINDS,
+  effectivePermissionPromptTool,
+  setPermissionPromptHostProbe,
+  setPermissionPromptPerson,
+  getPermissionPromptHostKind,
+  updatedInputOrOriginal,
+};

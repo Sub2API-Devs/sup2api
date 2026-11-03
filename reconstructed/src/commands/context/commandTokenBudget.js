@@ -8,47 +8,55 @@
  * pieces: chunk-a1q31s85.js (1)
  * attribution: placement 1
  */
-import { or } from "../../utils/settings/commandSyncNames.js";
+import { invalidateCommandNames } from "../../utils/settings/commandSyncNames.js";
 import {
   sortSkillsForListing,
   buildSkillOverrideContext,
   getEffectiveSkillStates,
   getSkillSourceLabel,
 } from "../../skills/claudeAiSkillConflicts.js";
-import { bFo } from "../../utils/commandPredicates.js";
+import { isUserInvocableSkill } from "../../utils/commandPredicates.js";
 import { getCommandName } from "../../commands.js";
 import { estimateSkillListingTokens } from "../../skills/loadSkillsDir.js";
 
 //@ chunk-a1q31s85.js:11861-12533 placement
-function estimateCommandTokens({ commands: commands, bytesPerToken: bytesPerToken }) {
-  or();
-  let n = sortSkillsForListing(commands),
-    r = buildSkillOverrideContext(n),
-    i = getEffectiveSkillStates(n, r),
-    t = new Map();
+function estimateCommandTokens({ commands, bytesPerToken }) {
+  invalidateCommandNames();
+  let n = sortSkillsForListing(commands);
+  let skillOverrideContext = buildSkillOverrideContext(n);
+  let effectiveSkillStates = getEffectiveSkillStates(n, skillOverrideContext);
+  let t = new Map();
   for (let e of n) {
-    let o = r.locked.get(e);
+    let o = skillOverrideContext.locked.get(e);
     if (o && !t.has(e.name)) t.set(e.name, o);
   }
   let a = new Map();
-  for (let e of commands) if (!a.has(e.name)) a.set(e.name, e);
+  for (let command of commands) if (!a.has(command.name)) a.set(command.name, command);
   return {
     skills: n.map((e) => {
-      let o = t.get(e.name),
-        d = bFo(e) && a.get(e.name) === e;
+      let o = t.get(e.name);
+      let advertised = isUserInvocableSkill(e) && a.get(e.name) === e;
       return {
         name: e.name,
         display_name: getCommandName(e),
         description: e.description ?? "",
         source: getSkillSourceLabel(e),
         tokens: estimateSkillListingTokens(e, bytesPerToken),
-        state: o?.value ?? i[e.name] ?? "on",
-        ...(o && { locked_by: o.source }),
-        advertised: d,
+        state: o?.value ?? effectiveSkillStates[e.name] ?? "on",
+        ...(o && {
+          locked_by: o.source,
+        }),
+        advertised,
         handles: {
-          ...(e.unqualifiedName !== void 0 && { unqualified_name: e.unqualifiedName }),
-          ...(e.aliases?.length && { aliases: [...e.aliases] }),
-          ...(e.bareNameReserved !== void 0 && { bare_name_reserved: e.bareNameReserved }),
+          ...(e.unqualifiedName !== undefined && {
+            unqualified_name: e.unqualifiedName,
+          }),
+          ...(e.aliases?.length && {
+            aliases: [...e.aliases],
+          }),
+          ...(e.bareNameReserved !== undefined && {
+            bare_name_reserved: e.bareNameReserved,
+          }),
         },
       };
     }),

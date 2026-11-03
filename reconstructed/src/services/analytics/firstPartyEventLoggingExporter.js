@@ -8,44 +8,17 @@
  * pieces: chunk-4m46mxx9.js (1), chunk-aepeg2w5.js (18)
  * attribution: fingerprint 4, layout 6, placement 9
  */
-import {
-  randomUUID,
-  randomUUID as randomUUID_2,
-  randomUUID as randomUUID_3,
-  randomUUID as randomUUID_4,
-  randomUUID as randomUUID_5,
-  randomUUID as randomUUID_6,
-  randomUUID as randomUUID_7,
-  randomUUID as randomUUID_8,
-  randomUUID as randomUUID_9,
-  randomUUID as randomUUID_10,
-  createHash,
-  createHash as createHash_2,
-  createHash as createHash_3,
-  createHash as createHash_4,
-  createHash as createHash_5,
-} from "crypto";
+import { randomUUID, createHash } from "crypto";
 import * as pathModule from "path";
-import {
-  unlink,
-  unlink as unlink_2,
-  unlink as unlink_3,
-  unlink as unlink_4,
-  mkdir,
-  mkdir as mkdir_2,
-  mkdir as mkdir_3,
-  mkdir as mkdir_4,
-  writeFile,
-  writeFile as writeFile_2,
-  writeFile as writeFile_3,
-  writeFile as writeFile_4,
-  appendFile,
-  readdir,
-  readdir as readdir_2,
-} from "fs/promises";
+import { unlink, mkdir, writeFile, appendFile, readdir } from "fs/promises";
 import { getClaudeConfigDir } from "../../utils/envUtils.js";
-import { ux, isHipaaMode, sx, ax } from "./privacyLevel.js";
-import { bR, Mo } from "./anthropicTelemetryExport.js";
+import {
+  isRowOfCurrentPrincipal,
+  isHipaaMode,
+  needsPrincipalStamp,
+  isEventOfAnotherPrincipal,
+} from "./privacyLevel.js";
+import { EXPORT_ENVIRONMENTS, isDisklessHost } from "./anthropicTelemetryExport.js";
 import { getSessionId, getIsNonInteractiveSession, getIsInteractive } from "../../bootstrap/state.js";
 import { STORAGE_SPACES } from "../../utils/storage/storageSpaces.js";
 import { readJSONLFile_2 } from "../../utils/json.js";
@@ -56,9 +29,9 @@ import { errorMessage, isENOENT, isFsInaccessible, toError } from "../../utils/e
 import { logError } from "../../utils/log.js";
 import {
   filterEventsForPrivacy,
-  _r,
+  nodeGzipModule,
   gzipTelemetryBody,
-  gg,
+  sanitizeExperimentEventFields,
   pickNumericMetrics,
 } from "./eventSerialization.js";
 import { readAllPages, DEFAULT_MAX_PAGES } from "../../utils/pagedRead.js";
@@ -100,38 +73,41 @@ import { DoctorLazy } from "../../cli/handlers/util.js";
 import { u, E } from "../../../vendor/zod/v4/classic/schemas.js";
 
 //@ chunk-aepeg2w5.js:874435-874470 fingerprint = FILE_PREFIX (1)
-var EXPORTER_RUN_ID = randomUUID_8(),
-  Qg = "1p_failed_events.";
+var EXPORTER_RUN_ID = randomUUID();
+var FAILED_EVENTS_KEY_PREFIX = "1p_failed_events.";
 //@ chunk-aepeg2w5.js:874470-874581 layout
 function getFlatMigrationKey(e, n) {
-  let sliced = createHash_3("sha256").update(n).digest("base64url").slice(0, 22);
+  let sliced = createHash("sha256").update(n).digest("base64url").slice(0, 22);
   return `flat-migration.${e}.${sliced}`;
 }
+//@ chunk-aepeg2w5.js:874581-874628 layout = getStorageDir (1)
 /**
  * 1P 失败事件落盘目录 <配置目录>/telemetry。
  */
-//@ chunk-aepeg2w5.js:874581-874628 layout = getStorageDir (1)
 function getTelemetryStorageDir() {
   return pathModule.join(getClaudeConfigDir(), "telemetry");
 }
 //@ chunk-aepeg2w5.js:874628-874658 layout
-var OAUTH_REFRESH_TIMEOUT_MS = 2000,
-  v2 = 3000,
-  E2 = 300000;
+/**
+ * 一方遥测导出的 OAUTH 刷新超时、密钥助手加入超时与 WIF 铸造重试间隔。
+ */
+var OAUTH_REFRESH_TIMEOUT_MS = 2000;
+var KEY_HELPER_JOIN_TIMEOUT_MS = 3000;
+var WIF_MINT_RETRY_MS = 300000;
+//@ chunk-aepeg2w5.js:874658-874758 layout
 /**
  * 去掉 principal_stamp 不属于当前身份的事件。
  */
-//@ chunk-aepeg2w5.js:874658-874758 layout
-function dropForeignPrincipalEvents(e) {
+function dropForeignPrincipalEvents(events) {
   let n = [];
-  for (let { principal_stamp: principal_stamp, ...s } of e)
-    if (principal_stamp === void 0 || ux(principal_stamp)) n.push(s);
+  for (let { principal_stamp: principalStamp, ...s } of events)
+    if (principalStamp === undefined || isRowOfCurrentPrincipal(principalStamp)) n.push(s);
   return n;
 }
+//@ chunk-aepeg2w5.js:874758-892785 fingerprint = FirstPartyEventLoggingExporter (0.535)
 /**
  * 1P 事件导出器：POST <baseUrl 默认 https://api.anthropic.com>/api/event_logging/v2/batch（批 200、指数退避最多 8 次、OAuth/API key 认证可跳过）；失败批写入 <配置目录>/telemetry/1p_failed_events.<runId>… 下次重发；killswitch 时不发。
  */
-//@ chunk-aepeg2w5.js:874758-892785 fingerprint = FirstPartyEventLoggingExporter (0.535)
 class FirstPartyEventLoggingExporter {
   endpoint;
   timeout;
@@ -150,7 +126,7 @@ class FirstPartyEventLoggingExporter {
   wasPassedAGrant;
   sendMode;
   pendingExports = [];
-  isShutdown = !1;
+  isShutdown = false;
   schedule;
   cancelBackoff = null;
   attempts = 0;
@@ -160,63 +136,75 @@ class FirstPartyEventLoggingExporter {
   refreshAttemptedFor;
   inflightRefresh = null;
   wifMintRetryAt = 0;
-  finalFlush = !1;
+  finalFlush = false;
   signalFinalFlush = () => {};
-  finalFlushSignal = new Promise((e) => {
-    this.signalFinalFlush = e;
+  finalFlushSignal = new Promise((resolve) => {
+    this.signalFinalFlush = resolve;
   });
-  constructor(e = {}) {
-    let n =
-      e.baseUrl ||
+  constructor(options = {}) {
+    let baseUrl =
+      options.baseUrl ||
       (process.env.ANTHROPIC_BASE_URL === "https://api-staging.anthropic.com"
         ? "https://api-staging.anthropic.com"
         : "https://api.anthropic.com");
-    ((this.endpoint = `${n}${e.path || "/api/event_logging/v2/batch"}`),
-      (this.timeout = e.timeout || 1e4),
-      (this.maxBatchSize = e.maxBatchSize || 200),
-      (this.skipAuth = e.skipAuth ?? !1),
-      (this.attachAuthWithoutProfileScope = e.attachAuthWithoutProfileScope ?? (() => !1)),
-      (this.batchDelayMs = e.batchDelayMs || 100),
-      (this.baseBackoffDelayMs = e.baseBackoffDelayMs || 500),
-      (this.maxBackoffDelayMs = e.maxBackoffDelayMs || 30000),
-      (this.maxAttempts = e.maxAttempts ?? 8),
-      (this.oauthRefreshTimeoutMs = e.oauthRefreshTimeoutMs ?? OAUTH_REFRESH_TIMEOUT_MS),
-      (this.keyHelperJoinTimeoutMs = e.keyHelperJoinTimeoutMs ?? v2),
-      (this.isKilled = e.isKilled ?? (() => !1)),
-      (this.storageV5 = e.storageV5),
-      (this.tenantGrant = e.tenantGrant ?? dryRunGrant()),
-      (this.wasPassedAGrant = e.tenantGrant !== void 0));
-    let r = e.tenantGrant?.sendMode;
-    ((this.sendMode = bR.find((s) => s === r)),
-      (this.schedule =
-        e.schedule ??
-        ((s, h) => {
-          let y = setTimeout(s, h);
-          return () => clearTimeout(y);
-        })),
-      this.retryPreviousBatches());
+    this.endpoint = `${baseUrl}${options.path || "/api/event_logging/v2/batch"}`;
+    this.timeout = options.timeout || 1e4;
+    this.maxBatchSize = options.maxBatchSize || 200;
+    this.skipAuth = options.skipAuth ?? false;
+    this.attachAuthWithoutProfileScope = options.attachAuthWithoutProfileScope ?? (() => false);
+    this.batchDelayMs = options.batchDelayMs || 100;
+    this.baseBackoffDelayMs = options.baseBackoffDelayMs || 500;
+    this.maxBackoffDelayMs = options.maxBackoffDelayMs || 30000;
+    this.maxAttempts = options.maxAttempts ?? 8;
+    this.oauthRefreshTimeoutMs = options.oauthRefreshTimeoutMs ?? OAUTH_REFRESH_TIMEOUT_MS;
+    this.keyHelperJoinTimeoutMs = options.keyHelperJoinTimeoutMs ?? KEY_HELPER_JOIN_TIMEOUT_MS;
+    this.isKilled = options.isKilled ?? (() => false);
+    this.storageV5 = options.storageV5;
+    this.tenantGrant = options.tenantGrant ?? dryRunGrant();
+    this.wasPassedAGrant = options.tenantGrant !== undefined;
+    let sendMode = options.tenantGrant?.sendMode;
+    this.sendMode = EXPORT_ENVIRONMENTS.find((s) => s === sendMode);
+    this.schedule =
+      options.schedule ??
+      ((fn, ms) => {
+        let t = setTimeout(fn, ms);
+        return () => clearTimeout(t);
+      });
+    this.retryPreviousBatches();
   }
   async getQueuedEventCount() {
     return (await this.loadEventsFromCurrentBatch()).length;
   }
   getCurrentBatchFilePath() {
-    return pathModule.join(getTelemetryStorageDir(), `${Qg}${getSessionId()}.${EXPORTER_RUN_ID}.json`);
+    return pathModule.join(
+      getTelemetryStorageDir(),
+      `${FAILED_EVENTS_KEY_PREFIX}${getSessionId()}.${EXPORTER_RUN_ID}.json`,
+    );
   }
   currentBatchStream() {
-    return STORAGE_SPACES.log(getSessionId(), "telemetry", { runId: EXPORTER_RUN_ID });
+    return STORAGE_SPACES.log(getSessionId(), "telemetry", {
+      runId: EXPORTER_RUN_ID,
+    });
   }
-  async loadEventsFromFile(e) {
+  async loadEventsFromFile(filePath) {
     if (this.underATenantsRules()) return [];
     try {
-      return await readJSONLFile_2(e);
+      return await readJSONLFile_2(filePath);
     } catch {
       return [];
     }
   }
   currentBatch() {
-    return isStorageV5Enabled() && this.storageV5 !== void 0
-      ? { kind: "stream", storageV5: this.storageV5, stream: this.currentBatchStream() }
-      : { kind: "file", filePath: this.getCurrentBatchFilePath() };
+    return isStorageV5Enabled() && this.storageV5 !== undefined
+      ? {
+          kind: "stream",
+          storageV5: this.storageV5,
+          stream: this.currentBatchStream(),
+        }
+      : {
+          kind: "file",
+          filePath: this.getCurrentBatchFilePath(),
+        };
   }
   async loadEventsFromCurrentBatch() {
     return this.loadEventsFromBatch(this.currentBatch());
@@ -234,78 +222,90 @@ class FirstPartyEventLoggingExporter {
       ? this.appendEventsToStream(e.storageV5, e.stream, n)
       : this.appendEventsToFile(e.filePath, n);
   }
-  async saveEventsToFile(e, n) {
+  async saveEventsToFile(filePath, events) {
     if (this.underATenantsRules()) return;
     try {
-      if (n.length === 0)
+      if (events.length === 0)
         try {
-          await unlink_3(e);
+          await unlink(filePath);
         } catch {}
       else {
-        await mkdir_3(getTelemetryStorageDir(), { recursive: !0 });
-        let r =
-          n.map((s) => jsonStringify(s)).join(`
+        await mkdir(getTelemetryStorageDir(), {
+          recursive: true,
+        });
+        let content =
+          events.map((e) => jsonStringify(e)).join(`
 `) +
           `
 `;
-        await writeFile_3(e, r, "utf8");
+        await writeFile(filePath, content, "utf8");
       }
     } catch (error) {
       logForDebugging(
-        `1P event logging: failed to persist failed-events batch to ${e}: ${errorMessage(error)}`,
-        { level: "error" },
+        `1P event logging: failed to persist failed-events batch to ${filePath}: ${errorMessage(error)}`,
+        {
+          level: "error",
+        },
       );
     }
   }
-  async appendEventsToFile(e, n) {
-    if (n.length === 0) return;
+  async appendEventsToFile(e, events) {
+    if (events.length === 0) return;
     if (this.underATenantsRules()) {
-      this.dropInATenant("no_store", n.length);
+      this.dropInATenant("no_store", events.length);
       return;
     }
     try {
-      await mkdir_3(getTelemetryStorageDir(), { recursive: !0 });
-      let r =
-        n.map((s) => jsonStringify(s)).join(`
+      await mkdir(getTelemetryStorageDir(), {
+        recursive: true,
+      });
+      let content =
+        events.map((e) => jsonStringify(e)).join(`
 `) +
         `
 `;
-      await appendFile(e, r, "utf8");
+      await appendFile(e, content, "utf8");
     } catch (error) {
       logForDebugging(
         `1P event logging: failed to persist failed-event queue to ${e}: ${errorMessage(error)}`,
-        { level: "error" },
+        {
+          level: "error",
+        },
       );
     }
   }
-  async deleteFile(e) {
-    if (this.underATenantsRules()) return !0;
+  async deleteFile(filePath) {
+    if (this.underATenantsRules()) return true;
     try {
-      return (await unlink_3(e), !0);
+      await unlink(filePath);
+      return true;
     } catch (error) {
       return isENOENT(error);
     }
   }
   async loadEventsFromStream(e, n) {
-    let r = [],
-      textDecoder = new TextDecoder(),
-      h = 0;
+    let r = [];
+    let textDecoder = new TextDecoder();
+    let fromSeq = 0;
     for (;;) {
-      let records = await e.readRecords(n, { fromSeq: h, order: "forward" });
+      let records = await e.readRecords(n, {
+        fromSeq,
+        order: "forward",
+      });
       if (!records.ok) return [];
       for (let item of records.value.items) {
-        let decode = textDecoder.decode(item.data),
-          R = decode.endsWith(`
+        let w = textDecoder.decode(item.data);
+        let R = w.endsWith(`
 `)
-            ? decode.slice(0, -1)
-            : decode;
+          ? w.slice(0, -1)
+          : w;
         if (!R) continue;
         try {
           r.push(jsonParse(R));
         } catch {}
       }
-      if (records.value.nextSeq === void 0) return r;
-      h = records.value.nextSeq;
+      if (records.value.nextSeq === undefined) return r;
+      fromSeq = records.value.nextSeq;
     }
   }
   async deleteStream(e, n) {
@@ -313,7 +313,7 @@ class FirstPartyEventLoggingExporter {
   }
   async appendEventsToStream(e, n, r) {
     if (r.length === 0) return;
-    let append = await e.append(
+    let s = await e.append(
       n,
       r.map((h) => ({
         data:
@@ -322,15 +322,17 @@ class FirstPartyEventLoggingExporter {
 `,
       })),
     );
-    if (!append.ok)
+    if (!s.ok)
       logForDebugging(
-        `1P event logging: failed to persist failed-event queue to v5 stream: ${append.error.code}`,
-        { level: "error" },
+        `1P event logging: failed to persist failed-event queue to v5 stream: ${s.error.code}`,
+        {
+          level: "error",
+        },
       );
   }
   async retryPreviousBatches() {
     if (this.underATenantsRules()) return;
-    if (isStorageV5Enabled() && this.storageV5 !== void 0)
+    if (isStorageV5Enabled() && this.storageV5 !== undefined)
       try {
         return await this.retryPreviousBatchesV5(this.storageV5);
       } catch (error) {
@@ -338,54 +340,69 @@ class FirstPartyEventLoggingExporter {
         return;
       }
     try {
-      let e = `${Qg}${getSessionId()}.`,
-        n;
+      let prefix = `${FAILED_EVENTS_KEY_PREFIX}${getSessionId()}.`;
+      let files;
       try {
-        n = (await readdir(getTelemetryStorageDir()))
-          .filter((r) => r.startsWith(e) && r.endsWith(".json"))
+        files = (await readdir(getTelemetryStorageDir()))
+          .filter((r) => r.startsWith(prefix) && r.endsWith(".json"))
           .filter((r) => !r.includes(EXPORTER_RUN_ID));
-      } catch (error) {
-        if (isFsInaccessible(error)) return;
-        throw error;
+      } catch (e) {
+        if (isFsInaccessible(e)) return;
+        throw e;
       }
-      for (let r of n) {
-        let joined = pathModule.join(getTelemetryStorageDir(), r);
-        this.retryFileInBackground(joined).catch((h) => {
-          logError(h);
+      for (let file of files) {
+        let filePath = pathModule.join(getTelemetryStorageDir(), file);
+        this.retryFileInBackground(filePath).catch((error) => {
+          logError(error);
         });
       }
     } catch (error) {
       logError(error);
     }
   }
-  async retryFileInBackground(e) {
+  async retryFileInBackground(filePath) {
     if (this.attempts >= this.maxAttempts) {
-      await this.deleteFile(e);
+      await this.deleteFile(filePath);
       return;
     }
-    let eventsFromFile = await this.loadEventsFromFile(e);
-    if (eventsFromFile.length === 0) {
-      await this.deleteFile(e);
+    let events = await this.loadEventsFromFile(filePath);
+    if (events.length === 0) {
+      await this.deleteFile(filePath);
       return;
     }
-    let r = filterEventsForPrivacy(eventsFromFile),
-      sendEventsInBatches = await this.sendEventsInBatches(r, { startupRetry: !0 });
-    if (sendEventsInBatches.length === 0) await this.deleteFile(e);
-    else await this.saveEventsToFile(e, sendEventsInBatches);
+    let r = filterEventsForPrivacy(events);
+    let s = await this.sendEventsInBatches(r, {
+      startupRetry: true,
+    });
+    if (s.length === 0) await this.deleteFile(filePath);
+    else await this.saveEventsToFile(filePath, s);
   }
   async retryPreviousBatchesV5(e) {
-    let n = getSessionId(),
-      r = { namespace: "log", sessionId: n, channel: "telemetry" },
-      s = [];
+    let sessionId = getSessionId();
+    let r = {
+      namespace: "log",
+      sessionId,
+      channel: "telemetry",
+    };
+    let s = [];
     switch (
       (
         await readAllPages(
-          (y) => e.listEntries(r, y === void 0 ? void 0 : { cursor: y }),
+          (y) =>
+            e.listEntries(
+              r,
+              y === undefined
+                ? undefined
+                : {
+                    cursor: y,
+                  },
+            ),
           (y) => {
             for (let S of y) {
               if (S.kind !== "key" || S.key.namespace !== "log") continue;
               let key = S.key;
-              if (key.agentId !== void 0 || key.runId === void 0 || key.runId === EXPORTER_RUN_ID) continue;
+              if (key.agentId !== undefined || key.runId === undefined || key.runId === EXPORTER_RUN_ID)
+                continue;
               s.push(key);
             }
           },
@@ -399,24 +416,26 @@ class FirstPartyEventLoggingExporter {
       case "capped":
         logForDebugging(
           `1P event logging: previous-batch stream listing truncated at ${DEFAULT_MAX_PAGES} pages; retrying the ${s.length} streams seen`,
-          { level: "warn" },
+          {
+            level: "warn",
+          },
         );
         break;
     }
     for (let y of s)
-      this.retryStreamInBackground(e, y).catch((S) => {
-        logError(S);
+      this.retryStreamInBackground(e, y).catch((error) => {
+        logError(error);
       });
     await this.migrateLegacyFlatBatches(
       e,
-      n,
-      new Set(s.flatMap((y) => (y.namespace === "log" && y.runId !== void 0 ? [y.runId] : []))),
+      sessionId,
+      new Set(s.flatMap((y) => (y.namespace === "log" && y.runId !== undefined ? [y.runId] : []))),
     );
   }
   async migrateLegacyFlatBatches(e, n, r) {
     if (this.underATenantsRules()) return;
-    let s = `${Qg}${n}.`,
-      h;
+    let s = `${FAILED_EVENTS_KEY_PREFIX}${n}.`;
+    let h;
     try {
       h = (await readdir(getTelemetryStorageDir())).filter((y) => y.startsWith(s) && y.endsWith(".json"));
     } catch (error) {
@@ -427,31 +446,38 @@ class FirstPartyEventLoggingExporter {
       let sliced = y.slice(s.length, -5);
       if (sliced.length === 0 || sliced === EXPORTER_RUN_ID) continue;
       if (r.has(sliced)) continue;
-      let joined = pathModule.join(getTelemetryStorageDir(), y),
-        log = STORAGE_SPACES.log(n, "telemetry", { runId: sliced }),
-        eventsFromFile = await this.loadEventsFromFile(joined);
+      let joined = pathModule.join(getTelemetryStorageDir(), y);
+      let R = STORAGE_SPACES.log(n, "telemetry", {
+        runId: sliced,
+      });
+      let eventsFromFile = await this.loadEventsFromFile(joined);
       if (eventsFromFile.length === 0) continue;
-      let append = await e.append(
-        log,
+      let P = await e.append(
+        R,
         eventsFromFile.map((F, L) => {
           let G =
             jsonStringify(F) +
             `
 `;
-          return { data: G, recordId: getFlatMigrationKey(L, G) };
+          return {
+            data: G,
+            recordId: getFlatMigrationKey(L, G),
+          };
         }),
       );
-      if (!append.ok) {
+      if (!P.ok) {
         logForDebugging(
-          `1P event logging: failed to migrate flat failed-event batch to v5 stream: ${append.error.code}`,
-          { level: "error" },
+          `1P event logging: failed to migrate flat failed-event batch to v5 stream: ${P.error.code}`,
+          {
+            level: "error",
+          },
         );
         continue;
       }
-      (await this.deleteFile(joined),
-        this.retryStreamInBackground(e, log).catch((F) => {
-          logError(F);
-        }));
+      await this.deleteFile(joined);
+      this.retryStreamInBackground(e, R).catch((error) => {
+        logError(error);
+      });
     }
   }
   async retryStreamInBackground(e, n) {
@@ -464,224 +490,281 @@ class FirstPartyEventLoggingExporter {
       await this.deleteStream(e, n);
       return;
     }
-    let s = filterEventsForPrivacy(eventsFromStream),
-      sendEventsInBatches = await this.sendEventsInBatches(s, { startupRetry: !0 });
-    if (sendEventsInBatches.length === 0) await this.deleteStream(e, n);
-    else if (await this.deleteStream(e, n)) await this.appendEventsToStream(e, n, sendEventsInBatches);
+    let s = filterEventsForPrivacy(eventsFromStream);
+    let h = await this.sendEventsInBatches(s, {
+      startupRetry: true,
+    });
+    if (h.length === 0) await this.deleteStream(e, n);
+    else if (await this.deleteStream(e, n)) await this.appendEventsToStream(e, n, h);
   }
-  async export(e, n) {
+  async export(logs, resultCallback) {
     if (this.isShutdown) {
-      n({ code: _r.ExportResultCode.FAILED, error: Error("Exporter has been shutdown") });
+      resultCallback({
+        code: nodeGzipModule.ExportResultCode.FAILED,
+        error: Error("Exporter has been shutdown"),
+      });
       return;
     }
-    let r = this.doExport(e, n).catch(logError);
-    (this.pendingExports.push(r),
-      r.finally(() => {
-        let index = this.pendingExports.indexOf(r);
-        if (index > -1) this.pendingExports.splice(index, 1);
-      }));
+    let exportPromise = this.doExport(logs, resultCallback).catch(logError);
+    this.pendingExports.push(exportPromise);
+    exportPromise.finally(() => {
+      let index = this.pendingExports.indexOf(exportPromise);
+      if (index > -1) this.pendingExports.splice(index, 1);
+    });
   }
-  async doExport(e, n) {
+  async doExport(logs, resultCallback) {
     try {
-      this.tellATenantsGrant((y) => y.onExport(e.length));
-      let filtered = e.filter((y) => y.instrumentationScope?.name === "com.anthropic.claude_code.events");
-      if (filtered.length === 0) {
-        n({ code: _r.ExportResultCode.SUCCESS });
-        return;
-      }
-      let events = this.transformLogsToEvents(filtered).events;
-      if (events.length === 0) {
-        n({ code: _r.ExportResultCode.SUCCESS });
-        return;
-      }
-      if (this.attempts >= this.maxAttempts) {
-        (this.dropInATenant("given_up", events.length),
-          n({
-            code: _r.ExportResultCode.FAILED,
-            error: Error(`Dropped ${events.length} events: max attempts (${this.maxAttempts}) reached`),
-          }));
-        return;
-      }
-      let sendEventsInBatches = await this.sendEventsInBatches(events);
-      if ((this.attempts++, sendEventsInBatches.length > 0)) {
-        (await this.queueFailedEvents(sendEventsInBatches), this.scheduleBackoffRetry());
-        let y = this.lastExportErrorContext ? ` (${this.lastExportErrorContext})` : "";
-        n({
-          code: _r.ExportResultCode.FAILED,
-          error: Error(`Failed to export ${sendEventsInBatches.length} events${y}`),
+      this.tellATenantsGrant((y) => y.onExport(logs.length));
+      let eventLogs = logs.filter(
+        (log) => log.instrumentationScope?.name === "com.anthropic.claude_code.events",
+      );
+      if (eventLogs.length === 0) {
+        resultCallback({
+          code: nodeGzipModule.ExportResultCode.SUCCESS,
         });
         return;
       }
-      (this.resetBackoff(), this.retryFailedEvents(), n({ code: _r.ExportResultCode.SUCCESS }));
+      let events = this.transformLogsToEvents(eventLogs).events;
+      if (events.length === 0) {
+        resultCallback({
+          code: nodeGzipModule.ExportResultCode.SUCCESS,
+        });
+        return;
+      }
+      if (this.attempts >= this.maxAttempts) {
+        this.dropInATenant("given_up", events.length);
+        resultCallback({
+          code: nodeGzipModule.ExportResultCode.FAILED,
+          error: Error(`Dropped ${events.length} events: max attempts (${this.maxAttempts}) reached`),
+        });
+        return;
+      }
+      let failedEvents = await this.sendEventsInBatches(events);
+      this.attempts++;
+      if (failedEvents.length > 0) {
+        await this.queueFailedEvents(failedEvents);
+        this.scheduleBackoffRetry();
+        let context = this.lastExportErrorContext ? ` (${this.lastExportErrorContext})` : "";
+        resultCallback({
+          code: nodeGzipModule.ExportResultCode.FAILED,
+          error: Error(`Failed to export ${failedEvents.length} events${context}`),
+        });
+        return;
+      }
+      this.resetBackoff();
+      this.retryFailedEvents();
+      resultCallback({
+        code: nodeGzipModule.ExportResultCode.SUCCESS,
+      });
     } catch (error) {
-      (this.dropInATenant("export_threw", e.length),
-        logError(error),
-        n({ code: _r.ExportResultCode.FAILED, error: toError(error) }));
+      this.dropInATenant("export_threw", logs.length);
+      logError(error);
+      resultCallback({
+        code: nodeGzipModule.ExportResultCode.FAILED,
+        error: toError(error),
+      });
     }
   }
-  async sendEventsInBatches(e, n = {}) {
-    let r = [];
-    for (let y = 0; y < e.length; y += this.maxBatchSize) r.push(e.slice(y, y + this.maxBatchSize));
-    let s = [],
-      h;
-    for (let y = 0; y < r.length; y++) {
-      let S = r[y];
+  async sendEventsInBatches(events, n = {}) {
+    let batches = [];
+    for (let i = 0; i < events.length; i += this.maxBatchSize)
+      batches.push(events.slice(i, i + this.maxBatchSize));
+    let failedBatchEvents = [];
+    let lastErrorContext;
+    for (let i = 0; i < batches.length; i++) {
+      let batch = batches[i];
       try {
-        await this.sendBatchWithRetry({ events: S }, n);
+        await this.sendBatchWithRetry(
+          {
+            events: batch,
+          },
+          n,
+        );
       } catch (error) {
-        ((h = getAxiosErrorContext(error)),
-          this.tellATenantsGrant((R) => R.onFailed(classifyPostFailure(error), S.length)));
-        for (let R = y; R < r.length; R++) s.push(...r[R]);
+        lastErrorContext = getAxiosErrorContext(error);
+        this.tellATenantsGrant((R) => R.onFailed(classifyPostFailure(error), batch.length));
+        for (let j = i; j < batches.length; j++) failedBatchEvents.push(...batches[j]);
         break;
       }
-      if (y < r.length - 1 && this.batchDelayMs > 0) await sleep(this.batchDelayMs);
+      if (i < batches.length - 1 && this.batchDelayMs > 0) await sleep(this.batchDelayMs);
     }
-    if (s.length > 0 && h) this.lastExportErrorContext = h;
-    return s;
+    if (failedBatchEvents.length > 0 && lastErrorContext) this.lastExportErrorContext = lastErrorContext;
+    return failedBatchEvents;
   }
   withQueueFileLock(e) {
     let n = this.queueFileLock.then(e);
-    return (
-      (this.queueFileLock = n.then(
-        () => {
-          return;
-        },
-        () => {
-          return;
-        },
-      )),
-      n
+    this.queueFileLock = n.then(
+      () => {
+        return;
+      },
+      () => {
+        return;
+      },
     );
+    return n;
   }
-  async queueFailedEvents(e) {
-    let currentBatch = this.currentBatch();
-    await this.withQueueFileLock(() => this.appendEventsToBatch(currentBatch, e));
-    let r = this.lastExportErrorContext ? ` (${this.lastExportErrorContext})` : "";
-    logForDebugging(`1P event logging: ${e.length} events failed to export${r}`, { level: "error" });
+  async queueFailedEvents(events) {
+    let filePath = this.currentBatch();
+    await this.withQueueFileLock(() => this.appendEventsToBatch(filePath, events));
+    let context = this.lastExportErrorContext ? ` (${this.lastExportErrorContext})` : "";
+    logForDebugging(`1P event logging: ${events.length} events failed to export${context}`, {
+      level: "error",
+    });
   }
   scheduleBackoffRetry() {
     if (this.cancelBackoff || this.isShutdown) return;
-    let min = Math.min(
+    let delay = Math.min(
       Math.max(this.baseBackoffDelayMs, this.baseBackoffDelayMs * this.attempts * this.attempts),
       this.maxBackoffDelayMs,
     );
     this.cancelBackoff = this.schedule(async () => {
-      ((this.cancelBackoff = null), await this.retryFailedEvents());
-    }, min);
+      this.cancelBackoff = null;
+      await this.retryFailedEvents();
+    }, delay);
   }
   retryFailedEvents() {
     if (this.drainPromise) return this.drainPromise;
-    return (
-      (this.drainPromise = this.doRetryFailedEvents()
-        .catch((e) => {
-          logError(e);
-        })
-        .finally(() => {
-          this.drainPromise = null;
-        })),
-      this.drainPromise
-    );
+    this.drainPromise = this.doRetryFailedEvents()
+      .catch((error) => {
+        logError(error);
+      })
+      .finally(() => {
+        this.drainPromise = null;
+      });
+    return this.drainPromise;
   }
   async doRetryFailedEvents() {
-    let currentBatch = this.currentBatch();
+    let filePath = this.currentBatch();
     while (!this.isShutdown) {
-      let withQueueFileLock = await this.withQueueFileLock(async () => {
-        let eventsFromBatch = await this.loadEventsFromBatch(currentBatch);
-        if (eventsFromBatch.length === 0) return { kind: "empty" };
+      let n = await this.withQueueFileLock(async () => {
+        let eventsFromBatch = await this.loadEventsFromBatch(filePath);
+        if (eventsFromBatch.length === 0)
+          return {
+            kind: "empty",
+          };
         if (this.attempts >= this.maxAttempts) {
-          let deleteBatch = await this.deleteBatch(currentBatch);
-          return { kind: "dropped", count: eventsFromBatch.length, deleted: deleteBatch };
+          let deleted = await this.deleteBatch(filePath);
+          return {
+            kind: "dropped",
+            count: eventsFromBatch.length,
+            deleted,
+          };
         }
-        if (!(await this.deleteBatch(currentBatch))) return { kind: "unclaimable" };
-        return { kind: "claimed", events: eventsFromBatch };
+        if (!(await this.deleteBatch(filePath)))
+          return {
+            kind: "unclaimable",
+          };
+        return {
+          kind: "claimed",
+          events: eventsFromBatch,
+        };
       });
-      if (withQueueFileLock.kind === "empty") break;
-      if (withQueueFileLock.kind === "unclaimable") {
+      if (n.kind === "empty") break;
+      if (n.kind === "unclaimable") {
         this.scheduleBackoffRetry();
         return;
       }
-      if (withQueueFileLock.kind === "dropped") {
-        if (!withQueueFileLock.deleted) {
+      if (n.kind === "dropped") {
+        if (!n.deleted) {
           this.scheduleBackoffRetry();
           return;
         }
-        (this.dropInATenant("given_up", withQueueFileLock.count), this.resetBackoff());
+        this.dropInATenant("given_up", n.count);
+        this.resetBackoff();
         return;
       }
-      let r = filterEventsForPrivacy(withQueueFileLock.events),
-        sendEventsInBatches = await this.sendEventsInBatches(r);
-      if ((this.attempts++, sendEventsInBatches.length > 0)) {
-        (await this.withQueueFileLock(() => this.appendEventsToBatch(currentBatch, sendEventsInBatches)),
-          this.scheduleBackoffRetry());
+      let r = filterEventsForPrivacy(n.events);
+      let failedEvents = await this.sendEventsInBatches(r);
+      this.attempts++;
+      if (failedEvents.length > 0) {
+        await this.withQueueFileLock(() => this.appendEventsToBatch(filePath, failedEvents));
+        this.scheduleBackoffRetry();
         return;
       }
       this.resetBackoff();
     }
   }
   resetBackoff() {
-    if (((this.attempts = 0), this.cancelBackoff)) (this.cancelBackoff(), (this.cancelBackoff = null));
+    this.attempts = 0;
+    if (this.cancelBackoff) {
+      this.cancelBackoff();
+      this.cancelBackoff = null;
+    }
   }
   async refreshExpiredOAuthTokenOnce() {
     if (!isClaudeAISubscriber() || !hasProfileScope()) return;
-    let e = getClaudeAIOAuthTokens();
-    if (!e || !isOAuthTokenExpired(e.expiresAt)) return;
-    if (this.refreshAttemptedFor === e.accessToken) {
+    let claudeAIOAuthTokens = getClaudeAIOAuthTokens();
+    if (!claudeAIOAuthTokens || !isOAuthTokenExpired(claudeAIOAuthTokens.expiresAt)) return;
+    if (this.refreshAttemptedFor === claudeAIOAuthTokens.accessToken) {
       if (this.inflightRefresh) await withDeadline(this.inflightRefresh, this.oauthRefreshTimeoutMs);
       return;
     }
-    this.refreshAttemptedFor = e.accessToken;
+    this.refreshAttemptedFor = claudeAIOAuthTokens.accessToken;
     let n = Promise.resolve()
       .then(() => checkAndRefreshOAuthTokenIfNeeded())
       .then(
         () => {},
-        (r) => {
-          logForDebugging(`1P event logging: OAuth refresh before send failed: ${toError(r).name}`);
+        (error) => {
+          logForDebugging(`1P event logging: OAuth refresh before send failed: ${toError(error).name}`);
         },
       )
       .finally(() => {
         if (this.inflightRefresh === n) this.inflightRefresh = null;
       });
-    ((this.inflightRefresh = n), await withDeadline(n, this.oauthRefreshTimeoutMs));
+    this.inflightRefresh = n;
+    await withDeadline(n, this.oauthRefreshTimeoutMs);
   }
   shouldSkipAuthForSend(e) {
-    if (this.skipAuth || !e) return !0;
-    if (!isFirstPartyAnthropicHost(this.endpoint) || !Zg(this.endpoint)) return !0;
-    if (!isClaudeAISubscriber()) return !1;
-    let n = getClaudeAIOAuthTokens();
-    if (!hasProfileScope() && !this.shouldAttachAuthWithoutProfileScope()) return !0;
-    if (n && isOAuthTokenExpired(n.expiresAt)) return !0;
-    return !1;
+    if (this.skipAuth || !e) return true;
+    if (!isFirstPartyAnthropicHost(this.endpoint) || !isHttpsEndpoint_2(this.endpoint)) return true;
+    if (!isClaudeAISubscriber()) return false;
+    let claudeAIOAuthTokens = getClaudeAIOAuthTokens();
+    if (!hasProfileScope() && !this.shouldAttachAuthWithoutProfileScope()) return true;
+    if (claudeAIOAuthTokens && isOAuthTokenExpired(claudeAIOAuthTokens.expiresAt)) return true;
+    return false;
   }
   shouldAttachAuthWithoutProfileScope() {
     if (
       !this.attachAuthWithoutProfileScope() ||
       (!isActualFirstPartyAnthropicBaseUrl() && !this.hostVouchesForEnvBearer())
     )
-      return !1;
-    let e = getClaudeAIOAuthTokenOrigin();
-    if (e === "store") return !0;
-    if (e === "env" || e === "fd") return !getStoredOauthAccountInfo();
-    return !1;
+      return false;
+    let claudeAIOAuthTokenOrigin = getClaudeAIOAuthTokenOrigin();
+    if (claudeAIOAuthTokenOrigin === "store") return true;
+    if (claudeAIOAuthTokenOrigin === "env" || claudeAIOAuthTokenOrigin === "fd")
+      return !getStoredOauthAccountInfo();
+    return false;
   }
   underATenantsRules() {
-    return this.wasPassedAGrant || Mo();
+    return this.wasPassedAGrant || isDisklessHost();
   }
   hostVouchesForEnvBearer() {
-    return Mo() && this.sendMode !== void 0 && env.CLAUDE_CODE_OAUTH_TOKEN?.startsWith("sk-ant-oat") === !0;
+    return (
+      isDisklessHost() &&
+      this.sendMode !== undefined &&
+      env.CLAUDE_CODE_OAUTH_TOKEN?.startsWith("sk-ant-oat") === true
+    );
   }
   whyATenantMayNotPost(e, n) {
     if (!this.underATenantsRules()) return;
     if (e) return "previous_run";
     try {
-      let mayPost = this.tenantGrant.mayPost();
-      if (mayPost !== !0) return (Promise.resolve(mayPost).catch(logGrantCallbackError), "refused");
+      let s = this.tenantGrant.mayPost();
+      if (s !== true) {
+        Promise.resolve(s).catch(logGrantCallbackError);
+        return "refused";
+      }
     } catch (error) {
-      return (logGrantCallbackError(error), "refused");
+      logGrantCallbackError(error);
+      return "refused";
     }
     if (!this.hostVouchesForEnvBearer()) return "not_vouched";
-    if (!(n === void 0 || (!n.error && n.headers.Authorization === `Bearer ${env.CLAUDE_CODE_OAUTH_TOKEN}`)))
+    if (!(
+      n === undefined ||
+      (!n.error && n.headers.Authorization === `Bearer ${env.CLAUDE_CODE_OAUTH_TOKEN}`)
+    ))
       return "no_credential";
-    return n !== void 0 && this.sendMode === "dry_run" ? "dry_run" : void 0;
+    return n !== undefined && this.sendMode === "dry_run" ? "dry_run" : undefined;
   }
   dropInATenant(e, n) {
     this.tellATenantsGrant((r) => r.onDrop(e, n));
@@ -695,115 +778,155 @@ class FirstPartyEventLoggingExporter {
   }
   async authHeadersForSend() {
     if (!(getAnthropicApiKeySafe() === null && shouldUseWIFAuth())) return getAuthHeadersAsync();
-    let { getResolvedWIFBaseUrlSnapshot: getResolvedWIFBaseUrlSnapshot } =
-        await import("./chunk-7k61ne1e.js"),
-      r = getApiBaseUrlHost_2(getResolvedWIFBaseUrlSnapshot());
-    if (r === void 0 || r !== bP(this.endpoint) || !Zg(this.endpoint))
-      return { headers: {}, error: "workload-identity token is minted for a different host" };
+    let { getResolvedWIFBaseUrlSnapshot } = await import("./chunk-7k61ne1e.js");
+    let apiBaseUrlHost = getApiBaseUrlHost_2(getResolvedWIFBaseUrlSnapshot());
+    if (
+      apiBaseUrlHost === undefined ||
+      apiBaseUrlHost !== endpointHost(this.endpoint) ||
+      !isHttpsEndpoint_2(this.endpoint)
+    )
+      return {
+        headers: {},
+        error: "workload-identity token is minted for a different host",
+      };
     if (Date.now() < this.wifMintRetryAt)
-      return { headers: {}, error: "workload-identity mint failed recently; not retried yet" };
-    let s = await getAuthHeadersAsync();
-    if (s.error) {
-      if (s.reasonCode === "wif_error") this.wifMintRetryAt = Date.now() + E2;
-      return s;
+      return {
+        headers: {},
+        error: "workload-identity mint failed recently; not retried yet",
+      };
+    let authHeaders = await getAuthHeadersAsync();
+    if (authHeaders.error) {
+      if (authHeaders.reasonCode === "wif_error") this.wifMintRetryAt = Date.now() + WIF_MINT_RETRY_MS;
+      return authHeaders;
     }
-    if (getApiBaseUrlHost_2(getResolvedWIFBaseUrlSnapshot()) !== r)
-      return { headers: {}, error: "workload-identity resolution changed during the send" };
-    return s;
+    if (getApiBaseUrlHost_2(getResolvedWIFBaseUrlSnapshot()) !== apiBaseUrlHost)
+      return {
+        headers: {},
+        error: "workload-identity resolution changed during the send",
+      };
+    return authHeaders;
   }
   async sendBatchWithRetry(e, n = {}) {
-    let whyATenantMayNotPost = this.whyATenantMayNotPost(n.startupRetry);
-    if (whyATenantMayNotPost) {
-      this.dropInATenant(whyATenantMayNotPost, e.events.length);
+    let r = this.whyATenantMayNotPost(n.startupRetry);
+    if (r) {
+      this.dropInATenant(r, e.events.length);
       return;
     }
-    if (this.isKilled()) throw new t_();
+    if (this.isKilled()) throw new SinkKillSwitchError();
     let s = {
-        "Content-Type": "application/json",
-        "User-Agent": claudeCodeUserAgent(),
-        "x-service-name": "claude-code",
-      },
-      h =
-        (this.underATenantsRules() && getIsNonInteractiveSession()) ||
-        checkHasTrustDialogAccepted() ||
-        getIsNonInteractiveSession();
+      "Content-Type": "application/json",
+      "User-Agent": claudeCodeUserAgent(),
+      "x-service-name": "claude-code",
+    };
+    let h =
+      (this.underATenantsRules() && getIsNonInteractiveSession()) ||
+      checkHasTrustDialogAccepted() ||
+      getIsNonInteractiveSession();
     if (h && !this.skipAuth && !this.finalFlush && !this.isShutdown && !n.startupRetry && getIsInteractive())
       await this.refreshExpiredOAuthTokenOnce();
-    let shouldSkipAuthForSend = this.shouldSkipAuthForSend(h);
+    let y = this.shouldSkipAuthForSend(h);
     if (
-      !shouldSkipAuthForSend &&
+      !y &&
       !this.isShutdown &&
       !this.finalFlush &&
       isActualFirstPartyAnthropicBaseUrl() &&
       !isClaudeAISubscriber() &&
       isApiKeyHelperTheActiveCredential()
     ) {
-      let j = getColdApiKeyHelperRun();
-      if (j)
+      let coldApiKeyHelperRun = getColdApiKeyHelperRun();
+      if (coldApiKeyHelperRun)
         await withDeadline(
-          Promise.race([j.catch(() => null), this.finalFlushSignal]),
+          Promise.race([coldApiKeyHelperRun.catch(() => null), this.finalFlushSignal]),
           this.keyHelperJoinTimeoutMs,
         );
     }
-    let S = shouldSkipAuthForSend
-        ? {
-            headers: {},
-            error:
-              "auth skipped: skipAuth config, trust not established, endpoint not first-party https, no-profile lane closed, or OAuth token expired",
-          }
-        : await this.authHeadersForSend(),
-      w =
-        !shouldSkipAuthForSend && S.reasonCode === "no_api_key" ? (getAuthHeaders_2(this.endpoint) ?? S) : S,
-      R = guardTelemetryCredentials(w, this.endpoint),
-      x = !R.error,
-      P = { events: dropForeignPrincipalEvents(e.events) };
+    let S = y
+      ? {
+          headers: {},
+          error:
+            "auth skipped: skipAuth config, trust not established, endpoint not first-party https, no-profile lane closed, or OAuth token expired",
+        }
+      : await this.authHeadersForSend();
+    let w = !y && S.reasonCode === "no_api_key" ? (getAuthHeaders_2(this.endpoint) ?? S) : S;
+    let R = guardTelemetryCredentials(w, this.endpoint);
+    let x = !R.error;
+    let P = {
+      events: dropForeignPrincipalEvents(e.events),
+    };
     if (P.events.length === 0) return;
-    let F = gzipTelemetryBody({ url: this.endpoint, payload: P, storageV5: this.storageV5 }),
-      whyATenantMayNotPost_2 = this.whyATenantMayNotPost(n.startupRetry, R);
-    if (whyATenantMayNotPost_2) {
-      this.dropInATenant(whyATenantMayNotPost_2, P.events.length);
+    let F = gzipTelemetryBody({
+      url: this.endpoint,
+      payload: P,
+      storageV5: this.storageV5,
+    });
+    let L = this.whyATenantMayNotPost(n.startupRetry, R);
+    if (L) {
+      this.dropInATenant(L, P.events.length);
       return;
     }
     let G = {
       ...s,
       ...(x && R.headers),
-      ...(this.underATenantsRules() && this.sendMode !== "production" && { "x-test-mode": "true" }),
+      ...(this.underATenantsRules() &&
+        this.sendMode !== "production" && {
+          "x-test-mode": "true",
+        }),
     };
     try {
-      let post = await this.post(G, F, P);
-      this.logSuccess(P.events.length, x, post);
-      let ee = R2(post, P.events.length);
-      if ((this.tellATenantsGrant((q) => q.onSent(ee)), ee < P.events.length))
-        this.dropInATenant("rejected_by_ingest", P.events.length - ee);
+      let j = await this.post(G, F, P);
+      this.logSuccess(P.events.length, x, j);
+      let ee = acceptedEventCount(j, P.events.length);
+      this.tellATenantsGrant((q) => q.onSent(ee));
+      if (ee < P.events.length) this.dropInATenant("rejected_by_ingest", P.events.length - ee);
       return;
     } catch (error) {
       if (
         x &&
         !this.underATenantsRules() &&
-        !e.events.some((event) => event.principal_stamp !== void 0) &&
+        !e.events.some((event) => event.principal_stamp !== undefined) &&
         error instanceof DirectPostError &&
         error.facts.status === 401
       ) {
-        let post = await this.post(s, F, P);
-        this.logSuccess(P.events.length, !1, post);
+        let ee = await this.post(s, F, P);
+        this.logSuccess(P.events.length, false, ee);
         return;
       }
       throw error;
     }
   }
   async post(e, n, r) {
-    let s = getTLSFetchSession("analytics", withoutSensitiveHeaders(this.endpoint, e));
-    if (!s) throw Error("this runtime has no Bun.FetchSession");
-    let h = withVettedSessionsBearer({ Accept: DEFAULT_ACCEPT_HEADER, ...e, ...n?.headers }, this.endpoint),
-      { proxy: proxy, tls: tls, ...w } = getProxyFetchOptions({ url: this.endpoint }),
-      R =
-        proxy !== void 0
-          ? { proxy: { ...(typeof proxy === "string" ? { url: proxy } : proxy), respectNoProxy: !1 } }
-          : getProxyUrlWithSource()
-            ? { proxy: !1 }
-            : {};
-    guardBunFetchSession(s, "POST", this.endpoint);
-    let { response: response, text: text } = await s
+    let tlsFetchSession = getTLSFetchSession("analytics", withoutSensitiveHeaders(this.endpoint, e));
+    if (!tlsFetchSession) throw Error("this runtime has no Bun.FetchSession");
+    let h = withVettedSessionsBearer(
+      {
+        Accept: DEFAULT_ACCEPT_HEADER,
+        ...e,
+        ...n?.headers,
+      },
+      this.endpoint,
+    );
+    let { proxy, tls, ...w } = getProxyFetchOptions({
+      url: this.endpoint,
+    });
+    let R =
+      proxy !== undefined
+        ? {
+            proxy: {
+              ...(typeof proxy === "string"
+                ? {
+                    url: proxy,
+                  }
+                : proxy),
+              respectNoProxy: false,
+            },
+          }
+        : getProxyUrlWithSource()
+          ? {
+              proxy: false,
+            }
+          : {};
+    guardBunFetchSession(tlsFetchSession, "POST", this.endpoint);
+    let { response, text } = await tlsFetchSession
       .fetch(this.endpoint, {
         method: "POST",
         headers: h,
@@ -813,24 +936,36 @@ class FirstPartyEventLoggingExporter {
         ...R,
         redirect: "manual",
       })
-      .then(async (F) => ({ response: F, text: await F.text() }))
-      .catch((F) => {
-        throw F instanceof DOMException && F.name === "TimeoutError"
-          ? new DirectPostError(`timeout of ${this.timeout}ms exceeded`, { code: "ETIMEDOUT" })
-          : new DirectPostError(errorMessage(F), {
-              ...(F instanceof Error && "code" in F && typeof F.code === "string" && { code: F.code }),
+      .then(async (F) => ({
+        response: F,
+        text: await F.text(),
+      }))
+      .catch((error) => {
+        throw error instanceof DOMException && error.name === "TimeoutError"
+          ? new DirectPostError(`timeout of ${this.timeout}ms exceeded`, {
+              code: "ETIMEDOUT",
+            })
+          : new DirectPostError(errorMessage(error), {
+              ...(error instanceof Error &&
+                "code" in error &&
+                typeof error.code === "string" && {
+                  code: error.code,
+                }),
             });
       });
-    if (!response.ok)
-      throw (
-        reportSessionsBearerAnswer(response.status, h, this.endpoint),
-        new DirectPostError(`Request failed with status code ${response.status}`, {
-          status: response.status,
-          requestId: response.headers.get("request-id"),
-          code:
-            response.status >= 500 ? "ERR_BAD_RESPONSE" : response.status >= 400 ? "ERR_BAD_REQUEST" : void 0,
-        })
-      );
+    if (!response.ok) {
+      reportSessionsBearerAnswer(response.status, h, this.endpoint);
+      throw new DirectPostError(`Request failed with status code ${response.status}`, {
+        status: response.status,
+        requestId: response.headers.get("request-id"),
+        code:
+          response.status >= 500
+            ? "ERR_BAD_RESPONSE"
+            : response.status >= 400
+              ? "ERR_BAD_REQUEST"
+              : undefined,
+      });
+    }
     try {
       return jsonParse(text);
     } catch {
@@ -838,99 +973,106 @@ class FirstPartyEventLoggingExporter {
     }
   }
   logSuccess(e, n, r) {}
-  hrTimeToDate(e) {
-    let [n, r] = e;
-    return new Date(n * 1000 + r / 1e6);
+  hrTimeToDate(hrTime) {
+    let [seconds, nanoseconds] = hrTime;
+    return new Date(seconds * 1000 + nanoseconds / 1e6);
   }
   transformLogsToEvents(e) {
-    let n = [],
-      r = isHipaaMode(),
-      s = (R) => (typeof R === "string" ? R : void 0),
-      h = (R) => (typeof R === "boolean" ? R : void 0),
-      y = (R) => (typeof R === "number" && Number.isInteger(R) && R >= 0 ? R : void 0),
-      S = (R, x) => {
-        n.push({
-          event_type: "ClaudeCodeInternalEvent",
-          event_data: ClaudeCodeInternalEvent.toJSON(r ? sanitizeEventMetadata(R) : R),
-          ...(x !== null && { principal_stamp: x }),
-        });
-      },
-      w = (R) => {
-        n.push({
-          event_type: "GrowthbookExperimentEvent",
-          event_data: GrowthbookExperimentEvent.toJSON(r ? gg(R) : R),
-        });
-      };
-    for (let R of e) {
-      let x = R.attributes || {};
-      if (x.event_type === "GrowthbookExperimentEvent") {
-        let hrTimeToDate = this.hrTimeToDate(R.hrTime),
-          { account_uuid: account_uuid, organization_uuid: organization_uuid } = x;
+    let n = [];
+    let r = isHipaaMode();
+    let s = (R) => (typeof R === "string" ? R : undefined);
+    let h = (R) => (typeof R === "boolean" ? R : undefined);
+    let y = (R) => (typeof R === "number" && Number.isInteger(R) && R >= 0 ? R : undefined);
+    let S = (R, principalStamp) => {
+      n.push({
+        event_type: "ClaudeCodeInternalEvent",
+        event_data: ClaudeCodeInternalEvent.toJSON(r ? sanitizeEventMetadata(R) : R),
+        ...(principalStamp !== null && {
+          principal_stamp: principalStamp,
+        }),
+      });
+    };
+    let w = (R) => {
+      n.push({
+        event_type: "GrowthbookExperimentEvent",
+        event_data: GrowthbookExperimentEvent.toJSON(r ? sanitizeExperimentEventFields(R) : R),
+      });
+    };
+    for (let log of e) {
+      let attributes = log.attributes || {};
+      if (attributes.event_type === "GrowthbookExperimentEvent") {
+        let timestamp = this.hrTimeToDate(log.hrTime);
+        let { account_uuid, organization_uuid: organizationUuid } = attributes;
         w({
-          event_id: x.event_id,
-          timestamp: hrTimeToDate,
-          experiment_id: x.experiment_id,
-          variation_id: x.variation_id,
-          environment: x.environment,
-          user_attributes: x.user_attributes,
-          experiment_metadata: x.experiment_metadata,
-          device_id: x.device_id,
-          session_id: x.session_id,
+          event_id: attributes.event_id,
+          timestamp,
+          experiment_id: attributes.experiment_id,
+          variation_id: attributes.variation_id,
+          environment: attributes.environment,
+          user_attributes: attributes.user_attributes,
+          experiment_metadata: attributes.experiment_metadata,
+          device_id: attributes.device_id,
+          session_id: attributes.session_id,
           auth:
-            account_uuid || organization_uuid
-              ? { account_uuid: account_uuid, organization_uuid: organization_uuid }
-              : void 0,
+            account_uuid || organizationUuid
+              ? {
+                  account_uuid,
+                  organization_uuid: organizationUuid,
+                }
+              : undefined,
         });
         continue;
       }
-      let P = x.event_name || R.body || "unknown",
-        { core_metadata: core_metadata, user_metadata: user_metadata } = x,
-        G = typeof x.principal_stamp === "string" ? x.principal_stamp : null;
-      if (sx(P) || ax(P, G)) continue;
-      let j = x.event_metadata || {};
-      if (!core_metadata) {
+      let P = attributes.event_name || log.body || "unknown";
+      let { core_metadata: coreMetadata, user_metadata: userMetadata } = attributes;
+      let principalStamp = typeof attributes.principal_stamp === "string" ? attributes.principal_stamp : null;
+      if (needsPrincipalStamp(P) || isEventOfAnotherPrincipal(P, principalStamp)) continue;
+      let eventMetadata = attributes.event_metadata || {};
+      if (!coreMetadata) {
         S(
           {
-            event_id: x.event_id,
+            event_id: attributes.event_id,
             event_name: P,
-            client_timestamp: this.hrTimeToDate(R.hrTime),
+            client_timestamp: this.hrTimeToDate(log.hrTime),
             session_id: getSessionId(),
             additional_metadata: Buffer.from(
-              jsonStringify({ transform_error: "core_metadata attribute is missing" }),
+              jsonStringify({
+                transform_error: "core_metadata attribute is missing",
+              }),
             ).toString("base64"),
           },
-          G,
+          principalStamp,
         );
         continue;
       }
-      let ee = to1PEventFormat(core_metadata, user_metadata, j),
-        {
-          _PROTO_skill_name: _PROTO_skill_name,
-          _PROTO_plugin_name: _PROTO_plugin_name,
-          _PROTO_marketplace_name: _PROTO_marketplace_name,
-          _PROTO_mcp_server_name: _PROTO_mcp_server_name,
-          _PROTO_mcp_tool_name: _PROTO_mcp_tool_name,
-          _PROTO_code: _PROTO_code,
-          _PROTO_head_sha: _PROTO_head_sha,
-          _PROTO_is_clean_tree_at_start: _PROTO_is_clean_tree_at_start,
-          _PROTO_changed_file_count_at_start: _PROTO_changed_file_count_at_start,
-          _PROTO_untracked_file_count_at_start: _PROTO_untracked_file_count_at_start,
-          _PROTO_git_remote_url: _PROTO_git_remote_url,
-          ...Me
-        } = ee.additional,
-        xe = stripProtoFields(Me);
-      if (r) xe = pickNumericMetrics(xe, P);
+      let formatted = to1PEventFormat(coreMetadata, userMetadata, eventMetadata);
+      let {
+        _PROTO_skill_name,
+        _PROTO_plugin_name,
+        _PROTO_marketplace_name,
+        _PROTO_mcp_server_name,
+        _PROTO_mcp_tool_name,
+        _PROTO_code,
+        _PROTO_head_sha,
+        _PROTO_is_clean_tree_at_start,
+        _PROTO_changed_file_count_at_start,
+        _PROTO_untracked_file_count_at_start,
+        _PROTO_git_remote_url,
+        ...rest
+      } = formatted.additional;
+      let additionalMetadata = stripProtoFields(rest);
+      if (r) additionalMetadata = pickNumericMetrics(additionalMetadata, P);
       S(
         {
-          event_id: x.event_id,
+          event_id: attributes.event_id,
           event_name: P,
-          client_timestamp: this.hrTimeToDate(R.hrTime),
-          device_id: x.user_id,
-          email: user_metadata?.email,
-          auth: ee.auth,
-          ...ee.core,
-          env: ee.env,
-          process: ee.process,
+          client_timestamp: this.hrTimeToDate(log.hrTime),
+          device_id: attributes.user_id,
+          email: userMetadata?.email,
+          auth: formatted.auth,
+          ...formatted.core,
+          env: formatted.env,
+          process: formatted.process,
           skill_name: s(_PROTO_skill_name),
           plugin_name: s(_PROTO_plugin_name),
           marketplace_name: s(_PROTO_marketplace_name),
@@ -941,28 +1083,36 @@ class FirstPartyEventLoggingExporter {
           changed_file_count_at_start: y(_PROTO_changed_file_count_at_start),
           untracked_file_count_at_start: y(_PROTO_untracked_file_count_at_start),
           additional_metadata:
-            Object.keys(xe).length > 0 ? Buffer.from(jsonStringify(xe)).toString("base64") : void 0,
+            Object.keys(additionalMetadata).length > 0
+              ? Buffer.from(jsonStringify(additionalMetadata)).toString("base64")
+              : undefined,
         },
-        G,
+        principalStamp,
       );
     }
-    return { events: n };
+    return {
+      events: n,
+    };
   }
   adoptInflightRefreshFrom(e) {
     this.refreshAttemptedFor ??= e.refreshAttemptedFor;
     let inflightRefresh = e.inflightRefresh;
     if (!inflightRefresh || this.inflightRefresh) return;
-    ((this.inflightRefresh = inflightRefresh),
-      inflightRefresh.finally(() => {
-        if (this.inflightRefresh === inflightRefresh) this.inflightRefresh = null;
-      }));
+    this.inflightRefresh = inflightRefresh;
+    inflightRefresh.finally(() => {
+      if (this.inflightRefresh === inflightRefresh) this.inflightRefresh = null;
+    });
   }
   async beginShutdown(e = 0) {
-    if (((this.finalFlush = !0), this.signalFinalFlush(), this.inflightRefresh && e > 0))
-      await withDeadline(this.inflightRefresh, e);
+    this.finalFlush = true;
+    this.signalFinalFlush();
+    if (this.inflightRefresh && e > 0) await withDeadline(this.inflightRefresh, e);
   }
   async shutdown() {
-    if (((this.isShutdown = !0), this.resetBackoff(), await this.forceFlush(), this.underATenantsRules())) {
+    this.isShutdown = true;
+    this.resetBackoff();
+    await this.forceFlush();
+    if (this.underATenantsRules()) {
       await this.drainPromise;
       let queuedEventCount = await this.getQueuedEventCount();
       if (queuedEventCount > 0) this.dropInATenant("unsent_at_exit", queuedEventCount);
@@ -972,13 +1122,13 @@ class FirstPartyEventLoggingExporter {
     await Promise.all(this.pendingExports);
   }
 }
+//@ chunk-aepeg2w5.js:892785-893118 placement
 /**
  * claude-code-server 租户中没有授权时的空导出授权（只丢弃并报错一次）。
  */
-//@ chunk-aepeg2w5.js:892785-893118 placement
 function dryRunGrant() {
   return {
-    mayPost: () => !1,
+    mayPost: () => false,
     sendMode: "dry_run",
     onDrop: onceExport(() => {
       logError(
@@ -993,65 +1143,74 @@ function dryRunGrant() {
   };
 }
 //@ chunk-aepeg2w5.js:893118-893199 placement
-class t_ extends Error {
+/**
+ * 一方遥测 sink 被 killswitch 关闭时抛出的错误类型。
+ */
+class SinkKillSwitchError extends Error {
   constructor() {
     super("firstParty sink killswitch active");
   }
 }
 //@ chunk-aepeg2w5.js:893199-893255 placement
-function bP(e) {
+function endpointHost(e) {
   try {
     return new URL(e).host;
   } catch {
     return;
   }
 }
+//@ chunk-aepeg2w5.js:893255-893333 placement = getApiBaseUrlHost (0.812)
 /**
  * ANTHROPIC_BASE_URL 非 api.anthropic.com 时返回其 host，作为 GrowthBook 属性。
  */
-//@ chunk-aepeg2w5.js:893255-893333 placement = getApiBaseUrlHost (0.812)
-function getApiBaseUrlHost_2(e) {
-  if (e === void 0) return;
-  return e === null ? "api.anthropic.com" : bP(e);
+function getApiBaseUrlHost_2(resolvedWIFBaseUrlSnapshot) {
+  if (resolvedWIFBaseUrlSnapshot === undefined) return;
+  return resolvedWIFBaseUrlSnapshot === null ? "api.anthropic.com" : endpointHost(resolvedWIFBaseUrlSnapshot);
 }
 //@ chunk-aepeg2w5.js:893603-893676 placement
-function Zg(e) {
+function isHttpsEndpoint_2(endpoint) {
   try {
-    return new URL(e).protocol === "https:";
+    return new URL(endpoint).protocol === "https:";
   } catch {
-    return !1;
+    return false;
   }
 }
+//@ chunk-aepeg2w5.js:893676-893919 placement
 /**
  * 1P 上报失败原因：kill_switch / threw / no_answer / status_429/5xx/4xx/3xx。
  */
-//@ chunk-aepeg2w5.js:893676-893919 placement
-function classifyPostFailure(e) {
-  if (e instanceof t_) return "kill_switch";
-  if (!(e instanceof DirectPostError)) return "threw";
-  let { status: status } = e.facts;
-  if (status === void 0) return "no_answer";
+function classifyPostFailure(error) {
+  if (error instanceof SinkKillSwitchError) return "kill_switch";
+  if (!(error instanceof DirectPostError)) return "threw";
+  let { status } = error.facts;
+  if (status === undefined) return "no_answer";
   if (status === 429) return "status_429";
   if (status >= 500) return "status_5xx";
   return status >= 400 ? "status_4xx" : "status_3xx";
 }
 //@ chunk-aepeg2w5.js:893919-893977 placement
-var C2 = DoctorLazy(() => u({ accepted_count: E().int().nonnegative() }));
+var acceptedCountSchema = DoctorLazy(() =>
+  u({
+    accepted_count: E().int().nonnegative(),
+  }),
+);
 //@ chunk-aepeg2w5.js:893977-894071 placement
-function R2(e, n) {
-  let safeParse = C2().safeParse(e);
-  return safeParse.success ? Math.min(safeParse.data.accepted_count, n) : n;
+function acceptedEventCount(e, n) {
+  let r = acceptedCountSchema().safeParse(e);
+  return r.success ? Math.min(r.data.accepted_count, n) : n;
 }
+//@ chunk-aepeg2w5.js:894071-894295 placement
 /**
  * 记录租户授权回调抛错。
  */
-//@ chunk-aepeg2w5.js:894071-894295 placement
-function logGrantCallbackError(e) {
+function logGrantCallbackError(error) {
   try {
-    let n = e instanceof Error ? e.name : typeof e;
+    let n = error instanceof Error ? error.name : typeof error;
     logForDebugging(
       `1P event logging: a function of the tenant's grant threw or rejected (${n}). From mayPost that is a no, from a listener it is ignored.`,
-      { level: "error" },
+      {
+        level: "error",
+      },
     );
   } catch {}
 }
@@ -1060,20 +1219,20 @@ var DEFAULT_ACCEPT_HEADER = "application/json, text/plain, */*";
 //@ chunk-aepeg2w5.js:894338-894435 layout
 class DirectPostError extends Error {
   facts;
-  constructor(e, n) {
-    super(e);
-    this.facts = n;
+  constructor(message, facts) {
+    super(message);
+    this.facts = facts;
     this.name = "DirectPostError";
   }
 }
+//@ chunk-aepeg2w5.js:894435-894682 fingerprint = getAxiosErrorContext (0.688)
 /**
  * 从 axios 错误提取 request-id、status、code 便于日志。
  */
-//@ chunk-aepeg2w5.js:894435-894682 fingerprint = getAxiosErrorContext (0.688)
 function getAxiosErrorContext(error) {
   if (!(error instanceof DirectPostError)) return errorMessage(error);
-  let { facts: facts } = error,
-    parts = [];
+  let { facts } = error;
+  let parts = [];
   if (facts.requestId) parts.push(`request-id=${facts.requestId}`);
   if (facts.status) parts.push(`status=${facts.status}`);
   if (facts.code) parts.push(`code=${facts.code}`);
@@ -1082,5 +1241,4 @@ function getAxiosErrorContext(error) {
 }
 //@ chunk-4m46mxx9.js:6572-6590 fingerprint = getStorageDir (1)
 var getStorageDir = "telemetry";
-
-export { Zg, getStorageDir, FirstPartyEventLoggingExporter };
+export { isHttpsEndpoint_2, getStorageDir, FirstPartyEventLoggingExporter };

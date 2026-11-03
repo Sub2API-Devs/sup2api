@@ -13,354 +13,430 @@ import { notePinnedState } from "../utils/scrollTelemetry.js";
 import { SpinnerPaceContext } from "../components/Spinner/paceContext.js";
 
 //@ chunk-ag5x7vhf.js:151715-151758 sole-consumer
-var JD = 3,
-  rx = 40,
-  QD = 80,
-  rounded = Math.round(rx * 1.5);
+var DEFAULT_ITEM_HEIGHT = 3;
+var OVERSCAN_BUCKET = 40;
+var MAX_RENDERED_ROWS = 80;
+var rounded = Math.round(OVERSCAN_BUCKET * 1.5);
 //@ chunk-ag5x7vhf.js:151758-151824 sole-consumer
-function eA(m) {
-  return Math.max(rounded, Math.min(Math.round(m * 1.5), QD));
+function renderedRowCount(m) {
+  return Math.max(rounded, Math.min(Math.round(m * 1.5), MAX_RENDERED_ROWS));
 }
 //@ chunk-ag5x7vhf.js:151824-151852 affinity
-var tA = 30,
-  $p = 1,
-  rc = 300,
-  Ii = 25;
+var TAIL_RENDER_ROWS = 30;
+var DEFAULT_ROW_HEIGHT_ESTIMATE = 1;
+var MAX_ROWS_PER_BATCH = 300;
+var MIN_ROWS_PER_BATCH = 25;
 //@ chunk-ag5x7vhf.js:151852-158046 fingerprint = useVirtualScroll (0.791)
 function useVirtualScroll(scrollRef, itemKeys, columns) {
-  let heightCache = R(new Map()),
-    offsetVersionRef = R(0),
-    lastScrollTopRef = R(0),
-    offsetsRef = R({ arr: new Float64Array(0), version: -1, n: -1 }),
-    itemRefs = R(new Map()),
-    refCache = R(new Map()),
-    prevColumns = R({ len: 0, first: void 0, last: void 0 }),
-    skipMeasurementRef = R(columns),
-    prevRangeRef = R(!1),
-    freezeRendersRef = R(null),
-    K = R({ count: 0, lastKey: void 0 }),
-    q = R(0),
-    Y = R(null),
-    pe = R(null);
-  if (skipMeasurementRef.current !== columns) {
-    let de = skipMeasurementRef.current / columns;
-    skipMeasurementRef.current = columns;
-    for (let [le, Be] of heightCache.current)
-      if (Be !== 0) heightCache.current.set(le, Math.max(1, Math.round(Be * de)));
-    (offsetVersionRef.current++, (prevRangeRef.current = !0), (q.current = 2), (pe.current = Y.current));
+  let heightCache = R(new Map());
+  let offsetVersionRef = R(0);
+  let lastScrollTopRef = R(0);
+  let offsetsRef = R({
+    arr: new Float64Array(0),
+    version: -1,
+    n: -1,
+  });
+  let itemRefs = R(new Map());
+  let refCache = R(new Map());
+  let prevColumns = R({
+    len: 0,
+    first: undefined,
+    last: undefined,
+  });
+  let prevColumns_2 = R(columns);
+  let skipMeasurementRef = R(false);
+  let prevRangeRef = R(null);
+  let K = R({
+    count: 0,
+    lastKey: undefined,
+  });
+  let q = R(0);
+  let Y = R(null);
+  let pe = R(null);
+  if (prevColumns_2.current !== columns) {
+    let ratio = prevColumns_2.current / columns;
+    prevColumns_2.current = columns;
+    for (let [k, Be] of heightCache.current)
+      if (Be !== 0) heightCache.current.set(k, Math.max(1, Math.round(Be * ratio)));
+    offsetVersionRef.current++;
+    skipMeasurementRef.current = true;
+    q.current = 2;
+    pe.current = Y.current;
   }
   let xe = K.current.count !== itemKeys.length || K.current.lastKey !== itemKeys.at(-1);
   if (q.current > 0 && xe) q.current = 0;
-  if (xe) freezeRendersRef.current = null;
-  let listOriginRef = R(0),
-    [, Re] = y(0),
-    spacerRef = R(null);
+  if (xe) prevRangeRef.current = null;
+  let listOriginRef = R(0);
+  let [, Re] = y(0);
+  let spacerRef = R(null);
   yt(scrollRef.subscribe, () => {
     let handle = scrollRef.handle;
     if (!handle) return NaN;
-    let le = handle.getScrollTop() + handle.getPendingDelta(),
-      bin = Math.floor(le / rx);
+    let target = handle.getScrollTop() + handle.getPendingDelta();
+    let bin = Math.floor(target / OVERSCAN_BUCKET);
     return handle.isSticky() ? ~bin : bin;
   });
-  let fe = scrollRef.handle?.getScrollTop() ?? -1,
-    Fe = scrollRef.handle?.getPendingDelta() ?? 0,
-    te = scrollRef.handle?.getViewportHeight() ?? 0,
-    me = eA(te),
-    se = scrollRef.handle?.isSticky() ?? !0;
+  let scrollTop = scrollRef.handle?.getScrollTop() ?? -1;
+  let pendingDelta = scrollRef.handle?.getPendingDelta() ?? 0;
+  let te = scrollRef.handle?.getViewportHeight() ?? 0;
+  let me = renderedRowCount(te);
+  let se = scrollRef.handle?.isSticky() ?? true;
   if (q.current > 0) {
     let de = pe.current;
-    if (de === null) pe.current = { sticky: se, scrollTop: fe };
-    else if (de.sticky !== se || (!se && Math.abs(fe - de.scrollTop) >= Math.max(1, te))) q.current = 0;
+    if (de === null)
+      pe.current = {
+        sticky: se,
+        scrollTop,
+      };
+    else if (de.sticky !== se || (!se && Math.abs(scrollTop - de.scrollTop) >= Math.max(1, te)))
+      q.current = 0;
   }
-  let _e = q.current > 0 ? freezeRendersRef.current : null;
-  (P(() => (notePinnedState(se), () => notePinnedState(!0)), [se]),
-    Q(() => {
-      let de = prevColumns.current,
-        le = itemKeys[0],
-        Be = itemKeys.length >= de.len && le === de.first && itemKeys[de.len - 1] === de.last;
-      if (((de.len = itemKeys.length), (de.first = le), (de.last = itemKeys.at(-1)), Be)) return;
-      let live = new Set(itemKeys),
-        Ge = !1;
-      for (let Ve of heightCache.current.keys())
-        if (!live.has(Ve)) (heightCache.current.delete(Ve), (Ge = !0));
-      for (let Ve of refCache.current.keys()) if (!live.has(Ve)) refCache.current.delete(Ve);
-      if (Ge) offsetVersionRef.current++;
-    }, [itemKeys]));
-  let oe = itemKeys.length;
-  if (offsetsRef.current.version !== offsetVersionRef.current || offsetsRef.current.n !== oe) {
-    let de = offsetsRef.current.arr.length >= oe + 1 ? offsetsRef.current.arr : new Float64Array(oe + 1);
-    de[0] = 0;
-    for (let le = 0; le < oe; le++) de[le + 1] = de[le] + (heightCache.current.get(itemKeys[le]) ?? JD);
-    offsetsRef.current = { arr: de, version: offsetVersionRef.current, n: oe };
+  let _e = q.current > 0 ? prevRangeRef.current : null;
+  P(() => {
+    notePinnedState(se);
+    return () => notePinnedState(true);
+  }, [se]);
+  Q(() => {
+    let de = prevColumns.current;
+    let le = itemKeys[0];
+    let Be = itemKeys.length >= de.len && le === de.first && itemKeys[de.len - 1] === de.last;
+    de.len = itemKeys.length;
+    de.first = le;
+    de.last = itemKeys.at(-1);
+    if (Be) return;
+    let live = new Set(itemKeys);
+    let dirty = false;
+    for (let k of heightCache.current.keys())
+      if (!live.has(k)) {
+        heightCache.current.delete(k);
+        dirty = true;
+      }
+    for (let k of refCache.current.keys()) if (!live.has(k)) refCache.current.delete(k);
+    if (dirty) offsetVersionRef.current++;
+  }, [itemKeys]);
+  let n = itemKeys.length;
+  if (offsetsRef.current.version !== offsetVersionRef.current || offsetsRef.current.n !== n) {
+    let arr = offsetsRef.current.arr.length >= n + 1 ? offsetsRef.current.arr : new Float64Array(n + 1);
+    arr[0] = 0;
+    for (let i = 0; i < n; i++)
+      arr[i + 1] = arr[i] + (heightCache.current.get(itemKeys[i]) ?? DEFAULT_ITEM_HEIGHT);
+    offsetsRef.current = {
+      arr,
+      version: offsetVersionRef.current,
+      n,
+    };
   }
-  let offsets = offsetsRef.current.arr,
-    Ee = offsets[oe],
-    He,
-    Ue;
-  if (_e) [He, Ue] = _e;
-  else if (te === 0 || fe < 0) ((He = Math.max(0, oe - tA)), (Ue = oe));
-  else {
+  let offsets = offsetsRef.current.arr;
+  let totalHeight = offsets[n];
+  let start;
+  let end;
+  if (_e) [start, end] = _e;
+  else if (te === 0 || scrollTop < 0) {
+    start = Math.max(0, n - TAIL_RENDER_ROWS);
+    end = n;
+  } else {
     if (se) {
-      let Ve = te + me;
-      He = oe;
-      while (He > 0 && Ee - offsets[He - 1] < Ve) He--;
-      Ue = oe;
+      let budget = te + me;
+      start = n;
+      while (start > 0 && totalHeight - offsets[start - 1] < budget) start--;
+      end = n;
     } else {
-      let listOrigin = listOriginRef.current,
-        ze = te * 3,
-        rawLo = Math.min(fe, fe + Fe),
-        rawHi = Math.max(fe, fe + Fe),
-        jt = rawHi - rawLo,
-        oo = jt > ze ? (Fe < 0 ? rawHi - ze : rawLo) : rawLo,
-        mo = oo + Math.min(jt, ze),
-        effLo = Math.max(0, oo - listOrigin),
-        Gt = mo - listOrigin,
-        Mo = effLo - me;
+      let listOrigin = listOriginRef.current;
+      let MAX_SPAN_ROWS = te * 3;
+      let rawLo = Math.min(scrollTop, scrollTop + pendingDelta);
+      let rawHi = Math.max(scrollTop, scrollTop + pendingDelta);
+      let span = rawHi - rawLo;
+      let clampedLo = span > MAX_SPAN_ROWS ? (pendingDelta < 0 ? rawHi - MAX_SPAN_ROWS : rawLo) : rawLo;
+      let clampedHi = clampedLo + Math.min(span, MAX_SPAN_ROWS);
+      let effLo = Math.max(0, clampedLo - listOrigin);
+      let effHi = clampedHi - listOrigin;
+      let lo = effLo - me;
       {
-        let Yt = 0,
-          Qt = oe;
+        let Yt = 0;
+        let Qt = n;
         while (Yt < Qt) {
-          let ne = (Yt + Qt) >> 1;
-          if (offsets[ne + 1] <= Mo) Yt = ne + 1;
-          else Qt = ne;
+          let m = (Yt + Qt) >> 1;
+          if (offsets[m + 1] <= lo) Yt = m + 1;
+          else Qt = m;
         }
-        He = Yt;
+        start = Yt;
       }
       {
-        let Yt = freezeRendersRef.current;
-        if (Yt && Yt[0] < He)
-          for (let Qt = Yt[0]; Qt < Math.min(He, Yt[1]); Qt++) {
-            let ne = itemKeys[Qt],
-              ee = itemRefs.current.get(ne);
+        let Yt = prevRangeRef.current;
+        if (Yt && Yt[0] < start)
+          for (let i = Yt[0]; i < Math.min(start, Yt[1]); i++) {
+            let k = itemKeys[i];
+            let ee = itemRefs.current.get(k);
             if (
               ee &&
-              !heightCache.current.has(ne) &&
+              !heightCache.current.has(k) &&
               !(ee.yogaNode?.getComputedHeight() === 0 && hasDrawPending(ee))
             ) {
-              He = Qt;
+              start = i;
               break;
             }
           }
       }
-      let Vo = te + 2 * me,
-        Po = 0,
-        So = 0;
-      Ue = He;
-      while (Ue < oe && So < rc && (Po < Vo || offsets[Ue] < Gt + te + me)) {
-        let Yt = heightCache.current.get(itemKeys[Ue]);
-        if (((Po += Yt ?? $p), Yt !== 0)) So++;
-        Ue++;
+      let needed = te + 2 * me;
+      let Po = 0;
+      let So = 0;
+      end = start;
+      while (end < n && So < MAX_ROWS_PER_BATCH && (Po < needed || offsets[end] < effHi + te + me)) {
+        let Yt = heightCache.current.get(itemKeys[end]);
+        Po += Yt ?? DEFAULT_ROW_HEIGHT_ESTIMATE;
+        if (Yt !== 0) So++;
+        end++;
       }
     }
-    let de = te + 2 * me,
-      le = 0,
-      Be = 0;
-    for (let Ve = He; Ve < Ue; Ve++) {
-      let ze = heightCache.current.get(itemKeys[Ve]);
-      if (((le += ze ?? $p), ze !== 0)) Be++;
+    let needed = te + 2 * me;
+    let le = 0;
+    let Be = 0;
+    for (let i = start; i < end; i++) {
+      let ze = heightCache.current.get(itemKeys[i]);
+      le += ze ?? DEFAULT_ROW_HEIGHT_ESTIMATE;
+      if (ze !== 0) Be++;
     }
-    while (He > 0 && Be < rc && le < de) {
-      He--;
-      let Ve = heightCache.current.get(itemKeys[He]);
-      if (((le += Ve ?? $p), Ve !== 0)) Be++;
+    while (start > 0 && Be < MAX_ROWS_PER_BATCH && le < needed) {
+      start--;
+      let Ve = heightCache.current.get(itemKeys[start]);
+      le += Ve ?? DEFAULT_ROW_HEIGHT_ESTIMATE;
+      if (Ve !== 0) Be++;
     }
-    let prev = freezeRendersRef.current,
-      Ge = Math.abs(fe - lastScrollTopRef.current) + Math.abs(Fe);
-    if (prev && Ge > te * 2) {
+    let prev = prevRangeRef.current;
+    let scrollVelocity = Math.abs(scrollTop - lastScrollTopRef.current) + Math.abs(pendingDelta);
+    if (prev && scrollVelocity > te * 2) {
       let [Ve, ze] = prev;
-      if (He < Ve - Ii) He = Ve - Ii;
-      if (Ue > ze + Ii) Ue = ze + Ii;
-      if (He > Ue) Ue = Math.min(He + Ii, oe);
+      if (start < Ve - MIN_ROWS_PER_BATCH) start = Ve - MIN_ROWS_PER_BATCH;
+      if (end > ze + MIN_ROWS_PER_BATCH) end = ze + MIN_ROWS_PER_BATCH;
+      if (start > end) end = Math.min(start + MIN_ROWS_PER_BATCH, n);
     }
-    lastScrollTopRef.current = fe;
+    lastScrollTopRef.current = scrollTop;
   }
   if (q.current > 0) q.current--;
-  else
-    ((freezeRendersRef.current = [He, Ue]),
-      (K.current = { count: oe, lastKey: itemKeys[oe - 1] }),
-      (Y.current = { sticky: se, scrollTop: fe }));
-  let lt = !(Se(SpinnerPaceContext) !== null && se),
-    dStart = R([He, Ue, oe]);
-  if (!lt) dStart.current = [He, Ue, oe];
-  let ae = eJ(lt ? He : null) ?? dStart.current[0],
-    tt = eJ(lt ? Ue : null) ?? dStart.current[1],
-    ct = eJ(lt ? oe : null) ?? dStart.current[2],
-    Je = He < ae ? ae : He,
-    $e = Ue > tt ? tt : Ue;
-  if (Je > $e || se) ((Je = He), ($e = Ue));
-  if (Fe > 0) $e = Ue;
-  if ($e < Ue && ct < oe && tt >= ct && fe + te > listOriginRef.current + offsets[$e]) $e = Ue;
-  if ($e - Je > rc) {
-    let de = -rc;
-    for (let le = Je; le < $e; le++) if (heightCache.current.get(itemKeys[le]) !== 0) de++;
+  else {
+    prevRangeRef.current = [start, end];
+    K.current = {
+      count: n,
+      lastKey: itemKeys[n - 1],
+    };
+    Y.current = {
+      sticky: se,
+      scrollTop,
+    };
+  }
+  let lt = !(Se(SpinnerPaceContext) !== null && se);
+  let dStart = R([start, end, n]);
+  if (!lt) dStart.current = [start, end, n];
+  let ae = eJ(lt ? start : null) ?? dStart.current[0];
+  let tt = eJ(lt ? end : null) ?? dStart.current[1];
+  let ct = eJ(lt ? n : null) ?? dStart.current[2];
+  let effStart = start < ae ? ae : start;
+  let $e = end > tt ? tt : end;
+  if (effStart > $e || se) {
+    effStart = start;
+    $e = end;
+  }
+  if (pendingDelta > 0) $e = end;
+  if ($e < end && ct < n && tt >= ct && scrollTop + te > listOriginRef.current + offsets[$e]) $e = end;
+  if ($e - effStart > MAX_ROWS_PER_BATCH) {
+    let de = -MAX_ROWS_PER_BATCH;
+    for (let le = effStart; le < $e; le++) if (heightCache.current.get(itemKeys[le]) !== 0) de++;
     if (de > 0) {
-      let le = (offsets[Je] + offsets[$e]) / 2;
-      if (fe - listOriginRef.current < le) {
-        while (de > 0) if (($e--, heightCache.current.get(itemKeys[$e]) !== 0)) de--;
+      let le = (offsets[effStart] + offsets[$e]) / 2;
+      if (scrollTop - listOriginRef.current < le) {
+        while (de > 0) {
+          $e--;
+          if (heightCache.current.get(itemKeys[$e]) !== 0) de--;
+        }
       } else
         while (de > 0) {
-          if (heightCache.current.get(itemKeys[Je]) !== 0) de--;
-          Je++;
+          if (heightCache.current.get(itemKeys[effStart]) !== 0) de--;
+          effStart++;
         }
     }
   }
-  let Qe = offsets[Je],
-    Wt = $e === oe ? 1 / 0 : Math.max(Qe, offsets[$e] - te),
-    Ze = R(null),
-    pt = R(0),
-    Xt = R(null),
-    rt = ce(() => {
-      let handle = scrollRef.handle,
-        le = handle?.getScrollTop() ?? 0,
-        Be = handle?.getPendingDelta() ?? 0,
-        st = Boolean(handle?.getDomElement()?.scrollAnchor),
-        Ge = Ze.current;
-      if (!Ge || Be !== 0 || st) return le;
-      let Ve = itemRefs.current.get(Ge.key)?.yogaNode;
-      if (!Ve || Ve.getComputedWidth() === 0) return le;
-      let ze = Ve.getComputedTop() - Ge.yogaTop;
-      if (ze === 0) return le;
-      let At = le + ze;
-      ((pt.current += ze), (Ge.yogaTop += ze), handle?.scrollTo(At, { preserveHwm: !0 }));
-      let listOrigin = pe.current;
-      if (q.current > 0 && listOrigin) listOrigin.scrollTop += ze;
-      if (handle && ze > 0) raiseScrollHeight(handle);
-      return At;
-    }, [scrollRef]),
-    qe = ce((de) => {
-      let le,
-        Be = -1 / 0;
-      (itemRefs.current.forEach((st, Ge) => {
-        let yogaNode = st.yogaNode;
-        if (!yogaNode || yogaNode.getComputedWidth() === 0 || yogaNode.getComputedHeight() === 0) return;
-        let computedTop = yogaNode.getComputedTop();
-        if (computedTop <= de && computedTop > Be) ((Be = computedTop), (le = Ge));
-      }),
-        (Ze.current = le !== void 0 ? { key: le, yogaTop: Be } : null));
-    }, []);
+  let Qe = offsets[effStart];
+  let Wt = $e === n ? 1 / 0 : Math.max(Qe, offsets[$e] - te);
+  let Ze = R(null);
+  let pt = R(0);
+  let Xt = R(null);
+  let rt = ce(() => {
+    let handle = scrollRef.handle;
+    let le = handle?.getScrollTop() ?? 0;
+    let Be = handle?.getPendingDelta() ?? 0;
+    let st = Boolean(handle?.getDomElement()?.scrollAnchor);
+    let Ge = Ze.current;
+    if (!Ge || Be !== 0 || st) return le;
+    let yogaNode = itemRefs.current.get(Ge.key)?.yogaNode;
+    if (!yogaNode || yogaNode.getComputedWidth() === 0) return le;
+    let ze = yogaNode.getComputedTop() - Ge.yogaTop;
+    if (ze === 0) return le;
+    let At = le + ze;
+    pt.current += ze;
+    Ge.yogaTop += ze;
+    handle?.scrollTo(At, {
+      preserveHwm: true,
+    });
+    let listOrigin = pe.current;
+    if (q.current > 0 && listOrigin) listOrigin.scrollTop += ze;
+    if (handle && ze > 0) raiseScrollHeight(handle);
+    return At;
+  }, [scrollRef]);
+  let qe = ce((de) => {
+    let le;
+    let Be = -1 / 0;
+    itemRefs.current.forEach((st, Ge) => {
+      let yogaNode = st.yogaNode;
+      if (!yogaNode || yogaNode.getComputedWidth() === 0 || yogaNode.getComputedHeight() === 0) return;
+      let computedTop = yogaNode.getComputedTop();
+      if (computedTop <= de && computedTop > Be) {
+        Be = computedTop;
+        le = Ge;
+      }
+    });
+    Ze.current =
+      le !== undefined
+        ? {
+            key: le,
+            yogaTop: Be,
+          }
+        : null;
+  }, []);
   zt(() => {
-    if (se || fe < 0 || te === 0) {
+    if (se || scrollTop < 0 || te === 0) {
       Ze.current = null;
       return;
     }
     qe(rt());
   });
-  let St = ce(() => {
+  let onLayout = ce(() => {
     let handle = scrollRef.handle;
     if (!handle || handle.isSticky() || handle.getViewportHeight() === 0) {
       Ze.current = null;
       return;
     }
-    let le = rt(),
-      Be = Xt.current;
+    let le = rt();
+    let Be = Xt.current;
     if (Be !== null && Be.max !== 1 / 0) handle.setClampBounds(Be.min, Be.max + Math.max(0, pt.current));
     qe(le);
   }, [scrollRef, rt, qe]);
   zt(() => {
-    let de = spacerRef.current?.yogaNode;
-    if (de && de.getComputedWidth() > 0) {
-      let computedTop = de.getComputedTop(),
-        Ve = listOriginRef.current;
-      if (((listOriginRef.current = computedTop), Ve !== 0 && Math.abs(computedTop - Ve) > 1))
-        Re((ze) => ze + 1);
+    let spacerYoga = spacerRef.current?.yogaNode;
+    if (spacerYoga && spacerYoga.getComputedWidth() > 0) {
+      let computedTop = spacerYoga.getComputedTop();
+      let Ve = listOriginRef.current;
+      listOriginRef.current = computedTop;
+      if (Ve !== 0 && Math.abs(computedTop - Ve) > 1) Re((ze) => ze + 1);
     }
     let le = listOriginRef.current;
-    if (se) ((Xt.current = null), scrollRef.handle?.setClampBounds(void 0, void 0));
-    else {
-      let Ge = Je === 0 ? 0 : Qe + le,
-        Ve = Wt === 1 / 0 ? 1 / 0 : Wt + le + Math.max(0, pt.current);
-      ((Xt.current = { min: Ge, max: Ve }), scrollRef.handle?.setClampBounds(Ge, Ve));
+    if (se) {
+      Xt.current = null;
+      scrollRef.handle?.setClampBounds(undefined, undefined);
+    } else {
+      let Ge = effStart === 0 ? 0 : Qe + le;
+      let Ve = Wt === 1 / 0 ? 1 / 0 : Wt + le + Math.max(0, pt.current);
+      Xt.current = {
+        min: Ge,
+        max: Ve,
+      };
+      scrollRef.handle?.setClampBounds(Ge, Ve);
     }
-    if (((pt.current = 0), prevRangeRef.current)) {
-      prevRangeRef.current = !1;
+    pt.current = 0;
+    if (skipMeasurementRef.current) {
+      skipMeasurementRef.current = false;
       return;
     }
-    let Be = !1,
-      st = !1;
-    for (let [Ge, Ve] of itemRefs.current) {
+    let anyChanged = false;
+    let st = false;
+    for (let [key, Ve] of itemRefs.current) {
       let yoga = Ve.yogaNode;
       if (!yoga) continue;
-      let computedHeight = yoga.getComputedHeight(),
-        prev = heightCache.current.get(Ge);
+      let computedHeight = yoga.getComputedHeight();
+      let prev = heightCache.current.get(key);
       if (computedHeight > 0) {
-        if (prev !== computedHeight)
-          (heightCache.current.set(Ge, computedHeight),
-            (Be = !0),
-            (st ||= prev !== void 0 && prev - computedHeight > te));
-      } else if (yoga.getComputedWidth() > 0 && prev !== 0 && !hasDrawPending(Ve))
-        (heightCache.current.set(Ge, 0), (Be = !0));
+        if (prev !== computedHeight) {
+          heightCache.current.set(key, computedHeight);
+          anyChanged = true;
+          st ||= prev !== undefined && prev - computedHeight > te;
+        }
+      } else if (yoga.getComputedWidth() > 0 && prev !== 0 && !hasDrawPending(Ve)) {
+        heightCache.current.set(key, 0);
+        anyChanged = true;
+      }
     }
-    if (Be) offsetVersionRef.current++;
+    if (anyChanged) offsetVersionRef.current++;
     if (st) Re((Ge) => Ge + 1);
   });
   let measureRef = ce((key) => {
-      let fn = refCache.current.get(key);
-      if (!fn)
-        ((fn = (el) => {
-          if (el) itemRefs.current.set(key, el);
-          else {
-            let st = itemRefs.current.get(key),
-              yoga = st?.yogaNode;
-            if (st && yoga && !prevRangeRef.current) {
-              let computedHeight = yoga.getComputedHeight();
-              if (
-                (computedHeight > 0 || (yoga.getComputedWidth() > 0 && !hasDrawPending(st))) &&
-                heightCache.current.get(key) !== computedHeight
-              )
-                (heightCache.current.set(key, computedHeight), offsetVersionRef.current++);
+    let fn = refCache.current.get(key);
+    if (!fn) {
+      fn = (el) => {
+        if (el) itemRefs.current.set(key, el);
+        else {
+          let st = itemRefs.current.get(key);
+          let yoga = st?.yogaNode;
+          if (st && yoga && !skipMeasurementRef.current) {
+            let computedHeight = yoga.getComputedHeight();
+            if (
+              (computedHeight > 0 || (yoga.getComputedWidth() > 0 && !hasDrawPending(st))) &&
+              heightCache.current.get(key) !== computedHeight
+            ) {
+              heightCache.current.set(key, computedHeight);
+              offsetVersionRef.current++;
             }
-            itemRefs.current.delete(key);
           }
-        }),
-          refCache.current.set(key, fn));
-      return fn;
-    }, []),
-    getItemTop = ce(
-      (index) => {
-        let yoga = itemRefs.current.get(itemKeys[index])?.yogaNode;
-        if (!yoga || yoga.getComputedWidth() === 0) return -1;
-        return yoga.getComputedTop();
-      },
-      [itemKeys],
-    ),
-    getItemElement = ce((index) => itemRefs.current.get(itemKeys[index]) ?? null, [itemKeys]),
-    getItemHeight = ce((index) => heightCache.current.get(itemKeys[index]), [itemKeys]),
-    scrollToIndex = ce(
-      (de) => {
-        let le = offsetsRef.current;
-        if (de < 0 || de >= le.n) return;
-        scrollRef.handle?.scrollTo(le.arr[de] + listOriginRef.current);
-      },
-      [scrollRef],
-    ),
-    to = Ee - offsets[$e];
+          itemRefs.current.delete(key);
+        }
+      };
+      refCache.current.set(key, fn);
+    }
+    return fn;
+  }, []);
+  let getItemTop = ce(
+    (index) => {
+      let yoga = itemRefs.current.get(itemKeys[index])?.yogaNode;
+      if (!yoga || yoga.getComputedWidth() === 0) return -1;
+      return yoga.getComputedTop();
+    },
+    [itemKeys],
+  );
+  let getItemElement = ce((index) => itemRefs.current.get(itemKeys[index]) ?? null, [itemKeys]);
+  let getItemHeight = ce((index) => heightCache.current.get(itemKeys[index]), [itemKeys]);
+  let scrollToIndex = ce(
+    (i) => {
+      let le = offsetsRef.current;
+      if (i < 0 || i >= le.n) return;
+      scrollRef.handle?.scrollTo(le.arr[i] + listOriginRef.current);
+    },
+    [scrollRef],
+  );
+  let effBottomSpacer = totalHeight - offsets[$e];
   return {
-    range: [Je, $e],
+    range: [effStart, $e],
     topSpacer: Qe,
-    bottomSpacer: to,
-    measureRef: measureRef,
-    spacerRef: spacerRef,
-    offsets: offsets,
-    getItemTop: getItemTop,
-    getItemElement: getItemElement,
-    getItemHeight: getItemHeight,
-    onLayout: St,
-    scrollToIndex: scrollToIndex,
+    bottomSpacer: effBottomSpacer,
+    measureRef,
+    spacerRef,
+    offsets,
+    getItemTop,
+    getItemElement,
+    getItemHeight,
+    onLayout,
+    scrollToIndex,
   };
 }
 //@ chunk-ag5x7vhf.js:158046-158178 affinity = dropSubtreeCache (0.775)
 function hasDrawPending(node) {
-  if (node.attributes.drawPending === !0) return !0;
-  for (let child of node.childNodes) if (child.nodeName !== "#text" && hasDrawPending(child)) return !0;
-  return !1;
+  if (node.attributes.drawPending === true) return true;
+  for (let child of node.childNodes) if (child.nodeName !== "#text" && hasDrawPending(child)) return true;
+  return false;
 }
 //@ chunk-ag5x7vhf.js:158178-158357 affinity
 function raiseScrollHeight(m) {
   let domElement = m.getDomElement();
   if (!domElement) return;
   let freshScrollHeight = m.getFreshScrollHeight();
-  ((domElement.scrollHeightHwm = Math.max(domElement.scrollHeightHwm ?? 0, freshScrollHeight)),
-    (domElement.scrollHeight = Math.max(domElement.scrollHeight ?? 0, freshScrollHeight)));
+  domElement.scrollHeightHwm = Math.max(domElement.scrollHeightHwm ?? 0, freshScrollHeight);
+  domElement.scrollHeight = Math.max(domElement.scrollHeight ?? 0, freshScrollHeight);
 }
-
 export { useVirtualScroll, raiseScrollHeight };

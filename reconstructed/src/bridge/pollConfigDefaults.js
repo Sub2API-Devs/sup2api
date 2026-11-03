@@ -18,10 +18,9 @@ var DEFAULT_POLL_CONFIG = {
   reclaim_older_than_ms: 5000,
   session_keepalive_interval_v2_ms: 120000,
   sse_connect_timeout_ms: 30000,
-  watch_sessions: !1,
+  watch_sessions: false,
   watch_connected_poll_interval_ms: 60000,
   watch_fallback_poll_interval_ms: 30000,
   watch_session_end_window_ms: 600000,
 };
-
 export { DEFAULT_POLL_CONFIG };

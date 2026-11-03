@@ -6,126 +6,124 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../../runtime/bun-runtime.js";
-import { Xns } from "../../../../util-stream/dist-cjs/index.js";
-import { _D } from "../schema/index.js";
-import { z6t } from "../serde/index.js";
-import { Kg } from "../../../../protocol-http/dist-cjs/index.js";
+import { require_util_stream } from "../../../../util-stream/dist-cjs/index.js";
+import { require_schema } from "../schema/index.js";
+import { require_serde } from "../serde/index.js";
+import { require_protocol_http } from "../../../../protocol-http/dist-cjs/index.js";
 import { base64Module } from "../../../../../@aws-sdk/credential-provider-web-identity/dist-cjs/index.js";
-import { IR } from "../../../../util-utf8/dist-cjs/index.js";
+import { require_util_utf8 } from "../../../../util-utf8/dist-cjs/index.js";
 
 //@ chunk-wjd9n4jx.js:35068-49122 cjs-fingerprint
-var jRt = x(function (Ci) {
-  var he = Xns(),
-    E = _D(),
-    T = z6t(),
-    Q = Kg(),
-    fe = base64Module(),
-    Re = IR(),
-    P = async (e = new Uint8Array(), t) => {
-      if (e instanceof Uint8Array) return he.Uint8ArrayBlobAdapter.mutate(e);
-      if (!e) return he.Uint8ArrayBlobAdapter.mutate(new Uint8Array());
-      let streamCollector = t.streamCollector(e);
-      return he.Uint8ArrayBlobAdapter.mutate(await streamCollector);
-    };
-  function G(e) {
-    return encodeURIComponent(e).replace(/[!'()*]/g, function (t) {
-      return "%" + t.charCodeAt(0).toString(16).toUpperCase();
+var require_protocols = x(function (cjsExports) {
+  var Uint8ArrayBlobAdapter = require_util_stream();
+  var NormalizedSchema = require_schema();
+  var T = require_serde();
+  var HttpRequest = require_protocol_http();
+  var fe = base64Module();
+  var toUtf8 = require_util_utf8();
+  var collectBody = async (streamBody = new Uint8Array(), context) => {
+    if (streamBody instanceof Uint8Array)
+      return Uint8ArrayBlobAdapter.Uint8ArrayBlobAdapter.mutate(streamBody);
+    if (!streamBody) return Uint8ArrayBlobAdapter.Uint8ArrayBlobAdapter.mutate(new Uint8Array());
+    let fromContext = context.streamCollector(streamBody);
+    return Uint8ArrayBlobAdapter.Uint8ArrayBlobAdapter.mutate(await fromContext);
+  };
+  function extendedEncodeURIComponent(str) {
+    return encodeURIComponent(str).replace(/[!'()*]/g, function (c) {
+      return "%" + c.charCodeAt(0).toString(16).toUpperCase();
     });
   }
-  class j {
+  class SerdeContext {
     serdeContext;
-    setSerdeContext(e) {
-      this.serdeContext = e;
+    setSerdeContext(serdeContext) {
+      this.serdeContext = serdeContext;
     }
   }
-  class de extends j {
+  class HttpProtocol extends SerdeContext {
     options;
-    constructor(e) {
+    constructor(options) {
       super();
-      this.options = e;
+      this.options = options;
     }
     getRequestType() {
-      return Q.HttpRequest;
+      return HttpRequest.HttpRequest;
     }
     getResponseType() {
-      return Q.HttpResponse;
+      return HttpRequest.HttpResponse;
     }
-    setSerdeContext(e) {
-      if (
-        ((this.serdeContext = e),
-        this.serializer.setSerdeContext(e),
-        this.deserializer.setSerdeContext(e),
-        this.getPayloadCodec())
-      )
-        this.getPayloadCodec().setSerdeContext(e);
+    setSerdeContext(serdeContext) {
+      this.serdeContext = serdeContext;
+      this.serializer.setSerdeContext(serdeContext);
+      this.deserializer.setSerdeContext(serdeContext);
+      if (this.getPayloadCodec()) this.getPayloadCodec().setSerdeContext(serdeContext);
     }
-    updateServiceEndpoint(e, t) {
-      if ("url" in t) {
-        if (
-          ((e.protocol = t.url.protocol),
-          (e.hostname = t.url.hostname),
-          (e.port = t.url.port ? Number(t.url.port) : void 0),
-          (e.path = t.url.pathname),
-          (e.fragment = t.url.hash || void 0),
-          (e.username = t.url.username || void 0),
-          (e.password = t.url.password || void 0),
-          !e.query)
-        )
-          e.query = {};
-        for (let [r, s] of t.url.searchParams.entries()) e.query[r] = s;
-        return e;
-      } else
-        return (
-          (e.protocol = t.protocol),
-          (e.hostname = t.hostname),
-          (e.port = t.port ? Number(t.port) : void 0),
-          (e.path = t.path),
-          (e.query = { ...t.query }),
-          e
-        );
+    updateServiceEndpoint(request, endpoint) {
+      if ("url" in endpoint) {
+        request.protocol = endpoint.url.protocol;
+        request.hostname = endpoint.url.hostname;
+        request.port = endpoint.url.port ? Number(endpoint.url.port) : undefined;
+        request.path = endpoint.url.pathname;
+        request.fragment = endpoint.url.hash || undefined;
+        request.username = endpoint.url.username || undefined;
+        request.password = endpoint.url.password || undefined;
+        if (!request.query) request.query = {};
+        for (let [k, v] of endpoint.url.searchParams.entries()) request.query[k] = v;
+        return request;
+      } else {
+        request.protocol = endpoint.protocol;
+        request.hostname = endpoint.hostname;
+        request.port = endpoint.port ? Number(endpoint.port) : undefined;
+        request.path = endpoint.path;
+        request.query = {
+          ...endpoint.query,
+        };
+        return request;
+      }
     }
-    setHostPrefix(e, t, r) {
-      let of = E.NormalizedSchema.of(t.input),
-        translateTraits = E.translateTraits(t.traits ?? {});
-      if (translateTraits.endpoint) {
-        let i = translateTraits.endpoint?.[0];
-        if (typeof i === "string") {
-          let filtered = [...of.structIterator()].filter(([, o]) => o.getMergedTraits().hostLabel);
+    setHostPrefix(request, operationSchema, r) {
+      let inputNs = NormalizedSchema.NormalizedSchema.of(operationSchema.input);
+      let opTraits = NormalizedSchema.translateTraits(operationSchema.traits ?? {});
+      if (opTraits.endpoint) {
+        let hostPrefix = opTraits.endpoint?.[0];
+        if (typeof hostPrefix === "string") {
+          let filtered = [...inputNs.structIterator()].filter(([, o]) => o.getMergedTraits().hostLabel);
           for (let [o] of filtered) {
-            let c = r[o];
-            if (typeof c !== "string")
+            let replacement = r[o];
+            if (typeof replacement !== "string")
               throw Error(`@smithy/core/schema - ${o} in input must be a string as hostLabel.`);
-            i = i.replace(`{${o}}`, c);
+            hostPrefix = hostPrefix.replace(`{${o}}`, replacement);
           }
-          e.hostname = i + e.hostname;
+          request.hostname = hostPrefix + request.hostname;
         }
       }
     }
-    deserializeMetadata(e) {
+    deserializeMetadata(output) {
       return {
-        httpStatusCode: e.statusCode,
+        httpStatusCode: output.statusCode,
         requestId:
-          e.headers["x-amzn-requestid"] ?? e.headers["x-amzn-request-id"] ?? e.headers["x-amz-request-id"],
-        extendedRequestId: e.headers["x-amz-id-2"],
-        cfId: e.headers["x-amz-cf-id"],
+          output.headers["x-amzn-requestid"] ??
+          output.headers["x-amzn-request-id"] ??
+          output.headers["x-amz-request-id"],
+        extendedRequestId: output.headers["x-amz-id-2"],
+        cfId: output.headers["x-amz-cf-id"],
       };
     }
-    async serializeEventStream({ eventStream: e, requestSchema: t, initialRequest: r }) {
+    async serializeEventStream({ eventStream, requestSchema, initialRequest }) {
       return (await this.loadEventStreamCapability()).serializeEventStream({
-        eventStream: e,
-        requestSchema: t,
-        initialRequest: r,
+        eventStream,
+        requestSchema,
+        initialRequest,
       });
     }
-    async deserializeEventStream({ response: e, responseSchema: t, initialResponseContainer: r }) {
+    async deserializeEventStream({ response, responseSchema, initialResponseContainer }) {
       return (await this.loadEventStreamCapability()).deserializeEventStream({
-        response: e,
-        responseSchema: t,
-        initialResponseContainer: r,
+        response,
+        responseSchema,
+        initialResponseContainer,
       });
     }
     async loadEventStreamCapability() {
-      let { EventStreamSerde: EventStreamSerde } = await import("./chunk-w1q1hkg4.js");
+      let { EventStreamSerde } = await import("./chunk-w1q1hkg4.js");
       return new EventStreamSerde({
         marshaller: this.getEventStreamMarshaller(),
         serializer: this.serializer,
@@ -139,274 +137,341 @@ var jRt = x(function (Ci) {
         `@smithy/core/protocols - ${this.constructor.name} getDefaultContentType() implementation missing.`,
       );
     }
-    async deserializeHttpMessage(e, t, r, s, n) {
+    async deserializeHttpMessage(schema, context, response, arg4, arg5) {
       return [];
     }
     getEventStreamMarshaller() {
-      let serdeContext = this.serdeContext;
-      if (!serdeContext.eventStreamMarshaller)
+      let context = this.serdeContext;
+      if (!context.eventStreamMarshaller)
         throw Error("@smithy/core - HttpProtocol: eventStreamMarshaller missing in serdeContext.");
-      return serdeContext.eventStreamMarshaller;
+      return context.eventStreamMarshaller;
     }
   }
-  class Or extends de {
-    async serializeRequest(e, t, r) {
-      let s = { ...(t ?? {}) },
-        serializer = this.serializer,
-        i = {},
-        a = {},
-        endpoint = await r.endpoint(),
-        of = E.NormalizedSchema.of(e?.input),
-        schema = of.getSchema(),
-        h = !1,
-        f,
-        d = new Q.HttpRequest({
-          protocol: "",
-          hostname: "",
-          port: void 0,
-          path: "",
-          fragment: void 0,
-          query: i,
-          headers: a,
-          body: void 0,
-        });
+  class HttpBindingProtocol extends HttpProtocol {
+    async serializeRequest(operationSchema, _input, context) {
+      let s = {
+        ...(_input ?? {}),
+      };
+      let serializer = this.serializer;
+      let query = {};
+      let headers = {};
+      let endpoint = await context.endpoint();
+      let ns = NormalizedSchema.NormalizedSchema.of(operationSchema?.input);
+      let schema = ns.getSchema();
+      let hasNonHttpBindingMember = false;
+      let payload;
+      let request = new HttpRequest.HttpRequest({
+        protocol: "",
+        hostname: "",
+        port: undefined,
+        path: "",
+        fragment: undefined,
+        query,
+        headers,
+        body: undefined,
+      });
       if (endpoint) {
-        (this.updateServiceEndpoint(d, endpoint), this.setHostPrefix(d, e, s));
-        let translateTraits = E.translateTraits(e.traits);
-        if (translateTraits.http) {
-          d.method = translateTraits.http[0];
-          let [m, p] = translateTraits.http[1].split("?");
-          if (d.path == "/") d.path = m;
-          else d.path += m;
-          let uRLSearchParams = new URLSearchParams(p ?? "");
-          Object.assign(i, Object.fromEntries(uRLSearchParams));
+        this.updateServiceEndpoint(request, endpoint);
+        this.setHostPrefix(request, operationSchema, s);
+        let opTraits = NormalizedSchema.translateTraits(operationSchema.traits);
+        if (opTraits.http) {
+          request.method = opTraits.http[0];
+          let [path, search] = opTraits.http[1].split("?");
+          if (request.path == "/") request.path = path;
+          else request.path += path;
+          let uRLSearchParams = new URLSearchParams(search ?? "");
+          Object.assign(query, Object.fromEntries(uRLSearchParams));
         }
       }
-      for (let [l, m] of of.structIterator()) {
-        let p = m.getMergedTraits() ?? {},
-          S = s[l];
-        if (S == null && !m.isIdempotencyToken()) continue;
-        if (p.httpPayload) {
-          if (m.isStreaming())
-            if (m.isStructSchema()) {
-              if (s[l]) f = await this.serializeEventStream({ eventStream: s[l], requestSchema: of });
-            } else f = S;
-          else (serializer.write(m, S), (f = serializer.flush()));
-          delete s[l];
-        } else if (p.httpLabel) {
-          serializer.write(m, S);
-          let flush = serializer.flush();
-          if (d.path.includes(`{${l}+}`))
-            d.path = d.path.replace(`{${l}+}`, flush.split("/").map(G).join("/"));
-          else if (d.path.includes(`{${l}}`)) d.path = d.path.replace(`{${l}}`, G(flush));
-          delete s[l];
-        } else if (p.httpHeader)
-          (serializer.write(m, S), (a[p.httpHeader.toLowerCase()] = String(serializer.flush())), delete s[l]);
-        else if (typeof p.httpPrefixHeaders === "string") {
-          for (let [R, Y] of Object.entries(S)) {
-            let Ae = p.httpPrefixHeaders + R;
-            (serializer.write([m.getValueSchema(), { httpHeader: Ae }], Y),
-              (a[Ae.toLowerCase()] = serializer.flush()));
+      for (let [memberName, memberNs] of ns.structIterator()) {
+        let memberTraits = memberNs.getMergedTraits() ?? {};
+        let inputMemberValue = s[memberName];
+        if (inputMemberValue == null && !memberNs.isIdempotencyToken()) continue;
+        if (memberTraits.httpPayload) {
+          if (memberNs.isStreaming()) {
+            if (memberNs.isStructSchema()) {
+              if (s[memberName])
+                payload = await this.serializeEventStream({
+                  eventStream: s[memberName],
+                  requestSchema: ns,
+                });
+            } else payload = inputMemberValue;
+          } else {
+            serializer.write(memberNs, inputMemberValue);
+            payload = serializer.flush();
           }
-          delete s[l];
-        } else if (p.httpQuery || p.httpQueryParams) (this.serializeQuery(m, S, i), delete s[l]);
-        else h = !0;
+          delete s[memberName];
+        } else if (memberTraits.httpLabel) {
+          serializer.write(memberNs, inputMemberValue);
+          let replacement = serializer.flush();
+          if (request.path.includes(`{${memberName}+}`))
+            request.path = request.path.replace(
+              `{${memberName}+}`,
+              replacement.split("/").map(extendedEncodeURIComponent).join("/"),
+            );
+          else if (request.path.includes(`{${memberName}}`))
+            request.path = request.path.replace(`{${memberName}}`, extendedEncodeURIComponent(replacement));
+          delete s[memberName];
+        } else if (memberTraits.httpHeader) {
+          serializer.write(memberNs, inputMemberValue);
+          headers[memberTraits.httpHeader.toLowerCase()] = String(serializer.flush());
+          delete s[memberName];
+        } else if (typeof memberTraits.httpPrefixHeaders === "string") {
+          for (let [key, value] of Object.entries(inputMemberValue)) {
+            let amalgam = memberTraits.httpPrefixHeaders + key;
+            serializer.write(
+              [
+                memberNs.getValueSchema(),
+                {
+                  httpHeader: amalgam,
+                },
+              ],
+              value,
+            );
+            headers[amalgam.toLowerCase()] = serializer.flush();
+          }
+          delete s[memberName];
+        } else if (memberTraits.httpQuery || memberTraits.httpQueryParams) {
+          this.serializeQuery(memberNs, inputMemberValue, query);
+          delete s[memberName];
+        } else hasNonHttpBindingMember = true;
       }
-      if (h && s) (serializer.write(schema, s), (f = serializer.flush()));
-      return ((d.headers = a), (d.query = i), (d.body = f), d);
+      if (hasNonHttpBindingMember && s) {
+        serializer.write(schema, s);
+        payload = serializer.flush();
+      }
+      request.headers = headers;
+      request.query = query;
+      request.body = payload;
+      return request;
     }
-    serializeQuery(e, t, r) {
-      let serializer = this.serializer,
-        mergedTraits = e.getMergedTraits();
-      if (mergedTraits.httpQueryParams) {
-        for (let [i, a] of Object.entries(t))
-          if (!(i in r)) {
-            let valueSchema = e.getValueSchema();
-            (Object.assign(valueSchema.getMergedTraits(), {
-              ...mergedTraits,
-              httpQuery: i,
-              httpQueryParams: void 0,
-            }),
-              this.serializeQuery(valueSchema, a, r));
+    serializeQuery(ns, data, query) {
+      let serializer = this.serializer;
+      let traits = ns.getMergedTraits();
+      if (traits.httpQueryParams) {
+        for (let [key, value] of Object.entries(data))
+          if (!(key in query)) {
+            let valueSchema = ns.getValueSchema();
+            Object.assign(valueSchema.getMergedTraits(), {
+              ...traits,
+              httpQuery: key,
+              httpQueryParams: undefined,
+            });
+            this.serializeQuery(valueSchema, value, query);
           }
         return;
       }
-      if (e.isListSchema()) {
-        let i = !!e.getMergedTraits().sparse,
-          a = [];
-        for (let o of t) {
-          serializer.write([e.getValueSchema(), mergedTraits], o);
-          let flush = serializer.flush();
-          if (i || flush !== void 0) a.push(flush);
+      if (ns.isListSchema()) {
+        let sparse = !!ns.getMergedTraits().sparse;
+        let buffer = [];
+        for (let item of data) {
+          serializer.write([ns.getValueSchema(), traits], item);
+          let serializable = serializer.flush();
+          if (sparse || serializable !== undefined) buffer.push(serializable);
         }
-        r[mergedTraits.httpQuery] = a;
-      } else (serializer.write([e, mergedTraits], t), (r[mergedTraits.httpQuery] = serializer.flush()));
+        query[traits.httpQuery] = buffer;
+      } else {
+        serializer.write([ns, traits], data);
+        query[traits.httpQuery] = serializer.flush();
+      }
     }
-    async deserializeResponse(e, t, r) {
-      let deserializer = this.deserializer,
-        of = E.NormalizedSchema.of(e.output),
-        i = {};
-      if (r.statusCode >= 300) {
-        let o = await P(r.body, t);
-        if (o.byteLength > 0) Object.assign(i, await deserializer.read(15, o));
-        throw (
-          await this.handleError(e, t, r, i, this.deserializeMetadata(r)),
-          Error("@smithy/core/protocols - HTTP Protocol error handler failed to throw.")
+    async deserializeResponse(operationSchema, context, response) {
+      let deserializer = this.deserializer;
+      let ns = NormalizedSchema.NormalizedSchema.of(operationSchema.output);
+      let dataObject = {};
+      if (response.statusCode >= 300) {
+        let bytes = await collectBody(response.body, context);
+        if (bytes.byteLength > 0) Object.assign(dataObject, await deserializer.read(15, bytes));
+        await this.handleError(
+          operationSchema,
+          context,
+          response,
+          dataObject,
+          this.deserializeMetadata(response),
         );
+        throw Error("@smithy/core/protocols - HTTP Protocol error handler failed to throw.");
       }
-      for (let key in r.headers) {
-        let c = r.headers[key];
-        (delete r.headers[key], (r.headers[key.toLowerCase()] = c));
+      for (let header in response.headers) {
+        let value = response.headers[header];
+        delete response.headers[header];
+        response.headers[header.toLowerCase()] = value;
       }
-      let deserializeHttpMessage = await this.deserializeHttpMessage(of, t, r, i);
-      if (deserializeHttpMessage.length) {
-        let o = await P(r.body, t);
-        if (o.byteLength > 0) {
-          let read = await deserializer.read(of, o);
-          for (let u of deserializeHttpMessage) i[u] = read[u];
+      let nonHttpBindingMembers = await this.deserializeHttpMessage(ns, context, response, dataObject);
+      if (nonHttpBindingMembers.length) {
+        let bytes = await collectBody(response.body, context);
+        if (bytes.byteLength > 0) {
+          let c = await deserializer.read(ns, bytes);
+          for (let member of nonHttpBindingMembers) dataObject[member] = c[member];
         }
-      } else if (deserializeHttpMessage.discardResponseBody) await P(r.body, t);
-      return ((i.$metadata = this.deserializeMetadata(r)), i);
+      } else if (nonHttpBindingMembers.discardResponseBody) await collectBody(response.body, context);
+      dataObject.$metadata = this.deserializeMetadata(response);
+      return dataObject;
     }
-    async deserializeHttpMessage(e, t, r, s, n) {
-      let i;
-      if (s instanceof Set) i = n;
-      else i = s;
-      let a = !0,
-        deserializer = this.deserializer,
-        of = E.NormalizedSchema.of(e),
-        u = [];
-      for (let [h, f] of of.structIterator()) {
-        let memberTraits = f.getMemberTraits();
+    async deserializeHttpMessage(schema, context, response, arg4, arg5) {
+      let dataObject;
+      if (arg4 instanceof Set) dataObject = arg5;
+      else dataObject = arg4;
+      let discardResponseBody = true;
+      let deserializer = this.deserializer;
+      let ns = NormalizedSchema.NormalizedSchema.of(schema);
+      let nonHttpBindingMembers = [];
+      for (let [memberName, memberSchema] of ns.structIterator()) {
+        let memberTraits = memberSchema.getMemberTraits();
         if (memberTraits.httpPayload) {
-          if (((a = !1), f.isStreaming()))
-            if (f.isStructSchema())
-              i[h] = await this.deserializeEventStream({ response: r, responseSchema: of });
-            else i[h] = he.sdkStreamMixin(r.body);
-          else if (r.body) {
-            let m = await P(r.body, t);
-            if (m.byteLength > 0) i[h] = await deserializer.read(f, m);
+          discardResponseBody = false;
+          if (memberSchema.isStreaming()) {
+            if (memberSchema.isStructSchema())
+              dataObject[memberName] = await this.deserializeEventStream({
+                response,
+                responseSchema: ns,
+              });
+            else dataObject[memberName] = Uint8ArrayBlobAdapter.sdkStreamMixin(response.body);
+          } else if (response.body) {
+            let bytes = await collectBody(response.body, context);
+            if (bytes.byteLength > 0) dataObject[memberName] = await deserializer.read(memberSchema, bytes);
           }
         } else if (memberTraits.httpHeader) {
-          let lower = String(memberTraits.httpHeader).toLowerCase(),
-            m = r.headers[lower];
-          if (m != null)
-            if (f.isListSchema()) {
-              let valueSchema = f.getValueSchema();
-              valueSchema.getMergedTraits().httpHeader = lower;
-              let S;
-              if (valueSchema.isTimestampSchema() && valueSchema.getSchema() === 4)
-                S = T.splitEvery(m, ",", 2);
-              else S = T.splitHeader(m);
-              let R = [];
-              for (let Y of S) R.push(await deserializer.read(valueSchema, Y.trim()));
-              i[h] = R;
-            } else i[h] = await deserializer.read(f, m);
-        } else if (memberTraits.httpPrefixHeaders !== void 0) {
-          i[h] = {};
-          for (let [l, m] of Object.entries(r.headers))
-            if (l.startsWith(memberTraits.httpPrefixHeaders)) {
-              let valueSchema = f.getValueSchema();
-              ((valueSchema.getMergedTraits().httpHeader = l),
-                (i[h][l.slice(memberTraits.httpPrefixHeaders.length)] = await deserializer.read(
-                  valueSchema,
-                  m,
-                )));
+          let key = String(memberTraits.httpHeader).toLowerCase();
+          let value = response.headers[key];
+          if (value != null)
+            if (memberSchema.isListSchema()) {
+              let headerListValueSchema = memberSchema.getValueSchema();
+              headerListValueSchema.getMergedTraits().httpHeader = key;
+              let sections;
+              if (headerListValueSchema.isTimestampSchema() && headerListValueSchema.getSchema() === 4)
+                sections = T.splitEvery(value, ",", 2);
+              else sections = T.splitHeader(value);
+              let list = [];
+              for (let section of sections)
+                list.push(await deserializer.read(headerListValueSchema, section.trim()));
+              dataObject[memberName] = list;
+            } else dataObject[memberName] = await deserializer.read(memberSchema, value);
+        } else if (memberTraits.httpPrefixHeaders !== undefined) {
+          dataObject[memberName] = {};
+          for (let [header, value] of Object.entries(response.headers))
+            if (header.startsWith(memberTraits.httpPrefixHeaders)) {
+              let valueSchema = memberSchema.getValueSchema();
+              valueSchema.getMergedTraits().httpHeader = header;
+              dataObject[memberName][header.slice(memberTraits.httpPrefixHeaders.length)] =
+                await deserializer.read(valueSchema, value);
             }
-        } else if (memberTraits.httpResponseCode) i[h] = r.statusCode;
-        else u.push(h);
+        } else if (memberTraits.httpResponseCode) dataObject[memberName] = response.statusCode;
+        else nonHttpBindingMembers.push(memberName);
       }
-      return ((u.discardResponseBody = a), u);
+      nonHttpBindingMembers.discardResponseBody = discardResponseBody;
+      return nonHttpBindingMembers;
     }
   }
-  class $r extends de {
-    async serializeRequest(e, t, r) {
-      let serializer = this.serializer,
-        n = {},
-        i = {},
-        endpoint = await r.endpoint(),
-        of = E.NormalizedSchema.of(e?.input),
-        schema = of.getSchema(),
-        u,
-        h = new Q.HttpRequest({
-          protocol: "",
-          hostname: "",
-          port: void 0,
-          path: "/",
-          fragment: void 0,
-          query: n,
-          headers: i,
-          body: void 0,
-        });
-      if (endpoint) (this.updateServiceEndpoint(h, endpoint), this.setHostPrefix(h, e, t));
-      let f = { ...t };
+  class RpcProtocol extends HttpProtocol {
+    async serializeRequest(operationSchema, t, context) {
+      let serializer = this.serializer;
+      let query = {};
+      let headers = {};
+      let endpoint = await context.endpoint();
+      let ns = NormalizedSchema.NormalizedSchema.of(operationSchema?.input);
+      let schema = ns.getSchema();
+      let payload;
+      let request = new HttpRequest.HttpRequest({
+        protocol: "",
+        hostname: "",
+        port: undefined,
+        path: "/",
+        fragment: undefined,
+        query,
+        headers,
+        body: undefined,
+      });
+      if (endpoint) {
+        this.updateServiceEndpoint(request, endpoint);
+        this.setHostPrefix(request, operationSchema, t);
+      }
+      let input = {
+        ...t,
+      };
       if (t) {
-        let eventStreamMember = of.getEventStreamMember();
+        let eventStreamMember = ns.getEventStreamMember();
         if (eventStreamMember) {
-          if (f[eventStreamMember]) {
-            let l = {};
-            for (let [m, p] of of.structIterator())
-              if (m !== eventStreamMember && f[m]) (serializer.write(p, f[m]), (l[m] = serializer.flush()));
-            u = await this.serializeEventStream({
-              eventStream: f[eventStreamMember],
-              requestSchema: of,
-              initialRequest: l,
+          if (input[eventStreamMember]) {
+            let initialRequest = {};
+            for (let [memberName, memberSchema] of ns.structIterator())
+              if (memberName !== eventStreamMember && input[memberName]) {
+                serializer.write(memberSchema, input[memberName]);
+                initialRequest[memberName] = serializer.flush();
+              }
+            payload = await this.serializeEventStream({
+              eventStream: input[eventStreamMember],
+              requestSchema: ns,
+              initialRequest,
             });
           }
-        } else (serializer.write(schema, f), (u = serializer.flush()));
+        } else {
+          serializer.write(schema, input);
+          payload = serializer.flush();
+        }
       }
-      return ((h.headers = i), (h.query = n), (h.body = u), (h.method = "POST"), h);
+      request.headers = headers;
+      request.query = query;
+      request.body = payload;
+      request.method = "POST";
+      return request;
     }
-    async deserializeResponse(e, t, r) {
-      let deserializer = this.deserializer,
-        of = E.NormalizedSchema.of(e.output),
-        i = {};
-      if (r.statusCode >= 300) {
-        let o = await P(r.body, t);
-        if (o.byteLength > 0) Object.assign(i, await deserializer.read(15, o));
-        throw (
-          await this.handleError(e, t, r, i, this.deserializeMetadata(r)),
-          Error("@smithy/core/protocols - RPC Protocol error handler failed to throw.")
+    async deserializeResponse(operationSchema, context, response) {
+      let deserializer = this.deserializer;
+      let ns = NormalizedSchema.NormalizedSchema.of(operationSchema.output);
+      let dataObject = {};
+      if (response.statusCode >= 300) {
+        let bytes = await collectBody(response.body, context);
+        if (bytes.byteLength > 0) Object.assign(dataObject, await deserializer.read(15, bytes));
+        await this.handleError(
+          operationSchema,
+          context,
+          response,
+          dataObject,
+          this.deserializeMetadata(response),
         );
+        throw Error("@smithy/core/protocols - RPC Protocol error handler failed to throw.");
       }
-      for (let key in r.headers) {
-        let c = r.headers[key];
-        (delete r.headers[key], (r.headers[key.toLowerCase()] = c));
+      for (let header in response.headers) {
+        let value = response.headers[header];
+        delete response.headers[header];
+        response.headers[header.toLowerCase()] = value;
       }
-      let eventStreamMember = of.getEventStreamMember();
+      let eventStreamMember = ns.getEventStreamMember();
       if (eventStreamMember)
-        i[eventStreamMember] = await this.deserializeEventStream({
-          response: r,
-          responseSchema: of,
-          initialResponseContainer: i,
+        dataObject[eventStreamMember] = await this.deserializeEventStream({
+          response,
+          responseSchema: ns,
+          initialResponseContainer: dataObject,
         });
       else {
-        let o = await P(r.body, t);
-        if (o.byteLength > 0) Object.assign(i, await deserializer.read(of, o));
+        let bytes = await collectBody(response.body, context);
+        if (bytes.byteLength > 0) Object.assign(dataObject, await deserializer.read(ns, bytes));
       }
-      return ((i.$metadata = this.deserializeMetadata(r)), i);
+      dataObject.$metadata = this.deserializeMetadata(response);
+      return dataObject;
     }
   }
-  var Rr = (e, t, r, s, n, i) => {
-    if (t != null && t[r] !== void 0) {
-      let a = s();
-      if (a.length <= 0) throw Error("Empty value provided for input HTTP label: " + r + ".");
-      e = e.replace(
-        n,
-        i
-          ? a
+  var resolvedPath = (resolvedPath, input, memberName, labelValueProvider, uriLabel, isGreedyLabel) => {
+    if (input != null && input[memberName] !== undefined) {
+      let labelValue = labelValueProvider();
+      if (labelValue.length <= 0)
+        throw Error("Empty value provided for input HTTP label: " + memberName + ".");
+      resolvedPath = resolvedPath.replace(
+        uriLabel,
+        isGreedyLabel
+          ? labelValue
               .split("/")
-              .map((o) => G(o))
+              .map((segment) => extendedEncodeURIComponent(segment))
               .join("/")
-          : G(a),
+          : extendedEncodeURIComponent(labelValue),
       );
-    } else throw Error("No value provided for input HTTP label: " + r + ".");
-    return e;
+    } else throw Error("No value provided for input HTTP label: " + memberName + ".");
+    return resolvedPath;
   };
-  function Mi(e, t) {
-    return new Ie(e, t);
+  function Mi(input, context) {
+    return new RequestBuilder(input, context);
   }
-  class Ie {
+  class RequestBuilder {
     input;
     context;
     query = {};
@@ -416,22 +481,18 @@ var jRt = x(function (Ci) {
     body = null;
     hostname = "";
     resolvePathStack = [];
-    constructor(e, t) {
-      ((this.input = e), (this.context = t));
+    constructor(input, context) {
+      this.input = input;
+      this.context = context;
     }
     async build() {
-      let {
-        hostname: hostname,
-        protocol: protocol = "https",
-        port: port,
-        path: path,
-      } = await this.context.endpoint();
-      this.path = path;
-      for (let n of this.resolvePathStack) n(this.path);
-      return new Q.HttpRequest({
-        protocol: protocol,
+      let { hostname, protocol = "https", port, path: basePath } = await this.context.endpoint();
+      this.path = basePath;
+      for (let resolvePath of this.resolvePathStack) resolvePath(this.path);
+      return new HttpRequest.HttpRequest({
+        protocol,
         hostname: this.hostname || hostname,
-        port: port,
+        port,
         method: this.method,
         path: this.path,
         query: this.query,
@@ -439,252 +500,261 @@ var jRt = x(function (Ci) {
         headers: this.headers,
       });
     }
-    hn(e) {
-      return ((this.hostname = e), this);
+    hn(hostname) {
+      this.hostname = hostname;
+      return this;
     }
-    bp(e) {
-      return (
-        this.resolvePathStack.push((t) => {
-          this.path = `${t?.endsWith("/") ? t.slice(0, -1) : t || ""}` + e;
-        }),
-        this
-      );
+    bp(uriLabel) {
+      this.resolvePathStack.push((basePath) => {
+        this.path = `${basePath?.endsWith("/") ? basePath.slice(0, -1) : basePath || ""}` + uriLabel;
+      });
+      return this;
     }
-    p(e, t, r, s) {
-      return (
-        this.resolvePathStack.push((n) => {
-          this.path = Rr(n, this.input, e, t, r, s);
-        }),
-        this
-      );
+    p(memberName, labelValueProvider, uriLabel, isGreedyLabel) {
+      this.resolvePathStack.push((path) => {
+        this.path = resolvedPath(path, this.input, memberName, labelValueProvider, uriLabel, isGreedyLabel);
+      });
+      return this;
     }
-    h(e) {
-      return ((this.headers = e), this);
+    h(headers) {
+      this.headers = headers;
+      return this;
     }
-    q(e) {
-      return ((this.query = e), this);
+    q(query) {
+      this.query = query;
+      return this;
     }
-    b(e) {
-      return ((this.body = e), this);
+    b(body) {
+      this.body = body;
+      return this;
     }
-    m(e) {
-      return ((this.method = e), this);
+    m(method) {
+      this.method = method;
+      return this;
     }
   }
-  function Pe(e, t) {
-    if (t.timestampFormat.useTrait) {
-      if (e.isTimestampSchema() && (e.getSchema() === 5 || e.getSchema() === 6 || e.getSchema() === 7))
-        return e.getSchema();
+  function determineTimestampFormat(ns, settings) {
+    if (settings.timestampFormat.useTrait) {
+      if (ns.isTimestampSchema() && (ns.getSchema() === 5 || ns.getSchema() === 6 || ns.getSchema() === 7))
+        return ns.getSchema();
     }
-    let {
-      httpLabel: httpLabel,
-      httpPrefixHeaders: httpPrefixHeaders,
-      httpHeader: httpHeader,
-      httpQuery: httpQuery,
-    } = e.getMergedTraits();
+    let { httpLabel, httpPrefixHeaders, httpHeader, httpQuery } = ns.getMergedTraits();
     return (
-      (t.httpBindings
+      (settings.httpBindings
         ? typeof httpPrefixHeaders === "string" || Boolean(httpHeader)
           ? 6
           : Boolean(httpQuery) || Boolean(httpLabel)
             ? 5
-            : void 0
-        : void 0) ?? t.timestampFormat.default
+            : undefined
+        : undefined) ?? settings.timestampFormat.default
     );
   }
-  class Ne extends j {
+  class FromStringShapeDeserializer extends SerdeContext {
     settings;
-    constructor(e) {
+    constructor(settings) {
       super();
-      this.settings = e;
+      this.settings = settings;
     }
-    read(e, t) {
-      let of = E.NormalizedSchema.of(e);
-      if (of.isListSchema()) return T.splitHeader(t).map((s) => this.read(of.getValueSchema(), s));
-      if (of.isBlobSchema()) return (this.serdeContext?.base64Decoder ?? fe.fromBase64)(t);
-      if (of.isTimestampSchema())
-        switch (Pe(of, this.settings)) {
+    read(_schema, data) {
+      let ns = NormalizedSchema.NormalizedSchema.of(_schema);
+      if (ns.isListSchema()) return T.splitHeader(data).map((item) => this.read(ns.getValueSchema(), item));
+      if (ns.isBlobSchema()) return (this.serdeContext?.base64Decoder ?? fe.fromBase64)(data);
+      if (ns.isTimestampSchema())
+        switch (determineTimestampFormat(ns, this.settings)) {
           case 5:
-            return T._parseRfc3339DateTimeWithOffset(t);
+            return T._parseRfc3339DateTimeWithOffset(data);
           case 6:
-            return T._parseRfc7231DateTime(t);
+            return T._parseRfc7231DateTime(data);
           case 7:
-            return T._parseEpochTimestamp(t);
+            return T._parseEpochTimestamp(data);
           default:
-            return (
-              console.warn("Missing timestamp format, parsing value with Date constructor:", t),
-              new Date(t)
-            );
+            console.warn("Missing timestamp format, parsing value with Date constructor:", data);
+            return new Date(data);
         }
-      if (of.isStringSchema()) {
-        let mediaType = of.getMergedTraits().mediaType,
-          n = t;
+      if (ns.isStringSchema()) {
+        let mediaType = ns.getMergedTraits().mediaType;
+        let intermediateValue = data;
         if (mediaType) {
-          if (of.getMergedTraits().httpHeader) n = this.base64ToUtf8(n);
-          if (mediaType === "application/json" || mediaType.endsWith("+json")) n = T.LazyJsonString.from(n);
-          return n;
+          if (ns.getMergedTraits().httpHeader) intermediateValue = this.base64ToUtf8(intermediateValue);
+          if (mediaType === "application/json" || mediaType.endsWith("+json"))
+            intermediateValue = T.LazyJsonString.from(intermediateValue);
+          return intermediateValue;
         }
       }
-      if (of.isNumericSchema()) return Number(t);
-      if (of.isBigIntegerSchema()) return BigInt(t);
-      if (of.isBigDecimalSchema()) return new T.NumericValue(t, "bigDecimal");
-      if (of.isBooleanSchema()) return String(t).toLowerCase() === "true";
-      return t;
+      if (ns.isNumericSchema()) return Number(data);
+      if (ns.isBigIntegerSchema()) return BigInt(data);
+      if (ns.isBigDecimalSchema()) return new T.NumericValue(data, "bigDecimal");
+      if (ns.isBooleanSchema()) return String(data).toLowerCase() === "true";
+      return data;
     }
-    base64ToUtf8(e) {
-      return (this.serdeContext?.utf8Encoder ?? Re.toUtf8)(
-        (this.serdeContext?.base64Decoder ?? fe.fromBase64)(e),
+    base64ToUtf8(base64String) {
+      return (this.serdeContext?.utf8Encoder ?? toUtf8.toUtf8)(
+        (this.serdeContext?.base64Decoder ?? fe.fromBase64)(base64String),
       );
     }
   }
-  class Br extends j {
+  class HttpInterceptingShapeDeserializer extends SerdeContext {
     codecDeserializer;
     stringDeserializer;
-    constructor(e, t) {
+    constructor(codecDeserializer, codecSettings) {
       super();
-      ((this.codecDeserializer = e), (this.stringDeserializer = new Ne(t)));
+      this.codecDeserializer = codecDeserializer;
+      this.stringDeserializer = new FromStringShapeDeserializer(codecSettings);
     }
-    setSerdeContext(e) {
-      (this.stringDeserializer.setSerdeContext(e),
-        this.codecDeserializer.setSerdeContext(e),
-        (this.serdeContext = e));
+    setSerdeContext(serdeContext) {
+      this.stringDeserializer.setSerdeContext(serdeContext);
+      this.codecDeserializer.setSerdeContext(serdeContext);
+      this.serdeContext = serdeContext;
     }
-    read(e, t) {
-      let of = E.NormalizedSchema.of(e),
-        mergedTraits = of.getMergedTraits(),
-        n = this.serdeContext?.utf8Encoder ?? Re.toUtf8;
-      if (mergedTraits.httpHeader || mergedTraits.httpResponseCode)
-        return this.stringDeserializer.read(of, n(t));
-      if (mergedTraits.httpPayload) {
-        if (of.isBlobSchema()) {
-          let i = this.serdeContext?.utf8Decoder ?? Re.fromUtf8;
-          if (typeof t === "string") return i(t);
-          return t;
-        } else if (of.isStringSchema()) {
-          if ("byteLength" in t) return n(t);
-          return t;
+    read(schema, data) {
+      let ns = NormalizedSchema.NormalizedSchema.of(schema);
+      let traits = ns.getMergedTraits();
+      let toString = this.serdeContext?.utf8Encoder ?? toUtf8.toUtf8;
+      if (traits.httpHeader || traits.httpResponseCode)
+        return this.stringDeserializer.read(ns, toString(data));
+      if (traits.httpPayload) {
+        if (ns.isBlobSchema()) {
+          let toBytes = this.serdeContext?.utf8Decoder ?? toUtf8.fromUtf8;
+          if (typeof data === "string") return toBytes(data);
+          return data;
+        } else if (ns.isStringSchema()) {
+          if ("byteLength" in data) return toString(data);
+          return data;
         }
       }
-      return this.codecDeserializer.read(of, t);
+      return this.codecDeserializer.read(ns, data);
     }
   }
-  class ze extends j {
+  class ToStringShapeSerializer extends SerdeContext {
     settings;
     stringBuffer = "";
-    constructor(e) {
+    constructor(settings) {
       super();
-      this.settings = e;
+      this.settings = settings;
     }
-    write(e, t) {
-      let of = E.NormalizedSchema.of(e);
-      switch (typeof t) {
+    write(schema, value) {
+      let ns = NormalizedSchema.NormalizedSchema.of(schema);
+      switch (typeof value) {
         case "object":
-          if (t === null) {
+          if (value === null) {
             this.stringBuffer = "null";
             return;
           }
-          if (of.isTimestampSchema()) {
-            if (!(t instanceof Date))
+          if (ns.isTimestampSchema()) {
+            if (!(value instanceof Date))
               throw Error(
-                `@smithy/core/protocols - received non-Date value ${t} when schema expected Date in ${of.getName(!0)}`,
+                `@smithy/core/protocols - received non-Date value ${value} when schema expected Date in ${ns.getName(true)}`,
               );
-            switch (Pe(of, this.settings)) {
+            switch (determineTimestampFormat(ns, this.settings)) {
               case 5:
-                this.stringBuffer = t.toISOString().replace(".000Z", "Z");
+                this.stringBuffer = value.toISOString().replace(".000Z", "Z");
                 break;
               case 6:
-                this.stringBuffer = T.dateToUtcString(t);
+                this.stringBuffer = T.dateToUtcString(value);
                 break;
               case 7:
-                this.stringBuffer = String(t.getTime() / 1000);
+                this.stringBuffer = String(value.getTime() / 1000);
                 break;
               default:
-                (console.warn("Missing timestamp format, using epoch seconds", t),
-                  (this.stringBuffer = String(t.getTime() / 1000)));
+                console.warn("Missing timestamp format, using epoch seconds", value);
+                this.stringBuffer = String(value.getTime() / 1000);
             }
             return;
           }
-          if (of.isBlobSchema() && "byteLength" in t) {
-            this.stringBuffer = (this.serdeContext?.base64Encoder ?? fe.toBase64)(t);
+          if (ns.isBlobSchema() && "byteLength" in value) {
+            this.stringBuffer = (this.serdeContext?.base64Encoder ?? fe.toBase64)(value);
             return;
           }
-          if (of.isListSchema() && Array.isArray(t)) {
-            let i = "";
-            for (let a of t) {
-              this.write([of.getValueSchema(), of.getMergedTraits()], a);
-              let flush = this.flush(),
-                c = of.getValueSchema().isTimestampSchema() ? flush : T.quoteHeader(flush);
-              if (i !== "") i += ", ";
-              i += c;
+          if (ns.isListSchema() && Array.isArray(value)) {
+            let buffer = "";
+            for (let item of value) {
+              this.write([ns.getValueSchema(), ns.getMergedTraits()], item);
+              let headerItem = this.flush();
+              let serialized = ns.getValueSchema().isTimestampSchema()
+                ? headerItem
+                : T.quoteHeader(headerItem);
+              if (buffer !== "") buffer += ", ";
+              buffer += serialized;
             }
-            this.stringBuffer = i;
+            this.stringBuffer = buffer;
             return;
           }
-          this.stringBuffer = JSON.stringify(t, null, 2);
+          this.stringBuffer = JSON.stringify(value, null, 2);
           break;
         case "string":
-          let mediaType = of.getMergedTraits().mediaType,
-            n = t;
+          let mediaType = ns.getMergedTraits().mediaType;
+          let intermediateValue = value;
           if (mediaType) {
-            if (mediaType === "application/json" || mediaType.endsWith("+json")) n = T.LazyJsonString.from(n);
-            if (of.getMergedTraits().httpHeader) {
-              this.stringBuffer = (this.serdeContext?.base64Encoder ?? fe.toBase64)(n.toString());
+            if (mediaType === "application/json" || mediaType.endsWith("+json"))
+              intermediateValue = T.LazyJsonString.from(intermediateValue);
+            if (ns.getMergedTraits().httpHeader) {
+              this.stringBuffer = (this.serdeContext?.base64Encoder ?? fe.toBase64)(
+                intermediateValue.toString(),
+              );
               return;
             }
           }
-          this.stringBuffer = t;
+          this.stringBuffer = value;
           break;
         default:
-          if (of.isIdempotencyToken()) this.stringBuffer = T.generateIdempotencyToken();
-          else this.stringBuffer = String(t);
+          if (ns.isIdempotencyToken()) this.stringBuffer = T.generateIdempotencyToken();
+          else this.stringBuffer = String(value);
       }
     }
     flush() {
-      let stringBuffer = this.stringBuffer;
-      return ((this.stringBuffer = ""), stringBuffer);
+      let buffer = this.stringBuffer;
+      this.stringBuffer = "";
+      return buffer;
     }
   }
-  class Ir {
+  class HttpInterceptingShapeSerializer {
     codecSerializer;
     stringSerializer;
     buffer;
-    constructor(e, t, r = new ze(t)) {
-      ((this.codecSerializer = e), (this.stringSerializer = r));
+    constructor(
+      codecSerializer,
+      codecSettings,
+      stringSerializer = new ToStringShapeSerializer(codecSettings),
+    ) {
+      this.codecSerializer = codecSerializer;
+      this.stringSerializer = stringSerializer;
     }
-    setSerdeContext(e) {
-      (this.codecSerializer.setSerdeContext(e), this.stringSerializer.setSerdeContext(e));
+    setSerdeContext(serdeContext) {
+      this.codecSerializer.setSerdeContext(serdeContext);
+      this.stringSerializer.setSerdeContext(serdeContext);
     }
-    write(e, t) {
-      let of = E.NormalizedSchema.of(e),
-        mergedTraits = of.getMergedTraits();
-      if (mergedTraits.httpHeader || mergedTraits.httpLabel || mergedTraits.httpQuery) {
-        (this.stringSerializer.write(of, t), (this.buffer = this.stringSerializer.flush()));
+    write(schema, value) {
+      let ns = NormalizedSchema.NormalizedSchema.of(schema);
+      let traits = ns.getMergedTraits();
+      if (traits.httpHeader || traits.httpLabel || traits.httpQuery) {
+        this.stringSerializer.write(ns, value);
+        this.buffer = this.stringSerializer.flush();
         return;
       }
-      return this.codecSerializer.write(of, t);
+      return this.codecSerializer.write(ns, value);
     }
     flush() {
-      if (this.buffer !== void 0) {
+      if (this.buffer !== undefined) {
         let buffer = this.buffer;
-        return ((this.buffer = void 0), buffer);
+        this.buffer = undefined;
+        return buffer;
       }
       return this.codecSerializer.flush();
     }
   }
-  Ci.FromStringShapeDeserializer = Ne;
-  Ci.HttpBindingProtocol = Or;
-  Ci.HttpInterceptingShapeDeserializer = Br;
-  Ci.HttpInterceptingShapeSerializer = Ir;
-  Ci.HttpProtocol = de;
-  Ci.RequestBuilder = Ie;
-  Ci.RpcProtocol = $r;
-  Ci.SerdeContext = j;
-  Ci.ToStringShapeSerializer = ze;
-  Ci.collectBody = P;
-  Ci.determineTimestampFormat = Pe;
-  Ci.extendedEncodeURIComponent = G;
-  Ci.requestBuilder = Mi;
-  Ci.resolvedPath = Rr;
+  cjsExports.FromStringShapeDeserializer = FromStringShapeDeserializer;
+  cjsExports.HttpBindingProtocol = HttpBindingProtocol;
+  cjsExports.HttpInterceptingShapeDeserializer = HttpInterceptingShapeDeserializer;
+  cjsExports.HttpInterceptingShapeSerializer = HttpInterceptingShapeSerializer;
+  cjsExports.HttpProtocol = HttpProtocol;
+  cjsExports.RequestBuilder = RequestBuilder;
+  cjsExports.RpcProtocol = RpcProtocol;
+  cjsExports.SerdeContext = SerdeContext;
+  cjsExports.ToStringShapeSerializer = ToStringShapeSerializer;
+  cjsExports.collectBody = collectBody;
+  cjsExports.determineTimestampFormat = determineTimestampFormat;
+  cjsExports.extendedEncodeURIComponent = extendedEncodeURIComponent;
+  cjsExports.requestBuilder = Mi;
+  cjsExports.resolvedPath = resolvedPath;
 });
-
-export { jRt };
+export { require_protocols };

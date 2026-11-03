@@ -18,16 +18,23 @@ import {
 import { xHe } from "../../../vendor/es-toolkit/dist/string/escape.mjs";
 
 //@ chunk-cq05wh48.js:14403-14474 placement
-function y(e) {
-  return renderPixelgramSvg(e, { cell: 4, color: "#D97757", passes: "indefinite" });
+/**
+ * 用统一颜色与尺寸渲染像素动画 SVG。
+ */
+function renderAnimatedSvg(e) {
+  return renderPixelgramSvg(e, {
+    cell: 4,
+    color: "#D97757",
+    passes: "indefinite",
+  });
 }
 //@ chunk-cq05wh48.js:14474-14501 placement
 function checkmarkSvg() {
-  return y(CHECKMARK_PIXELGRAM);
+  return renderAnimatedSvg(CHECKMARK_PIXELGRAM);
 }
 //@ chunk-cq05wh48.js:14501-14528 placement
 function brokenLinkSvg() {
-  return y(BROKEN_LINK_PIXELGRAM);
+  return renderAnimatedSvg(BROKEN_LINK_PIXELGRAM);
 }
 //@ chunk-cq05wh48.js:14528-15810 placement
 var CALLBACK_PAGE_CSS = `*,*::before,*::after{box-sizing:border-box}
@@ -44,17 +51,17 @@ h1{font-family:"anthropic-serif",ui-serif,Charter,"Iowan Old Style",Georgia,seri
 @media (max-width:520px){h1{font-size:27px}body{padding:32px 20px 14vh}}`;
 //@ chunk-cq05wh48.js:15810-16015 placement
 function callbackPageBody(e) {
-  let { ok: ok, heading: heading, message: message, detail: detail } = e,
-    a = ok ? checkmarkSvg() : brokenLinkSvg(),
-    o = detail ? `<div class="detail">${xHe(detail)}</div>` : "";
+  let { ok, heading, message, detail } = e;
+  let a = ok ? checkmarkSvg() : brokenLinkSvg();
+  let o = detail ? `<div class="detail">${xHe(detail)}</div>` : "";
   return renderCallbackPage(`${a}<h1>${xHe(heading)}</h1><p class="sub">${xHe(message)}</p>${o}`, {
-    closeTab: ok ? {} : !1,
+    closeTab: ok ? {} : false,
   });
 }
+//@ chunk-cq05wh48.js:16015-16431 placement
 /**
  * OAuth 回调落地页 HTML：内嵌字体与像素动画、结果标题与说明，可选 nonce 脚本自动关闭标签页。
  */
-//@ chunk-cq05wh48.js:16015-16431 placement
 function renderCallbackPage(e, t) {
   let r = t.closeTab
     ? `<script${t.closeTab.nonce ? ` nonce="${t.closeTab.nonce}"` : ""}>setTimeout(function(){try{window.close()}catch(e){}},1500)</script>`
@@ -62,5 +69,4 @@ function renderCallbackPage(e, t) {
   return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Claude Code</title><style>${embeddedFontFaces()}
 ${CALLBACK_PAGE_CSS}${t.css ?? ""}</style></head><body><main>${e}</main>${r}</body></html>`;
 }
-
 export { callbackPageBody, renderCallbackPage, brokenLinkSvg, checkmarkSvg };

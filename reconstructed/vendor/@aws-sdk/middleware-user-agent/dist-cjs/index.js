@@ -6,155 +6,170 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { EE } from "../../../@smithy/core/dist-cjs/index.js";
-import { Iae } from "../../util-endpoints/dist-cjs/index.js";
-import { Kg } from "../../../@smithy/protocol-http/dist-cjs/index.js";
-import { Rx } from "../../core/dist-cjs/index.js";
+import { require_core as require_core_2 } from "../../../@smithy/core/dist-cjs/index.js";
+import { require_util_endpoints } from "../../util-endpoints/dist-cjs/index.js";
+import { require_protocol_http } from "../../../@smithy/protocol-http/dist-cjs/index.js";
+import { require_core } from "../../core/dist-cjs/index.js";
 
 //@ chunk-edce4vxq.js:111841-115054 cjs-fingerprint
-var Oae = x(function (Qc) {
-  var Bc = EE(),
-    Lc = Iae(),
-    Uc = Kg(),
-    ie = Rx(),
-    Qs = void 0;
-  function Vc(e) {
-    if (e === void 0) return !0;
-    return typeof e === "string" && e.length <= 50;
+var require_middleware_user_agent = x(function (cjsExports) {
+  var core = require_core_2();
+  var utilEndpoints = require_util_endpoints();
+  var protocolHttp = require_protocol_http();
+  var core$1 = require_core();
+  var DEFAULT_UA_APP_ID = undefined;
+  function isValidUserAgentAppId(appId) {
+    if (appId === undefined) return true;
+    return typeof appId === "string" && appId.length <= 50;
   }
-  function Fc(e) {
-    let normalizeProvider = Bc.normalizeProvider(e.userAgentAppId ?? Qs),
-      { customUserAgent: customUserAgent } = e;
-    return Object.assign(e, {
+  function resolveUserAgentConfig(input) {
+    let normalizedAppIdProvider = core.normalizeProvider(input.userAgentAppId ?? DEFAULT_UA_APP_ID);
+    let { customUserAgent } = input;
+    return Object.assign(input, {
       customUserAgent: typeof customUserAgent === "string" ? [[customUserAgent]] : customUserAgent,
       userAgentAppId: async () => {
-        let s = await normalizeProvider();
-        if (!Vc(s)) {
-          let o = e.logger?.constructor?.name === "NoOpLogger" || !e.logger ? console : e.logger;
-          if (typeof s !== "string") o?.warn("userAgentAppId must be a string or undefined.");
-          else if (s.length > 50)
-            o?.warn("The provided userAgentAppId exceeds the maximum length of 50 characters.");
+        let appId = await normalizedAppIdProvider();
+        if (!isValidUserAgentAppId(appId)) {
+          let logger =
+            input.logger?.constructor?.name === "NoOpLogger" || !input.logger ? console : input.logger;
+          if (typeof appId !== "string") logger?.warn("userAgentAppId must be a string or undefined.");
+          else if (appId.length > 50)
+            logger?.warn("The provided userAgentAppId exceeds the maximum length of 50 characters.");
         }
-        return s;
+        return appId;
       },
     });
   }
-  var jc = /\d{12}\.ddb/;
-  async function qc(e, t, r) {
-    if (r.request?.headers?.["smithy-protocol"] === "rpc-v2-cbor")
-      ie.setFeature(e, "PROTOCOL_RPC_V2_CBOR", "M");
-    if (typeof t.retryStrategy === "function") {
-      let retryStrategy = await t.retryStrategy();
-      if (typeof retryStrategy.acquireInitialRetryToken === "function")
+  var ACCOUNT_ID_ENDPOINT_REGEX = /\d{12}\.ddb/;
+  async function checkFeatures(context, config, args) {
+    if (args.request?.headers?.["smithy-protocol"] === "rpc-v2-cbor")
+      core$1.setFeature(context, "PROTOCOL_RPC_V2_CBOR", "M");
+    if (typeof config.retryStrategy === "function") {
+      let retryStrategy = await config.retryStrategy();
+      if (typeof retryStrategy.acquireInitialRetryToken === "function") {
         if (retryStrategy.constructor?.name?.includes("Adaptive"))
-          ie.setFeature(e, "RETRY_MODE_ADAPTIVE", "F");
-        else ie.setFeature(e, "RETRY_MODE_STANDARD", "E");
-      else ie.setFeature(e, "RETRY_MODE_LEGACY", "D");
+          core$1.setFeature(context, "RETRY_MODE_ADAPTIVE", "F");
+        else core$1.setFeature(context, "RETRY_MODE_STANDARD", "E");
+      } else core$1.setFeature(context, "RETRY_MODE_LEGACY", "D");
     }
-    if (typeof t.accountIdEndpointMode === "function") {
-      let endpointV2 = e.endpointV2;
-      if (String(endpointV2?.url?.hostname).match(jc)) ie.setFeature(e, "ACCOUNT_ID_ENDPOINT", "O");
-      switch (await t.accountIdEndpointMode?.()) {
+    if (typeof config.accountIdEndpointMode === "function") {
+      let endpointV2 = context.endpointV2;
+      if (String(endpointV2?.url?.hostname).match(ACCOUNT_ID_ENDPOINT_REGEX))
+        core$1.setFeature(context, "ACCOUNT_ID_ENDPOINT", "O");
+      switch (await config.accountIdEndpointMode?.()) {
         case "disabled":
-          ie.setFeature(e, "ACCOUNT_ID_MODE_DISABLED", "Q");
+          core$1.setFeature(context, "ACCOUNT_ID_MODE_DISABLED", "Q");
           break;
         case "preferred":
-          ie.setFeature(e, "ACCOUNT_ID_MODE_PREFERRED", "P");
+          core$1.setFeature(context, "ACCOUNT_ID_MODE_PREFERRED", "P");
           break;
         case "required":
-          ie.setFeature(e, "ACCOUNT_ID_MODE_REQUIRED", "R");
+          core$1.setFeature(context, "ACCOUNT_ID_MODE_REQUIRED", "R");
           break;
       }
     }
-    let o = e.__smithy_context?.selectedHttpAuthScheme?.identity;
-    if (o?.$source) {
-      let a = o;
-      if (a.accountId) ie.setFeature(e, "RESOLVED_ACCOUNT_ID", "T");
-      for (let [c, d] of Object.entries(a.$source ?? {})) ie.setFeature(e, c, d);
+    let identity = context.__smithy_context?.selectedHttpAuthScheme?.identity;
+    if (identity?.$source) {
+      let credentials = identity;
+      if (credentials.accountId) core$1.setFeature(context, "RESOLVED_ACCOUNT_ID", "T");
+      for (let [key, value] of Object.entries(credentials.$source ?? {}))
+        core$1.setFeature(context, key, value);
     }
   }
-  var Xs = "user-agent",
-    tr = "x-amz-user-agent",
-    Ws = " ",
-    rr = "/",
-    Hc = /[^!$%&'*+\-.^_`|~\w]/g,
-    Gc = /[^!$%&'*+\-.^_`|~\w#]/g,
-    Ks = "-",
-    Xc = 1024;
-  function Wc(e) {
-    let t = "";
-    for (let key in e) {
-      let s = e[key];
-      if (t.length + s.length + 1 <= Xc) {
-        if (t.length) t += "," + s;
-        else t += s;
+  var USER_AGENT = "user-agent";
+  var X_AMZ_USER_AGENT = "x-amz-user-agent";
+  var SPACE = " ";
+  var UA_NAME_SEPARATOR = "/";
+  var UA_NAME_ESCAPE_REGEX = /[^!$%&'*+\-.^_`|~\w]/g;
+  var UA_VALUE_ESCAPE_REGEX = /[^!$%&'*+\-.^_`|~\w#]/g;
+  var UA_ESCAPE_CHAR = "-";
+  var BYTE_LIMIT = 1024;
+  function encodeFeatures(features) {
+    let buffer = "";
+    for (let key in features) {
+      let val = features[key];
+      if (buffer.length + val.length + 1 <= BYTE_LIMIT) {
+        if (buffer.length) buffer += "," + val;
+        else buffer += val;
         continue;
       }
       break;
     }
-    return t;
+    return buffer;
   }
-  var Ys = (e) => (t, r) => async (s) => {
-      let { request: request } = s;
-      if (!Uc.HttpRequest.isInstance(request)) return t(s);
-      let { headers: headers } = request,
-        c = r?.userAgent?.map(it) || [],
-        mapped = (await e.defaultUserAgentProvider()).map(it);
-      await qc(r, e, s);
-      let f = r;
-      mapped.push(`m/${Wc(Object.assign({}, r.__smithy_context?.features, f.__aws_sdk_context?.features))}`);
-      let m = e?.customUserAgent?.map(it) || [],
-        userAgentAppId = await e.userAgentAppId();
-      if (userAgentAppId) mapped.push(it(["app", `${userAgentAppId}`]));
-      let userAgentPrefix = Lc.getUserAgentPrefix(),
-        joined = (userAgentPrefix ? [userAgentPrefix] : []).concat([...mapped, ...c, ...m]).join(Ws),
-        joined_2 = [...mapped.filter((_) => _.startsWith("aws-sdk-")), ...m].join(Ws);
-      if (e.runtime !== "browser") {
-        if (joined_2) headers[tr] = headers[tr] ? `${headers[Xs]} ${joined_2}` : joined_2;
-        headers[Xs] = joined;
-      } else headers[tr] = joined;
-      return t({ ...s, request: request });
-    },
-    it = (e) => {
-      let joined = e[0]
-          .split(rr)
-          .map((c) => c.replace(Hc, Ks))
-          .join(rr),
-        r = e[1]?.replace(Gc, Ks),
-        index = joined.indexOf(rr),
-        substring = joined.substring(0, index),
-        substring_2 = joined.substring(index + 1);
-      if (substring === "api") substring_2 = substring_2.toLowerCase();
-      return [substring, substring_2, r]
-        .filter((c) => c && c.length > 0)
-        .reduce((c, d, f) => {
-          switch (f) {
-            case 0:
-              return d;
-            case 1:
-              return `${c}/${d}`;
-            default:
-              return `${c}#${d}`;
-          }
-        }, "");
-    },
-    Js = {
-      name: "getUserAgentMiddleware",
-      step: "build",
-      priority: "low",
-      tags: ["SET_USER_AGENT", "USER_AGENT"],
-      override: !0,
-    },
-    Kc = (e) => ({
-      applyToStack: (t) => {
-        t.add(Ys(e), Js);
-      },
+  var userAgentMiddleware = (options) => (next, context) => async (args) => {
+    let { request } = args;
+    if (!protocolHttp.HttpRequest.isInstance(request)) return next(args);
+    let { headers } = request;
+    let userAgent = context?.userAgent?.map(escapeUserAgent) || [];
+    let defaultUserAgent = (await options.defaultUserAgentProvider()).map(escapeUserAgent);
+    await checkFeatures(context, options, args);
+    let awsContext = context;
+    defaultUserAgent.push(
+      `m/${encodeFeatures(Object.assign({}, context.__smithy_context?.features, awsContext.__aws_sdk_context?.features))}`,
+    );
+    let customUserAgent = options?.customUserAgent?.map(escapeUserAgent) || [];
+    let appId = await options.userAgentAppId();
+    if (appId) defaultUserAgent.push(escapeUserAgent(["app", `${appId}`]));
+    let prefix = utilEndpoints.getUserAgentPrefix();
+    let sdkUserAgentValue = (prefix ? [prefix] : [])
+      .concat([...defaultUserAgent, ...userAgent, ...customUserAgent])
+      .join(SPACE);
+    let normalUAValue = [
+      ...defaultUserAgent.filter((section) => section.startsWith("aws-sdk-")),
+      ...customUserAgent,
+    ].join(SPACE);
+    if (options.runtime !== "browser") {
+      if (normalUAValue)
+        headers[X_AMZ_USER_AGENT] = headers[X_AMZ_USER_AGENT]
+          ? `${headers[USER_AGENT]} ${normalUAValue}`
+          : normalUAValue;
+      headers[USER_AGENT] = sdkUserAgentValue;
+    } else headers[X_AMZ_USER_AGENT] = sdkUserAgentValue;
+    return next({
+      ...args,
+      request,
     });
-  Qc.DEFAULT_UA_APP_ID = Qs;
-  Qc.getUserAgentMiddlewareOptions = Js;
-  Qc.getUserAgentPlugin = Kc;
-  Qc.resolveUserAgentConfig = Fc;
-  Qc.userAgentMiddleware = Ys;
+  };
+  var escapeUserAgent = (userAgentPair) => {
+    let name = userAgentPair[0]
+      .split(UA_NAME_SEPARATOR)
+      .map((part) => part.replace(UA_NAME_ESCAPE_REGEX, UA_ESCAPE_CHAR))
+      .join(UA_NAME_SEPARATOR);
+    let version = userAgentPair[1]?.replace(UA_VALUE_ESCAPE_REGEX, UA_ESCAPE_CHAR);
+    let prefixSeparatorIndex = name.indexOf(UA_NAME_SEPARATOR);
+    let prefix = name.substring(0, prefixSeparatorIndex);
+    let uaName = name.substring(prefixSeparatorIndex + 1);
+    if (prefix === "api") uaName = uaName.toLowerCase();
+    return [prefix, uaName, version]
+      .filter((item) => item && item.length > 0)
+      .reduce((acc, item, index) => {
+        switch (index) {
+          case 0:
+            return item;
+          case 1:
+            return `${acc}/${item}`;
+          default:
+            return `${acc}#${item}`;
+        }
+      }, "");
+  };
+  var getUserAgentMiddlewareOptions = {
+    name: "getUserAgentMiddleware",
+    step: "build",
+    priority: "low",
+    tags: ["SET_USER_AGENT", "USER_AGENT"],
+    override: true,
+  };
+  var getUserAgentPlugin = (config) => ({
+    applyToStack: (clientStack) => {
+      clientStack.add(userAgentMiddleware(config), getUserAgentMiddlewareOptions);
+    },
+  });
+  cjsExports.DEFAULT_UA_APP_ID = DEFAULT_UA_APP_ID;
+  cjsExports.getUserAgentMiddlewareOptions = getUserAgentMiddlewareOptions;
+  cjsExports.getUserAgentPlugin = getUserAgentPlugin;
+  cjsExports.resolveUserAgentConfig = resolveUserAgentConfig;
+  cjsExports.userAgentMiddleware = userAgentMiddleware;
 });
-
-export { Oae };
+export { require_middleware_user_agent };

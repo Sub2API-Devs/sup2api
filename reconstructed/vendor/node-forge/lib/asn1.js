@@ -6,18 +6,23 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { Tn } from "./forge.js";
-import { Zn } from "./util.js";
-import { Ja } from "./oids.js";
+import { require_forge } from "./forge.js";
+import { require_util } from "./util.js";
+import { require_oids } from "./oids.js";
 
 //@ chunk-fq0cr76a.js:52411-64596 cjs-fingerprint
-var Xi = x(function (ffe, _T) {
-  var Rr = Tn();
-  Zn();
-  Ja();
-  var _t = (_T.exports = Rr.asn1 = Rr.asn1 || {});
-  _t.Class = { UNIVERSAL: 0, APPLICATION: 64, CONTEXT_SPECIFIC: 128, PRIVATE: 192 };
-  _t.Type = {
+var require_asn1 = x(function (cjsExports, cjsModule) {
+  var forge = require_forge();
+  require_util();
+  require_oids();
+  var asn1 = (cjsModule.exports = forge.asn1 = forge.asn1 || {});
+  asn1.Class = {
+    UNIVERSAL: 0,
+    APPLICATION: 64,
+    CONTEXT_SPECIFIC: 128,
+    PRIVATE: 192,
+  };
+  asn1.Type = {
     NONE: 0,
     BOOLEAN: 1,
     INTEGER: 2,
@@ -40,555 +45,673 @@ var Xi = x(function (ffe, _T) {
     GENERALIZEDTIME: 24,
     BMPSTRING: 30,
   };
-  _t.maxDepth = 256;
-  _t.create = function (e, n, r, s, h) {
-    if (Rr.util.isArray(s)) {
-      var y = [];
-      for (var b = 0; b < s.length; ++b) if (s[b] !== void 0) y.push(s[b]);
-      s = y;
+  asn1.maxDepth = 256;
+  asn1.create = function (tagClass, type, constructed, value, options) {
+    if (forge.util.isArray(value)) {
+      var tmp = [];
+      for (var i = 0; i < value.length; ++i) if (value[i] !== undefined) tmp.push(value[i]);
+      value = tmp;
     }
-    var S = { tagClass: e, type: n, constructed: r, composed: r || Rr.util.isArray(s), value: s };
-    if (h && "bitStringContents" in h)
-      ((S.bitStringContents = h.bitStringContents), (S.original = _t.copy(S)));
-    return S;
-  };
-  _t.copy = function (e, n) {
-    var r;
-    if (Rr.util.isArray(e)) {
-      r = [];
-      for (var s = 0; s < e.length; ++s) r.push(_t.copy(e[s], n));
-      return r;
+    var obj = {
+      tagClass,
+      type,
+      constructed,
+      composed: constructed || forge.util.isArray(value),
+      value,
+    };
+    if (options && "bitStringContents" in options) {
+      obj.bitStringContents = options.bitStringContents;
+      obj.original = asn1.copy(obj);
     }
-    if (typeof e === "string") return e;
-    if (
-      ((r = {
-        tagClass: e.tagClass,
-        type: e.type,
-        constructed: e.constructed,
-        composed: e.composed,
-        value: _t.copy(e.value, n),
-      }),
-      n && !n.excludeBitStringContents)
-    )
-      r.bitStringContents = e.bitStringContents;
-    return r;
+    return obj;
   };
-  _t.equals = function (e, n, r) {
-    if (Rr.util.isArray(e)) {
-      if (!Rr.util.isArray(n)) return !1;
-      if (e.length !== n.length) return !1;
-      for (var s = 0; s < e.length; ++s) if (!_t.equals(e[s], n[s])) return !1;
-      return !0;
+  asn1.copy = function (obj, options) {
+    var copy;
+    if (forge.util.isArray(obj)) {
+      copy = [];
+      for (var i = 0; i < obj.length; ++i) copy.push(asn1.copy(obj[i], options));
+      return copy;
     }
-    if (typeof e !== typeof n) return !1;
-    if (typeof e === "string") return e === n;
-    var h =
-      e.tagClass === n.tagClass &&
-      e.type === n.type &&
-      e.constructed === n.constructed &&
-      e.composed === n.composed &&
-      _t.equals(e.value, n.value);
-    if (r && r.includeBitStringContents) h = h && e.bitStringContents === n.bitStringContents;
-    return h;
+    if (typeof obj === "string") return obj;
+    copy = {
+      tagClass: obj.tagClass,
+      type: obj.type,
+      constructed: obj.constructed,
+      composed: obj.composed,
+      value: asn1.copy(obj.value, options),
+    };
+    if (options && !options.excludeBitStringContents) copy.bitStringContents = obj.bitStringContents;
+    return copy;
   };
-  _t.getBerValueLength = function (e) {
-    var byte = e.getByte();
-    if (byte === 128) return;
-    var r,
-      s = byte & 128;
-    if (!s) r = byte;
-    else r = e.getInt((byte & 127) << 3);
-    return r;
+  asn1.equals = function (obj1, obj2, options) {
+    if (forge.util.isArray(obj1)) {
+      if (!forge.util.isArray(obj2)) return false;
+      if (obj1.length !== obj2.length) return false;
+      for (var i = 0; i < obj1.length; ++i) if (!asn1.equals(obj1[i], obj2[i])) return false;
+      return true;
+    }
+    if (typeof obj1 !== typeof obj2) return false;
+    if (typeof obj1 === "string") return obj1 === obj2;
+    var equal =
+      obj1.tagClass === obj2.tagClass &&
+      obj1.type === obj2.type &&
+      obj1.constructed === obj2.constructed &&
+      obj1.composed === obj2.composed &&
+      asn1.equals(obj1.value, obj2.value);
+    if (options && options.includeBitStringContents)
+      equal = equal && obj1.bitStringContents === obj2.bitStringContents;
+    return equal;
   };
-  function gf(e, n, r) {
-    if (r > n) {
-      var s = Error("Too few bytes to parse DER.");
-      throw ((s.available = e.length()), (s.remaining = n), (s.requested = r), s);
+  asn1.getBerValueLength = function (b) {
+    var b2 = b.getByte();
+    if (b2 === 128) return;
+    var length;
+    var longForm = b2 & 128;
+    if (!longForm) length = b2;
+    else length = b.getInt((b2 & 127) << 3);
+    return length;
+  };
+  function _checkBufferLength(bytes, remaining, n) {
+    if (n > remaining) {
+      var error = Error("Too few bytes to parse DER.");
+      error.available = bytes.length();
+      error.remaining = remaining;
+      error.requested = n;
+      throw error;
     }
   }
-  var p3 = function (e, n) {
-    var byte = e.getByte();
-    if ((n--, byte === 128)) return;
-    var s,
-      h = byte & 128;
-    if (!h) s = byte;
+  var _getValueLength = function (bytes, remaining) {
+    var b2 = bytes.getByte();
+    remaining--;
+    if (b2 === 128) return;
+    var length;
+    var longForm = b2 & 128;
+    if (!longForm) length = b2;
     else {
-      var y = byte & 127;
-      (gf(e, n, y), (s = e.getInt(y << 3)));
+      var longFormBytes = b2 & 127;
+      _checkBufferLength(bytes, remaining, longFormBytes);
+      length = bytes.getInt(longFormBytes << 3);
     }
-    if (s < 0) throw Error("Negative length: " + s);
-    return s;
+    if (length < 0) throw Error("Negative length: " + length);
+    return length;
   };
-  _t.fromDer = function (e, n) {
-    if (n === void 0) n = { strict: !0, parseAllBytes: !0, decodeBitStrings: !0 };
-    if (typeof n === "boolean") n = { strict: n, parseAllBytes: !0, decodeBitStrings: !0 };
-    if (!("strict" in n)) n.strict = !0;
-    if (!("parseAllBytes" in n)) n.parseAllBytes = !0;
-    if (!("decodeBitStrings" in n)) n.decodeBitStrings = !0;
-    if (!("maxDepth" in n)) n.maxDepth = _t.maxDepth;
-    if (typeof e === "string") e = Rr.util.createBuffer(e);
-    var r = e.length(),
-      s = Hh(e, e.length(), 0, n);
-    if (n.parseAllBytes && e.length() !== 0) {
-      var h = Error("Unparsed DER bytes remain after ASN.1 parsing.");
-      throw ((h.byteCount = r), (h.remaining = e.length()), h);
+  asn1.fromDer = function (bytes, options) {
+    if (options === undefined)
+      options = {
+        strict: true,
+        parseAllBytes: true,
+        decodeBitStrings: true,
+      };
+    if (typeof options === "boolean")
+      options = {
+        strict: options,
+        parseAllBytes: true,
+        decodeBitStrings: true,
+      };
+    if (!("strict" in options)) options.strict = true;
+    if (!("parseAllBytes" in options)) options.parseAllBytes = true;
+    if (!("decodeBitStrings" in options)) options.decodeBitStrings = true;
+    if (!("maxDepth" in options)) options.maxDepth = asn1.maxDepth;
+    if (typeof bytes === "string") bytes = forge.util.createBuffer(bytes);
+    var byteCount = bytes.length();
+    var value = _fromDer(bytes, bytes.length(), 0, options);
+    if (options.parseAllBytes && bytes.length() !== 0) {
+      var error = Error("Unparsed DER bytes remain after ASN.1 parsing.");
+      error.byteCount = byteCount;
+      error.remaining = bytes.length();
+      throw error;
     }
-    return s;
+    return value;
   };
-  function Hh(e, n, r, s) {
-    if (r >= s.maxDepth) throw Error("ASN.1 parsing error: Max depth exceeded.");
-    var h;
-    gf(e, n, 2);
-    var byte = e.getByte();
-    n--;
-    var b = byte & 192,
-      S = byte & 31;
-    h = e.length();
-    var w = p3(e, n);
-    if (((n -= h - e.length()), w !== void 0 && w > n)) {
-      if (s.strict) {
-        var R = Error("Too few bytes to read ASN.1 value.");
-        throw ((R.available = e.length()), (R.remaining = n), (R.requested = w), R);
+  function _fromDer(bytes, remaining, depth, options) {
+    if (depth >= options.maxDepth) throw Error("ASN.1 parsing error: Max depth exceeded.");
+    var start;
+    _checkBufferLength(bytes, remaining, 2);
+    var b1 = bytes.getByte();
+    remaining--;
+    var tagClass = b1 & 192;
+    var type = b1 & 31;
+    start = bytes.length();
+    var length = _getValueLength(bytes, remaining);
+    remaining -= start - bytes.length();
+    if (length !== undefined && length > remaining) {
+      if (options.strict) {
+        var error = Error("Too few bytes to read ASN.1 value.");
+        error.available = bytes.length();
+        error.remaining = remaining;
+        error.requested = length;
+        throw error;
       }
-      w = n;
+      length = remaining;
     }
-    var D,
-      O,
-      L = (byte & 32) === 32;
-    if (L)
-      if (((D = []), w === void 0))
+    var value;
+    var bitStringContents;
+    var constructed = (b1 & 32) === 32;
+    if (constructed) {
+      value = [];
+      if (length === undefined)
         for (;;) {
-          if ((gf(e, n, 2), e.bytes(2) === String.fromCharCode(0, 0))) {
-            (e.getBytes(2), (n -= 2));
+          _checkBufferLength(bytes, remaining, 2);
+          if (bytes.bytes(2) === String.fromCharCode(0, 0)) {
+            bytes.getBytes(2);
+            remaining -= 2;
             break;
           }
-          ((h = e.length()), D.push(Hh(e, n, r + 1, s)), (n -= h - e.length()));
+          start = bytes.length();
+          value.push(_fromDer(bytes, remaining, depth + 1, options));
+          remaining -= start - bytes.length();
         }
       else
-        while (w > 0)
-          ((h = e.length()), D.push(Hh(e, w, r + 1, s)), (n -= h - e.length()), (w -= h - e.length()));
-    if (D === void 0 && b === _t.Class.UNIVERSAL && S === _t.Type.BITSTRING) O = e.bytes(w);
-    if (D === void 0 && s.decodeBitStrings && b === _t.Class.UNIVERSAL && S === _t.Type.BITSTRING && w > 1) {
-      var read = e.read,
-        K = n,
-        q = 0;
-      if (S === _t.Type.BITSTRING) (gf(e, n, 1), (q = e.getByte()), n--);
-      if (q === 0)
-        try {
-          h = e.length();
-          var Z = { strict: !0, decodeBitStrings: !0 },
-            J = Hh(e, n, r + 1, Z),
-            ie = h - e.length();
-          if (((n -= ie), S == _t.Type.BITSTRING)) ie++;
-          var tagClass = J.tagClass;
-          if (ie === w && (tagClass === _t.Class.UNIVERSAL || tagClass === _t.Class.CONTEXT_SPECIFIC))
-            D = [J];
-        } catch (error) {}
-      if (D === void 0) ((e.read = read), (n = K));
+        while (length > 0) {
+          start = bytes.length();
+          value.push(_fromDer(bytes, length, depth + 1, options));
+          remaining -= start - bytes.length();
+          length -= start - bytes.length();
+        }
     }
-    if (D === void 0) {
-      if (w === void 0) {
-        if (s.strict) throw Error("Non-constructed ASN.1 object of indefinite length.");
-        w = n;
-      }
-      if (S === _t.Type.BMPSTRING) {
-        D = "";
-        for (; w > 0; w -= 2) (gf(e, n, 2), (D += String.fromCharCode(e.getInt16())), (n -= 2));
-      } else ((D = e.getBytes(w)), (n -= w));
-    }
-    var Se = O === void 0 ? null : { bitStringContents: O };
-    return _t.create(b, S, L, D, Se);
-  }
-  _t.toDer = function (e) {
-    var buffer = Rr.util.createBuffer(),
-      r = e.tagClass | e.type,
-      buffer_2 = Rr.util.createBuffer(),
-      h = !1;
-    if ("bitStringContents" in e) {
-      if (((h = !0), e.original)) h = _t.equals(e, e.original);
-    }
-    if (h) buffer_2.putBytes(e.bitStringContents);
-    else if (e.composed) {
-      if (e.constructed) r |= 32;
-      else buffer_2.putByte(0);
-      for (var y = 0; y < e.value.length; ++y)
-        if (e.value[y] !== void 0) buffer_2.putBuffer(_t.toDer(e.value[y]));
-    } else if (e.type === _t.Type.BMPSTRING)
-      for (var y = 0; y < e.value.length; ++y) buffer_2.putInt16(e.value.charCodeAt(y));
-    else if (
-      e.type === _t.Type.INTEGER &&
-      e.value.length > 1 &&
-      ((e.value.charCodeAt(0) === 0 && (e.value.charCodeAt(1) & 128) === 0) ||
-        (e.value.charCodeAt(0) === 255 && (e.value.charCodeAt(1) & 128) === 128))
-    )
-      buffer_2.putBytes(e.value.substr(1));
-    else buffer_2.putBytes(e.value);
-    if ((buffer.putByte(r), buffer_2.length() <= 127)) buffer.putByte(buffer_2.length() & 127);
-    else {
-      var b = buffer_2.length(),
-        S = "";
-      do ((S += String.fromCharCode(b & 255)), (b = b >>> 8));
-      while (b > 0);
-      buffer.putByte(S.length | 128);
-      for (var y = S.length - 1; y >= 0; --y) buffer.putByte(S.charCodeAt(y));
-    }
-    return (buffer.putBuffer(buffer_2), buffer);
-  };
-  _t.oidToDer = function (e) {
-    var parts = e.split("."),
-      buffer = Rr.util.createBuffer();
-    buffer.putByte(40 * parseInt(parts[0], 10) + parseInt(parts[1], 10));
-    var s, h, y, b;
-    for (var S = 2; S < parts.length; ++S) {
-      if (((s = !0), (h = []), (y = parseInt(parts[S], 10)), y > 4294967295))
-        throw Error("OID value too large; max is 32-bits.");
-      do {
-        if (((b = y & 127), (y = y >>> 7), !s)) b |= 128;
-        (h.push(b), (s = !1));
-      } while (y > 0);
-      for (var w = h.length - 1; w >= 0; --w) buffer.putByte(h[w]);
-    }
-    return buffer;
-  };
-  _t.derToOid = function (e) {
-    var n;
-    if (typeof e === "string") e = Rr.util.createBuffer(e);
-    var byte = e.getByte();
-    n = Math.floor(byte / 40) + "." + (byte % 40);
-    var s = 0;
-    while (e.length() > 0) {
-      if (s > 70368744177663) throw Error("OID value too large; max is 53-bits.");
-      if (((byte = e.getByte()), (s = s * 128), byte & 128)) s += byte & 127;
-      else ((n += "." + (s + byte)), (s = 0));
-    }
-    return n;
-  };
-  _t.utcTimeToDate = function (e) {
-    var date = new Date(),
-      r = parseInt(e.substr(0, 2), 10);
-    r = r >= 50 ? 1900 + r : 2000 + r;
-    var s = parseInt(e.substr(2, 2), 10) - 1,
-      h = parseInt(e.substr(4, 2), 10),
-      y = parseInt(e.substr(6, 2), 10),
-      b = parseInt(e.substr(8, 2), 10),
-      S = 0;
-    if (e.length > 11) {
-      var charAt = e.charAt(10),
-        R = 10;
-      if (charAt !== "+" && charAt !== "-") ((S = parseInt(e.substr(10, 2), 10)), (R += 2));
-    }
-    if ((date.setUTCFullYear(r, s, h), date.setUTCHours(y, b, S, 0), R)) {
-      if (((charAt = e.charAt(R)), charAt === "+" || charAt === "-")) {
-        var D = parseInt(e.substr(R + 1, 2), 10),
-          O = parseInt(e.substr(R + 4, 2), 10),
-          L = D * 60 + O;
-        if (((L *= 60000), charAt === "+")) date.setTime(+date - L);
-        else date.setTime(+date + L);
-      }
-    }
-    return date;
-  };
-  _t.generalizedTimeToDate = function (e) {
-    var date = new Date(),
-      r = parseInt(e.substr(0, 4), 10),
-      s = parseInt(e.substr(4, 2), 10) - 1,
-      h = parseInt(e.substr(6, 2), 10),
-      y = parseInt(e.substr(8, 2), 10),
-      b = parseInt(e.substr(10, 2), 10),
-      S = parseInt(e.substr(12, 2), 10),
-      w = 0,
-      R = 0,
-      D = !1;
-    if (e.charAt(e.length - 1) === "Z") D = !0;
-    var O = e.length - 5,
-      charAt = e.charAt(O);
-    if (charAt === "+" || charAt === "-") {
-      var V = parseInt(e.substr(O + 1, 2), 10),
-        K = parseInt(e.substr(O + 4, 2), 10);
-      if (((R = V * 60 + K), (R *= 60000), charAt === "+")) R *= -1;
-      D = !0;
-    }
-    if (e.charAt(14) === ".") w = parseFloat(e.substr(14), 10) * 1000;
-    if (D) (date.setUTCFullYear(r, s, h), date.setUTCHours(y, b, S, w), date.setTime(+date + R));
-    else (date.setFullYear(r, s, h), date.setHours(y, b, S, w));
-    return date;
-  };
-  _t.dateToUtcTime = function (e) {
-    if (typeof e === "string") return e;
-    var n = "",
-      r = [];
-    (r.push(("" + e.getUTCFullYear()).substr(2)),
-      r.push("" + (e.getUTCMonth() + 1)),
-      r.push("" + e.getUTCDate()),
-      r.push("" + e.getUTCHours()),
-      r.push("" + e.getUTCMinutes()),
-      r.push("" + e.getUTCSeconds()));
-    for (var s = 0; s < r.length; ++s) {
-      if (r[s].length < 2) n += "0";
-      n += r[s];
-    }
-    return ((n += "Z"), n);
-  };
-  _t.dateToGeneralizedTime = function (e) {
-    if (typeof e === "string") return e;
-    var n = "",
-      r = [];
-    (r.push("" + e.getUTCFullYear()),
-      r.push("" + (e.getUTCMonth() + 1)),
-      r.push("" + e.getUTCDate()),
-      r.push("" + e.getUTCHours()),
-      r.push("" + e.getUTCMinutes()),
-      r.push("" + e.getUTCSeconds()));
-    for (var s = 0; s < r.length; ++s) {
-      if (r[s].length < 2) n += "0";
-      n += r[s];
-    }
-    return ((n += "Z"), n);
-  };
-  _t.integerToDer = function (e) {
-    var buffer = Rr.util.createBuffer();
-    if (e >= -128 && e < 128) return buffer.putSignedInt(e, 8);
-    if (e >= -32768 && e < 32768) return buffer.putSignedInt(e, 16);
-    if (e >= -8388608 && e < 8388608) return buffer.putSignedInt(e, 24);
-    if (e >= -2147483648 && e < 2147483648) return buffer.putSignedInt(e, 32);
-    var r = Error("Integer too large; max is 32-bits.");
-    throw ((r.integer = e), r);
-  };
-  _t.derToInteger = function (e) {
-    if (typeof e === "string") e = Rr.util.createBuffer(e);
-    var n = e.length() * 8;
-    if (n > 32) throw Error("Integer too large; max is 32-bits.");
-    return e.getSignedInt(n);
-  };
-  _t.validate = function (e, n, r, s) {
-    var h = !1;
+    if (value === undefined && tagClass === asn1.Class.UNIVERSAL && type === asn1.Type.BITSTRING)
+      bitStringContents = bytes.bytes(length);
     if (
-      (e.tagClass === n.tagClass || typeof n.tagClass > "u") &&
-      (e.type === n.type || typeof n.type > "u")
+      value === undefined &&
+      options.decodeBitStrings &&
+      tagClass === asn1.Class.UNIVERSAL &&
+      type === asn1.Type.BITSTRING &&
+      length > 1
     ) {
-      if (e.constructed === n.constructed || typeof n.constructed > "u") {
-        if (((h = !0), n.value && Rr.util.isArray(n.value))) {
-          var y = 0;
-          for (var b = 0; h && b < n.value.length; ++b) {
-            var S = n.value[b];
-            h = !!S.optional;
-            var w = e.value[y];
-            if (!w) {
-              if (!S.optional) {
-                if (((h = !1), s))
-                  s.push(
+      var savedRead = bytes.read;
+      var savedRemaining = remaining;
+      var unused = 0;
+      if (type === asn1.Type.BITSTRING) {
+        _checkBufferLength(bytes, remaining, 1);
+        unused = bytes.getByte();
+        remaining--;
+      }
+      if (unused === 0)
+        try {
+          start = bytes.length();
+          var subOptions = {
+            strict: true,
+            decodeBitStrings: true,
+          };
+          var composed = _fromDer(bytes, remaining, depth + 1, subOptions);
+          var used = start - bytes.length();
+          remaining -= used;
+          if (type == asn1.Type.BITSTRING) used++;
+          var tc = composed.tagClass;
+          if (used === length && (tc === asn1.Class.UNIVERSAL || tc === asn1.Class.CONTEXT_SPECIFIC))
+            value = [composed];
+        } catch (ex) {}
+      if (value === undefined) {
+        bytes.read = savedRead;
+        remaining = savedRemaining;
+      }
+    }
+    if (value === undefined) {
+      if (length === undefined) {
+        if (options.strict) throw Error("Non-constructed ASN.1 object of indefinite length.");
+        length = remaining;
+      }
+      if (type === asn1.Type.BMPSTRING) {
+        value = "";
+        for (; length > 0; length -= 2) {
+          _checkBufferLength(bytes, remaining, 2);
+          value += String.fromCharCode(bytes.getInt16());
+          remaining -= 2;
+        }
+      } else {
+        value = bytes.getBytes(length);
+        remaining -= length;
+      }
+    }
+    var asn1Options =
+      bitStringContents === undefined
+        ? null
+        : {
+            bitStringContents,
+          };
+    return asn1.create(tagClass, type, constructed, value, asn1Options);
+  }
+  asn1.toDer = function (obj) {
+    var bytes = forge.util.createBuffer();
+    var b1 = obj.tagClass | obj.type;
+    var value = forge.util.createBuffer();
+    var useBitStringContents = false;
+    if ("bitStringContents" in obj) {
+      useBitStringContents = true;
+      if (obj.original) useBitStringContents = asn1.equals(obj, obj.original);
+    }
+    if (useBitStringContents) value.putBytes(obj.bitStringContents);
+    else if (obj.composed) {
+      if (obj.constructed) b1 |= 32;
+      else value.putByte(0);
+      for (var i = 0; i < obj.value.length; ++i)
+        if (obj.value[i] !== undefined) value.putBuffer(asn1.toDer(obj.value[i]));
+    } else if (obj.type === asn1.Type.BMPSTRING)
+      for (var i = 0; i < obj.value.length; ++i) value.putInt16(obj.value.charCodeAt(i));
+    else if (
+      obj.type === asn1.Type.INTEGER &&
+      obj.value.length > 1 &&
+      ((obj.value.charCodeAt(0) === 0 && (obj.value.charCodeAt(1) & 128) === 0) ||
+        (obj.value.charCodeAt(0) === 255 && (obj.value.charCodeAt(1) & 128) === 128))
+    )
+      value.putBytes(obj.value.substr(1));
+    else value.putBytes(obj.value);
+    bytes.putByte(b1);
+    if (value.length() <= 127) bytes.putByte(value.length() & 127);
+    else {
+      var len = value.length();
+      var lenBytes = "";
+      do {
+        lenBytes += String.fromCharCode(len & 255);
+        len = len >>> 8;
+      } while (len > 0);
+      bytes.putByte(lenBytes.length | 128);
+      for (var i = lenBytes.length - 1; i >= 0; --i) bytes.putByte(lenBytes.charCodeAt(i));
+    }
+    bytes.putBuffer(value);
+    return bytes;
+  };
+  asn1.oidToDer = function (oid) {
+    var values = oid.split(".");
+    var bytes = forge.util.createBuffer();
+    bytes.putByte(40 * parseInt(values[0], 10) + parseInt(values[1], 10));
+    var last;
+    var valueBytes;
+    var value;
+    var b;
+    for (var i = 2; i < values.length; ++i) {
+      last = true;
+      valueBytes = [];
+      value = parseInt(values[i], 10);
+      if (value > 4294967295) throw Error("OID value too large; max is 32-bits.");
+      do {
+        b = value & 127;
+        value = value >>> 7;
+        if (!last) b |= 128;
+        valueBytes.push(b);
+        last = false;
+      } while (value > 0);
+      for (var n = valueBytes.length - 1; n >= 0; --n) bytes.putByte(valueBytes[n]);
+    }
+    return bytes;
+  };
+  asn1.derToOid = function (bytes) {
+    var oid;
+    if (typeof bytes === "string") bytes = forge.util.createBuffer(bytes);
+    var b = bytes.getByte();
+    oid = Math.floor(b / 40) + "." + (b % 40);
+    var value = 0;
+    while (bytes.length() > 0) {
+      if (value > 70368744177663) throw Error("OID value too large; max is 53-bits.");
+      b = bytes.getByte();
+      value = value * 128;
+      if (b & 128) value += b & 127;
+      else {
+        oid += "." + (value + b);
+        value = 0;
+      }
+    }
+    return oid;
+  };
+  asn1.utcTimeToDate = function (utc) {
+    var date = new Date();
+    var year = parseInt(utc.substr(0, 2), 10);
+    year = year >= 50 ? 1900 + year : 2000 + year;
+    var MM = parseInt(utc.substr(2, 2), 10) - 1;
+    var DD = parseInt(utc.substr(4, 2), 10);
+    var hh = parseInt(utc.substr(6, 2), 10);
+    var mm = parseInt(utc.substr(8, 2), 10);
+    var ss = 0;
+    if (utc.length > 11) {
+      var c = utc.charAt(10);
+      var end = 10;
+      if (c !== "+" && c !== "-") {
+        ss = parseInt(utc.substr(10, 2), 10);
+        end += 2;
+      }
+    }
+    date.setUTCFullYear(year, MM, DD);
+    date.setUTCHours(hh, mm, ss, 0);
+    if (end) {
+      c = utc.charAt(end);
+      if (c === "+" || c === "-") {
+        var hhoffset = parseInt(utc.substr(end + 1, 2), 10);
+        var mmoffset = parseInt(utc.substr(end + 4, 2), 10);
+        var offset = hhoffset * 60 + mmoffset;
+        offset *= 60000;
+        if (c === "+") date.setTime(+date - offset);
+        else date.setTime(+date + offset);
+      }
+    }
+    return date;
+  };
+  asn1.generalizedTimeToDate = function (gentime) {
+    var date = new Date();
+    var YYYY = parseInt(gentime.substr(0, 4), 10);
+    var MM = parseInt(gentime.substr(4, 2), 10) - 1;
+    var DD = parseInt(gentime.substr(6, 2), 10);
+    var hh = parseInt(gentime.substr(8, 2), 10);
+    var mm = parseInt(gentime.substr(10, 2), 10);
+    var ss = parseInt(gentime.substr(12, 2), 10);
+    var fff = 0;
+    var offset = 0;
+    var isUTC = false;
+    if (gentime.charAt(gentime.length - 1) === "Z") isUTC = true;
+    var end = gentime.length - 5;
+    var c = gentime.charAt(end);
+    if (c === "+" || c === "-") {
+      var hhoffset = parseInt(gentime.substr(end + 1, 2), 10);
+      var mmoffset = parseInt(gentime.substr(end + 4, 2), 10);
+      offset = hhoffset * 60 + mmoffset;
+      offset *= 60000;
+      if (c === "+") offset *= -1;
+      isUTC = true;
+    }
+    if (gentime.charAt(14) === ".") fff = parseFloat(gentime.substr(14), 10) * 1000;
+    if (isUTC) {
+      date.setUTCFullYear(YYYY, MM, DD);
+      date.setUTCHours(hh, mm, ss, fff);
+      date.setTime(+date + offset);
+    } else {
+      date.setFullYear(YYYY, MM, DD);
+      date.setHours(hh, mm, ss, fff);
+    }
+    return date;
+  };
+  asn1.dateToUtcTime = function (date) {
+    if (typeof date === "string") return date;
+    var rval = "";
+    var format = [];
+    format.push(("" + date.getUTCFullYear()).substr(2));
+    format.push("" + (date.getUTCMonth() + 1));
+    format.push("" + date.getUTCDate());
+    format.push("" + date.getUTCHours());
+    format.push("" + date.getUTCMinutes());
+    format.push("" + date.getUTCSeconds());
+    for (var i = 0; i < format.length; ++i) {
+      if (format[i].length < 2) rval += "0";
+      rval += format[i];
+    }
+    rval += "Z";
+    return rval;
+  };
+  asn1.dateToGeneralizedTime = function (date) {
+    if (typeof date === "string") return date;
+    var rval = "";
+    var format = [];
+    format.push("" + date.getUTCFullYear());
+    format.push("" + (date.getUTCMonth() + 1));
+    format.push("" + date.getUTCDate());
+    format.push("" + date.getUTCHours());
+    format.push("" + date.getUTCMinutes());
+    format.push("" + date.getUTCSeconds());
+    for (var i = 0; i < format.length; ++i) {
+      if (format[i].length < 2) rval += "0";
+      rval += format[i];
+    }
+    rval += "Z";
+    return rval;
+  };
+  asn1.integerToDer = function (x) {
+    var rval = forge.util.createBuffer();
+    if (x >= -128 && x < 128) return rval.putSignedInt(x, 8);
+    if (x >= -32768 && x < 32768) return rval.putSignedInt(x, 16);
+    if (x >= -8388608 && x < 8388608) return rval.putSignedInt(x, 24);
+    if (x >= -2147483648 && x < 2147483648) return rval.putSignedInt(x, 32);
+    var error = Error("Integer too large; max is 32-bits.");
+    error.integer = x;
+    throw error;
+  };
+  asn1.derToInteger = function (bytes) {
+    if (typeof bytes === "string") bytes = forge.util.createBuffer(bytes);
+    var n = bytes.length() * 8;
+    if (n > 32) throw Error("Integer too large; max is 32-bits.");
+    return bytes.getSignedInt(n);
+  };
+  asn1.validate = function (obj, v, capture, errors) {
+    var rval = false;
+    if (
+      (obj.tagClass === v.tagClass || typeof v.tagClass === "undefined") &&
+      (obj.type === v.type || typeof v.type === "undefined")
+    ) {
+      if (obj.constructed === v.constructed || typeof v.constructed === "undefined") {
+        rval = true;
+        if (v.value && forge.util.isArray(v.value)) {
+          var j = 0;
+          for (var i = 0; rval && i < v.value.length; ++i) {
+            var schemaItem = v.value[i];
+            rval = !!schemaItem.optional;
+            var objChild = obj.value[j];
+            if (!objChild) {
+              if (!schemaItem.optional) {
+                rval = false;
+                if (errors)
+                  errors.push(
                     "[" +
-                      n.name +
+                      v.name +
                       '] Missing required element. Expected tag class "' +
-                      S.tagClass +
+                      schemaItem.tagClass +
                       '", type "' +
-                      S.type +
+                      schemaItem.type +
                       '"',
                   );
               }
               continue;
             }
-            var R = typeof S.tagClass < "u" && typeof S.type < "u";
-            if (R && (w.tagClass !== S.tagClass || w.type !== S.type))
-              if (S.optional) {
-                h = !0;
+            var schemaHasTag =
+              typeof schemaItem.tagClass !== "undefined" && typeof schemaItem.type !== "undefined";
+            if (
+              schemaHasTag &&
+              (objChild.tagClass !== schemaItem.tagClass || objChild.type !== schemaItem.type)
+            )
+              if (schemaItem.optional) {
+                rval = true;
                 continue;
               } else {
-                if (((h = !1), s))
-                  s.push(
+                rval = false;
+                if (errors)
+                  errors.push(
                     "[" +
-                      n.name +
+                      v.name +
                       "] Tag mismatch. Expected (" +
-                      S.tagClass +
+                      schemaItem.tagClass +
                       "," +
-                      S.type +
+                      schemaItem.type +
                       "), got (" +
-                      w.tagClass +
+                      objChild.tagClass +
                       "," +
-                      w.type +
+                      objChild.type +
                       ")",
                   );
                 break;
               }
-            var validate = _t.validate(w, S, r, s);
-            if (validate) (++y, (h = !0));
-            else if (S.optional) h = !0;
+            var childRval = asn1.validate(objChild, schemaItem, capture, errors);
+            if (childRval) {
+              ++j;
+              rval = true;
+            } else if (schemaItem.optional) rval = true;
             else {
-              h = !1;
+              rval = false;
               break;
             }
           }
         }
-        if (h && r) {
-          if (n.capture) r[n.capture] = e.value;
-          if (n.captureAsn1) r[n.captureAsn1] = e;
-          if (n.captureBitStringContents && "bitStringContents" in e)
-            r[n.captureBitStringContents] = e.bitStringContents;
-          if (n.captureBitStringValue && "bitStringContents" in e) {
-            var O;
-            if (e.bitStringContents.length < 2) r[n.captureBitStringValue] = "";
+        if (rval && capture) {
+          if (v.capture) capture[v.capture] = obj.value;
+          if (v.captureAsn1) capture[v.captureAsn1] = obj;
+          if (v.captureBitStringContents && "bitStringContents" in obj)
+            capture[v.captureBitStringContents] = obj.bitStringContents;
+          if (v.captureBitStringValue && "bitStringContents" in obj) {
+            var value;
+            if (obj.bitStringContents.length < 2) capture[v.captureBitStringValue] = "";
             else {
-              var code = e.bitStringContents.charCodeAt(0);
-              if (code !== 0) throw Error("captureBitStringValue only supported for zero unused bits");
-              r[n.captureBitStringValue] = e.bitStringContents.slice(1);
+              var unused = obj.bitStringContents.charCodeAt(0);
+              if (unused !== 0) throw Error("captureBitStringValue only supported for zero unused bits");
+              capture[v.captureBitStringValue] = obj.bitStringContents.slice(1);
             }
           }
         }
-      } else if (s)
-        s.push("[" + n.name + '] Expected constructed "' + n.constructed + '", got "' + e.constructed + '"');
-    } else if (s) {
-      if (e.tagClass !== n.tagClass)
-        s.push("[" + n.name + '] Expected tag class "' + n.tagClass + '", got "' + e.tagClass + '"');
-      if (e.type !== n.type) s.push("[" + n.name + '] Expected type "' + n.type + '", got "' + e.type + '"');
+      } else if (errors)
+        errors.push(
+          "[" + v.name + '] Expected constructed "' + v.constructed + '", got "' + obj.constructed + '"',
+        );
+    } else if (errors) {
+      if (obj.tagClass !== v.tagClass)
+        errors.push("[" + v.name + '] Expected tag class "' + v.tagClass + '", got "' + obj.tagClass + '"');
+      if (obj.type !== v.type)
+        errors.push("[" + v.name + '] Expected type "' + v.type + '", got "' + obj.type + '"');
     }
-    return h;
+    return rval;
   };
-  var xT = /[^\\u0000-\\u00ff]/;
-  _t.prettyPrint = function (e, n, r) {
-    var s = "";
-    if (((n = n || 0), (r = r || 2), n > 0))
-      s += `
+  var _nonLatinRegex = /[^\\u0000-\\u00ff]/;
+  asn1.prettyPrint = function (obj, level, indentation) {
+    var rval = "";
+    level = level || 0;
+    indentation = indentation || 2;
+    if (level > 0)
+      rval += `
 `;
-    var h = "";
-    for (var y = 0; y < n * r; ++y) h += " ";
-    switch (((s += h + "Tag: "), e.tagClass)) {
-      case _t.Class.UNIVERSAL:
-        s += "Universal:";
+    var indent = "";
+    for (var i = 0; i < level * indentation; ++i) indent += " ";
+    switch (((rval += indent + "Tag: "), obj.tagClass)) {
+      case asn1.Class.UNIVERSAL:
+        rval += "Universal:";
         break;
-      case _t.Class.APPLICATION:
-        s += "Application:";
+      case asn1.Class.APPLICATION:
+        rval += "Application:";
         break;
-      case _t.Class.CONTEXT_SPECIFIC:
-        s += "Context-Specific:";
+      case asn1.Class.CONTEXT_SPECIFIC:
+        rval += "Context-Specific:";
         break;
-      case _t.Class.PRIVATE:
-        s += "Private:";
+      case asn1.Class.PRIVATE:
+        rval += "Private:";
         break;
     }
-    if (e.tagClass === _t.Class.UNIVERSAL)
-      switch (((s += e.type), e.type)) {
-        case _t.Type.NONE:
-          s += " (None)";
+    if (obj.tagClass === asn1.Class.UNIVERSAL)
+      switch (((rval += obj.type), obj.type)) {
+        case asn1.Type.NONE:
+          rval += " (None)";
           break;
-        case _t.Type.BOOLEAN:
-          s += " (Boolean)";
+        case asn1.Type.BOOLEAN:
+          rval += " (Boolean)";
           break;
-        case _t.Type.INTEGER:
-          s += " (Integer)";
+        case asn1.Type.INTEGER:
+          rval += " (Integer)";
           break;
-        case _t.Type.BITSTRING:
-          s += " (Bit string)";
+        case asn1.Type.BITSTRING:
+          rval += " (Bit string)";
           break;
-        case _t.Type.OCTETSTRING:
-          s += " (Octet string)";
+        case asn1.Type.OCTETSTRING:
+          rval += " (Octet string)";
           break;
-        case _t.Type.NULL:
-          s += " (Null)";
+        case asn1.Type.NULL:
+          rval += " (Null)";
           break;
-        case _t.Type.OID:
-          s += " (Object Identifier)";
+        case asn1.Type.OID:
+          rval += " (Object Identifier)";
           break;
-        case _t.Type.ODESC:
-          s += " (Object Descriptor)";
+        case asn1.Type.ODESC:
+          rval += " (Object Descriptor)";
           break;
-        case _t.Type.EXTERNAL:
-          s += " (External or Instance of)";
+        case asn1.Type.EXTERNAL:
+          rval += " (External or Instance of)";
           break;
-        case _t.Type.REAL:
-          s += " (Real)";
+        case asn1.Type.REAL:
+          rval += " (Real)";
           break;
-        case _t.Type.ENUMERATED:
-          s += " (Enumerated)";
+        case asn1.Type.ENUMERATED:
+          rval += " (Enumerated)";
           break;
-        case _t.Type.EMBEDDED:
-          s += " (Embedded PDV)";
+        case asn1.Type.EMBEDDED:
+          rval += " (Embedded PDV)";
           break;
-        case _t.Type.UTF8:
-          s += " (UTF8)";
+        case asn1.Type.UTF8:
+          rval += " (UTF8)";
           break;
-        case _t.Type.ROID:
-          s += " (Relative Object Identifier)";
+        case asn1.Type.ROID:
+          rval += " (Relative Object Identifier)";
           break;
-        case _t.Type.SEQUENCE:
-          s += " (Sequence)";
+        case asn1.Type.SEQUENCE:
+          rval += " (Sequence)";
           break;
-        case _t.Type.SET:
-          s += " (Set)";
+        case asn1.Type.SET:
+          rval += " (Set)";
           break;
-        case _t.Type.PRINTABLESTRING:
-          s += " (Printable String)";
+        case asn1.Type.PRINTABLESTRING:
+          rval += " (Printable String)";
           break;
-        case _t.Type.IA5String:
-          s += " (IA5String (ASCII))";
+        case asn1.Type.IA5String:
+          rval += " (IA5String (ASCII))";
           break;
-        case _t.Type.UTCTIME:
-          s += " (UTC time)";
+        case asn1.Type.UTCTIME:
+          rval += " (UTC time)";
           break;
-        case _t.Type.GENERALIZEDTIME:
-          s += " (Generalized time)";
+        case asn1.Type.GENERALIZEDTIME:
+          rval += " (Generalized time)";
           break;
-        case _t.Type.BMPSTRING:
-          s += " (BMP String)";
+        case asn1.Type.BMPSTRING:
+          rval += " (BMP String)";
           break;
       }
-    else s += e.type;
-    if (
-      ((s += `
-`),
-      (s +=
-        h +
-        "Constructed: " +
-        e.constructed +
-        `
-`),
-      e.composed)
-    ) {
-      var b = 0,
-        S = "";
-      for (var y = 0; y < e.value.length; ++y)
-        if (e.value[y] !== void 0) {
-          if (((b += 1), (S += _t.prettyPrint(e.value[y], n + 1, r)), y + 1 < e.value.length)) S += ",";
+    else rval += obj.type;
+    rval += `
+`;
+    rval +=
+      indent +
+      "Constructed: " +
+      obj.constructed +
+      `
+`;
+    if (obj.composed) {
+      var subvalues = 0;
+      var sub = "";
+      for (var i = 0; i < obj.value.length; ++i)
+        if (obj.value[i] !== undefined) {
+          subvalues += 1;
+          sub += asn1.prettyPrint(obj.value[i], level + 1, indentation);
+          if (i + 1 < obj.value.length) sub += ",";
         }
-      s += h + "Sub values: " + b + S;
+      rval += indent + "Sub values: " + subvalues + sub;
     } else {
-      if (((s += h + "Value: "), e.type === _t.Type.OID)) {
-        var derToOid = _t.derToOid(e.value);
-        if (((s += derToOid), Rr.pki && Rr.pki.oids)) {
-          if (derToOid in Rr.pki.oids) s += " (" + Rr.pki.oids[derToOid] + ") ";
+      rval += indent + "Value: ";
+      if (obj.type === asn1.Type.OID) {
+        var oid = asn1.derToOid(obj.value);
+        rval += oid;
+        if (forge.pki && forge.pki.oids) {
+          if (oid in forge.pki.oids) rval += " (" + forge.pki.oids[oid] + ") ";
         }
       }
-      if (e.type === _t.Type.INTEGER)
+      if (obj.type === asn1.Type.INTEGER)
         try {
-          s += _t.derToInteger(e.value);
-        } catch (error) {
-          s += "0x" + Rr.util.bytesToHex(e.value);
+          rval += asn1.derToInteger(obj.value);
+        } catch (ex) {
+          rval += "0x" + forge.util.bytesToHex(obj.value);
         }
-      else if (e.type === _t.Type.BITSTRING) {
-        if (e.value.length > 1) s += "0x" + Rr.util.bytesToHex(e.value.slice(1));
-        else s += "(none)";
-        if (e.value.length > 0) {
-          var code = e.value.charCodeAt(0);
-          if (code == 1) s += " (1 unused bit shown)";
-          else if (code > 1) s += " (" + code + " unused bits shown)";
+      else if (obj.type === asn1.Type.BITSTRING) {
+        if (obj.value.length > 1) rval += "0x" + forge.util.bytesToHex(obj.value.slice(1));
+        else rval += "(none)";
+        if (obj.value.length > 0) {
+          var unused = obj.value.charCodeAt(0);
+          if (unused == 1) rval += " (1 unused bit shown)";
+          else if (unused > 1) rval += " (" + unused + " unused bits shown)";
         }
-      } else if (e.type === _t.Type.OCTETSTRING) {
-        if (!xT.test(e.value)) s += "(" + e.value + ") ";
-        s += "0x" + Rr.util.bytesToHex(e.value);
-      } else if (e.type === _t.Type.UTF8)
+      } else if (obj.type === asn1.Type.OCTETSTRING) {
+        if (!_nonLatinRegex.test(obj.value)) rval += "(" + obj.value + ") ";
+        rval += "0x" + forge.util.bytesToHex(obj.value);
+      } else if (obj.type === asn1.Type.UTF8)
         try {
-          s += Rr.util.decodeUtf8(e.value);
-        } catch (error) {
-          if (error.message === "URI malformed")
-            s += "0x" + Rr.util.bytesToHex(e.value) + " (malformed UTF8)";
-          else throw error;
+          rval += forge.util.decodeUtf8(obj.value);
+        } catch (e) {
+          if (e.message === "URI malformed")
+            rval += "0x" + forge.util.bytesToHex(obj.value) + " (malformed UTF8)";
+          else throw e;
         }
-      else if (e.type === _t.Type.PRINTABLESTRING || e.type === _t.Type.IA5String) s += e.value;
-      else if (xT.test(e.value)) s += "0x" + Rr.util.bytesToHex(e.value);
-      else if (e.value.length === 0) s += "[null]";
-      else s += e.value;
+      else if (obj.type === asn1.Type.PRINTABLESTRING || obj.type === asn1.Type.IA5String) rval += obj.value;
+      else if (_nonLatinRegex.test(obj.value)) rval += "0x" + forge.util.bytesToHex(obj.value);
+      else if (obj.value.length === 0) rval += "[null]";
+      else rval += obj.value;
     }
-    return s;
+    return rval;
   };
 });
-
-export { Xi };
+export { require_asn1 };

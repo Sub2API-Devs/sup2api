@@ -10,34 +10,35 @@
  */
 import { getIsNonInteractiveSession } from "../../bootstrap/state.js";
 
+//@ chunk-e6aww6q8.js:1693786-1694311 fingerprint = config (0.309)
 /**
  * /config 命令对象（local-jsx）；描述：Open settings；别名 ["settings"]；实现 chunk-ak1qv1dp.js 的 _。
  */
-//@ chunk-e6aww6q8.js:1693786-1694311 fingerprint = config (0.309)
 var configCommandDefinition = {
-    aliases: ["settings"],
-    type: "local-jsx",
-    name: "config",
-    description: "Open settings",
-    argumentHint: "[key=value]",
-    immediate: (args, presentation) => args.trim() !== "" || presentation === "fullscreen",
-    requires: { ink: !0 },
-    getArgumentCompletions: (e, n) =>
-      import("./chunk-7qydycm2.js").then((r) => r.getConfigArgumentCompletions(e, n)),
+  aliases: ["settings"],
+  type: "local-jsx",
+  name: "config",
+  description: "Open settings",
+  argumentHint: "[key=value]",
+  immediate: (args, presentation) => args.trim() !== "" || presentation === "fullscreen",
+  requires: {
+    ink: true,
   },
-  configNonInteractiveCommand = {
-    type: "local",
-    name: "config",
-    aliases: ["settings"],
-    supportsNonInteractive: !0,
-    description: "Set a setting by key",
-    argumentHint: "key=value",
-    isEnabled: () => getIsNonInteractiveSession(),
-    get isHidden() {
-      return !getIsNonInteractiveSession();
-    },
-    load: () => import("./chunk-8ncxevqn.js"),
+  getArgumentCompletions: (e, n) =>
+    import("./chunk-7qydycm2.js").then((r) => r.getConfigArgumentCompletions(e, n)),
+};
+var configNonInteractiveCommand = {
+  type: "local",
+  name: "config",
+  aliases: ["settings"],
+  supportsNonInteractive: true,
+  description: "Set a setting by key",
+  argumentHint: "key=value",
+  isEnabled: () => getIsNonInteractiveSession(),
+  get isHidden() {
+    return !getIsNonInteractiveSession();
   },
-  configCommand = configCommandDefinition;
-
+  load: () => import("./chunk-8ncxevqn.js"),
+};
+var configCommand = configCommandDefinition;
 export { configCommand, configNonInteractiveCommand };

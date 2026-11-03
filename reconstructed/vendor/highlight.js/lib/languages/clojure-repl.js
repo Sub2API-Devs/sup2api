@@ -8,20 +8,22 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:69559-69747 cjs-fingerprint
-var jt = x(function (wu, Jt) {
-  function gl(e) {
+var require_clojure_repl = x(function (cjsExports, cjsModule) {
+  function clojureRepl(hljs) {
     return {
       name: "Clojure REPL",
       contains: [
         {
           className: "meta.prompt",
           begin: /^([\w.-]+|\s*#_)?=>/,
-          starts: { end: /$/, subLanguage: "clojure" },
+          starts: {
+            end: /$/,
+            subLanguage: "clojure",
+          },
         },
       ],
     };
   }
-  Jt.exports = gl;
+  cjsModule.exports = clojureRepl;
 });
-
-export { jt };
+export { require_clojure_repl };

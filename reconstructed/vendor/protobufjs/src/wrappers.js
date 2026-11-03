@@ -9,42 +9,47 @@ import { x } from "../../../runtime/bun-runtime.js";
 import { Os } from "./message.js";
 
 //@ chunk-pwh5dx3n.js:101568-102455 cjs-fingerprint
-var Ga = x(function (Ed) {
-  var yE = Ed,
-    _E = Os();
-  yE[".google.protobuf.Any"] = {
-    fromObject: function (e, t) {
-      if (e && e["@type"]) {
-        var substring = e["@type"].substring(e["@type"].lastIndexOf("/") + 1),
-          lookup = this.lookup(substring);
-        if (lookup) {
-          var s = e["@type"].charAt(0) === "." ? e["@type"].slice(1) : e["@type"];
-          if (s.indexOf("/") === -1) s = "/" + s;
-          var n = t === void 0 ? 1 : t + 1;
-          return this.create({ type_url: s, value: lookup.encode(lookup.fromObject(e, n)).finish() });
+var Ga = x(function (cjsExports) {
+  var wrappers = cjsExports;
+  var Message = Os();
+  wrappers[".google.protobuf.Any"] = {
+    fromObject: function (object, depth) {
+      if (object && object["@type"]) {
+        var name = object["@type"].substring(object["@type"].lastIndexOf("/") + 1);
+        var type = this.lookup(name);
+        if (type) {
+          var type_url = object["@type"].charAt(0) === "." ? object["@type"].slice(1) : object["@type"];
+          if (type_url.indexOf("/") === -1) type_url = "/" + type_url;
+          var nextDepth = depth === undefined ? 1 : depth + 1;
+          return this.create({
+            type_url,
+            value: type.encode(type.fromObject(object, nextDepth)).finish(),
+          });
         }
       }
-      return this.fromObject(e, t);
+      return this.fromObject(object, depth);
     },
-    toObject: function (e, t) {
-      var r = "type.googleapis.com/",
-        i = "",
-        s = "";
-      if (t && t.json && e.type_url && e.value) {
-        ((s = e.type_url.substring(e.type_url.lastIndexOf("/") + 1)),
-          (i = e.type_url.substring(0, e.type_url.lastIndexOf("/") + 1)));
-        var lookup = this.lookup(s);
-        if (lookup) e = lookup.decode(e.value);
+    toObject: function (message, options) {
+      var googleApi = "type.googleapis.com/";
+      var prefix = "";
+      var name = "";
+      if (options && options.json && message.type_url && message.value) {
+        name = message.type_url.substring(message.type_url.lastIndexOf("/") + 1);
+        prefix = message.type_url.substring(0, message.type_url.lastIndexOf("/") + 1);
+        var type = this.lookup(name);
+        if (type) message = type.decode(message.value);
       }
-      if (!(e instanceof this.ctor) && e instanceof _E) {
-        var toObject = e.$type.toObject(e, t),
-          o = e.$type.fullName[0] === "." ? e.$type.fullName.slice(1) : e.$type.fullName;
-        if (i === "") i = r;
-        return ((s = i + o), (toObject["@type"] = s), toObject);
+      if (!(message instanceof this.ctor) && message instanceof Message) {
+        var object = message.$type.toObject(message, options);
+        var messageName =
+          message.$type.fullName[0] === "." ? message.$type.fullName.slice(1) : message.$type.fullName;
+        if (prefix === "") prefix = googleApi;
+        name = prefix + messageName;
+        object["@type"] = name;
+        return object;
       }
-      return this.toObject(e, t);
+      return this.toObject(message, options);
     },
   };
 });
-
 export { Ga };

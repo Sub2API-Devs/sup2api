@@ -8,14 +8,15 @@
  * pieces: chunk-vtcm47cy.js (1)
  * attribution: placement 1
  */
-import { Xne } from "../../vendor/zod/v4/core/core.js";
+import { config } from "../../vendor/zod/v4/core/core.js";
 
+//@ chunk-vtcm47cy.js:228-261 placement
 /**
  * 启动时配置 zod。
  */
-//@ chunk-vtcm47cy.js:228-261 placement
 function configureZodForStartup() {
-  Xne({ jitless: !0 });
+  config({
+    jitless: true,
+  });
 }
-
 export { configureZodForStartup };

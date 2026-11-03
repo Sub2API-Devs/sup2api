@@ -9,26 +9,30 @@
  * attribution: placement 2
  */
 import { logForDebugging } from "../debug.js";
-import { ql } from "../stringUtils.js";
-import { Vyt } from "./settingsLabel.js";
+import { cleanForDisplay } from "../stringUtils.js";
+import { settingsSourceLabel } from "./settingsLabel.js";
 
+//@ chunk-1ptrwbb7.js:452-565 placement
 /**
  * 把设置问题分为仅状态提示与无效条目两类。
  */
-//@ chunk-1ptrwbb7.js:452-565 placement
-function splitStatusNotices(o) {
-  let r = [],
-    i = [];
-  for (let n of o) (n.statusOnly ? r : i).push(n);
-  return { statusNotices: r, invalidEntries: i };
+function splitStatusNotices(errors) {
+  let r = [];
+  let i = [];
+  for (let n of errors) (n.statusOnly ? r : i).push(n);
+  return {
+    statusNotices: r,
+    invalidEntries: i,
+  };
 }
 //@ chunk-1ptrwbb7.js:565-721 placement
 function logSkippedInvalidSetting(o) {
   for (let r of o)
     logForDebugging(
-      `Invalid setting skipped without dialog (automated session): ${ql(Vyt(r.file))}: ${r.path}: ${r.message}`,
-      { level: "error" },
+      `Invalid setting skipped without dialog (automated session): ${cleanForDisplay(settingsSourceLabel(r.file))}: ${r.path}: ${r.message}`,
+      {
+        level: "error",
+      },
     );
 }
-
 export { splitStatusNotices, logSkippedInvalidSetting };

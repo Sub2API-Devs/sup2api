@@ -13,11 +13,11 @@ import { canonicalArtifactTargetFor } from "../../tools/ArtifactTool/artifactUrl
 
 //@ chunk-chsmq3nc.js:991-1715 placement
 function afterQuickstartSavedLine(t, o, a, d) {
-  let e = (i, r) => typeof i === "string" && typeof r === "string" && i === a(r),
-    s = e(t.saved_pages_dir, o)
-      ? `[A quickstart in this conversation saved reference pages of this type on disk in ${shellQuoteArgs([t.saved_pages_dir])}; its result lists them, so those are not attached here.]`
-      : "";
-  if (t.not_listed === !0)
+  let e = (i, r) => typeof i === "string" && typeof r === "string" && i === a(r);
+  let s = e(t.saved_pages_dir, o)
+    ? `[A quickstart in this conversation saved reference pages of this type on disk in ${shellQuoteArgs([t.saved_pages_dir])}; its result lists them, so those are not attached here.]`
+    : "";
+  if (t.not_listed === true)
     return s === ""
       ? ""
       : `

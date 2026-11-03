@@ -13,5 +13,4 @@
 function sliceAnsi(Z) {
   return Z.fullWidth;
 }
-
 export { sliceAnsi };

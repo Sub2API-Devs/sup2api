@@ -12,19 +12,21 @@ import { stripNonPrintable } from "./truncateGraphemes.js";
 import { truncateToLength } from "./stringUtils.js";
 
 //@ chunk-33en6jc2.js:263-324 placement
-function gQe(n) {
+/**
+ * 把行分隔符替换为空格。
+ */
+function collapseLineBreaks(n) {
   return n.replace(/[\r\n\u2028\u2029]+/g, " ");
 }
+//@ chunk-33en6jc2.js:324-516 placement
 /**
  * 去除不可打印字符后按长度截断，并注明还有多少字符未显示。
  */
-//@ chunk-33en6jc2.js:324-516 placement
 function truncateWithNotice(n, r) {
   let e = stripNonPrintable(n);
   if (e.length <= r) return e;
-  let t = truncateToLength(e, r),
-    o = Array.from(e.slice(t.length)).length;
+  let t = truncateToLength(e, r);
+  let o = Array.from(e.slice(t.length)).length;
   return `${t} \u2026 (${o} more characters follow that are NOT shown in this message)`;
 }
-
-export { truncateWithNotice, gQe };
+export { truncateWithNotice, collapseLineBreaks };

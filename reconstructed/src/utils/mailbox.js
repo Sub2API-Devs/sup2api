@@ -10,10 +10,10 @@
  */
 import { createSignal } from "./signal.js";
 
+//@ chunk-xe7zq1p4.js:11488-12161 fingerprint = Mailbox (1)
 /**
  * 进程内消息邮箱：按条件等待/取出消息，供队友与后台代理通信。
  */
-//@ chunk-xe7zq1p4.js:11488-12161 fingerprint = Mailbox (1)
 class Mailbox {
   queue = [];
   waiters = [];
@@ -25,31 +25,39 @@ class Mailbox {
   get revision() {
     return this._revision;
   }
-  send(n) {
+  send(msg) {
     this._revision++;
-    let index = this.waiters.findIndex((waiter) => waiter.fn(n));
-    if (index !== -1) {
-      let i = this.waiters.splice(index, 1)[0];
-      if (i) {
-        (i.resolve(n), this.notify());
+    let idx = this.waiters.findIndex((waiter) => waiter.fn(msg));
+    if (idx !== -1) {
+      let waiter = this.waiters.splice(idx, 1)[0];
+      if (waiter) {
+        waiter.resolve(msg);
+        this.notify();
         return;
       }
     }
-    (this.queue.push(n), this.notify());
+    this.queue.push(msg);
+    this.notify();
   }
-  poll(n = () => !0) {
-    let index = this.queue.findIndex(n);
-    if (index === -1) return;
-    return this.queue.splice(index, 1)[0];
+  poll(fn = () => true) {
+    let idx = this.queue.findIndex(fn);
+    if (idx === -1) return;
+    return this.queue.splice(idx, 1)[0];
   }
-  receive(n = () => !0) {
-    let index = this.queue.findIndex(n);
-    if (index !== -1) {
-      let i = this.queue.splice(index, 1)[0];
-      if (i) return (this.notify(), Promise.resolve(i));
+  receive(fn = () => true) {
+    let idx = this.queue.findIndex(fn);
+    if (idx !== -1) {
+      let msg = this.queue.splice(idx, 1)[0];
+      if (msg) {
+        this.notify();
+        return Promise.resolve(msg);
+      }
     }
-    return new Promise((i) => {
-      this.waiters.push({ fn: n, resolve: i });
+    return new Promise((resolve) => {
+      this.waiters.push({
+        fn,
+        resolve,
+      });
     });
   }
   subscribe = this.changed.subscribe;
@@ -57,5 +65,4 @@ class Mailbox {
     this.changed.emit();
   }
 }
-
 export { Mailbox };

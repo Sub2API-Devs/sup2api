@@ -15,25 +15,30 @@ import { getRootSession } from "../../bootstrap/state.js";
 class ShellPathsState {
   shellConfig = null;
   bashToolShellPath = null;
-  resolvedBashToolShellPath = void 0;
+  resolvedBashToolShellPath = undefined;
   powerShellProvider = null;
   powerShellPluginBinPaths = null;
   powerShellPath = null;
-  resolvedPowerShellPath = void 0;
+  resolvedPowerShellPath = undefined;
   organizationsPowerShellPath = null;
-  gitBashPath = void 0;
+  gitBashPath = undefined;
   windowsShellLauncherUsable = null;
-  warnedShortTmpDir = !1;
+  warnedShortTmpDir = false;
 }
 //@ chunk-648vry02.js:1025-1048 placement
-var b = new HostScoped(() => new ShellPathsState());
+var shellPathsByHost = new HostScoped(() => new ShellPathsState());
 //@ chunk-648vry02.js:1048-1085 placement
-function pre() {
-  return b.of(getRootSession().host);
+/**
+ * 按宿主缓存的 shell 路径状态。
+ */
+function shellPaths() {
+  return shellPathsByHost.of(getRootSession().host);
 }
 //@ chunk-648vry02.js:1085-1139 placement
-function ZSr() {
-  return pre().resolvedBashToolShellPath;
+/**
+ * 取已解析的 Bash 工具 shell 路径。
+ */
+function getResolvedBashShellPath() {
+  return shellPaths().resolvedBashToolShellPath;
 }
-
-export { ZSr, pre };
+export { getResolvedBashShellPath, shellPaths };

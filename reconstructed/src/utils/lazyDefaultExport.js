@@ -8,7 +8,7 @@
  * pieces: chunk-ndb2dret.js (1)
  * attribution: placement 1
  */
-import { Wur } from "../../vendor/google-auth-library/build/src/index.js";
+import { require_google_auth_library } from "../../vendor/google-auth-library/build/src/index.js";
 
 //@ chunk-ndb2dret.js:228-249 placement
-export default Wur();
+export default require_google_auth_library();

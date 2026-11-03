@@ -10,9 +10,19 @@
  */
 import { isUserTextPrompt } from "../../utils/messages.js";
 import { fileHistoryMakeSnapshot, reduceFileHistoryState } from "../../utils/fileHistory.js";
-import { $f, Up, e7n, REt, getRetainedPastedContents } from "../../utils/messageQueueManager.js";
+import {
+  isMainAgentCommand,
+  isRefillableInput,
+  isReplayableHistoryEntry,
+  inputDisplayText,
+  getRetainedPastedContents,
+} from "../../utils/messageQueueManager.js";
 import { createAbortController } from "../../utils/abortController.js";
-import { b7e, hasThirdPartyPromptHooks, _Io } from "../../utils/processUserInput/userPromptSubmitHooks.js";
+import {
+  hooksSnapshotKey,
+  hasThirdPartyPromptHooks,
+  hasPromptSubmitHooks as hasPromptSubmitHooks_2,
+} from "../../utils/processUserInput/userPromptSubmitHooks.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { errorMessage, isAbortError } from "../../utils/errors.js";
 import { mergeTurnTags } from "../../utils/userTurnTags.js";
@@ -20,42 +30,37 @@ import { recordSubmittedPrompts } from "../../history.js";
 import { withExpandedPastes } from "../../utils/hooks/postSamplingHooks.js";
 import { logError } from "../../utils/log.js";
 
+//@ chunk-18hwfzwa.js:1493732-1494053 placement
 /**
  * 生成文件历史快照函数：先为同批的其他用户提示做快照。
  */
-//@ chunk-18hwfzwa.js:1493732-1494053 placement
 function snapshotBatchSiblings({
-  baseMakeFileHistorySnapshot: baseMakeFileHistorySnapshot,
-  batchMessages: batchMessages,
-  preSnapshottedSiblings: preSnapshottedSiblings,
-  getAppState: getAppState,
-  setAppState: setAppState,
-  storageV5: storageV5,
+  baseMakeFileHistorySnapshot,
+  batchMessages,
+  preSnapshottedSiblings,
+  getAppState,
+  setAppState,
+  storageV5,
 }) {
   return async (Re) => {
-    for (let Be of batchMessages.filter(isUserTextPrompt)) {
-      if (Be.uuid === Re || preSnapshottedSiblings.has(Be.uuid)) continue;
-      (preSnapshottedSiblings.add(Be.uuid),
-        await makeFileHistorySnapshot({
-          getAppState: getAppState,
-          setAppState: setAppState,
-          messageUuid: Be.uuid,
-          storageV5: storageV5,
-        }));
+    for (let batchMessage of batchMessages.filter(isUserTextPrompt)) {
+      if (batchMessage.uuid === Re || preSnapshottedSiblings.has(batchMessage.uuid)) continue;
+      preSnapshottedSiblings.add(batchMessage.uuid);
+      await makeFileHistorySnapshot({
+        getAppState,
+        setAppState,
+        messageUuid: batchMessage.uuid,
+        storageV5,
+      });
     }
     await baseMakeFileHistorySnapshot(Re);
   };
 }
+//@ chunk-18hwfzwa.js:1494053-1494614 placement
 /**
  * 批量期间把追加/替换/插入消息的操作缓冲到批次中。
  */
-//@ chunk-18hwfzwa.js:1494053-1494614 placement
-function createBatchedMessageOp({
-  baseApplyMessageOp: baseApplyMessageOp,
-  batchMessages: batchMessages,
-  isBatchHandedOff: isBatchHandedOff,
-  buffered: buffered,
-}) {
+function createBatchedMessageOp({ baseApplyMessageOp, batchMessages, isBatchHandedOff, buffered }) {
   return (ee) => {
     let ke = batchMessages.length > 0 && !isBatchHandedOff();
     if (ke && ee.type === "append") {
@@ -64,14 +69,15 @@ function createBatchedMessageOp({
       return;
     }
     if (ke && ee.type === "replace-by-uuid") {
-      let index = batchMessages.findIndex((Be) => Be.uuid === ee.uuid);
+      let index = batchMessages.findIndex((batchMessage) => batchMessage.uuid === ee.uuid);
       if (index !== -1) {
-        if (((batchMessages[index] = ee.message), buffered.delete(ee.uuid))) buffered.add(ee.message.uuid);
+        batchMessages[index] = ee.message;
+        if (buffered.delete(ee.uuid)) buffered.add(ee.message.uuid);
         return;
       }
     }
     if (ke && ee.type === "insert-after-uuid") {
-      let index = batchMessages.findIndex((Be) => Be.uuid === ee.uuid);
+      let index = batchMessages.findIndex((batchMessage) => batchMessage.uuid === ee.uuid);
       if (index !== -1) {
         batchMessages.splice(index + 1, 0, ...ee.messages);
         for (let message of ee.messages) buffered.add(message.uuid);
@@ -81,102 +87,99 @@ function createBatchedMessageOp({
     baseApplyMessageOp(ee);
   };
 }
+//@ chunk-18hwfzwa.js:1494614-1494829 placement
 /**
  * 为某条消息做文件历史快照并写回应用状态。
  */
-//@ chunk-18hwfzwa.js:1494614-1494829 placement
-function makeFileHistorySnapshot({
-  getAppState: getAppState,
-  setAppState: setAppState,
-  messageUuid: messageUuid,
-  storageV5: storageV5,
-}) {
+function makeFileHistorySnapshot({ getAppState, setAppState, messageUuid, storageV5 }) {
   return fileHistoryMakeSnapshot(
     () => getAppState().fileHistory,
     (ee) =>
       setAppState((ke) => {
         let Re = reduceFileHistoryState(ke.fileHistory, ee, storageV5);
         if (Re === ke.fileHistory) return ke;
-        return { ...ke, fileHistory: Re };
+        return {
+          ...ke,
+          fileHistory: Re,
+        };
       }),
     messageUuid,
   );
 }
+//@ chunk-18hwfzwa.js:1494829-1494937 placement
 /**
  * 命令队列中没有可执行的用户提示。
  */
-//@ chunk-18hwfzwa.js:1494829-1494937 placement
-function isQueueFreeOfPrompts(h, x) {
-  return !h.getCommandQueue().some((D) => $f(D) && Up(D) && (x === void 0 || D.ideSelection === void 0));
+function isQueueFreeOfPrompts(h, ideSelection) {
+  return !h
+    .getCommandQueue()
+    .some(
+      (D) =>
+        isMainAgentCommand(D) &&
+        isRefillableInput(D) &&
+        (ideSelection === undefined || D.ideSelection === undefined),
+    );
 }
+//@ chunk-18hwfzwa.js:1494937-1495168 placement
 /**
  * 是否有 prompt.submit 钩子（读取失败时视为有）。
  */
-//@ chunk-18hwfzwa.js:1494937-1495168 placement
-function hasPromptSubmitHooks(h, x, D, L = "any") {
+function hasPromptSubmitHooks(turn, x, D, L = "any") {
   try {
-    let toolUseContext = h.buildToolUseContext(x, [], createAbortController(), D);
+    let toolUseContext = turn.buildToolUseContext(x, [], createAbortController(), D);
     return L === "installed"
-      ? b7e(toolUseContext).hooks !== "" || hasThirdPartyPromptHooks()
-      : _Io(toolUseContext);
+      ? hooksSnapshotKey(toolUseContext).hooks !== "" || hasThirdPartyPromptHooks()
+      : hasPromptSubmitHooks_2(toolUseContext);
   } catch (error) {
-    return (
-      logForDebugging(`prompt.submit at Enter could not read the hooks: ${errorMessage(error)}`, {
-        level: "error",
-      }),
-      !0
-    );
+    logForDebugging(`prompt.submit at Enter could not read the hooks: ${errorMessage(error)}`, {
+      level: "error",
+    });
+    return true;
   }
 }
+//@ chunk-18hwfzwa.js:1495168-1495281 placement
 /**
  * 被丢弃的输入放回输入框（含粘贴内容）。
  */
-//@ chunk-18hwfzwa.js:1495168-1495281 placement
-function restoreDroppedInput(h, x) {
-  if (!e7n(h)) return;
-  x.land(REt(h), h);
-  let D = getRetainedPastedContents(h);
-  if (D.length > 0) x.setPastedContents((L) => mergeTurnTags(L, D));
+function restoreDroppedInput(h, composer) {
+  if (!isReplayableHistoryEntry(h)) return;
+  composer.land(inputDisplayText(h), h);
+  let retainedPastedContents = getRetainedPastedContents(h);
+  if (retainedPastedContents.length > 0)
+    composer.setPastedContents((L) => mergeTurnTags(L, retainedPastedContents));
 }
+//@ chunk-18hwfzwa.js:1495281-1495463 placement
 /**
  * 延迟写入一条历史记录（只写一次）。
  */
-//@ chunk-18hwfzwa.js:1495281-1495463 placement
-function deferredHistoryWrite(h, x) {
-  let D = !1;
+function deferredHistoryWrite(h, storageV5) {
+  let D = false;
   return (L) => {
     if (D) return;
-    D = !0;
+    D = true;
     try {
-      recordSubmittedPrompts([h], x, { placed: withExpandedPastes, screened: new Map([[h, L]]) });
+      recordSubmittedPrompts([h], storageV5, {
+        placed: withExpandedPastes,
+        screened: new Map([[h, L]]),
+      });
     } catch (error) {
       if (isAbortError(error)) logForDebugging(`a deferred line's write: ${errorMessage(error)}`);
       else logError(error);
     }
   };
 }
+//@ chunk-18hwfzwa.js:1495463-1495627 placement
 /**
  * 写入被扣留的历史记录，被丢弃时放回输入框。
  */
-//@ chunk-18hwfzwa.js:1495463-1495627 placement
-function writeHeldHistory({
-  cmd: cmd,
-  screened: screened,
-  held: held,
-  storageV5: storageV5,
-  composer: composer,
-}) {
+function writeHeldHistory({ cmd, screened, held, storageV5, composer }) {
   if (!held.delete(cmd)) return;
-  if (
-    (recordSubmittedPrompts([cmd], storageV5, {
-      placed: withExpandedPastes,
-      screened: new Map([[cmd, screened]]),
-    }),
-    screened.dropped === !0)
-  )
-    restoreDroppedInput(cmd, composer);
+  recordSubmittedPrompts([cmd], storageV5, {
+    placed: withExpandedPastes,
+    screened: new Map([[cmd, screened]]),
+  });
+  if (screened.dropped === true) restoreDroppedInput(cmd, composer);
 }
-
 export {
   hasPromptSubmitHooks,
   isQueueFreeOfPrompts,

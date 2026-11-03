@@ -6,48 +6,53 @@
  * attribution: esm-layout 1, esm-fingerprint 3
  */
 import { Re } from "../../../../runtime/bun-runtime.js";
-import { Kg } from "../../../@smithy/protocol-http/dist-cjs/index.js";
+import { require_protocol_http } from "../../../@smithy/protocol-http/dist-cjs/index.js";
 
 //@ chunk-3cddmtk7.js:10978-10994 esm-layout
-var me = Re(Kg());
+var import_protocol_http = Re(require_protocol_http());
 //@ chunk-3cddmtk7.js:10994-11046 esm-fingerprint
-var pe = (e) => e.protocol === "ws:" || e.protocol === "wss:";
+var isWebSocketRequest = (toSign) => toSign.protocol === "ws:" || toSign.protocol === "wss:";
 //@ chunk-3cddmtk7.js:11046-11394 esm-fingerprint
-class Y {
+class WebsocketSignatureV4 {
   signer;
-  constructor(e) {
-    this.signer = e.signer;
+  constructor(options) {
+    this.signer = options.signer;
   }
-  presign(e, t = {}) {
-    return this.signer.presign(e, t);
+  presign(originalRequest, options = {}) {
+    return this.signer.presign(originalRequest, options);
   }
-  async sign(e, t) {
-    if (me.HttpRequest.isInstance(e) && pe(e))
+  async sign(toSign, options) {
+    if (import_protocol_http.HttpRequest.isInstance(toSign) && isWebSocketRequest(toSign))
       return {
         ...(await this.signer.presign(
-          { ...e, body: "" },
           {
-            ...t,
+            ...toSign,
+            body: "",
+          },
+          {
+            ...options,
             expiresIn: 60,
-            unsignableHeaders: new Set(Object.keys(e.headers).filter((r) => r !== "host")),
+            unsignableHeaders: new Set(Object.keys(toSign.headers).filter((header) => header !== "host")),
           },
         )),
-        body: e.body,
+        body: toSign.body,
       };
-    else return this.signer.sign(e, t);
+    else return this.signer.sign(toSign, options);
   }
 }
 //@ chunk-3cddmtk7.js:11394-11622 esm-fingerprint
-var xe = (e) => {
-    let { signer: signer } = e;
-    return Object.assign(e, {
-      signer: async (o) => {
-        let r = await signer(o);
-        if (wt(r)) return new Y({ signer: r });
-        throw Error("Expected WebsocketSignatureV4 signer, please check the client constructor.");
-      },
-    });
-  },
-  wt = (e) => !!e;
-
-export { xe };
+var resolveWebSocketConfig = (input) => {
+  let { signer } = input;
+  return Object.assign(input, {
+    signer: async (authScheme) => {
+      let signerObj = await signer(authScheme);
+      if (wt(signerObj))
+        return new WebsocketSignatureV4({
+          signer: signerObj,
+        });
+      throw Error("Expected WebsocketSignatureV4 signer, please check the client constructor.");
+    },
+  });
+};
+var wt = (signerObj) => !!signerObj;
+export { resolveWebSocketConfig };

@@ -10,129 +10,137 @@ import { nt } from "./enum.js";
 import { de } from "./util.js";
 
 //@ chunk-pwh5dx3n.js:93802-96427 cjs-fingerprint
-var za = x(function (cA, _d) {
-  _d.exports = vE;
-  var gE = nt(),
-    Ua = de();
-  function He(e, t) {
+var za = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = verifier;
+  var Enum = nt();
+  var util = de();
+  function invalid(field, expected) {
     return (
-      e.name +
+      field.name +
       ": " +
-      t +
-      (e.repeated && t !== "array" ? "[]" : e.map && t !== "object" ? "{k:" + e.keyType + "}" : "") +
+      expected +
+      (field.repeated && expected !== "array"
+        ? "[]"
+        : field.map && expected !== "object"
+          ? "{k:" + field.keyType + "}"
+          : "") +
       " expected"
     );
   }
-  function Ba(e, t, r, i) {
-    if (t.resolvedType)
-      if (t.resolvedType instanceof gE) {
-        e("switch(%s){", i)("default:")("return%j", He(t, "enum value"));
-        for (var keys = Object.keys(t.resolvedType.values), n = 0; n < keys.length; ++n)
-          e("case %i:", t.resolvedType.values[keys[n]]);
-        e("break")("}");
-      } else e("{")("var e=types[%i].verify(%s,n+1);", r, i)("if(e)")("return%j+e", t.name + ".")("}");
-    else
-      switch (t.type) {
+  function genVerifyValue(gen, field, fieldIndex, ref) {
+    if (field.resolvedType) {
+      if (field.resolvedType instanceof Enum) {
+        gen("switch(%s){", ref)("default:")("return%j", invalid(field, "enum value"));
+        for (var keys = Object.keys(field.resolvedType.values), j = 0; j < keys.length; ++j)
+          gen("case %i:", field.resolvedType.values[keys[j]]);
+        gen("break")("}");
+      } else
+        gen("{")("var e=types[%i].verify(%s,n+1);", fieldIndex, ref)("if(e)")("return%j+e", field.name + ".")(
+          "}",
+        );
+    } else
+      switch (field.type) {
         case "int32":
         case "uint32":
         case "sint32":
         case "fixed32":
         case "sfixed32":
-          e("if(!util.isInteger(%s))", i)("return%j", He(t, "integer"));
+          gen("if(!util.isInteger(%s))", ref)("return%j", invalid(field, "integer"));
           break;
         case "int64":
         case "uint64":
         case "sint64":
         case "fixed64":
         case "sfixed64":
-          e(
+          gen(
             "if(!util.isInteger(%s)&&!(%s&&util.isInteger(%s.low)&&util.isInteger(%s.high)))",
-            i,
-            i,
-            i,
-            i,
-          )("return%j", He(t, "integer|Long"));
+            ref,
+            ref,
+            ref,
+            ref,
+          )("return%j", invalid(field, "integer|Long"));
           break;
         case "float":
         case "double":
-          e('if(typeof %s!=="number")', i)("return%j", He(t, "number"));
+          gen('if(typeof %s!=="number")', ref)("return%j", invalid(field, "number"));
           break;
         case "bool":
-          e('if(typeof %s!=="boolean")', i)("return%j", He(t, "boolean"));
+          gen('if(typeof %s!=="boolean")', ref)("return%j", invalid(field, "boolean"));
           break;
         case "string":
-          e("if(!util.isString(%s))", i)("return%j", He(t, "string"));
+          gen("if(!util.isString(%s))", ref)("return%j", invalid(field, "string"));
           break;
         case "bytes":
-          e(
+          gen(
             'if(!(%s&&typeof %s.length==="number"||util.isString(%s)))',
-            i,
-            i,
-            i,
-          )("return%j", He(t, "buffer"));
+            ref,
+            ref,
+            ref,
+          )("return%j", invalid(field, "buffer"));
           break;
       }
-    return e;
+    return gen;
   }
-  function mE(e, t, r) {
-    switch (t.keyType) {
+  function genVerifyKey(gen, field, ref) {
+    switch (field.keyType) {
       case "int32":
       case "uint32":
       case "sint32":
       case "fixed32":
       case "sfixed32":
-        e("if(!util.key32Re.test(%s))", r)("return%j", He(t, "integer key"));
+        gen("if(!util.key32Re.test(%s))", ref)("return%j", invalid(field, "integer key"));
         break;
       case "int64":
       case "uint64":
       case "sint64":
       case "fixed64":
       case "sfixed64":
-        e("if(!util.key64Re.test(%s))", r)("return%j", He(t, "integer|Long key"));
+        gen("if(!util.key64Re.test(%s))", ref)("return%j", invalid(field, "integer|Long key"));
         break;
       case "bool":
-        e("if(!util.key2Re.test(%s))", r)("return%j", He(t, "boolean key"));
+        gen("if(!util.key2Re.test(%s))", ref)("return%j", invalid(field, "boolean key"));
         break;
     }
-    return e;
+    return gen;
   }
-  function vE(e) {
-    var t = Ua.codegen(["m", "n"], e.name + "$verify")('if(typeof m!=="object"||m===null)')(
-        "return%j",
-        "object expected",
-      )("if(n===undefined)n=0")("if(n>util.recursionLimit)")("return%j", "maximum nesting depth exceeded"),
-      oneofsArray = e.oneofsArray,
-      i = {};
-    if (oneofsArray.length) t("var p={}");
-    for (var s = 0; s < e.fieldsArray.length; ++s) {
-      var resolved = e._fieldsArray[s].resolve(),
-        a = "m" + Ua.safeProp(resolved.name);
-      if (resolved.optional) t("if(%s!=null&&m.hasOwnProperty(%j)){", a, resolved.name);
-      if (resolved.map)
-        (t("if(!util.isObject(%s))", a)("return%j", He(resolved, "object"))("var k=Object.keys(%s)", a)(
-          "for(var i=0;i<k.length;++i){",
-        ),
-          mE(t, resolved, "k[i]"),
-          Ba(t, resolved, s, a + "[k[i]]")("}"));
-      else if (resolved.repeated)
-        (t("if(!Array.isArray(%s))", a)("return%j", He(resolved, "array"))(
+  function verifier(mtype) {
+    var gen = util.codegen(["m", "n"], mtype.name + "$verify")('if(typeof m!=="object"||m===null)')(
+      "return%j",
+      "object expected",
+    )("if(n===undefined)n=0")("if(n>util.recursionLimit)")("return%j", "maximum nesting depth exceeded");
+    var oneofs = mtype.oneofsArray;
+    var seenFirstField = {};
+    if (oneofs.length) gen("var p={}");
+    for (var i = 0; i < mtype.fieldsArray.length; ++i) {
+      var field = mtype._fieldsArray[i].resolve();
+      var ref = "m" + util.safeProp(field.name);
+      if (field.optional) gen("if(%s!=null&&m.hasOwnProperty(%j)){", ref, field.name);
+      if (field.map) {
+        gen("if(!util.isObject(%s))", ref)("return%j", invalid(field, "object"))(
+          "var k=Object.keys(%s)",
+          ref,
+        )("for(var i=0;i<k.length;++i){");
+        genVerifyKey(gen, field, "k[i]");
+        genVerifyValue(gen, field, i, ref + "[k[i]]")("}");
+      } else if (field.repeated) {
+        gen("if(!Array.isArray(%s))", ref)("return%j", invalid(field, "array"))(
           "for(var i=0;i<%s.length;++i){",
-          a,
-        ),
-          Ba(t, resolved, s, a + "[i]")("}"));
-      else {
-        if (resolved.partOf) {
-          var safeProp = Ua.safeProp(resolved.partOf.name);
-          if (i[resolved.partOf.name] === 1)
-            t("if(p%s===1)", safeProp)("return%j", resolved.partOf.name + ": multiple values");
-          ((i[resolved.partOf.name] = 1), t("p%s=1", safeProp));
+          ref,
+        );
+        genVerifyValue(gen, field, i, ref + "[i]")("}");
+      } else {
+        if (field.partOf) {
+          var oneofProp = util.safeProp(field.partOf.name);
+          if (seenFirstField[field.partOf.name] === 1)
+            gen("if(p%s===1)", oneofProp)("return%j", field.partOf.name + ": multiple values");
+          seenFirstField[field.partOf.name] = 1;
+          gen("p%s=1", oneofProp);
         }
-        Ba(t, resolved, s, a);
+        genVerifyValue(gen, field, i, ref);
       }
-      if (resolved.optional) t("}");
+      if (field.optional) gen("}");
     }
-    return t("return null");
+    return gen("return null");
   }
 });
-
 export { za };

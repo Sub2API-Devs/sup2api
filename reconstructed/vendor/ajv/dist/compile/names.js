@@ -6,31 +6,32 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { uh } from "./codegen/index.js";
+import { require_codegen_2 } from "./codegen/index.js";
 
 //@ chunk-s82q9s4x.js:20766-21375 cjs-fingerprint
-var DPe = x(function (ys) {
-  Object.defineProperty(ys, "__esModule", { value: !0 });
-  var R = uh(),
-    gc = {
-      data: new R.Name("data"),
-      valCxt: new R.Name("valCxt"),
-      instancePath: new R.Name("instancePath"),
-      parentData: new R.Name("parentData"),
-      parentDataProperty: new R.Name("parentDataProperty"),
-      rootData: new R.Name("rootData"),
-      dynamicAnchors: new R.Name("dynamicAnchors"),
-      vErrors: new R.Name("vErrors"),
-      errors: new R.Name("errors"),
-      this: new R.Name("this"),
-      self: new R.Name("self"),
-      scope: new R.Name("scope"),
-      json: new R.Name("json"),
-      jsonPos: new R.Name("jsonPos"),
-      jsonLen: new R.Name("jsonLen"),
-      jsonPart: new R.Name("jsonPart"),
-    };
-  ys.default = gc;
+var require_names = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  var codegen_1 = require_codegen_2();
+  var names = {
+    data: new codegen_1.Name("data"),
+    valCxt: new codegen_1.Name("valCxt"),
+    instancePath: new codegen_1.Name("instancePath"),
+    parentData: new codegen_1.Name("parentData"),
+    parentDataProperty: new codegen_1.Name("parentDataProperty"),
+    rootData: new codegen_1.Name("rootData"),
+    dynamicAnchors: new codegen_1.Name("dynamicAnchors"),
+    vErrors: new codegen_1.Name("vErrors"),
+    errors: new codegen_1.Name("errors"),
+    this: new codegen_1.Name("this"),
+    self: new codegen_1.Name("self"),
+    scope: new codegen_1.Name("scope"),
+    json: new codegen_1.Name("json"),
+    jsonPos: new codegen_1.Name("jsonPos"),
+    jsonLen: new codegen_1.Name("jsonLen"),
+    jsonPart: new codegen_1.Name("jsonPart"),
+  };
+  cjsExports.default = names;
 });
-
-export { DPe };
+export { require_names };

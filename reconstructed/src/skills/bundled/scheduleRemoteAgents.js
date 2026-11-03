@@ -8,7 +8,7 @@
  * pieces: chunk-6mwt0myy.js (2), chunk-dcmhvw5a.js (1), chunk-m3arwd1y.js (13)
  * attribution: placement 2, fingerprint 6, callgraph-fingerprint 1, affinity 1, layout 5, file-local 1
  */
-import { O$e } from "../../services/mcp/claudeai.js";
+import { normalizeConnectorId } from "../../services/mcp/claudeai.js";
 import { isPluginServerConfig } from "../../services/mcp/types.js";
 import { plural } from "../../utils/stringUtils.js";
 import { getRemoteUrl } from "../../utils/git.js";
@@ -50,37 +50,44 @@ import { uuidToBigInt, base58Encode } from "../../utils/taggedId.js";
 var BASE58_2 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 //@ chunk-m3arwd1y.js:12210-12528 fingerprint = taggedIdToUUID (1)
 function taggedIdToUUID(taggedId) {
-  let n = O$e(taggedId),
-    prefix = "mcpsrv_";
+  let n = normalizeConnectorId(taggedId);
+  let prefix = "mcpsrv_";
   if (!n.startsWith("mcpsrv_")) return null;
-  let rest = n.slice(7).slice(2),
-    h = 0n;
+  let rest = n.slice(7).slice(2);
+  let n_2 = 0n;
   for (let f of rest) {
     let idx = BASE58_2.indexOf(f);
     if (idx === -1) return null;
-    h = h * 58n + BigInt(idx);
+    n_2 = n_2 * 58n + BigInt(idx);
   }
-  let hex = h.toString(16).padStart(32, "0");
+  let hex = n_2.toString(16).padStart(32, "0");
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
 }
 //@ chunk-m3arwd1y.js:12528-12637 layout
-function isClaudeAiConnectorConfig(s) {
-  if (s.type !== "claudeai-proxy") return !1;
-  return s.scope === "claudeai" || (s.scope === "dynamic" && !isPluginServerConfig(s));
+function isClaudeAiConnectorConfig(config) {
+  if (config.type !== "claudeai-proxy") return false;
+  return config.scope === "claudeai" || (config.scope === "dynamic" && !isPluginServerConfig(config));
 }
 //@ chunk-m3arwd1y.js:12637-12677 layout
-function L(s) {
+/**
+ * 判断 MCP 客户端是否可用于 claude.ai 连接器（已连接/缓存且配置匹配）。
+ */
+function isUsableClaudeAiConnector(s) {
   return isConnectedOrCached(s) && isClaudeAiConnectorConfig(s.config);
 }
 //@ chunk-m3arwd1y.js:12677-12870 placement = _temp2 (1)
 function collectClaudeAiConnectors(client_0) {
   let n = [];
   for (let a of client_0) {
-    if (!L(a)) continue;
+    if (!isUsableClaudeAiConnector(a)) continue;
     if (a.config.type !== "claudeai-proxy") continue;
     let p = taggedIdToUUID(a.config.id);
     if (!p) continue;
-    n.push({ uuid: p, name: a.name, url: a.config.url });
+    n.push({
+      uuid: p,
+      name: a.name,
+      url: a.config.url,
+    });
   }
   return n;
 }
@@ -93,61 +100,62 @@ function sanitizeConnectorName(name) {
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "");
 }
+//@ chunk-m3arwd1y.js:13029-19179 layout
 /**
  * 为 /schedule 远程代理提示词生成 MCP 连接器说明：列出已连接的 claude.ai 连接器（uuid、名称、URL）；没有时按原因（托管锁定、受限配置、退出、安全模式、缺少权限、仍在连接）给出对应解释，并说明仅本地的服务器和同名重复项。
  */
-//@ chunk-m3arwd1y.js:13029-19179 layout
 function buildConnectorsInfo({
-  connectors: connectors,
-  localOnlyServerCount: localOnlyServerCount,
-  suppressedTwinCount: suppressedTwinCount,
-  suppressedTwinLabels: suppressedTwinLabels,
-  connectorFetchSkipReason: connectorFetchSkipReason,
-  hasUnlistedTrustedConnector: hasUnlistedTrustedConnector,
+  connectors,
+  localOnlyServerCount,
+  suppressedTwinCount,
+  suppressedTwinLabels,
+  connectorFetchSkipReason,
+  hasUnlistedTrustedConnector,
 }) {
   let lines = [];
   if (connectors.length === 0) {
-    if (
-      (lines.push(
-        connectorFetchSkipReason === "lockdown"
-          ? "Loading of claude.ai connectors is disabled in this Claude Code session by the organization's managed MCP configuration, so none are listed here. Connectors configured on claude.ai remain available to cloud routines there."
-          : connectorFetchSkipReason === "restricted"
-            ? "claude.ai connectors are not loaded in this Claude Code session (MCP servers are restricted to explicitly passed config here, e.g. --strict-mcp-config or --bare), so none are listed. Connectors the user has on claude.ai remain available to cloud routines there."
-            : connectorFetchSkipReason === "optout"
-              ? "Automatic loading of claude.ai connectors is disabled in this Claude Code session (disableClaudeAiConnectors setting or ENABLE_CLAUDEAI_MCP_SERVERS env var), so none are listed here. Connectors the user has connected on claude.ai remain available to cloud routines there."
-              : connectorFetchSkipReason === "safe-mode"
-                ? "claude.ai connectors are not loaded in this Claude Code session (safe mode), so none are listed here. Connectors the user has connected on claude.ai remain available to cloud routines there."
-                : connectorFetchSkipReason === "missing-scope"
-                  ? "claude.ai connectors could not be loaded in this Claude Code session (the session's login token does not include the MCP-connectors permission), so none are listed here. Connectors the user has connected on claude.ai remain available to cloud routines there."
-                  : hasUnlistedTrustedConnector
-                    ? "No MCP connectors are currently connected in this Claude Code session, but a claude.ai connector for this account exists and is still connecting or failed to connect client-side. Routines use connectors server-side on claude.ai, so do not assert that the user must connect one; they can check https://claude.ai/customize/connectors."
-                    : "No available MCP connectors found. The user may need to connect servers at https://claude.ai/customize/connectors.",
-      ),
-      localOnlyServerCount === 0)
-    )
+    lines.push(
+      connectorFetchSkipReason === "lockdown"
+        ? "Loading of claude.ai connectors is disabled in this Claude Code session by the organization's managed MCP configuration, so none are listed here. Connectors configured on claude.ai remain available to cloud routines there."
+        : connectorFetchSkipReason === "restricted"
+          ? "claude.ai connectors are not loaded in this Claude Code session (MCP servers are restricted to explicitly passed config here, e.g. --strict-mcp-config or --bare), so none are listed. Connectors the user has on claude.ai remain available to cloud routines there."
+          : connectorFetchSkipReason === "optout"
+            ? "Automatic loading of claude.ai connectors is disabled in this Claude Code session (disableClaudeAiConnectors setting or ENABLE_CLAUDEAI_MCP_SERVERS env var), so none are listed here. Connectors the user has connected on claude.ai remain available to cloud routines there."
+            : connectorFetchSkipReason === "safe-mode"
+              ? "claude.ai connectors are not loaded in this Claude Code session (safe mode), so none are listed here. Connectors the user has connected on claude.ai remain available to cloud routines there."
+              : connectorFetchSkipReason === "missing-scope"
+                ? "claude.ai connectors could not be loaded in this Claude Code session (the session's login token does not include the MCP-connectors permission), so none are listed here. Connectors the user has connected on claude.ai remain available to cloud routines there."
+                : hasUnlistedTrustedConnector
+                  ? "No MCP connectors are currently connected in this Claude Code session, but a claude.ai connector for this account exists and is still connecting or failed to connect client-side. Routines use connectors server-side on claude.ai, so do not assert that the user must connect one; they can check https://claude.ai/customize/connectors."
+                  : "No available MCP connectors found. The user may need to connect servers at https://claude.ai/customize/connectors.",
+    );
+    if (localOnlyServerCount === 0)
       lines.push(
         "Note that MCP servers configured directly in Claude Code (e.g. with `claude mcp add`) cannot be attached to cloud routines \u2014 routines can only use claude.ai connectors.",
       );
   } else {
     lines.push("Available connectors (usable by routines):");
-    let mapped = connectors.map((o) => ({
-        connector: o,
-        baseName:
-          sanitizeConnectorName(o.name.replace(/^claude[.\s-]ai[.\s-]/i, "")) ||
-          `connector_${o.uuid.slice(0, 8)}`,
-      })),
-      C = new Set(mapped.map((o) => o.baseName)),
-      m = new Set(),
-      displayNames = new Map();
+    let mapped = connectors.map((connector) => ({
+      connector,
+      baseName:
+        sanitizeConnectorName(connector.name.replace(/^claude[.\s-]ai[.\s-]/i, "")) ||
+        `connector_${connector.uuid.slice(0, 8)}`,
+    }));
+    let C = new Set(mapped.map((o) => o.baseName));
+    let m = new Set();
+    let displayNames = new Map();
     for (let o of mapped)
-      if (o.connector.name.replace(/^claude[.\s-]ai[.\s-]/i, "") === o.baseName && !m.has(o.baseName))
-        (displayNames.set(o, o.baseName), m.add(o.baseName));
+      if (o.connector.name.replace(/^claude[.\s-]ai[.\s-]/i, "") === o.baseName && !m.has(o.baseName)) {
+        displayNames.set(o, o.baseName);
+        m.add(o.baseName);
+      }
     for (let o of mapped) {
       if (displayNames.has(o)) continue;
       let baseName = o.baseName;
       if (m.has(baseName))
-        for (let b = 2; m.has(baseName) || C.has(baseName); b++) baseName = `${o.baseName}-${b}`;
-      (m.add(baseName), displayNames.set(o, baseName));
+        for (let idx = 2; m.has(baseName) || C.has(baseName); idx++) baseName = `${o.baseName}-${idx}`;
+      m.add(baseName);
+      displayNames.set(o, baseName);
     }
     for (let o of mapped) {
       let d = displayNames.get(o) ?? o.baseName;
@@ -181,7 +189,7 @@ var SCHEDULE_MENU_QUESTION = "What would you like to do with scheduled cloud age
 //@ chunk-m3arwd1y.js:19242-19315 fingerprint = formatSetupNotes (1)
 function formatSetupNotes(notes) {
   return `\u26A0 Heads-up:
-${notes.map((a) => `- ${a}`).join(`
+${notes.map((n) => `- ${n}`).join(`
 `)}`;
 }
 //@ chunk-m3arwd1y.js:19315-19454 fingerprint = getCurrentRepoHttpsUrl (1)
@@ -192,38 +200,38 @@ async function getCurrentRepoHttpsUrl() {
   if (!parsed || isNestedGitLabProject(parsed)) return null;
   return `https://${parsed.host}/${parsed.owner}/${parsed.name}`;
 }
+//@ chunk-m3arwd1y.js:19454-31118 fingerprint = buildPrompt (0.832)
 /**
  * /schedule skill 的主提示词：列出/创建/更新/运行远程定时代理的流程、仓库与环境选择、连接器说明。
  */
-//@ chunk-m3arwd1y.js:19454-31118 fingerprint = buildPrompt (0.832)
 function buildPrompt(opts) {
   let {
-      userTimezone: userTimezone,
-      nowUtcIso: nowUtcIso,
-      nowLocal: nowLocal,
-      connectorsInfo: connectorsInfo,
-      gitRepoUrl: gitRepoUrl,
-      environmentsInfo: environmentsInfo,
-      createdEnvironment: createdEnvironment,
-      setupNotes: setupNotes,
-      needsGitHubAccessReminder: needsGitHubAccessReminder,
-      userArgs: userArgs,
-    } = opts,
-    g =
-      userArgs && setupNotes.length > 0
-        ? `
+    userTimezone,
+    nowUtcIso,
+    nowLocal,
+    connectorsInfo,
+    gitRepoUrl,
+    environmentsInfo,
+    createdEnvironment,
+    setupNotes,
+    needsGitHubAccessReminder,
+    userArgs,
+  } = opts;
+  let setupNotesSection =
+    userArgs && setupNotes.length > 0
+      ? `
 ## Setup Notes
 
 ${formatSetupNotes(setupNotes)}
 `
-        : "",
-    o =
-      setupNotes.length > 0
-        ? `${formatSetupNotes(setupNotes)}
+      : "";
+  let initialQuestion =
+    setupNotes.length > 0
+      ? `${formatSetupNotes(setupNotes)}
 
 ${SCHEDULE_MENU_QUESTION}`
-        : SCHEDULE_MENU_QUESTION,
-    d = validateCatalogAliases("sonnet");
+      : SCHEDULE_MENU_QUESTION;
+  let d = validateCatalogAliases("sonnet");
   return `# Schedule Cloud Agents
 
 You are helping the user schedule, update, list, or run **cloud** Claude Code agents. These are NOT local cron jobs \u2014 each routine spawns a fully isolated cloud session (CCR) in Anthropic's cloud infrastructure, either on a recurring cron schedule or once at a specific time. The agent runs in a sandboxed environment with its own git checkout, tools, and optional MCP connections.
@@ -235,11 +243,11 @@ ${
     ? "The user has already told you what they want (see User Request at the bottom). Skip the initial question and go directly to the matching workflow."
     : `Your FIRST action must be a single ${ASKUSERQUESTION} tool call (no preamble). Use this EXACT string for the \`question\` field \u2014 do not paraphrase or shorten it:
 
-${jsonStringify(o)}
+${jsonStringify(initialQuestion)}
 
 Set \`header: "Action"\` and offer the four actions (create/list/update/run) as options. After the user picks, follow the matching workflow below.`
 }
-${g}
+${setupNotesSection}
 
 ## What You Can Do
 
@@ -417,10 +425,10 @@ Start by understanding their intent and working through the appropriate workflow
     : ""
 }`;
 }
+//@ chunk-m3arwd1y.js:31118-37070 fingerprint = registerScheduleRemoteAgentsSkill (0.411)
 /**
  * 注册 /schedule 内置 skill（管理定时云端代理 routines）：需要 claude.ai 登录、非 CLAUDE_CODE_REMOTE、且策略允许 routines。
  */
-//@ chunk-m3arwd1y.js:31118-37070 fingerprint = registerScheduleRemoteAgentsSkill (0.411)
 function registerScheduleRemoteAgentsSkill() {
   registerBundledSkill({
     name: SCHEDULE,
@@ -430,7 +438,7 @@ function registerScheduleRemoteAgentsSkill() {
       "Create, update, list, or run scheduled cloud agents (routines) that execute on a cron schedule.",
     whenToUse:
       'When the user wants to schedule a recurring cloud agent, set up automated tasks, create a cron job for Claude Code, or manage their scheduled agents/routines. Also use when the user wants a one-time scheduled run ("run this once at 3pm", "remind me to check X tomorrow").',
-    userInvocable: !0,
+    userInvocable: true,
     isEnabled: () =>
       isFirstPartyProvider() &&
       isClaudeAISubscriber() &&
@@ -438,7 +446,7 @@ function registerScheduleRemoteAgentsSkill() {
       isPolicyAllowed(ALLOW_ROUTINES),
     policyGate: CLOUD_SESSIONS_POLICY,
     allowedTools: [REMOTETRIGGER, ASKUSERQUESTION, "Bash(date *)"],
-    async getPromptForCommand(s, n) {
+    async getPromptForCommand(userArgs, n) {
       if (!hasStoredOAuthToken())
         return [
           {
@@ -446,40 +454,41 @@ function registerScheduleRemoteAgentsSkill() {
             text: "You need to authenticate with a claude.ai account first. API accounts are not supported. Run /login, then try /schedule again.",
           },
         ];
-      let a = [],
-        p = null,
-        r = [],
-        h = !1,
-        c = null;
+      let a = [];
+      let p = null;
+      let r = [];
+      let needsGitHubAccessReminder = false;
+      let gitRepoUrl = null;
       if (n.options?.isSkillPreload)
         r.push("Environment and repository details are resolved when the skill is actually run.");
       else {
         try {
-          a = await fetchEnvironments(void 0, n.storageV5, n.credentials);
+          a = await fetchEnvironments(undefined, n.storageV5, n.credentials);
         } catch (err) {
-          return (
-            logForDebugging(`[schedule] Failed to fetch environments: ${err}`, { level: "warn" }),
-            [
-              {
-                type: "text",
-                text: "We're having trouble connecting with your remote claude.ai account to set up a scheduled task. Please try /schedule again in a few minutes.",
-              },
-            ]
-          );
+          logForDebugging(`[schedule] Failed to fetch environments: ${err}`, {
+            level: "warn",
+          });
+          return [
+            {
+              type: "text",
+              text: "We're having trouble connecting with your remote claude.ai account to set up a scheduled task. Please try /schedule again in a few minutes.",
+            },
+          ];
         }
         if (a.length === 0)
           try {
-            ((p = await createDefaultCloudEnvironment()), (a = [p]));
+            p = await createDefaultCloudEnvironment();
+            a = [p];
           } catch (err) {
-            return (
-              logForDebugging(`[schedule] Failed to create environment: ${err}`, { level: "warn" }),
-              [
-                {
-                  type: "text",
-                  text: "No remote environments found, and we could not create one automatically. Visit https://claude.ai/code to set one up, then run /schedule again.",
-                },
-              ]
-            );
+            logForDebugging(`[schedule] Failed to create environment: ${err}`, {
+              level: "warn",
+            });
+            return [
+              {
+                type: "text",
+                text: "No remote environments found, and we could not create one automatically. Visit https://claude.ai/code to set one up, then run /schedule again.",
+              },
+            ];
           }
         let repo = await detectCurrentRepositoryWithHost();
         if (repo === null)
@@ -489,25 +498,29 @@ function registerScheduleRemoteAgentsSkill() {
         else if (isGithubDotCom(repo.host)) {
           let l = await checkRepoForRemoteAccess(repo.owner, repo.name);
           if (!l.hasAccess) {
-            h = !0;
-            let y = `${repo.owner}/${repo.name}`,
-              U =
-                l.reason === "transient"
-                  ? `Couldn't verify GitHub access for ${y} (the check failed in a way that may be temporary) \u2014 if your routine needs this repo and this persists, install the Claude GitHub App at https://claude.ai/code/onboarding?magic=github-app-setup.`
-                  : l.reason === "github_not_connected"
-                    ? githubNotConnectedMessage(y)
-                    : isWebSetupOfferable()
-                      ? `GitHub not connected for ${y} \u2014 run /web-setup to sync your GitHub credentials, or install the Claude GitHub App at https://claude.ai/code/onboarding?magic=github-app-setup.`
-                      : `Claude GitHub App not installed on ${y} \u2014 install at https://claude.ai/code/onboarding?magic=github-app-setup if your routine needs this repo.`;
+            needsGitHubAccessReminder = true;
+            let y = `${repo.owner}/${repo.name}`;
+            let U =
+              l.reason === "transient"
+                ? `Couldn't verify GitHub access for ${y} (the check failed in a way that may be temporary) \u2014 if your routine needs this repo and this persists, install the Claude GitHub App at https://claude.ai/code/onboarding?magic=github-app-setup.`
+                : l.reason === "github_not_connected"
+                  ? githubNotConnectedMessage(y)
+                  : isWebSetupOfferable()
+                    ? `GitHub not connected for ${y} \u2014 run /web-setup to sync your GitHub credentials, or install the Claude GitHub App at https://claude.ai/code/onboarding?magic=github-app-setup.`
+                    : `Claude GitHub App not installed on ${y} \u2014 install at https://claude.ai/code/onboarding?magic=github-app-setup if your routine needs this repo.`;
             r.push(U);
           }
         }
-        c = await getCurrentRepoHttpsUrl();
+        gitRepoUrl = await getCurrentRepoHttpsUrl();
       }
-      let connectors = collectClaudeAiConnectors(n.options.mcpClients),
-        u = getSuppressedClaudeAiConnectors(n),
-        C = new Set(u.map((e) => e.duplicateOf)),
-        m = new Set();
+      let connectors = collectClaudeAiConnectors(n.options.mcpClients);
+      let suppressedClaudeAiConnectors = getSuppressedClaudeAiConnectors(n);
+      let C = new Set(
+        suppressedClaudeAiConnectors.map(
+          (suppressedClaudeAiConnector) => suppressedClaudeAiConnector.duplicateOf,
+        ),
+      );
+      let m = new Set();
       for (let mcpClient of n.options.mcpClients)
         if (
           (isClaudeAiConnectorConfig(mcpClient.config) &&
@@ -516,47 +529,49 @@ function registerScheduleRemoteAgentsSkill() {
                 mcpClient.config.scope === "claudeai"))) ||
           C.has(mcpClient.name)
         ) {
-          let l = getMcpServerSignature(mcpClient.config);
-          if (l !== null) m.add(l);
+          let mcpServerSignature = getMcpServerSignature(mcpClient.config);
+          if (mcpServerSignature !== null) m.add(mcpServerSignature);
         }
       let any = n.options.mcpClients.some(
-          (mcpClient) =>
-            isClaudeAiConnectorConfig(mcpClient.config) &&
-            (mcpClient.type === "failed" || mcpClient.type === "pending") &&
-            mcpClient.config.scope === "claudeai",
-        ),
-        size = new Set(
-          n.options.mcpClients
-            .filter((mcpClient) => {
-              if (
-                !SCOPE_ORDER.has(mcpClient.config.scope) ||
-                mcpClient.config.type === "sdk" ||
-                mcpClient.type === "disabled" ||
-                C.has(mcpClient.name)
-              )
-                return !1;
-              let l = getMcpServerSignature(mcpClient.config);
-              return l === null || !m.has(l);
-            })
-            .map((e) => e.name),
-        ).size,
-        d = uniq(
-          u
-            .map((e) => sanitizeConnectorName(e.name.replace(/^claude[.\s-]ai[.\s-]/i, "")))
-            .filter((e) => e.length > 0),
-        ),
-        b = !hasOAuthScope("user:mcp_servers"),
-        v = shouldSkipClaudeAiFetchForEnterpriseLockdown()
-          ? "lockdown"
-          : getStrictMcpConfig() || isBareMode()
-            ? "restricted"
-            : env.ENABLE_CLAUDEAI_MCP_SERVERS === !1 || hasDisableClaudeAiConnectors()
-              ? "optout"
-              : isCustomizationDisabled("mcpClaudeAi")
-                ? "safe-mode"
-                : b
-                  ? "missing-scope"
-                  : null;
+        (mcpClient) =>
+          isClaudeAiConnectorConfig(mcpClient.config) &&
+          (mcpClient.type === "failed" || mcpClient.type === "pending") &&
+          mcpClient.config.scope === "claudeai",
+      );
+      let size = new Set(
+        n.options.mcpClients
+          .filter((mcpClient) => {
+            if (
+              !SCOPE_ORDER.has(mcpClient.config.scope) ||
+              mcpClient.config.type === "sdk" ||
+              mcpClient.type === "disabled" ||
+              C.has(mcpClient.name)
+            )
+              return false;
+            let mcpServerSignature = getMcpServerSignature(mcpClient.config);
+            return mcpServerSignature === null || !m.has(mcpServerSignature);
+          })
+          .map((mcpClient) => mcpClient.name),
+      ).size;
+      let d = uniq(
+        suppressedClaudeAiConnectors
+          .map((suppressedClaudeAiConnector) =>
+            sanitizeConnectorName(suppressedClaudeAiConnector.name.replace(/^claude[.\s-]ai[.\s-]/i, "")),
+          )
+          .filter((e) => e.length > 0),
+      );
+      let b = !hasOAuthScope("user:mcp_servers");
+      let v = shouldSkipClaudeAiFetchForEnterpriseLockdown()
+        ? "lockdown"
+        : getStrictMcpConfig() || isBareMode()
+          ? "restricted"
+          : env.ENABLE_CLAUDEAI_MCP_SERVERS === false || hasDisableClaudeAiConnectors()
+            ? "optout"
+            : isCustomizationDisabled("mcpClaudeAi")
+              ? "safe-mode"
+              : b
+                ? "missing-scope"
+                : null;
       if (connectors.length === 0) {
         let e =
           v === "lockdown"
@@ -572,61 +587,59 @@ function registerScheduleRemoteAgentsSkill() {
                     : any
                       ? "A claude.ai connector for this account exists but isn't connected in this session right now (still connecting, or its last connect failed); it remains available to routines on claude.ai."
                       : "Connect one at https://claude.ai/customize/connectors if needed.";
-        if (
-          (r.push(
-            size > 0
-              ? `No MCP connectors for cloud routines \u2014 ${size} MCP ${plural(size, "server")} configured in Claude Code can't be attached to routines (run /mcp to see ${plural(size, "it", "them")}); routines can only use claude.ai connectors. ${e}`
-              : v !== null || any
-                ? `No MCP connectors \u2014 ${e}`
-                : "No MCP connectors \u2014 connect at https://claude.ai/customize/connectors if needed.",
-          ),
-          u.length > 0)
-        ) {
-          let l = u.length,
-            y = d.length > 0 ? ` (${d.join(", ")})` : "";
+        r.push(
+          size > 0
+            ? `No MCP connectors for cloud routines \u2014 ${size} MCP ${plural(size, "server")} configured in Claude Code can't be attached to routines (run /mcp to see ${plural(size, "it", "them")}); routines can only use claude.ai connectors. ${e}`
+            : v !== null || any
+              ? `No MCP connectors \u2014 ${e}`
+              : "No MCP connectors \u2014 connect at https://claude.ai/customize/connectors if needed.",
+        );
+        if (suppressedClaudeAiConnectors.length > 0) {
+          let l = suppressedClaudeAiConnectors.length;
+          let y = d.length > 0 ? ` (${d.join(", ")})` : "";
           r.push(
             `${l} claude.ai ${plural(l, "connector")}${y} ${plural(l, "is", "are")} not active in this session (${plural(l, "a server configured in Claude Code covers", "servers configured in Claude Code cover")} the same ${plural(l, "service")}), but ${plural(l, "it remains", "they remain")} available to routines on claude.ai.`,
           );
         }
       }
-      let userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone,
-        date = new Date(),
-        iso = date.toISOString(),
-        N = date.toLocaleString("en-US", {
-          timeZone: userTimezone,
-          weekday: "short",
-          year: "numeric",
-          month: "short",
-          day: "numeric",
-          hour: "2-digit",
-          minute: "2-digit",
-        }),
-        connectorsInfo = buildConnectorsInfo({
-          connectors: connectors,
-          localOnlyServerCount: size,
-          suppressedTwinCount: u.length,
-          suppressedTwinLabels: d,
-          connectorFetchSkipReason: v,
-          hasUnlistedTrustedConnector: any,
-        }),
-        lines = ["Available environments:"];
+      let userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      let date = new Date();
+      let nowUtcIso = date.toISOString();
+      let nowLocal = date.toLocaleString("en-US", {
+        timeZone: userTimezone,
+        weekday: "short",
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+      let connectorsInfo = buildConnectorsInfo({
+        connectors,
+        localOnlyServerCount: size,
+        suppressedTwinCount: suppressedClaudeAiConnectors.length,
+        suppressedTwinLabels: d,
+        connectorFetchSkipReason: v,
+        hasUnlistedTrustedConnector: any,
+      });
+      let lines = ["Available environments:"];
       for (let env of a) lines.push(`- ${env.name} (id: ${env.environment_id}, kind: ${env.kind})`);
-      let joined = lines.join(`
+      let environmentsInfo = lines.join(`
 `);
       return [
         {
           type: "text",
           text: buildPrompt({
-            userTimezone: userTimezone,
-            nowUtcIso: iso,
-            nowLocal: N,
-            connectorsInfo: connectorsInfo,
-            gitRepoUrl: c,
-            environmentsInfo: joined,
+            userTimezone,
+            nowUtcIso,
+            nowLocal,
+            connectorsInfo,
+            gitRepoUrl,
+            environmentsInfo,
             createdEnvironment: p,
             setupNotes: r,
-            needsGitHubAccessReminder: h,
-            userArgs: s,
+            needsGitHubAccessReminder,
+            userArgs,
           }),
         },
       ];
@@ -634,9 +647,12 @@ function registerScheduleRemoteAgentsSkill() {
   });
 }
 //@ chunk-6mwt0myy.js:1431-1501 placement
-function zbr(e, n) {
+/**
+ * 用连接器前缀与 base58(uuid) 拼出 id，失败返回 undefined。
+ */
+function connectorScopedAgentId(e, uuid) {
   try {
-    let r = uuidToBigInt(n);
+    let r = uuidToBigInt(uuid);
     return `${e}_01${base58Encode(r)}`;
   } catch {
     return;
@@ -645,8 +661,8 @@ function zbr(e, n) {
 //@ chunk-6mwt0myy.js:1501-1694 fingerprint = BASE58 (1)
 function BASE58(e) {
   if (e.length !== 22) return;
-  let n = BigInt(58),
-    r = 0n;
+  let n = BigInt(58);
+  let r = 0n;
   for (let t of e) {
     let index = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz".indexOf(t);
     if (index < 0) return;
@@ -654,12 +670,11 @@ function BASE58(e) {
   }
   return r;
 }
+//@ chunk-dcmhvw5a.js:71894-71956 callgraph-fingerprint = getConnectedClaudeAIConnectors (0.455)
 /**
  * getConnectedClaudeAIConnectors（实为 isConnectedOrCached）：连接状态为 connected 或 cached。
  */
-//@ chunk-dcmhvw5a.js:71894-71956 callgraph-fingerprint = getConnectedClaudeAIConnectors (0.455)
 function isConnectedOrCached(mcpClients) {
   return mcpClients.type === "connected" || mcpClients.type === "cached";
 }
-
-export { isConnectedOrCached, zbr, BASE58 };
+export { isConnectedOrCached, connectorScopedAgentId, BASE58 };

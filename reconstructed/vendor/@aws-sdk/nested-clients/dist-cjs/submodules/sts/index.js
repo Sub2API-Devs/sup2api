@@ -5,354 +5,537 @@
  * pieces: chunk-a8ee6x44.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x as x_2 } from "../../../../../../runtime/bun-runtime.js";
-import { le } from "./STSClient.js";
-import { ff } from "../../../../../@smithy/core/dist-cjs/submodules/client/index.js";
-import { pK } from "../../../../../@smithy/middleware-endpoint/dist-cjs/index.js";
-import { de } from "./endpoint/EndpointParameters.js";
-import { _D } from "../../../../../@smithy/core/dist-cjs/submodules/schema/index.js";
-import { SD } from "../../../../core/dist-cjs/submodules/client/index.js";
-import { Dae } from "../../../../region-config-resolver/dist-cjs/index.js";
+import { x } from "../../../../../../runtime/bun-runtime.js";
+import { require_STSClient } from "./STSClient.js";
+import { require_client } from "../../../../../@smithy/core/dist-cjs/submodules/client/index.js";
+import { require_middleware_endpoint } from "../../../../../@smithy/middleware-endpoint/dist-cjs/index.js";
+import { require_EndpointParameters } from "./endpoint/EndpointParameters.js";
+import { require_schema } from "../../../../../@smithy/core/dist-cjs/submodules/schema/index.js";
+import { require_client as require_client_2 } from "../../../../core/dist-cjs/submodules/client/index.js";
+import { require_region_config_resolver } from "../../../../region-config-resolver/dist-cjs/index.js";
 
 //@ chunk-a8ee6x44.js:12668-21063 cjs-fingerprint
-var Wns = x_2(function (ne) {
-  var F = le(),
-    U = ff(),
-    Mt = pK(),
-    $t = de(),
-    y = _D(),
-    _e = SD(),
-    No = Dae(),
-    S = class e extends U.ServiceException {
-      constructor(t) {
-        super(t);
-        Object.setPrototypeOf(this, e.prototype);
-      }
-    },
-    Kt = class e extends S {
-      name = "ExpiredTokenException";
-      $fault = "client";
-      constructor(t) {
-        super({ name: "ExpiredTokenException", $fault: "client", ...t });
-        Object.setPrototypeOf(this, e.prototype);
-      }
-    },
-    Gt = class e extends S {
-      name = "MalformedPolicyDocumentException";
-      $fault = "client";
-      constructor(t) {
-        super({ name: "MalformedPolicyDocumentException", $fault: "client", ...t });
-        Object.setPrototypeOf(this, e.prototype);
-      }
-    },
-    zt = class e extends S {
-      name = "PackedPolicyTooLargeException";
-      $fault = "client";
-      constructor(t) {
-        super({ name: "PackedPolicyTooLargeException", $fault: "client", ...t });
-        Object.setPrototypeOf(this, e.prototype);
-      }
-    },
-    Vt = class e extends S {
-      name = "RegionDisabledException";
-      $fault = "client";
-      constructor(t) {
-        super({ name: "RegionDisabledException", $fault: "client", ...t });
-        Object.setPrototypeOf(this, e.prototype);
-      }
-    },
-    Bt = class e extends S {
-      name = "IDPRejectedClaimException";
-      $fault = "client";
-      constructor(t) {
-        super({ name: "IDPRejectedClaimException", $fault: "client", ...t });
-        Object.setPrototypeOf(this, e.prototype);
-      }
-    },
-    Qt = class e extends S {
-      name = "InvalidIdentityTokenException";
-      $fault = "client";
-      constructor(t) {
-        super({ name: "InvalidIdentityTokenException", $fault: "client", ...t });
-        Object.setPrototypeOf(this, e.prototype);
-      }
-    },
-    Yt = class e extends S {
-      name = "IDPCommunicationErrorException";
-      $fault = "client";
-      constructor(t) {
-        super({ name: "IDPCommunicationErrorException", $fault: "client", ...t });
-        Object.setPrototypeOf(this, e.prototype);
-      }
-    },
-    Wo = "Arn",
-    jo = "AccessKeyId",
-    Fo = "AssumeRole",
-    Uo = "AssumedRoleId",
-    Lo = "AssumeRoleRequest",
-    Mo = "AssumeRoleResponse",
-    fe = "AssumedRoleUser",
-    $o = "AssumeRoleWithWebIdentity",
-    Ko = "AssumeRoleWithWebIdentityRequest",
-    Go = "AssumeRoleWithWebIdentityResponse",
-    zo = "Audience",
-    Se = "Credentials",
-    Vo = "ContextAssertion",
-    Jt = "DurationSeconds",
-    Bo = "Expiration",
-    Qo = "ExternalId",
-    Yo = "ExpiredTokenException",
-    Jo = "IDPCommunicationErrorException",
-    Xo = "IDPRejectedClaimException",
-    Zo = "InvalidIdentityTokenException",
-    en = "Key",
-    tn = "MalformedPolicyDocumentException",
-    Xt = "Policy",
-    Zt = "PolicyArns",
-    on = "ProviderArn",
-    nn = "ProvidedContexts",
-    rn = "ProvidedContextsListType",
-    sn = "ProvidedContext",
-    cn = "PolicyDescriptorType",
-    an = "ProviderId",
-    eo = "PackedPolicySize",
-    un = "PackedPolicyTooLargeException",
-    ln = "Provider",
-    to = "RoleArn",
-    dn = "RegionDisabledException",
-    oo = "RoleSessionName",
-    pn = "SecretAccessKey",
-    gn = "SubjectFromWebIdentityToken",
-    Pe = "SourceIdentity",
-    mn = "SerialNumber",
-    hn = "SessionToken",
-    _n = "Tags",
-    fn = "TokenCode",
-    Sn = "TransitiveTagKeys",
-    Pn = "Tag",
-    En = "Value",
-    vn = "WebIdentityToken",
-    yn = "arn",
-    Cn = "accessKeySecretType",
-    I = "awsQueryError",
-    T = "client",
-    An = "clientTokenType",
-    D = "error",
-    b = "httpError",
-    w = "message",
-    xn = "policyDescriptorListType",
-    no = "smithy.ts.sdk.synthetic.com.amazonaws.sts",
-    Rn = "tagListType",
-    c = "com.amazonaws.sts",
-    In = [0, c, Cn, 8, 0],
-    Tn = [0, c, An, 8, 0],
-    ro = [3, c, fe, 0, [Uo, Wo], [0, 0]],
-    Dn = [
-      3,
-      c,
-      Lo,
+var require_sts = x(function (cjsExports) {
+  var STSClient = require_STSClient();
+  var smithyClient = require_client();
+  var middlewareEndpoint = require_middleware_endpoint();
+  var EndpointParameters = require_EndpointParameters();
+  var schema = require_schema();
+  var client = require_client_2();
+  var regionConfigResolver = require_region_config_resolver();
+  var STSServiceException$1 = class STSServiceException extends smithyClient.ServiceException {
+    constructor(options) {
+      super(options);
+      Object.setPrototypeOf(this, STSServiceException.prototype);
+    }
+  };
+  var ExpiredTokenException$1 = class ExpiredTokenException extends STSServiceException$1 {
+    name = "ExpiredTokenException";
+    $fault = "client";
+    constructor(opts) {
+      super({
+        name: "ExpiredTokenException",
+        $fault: "client",
+        ...opts,
+      });
+      Object.setPrototypeOf(this, ExpiredTokenException.prototype);
+    }
+  };
+  var MalformedPolicyDocumentException$1 = class MalformedPolicyDocumentException extends STSServiceException$1 {
+    name = "MalformedPolicyDocumentException";
+    $fault = "client";
+    constructor(opts) {
+      super({
+        name: "MalformedPolicyDocumentException",
+        $fault: "client",
+        ...opts,
+      });
+      Object.setPrototypeOf(this, MalformedPolicyDocumentException.prototype);
+    }
+  };
+  var PackedPolicyTooLargeException$1 = class PackedPolicyTooLargeException extends STSServiceException$1 {
+    name = "PackedPolicyTooLargeException";
+    $fault = "client";
+    constructor(opts) {
+      super({
+        name: "PackedPolicyTooLargeException",
+        $fault: "client",
+        ...opts,
+      });
+      Object.setPrototypeOf(this, PackedPolicyTooLargeException.prototype);
+    }
+  };
+  var RegionDisabledException$1 = class RegionDisabledException extends STSServiceException$1 {
+    name = "RegionDisabledException";
+    $fault = "client";
+    constructor(opts) {
+      super({
+        name: "RegionDisabledException",
+        $fault: "client",
+        ...opts,
+      });
+      Object.setPrototypeOf(this, RegionDisabledException.prototype);
+    }
+  };
+  var IDPRejectedClaimException$1 = class IDPRejectedClaimException extends STSServiceException$1 {
+    name = "IDPRejectedClaimException";
+    $fault = "client";
+    constructor(opts) {
+      super({
+        name: "IDPRejectedClaimException",
+        $fault: "client",
+        ...opts,
+      });
+      Object.setPrototypeOf(this, IDPRejectedClaimException.prototype);
+    }
+  };
+  var InvalidIdentityTokenException$1 = class InvalidIdentityTokenException extends STSServiceException$1 {
+    name = "InvalidIdentityTokenException";
+    $fault = "client";
+    constructor(opts) {
+      super({
+        name: "InvalidIdentityTokenException",
+        $fault: "client",
+        ...opts,
+      });
+      Object.setPrototypeOf(this, InvalidIdentityTokenException.prototype);
+    }
+  };
+  var IDPCommunicationErrorException$1 = class IDPCommunicationErrorException extends STSServiceException$1 {
+    name = "IDPCommunicationErrorException";
+    $fault = "client";
+    constructor(opts) {
+      super({
+        name: "IDPCommunicationErrorException",
+        $fault: "client",
+        ...opts,
+      });
+      Object.setPrototypeOf(this, IDPCommunicationErrorException.prototype);
+    }
+  };
+  var _A = "Arn";
+  var _AKI = "AccessKeyId";
+  var _AR = "AssumeRole";
+  var _ARI = "AssumedRoleId";
+  var _ARR = "AssumeRoleRequest";
+  var _ARRs = "AssumeRoleResponse";
+  var _ARU = "AssumedRoleUser";
+  var _ARWWI = "AssumeRoleWithWebIdentity";
+  var _ARWWIR = "AssumeRoleWithWebIdentityRequest";
+  var _ARWWIRs = "AssumeRoleWithWebIdentityResponse";
+  var _Au = "Audience";
+  var _C = "Credentials";
+  var _CA = "ContextAssertion";
+  var _DS = "DurationSeconds";
+  var _E = "Expiration";
+  var _EI = "ExternalId";
+  var _ETE = "ExpiredTokenException";
+  var _IDPCEE = "IDPCommunicationErrorException";
+  var _IDPRCE = "IDPRejectedClaimException";
+  var _IITE = "InvalidIdentityTokenException";
+  var _K = "Key";
+  var _MPDE = "MalformedPolicyDocumentException";
+  var _P = "Policy";
+  var _PA = "PolicyArns";
+  var _PAr = "ProviderArn";
+  var _PC = "ProvidedContexts";
+  var _PCLT = "ProvidedContextsListType";
+  var _PCr = "ProvidedContext";
+  var _PDT = "PolicyDescriptorType";
+  var _PI = "ProviderId";
+  var _PPS = "PackedPolicySize";
+  var _PPTLE = "PackedPolicyTooLargeException";
+  var _Pr = "Provider";
+  var _RA = "RoleArn";
+  var _RDE = "RegionDisabledException";
+  var _RSN = "RoleSessionName";
+  var _SAK = "SecretAccessKey";
+  var _SFWIT = "SubjectFromWebIdentityToken";
+  var _SI = "SourceIdentity";
+  var _SN = "SerialNumber";
+  var _ST = "SessionToken";
+  var _T = "Tags";
+  var _TC = "TokenCode";
+  var _TTK = "TransitiveTagKeys";
+  var _Ta = "Tag";
+  var _V = "Value";
+  var _WIT = "WebIdentityToken";
+  var _a = "arn";
+  var _aKST = "accessKeySecretType";
+  var _aQE = "awsQueryError";
+  var _c = "client";
+  var _cTT = "clientTokenType";
+  var _e = "error";
+  var _hE = "httpError";
+  var _m = "message";
+  var _pDLT = "policyDescriptorListType";
+  var _s = "smithy.ts.sdk.synthetic.com.amazonaws.sts";
+  var _tLT = "tagListType";
+  var n0 = "com.amazonaws.sts";
+  var accessKeySecretType = [0, n0, _aKST, 8, 0];
+  var clientTokenType = [0, n0, _cTT, 8, 0];
+  var AssumedRoleUser = [3, n0, _ARU, 0, [_ARI, _A], [0, 0]];
+  var AssumeRoleRequest = [
+    3,
+    n0,
+    _ARR,
+    0,
+    [_RA, _RSN, _PA, _P, _DS, _T, _TTK, _EI, _SN, _TC, _SI, _PC],
+    [
       0,
-      [to, oo, Zt, Xt, Jt, _n, Sn, Qo, mn, fn, Pe, nn],
-      [0, 0, () => so, 0, 1, () => Gn, 64, 0, 0, 0, 0, () => Kn],
+      0,
+      () => policyDescriptorListType,
+      0,
+      1,
+      () => tagListType,
+      64,
+      0,
+      0,
+      0,
+      0,
+      () => ProvidedContextsListType,
     ],
-    bn = [3, c, Mo, 0, [Se, fe, eo, Pe], [[() => io, 0], () => ro, 1, 0]],
-    wn = [3, c, Ko, 0, [to, oo, vn, an, Zt, Xt, Jt], [0, 0, [() => Tn, 0], 0, () => so, 0, 1]],
-    qn = [3, c, Go, 0, [Se, gn, fe, eo, ln, zo, Pe], [[() => io, 0], 0, () => ro, 1, 0, 0, 0]],
-    io = [3, c, Se, 0, [jo, pn, hn, Bo], [0, [() => In, 0], 0, 4]],
-    kn = [-3, c, Yo, { [D]: T, [b]: 400, [I]: ["ExpiredTokenException", 400] }, [w], [0]];
-  y.TypeRegistry.for(c).registerError(kn, Kt);
-  var On = [-3, c, Jo, { [D]: T, [b]: 400, [I]: ["IDPCommunicationError", 400] }, [w], [0]];
-  y.TypeRegistry.for(c).registerError(On, Yt);
-  var Hn = [-3, c, Xo, { [D]: T, [b]: 403, [I]: ["IDPRejectedClaim", 403] }, [w], [0]];
-  y.TypeRegistry.for(c).registerError(Hn, Bt);
-  var Nn = [-3, c, Zo, { [D]: T, [b]: 400, [I]: ["InvalidIdentityToken", 400] }, [w], [0]];
-  y.TypeRegistry.for(c).registerError(Nn, Qt);
-  var Wn = [-3, c, tn, { [D]: T, [b]: 400, [I]: ["MalformedPolicyDocument", 400] }, [w], [0]];
-  y.TypeRegistry.for(c).registerError(Wn, Gt);
-  var jn = [-3, c, un, { [D]: T, [b]: 400, [I]: ["PackedPolicyTooLarge", 400] }, [w], [0]];
-  y.TypeRegistry.for(c).registerError(jn, zt);
-  var Fn = [3, c, cn, 0, [yn], [0]],
-    Un = [3, c, sn, 0, [on, Vo], [0, 0]],
-    Ln = [-3, c, dn, { [D]: T, [b]: 403, [I]: ["RegionDisabledException", 403] }, [w], [0]];
-  y.TypeRegistry.for(c).registerError(Ln, Vt);
-  var Mn = [3, c, Pn, 0, [en, En], [0, 0]],
-    $n = [-3, no, "STSServiceException", 0, [], []];
-  y.TypeRegistry.for(no).registerError($n, S);
-  var so = [1, c, xn, 0, () => Fn],
-    Kn = [1, c, rn, 0, () => Un],
-    Gn = [1, c, Rn, 0, () => Mn],
-    zn = [9, c, Fo, 0, () => Dn, () => bn],
-    Vn = [9, c, $o, 0, () => wn, () => qn];
-  class re extends U.Command.classBuilder()
-    .ep($t.commonParams)
-    .m(function (e, t, n, u) {
-      return [Mt.getEndpointPlugin(n, e.getEndpointParameterInstructions())];
+  ];
+  var AssumeRoleResponse = [
+    3,
+    n0,
+    _ARRs,
+    0,
+    [_C, _ARU, _PPS, _SI],
+    [[() => Credentials, 0], () => AssumedRoleUser, 1, 0],
+  ];
+  var AssumeRoleWithWebIdentityRequest = [
+    3,
+    n0,
+    _ARWWIR,
+    0,
+    [_RA, _RSN, _WIT, _PI, _PA, _P, _DS],
+    [0, 0, [() => clientTokenType, 0], 0, () => policyDescriptorListType, 0, 1],
+  ];
+  var AssumeRoleWithWebIdentityResponse = [
+    3,
+    n0,
+    _ARWWIRs,
+    0,
+    [_C, _SFWIT, _ARU, _PPS, _Pr, _Au, _SI],
+    [[() => Credentials, 0], 0, () => AssumedRoleUser, 1, 0, 0, 0],
+  ];
+  var Credentials = [3, n0, _C, 0, [_AKI, _SAK, _ST, _E], [0, [() => accessKeySecretType, 0], 0, 4]];
+  var ExpiredTokenException = [
+    -3,
+    n0,
+    _ETE,
+    {
+      [_e]: _c,
+      [_hE]: 400,
+      [_aQE]: ["ExpiredTokenException", 400],
+    },
+    [_m],
+    [0],
+  ];
+  schema.TypeRegistry.for(n0).registerError(ExpiredTokenException, ExpiredTokenException$1);
+  var IDPCommunicationErrorException = [
+    -3,
+    n0,
+    _IDPCEE,
+    {
+      [_e]: _c,
+      [_hE]: 400,
+      [_aQE]: ["IDPCommunicationError", 400],
+    },
+    [_m],
+    [0],
+  ];
+  schema.TypeRegistry.for(n0).registerError(IDPCommunicationErrorException, IDPCommunicationErrorException$1);
+  var IDPRejectedClaimException = [
+    -3,
+    n0,
+    _IDPRCE,
+    {
+      [_e]: _c,
+      [_hE]: 403,
+      [_aQE]: ["IDPRejectedClaim", 403],
+    },
+    [_m],
+    [0],
+  ];
+  schema.TypeRegistry.for(n0).registerError(IDPRejectedClaimException, IDPRejectedClaimException$1);
+  var InvalidIdentityTokenException = [
+    -3,
+    n0,
+    _IITE,
+    {
+      [_e]: _c,
+      [_hE]: 400,
+      [_aQE]: ["InvalidIdentityToken", 400],
+    },
+    [_m],
+    [0],
+  ];
+  schema.TypeRegistry.for(n0).registerError(InvalidIdentityTokenException, InvalidIdentityTokenException$1);
+  var MalformedPolicyDocumentException = [
+    -3,
+    n0,
+    _MPDE,
+    {
+      [_e]: _c,
+      [_hE]: 400,
+      [_aQE]: ["MalformedPolicyDocument", 400],
+    },
+    [_m],
+    [0],
+  ];
+  schema.TypeRegistry.for(n0).registerError(
+    MalformedPolicyDocumentException,
+    MalformedPolicyDocumentException$1,
+  );
+  var PackedPolicyTooLargeException = [
+    -3,
+    n0,
+    _PPTLE,
+    {
+      [_e]: _c,
+      [_hE]: 400,
+      [_aQE]: ["PackedPolicyTooLarge", 400],
+    },
+    [_m],
+    [0],
+  ];
+  schema.TypeRegistry.for(n0).registerError(PackedPolicyTooLargeException, PackedPolicyTooLargeException$1);
+  var PolicyDescriptorType = [3, n0, _PDT, 0, [_a], [0]];
+  var ProvidedContext = [3, n0, _PCr, 0, [_PAr, _CA], [0, 0]];
+  var RegionDisabledException = [
+    -3,
+    n0,
+    _RDE,
+    {
+      [_e]: _c,
+      [_hE]: 403,
+      [_aQE]: ["RegionDisabledException", 403],
+    },
+    [_m],
+    [0],
+  ];
+  schema.TypeRegistry.for(n0).registerError(RegionDisabledException, RegionDisabledException$1);
+  var Tag = [3, n0, _Ta, 0, [_K, _V], [0, 0]];
+  var STSServiceException = [-3, _s, "STSServiceException", 0, [], []];
+  schema.TypeRegistry.for(_s).registerError(STSServiceException, STSServiceException$1);
+  var policyDescriptorListType = [1, n0, _pDLT, 0, () => PolicyDescriptorType];
+  var ProvidedContextsListType = [1, n0, _PCLT, 0, () => ProvidedContext];
+  var tagListType = [1, n0, _tLT, 0, () => Tag];
+  var AssumeRole = [9, n0, _AR, 0, () => AssumeRoleRequest, () => AssumeRoleResponse];
+  var AssumeRoleWithWebIdentity = [
+    9,
+    n0,
+    _ARWWI,
+    0,
+    () => AssumeRoleWithWebIdentityRequest,
+    () => AssumeRoleWithWebIdentityResponse,
+  ];
+  class AssumeRoleCommand extends smithyClient.Command.classBuilder()
+    .ep(EndpointParameters.commonParams)
+    .m(function (Command, cs, config, o) {
+      return [middlewareEndpoint.getEndpointPlugin(config, Command.getEndpointParameterInstructions())];
     })
     .s("AWSSecurityTokenServiceV20110615", "AssumeRole", {})
     .n("STSClient", "AssumeRoleCommand")
-    .sc(zn)
+    .sc(AssumeRole)
     .build() {}
-  class ie extends U.Command.classBuilder()
-    .ep($t.commonParams)
-    .m(function (e, t, n, u) {
-      return [Mt.getEndpointPlugin(n, e.getEndpointParameterInstructions())];
+  class AssumeRoleWithWebIdentityCommand extends smithyClient.Command.classBuilder()
+    .ep(EndpointParameters.commonParams)
+    .m(function (Command, cs, config, o) {
+      return [middlewareEndpoint.getEndpointPlugin(config, Command.getEndpointParameterInstructions())];
     })
     .s("AWSSecurityTokenServiceV20110615", "AssumeRoleWithWebIdentity", {})
     .n("STSClient", "AssumeRoleWithWebIdentityCommand")
-    .sc(Vn)
+    .sc(AssumeRoleWithWebIdentity)
     .build() {}
-  var Bn = { AssumeRoleCommand: re, AssumeRoleWithWebIdentityCommand: ie };
-  class Ee extends F.STSClient {}
-  U.createAggregatedClient(Bn, Ee);
-  var co = (e) => {
-      if (typeof e?.Arn === "string") {
-        let parts = e.Arn.split(":");
-        if (parts.length > 4 && parts[4] !== "") return parts[4];
+  var commands = {
+    AssumeRoleCommand,
+    AssumeRoleWithWebIdentityCommand,
+  };
+  class STS extends STSClient.STSClient {}
+  smithyClient.createAggregatedClient(commands, STS);
+  var getAccountIdFromAssumedRoleUser = (assumedRoleUser) => {
+    if (typeof assumedRoleUser?.Arn === "string") {
+      let arnComponents = assumedRoleUser.Arn.split(":");
+      if (arnComponents.length > 4 && arnComponents[4] !== "") return arnComponents[4];
+    }
+    return;
+  };
+  var resolveRegion = async (_region, _parentRegion, credentialProviderLogger, loaderConfig = {}) => {
+    let region = typeof _region === "function" ? await _region() : _region;
+    let parentRegion = typeof _parentRegion === "function" ? await _parentRegion() : _parentRegion;
+    let stsDefaultRegion = await regionConfigResolver.stsRegionDefaultResolver(loaderConfig)();
+    credentialProviderLogger?.debug?.(
+      "@aws-sdk/client-sts::resolveRegion",
+      "accepting first of:",
+      `${region} (credential provider clientConfig)`,
+      `${parentRegion} (contextual client)`,
+      `${stsDefaultRegion} (STS default: AWS_REGION, profile region, or us-east-1)`,
+    );
+    return region ?? parentRegion ?? stsDefaultRegion;
+  };
+  var getDefaultRoleAssumer$1 = (stsOptions, STSClient) => {
+    let stsClient;
+    let closureSourceCreds;
+    return async (sourceCreds, params) => {
+      closureSourceCreds = sourceCreds;
+      if (!stsClient) {
+        let {
+          logger = stsOptions?.parentClientConfig?.logger,
+          profile = stsOptions?.parentClientConfig?.profile,
+          region,
+          requestHandler = stsOptions?.parentClientConfig?.requestHandler,
+          credentialProviderLogger,
+          userAgentAppId = stsOptions?.parentClientConfig?.userAgentAppId,
+        } = stsOptions;
+        let resolvedRegion = await resolveRegion(
+          region,
+          stsOptions?.parentClientConfig?.region,
+          credentialProviderLogger,
+          {
+            logger,
+            profile,
+          },
+        );
+        let isCompatibleRequestHandler = !isH2(requestHandler);
+        stsClient = new STSClient({
+          ...stsOptions,
+          userAgentAppId,
+          profile,
+          credentialDefaultProvider: () => async () => closureSourceCreds,
+          region: resolvedRegion,
+          requestHandler: isCompatibleRequestHandler ? requestHandler : undefined,
+          logger,
+        });
       }
-      return;
-    },
-    ao = async (e, t, n, u = {}) => {
-      let r = typeof e === "function" ? await e() : e,
-        g = typeof t === "function" ? await t() : t,
-        l = await No.stsRegionDefaultResolver(u)();
-      return (
-        n?.debug?.(
-          "@aws-sdk/client-sts::resolveRegion",
-          "accepting first of:",
-          `${r} (credential provider clientConfig)`,
-          `${g} (contextual client)`,
-          `${l} (STS default: AWS_REGION, profile region, or us-east-1)`,
-        ),
-        r ?? g ?? l
+      let { Credentials, AssumedRoleUser } = await stsClient.send(new AssumeRoleCommand(params));
+      if (!Credentials || !Credentials.AccessKeyId || !Credentials.SecretAccessKey)
+        throw Error(`Invalid response from STS.assumeRole call with role ${params.RoleArn}`);
+      let accountId = getAccountIdFromAssumedRoleUser(AssumedRoleUser);
+      let credentials = {
+        accessKeyId: Credentials.AccessKeyId,
+        secretAccessKey: Credentials.SecretAccessKey,
+        sessionToken: Credentials.SessionToken,
+        expiration: Credentials.Expiration,
+        ...(Credentials.CredentialScope && {
+          credentialScope: Credentials.CredentialScope,
+        }),
+        ...(accountId && {
+          accountId,
+        }),
+      };
+      client.setCredentialFeature(credentials, "CREDENTIALS_STS_ASSUME_ROLE", "i");
+      return credentials;
+    };
+  };
+  var getDefaultRoleAssumerWithWebIdentity$1 = (stsOptions, STSClient) => {
+    let stsClient;
+    return async (params) => {
+      if (!stsClient) {
+        let {
+          logger = stsOptions?.parentClientConfig?.logger,
+          profile = stsOptions?.parentClientConfig?.profile,
+          region,
+          requestHandler = stsOptions?.parentClientConfig?.requestHandler,
+          credentialProviderLogger,
+          userAgentAppId = stsOptions?.parentClientConfig?.userAgentAppId,
+        } = stsOptions;
+        let resolvedRegion = await resolveRegion(
+          region,
+          stsOptions?.parentClientConfig?.region,
+          credentialProviderLogger,
+          {
+            logger,
+            profile,
+          },
+        );
+        let isCompatibleRequestHandler = !isH2(requestHandler);
+        stsClient = new STSClient({
+          ...stsOptions,
+          userAgentAppId,
+          profile,
+          region: resolvedRegion,
+          requestHandler: isCompatibleRequestHandler ? requestHandler : undefined,
+          logger,
+        });
+      }
+      let { Credentials, AssumedRoleUser } = await stsClient.send(
+        new AssumeRoleWithWebIdentityCommand(params),
       );
-    },
-    Qn = (e, t) => {
-      let n, u;
-      return async (r, g) => {
-        if (((u = r), !n)) {
-          let {
-              logger: logger = e?.parentClientConfig?.logger,
-              profile: profile = e?.parentClientConfig?.profile,
-              region: region,
-              requestHandler: requestHandler = e?.parentClientConfig?.requestHandler,
-              credentialProviderLogger: credentialProviderLogger,
-              userAgentAppId: userAgentAppId = e?.parentClientConfig?.userAgentAppId,
-            } = e,
-            mo = await ao(region, e?.parentClientConfig?.region, credentialProviderLogger, {
-              logger: logger,
-              profile: profile,
-            }),
-            ho = !uo(requestHandler);
-          n = new t({
-            ...e,
-            userAgentAppId: userAgentAppId,
-            profile: profile,
-            credentialDefaultProvider: () => async () => u,
-            region: mo,
-            requestHandler: ho ? requestHandler : void 0,
-            logger: logger,
-          });
-        }
-        let { Credentials: Credentials, AssumedRoleUser: AssumedRoleUser } = await n.send(new re(g));
-        if (!Credentials || !Credentials.AccessKeyId || !Credentials.SecretAccessKey)
-          throw Error(`Invalid response from STS.assumeRole call with role ${g.RoleArn}`);
-        let A = co(AssumedRoleUser),
-          R = {
-            accessKeyId: Credentials.AccessKeyId,
-            secretAccessKey: Credentials.SecretAccessKey,
-            sessionToken: Credentials.SessionToken,
-            expiration: Credentials.Expiration,
-            ...(Credentials.CredentialScope && { credentialScope: Credentials.CredentialScope }),
-            ...(A && { accountId: A }),
-          };
-        return (_e.setCredentialFeature(R, "CREDENTIALS_STS_ASSUME_ROLE", "i"), R);
+      if (!Credentials || !Credentials.AccessKeyId || !Credentials.SecretAccessKey)
+        throw Error(`Invalid response from STS.assumeRoleWithWebIdentity call with role ${params.RoleArn}`);
+      let accountId = getAccountIdFromAssumedRoleUser(AssumedRoleUser);
+      let credentials = {
+        accessKeyId: Credentials.AccessKeyId,
+        secretAccessKey: Credentials.SecretAccessKey,
+        sessionToken: Credentials.SessionToken,
+        expiration: Credentials.Expiration,
+        ...(Credentials.CredentialScope && {
+          credentialScope: Credentials.CredentialScope,
+        }),
+        ...(accountId && {
+          accountId,
+        }),
       };
-    },
-    Yn = (e, t) => {
-      let n;
-      return async (u) => {
-        if (!n) {
-          let {
-              logger: logger = e?.parentClientConfig?.logger,
-              profile: profile = e?.parentClientConfig?.profile,
-              region: region,
-              requestHandler: requestHandler = e?.parentClientConfig?.requestHandler,
-              credentialProviderLogger: credentialProviderLogger,
-              userAgentAppId: userAgentAppId = e?.parentClientConfig?.userAgentAppId,
-            } = e,
-            ce = await ao(region, e?.parentClientConfig?.region, credentialProviderLogger, {
-              logger: logger,
-              profile: profile,
-            }),
-            ae = !uo(requestHandler);
-          n = new t({
-            ...e,
-            userAgentAppId: userAgentAppId,
-            profile: profile,
-            region: ce,
-            requestHandler: ae ? requestHandler : void 0,
-            logger: logger,
-          });
+      if (accountId) client.setCredentialFeature(credentials, "RESOLVED_ACCOUNT_ID", "T");
+      client.setCredentialFeature(credentials, "CREDENTIALS_STS_ASSUME_ROLE_WEB_ID", "k");
+      return credentials;
+    };
+  };
+  var isH2 = (requestHandler) => requestHandler?.metadata?.handlerProtocol === "h2";
+  var getCustomizableStsClientCtor = (baseCtor, customizations) => {
+    if (!customizations) return baseCtor;
+    else
+      return class extends baseCtor {
+        constructor(config) {
+          super(config);
+          for (let customization of customizations) this.middlewareStack.use(customization);
         }
-        let { Credentials: Credentials, AssumedRoleUser: AssumedRoleUser } = await n.send(new ie(u));
-        if (!Credentials || !Credentials.AccessKeyId || !Credentials.SecretAccessKey)
-          throw Error(`Invalid response from STS.assumeRoleWithWebIdentity call with role ${u.RoleArn}`);
-        let l = co(AssumedRoleUser),
-          C = {
-            accessKeyId: Credentials.AccessKeyId,
-            secretAccessKey: Credentials.SecretAccessKey,
-            sessionToken: Credentials.SessionToken,
-            expiration: Credentials.Expiration,
-            ...(Credentials.CredentialScope && { credentialScope: Credentials.CredentialScope }),
-            ...(l && { accountId: l }),
-          };
-        if (l) _e.setCredentialFeature(C, "RESOLVED_ACCOUNT_ID", "T");
-        return (_e.setCredentialFeature(C, "CREDENTIALS_STS_ASSUME_ROLE_WEB_ID", "k"), C);
       };
-    },
-    uo = (e) => e?.metadata?.handlerProtocol === "h2",
-    lo = (e, t) => {
-      if (!t) return e;
-      else
-        return class extends e {
-          constructor(u) {
-            super(u);
-            for (let r of t) this.middlewareStack.use(r);
-          }
-        };
-    },
-    po = (e = {}, t) => Qn(e, lo(F.STSClient, t)),
-    go = (e = {}, t) => Yn(e, lo(F.STSClient, t)),
-    Jn = (e) => (t) => e({ roleAssumer: po(t), roleAssumerWithWebIdentity: go(t), ...t });
-  Object.defineProperty(ne, "$Command", {
-    enumerable: !0,
+  };
+  var getDefaultRoleAssumer = (stsOptions = {}, stsPlugins) =>
+    getDefaultRoleAssumer$1(stsOptions, getCustomizableStsClientCtor(STSClient.STSClient, stsPlugins));
+  var getDefaultRoleAssumerWithWebIdentity = (stsOptions = {}, stsPlugins) =>
+    getDefaultRoleAssumerWithWebIdentity$1(
+      stsOptions,
+      getCustomizableStsClientCtor(STSClient.STSClient, stsPlugins),
+    );
+  var decorateDefaultCredentialProvider = (provider) => (input) =>
+    provider({
+      roleAssumer: getDefaultRoleAssumer(input),
+      roleAssumerWithWebIdentity: getDefaultRoleAssumerWithWebIdentity(input),
+      ...input,
+    });
+  Object.defineProperty(cjsExports, "$Command", {
+    enumerable: true,
     get: function () {
-      return U.Command;
+      return smithyClient.Command;
     },
   });
-  ne.AssumeRoleCommand = re;
-  ne.AssumeRoleWithWebIdentityCommand = ie;
-  ne.ExpiredTokenException = Kt;
-  ne.IDPCommunicationErrorException = Yt;
-  ne.IDPRejectedClaimException = Bt;
-  ne.InvalidIdentityTokenException = Qt;
-  ne.MalformedPolicyDocumentException = Gt;
-  ne.PackedPolicyTooLargeException = zt;
-  ne.RegionDisabledException = Vt;
-  ne.STS = Ee;
-  ne.STSServiceException = S;
-  ne.decorateDefaultCredentialProvider = Jn;
-  ne.getDefaultRoleAssumer = po;
-  ne.getDefaultRoleAssumerWithWebIdentity = go;
-  Object.keys(F).forEach(function (e) {
-    if (e !== "default" && !Object.prototype.hasOwnProperty.call(ne, e))
-      Object.defineProperty(ne, e, {
-        enumerable: !0,
+  cjsExports.AssumeRoleCommand = AssumeRoleCommand;
+  cjsExports.AssumeRoleWithWebIdentityCommand = AssumeRoleWithWebIdentityCommand;
+  cjsExports.ExpiredTokenException = ExpiredTokenException$1;
+  cjsExports.IDPCommunicationErrorException = IDPCommunicationErrorException$1;
+  cjsExports.IDPRejectedClaimException = IDPRejectedClaimException$1;
+  cjsExports.InvalidIdentityTokenException = InvalidIdentityTokenException$1;
+  cjsExports.MalformedPolicyDocumentException = MalformedPolicyDocumentException$1;
+  cjsExports.PackedPolicyTooLargeException = PackedPolicyTooLargeException$1;
+  cjsExports.RegionDisabledException = RegionDisabledException$1;
+  cjsExports.STS = STS;
+  cjsExports.STSServiceException = STSServiceException$1;
+  cjsExports.decorateDefaultCredentialProvider = decorateDefaultCredentialProvider;
+  cjsExports.getDefaultRoleAssumer = getDefaultRoleAssumer;
+  cjsExports.getDefaultRoleAssumerWithWebIdentity = getDefaultRoleAssumerWithWebIdentity;
+  Object.keys(STSClient).forEach(function (k) {
+    if (k !== "default" && !Object.prototype.hasOwnProperty.call(cjsExports, k))
+      Object.defineProperty(cjsExports, k, {
+        enumerable: true,
         get: function () {
-          return F[e];
+          return STSClient[k];
         },
       });
   });
 });
-
-export { Wns };
+export { require_sts };

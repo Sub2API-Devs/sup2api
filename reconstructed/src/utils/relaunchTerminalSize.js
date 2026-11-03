@@ -14,21 +14,20 @@ import { env } from "./env.js";
 var CLAUDE_CODE_RELAUNCH_TERMINAL_SIZE = "CLAUDE_CODE_RELAUNCH_TERMINAL_SIZE";
 //@ chunk-1k64h7rw.js:271-368 placement
 function getRelaunchTerminalSizeEnv() {
-  let { columns: columns, rows: rows } = process.stdout;
+  let { columns, rows } = process.stdout;
   if (!columns || !rows) return {};
-  return { [CLAUDE_CODE_RELAUNCH_TERMINAL_SIZE]: `${columns}x${rows}` };
+  return {
+    [CLAUDE_CODE_RELAUNCH_TERMINAL_SIZE]: `${columns}x${rows}`,
+  };
 }
 //@ chunk-1k64h7rw.js:368-628 placement
 function applyRelaunchTerminalSize() {
   let CLAUDE_CODE_RELAUNCH_TERMINAL_SIZE_2 = env.CLAUDE_CODE_RELAUNCH_TERMINAL_SIZE;
-  if (
-    (delete process.env[CLAUDE_CODE_RELAUNCH_TERMINAL_SIZE],
-    CLAUDE_CODE_RELAUNCH_TERMINAL_SIZE_2 === void 0 || !process.stdout.isTTY)
-  )
-    return;
+  delete process.env[CLAUDE_CODE_RELAUNCH_TERMINAL_SIZE];
+  if (CLAUDE_CODE_RELAUNCH_TERMINAL_SIZE_2 === undefined || !process.stdout.isTTY) return;
   let match = /^([1-9]\d{0,3})x([1-9]\d{0,3})$/.exec(CLAUDE_CODE_RELAUNCH_TERMINAL_SIZE_2);
   if (!match) return;
-  ((process.stdout.columns ||= Number(match[1])), (process.stdout.rows ||= Number(match[2])));
+  process.stdout.columns ||= Number(match[1]);
+  process.stdout.rows ||= Number(match[2]);
 }
-
 export { CLAUDE_CODE_RELAUNCH_TERMINAL_SIZE, getRelaunchTerminalSizeEnv, applyRelaunchTerminalSize };

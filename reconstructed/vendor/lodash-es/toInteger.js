@@ -8,12 +8,13 @@
 import { toNumberExport } from "./toNumber.js";
 
 //@ chunk-bwbq4xvm.js:150523-150847 placement
-var INFINITY = 1 / 0,
-  FR = 179769313486231570000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000;
+var INFINITY = 1 / 0;
+var FR = 179769313486231570000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000;
 //@ chunk-bwbq4xvm.js:150847-150958 placement
 function toFinite(e) {
   if (!e) return e === 0 ? e : 0;
-  if (((e = toNumberExport(e)), e === INFINITY || e === -INFINITY)) {
+  e = toNumberExport(e);
+  if (e === INFINITY || e === -INFINITY) {
     var s = e < 0 ? -1 : 1;
     return s * FR;
   }
@@ -23,11 +24,10 @@ function toFinite(e) {
 var toFiniteExport = toFinite;
 //@ chunk-bwbq4xvm.js:150968-151024 placement
 function toInteger(e) {
-  var s = toFiniteExport(e),
-    n = s % 1;
-  return s === s ? (n ? s - n : s) : 0;
+  var finiteExport = toFiniteExport(e);
+  var remainder = finiteExport % 1;
+  return finiteExport === finiteExport ? (remainder ? finiteExport - remainder : finiteExport) : 0;
 }
 //@ chunk-bwbq4xvm.js:151024-151035 placement
-var toIntegerExport = toInteger;
-
-export { toIntegerExport };
+var toInteger_default = toInteger;
+export { toInteger_default };

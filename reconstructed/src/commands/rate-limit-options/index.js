@@ -10,47 +10,61 @@
  */
 import { withHideWhile } from "../../components/dialogs/dialogRequests.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, o, M, zg } from "../../../vendor/zod/v4/classic/schemas.js";
+import { u, string, M, zg } from "../../../vendor/zod/v4/classic/schemas.js";
 import { isClaudeAISubscriber } from "../../utils/auth.js";
 
+//@ chunk-ntgvwzh2.js:304-537 placement
 /**
  * local_jsx 对话框定义与 holdsQueue 载荷。
  */
-//@ chunk-ntgvwzh2.js:304-537 placement
 var LOCAL_JSX_DIALOG = withHideWhile({
-    kind: "local_jsx",
-    payload: DoctorLazy(() =>
-      u({ nodeId: o(), commandName: o(), immediate: M(), hidesPrompt: M(), holdsQueue: M().optional() }),
-    ),
-    result: DoctorLazy(() => zg()),
-    default: null,
-    userInvoked: !0,
-    hideWhile: [],
+  kind: "local_jsx",
+  payload: DoctorLazy(() =>
+    u({
+      nodeId: string(),
+      commandName: string(),
+      immediate: M(),
+      hidesPrompt: M(),
+      holdsQueue: M().optional(),
+    }),
+  ),
+  result: DoctorLazy(() => zg()),
+  default: null,
+  userInvoked: true,
+  hideWhile: [],
+});
+var HoldsQueueSchema = DoctorLazy(() =>
+  u({
+    holdsQueue: M().optional(),
   }),
-  HoldsQueueSchema = DoctorLazy(() => u({ holdsQueue: M().optional() }));
+);
+//@ chunk-ntgvwzh2.js:537-643 placement
 /**
  * 打开的 local_jsx 对话框是否占住队列。
  */
-//@ chunk-ntgvwzh2.js:537-643 placement
-function isLocalJsxHoldingQueue(a) {
-  return a.open.some(
+function isLocalJsxHoldingQueue(state) {
+  return state.open.some(
     (e) =>
-      e.kind === LOCAL_JSX_DIALOG.kind && HoldsQueueSchema().safeParse(e.payload).data?.holdsQueue !== !1,
+      e.kind === LOCAL_JSX_DIALOG.kind && HoldsQueueSchema().safeParse(e.payload).data?.holdsQueue !== false,
   );
 }
 //@ chunk-ntgvwzh2.js:643-703 placement
-var uOo = new Set(["rate-limit-options", "pro-trial-expired"]);
+/**
+ * rate-limit-options 命令的别名集合（rate-limit-options、pro-trial-expired）。
+ */
+var RATE_LIMIT_OPTIONS_COMMANDS = new Set(["rate-limit-options", "pro-trial-expired"]);
+//@ chunk-e6aww6q8.js:2042957-2043113 fingerprint = rateLimitOptions (0.602)
 /**
  * /rate-limit-options 命令对象（local-jsx）；描述：Manage usage limits and upgrade options；isEnabled: ()=>vt()||!1；实现 chunk-dg94x42s.js 的 Ha。
  */
-//@ chunk-e6aww6q8.js:2042957-2043113 fingerprint = rateLimitOptions (0.602)
 var rateLimitOptionsCommandDefinition = {
-    type: "local-jsx",
-    name: "rate-limit-options",
-    description: "Manage usage limits and upgrade options",
-    isEnabled: () => isClaudeAISubscriber() || !1,
-    requires: { ink: !0 },
+  type: "local-jsx",
+  name: "rate-limit-options",
+  description: "Manage usage limits and upgrade options",
+  isEnabled: () => isClaudeAISubscriber() || false,
+  requires: {
+    ink: true,
   },
-  rateLimitOptionsCommand = rateLimitOptionsCommandDefinition;
-
-export { LOCAL_JSX_DIALOG, isLocalJsxHoldingQueue, uOo, rateLimitOptionsCommand };
+};
+var rateLimitOptionsCommand = rateLimitOptionsCommandDefinition;
+export { LOCAL_JSX_DIALOG, isLocalJsxHoldingQueue, RATE_LIMIT_OPTIONS_COMMANDS, rateLimitOptionsCommand };

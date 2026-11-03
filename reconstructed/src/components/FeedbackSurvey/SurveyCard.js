@@ -9,17 +9,21 @@
  * attribution: placement 3
  */
 import { w } from "../../../vendor/react/compiler-runtime.js";
-import { fT, DIGIT_HOTKEY_HOLD_MS, useDigitHotkeys } from "../pluginUi/digitHotkeys.js";
+import { normalizeDigitKey, DIGIT_HOTKEY_HOLD_MS, useDigitHotkeys } from "../pluginUi/digitHotkeys.js";
 import { useKeybindingContext } from "../../keybindings/KeybindingContext.js";
 import { getActionChords } from "../../keybindings/resolver.js";
-import { Lfo } from "./FeedbackSurvey.js";
+import { hasSingleItem } from "./FeedbackSurvey.js";
 import { chordToString } from "../../keybindings/parser.js";
-import { rs } from "../../state/AppState.js";
+import { useAppStateSlice } from "../../state/AppState.js";
 import { selectHasModalOverlay } from "../../context/overlayContext.js";
 import { P } from "../../../vendor/react/cjs/react.production.js";
 import { isUnattendedInteractiveSession } from "../../utils/concurrentSessions.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
-import { e, r, Fragment } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+  Fragment,
+} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Box } from "../../ink/components/Text.js";
 import { BLACK_CIRCLE } from "../../utils/permissions/autoModeRulesPrompt.js";
 import { KeyboardShortcutHint } from "../design-system/KeyboardShortcutHint.js";
@@ -27,79 +31,94 @@ import { USER_MESSAGE_BACKGROUND } from "../CustomSelect/selectTypeahead.js";
 import { Button } from "../../ink/components/ErrorBoundary.js";
 
 //@ chunk-18hwfzwa.js:1004373-1004412 placement
-function d4(h) {
+function isRatingKey(h) {
   return h === "0" || h === "1";
 }
+//@ chunk-18hwfzwa.js:1004412-1007788 placement
 /**
  * SurveyCard：调查卡片外框与评分选项。
  */
-//@ chunk-18hwfzwa.js:1004412-1007788 placement
-function SurveyCard(h) {
-  let $ = w(48),
-    {
-      state: state,
-      survey: survey,
-      starting: starting,
-      inputValue: inputValue,
-      setInputValue: setInputValue,
-      inputRowReplaced: inputRowReplaced,
-      onShown: onShown,
-      onStart: onStart,
-      onDismiss: onDismiss,
-      onIgnore: onIgnore,
-    } = h,
-    rt;
-  if ($[0] !== inputValue)
-    ((rt = inputValue.length === 1 ? fT(inputValue) : inputValue), ($[0] = inputValue), ($[1] = rt));
-  else rt = $[1];
-  let kt = rt,
-    At;
-  if ($[2] !== kt || $[3] !== state)
-    ((At = state === "open" && kt !== "" && !d4(kt)), ($[2] = kt), ($[3] = state), ($[4] = At));
-  else At = $[4];
-  let It = At,
-    Ot = state === "open" && survey !== null && !It,
-    Et = useKeybindingContext(),
-    Dt;
+function SurveyCard(props) {
+  let $ = w(48);
+  let {
+    state,
+    survey,
+    starting,
+    inputValue,
+    setInputValue,
+    inputRowReplaced,
+    onShown,
+    onStart,
+    onDismiss,
+    onIgnore,
+  } = props;
+  let rt;
+  if ($[0] !== inputValue) {
+    rt = inputValue.length === 1 ? normalizeDigitKey(inputValue) : inputValue;
+    $[0] = inputValue;
+    $[1] = rt;
+  } else rt = $[1];
+  let kt = rt;
+  let At;
+  if ($[2] !== kt || $[3] !== state) {
+    At = state === "open" && kt !== "" && !isRatingKey(kt);
+    $[2] = kt;
+    $[3] = state;
+    $[4] = At;
+  } else At = $[4];
+  let It = At;
+  let Ot = state === "open" && survey !== null && !It;
+  let keybindingContext = useKeybindingContext();
+  let Dt;
   Lt: {
-    if (Et === null) {
+    if (keybindingContext === null) {
       Dt = "enter";
       break Lt;
     }
     let oo;
-    if ($[5] !== Et.bindings) {
-      let at = getActionChords("chat:submit", "Chat", Et.bindings).filter(Lfo).at(-1);
-      oo = at === void 0 ? "" : chordToString(at);
-      (($[5] = Et.bindings), ($[6] = oo));
+    if ($[5] !== keybindingContext.bindings) {
+      let last = getActionChords("chat:submit", "Chat", keybindingContext.bindings)
+        .filter(hasSingleItem)
+        .at(-1);
+      oo = last === undefined ? "" : chordToString(last);
+      $[5] = keybindingContext.bindings;
+      $[6] = oo;
     } else oo = $[6];
     Dt = oo;
   }
-  let io = Dt,
-    so = rs(selectHasModalOverlay) === !0,
-    oo,
-    po;
-  if ($[7] !== onIgnore || $[8] !== It)
-    ((oo = () => {
+  let io = Dt;
+  let so = useAppStateSlice(selectHasModalOverlay) === true;
+  let oo;
+  let po;
+  if ($[7] !== onIgnore || $[8] !== It) {
+    oo = () => {
       if (It) onIgnore();
-    }),
-      (po = [It, onIgnore]),
-      ($[7] = onIgnore),
-      ($[8] = It),
-      ($[9] = oo),
-      ($[10] = po));
-  else ((oo = $[9]), (po = $[10]));
+    };
+    po = [It, onIgnore];
+    $[7] = onIgnore;
+    $[8] = It;
+    $[9] = oo;
+    $[10] = po;
+  } else {
+    oo = $[9];
+    po = $[10];
+  }
   P(oo, po);
-  let ao, co;
-  if ($[11] !== Ot || $[12] !== onShown)
-    ((ao = () => {
+  let ao;
+  let co;
+  if ($[11] !== Ot || $[12] !== onShown) {
+    ao = () => {
       if (Ot) onShown();
-    }),
-      (co = [Ot, onShown]),
-      ($[11] = Ot),
-      ($[12] = onShown),
-      ($[13] = ao),
-      ($[14] = co));
-  else ((ao = $[13]), (co = $[14]));
+    };
+    co = [Ot, onShown];
+    $[11] = Ot;
+    $[12] = onShown;
+    $[13] = ao;
+    $[14] = co;
+  } else {
+    ao = $[13];
+    co = $[14];
+  }
   P(ao, co);
   let bo;
   if (
@@ -108,9 +127,10 @@ function SurveyCard(h) {
     $[17] !== onStart ||
     $[18] !== setInputValue ||
     $[19] !== starting
-  )
-    ((bo = function Bo(Ao) {
-      if ((setInputValue(""), starting)) {
+  ) {
+    bo = function Bo(Ao) {
+      setInputValue("");
+      if (starting) {
         return;
       }
       if (isUnattendedInteractiveSession()) {
@@ -119,47 +139,52 @@ function SurveyCard(h) {
       }
       if (Ao === "1") onStart();
       else onDismiss();
-    }),
-      ($[15] = onDismiss),
-      ($[16] = onIgnore),
-      ($[17] = onStart),
-      ($[18] = setInputValue),
-      ($[19] = starting),
-      ($[20] = bo));
-  else bo = $[20];
+    };
+    $[15] = onDismiss;
+    $[16] = onIgnore;
+    $[17] = onStart;
+    $[18] = setInputValue;
+    $[19] = starting;
+    $[20] = bo;
+  } else bo = $[20];
   let Bo = bo;
-  const Ro = !inputRowReplaced && !so;
+  const enterConfirms = !inputRowReplaced && !so;
   let Ho;
-  if ($[21] !== Ot || $[22] !== inputValue || $[23] !== Bo || $[24] !== Ro)
-    ((Ho = {
-      inputValue: inputValue,
-      isValidDigit: d4,
+  if ($[21] !== Ot || $[22] !== inputValue || $[23] !== Bo || $[24] !== enterConfirms) {
+    Ho = {
+      inputValue,
+      isValidDigit: isRatingKey,
       onDigit: Bo,
       enabled: Ot,
-      enterConfirms: Ro,
-      acceptAfterPause: !1,
+      enterConfirms,
+      acceptAfterPause: false,
       mountDelayMs: DIGIT_HOTKEY_HOLD_MS,
-    }),
-      ($[21] = Ot),
-      ($[22] = inputValue),
-      ($[23] = Bo),
-      ($[24] = Ro),
-      ($[25] = Ho));
-  else Ho = $[25];
-  if ((useDigitHotkeys(Ho), state === "thanks" && survey !== null)) {
+    };
+    $[21] = Ot;
+    $[22] = inputValue;
+    $[23] = Bo;
+    $[24] = enterConfirms;
+    $[25] = Ho;
+  } else Ho = $[25];
+  useDigitHotkeys(Ho);
+  if (state === "thanks" && survey !== null) {
     let Io;
-    if ($[26] === MEMO_CACHE_SENTINEL)
-      ((Io = e(Text, { color: "success", children: "Thanks for your feedback" })), ($[26] = Io));
-    else Io = $[26];
+    if ($[26] === MEMO_CACHE_SENTINEL) {
+      Io = jsxProd_default(Text, {
+        color: "success",
+        children: "Thanks for your feedback",
+      });
+      $[26] = Io;
+    } else Io = $[26];
     let Wo;
-    if ($[27] !== survey.orgName)
-      ((Wo = r(Box, {
+    if ($[27] !== survey.orgName) {
+      Wo = jsxProd_default_2(Box, {
         flexDirection: "column",
         marginTop: 1,
         children: [
           Io,
-          r(Text, {
-            dimColor: !0,
+          jsxProd_default_2(Text, {
+            dimColor: true,
             wrap: "wrap",
             children: [
               "This survey is from ",
@@ -172,18 +197,18 @@ function SurveyCard(h) {
             ],
           }),
         ],
-      })),
-        ($[27] = survey.orgName),
-        ($[28] = Wo));
-    else Wo = $[28];
+      });
+      $[27] = survey.orgName;
+      $[28] = Wo;
+    } else Wo = $[28];
     return Wo;
   }
   if (state === "gone" && survey !== null) {
     let Io;
-    if ($[29] === MEMO_CACHE_SENTINEL)
-      ((Io = e(Box, {
+    if ($[29] === MEMO_CACHE_SENTINEL) {
+      Io = jsxProd_default(Box, {
         marginTop: 1,
-        children: r(Text, {
+        children: jsxProd_default_2(Text, {
           color: "warning",
           wrap: "wrap",
           children: [
@@ -194,125 +219,179 @@ function SurveyCard(h) {
             "t sent.",
           ],
         }),
-      })),
-        ($[29] = Io));
-    else Io = $[29];
+      });
+      $[29] = Io;
+    } else Io = $[29];
     return Io;
   }
   if (!Ot) {
     return null;
   }
   let Io;
-  if ($[30] === MEMO_CACHE_SENTINEL)
-    ((Io = e(Box, { minWidth: 2, children: e(Text, { color: "ansi:cyan", children: BLACK_CIRCLE }) })),
-      ($[30] = Io));
-  else Io = $[30];
+  if ($[30] === MEMO_CACHE_SENTINEL) {
+    Io = jsxProd_default(Box, {
+      minWidth: 2,
+      children: jsxProd_default(Text, {
+        color: "ansi:cyan",
+        children: BLACK_CIRCLE,
+      }),
+    });
+    $[30] = Io;
+  } else Io = $[30];
   let Wo;
-  if ($[31] !== survey.headline)
-    ((Wo = r(Box, { children: [Io, e(Text, { bold: !0, wrap: "wrap", children: survey.headline })] })),
-      ($[31] = survey.headline),
-      ($[32] = Wo));
-  else Wo = $[32];
+  if ($[31] !== survey.headline) {
+    Wo = jsxProd_default_2(Box, {
+      children: [
+        Io,
+        jsxProd_default(Text, {
+          bold: true,
+          wrap: "wrap",
+          children: survey.headline,
+        }),
+      ],
+    });
+    $[31] = survey.headline;
+    $[32] = Wo;
+  } else Wo = $[32];
   let mn;
-  if ($[33] !== survey.message)
-    ((mn = e(Box, { marginLeft: 2, children: e(Text, { wrap: "wrap", children: survey.message }) })),
-      ($[33] = survey.message),
-      ($[34] = mn));
-  else mn = $[34];
-  let Cn;
-  if ($[35] !== survey.orgName)
-    ((Cn = e(Box, {
+  if ($[33] !== survey.message) {
+    mn = jsxProd_default(Box, {
       marginLeft: 2,
-      children: r(Text, { dimColor: !0, wrap: "wrap", children: ["Survey from ", survey.orgName] }),
-    })),
-      ($[35] = survey.orgName),
-      ($[36] = Cn));
-  else Cn = $[36];
+      children: jsxProd_default(Text, {
+        wrap: "wrap",
+        children: survey.message,
+      }),
+    });
+    $[33] = survey.message;
+    $[34] = mn;
+  } else mn = $[34];
+  let Cn;
+  if ($[35] !== survey.orgName) {
+    Cn = jsxProd_default(Box, {
+      marginLeft: 2,
+      children: jsxProd_default_2(Text, {
+        dimColor: true,
+        wrap: "wrap",
+        children: ["Survey from ", survey.orgName],
+      }),
+    });
+    $[35] = survey.orgName;
+    $[36] = Cn;
+  } else Cn = $[36];
   let No;
-  if ($[37] !== Bo)
-    ((No = r(Box, {
+  if ($[37] !== Bo) {
+    No = jsxProd_default_2(Box, {
       marginLeft: 2,
       flexWrap: "wrap",
       children: [
-        e(SurveyDigitButton, { digit: "1", label: "Start survey", onAction: Bo }),
-        e(SurveyDigitButton, { digit: "0", label: "Not now", onAction: Bo }),
+        jsxProd_default(SurveyDigitButton, {
+          digit: "1",
+          label: "Start survey",
+          onAction: Bo,
+        }),
+        jsxProd_default(SurveyDigitButton, {
+          digit: "0",
+          label: "Not now",
+          onAction: Bo,
+        }),
       ],
-    })),
-      ($[37] = Bo),
-      ($[38] = No));
-  else No = $[38];
+    });
+    $[37] = Bo;
+    $[38] = No;
+  } else No = $[38];
   let vo;
-  if ($[39] !== starting || $[40] !== io)
-    ((vo =
+  if ($[39] !== starting || $[40] !== io) {
+    vo =
       (starting || io !== "") &&
-      e(Box, {
+      jsxProd_default(Box, {
         marginLeft: 2,
-        children: e(Text, {
-          dimColor: !0,
+        children: jsxProd_default(Text, {
+          dimColor: true,
           wrap: "wrap",
           children: starting
             ? "Opening the survey\u2026"
-            : r(Fragment, {
+            : jsxProd_default_2(Fragment, {
                 children: [
                   "Type 1 or 0, then",
                   " ",
-                  e(KeyboardShortcutHint, { chord: io, action: "answer" }),
+                  jsxProd_default(KeyboardShortcutHint, {
+                    chord: io,
+                    action: "answer",
+                  }),
                 ],
               }),
         }),
-      })),
-      ($[39] = starting),
-      ($[40] = io),
-      ($[41] = vo));
-  else vo = $[41];
+      });
+    $[39] = starting;
+    $[40] = io;
+    $[41] = vo;
+  } else vo = $[41];
   let Yo;
-  if ($[42] !== Wo || $[43] !== mn || $[44] !== Cn || $[45] !== No || $[46] !== vo)
-    ((Yo = r(Box, { flexDirection: "column", marginTop: 1, children: [Wo, mn, Cn, No, vo] })),
-      ($[42] = Wo),
-      ($[43] = mn),
-      ($[44] = Cn),
-      ($[45] = No),
-      ($[46] = vo),
-      ($[47] = Yo));
-  else Yo = $[47];
+  if ($[42] !== Wo || $[43] !== mn || $[44] !== Cn || $[45] !== No || $[46] !== vo) {
+    Yo = jsxProd_default_2(Box, {
+      flexDirection: "column",
+      marginTop: 1,
+      children: [Wo, mn, Cn, No, vo],
+    });
+    $[42] = Wo;
+    $[43] = mn;
+    $[44] = Cn;
+    $[45] = No;
+    $[46] = vo;
+    $[47] = Yo;
+  } else Yo = $[47];
   return Yo;
 }
+//@ chunk-18hwfzwa.js:1007788-1008312 placement
 /**
  * 调查卡片里的一个数字按钮：显示"数字: 标签"，悬停高亮，点击回调 onAction(digit)。
  */
-//@ chunk-18hwfzwa.js:1007788-1008312 placement
-function SurveyDigitButton(h) {
-  let $ = w(9),
-    { digit: digit, label: label, onAction: onAction } = h,
-    ke;
-  if ($[0] !== digit || $[1] !== onAction)
-    ((ke = () => onAction(digit)), ($[0] = digit), ($[1] = onAction), ($[2] = ke));
-  else ke = $[2];
-  let Re;
-  if ($[3] !== digit || $[4] !== label)
-    ((Re = (Be) => {
-      let { hovered: hovered } = Be;
-      return r(Text, {
-        backgroundColor: hovered ? USER_MESSAGE_BACKGROUND : void 0,
-        children: [e(Text, { color: "ansi:cyan", children: digit }), ": ", label],
+function SurveyDigitButton(props) {
+  let $ = w(9);
+  let { digit, label, onAction } = props;
+  let onAction_2;
+  if ($[0] !== digit || $[1] !== onAction) {
+    onAction_2 = () => onAction(digit);
+    $[0] = digit;
+    $[1] = onAction;
+    $[2] = onAction_2;
+  } else onAction_2 = $[2];
+  let children;
+  if ($[3] !== digit || $[4] !== label) {
+    children = (Be) => {
+      let { hovered } = Be;
+      return jsxProd_default_2(Text, {
+        backgroundColor: hovered ? USER_MESSAGE_BACKGROUND : undefined,
+        children: [
+          jsxProd_default(Text, {
+            color: "ansi:cyan",
+            children: digit,
+          }),
+          ": ",
+          label,
+        ],
       });
-    }),
-      ($[3] = digit),
-      ($[4] = label),
-      ($[5] = Re));
-  else Re = $[5];
+    };
+    $[3] = digit;
+    $[4] = label;
+    $[5] = children;
+  } else children = $[5];
   let Be;
-  if ($[6] !== ke || $[7] !== Re)
-    ((Be = e(Box, {
+  if ($[6] !== onAction_2 || $[7] !== children) {
+    Be = jsxProd_default(Box, {
       marginRight: 3,
       flexShrink: 0,
-      children: e(Button, { tabIndex: -1, mountSettleMs: DIGIT_HOTKEY_HOLD_MS, onAction: ke, children: Re }),
-    })),
-      ($[6] = ke),
-      ($[7] = Re),
-      ($[8] = Be));
-  else Be = $[8];
+      children: jsxProd_default(Button, {
+        tabIndex: -1,
+        mountSettleMs: DIGIT_HOTKEY_HOLD_MS,
+        onAction: onAction_2,
+        children,
+      }),
+    });
+    $[6] = onAction_2;
+    $[7] = children;
+    $[8] = Be;
+  } else Be = $[8];
   return Be;
 }
-
 export { SurveyCard };

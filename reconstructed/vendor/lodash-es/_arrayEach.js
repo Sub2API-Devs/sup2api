@@ -7,13 +7,12 @@
  */
 
 //@ chunk-dcmhvw5a.js:3550-3644 placement
-function arrayEach(e, n) {
-  var r = -1,
-    s = e == null ? 0 : e.length;
-  while (++r < s) if (n(e[r], r, e) === !1) break;
-  return e;
+function arrayEach(array, iteratee) {
+  var index = -1;
+  var length = array == null ? 0 : array.length;
+  while (++index < length) if (iteratee(array[index], index, array) === false) break;
+  return array;
 }
 //@ chunk-dcmhvw5a.js:3644-3654 placement
-var ci = arrayEach;
-
-export { ci };
+var arrayEach_default = arrayEach;
+export { arrayEach_default };

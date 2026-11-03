@@ -6,37 +6,40 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { ca } from "./URL.js";
-import { Vn } from "./URLUtils.js";
+import { require_URL } from "./URL.js";
+import { require_URLUtils } from "./URLUtils.js";
 
 //@ chunk-vwj6ccer.js:234995-235461 cjs-fingerprint
-var Cc = x(function (Qd, Ac) {
-  var bf = ca(),
-    Ef = Vn();
-  Ac.exports = ri;
-  function ri(e, t) {
-    ((this._window = e), (this._href = t));
+var require_Location = x(function (cjsExports, cjsModule) {
+  var bf = require_URL();
+  var URLUtils = require_URLUtils();
+  cjsModule.exports = Location;
+  function Location(_window, href) {
+    this._window = _window;
+    this._href = href;
   }
-  ri.prototype = Object.create(Ef.prototype, {
-    constructor: { value: ri },
+  Location.prototype = Object.create(URLUtils.prototype, {
+    constructor: {
+      value: Location,
+    },
     href: {
       get: function () {
         return this._href;
       },
-      set: function (e) {
-        this.assign(e);
+      set: function (v) {
+        this.assign(v);
       },
     },
     assign: {
-      value: function (e) {
-        var t = new bf(this._href),
-          resolved = t.resolve(e);
-        this._href = resolved;
+      value: function (url) {
+        var current = new bf(this._href);
+        var newurl = current.resolve(url);
+        this._href = newurl;
       },
     },
     replace: {
-      value: function (e) {
-        this.assign(e);
+      value: function (url) {
+        this.assign(url);
       },
     },
     reload: {
@@ -51,5 +54,4 @@ var Cc = x(function (Qd, Ac) {
     },
   });
 });
-
-export { Cc };
+export { require_Location };

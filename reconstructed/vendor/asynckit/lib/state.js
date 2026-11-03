@@ -6,19 +6,20 @@
  * attribution: cjs-fingerprint 4
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { Jt } from "../index.js";
-import { Kt } from "./abort.js";
+import { require_asynckit } from "../index.js";
+import { require_abort } from "./abort.js";
 
 //@ chunk-h6b7mazd.js:5825-6165 cjs-fingerprint
-var Xt = x(function (Ll, Fn) {
-  var Pn = Jt(),
-    La = Kt();
-  Fn.exports = Ba;
+var require_state_2 = x(function (cjsExports, cjsModule) {
+  var Pn = require_asynckit();
+  var La = require_abort();
+  cjsModule.exports = Ba;
   function Ba(e, t, r, n) {
     var o = r.keyedList ? r.keyedList[r.index] : r.index;
     r.jobs[o] = Na(t, o, e[o], function (s, i) {
       if (!(o in r.jobs)) return;
-      if ((delete r.jobs[o], s)) La(r);
+      delete r.jobs[o];
+      if (s) La(r);
       else r.results[o] = i;
       n(s, r.results);
     });
@@ -31,48 +32,50 @@ var Xt = x(function (Ll, Fn) {
   }
 });
 //@ chunk-h6b7mazd.js:6165-6428 cjs-fingerprint
-var Yt = x(function (Bl, Ln) {
-  Ln.exports = Da;
-  function Da(e, t) {
-    var r = !Array.isArray(e),
-      n = {
-        index: 0,
-        keyedList: r || t ? Object.keys(e) : null,
-        jobs: {},
-        results: r ? {} : [],
-        size: r ? Object.keys(e).length : e.length,
-      };
-    if (t)
-      n.keyedList.sort(
-        r
-          ? t
-          : function (o, s) {
-              return t(e[o], e[s]);
+var require_state = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = state;
+  function state(list, sortMethod) {
+    var isNamedList = !Array.isArray(list);
+    var initState = {
+      index: 0,
+      keyedList: isNamedList || sortMethod ? Object.keys(list) : null,
+      jobs: {},
+      results: isNamedList ? {} : [],
+      size: isNamedList ? Object.keys(list).length : list.length,
+    };
+    if (sortMethod)
+      initState.keyedList.sort(
+        isNamedList
+          ? sortMethod
+          : function (a, b) {
+              return sortMethod(list[a], list[b]);
             },
       );
-    return n;
+    return initState;
   }
 });
 //@ chunk-h6b7mazd.js:6428-6601 cjs-fingerprint
-var Qt = x(function (Nl, Bn) {
-  var Ua = Kt(),
-    qa = Jt();
-  Bn.exports = Ia;
-  function Ia(e) {
+var require_state_4 = x(function (cjsExports, cjsModule) {
+  var Ua = require_abort();
+  var qa = require_asynckit();
+  cjsModule.exports = state;
+  function state(list) {
     if (!Object.keys(this.jobs).length) return;
-    ((this.index = this.size), Ua(this), qa(e)(null, this.results));
+    this.index = this.size;
+    Ua(this);
+    qa(list)(null, this.results);
   }
 });
 //@ chunk-h6b7mazd.js:6601-6876 cjs-fingerprint
-var Dn = x(function (Dl, Nn) {
-  var ka = Xt(),
-    Ma = Yt(),
-    Ha = Qt();
-  Nn.exports = za;
-  function za(e, t, r) {
+var require_state_3 = x(function (cjsExports, cjsModule) {
+  var ka = require_state_2();
+  var Ma = require_state();
+  var Ha = require_state_4();
+  cjsModule.exports = state;
+  function state(e, t, r) {
     var n = Ma(e);
-    while (n.index < (n.keyedList || e).length)
-      (ka(e, t, n, function (o, s) {
+    while (n.index < (n.keyedList || e).length) {
+      ka(e, t, n, function (o, s) {
         if (o) {
           r(o, s);
           return;
@@ -81,10 +84,10 @@ var Dn = x(function (Dl, Nn) {
           r(null, n.results);
           return;
         }
-      }),
-        n.index++);
+      });
+      n.index++;
+    }
     return Ha.bind(n, r);
   }
 });
-
-export { Dn, Xt, Yt, Qt };
+export { require_state_3, require_state_2, require_state, require_state_4 };

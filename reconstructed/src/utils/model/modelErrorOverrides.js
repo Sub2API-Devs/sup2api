@@ -14,93 +14,121 @@ import {
   getDynamicConfig_CACHED_MAY_BE_STALE,
 } from "../../services/analytics/growthbook.js";
 import { getFamilyDefaults, isCatalogRowSelectable } from "./modelCatalog/catalogCapabilities.js";
-import { a6e, catalogModels, ato, getRowFamily } from "./providers.js";
-import { Bae } from "./modelCatalog/servedCatalog.js";
+import { MODEL_FAMILY_NAMES, catalogModels, isOverflowRow, getRowFamily } from "./providers.js";
+import { modelIdentityKey } from "./modelCatalog/servedCatalog.js";
 import { normalizeModelId } from "./modelCatalog/catalogEntries.js";
 
 //@ chunk-hwmsct5x.js:198401-198444 placement
-var TENGU_MODEL_ERROR_OVERRIDES = "tengu-model-error-overrides",
-  Xa = {};
+var TENGU_MODEL_ERROR_OVERRIDES = "tengu-model-error-overrides";
+var EMPTY_OVERRIDES = {};
 //@ chunk-hwmsct5x.js:198444-198476 placement
-function M_(e) {
-  return isPlainObject(e) ? e : Xa;
+function plainObjectOrEmpty(e) {
+  return isPlainObject(e) ? e : EMPTY_OVERRIDES;
 }
 //@ chunk-hwmsct5x.js:198476-198592 placement
 function getModelErrorOverride(e, n) {
   if (typeof n !== "string" || n === "") return;
-  let r = M_(e)[n];
-  return typeof r === "object" && r !== null ? r : void 0;
+  let r = plainObjectOrEmpty(e)[n];
+  return typeof r === "object" && r !== null ? r : undefined;
 }
 //@ chunk-hwmsct5x.js:198592-198655 placement
-async function oci(e) {
-  let n = await getDynamicConfig_BLOCKS_ON_INIT(TENGU_MODEL_ERROR_OVERRIDES, Xa);
-  return rc(getModelErrorOverride(n, e));
+/**
+ * 异步取动态配置中该模型的阻断说明文本。
+ */
+async function blockedOverrideText(previousRequestId) {
+  let dynamicConfig_BLOCKS_ON_INIT = await getDynamicConfig_BLOCKS_ON_INIT(
+    TENGU_MODEL_ERROR_OVERRIDES,
+    EMPTY_OVERRIDES,
+  );
+  return blockTextFromOverride(getModelErrorOverride(dynamicConfig_BLOCKS_ON_INIT, previousRequestId));
 }
 //@ chunk-hwmsct5x.js:198655-198690 placement
-function rc(e) {
-  return sc(e?.block);
+function blockTextFromOverride(modelErrorOverride) {
+  return trimmedNonEmptyOrNull(modelErrorOverride?.block);
 }
 //@ chunk-hwmsct5x.js:198690-198787 placement
-function oc(e) {
-  let n = getModelErrorOverride(getDynamicConfig_CACHED_MAY_BE_STALE(TENGU_MODEL_ERROR_OVERRIDES, Xa), e),
-    r = rc(n);
+/**
+ * 取该模型的错误覆盖：pickerHint 优先，其次 block；都没有返回 null。
+ */
+function pickerHintFromOverride(canonicalName) {
+  let modelErrorOverride = getModelErrorOverride(
+    getDynamicConfig_CACHED_MAY_BE_STALE(TENGU_MODEL_ERROR_OVERRIDES, EMPTY_OVERRIDES),
+    canonicalName,
+  );
+  let r = blockTextFromOverride(modelErrorOverride);
   if (r === null) return null;
-  return sc(n?.pickerHint) ?? r;
+  return trimmedNonEmptyOrNull(modelErrorOverride?.pickerHint) ?? r;
 }
 //@ chunk-hwmsct5x.js:198787-198873 placement
-function sc(e) {
+function trimmedNonEmptyOrNull(e) {
   if (typeof e !== "string") return null;
   let trimmed = e.trim();
   return trimmed === "" ? null : trimmed;
 }
+//@ chunk-hwmsct5x.js:198873-199295 placement
 /**
  * 把目录中的模型整理为去重的行（served 来源时可用行在前），每行带来源、规范 key、是否可选、族名与别名族。
  */
-//@ chunk-hwmsct5x.js:198873-199295 placement
-function buildCatalogRows({ catalog: catalog, provenance: provenance }) {
-  let r = [],
-    s = new Set(),
-    h = (R) => {
-      if (R === "" || s.has(R)) return !1;
-      return (s.add(R), !0);
-    },
-    y = getFamilyDefaults(catalog),
-    w = new Map();
-  for (let R of a6e) {
-    let L = y[R];
-    if (L !== void 0) w.set(Bae(L), R);
+function buildCatalogRows({ catalog, provenance }) {
+  let r = [];
+  let s = new Set();
+  let h = (R) => {
+    if (R === "" || s.has(R)) return false;
+    s.add(R);
+    return true;
+  };
+  let familyDefaults = getFamilyDefaults(catalog);
+  let w = new Map();
+  for (let R of MODEL_FAMILY_NAMES) {
+    let L = familyDefaults[R];
+    if (L !== undefined) w.set(modelIdentityKey(L), R);
   }
-  let S = catalogModels(catalog),
-    E = provenance === "served" ? [...S.filter((R) => !ato(R)), ...S.filter(ato)] : S;
+  let S = catalogModels(catalog);
+  let E = provenance === "served" ? [...S.filter((R) => !isOverflowRow(R)), ...S.filter(isOverflowRow)] : S;
   for (let R of E) {
     let L = normalizeModelId(R.id);
     if (!h(L)) continue;
     r.push({
-      provenance: provenance,
+      provenance,
       key: L,
       row: R,
       selectable: isCatalogRowSelectable(catalog, R),
       family: getRowFamily(R),
-      aliasFamily: w.get(Bae(R.id)),
+      aliasFamily: w.get(modelIdentityKey(R.id)),
     });
   }
   return r;
 }
 //@ chunk-hwmsct5x.js:199295-199365 placement
-function sci(e) {
+/**
+ * 列出可选的目录行 id。
+ */
+function selectableRowIds(e) {
   return buildCatalogRows(e).flatMap((n) => (n.selectable ? [n.row.id] : []));
 }
 //@ chunk-hwmsct5x.js:199365-199448 placement
-function ici(e) {
-  return buildCatalogRows(e).flatMap((n) => (n.selectable && !ato(n.row) ? [n.row.id] : []));
+/**
+ * 列出可选且非 overflow 分区的行 id。
+ */
+function selectableNonOverflowRowIds(e) {
+  return buildCatalogRows(e).flatMap((n) => (n.selectable && !isOverflowRow(n.row) ? [n.row.id] : []));
 }
+//@ chunk-hwmsct5x.js:199448-199615 placement
 /**
  * 见同句首个绑定的说明。
  */
-//@ chunk-hwmsct5x.js:199448-199615 placement
-var SONNET_SLOGAN = "Efficient for routine tasks",
-  OPUS_SLOGAN = "Best for everyday, complex tasks",
-  HAIKU_SLOGAN = "Fastest for quick answers",
-  FABLE_SLOGAN = "Most capable for your hardest and longest-running tasks";
-
-export { oci, sci, ici, SONNET_SLOGAN, OPUS_SLOGAN, FABLE_SLOGAN, HAIKU_SLOGAN, buildCatalogRows, oc };
+var SONNET_SLOGAN = "Efficient for routine tasks";
+var OPUS_SLOGAN = "Best for everyday, complex tasks";
+var HAIKU_SLOGAN = "Fastest for quick answers";
+var FABLE_SLOGAN = "Most capable for your hardest and longest-running tasks";
+export {
+  blockedOverrideText,
+  selectableRowIds,
+  selectableNonOverflowRowIds,
+  SONNET_SLOGAN,
+  OPUS_SLOGAN,
+  FABLE_SLOGAN,
+  HAIKU_SLOGAN,
+  buildCatalogRows,
+  pickerHintFromOverride,
+};

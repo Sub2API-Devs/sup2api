@@ -10,50 +10,64 @@
  */
 import { isEnvDefinedFalsy } from "../../utils/envUtils.js";
 
+//@ chunk-g9fr1aeb.js:227-380 placement
 /**
  * runner 转交给子进程的服务器参数：参数名格式、布尔型参数、系统提示文件类参数。
  */
-//@ chunk-g9fr1aeb.js:227-380 placement
-var SERVER_ARG_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9-]*$/,
-  BOOLEAN_SERVER_ARGS = new Set(["restricted"]),
-  SYSTEM_PROMPT_FILE_ARGS = [
-    "system-prompt-file",
-    "append-system-prompt-file",
-    "append-subagent-system-prompt-file",
-  ];
+var SERVER_ARG_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9-]*$/;
+var BOOLEAN_SERVER_ARGS = new Set(["restricted"]);
+var SYSTEM_PROMPT_FILE_ARGS = [
+  "system-prompt-file",
+  "append-system-prompt-file",
+  "append-subagent-system-prompt-file",
+];
 //@ chunk-g9fr1aeb.js:380-415 placement
-function RC(t, e) {
+/**
+ * 拼出 `--key value` 形式的参数。
+ */
+function keyValueArg(t, e) {
   return `${t}=${e}`;
 }
 //@ chunk-g9fr1aeb.js:415-510 placement
-function mxr(t, e) {
+/**
+ * 拼出 flag 与值的参数对（必要时省略值）。
+ */
+function flagArgPair(t, e) {
   let n = String(e);
-  if (n.length > 1 && n.startsWith("-")) return [RC(t, n)];
+  if (n.length > 1 && n.startsWith("-")) return [keyValueArg(t, n)];
   return [t, n];
 }
 //@ chunk-g9fr1aeb.js:510-557 placement
-function wrn(t, e, n) {
-  t.push(...mxr(`--${e}`, n));
+/**
+ * 按条件追加一对 flag 参数。
+ */
+function pushFlagArg(t, e, n) {
+  t.push(...flagArgPair(`--${e}`, n));
 }
 //@ chunk-g9fr1aeb.js:557-810 placement
 function appendServerArgs(t, e, n, o) {
   let i = 0;
-  for (let [r, s] of Object.entries(e)) {
-    if (!SERVER_ARG_NAME_PATTERN.test(r)) {
-      o("malformed", JSON.stringify(r));
+  for (let [key, value] of Object.entries(e)) {
+    if (!SERVER_ARG_NAME_PATTERN.test(key)) {
+      o("malformed", JSON.stringify(key));
       continue;
     }
-    if (n.has(r)) {
-      o("blocked", r);
+    if (n.has(key)) {
+      o("blocked", key);
       continue;
     }
-    if (BOOLEAN_SERVER_ARGS.has(r)) {
-      if (!isEnvDefinedFalsy(String(s))) (t.push(`--${r}`), i++);
+    if (BOOLEAN_SERVER_ARGS.has(key)) {
+      if (!isEnvDefinedFalsy(String(value))) {
+        t.push(`--${key}`);
+        i++;
+      }
       continue;
     }
-    if (s !== "") (wrn(t, r, s), i++);
+    if (value !== "") {
+      pushFlagArg(t, key, value);
+      i++;
+    }
   }
   return i;
 }
-
-export { appendServerArgs, wrn, SYSTEM_PROMPT_FILE_ARGS, RC, mxr };
+export { appendServerArgs, pushFlagArg, SYSTEM_PROMPT_FILE_ARGS, keyValueArg, flagArgPair };

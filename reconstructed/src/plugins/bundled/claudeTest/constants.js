@@ -13,9 +13,9 @@ import { Ar } from "../../../../runtime/bun-runtime.js";
 import {
   SCRUBBED_APP_ENV_VARS,
   getTeammateEnvVarsToForward,
-  Tt,
+  isOutsideProject,
   loadInstalledFiles,
-  rr,
+  filesFromUnsafeNodeOptions,
   isSafeNodeOptions,
   resolveTrustedNode,
   findUnsafeInheritedEnv,
@@ -23,110 +23,110 @@ import {
   listProjectRoots,
 } from "./nodeEnvironment.js";
 import {
-  Go,
-  BLOCKED_STATES,
-  ha,
+  CLAUDE_TEST_BACKGROUND,
+  BLOCKED_STATES_2,
+  CLAUDE_TEST_RELOAD_TIMEOUT_MS,
   browserHelperHooks,
-  Oa,
-  Ia,
-  ka,
+  helperWatchStateSlot,
+  runFolderMapSlot,
+  CLAUDE_TEST_AGENT_TYPES,
   LOCAL_RUN_DESCRIPTION,
-  xo,
+  AGENTS_REREAD_CACHE_MS,
   HELPER_OFF_LOGIN_CHANGED_TEXT,
-  Ro,
-  qt,
+  HELPER_OFF_UNAVAILABLE_TEXT,
+  hasAllTestAgents,
   completeSpecArgs,
-  Uo,
+  backgroundShellPolicy,
   createBrowserHelperController,
   parseSpecProposalEvent,
-  Ea,
-  wa,
+  isClaudeTestReloadOutstanding,
+  isClaudeTestReloadPending,
   getActiveAgentDefinitions,
   ensureClaudeTestReloaded,
   createHelperWatchState,
   rememberRunFolder,
-  Ta,
-  Jt,
-  bo,
+  rememberComposerMark,
+  runFolderMap,
+  composerSubmitMarker,
   countRunsFromUsageEvents,
-  Ho,
+  logHelperStart,
   parseRunResults,
   seatOwnAgents,
-  To,
+  isAbortableAndEnabled,
   consumeComposerMark,
 } from "./browserHelper.js";
 import {
-  pet,
-  V6n,
-  K6n,
+  TEST_PLUGIN_ID,
+  testPluginTexts,
+  TEST_PLUGIN_VERSION,
   testPluginContentId,
   claudeTestInstalledRoot,
-  m$o,
-  mNi,
+  isRunSkillCommand,
+  buildRunSkillCommand,
 } from "../../../services/pluginTest/claudeTestPlugin.js";
 import { DRAFT_AGENT_DEFINITION, EXECUTE_AGENT_DEFINITION, RUN_SKILL_DEFINITION } from "./agents.js";
 import {
-  An,
-  Wi,
-  Dt,
+  claudeTestGateApi,
+  claudeTestGateStateSlot,
+  NO_STORED_LOGIN,
   readClaudeTestGate,
-  Gr,
-  Ur,
-  $r,
+  describeHelperState,
+  IS_ON_WITH_FLAGS_OFF,
+  createGateNoteState,
   cleanupOldClaudeTestFiles,
   readSignedInAccount,
   readFlagAccount,
 } from "./consent.js";
 import {
-  Nn,
-  Wt,
-  Ln,
-  kn,
+  NO_TESTS_TEXT,
+  REPORT_MISSING_TEXT,
+  INSTALL_NEEDED_TEXT,
+  RUN_BLOCKED_TEXT,
   LOAD_MARK_PREFIX,
-  Mn,
-  ct,
+  REQUEST_NOT_RUN_TEXT,
+  LOGIN_CHANGED_TEXT,
   CLI_ONLY_TEXT,
-  Cn,
-  Xr,
-  Pn,
-  ut,
+  ASK_IN_CHAT_TEXT,
+  RELOAD_PART_MISSING_TEXT,
+  BROWSER_UNAVAILABLE_TEXT,
+  NOT_AVAILABLE_NOW_TEXT,
   HELPER_NOT_READY_TEXT,
-  In,
-  xn,
-  Jr,
-  jt,
-  Ht,
-  qr,
-  jn,
-  Wn,
-  Gt,
-  Gn,
+  TESTS_FAILED_TEXT,
+  DUPLICATE_HELPER_TOOLS_TEXT,
+  AGENTS_JUST_LOADED_TEXT,
+  AGENTS_STILL_LOADING_TEXT,
+  AGENTS_NOT_LOADED_TEXT,
+  AGENT_START_FAILED_TEXT,
+  PANEL_OPEN_RULE,
+  PANEL_OPEN_NO_PICTURES_RULE,
+  PANE_TITLE,
+  OPEN_REPORT_LABEL,
   CLAUDE_TEST_TITLE,
-  vn,
-  Kr,
-  zr,
-  Me,
+  RUN_STOPPED_TEXT,
+  STILL_READYING_TEXT,
+  START_HINT_TEXT,
+  LOGIN_CHECK_FAILED_TEXT,
   describeHelperEnvIgnored,
   describeHelperFileMismatch,
   formatConflictingPluginText,
-  Pe,
+  tellPersonAndStop,
 } from "./messages.js";
 import { claudeTestState } from "./appFacts.js";
 import {
-  _a,
+  claudeTestMarkSlot,
   CLAUDE_TEST_3,
-  z,
+  pictureAskState,
   noteAppStartEnded,
   detectRunHalt,
   isClaudeTestAvailable,
-  lo,
+  shouldShowFixing,
   isMoreTestsDeclined,
   isEarlyPhaseActive,
   isAppStartPending,
   isRunAcceptedPending,
-  $t,
+  hasCiFlag,
   rememberRunHalt,
-  Oe,
+  claudeTestMarkState,
   noteStartAppAnswer,
   noteMoreTestsDeclinedByText,
   noteMoreTestsDeclined,
@@ -138,24 +138,24 @@ import {
 } from "./commandHook.js";
 import { TEAMMATE_ENV_VARS } from "../../../utils/swarm/spawnUtils.js";
 import {
-  zo,
-  Yo,
+  CLAUDE_TEST_SANDBOX_MARK,
+  CLAUDE_TEST_LISTEN,
   CLAUDE_TEST_SKILLS,
-  Ko,
+  CLAUDE_TEST_USER_SETTINGS,
   registerClaudeTestPlugin,
-  Xo,
+  runDirFromCommand,
   describeNetworkReach,
   checkSandboxLocalBinding,
   createClaudeTestSkill,
   readSkillFrontmatter,
 } from "./plugin.js";
 import { findDifferingInstalledFile } from "./runFiles.js";
-import { Xt } from "../../../components/skills/SkillsMenu.js";
-import { ge } from "../../../utils/identity.js";
+import { hasPluginSkill } from "../../../components/skills/SkillsMenu.js";
+import { identity as identity_2 } from "../../../utils/identity.js";
 import { xr } from "../../../../vendor/lodash-es/_inlinedHelpers.js";
 import { isEssentialTrafficOnly } from "../../../utils/privacyLevel.js";
 import { getEnvCaseInsensitive } from "../../../utils/plugins/securityDefaultPlugin.js";
-import { cte } from "../../../utils/settings/envSources.js";
+import { effectiveEnvSnapshot } from "../../../utils/settings/envSources.js";
 import { isSettingsSourcedEnvValue } from "../../../utils/managedEnvApply.js";
 
 //@ chunk-e6aww6q8.js:4677720-4677749 placement
@@ -169,9 +169,15 @@ var BROWSER = "browser";
 //@ chunk-e6aww6q8.js:4677830-4677852 placement
 var CLAUDE_TEST = "claude-test";
 //@ chunk-e6aww6q8.js:4677852-4677882 placement
-var IZ = `plugin:${CLAUDE_TEST}:${BROWSER}`;
+/**
+ * 浏览器助手 MCP 服务器的名字 plugin:claude-test:browser，由助手名与 scope 拼成；另一种写法的工具名前缀见 HELPER_TOOL_PREFIX。
+ */
+var HELPER_SERVER_NAME = `plugin:${CLAUDE_TEST}:${BROWSER}`;
 //@ chunk-e6aww6q8.js:4677882-4677920 placement
-var u0e = `mcp__plugin_${CLAUDE_TEST}_${BROWSER}__`;
+/**
+ * 浏览器助手工具名的统一前缀。
+ */
+var HELPER_TOOL_PREFIX = `mcp__plugin_${CLAUDE_TEST}_${BROWSER}__`;
 //@ chunk-e6aww6q8.js:4677920-4677949 placement
 var CLAUDE_TEST_APP_UP = "claude_test_app_up";
 //@ chunk-e6aww6q8.js:4677949-4677971 placement
@@ -181,105 +187,118 @@ var RELOAD_PLUGINS = "reload-plugins";
 //@ chunk-e6aww6q8.js:4677996-4678025 placement
 var CLAUDE_TEST_RUNNER = "claude-test:runner";
 //@ chunk-e6aww6q8.js:4678025-4678083 placement
-var CLAUDE_TEST_WRITE = "claude_test_write",
-  h1r = "[a-z0-9][a-z0-9-]{0,79}";
+/**
+ * claude_test_write 草稿文件名的正则片段（小写字母数字与连字符，最长 80 字符），拼成 ^…\.md$ 后用于校验草稿名。
+ */
+var CLAUDE_TEST_WRITE = "claude_test_write";
+var DRAFT_NAME_RE = "[a-z0-9][a-z0-9-]{0,79}";
 //@ chunk-e6aww6q8.js:4678083-4678114 placement
 var CC_PLUGIN_CLAUDE_TEST = "cc-plugin-claude-test";
 //@ chunk-e6aww6q8.js:4678495-4678559 placement
-var MCP_CLAUDE_TEST_WRITE = "mcp-claude-test-write",
-  regExp_17 = new RegExp(`^${h1r}\\.md$`);
+var MCP_CLAUDE_TEST_WRITE = "mcp-claude-test-write";
+var regExp_17 = new RegExp(`^${DRAFT_NAME_RE}\\.md$`);
 //@ chunk-e6aww6q8.js:4678559-4678621 placement
-function u8n(e, n, r) {
-  return n === `${CC_PLUGIN_CLAUDE_TEST}@${BUILTIN}` && e === IZ && r === CLAUDE_TEST_WRITE;
+/**
+ * 判断某次工具调用是否来自 claude-test 插件对 claude_test_write 的调用。
+ */
+function isClaudeTestWriteCall(name, pluginSource, name_2) {
+  return (
+    pluginSource === `${CC_PLUGIN_CLAUDE_TEST}@${BUILTIN}` &&
+    name === HELPER_SERVER_NAME &&
+    name_2 === CLAUDE_TEST_WRITE
+  );
 }
 //@ chunk-ae5g0zb5.js:24040-24050 placement
-var Qo = {};
+/**
+ * 空对象默认导出
+ */
+var emptyExportsFirst = {};
 //@ chunk-ae5g0zb5.js:24050-27585 placement
-Ar(Qo, {
+Ar(emptyExportsFirst, {
   ALWAYS_SET: () => SCRUBBED_APP_ENV_VARS,
   AUTHOR_AGENT_TYPE: () => CLAUDE_TEST_AUTHOR,
-  BACKGROUND_FOR_SERVER_MARK: () => Go,
-  BLOCKED_WORDS: () => BLOCKED_STATES,
+  BACKGROUND_FOR_SERVER_MARK: () => CLAUDE_TEST_BACKGROUND,
+  BLOCKED_WORDS: () => BLOCKED_STATES_2,
   CONDUCTOR_AGENT_TYPE: () => CLAUDE_TEST_CONDUCTOR,
-  DATA_PLUGIN_ID: () => pet,
+  DATA_PLUGIN_ID: () => TEST_PLUGIN_ID,
   DRAFT_LISTING: () => DRAFT_AGENT_DEFINITION,
-  DRAFT_NAME_STEM: () => h1r,
+  DRAFT_NAME_STEM: () => DRAFT_NAME_RE,
   EXECUTE_LISTING: () => EXECUTE_AGENT_DEFINITION,
   EXPLORER_AGENT_TYPE: () => CLAUDE_TEST_EXPLORER,
-  FLAG_ANSWER: () => An,
-  FLAG_ANSWER_NOTES: () => Wi,
-  HELPER_FAILED_TEXT: () => Nn,
-  HELPER_NOT_CONNECTED_TEXT: () => Wt,
-  HELPER_OFF_TEXT: () => Ln,
-  HELPER_REFUSED_TEXT: () => kn,
+  FLAG_ANSWER: () => claudeTestGateApi,
+  FLAG_ANSWER_NOTES: () => claudeTestGateStateSlot,
+  HELPER_FAILED_TEXT: () => NO_TESTS_TEXT,
+  HELPER_NOT_CONNECTED_TEXT: () => REPORT_MISSING_TEXT,
+  HELPER_OFF_TEXT: () => INSTALL_NEEDED_TEXT,
+  HELPER_REFUSED_TEXT: () => RUN_BLOCKED_TEXT,
   HELPER_SERVER_KEY: () => BROWSER,
-  HELPER_SERVER_NAME: () => IZ,
-  HELPER_START: () => Be,
+  HELPER_SERVER_NAME: () => HELPER_SERVER_NAME,
+  HELPER_START: () => helperServerState,
   HELPER_STATE: () => claudeTestState,
-  HELPER_TOOL_PREFIX: () => u0e,
+  HELPER_TOOL_PREFIX: () => HELPER_TOOL_PREFIX,
   HELPER_UP_TOOL: () => CLAUDE_TEST_APP_UP,
-  LATE_LOADS: () => _a,
-  LATE_LOAD_WAIT_MS: () => ha,
+  LATE_LOADS: () => claudeTestMarkSlot,
+  LATE_LOAD_WAIT_MS: () => CLAUDE_TEST_RELOAD_TIMEOUT_MS,
   LOAD_LINE_LEAD: () => LOAD_MARK_PREFIX,
-  LOAD_SPENT_TEXT: () => Mn,
-  LOGIN_CHANGED_TEXT: () => ct,
+  LOAD_SPENT_TEXT: () => REQUEST_NOT_RUN_TEXT,
+  LOGIN_CHANGED_TEXT: () => LOGIN_CHANGED_TEXT,
   LOGIN_WATCH: () => browserHelperHooks,
-  LOGIN_WATCH_NOTES: () => Oa,
+  LOGIN_WATCH_NOTES: () => helperWatchStateSlot,
   MARKETPLACE_PLUGIN_NAME: () => CLAUDE_TEST_3,
-  NAMESPACE_NAME: () => CLAUDE_TEST_2_3,
+  NAMESPACE_NAME: () => CLAUDE_TEST,
   NEEDS_TERMINAL_TEXT: () => CLI_ONLY_TEXT,
-  NOTED_RUNS: () => Ia,
-  NOT_CARRIED_TEXT: () => Cn,
-  NOT_IN_CHARGE_TEXT: () => Xr,
-  NOT_LISTED_TEXT: () => Pn,
-  NOT_OFFERED_TEXT: () => ut,
+  NOTED_RUNS: () => runFolderMapSlot,
+  NOT_CARRIED_TEXT: () => ASK_IN_CHAT_TEXT,
+  NOT_IN_CHARGE_TEXT: () => RELOAD_PART_MISSING_TEXT,
+  NOT_LISTED_TEXT: () => BROWSER_UNAVAILABLE_TEXT,
+  NOT_OFFERED_TEXT: () => NOT_AVAILABLE_NOW_TEXT,
   NOT_STARTED_YET_TEXT: () => HELPER_NOT_READY_TEXT,
-  NO_STORED_LOGIN: () => Dt,
-  OTHER_NAME_TEXT: () => In,
-  OTHER_PLUGIN_TEXT: () => xn,
-  OWN_AGENTS_NEXT_TURN_TEXT: () => Jr,
-  OWN_AGENTS_STILL_LOADING_TEXT: () => jt,
-  OWN_AGENTS_STILL_MISSING_TEXT: () => Ht,
-  OWN_AGENT_NOT_LISTED_TEXT: () => qr,
-  OWN_AGENT_TYPES: () => ka,
-  OWN_FOLDER: () => V6n,
-  PANE_ID: () => CLAUDE_TEST_2_2,
-  PANE_OPEN_NOTE: () => jn,
-  PANE_OPEN_NO_PICTURES_NOTE: () => Wn,
-  PANE_PICTURE_ALT: () => Gt,
-  PANE_REPORT_LINK_TEXT: () => Gn,
+  NO_STORED_LOGIN: () => NO_STORED_LOGIN,
+  OTHER_NAME_TEXT: () => TESTS_FAILED_TEXT,
+  OTHER_PLUGIN_TEXT: () => DUPLICATE_HELPER_TOOLS_TEXT,
+  OWN_AGENTS_NEXT_TURN_TEXT: () => AGENTS_JUST_LOADED_TEXT,
+  OWN_AGENTS_STILL_LOADING_TEXT: () => AGENTS_STILL_LOADING_TEXT,
+  OWN_AGENTS_STILL_MISSING_TEXT: () => AGENTS_NOT_LOADED_TEXT,
+  OWN_AGENT_NOT_LISTED_TEXT: () => AGENT_START_FAILED_TEXT,
+  OWN_AGENT_TYPES: () => CLAUDE_TEST_AGENT_TYPES,
+  OWN_FOLDER: () => testPluginTexts,
+  PANE_ID: () => CLAUDE_TEST_2,
+  PANE_OPEN_NOTE: () => PANEL_OPEN_RULE,
+  PANE_OPEN_NO_PICTURES_NOTE: () => PANEL_OPEN_NO_PICTURES_RULE,
+  PANE_PICTURE_ALT: () => PANE_TITLE,
+  PANE_REPORT_LINK_TEXT: () => OPEN_REPORT_LABEL,
   PANE_TITLE: () => CLAUDE_TEST_TITLE,
   PERSONS_CHOICES: () => TEAMMATE_ENV_VARS,
   PLUGIN_DESCRIPTION: () => LOCAL_RUN_DESCRIPTION,
   PLUGIN_NAME: () => CC_PLUGIN_CLAUDE_TEST,
-  PLUGIN_VERSION: () => K6n,
-  PROBE: () => z,
+  PLUGIN_VERSION: () => TEST_PLUGIN_VERSION,
+  PROBE: () => pictureAskState,
   RELOAD_COMMAND: () => RELOAD_PLUGINS,
   RUNNER_AGENT_TYPE: () => CLAUDE_TEST_RUNNER,
   RUN_LISTING: () => RUN_SKILL_DEFINITION,
-  SANDBOX_FOR_SERVER_MARK: () => zo,
-  SANDBOX_LISTEN_MARK: () => Yo,
-  SEAT_WAIT_MS: () => xo,
+  SANDBOX_FOR_SERVER_MARK: () => CLAUDE_TEST_SANDBOX_MARK,
+  SANDBOX_LISTEN_MARK: () => CLAUDE_TEST_LISTEN,
+  SEAT_WAIT_MS: () => AGENTS_REREAD_CACHE_MS,
   SKILLS: () => CLAUDE_TEST_SKILLS,
-  SKILL_NAMES: () => freeze,
-  STARTING_TEXT: () => vn,
-  STILL_GETTING_READY_TEXT: () => Kr,
+  SKILL_NAMES: () => $e,
+  STARTING_TEXT: () => RUN_STOPPED_TEXT,
+  STILL_GETTING_READY_TEXT: () => STILL_READYING_TEXT,
   STOPPED_LOGIN_CHANGED_TEXT: () => HELPER_OFF_LOGIN_CHANGED_TEXT,
-  STOPPED_NOT_OFFERED_TEXT: () => Ro,
-  TYPE_IN_PROMPT_BOX_TEXT: () => zr,
-  USER_SETTINGS_FILE_MARK: () => Ko,
-  WATCH_FAILED_TEXT: () => Me,
+  STOPPED_NOT_OFFERED_TEXT: () => HELPER_OFF_UNAVAILABLE_TEXT,
+  TYPE_IN_PROMPT_BOX_TEXT: () => START_HINT_TEXT,
+  USER_SETTINGS_FILE_MARK: () => CLAUDE_TEST_USER_SETTINGS,
+  WATCH_FAILED_TEXT: () => LOGIN_CHECK_FAILED_TEXT,
   WRITE_TOOL_NAME: () => CLAUDE_TEST_WRITE,
-  areOwnAgentsListed: () => qt,
+  areOwnAgentsListed: () => hasAllTestAgents,
   argumentCompletions: () => completeSpecArgs,
-  backgroundForServer: () => Uo,
+  backgroundForServer: () => backgroundShellPolicy,
   browserServer: () => buildHelperServerConfig,
   createFlagAnswer: () => readClaudeTestGate,
   createLoginWatch: () => createBrowserHelperController,
-  default: () => Qo,
+  default: () => emptyExportsFirst,
   draftEventOf: () => parseSpecProposalEvent,
   endAppStarting: () => noteAppStartEnded,
-  filesReady: () => Gr,
+  filesReady: () => describeHelperState,
   haltOf: () => detectRunHalt,
   helperServer: () => buildPlaywrightMcpServer,
   ignoredChoices: () => getTeammateEnvVarsToForward,
@@ -288,27 +307,27 @@ Ar(Qo, {
   installedFolderName: () => testPluginContentId,
   installedRoot: () => claudeTestInstalledRoot,
   isAvailable: () => isClaudeTestAvailable,
-  isFixEditOf: () => lo,
+  isFixEditOf: () => shouldShowFixing,
   isForeignValue: () => isEnvOverridden,
-  isInProject: () => Tt,
-  isLateLoadRunning: () => Ea,
-  isLateLoadTried: () => wa,
+  isInProject: () => isOutsideProject,
+  isLateLoadRunning: () => isClaudeTestReloadOutstanding,
+  isLateLoadTried: () => isClaudeTestReloadPending,
   isMoreDeclinedOf: () => isMoreTestsDeclined,
-  isOnByDefault: () => Ur,
-  isOtherPluginListed: () => Xt,
+  isOnByDefault: () => IS_ON_WITH_FLAGS_OFF,
+  isOtherPluginListed: () => hasPluginSkill,
   isRunActive: () => isEarlyPhaseActive,
   isStartingAppOf: () => isAppStartPending,
   isStartingRunOf: () => isRunAcceptedPending,
-  isStopOnExitStart: () => m$o,
-  isTypedCi: () => $t,
+  isStopOnExitStart: () => isRunSkillCommand,
+  isTypedCi: () => hasCiFlag,
   keptHalt: () => rememberRunHalt,
-  lateLoadState: () => Oe,
+  lateLoadState: () => claudeTestMarkState,
   listedInSession: () => getActiveAgentDefinitions,
   loadContent: () => loadInstalledFiles,
   loadLate: () => ensureClaudeTestReloaded,
-  loadedFiles: () => rr,
+  loadedFiles: () => filesFromUnsafeNodeOptions,
   loadsOnlyFullPaths: () => isSafeNodeOptions,
-  newFlagAnswerNotes: () => $r,
+  newFlagAnswerNotes: () => createGateNoteState,
   newLoginWatchNotes: () => createHelperWatchState,
   nodeBinary: () => resolveTrustedNode,
   notStartedText: () => describeHelperFileMismatch,
@@ -318,24 +337,24 @@ Ar(Qo, {
   noteRun: () => rememberRunFolder,
   noteRunAccepted: () => noteRunConfirmed,
   noteStartAhead: () => noteAppDownWithStartAllowed,
-  noteTyped: () => Ta,
-  notedRuns: () => Jt,
+  noteTyped: () => rememberComposerMark,
+  notedRuns: () => runFolderMap,
   otherPluginFirstText: () => formatConflictingPluginText,
   otherPluginSource: () => findClaudeTestRepository,
   outsideProject: () => findUnsafeInheritedEnv,
   ownValues: () => buildAppEnvironment,
-  portedInstalledFiles: () => yt,
-  portedNames: () => ht,
+  portedInstalledFiles: () => portPortedFiles,
+  portedNames: () => portedCommandNames,
   portedPaths: () => expandSkillDirPlaceholders,
   projectRoots: () => listProjectRoots,
-  promptBoxMarkerOf: () => bo,
+  promptBoxMarkerOf: () => composerSubmitMarker,
   register: () => registerClaudeTestCommand,
   registerPlugin: () => registerClaudeTestPlugin,
   removeStaleVersions: () => cleanupOldClaudeTestFiles,
   reportRuns: () => countRunsFromUsageEvents,
-  reportStart: () => Ho,
+  reportStart: () => logHelperStart,
   runEventOf: () => parseRunResults,
-  runFolderOf: () => Xo,
+  runFolderOf: () => runDirFromCommand,
   sandboxForServer: () => describeNetworkReach,
   sandboxListen: () => checkSandboxLocalBinding,
   seatOwnAgents: () => seatOwnAgents,
@@ -343,68 +362,71 @@ Ar(Qo, {
   signedInLogin: () => readSignedInAccount,
   skillOf: () => createClaudeTestSkill,
   skillPartsOf: () => readSkillFrontmatter,
-  stillWantedBy: () => To,
-  stopOnExitStartPrefix: () => mNi,
+  stillWantedBy: () => isAbortableAndEnabled,
+  stopOnExitStartPrefix: () => buildRunSkillCommand,
   takeTyped: () => consumeComposerMark,
-  waitPrompt: () => Pe,
+  waitPrompt: () => tellPersonAndStop,
   wasFlagServiceToldStoredLogin: () => readFlagAccount,
 });
 //@ chunk-ae5g0zb5.js:27585-27595 placement
-var je = {};
+/**
+ * 空对象默认导出
+ */
+var emptyExportsSecond = {};
 //@ chunk-ae5g0zb5.js:27595-29135 placement
-Ar(je, {
+Ar(emptyExportsSecond, {
   AUTHOR_AGENT_TYPE: () => CLAUDE_TEST_AUTHOR,
   CONDUCTOR_AGENT_TYPE: () => CLAUDE_TEST_CONDUCTOR,
-  DRAFT_NAME_STEM: () => h1r,
+  DRAFT_NAME_STEM: () => DRAFT_NAME_RE,
   EXPLORER_AGENT_TYPE: () => CLAUDE_TEST_EXPLORER,
-  HELPER_FAILED_TEXT: () => Nn,
-  HELPER_NOT_CONNECTED_TEXT: () => Wt,
-  HELPER_OFF_TEXT: () => Ln,
-  HELPER_REFUSED_TEXT: () => kn,
+  HELPER_FAILED_TEXT: () => NO_TESTS_TEXT,
+  HELPER_NOT_CONNECTED_TEXT: () => REPORT_MISSING_TEXT,
+  HELPER_OFF_TEXT: () => INSTALL_NEEDED_TEXT,
+  HELPER_REFUSED_TEXT: () => RUN_BLOCKED_TEXT,
   HELPER_SERVER_KEY: () => BROWSER,
-  HELPER_SERVER_NAME: () => IZ,
+  HELPER_SERVER_NAME: () => HELPER_SERVER_NAME,
   HELPER_STATE: () => claudeTestState,
-  HELPER_TOOL_PREFIX: () => u0e,
+  HELPER_TOOL_PREFIX: () => HELPER_TOOL_PREFIX,
   HELPER_UP_TOOL: () => CLAUDE_TEST_APP_UP,
   LOAD_LINE_LEAD: () => LOAD_MARK_PREFIX,
-  LOAD_SPENT_TEXT: () => Mn,
-  LOGIN_CHANGED_TEXT: () => ct,
+  LOAD_SPENT_TEXT: () => REQUEST_NOT_RUN_TEXT,
+  LOGIN_CHANGED_TEXT: () => LOGIN_CHANGED_TEXT,
   NEEDS_TERMINAL_TEXT: () => CLI_ONLY_TEXT,
-  NOT_CARRIED_TEXT: () => Cn,
-  NOT_IN_CHARGE_TEXT: () => Xr,
-  NOT_LISTED_TEXT: () => Pn,
-  NOT_OFFERED_TEXT: () => ut,
+  NOT_CARRIED_TEXT: () => ASK_IN_CHAT_TEXT,
+  NOT_IN_CHARGE_TEXT: () => RELOAD_PART_MISSING_TEXT,
+  NOT_LISTED_TEXT: () => BROWSER_UNAVAILABLE_TEXT,
+  NOT_OFFERED_TEXT: () => NOT_AVAILABLE_NOW_TEXT,
   NOT_STARTED_YET_TEXT: () => HELPER_NOT_READY_TEXT,
-  OTHER_NAME_TEXT: () => In,
-  OTHER_PLUGIN_TEXT: () => xn,
-  OWN_AGENTS_NEXT_TURN_TEXT: () => Jr,
-  OWN_AGENTS_STILL_LOADING_TEXT: () => jt,
-  OWN_AGENTS_STILL_MISSING_TEXT: () => Ht,
-  OWN_AGENT_NOT_LISTED_TEXT: () => qr,
-  PANE_ID: () => CLAUDE_TEST_2_2,
-  PANE_OPEN_NOTE: () => jn,
-  PANE_OPEN_NO_PICTURES_NOTE: () => Wn,
-  PANE_PICTURE_ALT: () => Gt,
-  PANE_REPORT_LINK_TEXT: () => Gn,
+  OTHER_NAME_TEXT: () => TESTS_FAILED_TEXT,
+  OTHER_PLUGIN_TEXT: () => DUPLICATE_HELPER_TOOLS_TEXT,
+  OWN_AGENTS_NEXT_TURN_TEXT: () => AGENTS_JUST_LOADED_TEXT,
+  OWN_AGENTS_STILL_LOADING_TEXT: () => AGENTS_STILL_LOADING_TEXT,
+  OWN_AGENTS_STILL_MISSING_TEXT: () => AGENTS_NOT_LOADED_TEXT,
+  OWN_AGENT_NOT_LISTED_TEXT: () => AGENT_START_FAILED_TEXT,
+  PANE_ID: () => CLAUDE_TEST_2,
+  PANE_OPEN_NOTE: () => PANEL_OPEN_RULE,
+  PANE_OPEN_NO_PICTURES_NOTE: () => PANEL_OPEN_NO_PICTURES_RULE,
+  PANE_PICTURE_ALT: () => PANE_TITLE,
+  PANE_REPORT_LINK_TEXT: () => OPEN_REPORT_LABEL,
   PANE_TITLE: () => CLAUDE_TEST_TITLE,
-  PROBE: () => z,
+  PROBE: () => pictureAskState,
   RELOAD_COMMAND: () => RELOAD_PLUGINS,
   RUNNER_AGENT_TYPE: () => CLAUDE_TEST_RUNNER,
-  STARTING_TEXT: () => vn,
-  STILL_GETTING_READY_TEXT: () => Kr,
-  TYPE_IN_PROMPT_BOX_TEXT: () => zr,
-  WATCH_FAILED_TEXT: () => Me,
+  STARTING_TEXT: () => RUN_STOPPED_TEXT,
+  STILL_GETTING_READY_TEXT: () => STILL_READYING_TEXT,
+  TYPE_IN_PROMPT_BOX_TEXT: () => START_HINT_TEXT,
+  WATCH_FAILED_TEXT: () => LOGIN_CHECK_FAILED_TEXT,
   WRITE_TOOL_NAME: () => CLAUDE_TEST_WRITE,
-  default: () => je,
+  default: () => emptyExportsSecond,
   endAppStarting: () => noteAppStartEnded,
   haltOf: () => detectRunHalt,
   ignoredChoicesText: () => describeHelperEnvIgnored,
-  isFixEditOf: () => lo,
+  isFixEditOf: () => shouldShowFixing,
   isMoreDeclinedOf: () => isMoreTestsDeclined,
   isRunActive: () => isEarlyPhaseActive,
   isStartingAppOf: () => isAppStartPending,
   isStartingRunOf: () => isRunAcceptedPending,
-  isTypedCi: () => $t,
+  isTypedCi: () => hasCiFlag,
   keptHalt: () => rememberRunHalt,
   notStartedText: () => describeHelperFileMismatch,
   noteAppStarting: () => noteStartAppAnswer,
@@ -415,35 +437,59 @@ Ar(je, {
   otherPluginFirstText: () => formatConflictingPluginText,
   register: () => registerClaudeTestCommand,
   settleStartGuess: () => noteAppProbeResult,
-  waitPrompt: () => Pe,
+  waitPrompt: () => tellPersonAndStop,
 });
 //@ chunk-ae5g0zb5.js:29135-29217 placement
-var Be = ge({ server: void 0, toldIgnored: "" }, (e) => {
-  ((e.server = void 0), (e.toldIgnored = ""));
-});
+/**
+ * 助手服务器状态（server/toldIgnored）
+ */
+var helperServerState = identity_2(
+  {
+    server: undefined,
+    toldIgnored: "",
+  },
+  (e) => {
+    e.server = undefined;
+    e.toldIgnored = "";
+  },
+);
+//@ chunk-ae5g0zb5.js:29217-29388 placement
 /**
  * 生成浏览器助手 MCP 服务器配置，按需追加 --preview/--pane 参数。
  */
-//@ chunk-ae5g0zb5.js:29217-29388 placement
-function buildHelperServerConfig(preview, pane = !1) {
-  let { server: server } = Be;
-  if (server === void 0) return {};
+function buildHelperServerConfig(preview, pane = false) {
+  let { server } = helperServerState;
+  if (server === undefined) return {};
   let o = [...(preview ? ["--preview"] : []), ...(pane ? ["--pane"] : [])];
-  return { [BROWSER]: o.length === 0 ? server : { ...server, args: [...(server.args ?? []), ...o] } };
+  return {
+    [BROWSER]:
+      o.length === 0
+        ? server
+        : {
+            ...server,
+            args: [...(server.args ?? []), ...o],
+          },
+  };
 }
 //@ chunk-ae5g0zb5.js:29388-29486 placement
-var freeze = Object.freeze({
+var $e = Object.freeze({
   run: "claude-test",
   execute: "claude-test-execute",
   draft: "claude-test-draft",
 });
 //@ chunk-ae5g0zb5.js:29486-29569 placement
-function ht(e) {
-  return e.replace(/claude-test:(run|execute|draft)\b/g, (n, r) => freeze[r]);
+/**
+ * 把文本里的 claude-test:run/execute/draft 替换为已冻结的命令名。
+ */
+function portedCommandNames(e) {
+  return e.replace(/claude-test:(run|execute|draft)\b/g, (n, r) => $e[r]);
 }
 //@ chunk-ae5g0zb5.js:29569-29650 placement
-function yt(e) {
-  return xr(e, (n, r) => (r.endsWith(".md") || r.endsWith(".mjs") ? ht(n) : n));
+/**
+ * 对以 .md/.mjs 结尾的文件值做命令名替换（其他原样）。
+ */
+function portPortedFiles(e) {
+  return xr(e, (n, r) => (r.endsWith(".md") || r.endsWith(".mjs") ? portedCommandNames(n) : n));
 }
 //@ chunk-ae5g0zb5.js:29650-29795 placement
 function expandSkillDirPlaceholders(e, n) {
@@ -455,56 +501,55 @@ function expandSkillDirPlaceholders(e, n) {
 function getEssentialTrafficOnlyReason() {
   return (
     isEssentialTrafficOnly() ||
-    Boolean(getEnvCaseInsensitive(cte(), "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"))
+    Boolean(getEnvCaseInsensitive(effectiveEnvSnapshot(), "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"))
   );
 }
+//@ chunk-ae5g0zb5.js:29884-30079 placement
 /**
  * 生成运行 skills/run/scripts/playwright-mcp.mjs 的 MCP 服务器条目（带项目目录与精简流量开关）。
  */
-//@ chunk-ae5g0zb5.js:29884-30079 placement
-function buildPlaywrightMcpServer(e, n) {
+function buildPlaywrightMcpServer(command, unsafeInheritedEnv) {
   return {
-    command: e,
+    command,
     args: [`${claudeTestInstalledRoot()}/skills/run/scripts/playwright-mcp.mjs`],
     env: {
-      ...n,
+      ...unsafeInheritedEnv,
       CLAUDE_TEST_PROJECT_DIR: "${CLAUDE_PROJECT_DIR}",
-      ...(getEssentialTrafficOnlyReason() && { CLAUDE_TEST_ESSENTIAL_TRAFFIC: "1" }),
+      ...(getEssentialTrafficOnlyReason() && {
+        CLAUDE_TEST_ESSENTIAL_TRAFFIC: "1",
+      }),
     },
   };
 }
+//@ chunk-ae5g0zb5.js:30079-30138 placement
 /**
  * 环境变量值是否与基线不同（需要显式透传）。
  */
-//@ chunk-ae5g0zb5.js:30079-30138 placement
 function isEnvOverridden(e, n, r) {
-  return n !== void 0 && n !== getEnvCaseInsensitive(r, e) && isSettingsSourcedEnvValue(e, n);
+  return n !== undefined && n !== getEnvCaseInsensitive(r, e) && isSettingsSourcedEnvValue(e, n);
 }
-const CLAUDE_TEST_2_3 = CLAUDE_TEST; //@ cross-chunk alias
-const CLAUDE_TEST_2_2 = CLAUDE_TEST_2; //@ cross-chunk alias
-
 export {
-  u8n,
+  isClaudeTestWriteCall,
   isEnvOverridden,
-  yt,
-  Be,
+  portPortedFiles,
+  helperServerState,
   buildPlaywrightMcpServer,
-  u0e,
+  HELPER_TOOL_PREFIX,
   CLAUDE_TEST_APP_UP,
-  IZ,
+  HELPER_SERVER_NAME,
   CC_PLUGIN_CLAUDE_TEST,
   RELOAD_PLUGINS,
-  freeze,
+  $e,
   CLAUDE_TEST_RUNNER,
   CLAUDE_TEST_2,
   CLAUDE_TEST_EXPLORER,
   CLAUDE_TEST_CONDUCTOR,
   CLAUDE_TEST_AUTHOR,
   BROWSER,
-  ht,
+  portedCommandNames,
   expandSkillDirPlaceholders,
   buildHelperServerConfig,
-  je,
+  emptyExportsSecond,
   MCP_CLAUDE_TEST_WRITE,
   regExp_17,
 };

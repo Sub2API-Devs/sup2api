@@ -11,9 +11,11 @@
 import { env } from "./env.js";
 
 //@ chunk-khxw263p.js:226-293 placement
-function CC() {
-  if (env.CLAUDE_CODE_KB_COHESION_FIXES) return !0;
-  return !1;
+/**
+ * 判断 CLAUDE_CODE_KB_COHESION_FIXES 开关是否开启。
+ */
+function isKbCohesionFixesOn() {
+  if (env.CLAUDE_CODE_KB_COHESION_FIXES) return true;
+  return false;
 }
-
-export { CC };
+export { isKbCohesionFixesOn };

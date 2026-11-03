@@ -8,14 +8,15 @@
 
 //@ chunk-hwmsct5x.js:104825-104913 esm-fingerprint
 function SEn() {
-  let e, n;
+  let resolve;
+  let reject;
   return {
-    promise: new Promise((s, h) => {
-      ((e = s), (n = h));
+    promise: new Promise((res, reject_2) => {
+      resolve = res;
+      reject = reject_2;
     }),
-    resolve: e,
-    reject: n,
+    resolve,
+    reject,
   };
 }
-
 export { SEn };

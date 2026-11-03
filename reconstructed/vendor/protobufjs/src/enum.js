@@ -11,51 +11,50 @@ import { zr } from "./namespace.js";
 import { de } from "./util.js";
 
 //@ chunk-pwh5dx3n.js:125754-128334 cjs-fingerprint
-var nt = x(function (_A, Ud) {
-  Ud.exports = at;
-  var ro = Kt();
-  ((at.prototype = Object.create(ro.prototype)).constructor = at).className = "Enum";
-  var qd = zr(),
-    Fs = de();
-  function at(e, t, r, i, s, n) {
-    if ((ro.call(this, e, r), t && typeof t !== "object")) throw TypeError("values must be an object");
-    if (
-      ((this.valuesById = {}),
-      (this.values = Object.create(this.valuesById)),
-      (this.comment = i),
-      (this.comments = s || {}),
-      (this.valuesOptions = n),
-      (this._valuesFeatures = {}),
-      (this.reserved = void 0),
-      t)
-    ) {
-      for (var keys = Object.keys(t), o = 0; o < keys.length; ++o)
-        if (keys[o] !== "__proto__" && typeof t[keys[o]] === "number")
-          this.valuesById[(this.values[keys[o]] = t[keys[o]])] = keys[o];
+var nt = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = Enum;
+  var ReflectionObject = Kt();
+  ((Enum.prototype = Object.create(ReflectionObject.prototype)).constructor = Enum).className = "Enum";
+  var Namespace = zr();
+  var util = de();
+  function Enum(name, values, options, comment, comments, valuesOptions) {
+    ReflectionObject.call(this, name, options);
+    if (values && typeof values !== "object") throw TypeError("values must be an object");
+    this.valuesById = {};
+    this.values = Object.create(this.valuesById);
+    this.comment = comment;
+    this.comments = comments || {};
+    this.valuesOptions = valuesOptions;
+    this._valuesFeatures = {};
+    this.reserved = undefined;
+    if (values) {
+      for (var keys = Object.keys(values), i = 0; i < keys.length; ++i)
+        if (keys[i] !== "__proto__" && typeof values[keys[i]] === "number")
+          this.valuesById[(this.values[keys[i]] = values[keys[i]])] = keys[i];
     }
   }
-  at.prototype._resolveFeatures = function (t) {
-    return (
-      (t = this._edition || t),
-      ro.prototype._resolveFeatures.call(this, t),
-      Object.keys(this.values).forEach((r) => {
-        var merged = Object.assign({}, this._features);
-        this._valuesFeatures[r] = Object.assign(
-          merged,
-          this.valuesOptions && this.valuesOptions[r] && this.valuesOptions[r].features,
-        );
-      }),
-      this
-    );
+  Enum.prototype._resolveFeatures = function (edition) {
+    edition = this._edition || edition;
+    ReflectionObject.prototype._resolveFeatures.call(this, edition);
+    Object.keys(this.values).forEach((key) => {
+      var parentFeaturesCopy = Object.assign({}, this._features);
+      this._valuesFeatures[key] = Object.assign(
+        parentFeaturesCopy,
+        this.valuesOptions && this.valuesOptions[key] && this.valuesOptions[key].features,
+      );
+    });
+    return this;
   };
-  at.fromJSON = function (t, r) {
-    var i = new at(t, r.values, r.options, r.comment, r.comments);
-    if (((i.reserved = r.reserved), r.edition)) i._edition = r.edition;
-    return ((i._defaultEdition = "proto3"), i);
+  Enum.fromJSON = function (name, json) {
+    var enm = new Enum(name, json.values, json.options, json.comment, json.comments);
+    enm.reserved = json.reserved;
+    if (json.edition) enm._edition = json.edition;
+    enm._defaultEdition = "proto3";
+    return enm;
   };
-  at.prototype.toJSON = function (t) {
-    var r = t ? Boolean(t.keepComments) : !1;
-    return Fs.toObject([
+  Enum.prototype.toJSON = function (toJSONOptions) {
+    var keepComments = toJSONOptions ? Boolean(toJSONOptions.keepComments) : false;
+    return util.toObject([
       "edition",
       this._editionToJSON(),
       "options",
@@ -65,44 +64,46 @@ var nt = x(function (_A, Ud) {
       "values",
       this.values,
       "reserved",
-      this.reserved && this.reserved.length ? this.reserved : void 0,
+      this.reserved && this.reserved.length ? this.reserved : undefined,
       "comment",
-      r ? this.comment : void 0,
+      keepComments ? this.comment : undefined,
       "comments",
-      r ? this.comments : void 0,
+      keepComments ? this.comments : undefined,
     ]);
   };
-  at.prototype.add = function (t, r, i, s) {
-    if (!Fs.isString(t)) throw TypeError("name must be a string");
-    if (!Fs.isInteger(r)) throw TypeError("id must be an integer");
-    if (t === "__proto__") return this;
-    if (this.values[t] !== void 0) throw Error("duplicate name '" + t + "' in " + this);
-    if (this.isReservedId(r)) throw Error("id " + r + " is reserved in " + this);
-    if (this.isReservedName(t)) throw Error("name '" + t + "' is reserved in " + this);
-    if (this.valuesById[r] !== void 0) {
-      if (!(this.options && this.options.allow_alias)) throw Error("duplicate id " + r + " in " + this);
-      this.values[t] = r;
-    } else this.valuesById[(this.values[t] = r)] = t;
-    if (s) {
-      if (this.valuesOptions === void 0) this.valuesOptions = {};
-      this.valuesOptions[t] = s || null;
+  Enum.prototype.add = function (name, id, comment, options) {
+    if (!util.isString(name)) throw TypeError("name must be a string");
+    if (!util.isInteger(id)) throw TypeError("id must be an integer");
+    if (name === "__proto__") return this;
+    if (this.values[name] !== undefined) throw Error("duplicate name '" + name + "' in " + this);
+    if (this.isReservedId(id)) throw Error("id " + id + " is reserved in " + this);
+    if (this.isReservedName(name)) throw Error("name '" + name + "' is reserved in " + this);
+    if (this.valuesById[id] !== undefined) {
+      if (!(this.options && this.options.allow_alias)) throw Error("duplicate id " + id + " in " + this);
+      this.values[name] = id;
+    } else this.valuesById[(this.values[name] = id)] = name;
+    if (options) {
+      if (this.valuesOptions === undefined) this.valuesOptions = {};
+      this.valuesOptions[name] = options || null;
     }
-    return ((this.comments[t] = i || null), this);
-  };
-  at.prototype.remove = function (t) {
-    if (!Fs.isString(t)) throw TypeError("name must be a string");
-    var r = this.values[t];
-    if (r == null) throw Error("name '" + t + "' does not exist in " + this);
-    if ((delete this.valuesById[r], delete this.values[t], delete this.comments[t], this.valuesOptions))
-      delete this.valuesOptions[t];
+    this.comments[name] = comment || null;
     return this;
   };
-  at.prototype.isReservedId = function (t) {
-    return qd.isReservedId(this.reserved, t);
+  Enum.prototype.remove = function (name) {
+    if (!util.isString(name)) throw TypeError("name must be a string");
+    var val = this.values[name];
+    if (val == null) throw Error("name '" + name + "' does not exist in " + this);
+    delete this.valuesById[val];
+    delete this.values[name];
+    delete this.comments[name];
+    if (this.valuesOptions) delete this.valuesOptions[name];
+    return this;
   };
-  at.prototype.isReservedName = function (t) {
-    return qd.isReservedName(this.reserved, t);
+  Enum.prototype.isReservedId = function (id) {
+    return Namespace.isReservedId(this.reserved, id);
+  };
+  Enum.prototype.isReservedName = function (name) {
+    return Namespace.isReservedName(this.reserved, name);
   };
 });
-
 export { nt };

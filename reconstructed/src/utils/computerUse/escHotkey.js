@@ -13,27 +13,26 @@ import { requireComputerUseSwift } from "./swiftLoader.js";
 import { releasePump } from "./drainRunLoop.js";
 import { logForDebugging } from "../debug.js";
 
+//@ chunk-ha3km179.js:51947-52096 fingerprint = unregisterEscHotkey (0.881)
 /**
  * 注销 computer-use 的 ESC 热键并释放 run loop 泵（仅在已注册时）。
  */
-//@ chunk-ha3km179.js:51947-52096 fingerprint = unregisterEscHotkey (0.881)
 function unregisterEscHotkey() {
   if (!getComputerUseSession().escHotkeyRegistered) return;
   try {
     requireComputerUseSwift().hotkey.unregister();
   } finally {
-    (releasePump(),
-      (getComputerUseSession().escHotkeyRegistered = !1),
-      logForDebugging("[cu-esc] unregistered"));
+    releasePump();
+    getComputerUseSession().escHotkeyRegistered = false;
+    logForDebugging("[cu-esc] unregistered");
   }
 }
+//@ chunk-ha3km179.js:52096-52183 fingerprint = notifyExpectedEscape (0.794)
 /**
  * 告诉 Swift 热键模块下一次 ESC 是程序自己发的，不当作用户中断。
  */
-//@ chunk-ha3km179.js:52096-52183 fingerprint = notifyExpectedEscape (0.794)
 function notifyExpectedEscape() {
   if (!getComputerUseSession().escHotkeyRegistered) return;
   requireComputerUseSwift().hotkey.notifyExpectedEscape();
 }
-
 export { unregisterEscHotkey };

@@ -5,21 +5,21 @@
  * pieces: chunk-mrx6y2r5.js (2)
  * attribution: esm-layout 1, esm-fingerprint 1
  */
-import { Yl, Yo } from "../util/userAgent.js";
+import { Yl, getUserAgentValue } from "../util/userAgent.js";
 
 //@ chunk-mrx6y2r5.js:55718-55751 esm-layout
-var Wl = Yl(),
-  USERAGENTPOLICY = "userAgentPolicy";
+var UserAgentHeaderName = Yl();
+var userAgentPolicyName = "userAgentPolicy";
 //@ chunk-mrx6y2r5.js:55751-55897 esm-fingerprint
-function Ql(e = {}) {
-  let t = Yo(e.userAgentPrefix);
+function userAgentPolicy(options = {}) {
+  let userAgentValue = getUserAgentValue(options.userAgentPrefix);
   return {
-    name: USERAGENTPOLICY,
-    async sendRequest(r, n) {
-      if (!r.headers.has(Wl)) r.headers.set(Wl, await t);
-      return n(r);
+    name: userAgentPolicyName,
+    async sendRequest(request, next) {
+      if (!request.headers.has(UserAgentHeaderName))
+        request.headers.set(UserAgentHeaderName, await userAgentValue);
+      return next(request);
     },
   };
 }
-
-export { Ql };
+export { userAgentPolicy };

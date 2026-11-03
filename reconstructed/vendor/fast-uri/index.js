@@ -6,234 +6,274 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../runtime/bun-runtime.js";
-import { kr } from "./lib/utils.js";
-import { Xn } from "./lib/schemes.js";
+import { require_utils } from "./lib/utils.js";
+import { require_schemes } from "./lib/schemes.js";
 
 //@ chunk-s82q9s4x.js:63889-68634 cjs-fingerprint
-var so = x(function (hm, Tt) {
+var require_fast_uri = x(function (cjsExports, cjsModule) {
   var {
-      normalizeIPv6: normalizeIPv6,
-      removeDotSegments: removeDotSegments,
-      recomposeAuthority: recomposeAuthority,
-      normalizePercentEncoding: normalizePercentEncoding,
-      normalizePathEncoding: normalizePathEncoding,
-      escapePreservingEscapes: escapePreservingEscapes,
-      reescapeHostDelimiters: reescapeHostDelimiters,
-      isIPv4: isIPv4,
-      nonSimpleDomain: nonSimpleDomain,
-    } = kr(),
-    { SCHEMES: SCHEMES, getSchemeHandler: getSchemeHandler } = Xn();
-  function wd(e, t) {
-    if (typeof e === "string") e = Nd(e, t);
-    else if (typeof e === "object") e = Je(Ae(e, t), t);
-    return e;
+    normalizeIPv6,
+    removeDotSegments,
+    recomposeAuthority,
+    normalizePercentEncoding,
+    normalizePathEncoding,
+    escapePreservingEscapes,
+    reescapeHostDelimiters,
+    isIPv4,
+    nonSimpleDomain,
+  } = require_utils();
+  var { SCHEMES, getSchemeHandler } = require_schemes();
+  function normalize(uri, options) {
+    if (typeof uri === "string") uri = normalizeString(uri, options);
+    else if (typeof uri === "object") uri = parse(serialize(uri, options), options);
+    return uri;
   }
-  function bd(e, t, r) {
-    let s = r ? Object.assign({ scheme: "null" }, r) : { scheme: "null" },
-      n = eo(Je(e, s), Je(t, s), s, !0);
-    return ((s.skipEscape = !0), Ae(n, s));
+  function resolve(baseURI, relativeURI, options) {
+    let schemelessOptions = options
+      ? Object.assign(
+          {
+            scheme: "null",
+          },
+          options,
+        )
+      : {
+          scheme: "null",
+        };
+    let resolved = resolveComponent(
+      parse(baseURI, schemelessOptions),
+      parse(relativeURI, schemelessOptions),
+      schemelessOptions,
+      true,
+    );
+    schemelessOptions.skipEscape = true;
+    return serialize(resolved, schemelessOptions);
   }
-  function eo(e, t, r, s) {
-    let n = {};
-    if (!s) ((e = Je(Ae(e, r), r)), (t = Je(Ae(t, r), r)));
-    if (((r = r || {}), !r.tolerant && t.scheme))
-      ((n.scheme = t.scheme),
-        (n.userinfo = t.userinfo),
-        (n.host = t.host),
-        (n.port = t.port),
-        (n.path = removeDotSegments(t.path || "")),
-        (n.query = t.query));
-    else {
-      if (t.userinfo !== void 0 || t.host !== void 0 || t.port !== void 0)
-        ((n.userinfo = t.userinfo),
-          (n.host = t.host),
-          (n.port = t.port),
-          (n.path = removeDotSegments(t.path || "")),
-          (n.query = t.query));
-      else {
-        if (!t.path)
-          if (((n.path = e.path), t.query !== void 0)) n.query = t.query;
-          else n.query = e.query;
-        else {
-          if (t.path[0] === "/") n.path = removeDotSegments(t.path);
+  function resolveComponent(base, relative, options, skipNormalization) {
+    let target = {};
+    if (!skipNormalization) {
+      base = parse(serialize(base, options), options);
+      relative = parse(serialize(relative, options), options);
+    }
+    options = options || {};
+    if (!options.tolerant && relative.scheme) {
+      target.scheme = relative.scheme;
+      target.userinfo = relative.userinfo;
+      target.host = relative.host;
+      target.port = relative.port;
+      target.path = removeDotSegments(relative.path || "");
+      target.query = relative.query;
+    } else {
+      if (relative.userinfo !== undefined || relative.host !== undefined || relative.port !== undefined) {
+        target.userinfo = relative.userinfo;
+        target.host = relative.host;
+        target.port = relative.port;
+        target.path = removeDotSegments(relative.path || "");
+        target.query = relative.query;
+      } else {
+        if (!relative.path) {
+          target.path = base.path;
+          if (relative.query !== undefined) target.query = relative.query;
+          else target.query = base.query;
+        } else {
+          if (relative.path[0] === "/") target.path = removeDotSegments(relative.path);
           else {
-            if ((e.userinfo !== void 0 || e.host !== void 0 || e.port !== void 0) && !e.path)
-              n.path = "/" + t.path;
-            else if (!e.path) n.path = t.path;
-            else n.path = e.path.slice(0, e.path.lastIndexOf("/") + 1) + t.path;
-            n.path = removeDotSegments(n.path);
+            if (
+              (base.userinfo !== undefined || base.host !== undefined || base.port !== undefined) &&
+              !base.path
+            )
+              target.path = "/" + relative.path;
+            else if (!base.path) target.path = relative.path;
+            else target.path = base.path.slice(0, base.path.lastIndexOf("/") + 1) + relative.path;
+            target.path = removeDotSegments(target.path);
           }
-          n.query = t.query;
+          target.query = relative.query;
         }
-        ((n.userinfo = e.userinfo), (n.host = e.host), (n.port = e.port));
+        target.userinfo = base.userinfo;
+        target.host = base.host;
+        target.port = base.port;
       }
-      n.scheme = e.scheme;
+      target.scheme = base.scheme;
     }
-    return ((n.fragment = t.fragment), n);
+    target.fragment = relative.fragment;
+    return target;
   }
-  function Ed(e, t, r) {
-    let s = Yn(e, r),
-      n = Yn(t, r);
-    return s !== void 0 && n !== void 0 && s.toLowerCase() === n.toLowerCase();
+  function equal(uriA, uriB, options) {
+    let normalizedA = normalizeComparableURI(uriA, options);
+    let normalizedB = normalizeComparableURI(uriB, options);
+    return (
+      normalizedA !== undefined &&
+      normalizedB !== undefined &&
+      normalizedA.toLowerCase() === normalizedB.toLowerCase()
+    );
   }
-  function Ae(e, t) {
-    let r = {
-        host: e.host,
-        scheme: e.scheme,
-        userinfo: e.userinfo,
-        port: e.port,
-        path: e.path,
-        query: e.query,
-        nid: e.nid,
-        nss: e.nss,
-        uuid: e.uuid,
-        fragment: e.fragment,
-        reference: e.reference,
-        resourceName: e.resourceName,
-        secure: e.secure,
-        error: "",
-      },
-      merged = Object.assign({}, t),
-      n = [],
-      o = getSchemeHandler(merged.scheme || r.scheme);
-    if (o && o.serialize) o.serialize(r, merged);
-    if (r.path !== void 0)
-      if (!merged.skipEscape) {
-        if (((r.path = escapePreservingEscapes(r.path)), r.scheme !== void 0))
-          r.path = r.path.split("%3A").join(":");
-      } else r.path = normalizePercentEncoding(r.path);
-    if (merged.reference !== "suffix" && r.scheme) n.push(r.scheme, ":");
-    let i = recomposeAuthority(r);
-    if (i !== void 0) {
-      if (merged.reference !== "suffix") n.push("//");
-      if ((n.push(i), r.path && r.path[0] !== "/")) n.push("/");
+  function serialize(cmpts, opts) {
+    let component = {
+      host: cmpts.host,
+      scheme: cmpts.scheme,
+      userinfo: cmpts.userinfo,
+      port: cmpts.port,
+      path: cmpts.path,
+      query: cmpts.query,
+      nid: cmpts.nid,
+      nss: cmpts.nss,
+      uuid: cmpts.uuid,
+      fragment: cmpts.fragment,
+      reference: cmpts.reference,
+      resourceName: cmpts.resourceName,
+      secure: cmpts.secure,
+      error: "",
+    };
+    let options = Object.assign({}, opts);
+    let uriTokens = [];
+    let schemeHandler = getSchemeHandler(options.scheme || component.scheme);
+    if (schemeHandler && schemeHandler.serialize) schemeHandler.serialize(component, options);
+    if (component.path !== undefined)
+      if (!options.skipEscape) {
+        component.path = escapePreservingEscapes(component.path);
+        if (component.scheme !== undefined) component.path = component.path.split("%3A").join(":");
+      } else component.path = normalizePercentEncoding(component.path);
+    if (options.reference !== "suffix" && component.scheme) uriTokens.push(component.scheme, ":");
+    let authority = recomposeAuthority(component);
+    if (authority !== undefined) {
+      if (options.reference !== "suffix") uriTokens.push("//");
+      uriTokens.push(authority);
+      if (component.path && component.path[0] !== "/") uriTokens.push("/");
     }
-    if (r.path !== void 0) {
-      let path = r.path;
-      if (!merged.absolutePath && (!o || !o.absolutePath)) path = removeDotSegments(path);
-      if (i === void 0 && path[0] === "/" && path[1] === "/") path = "/%2F" + path.slice(2);
-      n.push(path);
+    if (component.path !== undefined) {
+      let s = component.path;
+      if (!options.absolutePath && (!schemeHandler || !schemeHandler.absolutePath)) s = removeDotSegments(s);
+      if (authority === undefined && s[0] === "/" && s[1] === "/") s = "/%2F" + s.slice(2);
+      uriTokens.push(s);
     }
-    if (r.query !== void 0) n.push("?", r.query);
-    if (r.fragment !== void 0) n.push("#", r.fragment);
-    return n.join("");
+    if (component.query !== undefined) uriTokens.push("?", component.query);
+    if (component.fragment !== undefined) uriTokens.push("#", component.fragment);
+    return uriTokens.join("");
   }
-  var Sd =
+  var URI_PARSE =
     /^(?:([^#/:?]+):)?(?:\/\/((?:([^#/?@]*)@)?(\[[^#/?\]]+\]|[^#/:?]*)(?::(\d*))?))?([^#?]*)(?:\?([^#]*))?(?:#((?:.|[\n\r])*))?/u;
-  function Pd(e, t) {
-    if (t[2] !== void 0 && e.path && e.path[0] !== "/")
+  function getParseError(parsed, matches) {
+    if (matches[2] !== undefined && parsed.path && parsed.path[0] !== "/")
       return 'URI path must start with "/" when authority is present.';
-    if (typeof e.port === "number" && (e.port < 0 || e.port > 65535)) return "URI port is malformed.";
+    if (typeof parsed.port === "number" && (parsed.port < 0 || parsed.port > 65535))
+      return "URI port is malformed.";
     return;
   }
-  function to(e, t) {
-    let merged = Object.assign({}, t),
-      s = {
-        scheme: void 0,
-        userinfo: void 0,
-        host: "",
-        port: void 0,
-        path: "",
-        query: void 0,
-        fragment: void 0,
-      },
-      n = !1,
-      o = !1;
-    if (merged.reference === "suffix")
-      if (merged.scheme) e = merged.scheme + ":" + e;
-      else e = "//" + e;
-    let match = e.match(Sd);
-    if (match) {
+  function parseWithStatus(uri, opts) {
+    let options = Object.assign({}, opts);
+    let parsed = {
+      scheme: undefined,
+      userinfo: undefined,
+      host: "",
+      port: undefined,
+      path: "",
+      query: undefined,
+      fragment: undefined,
+    };
+    let malformedAuthorityOrPort = false;
+    let isIP = false;
+    if (options.reference === "suffix")
+      if (options.scheme) uri = options.scheme + ":" + uri;
+      else uri = "//" + uri;
+    let matches = uri.match(URI_PARSE);
+    if (matches) {
+      parsed.scheme = matches[1];
+      parsed.userinfo = matches[3];
+      parsed.host = matches[4];
+      parsed.port = parseInt(matches[5], 10);
+      parsed.path = matches[6] || "";
+      parsed.query = matches[7];
+      parsed.fragment = matches[8];
+      if (isNaN(parsed.port)) parsed.port = matches[5];
+      let parseError = getParseError(parsed, matches);
+      if (parseError !== undefined) {
+        parsed.error = parsed.error || parseError;
+        malformedAuthorityOrPort = true;
+      }
+      if (parsed.host)
+        if (isIPv4(parsed.host) === false) {
+          let ipv6result = normalizeIPv6(parsed.host);
+          parsed.host = ipv6result.host.toLowerCase();
+          isIP = ipv6result.isIPV6;
+        } else isIP = true;
       if (
-        ((s.scheme = match[1]),
-        (s.userinfo = match[3]),
-        (s.host = match[4]),
-        (s.port = parseInt(match[5], 10)),
-        (s.path = match[6] || ""),
-        (s.query = match[7]),
-        (s.fragment = match[8]),
-        isNaN(s.port))
+        parsed.scheme === undefined &&
+        parsed.userinfo === undefined &&
+        parsed.host === undefined &&
+        parsed.port === undefined &&
+        parsed.query === undefined &&
+        !parsed.path
       )
-        s.port = match[5];
-      let a = Pd(s, match);
-      if (a !== void 0) ((s.error = s.error || a), (n = !0));
-      if (s.host)
-        if (isIPv4(s.host) === !1) {
-          let l = normalizeIPv6(s.host);
-          ((s.host = l.host.toLowerCase()), (o = l.isIPV6));
-        } else o = !0;
-      if (
-        s.scheme === void 0 &&
-        s.userinfo === void 0 &&
-        s.host === void 0 &&
-        s.port === void 0 &&
-        s.query === void 0 &&
-        !s.path
-      )
-        s.reference = "same-document";
-      else if (s.scheme === void 0) s.reference = "relative";
-      else if (s.fragment === void 0) s.reference = "absolute";
-      else s.reference = "uri";
-      if (merged.reference && merged.reference !== "suffix" && merged.reference !== s.reference)
-        s.error = s.error || "URI is not a " + merged.reference + " reference.";
-      let c = getSchemeHandler(merged.scheme || s.scheme);
-      if (!merged.unicodeSupport && (!c || !c.unicodeSupport)) {
-        if (s.host && (merged.domainHost || (c && c.domainHost)) && o === !1 && nonSimpleDomain(s.host))
+        parsed.reference = "same-document";
+      else if (parsed.scheme === undefined) parsed.reference = "relative";
+      else if (parsed.fragment === undefined) parsed.reference = "absolute";
+      else parsed.reference = "uri";
+      if (options.reference && options.reference !== "suffix" && options.reference !== parsed.reference)
+        parsed.error = parsed.error || "URI is not a " + options.reference + " reference.";
+      let schemeHandler = getSchemeHandler(options.scheme || parsed.scheme);
+      if (!options.unicodeSupport && (!schemeHandler || !schemeHandler.unicodeSupport)) {
+        if (
+          parsed.host &&
+          (options.domainHost || (schemeHandler && schemeHandler.domainHost)) &&
+          isIP === false &&
+          nonSimpleDomain(parsed.host)
+        )
           try {
-            s.host = URL.domainToASCII(s.host.toLowerCase());
-          } catch (error) {
-            s.error = s.error || "Host's domain name can not be converted to ASCII: " + error;
+            parsed.host = URL.domainToASCII(parsed.host.toLowerCase());
+          } catch (e) {
+            parsed.error = parsed.error || "Host's domain name can not be converted to ASCII: " + e;
           }
       }
-      if (!c || (c && !c.skipNormalize)) {
-        if (e.indexOf("%") !== -1) {
-          if (s.scheme !== void 0) s.scheme = unescape(s.scheme);
-          if (s.host !== void 0) s.host = reescapeHostDelimiters(unescape(s.host), o);
+      if (!schemeHandler || (schemeHandler && !schemeHandler.skipNormalize)) {
+        if (uri.indexOf("%") !== -1) {
+          if (parsed.scheme !== undefined) parsed.scheme = unescape(parsed.scheme);
+          if (parsed.host !== undefined) parsed.host = reescapeHostDelimiters(unescape(parsed.host), isIP);
         }
-        if (s.path) s.path = normalizePathEncoding(s.path);
-        if (s.fragment)
+        if (parsed.path) parsed.path = normalizePathEncoding(parsed.path);
+        if (parsed.fragment)
           try {
-            s.fragment = encodeURI(decodeURIComponent(s.fragment));
+            parsed.fragment = encodeURI(decodeURIComponent(parsed.fragment));
           } catch {
-            s.error = s.error || "URI malformed";
+            parsed.error = parsed.error || "URI malformed";
           }
       }
-      if (c && c.parse) c.parse(s, merged);
-    } else s.error = s.error || "URI can not be parsed.";
-    return { parsed: s, malformedAuthorityOrPort: n };
-  }
-  function Je(e, t) {
-    return to(e, t).parsed;
-  }
-  function Nd(e, t) {
-    return ro(e, t).normalized;
-  }
-  function ro(e, t) {
-    let { parsed: parsed, malformedAuthorityOrPort: malformedAuthorityOrPort } = to(e, t);
+      if (schemeHandler && schemeHandler.parse) schemeHandler.parse(parsed, options);
+    } else parsed.error = parsed.error || "URI can not be parsed.";
     return {
-      normalized: malformedAuthorityOrPort ? e : Ae(parsed, t),
-      malformedAuthorityOrPort: malformedAuthorityOrPort,
+      parsed,
+      malformedAuthorityOrPort,
     };
   }
-  function Yn(e, t) {
-    if (typeof e === "string") {
-      let { normalized: normalized, malformedAuthorityOrPort: malformedAuthorityOrPort } = ro(e, t);
-      return malformedAuthorityOrPort ? void 0 : normalized;
-    }
-    if (typeof e === "object") return Ae(e, t);
+  function parse(uri, opts) {
+    return parseWithStatus(uri, opts).parsed;
   }
-  var jr = {
-    SCHEMES: SCHEMES,
-    normalize: wd,
-    resolve: bd,
-    resolveComponent: eo,
-    equal: Ed,
-    serialize: Ae,
-    parse: Je,
+  function normalizeString(uri, opts) {
+    return normalizeStringWithStatus(uri, opts).normalized;
+  }
+  function normalizeStringWithStatus(uri, opts) {
+    let { parsed, malformedAuthorityOrPort } = parseWithStatus(uri, opts);
+    return {
+      normalized: malformedAuthorityOrPort ? uri : serialize(parsed, opts),
+      malformedAuthorityOrPort,
+    };
+  }
+  function normalizeComparableURI(uri, opts) {
+    if (typeof uri === "string") {
+      let { normalized, malformedAuthorityOrPort } = normalizeStringWithStatus(uri, opts);
+      return malformedAuthorityOrPort ? undefined : normalized;
+    }
+    if (typeof uri === "object") return serialize(uri, opts);
+  }
+  var fastUri = {
+    SCHEMES,
+    normalize,
+    resolve,
+    resolveComponent,
+    equal,
+    serialize,
+    parse,
   };
-  Tt.exports = jr;
-  Tt.exports.default = jr;
-  Tt.exports.fastUri = jr;
+  cjsModule.exports = fastUri;
+  cjsModule.exports.default = fastUri;
+  cjsModule.exports.fastUri = fastUri;
 });
-
-export { so };
+export { require_fast_uri };

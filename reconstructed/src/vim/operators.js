@@ -10,7 +10,13 @@
  */
 import { resolveMotion, CHAR_MOTIONS } from "./types.js";
 import { isLinewiseMotion, isInclusiveMotion } from "./motions.js";
-import { truncateStartToWidth, getCursorDisplayColumn, Cursor, wrapText, zWe } from "../utils/Cursor.js";
+import {
+  truncateStartToWidth,
+  getCursorDisplayColumn,
+  Cursor,
+  wrapText,
+  isWhitespaceChar,
+} from "../utils/Cursor.js";
 import { findTextObject } from "./textObjects.js";
 import { isImagePlaceholder } from "../commands.js";
 import { firstGrapheme, lastGrapheme, getGraphemeSegmenter } from "../utils/intl.js";
@@ -18,116 +24,151 @@ import { countCharInString } from "../utils/stringUtils.js";
 import { countGraphemes } from "../ink/output.js";
 import { getSecuritySensitiveSetting } from "../utils/settings/settings.js";
 
+//@ chunk-530hfzwb.js:4643-5841 fingerprint = executeLineOp (0.678)
 /**
  * 操作符 + 移动（如 dw、c$、yj、dgj）：整行移动（j k G gg）按行处理；移动没动且不是包含式移动时只做空操作的副作用（c 进插入、y 清寄存器）；否则用 getOperatorRange 算范围（cw 特例、w 跨行截断、整行化判断）后应用操作并记录可重复的修改。
  */
-//@ chunk-530hfzwb.js:4643-5841 fingerprint = executeLineOp (0.678)
 function executeOperatorMotion(op, motion, count, ctx) {
   if (motion === "gj" || motion === "gk") {
-    let i = computeScreenLineMove(motion, count, ctx);
-    if (i.rowsRunOut) {
-      ctx.setOffset(clampOffsetOutsidePlaceholder(ctx.cursor, i.offset));
+    let screenLineMove = computeScreenLineMove(motion, count, ctx);
+    if (screenLineMove.rowsRunOut) {
+      ctx.setOffset(clampOffsetOutsidePlaceholder(ctx.cursor, screenLineMove.offset));
       return;
     }
   }
-  let s = resolveMotion(motion, ctx.cursor, count);
+  let target = resolveMotion(motion, ctx.cursor, count);
   if (isLinewiseMotion(motion)) {
-    let i = getLineIndexAt(ctx.text, ctx.cursor.offset),
-      u = getLineIndexAt(ctx.text, s.offset);
-    if (u !== i) {
-      let f = getLineStartAt(ctx.text, s.offset),
-        index = ctx.text.indexOf(
-          `
+    let lineIndexAt = getLineIndexAt(ctx.text, ctx.cursor.offset);
+    let lineIndexAt_2 = getLineIndexAt(ctx.text, target.offset);
+    if (lineIndexAt_2 !== lineIndexAt) {
+      let lineStartAt = getLineStartAt(ctx.text, target.offset);
+      let index = ctx.text.indexOf(
+        `
 `,
-          f,
-        ),
-        p = index === -1 ? ctx.text.length : index,
-        h = truncateStartToWidth(ctx.text, f, p, getCursorDisplayColumn(ctx.cursor, ctx.wantedColumn)),
-        x =
-          h === p && p > f && clampOffsetOutsidePlaceholder(ctx.cursor, p) === p
-            ? ctx.cursor.measuredText.prevOffset(p)
-            : h,
-        b = motion === "k" ? snapToPlaceholderEnd(ctx.cursor, x, f) : Math.min(ctx.cursor.offset, s.offset);
-      (applyLinewiseOperator(op, i, u, ctx, b),
-        recordRepeatableChange(ctx, { type: "operator", op: op, motion: motion, count: count }));
+        lineStartAt,
+      );
+      let p = index === -1 ? ctx.text.length : index;
+      let h = truncateStartToWidth(
+        ctx.text,
+        lineStartAt,
+        p,
+        getCursorDisplayColumn(ctx.cursor, ctx.wantedColumn),
+      );
+      let x =
+        h === p && p > lineStartAt && clampOffsetOutsidePlaceholder(ctx.cursor, p) === p
+          ? ctx.cursor.measuredText.prevOffset(p)
+          : h;
+      let b =
+        motion === "k"
+          ? snapToPlaceholderEnd(ctx.cursor, x, lineStartAt)
+          : Math.min(ctx.cursor.offset, target.offset);
+      applyLinewiseOperator(op, lineIndexAt, lineIndexAt_2, ctx, b);
+      recordRepeatableChange(ctx, {
+        type: "operator",
+        op,
+        motion,
+        count,
+      });
     }
     return;
   }
-  if (motion === "%" && s.equals(ctx.cursor)) return;
-  if (s.equals(ctx.cursor) && !isInclusiveMotion(motion)) {
+  if (motion === "%" && target.equals(ctx.cursor)) return;
+  if (target.equals(ctx.cursor) && !isInclusiveMotion(motion)) {
     let i = (motion === "w" || motion === "W") && count > 0;
     if (motion === "0" || motion === "^" || i || CHAR_MOTIONS.has(motion)) {
-      if (op === "yank") ctx.setRegister("", !1);
+      if (op === "yank") ctx.setRegister("", false);
       else if (op === "change") ctx.enterInsert(ctx.cursor.offset);
-      recordRepeatableChange(ctx, { type: "operator", op: op, motion: motion, count: count });
+      recordRepeatableChange(ctx, {
+        type: "operator",
+        op,
+        motion,
+        count,
+      });
     }
     return;
   }
-  let o = getOperatorRange(ctx.cursor, s, motion, op, count);
-  if (o.from === o.to && !(o.linewise && motion === " ")) {
-    if (op === "change" || op === "yank") ctx.setRegister("", !1);
-    if (op === "change")
-      (ctx.enterInsert(o.from),
-        recordRepeatableChange(ctx, { type: "operator", op: op, motion: motion, count: count }));
+  let operatorRange = getOperatorRange(ctx.cursor, target, motion, op, count);
+  if (operatorRange.from === operatorRange.to && !(operatorRange.linewise && motion === " ")) {
+    if (op === "change" || op === "yank") ctx.setRegister("", false);
+    if (op === "change") {
+      ctx.enterInsert(operatorRange.from);
+      recordRepeatableChange(ctx, {
+        type: "operator",
+        op,
+        motion,
+        count,
+      });
+    }
     return;
   }
-  if (o.linewise && op !== "change")
+  if (operatorRange.linewise && op !== "change")
     applyLinewiseOperator(
       op,
-      getLineIndexAt(ctx.text, o.from),
-      getLineIndexAt(ctx.text, Math.max(o.from, o.to - 1)),
+      getLineIndexAt(ctx.text, operatorRange.from),
+      getLineIndexAt(ctx.text, Math.max(operatorRange.from, operatorRange.to - 1)),
       ctx,
       ctx.cursor.offset,
     );
-  else applyOperator(op, o.from, o.to, ctx, o.linewise);
-  recordRepeatableChange(ctx, { type: "operator", op: op, motion: motion, count: count });
+  else applyOperator(op, operatorRange.from, operatorRange.to, ctx, operatorRange.linewise);
+  recordRepeatableChange(ctx, {
+    type: "operator",
+    op,
+    motion,
+    count,
+  });
 }
+//@ chunk-530hfzwb.js:5841-6069 fingerprint = executeOperatorFind (0.948)
 /**
  * 操作符 + 查找（如 dfx、ct)）：找到目标字符后对包含式范围应用操作，并记住这次查找供 ; , 重复。
  */
-//@ chunk-530hfzwb.js:5841-6069 fingerprint = executeOperatorFind (0.948)
 function executeOperatorFind(op, findType, char, count, ctx) {
   let targetOffset = ctx.cursor.findCharacter(char, findType, count);
   if (targetOffset === null) return;
-  let target = new Cursor(ctx.cursor.measuredText, targetOffset),
-    range = getFindRange(ctx.cursor, target, findType);
-  (applyOperator(op, range.from, range.to, ctx),
-    ctx.setLastFind(findType, char),
-    recordRepeatableChange(ctx, { type: "operatorFind", op: op, find: findType, char: char, count: count }));
+  let target = new Cursor(ctx.cursor.measuredText, targetOffset);
+  let range = getFindRange(ctx.cursor, target, findType);
+  applyOperator(op, range.from, range.to, ctx);
+  ctx.setLastFind(findType, char);
+  recordRepeatableChange(ctx, {
+    type: "operatorFind",
+    op,
+    find: findType,
+    char,
+    count,
+  });
 }
+//@ chunk-530hfzwb.js:6069-6362 fingerprint = executeOperatorTextObj (0.718)
 /**
  * 操作符 + 文本对象（如 diw、ca"、yi(）：用 findTextObject 求范围后应用；yi( 这类内容从换行开始时光标落到下一行。
  */
-//@ chunk-530hfzwb.js:6069-6362 fingerprint = executeOperatorTextObj (0.718)
 function executeOperatorTextObj(op, scope, objType, count, ctx) {
   let range = findTextObject(ctx.text, ctx.cursor.offset, objType, scope === "inner");
   if (!range) return;
   applyOperator(op, range.start, range.end, ctx);
-  let { start: start } = range,
-    u =
-      scope === "inner" &&
-      count === 1 &&
-      start > 0 &&
-      "([{<".includes(ctx.text[start - 1] ?? " ") &&
-      ctx.text[start] ===
-        `
+  let { start } = range;
+  let u =
+    scope === "inner" &&
+    count === 1 &&
+    start > 0 &&
+    "([{<".includes(ctx.text[start - 1] ?? " ") &&
+    ctx.text[start] ===
+      `
 `;
   if (op === "yank" && u) ctx.setOffset(start + 1);
   recordRepeatableChange(ctx, {
     type: "operatorTextObj",
-    op: op,
-    objType: objType,
-    scope: scope,
-    count: count,
+    op,
+    objType,
+    scope,
+    count,
   });
 }
+//@ chunk-530hfzwb.js:6362-6714 fingerprint = executeOperatorMotion (0.593)
 /**
  * 双写操作符（dd、cc、yy、S、Y）：对从当前行起的 count 行做整行操作；count>1 但光标后已没有换行时不执行。
  */
-//@ chunk-530hfzwb.js:6362-6714 fingerprint = executeOperatorMotion (0.593)
 function executeLineOp(op, count, ctx) {
   if (count < 1) return;
-  let n = getLineIndexAt(ctx.text, ctx.cursor.offset);
+  let lineIndexAt = getLineIndexAt(ctx.text, ctx.cursor.offset);
   if (
     count > 1 &&
     !ctx.cursor.text.includes(
@@ -137,53 +178,72 @@ function executeLineOp(op, count, ctx) {
     )
   )
     return;
-  let { offset: offset } = ctx.cursor,
-    o =
-      ctx.text[offset] ===
-      `
+  let { offset } = ctx.cursor;
+  let o =
+    ctx.text[offset] ===
+    `
 `
-        ? ctx.cursor.placeholderEndingAt(offset)
-        : null,
-    i = o !== null && isImagePlaceholder(ctx.text.slice(o.start, o.end));
-  (applyLinewiseOperator(op, n, n + count - 1, ctx, i ? ctx.cursor.startOfLogicalLine().offset : offset),
-    recordRepeatableChange(ctx, { type: "operator", op: op, motion: op[0], count: count }));
+      ? ctx.cursor.placeholderEndingAt(offset)
+      : null;
+  let i = o !== null && isImagePlaceholder(ctx.text.slice(o.start, o.end));
+  applyLinewiseOperator(
+    op,
+    lineIndexAt,
+    lineIndexAt + count - 1,
+    ctx,
+    i ? ctx.cursor.startOfLogicalLine().offset : offset,
+  );
+  recordRepeatableChange(ctx, {
+    type: "operator",
+    op,
+    motion: op[0],
+    count,
+  });
 }
+//@ chunk-530hfzwb.js:6714-6960 fingerprint = executeX (0.853)
 /**
  * x：删除光标处 count 个字符（不跨行），存入寄存器。
  */
-//@ chunk-530hfzwb.js:6714-6960 fingerprint = executeX (0.853)
 function executeX(count, ctx) {
   let from = ctx.cursor.offset;
   if (from >= ctx.text.length) return;
   let n = advanceCharsInLine(ctx, count);
   if (n === from) return;
-  let deleted = ctx.text.slice(from, n),
-    newText = ctx.text.slice(0, from) + ctx.text.slice(n);
-  (ctx.setRegister(deleted, !1),
-    ctx.setText(newText),
-    ctx.setOffset(clampCursorOffset(newText, from)),
-    ctx.recordChange({ type: "x", count: count }));
+  let deleted = ctx.text.slice(from, n);
+  let newText = ctx.text.slice(0, from) + ctx.text.slice(n);
+  ctx.setRegister(deleted, false);
+  ctx.setText(newText);
+  ctx.setOffset(clampCursorOffset(newText, from));
+  ctx.recordChange({
+    type: "x",
+    count,
+  });
 }
+//@ chunk-530hfzwb.js:6960-7158 layout
 /**
  * s：删除 count 个字符并进入插入模式。
  */
-//@ chunk-530hfzwb.js:6960-7158 layout
 function executeSubstitute(count, ctx) {
-  let offset = ctx.cursor.offset,
-    n = advanceCharsInLine(ctx, count);
-  if (n > offset)
-    (ctx.setRegister(ctx.text.slice(offset, n), !1),
-      ctx.setText(ctx.text.slice(0, offset) + ctx.text.slice(n)));
-  (ctx.enterInsert(offset), ctx.recordChange({ type: "substitute", count: count }));
+  let offset = ctx.cursor.offset;
+  let n = advanceCharsInLine(ctx, count);
+  if (n > offset) {
+    ctx.setRegister(ctx.text.slice(offset, n), false);
+    ctx.setText(ctx.text.slice(0, offset) + ctx.text.slice(n));
+  }
+  ctx.enterInsert(offset);
+  ctx.recordChange({
+    type: "substitute",
+    count,
+  });
 }
+//@ chunk-530hfzwb.js:7158-7421 fingerprint = executeReplace (0.952)
 /**
  * r{char}：把光标起 count 个字素替换为该字符（遇到行尾则不执行）。
  */
-//@ chunk-530hfzwb.js:7158-7421 fingerprint = executeReplace (0.952)
 function executeReplace(char, count, ctx) {
-  let offset = ctx.cursor.offset,
-    newText = ctx.text,
-    o = offset;
+  let offset = ctx.cursor.offset;
+  let newText = ctx.text;
+  let o = offset;
   for (let i = 0; i < count; i++) {
     if (
       o >= newText.length ||
@@ -194,177 +254,219 @@ function executeReplace(char, count, ctx) {
       return;
     o += firstGrapheme(newText.slice(o)).length || 1;
   }
-  (ctx.setText(newText.slice(0, offset) + char.repeat(count) + newText.slice(o)),
-    ctx.setOffset(offset + char.length * (count - 1)),
-    ctx.recordChange({ type: "replace", char: char, count: count }));
+  ctx.setText(newText.slice(0, offset) + char.repeat(count) + newText.slice(o));
+  ctx.setOffset(offset + char.length * (count - 1));
+  ctx.recordChange({
+    type: "replace",
+    char,
+    count,
+  });
 }
+//@ chunk-530hfzwb.js:7421-7809 fingerprint = executeToggleCase (0.769)
 /**
  * ~：切换光标起 count 个字素的大小写（NFC 规范化），光标后移。
  */
-//@ chunk-530hfzwb.js:7421-7809 fingerprint = executeToggleCase (0.769)
 function executeToggleCase(count, ctx) {
-  let columns = ctx.cursor.measuredText.columns,
-    text = ctx.text,
-    startOffset = ctx.cursor.offset,
-    toggled = 0;
+  let columns = ctx.cursor.measuredText.columns;
+  let newText = ctx.text;
+  let offset = ctx.cursor.offset;
+  let toggled = 0;
   while (
-    startOffset < text.length &&
-    text[startOffset] !==
+    offset < newText.length &&
+    newText[offset] !==
       `
 ` &&
     toggled < count
   ) {
-    let grapheme = firstGrapheme(text.slice(startOffset)),
-      graphemeLen = grapheme.length,
-      normalized = (
-        grapheme === grapheme.toUpperCase() ? grapheme.toLowerCase() : grapheme.toUpperCase()
-      ).normalize("NFC");
-    ((text = text.slice(0, startOffset) + normalized + text.slice(startOffset + graphemeLen)),
-      (startOffset += normalized.length),
-      toggled++);
+    let grapheme = firstGrapheme(newText.slice(offset));
+    let graphemeLen = grapheme.length;
+    let toggledGrapheme = (
+      grapheme === grapheme.toUpperCase() ? grapheme.toLowerCase() : grapheme.toUpperCase()
+    ).normalize("NFC");
+    newText = newText.slice(0, offset) + toggledGrapheme + newText.slice(offset + graphemeLen);
+    offset += toggledGrapheme.length;
+    toggled++;
   }
   if (toggled === 0) return;
-  let fromText = Cursor.fromText(text, columns);
-  (ctx.setText(text),
-    ctx.setOffset(clampOffsetOutsidePlaceholder(fromText, startOffset)),
-    ctx.recordChange({ type: "toggleCase", count: count }));
+  let i = Cursor.fromText(newText, columns);
+  ctx.setText(newText);
+  ctx.setOffset(clampOffsetOutsidePlaceholder(i, offset));
+  ctx.recordChange({
+    type: "toggleCase",
+    count,
+  });
 }
+//@ chunk-530hfzwb.js:7809-8060 layout
 /**
  * J：把当前行与后面 max(count,2)-1 行合并。
  */
-//@ chunk-530hfzwb.js:7809-8060 layout
 function executeJoinLines(count, ctx) {
-  let parts = ctx.text.split(`
-`),
-    n = getLineIndexAt(ctx.cursor.text, ctx.cursor.offset);
-  if (n >= parts.length - 1) {
-    if (count >= 3)
-      (ctx.setOffset(getLineStartAt(ctx.cursor.text, ctx.cursor.offset)),
-        ctx.recordChange({ type: "join", count: 2 }));
+  let lines = ctx.text.split(`
+`);
+  let lineIndex = getLineIndexAt(ctx.cursor.text, ctx.cursor.offset);
+  if (lineIndex >= lines.length - 1) {
+    if (count >= 3) {
+      ctx.setOffset(getLineStartAt(ctx.cursor.text, ctx.cursor.offset));
+      ctx.recordChange({
+        type: "join",
+        count: 2,
+      });
+    }
     return;
   }
-  let min = Math.min(Math.max(count, 2) - 1, parts.length - n - 1);
-  executeJoin(parts, n, min, ctx);
+  let min = Math.min(Math.max(count, 2) - 1, lines.length - lineIndex - 1);
+  executeJoin(lines, lineIndex, min, ctx);
 }
+//@ chunk-530hfzwb.js:8060-8398 fingerprint = executeJoin (0.763)
 /**
  * 合并行：去掉后续行行首空白，必要时补一个空格（下一行以 ) 开头或上一段以空白结尾时不补），光标停在最后一个连接点。
  */
-//@ chunk-530hfzwb.js:8060-8398 fingerprint = executeJoin (0.763)
 function executeJoin(lines, lineIndex, joinCount, ctx) {
-  let joinedLine = lines[lineIndex],
-    cursorPos = joinedLine.length,
-    i = joinedLine;
-  for (let d = 1; d <= joinCount; d++) {
+  let joinedLine = lines[lineIndex];
+  let cursorPos = joinedLine.length;
+  let i = joinedLine;
+  for (let i_2 = 1; i_2 <= joinCount; i_2++) {
     cursorPos = joinedLine.length;
-    let replaced = lines[lineIndex + d].replace(/^[ \t\r]+/, "");
-    if (replaced.length > 0 && joinedLine.length > 0 && !replaced.startsWith(")") && !/[ \t]$/.test(i))
+    let nextLine = lines[lineIndex + i_2].replace(/^[ \t\r]+/, "");
+    if (nextLine.length > 0 && joinedLine.length > 0 && !nextLine.startsWith(")") && !/[ \t]$/.test(i))
       joinedLine += " ";
-    ((joinedLine += replaced), (i = replaced));
+    joinedLine += nextLine;
+    i = nextLine;
   }
-  let newLines = [...lines.slice(0, lineIndex), joinedLine, ...lines.slice(lineIndex + joinCount + 1)],
-    joined = newLines.join(`
+  let newLines = [...lines.slice(0, lineIndex), joinedLine, ...lines.slice(lineIndex + joinCount + 1)];
+  let newText = newLines.join(`
 `);
-  (ctx.setText(joined),
-    ctx.setOffset(clampCursorOffset(joined, getLineStartOffset(newLines, lineIndex) + cursorPos)),
-    ctx.recordChange({ type: "join", count: joinCount + 1 }));
+  ctx.setText(newText);
+  ctx.setOffset(clampCursorOffset(newText, getLineStartOffset(newLines, lineIndex) + cursorPos));
+  ctx.recordChange({
+    type: "join",
+    count: joinCount + 1,
+  });
 }
+//@ chunk-530hfzwb.js:8398-9239 fingerprint = executePaste (0.554)
 /**
  * p/P：按寄存器是否整行分两种：整行内容插到当前行下/上方并把光标放到首个非空字符；字符内容插到光标后/前，光标停在插入内容最后一个字素。
  */
-//@ chunk-530hfzwb.js:8398-9239 fingerprint = executePaste (0.554)
 function executePaste(after, count, ctx) {
   let register = ctx.getRegister();
   if (!register) return;
-  ctx.recordChange({ type: "paste", after: after, count: count });
-  let registerIsLinewise = ctx.getRegisterIsLinewise(),
-    o =
-      registerIsLinewise &&
-      register.endsWith(`
+  ctx.recordChange({
+    type: "paste",
+    after,
+    count,
+  });
+  let isLinewise = ctx.getRegisterIsLinewise();
+  let content =
+    isLinewise &&
+    register.endsWith(`
 `)
-        ? register.slice(0, -1)
-        : register;
-  if (registerIsLinewise) {
-    let text = ctx.text,
-      parts = text.split(`
-`),
-      f = getLineIndexAt(ctx.cursor.text, ctx.cursor.offset),
-      d = after ? f + 1 : f,
-      parts_2 = o.split(`
-`),
-      repeatedLines = [];
-    for (let D = 0; D < count; D++) repeatedLines.push(...parts_2);
-    let newLines = [...parts.slice(0, d), ...repeatedLines, ...parts.slice(d)],
-      joined = newLines.join(`
-`),
-      O = getLineStartOffset(newLines, d),
-      fromText = Cursor.fromText(parts_2[0] ?? "", ctx.cursor.measuredText.columns),
-      F = firstNonBlankOffset(fromText);
-    (ctx.setText(joined, { previous: { value: text, cursorOffset: O } }),
-      ctx.setOffset(O + (fromText.placeholderStartingAt(F) ? 0 : F)));
+      ? register.slice(0, -1)
+      : register;
+  if (isLinewise) {
+    let text = ctx.text;
+    let lines = text.split(`
+`);
+    let currentLine = getLineIndexAt(ctx.cursor.text, ctx.cursor.offset);
+    let insertLine = after ? currentLine + 1 : currentLine;
+    let contentLines = content.split(`
+`);
+    let repeatedLines = [];
+    for (let i = 0; i < count; i++) repeatedLines.push(...contentLines);
+    let newLines = [...lines.slice(0, insertLine), ...repeatedLines, ...lines.slice(insertLine)];
+    let newText = newLines.join(`
+`);
+    let lineStartOffset = getLineStartOffset(newLines, insertLine);
+    let I = Cursor.fromText(contentLines[0] ?? "", ctx.cursor.measuredText.columns);
+    let F = firstNonBlankOffset(I);
+    ctx.setText(newText, {
+      previous: {
+        value: text,
+        cursorOffset: lineStartOffset,
+      },
+    });
+    ctx.setOffset(lineStartOffset + (I.placeholderStartingAt(F) ? 0 : F));
   } else {
-    let textToInsert = o.repeat(count),
-      offset = ctx.cursor.offset,
-      f =
-        ctx.text[offset] ===
-          `
+    let textToInsert = content.repeat(count);
+    let offset = ctx.cursor.offset;
+    let f =
+      ctx.text[offset] ===
+        `
 ` &&
-        (offset === 0 ||
-          ctx.text[offset - 1] ===
-            `
-`),
-      d = after && offset < ctx.text.length && !f ? ctx.cursor.measuredText.nextOffset(offset) : offset,
-      p = ctx.text.slice(0, d) + textToInsert + ctx.text.slice(d),
-      h = textToInsert.includes(`
+      (offset === 0 ||
+        ctx.text[offset - 1] ===
+          `
+`);
+    let d = after && offset < ctx.text.length && !f ? ctx.cursor.measuredText.nextOffset(offset) : offset;
+    let newText = ctx.text.slice(0, d) + textToInsert + ctx.text.slice(d);
+    let lastGr = textToInsert.includes(`
 `)
-        ? clampCursorOffset(p, d)
-        : d + textToInsert.length - (lastGrapheme(textToInsert).length || 1);
-    (ctx.setText(p, { previous: { value: ctx.text, cursorOffset: d } }), ctx.setOffset(h));
+      ? clampCursorOffset(newText, d)
+      : d + textToInsert.length - (lastGrapheme(textToInsert).length || 1);
+    ctx.setText(newText, {
+      previous: {
+        value: ctx.text,
+        cursorOffset: d,
+      },
+    });
+    ctx.setOffset(lastGr);
   }
 }
+//@ chunk-530hfzwb.js:9239-9506 fingerprint = executeIndent (0.834)
 /**
  * >> / <<：给当前行起 count 行加/减两个空格缩进（减时也去掉一个 tab 或最多两个空白）。
  */
-//@ chunk-530hfzwb.js:9239-9506 fingerprint = executeIndent (0.834)
 function executeIndent(dir, count, ctx) {
-  let parts = ctx.text.split(`
-`),
-    o = getLineIndexAt(ctx.cursor.text, ctx.cursor.offset);
-  if (count > 1 && o === parts.length - 1) return;
-  let linesToAffect = Math.min(count, parts.length - o);
-  indentLines(parts, o, o + linesToAffect - 1, dir);
-  let joined = parts.join(`
-`),
-    f = wrapText(parts[o] ?? "");
-  (ctx.setText(joined),
-    ctx.setOffset(getLineStartOffset(parts, o) + f),
-    ctx.recordChange({ type: "indent", dir: dir, count: count }));
+  let lines = ctx.text.split(`
+`);
+  let lineIndexAt = getLineIndexAt(ctx.cursor.text, ctx.cursor.offset);
+  if (count > 1 && lineIndexAt === lines.length - 1) return;
+  let linesToAffect = Math.min(count, lines.length - lineIndexAt);
+  indentLines(lines, lineIndexAt, lineIndexAt + linesToAffect - 1, dir);
+  let newText = lines.join(`
+`);
+  let f = wrapText(lines[lineIndexAt] ?? "");
+  ctx.setText(newText);
+  ctx.setOffset(getLineStartOffset(lines, lineIndexAt) + f);
+  ctx.recordChange({
+    type: "indent",
+    dir,
+    count,
+  });
 }
+//@ chunk-530hfzwb.js:9506-9778 fingerprint = executeOpenLine (0.808)
 /**
  * o/O：在当前行下/上方插入空行并进入插入模式。
  */
-//@ chunk-530hfzwb.js:9506-9778 fingerprint = executeOpenLine (0.808)
 function executeOpenLine(direction, ctx) {
-  let text = ctx.text,
-    parts = text.split(`
-`),
-    s = getLineIndexAt(ctx.cursor.text, ctx.cursor.offset),
-    insertLine = direction === "below" ? s + 1 : s,
-    newLines = [...parts.slice(0, insertLine), "", ...parts.slice(insertLine)],
-    joined = newLines.join(`
-`),
-    f = getLineStartOffset(newLines, insertLine);
-  (ctx.setText(joined, { previous: { value: text, cursorOffset: f } }),
-    ctx.enterInsert(f),
-    ctx.recordChange({ type: "openLine", direction: direction }));
+  let text = ctx.text;
+  let lines = text.split(`
+`);
+  let currentLine = getLineIndexAt(ctx.cursor.text, ctx.cursor.offset);
+  let insertLine = direction === "below" ? currentLine + 1 : currentLine;
+  let newLines = [...lines.slice(0, insertLine), "", ...lines.slice(insertLine)];
+  let newText = newLines.join(`
+`);
+  let lineStartOffset = getLineStartOffset(newLines, insertLine);
+  ctx.setText(newText, {
+    previous: {
+      value: text,
+      cursorOffset: lineStartOffset,
+    },
+  });
+  ctx.enterInsert(lineStartOffset);
+  ctx.recordChange({
+    type: "openLine",
+    direction,
+  });
 }
 //@ chunk-530hfzwb.js:9778-9829 layout
-function recordRepeatableChange(e, t) {
-  if (t.op !== "yank") e.recordChange(t);
+function recordRepeatableChange(ctx, t) {
+  if (t.op !== "yank") ctx.recordChange(t);
 }
 //@ chunk-530hfzwb.js:9829-9956 layout
 function advanceCharsInLine(ctx, count) {
   let cursor = ctx.cursor;
-  for (let n = 0; n < count && !cursor.isAtEnd(); n++) {
+  for (let i = 0; i < count && !cursor.isAtEnd(); i++) {
     if (
       ctx.text[cursor.offset] ===
       `
@@ -382,49 +484,52 @@ function getLineStartOffset(lines, lineIndex) {
 `).length + (lineIndex > 0 ? 1 : 0)
   );
 }
+//@ chunk-530hfzwb.js:10019-11262 fingerprint = getOperatorRange (0.852)
 /**
  * 操作符 + 移动的范围计算（vim 兼容细节）：cw 当作 ce；dw/yw 不越过行尾；包含式移动（e E $ %）把终点含进去；跨行删除且前面只有空白时整行化。最后把起止点推出占位符（图片/粘贴占位）之外。
  */
-//@ chunk-530hfzwb.js:10019-11262 fingerprint = getOperatorRange (0.852)
 function getOperatorRange(cursor, target, motion, op, count) {
-  let from = Math.min(cursor.offset, target.offset),
-    to = Math.max(cursor.offset, target.offset),
-    u = !1,
-    f = motion === "w" || motion === "W",
-    d = f && op === "change",
-    p = f && op !== "change",
-    h = cursor.text[cursor.offset],
-    x =
-      (h === " " ||
-        h === "\t" ||
-        h ===
-          `
+  let from = Math.min(cursor.offset, target.offset);
+  let to = Math.max(cursor.offset, target.offset);
+  let u = false;
+  let f = motion === "w" || motion === "W";
+  let d = f && op === "change";
+  let p = f && op !== "change";
+  let h = cursor.text[cursor.offset];
+  let x =
+    (h === " " ||
+      h === "\t" ||
+      h ===
+        `
 `) &&
-      cursor.snapOutOfPlaceholder(cursor.offset, "start") === cursor.offset;
+    cursor.snapOutOfPlaceholder(cursor.offset, "start") === cursor.offset;
   if (d && x) {
+    to = clampWordMotionToLineEnd(cursor, motion, count, to);
     if (
-      ((to = clampWordMotionToLineEnd(cursor, motion, count, to)),
       to > from &&
-        cursor.text[to - 1] ===
-          `
-`)
+      cursor.text[to - 1] ===
+        `
+`
     ) {
       to -= 1;
       let offset = cursor.startOfLogicalLine().offset;
-      if (/^[ \t]*$/.test(cursor.text.slice(offset, from))) ((from = offset), (u = !0));
+      if (/^[ \t]*$/.test(cursor.text.slice(offset, from))) {
+        from = offset;
+        u = true;
+      }
     }
   } else if (d) {
     let wordCursor = cursor;
-    for (let oe = 0; oe < count - 1; oe++)
+    for (let i = 0; i < count - 1; i++)
       do wordCursor = motion === "w" ? wordCursor.nextVimWord() : wordCursor.nextWORD();
       while (cursor.isOnEmptyLine(wordCursor.offset));
-    let F = motion === "w" ? wordCursor.endOfVimWord() : wordCursor.endOfWORD(),
-      nextOffset = cursor.measuredText.nextOffset(wordCursor.offset),
-      K = motion === "w" ? wordCursor.nextVimWord() : wordCursor.nextWORD();
+    let F = motion === "w" ? wordCursor.endOfVimWord() : wordCursor.endOfWORD();
+    let D = cursor.measuredText.nextOffset(wordCursor.offset);
+    let K = motion === "w" ? wordCursor.nextVimWord() : wordCursor.nextWORD();
     if (
-      (nextOffset >= cursor.text.length || zWe(cursor.text[nextOffset] ?? "") || K.offset === nextOffset) &&
-      !zWe(cursor.text[cursor.offset] ?? "") &&
-      !zWe(cursor.text[wordCursor.offset] ?? "")
+      (D >= cursor.text.length || isWhitespaceChar(cursor.text[D] ?? "") || K.offset === D) &&
+      !isWhitespaceChar(cursor.text[cursor.offset] ?? "") &&
+      !isWhitespaceChar(cursor.text[wordCursor.offset] ?? "")
     )
       F = wordCursor;
     to = cursor.measuredText.nextOffset(F.offset);
@@ -437,50 +542,59 @@ function getOperatorRange(cursor, target, motion, op, count) {
   )
     to = cursor.measuredText.nextOffset(to);
   else if (p) to = clampWordMotionToLineEnd(cursor, motion, count, to);
-  let b = getLineStartAt(cursor.text, from),
-    matches = /^[ \t]*$/.test(cursor.text.slice(b, from));
+  let lineStartAt = getLineStartAt(cursor.text, from);
+  let matches = /^[ \t]*$/.test(cursor.text.slice(lineStartAt, from));
   if (
     (motion === " " || p) &&
     to > from &&
     cursor.text[to - 1] ===
       `
 `
-  )
-    ((u = matches), (from = u ? b : from), (to = u && op !== "change" ? to : to - 1));
-  else if (
+  ) {
+    u = matches;
+    from = u ? lineStartAt : from;
+    to = u && op !== "change" ? to : to - 1;
+  } else if (
     p &&
     op === "delete" &&
     matches &&
     cursor.text.slice(from, to).includes(`
 `) &&
     /^[ \t]*(\n|$)/.test(cursor.text.slice(to))
-  )
-    ((from = b), (u = !0));
-  return (
-    (from = cursor.snapOutOfPlaceholder(from, "start")),
-    (to = cursor.snapOutOfPlaceholder(to, "end")),
-    { from: from, to: to, linewise: u }
-  );
+  ) {
+    from = lineStartAt;
+    u = true;
+  }
+  from = cursor.snapOutOfPlaceholder(from, "start");
+  to = cursor.snapOutOfPlaceholder(to, "end");
+  return {
+    from,
+    to,
+    linewise: u,
+  };
 }
 //@ chunk-530hfzwb.js:11262-11371 layout
-function clampWordMotionToLineEnd(e, t, r, n) {
-  let s = resolveMotion(t, e, r - 1),
-    offset = s.endOfLogicalLine().offset;
+function clampWordMotionToLineEnd(cursor, motion, count, n) {
+  let motion_2 = resolveMotion(motion, cursor, count - 1);
+  let offset = motion_2.endOfLogicalLine().offset;
   if (n <= offset) return n;
-  return offset > s.offset ? offset : offset + 1;
+  return offset > motion_2.offset ? offset : offset + 1;
 }
 //@ chunk-530hfzwb.js:11371-11567 layout
-function getFindRange(e, t, r) {
-  let max = Math.max(e.offset, t.offset),
-    snapOutOfPlaceholder = e.snapOutOfPlaceholder(Math.min(e.offset, t.offset), "start"),
-    snapOutOfPlaceholder_2 = e.snapOutOfPlaceholder(e.measuredText.nextOffset(max), "end");
-  return { from: snapOutOfPlaceholder, to: snapOutOfPlaceholder_2 };
+function getFindRange(cursor, target, _findType) {
+  let max = Math.max(cursor.offset, target.offset);
+  let from = cursor.snapOutOfPlaceholder(Math.min(cursor.offset, target.offset), "start");
+  let to = cursor.snapOutOfPlaceholder(cursor.measuredText.nextOffset(max), "end");
+  return {
+    from,
+    to,
+  };
 }
+//@ chunk-530hfzwb.js:11567-11918 fingerprint = applyOperator (0.962)
 /**
  * 对字符范围应用操作：内容写寄存器（整行时补换行）；yank 只移动光标；delete 删除并修正光标；change 删除后进入插入模式。
  */
-//@ chunk-530hfzwb.js:11567-11918 fingerprint = applyOperator (0.962)
-function applyOperator(op, from, to, ctx, linewise = !1) {
+function applyOperator(op, from, to, ctx, linewise = false) {
   let content = ctx.text.slice(from, to);
   if (
     linewise &&
@@ -494,17 +608,19 @@ function applyOperator(op, from, to, ctx, linewise = !1) {
   if (content || op !== "delete") ctx.setRegister(content, linewise);
   if (op === "yank") ctx.setOffset(clampOffsetOutsidePlaceholder(ctx.cursor, from));
   else if (op === "delete") {
-    let i = ctx.text.slice(0, from) + ctx.text.slice(to);
-    (ctx.setText(i), ctx.setOffset(clampCursorOffset(i, from)));
+    let newText = ctx.text.slice(0, from) + ctx.text.slice(to);
+    ctx.setText(newText);
+    ctx.setOffset(clampCursorOffset(newText, from));
   } else if (op === "change") {
-    let i = ctx.text.slice(0, from) + ctx.text.slice(to);
-    (ctx.setText(i), ctx.enterInsert(from));
+    let newText = ctx.text.slice(0, from) + ctx.text.slice(to);
+    ctx.setText(newText);
+    ctx.enterInsert(from);
   }
 }
+//@ chunk-530hfzwb.js:11918-12095 layout
 /**
  * 普通模式光标不能停在行尾换行符上或文本末尾之后：退回到前一个字素。
  */
-//@ chunk-530hfzwb.js:11918-12095 layout
 function clampCursorOffset(text, offset) {
   if (
     text[offset] ===
@@ -525,46 +641,58 @@ function clampCursorOffset(text, offset) {
   return offset;
 }
 //@ chunk-530hfzwb.js:12095-12258 layout
-function snapToPlaceholderEnd(e, t, r) {
-  let n = placeholderAt(e, t),
-    s = t;
-  while (n && n.start > r) ((s = e.measuredText.prevOffset(n.start)), (n = placeholderAt(e, s)));
+function snapToPlaceholderEnd(cursor, t, r) {
+  let n = placeholderAt(cursor, t);
+  let s = t;
+  while (n && n.start > r) {
+    s = cursor.measuredText.prevOffset(n.start);
+    n = placeholderAt(cursor, s);
+  }
   if (!n) return s;
   let end = n.end;
-  while ((n = placeholderAt(e, end))) end = n.end;
+  while ((n = placeholderAt(cursor, end))) end = n.end;
   return end;
 }
 //@ chunk-530hfzwb.js:12258-12349 layout
 function placeholderAt(e, t) {
-  let snapOutOfPlaceholder = e.snapOutOfPlaceholder(t, "start");
-  return e.placeholderStartingAt(snapOutOfPlaceholder);
+  let r = e.snapOutOfPlaceholder(t, "start");
+  return e.placeholderStartingAt(r);
 }
 //@ chunk-530hfzwb.js:12349-12439 layout
-function clampOffsetOutsidePlaceholder(e, t, r = e.text) {
-  let n = clampCursorOffset(r, t);
-  return e.snapOutOfPlaceholder(n, "start") === n ? n : t;
+function clampOffsetOutsidePlaceholder(cursor, offset, r = cursor.text) {
+  let n = clampCursorOffset(r, offset);
+  return cursor.snapOutOfPlaceholder(n, "start") === n ? n : offset;
 }
+//@ chunk-530hfzwb.js:12439-12999 layout
 /**
  * gj/gk 的屏幕行移动：按折行后的行计算目标位置并保持目标列（wantedColumn）；返回 {offset, column, rowsRunOut}。
  */
-//@ chunk-530hfzwb.js:12439-12999 layout
 function computeScreenLineMove(motion, count, ctx) {
-  let { cursor: cursor } = ctx,
-    s = resolveMotion(motion, cursor, count),
-    wrappedLines = cursor.measuredText.getWrappedLines(),
-    line = cursor.getPosition().line,
-    f = (motion === "gj" ? wrappedLines.length - 1 - line : line) < count,
-    d = wrappedLines[line],
-    p = wrappedLines[s.getPosition().line],
-    h = d?.startOffset === 0 || d?.isPrecededByNewline,
-    x = p?.startOffset === 0 || p?.isPrecededByNewline;
-  if (s.equals(cursor) || !h || !x || !p) return { offset: s.offset, column: null, rowsRunOut: f };
-  let b = getCursorDisplayColumn(cursor, ctx.wantedColumn),
-    O = p.startOffset + p.text.length,
-    I = truncateStartToWidth(cursor.text, p.startOffset, O, b),
-    F = snapToPlaceholderEnd(cursor, I, p.startOffset),
-    D = !p.endsWithNewline && O < cursor.text.length;
-  return { offset: F === O && D ? cursor.measuredText.prevOffset(O) : F, column: b, rowsRunOut: f };
+  let { cursor } = ctx;
+  let motion_2 = resolveMotion(motion, cursor, count);
+  let wrappedLines = cursor.measuredText.getWrappedLines();
+  let line = cursor.getPosition().line;
+  let rowsRunOut = (motion === "gj" ? wrappedLines.length - 1 - line : line) < count;
+  let d = wrappedLines[line];
+  let p = wrappedLines[motion_2.getPosition().line];
+  let h = d?.startOffset === 0 || d?.isPrecededByNewline;
+  let x = p?.startOffset === 0 || p?.isPrecededByNewline;
+  if (motion_2.equals(cursor) || !h || !x || !p)
+    return {
+      offset: motion_2.offset,
+      column: null,
+      rowsRunOut,
+    };
+  let cursorDisplayColumn = getCursorDisplayColumn(cursor, ctx.wantedColumn);
+  let O = p.startOffset + p.text.length;
+  let I = truncateStartToWidth(cursor.text, p.startOffset, O, cursorDisplayColumn);
+  let F = snapToPlaceholderEnd(cursor, I, p.startOffset);
+  let D = !p.endsWithNewline && O < cursor.text.length;
+  return {
+    offset: F === O && D ? cursor.measuredText.prevOffset(O) : F,
+    column: cursorDisplayColumn,
+    rowsRunOut,
+  };
 }
 //@ chunk-530hfzwb.js:12999-13083 layout
 function getLineStartAt(text, offset) {
@@ -576,10 +704,10 @@ function getLineStartAt(text, offset) {
   );
   return index === -1 ? 0 : index + 1;
 }
+//@ chunk-530hfzwb.js:13083-13165 layout
 /**
  * 可视模式记录跨度：整行时为行数，否则为字素数（供 . 重复同样大小的可视操作）。
  */
-//@ chunk-530hfzwb.js:13083-13165 layout
 function measureSpan(e, t) {
   if (t) {
     let r = countCharInString(
@@ -594,16 +722,16 @@ function measureSpan(e, t) {
   }
   return countGraphemes(e);
 }
+//@ chunk-530hfzwb.js:13165-13449 fingerprint = getOperatorRangeForFind (0.907)
 /**
  * 用记录的跨度从当前光标重建可视范围（. 重复可视操作时用）。
  */
-//@ chunk-530hfzwb.js:13165-13449 fingerprint = getOperatorRangeForFind (0.907)
 function getRepeatVisualRange(cursor, target, _findType) {
   let text = cursor.text;
   if (_findType) {
-    let i = getLineStartAt(text, cursor.cursor.offset),
-      u = i;
-    for (let f = 0; f < target; f++) {
+    let lineStartAt = getLineStartAt(text, cursor.cursor.offset);
+    let u = lineStartAt;
+    for (let k = 0; k < target; k++) {
       let index = text.indexOf(
         `
 `,
@@ -615,234 +743,262 @@ function getRepeatVisualRange(cursor, target, _findType) {
       }
       u = index + 1;
     }
-    return { from: i, to: u };
+    return {
+      from: lineStartAt,
+      to: u,
+    };
   }
-  let offset = cursor.cursor.offset,
-    o = offset;
+  let offset = cursor.cursor.offset;
+  let o = offset;
   for (let i = 0; i < target && o < text.length; i++) o = cursor.cursor.measuredText.nextOffset(o);
-  return { from: offset, to: o };
+  return {
+    from: offset,
+    to: o,
+  };
 }
+//@ chunk-530hfzwb.js:13449-13676 layout = getOperatorRangeForFind (0.907)
 /**
  * 可视选区范围：字符可视为 [min, max+1)，整行可视扩到首行行首至末行换行之后。
  */
-//@ chunk-530hfzwb.js:13449-13676 layout = getOperatorRangeForFind (0.907)
 function getVisualRange(cursor, target, _findType) {
-  let from = Math.min(cursor, target.cursor.offset),
-    maxOffset = Math.max(cursor, target.cursor.offset);
-  if (!_findType) return { from: from, to: target.cursor.measuredText.nextOffset(maxOffset) };
-  let text = target.text,
-    i = getLineStartAt(text, from),
-    index = text.indexOf(
-      `
+  let from = Math.min(cursor, target.cursor.offset);
+  let maxOffset = Math.max(cursor, target.cursor.offset);
+  if (!_findType)
+    return {
+      from,
+      to: target.cursor.measuredText.nextOffset(maxOffset),
+    };
+  let text = target.text;
+  let from_2 = getLineStartAt(text, from);
+  let index = text.indexOf(
+    `
 `,
-      maxOffset,
-    ),
-    f = index === -1 ? text.length : index + 1;
-  return { from: i, to: f };
+    maxOffset,
+  );
+  let to = index === -1 ? text.length : index + 1;
+  return {
+    from: from_2,
+    to,
+  };
 }
 //@ chunk-530hfzwb.js:13676-13936 layout
-function indentLines(e, t, r, n) {
+function indentLines(lines, t, r, n) {
   for (let o = t; o <= r; o++) {
-    let i = e[o] ?? "";
+    let i = lines[o] ?? "";
     if (i === "") continue;
-    if (n === ">") e[o] = "  " + i;
-    else if (i.startsWith("  ")) e[o] = i.slice(2);
-    else if (i.startsWith("\t")) e[o] = i.slice(1);
+    if (n === ">") lines[o] = "  " + i;
+    else if (i.startsWith("  ")) lines[o] = i.slice(2);
+    else if (i.startsWith("\t")) lines[o] = i.slice(1);
     else {
       let u = 0;
       while (u < i.length && u < 2 && /\s/.test(i[u])) u++;
-      e[o] = i.slice(u);
+      lines[o] = i.slice(u);
     }
   }
 }
 //@ chunk-530hfzwb.js:13936-14267 layout
-function executeVisualJoin(e, t, r) {
-  let min = Math.min(e, t.cursor.offset),
-    max = Math.max(e, t.cursor.offset),
-    text = t.text,
-    i = countCharInString(
-      text.slice(0, min),
+function executeVisualJoin(anchor, ctx, r) {
+  let min = Math.min(anchor, ctx.cursor.offset);
+  let max = Math.max(anchor, ctx.cursor.offset);
+  let text = ctx.text;
+  let lineIndex = countCharInString(
+    text.slice(0, min),
+    `
+`,
+  );
+  let u =
+    countCharInString(
+      text.slice(min, max),
       `
 `,
-    ),
-    u =
-      countCharInString(
-        text.slice(min, max),
-        `
-`,
-      ) + 1,
-    parts = text.split(`
+    ) + 1;
+  let lines = text.split(`
 `);
-  if (i >= parts.length - 1) {
-    (t.setOffset(r ? getLineStartAt(t.cursor.text, min) : clampCursorOffset(t.cursor.text, min)),
-      t.recordChange({ type: "join", count: 2 }));
+  if (lineIndex >= lines.length - 1) {
+    ctx.setOffset(r ? getLineStartAt(ctx.cursor.text, min) : clampCursorOffset(ctx.cursor.text, min));
+    ctx.recordChange({
+      type: "join",
+      count: 2,
+    });
     return;
   }
-  let max_2 = Math.max(1, Math.min(u - 1, parts.length - i - 1));
-  executeJoin(parts, i, max_2, t);
+  let max_2 = Math.max(1, Math.min(u - 1, lines.length - lineIndex - 1));
+  executeJoin(lines, lineIndex, max_2, ctx);
 }
 //@ chunk-530hfzwb.js:14267-14363 layout
-function executeJoinIfNotLastLine(e, t) {
-  let parts = t.text.split(`
+function executeJoinIfNotLastLine(count, ctx) {
+  let lines = ctx.text.split(`
 `);
-  if (getLineIndexAt(t.cursor.text, t.cursor.offset) < parts.length - 1) executeJoinLines(e, t);
+  if (getLineIndexAt(ctx.cursor.text, ctx.cursor.offset) < lines.length - 1) executeJoinLines(count, ctx);
 }
 //@ chunk-530hfzwb.js:14363-14684 layout
-function executeVisualIndent(e, t, r, n) {
-  let min = Math.min(r, n.cursor.offset),
-    max = Math.max(r, n.cursor.offset),
-    text = n.text,
-    u = countCharInString(
-      text.slice(0, min),
+function executeVisualIndent(dir, count, anchor, n) {
+  let min = Math.min(anchor, n.cursor.offset);
+  let max = Math.max(anchor, n.cursor.offset);
+  let text = n.text;
+  let u = countCharInString(
+    text.slice(0, min),
+    `
+`,
+  );
+  let f =
+    u +
+    countCharInString(
+      text.slice(min, max),
       `
 `,
-    ),
-    f =
-      u +
-      countCharInString(
-        text.slice(min, max),
-        `
-`,
-      ),
-    parts = text.split(`
+    );
+  let lines = text.split(`
 `);
-  for (let x = 0; x < t; x++) indentLines(parts, u, f, e);
-  let joined = parts.join(`
-`),
-    h = wrapText(parts[u] ?? "");
-  (n.setText(joined),
-    n.setOffset(getLineStartOffset(parts, u) + h),
-    n.recordChange({ type: "visualIndent", dir: e, count: t, lines: f - u + 1 }));
+  for (let k = 0; k < count; k++) indentLines(lines, u, f, dir);
+  let joined = lines.join(`
+`);
+  let h = wrapText(lines[u] ?? "");
+  n.setText(joined);
+  n.setOffset(getLineStartOffset(lines, u) + h);
+  n.recordChange({
+    type: "visualIndent",
+    dir,
+    count,
+    lines: f - u + 1,
+  });
 }
 //@ chunk-530hfzwb.js:14684-14899 layout
-function repeatVisualIndent(e, t, r, n) {
-  let text = n.text,
-    parts = text.split(`
-`),
-    i = countCharInString(
-      text.slice(0, n.cursor.offset),
-      `
+function repeatVisualIndent(dir, count, lines, n) {
+  let text = n.text;
+  let lines_2 = text.split(`
+`);
+  let i = countCharInString(
+    text.slice(0, n.cursor.offset),
+    `
 `,
-    ),
-    min = Math.min(i + r - 1, parts.length - 1);
-  for (let p = 0; p < t; p++) indentLines(parts, i, min, e);
-  let joined = parts.join(`
-`),
-    d = wrapText(parts[i] ?? "");
-  (n.setText(joined), n.setOffset(getLineStartOffset(parts, i) + d));
+  );
+  let min = Math.min(i + lines - 1, lines_2.length - 1);
+  for (let k = 0; k < count; k++) indentLines(lines_2, i, min, dir);
+  let joined = lines_2.join(`
+`);
+  let d = wrapText(lines_2[i] ?? "");
+  n.setText(joined);
+  n.setOffset(getLineStartOffset(lines_2, i) + d);
 }
+//@ chunk-530hfzwb.js:14899-15594 layout
 /**
  * 对可视选区应用操作：整行 c 留一个空行进插入；整行 d 删除整行并把光标放到下一行首个非空；其他走 applyOperator。
  */
-//@ chunk-530hfzwb.js:14899-15594 layout
-function applyVisualOperator(e, t, r, n, s, o = !1) {
+function applyVisualOperator(e, from, r, n, s, o = false) {
   if (s && e === "change") {
-    let sliced = n.text.slice(t, r),
-      u = sliced;
+    let sliced = n.text.slice(from, r);
+    let u = sliced;
     if (
       !u.endsWith(`
 `)
     )
       u += `
 `;
-    n.setRegister(u, !0);
-    let sliced_2 = n.text.slice(0, t),
-      sliced_3 = n.text.slice(r),
-      p =
-        sliced_3 !== "" ||
-        (sliced.endsWith(`
+    n.setRegister(u, true);
+    let sliced_2 = n.text.slice(0, from);
+    let sliced_3 = n.text.slice(r);
+    let p =
+      sliced_3 !== "" ||
+      (sliced.endsWith(`
 `) &&
-          !o);
-    (n.setText(
+        !o);
+    n.setText(
       sliced_2 +
         (p
           ? `
 `
           : "") +
         sliced_3,
-    ),
-      n.enterInsert(t));
+    );
+    n.enterInsert(from);
     return;
   }
   if (s && e === "delete") {
-    let sliced = n.text.slice(t, r);
+    let sliced = n.text.slice(from, r);
     if (
       !sliced.endsWith(`
 `)
     )
       sliced += `
 `;
-    n.setRegister(sliced, !0);
-    let u = t;
+    n.setRegister(sliced, true);
+    let u = from;
     if (
       r === n.text.length &&
-      t > 0 &&
-      n.text[t - 1] ===
+      from > 0 &&
+      n.text[from - 1] ===
         `
 `
     )
       u -= 1;
-    let f = r < n.text.length,
-      d = n.text.slice(0, u) + n.text.slice(r);
+    let f = r < n.text.length;
+    let d = n.text.slice(0, u) + n.text.slice(r);
     n.setText(d);
-    let p = f ? t : getLineStartAt(d, d.length),
-      index = d.indexOf(
-        `
+    let p = f ? from : getLineStartAt(d, d.length);
+    let index = d.indexOf(
+      `
 `,
-        p,
-      ),
-      x = index === -1 ? d.length : index,
-      fromText = Cursor.fromText(d.slice(p, x), n.cursor.measuredText.columns + 1),
-      O = firstNonBlankOffsetSafe(fromText, f),
-      I = !f && fromText.placeholderStartingAt(O) !== null;
+      p,
+    );
+    let x = index === -1 ? d.length : index;
+    let b = Cursor.fromText(d.slice(p, x), n.cursor.measuredText.columns + 1);
+    let O = firstNonBlankOffsetSafe(b, f);
+    let I = !f && b.placeholderStartingAt(O) !== null;
     n.setOffset(I ? clampCursorOffset(d, d.length) : p + O);
     return;
   }
-  applyOperator(e, t, r, n, s);
+  applyOperator(e, from, r, n, s);
 }
 //@ chunk-530hfzwb.js:15594-15738 layout
-function executeVisualOperator(e, t, r, n) {
-  let { from: from, to: to } = getVisualRange(t, r, n),
-    i = measureSpan(r.text.slice(from, to), n);
-  (applyVisualOperator(e, from, to, r, n, selectionReachesTrailingNewline(t, r, n)),
-    recordRepeatableChange(r, { type: "visualOp", op: e, span: i, linewise: n }));
+function executeVisualOperator(e, anchor, r, n) {
+  let { from, to } = getVisualRange(anchor, r, n);
+  let span = measureSpan(r.text.slice(from, to), n);
+  applyVisualOperator(e, from, to, r, n, selectionReachesTrailingNewline(anchor, r, n));
+  recordRepeatableChange(r, {
+    type: "visualOp",
+    op: e,
+    span,
+    linewise: n,
+  });
 }
 //@ chunk-530hfzwb.js:15738-15839 layout
-function repeatVisualOperator(e, t, r, n) {
-  let { from: from, to: to } = getRepeatVisualRange(n, t, r);
-  if (from === to && !(r && n.text.length > 0)) return;
-  applyVisualOperator(e, from, to, n, r);
+function repeatVisualOperator(e, span, linewise, n) {
+  let { from, to } = getRepeatVisualRange(n, span, linewise);
+  if (from === to && !(linewise && n.text.length > 0)) return;
+  applyVisualOperator(e, from, to, n, linewise);
 }
 //@ chunk-530hfzwb.js:15839-16091 layout
-function repeatVisualChange(e, t, r) {
-  let { from: from, to: to } = getRepeatVisualRange(r, e, t);
-  if (from === to && !t) return;
-  let sliced = r.text.slice(from, to),
-    i = sliced;
+function repeatVisualChange(span, linewise, r) {
+  let { from, to } = getRepeatVisualRange(r, span, linewise);
+  if (from === to && !linewise) return;
+  let sliced = r.text.slice(from, to);
+  let i = sliced;
   if (
-    t &&
+    linewise &&
     !i.endsWith(`
 `)
   )
     i += `
 `;
-  r.setRegister(i, t);
-  let sliced_2 = r.text.slice(to),
-    f =
-      t &&
-      (sliced_2 !== "" ||
-        sliced.endsWith(`
+  r.setRegister(i, linewise);
+  let sliced_2 = r.text.slice(to);
+  let f =
+    linewise &&
+    (sliced_2 !== "" ||
+      sliced.endsWith(`
 `))
-        ? `
+      ? `
 ` + sliced_2
-        : sliced_2;
-  (r.setText(r.text.slice(0, from) + f), r.enterInsert(from));
+      : sliced_2;
+  r.setText(r.text.slice(0, from) + f);
+  r.enterInsert(from);
 }
 //@ chunk-530hfzwb.js:16091-16284 layout
-function replaceRangeWithChar(e, t, r, n) {
-  let sliced = n.text.slice(t, r),
-    o = "";
-  for (let { segment: segment } of getGraphemeSegmenter().segment(sliced))
+function replaceRangeWithChar(e, from, r, n) {
+  let sliced = n.text.slice(from, r);
+  let o = "";
+  for (let { segment } of getGraphemeSegmenter().segment(sliced))
     o +=
       segment ===
       `
@@ -850,190 +1006,218 @@ function replaceRangeWithChar(e, t, r, n) {
         ? `
 `
         : e;
-  let i = n.text.slice(0, t) + o + n.text.slice(r),
-    cursor = n.cursor;
-  (n.setText(i), n.setOffset(clampOffsetOutsidePlaceholder(cursor, t, i)));
+  let i = n.text.slice(0, from) + o + n.text.slice(r);
+  let cursor = n.cursor;
+  n.setText(i);
+  n.setOffset(clampOffsetOutsidePlaceholder(cursor, from, i));
 }
 //@ chunk-530hfzwb.js:16284-16434 layout
-function executeVisualReplace(e, t, r, n) {
-  let { from: from, to: to } = getVisualRange(t, r, n),
-    i = measureSpan(r.text.slice(from, to), n);
-  (replaceRangeWithChar(e, from, to, r),
-    r.recordChange({ type: "visualReplace", char: e, span: i, linewise: n }));
+function executeVisualReplace(char, anchor, r, n) {
+  let { from, to } = getVisualRange(anchor, r, n);
+  let span = measureSpan(r.text.slice(from, to), n);
+  replaceRangeWithChar(char, from, to, r);
+  r.recordChange({
+    type: "visualReplace",
+    char,
+    span,
+    linewise: n,
+  });
 }
 //@ chunk-530hfzwb.js:16434-16510 layout
-function repeatVisualReplace(e, t, r, n) {
-  let { from: from, to: to } = getRepeatVisualRange(n, t, r);
+function repeatVisualReplace(char, span, linewise, n) {
+  let { from, to } = getRepeatVisualRange(n, span, linewise);
   if (from === to) return;
-  replaceRangeWithChar(e, from, to, n);
+  replaceRangeWithChar(char, from, to, n);
 }
 //@ chunk-530hfzwb.js:16510-16819 layout
-function changeRangeCase(e, t, r, n) {
-  let sliced = n.text.slice(t, r),
-    o = "";
-  for (let { segment: segment } of getGraphemeSegmenter().segment(sliced))
+function changeRangeCase(e, from, r, n) {
+  let sliced = n.text.slice(from, r);
+  let o = "";
+  for (let { segment } of getGraphemeSegmenter().segment(sliced))
     if (e === "upper") o += segment.toUpperCase();
     else if (e === "lower") o += segment.toLowerCase();
     else o += segment === segment.toUpperCase() ? segment.toLowerCase() : segment.toUpperCase();
-  let i = n.text.slice(0, t) + o + n.text.slice(r),
-    cursor = n.cursor;
-  (n.setText(i), n.setOffset(clampOffsetOutsidePlaceholder(cursor, t, i)));
+  let i = n.text.slice(0, from) + o + n.text.slice(r);
+  let cursor = n.cursor;
+  n.setText(i);
+  n.setOffset(clampOffsetOutsidePlaceholder(cursor, from, i));
 }
 //@ chunk-530hfzwb.js:16819-16968 layout
-function executeVisualCase(e, t, r, n) {
-  let { from: from, to: to } = getVisualRange(t, r, n),
-    i = measureSpan(r.text.slice(from, to), n);
-  (changeRangeCase(e, from, to, r), r.recordChange({ type: "visualCase", caseOp: e, span: i, linewise: n }));
+function executeVisualCase(e, anchor, r, n) {
+  let { from, to } = getVisualRange(anchor, r, n);
+  let span = measureSpan(r.text.slice(from, to), n);
+  changeRangeCase(e, from, to, r);
+  r.recordChange({
+    type: "visualCase",
+    caseOp: e,
+    span,
+    linewise: n,
+  });
 }
 //@ chunk-530hfzwb.js:16968-17044 layout
-function repeatVisualCase(e, t, r, n) {
-  let { from: from, to: to } = getRepeatVisualRange(n, t, r);
+function repeatVisualCase(caseOp, span, linewise, n) {
+  let { from, to } = getRepeatVisualRange(n, span, linewise);
   if (from === to) return;
-  changeRangeCase(e, from, to, n);
+  changeRangeCase(caseOp, from, to, n);
 }
 //@ chunk-530hfzwb.js:17044-17376 layout
-function executeVisualPaste(e, t, r) {
-  let register = t.getRegister();
-  if (!register) return;
-  let registerIsLinewise = t.getRegisterIsLinewise(),
-    { from: from, to: to } = getVisualRange(e, t, r),
-    sliced = t.text.slice(from, to),
-    f = measureSpan(sliced, r);
-  (replaceRangeWithRegister(
-    register,
-    registerIsLinewise,
-    from,
-    to,
-    t,
-    r,
-    selectionReachesTrailingNewline(e, t, r),
-  ),
-    t.recordChange({
-      type: "visualPaste",
-      content: register,
-      registerLinewise: registerIsLinewise,
-      selectionEndsLine: sliced.endsWith(`
+function executeVisualPaste(anchor, t, r) {
+  let n = t.getRegister();
+  if (!n) return;
+  let s = t.getRegisterIsLinewise();
+  let { from, to } = getVisualRange(anchor, t, r);
+  let sliced = t.text.slice(from, to);
+  let span = measureSpan(sliced, r);
+  replaceRangeWithRegister(n, s, from, to, t, r, selectionReachesTrailingNewline(anchor, t, r));
+  t.recordChange({
+    type: "visualPaste",
+    content: n,
+    registerLinewise: s,
+    selectionEndsLine: sliced.endsWith(`
 `),
-      selectionOnOneLine: !sliced.slice(0, -1).includes(`
+    selectionOnOneLine: !sliced.slice(0, -1).includes(`
 `),
-      span: f,
-      linewise: r,
-    }));
+    span,
+    linewise: r,
+  });
 }
 //@ chunk-530hfzwb.js:17376-17530 layout
-function repeatVisualPaste(e, t, r, n, s, o, i) {
-  let { from: from, to: to } = getRepeatVisualRange(i, s, o);
-  if (from === to && !o) return;
+function repeatVisualPaste(
+  content,
+  registerLinewise,
+  selectionEndsLine,
+  selectionOnOneLine,
+  span,
+  linewise,
+  i,
+) {
+  let { from, to } = getRepeatVisualRange(i, span, linewise);
+  if (from === to && !linewise) return;
   replaceRangeWithRegister(
-    e,
-    t,
+    content,
+    registerLinewise,
     from,
-    !o && n ? Math.min(to, i.cursor.endOfLogicalLine().offset + (r ? 1 : 0)) : to,
+    !linewise && selectionOnOneLine
+      ? Math.min(to, i.cursor.endOfLogicalLine().offset + (selectionEndsLine ? 1 : 0))
+      : to,
     i,
-    o,
-    !1,
+    linewise,
+    false,
   );
 }
+//@ chunk-530hfzwb.js:17530-18034 layout
 /**
  * 可视粘贴：用寄存器内容替换选区，原选区内容进寄存器；处理整行/字符寄存器与整行/字符选区的四种组合。
  */
-//@ chunk-530hfzwb.js:17530-18034 layout
-function replaceRangeWithRegister(e, t, r, n, s, o, i) {
-  let sliced = s.text.slice(r, n),
-    f = t ? e.replace(/\n$/, "") : e,
-    d =
-      sliced.endsWith(`
-`) && !i,
-    p = e,
-    h = r;
+function replaceRangeWithRegister(e, t, from, n, s, o, i) {
+  let sliced = s.text.slice(from, n);
+  let f = t ? e.replace(/\n$/, "") : e;
+  let d =
+    sliced.endsWith(`
+`) && !i;
+  let p = e;
+  let h = from;
   if (o)
     p = d
       ? f +
         `
 `
       : f;
-  else if (t)
-    ((p = s.text
+  else if (t) {
+    p = s.text
       ? `
 ` +
         f +
         `
 `
       : `
-` + f),
-      (h = r + 1));
+` + f;
+    h = from + 1;
+  }
   let x = sliced;
   if (o && !d)
     x += `
 `;
   if (x) s.setRegister(x, o);
-  let b = s.text.slice(0, r) + p + s.text.slice(n);
-  if ((s.setText(b), o || t)) {
-    let fromText = Cursor.fromText(b, s.cursor.measuredText.columns, h),
-      I = firstNonBlankOffset(fromText);
-    s.setOffset(fromText.placeholderStartingAt(I) ? h : I);
+  let b = s.text.slice(0, from) + p + s.text.slice(n);
+  s.setText(b);
+  if (o || t) {
+    let O = Cursor.fromText(b, s.cursor.measuredText.columns, h);
+    let I = firstNonBlankOffset(O);
+    s.setOffset(O.placeholderStartingAt(I) ? h : I);
   } else if (
     p.includes(`
 `)
   )
-    s.setOffset(clampOffsetOutsidePlaceholder(s.cursor, r, b));
+    s.setOffset(clampOffsetOutsidePlaceholder(s.cursor, from, b));
   else {
     let O = lastGrapheme(p);
-    s.setOffset(Math.max(r, r + p.length - (O.length || 1)));
+    s.setOffset(Math.max(from, from + p.length - (O.length || 1)));
   }
 }
+//@ chunk-530hfzwb.js:18034-18245 fingerprint = executeOperatorG (0.768)
 /**
  * 操作符 + G（如 dG、d3G）：整行操作到最后一行或第 count 行。
  */
-//@ chunk-530hfzwb.js:18034-18245 fingerprint = executeOperatorG (0.768)
 function executeOperatorG(op, count, ctx) {
   let target = count === 0 ? ctx.cursor.startOfLastLine() : ctx.cursor.goToLine(count);
-  (applyLinewiseOperator(
+  applyLinewiseOperator(
     op,
     getLineIndexAt(ctx.text, ctx.cursor.offset),
     getLineIndexAt(ctx.text, target.offset),
     ctx,
     Math.min(ctx.cursor.offset, firstNonBlankOffset(target)),
-  ),
-    recordRepeatableChange(ctx, { type: "operator", op: op, motion: "G", count: count }));
+  );
+  recordRepeatableChange(ctx, {
+    type: "operator",
+    op,
+    motion: "G",
+    count,
+  });
 }
+//@ chunk-530hfzwb.js:18245-18458 fingerprint = executeOperatorGg (0.767)
 /**
  * 操作符 + gg（如 dgg）：整行操作到第一行或第 count 行。
  */
-//@ chunk-530hfzwb.js:18245-18458 fingerprint = executeOperatorGg (0.767)
 function executeOperatorGg(op, count, ctx) {
   let target = count === 1 ? ctx.cursor.startOfFirstLine() : ctx.cursor.goToLine(count);
-  (applyLinewiseOperator(
+  applyLinewiseOperator(
     op,
     getLineIndexAt(ctx.text, ctx.cursor.offset),
     getLineIndexAt(ctx.text, target.offset),
     ctx,
     Math.min(ctx.cursor.offset, firstNonBlankOffset(target)),
-  ),
-    recordRepeatableChange(ctx, { type: "operator", op: op, motion: "gg", count: count }));
+  );
+  recordRepeatableChange(ctx, {
+    type: "operator",
+    op,
+    motion: "gg",
+    count,
+  });
 }
+//@ chunk-530hfzwb.js:18458-19048 affinity = applyOperator (0.753)
 /**
  * 按行号范围做整行操作：整行内容写寄存器；yank 只移光标；delete 删行后光标到相应行首个非空；change 留一个空行进入插入模式。
  */
-//@ chunk-530hfzwb.js:18458-19048 affinity = applyOperator (0.753)
 function applyLinewiseOperator(op, fromLine, toLine, ctx, cursorOffset) {
-  let parts = ctx.text.split(`
-`),
-    min = Math.min(fromLine, toLine),
-    min_2 = Math.min(Math.max(fromLine, toLine) + 1, parts.length),
-    content = parts.slice(0, min),
-    sliced = parts.slice(min_2),
-    p = getLineStartOffset(parts, min),
-    joined = parts
-      .slice(min, min_2)
-      .map(
-        (x) =>
-          x +
-          `
+  let lines = ctx.text.split(`
+`);
+  let min = Math.min(fromLine, toLine);
+  let min_2 = Math.min(Math.max(fromLine, toLine) + 1, lines.length);
+  let content = lines.slice(0, min);
+  let sliced = lines.slice(min_2);
+  let lineStartOffset = getLineStartOffset(lines, min);
+  let joined = lines
+    .slice(min, min_2)
+    .map(
+      (line) =>
+        line +
+        `
 `,
-      )
-      .join("");
-  if ((ctx.setRegister(joined, !0), op === "yank")) {
+    )
+    .join("");
+  ctx.setRegister(joined, true);
+  if (op === "yank") {
     let x = clampCursorOffset(ctx.text, cursorOffset);
     ctx.setOffset(
       cursorOffset === ctx.text.length
@@ -1046,20 +1230,21 @@ function applyLinewiseOperator(op, fromLine, toLine, ctx, cursorOffset) {
       x.join(`
 `),
     );
-    let maxOff = Math.max(0, Math.min(min, x.length - 1)),
-      fromText = Cursor.fromText(x[maxOff] ?? "", ctx.cursor.measuredText.columns + 1);
-    ctx.setOffset(getLineStartOffset(x, maxOff) + firstNonBlankOffsetSafe(fromText, sliced.length > 0));
-  } else if (op === "change")
-    (ctx.setText(
+    let maxOff = Math.max(0, Math.min(min, x.length - 1));
+    let O = Cursor.fromText(x[maxOff] ?? "", ctx.cursor.measuredText.columns + 1);
+    ctx.setOffset(getLineStartOffset(x, maxOff) + firstNonBlankOffsetSafe(O, sliced.length > 0));
+  } else if (op === "change") {
+    ctx.setText(
       [...content, "", ...sliced].join(`
 `),
-    ),
-      ctx.enterInsert(p));
+    );
+    ctx.enterInsert(lineStartOffset);
+  }
 }
 //@ chunk-530hfzwb.js:19048-19092 affinity
-function getLineIndexAt(e, t) {
+function getLineIndexAt(text, offset) {
   return countCharInString(
-    e.slice(0, t),
+    text.slice(0, offset),
     `
 `,
   );
@@ -1074,18 +1259,16 @@ function firstNonBlankOffsetSafe(e, t) {
 }
 //@ chunk-530hfzwb.js:19346-19493 placement
 function snapOffsetOutOfPlaceholder(e, t) {
-  let snapOutOfPlaceholder = e.snapOutOfPlaceholder(t, "start");
-  if (snapOutOfPlaceholder === t) return t;
-  let snapOutOfPlaceholder_2 = e.snapOutOfPlaceholder(t, "end");
-  return isImagePlaceholder(e.text.slice(snapOutOfPlaceholder, snapOutOfPlaceholder_2))
-    ? snapOutOfPlaceholder_2
-    : snapOutOfPlaceholder;
+  let r = e.snapOutOfPlaceholder(t, "start");
+  if (r === t) return t;
+  let n = e.snapOutOfPlaceholder(t, "end");
+  return isImagePlaceholder(e.text.slice(r, n)) ? n : r;
 }
 //@ chunk-530hfzwb.js:19493-19605 placement
-function firstNonBlankOffset(e) {
-  let offset = e.startOfLogicalLine().offset,
-    offset_2 = e.endOfLogicalLine().offset;
-  return offset + wrapText(e.text.slice(offset, offset_2));
+function firstNonBlankOffset(target) {
+  let offset = target.startOfLogicalLine().offset;
+  let offset_2 = target.endOfLogicalLine().offset;
+  return offset + wrapText(target.text.slice(offset, offset_2));
 }
 //@ chunk-530hfzwb.js:19605-19699 placement
 function selectionReachesTrailingNewline(e, t, r) {
@@ -1098,15 +1281,15 @@ function selectionReachesTrailingNewline(e, t, r) {
 }
 //@ chunk-530hfzwb.js:19699-19711 placement
 var VIM_ESCAPE_REMAP_TIMEOUT_MS = 1000;
+//@ chunk-530hfzwb.js:19711-19939 placement
 /**
  * 读取 vimInsertModeRemaps 设置：只接受映射到 <Esc> 的两字符可见序列（如 jk、jj）。
  */
-//@ chunk-530hfzwb.js:19711-19939 placement
 function parseInsertModeEscapeRemaps(e) {
   let t = new Map();
-  for (let [r, n] of Object.entries(e)) {
-    if (typeof n !== "string" || n.toLowerCase() !== "<esc>") continue;
-    let normalized = r.normalize("NFC");
+  for (let [key, value] of Object.entries(e)) {
+    if (typeof value !== "string" || value.toLowerCase() !== "<esc>") continue;
+    let normalized = key.normalize("NFC");
     if (!/^[^\p{C}\p{Z}]{2}$/u.test(normalized) || countGraphemes(normalized) !== 2) continue;
     t.set(normalized, "<Esc>");
   }
@@ -1116,34 +1299,31 @@ function parseInsertModeEscapeRemaps(e) {
 function getInsertModeEscapeRemaps() {
   return parseInsertModeEscapeRemaps(getSecuritySensitiveSetting("vimInsertModeRemaps")[0] ?? {});
 }
-
 export {
+  getInsertModeEscapeRemaps,
   clampCursorOffset,
   clampOffsetOutsidePlaceholder,
-  getInsertModeEscapeRemaps,
   snapToPlaceholderEnd,
-  executeToggleCase,
   executeX,
   executeSubstitute,
-  executeLineOp,
-  executeJoinLines,
-  executePaste,
-  executeOperatorMotion,
-  executeOpenLine,
-  executeOperatorG,
-  executeOperatorFind,
-  executeOperatorTextObj,
-  computeScreenLineMove,
-  executeOperatorGg,
   executeReplace,
+  executeToggleCase,
   executeIndent,
   executeJoinIfNotLastLine,
+  executeOpenLine,
+  executeLineOp,
+  executeOperatorGg,
+  executeOperatorG,
+  executeOperatorMotion,
+  executeOperatorFind,
+  executeOperatorTextObj,
   repeatVisualOperator,
   repeatVisualReplace,
   repeatVisualCase,
   repeatVisualPaste,
   repeatVisualIndent,
   repeatVisualChange,
+  executePaste,
   VIM_ESCAPE_REMAP_TIMEOUT_MS,
   executeVisualOperator,
   executeVisualReplace,
@@ -1151,4 +1331,6 @@ export {
   executeVisualPaste,
   executeVisualJoin,
   executeVisualIndent,
+  executeJoinLines,
+  computeScreenLineMove,
 };

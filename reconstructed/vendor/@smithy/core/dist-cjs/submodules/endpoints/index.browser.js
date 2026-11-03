@@ -6,332 +6,404 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../../runtime/bun-runtime.js";
-import { W1e } from "../../../../types/dist-cjs/index.js";
+import { require_types } from "../../../../types/dist-cjs/index.js";
 
 //@ chunk-a3vzsfpr.js:819-7701 cjs-fingerprint
-var YJ = x(function ($e) {
-  var O = W1e();
-  class U {
+var require_index_browser = x(function (cjsExports) {
+  var EndpointURLScheme = require_types();
+  class EndpointCache {
     capacity;
     data = new Map();
     parameters = [];
-    constructor({ size: e, params: n }) {
-      if (((this.capacity = e ?? 50), n)) this.parameters = n;
+    constructor({ size, params }) {
+      this.capacity = size ?? 50;
+      if (params) this.parameters = params;
     }
-    get(e, n) {
-      let hash = this.hash(e);
-      if (hash === !1) return n();
-      if (!this.data.has(hash)) {
+    get(endpointParams, resolver) {
+      let key = this.hash(endpointParams);
+      if (key === false) return resolver();
+      if (!this.data.has(key)) {
         if (this.data.size > this.capacity + 10) {
-          let keys = this.data.keys(),
-            s = 0;
-          while (!0) {
-            let { value: o, done: i } = keys.next();
-            if ((this.data.delete(o), i || ++s > 10)) break;
+          let keys = this.data.keys();
+          let i_2 = 0;
+          while (true) {
+            let { value, done } = keys.next();
+            this.data.delete(value);
+            if (done || ++i_2 > 10) break;
           }
         }
-        this.data.set(hash, n());
+        this.data.set(key, resolver());
       }
-      return this.data.get(hash);
+      return this.data.get(key);
     }
     size() {
       return this.data.size;
     }
-    hash(e) {
-      let n = "",
-        { parameters: parameters } = this;
-      if (parameters.length === 0) return !1;
-      for (let r of parameters) {
-        let s = String(e[r] ?? "");
-        if (s.includes("|;")) return !1;
-        n += s + "|;";
+    hash(endpointParams) {
+      let buffer = "";
+      let { parameters } = this;
+      if (parameters.length === 0) return false;
+      for (let param of parameters) {
+        let val = String(endpointParams[param] ?? "");
+        if (val.includes("|;")) return false;
+        buffer += val + "|;";
       }
-      return n;
+      return buffer;
     }
   }
-  var regExp = new RegExp(
-      "^(?:25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]\\d|\\d)(?:\\.(?:25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]\\d|\\d)){3}$",
-    ),
-    A = (e) => regExp.test(e) || (e.startsWith("[") && e.endsWith("]")),
-    regExp_2 = new RegExp("^(?!.*-$)(?!-)[a-zA-Z0-9-]{1,63}$"),
-    m = (e, n = !1) => {
-      if (!n) return regExp_2.test(e);
-      let parts = e.split(".");
-      for (let r of parts) if (!m(r)) return !1;
-      return !0;
-    },
-    I = {},
-    N = "endpoints";
-  function d(e) {
-    if (typeof e !== "object" || e == null) return e;
-    if ("ref" in e) return `$${d(e.ref)}`;
-    if ("fn" in e) return `${e.fn}(${(e.argv || []).map(d).join(", ")})`;
-    return JSON.stringify(e, null, 2);
+  var IP_V4_REGEX = new RegExp(
+    "^(?:25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]\\d|\\d)(?:\\.(?:25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]\\d|\\d)){3}$",
+  );
+  var isIpAddress = (value) => IP_V4_REGEX.test(value) || (value.startsWith("[") && value.endsWith("]"));
+  var regExp = new RegExp("^(?!.*-$)(?!-)[a-zA-Z0-9-]{1,63}$");
+  var m = (e, n = false) => {
+    if (!n) return regExp.test(e);
+    let parts = e.split(".");
+    for (let r of parts) if (!m(r)) return false;
+    return true;
+  };
+  var I = {};
+  var debugId = "endpoints";
+  function toDebugString(input) {
+    if (typeof input !== "object" || input == null) return input;
+    if ("ref" in input) return `$${toDebugString(input.ref)}`;
+    if ("fn" in input) return `${input.fn}(${(input.argv || []).map(toDebugString).join(", ")})`;
+    return JSON.stringify(input, null, 2);
   }
   class EndpointError extends Error {
-    constructor(e) {
-      super(e);
+    constructor(message) {
+      super(message);
       this.name = "EndpointError";
     }
   }
-  var ae = (e, n) => e === n,
-    le = (e) => {
-      let parts = e.split("."),
-        t = [];
-      for (let r of parts) {
-        let index = r.indexOf("[");
-        if (index !== -1) {
-          if (r.indexOf("]") !== r.length - 1) throw new EndpointError(`Path: '${e}' does not end with ']'`);
-          let sliced = r.slice(index + 1, -1);
-          if (Number.isNaN(parseInt(sliced)))
-            throw new EndpointError(`Invalid array index: '${sliced}' in path: '${e}'`);
-          if (index !== 0) t.push(r.slice(0, index));
-          t.push(sliced);
-        } else t.push(r);
+  var coalesce = (e, args) => e === args;
+  var getAttrPathList = (path) => {
+    let parts = path.split(".");
+    let pathList = [];
+    for (let part of parts) {
+      let squareBracketIndex = part.indexOf("[");
+      if (squareBracketIndex !== -1) {
+        if (part.indexOf("]") !== part.length - 1)
+          throw new EndpointError(`Path: '${path}' does not end with ']'`);
+        let arrayIndex = part.slice(squareBracketIndex + 1, -1);
+        if (Number.isNaN(parseInt(arrayIndex)))
+          throw new EndpointError(`Invalid array index: '${arrayIndex}' in path: '${path}'`);
+        if (squareBracketIndex !== 0) pathList.push(part.slice(0, squareBracketIndex));
+        pathList.push(arrayIndex);
+      } else pathList.push(part);
+    }
+    return pathList;
+  };
+  var getAttr = (value, path) =>
+    getAttrPathList(path).reduce((acc, index) => {
+      if (typeof acc !== "object")
+        throw new EndpointError(`Index '${index}' in '${path}' not found in '${JSON.stringify(value)}'`);
+      else if (Array.isArray(acc)) return acc[parseInt(index)];
+      return acc[index];
+    }, value);
+  var isSet = (value) => value != null;
+  var not = (value) => !value;
+  var DEFAULT_PORTS = {
+    [EndpointURLScheme.EndpointURLScheme.HTTP]: 80,
+    [EndpointURLScheme.EndpointURLScheme.HTTPS]: 443,
+  };
+  var parseURL = (value) => {
+    let whatwgURL = (() => {
+      try {
+        if (value instanceof URL) return value;
+        if (typeof value === "object" && "hostname" in value) {
+          let { hostname, port, protocol = "", path = "", query = {} } = value;
+          let url = new URL(`${protocol}//${hostname}${port ? `:${port}` : ""}${path}`);
+          url.search = Object.entries(query)
+            .map(([k, v]) => `${k}=${v}`)
+            .join("&");
+          return url;
+        }
+        return new URL(value);
+      } catch (ignored) {
+        return null;
       }
-      return t;
-    },
-    D = (e, n) =>
-      le(n).reduce((t, r) => {
-        if (typeof t !== "object")
-          throw new EndpointError(`Index '${r}' in '${n}' not found in '${JSON.stringify(e)}'`);
-        else if (Array.isArray(t)) return t[parseInt(r)];
-        return t[r];
-      }, e),
-    ue = (e) => e != null,
-    de = (e) => !e,
-    S = { [O.EndpointURLScheme.HTTP]: 80, [O.EndpointURLScheme.HTTPS]: 443 },
-    fe = (e) => {
-      let n = (() => {
-        try {
-          if (e instanceof URL) return e;
-          if (typeof e === "object" && "hostname" in e) {
-            let {
-                hostname: hostname,
-                port: port,
-                protocol: protocol = "",
-                path: path = "",
-                query: query = {},
-              } = e,
-              T = new URL(`${protocol}//${hostname}${port ? `:${port}` : ""}${path}`);
-            return (
-              (T.search = Object.entries(query)
-                .map(([Y, ee]) => `${Y}=${ee}`)
-                .join("&")),
-              T
-            );
-          }
-          return new URL(e);
-        } catch (error) {
-          return null;
-        }
-      })();
-      if (!n) return (console.error(`Unable to parse ${JSON.stringify(e)} as a whatwg URL.`), null);
-      let href = n.href,
-        { host: host, hostname: hostname, pathname: pathname, protocol: protocol, search: search } = n;
-      if (search) return null;
-      let sliced = protocol.slice(0, -1);
-      if (!Object.values(O.EndpointURLScheme).includes(sliced)) return null;
-      let c = A(hostname),
-        g =
-          href.includes(`${host}:${S[sliced]}`) ||
-          (typeof e === "string" && e.includes(`${host}:${S[sliced]}`)),
-        p = `${host}${g ? `:${S[sliced]}` : ""}`;
-      return {
-        scheme: sliced,
-        authority: p,
-        path: pathname,
-        normalizedPath: pathname.endsWith("/") ? pathname : `${pathname}/`,
-        isIp: c,
-      };
-    },
-    ge = (e, n) => e === n,
-    pe = (e, n, t, r) => {
-      if (n >= t || e.length < t) return null;
-      if (!r) return e.substring(n, t);
-      return e.substring(e.length - t, e.length - n);
-    },
-    Ee = (e) =>
-      encodeURIComponent(e).replace(/[!*'()]/g, (n) => `%${n.charCodeAt(0).toString(16).toUpperCase()}`),
-    Ne = {
-      booleanEquals: ae,
-      getAttr: D,
-      isSet: ue,
-      isValidHostLabel: m,
-      not: de,
-      parseURL: fe,
-      stringEquals: ge,
-      substring: pe,
-      uriEncode: Ee,
-    },
-    b = (e, n) => {
-      let t = [],
-        r = { ...n.endpointParams, ...n.referenceRecord },
-        s = 0;
-      while (s < e.length) {
-        let index = e.indexOf("{", s);
-        if (index === -1) {
-          t.push(e.slice(s));
-          break;
-        }
-        t.push(e.slice(s, index));
-        let index_2 = e.indexOf("}", index);
-        if (index_2 === -1) {
-          t.push(e.slice(index));
-          break;
-        }
-        if (e[index + 1] === "{" && e[index_2 + 1] === "}")
-          (t.push(e.slice(index + 1, index_2)), (s = index_2 + 2));
-        let substring = e.substring(index + 1, index_2);
-        if (substring.includes("#")) {
-          let [l, c] = substring.split("#");
-          t.push(D(r[l], c));
-        } else t.push(r[substring]);
-        s = index_2 + 1;
-      }
-      return t.join("");
-    },
-    he = ({ ref: ref }, n) => ({ ...n.endpointParams, ...n.referenceRecord })[ref],
-    h = (e, n, t) => {
-      if (typeof e === "string") return b(e, t);
-      else if (e.fn) return F.callFunction(e, t);
-      else if (e.ref) return he(e, t);
-      throw new EndpointError(`'${n}': ${String(e)} is not a string, function or reference.`);
-    },
-    C = ({ fn: fn, argv: argv }, t) => {
-      let mapped = argv.map((o) =>
-          ["boolean", "number"].includes(typeof o) ? o : F.evaluateExpression(o, "arg", t),
-        ),
-        parts = fn.split(".");
-      if (parts[0] in I && parts[1] != null) return I[parts[0]][parts[1]](...mapped);
-      return Ne[fn](...mapped);
-    },
-    F = { evaluateExpression: h, callFunction: C },
-    _e = ({ assign: assign, ...n }, t) => {
-      if (assign && assign in t.referenceRecord)
-        throw new EndpointError(`'${assign}' is already defined in Reference Record.`);
-      let r = C(n, t);
-      return (
-        t.logger?.debug?.(`${N} evaluateCondition: ${d(n)} = ${d(r)}`),
-        { result: r === "" ? !0 : !!r, ...(assign != null && { toAssign: { name: assign, value: r } }) }
-      );
-    },
-    w = (e = [], n) => {
-      let t = {};
-      for (let r of e) {
-        let { result: s, toAssign: toAssign } = _e(r, {
-          ...n,
-          referenceRecord: { ...n.referenceRecord, ...t },
-        });
-        if (!s) return { result: s };
-        if (toAssign)
-          ((t[toAssign.name] = toAssign.value),
-            n.logger?.debug?.(`${N} assign: ${toAssign.name} := ${d(toAssign.value)}`));
-      }
-      return { result: !0, referenceRecord: t };
-    },
-    Re = (e, n) =>
-      Object.entries(e).reduce(
-        (t, [r, s]) => ({
-          ...t,
-          [r]: s.map((o) => {
-            let i = h(o, "Header value entry", n);
-            if (typeof i !== "string") throw new EndpointError(`Header '${r}' value '${i}' is not a string`);
-            return i;
-          }),
-        }),
-        {},
-      ),
-    y = (e, n) => Object.entries(e).reduce((t, [r, s]) => ({ ...t, [r]: G.getEndpointProperty(s, n) }), {}),
-    L = (e, n) => {
-      if (Array.isArray(e)) return e.map((t) => L(t, n));
-      switch (typeof e) {
-        case "string":
-          return b(e, n);
-        case "object":
-          if (e === null) throw new EndpointError(`Unexpected endpoint property: ${e}`);
-          return G.getEndpointProperties(e, n);
-        case "boolean":
-          return e;
-        default:
-          throw new EndpointError(`Unexpected endpoint property type: ${typeof e}`);
-      }
-    },
-    G = { getEndpointProperty: L, getEndpointProperties: y },
-    Se = (e, n) => {
-      let t = h(e, "Endpoint URL", n);
-      if (typeof t === "string")
-        try {
-          return new URL(t);
-        } catch (error) {
-          throw (console.error(`Failed to construct URL with ${t}`, error), error);
-        }
-      throw new EndpointError(`Endpoint URL must be a string, got ${typeof t}`);
-    },
-    Oe = (e, n) => {
-      let { conditions: conditions, endpoint: endpoint } = e,
-        { result: s, referenceRecord: referenceRecord } = w(conditions, n);
-      if (!s) return;
-      let i = { ...n, referenceRecord: { ...n.referenceRecord, ...referenceRecord } },
-        { url: url, properties: properties, headers: headers } = endpoint;
-      return (
-        n.logger?.debug?.(`${N} Resolving endpoint from template: ${d(endpoint)}`),
-        {
-          ...(headers != null && { headers: Re(headers, i) }),
-          ...(properties != null && { properties: y(properties, i) }),
-          url: Se(url, i),
-        }
-      );
-    },
-    Ie = (e, n) => {
-      let { conditions: conditions, error: error } = e,
-        { result: s, referenceRecord: referenceRecord } = w(conditions, n);
-      if (!s) return;
-      throw new EndpointError(
-        h(error, "Error", { ...n, referenceRecord: { ...n.referenceRecord, ...referenceRecord } }),
-      );
-    },
-    V = (e, n) => {
-      for (let t of e)
-        if (t.type === "endpoint") {
-          let r = Oe(t, n);
-          if (r) return r;
-        } else if (t.type === "error") Ie(t, n);
-        else if (t.type === "tree") {
-          let evaluateTreeRule = z.evaluateTreeRule(t, n);
-          if (evaluateTreeRule) return evaluateTreeRule;
-        } else throw new EndpointError(`Unknown endpoint rule: ${t}`);
-      throw new EndpointError("Rules evaluation failed");
-    },
-    me = (e, n) => {
-      let { conditions: conditions, rules: rules } = e,
-        { result: s, referenceRecord: referenceRecord } = w(conditions, n);
-      if (!s) return;
-      return z.evaluateRules(rules, { ...n, referenceRecord: { ...n.referenceRecord, ...referenceRecord } });
-    },
-    z = { evaluateRules: V, evaluateTreeRule: me },
-    we = (e, n) => {
-      let { endpointParams: endpointParams, logger: logger } = n,
-        { parameters: parameters, rules: rules } = e;
-      n.logger?.debug?.(`${N} Initial EndpointParams: ${d(endpointParams)}`);
-      let mapped = Object.entries(parameters)
-        .filter(([, c]) => c.default != null)
-        .map(([c, g]) => [c, g.default]);
-      if (mapped.length > 0) for (let [c, g] of mapped) endpointParams[c] = endpointParams[c] ?? g;
-      let mapped_2 = Object.entries(parameters)
-        .filter(([, c]) => c.required)
-        .map(([c]) => c);
-      for (let c of mapped_2)
-        if (endpointParams[c] == null) throw new EndpointError(`Missing required parameter: '${c}'`);
-      let l = V(rules, { endpointParams: endpointParams, logger: logger, referenceRecord: {} });
-      return (n.logger?.debug?.(`${N} Resolved endpoint: ${d(l)}`), l);
+    })();
+    if (!whatwgURL) {
+      console.error(`Unable to parse ${JSON.stringify(value)} as a whatwg URL.`);
+      return null;
+    }
+    let urlString = whatwgURL.href;
+    let { host, hostname, pathname, protocol, search } = whatwgURL;
+    if (search) return null;
+    let scheme = protocol.slice(0, -1);
+    if (!Object.values(EndpointURLScheme.EndpointURLScheme).includes(scheme)) return null;
+    let isIp = isIpAddress(hostname);
+    let inputContainsDefaultPort =
+      urlString.includes(`${host}:${DEFAULT_PORTS[scheme]}`) ||
+      (typeof value === "string" && value.includes(`${host}:${DEFAULT_PORTS[scheme]}`));
+    let authority = `${host}${inputContainsDefaultPort ? `:${DEFAULT_PORTS[scheme]}` : ""}`;
+    return {
+      scheme,
+      authority,
+      path: pathname,
+      normalizedPath: pathname.endsWith("/") ? pathname : `${pathname}/`,
+      isIp,
     };
-  $e.EndpointCache = U;
-  $e.EndpointError = EndpointError;
-  $e.customEndpointFunctions = I;
-  $e.isIpAddress = A;
-  $e.isValidHostLabel = m;
-  $e.resolveEndpoint = we;
+  };
+  var stringEquals = (e, n) => e === n;
+  var substring = (input, start, stop, reverse) => {
+    if (start >= stop || input.length < stop) return null;
+    if (!reverse) return input.substring(start, stop);
+    return input.substring(input.length - stop, input.length - start);
+  };
+  var uriEncode = (value) =>
+    encodeURIComponent(value).replace(/[!*'()]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
+  var Ne = {
+    booleanEquals: coalesce,
+    getAttr,
+    isSet,
+    isValidHostLabel: m,
+    not,
+    parseURL,
+    stringEquals,
+    substring,
+    uriEncode,
+  };
+  var evaluateTemplate = (template, options) => {
+    let evaluatedTemplateArr = [];
+    let referenceRecord = {
+      ...options.endpointParams,
+      ...options.referenceRecord,
+    };
+    let currentIndex = 0;
+    while (currentIndex < template.length) {
+      let openingBraceIndex = template.indexOf("{", currentIndex);
+      if (openingBraceIndex === -1) {
+        evaluatedTemplateArr.push(template.slice(currentIndex));
+        break;
+      }
+      evaluatedTemplateArr.push(template.slice(currentIndex, openingBraceIndex));
+      let closingBraceIndex = template.indexOf("}", openingBraceIndex);
+      if (closingBraceIndex === -1) {
+        evaluatedTemplateArr.push(template.slice(openingBraceIndex));
+        break;
+      }
+      if (template[openingBraceIndex + 1] === "{" && template[closingBraceIndex + 1] === "}") {
+        evaluatedTemplateArr.push(template.slice(openingBraceIndex + 1, closingBraceIndex));
+        currentIndex = closingBraceIndex + 2;
+      }
+      let parameterName = template.substring(openingBraceIndex + 1, closingBraceIndex);
+      if (parameterName.includes("#")) {
+        let [refName, attrName] = parameterName.split("#");
+        evaluatedTemplateArr.push(getAttr(referenceRecord[refName], attrName));
+      } else evaluatedTemplateArr.push(referenceRecord[parameterName]);
+      currentIndex = closingBraceIndex + 1;
+    }
+    return evaluatedTemplateArr.join("");
+  };
+  var getReferenceValue = ({ ref }, options) =>
+    ({
+      ...options.endpointParams,
+      ...options.referenceRecord,
+    })[ref];
+  var evaluateExpression = (obj, keyName, options) => {
+    if (typeof obj === "string") return evaluateTemplate(obj, options);
+    else if (obj.fn) return group$2.callFunction(obj, options);
+    else if (obj.ref) return getReferenceValue(obj, options);
+    throw new EndpointError(`'${keyName}': ${String(obj)} is not a string, function or reference.`);
+  };
+  var callFunction = ({ fn, argv }, options) => {
+    let evaluatedArgs = argv.map((arg) =>
+      ["boolean", "number"].includes(typeof arg) ? arg : group$2.evaluateExpression(arg, "arg", options),
+    );
+    let namespaceSeparatorIndex = fn.split(".");
+    if (namespaceSeparatorIndex[0] in I && namespaceSeparatorIndex[1] != null)
+      return I[namespaceSeparatorIndex[0]][namespaceSeparatorIndex[1]](...evaluatedArgs);
+    return Ne[fn](...evaluatedArgs);
+  };
+  var group$2 = {
+    evaluateExpression,
+    callFunction,
+  };
+  var _e = ({ assign, ...condition }, options) => {
+    if (assign && assign in options.referenceRecord)
+      throw new EndpointError(`'${assign}' is already defined in Reference Record.`);
+    let value = callFunction(condition, options);
+    options.logger?.debug?.(
+      `${debugId} evaluateCondition: ${toDebugString(condition)} = ${toDebugString(value)}`,
+    );
+    return {
+      result: value === "" ? true : !!value,
+      ...(assign != null && {
+        toAssign: {
+          name: assign,
+          value,
+        },
+      }),
+    };
+  };
+  var evaluateConditions = (conditions = [], options) => {
+    let t = {};
+    for (let r of conditions) {
+      let { result: s, toAssign } = _e(r, {
+        ...options,
+        referenceRecord: {
+          ...options.referenceRecord,
+          ...t,
+        },
+      });
+      if (!s)
+        return {
+          result: s,
+        };
+      if (toAssign) {
+        t[toAssign.name] = toAssign.value;
+        options.logger?.debug?.(`${debugId} assign: ${toAssign.name} := ${toDebugString(toAssign.value)}`);
+      }
+    }
+    return {
+      result: true,
+      referenceRecord: t,
+    };
+  };
+  var getEndpointHeaders = (headers, options) =>
+    Object.entries(headers).reduce(
+      (acc, [headerKey, headerVal]) => ({
+        ...acc,
+        [headerKey]: headerVal.map((headerValEntry) => {
+          let processedExpr = evaluateExpression(headerValEntry, "Header value entry", options);
+          if (typeof processedExpr !== "string")
+            throw new EndpointError(`Header '${headerKey}' value '${processedExpr}' is not a string`);
+          return processedExpr;
+        }),
+      }),
+      {},
+    );
+  var getEndpointProperties = (properties, n) =>
+    Object.entries(properties).reduce(
+      (acc, [propertyKey, propertyVal]) => ({
+        ...acc,
+        [propertyKey]: group$1.getEndpointProperty(propertyVal, n),
+      }),
+      {},
+    );
+  var getEndpointProperty = (property, options) => {
+    if (Array.isArray(property))
+      return property.map((propertyEntry) => getEndpointProperty(propertyEntry, options));
+    switch (typeof property) {
+      case "string":
+        return evaluateTemplate(property, options);
+      case "object":
+        if (property === null) throw new EndpointError(`Unexpected endpoint property: ${property}`);
+        return group$1.getEndpointProperties(property, options);
+      case "boolean":
+        return property;
+      default:
+        throw new EndpointError(`Unexpected endpoint property type: ${typeof property}`);
+    }
+  };
+  var group$1 = {
+    getEndpointProperty,
+    getEndpointProperties,
+  };
+  var Se = (endpointUrl, options) => {
+    let expression = evaluateExpression(endpointUrl, "Endpoint URL", options);
+    if (typeof expression === "string")
+      try {
+        return new URL(expression);
+      } catch (error) {
+        console.error(`Failed to construct URL with ${expression}`, error);
+        throw error;
+      }
+    throw new EndpointError(`Endpoint URL must be a string, got ${typeof expression}`);
+  };
+  var evaluateEndpointRule = (rule, options) => {
+    let { conditions, endpoint } = rule;
+    let { result, referenceRecord } = evaluateConditions(conditions, options);
+    if (!result) return;
+    let options_2 = {
+      ...options,
+      referenceRecord: {
+        ...options.referenceRecord,
+        ...referenceRecord,
+      },
+    };
+    let { url, properties, headers } = endpoint;
+    options.logger?.debug?.(`${debugId} Resolving endpoint from template: ${toDebugString(endpoint)}`);
+    return {
+      ...(headers != null && {
+        headers: getEndpointHeaders(headers, options_2),
+      }),
+      ...(properties != null && {
+        properties: getEndpointProperties(properties, options_2),
+      }),
+      url: Se(url, options_2),
+    };
+  };
+  var evaluateErrorRule = (errorRule, options) => {
+    let { conditions, error } = errorRule;
+    let { result, referenceRecord } = evaluateConditions(conditions, options);
+    if (!result) return;
+    throw new EndpointError(
+      evaluateExpression(error, "Error", {
+        ...options,
+        referenceRecord: {
+          ...options.referenceRecord,
+          ...referenceRecord,
+        },
+      }),
+    );
+  };
+  var evaluateRules = (rules, options) => {
+    for (let rule of rules)
+      if (rule.type === "endpoint") {
+        let endpointOrUndefined = evaluateEndpointRule(rule, options);
+        if (endpointOrUndefined) return endpointOrUndefined;
+      } else if (rule.type === "error") evaluateErrorRule(rule, options);
+      else if (rule.type === "tree") {
+        let endpointOrUndefined = z.evaluateTreeRule(rule, options);
+        if (endpointOrUndefined) return endpointOrUndefined;
+      } else throw new EndpointError(`Unknown endpoint rule: ${rule}`);
+    throw new EndpointError("Rules evaluation failed");
+  };
+  var evaluateTreeRule = (treeRule, options) => {
+    let { conditions, rules } = treeRule;
+    let { result, referenceRecord } = evaluateConditions(conditions, options);
+    if (!result) return;
+    return z.evaluateRules(rules, {
+      ...options,
+      referenceRecord: {
+        ...options.referenceRecord,
+        ...referenceRecord,
+      },
+    });
+  };
+  var z = {
+    evaluateRules,
+    evaluateTreeRule,
+  };
+  var resolveEndpoint = (ruleSetObject, options) => {
+    let { endpointParams, logger } = options;
+    let { parameters, rules } = ruleSetObject;
+    options.logger?.debug?.(`${debugId} Initial EndpointParams: ${toDebugString(endpointParams)}`);
+    let mapped = Object.entries(parameters)
+      .filter(([, value]) => value.default != null)
+      .map(([key, value]) => [key, value.default]);
+    if (mapped.length > 0) for (let [c, g] of mapped) endpointParams[c] = endpointParams[c] ?? g;
+    let mapped_2 = Object.entries(parameters)
+      .filter(([, value]) => value.required)
+      .map(([key]) => key);
+    for (let c of mapped_2)
+      if (endpointParams[c] == null) throw new EndpointError(`Missing required parameter: '${c}'`);
+    let endpoint = evaluateRules(rules, {
+      endpointParams,
+      logger,
+      referenceRecord: {},
+    });
+    options.logger?.debug?.(`${debugId} Resolved endpoint: ${toDebugString(endpoint)}`);
+    return endpoint;
+  };
+  cjsExports.EndpointCache = EndpointCache;
+  cjsExports.EndpointError = EndpointError;
+  cjsExports.customEndpointFunctions = I;
+  cjsExports.isIpAddress = isIpAddress;
+  cjsExports.isValidHostLabel = m;
+  cjsExports.resolveEndpoint = resolveEndpoint;
 });
-
-export { YJ };
+export { require_index_browser };

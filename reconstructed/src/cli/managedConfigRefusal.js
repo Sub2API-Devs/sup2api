@@ -10,9 +10,9 @@
  */
 import { randomUUID } from "crypto";
 import { DoctorLazy } from "./handlers/util.js";
-import { kt, T, o, oe, M } from "../../vendor/zod/v4/classic/schemas.js";
+import { looseObject, literal, string, unknown, M } from "../../vendor/zod/v4/classic/schemas.js";
 import { jsonParseRaw } from "../utils/slowOperations.js";
-import { Xet } from "../utils/promptSource.js";
+import { originKindForWakeup } from "../utils/promptSource.js";
 import { hasNonHumanOrigin } from "../utils/messageProvenance.js";
 import { withDeadline, sleep } from "../utils/sleep.js";
 import {
@@ -49,39 +49,39 @@ import { eventRecordQueue } from "../utils/telemetry/thirdPartyEventRecords.js";
 import { printCliError, flushAnalyticsBeforeExit, cliExit, cliError } from "./exit.js";
 import { emitManagedConfigReadyAtExit } from "../services/policyLimits/startupGate.js";
 
+//@ chunk-y43msawm.js:959-1154 placement
 /**
  * 拒绝消息发送超时与首条用户消息 schema
  */
-//@ chunk-y43msawm.js:959-1154 placement
-var REFUSAL_SEND_TIMEOUT_MS = 1000,
-  S = DoctorLazy(() =>
-    kt({
-      type: T("user"),
-      initiator: o().optional(),
-      origin: oe().optional(),
-      isSynthetic: M().optional(),
-      is_meta: M().optional(),
-      seeded_summon: M().optional(),
-      shouldQuery: M().optional(),
-    }),
-  );
+var REFUSAL_SEND_TIMEOUT_MS = 1000;
+var userMessageLineSchema = DoctorLazy(() =>
+  looseObject({
+    type: literal("user"),
+    initiator: string().optional(),
+    origin: unknown().optional(),
+    isSynthetic: M().optional(),
+    is_meta: M().optional(),
+    seeded_summon: M().optional(),
+    shouldQuery: M().optional(),
+  }),
+);
+//@ chunk-y43msawm.js:1154-1369 placement
 /**
  * stdin 行是否为需要应答的用户消息
  */
-//@ chunk-y43msawm.js:1154-1369 placement
 function isPromptBearingUserLine(e) {
   try {
-    let safeParse = S().safeParse(jsonParseRaw(e));
+    let r = userMessageLineSchema().safeParse(jsonParseRaw(e));
     return (
-      safeParse.success &&
-      Xet(safeParse.data.initiator) === void 0 &&
-      !hasNonHumanOrigin(safeParse.data.origin, safeParse.data.isSynthetic) &&
-      !safeParse.data.is_meta &&
-      !safeParse.data.seeded_summon &&
-      safeParse.data.shouldQuery !== !1
+      r.success &&
+      originKindForWakeup(r.data.initiator) === undefined &&
+      !hasNonHumanOrigin(r.data.origin, r.data.isSynthetic) &&
+      !r.data.is_meta &&
+      !r.data.seeded_summon &&
+      r.data.shouldQuery !== false
     );
   } catch {
-    return !1;
+    return false;
   }
 }
 //@ chunk-y43msawm.js:1369-1607 placement = returnValue (0.8)
@@ -90,59 +90,70 @@ async function returnValue(e, r) {
     let s = "";
     for (;;) {
       let { done: d, value: n } = await e.next();
-      if (d) return !1;
+      if (d) return false;
+      s += n;
       if (
-        ((s += n),
         !n.includes(`
-`))
+`)
       )
         continue;
-      let parts = s.split(`
+      let lines = s.split(`
 `);
-      if (((s = parts.pop() ?? ""), parts.some(isPromptBearingUserLine))) return !0;
+      s = lines.pop() ?? "";
+      if (lines.some(isPromptBearingUserLine)) return true;
     }
-  })().catch(() => !1);
-  return (await withDeadline(a, r)) ?? !1;
+  })().catch(() => false);
+  return (await withDeadline(a, r)) ?? false;
 }
+//@ chunk-y43msawm.js:1607-2255 placement
 /**
  * stream-json 下把未启动的拒绝作为一回合发回
  */
-//@ chunk-y43msawm.js:1607-2255 placement
-async function sendStartupRefusalTurn(e, r = REFUSAL_SEND_TIMEOUT_MS) {
+async function sendStartupRefusalTurn(message, r = REFUSAL_SEND_TIMEOUT_MS) {
   if (
-    getGatewayAuth()?.hostVerdict === void 0 ||
+    getGatewayAuth()?.hostVerdict === undefined ||
     !isDesktopNonClaudecode() ||
     isStartupFailureResultRequested() ||
     hostScheduledRun() ||
     eagerParseCliFlag("--input-format") !== "stream-json" ||
     eagerHasCliFlag("--no-session-persistence") ||
-    env.CLAUDE_BRIDGE_REATTACH_SESSION !== void 0 ||
+    env.CLAUDE_BRIDGE_REATTACH_SESSION !== undefined ||
     !(await returnValue(adoptStdinStream() ?? readStreamJsonStdin(), r))
   )
-    return !1;
-  let a = startupResultSessionId(getSessionId()),
-    s = `Claude Code didn't start. ${e.replace(/\s+/g, " ").replace(/(?:[a-z][a-z\d+.-]*:\/\/|www\.|[\w.+-]+@)[^\s<`]*[^\s<`.,;:)]|[\\`*_[\]<]/gi, (l) => (l.length > 1 ? `\`${l}\`` : l === "<" ? "&lt;" : `\\${l}`))}`,
-    { errors: errors, ...n } = emitLoadError(a, []);
+    return false;
+  let a = startupResultSessionId(getSessionId());
+  let s = `Claude Code didn't start. ${message.replace(/\s+/g, " ").replace(/(?:[a-z][a-z\d+.-]*:\/\/|www\.|[\w.+-]+@)[^\s<`]*[^\s<`.,;:)]|[\\`*_[\]<]/gi, (l) => (l.length > 1 ? `\`${l}\`` : l === "<" ? "&lt;" : `\\${l}`))}`;
+  let { errors, ...n } = emitLoadError(a, []);
   return writeStartupFrames([
     {
       type: "assistant",
-      message: createAssistantMessage({ content: s }).message,
+      message: createAssistantMessage({
+        content: s,
+      }).message,
       parent_tool_use_id: null,
       session_id: a,
       uuid: randomUUID(),
     },
-    { ...n, subtype: "success", is_error: !1, result: s, terminal_reason: "turn_setup_failed" },
+    {
+      ...n,
+      subtype: "success",
+      is_error: false,
+      result: s,
+      terminal_reason: "turn_setup_failed",
+    },
   ]);
 }
 //@ chunk-y43msawm.js:2255-2266 placement
-var f = 2000;
+var REFUSAL_FLUSH_TIMEOUT_MS = 2000;
 //@ chunk-y43msawm.js:2266-2405 placement
 async function sendManagedSettingsRefusal(e) {
   try {
-    if ((logManagedSettingsRefused(e), isOtlpLogsConfigured() || isOtlpLogsConfiguredByPolicy()))
-      await flushRefusalTelemetry();
+    logManagedSettingsRefused(e);
+    if (isOtlpLogsConfigured() || isOtlpLogsConfiguredByPolicy()) await flushRefusalTelemetry();
   } catch {
-    logForDebugging("[3P telemetry] managed-settings refusal send failed", { level: "error" });
+    logForDebugging("[3P telemetry] managed-settings refusal send failed", {
+      level: "error",
+    });
   }
 }
 //@ chunk-y43msawm.js:2405-2553 placement
@@ -152,52 +163,53 @@ async function sendOrgValidationRefusal(e) {
 }
 //@ chunk-y43msawm.js:2553-2614 placement
 function recordManagedSettingsRefusal(e) {
-  if (
-    (logManagedSettingsRefused(e),
-    getEventLogger() === null && (isOtlpLogsConfigured() || isOtlpLogsConfiguredByPolicy()))
-  )
+  logManagedSettingsRefused(e);
+  if (getEventLogger() === null && (isOtlpLogsConfigured() || isOtlpLogsConfiguredByPolicy()))
     registerCleanup(flushRefusalTelemetry);
 }
+//@ chunk-y43msawm.js:2614-2890 placement
 /**
  * 导出托管设置拒绝的 3P 遥测
  */
-//@ chunk-y43msawm.js:2614-2890 placement
 async function flushRefusalTelemetry() {
   try {
     if (getEventLogger() === null) {
       if (!checkHasTrustDialogAccepted() && !getIsNonInteractiveSession()) return;
-      (applySafeConfigEnvironmentVariables(), await Promise.race([initializeTelemetryForExit(), sleep(f)]));
+      applySafeConfigEnvironmentVariables();
+      await Promise.race([initializeTelemetryForExit(), sleep(REFUSAL_FLUSH_TIMEOUT_MS)]);
     }
-    let e = getLoggerProvider();
-    if (e) await Promise.race([eventRecordQueue.settledWithin(f / 2).then(() => e.forceFlush()), sleep(f)]);
+    let loggerProvider = getLoggerProvider();
+    if (loggerProvider)
+      await Promise.race([
+        eventRecordQueue.settledWithin(REFUSAL_FLUSH_TIMEOUT_MS / 2).then(() => loggerProvider.forceFlush()),
+        sleep(REFUSAL_FLUSH_TIMEOUT_MS),
+      ]);
   } catch {
-    logForDebugging("[3P telemetry] managed-settings refusal export failed", { level: "error" });
+    logForDebugging("[3P telemetry] managed-settings refusal export failed", {
+      level: "error",
+    });
   }
 }
+//@ chunk-y43msawm.js:2890-3200 placement
 /**
  * 托管配置拒绝时退出：stream-json 下作为一回合回复，记 3P 遥测。
  */
-//@ chunk-y43msawm.js:2890-3200 placement
-async function exitRefusingManagedConfig({
-  message: message,
-  reason: reason,
-  errorType: errorType,
-  print: print,
-  beforeExit: beforeExit,
-}) {
-  if (print === void 0) printCliError(message);
+async function exitRefusingManagedConfig({ message, reason, errorType, print, beforeExit }) {
+  if (print === undefined) printCliError(message);
   else await print(message);
-  if (errorType !== void 0) await sendManagedSettingsRefusal(errorType);
+  if (errorType !== undefined) await sendManagedSettingsRefusal(errorType);
   let n = await sendStartupRefusalTurn(message);
-  if (!n) await writeStartupFailureResult({ sessionId: getSessionId(), message: message, reason: reason });
-  return (
-    await beforeExit?.(),
-    await emitManagedConfigReadyAtExit(),
-    await flushAnalyticsBeforeExit(),
-    n ? cliExit(0) : cliError(void 0, print === void 0 ? "cli_error" : "exit_with_message")
-  );
+  if (!n)
+    await writeStartupFailureResult({
+      sessionId: getSessionId(),
+      message,
+      reason,
+    });
+  await beforeExit?.();
+  await emitManagedConfigReadyAtExit();
+  await flushAnalyticsBeforeExit();
+  return n ? cliExit(0) : cliError(undefined, print === undefined ? "cli_error" : "exit_with_message");
 }
-
 export {
   sendManagedSettingsRefusal,
   sendOrgValidationRefusal,

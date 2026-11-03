@@ -19,22 +19,21 @@ import { isUnforwardedHostAsk } from "../../services/tools/hostWordedAsks.js";
 
 //@ chunk-zzvfscb1.js:281-355 placement
 function isSameDecision(e, _) {
-  return e === _ || (e.behavior === "ask" && e.forcedByCaller === !0);
+  return e === _ || (e.behavior === "ask" && e.forcedByCaller === true);
 }
 //@ chunk-zzvfscb1.js:355-430 placement
-function isCanUseToolFailureReason(e) {
+function isCanUseToolFailureReason(reason) {
   return (
-    e === CAN_USE_TOOL_STREAM_CLOSED_REASON ||
-    e === CAN_USE_TOOL_INVALID_RESULT_REASON ||
-    e === CAN_USE_TOOL_REQUEST_FAILED_REASON ||
-    e === CAN_USE_TOOL_PROMPT_TOOL_GONE_REASON ||
-    e === CAN_USE_TOOL_PROMPT_TOOL_IS_CLOUD_BROWSER_REASON ||
-    isUnforwardedHostAsk(e)
+    reason === CAN_USE_TOOL_STREAM_CLOSED_REASON ||
+    reason === CAN_USE_TOOL_INVALID_RESULT_REASON ||
+    reason === CAN_USE_TOOL_REQUEST_FAILED_REASON ||
+    reason === CAN_USE_TOOL_PROMPT_TOOL_GONE_REASON ||
+    reason === CAN_USE_TOOL_PROMPT_TOOL_IS_CLOUD_BROWSER_REASON ||
+    isUnforwardedHostAsk(reason)
   );
 }
 //@ chunk-zzvfscb1.js:430-461 placement
-function isRequestFailedReason(e) {
-  return e === CAN_USE_TOOL_REQUEST_FAILED_REASON;
+function isRequestFailedReason(reason) {
+  return reason === CAN_USE_TOOL_REQUEST_FAILED_REASON;
 }
-
 export { isSameDecision, isCanUseToolFailureReason, isRequestFailedReason };

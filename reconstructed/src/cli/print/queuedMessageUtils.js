@@ -19,10 +19,11 @@ import { getSourceUuid, filterUuidList } from "../queuedCommands.js";
 //@ chunk-tyg7f3ek.js:38353-38476 placement
 function isHeldMessageRecognitionOn() {
   try {
-    if (env.CLAUDE_CODE_DISABLE_HELD_MESSAGE_RECOGNITION) return !1;
-    return getFeatureValue_CACHED_MAY_BE_STALE(HELD_MESSAGE_FLAGS, !1) === !0;
+    if (env.CLAUDE_CODE_DISABLE_HELD_MESSAGE_RECOGNITION) return false;
+    return getFeatureValue_CACHED_MAY_BE_STALE(HELD_MESSAGE_FLAGS, false) === true;
   } catch (error) {
-    return (logError(error), !1);
+    logError(error);
+    return false;
   }
 }
 //@ chunk-tyg7f3ek.js:38476-38600 placement
@@ -31,24 +32,27 @@ function isSelfHostedHeldRecognition() {
     return (
       isSelfHostedRemoteEnvironment() &&
       !env.CLAUDE_CODE_DISABLE_HELD_MESSAGE_RECOGNITION &&
-      !readFlagWithOverride(TENGU_SNAPPY_SUNRISE_KILLSWITCH, { safe: !1 })
+      !readFlagWithOverride(TENGU_SNAPPY_SUNRISE_KILLSWITCH, {
+        safe: false,
+      })
     );
   } catch (error) {
-    return (logError(error), !1);
+    logError(error);
+    return false;
   }
 }
 //@ chunk-tyg7f3ek.js:38600-38636 placement
-function heldMessageUuids(e) {
-  return isHeldMessageRecognitionOn() ? Bc(e) : [];
+function heldMessageUuids(message) {
+  return isHeldMessageRecognitionOn() ? sourceUuidsOfMessage(message) : [];
 }
 //@ chunk-tyg7f3ek.js:38636-38686 placement
 function heldMessageUuidSet(e) {
-  return new Set([...e].flatMap(Bc));
+  return new Set([...e].flatMap(sourceUuidsOfMessage));
 }
 //@ chunk-tyg7f3ek.js:38686-38778 placement
-function Bc(e) {
-  let n = getSourceUuid(e);
-  if (n) return [n];
+function sourceUuidsOfMessage(e) {
+  let sourceUuid = getSourceUuid(e);
+  if (sourceUuid) return [sourceUuid];
   return e.type === "user" ? filterUuidList(e.mergedSendUuids) : [];
 }
 //@ chunk-tyg7f3ek.js:38778-38819 placement
@@ -61,7 +65,7 @@ function mergedMessageUuids(e, n) {
   if (index === -1 || !isHeldMessageRecognitionOn()) return [n];
   let s = e[index];
   return [
-    ...(s.isMeta === !0 ? [] : Bc(s)),
+    ...(s.isMeta === true ? [] : sourceUuidsOfMessage(s)),
     n,
     ...e
       .slice(index + 1)
@@ -69,8 +73,8 @@ function mergedMessageUuids(e, n) {
         typeof h.attachment === "object" &&
         h.attachment !== null &&
         Reflect.get(h.attachment, "commandMode") === "prompt" &&
-        Reflect.get(h.attachment, "isMeta") !== !0
-          ? Bc(h)
+        Reflect.get(h.attachment, "isMeta") !== true
+          ? sourceUuidsOfMessage(h)
           : [],
       ),
   ];
@@ -78,11 +82,10 @@ function mergedMessageUuids(e, n) {
 //@ chunk-tyg7f3ek.js:39129-39248 placement
 function findMessageIndex(e, n, r = isHeldMessageRecognitionOn()) {
   let index = e.findIndex((h) => h.uuid === n);
-  return index !== -1 || !r ? index : e.findLastIndex((h) => Bc(h).includes(n));
+  return index !== -1 || !r ? index : e.findLastIndex((h) => sourceUuidsOfMessage(h).includes(n));
 }
 //@ chunk-tyg7f3ek.js:39284-39294 placement
 var MAX_HELD_MESSAGES = 64;
-
 export {
   heldUuidsIfEnabled,
   isSelfHostedHeldRecognition,

@@ -8,41 +8,41 @@
  * pieces: chunk-e6aww6q8.js (8)
  * attribution: fingerprint 4, layout 4
  */
-import { re } from "../../vendor/@inquirer/figures/dist/esm/index.js";
+import { figures_default } from "../../vendor/@inquirer/figures/dist/esm/index.js";
 import { getOrCreate, getHostState, keyOrNull } from "../utils/hostEnvironment.js";
-import { W1 } from "../plugins/functionHooks/sites/promptContextSites.js";
+import { managedFolderCondition } from "../plugins/functionHooks/sites/promptContextSites.js";
 import { isCustomizationDisabled } from "../utils/settings/customizationDisabled.js";
-import { H0t } from "../outputStyles/loadOutputStylesDir.js";
+import { getOutputStyleDirStyles } from "../outputStyles/loadOutputStylesDir.js";
 import { loadPluginOutputStyles } from "../utils/plugins/loadPluginOutputStyles.js";
 import { groupPluginSourcesByName } from "../utils/telemetry/pluginTelemetry.js";
-import { gl } from "../utils/cwd.js";
+import { getCwdOrNull } from "../utils/cwd.js";
 import { logForDebugging } from "../utils/debug.js";
 import { getSettings_DEPRECATED } from "../utils/settings/settings.js";
 
+//@ chunk-e6aww6q8.js:809547-819458 fingerprint = OUTPUT_STYLE_CONFIG (0.495)
 /**
  * 内置输出风格提示词片段：Insights 说明、Proactive 的完整段与简述、Concise 的完整段与简述；zI 为默认风格名 "default"；GZ 为内置风格表（default:null、Proactive、Concise、Explanatory、Learning）。
  */
-//@ chunk-e6aww6q8.js:809547-819458 fingerprint = OUTPUT_STYLE_CONFIG (0.495)
 var EXPLANATORY_INSIGHTS_PROMPT = `
 ## Insights
 In order to encourage learning, before and after writing code, always provide brief educational explanations about implementation choices using (with backticks):
-"\`${re.star} Insight \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\`
+"\`${figures_default.star} Insight \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\`
 [2-3 key educational points]
 \`\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\`"
 
-These insights should be included in the conversation, not in the codebase. You should generally focus on interesting insights that are specific to the codebase or the code you just wrote, rather than general programming concepts.`,
-  PROACTIVE_STYLE_PROMPT = `The user chose continuous, autonomous execution. You should:
+These insights should be included in the conversation, not in the codebase. You should generally focus on interesting insights that are specific to the codebase or the code you just wrote, rather than general programming concepts.`;
+var PROACTIVE_STYLE_PROMPT = `The user chose continuous, autonomous execution. You should:
 
 1. **Execute immediately** \u2014 Start implementing right away. Make reasonable assumptions and proceed on low-risk work.
 2. **Minimize interruptions** \u2014 Prefer making reasonable assumptions over asking questions for routine decisions.
 3. **Prefer action over planning** \u2014 Do not enter plan mode unless the user explicitly asks. When in doubt, start coding.
 4. **Expect course corrections** \u2014 The user may provide suggestions or course corrections at any point; treat those as normal input.
 5. **Do not take overly destructive actions** \u2014 This is not a license to destroy. Anything that deletes data or modifies shared or production systems still needs explicit user confirmation. If you reach such a decision point, ask and wait, or course correct to a safer method instead.
-6. **Avoid data exfiltration** \u2014 Post even routine messages to chat platforms or work tickets only if the user has directed you to. You must not share secrets (e.g. credentials, internal documentation) unless the user has explicitly authorized both that specific secret and its destination.`,
-  PROACTIVE_STYLE_SUMMARY = "Execute autonomously, minimize interruptions, prefer action over planning.",
-  PROACTIVE_STYLE_BACKGROUND_NOTE =
-    "Execute autonomously and minimize interruptions. If the only work left is waiting for a background task or monitor you started, end your turn now: you will be notified when it finishes or fires. Do not poll, sleep, or re-read its output while you wait.",
-  CONCISE_STYLE_PROMPT = `The user chose brevity over narration. You should:
+6. **Avoid data exfiltration** \u2014 Post even routine messages to chat platforms or work tickets only if the user has directed you to. You must not share secrets (e.g. credentials, internal documentation) unless the user has explicitly authorized both that specific secret and its destination.`;
+var PROACTIVE_STYLE_SUMMARY = "Execute autonomously, minimize interruptions, prefer action over planning.";
+var PROACTIVE_STYLE_BACKGROUND_NOTE =
+  "Execute autonomously and minimize interruptions. If the only work left is waiting for a background task or monitor you started, end your turn now: you will be notified when it finishes or fires. Do not poll, sleep, or re-read its output while you wait.";
+var CONCISE_STYLE_PROMPT = `The user chose brevity over narration. You should:
 
 1. **Lead with the result** \u2014 Your first sentence answers "what happened" or "what's the answer." No preamble ("Let me...", "Now I'll...") and no closing recap of what you already said.
 2. **Cut narration, keep substance** \u2014 Don't restate the request, the plan, or each step you took. Report outcomes, decisions, and anything the user must act on.
@@ -51,53 +51,53 @@ These insights should be included in the conversation, not in the codebase. You 
 5. **Give full detail on request** \u2014 When the user asks for an explanation or detail, answer completely. Conciseness never means withholding requested information.
 6. **Never trade correctness for brevity** \u2014 Error reports, failing test output, security warnings, and confirmations for destructive actions keep their full content.
 
-Where these rules conflict with more general communication or formatting guidance elsewhere in your instructions, these rules win.`,
-  CONCISE_STYLE_SUMMARY =
-    "Be concise: lead with the result, skip preamble and narration, keep only what the user needs.",
-  DEFAULT = "default",
-  OUTPUT_STYLE_CONFIG = {
-    [DEFAULT]: null,
-    Proactive: {
-      name: "Proactive",
-      source: "built-in",
-      description: "Claude executes immediately, minimizes interruptions, and prefers action over planning",
-      keepCodingInstructions: !0,
-      prompt: `You are an interactive CLI tool that helps users with software engineering tasks. You should work proactively and autonomously, executing immediately and minimizing interruptions.
+Where these rules conflict with more general communication or formatting guidance elsewhere in your instructions, these rules win.`;
+var CONCISE_STYLE_SUMMARY =
+  "Be concise: lead with the result, skip preamble and narration, keep only what the user needs.";
+var DEFAULT = "default";
+var OUTPUT_STYLE_CONFIG = {
+  [DEFAULT]: null,
+  Proactive: {
+    name: "Proactive",
+    source: "built-in",
+    description: "Claude executes immediately, minimizes interruptions, and prefers action over planning",
+    keepCodingInstructions: true,
+    prompt: `You are an interactive CLI tool that helps users with software engineering tasks. You should work proactively and autonomously, executing immediately and minimizing interruptions.
 
 # Proactive Style Active
 ${PROACTIVE_STYLE_PROMPT}`,
-      turnReminder: PROACTIVE_STYLE_SUMMARY,
-      waitingTurnReminder: PROACTIVE_STYLE_BACKGROUND_NOTE,
-    },
-    Concise: {
-      name: "Concise",
-      source: "built-in",
-      description: "Claude responds tersely, leading with results and skipping preamble and narration",
-      keepCodingInstructions: !0,
-      prompt: `You are an interactive CLI tool that helps users with software engineering tasks. Keep your responses short and direct while doing the work just as thoroughly.
+    turnReminder: PROACTIVE_STYLE_SUMMARY,
+    waitingTurnReminder: PROACTIVE_STYLE_BACKGROUND_NOTE,
+  },
+  Concise: {
+    name: "Concise",
+    source: "built-in",
+    description: "Claude responds tersely, leading with results and skipping preamble and narration",
+    keepCodingInstructions: true,
+    prompt: `You are an interactive CLI tool that helps users with software engineering tasks. Keep your responses short and direct while doing the work just as thoroughly.
 
 # Concise Style Active
 ${CONCISE_STYLE_PROMPT}`,
-      turnReminder: CONCISE_STYLE_SUMMARY,
-    },
-    Explanatory: {
-      name: "Explanatory",
-      source: "built-in",
-      description: "Claude explains its implementation choices and codebase patterns",
-      keepCodingInstructions: !0,
-      prompt: `You are an interactive CLI tool that helps users with software engineering tasks. In addition to software engineering tasks, you should provide educational insights about the codebase along the way.
+    turnReminder: CONCISE_STYLE_SUMMARY,
+  },
+  Explanatory: {
+    name: "Explanatory",
+    source: "built-in",
+    description: "Claude explains its implementation choices and codebase patterns",
+    keepCodingInstructions: true,
+    prompt: `You are an interactive CLI tool that helps users with software engineering tasks. In addition to software engineering tasks, you should provide educational insights about the codebase along the way.
 
 You should be clear and educational, providing helpful explanations while remaining focused on the task. Balance educational content with task completion. When providing insights, you may exceed typical length constraints, but remain focused and relevant.
 
 # Explanatory Style Active
 ${EXPLANATORY_INSIGHTS_PROMPT}`,
-    },
-    Learning: {
-      name: "Learning",
-      source: "built-in",
-      description: "Claude pauses and asks you to write small pieces of code for hands-on practice",
-      keepCodingInstructions: !0,
-      prompt: `You are an interactive CLI tool that helps users with software engineering tasks. In addition to software engineering tasks, you should help users learn more about the codebase through hands-on practice and educational insights.
+  },
+  Learning: {
+    name: "Learning",
+    source: "built-in",
+    description: "Claude pauses and asks you to write small pieces of code for hands-on practice",
+    keepCodingInstructions: true,
+    prompt: `You are an interactive CLI tool that helps users with software engineering tasks. In addition to software engineering tasks, you should help users learn more about the codebase through hands-on practice and educational insights.
 
 You should be collaborative and encouraging. Balance task completion with learning by requesting user input for meaningful design decisions while handling routine implementation yourself.   
 
@@ -117,7 +117,7 @@ Example TodoList flow:
 
 ### Request Format
 \`\`\`
-${re.bullet} **Learn by Doing**
+${figures_default.bullet} **Learn by Doing**
 **Context:** [what's built and why this decision matters]
 **Your Task:** [specific function/section in file, mention file and TODO(human) but do not include line numbers]
 **Guidance:** [trade-offs and constraints to consider]
@@ -133,7 +133,7 @@ ${re.bullet} **Learn by Doing**
 
 **Whole Function Example:**
 \`\`\`
-${re.bullet} **Learn by Doing**
+${figures_default.bullet} **Learn by Doing**
 
 **Context:** I've set up the hint feature UI with a button that triggers the hint system. The infrastructure is ready: when clicked, it calls selectHintCell() to determine which cell to hint, then highlights that cell with a yellow background and shows possible values. The hint system needs to decide which empty cell would be most helpful to reveal to the user.
 
@@ -144,7 +144,7 @@ ${re.bullet} **Learn by Doing**
 
 **Partial Function Example:**
 \`\`\`
-${re.bullet} **Learn by Doing**
+${figures_default.bullet} **Learn by Doing**
 
 **Context:** I've built a file upload component that validates files before accepting them. The main validation logic is complete, but it needs specific handling for different file type categories in the switch statement.
 
@@ -155,7 +155,7 @@ ${re.bullet} **Learn by Doing**
 
 **Debugging Example:**
 \`\`\`
-${re.bullet} **Learn by Doing**
+${figures_default.bullet} **Learn by Doing**
 
 **Context:** The user reported that number inputs aren't working correctly in the calculator. I've identified the handleInput() function as the likely source, but need to understand what values are being processed.
 
@@ -169,42 +169,55 @@ Share one insight connecting their code to broader patterns or system effects. A
 
 ## Insights
 ${EXPLANATORY_INSIGHTS_PROMPT}`,
-    },
-  };
+  },
+};
+//@ chunk-e6aww6q8.js:819458-819540 layout
 /**
  * 按工作目录缓存 getAllOutputStyles 的结果。
  */
-//@ chunk-e6aww6q8.js:819458-819540 layout
-function getAllOutputStylesCached(e, n) {
-  return getOrCreate(getHostState().allOutputStyles, `${W1()}${keyOrNull(e)}`, () =>
-    getAllOutputStyles(e, n),
+function getAllOutputStylesCached(e, storageV5) {
+  return getOrCreate(getHostState().allOutputStyles, `${managedFolderCondition()}${keyOrNull(e)}`, () =>
+    getAllOutputStyles(e, storageV5),
   );
 }
+//@ chunk-e6aww6q8.js:819540-820209 fingerprint = getAllOutputStyles (0.634)
 /**
  * 所有输出风格：内置 + 插件 + 用户 + 项目 + 策略（后者覆盖前者）；outputStyles 被策略锁定时只给内置。
  */
-//@ chunk-e6aww6q8.js:819540-820209 fingerprint = getAllOutputStyles (0.634)
 async function getAllOutputStyles(e, n) {
-  if (isCustomizationDisabled("outputStyles")) return { ...OUTPUT_STYLE_CONFIG };
-  let r = await H0t(e, n),
-    customStyles = await loadPluginOutputStyles(n),
-    allStyles = { ...OUTPUT_STYLE_CONFIG },
-    managedStyles = r.filter((style) => style.source === "policySettings"),
-    userStyles = r.filter((style) => style.source === "userSettings"),
-    w = [
-      ...r.filter((style) => style.source === "projectSettings"),
-      ...getHostState().projectOutputStylesElsewhere,
-    ],
-    styleGroups = [customStyles, userStyles, w, managedStyles];
+  if (isCustomizationDisabled("outputStyles"))
+    return {
+      ...OUTPUT_STYLE_CONFIG,
+    };
+  let customStyles = await getOutputStyleDirStyles(e, n);
+  let pluginStyles = await loadPluginOutputStyles(n);
+  let allStyles = {
+    ...OUTPUT_STYLE_CONFIG,
+  };
+  let managedStyles = customStyles.filter((style) => style.source === "policySettings");
+  let userStyles = customStyles.filter((style) => style.source === "userSettings");
+  let projectStyles = [
+    ...customStyles.filter((style) => style.source === "projectSettings"),
+    ...getHostState().projectOutputStylesElsewhere,
+  ];
+  let styleGroups = [pluginStyles, userStyles, projectStyles, managedStyles];
   groupPluginSourcesByName(
     "outputStyle",
     [
       ...Object.values(OUTPUT_STYLE_CONFIG)
         .filter((G) => G !== null)
-        .map((G) => ({ name: G.name, source: G.source })),
-      ...styleGroups.flat().map((G) => ({ name: G.name, source: G.source })),
+        .map((G) => ({
+          name: G.name,
+          source: G.source,
+        })),
+      ...styleGroups.flat().map((G) => ({
+        name: G.name,
+        source: G.source,
+      })),
     ],
-    { resolves: !0 },
+    {
+      resolves: true,
+    },
   );
   for (let styles of styleGroups)
     for (let style of styles)
@@ -218,57 +231,59 @@ async function getAllOutputStyles(e, n) {
       };
   return allStyles;
 }
+//@ chunk-e6aww6q8.js:820209-820265 layout = _temp1 (1)
 /**
  * null（默认）或 built-in 来源。
  */
-//@ chunk-e6aww6q8.js:820209-820265 layout = _temp1 (1)
 function isBuiltInOrDefaultStyle(a_9) {
   return a_9 === null || a_9?.source === "built-in";
 }
+//@ chunk-e6aww6q8.js:820265-820574 layout
 /**
  * Remote Control/转发消息不能切换自定义风格、本地设置不可写时的提示文本。
  */
-//@ chunk-e6aww6q8.js:820265-820574 layout
 var CUSTOM_STYLE_REMOTE_DENIED_MESSAGE =
-    "Custom output styles can't be selected over Remote Control or from a relayed message. Select one in the session itself, or pick a built-in style here.",
-  STYLE_SAVE_UNAVAILABLE_MESSAGE =
-    "Output styles are saved to local settings (.claude/settings.local.json), which this session doesn't load, so the style can't be changed here.";
+  "Custom output styles can't be selected over Remote Control or from a relayed message. Select one in the session itself, or pick a built-in style here.";
+var STYLE_SAVE_UNAVAILABLE_MESSAGE =
+  "Output styles are saved to local settings (.claude/settings.local.json), which this session doesn't load, so the style can't be changed here.";
+//@ chunk-e6aww6q8.js:820574-820618 layout
 /**
  * 清空输出风格缓存。
  */
-//@ chunk-e6aww6q8.js:820574-820618 layout
 function clearOutputStylesCache() {
   getHostState().allOutputStyles.clear();
 }
+//@ chunk-e6aww6q8.js:820618-820991 fingerprint = getOutputStyleConfig (1)
 /**
  * 当前输出风格配置：插件强制风格优先（多个时警告取第一个），否则 settings.outputStyle（默认 default→null）。
  */
-//@ chunk-e6aww6q8.js:820618-820991 fingerprint = getOutputStyleConfig (1)
 async function getOutputStyleConfig() {
-  let allStyles = await getAllOutputStylesCached(gl()),
-    forcedStyles = Object.values(allStyles).filter(
-      (style) => style !== null && style.source === "plugin" && style.forceForPlugin === !0,
-    ),
-    firstForcedStyle = forcedStyles[0];
+  let allStyles = await getAllOutputStylesCached(getCwdOrNull());
+  let forcedStyles = Object.values(allStyles).filter(
+    (style) => style !== null && style.source === "plugin" && style.forceForPlugin === true,
+  );
+  let firstForcedStyle = forcedStyles[0];
   if (firstForcedStyle) {
     if (forcedStyles.length > 1)
       logForDebugging(
-        `Multiple plugins have forced output styles: ${forcedStyles.map((y) => y.name).join(", ")}. Using: ${firstForcedStyle.name}`,
-        { level: "warn" },
+        `Multiple plugins have forced output styles: ${forcedStyles.map((forcedStyle) => forcedStyle.name).join(", ")}. Using: ${firstForcedStyle.name}`,
+        {
+          level: "warn",
+        },
       );
-    return (logForDebugging(`Using forced plugin output style: ${firstForcedStyle.name}`), firstForcedStyle);
+    logForDebugging(`Using forced plugin output style: ${firstForcedStyle.name}`);
+    return firstForcedStyle;
   }
   let outputStyle = getSettings_DEPRECATED()?.outputStyle || DEFAULT;
   return allStyles[outputStyle] ?? null;
 }
+//@ chunk-e6aww6q8.js:820991-821035 fingerprint = hasCustomOutputStyle (1)
 /**
  * 当前设置的输出风格名（默认 "default"）。
  */
-//@ chunk-e6aww6q8.js:820991-821035 fingerprint = hasCustomOutputStyle (1)
 function hasCustomOutputStyle() {
   return getSettings_DEPRECATED()?.outputStyle || DEFAULT;
 }
-
 export {
   getOutputStyleConfig,
   hasCustomOutputStyle,

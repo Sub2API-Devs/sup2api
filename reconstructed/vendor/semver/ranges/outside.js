@@ -6,56 +6,67 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { G } from "../classes/semver.js";
-import { yt } from "../classes/comparator.js";
-import { ee } from "../classes/range.js";
-import { Rt } from "../functions/satisfies.js";
-import { Tt, us, ms, ps } from "../functions/eq.js";
+import { require_semver } from "../classes/semver.js";
+import { require_comparator } from "../classes/comparator.js";
+import { require_range } from "../classes/range.js";
+import { require_satisfies } from "../functions/satisfies.js";
+import { require_eq, require_eq_2, require_eq_6, require_eq_5 } from "../functions/eq.js";
 
 //@ chunk-bwbq4xvm.js:23083-23793 cjs-fingerprint
-var Es = x(function (C2, Ml) {
-  var Kk = G(),
-    Pl = yt(),
-    { ANY: ANY } = Pl,
-    Wk = ee(),
-    Yk = Rt(),
-    Il = Tt(),
-    Nl = us(),
-    $k = ms(),
-    Xk = ps(),
-    Qk = (e, s, n, r) => {
-      ((e = new Kk(e, r)), (s = new Wk(s, r)));
-      let a, l, c, h, m;
-      switch (n) {
-        case ">":
-          ((a = Il), (l = $k), (c = Nl), (h = ">"), (m = ">="));
-          break;
-        case "<":
-          ((a = Nl), (l = Xk), (c = Il), (h = "<"), (m = "<="));
-          break;
-        default:
-          throw TypeError('Must provide a hilo val of "<" or ">"');
-      }
-      if (Yk(e, s, r)) return !1;
-      for (let f = 0; f < s.set.length; ++f) {
-        let w = s.set[f],
-          z = null,
-          I = null;
-        if (
-          (w.forEach((R) => {
-            if (R.semver === ANY) R = new Pl(">=0.0.0");
-            if (((z = z || R), (I = I || R), a(R.semver, z.semver, r))) z = R;
-            else if (c(R.semver, I.semver, r)) I = R;
-          }),
-          z.operator === h || z.operator === m)
-        )
-          return !1;
-        if ((!I.operator || I.operator === h) && l(e, I.semver)) return !1;
-        else if (I.operator === m && c(e, I.semver)) return !1;
-      }
-      return !0;
-    };
-  Ml.exports = Qk;
+var require_outside = x(function (cjsExports, cjsModule) {
+  var SemVer = require_semver();
+  var Comparator = require_comparator();
+  var { ANY } = Comparator;
+  var Range = require_range();
+  var satisfies = require_satisfies();
+  var gt = require_eq();
+  var lt = require_eq_2();
+  var lte = require_eq_6();
+  var gte = require_eq_5();
+  var outside = (version, range, hilo, options) => {
+    version = new SemVer(version, options);
+    range = new Range(range, options);
+    let gtfn;
+    let ltefn;
+    let ltfn;
+    let comp;
+    let ecomp;
+    switch (hilo) {
+      case ">":
+        gtfn = gt;
+        ltefn = lte;
+        ltfn = lt;
+        comp = ">";
+        ecomp = ">=";
+        break;
+      case "<":
+        gtfn = lt;
+        ltefn = gte;
+        ltfn = gt;
+        comp = "<";
+        ecomp = "<=";
+        break;
+      default:
+        throw TypeError('Must provide a hilo val of "<" or ">"');
+    }
+    if (satisfies(version, range, options)) return false;
+    for (let i = 0; i < range.set.length; ++i) {
+      let comparators = range.set[i];
+      let high = null;
+      let low = null;
+      comparators.forEach((comparator) => {
+        if (comparator.semver === ANY) comparator = new Comparator(">=0.0.0");
+        high = high || comparator;
+        low = low || comparator;
+        if (gtfn(comparator.semver, high.semver, options)) high = comparator;
+        else if (ltfn(comparator.semver, low.semver, options)) low = comparator;
+      });
+      if (high.operator === comp || high.operator === ecomp) return false;
+      if ((!low.operator || low.operator === comp) && ltefn(version, low.semver)) return false;
+      else if (low.operator === ecomp && ltfn(version, low.semver)) return false;
+    }
+    return true;
+  };
+  cjsModule.exports = outside;
 });
-
-export { Es };
+export { require_outside };

@@ -15,7 +15,7 @@ import {
   latestReleaseNotes,
   formatReleaseNotes,
   HTTPS_CODE_CLAUDE_COM_DOCS_EN_CHANGELOG,
-  BTo,
+  CHANGELOG_URL,
 } from "../../utils/releaseNotes.js";
 import { getGlobalConfig, saveGlobalConfig } from "../../utils/config.js";
 import { isSemverString } from "../../utils/model/modelCatalog/catalogCapabilities.js";
@@ -24,47 +24,52 @@ import { toError } from "../../utils/errors.js";
 import { uiSignals } from "../../state/uiSignals.js";
 import { logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 import { w } from "../../../vendor/react/compiler-runtime.js";
-import { Me } from "../design-system/ThemeProvider.js";
+import { useTheme_2 } from "../design-system/ThemeProvider.js";
 import { useHost } from "../../context/session.js";
-import { Dt, CondensedLogo } from "./CondensedLogo.js";
-import { Xj } from "../../utils/sessionRestore.js";
+import { useNoticeImpressionEnabled, CondensedLogo } from "./CondensedLogo.js";
+import { isSessionRestored } from "../../utils/sessionRestore.js";
 import { isBgSession } from "../../utils/concurrentSessions.js";
 import { getTeammateAgentId } from "../../bootstrap/state.js";
-import { y, P, j } from "../../../vendor/react/cjs/react.production.js";
+import { y, P, init_react_production } from "../../../vendor/react/cjs/react.production.js";
 import { env } from "../../utils/env.js";
-import { e, r, Fragment } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+  Fragment,
+} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Box, Text, Link } from "../../ink/components/Text.js";
 
 //@ chunk-ag5x7vhf.js:65318-65583 placement
 var BUGFIX_PATTERN =
-    /^(fix(ed|es)?|resolve[ds]?|correct(ed|s)?|prevent(ed|s)?|(\S+\s+){0,2}no longer|revert(ed|s)?|bug fix(es)?)\b/,
-  t_ = /^(add(ed|s)?|new|introduce[ds]?|support(ed|s)?|launch(ed|es)?|ship(ped|s)?|enable[ds]?)\b/,
-  o_ = /^\[[^\]]+\]\s*/,
-  n_ = /^[a-z0-9 /._`-]{1,40}:\s*/;
+  /^(fix(ed|es)?|resolve[ds]?|correct(ed|s)?|prevent(ed|s)?|(\S+\s+){0,2}no longer|revert(ed|s)?|bug fix(es)?)\b/;
+var FEATURE_PREFIX_RE =
+  /^(add(ed|s)?|new|introduce[ds]?|support(ed|s)?|launch(ed|es)?|ship(ped|s)?|enable[ds]?)\b/;
+var BRACKET_PREFIX_RE = /^\[[^\]]+\]\s*/;
+var NAMESPACE_PREFIX_RE = /^[a-z0-9 /._`-]{1,40}:\s*/;
 //@ chunk-ag5x7vhf.js:65583-65697 placement
 function classifyReleaseNote(m) {
   if (BUGFIX_PATTERN.test(m) || m.includes("regression")) return "bugFix";
-  if (t_.test(m)) return "feature";
+  if (FEATURE_PREFIX_RE.test(m)) return "feature";
   return "other";
 }
 //@ chunk-ag5x7vhf.js:65697-65755 placement
-var r_ = /^(various )?bug ?fixes\b.*\bimprovements$/,
-  s_ = 500;
+var BUGFIX_ROLLUP_RE = /^(various )?bug ?fixes\b.*\bimprovements$/;
+var CLASSIFY_MAX_CHARS = 500;
 //@ chunk-ag5x7vhf.js:65755-65925 placement
 function classifyReleaseNoteEntry(m) {
-  let lower = m.slice(0, s_).trim().toLowerCase();
-  if (r_.test(lower)) return "bugFixRollup";
+  let lower = m.slice(0, CLASSIFY_MAX_CHARS).trim().toLowerCase();
+  if (BUGFIX_ROLLUP_RE.test(lower)) return "bugFixRollup";
   let x = classifyReleaseNote(lower);
   if (x !== "other") return x;
-  return classifyReleaseNote(lower.replace(o_, "").replace(n_, ""));
+  return classifyReleaseNote(lower.replace(BRACKET_PREFIX_RE, "").replace(NAMESPACE_PREFIX_RE, ""));
 }
 //@ chunk-ag5x7vhf.js:65925-66386 placement
-function summarizeReleaseNotes({ entries: entries }) {
+function summarizeReleaseNotes({ entries }) {
   let h = releaseNoteStrings(entries);
   if (h.length === 0) return null;
-  let x = 0,
-    T = 0,
-    k = 0;
+  let x = 0;
+  let T = 0;
+  let k = 0;
   for (let I of h)
     switch (classifyReleaseNoteEntry(I)) {
       case "feature":
@@ -96,16 +101,16 @@ function formatListWithAnd(m) {
   return `${m.slice(0, -1).join(", ")}, and ${m.at(-1)}`;
 }
 //@ chunk-ag5x7vhf.js:66531-66657 placement
-function releaseNoteStrings(m) {
-  if (!Array.isArray(m)) return [];
+function releaseNoteStrings(entries) {
+  if (!Array.isArray(entries)) return [];
   let h = [];
-  for (let x of m) if (typeof x === "string" && x.trim() !== "") h.push(x);
+  for (let x of entries) if (typeof x === "string" && x.trim() !== "") h.push(x);
   return h;
 }
+//@ chunk-ag5x7vhf.js:66657-67455 placement
 /**
  * 启动时汇总自上次看过以来的版本更新说明（feature/bugFix 计数），用于"Updated to latest"提示。
  */
-//@ chunk-ag5x7vhf.js:66657-67455 placement
 function computeStartupUpdateSummary(
   m = {
     ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
@@ -120,12 +125,14 @@ function computeStartupUpdateSummary(
   }.VERSION,
 ) {
   try {
-    let h = getForcedFirstLaunch();
-    if (h) {
+    let forcedFirstLaunch = getForcedFirstLaunch();
+    if (forcedFirstLaunch) {
       let T = BUNDLED_CHANGELOG();
       return summarizeReleaseNotes({
         entries:
-          h.pretendLastSeen === void 0 ? latestReleaseNotes(T) : formatReleaseNotes(T, h.pretendLastSeen, m),
+          forcedFirstLaunch.pretendLastSeen === undefined
+            ? latestReleaseNotes(T)
+            : formatReleaseNotes(T, forcedFirstLaunch.pretendLastSeen, m),
       });
     }
     let lastReleaseNotesSeen = getGlobalConfig().lastReleaseNotesSeen;
@@ -135,15 +142,18 @@ function computeStartupUpdateSummary(
       entries: formatReleaseNotes(BUNDLED_CHANGELOG(), lastReleaseNotesSeen, m),
     });
   } catch (error) {
-    return (logForDebugging(`computeUpdateSummary: ${toError(error).message}`, { level: "error" }), null);
+    logForDebugging(`computeUpdateSummary: ${toError(error).message}`, {
+      level: "error",
+    });
+    return null;
   }
 }
 //@ chunk-ag5x7vhf.js:67455-67621 placement
 function getStartupUpdateSummary() {
-  if (uiSignals.startupUpdateSummary === void 0) {
-    let m = computeStartupUpdateSummary();
-    if (((uiSignals.startupUpdateSummary = m), m !== null && !getForcedFirstLaunch()))
-      logFeatureOk("startup_update_summary");
+  if (uiSignals.startupUpdateSummary === undefined) {
+    let startupUpdateSummary = computeStartupUpdateSummary();
+    uiSignals.startupUpdateSummary = startupUpdateSummary;
+    if (startupUpdateSummary !== null && !getForcedFirstLaunch()) logFeatureOk("startup_update_summary");
   }
   return uiSignals.startupUpdateSummary;
 }
@@ -167,82 +177,108 @@ function markReleaseNotesSeen(pe) {
     }.VERSION,
   };
 }
+//@ chunk-ag5x7vhf.js:68202-69046 placement
 /**
  * 启动时显示精简 Logo 与"本次更新摘要 + changelog 链接"；后台/队友会话或非首屏时不显示，并在显示后标记已看过发行说明。
  */
-//@ chunk-ag5x7vhf.js:68202-69046 placement
 function StartupUpdateSummary(props) {
-  let I = w(17),
-    { hideLogo: hideLogo } = props,
-    x = hideLogo === void 0 ? !1 : hideLogo,
-    { storageV5: storageV5 } = Me(),
-    k = useHost(),
-    _ = Dt(),
-    D;
-  if (I[0] !== k || I[1] !== _)
-    ((D = () => !_ || Xj(k) || isBgSession() || getTeammateAgentId() !== void 0),
-      (I[0] = k),
-      (I[1] = _),
-      (I[2] = D));
-  else D = I[2];
-  let [A] = y(D),
-    L;
-  if (I[3] !== A)
-    ((L = () => (A || env.DEMO_VERSION ? null : getStartupUpdateSummary())), (I[3] = A), (I[4] = L));
-  else L = I[4];
-  let [V] = y(L),
-    W,
-    z;
-  if (I[5] !== A || I[6] !== storageV5)
-    ((W = () => {
+  let I = w(17);
+  let { hideLogo } = props;
+  let x = hideLogo === undefined ? false : hideLogo;
+  let { storageV5 } = useTheme_2();
+  let host = useHost();
+  let noticeImpressionEnabled = useNoticeImpressionEnabled();
+  let D;
+  if (I[0] !== host || I[1] !== noticeImpressionEnabled) {
+    D = () =>
+      !noticeImpressionEnabled ||
+      isSessionRestored(host) ||
+      isBgSession() ||
+      getTeammateAgentId() !== undefined;
+    I[0] = host;
+    I[1] = noticeImpressionEnabled;
+    I[2] = D;
+  } else D = I[2];
+  let [A] = y(D);
+  let L;
+  if (I[3] !== A) {
+    L = () => (A || env.DEMO_VERSION ? null : getStartupUpdateSummary());
+    I[3] = A;
+    I[4] = L;
+  } else L = I[4];
+  let [V] = y(L);
+  let W;
+  let z;
+  if (I[5] !== A || I[6] !== storageV5) {
+    W = () => {
       if (A || !isNewerClawdEntranceVersion(getGlobalConfig().lastReleaseNotesSeen)) {
         return;
       }
       saveGlobalConfig(markReleaseNotesSeen, storageV5);
-    }),
-      (z = [A, storageV5]),
-      (I[5] = A),
-      (I[6] = storageV5),
-      (I[7] = W),
-      (I[8] = z));
-  else ((W = I[7]), (z = I[8]));
+    };
+    z = [A, storageV5];
+    I[5] = A;
+    I[6] = storageV5;
+    I[7] = W;
+    I[8] = z;
+  } else {
+    W = I[7];
+    z = I[8];
+  }
   P(W, z);
   let K;
-  if (I[9] !== x || I[10] !== A)
-    ((K = !x && e(CondensedLogo, { oneShotsAllowed: !A })), (I[9] = x), (I[10] = A), (I[11] = K));
-  else K = I[11];
+  if (I[9] !== x || I[10] !== A) {
+    K =
+      !x &&
+      jsxProd_default(CondensedLogo, {
+        oneShotsAllowed: !A,
+      });
+    I[9] = x;
+    I[10] = A;
+    I[11] = K;
+  } else K = I[11];
   let q;
-  if (I[12] !== V)
-    ((q =
+  if (I[12] !== V) {
+    q =
       V &&
-      r(Box, {
+      jsxProd_default_2(Box, {
         paddingLeft: 2,
         flexDirection: "column",
         children: [
-          e(Text, { bold: !0, children: V }),
-          r(Text, {
-            dimColor: !0,
+          jsxProd_default(Text, {
+            bold: true,
+            children: V,
+          }),
+          jsxProd_default_2(Text, {
+            dimColor: true,
             children: [
-              e(Link, { url: HTTPS_CODE_CLAUDE_COM_DOCS_EN_CHANGELOG, children: BTo }),
+              jsxProd_default(Link, {
+                url: HTTPS_CODE_CLAUDE_COM_DOCS_EN_CHANGELOG,
+                children: CHANGELOG_URL,
+              }),
               " for details",
             ],
           }),
         ],
-      })),
-      (I[12] = V),
-      (I[13] = q));
-  else q = I[13];
+      });
+    I[12] = V;
+    I[13] = q;
+  } else q = I[13];
   let Y;
-  if (I[14] !== K || I[15] !== q)
-    ((Y = r(Fragment, { children: [K, q, !1] })), (I[14] = K), (I[15] = q), (I[16] = Y));
-  else Y = I[16];
+  if (I[14] !== K || I[15] !== q) {
+    Y = jsxProd_default_2(Fragment, {
+      children: [K, q, false],
+    });
+    I[14] = K;
+    I[15] = q;
+    I[16] = Y;
+  } else Y = I[16];
   return Y;
 }
 //@ chunk-ag5x7vhf.js:69046-69050 placement
-j();
+init_react_production();
 //@ chunk-ag5x7vhf.js:69050-69054 placement
-j();
+init_react_production();
 //@ chunk-ag5x7vhf.js:69054-69058 placement
-j();
-
+init_react_production();
 export { StartupUpdateSummary };

@@ -8,20 +8,20 @@
  * pieces: chunk-4121qate.js (16)
  * attribution: placement 16
  */
-import * as vmModule from "vm";
+import "vm";
 import * as vmModule_2 from "vm";
-import * as vmModule_3 from "vm";
-import * as vmModule_4 from "vm";
-import * as vmModule_5 from "vm";
-import * as vmModule_6 from "vm";
-import * as vmModule_7 from "vm";
-import * as vmModule_8 from "vm";
-import * as vmModule_9 from "vm";
-import * as vmModule_10 from "vm";
-import * as vmModule_11 from "vm";
-import * as vmModule_12 from "vm";
-import * as vmModule_13 from "vm";
-import * as vmModule_14 from "vm";
+import "vm";
+import "vm";
+import "vm";
+import "vm";
+import "vm";
+import "vm";
+import "vm";
+import "vm";
+import "vm";
+import "vm";
+import "vm";
+import "vm";
 import { describeThrownValue, createSealedError, vmImportOptions } from "./vmRealm.js";
 import {
   CLONE_DEPTH_THRESHOLD,
@@ -33,38 +33,42 @@ import {
   NESTING_TOO_DEEP_MESSAGE,
 } from "../../../utils/structuredCloneLimits.js";
 import { io } from "../../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
-import { BT, VM_BOOTSTRAP_SOURCE, requireElement, dfr } from "./vmBootstrapSource.js";
+import {
+  withUseStrict,
+  VM_BOOTSTRAP_SOURCE,
+  requireElement,
+  functionNameMarks,
+} from "./vmBootstrapSource.js";
 import { SubAgentContext } from "../../../components/CtrlOToExpand.js";
-import { Q5e } from "../../../utils/hooks/functionHookMatchers.js";
+import { deepFreezeInPlace } from "../../../utils/hooks/functionHookMatchers.js";
 
+//@ chunk-4121qate.js:62421-62582 placement
 /**
  * 包装宿主异步函数供 VM 调用：抛出的错误转换为可跨边界的错误，函数原型设为 null。
  */
-//@ chunk-4121qate.js:62421-62582 placement
 function wrapHostFnForVm(e) {
   let o = async (...r) => {
     try {
       return await e(...r);
     } catch (error) {
-      let { msg: msg, name: i, stack: stack } = describeThrownValue(error);
+      let { msg, name: i, stack } = describeThrownValue(error);
       throw createSealedError(msg, i, stack);
     }
   };
-  return (Object.setPrototypeOf(o, null), o);
+  Object.setPrototypeOf(o, null);
+  return o;
 }
+//@ chunk-4121qate.js:62582-62967 placement
 /**
  * 跨 VM 边界读取数组长度（读取失败、非安全整数或超上限时抛错）。
  */
-//@ chunk-4121qate.js:62582-62967 placement
 function readBoundaryArrayLength(e) {
   let o;
   try {
     o = e.length;
   } catch (error) {
-    throw (
-      hostSideCopier().lost(error),
-      Error("unable to read array length across the workflow VM boundary")
-    );
+    hostSideCopier().lost(error);
+    throw Error("unable to read array length across the workflow VM boundary");
   }
   if (typeof o !== "number" || !Number.isSafeInteger(o))
     throw Error("array length is not a safe integer across the workflow VM boundary");
@@ -75,7 +79,10 @@ function readBoundaryArrayLength(e) {
   return o;
 }
 //@ chunk-4121qate.js:62967-63003 placement
-function LZr(e) {
+/**
+ * 宿主侧复制
+ */
+function hostCopy(e) {
   return hostSideCopier().copy(e);
 }
 //@ chunk-4121qate.js:63003-63246 placement
@@ -83,25 +90,33 @@ var hostSideCopier = io(() =>
   vmModule_2.runInThisContext(
     `(() => {
         'use strict';
-        ${copyAcrossVmBoundary({ arrayLengthCap: CLONE_DEPTH_THRESHOLD, isLeaving: !0, isListSeenFirst: !0, protoKey: "left-out" })}
+        ${copyAcrossVmBoundary({
+          arrayLengthCap: CLONE_DEPTH_THRESHOLD,
+          isLeaving: true,
+          isListSeenFirst: true,
+          protoKey: "left-out",
+        })}
         return { __proto__: null, copy, lost }
       })()`,
-    { filename: "primitivizeDeep" },
+    {
+      filename: "primitivizeDeep",
+    },
   ),
 );
+//@ chunk-4121qate.js:63246-63398 placement
 /**
  * 跨工作流 VM 边界复制数组元素（读取失败的元素为 undefined，长度受上限检查）。
  */
-//@ chunk-4121qate.js:63246-63398 placement
 function snapshotArrayAcrossVm(e) {
   if (e === null || typeof e !== "object") return [];
-  let o = readBoundaryArrayLength(e),
-    r = [];
-  for (let n = 0; n < o; n++)
+  let boundaryArrayLength = readBoundaryArrayLength(e);
+  let r = [];
+  for (let i = 0; i < boundaryArrayLength; i++)
     try {
-      r[n] = e[n];
+      r[i] = e[i];
     } catch (error) {
-      (hostSideCopier().lost(error), (r[n] = void 0));
+      hostSideCopier().lost(error);
+      r[i] = undefined;
     }
   return r;
 }
@@ -119,15 +134,20 @@ function VM_STRING_BRIDGE_SOURCE(e) {
     e,
   );
 }
+//@ chunk-4121qate.js:63774-64481 placement
 /**
  * 在目标 VM 上下文中创建复制工具：sanitize 深复制、snapshot 复制数组、getProp 安全读属性。
  */
-//@ chunk-4121qate.js:63774-64481 placement
 function createVmSideCopier(e, o) {
   return vmModule_2.runInContext(
     `(() => {
       'use strict';
-      ${copyAcrossVmBoundary({ arrayLengthCap: CLONE_DEPTH_THRESHOLD, isLeaving: !0, isListSeenFirst: !0, protoKey: "left-out" })}
+      ${copyAcrossVmBoundary({
+        arrayLengthCap: CLONE_DEPTH_THRESHOLD,
+        isLeaving: true,
+        isListSeenFirst: true,
+        protoKey: "left-out",
+      })}
       return { __proto__: null,
         sanitize: copy,
         snapshot: (v) => {
@@ -148,19 +168,19 @@ function createVmSideCopier(e, o) {
     vmImportOptions(o),
   );
 }
+//@ chunk-4121qate.js:64481-64655 placement
 /**
  * 把跨边界值描述为字符串：字符串原样，原始值转字符串，函数/对象给占位文本。
  */
-//@ chunk-4121qate.js:64481-64655 placement
 function describeBoundaryValue(e) {
   if (typeof e === "string") return e;
   if (e === null || (typeof e !== "object" && typeof e !== "function")) return String(e);
   return typeof e === "function" ? "[function]" : "[object]";
 }
-/**
- * VM 内上限错误的源码片段：capErr 创建可识别的上限错误，lost 处理栈溢出类错误。
- */
 //@ chunk-4121qate.js:64655-65272 placement
+/**
+ * 注入 VM 的源码片段：用 _WeakSet 标记捕获到的错误（capErr/isCap），以及用 message 匹配栈溢出结尾的 isStackEnd；这些片段在插件代码里展开执行，错误因此能跨 VM 边界被识别。
+ */
 var CAPPED_ERROR_SOURCE = `
       const _capSet = new _WeakSet()
       function capErr(msg) {
@@ -170,8 +190,8 @@ var CAPPED_ERROR_SOURCE = `
       }
       function isCap(e) {
         try { return _capSet.has(e) } catch { return false }
-      }`,
-  Sy = `
+      }`;
+var STACK_END_SOURCE = `
       function isStackEnd(e) {
         if (_isError === null || !_isError(e)) return false
         const said = _ownDescriptor(e, 'message')
@@ -181,23 +201,18 @@ var CAPPED_ERROR_SOURCE = `
         if (isCap(e)) throw e
         if (isStackEnd(e)) throw capErr('${STACK_EXHAUSTED_MESSAGE}')
       }`;
+//@ chunk-4121qate.js:65272-69120 placement
 /**
  * 在工作流 VM 边界两侧复制值（数组长度、循环引用、深度上限）
  */
-//@ chunk-4121qate.js:65272-69120 placement
-function copyAcrossVmBoundary({
-  arrayLengthCap: arrayLengthCap,
-  isLeaving: isLeaving,
-  isListSeenFirst: isListSeenFirst,
-  protoKey: protoKey,
-}) {
+function copyAcrossVmBoundary({ arrayLengthCap, isLeaving, isListSeenFirst, protoKey }) {
   let s =
-      arrayLengthCap === void 0
-        ? ""
-        : `if (len > ${arrayLengthCap}) {
+    arrayLengthCap === undefined
+      ? ""
+      : `if (len > ${arrayLengthCap}) {
           throw capErr('array length ' + len + ' exceeds the maximum of ${arrayLengthCap} supported across the workflow VM boundary')
-        }`,
-    i = "const out = []; seen.set(v, out)";
+        }`;
+  let i = "const out = []; seen.set(v, out)";
   return `
       const _WeakMap = WeakMap, _WeakSet = WeakSet, _isArray = Array.isArray,
             _keys = Object.keys, _defineProperty = Object.defineProperty,
@@ -205,7 +220,7 @@ function copyAcrossVmBoundary({
             _isError = typeof Error.isError === 'function' ? Error.isError : null,
             _ownDescriptor = Object.getOwnPropertyDescriptor
       ${CAPPED_ERROR_SOURCE}
-      ${Sy}
+      ${STACK_END_SOURCE}
       function checkedLength(v) {
         let len
         try { len = v.length } catch (e) {
@@ -285,37 +300,52 @@ function copyAcrossVmBoundary({
       }`;
 }
 //@ chunk-4121qate.js:69120-69127 placement
-var Qp;
+/**
+ * 缓存的 VM 上下文
+ */
+var cachedVmContext;
 //@ chunk-4121qate.js:69127-69189 placement
-function rr() {
-  return ((Qp ??= vmModule.runInContext(BT(VM_BOOTSTRAP_SOURCE), SubAgentContext({}))), Qp);
+/**
+ * 取（懒创建）VM 上下文
+ */
+function vmContext() {
+  cachedVmContext ??= vmModule_2.runInContext(withUseStrict(VM_BOOTSTRAP_SOURCE), SubAgentContext({}));
+  return cachedVmContext;
 }
 //@ chunk-4121qate.js:69189-69219 placement
-var Bbi = (e) => rr().Fragment(e);
+/**
+ * VM 中的 Fragment
+ */
+var vmFragment = (e) => vmContext().Fragment(e);
 //@ chunk-4121qate.js:69219-69256 placement
-var jbi = (e, o, ...r) => rr().h(e, o, ...r);
+/**
+ * VM 中的元素构造
+ */
+var vmCreateElement = (e, o, ...r) => vmContext().h(e, o, ...r);
+//@ chunk-4121qate.js:69256-69364 placement
 /**
  * 在 VM 中构建元素（children 规整为数组）。
  */
-//@ chunk-4121qate.js:69256-69364 placement
 function buildVmElement(e, o) {
-  let { children: children, ...n } = o ?? {},
-    s = children === void 0 ? [] : Array.isArray(children) ? children : [children];
-  return requireElement(jbi(e, n, ...s));
+  let { children, ...n } = o ?? {};
+  let s = children === undefined ? [] : Array.isArray(children) ? children : [children];
+  return requireElement(vmCreateElement(e, n, ...s));
 }
 //@ chunk-4121qate.js:69364-69406 placement
-var Ny = (e) => dfr.mark((o) => Q5e(buildVmElement(e, o)), e);
-
+/**
+ * 带名字的 VM 元素构造器
+ */
+var namedVmElementBuilder = (e) => functionNameMarks.mark((o) => deepFreezeInPlace(buildVmElement(e, o)), e);
 export {
   copyAcrossVmBoundary,
   buildVmElement,
-  Bbi,
-  Ny,
+  vmFragment,
+  namedVmElementBuilder,
   describeBoundaryValue,
   createVmSideCopier,
   VM_STRING_BRIDGE_SOURCE,
   wrapHostFnForVm,
-  LZr,
+  hostCopy,
   snapshotArrayAcrossVm,
-  jbi,
+  vmCreateElement,
 };

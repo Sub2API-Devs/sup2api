@@ -13,15 +13,18 @@ import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
 import { getRootSession } from "../../bootstrap/state.js";
 
 //@ chunk-aepeg2w5.js:274904-274916 placement
-var jos = 1e4;
+/**
+ * 导出常量或表 `MAX_TRACKED_CALLS`：值为 1e4。
+ */
+var MAX_TRACKED_CALLS = 1e4;
+//@ chunk-aepeg2w5.js:274916-275382 placement
 /**
  * 记录文件引用类调用。
  */
-//@ chunk-aepeg2w5.js:274916-275382 placement
 class FileReferenceTracker {
   #n = null;
   #e = new Set();
-  #t = !1;
+  #t = false;
   #r = new Set();
   fileReferenceHintLatch() {
     return this.#n;
@@ -30,13 +33,14 @@ class FileReferenceTracker {
     this.#n = e;
   }
   isFileReferenceCall(e) {
-    return e === void 0 ? this.#t : this.#e.has(e);
+    return e === undefined ? this.#t : this.#e.has(e);
   }
   noteFileReferenceCall(e) {
-    if (((this.#t = !0), e === void 0 || this.#e.has(e))) return;
-    if (this.#e.size >= jos) {
+    this.#t = true;
+    if (e === undefined || this.#e.has(e)) return;
+    if (this.#e.size >= MAX_TRACKED_CALLS) {
       let n = this.#e.values().next().value;
-      if (n !== void 0) this.#e.delete(n);
+      if (n !== undefined) this.#e.delete(n);
     }
     this.#e.add(e);
   }
@@ -48,25 +52,43 @@ class FileReferenceTracker {
   }
 }
 //@ chunk-aepeg2w5.js:275382-275409 placement
-var U3t = new SessionRootSlot(() => new FileReferenceTracker());
+/**
+ * 导出函数 `fileReferenceTrackerSlot`。
+ */
+var fileReferenceTrackerSlot = new SessionRootSlot(() => new FileReferenceTracker());
 //@ chunk-aepeg2w5.js:275409-275468 placement
-function Wos() {
-  return U3t.of(getRootSession()).fileReferenceHintLatch();
+/**
+ * 导出函数 `fileReferenceHintLatch`：返回 U3t.of(getRootSession()).fileReferenceHintLatch()。
+ */
+function fileReferenceHintLatch() {
+  return fileReferenceTrackerSlot.of(getRootSession()).fileReferenceHintLatch();
 }
 //@ chunk-aepeg2w5.js:275468-275529 placement
-function Mxt(e) {
-  U3t.of(getRootSession()).replaceFileReferenceHintLatch(e);
+/**
+ * 导出函数 `replaceFileReferenceHintLatch`：参数 e。
+ */
+function replaceFileReferenceHintLatch(offered) {
+  fileReferenceTrackerSlot.of(getRootSession()).replaceFileReferenceHintLatch(offered);
 }
+//@ chunk-aepeg2w5.js:275529-275587 placement
 /**
  * 是否为文件引用调用。
  */
-//@ chunk-aepeg2w5.js:275529-275587 placement
-function isFileReferenceCall(e) {
-  return U3t.of(getRootSession()).isFileReferenceCall(e);
+function isFileReferenceCall(toolUseId) {
+  return fileReferenceTrackerSlot.of(getRootSession()).isFileReferenceCall(toolUseId);
 }
 //@ chunk-aepeg2w5.js:275587-275640 placement
-function Eto(e) {
-  U3t.of(getRootSession()).noteFileReferenceCall(e);
+/**
+ * 导出函数 `noteFileReferenceCall`：参数 e。
+ */
+function noteFileReferenceCall(e) {
+  fileReferenceTrackerSlot.of(getRootSession()).noteFileReferenceCall(e);
 }
-
-export { Mxt, U3t, Wos, isFileReferenceCall, Eto, jos };
+export {
+  replaceFileReferenceHintLatch,
+  fileReferenceTrackerSlot,
+  fileReferenceHintLatch,
+  isFileReferenceCall,
+  noteFileReferenceCall,
+  MAX_TRACKED_CALLS,
+};

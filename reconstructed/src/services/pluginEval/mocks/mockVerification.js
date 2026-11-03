@@ -8,40 +8,46 @@
  * pieces: chunk-qchp9vrd.js (8)
  * attribution: placement 8
  */
-import { rm as rm_2, rm as rm_2_2, rm as rm_3, rm as rm_4, rm as rm_5 } from "fs/promises";
-import { Brn, checkExpectGuards } from "../../../cli/handlers/pluginEval/mockGuards.js";
-import { Po, Hi } from "../runTrace.js";
-import { readReadyMockServers, ko } from "./mockRelayProtocol.js";
+import { rm as rm_2 } from "fs/promises";
+import { EVAL_ABORTED_BY_MOCK, checkExpectGuards } from "../../../cli/handlers/pluginEval/mockGuards.js";
+import { assistantContent, ToolResultBlockSchema } from "../runTrace.js";
+import { readReadyMockServers, MAX_RELAY_LOG_BYTES } from "./mockRelayProtocol.js";
 import { count } from "../../../utils/collections.js";
 import { replaceControlChars } from "../../../utils/resultError.js";
 
 //@ chunk-qchp9vrd.js:174088-175581 placement
-function findMockServersInInit(e) {
-  let n = new Set(e.mockedTools),
-    r = new Map();
-  for (let server of e.servers)
+function findMockServersInInit(mocks) {
+  let n = new Set(mocks.mockedTools);
+  let r = new Map();
+  for (let server of mocks.servers)
     for (let tool of server.tools) {
       let S = server.expects[tool];
-      if (S) r.set(server.toolFullNames[tool] ?? "", { server: server.dirName, tool: tool, expect: S });
+      if (S)
+        r.set(server.toolFullNames[tool] ?? "", {
+          server: server.dirName,
+          tool,
+          expect: S,
+        });
     }
   let a = new Set(
-      e.servers.flatMap((server) =>
-        server.tools
-          .filter((tool) => server.responderKinds[tool] === "agent")
-          .map((R) => server.toolFullNames[R] ?? ""),
-      ),
+    mocks.servers.flatMap((server) =>
+      server.tools
+        .filter((tool) => server.responderKinds[tool] === "agent")
+        .map((tool) => server.toolFullNames[tool] ?? ""),
     ),
-    s = new Set(),
-    h = new Set(),
-    w = 0,
-    b = `${Brn} ${e.nonce}:`;
+  );
+  let s = new Set();
+  let h = new Set();
+  let w = 0;
+  let b = `${EVAL_ABORTED_BY_MOCK} ${mocks.nonce}:`;
   return (y) => {
-    if (y.type === "system" && y.subtype === "init") return checkMockRegistration(y, e);
-    for (let R of Po(y)) {
+    if (y.type === "system" && y.subtype === "init") return checkMockRegistration(y, mocks);
+    for (let R of assistantContent(y)) {
       let S = R;
       if (y.type === "assistant" && S?.type === "tool_use") {
         if (typeof S.id === "string" && typeof S.name === "string" && n.has(S.name)) {
-          if ((s.add(S.id), a.has(S.name))) h.add(S.id);
+          s.add(S.id);
+          if (a.has(S.name)) h.add(S.id);
           let T = r.get(S.name);
           if (T) {
             let N = checkExpectGuards(S.input, T.expect);
@@ -49,24 +55,28 @@ function findMockServersInInit(e) {
               return {
                 kind: "abort",
                 message: `stopped by harness: ${T.server}/${T.tool} \u2014 the model's call violates expect: ${N}`,
-                abort: { server: T.server, tool: T.tool, reason: `the model's call violates expect: ${N}` },
+                abort: {
+                  server: T.server,
+                  tool: T.tool,
+                  reason: `the model's call violates expect: ${N}`,
+                },
               };
           }
         }
       } else if (y.type === "user") {
-        let safeParse = Hi().safeParse(R);
-        if (safeParse.success && h.has(safeParse.data.tool_use_id) && ++w > 2 * e.agentCallBudget)
+        let T = ToolResultBlockSchema().safeParse(R);
+        if (T.success && h.has(T.data.tool_use_id) && ++w > 2 * mocks.agentCallBudget)
           return {
             kind: "integrity",
-            message: `mocks: agent-served mock results in the trace exceeded twice the run budget (${e.agentCallBudget}) \u2014 the harness's own gate refuses at the budget, so this run's mocked calls were answered other than through it; the run is not graded`,
+            message: `mocks: agent-served mock results in the trace exceeded twice the run budget (${mocks.agentCallBudget}) \u2014 the harness's own gate refuses at the budget, so this run's mocked calls were answered other than through it; the run is not graded`,
           };
         if (
-          safeParse.success &&
-          safeParse.data.is_error === !0 &&
-          s.has(safeParse.data.tool_use_id) &&
-          toolResultText(safeParse.data.content).startsWith(b)
+          T.success &&
+          T.data.is_error === true &&
+          s.has(T.data.tool_use_id) &&
+          toolResultText(T.data.content).startsWith(b)
         ) {
-          let trimmed = toolResultText(safeParse.data.content).slice(b.length).trim();
+          let trimmed = toolResultText(T.data.content).slice(b.length).trim();
           return {
             kind: "abort",
             message: `stopped by mock: ${trimmed}`,
@@ -78,14 +88,14 @@ function findMockServersInInit(e) {
     return null;
   };
 }
+//@ chunk-qchp9vrd.js:175581-176875 placement
 /**
  * 确认每个模拟替身已注册进子会话的 MCP 服务器（可能被托管策略剔除）。
  */
-//@ chunk-qchp9vrd.js:175581-176875 placement
 async function checkMockRegistration(e, n) {
-  let r = Array.isArray(e.mcp_servers) ? e.mcp_servers : [];
+  let mcpServers = Array.isArray(e.mcp_servers) ? e.mcp_servers : [];
   for (let server of n.servers) {
-    let filtered = r.filter((y) => y.name === server.registeredName);
+    let filtered = mcpServers.filter((mcpServer) => mcpServer.name === server.registeredName);
     if (filtered.length !== 1)
       return {
         kind: "registration",
@@ -100,58 +110,69 @@ async function checkMockRegistration(e, n) {
         message: `mock stand-in for ${server.dirName} ("${server.registeredName}") did not connect (status: ${String(filtered[0]?.status)})`,
       };
   }
-  let a = await readReadyMockServers(n.callLogPath, n.nonce);
+  let readyMockServers = await readReadyMockServers(n.callLogPath, n.nonce);
   for (let server of n.servers)
-    if (!a.has(server.dirName))
+    if (!readyMockServers.has(server.dirName))
       return {
         kind: "identity",
         message: `the server connected as "${server.registeredName}" did not identify as this run's mock stand-in for ${server.dirName} \u2014 refusing to run against what may be the real server`,
       };
-  let s = new Set(Array.isArray(e.tools) ? e.tools.map(String) : []),
-    filtered = n.mockedTools.filter((mockedTool) => !s.has(mockedTool));
+  let s = new Set(Array.isArray(e.tools) ? e.tools.map(String) : []);
+  let filtered = n.mockedTools.filter((mockedTool) => !s.has(mockedTool));
   if (filtered.length > 0)
     return {
       kind: "tools_missing",
       message: `mocked tools not offered by the child: ${filtered.join(", ")}`,
     };
-  return (await rm_4(n.configPath, { force: !0 }).catch(() => {}), null);
+  await rm_2(n.configPath, {
+    force: true,
+  }).catch(() => {});
+  return null;
 }
+//@ chunk-qchp9vrd.js:176875-177034 placement
 /**
  * 把工具结果内容（字符串或文本块数组）转换为文本。
  */
-//@ chunk-qchp9vrd.js:176875-177034 placement
-function toolResultText(e) {
-  if (typeof e === "string") return e;
-  if (Array.isArray(e))
-    return e.map((n) => (n && typeof n === "object" && "text" in n ? String(n.text) : "")).join("");
+function toolResultText(content) {
+  if (typeof content === "string") return content;
+  if (Array.isArray(content))
+    return content.map((n) => (n && typeof n === "object" && "text" in n ? String(n.text) : "")).join("");
   return "";
 }
 //@ chunk-qchp9vrd.js:177034-177173 placement
 function parseMockAbortReason(e) {
   let match = /^([^/\s]+)\/(\S+) \u2014 (.*)$/s.exec(e);
   return match
-    ? { server: match[1], tool: match[2], reason: match[3] }
-    : { server: "?", tool: "?", reason: e };
+    ? {
+        server: match[1],
+        tool: match[2],
+        reason: match[3],
+      }
+    : {
+        server: "?",
+        tool: "?",
+        reason: e,
+      };
 }
+//@ chunk-qchp9vrd.js:177173-177535 placement
 /**
  * 给 trace 里调用了模拟工具的条目标注应答者类型与结论（ok、tool_error、abort、no_result）。
  */
-//@ chunk-qchp9vrd.js:177173-177535 placement
-function annotateMockedToolCalls(e, n) {
-  let r = `${Brn} ${n.nonce}:`,
-    a = new Map();
-  for (let server of n.servers)
+function annotateMockedToolCalls(toolCalls, mocks) {
+  let r = `${EVAL_ABORTED_BY_MOCK} ${mocks.nonce}:`;
+  let a = new Map();
+  for (let server of mocks.servers)
     for (let tool of server.tools) {
       let w = server.toolFullNames[tool];
-      if (w !== void 0) a.set(w, server.responderKinds[tool] ?? "fixed");
+      if (w !== undefined) a.set(w, server.responderKinds[tool] ?? "fixed");
     }
-  for (let s of e) {
+  for (let s of toolCalls) {
     let h = a.get(s.name);
-    if (h === void 0) continue;
+    if (h === undefined) continue;
     s.mock = {
       responder: h,
       verdict:
-        s.isError === void 0
+        s.isError === undefined
           ? "no_result"
           : !s.isError
             ? "ok"
@@ -161,45 +182,46 @@ function annotateMockedToolCalls(e, n) {
     };
   }
 }
+//@ chunk-qchp9vrd.js:177535-179018 placement
 /**
  * 把替身的调用日志与 trace 对照，超出大小上限时无法验证。
  */
-//@ chunk-qchp9vrd.js:177535-179018 placement
-function verifyMockCallLog(e, n, r, a) {
+function verifyMockCallLog(toolCalls, n, mocks, a) {
   if (n === null)
-    return `the mock call log exceeded ${Math.round(ko / 1048576)} MiB, so the stand-ins' records cannot be verified against the trace \u2014 reduce per-call payloads or split the case; the run is not graded`;
+    return `the mock call log exceeded ${Math.round(MAX_RELAY_LOG_BYTES / 1048576)} MiB, so the stand-ins' records cannot be verified against the trace \u2014 reduce per-call payloads or split the case; the run is not graded`;
   let s = new Map();
-  for (let server of r.servers)
+  for (let server of mocks.servers)
     for (let tool of server.tools)
-      s.set(server.toolFullNames[tool] ?? "", { server: server.dirName, tool: tool });
+      s.set(server.toolFullNames[tool] ?? "", {
+        server: server.dirName,
+        tool,
+      });
   let h = new Map();
   for (let S of n) {
     let T = `${S.server}/${S.tool}`;
     h.set(T, (h.get(T) ?? 0) + 1);
   }
-  let w = new Map(),
-    b = null,
-    lastIndex = e.findLastIndex((S) => S.isError !== void 0),
-    R = new Set();
-  if (a !== null && r.agentRun !== null)
-    for (let server of r.servers)
+  let w = new Map();
+  let b = null;
+  let lastIndex = toolCalls.findLastIndex((S) => S.isError !== undefined);
+  let R = new Set();
+  if (a !== null && mocks.agentRun !== null)
+    for (let server of mocks.servers)
       for (let tool of server.tools) {
         if (server.responderKinds[tool] !== "agent") continue;
-        let N = count(e, (x) => x.name === server.toolFullNames[tool] && x.isError !== void 0);
-        if (r.agentRun.state.relaysReceived(server.dirName, tool) > N) R.add(server.dirName);
+        let N = count(toolCalls, (x) => x.name === server.toolFullNames[tool] && x.isError !== undefined);
+        if (mocks.agentRun.state.relaysReceived(server.dirName, tool) > N) R.add(server.dirName);
       }
-  for (let [S, T] of e.entries()) {
+  for (let [S, T] of toolCalls.entries()) {
     let N = s.get(T.name);
-    if (N === void 0) continue;
-    if (T.isError === void 0) {
+    if (N === undefined) continue;
+    if (T.isError === undefined) {
       if (a === "unprovokable" && S > lastIndex) continue;
       if (R.has(N.server)) continue;
     } else if (T.deniedByChild) continue;
     let x = `${N.server}/${N.tool}`;
-    if (
-      (w.set(x, (w.get(x) ?? 0) + 1), b === null && T.isError === !0 && isMcpDisconnectError(T.output ?? ""))
-    )
-      b = x;
+    w.set(x, (w.get(x) ?? 0) + 1);
+    if (b === null && T.isError === true && isMcpDisconnectError(T.output ?? "")) b = x;
   }
   for (let [S, T] of w) {
     let N = h.get(S) ?? 0;
@@ -216,19 +238,23 @@ function isMcpDisconnectError(e) {
     /^MCP server "[^"\n]*" is not connected\b/.test(e) || /^MCP error -32000: Connection closed\b/.test(e)
   );
 }
+//@ chunk-qchp9vrd.js:179140-179573 placement
 /**
  * 统计模拟工具调用次数与错误数，并列出调用了被测服务器但未被模拟的工具及次数。
  */
-//@ chunk-qchp9vrd.js:179140-179573 placement
-function summarizeMockUsage(e, n) {
-  let r = new Set(n.mockedTools),
-    mapped = n.servers.map((server) => ({ prefix: `mcp__${server.segment}__`, dirName: server.dirName })),
-    s = 0,
-    h = 0,
-    w = new Map();
-  for (let b of e) {
+function summarizeMockUsage(toolCalls, mocks) {
+  let r = new Set(mocks.mockedTools);
+  let mapped = mocks.servers.map((server) => ({
+    prefix: `mcp__${server.segment}__`,
+    dirName: server.dirName,
+  }));
+  let s = 0;
+  let h = 0;
+  let w = new Map();
+  for (let b of toolCalls) {
     if (r.has(b.name)) {
-      if ((s++, b.mock?.verdict === "tool_error")) h++;
+      s++;
+      if (b.mock?.verdict === "tool_error") h++;
       continue;
     }
     let found = mapped.find((R) => b.name.startsWith(R.prefix));
@@ -237,9 +263,15 @@ function summarizeMockUsage(e, n) {
       w.set(R, (w.get(R) ?? 0) + 1);
     }
   }
-  return { total: s, errors: h, unmocked: [...w].map(([b, y]) => ({ tool: b, count: y })) };
+  return {
+    total: s,
+    errors: h,
+    unmocked: [...w].map(([b, y]) => ({
+      tool: b,
+      count: y,
+    })),
+  };
 }
-
 export {
   findMockServersInInit,
   annotateMockedToolCalls,

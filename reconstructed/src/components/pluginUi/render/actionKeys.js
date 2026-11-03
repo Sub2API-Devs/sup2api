@@ -73,10 +73,10 @@ import {
   PressButton,
   releaseInkFocus,
 } from "./MarkdownBlock.js";
-import { PANE_COLORS, Ftr } from "../../../plugins/functionHooks/panes.js";
-import { SRe } from "../../../plugins/functionHooks/uiApi.js";
-import { j, qt, Se, y, Q, zt, P } from "../../../../vendor/react/cjs/react.production.js";
-import { ge } from "../../../utils/identity.js";
+import { PANE_COLORS, paneColorOf } from "../../../plugins/functionHooks/panes.js";
+import { logRejection } from "../../../plugins/functionHooks/uiApi.js";
+import { init_react_production, qt, Se, y, Q, zt, P } from "../../../../vendor/react/cjs/react.production.js";
+import { identity } from "../../../utils/identity.js";
 import { uniq } from "../../../utils/collections.js";
 import { handleUiPress } from "../../../plugins/functionHooks/ui/interactions.js";
 import { useKeybindingContext } from "../../../keybindings/KeybindingContext.js";
@@ -125,7 +125,7 @@ Ar(actionKeysNamespace, {
   heldBack: () => heldBack,
   heldFor: () => heldFor,
   heldOff: () => heldOff,
-  hexOfNamed: () => Ftr,
+  hexOfNamed: () => paneColorOf,
   highlightPath: () => highlightPath,
   hoverGroupsStore: () => hoverGroupsStore,
   hoverOverridesOf: () => hoverOverridesOf,
@@ -137,7 +137,7 @@ Ar(actionKeysNamespace, {
   renderInputKey: () => renderInputKey,
   rulerCut: () => rulerCut,
   selectFromTerminal: () => selectFromTerminal,
-  settleQuietly: () => SRe,
+  settleQuietly: () => logRejection,
   siteFailed: () => siteFailed,
   useActionKeys: () => useActionKeys,
   useEngineDrew: () => useEngineDrew,
@@ -156,24 +156,28 @@ Ar(actionKeysNamespace, {
   withHexColors: () => withHexColors,
 });
 //@ chunk-bc20zedk.js:4019-4023 placement
-j();
+init_react_production();
 //@ chunk-bc20zedk.js:4023-4081 placement
-var br = (o, p) => o.rank > p.rank || (o.rank === p.rank && o.seq > p.seq);
+var compareActionRank = (o, p) => o.rank > p.rank || (o.rank === p.rank && o.seq > p.seq);
 //@ chunk-bc20zedk.js:4081-4343 placement
 function createActionKeyRegistry() {
-  let o = [],
-    p = 0;
+  let o = [];
+  let p = 0;
   function a(m) {
     let index = o.indexOf(m);
     if (index >= 0) o.splice(index, 1);
   }
   return {
     add: (m) => {
-      (a(m), (m.seq = ++p), o.push(m));
+      a(m);
+      m.seq = ++p;
+      o.push(m);
     },
     remove: a,
     winnerOf: (m) =>
-      o.filter((f) => f.action === m).reduce((f, u) => (f === void 0 || br(u, f) ? u : f), void 0),
+      o
+        .filter((f) => f.action === m)
+        .reduce((acc, u) => (acc === undefined || compareActionRank(u, acc) ? u : acc), undefined),
     held: () => [...o],
     clear: () => {
       o.length = 0;
@@ -181,68 +185,88 @@ function createActionKeyRegistry() {
   };
 }
 //@ chunk-bc20zedk.js:4343-4374 placement
-var bt = ge(createActionKeyRegistry(), (o) => o.clear());
+var clearActionKeys = identity(createActionKeyRegistry(), (o) => o.clear());
 //@ chunk-bc20zedk.js:4374-4439 placement
-var hn = (o, p) => uniq(p.filter((a) => a.action === o).map((a) => a.context));
+var contextsForAction = (action, p) => uniq(p.filter((a) => a.action === action).map((a) => a.context));
 //@ chunk-bc20zedk.js:4439-4486 placement
-var Tn = (o) => (o === "Pane" ? 2 : o === "AbovePrompt" ? 1 : 0);
+var renderPriorityOf = (component) => (component === "Pane" ? 2 : component === "AbovePrompt" ? 1 : 0);
 //@ chunk-bc20zedk.js:4486-4599 placement
-var pressFromTerminal = (o, p) =>
-  void SRe(
+var pressFromTerminal = (o, link) =>
+  void logRejection(
     `ui.press ${o.plugin}`,
-    handleUiPress({ plugin: o.plugin, handle: o.handle, surface: "terminal", link: p }),
+    handleUiPress({
+      plugin: o.plugin,
+      handle: o.handle,
+      surface: "terminal",
+      link,
+    }),
   );
 //@ chunk-bc20zedk.js:4599-4603 placement
-j();
+init_react_production();
 //@ chunk-bc20zedk.js:4603-4619 placement
 var RenderInstance = qt(null);
 //@ chunk-bc20zedk.js:4619-5146 placement
-function useActionKeys(o) {
-  let { plugin: plugin, handle: handle, action: action } = o,
-    f = Se(RenderInstance),
-    u = useKeybindingContext(),
-    c = useHasAutoDialog(),
-    g = Tn(f?.component),
-    [x] = y(() => ({ action: action, rank: g, seq: 0, plugin: plugin, handle: handle })),
-    h = u?.bindings,
-    C = Q(() => hn(action, h ?? []), [action, h]);
-  (zt(() => {
-    ((x.plugin = plugin), (x.handle = handle), (x.rank = g));
-  }),
-    P(() => ((x.action = action), bt.add(x), () => bt.remove(x)), [action, x]),
-    P(() => {
-      if (!u || c) return;
-      let mapped = C.map((b) =>
-        u.registerHandler({
-          action: action,
-          context: b,
-          handler: () => {
-            let winnerOf = bt.winnerOf(action);
-            if (winnerOf === void 0) return !1;
-            pressFromTerminal({ plugin: winnerOf.plugin, handle: winnerOf.handle });
-          },
-          singleKey: !0,
-          fallback: !0,
-        }),
-      );
-      return () => {
-        for (let b of mapped) b();
-      };
-    }, [u, action, C, c]));
+function useActionKeys(props) {
+  let { plugin, handle, action } = props;
+  let f = Se(RenderInstance);
+  let keybindingContext = useKeybindingContext();
+  let hasAutoDialog = useHasAutoDialog();
+  let rank = renderPriorityOf(f?.component);
+  let [x] = y(() => ({
+    action,
+    rank,
+    seq: 0,
+    plugin,
+    handle,
+  }));
+  let bindings = keybindingContext?.bindings;
+  let C = Q(() => contextsForAction(action, bindings ?? []), [action, bindings]);
+  zt(() => {
+    x.plugin = plugin;
+    x.handle = handle;
+    x.rank = rank;
+  });
+  P(() => {
+    x.action = action;
+    clearActionKeys.add(x);
+    return () => clearActionKeys.remove(x);
+  }, [action, x]);
+  P(() => {
+    if (!keybindingContext || hasAutoDialog) return;
+    let mapped = C.map((context) =>
+      keybindingContext.registerHandler({
+        action,
+        context,
+        handler: () => {
+          let T = clearActionKeys.winnerOf(action);
+          if (T === undefined) return false;
+          pressFromTerminal({
+            plugin: T.plugin,
+            handle: T.handle,
+          });
+        },
+        singleKey: true,
+        fallback: true,
+      }),
+    );
+    return () => {
+      for (let b of mapped) b();
+    };
+  }, [keybindingContext, action, C, hasAutoDialog]);
 }
 //@ chunk-bc20zedk.js:5146-5179 placement
-function ActionKeysSeat(o) {
-  return (useActionKeys(o), null);
+function ActionKeysSeat(props) {
+  useActionKeys(props);
+  return null;
 }
 //@ chunk-bc20zedk.js:5179-5183 placement
-j();
+init_react_production();
 //@ chunk-bc20zedk.js:5183-5200 placement
 var BodyColumns = qt(null);
 //@ chunk-bc20zedk.js:5200-5204 placement
-j();
+init_react_production();
 //@ chunk-bc20zedk.js:5204-5221 placement
 var ClickedPress = qt(null);
 //@ chunk-bc20zedk.js:5221-5225 placement
-j();
-
+init_react_production();
 export { ClickedPress, BodyColumns, actionKeysNamespace, pressFromTerminal, ActionKeysSeat, RenderInstance };

@@ -8,23 +8,22 @@
  * pieces: chunk-4121qate.js (44)
  * attribution: placement 44
  */
-import * as vmModule from "vm";
+import "vm";
 import * as vmModule_2 from "vm";
-import * as vmModule_3 from "vm";
-import * as vmModule_4 from "vm";
-import * as vmModule_5 from "vm";
-import * as vmModule_6 from "vm";
-import * as vmModule_7 from "vm";
-import * as vmModule_8 from "vm";
-import * as vmModule_9 from "vm";
-import * as vmModule_10 from "vm";
-import * as vmModule_11 from "vm";
-import * as vmModule_12 from "vm";
-import * as vmModule_13 from "vm";
-import * as vmModule_14 from "vm";
+import "vm";
+import "vm";
+import "vm";
+import "vm";
+import "vm";
+import "vm";
+import "vm";
+import "vm";
+import "vm";
+import "vm";
+import "vm";
+import "vm";
 import {
   isArrayBuffer,
-  isArrayBuffer as isArrayBuffer_2,
   isUint8Array,
   isTypedArray,
   isDataView,
@@ -48,29 +47,24 @@ import {
   isSetIterator,
   isModuleNamespaceObject,
 } from "util/types";
+import { resolve } from "path";
+import { nullPrototypeFunction, freezeApiObject } from "../dispatch/chain.js";
 import {
-  resolve,
-  resolve as resolve_2,
-  resolve as resolve_3,
-  resolve as resolve_4,
-  resolve as resolve_5,
-  resolve as resolve_6,
-  resolve as resolve_7,
-  resolve as resolve_8,
-  resolve as resolve_9,
-} from "path";
-import { NH, freezeApiObject } from "../dispatch/chain.js";
-import { pd, NSi, $Si, Q5e } from "../../../utils/hooks/functionHookMatchers.js";
+  matcherLog,
+  MAX_MATCHER_DEPTH,
+  MAX_MATCHER_KEYS,
+  deepFreezeInPlace,
+} from "../../../utils/hooks/functionHookMatchers.js";
 import {
   describeLogArg,
   createVmInboundCopier,
   createVmRealm,
-  freeze,
-  FAn,
+  vUe,
+  callWithArgs,
   createVmErrorDescriber,
   VM_HOST_FN_WRAPPER,
 } from "./vmRealm.js";
-import { BT, VM_PRELUDE_SOURCE } from "./vmBootstrapSource.js";
+import { withUseStrict, VM_PRELUDE_SOURCE } from "./vmBootstrapSource.js";
 import { errorMessage } from "../../../utils/errors.js";
 import {
   STACK_EXHAUSTED_MESSAGE,
@@ -78,16 +72,19 @@ import {
   STACK_OVERFLOW_MESSAGES,
   MAX_STACK_NESTING_DEPTH,
 } from "../../../utils/structuredCloneLimits.js";
-import { HooksError, Qeo, apr, _xt, dpr } from "../hooksErrors.js";
-import { Pf } from "../../../utils/untrustedValues.js";
+import { HooksError, hasWeakSetTag, addWeakSetTag, tagError, readTag } from "../hooksErrors.js";
+import { isUntrustedObject } from "../../../utils/untrustedValues.js";
 import { SubAgentContext } from "../../../components/CtrlOToExpand.js";
 
+//@ chunk-4121qate.js:230219-230408 placement
 /**
  * 为 VM 构造冻结的 console（log/info/warn/error/debug），输出带插件前缀写入调试日志。
  */
-//@ chunk-4121qate.js:230219-230408 placement
 function createVmConsole(e, o) {
-  let r = (n) => NH(e((...s) => pd().log(`${o} console.${n}: ${s.map(describeLogArg).join(" ")}`)));
+  let r = (n) =>
+    nullPrototypeFunction(
+      e((...s) => matcherLog().log(`${o} console.${n}: ${s.map(describeLogArg).join(" ")}`)),
+    );
   return freezeApiObject({
     log: r("log"),
     info: r("info"),
@@ -98,8 +95,8 @@ function createVmConsole(e, o) {
 }
 //@ chunk-4121qate.js:230430-232816 placement
 var VM_MATCHER_SOURCE = (e) =>
-  vmModule_4.runInContext(
-    BT(`(() => {
+  vmModule_2.runInContext(
+    withUseStrict(`(() => {
       const _isArray = Array.isArray, _keys = Object.keys,
             _create = Object.create, _defineProperty = Object.defineProperty,
             _getPrototypeOf = Object.getPrototypeOf, _RegExp = RegExp,
@@ -122,15 +119,15 @@ var VM_MATCHER_SOURCE = (e) =>
         return _create(_create(_ObjectPrototype, { [_toStringTag]: tag }))
       }
       const copy = (value, depth, budget) => {
-        if (depth > ${NSi}) {
+        if (depth > ${MAX_MATCHER_DEPTH}) {
           throw new _Error(
-            'the matcher is deeper than ${NSi} levels ' +
+            'the matcher is deeper than ${MAX_MATCHER_DEPTH} levels ' +
             '(a partial of e is a few levels deep; a cycle never ends)',
           )
         }
         if (--budget.left < 0) {
           throw new _Error(
-            'the matcher holds more than ${$Si} values ' +
+            'the matcher holds more than ${MAX_MATCHER_KEYS} values ' +
             '(a partial of e names a few fields)',
           )
         }
@@ -157,17 +154,17 @@ var VM_MATCHER_SOURCE = (e) =>
         }
         return out
       }
-      return matcher => copy(matcher, 0, { left: ${$Si} })
+      return matcher => copy(matcher, 0, { left: ${MAX_MATCHER_KEYS} })
     })()`),
     e,
   );
+//@ chunk-4121qate.js:232838-233062 placement
 /**
  * 在 VM 上下文中创建 "value instanceof Object" 判断函数（异常返回 false）。
  */
-//@ chunk-4121qate.js:232838-233062 placement
 var createVmInstanceofObject = (e) =>
-  vmModule_5.runInContext(
-    BT(`(() => {
+  vmModule_2.runInContext(
+    withUseStrict(`(() => {
       const _Object = Object
       return value => {
         try {
@@ -180,8 +177,14 @@ var createVmInstanceofObject = (e) =>
     e,
   );
 //@ chunk-4121qate.js:233062-233135 placement
-function lSi(e) {
-  return createVmInboundCopier(e, { arrayLengthCap: void 0, protoKey: "carried" });
+/**
+ * VM 入站复制器
+ */
+function inboundCopier(e) {
+  return createVmInboundCopier(e, {
+    arrayLengthCap: undefined,
+    protoKey: "carried",
+  });
 }
 //@ chunk-4121qate.js:233189-233399 placement
 var serializeUrl = (e) =>
@@ -199,39 +202,54 @@ var serializeUrl = (e) =>
     hash: e.hash,
   });
 //@ chunk-4121qate.js:233443-233524 placement
-function WP(e) {
+/**
+ * 断言 ArrayBuffer
+ */
+function requireArrayBuffer(e) {
   if (!isArrayBuffer(e)) throw TypeError("an ArrayBuffer was expected");
   return e;
 }
 //@ chunk-4121qate.js:233524-233616 placement
-function GP(e) {
+/**
+ * 断言函数
+ */
+function requireFunction(e) {
   if (typeof e !== "function") throw TypeError("a function was expected");
   return e;
 }
 //@ chunk-4121qate.js:233659-233738 placement
-function En(e) {
+/**
+ * 断言 Uint8Array
+ */
+function requireUint8Array(e) {
   if (!isUint8Array(e)) throw TypeError("a Uint8Array was expected");
   return e;
 }
 //@ chunk-4121qate.js:233738-233826 placement
-function at(e) {
+/**
+ * 断言字符串
+ */
+function requireString(e) {
   if (typeof e !== "string") throw TypeError("a string was expected");
   return e;
 }
+//@ chunk-4121qate.js:233826-234554 placement
 /**
  * VM 宿主辅助函数：字节长度、编解码、URL 解析、base64、随机数与摘要。
  */
-//@ chunk-4121qate.js:233826-234554 placement
-var createVmHostHelpers = (e) => ({
-  root: e,
-  byteLength: (o) => Buffer.byteLength(at(o), "utf8"),
+var createVmHostHelpers = (root) => ({
+  root,
+  byteLength: (o) => Buffer.byteLength(requireString(o), "utf8"),
   encodeInto: (o, r) => {
-    new TextEncoder().encodeInto(at(o), En(r));
+    new TextEncoder().encodeInto(requireString(o), requireUint8Array(r));
   },
-  decodeUtf8: (o, r) => new TextDecoder("utf-8", { fatal: r === !0 }).decode(En(o)),
+  decodeUtf8: (o, r) =>
+    new TextDecoder("utf-8", {
+      fatal: r === true,
+    }).decode(requireUint8Array(o)),
   parseUrl: (o, r) => {
-    let n = at(o),
-      s = r === void 0 ? r : at(r);
+    let n = requireString(o);
+    let s = r === undefined ? r : requireString(r);
     try {
       return serializeUrl(new URL(n, s));
     } catch {
@@ -239,65 +257,86 @@ var createVmHostHelpers = (e) => ({
     }
   },
   setUrlPart: (o, r, n) => {
-    let s = at(o),
-      i = at(r),
-      p = at(n);
+    let s = requireString(o);
+    let i = requireString(r);
+    let p = requireString(n);
     try {
       let f = new URL(s);
-      return ((f[i] = p), serializeUrl(f));
+      f[i] = p;
+      return serializeUrl(f);
     } catch {
       return null;
     }
   },
-  atob: (o) => globalThis.atob(at(o)),
-  btoa: (o) => globalThis.btoa(at(o)),
+  atob: (o) => globalThis.atob(requireString(o)),
+  btoa: (o) => globalThis.btoa(requireString(o)),
   randomUUID: () => crypto.randomUUID(),
   fillRandom: (o) => {
-    crypto.getRandomValues(En(o));
+    crypto.getRandomValues(requireUint8Array(o));
   },
   digestInto: async (o, r, n) => {
-    let s = GP(n),
-      digest = await crypto.subtle.digest(at(o), En(r));
-    new Uint8Array(WP(s(digest.byteLength))).set(new Uint8Array(digest));
+    let s = requireFunction(n);
+    let i = await crypto.subtle.digest(requireString(o), requireUint8Array(r));
+    new Uint8Array(requireArrayBuffer(s(i.byteLength))).set(new Uint8Array(i));
   },
   now: () => performance.now(),
 });
 //@ chunk-4121qate.js:234554-234576 placement
-var zP = (e) => freezeApiObject(createVmHostHelpers(e));
+/**
+ * VM 宿主辅助函数集
+ */
+var vmHostHelpers = (root) => freezeApiObject(createVmHostHelpers(root));
 //@ chunk-4121qate.js:234576-234641 placement
-var Cc = ({ handle: handle, repeat: repeat }) => (repeat ? clearInterval(handle) : clearTimeout(handle));
+/**
+ * 清除定时器
+ */
+var clearTimerHandle = ({ handle, repeat }) => (repeat ? clearInterval(handle) : clearTimeout(handle));
+//@ chunk-4121qate.js:234641-234773 placement
 /**
  * 调用插件定时器回调，回调抛错时记录警告日志。
  */
-//@ chunk-4121qate.js:234641-234773 placement
-var runTimerCallback = ({ pluginName: pluginName, api: api, invoke: invoke, fn: fn, args: args }) => {
-  invoke(fn, args).catch((i) =>
-    pd().log(`${pluginName}: ${api}: the callback threw: ${errorMessage(i)}`, "warn"),
+var runTimerCallback = ({ pluginName, api, invoke, fn, args }) => {
+  invoke(fn, args).catch((error) =>
+    matcherLog().log(`${pluginName}: ${api}: the callback threw: ${errorMessage(error)}`, "warn"),
   );
 };
 //@ chunk-4121qate.js:234773-234827 placement
-function JP({ timers: timers, id: id, fire: fire }) {
-  (timers.delete(id), runTimerCallback(fire));
+/**
+ * 执行一次性定时回调
+ */
+function fireTimerOnce({ timers, id, fire }) {
+  timers.delete(id);
+  runTimerCallback(fire);
 }
 //@ chunk-4121qate.js:234827-234879 placement
-var dSi = (e, o) => vmModule_6.runInContext(BT(VM_PRELUDE_SOURCE), e)(zP(resolve_7(o)));
+/**
+ * 执行 VM 前导源码
+ */
+var runVmPrelude = (e, o) =>
+  vmModule_2.runInContext(withUseStrict(VM_PRELUDE_SOURCE), e)(vmHostHelpers(resolve(o)));
 //@ chunk-4121qate.js:234879-234925 placement
-function On(e) {
+/**
+ * 出错返回 false
+ */
+function safeCall(e) {
   try {
     return e();
   } catch {
-    return !1;
+    return false;
   }
 }
 //@ chunk-4121qate.js:234925-234965 placement
-var QAn = (e) => On(() => e instanceof Error);
+/**
+ * 是否 VM 内 Error
+ */
+var isVmError = (e) => safeCall(() => e instanceof Error);
+//@ chunk-4121qate.js:234987-235753 placement
 /**
  * 改写 VM 中 Object.prototype.__proto__ 的 setter：对普通对象定义为自有属性而非修改原型（防原型污染）。
  */
-//@ chunk-4121qate.js:234987-235753 placement
 function patchProtoSetter(e) {
-  vmModule_7.runInContext(
-    BT(`(() => {
+  vmModule_2.runInContext(
+    withUseStrict(`(() => {
       const define = Object.defineProperty
       const prototype = Object.prototype
       const standard = Object.getOwnPropertyDescriptor(prototype, '__proto__')
@@ -323,7 +362,10 @@ function patchProtoSetter(e) {
   );
 }
 //@ chunk-4121qate.js:235753-235784 placement
-var Mc = () => Object.create(null);
+/**
+ * Object.create(null)
+ */
+var nullPrototypeObject = () => Object.create(null);
 //@ chunk-4121qate.js:235806-235986 placement
 var IS_ASYNC_GENERATOR_SOURCE = `(fn => {
   try {
@@ -333,10 +375,10 @@ var IS_ASYNC_GENERATOR_SOURCE = `(fn => {
     return false
   }
 })`;
+//@ chunk-4121qate.js:235986-236816 placement
 /**
  * VM 内迭代源码：调用异步生成器的 next/return，校验返回值形状。
  */
-//@ chunk-4121qate.js:235986-236816 placement
 var VM_ITERATE_SOURCE = `(async (it, method, arg) => {
   const isObject =
     it !== null && (typeof it === 'object' || typeof it === 'function')
@@ -363,11 +405,14 @@ var VM_ITERATE_SOURCE = `(async (it, method, arg) => {
   }
 })`;
 //@ chunk-4121qate.js:236816-236826 placement
-var fo = 64;
+/**
+ * 64
+ */
+var MAX_COPY_DEPTH = 64;
+//@ chunk-4121qate.js:236826-257251 placement
 /**
  * VM 边界复制出值的源码字符串（深度上限、错误包装）
  */
-//@ chunk-4121qate.js:236826-257251 placement
 var VM_COPY_OUT_SOURCE = `(kindOf => {
   // Taken now, before any plugin runs: the global's bindings are the
   // plugin's to replace.
@@ -565,7 +610,7 @@ var VM_COPY_OUT_SOURCE = `(kindOf => {
   // whatever class made it. A Proxy among them ends the asking, unasked.
   const bornOf = value => {
     let link = value
-    for (let hop = 0; hop < ${fo}; hop += 1) {
+    for (let hop = 0; hop < ${MAX_COPY_DEPTH}; hop += 1) {
       const born = BORN.get(link)
       if (born !== undefined) return born
       link = parentOf(link)
@@ -913,10 +958,10 @@ var VM_COPY_OUT_SOURCE = `(kindOf => {
     refusal: made => REASONS.get(made),
   })
 })`;
+//@ chunk-4121qate.js:257251-263210 placement
 /**
  * VM 内元素构造器表源码：本地元素构建时冻结并补上未接线的回调槽，外来构造器的结果按地址重接 onPress/onEvent 闭包。
  */
-//@ chunk-4121qate.js:257251-263210 placement
 var VM_ELEMENT_TABLE_SOURCE = `(() => {
   const { freeze, isFrozen, keys } = Object
   const { isArray } = Array
@@ -1078,10 +1123,10 @@ var VM_ELEMENT_TABLE_SOURCE = `(() => {
     return freeze(table)
   }
 })()`;
+//@ chunk-4121qate.js:263210-265722 placement
 /**
  * VM 内答案固定源码：把答案原型链上的 then 固定为不可变（防 thenable 劫持），无法固定则拒绝。
  */
-//@ chunk-4121qate.js:263210-265722 placement
 var VM_ANSWER_PIN_SOURCE = `(() => {
   // Taken now, before any plugin runs: the global's bindings are the
   // plugin's to replace.
@@ -1129,7 +1174,7 @@ var VM_ANSWER_PIN_SOURCE = `(() => {
       // Only closed links are passed, each with no own \`then\` for ever. One
       // that is a Proxy may still read as it likes: unseen here, refused by
       // the host's check. A chain through Proxies may turn back on itself.
-      if (hop === ${fo}) throw refusal()
+      if (hop === ${MAX_COPY_DEPTH}) throw refusal()
       // Of a closed target a trap must answer the target's own, which is fixed.
       link = parentOf(link)
     }
@@ -1145,10 +1190,10 @@ var VM_ANSWER_PIN_SOURCE = `(() => {
     return { __proto__: null, v: answer }
   }
 })()`;
+//@ chunk-4121qate.js:265722-266165 placement
 /**
  * VM 内 Error instanceof 补丁源码。
  */
-//@ chunk-4121qate.js:265722-266165 placement
 var ERROR_HAS_INSTANCE_SOURCE = `(isError => {
   'use strict'
   const ordinary = Function.prototype[Symbol.hasInstance]
@@ -1166,10 +1211,10 @@ var ERROR_HAS_INSTANCE_SOURCE = `(isError => {
     },
   })
 })`;
+//@ chunk-4121qate.js:266165-266518 placement
 /**
  * VM 内流对象源码（next/return/throw 与 result 属性）。
  */
-//@ chunk-4121qate.js:266165-266518 placement
 var VM_STREAM_SOURCE = `((pull, close, result) => {
   const stream = {
     next: () => pull(),
@@ -1183,10 +1228,10 @@ var VM_STREAM_SOURCE = `((pull, close, result) => {
   })
   return Object.freeze(stream)
 })`;
+//@ chunk-4121qate.js:266518-267407 placement
 /**
  * VM 内宿主调用包装源码：同步与异步错误都转换为环境内错误（转换失败时用固定的回退错误）。
  */
-//@ chunk-4121qate.js:266518-267407 placement
 var VM_HOST_CALL_WRAPPER_SOURCE = `(intoEnvironment => {
   'use strict'
   const FALLBACK = new Error(
@@ -1225,57 +1270,60 @@ var VM_HOST_CALL_WRAPPER_SOURCE = `(intoEnvironment => {
     return returned
   }
 })`;
+//@ chunk-4121qate.js:267407-267564 placement
 /**
  * 修补 VM 中 Error 的 instanceof：宿主错误与 VM 内错误都识别为 Error。
  */
-//@ chunk-4121qate.js:267407-267564 placement
 function patchErrorHasInstance(e) {
-  let runInContext = vmModule_8.runInContext(BT("Error"), e),
-    r = Function.prototype[Symbol.hasInstance];
-  vmModule_8.runInContext(
-    BT(ERROR_HAS_INSTANCE_SOURCE),
+  let o = vmModule_2.runInContext(withUseStrict("Error"), e);
+  let r = Function.prototype[Symbol.hasInstance];
+  vmModule_2.runInContext(
+    withUseStrict(ERROR_HAS_INSTANCE_SOURCE),
     e,
-  )(NH((n) => QAn(n) || On(() => r.call(runInContext, n))));
+  )(nullPrototypeFunction((n) => isVmError(n) || safeCall(() => r.call(o, n))));
 }
+//@ chunk-4121qate.js:267564-268076 placement
 /**
  * 创建 VM 与宿主之间的错误转换：fromEnvironment 转为 HooksError，intoEnvironment 转为环境内错误。
  */
-//@ chunk-4121qate.js:267564-268076 placement
-function createErrorConverters(e, o, r) {
+function createErrorConverters(vmErrorDescriber, o, vmInstanceofObject) {
   function n(i) {
-    if (QAn(i)) return i;
-    let { name: p, message: message } = e(i),
-      a = new HooksError(message === "" ? p : message);
+    if (isVmError(i)) return i;
+    let { name: p, message } = vmErrorDescriber(i);
+    let a = new HooksError(message === "" ? p : message);
     if (message !== "" && p !== a.name) a.thrownName = p;
-    return Qeo(i) ? apr(a) : a;
+    return hasWeakSetTag(i) ? addWeakSetTag(a) : a;
   }
   function s(i) {
-    if (QAn(i)) {
-      let m = _xt(
-        o.makeError((i instanceof HooksError ? i.thrownName : void 0) ?? i.name, i.message),
-        dpr(i),
+    if (isVmError(i)) {
+      let m = tagError(
+        o.makeError((i instanceof HooksError ? i.thrownName : undefined) ?? i.name, i.message),
+        readTag(i),
       );
-      return Qeo(i) ? apr(m) : m;
+      return hasWeakSetTag(i) ? addWeakSetTag(m) : m;
     }
-    if (i === null || (typeof i !== "object" && typeof i !== "function") || r(i)) return i;
-    let { name: f, message: message } = i;
+    if (i === null || (typeof i !== "object" && typeof i !== "function") || vmInstanceofObject(i)) return i;
+    let { name: f, message } = i;
     return o.makeError(
       typeof f === "string" ? f : "Error",
       typeof message === "string" ? message : errorMessage(i),
     );
   }
-  return { fromEnvironment: n, intoEnvironment: s };
+  return {
+    fromEnvironment: n,
+    intoEnvironment: s,
+  };
 }
+//@ chunk-4121qate.js:268548-268898 placement
 /**
  * 值种类判断表（veiled、array、typed、map、set、date 等）。
  */
-//@ chunk-4121qate.js:268548-268898 placement
 var VALUE_KIND_TESTS = [
-  [Pf, "veiled"],
+  [isUntrustedObject, "veiled"],
   [Array.isArray, "array"],
   [isTypedArray, "typed"],
   [isDataView, "window"],
-  [isArrayBuffer_2, "buffer"],
+  [isArrayBuffer, "buffer"],
   [isMap, "map"],
   [isSet, "set"],
   [isDate, "date"],
@@ -1297,132 +1345,169 @@ var VALUE_KIND_TESTS = [
   [isModuleNamespaceObject, "veiled"],
 ];
 //@ chunk-4121qate.js:268898-268907 placement
-var jc = 2;
+/**
+ * 2
+ */
+var KIND_SLACK = 2;
 //@ chunk-4121qate.js:268907-268941 placement
-var mapped = VALUE_KIND_TESTS.slice(jc).map(([e]) => e);
+var mapped = VALUE_KIND_TESTS.slice(KIND_SLACK).map(([e]) => e);
 //@ chunk-4121qate.js:268941-268998 placement
-function Dc(e) {
-  for (let o of mapped) if (o(e)) return !0;
-  return !1;
+/**
+ * 任一谓词为真
+ */
+function anyPredicate(e) {
+  for (let o of mapped) if (o(e)) return true;
+  return false;
 }
+//@ chunk-4121qate.js:268998-269098 placement
 /**
  * 判断值的种类（record、array、typed、map、set、date、error、veiled 等）。
  */
-//@ chunk-4121qate.js:268998-269098 placement
 function valueKindOf(e) {
-  return !Pf(e) && !Array.isArray(e) && !Dc(e)
+  return !isUntrustedObject(e) && !Array.isArray(e) && !anyPredicate(e)
     ? "record"
     : (VALUE_KIND_TESTS.find(([r]) => r(e))?.[1] ?? "record");
 }
 //@ chunk-4121qate.js:269098-269144 placement
-var Uc = (e) => vmModule_9.runInContext(BT(VM_COPY_OUT_SOURCE), e)(NH(valueKindOf));
+/**
+ * 执行值种类判定
+ */
+var runValueKindOf = (e) =>
+  vmModule_2.runInContext(withUseStrict(VM_COPY_OUT_SOURCE), e)(nullPrototypeFunction(valueKindOf));
+//@ chunk-4121qate.js:269166-269513 placement
 /**
  * 检查答案原型链上的 then 是否已固定为不可变的非函数。
  */
-//@ chunk-4121qate.js:269166-269513 placement
 function isThenFixed(e) {
   let r = typeof e === "function" || (typeof e === "object" && e !== null) ? e : null;
   for (let n = 0; r !== null; n += 1) {
-    if (Pf(r)) return !1;
-    let isExtensible = Reflect.isExtensible(r),
-      ownPropertyDescriptor = Reflect.getOwnPropertyDescriptor(r, "then");
-    if (ownPropertyDescriptor !== void 0)
+    if (isUntrustedObject(r)) return false;
+    let s = Reflect.isExtensible(r);
+    let ownPropertyDescriptor = Reflect.getOwnPropertyDescriptor(r, "then");
+    if (ownPropertyDescriptor !== undefined)
       return (
-        ownPropertyDescriptor.writable === !1 &&
-        ownPropertyDescriptor.configurable === !1 &&
+        ownPropertyDescriptor.writable === false &&
+        ownPropertyDescriptor.configurable === false &&
         typeof ownPropertyDescriptor.value !== "function"
       );
-    if (isExtensible || n === fo) return !1;
+    if (s || n === MAX_COPY_DEPTH) return false;
     r = Reflect.getPrototypeOf(r);
   }
-  return !0;
+  return true;
 }
 //@ chunk-4121qate.js:269513-269677 placement
 function createAnswerSettler(e) {
-  let runInContext = vmModule_10.runInContext(BT(VM_ANSWER_PIN_SOURCE), e);
+  let o = vmModule_2.runInContext(withUseStrict(VM_ANSWER_PIN_SOURCE), e);
   return async (r) => {
-    let n = await runInContext(r);
+    let n = await o(r);
     if (!isThenFixed(n.v)) throw new HooksError("the answer holds a `then` that is not fixed");
     return n;
   };
 }
+//@ chunk-4121qate.js:269677-270409 placement
 /**
  * 创建 hooks VM 上下文（禁止字符串与 wasm 代码生成），装好 Error/proto 补丁与 realm，返回一组 VM 调用、克隆、错误转换与流工具。
  */
-//@ chunk-4121qate.js:269677-270409 placement
 function createVmContext(e) {
-  let o = Mc(),
-    r = SubAgentContext(o, { codeGeneration: { strings: !1, wasm: !1 } });
-  (patchErrorHasInstance(r), patchProtoSetter(r), createVmRealm(r, freeze));
-  let n = FAn(r),
-    runInContext = vmModule_3.runInContext(BT("((self, fn, ...args) => Reflect.apply(fn, self, args))"), r),
-    i = createAnswerSettler(r),
-    p = createVmErrorDescriber(r),
-    f = createVmInstanceofObject(r),
-    a = VM_MATCHER_SOURCE(r),
-    m = lSi(r),
-    c = VM_HOST_FN_WRAPPER(r),
-    u = Uc(r),
-    l = dSi(r, e),
-    { fromEnvironment: fromEnvironment, intoEnvironment: intoEnvironment } = createErrorConverters(p, l, f),
-    x = vmModule_3.runInContext(BT(VM_HOST_CALL_WRAPPER_SOURCE), r)(NH(intoEnvironment));
+  let o = nullPrototypeObject();
+  let r = SubAgentContext(o, {
+    codeGeneration: {
+      strings: false,
+      wasm: false,
+    },
+  });
+  patchErrorHasInstance(r);
+  patchProtoSetter(r);
+  createVmRealm(r, vUe);
+  let vmCall = callWithArgs(r);
+  let vmApply = vmModule_2.runInContext(
+    withUseStrict("((self, fn, ...args) => Reflect.apply(fn, self, args))"),
+    r,
+  );
+  let vmSettle = createAnswerSettler(r);
+  let vmErrorDescriber = createVmErrorDescriber(r);
+  let vmInstanceofObject = createVmInstanceofObject(r);
+  let copyMatcher = VM_MATCHER_SOURCE(r);
+  let m = inboundCopier(r);
+  let vmAsyncWrap = VM_HOST_FN_WRAPPER(r);
+  let u = runValueKindOf(r);
+  let l = runVmPrelude(r, e);
+  let { fromEnvironment, intoEnvironment } = createErrorConverters(vmErrorDescriber, l, vmInstanceofObject);
+  let wrapMethod = vmModule_2.runInContext(
+    withUseStrict(VM_HOST_CALL_WRAPPER_SOURCE),
+    r,
+  )(nullPrototypeFunction(intoEnvironment));
   return {
     globals: o,
     context: r,
     makers: l,
-    vmCall: n,
-    vmApply: runInContext,
-    vmSettle: i,
-    vmOwns: f,
-    copyMatcher: a,
+    vmCall,
+    vmApply,
+    vmSettle,
+    vmOwns: vmInstanceofObject,
+    copyMatcher,
     vmClone: m,
-    cloneIn: (T) => Q5e(m(T)),
+    cloneIn: (T) => deepFreezeInPlace(m(T)),
     leavingCopy: u.copy,
     leavingAnswer: u.answer,
     freezeOwn: u.freeze,
     leavingRefusal: u.refusal,
-    vmAsyncWrap: c,
-    fromEnvironment: fromEnvironment,
-    intoEnvironment: intoEnvironment,
-    wrapMethod: x,
-    vmIterate: vmModule_3.runInContext(BT(VM_ITERATE_SOURCE), r),
-    vmStream: vmModule_3.runInContext(BT(VM_STREAM_SOURCE), r),
-    isGeneratorHook: vmModule_3.runInContext(BT(IS_ASYNC_GENERATOR_SOURCE), r),
+    vmAsyncWrap,
+    fromEnvironment,
+    intoEnvironment,
+    wrapMethod,
+    vmIterate: vmModule_2.runInContext(withUseStrict(VM_ITERATE_SOURCE), r),
+    vmStream: vmModule_2.runInContext(withUseStrict(VM_STREAM_SOURCE), r),
+    isGeneratorHook: vmModule_2.runInContext(withUseStrict(IS_ASYNC_GENERATOR_SOURCE), r),
   };
 }
 //@ chunk-4121qate.js:270409-270419 placement
-var ZAn = 2;
+/**
+ * 与 VM 共享的心跳戳数组里，调用栈从第 2 个槽开始；前两个槽留给当前环境与当前调用。
+ */
+var STAMP_CALLER_STACK_START = 2;
 //@ chunk-4121qate.js:270419-270429 placement
-var ixt = 1;
+/**
+ * 心跳戳数组里「当前调用编号」的槽位，插件每次进入调用都会写它。
+ */
+var STAMP_CURRENT_CALL_SLOT = 1;
 //@ chunk-4121qate.js:270429-270439 placement
-var axt = 0;
+/**
+ * 心跳戳数组里「当前环境编号」的槽位，进出环境时保存与恢复。
+ */
+var STAMP_ENVIRONMENT_SLOT = 0;
 //@ chunk-4121qate.js:270439-270449 placement
-var $Ui = 9;
+/**
+ * 心跳戳共享数组的槽位数：2 个固定槽加最多 7 层调用栈。
+ */
+var STAMP_SLOT_COUNT = 9;
 //@ chunk-4121qate.js:270449-270537 placement = markScrollActivity (0.64)
-function markScrollActivity(e) {
-  if (e) (Atomics.store(e, ixt, 0), setImmediate(Atomics.store, e, ixt, 0).unref());
+function markScrollActivity(view) {
+  if (view) {
+    Atomics.store(view, STAMP_CURRENT_CALL_SLOT, 0);
+    setImmediate(Atomics.store, view, STAMP_CURRENT_CALL_SLOT, 0).unref();
+  }
 }
-
 export {
   createVmContext,
-  axt,
-  ixt,
+  STAMP_ENVIRONMENT_SLOT,
+  STAMP_CURRENT_CALL_SLOT,
   VM_ELEMENT_TABLE_SOURCE,
   valueKindOf,
   markScrollActivity,
   runTimerCallback,
-  JP,
-  Cc,
+  fireTimerOnce,
+  clearTimerHandle,
   createVmConsole,
-  Mc,
+  nullPrototypeObject,
   patchErrorHasInstance,
   patchProtoSetter,
   VM_HOST_CALL_WRAPPER_SOURCE,
-  ZAn,
-  $Ui,
-  QAn,
-  lSi,
-  dSi,
+  STAMP_CALLER_STACK_START,
+  STAMP_SLOT_COUNT,
+  isVmError,
+  inboundCopier,
+  runVmPrelude,
   createVmInstanceofObject,
   createErrorConverters,
 };

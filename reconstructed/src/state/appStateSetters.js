@@ -18,39 +18,74 @@ import {
 import { createArtifactSessionStores } from "../services/artifacts/artifactReadConsent.js";
 import { createAgentNameRegistry } from "../utils/agentNameRegistry.js";
 
+//@ chunk-mww7agq2.js:351-582 placement
 /**
  * 创建设置工具权限上下文的函数（值未变时不更新状态）。
  */
-//@ chunk-mww7agq2.js:351-582 placement
-function createPermissionContextSetters(t) {
+function createPermissionContextSetters(setAppState) {
   let e = (o) =>
-    t((r) => {
+    setAppState((r) => {
       let i = typeof o === "function" ? o(r.toolPermissionContext) : o;
-      return r.toolPermissionContext === i ? r : { ...r, toolPermissionContext: i };
+      return r.toolPermissionContext === i
+        ? r
+        : {
+            ...r,
+            toolPermissionContext: i,
+          };
     });
-  return { setToolPermissionContext: e, setSessionToolPermissionContext: e };
+  return {
+    setToolPermissionContext: e,
+    setSessionToolPermissionContext: e,
+  };
 }
 //@ chunk-mww7agq2.js:582-676 placement
-function KMr(t) {
-  t((e) => (e.ultrareviewOverageConfirmed ? e : { ...e, ultrareviewOverageConfirmed: !0 }));
+/**
+ * 把 ultrareview 超额确认标记写入应用状态。
+ */
+function confirmUltrareviewOverage(t) {
+  t((e) =>
+    e.ultrareviewOverageConfirmed
+      ? e
+      : {
+          ...e,
+          ultrareviewOverageConfirmed: true,
+        },
+  );
 }
 //@ chunk-mww7agq2.js:676-769 placement
-function s(t) {
-  return (e) => t((o) => ({ ...o, pendingMemoryUpdates: [...o.pendingMemoryUpdates, e] }));
+/**
+ * 生成一个把记忆更新追加到待处理列表的设置函数。
+ */
+function appendPendingMemoryUpdate(setAppState) {
+  return (e) =>
+    setAppState((o) => ({
+      ...o,
+      pendingMemoryUpdates: [...o.pendingMemoryUpdates, e],
+    }));
 }
 //@ chunk-mww7agq2.js:769-849 placement
-function n(t) {
-  t((e) => (e.prResolvedThisSession ? e : { ...e, prResolvedThisSession: !0 }));
+/**
+ * 生成一个把「本会话已处理 PR」标记写入应用状态的设置函数。
+ */
+function markPrResolvedThisSession(setAppState) {
+  setAppState((e) =>
+    e.prResolvedThisSession
+      ? e
+      : {
+          ...e,
+          prResolvedThisSession: true,
+        },
+  );
 }
+//@ chunk-mww7agq2.js:849-1405 placement
 /**
  * 创建应用状态的访问与设置函数集合（PR、ultrareview、MCP、主动性、浏览器、Artifact、记忆更新、代理名等）。
  */
-//@ chunk-mww7agq2.js:849-1405 placement
 function createAppStateAccessors(getAppState, setAppState) {
   return {
-    markPrResolvedThisSession: () => n(setAppState),
+    markPrResolvedThisSession: () => markPrResolvedThisSession(setAppState),
     isUltrareviewOverageConfirmed: () => getAppState().ultrareviewOverageConfirmed,
-    markUltrareviewOverageConfirmed: () => KMr(setAppState),
+    markUltrareviewOverageConfirmed: () => confirmUltrareviewOverage(setAppState),
     getAdvisorSetting: () => getAppState().advisorModel,
     getMcp: () => getAppState().mcp,
     getProactivityLevel: () => getAppState().proactivityLevel,
@@ -62,9 +97,8 @@ function createAppStateAccessors(getAppState, setAppState) {
     artifactRegistries: createArtifactSessionStores(getAppState, setAppState),
     setArtifactContractTarget: makeSetArtifactContractTarget(setAppState),
     getArtifactContractTarget: makeGetArtifactContractTarget(getAppState),
-    enqueuePendingMemoryUpdate: s(setAppState),
+    enqueuePendingMemoryUpdate: appendPendingMemoryUpdate(setAppState),
     agentLifecycle: createAgentNameRegistry(getAppState, setAppState),
   };
 }
-
-export { KMr, createAppStateAccessors, createPermissionContextSetters };
+export { confirmUltrareviewOverage, createAppStateAccessors, createPermissionContextSetters };

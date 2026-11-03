@@ -6,14 +6,15 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { SZo } from "../../../fast-deep-equal/index.js";
+import { require_fast_deep_equal } from "../../../fast-deep-equal/index.js";
 
 //@ chunk-dxsqk077.js:953-1101 cjs-fingerprint
-var Lkn = x(function (l) {
-  Object.defineProperty(l, "__esModule", { value: !0 });
-  var c = SZo();
-  c.code = 'require("ajv/dist/runtime/equal").default';
-  l.default = c;
+var require_equal = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  var equal = require_fast_deep_equal();
+  equal.code = 'require("ajv/dist/runtime/equal").default';
+  cjsExports.default = equal;
 });
-
-export { Lkn };
+export { require_equal };

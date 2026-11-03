@@ -12,222 +12,252 @@ import { de } from "./util.js";
 import { Sr } from "./oneof.js";
 
 //@ chunk-pwh5dx3n.js:80379-85940 cjs-fingerprint
-var zr = x(function (iA, dd) {
-  dd.exports = B;
-  var Es = Kt();
-  ((B.prototype = Object.create(Es.prototype)).constructor = B).className = "Namespace";
-  var ka = Yt(),
-    Br = de(),
-    oE = Sr(),
-    yr,
-    Ur,
-    _r;
-  B.fromJSON = function (t, r, i) {
-    return ((i = Br.checkDepth(i)), new B(t, r.options).addJSON(r.nested, i));
+var zr = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = Namespace;
+  var ReflectionObject = Kt();
+  ((Namespace.prototype = Object.create(ReflectionObject.prototype)).constructor = Namespace).className =
+    "Namespace";
+  var Field = Yt();
+  var util = de();
+  var OneOf = Sr();
+  var Type;
+  var Service;
+  var Enum;
+  Namespace.fromJSON = function (name, json, depth) {
+    depth = util.checkDepth(depth);
+    return new Namespace(name, json.options).addJSON(json.nested, depth);
   };
-  function cd(e, t) {
-    if (!(e && e.length)) return;
-    var r = {};
-    for (var i = 0; i < e.length; ++i) r[e[i].name] = e[i].toJSON(t);
-    return r;
+  function arrayToJSON(array, toJSONOptions) {
+    if (!(array && array.length)) return;
+    var obj = {};
+    for (var i = 0; i < array.length; ++i) obj[array[i].name] = array[i].toJSON(toJSONOptions);
+    return obj;
   }
-  B.arrayToJSON = cd;
-  B.isReservedId = function (t, r) {
-    if (t) {
-      for (var i = 0; i < t.length; ++i)
-        if (typeof t[i] !== "string" && t[i][0] <= r && t[i][1] > r) return !0;
+  Namespace.arrayToJSON = arrayToJSON;
+  Namespace.isReservedId = function (reserved, id) {
+    if (reserved) {
+      for (var i = 0; i < reserved.length; ++i)
+        if (typeof reserved[i] !== "string" && reserved[i][0] <= id && reserved[i][1] > id) return true;
     }
-    return !1;
+    return false;
   };
-  B.isReservedName = function (t, r) {
-    if (t) {
-      for (var i = 0; i < t.length; ++i) if (t[i] === r) return !0;
+  Namespace.isReservedName = function (reserved, name) {
+    if (reserved) {
+      for (var i = 0; i < reserved.length; ++i) if (reserved[i] === name) return true;
     }
-    return !1;
+    return false;
   };
-  function B(e, t) {
-    (Es.call(this, e, t),
-      (this.nested = void 0),
-      (this._nestedArray = null),
-      (this._lookupCache = Object.create(null)),
-      (this._needsRecursiveFeatureResolution = !0),
-      (this._needsRecursiveResolve = !0));
+  function Namespace(name, options) {
+    ReflectionObject.call(this, name, options);
+    this.nested = undefined;
+    this._nestedArray = null;
+    this._lookupCache = Object.create(null);
+    this._needsRecursiveFeatureResolution = true;
+    this._needsRecursiveResolve = true;
   }
-  function ud(e) {
-    ((e._nestedArray = null), (e._lookupCache = Object.create(null)));
-    var t = e;
-    while ((t = t.parent)) t._lookupCache = Object.create(null);
-    return e;
+  function clearCache(namespace) {
+    namespace._nestedArray = null;
+    namespace._lookupCache = Object.create(null);
+    var parent = namespace;
+    while ((parent = parent.parent)) parent._lookupCache = Object.create(null);
+    return namespace;
   }
-  Object.defineProperty(B.prototype, "nestedArray", {
+  Object.defineProperty(Namespace.prototype, "nestedArray", {
     get: function () {
-      return this._nestedArray || (this._nestedArray = Br.toArray(this.nested));
+      return this._nestedArray || (this._nestedArray = util.toArray(this.nested));
     },
   });
-  B.prototype.toJSON = function (t) {
-    return Br.toObject(["options", this.options, "nested", cd(this.nestedArray, t)]);
+  Namespace.prototype.toJSON = function (toJSONOptions) {
+    return util.toObject(["options", this.options, "nested", arrayToJSON(this.nestedArray, toJSONOptions)]);
   };
-  B.prototype.addJSON = function (t, r) {
-    r = Br.checkDepth(r);
-    var i = this;
-    if (t)
-      for (var keys = Object.keys(t), n = 0, a; n < keys.length; ++n)
-        ((a = t[keys[n]]),
-          i.add(
-            (a.fields !== void 0
-              ? yr.fromJSON
-              : a.values !== void 0
-                ? _r.fromJSON
-                : a.methods !== void 0
-                  ? Ur.fromJSON
-                  : a.id !== void 0
-                    ? ka.fromJSON
-                    : B.fromJSON)(keys[n], a, r + 1),
-          ));
+  Namespace.prototype.addJSON = function (nestedJson, depth) {
+    depth = util.checkDepth(depth);
+    var ns = this;
+    if (nestedJson)
+      for (var names = Object.keys(nestedJson), i = 0, nested; i < names.length; ++i) {
+        nested = nestedJson[names[i]];
+        ns.add(
+          (nested.fields !== undefined
+            ? Type.fromJSON
+            : nested.values !== undefined
+              ? Enum.fromJSON
+              : nested.methods !== undefined
+                ? Service.fromJSON
+                : nested.id !== undefined
+                  ? Field.fromJSON
+                  : Namespace.fromJSON)(names[i], nested, depth + 1),
+        );
+      }
     return this;
   };
-  B.prototype.get = function (t) {
-    return this.nested && Object.prototype.hasOwnProperty.call(this.nested, t) ? this.nested[t] : null;
+  Namespace.prototype.get = function (name) {
+    return this.nested && Object.prototype.hasOwnProperty.call(this.nested, name) ? this.nested[name] : null;
   };
-  B.prototype.getEnum = function (t) {
-    if (this.nested && Object.prototype.hasOwnProperty.call(this.nested, t) && this.nested[t] instanceof _r)
-      return this.nested[t].values;
-    throw Error("no such enum: " + t);
+  Namespace.prototype.getEnum = function (name) {
+    if (
+      this.nested &&
+      Object.prototype.hasOwnProperty.call(this.nested, name) &&
+      this.nested[name] instanceof Enum
+    )
+      return this.nested[name].values;
+    throw Error("no such enum: " + name);
   };
-  B.prototype.add = function (t) {
+  Namespace.prototype.add = function (object) {
     if (!(
-      (t instanceof ka && t.extend !== void 0) ||
-      t instanceof yr ||
-      t instanceof oE ||
-      t instanceof _r ||
-      t instanceof Ur ||
-      t instanceof B
+      (object instanceof Field && object.extend !== undefined) ||
+      object instanceof Type ||
+      object instanceof OneOf ||
+      object instanceof Enum ||
+      object instanceof Service ||
+      object instanceof Namespace
     ))
       throw TypeError("object must be a valid nested object");
-    if (t.name === "__proto__") return this;
+    if (object.name === "__proto__") return this;
     if (!this.nested) this.nested = {};
     else {
-      var r = this.get(t.name);
-      if (r)
-        if (r instanceof B && t instanceof B && !(r instanceof yr || r instanceof Ur)) {
-          var nestedArray = r.nestedArray;
-          for (var s = 0; s < nestedArray.length; ++s) t.add(nestedArray[s]);
-          if ((this.remove(r), !this.nested)) this.nested = {};
-          t.setOptions(r.options, !0);
-        } else throw Error("duplicate name '" + t.name + "' in " + this);
+      var prev = this.get(object.name);
+      if (prev)
+        if (
+          prev instanceof Namespace &&
+          object instanceof Namespace &&
+          !(prev instanceof Type || prev instanceof Service)
+        ) {
+          var nested = prev.nestedArray;
+          for (var i = 0; i < nested.length; ++i) object.add(nested[i]);
+          this.remove(prev);
+          if (!this.nested) this.nested = {};
+          object.setOptions(prev.options, true);
+        } else throw Error("duplicate name '" + object.name + "' in " + this);
     }
-    if (
-      ((this.nested[t.name] = t),
-      !(this instanceof yr || this instanceof Ur || this instanceof _r || this instanceof ka))
-    ) {
-      if (!t._edition) t._edition = t._defaultEdition;
+    this.nested[object.name] = object;
+    if (!(this instanceof Type || this instanceof Service || this instanceof Enum || this instanceof Field)) {
+      if (!object._edition) object._edition = object._defaultEdition;
     }
-    ((this._needsRecursiveFeatureResolution = !0), (this._needsRecursiveResolve = !0));
-    var n = this;
-    while ((n = n.parent)) ((n._needsRecursiveFeatureResolution = !0), (n._needsRecursiveResolve = !0));
-    return (t.onAdd(this), ud(this));
-  };
-  B.prototype.remove = function (t) {
-    if (!(t instanceof Es)) throw TypeError("object must be a ReflectionObject");
-    if (t.parent !== this) throw Error(t + " is not a member of " + this);
-    if ((delete this.nested[t.name], !Object.keys(this.nested).length)) this.nested = void 0;
-    return (t.onRemove(this), ud(this));
-  };
-  B.prototype.define = function (t, r) {
-    if (Br.isString(t)) t = t.split(".");
-    else if (!Array.isArray(t)) throw TypeError("illegal path");
-    if (t && t.length && t[0] === "") throw Error("path must be relative");
-    var i = this;
-    while (t.length > 0) {
-      var s = t.shift();
-      if (i.nested && i.nested[s]) {
-        if (((i = i.nested[s]), !(i instanceof B))) throw Error("path conflicts with non-namespace objects");
-      } else i.add((i = new B(s)));
+    this._needsRecursiveFeatureResolution = true;
+    this._needsRecursiveResolve = true;
+    var parent = this;
+    while ((parent = parent.parent)) {
+      parent._needsRecursiveFeatureResolution = true;
+      parent._needsRecursiveResolve = true;
     }
-    if (r) i.addJSON(r);
-    return i;
+    object.onAdd(this);
+    return clearCache(this);
   };
-  B.prototype.resolveAll = function () {
+  Namespace.prototype.remove = function (object) {
+    if (!(object instanceof ReflectionObject)) throw TypeError("object must be a ReflectionObject");
+    if (object.parent !== this) throw Error(object + " is not a member of " + this);
+    delete this.nested[object.name];
+    if (!Object.keys(this.nested).length) this.nested = undefined;
+    object.onRemove(this);
+    return clearCache(this);
+  };
+  Namespace.prototype.define = function (path, json) {
+    if (util.isString(path)) path = path.split(".");
+    else if (!Array.isArray(path)) throw TypeError("illegal path");
+    if (path && path.length && path[0] === "") throw Error("path must be relative");
+    var ptr = this;
+    while (path.length > 0) {
+      var part = path.shift();
+      if (ptr.nested && ptr.nested[part]) {
+        ptr = ptr.nested[part];
+        if (!(ptr instanceof Namespace)) throw Error("path conflicts with non-namespace objects");
+      } else ptr.add((ptr = new Namespace(part)));
+    }
+    if (json) ptr.addJSON(json);
+    return ptr;
+  };
+  Namespace.prototype.resolveAll = function () {
     if (!this._needsRecursiveResolve) return this;
     this._resolveFeaturesRecursive(this._edition);
-    var nestedArray = this.nestedArray,
-      r = 0;
+    var nested = this.nestedArray;
+    var i = 0;
     this.resolve();
-    while (r < nestedArray.length)
-      if (nestedArray[r] instanceof B) nestedArray[r++].resolveAll();
-      else nestedArray[r++].resolve();
-    return ((this._needsRecursiveResolve = !1), this);
+    while (i < nested.length)
+      if (nested[i] instanceof Namespace) nested[i++].resolveAll();
+      else nested[i++].resolve();
+    this._needsRecursiveResolve = false;
+    return this;
   };
-  B.prototype._resolveFeaturesRecursive = function (t) {
+  Namespace.prototype._resolveFeaturesRecursive = function (edition) {
     if (!this._needsRecursiveFeatureResolution) return this;
-    return (
-      (this._needsRecursiveFeatureResolution = !1),
-      (t = this._edition || t),
-      Es.prototype._resolveFeaturesRecursive.call(this, t),
-      this.nestedArray.forEach((r) => {
-        r._resolveFeaturesRecursive(t);
-      }),
-      this
-    );
+    this._needsRecursiveFeatureResolution = false;
+    edition = this._edition || edition;
+    ReflectionObject.prototype._resolveFeaturesRecursive.call(this, edition);
+    this.nestedArray.forEach((nested) => {
+      nested._resolveFeaturesRecursive(edition);
+    });
+    return this;
   };
-  B.prototype.lookup = function (t, r, i) {
-    if (typeof r === "boolean") ((i = r), (r = void 0));
-    else if (r && !Array.isArray(r)) r = [r];
-    if (Br.isString(t) && t.length) {
-      if (t === ".") return this.root;
-      t = t.split(".");
-    } else if (!t.length) return this;
-    var joined = t.join(".");
-    if (t[0] === "") return this.root.lookup(t.slice(1), r);
-    var n = this.root._fullyQualifiedObjects && this.root._fullyQualifiedObjects["." + joined];
-    if (n && (!r || r.indexOf(n.constructor) > -1)) return n;
-    if (((n = this._lookupImpl(t, joined)), n && (!r || r.indexOf(n.constructor) > -1))) return n;
-    if (i) return null;
-    var a = this;
-    while (a.parent) {
-      if (((n = a.parent._lookupImpl(t, joined)), n && (!r || r.indexOf(n.constructor) > -1))) return n;
-      a = a.parent;
+  Namespace.prototype.lookup = function (path, filterTypes, parentAlreadyChecked) {
+    if (typeof filterTypes === "boolean") {
+      parentAlreadyChecked = filterTypes;
+      filterTypes = undefined;
+    } else if (filterTypes && !Array.isArray(filterTypes)) filterTypes = [filterTypes];
+    if (util.isString(path) && path.length) {
+      if (path === ".") return this.root;
+      path = path.split(".");
+    } else if (!path.length) return this;
+    var flatPath = path.join(".");
+    if (path[0] === "") return this.root.lookup(path.slice(1), filterTypes);
+    var found = this.root._fullyQualifiedObjects && this.root._fullyQualifiedObjects["." + flatPath];
+    if (found && (!filterTypes || filterTypes.indexOf(found.constructor) > -1)) return found;
+    found = this._lookupImpl(path, flatPath);
+    if (found && (!filterTypes || filterTypes.indexOf(found.constructor) > -1)) return found;
+    if (parentAlreadyChecked) return null;
+    var current = this;
+    while (current.parent) {
+      found = current.parent._lookupImpl(path, flatPath);
+      if (found && (!filterTypes || filterTypes.indexOf(found.constructor) > -1)) return found;
+      current = current.parent;
     }
     return null;
   };
-  B.prototype._lookupImpl = function (t, r) {
-    if (Object.prototype.hasOwnProperty.call(this._lookupCache, r)) return this._lookupCache[r];
-    var i = this.get(t[0]),
-      s = null;
-    if (i) {
-      if (t.length === 1) s = i;
-      else if (i instanceof B) ((t = t.slice(1)), (s = i._lookupImpl(t, t.join("."))));
+  Namespace.prototype._lookupImpl = function (path, flatPath) {
+    if (Object.prototype.hasOwnProperty.call(this._lookupCache, flatPath)) return this._lookupCache[flatPath];
+    var found = this.get(path[0]);
+    var exact = null;
+    if (found) {
+      if (path.length === 1) exact = found;
+      else if (found instanceof Namespace) {
+        path = path.slice(1);
+        exact = found._lookupImpl(path, path.join("."));
+      }
     } else
-      for (var n = 0; n < this.nestedArray.length; ++n)
-        if (this._nestedArray[n] instanceof B && (i = this._nestedArray[n]._lookupImpl(t, r))) {
-          s = i;
+      for (var i = 0; i < this.nestedArray.length; ++i)
+        if (
+          this._nestedArray[i] instanceof Namespace &&
+          (found = this._nestedArray[i]._lookupImpl(path, flatPath))
+        ) {
+          exact = found;
           break;
         }
-    return ((this._lookupCache[r] = s), s);
+    this._lookupCache[flatPath] = exact;
+    return exact;
   };
-  B.prototype.lookupType = function (t) {
-    var lookup = this.lookup(t, [yr]);
-    if (!lookup) throw Error("no such type: " + t);
-    return lookup;
+  Namespace.prototype.lookupType = function (path) {
+    var found = this.lookup(path, [Type]);
+    if (!found) throw Error("no such type: " + path);
+    return found;
   };
-  B.prototype.lookupEnum = function (t) {
-    var lookup = this.lookup(t, [_r]);
-    if (!lookup) throw Error("no such Enum '" + t + "' in " + this);
-    return lookup;
+  Namespace.prototype.lookupEnum = function (path) {
+    var found = this.lookup(path, [Enum]);
+    if (!found) throw Error("no such Enum '" + path + "' in " + this);
+    return found;
   };
-  B.prototype.lookupTypeOrEnum = function (t) {
-    var lookup = this.lookup(t, [yr, _r]);
-    if (!lookup) throw Error("no such Type or Enum '" + t + "' in " + this);
-    return lookup;
+  Namespace.prototype.lookupTypeOrEnum = function (path) {
+    var found = this.lookup(path, [Type, Enum]);
+    if (!found) throw Error("no such Type or Enum '" + path + "' in " + this);
+    return found;
   };
-  B.prototype.lookupService = function (t) {
-    var lookup = this.lookup(t, [Ur]);
-    if (!lookup) throw Error("no such Service '" + t + "' in " + this);
-    return lookup;
+  Namespace.prototype.lookupService = function (path) {
+    var found = this.lookup(path, [Service]);
+    if (!found) throw Error("no such Service '" + path + "' in " + this);
+    return found;
   };
-  B._configure = function (e, t, r) {
-    ((yr = e), (Ur = t), (_r = r));
+  Namespace._configure = function (Type_, Service_, Enum_) {
+    Type = Type_;
+    Service = Service_;
+    Enum = Enum_;
   };
 });
-
 export { zr };

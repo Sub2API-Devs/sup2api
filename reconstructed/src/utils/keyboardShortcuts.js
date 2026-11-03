@@ -12,25 +12,27 @@ import { getPlatform } from "./platform.js";
 import { env } from "./env.js";
 
 //@ chunk-x1mwqya5.js:17933-17974 fingerprint = MACOS_OPTION_SPECIAL_CHARS (0.79)
-var MACOS_OPTION_SPECIAL_CHARS = { π: "alt+p", ø: "alt+o" };
+var MACOS_OPTION_SPECIAL_CHARS = {
+  π: "alt+p",
+  ø: "alt+o",
+};
 //@ chunk-x1mwqya5.js:17974-18018 placement
-function isMacOptionSpecialChar(n) {
-  return Object.hasOwn(MACOS_OPTION_SPECIAL_CHARS, n);
+function isMacOptionSpecialChar(key) {
+  return Object.hasOwn(MACOS_OPTION_SPECIAL_CHARS, key);
 }
+//@ chunk-x1mwqya5.js:18018-18182 placement
 /**
  * 显示快捷键时用的平台：iTerm2/Apple Terminal 下即使不是 macOS 主机（如 ssh）也按 macOS 显示。
  */
-//@ chunk-x1mwqya5.js:18018-18182 placement
 function getShortcutDisplayPlatform() {
-  let n = getPlatform();
-  if (n === "macos") return n;
+  let platform = getPlatform();
+  if (platform === "macos") return platform;
   if (
     env.LC_TERMINAL === "iTerm2" ||
     env.TERM_PROGRAM === "Apple_Terminal" ||
     env.TERM_PROGRAM === "iTerm.app"
   )
     return "macos";
-  return n;
+  return platform;
 }
-
 export { isMacOptionSpecialChar, MACOS_OPTION_SPECIAL_CHARS, getShortcutDisplayPlatform };

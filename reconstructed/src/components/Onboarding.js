@@ -5,10 +5,18 @@
  *
  * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/Onboarding.tsx
- * pieces: chunk-1tz177x8.js (1), chunk-p8fze0jh.js (6)
- * attribution: fingerprint 2, placement 2, sole-consumer 2, affinity 1
+ * pieces: chunk-1tz177x8.js (1), chunk-p8fze0jh.js (10)
+ * attribution: fingerprint 2, placement 6, sole-consumer 2, affinity 1
  */
-import { j, y, R, P, Q } from "../../vendor/react/cjs/react.production.js";
+import { init_react_production, y, R, P, Q } from "../../vendor/react/cjs/react.production.js";
+import { w } from "../../vendor/react/compiler-runtime.js";
+import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
+import {
+  jsxProd_default_2,
+  jsxProd_default,
+  Fragment,
+} from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { Text, Box } from "../ink/components/Text.js";
 import { OrderedListComponent } from "./ui/OrderedList.js";
 import { OrderedListItem } from "./ui/OrderedListItem.js";
 import {
@@ -21,20 +29,17 @@ import {
 import { getAPIProvider } from "../utils/model/providers.js";
 import { getGatewayAuth } from "../bootstrap/state.js";
 import { getUserSettingsGateway } from "../services/gateway/gatewayCredentialStore.js";
-import { useTheme, useThemeSetting, Me } from "./design-system/ThemeProvider.js";
+import { useTheme, useThemeSetting, useTheme_2 } from "./design-system/ThemeProvider.js";
 import { logEvent } from "../services/analytics/index.js";
 import { computeRemoteSettingsEligibility } from "../services/cloudSessions/eligibility.js";
 import { isRemoteManagedSettingsVerified } from "../services/remoteManagedSettings/remoteSettingsState.js";
 import { fromEnumOpt } from "../services/analytics/safeMetadata.js";
 import { logFeatureOk, logFeatureBad } from "../services/analytics/featureTelemetry.js";
-import { Qfn } from "../plugins/functionHooks/configApi.js";
+import { isConfigSetHooked } from "../plugins/functionHooks/configApi.js";
 import { useGlobalExitKeybindings } from "../keybindings/useKeybinding.js";
-import { e, r, Fragment } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
-import { Box, Text } from "../ink/components/Text.js";
 import { ThemePicker } from "./ThemePicker.js";
 import { Newline } from "../ink/components/Input.js";
 import { LearnMoreLink } from "./LearnMoreLink.js";
-import { PressEnterToContinue } from "./_new/PressEnterToContinue.js";
 import { PreflightStep } from "../utils/preflightChecks.js";
 import { ApproveApiKey } from "./ApproveApiKey.js";
 import { NoticeUnderScene } from "./design-system/NoticeUnderScene.js";
@@ -48,168 +53,246 @@ import { KeyboardShortcutHint } from "./design-system/KeyboardShortcutHint.js";
 import { MessageActionsKeybindings } from "./messageActions.js";
 import { WelcomeV2 } from "./LogoV2/WelcomeV2.js";
 import { StatusRow } from "./Settings/Status.js";
-import { resetStateForTests, zo } from "../cli/handlers/pluginTest/engineShim.js";
+import { resetStateForTests, resetStateLogPrefix } from "../cli/handlers/pluginTest/engineShim.js";
 
 //@ chunk-p8fze0jh.js:16213-16217 placement
-j();
+init_react_production();
 //@ chunk-p8fze0jh.js:16217-16221 placement
-j();
+init_react_production();
+//@ chunk-p8fze0jh.js:19010-19177 placement
+function PressEnterToContinue() {
+  let f = w(1);
+  let o;
+  if (f[0] === MEMO_CACHE_SENTINEL) {
+    o = jsxProd_default_2(Text, {
+      color: "permission",
+      children: [
+        "Press ",
+        jsxProd_default(Text, {
+          bold: true,
+          children: "Enter",
+        }),
+        " to continue\u2026",
+      ],
+    });
+    f[0] = o;
+  } else o = f[0];
+  return o;
+}
+//@ chunk-p8fze0jh.js:19177-19181 placement
+init_react_production();
+//@ chunk-p8fze0jh.js:19181-19185 placement
+init_react_production();
+//@ chunk-p8fze0jh.js:19185-19189 placement
+init_react_production();
 //@ chunk-p8fze0jh.js:20134-20143 sole-consumer
 OrderedListComponent.Item = OrderedListItem;
 //@ chunk-p8fze0jh.js:20143-20151 sole-consumer
-var K = OrderedListComponent;
+var OnboardingInner = OrderedListComponent;
 //@ chunk-p8fze0jh.js:20151-20166 affinity
 function noop() {}
+//@ chunk-p8fze0jh.js:20166-23783 fingerprint = Onboarding (0.631)
 /**
  * 首次引导：依次展示主题选择、登录（OAuth/网关）、安全须知、终端设置（shift+enter 等）等步骤，记录 tengu_began_setup/tengu_onboarding_step。
  */
-//@ chunk-p8fze0jh.js:20166-23783 fingerprint = Onboarding (0.631)
-function Onboarding({ host: host, onDone: onDone, orgConfigGateFollows: orgConfigGateFollows = !1 }) {
-  let [x, h] = y(0),
-    [p] = y(() => isGatewayLoginForced()),
-    [c] = y(() => isAnthropicAuthEnabled() || (p && getAPIProvider() === "gateway" && !getGatewayAuth())),
-    [k] = y(() => p || adminPolicyUnreadable() || getUserSettingsGateway() !== void 0),
-    [u] = y(() => !1),
-    C = R(!1),
-    d = R(!1),
-    [L, I] = useTheme(),
-    W = useThemeSetting(),
-    [N, A] = y(),
-    { storageV5: storageV5 } = Me();
+function Onboarding({ host, onDone, orgConfigGateFollows = false }) {
+  let [currentStepIndex, setCurrentStepIndex] = y(0);
+  let [p] = y(() => isGatewayLoginForced());
+  let [c] = y(() => isAnthropicAuthEnabled() || (p && getAPIProvider() === "gateway" && !getGatewayAuth()));
+  let [k] = y(() => p || adminPolicyUnreadable() || getUserSettingsGateway() !== undefined);
+  let [u] = y(() => false);
+  let C = R(false);
+  let d = R(false);
+  let [L, I] = useTheme();
+  let themeSetting = useThemeSetting();
+  let [N, A] = y();
+  let { storageV5 } = useTheme_2();
   P(() => {
-    logEvent("tengu_began_setup", { oauthEnabled: c });
+    logEvent("tengu_began_setup", {
+      oauthEnabled: c,
+    });
   }, [c]);
-  function O(E = 1) {
-    let v = x + E,
-      U = !1;
+  function goToNextStep(E = 1) {
+    let v = currentStepIndex + E;
+    let U = false;
     if (steps[v]?.id === "oauth")
       try {
         U = (!computeRemoteSettingsEligibility() || isRemoteManagedSettingsVerified()) && hasExistingSignIn();
       } catch {
-        U = !1;
+        U = false;
       }
-    if (U) ((C.current = !0), v++);
+    if (U) {
+      C.current = true;
+      v++;
+    }
     if (v < steps.length) {
-      h(v);
-      for (let H = x + 1; H <= v; H++) {
-        if (U && steps[H]?.id === "oauth") continue;
-        (logEvent("tengu_onboarding_step", { oauthEnabled: c, stepId: fromEnumOpt(steps[H]?.id) }),
-          logFeatureOk("onboarding_step_complete"));
+      setCurrentStepIndex(v);
+      for (let nextIndex = currentStepIndex + 1; nextIndex <= v; nextIndex++) {
+        if (U && steps[nextIndex]?.id === "oauth") continue;
+        logEvent("tengu_onboarding_step", {
+          oauthEnabled: c,
+          stepId: fromEnumOpt(steps[nextIndex]?.id),
+        });
+        logFeatureOk("onboarding_step_complete");
       }
     } else {
       if (d.current) return;
-      ((d.current = !0), logFeatureOk("onboarding_complete"), onDone({ skippedSignIn: C.current }));
+      d.current = true;
+      logFeatureOk("onboarding_complete");
+      onDone({
+        skippedSignIn: C.current,
+      });
     }
   }
   function handleThemeSelection(newTheme) {
-    if (!Qfn()) {
-      (I(newTheme), O());
+    if (!isConfigSetHooked()) {
+      I(newTheme);
+      goToNextStep();
       return;
     }
-    return (
-      O(),
-      import("./chunk-fqjhw3zb.js")
-        .then(({ commitTheme: commitTheme }) => commitTheme(newTheme, { themeSetting: W, setTheme: I }))
-        .then((v) => {
-          if (v?.error !== void 0) A(v.error.message);
-        })
-    );
-  }
-  let exitState = useGlobalExitKeybindings(),
-    pe = e(Box, {
-      marginX: 1,
-      children: e(ThemePicker, {
-        onThemeSelect: handleThemeSelection,
-        showIntroText: !0,
-        helpText: "To change this later, run /theme",
-        hideEscToCancel: !0,
-        skipExitHandling: !0,
-      }),
-    }),
-    ue = r(Box, {
-      flexDirection: "column",
-      gap: 1,
-      paddingLeft: 1,
-      children: [
-        e(Text, { bold: !0, children: "Security notes:" }),
-        e(Box, {
-          flexDirection: "column",
-          maxWidth: 70,
-          children: r(K, {
-            children: [
-              r(K.Item, {
-                children: [
-                  e(Text, { children: "Claude can make mistakes." }),
-                  r(Text, {
-                    dimColor: !0,
-                    wrap: "wrap",
-                    children: [
-                      "You're responsible for Claude's actions and should always",
-                      e(Newline, {}),
-                      "review them, especially when running code.",
-                      e(Newline, {}),
-                    ],
-                  }),
-                ],
-              }),
-              r(K.Item, {
-                children: [
-                  e(Text, { children: "Due to prompt injection risks, only use it with code you trust" }),
-                  e(LearnMoreLink, { url: "https://code.claude.com/docs/en/security" }),
-                ],
-              }),
-            ],
-          }),
+    goToNextStep();
+    return import("./chunk-fqjhw3zb.js")
+      .then(({ commitTheme }) =>
+        commitTheme(newTheme, {
+          themeSetting,
+          setTheme: I,
         }),
-        e(PressEnterToContinue, {}),
-      ],
+      )
+      .then((v) => {
+        if (v?.error !== undefined) A(v.error.message);
+      });
+  }
+  let exitState = useGlobalExitKeybindings();
+  let themeStep = jsxProd_default(Box, {
+    marginX: 1,
+    children: jsxProd_default(ThemePicker, {
+      onThemeSelect: handleThemeSelection,
+      showIntroText: true,
+      helpText: "To change this later, run /theme",
+      hideEscToCancel: true,
+      skipExitHandling: true,
     }),
-    fe = e(PreflightStep, { onSuccess: O }),
-    apiKeyNeedingApproval = Q(getUnapprovedCustomApiKey, []);
+  });
+  let securityStep = jsxProd_default_2(Box, {
+    flexDirection: "column",
+    gap: 1,
+    paddingLeft: 1,
+    children: [
+      jsxProd_default(Text, {
+        bold: true,
+        children: "Security notes:",
+      }),
+      jsxProd_default(Box, {
+        flexDirection: "column",
+        maxWidth: 70,
+        children: jsxProd_default_2(OnboardingInner, {
+          children: [
+            jsxProd_default_2(OnboardingInner.Item, {
+              children: [
+                jsxProd_default(Text, {
+                  children: "Claude can make mistakes.",
+                }),
+                jsxProd_default_2(Text, {
+                  dimColor: true,
+                  wrap: "wrap",
+                  children: [
+                    "You're responsible for Claude's actions and should always",
+                    jsxProd_default(Newline, {}),
+                    "review them, especially when running code.",
+                    jsxProd_default(Newline, {}),
+                  ],
+                }),
+              ],
+            }),
+            jsxProd_default_2(OnboardingInner.Item, {
+              children: [
+                jsxProd_default(Text, {
+                  children: "Due to prompt injection risks, only use it with code you trust",
+                }),
+                jsxProd_default(LearnMoreLink, {
+                  url: "https://code.claude.com/docs/en/security",
+                }),
+              ],
+            }),
+          ],
+        }),
+      }),
+      jsxProd_default(PressEnterToContinue, {}),
+    ],
+  });
+  let preflightStep = jsxProd_default(PreflightStep, {
+    onSuccess: goToNextStep,
+  });
+  let apiKeyNeedingApproval = Q(getUnapprovedCustomApiKey, []);
   function handleApiKeyDone(approved) {
-    let v = approved && steps[x + 1]?.id === "oauth";
-    O(v ? 2 : 1);
+    let v = approved && steps[currentStepIndex + 1]?.id === "oauth";
+    goToNextStep(v ? 2 : 1);
   }
   let steps = [];
-  if (c && !k) steps.push({ id: "preflight", component: fe });
-  if ((steps.push({ id: "theme", component: pe }), apiKeyNeedingApproval)) {
-    let E = e(ApproveApiKey, { customApiKeyTruncated: apiKeyNeedingApproval, onDone: handleApiKeyDone });
-    steps.push({ id: "api-key", component: u ? e(NoticeUnderScene, { children: E }) : E });
+  if (c && !k)
+    steps.push({
+      id: "preflight",
+      component: preflightStep,
+    });
+  steps.push({
+    id: "theme",
+    component: themeStep,
+  });
+  if (apiKeyNeedingApproval) {
+    let E = jsxProd_default(ApproveApiKey, {
+      customApiKeyTruncated: apiKeyNeedingApproval,
+      onDone: handleApiKeyDone,
+    });
+    steps.push({
+      id: "api-key",
+      component: u
+        ? jsxProd_default(NoticeUnderScene, {
+            children: E,
+          })
+        : E,
+    });
   }
   if (c)
     steps.push({
       id: "oauth",
-      component: e(Box, {
+      component: jsxProd_default(Box, {
         flexDirection: "column",
         gap: 1,
         paddingLeft: 1,
-        children: e(ConsoleOAuthFlow, {
-          onDone: O,
-          onOrgDocumentsReload: orgConfigGateFollows ? noop : void 0,
+        children: jsxProd_default(ConsoleOAuthFlow, {
+          onDone: goToNextStep,
+          onOrgDocumentsReload: orgConfigGateFollows ? noop : undefined,
           urlOutdent: 1,
-          allowContinueWithoutLogin: !0,
-          orgConfigGateFollows: orgConfigGateFollows,
+          allowContinueWithoutLogin: true,
+          orgConfigGateFollows,
         }),
       }),
     });
-  if ((steps.push({ id: "security", component: ue }), shouldOfferTerminalSetup() && !u))
+  steps.push({
+    id: "security",
+    component: securityStep,
+  });
+  if (shouldOfferTerminalSetup() && !u)
     steps.push({
       id: "terminal-setup",
-      component: r(Box, {
+      component: jsxProd_default_2(Box, {
         flexDirection: "column",
         gap: 1,
         paddingLeft: 1,
         children: [
-          e(Text, { bold: !0, children: "Use Claude Code's terminal setup?" }),
-          r(Box, {
+          jsxProd_default(Text, {
+            bold: true,
+            children: "Use Claude Code's terminal setup?",
+          }),
+          jsxProd_default_2(Box, {
             flexDirection: "column",
             maxWidth: 70,
             gap: 1,
             children: [
-              r(Text, {
+              jsxProd_default_2(Text, {
                 children: [
                   "For the optimal coding experience, enable the recommended settings",
-                  e(Newline, {}),
+                  jsxProd_default(Newline, {}),
                   "for your terminal:",
                   " ",
                   env.terminal === "Apple_Terminal"
@@ -219,7 +302,7 @@ function Onboarding({ host: host, onDone: onDone, orgConfigGateFollows: orgConfi
                     : "Shift+Enter for newlines",
                 ],
               }),
-              e(ConfirmSelect, {
+              jsxProd_default(ConfirmSelect, {
                 confirmLabel: "Yes, use recommended settings",
                 cancelLabel: "No, maybe later with /terminal-setup",
                 onConfirm: () =>
@@ -228,17 +311,25 @@ function Onboarding({ host: host, onDone: onDone, orgConfigGateFollows: orgConfi
                     .catch(() =>
                       logFeatureBad("onboarding_terminal_setup", "onboarding_terminal_setup_failed"),
                     )
-                    .finally(O),
-                onCancel: O,
+                    .finally(goToNextStep),
+                onCancel: goToNextStep,
               }),
-              e(Text, {
-                dimColor: !0,
+              jsxProd_default(Text, {
+                dimColor: true,
                 children: exitState.pending
-                  ? r(Fragment, { children: ["Press ", exitState.keyName, " again to exit"] })
-                  : r(Byline, {
+                  ? jsxProd_default_2(Fragment, {
+                      children: ["Press ", exitState.keyName, " again to exit"],
+                    })
+                  : jsxProd_default_2(Byline, {
                       children: [
-                        e(KeyboardShortcutHint, { chord: "enter", action: "confirm" }),
-                        e(KeyboardShortcutHint, { chord: "escape", action: "skip" }),
+                        jsxProd_default(KeyboardShortcutHint, {
+                          chord: "enter",
+                          action: "confirm",
+                        }),
+                        jsxProd_default(KeyboardShortcutHint, {
+                          chord: "escape",
+                          action: "skip",
+                        }),
                       ],
                     }),
               }),
@@ -247,53 +338,68 @@ function Onboarding({ host: host, onDone: onDone, orgConfigGateFollows: orgConfi
         ],
       }),
     });
-  let currentStep = steps[x];
+  let currentStep = steps[currentStepIndex];
   function te() {
-    O();
+    goToNextStep();
   }
-  return (
-    MessageActionsKeybindings(
-      { "confirm:yes": te },
-      { context: "Confirmation", isActive: currentStep?.id === "security" },
-    ),
-    MessageActionsKeybindings(
-      { "confirm:no": te },
-      { context: "Confirmation", isActive: currentStep?.id === "terminal-setup" },
-    ),
-    r(Box, {
-      flexDirection: "column",
-      children: [
-        e(WelcomeV2, {}),
-        r(Box, {
-          flexDirection: "column",
-          marginTop: 1,
-          children: [
-            currentStep?.component,
-            N !== void 0 &&
-              e(Box, {
-                paddingX: 1,
-                children: r(StatusRow, { status: "warning", children: ["Couldn't save Theme: ", N] }),
-              }),
-            exitState.pending &&
-              e(Box, {
-                padding: 1,
-                children: r(Text, {
-                  dimColor: !0,
-                  children: ["Press ", exitState.keyName, " again to exit"],
-                }),
-              }),
-          ],
-        }),
-      ],
-    })
+  MessageActionsKeybindings(
+    {
+      "confirm:yes": te,
+    },
+    {
+      context: "Confirmation",
+      isActive: currentStep?.id === "security",
+    },
   );
+  MessageActionsKeybindings(
+    {
+      "confirm:no": te,
+    },
+    {
+      context: "Confirmation",
+      isActive: currentStep?.id === "terminal-setup",
+    },
+  );
+  return jsxProd_default_2(Box, {
+    flexDirection: "column",
+    children: [
+      jsxProd_default(WelcomeV2, {}),
+      jsxProd_default_2(Box, {
+        flexDirection: "column",
+        marginTop: 1,
+        children: [
+          currentStep?.component,
+          N !== undefined &&
+            jsxProd_default(Box, {
+              paddingX: 1,
+              children: jsxProd_default_2(StatusRow, {
+                status: "warning",
+                children: ["Couldn't save Theme: ", N],
+              }),
+            }),
+          exitState.pending &&
+            jsxProd_default(Box, {
+              padding: 1,
+              children: jsxProd_default_2(Text, {
+                dimColor: true,
+                children: ["Press ", exitState.keyName, " again to exit"],
+              }),
+            }),
+        ],
+      }),
+    ],
+  });
 }
 //@ chunk-1tz177x8.js:22768-22923 fingerprint = SkippableStep (0.48)
 function SkippableStep(t0) {
-  let { plugin: plugin, event: event, reason: reason, skip: skip } = t0,
-    f = plugin === resetStateForTests && skip?.kind === "shape",
-    a = reason.startsWith(zo) ? reason.slice(zo.length) : reason;
-  return f ? { text: a, event: event } : void 0;
+  let { plugin, event, reason, skip } = t0;
+  let f = plugin === resetStateForTests && skip?.kind === "shape";
+  let text = reason.startsWith(resetStateLogPrefix) ? reason.slice(resetStateLogPrefix.length) : reason;
+  return f
+    ? {
+        text,
+        event,
+      }
+    : undefined;
 }
-
 export { SkippableStep };

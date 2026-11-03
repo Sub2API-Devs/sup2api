@@ -6,210 +6,233 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { hn } from "./adaptors/getEndpointFromConfig.js";
-import { P4 } from "../../url-parser/dist-cjs/index.js";
-import { EE } from "../../core/dist-cjs/index.js";
-import { bD } from "../../util-middleware/dist-cjs/index.js";
-import { Yns } from "../../middleware-serde/dist-cjs/index.js";
+import { require_getEndpointFromConfig } from "./adaptors/getEndpointFromConfig.js";
+import { require_url_parser } from "../../url-parser/dist-cjs/index.js";
+import { require_core as require_core_2 } from "../../core/dist-cjs/index.js";
+import { require_util_middleware } from "../../util-middleware/dist-cjs/index.js";
+import { require_middleware_serde } from "../../middleware-serde/dist-cjs/index.js";
 
 //@ chunk-edce4vxq.js:116495-120842 cjs-fingerprint
-var pK = x(function (bu) {
-  var pn = hn(),
-    fn = P4(),
-    lu = EE(),
-    at = bD(),
-    du = Yns(),
-    hu = async (e) => {
-      let t = e?.Bucket || "";
-      if (typeof e.Bucket === "string")
-        e.Bucket = t.replace(/#/g, encodeURIComponent("#")).replace(/\?/g, encodeURIComponent("?"));
-      if (yu(t)) {
-        if (e.ForcePathStyle === !0) throw Error("Path-style addressing cannot be used with ARN buckets");
-      } else if (
-        !gu(t) ||
-        (t.indexOf(".") !== -1 && !String(e.Endpoint).startsWith("http:")) ||
-        t.toLowerCase() !== t ||
-        t.length < 3
-      )
-        e.ForcePathStyle = !0;
-      if (e.DisableMultiRegionAccessPoints) ((e.disableMultiRegionAccessPoints = !0), (e.DisableMRAP = !0));
-      return e;
-    },
-    fu = /^[a-z0-9][a-z0-9\.\-]{1,61}[a-z0-9]$/,
-    pu = /(\d+\.){3}\d+/,
-    mu = /\.\./,
-    gu = (e) => fu.test(e) && !pu.test(e) && !mu.test(e),
-    yu = (e) => {
-      let [t, r, s, , , o] = e.split(":"),
-        a = t === "arn" && e.split(":").length >= 6,
-        c = Boolean(a && r && s && o);
-      if (a && !c) throw Error(`Invalid ARN: ${e} was an invalid ARN.`);
-      return c;
-    },
-    Eu = (e, t, r) => {
-      let s = async () => {
-        let o = r[e] ?? r[t];
-        if (typeof o === "function") return o();
-        return o;
+var require_middleware_endpoint = x(function (cjsExports) {
+  var getEndpointFromConfig = require_getEndpointFromConfig();
+  var urlParser = require_url_parser();
+  var core = require_core_2();
+  var utilMiddleware = require_util_middleware();
+  var middlewareSerde = require_middleware_serde();
+  var resolveParamsForS3 = async (endpointParams) => {
+    let bucket = endpointParams?.Bucket || "";
+    if (typeof endpointParams.Bucket === "string")
+      endpointParams.Bucket = bucket
+        .replace(/#/g, encodeURIComponent("#"))
+        .replace(/\?/g, encodeURIComponent("?"));
+    if (isArnBucketName(bucket)) {
+      if (endpointParams.ForcePathStyle === true)
+        throw Error("Path-style addressing cannot be used with ARN buckets");
+    } else if (
+      !isDnsCompatibleBucketName(bucket) ||
+      (bucket.indexOf(".") !== -1 && !String(endpointParams.Endpoint).startsWith("http:")) ||
+      bucket.toLowerCase() !== bucket ||
+      bucket.length < 3
+    )
+      endpointParams.ForcePathStyle = true;
+    if (endpointParams.DisableMultiRegionAccessPoints) {
+      endpointParams.disableMultiRegionAccessPoints = true;
+      endpointParams.DisableMRAP = true;
+    }
+    return endpointParams;
+  };
+  var DOMAIN_PATTERN = /^[a-z0-9][a-z0-9\.\-]{1,61}[a-z0-9]$/;
+  var IP_ADDRESS_PATTERN = /(\d+\.){3}\d+/;
+  var DOTS_PATTERN = /\.\./;
+  var isDnsCompatibleBucketName = (bucketName) =>
+    DOMAIN_PATTERN.test(bucketName) && !IP_ADDRESS_PATTERN.test(bucketName) && !DOTS_PATTERN.test(bucketName);
+  var isArnBucketName = (bucketName) => {
+    let [arn, partition, service, , , bucket] = bucketName.split(":");
+    let isArn = arn === "arn" && bucketName.split(":").length >= 6;
+    let isValidArn = Boolean(isArn && partition && service && bucket);
+    if (isArn && !isValidArn) throw Error(`Invalid ARN: ${bucketName} was an invalid ARN.`);
+    return isValidArn;
+  };
+  var createConfigValueProvider = (configKey, canonicalEndpointParamKey, config) => {
+    let configProvider = async () => {
+      let configValue = config[configKey] ?? config[canonicalEndpointParamKey];
+      if (typeof configValue === "function") return configValue();
+      return configValue;
+    };
+    if (configKey === "credentialScope" || canonicalEndpointParamKey === "CredentialScope")
+      return async () => {
+        let credentials =
+          typeof config.credentials === "function" ? await config.credentials() : config.credentials;
+        return credentials?.credentialScope ?? credentials?.CredentialScope;
       };
-      if (e === "credentialScope" || t === "CredentialScope")
-        return async () => {
-          let o = typeof r.credentials === "function" ? await r.credentials() : r.credentials;
-          return o?.credentialScope ?? o?.CredentialScope;
-        };
-      if (e === "accountId" || t === "AccountId")
-        return async () => {
-          let o = typeof r.credentials === "function" ? await r.credentials() : r.credentials;
-          return o?.accountId ?? o?.AccountId;
-        };
-      if (e === "endpoint" || t === "endpoint")
-        return async () => {
-          if (r.isCustomEndpoint === !1) return;
-          let o = await s();
-          if (o && typeof o === "object") {
-            if ("url" in o) return o.url.href;
-            if ("hostname" in o) {
-              let { protocol: protocol, hostname: hostname, port: port, path: path } = o;
-              return `${protocol}//${hostname}${port ? ":" + port : ""}${path}`;
-            }
+    if (configKey === "accountId" || canonicalEndpointParamKey === "AccountId")
+      return async () => {
+        let credentials =
+          typeof config.credentials === "function" ? await config.credentials() : config.credentials;
+        return credentials?.accountId ?? credentials?.AccountId;
+      };
+    if (configKey === "endpoint" || canonicalEndpointParamKey === "endpoint")
+      return async () => {
+        if (config.isCustomEndpoint === false) return;
+        let endpoint = await configProvider();
+        if (endpoint && typeof endpoint === "object") {
+          if ("url" in endpoint) return endpoint.url.href;
+          if ("hostname" in endpoint) {
+            let { protocol, hostname, port, path } = endpoint;
+            return `${protocol}//${hostname}${port ? ":" + port : ""}${path}`;
           }
-          return o;
-        };
-      return s;
-    },
-    sr = (e) => {
-      if (typeof e === "object") {
-        if ("url" in e) return fn.parseUrl(e.url);
-        return e;
-      }
-      return fn.parseUrl(e);
-    },
-    mn = async (e, t, r, s) => {
-      if (!r.isCustomEndpoint) {
-        let c;
-        if (r.serviceConfiguredEndpoint) c = await r.serviceConfiguredEndpoint();
-        else c = await pn.getEndpointFromConfig(r.serviceId);
-        if (c) ((r.endpoint = () => Promise.resolve(sr(c))), (r.isCustomEndpoint = !0));
-      }
-      let o = await gn(e, t, r);
-      if (typeof r.endpointProvider !== "function") throw Error("config.endpointProvider is not set.");
-      return r.endpointProvider(o, s);
-    },
-    gn = async (e, t, r) => {
-      let s = {},
-        o = t?.getEndpointParameterInstructions?.() || {};
-      for (let [a, c] of Object.entries(o))
-        switch (c.type) {
-          case "staticContextParams":
-            s[a] = c.value;
-            break;
-          case "contextParams":
-            s[a] = e[c.name];
-            break;
-          case "clientContextParams":
-          case "builtInParams":
-            s[a] = await Eu(c.name, a, r)();
-            break;
-          case "operationContextParams":
-            s[a] = c.get(e);
-            break;
-          default:
-            throw Error("Unrecognized endpoint parameter instruction: " + JSON.stringify(c));
         }
-      if (Object.keys(o).length === 0) Object.assign(s, r);
-      if (String(r.serviceId).toLowerCase() === "s3") await hu(s);
-      return s;
-    },
-    yn =
-      ({ config: config, instructions: instructions }) =>
-      (r, s) =>
-      async (o) => {
-        if (config.isCustomEndpoint) lu.setFeature(s, "ENDPOINT_OVERRIDE", "N");
-        let a = await mn(
-          o.input,
-          {
-            getEndpointParameterInstructions() {
-              return instructions;
-            },
-          },
-          { ...config },
-          s,
-        );
-        ((s.endpointV2 = a), (s.authSchemes = a.properties?.authSchemes));
-        let c = s.authSchemes?.[0];
-        if (c) {
-          ((s.signing_region = c.signingRegion), (s.signing_service = c.signingName));
-          let f = at.getSmithyContext(s)?.selectedHttpAuthScheme?.httpAuthOption;
-          if (f)
-            f.signingProperties = Object.assign(
-              f.signingProperties || {},
-              {
-                signing_region: c.signingRegion,
-                signingRegion: c.signingRegion,
-                signing_service: c.signingName,
-                signingName: c.signingName,
-                signingRegionSet: c.signingRegionSet,
-              },
-              c.properties,
-            );
-        }
-        return r({ ...o });
-      },
-    En = {
-      step: "serialize",
-      tags: ["ENDPOINT_PARAMETERS", "ENDPOINT_V2", "ENDPOINT"],
-      name: "endpointV2Middleware",
-      override: !0,
-      relation: "before",
-      toMiddleware: du.serializerMiddlewareOption.name,
-    },
-    Su = (e, t) => ({
-      applyToStack: (r) => {
-        r.addRelativeTo(yn({ config: e, instructions: t }), En);
-      },
-    }),
-    wu = (e) => {
-      let t = e.tls ?? !0,
+        return endpoint;
+      };
+    return configProvider;
+  };
+  var toEndpointV1 = (endpoint) => {
+    if (typeof endpoint === "object") {
+      if ("url" in endpoint) return urlParser.parseUrl(endpoint.url);
+      return endpoint;
+    }
+    return urlParser.parseUrl(endpoint);
+  };
+  var getEndpointFromInstructions = async (commandInput, instructionsSupplier, clientConfig, context) => {
+    if (!clientConfig.isCustomEndpoint) {
+      let endpointFromConfig;
+      if (clientConfig.serviceConfiguredEndpoint)
+        endpointFromConfig = await clientConfig.serviceConfiguredEndpoint();
+      else endpointFromConfig = await getEndpointFromConfig.getEndpointFromConfig(clientConfig.serviceId);
+      if (endpointFromConfig) {
+        clientConfig.endpoint = () => Promise.resolve(toEndpointV1(endpointFromConfig));
+        clientConfig.isCustomEndpoint = true;
+      }
+    }
+    let endpointParams = await resolveParams(commandInput, instructionsSupplier, clientConfig);
+    if (typeof clientConfig.endpointProvider !== "function")
+      throw Error("config.endpointProvider is not set.");
+    return clientConfig.endpointProvider(endpointParams, context);
+  };
+  var resolveParams = async (commandInput, instructionsSupplier, clientConfig) => {
+    let endpointParams = {};
+    let instructions = instructionsSupplier?.getEndpointParameterInstructions?.() || {};
+    for (let [name, instruction] of Object.entries(instructions))
+      switch (instruction.type) {
+        case "staticContextParams":
+          endpointParams[name] = instruction.value;
+          break;
+        case "contextParams":
+          endpointParams[name] = commandInput[instruction.name];
+          break;
+        case "clientContextParams":
+        case "builtInParams":
+          endpointParams[name] = await createConfigValueProvider(instruction.name, name, clientConfig)();
+          break;
+        case "operationContextParams":
+          endpointParams[name] = instruction.get(commandInput);
+          break;
+        default:
+          throw Error("Unrecognized endpoint parameter instruction: " + JSON.stringify(instruction));
+      }
+    if (Object.keys(instructions).length === 0) Object.assign(endpointParams, clientConfig);
+    if (String(clientConfig.serviceId).toLowerCase() === "s3") await resolveParamsForS3(endpointParams);
+    return endpointParams;
+  };
+  var endpointMiddleware =
+    ({ config, instructions }) =>
+    (next, context) =>
+    async (args) => {
+      if (config.isCustomEndpoint) core.setFeature(context, "ENDPOINT_OVERRIDE", "N");
+      let endpoint = await getEndpointFromInstructions(
+        args.input,
         {
-          endpoint: endpoint,
-          useDualstackEndpoint: useDualstackEndpoint,
-          useFipsEndpoint: useFipsEndpoint,
-        } = e,
-        a = endpoint != null ? async () => sr(await at.normalizeProvider(endpoint)()) : void 0,
-        merged = Object.assign(e, {
-          endpoint: a,
-          tls: t,
-          isCustomEndpoint: !!endpoint,
-          useDualstackEndpoint: at.normalizeProvider(useDualstackEndpoint ?? !1),
-          useFipsEndpoint: at.normalizeProvider(useFipsEndpoint ?? !1),
+          getEndpointParameterInstructions() {
+            return instructions;
+          },
+        },
+        {
+          ...config,
+        },
+        context,
+      );
+      context.endpointV2 = endpoint;
+      context.authSchemes = endpoint.properties?.authSchemes;
+      let authScheme = context.authSchemes?.[0];
+      if (authScheme) {
+        context.signing_region = authScheme.signingRegion;
+        context.signing_service = authScheme.signingName;
+        let httpAuthOption = utilMiddleware.getSmithyContext(context)?.selectedHttpAuthScheme?.httpAuthOption;
+        if (httpAuthOption)
+          httpAuthOption.signingProperties = Object.assign(
+            httpAuthOption.signingProperties || {},
+            {
+              signing_region: authScheme.signingRegion,
+              signingRegion: authScheme.signingRegion,
+              signing_service: authScheme.signingName,
+              signingName: authScheme.signingName,
+              signingRegionSet: authScheme.signingRegionSet,
+            },
+            authScheme.properties,
+          );
+      }
+      return next({
+        ...args,
+      });
+    };
+  var endpointMiddlewareOptions = {
+    step: "serialize",
+    tags: ["ENDPOINT_PARAMETERS", "ENDPOINT_V2", "ENDPOINT"],
+    name: "endpointV2Middleware",
+    override: true,
+    relation: "before",
+    toMiddleware: middlewareSerde.serializerMiddlewareOption.name,
+  };
+  var getEndpointPlugin = (config, instructions) => ({
+    applyToStack: (clientStack) => {
+      clientStack.addRelativeTo(
+        endpointMiddleware({
+          config,
+          instructions,
         }),
-        f = void 0;
-      return (
-        (merged.serviceConfiguredEndpoint = async () => {
-          if (e.serviceId && !f) f = pn.getEndpointFromConfig(e.serviceId);
-          return f;
-        }),
-        merged
+        endpointMiddlewareOptions,
       );
     },
-    xu = (e) => {
-      let { endpoint: endpoint } = e;
-      if (endpoint === void 0)
-        e.endpoint = async () => {
-          throw Error(
-            "@smithy/middleware-endpoint: (default endpointRuleSet) endpoint is not set - you must configure an endpoint.",
-          );
-        };
-      return e;
+  });
+  var resolveEndpointConfig = (input) => {
+    let tls = input.tls ?? true;
+    let { endpoint, useDualstackEndpoint, useFipsEndpoint } = input;
+    let customEndpointProvider =
+      endpoint != null
+        ? async () => toEndpointV1(await utilMiddleware.normalizeProvider(endpoint)())
+        : undefined;
+    let resolvedConfig = Object.assign(input, {
+      endpoint: customEndpointProvider,
+      tls,
+      isCustomEndpoint: !!endpoint,
+      useDualstackEndpoint: utilMiddleware.normalizeProvider(useDualstackEndpoint ?? false),
+      useFipsEndpoint: utilMiddleware.normalizeProvider(useFipsEndpoint ?? false),
+    });
+    let configuredEndpointPromise = undefined;
+    resolvedConfig.serviceConfiguredEndpoint = async () => {
+      if (input.serviceId && !configuredEndpointPromise)
+        configuredEndpointPromise = getEndpointFromConfig.getEndpointFromConfig(input.serviceId);
+      return configuredEndpointPromise;
     };
-  bu.endpointMiddleware = yn;
-  bu.endpointMiddlewareOptions = En;
-  bu.getEndpointFromInstructions = mn;
-  bu.getEndpointPlugin = Su;
-  bu.resolveEndpointConfig = wu;
-  bu.resolveEndpointRequiredConfig = xu;
-  bu.resolveParams = gn;
-  bu.toEndpointV1 = sr;
+    return resolvedConfig;
+  };
+  var resolveEndpointRequiredConfig = (input) => {
+    let { endpoint } = input;
+    if (endpoint === undefined)
+      input.endpoint = async () => {
+        throw Error(
+          "@smithy/middleware-endpoint: (default endpointRuleSet) endpoint is not set - you must configure an endpoint.",
+        );
+      };
+    return input;
+  };
+  cjsExports.endpointMiddleware = endpointMiddleware;
+  cjsExports.endpointMiddlewareOptions = endpointMiddlewareOptions;
+  cjsExports.getEndpointFromInstructions = getEndpointFromInstructions;
+  cjsExports.getEndpointPlugin = getEndpointPlugin;
+  cjsExports.resolveEndpointConfig = resolveEndpointConfig;
+  cjsExports.resolveEndpointRequiredConfig = resolveEndpointRequiredConfig;
+  cjsExports.resolveParams = resolveParams;
+  cjsExports.toEndpointV1 = toEndpointV1;
 });
-
-export { pK };
+export { require_middleware_endpoint };

@@ -8,52 +8,69 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:304-981 cjs-fingerprint
-var je = x(function (su, Je) {
-  function Hc(e) {
-    let regex = e.regex,
-      n = /^[a-zA-Z][a-zA-Z0-9-]*/,
-      a = [
-        "ALPHA",
-        "BIT",
-        "CHAR",
-        "CR",
-        "CRLF",
-        "CTL",
-        "DIGIT",
-        "DQUOTE",
-        "HEXDIG",
-        "HTAB",
-        "LF",
-        "LWSP",
-        "OCTET",
-        "SP",
-        "VCHAR",
-        "WSP",
-      ],
-      COMMENT = e.COMMENT(/;/, /$/),
-      o = { scope: "symbol", match: /%b[0-1]+(-[0-1]+|(\.[0-1]+)+)?/ },
-      r = { scope: "symbol", match: /%d[0-9]+(-[0-9]+|(\.[0-9]+)+)?/ },
-      i = { scope: "symbol", match: /%x[0-9A-F]+(-[0-9A-F]+|(\.[0-9A-F]+)+)?/ },
-      c = { scope: "symbol", match: /%[si](?=".*")/ },
-      l = { scope: "attribute", match: regex.concat(n, /(?=\s*=)/) };
+var require_abnf = x(function (cjsExports, cjsModule) {
+  function abnf(hljs) {
+    let regex = hljs.regex;
+    let IDENT = /^[a-zA-Z][a-zA-Z0-9-]*/;
+    let KEYWORDS = [
+      "ALPHA",
+      "BIT",
+      "CHAR",
+      "CR",
+      "CRLF",
+      "CTL",
+      "DIGIT",
+      "DQUOTE",
+      "HEXDIG",
+      "HTAB",
+      "LF",
+      "LWSP",
+      "OCTET",
+      "SP",
+      "VCHAR",
+      "WSP",
+    ];
+    let COMMENT = hljs.COMMENT(/;/, /$/);
+    let TERMINAL_BINARY = {
+      scope: "symbol",
+      match: /%b[0-1]+(-[0-1]+|(\.[0-1]+)+)?/,
+    };
+    let TERMINAL_DECIMAL = {
+      scope: "symbol",
+      match: /%d[0-9]+(-[0-9]+|(\.[0-9]+)+)?/,
+    };
+    let TERMINAL_HEXADECIMAL = {
+      scope: "symbol",
+      match: /%x[0-9A-F]+(-[0-9A-F]+|(\.[0-9A-F]+)+)?/,
+    };
+    let CASE_SENSITIVITY = {
+      scope: "symbol",
+      match: /%[si](?=".*")/,
+    };
+    let RULE_DECLARATION = {
+      scope: "attribute",
+      match: regex.concat(IDENT, /(?=\s*=)/),
+    };
     return {
       name: "Augmented Backus-Naur Form",
       illegal: /[!@#$^&',?+~`|:]/,
-      keywords: a,
+      keywords: KEYWORDS,
       contains: [
-        { scope: "operator", match: /=\/?/ },
-        l,
+        {
+          scope: "operator",
+          match: /=\/?/,
+        },
+        RULE_DECLARATION,
         COMMENT,
-        o,
-        r,
-        i,
-        c,
-        e.QUOTE_STRING_MODE,
-        e.NUMBER_MODE,
+        TERMINAL_BINARY,
+        TERMINAL_DECIMAL,
+        TERMINAL_HEXADECIMAL,
+        CASE_SENSITIVITY,
+        hljs.QUOTE_STRING_MODE,
+        hljs.NUMBER_MODE,
       ],
     };
   }
-  Je.exports = Hc;
+  cjsModule.exports = abnf;
 });
-
-export { je };
+export { require_abnf };

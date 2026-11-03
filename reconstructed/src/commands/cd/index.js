@@ -8,17 +8,15 @@
  * pieces: chunk-e6aww6q8.js (1)
  * attribution: placement 1
  */
-
+//@ chunk-e6aww6q8.js:1686713-1686839 placement
 /**
  * /cd 命令对象（local-jsx）；描述：Move this session to a new working directory；实现 chunk-fh3th4b7.js 的 Vo。
  */
-//@ chunk-e6aww6q8.js:1686713-1686839 placement
 var cdCommandDefinition = {
-    type: "local-jsx",
-    name: "cd",
-    description: "Move this session to a new working directory",
-    argumentHint: "<path>",
-  },
-  cdCommand = cdCommandDefinition;
-
+  type: "local-jsx",
+  name: "cd",
+  description: "Move this session to a new working directory",
+  argumentHint: "<path>",
+};
+var cdCommand = cdCommandDefinition;
 export { cdCommand };

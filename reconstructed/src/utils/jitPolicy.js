@@ -10,14 +10,13 @@
  */
 import { env } from "./env.js";
 
+//@ chunk-gwfxd7ar.js:226-345 placement
 /**
  * 启动后设置 JIT 策略。
  */
-//@ chunk-gwfxd7ar.js:226-345 placement
 function setJitPolicyAfterStartup() {
-  let e = env.CLAUDE_CODE_JIT_POLICY_AFTER_STARTUP ?? 1;
-  if (typeof Bun < "u") Bun.unsafe.setJITPolicy?.(e);
-  return e;
+  let CLAUDE_CODE_JIT_POLICY_AFTER_STARTUP = env.CLAUDE_CODE_JIT_POLICY_AFTER_STARTUP ?? 1;
+  if (typeof Bun !== "undefined") Bun.unsafe.setJITPolicy?.(CLAUDE_CODE_JIT_POLICY_AFTER_STARTUP);
+  return CLAUDE_CODE_JIT_POLICY_AFTER_STARTUP;
 }
-
 export { setJitPolicyAfterStartup };

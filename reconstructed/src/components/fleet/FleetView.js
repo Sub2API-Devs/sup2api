@@ -9,36 +9,36 @@
  * attribution: placement 17
  */
 import { isDeepStrictEqual } from "util";
-import { basename, basename as basename_2, basename as basename_3, resolve } from "path";
-import { randomUUID, randomUUID as randomUUID_2, randomUUID as randomUUID_3 } from "crypto";
+import { basename, resolve } from "path";
+import { randomUUID } from "crypto";
 import { lit, fromEnum } from "../../services/analytics/safeMetadata.js";
 import {
   SIMPLE_PINNED,
-  Sn,
+  groupCollapseKey,
   prependModeCharacterToInput,
-  Ws,
+  parseDraftInput,
   buildFleetRows,
   getJobTitle,
 } from "./FleetRow.js";
 import {
+  jobSortKey_2,
   jobSortKey,
-  gs,
-  jn,
+  sortJobs,
   remoteRowIdOf,
-  cd,
+  isRemoteRowId,
   ensureFleetRoster,
-  ws,
-  Ss,
-  bs,
+  ensureFleetSelection,
+  ensureFleetLiveStatus,
+  canonicalRepoRoot,
   CloudListFailureNotice,
-  cc,
-  oc,
+  CLOUD_LIST_ATTEMPTS,
+  isOtherLocalDaemonJob,
   jobTempo,
   emitFinishedJobs,
-  hc,
-  Qu,
+  terminalTitle,
+  prepareFatalExit,
   reportFatalAndExit,
-  nc,
+  markJobFinished,
   resolveDispatchPermissionMode,
 } from "./fleetRows.js";
 import {
@@ -49,7 +49,7 @@ import {
   attachToJob,
   openNewSession,
   logFleetJobAction,
-  Ap,
+  COMMAND_NOT_RESPONDING_TEXT,
   offerJobRestart,
 } from "./fleetActions.js";
 import { logFeatureSad, logFeatureOk, logFeatureBad } from "../../services/analytics/featureTelemetry.js";
@@ -59,44 +59,44 @@ import {
   parseNewSessionPrefix,
   isPasteImageKey,
   pasteImageFromClipboard,
-  Xc,
-  Rs,
-  vs,
+  DISPATCH_FLAG_HINTS,
+  ensureFleetEditor,
+  shouldListPastSessions,
   listPastSessions,
   modelSuggestions,
-  Od,
-  Os,
+  EMPTY_AGENT_SUGGESTIONS,
+  EMPTY_SKILL_SUGGESTIONS,
   findMentionedTemplate,
   mergeSuggestionsByName,
   relaunchAgentsView,
   CLAUDE_AGENTS_AUTO_RELAUNCHED_AT,
-  Hc,
-  ks,
+  RELAUNCH_COOLDOWN_MS,
+  RELAUNCH_RECENT_MS,
   buildDispatchSuggestions,
-  Id,
-  zc,
+  SUGGESTION_KIND_LABELS,
+  replaceTrailingMention,
   pruneReplyDrafts,
   backfillAgentLastUsed,
-  SUGGESTION_KIND_LABELS,
+  SUGGESTION_KIND_LABELS_2,
   mentionRanges,
   newSessionPrefixRanges,
   composePolicyLimitsForFleet,
   safeRespawnBgSession,
 } from "./fleetSessions.js";
 import {
-  xE,
+  RENAME_SAVE_WAIT_MS,
   resolveFleetKeyAction,
   jumpGroupHeader,
   nextFocusableRow,
   resolveExitAction,
-  Ia,
-  FE,
+  logFleetActionFailure,
+  RENAME_BUSY_TEXT,
   shortcutDisplayFor,
   stopOrDeleteJob,
   stopGroup,
   ensureFleetViewStore,
-  Um,
-  Dl,
+  ensureDeleteConfirmStore,
+  PREVIEW_BACK_TIMEOUT_MS,
   DispatchModeLine,
   submitRename,
   submitGroupEdit,
@@ -125,27 +125,40 @@ import {
 } from "../../services/daemon/jobState.js";
 import { logError } from "../../utils/log.js";
 import { errorMessage } from "../../utils/errors.js";
-import { Dr, getFirstLine } from "../../utils/stringUtils.js";
-import { submitDispatch, Bs, handlePasteIntoDispatch } from "./fleetDispatch.js";
+import { collapseWhitespace, getFirstLine } from "../../utils/stringUtils.js";
+import { submitDispatch, DISPATCH_TIMEOUT_MS, handlePasteIntoDispatch } from "./fleetDispatch.js";
 import { logEvent } from "../../services/analytics/index.js";
-import { nmt, Y$n, yAr } from "../../cli/bg/bgSpare.js";
+import { isFleetDispatchEnabled, claimSpareFromPool, discardSpare } from "../../cli/bg/bgSpare.js";
 import { isBashModeChar } from "../PromptInput/inputModes.js";
 import { Text, Box } from "../../ink/components/Text.js";
 import { createSignal } from "../../utils/signal.js";
-import { e, r } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { logForDebugging } from "../../utils/debug.js";
-import { findGitRoot, listUserAgentTemplates, pxs } from "../../cli/bg/bgSpawnEnv.js";
+import { findGitRoot, listUserAgentTemplates, setSpareExtraArgs } from "../../cli/bg/bgSpawnEnv.js";
 import { listRepoWorktrees } from "../../utils/worktree.js";
 import { getCommands, isSkillOff, getHumanFacingDescription } from "../../commands.js";
-import { j, R, P, y, Q, ce, Uy, zt, Se } from "../../../vendor/react/cjs/react.production.js";
+import {
+  init_react_production,
+  R,
+  P,
+  y,
+  Q,
+  ce,
+  Uy,
+  zt,
+  Se,
+} from "../../../vendor/react/cjs/react.production.js";
 import { truncateWithEllipsis } from "../../services/sessionStatus/sessionStateClassifier.js";
 import { useTerminalNotification } from "../../ink/useTerminalNotification.js";
-import { Me, useStdin } from "../design-system/ThemeProvider.js";
-import { gB } from "../../utils/terminalProbe.js";
-import { markAgentsNotified, rs } from "../../tasks/LocalAgentTask/LocalAgentTask.js";
-import { ye } from "../../utils/startupMarks.js";
+import { useTheme_2, useStdin } from "../design-system/ThemeProvider.js";
+import { notifyAsync } from "../../utils/terminalProbe.js";
+import { markAgentsNotified, createNotifiedState } from "../../tasks/LocalAgentTask/LocalAgentTask.js";
+import { sanitizeMarkName } from "../../utils/startupMarks.js";
 import { useClock } from "../../ink/components/ClockContext.js";
-import { Bo, useDispatchWindowDefaults, FleetRowList, FleetComposer } from "./FleetList.js";
+import { useFleetBindings, useDispatchWindowDefaults, FleetRowList, FleetComposer } from "./FleetList.js";
 import { isAgentsSimpleViewEnabled } from "../../utils/fleetGates.js";
 import { useTimeout, useTerminalTitle, createRoot } from "../../ink/hooks/useTerminalHooks.js";
 import { createFleetViewHost, useAttachFleetOwners } from "./useAttachFleetOwners.js";
@@ -176,7 +189,7 @@ import {
   useInputClock,
 } from "../../ink/components/Input.js";
 import { getLastInteractionTime, getRootSession, resetInteractionBaseline } from "../../bootstrap/state.js";
-import { $6s } from "./sessionAttention.js";
+import { returnFalseAttention } from "./sessionAttention.js";
 import { isCrossSessionMessagingEnabled } from "../../utils/crossSessionMessagingGate.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import { useIsScreenReaderEnabled } from "../../ink/components/ErrorBoundary.js";
@@ -187,7 +200,7 @@ import {
   useSelectionClearKeybinding,
 } from "../ScrollKeybindingHandler.js";
 import { useCopyOnSelect, useSelectionBgColor } from "../../hooks/useCopyOnSelect.js";
-import { di, enterAltScreenSequence, exitAltScreenSequence } from "../../ink/terminal.js";
+import { getSecondRootError, enterAltScreenSequence, exitAltScreenSequence } from "../../ink/terminal.js";
 import { openClickedLink } from "../../utils/browser.js";
 import { getAuthTokenSource } from "../../utils/auth.js";
 import { env } from "../../utils/env.js";
@@ -204,193 +217,215 @@ import {
   hasTeammateModeSnapshot,
   captureTeammateModeSnapshot,
 } from "../../utils/swarm/backends/teammateModeSnapshot.js";
-import { xo } from "../../bootstrap/sessionSlices.js";
+import { getSessionProject } from "../../bootstrap/sessionSlices.js";
 import { isStorageV5Enabled } from "../../utils/hoverRest.js";
 import { registerCleanup } from "../../utils/cleanupRegistry.js";
 import { openDaemonLease } from "../../services/daemon/controlClient.js";
 import { showScreen } from "../../utils/runSteps.js";
-import { j6s } from "../../utils/remoteSessionCommands.js";
-import { tgo } from "../SearchBox.js";
+import { noRemoteSessionCommands } from "../../utils/remoteSessionCommands.js";
+import { neverEmbedded } from "../SearchBox.js";
 import { setRawModeSafe } from "../../ink/setRawModeSafe.js";
 import { shouldUseFullscreenByDefault } from "../../utils/fullscreen.js";
 import { takeNotificationLatency, checkDispatchDefaultsChanged } from "./dispatchDefaults.js";
 import { readJobDraft, sweepJobDrafts } from "../../daemon/jobs/draftSweep.js";
 import { parseSwitchTarget } from "../../daemon/attach/attachJob.js";
-import { or } from "../../utils/settings/commandSyncNames.js";
+import { invalidateCommandNames } from "../../utils/settings/commandSyncNames.js";
 import { FleetViewScreen } from "../../screens/FleetView/FleetViewScreen.js";
 import { AppRoot } from "../AppRoot.js";
 import { setJitPolicyAfterStartup } from "../../utils/jitPolicy.js";
 import { getAPIProvider } from "../../utils/model/providers.js";
 import { getPlatform } from "../../utils/platform.js";
 import { onExit } from "../../../vendor/signal-exit/dist/mjs/index.js";
-import { Qtn } from "../PromptInput/Notifications.js";
+import { NOTICE_WIDTH_LIMIT } from "../PromptInput/Notifications.js";
 import { osc, OSC } from "../../ink/termio/osc.js";
 import { attachJob } from "../../daemon/jobs/killJob.js";
 import { isTerminalShutdown, heldUntilExit } from "../../utils/terminalShutdown.js";
 import { getBaseRenderOptions } from "../../utils/renderOptions.js";
 
 //@ chunk-93kwxas0.js:5808-5932 placement
-function fleetAttachFields(h, E, k) {
+function fleetAttachFields(id, E, k) {
   return {
-    attach_kind: !E ? lit("no_origin") : h === E ? lit("origin_return") : lit("other"),
+    attach_kind: !E ? lit("no_origin") : id === E ? lit("origin_return") : lit("other"),
     is_first_attach_of_visit: k === 0,
   };
 }
+//@ chunk-93kwxas0.js:163196-164309 placement
 /**
  * 在同组内上下移动当前会话（固定排序）。
  */
-//@ chunk-93kwxas0.js:163196-164309 placement
 function reorderFocusedJob(h, E) {
-  let { roster: roster, selection: selection, editor: editor } = h.submit,
-    { rows: rows, pendings: pendings, byGroup: byGroup, byState: byState, simpleView: simpleView } = h,
-    setError = editor.setError;
+  let { roster, selection, editor } = h.submit;
+  let { rows, pendings, byGroup, byState, simpleView } = h;
+  let setError = editor.setError;
   if (selection.reorderIssued) return;
-  let focusedIdx = selection.getSnapshot().focusedIdx,
-    X = rows[focusedIdx];
+  let focusedIdx = selection.getSnapshot().focusedIdx;
+  let X = rows[focusedIdx];
   if (X?.kind !== "job") return;
   let K = focusedIdx + E;
   while (rows[K]?.kind === "earlier") K += E;
   let W = rows[K];
   if (W?.kind !== "job" || X.group !== W.group) return;
-  let job = X.job,
-    job_2 = W.job;
-  if (pendings.some((Oe) => Oe.id === job.id || Oe.id === job_2.id)) return;
+  let job = X.job;
+  let job_2 = W.job;
+  if (pendings.some((pending) => pending.id === job.id || pending.id === job_2.id)) return;
   if (job.state.backend !== "daemon" || job_2.state.backend !== "daemon") return;
   setError(null);
   let ge = X.group === "pinned" || X.group === SIMPLE_PINNED;
   if ((byGroup || simpleView) && !ge) return;
-  let se = byState && !ge,
-    ne = se ? (Oe) => jobSortKey(Oe, X.group) : gs,
-    ae = ne(job.state),
-    me = ne(job_2.state),
-    Je = new Map();
+  let se = byState && !ge;
+  let ne = se ? (Oe) => jobSortKey_2(Oe, X.group) : jobSortKey;
+  let ae = ne(job.state);
+  let me = ne(job_2.state);
+  let Je = new Map();
   if (ae === me) {
-    let Oe = new Set(pendings.map((Re) => Re.id)),
-      De = 0;
+    let Oe = new Set(pendings.map((pending) => pending.id));
+    let De = 0;
     for (let Re of rows)
       if (Re.kind === "job" && Re.group === X.group && !Oe.has(Re.job.id)) Je.set(Re.job.id, De++);
     let we = Je.get(job.id);
-    (Je.set(job.id, Je.get(job_2.id)), Je.set(job_2.id, we));
-  } else (Je.set(job.id, me), Je.set(job_2.id, ae));
-  (selection.beginReorder(job.id, K), roster.bumpGen());
+    Je.set(job.id, Je.get(job_2.id));
+    Je.set(job_2.id, we);
+  } else {
+    Je.set(job.id, me);
+    Je.set(job_2.id, ae);
+  }
+  selection.beginReorder(job.id, K);
+  roster.bumpGen();
   let le = se ? "stateSortOrder" : "sortOrder";
-  (roster.updateJobs((Oe) =>
+  roster.updateJobs((Oe) =>
     Oe
-      ? jn(
+      ? sortJobs(
           Oe.map((De) => {
             let we = Je.get(De.id);
-            return we === void 0 ? De : { ...De, state: { ...De.state, [le]: we } };
+            return we === undefined
+              ? De
+              : {
+                  ...De,
+                  state: {
+                    ...De.state,
+                    [le]: we,
+                  },
+                };
           }),
         )
       : Oe,
-  ),
-    selection.queueOrderWrites(Je, se ? "state" : "directory"));
+  );
+  selection.queueOrderWrites(Je, se ? "state" : "directory");
 }
+//@ chunk-93kwxas0.js:164309-177025 placement
 /**
  * Agents 视图的键盘处理：导航、打开、派发、重命名、分组、删除、搜索、vim 模式等。
  */
-//@ chunk-93kwxas0.js:164309-177025 placement
-function handleFleetKey(h, E) {
+function handleFleetKey(h, event) {
   let {
-      editor: editor,
-      roster: roster,
-      selection: selection,
-      view: view,
-      attach: attach,
-      storageV5: storageV5,
-      onAction: onAction,
-      exit: exit,
-      searchKeyDown: searchKeyDown,
-      vimMode: vimMode,
-      dispatchInputActive: dispatchInputActive,
-      templates: templates,
-      suggestions: suggestions,
-      pickSuggestion: pickSuggestion,
-      applySuggestion: applySuggestion,
-      jobSessionIds: jobSessionIds,
-      focusedRow: focusedRow,
-      focused: focused,
-      openEarlier: openEarlier,
-      openNewSessionRow: openNewSessionRow,
-      openOrRespawn: openOrRespawn,
-    } = h.submit,
-    {
-      deleteConfirm: deleteConfirm,
-      rows: rows,
-      focusedIdx: focusedIdx,
-      altOpenOrigin: altOpenOrigin,
-      byGroup: byGroup,
-      hasComposedDispatch: hasComposedDispatch,
-      headerJobs: headerJobs,
-      groupSuggestions: groupSuggestions,
-      previewOpen: previewOpen,
-      helpOpen: helpOpen,
-      debugOpen: debugOpen,
-      groupEdit: groupEdit,
-      renamingJobId: renamingJobId,
-      attachingJobId: attachingJobId,
-      showAllAgents: showAllAgents,
-      jobs: jobs,
-      pendings: pendings,
-      keybindings: keybindings,
-      simpleView: simpleView,
-      groupsEnabled: groupsEnabled,
-      hasCredentials: hasCredentials,
-      termRows: termRows,
-      canGoBack: canGoBack,
-      originJobId: originJobId,
-      originSpawn: originSpawn,
-      renameKeyDown: renameKeyDown,
-      groupKeyDown: groupKeyDown,
-      setQuery: setQuery,
-      enterInsertMode: enterInsertMode,
-      setRenameDraft: setRenameDraft,
-      setGroupDraft: setGroupDraft,
-      readGroupDraft: readGroupDraft,
-      pressExitKey: pressExitKey,
-      switchTab: switchTab,
-      clearRename: clearRename,
-      clearGroupEdit: clearGroupEdit,
-      headerArmId: headerArmId,
-      ck: ck,
-      setShowAllAgents: setShowAllAgents,
-      setSelectedSuggestion: setSelectedSuggestion,
-      setHoveredSuggestionId: setHoveredSuggestionId,
-      attachPastedImage: attachPastedImage,
-    } = h,
-    rt = (Ce) => editor.setMode(Ce),
-    { setError: setError, setHint: setHint } = editor,
-    St = () => clearFleetOfferState(attach, editor);
-  if (E.key !== " ") view.cancelPeekTap();
-  if (simpleView && deleteConfirm.pending !== null && !(E.ctrl && E.key === "x") && E.name !== "escape")
+    editor,
+    roster,
+    selection,
+    view,
+    attach,
+    storageV5,
+    onAction,
+    exit,
+    searchKeyDown,
+    vimMode,
+    dispatchInputActive,
+    templates,
+    suggestions,
+    pickSuggestion,
+    applySuggestion,
+    jobSessionIds,
+    focusedRow,
+    focused,
+    openEarlier,
+    openNewSessionRow,
+    openOrRespawn,
+  } = h.submit;
+  let {
+    deleteConfirm,
+    rows,
+    focusedIdx,
+    altOpenOrigin,
+    byGroup,
+    hasComposedDispatch,
+    headerJobs,
+    groupSuggestions,
+    previewOpen,
+    helpOpen,
+    debugOpen,
+    groupEdit,
+    renamingJobId,
+    attachingJobId,
+    showAllAgents,
+    jobs,
+    pendings,
+    keybindings,
+    simpleView,
+    groupsEnabled,
+    hasCredentials,
+    termRows,
+    canGoBack,
+    originJobId,
+    originSpawn,
+    renameKeyDown,
+    groupKeyDown,
+    setQuery,
+    enterInsertMode,
+    setRenameDraft,
+    setGroupDraft,
+    readGroupDraft,
+    pressExitKey,
+    switchTab,
+    clearRename,
+    clearGroupEdit,
+    headerArmId,
+    ck,
+    setShowAllAgents,
+    setSelectedSuggestion,
+    setHoveredSuggestionId,
+    attachPastedImage,
+  } = h;
+  let rt = (Ce) => editor.setMode(Ce);
+  let { setError, setHint } = editor;
+  let St = () => clearFleetOfferState(attach, editor);
+  if (event.key !== " ") view.cancelPeekTap();
+  if (
+    simpleView &&
+    deleteConfirm.pending !== null &&
+    !(event.ctrl && event.key === "x") &&
+    event.name !== "escape"
+  )
     deleteConfirm.disarm();
   let Ne = () => {
-    (E.preventDefault(), E.stopImmediatePropagation());
+    event.preventDefault();
+    event.stopImmediatePropagation();
   };
   if (renamingJobId !== null || view.getSnapshot().renaming !== null) {
-    if ((Ne(), E.ctrl && E.key === "c")) {
+    Ne();
+    if (event.ctrl && event.key === "c") {
       clearRename();
       return;
     }
-    if (E.name === "up" || E.name === "down") return;
-    renameKeyDown(E);
+    if (event.name === "up" || event.name === "down") return;
+    renameKeyDown(event);
     return;
   }
   if (groupEdit !== null) {
-    if ((Ne(), E.ctrl && E.key === "c")) {
+    Ne();
+    if (event.ctrl && event.key === "c") {
       clearGroupEdit();
       return;
     }
     if (view.getSnapshot().groupPristine) {
       if (
-        E.name === "backspace" ||
-        E.name === "delete" ||
-        (E.ctrl && (E.key === "u" || E.key === "w" || E.key === "k"))
+        event.name === "backspace" ||
+        event.name === "delete" ||
+        (event.ctrl && (event.key === "u" || event.key === "w" || event.key === "k"))
       ) {
-        (setGroupDraft(""), view.setGroupPristine(!1));
+        setGroupDraft("");
+        view.setGroupPristine(false);
         return;
       }
-      switch (E.name) {
+      switch (event.name) {
         case "return":
         case "escape":
         case "up":
@@ -406,82 +441,88 @@ function handleFleetKey(h, E) {
         case "insert":
         case "wheelup":
         case "wheeldown":
-          view.setGroupPristine(!1);
+          view.setGroupPristine(false);
           return;
         default:
-          if (E.name.startsWith("f") && /^f\d+$/.test(E.name)) return;
-          if (!E.ctrl && !E.meta) {
-            (setGroupDraft(""), view.setGroupPristine(!1), groupKeyDown(E));
+          if (event.name.startsWith("f") && /^f\d+$/.test(event.name)) return;
+          if (!event.ctrl && !event.meta) {
+            setGroupDraft("");
+            view.setGroupPristine(false);
+            groupKeyDown(event);
             return;
           }
           return;
       }
     }
     if (groupEdit.kind === "rename") {
-      if (E.name === "up" || E.name === "down") return;
-      groupKeyDown(E);
+      if (event.name === "up" || event.name === "down") return;
+      groupKeyDown(event);
       return;
     }
-    let Ce = groupSuggestions,
-      trimmed = readGroupDraft().trim(),
-      at = trimmed === "" || trimmed === groupEdit.cur,
-      groupPickIdx = view.getSnapshot().groupPickIdx;
-    if (E.name === "down") {
+    let Ce = groupSuggestions;
+    let trimmed = readGroupDraft().trim();
+    let at = trimmed === "" || trimmed === groupEdit.cur;
+    let groupPickIdx = view.getSnapshot().groupPickIdx;
+    if (event.name === "down") {
       if (Ce.length > 0 && !at) view.setGroupPickIdx(Math.min(groupPickIdx + 1, Ce.length - 1));
       return;
     }
-    if (E.name === "up") {
+    if (event.name === "up") {
       view.setGroupPickIdx(Math.max(groupPickIdx - 1, -1));
       return;
     }
-    if (E.name === "left" && groupPickIdx >= 0) {
+    if (event.name === "left" && groupPickIdx >= 0) {
       view.setGroupPickIdx(-1);
       return;
     }
-    if (E.name === "tab") {
+    if (event.name === "tab") {
       if (at) return;
       let so = Ce[Math.max(groupPickIdx, 0)];
-      if (so !== void 0) (setGroupDraft(so), view.setGroupPickIdx(-1));
+      if (so !== undefined) {
+        setGroupDraft(so);
+        view.setGroupPickIdx(-1);
+      }
       return;
     }
-    if (E.name !== "return") view.setGroupPickIdx(-1);
-    groupKeyDown(E);
+    if (event.name !== "return") view.setGroupPickIdx(-1);
+    groupKeyDown(event);
     return;
   }
   let resumePicker = view.getSnapshot().resumePicker;
   if (resumePicker !== null) {
-    if ((Ne(), (E.ctrl && E.key === "c") || E.name === "escape" || E.meta)) {
+    Ne();
+    if ((event.ctrl && event.key === "c") || event.name === "escape" || event.meta) {
       view.closeResumePicker();
       return;
     }
-    let entries = resumePicker.entries,
-      Ke = entries?.length ?? 0,
-      resumePickerIdx = view.getSnapshot().resumePickerIdx;
-    if (E.name === "down" || (E.ctrl && E.key === "n")) {
+    let entries = resumePicker.entries;
+    let Ke = entries?.length ?? 0;
+    let resumePickerIdx = view.getSnapshot().resumePickerIdx;
+    if (event.name === "down" || (event.ctrl && event.key === "n")) {
       view.setResumePickerIdx(Math.min(resumePickerIdx + 1, Math.max(0, Ke - 1)));
       return;
     }
-    if (E.name === "up" || (E.ctrl && E.key === "p")) {
+    if (event.name === "up" || (event.ctrl && event.key === "p")) {
       view.setResumePickerIdx(Math.max(resumePickerIdx - 1, 0));
       return;
     }
-    if (E.name === "return") {
+    if (event.name === "return") {
       let Mt = entries?.[resumePickerIdx];
-      if (Mt !== void 0) {
+      if (Mt !== undefined) {
         let so = roster.isDeleting(Mt.sessionId.slice(0, 8)) || roster.isDeletingSession(Mt.sessionId);
         if (jobSessionIds.has(Mt.sessionId) || so) {
-          (logFeatureSad("fleet_view_resume_picker", so ? "deleting_in_flight" : "already_in_list"),
-            view.refuseResumePick(Date.now()),
-            setError(
-              so
-                ? "This session is being deleted \u2014 reopen /resume once it finishes"
-                : "This session is already in the list \u2014 press enter on its row",
-            ));
+          logFeatureSad("fleet_view_resume_picker", so ? "deleting_in_flight" : "already_in_list");
+          view.refuseResumePick(Date.now());
+          setError(
+            so
+              ? "This session is being deleted \u2014 reopen /resume once it finishes"
+              : "This session is already in the list \u2014 press enter on its row",
+          );
           return;
         }
-        ((view.resumePromoteSessionId = Mt.sessionId),
-          view.closeResumePicker(),
-          openEarlier(Mt, "resume_picker"));
+        view.resumePromoteSessionId = Mt.sessionId;
+        view.closeResumePicker();
+        openEarlier(Mt, "resume_picker");
       }
       return;
     }
@@ -489,22 +530,24 @@ function handleFleetKey(h, E) {
   }
   let settingPicker = view.getSnapshot().settingPicker;
   if (settingPicker !== null) {
-    if ((Ne(), (E.ctrl && E.key === "c") || E.name === "escape" || E.meta)) {
+    Ne();
+    if ((event.ctrl && event.key === "c") || event.name === "escape" || event.meta) {
       view.closeSettingPicker();
       return;
     }
     let settingPickerIdx = view.getSnapshot().settingPickerIdx;
-    if (E.name === "down" || (E.ctrl && E.key === "n")) {
+    if (event.name === "down" || (event.ctrl && event.key === "n")) {
       view.setSettingPickerIdx(Math.min(settingPickerIdx + 1, settingPicker.options.length - 1));
       return;
     }
-    if (E.name === "up" || (E.ctrl && E.key === "p")) {
+    if (event.name === "up" || (event.ctrl && event.key === "p")) {
       view.setSettingPickerIdx(Math.max(settingPickerIdx - 1, 0));
       return;
     }
-    if (E.name === "return") {
+    if (event.name === "return") {
       let Ke = settingPicker.options[settingPickerIdx];
-      if ((view.closeSettingPicker(), Ke !== void 0))
+      view.closeSettingPicker();
+      if (Ke !== undefined)
         setDispatchWindowValue(
           editor,
           h.submit.dispatchDefaults,
@@ -517,7 +560,7 @@ function handleFleetKey(h, E) {
   }
   if (view.resumePickerRefusedAt !== 0) {
     let Ce = Date.now() - view.resumePickerRefusedAt;
-    if (Ce >= 0 && Ce < xE && E.name === "return") {
+    if (Ce >= 0 && Ce < RENAME_SAVE_WAIT_MS && event.name === "return") {
       Ne();
       return;
     }
@@ -529,41 +572,52 @@ function handleFleetKey(h, E) {
     attachingJobId === null &&
     attach.isPromoting(resumePromoteSessionId)
   ) {
-    if ((Ne(), (E.ctrl && E.key === "c") || E.name === "escape")) view.resumePromoteSessionId = null;
+    Ne();
+    if ((event.ctrl && event.key === "c") || event.name === "escape") view.resumePromoteSessionId = null;
     return;
   }
-  if (((view.resumePromoteSessionId = null), attach.getSnapshot().newSessionOpening)) {
-    if ((Ne(), (E.ctrl && E.key === "c") || E.name === "escape")) attach.abandonNewSession();
+  view.resumePromoteSessionId = null;
+  if (attach.getSnapshot().newSessionOpening) {
+    Ne();
+    if ((event.ctrl && event.key === "c") || event.name === "escape") attach.abandonNewSession();
     return;
   }
-  let At = resolveFleetKeyAction(keyEventToKeystroke(E), keybindings);
+  let fleetKeyAction = resolveFleetKeyAction(keyEventToKeystroke(event), keybindings);
   if (attachingJobId !== null) {
-    if ((Ne(), (E.ctrl && E.key === "c") || E.name === "escape")) {
+    Ne();
+    if ((event.ctrl && event.key === "c") || event.name === "escape") {
       attach.abandonRespawnAttempt();
-      let disarm = attach.disarm();
-      if (disarm !== null) clearAttachBeacon(disarm, storageV5).catch(() => {});
+      let Ce = attach.disarm();
+      if (Ce !== null) clearAttachBeacon(Ce, storageV5).catch(() => {});
       attach.dropWarming(attachingJobId);
       return;
     }
-    if (!E.shift && (E.name === "up" || E.name === "down" || (E.ctrl && (E.key === "p" || E.key === "n")))) {
+    if (
+      !event.shift &&
+      (event.name === "up" ||
+        event.name === "down" ||
+        (event.ctrl && (event.key === "p" || event.key === "n")))
+    ) {
       if (
         suggestions.length > 0 ||
-        ((E.name === "up" || E.name === "down") &&
+        ((event.name === "up" || event.name === "down") &&
           !previewOpen &&
           editor.getSnapshot().query.includes(`
 `)) ||
-        (jumpGroupHeader(h, At, focusedIdx) ??
-          nextFocusableRow(h, focusedIdx, E.name === "down" || E.key === "n" ? 1 : -1)) === focusedIdx
+        (jumpGroupHeader(h, fleetKeyAction, focusedIdx) ??
+          nextFocusableRow(h, focusedIdx, event.name === "down" || event.key === "n" ? 1 : -1)) === focusedIdx
       )
         return;
       attach.abandonRespawnAttempt();
-      let disarm = attach.disarm();
-      if (disarm !== null) clearAttachBeacon(disarm, storageV5).catch(() => {});
+      let Ce = attach.disarm();
+      if (Ce !== null) clearAttachBeacon(Ce, storageV5).catch(() => {});
     } else return;
   }
-  if (E.ctrl && E.key === "c") {
-    if ((Ne(), helpOpen || debugOpen)) {
-      (view.setHelpOpen(!1), view.setDebugOpen(!1));
+  if (event.ctrl && event.key === "c") {
+    Ne();
+    if (helpOpen || debugOpen) {
+      view.setHelpOpen(false);
+      view.setDebugOpen(false);
       return;
     }
     if (editor.getSnapshot().query) setQuery("");
@@ -571,32 +625,34 @@ function handleFleetKey(h, E) {
     pressExitKey("Ctrl-C");
     return;
   }
-  if (E.name === "escape") {
-    if ((Ne(), previewOpen)) view.setPreviewOpen(!1);
-    else if (helpOpen) view.setHelpOpen(!1);
-    else if (debugOpen) view.setDebugOpen(!1);
-    else if (showAllAgents) setShowAllAgents(!1);
+  if (event.name === "escape") {
+    Ne();
+    if (previewOpen) view.setPreviewOpen(false);
+    else if (helpOpen) view.setHelpOpen(false);
+    else if (debugOpen) view.setDebugOpen(false);
+    else if (showAllAgents) setShowAllAgents(false);
     else if (
-      vimMode !== void 0 &&
+      vimMode !== undefined &&
       dispatchInputActive &&
       (vimMode !== "NORMAL" || editor.getSnapshot().query !== "")
     ) {
       if (deleteConfirm.pending) deleteConfirm.dismiss();
-      searchKeyDown(E);
+      searchKeyDown(event);
     } else if (editor.getSnapshot().query) setQuery("");
     else if (editor.getSnapshot().mode === "bash") rt("prompt");
     else if (deleteConfirm.pending) deleteConfirm.dismiss();
     else
       switch (
         resolveExitAction({
-          originJobId: originJobId,
-          originRowPresent: originJobId !== void 0 && (jobs?.some((Ke) => Ke.id === originJobId) ?? !1),
-          originSpawn: originSpawn,
+          originJobId,
+          originRowPresent:
+            originJobId !== undefined && (jobs?.some((job) => job.id === originJobId) ?? false),
+          originSpawn,
         }).kind
       ) {
         case "attach-origin":
           openOrRespawn(
-            jobs?.find((Ke) => Ke.id === originJobId),
+            jobs?.find((job) => job.id === originJobId),
             "esc",
           );
           break;
@@ -604,7 +660,7 @@ function handleFleetKey(h, E) {
           setError(STILL_STARTING_MESSAGE);
           break;
         case "exit-with-hint":
-          if (originSpawn) originSpawn.resumeHintRequested = !0;
+          if (originSpawn) originSpawn.resumeHintRequested = true;
           exit();
           break;
         case "exit":
@@ -615,157 +671,203 @@ function handleFleetKey(h, E) {
   }
   if (
     helpOpen &&
-    E.key !== "?" &&
-    E.name !== "up" &&
-    E.name !== "down" &&
-    !(E.ctrl && (E.key === "p" || E.key === "n"))
+    event.key !== "?" &&
+    event.name !== "up" &&
+    event.name !== "down" &&
+    !(event.ctrl && (event.key === "p" || event.key === "n"))
   )
-    view.setHelpOpen(!1);
-  if (E.shift && (E.name === "up" || E.name === "down") && suggestions.length === 0 && !previewOpen) {
-    (Ne(), reorderFocusedJob(h, E.name === "up" ? -1 : 1));
+    view.setHelpOpen(false);
+  if (
+    event.shift &&
+    (event.name === "up" || event.name === "down") &&
+    suggestions.length === 0 &&
+    !previewOpen
+  ) {
+    Ne();
+    reorderFocusedJob(h, event.name === "up" ? -1 : 1);
     return;
   }
-  if (At === "agents:switchView") {
-    if ((Ne(), simpleView)) return;
-    if (!selection.getSnapshot().draftPick)
-      ((selection.followId = focused?.id ?? null), (selection.followOrigin = null));
+  if (fleetKeyAction === "agents:switchView") {
+    Ne();
+    if (simpleView) return;
+    if (!selection.getSnapshot().draftPick) {
+      selection.followId = focused?.id ?? null;
+      selection.followOrigin = null;
+    }
     deleteConfirm.disarm();
-    let Ce = groupsEnabled ? ["state", "directory", "group"] : ["state", "directory"],
-      index = Ce.indexOf(view.getSnapshot().groupMode),
-      at = Ce[(index + 1) % Ce.length];
+    let Ce = groupsEnabled ? ["state", "directory", "group"] : ["state", "directory"];
+    let index = Ce.indexOf(view.getSnapshot().groupMode);
+    let at = Ce[(index + 1) % Ce.length];
     if (at === "group") logFeatureOk("fleet_view_group_mode");
-    (view.setGroupMode(at),
-      saveGlobalConfig(
-        (Mt) => (Mt.fleetViewGroupMode === at ? Mt : { ...Mt, fleetViewGroupMode: at }),
-        storageV5,
-      ));
+    view.setGroupMode(at);
+    saveGlobalConfig(
+      (Mt) =>
+        Mt.fleetViewGroupMode === at
+          ? Mt
+          : {
+              ...Mt,
+              fleetViewGroupMode: at,
+            },
+      storageV5,
+    );
     return;
   }
-  if (At === "chat:externalEditor" && !previewOpen && !simpleView) {
+  if (fleetKeyAction === "chat:externalEditor" && !previewOpen && !simpleView) {
     Ne();
     let Ce = editPromptInEditor(editor.getSnapshot().query);
     if (Ce.content !== null && Ce.content !== editor.getSnapshot().query) setQuery(Ce.content);
     if (Ce.error) setError(Ce.error);
     return;
   }
-  if (At === "agents:togglePin") {
+  if (fleetKeyAction === "agents:togglePin") {
     Ne();
-    let Ce = rows[selection.getSnapshot().focusedIdx],
-      Ke = Ce?.kind === "job" ? Ce.job : void 0;
-    if (!Ke || pendings.some((no) => no.id === Ke.id)) return;
-    let at = !1,
-      Mt = at ? remoteRowIdOf(Ke) : void 0;
-    if (at && Mt === void 0) {
+    let Ce = rows[selection.getSnapshot().focusedIdx];
+    let job = Ce?.kind === "job" ? Ce.job : undefined;
+    if (!job || pendings.some((pending) => pending.id === job.id)) return;
+    let at = false;
+    let Mt = at ? remoteRowIdOf(job) : undefined;
+    if (at && Mt === undefined) {
       setError(STILL_STARTING_MESSAGE);
       return;
     }
-    if (Ke.state.backend !== "daemon" && !at) {
-      (setError("Can't pin a session that's running in another terminal"),
-        logFeatureOk("fleet_view_pin_toggle"));
+    if (job.state.backend !== "daemon" && !at) {
+      setError("Can't pin a session that's running in another terminal");
+      logFeatureOk("fleet_view_pin_toggle");
       return;
     }
-    let id = Ke.id,
-      vo = !(
-        (at ? roster.getSnapshot().remoteJobs : roster.jobs)?.find((no) => no.id === id)?.state.pinned ??
-        Ke.state.pinned
-      );
-    if (((selection.followId = id), vo)) selection.uncollapse(ck("pinned"));
-    if (at && Mt !== void 0) {
+    let id = job.id;
+    let vo = !(
+      (at ? roster.getSnapshot().remoteJobs : roster.jobs)?.find((no) => no.id === id)?.state.pinned ??
+      job.state.pinned
+    );
+    selection.followId = id;
+    if (vo) selection.uncollapse(ck("pinned"));
+    if (at && Mt !== undefined) {
       if (editor.getSnapshot().error === STILL_STARTING_MESSAGE) setError(null);
       roster
-        .markRemoteRow(Mt, (no) => ({ ...no, pinned: vo ? !0 : void 0 }))
+        .markRemoteRow(Mt, (no) => ({
+          ...no,
+          pinned: vo ? true : undefined,
+        }))
         .then((no) => {
           if (no) logFeatureOk("fleet_view_pin_toggle");
-          else Ia(setError, "fleet_view_pin_toggle");
+          else logFleetActionFailure(setError, "fleet_view_pin_toggle");
         });
       return;
     }
-    (roster.bumpGen(),
-      roster.updateJobs(
-        (no) => no?.map((_e) => (_e.id === id ? { ..._e, state: { ..._e.state, pinned: vo } } : _e)) ?? no,
-      ));
-    let holdJob = roster.holdJob(id);
+    roster.bumpGen();
+    roster.updateJobs(
+      (no) =>
+        no?.map((_e) =>
+          _e.id === id
+            ? {
+                ..._e,
+                state: {
+                  ..._e.state,
+                  pinned: vo,
+                },
+              }
+            : _e,
+        ) ?? no,
+    );
+    let zo = roster.holdJob(id);
     writeJobPinned(id, vo, storageV5)
       .then(() => {
         logFeatureOk("fleet_view_pin_toggle");
       })
-      .catch((no) => {
-        (logError(no),
-          setError(`Couldn't ${vo ? "pin" : "unpin"} \u2014 ${errorMessage(no)}`),
-          logFeatureBad("fleet_view_pin_toggle", "pin_write_failed"),
-          roster.reload());
+      .catch((error) => {
+        logError(error);
+        setError(`Couldn't ${vo ? "pin" : "unpin"} \u2014 ${errorMessage(error)}`);
+        logFeatureBad("fleet_view_pin_toggle", "pin_write_failed");
+        roster.reload();
       })
-      .finally(holdJob);
+      .finally(zo);
     return;
   }
   let pt =
-    At === "agents:find" && !previewOpen && !simpleView && editor.getSnapshot().mode === "prompt"
+    fleetKeyAction === "agents:find" && !previewOpen && !simpleView && editor.getSnapshot().mode === "prompt"
       ? parseNewSessionPrefix(editor.getSnapshot().query)
       : null;
   if (pt !== null) {
     Ne();
-    let { query: query, cursorOffset: cursorOffset } = editor.getSnapshot(),
-      trimStart = query.trimStart(),
-      max = Math.max(0, cursorOffset - (query.length - trimStart.length));
-    if (
-      (editor.setQueryAndCursor(
-        pt,
-        vimMode === void 0 ? Math.max(0, max + pt.length - trimStart.length) : pt.length,
-      ),
-      enterInsertMode(),
-      pt.length > trimStart.length && view.firstImpression("find"))
-    )
-      logFeatureOk("fleet_view_find");
+    let { query, cursorOffset } = editor.getSnapshot();
+    let at = query.trimStart();
+    let max = Math.max(0, cursorOffset - (query.length - at.length));
+    editor.setQueryAndCursor(
+      pt,
+      vimMode === undefined ? Math.max(0, max + pt.length - at.length) : pt.length,
+    );
+    enterInsertMode();
+    if (pt.length > at.length && view.firstImpression("find")) logFeatureOk("fleet_view_find");
     return;
   }
-  let focusedIdx_2 = selection.getSnapshot().focusedIdx,
-    oo = jumpGroupHeader(h, At, focusedIdx_2);
+  let focusedIdx_2 = selection.getSnapshot().focusedIdx;
+  let oo = jumpGroupHeader(h, fleetKeyAction, focusedIdx_2);
   if (oo !== null) {
-    if ((Ne(), setError(null), deleteConfirm.disarm(), oo !== focusedIdx_2)) {
-      if ((selection.jumpToHeader(oo, rows[oo]), view.firstImpression("groupJump")))
-        logFeatureOk("fleet_view_group_jump");
+    Ne();
+    setError(null);
+    deleteConfirm.disarm();
+    if (oo !== focusedIdx_2) {
+      selection.jumpToHeader(oo, rows[oo]);
+      if (view.firstImpression("groupJump")) logFeatureOk("fleet_view_group_jump");
     }
     return;
   }
-  if (At === "agents:rename") {
+  if (fleetKeyAction === "agents:rename") {
+    Ne();
     if (
-      (Ne(),
       byGroup &&
-        focusedRow?.kind === "header" &&
-        focusedRow.group !== UNGROUPED &&
-        focusedRow.group !== "pinned" &&
-        focusedRow.group !== EARLIER)
+      focusedRow?.kind === "header" &&
+      focusedRow.group !== UNGROUPED &&
+      focusedRow.group !== "pinned" &&
+      focusedRow.group !== EARLIER
     ) {
-      (setGroupDraft(focusedRow.group),
-        St(),
-        view.openGroupEdit({ kind: "rename", from: focusedRow.group }, !0));
+      setGroupDraft(focusedRow.group);
+      St();
+      view.openGroupEdit(
+        {
+          kind: "rename",
+          from: focusedRow.group,
+        },
+        true,
+      );
       return;
     }
-    if (!focused || pendings.some((at) => at.id === focused.id)) return;
-    let Ce = !1;
-    if (Ce && !cd(focused.id)) {
+    if (!focused || pendings.some((pending) => pending.id === focused.id)) return;
+    let Ce = false;
+    if (Ce && !isRemoteRowId(focused.id)) {
       setError(STILL_STARTING_MESSAGE);
       return;
     }
     if (Ce && roster.isRetitling(focused.id)) {
-      setError(FE);
+      setError(RENAME_BUSY_TEXT);
       return;
     }
     if (!Ce && focused.state.backend !== "daemon" && !focused.state.sock) return;
-    let Ke = Dr(focused.state.name ?? "");
+    let Ke = collapseWhitespace(focused.state.name ?? "");
     if (Ce && editor.getSnapshot().error === STILL_STARTING_MESSAGE) setError(null);
-    (setRenameDraft(Ke),
-      St(),
-      view.startRename(
-        focused.id,
-        focused.state.backend !== "daemon" ? (focused.state.sock ?? null) : null,
-        Ce ? { sessionId: focused.state.sessionId, prefill: Ke } : null,
-      ));
+    setRenameDraft(Ke);
+    St();
+    view.startRename(
+      focused.id,
+      focused.state.backend !== "daemon" ? (focused.state.sock ?? null) : null,
+      Ce
+        ? {
+            sessionId: focused.state.sessionId,
+            prefill: Ke,
+          }
+        : null,
+    );
     return;
   }
-  if (groupsEnabled && At === "agents:setGroup" && !previewOpen && editor.getSnapshot().query === "") {
-    let at = !!focused && (pendings.some((Mt) => Mt.id === focused.id) || !1);
-    if (!focused || at || (focused.state.backend !== "daemon" && !0)) {
+  if (
+    groupsEnabled &&
+    fleetKeyAction === "agents:setGroup" &&
+    !previewOpen &&
+    editor.getSnapshot().query === ""
+  ) {
+    let at = !!focused && (pendings.some((pending) => pending.id === focused.id) || false);
+    if (!focused || at || (focused.state.backend !== "daemon" && true)) {
       Ne();
       let Mt = shortcutDisplayFor("agents:rename", keybindings);
       setError(
@@ -779,27 +881,33 @@ function handleFleetKey(h, E) {
       );
       return;
     }
-    (Ne(),
-      setGroupDraft(focused.state.group ?? ""),
-      St(),
-      view.openGroupEdit(
-        { kind: "assign", jobId: focused.id, cur: focused.state.group },
-        !!focused.state.group,
-      ));
+    Ne();
+    setGroupDraft(focused.state.group ?? "");
+    St();
+    view.openGroupEdit(
+      {
+        kind: "assign",
+        jobId: focused.id,
+        cur: focused.state.group,
+      },
+      !!focused.state.group,
+    );
     return;
   }
-  if (E.name === "up" || (E.ctrl && E.key === "p")) {
-    if ((Ne(), suggestions.length > 0)) {
-      (setHoveredSuggestionId(null), setSelectedSuggestion((Ke) => Math.max(0, Ke - 1)));
+  if (event.name === "up" || (event.ctrl && event.key === "p")) {
+    Ne();
+    if (suggestions.length > 0) {
+      setHoveredSuggestionId(null);
+      setSelectedSuggestion((Ke) => Math.max(0, Ke - 1));
       return;
     }
     if (
-      E.name === "up" &&
+      event.name === "up" &&
       !previewOpen &&
       editor.getSnapshot().query.includes(`
 `)
     ) {
-      searchKeyDown(E);
+      searchKeyDown(event);
       return;
     }
     setError(null);
@@ -808,42 +916,46 @@ function handleFleetKey(h, E) {
     return;
   }
   if (
-    (E.name === "home" || E.name === "end" || E.name === "pageup" || E.name === "pagedown") &&
+    (event.name === "home" || event.name === "end" || event.name === "pageup" || event.name === "pagedown") &&
     suggestions.length === 0 &&
     !hasComposedDispatch
   ) {
-    (Ne(), setError(null));
-    let max = Math.max(1, termRows - 6),
-      Ke = rows.length;
+    Ne();
+    setError(null);
+    let max = Math.max(1, termRows - 6);
+    let Ke = rows.length;
     if (Ke === 0) {
-      (selection.setHoverFocusIdx(null), selection.focus(0));
+      selection.setHoverFocusIdx(null);
+      selection.focus(0);
       return;
     }
-    let focusedIdx = selection.getSnapshot().focusedIdx,
-      Mt =
-        E.name === "home"
-          ? 0
-          : E.name === "end"
-            ? Ke - 1
-            : E.name === "pageup"
-              ? focusedIdx - max
-              : focusedIdx + max,
-      max_2 = Math.max(0, Math.min(Ke - 1, Mt));
+    let focusedIdx = selection.getSnapshot().focusedIdx;
+    let Mt =
+      event.name === "home"
+        ? 0
+        : event.name === "end"
+          ? Ke - 1
+          : event.name === "pageup"
+            ? focusedIdx - max
+            : focusedIdx + max;
+    let max_2 = Math.max(0, Math.min(Ke - 1, Mt));
     selection.navigateTo(max_2, rows[max_2]);
     return;
   }
-  if (E.name === "down" || (E.ctrl && E.key === "n")) {
-    if ((Ne(), suggestions.length > 0)) {
-      (setHoveredSuggestionId(null), setSelectedSuggestion((Ke) => Math.min(suggestions.length - 1, Ke + 1)));
+  if (event.name === "down" || (event.ctrl && event.key === "n")) {
+    Ne();
+    if (suggestions.length > 0) {
+      setHoveredSuggestionId(null);
+      setSelectedSuggestion((Ke) => Math.min(suggestions.length - 1, Ke + 1));
       return;
     }
     if (
-      E.name === "down" &&
+      event.name === "down" &&
       !previewOpen &&
       editor.getSnapshot().query.includes(`
 `)
     ) {
-      searchKeyDown(E);
+      searchKeyDown(event);
       return;
     }
     setError(null);
@@ -851,48 +963,52 @@ function handleFleetKey(h, E) {
     selection.navigateTo(Ce, rows[Ce]);
     return;
   }
-  if (previewOpen && E.ctrl && E.key === "x") {
-    if ((Ne(), focused && pendings.some((at) => at.id === focused.id))) return;
-    let Ce = rows[selection.getSnapshot().focusedIdx],
-      Ke = Ce?.kind === "job" ? Ce.job : void 0;
-    if (deleteConfirm.pending !== null && Ke !== void 0 && deleteConfirm.pending.id !== Ke.id)
+  if (previewOpen && event.ctrl && event.key === "x") {
+    Ne();
+    if (focused && pendings.some((pending) => pending.id === focused.id)) return;
+    let Ce = rows[selection.getSnapshot().focusedIdx];
+    let job = Ce?.kind === "job" ? Ce.job : undefined;
+    if (deleteConfirm.pending !== null && job !== undefined && deleteConfirm.pending.id !== job.id)
       deleteConfirm.disarm();
-    stopOrDeleteJob(h, "x", Ke);
+    stopOrDeleteJob(h, "x", job);
     return;
   }
   if (previewOpen) return;
-  if (E.name === "tab") {
-    if ((Ne(), simpleView)) return;
+  if (event.name === "tab") {
+    Ne();
+    if (simpleView) return;
     if (!editor.getSnapshot().query && editor.getSnapshot().mode === "prompt" && templates.length > 0)
       setShowAllAgents((Ce) => !Ce);
     else if (suggestions.length > 0) applySuggestion(pickSuggestion());
     return;
   }
   if (
-    E.name === "right" &&
-    !E.shift &&
+    event.name === "right" &&
+    !event.shift &&
     !editor.getSnapshot().query &&
     editor.getSnapshot().mode === "prompt" &&
     !previewOpen
   ) {
-    if ((Ne(), focusedRow?.kind === "earlier")) openEarlier(focusedRow.entry, "section");
+    Ne();
+    if (focusedRow?.kind === "earlier") openEarlier(focusedRow.entry, "section");
     else if (focusedRow?.kind === "newsession") openNewSessionRow(focusedRow.origin);
     else openOrRespawn(focused);
     return;
   }
-  if ((E.meta || E.superKey) && E.key >= "1" && E.key <= "9") {
+  if ((event.meta || event.superKey) && event.key >= "1" && event.key <= "9") {
     Ne();
-    let Ce = Number(E.key),
-      found = rows.find((at) => at.kind === "job" && at.origin === altOpenOrigin && --Ce === 0);
+    let Ce = Number(event.key);
+    let found = rows.find((at) => at.kind === "job" && at.origin === altOpenOrigin && --Ce === 0);
     if (found?.kind === "job") openOrRespawn(found.job);
     return;
   }
-  if (E.name === "return") {
-    submitDispatch(h.submit, E);
+  if (event.name === "return") {
+    submitDispatch(h.submit, event);
     return;
   }
-  if (E.ctrl && E.key === "x") {
-    if ((Ne(), suggestions.length > 0)) return;
+  if (event.ctrl && event.key === "x") {
+    Ne();
+    if (suggestions.length > 0) return;
     if (!hasComposedDispatch && byGroup && focusedRow?.kind === "header") {
       if (focusedRow.group === "pinned" || focusedRow.group === UNGROUPED || focusedRow.group === EARLIER) {
         setError(
@@ -900,44 +1016,42 @@ function handleFleetKey(h, E) {
         );
         return;
       }
-      if (
-        ((selection.followOrigin = focusedRow.group),
-        (selection.followId = null),
-        deleteConfirm.pending?.id !== headerArmId(focusedRow.group))
-      ) {
+      selection.followOrigin = focusedRow.group;
+      selection.followId = null;
+      if (deleteConfirm.pending?.id !== headerArmId(focusedRow.group)) {
         deleteConfirm.arm(headerArmId(focusedRow.group));
         return;
       }
-      (deleteConfirm.disarm(), stopGroup(h, focusedRow.group));
+      deleteConfirm.disarm();
+      stopGroup(h, focusedRow.group);
       return;
     }
     if (!hasComposedDispatch && focusedRow?.kind === "header" && headerJobs.length > 0) {
-      if (
-        ((selection.followOrigin = focusedRow.group),
-        (selection.followId = null),
-        deleteConfirm.pending?.id !== headerArmId(focusedRow.group))
-      ) {
+      selection.followOrigin = focusedRow.group;
+      selection.followId = null;
+      if (deleteConfirm.pending?.id !== headerArmId(focusedRow.group)) {
         deleteConfirm.arm(headerArmId(focusedRow.group));
         return;
       }
       deleteConfirm.disarm();
-      for (let at of headerJobs) {
-        if (pendings.some((Mt) => Mt.id === at.id)) continue;
-        stopOrDeleteJob(h, "x", at, !0);
+      for (let headerJob of headerJobs) {
+        if (pendings.some((pending) => pending.id === headerJob.id)) continue;
+        stopOrDeleteJob(h, "x", headerJob, true);
       }
       return;
     }
-    if (focused && pendings.some((at) => at.id === focused.id)) return;
-    let Ce = rows[selection.getSnapshot().focusedIdx],
-      Ke = Ce?.kind === "job" ? Ce.job : void 0;
-    if (deleteConfirm.pending !== null && Ke !== void 0 && deleteConfirm.pending.id !== Ke.id)
+    if (focused && pendings.some((pending) => pending.id === focused.id)) return;
+    let Ce = rows[selection.getSnapshot().focusedIdx];
+    let job = Ce?.kind === "job" ? Ce.job : undefined;
+    if (deleteConfirm.pending !== null && job !== undefined && deleteConfirm.pending.id !== job.id)
       deleteConfirm.disarm();
-    stopOrDeleteJob(h, "x", Ke);
+    stopOrDeleteJob(h, "x", job);
     return;
   }
-  if (E.ctrl && E.key === "d" && (simpleView || editor.getSnapshot().query === "")) {
-    if ((Ne(), helpOpen || view.getSnapshot().debugOpen)) {
-      view.setDebugOpen(!1);
+  if (event.ctrl && event.key === "d" && (simpleView || editor.getSnapshot().query === "")) {
+    Ne();
+    if (helpOpen || view.getSnapshot().debugOpen) {
+      view.setDebugOpen(false);
       return;
     }
     let snapshot = editor.getSnapshot();
@@ -945,52 +1059,67 @@ function handleFleetKey(h, E) {
     pressExitKey("Ctrl-D");
     return;
   }
-  if (
-    (E.ctrl && E.key,
-    E.key === "?" && editor.getSnapshot().query === "" && editor.getSnapshot().mode === "prompt")
-  ) {
+  if (event.ctrl) event.key;
+  if (event.key === "?" && editor.getSnapshot().query === "" && editor.getSnapshot().mode === "prompt") {
     Ne();
     let helpOpen = view.getSnapshot().helpOpen;
     if (!helpOpen) St();
-    (view.setHelpOpen(!helpOpen), logEvent("tengu_bg_agent_action", { action: lit("help_toggled") }));
+    view.setHelpOpen(!helpOpen);
+    logEvent("tengu_bg_agent_action", {
+      action: lit("help_toggled"),
+    });
     return;
   }
-  if (isPasteImageKey(E) && !simpleView) {
-    (Ne(),
-      pasteImageFromClipboard(
-        (Ce) => attachPastedImage(Ce.base64, { mediaType: Ce.mediaType, dimensions: Ce.dimensions }),
-        setHint,
-      ));
+  if (isPasteImageKey(event) && !simpleView) {
+    Ne();
+    pasteImageFromClipboard(
+      (Ce) =>
+        attachPastedImage(Ce.base64, {
+          mediaType: Ce.mediaType,
+          dimensions: Ce.dimensions,
+        }),
+      setHint,
+    );
     return;
   }
   if (
-    nmt() &&
+    isFleetDispatchEnabled() &&
     !simpleView &&
-    isBashModeChar(E.key) &&
+    isBashModeChar(event.key) &&
     !editor.getSnapshot().query &&
     editor.getSnapshot().mode === "prompt"
   ) {
-    (Ne(), rt("bash"));
+    Ne();
+    rt("bash");
     return;
   }
-  if (E.name === "backspace" && !editor.getSnapshot().query && editor.getSnapshot().mode === "bash") {
-    (Ne(), rt("prompt"));
+  if (event.name === "backspace" && !editor.getSnapshot().query && editor.getSnapshot().mode === "bash") {
+    Ne();
+    rt("prompt");
     return;
   }
   if (simpleView && !previewOpen && renamingJobId === null) {
-    if (E.key === "q" && !E.ctrl && !E.meta) (Ne(), pressExitKey("Ctrl-C"));
-    if (E.key === "l" && !E.ctrl && !E.meta && !hasCredentials) (Ne(), onAction({ type: "login" }));
+    if (event.key === "q" && !event.ctrl && !event.meta) {
+      Ne();
+      pressExitKey("Ctrl-C");
+    }
+    if (event.key === "l" && !event.ctrl && !event.meta && !hasCredentials) {
+      Ne();
+      onAction({
+        type: "login",
+      });
+    }
     return;
   }
-  searchKeyDown(E);
+  searchKeyDown(event);
 }
 //@ chunk-93kwxas0.js:177067-177083 placement
-var tu = {},
-  ou = {};
+var EMPTY_REPO_UPDATES = {};
+var EMPTY_CATALOG_STATE = {};
+//@ chunk-93kwxas0.js:177083-178405 placement
 /**
  * 派发建议数据存储（模板、技能、routine、子仓库、worktree）。
  */
-//@ chunk-93kwxas0.js:177083-178405 placement
 class FleetCatalogStore {
   #n = createSignal();
   #e = {
@@ -1004,47 +1133,64 @@ class FleetCatalogStore {
   getSnapshot = () => this.#e;
   subscribe = (h) => this.#n.subscribe(h);
   #t(h) {
-    ((this.#e = { ...this.#e, ...h }), this.#n.emit());
+    this.#e = {
+      ...this.#e,
+      ...h,
+    };
+    this.#n.emit();
   }
   loadLauncher(h) {
-    this.#r(h, { rescanKnown: !1 });
+    this.#r(h, {
+      rescanKnown: false,
+    });
   }
   refreshLauncher(h) {
-    this.#r(h, { rescanKnown: !0 });
+    this.#r(h, {
+      rescanKnown: true,
+    });
   }
-  #r(h, { rescanKnown: E }) {
+  #r(h, { rescanKnown }) {
     if (this.#l.has(h)) return;
     let k = [];
-    if (E || !this.#e.childRepos.has(h))
+    if (rescanKnown || !this.#e.childRepos.has(h))
       k.push(
-        findGitRoot(h).then((C) => {
-          let x = updateCatalogEntry(this.#e.childRepos, h, C, tu);
-          if (x) this.#t({ childRepos: x });
+        findGitRoot(h).then((gitRoot) => {
+          let x = updateCatalogEntry(this.#e.childRepos, h, gitRoot, EMPTY_REPO_UPDATES);
+          if (x)
+            this.#t({
+              childRepos: x,
+            });
         }),
       );
-    if (E || !this.#e.repoWorktrees.has(h))
+    if (rescanKnown || !this.#e.repoWorktrees.has(h))
       k.push(
         listRepoWorktrees(h)
           .then((C) => {
             if (C === null) return;
-            let x = updateCatalogEntry(this.#e.repoWorktrees, h, C, ou);
-            if (x) this.#t({ repoWorktrees: x });
+            let x = updateCatalogEntry(this.#e.repoWorktrees, h, C, EMPTY_CATALOG_STATE);
+            if (x)
+              this.#t({
+                repoWorktrees: x,
+              });
           })
           .catch(() => {}),
       );
     if (k.length === 0) return;
-    (this.#l.add(h),
-      Promise.all(k).finally(() => {
-        this.#l.delete(h);
-      }));
+    this.#l.add(h);
+    Promise.all(k).finally(() => {
+      this.#l.delete(h);
+    });
   }
   loadTarget(h, E) {
-    let k = !1;
+    let k = false;
     if (!this.#e.templates.has(h))
       listUserAgentTemplates(h, E)
         .catch(() => [])
         .then((C) => {
-          if (!k && !this.#e.templates.has(h)) this.#t({ templates: new Map(this.#e.templates).set(h, C) });
+          if (!k && !this.#e.templates.has(h))
+            this.#t({
+              templates: new Map(this.#e.templates).set(h, C),
+            });
         });
     if (!this.#e.skills.has(h))
       getCommands(h, E)
@@ -1056,726 +1202,776 @@ class FleetCatalogStore {
             name: T.name,
             aliases: T.aliases,
             description:
-              (T.type !== "prompt" && Xc.get(T.name)) || getFirstLine(getHumanFacingDescription(T) ?? ""),
+              (T.type !== "prompt" && DISPATCH_FLAG_HINTS.get(T.name)) ||
+              getFirstLine(getHumanFacingDescription(T) ?? ""),
           }));
-          this.#t({ skills: new Map(this.#e.skills).set(h, mapped) });
+          this.#t({
+            skills: new Map(this.#e.skills).set(h, mapped),
+          });
         });
     return () => {
-      k = !0;
+      k = true;
     };
   }
 }
 //@ chunk-93kwxas0.js:178405-178444 placement
-function ng(h) {
+function ensureFleetCatalog(h) {
   return (h.scope ??= new FleetCatalogStore());
 }
+//@ chunk-93kwxas0.js:178444-178556 placement
 /**
  * 目录项变化时返回新 Map，否则 null。
  */
-//@ chunk-93kwxas0.js:178444-178556 placement
 function updateCatalogEntry(h, E, k, C) {
   let x = Object.keys(k).length > 0 ? k : C;
   if (isDeepStrictEqual(h.get(E), x)) return null;
   return new Map(h).set(E, x);
 }
 //@ chunk-93kwxas0.js:178556-178560 placement
-j();
+init_react_production();
 //@ chunk-93kwxas0.js:178560-178586 placement
-var DE = 120,
-  IDLE_SEED = "idle-seed";
+var NEEDS_INPUT_PREVIEW_CHARS = 120;
+var IDLE_SEED = "idle-seed";
+//@ chunk-93kwxas0.js:178586-179308 placement
 /**
  * 比较会话所在分区的变化，生成"需要输入/已完成"通知。
  */
-//@ chunk-93kwxas0.js:178586-179308 placement
 function diffJobBands(h, E) {
-  let k = new Map(),
-    C = [],
-    x = [];
+  let k = new Map();
+  let C = [];
+  let x = [];
   for (let T of E) {
-    let A = h.get(T.id),
-      L = T.band === "blocked" && T.needs === IDLE_NEEDS;
-    if ((k.set(T.id, L ? (A ?? IDLE_SEED) : T.band), A === void 0 || A === T.band || L)) continue;
+    let A = h.get(T.id);
+    let L = T.band === "blocked" && T.needs === IDLE_NEEDS;
+    k.set(T.id, L ? (A ?? IDLE_SEED) : T.band);
+    if (A === undefined || A === T.band || L) continue;
     switch (T.band) {
       case "blocked":
-        (C.push({
+        C.push({
           message: T.needs
-            ? `${T.label} needs your input: ${truncateWithEllipsis(T.needs, DE)}`
+            ? `${T.label} needs your input: ${truncateWithEllipsis(T.needs, NEEDS_INPUT_PREVIEW_CHARS)}`
             : `${T.label} needs your input`,
           notificationType: "agent_needs_input",
-        }),
-          x.push({ sessionId: T.sessionId, kind: "needs_input" }));
+        });
+        x.push({
+          sessionId: T.sessionId,
+          kind: "needs_input",
+        });
         break;
       case "completed":
-        if (T.outcome !== "stopped" && !T.selfDriving && !(A === IDLE_SEED && T.outcome === "success"))
-          (C.push({
+        if (T.outcome !== "stopped" && !T.selfDriving && !(A === IDLE_SEED && T.outcome === "success")) {
+          C.push({
             message: `${T.label} ${T.outcome === "failure" ? "failed" : "finished"}`,
             notificationType: "agent_completed",
-          }),
-            x.push({ sessionId: T.sessionId, kind: "completed" }));
+          });
+          x.push({
+            sessionId: T.sessionId,
+            kind: "completed",
+          });
+        }
         break;
       case "active":
         break;
     }
   }
-  return { next: k, notifications: C, notified: x };
+  return {
+    next: k,
+    notifications: C,
+    notified: x,
+  };
 }
+//@ chunk-93kwxas0.js:179308-179650 placement
 /**
  * 会话分区变化时发通知的 hook。
  */
-//@ chunk-93kwxas0.js:179308-179650 placement
 function useJobBandNotifications(h, E) {
-  let k = useTerminalNotification(),
-    { storageV5: storageV5, credentials: credentials } = Me(),
-    T = R(new Map());
+  let terminalNotification = useTerminalNotification();
+  let { storageV5, credentials } = useTheme_2();
+  let T = R(new Map());
   P(() => {
-    let { next: A, notifications: notifications, notified: notified } = diffJobBands(T.current, h);
+    let { next: A, notifications, notified } = diffJobBands(T.current, h);
     T.current = A;
-    for (let U of notifications) gB(U, k, { storageV5: storageV5, credentials: credentials });
+    for (let notification of notifications)
+      notifyAsync(notification, terminalNotification, {
+        storageV5,
+        credentials,
+      });
     let now = Date.now();
     for (let U of notified)
       if (markAgentsNotified(E, U.sessionId, U.kind, now))
-        logEvent("tengu_bg_agent_notification", { kind: fromEnum(U.kind), jobSessionId: ye(U.sessionId) });
+        logEvent("tengu_bg_agent_notification", {
+          kind: fromEnum(U.kind),
+          jobSessionId: sanitizeMarkName(U.sessionId),
+        });
   });
 }
 //@ chunk-93kwxas0.js:179650-179660 placement
-var BE = [];
+var EMPTY_REMOTE_JOBS = [];
+//@ chunk-93kwxas0.js:179660-199227 placement
 /**
  * Agents（fleet）视图主组件：管理会话名单、选择、编辑器、附加与派发。
  */
-//@ chunk-93kwxas0.js:179660-199227 placement
 function FleetView({
-  onAction: onAction,
-  initialJobId: initialJobId,
-  originJobId: originJobId,
-  originSpawn: originSpawn,
-  cwdFilter: cwdFilter,
-  dispatchDefaults: dispatchDefaults,
-  typedAgent: typedAgent,
-  canGoBack: canGoBack,
-  autoOpenJobId: autoOpenJobId,
-  entryChannel: entryChannel,
-  relaunchTab: relaunchTab,
-  typedAhead: typedAhead,
-  fromLauncher: fromLauncher,
-  awayLoop: awayLoop,
-  host: host,
-  storageV5: storageV5,
+  onAction,
+  initialJobId,
+  originJobId,
+  originSpawn,
+  cwdFilter,
+  dispatchDefaults,
+  typedAgent,
+  canGoBack,
+  autoOpenJobId,
+  entryChannel,
+  relaunchTab,
+  typedAhead,
+  fromLauncher,
+  awayLoop,
+  host,
+  storageV5,
 }) {
-  let oe = useClock(),
-    { stdin: stdin, isRawModeSupported: isRawModeSupported } = useStdin(),
-    { credentials: credentials } = Me(),
-    ae = Bo(),
-    me = isAgentsSimpleViewEnabled(),
-    Je = !me || !!initialJobId?.startsWith("remote-"),
-    le = !1;
+  let clock = useClock();
+  let { stdin, isRawModeSupported } = useStdin();
+  let { credentials } = useTheme_2();
+  let keybindings = useFleetBindings();
+  let me = isAgentsSimpleViewEnabled();
+  let Je = !me || !!initialJobId?.startsWith("remote-");
+  let le = false;
   useTimeout(
     () => {
       if (!isRawModeSupported) return;
-      let listenerCount = stdin.listenerCount("readable");
-      if (listenerCount > 1) logEvent("tengu_fleetview_stdin_contention", { listeners: listenerCount });
+      let ee = stdin.listenerCount("readable");
+      if (ee > 1)
+        logEvent("tengu_fleetview_stdin_contention", {
+          listeners: ee,
+        });
     },
     1500,
     [],
   );
-  let [Oe] = y(() => awayLoop ?? rs()),
-    [De] = y(() => host ?? createFleetViewHost()),
-    [we] = y(() => ensureFleetRoster(De, storageV5)),
-    {
-      jobs: jobs,
-      adoptedPeers: adoptedPeers,
-      remoteJobs: remoteJobs,
-      remoteListLoaded: remoteListLoaded,
-      remoteListFailure: remoteListFailure,
-      remoteListHasOlder: remoteListHasOlder,
-      pendings: pendings,
-      prStatuses: prStatuses,
-      loopKicks: loopKicks,
-      overlaidLoadLanded: overlaidLoadLanded,
-    } = useStoreSelector(we),
-    [ke] = y(() => ws(De, we, storageV5)),
-    {
-      focusedIdx: focusedIdx,
-      hoverFocusIdx: hoverFocusIdx,
-      collapsed: collapsed,
-      capExpanded: capExpanded,
-      draftPick: draftPick,
-      followOrigin: followOrigin,
-    } = useStoreSelector(ke),
-    Ot = !1,
-    Yt = R(!1),
-    [Ue] = y(() => ensureFleetViewStore(De, Ot, "local")),
-    {
-      groupMode: groupMode,
-      activeTab: activeTab,
-      groupEdit: groupEdit,
-      resumePicker: resumePicker,
-      settingPicker: settingPicker,
-      renaming: renaming,
-      previewOpen: previewOpen,
-      helpOpen: helpOpen,
-      debugOpen: debugOpen,
-    } = useStoreSelector(Ue),
-    [$e] = y(() => Ss(De)),
-    { attachingJobId: attachingJobId, autoOpened: autoOpened } = useStoreSelector($e),
-    [We] = y(() => Rs(De)),
-    { mode: mode, expandHintPasteId: expandHintPasteId } = useStoreSelector(We),
-    [He] = y(() => Um(De, { onArm: () => clearFleetOfferState($e, We) })),
-    { pending: pending } = useStoreSelector(He);
+  let [Oe] = y(() => awayLoop ?? createNotifiedState());
+  let [De] = y(() => host ?? createFleetViewHost());
+  let [roster] = y(() => ensureFleetRoster(De, storageV5));
+  let {
+    jobs,
+    adoptedPeers,
+    remoteJobs,
+    remoteListLoaded,
+    remoteListFailure,
+    remoteListHasOlder,
+    pendings,
+    prStatuses,
+    loopKicks,
+    overlaidLoadLanded,
+  } = useStoreSelector(roster);
+  let [ke] = y(() => ensureFleetSelection(De, roster, storageV5));
+  let { focusedIdx, hoverFocusIdx, collapsed, capExpanded, draftPick, followOrigin } = useStoreSelector(ke);
+  let Ot = false;
+  let Yt = R(false);
+  let [Ue] = y(() => ensureFleetViewStore(De, Ot, "local"));
+  let {
+    groupMode,
+    activeTab,
+    groupEdit,
+    resumePicker,
+    settingPicker,
+    renaming,
+    previewOpen,
+    helpOpen,
+    debugOpen,
+  } = useStoreSelector(Ue);
+  let [$e] = y(() => ensureFleetLiveStatus(De));
+  let { attachingJobId, autoOpened } = useStoreSelector($e);
+  let [We] = y(() => ensureFleetEditor(De));
+  let { mode, expandHintPasteId } = useStoreSelector(We);
+  let [He] = y(() =>
+    ensureDeleteConfirmStore(De, {
+      onArm: () => clearFleetOfferState($e, We),
+    }),
+  );
+  let { pending } = useStoreSelector(He);
   useTimeout(() => He.disarm(), pending ? 2000 : null, [pending]);
   let [vt] = y(() => ({
-      roster: we,
-      selection: ke,
-      view: Ue,
-      attach: $e,
-      editor: We,
-      deleteConfirm: He,
-      earlier: De.earlier,
-    })),
-    { setError: setError, setHint: setHint } = We,
-    Xe = renaming?.jobId ?? null,
-    St = Je ? remoteJobs : BE;
-  (P(() => {
-    we.setRemoteWanted(Je);
-  }, [we, Je]),
-    P(() => we.attachView(oe), [we, oe]));
-  let Ne = getCwd(),
-    uo = bs({ cwd: Ne }),
-    [Kt, po] = y(Ne);
+    roster,
+    selection: ke,
+    view: Ue,
+    attach: $e,
+    editor: We,
+    deleteConfirm: He,
+    earlier: De.earlier,
+  }));
+  let { setError, setHint } = We;
+  let jobId = renaming?.jobId ?? null;
+  let St = Je ? remoteJobs : EMPTY_REMOTE_JOBS;
   P(() => {
-    let ee = !1;
-    return (
-      canonicalizePath(Ne, getRealPathOptions(storageV5)).then((Ve) => {
-        if (!ee && Ve !== Ne) po(Ve);
-      }),
-      () => {
-        ee = !0;
-      }
-    );
-  }, [Ne, storageV5]);
-  let At = cwdFilter && !jobMatchesCwd({ cwd: Kt }, cwdFilter) ? cwdFilter : Kt,
-    [pt, Nt] = y(Ne),
-    oo = activeTab === "remote" ? At : pt,
-    [Ce] = y(() => ng(De)),
-    {
-      templates: templates,
-      skills: skills,
-      routines: routines,
-      childRepos: childRepos,
-      repoWorktrees: repoWorktrees,
-    } = useStoreSelector(Ce);
+    roster.setRemoteWanted(Je);
+  }, [roster, Je]);
+  P(() => roster.attachView(clock), [roster, clock]);
+  let cwd = getCwd();
+  let launcherGroup = canonicalRepoRoot({
+    cwd,
+  });
+  let [Kt, po] = y(cwd);
   P(() => {
-    Ce.loadLauncher(Ne);
-  }, [Ce, Ne]);
-  let vo = childRepos.get(Ne) ?? tu,
-    zo = repoWorktrees.get(Ne) ?? ou,
-    joined = uniq([...(jobs ?? []), ...adoptedPeers].map((ee) => spawnOrigin(ee.state)))
-      .sort()
-      .join("\x00"),
-    { allRepos: allRepos, worktreeBranches: worktreeBranches } = Q(() => {
-      let ee = { ...vo };
-      for (let et of joined ? joined.split("\x00") : []) {
-        let Xt = basename_2(et);
-        if (Xt && !/\s/.test(Xt) && ee[Xt] === void 0) ee[Xt] = et;
-      }
-      let Ve = {};
-      for (let [et, Xt] of Object.entries(zo)) {
-        if (ee[et] === void 0) ee[et] = Xt.path;
-        if (ee[et] === Xt.path) Ve[et] = Xt.branch;
-      }
-      return { allRepos: ee, worktreeBranches: Ve };
-    }, [vo, joined, zo]),
-    go = () => onAction({ type: "done" }),
-    No = R("Ctrl-C"),
-    Qo = useDoublePress((ee) => {
-      if (ee) Cn();
-      Ue.setExitPending(ee ? No.current : null);
-    }, go),
-    Po = (ee) => {
-      ((No.current = ee), Qo());
-    },
-    xe = () => {
-      (Ue.clearRename(), setQuery_2(""));
-    },
-    qt = (ee, Ve) => Sn(Ve ?? Ue.getSnapshot().groupMode, ee),
-    it = (ee) => `header:${Ue.getSnapshot().groupMode}:${ee}`,
-    io = useStoreSelector(De.earlier, (ee) => ee.entries);
+    let ee = false;
+    canonicalizePath(cwd, getRealPathOptions(storageV5)).then((Ve) => {
+      if (!ee && Ve !== cwd) po(Ve);
+    });
+    return () => {
+      ee = true;
+    };
+  }, [cwd, storageV5]);
+  let At =
+    cwdFilter &&
+    !jobMatchesCwd(
+      {
+        cwd: Kt,
+      },
+      cwdFilter,
+    )
+      ? cwdFilter
+      : Kt;
+  let [pt, Nt] = y(cwd);
+  let oo = activeTab === "remote" ? At : pt;
+  let [Ce] = y(() => ensureFleetCatalog(De));
+  let { templates, skills, routines, childRepos, repoWorktrees } = useStoreSelector(Ce);
   P(() => {
-    if (cwdFilter || !vs()) {
+    Ce.loadLauncher(cwd);
+  }, [Ce, cwd]);
+  let vo = childRepos.get(cwd) ?? EMPTY_REPO_UPDATES;
+  let zo = repoWorktrees.get(cwd) ?? EMPTY_CATALOG_STATE;
+  let joined = uniq([...(jobs ?? []), ...adoptedPeers].map((ee) => spawnOrigin(ee.state)))
+    .sort()
+    .join("\x00");
+  let { allRepos, worktreeBranches } = Q(() => {
+    let ee = {
+      ...vo,
+    };
+    for (let et of joined ? joined.split("\x00") : []) {
+      let Xt = basename(et);
+      if (Xt && !/\s/.test(Xt) && ee[Xt] === undefined) ee[Xt] = et;
+    }
+    let Ve = {};
+    for (let [key, value] of Object.entries(zo)) {
+      if (ee[key] === undefined) ee[key] = value.path;
+      if (ee[key] === value.path) Ve[key] = value.branch;
+    }
+    return {
+      allRepos: ee,
+      worktreeBranches: Ve,
+    };
+  }, [vo, joined, zo]);
+  let go = () =>
+    onAction({
+      type: "done",
+    });
+  let No = R("Ctrl-C");
+  let Qo = useDoublePress((ee) => {
+    if (ee) Cn();
+    Ue.setExitPending(ee ? No.current : null);
+  }, go);
+  let Po = (ee) => {
+    No.current = ee;
+    Qo();
+  };
+  let xe = () => {
+    Ue.clearRename();
+    setQuery_2("");
+  };
+  let qt = (ee, Ve) => groupCollapseKey(Ve ?? Ue.getSnapshot().groupMode, ee);
+  let headerArmId = (ee) => `header:${Ue.getSnapshot().groupMode}:${ee}`;
+  let earlierEntries = useStoreSelector(De.earlier, (ee) => ee.entries);
+  P(() => {
+    if (cwdFilter || !shouldListPastSessions()) {
       if (!cwdFilter) De.earlier.clear();
       return;
     }
-    let ee = !1,
-      beginLoad = De.earlier.beginLoad();
-    return (
-      listPastSessions(new Set(), !1, storageV5)
-        .finally(() => {
-          De.earlier.endLoad(beginLoad);
-        })
-        .then((et) => {
-          if (et === null) logFeatureBad("fleet_view_earlier_load", "load_failed");
-          else logFeatureOk("fleet_view_earlier_load");
-          if (!ee && (et === null || et.length === 0) && !initialJobId && ke.restoreAttempts === 1)
-            ke.restoreAttempts = 2;
-          if (et === null) return;
-          if ((De.earlier.setEntries(et), !ee && et.length > 0))
-            logEvent("tengu_fleetview_earlier_loaded", { count: et.length });
-        }),
-      () => {
-        ee = !0;
-      }
-    );
+    let ee = false;
+    let Ve = De.earlier.beginLoad();
+    listPastSessions(new Set(), false, storageV5)
+      .finally(() => {
+        De.earlier.endLoad(Ve);
+      })
+      .then((et) => {
+        if (et === null) logFeatureBad("fleet_view_earlier_load", "load_failed");
+        else logFeatureOk("fleet_view_earlier_load");
+        if (!ee && (et === null || et.length === 0) && !initialJobId && ke.restoreAttempts === 1)
+          ke.restoreAttempts = 2;
+        if (et === null) return;
+        De.earlier.setEntries(et);
+        if (!ee && et.length > 0)
+          logEvent("tengu_fleetview_earlier_loaded", {
+            count: et.length,
+          });
+      });
+    return () => {
+      ee = true;
+    };
   }, []);
-  let bo = (ee) => ke.toggleCollapsed(qt(ee), Ue.getSnapshot().groupMode === "state" ? ee : null),
-    wo = useTerminalFocus();
+  let toggleCollapse = (ee) => ke.toggleCollapsed(qt(ee), Ue.getSnapshot().groupMode === "state" ? ee : null);
+  let terminalFocus = useTerminalFocus();
   P(() => {
-    if (wo) we.resetPrFetchGate();
-  }, [we, wo]);
-  let Ho = useAppState((ee) => ee.autoUpdaterResult?.status === "success"),
-    { columns: columns, rows: rows } = useTerminalSize(),
-    { pathOwnRow: pathOwnRow } = useDispatchWindowDefaults(We, dispatchDefaults),
-    [kn] = y(() => Date.now()),
-    Qr = R(null),
-    Xr = R(null);
+    if (terminalFocus) roster.resetPrFetchGate();
+  }, [roster, terminalFocus]);
+  let Ho = useAppState((ee) => ee.autoUpdaterResult?.status === "success");
+  let { columns, rows } = useTerminalSize();
+  let { pathOwnRow } = useDispatchWindowDefaults(We, dispatchDefaults);
+  let [kn] = y(() => Date.now());
+  let Qr = R(null);
+  let Xr = R(null);
   useFocusOnMount(Xr, jobs !== null && !previewOpen);
-  let qi = useVoiceAvailable(),
-    vn = useAppState((ee) => ee.settings.voice?.mode ?? "hold"),
-    Zr = useGetVoiceState(),
-    un = () => {
-      let focusedRow = ke.focusedRow(),
-        Ve = focusedRow?.kind === "job" ? focusedRow.job : void 0;
-      if (!Ve) return;
-      ui(!1);
-      let previewOpen = Ue.getSnapshot().previewOpen;
-      if (!previewOpen) ((ke.followId = Ve.id), Cn());
-      Ue.setPreviewOpen(!previewOpen);
+  let voiceAvailable = useVoiceAvailable();
+  let vn = useAppState((ee) => ee.settings.voice?.mode ?? "hold");
+  let getVoiceState = useGetVoiceState();
+  let un = () => {
+    let ee = ke.focusedRow();
+    let job = ee?.kind === "job" ? ee.job : undefined;
+    if (!job) return;
+    ui(false);
+    let previewOpen = Ue.getSnapshot().previewOpen;
+    if (!previewOpen) {
+      ke.followId = job.id;
+      Cn();
+    }
+    Ue.setPreviewOpen(!previewOpen);
+  };
+  let Nn =
+    !me &&
+    !previewOpen &&
+    jobId === null &&
+    groupEdit === null &&
+    attachingJobId === null &&
+    resumePicker === null &&
+    settingPicker === null;
+  let {
+    query,
+    queryRef,
+    setQuery,
+    willInsertNewline,
+    setCursorOffset,
+    handleKeyDown,
+    handlePaste,
+    vimMode,
+    enterInsertMode,
+  } = useSearchInput({
+    buffer: We,
+    isActive: Nn,
+    multiline: true,
+    honorEditorMode: true,
+    onExit: () => {},
+    onCancel: jobs === null ? () => Po("Ctrl-C") : undefined,
+    onSpaceOnEmpty: () => {
+      if (We.getSnapshot().mode === "bash") return;
+      if (voiceAvailable && vn !== "tap")
+        Ue.schedulePeekTap(
+          (ee) => clock.setTimeout(ee, PREVIEW_BACK_TIMEOUT_MS),
+          () => {
+            let voiceState = getVoiceState();
+            if (voiceState.voiceState !== "idle" || voiceState.voiceWarmingUp) return;
+            if (queryRef.current.trim() !== "") return;
+            un();
+          },
+        );
+      else un();
     },
-    Nn =
-      !me &&
-      !previewOpen &&
-      Xe === null &&
-      groupEdit === null &&
-      attachingJobId === null &&
-      resumePicker === null &&
-      settingPicker === null,
-    {
-      query: query,
-      queryRef: queryRef,
-      setQuery: setQuery,
-      willInsertNewline: willInsertNewline,
-      setCursorOffset: setCursorOffset,
-      handleKeyDown: handleKeyDown,
-      handlePaste: handlePaste,
-      vimMode: vimMode,
-      enterInsertMode: enterInsertMode,
-    } = useSearchInput({
-      buffer: We,
-      isActive: Nn,
-      multiline: !0,
-      honorEditorMode: !0,
-      onExit: () => {},
-      onCancel: jobs === null ? () => Po("Ctrl-C") : void 0,
-      onSpaceOnEmpty: () => {
-        if (We.getSnapshot().mode === "bash") return;
-        if (qi && vn !== "tap")
-          Ue.schedulePeekTap(
-            (ee) => oe.setTimeout(ee, Dl),
-            () => {
-              let ee = Zr();
-              if (ee.voiceState !== "idle" || ee.voiceWarmingUp) return;
-              if (queryRef.current.trim() !== "") return;
-              un();
-            },
-          );
-        else un();
-      },
-    });
+  });
   useIdeMcpClients((ee) => {
-    let { query: query, cursorOffset: cursorOffset } = We.getSnapshot();
+    let { query, cursorOffset } = We.getSnapshot();
     We.insertText(formatAtMention(ee, query[cursorOffset - 1]));
   });
-  let So = cacheImagePath(() => We.pastes, handlePaste, { onMinted: We.noteMintedPaste });
-  (P(() => {
+  let So = cacheImagePath(() => We.pastes, handlePaste, {
+    onMinted: We.noteMintedPaste,
+  });
+  P(() => {
     We.pruneOrphanedPastes();
-  }, [We, query]),
-    useTimeout(() => We.setExpandHintPasteId(null), expandHintPasteId === null ? null : 8000, [
-      expandHintPasteId,
-    ]));
+  }, [We, query]);
+  useTimeout(() => We.setExpandHintPasteId(null), expandHintPasteId === null ? null : 8000, [
+    expandHintPasteId,
+  ]);
   let [zi] = y(() => ({
-      get value() {
-        return We.getSnapshot().query;
-      },
-      get cursorOffset() {
-        return We.getSnapshot().cursorOffset;
-      },
-      setValueWithCursor: (ee, Ve) => We.setQueryAndCursor(ee, Ve),
-    })),
-    pn = useVoiceIntegration({ composer: zi, isActive: Nn }),
-    jo = useAppState_2((ee) => ee.voiceState);
+    get value() {
+      return We.getSnapshot().query;
+    },
+    get cursorOffset() {
+      return We.getSnapshot().cursorOffset;
+    },
+    setValueWithCursor: (ee, Ve) => We.setQueryAndCursor(ee, Ve),
+  }));
+  let voiceIntegration = useVoiceIntegration({
+    composer: zi,
+    isActive: Nn,
+  });
+  let jo = useAppState_2((ee) => ee.voiceState);
   P(() => {
     if (jo !== "idle") Ue.cancelPeekTap();
   }, [Ue, jo]);
   let { handleKeyDown: handleKeyDown_2 } = useVoiceKeybindingHandler({
-      voiceHandleKeyEvent: pn.handleKeyEvent,
-      voiceCancelRecording: pn.cancelRecording,
-      stripTrailing: pn.stripTrailing,
-      resetAnchor: pn.resetAnchor,
-      isActive: (vn !== "tap" || query.trim().length > 0) && mode !== "bash" && Nn,
-      composer: zi,
-    }),
-    Ta = useAppState((ee) => isReducedMotion(ee.settings.prefersReducedMotion)),
-    Oa = jo === "recording" && !Ta;
-  (DispatchModeLine({
+    voiceHandleKeyEvent: voiceIntegration.handleKeyEvent,
+    voiceCancelRecording: voiceIntegration.cancelRecording,
+    stripTrailing: voiceIntegration.stripTrailing,
+    resetAnchor: voiceIntegration.resetAnchor,
+    isActive: (vn !== "tap" || query.trim().length > 0) && mode !== "bash" && Nn,
+    composer: zi,
+  });
+  let Ta = useAppState((ee) => isReducedMotion(ee.settings.prefersReducedMotion));
+  let showCursor = jo === "recording" && !Ta;
+  DispatchModeLine({
     editor: We,
     selection: ke,
-    query: query,
+    query,
     dispatchMode: mode,
-    collapsed: collapsed,
+    collapsed,
     canonicalLauncherCwd: Kt,
-    storageV5: storageV5,
-  }),
-    useAttachFleetOwners(vt, { clock: oe, groupsEnabled: Ot }));
-  let Cn = () => clearFleetOfferState($e, We),
-    fn = Q(modelSuggestions, []),
-    {
-      query: query_2,
-      queryRef: queryRef_2,
-      setQuery: setQuery_2,
-      cursorOffset: cursorOffset,
-      handleKeyDown: handleKeyDown_3,
-      handlePaste: handlePaste_2,
-    } = useSearchInput({
-      isActive: Xe !== null,
-      honorEditorMode: !0,
-      backspaceExitsOnEmpty: !1,
-      onExit: () => submitRename(od()),
-      onCancel: xe,
-    }),
-    ar = () => {
-      (Ue.closeGroupEdit(), setQuery_3(""));
-    },
-    {
-      query: query_3,
-      queryRef: queryRef_3,
-      setQuery: setQuery_3,
-      cursorOffset: cursorOffset_2,
-      handleKeyDown: handleKeyDown_4,
-      handlePaste: handlePaste_3,
-    } = useSearchInput({
-      isActive: groupEdit !== null,
-      backspaceExitsOnEmpty: !1,
-      onExit: () => submitGroupEdit(od()),
-      onCancel: ar,
-    }),
-    Xi = Q(() => {
-      let ee = new Set();
-      for (let Ve of jobs ?? []) if (Ve.state.group) ee.add(Ve.state.group);
-      for (let Ve of remoteJobs) if (Ve.state.group) ee.add(Ve.state.group);
-      return ee;
-    }, [jobs, remoteJobs]),
-    Wo = Q(() => {
-      if (!groupEdit) return [];
-      let ee = new Set();
-      if (groupEdit.kind === "assign") {
-        let Xt = (
-          jobs?.find((to) => to.id === groupEdit.jobId) ??
-          remoteJobs.find((to) => remoteRowIdOf(to) === groupEdit.jobId)
-        )?.state.group;
-        if (Xt) ee.add(Xt);
-      } else ee.add(groupEdit.from);
-      let trimmed = query_3.trim(),
-        lower = trimmed.toLowerCase();
-      return [...Xi]
-        .filter((Xt) => !ee.has(Xt) && Xt.toLowerCase().startsWith(lower))
-        .sort((Xt, to) => {
-          let startsWith = Xt.startsWith(trimmed),
-            startsWith_2 = to.startsWith(trimmed);
-          return startsWith !== startsWith_2 ? (startsWith ? -1 : 1) : Xt.localeCompare(to);
-        });
-    }, [groupEdit, Xi, jobs, remoteJobs, query_3]),
-    trimmed = query_3.trim(),
-    Zi = trimmed !== "" && isReservedGroupName(trimmed),
-    Ma =
-      groupEdit !== null &&
-      trimmed !== "" &&
-      !Zi &&
-      !Xi.has(trimmed) &&
-      !(groupEdit.kind === "rename" && groupEdit.from === trimmed),
-    included = Wo.includes(trimmed),
-    joined_2 = Wo.join(`
+    storageV5,
+  });
+  useAttachFleetOwners(vt, {
+    clock,
+    groupsEnabled: Ot,
+  });
+  let Cn = () => clearFleetOfferState($e, We);
+  let fn = Q(modelSuggestions, []);
+  let {
+    query: query_2,
+    queryRef: queryRef_2,
+    setQuery: setQuery_2,
+    cursorOffset,
+    handleKeyDown: handleKeyDown_3,
+    handlePaste: handlePaste_2,
+  } = useSearchInput({
+    isActive: jobId !== null,
+    honorEditorMode: true,
+    backspaceExitsOnEmpty: false,
+    onExit: () => submitRename(od()),
+    onCancel: xe,
+  });
+  let ar = () => {
+    Ue.closeGroupEdit();
+    setQuery_3("");
+  };
+  let {
+    query: query_3,
+    queryRef: queryRef_3,
+    setQuery: setQuery_3,
+    cursorOffset: cursorOffset_2,
+    handleKeyDown: handleKeyDown_4,
+    handlePaste: handlePaste_3,
+  } = useSearchInput({
+    isActive: groupEdit !== null,
+    backspaceExitsOnEmpty: false,
+    onExit: () => submitGroupEdit(od()),
+    onCancel: ar,
+  });
+  let Xi = Q(() => {
+    let ee = new Set();
+    for (let Ve of jobs ?? []) if (Ve.state.group) ee.add(Ve.state.group);
+    for (let remoteJob of remoteJobs) if (remoteJob.state.group) ee.add(remoteJob.state.group);
+    return ee;
+  }, [jobs, remoteJobs]);
+  let Wo = Q(() => {
+    if (!groupEdit) return [];
+    let ee = new Set();
+    if (groupEdit.kind === "assign") {
+      let group = (
+        jobs?.find((job) => job.id === groupEdit.jobId) ??
+        remoteJobs.find((remoteJob) => remoteRowIdOf(remoteJob) === groupEdit.jobId)
+      )?.state.group;
+      if (group) ee.add(group);
+    } else ee.add(groupEdit.from);
+    let trimmed = query_3.trim();
+    let lower = trimmed.toLowerCase();
+    return [...Xi]
+      .filter((Xt) => !ee.has(Xt) && Xt.toLowerCase().startsWith(lower))
+      .sort((Xt, to) => {
+        let _o = Xt.startsWith(trimmed);
+        let Go = to.startsWith(trimmed);
+        return _o !== Go ? (_o ? -1 : 1) : Xt.localeCompare(to);
+      });
+  }, [groupEdit, Xi, jobs, remoteJobs, query_3]);
+  let trimmed = query_3.trim();
+  let Zi = trimmed !== "" && isReservedGroupName(trimmed);
+  let isNew =
+    groupEdit !== null &&
+    trimmed !== "" &&
+    !Zi &&
+    !Xi.has(trimmed) &&
+    !(groupEdit.kind === "rename" && groupEdit.from === trimmed);
+  let matchesExisting = Wo.includes(trimmed);
+  let joined_2 = Wo.join(`
 `);
   P(() => {
     Ue.setGroupPickIdx(
       groupEdit?.kind === "assign" && trimmed !== "" && trimmed !== groupEdit.cur && Wo.length > 0 ? 0 : -1,
     );
   }, [joined_2, trimmed]);
-  let pu = groupEdit?.kind === "assign" && trimmed !== "" && trimmed !== groupEdit.cur && Wo.length > 0,
-    Aa = templates.get(Ne) ?? Od,
-    ag = routines.get(Ne) ?? Os,
-    dr = findMentionedTemplate(query, allRepos, Aa, ag),
-    Bn = dr ?? oo,
-    fu = templates.get(Bn) ?? Od,
-    Jn = Q(() => mergeSuggestionsByName(fu, Aa), [fu, Aa]),
-    La = skills.get(Bn) ?? skills.get(Ne) ?? Os,
-    _n = routines.get(Bn) ?? routines.get(Ne) ?? Os,
-    ur = prependModeCharacterToInput(query, mode, jobs, cwdFilter),
-    cr = Q(
-      () => Ws(query, mode, ur, { templates: Jn, allRepos: allRepos, routines: _n }),
-      [mode, ur, query, Jn, allRepos, _n],
-    ),
-    mu = ce(
-      (ee) =>
-        relaunchAgentsView(ee, {
-          cwdFilter: cwdFilter,
-          dispatchDefaults: dispatchDefaults,
-          typedAgent: typedAgent,
-          activeTab: activeTab,
-          onError: setError,
-        }),
-      [cwdFilter, dispatchDefaults, typedAgent, activeTab],
-    );
+  let panelOpen =
+    groupEdit?.kind === "assign" && trimmed !== "" && trimmed !== groupEdit.cur && Wo.length > 0;
+  let Aa = templates.get(cwd) ?? EMPTY_AGENT_SUGGESTIONS;
+  let ag = routines.get(cwd) ?? EMPTY_SKILL_SUGGESTIONS;
+  let mentionedTemplate = findMentionedTemplate(query, allRepos, Aa, ag);
+  let Bn = mentionedTemplate ?? oo;
+  let fu = templates.get(Bn) ?? EMPTY_AGENT_SUGGESTIONS;
+  let Jn = Q(() => mergeSuggestionsByName(fu, Aa), [fu, Aa]);
+  let La = skills.get(Bn) ?? skills.get(cwd) ?? EMPTY_SKILL_SUGGESTIONS;
+  let _n = routines.get(Bn) ?? routines.get(cwd) ?? EMPTY_SKILL_SUGGESTIONS;
+  let ur = prependModeCharacterToInput(query, mode, jobs, cwdFilter);
+  let cr = Q(
+    () =>
+      parseDraftInput(query, mode, ur, {
+        templates: Jn,
+        allRepos,
+        routines: _n,
+      }),
+    [mode, ur, query, Jn, allRepos, _n],
+  );
+  let mu = ce(
+    (ee) =>
+      relaunchAgentsView(ee, {
+        cwdFilter,
+        dispatchDefaults,
+        typedAgent,
+        activeTab,
+        onError: setError,
+      }),
+    [cwdFilter, dispatchDefaults, typedAgent, activeTab],
+  );
   useInterval(
     () => {
       let ee = Number(process.env[CLAUDE_AGENTS_AUTO_RELAUNCHED_AT]) || 0;
-      if (Date.now() - ee < Hc) return;
-      if (Date.now() - getLastInteractionTime() < ks) return;
+      if (Date.now() - ee < RELAUNCH_COOLDOWN_MS) return;
+      if (Date.now() - getLastInteractionTime() < RELAUNCH_RECENT_MS) return;
       mu("auto");
     },
-    Ho && !wo ? ks : null,
+    Ho && !terminalFocus ? RELAUNCH_RECENT_MS : null,
   );
-  let [pr, ui] = y(!1),
-    [Da, gu] = y(0),
-    [Va, Ba] = y(null);
-  (P(() => {
-    if (query && pr) ui(!1);
-  }, [query, pr]),
-    P(() => {
-      if (Da !== 0) gu(0);
-    }, [query, pr, Bn]));
-  let [dg, hu] = Uy((ee) => ee + 1, 0),
-    lg = Q(
-      () =>
-        buildDispatchSuggestions(query, {
-          templates: Jn,
-          routines: _n,
-          repos: allRepos,
-          worktreeBranches: worktreeBranches,
-          skills: La,
-          models: fn,
-          dispatch: cr,
-          showAllAgents: pr,
-        }),
-      [query, Jn, _n, allRepos, worktreeBranches, La, fn, cr, pr, dg],
-    ),
-    {
-      firstWord: firstWord,
-      isSlashQuery: isSlashQuery,
-      atMatch: atMatch,
-      slashMatch: slashMatch,
-      modelArgMatch: modelArgMatch,
-      templateNames: templateNames,
-      repoNames: repoNames,
-      suggestions: suggestions,
-    } = lg;
+  let [pr, ui] = y(false);
+  let [Da, gu] = y(0);
+  let [Va, Ba] = y(null);
   P(() => {
-    if (atMatch) Ce.refreshLauncher(Ne);
-  }, [atMatch, Ce, Ne]);
+    if (query && pr) ui(false);
+  }, [query, pr]);
+  P(() => {
+    if (Da !== 0) gu(0);
+  }, [query, pr, Bn]);
+  let [dg, hu] = Uy((ee) => ee + 1, 0);
+  let lg = Q(
+    () =>
+      buildDispatchSuggestions(query, {
+        templates: Jn,
+        routines: _n,
+        repos: allRepos,
+        worktreeBranches,
+        skills: La,
+        models: fn,
+        dispatch: cr,
+        showAllAgents: pr,
+      }),
+    [query, Jn, _n, allRepos, worktreeBranches, La, fn, cr, pr, dg],
+  );
+  let { firstWord, isSlashQuery, atMatch, slashMatch, modelArgMatch, templateNames, repoNames, suggestions } =
+    lg;
+  P(() => {
+    if (atMatch) Ce.refreshLauncher(cwd);
+  }, [atMatch, Ce, cwd]);
   let bu = (ee) => {
-      if ((Ba(null), ee.kind === "model" && modelArgMatch)) {
-        setQuery(`/model ${ee.name}`);
-        return;
-      }
-      let Ve = Id[ee.kind];
-      setQuery(atMatch || slashMatch ? zc(query, Ve, ee.name) : `${Ve}${ee.name} `);
+    Ba(null);
+    if (ee.kind === "model" && modelArgMatch) {
+      setQuery(`/model ${ee.name}`);
+      return;
+    }
+    let Ve = SUGGESTION_KIND_LABELS[ee.kind];
+    setQuery(atMatch || slashMatch ? replaceTrailingMention(query, Ve, ee.name) : `${Ve}${ee.name} `);
+  };
+  let pickSuggestion = () =>
+    (Va ? suggestions.find((suggestion) => `${suggestion.kind}:${suggestion.name}` === Va) : undefined) ??
+    suggestions[Math.min(Da, suggestions.length - 1)];
+  let Ga = Q(
+    () =>
+      buildJobActions(
+        roster.reload,
+        (followId) => {
+          ke.followId = followId;
+        },
+        roster.optimistic,
+        roster.noteDeleteRefusal,
+        roster.deleteRefusalOf,
+        storageV5,
+      ),
+    [roster, ke, storageV5],
+  );
+  let onStop = ce(
+    async (ee) => {
+      let found = Ga.find((et) => et.label === "stop");
+      if (!found) throw Error("the stop action is missing");
+      await found.run(ee, {
+        bulk: false,
+      });
     },
-    mg = () =>
-      (Va ? suggestions.find((ee) => `${ee.kind}:${ee.name}` === Va) : void 0) ??
-      suggestions[Math.min(Da, suggestions.length - 1)],
-    Ga = Q(
-      () =>
-        buildJobActions(
-          we.reload,
-          (ee) => {
-            ke.followId = ee;
-          },
-          we.optimistic,
-          we.noteDeleteRefusal,
-          we.deleteRefusalOf,
-          storageV5,
-        ),
-      [we, ke, storageV5],
-    ),
-    gg = ce(
-      async (ee) => {
-        let found = Ga.find((et) => et.label === "stop");
-        if (!found) throw Error("the stop action is missing");
-        await found.run(ee, { bulk: !1 });
-      },
-      [Ga],
-    );
+    [Ga],
+  );
   P(() => {
-    (logForDebugging("[PERF:bg-remount-end]"), logFeatureOk("screen_fleet_view"));
+    logForDebugging("[PERF:bg-remount-end]");
+    logFeatureOk("screen_fleet_view");
   }, []);
   let Ua = ce(
     () =>
-      pruneReplyDrafts(We, we, {
-        jobs: jobs,
-        pendings: pendings,
-        adoptedPeers: adoptedPeers,
+      pruneReplyDrafts(We, roster, {
+        jobs,
+        pendings,
+        adoptedPeers,
         remoteJobs: St,
-        remoteListLoaded: remoteListLoaded,
+        remoteListLoaded,
       }),
-    [We, we, jobs, pendings, adoptedPeers, St, remoteListLoaded],
+    [We, roster, jobs, pendings, adoptedPeers, St, remoteListLoaded],
   );
-  (P(() => {
+  P(() => {
     Ua();
-  }, [Ua]),
-    useInterval(() => {
-      if (We.hasReplyDrafts()) Ua();
-    }, 15000));
-  let wu = R(null),
-    Ka = ce(() => {
-      let ee = wu.current;
-      wu.current = null;
-    }, [storageV5]),
-    HE = useDebouncedCallback(Ka, 300);
+  }, [Ua]);
+  useInterval(() => {
+    if (We.hasReplyDrafts()) Ua();
+  }, 15000);
+  let wu = R(null);
+  let Ka = ce(() => {
+    let ee = wu.current;
+    wu.current = null;
+  }, [storageV5]);
+  let debouncedCallback = useDebouncedCallback(Ka, 300);
   P(() => Ka, [Ka]);
-  let yu = (ee) => {
-      if (ee === Ue.getSnapshot().activeTab) return;
-      if (ee === "remote" && !$6s()) return;
-      if (
-        (Ue.setActiveTab(ee),
-        setHint(null),
-        setError(null),
-        (ke.followOrigin = null),
-        He.disarm(),
-        ee === "remote")
-      )
-        we.loadRemote();
-    },
-    Eu = (ee) => we.liveStatus(ee),
-    hg = isCrossSessionMessagingEnabled() && getFeatureValue_CACHED_MAY_BE_STALE("tengu_fleetview_peers", !1),
-    [wg, Sg] = y(() => Date.now()),
-    Ru = useIsScreenReaderEnabled(),
-    yg = Ru ? wg : void 0,
-    now = Date.now(),
-    ku = Q(() => new Set((jobs ?? []).filter((ee) => isLoopJob(ee.state)).map((ee) => ee.id)), [jobs]),
-    any = (jobs ?? []).some((ee) => {
-      if (!ku.has(ee.id)) return !1;
-      let Ve = loopKicks.get(ee.state.sessionId)?.nextAt;
-      return Ve != null && Ve > now && Ve - now < 60000;
+  let switchTab = (ee) => {
+    if (ee === Ue.getSnapshot().activeTab) return;
+    if (ee === "remote" && !returnFalseAttention()) return;
+    Ue.setActiveTab(ee);
+    setHint(null);
+    setError(null);
+    ke.followOrigin = null;
+    He.disarm();
+    if (ee === "remote") roster.loadRemote();
+  };
+  let Eu = (ee) => roster.liveStatus(ee);
+  let peersEnabled =
+    isCrossSessionMessagingEnabled() && getFeatureValue_CACHED_MAY_BE_STALE("tengu_fleetview_peers", false);
+  let [wg, Sg] = y(() => Date.now());
+  let isScreenReaderEnabled = useIsScreenReaderEnabled();
+  let ageNow = isScreenReaderEnabled ? wg : undefined;
+  let now = Date.now();
+  let ku = Q(() => new Set((jobs ?? []).filter((ee) => isLoopJob(ee.state)).map((ee) => ee.id)), [jobs]);
+  let any = (jobs ?? []).some((ee) => {
+    if (!ku.has(ee.id)) return false;
+    let nextAt = loopKicks.get(ee.state.sessionId)?.nextAt;
+    return nextAt != null && nextAt > now && nextAt - now < 60000;
+  });
+  useInterval(
+    () => Sg(Date.now()),
+    isScreenReaderEnabled ? DISPATCH_TIMEOUT_MS : any ? 1000 : jobs?.length || St.length ? 30000 : null,
+  );
+  P(() => {
+    claimSpareFromPool(At, true, dispatchDefaults, templates.get(At), storageV5);
+  }, [At, dispatchDefaults, templates, storageV5]);
+  P(() => {
+    if (De.agentLastUsedMigrationDone) return;
+    De.agentLastUsedMigrationDone = true;
+    backfillAgentLastUsed(storageV5).then((ee) => {
+      if (ee) hu();
     });
-  (useInterval(() => Sg(Date.now()), Ru ? Bs : any ? 1000 : jobs?.length || St.length ? 30000 : null),
-    P(() => {
-      Y$n(At, !0, dispatchDefaults, templates.get(At), storageV5);
-    }, [At, dispatchDefaults, templates, storageV5]),
-    P(() => {
-      if (De.agentLastUsedMigrationDone) return;
-      ((De.agentLastUsedMigrationDone = !0),
-        backfillAgentLastUsed(storageV5).then((ee) => {
-          if (ee) hu();
-        }));
-    }, [De, storageV5]),
-    P(() => Ce.loadTarget(Bn, storageV5), [Ce, Bn, storageV5]));
-  let { addNotification: addNotification } = useNotifications(),
-    es = useSelection(),
-    vu = (ee) => {
-      addNotification(buildCopiedNotification(ee));
-    },
-    kg = useCopyOnSelect(es, !0, vu);
-  useSelectionBgColor(es);
-  let _u = modalPagerAction(es, kg, vu);
-  (useSelectionClearKeybinding(es),
-    zt(() => {
-      let ee = di().get(process.stdout);
-      if (!ee) return;
-      return (
-        (ee.onHyperlinkClick = (Ve) => {
-          let et = !1,
-            { activeTab: activeTab, previewOpen: previewOpen } = Ue.getSnapshot(),
-            { error: error } = We.getSnapshot();
-          openClickedLink(Ve);
-        }),
-        () => {
-          ee.onHyperlinkClick = void 0;
-        }
-      );
-    }, [Ue, We, !1]));
-  let Ya = !1,
-    Iu = Q(() => getAuthTokenSource().hasToken, []),
-    Tu = CloudListFailureNotice({
-      onCloudTab: activeTab === "remote" && !me && !previewOpen,
-      remoteJobs: St,
-      remoteListLoaded: remoteListLoaded,
-      remoteListFailure: remoteListFailure,
-    }),
-    Ou = !1,
-    fr = buildFleetRows({
-      jobs: jobs,
-      adoptedPeers: adoptedPeers,
-      remoteJobs: St,
-      pendings: pendings,
-      prStatuses: prStatuses,
-      liveStatus: Eu,
-      heldInTerminal: (ee) => we.terminalHolderOf(ee) !== void 0,
-      loopJobIds: ku,
-      loopKicks: loopKicks,
-      focusedIdx: focusedIdx,
-      hoverFocusIdx: hoverFocusIdx,
-      followOrigin: followOrigin,
-      collapsed: collapsed,
-      capExpanded: capExpanded,
-      groupMode: groupMode,
-      activeTab: activeTab,
-      query: query,
-      mode: mode,
-      dispatch: cr,
-      linkMatchId: ur,
-      dispatchRepoCwd: dr,
-      pendingDelete: pending,
-      earlierEntries: io,
-      cwdFilter: cwdFilter,
-      initialJobId: initialJobId,
-      simpleView: me,
-      simpleWantsRemote: Je,
-      peersEnabled: hg,
-      showRemoteTabs: Ya,
-      launcherCwd: Ne,
-      launcherGroup: uo,
-      scopedFallbackOrigin: At,
-      termRows: rows - (Tu !== null && St.length > 0 ? cc : 0) - (pathOwnRow ? 1 : 0) - (Ou ? 1 : 0),
-      columns: columns,
-      now: now,
-      ageNow: yg,
-    }),
-    {
-      byState: byState,
-      byGroup: byGroup,
-      hasComposedDispatch: hasComposedDispatch,
-      scopedLocalJobs: scopedLocalJobs,
-      scopedJobs: scopedJobs,
-      filtered: filtered,
-      groupOf: groupOf,
-      jobSessionIds: jobSessionIds,
-      doneCap: doneCap,
-      simpleBuilt: simpleBuilt,
-      built: built,
-      rows: rows_2,
-      homeIdx: homeIdx,
-      onlyOrigin: onlyOrigin,
-      isOnboarding: isOnboarding,
-      focusedRow: focusedRow,
-      focused: focused,
-      altOpenOrigin: altOpenOrigin,
-      dispatchOrigin: dispatchOrigin,
-      focusIsFromHover: focusIsFromHover,
-      headerJobs: headerJobs,
-      isBashDispatch: isBashDispatch,
-      queryIsFilter: queryIsFilter,
-      hasNameFilter: hasNameFilter,
-    } = fr,
-    mi = (ee) => rows_2.findIndex((Ve) => Ve.kind === "job" && Ve.job.id === ee);
-  if (($e.releasePromoted(jobSessionIds), me && Ue.firstImpression("simple")))
-    logFeatureOk("fleet_view_simple");
+  }, [De, storageV5]);
+  P(() => Ce.loadTarget(Bn, storageV5), [Ce, Bn, storageV5]);
+  let { addNotification } = useNotifications();
+  let selection = useSelection();
+  let onCopied = (ee) => {
+    addNotification(buildCopiedNotification(ee));
+  };
+  let copyOnSelect = useCopyOnSelect(selection, true, onCopied);
+  useSelectionBgColor(selection);
+  let _u = modalPagerAction(selection, copyOnSelect, onCopied);
+  useSelectionClearKeybinding(selection);
+  zt(() => {
+    let ee = getSecondRootError().get(process.stdout);
+    if (!ee) return;
+    ee.onHyperlinkClick = (Ve) => {
+      let et = false;
+      let { activeTab, previewOpen } = Ue.getSnapshot();
+      let { error } = We.getSnapshot();
+      openClickedLink(Ve);
+    };
+    return () => {
+      ee.onHyperlinkClick = undefined;
+    };
+  }, [Ue, We, false]);
+  let showRemoteTabs = false;
+  let hasCredentials = Q(() => getAuthTokenSource().hasToken, []);
+  let Tu = CloudListFailureNotice({
+    onCloudTab: activeTab === "remote" && !me && !previewOpen,
+    remoteJobs: St,
+    remoteListLoaded,
+    remoteListFailure,
+  });
+  let Ou = false;
+  let fleetRows = buildFleetRows({
+    jobs,
+    adoptedPeers,
+    remoteJobs: St,
+    pendings,
+    prStatuses,
+    liveStatus: Eu,
+    heldInTerminal: (ee) => roster.terminalHolderOf(ee) !== undefined,
+    loopJobIds: ku,
+    loopKicks,
+    focusedIdx,
+    hoverFocusIdx,
+    followOrigin,
+    collapsed,
+    capExpanded,
+    groupMode,
+    activeTab,
+    query,
+    mode,
+    dispatch: cr,
+    linkMatchId: ur,
+    dispatchRepoCwd: mentionedTemplate,
+    pendingDelete: pending,
+    earlierEntries,
+    cwdFilter,
+    initialJobId,
+    simpleView: me,
+    simpleWantsRemote: Je,
+    peersEnabled,
+    showRemoteTabs,
+    launcherCwd: cwd,
+    launcherGroup,
+    scopedFallbackOrigin: At,
+    termRows:
+      rows - (Tu !== null && St.length > 0 ? CLOUD_LIST_ATTEMPTS : 0) - (pathOwnRow ? 1 : 0) - (Ou ? 1 : 0),
+    columns,
+    now,
+    ageNow,
+  });
+  let {
+    byState,
+    byGroup,
+    hasComposedDispatch,
+    scopedLocalJobs,
+    scopedJobs,
+    filtered,
+    groupOf,
+    jobSessionIds,
+    doneCap,
+    simpleBuilt,
+    built,
+    rows: rows_2,
+    homeIdx,
+    onlyOrigin,
+    isOnboarding,
+    focusedRow,
+    focused,
+    altOpenOrigin,
+    dispatchOrigin,
+    focusIsFromHover,
+    headerJobs,
+    isBashDispatch,
+    queryIsFilter,
+    hasNameFilter,
+  } = fleetRows;
+  let mi = (ee) => rows_2.findIndex((Ve) => Ve.kind === "job" && Ve.job.id === ee);
+  $e.releasePromoted(jobSessionIds);
+  if (me && Ue.firstImpression("simple")) logFeatureOk("fleet_view_simple");
   if (hasNameFilter && Ue.firstImpression("nameFilter")) logFeatureOk("fleet_view_name_filter");
   if (built.doneFoldHidden > 0 && Ue.firstImpression("fold"))
     logEvent("tengu_fleetview_fold_shown", {
@@ -1786,126 +1982,140 @@ function FleetView({
     });
   P(() => {
     if (jobs === null || !overlaidLoadLanded) return;
-    let ee = (et) => oc(et, originJobId) && !we.isHolding(et.id),
-      Ve = (et) => jobTempo(et.state) === "completed";
+    let ee = (et) => isOtherLocalDaemonJob(et, originJobId) && !roster.isHolding(et.id);
+    let Ve = (et) => jobTempo(et.state) === "completed";
     emitFinishedJobs(De.resultSeen, {
       visibleFinished: rows_2
         .filter((et) => et.kind === "job")
         .map((et) => et.job)
         .filter((et) => ee(et) && Ve(et)),
-      allFinished: jobs.filter((et) => ee(et) && Ve(et)),
+      allFinished: jobs.filter((job) => ee(job) && Ve(job)),
       allCandidates: jobs.filter(ee),
     });
-  }, [De, we, rows_2, jobs, originJobId, overlaidLoadLanded]);
+  }, [De, roster, rows_2, jobs, originJobId, overlaidLoadLanded]);
   let Fg = Q(() => env.CLAUDE_CODE_DISABLE_TERMINAL_TITLE, []);
-  (useTerminalTitle(Fg ? null : hc(count(scopedJobs, (ee) => jobTempo(ee.state, Eu(ee)) === "blocked"))),
-    useJobBandNotifications(
-      scopedLocalJobs
-        .filter((ee) => isLocalDaemonAgent(ee.state))
-        .map((ee) => ({
-          id: ee.id,
-          sessionId: ee.state.sessionId,
-          band: jobTempo(ee.state),
-          label: getJobTitle(ee.state, ee.id === initialJobId),
-          needs: ee.state.needs,
-          outcome: terminalOutcome(ee.state.state),
-          selfDriving: isSelfDriving(ee.state),
-        })),
-      Oe,
-    ));
+  useTerminalTitle(
+    Fg ? null : terminalTitle(count(scopedJobs, (ee) => jobTempo(ee.state, Eu(ee)) === "blocked")),
+  );
+  useJobBandNotifications(
+    scopedLocalJobs
+      .filter((scopedLocalJob) => isLocalDaemonAgent(scopedLocalJob.state))
+      .map((scopedLocalJob) => ({
+        id: scopedLocalJob.id,
+        sessionId: scopedLocalJob.state.sessionId,
+        band: jobTempo(scopedLocalJob.state),
+        label: getJobTitle(scopedLocalJob.state, scopedLocalJob.id === initialJobId),
+        needs: scopedLocalJob.state.needs,
+        outcome: terminalOutcome(scopedLocalJob.state.state),
+        selfDriving: isSelfDriving(scopedLocalJob.state),
+      })),
+    Oe,
+  );
   let Pg = ke.followId ?? focused?.id ?? focusedRow?.group;
-  (P(() => {
+  P(() => {
     if (He.pending !== null && He.pending.id === ke.followId) return;
     He.disarm();
-  }, [Pg]),
-    zt(() => {
-      if ((ke.syncRows(rows_2), !ke.getSnapshot().draftPick)) return;
-      if (!queryIsFilter) ke.releasePick(rows_2, homeIdx, !hasComposedDispatch && !byGroup);
-      else if (hasNameFilter && !ke.followId) ke.followPick(homeIdx, rows_2[homeIdx]);
-    }),
-    P(() => {
-      if (pendings.length === 0 || !jobs) return;
-      let filtered = pendings.filter((et) => jobs.some((Xt) => Xt.id === et.id));
-      if (filtered.length === 0) return;
-      we.settleLandedPendings(filtered);
-      let followId = ke.followId;
-      if (followId && filtered.some((et) => et.id === followId)) {
-        let et = mi(followId);
-        if (et >= 0) ke.focus(et);
+  }, [Pg]);
+  zt(() => {
+    ke.syncRows(rows_2);
+    if (!ke.getSnapshot().draftPick) return;
+    if (!queryIsFilter) ke.releasePick(rows_2, homeIdx, !hasComposedDispatch && !byGroup);
+    else if (hasNameFilter && !ke.followId) ke.followPick(homeIdx, rows_2[homeIdx]);
+  });
+  P(() => {
+    if (pendings.length === 0 || !jobs) return;
+    let filtered = pendings.filter((pending) => jobs.some((job) => job.id === pending.id));
+    if (filtered.length === 0) return;
+    roster.settleLandedPendings(filtered);
+    let followId = ke.followId;
+    if (followId && filtered.some((et) => et.id === followId)) {
+      let et = mi(followId);
+      if (et >= 0) ke.focus(et);
+    }
+  }, [roster, ke, pendings, jobs]);
+  P(() => {
+    if (ke.isFirstQueryOfLook()) return;
+    if (We.takeProgrammaticChange()) return;
+    setError(null);
+    setHint(null);
+    if (!queryIsFilter) return;
+    if (ur) {
+      let ee = mi(ur);
+      if (ee >= 0) ke.followPick(ee, rows_2[ee]);
+      else ke.clearFollow();
+      return;
+    }
+    if (hasNameFilter) {
+      ke.followPick(homeIdx, rows_2[homeIdx]);
+      return;
+    }
+    ke.clearFollow();
+    ke.focus(homeIdx);
+  }, [query]);
+  P(() => {
+    if (focusIsFromHover || (!byState && (draftPick || ke.getSnapshot().draftPick))) return;
+    if (pt !== dispatchOrigin) Nt(dispatchOrigin);
+  }, [dispatchOrigin, focusIsFromHover, draftPick, byState, pt]);
+  P(() => {
+    ke.clampFocus(rows_2.length);
+  }, [ke, rows_2.length]);
+  P(() => {
+    if (ur) {
+      ke.savedFocusJobId = null;
+      return;
+    }
+    if (!hasComposedDispatch) {
+      let savedFocusJobId = ke.savedFocusJobId;
+      ke.savedFocusJobId = null;
+      if (savedFocusJobId && hasNameFilter) ke.returnPickTo(savedFocusJobId);
+      else if (savedFocusJobId) {
+        ke.followOrigin = null;
+        ke.followId = savedFocusJobId;
+        let Go = mi(savedFocusJobId);
+        if (Go >= 0) ke.focus(Go);
       }
-    }, [we, ke, pendings, jobs]),
-    P(() => {
-      if (ke.isFirstQueryOfLook()) return;
-      if (We.takeProgrammaticChange()) return;
-      if ((setError(null), setHint(null), !queryIsFilter)) return;
-      if (ur) {
-        let ee = mi(ur);
-        if (ee >= 0) ke.followPick(ee, rows_2[ee]);
-        else ke.clearFollow();
-        return;
+      return;
+    }
+    let focusedIdx = ke.getSnapshot().focusedIdx;
+    let Ve = rows_2[focusedIdx];
+    if (Ve?.kind === "job" && ke.savedFocusJobId === null) ke.savedFocusJobId = Ve.job.id;
+    let et = (_o) => rows_2.findIndex((Go) => Go.kind === "header" && _o(Go));
+    let Xt = -1;
+    let to = null;
+    if (byState) to = "working";
+    else if (mentionedTemplate) {
+      Xt = et((_o) => _o.origin === mentionedTemplate && _o.group !== "pinned");
+      if (Xt >= 0) to = rows_2[Xt].group;
+    } else if (Ve?.kind === "job") {
+      if (Ve.group === "pinned")
+        to =
+          rows_2.find((Go) => Go.kind === "header" && Go.origin === Ve.origin && Go.group !== "pinned")
+            ?.group ?? null;
+      else to = Ve.group;
+    } else if (Ve?.kind === "header") {
+      if (Ve.group !== "pinned") {
+        to = Ve.group;
+        Xt = focusedIdx;
       }
-      if (hasNameFilter) {
-        ke.followPick(homeIdx, rows_2[homeIdx]);
-        return;
-      }
-      (ke.clearFollow(), ke.focus(homeIdx));
-    }, [query]),
-    P(() => {
-      if (focusIsFromHover || (!byState && (draftPick || ke.getSnapshot().draftPick))) return;
-      if (pt !== dispatchOrigin) Nt(dispatchOrigin);
-    }, [dispatchOrigin, focusIsFromHover, draftPick, byState, pt]),
-    P(() => {
-      ke.clampFocus(rows_2.length);
-    }, [ke, rows_2.length]),
-    P(() => {
-      if (ur) {
-        ke.savedFocusJobId = null;
-        return;
-      }
-      if (!hasComposedDispatch) {
-        let savedFocusJobId = ke.savedFocusJobId;
-        if (((ke.savedFocusJobId = null), savedFocusJobId && hasNameFilter)) ke.returnPickTo(savedFocusJobId);
-        else if (savedFocusJobId) {
-          ((ke.followOrigin = null), (ke.followId = savedFocusJobId));
-          let Go = mi(savedFocusJobId);
-          if (Go >= 0) ke.focus(Go);
-        }
-        return;
-      }
-      let focusedIdx = ke.getSnapshot().focusedIdx,
-        Ve = rows_2[focusedIdx];
-      if (Ve?.kind === "job" && ke.savedFocusJobId === null) ke.savedFocusJobId = Ve.job.id;
-      let et = (_o) => rows_2.findIndex((Go) => Go.kind === "header" && _o(Go)),
-        Xt = -1,
-        to = null;
-      if (byState) to = "working";
-      else if (dr) {
-        if (((Xt = et((_o) => _o.origin === dr && _o.group !== "pinned")), Xt >= 0)) to = rows_2[Xt].group;
-      } else if (Ve?.kind === "job")
-        if (Ve.group === "pinned")
-          to =
-            rows_2.find((Go) => Go.kind === "header" && Go.origin === Ve.origin && Go.group !== "pinned")
-              ?.group ?? null;
-        else to = Ve.group;
-      else if (Ve?.kind === "header") {
-        if (Ve.group !== "pinned") ((to = Ve.group), (Xt = focusedIdx));
-      }
-      if (Xt < 0) return;
-      if (((ke.followId = null), (ke.followOrigin = to), Xt !== focusedIdx)) ke.focus(Xt);
-    }, [hasComposedDispatch, byState, dr]));
+    }
+    if (Xt < 0) return;
+    ke.followId = null;
+    ke.followOrigin = to;
+    if (Xt !== focusedIdx) ke.focus(Xt);
+  }, [hasComposedDispatch, byState, mentionedTemplate]);
   let Vu =
     previewOpen &&
     (filtered.length === 0 ||
-      (focusedRow !== void 0 && focusedRow.kind !== "job") ||
-      (focusedRow === void 0 && (ke.followId === null || mi(ke.followId) < 0)));
+      (focusedRow !== undefined && focusedRow.kind !== "job") ||
+      (focusedRow === undefined && (ke.followId === null || mi(ke.followId) < 0)));
   P(() => {
-    if (Vu) Ue.setPreviewOpen(!1);
+    if (Vu) Ue.setPreviewOpen(false);
   }, [Vu]);
-  let Bu = R(!1);
+  let Bu = R(false);
   P(() => {
     if (ke.restoreAttempts >= 2 || jobs === null) return;
-    let ee = !!initialJobId?.startsWith("remote-"),
-      Ve = ee && St.some((to) => to.id === initialJobId);
+    let ee = !!initialJobId?.startsWith("remote-");
+    let Ve = ee && St.some((to) => to.id === initialJobId);
     if (ee && !remoteListLoaded && !Ve) return;
     if (!initialJobId && activeTab === "remote" && !rows_2.some((to) => to.kind === "job")) {
       Bu.current = St.length > 0;
@@ -1920,352 +2130,403 @@ function FleetView({
       return;
     }
     if (!ee && initialJobId && jobs === ke.restoreCountedJobs) return;
-    ((ke.restoreCountedJobs = jobs), ke.restoreAttempts++);
+    ke.restoreCountedJobs = jobs;
+    ke.restoreAttempts++;
     let et = () => {
       let to = rows_2[homeIdx];
       if (hasNameFilter) {
         ke.followPick(homeIdx, to);
         return;
       }
-      if ((ke.focus(homeIdx), to?.kind === "job")) ((ke.followId = to.job.id), (ke.followOrigin = null));
-      else if (to?.kind === "earlier") ((ke.followId = null), (ke.followOrigin = null));
-      else if (to?.kind === "header") ((ke.followId = null), (ke.followOrigin = to.group));
+      ke.focus(homeIdx);
+      if (to?.kind === "job") {
+        ke.followId = to.job.id;
+        ke.followOrigin = null;
+      } else if (to?.kind === "earlier") {
+        ke.followId = null;
+        ke.followOrigin = null;
+      } else if (to?.kind === "header") {
+        ke.followId = null;
+        ke.followOrigin = to.group;
+      }
     };
     if (!initialJobId) {
-      ((ke.restoreAttempts =
-        rows_2.some((to) => to.kind === "job" || to.kind === "earlier") || !De.earlier.pending ? 2 : 1),
-        et());
+      ke.restoreAttempts =
+        rows_2.some((to) => to.kind === "job" || to.kind === "earlier") || !De.earlier.pending ? 2 : 1;
+      et();
       return;
     }
     let Xt = mi(initialJobId);
-    if (Xt >= 0) ((ke.restoreAttempts = 2), ke.focus(Xt), (ke.followId = initialJobId));
-    else if (ke.restoreAttempts >= 2) et();
+    if (Xt >= 0) {
+      ke.restoreAttempts = 2;
+      ke.focus(Xt);
+      ke.followId = initialJobId;
+    } else if (ke.restoreAttempts >= 2) et();
   }, [jobs, St, remoteListLoaded, activeTab, initialJobId, homeIdx]);
   let Za = {
+    editor: We,
+    roster,
+    selection: ke,
+    view: Ue,
+    attach: $e,
+    deleteConfirm: He,
+    storageV5,
+    onAction,
+    pendings,
+    mountAt: kn,
+    canonicalLauncherCwd: Kt,
+    cwdFilter,
+    parseScope: {
+      templates: Jn,
+      allRepos,
+      routines: _n,
+    },
+  };
+  let openEarlier = (ee, Ve) => openEarlierSession(Za, ee, Ve);
+  let ns = (ee, Ve) => {
+    let et = queryIsFilter && ee ? groupOf.get(ee.id) : undefined;
+    if (et !== undefined) ke.uncollapse(qt(et));
+    attachToJob(Za, ee, Ve);
+  };
+  let openNewSessionRow = (ee) => openNewSession(Za, ee);
+  let td = autoOpenJobId !== undefined && (!autoOpened || attachingJobId !== null);
+  P(() => {
+    if ($e.getSnapshot().autoOpened || !autoOpenJobId || jobs === null) return;
+    $e.markAutoOpened();
+    ns(jobs.find((job) => job.id === autoOpenJobId));
+  }, [autoOpenJobId, jobs]);
+  let ju = jobs !== null && !td && onlyOrigin && activeTab !== "remote" && !query && !me;
+  let any_2 = filtered.some((ee) => ee.id === initialJobId);
+  P(() => {
+    if (!ju || !Ue.firstImpression("empty")) return;
+    logEvent("tengu_fleetview_empty_state_shown", {
+      skeleton: isOnboarding,
+      has_origin: any_2,
+    });
+  }, [ju, isOnboarding, any_2]);
+  let od = () => ({
+    submit: {
       editor: We,
-      roster: we,
+      roster,
       selection: ke,
       view: Ue,
       attach: $e,
-      deleteConfirm: He,
-      storageV5: storageV5,
-      onAction: onAction,
-      pendings: pendings,
-      mountAt: kn,
+      storageV5,
+      credentials,
+      onAction,
+      exit: go,
+      relaunchForUpdate: mu,
+      searchKeyDown: handleKeyDown,
+      willInsertNewline,
+      vimMode,
+      dispatchInputActive: Nn,
       canonicalLauncherCwd: Kt,
-      cwdFilter: cwdFilter,
-      parseScope: { templates: Jn, allRepos: allRepos, routines: _n },
+      launcherCwd: cwd,
+      effectiveCwd: oo,
+      scopedFallbackOrigin: At,
+      cwdFilter,
+      dispatchDefaults,
+      query,
+      dispatch: cr,
+      templates: Jn,
+      allRepos,
+      routines: _n,
+      templateCache: templates,
+      suggestions,
+      skills: La,
+      modelArgMatch,
+      modelSuggestions: fn,
+      pickSuggestion,
+      applySuggestion: bu,
+      closeAgentBrowse: () => ui(false),
+      jobSessionIds,
+      builtRows: built.rows,
+      bumpSuggGen: hu,
+      mountAt: kn,
+      focusedRow,
+      focused,
+      isOnboarding,
+      toggleCollapse,
+      openEarlier,
+      openNewSessionRow,
+      openOrRespawn: ns,
     },
-    Ju = (ee, Ve) => openEarlierSession(Za, ee, Ve),
-    ns = (ee, Ve) => {
-      let et = queryIsFilter && ee ? groupOf.get(ee.id) : void 0;
-      if (et !== void 0) ke.uncollapse(qt(et));
-      attachToJob(Za, ee, Ve);
-    },
-    Hu = (ee) => openNewSession(Za, ee),
-    td = autoOpenJobId !== void 0 && (!autoOpened || attachingJobId !== null);
-  P(() => {
-    if ($e.getSnapshot().autoOpened || !autoOpenJobId || jobs === null) return;
-    ($e.markAutoOpened(), ns(jobs.find((ee) => ee.id === autoOpenJobId)));
-  }, [autoOpenJobId, jobs]);
-  let ju = jobs !== null && !td && onlyOrigin && activeTab !== "remote" && !query && !me,
-    any_2 = filtered.some((ee) => ee.id === initialJobId);
-  P(() => {
-    if (!ju || !Ue.firstImpression("empty")) return;
-    logEvent("tengu_fleetview_empty_state_shown", { skeleton: isOnboarding, has_origin: any_2 });
-  }, [ju, isOnboarding, any_2]);
-  let od = () => ({
-      submit: {
-        editor: We,
-        roster: we,
-        selection: ke,
-        view: Ue,
-        attach: $e,
-        storageV5: storageV5,
-        credentials: credentials,
-        onAction: onAction,
-        exit: go,
-        relaunchForUpdate: mu,
-        searchKeyDown: handleKeyDown,
-        willInsertNewline: willInsertNewline,
-        vimMode: vimMode,
-        dispatchInputActive: Nn,
-        canonicalLauncherCwd: Kt,
-        launcherCwd: Ne,
-        effectiveCwd: oo,
-        scopedFallbackOrigin: At,
-        cwdFilter: cwdFilter,
-        dispatchDefaults: dispatchDefaults,
-        query: query,
-        dispatch: cr,
-        templates: Jn,
-        allRepos: allRepos,
-        routines: _n,
-        templateCache: templates,
-        suggestions: suggestions,
-        skills: La,
-        modelArgMatch: modelArgMatch,
-        modelSuggestions: fn,
-        pickSuggestion: mg,
-        applySuggestion: bu,
-        closeAgentBrowse: () => ui(!1),
-        jobSessionIds: jobSessionIds,
-        builtRows: built.rows,
-        bumpSuggGen: hu,
-        mountAt: kn,
-        focusedRow: focusedRow,
-        focused: focused,
-        isOnboarding: isOnboarding,
-        toggleCollapse: bo,
-        openEarlier: Ju,
-        openNewSessionRow: Hu,
-        openOrRespawn: ns,
-      },
-      deleteConfirm: He,
-      actions: Ga,
-      rows: rows_2,
-      focusedIdx: focusedIdx,
-      altOpenOrigin: altOpenOrigin,
-      byGroup: byGroup,
-      byState: byState,
-      hasComposedDispatch: hasComposedDispatch,
-      dispatchRepoCwd: dr,
-      headerJobs: headerJobs,
-      groupOf: groupOf,
-      groupSuggestions: Wo,
-      previewOpen: previewOpen,
-      helpOpen: helpOpen,
-      debugOpen: debugOpen,
-      groupEdit: groupEdit,
-      renamingJobId: Xe,
-      attachingJobId: attachingJobId,
-      showAllAgents: pr,
-      jobs: jobs,
-      pendings: pendings,
-      keybindings: ae,
-      simpleView: me,
-      groupsEnabled: Ot,
-      hasCredentials: Iu,
-      termRows: rows,
-      canGoBack: canGoBack,
-      originJobId: originJobId,
-      originSpawn: originSpawn,
-      renameKeyDown: handleKeyDown_3,
-      groupKeyDown: handleKeyDown_4,
-      setQuery: setQuery,
-      enterInsertMode: enterInsertMode,
-      setRenameDraft: setQuery_2,
-      setGroupDraft: setQuery_3,
-      readRenameDraft: () => queryRef_2.current,
-      readGroupDraft: () => queryRef_3.current,
-      pressExitKey: Po,
-      switchTab: yu,
-      clearRename: xe,
-      clearGroupEdit: ar,
-      headerArmId: it,
-      ck: qt,
-      setShowAllAgents: ui,
-      setSelectedSuggestion: gu,
-      setHoveredSuggestionId: Ba,
-      attachPastedImage: So,
-    }),
-    Mg = (ee) => handleFleetKey(od(), ee),
-    { handleKeyDown: handleKeyDown_5, handlePaste: handlePaste_4 } = usePasteHandler({
-      handleKeyDown: Mg,
-      onPaste: (ee) =>
-        handlePasteIntoDispatch(
-          { editor: We, dispatchInputActive: Nn, insertAtCursor: (Ve) => handlePaste(new PasteEvent(Ve)) },
-          ee,
-        ),
-      onImagePaste: So,
-    }),
-    Gu = (ee) => {
-      let snapshot = Ue.getSnapshot();
-      if (snapshot.resumePicker !== null || snapshot.settingPicker !== null) return;
-      if (Xe !== null || snapshot.renaming !== null) {
-        handlePaste_2(ee);
-        return;
+    deleteConfirm: He,
+    actions: Ga,
+    rows: rows_2,
+    focusedIdx,
+    altOpenOrigin,
+    byGroup,
+    byState,
+    hasComposedDispatch,
+    dispatchRepoCwd: mentionedTemplate,
+    headerJobs,
+    groupOf,
+    groupSuggestions: Wo,
+    previewOpen,
+    helpOpen,
+    debugOpen,
+    groupEdit,
+    renamingJobId: jobId,
+    attachingJobId,
+    showAllAgents: pr,
+    jobs,
+    pendings,
+    keybindings,
+    simpleView: me,
+    groupsEnabled: Ot,
+    hasCredentials,
+    termRows: rows,
+    canGoBack,
+    originJobId,
+    originSpawn,
+    renameKeyDown: handleKeyDown_3,
+    groupKeyDown: handleKeyDown_4,
+    setQuery,
+    enterInsertMode,
+    setRenameDraft: setQuery_2,
+    setGroupDraft: setQuery_3,
+    readRenameDraft: () => queryRef_2.current,
+    readGroupDraft: () => queryRef_3.current,
+    pressExitKey: Po,
+    switchTab,
+    clearRename: xe,
+    clearGroupEdit: ar,
+    headerArmId,
+    ck: qt,
+    setShowAllAgents: ui,
+    setSelectedSuggestion: gu,
+    setHoveredSuggestionId: Ba,
+    attachPastedImage: So,
+  });
+  let handleKeyDown_5 = (event) => handleFleetKey(od(), event);
+  let { handleKeyDown: handleKeyDown_6, handlePaste: handlePaste_4 } = usePasteHandler({
+    handleKeyDown: handleKeyDown_5,
+    onPaste: (ee) =>
+      handlePasteIntoDispatch(
+        {
+          editor: We,
+          dispatchInputActive: Nn,
+          insertAtCursor: (Ve) => handlePaste(new PasteEvent(Ve)),
+        },
+        ee,
+      ),
+    onImagePaste: So,
+  });
+  let onPaste = (ee) => {
+    let snapshot = Ue.getSnapshot();
+    if (snapshot.resumePicker !== null || snapshot.settingPicker !== null) return;
+    if (jobId !== null || snapshot.renaming !== null) {
+      handlePaste_2(ee);
+      return;
+    }
+    if (groupEdit !== null) {
+      Ue.setGroupPickIdx(-1);
+      if (snapshot.groupPristine) {
+        setQuery_3("");
+        Ue.setGroupPristine(false);
       }
-      if (groupEdit !== null) {
-        if ((Ue.setGroupPickIdx(-1), snapshot.groupPristine)) (setQuery_3(""), Ue.setGroupPristine(!1));
-        handlePaste_3(ee);
-        return;
-      }
-      if (helpOpen) Ue.setHelpOpen(!1);
-      handlePaste_4(ee);
-    },
-    Dg = jobs !== null && !td,
-    jE = R(null),
-    WE = useInputClock(),
-    { subscribeFrames: subscribeFrames } = Se(kp);
+      handlePaste_3(ee);
+      return;
+    }
+    if (helpOpen) Ue.setHelpOpen(false);
+    handlePaste_4(ee);
+  };
+  let Dg = jobs !== null && !td;
+  let jE = R(null);
+  let inputClock = useInputClock();
+  let { subscribeFrames } = Se(kp);
   zt(() => {
     return;
   }, [Dg, subscribeFrames]);
-  let Vg = (ee) => !1;
+  let Vg = (ee) => false;
   if (jobs === null || td)
-    return e(Box, {
+    return jsxProd_default(Box, {
       tabIndex: 0,
-      autoFocus: !0,
+      autoFocus: true,
       onKeyDownCapture: _u,
-      onKeyDown: (Ve) => {
-        if (Ve.ctrl && Ve.key === "d" && (me || (jobs === null && We.getSnapshot().query === ""))) {
-          (Ve.stopImmediatePropagation(), Po("Ctrl-D"));
+      onKeyDown: (event) => {
+        if (event.ctrl && event.key === "d" && (me || (jobs === null && We.getSnapshot().query === ""))) {
+          event.stopImmediatePropagation();
+          Po("Ctrl-D");
           return;
         }
-        if (me && (Ve.name === "escape" || (Ve.ctrl && Ve.key === "c"))) {
-          (Ve.stopImmediatePropagation(), Po("Ctrl-C"));
+        if (me && (event.name === "escape" || (event.ctrl && event.key === "c"))) {
+          event.stopImmediatePropagation();
+          Po("Ctrl-C");
           return;
         }
-        handleKeyDown(Ve);
+        handleKeyDown(event);
       },
-      onPaste: Gu,
+      onPaste,
     });
-  let Bg =
-      suggestions.length > 0
-        ? e(Box, {
-            paddingLeft: 2,
-            marginBottom: 1,
-            children: e(PromptInputFooterSuggestions, {
-              suggestions: suggestions.map((ee) => ({
-                id: `${ee.kind}:${ee.name}`,
-                displayText: modelArgMatch ? ee.name : `${Id[ee.kind]}${ee.name}`,
-                description: `${SUGGESTION_KIND_LABELS[ee.kind]} \xB7 ${ee.description}`,
-              })),
-              selectedSuggestion: Math.min(Da, suggestions.length - 1),
-              maxColumnWidth: 35,
-              noPad: !0,
-              hoveredId: Va,
-              onHoverChange: Ba,
-              onSelect: (ee) => {
-                let Ve = suggestions[ee];
-                if (Ve) (bu(Ve), ui(!1));
-              },
-            }),
-          })
-        : null,
-    Jg = new Set([
-      ...templateNames,
-      ..._n.map((ee) => ee.name.toLowerCase()),
-      ...repoNames.map((ee) => ee.toLowerCase()),
-    ]),
-    nd = isBashDispatch ? [] : mentionRanges(query, Jg),
-    Hg = isBashDispatch
-      ? []
-      : cr?.matched && firstWord === cr.template.name.toLowerCase()
+  let suggestionList =
+    suggestions.length > 0
+      ? jsxProd_default(Box, {
+          paddingLeft: 2,
+          marginBottom: 1,
+          children: jsxProd_default(PromptInputFooterSuggestions, {
+            suggestions: suggestions.map((suggestion) => ({
+              id: `${suggestion.kind}:${suggestion.name}`,
+              displayText: modelArgMatch
+                ? suggestion.name
+                : `${SUGGESTION_KIND_LABELS[suggestion.kind]}${suggestion.name}`,
+              description: `${SUGGESTION_KIND_LABELS_2[suggestion.kind]} \xB7 ${suggestion.description}`,
+            })),
+            selectedSuggestion: Math.min(Da, suggestions.length - 1),
+            maxColumnWidth: 35,
+            noPad: true,
+            hoveredId: Va,
+            onHoverChange: Ba,
+            onSelect: (ee) => {
+              let Ve = suggestions[ee];
+              if (Ve) {
+                bu(Ve);
+                ui(false);
+              }
+            },
+          }),
+        })
+      : null;
+  let Jg = new Set([
+    ...templateNames,
+    ..._n.map((ee) => ee.name.toLowerCase()),
+    ...repoNames.map((repoName) => repoName.toLowerCase()),
+  ]);
+  let nd = isBashDispatch ? [] : mentionRanges(query, Jg);
+  let highlights = isBashDispatch
+    ? []
+    : cr?.matched && firstWord === cr.template.name.toLowerCase()
+      ? [[0, firstWord.length], ...nd]
+      : isSlashQuery
         ? [[0, firstWord.length], ...nd]
-        : isSlashQuery
-          ? [[0, firstWord.length], ...nd]
-          : [...newSessionPrefixRanges(query), ...nd];
-  return r(Box, {
+        : [...newSessionPrefixRanges(query), ...nd];
+  return jsxProd_default_2(Box, {
     ref: Xr,
     flexDirection: "column",
     flexGrow: 1,
     tabIndex: 0,
-    autoFocus: !0,
+    autoFocus: true,
     onKeyDownCapture: (ee) => {
       if (Vg(ee)) return;
-      (_u(ee), handleKeyDown_2(ee));
+      _u(ee);
+      handleKeyDown_2(ee);
     },
-    onKeyDown: handleKeyDown_5,
-    onPaste: Gu,
-    onWheel: (ee) => {
+    onKeyDown: handleKeyDown_6,
+    onPaste,
+    onWheel: (event) => {
       if (previewOpen) return;
-      (ee.preventDefault(), Qr.current?.scrollBy(ee.deltaY > 0 ? 3 : -3));
+      event.preventDefault();
+      Qr.current?.scrollBy(event.deltaY > 0 ? 3 : -3);
     },
     children: [
-      e(FleetRowList, {
+      jsxProd_default(FleetRowList, {
         owners: vt,
-        layout: fr,
+        layout: fleetRows,
         scrollRef: Qr,
-        header: e(FleetComposer, {
+        header: jsxProd_default(FleetComposer, {
           editor: We,
-          layout: fr,
+          layout: fleetRows,
           simpleView: me,
-          dispatchDefaults: dispatchDefaults,
+          dispatchDefaults,
           targetCwd: Bn,
-          launcherCwd: Ne,
+          launcherCwd: cwd,
           canonicalLauncherCwd: Kt,
-          originJobId: originJobId,
+          originJobId,
         }),
-        renameInput: { draft: query_2, cursor: cursorOffset },
+        renameInput: {
+          draft: query_2,
+          cursor: cursorOffset,
+        },
         groupInput: {
           draft: query_3,
           cursor: cursorOffset_2,
           suggestions: Wo,
           reserved: Zi,
-          isNew: Ma,
-          matchesExisting: included,
-          panelOpen: pu,
+          isNew,
+          matchesExisting,
+          panelOpen,
         },
-        initialJobId: initialJobId,
-        cwdFilter: cwdFilter,
+        initialJobId,
+        cwdFilter,
         simpleView: me,
         endsWithOlderSessionsLine: Ou,
-        hasCredentials: Iu,
+        hasCredentials,
         mountAt: kn,
-        actions: { toggleCollapse: bo, openOrRespawn: ns, openEarlier: Ju, openNewSessionRow: Hu },
+        actions: {
+          toggleCollapse,
+          openOrRespawn: ns,
+          openEarlier,
+          openNewSessionRow,
+        },
       }),
-      e(FleetSearchInput, {
+      jsxProd_default(FleetSearchInput, {
         owners: vt,
-        layout: fr,
+        layout: fleetRows,
         onCursorOffsetChange: setCursorOffset,
-        highlights: Hg,
-        voice: { interimRange: pn.interimRange, showCursor: Oa },
-        isTerminalFocused: wo,
+        highlights,
+        voice: {
+          interimRange: voiceIntegration.interimRange,
+          showCursor,
+        },
+        isTerminalFocused: terminalFocus,
         simpleView: me,
-        showRemoteTabs: Ya,
-        switchTab: yu,
+        showRemoteTabs,
+        switchTab,
         remoteJobs: St,
         hasGroups: (jobs ?? []).some((ee) => !!ee.state.group),
-        suggestionList: Bg,
+        suggestionList,
         cloudListNotice: Tu,
       }),
-      e(FleetBody, {
+      jsxProd_default(FleetBody, {
         owners: vt,
-        layout: fr,
-        footer: e(FleetFooter, {
+        layout: fleetRows,
+        footer: jsxProd_default(FleetFooter, {
           owners: vt,
-          layout: fr,
+          layout: fleetRows,
           simpleView: me,
-          canGoBack: canGoBack,
-          dispatchDefaults: dispatchDefaults,
-          launcherCwd: Ne,
-          storageV5: storageV5,
-          groupInput: { draft: query_3, suggestions: Wo },
+          canGoBack,
+          dispatchDefaults,
+          launcherCwd: cwd,
+          storageV5,
+          groupInput: {
+            draft: query_3,
+            suggestions: Wo,
+          },
           suggestionsOpen: suggestions.length > 0,
         }),
         simpleView: me,
         groupsEnabled: Ot,
-        showRemoteTabs: Ya,
-        canGoBack: canGoBack,
+        showRemoteTabs,
+        canGoBack,
         canMention: Jn.length + _n.length + Object.keys(allRepos).length > 0,
-        isTerminalFocused: wo,
+        isTerminalFocused: terminalFocus,
         awayLoop: Oe,
-        storageV5: storageV5,
+        storageV5,
         onOpen: ns,
-        onStop: gg,
+        onStop,
       }),
     ],
   });
 }
 //@ chunk-93kwxas0.js:199227-199239 placement
-var co = null;
+var awayLoopApi = null;
 //@ chunk-93kwxas0.js:199239-199279 placement
 function seedHostJobs(h, E, k) {
   ensureFleetRoster(h, k).seedJobs(E);
 }
 //@ chunk-93kwxas0.js:199279-199412 placement
-function remountClearSeq(h, E, k) {
+function remountClearSeq(h, lastFrameFillsCurrentViewport, k) {
   if (h) return enterAltScreenSequence();
   let rows = getTerminalSize(process.stdout, null).rows;
   if (rows !== process.stdout.rows) return "";
-  return E && !k ? eraseViewportInPlace(rows) : "";
+  return lastFrameFillsCurrentViewport && !k ? eraseViewportInPlace(rows) : "";
 }
 //@ chunk-93kwxas0.js:199412-209165 placement
 async function mountFleetView(h, E) {
-  let k = !1;
+  let k = false;
   function C() {
-    k = !0;
+    k = true;
   }
   process.stdout.on("resize", C);
   using x = {
@@ -2273,30 +2534,34 @@ async function mountFleetView(h, E) {
       process.stdout.removeListener("resize", C);
     },
   };
-  let T = "inline",
-    A = Qu();
-  if (!A.ok) {
-    await reportFatalAndExit(A.error);
+  let presentation = "inline";
+  let fatalExit = prepareFatalExit();
+  if (!fatalExit.ok) {
+    await reportFatalAndExit(fatalExit.error);
     return;
   }
-  if (
-    ((await import("./chunk-7dsst868.js")).registerToolHosts(),
-    initBuiltinPlugins(),
-    initBundledSkills(),
-    isAgentSwarmsEnabled() && !hasTeammateModeSnapshot())
-  )
-    captureTeammateModeSnapshot();
-  (pxs(E?.dispatchExtraArgs ?? []),
-    logEvent("tengu_bg_agent_action", {
-      action: lit("list_open"),
-      mode: fromEnum(getGlobalConfig().fleetViewGroupMode ?? "state"),
-    }));
-  let L = E?.host ?? createFleetViewHost(),
-    V = getRootSession(),
-    host = V.host,
-    U = xo(V);
-  if ((nc(L.resultSeen, E?.entryChannel), !getGlobalConfig().hasOpenedAgentsView))
-    await saveGlobalConfig((Fe) => ({ ...Fe, hasOpenedAgentsView: !0 }), E?.storageV5);
+  (await import("./chunk-7dsst868.js")).registerToolHosts();
+  initBuiltinPlugins();
+  initBundledSkills();
+  if (isAgentSwarmsEnabled() && !hasTeammateModeSnapshot()) captureTeammateModeSnapshot();
+  setSpareExtraArgs(E?.dispatchExtraArgs ?? []);
+  logEvent("tengu_bg_agent_action", {
+    action: lit("list_open"),
+    mode: fromEnum(getGlobalConfig().fleetViewGroupMode ?? "state"),
+  });
+  let L = E?.host ?? createFleetViewHost();
+  let rootSession = getRootSession();
+  let host = rootSession.host;
+  let project = getSessionProject(rootSession);
+  markJobFinished(L.resultSeen, E?.entryChannel);
+  if (!getGlobalConfig().hasOpenedAgentsView)
+    await saveGlobalConfig(
+      (Fe) => ({
+        ...Fe,
+        hasOpenedAgentsView: true,
+      }),
+      E?.storageV5,
+    );
   let N = [];
   function X() {
     let Fe;
@@ -2308,154 +2573,204 @@ async function mountFleetView(h, E) {
       N.push(Fe);
     }
   }
-  (process.stdin.on("readable", X),
-    await composePolicyLimitsForFleet({ storageV5: E?.storageV5, credentials: E?.credentials }));
-  let K = E?.cwdFilter
-      ? await canonicalizePath(resolve(E.cwdFilter), getRealPathOptions(E?.storageV5))
-      : void 0,
-    W = resolveDispatchPermissionMode(E?.dispatchDefaults),
-    z = isStorageV5Enabled() ? E?.storageV5 : void 0;
-  (registerCleanup(z ? () => yAr(z) : yAr), registerCleanup(openDaemonLease("claude agents")));
-  let oe = h,
-    ge = E?.screen,
-    se = (Fe) => {
-      if (ge) ge.update(Fe);
-      else ge = showScreen(oe, Fe);
-    },
-    CLAUDE_AGENTS_SELECT = env.CLAUDE_AGENTS_SELECT,
-    ae = j6s(),
-    me = E?.autoOpenJobId ?? ae?.short,
-    Je = ae?.left,
-    le = me !== void 0 && E?.canGoBack && ae === void 0,
-    Oe = [],
-    De = new Set(),
-    we,
-    Re = !1,
-    je = !1,
-    st = new Set(),
-    mt = () =>
-      co !== null &&
-      !je &&
-      tgo({ presentation: T, rows: getTerminalSize(process.stdout, null).rows, embedded: !1 }),
-    Ye = (Fe, Rt) => {
-      if ((oe.unmount(), Rt && process.stdin.isTTY)) setRawModeSafe(process.stdin, !1);
-      if (Rt && shouldUseFullscreenByDefault()) process.stdout.write(exitAltScreenSequence());
-      if (Fe !== void 0)
-        process.stderr.write(`${Fe}
+  process.stdin.on("readable", X);
+  await composePolicyLimitsForFleet({
+    storageV5: E?.storageV5,
+    credentials: E?.credentials,
+  });
+  let cwdFilter = E?.cwdFilter
+    ? await canonicalizePath(resolve(E.cwdFilter), getRealPathOptions(E?.storageV5))
+    : undefined;
+  let launch = resolveDispatchPermissionMode(E?.dispatchDefaults);
+  let storageV5 = isStorageV5Enabled() ? E?.storageV5 : undefined;
+  registerCleanup(storageV5 ? () => discardSpare(storageV5) : discardSpare);
+  registerCleanup(openDaemonLease("claude agents"));
+  let oe = h;
+  let screen = E?.screen;
+  let se = (Fe) => {
+    if (screen) screen.update(Fe);
+    else screen = showScreen(oe, Fe);
+  };
+  let CLAUDE_AGENTS_SELECT = env.CLAUDE_AGENTS_SELECT;
+  let ae = noRemoteSessionCommands();
+  let me = E?.autoOpenJobId ?? ae?.short;
+  let left = ae?.left;
+  let le = me !== undefined && E?.canGoBack && ae === undefined;
+  let Oe = [];
+  let De = new Set();
+  let we;
+  let Re = false;
+  let je = false;
+  let st = new Set();
+  let mt = () =>
+    awayLoopApi !== null &&
+    !je &&
+    neverEmbedded({
+      presentation,
+      rows: getTerminalSize(process.stdout, null).rows,
+      embedded: false,
+    });
+  let Ye = (Fe, Rt) => {
+    oe.unmount();
+    if (Rt && process.stdin.isTTY) setRawModeSafe(process.stdin, false);
+    if (Rt && shouldUseFullscreenByDefault()) process.stdout.write(exitAltScreenSequence());
+    if (Fe !== undefined)
+      process.stderr.write(`${Fe}
 `);
-    },
-    Lt = !1,
-    dt = CLAUDE_AGENTS_SELECT,
-    Dt = rs(),
-    eo = 0,
-    Wt = (Fe) => {
-      let Rt = {
-        ...fleetAttachFields(Fe.id, dt, eo),
-        ...takeNotificationLatency(Dt, Fe.state.sessionId, Date.now()),
-      };
-      return (eo++, Rt);
-    },
-    ke = E?.originJobId,
-    Ge = E?.originSpawn;
+  };
+  let Lt = false;
+  let dt = CLAUDE_AGENTS_SELECT;
+  let notifiedState = createNotifiedState();
+  let eo = 0;
+  let Wt = (job) => {
+    let Rt = {
+      ...fleetAttachFields(job.id, dt, eo),
+      ...takeNotificationLatency(notifiedState, job.state.sessionId, Date.now()),
+    };
+    eo++;
+    return Rt;
+  };
+  let originJobId = E?.originJobId;
+  let originSpawn = E?.originSpawn;
   delete process.env.CLAUDE_AGENTS_SELECT;
-  let yt,
-    Bt = await readJobDraft(await canonicalizePath(getCwd(), getRealPathOptions(E?.storageV5)), E?.storageV5),
-    lt = ensureFleetRoster(L, E?.storageV5);
-  ws(L, lt, E?.storageV5, Bt?.collapsed);
-  let Tt = Rs(L, { query: Bt?.q || void 0 }),
-    Et = Ss(L);
+  let relaunchTab;
+  let jobDraft = await readJobDraft(
+    await canonicalizePath(getCwd(), getRealPathOptions(E?.storageV5)),
+    E?.storageV5,
+  );
+  let roster = ensureFleetRoster(L, E?.storageV5);
+  ensureFleetSelection(L, roster, E?.storageV5, jobDraft?.collapsed);
+  let fleetEditor = ensureFleetEditor(L, {
+    query: jobDraft?.q || undefined,
+  });
+  let fleetLiveStatus = ensureFleetLiveStatus(L);
   sweepJobDrafts();
   let Ot;
   process.stdin.off("readable", X);
-  let Yt = !1;
+  let typedAhead = false;
   while (N.length) process.stdin.unshift(N.pop());
   let Ue;
-  if (me !== void 0) {
-    if (lt.jobs === null) lt.seedJobs(await listJobs(void 0, E?.storageV5));
-    let Fe = lt.jobs?.find((Rt) => Rt.id === me);
-    if (Fe) {
-      let startTime = performance.now(),
-        Vt = randomUUID();
+  if (me !== undefined) {
+    if (roster.jobs === null) roster.seedJobs(await listJobs(undefined, E?.storageV5));
+    let found = roster.jobs?.find((job) => job.id === me);
+    if (found) {
+      let gestureT0 = performance.now();
+      let Vt = randomUUID();
       startAttachBeacon(Vt, "fleet", E?.storageV5).catch(() => {});
-      let Be = await safeRespawnBgSession(Fe.id, { knownState: Fe.state }, E?.storageV5);
-      if (co && ae !== void 0) {
-        if (!Be.ok && !Be.alive) (await co.backToCloudSession(ae.left, !1, E?.storageV5), (Je = void 0));
+      let Be = await safeRespawnBgSession(
+        found.id,
+        {
+          knownState: found.state,
+        },
+        E?.storageV5,
+      );
+      if (awayLoopApi && ae !== undefined) {
+        if (!Be.ok && !Be.alive) {
+          await awayLoopApi.backToCloudSession(ae.left, false, E?.storageV5);
+          left = undefined;
+        }
         if (shouldUseFullscreenByDefault()) process.stdout.write(enterAltScreenSequence());
       }
-      Ue = { type: "open", job: Fe, respawnResult: Be, gestureT0: startTime, gestureId: Vt };
-    } else if (co && ae !== void 0) await co.backToCloudSession(ae.left, !1, E?.storageV5);
-    else if (co && ke !== void 0 && (mt() || parseSwitchTarget(me).kind === "cloud")) {
-      let sessionTabsNext = await co.sessionTabsNext({
-          ending: { kind: "asked", intent: parseSwitchTarget(me) },
-          leftJobId: ke,
-          visited: [],
-          ended: De,
-          landed: void 0,
-          storageV5: E?.storageV5,
-        }),
-        Vt =
-          sessionTabsNext.kind === "cloud"
-            ? await co.stayAfterCloudTab(
-                sessionTabsNext,
-                E?.dispatchExtraArgs ?? [],
-                !1,
-                () => Ge?.settled === !0 && !Ge.ok,
-                E?.storageV5,
-              )
-            : sessionTabsNext;
+      Ue = {
+        type: "open",
+        job: found,
+        respawnResult: Be,
+        gestureT0,
+        gestureId: Vt,
+      };
+    } else if (awayLoopApi && ae !== undefined)
+      await awayLoopApi.backToCloudSession(ae.left, false, E?.storageV5);
+    else if (awayLoopApi && originJobId !== undefined && (mt() || parseSwitchTarget(me).kind === "cloud")) {
+      let Rt = await awayLoopApi.sessionTabsNext({
+        ending: {
+          kind: "asked",
+          intent: parseSwitchTarget(me),
+        },
+        leftJobId: originJobId,
+        visited: [],
+        ended: De,
+        landed: undefined,
+        storageV5: E?.storageV5,
+      });
+      let Vt =
+        Rt.kind === "cloud"
+          ? await awayLoopApi.stayAfterCloudTab(
+              Rt,
+              E?.dispatchExtraArgs ?? [],
+              false,
+              () => originSpawn?.settled === true && !originSpawn.ok,
+              E?.storageV5,
+            )
+          : Rt;
       if (Vt.kind === "open") {
-        if (Vt.jobs) lt.seedJobs(Vt.jobs);
-        let jobToOpen = await co.jobToOpen(Vt.jobId, lt.jobs, E?.storageV5);
-        if (jobToOpen) ((Ue = { type: "open", job: jobToOpen }), (Re = !Vt.asked), (Lt = Vt.booting));
+        if (Vt.jobs) roster.seedJobs(Vt.jobs);
+        let Be = await awayLoopApi.jobToOpen(Vt.jobId, roster.jobs, E?.storageV5);
+        if (Be) {
+          Ue = {
+            type: "open",
+            job: Be,
+          };
+          Re = !Vt.asked;
+          Lt = Vt.booting;
+        }
       }
-      if (Ue === void 0) {
-        if (Ge) Ge.resumeHintRequested = !0;
-        Ye(co.NO_SESSION_QUIT_LINE, !1);
+      if (Ue === undefined) {
+        if (originSpawn) originSpawn.resumeHintRequested = true;
+        Ye(awayLoopApi.NO_SESSION_QUIT_LINE, false);
         return;
       }
     }
   }
-  let Qt = !1,
-    tt,
-    ze = Ue !== void 0 && ke !== void 0;
+  let Qt = false;
+  let tt;
+  let ze = Ue !== undefined && originJobId !== undefined;
   for (;;) {
-    if (Ue === void 0 && ze && mt()) {
-      Ye(co?.NO_SESSION_QUIT_LINE, !0);
+    if (Ue === undefined && ze && mt()) {
+      Ye(awayLoopApi?.NO_SESSION_QUIT_LINE, true);
       break;
     }
-    if (((je ||= Ue === void 0), Qt)) or();
-    ((tt = checkDispatchDefaultsChanged(tt, W, E?.storageV5)), (Qt = !0));
+    je ||= Ue === undefined;
+    if (Qt) invalidateCommandNames();
+    tt = checkDispatchDefaultsChanged(tt, launch, E?.storageV5);
+    Qt = true;
     let Fe =
       Ue ??
-      (await new Promise((vt) => {
-        (se(
-          e(FleetViewScreen, {
+      (await new Promise((resolve) => {
+        se(
+          jsxProd_default(FleetViewScreen, {
             killRing: L.killRing,
-            children: e(
+            children: jsxProd_default(
               AppRoot,
               {
-                host: host,
-                project: U,
+                host,
+                project,
                 storageV5: E?.storageV5,
-                initialState: Ot && { ...Ot, notifications: { current: null, queue: [], pinned: [] } },
-                onChangeAppState: ({ newState: newState }) => {
+                initialState: Ot && {
+                  ...Ot,
+                  notifications: {
+                    current: null,
+                    queue: [],
+                    pinned: [],
+                  },
+                },
+                onChangeAppState: ({ newState }) => {
                   Ot = newState;
                 },
-                children: e(FleetView, {
-                  onAction: vt,
+                children: jsxProd_default(FleetView, {
+                  onAction: resolve,
                   host: L,
                   initialJobId: CLAUDE_AGENTS_SELECT,
-                  awayLoop: Dt,
-                  originJobId: ke,
-                  originSpawn: Ge,
-                  cwdFilter: K,
-                  dispatchDefaults: W,
+                  awayLoop: notifiedState,
+                  originJobId,
+                  originSpawn,
+                  cwdFilter,
+                  dispatchDefaults: launch,
                   typedAgent: E?.dispatchDefaults?.agent,
                   canGoBack: E?.canGoBack,
                   autoOpenJobId: me,
                   entryChannel: E?.entryChannel,
-                  relaunchTab: yt,
-                  typedAhead: Yt,
+                  relaunchTab,
+                  typedAhead,
                   fromLauncher: E?.fromLauncher,
                   storageV5: E?.storageV5,
                 }),
@@ -2463,56 +2778,66 @@ async function mountFleetView(h, E) {
               "agents-list",
             ),
           }),
-        ),
-          setJitPolicyAfterStartup());
+        );
+        setJitPolicyAfterStartup();
       }));
-    Ue = void 0;
+    Ue = undefined;
     let Rt = Re;
-    Re = !1;
+    Re = false;
     let Vt = Lt;
-    Lt = !1;
+    Lt = false;
     let Be = shouldUseFullscreenByDefault();
     if (Fe.type === "back") {
       oe.unmount();
       break;
     }
-    if (Fe.type === "open" && Fe.job.id !== me) le = !1;
-    if (((me = void 0), Fe.type === "login")) {
-      let { getLoginStartingMessage: getLoginStartingMessage, Login: Login } =
-          await import("./chunk-whwtfsqf.js"),
-        Qe = !1,
-        winner = await Promise.race([
-          new Promise((St) => {
-            ((ge = void 0),
-              showScreen(
-                oe,
-                e(AppRoot, {
-                  storageV5: E?.storageV5,
-                  initialState: Ot && { ...Ot, notifications: { current: null, queue: [], pinned: [] } },
-                  onChangeAppState: ({ newState: newState }) => {
-                    Ot = newState;
-                  },
-                  children: e(Login, {
-                    onDone: St,
-                    onOrgDocumentsReload: (Ne) => {
-                      if (Ne === "previous") Qe = !0;
-                    },
-                    startingMessage: getLoginStartingMessage(),
-                  }),
-                }),
-              ));
-          }),
-          oe.waitUntilExit().then(() => "exited"),
-        ]);
+    if (Fe.type === "open" && Fe.job.id !== me) le = false;
+    me = undefined;
+    if (Fe.type === "login") {
+      let { getLoginStartingMessage, Login } = await import("./chunk-whwtfsqf.js");
+      let Qe = false;
+      let winner = await Promise.race([
+        new Promise((resolve) => {
+          screen = undefined;
+          showScreen(
+            oe,
+            jsxProd_default(AppRoot, {
+              storageV5: E?.storageV5,
+              initialState: Ot && {
+                ...Ot,
+                notifications: {
+                  current: null,
+                  queue: [],
+                  pinned: [],
+                },
+              },
+              onChangeAppState: ({ newState }) => {
+                Ot = newState;
+              },
+              children: jsxProd_default(Login, {
+                onDone: resolve,
+                onOrgDocumentsReload: (Ne) => {
+                  if (Ne === "previous") Qe = true;
+                },
+                startingMessage: getLoginStartingMessage(),
+              }),
+            }),
+          );
+        }),
+        oe.waitUntilExit().then(() => "exited"),
+      ]);
       if (winner === "exited") break;
-      if ((showScreen(oe, null), process.stdout.isTTY)) process.stdout.write(getEraseScreenSequence());
+      showScreen(oe, null);
+      if (process.stdout.isTTY) process.stdout.write(getEraseScreenSequence());
       if (winner) {
-        let { runOrgMemoryAuthBoundary: runOrgMemoryAuthBoundary } = await import("./chunk-whwtfsqf.js");
-        if ((runOrgMemoryAuthBoundary(), await yAr(E?.storageV5), getAPIProvider() === "gateway")) {
+        let { runOrgMemoryAuthBoundary } = await import("./chunk-whwtfsqf.js");
+        runOrgMemoryAuthBoundary();
+        await discardSpare(E?.storageV5);
+        if (getAPIProvider() === "gateway") {
           oe.unmount();
           break;
         }
-        Tt.setHint("Login successful");
+        fleetEditor.setHint("Login successful");
       }
       if (winner || Qe) {
         let [
@@ -2527,193 +2852,254 @@ async function mountFleetView(h, E) {
           import("./chunk-xcagebg7.js"),
         ]);
         uo();
-        let results = Promise.all([St(void 0, E?.storageV5, E?.credentials), Ne().catch(() => {})]);
-        (await new Promise((pt) => {
+        let reload = Promise.all([St(undefined, E?.storageV5, E?.credentials), Ne().catch(() => {})]);
+        await new Promise((resolve) => {
           showScreen(
             oe,
-            e(AppRoot, { storageV5: E?.storageV5, children: e(Kt, { reload: results, onDone: pt }) }),
+            jsxProd_default(AppRoot, {
+              storageV5: E?.storageV5,
+              children: jsxProd_default(Kt, {
+                reload,
+                onDone: resolve,
+              }),
+            }),
           );
-        }),
-          showScreen(oe, null),
-          await po(oe));
+        });
+        showScreen(oe, null);
+        await po(oe);
       }
       continue;
     }
-    let gt = di().get(process.stdout);
+    let gt = getSecondRootError().get(process.stdout);
     if (Be && Fe.type === "open") gt?.handoffAltScreen();
     if (getPlatform() === "windows" && Fe.type === "open") gt?.handoffRawMode();
-    let kt = gt?.lastFrameFillsCurrentViewport ?? !1;
+    let lastFrameFillsCurrentViewport = gt?.lastFrameFillsCurrentViewport ?? false;
     if (!Be) se(null);
-    if ((oe.unmount(), Fe.type === "done")) break;
-    if (getPlatform() === "windows" && process.stdin.isTTY)
-      (setRawModeSafe(process.stdin, !0), process.stdin.ref());
-    let $e = "",
-      ht = Be ? onExit(() => void process.stdout.write(exitAltScreenSequence() + $e)) : () => {};
+    oe.unmount();
+    if (Fe.type === "done") break;
+    if (getPlatform() === "windows" && process.stdin.isTTY) {
+      setRawModeSafe(process.stdin, true);
+      process.stdin.ref();
+    }
+    let $e = "";
+    let ht = Be ? onExit(() => void process.stdout.write(exitAltScreenSequence() + $e)) : () => {};
     if (
-      CLAUDE_AGENTS_SELECT !== void 0 &&
+      CLAUDE_AGENTS_SELECT !== undefined &&
       CLAUDE_AGENTS_SELECT !== Fe.job.id &&
       CLAUDE_AGENTS_SELECT !== we
     ) {
       let vt = CLAUDE_AGENTS_SELECT;
       Oe.splice(0, Oe.length, vt, ...Oe.filter((rt) => rt !== vt));
     }
-    if (((CLAUDE_AGENTS_SELECT = Fe.job.id), (we = void 0), !Fe.keepQuery)) Tt.dropDraft();
-    L.agentLastUsedMigrationDone = !0;
-    let now = Date.now(),
-      We;
-    if (Fe.respawnResult === void 0 && Fe.gestureId === void 0)
-      ((We = randomUUID()), startAttachBeacon(We, "fleet", E?.storageV5).catch(() => {}));
+    CLAUDE_AGENTS_SELECT = Fe.job.id;
+    we = undefined;
+    if (!Fe.keepQuery) fleetEditor.dropDraft();
+    L.agentLastUsedMigrationDone = true;
+    let now = Date.now();
+    let We;
+    if (Fe.respawnResult === undefined && Fe.gestureId === undefined) {
+      We = randomUUID();
+      startAttachBeacon(We, "fleet", E?.storageV5).catch(() => {});
+    }
     let Jt =
-      co !== null &&
-      tgo({ presentation: T, rows: Qtn, embedded: !1 }) &&
+      awayLoopApi !== null &&
+      neverEmbedded({
+        presentation,
+        rows: NOTICE_WIDTH_LIMIT,
+        embedded: false,
+      }) &&
       !je &&
-      !(le && E?.screen !== void 0) &&
+      !(le && E?.screen !== undefined) &&
       !isExecLaunch(Fe.job.state);
-    if (Jt) le = !1;
-    let qe = { kind: "failed" },
-      He =
-        Fe.respawnResult ??
-        (await safeRespawnBgSession(
-          Fe.job.id,
-          Fe.freshDispatch ? void 0 : { knownState: Fe.job.state },
-          E?.storageV5,
-        ));
-    if (
-      (logForDebugging(
-        `[FV-attach] respawnJob ${Fe.job.id}: ok=${He.ok} alive=${!He.ok && He.alive} err=${He.ok ? "" : He.error}`,
-      ),
-      He.ok || He.alive)
-    ) {
-      (logFleetJobAction("attach", Fe.job.state, {
-        jobId: ye(Fe.job.id),
-        attachShort: ye(He.short ?? Fe.job.id),
-        ...Wt(Fe.job),
-      }),
-        process.stdout.write(osc(OSC.SET_TITLE_AND_ICON, getJobTitle(Fe.job.state, !0))));
-      let now_2 = Date.now(),
-        rt = {
-          gestureId: Fe.gestureId ?? We ?? randomUUID(),
-          attempt: 0,
-          t0: Fe.gestureT0,
-          surface: "fleet",
-          interactive: {},
-        };
-      if (Fe.gestureId === void 0 && We === void 0)
-        startAttachBeacon(rt.gestureId, "fleet", E?.storageV5).catch(() => {});
-      let Qe = (Ne, uo) =>
-          attachJob(Ne, {
-            alreadyInAlt: Be,
-            onExitNotice: (Kt) => {
-              $e = Kt;
+    if (Jt) le = false;
+    let qe = {
+      kind: "failed",
+    };
+    let He =
+      Fe.respawnResult ??
+      (await safeRespawnBgSession(
+        Fe.job.id,
+        Fe.freshDispatch
+          ? undefined
+          : {
+              knownState: Fe.job.state,
             },
-            gateStdinUntilFirstFrame: uo,
-            gesture: rt,
-            sessionTabs: Jt,
-            cloudTabs: co?.hostRestartsForCloudTabs(E?.dispatchExtraArgs ?? []) ?? !1,
-            tabsLanding: Fe.landing,
-            storageV5: E?.storageV5,
-          }).catch(
-            (Kt) => (
-              logError(Kt),
-              logFeatureBad("job_attach", "threw"),
-              { kind: "error", msg: `Couldn't attach \u2014 ${errorMessage(Kt)}` }
-            ),
-          ),
-        Xe = await Qe(He.short ?? Fe.job.id, He.ok || Fe.afterNoResponse === !0 || Rt || Vt),
-        St = !1;
+        E?.storageV5,
+      ));
+    logForDebugging(
+      `[FV-attach] respawnJob ${Fe.job.id}: ok=${He.ok} alive=${!He.ok && He.alive} err=${He.ok ? "" : He.error}`,
+    );
+    if (He.ok || He.alive) {
+      logFleetJobAction("attach", Fe.job.state, {
+        jobId: sanitizeMarkName(Fe.job.id),
+        attachShort: sanitizeMarkName(He.short ?? Fe.job.id),
+        ...Wt(Fe.job),
+      });
+      process.stdout.write(osc(OSC.SET_TITLE_AND_ICON, getJobTitle(Fe.job.state, true)));
+      let now_2 = Date.now();
+      let rt = {
+        gestureId: Fe.gestureId ?? We ?? randomUUID(),
+        attempt: 0,
+        t0: Fe.gestureT0,
+        surface: "fleet",
+        interactive: {},
+      };
+      if (Fe.gestureId === undefined && We === undefined)
+        startAttachBeacon(rt.gestureId, "fleet", E?.storageV5).catch(() => {});
+      let Qe = (Ne, gateStdinUntilFirstFrame) =>
+        attachJob(Ne, {
+          alreadyInAlt: Be,
+          onExitNotice: (Kt) => {
+            $e = Kt;
+          },
+          gateStdinUntilFirstFrame,
+          gesture: rt,
+          sessionTabs: Jt,
+          cloudTabs: awayLoopApi?.hostRestartsForCloudTabs(E?.dispatchExtraArgs ?? []) ?? false,
+          tabsLanding: Fe.landing,
+          storageV5: E?.storageV5,
+        }).catch((error) => {
+          logError(error);
+          logFeatureBad("job_attach", "threw");
+          return {
+            kind: "error",
+            msg: `Couldn't attach \u2014 ${errorMessage(error)}`,
+          };
+        });
+      let Xe = await Qe(He.short ?? Fe.job.id, He.ok || Fe.afterNoResponse === true || Rt || Vt);
+      let St = false;
       if (Xe.kind === "error" && Xe.orphaned && !isExecLaunch(Fe.job.state) && !isTerminalShutdown()) {
-        let Ne = await safeRespawnBgSession(Fe.job.id, { force: !0, knownState: Fe.job.state }, E?.storageV5);
-        if (Ne.ok || Ne.alive) ((St = !0), (Xe = await Qe(Ne.short ?? Fe.job.id, Ne.ok)));
-        else Xe = { kind: "error", msg: Ne.error };
+        let Ne = await safeRespawnBgSession(
+          Fe.job.id,
+          {
+            force: true,
+            knownState: Fe.job.state,
+          },
+          E?.storageV5,
+        );
+        if (Ne.ok || Ne.alive) {
+          St = true;
+          Xe = await Qe(Ne.short ?? Fe.job.id, Ne.ok);
+        } else
+          Xe = {
+            kind: "error",
+            msg: Ne.error,
+          };
       }
-      if ((clearAttachBeacon(rt.gestureId, E?.storageV5).catch(() => {}), isTerminalShutdown()))
-        return heldUntilExit();
-      if (co) qe = co.attachEndingOf(Xe, !Rt);
+      clearAttachBeacon(rt.gestureId, E?.storageV5).catch(() => {});
+      if (isTerminalShutdown()) return heldUntilExit();
+      if (awayLoopApi) qe = awayLoopApi.attachEndingOf(Xe, !Rt);
       if (Xe.kind === "error" && !Xe.ended) {
-        if (Xe.notResponding)
-          if (isExecLaunch(Fe.job.state)) Tt.setError(Ap);
-          else offerJobRestart(Et, Tt, Fe.job.id);
-        else Tt.setError(Xe.msg);
+        if (Xe.notResponding) {
+          if (isExecLaunch(Fe.job.state)) fleetEditor.setError(COMMAND_NOT_RESPONDING_TEXT);
+          else offerJobRestart(fleetLiveStatus, fleetEditor, Fe.job.id);
+        } else fleetEditor.setError(Xe.msg);
         if (St && Xe.orphaned) logFeatureSad("fleet_view_open", "recovered_then_crashed");
         else logFeatureBad("fleet_view_open", St ? "orphan_recovery_failed" : "attach_failed");
       } else {
-        if (Xe.msg) Tt.setError(Xe.msg);
+        if (Xe.msg) fleetEditor.setError(Xe.msg);
         logFeatureOk("fleet_view_open");
       }
-      (logFleetJobAction("detach", Fe.job.state, { attachDurationMs: Date.now() - now_2 }),
-        logForDebugging(`[FV-attach] attachJob returned after ${Date.now() - now}ms \u2014 remounting list`));
+      logFleetJobAction("detach", Fe.job.state, {
+        attachDurationMs: Date.now() - now_2,
+      });
+      logForDebugging(`[FV-attach] attachJob returned after ${Date.now() - now}ms \u2014 remounting list`);
     } else {
-      Tt.setError(He.error);
-      let vt = Fe.gestureId ?? We;
-      if (vt !== void 0) clearAttachBeacon(vt, E?.storageV5).catch(() => {});
+      fleetEditor.setError(He.error);
+      let gestureId = Fe.gestureId ?? We;
+      if (gestureId !== undefined) clearAttachBeacon(gestureId, E?.storageV5).catch(() => {});
       if (He.errorCode === "fork_transcript_never_materialized")
         logFeatureSad("fleet_view_open", "fork_transcript_never_materialized");
       else logFeatureBad("fleet_view_open", "respawn_failed");
     }
     resetInteractionBaseline();
-    let ct = !1;
-    if (co && !le && mt()) {
-      if (
-        ((oe = await createRoot(getBaseRenderOptions(!1))),
-        (ge = void 0),
-        (ct = !0),
-        Be && (qe.kind === "ended" || qe.kind === "failed"))
-      )
-        process.stdout.write(enterAltScreenSequence());
+    let ct = false;
+    if (awayLoopApi && !le && mt()) {
+      oe = await createRoot(getBaseRenderOptions(false));
+      screen = undefined;
+      ct = true;
+      if (Be && (qe.kind === "ended" || qe.kind === "failed")) process.stdout.write(enterAltScreenSequence());
       if (qe.kind === "failed" || (qe.kind === "back" && qe.why === "taken")) st.add(Fe.job.id);
-      else (st.delete(Fe.job.id), (Je = void 0));
-      let vt = process.stdin.isTTY === !0 && process.stdin.isRaw !== !0;
-      if (vt) setRawModeSafe(process.stdin, !0);
+      else {
+        st.delete(Fe.job.id);
+        left = undefined;
+      }
+      let vt = process.stdin.isTTY === true && process.stdin.isRaw !== true;
+      if (vt) setRawModeSafe(process.stdin, true);
       if (qe.kind === "ended" || (qe.kind === "asked" && qe.intent.kind === "leave" && !qe.intent.running))
         De.add(Fe.job.id);
       else De.delete(Fe.job.id);
-      let { stayAfterCloudTab: stayAfterCloudTab } = co,
-        Qe = await co
-          .sessionTabsNext({
-            ending: qe,
-            leftJobId: Fe.job.id,
-            visited: Oe.filter((Xe) => !st.has(Xe)),
-            ended: De,
-            landed: He.ok || He.alive ? void 0 : Fe.landing,
-            storageV5: E?.storageV5,
-          })
-          .then((Xe) =>
-            Xe.kind === "cloud"
-              ? stayAfterCloudTab(Xe, E?.dispatchExtraArgs ?? [], !0, () => !1, E?.storageV5)
-              : Xe,
-          )
-          .finally(() => {
-            if (vt) setRawModeSafe(process.stdin, !1);
-          });
+      let { stayAfterCloudTab } = awayLoopApi;
+      let Qe = await awayLoopApi
+        .sessionTabsNext({
+          ending: qe,
+          leftJobId: Fe.job.id,
+          visited: Oe.filter((Xe) => !st.has(Xe)),
+          ended: De,
+          landed: He.ok || He.alive ? undefined : Fe.landing,
+          storageV5: E?.storageV5,
+        })
+        .then((Xe) =>
+          Xe.kind === "cloud"
+            ? stayAfterCloudTab(Xe, E?.dispatchExtraArgs ?? [], true, () => false, E?.storageV5)
+            : Xe,
+        )
+        .finally(() => {
+          if (vt) setRawModeSafe(process.stdin, false);
+        });
       if (Qe.kind === "quit") {
-        (await co.backToCloudSession(Je, !0, E?.storageV5), Ye(Qe.say, !0), ht());
+        await awayLoopApi.backToCloudSession(left, true, E?.storageV5);
+        Ye(Qe.say, true);
+        ht();
         break;
       }
       if (Qe.kind === "open") {
-        if (Qe.jobs) lt.seedJobs(Qe.jobs);
-        let jobToOpen = await co.jobToOpen(Qe.jobId, lt.jobs, E?.storageV5);
-        if (!jobToOpen) {
-          (await co.backToCloudSession(Je, !0, E?.storageV5), Ye(co.NO_SESSION_QUIT_LINE, !0), ht());
+        if (Qe.jobs) roster.seedJobs(Qe.jobs);
+        let Xe = await awayLoopApi.jobToOpen(Qe.jobId, roster.jobs, E?.storageV5);
+        if (!Xe) {
+          await awayLoopApi.backToCloudSession(left, true, E?.storageV5);
+          Ye(awayLoopApi.NO_SESSION_QUIT_LINE, true);
+          ht();
           break;
         }
-        if (
-          ((Ue = { type: "open", job: jobToOpen, ...(Qe.landing && { landing: Qe.landing }) }),
-          qe.kind === "asked" && qe.intent.kind === "quit")
-        ) {
+        Ue = {
+          type: "open",
+          job: Xe,
+          ...(Qe.landing && {
+            landing: Qe.landing,
+          }),
+        };
+        if (qe.kind === "asked" && qe.intent.kind === "quit") {
           let id = Fe.job.id;
-          ((we = id), Oe.splice(0, Oe.length, ...Oe.filter((Ne) => Ne !== id)));
+          we = id;
+          Oe.splice(0, Oe.length, ...Oe.filter((Ne) => Ne !== id));
         }
-        ((Re = !Qe.asked), (Lt = Qe.booting), (le = !1), Tt.setError(null), ht());
+        Re = !Qe.asked;
+        Lt = Qe.booting;
+        le = false;
+        fleetEditor.setError(null);
+        ht();
         continue;
       }
     }
-    if (!ct) ((oe = await createRoot(getBaseRenderOptions(!1))), (ge = void 0));
-    if (le) {
-      if (!Be) process.stdout.write(remountClearSeq(Be, kt, k));
-      return ((le = !1), ht(), (ge ??= showScreen(oe, null)), { back: !0, root: oe, screen: ge });
+    if (!ct) {
+      oe = await createRoot(getBaseRenderOptions(false));
+      screen = undefined;
     }
-    (process.stdout.write(remountClearSeq(Be, kt, k)), logForDebugging("[PERF:bg-remount-start]"), ht());
+    if (le) {
+      if (!Be) process.stdout.write(remountClearSeq(Be, lastFrameFillsCurrentViewport, k));
+      le = false;
+      ht();
+      screen ??= showScreen(oe, null);
+      return {
+        back: true,
+        root: oe,
+        screen,
+      };
+    }
+    process.stdout.write(remountClearSeq(Be, lastFrameFillsCurrentViewport, k));
+    logForDebugging("[PERF:bg-remount-start]");
+    ht();
   }
 }
-
 export { mountFleetView };

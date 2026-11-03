@@ -8,8 +8,7 @@
 import { x } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-798ashq9.js:40707-40749 cjs-require-graph
-var eIo = x(function (wc, Jr) {
-  Jr.exports = {};
+var require_roots = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = {};
 });
-
-export { eIo };
+export { require_roots };

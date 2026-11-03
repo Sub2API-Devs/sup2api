@@ -10,46 +10,61 @@ import { Kt } from "./object.js";
 import { de } from "./util.js";
 
 //@ chunk-pwh5dx3n.js:86966-88399 cjs-fingerprint
-var Rs = x(function (nA, fd) {
-  fd.exports = Er;
-  var La = Kt();
-  ((Er.prototype = Object.create(La.prototype)).constructor = Er).className = "Method";
-  var Hr = de();
-  function Er(e, t, r, i, s, n, a, o, l) {
-    if (Hr.isObject(s)) ((a = s), (s = n = void 0));
-    else if (Hr.isObject(n)) ((a = n), (n = void 0));
-    if (!(t === void 0 || Hr.isString(t))) throw TypeError("type must be a string");
-    if (!Hr.isString(r)) throw TypeError("requestType must be a string");
-    if (!Hr.isString(i)) throw TypeError("responseType must be a string");
-    (La.call(this, e, a),
-      (this.type = t || "rpc"),
-      (this.requestType = r),
-      (this.requestStream = s ? !0 : void 0),
-      (this.responseType = i),
-      (this.responseStream = n ? !0 : void 0),
-      (this.resolvedRequestType = null),
-      (this.resolvedResponseType = null),
-      (this.comment = o),
-      (this.parsedOptions = l));
+var Rs = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = Method;
+  var ReflectionObject = Kt();
+  ((Method.prototype = Object.create(ReflectionObject.prototype)).constructor = Method).className = "Method";
+  var util = de();
+  function Method(
+    name,
+    type,
+    requestType,
+    responseType,
+    requestStream,
+    responseStream,
+    options,
+    comment,
+    parsedOptions,
+  ) {
+    if (util.isObject(requestStream)) {
+      options = requestStream;
+      requestStream = responseStream = undefined;
+    } else if (util.isObject(responseStream)) {
+      options = responseStream;
+      responseStream = undefined;
+    }
+    if (!(type === undefined || util.isString(type))) throw TypeError("type must be a string");
+    if (!util.isString(requestType)) throw TypeError("requestType must be a string");
+    if (!util.isString(responseType)) throw TypeError("responseType must be a string");
+    ReflectionObject.call(this, name, options);
+    this.type = type || "rpc";
+    this.requestType = requestType;
+    this.requestStream = requestStream ? true : undefined;
+    this.responseType = responseType;
+    this.responseStream = responseStream ? true : undefined;
+    this.resolvedRequestType = null;
+    this.resolvedResponseType = null;
+    this.comment = comment;
+    this.parsedOptions = parsedOptions;
   }
-  Er.fromJSON = function (t, r) {
-    return new Er(
-      t,
-      r.type,
-      r.requestType,
-      r.responseType,
-      r.requestStream,
-      r.responseStream,
-      r.options,
-      r.comment,
-      r.parsedOptions,
+  Method.fromJSON = function (name, json) {
+    return new Method(
+      name,
+      json.type,
+      json.requestType,
+      json.responseType,
+      json.requestStream,
+      json.responseStream,
+      json.options,
+      json.comment,
+      json.parsedOptions,
     );
   };
-  Er.prototype.toJSON = function (t) {
-    var r = t ? Boolean(t.keepComments) : !1;
-    return Hr.toObject([
+  Method.prototype.toJSON = function (toJSONOptions) {
+    var keepComments = toJSONOptions ? Boolean(toJSONOptions.keepComments) : false;
+    return util.toObject([
       "type",
-      (this.type !== "rpc" && this.type) || void 0,
+      (this.type !== "rpc" && this.type) || undefined,
       "requestType",
       this.requestType,
       "requestStream",
@@ -61,19 +76,16 @@ var Rs = x(function (nA, fd) {
       "options",
       this.options,
       "comment",
-      r ? this.comment : void 0,
+      keepComments ? this.comment : undefined,
       "parsedOptions",
       this.parsedOptions,
     ]);
   };
-  Er.prototype.resolve = function () {
+  Method.prototype.resolve = function () {
     if (this.resolved) return this;
-    return (
-      (this.resolvedRequestType = this.parent.lookupType(this.requestType)),
-      (this.resolvedResponseType = this.parent.lookupType(this.responseType)),
-      La.prototype.resolve.call(this)
-    );
+    this.resolvedRequestType = this.parent.lookupType(this.requestType);
+    this.resolvedResponseType = this.parent.lookupType(this.responseType);
+    return ReflectionObject.prototype.resolve.call(this);
   };
 });
-
 export { Rs };

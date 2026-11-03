@@ -9,9 +9,17 @@ import { A, We } from "../../../../_unknown/bedrockRuntimeConfig.js";
 import { Ue } from "./ruleset.js";
 
 //@ chunk-3cddmtk7.js:23181-23357 esm-fingerprint
-var $t = new A.EndpointCache({ size: 50, params: ["Endpoint", "Region", "UseDualStack", "UseFIPS"] }),
-  Ne = (e, t = {}) => $t.get(e, () => A.resolveEndpoint(Ue, { endpointParams: e, logger: t.logger }));
+var $t = new A.EndpointCache({
+  size: 50,
+  params: ["Endpoint", "Region", "UseDualStack", "UseFIPS"],
+});
+var defaultEndpointResolver = (endpointParams, context = {}) =>
+  $t.get(endpointParams, () =>
+    A.resolveEndpoint(Ue, {
+      endpointParams,
+      logger: context.logger,
+    }),
+  );
 //@ chunk-3cddmtk7.js:23357-23411 esm-fingerprint
 A.customEndpointFunctions.aws = We.awsEndpointFunctions;
-
-export { Ne };
+export { defaultEndpointResolver };

@@ -13,22 +13,21 @@ import { consoleProfileCanStartCloudSessions } from "../../utils/teleport/api.js
 import { CLOUD_SESSIONS_POLICY } from "../../services/cloudSessions/cloudSessionsPolicy.js";
 import { isCommandEnabled } from "../../commands.js";
 
+//@ chunk-e6aww6q8.js:1749817-1750075 placement
 /**
  * /teleport 命令对象（local-jsx）；描述：Send this session to the cloud, or resume one from claude.ai；别名 ["tp"]；availability ["claude-ai","console-profile"]；isEnabled: ()=>vt()||B8t()；isHidden: {return!Ud(this)}；实现 chunk-c2tx3syd.js 的 oe。
  */
-//@ chunk-e6aww6q8.js:1749817-1750075 placement
 var teleportCommandDefinition = {
-    type: "local-jsx",
-    name: "teleport",
-    description: "Send this session to the cloud, or resume one from claude.ai",
-    aliases: ["tp"],
-    availability: ["claude-ai", "console-profile"],
-    isEnabled: () => isClaudeAISubscriber() || consoleProfileCanStartCloudSessions(),
-    policyGate: CLOUD_SESSIONS_POLICY,
-    get isHidden() {
-      return !isCommandEnabled(this);
-    },
+  type: "local-jsx",
+  name: "teleport",
+  description: "Send this session to the cloud, or resume one from claude.ai",
+  aliases: ["tp"],
+  availability: ["claude-ai", "console-profile"],
+  isEnabled: () => isClaudeAISubscriber() || consoleProfileCanStartCloudSessions(),
+  policyGate: CLOUD_SESSIONS_POLICY,
+  get isHidden() {
+    return !isCommandEnabled(this);
   },
-  teleportCommand = teleportCommandDefinition;
-
+};
+var teleportCommand = teleportCommandDefinition;
 export { teleportCommand };

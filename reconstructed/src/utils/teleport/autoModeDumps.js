@@ -8,20 +8,18 @@
  * pieces: chunk-f25sswmp.js (2)
  * attribution: placement 2
  */
-
 //@ chunk-f25sswmp.js:25264-25445 placement
-var AUTO_MODE_DUMP_FILES = "auto-mode-classifier-error.txt",
-  AUTO_MODE_DUMP = "auto-mode-dump.",
-  AUTO_MODE_ENV_EDIT = "auto-mode-env-edit-",
-  AUTO_MODE_BUILTINS = "auto-mode-builtins-",
-  AUTO_MODE_CLASSIFIER_DUMP = "auto-mode-classifier-dump",
-  AUTO_MODE_CLASSIFIER_SYSTEM = "auto-mode-classifier-system";
+var AUTO_MODE_DUMP_FILES = "auto-mode-classifier-error.txt";
+var AUTO_MODE_DUMP = "auto-mode-dump.";
+var AUTO_MODE_ENV_EDIT = "auto-mode-env-edit-";
+var AUTO_MODE_BUILTINS = "auto-mode-builtins-";
+var AUTO_MODE_CLASSIFIER_DUMP = "auto-mode-classifier-dump";
+var AUTO_MODE_CLASSIFIER_SYSTEM = "auto-mode-classifier-system";
 //@ chunk-f25sswmp.js:25445-25602 placement
-function isClassifierDumpEvent(e) {
-  if (typeof e !== "object" || e === null || !("type" in e)) return !1;
-  return e.type === "auto-mode-classifier-dump" || e.type === "auto-mode-classifier-system";
+function isClassifierDumpEvent(payload) {
+  if (typeof payload !== "object" || payload === null || !("type" in payload)) return false;
+  return payload.type === "auto-mode-classifier-dump" || payload.type === "auto-mode-classifier-system";
 }
-
 export {
   AUTO_MODE_DUMP_FILES,
   AUTO_MODE_DUMP,

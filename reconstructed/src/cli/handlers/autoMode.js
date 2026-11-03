@@ -9,7 +9,10 @@
  * attribution: placement 11, fingerprint 3, layout 1, sole-consumer 1
  */
 import { stripVTControlCharacters } from "util";
-import { e, r } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { RenderOnceAndExit } from "../../utils/staticRender.js";
 import { Text } from "../../ink/components/Text.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
@@ -43,110 +46,117 @@ import {
 } from "../../services/autoModeSetup/applySetup.js";
 import { writeToStdout } from "../../utils/process.js";
 import { confirmYesNo } from "./util.js";
-import { or } from "../../utils/settings/commandSyncNames.js";
+import { invalidateCommandNames } from "../../utils/settings/commandSyncNames.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { plural } from "../../utils/stringUtils.js";
 import { replaceControlChars } from "../../utils/resultError.js";
 import {
-  nct,
+  replacesDefaultRules,
   DEFAULTS_PLACEHOLDER,
   expandDefaultsPlaceholder,
 } from "../../utils/permissions/autoModeRulesPrompt.js";
 import { parseUserSpecifiedModel } from "../../utils/model/modelDisplay.js";
 import { getMainLoopModel } from "../../utils/model/model.js";
-import { aN } from "../../utils/sideQuery.js";
-import { $Y } from "../../utils/concurrentSessions.js";
+import { sideQueryWithCounter } from "../../utils/sideQuery.js";
+import { ANSI_ESCAPE_RE } from "../../utils/concurrentSessions.js";
 
 //@ chunk-t2bgh7t8.js:15206-15307 placement = renderAndRun (1)
 async function renderAndRun(root, element) {
-  (root.render(e(RenderOnceAndExit, { children: e(Text, { children: jsonStringify(element, null, 2) }) })),
-    await root.waitUntilExit());
+  root.render(
+    jsxProd_default(RenderOnceAndExit, {
+      children: jsxProd_default(Text, {
+        children: jsonStringify(element, null, 2),
+      }),
+    }),
+  );
+  await root.waitUntilExit();
 }
 //@ chunk-t2bgh7t8.js:15307-15398 placement
-async function ne(o, i) {
-  let s = getDefaultExternalAutoModeRules();
-  (await renderAndRun(o, i ? autoModeConfigHandler_3(s, i) : s),
-    await logFeatureOkAsync("cli_auto_mode_defaults"));
+async function runAutoModeDefaults(root, i) {
+  let defaultExternalAutoModeRules = getDefaultExternalAutoModeRules();
+  await renderAndRun(
+    root,
+    i ? autoModeConfigHandler_3(defaultExternalAutoModeRules, i) : defaultExternalAutoModeRules,
+  );
+  await logFeatureOkAsync("cli_auto_mode_defaults");
 }
 //@ chunk-t2bgh7t8.js:15398-15684 placement = autoModeConfigHandler (0.842)
-function autoModeConfigHandler_3(o, i) {
+function autoModeConfigHandler_3(defaultExternalAutoModeRules, i) {
   let s = (u) =>
-      u
-        .replace(/\*/g, "")
-        .replace(/\[[^\]]*\]/g, "")
-        .toLowerCase(),
-    a = (u) => ruleLabelOf(s(u)),
-    g = a(i) || i.toLowerCase(),
-    c = (u) => a(u).startsWith(g);
+    u
+      .replace(/\*/g, "")
+      .replace(/\[[^\]]*\]/g, "")
+      .toLowerCase();
+  let a = (u) => ruleLabelOf(s(u));
+  let g = a(i) || i.toLowerCase();
+  let c = (u) => a(u).startsWith(g);
   return {
-    allow: o.allow.filter(c),
-    soft_deny: o.soft_deny.filter(c),
-    hard_deny: o.hard_deny.filter(c),
-    environment: o.environment.filter(c),
+    allow: defaultExternalAutoModeRules.allow.filter(c),
+    soft_deny: defaultExternalAutoModeRules.soft_deny.filter(c),
+    hard_deny: defaultExternalAutoModeRules.hard_deny.filter(c),
+    environment: defaultExternalAutoModeRules.environment.filter(c),
   };
 }
+//@ chunk-t2bgh7t8.js:15684-15759 placement
 /**
  * claude auto-mode config：输出生效的 autoMode 配置（用户设置覆盖默认值）为 JSON。
  */
-//@ chunk-t2bgh7t8.js:15684-15759 placement
-async function autoModeConfigHandler(o) {
-  (await renderAndRun(o, autoModeConfigHandler_2(getAutoModeConfig())),
-    await logFeatureOkAsync("cli_auto_mode_config"));
+async function autoModeConfigHandler(root) {
+  await renderAndRun(root, autoModeConfigHandler_2(getAutoModeConfig()));
+  await logFeatureOkAsync("cli_auto_mode_config");
 }
+//@ chunk-t2bgh7t8.js:15759-17898 placement
 /**
  * claude auto-mode reset：从用户设置文件删除 autoMode 段。
  */
-//@ chunk-t2bgh7t8.js:15759-17898 placement
 async function autoModeResetHandler(o, i) {
-  let s = getSettingsFilePathForSource("userSettings");
-  if (!s)
-    return (
-      await logFeatureBadAsync("cli_auto_mode_reset", "no_user_settings_path"),
-      cliErrorAfterAnalyticsFlush("Could not resolve the user settings file path.")
-    );
+  let settingsFilePathForSource = getSettingsFilePathForSource("userSettings");
+  if (!settingsFilePathForSource) {
+    await logFeatureBadAsync("cli_auto_mode_reset", "no_user_settings_path");
+    return cliErrorAfterAnalyticsFlush("Could not resolve the user settings file path.");
+  }
   let a = null;
   try {
-    a = (await readFileChecked(s, MAX_SETTINGS_JSON_BYTES)).content;
+    a = (await readFileChecked(settingsFilePathForSource, MAX_SETTINGS_JSON_BYTES)).content;
   } catch (error) {
-    if (!isENOENT(error))
-      return (
-        await logFeatureBadAsync("cli_auto_mode_reset", "settings_file_unreadable"),
-        cliErrorAfterAnalyticsFlush(stripControlChars(`Could not read ${s}: ${errorMessage(error)}`))
+    if (!isENOENT(error)) {
+      await logFeatureBadAsync("cli_auto_mode_reset", "settings_file_unreadable");
+      return cliErrorAfterAnalyticsFlush(
+        stripControlChars(`Could not read ${settingsFilePathForSource}: ${errorMessage(error)}`),
       );
+    }
   }
-  let g = a !== null && a.trim() !== "",
-    c = g ? safeParseJSON(a, !1) : null;
-  if (g && !isPlainObject(c))
-    return (
-      await logFeatureBadAsync("cli_auto_mode_reset", "settings_file_invalid"),
-      cliErrorAfterAnalyticsFlush(invalidSettingsJsonMessage(s, "reset"))
-    );
-  let u = isPlainObject(c) ? c.autoMode : void 0;
-  if (u === void 0) {
-    (writeToStdout(`Auto mode configuration is already at defaults \u2014 ${s} has no autoMode section.
-`),
-      noteOtherAutoModeSources(),
-      await logFeatureOkAsync("cli_auto_mode_reset"));
+  let g = a !== null && a.trim() !== "";
+  let c = g ? safeParseJSON(a, false) : null;
+  if (g && !isPlainObject(c)) {
+    await logFeatureBadAsync("cli_auto_mode_reset", "settings_file_invalid");
+    return cliErrorAfterAnalyticsFlush(invalidSettingsJsonMessage(settingsFilePathForSource, "reset"));
+  }
+  let autoMode = isPlainObject(c) ? c.autoMode : undefined;
+  if (autoMode === undefined) {
+    writeToStdout(`Auto mode configuration is already at defaults \u2014 ${settingsFilePathForSource} has no autoMode section.
+`);
+    noteOtherAutoModeSources();
+    await logFeatureOkAsync("cli_auto_mode_reset");
     return;
   }
-  let f = parseSettingsFile(s),
-    m =
-      f.settings === null
-        ? []
-        : f.errors
-            .filter((error) => error.severity === "warning")
-            .map((l) => stripAnsiAndTrim(l.path) || "unknown entry"),
-    p = countDuplicates(m);
-  if (m.length > 0 && o.yes)
-    return (
-      await logFeatureSadAsync("cli_auto_mode_reset", "lossy_write_unconfirmed"),
-      cliErrorAfterAnalyticsFlush(
-        `Not resetting: ${s} also contains ${pluralCount(m.length, "entry", "entries")} this version of Claude Code cannot parse \u2014 ${p.join(", ")} \u2014 and saving the file would delete ${m.length === 1 ? "it" : "them"} too. Fix or remove ${m.length === 1 ? "that entry" : "those entries"} first, or run the command without --yes to review and confirm.`,
-      )
+  let settingsFile = parseSettingsFile(settingsFilePathForSource);
+  let m =
+    settingsFile.settings === null
+      ? []
+      : settingsFile.errors
+          .filter((error) => error.severity === "warning")
+          .map((error) => stripAnsiAndTrim(error.path) || "unknown entry");
+  let p = countDuplicates(m);
+  if (m.length > 0 && o.yes) {
+    await logFeatureSadAsync("cli_auto_mode_reset", "lossy_write_unconfirmed");
+    return cliErrorAfterAnalyticsFlush(
+      `Not resetting: ${settingsFilePathForSource} also contains ${pluralCount(m.length, "entry", "entries")} this version of Claude Code cannot parse \u2014 ${p.join(", ")} \u2014 and saving the file would delete ${m.length === 1 ? "it" : "them"} too. Fix or remove ${m.length === 1 ? "that entry" : "those entries"} first, or run the command without --yes to review and confirm.`,
     );
-  writeToStdout(`This resets auto mode to the shipped defaults by removing the autoMode section from ${s}:
+  }
+  writeToStdout(`This resets auto mode to the shipped defaults by removing the autoMode section from ${settingsFilePathForSource}:
 `);
-  for (let l of describeAutoModeSectionKeys(u))
+  for (let l of describeAutoModeSectionKeys(autoMode))
     writeToStdout(`  - ${stripAnsiAndTrim(l)}
 `);
   if (m.length > 0) {
@@ -157,35 +167,42 @@ async function autoModeResetHandler(o, i) {
 `);
   }
   if (!o.yes) {
-    if (!(await confirmYesNo("Reset auto mode configuration to defaults?")))
-      return (
-        await logFeatureSadAsync("cli_auto_mode_reset", "declined"),
-        cliErrorAfterAnalyticsFlush("Aborted.")
-      );
+    if (!(await confirmYesNo("Reset auto mode configuration to defaults?"))) {
+      await logFeatureSadAsync("cli_auto_mode_reset", "declined");
+      return cliErrorAfterAnalyticsFlush("Aborted.");
+    }
   }
-  or();
-  let { error: error } = await updateSettingsForSourceWithTransform(
+  invalidateCommandNames();
+  let { error } = await updateSettingsForSourceWithTransform(
     "userSettings",
-    (l) => (l !== null && l.autoMode !== void 0 ? { autoMode: void 0 } : null),
-    void 0,
+    (l) =>
+      l !== null && l.autoMode !== undefined
+        ? {
+            autoMode: undefined,
+          }
+        : null,
+    undefined,
     i,
   );
   if (error) {
-    logForDebugging(`auto-mode reset write failed: ${error.message}`, { level: "error" });
-    let l = describeSettingsWriteFailure(error, s, "reset");
-    return (await logFeatureBadAsync("cli_auto_mode_reset", l.code), cliErrorAfterAnalyticsFlush(l.message));
+    logForDebugging(`auto-mode reset write failed: ${error.message}`, {
+      level: "error",
+    });
+    let l = describeSettingsWriteFailure(error, settingsFilePathForSource, "reset");
+    await logFeatureBadAsync("cli_auto_mode_reset", l.code);
+    return cliErrorAfterAnalyticsFlush(l.message);
   }
-  (await logFeatureOkAsync("cli_auto_mode_reset"),
-    writeToStdout(`Auto mode configuration reset to defaults \u2014 autoMode section removed from ${s}.
+  await logFeatureOkAsync("cli_auto_mode_reset");
+  writeToStdout(`Auto mode configuration reset to defaults \u2014 autoMode section removed from ${settingsFilePathForSource}.
 Run \`claude auto-mode config\` to see the effective rules.
-`),
-    noteOtherAutoModeSources());
+`);
+  noteOtherAutoModeSources();
 }
 //@ chunk-t2bgh7t8.js:17898-18073 placement
-function describeAutoModeSectionKeys(o) {
-  if (!isPlainObject(o)) return ["autoMode (unrecognized value)"];
-  return Object.entries(o).map(([i, s]) =>
-    Array.isArray(s) ? `${i} (${s.length} ${plural(s.length, "entry", "entries")})` : i,
+function describeAutoModeSectionKeys(autoMode) {
+  if (!isPlainObject(autoMode)) return ["autoMode (unrecognized value)"];
+  return Object.entries(autoMode).map(([key, value]) =>
+    Array.isArray(value) ? `${key} (${value.length} ${plural(value.length, "entry", "entries")})` : key,
   );
 }
 //@ chunk-t2bgh7t8.js:18073-18219 placement
@@ -206,7 +223,7 @@ function pluralCount(o, i, s) {
 function noteOtherAutoModeSources() {
   for (let o of AUTO_MODE_TRUSTED_SOURCES) {
     if (o === "userSettings") continue;
-    if (getSettingsForSource(o)?.autoMode !== void 0) {
+    if (getSettingsForSource(o)?.autoMode !== undefined) {
       writeToStdout(`Note: auto mode rules from managed or --settings flag sources still apply \u2014 reset only changes your user settings file.
 `);
       return;
@@ -232,36 +249,41 @@ For each rule, evaluate:
 4. **Actionability**: Is the rule specific enough for the classifier to act on?
 
 Be concise and constructive. Only comment on rules that could be improved. If all rules look good, say so.`;
+//@ chunk-t2bgh7t8.js:19793-21319 fingerprint = autoModeCritiqueHandler (0.525)
 /**
  * claude auto-mode critique：把用户的 autoMode 规则发给模型点评（CRITIQUE_SYSTEM_PROMPT）。
  */
-//@ chunk-t2bgh7t8.js:19793-21319 fingerprint = autoModeCritiqueHandler (0.525)
-async function autoModeCritiqueHandler(o, i, s) {
+async function autoModeCritiqueHandler(o, i, credentials) {
   let config = getAutoModeConfig();
-  if (!(nct(config?.allow) || nct(config?.soft_deny) || nct(config?.hard_deny) || nct(config?.environment))) {
-    (o.render(
-      e(RenderOnceAndExit, {
-        children: e(Text, {
+  if (!(
+    replacesDefaultRules(config?.allow) ||
+    replacesDefaultRules(config?.soft_deny) ||
+    replacesDefaultRules(config?.hard_deny) ||
+    replacesDefaultRules(config?.environment)
+  )) {
+    o.render(
+      jsxProd_default(RenderOnceAndExit, {
+        children: jsxProd_default(Text, {
           children: `No custom auto mode rules found.
 
 Add rules to your settings file under autoMode.{allow, soft_deny, hard_deny, environment}.
 Run \`claude auto-mode defaults\` to see the default rules for reference.`,
         }),
       }),
-    ),
-      await o.waitUntilExit());
+    );
+    await o.waitUntilExit();
     return;
   }
-  let model = i.model ? parseUserSpecifiedModel(i.model) : getMainLoopModel(),
-    defaults = getDefaultExternalAutoModeRules(),
-    classifierPrompt = buildDefaultExternalSystemPrompt(),
-    userRulesSummary =
-      formatRulesForCritique("allow", config?.allow ?? [], defaults.allow) +
-      formatRulesForCritique("soft_deny", config?.soft_deny ?? [], defaults.soft_deny) +
-      formatRulesForCritique("hard_deny", config?.hard_deny ?? [], defaults.hard_deny) +
-      formatRulesForCritique("environment", config?.environment ?? [], defaults.environment);
+  let model = i.model ? parseUserSpecifiedModel(i.model) : getMainLoopModel();
+  let defaults = getDefaultExternalAutoModeRules();
+  let classifierPrompt = buildDefaultExternalSystemPrompt();
+  let userRulesSummary =
+    formatRulesForCritique("allow", config?.allow ?? [], defaults.allow) +
+    formatRulesForCritique("soft_deny", config?.soft_deny ?? [], defaults.soft_deny) +
+    formatRulesForCritique("hard_deny", config?.hard_deny ?? [], defaults.hard_deny) +
+    formatRulesForCritique("environment", config?.environment ?? [], defaults.environment);
   o.render(
-    r(Text, {
+    jsxProd_default_2(Text, {
       children: [
         "Analyzing your auto mode rules\u2026",
         `
@@ -273,13 +295,13 @@ Run \`claude auto-mode defaults\` to see the default rules for reference.`,
   let response;
   try {
     let textBlock = (
-      await aN({
+      await sideQueryWithCounter({
         querySource: "auto_mode_critique",
-        model: model,
-        credentials: s,
+        model,
+        credentials,
         system: CRITIQUE_SYSTEM_PROMPT,
-        skipSystemPromptPrefix: !0,
-        forceAttributionHeader: !0,
+        skipSystemPromptPrefix: true,
+        forceAttributionHeader: true,
         max_tokens: 4096,
         messages: [
           {
@@ -305,24 +327,28 @@ Please critique these custom rules.`,
     ).content.find((block) => block.type === "text");
     response = textBlock?.type === "text" ? textBlock.text : "No critique was generated. Please try again.";
   } catch (error) {
-    return (
-      await logFeatureBadAsync("cli_auto_mode_critique", "cli_auto_mode_critique_query_failed"),
-      o.unmount(),
-      cliErrorAfterAnalyticsFlush(stripControlChars("Failed to analyze rules: " + errorMessage(error)))
-    );
+    await logFeatureBadAsync("cli_auto_mode_critique", "cli_auto_mode_critique_query_failed");
+    o.unmount();
+    return cliErrorAfterAnalyticsFlush(stripControlChars("Failed to analyze rules: " + errorMessage(error)));
   }
-  (o.render(e(RenderOnceAndExit, { children: e(Text, { children: response }) })),
-    await o.waitUntilExit(),
-    await logFeatureOkAsync("cli_auto_mode_critique"));
+  o.render(
+    jsxProd_default(RenderOnceAndExit, {
+      children: jsxProd_default(Text, {
+        children: response,
+      }),
+    }),
+  );
+  await o.waitUntilExit();
+  await logFeatureOkAsync("cli_auto_mode_critique");
 }
 //@ chunk-t2bgh7t8.js:21319-21667 sole-consumer
 function formatRulesForCritique(o, i, s) {
   let filtered = i.filter((f) => f !== DEFAULTS_PLACEHOLDER);
   if (filtered.length === 0) return "";
-  let g = i.length !== filtered.length,
-    joined = filtered.map((f) => "- " + f).join(`
-`),
-    joined_2 = s.map((f) => "- " + f).join(`
+  let g = i.length !== filtered.length;
+  let joined = filtered.map((f) => "- " + f).join(`
+`);
+  let joined_2 = s.map((f) => "- " + f).join(`
 `);
   return (
     "## " +
@@ -349,41 +375,44 @@ function formatRulesForCritique(o, i, s) {
 `
   );
 }
+//@ chunk-2a8yx6fc.js:11310-11389 placement
 /**
  * 取规则标签：冒号或方括号之前的部分（去尾部空白），用于 --label 过滤。
  */
-//@ chunk-2a8yx6fc.js:11310-11389 placement
 function ruleLabelOf(e) {
-  let search = e.search(/[:[]/);
-  return (search === -1 ? e : e.slice(0, search)).trimEnd();
+  let n = e.search(/[:[]/);
+  return (n === -1 ? e : e.slice(0, n)).trimEnd();
 }
+//@ chunk-2a8yx6fc.js:11389-11595 fingerprint = autoModeConfigHandler (0.842)
 /**
  * 合并用户 autoMode 设置与内置默认规则（allow/soft_deny/hard_deny/environment 四段）。
  */
-//@ chunk-2a8yx6fc.js:11389-11595 fingerprint = autoModeConfigHandler (0.842)
-function autoModeConfigHandler_2(e) {
-  let config = getDefaultExternalAutoModeRules(),
-    r = (o) => o;
+function autoModeConfigHandler_2(autoModeConfig) {
+  let config = getDefaultExternalAutoModeRules();
+  let r = (o) => o;
   return {
-    allow: expandDefaultsPlaceholder(e?.allow, config.allow, r),
-    soft_deny: expandDefaultsPlaceholder(e?.soft_deny, config.soft_deny, r),
-    hard_deny: expandDefaultsPlaceholder(e?.hard_deny, config.hard_deny, r),
-    environment: expandDefaultsPlaceholder(e?.environment, config.environment, r),
+    allow: expandDefaultsPlaceholder(autoModeConfig?.allow, config.allow, r),
+    soft_deny: expandDefaultsPlaceholder(autoModeConfig?.soft_deny, config.soft_deny, r),
+    hard_deny: expandDefaultsPlaceholder(autoModeConfig?.hard_deny, config.hard_deny, r),
+    environment: expandDefaultsPlaceholder(autoModeConfig?.environment, config.environment, r),
   };
 }
 //@ chunk-aepeg2w5.js:851418-851673 fingerprint = formatRulesForCritique (0.557)
 function formatRulesForCritique_2(e) {
   if (e.code !== 0) return;
-  let n = 0,
-    r = 0;
-  for (let s of e.stdout.split(`
+  let n = 0;
+  let r = 0;
+  for (let line of e.stdout.split(`
 `)) {
-    let replaced = s.replace($Y, "");
+    let replaced = line.replace(ANSI_ESCAPE_RE, "");
     if (replaced.trim() === "" || replaced.startsWith("## ")) continue;
     if (replaced.startsWith("??")) r++;
     else n++;
   }
-  return { isCleanTree: n + r === 0, changedFileCount: n, untrackedFileCount: r };
+  return {
+    isCleanTree: n + r === 0,
+    changedFileCount: n,
+    untrackedFileCount: r,
+  };
 }
-
 export { ruleLabelOf, formatRulesForCritique_2 };

@@ -20,18 +20,21 @@ function registerRunSkillGeneratorSkill() {
     name: "run-skill-generator",
     menuDescription: "Create a skill that knows how to run this project\u2019s app",
     description: RUN_SKILL_GENERATOR_DESCRIPTION,
-    userInvocable: !0,
-    disableModelInvocation: !0,
+    userInvocable: true,
+    disableModelInvocation: true,
     files: async () => {
       let [{ TEMPLATE_MD: t }, { RUN_EXAMPLE_FILES: e }] = await Promise.all([
         import("./chunk-z2aczm6x.js"),
         import("./chunk-sbfx2p3f.js"),
       ]);
-      return { "template.md": t, ...e };
+      return {
+        "template.md": t,
+        ...e,
+      };
     },
     async getPromptForCommand(t) {
-      let { SKILL_MD: SKILL_MD } = await import("./chunk-z2aczm6x.js"),
-        r = [parseFrontmatter(SKILL_MD).content.trimStart()];
+      let { SKILL_MD } = await import("./chunk-z2aczm6x.js");
+      let r = [parseFrontmatter(SKILL_MD).content.trimStart()];
       if (t)
         r.push(`## User Request
 

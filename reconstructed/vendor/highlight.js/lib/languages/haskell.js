@@ -8,54 +8,90 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:185869-188089 cjs-fingerprint
-var Ua = x(function (OE, Pa) {
-  function Rd(e) {
-    let l = { variants: [e.COMMENT("--+", "$"), e.COMMENT(/\{-/, /-\}/, { contains: ["self"] })] },
-      d = { className: "meta", begin: /\{-#/, end: /#-\}/ },
-      m = { className: "meta", begin: "^#", end: "$" },
-      p = { className: "type", begin: "\\b[A-Z][\\w']*", relevance: 0 },
-      _ = {
-        begin: "\\(",
-        end: "\\)",
-        illegal: '"',
-        contains: [
-          d,
-          m,
-          { className: "type", begin: "\\b[A-Z][\\w]*(\\((\\.\\.|,|\\w+)\\))?" },
-          e.inherit(e.TITLE_MODE, { begin: "[_a-z][\\w']*" }),
-          l,
-        ],
-      },
-      E = { begin: /\{/, end: /\}/, contains: _.contains },
-      u = {
-        className: "number",
-        relevance: 0,
-        variants: [
-          { match: "\\b(([0-9]_*)+)(\\.(([0-9]_*)+))?([eE][+-]?(([0-9]_*)+))?\\b" },
-          { match: "\\b0[xX]_*(([0-9a-fA-F]_*)+)(\\.(([0-9a-fA-F]_*)+))?([pP][+-]?(([0-9]_*)+))?\\b" },
-          { match: "\\b0[oO](([0-7]_*)+)\\b" },
-          { match: "\\b0[bB](([01]_*)+)\\b" },
-        ],
-      };
+var require_haskell = x(function (cjsExports, cjsModule) {
+  function haskell(hljs) {
+    let COMMENT = {
+      variants: [
+        hljs.COMMENT("--+", "$"),
+        hljs.COMMENT(/\{-/, /-\}/, {
+          contains: ["self"],
+        }),
+      ],
+    };
+    let PRAGMA = {
+      className: "meta",
+      begin: /\{-#/,
+      end: /#-\}/,
+    };
+    let PREPROCESSOR = {
+      className: "meta",
+      begin: "^#",
+      end: "$",
+    };
+    let CONSTRUCTOR = {
+      className: "type",
+      begin: "\\b[A-Z][\\w']*",
+      relevance: 0,
+    };
+    let LIST = {
+      begin: "\\(",
+      end: "\\)",
+      illegal: '"',
+      contains: [
+        PRAGMA,
+        PREPROCESSOR,
+        {
+          className: "type",
+          begin: "\\b[A-Z][\\w]*(\\((\\.\\.|,|\\w+)\\))?",
+        },
+        hljs.inherit(hljs.TITLE_MODE, {
+          begin: "[_a-z][\\w']*",
+        }),
+        COMMENT,
+      ],
+    };
+    let RECORD = {
+      begin: /\{/,
+      end: /\}/,
+      contains: LIST.contains,
+    };
+    let u = {
+      className: "number",
+      relevance: 0,
+      variants: [
+        {
+          match: "\\b(([0-9]_*)+)(\\.(([0-9]_*)+))?([eE][+-]?(([0-9]_*)+))?\\b",
+        },
+        {
+          match: "\\b0[xX]_*(([0-9a-fA-F]_*)+)(\\.(([0-9a-fA-F]_*)+))?([pP][+-]?(([0-9]_*)+))?\\b",
+        },
+        {
+          match: "\\b0[oO](([0-7]_*)+)\\b",
+        },
+        {
+          match: "\\b0[bB](([01]_*)+)\\b",
+        },
+      ],
+    };
     return {
       name: "Haskell",
       aliases: ["hs"],
       keywords:
         "let in if then else case of where do module import hiding qualified type data newtype deriving class instance as default infix infixl infixr foreign export ccall stdcall cplusplus jvm dotnet safe unsafe family forall mdo proc rec",
-      unicodeRegex: !0,
+      unicodeRegex: true,
       contains: [
         {
           beginKeywords: "module",
           end: "where",
           keywords: "module where",
-          contains: [_, l],
+          contains: [LIST, COMMENT],
           illegal: "\\W\\.|;",
         },
         {
           begin: "\\bimport\\b",
           end: "$",
           keywords: "import qualified as hiding",
-          contains: [_, l],
+          contains: [LIST, COMMENT],
           illegal: "\\W\\.|;",
         },
         {
@@ -63,46 +99,66 @@ var Ua = x(function (OE, Pa) {
           begin: "^(\\s*)?(class|instance)\\b",
           end: "where",
           keywords: "class family instance where",
-          contains: [p, _, l],
+          contains: [CONSTRUCTOR, LIST, COMMENT],
         },
         {
           className: "class",
           begin: "\\b(data|(new)?type)\\b",
           end: "$",
           keywords: "data family type newtype deriving",
-          contains: [d, p, _, E, l],
+          contains: [PRAGMA, CONSTRUCTOR, LIST, RECORD, COMMENT],
         },
-        { beginKeywords: "default", end: "$", contains: [p, _, l] },
-        { beginKeywords: "infix infixl infixr", end: "$", contains: [e.C_NUMBER_MODE, l] },
+        {
+          beginKeywords: "default",
+          end: "$",
+          contains: [CONSTRUCTOR, LIST, COMMENT],
+        },
+        {
+          beginKeywords: "infix infixl infixr",
+          end: "$",
+          contains: [hljs.C_NUMBER_MODE, COMMENT],
+        },
         {
           begin: "\\bforeign\\b",
           end: "$",
           keywords: "foreign import export ccall stdcall cplusplus jvm dotnet safe unsafe",
-          contains: [p, e.QUOTE_STRING_MODE, l],
+          contains: [CONSTRUCTOR, hljs.QUOTE_STRING_MODE, COMMENT],
         },
-        { className: "meta", begin: "#!\\/usr\\/bin\\/env runhaskell", end: "$" },
-        d,
-        m,
+        {
+          className: "meta",
+          begin: "#!\\/usr\\/bin\\/env runhaskell",
+          end: "$",
+        },
+        PRAGMA,
+        PREPROCESSOR,
         {
           scope: "string",
           begin: /'(?=\\?.')/,
           end: /'/,
-          contains: [{ scope: "char.escape", match: /\\./ }],
+          contains: [
+            {
+              scope: "char.escape",
+              match: /\\./,
+            },
+          ],
         },
-        e.QUOTE_STRING_MODE,
+        hljs.QUOTE_STRING_MODE,
         u,
-        p,
-        e.inherit(e.TITLE_MODE, { begin: "^[_a-z][\\w']*" }),
+        CONSTRUCTOR,
+        hljs.inherit(hljs.TITLE_MODE, {
+          begin: "^[_a-z][\\w']*",
+        }),
         {
           begin:
             "(?!-)([!#$%&*+.\\/<=>?@\\\\^~-]|(?!([(),;\\[\\]`|{}]|[_:\"']))(\\p{S}|\\p{P}))--+|--+(?!-)([!#$%&*+.\\/<=>?@\\\\^~-]|(?!([(),;\\[\\]`|{}]|[_:\"']))(\\p{S}|\\p{P}))",
         },
-        l,
-        { begin: "->|<-" },
+        COMMENT,
+        {
+          begin: "->|<-",
+        },
       ],
     };
   }
-  Pa.exports = Rd;
+  cjsModule.exports = haskell;
 });
-
-export { Ua };
+export { require_haskell };

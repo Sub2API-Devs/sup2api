@@ -15,7 +15,7 @@ import { BASH_TOOL_NAME } from "../tools/BashTool/toolName.js";
 
 //@ chunk-08945j39.js:1783-2325 placement
 function toBackgroundTaskEvent(e, n) {
-  if (n.type !== "system") return !1;
+  if (n.type !== "system") return false;
   switch (n.subtype) {
     case "background_tasks_changed":
       if (Array.isArray(n.tasks)) {
@@ -24,23 +24,23 @@ function toBackgroundTaskEvent(e, n) {
           if (typeof task?.task_id === "string")
             e.set(task.task_id, toBackgroundTaskInfo(task.task_id, task, task.subagent_type));
       }
-      return !0;
+      return true;
     case "task_started":
-      if (typeof n.task_id === "string" && n.is_backgrounded !== !1)
+      if (typeof n.task_id === "string" && n.is_backgrounded !== false)
         e.set(n.task_id, toBackgroundTaskInfo(n.task_id, n, e.get(n.task_id)?.subagentType));
-      return !0;
+      return true;
     case "task_notification":
       if (typeof n.task_id === "string") e.delete(n.task_id);
-      return !0;
+      return true;
     case "task_progress":
     case "task_updated":
-      return !0;
+      return true;
     default:
-      return !1;
+      return false;
   }
 }
 //@ chunk-08945j39.js:2325-2370 placement
-var at = new Set(["local_bash", "local_agent"]);
+var BACKGROUND_TASK_TYPES_WITH_TRACKED_IDS = new Set(["local_bash", "local_agent"]);
 //@ chunk-08945j39.js:2370-2987 placement
 function isSystemInitMessage(e, n) {
   if (n.type === "result" || (n.type === "system" && n.subtype === "init")) {
@@ -51,13 +51,18 @@ function isSystemInitMessage(e, n) {
   switch (n.subtype) {
     case "task_started":
       if (typeof n.task_id !== "string") return;
-      if (n.is_backgrounded === !1 && n.skip_transcript !== !0 && at.has(n.task_type)) e.add(n.task_id);
+      if (
+        n.is_backgrounded === false &&
+        n.skip_transcript !== true &&
+        BACKGROUND_TASK_TYPES_WITH_TRACKED_IDS.has(n.task_type)
+      )
+        e.add(n.task_id);
       else e.delete(n.task_id);
       return;
     case "task_updated":
       if (
-        n.patch?.is_backgrounded === !0 ||
-        (n.patch?.status !== void 0 && isTerminalTaskStatus(n.patch.status))
+        n.patch?.is_backgrounded === true ||
+        (n.patch?.status !== undefined && isTerminalTaskStatus(n.patch.status))
       )
         e.delete(n.task_id);
       return;
@@ -72,82 +77,88 @@ function isSystemInitMessage(e, n) {
   }
 }
 //@ chunk-08945j39.js:2987-3000 placement
-var YAs = 2000;
+/**
+ * 导出常量或表 `BASH_TASK_COUNT_DELAY_MS`：值为 2000。
+ */
+var BASH_TASK_COUNT_DELAY_MS = 2000;
 //@ chunk-08945j39.js:3000-3083 placement
-function Kkr(e) {
+/**
+ * 导出函数 `supportsBackgroundTasksMovesBash`：参数 e，返回 Array.isArray(e.capabilities) && e.capabilities.includes(BACKGROUND_TASKS_MOVES_BASH_V1)。
+ */
+function supportsBackgroundTasksMovesBash(e) {
   return Array.isArray(e.capabilities) && e.capabilities.includes(BACKGROUND_TASKS_MOVES_BASH_V1);
 }
+//@ chunk-08945j39.js:3083-3323 placement
 /**
  * 取主线程助手消息中非后台运行的 Bash 工具调用 id。
  */
-//@ chunk-08945j39.js:3083-3323 placement
 function getForegroundBashToolUseIds(e) {
   if (e.type !== "assistant" || e.parent_tool_use_id) return [];
-  let n = e.message?.content;
-  return Array.isArray(n)
-    ? n.flatMap((s) =>
+  let content = e.message?.content;
+  return Array.isArray(content)
+    ? content.flatMap((s) =>
         s?.type === "tool_use" &&
         s.name === BASH_TOOL_NAME &&
         typeof s.id === "string" &&
-        s.input?.run_in_background !== !0
+        s.input?.run_in_background !== true
           ? [s.id]
           : [],
       )
     : [];
 }
+//@ chunk-08945j39.js:3323-3506 placement
 /**
  * 取用户消息中所有工具结果对应的工具调用 id。
  */
-//@ chunk-08945j39.js:3323-3506 placement
-function getToolResultIds(e) {
-  let n = e.type === "user" ? e.message?.content : void 0;
-  return Array.isArray(n)
-    ? n.flatMap((s) =>
+function getToolResultIds(payload) {
+  let content = payload.type === "user" ? payload.message?.content : undefined;
+  return Array.isArray(content)
+    ? content.flatMap((s) =>
         s?.type === "tool_result" && typeof s.tool_use_id === "string" ? [s.tool_use_id] : [],
       )
     : [];
 }
 //@ chunk-08945j39.js:3506-3517 placement
-var dt = 256;
+var MAX_TRACKED_BACKGROUND_TASK_IDS = 256;
+//@ chunk-08945j39.js:3517-3898 placement
 /**
  * 根据系统消息（后台任务变化、任务开始、任务更新为后台）记录需要跟踪的后台任务 id。
  */
-//@ chunk-08945j39.js:3517-3898 placement
-function trackBackgroundTask(e, n) {
+function trackBackgroundTask(awaitingFinish, n) {
   if (n.type !== "system") return;
   switch (n.subtype) {
     case "background_tasks_changed":
       if (Array.isArray(n.tasks)) {
         for (let task of n.tasks)
-          if (task?.awaited !== !0) addBackgroundTaskId(e, task?.task_id, task?.ambient);
+          if (task?.awaited !== true) addBackgroundTaskId(awaitingFinish, task?.task_id, task?.ambient);
       }
       return;
     case "task_started":
-      if (n.is_backgrounded !== !1 && n.awaited !== !0) addBackgroundTaskId(e, n.task_id, n.ambient);
+      if (n.is_backgrounded !== false && n.awaited !== true)
+        addBackgroundTaskId(awaitingFinish, n.task_id, n.ambient);
       return;
     case "task_updated":
-      if (n.patch?.is_backgrounded === !0) addBackgroundTaskId(e, n.task_id);
+      if (n.patch?.is_backgrounded === true) addBackgroundTaskId(awaitingFinish, n.task_id);
       return;
     default:
       return;
   }
 }
 //@ chunk-08945j39.js:3898-4045 placement
-function addBackgroundTaskId(e, n, s) {
-  if (typeof n !== "string" || s === !0 || e.has(n)) return;
-  if (e.size >= dt) {
+function addBackgroundTaskId(e, taskId, ambient) {
+  if (typeof taskId !== "string" || ambient === true || e.has(taskId)) return;
+  if (e.size >= MAX_TRACKED_BACKGROUND_TASK_IDS) {
     let i = e.values().next().value;
-    if (i !== void 0) e.delete(i);
+    if (i !== undefined) e.delete(i);
   }
-  e.add(n);
+  e.add(taskId);
 }
-
 export {
   trackBackgroundTask,
   isSystemInitMessage,
   toBackgroundTaskEvent,
-  Kkr,
+  supportsBackgroundTasksMovesBash,
   getForegroundBashToolUseIds,
-  YAs,
+  BASH_TASK_COUNT_DELAY_MS,
   getToolResultIds,
 };

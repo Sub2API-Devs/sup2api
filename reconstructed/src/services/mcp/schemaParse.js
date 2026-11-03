@@ -8,16 +8,21 @@
  * pieces: chunk-zxqppt5p.js (2)
  * attribution: placement 2
  */
-import { rlo, olo } from "../../../vendor/zod/v4/core/api.js";
-import { Ygs, Xgs } from "../../../vendor/zod/v4/classic/schemas.js";
+import { _isoDateTime, _isoDate } from "../../../vendor/zod/v4/core/api.js";
+import { ZodISODateTime, ZodISODate } from "../../../vendor/zod/v4/classic/schemas.js";
 
 //@ chunk-zxqppt5p.js:240-273 placement
-function t0(o) {
-  return rlo(Ygs, o);
+/**
+ * 用输出 schema 解析值（内部包装）。
+ */
+function parseToolOutputSchema(params) {
+  return _isoDateTime(ZodISODateTime, params);
 }
 //@ chunk-zxqppt5p.js:273-307 placement
-function t1i(o) {
-  return olo(Xgs, o);
+/**
+ * 用输入 schema 宽松解析值（内部包装）。
+ */
+function parseToolInputSchemaLoose(params) {
+  return _isoDate(ZodISODate, params);
 }
-
-export { t0, t1i };
+export { parseToolOutputSchema, parseToolInputSchemaLoose };

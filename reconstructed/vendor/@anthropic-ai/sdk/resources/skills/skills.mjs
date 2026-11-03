@@ -5,71 +5,95 @@
  * pieces: chunk-hwmsct5x.js (1)
  * attribution: esm-fingerprint 1
  */
-import { Y } from "../../core/resource.mjs";
-import { ko } from "./versions.mjs";
+import { APIResource } from "../../core/resource.mjs";
+import { Versions_3 } from "./versions.mjs";
 import { ut } from "../../internal/uploads.mjs";
-import { T } from "../../internal/headers.mjs";
+import { buildHeaders } from "../../internal/headers.mjs";
 import { I } from "../../internal/utils/path.mjs";
-import { ee } from "../../core/pagination.mjs";
+import { TokenPage } from "../../core/pagination.mjs";
 
 //@ chunk-hwmsct5x.js:161297-162129 esm-fingerprint
-var xo = (() => {
-  class e extends Y {
+var Skills_2 = (() => {
+  class Skills extends APIResource {
     constructor() {
       super(...arguments);
-      this.versions = new ko(this._client);
+      this.versions = new Versions_3(this._client);
     }
-    create(n, r) {
-      let { workspace_id: workspace_id, ...h } = n;
+    create(params, options) {
+      let { workspace_id, ...body } = params;
       return this._client.post(
         "/v1/skills",
         ut(
           {
-            body: h,
-            ...r,
-            headers: T([
-              { ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0) },
-              r?.headers,
+            body,
+            ...options,
+            headers: buildHeaders([
+              {
+                ...(workspace_id != null
+                  ? {
+                      "anthropic-workspace-id": workspace_id,
+                    }
+                  : undefined),
+              },
+              options?.headers,
             ]),
           },
           this._client,
-          !1,
+          false,
         ),
       );
     }
-    retrieve(n, r = {}, s) {
-      let { workspace_id: workspace_id } = r ?? {};
-      return this._client.get(I`/v1/skills/${n}`, {
-        ...s,
-        headers: T([
-          { ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0) },
-          s?.headers,
+    retrieve(skillID, params = {}, options) {
+      let { workspace_id } = params ?? {};
+      return this._client.get(I`/v1/skills/${skillID}`, {
+        ...options,
+        headers: buildHeaders([
+          {
+            ...(workspace_id != null
+              ? {
+                  "anthropic-workspace-id": workspace_id,
+                }
+              : undefined),
+          },
+          options?.headers,
         ]),
       });
     }
-    list(n = {}, r) {
-      let { workspace_id: workspace_id, ...h } = n ?? {};
-      return this._client.getAPIList("/v1/skills", ee, {
-        query: h,
-        ...r,
-        headers: T([
-          { ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0) },
-          r?.headers,
+    list(params = {}, options) {
+      let { workspace_id, ...query } = params ?? {};
+      return this._client.getAPIList("/v1/skills", TokenPage, {
+        query,
+        ...options,
+        headers: buildHeaders([
+          {
+            ...(workspace_id != null
+              ? {
+                  "anthropic-workspace-id": workspace_id,
+                }
+              : undefined),
+          },
+          options?.headers,
         ]),
       });
     }
-    delete(n, r = {}, s) {
-      let { workspace_id: workspace_id } = r ?? {};
-      return this._client.delete(I`/v1/skills/${n}`, {
-        ...s,
-        headers: T([
-          { ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0) },
-          s?.headers,
+    delete(skillID, params = {}, options) {
+      let { workspace_id } = params ?? {};
+      return this._client.delete(I`/v1/skills/${skillID}`, {
+        ...options,
+        headers: buildHeaders([
+          {
+            ...(workspace_id != null
+              ? {
+                  "anthropic-workspace-id": workspace_id,
+                }
+              : undefined),
+          },
+          options?.headers,
         ]),
       });
     }
   }
-  return ((e.Versions = ko), e);
+  Skills.Versions = Versions_3;
+  return Skills;
 })();
-
-export { xo };
+export { Skills_2 };

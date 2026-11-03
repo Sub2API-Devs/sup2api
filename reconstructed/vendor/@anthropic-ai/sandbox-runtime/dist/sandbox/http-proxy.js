@@ -5,566 +5,738 @@
  * pieces: chunk-fq0cr76a.js (4)
  * attribution: esm-fingerprint 4
  */
-import {
-  createServer,
-  createServer as createServer_2,
-  createServer as createServer_3,
-  Agent,
-  request,
-} from "http";
-import {
-  connect,
-  connect as connect_2,
-  isIP,
-  isIP as isIP_2,
-  isIP as isIP_3,
-  isIP as isIP_4,
-  isIP as isIP_5,
-} from "net";
+import { createServer as createServer_2, Agent, request } from "http";
+import { connect, isIP } from "net";
 import { URL as dR } from "url";
-import { request as request_2, request as request_3 } from "https";
-import { Uh, tT, Fh } from "./emitted-connection.js";
-import { At } from "../utils/debug.js";
-import { Iwn } from "./sandbox-utils.js";
+import { request as request_2 } from "https";
+import {
+  assertTlsTerminationSupported,
+  createByteBudget,
+  gateSocketOnBufferedBody,
+} from "./emitted-connection.js";
+import { logForDebugging as logForDebugging_2 } from "../utils/debug.js";
+import { encodedCommandFromProxyUser } from "./sandbox-utils.js";
 import {
   Pm,
-  Ks,
-  Rm,
-  km,
-  Nm,
-  Pf,
-  Om,
-  Cm,
-  Dm,
-  Lf,
+  respondDenied,
+  readRequestTarget,
+  requestTargetAsSpelled,
+  respondRefusedTarget,
+  hostHeaderValues,
+  hostMismatch,
+  decideAndRespond,
+  applyHeaderEdits,
+  respondUpstreamError,
   invokeRequestFilterOnResponse,
-  pc,
+  removeHeadersFolded,
 } from "./request-filter.js";
-import { JF, RTt, rsr, osr, m8o, D3r, ssr, W$e, Wot, kwn, g8o, H3r, L3r } from "./parent-proxy.js";
-import { sR, lR } from "./tls-terminate-proxy.js";
+import {
+  canonicalizeHost,
+  RTt,
+  shouldBypassParentProxy,
+  selectParentProxyUrl,
+  openConnectTunnel,
+  connectViaParentProxy,
+  dialDirect,
+  stripBrackets,
+  stripHopByHop,
+  relayResponseHead,
+  proxyAuthHeader,
+  directRequestOptions,
+  onUpstreamError,
+} from "./parent-proxy.js";
+import { peekForClientHello, terminateAndForward } from "./tls-terminate-proxy.js";
 import { ol } from "./resolved-address-guard.js";
-import { Sm } from "./mitm-ca.js";
-import { Lm } from "./body-substitution.js";
+import { CRL_PATH } from "./mitm-ca.js";
+import { prepareBodySubstitution } from "./body-substitution.js";
 
 //@ chunk-fq0cr76a.js:682727-682816 esm-fingerprint
-var fR = ["Connection blocked by network allowlist", "blocked-by-allowlist"],
-  weakSet_2 = new WeakSet();
+var ALLOWLIST_DENY = ["Connection blocked by network allowlist", "blocked-by-allowlist"];
+var handedIn = new WeakSet();
 //@ chunk-fq0cr76a.js:682816-693701 esm-fingerprint
-function hR(e) {
-  if (e.mitmCA) Uh();
-  let n = createServer(e.maxHeaderSize !== void 0 ? { maxHeaderSize: e.maxHeaderSize } : {}),
-    r = 0,
-    s = new Set(),
-    h = e.byteBudget ?? tT(e.maxBufferedBytes ?? 268435456),
-    y = (w, R) => (e.denyHeader !== void 0 ? { name: e.denyHeader, value: w } : R),
-    b = [fR[0], y("host_not_allowed", fR[1])];
-  n.on("clientError", (w, R) => {
-    if (
-      (At(`Client connection error: ${w.message}`, { level: "error" }),
-      R.on("error", () => {}),
-      w.code !== "ECONNRESET" && R.writable)
-    ) {
-      let D =
-          w.code === "HPE_HEADER_OVERFLOW" && e.maxHeaderSize === void 0
-            ? "431 Request Header Fields Too Large"
-            : "400 Bad Request",
-        O =
-          e.denyHeader !== void 0
-            ? `${e.denyHeader}: bad_request\r
+function hR(options) {
+  if (options.mitmCA) assertTlsTerminationSupported();
+  let server = createServer_2(
+    options.maxHeaderSize !== undefined
+      ? {
+          maxHeaderSize: options.maxHeaderSize,
+        }
+      : {},
+  );
+  let terminatedTunnels = 0;
+  let toldOfCap = new Set();
+  let byteBudget = options.byteBudget ?? createByteBudget(options.maxBufferedBytes ?? 268435456);
+  let markFor = (code, tag) =>
+    options.denyHeader !== undefined
+      ? {
+          name: options.denyHeader,
+          value: code,
+        }
+      : tag;
+  let allowlistDeny = [ALLOWLIST_DENY[0], markFor("host_not_allowed", ALLOWLIST_DENY[1])];
+  server.on("clientError", (err, socket) => {
+    logForDebugging_2(`Client connection error: ${err.message}`, {
+      level: "error",
+    });
+    socket.on("error", () => {});
+    if (err.code !== "ECONNRESET" && socket.writable) {
+      let status =
+        err.code === "HPE_HEADER_OVERFLOW" && options.maxHeaderSize === undefined
+          ? "431 Request Header Fields Too Large"
+          : "400 Bad Request";
+      let mark =
+        options.denyHeader !== undefined
+          ? `${options.denyHeader}: bad_request\r
 `
-            : "";
-      (R.end(
-        `HTTP/1.1 ${D}\r
-${O}\r
+          : "";
+      socket.end(
+        `HTTP/1.1 ${status}\r
+${mark}\r
 `,
-        () => R.destroy(),
-      ),
-        setTimeout(() => R.destroy(), 1000).unref?.());
+        () => socket.destroy(),
+      );
+      setTimeout(() => socket.destroy(), 1000).unref?.();
       return;
     }
-    R.destroy();
+    socket.destroy();
   });
-  let S = (w) => {
-    if (!e.proxyAuthToken) return { ok: !0 };
-    let match = /^basic\s+([a-z0-9+/=]+)\s*$/i.exec(w ?? "");
-    if (!match) return { ok: !1 };
-    let str = Buffer.from(match[1], "base64").toString("utf8"),
-      index = str.indexOf(":");
-    if (index <= 0 || str.slice(index + 1) !== e.proxyAuthToken) return { ok: !1 };
-    return { ok: !0, encodedCommand: Iwn(str.slice(0, index)) };
+  let checkAuth = (got) => {
+    if (!options.proxyAuthToken)
+      return {
+        ok: true,
+      };
+    let m = /^basic\s+([a-z0-9+/=]+)\s*$/i.exec(got ?? "");
+    if (!m)
+      return {
+        ok: false,
+      };
+    let decoded = Buffer.from(m[1], "base64").toString("utf8");
+    let sep = decoded.indexOf(":");
+    if (sep <= 0 || decoded.slice(sep + 1) !== options.proxyAuthToken)
+      return {
+        ok: false,
+      };
+    return {
+      ok: true,
+      encodedCommand: encodedCommandFromProxyUser(decoded.slice(0, sep)),
+    };
   };
-  return (
-    n.on("connect", async (w, R, D) => {
-      R.on("error", (me) => {
-        (At(`Client socket error: ${me.message}`, { level: "error" }), R.destroy());
+  server.on("connect", async (req, socket, head) => {
+    socket.on("error", (err) => {
+      logForDebugging_2(`Client socket error: ${err.message}`, {
+        level: "error",
       });
-      let O = !1;
-      R.once("close", () => {
-        O = !0;
-      });
-      let L = () => {
-          ((O = !0), R.destroy());
-        },
-        V = 65536,
-        K = 0,
-        q = !1,
-        Z = [],
-        J = (me) => {
-          if (!q) return;
-          if (((K += me.length), K > V)) {
-            (At("CONNECT client exceeded pre-establishment capture cap; destroying", { level: "error" }),
-              L());
-            return;
-          }
-          Z.push(me);
-        };
-      if (!e.mitmCA) ((q = !0), R.on("data", J));
-      if (R.readableEnded) L();
-      else R.once("end", L);
-      let ie = () => {
-          if (((q = !1), Z.length)) ((D = Buffer.concat([D, ...Z])), (Z.length = 0));
-        },
-        ae = () => {
-          (R.removeListener("end", L), ie());
-        },
-        Se = (me) => {
-          if (O || R.destroyed || R.readableEnded || !R.writable) {
-            (At("CONNECT client gone before status write; dropping verdict and destroying socket"),
-              R.destroy());
-            return;
-          }
-          (ae(), R.end(me));
-        };
-      if (O || R.destroyed) return;
-      let ue = !1;
-      try {
-        let me = S(w.headers["proxy-authorization"]);
-        if (!me.ok) {
-          Se(`HTTP/1.1 407 Proxy Authentication Required\r
+      socket.destroy();
+    });
+    let clientGone = false;
+    socket.once("close", () => {
+      clientGone = true;
+    });
+    let onDecisionWindowEof = () => {
+      clientGone = true;
+      socket.destroy();
+    };
+    let MAX_DECISION_CAPTURE_BYTES = 65536;
+    let decisionCaptureBytes = 0;
+    let capturing = false;
+    let decisionData = [];
+    let onDecisionData = (chunk) => {
+      if (!capturing) return;
+      decisionCaptureBytes += chunk.length;
+      if (decisionCaptureBytes > MAX_DECISION_CAPTURE_BYTES) {
+        logForDebugging_2("CONNECT client exceeded pre-establishment capture cap; destroying", {
+          level: "error",
+        });
+        onDecisionWindowEof();
+        return;
+      }
+      decisionData.push(chunk);
+    };
+    if (!options.mitmCA) {
+      capturing = true;
+      socket.on("data", onDecisionData);
+    }
+    if (socket.readableEnded) onDecisionWindowEof();
+    else socket.once("end", onDecisionWindowEof);
+    let disarmDecisionCapture = () => {
+      capturing = false;
+      if (decisionData.length) {
+        head = Buffer.concat([head, ...decisionData]);
+        decisionData.length = 0;
+      }
+    };
+    let disarmDecisionWindowEof = () => {
+      socket.removeListener("end", onDecisionWindowEof);
+      disarmDecisionCapture();
+    };
+    let endWithStatus = (payload) => {
+      if (clientGone || socket.destroyed || socket.readableEnded || !socket.writable) {
+        logForDebugging_2("CONNECT client gone before status write; dropping verdict and destroying socket");
+        socket.destroy();
+        return;
+      }
+      disarmDecisionWindowEof();
+      socket.end(payload);
+    };
+    if (clientGone || socket.destroyed) return;
+    let wrote200 = false;
+    try {
+      let auth = checkAuth(req.headers["proxy-authorization"]);
+      if (!auth.ok) {
+        endWithStatus(`HTTP/1.1 407 Proxy Authentication Required\r
 Proxy-Authenticate: Basic realm="srt"\r
 \r
 `);
-          return;
-        }
-        let Ne = EH(w.url);
-        if (!Ne || (e.requireAsciiHost && !pR(w.url, !1))) {
-          At(`Invalid CONNECT request: ${w.url}`, { level: "error" });
-          let Me =
-            e.denyHeader !== void 0
-              ? `${e.denyHeader}: bad_request\r
+        return;
+      }
+      let target = parseConnectTarget(req.url);
+      if (!target || (options.requireAsciiHost && !isAsciiAuthority(req.url, false))) {
+        logForDebugging_2(`Invalid CONNECT request: ${req.url}`, {
+          level: "error",
+        });
+        let mark =
+          options.denyHeader !== undefined
+            ? `${options.denyHeader}: bad_request\r
 `
-              : "";
-          Se(`HTTP/1.1 400 Bad Request\r
-${Me}\r
+            : "";
+        endWithStatus(`HTTP/1.1 400 Bad Request\r
+${mark}\r
 `);
-          return;
-        }
-        let { hostname: hostname, port: port } = Ne,
-          he;
-        if (
-          !(await e.filter(port, hostname, R, me.encodedCommand, (Me) => {
-            he = Me;
-          }))
-        ) {
-          (At(`Connection blocked to ${hostname}:${port}`, { level: "error" }), Se(Pm(...b, he)));
-          return;
-        }
-        if (O || R.destroyed) {
-          R.destroy();
-          return;
-        }
-        let rt = JF(hostname) ?? hostname,
-          ut = e.lookupFor?.(port, me.encodedCommand);
-        if (e.mitmCA && (e.shouldTerminateTLS?.(rt, port) ?? !0)) {
-          let Me = e.maxTerminatedTunnels ?? 256;
-          if (r >= Me) {
-            if (!s.has(me.encodedCommand)) {
-              if (s.size >= 100) s.clear();
-              s.add(me.encodedCommand);
-              let jt = `the sandbox's limit of ${Me} TLS-terminated tunnels at once is reached; the limit is network.tlsTerminate.maxTunnels in the sandbox's configuration`;
-              (At(`[proxy] CONNECT ${rt}:${port} refused: ${jt}`, { level: "warn" }),
-                e.onFilterRequestDenied?.({
-                  method: "CONNECT",
-                  url: RTt(rt, port, 0),
-                  reason: jt,
-                  encodedCommand: me.encodedCommand,
-                }));
-            }
-            let Nt = y("too_many_tunnels", "too-many-tunnels"),
-              [Wt, gt] = typeof Nt === "string" ? ["X-Proxy-Error", Nt] : [Nt.name, Nt.value];
-            R.end(`HTTP/1.1 503 Service Unavailable\r
+        return;
+      }
+      let { hostname: requestedHost, port } = target;
+      let reason;
+      if (
+        !(await options.filter(port, requestedHost, socket, auth.encodedCommand, (Me) => {
+          reason = Me;
+        }))
+      ) {
+        logForDebugging_2(`Connection blocked to ${requestedHost}:${port}`, {
+          level: "error",
+        });
+        endWithStatus(Pm(...allowlistDeny, reason));
+        return;
+      }
+      if (clientGone || socket.destroyed) {
+        socket.destroy();
+        return;
+      }
+      let hostname = canonicalizeHost(requestedHost) ?? requestedHost;
+      let lookup = options.lookupFor?.(port, auth.encodedCommand);
+      if (options.mitmCA && (options.shouldTerminateTLS?.(hostname, port) ?? true)) {
+        let maxTunnels = options.maxTerminatedTunnels ?? 256;
+        if (terminatedTunnels >= maxTunnels) {
+          if (!toldOfCap.has(auth.encodedCommand)) {
+            if (toldOfCap.size >= 100) toldOfCap.clear();
+            toldOfCap.add(auth.encodedCommand);
+            let reason = `the sandbox's limit of ${maxTunnels} TLS-terminated tunnels at once is reached; the limit is network.tlsTerminate.maxTunnels in the sandbox's configuration`;
+            logForDebugging_2(`[proxy] CONNECT ${hostname}:${port} refused: ${reason}`, {
+              level: "warn",
+            });
+            options.onFilterRequestDenied?.({
+              method: "CONNECT",
+              url: RTt(hostname, port, 0),
+              reason,
+              encodedCommand: auth.encodedCommand,
+            });
+          }
+          let mark = markFor("too_many_tunnels", "too-many-tunnels");
+          let [name, value] = typeof mark === "string" ? ["X-Proxy-Error", mark] : [mark.name, mark.value];
+          socket.end(`HTTP/1.1 503 Service Unavailable\r
 Content-Type: text/plain\r
-${Wt}: ${gt}\r
+${name}: ${value}\r
 Connection: close\r
 \r
 too many TLS-terminated tunnels at once`);
-            return;
-          }
-          r++;
-          let Ft = !0,
-            xn = () => {
-              if (!Ft) return;
-              if (((Ft = !1), r--, r * 2 <= Me)) s.clear();
-            },
-            mt = () => !1,
-            Mt = setTimeout(() => {
-              if (mt()) return;
-              (At(`[proxy] TLS handshake not done in time for ${rt}:${port}; tunnel closed`), R.destroy());
-            }, e.tlsHandshakeTimeoutMs ?? 1e4);
-          (Mt.unref?.(),
-            R.once("close", () => {
-              (clearTimeout(Mt), xn());
-            }),
-            R.write(`HTTP/1.1 200 Connection Established\r
+          return;
+        }
+        terminatedTunnels++;
+        let slotHeld = true;
+        let freeSlot = () => {
+          if (!slotHeld) return;
+          slotHeld = false;
+          terminatedTunnels--;
+          if (terminatedTunnels * 2 <= maxTunnels) toldOfCap.clear();
+        };
+        let handshakeDone = () => false;
+        let deadline = setTimeout(() => {
+          if (handshakeDone()) return;
+          logForDebugging_2(`[proxy] TLS handshake not done in time for ${hostname}:${port}; tunnel closed`);
+          socket.destroy();
+        }, options.tlsHandshakeTimeoutMs ?? 1e4);
+        deadline.unref?.();
+        socket.once("close", () => {
+          clearTimeout(deadline);
+          freeSlot();
+        });
+        socket.write(`HTTP/1.1 200 Connection Established\r
 \r
-`),
-            (ue = !0));
-          let mn = await sR(R, D);
-          if (!mn.isTLS) (clearTimeout(Mt), xn());
-          if (O || R.destroyed) {
-            R.destroy();
-            return;
-          }
-          if (mn.isTLS) {
-            (ae(),
-              lR(
-                e.mitmCA,
-                e.filterRequest,
-                e.mutateHeaders,
-                e.getBodySubstitutions,
-                R,
-                mn.head,
-                {
-                  hostname: rt,
-                  port: port,
-                  upstreamCA: e.tlsTerminateUpstreamCA,
-                  lookup: ut,
-                  stripResponseHeaders: e.stripResponseHeaders,
-                  requireHostMatch: e.requireHostMatch,
-                  maxHeaderSize: e.maxHeaderSize,
-                  foldHopByHop: e.foldHopByHop,
-                  denyHeader: e.denyHeader,
-                  requestTargetAsSpelled: e.requestTargetAsSpelled,
-                  ambiguousRequestTarget: e.ambiguousRequestTarget,
-                  byteBudget: h,
-                  timeouts: e.tunnelTimeouts,
-                  onEstablished: () => clearTimeout(Mt),
-                  onHandshakeProbe: (Nt) => {
-                    mt = Nt;
-                  },
-                  onFilterRequestDeny: e.onFilterRequestDenied
-                    ? (Nt, Wt, gt) =>
-                        e.onFilterRequestDenied({
-                          method: Nt,
-                          url: Wt,
-                          reason: gt,
-                          encodedCommand: me.encodedCommand,
-                        })
-                    : void 0,
-                },
-                e.planSigv4,
-                e.maxSigv4ResignBodyBytes,
-              ));
-            return;
-          }
-          if (e.refuseOpaqueTunnels) {
-            (At(`[tls-terminate] non-TLS bytes on CONNECT ${rt}:${port}; refused (refuseOpaqueTunnels)`),
-              e.onFilterRequestDenied?.({
-                method: "CONNECT",
-                url: RTt(rt, port, 0),
-                reason: "tunnel carries no TLS and cannot be inspected",
-                encodedCommand: me.encodedCommand,
-              }),
-              R.destroy());
-            return;
-          }
-          (At(`[tls-terminate] non-TLS bytes on CONNECT ${rt}:${port}; opaque-tunnelling`), (D = mn.head));
-        } else if (e.refuseOpaqueTunnels) {
-          (e.onFilterRequestDenied?.({
+`);
+        wrote200 = true;
+        let peeked = await peekForClientHello(socket, head);
+        if (!peeked.isTLS) {
+          clearTimeout(deadline);
+          freeSlot();
+        }
+        if (clientGone || socket.destroyed) {
+          socket.destroy();
+          return;
+        }
+        if (peeked.isTLS) {
+          disarmDecisionWindowEof();
+          terminateAndForward(
+            options.mitmCA,
+            options.filterRequest,
+            options.mutateHeaders,
+            options.getBodySubstitutions,
+            socket,
+            peeked.head,
+            {
+              hostname,
+              port,
+              upstreamCA: options.tlsTerminateUpstreamCA,
+              lookup,
+              stripResponseHeaders: options.stripResponseHeaders,
+              requireHostMatch: options.requireHostMatch,
+              maxHeaderSize: options.maxHeaderSize,
+              foldHopByHop: options.foldHopByHop,
+              denyHeader: options.denyHeader,
+              requestTargetAsSpelled: options.requestTargetAsSpelled,
+              ambiguousRequestTarget: options.ambiguousRequestTarget,
+              byteBudget,
+              timeouts: options.tunnelTimeouts,
+              onEstablished: () => clearTimeout(deadline),
+              onHandshakeProbe: (isDone) => {
+                handshakeDone = isDone;
+              },
+              onFilterRequestDeny: options.onFilterRequestDenied
+                ? (method, url, reason) =>
+                    options.onFilterRequestDenied({
+                      method,
+                      url,
+                      reason,
+                      encodedCommand: auth.encodedCommand,
+                    })
+                : undefined,
+            },
+            options.planSigv4,
+            options.maxSigv4ResignBodyBytes,
+          );
+          return;
+        }
+        if (options.refuseOpaqueTunnels) {
+          logForDebugging_2(
+            `[tls-terminate] non-TLS bytes on CONNECT ${hostname}:${port}; refused (refuseOpaqueTunnels)`,
+          );
+          options.onFilterRequestDenied?.({
             method: "CONNECT",
-            url: RTt(rt, port, 0),
-            reason: "this proxy does not tunnel CONNECTs it cannot inspect",
-            encodedCommand: me.encodedCommand,
-          }),
-            Se(Pm("this proxy does not tunnel CONNECTs it cannot inspect", y("opaque_tunnel"))));
-          return;
-        } else if (e.mitmCA) At(`[tls-terminate] policy exempts ${rt}:${port}; opaque-tunnelling`);
-        let we = e.getMitmSocketPath?.(rt),
-          Ae = !we && e.parentProxy && !rsr(e.parentProxy, rt) ? osr(e.parentProxy, { isHttps: !0 }) : void 0,
-          dt;
-        try {
-          if (we)
-            (At(`Routing CONNECT ${rt}:${port} through MITM proxy at ${we}`),
-              (dt = await m8o({
-                dial: () => connect({ path: we }),
-                readyEvent: "connect",
-                destHost: rt,
-                destPort: port,
-              })));
-          else if (Ae) dt = await D3r(Ae, rt, port);
-          else dt = await ssr(rt, port, ut);
-        } catch (error) {
-          if ((At(`CONNECT tunnel failed: ${error.message}`, { level: "error" }), ue)) R.destroy();
-          else if (ol(error)) Se(Pm(error.message, y("address_not_allowed"), error.reason));
-          else
-            Se(`HTTP/1.1 502 Bad Gateway\r
-\r
-`);
+            url: RTt(hostname, port, 0),
+            reason: "tunnel carries no TLS and cannot be inspected",
+            encodedCommand: auth.encodedCommand,
+          });
+          socket.destroy();
           return;
         }
-        if (O || R.destroyed) {
-          (dt.on("error", () => {}), dt.destroy(), R.destroy());
-          return;
-        }
-        if (!ue)
-          R.write(`HTTP/1.1 200 Connection Established\r
-\r
-`);
-        if ((ae(), (R.allowHalfOpen = !0), D.length)) dt.write(D);
-        (dt.pipe(R),
-          R.pipe(dt),
-          dt.on("error", (Me) => {
-            (At(`CONNECT tunnel failed: ${Me.message}`, { level: "error" }), R.destroy());
-          }),
-          R.on("close", () => dt.destroy()),
-          dt.on("close", () => R.destroy()));
-      } catch (error) {
-        if ((At(`Error handling CONNECT: ${error}`, { level: "error" }), ue)) R.destroy();
-        else
-          Se(`HTTP/1.1 500 Internal Server Error\r
-\r
-`);
-      }
-    }),
-    n.on("request", async (w, R) => {
-      (w.on("error", (D) => {
-        At(`Client request error: ${D.message}`, { level: "error" });
-      }),
-        R.on("error", (D) => {
-          (At(`Client response error: ${D.message}`, { level: "error" }), R.socket?.destroy());
-        }));
+        logForDebugging_2(`[tls-terminate] non-TLS bytes on CONNECT ${hostname}:${port}; opaque-tunnelling`);
+        head = peeked.head;
+      } else if (options.refuseOpaqueTunnels) {
+        options.onFilterRequestDenied?.({
+          method: "CONNECT",
+          url: RTt(hostname, port, 0),
+          reason: "this proxy does not tunnel CONNECTs it cannot inspect",
+          encodedCommand: auth.encodedCommand,
+        });
+        endWithStatus(Pm("this proxy does not tunnel CONNECTs it cannot inspect", markFor("opaque_tunnel")));
+        return;
+      } else if (options.mitmCA)
+        logForDebugging_2(`[tls-terminate] policy exempts ${hostname}:${port}; opaque-tunnelling`);
+      let mitmSocketPath = options.getMitmSocketPath?.(hostname);
+      let parentUrl =
+        !mitmSocketPath && options.parentProxy && !shouldBypassParentProxy(options.parentProxy, hostname)
+          ? selectParentProxyUrl(options.parentProxy, {
+              isHttps: true,
+            })
+          : undefined;
+      let upstream;
       try {
-        if (e.mitmCA && w.method === "GET" && new dR(w.url ?? "", "http://x").pathname === Sm) {
-          (R.writeHead(200, {
-            "Content-Type": "application/pkix-crl",
-            "Content-Length": e.mitmCA.crlDer.length,
-          }),
-            R.end(e.mitmCA.crlDer));
-          return;
-        }
-        let D = S(w.headers["proxy-authorization"]);
-        if (!D.ok) {
-          (R.writeHead(407, { "Proxy-Authenticate": 'Basic realm="srt"' }), R.end());
-          return;
-        }
-        if (e.requireAsciiHost && !pR(w.url, !0)) {
-          Ks(R, "destination host is not plain ASCII", y("bad_request"), 400);
-          return;
-        }
-        let O = new dR(w.url),
-          L = O.protocol === "https:",
-          V = L ? 443 : 80,
-          K = W$e(O.hostname),
-          q = O.port ? parseInt(O.port, 10) : V;
-        if (!(await e.filter(q, K, w.socket, D.encodedCommand))) {
-          if (
-            (At(`HTTP request blocked to ${K}:${q}`, { level: "error" }), w.socket.destroyed || R.destroyed)
-          ) {
-            R.destroy();
-            return;
-          }
-          Ks(R, ...b);
-          return;
-        }
-        if (w.socket.destroyed) return;
-        let J = JF(K) ?? K,
-          ie = RTt(J, q, V),
-          ae = { ...Wot(w.headers, { folded: e.foldHopByHop }), host: ie },
-          Se = e.getMitmSocketPath?.(J),
-          ue = !Se && e.parentProxy && !rsr(e.parentProxy, J) ? osr(e.parentProxy, { isHttps: L }) : void 0,
-          me =
-            e.filterRequest && !e.requestTargetAsSpelled
-              ? Rm(w.url, w.method, e.ambiguousRequestTarget)
-              : void 0,
-          Ne = e.requestTargetAsSpelled
-            ? km(w.url, { absolute: !0 })
-            : me
-              ? me.forwarded
-              : `${O.pathname}${O.search}`;
-        if (Ne === void 0) {
-          let Ae = Nm(R, me?.refusal, y("bad_request"));
-          e.onFilterRequestDenied?.({
-            method: w.method ?? "GET",
-            url: `${O.protocol}//${ie}${me?.spelled ?? ""}`,
-            reason: Ae,
-            encodedCommand: D.encodedCommand,
+        if (mitmSocketPath) {
+          logForDebugging_2(`Routing CONNECT ${hostname}:${port} through MITM proxy at ${mitmSocketPath}`);
+          upstream = await openConnectTunnel({
+            dial: () =>
+              connect({
+                path: mitmSocketPath,
+              }),
+            readyEvent: "connect",
+            destHost: hostname,
+            destPort: port,
           });
-          return;
-        }
-        let Ce = `${O.protocol}//${ie}${Ne}`;
-        if (e.maxBufferedRequestBody !== void 0 && weakSet_2.has(w.socket))
-          Fh(w, e.maxBufferedRequestBody, h);
-        let Ie = w,
-          he;
-        if (e.requireHostMatch) {
-          let Ae = Pf(w.rawHeaders);
-          if (Ae.length === 0 && w.httpVersion === "1.1") {
-            Ks(R, "HTTP/1.1 request without a Host header", y("bad_request"), 400);
-            return;
-          }
-          let dt = Om(Ae, void 0, { hostname: J, port: q, defaultPort: V });
-          if (dt !== void 0) {
-            (e.onFilterRequestDenied?.({
-              method: w.method ?? "GET",
-              url: Ce,
-              reason: dt,
-              encodedCommand: D.encodedCommand,
-            }),
-              Ks(R, dt, y("misdirected"), 421));
-            return;
-          }
-        }
-        if (e.filterRequest) {
-          let abortController = new AbortController();
-          R.once("close", () => abortController.abort());
-          let dt = await Cm(
-            e.filterRequest,
-            w,
-            R,
-            Ce,
-            abortController.signal,
-            e.onFilterRequestDenied
-              ? (Me, Ft, xn) =>
-                  e.onFilterRequestDenied({
-                    method: Me,
-                    url: Ft,
-                    reason: xn,
-                    encodedCommand: D.encodedCommand,
-                  })
-              : void 0,
-            {
-              target: { host: J, port: q },
-              requestTarget: me?.spelled ?? Ne,
-              normalizedRequestTarget: me?.normalized,
-              requestTargetIsAmbiguous: me?.ambiguous,
-              rawHeaders: [...w.rawHeaders],
-              scheme: "http",
-            },
-            e.denyHeader,
-            e.plaintextHeaderSet === !0,
-          );
-          if (dt === null) return;
-          if (
-            ((Ie = dt.body),
-            (he = dt.decision),
-            Dm(ae, dt.decision),
-            (w.destroyed && !w.readableEnded) || R.destroyed || w.socket.destroyed || Ie.destroyed)
-          ) {
-            Ie.destroy();
-            return;
-          }
-        }
-        e.mutateHeadersPlaintext?.(ae, J);
-        let ft = Lm(e.getBodySubstitutionsPlaintext, w, ae, J);
-        if (
-          Boolean(w.headers["content-length"] || w.headers["transfer-encoding"]) &&
-          ae["content-length"] === void 0 &&
-          ae["transfer-encoding"] === void 0
-        )
-          ae["transfer-encoding"] = "chunked";
-        let ut = (Ae) => {
-            (At(`Proxy request failed: ${Ae.message}`, { level: "error" }), Lf(R, Ae, e.denyHeader));
-          },
-          we;
-        if (Se) {
-          At(`Routing HTTP ${w.method} ${J}:${q} through MITM proxy at ${Se}`);
-          let Ae = new Agent({ socketPath: Se });
-          we = request({ agent: Ae, path: Ce, method: w.method, headers: ae }, (dt) => {
-            dt.on("error", (Ft) => {
-              (At(`Upstream response error: ${Ft.message}`, { level: "error" }), R.destroy());
-            });
-            let Me = Wot(dt.headers);
-            if ((invokeRequestFilterOnResponse(he, dt.statusCode, Me), e.stripResponseHeaders))
-              pc(Me, e.stripResponseHeaders);
-            if (kwn(R, dt, Me)) dt.pipe(R);
-          });
-        } else if (ue) {
-          let Ae = W$e(ue.hostname),
-            dt = Number(ue.port) || (ue.protocol === "https:" ? 443 : 80),
-            Me = g8o(ue);
-          we = (ue.protocol === "https:" ? request_2 : request)(
-            {
-              hostname: Ae,
-              port: dt,
-              path: Ce,
-              method: w.method,
-              headers: Me ? { ...ae, "proxy-authorization": Me } : ae,
-            },
-            (xn) => {
-              xn.on("error", (Mt) => {
-                (At(`Upstream response error: ${Mt.message}`, { level: "error" }), R.destroy());
-              });
-              let mt = Wot(xn.headers);
-              if ((invokeRequestFilterOnResponse(he, xn.statusCode, mt), e.stripResponseHeaders))
-                pc(mt, e.stripResponseHeaders);
-              if (kwn(R, xn, mt)) xn.pipe(R);
-            },
-          );
-        } else {
-          let Ae;
-          try {
-            Ae = await H3r(J, q, e.lookupFor?.(q, D.encodedCommand), L);
-          } catch (error) {
-            ut(error);
-            return;
-          }
-          if (R.destroyed || w.socket.destroyed) {
-            Ie.destroy();
-            return;
-          }
-          we = (L ? request_2 : request)({ ...Ae, path: Ne, method: w.method, headers: ae }, (dt) => {
-            dt.on("error", (Ft) => {
-              (At(`Upstream response error: ${Ft.message}`, { level: "error" }), R.destroy());
-            });
-            let Me = Wot(dt.headers);
-            if ((invokeRequestFilterOnResponse(he, dt.statusCode, Me), e.stripResponseHeaders))
-              pc(Me, e.stripResponseHeaders);
-            if (kwn(R, dt, Me)) dt.pipe(R);
-          });
-        }
-        if ((L3r(we, ut), R.on("close", () => we.destroy()), ft))
-          (ft.on("error", (Ae) => we.destroy(Ae)),
-            Ie.on("error", (Ae) => ft.destroy(Ae)),
-            R.on("close", () => ft.destroy()),
-            Ie.pipe(ft).pipe(we));
-        else (Ie.on("error", (Ae) => we.destroy(Ae)), Ie.pipe(we));
-      } catch (error) {
-        if ((At(`Error handling HTTP request: ${error}`, { level: "error" }), !R.headersSent))
-          (R.writeHead(500, { "Content-Type": "text/plain" }), R.end("Internal Server Error"));
-        else R.destroy();
+        } else if (parentUrl) upstream = await connectViaParentProxy(parentUrl, hostname, port);
+        else upstream = await dialDirect(hostname, port, lookup);
+      } catch (err) {
+        logForDebugging_2(`CONNECT tunnel failed: ${err.message}`, {
+          level: "error",
+        });
+        if (wrote200) socket.destroy();
+        else if (ol(err)) endWithStatus(Pm(err.message, markFor("address_not_allowed"), err.reason));
+        else
+          endWithStatus(`HTTP/1.1 502 Bad Gateway\r
+\r
+`);
+        return;
       }
-    }),
-    n
-  );
+      if (clientGone || socket.destroyed) {
+        upstream.on("error", () => {});
+        upstream.destroy();
+        socket.destroy();
+        return;
+      }
+      if (!wrote200)
+        socket.write(`HTTP/1.1 200 Connection Established\r
+\r
+`);
+      disarmDecisionWindowEof();
+      socket.allowHalfOpen = true;
+      if (head.length) upstream.write(head);
+      upstream.pipe(socket);
+      socket.pipe(upstream);
+      upstream.on("error", (err) => {
+        logForDebugging_2(`CONNECT tunnel failed: ${err.message}`, {
+          level: "error",
+        });
+        socket.destroy();
+      });
+      socket.on("close", () => upstream.destroy());
+      upstream.on("close", () => socket.destroy());
+    } catch (err) {
+      logForDebugging_2(`Error handling CONNECT: ${err}`, {
+        level: "error",
+      });
+      if (wrote200) socket.destroy();
+      else
+        endWithStatus(`HTTP/1.1 500 Internal Server Error\r
+\r
+`);
+    }
+  });
+  server.on("request", async (req, res) => {
+    req.on("error", (err) => {
+      logForDebugging_2(`Client request error: ${err.message}`, {
+        level: "error",
+      });
+    });
+    res.on("error", (err) => {
+      logForDebugging_2(`Client response error: ${err.message}`, {
+        level: "error",
+      });
+      res.socket?.destroy();
+    });
+    try {
+      if (options.mitmCA && req.method === "GET" && new dR(req.url ?? "", "http://x").pathname === CRL_PATH) {
+        res.writeHead(200, {
+          "Content-Type": "application/pkix-crl",
+          "Content-Length": options.mitmCA.crlDer.length,
+        });
+        res.end(options.mitmCA.crlDer);
+        return;
+      }
+      let auth = checkAuth(req.headers["proxy-authorization"]);
+      if (!auth.ok) {
+        res.writeHead(407, {
+          "Proxy-Authenticate": 'Basic realm="srt"',
+        });
+        res.end();
+        return;
+      }
+      if (options.requireAsciiHost && !isAsciiAuthority(req.url, true)) {
+        respondDenied(res, "destination host is not plain ASCII", markFor("bad_request"), 400);
+        return;
+      }
+      let url = new dR(req.url);
+      let isHttps = url.protocol === "https:";
+      let defaultPort = isHttps ? 443 : 80;
+      let requestedHost = stripBrackets(url.hostname);
+      let port = url.port ? parseInt(url.port, 10) : defaultPort;
+      if (!(await options.filter(port, requestedHost, req.socket, auth.encodedCommand))) {
+        logForDebugging_2(`HTTP request blocked to ${requestedHost}:${port}`, {
+          level: "error",
+        });
+        if (req.socket.destroyed || res.destroyed) {
+          res.destroy();
+          return;
+        }
+        respondDenied(res, ...allowlistDeny);
+        return;
+      }
+      if (req.socket.destroyed) return;
+      let hostname = canonicalizeHost(requestedHost) ?? requestedHost;
+      let authority = RTt(hostname, port, defaultPort);
+      let fwdHeaders = {
+        ...stripHopByHop(req.headers, {
+          folded: options.foldHopByHop,
+        }),
+        host: authority,
+      };
+      let mitmSocketPath = options.getMitmSocketPath?.(hostname);
+      let parentUrl =
+        !mitmSocketPath && options.parentProxy && !shouldBypassParentProxy(options.parentProxy, hostname)
+          ? selectParentProxyUrl(options.parentProxy, {
+              isHttps,
+            })
+          : undefined;
+      let read =
+        options.filterRequest && !options.requestTargetAsSpelled
+          ? readRequestTarget(req.url, req.method, options.ambiguousRequestTarget)
+          : undefined;
+      let requestTarget = options.requestTargetAsSpelled
+        ? requestTargetAsSpelled(req.url, {
+            absolute: true,
+          })
+        : read
+          ? read.forwarded
+          : `${url.pathname}${url.search}`;
+      if (requestTarget === undefined) {
+        let reason = respondRefusedTarget(res, read?.refusal, markFor("bad_request"));
+        options.onFilterRequestDenied?.({
+          method: req.method ?? "GET",
+          url: `${url.protocol}//${authority}${read?.spelled ?? ""}`,
+          reason,
+          encodedCommand: auth.encodedCommand,
+        });
+        return;
+      }
+      let absUrl = `${url.protocol}//${authority}${requestTarget}`;
+      if (options.maxBufferedRequestBody !== undefined && handedIn.has(req.socket))
+        gateSocketOnBufferedBody(req, options.maxBufferedRequestBody, byteBudget);
+      let body = req;
+      let decision;
+      if (options.requireHostMatch) {
+        let hostHeaders = hostHeaderValues(req.rawHeaders);
+        if (hostHeaders.length === 0 && req.httpVersion === "1.1") {
+          respondDenied(res, "HTTP/1.1 request without a Host header", markFor("bad_request"), 400);
+          return;
+        }
+        let why = hostMismatch(hostHeaders, undefined, {
+          hostname,
+          port,
+          defaultPort,
+        });
+        if (why !== undefined) {
+          options.onFilterRequestDenied?.({
+            method: req.method ?? "GET",
+            url: absUrl,
+            reason: why,
+            encodedCommand: auth.encodedCommand,
+          });
+          respondDenied(res, why, markFor("misdirected"), 421);
+          return;
+        }
+      }
+      if (options.filterRequest) {
+        let ac = new AbortController();
+        res.once("close", () => ac.abort());
+        let out = await decideAndRespond(
+          options.filterRequest,
+          req,
+          res,
+          absUrl,
+          ac.signal,
+          options.onFilterRequestDenied
+            ? (method, url, reason) =>
+                options.onFilterRequestDenied({
+                  method,
+                  url,
+                  reason,
+                  encodedCommand: auth.encodedCommand,
+                })
+            : undefined,
+          {
+            target: {
+              host: hostname,
+              port,
+            },
+            requestTarget: read?.spelled ?? requestTarget,
+            normalizedRequestTarget: read?.normalized,
+            requestTargetIsAmbiguous: read?.ambiguous,
+            rawHeaders: [...req.rawHeaders],
+            scheme: "http",
+          },
+          options.denyHeader,
+          options.plaintextHeaderSet === true,
+        );
+        if (out === null) return;
+        body = out.body;
+        decision = out.decision;
+        applyHeaderEdits(fwdHeaders, out.decision);
+        if (
+          (req.destroyed && !req.readableEnded) ||
+          res.destroyed ||
+          req.socket.destroyed ||
+          body.destroyed
+        ) {
+          body.destroy();
+          return;
+        }
+      }
+      options.mutateHeadersPlaintext?.(fwdHeaders, hostname);
+      let bodyTransform = prepareBodySubstitution(
+        options.getBodySubstitutionsPlaintext,
+        req,
+        fwdHeaders,
+        hostname,
+      );
+      if (
+        Boolean(req.headers["content-length"] || req.headers["transfer-encoding"]) &&
+        fwdHeaders["content-length"] === undefined &&
+        fwdHeaders["transfer-encoding"] === undefined
+      )
+        fwdHeaders["transfer-encoding"] = "chunked";
+      let failUpstream = (err) => {
+        logForDebugging_2(`Proxy request failed: ${err.message}`, {
+          level: "error",
+        });
+        respondUpstreamError(res, err, options.denyHeader);
+      };
+      let proxyReq;
+      if (mitmSocketPath) {
+        logForDebugging_2(
+          `Routing HTTP ${req.method} ${hostname}:${port} through MITM proxy at ${mitmSocketPath}`,
+        );
+        let mitmAgent = new Agent({
+          socketPath: mitmSocketPath,
+        });
+        proxyReq = request(
+          {
+            agent: mitmAgent,
+            path: absUrl,
+            method: req.method,
+            headers: fwdHeaders,
+          },
+          (proxyRes) => {
+            proxyRes.on("error", (err) => {
+              logForDebugging_2(`Upstream response error: ${err.message}`, {
+                level: "error",
+              });
+              res.destroy();
+            });
+            let outHeaders = stripHopByHop(proxyRes.headers);
+            invokeRequestFilterOnResponse(decision, proxyRes.statusCode, outHeaders);
+            if (options.stripResponseHeaders) removeHeadersFolded(outHeaders, options.stripResponseHeaders);
+            if (relayResponseHead(res, proxyRes, outHeaders)) proxyRes.pipe(res);
+          },
+        );
+      } else if (parentUrl) {
+        let parentHost = stripBrackets(parentUrl.hostname);
+        let parentPort = Number(parentUrl.port) || (parentUrl.protocol === "https:" ? 443 : 80);
+        let auth = proxyAuthHeader(parentUrl);
+        proxyReq = (parentUrl.protocol === "https:" ? request_2 : request)(
+          {
+            hostname: parentHost,
+            port: parentPort,
+            path: absUrl,
+            method: req.method,
+            headers: auth
+              ? {
+                  ...fwdHeaders,
+                  "proxy-authorization": auth,
+                }
+              : fwdHeaders,
+          },
+          (proxyRes) => {
+            proxyRes.on("error", (err) => {
+              logForDebugging_2(`Upstream response error: ${err.message}`, {
+                level: "error",
+              });
+              res.destroy();
+            });
+            let outHeaders = stripHopByHop(proxyRes.headers);
+            invokeRequestFilterOnResponse(decision, proxyRes.statusCode, outHeaders);
+            if (options.stripResponseHeaders) removeHeadersFolded(outHeaders, options.stripResponseHeaders);
+            if (relayResponseHead(res, proxyRes, outHeaders)) proxyRes.pipe(res);
+          },
+        );
+      } else {
+        let direct;
+        try {
+          direct = await directRequestOptions(
+            hostname,
+            port,
+            options.lookupFor?.(port, auth.encodedCommand),
+            isHttps,
+          );
+        } catch (err) {
+          failUpstream(err);
+          return;
+        }
+        if (res.destroyed || req.socket.destroyed) {
+          body.destroy();
+          return;
+        }
+        proxyReq = (isHttps ? request_2 : request)(
+          {
+            ...direct,
+            path: requestTarget,
+            method: req.method,
+            headers: fwdHeaders,
+          },
+          (proxyRes) => {
+            proxyRes.on("error", (err) => {
+              logForDebugging_2(`Upstream response error: ${err.message}`, {
+                level: "error",
+              });
+              res.destroy();
+            });
+            let outHeaders = stripHopByHop(proxyRes.headers);
+            invokeRequestFilterOnResponse(decision, proxyRes.statusCode, outHeaders);
+            if (options.stripResponseHeaders) removeHeadersFolded(outHeaders, options.stripResponseHeaders);
+            if (relayResponseHead(res, proxyRes, outHeaders)) proxyRes.pipe(res);
+          },
+        );
+      }
+      onUpstreamError(proxyReq, failUpstream);
+      res.on("close", () => proxyReq.destroy());
+      if (bodyTransform) {
+        bodyTransform.on("error", (err) => proxyReq.destroy(err));
+        body.on("error", (err) => bodyTransform.destroy(err));
+        res.on("close", () => bodyTransform.destroy());
+        body.pipe(bodyTransform).pipe(proxyReq);
+      } else {
+        body.on("error", (err) => proxyReq.destroy(err));
+        body.pipe(proxyReq);
+      }
+    } catch (err) {
+      logForDebugging_2(`Error handling HTTP request: ${err}`, {
+        level: "error",
+      });
+      if (!res.headersSent) {
+        res.writeHead(500, {
+          "Content-Type": "text/plain",
+        });
+        res.end("Internal Server Error");
+      } else res.destroy();
+    }
+  });
+  return server;
 }
 //@ chunk-fq0cr76a.js:693701-693886 esm-fingerprint
-function EH(e) {
-  let n = /^\[([^\]]+)\]:(\d+)$/.exec(e) ?? /^([^:]+):(\d+)$/.exec(e);
-  if (!n) return;
-  let r = Number(n[2]);
-  if (!Number.isInteger(r) || r < 1 || r > 65535) return;
-  return { hostname: n[1], port: r };
+function parseConnectTarget(target) {
+  let m = /^\[([^\]]+)\]:(\d+)$/.exec(target) ?? /^([^:]+):(\d+)$/.exec(target);
+  if (!m) return;
+  let port = Number(m[2]);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) return;
+  return {
+    hostname: m[1],
+    port,
+  };
 }
 //@ chunk-fq0cr76a.js:693886-694168 esm-fingerprint
-function pR(e, n) {
-  let r = n
-    ? /^https?:\/\/(\[[^\]]*\]|[^/?#:@[\]]*)(?::\d+)?(?:[/?]|$)/i.exec(e)
-    : /^(\[[^\]]*\]|[^:[\]]*):\d+$/.exec(e);
-  if (!r) return !1;
-  let s = r[1];
-  if (s.startsWith("[")) return isIP(s.slice(1, -1)) === 6;
-  if (isIP(s) === 4) return !0;
-  return /^[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.?$/.test(s);
+function isAsciiAuthority(raw, absolute) {
+  let m = absolute
+    ? /^https?:\/\/(\[[^\]]*\]|[^/?#:@[\]]*)(?::\d+)?(?:[/?]|$)/i.exec(raw)
+    : /^(\[[^\]]*\]|[^:[\]]*):\d+$/.exec(raw);
+  if (!m) return false;
+  let host = m[1];
+  if (host.startsWith("[")) return isIP(host.slice(1, -1)) === 6;
+  if (isIP(host) === 4) return true;
+  return /^[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.?$/.test(host);
 }
-
 export { hR };

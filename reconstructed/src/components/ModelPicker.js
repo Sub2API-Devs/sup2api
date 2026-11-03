@@ -5,17 +5,17 @@
  *
  * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/ModelPicker.tsx
- * pieces: chunk-18hwfzwa.js (19)
- * attribution: sole-consumer 8, fingerprint 4, layout 3, callgraph-fingerprint 2, placement 1, affinity 1
+ * pieces: chunk-18hwfzwa.js (21)
+ * attribution: sole-consumer 8, fingerprint 4, layout 3, callgraph-fingerprint 2, placement 3, affinity 1
  */
-import { j, y, R, ce, Q, P, Uy } from "../../vendor/react/cjs/react.production.js";
+import { init_react_production, y, R, ce, Q, P, Uy } from "../../vendor/react/cjs/react.production.js";
 import { useSearchInput } from "../hooks/useSearchInput.js";
 import { MessageActionsKeybindings } from "./messageActions.js";
 import { getCachedClientData } from "../utils/config.js";
 import { parseUserSpecifiedModel } from "../utils/model/modelDisplay.js";
 import { getCanonicalName } from "../utils/model/canonicalModelName.js";
-import { FILLED_CIRCLE, WHITE_CIRCLE, Gg } from "../utils/permissions/autoModeRulesPrompt.js";
-import { Me, useTheme } from "./design-system/ThemeProvider.js";
+import { FILLED_CIRCLE, WHITE_CIRCLE, WARNING_GLYPH } from "../utils/permissions/autoModeRulesPrompt.js";
+import { useTheme_2, useTheme } from "./design-system/ThemeProvider.js";
 import { useScrollViewportSize } from "./ScrollViewportContext.js";
 import { useTerminalSize } from "../hooks/useTerminalSize.js";
 import { useAppState } from "../state/AppState.js";
@@ -31,12 +31,12 @@ import {
   noopModelOption,
 } from "../utils/model/modelOptions.js";
 import { useForceRender } from "../hooks/useForceRender.js";
-import { qd } from "../hooks/useSettings.js";
+import { useSettingsState } from "../hooks/useSettings.js";
 import { getModelSwitchTarget } from "../utils/model/modelSwitchHooks.js";
 import { useLatestState } from "./CustomSelect/option-map.js";
 import { useTerminalFocus } from "../ink/hooks/use-terminal-focus.js";
 import { useIsScreenReaderEnabled } from "../ink/components/ErrorBoundary.js";
-import { nd } from "../utils/stableEmptyObject.js";
+import { stableEmptyObject } from "../utils/stableEmptyObject.js";
 import { logFeatureOk } from "../services/analytics/featureTelemetry.js";
 import {
   resolveEffortLevel,
@@ -52,12 +52,15 @@ import { modelDisplayString } from "../utils/model/model.js";
 import { color } from "./design-system/color.js";
 import { supportsStrikethrough } from "../utils/doctorContextWarnings.js";
 import { sequential } from "../utils/sequential.js";
-import { filterModelOptions } from "./_new/filterModelOptions.js";
 import { getInferenceProfileBackingModel } from "../utils/model/bedrock.js";
 import { logEvent } from "../services/analytics/index.js";
 import { fromEnumOpt } from "../services/analytics/safeMetadata.js";
 import { useGlobalExitKeybindings } from "../keybindings/useKeybinding.js";
-import { r, e, Fragment } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default_2,
+  jsxProd_default,
+  Fragment,
+} from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Box, Text } from "../ink/components/Text.js";
 import { Ratchet } from "./design-system/Ratchet.js";
 import { ModelSelector } from "./agents/ModelSelector.js";
@@ -72,606 +75,732 @@ import { Pane } from "./design-system/Pane.js";
 import { getDefaultMainLoopModel } from "../utils/model/modelFallback.js";
 import { w } from "../../vendor/react/compiler-runtime.js";
 import { effortLevelToSymbol } from "./EffortIndicator.js";
+import { stripAnsi } from "../utils/stripAnsi.js";
 import { usePluginInstallationStatus } from "../hooks/notifs/usePluginInstallationStatus.js";
-import { D2e } from "./StatusNotices.js";
+import { PinnedBridgeNotice } from "./StatusNotices.js";
 
 //@ chunk-18hwfzwa.js:666845-666849 sole-consumer
-j();
+init_react_production();
 //@ chunk-18hwfzwa.js:666849-666853 sole-consumer
-j();
+init_react_production();
+//@ chunk-18hwfzwa.js:666853-667539 sole-consumer
 /**
  * 设置类列表的搜索模式钩子：按 / 进入搜索（settings:search 键绑定），Ctrl+N 或空串退格退出；返回 isSearchMode、query、光标与键盘/粘贴处理函数。
  */
-//@ chunk-18hwfzwa.js:666853-667539 sole-consumer
-function useSettingsSearchMode({ canEnter: canEnter, startInSearchMode: startInSearchMode = !1 }) {
-  let D = canEnter && startInSearchMode,
-    [L, ee] = y(D),
-    searchModeRef = R(D),
-    Re = () => {
-      ((searchModeRef.current = !1), ee(!1));
+function useSettingsSearchMode({ canEnter, startInSearchMode = false }) {
+  let D = canEnter && startInSearchMode;
+  let [L, ee] = y(D);
+  let searchModeRef = R(D);
+  let Re = () => {
+    searchModeRef.current = false;
+    ee(false);
+  };
+  let { query, cursorOffset, handleKeyDown, handlePaste } = useSearchInput({
+    isActive: true,
+    backspaceExitsOnEmpty: !D,
+    onExit: Re,
+  });
+  let enterSearchMode = ce(() => {
+    searchModeRef.current = true;
+    ee(true);
+  }, []);
+  MessageActionsKeybindings(
+    {
+      "settings:search": () => {
+        if (searchModeRef.current) return false;
+        enterSearchMode();
+      },
     },
     {
-      query: query,
-      cursorOffset: cursorOffset,
-      handleKeyDown: handleKeyDown,
-      handlePaste: handlePaste,
-    } = useSearchInput({ isActive: !0, backspaceExitsOnEmpty: !D, onExit: Re }),
-    enterSearchMode = ce(() => {
-      ((searchModeRef.current = !0), ee(!0));
-    }, []);
-  return (
-    MessageActionsKeybindings(
-      {
-        "settings:search": () => {
-          if (searchModeRef.current) return !1;
-          enterSearchMode();
-        },
-      },
-      { context: "Settings", isActive: canEnter && !L },
-    ),
-    {
-      isSearchMode: L,
-      query: query,
-      cursorOffset: cursorOffset,
-      handleKeyDown: (At) => {
-        if (At.defaultPrevented) return;
-        if (searchModeRef.current) {
-          if (At.ctrl && !At.meta && At.key === "n") {
-            (At.preventDefault(), Re());
-            return;
-          }
-          handleKeyDown(At);
+      context: "Settings",
+      isActive: canEnter && !L,
+    },
+  );
+  return {
+    isSearchMode: L,
+    query,
+    cursorOffset,
+    handleKeyDown: (event) => {
+      if (event.defaultPrevented) return;
+      if (searchModeRef.current) {
+        if (event.ctrl && !event.meta && event.key === "n") {
+          event.preventDefault();
+          Re();
           return;
         }
-        if (!canEnter) return;
-        if (At.key === "/" && !At.ctrl && !At.meta) (At.preventDefault(), enterSearchMode());
-      },
-      handlePaste: (At) => {
-        if (searchModeRef.current) handlePaste(At);
-      },
-      enterSearchMode: enterSearchMode,
-    }
-  );
+        handleKeyDown(event);
+        return;
+      }
+      if (!canEnter) return;
+      if (event.key === "/" && !event.ctrl && !event.meta) {
+        event.preventDefault();
+        enterSearchMode();
+      }
+    },
+    handlePaste: (At) => {
+      if (searchModeRef.current) handlePaste(At);
+    },
+    enterSearchMode,
+  };
 }
 //@ chunk-18hwfzwa.js:667539-667752 sole-consumer
 function getModelNotices() {
-  let h = getCachedClientData()?.model_notices;
-  if (typeof h !== "object" || h === null || Array.isArray(h)) return {};
+  let modelNotices = getCachedClientData()?.model_notices;
+  if (typeof modelNotices !== "object" || modelNotices === null || Array.isArray(modelNotices)) return {};
   let x = {};
-  for (let [D, L] of Object.entries(h))
-    if (D.trim().length > 0 && typeof L === "string" && L.length > 0) x[D] = L;
+  for (let [key, value] of Object.entries(modelNotices))
+    if (key.trim().length > 0 && typeof value === "string" && value.length > 0) x[key] = value;
   return x;
 }
+//@ chunk-18hwfzwa.js:667752-668017 sole-consumer
 /**
  * 在服务端下发的 model_notices 里查找与给定模型匹配的提示（按原名、解析后名、规范名或包含关系，忽略大小写）。
  */
-//@ chunk-18hwfzwa.js:667752-668017 sole-consumer
-function findModelNotice(h) {
-  let x = getModelNotices();
-  if (Object.keys(x).length === 0) return;
-  let lower = h.toLowerCase(),
-    lower_2 = parseUserSpecifiedModel(h).toLowerCase(),
-    lower_3 = getCanonicalName(lower_2, { identity: !0 }).toLowerCase();
-  for (let [ke, Re] of Object.entries(x)) {
-    let lower_4 = ke.toLowerCase();
+function findModelNotice(modelOptionValue) {
+  let modelNotices = getModelNotices();
+  if (Object.keys(modelNotices).length === 0) return;
+  let lower = modelOptionValue.toLowerCase();
+  let lower_2 = parseUserSpecifiedModel(modelOptionValue).toLowerCase();
+  let lower_3 = getCanonicalName(lower_2, {
+    identity: true,
+  }).toLowerCase();
+  for (let [key, value] of Object.entries(modelNotices)) {
+    let lower_4 = key.toLowerCase();
     if (lower_4 === lower || lower_4 === lower_2 || lower_4 === lower_3 || lower_2.includes(lower_4))
-      return Re;
+      return value;
   }
   return;
 }
 //@ chunk-18hwfzwa.js:668017-668043 sole-consumer
-function qor() {
+function getFilledCircleGlyph() {
   return FILLED_CIRCLE;
 }
 //@ chunk-18hwfzwa.js:668043-668074 sole-consumer
-function $or() {
+function getLeadingWhiteCircleGlyph() {
   return ` ${WHITE_CIRCLE}`;
 }
 //@ chunk-18hwfzwa.js:668074-668101 fingerprint = NO_PREFERENCE (1)
 var NO_PREFERENCE = "__NO_PREFERENCE__";
 //@ chunk-18hwfzwa.js:668101-668112 layout
-var uQe = 14;
+var MODEL_PICKER_CHROME_ROWS = 14;
+//@ chunk-18hwfzwa.js:668112-674941 fingerprint = ModelPicker (0.441)
 /**
  * /model 选择器：列出可用模型选项（默认/Opus/Sonnet/Haiku 及 1M、Fast 变体），左右键调节 effort（low/medium/high/xhigh/max），显示当前模型与基础模型，支持搜索。
  */
-//@ chunk-18hwfzwa.js:668112-674941 fingerprint = ModelPicker (0.441)
 function ModelPicker({
-  initial: initial,
-  sessionModel: sessionModel,
-  onSelect: onSelect,
-  onSetDefault: onSetDefault,
-  onCancel: onCancel,
-  isStandaloneCommand: isStandaloneCommand,
-  showFastModeNotice: showFastModeNotice,
-  headerText: headerText,
-  options: options,
+  initial,
+  sessionModel,
+  onSelect,
+  onSetDefault,
+  onCancel,
+  isStandaloneCommand,
+  showFastModeNotice,
+  headerText,
+  options,
 }) {
-  let { storageV5: storageV5, credentials: credentials } = Me(),
-    { rows: rows } = useScrollViewportSize(useTerminalSize()),
-    rt = useAppState((is) => (isFastModeEnabled() ? is.fastMode : !1)),
-    [kt] = y(rt ?? !1),
-    At = Q(() => options ?? getModelOptionsWithTelemetry(kt), [options, kt]),
-    It = useForceRender(),
-    Ot = qd(),
-    Et = Q(() => getModelSwitchTarget(sessionModel, initial), [sessionModel, initial, It, Ot]),
-    Dt = Et ?? initial,
-    Lt = Dt === null ? NO_PREFERENCE : (findMatchingOptionValue(At, Dt) ?? Dt),
-    [oo, Xt, io] = useLatestState(Lt),
-    [so] = y({ current: Dt, value: Lt, sessionOverride: Et }),
-    [po] = useTheme(),
-    setAppState = useTerminalFocus(),
-    exitState = useIsScreenReaderEnabled(),
-    bo = !1,
-    Ao = exitState ? !0 : !1,
-    Bo = !1,
-    Ro = !1,
-    isFastMode = nd(!1),
-    {
-      isSearchMode: isSearchMode,
-      query: query,
-      cursorOffset: cursorOffset,
-      handleKeyDown: handleKeyDown,
-      handlePaste: handlePaste,
-      enterSearchMode: enterSearchMode,
-    } = useSettingsSearchMode({ canEnter: !1, startInSearchMode: !0 }),
-    effortValue = R(!1);
+  let { storageV5, credentials } = useTheme_2();
+  let { rows } = useScrollViewportSize(useTerminalSize());
+  let rt = useAppState((is) => (isFastModeEnabled() ? is.fastMode : false));
+  let [kt] = y(rt ?? false);
+  let At = Q(() => options ?? getModelOptionsWithTelemetry(kt), [options, kt]);
+  let forceRender = useForceRender();
+  let settingsState = useSettingsState();
+  let Et = Q(
+    () => getModelSwitchTarget(sessionModel, initial),
+    [sessionModel, initial, forceRender, settingsState],
+  );
+  let Dt = Et ?? initial;
+  let Lt = Dt === null ? NO_PREFERENCE : (findMatchingOptionValue(At, Dt) ?? Dt);
+  let [oo, Xt, io] = useLatestState(Lt);
+  let [so] = y({
+    current: Dt,
+    value: Lt,
+    sessionOverride: Et,
+  });
+  let [po] = useTheme();
+  let setAppState = useTerminalFocus();
+  let exitState = useIsScreenReaderEnabled();
+  let bo = false;
+  let Ao = exitState ? true : false;
+  let Bo = false;
+  let Ro = false;
+  let isFastMode = stableEmptyObject(false);
+  let { isSearchMode, query, cursorOffset, handleKeyDown, handlePaste, enterSearchMode } =
+    useSettingsSearchMode({
+      canEnter: false,
+      startInSearchMode: true,
+    });
+  let effortValue = R(false);
   P(() => {
-    if (query !== "" && !effortValue.current)
-      ((effortValue.current = !0), logFeatureOk("model_picker_search"));
+    if (query !== "" && !effortValue.current) {
+      effortValue.current = true;
+      logFeatureOk("model_picker_search");
+    }
   }, [query]);
-  let kn = 0,
-    Fn = isFastModeEnabled() && (showFastModeNotice || (isFastModeAvailable() && !isFastModeCooldown())),
-    bn = Fn ? 3 : 0,
-    Go = Et !== null ? 3 : 0,
-    max = Math.max(2, Math.min(10, Math.floor((rows - uQe - kn - bn - Go) / 2))),
-    [, Mn, Xo] = useLatestState(!1),
-    Sn = useAppState((is) => resolveEffortLevel(is, void 0, { withHold: !1 })),
-    sessionEffort = useAppState((is) => is.sessionEffort),
-    settingsEffortTable = useAppState((is) => is.settingsEffortTable),
-    ultracode = useAppState((is) => is.ultracode),
-    [cn, Dn, wn] = useLatestState(Sn !== void 0 ? normalizeEffortLevel(Sn) : void 0),
-    mr = Q(() => {
-      let is = [];
-      for (let [Ci, oi, Oi] of [
-        [so.current, so.value, "Current model"],
-        [
-          so.sessionOverride === null ? null : initial,
-          initial === null ? NO_PREFERENCE : (findMatchingOptionValue(At, initial) ?? initial),
-          "Base model",
-        ],
-      ])
-        if (
-          Ci !== null &&
-          !At.some((Hi) => Hi.value === oi) &&
-          !is.some((Hi) => Hi.value === Ci) &&
-          isModelAllowed(Ci)
+  let kn = 0;
+  let Fn = isFastModeEnabled() && (showFastModeNotice || (isFastModeAvailable() && !isFastModeCooldown()));
+  let bn = Fn ? 3 : 0;
+  let Go = Et !== null ? 3 : 0;
+  let max = Math.max(2, Math.min(10, Math.floor((rows - MODEL_PICKER_CHROME_ROWS - kn - bn - Go) / 2)));
+  let [, Mn, Xo] = useLatestState(false);
+  let Sn = useAppState((is) =>
+    resolveEffortLevel(is, undefined, {
+      withHold: false,
+    }),
+  );
+  let sessionEffort = useAppState((is) => is.sessionEffort);
+  let settingsEffortTable = useAppState((is) => is.settingsEffortTable);
+  let ultracode = useAppState((is) => is.ultracode);
+  let [cn, Dn, wn] = useLatestState(Sn !== undefined ? normalizeEffortLevel(Sn) : undefined);
+  let mr = Q(() => {
+    let is = [];
+    for (let [Ci, oi, Oi] of [
+      [so.current, so.value, "Current model"],
+      [
+        so.sessionOverride === null ? null : initial,
+        initial === null ? NO_PREFERENCE : (findMatchingOptionValue(At, initial) ?? initial),
+        "Base model",
+      ],
+    ])
+      if (
+        Ci !== null &&
+        !At.some((Hi) => Hi.value === oi) &&
+        !is.some((Hi) => Hi.value === Ci) &&
+        isModelAllowed(Ci)
+      )
+        is.push({
+          value: Ci,
+          label: modelDisplayString(Ci),
+          description: Oi,
+        });
+    if (is.length === 0) return At;
+    let index = At.findIndex((Ci) => Ci.disabled === true);
+    if (index === -1) return [...At, ...is];
+    return [...At.slice(0, index), ...is, ...At.slice(index)];
+  }, [At, so, initial]);
+  let Kn = Q(
+    () =>
+      mr.map((is) => {
+        let ws = is.value === null ? NO_PREFERENCE : is.value;
+        let modelOptionValue = resolveModelOptionValue(ws);
+        let oi = modelOptionValue ? findModelNotice(modelOptionValue) : undefined;
+        let description = (
+          (oi ? (is.description ? `${is.description} \xB7 ${oi}` : oi) : is.description) ?? ""
         )
-          is.push({ value: Ci, label: modelDisplayString(Ci), description: Oi });
-      if (is.length === 0) return At;
-      let index = At.findIndex((Ci) => Ci.disabled === !0);
-      if (index === -1) return [...At, ...is];
-      return [...At.slice(0, index), ...is, ...At.slice(index)];
-    }, [At, so, initial]),
-    Kn = Q(
-      () =>
-        mr.map((is) => {
-          let ws = is.value === null ? NO_PREFERENCE : is.value,
-            Ci = Ow(ws),
-            oi = Ci ? findModelNotice(Ci) : void 0,
-            replaced = ((oi ? (is.description ? `${is.description} \xB7 ${oi}` : oi) : is.description) ?? "")
-              .replaceAll("Opus 5.5", color("claude", po)("Opus 5.5"))
-              .replace(/\$[\d.]+\/\$[\d.]+ per Mtok/, (opt) =>
-                is.promoListPrice && supportsStrikethrough() && sequential.level > 0
-                  ? `${sequential.dim.strikethrough(is.promoListPrice)} ${opt}`
-                  : opt,
-              );
-          return { ...is, value: ws, description: replaced };
-        }),
-      [mr, po],
-    ),
-    Wn = Q(() => filterModelOptions(Kn, query), [Kn, query]),
-    Fr = Q(
-      () => (Wn.some((is) => is.value === so.value) ? so.value : (Wn[0]?.value ?? void 0)),
-      [Wn, so.value],
-    ),
-    visibleCount = Math.min(max, Wn.length),
-    Un = Wn.some((is) => is.value === oo) ? oo : Fr,
-    found = Kn.find((opt_1) => opt_1.value === Un),
-    or = found?.label,
-    pr = found?.disabled === !0,
-    focusedModel = Ow(Un);
+          .replaceAll("Opus 5.5", color("claude", po)("Opus 5.5"))
+          .replace(/\$[\d.]+\/\$[\d.]+ per Mtok/, (opt) =>
+            is.promoListPrice && supportsStrikethrough() && sequential.level > 0
+              ? `${sequential.dim.strikethrough(is.promoListPrice)} ${opt}`
+              : opt,
+          );
+        return {
+          ...is,
+          value: ws,
+          description,
+        };
+      }),
+    [mr, po],
+  );
+  let Wn = Q(() => filterModelOptions(Kn, query), [Kn, query]);
+  let Fr = Q(
+    () => (Wn.some((is) => is.value === so.value) ? so.value : (Wn[0]?.value ?? undefined)),
+    [Wn, so.value],
+  );
+  let visibleCount = Math.min(max, Wn.length);
+  let Un = Wn.some((is) => is.value === oo) ? oo : Fr;
+  let found = Kn.find((opt_1) => opt_1.value === Un);
+  let label = found?.label;
+  let pr = found?.disabled === true;
+  let focusedModel = resolveModelOptionValue(Un);
   P(() => {
     import("./chunk-1qx2v2vg.js").then((is) => is.fetchBootstrapData(storageV5, credentials));
   }, [storageV5, credentials]);
   let [, ur] = Uy((is) => is + 1, 0);
   P(() => {
     if (!focusedModel?.includes("application-inference-profile")) return;
-    let is = !1;
-    return (
-      getInferenceProfileBackingModel(focusedModel).then(() => {
-        if (!is) ur();
-      }),
-      () => {
-        is = !0;
-      }
-    );
+    let is = false;
+    getInferenceProfileBackingModel(focusedModel).then(() => {
+      if (!is) ur();
+    });
+    return () => {
+      is = true;
+    };
   }, [focusedModel]);
-  let {
-      supportsEffort: supportsEffort,
-      supportsMax: supportsMax,
-      supportsXHigh: supportsXHigh,
-      defaultEffort: defaultEffort,
-      capLevels: capLevels,
-    } = getEffortCapabilitiesForOption(Un),
-    Zr = (cn === "max" && !supportsMax) || (cn === "xhigh" && !supportsXHigh) ? "high" : cn,
-    wr = focusedModel && Zr !== void 0 ? clampEffortToCap(Zr, focusedModel) : Zr,
-    zr = ce(
-      (is) => {
-        if ((Xt(is), Xo())) return;
-        let ws = resolveEffortLevel(
-          { sessionEffort: sessionEffort, settingsEffortTable: settingsEffortTable },
-          Ow(is),
-          { withHold: !1 },
-        );
-        Dn(noopModelOption(is)?.effort ?? (ws !== void 0 ? normalizeEffortLevel(ws) : Hme(is)));
-      },
-      [Xo, sessionEffort, settingsEffortTable, Xt, Dn],
-    ),
-    _r = ce(
-      (is) => {
-        let ws = io(),
-          found = Wn.find((value) => value.value === ws);
-        if (found === void 0 || found.disabled === !0) return;
-        let oi = getEffortCapabilitiesForOption(ws);
-        if (!oi.supportsEffort) return;
-        (Dn((direction) =>
-          cycleEffortLevel(direction ?? oi.defaultEffort, is, oi.capLevels, oi.supportsMax, oi.supportsXHigh),
+  let { supportsEffort, supportsMax, supportsXHigh, defaultEffort, capLevels } =
+    getEffortCapabilitiesForOption(Un);
+  let Zr = (cn === "max" && !supportsMax) || (cn === "xhigh" && !supportsXHigh) ? "high" : cn;
+  let wr = focusedModel && Zr !== undefined ? clampEffortToCap(Zr, focusedModel) : Zr;
+  let onFocus = ce(
+    (is) => {
+      Xt(is);
+      if (Xo()) return;
+      let effortLevel = resolveEffortLevel(
+        {
+          sessionEffort,
+          settingsEffortTable,
+        },
+        resolveModelOptionValue(is),
+        {
+          withHold: false,
+        },
+      );
+      Dn(
+        noopModelOption(is)?.effort ??
+          (effortLevel !== undefined ? normalizeEffortLevel(effortLevel) : defaultEffortForModel(is)),
+      );
+    },
+    [Xo, sessionEffort, settingsEffortTable, Xt, Dn],
+  );
+  let _r = ce(
+    (direction) => {
+      let ws = io();
+      let found = Wn.find((value) => value.value === ws);
+      if (found === undefined || found.disabled === true) return;
+      let effortCapabilitiesForOption = getEffortCapabilitiesForOption(ws);
+      if (!effortCapabilitiesForOption.supportsEffort) return;
+      Dn((direction_2) =>
+        cycleEffortLevel(
+          direction_2 ?? effortCapabilitiesForOption.defaultEffort,
+          direction,
+          effortCapabilitiesForOption.capLevels,
+          effortCapabilitiesForOption.supportsMax,
+          effortCapabilitiesForOption.supportsXHigh,
         ),
-          Mn(!0));
-      },
-      [Wn, io, Mn, Dn],
-    );
+      );
+      Mn(true);
+    },
+    [Wn, io, Mn, Dn],
+  );
   MessageActionsKeybindings(
     {
       "modelPicker:decreaseEffort": () => {
-        if (isSearchMode && query !== "") return !1;
+        if (isSearchMode && query !== "") return false;
         _r("left");
       },
       "modelPicker:increaseEffort": () => {
-        if (isSearchMode && query !== "") return !1;
+        if (isSearchMode && query !== "") return false;
         _r("right");
       },
       "modelPicker:thisSessionOnly": () => {
-        if (isSearchMode) return !1;
+        if (isSearchMode) return false;
         if (!onSetDefault) return;
-        let is = io(),
-          found = Wn.find((prev) => prev.value === is);
-        if (found === void 0) return;
-        if (found.disabled === !0) return;
+        let is = io();
+        let found = Wn.find((prev) => prev.value === is);
+        if (found === undefined) return;
+        if (found.disabled === true) return;
         fr(found.value);
       },
     },
-    { context: "ModelPicker" },
+    {
+      context: "ModelPicker",
+    },
   );
   function fr(value_0) {
-    let persistable = Ow(value_0),
-      Ci = wn(),
-      oi = Xo(),
-      Oi = persistable && Ci !== void 0 ? clampEffortToCap(Ci, persistable) : Ci;
-    logEvent("tengu_model_command_menu_effort", { effort: fromEnumOpt(Oi), toggled: oi });
-    let Hi = oi && persistable && modelSupportsEffort(persistable) ? Oi : void 0;
+    let persistable = resolveModelOptionValue(value_0);
+    let Ci = wn();
+    let oi = Xo();
+    let Oi = persistable && Ci !== undefined ? clampEffortToCap(Ci, persistable) : Ci;
+    logEvent("tengu_model_command_menu_effort", {
+      effort: fromEnumOpt(Oi),
+      toggled: oi,
+    });
+    let selectedEffort = oi && persistable && modelSupportsEffort(persistable) ? Oi : undefined;
     if (value_0 === NO_PREFERENCE) {
-      onSelect(null, Hi);
+      onSelect(null, selectedEffort);
       return;
     }
-    onSelect(value_0, Hi);
+    onSelect(value_0, selectedEffort);
   }
-  let $r = useGlobalExitKeybindings(onCancel, void 0, isStandaloneCommand === !0);
+  let globalExitKeybindings = useGlobalExitKeybindings(onCancel, undefined, isStandaloneCommand === true);
   function Yr(prev_0) {
     if (onSetDefault) onSetDefault(prev_0 === NO_PREFERENCE ? null : prev_0);
     fr(prev_0);
   }
-  function Er(is) {
+  function Er(event) {
     if (
-      !is.defaultPrevented &&
+      !event.defaultPrevented &&
       isSearchMode &&
-      (is.name === "return" || is.name === "down" || (is.ctrl && !is.meta && is.key === "n")) &&
+      (event.name === "return" ||
+        event.name === "down" ||
+        (event.ctrl && !event.meta && event.key === "n")) &&
       Wn.length === 0
     ) {
-      is.preventDefault();
+      event.preventDefault();
       return;
     }
-    if (!is.defaultPrevented && isSearchMode && query === "") {
-      if (is.name === "return") {
-        is.preventDefault();
+    if (!event.defaultPrevented && isSearchMode && query === "") {
+      if (event.name === "return") {
+        event.preventDefault();
         let found = Wn.find((Ci) => Ci.value === io());
-        if (found !== void 0 && !found.disabled) Yr(found.value);
+        if (found !== undefined && !found.disabled) Yr(found.value);
         return;
       }
-      if (is.name === "escape") {
-        (is.preventDefault(), onCancel?.());
+      if (event.name === "escape") {
+        event.preventDefault();
+        onCancel?.();
         return;
       }
     }
-    handleKeyDown(is);
+    handleKeyDown(event);
   }
-  let Vr = focusedModel && isUltracodeActive(ultracode, focusedModel) ? " \xB7 Ultracode on (/effort)" : "",
-    ms = wr,
-    Xs = !1,
-    Ls = r(Box, {
-      flexDirection: "column",
-      tabIndex: 0,
-      autoFocus: !0,
-      onKeyDown: Er,
-      onPaste: handlePaste,
-      children: [
-        r(Box, {
-          flexDirection: "column",
-          children: [
-            r(Box, {
-              marginBottom: 1,
-              flexDirection: "column",
-              children: [
-                e(Text, { color: "remember", bold: !0, children: "Select model" }),
-                (headerText !== void 0 || !0) &&
-                  e(Text, {
-                    dimColor: !0,
-                    children:
-                      headerText ??
-                      "Switch between Claude models. Your pick becomes the default for new sessions. For other/previous model names, specify with --model.",
-                  }),
-                Et !== null &&
-                  r(Text, {
-                    dimColor: !0,
-                    children: [
-                      "Currently using ",
-                      modelDisplayString(Et),
-                      " for this session only (base model: ",
-                      modelDisplayString(initial),
-                      "). Selecting a model here replaces both.",
-                    ],
-                  }),
-              ],
-            }),
-            r(Box, {
-              flexDirection: "column",
-              marginBottom: 1,
-              children: [
-                !1,
-                r(Ratchet, {
-                  restartKey: max,
+  let Vr = focusedModel && isUltracodeActive(ultracode, focusedModel) ? " \xB7 Ultracode on (/effort)" : "";
+  let ms = wr;
+  let Xs = false;
+  let Ls = jsxProd_default_2(Box, {
+    flexDirection: "column",
+    tabIndex: 0,
+    autoFocus: true,
+    onKeyDown: Er,
+    onPaste: handlePaste,
+    children: [
+      jsxProd_default_2(Box, {
+        flexDirection: "column",
+        children: [
+          jsxProd_default_2(Box, {
+            marginBottom: 1,
+            flexDirection: "column",
+            children: [
+              jsxProd_default(Text, {
+                color: "remember",
+                bold: true,
+                children: "Select model",
+              }),
+              (headerText !== undefined || true) &&
+                jsxProd_default(Text, {
+                  dimColor: true,
+                  children:
+                    headerText ??
+                    "Switch between Claude models. Your pick becomes the default for new sessions. For other/previous model names, specify with --model.",
+                }),
+              Et !== null &&
+                jsxProd_default_2(Text, {
+                  dimColor: true,
                   children: [
-                    e(ModelSelector, {
-                      defaultValue: Lt,
-                      selectedValue: Lt,
-                      defaultFocusValue: Fr,
-                      options: Wn,
-                      columnSizingOptions: Kn,
-                      onChange: Yr,
-                      onFocus: zr,
-                      onUpFromFirstItem: void 0,
-                      onCancel: () => onCancel?.(),
-                      visibleOptionCount: visibleCount,
-                      hiddenBelowUnit: "model",
-                      isDisabled: isSearchMode,
-                    }),
-                    query !== "" &&
-                      Wn.length === 0 &&
-                      e(HintText, { children: `No models match "${query}"` }),
+                    "Currently using ",
+                    modelDisplayString(Et),
+                    " for this session only (base model: ",
+                    modelDisplayString(initial),
+                    "). Selecting a model here replaces both.",
                   ],
                 }),
-              ],
-            }),
-            e(Ratchet, {
-              children:
-                Un !== void 0 &&
-                !pr &&
-                e(Box, {
-                  marginBottom: 1,
-                  flexDirection: "column",
-                  children: supportsEffort
-                    ? r(Fragment, {
-                        children: [
-                          r(Text, {
-                            dimColor: !0,
-                            children: [
-                              e(EffortLevelIndicator, { effort: wr }),
-                              " ",
-                              wr === "xhigh" ? "xHigh" : wr ? qyn(wr) : "",
-                              " ",
-                              "effort",
-                              wr === defaultEffort ? " (default)" : "",
-                              (!isSearchMode || query === "") &&
-                                r(Text, {
-                                  color: "subtle",
-                                  children: [
-                                    " ",
-                                    e(KeyboardShortcutHint, { chord: ["left", "right"], action: "adjust" }),
-                                  ],
-                                }),
-                              Vr,
-                            ],
-                          }),
-                          ms === "max"
-                            ? isMaxEffortReminderEnabled()
-                              ? r(Text, { color: "warning", children: [Gg, " ", MAX_EFFORT_DESCRIPTION] })
-                              : e(Text, { color: "subtle", dimColor: !1, children: MAX_EFFORT_DESCRIPTION })
-                            : null,
-                        ],
-                      })
-                    : e(Box, {
-                        minHeight: void 0,
-                        children: r(Text, {
-                          color: "subtle",
-                          dimColor: !1,
+            ],
+          }),
+          jsxProd_default_2(Box, {
+            flexDirection: "column",
+            marginBottom: 1,
+            children: [
+              false,
+              jsxProd_default_2(Ratchet, {
+                restartKey: max,
+                children: [
+                  jsxProd_default(ModelSelector, {
+                    defaultValue: Lt,
+                    selectedValue: Lt,
+                    defaultFocusValue: Fr,
+                    options: Wn,
+                    columnSizingOptions: Kn,
+                    onChange: Yr,
+                    onFocus,
+                    onUpFromFirstItem: undefined,
+                    onCancel: () => onCancel?.(),
+                    visibleOptionCount: visibleCount,
+                    hiddenBelowUnit: "model",
+                    isDisabled: isSearchMode,
+                  }),
+                  query !== "" &&
+                    Wn.length === 0 &&
+                    jsxProd_default(HintText, {
+                      children: `No models match "${query}"`,
+                    }),
+                ],
+              }),
+            ],
+          }),
+          jsxProd_default(Ratchet, {
+            children:
+              Un !== undefined &&
+              !pr &&
+              jsxProd_default(Box, {
+                marginBottom: 1,
+                flexDirection: "column",
+                children: supportsEffort
+                  ? jsxProd_default_2(Fragment, {
+                      children: [
+                        jsxProd_default_2(Text, {
+                          dimColor: true,
                           children: [
-                            e(EffortLevelIndicator, { effort: void 0 }),
+                            jsxProd_default(EffortLevelIndicator, {
+                              effort: wr,
+                            }),
                             " ",
-                            "Effort not supported",
-                            or ? ` for ${or}` : "",
+                            wr === "xhigh" ? "xHigh" : wr ? qyn(wr) : "",
+                            " ",
+                            "effort",
+                            wr === defaultEffort ? " (default)" : "",
+                            (!isSearchMode || query === "") &&
+                              jsxProd_default_2(Text, {
+                                color: "subtle",
+                                children: [
+                                  " ",
+                                  jsxProd_default(KeyboardShortcutHint, {
+                                    chord: ["left", "right"],
+                                    action: "adjust",
+                                  }),
+                                ],
+                              }),
+                            Vr,
                           ],
                         }),
+                        ms === "max"
+                          ? isMaxEffortReminderEnabled()
+                            ? jsxProd_default_2(Text, {
+                                color: "warning",
+                                children: [WARNING_GLYPH, " ", MAX_EFFORT_DESCRIPTION],
+                              })
+                            : jsxProd_default(Text, {
+                                color: "subtle",
+                                dimColor: false,
+                                children: MAX_EFFORT_DESCRIPTION,
+                              })
+                          : null,
+                      ],
+                    })
+                  : jsxProd_default(Box, {
+                      minHeight: undefined,
+                      children: jsxProd_default_2(Text, {
+                        color: "subtle",
+                        dimColor: false,
+                        children: [
+                          jsxProd_default(EffortLevelIndicator, {
+                            effort: undefined,
+                          }),
+                          " ",
+                          "Effort not supported",
+                          label ? ` for ${label}` : "",
+                        ],
                       }),
-                }),
-            }),
-            Fn
-              ? showFastModeNotice
-                ? e(Box, {
-                    marginBottom: 1,
-                    children: r(Text, {
-                      dimColor: !0,
-                      children: [
-                        "Fast mode is ",
-                        e(Text, { bold: !0, children: "ON" }),
-                        " and available with",
-                        " ",
-                        defaultOpusLabel(),
-                        " (/fast). Switching to other models turns off fast mode.",
-                      ],
                     }),
+              }),
+          }),
+          Fn
+            ? showFastModeNotice
+              ? jsxProd_default(Box, {
+                  marginBottom: 1,
+                  children: jsxProd_default_2(Text, {
+                    dimColor: true,
+                    children: [
+                      "Fast mode is ",
+                      jsxProd_default(Text, {
+                        bold: true,
+                        children: "ON",
+                      }),
+                      " and available with",
+                      " ",
+                      defaultOpusLabel(),
+                      " (/fast). Switching to other models turns off fast mode.",
+                    ],
+                  }),
+                })
+              : jsxProd_default(Box, {
+                  marginBottom: 1,
+                  children: jsxProd_default_2(Text, {
+                    dimColor: true,
+                    children: [
+                      "Use ",
+                      jsxProd_default(Text, {
+                        bold: true,
+                        children: "/fast",
+                      }),
+                      " to turn on Fast mode (",
+                      defaultOpusLabel(),
+                      ").",
+                    ],
+                  }),
+                })
+            : null,
+        ],
+      }),
+      isStandaloneCommand &&
+        jsxProd_default(Ratchet, {
+          children: jsxProd_default(Text, {
+            dimColor: true,
+            italic: false,
+            children: globalExitKeybindings.pending
+              ? `Press ${globalExitKeybindings.keyName} again to ${onCancel ? "cancel" : "exit"}`
+              : isSearchMode && query === ""
+                ? jsxProd_default_2(Byline, {
+                    children: [
+                      jsxProd_default(Text, {
+                        children: "Type to search",
+                      }),
+                      Xs,
+                      Un !== undefined &&
+                        !pr &&
+                        jsxProd_default(KeyboardShortcutHint, {
+                          chord: "enter",
+                          action: onSetDefault ? "set as default" : "confirm",
+                          ...isFastMode,
+                        }),
+                      jsxProd_default(KeyboardShortcutHint, {
+                        chord: "down",
+                        action: "list",
+                        ...isFastMode,
+                      }),
+                      jsxProd_default(KeyboardShortcutHint, {
+                        chord: "escape",
+                        action: "cancel",
+                        ...isFastMode,
+                      }),
+                    ],
                   })
-                : e(Box, {
-                    marginBottom: 1,
-                    children: r(Text, {
-                      dimColor: !0,
+                : isSearchMode
+                  ? jsxProd_default_2(Byline, {
                       children: [
-                        "Use ",
-                        e(Text, { bold: !0, children: "/fast" }),
-                        " to turn on Fast mode (",
-                        defaultOpusLabel(),
-                        ").",
+                        jsxProd_default(Text, {
+                          children: "Type to filter",
+                        }),
+                        Wn.length > 0 &&
+                          jsxProd_default(KeyboardShortcutHint, {
+                            chord: ["enter", "down"],
+                            action: "list",
+                            ...isFastMode,
+                          }),
+                        jsxProd_default(KeyboardShortcutHint, {
+                          chord: "escape",
+                          action: "clear",
+                          ...isFastMode,
+                        }),
                       ],
-                    }),
-                  })
-              : null,
-          ],
-        }),
-        isStandaloneCommand &&
-          e(Ratchet, {
-            children: e(Text, {
-              dimColor: !0,
-              italic: !1,
-              children: $r.pending
-                ? `Press ${$r.keyName} again to ${onCancel ? "cancel" : "exit"}`
-                : isSearchMode && query === ""
-                  ? r(Byline, {
+                    })
+                  : jsxProd_default_2(Byline, {
                       children: [
-                        e(Text, { children: "Type to search" }),
                         Xs,
-                        Un !== void 0 &&
+                        Un !== undefined &&
                           !pr &&
-                          e(KeyboardShortcutHint, {
+                          jsxProd_default(KeyboardShortcutHint, {
                             chord: "enter",
                             action: onSetDefault ? "set as default" : "confirm",
                             ...isFastMode,
                           }),
-                        e(KeyboardShortcutHint, { chord: "down", action: "list", ...isFastMode }),
-                        e(KeyboardShortcutHint, { chord: "escape", action: "cancel", ...isFastMode }),
-                      ],
-                    })
-                  : isSearchMode
-                    ? r(Byline, {
-                        children: [
-                          e(Text, { children: "Type to filter" }),
-                          Wn.length > 0 &&
-                            e(KeyboardShortcutHint, {
-                              chord: ["enter", "down"],
-                              action: "list",
-                              ...isFastMode,
-                            }),
-                          e(KeyboardShortcutHint, { chord: "escape", action: "clear", ...isFastMode }),
-                        ],
-                      })
-                    : r(Byline, {
-                        children: [
-                          Xs,
-                          Un !== void 0 &&
-                            !pr &&
-                            e(KeyboardShortcutHint, {
-                              chord: "enter",
-                              action: onSetDefault ? "set as default" : "confirm",
-                              ...isFastMode,
-                            }),
-                          Un !== void 0 &&
-                            !pr &&
-                            onSetDefault &&
-                            e(KeyboardShortcutHint, {
-                              chord: "s",
-                              action: "use this session only",
-                              ...isFastMode,
-                            }),
-                          !1,
-                          e(ConfigurableShortcutHint, {
-                            action: "select:cancel",
-                            context: "Select",
-                            fallback: "Esc",
-                            description: "cancel",
+                        Un !== undefined &&
+                          !pr &&
+                          onSetDefault &&
+                          jsxProd_default(KeyboardShortcutHint, {
+                            chord: "s",
+                            action: "use this session only",
                             ...isFastMode,
                           }),
-                        ],
-                      }),
-            }),
+                        false,
+                        jsxProd_default(ConfigurableShortcutHint, {
+                          action: "select:cancel",
+                          context: "Select",
+                          fallback: "Esc",
+                          description: "cancel",
+                          ...isFastMode,
+                        }),
+                      ],
+                    }),
           }),
-      ],
-    });
+        }),
+    ],
+  });
   if (!isStandaloneCommand) return Ls;
-  return e(Pane, { color: "permission", children: Ls });
+  return jsxProd_default(Pane, {
+    color: "permission",
+    children: Ls,
+  });
 }
 //@ chunk-18hwfzwa.js:674941-675008 layout
-function Ow(h) {
-  if (!h) return;
-  return h === NO_PREFERENCE
+function resolveModelOptionValue(value) {
+  if (!value) return;
+  return value === NO_PREFERENCE
     ? getDefaultMainLoopModel()
-    : parseUserSpecifiedModel(noopModelOption(h)?.lead ?? h);
+    : parseUserSpecifiedModel(noopModelOption(value)?.lead ?? value);
 }
 //@ chunk-18hwfzwa.js:675008-675259 fingerprint = EffortLevelIndicator (1)
-function EffortLevelIndicator(t0) {
-  let $ = w(5),
-    { effort: effort } = t0;
-  const t1 = effort ? "claude" : "subtle",
-    t2 = effort ?? "low";
-  let ke;
-  if ($[0] !== t2) ((ke = effortLevelToSymbol(t2)), ($[0] = t2), ($[1] = ke));
-  else ke = $[1];
-  let Re;
-  if ($[2] !== t1 || $[3] !== ke)
-    ((Re = e(Text, { color: t1, children: ke })), ($[2] = t1), ($[3] = ke), ($[4] = Re));
-  else Re = $[4];
-  return Re;
+function EffortLevelIndicator(props) {
+  let $ = w(5);
+  let { effort } = props;
+  const color = effort ? "claude" : "subtle";
+  const t2 = effort ?? "low";
+  let children;
+  if ($[0] !== t2) {
+    children = effortLevelToSymbol(t2);
+    $[0] = t2;
+    $[1] = children;
+  } else children = $[1];
+  let t4;
+  if ($[2] !== color || $[3] !== children) {
+    t4 = jsxProd_default(Text, {
+      color,
+      children,
+    });
+    $[2] = color;
+    $[3] = children;
+    $[4] = t4;
+  } else t4 = $[4];
+  return t4;
 }
 //@ chunk-18hwfzwa.js:675259-675334 layout
-function b5t(h, x, D) {
-  return h.filter((L) => (L !== "max" || x) && (L !== "xhigh" || D));
+function filterSupportedEffortLevels(includeMax, x, D) {
+  return includeMax.filter((L) => (L !== "max" || x) && (L !== "xhigh" || D));
 }
 //@ chunk-18hwfzwa.js:675334-675552 callgraph-fingerprint = cycleEffortLevel (0.647)
-function cycleEffortLevel(h, x, D, L, ee) {
-  let ke = b5t(D, L, ee),
-    Re = (h === "max" && !L) || (h === "xhigh" && !ee) ? "high" : h,
-    idx = ke.indexOf(Re),
-    He = idx !== -1 ? idx : ke.length - 1;
-  if (x === "right") return ke[Math.min(He + 1, ke.length - 1)];
-  else return ke[Math.max(He - 1, 0)];
+function cycleEffortLevel(h, direction, includeMax, supportsMax, supportsXHigh) {
+  let levels = filterSupportedEffortLevels(includeMax, supportsMax, supportsXHigh);
+  let Re = (h === "max" && !supportsMax) || (h === "xhigh" && !supportsXHigh) ? "high" : h;
+  let idx = levels.indexOf(Re);
+  let currentIndex = idx !== -1 ? idx : levels.length - 1;
+  if (direction === "right") return levels[Math.min(currentIndex + 1, levels.length - 1)];
+  else return levels[Math.max(currentIndex - 1, 0)];
 }
 //@ chunk-18hwfzwa.js:675552-675600 placement
-function Hme(h) {
-  let x = Ow(h) ?? getDefaultMainLoopModel();
+function defaultEffortForModel(h) {
+  let x = resolveModelOptionValue(h) ?? getDefaultMainLoopModel();
   return getDefaultEffortLevel(x);
 }
+//@ chunk-18hwfzwa.js:675889-676080 placement
+function filterModelOptions(h, query) {
+  if (!query) return h;
+  let lower = query.toLowerCase();
+  return h.filter(
+    (L) =>
+      (typeof L.label === "string" ? L.label : "").toLowerCase().includes(lower) ||
+      stripAnsi(L.description ?? "")
+        .toLowerCase()
+        .includes(lower),
+  );
+}
+//@ chunk-18hwfzwa.js:676080-676084 placement
+init_react_production();
 //@ chunk-18hwfzwa.js:773225-773250 sole-consumer
-function g8t(x) {
-  return !1;
+function selectFalseAppState(x) {
+  return false;
 }
 //@ chunk-18hwfzwa.js:773250-773287 affinity
-var LIVE_PREVIEW = "live-preview",
-  E2e = { wrap: !0 };
+var LIVE_PREVIEW = "live-preview";
+var LIVE_PREVIEW_WRAP_OPTIONS = {
+  wrap: true,
+};
 //@ chunk-18hwfzwa.js:773287-773347 fingerprint = getDefaultEffortLevelForOption (1)
 function getDefaultEffortLevelForOption() {
-  let defaultValue = useAppState(g8t);
-  usePluginInstallationStatus(LIVE_PREVIEW, "high", defaultValue ? !0 : null, D2e, E2e);
+  let defaultValue = useAppState(selectFalseAppState);
+  usePluginInstallationStatus(
+    LIVE_PREVIEW,
+    "high",
+    defaultValue ? true : null,
+    PinnedBridgeNotice,
+    LIVE_PREVIEW_WRAP_OPTIONS,
+  );
 }
 //@ chunk-18hwfzwa.js:929532-929578 callgraph-fingerprint = _temp (1)
-function vuo(s) {
-  return isFastModeEnabled() ? s.fastMode : !1;
+function selectIsFastModeOn(s) {
+  return isFastModeEnabled() ? s.fastMode : false;
 }
-
-export { Ow, Hme, vuo, ModelPicker, getDefaultEffortLevelForOption };
+export {
+  selectIsFastModeOn,
+  ModelPicker,
+  resolveModelOptionValue,
+  defaultEffortForModel,
+  getDefaultEffortLevelForOption,
+};

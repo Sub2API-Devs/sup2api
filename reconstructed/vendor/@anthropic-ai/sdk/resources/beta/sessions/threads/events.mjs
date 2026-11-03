@@ -5,42 +5,53 @@
  * pieces: chunk-hwmsct5x.js (1)
  * attribution: esm-fingerprint 1
  */
-import { Y } from "../../../../core/resource.mjs";
+import { APIResource } from "../../../../core/resource.mjs";
 import { I } from "../../../../internal/utils/path.mjs";
-import { ee } from "../../../../core/pagination.mjs";
-import { T } from "../../../../internal/headers.mjs";
+import { TokenPage } from "../../../../core/pagination.mjs";
+import { buildHeaders } from "../../../../internal/headers.mjs";
 
 //@ chunk-hwmsct5x.js:132169-132793 esm-fingerprint
-class mo extends Y {
-  list(e, n, r) {
-    let { session_id: session_id, betas: betas, workspace_id: workspace_id, ...w } = n;
-    return this._client.getAPIList(I`/v1/sessions/${session_id}/threads/${e}/events?beta=true`, ee, {
-      query: w,
-      ...r,
-      headers: T([
-        {
-          "anthropic-beta": [...(betas ?? []), "managed-agents-2026-04-01"].toString(),
-          ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0),
-        },
-        r?.headers,
-      ]),
-    });
+class Events_2 extends APIResource {
+  list(threadID, params, options) {
+    let { session_id, betas, workspace_id, ...query } = params;
+    return this._client.getAPIList(
+      I`/v1/sessions/${session_id}/threads/${threadID}/events?beta=true`,
+      TokenPage,
+      {
+        query,
+        ...options,
+        headers: buildHeaders([
+          {
+            "anthropic-beta": [...(betas ?? []), "managed-agents-2026-04-01"].toString(),
+            ...(workspace_id != null
+              ? {
+                  "anthropic-workspace-id": workspace_id,
+                }
+              : undefined),
+          },
+          options?.headers,
+        ]),
+      },
+    );
   }
-  stream(e, n, r) {
-    let { session_id: session_id, betas: betas, workspace_id: workspace_id, ...w } = n;
-    return this._client.get(I`/v1/sessions/${session_id}/threads/${e}/stream?beta=true`, {
-      query: w,
-      ...r,
-      headers: T([
+  stream(threadID, params, options) {
+    let { session_id, betas, workspace_id, ...query } = params;
+    return this._client.get(I`/v1/sessions/${session_id}/threads/${threadID}/stream?beta=true`, {
+      query,
+      ...options,
+      headers: buildHeaders([
         {
           "anthropic-beta": [...(betas ?? []), "managed-agents-2026-04-01"].toString(),
-          ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0),
+          ...(workspace_id != null
+            ? {
+                "anthropic-workspace-id": workspace_id,
+              }
+            : undefined),
         },
-        r?.headers,
+        options?.headers,
       ]),
-      stream: !0,
+      stream: true,
     });
   }
 }
-
-export { mo };
+export { Events_2 };

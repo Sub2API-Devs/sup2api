@@ -13,86 +13,102 @@ import { isHostEntrypoint } from "./entrypointKinds.js";
 import { hasManagedSettings } from "./settings/managedRestrictionKeys.js";
 import {
   isStoredLoginPinned,
-  Vso,
-  zso,
+  isAttachServeRepoScopedSourceOrNonInteractive,
+  isAttachServeRepoScopedSource,
   exitIfServeHelperMisconfigured,
 } from "../cli/headlessCloud/attachServe.js";
-import { PROCESS_WRAPPER_ENV } from "./processWrapper.js";
-import { HIt, setSettingsEnvForChildren, holdsDaemonForceColor } from "./subprocessEnv.js";
+import { PROCESS_WRAPPER_ENV_2 } from "./processWrapper.js";
 import {
-  Q_r,
+  BG_DISPATCHER_IDENTITY_ENV_VARS,
+  setSettingsEnvForChildren,
+  holdsDaemonForceColor,
+} from "./subprocessEnv.js";
+import {
+  OAUTH_ENV_VARS,
   OTEL_ENV_VARS,
   OTEL_EXPORTER_OTLP,
-  zps,
+  isNetworkEnvVar,
   isDangerousEnvVar,
-  rao,
-  X_r,
+  OTEL_EXPORTER_PREFIXES,
+  OTEL_DETAIL_VARS,
   isProtectedEnvVar,
 } from "./managedEnvConstants.js";
 import {
   isSafeChromeEnvValue,
-  Ge,
-  v,
+  isCatalogDisabledByPolicy,
+  CHROME_ENV_VARS,
   isRestrictedEnvKey,
   filterHostManagedEnv,
   stripProjectBlockedEnv,
   dropIgnoredEnvEntries,
   applyDirectEnvKeys,
-  j,
-  h,
-  _e,
+  isColorEnvVar,
+  HOST_ONLY_ENV_VARS,
+  OTEL_ENV_VAR_SET,
   isServeBlockedEnv,
-  V,
+  noopEnvHook,
 } from "./managedEnvSafety.js";
-import { isPersonalConfigRestricted, c_i } from "./personalConfigRestriction.js";
+import { isPersonalConfigRestricted, setPersonalConfigRestriction } from "./personalConfigRestriction.js";
 import { wi } from "../../vendor/lodash-es/_inlinedHelpers.js";
-import { txi } from "./settings/policyHelper/helperRemote.js";
-import { MRi, DRi, Eus, snapshotHostOwnedEnv } from "./settings/managedSettingsFiles.js";
+import { setHelperOutputOverride } from "./settings/policyHelper/helperRemote.js";
+import {
+  withEnvTake,
+  setManagedOverrideProvider,
+  forgetHostEnvWrites,
+  snapshotHostOwnedEnv,
+} from "./settings/managedSettingsFiles.js";
 import {
   getSettingsForSource,
   getMachineAdminPolicyEnv,
   isSettingsTierWithheld,
   getSettingsFilePathForSource,
 } from "./settings/settings.js";
-import { J, escapeForDisplay, describeEnvEntryName } from "./envValidation.js";
-import { r_i, computeRemoteSettingsEligibility } from "../services/cloudSessions/eligibility.js";
-import { q_i, claimedCredential, credentialRoad } from "../entrypoints/warmSpare/claimCredentials.js";
+import { setEnvEntryProblemCheck, escapeForDisplay, describeEnvEntryName } from "./envValidation.js";
+import {
+  setRemoteSettingsProbes,
+  computeRemoteSettingsEligibility,
+} from "../services/cloudSessions/eligibility.js";
+import {
+  setClaimContext,
+  claimedCredential_2,
+  credentialRoad,
+} from "../entrypoints/warmSpare/claimCredentials.js";
 import { getPlatform } from "./platform.js";
 import { getGlobalConfig, PERSISTED_TRUST_IGNORED } from "./config.js";
 import { applySafeConfigEnvironmentVariables_2 } from "./managedEnv.js";
 import { hasDangerousEnvVars } from "../components/TrustDialog/utils.js";
 import { getEnabledSettingSources, isSettingSourceEnabled } from "./settings/constants.js";
 import { logForDebugging } from "./debug.js";
-import { gPi } from "./settings/marketplaceSettingsAliases.js";
+import { isEnvSettingOn } from "./settings/marketplaceSettingsAliases.js";
 import { isHttpMcpServeInvocation } from "../entrypoints/mcpServeArgs.js";
-import { or } from "./settings/commandSyncNames.js";
+import { invalidateCommandNames } from "./settings/commandSyncNames.js";
 import { env } from "./env.js";
-import { v$ } from "./authFileDescriptor.js";
+import { hasPossibleCredentialFromDescriptor } from "./authFileDescriptor.js";
 import { clearCACertsCache, loadExtraCACerts } from "./caCerts.js";
 import { hasConfiguredGlobalAgents, clearProxyCache, configureGlobalAgents } from "./proxy.js";
 import { getLoadedMTLSPaths, clearMTLSCache, loadMTLSClientMaterial } from "./mtls.js";
 import { logError } from "./log.js";
-import { aV } from "./memoize.js";
+import { retainCacheKey } from "./memoize.js";
 import { emitCredentialChange } from "./auth/credentialEpoch.js";
 
 //@ chunk-q4qb1h08.js:11334-11486 placement
-var freeze = Object.freeze({
-  coworkCloud: !1,
-  managedByHost: !1,
-  managedByHostFlag: !1,
-  desktopHost: !1,
-  hostOrchestrated: !1,
-  storedLoginPinned: !1,
-  hybridConnection: !1,
+var P = Object.freeze({
+  coworkCloud: false,
+  managedByHost: false,
+  managedByHostFlag: false,
+  desktopHost: false,
+  hostOrchestrated: false,
+  storedLoginPinned: false,
+  hybridConnection: false,
 });
+//@ chunk-q4qb1h08.js:11486-11804 placement
 /**
  * 汇总当前环境的托管情况：云端协作托管设置、是否由宿主管理提供方（标记或认证变量）、桌面宿主、宿主编排（含 byoc）、固定存储登录、混合连接。
  */
-//@ chunk-q4qb1h08.js:11486-11804 placement
 function hostManagementFacts() {
-  let e = isEnvTruthy(process.env.CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST),
-    n = isHostEntrypoint(),
-    envClaudeCodeEnvironmentKind = process.env.CLAUDE_CODE_ENVIRONMENT_KIND;
+  let e = isEnvTruthy(process.env.CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST);
+  let n = isHostEntrypoint();
+  let envClaudeCodeEnvironmentKind = process.env.CLAUDE_CODE_ENVIRONMENT_KIND;
   return {
     coworkCloud: hasManagedSettings(),
     managedByHost: e || !!process.env.CLAUDE_CODE_HOST_AUTH_ENV_VAR,
@@ -100,205 +116,205 @@ function hostManagementFacts() {
     desktopHost: n,
     hostOrchestrated: n || envClaudeCodeEnvironmentKind === "byoc",
     storedLoginPinned: isStoredLoginPinned(),
-    hybridConnection: Ee(),
+    hybridConnection: isHybridConnectionAllowed(),
   };
 }
 //@ chunk-q4qb1h08.js:11804-11827 placement
-function Ee() {
-  return !1;
+function isHybridConnectionAllowed() {
+  return false;
 }
+//@ chunk-q4qb1h08.js:11827-17123 placement
 /**
  * 项目级设置不能设置的环境变量清单（宿主/会话控制、配置目录、临时目录、遥测与调试输出等），以及按前缀屏蔽的列表。
  */
-//@ chunk-q4qb1h08.js:11827-17123 placement
-var PROJECT_LEVEL_SETTING_SOURCES = new Set(["policySettings", "projectSettings", "localSettings"]),
-  EXTRA_BLOCKED_ENV_VARS = [],
-  EXTRA_BLOCKED_ENV_PREFIXES = [],
-  BLOCKED_PREFIX_GROUPS = [],
-  PROJECT_SCOPE_BLOCKED_ENV_VARS = new Set([
-    PROCESS_WRAPPER_ENV,
-    "CLAUDE_CODE_CUSTOM_OAUTH_URL",
-    "CLAUDE_CODE_SYNC_SKILLS",
-    "CLAUDE_CODE_SYNC_PLUGINS",
-    "CLAUDE_CODE_TRANSCRIPT_LOCAL_GC",
-    "CLAUDE_CODE_CCR_SURFACE",
-    "CLAUDE_CODE_INCREMENTAL_REQUEST_BODY",
-    "CLAUDE_CODE_GZIP_REQUEST_BODY_BLOCKS",
-    "CLAUDE_CODE_SKIP_PLUGIN_LOCAL_MCP_SERVERS",
-    "CLAUDE_CODE_SKIP_PLUGIN_MCP_BUNDLES",
-    "CLAUDE_CODE_SKIP_PLUGIN_MCP_SERVERS_EXCEPT",
-    "CLAUDE_CODE_RELAUNCH_PROACTIVITY_BASELINE",
-    "CLAUDE_CODE_RELAUNCH_PROACTIVITY_DECIDED",
-    "CLAUDE_CODE_RELAUNCH_PROACTIVITY_EVER_ON",
-    "CLAUDE_CODE_RELAUNCH_PROACTIVITY_LEVEL",
-    "CLAUDE_CODE_DISABLE_PROACTIVITY",
-    "CLAUDE_CODE_DISABLE_ATTACHMENTS",
-    "CLAUDE_CODE_TETHER_LIVE",
-    "CLAUDE_CODE_BRIDGE_CHILD_AUTO_DEFAULT",
-    "CLAUDE_CODE_BRIDGE_CHILD_ARTIFACT",
-    "CLAUDE_CODE_BRIDGE_CHILD_MACHINE_SETTINGS",
-    "CLAUDE_CODE_BRIDGE_CHILD_PROJECTS_ENTRYPOINT",
-    "CLAUDE_CODE_BRIDGE_CHILD_CLI_ENTRYPOINT",
-    "CLAUDE_CODE_MCP_APPS_HOST",
-    "CLAUDE_CODE_COORDINATOR_MODE",
-    "CLAUDE_CODE_COORDINATOR_EXTRA_TOOLS",
-    "CLAUDE_CODE_UPFRONT_TOOLS",
-    "CLAUDE_CODE_HOST_PROMPT_SUPERSEDES_RECORD",
-    "CLAUDE_CODE_REMOTE_TOOLS_PIN_STORED_LOGIN",
-    "CLAUDE_CODE_REMOTE_TOOLS_HOST_ALLOWS_UNATTENDED",
-    "CLAUDE_CODE_REMOTE_TOOLS_HOST_IDLE_RELEASE_MINUTES",
-    "CLAUDE_CODE_3P_PROBE_WROTE_SONNET_DEFAULT",
-    "CLAUDE_CODE_3P_PROBE_WROTE_OPUS_DEFAULT",
-    "CLAUDE_CODE_3P_PROBE_WROTE_HAIKU_DEFAULT",
-    "CLAUDE_CODE_3P_SEEDED_SONNET_DEFAULT",
-    "CLAUDE_CODE_3P_SEEDED_OPUS_DEFAULT",
-    "CLAUDE_CODE_SANDBOXED",
-    "CLAUDE_CODE_ATTRIBUTION_STATUS_TIMEOUT_MS",
-    "CLAUDE_CODE_TOOL_USE_ID",
-    "CLAUDE_CODE_DISABLE_ATTRIBUTION_CROSS_REPO",
-    "CLAUDE_CODE_DISABLE_WEB_FETCH",
-    "CLAUDE_CODE_DISABLE_RESPONSE_COMPARISON",
-    "CLAUDE_CODE_DISABLE_ULTRATHINK",
-    "CLAUDE_CODE_DISABLE_FILE_MENTIONS",
-    "CCR_SESSION_PROFILE",
-    "CLAUDE_CODE_MCP_STARTUP_WAIT_MS",
-    "CLAUDE_CODE_MCP_CONNECTOR_PREWAIT_MS",
-    "CLAUDE_CODE_MCP_PREWAIT_SERVERS",
-    "CLAUDE_CODE_MCP_PREWAIT_SERVERS_MS",
-    "CLAUDE_CODE_SORTED_OTTER",
-    "CLAUDE_CODE_SKILL_PROPOSALS",
-    "CLAUDE_CODE_PLUGIN_CACHE_DIR",
-    "CLAUDE_CODE_PLUGIN_SEED_DIR",
-    "CLAUDE_CODE_PLUGIN_DIRS",
-    "CLAUDE_CODE_PLUGIN_DIR_WATCH",
-    "CLAUDE_CODE_ENABLE_FUNCTION_HOOKS",
-    "CLAUDE_CODE_PLUGIN_ATTRIBUTION",
-    "CLAUDE_CODE_SKILL_ATTRIBUTION",
-    "CLAUDE_CODE_MODEL_CATALOG_URL",
-    "CLAUDE_CODE_MODEL_CATALOG",
-    "CLAUDE_CODE_CLIENT_DATA_URL",
-    "CLAUDE_CODE_ALLOW_OTHER_MODELS",
-    "CLAUDE_CODE_REMOVE_PROMPT_STRINGS",
-    ...HIt,
-    "CLAUDE_CODE_SUBSCRIPTION_TYPE",
-    "CLAUDE_CODE_RATE_LIMIT_TIER",
-    ...Q_r,
-    "CLAUDE_CODE_SANDBOX_LEAVE_DENIES_TO_SRT_WIN",
-    "CLAUDE_CODE_SANDBOX_LEAVE_PARENT_FOLDERS_ALONE",
-    "CLAUDE_CODE_NANKEEN_KESTREL",
-    "CLAUDE_CODE_DISABLE_DANGEROUS_RM_TIMEOUT",
-    "CLAUDE_CODE_DISABLE_SUBSTITUTION_RM_PROMPT",
-    "CLAUDE_CODE_DISABLE_INLINE_SHELL_RM_PROMPT",
-    "CLAUDE_CODE_STRICT_INLINE_SHELL_RM_PROMPT",
-    "CLAUDE_CODE_IGNORE_PERSISTED_TRUST",
-    "CLAUDE_CODE_DISABLE_MOUNTED_DRIVE_RM_PROMPT",
-    "CLAUDE_CODE_EVEN_MORE_DANGEROUSLY_SKIP_PERMISSIONS",
-    "CLAUDE_CODE_DISABLE_POWERSHELL_CMD_RM_DENY",
-    "CLAUDE_CODE_DISABLE_ULTRAREVIEW_TRUST_CHECK",
-    "CLAUDE_CODE_FEDERATION_CACHE_DIR",
-    "ANTHROPIC_CONFIG_DIR",
-    "XDG_CONFIG_HOME",
-    "HOME",
-    "APPDATA",
-    "USERPROFILE",
-    "HOMEDRIVE",
-    "HOMEPATH",
-    "PROGRAMDATA",
-    "ALLUSERSPROFILE",
-    "SYSTEMROOT",
-    "WINDIR",
-    "COMSPEC",
-    "SYSTEMDRIVE",
-    "PROGRAMFILES",
-    "PROGRAMFILES(X86)",
-    "PROGRAMW6432",
-    "LOCALAPPDATA",
-    "PATHEXT",
-    "COMMONPROGRAMFILES",
-    "COMMONPROGRAMFILES(X86)",
-    "COMMONPROGRAMW6432",
-    "PSMODULEPATH",
-    "HOMESHARE",
-    "ONEDRIVE",
-    "ONEDRIVECONSUMER",
-    "ONEDRIVECOMMERCIAL",
-    "CDPATH",
-    "PWD",
-    "XDG_DATA_HOME",
-    "XDG_CACHE_HOME",
-    "XDG_STATE_HOME",
-    "CLAUDE_CODE_SAFE_MODE",
-    "CLAUDE_CODE_SIMPLE",
-    "CLAUDE_CODE_HARBOR_KITE",
-    "CLAUDE_CODE_HARBOR_KITE_CLOUD",
-    "CLAUDE_CODE_HARBOR_KITE_PACING_OFF",
-    "CLAUDE_CODE_SILENT_TURN_REMINDER",
-    "CLAUDE_CODE_SILENT_TURN_REMINDER_TURNS",
-    "CLAUDE_CODE_SILENT_TURN_REMINDER_SECONDS",
-    "CLAUDE_CODE_SILENT_TURN_REMINDER_TEXT",
-    "CLAUDE_CODE_MODEL_CAPABILITIES",
-    "CLAUDE_CODE_ARTIFACT_ROOM",
-    "CLAUDE_CODE_BASH_EDIT_DIFF",
-    "CLAUDE_CODE_FORWARD_USER_INTENT",
-    "CLAUDE_CODE_WHIMSICAL_ELEPHANT",
-    "CLAUDE_CODE_ARTIFACT_PRESENCE",
-    "CLAUDE_CODE_ARTIFACT_OPEN_ACTION",
-    "CLAUDE_CODE_ARTIFACT_REPL",
-    "CLAUDE_CODE_ARTIFACT_PREVIEW_EMULATOR",
-    "USER_TYPE",
-    "CLAUDE_CODE_MESSAGING_SOCKET",
-    "CLAUDE_CODE_MESSAGING_TOKEN",
-    "CLAUDE_CODE_DISABLE_ADMIN_ENV_UNION",
-    "CLAUDE_CODE_MANAGED_SETTINGS_PATH",
-    "CLAUDE_CODE_TOASTY_THIMBLE",
-    "CLAUDE_CODE_GENTLE_PARASOL",
-    "CLAUDE_CODE_STREAMED_BUMBLEBEE_TEXT",
-    "CLAUDE_CODE_LEGACY_BUNDLE",
-    "CCR_ENABLE_BUNDLE",
-    "CCR_FORCE_BUNDLE",
-    ...BLOCKED_PREFIX_GROUPS.flatMap((e) => e.names),
-    "GITHUB_ACTIONS",
-    "RUNNER_ENVIRONMENT",
-    "CLAUDE_CODE_SUBPROCESS_ENV_SCRUB",
-    "ENABLE_BETA_TRACING_DETAILED",
-    "BETA_TRACING_ENDPOINT",
-    "OTEL_LOG_RAW_API_BODIES",
-    ...OTEL_ENV_VARS,
-    "CLAUDE_PTY_RECORD",
-    "CLAUDE_CODE_DEBUG_LOGS_DIR",
-    "CLAUDE_CODE_DIAGNOSTICS_FILE",
-    "CLAUDE_CODE_PERFETTO_TRACE",
-    "CLAUDE_CODE_FRAME_TIMING_LOG",
-    "CLAUDE_CODE_REMOTE_MEMORY_DIR",
-    "CLAUDE_COWORK_MEMORY_PATH_OVERRIDE",
-    "AUTOMODE_DECISION_LOG",
-    "CLAUDE_CONFIG_DIR",
-    "CLAUDE_SECURESTORAGE_CONFIG_DIR",
-    "CLAUDE_CODE_TMPDIR",
-    "CLAUDE_TMPDIR",
-    "TMPDIR",
-    "TMP",
-    "TEMP",
-    "XDG_RUNTIME_DIR",
-    "CLAUDE_JOB_DIR",
-    "CLAUDE_CODE_DISABLE_BG_STABLE_PATH",
-    "CLAUDE_CODE_REMOTE_TOOLS_FORWARD",
-    "CLAUDE_CODE_USER_DIALOG_TIMEOUT_MS",
-    "CLAUDE_AFK_TIMEOUT_MS",
-    "CLAUDE_AFK_COUNTDOWN_MS",
-    "CLAUDE_AX_SCREEN_READER",
-    "INK_SCREEN_READER",
-    "CLAUDE_CHROME_CLASSIFIER_FLOOR",
-    "CLAUDE_CHROME_PERMISSION_MODE",
-    "CLAUDE_CODE_ENABLE_CFC",
-    "CLAUDE_CODE_WORKFLOW_SUBAGENT_MODEL",
-    ...EXTRA_BLOCKED_ENV_VARS,
-  ]),
-  PROJECT_SCOPE_BLOCKED_PREFIXES = [
-    "CLAUDE_AX_",
-    ...BLOCKED_PREFIX_GROUPS.flatMap((e) => e.prefixes),
-    ...EXTRA_BLOCKED_ENV_PREFIXES,
-  ];
+var PROJECT_LEVEL_SETTING_SOURCES = new Set(["policySettings", "projectSettings", "localSettings"]);
+var EXTRA_BLOCKED_ENV_VARS = [];
+var EXTRA_BLOCKED_ENV_PREFIXES = [];
+var BLOCKED_PREFIX_GROUPS = [];
+var PROJECT_SCOPE_BLOCKED_ENV_VARS = new Set([
+  PROCESS_WRAPPER_ENV_2,
+  "CLAUDE_CODE_CUSTOM_OAUTH_URL",
+  "CLAUDE_CODE_SYNC_SKILLS",
+  "CLAUDE_CODE_SYNC_PLUGINS",
+  "CLAUDE_CODE_TRANSCRIPT_LOCAL_GC",
+  "CLAUDE_CODE_CCR_SURFACE",
+  "CLAUDE_CODE_INCREMENTAL_REQUEST_BODY",
+  "CLAUDE_CODE_GZIP_REQUEST_BODY_BLOCKS",
+  "CLAUDE_CODE_SKIP_PLUGIN_LOCAL_MCP_SERVERS",
+  "CLAUDE_CODE_SKIP_PLUGIN_MCP_BUNDLES",
+  "CLAUDE_CODE_SKIP_PLUGIN_MCP_SERVERS_EXCEPT",
+  "CLAUDE_CODE_RELAUNCH_PROACTIVITY_BASELINE",
+  "CLAUDE_CODE_RELAUNCH_PROACTIVITY_DECIDED",
+  "CLAUDE_CODE_RELAUNCH_PROACTIVITY_EVER_ON",
+  "CLAUDE_CODE_RELAUNCH_PROACTIVITY_LEVEL",
+  "CLAUDE_CODE_DISABLE_PROACTIVITY",
+  "CLAUDE_CODE_DISABLE_ATTACHMENTS",
+  "CLAUDE_CODE_TETHER_LIVE",
+  "CLAUDE_CODE_BRIDGE_CHILD_AUTO_DEFAULT",
+  "CLAUDE_CODE_BRIDGE_CHILD_ARTIFACT",
+  "CLAUDE_CODE_BRIDGE_CHILD_MACHINE_SETTINGS",
+  "CLAUDE_CODE_BRIDGE_CHILD_PROJECTS_ENTRYPOINT",
+  "CLAUDE_CODE_BRIDGE_CHILD_CLI_ENTRYPOINT",
+  "CLAUDE_CODE_MCP_APPS_HOST",
+  "CLAUDE_CODE_COORDINATOR_MODE",
+  "CLAUDE_CODE_COORDINATOR_EXTRA_TOOLS",
+  "CLAUDE_CODE_UPFRONT_TOOLS",
+  "CLAUDE_CODE_HOST_PROMPT_SUPERSEDES_RECORD",
+  "CLAUDE_CODE_REMOTE_TOOLS_PIN_STORED_LOGIN",
+  "CLAUDE_CODE_REMOTE_TOOLS_HOST_ALLOWS_UNATTENDED",
+  "CLAUDE_CODE_REMOTE_TOOLS_HOST_IDLE_RELEASE_MINUTES",
+  "CLAUDE_CODE_3P_PROBE_WROTE_SONNET_DEFAULT",
+  "CLAUDE_CODE_3P_PROBE_WROTE_OPUS_DEFAULT",
+  "CLAUDE_CODE_3P_PROBE_WROTE_HAIKU_DEFAULT",
+  "CLAUDE_CODE_3P_SEEDED_SONNET_DEFAULT",
+  "CLAUDE_CODE_3P_SEEDED_OPUS_DEFAULT",
+  "CLAUDE_CODE_SANDBOXED",
+  "CLAUDE_CODE_ATTRIBUTION_STATUS_TIMEOUT_MS",
+  "CLAUDE_CODE_TOOL_USE_ID",
+  "CLAUDE_CODE_DISABLE_ATTRIBUTION_CROSS_REPO",
+  "CLAUDE_CODE_DISABLE_WEB_FETCH",
+  "CLAUDE_CODE_DISABLE_RESPONSE_COMPARISON",
+  "CLAUDE_CODE_DISABLE_ULTRATHINK",
+  "CLAUDE_CODE_DISABLE_FILE_MENTIONS",
+  "CCR_SESSION_PROFILE",
+  "CLAUDE_CODE_MCP_STARTUP_WAIT_MS",
+  "CLAUDE_CODE_MCP_CONNECTOR_PREWAIT_MS",
+  "CLAUDE_CODE_MCP_PREWAIT_SERVERS",
+  "CLAUDE_CODE_MCP_PREWAIT_SERVERS_MS",
+  "CLAUDE_CODE_SORTED_OTTER",
+  "CLAUDE_CODE_SKILL_PROPOSALS",
+  "CLAUDE_CODE_PLUGIN_CACHE_DIR",
+  "CLAUDE_CODE_PLUGIN_SEED_DIR",
+  "CLAUDE_CODE_PLUGIN_DIRS",
+  "CLAUDE_CODE_PLUGIN_DIR_WATCH",
+  "CLAUDE_CODE_ENABLE_FUNCTION_HOOKS",
+  "CLAUDE_CODE_PLUGIN_ATTRIBUTION",
+  "CLAUDE_CODE_SKILL_ATTRIBUTION",
+  "CLAUDE_CODE_MODEL_CATALOG_URL",
+  "CLAUDE_CODE_MODEL_CATALOG",
+  "CLAUDE_CODE_CLIENT_DATA_URL",
+  "CLAUDE_CODE_ALLOW_OTHER_MODELS",
+  "CLAUDE_CODE_REMOVE_PROMPT_STRINGS",
+  ...BG_DISPATCHER_IDENTITY_ENV_VARS,
+  "CLAUDE_CODE_SUBSCRIPTION_TYPE",
+  "CLAUDE_CODE_RATE_LIMIT_TIER",
+  ...OAUTH_ENV_VARS,
+  "CLAUDE_CODE_SANDBOX_LEAVE_DENIES_TO_SRT_WIN",
+  "CLAUDE_CODE_SANDBOX_LEAVE_PARENT_FOLDERS_ALONE",
+  "CLAUDE_CODE_NANKEEN_KESTREL",
+  "CLAUDE_CODE_DISABLE_DANGEROUS_RM_TIMEOUT",
+  "CLAUDE_CODE_DISABLE_SUBSTITUTION_RM_PROMPT",
+  "CLAUDE_CODE_DISABLE_INLINE_SHELL_RM_PROMPT",
+  "CLAUDE_CODE_STRICT_INLINE_SHELL_RM_PROMPT",
+  "CLAUDE_CODE_IGNORE_PERSISTED_TRUST",
+  "CLAUDE_CODE_DISABLE_MOUNTED_DRIVE_RM_PROMPT",
+  "CLAUDE_CODE_EVEN_MORE_DANGEROUSLY_SKIP_PERMISSIONS",
+  "CLAUDE_CODE_DISABLE_POWERSHELL_CMD_RM_DENY",
+  "CLAUDE_CODE_DISABLE_ULTRAREVIEW_TRUST_CHECK",
+  "CLAUDE_CODE_FEDERATION_CACHE_DIR",
+  "ANTHROPIC_CONFIG_DIR",
+  "XDG_CONFIG_HOME",
+  "HOME",
+  "APPDATA",
+  "USERPROFILE",
+  "HOMEDRIVE",
+  "HOMEPATH",
+  "PROGRAMDATA",
+  "ALLUSERSPROFILE",
+  "SYSTEMROOT",
+  "WINDIR",
+  "COMSPEC",
+  "SYSTEMDRIVE",
+  "PROGRAMFILES",
+  "PROGRAMFILES(X86)",
+  "PROGRAMW6432",
+  "LOCALAPPDATA",
+  "PATHEXT",
+  "COMMONPROGRAMFILES",
+  "COMMONPROGRAMFILES(X86)",
+  "COMMONPROGRAMW6432",
+  "PSMODULEPATH",
+  "HOMESHARE",
+  "ONEDRIVE",
+  "ONEDRIVECONSUMER",
+  "ONEDRIVECOMMERCIAL",
+  "CDPATH",
+  "PWD",
+  "XDG_DATA_HOME",
+  "XDG_CACHE_HOME",
+  "XDG_STATE_HOME",
+  "CLAUDE_CODE_SAFE_MODE",
+  "CLAUDE_CODE_SIMPLE",
+  "CLAUDE_CODE_HARBOR_KITE",
+  "CLAUDE_CODE_HARBOR_KITE_CLOUD",
+  "CLAUDE_CODE_HARBOR_KITE_PACING_OFF",
+  "CLAUDE_CODE_SILENT_TURN_REMINDER",
+  "CLAUDE_CODE_SILENT_TURN_REMINDER_TURNS",
+  "CLAUDE_CODE_SILENT_TURN_REMINDER_SECONDS",
+  "CLAUDE_CODE_SILENT_TURN_REMINDER_TEXT",
+  "CLAUDE_CODE_MODEL_CAPABILITIES",
+  "CLAUDE_CODE_ARTIFACT_ROOM",
+  "CLAUDE_CODE_BASH_EDIT_DIFF",
+  "CLAUDE_CODE_FORWARD_USER_INTENT",
+  "CLAUDE_CODE_WHIMSICAL_ELEPHANT",
+  "CLAUDE_CODE_ARTIFACT_PRESENCE",
+  "CLAUDE_CODE_ARTIFACT_OPEN_ACTION",
+  "CLAUDE_CODE_ARTIFACT_REPL",
+  "CLAUDE_CODE_ARTIFACT_PREVIEW_EMULATOR",
+  "USER_TYPE",
+  "CLAUDE_CODE_MESSAGING_SOCKET",
+  "CLAUDE_CODE_MESSAGING_TOKEN",
+  "CLAUDE_CODE_DISABLE_ADMIN_ENV_UNION",
+  "CLAUDE_CODE_MANAGED_SETTINGS_PATH",
+  "CLAUDE_CODE_TOASTY_THIMBLE",
+  "CLAUDE_CODE_GENTLE_PARASOL",
+  "CLAUDE_CODE_STREAMED_BUMBLEBEE_TEXT",
+  "CLAUDE_CODE_LEGACY_BUNDLE",
+  "CCR_ENABLE_BUNDLE",
+  "CCR_FORCE_BUNDLE",
+  ...BLOCKED_PREFIX_GROUPS.flatMap((e) => e.names),
+  "GITHUB_ACTIONS",
+  "RUNNER_ENVIRONMENT",
+  "CLAUDE_CODE_SUBPROCESS_ENV_SCRUB",
+  "ENABLE_BETA_TRACING_DETAILED",
+  "BETA_TRACING_ENDPOINT",
+  "OTEL_LOG_RAW_API_BODIES",
+  ...OTEL_ENV_VARS,
+  "CLAUDE_PTY_RECORD",
+  "CLAUDE_CODE_DEBUG_LOGS_DIR",
+  "CLAUDE_CODE_DIAGNOSTICS_FILE",
+  "CLAUDE_CODE_PERFETTO_TRACE",
+  "CLAUDE_CODE_FRAME_TIMING_LOG",
+  "CLAUDE_CODE_REMOTE_MEMORY_DIR",
+  "CLAUDE_COWORK_MEMORY_PATH_OVERRIDE",
+  "AUTOMODE_DECISION_LOG",
+  "CLAUDE_CONFIG_DIR",
+  "CLAUDE_SECURESTORAGE_CONFIG_DIR",
+  "CLAUDE_CODE_TMPDIR",
+  "CLAUDE_TMPDIR",
+  "TMPDIR",
+  "TMP",
+  "TEMP",
+  "XDG_RUNTIME_DIR",
+  "CLAUDE_JOB_DIR",
+  "CLAUDE_CODE_DISABLE_BG_STABLE_PATH",
+  "CLAUDE_CODE_REMOTE_TOOLS_FORWARD",
+  "CLAUDE_CODE_USER_DIALOG_TIMEOUT_MS",
+  "CLAUDE_AFK_TIMEOUT_MS",
+  "CLAUDE_AFK_COUNTDOWN_MS",
+  "CLAUDE_AX_SCREEN_READER",
+  "INK_SCREEN_READER",
+  "CLAUDE_CHROME_CLASSIFIER_FLOOR",
+  "CLAUDE_CHROME_PERMISSION_MODE",
+  "CLAUDE_CODE_ENABLE_CFC",
+  "CLAUDE_CODE_WORKFLOW_SUBAGENT_MODEL",
+  ...EXTRA_BLOCKED_ENV_VARS,
+]);
+var PROJECT_SCOPE_BLOCKED_PREFIXES = [
+  "CLAUDE_AX_",
+  ...BLOCKED_PREFIX_GROUPS.flatMap((e) => e.prefixes),
+  ...EXTRA_BLOCKED_ENV_PREFIXES,
+];
 //@ chunk-q4qb1h08.js:17123-17210 placement
 function isProjectScopeBlockedEnvVar(e) {
   let upper = e.toUpperCase();
@@ -308,12 +324,15 @@ function isProjectScopeBlockedEnvVar(e) {
   );
 }
 //@ chunk-q4qb1h08.js:21865-21905 placement
-function ae(e, n) {
-  return isSafeChromeEnvValue(e, n) || Ge(e, n);
+/**
+ * 判断某环境项的值是否允许下发（安全值或目录例外）。
+ */
+function isServableEnvValue(e, n) {
+  return isSafeChromeEnvValue(e, n) || isCatalogDisabledByPolicy(e, n);
 }
 //@ chunk-q4qb1h08.js:21905-21964 placement
 function purgeHostOwnedChromeVars() {
-  for (let e of v.keys()) delete process.env[e];
+  for (let key of CHROME_ENV_VARS.keys()) delete process.env[key];
 }
 //@ chunk-q4qb1h08.js:21964-22069 placement
 var USER_SCOPE_BLOCKED_ENV_VARS = new Set([
@@ -323,232 +342,243 @@ var USER_SCOPE_BLOCKED_ENV_VARS = new Set([
 ]);
 //@ chunk-q4qb1h08.js:22069-22200 placement
 function stripHostOnlyEnv(e, n) {
-  if (e === void 0 || !isPersonalConfigRestricted() || (n !== "userSettings" && n !== "globalConfig"))
+  if (e === undefined || !isPersonalConfigRestricted() || (n !== "userSettings" && n !== "globalConfig"))
     return e;
   return wi(e, (r, E) => USER_SCOPE_BLOCKED_ENV_VARS.has(E.toUpperCase()));
 }
 //@ chunk-q4qb1h08.js:22200-22298 placement
-function H(e) {
+function withoutRestrictedEnvKeys(e) {
   if (!e) return {};
   let n = {};
-  for (let [r, E] of Object.entries(e)) if (!isRestrictedEnvKey(r, E)) n[r] = E;
+  for (let [key, value] of Object.entries(e)) if (!isRestrictedEnvKey(key, value)) n[key] = value;
   return n;
 }
 //@ chunk-q4qb1h08.js:22298-22348 placement
 function getEnvAboveProjectSettings() {
-  return d.envAboveProjectSettings();
+  return managedEnvApplier.envAboveProjectSettings();
 }
 //@ chunk-q4qb1h08.js:22348-22399 placement
 function getPreSettingsEnvSnapshot() {
-  return d.getPreSettingsEnvSnapshot();
+  return managedEnvApplier.getPreSettingsEnvSnapshot();
 }
 //@ chunk-q4qb1h08.js:22399-22506 placement
 function getPreSettingsEnvHonoringLiveDeletions() {
-  let e = { ...getPreSettingsEnvSnapshot() };
-  for (let n of Object.keys(e)) if (process.env[n] === void 0) delete e[n];
+  let e = {
+    ...getPreSettingsEnvSnapshot(),
+  };
+  for (let key of Object.keys(e)) if (process.env[key] === undefined) delete e[key];
   return e;
 }
 //@ chunk-q4qb1h08.js:22506-22563 placement
 function isSettingsSourcedEnvValue(e, n) {
-  return d.isSettingsSourcedEnvValue(e, n);
+  return managedEnvApplier.isSettingsSourcedEnvValue(e, n);
 }
 //@ chunk-q4qb1h08.js:22563-22619 placement
-function personsSettingsEnvKeeps(e, n) {
-  return d.personsSettingsEnvKeeps(e, n);
+function personsSettingsEnvKeeps(name, n) {
+  return managedEnvApplier.personsSettingsEnvKeeps(name, n);
 }
 //@ chunk-q4qb1h08.js:22619-22675 placement
 function putBackUnsuppliedTelemetryEnv() {
-  return d.putBackUnsuppliedTelemetryEnv();
+  return managedEnvApplier.putBackUnsuppliedTelemetryEnv();
 }
 //@ chunk-q4qb1h08.js:22675-22719 placement
 function setToolServerLaunchEnv(e) {
-  d.setToolServerLaunchEnv(e);
+  managedEnvApplier.setToolServerLaunchEnv(e);
 }
 //@ chunk-q4qb1h08.js:22719-22766 placement
-function recordPersonsEnvValue(e, n) {
-  d.recordPersonsEnvValue(e, n);
+function recordPersonsEnvValue(name, n) {
+  managedEnvApplier.recordPersonsEnvValue(name, n);
 }
 //@ chunk-q4qb1h08.js:22766-22818 placement
 function getLatchedPreSettingsEnvSnapshot() {
-  return d.peekPreSettingsEnvSnapshot();
+  return managedEnvApplier.peekPreSettingsEnvSnapshot();
 }
 //@ chunk-q4qb1h08.js:22818-22842 placement
-function withLaunchValuesOfHybridConnection(e) {
-  return e;
+function withLaunchValuesOfHybridConnection(env) {
+  return env;
 }
 //@ chunk-q4qb1h08.js:22842-22884 placement
 function getLegacyEnvMap() {
-  return d.getLegacyEnvMap();
+  return managedEnvApplier.getLegacyEnvMap();
 }
 //@ chunk-q4qb1h08.js:22884-22936 placement
 function getAppliedGlobalConfigEnv() {
-  return d.getAppliedGlobalConfigEnv();
+  return managedEnvApplier.getAppliedGlobalConfigEnv();
 }
 //@ chunk-q4qb1h08.js:22936-22944 placement
-txi(getPreSettingsEnvSnapshot);
+setHelperOutputOverride(getPreSettingsEnvSnapshot);
 //@ chunk-q4qb1h08.js:22944-22984 placement
-MRi(() => d.takeChildEnvFromRepository());
+withEnvTake(() => managedEnvApplier.takeChildEnvFromRepository());
 //@ chunk-q4qb1h08.js:22984-22992 placement
-c_i(getLatchedPreSettingsEnvSnapshot);
+setPersonalConfigRestriction(getLatchedPreSettingsEnvSnapshot);
 //@ chunk-q4qb1h08.js:22992-23031 placement = _temp7 (1)
-DRi(() => getSettingsForSource("policySettings")?.env ?? {});
+setManagedOverrideProvider(() => getSettingsForSource("policySettings")?.env ?? {});
 //@ chunk-q4qb1h08.js:23031-23037 placement
-J(isSettingsSourcedEnvValue);
+setEnvEntryProblemCheck(isSettingsSourcedEnvValue);
 //@ chunk-q4qb1h08.js:23037-23092 placement
-r_i(
-  (e) => d.routeAfterVerdict(e),
-  (e) => d.launchNamed(e),
+setRemoteSettingsProbes(
+  (e) => managedEnvApplier.routeAfterVerdict(e),
+  (e) => managedEnvApplier.launchNamed(e),
 );
 //@ chunk-q4qb1h08.js:23092-23204 placement
-q_i({
-  env: () => d.getHostLaunchEnv(),
-  credential: () => d.getLaunchCredential(),
-  road: () => d.getLaunchCredentialRoad(),
+setClaimContext({
+  env: () => managedEnvApplier.getHostLaunchEnv(),
+  credential: () => managedEnvApplier.getLaunchCredential(),
+  road: () => managedEnvApplier.getLaunchCredentialRoad(),
 });
 //@ chunk-q4qb1h08.js:23204-23263 placement
-function resetPreSettingsEnvSnapshotForClaim(e, n) {
-  return d.dropPreSettingsEnvSnapshot(e, n);
+function resetPreSettingsEnvSnapshotForClaim(e, kept) {
+  return managedEnvApplier.dropPreSettingsEnvSnapshot(e, kept);
 }
 //@ chunk-q4qb1h08.js:23263-23318 placement
-function c(e) {
+function envKeyCase(e) {
   return getPlatform() === "windows" ? e.toUpperCase() : e;
 }
 //@ chunk-q4qb1h08.js:23318-23614 placement
 function launchViewAtClaim(e, n, r) {
-  if (e === void 0) return Object.freeze({ ...process.env });
-  let E = new Set(n.map(c)),
-    s = new Map(Object.entries(e).map(([_, a]) => [c(_), a])),
-    C = {};
-  for (let _ of Object.keys(process.env))
-    if (E.has(c(_))) C[_] = r?.[_] ?? process.env[_];
-    else if (s.has(c(_))) C[_] = s.get(c(_));
+  if (e === undefined)
+    return Object.freeze({
+      ...process.env,
+    });
+  let E = new Set(n.map(envKeyCase));
+  let s = new Map(Object.entries(e).map(([key, value]) => [envKeyCase(key), value]));
+  let C = {};
+  for (let key of Object.keys(process.env))
+    if (E.has(envKeyCase(key))) C[key] = r?.[key] ?? process.env[key];
+    else if (s.has(envKeyCase(key))) C[key] = s.get(envKeyCase(key));
   return Object.freeze(C);
 }
 //@ chunk-q4qb1h08.js:23614-23801 placement
 function putBackTransport(e, n) {
-  let filtered = Object.keys(process.env).filter((E) => n(E) && process.env[E] !== e[E]);
+  let filtered = Object.keys(process.env).filter((key) => n(key) && process.env[key] !== e[key]);
   for (let E of filtered)
-    if (e[E] === void 0) delete process.env[E];
+    if (e[E] === undefined) delete process.env[E];
     else process.env[E] = e[E];
   return filtered.length > 0;
 }
 //@ chunk-q4qb1h08.js:23801-23894 placement
-function filterPolicyPredicateEnv(e, n = "policySettings") {
-  return d.filterPolicyPredicateEnv(e, n, { forPolicyMatch: !1 });
+function filterPolicyPredicateEnv(env, n = "policySettings") {
+  return managedEnvApplier.filterPolicyPredicateEnv(env, n, {
+    forPolicyMatch: false,
+  });
 }
 //@ chunk-q4qb1h08.js:23894-23988 placement
-function filterEnvForPolicyPredicateMatch(e, n = "policySettings") {
-  return d.filterPolicyPredicateEnv(e, n, { forPolicyMatch: !0 });
+function filterEnvForPolicyPredicateMatch(env, n = "policySettings") {
+  return managedEnvApplier.filterPolicyPredicateEnv(env, n, {
+    forPolicyMatch: true,
+  });
 }
 //@ chunk-q4qb1h08.js:23988-24046 placement
-function withoutInvalidSettingsEnv(e, n) {
-  return d.withoutInvalidSettingsEnv(e, n);
+function withoutInvalidSettingsEnv(env, n) {
+  return managedEnvApplier.withoutInvalidSettingsEnv(env, n);
 }
 //@ chunk-q4qb1h08.js:24046-24083 placement
 function settingsEnvForHookChild(e, n) {
-  return H(withoutInvalidSettingsEnv(e, n));
+  return withoutRestrictedEnvKeys(withoutInvalidSettingsEnv(e, n));
 }
 //@ chunk-q4qb1h08.js:24083-24363 placement
-var TELEMETRY_SETTING_SOURCES = ["userSettings", "flagSettings", "policySettings"],
-  OTLP_SIGNALS = ["TRACES", "METRICS", "LOGS", "PROFILES"],
-  OTLP_EXPORTER_PREFIX = OTEL_EXPORTER_OTLP,
-  OTLP_SECRET_SUFFIXES = new Set(["HEADERS", "CLIENT_KEY", "CLIENT_CERTIFICATE"]),
-  OTEL_EXPORTER_SELECTORS = new Set(["OTEL_LOGS_EXPORTER", "OTEL_TRACES_EXPORTER"]),
-  CLAUDE_CODE_ENABLE_TELEMETRY = "CLAUDE_CODE_ENABLE_TELEMETRY",
-  BETA_TRACING_ENDPOINT = "BETA_TRACING_ENDPOINT";
+var TELEMETRY_SETTING_SOURCES = ["userSettings", "flagSettings", "policySettings"];
+var OTLP_SIGNALS = ["TRACES", "METRICS", "LOGS", "PROFILES"];
+var OTLP_EXPORTER_PREFIX = OTEL_EXPORTER_OTLP;
+var OTLP_SECRET_SUFFIXES = new Set(["HEADERS", "CLIENT_KEY", "CLIENT_CERTIFICATE"]);
+var OTEL_EXPORTER_SELECTORS = new Set(["OTEL_LOGS_EXPORTER", "OTEL_TRACES_EXPORTER"]);
+var CLAUDE_CODE_ENABLE_TELEMETRY = "CLAUDE_CODE_ENABLE_TELEMETRY";
+var BETA_TRACING_ENDPOINT = "BETA_TRACING_ENDPOINT";
 //@ chunk-q4qb1h08.js:24363-24431 placement
-var xt = new Set([
+var OTEL_ENDPOINT_ENV_VARS = new Set([
   `${OTEL_EXPORTER_OTLP}ENDPOINT`,
   `${OTEL_EXPORTER_OTLP}HEADERS`,
   `${OTEL_EXPORTER_OTLP}PROTOCOL`,
 ]);
 //@ chunk-q4qb1h08.js:24431-24454 placement
-function x(e) {
-  return e;
+function identityEnvMap(hostSpawnEnvKey) {
+  return hostSpawnEnvKey;
 }
 //@ chunk-q4qb1h08.js:24454-24525 placement
-function Ke(e) {
+function lacksOtlpExporter(e) {
   return !e
     .split(",")
     .map((n) => n.trim())
     .includes("otlp");
 }
 //@ chunk-q4qb1h08.js:24525-24580 placement
-function G(e) {
+function envKeyCaseUpper(e) {
   return getPlatform() === "windows" ? e.toUpperCase() : e;
 }
 //@ chunk-q4qb1h08.js:24580-24709 placement
 function pickEnvKeys(e, n) {
   let r = {};
-  for (let [E, s] of Object.entries(e ?? {}))
-    if (n.includes(E.toUpperCase()) && s !== void 0) r[E] = String(s);
+  for (let [key, value] of Object.entries(e ?? {}))
+    if (n.includes(key.toUpperCase()) && value !== undefined) r[key] = String(value);
   return r;
 }
+//@ chunk-q4qb1h08.js:24709-41306 placement
 /**
  * 应用托管/项目设置中的环境变量：按作用域过滤被阻止变量、剥离 provider 相关变量并告警。
  */
-//@ chunk-q4qb1h08.js:24709-41306 placement
 class ManagedEnvApplier {
-  providerStripContext = freeze;
+  providerStripContext = P;
   projectScopeDropWarned = new Set();
-  fullPassDroppedGitKey = !1;
+  fullPassDroppedGitKey = false;
   hostManagedDropWarned = new Set();
   invalidEnvKeyWarned = new Set();
-  hostSpawnEnvKeys = void 0;
+  hostSpawnEnvKeys = undefined;
   settingsEnvForChildren = {};
   settingsEnvForChildrenFromRepository = new Map();
   publishedChildEnv = {};
   publishedChildEnvFromRepository = new Map();
   toolServerLaunchEnv = {};
-  materializedProcessWrapper = void 0;
-  preSettingsEnvSnapshot = void 0;
+  materializedProcessWrapper = undefined;
+  preSettingsEnvSnapshot = undefined;
   userTierNames = new Set();
-  launchNamesBeforeClaim = void 0;
+  launchNamesBeforeClaim = undefined;
   userTierNamesInSnapshot = new Set();
-  claimLaunchEnv = void 0;
+  claimLaunchEnv = undefined;
   launchCredentialRoad = "none";
-  launchCredential = void 0;
+  launchCredential = undefined;
   otelDominanceDropWarned = new Set();
   hostSpawnEnvDropWarned = new Set();
   untrustedFolderDropWarned = new Set();
-  servedFolderEnvWithheld = !1;
+  servedFolderEnvWithheld = false;
   getPreSettingsEnvSnapshot() {
-    return (
-      (this.preSettingsEnvSnapshot ??= this.latchPreSettingsEnvSnapshot({ ...process.env })),
-      this.preSettingsEnvSnapshot
-    );
+    this.preSettingsEnvSnapshot ??= this.latchPreSettingsEnvSnapshot({
+      ...process.env,
+    });
+    return this.preSettingsEnvSnapshot;
   }
   latchPreSettingsEnvSnapshot(e) {
     let launchNamesBeforeClaim = this.launchNamesBeforeClaim;
     this.userTierNamesInSnapshot = new Set(
-      launchNamesBeforeClaim === void 0
+      launchNamesBeforeClaim === undefined
         ? []
         : Object.keys(e)
-            .map((E) => E.toUpperCase())
+            .map((key) => key.toUpperCase())
             .filter((E) => this.userTierNames.has(E) && !launchNamesBeforeClaim.has(E)),
     );
-    let r = this.claimLaunchEnv ?? e;
-    return (
-      (this.launchCredential = hasManagedSettings() ? claimedCredential(r) : null),
-      (this.launchCredentialRoad = hasManagedSettings() ? credentialRoad(r, this.launchCredential) : "none"),
-      Object.freeze(e)
-    );
+    let claimLaunchEnv = this.claimLaunchEnv ?? e;
+    this.launchCredential = hasManagedSettings() ? claimedCredential_2(claimLaunchEnv) : null;
+    this.launchCredentialRoad = hasManagedSettings()
+      ? credentialRoad(claimLaunchEnv, this.launchCredential)
+      : "none";
+    return Object.freeze(e);
   }
   getLaunchCredentialRoad() {
-    return (this.getPreSettingsEnvSnapshot(), this.launchCredentialRoad);
+    this.getPreSettingsEnvSnapshot();
+    return this.launchCredentialRoad;
   }
   getLaunchCredential() {
-    return (this.getPreSettingsEnvSnapshot(), this.launchCredential ?? null);
+    this.getPreSettingsEnvSnapshot();
+    return this.launchCredential ?? null;
   }
   getHostLaunchEnv() {
     let preSettingsEnvSnapshot = this.getPreSettingsEnvSnapshot();
     return this.claimLaunchEnv ?? preSettingsEnvSnapshot;
   }
   envAboveProjectSettings() {
-    let preSettingsEnvSnapshot = this.getPreSettingsEnvSnapshot(),
-      n = {};
-    for (let [r, E] of Object.entries(preSettingsEnvSnapshot))
-      if (!this.userTierNamesInSnapshot.has(r.toUpperCase())) n[r] = E;
+    let preSettingsEnvSnapshot = this.getPreSettingsEnvSnapshot();
+    let n = {};
+    for (let [key, value] of Object.entries(preSettingsEnvSnapshot))
+      if (!this.userTierNamesInSnapshot.has(key.toUpperCase())) n[key] = value;
     return {
       ...n,
       ...getSettingsForSource("flagSettings")?.env,
@@ -558,11 +588,11 @@ class ManagedEnvApplier {
   peekPreSettingsEnvSnapshot() {
     return this.preSettingsEnvSnapshot;
   }
-  appliedGlobalConfigEnv = void 0;
-  legacyEnvMapAtLaunch = void 0;
+  appliedGlobalConfigEnv = undefined;
+  legacyEnvMapAtLaunch = undefined;
   settingsOfferedEnvValues = new Map();
   personsWrittenEnvValues = new Map();
-  otelDominatedAsked = void 0;
+  otelDominatedAsked = undefined;
   getAppliedGlobalConfigEnv() {
     return this.appliedGlobalConfigEnv;
   }
@@ -571,51 +601,49 @@ class ManagedEnvApplier {
   }
   dropPreSettingsEnvSnapshot(e, n) {
     let preSettingsEnvSnapshot = this.preSettingsEnvSnapshot;
-    if (
-      ((this.preSettingsEnvSnapshot = void 0),
-      (this.launchCredential = void 0),
-      (this.claimLaunchEnv = void 0),
-      (this.legacyEnvMapAtLaunch = void 0),
-      e === void 0)
-    )
-      return !1;
+    this.preSettingsEnvSnapshot = undefined;
+    this.launchCredential = undefined;
+    this.claimLaunchEnv = undefined;
+    this.legacyEnvMapAtLaunch = undefined;
+    if (e === undefined) return false;
     let E = [...e];
     if (preSettingsEnvSnapshot)
       this.launchNamesBeforeClaim = new Set(
         [...Object.keys(preSettingsEnvSnapshot), ...E].map((_) => _.toUpperCase()),
       );
-    if (!hasManagedSettings()) return !1;
+    if (!hasManagedSettings()) return false;
     let s = launchViewAtClaim(preSettingsEnvSnapshot, E, n);
     this.claimLaunchEnv = s;
-    let C = preSettingsEnvSnapshot !== void 0 && putBackTransport(s, zps);
-    return (this.getPreSettingsEnvSnapshot(), C);
+    let C = preSettingsEnvSnapshot !== undefined && putBackTransport(s, isNetworkEnvVar);
+    this.getPreSettingsEnvSnapshot();
+    return C;
   }
   reset() {
-    ((this.providerStripContext = freeze),
-      this.projectScopeDropWarned.clear(),
-      this.hostManagedDropWarned.clear(),
-      this.invalidEnvKeyWarned.clear(),
-      (this.hostSpawnEnvKeys = void 0),
-      (this.settingsEnvForChildren = {}),
-      (this.settingsEnvForChildrenFromRepository = new Map()),
-      (this.toolServerLaunchEnv = {}),
-      (this.materializedProcessWrapper = void 0),
-      (this.preSettingsEnvSnapshot = void 0),
-      this.userTierNames.clear(),
-      (this.launchNamesBeforeClaim = void 0),
-      (this.userTierNamesInSnapshot = new Set()),
-      (this.claimLaunchEnv = void 0),
-      (this.launchCredential = void 0),
-      (this.launchCredentialRoad = "none"),
-      (this.appliedGlobalConfigEnv = void 0),
-      (this.legacyEnvMapAtLaunch = void 0),
-      this.settingsOfferedEnvValues.clear(),
-      this.personsWrittenEnvValues.clear(),
-      this.otelDominanceDropWarned.clear(),
-      this.hostSpawnEnvDropWarned.clear(),
-      this.untrustedFolderDropWarned.clear(),
-      (this.servedFolderEnvWithheld = !1),
-      (this.fullPassDroppedGitKey = !1));
+    this.providerStripContext = P;
+    this.projectScopeDropWarned.clear();
+    this.hostManagedDropWarned.clear();
+    this.invalidEnvKeyWarned.clear();
+    this.hostSpawnEnvKeys = undefined;
+    this.settingsEnvForChildren = {};
+    this.settingsEnvForChildrenFromRepository = new Map();
+    this.toolServerLaunchEnv = {};
+    this.materializedProcessWrapper = undefined;
+    this.preSettingsEnvSnapshot = undefined;
+    this.userTierNames.clear();
+    this.launchNamesBeforeClaim = undefined;
+    this.userTierNamesInSnapshot = new Set();
+    this.claimLaunchEnv = undefined;
+    this.launchCredential = undefined;
+    this.launchCredentialRoad = "none";
+    this.appliedGlobalConfigEnv = undefined;
+    this.legacyEnvMapAtLaunch = undefined;
+    this.settingsOfferedEnvValues.clear();
+    this.personsWrittenEnvValues.clear();
+    this.otelDominanceDropWarned.clear();
+    this.hostSpawnEnvDropWarned.clear();
+    this.untrustedFolderDropWarned.clear();
+    this.servedFolderEnvWithheld = false;
+    this.fullPassDroppedGitKey = false;
   }
   lastFullPassDroppedProjectGitKey() {
     return this.fullPassDroppedGitKey;
@@ -626,11 +654,11 @@ class ManagedEnvApplier {
   strippedSettingsEnv(e, n, r, E) {
     let s = applySafeConfigEnvironmentVariables_2(
       filterHostManagedEnv(
-        H(
+        withoutRestrictedEnvKeys(
           hasDangerousEnvVars(
             stripProjectBlockedEnv(
               dropIgnoredEnvEntries(
-                stripHostOnlyEnv(this.asFromAFolderNobodyTrusted(e, n, E !== void 0), n),
+                stripHostOnlyEnv(this.asFromAFolderNobodyTrusted(e, n, E !== undefined), n),
                 n,
                 E && this.invalidEnvKeyWarned,
               ),
@@ -657,9 +685,9 @@ class ManagedEnvApplier {
         this.settingsEnvForChildrenFromRepository,
         isDangerousEnvVar(n),
       );
-    let C = {},
-      _ = applyDirectEnvKeys(s, C);
-    for (let [a, O] of Object.entries(C)) if (j(a.toUpperCase())) _[a] = O;
+    let C = {};
+    let _ = applyDirectEnvKeys(s, C);
+    for (let [key, value] of Object.entries(C)) if (isColorEnvVar(key.toUpperCase())) _[key] = value;
     return _;
   }
   keptSettingsEnv(e, n, r, E) {
@@ -669,36 +697,42 @@ class ManagedEnvApplier {
     return this.claimLaunchEnv ?? this.peekPreSettingsEnvSnapshot() ?? process.env;
   }
   launchNamed(e) {
-    let n = new Map(Object.entries(pickEnvKeys(this.launchEnvUnlatched(), e)).map(([r, E]) => [G(r), E]));
-    return (r) => n.get(G(r));
+    let n = new Map(
+      Object.entries(pickEnvKeys(this.launchEnvUnlatched(), e)).map(([key, value]) => [
+        envKeyCaseUpper(key),
+        value,
+      ]),
+    );
+    return (r) => n.get(envKeyCaseUpper(r));
   }
   routeAfterVerdict(e) {
-    let n = this.providerStripContext === freeze ? hostManagementFacts() : this.providerStripContext,
-      r = [
-        pickEnvKeys(this.launchEnvUnlatched(), e),
-        this.keptSettingsEnv(pickEnvKeys(this.getLegacyEnvMap(), e), "globalConfig", n, void 0),
-        ...getEnabledSettingSources()
-          .filter((s) => s !== "policySettings" && !isDangerousEnvVar(s))
-          .map((s) => this.keptSettingsEnv(pickEnvKeys(getSettingsForSource(s)?.env, e), s, n, void 0)),
-        this.strippedSettingsEnv(pickEnvKeys(getMachineAdminPolicyEnv(), e), "policySettings", n, void 0),
-      ],
-      E = new Map(r.flatMap((s) => Object.entries(s).map(([C, _]) => [G(C), _])));
-    return (s) => E.get(G(s));
+    let n = this.providerStripContext === P ? hostManagementFacts() : this.providerStripContext;
+    let r = [
+      pickEnvKeys(this.launchEnvUnlatched(), e),
+      this.keptSettingsEnv(pickEnvKeys(this.getLegacyEnvMap(), e), "globalConfig", n, undefined),
+      ...getEnabledSettingSources()
+        .filter((s) => s !== "policySettings" && !isDangerousEnvVar(s))
+        .map((s) => this.keptSettingsEnv(pickEnvKeys(getSettingsForSource(s)?.env, e), s, n, undefined)),
+      this.strippedSettingsEnv(pickEnvKeys(getMachineAdminPolicyEnv(), e), "policySettings", n, undefined),
+    ];
+    let E = new Map(r.flatMap((s) => Object.entries(s).map(([key, value]) => [envKeyCaseUpper(key), value])));
+    return (s) => E.get(envKeyCaseUpper(s));
   }
-  setToolServerLaunchEnv(e) {
-    this.toolServerLaunchEnv = e;
+  setToolServerLaunchEnv(toolServerLaunchEnv) {
+    this.toolServerLaunchEnv = toolServerLaunchEnv;
   }
   assignFromAboveTheRepository(e) {
     Object.assign(process.env, e);
-    for (let n of Object.keys(e)) Eus(n);
+    for (let key of Object.keys(e)) forgetHostEnvWrites(key);
   }
   takeChildEnvFromRepository() {
-    let publishedChildEnv = this.publishedChildEnv,
-      n = [];
+    let publishedChildEnv = this.publishedChildEnv;
+    let n = [];
     for (let [r, E] of this.publishedChildEnvFromRepository) {
       let s = publishedChildEnv[r];
-      if (s === void 0) continue;
-      if ((n.push([r, s]), E === void 0)) delete publishedChildEnv[r];
+      if (s === undefined) continue;
+      n.push([r, s]);
+      if (E === undefined) delete publishedChildEnv[r];
       else publishedChildEnv[r] = E;
     }
     if (n.length === 0) return;
@@ -707,90 +741,107 @@ class ManagedEnvApplier {
     };
   }
   publishChildEnv() {
-    ((this.publishedChildEnv = this.settingsEnvForChildren),
-      (this.publishedChildEnvFromRepository = this.settingsEnvForChildrenFromRepository),
-      setSettingsEnvForChildren(this.settingsEnvForChildren));
+    this.publishedChildEnv = this.settingsEnvForChildren;
+    this.publishedChildEnvFromRepository = this.settingsEnvForChildrenFromRepository;
+    setSettingsEnvForChildren(this.settingsEnvForChildren);
   }
   takenFromToolServerLaunchEnv() {
     let e = {};
-    for (let [n, r] of Object.entries(
-      H(dropIgnoredEnvEntries(this.toolServerLaunchEnv, "globalConfig", this.invalidEnvKeyWarned)),
+    for (let [key, value] of Object.entries(
+      withoutRestrictedEnvKeys(
+        dropIgnoredEnvEntries(this.toolServerLaunchEnv, "globalConfig", this.invalidEnvKeyWarned),
+      ),
     ))
-      if (!h.has(n.toUpperCase())) e[n] = r;
+      if (!HOST_ONLY_ENV_VARS.has(key.toUpperCase())) e[key] = value;
     return this.filterSettingsEnv(applyDirectEnvKeys(e, this.settingsEnvForChildren), "globalConfig");
   }
-  filterSettingsEnv(e, n, r) {
-    let keptSettingsEnv = this.keptSettingsEnv(e, n, this.providerStripContext, { onGitKeyDropped: r });
-    for (let [s, C] of Object.entries(keptSettingsEnv)) this.recordOfferedEnvValue(s, C);
+  filterSettingsEnv(e, n, onGitKeyDropped) {
+    let E = this.keptSettingsEnv(e, n, this.providerStripContext, {
+      onGitKeyDropped,
+    });
+    for (let [key, value] of Object.entries(E)) this.recordOfferedEnvValue(key, value);
     if (n === "globalConfig" || n === "userSettings")
-      for (let s of Object.keys(keptSettingsEnv)) this.userTierNames.add(s.toUpperCase());
-    return keptSettingsEnv;
+      for (let key of Object.keys(E)) this.userTierNames.add(key.toUpperCase());
+    return E;
   }
   withoutInvalidSettingsEnv(e, n) {
     return dropIgnoredEnvEntries(e, n, this.invalidEnvKeyWarned);
   }
   putBackUnsuppliedTelemetryEnv() {
     let preSettingsEnvSnapshot = this.preSettingsEnvSnapshot;
-    if (preSettingsEnvSnapshot === void 0 || this.appliedGlobalConfigEnv === void 0) return !1;
-    let n = !1,
-      filtered = Object.keys(process.env).filter((E) => {
-        let upper = E.toUpperCase(),
-          C = process.env[E];
-        return (
-          C !== void 0 &&
-          C !== preSettingsEnvSnapshot[E] &&
-          (rao.some((_) => upper.startsWith(_)) || X_r.includes(upper) || _e.has(upper)) &&
-          this.settingsOfferedEnvValues.get(upper)?.has(C.trim()) === !0 &&
-          this.personsWrittenEnvValues.get(c(E)) !== C.trim()
-        );
-      });
+    if (preSettingsEnvSnapshot === undefined || this.appliedGlobalConfigEnv === undefined) return false;
+    let n = false;
+    let filtered = Object.keys(process.env).filter((key) => {
+      let upper = key.toUpperCase();
+      let C = process.env[key];
+      return (
+        C !== undefined &&
+        C !== preSettingsEnvSnapshot[key] &&
+        (OTEL_EXPORTER_PREFIXES.some((_) => upper.startsWith(_)) ||
+          OTEL_DETAIL_VARS.includes(upper) ||
+          OTEL_ENV_VAR_SET.has(upper)) &&
+        this.settingsOfferedEnvValues.get(upper)?.has(C.trim()) === true &&
+        this.personsWrittenEnvValues.get(envKeyCase(key)) !== C.trim()
+      );
+    });
     if (filtered.length > 0) {
       let E = new Map();
       for (let C of [
         this.toolServerLaunchEnv,
         this.appliedGlobalConfigEnv ?? {},
         ...getEnabledSettingSources().map((_) =>
-          this.keptSettingsEnv(getSettingsForSource(_)?.env, _, this.providerStripContext, void 0),
+          this.keptSettingsEnv(getSettingsForSource(_)?.env, _, this.providerStripContext, undefined),
         ),
       ])
-        for (let [_, a] of Object.entries(C)) E.set(c(_), a.trim());
-      let filtered_2 = filtered.filter((C) => E.get(c(C)) !== process.env[C]?.trim());
-      if (((n = putBackTransport(preSettingsEnvSnapshot, (C) => filtered_2.includes(C))), n))
+        for (let [key, value] of Object.entries(C)) E.set(envKeyCase(key), value.trim());
+      let filtered_2 = filtered.filter((C) => E.get(envKeyCase(C)) !== process.env[C]?.trim());
+      n = putBackTransport(preSettingsEnvSnapshot, (C) => filtered_2.includes(C));
+      if (n)
         logForDebugging(
           `Telemetry environment variables put back to their startup values, or removed, because no settings source still sets their current value: ${filtered_2.map(escapeForDisplay).join(", ")}`,
         );
     }
-    return (this.enforceManagedOtelFamilyDominance(), n);
+    this.enforceManagedOtelFamilyDominance();
+    return n;
   }
   isSettingsSourcedEnvValue(e, n) {
     let trimmed = n.trim();
     return (
-      this.settingsOfferedEnvValues.get(e.toUpperCase())?.has(trimmed) === !0 ||
-      this.personsWrittenEnvValues.get(c(e)) === trimmed
+      this.settingsOfferedEnvValues.get(e.toUpperCase())?.has(trimmed) === true ||
+      this.personsWrittenEnvValues.get(envKeyCase(e)) === trimmed
     );
   }
   recordPersonsEnvValue(e, n) {
-    if (n === void 0) this.personsWrittenEnvValues.delete(c(e));
-    else this.personsWrittenEnvValues.set(c(e), n.trim());
+    if (n === undefined) this.personsWrittenEnvValues.delete(envKeyCase(e));
+    else this.personsWrittenEnvValues.set(envKeyCase(e), n.trim());
   }
   recordOfferedEnvValue(e, n) {
-    let upper = e.toUpperCase(),
-      trimmed = n.trim(),
-      s = this.settingsOfferedEnvValues.get(upper);
+    let upper = e.toUpperCase();
+    let trimmed = n.trim();
+    let s = this.settingsOfferedEnvValues.get(upper);
     if (s) s.add(trimmed);
     else this.settingsOfferedEnvValues.set(upper, new Set([trimmed]));
   }
   personsSettingsEnvKeeps(e, n) {
-    let r = this.providerStripContext === freeze ? hostManagementFacts() : this.providerStripContext,
-      E = getEnabledSettingSources(),
-      sliced = E.slice(E.indexOf("userSettings") + 1),
-      C = (_, a) => Object.keys(this.keptSettingsEnv(_, a, r, void 0));
+    let r = this.providerStripContext === P ? hostManagementFacts() : this.providerStripContext;
+    let enabledSettingSources = getEnabledSettingSources();
+    let sliced = enabledSettingSources.slice(enabledSettingSources.indexOf("userSettings") + 1);
+    let C = (env, a) => Object.keys(this.keptSettingsEnv(env, a, r, undefined));
     return (
-      E.includes("userSettings") &&
-      C({ [e]: n }, "userSettings").includes(e) &&
-      !sliced.some((_) => C(getSettingsForSource(_)?.env, _).some((a) => c(a) === c(e))) &&
+      enabledSettingSources.includes("userSettings") &&
+      C(
+        {
+          [e]: n,
+        },
+        "userSettings",
+      ).includes(e) &&
+      !sliced.some((_) => C(getSettingsForSource(_)?.env, _).some((a) => envKeyCase(a) === envKeyCase(e))) &&
       !this.otelDominates(e) &&
-      !(n === "" && c(e) === c(PROCESS_WRAPPER_ENV) && this.processWrapperKeyAbove() !== void 0)
+      !(
+        n === "" &&
+        envKeyCase(e) === envKeyCase(PROCESS_WRAPPER_ENV_2) &&
+        this.processWrapperKeyAbove() !== undefined
+      )
     );
   }
   otelDominates(e) {
@@ -799,50 +850,50 @@ class ManagedEnvApplier {
     try {
       this.enforceManagedOtelFamilyDominance();
     } finally {
-      this.otelDominatedAsked = void 0;
+      this.otelDominatedAsked = undefined;
     }
     return n.has(e.toUpperCase());
   }
   otelClaimInForce(e, n) {
-    return this.otelDominatedAsked !== void 0 || process.env[e] === n;
+    return this.otelDominatedAsked !== undefined || process.env[e] === n;
   }
   processWrapperKeyAbove() {
     return [this.processWrapperKeyFrom("policySettings"), this.processWrapperKeyFrom("flagSettings")].find(
       (e) => typeof e === "string" && e !== "",
     );
   }
-  filterPolicyPredicateEnv(e, n, { forPolicyMatch: r }) {
-    if (!r && this.withholdsEnvFrom(n)) return {};
+  filterPolicyPredicateEnv(e, n, { forPolicyMatch }) {
+    if (!forPolicyMatch && this.withholdsEnvFrom(n)) return {};
     let E = applySafeConfigEnvironmentVariables_2(
-        filterHostManagedEnv(
-          H(
-            hasDangerousEnvVars(
-              stripProjectBlockedEnv(
-                dropIgnoredEnvEntries(
-                  r ? e : this.asFromAFolderNobodyTrusted(e, n, !1),
-                  n,
-                  this.invalidEnvKeyWarned,
-                ),
+      filterHostManagedEnv(
+        withoutRestrictedEnvKeys(
+          hasDangerousEnvVars(
+            stripProjectBlockedEnv(
+              dropIgnoredEnvEntries(
+                forPolicyMatch ? e : this.asFromAFolderNobodyTrusted(e, n, false),
                 n,
-                this.projectScopeDropWarned,
-                () => this.envAboveProjectSettings(),
+                this.invalidEnvKeyWarned,
               ),
+              n,
+              this.projectScopeDropWarned,
+              () => this.envAboveProjectSettings(),
             ),
           ),
-          n,
-          this.providerStripContext,
-          this.hostManagedDropWarned,
         ),
         n,
-        this.hostSpawnEnvKeys,
-        this.providerStripContext.desktopHost,
+        this.providerStripContext,
+        this.hostManagedDropWarned,
       ),
-      s = {};
-    for (let [C, _] of Object.entries(E)) {
-      let upper = C.toUpperCase();
-      if (j(upper)) continue;
-      if (!r && isServeBlockedEnv(C, _)) continue;
-      s[C] = _;
+      n,
+      this.hostSpawnEnvKeys,
+      this.providerStripContext.desktopHost,
+    );
+    let s = {};
+    for (let [key, value] of Object.entries(E)) {
+      let upper = key.toUpperCase();
+      if (isColorEnvVar(upper)) continue;
+      if (!forPolicyMatch && isServeBlockedEnv(key, value)) continue;
+      s[key] = value;
     }
     return s;
   }
@@ -850,21 +901,29 @@ class ManagedEnvApplier {
     return n.storedLoginPinned && isSettingsTierWithheld(e);
   }
   asFromAFolderNobodyTrusted(e, n, r) {
-    if (e === void 0 || !Vso(n)) return e;
-    let E = zso(n),
-      s = {},
-      C = [];
-    for (let [_, a] of Object.entries(e)) {
-      let upper = _.toUpperCase();
-      if (typeof a === "string" && (gPi(_, a) || (!E && ae(upper, a)))) s[_] = a;
-      else if (r && E) this.servedFolderEnvWithheld = !0;
-      else if (r && !this.untrustedFolderDropWarned.has(`${n}:${_}`))
-        (this.untrustedFolderDropWarned.add(`${n}:${_}`), C.push(describeEnvEntryName(_)));
+    if (e === undefined || !isAttachServeRepoScopedSourceOrNonInteractive(n)) return e;
+    let E = isAttachServeRepoScopedSource(n);
+    let s = {};
+    let C = [];
+    for (let [key, value] of Object.entries(e)) {
+      let upper = key.toUpperCase();
+      if (
+        typeof value === "string" &&
+        (isEnvSettingOn(key, value) || (!E && isServableEnvValue(upper, value)))
+      )
+        s[key] = value;
+      else if (r && E) this.servedFolderEnvWithheld = true;
+      else if (r && !this.untrustedFolderDropWarned.has(`${n}:${key}`)) {
+        this.untrustedFolderDropWarned.add(`${n}:${key}`);
+        C.push(describeEnvEntryName(key));
+      }
     }
     if (C.length > 0)
       logForDebugging(
         `Ignoring ${C.join(", ")} in the env block of ${n === "localSettings" ? ".claude/settings.local.json" : ".claude/settings.json"}: ${PERSISTED_TRUST_IGNORED}, and this session cannot show a trust dialog, so this folder's settings files may set only a short list of variables, each to certain values only, such as DISABLE_TELEMETRY=1. The repository's author chose the ignored values, not you. If your setup needs an ignored variable, set it yourself in user or managed settings, or in the environment that Claude Code is started with. On a self-hosted runner, user settings are settings.json in the runner host's config directory (SELF_HOSTED_RUNNER_HOST_CONFIG_DIR): restart the runner afterwards.`,
-        { level: "warn" },
+        {
+          level: "warn",
+        },
       );
     return s;
   }
@@ -872,25 +931,28 @@ class ManagedEnvApplier {
     return this.withholdsEnvFrom(e) ||
       isHttpMcpServeInvocation() ||
       (e === "userSettings" && isPersonalConfigRestricted())
-      ? void 0
+      ? undefined
       : getSettingsForSource(e)?.processWrapper;
   }
   dropDominatedOtelKey(e, n, r, E, s = "managed settings") {
     let otelDominatedAsked = this.otelDominatedAsked;
-    if (otelDominatedAsked !== void 0) {
+    if (otelDominatedAsked !== undefined) {
       if (!(E.has(e) && E.get(e) === process.env[e]) && !this.hostSpawnEnvKeys?.has(e.toUpperCase()))
         otelDominatedAsked.add(e.toUpperCase());
       return;
     }
     if (E.get(e) === process.env[e]) return;
     if (this.hostSpawnEnvKeys?.has(e.toUpperCase())) return;
-    if (process.env[e] === void 0) return;
-    if (!this.otelDominanceDropWarned.has(e))
-      (this.otelDominanceDropWarned.add(e),
-        logForDebugging(
-          `Dropping ${escapeForDisplay(e)}: ${escapeForDisplay(r)} is claimed by ${s}, so lower-trust scopes cannot redirect ${n}`,
-          { level: "warn" },
-        ));
+    if (process.env[e] === undefined) return;
+    if (!this.otelDominanceDropWarned.has(e)) {
+      this.otelDominanceDropWarned.add(e);
+      logForDebugging(
+        `Dropping ${escapeForDisplay(e)}: ${escapeForDisplay(r)} is claimed by ${s}, so lower-trust scopes cannot redirect ${n}`,
+        {
+          level: "warn",
+        },
+      );
+    }
     delete process.env[e];
   }
   dropDominatedAntAlias(e, n, r, E = "managed settings") {
@@ -906,36 +968,37 @@ class ManagedEnvApplier {
     );
   }
   hostSpawnOtelClaims() {
-    let e = new Map(),
-      hostSpawnEnvKeys = this.hostSpawnEnvKeys;
+    let e = new Map();
+    let hostSpawnEnvKeys = this.hostSpawnEnvKeys;
     if (!hostSpawnEnvKeys) return e;
-    let any = [...hostSpawnEnvKeys].some((E) => {
-      let s = x(E);
+    let any = [...hostSpawnEnvKeys].some((hostSpawnEnvKey) => {
+      let s = identityEnvMap(hostSpawnEnvKey);
       return (
         ((s.startsWith(OTLP_EXPORTER_PREFIX) && s.endsWith("_ENDPOINT")) || s === BETA_TRACING_ENDPOINT) &&
-        (process.env[E] ?? "").trim() !== ""
+        (process.env[hostSpawnEnvKey] ?? "").trim() !== ""
       );
     });
-    for (let E of hostSpawnEnvKeys) {
-      let s = x(E),
-        C = OTEL_EXPORTER_SELECTORS.has(s) || s === CLAUDE_CODE_ENABLE_TELEMETRY,
-        _ = any && s.startsWith(OTLP_EXPORTER_PREFIX);
+    for (let hostSpawnEnvKey of hostSpawnEnvKeys) {
+      let s = identityEnvMap(hostSpawnEnvKey);
+      let C = OTEL_EXPORTER_SELECTORS.has(s) || s === CLAUDE_CODE_ENABLE_TELEMETRY;
+      let _ = any && s.startsWith(OTLP_EXPORTER_PREFIX);
       if (!C && !_) continue;
-      let a = process.env[E];
-      if (a !== void 0) e.set(E, a);
+      let a = process.env[hostSpawnEnvKey];
+      if (a !== undefined) e.set(hostSpawnEnvKey, a);
     }
     return e;
   }
   enforceManagedOtelFamilyDominance() {
-    let e = getSettingsForSource("policySettings"),
-      n = e?.env,
-      r = (e?.otelHeadersHelper ?? "").trim() !== "",
-      E = new Map();
-    for (let [s, C] of Object.entries(n ?? {})) {
-      let upper = s.toUpperCase();
-      if (!E.has(upper) || s === upper) E.set(upper, C);
+    let settingsForSource = getSettingsForSource("policySettings");
+    let env = settingsForSource?.env;
+    let r = (settingsForSource?.otelHeadersHelper ?? "").trim() !== "";
+    let E = new Map();
+    for (let [key, value] of Object.entries(env ?? {})) {
+      let upper = key.toUpperCase();
+      if (!E.has(upper) || key === upper) E.set(upper, value);
     }
-    if ((this.applyOtelFamilyClaims(this.hostSpawnOtelClaims(), E, "the host spawn env"), !n && !r)) return;
+    this.applyOtelFamilyClaims(this.hostSpawnOtelClaims(), E, "the host spawn env");
+    if (!env && !r) return;
     if (r) {
       for (let s of OTLP_SIGNALS)
         this.dropDominatedOtelKey(
@@ -944,26 +1007,27 @@ class ManagedEnvApplier {
           "otelHeadersHelper",
           E,
         );
-      (this.dropDominatedOtelKey(
+      this.dropDominatedOtelKey(
         `${OTLP_EXPORTER_PREFIX}ENDPOINT`,
         "telemetry for any signal",
         "otelHeadersHelper",
         E,
-      ),
-        this.dropDominatedAntAlias(`${OTLP_EXPORTER_PREFIX}ENDPOINT`, "otelHeadersHelper", E),
-        this.dropDominatedBetaTracingEndpoint("otelHeadersHelper", E));
+      );
+      this.dropDominatedAntAlias(`${OTLP_EXPORTER_PREFIX}ENDPOINT`, "otelHeadersHelper", E);
+      this.dropDominatedBetaTracingEndpoint("otelHeadersHelper", E);
     }
     this.applyOtelFamilyClaims(E, E, "managed settings");
   }
   applyOtelFamilyClaims(e, n, r) {
     for (let [E, s] of e) {
-      let C = x(E);
+      let C = identityEnvMap(E);
       if (C === CLAUDE_CODE_ENABLE_TELEMETRY) {
         if (this.otelClaimInForce(E, s) && !isEnvTruthy(s)) this.dropDominatedBetaTracingEndpoint(E, n, r);
         continue;
       }
       if (OTEL_EXPORTER_SELECTORS.has(C)) {
-        if (this.otelClaimInForce(E, s) && Ke(s)) this.dropDominatedBetaTracingEndpoint(E, n, r);
+        if (this.otelClaimInForce(E, s) && lacksOtlpExporter(s))
+          this.dropDominatedBetaTracingEndpoint(E, n, r);
         continue;
       }
       if (!C.startsWith(OTLP_EXPORTER_PREFIX)) continue;
@@ -971,26 +1035,23 @@ class ManagedEnvApplier {
       if (!this.otelClaimInForce(E, s)) continue;
       let found = OTLP_SIGNALS.find((S) => C.startsWith(`${OTLP_EXPORTER_PREFIX}${S}_`));
       if (found) {
-        let sliced = C.slice(`${OTLP_EXPORTER_PREFIX}${found}_`.length),
-          R = found === "TRACES" || found === "LOGS";
+        let sliced = C.slice(`${OTLP_EXPORTER_PREFIX}${found}_`.length);
+        let R = found === "TRACES" || found === "LOGS";
         if (OTLP_SECRET_SUFFIXES.has(sliced)) {
-          if (
-            (this.dropDominatedOtelKey(
-              `${OTLP_EXPORTER_PREFIX}${found}_ENDPOINT`,
-              `the ${found.toLowerCase()} signal`,
-              E,
-              n,
-              r,
-            ),
-            R)
-          )
-            this.dropDominatedBetaTracingEndpoint(E, n, r);
+          this.dropDominatedOtelKey(
+            `${OTLP_EXPORTER_PREFIX}${found}_ENDPOINT`,
+            `the ${found.toLowerCase()} signal`,
+            E,
+            n,
+            r,
+          );
+          if (R) this.dropDominatedBetaTracingEndpoint(E, n, r);
         } else if (sliced === "ENDPOINT" && R) this.dropDominatedBetaTracingEndpoint(E, n, r);
         continue;
       }
-      let sliced = C.slice(OTLP_EXPORTER_PREFIX.length),
-        O = OTLP_SECRET_SUFFIXES.has(sliced),
-        D = O ? [sliced, "ENDPOINT"] : [sliced];
+      let sliced = C.slice(OTLP_EXPORTER_PREFIX.length);
+      let O = OTLP_SECRET_SUFFIXES.has(sliced);
+      let D = O ? [sliced, "ENDPOINT"] : [sliced];
       for (let S of D)
         for (let R of OTLP_SIGNALS)
           this.dropDominatedOtelKey(
@@ -1000,109 +1061,133 @@ class ManagedEnvApplier {
             n,
             r,
           );
-      if (O)
-        (this.dropDominatedOtelKey(`${OTLP_EXPORTER_PREFIX}ENDPOINT`, "telemetry for any signal", E, n, r),
-          this.dropDominatedAntAlias(`${OTLP_EXPORTER_PREFIX}ENDPOINT`, E, n, r));
+      if (O) {
+        this.dropDominatedOtelKey(`${OTLP_EXPORTER_PREFIX}ENDPOINT`, "telemetry for any signal", E, n, r);
+        this.dropDominatedAntAlias(`${OTLP_EXPORTER_PREFIX}ENDPOINT`, E, n, r);
+      }
       if (D.includes("ENDPOINT")) this.dropDominatedBetaTracingEndpoint(E, n, r);
       this.dropDominatedAntAlias(C, E, n, r);
     }
   }
   resetSettingsIfUserSettingsFileMoved(e) {
-    if (getSettingsFilePathForSource("userSettings") !== e) or();
+    if (getSettingsFilePathForSource("userSettings") !== e) invalidateCommandNames();
   }
   applySafeConfigEnvironmentVariables() {
-    (this.getPreSettingsEnvSnapshot(), (this.providerStripContext = hostManagementFacts()));
-    let e = getSettingsFilePathForSource("userSettings"),
-      NODE_EXTRA_CA_CERTS = env.NODE_EXTRA_CA_CERTS,
-      CLAUDE_CODE_CERT_STORE = env.CLAUDE_CODE_CERT_STORE,
-      E = env.CLAUDE_CODE_DISABLE_LOOPED_CROSS_CERT_DROP,
-      CLAUDE_CODE_DISABLE_SELF_NAMED_CERT_DROP = env.CLAUDE_CODE_DISABLE_SELF_NAMED_CERT_DROP,
-      NODE_OPTIONS = env.NODE_OPTIONS;
-    if (this.hostSpawnEnvKeys === void 0) {
+    this.getPreSettingsEnvSnapshot();
+    this.providerStripContext = hostManagementFacts();
+    let settingsFilePathForSource = getSettingsFilePathForSource("userSettings");
+    let NODE_EXTRA_CA_CERTS = env.NODE_EXTRA_CA_CERTS;
+    let CLAUDE_CODE_CERT_STORE = env.CLAUDE_CODE_CERT_STORE;
+    let E = env.CLAUDE_CODE_DISABLE_LOOPED_CROSS_CERT_DROP;
+    let CLAUDE_CODE_DISABLE_SELF_NAMED_CERT_DROP = env.CLAUDE_CODE_DISABLE_SELF_NAMED_CERT_DROP;
+    let NODE_OPTIONS = env.NODE_OPTIONS;
+    if (this.hostSpawnEnvKeys === undefined) {
+      this.hostSpawnEnvKeys = this.providerStripContext.hostOrchestrated
+        ? new Set(Object.keys(process.env).map((key) => key.toUpperCase()))
+        : null;
       if (
-        ((this.hostSpawnEnvKeys = this.providerStripContext.hostOrchestrated
-          ? new Set(Object.keys(process.env).map((O) => O.toUpperCase()))
-          : null),
-        this.hostSpawnEnvKeys && v$("CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR"))
+        this.hostSpawnEnvKeys &&
+        hasPossibleCredentialFromDescriptor("CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR")
       )
         this.hostSpawnEnvKeys.add("CLAUDE_CODE_OAUTH_TOKEN");
       if (holdsDaemonForceColor()) this.hostSpawnEnvKeys?.delete("FORCE_COLOR");
     }
-    ((this.settingsEnvForChildren = {}),
-      (this.settingsEnvForChildrenFromRepository = new Map()),
-      Object.assign(process.env, this.takenFromToolServerLaunchEnv()),
-      (this.appliedGlobalConfigEnv = this.filterSettingsEnv(this.getLegacyEnvMap(), "globalConfig")),
-      this.assignFromAboveTheRepository(this.appliedGlobalConfigEnv));
+    this.settingsEnvForChildren = {};
+    this.settingsEnvForChildrenFromRepository = new Map();
+    Object.assign(process.env, this.takenFromToolServerLaunchEnv());
+    this.appliedGlobalConfigEnv = this.filterSettingsEnv(this.getLegacyEnvMap(), "globalConfig");
+    this.assignFromAboveTheRepository(this.appliedGlobalConfigEnv);
     for (let O of TELEMETRY_SETTING_SOURCES) {
       if (O === "policySettings") continue;
       if (!isSettingSourceEnabled(O)) continue;
       this.assignFromAboveTheRepository(this.filterSettingsEnv(getSettingsForSource(O)?.env, O));
     }
-    (computeRemoteSettingsEligibility(),
-      (this.providerStripContext = { ...this.providerStripContext, hybridConnection: Ee() }),
-      this.assignFromAboveTheRepository(
-        this.filterSettingsEnv(getSettingsForSource("policySettings")?.env, "policySettings"),
-      ));
+    computeRemoteSettingsEligibility();
+    this.providerStripContext = {
+      ...this.providerStripContext,
+      hybridConnection: isHybridConnectionAllowed(),
+    };
+    this.assignFromAboveTheRepository(
+      this.filterSettingsEnv(getSettingsForSource("policySettings")?.env, "policySettings"),
+    );
     let _ = new Map();
     for (let O of getEnabledSettingSources()) {
-      let filterSettingsEnv = this.filterSettingsEnv(getSettingsForSource(O)?.env, O);
-      for (let [S, R] of Object.entries(filterSettingsEnv))
-        _.set(S.toUpperCase(), { key: S, value: R, source: O });
+      let D = this.filterSettingsEnv(getSettingsForSource(O)?.env, O);
+      for (let [key, value] of Object.entries(D))
+        _.set(key.toUpperCase(), {
+          key,
+          value,
+          source: O,
+        });
     }
-    for (let { key: key, value: D, source: source } of _.values()) {
+    for (let { key, value: D, source } of _.values()) {
       if (!isProtectedEnvVar(key, D)) continue;
       if (isDangerousEnvVar(source)) {
         let R = snapshotHostOwnedEnv(key);
-        ((process.env[key] = D), R());
-      } else ((process.env[key] = D), Eus(key));
+        process.env[key] = D;
+        R();
+      } else {
+        process.env[key] = D;
+        forgetHostEnvWrites(key);
+      }
     }
     this.publishChildEnv();
-    let a = process.env[PROCESS_WRAPPER_ENV];
+    let a = process.env[PROCESS_WRAPPER_ENV_2];
     if (!a || a === this.materializedProcessWrapper) {
-      let O = isSettingSourceEnabled("userSettings") ? this.processWrapperKeyFrom("userSettings") : void 0,
-        D = this.processWrapperKeyAbove() ?? (O === "" ? void 0 : O);
-      if (D !== void 0) ((process.env[PROCESS_WRAPPER_ENV] = D), (this.materializedProcessWrapper = D));
+      let O = isSettingSourceEnabled("userSettings") ? this.processWrapperKeyFrom("userSettings") : undefined;
+      let D = this.processWrapperKeyAbove() ?? (O === "" ? undefined : O);
+      if (D !== undefined) {
+        process.env[PROCESS_WRAPPER_ENV_2] = D;
+        this.materializedProcessWrapper = D;
+      }
     }
+    this.enforceManagedOtelFamilyDominance();
+    this.resetSettingsIfUserSettingsFileMoved(settingsFilePathForSource);
     if (
-      (this.enforceManagedOtelFamilyDominance(),
-      this.resetSettingsIfUserSettingsFileMoved(e),
       env.NODE_EXTRA_CA_CERTS !== NODE_EXTRA_CA_CERTS ||
-        env.CLAUDE_CODE_CERT_STORE !== CLAUDE_CODE_CERT_STORE ||
-        env.CLAUDE_CODE_DISABLE_LOOPED_CROSS_CERT_DROP !== E ||
-        env.CLAUDE_CODE_DISABLE_SELF_NAMED_CERT_DROP !== CLAUDE_CODE_DISABLE_SELF_NAMED_CERT_DROP ||
-        env.NODE_OPTIONS !== NODE_OPTIONS)
+      env.CLAUDE_CODE_CERT_STORE !== CLAUDE_CODE_CERT_STORE ||
+      env.CLAUDE_CODE_DISABLE_LOOPED_CROSS_CERT_DROP !== E ||
+      env.CLAUDE_CODE_DISABLE_SELF_NAMED_CERT_DROP !== CLAUDE_CODE_DISABLE_SELF_NAMED_CERT_DROP ||
+      env.NODE_OPTIONS !== NODE_OPTIONS
     ) {
-      if ((clearCACertsCache(), hasConfiguredGlobalAgents())) (clearProxyCache(), configureGlobalAgents());
+      clearCACertsCache();
+      if (hasConfiguredGlobalAgents()) {
+        clearProxyCache();
+        configureGlobalAgents();
+      }
     }
   }
   applyConfigEnvironmentVariables() {
-    (this.getPreSettingsEnvSnapshot(),
-      (this.providerStripContext = hostManagementFacts()),
-      (this.settingsEnvForChildren = {}),
-      (this.settingsEnvForChildrenFromRepository = new Map()));
-    let NODE_EXTRA_CA_CERTS = env.NODE_EXTRA_CA_CERTS,
-      CLAUDE_CODE_CERT_STORE = env.CLAUDE_CODE_CERT_STORE,
-      r = env.CLAUDE_CODE_DISABLE_LOOPED_CROSS_CERT_DROP,
-      CLAUDE_CODE_DISABLE_SELF_NAMED_CERT_DROP = env.CLAUDE_CODE_DISABLE_SELF_NAMED_CERT_DROP,
-      NODE_OPTIONS = env.NODE_OPTIONS,
-      CLAUDE_CODE_CLIENT_CERT = env.CLAUDE_CODE_CLIENT_CERT,
-      CLAUDE_CODE_CLIENT_KEY = env.CLAUDE_CODE_CLIENT_KEY;
-    ((this.legacyEnvMapAtLaunch ??= { ...getGlobalConfig().env }),
-      Object.assign(process.env, this.takenFromToolServerLaunchEnv()),
-      (this.appliedGlobalConfigEnv = this.filterSettingsEnv(this.getLegacyEnvMap(), "globalConfig")),
-      this.assignFromAboveTheRepository(this.appliedGlobalConfigEnv),
-      (this.fullPassDroppedGitKey = !1));
+    this.getPreSettingsEnvSnapshot();
+    this.providerStripContext = hostManagementFacts();
+    this.settingsEnvForChildren = {};
+    this.settingsEnvForChildrenFromRepository = new Map();
+    let NODE_EXTRA_CA_CERTS = env.NODE_EXTRA_CA_CERTS;
+    let CLAUDE_CODE_CERT_STORE = env.CLAUDE_CODE_CERT_STORE;
+    let r = env.CLAUDE_CODE_DISABLE_LOOPED_CROSS_CERT_DROP;
+    let CLAUDE_CODE_DISABLE_SELF_NAMED_CERT_DROP = env.CLAUDE_CODE_DISABLE_SELF_NAMED_CERT_DROP;
+    let NODE_OPTIONS = env.NODE_OPTIONS;
+    let CLAUDE_CODE_CLIENT_CERT = env.CLAUDE_CODE_CLIENT_CERT;
+    let CLAUDE_CODE_CLIENT_KEY = env.CLAUDE_CODE_CLIENT_KEY;
+    this.legacyEnvMapAtLaunch ??= {
+      ...getGlobalConfig().env,
+    };
+    Object.assign(process.env, this.takenFromToolServerLaunchEnv());
+    this.appliedGlobalConfigEnv = this.filterSettingsEnv(this.getLegacyEnvMap(), "globalConfig");
+    this.assignFromAboveTheRepository(this.appliedGlobalConfigEnv);
+    this.fullPassDroppedGitKey = false;
     for (let R of getEnabledSettingSources()) {
-      let filterSettingsEnv = this.filterSettingsEnv(getSettingsForSource(R)?.env, R, () => {
-        this.fullPassDroppedGitKey = !0;
+      let f = this.filterSettingsEnv(getSettingsForSource(R)?.env, R, () => {
+        this.fullPassDroppedGitKey = true;
       });
       if (isDangerousEnvVar(R)) {
-        let mapped = Object.keys(filterSettingsEnv).map((b) => snapshotHostOwnedEnv(b));
-        Object.assign(process.env, filterSettingsEnv);
+        let mapped = Object.keys(f).map((key) => snapshotHostOwnedEnv(key));
+        Object.assign(process.env, f);
         for (let b of mapped) b();
-      } else this.assignFromAboveTheRepository(filterSettingsEnv);
+      } else this.assignFromAboveTheRepository(f);
     }
-    (this.publishChildEnv(), this.enforceManagedOtelFamilyDominance());
+    this.publishChildEnv();
+    this.enforceManagedOtelFamilyDominance();
     let a =
       env.NODE_EXTRA_CA_CERTS !== NODE_EXTRA_CA_CERTS ||
       env.CLAUDE_CODE_CLIENT_CERT !== CLAUDE_CODE_CLIENT_CERT ||
@@ -1115,51 +1200,57 @@ class ManagedEnvApplier {
       env.NODE_OPTIONS !== NODE_OPTIONS
     )
       clearCACertsCache();
-    let { certPath: certPath, keyPath: keyPath } = getLoadedMTLSPaths(),
-      S =
-        (env.CLAUDE_CODE_CLIENT_CERT !== certPath || env.CLAUDE_CODE_CLIENT_KEY !== keyPath) &&
-        (certPath !== void 0 || keyPath !== void 0);
+    let { certPath, keyPath } = getLoadedMTLSPaths();
+    let S =
+      (env.CLAUDE_CODE_CLIENT_CERT !== certPath || env.CLAUDE_CODE_CLIENT_KEY !== keyPath) &&
+      (certPath !== undefined || keyPath !== undefined);
     if (!S) clearMTLSCache();
-    (clearProxyCache(),
-      configureGlobalAgents(),
-      Promise.all([loadExtraCACerts(), loadMTLSClientMaterial()])
-        .then(([R, f]) => {
-          if (S && f.readFailed) clearMTLSCache();
-          if (a || S || R || f.changed) (clearProxyCache(), configureGlobalAgents());
-        })
-        .catch(logError));
+    clearProxyCache();
+    configureGlobalAgents();
+    Promise.all([loadExtraCACerts(), loadMTLSClientMaterial()])
+      .then(([R, f]) => {
+        if (S && f.readFailed) clearMTLSCache();
+        if (a || S || R || f.changed) {
+          clearProxyCache();
+          configureGlobalAgents();
+        }
+      })
+      .catch(logError);
   }
 }
 //@ chunk-q4qb1h08.js:41306-41337 placement
-var d = new ManagedEnvApplier(),
-  jt = aV({ clear: We });
+var managedEnvApplier = new ManagedEnvApplier();
+var preSettingsEnvLatch = retainCacheKey({
+  clear: resetManagedEnvApplier,
+});
 //@ chunk-q4qb1h08.js:41337-41419 placement
 function applySafeConfigEnvironmentVariables() {
   try {
-    d.applySafeConfigEnvironmentVariables();
+    managedEnvApplier.applySafeConfigEnvironmentVariables();
   } finally {
     exitIfServeHelperMisconfigured();
   }
-  (V(), emitCredentialChange());
+  noopEnvHook();
+  emitCredentialChange();
 }
 //@ chunk-q4qb1h08.js:41419-41496 placement
 function applyConfigEnvironmentVariables() {
   try {
-    d.applyConfigEnvironmentVariables();
+    managedEnvApplier.applyConfigEnvironmentVariables();
   } finally {
     exitIfServeHelperMisconfigured();
   }
-  (V(), emitCredentialChange());
+  noopEnvHook();
+  emitCredentialChange();
 }
 //@ chunk-q4qb1h08.js:41496-41549 placement
 function servedFolderEnvWasWithheld() {
-  return d.servedFolderEnvWasWithheld();
+  return managedEnvApplier.servedFolderEnvWasWithheld();
 }
 //@ chunk-q4qb1h08.js:41549-41573 placement
-function We() {
-  d.reset();
+function resetManagedEnvApplier() {
+  managedEnvApplier.reset();
 }
-
 export {
   getLatchedPreSettingsEnvSnapshot,
   getAppliedGlobalConfigEnv,
@@ -1181,7 +1272,7 @@ export {
   servedFolderEnvWasWithheld,
   PROJECT_SCOPE_BLOCKED_ENV_VARS,
   getEnvAboveProjectSettings,
-  ae,
+  isServableEnvValue,
   PROJECT_LEVEL_SETTING_SOURCES,
   purgeHostOwnedChromeVars,
   putBackTransport,

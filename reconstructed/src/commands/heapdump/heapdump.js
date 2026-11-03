@@ -13,44 +13,49 @@ import { performHeapDump } from "../../utils/heapDumpService.js";
 import { isBridgeOrTransport } from "../../cli/transportState.js";
 import { logForDebugging } from "../../utils/debug.js";
 
+//@ chunk-dhgx9s0b.js:2263-2840 fingerprint = call (0.478)
 /**
  * /heapdump 的 local call(args, context, invokedName) 实现入口（由命令对象 load() 返回）。
  */
-//@ chunk-dhgx9s0b.js:2263-2840 fingerprint = call (0.478)
 async function call(args, context) {
-  let result = await performHeapDump(),
-    a = isBridgeOrTransport(context.session);
+  let result = await performHeapDump();
+  let a = isBridgeOrTransport(context.session);
   if (!result.success) {
-    if (a)
-      return (
-        logForDebugging(`heapdump failed: ${result.error}`, { level: "error" }),
-        { type: "text", value: "Failed to create heap dump (detail withheld on this connection)" }
-      );
-    return { type: "text", value: `Failed to create heap dump: ${result.error}` };
+    if (a) {
+      logForDebugging(`heapdump failed: ${result.error}`, {
+        level: "error",
+      });
+      return {
+        type: "text",
+        value: "Failed to create heap dump (detail withheld on this connection)",
+      };
+    }
+    return {
+      type: "text",
+      value: `Failed to create heap dump: ${result.error}`,
+    };
   }
-  let i = a ? basename(result.heapPath) : result.heapPath,
-    p = a ? basename(result.diagPath) : result.diagPath;
+  let i = a ? basename(result.heapPath) : result.heapPath;
+  let p = a ? basename(result.diagPath) : result.diagPath;
   if (a) logForDebugging(`heapdump written: ${result.heapPath} ${result.diagPath}`);
   let h = [i, p, "", formatHeapReport(result.diagnostics)];
-  return (
-    h.push("", "Open the .heapsnapshot in Chrome DevTools \u2192 Memory \u2192 Load to inspect retainers."),
-    {
-      type: "text",
-      value: h.join(`
+  h.push("", "Open the .heapsnapshot in Chrome DevTools \u2192 Memory \u2192 Load to inspect retainers.");
+  return {
+    type: "text",
+    value: h.join(`
 `),
-    }
-  );
+  };
 }
 //@ chunk-dhgx9s0b.js:2840-3908 affinity
-function formatHeapReport(r) {
-  let { memoryUsage: memoryUsage, resourceUsage: resourceUsage, analysis: analysis } = r,
-    i = analysis.potentialLeaks.length
-      ? analysis.potentialLeaks.map((potentialLeak) => `  \u26A0 ${potentialLeak}`).join(`
+function formatHeapReport(diagnostics) {
+  let { memoryUsage, resourceUsage, analysis } = diagnostics;
+  let i = analysis.potentialLeaks.length
+    ? analysis.potentialLeaks.map((potentialLeak) => `  \u26A0 ${potentialLeak}`).join(`
 `)
-      : "  (no obvious leak indicators)",
-    p = (n, u) =>
-      `RSS ${formatGigabytes(memoryUsage.rss)} (peak ${formatGigabytes(resourceUsage.maxRSS)}) ${n > u ? "\u2014 most memory is JS heap (inspect the .heapsnapshot)" : "\u2014 most memory is native (NOT in the .heapsnapshot)"}`;
-  if (r.runtime === "bun") {
+    : "  (no obvious leak indicators)";
+  let p = (n, u) =>
+    `RSS ${formatGigabytes(memoryUsage.rss)} (peak ${formatGigabytes(resourceUsage.maxRSS)}) ${n > u ? "\u2014 most memory is JS heap (inspect the .heapsnapshot)" : "\u2014 most memory is native (NOT in the .heapsnapshot)"}`;
+  if (diagnostics.runtime === "bun") {
     let max = Math.max(0, memoryUsage.rss - memoryUsage.heapUsed);
     return [
       p(memoryUsage.heapUsed, max),
@@ -61,8 +66,8 @@ function formatHeapReport(r) {
     ].join(`
 `);
   }
-  let h = memoryUsage.external - memoryUsage.arrayBuffers,
-    max = Math.max(0, memoryUsage.rss - memoryUsage.heapTotal - memoryUsage.external);
+  let h = memoryUsage.external - memoryUsage.arrayBuffers;
+  let max = Math.max(0, memoryUsage.rss - memoryUsage.heapTotal - memoryUsage.external);
   return [
     p(memoryUsage.heapTotal, memoryUsage.external + max),
     `  JS heap        ${formatGigabytes(memoryUsage.heapTotal).padStart(8)}  in snapshot`,

@@ -14,7 +14,7 @@ import { credentialsStoreFor } from "../secureStorage/credentialsFileStore.js";
 import { getSettingsForSource, getSettingsForSourceTightenOnly } from "../settings/settings.js";
 import { isSettingSourceEnabled } from "../settings/constants.js";
 import { checkHasTrustDialogAccepted } from "../config.js";
-import { runManagedHelperWithoutProjectEnv, flt } from "./managedHelpers.js";
+import { runManagedHelperWithoutProjectEnv, managedHelperSettingsGate } from "./managedHelpers.js";
 import { isProviderManagedByHost } from "../entrypointKinds.js";
 import {
   _setProxyAuthHelperConfig,
@@ -31,10 +31,13 @@ import { loadHostCredentials } from "../hostCredsFile.js";
 import { unsettledBy } from "../../daemon/workerEnding.js";
 
 //@ chunk-rehfzw2n.js:692-703 placement
-var zwo = {};
+/**
+ * 空对象的默认导出（占位模块内容）。
+ */
+var emptyDefaultExport = {};
 //@ chunk-rehfzw2n.js:703-899 placement
-Ar(zwo, {
-  default: () => zwo,
+Ar(emptyDefaultExport, {
+  default: () => emptyDefaultExport,
   earlyCredentialsOf: () => earlyCredentialsOf,
   hostProxyAuthConfigured: () => hostProxyAuthConfigured,
   personProxyAuthHelper: () => personProxyAuthHelper,
@@ -44,51 +47,65 @@ Ar(zwo, {
 });
 //@ chunk-rehfzw2n.js:899-983 placement
 function earlyCredentialsOf(e) {
-  return e?.backend !== void 0 && isSameConfigDir(e.configHome) ? credentialsStoreFor(e?.backend) : void 0;
+  return e?.backend !== undefined && isSameConfigDir(e.configHome)
+    ? credentialsStoreFor(e?.backend)
+    : undefined;
 }
+//@ chunk-rehfzw2n.js:983-1338 placement
 /**
  * 为特定命令只运行个人与策略来源的代理认证助手。
  */
-//@ chunk-rehfzw2n.js:983-1338 placement
 function personProxyAuthHelper() {
-  let e = getSettingsForSource("policySettings")?.proxyAuthHelper,
-    t = isSettingSourceEnabled("userSettings")
-      ? getSettingsForSource("userSettings")?.proxyAuthHelper
-      : void 0;
+  let proxyAuthHelper = getSettingsForSource("policySettings")?.proxyAuthHelper;
+  let proxyAuthHelper_2 = isSettingSourceEnabled("userSettings")
+    ? getSettingsForSource("userSettings")?.proxyAuthHelper
+    : undefined;
   return {
-    helper: e ?? t,
+    helper: proxyAuthHelper ?? proxyAuthHelper_2,
     fromProjectOrLocal:
-      e === void 0 &&
-      t !== void 0 &&
-      (getSettingsForSourceTightenOnly("projectSettings")?.proxyAuthHelper === t ||
-        getSettingsForSourceTightenOnly("localSettings")?.proxyAuthHelper === t),
+      proxyAuthHelper === undefined &&
+      proxyAuthHelper_2 !== undefined &&
+      (getSettingsForSourceTightenOnly("projectSettings")?.proxyAuthHelper === proxyAuthHelper_2 ||
+        getSettingsForSourceTightenOnly("localSettings")?.proxyAuthHelper === proxyAuthHelper_2),
     trustAccepted: checkHasTrustDialogAccepted,
     sources: "personAndPolicy",
     startHelper: runManagedHelperWithoutProjectEnv,
-    readAsHelperStarts: flt,
+    readAsHelperStarts: managedHelperSettingsGate,
   };
 }
 //@ chunk-rehfzw2n.js:1338-1409 placement
-var s = `a proxy helper set by this project is not run by this command
+/**
+ * 提示：本项目设置的 proxy helper 不会由该命令运行。
+ */
+var PROXY_HELPER_SKIPPED_NOTE = `a proxy helper set by this project is not run by this command
 `;
 //@ chunk-rehfzw2n.js:1409-1613 placement
 function hostProxyAuthConfigured() {
-  let e = isProviderManagedByHost(),
-    r =
-      e &&
-      Boolean(process.stderr.isTTY) &&
-      (getSettingsForSource("projectSettings")?.proxyAuthHelper !== void 0 ||
-        getSettingsForSource("localSettings")?.proxyAuthHelper !== void 0);
+  let e = isProviderManagedByHost();
+  let r =
+    e &&
+    Boolean(process.stderr.isTTY) &&
+    (getSettingsForSource("projectSettings")?.proxyAuthHelper !== undefined ||
+      getSettingsForSource("localSettings")?.proxyAuthHelper !== undefined);
   if (e) _setProxyAuthHelperConfig(personProxyAuthHelper());
-  if (r) process.stderr.write(s);
+  if (r) process.stderr.write(PROXY_HELPER_SKIPPED_NOTE);
 }
 //@ chunk-rehfzw2n.js:1613-1670 placement
-var p = "Error: the proxy setting named above is refused.";
+/**
+ * 代理设置被拒绝时的错误文本。
+ */
+var PROXY_HELPER_REFUSED_MESSAGE = "Error: the proxy setting named above is refused.";
 //@ chunk-rehfzw2n.js:1670-1768 placement
 function proxyAgentsInstalled() {
-  let e = getProxyUrlWithSource(),
-    r = e !== void 0 && !parseProxyUrl(e.value);
-  return (configureGlobalAgents(), r ? { reason: p, kind: "lasting" } : null);
+  let proxyUrlWithSource = getProxyUrlWithSource();
+  let r = proxyUrlWithSource !== undefined && !parseProxyUrl(proxyUrlWithSource.value);
+  configureGlobalAgents();
+  return r
+    ? {
+        reason: PROXY_HELPER_REFUSED_MESSAGE,
+        kind: "lasting",
+      }
+    : null;
 }
 //@ chunk-rehfzw2n.js:1768-1852 placement
 function signInRestored(e) {
@@ -98,14 +115,13 @@ function signInRestored(e) {
 //@ chunk-rehfzw2n.js:1852-2065 placement
 async function sessionFactsRestored(e) {
   let r = await Promise.resolve()
-      .then(applyExtraCACertsFromConfig)
-      .then(() => Promise.all([loadExtraCACerts(), loadMTLSClientMaterial()]))
-      .then(loadHostCredentials)
-      .then(hostProxyAuthConfigured)
-      .then(() => signInRestored(e))
-      .then(() => null, unsettledBy),
-    t = await Promise.resolve().then(proxyAgentsInstalled).catch(unsettledBy);
+    .then(applyExtraCACertsFromConfig)
+    .then(() => Promise.all([loadExtraCACerts(), loadMTLSClientMaterial()]))
+    .then(loadHostCredentials)
+    .then(hostProxyAuthConfigured)
+    .then(() => signInRestored(e))
+    .then(() => null, unsettledBy);
+  let t = await Promise.resolve().then(proxyAgentsInstalled).catch(unsettledBy);
   return r ?? t;
 }
-
 export { sessionFactsRestored };

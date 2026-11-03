@@ -11,10 +11,12 @@
 import { getInitialSettings_2 } from "./settings/settings.js";
 
 //@ chunk-vjd99kgw.js:227-315 placement
-function y9() {
-  let e = getInitialSettings_2()?.autoUpdatesChannel;
-  if (e && e !== "latest") return e;
+/**
+ * 取自动更新通道（缺省 latest）。
+ */
+function autoUpdatesChannel() {
+  let autoUpdatesChannel = getInitialSettings_2()?.autoUpdatesChannel;
+  if (autoUpdatesChannel && autoUpdatesChannel !== "latest") return autoUpdatesChannel;
   return "latest";
 }
-
-export { y9 };
+export { autoUpdatesChannel };

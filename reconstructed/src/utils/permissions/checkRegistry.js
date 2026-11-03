@@ -32,11 +32,13 @@ function escapeXmlKeepJoiners(e) {
 }
 //@ chunk-g54kbxqw.js:35235-35291 placement
 function normalizeKeepJoiners(e) {
-  return stripInvisibleChars(e, " ", { keepSpelledJoiners: !0 });
+  return stripInvisibleChars(e, " ", {
+    keepSpelledJoiners: true,
+  });
 }
 //@ chunk-g54kbxqw.js:35291-35346 placement
-function escapeXmlAttribute(e) {
-  return escapeXmlInline(e).replaceAll('"', "&quot;");
+function escapeXmlAttribute(uri) {
+  return escapeXmlInline(uri).replaceAll('"', "&quot;");
 }
 //@ chunk-g54kbxqw.js:35346-35441 placement
 function escapeXmlControlChars(e) {
@@ -53,56 +55,56 @@ function escapeXmlControlChars(e) {
   );
 }
 //@ chunk-g54kbxqw.js:35441-35557 placement
-var CHECK_NO_DECISION = Symbol("check does not decide"),
-  ji = new SessionRootSlot(() => new Map()),
-  Vo = new SessionRootSlot(() => new Map()),
-  qo = new SessionRootSlot(() => new Set()),
-  zi = 256;
+var CHECK_NO_DECISION = Symbol("check does not decide");
+var pendingCheckResults = new SessionRootSlot(() => new Map());
+var registeredChecks = new SessionRootSlot(() => new Map());
+var pendingCheckToolUseIds = new SessionRootSlot(() => new Set());
+var MAX_PENDING_CHECKS = 256;
 //@ chunk-g54kbxqw.js:35557-35678 placement
-function rememberPendingCheck(e, n) {
-  if (e === void 0 || n === "") return;
-  let of = qo.of(e);
-  if ((of.add(n), of.size > zi)) {
-    let [r] = of;
-    if (r !== void 0) of.delete(r);
+function rememberPendingCheck(session, n) {
+  if (session === undefined || n === "") return;
+  let s = pendingCheckToolUseIds.of(session);
+  s.add(n);
+  if (s.size > MAX_PENDING_CHECKS) {
+    let [r] = s;
+    if (r !== undefined) s.delete(r);
   }
 }
 //@ chunk-g54kbxqw.js:35678-35739 placement
-function hasRegisteredCheck(e, n) {
-  return e !== void 0 && (Vo.peek(e)?.has(n) ?? !1);
+function hasRegisteredCheck(session, name) {
+  return session !== undefined && (registeredChecks.peek(session)?.has(name) ?? false);
 }
 //@ chunk-g54kbxqw.js:35739-35804 placement
-function forgetPendingCheck(e, n) {
-  return e !== void 0 && (qo.peek(e)?.delete(n) ?? !1);
+function forgetPendingCheck(session, toolUseID) {
+  return session !== undefined && (pendingCheckToolUseIds.peek(session)?.delete(toolUseID) ?? false);
 }
 //@ chunk-g54kbxqw.js:35804-35895 placement
-function getRegisteredCheck(e, n) {
-  let s = e && Vo.peek(e)?.get(n);
-  return s && getCheckRunner(e, n) === s.runner ? s.check : void 0;
+function getRegisteredCheck(session, name) {
+  let s = session && registeredChecks.peek(session)?.get(name);
+  return s && getCheckRunner(session, name) === s.runner ? s.check : undefined;
 }
 //@ chunk-g54kbxqw.js:35895-35942 placement
-function getCheckRunner(e, n) {
-  return e && ji.peek(e)?.get(n);
+function getCheckRunner(session, name) {
+  return session && pendingCheckResults.peek(session)?.get(name);
 }
 //@ chunk-g54kbxqw.js:35942-35996 placement
-var Wi = [
-    BASH_TOOL_NAME,
-    POWERSHELL_TOOL_NAME,
-    FILE_READ_TOOL_NAME,
-    FILE_WRITE_TOOL_NAME,
-    FILE_EDIT_TOOL_NAME,
-    NOTEBOOK_EDIT_TOOL_NAME,
-    GLOB_TOOL_NAME,
-    GREP_TOOL_NAME,
-    SEND_USER_FILE_TOOL_NAME,
-    MONITOR,
-  ],
-  $i = new Set(Wi);
+var DISKLESS_CHECK_TOOL_NAMES = [
+  BASH_TOOL_NAME,
+  POWERSHELL_TOOL_NAME,
+  FILE_READ_TOOL_NAME,
+  FILE_WRITE_TOOL_NAME,
+  FILE_EDIT_TOOL_NAME,
+  NOTEBOOK_EDIT_TOOL_NAME,
+  GLOB_TOOL_NAME,
+  GREP_TOOL_NAME,
+  SEND_USER_FILE_TOOL_NAME,
+  MONITOR,
+];
+var DISKLESS_CHECK_TOOL_NAME_SET = new Set(DISKLESS_CHECK_TOOL_NAMES);
 //@ chunk-g54kbxqw.js:35996-36033 placement
 function isRemoteOnlyCheck(e) {
-  return $i.has(e) && isDiskless();
+  return DISKLESS_CHECK_TOOL_NAME_SET.has(e) && isDiskless();
 }
-
 export {
   getRegisteredCheck,
   CHECK_NO_DECISION,

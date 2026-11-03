@@ -11,6 +11,8 @@
 import { SessionRootSlot } from "../bootstrap/sessionSlices.js";
 
 //@ chunk-5vn5bpwt.js:227-255 placement
-var AWn = new SessionRootSlot(() => new Map());
-
-export { AWn };
+/**
+ * sessionScopedMapsSlot：按会话根保存的映射表。
+ */
+var sessionScopedMapsSlot = new SessionRootSlot(() => new Map());
+export { sessionScopedMapsSlot };

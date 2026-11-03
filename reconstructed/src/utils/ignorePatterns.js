@@ -9,15 +9,15 @@
  * attribution: placement 12
  */
 import { Re } from "../../runtime/bun-runtime.js";
-import { Vpe } from "../../vendor/ignore/index.js";
+import { require_ignore } from "../../vendor/ignore/index.js";
 import { logForDebugging } from "./debug.js";
 import { logEvent } from "../services/analytics/index.js";
 import { fromEnum } from "../services/analytics/safeMetadata.js";
 
+//@ chunk-82kqcve8.js:161884-162066 placement
 /**
  * 去掉路径段末尾的空格与点（Windows 规则），保留 "." 与 ".."。
  */
-//@ chunk-82kqcve8.js:161884-162066 placement
 function stripTrailingDotsSpaces(e) {
   let n = e.length;
   for (;;) {
@@ -31,10 +31,10 @@ function stripTrailingDotsSpaces(e) {
     n = h;
   }
 }
+//@ chunk-82kqcve8.js:162066-162536 placement
 /**
  * 按 Windows 规则规整路径：保留前缀（盘符/UNC/设备），去掉段尾点与空格、处理 . 与 ..；无需改动时原样返回。
  */
-//@ chunk-82kqcve8.js:162066-162536 placement
 function normalizeWin32Path(e) {
   if (/^\\(?:\\\?|\?\?)\\/.test(e)) return e;
   let n =
@@ -42,12 +42,13 @@ function normalizeWin32Path(e) {
       e,
     )?.[0] ?? "";
   if (n === "" && !/^[\\/]/.test(e)) return e;
-  let r = [],
-    s = !1;
+  let r = [];
+  let s = false;
   for (let y of e.slice(n.length).split(/[\\/]+/)) {
     if (y === "") continue;
     let w = stripTrailingDotsSpaces(y);
-    if (((s ||= w !== y || w === "." || w === ".."), w === "..")) r.pop();
+    s ||= w !== y || w === "." || w === "..";
+    if (w === "..") r.pop();
     else if (w !== "" && w !== ".") r.push(w);
   }
   if (!s) return e;
@@ -55,74 +56,93 @@ function normalizeWin32Path(e) {
   return `${n}${h}${r.join(h)}`;
 }
 //@ chunk-82kqcve8.js:162536-162555 placement
-var Ol = Re(Vpe(), 1);
+var ignoreLibrary = Re(require_ignore(), 1);
 //@ chunk-82kqcve8.js:162555-162604 placement
-function _9r(e) {
-  return Tl.compileErrorMessage(e);
+/**
+ * 编译忽略模式，返回错误说明；合法返回 null。
+ */
+function ignorePatternError(e) {
+  return ignorePatternDiagnostics.compileErrorMessage(e);
 }
 //@ chunk-82kqcve8.js:162604-162727 placement
 function getIgnoreCompileError(e) {
   try {
-    return (Ol.default().add([e]).test("probe"), null);
+    ignoreLibrary.default().add([e]).test("probe");
+    return null;
   } catch (error) {
     return error instanceof Error ? error.message : String(error);
   }
 }
 //@ chunk-82kqcve8.js:162727-162760 placement
-var qf = /^\s*$|^#|(?:^|[^\\])\\$/;
+var IGNORE_SKIP_PATTERN_RE = /^\s*$|^#|(?:^|[^\\])\\$/;
 //@ chunk-82kqcve8.js:162760-162872 placement
 function describeIgnorePatternSkip(e) {
-  return qf.test(e) ? "skipped by the ignore library (blank, comment, or trailing backslash)" : _9r(e);
+  return IGNORE_SKIP_PATTERN_RE.test(e)
+    ? "skipped by the ignore library (blank, comment, or trailing backslash)"
+    : ignorePatternError(e);
 }
+//@ chunk-82kqcve8.js:162872-163260 placement
 /**
  * 缓存忽略模式的编译错误，并保证同一位置同一模式只警告一次。
  */
-//@ chunk-82kqcve8.js:162872-163260 placement
 class IgnorePatternDiagnostics {
   compileErrorMessages = new Map();
   warnedPatterns = new Set();
   compileErrorMessage(e) {
     let n = this.compileErrorMessages.get(e);
-    if (n !== void 0) return n;
-    let r = getIgnoreCompileError(e);
-    return (this.compileErrorMessages.set(e, r), r);
+    if (n !== undefined) return n;
+    let ignoreCompileError = getIgnoreCompileError(e);
+    this.compileErrorMessages.set(e, ignoreCompileError);
+    return ignoreCompileError;
   }
   firstWarning(e, n) {
     let r = `${e}\x00${n}`;
-    if (this.warnedPatterns.has(r)) return !1;
-    return (this.warnedPatterns.add(r), !0);
+    if (this.warnedPatterns.has(r)) return false;
+    this.warnedPatterns.add(r);
+    return true;
   }
   reset() {
-    (this.compileErrorMessages.clear(), this.warnedPatterns.clear());
+    this.compileErrorMessages.clear();
+    this.warnedPatterns.clear();
   }
 }
 //@ chunk-82kqcve8.js:163260-163274 placement
-var Tl = new IgnorePatternDiagnostics();
+var ignorePatternDiagnostics = new IgnorePatternDiagnostics();
 //@ chunk-82kqcve8.js:163274-163494 placement
 function warnUnusableIgnorePattern(e, n, r, s = "treating it as matching nothing") {
-  if (!Tl.firstWarning(e, n)) return;
-  (logForDebugging(`[${e}] gitignore-style pattern is unusable (${r}); ${s}: ${n}`, { level: "warn" }),
-    logEvent("tengu_uncompilable_ignore_pattern", { site: fromEnum(e) }));
+  if (!ignorePatternDiagnostics.firstWarning(e, n)) return;
+  logForDebugging(`[${e}] gitignore-style pattern is unusable (${r}); ${s}: ${n}`, {
+    level: "warn",
+  });
+  logEvent("tengu_uncompilable_ignore_pattern", {
+    site: fromEnum(e),
+  });
 }
 //@ chunk-82kqcve8.js:163494-163590 placement
-function xst(e, n) {
+/**
+ * 过滤掉无法编译的忽略模式并逐条告警。
+ */
+function filterUsableIgnorePatterns(e, n) {
   return e.filter((r) => {
-    let s = _9r(r);
-    if (s === null) return !0;
-    return (warnUnusableIgnorePattern(n, r, s), !1);
+    let s = ignorePatternError(r);
+    if (s === null) return true;
+    warnUnusableIgnorePattern(n, r, s);
+    return false;
   });
 }
 //@ chunk-82kqcve8.js:163590-163646 placement
-function wAt(e) {
+/**
+ * 按行拆分并丢弃空行。
+ */
+function splitNonEmptyLines(e) {
   return e.split(/\r?\n/).filter(Boolean);
 }
-
 export {
   normalizeWin32Path,
   describeIgnorePatternSkip,
   warnUnusableIgnorePattern,
-  xst,
-  wAt,
+  filterUsableIgnorePatterns,
+  splitNonEmptyLines,
   stripTrailingDotsSpaces,
-  _9r,
+  ignorePatternError,
 };

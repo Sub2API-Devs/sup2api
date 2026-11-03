@@ -5,73 +5,72 @@
  * pieces: chunk-7vb8p3zb.js (6)
  * attribution: esm-layout 2, esm-fingerprint 4
  */
-import { z } from "./word.js";
-import { L } from "../../libcjs/diff/base.js";
+import { WordsWithSpaceDiff } from "./word.js";
+import { Diff } from "../../libcjs/diff/base.js";
 
 //@ chunk-7vb8p3zb.js:6614-6626 esm-layout
-var M = new z();
+var M = new WordsWithSpaceDiff();
 //@ chunk-7vb8p3zb.js:6626-6667 esm-fingerprint
-function tos(n, e, t) {
-  return M.diff(n, e, t);
+function tos(oldText, newText, t) {
+  return M.diff(oldText, newText, t);
 }
 //@ chunk-7vb8p3zb.js:6667-7019 esm-fingerprint
-class _ extends L {
+class _ extends Diff {
   constructor() {
     super(...arguments);
-    this.tokenize = X;
+    this.tokenize = tokenize;
   }
-  equals(n, e, t) {
-    if (t.ignoreWhitespace) {
+  equals(left, right, options) {
+    if (options.ignoreWhitespace) {
       if (
-        !t.newlineIsToken ||
-        !n.includes(`
+        !options.newlineIsToken ||
+        !left.includes(`
 `)
       )
-        n = n.trim();
+        left = left.trim();
       if (
-        !t.newlineIsToken ||
-        !e.includes(`
+        !options.newlineIsToken ||
+        !right.includes(`
 `)
       )
-        e = e.trim();
-    } else if (t.ignoreNewlineAtEof && !t.newlineIsToken) {
+        right = right.trim();
+    } else if (options.ignoreNewlineAtEof && !options.newlineIsToken) {
       if (
-        n.endsWith(`
+        left.endsWith(`
 `)
       )
-        n = n.slice(0, -1);
+        left = left.slice(0, -1);
       if (
-        e.endsWith(`
+        right.endsWith(`
 `)
       )
-        e = e.slice(0, -1);
+        right = right.slice(0, -1);
     }
-    return super.equals(n, e, t);
+    return super.equals(left, right, options);
   }
 }
 //@ chunk-7vb8p3zb.js:7019-7031 esm-layout
-var U = new _();
+var lineDiff = new _();
 //@ chunk-7vb8p3zb.js:7031-7072 esm-fingerprint
 function Y5e(n, e, t) {
-  return U.diff(n, e, t);
+  return lineDiff.diff(n, e, t);
 }
 //@ chunk-7vb8p3zb.js:7072-7298 esm-fingerprint
-function X(n, e) {
-  if (e.stripTrailingCr)
-    n = n.replace(
+function tokenize(value, options) {
+  if (options.stripTrailingCr)
+    value = value.replace(
       /\r\n/g,
       `
 `,
     );
-  let t = [],
-    parts = n.split(/(\n|\r\n)/);
-  if (!parts[parts.length - 1]) parts.pop();
-  for (let l = 0; l < parts.length; l++) {
-    let r = parts[l];
-    if (l % 2 && !e.newlineIsToken) t[t.length - 1] += r;
-    else t.push(r);
+  let retLines = [];
+  let linesAndNewlines = value.split(/(\n|\r\n)/);
+  if (!linesAndNewlines[linesAndNewlines.length - 1]) linesAndNewlines.pop();
+  for (let i = 0; i < linesAndNewlines.length; i++) {
+    let line = linesAndNewlines[i];
+    if (i % 2 && !options.newlineIsToken) retLines[retLines.length - 1] += line;
+    else retLines.push(line);
   }
-  return t;
+  return retLines;
 }
-
 export { Y5e, tos };

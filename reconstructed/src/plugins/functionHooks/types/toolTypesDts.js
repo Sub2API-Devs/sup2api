@@ -14,20 +14,26 @@ import { uniq } from "../../../utils/collections.js";
 import { logForDebugging } from "../../../utils/debug.js";
 
 //@ chunk-s61vbvea.js:624308-624372 placement
-var sanitizeJsDocText = (e) => e.replace(/\s+/g, " ").trim().replace(/\*\//g, "* /");
+var sanitizeJsDocText = (description) => description.replace(/\s+/g, " ").trim().replace(/\*\//g, "* /");
 //@ chunk-s61vbvea.js:624372-624477 placement = parseSkillPaths (0.822)
 function formatJsDocLine(e, n) {
-  let { description: description } = e,
-    h = typeof description === "string" ? sanitizeJsDocText(description) : "";
+  let { description } = e;
+  let h = typeof description === "string" ? sanitizeJsDocText(description) : "";
   return h === ""
     ? ""
     : `${n}/** ${h} */
 `;
 }
 //@ chunk-s61vbvea.js:624477-624505 placement
-var KE = /^[A-Za-z_$][\w$]*$/;
+/**
+ * TypeScript 标识符
+ */
+var TS_IDENTIFIER_RE = /^[A-Za-z_$][\w$]*$/;
 //@ chunk-s61vbvea.js:624505-624535 placement
-var VE = (e) => (KE.test(e) ? e : jsonStringify(e));
+/**
+ * 非标识符则加引号
+ */
+var quoteIfNotIdentifier = (e) => (TS_IDENTIFIER_RE.test(e) ? e : jsonStringify(e));
 //@ chunk-s61vbvea.js:624535-624645 placement
 function literalTsType(e) {
   return typeof e === "string" || typeof e === "number" || typeof e === "boolean" || e === null
@@ -35,14 +41,17 @@ function literalTsType(e) {
     : "unknown";
 }
 //@ chunk-s61vbvea.js:624645-624655 placement
-var mW = 32;
+/**
+ * 32
+ */
+var MAX_TS_TYPE_DEPTH = 32;
+//@ chunk-s61vbvea.js:624655-626035 placement
 /**
  * 把 JSON Schema 转成 TypeScript 类型文本（用于生成工具输入 d.ts）
  */
-//@ chunk-s61vbvea.js:624655-626035 placement
 function jsonSchemaToTs(e, n = "", r = 0) {
-  if (e === !0 || r > mW) return "unknown";
-  if (e === !1) return "never";
+  if (e === true || r > MAX_TS_TYPE_DEPTH) return "unknown";
+  if (e === false) return "never";
   if (!isPlainObject(e)) return "unknown";
   if ("const" in e) return literalTsType(e.const);
   if (Array.isArray(e.enum)) return e.enum.map(literalTsType).join(" | ") || "never";
@@ -57,7 +66,20 @@ function jsonSchemaToTs(e, n = "", r = 0) {
       : mapped.map((y) => (y.includes(" | ") ? `(${y})` : y)).join(" & ");
   }
   if (Array.isArray(e.type))
-    return uniq(e.type.map((s) => jsonSchemaToTs({ ...e, type: s }, n, r + 1))).join(" | ") || "unknown";
+    return (
+      uniq(
+        e.type.map((type) =>
+          jsonSchemaToTs(
+            {
+              ...e,
+              type,
+            },
+            n,
+            r + 1,
+          ),
+        ),
+      ).join(" | ") || "unknown"
+    );
   switch (e.type) {
     case "string":
       return "string";
@@ -75,20 +97,20 @@ function jsonSchemaToTs(e, n = "", r = 0) {
       return s.includes(" | ") || s.includes(" & ") || s.includes("/*") ? `Array<${s}>` : `${s}[]`;
     }
     case "object":
-    case void 0: {
+    case undefined: {
       if (!isPlainObject(e.properties)) {
-        let w = e.type === "object",
-          R = "$ref" in e;
+        let w = e.type === "object";
+        let R = "$ref" in e;
         return w ? "{}" : R ? `unknown /* $ref ${sanitizeJsDocText(String(e.$ref))} */` : "unknown";
       }
-      let s = new Set(Array.isArray(e.required) ? e.required.map(String) : []),
-        h = `${n}  `,
-        mapped = Object.entries(e.properties).map(([w, R]) => {
-          let x = isPlainObject(R) ? formatJsDocLine(R, h) : "",
-            P = s.has(w) ? "" : "?",
-            j = jsonSchemaToTs(R, h, r + 1);
-          return `${x}${h}${VE(w)}${P}: ${j}`;
-        });
+      let s = new Set(Array.isArray(e.required) ? e.required.map(String) : []);
+      let h = `${n}  `;
+      let mapped = Object.entries(e.properties).map(([key, value]) => {
+        let x = isPlainObject(value) ? formatJsDocLine(value, h) : "";
+        let P = s.has(key) ? "" : "?";
+        let j = jsonSchemaToTs(value, h, r + 1);
+        return `${x}${h}${quoteIfNotIdentifier(key)}${P}: ${j}`;
+      });
       return mapped.length === 0
         ? "{}"
         : `{
@@ -100,18 +122,26 @@ ${n}}`;
       return "unknown";
   }
 }
+//@ chunk-s61vbvea.js:626035-626325 placement
 /**
  * 生成 declare module 'claude-code' 中某工具输入接口的声明行（按名排序，带 JSDoc 描述）。
  */
-//@ chunk-s61vbvea.js:626035-626325 placement
 var declareToolInputsInterface = (e, n, r = (s) => jsonSchemaToTs(s.inputSchema, "    ")) => [
   "declare module 'claude-code' {",
   `  interface ${e} {`,
   ...[...n]
     .sort((s, h) => s.name.localeCompare(h.name))
     .map((s) => {
-      let y = s.description === void 0 ? "" : formatJsDocLine({ description: s.description }, "    "),
-        S = VE(s.name);
+      let y =
+        s.description === undefined
+          ? ""
+          : formatJsDocLine(
+              {
+                description: s.description,
+              },
+              "    ",
+            );
+      let S = quoteIfNotIdentifier(s.name);
       return `${y}    ${S}: ${r(s)}`;
     }),
   "  }",
@@ -129,7 +159,7 @@ var BUILTIN_TOOL_INPUTS_HEADER = (e) =>
     "// schema. Merges into ToolCallResult (BuiltinToolResults) so after",
     '// `e.tool === "Bash"` the `result` of `next(e)` is the tool\'s record.',
     ...declareToolInputsInterface("BuiltinToolResults", e, (n) =>
-      n.outputSchema !== void 0 ? jsonSchemaToTs(n.outputSchema, "    ") : "unknown",
+      n.outputSchema !== undefined ? jsonSchemaToTs(n.outputSchema, "    ") : "unknown",
     ),
     "",
   ].join(`
@@ -152,17 +182,18 @@ function buildMcpToolInputTypes(e) {
   let n = [];
   for (let r of e) {
     if (!r.name.startsWith("mcp__")) continue;
-    if (r.inputJSONSchema === void 0) {
+    if (r.inputJSONSchema === undefined) {
       logForDebugging(`tool types: ${r.name} has no inputJSONSchema; skipped`);
       continue;
     }
     n.push({
       name: r.name,
       inputSchema: r.inputJSONSchema,
-      ...(r.description !== void 0 && { description: r.description }),
+      ...(r.description !== undefined && {
+        description: r.description,
+      }),
     });
   }
   return n;
 }
-
 export { BUILTIN_TOOL_INPUTS_HEADER, buildMcpToolInputTypes, MCP_TOOL_INPUTS_HEADER };

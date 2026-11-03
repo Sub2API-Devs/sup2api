@@ -16,7 +16,13 @@ import {
 } from "../../bootstrap/state.js";
 import { env } from "../env.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
-import { hxi, Lt, PROVIDER_ENV_FLAGS, v8, E8 } from "./modelIds.js";
+import {
+  hasVersionTrailer,
+  strip1mSuffix,
+  PROVIDER_ENV_FLAGS,
+  MODEL_KEY_NAMES,
+  LEGACY_MODEL_IDS,
+} from "./modelIds.js";
 import { findModelConfigById, getProviderState } from "./providerCaches.js";
 import { PROVIDER_ENV_VARS, _CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL } from "../env/envRegistry.js";
 import { normalizeModelId } from "./modelCatalog/catalogEntries.js";
@@ -25,22 +31,22 @@ import { ALLOWED_OAUTH_BASE_URLS } from "../../constants/oauth.js";
 
 //@ chunk-v9tcvh08.js:30612-31095 placement
 var THIRD_PARTY_PROVIDER_LABELS = {
-    bedrock: "Amazon Bedrock",
-    vertex: "Google Vertex AI",
-    foundry: "Microsoft Foundry",
-    anthropicAws: "Claude Platform on AWS",
-    anthropicGoogleCloud: "Claude Platform on Google Cloud",
-    mantle: "Amazon Bedrock (Mantle)",
-    gateway: "Cloud gateway",
-  },
-  THIRD_PARTY_PROVIDER_ENV_VARS = {
-    bedrock: "CLAUDE_CODE_USE_BEDROCK",
-    foundry: "CLAUDE_CODE_USE_FOUNDRY",
-    anthropicAws: "CLAUDE_CODE_USE_ANTHROPIC_AWS",
-    anthropicGoogleCloud: "CLAUDE_CODE_USE_ANTHROPIC_GOOGLE_CLOUD",
-    mantle: "CLAUDE_CODE_USE_MANTLE",
-    vertex: "CLAUDE_CODE_USE_VERTEX",
-  };
+  bedrock: "Amazon Bedrock",
+  vertex: "Google Vertex AI",
+  foundry: "Microsoft Foundry",
+  anthropicAws: "Claude Platform on AWS",
+  anthropicGoogleCloud: "Claude Platform on Google Cloud",
+  mantle: "Amazon Bedrock (Mantle)",
+  gateway: "Cloud gateway",
+};
+var THIRD_PARTY_PROVIDER_ENV_VARS = {
+  bedrock: "CLAUDE_CODE_USE_BEDROCK",
+  foundry: "CLAUDE_CODE_USE_FOUNDRY",
+  anthropicAws: "CLAUDE_CODE_USE_ANTHROPIC_AWS",
+  anthropicGoogleCloud: "CLAUDE_CODE_USE_ANTHROPIC_GOOGLE_CLOUD",
+  mantle: "CLAUDE_CODE_USE_MANTLE",
+  vertex: "CLAUDE_CODE_USE_VERTEX",
+};
 //@ chunk-v9tcvh08.js:31095-31399 placement
 function allowedProviderNameOf(e) {
   switch (e) {
@@ -63,7 +69,7 @@ function allowedProviderNameOf(e) {
   }
 }
 //@ chunk-v9tcvh08.js:31399-31428 placement
-function j(e) {
+function isThirdPartyProviderLabel(e) {
   return e in THIRD_PARTY_PROVIDER_LABELS;
 }
 //@ chunk-v9tcvh08.js:31428-31591 placement
@@ -74,13 +80,13 @@ function allowedProviderLabel(e) {
     case "customEndpoint":
       return "a custom endpoint (LLM gateway or proxy)";
     default:
-      return j(e) ? THIRD_PARTY_PROVIDER_LABELS[e] : e;
+      return isThirdPartyProviderLabel(e) ? THIRD_PARTY_PROVIDER_LABELS[e] : e;
   }
 }
+//@ chunk-v9tcvh08.js:31591-31914 placement = getAPIProvider (0.652)
 /**
  * 当前提供商：网关模式为 gateway；否则按 CLAUDE_CODE_USE_BEDROCK/FOUNDRY/ANTHROPIC_AWS/ANTHROPIC_GOOGLE_CLOUD/MANTLE/VERTEX 顺序，都没有为 firstParty。
  */
-//@ chunk-v9tcvh08.js:31591-31914 placement = getAPIProvider (0.652)
 function getAPIProvider() {
   if (getGatewayAuth() || isGatewayServerProcess() || isGatewayRequiredByHostPolicy()) return "gateway";
   return env.CLAUDE_CODE_USE_BEDROCK
@@ -114,44 +120,55 @@ function getSecondaryProvider() {
   if (getAPIProvider() === "bedrock" && env.CLAUDE_CODE_USE_MANTLE) return "mantle";
   return null;
 }
+//@ chunk-v9tcvh08.js:32114-32175 placement = isFoundationModel (1)
 /**
  * anthropic. 开头且不以 -v<n>[:<n>] 结尾。旧版名 isFoundationModel_3 不准确。
  */
-//@ chunk-v9tcvh08.js:32114-32175 placement = isFoundationModel (1)
 function isBedrockFoundationModelWithoutVersion(modelId) {
-  return modelId.startsWith("anthropic.") && !hxi(Lt(modelId));
+  return modelId.startsWith("anthropic.") && !hasVersionTrailer(strip1mSuffix(modelId));
 }
 //@ chunk-v9tcvh08.js:32175-32317 placement
-function getProviderForModel(e) {
-  if (e) {
-    let t = getSecondaryProvider();
-    if (t) {
-      if (t === "mantle" && isBedrockFoundationModelWithoutVersion(e)) return t;
-      let a = getAPIProvider(),
-        n = findModelConfigById(e);
-      if (n && n[a] === null && n[t] !== null) return t;
+function getProviderForModel(modelId) {
+  if (modelId) {
+    let secondaryProvider = getSecondaryProvider();
+    if (secondaryProvider) {
+      if (secondaryProvider === "mantle" && isBedrockFoundationModelWithoutVersion(modelId))
+        return secondaryProvider;
+      let apiProvider = getAPIProvider();
+      let modelConfigById = findModelConfigById(modelId);
+      if (
+        modelConfigById &&
+        modelConfigById[apiProvider] === null &&
+        modelConfigById[secondaryProvider] !== null
+      )
+        return secondaryProvider;
     }
   }
   return getAPIProvider();
 }
+//@ chunk-v9tcvh08.js:32317-32383 placement = getOpus46PricingSuffix (0.646)
 /**
  * 是否“第一方类”提供商：firstParty、anthropicAws、anthropicGoogleCloud 或 gateway（很多默认与 1M/effort 判断用它）。
  */
-//@ chunk-v9tcvh08.js:32317-32383 placement = getOpus46PricingSuffix (0.646)
 function usesFirstPartyModelIds(fastMode = getAPIProvider()) {
   return fastMode === "firstParty" || isClaudePlatformProvider(fastMode) || fastMode === "gateway";
 }
 //@ chunk-v9tcvh08.js:32383-32457 placement
-function isClaudePlatformProvider(e = getAPIProvider()) {
-  return e === "anthropicAws" || e === "anthropicGoogleCloud";
+function isClaudePlatformProvider(apiProvider = getAPIProvider()) {
+  return apiProvider === "anthropicAws" || apiProvider === "anthropicGoogleCloud";
 }
 //@ chunk-v9tcvh08.js:32457-32484 placement
 function usesFirstPartyPricing() {
   return isFirstPartyProvider();
 }
 //@ chunk-v9tcvh08.js:32484-32564 placement
-function hasFirstPartyCapabilities(e = getAPIProvider()) {
-  return e === "firstParty" || isClaudePlatformProvider(e) || e === "foundry" || e === "mantle";
+function hasFirstPartyCapabilities(providerForModel = getAPIProvider()) {
+  return (
+    providerForModel === "firstParty" ||
+    isClaudePlatformProvider(providerForModel) ||
+    providerForModel === "foundry" ||
+    providerForModel === "mantle"
+  );
 }
 //@ chunk-v9tcvh08.js:32564-32611 placement = logEventTo1P (1)
 function isFirstPartyApiBackend() {
@@ -159,12 +176,15 @@ function isFirstPartyApiBackend() {
 }
 //@ chunk-v9tcvh08.js:32611-32716 placement
 function providerReadsClientData() {
-  let e = getAPIProvider();
-  return e === "firstParty" || (e === "anthropicAws" && env.ANTHROPIC_AWS_BASE_URL === void 0);
+  let apiProvider = getAPIProvider();
+  return (
+    apiProvider === "firstParty" ||
+    (apiProvider === "anthropicAws" && env.ANTHROPIC_AWS_BASE_URL === undefined)
+  );
 }
 //@ chunk-v9tcvh08.js:32716-32759 placement
 function isFirstPartyAnthropicBaseUrl() {
-  if (assumesFirstPartyBaseUrl()) return !0;
+  if (assumesFirstPartyBaseUrl()) return true;
   return isActualFirstPartyAnthropicBaseUrl();
 }
 //@ chunk-v9tcvh08.js:32759-32868 placement
@@ -176,7 +196,7 @@ function assumesFirstPartyBaseUrl() {
 //@ chunk-v9tcvh08.js:32868-32947 placement
 function isActualFirstPartyAnthropicBaseUrl() {
   let envAnthropicBaseUrl = process.env.ANTHROPIC_BASE_URL;
-  if (!envAnthropicBaseUrl) return !0;
+  if (!envAnthropicBaseUrl) return true;
   return isFirstPartyAnthropicHost(envAnthropicBaseUrl);
 }
 //@ chunk-v9tcvh08.js:32947-33052 placement
@@ -188,9 +208,9 @@ var PROVIDER_ROUTING_ENV_VARS = [
 ];
 //@ chunk-v9tcvh08.js:33052-33282 placement
 function routesOffAnthropicApiWith(e) {
-  if (PROVIDER_ENV_FLAGS.some((n) => PROVIDER_ENV_VARS[n].parse(e(n)) === !0)) return !0;
+  if (PROVIDER_ENV_FLAGS.some((n) => PROVIDER_ENV_VARS[n].parse(e(n)) === true)) return true;
   let t = e("ANTHROPIC_BASE_URL");
-  if (!t) return !1;
+  if (!t) return false;
   return (
     !(
       _CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL.parse(e("_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL")) ??
@@ -200,7 +220,7 @@ function routesOffAnthropicApiWith(e) {
 }
 //@ chunk-v9tcvh08.js:33282-33321 placement
 function hasCustomBaseUrlForAnalytics() {
-  return isDiskless() ? void 0 : !isActualFirstPartyAnthropicBaseUrl();
+  return isDiskless() ? undefined : !isActualFirstPartyAnthropicBaseUrl();
 }
 //@ chunk-v9tcvh08.js:33321-33492 placement
 function configuredApiProxyHost() {
@@ -209,12 +229,12 @@ function configuredApiProxyHost() {
     isDiskless() ||
     getAPIProvider() !== "firstParty" ||
     !ANTHROPIC_BASE_URL ||
-    env.ANTHROPIC_UNIX_SOCKET !== void 0 ||
+    env.ANTHROPIC_UNIX_SOCKET !== undefined ||
     isFirstPartyAnthropicHost(ANTHROPIC_BASE_URL)
   )
     return;
   try {
-    return new URL(ANTHROPIC_BASE_URL).host || void 0;
+    return new URL(ANTHROPIC_BASE_URL).host || undefined;
   } catch {
     return;
   }
@@ -225,62 +245,88 @@ function isFirstPartyAnthropicHost(e) {
     let host = new URL(e).host;
     return ["api.anthropic.com"].includes(host);
   } catch {
-    return !1;
+    return false;
   }
 }
 //@ chunk-v9tcvh08.js:33589-33867 placement
-var AWS_REGION_PATTERN = "[a-z]{2,4}(?:-[a-z]{2,5})?-[a-z]+-\\d+",
-  GCP_REGION_PATTERN = "[a-z]+(?:-[a-z]+\\d+)?",
-  AWS_DOMAIN_PATTERN =
-    "(?:amazonaws\\.(?:com(?:\\.cn)?|eu)|api\\.aws|c2s\\.ic\\.gov|sc2s\\.sgov\\.gov|cloud\\.adc-e\\.uk|csp\\.hci\\.ic\\.gov)",
-  AWS_VPCE_HOST_RE = new RegExp(
-    `\\.(?!us-gov-)${AWS_REGION_PATTERN}\\.(?:vpce\\.)?(?:amazonaws\\.com|api\\.aws)$`,
-  );
+var AWS_REGION_PATTERN = "[a-z]{2,4}(?:-[a-z]{2,5})?-[a-z]+-\\d+";
+var GCP_REGION_PATTERN = "[a-z]+(?:-[a-z]+\\d+)?";
+var AWS_DOMAIN_PATTERN =
+  "(?:amazonaws\\.(?:com(?:\\.cn)?|eu)|api\\.aws|c2s\\.ic\\.gov|sc2s\\.sgov\\.gov|cloud\\.adc-e\\.uk|csp\\.hci\\.ic\\.gov)";
+var AWS_VPCE_HOST_RE = new RegExp(
+  `\\.(?!us-gov-)${AWS_REGION_PATTERN}\\.(?:vpce\\.)?(?:amazonaws\\.com|api\\.aws)$`,
+);
 //@ chunk-v9tcvh08.js:33867-33968 placement
 function buildAwsHostRe(e) {
   return new RegExp(
     `^(?:vpce-[a-z0-9-]+\\.)?${e}(?:-fips)?\\.${AWS_REGION_PATTERN}\\.(?:vpce\\.)?${AWS_DOMAIN_PATTERN}$`,
   );
 }
+//@ chunk-v9tcvh08.js:33968-34959 placement
 /**
  * 各第三方提供商的端点配置：可覆盖 base URL 的环境变量（foundry 资源名转 URL）与自有主机名正则（Bedrock/Mantle/AWS/Vertex/Google Cloud/Azure）。
  */
-//@ chunk-v9tcvh08.js:33968-34959 placement
 var PROVIDER_ENDPOINTS = {
-  firstParty: void 0,
-  gateway: void 0,
+  firstParty: undefined,
+  gateway: undefined,
   bedrock: {
     variables: [
-      { name: "ANTHROPIC_BEDROCK_BASE_URL" },
-      { name: "AWS_ENDPOINT_URL_BEDROCK_RUNTIME" },
-      { name: "AWS_ENDPOINT_URL_BEDROCK" },
-      { name: "AWS_ENDPOINT_URL" },
+      {
+        name: "ANTHROPIC_BEDROCK_BASE_URL",
+      },
+      {
+        name: "AWS_ENDPOINT_URL_BEDROCK_RUNTIME",
+      },
+      {
+        name: "AWS_ENDPOINT_URL_BEDROCK",
+      },
+      {
+        name: "AWS_ENDPOINT_URL",
+      },
     ],
     ownHost: buildAwsHostRe("bedrock(?:-runtime)?"),
   },
   mantle: {
-    variables: [{ name: "ANTHROPIC_BEDROCK_MANTLE_BASE_URL" }],
+    variables: [
+      {
+        name: "ANTHROPIC_BEDROCK_MANTLE_BASE_URL",
+      },
+    ],
     ownHost: buildAwsHostRe("bedrock-mantle"),
   },
   anthropicAws: {
-    variables: [{ name: "ANTHROPIC_AWS_BASE_URL" }],
+    variables: [
+      {
+        name: "ANTHROPIC_AWS_BASE_URL",
+      },
+    ],
     ownHost: buildAwsHostRe("aws-external-anthropic"),
   },
   vertex: {
-    variables: [{ name: "ANTHROPIC_VERTEX_BASE_URL" }],
+    variables: [
+      {
+        name: "ANTHROPIC_VERTEX_BASE_URL",
+      },
+    ],
     ownHost: new RegExp(
       `^(?:aiplatform|${GCP_REGION_PATTERN}-aiplatform|aiplatform\\.${GCP_REGION_PATTERN}\\.rep|[a-z0-9-]+\\.p)\\.googleapis\\.com$`,
     ),
   },
   anthropicGoogleCloud: {
-    variables: [{ name: "ANTHROPIC_GOOGLE_CLOUD_BASE_URL" }],
+    variables: [
+      {
+        name: "ANTHROPIC_GOOGLE_CLOUD_BASE_URL",
+      },
+    ],
     ownHost: new RegExp(
       `^(?:claude|claude\\.${GCP_REGION_PATTERN}\\.rep|[a-z0-9-]+\\.p)\\.googleapis\\.com$`,
     ),
   },
   foundry: {
     variables: [
-      { name: "ANTHROPIC_FOUNDRY_BASE_URL" },
+      {
+        name: "ANTHROPIC_FOUNDRY_BASE_URL",
+      },
       {
         name: "ANTHROPIC_FOUNDRY_RESOURCE",
         urlOf: (resource) => `https://${resource}.services.ai.azure.com`,
@@ -289,36 +335,41 @@ var PROVIDER_ENDPOINTS = {
     ownHost: /^[a-z0-9-]{2,64}\.(?:services\.ai|cognitiveservices|openai)\.azure\.(?:com|us|cn)$/,
   },
 };
+//@ chunk-v9tcvh08.js:34959-35002 placement = getVariablesByScope (1)
 /**
  * 返回某个模型提供者对应的 base URL 环境变量列表（切分误归，应属 API 提供者配置）。
  */
-//@ chunk-v9tcvh08.js:34959-35002 placement = getVariablesByScope (1)
 function providerEndpointVariables(e) {
   return PROVIDER_ENDPOINTS[e]?.variables ?? [];
 }
 //@ chunk-v9tcvh08.js:35002-35181 placement
-function providerEndpointOverrides(e, t) {
+function providerEndpointOverrides(e, envVarOrUndefined) {
   let a = [];
-  for (let { name: n, urlOf: urlOf } of providerEndpointVariables(e)) {
-    let d = t(n);
+  for (let { name: n, urlOf } of providerEndpointVariables(e)) {
+    let d = envVarOrUndefined(n);
     if (!d) continue;
-    let l = urlOf === void 0 ? d : urlOf(d),
-      _ = classifyProviderEndpoint(e, l);
-    if (_ !== "own") a.push({ variable: n, url: l, verdict: _ });
+    let l = urlOf === undefined ? d : urlOf(d);
+    let _ = classifyProviderEndpoint(e, l);
+    if (_ !== "own")
+      a.push({
+        variable: n,
+        url: l,
+        verdict: _,
+      });
   }
   return a;
 }
 //@ chunk-v9tcvh08.js:35181-35397 placement
 function classifyProviderEndpoint(e, t) {
-  let a = PROVIDER_ENDPOINTS[e],
-    n;
+  let a = PROVIDER_ENDPOINTS[e];
+  let n;
   try {
     n = new URL(t);
   } catch {
     return "unparsable";
   }
   let replaced = n.hostname.toLowerCase().replace(/\.$/, "");
-  if (a === void 0 || !a.ownHost.test(replaced)) return "foreign";
+  if (a === undefined || !a.ownHost.test(replaced)) return "foreign";
   return n.protocol === "https:" ? "own" : "insecure";
 }
 //@ chunk-v9tcvh08.js:35397-35437 placement
@@ -328,7 +379,7 @@ function isProviderServiceUrl(e, t) {
 //@ chunk-v9tcvh08.js:35437-35595 placement
 function isGenuineBedrockEndpoint() {
   let ANTHROPIC_BEDROCK_BASE_URL = env.ANTHROPIC_BEDROCK_BASE_URL;
-  if (ANTHROPIC_BEDROCK_BASE_URL === void 0) return !0;
+  if (ANTHROPIC_BEDROCK_BASE_URL === undefined) return true;
   return (
     isProviderServiceUrl("bedrock", ANTHROPIC_BEDROCK_BASE_URL) &&
     AWS_VPCE_HOST_RE.test(new URL(ANTHROPIC_BEDROCK_BASE_URL).hostname.toLowerCase().replace(/\.$/, ""))
@@ -338,30 +389,36 @@ function isGenuineBedrockEndpoint() {
 function shouldPropagateTraceContext() {
   return isFirstPartyAnthropicBaseUrl() || env.CLAUDE_CODE_PROPAGATE_TRACEPARENT;
 }
+//@ chunk-aepeg2w5.js:135864-136057 placement
 /**
  * 模型所属族（best/opusplan 归为 other）。
  */
-//@ chunk-aepeg2w5.js:135864-136057 placement
-function modelFamilyOf(e, n) {
-  let lower = Lt(e).toLowerCase(),
-    found = v8.find((y) => y === lower);
+function modelFamilyOf(e, canonicalName) {
+  let lower = strip1mSuffix(e).toLowerCase();
+  let found = MODEL_KEY_NAMES.find((y) => y === lower);
   if (found) return found;
   if (lower === "best" || lower === "opusplan") return "other";
-  let lower_2 = Lt(n).toLowerCase();
-  return v8.find((y) => lower_2.includes(y)) ?? "other";
+  let lower_2 = strip1mSuffix(canonicalName).toLowerCase();
+  return MODEL_KEY_NAMES.find((y) => lower_2.includes(y)) ?? "other";
 }
 //@ chunk-aepeg2w5.js:136057-136091 placement
-var a6e = ["opus", "sonnet", "haiku"];
+/**
+ * 目录中支持的模型族名（opus/sonnet/haiku）。
+ */
+var MODEL_FAMILY_NAMES = ["opus", "sonnet", "haiku"];
 //@ chunk-aepeg2w5.js:136091-136129 placement
-function hi(e) {
-  return a6e.includes(e);
+/**
+ * 判断字符串是否为模型族名。
+ */
+function isModelFamily(e) {
+  return MODEL_FAMILY_NAMES.includes(e);
 }
+//@ chunk-aepeg2w5.js:136129-136438 placement
 /**
  * 提供商在目录中的键名。
  */
-//@ chunk-aepeg2w5.js:136129-136438 placement
-function providerCatalogKey(e) {
-  switch (e) {
+function providerCatalogKey(apiProvider) {
+  switch (apiProvider) {
     case "firstParty":
       return "first_party";
     case "bedrock":
@@ -381,17 +438,20 @@ function providerCatalogKey(e) {
   }
 }
 //@ chunk-aepeg2w5.js:136438-136504 placement
-function Iy(e, n) {
-  let offered_on = e.offered_on;
-  return offered_on == null || offered_on.includes(n);
+/**
+ * 判断目录行是否在给定提供商下提供（offered_on 为空视为全部）。
+ */
+function isProviderOffered(e, n) {
+  let offeredOn = e.offered_on;
+  return offeredOn == null || offeredOn.includes(n);
 }
 //@ chunk-aepeg2w5.js:136504-136578 placement
-var DD = new Set(["anthropic_aws", "anthropic_google_cloud"]),
-  weakMap = new WeakMap();
+var CLOUD_PROVIDER_KEYS = new Set(["anthropic_aws", "anthropic_google_cloud"]);
+var weakMap = new WeakMap();
 //@ chunk-aepeg2w5.js:136578-136722 placement
-function isProviderOffered(e, n) {
+function isProviderOffered_2(e, n) {
   let r = weakMap.get(e);
-  if (r === void 0) {
+  if (r === undefined) {
     r = new Set();
     for (let s of catalogModels(e)) for (let h of s.offered_on ?? []) r.add(h);
     weakMap.set(e, r);
@@ -399,177 +459,233 @@ function isProviderOffered(e, n) {
   return r.has(n);
 }
 //@ chunk-aepeg2w5.js:136722-136795 placement
-function Dy(e, n) {
-  let r = providerCatalogKey(n);
-  return DD.has(r) && !isProviderOffered(e, r) ? "first_party" : r;
+/**
+ * 计算目录行实际使用的提供商键（云后端未提供时回退 first_party）。
+ */
+function effectiveCatalogProviderKey(e, apiProvider) {
+  let r = providerCatalogKey(apiProvider);
+  return CLOUD_PROVIDER_KEYS.has(r) && !isProviderOffered_2(e, r) ? "first_party" : r;
 }
+//@ chunk-aepeg2w5.js:136795-137078 placement
 /**
  * 读取目录中某别名在指定提供商下的目标与通用目标。
  */
-//@ chunk-aepeg2w5.js:136795-137078 placement
 function getProviderAliasTargets(e, n, r) {
-  let provider_alias_targets = e.config.provider_alias_targets,
-    h =
-      provider_alias_targets != null && Object.hasOwn(provider_alias_targets, n)
-        ? provider_alias_targets[n]
-        : void 0;
+  let providerAliasTargets = e.config.provider_alias_targets;
+  let h =
+    providerAliasTargets != null && Object.hasOwn(providerAliasTargets, n)
+      ? providerAliasTargets[n]
+      : undefined;
   if (h == null) return {};
-  let y = h.per_provider != null && Object.hasOwn(h.per_provider, r) ? h.per_provider[r]?.trim() : void 0,
-    S = h.default?.trim();
-  return { ...(y && { perProvider: y }), ...(S && { everywhere: S }) };
+  let y = h.per_provider != null && Object.hasOwn(h.per_provider, r) ? h.per_provider[r]?.trim() : undefined;
+  let trimmed = h.default?.trim();
+  return {
+    ...(y && {
+      perProvider: y,
+    }),
+    ...(trimmed && {
+      everywhere: trimmed,
+    }),
+  };
 }
+//@ chunk-aepeg2w5.js:137078-137279 placement
 /**
  * 判断目录是否为某别名声明了任何提供商目标。
  */
-//@ chunk-aepeg2w5.js:137078-137279 placement
 function hasProviderAliasTarget(e, n) {
-  let provider_alias_targets = e.config.provider_alias_targets,
-    s =
-      provider_alias_targets != null && Object.hasOwn(provider_alias_targets, n)
-        ? provider_alias_targets[n]
-        : void 0;
-  if (s == null) return !1;
+  let providerAliasTargets = e.config.provider_alias_targets;
+  let s =
+    providerAliasTargets != null && Object.hasOwn(providerAliasTargets, n)
+      ? providerAliasTargets[n]
+      : undefined;
+  if (s == null) return false;
   return !!s.default?.trim() || Object.values(s.per_provider ?? {}).some((h) => !!h?.trim());
 }
+//@ chunk-aepeg2w5.js:137279-137321 placement
 /**
  * 目录中的模型列表。
  */
-//@ chunk-aepeg2w5.js:137279-137321 placement
 function catalogModels(e) {
   return e.config.models ?? [];
 }
+//@ chunk-aepeg2w5.js:137321-137361 placement
 /**
  * 未禁用、未弃用的目录模型。
  */
-//@ chunk-aepeg2w5.js:137321-137361 placement
-function activeCatalogModels(e) {
-  return catalogModels(e).filter(isActiveCatalogModel);
+function activeCatalogModels_2(catalog) {
+  return catalogModels(catalog).filter(isActiveCatalogModel);
 }
+//@ chunk-aepeg2w5.js:137361-137425 placement
 /**
  * 目录模型是否可用。
  */
-//@ chunk-aepeg2w5.js:137361-137425 placement
 function isActiveCatalogModel(e) {
-  return e.disabled !== !0 && e.section !== "deprecated";
+  return e.disabled !== true && e.section !== "deprecated";
 }
 //@ chunk-aepeg2w5.js:137425-137471 placement
-function ato(e) {
+/**
+ * 判断目录行是否属于 overflow 分区。
+ */
+function isOverflowRow(e) {
   return e.section === "overflow";
 }
 //@ chunk-aepeg2w5.js:137471-137516 placement
-function qSi(e) {
-  return activeCatalogModels(e).map((n) => n.id);
+/**
+ * 列出目录中的模型 id。
+ */
+function activeCatalogModelIds(e) {
+  return activeCatalogModels_2(e).map((n) => n.id);
 }
 //@ chunk-aepeg2w5.js:137516-137554 placement
-function Dos(e) {
+/**
+ * 取目录状态里配置的默认模型。
+ */
+function catalogStateModel(e) {
   return e.state?.model;
 }
+//@ chunk-aepeg2w5.js:137554-137678 placement
 /**
  * 返回目录行的模型族（runtime.family 或按 id 推断）。
  */
-//@ chunk-aepeg2w5.js:137554-137678 placement
 function getRowFamily(e) {
-  let n = e.runtime?.family?.trim().toLowerCase();
-  if (n) return n;
+  let lower = e.runtime?.family?.trim().toLowerCase();
+  if (lower) return lower;
   let r = modelFamilyOf(e.id, e.id);
-  return r === "other" ? void 0 : r;
+  return r === "other" ? undefined : r;
 }
 //@ chunk-aepeg2w5.js:137678-137711 placement
-function Fy(e) {
-  return Oc(activeCatalogModels(e));
+/**
+ * 计算目录中各族的首个模型 id 映射。
+ */
+function familyDefaultMap(e) {
+  return familyFirstIds(activeCatalogModels_2(e));
 }
 //@ chunk-aepeg2w5.js:137711-137807 placement
-function Oc(e) {
+/**
+ * 从目录行中挑出各模型族的首个 id。
+ */
+function familyFirstIds(e) {
   let n = {};
   for (let r of e) {
-    let s = getRowFamily(r);
-    if (hi(s) && n[s] === void 0) n[s] = r.id;
+    let rowFamily = getRowFamily(r);
+    if (isModelFamily(rowFamily) && n[rowFamily] === undefined) n[rowFamily] = r.id;
   }
   return n;
 }
 //@ chunk-aepeg2w5.js:137807-137838 placement
-var FD = /^[a-z][a-z0-9]{1,23}$/;
+var PROVIDER_MODEL_SHORTHAND_RE = /^[a-z][a-z0-9]{1,23}$/;
 //@ chunk-aepeg2w5.js:137838-137929 placement
-var LD = new Set(E8.map((e) => Lt(e))),
-  UD = new Set([...LD, "default", "inherit", "latest", "fast"]);
+var KNOWN_MODEL_KEYS = new Set(LEGACY_MODEL_IDS.map((e) => strip1mSuffix(e)));
+var RESERVED_MODEL_KEYS = new Set([...KNOWN_MODEL_KEYS, "default", "inherit", "latest", "fast"]);
 //@ chunk-aepeg2w5.js:137929-138073 placement
 function getRuntimeFamilyDefault(e, n) {
-  let s = (n === "default" ? e.runtime?.default_for_family : e.runtime?.fast_default_for_family)
+  let lower = (n === "default" ? e.runtime?.default_for_family : e.runtime?.fast_default_for_family)
     ?.trim()
     .toLowerCase();
-  return s ? s : void 0;
+  return lower ? lower : undefined;
 }
 //@ chunk-aepeg2w5.js:138073-138141 placement
-function HD(e) {
-  return FD.test(e) && !UD.has(e) && !e.includes("claude");
+function usableShorthandModel(runtimeFamilyDefault) {
+  return (
+    PROVIDER_MODEL_SHORTHAND_RE.test(runtimeFamilyDefault) &&
+    !RESERVED_MODEL_KEYS.has(runtimeFamilyDefault) &&
+    !runtimeFamilyDefault.includes("claude")
+  );
 }
 //@ chunk-aepeg2w5.js:138141-138206 placement
-function BD(e, n) {
-  let r = getRuntimeFamilyDefault(e, n);
-  return r !== void 0 && HD(r) ? r : void 0;
+/**
+ * 取目录中某族的运行时默认模型（需是合法简写）。
+ */
+function runtimeFamilyDefaultShorthand(e, n) {
+  let runtimeFamilyDefault = getRuntimeFamilyDefault(e, n);
+  return runtimeFamilyDefault !== undefined && usableShorthandModel(runtimeFamilyDefault)
+    ? runtimeFamilyDefault
+    : undefined;
 }
 //@ chunk-aepeg2w5.js:138206-138272 placement
-function D3(e, n) {
+/**
+ * 在给定目录中按 id 查模型行。
+ */
+function findServedCatalogRow(e, n) {
   let r = normalizeModelId(n);
   return catalogModels(e).find((s) => normalizeModelId(s.id) === r);
 }
 //@ chunk-aepeg2w5.js:138272-138359 placement
-function YSi(e, n) {
-  let r = D3(e, n);
-  return r?.runtime?.max_input_tokens ?? r?.context_window;
+/**
+ * 取目录行的最大输入 token（缺省用 context_window）。
+ */
+function servedMaxInputTokensOf(e, mainLoopModel) {
+  let servedCatalogRow = findServedCatalogRow(e, mainLoopModel);
+  return servedCatalogRow?.runtime?.max_input_tokens ?? servedCatalogRow?.context_window;
 }
 //@ chunk-aepeg2w5.js:138359-138420 placement
-function Los(e, n) {
-  return D3(e, n)?.runtime?.max_output_tokens;
+/**
+ * 取目录行的最大输出 token。
+ */
+function servedMaxOutputTokensOf(e, n) {
+  return findServedCatalogRow(e, n)?.runtime?.max_output_tokens;
 }
+//@ chunk-aepeg2w5.js:138420-138536 placement
 /**
  * 读取目录中模型的默认输出 token 数。
  */
-//@ chunk-aepeg2w5.js:138420-138536 placement
 function getDefaultOutputTokens(e, n) {
-  let r = D3(e, n)?.runtime?.default_output_tokens;
-  return r !== void 0 && Number.isFinite(r) && r > 0 ? r : void 0;
+  let defaultOutputTokens = findServedCatalogRow(e, n)?.runtime?.default_output_tokens;
+  return defaultOutputTokens !== undefined && Number.isFinite(defaultOutputTokens) && defaultOutputTokens > 0
+    ? defaultOutputTokens
+    : undefined;
 }
+//@ chunk-aepeg2w5.js:138536-138642 placement
 /**
  * 读取目录中模型的默认 effort 等级。
  */
-//@ chunk-aepeg2w5.js:138536-138642 placement
 function getDefaultEffort(e, n) {
-  let r = D3(e, n)?.runtime?.default_effort?.trim().toLowerCase();
-  return EFFORT_LEVELS.find((s) => s === r);
+  let lower = findServedCatalogRow(e, n)?.runtime?.default_effort?.trim().toLowerCase();
+  return EFFORT_LEVELS.find((s) => s === lower);
 }
 //@ chunk-aepeg2w5.js:138642-138701 placement
-function lto(e) {
-  return catalogModels(e).some((n) => n.runtime !== void 0);
+/**
+ * 判断目录中是否有任何行带 runtime 信息。
+ */
+function catalogHasRuntime(catalog) {
+  return catalogModels(catalog).some((n) => n.runtime !== undefined);
 }
 //@ chunk-aepeg2w5.js:138701-138791 placement
-function QSi(e) {
+/**
+ * 取目录中保密模型的 id 集合。
+ */
+function confidentialModelIds(catalog) {
   return new Set(
-    catalogModels(e)
-      .filter((n) => n.confidential === !0)
+    catalogModels(catalog)
+      .filter((n) => n.confidential === true)
       .map((n) => normalizeModelId(n.id)),
   );
 }
 //@ chunk-aepeg2w5.js:138791-138880 placement
-function Uy(e) {
+/**
+ * 取目录中非保密（公开）模型的 id 集合。
+ */
+function publicModelIds(e) {
   return new Set(
     catalogModels(e)
-      .filter((n) => n.confidential !== !0)
+      .filter((n) => n.confidential !== true)
       .map((n) => normalizeModelId(n.id)),
   );
 }
 //@ chunk-1wpnxx5r.js:770-799 placement
-var E = (e) => JSON.stringify(e);
+/**
+ * JSON.stringify 的别名。
+ */
+var jsonStringify = (e) => JSON.stringify(e);
+//@ chunk-1wpnxx5r.js:799-920 fingerprint = isFirstPartyAnthropicBaseUrl (0.642)
 /**
  * api.anthropic.com、api-staging.anthropic.com；同句 ue 再加 OAuth 允许的 base URL 主机。
  */
-//@ chunk-1wpnxx5r.js:799-920 fingerprint = isFirstPartyAnthropicBaseUrl (0.642)
-var FIRST_PARTY_API_HOSTS = new Set(["api.anthropic.com", "api-staging.anthropic.com"]),
-  ALLOWED_API_HOSTS = new Set([
-    ...FIRST_PARTY_API_HOSTS,
-    ...ALLOWED_OAUTH_BASE_URLS.map((e) => new URL(e).hostname),
-  ]);
-
+var FIRST_PARTY_API_HOSTS = new Set(["api.anthropic.com", "api-staging.anthropic.com"]);
+var ALLOWED_API_HOSTS = new Set([
+  ...FIRST_PARTY_API_HOSTS,
+  ...ALLOWED_OAUTH_BASE_URLS.map((e) => new URL(e).hostname),
+]);
 export {
   getAPIProvider,
   allowedProviderLabel,
@@ -589,37 +705,37 @@ export {
   getProviderForModel,
   shouldPropagateTraceContext,
   usesFirstPartyPricing,
+  FIRST_PARTY_API_HOSTS,
   assumesFirstPartyBaseUrl,
   isGenuineBedrockEndpoint,
-  FIRST_PARTY_API_HOSTS,
-  E,
+  jsonStringify,
   ALLOWED_API_HOSTS,
   catalogModels,
-  BD,
-  activeCatalogModels,
+  runtimeFamilyDefaultShorthand,
+  activeCatalogModels_2,
   providerCatalogKey,
-  a6e,
-  D3,
+  MODEL_FAMILY_NAMES,
+  findServedCatalogRow,
   getDefaultOutputTokens,
-  Los,
+  servedMaxOutputTokensOf,
   getDefaultEffort,
-  Dos,
-  YSi,
-  qSi,
-  QSi,
-  lto,
+  catalogStateModel,
+  servedMaxInputTokensOf,
+  activeCatalogModelIds,
+  confidentialModelIds,
+  catalogHasRuntime,
   hasCustomBaseUrlForAnalytics,
   modelIdsAreOpaque,
   THIRD_PARTY_PROVIDER_ENV_VARS,
   isClaudePlatformProvider,
   providerReadsClientData,
-  Uy,
+  publicModelIds,
   getRowFamily,
-  Fy,
-  hi,
-  Dy,
-  Iy,
-  Oc,
+  familyDefaultMap,
+  isModelFamily,
+  effectiveCatalogProviderKey,
+  isProviderOffered,
+  familyFirstIds,
   getProviderAliasTargets,
   hasProviderAliasTarget,
   providerEndpointOverrides,
@@ -627,5 +743,5 @@ export {
   providerEndpointVariables,
   isProviderServiceUrl,
   routesOffAnthropicApiWith,
-  ato,
+  isOverflowRow,
 };

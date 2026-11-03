@@ -6,13 +6,16 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { ee } from "../classes/range.js";
+import { require_range } from "../classes/range.js";
 
 //@ chunk-bwbq4xvm.js:23951-24064 cjs-fingerprint
-var Bl = x(function (N2, jl) {
-  var Vl = ee(),
-    sz = (e, s, n) => ((e = new Vl(e, n)), (s = new Vl(s, n)), e.intersects(s, n));
-  jl.exports = sz;
+var require_intersects = x(function (cjsExports, cjsModule) {
+  var Range = require_range();
+  var intersects = (r1, r2, options) => {
+    r1 = new Range(r1, options);
+    r2 = new Range(r2, options);
+    return r1.intersects(r2, options);
+  };
+  cjsModule.exports = intersects;
 });
-
-export { Bl };
+export { require_intersects };

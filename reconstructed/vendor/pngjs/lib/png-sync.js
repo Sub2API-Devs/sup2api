@@ -6,19 +6,18 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { Tn } from "./parser-sync.js";
-import { Bn } from "./packer-sync.js";
+import { require_parser_sync } from "./parser-sync.js";
+import { require_packer_sync } from "./packer-sync.js";
 
 //@ chunk-spjgqa4y.js:47987-48112 cjs-fingerprint
-var In = x(function (Ts) {
-  var ws = Tn(),
-    Es = Bn();
-  Ts.read = function (t, e) {
-    return ws(t, e || {});
+var require_png_sync = x(function (cjsExports) {
+  var parse = require_parser_sync();
+  var pack = require_packer_sync();
+  cjsExports.read = function (buffer, options) {
+    return parse(buffer, options || {});
   };
-  Ts.write = function (t, e) {
-    return Es(t, e);
+  cjsExports.write = function (png, options) {
+    return pack(png, options);
   };
 });
-
-export { In };
+export { require_png_sync };

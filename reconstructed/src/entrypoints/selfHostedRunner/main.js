@@ -8,18 +8,18 @@
  * pieces: chunk-2cbdmxy9.js (2)
  * attribution: placement 2
  */
-import { mkdir, readFile, readFile as readFile_2 } from "fs/promises";
+import { mkdir, readFile } from "fs/promises";
 import { randomUUID } from "crypto";
 import { hostname } from "os";
 import {
   RUNNER_DEFAULTS,
-  Ne,
-  Oe,
-  He,
-  ve,
+  MAX_CONNECT_ATTEMPTS,
+  HANDSHAKE_TIMEOUT_MS,
+  MAX_IDLE_SECONDS,
+  DEFAULT_LISTEN_PORT,
   newScmConnectorStatus,
   startScmConnector,
-  mt,
+  CONNECT_RETRY_MS,
 } from "./scmConnector.js";
 import { configureGlobalAgents } from "../../utils/proxy.js";
 import { openStdioWriter } from "../../selfHostedRunner/stdioWriter.js";
@@ -30,18 +30,18 @@ import { parseRunnerArgs, resolveSpawnRunnerHook, poolIdFromSecret } from "./run
 import { checkRunnerAgentProxyStandaloneUrl } from "../../services/selfHostedRunner/agentProxyStandalone.js";
 import { env } from "../../utils/env.js";
 import { errorMessage } from "../../utils/errors.js";
-import { HHn, Y9e } from "../../selfHostedRunner/serverAutoMode.js";
+import { ENV_MAX_TIMEOUT_MS, RUNNER_CLIENT_VERSION } from "../../selfHostedRunner/serverAutoMode.js";
 import { ORCHESTRATOR_DEBUG_LIMITS } from "./orchestratorDebugDir.js";
 import { createDefaultEnvironment } from "../../commands/remote-setup/api.js";
 import { newDurationHistogram, newSpawnHistogram } from "./metrics.js";
-import { NHn } from "../../selfHostedRunner/runnerApiErrors.js";
+import { emptyErrorCategoryCounts } from "../../selfHostedRunner/runnerApiErrors.js";
 import { startRunnerHealthServer, runOrchestratorLoop, fatalExitWith } from "./orchestrator.js";
 import { withBoundedTimeout } from "../../utils/boundedTimeout.js";
 
+//@ chunk-2cbdmxy9.js:44198-52374 placement
 /**
  * claude self-hosted-runner orchestrator 入口：解析参数、读取环境密钥、启动健康/指标服务与 spawn-runner 轮询循环。
  */
-//@ chunk-2cbdmxy9.js:44198-52374 placement
 async function runSelfHostedRunnerOrchestrator(e) {
   if (e.includes("--help") || e.includes("-h")) {
     console.log(`Usage: claude self-hosted-runner orchestrator [options]
@@ -62,11 +62,11 @@ Connection:
 Hook:
   --hooks-dir <path>          Directory containing the spawn-runner hook (REQUIRED).
                               [env: SELF_HOSTED_RUNNER_HOOKS_DIR]
-  --hook-concurrency <n>      Max spawn-runner hooks running in parallel (default: ${Ne}).
+  --hook-concurrency <n>      Max spawn-runner hooks running in parallel (default: ${MAX_CONNECT_ATTEMPTS}).
                               Also caps how many hints are claimed per poll.
-  --hook-timeout <sec>        SIGTERM the hook after <sec> seconds (default: ${Oe / 1000}).
+  --hook-timeout <sec>        SIGTERM the hook after <sec> seconds (default: ${HANDSHAKE_TIMEOUT_MS / 1000}).
   --expected-spawn-seconds <n>  p99 boot time for runners this orchestrator spawns
-                              (default: ${He}). Sent on every Poll as the
+                              (default: ${MAX_IDLE_SECONDS}). Sent on every Poll as the
                               server-side lease; if the runner doesn't register before then, the
                               session is re-hinted with a fresh jti. HA replicas MUST use the same value.
   --min-idle <n>              Keep at least <n> idle slots free (free capacity across runners, not
@@ -91,7 +91,7 @@ Runtime:
                               that exits at once, without waiting for them. Set <n> to at least
                               --hook-timeout + 10, and the process manager's kill delay to at least
                               <n> + 15.
-  --health-port <port>        Port for /healthz HTTP listener (default: ${ve}). 0 disables.
+  --health-port <port>        Port for /healthz HTTP listener (default: ${DEFAULT_LISTEN_PORT}). 0 disables.
                               ALWAYS returns 200 (liveness). Body carries connected/last_*/queue_counts/warm_hints_dispatched
                               for readiness/alerting. [env: SELF_HOSTED_RUNNER_HEALTH_PORT]
   --log-level <level>         Log level: info or debug (default: info)
@@ -110,64 +110,69 @@ Debug:
     return;
   }
   configureGlobalAgents();
-  let t = () => new Date().toISOString(),
-    r = openStdioWriter({ stamp: (b) => `${t()} [self-hosted-runner] ${redactSecretsInText(b)}` }),
-    n;
+  let t = () => new Date().toISOString();
+  let stdioWriter = openStdioWriter({
+    stamp: (b) => `${t()} [self-hosted-runner] ${redactSecretsInText(b)}`,
+  });
+  let n;
   try {
-    (assertLifecycleHooksSupported("orchestrator mode"),
-      rejectOrchestratorProxyAuth(e),
-      (n = parseRunnerArgs(e)),
-      checkRunnerAgentProxyStandaloneUrl(
-        env.SELF_HOSTED_RUNNER_AGENT_PROXY_URL,
-        "SELF_HOSTED_RUNNER_AGENT_PROXY_URL",
-      ));
+    assertLifecycleHooksSupported("orchestrator mode");
+    rejectOrchestratorProxyAuth(e);
+    n = parseRunnerArgs(e);
+    checkRunnerAgentProxyStandaloneUrl(
+      env.SELF_HOSTED_RUNNER_AGENT_PROXY_URL,
+      "SELF_HOSTED_RUNNER_AGENT_PROXY_URL",
+    );
   } catch (error) {
-    (r.write(
+    stdioWriter.write(
       "stderr",
       `error: ${redactSecretsInText(errorMessage(error))}
 Run 'claude self-hosted-runner orchestrator --help' for usage.`,
-    ),
-      process.exit(2));
+    );
+    process.exit(2);
   }
-  let h = n.logLevel === "debug",
-    o = (b) => redactSecretsInText(b).replace(/[\x00-\x08\x0b-\x1f\x7f]/g, ""),
-    l = (b) => {
-      if (h) r.write("stderr", `${t()} [DEBUG] ${o(b)}`);
-    },
-    g = (b) => {
-      r.write("stdout", `${t()} [self-hosted-runner] ${o(b)}`);
-    };
-  l(`[runner:log] ${r.describe()}`);
+  let h = n.logLevel === "debug";
+  let o = (b) => redactSecretsInText(b).replace(/[\x00-\x08\x0b-\x1f\x7f]/g, "");
+  let l = (b) => {
+    if (h) stdioWriter.write("stderr", `${t()} [DEBUG] ${o(b)}`);
+  };
+  let g = (b) => {
+    stdioWriter.write("stdout", `${t()} [self-hosted-runner] ${o(b)}`);
+  };
+  l(`[runner:log] ${stdioWriter.describe()}`);
   let c;
   try {
     c = await resolveSpawnRunnerHook(n.hooksDir);
   } catch (error) {
-    (g(`[runner:fatal] ${errorMessage(error)}`), process.exit(1));
+    g(`[runner:fatal] ${errorMessage(error)}`);
+    process.exit(1);
   }
   g(`[runner:hook] spawn-runner hook found at ${c}`);
   let S;
   try {
-    S = await readPoolSecret(n, (b) => r.write("stderr", b));
+    S = await readPoolSecret(n, (b) => stdioWriter.write("stderr", b));
   } catch (error) {
-    (g(`[runner:fatal] ${errorMessage(error)}`), process.exit(1));
+    g(`[runner:fatal] ${errorMessage(error)}`);
+    process.exit(1);
   }
   if (n.debugDir)
-    await mkdir(n.debugDir, { recursive: !0, mode: 448 }).catch((b) =>
+    await mkdir(n.debugDir, {
+      recursive: true,
+      mode: 448,
+    }).catch((error) =>
       g(
-        `[runner:warn] failed to create --debug-dir ${n.debugDir}: ${errorMessage(b)} \u2014 continuing without debug artifacts`,
+        `[runner:warn] failed to create --debug-dir ${n.debugDir}: ${errorMessage(error)} \u2014 continuing without debug artifacts`,
       ),
     );
-  let s = randomUUID(),
-    u = hostname();
-  if (
-    (g(
-      `[runner:orchestrator] starting orchestrator_uuid=${s} hostname=${u} hook-concurrency=${n.hookConcurrency} hook-timeout=${n.hookTimeoutMs}ms`,
-    ),
-    n.shutdownDrainMs > 0)
-  ) {
+  let s = randomUUID();
+  let u = hostname();
+  g(
+    `[runner:orchestrator] starting orchestrator_uuid=${s} hostname=${u} hook-concurrency=${n.hookConcurrency} hook-timeout=${n.hookTimeoutMs}ms`,
+  );
+  if (n.shutdownDrainMs > 0) {
     let b = n.shutdownDrainMs / 1000;
     g(
-      `[runner:orchestrator] shutdown drain: ${b}s after SIGTERM; SIGINT or a second SIGTERM ends it early. Allow up to ${b + HHn / 1000}s for the exit, longer if a hook cannot be killed`,
+      `[runner:orchestrator] shutdown drain: ${b}s after SIGTERM; SIGINT or a second SIGTERM ends it early. Allow up to ${b + ENV_MAX_TIMEOUT_MS / 1000}s for the exit, longer if a hook cannot be killed`,
     );
     let K = n.hookTimeoutMs + 2 * ORCHESTRATOR_DEBUG_LIMITS;
     if (n.shutdownDrainMs < K)
@@ -179,104 +184,132 @@ Run 'claude self-hosted-runner orchestrator --help' for usage.`,
   try {
     U = poolIdFromSecret(S);
   } catch (error) {
-    (g(`[runner:fatal] ${errorMessage(error)}`), process.exit(1));
+    g(`[runner:fatal] ${errorMessage(error)}`);
+    process.exit(1);
   }
   g(`[runner:orchestrator] environment_id=${U}`);
-  let j = createDefaultEnvironment({ baseUrl: n.apiUrl, poolSecret: S, onDebug: l, capabilities: [] }),
-    H = {
-      orchestratorUuid: s,
-      hostname: u,
-      version: Y9e,
-      pool_id: U,
-      connected: !1,
-      last_poll_at: 0,
-      last_hint_at: 0,
-      last_hook_ok_at: 0,
-      last_warm_hook_ok_at: 0,
-      last_error: null,
-      clock_skew_ms: null,
-      queue_counts: null,
-      pool_pending_session_count: null,
-      pool_active_session_count: null,
-      warm_hints_dispatched: 0,
-      spawnHooks: { ok: 0, retryable: 0, nonRetryable: 0 },
-      spawnHookDurations: newDurationHistogram(),
-      pollErrors: NHn(),
-      scm_connector: n.scmConnector ? newScmConnectorStatus() : null,
-      sessionQueueWaits: newSpawnHistogram(),
+  let apiClient = createDefaultEnvironment({
+    baseUrl: n.apiUrl,
+    poolSecret: S,
+    onDebug: l,
+    capabilities: [],
+  });
+  let H = {
+    orchestratorUuid: s,
+    hostname: u,
+    version: RUNNER_CLIENT_VERSION,
+    pool_id: U,
+    connected: false,
+    last_poll_at: 0,
+    last_hint_at: 0,
+    last_hook_ok_at: 0,
+    last_warm_hook_ok_at: 0,
+    last_error: null,
+    clock_skew_ms: null,
+    queue_counts: null,
+    pool_pending_session_count: null,
+    pool_active_session_count: null,
+    warm_hints_dispatched: 0,
+    spawnHooks: {
+      ok: 0,
+      retryable: 0,
+      nonRetryable: 0,
     },
-    W = n.healthPort > 0 ? startRunnerHealthServer(n.healthPort, H, g) : void 0,
-    abortController = new AbortController(),
-    abortController_2 = new AbortController(),
-    w,
-    x,
-    O = n.shutdownDrainMs > 0 ? { stopSignal: abortController_2.signal, abortAt: () => w } : void 0,
-    I =
-      n.scmConnector && H.scm_connector
-        ? startScmConnector(
-            n.scmConnector,
-            H.scm_connector,
-            { apiUrl: n.apiUrl, poolSecret: S, onStatus: g, onDebug: l },
-            abortController.signal,
-          )
-        : void 0,
-    G = !1,
-    L = (b) => {
-      if (O && !abortController.signal.aborted) {
-        if (b && !abortController_2.signal.aborted) {
-          (g(
-            `Received SIGTERM, stopping poll loop; the poll in flight and running hooks have up to ${n.shutdownDrainMs / 1000}s to end...`,
-          ),
-            (w = performance.now() + n.shutdownDrainMs),
-            (x = setTimeout(
-              (K, m) => {
-                (K("Shutdown drain time is over, stopping what is still running..."), m.abort());
-              },
-              n.shutdownDrainMs,
-              g,
-              abortController,
-            )),
-            abortController_2.abort());
-          return;
+    spawnHookDurations: newDurationHistogram(),
+    pollErrors: emptyErrorCategoryCounts(),
+    scm_connector: n.scmConnector ? newScmConnectorStatus() : null,
+    sessionQueueWaits: newSpawnHistogram(),
+  };
+  let W = n.healthPort > 0 ? startRunnerHealthServer(n.healthPort, H, g) : undefined;
+  let abortController = new AbortController();
+  let abortController_2 = new AbortController();
+  let w;
+  let x;
+  let O =
+    n.shutdownDrainMs > 0
+      ? {
+          stopSignal: abortController_2.signal,
+          abortAt: () => w,
         }
-        (g(
-          abortController_2.signal.aborted
-            ? "Received a second shutdown signal, stopping what is still running..."
-            : "Received SIGINT, stopping poll loop and running hooks...",
-        ),
-          clearTimeout(x),
-          (w = performance.now()),
-          abortController_2.abort(),
-          abortController.abort());
+      : undefined;
+  let I =
+    n.scmConnector && H.scm_connector
+      ? startScmConnector(
+          n.scmConnector,
+          H.scm_connector,
+          {
+            apiUrl: n.apiUrl,
+            poolSecret: S,
+            onStatus: g,
+            onDebug: l,
+          },
+          abortController.signal,
+        )
+      : undefined;
+  let G = false;
+  let L = (b) => {
+    if (O && !abortController.signal.aborted) {
+      if (b && !abortController_2.signal.aborted) {
+        g(
+          `Received SIGTERM, stopping poll loop; the poll in flight and running hooks have up to ${n.shutdownDrainMs / 1000}s to end...`,
+        );
+        w = performance.now() + n.shutdownDrainMs;
+        x = setTimeout(
+          (K, m) => {
+            K("Shutdown drain time is over, stopping what is still running...");
+            m.abort();
+          },
+          n.shutdownDrainMs,
+          g,
+          abortController,
+        );
+        abortController_2.abort();
         return;
       }
-      if (G || O) (g("Forced shutdown"), process.exit(1));
-      ((G = !0), g("Received shutdown signal, stopping poll loop..."), abortController.abort());
-    },
-    B = () => L(!0),
-    q = () => L(!1);
-  (process.on("SIGTERM", B), process.on("SIGINT", q));
+      g(
+        abortController_2.signal.aborted
+          ? "Received a second shutdown signal, stopping what is still running..."
+          : "Received SIGINT, stopping poll loop and running hooks...",
+      );
+      clearTimeout(x);
+      w = performance.now();
+      abortController_2.abort();
+      abortController.abort();
+      return;
+    }
+    if (G || O) {
+      g("Forced shutdown");
+      process.exit(1);
+    }
+    G = true;
+    g("Received shutdown signal, stopping poll loop...");
+    abortController.abort();
+  };
+  let B = () => L(true);
+  let q = () => L(false);
+  process.on("SIGTERM", B);
+  process.on("SIGINT", q);
   try {
     await runOrchestratorLoop(
       {
-        apiClient: j,
+        apiClient,
         hookPath: c,
         args: n,
         healthState: H,
         onStatus: g,
         onDebug: l,
         drain: O,
-        fatalExit: fatalExitWith((b) => r.write("stderr", b)),
+        fatalExit: fatalExitWith((b) => stdioWriter.write("stderr", b)),
       },
       abortController.signal,
     );
   } finally {
-    (clearTimeout(x),
-      I?.stop(),
-      W?.closeAllConnections?.(),
-      W?.close(),
-      process.removeListener("SIGTERM", B),
-      process.removeListener("SIGINT", q));
+    clearTimeout(x);
+    I?.stop();
+    W?.closeAllConnections?.();
+    W?.close();
+    process.removeListener("SIGTERM", B);
+    process.removeListener("SIGINT", q);
   }
 }
 //@ chunk-2cbdmxy9.js:52374-52935 placement
@@ -284,21 +317,22 @@ async function readPoolSecret(e, t = (r) => console.error(r)) {
   if (e.poolSecretFile)
     return (
       await withBoundedTimeout(
-        readFile(e.poolSecretFile, { encoding: "utf-8" }),
-        mt,
+        readFile(e.poolSecretFile, {
+          encoding: "utf-8",
+        }),
+        CONNECT_RETRY_MS,
         `environment-secret read from ${e.poolSecretFile}`,
       )
     ).trim();
   let envSelfHostedRunnerEnvironmentSecret = process.env.SELF_HOSTED_RUNNER_ENVIRONMENT_SECRET;
   if (envSelfHostedRunnerEnvironmentSecret) return envSelfHostedRunnerEnvironmentSecret.trim();
   let envSelfHostedRunnerPoolSecret = process.env.SELF_HOSTED_RUNNER_POOL_SECRET;
-  if (envSelfHostedRunnerPoolSecret)
-    return (
-      t(
-        "[runner:warn] SELF_HOSTED_RUNNER_POOL_SECRET is deprecated; use SELF_HOSTED_RUNNER_ENVIRONMENT_SECRET",
-      ),
-      envSelfHostedRunnerPoolSecret.trim()
+  if (envSelfHostedRunnerPoolSecret) {
+    t(
+      "[runner:warn] SELF_HOSTED_RUNNER_POOL_SECRET is deprecated; use SELF_HOSTED_RUNNER_ENVIRONMENT_SECRET",
     );
+    return envSelfHostedRunnerPoolSecret.trim();
+  }
   throw Error(
     "No environment secret provided. Use --environment-secret-file or set SELF_HOSTED_RUNNER_ENVIRONMENT_SECRET.",
   );

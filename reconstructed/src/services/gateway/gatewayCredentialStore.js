@@ -17,7 +17,11 @@ import { getSecureStorage } from "../../utils/secureStorage/index.js";
 import { hostOf } from "./internalNetworks.js";
 import { replaceAllowlistEntry } from "./gatewayAuth.js";
 import { errorMessage } from "../../utils/errors.js";
-import { waitForBgAuthSnapshot, K1e, consumeBgAuthSnapshot } from "../../utils/authFileDescriptor.js";
+import {
+  waitForBgAuthSnapshot,
+  hasBgAuthSnapshotPending,
+  consumeBgAuthSnapshot as consumeBgAuthSnapshot_2,
+} from "../../utils/authFileDescriptor.js";
 import { fromSanitizer_SANITIZER_OUTPUT_ONLY, lit } from "../analytics/safeMetadata.js";
 import {
   getMachineAdminPolicyTier,
@@ -28,121 +32,171 @@ import {
   getSettingsForSourceTightenOnly,
   getMachineAdminDocumentTier,
 } from "../../utils/settings/settings.js";
-import { providerBlockedMessage, tu, vf } from "../../utils/model/allowedProviders.js";
+import {
+  providerBlockedMessage,
+  sameGatewayUrl,
+  isGatewayLoginUrl,
+} from "../../utils/model/allowedProviders.js";
 import { isGatewayLoginForced } from "../../utils/auth.js";
-import { Ole } from "../../utils/settings/policyHelper/helperRemote.js";
+import { hasRemoteHelperState } from "../../utils/settings/policyHelper/helperRemote.js";
 import { hasPolicyHelperConfig } from "../../utils/settings/policyHelper/helperPayload.js";
 
+//@ chunk-aepeg2w5.js:498909-499423 placement
 /**
  * 保存新的网关凭据（失败时报告原因）。
  */
-//@ chunk-aepeg2w5.js:498909-499423 placement
-async function saveGatewayCredential(e, n, r) {
+async function saveGatewayCredential(e, credentials, r) {
   setGatewayAuth(e);
-  let s = !1,
-    h,
-    y,
-    S = (w) =>
-      s
-        ? { outcome: "failed", replaced: h, replacedAllowlistEntry: y, message: w }
-        : { outcome: "untouched", message: w };
+  let s = false;
+  let replaced;
+  let replacedAllowlistEntry;
+  let S = (message) =>
+    s
+      ? {
+          outcome: "failed",
+          replaced,
+          replacedAllowlistEntry,
+          message,
+        }
+      : {
+          outcome: "untouched",
+          message,
+        };
   try {
-    let mutate = await getSecureStorage().mutate((R) => {
-      let x = hostOf(new URL(e.url)),
-        { enterpriseGateway: enterpriseGateway, gatewayAllowlistEntries: gatewayAllowlistEntries, ...L } = R;
-      return (
-        (h = enterpriseGateway),
-        (y = gatewayAllowlistEntries?.[x]),
-        (s = !0),
-        { ...L, enterpriseGateway: e, ...replaceAllowlistEntry(gatewayAllowlistEntries, x, r) }
-      );
-    }, n);
-    if (!mutate.success)
-      return S(`Failed to persist gateway credential${mutate.warning ? `: ${mutate.warning}` : ""}`);
+    let w = await getSecureStorage().mutate((R) => {
+      let x = hostOf(new URL(e.url));
+      let { enterpriseGateway, gatewayAllowlistEntries, ...L } = R;
+      replaced = enterpriseGateway;
+      replacedAllowlistEntry = gatewayAllowlistEntries?.[x];
+      s = true;
+      return {
+        ...L,
+        enterpriseGateway: e,
+        ...replaceAllowlistEntry(gatewayAllowlistEntries, x, r),
+      };
+    }, credentials);
+    if (!w.success) return S(`Failed to persist gateway credential${w.warning ? `: ${w.warning}` : ""}`);
   } catch (error) {
     return S(errorMessage(error));
   }
-  return { outcome: "saved", replaced: h, replacedAllowlistEntry: y };
+  return {
+    outcome: "saved",
+    replaced,
+    replacedAllowlistEntry,
+  };
 }
 //@ chunk-aepeg2w5.js:499423-499481 placement
-async function CA() {
-  return (await waitForBgAuthSnapshot(), K1e() ? consumeBgAuthSnapshot() : void 0);
+/**
+ * 等待并取后台进程的认证快照（没有则 undefined）。
+ */
+async function consumeBgAuthSnapshot() {
+  await waitForBgAuthSnapshot();
+  return hasBgAuthSnapshotPending() ? consumeBgAuthSnapshot_2() : undefined;
 }
 //@ chunk-aepeg2w5.js:499481-499519 placement
-var RA = (e) => e === "EPERM" || e === "EACCES";
+/**
+ * 判断错误码是否为权限被拒（EPERM、EACCES）。
+ */
+var isPermissionDeniedCode = (e) => e === "EPERM" || e === "EACCES";
 //@ chunk-aepeg2w5.js:499519-499619 placement
-var SECURE_STORAGE_KINDS = new Set(["keychain", "plaintext", "windows-credman"]),
-  FALLBACK_STORAGE_RE = /^([a-z-]+)-with-([a-z-]+)-fallback$/;
+var SECURE_STORAGE_KINDS = new Set(["keychain", "plaintext", "windows-credman"]);
+var FALLBACK_STORAGE_RE = /^([a-z-]+)-with-([a-z-]+)-fallback$/;
 //@ chunk-aepeg2w5.js:499619-499731 placement
-function storageKindForTelemetry(e) {
-  if (SECURE_STORAGE_KINDS.has(e)) return fromSanitizer_SANITIZER_OUTPUT_ONLY(e);
-  let match = FALLBACK_STORAGE_RE.exec(e);
+function storageKindForTelemetry_2(name) {
+  if (SECURE_STORAGE_KINDS.has(name)) return fromSanitizer_SANITIZER_OUTPUT_ONLY(name);
+  let match = FALLBACK_STORAGE_RE.exec(name);
   return match && SECURE_STORAGE_KINDS.has(match[1]) && SECURE_STORAGE_KINDS.has(match[2])
-    ? fromSanitizer_SANITIZER_OUTPUT_ONLY(e)
+    ? fromSanitizer_SANITIZER_OUTPUT_ONLY(name)
     : lit("other");
 }
 //@ chunk-aepeg2w5.js:499731-499815 placement
-function OA(e) {
-  return e?.forceLoginMethod === "gateway" ? e.forceLoginGatewayUrl : void 0;
+/**
+ * 取用户设置里强制网关登录的地址。
+ */
+function forcedLoginGatewayUrl(e) {
+  return e?.forceLoginMethod === "gateway" ? e.forceLoginGatewayUrl : undefined;
 }
 //@ chunk-aepeg2w5.js:499815-499861 placement
-function PA() {
-  return getMachineAdminPolicyTier() !== null || isMachineAdminDocumentUnreadable() || MA();
+/**
+ * 是否受机器管理员策略管理（或文档不可读）。
+ */
+function isMachineAdminManaged() {
+  return (
+    getMachineAdminPolicyTier() !== null || isMachineAdminDocumentUnreadable() || hasManagedForceLoginOrg()
+  );
 }
 //@ chunk-aepeg2w5.js:499861-499923 placement
-function MA() {
-  return getParentManagedSettings()?.forceLoginOrgUUID !== void 0 || getParentManagedSettingsInvalid();
+/**
+ * 托管设置里是否指定 forceLoginOrgUUID 或托管设置无效。
+ */
+function hasManagedForceLoginOrg() {
+  return getParentManagedSettings()?.forceLoginOrgUUID !== undefined || getParentManagedSettingsInvalid();
 }
+//@ chunk-aepeg2w5.js:499923-500037 placement
 /**
  * 读取 userSettings 中的网关配置。
  */
-//@ chunk-aepeg2w5.js:499923-500037 placement
 function getUserSettingsGateway() {
   {
-    let e = OA(getSettingsForSource("userSettings"));
-    if (!e || PA()) return;
-    if (providerBlockedMessage("gateway") !== void 0) return;
+    let e = forcedLoginGatewayUrl(getSettingsForSource("userSettings"));
+    if (!e || isMachineAdminManaged()) return;
+    if (providerBlockedMessage("gateway") !== undefined) return;
     return e;
   }
   return;
 }
+//@ chunk-aepeg2w5.js:500037-500313 placement
 /**
  * 托管设置强制的网关登录 URL 与内网列表。
  */
-//@ chunk-aepeg2w5.js:500037-500313 placement
-function getForcedGatewayLogin(e) {
+function getForcedGatewayLogin(userSettingsGateway) {
   if (isGatewayLoginForced()) {
-    let { forceLoginGatewayUrl: forceLoginGatewayUrl, gatewayInternalNetworks: gatewayInternalNetworks } =
-      getHostPolicyLoginPins();
-    return forceLoginGatewayUrl === void 0
-      ? { url: forceLoginGatewayUrl }
-      : { url: forceLoginGatewayUrl, namedBy: "administrator", internalNetworks: gatewayInternalNetworks };
+    let { forceLoginGatewayUrl, gatewayInternalNetworks } = getHostPolicyLoginPins();
+    return forceLoginGatewayUrl === undefined
+      ? {
+          url: forceLoginGatewayUrl,
+        }
+      : {
+          url: forceLoginGatewayUrl,
+          namedBy: "administrator",
+          internalNetworks: gatewayInternalNetworks,
+        };
   }
   let forceLoginMethod = getInitialSettings_2().forceLoginMethod;
-  if (e === void 0 || forceLoginMethod === "claudeai" || forceLoginMethod === "console") return;
-  return { url: e, namedBy: "developer" };
+  if (userSettingsGateway === undefined || forceLoginMethod === "claudeai" || forceLoginMethod === "console")
+    return;
+  return {
+    url: userSettingsGateway,
+    namedBy: "developer",
+  };
 }
 //@ chunk-aepeg2w5.js:500313-500590 placement
-function isGatewayLoginRequired(e) {
+function isGatewayLoginRequired(url) {
   {
-    let n = getMachineAdminPolicyTier(),
-      r =
-        n?.forceLoginGatewayUrl === void 0 && !Ole() && (n?.policyHelper != null || hasPolicyHelperConfig(n)),
-      s = n?.forceLoginGatewayUrl === void 0 && n?.forceLoginMethod === "gateway";
+    let machineAdminPolicyTier = getMachineAdminPolicyTier();
+    let r =
+      machineAdminPolicyTier?.forceLoginGatewayUrl === undefined &&
+      !hasRemoteHelperState() &&
+      (machineAdminPolicyTier?.policyHelper != null || hasPolicyHelperConfig(machineAdminPolicyTier));
+    let s =
+      machineAdminPolicyTier?.forceLoginGatewayUrl === undefined &&
+      machineAdminPolicyTier?.forceLoginMethod === "gateway";
     return (
-      (r || s ? MA() || tu(OA(getSettingsForSourceTightenOnly("userSettings")), e) : PA()) &&
-      !vf(e) &&
-      !tu(getMachineAdminDocumentTier()?.forceLoginGatewayUrl, e)
+      (r || s
+        ? hasManagedForceLoginOrg() ||
+          sameGatewayUrl(forcedLoginGatewayUrl(getSettingsForSourceTightenOnly("userSettings")), url)
+        : isMachineAdminManaged()) &&
+      !isGatewayLoginUrl(url) &&
+      !sameGatewayUrl(getMachineAdminDocumentTier()?.forceLoginGatewayUrl, url)
     );
   }
-  return !1;
+  return false;
 }
-
 export {
-  CA,
-  RA,
+  consumeBgAuthSnapshot,
+  isPermissionDeniedCode,
   isGatewayLoginRequired,
-  storageKindForTelemetry,
+  storageKindForTelemetry_2,
   getUserSettingsGateway,
   saveGatewayCredential,
   getForcedGatewayLogin,

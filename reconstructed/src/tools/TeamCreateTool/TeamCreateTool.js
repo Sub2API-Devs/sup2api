@@ -12,7 +12,7 @@ import { rename } from "fs/promises";
 import { getAssistantTeamName } from "../../utils/swarm/sessionTeam.js";
 import { sessionTeamName, isSessionListId } from "../../utils/swarm/sessionTaskList.js";
 import { getSessionId, getOriginalCwd } from "../../bootstrap/state.js";
-import { MG } from "../../utils/swarm/teammateIds.js";
+import { agentAddress } from "../../utils/swarm/teammateIds.js";
 import { TEAM_LEAD } from "../../utils/swarm/constants.js";
 import {
   getTeamFilePath,
@@ -28,33 +28,35 @@ import { env } from "../../utils/env.js";
 import { getTaskOutputDir, ensureTaskListDir } from "../../utils/tasks.js";
 import { AGENT_COLOR_NAMES } from "../AgentTool/agentColorManager.js";
 
+//@ chunk-6cc2zqkz.js:3286-4232 fingerprint = TeamCreateTool (0.482)
 /**
  * 建立会话唯一的隐式团队：写团队文件（lead 成员 team-lead，in-process 后端）、迁移会话任务列表目录、注册清理，返回 teamContext 与队友颜色分配。316 没有 TeamCreate 工具，此函数由会话启动流程调用。
  */
-//@ chunk-6cc2zqkz.js:3286-4232 fingerprint = TeamCreateTool (0.482)
 async function initializeSessionTeam(options, storageV5) {
-  let o = options?.existingTeamName || getAssistantTeamName(),
-    teamName = o ?? sessionTeamName(getSessionId()),
-    leadAgentId = MG(TEAM_LEAD, teamName),
-    m = getTeamFilePath(teamName),
-    c = o ? await readTeamFileAsync(teamName, storageV5) : null,
-    l = await countConcurrentSessions_2();
+  let o = options?.existingTeamName || getAssistantTeamName();
+  let teamName = o ?? sessionTeamName(getSessionId());
+  let leadAgentId = agentAddress(TEAM_LEAD, teamName);
+  let teamFilePath = getTeamFilePath(teamName);
+  let c = o ? await readTeamFileAsync(teamName, storageV5) : null;
+  let leadProcess = await countConcurrentSessions_2();
   if (c)
     await updateTeamFile(
       teamName,
       (u) => {
-        u.leadProcess = l;
+        u.leadProcess = leadProcess;
       },
-      { bestEffortWrite: !0 },
+      {
+        bestEffortWrite: true,
+      },
       storageV5,
-    ).catch((u) => logTeamFileWriteFailure(teamName, u));
+    ).catch((error) => logTeamFileWriteFailure(teamName, error));
   else {
-    let u = {
+    let teamFile = {
       name: teamName,
       createdAt: Date.now(),
-      leadAgentId: leadAgentId,
+      leadAgentId,
       leadSessionId: getSessionId(),
-      leadProcess: l,
+      leadProcess,
       members: [
         {
           agentId: leadAgentId,
@@ -68,25 +70,26 @@ async function initializeSessionTeam(options, storageV5) {
         },
       ],
     };
-    await writeTeamFileAsync(teamName, u, storageV5).catch((g) => logTeamFileWriteFailure(teamName, g));
+    await writeTeamFileAsync(teamName, teamFile, storageV5).catch((error) =>
+      logTeamFileWriteFailure(teamName, error),
+    );
   }
   setLeaderTeamName(teamName);
   let CLAUDE_INTERNAL_SESSION_TASK_LIST_ID = env.CLAUDE_INTERNAL_SESSION_TASK_LIST_ID;
-  if (
-    (env.unset("CLAUDE_INTERNAL_SESSION_TASK_LIST_ID"),
-    CLAUDE_INTERNAL_SESSION_TASK_LIST_ID && isSessionListId(CLAUDE_INTERNAL_SESSION_TASK_LIST_ID))
-  )
+  env.unset("CLAUDE_INTERNAL_SESSION_TASK_LIST_ID");
+  if (CLAUDE_INTERNAL_SESSION_TASK_LIST_ID && isSessionListId(CLAUDE_INTERNAL_SESSION_TASK_LIST_ID))
     setSessionListId(CLAUDE_INTERNAL_SESSION_TASK_LIST_ID);
-  let r = getSessionId();
-  if (teamName !== r && !options?.keepSessionKeyedTaskList)
-    await rename(getTaskOutputDir(r), getTaskOutputDir(teamName)).catch(() => {});
-  (await ensureTaskListDir(teamName, storageV5), registerTeamForSessionCleanup(teamName));
+  let sessionId = getSessionId();
+  if (teamName !== sessionId && !options?.keepSessionKeyedTaskList)
+    await rename(getTaskOutputDir(sessionId), getTaskOutputDir(teamName)).catch(() => {});
+  await ensureTaskListDir(teamName, storageV5);
+  registerTeamForSessionCleanup(teamName);
   let p = AGENT_COLOR_NAMES[0];
   return {
     teamContext: {
-      teamName: teamName,
-      teamFilePath: m,
-      leadAgentId: leadAgentId,
+      teamName,
+      teamFilePath,
+      leadAgentId,
       teammates: {
         [leadAgentId]: {
           name: TEAM_LEAD,
@@ -99,8 +102,10 @@ async function initializeSessionTeam(options, storageV5) {
         },
       },
     },
-    teammateColors: { assignments: new Map([[leadAgentId, p]]), index: 1 },
+    teammateColors: {
+      assignments: new Map([[leadAgentId, p]]),
+      index: 1,
+    },
   };
 }
-
 export { initializeSessionTeam };

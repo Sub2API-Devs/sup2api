@@ -1,12 +1,12 @@
 /**
  * screens/repl/ComposerChrome.ts
  *
- * 2.1.316 新增。REPL 控制器：输入区外框状态。
+ * 2.1.316 新增：REPL 输入区外框状态与相关控制器（IDE 选区去重、退出时费用报告、会话统计读取）。
  *
  * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
  * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (16)
- * attribution: placement 16
+ * pieces: chunk-18hwfzwa.js (16), chunk-xe7zq1p4.js (2)
+ * attribution: placement 18
  */
 import { PERMISSION_CARD_KINDS } from "../../components/dialogs/dialogKinds.js";
 import { w } from "../../../vendor/react/compiler-runtime.js";
@@ -14,22 +14,25 @@ import {
   unattendedNoticeRows,
   UnattendedNoticeContext,
 } from "../../components/permissions/UnattendedAutoBlockNotice.js";
-import { e, r } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
-import { j, P, R, yt } from "../../../vendor/react/cjs/react.production.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { init_react_production, P, R, yt, Se } from "../../../vendor/react/cjs/react.production.js";
 import { createSignal } from "../../utils/signal.js";
 import { logForDebugging } from "../../utils/debug.js";
-import { o } from "../../../vendor/zod/v4/classic/schemas.js";
+import { string } from "../../../vendor/zod/v4/classic/schemas.js";
 import { Text, Box } from "../../ink/components/Text.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { env } from "../../utils/env.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { logError } from "../../utils/log.js";
 import { errorMessage } from "../../utils/errors.js";
-import { uwr } from "../../remote/remoteMode.js";
+import { alwaysFalseRemoteMode } from "../../remote/remoteMode.js";
 import { NOT_IN_CLOUD_SESSIONS } from "../../components/PromptInput/PromptInputModeHints.js";
 import { logFeatureBad } from "../../services/analytics/featureTelemetry.js";
 import { isBgSession } from "../../utils/concurrentSessions.js";
-import { sendDetachRequest, tce } from "./backgroundConfirm.js";
+import { sendDetachRequest, noopBackgroundConfirm } from "./backgroundConfirm.js";
 import { getCurrentWorktreeSession } from "../../utils/worktree.js";
 import { backgroundTaskKindLabel } from "../../tasks/backgroundTaskLabels.js";
 import { ExitFlow } from "../../components/ExitFlow.js";
@@ -37,7 +40,7 @@ import { gracefulShutdown, isShuttingDown } from "../../utils/gracefulShutdown.j
 import { getActiveMessageQueue } from "../../query/presenceCheck.js";
 import { awaitScanThenTurn } from "./PromptSubmitController.js";
 import { useIsScreenReaderEnabled } from "../../ink/components/ErrorBoundary.js";
-import { Me } from "../../components/design-system/ThemeProvider.js";
+import { useTheme_2 } from "../../components/design-system/ThemeProvider.js";
 import {
   getIsRemoteMode,
   claimCostLedgerForCurrentSession,
@@ -48,7 +51,13 @@ import { getCurrentProjectConfig, saveCurrentProjectConfig } from "../../utils/c
 import { getVersionBase } from "../../services/analytics/metadata.js";
 import { isStorageV5Enabled } from "../../utils/hoverRest.js";
 import { registerPreExitFlush } from "../../utils/cleanupRegistry.js";
-import { Q9s, resetCostState as resetCostState_2, formatTotalCost, Z9s, Ozt } from "../../cost-tracker.js";
+import {
+  saveCostsAsync,
+  resetCostState as resetCostState_2,
+  formatTotalCost,
+  saveCostsOnExit,
+  flushAndSaveCosts,
+} from "../../cost-tracker.js";
 import { registerTranscriptExitReStamp } from "../../utils/sessionStorage.js";
 import { hasConsoleBillingAccess } from "../../utils/billing.js";
 import { useSetAppState, useAppState } from "../../state/AppState.js";
@@ -60,65 +69,75 @@ import {
   isTaskFailedOrStopped,
 } from "../../state/teammateViewHelpers.js";
 import { useTimeout } from "../../ink/hooks/useTerminalHooks.js";
+import { statsContext } from "../../context/stats.js";
 
+//@ chunk-18hwfzwa.js:1624350-1624603 placement
 /**
  * 决定对话框画在窗格中还是输入框上方、是否绘制。
  */
-//@ chunk-18hwfzwa.js:1624350-1624603 placement
 function resolveModalPlacement({
-  onScreenBlockingKind: onScreenBlockingKind,
-  modalSlotActive: modalSlotActive,
-  panelHidesPrompt: panelHidesPrompt,
-  pinnedConsentShowing: pinnedConsentShowing,
-  dialogOverPanel: dialogOverPanel,
-  fullscreen: fullscreen,
+  onScreenBlockingKind,
+  modalSlotActive,
+  panelHidesPrompt,
+  pinnedConsentShowing,
+  dialogOverPanel,
+  fullscreen,
 }) {
-  let Re = onScreenBlockingKind !== null && PERMISSION_CARD_KINDS.includes(onScreenBlockingKind),
-    Be = Re && modalSlotActive,
-    He = !Be && (panelHidesPrompt || pinnedConsentShowing || Re || dialogOverPanel);
-  return { inPane: Be, abovePrompt: He, drawn: Be || (He && !(fullscreen && modalSlotActive)) };
+  let Re = onScreenBlockingKind !== null && PERMISSION_CARD_KINDS.includes(onScreenBlockingKind);
+  let Be = Re && modalSlotActive;
+  let He = !Be && (panelHidesPrompt || pinnedConsentShowing || Re || dialogOverPanel);
+  return {
+    inPane: Be,
+    abovePrompt: He,
+    drawn: Be || (He && !(fullscreen && modalSlotActive)),
+  };
 }
+//@ chunk-18hwfzwa.js:1624603-1624812 placement
 /**
  * 提供无人值守提示占用的行数。
  */
-//@ chunk-18hwfzwa.js:1624603-1624812 placement
-function UnattendedNoticeProvider(h) {
-  let $ = w(3),
-    { drawn: drawn, hideSessionTitle: hideSessionTitle, children: children } = h,
-    ee = unattendedNoticeRows(hideSessionTitle);
-  const ke = drawn ? ee : 0;
+function UnattendedNoticeProvider(props) {
+  let $ = w(3);
+  let { drawn, hideSessionTitle, children } = props;
+  let ee = unattendedNoticeRows(hideSessionTitle);
+  const value = drawn ? ee : 0;
   let Be;
-  if ($[0] !== children || $[1] !== ke)
-    ((Be = e(UnattendedNoticeContext, { value: ke, children: children })),
-      ($[0] = children),
-      ($[1] = ke),
-      ($[2] = Be));
-  else Be = $[2];
+  if ($[0] !== children || $[1] !== value) {
+    Be = jsxProd_default(UnattendedNoticeContext, {
+      value,
+      children,
+    });
+    $[0] = children;
+    $[1] = value;
+    $[2] = Be;
+  } else Be = $[2];
   return Be;
 }
 //@ chunk-18hwfzwa.js:1624812-1624816 placement
-j();
+init_react_production();
 //@ chunk-18hwfzwa.js:1626009-1626052 placement
-function BV(h) {
+function isExiting(h) {
   return h.exit.kind !== "none";
 }
+//@ chunk-18hwfzwa.js:1626052-1626185 placement
 /**
  * 嵌入模式相关属性键与空状态。
  */
-//@ chunk-18hwfzwa.js:1626052-1626185 placement
 var EMBEDDED_PROP_KEYS = {
-    debug: !0,
-    embedded: !0,
-    onDetachToCaller: !0,
-    hasSuppressedDialogs: !0,
-    hideLoginNotice: !0,
-  },
-  keys = Object.keys(EMBEDDED_PROP_KEYS),
-  xvt = { kind: "none" };
+  debug: true,
+  embedded: true,
+  onDetachToCaller: true,
+  hasSuppressedDialogs: true,
+  hideLoginNotice: true,
+};
+var keys = Object.keys(EMBEDDED_PROP_KEYS);
+var NO_EXIT_STATE = {
+  kind: "none",
+};
+//@ chunk-18hwfzwa.js:1626185-1628696 placement
 /**
  * 输入框外围（chrome）控制器：退出流程（interstitial/shutting-down）、IDE 选区、bash 对话框、rewind 在云会话不可用提示等。
  */
-//@ chunk-18hwfzwa.js:1626185-1628696 placement
 class ComposerChrome {
   #e = createSignal();
   #t;
@@ -129,28 +148,42 @@ class ComposerChrome {
   #r;
   #c = null;
   #i = null;
-  #a = void 0;
-  constructor({ isRemoteSession: h, addNotification: x, store: D, storageV5: L, exitReaders: ee, ...ke }) {
-    ((this.#t = h),
-      (this.#o = x),
-      (this.#n = D),
-      (this.#s = L),
-      (this.exitReaders = ee),
-      (this.#r = { ...ke, ideSelection: void 0, bashesDialog: !1, exit: xvt }));
+  #a = undefined;
+  constructor({ isRemoteSession, addNotification, store, storageV5, exitReaders, ...ke }) {
+    this.#t = isRemoteSession;
+    this.#o = addNotification;
+    this.#n = store;
+    this.#s = storageV5;
+    this.exitReaders = exitReaders;
+    this.#r = {
+      ...ke,
+      ideSelection: undefined,
+      bashesDialog: false,
+      exit: NO_EXIT_STATE,
+    };
   }
   subscribe = (h) => this.#e.subscribe(h);
   getSnapshot = () => this.#r;
   #l(h) {
-    ((this.#r = h), this.#e.emit());
+    this.#r = h;
+    this.#e.emit();
   }
   setView(h) {
     let x = this.#r;
     if (keys.every((D) => Object.is(h[D], x[D]))) return;
-    this.#l({ ...x, ...h });
+    this.#l({
+      ...x,
+      ...h,
+    });
   }
   setIdeSelection = (h) => {
-    if (((this.#i = null), (this.#a = void 0), Object.is(h, this.#r.ideSelection))) return;
-    this.#l({ ...this.#r, ideSelection: h });
+    this.#i = null;
+    this.#a = undefined;
+    if (Object.is(h, this.#r.ideSelection)) return;
+    this.#l({
+      ...this.#r,
+      ideSelection: h,
+    });
   };
   offerIdeSelection = (h) => {
     if (this.#r.ideSelection?.source === "diff" && !h.text) return;
@@ -160,36 +193,47 @@ class ComposerChrome {
   dismissIdeSelection = () => {
     let ideSelection = this.#r.ideSelection;
     if (!ideSelection) return;
-    (this.setIdeSelection(void 0), (this.#i = ideSelectionKey(ideSelection)));
+    this.setIdeSelection(undefined);
+    this.#i = ideSelectionKey(ideSelection);
   };
   consumeIdeSelection = (h) => {
     let ideSelection = this.#r.ideSelection;
-    if ((this.setIdeSelection(void 0), ideSelection && h))
-      this.#a = { selection: ideSelection, promptUuid: h };
+    this.setIdeSelection(undefined);
+    if (ideSelection && h)
+      this.#a = {
+        selection: ideSelection,
+        promptUuid: h,
+      };
   };
   restoreIdeSelectionConsumedBy = (h, x) => {
-    if (x !== void 0) this.returnIdeSelection(x);
+    if (x !== undefined) this.returnIdeSelection(x);
     else if (this.#a?.promptUuid === h) this.returnIdeSelection(this.#a.selection);
   };
-  recordIdeSelectionConsumedBy = (h, x) => {
-    this.#a = { selection: x, promptUuid: h };
+  recordIdeSelectionConsumedBy = (promptUuid, selection) => {
+    this.#a = {
+      selection,
+      promptUuid,
+    };
   };
   returnIdeSelection = (h) => {
     let ideSelection = this.#r.ideSelection;
-    if (h !== void 0 && !ideSelection?.text && ideSelection?.source !== "diff") this.setIdeSelection(h);
+    if (h !== undefined && !ideSelection?.text && ideSelection?.source !== "diff") this.setIdeSelection(h);
   };
   openBashesDialog = (h) => {
-    this.#d(h ?? !0);
+    this.#d(h ?? true);
   };
   closeBashesDialog = () => {
-    this.#d(!1);
+    this.#d(false);
   };
   #d(h) {
     if (h === this.#r.bashesDialog) return;
-    this.#l({ ...this.#r, bashesDialog: h });
+    this.#l({
+      ...this.#r,
+      bashesDialog: h,
+    });
   }
   openMessageSelector = () => {
-    if (this.#t && !uwr()) {
+    if (this.#t && !alwaysFalseRemoteMode()) {
       this.#o({
         key: "remote-rewind-unavailable",
         kind: "feedback",
@@ -202,18 +246,24 @@ class ComposerChrome {
     this.#m().openMessageSelector();
   };
   requestExit = () => {
-    let { onDetachToCaller: onDetachToCaller } = this.#r;
+    let { onDetachToCaller } = this.#r;
     if (onDetachToCaller) {
       onDetachToCaller();
       return;
     }
     if (isBgSession()) {
-      sendDetachRequest({ message: tce({ kind: "quit" }) });
+      sendDetachRequest({
+        message: noopBackgroundConfirm({
+          kind: "quit",
+        }),
+      });
       return;
     }
-    let x = getCurrentWorktreeSession() !== null,
-      { tasks: tasks, mcp: mcp } = this.#n.getState(),
-      ee = backgroundTaskKindLabel(tasks, { mcpClients: mcp.clients });
+    let x = getCurrentWorktreeSession() !== null;
+    let { tasks, mcp } = this.#n.getState();
+    let ee = backgroundTaskKindLabel(tasks, {
+      mcpClients: mcp.clients,
+    });
     if (x || ee.length > 0) {
       this.#l({
         ...this.#r,
@@ -227,18 +277,31 @@ class ComposerChrome {
       });
       return;
     }
-    (this.#l({ ...this.#r, exit: { kind: "shutting-down" } }),
-      ExitFlow(
-        this.exitReaders.getMessages(),
-        { responseStreaming: this.exitReaders.isResponseStreaming() },
-        this.#s,
-      )
-        .catch((ke) => (logError(ke), gracefulShutdown(0, "prompt_input_exit")))
-        .catch(logError));
+    this.#l({
+      ...this.#r,
+      exit: {
+        kind: "shutting-down",
+      },
+    });
+    ExitFlow(
+      this.exitReaders.getMessages(),
+      {
+        responseStreaming: this.exitReaders.isResponseStreaming(),
+      },
+      this.#s,
+    )
+      .catch((error) => {
+        logError(error);
+        return gracefulShutdown(0, "prompt_input_exit");
+      })
+      .catch(logError);
   };
   cancelExit = () => {
     if (this.#r.exit.kind === "none") return;
-    this.#l({ ...this.#r, exit: xvt });
+    this.#l({
+      ...this.#r,
+      exit: NO_EXIT_STATE,
+    });
   };
   bindHost(h) {
     this.#c = h;
@@ -248,43 +311,57 @@ class ComposerChrome {
     return this.#c;
   }
 }
+//@ chunk-18hwfzwa.js:1628696-1628831 placement
 /**
  * IDE 选区的去重键。
  */
-//@ chunk-18hwfzwa.js:1628696-1628831 placement
 function ideSelectionKey(h) {
   let x = `${h.source ?? "ide"}|${h.filePath ?? ""}`;
   return h.text ? `${x}|${h.lineStart ?? ""}|${h.lineCount}|${h.text.length}` : x;
 }
 //@ chunk-18hwfzwa.js:1628869-1628953 placement
-function Avt(h, x) {
-  let D = getActiveMessageQueue();
-  return D !== void 0 && (x !== void 0 || h()) ? awaitScanThenTurn(D, h, x) : void 0;
+function scanQueueBeforeTurn(h, x) {
+  let activeMessageQueue = getActiveMessageQueue();
+  return activeMessageQueue !== undefined && (x !== undefined || h())
+    ? awaitScanThenTurn(activeMessageQueue, h, x)
+    : undefined;
 }
+//@ chunk-18hwfzwa.js:1644111-1644605 placement
 /**
  * 标记非正常退出、注册退出前刷新；进程退出时打印费用并保存状态。
  */
-//@ chunk-18hwfzwa.js:1644111-1644605 placement
 function useExitCostReport(h) {
-  let x = useIsScreenReaderEnabled(),
-    { storageV5: storageV5 } = Me();
+  let isScreenReaderEnabled = useIsScreenReaderEnabled();
+  let { storageV5 } = useTheme_2();
   P(() => {
     if (getIsRemoteMode()) return;
-    let L = getCurrentProjectConfig(),
-      ee = getVersionBase();
-    if (L.lastGracefulShutdown !== !1 || L.lastVersionBase !== ee)
-      saveCurrentProjectConfig((He) => ({ ...He, lastGracefulShutdown: !1, lastVersionBase: ee }), storageV5);
-    let ke = !1,
-      Re =
-        isStorageV5Enabled() && storageV5 !== void 0
-          ? registerPreExitFlush(async () => {
-              (await Q9s(h?.(), storageV5), (ke = !0));
-            })
-          : void 0;
-    (claimCostLedgerForCurrentSession(), registerTranscriptExitReStamp(resetCostState_2));
+    let currentProjectConfig = getCurrentProjectConfig();
+    let versionBase = getVersionBase();
+    if (
+      currentProjectConfig.lastGracefulShutdown !== false ||
+      currentProjectConfig.lastVersionBase !== versionBase
+    )
+      saveCurrentProjectConfig(
+        (He) => ({
+          ...He,
+          lastGracefulShutdown: false,
+          lastVersionBase: versionBase,
+        }),
+        storageV5,
+      );
+    let ke = false;
+    let Re =
+      isStorageV5Enabled() && storageV5 !== undefined
+        ? registerPreExitFlush(async () => {
+            await saveCostsAsync(h?.(), storageV5);
+            ke = true;
+          })
+        : undefined;
+    claimCostLedgerForCurrentSession();
+    registerTranscriptExitReStamp(resetCostState_2);
     let Be = () => {
       if (hasConsoleBillingAccess()) {
-        let He = x ? "Cost: " : "";
+        let He = isScreenReaderEnabled ? "Cost: " : "";
         process.stdout.write(
           `
 ` +
@@ -294,75 +371,93 @@ function useExitCostReport(h) {
 `,
         );
       }
-      if (!ke) Z9s(h?.());
+      if (!ke) saveCostsOnExit(h?.());
     };
-    return (
-      process.on("exit", Be),
-      () => {
-        if ((Re?.(), isShuttingDown())) Ozt(h?.(), storageV5);
-        process.off("exit", Be);
-      }
-    );
-  }, [x, storageV5]);
+    process.on("exit", Be);
+    return () => {
+      Re?.();
+      if (isShuttingDown()) flushAndSaveCosts(h?.(), storageV5);
+      process.off("exit", Be);
+    };
+  }, [isScreenReaderEnabled, storageV5]);
 }
 //@ chunk-18hwfzwa.js:1644605-1644609 placement
-j();
+init_react_production();
 //@ chunk-18hwfzwa.js:1644609-1645075 placement = getViewedTeammateTask (0.79)
 function getViewedTeammateTask_2() {
-  let h = useSetAppState(),
-    x = useAppState((Be) => Be.viewingAgentTaskId),
-    D = useAppState((Be) => (Be.viewingAgentTaskId ? Be.tasks[Be.viewingAgentTaskId] : void 0)),
-    L = D && isInProcessTeammateTask(D) ? D : void 0,
-    ee = D !== void 0,
-    ke = R(void 0);
-  if (isLocalAgent(D)) ke.current = D.parentAgentId;
-  else if (D !== void 0) ke.current = void 0;
-  let Re = useAppState((Be) => (ke.current ? Be.tasks[ke.current] !== void 0 : !1));
+  let setAppState = useSetAppState();
+  let x = useAppState((Be) => Be.viewingAgentTaskId);
+  let D = useAppState((Be) => (Be.viewingAgentTaskId ? Be.tasks[Be.viewingAgentTaskId] : undefined));
+  let L = D && isInProcessTeammateTask(D) ? D : undefined;
+  let ee = D !== undefined;
+  let parentAgentIdRef = R(undefined);
+  if (isLocalAgent(D)) parentAgentIdRef.current = D.parentAgentId;
+  else if (D !== undefined) parentAgentIdRef.current = undefined;
+  let Re = useAppState((Be) =>
+    parentAgentIdRef.current ? Be.tasks[parentAgentIdRef.current] !== undefined : false,
+  );
   P(() => {
     if (!x) return;
     if (!ee) {
-      let Be = ke.current;
-      if (((ke.current = void 0), Be && Re)) enterTeammateView(Be, h);
-      else exitTeammateView(h);
+      let Be = parentAgentIdRef.current;
+      parentAgentIdRef.current = undefined;
+      if (Be && Re) enterTeammateView(Be, setAppState);
+      else exitTeammateView(setAppState);
       return;
     }
     if (!L) return;
     if (isTaskFailedOrStopped(L)) {
-      exitTeammateView(h);
+      exitTeammateView(setAppState);
       return;
     }
-  }, [x, ee, Re, L, h]);
+  }, [x, ee, Re, L, setAppState]);
 }
 //@ chunk-18hwfzwa.js:1645075-1645079 placement
-j();
+init_react_production();
 //@ chunk-18hwfzwa.js:1645079-1645091 placement
-var W$o = 1e4;
+var AGENTS_HINT_TIMEOUT_MS = 1e4;
+//@ chunk-18hwfzwa.js:1645091-1645224 placement
 /**
  * 一段时间后标记 agents 提示过期。
  */
-//@ chunk-18hwfzwa.js:1645091-1645224 placement
 function useAgentsHintExpiry() {
-  let h = yt(onAttacherCapsChange, j$o),
-    x = useTimeout(W$o, h),
-    D = useSetAppState();
+  let h = yt(onAttacherCapsChange, hasAttacherCaps);
+  let timeout = useTimeout(AGENTS_HINT_TIMEOUT_MS, h);
+  let setAppState = useSetAppState();
   P(() => {
-    D((L) => ((L.agentsHintExpired ?? !1) === x ? L : { ...L, agentsHintExpired: x }));
-  }, [x, D]);
+    setAppState((L) =>
+      (L.agentsHintExpired ?? false) === timeout
+        ? L
+        : {
+            ...L,
+            agentsHintExpired: timeout,
+          },
+    );
+  }, [timeout, setAppState]);
 }
 //@ chunk-18hwfzwa.js:1645224-1645257 placement
-function j$o() {
+function hasAttacherCaps() {
   return getAttacherCaps() != null;
 }
 //@ chunk-18hwfzwa.js:1645257-1645261 placement
-j();
-
+init_react_production();
+//@ chunk-xe7zq1p4.js:1971-2000 placement
+/**
+ * 导出函数 `isTerminalInterested`：返回 Se(ie)。
+ */
+function isTerminalInterested() {
+  return Se(statsContext);
+}
+//@ chunk-xe7zq1p4.js:2000-2004 placement
+init_react_production();
 export {
   ComposerChrome,
-  BV,
+  isExiting,
   useExitCostReport,
+  isTerminalInterested,
   getViewedTeammateTask_2,
   useAgentsHintExpiry,
   UnattendedNoticeProvider,
   resolveModalPlacement,
-  Avt,
+  scanQueueBeforeTurn,
 };

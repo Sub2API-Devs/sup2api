@@ -11,7 +11,7 @@
 
 //@ chunk-bwbq4xvm.js:166982-167004 placement
 class TerminalShutdownLatch {
-  committed = !1;
+  committed = false;
 }
 //@ chunk-bwbq4xvm.js:167004-167018 placement
 var terminalShutdownLatch = new TerminalShutdownLatch();
@@ -21,7 +21,7 @@ function isTerminalShutdown() {
 }
 //@ chunk-bwbq4xvm.js:167052-167083 placement
 function latchTerminalShutdown() {
-  terminalShutdownLatch.committed = !0;
+  terminalShutdownLatch.committed = true;
 }
 //@ chunk-bwbq4xvm.js:167083-167110 placement
 var NEVER_RESOLVING = new Promise(() => {});
@@ -29,5 +29,4 @@ var NEVER_RESOLVING = new Promise(() => {});
 function heldUntilExit() {
   return NEVER_RESOLVING;
 }
-
 export { isTerminalShutdown, heldUntilExit, latchTerminalShutdown };

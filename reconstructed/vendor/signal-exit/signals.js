@@ -8,10 +8,18 @@
 import { x } from "../../runtime/bun-runtime.js";
 
 //@ chunk-bmbhxpfm.js:14791-15044 cjs-fingerprint
-var Ve = x(function (nr, le) {
-  le.exports = ["SIGABRT", "SIGALRM", "SIGHUP", "SIGINT", "SIGTERM"];
-  le.exports.push("SIGVTALRM", "SIGXCPU", "SIGXFSZ", "SIGUSR2", "SIGTRAP", "SIGSYS", "SIGQUIT", "SIGIOT");
-  le.exports.push("SIGIO", "SIGPOLL", "SIGPWR", "SIGSTKFLT", "SIGUNUSED");
+var require_signals = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = ["SIGABRT", "SIGALRM", "SIGHUP", "SIGINT", "SIGTERM"];
+  cjsModule.exports.push(
+    "SIGVTALRM",
+    "SIGXCPU",
+    "SIGXFSZ",
+    "SIGUSR2",
+    "SIGTRAP",
+    "SIGSYS",
+    "SIGQUIT",
+    "SIGIOT",
+  );
+  cjsModule.exports.push("SIGIO", "SIGPOLL", "SIGPWR", "SIGSTKFLT", "SIGUNUSED");
 });
-
-export { Ve };
+export { require_signals };

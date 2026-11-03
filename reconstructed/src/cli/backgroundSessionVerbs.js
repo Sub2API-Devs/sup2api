@@ -11,21 +11,21 @@
 import { Help, Command } from "../../vendor/commander/esm.mjs";
 
 //@ chunk-shkzs7rp.js:21325-21566 placement
-function addBackgroundVerbsToHelp(n) {
-  n.configureHelp({
-    ...n.configureHelp(),
+function addBackgroundVerbsToHelp(program) {
+  program.configureHelp({
+    ...program.configureHelp(),
     visibleCommands(e) {
       let S = Help.prototype.visibleCommands.call(this, e);
-      if (e !== n) return S;
+      if (e !== program) return S;
       let A = [...S, ...getBackgroundSessionVerbCommands()];
       return this.sortSubcommands ? A.sort((r, s) => r.name().localeCompare(s.name())) : A;
     },
   });
 }
+//@ chunk-shkzs7rp.js:21566-22472 placement
 /**
  * 后台会话动词（attach/logs/stop|kill/respawn/rm）的 commander 定义；只用于根帮助显示，真正执行在 cli.js 快速路径。
  */
-//@ chunk-shkzs7rp.js:21566-22472 placement
 function getBackgroundSessionVerbCommands() {
   return [
     new Command("attach")
@@ -57,5 +57,4 @@ function getBackgroundSessionVerbCommands() {
     ...[],
   ];
 }
-
 export { addBackgroundVerbsToHelp };

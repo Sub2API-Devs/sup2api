@@ -8,11 +8,10 @@
  * pieces: chunk-fq0cr76a.js (1)
  * attribution: fingerprint 1
  */
-import { Kl } from "../../../utils/ripgrep.js";
+import { ripgrepStatus } from "../../../utils/ripgrep.js";
 
 //@ chunk-fq0cr76a.js:878544-878582 fingerprint = ideDiffSupport (0.531)
 function ideDiffSupport() {
-  return Kl().getConfig();
+  return ripgrepStatus().getConfig();
 }
-
 export { ideDiffSupport };

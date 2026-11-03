@@ -8,85 +8,119 @@
  * pieces: chunk-bz1hrmy7.js (13)
  * attribution: placement 13
  */
-import { ht } from "./cliOwnedClients.js";
+import { getCliOwnedState } from "./cliOwnedClients.js";
 
 //@ chunk-bz1hrmy7.js:227-238 placement
-var s = null;
+/**
+ * 当前的脚手架（初始化）解析函数。
+ */
+var scaffoldResolver = null;
 //@ chunk-bz1hrmy7.js:238-275 placement
-function Czs(e) {
-  let n = s;
-  return ((s = e), n);
+/**
+ * 替换脚手架解析函数并返回旧的。
+ */
+function swapScaffoldResolver(designUnavailableReason) {
+  let n = scaffoldResolver;
+  scaffoldResolver = designUnavailableReason;
+  return n;
 }
 //@ chunk-bz1hrmy7.js:275-299 placement
-function kYn() {
-  return s;
+/**
+ * 取当前脚手架解析函数。
+ */
+function getScaffoldResolver() {
+  return scaffoldResolver;
 }
 //@ chunk-bz1hrmy7.js:299-310 placement
-var r = null;
+/**
+ * 当前的同意检查函数。
+ */
+var consentChecker = null;
 //@ chunk-bz1hrmy7.js:310-347 placement
-function Rzs(e) {
-  let n = r;
-  return ((r = e), n);
+/**
+ * 替换同意检查函数并返回旧的。
+ */
+function swapConsentChecker(e) {
+  let n = consentChecker;
+  consentChecker = e;
+  return n;
 }
 //@ chunk-bz1hrmy7.js:347-393 placement
-async function Foe(e) {
-  return (await r?.(e)) ?? !1;
+/**
+ * 调用同意检查函数（未设置时视为不同意）。
+ */
+async function checkConsent(credentials) {
+  return (await consentChecker?.(credentials)) ?? false;
 }
 //@ chunk-bz1hrmy7.js:393-558 placement
 class FirstPartyDesignNeedsConsentError extends Error {
   consent;
-  constructor(e) {
+  constructor(consent) {
     super("first-party design MCP server requires consent");
-    this.consent = e;
+    this.consent = consent;
     this.name = "FirstPartyDesignNeedsConsentError";
   }
 }
 //@ chunk-bz1hrmy7.js:558-569 placement
-var t = null;
+/**
+ * 当前待显示的授权扩展开启提示。
+ */
+var noticeHolder = null;
 //@ chunk-bz1hrmy7.js:569-606 placement
-function xzs(e) {
-  let n = t;
-  return ((t = e), n);
+/**
+ * 替换提示持有者并返回旧的。
+ */
+function swapNoticeHolder(e) {
+  let n = noticeHolder;
+  noticeHolder = e;
+  return n;
 }
 //@ chunk-bz1hrmy7.js:606-630 placement
-function SZe() {
-  return t;
+/**
+ * 取待显示的授权扩展提示（不清空）。
+ */
+function peekScopeExpansionNotice() {
+  return noticeHolder;
 }
+//@ chunk-bz1hrmy7.js:630-754 placement
 /**
  * 首次扩展一方设计服务器授权范围时保存待显示的提示。
  */
-//@ chunk-bz1hrmy7.js:630-754 placement
-function noteScopeExpansion(e) {
-  let n = ht();
-  if (n.scopeExpansionDisclosed) return;
-  ((n.scopeExpansionDisclosed = !0), (n.pendingScopeExpansionNotice = e));
+function noteScopeExpansion(pendingScopeExpansionNotice) {
+  let cliOwnedState = getCliOwnedState();
+  if (cliOwnedState.scopeExpansionDisclosed) return;
+  cliOwnedState.scopeExpansionDisclosed = true;
+  cliOwnedState.pendingScopeExpansionNotice = pendingScopeExpansionNotice;
 }
+//@ chunk-bz1hrmy7.js:754-858 placement
 /**
  * 取出并清除待显示的授权范围扩展提示。
  */
-//@ chunk-bz1hrmy7.js:754-858 placement
 function takeScopeExpansionNotice() {
-  let e = ht(),
-    pendingScopeExpansionNotice = e.pendingScopeExpansionNotice;
-  return ((e.pendingScopeExpansionNotice = void 0), pendingScopeExpansionNotice);
+  let cliOwnedState = getCliOwnedState();
+  let pendingScopeExpansionNotice = cliOwnedState.pendingScopeExpansionNotice;
+  cliOwnedState.pendingScopeExpansionNotice = undefined;
+  return pendingScopeExpansionNotice;
 }
 //@ chunk-bz1hrmy7.js:858-920 placement
-function Pzs() {
+/**
+ * 把待显示的授权扩展提示写到 stderr。
+ */
+function printScopeExpansionNotice() {
   let e = takeScopeExpansionNotice();
   if (e)
     process.stderr.write(`${e}
 `);
 }
-
 export {
-  kYn,
+  getScaffoldResolver,
   noteScopeExpansion,
-  SZe,
+  peekScopeExpansionNotice,
   FirstPartyDesignNeedsConsentError,
-  Foe,
+  checkConsent,
   takeScopeExpansionNotice,
-  Czs,
-  Rzs,
-  xzs,
-  Pzs,
+  swapScaffoldResolver,
+  swapConsentChecker,
+  swapNoticeHolder,
+  printScopeExpansionNotice,
 };

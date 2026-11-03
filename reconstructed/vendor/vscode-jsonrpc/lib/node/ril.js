@@ -6,132 +6,152 @@
  * attribution: cjs-fingerprint 1
  */
 import { x, importMetaRequire } from "../../../../runtime/bun-runtime.js";
-import { it } from "../common/api.js";
+import { require_api } from "../common/api.js";
 
 //@ chunk-t4ksmxzx.js:51933-54469 cjs-fingerprint
-var Ln = x(function (kn) {
-  Object.defineProperty(kn, "__esModule", { value: !0 });
-  var st = importMetaRequire("util"),
-    F = it();
-  class ot extends F.AbstractMessageBuffer {
-    constructor(e = "utf-8") {
-      super(e);
+var require_ril = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  var util_1 = importMetaRequire("util");
+  var api_1 = require_api();
+  class MessageBuffer extends api_1.AbstractMessageBuffer {
+    constructor(encoding = "utf-8") {
+      super(encoding);
     }
     emptyBuffer() {
-      return ot.emptyBuffer;
+      return MessageBuffer.emptyBuffer;
     }
-    fromString(e, r) {
-      return Buffer.from(e, r);
+    fromString(value, encoding) {
+      return Buffer.from(value, encoding);
     }
-    toString(e, r) {
-      if (e instanceof Buffer) return e.toString(r);
-      else return new st.TextDecoder(r).decode(e);
+    toString(value, encoding) {
+      if (value instanceof Buffer) return value.toString(encoding);
+      else return new util_1.TextDecoder(encoding).decode(value);
     }
-    asNative(e, r) {
-      if (r === void 0) return e instanceof Buffer ? e : Buffer.from(e);
-      else return e instanceof Buffer ? e.slice(0, r) : Buffer.from(e, 0, r);
+    asNative(buffer, length) {
+      if (length === undefined) return buffer instanceof Buffer ? buffer : Buffer.from(buffer);
+      else return buffer instanceof Buffer ? buffer.slice(0, length) : Buffer.from(buffer, 0, length);
     }
-    allocNative(e) {
-      return Buffer.allocUnsafe(e);
-    }
-  }
-  ot.emptyBuffer = Buffer.allocUnsafe(0);
-  class En {
-    constructor(e) {
-      this.stream = e;
-    }
-    onClose(e) {
-      return (this.stream.on("close", e), F.Disposable.create(() => this.stream.off("close", e)));
-    }
-    onError(e) {
-      return (this.stream.on("error", e), F.Disposable.create(() => this.stream.off("error", e)));
-    }
-    onEnd(e) {
-      return (this.stream.on("end", e), F.Disposable.create(() => this.stream.off("end", e)));
-    }
-    onData(e) {
-      return (this.stream.on("data", e), F.Disposable.create(() => this.stream.off("data", e)));
+    allocNative(length) {
+      return Buffer.allocUnsafe(length);
     }
   }
-  class Cn {
-    constructor(e) {
-      this.stream = e;
+  MessageBuffer.emptyBuffer = Buffer.allocUnsafe(0);
+  class ReadableStreamWrapper {
+    constructor(stream) {
+      this.stream = stream;
     }
-    onClose(e) {
-      return (this.stream.on("close", e), F.Disposable.create(() => this.stream.off("close", e)));
+    onClose(listener) {
+      this.stream.on("close", listener);
+      return api_1.Disposable.create(() => this.stream.off("close", listener));
     }
-    onError(e) {
-      return (this.stream.on("error", e), F.Disposable.create(() => this.stream.off("error", e)));
+    onError(listener) {
+      this.stream.on("error", listener);
+      return api_1.Disposable.create(() => this.stream.off("error", listener));
     }
-    onEnd(e) {
-      return (this.stream.on("end", e), F.Disposable.create(() => this.stream.off("end", e)));
+    onEnd(listener) {
+      this.stream.on("end", listener);
+      return api_1.Disposable.create(() => this.stream.off("end", listener));
     }
-    write(e, r) {
-      return new Promise((n, s) => {
-        let c = (h) => {
-          if (h === void 0 || h === null) n();
-          else s(h);
+    onData(listener) {
+      this.stream.on("data", listener);
+      return api_1.Disposable.create(() => this.stream.off("data", listener));
+    }
+  }
+  class WritableStreamWrapper {
+    constructor(stream) {
+      this.stream = stream;
+    }
+    onClose(listener) {
+      this.stream.on("close", listener);
+      return api_1.Disposable.create(() => this.stream.off("close", listener));
+    }
+    onError(listener) {
+      this.stream.on("error", listener);
+      return api_1.Disposable.create(() => this.stream.off("error", listener));
+    }
+    onEnd(listener) {
+      this.stream.on("end", listener);
+      return api_1.Disposable.create(() => this.stream.off("end", listener));
+    }
+    write(data, encoding) {
+      return new Promise((resolve, reject) => {
+        let callback = (error) => {
+          if (error === undefined || error === null) resolve();
+          else reject(error);
         };
-        if (typeof e === "string") this.stream.write(e, r, c);
-        else this.stream.write(e, c);
+        if (typeof data === "string") this.stream.write(data, encoding, callback);
+        else this.stream.write(data, callback);
       });
     }
     end() {
       this.stream.end();
     }
   }
-  var freeze = Object.freeze({
-    messageBuffer: Object.freeze({ create: (e) => new ot(e) }),
+  var _ril = Object.freeze({
+    messageBuffer: Object.freeze({
+      create: (encoding) => new MessageBuffer(encoding),
+    }),
     applicationJson: Object.freeze({
       encoder: Object.freeze({
         name: "application/json",
-        encode: (e, r) => {
+        encode: (msg, options) => {
           try {
-            return Promise.resolve(Buffer.from(JSON.stringify(e, void 0, 0), r.charset));
-          } catch (error) {
-            return Promise.reject(error);
+            return Promise.resolve(Buffer.from(JSON.stringify(msg, undefined, 0), options.charset));
+          } catch (err) {
+            return Promise.reject(err);
           }
         },
       }),
       decoder: Object.freeze({
         name: "application/json",
-        decode: (e, r) => {
+        decode: (buffer, options) => {
           try {
-            if (e instanceof Buffer) return Promise.resolve(JSON.parse(e.toString(r.charset)));
-            else return Promise.resolve(JSON.parse(new st.TextDecoder(r.charset).decode(e)));
-          } catch (error) {
-            return Promise.reject(error);
+            if (buffer instanceof Buffer)
+              return Promise.resolve(JSON.parse(buffer.toString(options.charset)));
+            else return Promise.resolve(JSON.parse(new util_1.TextDecoder(options.charset).decode(buffer)));
+          } catch (err) {
+            return Promise.reject(err);
           }
         },
       }),
     }),
-    stream: Object.freeze({ asReadableStream: (e) => new En(e), asWritableStream: (e) => new Cn(e) }),
+    stream: Object.freeze({
+      asReadableStream: (stream) => new ReadableStreamWrapper(stream),
+      asWritableStream: (stream) => new WritableStreamWrapper(stream),
+    }),
     console,
     timer: Object.freeze({
-      setTimeout(e, r, ...n) {
-        let s = setTimeout(e, r, ...n);
-        return { dispose: () => clearTimeout(s) };
+      setTimeout(callback, ms, ...args) {
+        let handle = setTimeout(callback, ms, ...args);
+        return {
+          dispose: () => clearTimeout(handle),
+        };
       },
-      setImmediate(e, ...r) {
-        let n = setImmediate(e, ...r);
-        return { dispose: () => clearImmediate(n) };
+      setImmediate(callback, ...args) {
+        let handle = setImmediate(callback, ...args);
+        return {
+          dispose: () => clearImmediate(handle),
+        };
       },
-      setInterval(e, r, ...n) {
-        let s = setInterval(e, r, ...n);
-        return { dispose: () => clearInterval(s) };
+      setInterval(callback, ms, ...args) {
+        let handle = setInterval(callback, ms, ...args);
+        return {
+          dispose: () => clearInterval(handle),
+        };
       },
     }),
   });
-  function Lt() {
-    return freeze;
+  function RIL() {
+    return _ril;
   }
-  (function (e) {
-    function r() {
-      F.RAL.install(freeze);
+  (function (RIL) {
+    function install() {
+      api_1.RAL.install(_ril);
     }
-    e.install = r;
-  })(Lt || (Lt = {}));
-  kn.default = Lt;
+    RIL.install = install;
+  })(RIL || (RIL = {}));
+  cjsExports.default = RIL;
 });
-
-export { Ln };
+export { require_ril };

@@ -6,164 +6,226 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { q } from "./mode.js";
-import { fr } from "./numeric-data.js";
-import { cr } from "./alphanumeric-data.js";
-import { gr } from "./byte-data.js";
-import { wr } from "./kanji-data.js";
-import { Ge } from "./regex.js";
-import { N } from "./utils.js";
-import { Er } from "../../../dijkstrajs/dijkstra.js";
+import { require_mode } from "./mode.js";
+import { require_numeric_data } from "./numeric-data.js";
+import { require_alphanumeric_data } from "./alphanumeric-data.js";
+import { require_byte_data } from "./byte-data.js";
+import { require_kanji_data } from "./kanji-data.js";
+import { require_regex } from "./regex.js";
+import { require_utils } from "./utils.js";
+import { require_dijkstra } from "../../../dijkstrajs/dijkstra.js";
 
 //@ chunk-spjgqa4y.js:14833-17575 cjs-fingerprint
-var Br = x(function (ao) {
-  var d = q(),
-    $e = fr(),
-    Xe = cr(),
-    et = gr(),
-    tt = wr(),
-    k = Ge(),
-    F = N(),
-    br = Er();
-  function Tr(t) {
-    return unescape(encodeURIComponent(t)).length;
+var require_segments = x(function (cjsExports) {
+  var Mode = require_mode();
+  var NumericData = require_numeric_data();
+  var AlphanumericData = require_alphanumeric_data();
+  var ByteData = require_byte_data();
+  var KanjiData = require_kanji_data();
+  var Regex = require_regex();
+  var Utils = require_utils();
+  var dijkstra = require_dijkstra();
+  function getStringByteLength(str) {
+    return unescape(encodeURIComponent(str)).length;
   }
-  function me(t, e, r) {
-    let n = [],
-      i;
-    while ((i = t.exec(r)) !== null) n.push({ data: i[0], index: i.index, mode: e, length: i[0].length });
-    return n;
+  function getSegments(regex, mode, str) {
+    let segments = [];
+    let result;
+    while ((result = regex.exec(str)) !== null)
+      segments.push({
+        data: result[0],
+        index: result.index,
+        mode,
+        length: result[0].length,
+      });
+    return segments;
   }
-  function xr(t) {
-    let e = me(k.NUMERIC, d.NUMERIC, t),
-      r = me(k.ALPHANUMERIC, d.ALPHANUMERIC, t),
-      n,
-      i;
-    if (F.isKanjiModeEnabled()) ((n = me(k.BYTE, d.BYTE, t)), (i = me(k.KANJI, d.KANJI, t)));
-    else ((n = me(k.BYTE_KANJI, d.BYTE, t)), (i = []));
-    return e
-      .concat(r, n, i)
-      .sort(function (s, l) {
-        return s.index - l.index;
+  function getSegmentsFromString(dataStr) {
+    let numSegs = getSegments(Regex.NUMERIC, Mode.NUMERIC, dataStr);
+    let alphaNumSegs = getSegments(Regex.ALPHANUMERIC, Mode.ALPHANUMERIC, dataStr);
+    let byteSegs;
+    let kanjiSegs;
+    if (Utils.isKanjiModeEnabled()) {
+      byteSegs = getSegments(Regex.BYTE, Mode.BYTE, dataStr);
+      kanjiSegs = getSegments(Regex.KANJI, Mode.KANJI, dataStr);
+    } else {
+      byteSegs = getSegments(Regex.BYTE_KANJI, Mode.BYTE, dataStr);
+      kanjiSegs = [];
+    }
+    return numSegs
+      .concat(alphaNumSegs, byteSegs, kanjiSegs)
+      .sort(function (s1, s2) {
+        return s1.index - s2.index;
       })
-      .map(function (s) {
-        return { data: s.data, mode: s.mode, length: s.length };
+      .map(function (obj) {
+        return {
+          data: obj.data,
+          mode: obj.mode,
+          length: obj.length,
+        };
       });
   }
-  function Ze(t, e) {
-    switch (e) {
-      case d.NUMERIC:
-        return $e.getBitsLength(t);
-      case d.ALPHANUMERIC:
-        return Xe.getBitsLength(t);
-      case d.KANJI:
-        return tt.getBitsLength(t);
-      case d.BYTE:
-        return et.getBitsLength(t);
+  function getSegmentBitsLength(length, mode) {
+    switch (mode) {
+      case Mode.NUMERIC:
+        return NumericData.getBitsLength(length);
+      case Mode.ALPHANUMERIC:
+        return AlphanumericData.getBitsLength(length);
+      case Mode.KANJI:
+        return KanjiData.getBitsLength(length);
+      case Mode.BYTE:
+        return ByteData.getBitsLength(length);
     }
   }
-  function lo(t) {
-    return t.reduce(function (e, r) {
-      let n = e.length - 1 >= 0 ? e[e.length - 1] : null;
-      if (n && n.mode === r.mode) return ((e[e.length - 1].data += r.data), e);
-      return (e.push(r), e);
+  function mergeSegments(segs) {
+    return segs.reduce(function (acc, curr) {
+      let prevSeg = acc.length - 1 >= 0 ? acc[acc.length - 1] : null;
+      if (prevSeg && prevSeg.mode === curr.mode) {
+        acc[acc.length - 1].data += curr.data;
+        return acc;
+      }
+      acc.push(curr);
+      return acc;
     }, []);
   }
-  function uo(t) {
-    let e = [];
-    for (let r = 0; r < t.length; r++) {
-      let n = t[r];
-      switch (n.mode) {
-        case d.NUMERIC:
-          e.push([
-            n,
-            { data: n.data, mode: d.ALPHANUMERIC, length: n.length },
-            { data: n.data, mode: d.BYTE, length: n.length },
+  function buildNodes(segs) {
+    let nodes = [];
+    for (let i = 0; i < segs.length; i++) {
+      let seg = segs[i];
+      switch (seg.mode) {
+        case Mode.NUMERIC:
+          nodes.push([
+            seg,
+            {
+              data: seg.data,
+              mode: Mode.ALPHANUMERIC,
+              length: seg.length,
+            },
+            {
+              data: seg.data,
+              mode: Mode.BYTE,
+              length: seg.length,
+            },
           ]);
           break;
-        case d.ALPHANUMERIC:
-          e.push([n, { data: n.data, mode: d.BYTE, length: n.length }]);
+        case Mode.ALPHANUMERIC:
+          nodes.push([
+            seg,
+            {
+              data: seg.data,
+              mode: Mode.BYTE,
+              length: seg.length,
+            },
+          ]);
           break;
-        case d.KANJI:
-          e.push([n, { data: n.data, mode: d.BYTE, length: Tr(n.data) }]);
+        case Mode.KANJI:
+          nodes.push([
+            seg,
+            {
+              data: seg.data,
+              mode: Mode.BYTE,
+              length: getStringByteLength(seg.data),
+            },
+          ]);
           break;
-        case d.BYTE:
-          e.push([{ data: n.data, mode: d.BYTE, length: Tr(n.data) }]);
+        case Mode.BYTE:
+          nodes.push([
+            {
+              data: seg.data,
+              mode: Mode.BYTE,
+              length: getStringByteLength(seg.data),
+            },
+          ]);
       }
     }
-    return e;
+    return nodes;
   }
-  function fo(t, e) {
-    let r = {},
-      n = { start: {} },
-      i = ["start"];
-    for (let o = 0; o < t.length; o++) {
-      let s = t[o],
-        l = [];
-      for (let u = 0; u < s.length; u++) {
-        let f = s[u],
-          a = "" + o + u;
-        (l.push(a), (r[a] = { node: f, lastCount: 0 }), (n[a] = {}));
-        for (let h = 0; h < i.length; h++) {
-          let c = i[h];
-          if (r[c] && r[c].node.mode === f.mode)
-            ((n[c][a] = Ze(r[c].lastCount + f.length, f.mode) - Ze(r[c].lastCount, f.mode)),
-              (r[c].lastCount += f.length));
-          else {
-            if (r[c]) r[c].lastCount = f.length;
-            n[c][a] = Ze(f.length, f.mode) + 4 + d.getCharCountIndicator(f.mode, e);
+  function buildGraph(nodes, version) {
+    let table = {};
+    let graph = {
+      start: {},
+    };
+    let prevNodeIds = ["start"];
+    for (let i = 0; i < nodes.length; i++) {
+      let nodeGroup = nodes[i];
+      let currentNodeIds = [];
+      for (let j = 0; j < nodeGroup.length; j++) {
+        let node = nodeGroup[j];
+        let key = "" + i + j;
+        currentNodeIds.push(key);
+        table[key] = {
+          node,
+          lastCount: 0,
+        };
+        graph[key] = {};
+        for (let n = 0; n < prevNodeIds.length; n++) {
+          let prevNodeId = prevNodeIds[n];
+          if (table[prevNodeId] && table[prevNodeId].node.mode === node.mode) {
+            graph[prevNodeId][key] =
+              getSegmentBitsLength(table[prevNodeId].lastCount + node.length, node.mode) -
+              getSegmentBitsLength(table[prevNodeId].lastCount, node.mode);
+            table[prevNodeId].lastCount += node.length;
+          } else {
+            if (table[prevNodeId]) table[prevNodeId].lastCount = node.length;
+            graph[prevNodeId][key] =
+              getSegmentBitsLength(node.length, node.mode) +
+              4 +
+              Mode.getCharCountIndicator(node.mode, version);
           }
         }
       }
-      i = l;
+      prevNodeIds = currentNodeIds;
     }
-    for (let o = 0; o < i.length; o++) n[i[o]].end = 0;
-    return { map: n, table: r };
+    for (let n = 0; n < prevNodeIds.length; n++) graph[prevNodeIds[n]].end = 0;
+    return {
+      map: graph,
+      table,
+    };
   }
-  function Cr(t, e) {
-    let r,
-      bestModeForData = d.getBestModeForData(t);
-    if (((r = d.from(e, bestModeForData)), r !== d.BYTE && r.bit < bestModeForData.bit))
+  function buildSingleSegment(data, modesHint) {
+    let mode;
+    let bestMode = Mode.getBestModeForData(data);
+    mode = Mode.from(modesHint, bestMode);
+    if (mode !== Mode.BYTE && mode.bit < bestMode.bit)
       throw Error(
         '"' +
-          t +
+          data +
           '" cannot be encoded with mode ' +
-          d.toString(r) +
+          Mode.toString(mode) +
           `.
  Suggested mode is: ` +
-          d.toString(bestModeForData),
+          Mode.toString(bestMode),
       );
-    if (r === d.KANJI && !F.isKanjiModeEnabled()) r = d.BYTE;
-    switch (r) {
-      case d.NUMERIC:
-        return new $e(t);
-      case d.ALPHANUMERIC:
-        return new Xe(t);
-      case d.KANJI:
-        return new tt(t);
-      case d.BYTE:
-        return new et(t);
+    if (mode === Mode.KANJI && !Utils.isKanjiModeEnabled()) mode = Mode.BYTE;
+    switch (mode) {
+      case Mode.NUMERIC:
+        return new NumericData(data);
+      case Mode.ALPHANUMERIC:
+        return new AlphanumericData(data);
+      case Mode.KANJI:
+        return new KanjiData(data);
+      case Mode.BYTE:
+        return new ByteData(data);
     }
   }
-  ao.fromArray = function (e) {
-    return e.reduce(function (r, n) {
-      if (typeof n === "string") r.push(Cr(n, null));
-      else if (n.data) r.push(Cr(n.data, n.mode));
-      return r;
+  cjsExports.fromArray = function (array) {
+    return array.reduce(function (acc, seg) {
+      if (typeof seg === "string") acc.push(buildSingleSegment(seg, null));
+      else if (seg.data) acc.push(buildSingleSegment(seg.data, seg.mode));
+      return acc;
     }, []);
   };
-  ao.fromString = function (e, r) {
-    let n = xr(e, F.isKanjiModeEnabled()),
-      i = uo(n),
-      o = fo(i, r),
-      find_path = br.find_path(o.map, "start", "end"),
-      l = [];
-    for (let u = 1; u < find_path.length - 1; u++) l.push(o.table[find_path[u]].node);
-    return ao.fromArray(lo(l));
+  cjsExports.fromString = function (data, version) {
+    let segs = getSegmentsFromString(data, Utils.isKanjiModeEnabled());
+    let nodes = buildNodes(segs);
+    let graph = buildGraph(nodes, version);
+    let path = dijkstra.find_path(graph.map, "start", "end");
+    let optimizedSegs = [];
+    for (let i = 1; i < path.length - 1; i++) optimizedSegs.push(graph.table[path[i]].node);
+    return cjsExports.fromArray(mergeSegments(optimizedSegs));
   };
-  ao.rawSplit = function (e) {
-    return ao.fromArray(xr(e, F.isKanjiModeEnabled()));
+  cjsExports.rawSplit = function (data) {
+    return cjsExports.fromArray(getSegmentsFromString(data, Utils.isKanjiModeEnabled()));
   };
 });
-
-export { Br };
+export { require_segments };

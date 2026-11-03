@@ -6,22 +6,26 @@
  * attribution: cjs-fingerprint 1
  */
 import { x, importMetaRequire } from "../../../../runtime/bun-runtime.js";
-import { Qt } from "./splitStream.browser.js";
-import { B } from "./stream-type-check.js";
+import { require_splitStream_browser } from "./splitStream.browser.js";
+import { require_stream_type_check } from "./stream-type-check.js";
 
 //@ chunk-wjd9n4jx.js:10385-10678 cjs-fingerprint
-var Zt = x(function (Yt) {
-  Object.defineProperty(Yt, "__esModule", { value: !0 });
-  Yt.splitStream = es;
-  var ee = importMetaRequire("stream"),
-    Gt = Qt(),
-    te = B();
-  async function es(e) {
-    if (te.isReadableStream(e) || te.isBlob(e)) return Gt.splitStream(e);
-    let t = new ee.PassThrough(),
-      r = new ee.PassThrough();
-    return (e.pipe(t), e.pipe(r), [t, r]);
+var require_splitStream = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.splitStream = splitStream;
+  var stream_1 = importMetaRequire("stream");
+  var splitStream_browser_1 = require_splitStream_browser();
+  var stream_type_check_1 = require_stream_type_check();
+  async function splitStream(stream) {
+    if (stream_type_check_1.isReadableStream(stream) || stream_type_check_1.isBlob(stream))
+      return splitStream_browser_1.splitStream(stream);
+    let stream1 = new stream_1.PassThrough();
+    let stream2 = new stream_1.PassThrough();
+    stream.pipe(stream1);
+    stream.pipe(stream2);
+    return [stream1, stream2];
   }
 });
-
-export { Zt };
+export { require_splitStream };

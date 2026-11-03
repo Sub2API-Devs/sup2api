@@ -8,11 +8,11 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:482400-482907 cjs-fingerprint
-var co = x(function (sb, oo) {
-  function Gm(e) {
+var require_subunit = x(function (cjsExports, cjsModule) {
+  function subunit(hljs) {
     return {
       name: "SubUnit",
-      case_insensitive: !0,
+      case_insensitive: true,
       contains: [
         {
           className: "string",
@@ -21,22 +21,35 @@ var co = x(function (sb, oo) {
           end: `\\]
 `,
         },
-        { className: "string", begin: "\\d{4}-\\d{2}-\\d{2}(\\s+)\\d{2}:\\d{2}:\\d{2}.\\d+Z" },
-        { className: "string", begin: "(\\+|-)\\d+" },
+        {
+          className: "string",
+          begin: "\\d{4}-\\d{2}-\\d{2}(\\s+)\\d{2}:\\d{2}:\\d{2}.\\d+Z",
+        },
+        {
+          className: "string",
+          begin: "(\\+|-)\\d+",
+        },
         {
           className: "keyword",
           relevance: 10,
           variants: [
-            { begin: "^(test|testing|success|successful|failure|error|skip|xfail|uxsuccess)(:?)\\s+(test)?" },
-            { begin: "^progress(:?)(\\s+)?(pop|push)?" },
-            { begin: "^tags:" },
-            { begin: "^time:" },
+            {
+              begin: "^(test|testing|success|successful|failure|error|skip|xfail|uxsuccess)(:?)\\s+(test)?",
+            },
+            {
+              begin: "^progress(:?)(\\s+)?(pop|push)?",
+            },
+            {
+              begin: "^tags:",
+            },
+            {
+              begin: "^time:",
+            },
           ],
         },
       ],
     };
   }
-  oo.exports = Gm;
+  cjsModule.exports = subunit;
 });
-
-export { co };
+export { require_subunit };

@@ -15,5 +15,4 @@ import { isBareMode } from "../utils/envUtils.js";
 function useAfterFirstRender() {
   return env.CLAUDE_CODE_EXIT_AFTER_FIRST_RENDER || isBareMode();
 }
-
 export { useAfterFirstRender };

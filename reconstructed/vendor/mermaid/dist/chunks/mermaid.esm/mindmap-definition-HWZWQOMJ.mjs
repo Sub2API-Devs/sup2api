@@ -5,60 +5,67 @@
  * pieces: chunk-mrx6y2r5.js (7)
  * attribution: esm-fingerprint 3, esm-layout 4
  */
-import { randomUUID, randomUUID as randomUUID_2, randomFillSync } from "crypto";
+import { randomUUID, randomFillSync } from "crypto";
 
 //@ chunk-mrx6y2r5.js:224842-224865 esm-fingerprint
-var tc = { randomUUID: randomUUID_2 };
+var native_default = {
+  randomUUID,
+};
 //@ chunk-mrx6y2r5.js:224906-224946 esm-layout
-var uint8Array = new Uint8Array(256),
-  is = uint8Array.length;
+var uint8Array = new Uint8Array(256);
+var is = uint8Array.length;
 //@ chunk-mrx6y2r5.js:224946-225018 esm-layout
-function rc() {
-  if (is > uint8Array.length - 16) (randomFillSync(uint8Array), (is = 0));
+function rng() {
+  if (is > uint8Array.length - 16) {
+    randomFillSync(uint8Array);
+    is = 0;
+  }
   return uint8Array.slice(is, (is += 16));
 }
 //@ chunk-mrx6y2r5.js:225018-225028 esm-layout
-var ge = [];
+var byteToHex = [];
 //@ chunk-mrx6y2r5.js:225028-225089 esm-fingerprint
-for (let e = 0; e < 256; ++e) ge.push((e + 256).toString(16).slice(1));
+for (let i = 0; i < 256; ++i) byteToHex.push((i + 256).toString(16).slice(1));
 //@ chunk-mrx6y2r5.js:225089-225328 esm-layout
-function Oh(e, t = 0) {
+function unsafeStringify(arr, offset = 0) {
   return (
-    ge[e[t + 0]] +
-    ge[e[t + 1]] +
-    ge[e[t + 2]] +
-    ge[e[t + 3]] +
+    byteToHex[arr[offset + 0]] +
+    byteToHex[arr[offset + 1]] +
+    byteToHex[arr[offset + 2]] +
+    byteToHex[arr[offset + 3]] +
     "-" +
-    ge[e[t + 4]] +
-    ge[e[t + 5]] +
+    byteToHex[arr[offset + 4]] +
+    byteToHex[arr[offset + 5]] +
     "-" +
-    ge[e[t + 6]] +
-    ge[e[t + 7]] +
+    byteToHex[arr[offset + 6]] +
+    byteToHex[arr[offset + 7]] +
     "-" +
-    ge[e[t + 8]] +
-    ge[e[t + 9]] +
+    byteToHex[arr[offset + 8]] +
+    byteToHex[arr[offset + 9]] +
     "-" +
-    ge[e[t + 10]] +
-    ge[e[t + 11]] +
-    ge[e[t + 12]] +
-    ge[e[t + 13]] +
-    ge[e[t + 14]] +
-    ge[e[t + 15]]
+    byteToHex[arr[offset + 10]] +
+    byteToHex[arr[offset + 11]] +
+    byteToHex[arr[offset + 12]] +
+    byteToHex[arr[offset + 13]] +
+    byteToHex[arr[offset + 14]] +
+    byteToHex[arr[offset + 15]]
   ).toLowerCase();
 }
 //@ chunk-mrx6y2r5.js:225328-225695 esm-fingerprint
-function dy(e, t, r) {
-  if (tc.randomUUID && !t && !e) return tc.randomUUID();
-  e = e || {};
-  let n = e.random ?? e.rng?.() ?? rc();
-  if (n.length < 16) throw Error("Random bytes length must be >= 16");
-  if (((n[6] = (n[6] & 15) | 64), (n[8] = (n[8] & 63) | 128), t)) {
-    if (((r = r || 0), r < 0 || r + 16 > t.length))
-      throw RangeError(`UUID byte range ${r}:${r + 15} is out of buffer bounds`);
-    for (let o = 0; o < 16; ++o) t[r + o] = n[o];
-    return t;
+function dy(options, buf, offset) {
+  if (native_default.randomUUID && !buf && !options) return native_default.randomUUID();
+  options = options || {};
+  let rnds = options.random ?? options.rng?.() ?? rng();
+  if (rnds.length < 16) throw Error("Random bytes length must be >= 16");
+  rnds[6] = (rnds[6] & 15) | 64;
+  rnds[8] = (rnds[8] & 63) | 128;
+  if (buf) {
+    offset = offset || 0;
+    if (offset < 0 || offset + 16 > buf.length)
+      throw RangeError(`UUID byte range ${offset}:${offset + 15} is out of buffer bounds`);
+    for (let i = 0; i < 16; ++i) buf[offset + i] = rnds[i];
+    return buf;
   }
-  return Oh(n);
+  return unsafeStringify(rnds);
 }
-
 export { dy };

@@ -13,21 +13,23 @@ import { sanitizeDisplayText } from "../../../services/artifacts/capabilityDecla
 import { DECISION_SURFACE_BRACKETS_RE, QUOTE_HOMOGLYPHS, SINGLE_QUOTE_RUNS } from "../artifactUrls.js";
 import { MAX_EDITS_PER_CALL } from "../../../services/artifacts/artifactDb.js";
 import {
-  I0o,
-  B5n,
+  WWW_CONTENT_TYPES,
+  SCRIPT_CONTENT_TYPES,
   baseMediaType,
   contentTypeForPath,
-  O0o,
+  SERVABLE_CONTENT_TYPES,
   MARKUP_CONTENT_TYPES,
 } from "../../../services/artifacts/contentTypes.js";
-import { readUntrustedArray, Uf } from "../../../utils/untrustedArray.js";
+import { readUntrustedArray, UNREADABLE_ARRAY } from "../../../utils/untrustedArray.js";
 
 //@ chunk-qxvqcab6.js:13435-13585 placement
 function approvalPayloadExcerpt(e) {
-  if (e === void 0) return "";
+  if (e === undefined) return "";
   try {
     let n = jsonStringify(e);
-    return `${sanitizeDisplayText(n, { max: 300 }).replace(DECISION_SURFACE_BRACKETS_RE, " ")}${truncatedSuffix(n, 300)}`;
+    return `${sanitizeDisplayText(n, {
+      max: 300,
+    }).replace(DECISION_SURFACE_BRACKETS_RE, " ")}${truncatedSuffix(n, 300)}`;
   } catch {
     return "(unserializable payload)";
   }
@@ -39,40 +41,56 @@ function truncatedSuffix(e, n) {
     : `\u2026 [truncated \u2014 ${Buffer.byteLength(e, "utf8")} bytes total]`;
 }
 //@ chunk-qxvqcab6.js:13723-14005 placement
-function strReplaceApprovalText({ field: field, oldStr: oldStr, newStr: newStr, replaceAll: replaceAll }) {
+function strReplaceApprovalText({ field, oldStr, newStr, replaceAll }) {
   let s = (u, a) => {
-    if (u === void 0) return "(missing)";
+    if (u === undefined) return "(missing)";
     let l = jsonStringify(u);
-    return `${sanitizeDisplayText(l, { max: a }).replace(DECISION_SURFACE_BRACKETS_RE, " ").replace(QUOTE_HOMOGLYPHS, "'").replace(SINGLE_QUOTE_RUNS, "'")}${truncatedSuffix(l, a)}`;
+    return `${sanitizeDisplayText(l, {
+      max: a,
+    })
+      .replace(DECISION_SURFACE_BRACKETS_RE, " ")
+      .replace(QUOTE_HOMOGLYPHS, "'")
+      .replace(SINGLE_QUOTE_RUNS, "'")}${truncatedSuffix(l, a)}`;
   };
-  return `field ${s(field, MAX_EDITS_PER_CALL)}: replace ${replaceAll === !0 ? "every " : ""}${s(oldStr, 200)} with ${s(newStr, 200)}`;
+  return `field ${s(field, MAX_EDITS_PER_CALL)}: replace ${replaceAll === true ? "every " : ""}${s(oldStr, 200)} with ${s(newStr, 200)}`;
 }
 //@ chunk-qxvqcab6.js:14005-14098 placement
 function isLiveOffOnly(e) {
-  return e !== null && typeof e === "object" && e.live === !1 && Object.keys(e).length === 1;
+  return e !== null && typeof e === "object" && e.live === false && Object.keys(e).length === 1;
 }
 //@ chunk-qxvqcab6.js:14098-14129 placement
-var P = new Set([...I0o, ...B5n]);
+/**
+ * 可当作文本处理的 media type 集合。
+ */
+var TEXTUAL_MEDIA_TYPES = new Set([...WWW_CONTENT_TYPES, ...SCRIPT_CONTENT_TYPES]);
 //@ chunk-qxvqcab6.js:14129-14233 placement
-function isTextualMediaType(e, n) {
-  if (typeof n === "string") return P.has(baseMediaType(n));
-  return typeof e === "string" && P.has(contentTypeForPath(e) ?? "");
+function isTextualMediaType(e, contentType) {
+  if (typeof contentType === "string") return TEXTUAL_MEDIA_TYPES.has(baseMediaType(contentType));
+  return typeof e === "string" && TEXTUAL_MEDIA_TYPES.has(contentTypeForPath(e) ?? "");
 }
 //@ chunk-qxvqcab6.js:14233-14672 placement
 function countApprovedFiles(e) {
   if (typeof e !== "object" || e === null) return 0;
-  let { file_path: file_path, files: files } = e,
-    o = isTextualMediaType(file_path) ? 1 : 0,
-    s = readUntrustedArray(files);
-  if (s === Uf) return Uf;
-  if (s !== void 0)
-    for (let u of s) o += isTextualMediaType(typeof u === "string" ? u : u?.path, u?.contentType) ? 1 : 0;
+  let { file_path: filePath, files } = e;
+  let o = isTextualMediaType(filePath) ? 1 : 0;
+  let untrustedArray = readUntrustedArray(files);
+  if (untrustedArray === UNREADABLE_ARRAY) return UNREADABLE_ARRAY;
+  if (untrustedArray !== undefined)
+    for (let untrusted of untrustedArray)
+      o += isTextualMediaType(
+        typeof untrusted === "string" ? untrusted : untrusted?.path,
+        untrusted?.contentType,
+      )
+        ? 1
+        : 0;
   else if (files !== null && typeof files === "object")
-    for (let [u, a] of Object.entries(files)) {
-      if (a === null || isLiveOffOnly(a)) continue;
-      let l = typeof a === "object" && typeof a.artifact === "string" ? a.path : void 0;
+    for (let [key, value] of Object.entries(files)) {
+      if (value === null || isLiveOffOnly(value)) continue;
+      let path = typeof value === "object" && typeof value.artifact === "string" ? value.path : undefined;
       o += (
-        l !== void 0 ? isTextualMediaType(u) || isTextualMediaType(l) : isTextualMediaType(u, a?.contentType)
+        path !== undefined
+          ? isTextualMediaType(key) || isTextualMediaType(path)
+          : isTextualMediaType(key, value?.contentType)
       )
         ? 1
         : 0;
@@ -80,23 +98,22 @@ function countApprovedFiles(e) {
   return o;
 }
 //@ chunk-qxvqcab6.js:14672-14703 placement
-var APPROVABLE_CONTENT_TYPES = new Set([...O0o, ...MARKUP_CONTENT_TYPES]);
+var APPROVABLE_CONTENT_TYPES = new Set([...SERVABLE_CONTENT_TYPES, ...MARKUP_CONTENT_TYPES]);
 //@ chunk-qxvqcab6.js:14703-14856 placement
 function isApprovableFile(e, n, r) {
-  if (typeof e !== "string") return !1;
+  if (typeof e !== "string") return false;
   let o = contentTypeForPath(e);
-  if (o === void 0 || !r.has(baseMediaType(o))) return !1;
-  return n === void 0 || (typeof n === "string" && r.has(baseMediaType(n)));
+  if (o === undefined || !r.has(baseMediaType(o))) return false;
+  return n === undefined || (typeof n === "string" && r.has(baseMediaType(n)));
 }
 //@ chunk-qxvqcab6.js:14856-14910 placement
-function areBothApprovable(e, n, r) {
-  return isApprovableFile(e, void 0, r) && isApprovableFile(n, void 0, r);
+function areBothApprovable(e, path, r) {
+  return isApprovableFile(e, undefined, r) && isApprovableFile(path, undefined, r);
 }
 //@ chunk-qxvqcab6.js:14910-14966 placement
 function isLiveOrReseed(e) {
-  return e.live !== void 0 || e.reseed !== void 0;
+  return e.live !== undefined || e.reseed !== undefined;
 }
-
 export {
   approvalPayloadExcerpt,
   truncatedSuffix,

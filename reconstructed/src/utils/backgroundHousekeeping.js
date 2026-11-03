@@ -31,39 +31,41 @@ import { logError } from "./log.js";
 import { cleanupOldVersions } from "./nativeInstaller/installer.js";
 
 //@ chunk-0nv5pv9r.js:11937-11984 facade-majority
-var L = 86400000,
-  DELAY_VERY_SLOW_OPERATIONS_THAT_HAPPEN_EVERY_SESSION = 600000,
-  STALE_CLEANUP_CATCHUP_DELAY_MS = 5000,
-  TRANSCRIPT_HEARTBEAT_INTERVAL_MS = 3600000;
+/**
+ * 判定过期清理的时间阈值（24 小时）。
+ */
+var STALE_CLEANUP_AGE_MS = 86400000;
+var DELAY_VERY_SLOW_OPERATIONS_THAT_HAPPEN_EVERY_SESSION = 600000;
+var STALE_CLEANUP_CATCHUP_DELAY_MS = 5000;
+var TRANSCRIPT_HEARTBEAT_INTERVAL_MS = 3600000;
 //@ chunk-0nv5pv9r.js:11984-12206 facade-majority
-async function isLastCleanupSentinelFresh(n) {
-  if (isStorageV5Enabled() && n !== void 0) {
-    let statMeta = await n.statMeta(STORAGE_SPACES.state("last-cleanup"));
-    return statMeta.ok && Date.now() - statMeta.value.mtimeMs < L;
+async function isLastCleanupSentinelFresh(storageV5) {
+  if (isStorageV5Enabled() && storageV5 !== undefined) {
+    let o = await storageV5.statMeta(STORAGE_SPACES.state("last-cleanup"));
+    return o.ok && Date.now() - o.value.mtimeMs < STALE_CLEANUP_AGE_MS;
   }
   try {
     let o = await stat(join(getClaudeConfigDir(), ".last-cleanup"));
-    return Date.now() - o.mtimeMs < L;
+    return Date.now() - o.mtimeMs < STALE_CLEANUP_AGE_MS;
   } catch {
-    return !1;
+    return false;
   }
 }
+//@ chunk-0nv5pv9r.js:12206-13290 facade-majority = startBackgroundHousekeeping (0.047)
 /**
  * 后台维护（每宿主一次）：初始化 extractMemories/autoDream、后台更新插件；交互式时注册 deep link；延迟执行慢操作（用户 1 分钟内有操作则推迟）：清理旧消息文件、写 .last-cleanup、清理旧版本。
  */
-//@ chunk-0nv5pv9r.js:12206-13290 facade-majority = startBackgroundHousekeeping (0.047)
 async function startBackgroundHousekeeping(host, storageV5) {
   if (isDiskless()) return;
   if (!host.backgroundHousekeeping.claim()) return;
-  if (
-    (initExtractMemories(host),
-    initAutoDream(host),
-    autoUpdateMarketplacesAndPluginsInBackground(storageV5),
-    getIsInteractive())
-  )
-    (ensureDeepLinkProtocolRegistered(storageV5),
-      touchSessionTranscript(storageV5),
-      setInterval(touchSessionTranscript, TRANSCRIPT_HEARTBEAT_INTERVAL_MS, storageV5).unref());
+  initExtractMemories(host);
+  initAutoDream(host);
+  autoUpdateMarketplacesAndPluginsInBackground(storageV5);
+  if (getIsInteractive()) {
+    ensureDeepLinkProtocolRegistered(storageV5);
+    touchSessionTranscript(storageV5);
+    setInterval(touchSessionTranscript, TRANSCRIPT_HEARTBEAT_INTERVAL_MS, storageV5).unref();
+  }
   let m = "sentinel-unchecked";
   async function r() {
     if (getIsInteractive() && getLastInteractionTime() > Date.now() - 60000) {
@@ -72,26 +74,33 @@ async function startBackgroundHousekeeping(host, storageV5) {
     }
     if (m !== "done") {
       if (m === "sentinel-unchecked") {
-        if (((m = "sweep-due"), await isLastCleanupSentinelFresh(storageV5))) {
+        m = "sweep-due";
+        if (await isLastCleanupSentinelFresh(storageV5)) {
           setTimeout(runVerySlowOps, DELAY_VERY_SLOW_OPERATIONS_THAT_HAPPEN_EVERY_SESSION).unref();
           return;
         }
       }
       m = "done";
       let i = (await cleanupOldMessageFilesInBackground(storageV5)) !== "remote_settings_unknowable";
-      if (isStorageV5Enabled() && storageV5 !== void 0)
+      if (isStorageV5Enabled() && storageV5 !== undefined)
         await reapStaleHousekeepingStagingFiles(getClaudeConfigDir(), host.backgroundHousekeeping);
-      if (i && isStorageV5Enabled() && storageV5 !== void 0) {
+      if (i && isStorageV5Enabled() && storageV5 !== undefined) {
         await healRefusedSentinelLeaf(storageV5);
-        let write = await storageV5.write(STORAGE_SPACES.state("last-cleanup"), new Date().toISOString(), {
+        let u = await storageV5.write(STORAGE_SPACES.state("last-cleanup"), new Date().toISOString(), {
           publishDiscipline: "inPlace",
         });
-        if (!write.ok) logForDebugging(`.last-cleanup write failed: ${write.error.code}`, { level: "error" });
+        if (!u.ok)
+          logForDebugging(`.last-cleanup write failed: ${u.error.code}`, {
+            level: "error",
+          });
       } else if (i)
-        await writeFile(join(getClaudeConfigDir(), ".last-cleanup"), new Date().toISOString()).catch((u) =>
-          isSyscallError(u)
-            ? logForDebugging(`.last-cleanup write failed: ${u.code} ${u.message}`, { level: "error" })
-            : logError(u),
+        await writeFile(join(getClaudeConfigDir(), ".last-cleanup"), new Date().toISOString()).catch(
+          (error) =>
+            isSyscallError(error)
+              ? logForDebugging(`.last-cleanup write failed: ${error.code} ${error.message}`, {
+                  level: "error",
+                })
+              : logError(error),
         );
     }
     if (getIsInteractive() && getLastInteractionTime() > Date.now() - 60000) {
@@ -101,13 +110,14 @@ async function startBackgroundHousekeeping(host, storageV5) {
     await cleanupOldVersions();
   }
   function runVerySlowOps() {
-    return r().catch((i) =>
-      isCleanupQuietFsErrno(i)
-        ? logForDebugging(`background housekeeping failed: ${i.message}`, { level: "error" })
-        : logError(i),
+    return r().catch((error) =>
+      isCleanupQuietFsErrno(error)
+        ? logForDebugging(`background housekeeping failed: ${error.message}`, {
+            level: "error",
+          })
+        : logError(error),
     );
   }
   setTimeout(runVerySlowOps, STALE_CLEANUP_CATCHUP_DELAY_MS).unref();
 }
-
 export { startBackgroundHousekeeping };

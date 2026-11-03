@@ -8,12 +8,7 @@
  * pieces: chunk-s61vbvea.js (4)
  * attribution: fingerprint 1, file-local 1, callgraph-fingerprint 1, file-last-pair 1
  */
-import {
-  createHash,
-  createHash as createHash_2,
-  createHash as createHash_3,
-  createHash as createHash_4,
-} from "crypto";
+import { createHash } from "crypto";
 
 //@ chunk-s61vbvea.js:455304-455326 fingerprint = FINGERPRINT_SALT (1)
 var FINGERPRINT_SALT = "59cf53e54c78";
@@ -29,14 +24,14 @@ function extractFirstMessageText(messages) {
   }
   return "";
 }
+//@ chunk-s61vbvea.js:455559-455693 callgraph-fingerprint = computeFingerprint (1)
 /**
  * 计费头 cc_version 的 3 位指纹：sha256(盐 59cf53e54c78 + 首条用户消息第 4/7/20 个字符 + 版本号) 取前 3 个 hex。
  */
-//@ chunk-s61vbvea.js:455559-455693 callgraph-fingerprint = computeFingerprint (1)
 function computeFingerprint(messageText, version) {
-  let chars = [4, 7, 20].map((S) => messageText[S] || "0").join(""),
-    fingerprintInput = `${FINGERPRINT_SALT}${chars}${version}`;
-  return createHash_3("sha256").update(fingerprintInput).digest("hex").slice(0, 3);
+  let chars = [4, 7, 20].map((i) => messageText[i] || "0").join("");
+  let fingerprintInput = `${FINGERPRINT_SALT}${chars}${version}`;
+  return createHash("sha256").update(fingerprintInput).digest("hex").slice(0, 3);
 }
 //@ chunk-s61vbvea.js:455693-456221 file-last-pair
 function computeFingerprintFromMessages(messages) {
@@ -56,5 +51,4 @@ function computeFingerprintFromMessages(messages) {
     }.VERSION,
   );
 }
-
 export { computeFingerprintFromMessages, computeFingerprint };

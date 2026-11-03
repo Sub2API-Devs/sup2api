@@ -9,49 +9,52 @@
  * attribution: fingerprint 1
  */
 import { isFullscreenEnvEnabled } from "./fullscreen.js";
-import { $Ts, notificationKind, weakMap_14 } from "./queuedCommandDisplay.js";
+import { collapseNotificationRunsIn, notificationKind, weakMap_14 } from "./queuedCommandDisplay.js";
 import { TASK_NOTIFICATION, STATUS, SUMMARY } from "../constants/xml.js";
 
+//@ chunk-e6aww6q8.js:4675449-4675952 fingerprint = collapseBackgroundBashNotifications (0.615)
 /**
  * 把连续的后台 Bash 完成通知合并成一条显示。
  */
-//@ chunk-e6aww6q8.js:4675449-4675952 fingerprint = collapseBackgroundBashNotifications (0.615)
-function collapseBackgroundBashNotifications(e, n, r) {
-  if (n) return e;
-  if (!isFullscreenEnvEnabled()) return e;
-  if (r) return $Ts(e);
-  let result = [],
-    h = 0;
-  while (h < e.length) {
-    let msg = e[h],
-      S = notificationKind(msg);
+function collapseBackgroundBashNotifications(messages, n, r) {
+  if (n) return messages;
+  if (!isFullscreenEnvEnabled()) return messages;
+  if (r) return collapseNotificationRunsIn(messages);
+  let result = [];
+  let i = 0;
+  while (i < messages.length) {
+    let msg = messages[i];
+    let S = notificationKind(msg);
     if (S === null || msg.type !== "user") {
-      (result.push(msg), h++);
+      result.push(msg);
+      i++;
       continue;
     }
     let w = 0;
-    while (h < e.length && notificationKind(e[h]) === S) (w++, h++);
+    while (i < messages.length && notificationKind(messages[i]) === S) {
+      w++;
+      i++;
+    }
     if (w === 1) {
       result.push(msg);
       continue;
     }
-    let L = S === "bash" ? `${w} background commands completed` : `${w} remote tasks completed`,
-      G = {
-        ...msg,
-        message: {
-          role: "user",
-          content: [
-            {
-              type: "text",
-              text: `<${TASK_NOTIFICATION}><${STATUS}>completed</${STATUS}><${SUMMARY}>${L}</${SUMMARY}></${TASK_NOTIFICATION}>`,
-            },
-          ],
-        },
-      };
+    let L = S === "bash" ? `${w} background commands completed` : `${w} remote tasks completed`;
+    let G = {
+      ...msg,
+      message: {
+        role: "user",
+        content: [
+          {
+            type: "text",
+            text: `<${TASK_NOTIFICATION}><${STATUS}>completed</${STATUS}><${SUMMARY}>${L}</${SUMMARY}></${TASK_NOTIFICATION}>`,
+          },
+        ],
+      },
+    };
     if (S === "bash") weakMap_14.set(G, w);
     result.push(G);
   }
   return result;
 }
-
 export { collapseBackgroundBashNotifications };

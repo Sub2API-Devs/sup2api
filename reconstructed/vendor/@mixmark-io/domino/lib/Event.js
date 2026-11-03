@@ -8,62 +8,62 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-vwj6ccer.js:226-1261 cjs-fingerprint
-var Lt = x(function (ed, Li) {
-  Li.exports = _t;
+var require_Event = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = _t;
   _t.CAPTURING_PHASE = 1;
   _t.AT_TARGET = 2;
   _t.BUBBLING_PHASE = 3;
-  function _t(e, t) {
-    if (
-      ((this.type = ""),
-      (this.target = null),
-      (this.currentTarget = null),
-      (this.eventPhase = _t.AT_TARGET),
-      (this.bubbles = !1),
-      (this.cancelable = !1),
-      (this.isTrusted = !1),
-      (this.defaultPrevented = !1),
-      (this.timeStamp = Date.now()),
-      (this._propagationStopped = !1),
-      (this._immediatePropagationStopped = !1),
-      (this._initialized = !0),
-      (this._dispatching = !1),
-      e)
-    )
-      this.type = e;
-    if (t) for (var key in t) this[key] = t[key];
+  function _t(type, dictionary) {
+    this.type = "";
+    this.target = null;
+    this.currentTarget = null;
+    this.eventPhase = _t.AT_TARGET;
+    this.bubbles = false;
+    this.cancelable = false;
+    this.isTrusted = false;
+    this.defaultPrevented = false;
+    this.timeStamp = Date.now();
+    this._propagationStopped = false;
+    this._immediatePropagationStopped = false;
+    this._initialized = true;
+    this._dispatching = false;
+    if (type) this.type = type;
+    if (dictionary) for (var p in dictionary) this[p] = dictionary[p];
   }
   _t.prototype = Object.create(Object.prototype, {
-    constructor: { value: _t },
+    constructor: {
+      value: _t,
+    },
     stopPropagation: {
       value: function () {
-        this._propagationStopped = !0;
+        this._propagationStopped = true;
       },
     },
     stopImmediatePropagation: {
       value: function () {
-        ((this._propagationStopped = !0), (this._immediatePropagationStopped = !0));
+        this._propagationStopped = true;
+        this._immediatePropagationStopped = true;
       },
     },
     preventDefault: {
       value: function () {
-        if (this.cancelable) this.defaultPrevented = !0;
+        if (this.cancelable) this.defaultPrevented = true;
       },
     },
     initEvent: {
-      value: function (t, r, a) {
-        if (((this._initialized = !0), this._dispatching)) return;
-        ((this._propagationStopped = !1),
-          (this._immediatePropagationStopped = !1),
-          (this.defaultPrevented = !1),
-          (this.isTrusted = !1),
-          (this.target = null),
-          (this.type = t),
-          (this.bubbles = r),
-          (this.cancelable = a));
+      value: function (type, bubbles, cancelable) {
+        this._initialized = true;
+        if (this._dispatching) return;
+        this._propagationStopped = false;
+        this._immediatePropagationStopped = false;
+        this.defaultPrevented = false;
+        this.isTrusted = false;
+        this.target = null;
+        this.type = type;
+        this.bubbles = bubbles;
+        this.cancelable = cancelable;
       },
     },
   });
 });
-
-export { Lt };
+export { require_Event };

@@ -8,51 +8,59 @@
  * pieces: chunk-xjnjbame.js (4)
  * attribution: placement 4
  */
-import { ge } from "./identity.js";
+import { identity } from "./identity.js";
 
+//@ chunk-xjnjbame.js:227-551 placement
 /**
  * 进程启动调优环境变量
  */
-//@ chunk-xjnjbame.js:227-551 placement
 var PROCESS_START_TUNING_ENV = [
-    "BUN_GC_TIMER_INTERVAL",
-    "MIMALLOC_PURGE_HOLES_MIN_INTERVAL",
-    "BUN_IDLE_GC_SECONDS",
-    "MIMALLOC_PURGE_DELAY",
-    "BUN_JSC_useFTLJIT",
-    "BUN_JSC_percentCPUPerMBForEdenTimer",
-    "BUN_JSC_percentCPUPerMBForFullTimer",
-  ],
-  e = ge({ isNoted: !1, namesSet: void 0, purgeDelayMs: void 0 }, (n) => {
-    ((n.isNoted = !1), (n.namesSet = void 0), (n.purgeDelayMs = void 0));
-  });
+  "BUN_GC_TIMER_INTERVAL",
+  "MIMALLOC_PURGE_HOLES_MIN_INTERVAL",
+  "BUN_IDLE_GC_SECONDS",
+  "MIMALLOC_PURGE_DELAY",
+  "BUN_JSC_useFTLJIT",
+  "BUN_JSC_percentCPUPerMBForEdenTimer",
+  "BUN_JSC_percentCPUPerMBForFullTimer",
+];
+var processStartTuningState = identity(
+  {
+    isNoted: false,
+    namesSet: undefined,
+    purgeDelayMs: undefined,
+  },
+  (n) => {
+    n.isNoted = false;
+    n.namesSet = undefined;
+    n.purgeDelayMs = undefined;
+  },
+);
+//@ chunk-xjnjbame.js:551-809 placement
 /**
  * 记录进程启动调优环境变量。
  */
-//@ chunk-xjnjbame.js:551-809 placement
 function noteProcessStartTuning() {
-  if (e.isNoted) return;
-  e.isNoted = !0;
+  if (processStartTuningState.isNoted) return;
+  processStartTuningState.isNoted = true;
   try {
-    let n = 0;
-    for (let [r, s] of PROCESS_START_TUNING_ENV.entries()) if (process.env[s]) n |= 1 << r;
+    let namesSet = 0;
+    for (let [r, s] of PROCESS_START_TUNING_ENV.entries()) if (process.env[s]) namesSet |= 1 << r;
     let envMimallocPurgeDelay = process.env.MIMALLOC_PURGE_DELAY;
-    ((e.purgeDelayMs =
-      envMimallocPurgeDelay !== void 0 && /^\d{1,7}$/.test(envMimallocPurgeDelay)
+    processStartTuningState.purgeDelayMs =
+      envMimallocPurgeDelay !== undefined && /^\d{1,7}$/.test(envMimallocPurgeDelay)
         ? Number(envMimallocPurgeDelay)
-        : void 0),
-      (e.namesSet = n));
+        : undefined;
+    processStartTuningState.namesSet = namesSet;
   } catch {
-    e.purgeDelayMs = void 0;
+    processStartTuningState.purgeDelayMs = undefined;
   }
 }
 //@ chunk-xjnjbame.js:809-842 placement
 function processStartTuning() {
-  return e.namesSet;
+  return processStartTuningState.namesSet;
 }
 //@ chunk-xjnjbame.js:842-879 placement
 function processStartPurgeDelayMs() {
-  return e.purgeDelayMs;
+  return processStartTuningState.purgeDelayMs;
 }
-
 export { processStartTuning, processStartPurgeDelayMs };

@@ -9,33 +9,36 @@
  * attribution: placement 2, fingerprint 3, callgraph-witnessed 1
  */
 import { BLACK_CIRCLE, PAUSE_GLYPH } from "../../utils/permissions/autoModeRulesPrompt.js";
-import { re } from "../../../vendor/@inquirer/figures/dist/esm/index.js";
+import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/index.js";
 import { FLAG_IDLE_WINDOW } from "../../tasks/LocalAgentTask/keepalive.js";
-import { SNe, isPanelAgentTask } from "../../tasks/taskKinds.js";
-import { isCoordinatorPanelActive, Hn } from "../../utils/transcriptDiagnostics.js";
+import { isAmbientTask, isPanelAgentTask } from "../../tasks/taskKinds.js";
+import { isCoordinatorPanelActive, isCoordinatorPanelEnabled } from "../../utils/transcriptDiagnostics.js";
 import { waitForTaskCompletion } from "../../tools/TaskOutputTool/TaskOutputTool.js";
 import { isBackgroundTask } from "../../tasks/types.js";
 import { w } from "../../../vendor/react/compiler-runtime.js";
-import { e, r } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { KeyboardShortcutHint } from "../design-system/KeyboardShortcutHint.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { Byline } from "../design-system/Byline.js";
 import { summarizeRecentActivities } from "../../utils/collapseReadSearch.js";
 
 //@ chunk-ah34pb7m.js:11869-12036 fingerprint = getTaskStatusIcon (0.527)
-function getTaskStatusIcon(m) {
-  if (m === "running") return BLACK_CIRCLE;
-  if (m === "completed") return re.tick;
-  if (m === "failed" || m === "killed") return re.cross;
-  if (m === "paused") return PAUSE_GLYPH;
-  return re.circle;
+function getTaskStatusIcon(status) {
+  if (status === "running") return BLACK_CIRCLE;
+  if (status === "completed") return figures_default.tick;
+  if (status === "failed" || status === "killed") return figures_default.cross;
+  if (status === "paused") return PAUSE_GLYPH;
+  return figures_default.circle;
 }
 //@ chunk-ah34pb7m.js:12036-12200 fingerprint = getTaskStatusColor (0.743)
-function getTaskStatusColor(m) {
-  if (m === "completed") return "success";
-  if (m === "failed") return "error";
-  if (m === "killed") return "warning";
-  if (m === "paused") return "warning";
+function getTaskStatusColor(status) {
+  if (status === "completed") return "success";
+  if (status === "failed") return "error";
+  if (status === "killed") return "warning";
+  if (status === "paused") return "warning";
   return "background";
 }
 //@ chunk-ah34pb7m.js:12331-12424 placement
@@ -45,46 +48,62 @@ function isTerminalStatus(status) {
   );
 }
 //@ chunk-ah34pb7m.js:12424-12578 callgraph-witnessed = shouldHideTasksFooter (0.373)
-function shouldHideTasksFooter(m) {
-  if (SNe(m)) return !1;
-  if (isCoordinatorPanelActive()) return waitForTaskCompletion(m) || isBackgroundTask(m);
+function shouldHideTasksFooter(task) {
+  if (isAmbientTask(task)) return false;
+  if (isCoordinatorPanelActive()) return waitForTaskCompletion(task) || isBackgroundTask(task);
   return (
-    waitForTaskCompletion(m) &&
-    m.type !== "local_workflow" &&
-    !(Hn() && (isPanelAgentTask(m) || m.type === "in_process_teammate"))
+    waitForTaskCompletion(task) &&
+    task.type !== "local_workflow" &&
+    !(isCoordinatorPanelEnabled() && (isPanelAgentTask(task) || task.type === "in_process_teammate"))
   );
 }
+//@ chunk-18hwfzwa.js:687040-687519 placement
 /**
  * 任务详情对话框的底部快捷键提示：可选"← 返回"、"Esc/Enter/Space 关闭"、可选"x 停止"，再接额外子节点。
  */
-//@ chunk-18hwfzwa.js:687040-687519 placement
-function TaskDetailFooterHints(h) {
-  let $ = w(9),
-    { showBack: showBack, showStop: showStop, children: children } = h,
-    ke;
-  if ($[0] !== showBack)
-    ((ke = showBack && e(KeyboardShortcutHint, { chord: "left", action: "go back" })),
-      ($[0] = showBack),
-      ($[1] = ke));
-  else ke = $[1];
+function TaskDetailFooterHints(props) {
+  let $ = w(9);
+  let { showBack, showStop, children } = props;
+  let ke;
+  if ($[0] !== showBack) {
+    ke =
+      showBack &&
+      jsxProd_default(KeyboardShortcutHint, {
+        chord: "left",
+        action: "go back",
+      });
+    $[0] = showBack;
+    $[1] = ke;
+  } else ke = $[1];
   let Re;
-  if ($[2] === MEMO_CACHE_SENTINEL)
-    ((Re = e(KeyboardShortcutHint, { chord: ["escape", "enter", "space"], action: "close" })), ($[2] = Re));
-  else Re = $[2];
+  if ($[2] === MEMO_CACHE_SENTINEL) {
+    Re = jsxProd_default(KeyboardShortcutHint, {
+      chord: ["escape", "enter", "space"],
+      action: "close",
+    });
+    $[2] = Re;
+  } else Re = $[2];
   let Be;
-  if ($[3] !== showStop)
-    ((Be = showStop && e(KeyboardShortcutHint, { chord: "x", action: "stop" })),
-      ($[3] = showStop),
-      ($[4] = Be));
-  else Be = $[4];
+  if ($[3] !== showStop) {
+    Be =
+      showStop &&
+      jsxProd_default(KeyboardShortcutHint, {
+        chord: "x",
+        action: "stop",
+      });
+    $[3] = showStop;
+    $[4] = Be;
+  } else Be = $[4];
   let He;
-  if ($[5] !== children || $[6] !== ke || $[7] !== Be)
-    ((He = r(Byline, { children: [ke, Re, Be, children] })),
-      ($[5] = children),
-      ($[6] = ke),
-      ($[7] = Be),
-      ($[8] = He));
-  else He = $[8];
+  if ($[5] !== children || $[6] !== ke || $[7] !== Be) {
+    He = jsxProd_default_2(Byline, {
+      children: [ke, Re, Be, children],
+    });
+    $[5] = children;
+    $[6] = ke;
+    $[7] = Be;
+    $[8] = He;
+  } else He = $[8];
   return He;
 }
 //@ chunk-18hwfzwa.js:691937-692158 fingerprint = describeTeammateActivity (0.921)
@@ -97,7 +116,6 @@ function describeTeammateActivity(t) {
     "working"
   );
 }
-
 export {
   shouldHideTasksFooter,
   isTerminalStatus,

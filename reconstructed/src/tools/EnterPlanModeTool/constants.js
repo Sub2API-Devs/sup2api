@@ -9,10 +9,9 @@
  * attribution: fingerprint 1
  */
 
+//@ chunk-gdnkn2q4.js:191-214 fingerprint = ENTER_PLAN_MODE_TOOL_NAME (1)
 /**
  * EnterPlanMode 工具名常量。
  */
-//@ chunk-gdnkn2q4.js:191-214 fingerprint = ENTER_PLAN_MODE_TOOL_NAME (1)
 var ENTER_PLAN_MODE_TOOL_NAME = "EnterPlanMode";
-
 export { ENTER_PLAN_MODE_TOOL_NAME };

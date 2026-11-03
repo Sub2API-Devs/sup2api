@@ -9,9 +9,15 @@
  * attribution: placement 2
  */
 import __cc_resource_0 from "../../../assets/preview-rebuild.mjs-88e389b0.txt.zst" with { type: "file" };
-import { Et } from "../embeddedAssets.js";
+import { readEmbeddedTextSync } from "../embeddedAssets.js";
 
 //@ chunk-f3v430vj.js:318-340 placement
-var J = __cc_resource_0;
+/**
+ * 预览重建脚本的内嵌资源名。
+ */
+var PREVIEW_REBUILD_RESOURCE = __cc_resource_0;
 //@ chunk-f3v430vj.js:340-372 placement
-var r = Et(J, import.meta.dirname);
+/**
+ * 读出的预览重建脚本文本（内嵌资源解压后转文本）。
+ */
+var previewRebuildSource = readEmbeddedTextSync(PREVIEW_REBUILD_RESOURCE, import.meta.dirname);

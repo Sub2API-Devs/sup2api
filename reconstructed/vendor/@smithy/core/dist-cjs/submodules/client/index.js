@@ -6,111 +6,125 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../../runtime/bun-runtime.js";
-import { q } from "../../../../middleware-stack/dist-cjs/index.js";
-import { jRt } from "../protocols/index.js";
-import { W1e } from "../../../../types/dist-cjs/index.js";
-import { _D } from "../schema/index.js";
-import { z6t } from "../serde/index.js";
+import { require_middleware_stack } from "../../../../middleware-stack/dist-cjs/index.js";
+import { require_protocols } from "../protocols/index.js";
+import { require_types } from "../../../../types/dist-cjs/index.js";
+import { require_schema } from "../schema/index.js";
+import { require_serde } from "../serde/index.js";
 
 //@ chunk-ke7ft91e.js:3961-12613 cjs-fingerprint
-var ff = x(function (E) {
-  var V = q(),
-    T = jRt(),
-    O = W1e(),
-    K = _D(),
-    D = z6t();
-  class j {
+var require_client = x(function (cjsExports) {
+  var constructStack = require_middleware_stack();
+  var T = require_protocols();
+  var AlgorithmId = require_types();
+  var NormalizedSchema = require_schema();
+  var D = require_serde();
+  class Client {
     config;
-    middlewareStack = V.constructStack();
+    middlewareStack = constructStack.constructStack();
     initConfig;
     handlers;
-    constructor(e) {
-      this.config = e;
+    constructor(config) {
+      this.config = config;
     }
-    send(e, t, r) {
-      let n = typeof t !== "function" ? t : void 0,
-        a = typeof t === "function" ? t : r,
-        o = n === void 0 && this.config.cacheMiddleware === !0,
-        d;
-      if (o) {
+    send(command, optionsOrCb, cb) {
+      let options = typeof optionsOrCb !== "function" ? optionsOrCb : undefined;
+      let callback = typeof optionsOrCb === "function" ? optionsOrCb : cb;
+      let useHandlerCache = options === undefined && this.config.cacheMiddleware === true;
+      let handler;
+      if (useHandlerCache) {
         if (!this.handlers) this.handlers = new WeakMap();
         let handlers = this.handlers;
-        if (handlers.has(e.constructor)) d = handlers.get(e.constructor);
-        else
-          ((d = e.resolveMiddleware(this.middlewareStack, this.config, n)), handlers.set(e.constructor, d));
-      } else (delete this.handlers, (d = e.resolveMiddleware(this.middlewareStack, this.config, n)));
-      if (a)
-        d(e)
+        if (handlers.has(command.constructor)) handler = handlers.get(command.constructor);
+        else {
+          handler = command.resolveMiddleware(this.middlewareStack, this.config, options);
+          handlers.set(command.constructor, handler);
+        }
+      } else {
+        delete this.handlers;
+        handler = command.resolveMiddleware(this.middlewareStack, this.config, options);
+      }
+      if (callback)
+        handler(command)
           .then(
-            (u) => a(null, u.output),
-            (u) => a(u),
+            (result) => callback(null, result.output),
+            (err) => callback(err),
           )
           .catch(() => {});
-      else return d(e).then((u) => u.output);
+      else return handler(command).then((result) => result.output);
     }
     destroy() {
-      (this.config?.requestHandler?.destroy?.(), delete this.handlers);
+      this.config?.requestHandler?.destroy?.();
+      delete this.handlers;
     }
   }
-  var z = "***SensitiveInformation***";
-  function R(e, t) {
-    if (t == null) return t;
-    let of = K.NormalizedSchema.of(e);
-    if (of.getMergedTraits().sensitive) return z;
-    if (of.isListSchema()) {
-      if (!!of.getValueSchema().getMergedTraits().sensitive) return z;
-    } else if (of.isMapSchema()) {
+  var SENSITIVE_STRING$1 = "***SensitiveInformation***";
+  function schemaLogFilter(schema, data) {
+    if (data == null) return data;
+    let ns = NormalizedSchema.NormalizedSchema.of(schema);
+    if (ns.getMergedTraits().sensitive) return SENSITIVE_STRING$1;
+    if (ns.isListSchema()) {
+      if (!!ns.getValueSchema().getMergedTraits().sensitive) return SENSITIVE_STRING$1;
+    } else if (ns.isMapSchema()) {
       if (
-        !!of.getKeySchema().getMergedTraits().sensitive ||
-        !!of.getValueSchema().getMergedTraits().sensitive
+        !!ns.getKeySchema().getMergedTraits().sensitive ||
+        !!ns.getValueSchema().getMergedTraits().sensitive
       )
-        return z;
-    } else if (of.isStructSchema() && typeof t === "object") {
-      let n = t,
-        a = {};
-      for (let [o, d] of of.structIterator()) if (n[o] != null) a[o] = R(d, n[o]);
-      return a;
+        return SENSITIVE_STRING$1;
+    } else if (ns.isStructSchema() && typeof data === "object") {
+      let object = data;
+      let newObject = {};
+      for (let [member, memberNs] of ns.structIterator())
+        if (object[member] != null) newObject[member] = schemaLogFilter(memberNs, object[member]);
+      return newObject;
     }
-    return t;
+    return data;
   }
-  class F {
-    middlewareStack = V.constructStack();
+  class Command {
+    middlewareStack = constructStack.constructStack();
     schema;
     static classBuilder() {
-      return new W();
+      return new ClassBuilder();
     }
     resolveMiddlewareWithContext(
-      e,
-      t,
-      r,
+      clientStack,
+      configuration,
+      options,
       {
-        middlewareFn: n,
-        clientName: a,
-        commandName: o,
-        inputFilterSensitiveLog: d,
-        outputFilterSensitiveLog: u,
-        smithyContext: g,
-        additionalContext: w,
-        CommandCtor: I,
+        middlewareFn,
+        clientName,
+        commandName,
+        inputFilterSensitiveLog,
+        outputFilterSensitiveLog,
+        smithyContext,
+        additionalContext,
+        CommandCtor,
       },
     ) {
-      for (let m of n.bind(this)(I, e, t, r)) this.middlewareStack.use(m);
-      let combined = e.concat(this.middlewareStack),
-        { logger: logger } = t,
-        l = {
-          logger: logger,
-          clientName: a,
-          commandName: o,
-          inputFilterSensitiveLog: d,
-          outputFilterSensitiveLog: u,
-          [O.SMITHY_CONTEXT_KEY]: { commandInstance: this, ...g },
-          ...w,
+      for (let mw of middlewareFn.bind(this)(CommandCtor, clientStack, configuration, options))
+        this.middlewareStack.use(mw);
+      let stack = clientStack.concat(this.middlewareStack);
+      let { logger } = configuration;
+      let handlerExecutionContext = {
+        logger,
+        clientName,
+        commandName,
+        inputFilterSensitiveLog,
+        outputFilterSensitiveLog,
+        [AlgorithmId.SMITHY_CONTEXT_KEY]: {
+          commandInstance: this,
+          ...smithyContext,
         },
-        { requestHandler: requestHandler } = t;
-      return combined.resolve((m) => requestHandler.handle(m.request, r || {}), l);
+        ...additionalContext,
+      };
+      let { requestHandler } = configuration;
+      return stack.resolve(
+        (request) => requestHandler.handle(request.request, options || {}),
+        handlerExecutionContext,
+      );
     }
   }
-  class W {
+  class ClassBuilder {
     _init = () => {};
     _ep = {};
     _middlewareFn = () => [];
@@ -118,358 +132,420 @@ var ff = x(function (E) {
     _clientName = "";
     _additionalContext = {};
     _smithyContext = {};
-    _inputFilterSensitiveLog = void 0;
-    _outputFilterSensitiveLog = void 0;
+    _inputFilterSensitiveLog = undefined;
+    _outputFilterSensitiveLog = undefined;
     _serializer = null;
     _deserializer = null;
     _operationSchema;
-    init(e) {
-      this._init = e;
+    init(cb) {
+      this._init = cb;
     }
-    ep(e) {
-      return ((this._ep = e), this);
+    ep(endpointParameterInstructions) {
+      this._ep = endpointParameterInstructions;
+      return this;
     }
-    m(e) {
-      return ((this._middlewareFn = e), this);
+    m(middlewareSupplier) {
+      this._middlewareFn = middlewareSupplier;
+      return this;
     }
-    s(e, t, r = {}) {
-      return ((this._smithyContext = { service: e, operation: t, ...r }), this);
+    s(service, operation, smithyContext = {}) {
+      this._smithyContext = {
+        service,
+        operation,
+        ...smithyContext,
+      };
+      return this;
     }
-    c(e = {}) {
-      return ((this._additionalContext = e), this);
+    c(additionalContext = {}) {
+      this._additionalContext = additionalContext;
+      return this;
     }
-    n(e, t) {
-      return ((this._clientName = e), (this._commandName = t), this);
+    n(clientName, commandName) {
+      this._clientName = clientName;
+      this._commandName = commandName;
+      return this;
     }
-    f(e = (r) => r, t = (r) => r) {
-      return ((this._inputFilterSensitiveLog = e), (this._outputFilterSensitiveLog = t), this);
+    f(inputFilter = (_) => _, outputFilter = (_) => _) {
+      this._inputFilterSensitiveLog = inputFilter;
+      this._outputFilterSensitiveLog = outputFilter;
+      return this;
     }
-    ser(e) {
-      return ((this._serializer = e), this);
+    ser(serializer) {
+      this._serializer = serializer;
+      return this;
     }
-    de(e) {
-      return ((this._deserializer = e), this);
+    de(deserializer) {
+      this._deserializer = deserializer;
+      return this;
     }
-    sc(e) {
-      return ((this._operationSchema = e), (this._smithyContext.operationSchema = e), this);
+    sc(operation) {
+      this._operationSchema = operation;
+      this._smithyContext.operationSchema = operation;
+      return this;
     }
     build() {
-      let e = this,
-        t;
-      return (t = class extends F {
+      let closure = this;
+      let CommandRef;
+      return (CommandRef = class extends Command {
         input;
         static getEndpointParameterInstructions() {
-          return e._ep;
+          return closure._ep;
         }
-        constructor(...[r]) {
+        constructor(...[input]) {
           super();
-          ((this.input = r ?? {}), e._init(this), (this.schema = e._operationSchema));
+          this.input = input ?? {};
+          closure._init(this);
+          this.schema = closure._operationSchema;
         }
-        resolveMiddleware(r, n, a) {
-          let _operationSchema = e._operationSchema,
-            d = _operationSchema?.[4] ?? _operationSchema?.input,
-            u = _operationSchema?.[5] ?? _operationSchema?.output;
-          return this.resolveMiddlewareWithContext(r, n, a, {
-            CommandCtor: t,
-            middlewareFn: e._middlewareFn,
-            clientName: e._clientName,
-            commandName: e._commandName,
+        resolveMiddleware(stack, configuration, options) {
+          let op = closure._operationSchema;
+          let input = op?.[4] ?? op?.input;
+          let output = op?.[5] ?? op?.output;
+          return this.resolveMiddlewareWithContext(stack, configuration, options, {
+            CommandCtor: CommandRef,
+            middlewareFn: closure._middlewareFn,
+            clientName: closure._clientName,
+            commandName: closure._commandName,
             inputFilterSensitiveLog:
-              e._inputFilterSensitiveLog ?? (_operationSchema ? R.bind(null, d) : (g) => g),
+              closure._inputFilterSensitiveLog ?? (op ? schemaLogFilter.bind(null, input) : (_) => _),
             outputFilterSensitiveLog:
-              e._outputFilterSensitiveLog ?? (_operationSchema ? R.bind(null, u) : (g) => g),
-            smithyContext: e._smithyContext,
-            additionalContext: e._additionalContext,
+              closure._outputFilterSensitiveLog ?? (op ? schemaLogFilter.bind(null, output) : (_) => _),
+            smithyContext: closure._smithyContext,
+            additionalContext: closure._additionalContext,
           });
         }
-        serialize = e._serializer;
-        deserialize = e._deserializer;
+        serialize = closure._serializer;
+        deserialize = closure._deserializer;
       });
     }
   }
-  var ee = "***SensitiveInformation***",
-    te = (e, t) => {
-      for (let r of Object.keys(e)) {
-        let n = e[r],
-          a = async function (d, u, g) {
-            let w = new n(d);
-            if (typeof u === "function") this.send(w, u);
-            else if (typeof g === "function") {
-              if (typeof u !== "object") throw Error(`Expected http options but got ${typeof u}`);
-              this.send(w, u || {}, g);
-            } else return this.send(w, u);
-          },
-          replaced = (r[0].toLowerCase() + r.slice(1)).replace(/Command$/, "");
-        t.prototype[replaced] = a;
-      }
-    };
-  class _ extends Error {
+  var SENSITIVE_STRING = "***SensitiveInformation***";
+  var createAggregatedClient = (e, t) => {
+    for (let key of Object.keys(e)) {
+      let n = e[key];
+      let a = async function (args, optionsOrCb, cb) {
+        let command = new n(args);
+        if (typeof optionsOrCb === "function") this.send(command, optionsOrCb);
+        else if (typeof cb === "function") {
+          if (typeof optionsOrCb !== "object")
+            throw Error(`Expected http options but got ${typeof optionsOrCb}`);
+          this.send(command, optionsOrCb || {}, cb);
+        } else return this.send(command, optionsOrCb);
+      };
+      let methodName = (key[0].toLowerCase() + key.slice(1)).replace(/Command$/, "");
+      t.prototype[methodName] = a;
+    }
+  };
+  class ServiceException extends Error {
     $fault;
     $response;
     $retryable;
     $metadata;
-    constructor(e) {
-      super(e.message);
-      (Object.setPrototypeOf(this, Object.getPrototypeOf(this).constructor.prototype),
-        (this.name = e.name),
-        (this.$fault = e.$fault),
-        (this.$metadata = e.$metadata));
+    constructor(options) {
+      super(options.message);
+      Object.setPrototypeOf(this, Object.getPrototypeOf(this).constructor.prototype);
+      this.name = options.name;
+      this.$fault = options.$fault;
+      this.$metadata = options.$metadata;
     }
-    static isInstance(e) {
-      if (!e) return !1;
-      let t = e;
+    static isInstance(value) {
+      if (!value) return false;
+      let candidate = value;
       return (
-        _.prototype.isPrototypeOf(t) ||
-        (Boolean(t.$fault) && Boolean(t.$metadata) && (t.$fault === "client" || t.$fault === "server"))
+        ServiceException.prototype.isPrototypeOf(candidate) ||
+        (Boolean(candidate.$fault) &&
+          Boolean(candidate.$metadata) &&
+          (candidate.$fault === "client" || candidate.$fault === "server"))
       );
     }
-    static [Symbol.hasInstance](e) {
-      if (!e) return !1;
-      let t = e;
-      if (this === _) return _.isInstance(e);
-      if (_.isInstance(e)) {
-        if (t.name && this.name) return this.prototype.isPrototypeOf(e) || t.name === this.name;
-        return this.prototype.isPrototypeOf(e);
+    static [Symbol.hasInstance](instance) {
+      if (!instance) return false;
+      let candidate = instance;
+      if (this === ServiceException) return ServiceException.isInstance(instance);
+      if (ServiceException.isInstance(instance)) {
+        if (candidate.name && this.name)
+          return this.prototype.isPrototypeOf(instance) || candidate.name === this.name;
+        return this.prototype.isPrototypeOf(instance);
       }
-      return !1;
+      return false;
     }
   }
-  var B = (e, t = {}) => {
-      Object.entries(t)
-        .filter(([, n]) => n !== void 0)
-        .forEach(([n, a]) => {
-          if (e[n] == null || e[n] === "") e[n] = a;
-        });
-      let r = e.message || e.Message || "UnknownError";
-      return ((e.message = r), delete e.Message, e);
-    },
-    H = ({ output: output, parsedBody: parsedBody, exceptionCtor: exceptionCtor, errorCode: errorCode }) => {
-      let a = ne(output),
-        o = a.httpStatusCode ? a.httpStatusCode + "" : void 0,
-        d = new exceptionCtor({
-          name: parsedBody?.code || parsedBody?.Code || errorCode || o || "UnknownError",
-          $fault: "client",
-          $metadata: a,
-        });
-      throw B(d, parsedBody);
-    },
-    re =
-      (e) =>
-      ({ output: output, parsedBody: parsedBody, errorCode: errorCode }) => {
-        H({ output: output, parsedBody: parsedBody, exceptionCtor: e, errorCode: errorCode });
+  var decorateServiceException = (exception, additions = {}) => {
+    Object.entries(additions)
+      .filter(([, v]) => v !== undefined)
+      .forEach(([k, v]) => {
+        if (exception[k] == null || exception[k] === "") exception[k] = v;
+      });
+    let message = exception.message || exception.Message || "UnknownError";
+    exception.message = message;
+    delete exception.Message;
+    return exception;
+  };
+  var throwDefaultError = ({ output, parsedBody, exceptionCtor, errorCode }) => {
+    let $metadata = deserializeMetadata(output);
+    let statusCode = $metadata.httpStatusCode ? $metadata.httpStatusCode + "" : undefined;
+    let response = new exceptionCtor({
+      name: parsedBody?.code || parsedBody?.Code || errorCode || statusCode || "UnknownError",
+      $fault: "client",
+      $metadata,
+    });
+    throw decorateServiceException(response, parsedBody);
+  };
+  var withBaseException =
+    (ExceptionCtor) =>
+    ({ output, parsedBody, errorCode }) => {
+      throwDefaultError({
+        output,
+        parsedBody,
+        exceptionCtor: ExceptionCtor,
+        errorCode,
+      });
+    };
+  var deserializeMetadata = (output) => ({
+    httpStatusCode: output.statusCode,
+    requestId:
+      output.headers["x-amzn-requestid"] ??
+      output.headers["x-amzn-request-id"] ??
+      output.headers["x-amz-request-id"],
+    extendedRequestId: output.headers["x-amz-id-2"],
+    cfId: output.headers["x-amz-cf-id"],
+  });
+  var loadConfigsForDefaultMode = (mode) => {
+    switch (mode) {
+      case "standard":
+        return {
+          retryMode: "standard",
+          connectionTimeout: 3100,
+        };
+      case "in-region":
+        return {
+          retryMode: "standard",
+          connectionTimeout: 1100,
+        };
+      case "cross-region":
+        return {
+          retryMode: "standard",
+          connectionTimeout: 3100,
+        };
+      case "mobile":
+        return {
+          retryMode: "standard",
+          connectionTimeout: 30000,
+        };
+      default:
+        return {};
+    }
+  };
+  var warningEmitted = false;
+  var emitWarningIfUnsupportedVersion = (version) => {
+    if (version && !warningEmitted && parseInt(version.substring(1, version.indexOf("."))) < 16)
+      warningEmitted = true;
+  };
+  var getChecksumConfiguration = (runtimeConfig) => {
+    let checksumAlgorithms = [];
+    for (let id in AlgorithmId.AlgorithmId) {
+      let algorithmId = AlgorithmId.AlgorithmId[id];
+      if (runtimeConfig[algorithmId] === undefined) continue;
+      checksumAlgorithms.push({
+        algorithmId: () => algorithmId,
+        checksumConstructor: () => runtimeConfig[algorithmId],
+      });
+    }
+    return {
+      addChecksumAlgorithm(algo) {
+        checksumAlgorithms.push(algo);
       },
-    ne = (e) => ({
-      httpStatusCode: e.statusCode,
-      requestId:
-        e.headers["x-amzn-requestid"] ?? e.headers["x-amzn-request-id"] ?? e.headers["x-amz-request-id"],
-      extendedRequestId: e.headers["x-amz-id-2"],
-      cfId: e.headers["x-amz-cf-id"],
-    }),
-    ie = (e) => {
-      switch (e) {
-        case "standard":
-          return { retryMode: "standard", connectionTimeout: 3100 };
-        case "in-region":
-          return { retryMode: "standard", connectionTimeout: 1100 };
-        case "cross-region":
-          return { retryMode: "standard", connectionTimeout: 3100 };
-        case "mobile":
-          return { retryMode: "standard", connectionTimeout: 30000 };
-        default:
-          return {};
-      }
-    },
-    L = !1,
-    se = (e) => {
-      if (e && !L && parseInt(e.substring(1, e.indexOf("."))) < 16) L = !0;
-    },
-    oe = (e) => {
-      let t = [];
-      for (let key in O.AlgorithmId) {
-        let n = O.AlgorithmId[key];
-        if (e[n] === void 0) continue;
-        t.push({ algorithmId: () => n, checksumConstructor: () => e[n] });
-      }
-      return {
-        addChecksumAlgorithm(r) {
-          t.push(r);
-        },
-        checksumAlgorithms() {
-          return t;
-        },
-      };
-    },
-    ae = (e) => {
-      let t = {};
-      return (
-        e.checksumAlgorithms().forEach((r) => {
-          t[r.algorithmId()] = r.checksumConstructor();
-        }),
-        t
-      );
-    },
-    le = (e) => ({
-      setRetryStrategy(t) {
-        e.retryStrategy = t;
+      checksumAlgorithms() {
+        return checksumAlgorithms;
       },
-      retryStrategy() {
-        return e.retryStrategy;
-      },
-    }),
-    ce = (e) => {
-      let t = {};
-      return ((t.retryStrategy = e.retryStrategy()), t);
+    };
+  };
+  var ae = (clientConfig) => {
+    let runtimeConfig = {};
+    clientConfig.checksumAlgorithms().forEach((checksumAlgorithm) => {
+      runtimeConfig[checksumAlgorithm.algorithmId()] = checksumAlgorithm.checksumConstructor();
+    });
+    return runtimeConfig;
+  };
+  var getRetryConfiguration = (runtimeConfig) => ({
+    setRetryStrategy(retryStrategy) {
+      runtimeConfig.retryStrategy = retryStrategy;
     },
-    U = (e) => Object.assign(oe(e), le(e)),
-    de = U,
-    ue = (e) => Object.assign(ae(e), ce(e)),
-    fe = (e) => (Array.isArray(e) ? e : [e]),
-    G = (e) => {
-      for (let key in e)
-        if (e.hasOwnProperty(key) && e[key]["#text"] !== void 0) e[key] = e[key]["#text"];
-        else if (typeof e[key] === "object" && e[key] !== null) e[key] = G(e[key]);
-      return e;
+    retryStrategy() {
+      return runtimeConfig.retryStrategy;
     },
-    he = (e) => e != null;
-  class Y {
+  });
+  var resolveRetryRuntimeConfig = (retryStrategyConfiguration) => {
+    let runtimeConfig = {};
+    runtimeConfig.retryStrategy = retryStrategyConfiguration.retryStrategy();
+    return runtimeConfig;
+  };
+  var getDefaultExtensionConfiguration = (runtimeConfig) =>
+    Object.assign(getChecksumConfiguration(runtimeConfig), getRetryConfiguration(runtimeConfig));
+  var getDefaultClientConfiguration = getDefaultExtensionConfiguration;
+  var resolveDefaultRuntimeConfig = (config) => Object.assign(ae(config), resolveRetryRuntimeConfig(config));
+  var getArrayIfSingleItem = (mayBeArray) => (Array.isArray(mayBeArray) ? mayBeArray : [mayBeArray]);
+  var getValueFromTextNode = (obj) => {
+    for (let key in obj)
+      if (obj.hasOwnProperty(key) && obj[key]["#text"] !== undefined) obj[key] = obj[key]["#text"];
+      else if (typeof obj[key] === "object" && obj[key] !== null) obj[key] = getValueFromTextNode(obj[key]);
+    return obj;
+  };
+  var isSerializableHeaderValue = (value) => value != null;
+  class NoOpLogger {
     trace() {}
     debug() {}
     info() {}
     warn() {}
     error() {}
   }
-  function Z(e, t, r) {
-    let n, a, o;
-    if (typeof t > "u" && typeof r > "u") ((n = {}), (o = e));
-    else if (((n = e), typeof t === "function")) return ((a = t), (o = r), ge(n, a, o));
-    else o = t;
-    for (let d of Object.keys(o)) {
-      if (!Array.isArray(o[d])) {
-        n[d] = o[d];
+  function map(arg0, arg1, arg2) {
+    let target;
+    let filter;
+    let instructions;
+    if (typeof arg1 === "undefined" && typeof arg2 === "undefined") {
+      target = {};
+      instructions = arg0;
+    } else {
+      target = arg0;
+      if (typeof arg1 === "function") {
+        filter = arg1;
+        instructions = arg2;
+        return mapWithFilter(target, filter, instructions);
+      } else instructions = arg1;
+    }
+    for (let key of Object.keys(instructions)) {
+      if (!Array.isArray(instructions[key])) {
+        target[key] = instructions[key];
         continue;
       }
-      X(n, null, o, d);
+      applyInstruction(target, null, instructions, key);
     }
-    return n;
+    return target;
   }
-  var me = (e) => {
-      let t = {};
-      for (let [r, n] of Object.entries(e || {})) t[r] = [, n];
-      return t;
-    },
-    pe = (e, t) => {
-      let r = {};
-      for (let key in t) X(r, e, t, key);
-      return r;
-    },
-    ge = (e, t, r) =>
-      Z(
-        e,
-        Object.entries(r).reduce((n, [a, o]) => {
-          if (Array.isArray(o)) n[a] = o;
-          else if (typeof o === "function") n[a] = [t, o()];
-          else n[a] = [t, o];
-          return n;
-        }, {}),
-      ),
-    X = (e, t, r, n) => {
-      if (t !== null) {
-        let d = r[n];
-        if (typeof d === "function") d = [, d];
-        let [u = ye, g = we, w = n] = d;
-        if ((typeof u === "function" && u(t[w])) || (typeof u !== "function" && !!u)) e[n] = g(t[w]);
-        return;
+  var convertMap = (target) => {
+    let output = {};
+    for (let [k, v] of Object.entries(target || {})) output[k] = [, v];
+    return output;
+  };
+  var take = (source, instructions) => {
+    let out = {};
+    for (let key in instructions) applyInstruction(out, source, instructions, key);
+    return out;
+  };
+  var mapWithFilter = (target, filter, instructions) =>
+    map(
+      target,
+      Object.entries(instructions).reduce((_instructions, [key, value]) => {
+        if (Array.isArray(value)) _instructions[key] = value;
+        else if (typeof value === "function") _instructions[key] = [filter, value()];
+        else _instructions[key] = [filter, value];
+        return _instructions;
+      }, {}),
+    );
+  var applyInstruction = (target, source, instructions, targetKey) => {
+    if (source !== null) {
+      let instruction = instructions[targetKey];
+      if (typeof instruction === "function") instruction = [, instruction];
+      let [filter = nonNullish, valueFn = pass, sourceKey = targetKey] = instruction;
+      if (
+        (typeof filter === "function" && filter(source[sourceKey])) ||
+        (typeof filter !== "function" && !!filter)
+      )
+        target[targetKey] = valueFn(source[sourceKey]);
+      return;
+    }
+    let [filter, value] = instructions[targetKey];
+    if (typeof value === "function") {
+      let _value;
+      let defaultFilterPassed = filter === undefined && (_value = value()) != null;
+      let customFilterPassed =
+        (typeof filter === "function" && !!filter(undefined)) || (typeof filter !== "function" && !!filter);
+      if (defaultFilterPassed) target[targetKey] = _value;
+      else if (customFilterPassed) target[targetKey] = value();
+    } else {
+      let defaultFilterPassed = filter === undefined && value != null;
+      let customFilterPassed =
+        (typeof filter === "function" && !!filter(value)) || (typeof filter !== "function" && !!filter);
+      if (defaultFilterPassed || customFilterPassed) target[targetKey] = value;
+    }
+  };
+  var nonNullish = (_) => _ != null;
+  var pass = (_) => _;
+  var serializeFloat = (value) => {
+    if (value !== value) return "NaN";
+    switch (value) {
+      case 1 / 0:
+        return "Infinity";
+      case -1 / 0:
+        return "-Infinity";
+      default:
+        return value;
+    }
+  };
+  var serializeDateTime = (date) => date.toISOString().replace(".000Z", "Z");
+  var _json = (obj) => {
+    if (obj == null) return {};
+    if (Array.isArray(obj)) return obj.filter((_) => _ != null).map(_json);
+    if (typeof obj === "object") {
+      let target = {};
+      for (let key of Object.keys(obj)) {
+        if (obj[key] == null) continue;
+        target[key] = _json(obj[key]);
       }
-      let [a, o] = r[n];
-      if (typeof o === "function") {
-        let d,
-          u = a === void 0 && (d = o()) != null,
-          g = (typeof a === "function" && !!a(void 0)) || (typeof a !== "function" && !!a);
-        if (u) e[n] = d;
-        else if (g) e[n] = o();
-      } else {
-        let d = a === void 0 && o != null,
-          u = (typeof a === "function" && !!a(o)) || (typeof a !== "function" && !!a);
-        if (d || u) e[n] = o;
-      }
-    },
-    ye = (e) => e != null,
-    we = (e) => e,
-    Se = (e) => {
-      if (e !== e) return "NaN";
-      switch (e) {
-        case 1 / 0:
-          return "Infinity";
-        case -1 / 0:
-          return "-Infinity";
-        default:
-          return e;
-      }
-    },
-    ve = (e) => e.toISOString().replace(".000Z", "Z"),
-    k = (e) => {
-      if (e == null) return {};
-      if (Array.isArray(e)) return e.filter((t) => t != null).map(k);
-      if (typeof e === "object") {
-        let t = {};
-        for (let r of Object.keys(e)) {
-          if (e[r] == null) continue;
-          t[r] = k(e[r]);
-        }
-        return t;
-      }
-      return e;
-    };
-  Object.defineProperty(E, "collectBody", {
-    enumerable: !0,
+      return target;
+    }
+    return obj;
+  };
+  Object.defineProperty(cjsExports, "collectBody", {
+    enumerable: true,
     get: function () {
       return T.collectBody;
     },
   });
-  Object.defineProperty(E, "extendedEncodeURIComponent", {
-    enumerable: !0,
+  Object.defineProperty(cjsExports, "extendedEncodeURIComponent", {
+    enumerable: true,
     get: function () {
       return T.extendedEncodeURIComponent;
     },
   });
-  Object.defineProperty(E, "resolvedPath", {
-    enumerable: !0,
+  Object.defineProperty(cjsExports, "resolvedPath", {
+    enumerable: true,
     get: function () {
       return T.resolvedPath;
     },
   });
-  E.Client = j;
-  E.Command = F;
-  E.NoOpLogger = Y;
-  E.SENSITIVE_STRING = ee;
-  E.ServiceException = _;
-  E._json = k;
-  E.convertMap = me;
-  E.createAggregatedClient = te;
-  E.decorateServiceException = B;
-  E.emitWarningIfUnsupportedVersion = se;
-  E.getArrayIfSingleItem = fe;
-  E.getDefaultClientConfiguration = de;
-  E.getDefaultExtensionConfiguration = U;
-  E.getValueFromTextNode = G;
-  E.isSerializableHeaderValue = he;
-  E.loadConfigsForDefaultMode = ie;
-  E.map = Z;
-  E.resolveDefaultRuntimeConfig = ue;
-  E.serializeDateTime = ve;
-  E.serializeFloat = Se;
-  E.take = pe;
-  E.throwDefaultError = H;
-  E.withBaseException = re;
-  Object.keys(D).forEach(function (e) {
-    if (e !== "default" && !Object.prototype.hasOwnProperty.call(E, e))
-      Object.defineProperty(E, e, {
-        enumerable: !0,
+  cjsExports.Client = Client;
+  cjsExports.Command = Command;
+  cjsExports.NoOpLogger = NoOpLogger;
+  cjsExports.SENSITIVE_STRING = SENSITIVE_STRING;
+  cjsExports.ServiceException = ServiceException;
+  cjsExports._json = _json;
+  cjsExports.convertMap = convertMap;
+  cjsExports.createAggregatedClient = createAggregatedClient;
+  cjsExports.decorateServiceException = decorateServiceException;
+  cjsExports.emitWarningIfUnsupportedVersion = emitWarningIfUnsupportedVersion;
+  cjsExports.getArrayIfSingleItem = getArrayIfSingleItem;
+  cjsExports.getDefaultClientConfiguration = getDefaultClientConfiguration;
+  cjsExports.getDefaultExtensionConfiguration = getDefaultExtensionConfiguration;
+  cjsExports.getValueFromTextNode = getValueFromTextNode;
+  cjsExports.isSerializableHeaderValue = isSerializableHeaderValue;
+  cjsExports.loadConfigsForDefaultMode = loadConfigsForDefaultMode;
+  cjsExports.map = map;
+  cjsExports.resolveDefaultRuntimeConfig = resolveDefaultRuntimeConfig;
+  cjsExports.serializeDateTime = serializeDateTime;
+  cjsExports.serializeFloat = serializeFloat;
+  cjsExports.take = take;
+  cjsExports.throwDefaultError = throwDefaultError;
+  cjsExports.withBaseException = withBaseException;
+  Object.keys(D).forEach(function (key) {
+    if (key !== "default" && !Object.prototype.hasOwnProperty.call(cjsExports, key))
+      Object.defineProperty(cjsExports, key, {
+        enumerable: true,
         get: function () {
-          return D[e];
+          return D[key];
         },
       });
   });
 });
-
-export { ff };
+export { require_client };

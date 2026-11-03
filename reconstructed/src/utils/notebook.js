@@ -18,21 +18,24 @@ import { Ph } from "../../vendor/@anthropic-ai/sdk/helpers/beta/mcp.mjs";
 import { readHandleUpTo } from "./fsOperations.js";
 
 //@ chunk-e6aww6q8.js:3150675-3150692 placement
-var SW = 104857600;
+/**
+ * notebook 文件大小上限（100 MB）。
+ */
+var MAX_NOTEBOOK_BYTES = 104857600;
+//@ chunk-e6aww6q8.js:3150692-3150890 placement
 /**
  * cells 是数组且每个单元 source 为字符串或字符串数组。
  */
-//@ chunk-e6aww6q8.js:3150692-3150890 placement
-function isValidNotebook(e) {
-  let n = e?.cells;
+function isValidNotebook(notebook) {
+  let cells = notebook?.cells;
   return (
-    Array.isArray(n) &&
-    !n.some(
-      (r) =>
-        r === null ||
-        typeof r !== "object" ||
-        (typeof r.source !== "string" &&
-          !(Array.isArray(r.source) && r.source.every((s) => typeof s === "string"))),
+    Array.isArray(cells) &&
+    !cells.some(
+      (cell) =>
+        cell === null ||
+        typeof cell !== "object" ||
+        (typeof cell.source !== "string" &&
+          !(Array.isArray(cell.source) && cell.source.every((s) => typeof s === "string"))),
     )
   );
 }
@@ -41,31 +44,45 @@ function parseCellId(cellId) {
   let match = cellId.match(/^cell-(\d+)$/);
   if (match && match[1]) {
     let index = parseInt(match[1], 10);
-    return isNaN(index) ? void 0 : index;
+    return isNaN(index) ? undefined : index;
   }
   return;
 }
+//@ chunk-e6aww6q8.js:3151004-3151363 placement
 /**
  * 按 id 或序号找单元的源码（unparsable/cell-missing/found）。
  */
-//@ chunk-e6aww6q8.js:3151004-3151363 placement
-function findNotebookCellSource(e, n) {
+function findNotebookCellSource(e, cellId) {
   let r;
   try {
     r = jsonParse(e);
   } catch {
-    return { kind: "unparsable" };
+    return {
+      kind: "unparsable",
+    };
   }
-  if (!isValidNotebook(r) || r === null) return { kind: "unparsable" };
-  if (!n) return { kind: "cell-missing" };
-  let found = r.cells.find((cell) => cell.id === n),
-    h = found === void 0 ? parseCellId(n) : void 0,
-    y = found ?? (h !== void 0 ? r.cells[h] : void 0);
-  if (!y) return { kind: "cell-missing" };
-  return { kind: "found", source: Array.isArray(y.source) ? y.source.join("") : y.source };
+  if (!isValidNotebook(r) || r === null)
+    return {
+      kind: "unparsable",
+    };
+  if (!cellId)
+    return {
+      kind: "cell-missing",
+    };
+  let found = r.cells.find((cell) => cell.id === cellId);
+  let h = found === undefined ? parseCellId(cellId) : undefined;
+  let y = found ?? (h !== undefined ? r.cells[h] : undefined);
+  if (!y)
+    return {
+      kind: "cell-missing",
+    };
+  return {
+    kind: "found",
+    source: Array.isArray(y.source) ? y.source.join("") : y.source,
+  };
 }
 //@ chunk-e6aww6q8.js:3151363-3151375 placement
-var QRr = 1e4;
+var MAX_NOTEBOOK_OUTPUT_CHARS = 1e4;
 //@ chunk-e6aww6q8.js:3151375-3152263 placement
 function NOTEBOOK_TOO_LARGE_HINT() {
   return isBashAvailable()
@@ -80,37 +97,38 @@ function NOTEBOOK_TOO_LARGE_HINT() {
   (Get-Content <notebook_path> | ConvertFrom-Json).cells.Count # Count total cells
   Get-Content <notebook_path> | ConvertFrom-Json | Select-Object -ExpandProperty cells | Where-Object cell_type -eq code | Select-Object -ExpandProperty source`;
 }
+//@ chunk-e6aww6q8.js:3152263-3152366 placement
 /**
  * notebook 超过可读大小的提示。
  */
-//@ chunk-e6aww6q8.js:3152263-3152366 placement
 function notebookTooLargeMessage() {
-  return `Notebook file exceeds the maximum size this tool can read (${formatFileSize(SW)}). ${NOTEBOOK_TOO_LARGE_HINT()}`;
+  return `Notebook file exceeds the maximum size this tool can read (${formatFileSize(MAX_NOTEBOOK_BYTES)}). ${NOTEBOOK_TOO_LARGE_HINT()}`;
 }
 //@ chunk-e6aww6q8.js:3152366-3152521 placement
 var INVALID_NOTEBOOK_MESSAGE =
   'Notebook file is not a valid Jupyter notebook (top-level "cells" must be an array of cell objects, each with a string or string-array "source").';
 //@ chunk-e6aww6q8.js:3152521-3152599 layout
 class NotebookReadError extends Error {
-  constructor(e) {
-    super(e);
+  constructor(message) {
+    super(message);
     this.name = "NotebookReadError";
   }
 }
 //@ chunk-e6aww6q8.js:3152599-3152736 fingerprint = isLargeOutputs (1)
 function isLargeOutputs(outputs) {
   let size = 0;
-  for (let r of outputs) {
-    if (!r) continue;
-    if (((size += (r.text?.length ?? 0) + (r.image?.image_data.length ?? 0)), size > QRr)) return !0;
+  for (let output of outputs) {
+    if (!output) continue;
+    size += (output.text?.length ?? 0) + (output.image?.image_data.length ?? 0);
+    if (size > MAX_NOTEBOOK_OUTPUT_CHARS) return true;
   }
-  return !1;
+  return false;
 }
 //@ chunk-e6aww6q8.js:3152736-3152840 fingerprint = processOutputText (1)
 function processOutputText(text) {
   if (!text) return "";
-  let rawText = Array.isArray(text) ? text.join("") : text,
-    { truncatedContent: truncatedContent } = formatOutput(rawText);
+  let rawText = Array.isArray(text) ? text.join("") : text;
+  let { truncatedContent } = formatOutput(rawText);
   return truncatedContent;
 }
 //@ chunk-e6aww6q8.js:3152840-3153051 fingerprint = extractImage (0.737)
@@ -120,7 +138,10 @@ function extractImage(data) {
     if (typeof r !== "string") continue;
     let replaced = r.replace(/\s/g, "");
     if (Ph(Buffer.from(replaced, "base64")) === null) return;
-    return { image_data: replaced, media_type: n };
+    return {
+      image_data: replaced,
+      media_type: n,
+    };
   }
   return;
 }
@@ -128,7 +149,10 @@ function extractImage(data) {
 function processOutput(output) {
   switch (output.output_type) {
     case "stream":
-      return { output_type: output.output_type, text: processOutputText(output.text) };
+      return {
+        output_type: output.output_type,
+        text: processOutputText(output.text),
+      };
     case "execute_result":
     case "display_data":
       return {
@@ -147,13 +171,13 @@ ${output.traceback.join(`
 }
 //@ chunk-e6aww6q8.js:3153394-3154075 fingerprint = processCell (0.893)
 function processCell(cell, index, codeLanguage, includeLargeOutputs) {
-  let cellId = cell.id ?? `cell-${index}`,
-    cellData = {
-      cellType: cell.cell_type,
-      source: Array.isArray(cell.source) ? cell.source.join("") : cell.source,
-      execution_count: cell.cell_type === "code" ? cell.execution_count || void 0 : void 0,
-      cell_id: cellId,
-    };
+  let cellId = cell.id ?? `cell-${index}`;
+  let cellData = {
+    cellType: cell.cell_type,
+    source: Array.isArray(cell.source) ? cell.source.join("") : cell.source,
+    execution_count: cell.cell_type === "code" ? cell.execution_count || undefined : undefined,
+    cell_id: cellId,
+  };
   if (cell.cell_type === "code") cellData.language = codeLanguage;
   if (cell.cell_type === "code" && cell.outputs?.length) {
     let outputs = cell.outputs.map(processOutput);
@@ -161,7 +185,12 @@ function processCell(cell, index, codeLanguage, includeLargeOutputs) {
       let w = isBashAvailable()
         ? `${BASH_TOOL_NAME} with: cat <notebook_path> | jq '.cells[${index}].outputs'`
         : `${POWERSHELL_TOOL_NAME} with: Get-Content <notebook_path> | ConvertFrom-Json | Select-Object -ExpandProperty cells | Select-Object -Index ${index} | Select-Object -ExpandProperty outputs`;
-      cellData.outputs = [{ output_type: "stream", text: `Outputs are too large to include. Use ${w}` }];
+      cellData.outputs = [
+        {
+          output_type: "stream",
+          text: `Outputs are too large to include. Use ${w}`,
+        },
+      ];
     } else cellData.outputs = outputs;
   }
   return cellData;
@@ -189,59 +218,62 @@ ${output.text}`,
   if (output.image)
     outputs.push({
       type: "image",
-      source: { data: output.image.image_data, media_type: output.image.media_type, type: "base64" },
+      source: {
+        data: output.image.image_data,
+        media_type: output.image.media_type,
+        type: "base64",
+      },
     });
   return outputs;
 }
+//@ chunk-e6aww6q8.js:3154557-3154631 fingerprint = getToolResultFromCell (1)
 /**
  * 把 notebook 单元转成 tool_result 内容块（源码 + 各输出）。
  */
-//@ chunk-e6aww6q8.js:3154557-3154631 fingerprint = getToolResultFromCell (1)
 function getToolResultFromCell(cell) {
-  let contentResult = cellContentToToolResult(cell),
-    outputResults = cell.outputs?.flatMap(cellOutputToToolResult);
+  let contentResult = cellContentToToolResult(cell);
+  let outputResults = cell.outputs?.flatMap(cellOutputToToolResult);
   return [contentResult, ...(outputResults ?? [])];
 }
+//@ chunk-e6aww6q8.js:3154631-3155317 fingerprint = readNotebook (0.73)
 /**
  * 读取 .ipynb：拒绝非普通文件与超过上限的文件，解析 JSON，按 Read 的格式处理所有单元（可按 cellId 取单个）。
  */
-//@ chunk-e6aww6q8.js:3154631-3155317 fingerprint = readNotebook (0.73)
 async function readNotebook(notebookPath, cellId) {
   let stats = await notebookPath.stat();
   if (!stats.isFile() && !stats.isDirectory())
     throw new NotebookReadError("Notebook path is not a regular file (device, FIFO, or socket).");
-  if (stats.size > SW) throw new NotebookReadError(notebookTooLargeMessage());
-  let s = await readHandleUpTo(notebookPath, SW + 1, "file");
-  if (s.length > SW) throw new NotebookReadError(notebookTooLargeMessage());
-  let content = s.toString("utf-8"),
-    y;
+  if (stats.size > MAX_NOTEBOOK_BYTES) throw new NotebookReadError(notebookTooLargeMessage());
+  let buffer = await readHandleUpTo(notebookPath, MAX_NOTEBOOK_BYTES + 1, "file");
+  if (buffer.length > MAX_NOTEBOOK_BYTES) throw new NotebookReadError(notebookTooLargeMessage());
+  let content = buffer.toString("utf-8");
+  let notebook;
   try {
-    y = jsonParse(content);
+    notebook = jsonParse(content);
   } catch (error) {
     throw new NotebookReadError(
       `Notebook file is not valid JSON (it may be truncated, corrupted, or still being written): ${error instanceof Error ? error.message : String(error)}`,
     );
   }
-  if (!isValidNotebook(y)) throw new NotebookReadError(INVALID_NOTEBOOK_MESSAGE);
-  let language = y.metadata?.language_info?.name ?? "python";
+  if (!isValidNotebook(notebook)) throw new NotebookReadError(INVALID_NOTEBOOK_MESSAGE);
+  let language = notebook.metadata?.language_info?.name ?? "python";
   if (cellId) {
-    let cell = y.cells.find((cell) => cell.id === cellId);
+    let cell = notebook.cells.find((cell) => cell.id === cellId);
     if (!cell) throw new NotebookReadError(`Cell with ID "${cellId}" not found in notebook`);
-    return [processCell(cell, y.cells.indexOf(cell), language, !0)];
+    return [processCell(cell, notebook.cells.indexOf(cell), language, true)];
   }
-  return notebookToReadCells(y);
+  return notebookToReadCells(notebook);
 }
+//@ chunk-e6aww6q8.js:3155317-3155422 affinity
 /**
  * 按 Read 的渲染方式处理 notebook 所有单元（NotebookEdit 用它判断模型上下文中的内容是否最新）。
  */
-//@ chunk-e6aww6q8.js:3155317-3155422 affinity
-function notebookToReadCells(e) {
-  let n = e.metadata?.language_info?.name ?? "python";
-  return e.cells.map((cell, s) => processCell(cell, s, n, !1));
+function notebookToReadCells(notebook) {
+  let codeLanguage = notebook.metadata?.language_info?.name ?? "python";
+  return notebook.cells.map((cell, index) => processCell(cell, index, codeLanguage, false));
 }
-
 export {
-  SW,
+  MAX_NOTEBOOK_BYTES,
   isValidNotebook,
   parseCellId,
   getToolResultFromCell,

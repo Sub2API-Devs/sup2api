@@ -24,10 +24,10 @@ import { env } from "../../utils/env.js";
 import { logFeatureBadAsync, logFeatureOkAsync } from "../../services/analytics/featureTelemetry.js";
 import { exitAfterAnalyticsFlush } from "../exit.js";
 
+//@ chunk-aqpr1420.js:4744-28027 placement
 /**
  * 自托管 runner 诊断提示词：指导模型检查 runner 环境（网络、认证、目录、服务状态）并给出修复建议。
  */
-//@ chunk-aqpr1420.js:4744-28027 placement
 function selfHostedRunnerDoctorPrompt(e) {
   let host = new URL(e).host;
   return `You are diagnosing a **self-hosted runner** deployment for Claude Code cloud sessions. Work through the diagnostic categories below, gather evidence with the typed \`self_hosted_runner_*\` read tools (admin-API state, \`/healthz\`, \`/metrics\`, redacted log tail) and Bash for everything else, fix what you can, and escalate cleanly when you can't.
@@ -187,30 +187,33 @@ When you can't fix it, or the operator asks to escalate:
 **Never auto-upload customer logs.** The operator reviews and sends.`;
 }
 //@ chunk-aqpr1420.js:28027-28565 placement
+/**
+ * self-hosted runner doctor 命令：受限工具集列表与该向导的系统提示词（逐项询问症状、按 8 类诊断推进）。
+ */
 var joined = [
-    "Bash",
-    "Read",
-    "Write",
-    "TodoWrite",
-    "TaskCreate",
-    "TaskGet",
-    "TaskList",
-    "TaskUpdate",
-    "self_hosted_runner_get_pool",
-    "self_hosted_runner_list_runners",
-    "self_hosted_runner_list_sessions",
-    "self_hosted_runner_list_secrets",
-    "self_hosted_runner_read_health",
-    "self_hosted_runner_read_metrics",
-    "self_hosted_runner_tail_log",
-    "self_hosted_runner_requeue_session",
-  ].join(","),
-  w =
-    "Start the self-hosted runner doctor wizard. Greet me, then ask me to describe the symptom or pick from the 8 diagnostic categories. Work through it one step at a time.";
+  "Bash",
+  "Read",
+  "Write",
+  "TodoWrite",
+  "TaskCreate",
+  "TaskGet",
+  "TaskList",
+  "TaskUpdate",
+  "self_hosted_runner_get_pool",
+  "self_hosted_runner_list_runners",
+  "self_hosted_runner_list_sessions",
+  "self_hosted_runner_list_secrets",
+  "self_hosted_runner_read_health",
+  "self_hosted_runner_read_metrics",
+  "self_hosted_runner_tail_log",
+  "self_hosted_runner_requeue_session",
+].join(",");
+var SELF_HOSTED_RUNNER_DOCTOR_PROMPT =
+  "Start the self-hosted runner doctor wizard. Greet me, then ask me to describe the symptom or pick from the 8 diagnostic categories. Work through it one step at a time.";
+//@ chunk-aqpr1420.js:28565-30548 placement
 /**
  * selfHostedRunnerDoctorMain：自托管 runner 诊断命令入口，收集环境信息后用诊断提示词运行模型。
  */
-//@ chunk-aqpr1420.js:28565-30548 placement
 async function selfHostedRunnerDoctorMain(e, r) {
   if (e.includes("--help") || e.includes("-h")) {
     console.log(`Usage: claude self-hosted-runner doctor [args...]
@@ -229,8 +232,12 @@ Any extra args are passed to the underlying Claude Code session.`);
   if (a !== null) exitWithError(a.reason);
   initializeAnalyticsSink();
   let o = pinStorageV5(r);
-  if ((initialize1PEventLogging(o), isStorageV5Enabled() && o !== void 0)) {
-    (initDefaultDebugLog({ storageV5: o }), watchGlobalConfigThroughStorage(o));
+  initialize1PEventLogging(o);
+  if (isStorageV5Enabled() && o !== undefined) {
+    initDefaultDebugLog({
+      storageV5: o,
+    });
+    watchGlobalConfigThroughStorage(o);
     let [
       { composePolicyLimitsClient: n, primePolicyLimitsCache: c },
       { credentialsStoreFor: p },
@@ -240,34 +247,40 @@ Any extra args are passed to the underlying Claude Code session.`);
       import("./chunk-y36z1q7c.js"),
       import("./chunk-ts9rfgqd.js"),
     ]);
-    (n({ storageV5: o }), await f(p(o)), await c(o), await seedInstallIDs(o));
+    n({
+      storageV5: o,
+    });
+    await f(p(o));
+    await c(o);
+    await seedInstallIDs(o);
   }
-  let s = selfHostedRunnerDoctorPrompt(runnerApiBaseUrl()),
-    d = isStandaloneExecutable() ? [] : [process.argv[1]],
-    u = e.length > 0 && !e[0].startsWith("-") ? [] : [w],
-    l = [...d, ...u, "--append-system-prompt", s, "--tools", joined, "--permission-mode", "default", ...e];
+  let s = selfHostedRunnerDoctorPrompt(runnerApiBaseUrl());
+  let d = isStandaloneExecutable() ? [] : [process.argv[1]];
+  let u = e.length > 0 && !e[0].startsWith("-") ? [] : [SELF_HOSTED_RUNNER_DOCTOR_PROMPT];
+  let l = [...d, ...u, "--append-system-prompt", s, "--tools", joined, "--permission-mode", "default", ...e];
   if (env.DEBUG)
     console.error(
       "[self-hosted-runner:doctor] spawning:",
-      jsonStringify({ argv: [process.execPath, ...l.map((n) => (n === s ? `<${s.length} chars>` : n))] }),
+      jsonStringify({
+        argv: [process.execPath, ...l.map((n) => (n === s ? `<${s.length} chars>` : n))],
+      }),
     );
-  let t = spawnSync(process.execPath, l, { stdio: "inherit" });
-  if (t.error)
-    return (
-      console.error(`[self-hosted-runner:doctor] failed to spawn child: ${t.error.message}`),
-      await logFeatureBadAsync("cli_self_hosted_doctor", "spawn_failed"),
-      exitAfterAnalyticsFlush(1)
-    );
-  if ((t.status !== null && t.status !== 0) || t.signal)
-    (console.error(
-      `[self-hosted-runner:doctor] child exited with status ${t.status ?? "(null)"}${t.signal ? `, signal ${t.signal}` : ""}`,
-    ),
-      await logFeatureBadAsync("cli_self_hosted_doctor", t.signal ? "child_signal" : "child_nonzero"));
-  else await logFeatureOkAsync("cli_self_hosted_doctor");
-  return (
+  let t = spawnSync(process.execPath, l, {
+    stdio: "inherit",
+  });
+  if (t.error) {
+    console.error(`[self-hosted-runner:doctor] failed to spawn child: ${t.error.message}`);
+    await logFeatureBadAsync("cli_self_hosted_doctor", "spawn_failed");
+    return exitAfterAnalyticsFlush(1);
+  }
+  if ((t.status !== null && t.status !== 0) || t.signal) {
     console.error(
-      "[self-hosted-runner:doctor] To continue diagnosis, re-run `claude self-hosted-runner doctor` \u2014 resuming the session with `claude --resume`/`-c` will not re-enable the doctor tools.",
-    ),
-    exitAfterAnalyticsFlush(t.status !== null ? t.status : 1)
+      `[self-hosted-runner:doctor] child exited with status ${t.status ?? "(null)"}${t.signal ? `, signal ${t.signal}` : ""}`,
+    );
+    await logFeatureBadAsync("cli_self_hosted_doctor", t.signal ? "child_signal" : "child_nonzero");
+  } else await logFeatureOkAsync("cli_self_hosted_doctor");
+  console.error(
+    "[self-hosted-runner:doctor] To continue diagnosis, re-run `claude self-hosted-runner doctor` \u2014 resuming the session with `claude --resume`/`-c` will not re-enable the doctor tools.",
   );
+  return exitAfterAnalyticsFlush(t.status !== null ? t.status : 1);
 }

@@ -10,17 +10,17 @@
  */
 import { cliError } from "../exit.js";
 
+//@ chunk-tnrq30t1.js:871-1186 placement
 /**
  * claude -p --cloud：从 --cloud 值和提示拼出任务（都没有则报错），再动态加载 runHeadlessCloudPrint 以 json/text 输出运行。
  */
-//@ chunk-tnrq30t1.js:871-1186 placement
 async function runCloudPrintHandler(options, root) {
   let o = joinCloudTaskParts(options.remote, options.inputPrompt);
   if (o === null)
     return cliError(
       "Error: claude -p --cloud needs a task: pass it as the prompt, as --cloud's value, or on stdin.",
     );
-  let { runHeadlessCloudPrint: runHeadlessCloudPrint } = await import("./chunk-54xbtc53.js");
+  let { runHeadlessCloudPrint } = await import("./chunk-54xbtc53.js");
   return runHeadlessCloudPrint(options, root, {
     prompt: o,
     outputFormat: options.outputFormat === "json" ? "json" : "text",

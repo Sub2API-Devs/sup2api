@@ -5,107 +5,137 @@
  * pieces: chunk-hwmsct5x.js (1)
  * attribution: esm-fingerprint 1
  */
-import { Y } from "../../../core/resource.mjs";
+import { APIResource } from "../../../core/resource.mjs";
 import { I } from "../../../internal/utils/path.mjs";
-import { T } from "../../../internal/headers.mjs";
-import { ee } from "../../../core/pagination.mjs";
+import { buildHeaders } from "../../../internal/headers.mjs";
+import { TokenPage } from "../../../core/pagination.mjs";
 
 //@ chunk-hwmsct5x.js:140967-142965 esm-fingerprint
-class bo extends Y {
-  create(e, n, r) {
-    let { betas: betas, workspace_id: workspace_id, ...y } = n;
-    return this._client.post(I`/v1/vaults/${e}/credentials?beta=true`, {
-      body: y,
-      ...r,
-      headers: T([
+class Credentials extends APIResource {
+  create(vaultID, params, options) {
+    let { betas, workspace_id, ...body } = params;
+    return this._client.post(I`/v1/vaults/${vaultID}/credentials?beta=true`, {
+      body,
+      ...options,
+      headers: buildHeaders([
         {
           "anthropic-beta": [...(betas ?? []), "managed-agents-2026-04-01"].toString(),
-          ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0),
+          ...(workspace_id != null
+            ? {
+                "anthropic-workspace-id": workspace_id,
+              }
+            : undefined),
         },
-        r?.headers,
+        options?.headers,
       ]),
     });
   }
-  retrieve(e, n, r) {
-    let { vault_id: vault_id, betas: betas, workspace_id: workspace_id } = n;
-    return this._client.get(I`/v1/vaults/${vault_id}/credentials/${e}?beta=true`, {
-      ...r,
-      headers: T([
+  retrieve(credentialID, params, options) {
+    let { vault_id, betas, workspace_id } = params;
+    return this._client.get(I`/v1/vaults/${vault_id}/credentials/${credentialID}?beta=true`, {
+      ...options,
+      headers: buildHeaders([
         {
           "anthropic-beta": [...(betas ?? []), "managed-agents-2026-04-01"].toString(),
-          ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0),
+          ...(workspace_id != null
+            ? {
+                "anthropic-workspace-id": workspace_id,
+              }
+            : undefined),
         },
-        r?.headers,
+        options?.headers,
       ]),
     });
   }
-  update(e, n, r) {
-    let { vault_id: vault_id, betas: betas, workspace_id: workspace_id, ...w } = n;
-    return this._client.post(I`/v1/vaults/${vault_id}/credentials/${e}?beta=true`, {
-      body: w,
-      ...r,
-      headers: T([
+  update(credentialID, params, options) {
+    let { vault_id, betas, workspace_id, ...body } = params;
+    return this._client.post(I`/v1/vaults/${vault_id}/credentials/${credentialID}?beta=true`, {
+      body,
+      ...options,
+      headers: buildHeaders([
         {
           "anthropic-beta": [...(betas ?? []), "managed-agents-2026-04-01"].toString(),
-          ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0),
+          ...(workspace_id != null
+            ? {
+                "anthropic-workspace-id": workspace_id,
+              }
+            : undefined),
         },
-        r?.headers,
+        options?.headers,
       ]),
     });
   }
-  list(e, n = {}, r) {
-    let { betas: betas, workspace_id: workspace_id, ...y } = n ?? {};
-    return this._client.getAPIList(I`/v1/vaults/${e}/credentials?beta=true`, ee, {
-      query: y,
-      ...r,
-      headers: T([
+  list(vaultID, params = {}, options) {
+    let { betas, workspace_id, ...query } = params ?? {};
+    return this._client.getAPIList(I`/v1/vaults/${vaultID}/credentials?beta=true`, TokenPage, {
+      query,
+      ...options,
+      headers: buildHeaders([
         {
           "anthropic-beta": [...(betas ?? []), "managed-agents-2026-04-01"].toString(),
-          ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0),
+          ...(workspace_id != null
+            ? {
+                "anthropic-workspace-id": workspace_id,
+              }
+            : undefined),
         },
-        r?.headers,
+        options?.headers,
       ]),
     });
   }
-  delete(e, n, r) {
-    let { vault_id: vault_id, betas: betas, workspace_id: workspace_id } = n;
-    return this._client.delete(I`/v1/vaults/${vault_id}/credentials/${e}?beta=true`, {
-      ...r,
-      headers: T([
+  delete(credentialID, params, options) {
+    let { vault_id, betas, workspace_id } = params;
+    return this._client.delete(I`/v1/vaults/${vault_id}/credentials/${credentialID}?beta=true`, {
+      ...options,
+      headers: buildHeaders([
         {
           "anthropic-beta": [...(betas ?? []), "managed-agents-2026-04-01"].toString(),
-          ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0),
+          ...(workspace_id != null
+            ? {
+                "anthropic-workspace-id": workspace_id,
+              }
+            : undefined),
         },
-        r?.headers,
+        options?.headers,
       ]),
     });
   }
-  archive(e, n, r) {
-    let { vault_id: vault_id, betas: betas, workspace_id: workspace_id } = n;
-    return this._client.post(I`/v1/vaults/${vault_id}/credentials/${e}/archive?beta=true`, {
-      ...r,
-      headers: T([
+  archive(credentialID, params, options) {
+    let { vault_id, betas, workspace_id } = params;
+    return this._client.post(I`/v1/vaults/${vault_id}/credentials/${credentialID}/archive?beta=true`, {
+      ...options,
+      headers: buildHeaders([
         {
           "anthropic-beta": [...(betas ?? []), "managed-agents-2026-04-01"].toString(),
-          ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0),
+          ...(workspace_id != null
+            ? {
+                "anthropic-workspace-id": workspace_id,
+              }
+            : undefined),
         },
-        r?.headers,
+        options?.headers,
       ]),
     });
   }
-  mcpOAuthValidate(e, n, r) {
-    let { vault_id: vault_id, betas: betas, workspace_id: workspace_id } = n;
-    return this._client.post(I`/v1/vaults/${vault_id}/credentials/${e}/mcp_oauth_validate?beta=true`, {
-      ...r,
-      headers: T([
-        {
-          "anthropic-beta": [...(betas ?? []), "managed-agents-2026-04-01"].toString(),
-          ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0),
-        },
-        r?.headers,
-      ]),
-    });
+  mcpOAuthValidate(credentialID, params, options) {
+    let { vault_id, betas, workspace_id } = params;
+    return this._client.post(
+      I`/v1/vaults/${vault_id}/credentials/${credentialID}/mcp_oauth_validate?beta=true`,
+      {
+        ...options,
+        headers: buildHeaders([
+          {
+            "anthropic-beta": [...(betas ?? []), "managed-agents-2026-04-01"].toString(),
+            ...(workspace_id != null
+              ? {
+                  "anthropic-workspace-id": workspace_id,
+                }
+              : undefined),
+          },
+          options?.headers,
+        ]),
+      },
+    );
   }
 }
-
-export { bo };
+export { Credentials };

@@ -6,79 +6,80 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { q } from "./mode.js";
+import { require_mode } from "./mode.js";
 
 //@ chunk-spjgqa4y.js:11961-12654 cjs-fingerprint
-var cr = x(function (Ml, hr) {
-  var ar = q(),
-    Je = [
-      "0",
-      "1",
-      "2",
-      "3",
-      "4",
-      "5",
-      "6",
-      "7",
-      "8",
-      "9",
-      "A",
-      "B",
-      "C",
-      "D",
-      "E",
-      "F",
-      "G",
-      "H",
-      "I",
-      "J",
-      "K",
-      "L",
-      "M",
-      "N",
-      "O",
-      "P",
-      "Q",
-      "R",
-      "S",
-      "T",
-      "U",
-      "V",
-      "W",
-      "X",
-      "Y",
-      "Z",
-      " ",
-      "$",
-      "%",
-      "*",
-      "+",
-      "-",
-      ".",
-      "/",
-      ":",
-    ];
-  function Z(t) {
-    ((this.mode = ar.ALPHANUMERIC), (this.data = t));
+var require_alphanumeric_data = x(function (cjsExports, cjsModule) {
+  var Mode = require_mode();
+  var ALPHA_NUM_CHARS = [
+    "0",
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "6",
+    "7",
+    "8",
+    "9",
+    "A",
+    "B",
+    "C",
+    "D",
+    "E",
+    "F",
+    "G",
+    "H",
+    "I",
+    "J",
+    "K",
+    "L",
+    "M",
+    "N",
+    "O",
+    "P",
+    "Q",
+    "R",
+    "S",
+    "T",
+    "U",
+    "V",
+    "W",
+    "X",
+    "Y",
+    "Z",
+    " ",
+    "$",
+    "%",
+    "*",
+    "+",
+    "-",
+    ".",
+    "/",
+    ":",
+  ];
+  function AlphanumericData(data) {
+    this.mode = Mode.ALPHANUMERIC;
+    this.data = data;
   }
-  Z.getBitsLength = function (e) {
-    return 11 * Math.floor(e / 2) + 6 * (e % 2);
+  AlphanumericData.getBitsLength = function (length) {
+    return 11 * Math.floor(length / 2) + 6 * (length % 2);
   };
-  Z.prototype.getLength = function () {
+  AlphanumericData.prototype.getLength = function () {
     return this.data.length;
   };
-  Z.prototype.getBitsLength = function () {
-    return Z.getBitsLength(this.data.length);
+  AlphanumericData.prototype.getBitsLength = function () {
+    return AlphanumericData.getBitsLength(this.data.length);
   };
-  Z.prototype.write = function (e) {
-    let r;
-    for (r = 0; r + 2 <= this.data.length; r += 2) {
-      let n = Je.indexOf(this.data[r]) * 45;
-      ((n += Je.indexOf(this.data[r + 1])), e.put(n, 11));
+  AlphanumericData.prototype.write = function (bitBuffer) {
+    let i;
+    for (i = 0; i + 2 <= this.data.length; i += 2) {
+      let value = ALPHA_NUM_CHARS.indexOf(this.data[i]) * 45;
+      value += ALPHA_NUM_CHARS.indexOf(this.data[i + 1]);
+      bitBuffer.put(value, 11);
     }
-    if (this.data.length % 2) e.put(Je.indexOf(this.data[r]), 6);
+    if (this.data.length % 2) bitBuffer.put(ALPHA_NUM_CHARS.indexOf(this.data[i]), 6);
   };
-  hr.exports = Z;
+  cjsModule.exports = AlphanumericData;
 });
-
-export { cr };
+export { require_alphanumeric_data };

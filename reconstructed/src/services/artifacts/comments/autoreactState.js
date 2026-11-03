@@ -25,7 +25,7 @@ import {
   SUMMON_POLL_MS,
 } from "./commentNotifications.js";
 import { parseArtifactUrl } from "../../../tools/ArtifactTool/constants.js";
-import { Vt } from "../../../utils/agentId.js";
+import { normalizeUuidOrNull } from "../../../utils/agentId.js";
 import { recordCommentHandIn, recordUnaccountedComments } from "../shareEntries.js";
 import { getLiveState } from "../../liveReplica/liveReplica.js";
 import { getCommentsAwaitingReply } from "./commentState.js";
@@ -39,377 +39,469 @@ import {
 
 //@ chunk-9tgt55am.js:27724-27760 placement
 function isCommentNotificationGateOn() {
-  return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_MADRONE_SPINDLE_CORBEL, !1) === !0;
+  return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_MADRONE_SPINDLE_CORBEL, false) === true;
 }
 //@ chunk-9tgt55am.js:27760-27831 placement
-var Bn = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/,
-  ji = /^[1-9][0-9]{0,5}$/;
+var ISO_SECOND_UTC_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/;
+var NUMBER_STRING_RE = /^[1-9][0-9]{0,5}$/;
 //@ chunk-9tgt55am.js:27831-27873 placement
-function Zt(e) {
-  return e != null && Bn.test(e);
+function isToClaudeTimestamp(toClaudeAt) {
+  return toClaudeAt != null && ISO_SECOND_UTC_RE.test(toClaudeAt);
 }
 //@ chunk-9tgt55am.js:27873-27943 placement
-function Me(e, t, n) {
+function summonKey(e, t, n) {
   return `${e.toLowerCase()}:${t.toLowerCase()}:${n}`;
 }
 //@ chunk-9tgt55am.js:27943-27994 placement
-function kr(e, t) {
+function summonSlugKey(e, t) {
   return `${e.toLowerCase()}:*:${t}`;
 }
 //@ chunk-9tgt55am.js:27994-28077 placement
 function isCommentNotificationText(e) {
-  let t = getPromptText(e);
-  return t !== null && (t.startsWith(COMMENT_NOTICE_HEADER) || t.startsWith(COMMENTS_NOTICE_HEADER));
+  let promptText = getPromptText(e);
+  return (
+    promptText !== null &&
+    (promptText.startsWith(COMMENT_NOTICE_HEADER) || promptText.startsWith(COMMENTS_NOTICE_HEADER))
+  );
 }
+//@ chunk-9tgt55am.js:28077-28464 placement
 /**
  * 解析"[Artifact comment sent to Claude]"格式的通知文本，取出 artifact、线程与发送时间。
  */
-//@ chunk-9tgt55am.js:28077-28464 placement
-function parseCommentNotification(e) {
-  if (!e.startsWith(COMMENT_NOTICE_HEADER)) return null;
-  let parts = e.split(
+function parseCommentNotification(promptText) {
+  if (!promptText.startsWith(COMMENT_NOTICE_HEADER)) return null;
+  let lines = promptText.split(
     `
 `,
     4,
   );
-  if (parts.length < 4 || parts[0] !== COMMENT_NOTICE_HEADER) return null;
-  let n = parts[1],
-    a = parts[2],
-    r = parts[3];
+  if (lines.length < 4 || lines[0] !== COMMENT_NOTICE_HEADER) return null;
+  let n = lines[1];
+  let a = lines[2];
+  let r = lines[3];
   if (
     !n.startsWith(ARTIFACT_LINE_PREFIX) ||
     !a.startsWith(THREAD_LINE_PREFIX) ||
     !r.startsWith(SENT_AT_LINE_PREFIX)
   )
     return null;
-  let s = parseArtifactUrl(n.slice(ARTIFACT_LINE_PREFIX.length).trim())?.slug,
-    trimmed = a.slice(THREAD_LINE_PREFIX.length).trim(),
-    sliced = r.slice(SENT_AT_LINE_PREFIX.length);
-  if (s === void 0 || Vt(trimmed) === null || !Bn.test(sliced)) return null;
-  return { slug: s, threadId: trimmed, gestureAt: sliced };
+  let slug = parseArtifactUrl(n.slice(ARTIFACT_LINE_PREFIX.length).trim())?.slug;
+  let trimmed = a.slice(THREAD_LINE_PREFIX.length).trim();
+  let sliced = r.slice(SENT_AT_LINE_PREFIX.length);
+  if (slug === undefined || normalizeUuidOrNull(trimmed) === null || !ISO_SECOND_UTC_RE.test(sliced))
+    return null;
+  return {
+    slug,
+    threadId: trimmed,
+    gestureAt: sliced,
+  };
 }
 //@ chunk-9tgt55am.js:28464-28847 placement
 function parseMultiCommentNotification(e) {
   if (!e.startsWith(COMMENTS_NOTICE_HEADER)) return null;
-  let parts = e.split(
+  let lines = e.split(
     `
 `,
     4,
   );
-  if (parts.length < 4 || parts[0] !== COMMENTS_NOTICE_HEADER) return null;
-  let n = parts[1],
-    a = parts[2],
-    r = parts[3];
+  if (lines.length < 4 || lines[0] !== COMMENTS_NOTICE_HEADER) return null;
+  let n = lines[1];
+  let a = lines[2];
+  let r = lines[3];
   if (
     !n.startsWith(ARTIFACT_LINE_PREFIX) ||
     !a.startsWith(THREADS_LINE_PREFIX) ||
     !r.startsWith(SENT_AT_LINE_PREFIX)
   )
     return null;
-  let s = parseArtifactUrl(n.slice(ARTIFACT_LINE_PREFIX.length).trim())?.slug,
-    sliced = a.slice(THREADS_LINE_PREFIX.length),
-    sliced_2 = r.slice(SENT_AT_LINE_PREFIX.length);
-  if (s === void 0 || !ji.test(sliced) || !Bn.test(sliced_2)) return null;
-  return { slug: s, count: Number(sliced), gestureAt: sliced_2 };
+  let slug = parseArtifactUrl(n.slice(ARTIFACT_LINE_PREFIX.length).trim())?.slug;
+  let sliced = a.slice(THREADS_LINE_PREFIX.length);
+  let sliced_2 = r.slice(SENT_AT_LINE_PREFIX.length);
+  if (slug === undefined || !NUMBER_STRING_RE.test(sliced) || !ISO_SECOND_UTC_RE.test(sliced_2)) return null;
+  return {
+    slug,
+    count: Number(sliced),
+    gestureAt: sliced_2,
+  };
 }
 //@ chunk-9tgt55am.js:28847-28984 placement
-function summonKeyFromNotification(e) {
-  let t = parseCommentNotification(e);
-  if (t !== null) return Me(t.slug, t.threadId, t.gestureAt);
-  let n = parseMultiCommentNotification(e);
-  return n === null ? null : kr(n.slug, n.gestureAt);
+function summonKeyFromNotification(promptText) {
+  let commentNotification = parseCommentNotification(promptText);
+  if (commentNotification !== null)
+    return summonKey(commentNotification.slug, commentNotification.threadId, commentNotification.gestureAt);
+  let multiCommentNotification = parseMultiCommentNotification(promptText);
+  return multiCommentNotification === null
+    ? null
+    : summonSlugKey(multiCommentNotification.slug, multiCommentNotification.gestureAt);
 }
 //@ chunk-9tgt55am.js:28984-29282 placement
 function consumeSeededSummon(e) {
-  if (e.seededSummon !== !0) return null;
-  let t = getPromptText(e.value),
-    n = t === null ? null : summonKeyFromNotification(t);
-  if (t === null || n === null) return null;
-  let a = parseCommentNotification(t);
-  if (a !== null) recordCommentHandIn(a.slug, a.threadId, a.gestureAt);
+  if (e.seededSummon !== true) return null;
+  let promptText = getPromptText(e.value);
+  let n = promptText === null ? null : summonKeyFromNotification(promptText);
+  if (promptText === null || n === null) return null;
+  let commentNotification = parseCommentNotification(promptText);
+  if (commentNotification !== null)
+    recordCommentHandIn(
+      commentNotification.slug,
+      commentNotification.threadId,
+      commentNotification.gestureAt,
+    );
   else {
-    let r = parseMultiCommentNotification(t);
-    if (r !== null) recordUnaccountedComments(r.slug);
+    let multiCommentNotification = parseMultiCommentNotification(promptText);
+    if (multiCommentNotification !== null) recordUnaccountedComments(multiCommentNotification.slug);
   }
-  if (e.shouldQuery === !1) return null;
-  if ((Cr([n]), a !== null)) rememberOpenSummon(n, a);
+  if (e.shouldQuery === false) return null;
+  addSummonClaim([n]);
+  if (commentNotification !== null) rememberOpenSummon(n, commentNotification);
   return n;
 }
+//@ chunk-9tgt55am.js:29282-29505 placement
 /**
  * 用户提示词是宿主预置的评论召唤时，解析通知得到召唤键（单条或多条评论），记录评论交入并登记为已认领；不是召唤时返回 null。
  */
-//@ chunk-9tgt55am.js:29282-29505 placement
 function takeSeededSummon(e) {
-  if (e.seededSummon !== !0 || e.shouldQuery === !1) return null;
-  let t = getPromptText(e.value),
-    n = t === null ? null : summonKeyFromNotification(t);
-  if (t === null || n === null) return null;
-  let a = parseCommentNotification(t);
-  if (a !== null) recordCommentHandIn(a.slug, a.threadId, a.gestureAt);
-  return (Cr([n]), n);
+  if (e.seededSummon !== true || e.shouldQuery === false) return null;
+  let promptText = getPromptText(e.value);
+  let n = promptText === null ? null : summonKeyFromNotification(promptText);
+  if (promptText === null || n === null) return null;
+  let commentNotification = parseCommentNotification(promptText);
+  if (commentNotification !== null)
+    recordCommentHandIn(
+      commentNotification.slug,
+      commentNotification.threadId,
+      commentNotification.gestureAt,
+    );
+  addSummonClaim([n]);
+  return n;
 }
 //@ chunk-9tgt55am.js:29505-29734 placement
-function rememberOpenSummon(e, t) {
-  let { open: open } = getLiveState().summonSeeds;
-  (open.delete(e),
-    open.set(e, { slug: t.slug.toLowerCase(), threadId: t.threadId.toLowerCase(), gestureAt: t.gestureAt }));
+function rememberOpenSummon(e, commentNotification) {
+  let { open } = getLiveState().summonSeeds;
+  open.delete(e);
+  open.set(e, {
+    slug: commentNotification.slug.toLowerCase(),
+    threadId: commentNotification.threadId.toLowerCase(),
+    gestureAt: commentNotification.gestureAt,
+  });
   while (open.size > MAX_OPEN_SUMMONS) {
     let a = open.keys().next().value;
-    if (a === void 0) break;
+    if (a === undefined) break;
     open.delete(a);
   }
 }
 //@ chunk-9tgt55am.js:29734-30125 placement
-function settleSummonSeed(e, t, n) {
-  let { open: open, settled: settled } = getLiveState().summonSeeds,
-    lower = e.toLowerCase(),
-    lower_2 = t.toLowerCase();
+function settleSummonSeed(slug, threadId, text) {
+  let { open, settled } = getLiveState().summonSeeds;
+  let lower = slug.toLowerCase();
+  let lower_2 = threadId.toLowerCase();
   for (let [y, C] of open) if (C.slug === lower && C.threadId === lower_2) open.delete(y);
-  let h = n == null ? null : parseCommentNotification(n);
+  let h = text == null ? null : parseCommentNotification(text);
   if (h !== null && h.slug.toLowerCase() === lower && h.threadId.toLowerCase() === lower_2) {
-    let y = Me(h.slug, h.threadId, h.gestureAt);
-    (settled.delete(y), settled.add(y));
+    let y = summonKey(h.slug, h.threadId, h.gestureAt);
+    settled.delete(y);
+    settled.add(y);
     while (settled.size > MAX_OPEN_SUMMONS) {
       let C = settled.values().next().value;
-      if (C === void 0) break;
+      if (C === undefined) break;
       settled.delete(C);
     }
   }
 }
 //@ chunk-9tgt55am.js:30125-30212 placement
-function JFs(e) {
-  return getLiveState().summonSeeds.settled.has(Me(e.slug, e.threadId, e.gestureAt));
+/**
+ * 导出函数 `isSummonSettled`：参数 e，返回 getLiveState().summonSeeds.settled.has(Me(e.slug, e.threadId, e.gestureAt))。
+ */
+function isSummonSettled(e) {
+  return getLiveState().summonSeeds.settled.has(summonKey(e.slug, e.threadId, e.gestureAt));
 }
 //@ chunk-9tgt55am.js:30212-30296 placement
-function QFs(e) {
-  return getLiveState().summonSeeds.open.get(Me(e.slug, e.threadId, e.gestureAt));
+/**
+ * 导出函数 `openSummonFor`：参数 e，返回 getLiveState().summonSeeds.open.get(Me(e.slug, e.threadId, e.gestureAt))。
+ */
+function openSummonFor(e) {
+  return getLiveState().summonSeeds.open.get(summonKey(e.slug, e.threadId, e.gestureAt));
 }
+//@ chunk-9tgt55am.js:30296-30466 placement
 /**
  * 判断提示词来自本地真实用户输入：已声明、非远程 IO、非合成、非对等投递、没有入站来源，且客户端平台为空或是桌面应用。
  */
-//@ chunk-9tgt55am.js:30296-30466 placement
 function isLocalDesktopPrompt(e) {
   return (
-    e.declared === !0 &&
+    e.declared === true &&
     !e.isRemoteIO &&
-    e.isSynthetic !== !0 &&
+    e.isSynthetic !== true &&
     !e.peerDelivered &&
-    e.inboundOrigin === void 0 &&
-    (e.clientPlatform === void 0 || e.clientPlatform === DESKTOP_APP)
+    e.inboundOrigin === undefined &&
+    (e.clientPlatform === undefined || e.clientPlatform === DESKTOP_APP)
   );
 }
+//@ chunk-9tgt55am.js:30466-30633 placement
 /**
  * 为线程里等待回复且时间戳有效的评论生成召唤键，登记为已读认领（有上限），返回数量。
  */
-//@ chunk-9tgt55am.js:30466-30633 placement
-function claimAwaitingReplies(e, t) {
+function claimAwaitingReplies(slug, t) {
   let n = [];
   for (let a of t)
-    for (let r of getCommentsAwaitingReply(a)) if (Zt(r.toClaudeAt)) n.push(Me(e, a.id, r.toClaudeAt));
-  return (addToBoundedSet(getLiveState().summonSeeds.readClaims, n, MAX_READ_CLAIMS), n.length);
+    for (let r of getCommentsAwaitingReply(a))
+      if (isToClaudeTimestamp(r.toClaudeAt)) n.push(summonKey(slug, a.id, r.toClaudeAt));
+  addToBoundedSet(getLiveState().summonSeeds.readClaims, n, MAX_READ_CLAIMS);
+  return n.length;
 }
+//@ chunk-9tgt55am.js:30633-30767 placement
 /**
  * 把一组值按最近使用顺序加入集合（已有的移到末尾），超过上限时淘汰最早的。
  */
-//@ chunk-9tgt55am.js:30633-30767 placement
 function addToBoundedSet(e, t, n) {
-  for (let a of t) (e.delete(a), e.add(a));
+  for (let a of t) {
+    e.delete(a);
+    e.add(a);
+  }
   while (e.size > n) {
     let a = e.values().next().value;
-    if (a === void 0) break;
+    if (a === undefined) break;
     e.delete(a);
   }
 }
 //@ chunk-9tgt55am.js:30767-30815 placement
-function Cr(e) {
+function addSummonClaim(e) {
   addToBoundedSet(getLiveState().summonSeeds.claims, e, MAX_SUMMON_CLAIMS);
 }
 //@ chunk-9tgt55am.js:30815-30838 placement
-var Gn = { hostSeeded: !0 };
+var DEFAULT_SEED_OPTIONS = {
+  hostSeeded: true,
+};
 //@ chunk-9tgt55am.js:30838-30937 placement
-function St(e, t, n, a = Gn) {
-  return getLiveState().summonSeeds.readClaims.has(Me(e, t, n)) || (a.hostSeeded && en(e, t, n));
+function hasSummonClaim(slug, id, n, a = DEFAULT_SEED_OPTIONS) {
+  return (
+    getLiveState().summonSeeds.readClaims.has(summonKey(slug, id, n)) ||
+    (a.hostSeeded && hasHostClaim(slug, id, n))
+  );
 }
 //@ chunk-9tgt55am.js:30937-31027 placement
-function en(e, t, n) {
-  let { claims: claims } = getLiveState().summonSeeds;
-  return claims.has(Me(e, t, n)) || claims.has(kr(e, n));
+function hasHostClaim(slug, id, n) {
+  let { claims } = getLiveState().summonSeeds;
+  return claims.has(summonKey(slug, id, n)) || claims.has(summonSlugKey(slug, n));
 }
 //@ chunk-9tgt55am.js:31027-31096 placement
-function Hn(e, t, n, a = Gn) {
-  return n.length > 0 && n.every((r) => St(e, t, r, a));
+function allSummonsClaimed(e, t, n, a = DEFAULT_SEED_OPTIONS) {
+  return n.length > 0 && n.every((r) => hasSummonClaim(e, t, r, a));
 }
+//@ chunk-9tgt55am.js:31096-31269 placement
 /**
  * 消费召唤种子的认领记录：校验通过后删除对应的读认领（由宿主预置时一并删除认领）。
  */
-//@ chunk-9tgt55am.js:31096-31269 placement
-function consumeSummonClaims(e, t, n, a = Gn) {
-  if (!Hn(e, t, n, a)) return !1;
-  let { claims: claims, readClaims: readClaims } = getLiveState().summonSeeds;
-  for (let d of n) if ((readClaims.delete(Me(e, t, d)), a.hostSeeded)) claims.delete(Me(e, t, d));
-  return !0;
+function consumeSummonClaims(slug, id, n, a = DEFAULT_SEED_OPTIONS) {
+  if (!allSummonsClaimed(slug, id, n, a)) return false;
+  let { claims, readClaims } = getLiveState().summonSeeds;
+  for (let d of n) {
+    readClaims.delete(summonKey(slug, id, d));
+    if (a.hostSeeded) claims.delete(summonKey(slug, id, d));
+  }
+  return true;
 }
 //@ chunk-9tgt55am.js:31269-31358 placement
-function Or(e, t, n) {
-  let { readClaims: readClaims } = getLiveState().summonSeeds;
-  for (let r of n) readClaims.delete(Me(e, t, r));
+function consumeReadClaims(slug, id, n) {
+  let { readClaims } = getLiveState().summonSeeds;
+  for (let r of n) readClaims.delete(summonKey(slug, id, r));
 }
+//@ chunk-9tgt55am.js:31358-31573 placement
 /**
  * 在宽限期内轮询等待某线程的召唤认领出现（可中止），到期后再检查一次。
  */
-//@ chunk-9tgt55am.js:31358-31573 placement
-async function waitForSummonClaim(e, t, n, a) {
-  let r = getLiveState().summonSeeds.graceMsOverride ?? SUMMON_GRACE_MS,
-    s = Date.now() + r;
+async function waitForSummonClaim(slug, id, n, signal) {
+  let graceMsOverride = getLiveState().summonSeeds.graceMsOverride ?? SUMMON_GRACE_MS;
+  let s = Date.now() + graceMsOverride;
   while (Date.now() < s) {
-    if (a.aborted) return !1;
-    if (Hn(e, t, n)) return !0;
-    await sleep(Math.min(SUMMON_POLL_MS, Math.max(1, s - Date.now())), a);
+    if (signal.aborted) return false;
+    if (allSummonsClaimed(slug, id, n)) return true;
+    await sleep(Math.min(SUMMON_POLL_MS, Math.max(1, s - Date.now())), signal);
   }
-  return Hn(e, t, n);
+  return allSummonsClaimed(slug, id, n);
 }
+//@ chunk-9tgt55am.js:31573-31729 placement
 /**
  * 取提示词文本：字符串直接返回；内容块数组取最后一个 text 块的文字；否则 null。
  */
-//@ chunk-9tgt55am.js:31573-31729 placement
 function getPromptText(e) {
   if (typeof e === "string") return e;
   if (Array.isArray(e)) {
-    let at = e.at(-1);
-    if (at?.type === "text" && typeof at.text === "string") return at.text;
+    let last = e.at(-1);
+    if (last?.type === "text" && typeof last.text === "string") return last.text;
   }
   return null;
 }
 //@ chunk-9tgt55am.js:35345-35500 placement
 function getWholeFileAnchor(e) {
-  return e.anchor_path !== void 0 &&
-    (e.span_quote === void 0 || e.span_quote === "") &&
-    e.anchor_file_degraded !== !0 &&
-    e.carried !== !0
+  return e.anchor_path !== undefined &&
+    (e.span_quote === undefined || e.span_quote === "") &&
+    e.anchor_file_degraded !== true &&
+    e.carried !== true
     ? e.anchor_path
-    : void 0;
+    : undefined;
 }
 //@ chunk-9tgt55am.js:35500-35618 placement
 function getLatestCommentTime(e) {
   return e.comments.reduce(
-    (t, n) => (n.created_at !== void 0 && n.created_at > t ? n.created_at : t),
+    (acc, comment) =>
+      comment.created_at !== undefined && comment.created_at > acc ? comment.created_at : acc,
     e.created_at ?? "",
   );
 }
 //@ chunk-9tgt55am.js:35618-37679 placement
 async function collectThreadAnchorSnippets(e, t, n = {}) {
-  let { onlyThreadIds: onlyThreadIds, memoKey: memoKey, regionKids: regionKids } = n,
-    d = getLiveState(),
-    { anchorSnippets: anchorSnippets, accountEpoch: accountEpoch } = d,
-    C = (P) => (memoKey === void 0 ? void 0 : anchorSnippets.get(`${memoKey}|${P ?? ""}`)),
-    R = (P) => {
-      if (onlyThreadIds !== void 0 && !onlyThreadIds.has(P.id)) return;
-      let D = getWholeFileAnchor(P);
-      if (D === void 0) return;
-      let G = P.anchor_region ? regionKids?.get(P.id) : void 0;
-      return G === void 0 || G.length === 0
-        ? { path: D, key: D }
-        : { path: D, kids: G, key: `${D}|k${G.join(",")}` };
-    },
-    b = (P) => (P.comments.some((comment) => comment.sent_to_claude === !0) ? 0 : 2) + (P.resolved ? 1 : 0),
-    sorted = e
-      .filter((P) => R(P) !== void 0)
-      .sort((P, D) => b(P) - b(D) || getLatestCommentTime(D).localeCompare(getLatestCommentTime(P))),
-    S = new Map(),
-    w = new Map();
+  let { onlyThreadIds, memoKey, regionKids } = n;
+  let liveState = getLiveState();
+  let { anchorSnippets, accountEpoch } = liveState;
+  let C = (anchorFile) =>
+    memoKey === undefined ? undefined : anchorSnippets.get(`${memoKey}|${anchorFile ?? ""}`);
+  let R = (P) => {
+    if (onlyThreadIds !== undefined && !onlyThreadIds.has(P.id)) return;
+    let wholeFileAnchor = getWholeFileAnchor(P);
+    if (wholeFileAnchor === undefined) return;
+    let G = P.anchor_region ? regionKids?.get(P.id) : undefined;
+    return G === undefined || G.length === 0
+      ? {
+          path: wholeFileAnchor,
+          key: wholeFileAnchor,
+        }
+      : {
+          path: wholeFileAnchor,
+          kids: G,
+          key: `${wholeFileAnchor}|k${G.join(",")}`,
+        };
+  };
+  let b = (P) =>
+    (P.comments.some((comment) => comment.sent_to_claude === true) ? 0 : 2) + (P.resolved ? 1 : 0);
+  let sorted = e
+    .filter((P) => R(P) !== undefined)
+    .sort((P, D) => b(P) - b(D) || getLatestCommentTime(D).localeCompare(getLatestCommentTime(P)));
+  let S = new Map();
+  let w = new Map();
   for (let P of sorted) {
-    let D = R(P),
-      G = C(P.anchor_file);
+    let D = R(P);
+    let G = C(P.anchor_file);
     if (G?.has(D.key)) {
       let x = w.get(P.anchor_file) ?? new Map();
-      (x.set(D.key, G.get(D.key)), w.set(P.anchor_file, x));
+      x.set(D.key, G.get(D.key));
+      w.set(P.anchor_file, x);
       continue;
     }
     if (!S.has(P.anchor_file)) {
       if (S.size >= MAX_ANCHOR_FILES) continue;
-      S.set(P.anchor_file, { paths: new Set(), requests: new Map() });
+      S.set(P.anchor_file, {
+        paths: new Set(),
+        requests: new Map(),
+      });
     }
-    let { paths: paths, requests: requests } = S.get(P.anchor_file);
-    if (paths.size < MAX_ANCHORS_PER_FILE || paths.has(D.path)) (paths.add(D.path), requests.set(D.key, D));
+    let { paths, requests } = S.get(P.anchor_file);
+    if (paths.size < MAX_ANCHORS_PER_FILE || paths.has(D.path)) {
+      paths.add(D.path);
+      requests.set(D.key, D);
+    }
   }
-  if (memoKey !== void 0)
-    for (let P of w.keys()) {
-      let D = `${memoKey}|${P ?? ""}`,
-        G = anchorSnippets.get(D);
-      if (G !== void 0) (anchorSnippets.delete(D), anchorSnippets.set(D, G));
+  if (memoKey !== undefined)
+    for (let key of w.keys()) {
+      let D = `${memoKey}|${key ?? ""}`;
+      let G = anchorSnippets.get(D);
+      if (G !== undefined) {
+        anchorSnippets.delete(D);
+        anchorSnippets.set(D, G);
+      }
     }
   let L = new Map();
-  return (
-    await Promise.all(
-      [...S].map(async ([P, { paths: D, requests: G }]) => {
-        let V = await t(P).catch(() => {
-          return;
-        });
-        if (V === void 0) return;
-        let q = new Map();
-        for (let { path: path, kids: kids } of G.values())
-          if (kids !== void 0) q.set(path, [...(q.get(path) ?? []), ...kids]);
-        let x = await resolveAnchorElements(V, [...D], q),
-          Y = new Set(),
-          z = new Map();
-        for (let { path: path, kids: kids, key: key } of G.values()) {
-          let le = x.get(path);
-          if (le === void 0) {
-            z.set(key, null);
-            continue;
-          }
-          let me = kids?.map((ue) => le.kids?.get(ue));
-          if (me?.includes(void 0)) Y.add(key);
-          let be = Y.has(key) ? [] : me?.filter((ue) => typeof ue === "string");
-          z.set(key, { snippet: le.snippet, ...(be !== void 0 && be.length > 0 && { inside: be }) });
+  await Promise.all(
+    [...S].map(async ([P, { paths: D, requests: G }]) => {
+      let V = await t(P).catch(() => {
+        return;
+      });
+      if (V === undefined) return;
+      let q = new Map();
+      for (let { path, kids } of G.values())
+        if (kids !== undefined) q.set(path, [...(q.get(path) ?? []), ...kids]);
+      let anchorElements = await resolveAnchorElements(V, [...D], q);
+      let Y = new Set();
+      let z = new Map();
+      for (let { path, kids, key } of G.values()) {
+        let le = anchorElements.get(path);
+        if (le === undefined) {
+          z.set(key, null);
+          continue;
         }
-        if ((L.set(P, z), memoKey === void 0 || d.accountEpoch !== accountEpoch)) return;
-        let Q = `${memoKey}|${P ?? ""}`,
-          I = anchorSnippets.get(Q) ?? new Map();
-        for (let [j, Z] of z) if (!Y.has(j)) I.set(j, Z);
-        (anchorSnippets.delete(Q), anchorSnippets.set(Q, I));
-        while (anchorSnippets.size > ANCHOR_CACHE_MAX_PAGES)
-          anchorSnippets.delete(anchorSnippets.keys().next().value);
-      }),
-    ),
-    e.map((P) => {
-      let D = R(P);
-      if (D === void 0) return P;
-      let G = L.get(P.anchor_file)?.get(D.key) ?? w.get(P.anchor_file)?.get(D.key) ?? void 0;
-      return G === void 0 || G === null
-        ? P
-        : { ...P, anchor_snippet: G.snippet, ...(G.inside !== void 0 && { region_inside: [...G.inside] }) };
-    })
+        let mapped = kids?.map((ue) => le.kids?.get(ue));
+        if (mapped?.includes(undefined)) Y.add(key);
+        let be = Y.has(key) ? [] : mapped?.filter((ue) => typeof ue === "string");
+        z.set(key, {
+          snippet: le.snippet,
+          ...(be !== undefined &&
+            be.length > 0 && {
+              inside: be,
+            }),
+        });
+      }
+      L.set(P, z);
+      if (memoKey === undefined || liveState.accountEpoch !== accountEpoch) return;
+      let Q = `${memoKey}|${P ?? ""}`;
+      let I = anchorSnippets.get(Q) ?? new Map();
+      for (let [j, Z] of z) if (!Y.has(j)) I.set(j, Z);
+      anchorSnippets.delete(Q);
+      anchorSnippets.set(Q, I);
+      while (anchorSnippets.size > ANCHOR_CACHE_MAX_PAGES)
+        anchorSnippets.delete(anchorSnippets.keys().next().value);
+    }),
   );
+  return e.map((P) => {
+    let D = R(P);
+    if (D === undefined) return P;
+    let G = L.get(P.anchor_file)?.get(D.key) ?? w.get(P.anchor_file)?.get(D.key) ?? undefined;
+    return G === undefined || G === null
+      ? P
+      : {
+          ...P,
+          anchor_snippet: G.snippet,
+          ...(G.inside !== undefined && {
+            region_inside: [...G.inside],
+          }),
+        };
+  });
 }
 //@ chunk-9tgt55am.js:37679-37774 placement
-function zn(e) {
-  let t = { ...e, consumed: !1 };
-  return (getLiveState().summonAnswers.set(e.expectedToolUseId, t), t);
+function rememberSummonAnswer(e) {
+  let t = {
+    ...e,
+    consumed: false,
+  };
+  getLiveState().summonAnswers.set(e.expectedToolUseId, t);
+  return t;
 }
+//@ chunk-9tgt55am.js:37774-38046 placement
 /**
  * 某次回复工具调用对应的召唤答复还没用过且属于同一线程时，标记为已用；返回是否算作回应召唤，或需要延续的回复 id。
  */
-//@ chunk-9tgt55am.js:37774-38046 placement
-function consumeSummonAnswer(e, t, n) {
-  let a = n === void 0 ? void 0 : getLiveState().summonAnswers.get(n);
-  if (a === void 0 || a.consumed || a.slug !== e || a.threadId !== t) return { answersSummon: !1 };
-  return (
-    (a.consumed = !0),
-    a.continuesReplyId === void 0
-      ? { answersSummon: !0 }
-      : { answersSummon: !1, continuesReplyId: a.continuesReplyId }
-  );
+function consumeSummonAnswer(slug, threadId, toolUseId) {
+  let a = toolUseId === undefined ? undefined : getLiveState().summonAnswers.get(toolUseId);
+  if (a === undefined || a.consumed || a.slug !== slug || a.threadId !== threadId)
+    return {
+      answersSummon: false,
+    };
+  a.consumed = true;
+  return a.continuesReplyId === undefined
+    ? {
+        answersSummon: true,
+      }
+    : {
+        answersSummon: false,
+        continuesReplyId: a.continuesReplyId,
+      };
 }
+//@ chunk-9tgt55am.js:38046-38150 placement
 /**
  * 若召唤回答仍是当前记录，则按预期工具调用 id 删除它。
  */
-//@ chunk-9tgt55am.js:38046-38150 placement
 function clearSummonAnswer(e) {
   let summonAnswers = getLiveState().summonAnswers;
   if (summonAnswers.get(e.expectedToolUseId) === e) summonAnswers.delete(e.expectedToolUseId);
 }
-
 export {
   isLocalDesktopPrompt,
   takeSeededSummon,
@@ -420,14 +512,14 @@ export {
   claimAwaitingReplies,
   consumeSummonAnswer,
   parseCommentNotification,
-  QFs,
-  JFs,
-  zn,
+  openSummonFor,
+  isSummonSettled,
+  rememberSummonAnswer,
   clearSummonAnswer,
-  St,
-  Zt,
-  en,
-  Or,
+  hasSummonClaim,
+  isToClaudeTimestamp,
+  hasHostClaim,
+  consumeReadClaims,
   consumeSummonClaims,
   waitForSummonClaim,
   getPromptText,

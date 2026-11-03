@@ -8,50 +8,62 @@
  * pieces: chunk-ah34pb7m.js (2)
  * attribution: placement 2
  */
-import { r, e } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default_2,
+  jsxProd_default,
+} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Box, Text } from "../../ink/components/Text.js";
 import { themeColorOf } from "../../utils/spellcheck.js";
 import { BLACK_CIRCLE } from "../../utils/permissions/autoModeRulesPrompt.js";
 
+//@ chunk-ah34pb7m.js:30138-30454 placement
 /**
  * 进入计划模式的结果显示。
  */
-//@ chunk-ah34pb7m.js:30138-30454 placement
 function EnterPlanModeResult(m, d, c) {
-  return r(Box, {
+  return jsxProd_default_2(Box, {
     flexDirection: "column",
     marginTop: 1,
     children: [
-      r(Box, {
+      jsxProd_default_2(Box, {
         flexDirection: "row",
         children: [
-          e(Text, { color: themeColorOf("plan"), children: BLACK_CIRCLE }),
-          e(Text, { children: " Entered plan mode" }),
+          jsxProd_default(Text, {
+            color: themeColorOf("plan"),
+            children: BLACK_CIRCLE,
+          }),
+          jsxProd_default(Text, {
+            children: " Entered plan mode",
+          }),
         ],
       }),
-      e(Box, {
+      jsxProd_default(Box, {
         paddingLeft: 2,
-        children: e(Text, {
-          dimColor: !0,
+        children: jsxProd_default(Text, {
+          dimColor: true,
           children: "Claude is now exploring and designing an implementation approach.",
         }),
       }),
     ],
   });
 }
+//@ chunk-ah34pb7m.js:30454-30616 placement
 /**
  * “User declined to enter plan mode” 消息。
  */
-//@ chunk-ah34pb7m.js:30454-30616 placement
 function PlanModeDeclinedMessage() {
-  return r(Box, {
+  return jsxProd_default_2(Box, {
     flexDirection: "row",
     marginTop: 1,
     children: [
-      e(Text, { color: themeColorOf("default"), children: BLACK_CIRCLE }),
-      e(Text, { children: " User declined to enter plan mode" }),
+      jsxProd_default(Text, {
+        color: themeColorOf("default"),
+        children: BLACK_CIRCLE,
+      }),
+      jsxProd_default(Text, {
+        children: " User declined to enter plan mode",
+      }),
     ],
   });
 }
-
 export { EnterPlanModeResult, PlanModeDeclinedMessage };

@@ -8,10 +8,14 @@
  * pieces: chunk-hme9amad.js (66)
  * attribution: placement 66
  */
-import { lstat, lstat as lstat_2, readdir, rm, rmdir, stat, readFile } from "fs/promises";
+import { lstat, readdir, rm, rmdir, stat, readFile } from "fs/promises";
 import { join, relative, sep } from "path";
 import { COLLISION_LOSER } from "../../skills/hostSkillMounts.js";
-import { LUo, getHeldBackSyncedPlugins, clearCommandMemoizationCaches } from "../../commands.js";
+import {
+  isPluginDirMissingFromSyncedList,
+  getHeldBackSyncedPlugins,
+  clearCommandMemoizationCaches,
+} from "../../commands.js";
 import {
   firstLiveSessionMatching,
   SessionRecordsUnreadableError,
@@ -26,197 +30,236 @@ import {
   getFeatureValue_CACHED_MAY_BE_STALE,
   getFeatureValue_SESSION_PINNED,
 } from "../analytics/growthbook.js";
-import { Wts } from "../api/errorUtils.js";
+import { isIdleLongerThan } from "../api/errorUtils.js";
 import { hasActiveWork, onWorkStarted } from "../../utils/sessionActivity.js";
 import { logEvent } from "../analytics/index.js";
 import { fromEnum } from "../analytics/safeMetadata.js";
 import { getEntrypointKind, isHeadlessHostEntrypoint } from "../../utils/entrypointKinds.js";
 import {
   getStoredAccountBucket,
+  SKILLS_SYNC_DIR_2,
+  isSyncBucketName,
+  isHiddenFoldName,
   SKILLS_SYNC_DIR,
-  WYe,
-  MJ,
-  GYe,
   SYNCED_MANIFEST_FILE,
-  Cte,
+  TRASH_SUBDIR,
   syncedItemPath,
 } from "../../utils/plugins/syncedItems.js";
 import {
   checkReuseWindow,
   readReuseStamp,
-  fBr,
-  _3n,
-  eN,
-  b3n,
-  det,
-  XKs,
-  i$o,
-  Ybt,
-  K1t,
-  cet,
+  syncReuseWithinMs,
+  isSessionRefsSkillsSyncOn,
+  refreshSkillsSyncVeto,
+  isSkillsSyncLive,
+  isSkillsCustomizationAllowed,
+  readSkillsSyncSettingAlt,
+  isAccountSkillsSyncDenied,
+  lastCompleteRoundPath,
+  removeSyncedSkillDir,
+  MAX_SYNCED_SKILL_BYTES,
   readManifestText,
   parseManifestJson,
   parseValidRows,
-  uet,
+  stringArray,
   mergeManifestRows,
   omitKeys_2,
   mergeStaleDirs,
   planSyncDownloads,
 } from "../../utils/claudeAiSync/skillsSync.js";
 import {
-  E2e,
+  hasSyncMarker,
   verifySyncRoot,
   readSyncMarker,
   checkSyncRoots,
-  MUr,
+  rootRefusedError,
 } from "../../utils/claudeAiSync/syncOwnedRoot.js";
 import { isPlainNonInteractive, envSessionKind } from "../../utils/sessionShape.js";
-import { qOo } from "./orgSkillsApi.js";
+import { ORG_SKILL_ZIP_TIMEOUT_MS } from "./orgSkillsApi.js";
 import { env } from "../../utils/env.js";
 import { runSyncRoundOnce, reconcileSkillsManifest, checkSyncOwnedRootFor } from "./syncRound.js";
 import { sleep } from "../../utils/sleep.js";
-import { zqe } from "../plugins/accountSync/sessionSkillManifest.js";
+import { sessionSkillManifestSlot } from "../plugins/accountSync/sessionSkillManifest.js";
 import {
   clearSkillCaches,
-  syncedSkillsManifestSchema,
-  syncedSkillEntrySchema,
+  syncedSkillsManifestSchema as syncedSkillsManifestSchema_2,
+  syncedSkillEntrySchema as syncedSkillEntrySchema_2,
 } from "../../skills/loadSkillsDir.js";
-import { Jz } from "../../utils/plugins/pluginsChangedSignal.js";
+import { skillsChangedSignal } from "../../utils/plugins/pluginsChangedSignal.js";
 import { getClaudeConfigDir } from "../../utils/envUtils.js";
 import { STORAGE_SPACES } from "../../utils/storage/storageSpaces.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { kt, E, A, oe, o, QD } from "../../../vendor/zod/v4/classic/schemas.js";
+import { looseObject, E, array, unknown, string, QD } from "../../../vendor/zod/v4/classic/schemas.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { writeFileAtomic } from "../../utils/atomicPublishWrite.js";
-import { By } from "../plugins/accountSync/pluginsScopeGate.js";
+import { MAX_SCOPE_RESPONSE_BYTES } from "../plugins/accountSync/pluginsScopeGate.js";
 
 //@ chunk-hme9amad.js:2036-2772 placement
-async function resolveSkillsBucket(e, n, s) {
-  let t = new Set(n.map((y) => y.skillId)),
-    filtered = e.filter(
-      (y) =>
-        y.backingPluginId !== void 0 &&
-        y.updatedAt !== COLLISION_LOSER &&
-        !t.has(y.skillId) &&
-        LUo(s, y.backingPluginId),
-    );
+async function resolveSkillsBucket(e, skills, syncBucket) {
+  let t = new Set(skills.map((y) => y.skillId));
+  let filtered = e.filter(
+    (y) =>
+      y.backingPluginId !== undefined &&
+      y.updatedAt !== COLLISION_LOSER &&
+      !t.has(y.skillId) &&
+      isPluginDirMissingFromSyncedList(syncBucket, y.backingPluginId),
+  );
   if (filtered.length === 0) return [];
-  let w = filtered,
-    h = "another_session";
+  let w = filtered;
+  let h = "another_session";
   try {
     if (
       (await firstLiveSessionMatching(
         (b) =>
           b.pid !== process.pid &&
           b.kind !== "daemon" &&
-          b.asksForConvertedSkills !== !0 &&
+          b.asksForConvertedSkills !== true &&
           b.asksForConvertedSkills !== null,
-      )) === void 0
+      )) === undefined
     ) {
-      let b = await findInstalledSyncedPlugins(s, new Set(filtered.flatMap((R) => R.backingPluginId ?? [])));
-      if (b === null) h = "plugins_bucket_unread";
-      else
-        ((h = "no_plugin_folder"),
-          (w = filtered.filter((R) => R.backingPluginId !== void 0 && !b.has(R.backingPluginId))));
+      let installedSyncedPlugins = await findInstalledSyncedPlugins(
+        syncBucket,
+        new Set(filtered.flatMap((R) => R.backingPluginId ?? [])),
+      );
+      if (installedSyncedPlugins === null) h = "plugins_bucket_unread";
+      else {
+        h = "no_plugin_folder";
+        w = filtered.filter(
+          (R) => R.backingPluginId !== undefined && !installedSyncedPlugins.has(R.backingPluginId),
+        );
+      }
     }
   } catch (error) {
-    if (((h = "registry_unreadable"), !(error instanceof SessionRecordsUnreadableError)))
-      ((h = "read_failed"), logError(toError(error)));
+    h = "registry_unreadable";
+    if (!(error instanceof SessionRecordsUnreadableError)) {
+      h = "read_failed";
+      logError(toError(error));
+    }
   }
   if (w.length > 0)
-    logForDiagnosticsNoPII("info", "skills_sync_converted_copies_kept", { count: w.length, reason: h });
+    logForDiagnosticsNoPII("info", "skills_sync_converted_copies_kept", {
+      count: w.length,
+      reason: h,
+    });
   return w;
 }
+//@ chunk-hme9amad.js:2772-3399 placement
 /**
  * 检查被同步技能遮蔽的插件目录是否已消失，若消失的目录对应列表中的技能则记录并返回 true（需要重新同步）。
  */
-//@ chunk-hme9amad.js:2772-3399 placement
 async function noteHidingFoldersGone(e) {
-  let n = getHeldBackSyncedPlugins(),
-    filtered = (getLastSyncedLaneLoad() ?? []).filter(
-      ({ pluginId: pluginId }) => pluginId !== void 0 && n.get(pluginId)?.heldBack === !1,
-    ),
-    results = await Promise.all(
-      filtered.map(({ folder: folder }) =>
-        lstat_2(folder).then(
-          () => !0,
-          (S) => !isENOENT(S),
-        ),
+  let heldBackSyncedPlugins = getHeldBackSyncedPlugins();
+  let filtered = (getLastSyncedLaneLoad() ?? []).filter(
+    ({ pluginId }) => pluginId !== undefined && heldBackSyncedPlugins.get(pluginId)?.heldBack === false,
+  );
+  let results = await Promise.all(
+    filtered.map(({ folder }) =>
+      lstat(folder).then(
+        () => true,
+        (error) => !isENOENT(error),
       ),
     ),
-    filtered_2 = filtered.filter((M, S) => !results[S]),
-    w = remoteToolsState(),
-    filtered_3 = filtered_2.filter(({ folder: folder }) => w.hidingFoldersGone.has(folder)),
-    filtered_4 = filtered_2.filter(({ folder: folder }) => !w.hidingFoldersGone.has(folder)),
-    b = filtered_4.length > 0 ? await e() : [],
-    R = new Set(b.flatMap((M) => (M.updatedAt === COLLISION_LOSER ? [] : (M.backingPluginId ?? [])))),
-    filtered_5 = filtered_4.filter(({ pluginId: pluginId }) => pluginId !== void 0 && R.has(pluginId));
-  if (
-    ((w.hidingFoldersGone = new Set([...filtered_3, ...filtered_5].map(({ folder: folder }) => folder))),
-    filtered_5.length === 0)
-  )
-    return !1;
-  return (
-    logForDiagnosticsNoPII("info", "skills_sync_hiding_plugin_folder_gone", { count: filtered_5.length }),
-    !0
   );
+  let filtered_2 = filtered.filter((M, S) => !results[S]);
+  let w = remoteToolsState();
+  let filtered_3 = filtered_2.filter(({ folder }) => w.hidingFoldersGone.has(folder));
+  let filtered_4 = filtered_2.filter(({ folder }) => !w.hidingFoldersGone.has(folder));
+  let b = filtered_4.length > 0 ? await e() : [];
+  let R = new Set(b.flatMap((M) => (M.updatedAt === COLLISION_LOSER ? [] : (M.backingPluginId ?? []))));
+  let filtered_5 = filtered_4.filter(({ pluginId }) => pluginId !== undefined && R.has(pluginId));
+  w.hidingFoldersGone = new Set([...filtered_3, ...filtered_5].map(({ folder }) => folder));
+  if (filtered_5.length === 0) return false;
+  logForDiagnosticsNoPII("info", "skills_sync_hiding_plugin_folder_gone", {
+    count: filtered_5.length,
+  });
+  return true;
 }
+//@ chunk-hme9amad.js:3399-3593 placement
 /**
  * 技能同步的调度常量：默认/最小/最大间隔、空闲倍数、退避、睡眠检测阈值与对应的特性开关名。
  */
-//@ chunk-hme9amad.js:3399-3593 placement
-var DEFAULT_SYNC_INTERVAL_MINUTES = 10,
-  vt = DEFAULT_SYNC_INTERVAL_MINUTES * 60000,
-  Dt = 4,
-  Lt = "tengu_claudeai_skills_sync_interval_minutes",
-  Et = 5,
-  It = 1440,
-  Ct = "tengu_claudeai_skills_sync_idle_intervals",
-  On = 4,
-  Tt = 4,
-  Ft = 3600000,
-  Pt = 30000,
-  At = 60000,
-  xn = 180000,
-  Ie = 45000;
+var DEFAULT_SYNC_INTERVAL_MINUTES = 10;
+var DEFAULT_SYNC_INTERVAL_MS = DEFAULT_SYNC_INTERVAL_MINUTES * 60000;
+var MAX_SYNC_BACKOFF_FACTOR = 4;
+var SYNC_INTERVAL_FLAG = "tengu_claudeai_skills_sync_interval_minutes";
+var MIN_SYNC_INTERVAL_MINUTES = 5;
+var MAX_SYNC_INTERVAL_MINUTES = 1440;
+var IDLE_SYNC_INTERVALS_FLAG = "tengu_claudeai_skills_sync_idle_intervals";
+var DEFAULT_IDLE_INTERVAL_FACTOR = 4;
+var MAX_IDLE_INTERVAL_FACTOR = 4;
+var MAX_IDLE_SYNC_INTERVAL_MS = 3600000;
+var SYNC_JITTER_BASE_MS = 30000;
+var SYNC_JITTER_RANGE_MS = 60000;
+var WAKE_SETTLE_MS = 180000;
+var FIRST_FAILED_ROUND_THRESHOLD_MS = 45000;
 //@ chunk-hme9amad.js:3593-3719 placement
 function syncIntervalMs() {
-  let e = getFeatureValue_CACHED_MAY_BE_STALE(Lt, DEFAULT_SYNC_INTERVAL_MINUTES);
-  if (typeof e !== "number" || Number.isNaN(e) || e <= 0) return vt;
-  return Math.min(Math.max(e, Et), It) * 60000;
+  let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE(
+    SYNC_INTERVAL_FLAG,
+    DEFAULT_SYNC_INTERVAL_MINUTES,
+  );
+  if (
+    typeof featureValue_CACHED_MAY_BE_STALE !== "number" ||
+    Number.isNaN(featureValue_CACHED_MAY_BE_STALE) ||
+    featureValue_CACHED_MAY_BE_STALE <= 0
+  )
+    return DEFAULT_SYNC_INTERVAL_MS;
+  return (
+    Math.min(
+      Math.max(featureValue_CACHED_MAY_BE_STALE, MIN_SYNC_INTERVAL_MINUTES),
+      MAX_SYNC_INTERVAL_MINUTES,
+    ) * 60000
+  );
 }
 //@ chunk-hme9amad.js:3719-3774 placement
-function Hn() {
+/**
+ * 当前是否应走空闲同步节奏（空闲间隔更长、无活跃工作）。
+ */
+function shouldWeatherIdle() {
   let e = syncIntervalMs();
-  return idleSyncIntervalMs() > e && Wts(e) && !hasActiveWork();
+  return idleSyncIntervalMs() > e && isIdleLongerThan(e) && !hasActiveWork();
 }
 //@ chunk-hme9amad.js:3774-3916 placement
 function idleSyncIntervalMs() {
-  let e = getFeatureValue_CACHED_MAY_BE_STALE(Ct, On),
-    n = typeof e === "number" && !Number.isNaN(e) ? Math.min(Math.max(e, 1), Tt) : On,
-    s = syncIntervalMs();
-  return Math.max(s, Math.min(s * n, Ft));
+  let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE(
+    IDLE_SYNC_INTERVALS_FLAG,
+    DEFAULT_IDLE_INTERVAL_FACTOR,
+  );
+  let n =
+    typeof featureValue_CACHED_MAY_BE_STALE === "number" && !Number.isNaN(featureValue_CACHED_MAY_BE_STALE)
+      ? Math.min(Math.max(featureValue_CACHED_MAY_BE_STALE, 1), MAX_IDLE_INTERVAL_FACTOR)
+      : DEFAULT_IDLE_INTERVAL_FACTOR;
+  let s = syncIntervalMs();
+  return Math.max(s, Math.min(s * n, MAX_IDLE_SYNC_INTERVAL_MS));
 }
 //@ chunk-hme9amad.js:3916-3969 placement
-function Kn() {
-  return Pt + Math.floor(Math.random() * At);
+/**
+ * 同步间隔的随机抖动值。
+ */
+function syncJitterMs() {
+  return SYNC_JITTER_BASE_MS + Math.floor(Math.random() * SYNC_JITTER_RANGE_MS);
 }
 //@ chunk-hme9amad.js:3969-4038 placement
-function Te(e) {
+/**
+ * 按连续失败轮数计算指数退避后的同步间隔（封顶为基准的若干倍）。
+ */
+function backoffIntervalMs(consecutiveFailedRounds) {
   let n = syncIntervalMs();
-  return Math.min(n * 2 ** Math.max(0, e - 1), n * Dt);
+  return Math.min(n * 2 ** Math.max(0, consecutiveFailedRounds - 1), n * MAX_SYNC_BACKOFF_FACTOR);
 }
 //@ chunk-hme9amad.js:4038-4157 placement
 function armResync(e) {
   let n = remoteToolsState();
   if (n.resyncTimer) return;
-  ((n.resyncRunRound = e), scheduleResync(n, e, Te(n.consecutiveFailedRounds), "resync", !1));
+  n.resyncRunRound = e;
+  scheduleResync(n, e, backoffIntervalMs(n.consecutiveFailedRounds), "resync", false);
 }
 //@ chunk-hme9amad.js:4157-4292 placement
 function rescheduleResync(e) {
   let n = remoteToolsState();
   if (!n.resyncTimer || !n.resyncRunRound) return;
-  (clearTimeout(n.resyncTimer), scheduleResync(n, n.resyncRunRound, e, "resync", !1));
+  clearTimeout(n.resyncTimer);
+  scheduleResync(n, n.resyncRunRound, e, "resync", false);
 }
 //@ chunk-hme9amad.js:4292-4559 placement
 function awaitActivityForResync() {
@@ -224,8 +267,8 @@ function awaitActivityForResync() {
   if (e.stopAwaitingActivity) return;
   let mapped = [onInteraction, onWorkStarted].map((s) =>
     s(() => {
-      if ((e.stopAwaitingActivity?.(), e.syncPromise))
-        e.syncPromise.catch(() => {}).then(() => resyncOnActivity(e));
+      e.stopAwaitingActivity?.();
+      if (e.syncPromise) e.syncPromise.catch(() => {}).then(() => resyncOnActivity(e));
       else resyncOnActivity(e);
     }),
   );
@@ -235,70 +278,86 @@ function awaitActivityForResync() {
   };
 }
 //@ chunk-hme9amad.js:4559-4613 placement
-function Yn() {
+function isAwaitingActivityStop() {
   return remoteToolsState().stopAwaitingActivity !== null;
 }
 //@ chunk-hme9amad.js:4613-4657 placement
-function on() {
+function stopAwaitingActivity() {
   remoteToolsState().stopAwaitingActivity?.();
 }
+//@ chunk-hme9amad.js:4657-5137 placement
 /**
  * 有用户活动时调整重新同步计时（睡眠后跳过或提前）。
  */
-//@ chunk-hme9amad.js:4657-5137 placement
 function resyncOnActivity(e) {
   try {
     let resyncArmed = e.resyncArmed;
     if (!e.resyncTimer || !e.resyncRunRound || !resyncArmed || resyncArmed.trigger === "wake_settle") return;
     let rounded = Math.round(Date.now() - resyncArmed.wallMs - (performance.now() - resyncArmed.monotonicMs));
-    if (rounded > Ie && e.consecutiveFailedRounds === 0) {
-      (clearTimeout(e.resyncTimer),
-        skipResyncAfterSleep(e, e.resyncRunRound, resyncArmed.trigger, rounded, !0));
+    if (rounded > FIRST_FAILED_ROUND_THRESHOLD_MS && e.consecutiveFailedRounds === 0) {
+      clearTimeout(e.resyncTimer);
+      skipResyncAfterSleep(e, e.resyncRunRound, resyncArmed.trigger, rounded, true);
       return;
     }
-    let t = e.consecutiveFailedRounds > 0 ? Te(e.consecutiveFailedRounds) : 0;
-    if (resyncArmed.wallMs + resyncArmed.delayMs - Date.now() > t)
-      (clearTimeout(e.resyncTimer), scheduleResync(e, e.resyncRunRound, t, "resync", !0));
+    let t = e.consecutiveFailedRounds > 0 ? backoffIntervalMs(e.consecutiveFailedRounds) : 0;
+    if (resyncArmed.wallMs + resyncArmed.delayMs - Date.now() > t) {
+      clearTimeout(e.resyncTimer);
+      scheduleResync(e, e.resyncRunRound, t, "resync", true);
+    }
   } catch (error) {
     logError(error);
   }
 }
 //@ chunk-hme9amad.js:5137-5188 placement
-function jn() {
-  rescheduleResync(Te(remoteToolsState().consecutiveFailedRounds));
+function rescheduleResyncByBackoff() {
+  rescheduleResync(backoffIntervalMs(remoteToolsState().consecutiveFailedRounds));
 }
 //@ chunk-hme9amad.js:5188-5379 placement
 function scheduleResync(e, n, s, t, d) {
   let w = Date.now() + s;
-  ((e.resyncArmed = { trigger: t, delayMs: s, wallMs: Date.now(), monotonicMs: performance.now() }),
-    (e.resyncTimer = setTimeout(runResyncTick, s, e, n, w, t, d)),
-    e.resyncTimer.unref?.());
+  e.resyncArmed = {
+    trigger: t,
+    delayMs: s,
+    wallMs: Date.now(),
+    monotonicMs: performance.now(),
+  };
+  e.resyncTimer = setTimeout(runResyncTick, s, e, n, w, t, d);
+  e.resyncTimer.unref?.();
 }
 //@ chunk-hme9amad.js:5379-5628 placement
 function runResyncTick(e, n, s, t, d) {
-  let resyncTimer = e.resyncTimer,
-    max = Math.max(0, Date.now() - s);
-  if (max > Ie) {
-    skipResyncAfterSleep(e, n, t, max, !1);
+  let resyncTimer = e.resyncTimer;
+  let max = Math.max(0, Date.now() - s);
+  if (max > FIRST_FAILED_ROUND_THRESHOLD_MS) {
+    skipResyncAfterSleep(e, n, t, max, false);
     return;
   }
-  n({ trigger: t, tickLateMs: max, ...(d && { woken: d }) })
+  n({
+    trigger: t,
+    tickLateMs: max,
+    ...(d && {
+      woken: d,
+    }),
+  })
     .catch(() => {})
     .then(() => {
       if (e.resyncTimer !== resyncTimer) return;
-      scheduleResync(e, n, Te(e.consecutiveFailedRounds), "resync", !1);
+      scheduleResync(e, n, backoffIntervalMs(e.consecutiveFailedRounds), "resync", false);
     });
 }
 //@ chunk-hme9amad.js:5628-5865 placement
 function skipResyncAfterSleep(e, n, s, t, d) {
-  (logForDiagnosticsNoPII("info", "skills_sync_resync_skipped_after_sleep", { late_ms: t, woken: d }),
-    scheduleResync(e, n, xn, "wake_settle", d));
+  logForDiagnosticsNoPII("info", "skills_sync_resync_skipped_after_sleep", {
+    late_ms: t,
+    woken: d,
+  });
+  scheduleResync(e, n, WAKE_SETTLE_MS, "wake_settle", d);
   try {
     if (!isDiskless())
       logEvent("tengu_skills_sync_resync_skipped", {
         trigger: fromEnum(s),
         tick_late_ms: t,
-        settle_ms: xn,
+        settle_ms: WAKE_SETTLE_MS,
         woken: d,
       });
   } catch (error) {
@@ -306,344 +365,480 @@ function skipResyncAfterSleep(e, n, s, t, d) {
   }
 }
 //@ chunk-hme9amad.js:5865-5878 placement
-var Ot = 60000;
+var MAX_STARTUP_SYNC_WAIT_MS = 60000;
 //@ chunk-hme9amad.js:5878-5935 placement
-function ye(e) {
+/**
+ * 构造 listedFor 键：入口类型，加上是否把技能转换成了插件。
+ */
+function listedForKey(e) {
   let n = getEntrypointKind() ?? "none";
-  return e ? `${n}${an}` : n;
+  return e ? `${n}${CONVERTED_SKILLS_SUFFIX}` : n;
 }
 //@ chunk-hme9amad.js:5935-5962 placement
-var an = ".converted-skills";
+var CONVERTED_SKILLS_SUFFIX = ".converted-skills";
 //@ chunk-hme9amad.js:5962-6040 placement
-function $n(e) {
-  return { ...e, listedFor: e.listedFor.filter((n) => n.endsWith(an)) };
+function onlyConvertedSkills(e) {
+  return {
+    ...e,
+    listedFor: e.listedFor.filter((n) => n.endsWith(CONVERTED_SKILLS_SUFFIX)),
+  };
 }
 //@ chunk-hme9amad.js:6040-6858 placement
 async function reuseSkillsSyncRound({
-  syncedRoot: syncedRoot,
-  bucket: bucket,
-  root: root,
-  trigger: trigger,
-  pinned: pinned,
-  lastGeneration: lastGeneration,
-  holdsPlaceholders: holdsPlaceholders,
-  idle: idle,
-  convertedSkillsAsPlugins: convertedSkillsAsPlugins,
+  syncedRoot,
+  bucket,
+  root,
+  trigger,
+  pinned,
+  lastGeneration,
+  holdsPlaceholders,
+  idle,
+  convertedSkillsAsPlugins,
 }) {
-  let R = !pinned && bucket === getStoredAccountBucket(),
-    D = pinned ? void 0 : firstResyncDelay(trigger, R, idle);
-  if (D === void 0) return { list: !0, shared: R };
+  let R = !pinned && bucket === getStoredAccountBucket();
+  let D = pinned ? undefined : firstResyncDelay(trigger, R, idle);
+  if (D === undefined)
+    return {
+      list: true,
+      shared: R,
+    };
   if (R && idle) awaitActivityForResync();
   let M = await checkReuseWindow(root, D);
-  if (!M.reuse || !(await E2e(syncedRoot, bucket))) return (on(), { list: !0, shared: R });
-  let S = await readReuseStamp(root),
-    O = !1;
-  if (R) {
-    if (S === null || holdsPlaceholders || !S.listedFor.includes(ye(convertedSkillsAsPlugins)))
-      return (on(), { list: !0, shared: R });
-    let I = idle && Yn();
-    if (idle && !I && M.ageMs >= syncIntervalMs()) return { list: !0, shared: R };
-    O = S.token !== lastGeneration && trigger !== "startup";
-    let B = I ? idleSyncIntervalMs() : syncIntervalMs();
-    if (M.ageMs < B) rescheduleResync(B - M.ageMs + Kn());
-  } else {
-    let I = S?.listedFor ?? [];
-    if (
-      !(convertedSkillsAsPlugins ? I.includes(ye(!0)) : I.includes(ye(!1)) || !I.some((C) => C.endsWith(an)))
-    )
-      return { list: !0, shared: R };
+  if (!M.reuse || !(await hasSyncMarker(syncedRoot, bucket))) {
+    stopAwaitingActivity();
+    return {
+      list: true,
+      shared: R,
+    };
   }
-  return (
-    logForDiagnosticsNoPII("info", "skills_sync_round_reused", { age_ms: M.ageMs, within_ms: M.withinMs }),
-    { list: !1, generation: S?.token ?? null, reload: O }
-  );
+  let reuseStamp = await readReuseStamp(root);
+  let reload = false;
+  if (R) {
+    if (
+      reuseStamp === null ||
+      holdsPlaceholders ||
+      !reuseStamp.listedFor.includes(listedForKey(convertedSkillsAsPlugins))
+    ) {
+      stopAwaitingActivity();
+      return {
+        list: true,
+        shared: R,
+      };
+    }
+    let I = idle && isAwaitingActivityStop();
+    if (idle && !I && M.ageMs >= syncIntervalMs())
+      return {
+        list: true,
+        shared: R,
+      };
+    reload = reuseStamp.token !== lastGeneration && trigger !== "startup";
+    let B = I ? idleSyncIntervalMs() : syncIntervalMs();
+    if (M.ageMs < B) rescheduleResync(B - M.ageMs + syncJitterMs());
+  } else {
+    let listedFor = reuseStamp?.listedFor ?? [];
+    if (
+      !(convertedSkillsAsPlugins
+        ? listedFor.includes(listedForKey(true))
+        : listedFor.includes(listedForKey(false)) ||
+          !listedFor.some((C) => C.endsWith(CONVERTED_SKILLS_SUFFIX)))
+    )
+      return {
+        list: true,
+        shared: R,
+      };
+  }
+  logForDiagnosticsNoPII("info", "skills_sync_round_reused", {
+    age_ms: M.ageMs,
+    within_ms: M.withinMs,
+  });
+  return {
+    list: false,
+    generation: reuseStamp?.token ?? null,
+    reload,
+  };
 }
 //@ chunk-hme9amad.js:6858-7045 placement
-function firstResyncDelay(e, n, s) {
-  let t = e === "startup" ? fBr() : void 0;
-  if (!n || e === "reload") return t;
-  if (s) return idleSyncIntervalMs();
+function firstResyncDelay(trigger, n, idle) {
+  let t = trigger === "startup" ? syncReuseWithinMs() : undefined;
+  if (!n || trigger === "reload") return t;
+  if (idle) return idleSyncIntervalMs();
   let d =
-    e === "startup" && (!isPlainNonInteractive() || (isHeadlessHostEntrypoint() && envSessionKind()))
-      ? Math.min(Ot, syncIntervalMs())
+    trigger === "startup" && (!isPlainNonInteractive() || (isHeadlessHostEntrypoint() && envSessionKind()))
+      ? Math.min(MAX_STARTUP_SYNC_WAIT_MS, syncIntervalMs())
       : syncIntervalMs();
   return Math.max(d, t ?? 0);
 }
 //@ chunk-hme9amad.js:7045-7074 placement
 var TENGU_JAUNTY_ALPACA = "tengu_jaunty_alpaca";
 //@ chunk-hme9amad.js:7074-7110 placement
-function Zn() {
-  return getFeatureValue_SESSION_PINNED(TENGU_JAUNTY_ALPACA, !0) !== !1;
+function isJauntyAlpacaOn() {
+  return getFeatureValue_SESSION_PINNED(TENGU_JAUNTY_ALPACA, true) !== false;
 }
 //@ chunk-hme9amad.js:7110-7141 placement
 var TENGU_QUIZZICAL_WIRTH = "tengu_quizzical_wirth";
 //@ chunk-hme9amad.js:7141-7176 placement
-function Fe() {
-  return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_QUIZZICAL_WIRTH, !0) !== !1;
+/**
+ * 读开关 tengu_quizzical_wirth（默认开）。
+ */
+function isQuizzicalWirthOn() {
+  return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_QUIZZICAL_WIRTH, true) !== false;
 }
 //@ chunk-hme9amad.js:7176-7199 placement
-var ln = 15,
-  Yt = qOo + 60000;
+var MAX_INSTALL_WAIT_CHAIN = 15;
+var INSTALL_WAIT_CEILING_MS = ORG_SKILL_ZIP_TIMEOUT_MS + 60000;
 //@ chunk-hme9amad.js:7199-7282 placement
-function jt() {
+function firstListWaitTimeoutMs() {
   let CLAUDE_CODE_SYNC_SKILLS_WAIT_TIMEOUT_MS = env.CLAUDE_CODE_SYNC_SKILLS_WAIT_TIMEOUT_MS;
   return CLAUDE_CODE_SYNC_SKILLS_WAIT_TIMEOUT_MS && CLAUDE_CODE_SYNC_SKILLS_WAIT_TIMEOUT_MS > 0
     ? CLAUDE_CODE_SYNC_SKILLS_WAIT_TIMEOUT_MS
     : 5000;
 }
 //@ chunk-hme9amad.js:7282-7370 placement
-function tDs() {
+/**
+ * 计算安装等待的超时。
+ */
+function installWaitTimeoutMs() {
   let e = env.CLAUDE_CODE_SYNC_SKILLS_INSTALL_TIMEOUT_MS;
   return e && e > 0 ? e : 30000;
 }
+//@ chunk-hme9amad.js:7370-7521 placement
 /**
  * 返回首次技能列表的 deferred（Promise 与 resolve），没有时创建。
  */
-//@ chunk-hme9amad.js:7370-7521 placement
 function firstListDeferred() {
   let e = remoteToolsState();
   if (!e.firstListDeferred) {
-    let n,
-      promise = new Promise((t) => {
-        n = t;
-      });
-    e.firstListDeferred = { promise: promise, resolve: n };
+    let resolve;
+    let promise = new Promise((resolve_2) => {
+      resolve = resolve_2;
+    });
+    e.firstListDeferred = {
+      promise,
+      resolve,
+    };
   }
   return e.firstListDeferred;
 }
 //@ chunk-hme9amad.js:7521-7596 placement
-function lLe(e, n, s) {
-  ((remoteToolsState().firstSyncPromise ??= runStartupSync(e, n, s)),
-    armResync((t) => runSyncRoundOnce(e, n, s, t)));
+/**
+ * 启动技能同步并重新同步。
+ */
+function startSkillSyncAndResync(e, n, s) {
+  remoteToolsState().firstSyncPromise ??= runStartupSync(e, n, s);
+  armResync((t) => runSyncRoundOnce(e, n, s, t));
 }
+//@ chunk-hme9amad.js:7596-7780 placement
 /**
  * CCR 中按 CLAUDE_CODE_CCR_EARLY_SKILLS_SYNC 在非交互会话启动时提前开始技能同步，返回是否启动。
  */
-//@ chunk-hme9amad.js:7596-7780 placement
-function startEarlySkillsSync(e, n, s, t) {
-  if (!env.CLAUDE_CODE_CCR_EARLY_SKILLS_SYNC || e.host.launchOptions.isInteractive() || !_3n(e) || t())
-    return !1;
-  if ((eN(), !b3n(e) || !det() || XKs())) return !1;
-  return (lLe(e, n, s), !0);
+function startEarlySkillsSync(rootSession, n, s, t) {
+  if (
+    !env.CLAUDE_CODE_CCR_EARLY_SKILLS_SYNC ||
+    rootSession.host.launchOptions.isInteractive() ||
+    !isSessionRefsSkillsSyncOn(rootSession) ||
+    t()
+  )
+    return false;
+  refreshSkillsSyncVeto();
+  if (!isSkillsSyncLive(rootSession) || !isSkillsCustomizationAllowed() || readSkillsSyncSettingAlt())
+    return false;
+  startSkillSyncAndResync(rootSession, n, s);
+  return true;
 }
 //@ chunk-hme9amad.js:7780-7862 placement
-function rDs(e, n, s) {
+/**
+ * 等待首次技能列表返回。
+ */
+function awaitFirstSkillList(e, storageV5, credentials) {
   let t = firstListDeferred();
-  return ((remoteToolsState().firstSyncPromise ??= runStartupSync(e, n, s)), t.promise);
+  remoteToolsState().firstSyncPromise ??= runStartupSync(e, storageV5, credentials);
+  return t.promise;
 }
+//@ chunk-hme9amad.js:7862-8070 placement
 /**
  * 回合开始前等待首次技能列表，超过剩余等待时间则记 timed_out 遥测。
  */
-//@ chunk-hme9amad.js:7862-8070 placement
-async function awaitFirstSkillsList(e, n) {
-  let s = jt() - (performance.now() - n),
-    winner = await Promise.race([e.then(() => "listed"), sleep(Math.max(0, s)).then(() => "timed_out")]);
+async function awaitFirstSkillsList(skillsSync, skillsSyncStartedAt) {
+  let s = firstListWaitTimeoutMs() - (performance.now() - skillsSyncStartedAt);
+  let winner = await Promise.race([
+    skillsSync.then(() => "listed"),
+    sleep(Math.max(0, s)).then(() => "timed_out"),
+  ]);
   if (winner === "timed_out") logEvent("tengu_skills_sync_wait_timeout", {});
   return winner;
 }
+//@ chunk-hme9amad.js:8070-8198 placement
 /**
  * 丢弃进行中的请求，等当前同步结束后以 reload 触发重新同步。
  */
-//@ chunk-hme9amad.js:8070-8198 placement
-async function reloadSyncedSkills(e, n, s) {
-  return (
-    zqe.of(e).discardInflight(),
-    await remoteToolsState().syncPromise?.catch(() => {}),
-    runSyncRoundOnce(e, n, s, { trigger: "reload" })
-  );
+async function reloadSyncedSkills(e, storageV5, credentials) {
+  sessionSkillManifestSlot.of(e).discardInflight();
+  await remoteToolsState().syncPromise?.catch(() => {});
+  return runSyncRoundOnce(e, storageV5, credentials, {
+    trigger: "reload",
+  });
 }
 //@ chunk-hme9amad.js:8198-8303 placement
 function runStartupSync(e, n, s) {
   let t = remoteToolsState();
-  return runSyncRoundOnce(e, n, s, { trigger: "startup" }).finally(() => {
-    t.firstRoundSettled = !0;
+  return runSyncRoundOnce(e, n, s, {
+    trigger: "startup",
+  }).finally(() => {
+    t.firstRoundSettled = true;
   });
 }
 //@ chunk-hme9amad.js:8303-8375 placement
-function un() {
+function markFirstRoundEmitted() {
   let e = remoteToolsState();
-  if (!e.firstRoundSettled) e.firstRoundEmitted = !0;
+  if (!e.firstRoundSettled) e.firstRoundEmitted = true;
 }
 //@ chunk-hme9amad.js:8375-8410 placement
-function Hce() {
-  (un(), clearSkillCaches(), Jz.emit());
+/**
+ * 清空技能缓存并广播变更（技能 bucket 代号变化时调用）。
+ */
+function resetSkillSyncState() {
+  markFirstRoundEmitted();
+  clearSkillCaches();
+  skillsChangedSignal.emit();
 }
+//@ chunk-hme9amad.js:8410-8521 placement
 /**
  * 记录技能 bucket 代号；代号变化时清空同步缓存。
  */
-//@ chunk-hme9amad.js:8410-8521 placement
 function noteBucketGeneration(e, n) {
   if (e === null) return;
   if (n !== null && e.token !== n.token) {
-    Hce();
+    resetSkillSyncState();
     return;
   }
   remoteToolsState().bucketGeneration = e.token;
 }
 //@ chunk-hme9amad.js:8521-8553 placement
-function ne() {
-  return join(getClaudeConfigDir(), SKILLS_SYNC_DIR);
+/**
+ * 技能同步根目录的绝对路径。
+ */
+function skillsSyncDir() {
+  return join(getClaudeConfigDir(), SKILLS_SYNC_DIR_2);
 }
 //@ chunk-hme9amad.js:8553-8585 placement
-function rt(e) {
-  return join(ne(), e);
+/**
+ * 同步根目录下的相对路径。
+ */
+function skillsSyncPath(e) {
+  return join(skillsSyncDir(), e);
 }
 //@ chunk-hme9amad.js:8585-8667 placement
-function ot(e) {
+/**
+ * 把同步目录路径映射成用户配置存储空间里的键。
+ */
+function storageKeyForSyncedPath(e) {
   return STORAGE_SPACES.userConfigDir("skills", relative(join(getClaudeConfigDir(), "skills"), e).split(sep));
 }
+//@ chunk-hme9amad.js:8667-9212 placement
 /**
  * 扫描技能同步根目录：区分 bucket、杂项与不可读条目。
  */
-//@ chunk-hme9amad.js:8667-9212 placement
-async function scanSkillsSyncRoot(e) {
-  let n = ne();
+async function scanSkillsSyncRoot(storageV5) {
+  let n = skillsSyncDir();
   if (
     (await verifySyncRoot(
       n,
       getClaudeConfigDir(),
-      { event: "skills_sync_root_refused", phase: "prune", rootLabel: SKILLS_SYNC_DIR },
-      { storageV5: e },
+      {
+        event: "skills_sync_root_refused",
+        phase: "prune",
+        rootLabel: SKILLS_SYNC_DIR_2,
+      },
+      {
+        storageV5,
+      },
     ).catch(() => null)) !== "real"
   )
     return null;
   let t;
   try {
-    t = await readdir(n, { withFileTypes: !0 });
+    t = await readdir(n, {
+      withFileTypes: true,
+    });
   } catch {
     return null;
   }
-  let d = [],
-    w = [],
-    h = [];
+  let d = [];
+  let w = [];
+  let h = [];
   for (let y of t) {
-    let b = y.isDirectory() && WYe(y.name) ? await readSyncMarker(n, y.name) : "unmarked";
+    let b = y.isDirectory() && isSyncBucketName(y.name) ? await readSyncMarker(n, y.name) : "unmarked";
     if (b === "marked") d.push(y.name);
-    else if (typeof b === "object")
-      (h.push(y.name),
-        logForDiagnosticsNoPII("warn", "skills_sync_bucket_marker_unreadable", { code: b.unreadable }));
-    else if (!MJ(y.name)) w.push(y.name);
+    else if (typeof b === "object") {
+      h.push(y.name);
+      logForDiagnosticsNoPII("warn", "skills_sync_bucket_marker_unreadable", {
+        code: b.unreadable,
+      });
+    } else if (!isHiddenFoldName(y.name)) w.push(y.name);
   }
-  return { buckets: d, strays: w, unreadable: h };
+  return {
+    buckets: d,
+    strays: w,
+    unreadable: h,
+  };
 }
 //@ chunk-hme9amad.js:9212-9357 placement
 async function trashStrayEntries(e, n) {
   let s = 0;
-  for (let t of e) if (await moveToSyncTrash(join(ne(), t), n)) s++;
-  if (s > 0) logForDiagnosticsNoPII("info", "skills_sync_stray_entry_trashed", { count: s });
+  for (let t of e) if (await moveToSyncTrash(join(skillsSyncDir(), t), n)) s++;
+  if (s > 0)
+    logForDiagnosticsNoPII("info", "skills_sync_stray_entry_trashed", {
+      count: s,
+    });
   return s;
 }
+//@ chunk-hme9amad.js:9357-9468 placement
 /**
  * 把技能同步根目录下的杂项条目移到回收目录，返回是否移动了。
  */
-//@ chunk-hme9amad.js:9357-9468 placement
-async function trashStraySyncEntries(e) {
-  let n = await scanSkillsSyncRoot(e);
-  if (n === null || n.strays.length === 0) return !1;
-  return (await trashStrayEntries(n.strays, e)) > 0;
+async function trashStraySyncEntries(storageV5) {
+  let n = await scanSkillsSyncRoot(storageV5);
+  if (n === null || n.strays.length === 0) return false;
+  return (await trashStrayEntries(n.strays, storageV5)) > 0;
 }
+//@ chunk-hme9amad.js:9468-9593 placement
 /**
  * 把技能同步目录移到回收目录（带根目录检查）。
  */
-//@ chunk-hme9amad.js:9468-9593 placement
-function moveToSyncTrash(e, n) {
+function moveToSyncTrash(dir, storageV5) {
   return checkSyncRoots({
-    dir: e,
-    trashRoot: xe(),
+    dir,
+    trashRoot: trashRootDir(),
     configHome: getClaudeConfigDir(),
     failureEvent: "skills_sync_trash_move_failed",
-    storageV5: n,
+    storageV5,
   });
 }
+//@ chunk-hme9amad.js:9593-10191 placement
 /**
  * 技能同步关闭时清理同步根目录：逐个 bucket 对账清单并删除，移走杂项，清空命令与技能缓存。
  */
-//@ chunk-hme9amad.js:9593-10191 placement
-async function pruneSkillsSyncRoot(e) {
-  if (!i$o()) return !1;
+async function pruneSkillsSyncRoot(storageV5) {
+  if (!isAccountSkillsSyncDenied()) return false;
   let n = await verifySyncRoot(
-    ne(),
+    skillsSyncDir(),
     getClaudeConfigDir(),
-    { event: "skills_sync_root_refused", phase: "prune", rootLabel: SKILLS_SYNC_DIR },
-    { storageV5: e },
+    {
+      event: "skills_sync_root_refused",
+      phase: "prune",
+      rootLabel: SKILLS_SYNC_DIR_2,
+    },
+    {
+      storageV5,
+    },
   );
-  if (n !== "real" && n !== "absent") return !1;
-  let s = null,
-    t = n === "real" ? await scanSkillsSyncRoot(e) : null;
+  if (n !== "real" && n !== "absent") return false;
+  let s = null;
+  let t = n === "real" ? await scanSkillsSyncRoot(storageV5) : null;
   if (t !== null) {
     s = 0;
     for (let bucket of t.buckets) {
-      let h = rt(bucket);
-      await rm(Ybt(h), { force: !0 }).catch(() => {});
-      let y = await reconcileSkillsManifest(h, e).catch(() => null);
-      if (y !== null)
-        ((s += y),
-          await rmdir(h).then(
-            () => K1t(ne(), bucket),
-            () => {},
-          ));
+      let h = skillsSyncPath(bucket);
+      await rm(lastCompleteRoundPath(h), {
+        force: true,
+      }).catch(() => {});
+      let y = await reconcileSkillsManifest(h, storageV5).catch(() => null);
+      if (y !== null) {
+        s += y;
+        await rmdir(h).then(
+          () => removeSyncedSkillDir(skillsSyncDir(), bucket),
+          () => {},
+        );
+      }
     }
-    ((s += await trashStrayEntries([...t.strays, ...t.unreadable], e)), await rmdir(ne()).catch(() => {}));
+    s += await trashStrayEntries([...t.strays, ...t.unreadable], storageV5);
+    await rmdir(skillsSyncDir()).catch(() => {});
   }
-  logForDiagnosticsNoPII("info", "skills_sync_pruned_for_closed_gate", { moved: s ?? 0 });
+  logForDiagnosticsNoPII("info", "skills_sync_pruned_for_closed_gate", {
+    moved: s ?? 0,
+  });
   let d = s !== null && s > 0;
-  if (d) (clearCommandMemoizationCaches(), clearSkillCaches(), Jz.emit());
+  if (d) {
+    clearCommandMemoizationCaches();
+    clearSkillCaches();
+    skillsChangedSignal.emit();
+  }
   return d;
 }
 //@ chunk-hme9amad.js:10191-10224 placement
-function xe() {
-  return join(getClaudeConfigDir(), GYe);
+/**
+ * 技能垃圾箱目录路径。
+ */
+function trashRootDir() {
+  return join(getClaudeConfigDir(), SKILLS_SYNC_DIR);
 }
 //@ chunk-hme9amad.js:10224-10254 placement
-function Be(e) {
-  return join(e, SYNCED_MANIFEST_FILE);
+/**
+ * 某目录下同步清单（SYNCED_MANIFEST_FILE）的路径。
+ */
+function manifestPathIn(root) {
+  return join(root, SYNCED_MANIFEST_FILE);
 }
+//@ chunk-hme9amad.js:10254-10593 placement
 /**
  * 技能同步清单 schema（lastUpdated、skills、staleDirs、pendingClaims）与清单中单个技能的 schema。
  */
-//@ chunk-hme9amad.js:10254-10593 placement
-var SKILLS_MANIFEST_SCHEMA = new Set(),
-  nt = [],
-  $t = DoctorLazy(() =>
-    kt({
-      lastUpdated: E().catch(0),
-      skills: A(oe()),
-      staleDirs: oe().optional(),
-      pendingClaims: oe().optional(),
-    }),
-  ),
-  qt = DoctorLazy(() =>
-    kt({
-      name: o(),
-      skillId: o().catch(""),
-      description: o().catch(""),
-      source: o().catch(""),
-      updatedAt: o().nullable().catch(null),
-      userInvocable: QD().catch(void 0),
-      disableModelInvocation: QD().catch(void 0),
-    }),
-  );
+var SKILLS_MANIFEST_SCHEMA = new Set();
+var SKILLS_MANIFEST_SCHEMA_PLACEHOLDER = [];
+var syncedSkillsManifestSchema = DoctorLazy(() =>
+  looseObject({
+    lastUpdated: E().catch(0),
+    skills: array(unknown()),
+    staleDirs: unknown().optional(),
+    pendingClaims: unknown().optional(),
+  }),
+);
+var syncedSkillEntrySchema = DoctorLazy(() =>
+  looseObject({
+    name: string(),
+    skillId: string().catch(""),
+    description: string().catch(""),
+    source: string().catch(""),
+    updatedAt: string().nullable().catch(null),
+    userInvocable: QD().catch(undefined),
+    disableModelInvocation: QD().catch(undefined),
+  }),
+);
 //@ chunk-hme9amad.js:10593-10625 placement
-function dt(e) {
-  return ot(Be(e));
+/**
+ * 某目录下同步清单在存储空间里的键。
+ */
+function manifestStorageKey(root) {
+  return storageKeyForSyncedPath(manifestPathIn(root));
 }
 //@ chunk-hme9amad.js:10625-11482 placement
 async function readSkillsSyncManifest(e, n) {
   let s = !n.manifestRead;
-  n.manifestRead = !0;
+  n.manifestRead = true;
   let t;
   if (e)
     try {
-      let read = await e.read([{ key: dt(n.root), offset: 0, length: cet + 1 }]);
-      if (!read.ok) {
+      let R = await e.read([
+        {
+          key: manifestStorageKey(n.root),
+          offset: 0,
+          length: MAX_SYNCED_SKILL_BYTES + 1,
+        },
+      ]);
+      if (!R.ok) {
         if (s)
-          logForDiagnosticsNoPII("warn", "skills_sync_manifest_unreadable", { code: "backend_read_failed" });
+          logForDiagnosticsNoPII("warn", "skills_sync_manifest_unreadable", {
+            code: "backend_read_failed",
+          });
         return null;
       }
-      let D = read.value.items[0];
+      let D = R.value.items[0];
       if (!D.found) return null;
-      if (D.totalBytes > cet || D.value.byteLength > cet) {
-        if (s) logForDiagnosticsNoPII("warn", "skills_sync_manifest_unreadable", { code: "parse_or_size" });
+      if (D.totalBytes > MAX_SYNCED_SKILL_BYTES || D.value.byteLength > MAX_SYNCED_SKILL_BYTES) {
+        if (s)
+          logForDiagnosticsNoPII("warn", "skills_sync_manifest_unreadable", {
+            code: "parse_or_size",
+          });
         return null;
       }
       t = Buffer.from(D.value).toString("utf8");
@@ -654,121 +849,150 @@ async function readSkillsSyncManifest(e, n) {
         });
       return null;
     }
-  else if (
-    ((t = await readManifestText(Be(n.root), s ? "skills_sync_manifest_unreadable" : null)), t === null)
-  )
-    return null;
-  let d = parseManifestJson(t, syncedSkillsManifestSchema(), s ? "skills_sync_manifest_unreadable" : null);
-  if (d === null) return null;
-  let { skills: skills, staleDirs: staleDirs, pendingClaims: pendingClaims, ...b } = d;
+  else {
+    t = await readManifestText(manifestPathIn(n.root), s ? "skills_sync_manifest_unreadable" : null);
+    if (t === null) return null;
+  }
+  let manifestJson = parseManifestJson(
+    t,
+    syncedSkillsManifestSchema_2(),
+    s ? "skills_sync_manifest_unreadable" : null,
+  );
+  if (manifestJson === null) return null;
+  let { skills, staleDirs, pendingClaims, ...b } = manifestJson;
   return {
     ...b,
-    skills: parseValidRows(syncedSkillEntrySchema(), skills),
-    staleDirs: uet(staleDirs),
-    pendingClaims: uet(pendingClaims),
+    skills: parseValidRows(syncedSkillEntrySchema_2(), skills),
+    staleDirs: stringArray(staleDirs),
+    pendingClaims: stringArray(pendingClaims),
   };
 }
 //@ chunk-hme9amad.js:11482-12201 placement
-async function writeSkillsSyncManifest(e, n, s, t) {
-  let refusedReason = t.guard.refusedReason();
-  if (refusedReason !== null) throw MUr(refusedReason);
-  await checkSyncOwnedRootFor(s, t.root);
-  let w = await readSkillsSyncManifest(s, t);
-  if (w === null && n.onlyOverReadable) return;
-  let h = mergeManifestRows(
-      parseValidRows(syncedSkillEntrySchema(), e.skills),
-      w?.skills,
-      (b) => b.skillId,
-      n.removedSkillIds,
-      parseValidRows(syncedSkillEntrySchema(), n.deferredRows),
-    ),
-    y = jsonStringify(
-      {
-        ...omitKeys_2(w, ["lastUpdated", "skills", "staleDirs", "pendingClaims"]),
-        ...e,
-        skills: h,
-        staleDirs: mergeStaleDirs(e.staleDirs, w?.staleDirs, n.staleDirs),
-        pendingClaims: mergeStaleDirs(e.pendingClaims, w?.pendingClaims, n.pendingClaims),
-      },
-      null,
-      2,
-    );
-  if (s) {
-    let write = await s.write(dt(t.root), y, { mode: 438 & ~process.umask(), publishDiscipline: "atomic" });
-    if (!write.ok)
-      throw (
-        logForDiagnosticsNoPII("error", "skills_sync_manifest_write_failed", { code: write.error.code }),
-        Error("skillsSync: manifest write failed")
-      );
+async function writeSkillsSyncManifest(e, n, storageV5, t) {
+  let d = t.guard.refusedReason();
+  if (d !== null) throw rootRefusedError(d);
+  await checkSyncOwnedRootFor(storageV5, t.root);
+  let skillsSyncManifest = await readSkillsSyncManifest(storageV5, t);
+  if (skillsSyncManifest === null && n.onlyOverReadable) return;
+  let skills = mergeManifestRows(
+    parseValidRows(syncedSkillEntrySchema_2(), e.skills),
+    skillsSyncManifest?.skills,
+    (b) => b.skillId,
+    n.removedSkillIds,
+    parseValidRows(syncedSkillEntrySchema_2(), n.deferredRows),
+  );
+  let y = jsonStringify(
+    {
+      ...omitKeys_2(skillsSyncManifest, ["lastUpdated", "skills", "staleDirs", "pendingClaims"]),
+      ...e,
+      skills,
+      staleDirs: mergeStaleDirs(e.staleDirs, skillsSyncManifest?.staleDirs, n.staleDirs),
+      pendingClaims: mergeStaleDirs(e.pendingClaims, skillsSyncManifest?.pendingClaims, n.pendingClaims),
+    },
+    null,
+    2,
+  );
+  if (storageV5) {
+    let b = await storageV5.write(manifestStorageKey(t.root), y, {
+      mode: 438 & ~process.umask(),
+      publishDiscipline: "atomic",
+    });
+    if (!b.ok) {
+      logForDiagnosticsNoPII("error", "skills_sync_manifest_write_failed", {
+        code: b.error.code,
+      });
+      throw Error("skillsSync: manifest write failed");
+    }
     return;
   }
-  await writeFileAtomic(Be(t.root), y);
+  await writeFileAtomic(manifestPathIn(t.root), y);
 }
 //@ chunk-hme9amad.js:12201-12252 placement
-function fn(e) {
-  return join(e, Cte, String(process.pid));
+/**
+ * 按进程 pid 区分的临时目录。
+ */
+function perProcessTempDir(root) {
+  return join(root, TRASH_SUBDIR, String(process.pid));
 }
 //@ chunk-hme9amad.js:12252-12283 placement
-function Y(e, n) {
-  return syncedItemPath(n, e);
+/**
+ * 同步目录下某技能的路径。
+ */
+function syncedSkillDirPath(root, name) {
+  return syncedItemPath(name, root);
 }
+//@ chunk-hme9amad.js:12283-12646 placement
 /**
  * 读取同步技能的 SKILL.md 文本（经存储后端或文件系统，超出大小或不是文件时为 null）。
  */
-//@ chunk-hme9amad.js:12283-12646 placement
-async function readSyncedSkillMd(e, n, s) {
+async function readSyncedSkillMd(root, name, s) {
   try {
-    let t = Y(e, n);
+    let t = syncedSkillDirPath(root, name);
     if (s) {
-      let read = await s.read([{ key: _n(t), offset: 0, length: By + 1 }]),
-        y = read.ok ? read.value.items[0] : void 0;
-      if (!y?.found || y.totalBytes > By || y.value.byteLength > By) return null;
+      let h = await s.read([
+        {
+          key: skillMdStorageKey(t),
+          offset: 0,
+          length: MAX_SCOPE_RESPONSE_BYTES + 1,
+        },
+      ]);
+      let y = h.ok ? h.value.items[0] : undefined;
+      if (
+        !y?.found ||
+        y.totalBytes > MAX_SCOPE_RESPONSE_BYTES ||
+        y.value.byteLength > MAX_SCOPE_RESPONSE_BYTES
+      )
+        return null;
       return Buffer.from(y.value).toString("utf8");
     }
-    let d = join(t, "SKILL.md"),
-      w = await stat(d);
-    if (!w.isFile() || w.size > By) return null;
+    let d = join(t, "SKILL.md");
+    let w = await stat(d);
+    if (!w.isFile() || w.size > MAX_SCOPE_RESPONSE_BYTES) return null;
     return await readFile(d, "utf8");
   } catch {
     return null;
   }
 }
 //@ chunk-hme9amad.js:12646-12688 placement
-function _n(e) {
-  return ot(join(e, "SKILL.md"));
+/**
+ * 某技能 SKILL.md 在存储空间里的键。
+ */
+function skillMdStorageKey(e) {
+  return storageKeyForSyncedPath(join(e, "SKILL.md"));
 }
+//@ chunk-hme9amad.js:12688-12829 placement
 /**
  * 判断同步技能目录中是否有 SKILL.md。
  */
-//@ chunk-hme9amad.js:12688-12829 placement
-async function hasSyncedSkillMd(e, n, s) {
+async function hasSyncedSkillMd(root, name, s) {
   try {
-    let t = Y(e, n);
-    if (s) return (await s.statMeta(_n(t))).ok;
+    let t = syncedSkillDirPath(root, name);
+    if (s) return (await s.statMeta(skillMdStorageKey(t))).ok;
     return (await stat(join(t, "SKILL.md"))).isFile();
   } catch {
-    return !1;
+    return false;
   }
 }
+//@ chunk-hme9amad.js:12829-13007 placement
 /**
  * 判断技能目录中的 SKILL.md 是否缺失。
  */
-//@ chunk-hme9amad.js:12829-13007 placement
 async function isSkillMdMissing(e, n) {
   try {
     if (n) {
-      let statMeta = await n.statMeta(_n(e));
-      return !statMeta.ok && statMeta.error.code === "NotFound";
+      let s = await n.statMeta(skillMdStorageKey(e));
+      return !s.ok && s.error.code === "NotFound";
     }
-    return (await stat(join(e, "SKILL.md")), !1);
+    await stat(join(e, "SKILL.md"));
+    return false;
   } catch (error) {
     return isENOENT(error) || getErrnoCode(error) === "ENOTDIR";
   }
 }
+//@ chunk-hme9amad.js:13007-13172 placement
 /**
  * 把会话引用的技能转为同步条目（来源 session-refs，可带请求的版本）。
  */
-//@ chunk-hme9amad.js:13007-13172 placement
 function sessionRefSkillEntry(e) {
   return {
     skillId: e.id,
@@ -776,12 +1000,18 @@ function sessionRefSkillEntry(e) {
     description: e.description,
     source: "session-refs",
     updatedAt: null,
-    requestedVersion: e.version || void 0,
+    requestedVersion: e.version || undefined,
   };
 }
 //@ chunk-hme9amad.js:13172-13236 placement
-function ct(e, n) {
-  return { ...e, backingPluginId: n.backingPluginId };
+/**
+ * 复制条目并替换 backingPluginId。
+ */
+function carryBackingPluginId(e, n) {
+  return {
+    ...e,
+    backingPluginId: n.backingPluginId,
+  };
 }
 //@ chunk-hme9amad.js:13236-13349 placement
 var SKILL_DIR_NAMING = {
@@ -789,64 +1019,71 @@ var SKILL_DIR_NAMING = {
   invalidNameTag: "skills_sync_invalid_name",
   collisionTag: "skills_sync_name_collision",
 };
+//@ chunk-hme9amad.js:13349-13453 placement
 /**
  * 为同步技能分配目录名（处理非法名与冲突，可标记冲突落败者）。
  */
-//@ chunk-hme9amad.js:13349-13453 placement
-function assignSkillDirs(e, n, s) {
+function assignSkillDirs(root, n, s) {
   return planSyncDownloads(n, s, {
     ...SKILL_DIR_NAMING,
-    dirFor: (t) => Y(e, t),
-    carry: ct,
-    ...(Zn() && { markCollisionLoser: ti }),
+    dirFor: (t) => syncedSkillDirPath(root, t),
+    carry: carryBackingPluginId,
+    ...(isJauntyAlpacaOn() && {
+      markCollisionLoser: markCollisionLoserRow,
+    }),
   });
 }
 //@ chunk-hme9amad.js:13453-13495 placement
-function ti(e) {
-  return { ...e, updatedAt: COLLISION_LOSER };
+/**
+ * 把冲突落败条目的 updatedAt 标成哨兵值。
+ */
+function markCollisionLoserRow(e) {
+  return {
+    ...e,
+    updatedAt: COLLISION_LOSER,
+  };
 }
-
 export {
-  lLe,
-  rDs,
-  tDs,
+  startSkillSyncAndResync,
+  awaitFirstSkillList,
+  installWaitTimeoutMs,
   reloadSyncedSkills,
   startEarlySkillsSync,
   pruneSkillsSyncRoot,
-  Hce,
-  Y,
-  fn,
+  resetSkillSyncState,
+  syncedSkillDirPath,
+  perProcessTempDir,
   moveToSyncTrash,
-  $t,
-  qt,
-  ne,
-  xe,
-  rt,
-  Hn,
+  syncedSkillsManifestSchema,
+  syncedSkillEntrySchema,
+  skillsSyncDir,
+  trashRootDir,
+  skillsSyncPath,
+  shouldWeatherIdle,
   reuseSkillsSyncRound,
   noteHidingFoldersGone,
   readSkillsSyncManifest,
   sessionRefSkillEntry,
-  ct,
-  Ie,
+  carryBackingPluginId,
+  FIRST_FAILED_ROUND_THRESHOLD_MS,
   trashStraySyncEntries,
   resolveSkillsBucket,
-  $n,
+  onlyConvertedSkills,
   assignSkillDirs,
-  un,
+  markFirstRoundEmitted,
   hasSyncedSkillMd,
   writeSkillsSyncManifest,
   SKILLS_MANIFEST_SCHEMA,
-  nt,
-  Be,
+  SKILLS_MANIFEST_SCHEMA_PLACEHOLDER,
+  manifestPathIn,
   noteBucketGeneration,
-  ye,
+  listedForKey,
   firstListDeferred,
-  ln,
+  MAX_INSTALL_WAIT_CHAIN,
   readSyncedSkillMd,
-  Fe,
-  jn,
+  isQuizzicalWirthOn,
+  rescheduleResyncByBackoff,
   isSkillMdMissing,
-  Yt,
+  INSTALL_WAIT_CEILING_MS,
   awaitFirstSkillsList,
 };

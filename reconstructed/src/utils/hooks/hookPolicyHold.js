@@ -11,7 +11,12 @@
 import { isHookPolicyUnanswered } from "../../commands/goal/goal.js";
 import { getManagedHooksHoldState, filterHooksByManagedHold } from "./managedHooksOnly.js";
 import { getPluginRegistry } from "../plugins/pluginLoadState.js";
-import { zW, z5r, K5r, askOrganizationOnce } from "../plugins/commandSource.js";
+import {
+  organizationAnswerState,
+  ORGANIZATION_ANSWER_TIMEOUT_MS,
+  ORGANIZATION_ANSWER_POLL_MS,
+  askOrganizationOnce,
+} from "../plugins/commandSource.js";
 import { logError } from "../log.js";
 import { raceWithAbortSignal, withDeadline } from "../sleep.js";
 import {
@@ -31,11 +36,11 @@ import {
 import { isAutoAllowedInMode, isPlanBypass } from "../permissions/browserToolNames.js";
 import { HOOK_EVENTS } from "../../entrypoints/sdk/coreSchemas.js";
 import { uniq } from "../collections.js";
-import { J_ } from "../plugins/marketplaceNames.js";
+import { marketplaceNameAnswerState } from "../plugins/marketplaceNames.js";
 import { logForDebugging } from "../debug.js";
 import { logFeatureOk, logFeatureSad } from "../../services/analytics/featureTelemetry.js";
-import { describeHooksModulesOffReason, BF } from "../plugins/hooksModulesRollout.js";
-import { isBuiltinPluginId, RSi } from "../../plugins/builtinPlugins.js";
+import { describeHooksModulesOffReason, isAutoModeGateOpen } from "../plugins/hooksModulesRollout.js";
+import { isBuiltinPluginId, getBuiltinPluginNames } from "../../plugins/builtinPlugins.js";
 import {
   areHooksModulesAllowed,
   hooksModulesRefusalReason,
@@ -55,7 +60,7 @@ import {
   hasLoadCycleBegun,
   getEligibilityMemo,
 } from "../../services/remoteManagedSettings/remoteSettingsState.js";
-import { oOt } from "../settings/policyHelper/helperRemote.js";
+import { hasHelperPassInFlight } from "../settings/policyHelper/helperRemote.js";
 import { AUTO_MODE_ENABLED_DEFAULT } from "../permissions/permissionSetup.js";
 import { nfcLower } from "../stringUtils.js";
 import { pluginNameAliases, parsePluginIdentifier } from "../plugins/pluginIdentifier.js";
@@ -67,52 +72,58 @@ import { arePluginHooksHeld } from "../permissions/permissionsLoader.js";
 import { getPolicyAllowedSet } from "../plugins/pluginPolicy.js";
 
 //@ chunk-e6aww6q8.js:753062-753108 placement
-var Zje = () => isHookPolicyUnanswered() || getManagedHooksHoldState("PreToolUse").isFaulted;
+var isHookPolicyHoldActive = () =>
+  isHookPolicyUnanswered() || getManagedHooksHoldState("PreToolUse").isFaulted;
+//@ chunk-e6aww6q8.js:753108-753406 placement
 /**
  * 等待组织托管设置对钩子策略给出答复（有上限时间，可被中止）；超时则标记等待预算已用尽，之后不再等待。
  */
-//@ chunk-e6aww6q8.js:753108-753406 placement
 function waitForOrganizationHookPolicy(e, n) {
   let organizationAsk = getPluginRegistry().organizationAsk;
   if (organizationAsk.isBoundSpent) return Promise.resolve();
   let s = Promise.resolve()
-      .then(() => zW.wait?.())
-      .catch(logError)
-      .then(() => ((organizationAsk.isBoundSpent = !1), !0)),
-    h = e === void 0 ? s : raceWithAbortSignal(s, e, () => Error("stopped")).catch(() => !0);
-  return withDeadline(h, z5r, n).then((y) => {
-    if (y === void 0) organizationAsk.isBoundSpent = !0;
+    .then(() => organizationAnswerState.wait?.())
+    .catch(logError)
+    .then(() => {
+      organizationAsk.isBoundSpent = false;
+      return true;
+    });
+  let h = e === undefined ? s : raceWithAbortSignal(s, e, () => Error("stopped")).catch(() => true);
+  return withDeadline(h, ORGANIZATION_ANSWER_TIMEOUT_MS, n).then((y) => {
+    if (y === undefined) organizationAsk.isBoundSpent = true;
   });
 }
 //@ chunk-e6aww6q8.js:753406-753540 placement
-function maybeWaitForHookPolicy(e, n, r, s) {
+function maybeWaitForHookPolicy(e, n, signal, s) {
   try {
     if (!GUARD_AND_FEEDBACK_EVENTS.has(e) || !isHookPolicyUnanswered()) return;
   } catch (error) {
     logError(error);
     return;
   }
-  let h = !0;
+  let h = true;
   try {
     h = n();
   } catch (error) {
     logError(error);
   }
-  return h ? waitForOrganizationHookPolicy(r, s) : void 0;
+  return h ? waitForOrganizationHookPolicy(signal, s) : undefined;
 }
 //@ chunk-e6aww6q8.js:753540-753555 placement
 var DENY = "deny";
 //@ chunk-e6aww6q8.js:753555-753779 placement
 async function holdToolCallForHookPolicy(e, n, r, s) {
-  let h = !1;
+  let h = false;
   try {
-    if (((h = Zje()), !(h && e()))) return;
-    (await waitForOrganizationHookPolicy(r, s), (h = Zje()));
+    h = isHookPolicyHoldActive();
+    if (!(h && e())) return;
+    await waitForOrganizationHookPolicy(r, s);
+    h = isHookPolicyHoldActive();
   } catch (error) {
     logError(error);
   }
   if (!h) return;
-  let y = !0;
+  let y = true;
   try {
     y = n();
   } catch (error) {
@@ -124,80 +135,92 @@ async function holdToolCallForHookPolicy(e, n, r, s) {
   };
 }
 //@ chunk-e6aww6q8.js:753779-753972 placement
-function isBypassPermissionsInEffect(e, n, r) {
-  let s = r === "bypassPermissions";
-  if (n === void 0) return s;
-  let h = isAutoAllowedInMode(e, n);
+function isBypassPermissionsInEffect(toolByName, toolPermissionContext, mode) {
+  let s = mode === "bypassPermissions";
+  if (toolPermissionContext === undefined) return s;
+  let h = isAutoAllowedInMode(toolByName, toolPermissionContext);
   return (
-    (s && n.mode !== "bypassPermissions") ||
+    (s && toolPermissionContext.mode !== "bypassPermissions") ||
     h === "bypassPermissions" ||
-    isPlanBypass(h, n.isBypassPermissionsModeAvailable)
+    isPlanBypass(h, toolPermissionContext.isBypassPermissionsModeAvailable)
   );
 }
 //@ chunk-e6aww6q8.js:753972-754088 placement
 function withHeldPermissionBehavior(e, n) {
-  if (e === void 0) return;
-  let r = !0;
+  if (e === undefined) return;
+  let r = true;
   try {
     r = n();
   } catch (error) {
     logError(error);
   }
-  return { ...e, permissionBehavior: r ? DENY : "ask" };
+  return {
+    ...e,
+    permissionBehavior: r ? DENY : "ask",
+  };
 }
+//@ chunk-e6aww6q8.js:754088-754359 placement
 /**
  * 生成"钩子因托管设置未就绪/不可读而未运行"的说明，附上受影响的钩子事件（插件钩子带插件 id）列表。
  */
-//@ chunk-e6aww6q8.js:754088-754359 placement
 function hooksNotRunningMessage() {
   let e = HOOKS_POLICY_UNREADABLE_MESSAGE;
   try {
-    e = zW.fetches?.() === !0 ? HOOKS_PENDING_POLICY_MESSAGE : HOOKS_POLICY_UNREADABLE_MESSAGE;
+    e =
+      organizationAnswerState.fetches?.() === true
+        ? HOOKS_PENDING_POLICY_MESSAGE
+        : HOOKS_POLICY_UNREADABLE_MESSAGE;
     let flattened = HOOK_EVENTS.flatMap((y) =>
-        filterHooksByManagedHold([...getHooksForEvent(y)], y, "only").map((S) =>
-          "pluginId" in S ? `${y} (plugin ${S.pluginId})` : y,
-        ),
+      filterHooksByManagedHold([...getHooksForEvent(y)], y, "only").map((S) =>
+        "pluginId" in S ? `${y} (plugin ${S.pluginId})` : y,
       ),
-      joined = uniq(flattened).toSorted().join(", ");
+    );
+    let joined = uniq(flattened).toSorted().join(", ");
     return flattened.length > 0 ? `${e} Hooks not running: ${joined}.` : e;
   } catch (error) {
-    return (logError(error), e);
+    logError(error);
+    return e;
   }
 }
+//@ chunk-e6aww6q8.js:754359-754458 placement = createMemoryFileCanUseTool (0.484)
 /**
  * 只允许 Edit 指定记忆文件的 canUseTool（会话记忆更新代理用）。
  */
-//@ chunk-e6aww6q8.js:754359-754458 placement = createMemoryFileCanUseTool (0.484)
 function createMemoryFileCanUseTool() {
   try {
     return HOOK_EVENTS.some((e) => filterHooksByManagedHold([...getHooksForEvent(e)], e, "only").length > 0);
   } catch (error) {
-    return (logError(error), !1);
+    logError(error);
+    return false;
   }
 }
 //@ chunk-e6aww6q8.js:754458-755329 placement
-function waitForCloudModsHold(e, n, r) {
-  let organizationAsk = getPluginRegistry().organizationAsk,
-    h = J_(),
-    isHeld = organizationAsk.isHeld,
-    S = h === "unanswered",
-    w = isHeld || (S && (organizationAsk.hasHeld || createMemoryFileCanUseTool()));
-  if (!S) organizationAsk.hasHeld = !1;
+function waitForCloudModsHold(reload, tell, r) {
+  let organizationAsk = getPluginRegistry().organizationAsk;
+  let h = marketplaceNameAnswerState();
+  let isHeld = organizationAsk.isHeld;
+  let S = h === "unanswered";
+  let w = isHeld || (S && (organizationAsk.hasHeld || createMemoryFileCanUseTool()));
+  if (!S) organizationAsk.hasHeld = false;
   if (!w) return null;
   function L() {
-    return J_() !== "unanswered" ? e().catch(logError) : void 0;
+    return marketplaceNameAnswerState() !== "unanswered" ? reload().catch(logError) : undefined;
   }
-  if (h !== "unanswered") return withDeadline(Promise.resolve(L()), K5r, r);
-  let G = !1,
-    isWaited = organizationAsk.isWaited;
+  if (h !== "unanswered") return withDeadline(Promise.resolve(L()), ORGANIZATION_ANSWER_POLL_MS, r);
+  let G = false;
+  let isWaited = organizationAsk.isWaited;
   function Z() {
-    let we = J_() !== "unanswered";
+    let we = marketplaceNameAnswerState() !== "unanswered";
     if (organizationAsk.isTold || (we && !isWaited)) return;
     let Ae = we ? HOOKS_SKIPPED_AT_START_MESSAGE : hooksNotRunningMessage();
-    (logForDebugging(Ae, { level: "warn" }), n(Ae), (organizationAsk.isTold = !0));
+    logForDebugging(Ae, {
+      level: "warn",
+    });
+    tell(Ae);
+    organizationAsk.isTold = true;
   }
   function Se() {
-    G = !0;
+    G = true;
     try {
       if (isWaited) Z();
     } catch (error) {
@@ -206,85 +229,95 @@ function waitForCloudModsHold(e, n, r) {
     return askOrganizationOnce();
   }
   let ke = Promise.resolve()
-    .then(() => zW.wait?.())
-    .then(Se, (we) => (logError(we), Se()))
+    .then(() => organizationAnswerState.wait?.())
+    .then(Se, (error) => {
+      logError(error);
+      return Se();
+    })
     .catch(logError)
     .then(Z)
     .catch(logError);
   if (organizationAsk.isWaited) return null;
-  return (
-    (organizationAsk.isWaited = !0),
-    withDeadline(ke.then(L), K5r, r)
-      .then(() => {
-        let we = J_();
-        if (((isWaited = we === "unanswered"), isHeld && we === "answered"))
-          logFeatureOk("cowork_cloud_mods_hold");
-        if (isHeld && we !== "answered") {
-          let Ee = zW.fetches?.() === !0;
-          logFeatureSad("cowork_cloud_mods_hold", Ee ? "settings_unread" : "never_asks");
-        }
-        if (isWaited && G) Z();
-      })
-      .catch(logError)
-  );
+  organizationAsk.isWaited = true;
+  return withDeadline(ke.then(L), ORGANIZATION_ANSWER_POLL_MS, r)
+    .then(() => {
+      let we = marketplaceNameAnswerState();
+      isWaited = we === "unanswered";
+      if (isHeld && we === "answered") logFeatureOk("cowork_cloud_mods_hold");
+      if (isHeld && we !== "answered") {
+        let Ee = organizationAnswerState.fetches?.() === true;
+        logFeatureSad("cowork_cloud_mods_hold", Ee ? "settings_unread" : "never_asks");
+      }
+      if (isWaited && G) Z();
+    })
+    .catch(logError);
 }
+//@ chunk-e6aww6q8.js:755329-755700 placement
 /**
  * 等待组织托管 hook 策略回答后再运行启动 hook，并记录等待时长。
  */
-//@ chunk-e6aww6q8.js:755329-755700 placement
 function waitForStartHooksPolicy(e) {
-  let organizationAsk = getPluginRegistry().organizationAsk,
-    now = Date.now();
+  let organizationAsk = getPluginRegistry().organizationAsk;
+  let now = Date.now();
   function s() {
     let h = isHookPolicyUnanswered();
-    return (
-      logForDebugging(
-        `start hooks waited ${Date.now() - now} ms for the organization's managed settings` +
-          (h ? `; ${SESSION_START_HOOKS_SKIPPED_REASON}` : ""),
-        h ? { level: "warn" } : void 0,
-      ),
+    logForDebugging(
+      `start hooks waited ${Date.now() - now} ms for the organization's managed settings` +
+        (h ? `; ${SESSION_START_HOOKS_SKIPPED_REASON}` : ""),
       h
-        ? logFeatureSad("hooks_organization_start_wait", "unanswered")
-        : logFeatureOk("hooks_organization_start_wait")
+        ? {
+            level: "warn",
+          }
+        : undefined,
     );
+    return h
+      ? logFeatureSad("hooks_organization_start_wait", "unanswered")
+      : logFeatureOk("hooks_organization_start_wait");
   }
-  return (
-    (organizationAsk.startHooksWait ??= waitForOrganizationHookPolicy(void 0, e)
-      .then(s)
-      .catch(logError)),
-    organizationAsk.startHooksWait
-  );
+  organizationAsk.startHooksWait ??= waitForOrganizationHookPolicy(undefined, e).then(s).catch(logError);
+  return organizationAsk.startHooksWait;
 }
 //@ chunk-e6aww6q8.js:755700-755779 placement
-var tWe = (e, n) =>
+/**
+ * 钩子策略未答复且有已配置钩子时，等待组织托管设置答复（有上限）。
+ */
+var waitForStartHooksPolicyIfNeeded = (e, n) =>
   Promise.resolve()
     .then(() =>
-      isHookPolicyUnanswered() && hasConfiguredHooksForEvent(e) ? waitForStartHooksPolicy(n) : void 0,
+      isHookPolicyUnanswered() && hasConfiguredHooksForEvent(e) ? waitForStartHooksPolicy(n) : undefined,
     )
     .catch(logError);
+//@ chunk-e6aww6q8.js:755779-756371 placement
 /**
  * 在 hook 结果中找出最后一个给出阻止或权限决定的结果。
  */
-//@ chunk-e6aww6q8.js:755779-756371 placement
-function p$t(e, results) {
-  if (e === void 0) return;
+function reconcileHeldHookResults(e, results) {
+  if (e === undefined) return;
   let last = results.findLast(
-      (w) =>
-        w.blockingError !== void 0 ||
-        w.permissionBehavior === "allow" ||
-        w.permissionBehavior === "ask" ||
-        w.permissionBehavior === "deny",
-    ),
-    s = last?.blockingError !== void 0 || last?.permissionBehavior === "deny",
-    h = last?.permissionBehavior === "ask" && e.permissionBehavior === "ask";
+    (result) =>
+      result.blockingError !== undefined ||
+      result.permissionBehavior === "allow" ||
+      result.permissionBehavior === "ask" ||
+      result.permissionBehavior === "deny",
+  );
+  let s = last?.blockingError !== undefined || last?.permissionBehavior === "deny";
+  let h = last?.permissionBehavior === "ask" && e.permissionBehavior === "ask";
   if (s || h) return;
   logForDebugging(
     "a hook ahead of this tool call is held for the organization's managed settings: the call " +
       (e.permissionBehavior === "deny" ? "is refused" : "asks"),
-    { level: "warn" },
+    {
+      level: "warn",
+    },
   );
-  let S = (results.findLast((w) => w.permissionBehavior === "ask") ?? last)?.updatedInput;
-  return S === void 0 ? e : { ...e, updatedInput: S };
+  let updatedInput = (results.findLast((result) => result.permissionBehavior === "ask") ?? last)
+    ?.updatedInput;
+  return updatedInput === undefined
+    ? e
+    : {
+        ...e,
+        updatedInput,
+      };
 }
 //@ chunk-e6aww6q8.js:756371-757137 placement
 function describeHooksModulesTurnedOff(e, n) {
@@ -299,12 +332,12 @@ function describeHooksModulesTurnedOff(e, n) {
     return "installed plugins that are not managed load no hooks module in this mode (--bare); built-in plugins load regardless";
   if (n.managedOnly)
     return "only managed plugins and built-in plugins run (allowManagedHooksOnly / disableAllHooks)";
-  return n.organization === "unanswered" ? MODS_POLICY_UNKNOWN_REASON : void 0;
+  return n.organization === "unanswered" ? MODS_POLICY_UNKNOWN_REASON : undefined;
 }
 //@ chunk-e6aww6q8.js:757137-757259 placement
 function pluginHooksRefusalReason(e, n, r) {
   return isBuiltinPluginId(e)
-    ? void 0
+    ? undefined
     : n.isHeld
       ? RESTRICT_PERSONAL_CONFIG_REASON
       : describeHooksModulesTurnedOff(n.isManaged, {
@@ -313,114 +346,156 @@ function pluginHooksRefusalReason(e, n, r) {
         });
 }
 //@ chunk-e6aww6q8.js:757259-757319 placement
-var oWe = (e) => !areHooksModulesAllowed() || (BF() && e.hooksModulesWakeBound === "ahead");
+/**
+ * 判断是否只允许内建插件的钩子模块（受限模式且等待已结束）。
+ */
+var areBuiltinOnlyHooksModules = (e) =>
+  !areHooksModulesAllowed() || (isAutoModeGateOpen() && e.hooksModulesWakeBound === "ahead");
 //@ chunk-e6aww6q8.js:757319-757412 placement
-var ZP = () => ({
+/**
+ * 汇总钩子策略状态（总开关、仅托管、全禁用、组织答复状态）。
+ */
+var hookPolicySummaryState = () => ({
   hooksDisabled: isCustomizationDisabled("hooks"),
   managedOnly: shouldAllowManagedHooksOnly(),
   allDisabled: shouldDisableAllHooksIncludingManaged(),
-  organization: J_(),
+  organization: marketplaceNameAnswerState(),
 });
 //@ chunk-e6aww6q8.js:757412-757468 placement
-function m$t() {
+function isCoworkSessionSafe() {
   try {
     return isCoworkSession();
   } catch (error) {
-    return (logError(error), !1);
+    logError(error);
+    return false;
   }
 }
 //@ chunk-e6aww6q8.js:757468-757536 placement
-var g$t = (e) =>
-  e?.state === "ok" &&
-  (!e.hasSettings || isRemoteManagedSettingsVerified() || getRemoteSettingsPathOverride() !== void 0);
+var isRemoteSettingsAnswered = (lastLoadStatus) =>
+  lastLoadStatus?.state === "ok" &&
+  (!lastLoadStatus.hasSettings ||
+    isRemoteManagedSettingsVerified() ||
+    getRemoteSettingsPathOverride() !== undefined);
 //@ chunk-e6aww6q8.js:757536-757728 placement
 function remoteSettingsAnswerState() {
-  let e = getLastLoadStatus(),
-    n = g$t(e),
-    r = e === void 0 && (hasLoadCycleEnded() || !hasLoadCycleBegun()),
-    s = e?.state === "failed" || e?.state === "stale_cache" || r,
-    h = getEligibilityMemo() === !1 || m$t() || n;
-  return oOt() || !(h || s) ? "pending" : h ? "answered" : "failed";
+  let lastLoadStatus = getLastLoadStatus();
+  let n = isRemoteSettingsAnswered(lastLoadStatus);
+  let r = lastLoadStatus === undefined && (hasLoadCycleEnded() || !hasLoadCycleBegun());
+  let s = lastLoadStatus?.state === "failed" || lastLoadStatus?.state === "stale_cache" || r;
+  let h = getEligibilityMemo() === false || isCoworkSessionSafe() || n;
+  return hasHelperPassInFlight() || !(h || s) ? "pending" : h ? "answered" : "failed";
 }
 //@ chunk-e6aww6q8.js:757728-757853 placement
 function getHookPolicyAnswerState() {
   try {
-    let e = remoteSettingsAnswerState(),
-      n = !policySettingsUnreadable(),
-      r = e !== "pending" && AUTO_MODE_ENABLED_DEFAULT();
+    let e = remoteSettingsAnswerState();
+    let n = !policySettingsUnreadable();
+    let r = e !== "pending" && AUTO_MODE_ENABLED_DEFAULT();
     return n ? e : r ? "failed" : "pending";
   } catch (error) {
-    return (logError(error), "pending");
+    logError(error);
+    return "pending";
   }
 }
 //@ chunk-e6aww6q8.js:757853-757941 placement
-var sWe = (e) =>
+/**
+ * 判断个人安装的钩子模块是否需要暂扣等待 rollout 开关。
+ */
+var shouldHoldPersonalModuleHooks = (e) =>
   e.hooksModulesWakeBound !== "ahead" &&
-  BF() &&
+  isAutoModeGateOpen() &&
   areHooksModulesAllowed() &&
   !(AUTO_MODE_ENABLED_DEFAULT() && getHookPolicyAnswerState() === "answered");
 //@ chunk-e6aww6q8.js:757941-758119 placement
-function F0(e, n) {
-  if (e === null) return null;
-  let r = new Set([...e].filter((s) => !isBuiltinPluginId(s)).map(nfcLower));
-  return new Set(n.filter((s) => e.has(s.source) || r.has(nfcLower(s.source))).map((s) => s.source));
+/**
+ * 从托管来源集合中筛出与给定来源列表匹配的部分。
+ */
+function filterManagedHookSources(policyAllowedSet, n) {
+  if (policyAllowedSet === null) return null;
+  let r = new Set([...policyAllowedSet].filter((s) => !isBuiltinPluginId(s)).map(nfcLower));
+  return new Set(
+    n.filter((s) => policyAllowedSet.has(s.source) || r.has(nfcLower(s.source))).map((s) => s.source),
+  );
 }
 //@ chunk-e6aww6q8.js:758119-758216 placement
-var Ome = (e) =>
-  RSi()
-    .flatMap((n) => pluginNameAliases({ name: n, source: `${n}@${BUILTIN}` }))
+/**
+ * 判断某插件名是否为内建插件的别名。
+ */
+var isBuiltinPluginAlias = (e) =>
+  getBuiltinPluginNames()
+    .flatMap((n) =>
+      pluginNameAliases({
+        name: n,
+        source: `${n}@${BUILTIN}`,
+      }),
+    )
     .some((n) => nfcLower(n) === nfcLower(e.name));
 //@ chunk-e6aww6q8.js:758216-758297 placement
-var iWe = (e) =>
-  resolveManagedPluginDigests(e.source) !== void 0 &&
+/**
+ * 判断某插件是否为已担保的托管插件（名称与来源一致且非内建别名）。
+ */
+var isManagedPluginVouched = (e) =>
+  resolveManagedPluginDigests(e.source) !== undefined &&
   nfcLower(e.name) === nfcLower(parsePluginIdentifier(e.source).name) &&
-  !Ome(e);
+  !isBuiltinPluginAlias(e);
 //@ chunk-e6aww6q8.js:758297-758562 placement
-function h$t(e, n) {
-  if (isBuiltinPluginId(e) || getManagedPlugins() || hooksModulesRefusalReason() !== void 0) return;
-  let s = [{ source: e }],
-    h = getPluginRegistry();
+/**
+ * 给出插件钩子模块不可运行的原因（未知/个人受限/策略限制等）。
+ */
+function hooksModuleRefusalReason(e, n) {
+  if (isBuiltinPluginId(e) || getManagedPlugins() || hooksModulesRefusalReason() !== undefined) return;
+  let s = [
+    {
+      source: e,
+    },
+  ];
+  let pluginRegistry = getPluginRegistry();
   return pluginHooksRefusalReason(
     e,
     {
-      isHeld: n === void 0 ? isPersonalConfigRestricted() : arePluginHooksHeld(n),
-      isManaged: F0(getVouchedPolicyPluginIds(), s)?.size === 1 || (n !== void 0 && iWe(n)),
-      isPolicyEnabled: F0(getPolicyAllowedSet(), s)?.size === 1,
+      isHeld: n === undefined ? isPersonalConfigRestricted() : arePluginHooksHeld(n),
+      isManaged:
+        filterManagedHookSources(getVouchedPolicyPluginIds(), s)?.size === 1 ||
+        (n !== undefined && isManagedPluginVouched(n)),
+      isPolicyEnabled: filterManagedHookSources(getPolicyAllowedSet(), s)?.size === 1,
     },
-    { ...ZP(), builtinsOnly: oWe(h), personsHeld: sWe(h) },
+    {
+      ...hookPolicySummaryState(),
+      builtinsOnly: areBuiltinOnlyHooksModules(pluginRegistry),
+      personsHeld: shouldHoldPersonalModuleHooks(pluginRegistry),
+    },
   );
 }
 //@ chunk-e6aww6q8.js:758562-758786 placement
 function assertPluginHooksAdmitted(e, n) {
-  if (e.knownArgs.get(n.pluginName)?.sealed === !0)
+  if (e.knownArgs.get(n.pluginName)?.sealed === true)
     throw new NotOrganizationPluginError(
       n.pluginName,
       "a proved module of this name may not come back from disk",
     );
-  let s = h$t(n.pluginId, n.plugin);
-  if (s !== void 0) throw new HookAdmissionRefusal(n.pluginName, s);
+  let s = hooksModuleRefusalReason(n.pluginId, n.plugin);
+  if (s !== undefined) throw new HookAdmissionRefusal(n.pluginName, s);
 }
-
 export {
   waitForOrganizationHookPolicy,
   DENY,
   isBypassPermissionsInEffect,
   holdToolCallForHookPolicy,
-  p$t,
+  reconcileHeldHookResults,
   withHeldPermissionBehavior,
   maybeWaitForHookPolicy,
-  iWe,
-  F0,
+  isManagedPluginVouched,
+  filterManagedHookSources,
   pluginHooksRefusalReason,
   describeHooksModulesTurnedOff,
-  ZP,
-  oWe,
+  hookPolicySummaryState,
+  areBuiltinOnlyHooksModules,
   getHookPolicyAnswerState,
   remoteSettingsAnswerState,
-  sWe,
+  shouldHoldPersonalModuleHooks,
   assertPluginHooksAdmitted,
-  Ome,
-  h$t,
-  tWe,
+  isBuiltinPluginAlias,
+  hooksModuleRefusalReason,
+  waitForStartHooksPolicyIfNeeded,
   waitForCloudModsHold,
 };

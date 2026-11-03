@@ -8,12 +8,13 @@
  * pieces: chunk-w6s5y86e.js (1)
  * attribution: placement 1
  */
-
 //@ chunk-w6s5y86e.js:191-232 placement
-var Xh = 16,
-  ADs = 50,
-  CDs = 4,
-  RDs = 16384,
-  kwo = 250;
-
-export { Xh, ADs, CDs, RDs, kwo };
+/**
+ * 滚动相关常量：一次跳 16 行、每 tick 最多 50 行、最少 4 行、历史上限 16384 行、tick 间隔 250ms。
+ */
+var SCROLL_JUMP_LINES = 16;
+var SCROLL_MAX_ROWS_PER_TICK = 50;
+var SCROLL_MIN_ROWS = 4;
+var SCROLL_HISTORY_LIMIT = 16384;
+var SCROLL_TICK_MS = 250;
+export { SCROLL_JUMP_LINES, SCROLL_MAX_ROWS_PER_TICK, SCROLL_MIN_ROWS, SCROLL_HISTORY_LIMIT, SCROLL_TICK_MS };

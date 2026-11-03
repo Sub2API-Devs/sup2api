@@ -6,28 +6,27 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { _Hr } from "./reader.js";
-import { QGe } from "./util/minimal.js";
+import { require_reader } from "./reader.js";
+import { require_minimal } from "./util/minimal.js";
 
 //@ chunk-798ashq9.js:39108-39586 cjs-fingerprint
-var Fr = x(function (gc, Hr) {
-  Hr.exports = at;
-  var qr = _Hr();
-  (at.prototype = Object.create(qr.prototype)).constructor = at;
-  var Br = QGe();
-  function at(l) {
-    qr.call(this, l);
+var require_reader_buffer = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = BufferReader;
+  var Reader = require_reader();
+  (BufferReader.prototype = Object.create(Reader.prototype)).constructor = BufferReader;
+  var util = require_minimal();
+  function BufferReader(buffer) {
+    Reader.call(this, buffer);
   }
-  at._configure = function () {
-    if (Br.Buffer) at.prototype._slice = Br.Buffer.prototype.slice;
+  BufferReader._configure = function () {
+    if (util.Buffer) BufferReader.prototype._slice = util.Buffer.prototype.slice;
   };
-  at.prototype.string = function () {
-    var uint32 = this.uint32();
+  BufferReader.prototype.string = function () {
+    var len = this.uint32();
     return this.buf.utf8Slice
-      ? this.buf.utf8Slice(this.pos, (this.pos = Math.min(this.pos + uint32, this.len)))
-      : this.buf.toString("utf-8", this.pos, (this.pos = Math.min(this.pos + uint32, this.len)));
+      ? this.buf.utf8Slice(this.pos, (this.pos = Math.min(this.pos + len, this.len)))
+      : this.buf.toString("utf-8", this.pos, (this.pos = Math.min(this.pos + len, this.len)));
   };
-  at._configure();
+  BufferReader._configure();
 });
-
-export { Fr };
+export { require_reader_buffer };

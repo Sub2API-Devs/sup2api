@@ -9,10 +9,10 @@
  * attribution: placement 3
  */
 import { describeToolAvailability } from "../mcp/mcpToolAvailability.js";
-import { findLongestPrefixClients, lGt } from "./toolExecution.js";
+import { findLongestPrefixClients, aliasOrSelf } from "./toolExecution.js";
 import { getMcpTransportTelemetryLabel } from "../mcp/config.js";
 import { REMOTE_DEVICES } from "../mcp/firstPartyServerIds.js";
-import { sd } from "./toolOrchestration.js";
+import { concurrencyBucket } from "./toolOrchestration.js";
 import { count } from "../../utils/collections.js";
 import { currentMcpClients } from "../compact/idleToolResultClearing.js";
 import { getToolPermissionContext } from "../../utils/permissions/toolPermissionContext.js";
@@ -21,33 +21,45 @@ import { errorMessage } from "../../utils/errors.js";
 import { logError } from "../../utils/log.js";
 
 //@ chunk-0h4e7gnq.js:29062-29153 placement
-var td = { stdio: !0, sse: !0, "sse-ide": !0, "ws-ide": !0, http: !0, ws: !0, sdk: !0, "claudeai-proxy": !0 };
+var MCP_TRANSPORTS_SUPPORTING_TOOLS = {
+  stdio: true,
+  sse: true,
+  "sse-ide": true,
+  "ws-ide": true,
+  http: true,
+  ws: true,
+  sdk: true,
+  "claudeai-proxy": true,
+};
 //@ chunk-0h4e7gnq.js:29153-29618 placement
-function mcpDepartureCause(e, n, s, y) {
-  let kind = describeToolAvailability(e, s, y).kind,
-    S = findLongestPrefixClients(e, s),
-    filtered = S.filter((w) => w.type === "connected"),
-    k = filtered[0] ?? S[0];
+function mcpDepartureCause(e, n, s, toolPermissionContext) {
+  let departureCause = describeToolAvailability(e, s, toolPermissionContext).kind;
+  let longestPrefixClients = findLongestPrefixClients(e, s);
+  let filtered = longestPrefixClients.filter(
+    (longestPrefixClient) => longestPrefixClient.type === "connected",
+  );
+  let k = filtered[0] ?? longestPrefixClients[0];
   if (!k)
     return {
-      departureCause: kind,
-      serverTransport: void 0,
-      serverIsDeviceBridge: void 0,
-      serverToolsListFailed: void 0,
-      serverToolsInPool: void 0,
+      departureCause,
+      serverTransport: undefined,
+      serverIsDeviceBridge: undefined,
+      serverToolsListFailed: undefined,
+      serverToolsInPool: undefined,
     };
   return {
-    departureCause: kind,
+    departureCause,
     serverTransport: getMcpTransportTelemetryLabel(k.config),
     serverIsDeviceBridge: k.name === REMOTE_DEVICES,
-    serverToolsListFailed: filtered.length > 0 ? filtered.some((w) => w.toolsListError !== void 0) : void 0,
-    serverToolsInPool: sd(count(n, (w) => findLongestPrefixClients(w.name, s).includes(k))),
+    serverToolsListFailed:
+      filtered.length > 0 ? filtered.some((w) => w.toolsListError !== undefined) : undefined,
+    serverToolsInPool: concurrencyBucket(count(n, (w) => findLongestPrefixClients(w.name, s).includes(k))),
   };
 }
 //@ chunk-0h4e7gnq.js:29618-29912 placement
 function missingToolTelemetry(e, n, s) {
   try {
-    let y = lGt(e, s.options.toolAliases);
+    let y = aliasOrSelf(e, s.options.toolAliases);
     if (typeof y !== "string") return;
     return mcpDepartureCause(
       y,
@@ -56,13 +68,14 @@ function missingToolTelemetry(e, n, s) {
       getToolPermissionContext(s),
     );
   } catch (error) {
-    (logForDebugging(
+    logForDebugging(
       `Could not read why a tool is missing, so its telemetry fields are left out (the turn is unaffected): ${errorMessage(error)}`,
-      { level: "warn" },
-    ),
-      logError(error));
+      {
+        level: "warn",
+      },
+    );
+    logError(error);
     return;
   }
 }
-
-export { missingToolTelemetry, td };
+export { missingToolTelemetry, MCP_TRANSPORTS_SUPPORTING_TOOLS };

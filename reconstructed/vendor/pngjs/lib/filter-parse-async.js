@@ -6,30 +6,29 @@
  * attribution: cjs-fingerprint 1
  */
 import { x, importMetaRequire } from "../../../runtime/bun-runtime.js";
-import { st } from "./chunkstream.js";
-import { ft } from "./filter-parse.js";
+import { require_chunkstream } from "./chunkstream.js";
+import { require_filter_parse } from "./filter-parse.js";
 
 //@ chunk-spjgqa4y.js:25954-26249 cjs-fingerprint
-var Fr = x(function (Gl, Ur) {
-  var qr = importMetaRequire("util"),
-    at = st(),
-    Po = ft(),
-    ko = (Ur.exports = function (t) {
-      at.call(this);
-      let e = [],
-        r = this;
-      ((this._filter = new Po(t, {
-        read: this.read.bind(this),
-        write: function (n) {
-          e.push(n);
-        },
-        complete: function () {
-          r.emit("complete", Buffer.concat(e));
-        },
-      })),
-        this._filter.start());
+var require_filter_parse_async = x(function (cjsExports, cjsModule) {
+  var util = importMetaRequire("util");
+  var ChunkStream = require_chunkstream();
+  var Filter = require_filter_parse();
+  var FilterAsync = (cjsModule.exports = function (bitmapInfo) {
+    ChunkStream.call(this);
+    let buffers = [];
+    let that = this;
+    this._filter = new Filter(bitmapInfo, {
+      read: this.read.bind(this),
+      write: function (buffer) {
+        buffers.push(buffer);
+      },
+      complete: function () {
+        that.emit("complete", Buffer.concat(buffers));
+      },
     });
-  qr.inherits(ko, at);
+    this._filter.start();
+  });
+  util.inherits(FilterAsync, ChunkStream);
 });
-
-export { Fr };
+export { require_filter_parse_async };

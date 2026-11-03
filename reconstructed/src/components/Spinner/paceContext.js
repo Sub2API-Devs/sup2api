@@ -8,18 +8,22 @@
  * pieces: chunk-mfvgtsgj.js (3)
  * attribution: placement 3
  */
-import { j, qt } from "../../../vendor/react/cjs/react.production.js";
-import { Xh } from "../../ink/scrollConstants.js";
+import { init_react_production, qt } from "../../../vendor/react/cjs/react.production.js";
+import { SCROLL_JUMP_LINES } from "../../ink/scrollConstants.js";
 
 //@ chunk-mfvgtsgj.js:265-269 placement
-j();
+init_react_production();
 //@ chunk-mfvgtsgj.js:269-280 placement
-var c = 3 * Xh;
+var PACE_INTERVAL = 3 * SCROLL_JUMP_LINES;
+//@ chunk-mfvgtsgj.js:280-365 placement
 /**
  * Spinner 节奏控制上下文与默认（不延迟）实现。
  */
-//@ chunk-mfvgtsgj.js:280-365 placement
-var SpinnerPaceContext = qt(null),
-  j_o = { deferred: (e) => e(), paced: (e) => e, flush: () => {}, isDeferring: () => !1 };
-
-export { SpinnerPaceContext, j_o };
+var SpinnerPaceContext = qt(null);
+var IMMEDIATE_PACER = {
+  deferred: (e) => e(),
+  paced: (e) => e,
+  flush: () => {},
+  isDeferring: () => false,
+};
+export { SpinnerPaceContext, IMMEDIATE_PACER };

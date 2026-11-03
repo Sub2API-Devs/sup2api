@@ -14,95 +14,144 @@ import { env } from "../../utils/env.js";
 import { createKeyedQueue } from "../../utils/promiseQueue.js";
 import { LocalFileStore } from "../../utils/fileStore.js";
 import { sleep } from "../../utils/sleep.js";
-import { ht } from "./cliOwnedClients.js";
+import { getCliOwnedState } from "./cliOwnedClients.js";
 
 //@ chunk-e6aww6q8.js:2303366-2303421 placement
-async function smn(e, n) {
-  return filterCommandsByAllowlist(await getSkillToolCommands(e, n), getSessionSkillAllowlist());
+/**
+ * 取当前会话可用且被允许的技能命令。
+ */
+async function getSessionSkillCommands(e, storageV5) {
+  return filterCommandsByAllowlist(await getSkillToolCommands(e, storageV5), getSessionSkillAllowlist());
 }
 //@ chunk-e6aww6q8.js:2303421-2303434 placement
-var I4s = 3000;
+/**
+ * 解析账号身份的超时（3000 毫秒）。
+ */
+var ACCOUNT_RESOLVE_TIMEOUT_MS = 3000;
 //@ chunk-e6aww6q8.js:2303434-2303470 placement
-function fd() {
-  return discoveryCacheOffReason() === void 0;
+/**
+ * 发现缓存是否开启。
+ */
+function isDiscoveryCacheOn() {
+  return discoveryCacheOffReason() === undefined;
 }
 //@ chunk-e6aww6q8.js:2303470-2303537 placement
-function IM() {
+/**
+ * 发现缓存是否可用（关闭原因为空或仅键不可用）。
+ */
+function isDiscoveryCacheUsable() {
   let e = discoveryCacheOffReason();
-  return e === void 0 || e === "key-unavailable";
+  return e === undefined || e === "key-unavailable";
 }
 //@ chunk-e6aww6q8.js:2303537-2303571 placement
-function O4s(e) {
-  getDiscoveryCacheStore().killSwitch = e;
+/**
+ * 设置发现缓存的熔断（kill switch）。
+ */
+function setCacheKillSwitch(killSwitch) {
+  getDiscoveryCacheStore().killSwitch = killSwitch;
 }
 //@ chunk-e6aww6q8.js:2303571-2303618 placement
-function M4s() {
-  return getDiscoveryCacheStore().killSwitch !== void 0;
+/**
+ * 是否已设置熔断。
+ */
+function hasCacheKillSwitch() {
+  return getDiscoveryCacheStore().killSwitch !== undefined;
 }
+//@ chunk-e6aww6q8.js:2303618-2303816 placement
 /**
  * 返回发现缓存关闭的原因（无盘、环境变量禁用、熔断等），确定的原因会被锁存。
  */
-//@ chunk-e6aww6q8.js:2303618-2303816 placement
 function discoveryCacheOffReason() {
-  let e = getDiscoveryCacheStore();
-  if (isDiskless()) e.offLatched = "diskless";
-  if (e.offLatched !== void 0) return e.offLatched;
-  let n = computeDiscoveryCacheOffReason(e);
-  if (n !== void 0 && (n === "env-disabled" || e.killSwitch !== void 0)) e.offLatched = n;
-  return n;
+  let discoveryCacheStore = getDiscoveryCacheStore();
+  if (isDiskless()) discoveryCacheStore.offLatched = "diskless";
+  if (discoveryCacheStore.offLatched !== undefined) return discoveryCacheStore.offLatched;
+  let discoveryCacheOffReason = computeDiscoveryCacheOffReason(discoveryCacheStore);
+  if (
+    discoveryCacheOffReason !== undefined &&
+    (discoveryCacheOffReason === "env-disabled" || discoveryCacheStore.killSwitch !== undefined)
+  )
+    discoveryCacheStore.offLatched = discoveryCacheOffReason;
+  return discoveryCacheOffReason;
 }
 //@ chunk-e6aww6q8.js:2303816-2303860 placement
-function D4s() {
-  return (discoveryCacheOffReason(), getDiscoveryCacheStore().offLatched);
+/**
+ * 取发现缓存关闭的锁存原因。
+ */
+function getCacheOffLatched() {
+  discoveryCacheOffReason();
+  return getDiscoveryCacheStore().offLatched;
 }
 //@ chunk-e6aww6q8.js:2303860-2303911 placement
-function OFo() {
+/**
+ * 把关闭原因锁存为 key-unavailable。
+ */
+function latchCacheOff() {
   getDiscoveryCacheStore().offLatched ??= "key-unavailable";
 }
 //@ chunk-e6aww6q8.js:2303911-2304096 placement
-function computeDiscoveryCacheOffReason(e) {
-  if (env.MCP_DISCOVERY_CACHE === !1) return "env-disabled";
-  let n = e.killSwitch?.();
-  if (n === !1) return "kill-switch";
-  if (env.MCP_DISCOVERY_CACHE !== !0 && n !== !0) return "not-enabled";
+function computeDiscoveryCacheOffReason(discoveryCacheStore) {
+  if (env.MCP_DISCOVERY_CACHE === false) return "env-disabled";
+  let n = discoveryCacheStore.killSwitch?.();
+  if (n === false) return "kill-switch";
+  if (env.MCP_DISCOVERY_CACHE !== true && n !== true) return "not-enabled";
   return;
 }
 //@ chunk-e6aww6q8.js:2304096-2304163 placement
-var ACCT_UNWIRED = "acct:unwired",
-  ACCT_LOGGED_OUT = "acct:logged-out",
-  ACCT_INCOMPLETE = "acct:incomplete";
+var ACCT_UNWIRED = "acct:unwired";
+var ACCT_LOGGED_OUT = "acct:logged-out";
+var ACCT_INCOMPLETE = "acct:incomplete";
+//@ chunk-e6aww6q8.js:2304163-2304486 placement
 /**
  * 解析当前 MCP 账号身份：未接入解析器、未登录、不完整，或账号与组织组成的身份令牌。
  */
-//@ chunk-e6aww6q8.js:2304163-2304486 placement
 function resolveMcpAccountIdentity() {
   let accountResolver = getDiscoveryCacheStore().accountResolver;
-  if (!accountResolver) return { kind: "unwired", token: ACCT_UNWIRED };
+  if (!accountResolver)
+    return {
+      kind: "unwired",
+      token: ACCT_UNWIRED,
+    };
   let n = accountResolver();
-  if (!n) return { kind: "logged-out", token: ACCT_LOGGED_OUT };
-  let r = n.accountUuid ?? "",
-    s = n.organizationUuid ?? "";
-  if (!r || !n.credentialInstalled) return { kind: "incomplete", token: ACCT_INCOMPLETE };
-  return { kind: "resolved", token: `acct:${r}|org:${s}`, accountUuid: r, orgUuid: s };
+  if (!n)
+    return {
+      kind: "logged-out",
+      token: ACCT_LOGGED_OUT,
+    };
+  let accountUuid = n.accountUuid ?? "";
+  let organizationUuid = n.organizationUuid ?? "";
+  if (!accountUuid || !n.credentialInstalled)
+    return {
+      kind: "incomplete",
+      token: ACCT_INCOMPLETE,
+    };
+  return {
+    kind: "resolved",
+    token: `acct:${accountUuid}|org:${organizationUuid}`,
+    accountUuid,
+    orgUuid: organizationUuid,
+  };
 }
+//@ chunk-e6aww6q8.js:2304486-2304529 placement = getResolvedDir (1)
 /**
  * 目标是否未解析（kind!=="resolved"）。
  */
-//@ chunk-e6aww6q8.js:2304486-2304529 placement = getResolvedDir (1)
 function isUnresolved(target) {
   return target.kind !== "resolved";
 }
 //@ chunk-e6aww6q8.js:2304529-2304557 placement
-var f1r = ["legacy", "modern"];
+/**
+ * 协议时代枚举（legacy、modern）。
+ */
+var PROTOCOL_ERAS = ["legacy", "modern"];
+//@ chunk-e6aww6q8.js:2304557-2305434 placement
 /**
  * 发现缓存的进程级状态：账号解析器、开关、缓存路径记忆、按路径串行化的写队列、删除代际、协议代解析器等；drain 在限定时间内等待写入完成。
  */
-//@ chunk-e6aww6q8.js:2304557-2305434 placement
 class DiscoveryCacheStore {
   accountResolver;
-  lastResolvedAccountToken = void 0;
+  lastResolvedAccountToken = undefined;
   killSwitch;
-  offLatched = void 0;
+  offLatched = undefined;
   storage;
   storageV5;
   filePathMemo = new Map();
@@ -114,10 +163,10 @@ class DiscoveryCacheStore {
   deleteGenerationByCacheKey = new Map();
   readGateForTest;
   constructor(e) {
-    ((this.storage = e?.storage ?? new LocalFileStore()),
-      (this.storageV5 = e?.storageV5),
-      (this.accountResolver = e?.accountResolver),
-      (this.killSwitch = e?.killSwitch));
+    this.storage = e?.storage ?? new LocalFileStore();
+    this.storageV5 = e?.storageV5;
+    this.accountResolver = e?.accountResolver;
+    this.killSwitch = e?.killSwitch;
   }
   serializeWrite(e, n) {
     let r = this.#e;
@@ -126,13 +175,19 @@ class DiscoveryCacheStore {
   }
   async drain(e) {
     if (this.pathWrites.size === 0) return;
-    await Promise.race([this.pathWrites.settle(), sleep(e, void 0, { unref: !0 })]);
+    await Promise.race([
+      this.pathWrites.settle(),
+      sleep(e, undefined, {
+        unref: true,
+      }),
+    ]);
   }
   async dispose(e) {
     try {
       await this.drain(e);
     } finally {
-      (this.flushCleanup?.(), (this.flushCleanup = void 0));
+      this.flushCleanup?.();
+      this.flushCleanup = undefined;
     }
   }
   succeed(e) {
@@ -143,28 +198,28 @@ class DiscoveryCacheStore {
     this.#e = n;
   }
 }
+//@ chunk-e6aww6q8.js:2305434-2305550 placement
 /**
  * 获取（必要时创建）发现缓存的进程级状态对象。
  */
-//@ chunk-e6aww6q8.js:2305434-2305550 placement
 function getDiscoveryCacheStore() {
-  let e = ht();
-  if (e.discoveryCacheStore === null) e.discoveryCacheStore = new DiscoveryCacheStore();
-  return e.discoveryCacheStore;
+  let cliOwnedState = getCliOwnedState();
+  if (cliOwnedState.discoveryCacheStore === null)
+    cliOwnedState.discoveryCacheStore = new DiscoveryCacheStore();
+  return cliOwnedState.discoveryCacheStore;
 }
-
 export {
-  fd,
+  isDiscoveryCacheOn,
   getDiscoveryCacheStore,
   resolveMcpAccountIdentity,
-  f1r,
+  PROTOCOL_ERAS,
   discoveryCacheOffReason,
-  OFo,
-  IM,
-  I4s,
-  D4s,
+  latchCacheOff,
+  isDiscoveryCacheUsable,
+  ACCOUNT_RESOLVE_TIMEOUT_MS,
+  getCacheOffLatched,
   isUnresolved,
-  M4s,
-  O4s,
-  smn,
+  hasCacheKillSwitch,
+  setCacheKillSwitch,
+  getSessionSkillCommands,
 };

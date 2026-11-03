@@ -8,15 +8,15 @@
  * pieces: chunk-93kwxas0.js (6)
  * attribution: placement 6
  */
-import { basename, basename as basename_2, basename as basename_3 } from "path";
-import { randomUUID, randomUUID as randomUUID_2, randomUUID as randomUUID_3 } from "crypto";
+import { basename } from "path";
+import { randomUUID } from "crypto";
 import {
-  Ah,
+  isRecentDispatchMark,
   markDispatchChunk,
   setDispatchWindowValue,
   buildDispatchValueOptions,
-  wd,
-  vs,
+  canLoadPastSessions,
+  shouldListPastSessions,
   listPastSessions,
   parseDispatchInput,
   MAX_SPAWN_RETRIES,
@@ -24,10 +24,14 @@ import {
   safeRespawnBgSession,
   TRANSIENT_SOCKET_ERRORS,
 } from "./fleetSessions.js";
-import { expandPastedTextRefs, stripInvisiblePromptChars, M1r } from "../../utils/promptTextSanitize.js";
+import {
+  expandPastedTextRefs,
+  stripInvisiblePromptChars,
+  forceRedraw,
+} from "../../utils/promptTextSanitize.js";
 import { formatInvisibleCharsRemoved } from "../../utils/invisibleChars.js";
-import { TVn } from "../../daemon/jobs/draftSweep.js";
-import { cX } from "../../utils/handlePromptSubmit.js";
+import { sweepDraft } from "../../daemon/jobs/draftSweep.js";
+import { EXIT_COMMAND_WORDS } from "../../utils/handlePromptSubmit.js";
 import {
   findCommand,
   getBuiltinCommands,
@@ -41,7 +45,7 @@ import { parseEffortLevel, parseEffortKeyword, EFFORT_LEVELS } from "../../utils
 import { isReservedEffortKeyword } from "../../utils/permissions/permissionSetup.js";
 import {
   resolveDispatchDefaults,
-  gi,
+  dispatchDefaultsFromJob,
   applyDispatchOverrides,
   takeNotificationLatency,
 } from "./dispatchDefaults.js";
@@ -53,14 +57,20 @@ import { logEvent } from "../../services/analytics/index.js";
 import { lit } from "../../services/analytics/safeMetadata.js";
 import { getGlobalConfig, saveGlobalConfig } from "../../utils/config.js";
 import {
-  rpe,
+  addPastedEntry,
   parsePastedRefs,
   expandLastPaste,
   getPastedTextRefNumLines,
   formatPastedTextRef,
-  ert,
+  MAX_HISTORY_ENTRIES,
 } from "../../history.js";
-import { hAr, shallowEqualRecords, dispatchFromFleetView, claimSpare, Y$n } from "../../cli/bg/bgSpare.js";
+import {
+  takeSpareHandle,
+  shallowEqualRecords,
+  dispatchFromFleetView,
+  claimSpare,
+  claimSpareFromPool,
+} from "../../cli/bg/bgSpare.js";
 import { PASTE_THRESHOLD } from "../../utils/imagePaste.js";
 import {
   resolveBgAgentTemplate,
@@ -85,235 +95,274 @@ import {
 import { jobOutcome } from "./fleetRows.js";
 import { getModeFromInput } from "../PromptInput/inputModes.js";
 import { queuePromptForJob } from "../../services/daemon/spawnLauncher.js";
-import { j } from "../../../vendor/react/cjs/react.production.js";
+import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
 
+//@ chunk-93kwxas0.js:61752-69788 placement
 /**
  * 提交派发输入：解析模板/技能/仓库/模型，创建后台会话或执行命令。
  */
-//@ chunk-93kwxas0.js:61752-69788 placement
-function submitDispatch(h, E) {
+function submitDispatch(submit, event) {
   let {
-      editor: editor,
-      roster: roster,
-      selection: selection,
-      view: view,
-      attach: attach,
-      storageV5: storageV5,
-      credentials: credentials,
-      onAction: onAction,
-      exit: exit,
-      relaunchForUpdate: relaunchForUpdate,
-      searchKeyDown: searchKeyDown,
-      willInsertNewline: willInsertNewline,
-      canonicalLauncherCwd: canonicalLauncherCwd,
-      launcherCwd: launcherCwd,
-      effectiveCwd: effectiveCwd,
-      scopedFallbackOrigin: scopedFallbackOrigin,
-      cwdFilter: cwdFilter,
-      dispatchDefaults: dispatchDefaults,
-      query: query,
-      dispatch: dispatch,
-      templates: templates,
-      allRepos: allRepos,
-      routines: routines,
-      templateCache: templateCache,
-      suggestions: suggestions,
-      skills: skills,
-      modelArgMatch: modelArgMatch,
-      modelSuggestions: modelSuggestions,
-      pickSuggestion: pickSuggestion,
-      applySuggestion: applySuggestion,
-      closeAgentBrowse: closeAgentBrowse,
-      jobSessionIds: jobSessionIds,
-      builtRows: builtRows,
-      bumpSuggGen: bumpSuggGen,
-      mountAt: mountAt,
-      focusedRow: focusedRow,
-      focused: focused,
-      isOnboarding: isOnboarding,
-      toggleCollapse: toggleCollapse,
-      openEarlier: openEarlier,
-      openNewSessionRow: openNewSessionRow,
-      openOrRespawn: openOrRespawn,
-    } = h,
-    Ot = () => {
-      (E.preventDefault(), E.stopImmediatePropagation());
-    },
-    Yt = (gt) => {
-      (editor.beginProgrammaticChange(), editor.setQuery(gt), view.setHelpOpen(!1));
-    },
-    ctrl = E.ctrl;
-  if (!ctrl && willInsertNewline(E)) {
-    searchKeyDown(E);
+    editor,
+    roster,
+    selection,
+    view,
+    attach,
+    storageV5,
+    credentials,
+    onAction,
+    exit,
+    relaunchForUpdate,
+    searchKeyDown,
+    willInsertNewline,
+    canonicalLauncherCwd,
+    launcherCwd,
+    effectiveCwd,
+    scopedFallbackOrigin,
+    cwdFilter,
+    dispatchDefaults,
+    query,
+    dispatch,
+    templates,
+    allRepos,
+    routines,
+    templateCache,
+    suggestions,
+    skills,
+    modelArgMatch,
+    modelSuggestions,
+    pickSuggestion,
+    applySuggestion,
+    closeAgentBrowse,
+    jobSessionIds,
+    builtRows,
+    bumpSuggGen,
+    mountAt,
+    focusedRow,
+    focused,
+    isOnboarding,
+    toggleCollapse,
+    openEarlier,
+    openNewSessionRow,
+    openOrRespawn,
+  } = submit;
+  let Ot = () => {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  };
+  let Yt = (gt) => {
+    editor.beginProgrammaticChange();
+    editor.setQuery(gt);
+    view.setHelpOpen(false);
+  };
+  let ctrl = event.ctrl;
+  if (!ctrl && willInsertNewline(event)) {
+    searchKeyDown(event);
     return;
   }
-  if ((Ot(), Ah(editor))) return;
-  let query_2 = editor.getSnapshot().query,
-    tt = expandPastedTextRefs(query_2, editor.pastes);
+  Ot();
+  if (isRecentDispatchMark(editor)) return;
+  let query_2 = editor.getSnapshot().query;
+  let tt = expandPastedTextRefs(query_2, editor.pastes);
   if (tt.removed.removedTotal > 0) {
-    (stripInvisiblePromptChars(tt.removed, "fleet_dispatch"), markDispatchChunk(editor));
+    stripInvisiblePromptChars(tt.removed, "fleet_dispatch");
+    markDispatchChunk(editor);
     let gt = tt.input.trim() === "";
-    if (tt.input !== query_2) (editor.beginProgrammaticChange(), editor.setQuery(tt.input));
+    if (tt.input !== query_2) {
+      editor.beginProgrammaticChange();
+      editor.setQuery(tt.input);
+    }
     if (tt.pastedContents !== editor.pastes) editor.replacePastes(tt.pastedContents);
-    (editor.setError(null),
-      editor.setHint(formatInvisibleCharsRemoved(tt.removed.removedTotal, gt ? "empty" : "review")),
-      M1r());
+    editor.setError(null);
+    editor.setHint(formatInvisibleCharsRemoved(tt.removed.removedTotal, gt ? "empty" : "review"));
+    forceRedraw();
     return;
   }
-  let ze = editor.getSnapshot().mode === "bash" ? "!" : editor.getSnapshot().query.trim().toLowerCase(),
-    Fe = () => {
-      (editor.beginProgrammaticChange(),
-        editor.setQuery(""),
-        TVn(canonicalLauncherCwd, { q: "", collapsed: [...selection.getSnapshot().collapsed] }, storageV5));
-    };
-  if (cX.includes(ze)) {
-    (Fe(), exit());
+  let ze = editor.getSnapshot().mode === "bash" ? "!" : editor.getSnapshot().query.trim().toLowerCase();
+  let Fe = () => {
+    editor.beginProgrammaticChange();
+    editor.setQuery("");
+    sweepDraft(
+      canonicalLauncherCwd,
+      {
+        q: "",
+        collapsed: [...selection.getSnapshot().collapsed],
+      },
+      storageV5,
+    );
+  };
+  if (EXIT_COMMAND_WORDS.includes(ze)) {
+    Fe();
+    exit();
     return;
   }
   if (ze.startsWith("/")) {
     let [gt = "", kt = ""] = editor
-        .getSnapshot()
-        .query.trim()
-        .slice(1)
-        .split(/\s+(.*)/, 2),
-      $e = findCommand(gt.toLowerCase(), getBuiltinCommands());
-    if ($e && isCommandEnabled($e) && meetsAvailabilityRequirement($e)) {
-      if ($e.fleetHostCall) {
-        (Fe(),
-          $e
-            .fleetHostCall(
-              {
-                exit: exit,
-                relaunch: () => relaunchForUpdate("manual"),
-                login: () => onAction({ type: "login" }),
-                setError: editor.setError,
-                setInfo: editor.setHint,
-                storageV5: storageV5,
-              },
-              kt,
-            )
-            .catch((ht) => {
-              (logError(ht), editor.setError(errorMessage(ht)));
-            }));
+      .getSnapshot()
+      .query.trim()
+      .slice(1)
+      .split(/\s+(.*)/, 2);
+    let command = findCommand(gt.toLowerCase(), getBuiltinCommands());
+    if (command && isCommandEnabled(command) && meetsAvailabilityRequirement(command)) {
+      if (command.fleetHostCall) {
+        Fe();
+        command
+          .fleetHostCall(
+            {
+              exit,
+              relaunch: () => relaunchForUpdate("manual"),
+              login: () =>
+                onAction({
+                  type: "login",
+                }),
+              setError: editor.setError,
+              setInfo: editor.setHint,
+              storageV5,
+            },
+            kt,
+          )
+          .catch((error) => {
+            logError(error);
+            editor.setError(errorMessage(error));
+          });
         return;
       }
-      if ($e.type !== "prompt" && $e.name !== "model") {
-        let lower = gt.toLowerCase(),
-          jt = pickSuggestion();
+      if (command.type !== "prompt" && command.name !== "model") {
+        let lower = gt.toLowerCase();
+        let jt = pickSuggestion();
         if (
-          !skills.some((Jt) => Jt.kind !== "command" && (Jt.name === lower || Jt.aliases?.includes(lower))) &&
-          (!jt || jt.name === $e.name || $e.isHidden)
+          !skills.some(
+            (skill) => skill.kind !== "command" && (skill.name === lower || skill.aliases?.includes(lower)),
+          ) &&
+          (!jt || jt.name === command.name || command.isHidden)
         ) {
-          if ($e.name === "effort") {
-            let trimmed = kt.trim(),
-              ct = parseEffortLevel(trimmed);
-            if (/^(default|auto)$/i.test(trimmed) || isReservedEffortKeyword(trimmed))
-              (Fe(),
-                setDispatchWindowValue(
-                  editor,
-                  dispatchDefaults,
-                  "effort",
-                  "default",
-                  view.getSnapshot().activeTab === "remote",
-                ));
-            else if (ct)
-              (Fe(),
-                setDispatchWindowValue(
-                  editor,
-                  dispatchDefaults,
-                  "effort",
-                  ct,
-                  view.getSnapshot().activeTab === "remote",
-                ));
-            else if (!trimmed) (Fe(), buildDispatchValueOptions(h, "effort"));
-            else {
-              let [vt, rt] = trimmed.split(/\s+/),
-                Qe = parseEffortKeyword(vt) !== void 0 && rt?.toLowerCase() === "off";
-              (editor.setError(null),
-                editor.setHint(
-                  Qe
-                    ? !resolveDispatchDefaults({ launch: dispatchDefaults, window: gi(editor.getSnapshot()) })
-                        .ultracode
-                      ? "New sessions from this window don't start in ultracode"
-                      : getInitialSettings_2().ultracode === !0
-                        ? "New sessions start in ultracode because ultracode is on in your settings"
-                        : "Ultracode is on from --effort ultracode; /effort <level> turns it off"
-                    : parseEffortKeyword(vt) !== void 0
-                      ? "Ultracode can't be set for new sessions here \u2014 start agent view with claude agents --effort ultracode, or turn it on in a session with /effort ultracode"
-                      : `Unknown effort '${trimmed}' \u2014 use ${EFFORT_LEVELS.join(", ")} or default`,
-                ));
+          if (command.name === "effort") {
+            let trimmed = kt.trim();
+            let effortLevel = parseEffortLevel(trimmed);
+            if (/^(default|auto)$/i.test(trimmed) || isReservedEffortKeyword(trimmed)) {
+              Fe();
+              setDispatchWindowValue(
+                editor,
+                dispatchDefaults,
+                "effort",
+                "default",
+                view.getSnapshot().activeTab === "remote",
+              );
+            } else if (effortLevel) {
+              Fe();
+              setDispatchWindowValue(
+                editor,
+                dispatchDefaults,
+                "effort",
+                effortLevel,
+                view.getSnapshot().activeTab === "remote",
+              );
+            } else if (!trimmed) {
+              Fe();
+              buildDispatchValueOptions(submit, "effort");
+            } else {
+              let [vt, rt] = trimmed.split(/\s+/);
+              let Qe = parseEffortKeyword(vt) !== undefined && rt?.toLowerCase() === "off";
+              editor.setError(null);
+              editor.setHint(
+                Qe
+                  ? !resolveDispatchDefaults({
+                      launch: dispatchDefaults,
+                      window: dispatchDefaultsFromJob(editor.getSnapshot()),
+                    }).ultracode
+                    ? "New sessions from this window don't start in ultracode"
+                    : getInitialSettings_2().ultracode === true
+                      ? "New sessions start in ultracode because ultracode is on in your settings"
+                      : "Ultracode is on from --effort ultracode; /effort <level> turns it off"
+                  : parseEffortKeyword(vt) !== undefined
+                    ? "Ultracode can't be set for new sessions here \u2014 start agent view with claude agents --effort ultracode, or turn it on in a session with /effort ultracode"
+                    : `Unknown effort '${trimmed}' \u2014 use ${EFFORT_LEVELS.join(", ")} or default`,
+              );
             }
             return;
           }
-          if ($e.name === "fast") {
+          if (command.name === "fast") {
             let lower = kt.trim().toLowerCase();
-            if (!isFastModeEnabled())
-              (editor.setError(null),
-                editor.setHint(getFastModeUnavailableMessage() ?? "Fast mode is not available"));
-            else if (lower === "default" || lower === "on" || lower === "off")
-              (Fe(),
-                setDispatchWindowValue(
-                  editor,
-                  dispatchDefaults,
-                  "fast",
-                  lower,
-                  view.getSnapshot().activeTab === "remote",
-                ));
-            else if (!lower) (Fe(), buildDispatchValueOptions(h, "fast"));
-            else
-              (editor.setError(null),
-                editor.setHint(`Unknown /fast option '${lower}' \u2014 use on, off or default`));
+            if (!isFastModeEnabled()) {
+              editor.setError(null);
+              editor.setHint(getFastModeUnavailableMessage() ?? "Fast mode is not available");
+            } else if (lower === "default" || lower === "on" || lower === "off") {
+              Fe();
+              setDispatchWindowValue(
+                editor,
+                dispatchDefaults,
+                "fast",
+                lower,
+                view.getSnapshot().activeTab === "remote",
+              );
+            } else if (!lower) {
+              Fe();
+              buildDispatchValueOptions(submit, "fast");
+            } else {
+              editor.setError(null);
+              editor.setHint(`Unknown /fast option '${lower}' \u2014 use on, off or default`);
+            }
             return;
           }
           if (
-            $e.name === "resume" &&
+            command.name === "resume" &&
             !kt.trim() &&
             view.getSnapshot().activeTab !== "remote" &&
             !cwdFilter &&
-            wd()
+            canLoadPastSessions()
           ) {
-            (Fe(), editor.setError(null), editor.setHint(null));
-            let openResumePicker = view.openResumePicker(),
-              ct = new Set(jobSessionIds);
-            if (vs()) {
+            Fe();
+            editor.setError(null);
+            editor.setHint(null);
+            let He = view.openResumePicker();
+            let ct = new Set(jobSessionIds);
+            if (shouldListPastSessions()) {
               for (let rt of builtRows) if (rt.kind === "earlier") ct.add(rt.entry.sessionId);
             }
-            listPastSessions(ct, !0, storageV5).then((rt) => {
-              if (openResumePicker !== view.resumePickerGen) return;
+            listPastSessions(ct, true, storageV5).then((rt) => {
+              if (He !== view.resumePickerGen) return;
               if (rt === null) {
-                (logFeatureBad("fleet_view_resume_picker", "load_failed"),
-                  view.setResumePicker({ entries: [], failed: !0 }));
+                logFeatureBad("fleet_view_resume_picker", "load_failed");
+                view.setResumePicker({
+                  entries: [],
+                  failed: true,
+                });
                 return;
               }
               let filtered = rt.filter(
                 (Xe) =>
                   !roster.isDeleting(Xe.sessionId.slice(0, 8)) && !roster.isDeletingSession(Xe.sessionId),
               );
-              (logFeatureOk("fleet_view_resume_picker", { count: filtered.length }),
-                view.setResumePicker({ entries: filtered, failed: !1 }));
+              logFeatureOk("fleet_view_resume_picker", {
+                count: filtered.length,
+              });
+              view.setResumePicker({
+                entries: filtered,
+                failed: false,
+              });
             });
             return;
           }
           editor.setError(null);
-          let { sanitizedName: sanitizedName, skillNameHash: skillNameHash } = sanitizeSkillNameForTelemetry({
-            rawName: $e.name,
-            canonicalName: $e.name,
-            isMcp: !1,
-            isBuiltIn: builtInCommandNames().has($e.name),
-            isBundled: !1,
-            isOfficial: !1,
+          let { sanitizedName, skillNameHash } = sanitizeSkillNameForTelemetry({
+            rawName: command.name,
+            canonicalName: command.name,
+            isMcp: false,
+            isBuiltIn: builtInCommandNames().has(command.name),
+            isBundled: false,
+            isOfficial: false,
           });
-          (logEvent("tengu_slash_command_unavailable", {
+          logEvent("tengu_slash_command_unavailable", {
             command_name: sanitizedName,
             ...skillNameHash,
             surface: view.getSnapshot().activeTab === "remote" ? lit("fleet-cloud") : lit("fleet-local"),
             reason: lit("unavailable_in_agent_view"),
-          }),
-            editor.setHint(
-              $e.name === "config" && getGlobalConfig().defaultToAgentsView === !0
-                ? "Run /config in a session. /config defaultToAgentsView=false stops opening here"
-                : `/${$e.name} isn't available in agent view \u2014 open a session and run it there`,
-            ));
+          });
+          editor.setHint(
+            command.name === "config" && getGlobalConfig().defaultToAgentsView === true
+              ? "Run /config in a session. /config defaultToAgentsView=false stops opening here"
+              : `/${command.name} isn't available in agent view \u2014 open a session and run it there`,
+          );
           return;
         }
       }
@@ -323,109 +372,132 @@ function submitDispatch(h, E) {
     let gt = pickSuggestion();
     if (!modelArgMatch && gt && gt.kind !== "model");
     else {
-      let trimmed = editor.getSnapshot().query.trim().slice(6).trim(),
-        lower = trimmed.toLowerCase(),
-        mapped = modelSuggestions.map((He) => He.name),
-        found = mapped.find((He) => He.toLowerCase() === lower),
-        filtered = mapped.filter((He) => He.toLowerCase().startsWith(lower)),
-        Jt = modelArgMatch ? gt?.name : void 0,
-        qe = found ?? (filtered.length === 1 ? filtered[0] : void 0) ?? Jt;
-      if (qe)
-        (Fe(),
-          setDispatchWindowValue(
-            editor,
-            dispatchDefaults,
-            "model",
-            qe,
-            view.getSnapshot().activeTab === "remote",
-          ));
-      else if (!trimmed) (Fe(), buildDispatchValueOptions(h, "model"));
-      else editor.setHint(`Unknown model '${trimmed}' \u2014 type /model  to see options`);
+      let trimmed = editor.getSnapshot().query.trim().slice(6).trim();
+      let lower = trimmed.toLowerCase();
+      let mapped = modelSuggestions.map((modelSuggestion) => modelSuggestion.name);
+      let found = mapped.find((He) => He.toLowerCase() === lower);
+      let filtered = mapped.filter((He) => He.toLowerCase().startsWith(lower));
+      let Jt = modelArgMatch ? gt?.name : undefined;
+      let qe = found ?? (filtered.length === 1 ? filtered[0] : undefined) ?? Jt;
+      if (qe) {
+        Fe();
+        setDispatchWindowValue(
+          editor,
+          dispatchDefaults,
+          "model",
+          qe,
+          view.getSnapshot().activeTab === "remote",
+        );
+      } else if (!trimmed) {
+        Fe();
+        buildDispatchValueOptions(submit, "model");
+      } else editor.setHint(`Unknown model '${trimmed}' \u2014 type /model  to see options`);
       return;
     }
   }
   if (suggestions.length > 0) {
-    (applySuggestion(pickSuggestion()), closeAgentBrowse());
+    applySuggestion(pickSuggestion());
+    closeAgentBrowse();
     return;
   }
-  let Rt = query_2,
-    Vt = editor.getSnapshot().mode === "bash",
-    Be =
-      Rt === query && !Vt ? dispatch : parseDispatchInput(Vt ? `!${Rt}` : Rt, templates, allRepos, routines);
+  let Rt = query_2;
+  let Vt = editor.getSnapshot().mode === "bash";
+  let Be =
+    Rt === query && !Vt ? dispatch : parseDispatchInput(Vt ? `!${Rt}` : Rt, templates, allRepos, routines);
   if (Be?.intent || Be?.routine || Be?.matched) {
-    let gt = rpe(Be.intent, editor.pastes);
+    let gt = addPastedEntry(Be.intent, editor.pastes);
     if (!Be.routine && !Be.matched && gt.trim().length < MAX_SPAWN_RETRIES) {
-      (editor.setError(null), editor.setHint("Too short \u2014 describe the task"));
+      editor.setError(null);
+      editor.setHint("Too short \u2014 describe the task");
       return;
     }
-    let kt = Be.cwd ?? effectiveCwd,
-      $e = templateCache.get(kt);
-    if (Be.matched && !Be.exec && !(Be.template.name.includes(":") && kt !== effectiveCwd)) {
+    let cwd = Be.cwd ?? effectiveCwd;
+    let $e = templateCache.get(cwd);
+    if (Be.matched && !Be.exec && !(Be.template.name.includes(":") && cwd !== effectiveCwd)) {
       if ($e && !$e.some((pt) => pt.name === Be.template.name || pt.name.endsWith(`:${Be.template.name}`))) {
-        editor.setError(`@${Be.template.name} isn't available in ${basename(kt)}`);
+        editor.setError(`@${Be.template.name} isn't available in ${basename(cwd)}`);
         return;
       }
     }
-    let ht = applyDispatchOverrides(dispatchDefaults, gi(editor.getSnapshot())),
-      jt = hAr(),
-      Jt =
-        !parsePastedRefs(gt).some((pt) => editor.pastes[pt.id]?.type === "image") &&
-        gt.length <= PASTE_THRESHOLD &&
-        !gt.includes(`
-`),
-      qe =
-        !!jt &&
-        jt.ready &&
-        !Be.matched &&
-        !Be.routine &&
-        kt === jt.cwd &&
-        shallowEqualRecords(jt.defaults, ht) &&
-        Jt,
-      He = qe ? jt.sessionId : randomUUID_3(),
-      sliced = He.slice(0, 8);
-    ((selection.followId = sliced), editor.beginProgrammaticChange());
-    let vt = Be.matched && !Be.exec ? Be.template.name : null,
-      rt = Be.matched ? Be.template : resolveBgAgentTemplate(dispatchDefaults, $e),
-      pastes = editor.pastes,
-      Xe = Be.exec ? rpe(Be.exec, pastes) : void 0,
-      St = {
-        id: sliced,
-        state: makeInitialState({
-          template: Xe
-            ? { name: "exec", description: "" }
-            : Be.routine
-              ? { name: Be.routine, description: "" }
-              : rt,
-          intent: Xe ?? gt,
-          sessionId: He,
-          cwd: kt,
-          originCwd: kt,
-        }),
-        activity: "flowing",
-      };
-    roster.updatePendings((pt) => [...pt, St]);
-    let Ne = Rt,
-      mode = editor.getSnapshot().mode,
-      { savedFocusJobId: savedFocusJobId, followOrigin: followOrigin } = selection;
-    ((selection.savedFocusJobId = null),
-      (selection.followOrigin = null),
-      editor.setQuery(""),
-      editor.setMode("prompt"),
-      TVn(canonicalLauncherCwd, { q: "", collapsed: [...selection.getSnapshot().collapsed] }, storageV5),
-      editor.replacePastes({ ...editor.pastes }),
-      editor.pruneOrphanedPastes({ pruneTextPastes: !0 }));
-    let At = (pt) => {
-      (roster.updatePendings((Nt) => {
-        let filtered = Nt.filter((Ce) => Ce.id !== sliced);
-        if (!editor.getSnapshot().query && filtered.length === 0)
-          (editor.mergeRestoredPastes(pastes),
-            (selection.savedFocusJobId = savedFocusJobId),
-            (selection.followOrigin = followOrigin),
-            editor.setMode(mode),
-            Yt(Ne));
-        return filtered;
+    let ht = applyDispatchOverrides(dispatchDefaults, dispatchDefaultsFromJob(editor.getSnapshot()));
+    let jt = takeSpareHandle();
+    let Jt =
+      !parsePastedRefs(gt).some((pt) => editor.pastes[pt.id]?.type === "image") &&
+      gt.length <= PASTE_THRESHOLD &&
+      !gt.includes(`
+`);
+    let qe =
+      !!jt &&
+      jt.ready &&
+      !Be.matched &&
+      !Be.routine &&
+      cwd === jt.cwd &&
+      shallowEqualRecords(jt.defaults, ht) &&
+      Jt;
+    let He = qe ? jt.sessionId : randomUUID();
+    let sliced = He.slice(0, 8);
+    selection.followId = sliced;
+    editor.beginProgrammaticChange();
+    let vt = Be.matched && !Be.exec ? Be.template.name : null;
+    let rt = Be.matched ? Be.template : resolveBgAgentTemplate(dispatchDefaults, $e);
+    let pastes = editor.pastes;
+    let Xe = Be.exec ? addPastedEntry(Be.exec, pastes) : undefined;
+    let St = {
+      id: sliced,
+      state: makeInitialState({
+        template: Xe
+          ? {
+              name: "exec",
+              description: "",
+            }
+          : Be.routine
+            ? {
+                name: Be.routine,
+                description: "",
+              }
+            : rt,
+        intent: Xe ?? gt,
+        sessionId: He,
+        cwd,
+        originCwd: cwd,
       }),
-        editor.setError(pt));
+      activity: "flowing",
+    };
+    roster.updatePendings((pt) => [...pt, St]);
+    let Ne = Rt;
+    let mode = editor.getSnapshot().mode;
+    let { savedFocusJobId, followOrigin } = selection;
+    selection.savedFocusJobId = null;
+    selection.followOrigin = null;
+    editor.setQuery("");
+    editor.setMode("prompt");
+    sweepDraft(
+      canonicalLauncherCwd,
+      {
+        q: "",
+        collapsed: [...selection.getSnapshot().collapsed],
+      },
+      storageV5,
+    );
+    editor.replacePastes({
+      ...editor.pastes,
+    });
+    editor.pruneOrphanedPastes({
+      pruneTextPastes: true,
+    });
+    let At = (pt) => {
+      roster.updatePendings((Nt) => {
+        let filtered = Nt.filter((Ce) => Ce.id !== sliced);
+        if (!editor.getSnapshot().query && filtered.length === 0) {
+          editor.mergeRestoredPastes(pastes);
+          selection.savedFocusJobId = savedFocusJobId;
+          selection.followOrigin = followOrigin;
+          editor.setMode(mode);
+          Yt(Ne);
+        }
+        return filtered;
+      });
+      editor.setError(pt);
     };
     (async () => {
       let pt =
@@ -433,10 +505,10 @@ function submitDispatch(h, E) {
           ? rt
           : resolveBgAgentTemplate(
               dispatchDefaults,
-              await listUserAgentTemplates(kt, storageV5).catch(() => []),
+              await listUserAgentTemplates(cwd, storageV5).catch(() => []),
             );
       return Xe
-        ? dispatchFromFleetView(Xe, He, kt, storageV5)
+        ? dispatchFromFleetView(Xe, He, cwd, storageV5)
         : qe
           ? claimSpare(gt, pt, storageV5)
           : materializePastedImages(gt, pastes, sliced, storageV5).then((Nt) =>
@@ -445,10 +517,10 @@ function submitDispatch(h, E) {
                 Nt,
                 {
                   sessionId: He,
-                  targetCwd: kt,
+                  targetCwd: cwd,
                   routine: Be.routine,
                   defaults: ht,
-                  displayIntent: Nt !== gt ? gt : void 0,
+                  displayIntent: Nt !== gt ? gt : undefined,
                 },
                 storageV5,
               ),
@@ -456,150 +528,205 @@ function submitDispatch(h, E) {
     })().then(
       (pt) => {
         if (qe)
-          Y$n(scopedFallbackOrigin, !1, dispatchDefaults, templateCache.get(scopedFallbackOrigin), storageV5);
+          claimSpareFromPool(
+            scopedFallbackOrigin,
+            false,
+            dispatchDefaults,
+            templateCache.get(scopedFallbackOrigin),
+            storageV5,
+          );
         if (!pt.ok) return At(pt.error);
-        if (qe && pt.jobId !== sliced)
-          ((selection.followId = pt.jobId),
-            (St = { ...St, id: pt.jobId, state: { ...St.state, sessionId: pt.sessionId } }),
-            roster.updatePendings((Nt) => Nt.map((oo) => (oo.id === sliced ? St : oo))));
+        if (qe && pt.jobId !== sliced) {
+          selection.followId = pt.jobId;
+          St = {
+            ...St,
+            id: pt.jobId,
+            state: {
+              ...St.state,
+              sessionId: pt.sessionId,
+            },
+          };
+          roster.updatePendings((Nt) => Nt.map((oo) => (oo.id === sliced ? St : oo)));
+        }
         if (qe) roster.kick(pt.sessionId, pt.jobId);
         if (vt) {
-          let Nt = !1;
-          if (
-            (saveGlobalConfig((oo) => {
-              let now = Date.now(),
-                Ke = oo.agentLastUsed?.[vt];
-              if (Ke !== void 0 && now - Ke < 60000) return oo;
-              return ((Nt = !0), { ...oo, agentLastUsed: { ...(oo.agentLastUsed ?? {}), [vt]: now } });
-            }, storageV5),
-            Nt)
-          )
-            bumpSuggGen();
+          let Nt = false;
+          saveGlobalConfig((oo) => {
+            let now = Date.now();
+            let Ke = oo.agentLastUsed?.[vt];
+            if (Ke !== undefined && now - Ke < 60000) return oo;
+            Nt = true;
+            return {
+              ...oo,
+              agentLastUsed: {
+                ...(oo.agentLastUsed ?? {}),
+                [vt]: now,
+              },
+            };
+          }, storageV5);
+          if (Nt) bumpSuggGen();
         }
-        if (ctrl) (attach.arm(St.id, null), onAction({ type: "open", job: St, freshDispatch: !0 }));
-        else if ((roster.reload(), !qe)) roster.watchPendingJobDir(sliced);
+        if (ctrl) {
+          attach.arm(St.id, null);
+          onAction({
+            type: "open",
+            job: St,
+            freshDispatch: true,
+          });
+        } else {
+          roster.reload();
+          if (!qe) roster.watchPendingJobDir(sliced);
+        }
       },
-      (pt) => {
+      (error) => {
         if (qe)
-          Y$n(scopedFallbackOrigin, !1, dispatchDefaults, templateCache.get(scopedFallbackOrigin), storageV5);
-        At(errorMessage(pt));
+          claimSpareFromPool(
+            scopedFallbackOrigin,
+            false,
+            dispatchDefaults,
+            templateCache.get(scopedFallbackOrigin),
+            storageV5,
+          );
+        At(errorMessage(error));
       },
     );
-  } else if (!Be?.cwd && Be?.exec === void 0) {
+  } else if (!Be?.cwd && Be?.exec === undefined) {
     if (Be === null && Rt !== query) return;
-    if (focusedRow?.kind === "fold")
-      ((selection.followOrigin = null),
-        (selection.followId = null),
-        selection.expandCap(focusedRow.group),
-        logEvent("tengu_fleetview_fold_expand", {
-          hidden_count: focusedRow.hidden,
-          ms_since_mount: Date.now() - mountAt,
-        }));
-    else if (focusedRow?.kind === "header") {
+    if (focusedRow?.kind === "fold") {
+      selection.followOrigin = null;
+      selection.followId = null;
+      selection.expandCap(focusedRow.group);
+      logEvent("tengu_fleetview_fold_expand", {
+        hidden_count: focusedRow.hidden,
+        ms_since_mount: Date.now() - mountAt,
+      });
+    } else if (focusedRow?.kind === "header") {
       if (isOnboarding || Be === null) return;
-      ((selection.followOrigin = focusedRow.group),
-        (selection.followId = null),
-        toggleCollapse(focusedRow.group));
+      selection.followOrigin = focusedRow.group;
+      selection.followId = null;
+      toggleCollapse(focusedRow.group);
     } else if (focusedRow?.kind === "earlier") openEarlier(focusedRow.entry, "section");
     else if (focusedRow?.kind === "newsession") openNewSessionRow(focusedRow.origin);
     else openOrRespawn(focused);
   }
 }
+//@ chunk-93kwxas0.js:69788-70256 placement
 /**
  * 处理粘贴到派发输入框的内容。
  */
-//@ chunk-93kwxas0.js:69788-70256 placement
 function handlePasteIntoDispatch(h, E) {
-  let { editor: editor, dispatchInputActive: dispatchInputActive, insertAtCursor: insertAtCursor } = h,
-    replaced = E.replace(
-      /\r\n|\r/g,
-      `
+  let { editor, dispatchInputActive, insertAtCursor } = h;
+  let replaced = E.replace(
+    /\r\n|\r/g,
+    `
 `,
-    ),
-    A = editor.lastMintedPasteId ?? -1,
-    L = editor.pastes[A];
+  );
+  let A = editor.lastMintedPasteId ?? -1;
+  let L = editor.pastes[A];
   if (dispatchInputActive && L?.type === "text" && L.content === replaced) {
     let D = expandLastPaste(editor.getSnapshot().query, editor.pastes);
     if (D?.id === A) {
-      (delete editor.pastes[A],
-        editor.setQueryAndCursor(D.expanded, D.cursorOffset),
-        editor.setExpandHintPasteId(null));
+      delete editor.pastes[A];
+      editor.setQueryAndCursor(D.expanded, D.cursorOffset);
+      editor.setExpandHintPasteId(null);
       return;
     }
   }
-  let V = getPastedTextRefNumLines(replaced);
-  if (dispatchInputActive && (replaced.length > PASTE_THRESHOLD || V > 2)) {
-    let mintTextPaste = editor.mintTextPaste(replaced);
-    if ((insertAtCursor(formatPastedTextRef(mintTextPaste, V)), replaced.length <= ert))
-      editor.setExpandHintPasteId(mintTextPaste);
+  let pastedTextRefNumLines = getPastedTextRefNumLines(replaced);
+  if (dispatchInputActive && (replaced.length > PASTE_THRESHOLD || pastedTextRefNumLines > 2)) {
+    let D = editor.mintTextPaste(replaced);
+    insertAtCursor(formatPastedTextRef(D, pastedTextRefNumLines));
+    if (replaced.length <= MAX_HISTORY_ENTRIES) editor.setExpandHintPasteId(D);
     return;
   }
   insertAtCursor(replaced);
 }
+//@ chunk-93kwxas0.js:70256-72623 placement
 /**
  * 向会话发送回复（支持 /stop）。
  */
-//@ chunk-93kwxas0.js:70256-72623 placement
-async function replyToJob(h, E, k) {
-  let { editor: editor, roster: roster, attach: attach, awayLoop: awayLoop, storageV5: storageV5 } = h;
-  if (E.id.startsWith("remote-pending-")) return STILL_STARTING_MESSAGE;
-  if (k.trim() === "/stop" && isLocalDaemonAgent(E.state) && !isSettled(E.state)) {
-    if (roster.getSnapshot().pendings.some((pending) => pending.id === E.id)) return STILL_STARTING_MESSAGE;
+async function replyToJob(h, focused, k) {
+  let { editor, roster, attach, awayLoop, storageV5 } = h;
+  if (focused.id.startsWith("remote-pending-")) return STILL_STARTING_MESSAGE;
+  if (k.trim() === "/stop" && isLocalDaemonAgent(focused.state) && !isSettled(focused.state)) {
+    if (roster.getSnapshot().pendings.some((pending) => pending.id === focused.id))
+      return STILL_STARTING_MESSAGE;
     try {
-      return (await h.stop(E), null);
+      await h.stop(focused);
+      return null;
     } catch (error) {
-      return (
-        logForDebugging(`[fleetview] /stop from the peek failed: ${errorMessage(error)}`, { level: "warn" }),
-        `Couldn't stop \u2014 ${errorMessage(error)}`
-      );
+      logForDebugging(`[fleetview] /stop from the peek failed: ${errorMessage(error)}`, {
+        level: "warn",
+      });
+      return `Couldn't stop \u2014 ${errorMessage(error)}`;
     }
   }
-  let holdJob = roster.holdJob(E.id),
-    D = E.state.resumeSessionId ?? E.state.sessionId,
-    kick = roster.kick(D, E.id);
+  let V = roster.holdJob(focused.id);
+  let D = focused.state.resumeSessionId ?? focused.state.sessionId;
+  let U = roster.kick(D, focused.id);
   roster.updateJobs((oe) => {
-    if (!oe?.some((ge) => ge.id === E.id)) return oe;
+    if (!oe?.some((ge) => ge.id === focused.id)) return oe;
     return oe.map((ge) => {
-      if (ge.id !== E.id) return ge;
+      if (ge.id !== focused.id) return ge;
       let se = applyReplyPatch(ge.state, k);
-      return { ...ge, state: se, activity: jobOutcome(se) };
+      return {
+        ...ge,
+        state: se,
+        activity: jobOutcome(se),
+      };
     });
   });
-  let N,
-    X,
-    K = !1,
-    W = !1,
-    z = !1;
+  let N;
+  let X;
+  let K = false;
+  let W = false;
+  let z = false;
   try {
-    let oe = () => takeNotificationLatency(awayLoop, E.state.sessionId, Date.now()),
-      ge = await replyToJob_2(E.id, k, E.state, void 0, oe, storageV5);
-    if (((N = ge?.err ?? null), (X = ge?.code), N === REPLY_ENOJOB_MSG)) {
-      let warming = attach.getWarming(E.id);
+    let oe = () => takeNotificationLatency(awayLoop, focused.state.sessionId, Date.now());
+    let ge = await replyToJob_2(focused.id, k, focused.state, undefined, oe, storageV5);
+    N = ge?.err ?? null;
+    X = ge?.code;
+    if (N === REPLY_ENOJOB_MSG) {
+      let warming = attach.getWarming(focused.id);
       if (warming) {
         await warming;
-        let ne = await replyToJob_2(E.id, k, E.state, void 0, oe, storageV5);
-        ((N = ne?.err ?? null), (X = ne?.code));
+        let ne = await replyToJob_2(focused.id, k, focused.state, undefined, oe, storageV5);
+        N = ne?.err ?? null;
+        X = ne?.code;
       }
     }
     if (N === REPLY_ENOJOB_MSG && getModeFromInput(k) === "prompt") {
-      let se = await safeRespawnBgSession(E.id, { knownState: E.state, initialPrompt: k }, storageV5);
+      let se = await safeRespawnBgSession(
+        focused.id,
+        {
+          knownState: focused.state,
+          initialPrompt: k,
+        },
+        storageV5,
+      );
       if (!se.ok && se.alive) {
-        let ne = await replyToJob_2(E.id, k, E.state, void 0, oe, storageV5);
-        ((N = ne?.err ?? null), (X = ne?.code));
-      } else
-        ((K = !se.ok),
-          (W = !se.ok && se.queued === !0),
-          (z = !se.ok && "errorCode" in se && se.errorCode === "dead_epoch_transcript_gone"),
-          (N = se.ok ? null : W ? "Reply queued \u2014 will be sent when this session restarts" : se.error));
+        let ne = await replyToJob_2(focused.id, k, focused.state, undefined, oe, storageV5);
+        N = ne?.err ?? null;
+        X = ne?.code;
+      } else {
+        K = !se.ok;
+        W = !se.ok && se.queued === true;
+        z = !se.ok && "errorCode" in se && se.errorCode === "dead_epoch_transcript_gone";
+        N = se.ok ? null : W ? "Reply queued \u2014 will be sent when this session restarts" : se.error;
+      }
       if (se.ok) oe();
     }
-    if (N) kick();
+    if (N) U();
   } finally {
-    holdJob();
+    V();
   }
-  if (N === null) (logFeatureOk("fleet_view_reply"), editor.clearReplyFailure(D));
-  else if (N === REPLY_PEER_NO_SOCK_MSG) (logFeatureOk("fleet_view_reply"), editor.clearReplyFailure(D));
-  else {
+  if (N === null) {
+    logFeatureOk("fleet_view_reply");
+    editor.clearReplyFailure(D);
+  } else if (N === REPLY_PEER_NO_SOCK_MSG) {
+    logFeatureOk("fleet_view_reply");
+    editor.clearReplyFailure(D);
+  } else {
     if (K) logForDebugging(`[fleetview] peek-reply respawn failed: ${N}`);
     let now = Date.now();
     if (editor.isRetryOfRecentReplyFailure(D, now))
@@ -610,32 +737,34 @@ async function replyToJob(h, E, k) {
     else if (K) logFeatureBad("fleet_view_reply", "respawn_failed");
     else if (isReplyDaemonRestartingMsg(N)) logFeatureSad("fleet_view_reply", "daemon_restarting");
     else {
-      let ge = N,
-        se = [...ge.matchAll(/\bE[A-Z]{2,14}\b/g)].find(
-          (me) => !"/\\".includes(ge[me.index - 1] ?? "."),
-        )?.[0];
+      let ge = N;
+      let se = [...ge.matchAll(/\bE[A-Z]{2,14}\b/g)].find(
+        (me) => !"/\\".includes(ge[me.index - 1] ?? "."),
+      )?.[0];
       logForDebugging(`[fleetview] peek-reply send failed: ${ge}`);
       let ne =
-          !X &&
-          se !== void 0 &&
-          TRANSIENT_SOCKET_ERRORS.has(se) &&
-          (await queuePromptForJob(getJobDir(E.id), E.state, k, storageV5)),
-        ae = { errno: sanitizeErrnoTokenForTelemetry(X ?? se) ?? lit("unknown") };
-      if (ne)
-        ((N = "Reply queued \u2014 will be sent when this session restarts"),
-          logFeatureSad("fleet_view_reply", "queued_for_later", ae));
-      else logFeatureBad("fleet_view_reply", "send_failed", ae);
+        !X &&
+        se !== undefined &&
+        TRANSIENT_SOCKET_ERRORS.has(se) &&
+        (await queuePromptForJob(getJobDir(focused.id), focused.state, k, storageV5));
+      let ae = {
+        errno: sanitizeErrnoTokenForTelemetry(X ?? se) ?? lit("unknown"),
+      };
+      if (ne) {
+        N = "Reply queued \u2014 will be sent when this session restarts";
+        logFeatureSad("fleet_view_reply", "queued_for_later", ae);
+      } else logFeatureBad("fleet_view_reply", "send_failed", ae);
     }
     editor.noteReplyFailure(D, now);
   }
-  return (roster.reload(), N);
+  roster.reload();
+  return N;
 }
 //@ chunk-93kwxas0.js:72623-72627 placement
-j();
+init_react_production();
 //@ chunk-93kwxas0.js:72627-72631 placement
-j();
+init_react_production();
 //@ chunk-93kwxas0.js:72631-72647 placement
-var Lh = 3,
-  Bs = 1e4;
-
-export { submitDispatch, Bs, handlePasteIntoDispatch, Lh, replyToJob };
+var MAX_DISPATCH_RETRIES = 3;
+var DISPATCH_TIMEOUT_MS = 1e4;
+export { submitDispatch, DISPATCH_TIMEOUT_MS, handlePasteIntoDispatch, MAX_DISPATCH_RETRIES, replyToJob };

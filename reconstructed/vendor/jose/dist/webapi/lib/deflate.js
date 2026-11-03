@@ -5,45 +5,50 @@
  * pieces: chunk-5h78gfwc.js (3)
  * attribution: esm-fingerprint 3
  */
-import { f_2, c } from "../../node/esm/util/errors.js";
-import { E_2 } from "./buffer_utils.js";
+import { JOSENotSupported, JWEInvalid } from "../../node/esm/util/errors.js";
+import { concat } from "./buffer_utils.js";
 
 //@ chunk-5h78gfwc.js:30709-30841 esm-fingerprint
-function Pt(e) {
-  if (typeof globalThis[e] > "u")
-    throw new f_2(`JWE "zip" (Compression Algorithm) Header Parameter requires the ${e} API.`);
+function Pt(name) {
+  if (typeof globalThis[name] === "undefined")
+    throw new JOSENotSupported(
+      `JWE "zip" (Compression Algorithm) Header Parameter requires the ${name} API.`,
+    );
 }
 //@ chunk-5h78gfwc.js:30841-31116 esm-fingerprint
-async function Wt(e) {
+async function Wt(input) {
   Pt("CompressionStream");
-  let compressionStream = new CompressionStream("deflate-raw"),
-    writer = compressionStream.writable.getWriter();
-  (writer.write(e).catch(() => {}), writer.close().catch(() => {}));
-  let n = [],
-    reader = compressionStream.readable.getReader();
+  let cs = new CompressionStream("deflate-raw");
+  let writer = cs.writable.getWriter();
+  writer.write(input).catch(() => {});
+  writer.close().catch(() => {});
+  let chunks = [];
+  let reader = cs.readable.getReader();
   for (;;) {
-    let { value: o, done: a } = await reader.read();
-    if (a) break;
-    n.push(o);
+    let { value, done } = await reader.read();
+    if (done) break;
+    chunks.push(value);
   }
-  return E_2(...n);
+  return concat(...chunks);
 }
 //@ chunk-5h78gfwc.js:31116-31501 esm-fingerprint
-async function It(e, t) {
+async function decompress(input, maxLength) {
   Pt("DecompressionStream");
-  let decompressionStream = new DecompressionStream("deflate-raw"),
-    writer = decompressionStream.writable.getWriter();
-  (writer.write(e).catch(() => {}), writer.close().catch(() => {}));
-  let i = [],
-    o = 0,
-    reader = decompressionStream.readable.getReader();
+  let ds = new DecompressionStream("deflate-raw");
+  let writer = ds.writable.getWriter();
+  writer.write(input).catch(() => {});
+  writer.close().catch(() => {});
+  let chunks = [];
+  let length = 0;
+  let reader = ds.readable.getReader();
   for (;;) {
-    let { value: s, done: p } = await reader.read();
-    if (p) break;
-    if ((i.push(s), (o += s.byteLength), t !== 1 / 0 && o > t))
-      throw new c("Decompressed plaintext exceeded the configured limit");
+    let { value, done } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    length += value.byteLength;
+    if (maxLength !== 1 / 0 && length > maxLength)
+      throw new JWEInvalid("Decompressed plaintext exceeded the configured limit");
   }
-  return E_2(...i);
+  return concat(...chunks);
 }
-
-export { It, Wt };
+export { decompress, Wt };

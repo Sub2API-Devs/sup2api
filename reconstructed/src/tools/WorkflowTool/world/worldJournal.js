@@ -8,11 +8,11 @@
  * pieces: chunk-y1shfdfm.js (12)
  * attribution: placement 11, sole-consumer 1
  */
-import { join, dirname, basename, basename as basename_2 } from "path";
+import { join, dirname, basename } from "path";
 import { mkdir, appendFile, readFile } from "fs/promises";
 import { resolveSessionProjectDir, getProjectKeyIfRepresentable } from "../../../utils/sessionStorage.js";
 import { getSessionId, onSessionSwitch } from "../../../bootstrap/state.js";
-import { WORLD_JSONL, worldJournalLineSchema, Kt } from "./runRegistry.js";
+import { WORLD_JSONL, worldJournalLineSchema, MAX_WORLD_JOURNAL_READ_BYTES } from "./runRegistry.js";
 import { STORAGE_SPACES } from "../../../utils/storage/storageSpaces.js";
 import { validateStorageKey } from "../../../utils/storage/storageKeys.js";
 import { isStorageV5Enabled } from "../../../utils/hoverRest.js";
@@ -26,118 +26,177 @@ import { WorldStore } from "./worldStore.js";
 import { call } from "../../../commands/extra-usage/extra-usage-noninteractive.js";
 
 //@ chunk-y1shfdfm.js:51018-51063 placement
-function Zr() {
-  let e = resolveSessionProjectDir();
-  return join(e, getSessionId(), WORLD_JSONL);
+/**
+ * 当前会话的 world 日志文件路径。
+ */
+function worldJournalPath() {
+  let sessionProjectDir = resolveSessionProjectDir();
+  return join(sessionProjectDir, getSessionId(), WORLD_JSONL);
 }
 //@ chunk-y1shfdfm.js:51063-51207 placement
 function worldJournalStorageKey(e) {
-  let r = dirname(e),
-    n = getProjectKeyIfRepresentable(dirname(r));
-  if (n === void 0 || basename_2(e) !== WORLD_JSONL) return;
-  let sessionJournal = STORAGE_SPACES.sessionJournal(n, basename_2(r), "world");
-  return validateStorageKey(sessionJournal) === void 0 ? sessionJournal : void 0;
+  let r = dirname(e);
+  let projectKeyIfRepresentable = getProjectKeyIfRepresentable(dirname(r));
+  if (projectKeyIfRepresentable === undefined || basename(e) !== WORLD_JSONL) return;
+  let s = STORAGE_SPACES.sessionJournal(projectKeyIfRepresentable, basename(r), "world");
+  return validateStorageKey(s) === undefined ? s : undefined;
 }
+//@ chunk-y1shfdfm.js:51207-52217 placement
 /**
  * 把 world 行变更顺序追加写入会话日志（远程会话走记录存储）。
  */
-//@ chunk-y1shfdfm.js:51207-52217 placement
 function createWorldJournalWriter(e, r, n) {
-  let s = worldJournalStorageKey(r),
-    i = !1,
-    w = !1,
-    resolved = Promise.resolve(),
-    k = (R) => {
-      resolved = resolved
-        .then(async () => {
-          if (w) return;
-          if (isStorageV5Enabled() && n !== void 0 && s !== void 0) {
-            let append = await n.append(s, [{ data: toJsonLine(R) }]);
-            if (!append.ok)
-              throw (
-                logForDebugging(`world journal append failed: ${formatStorageError(append.error)}`, {
-                  level: "warn",
-                }),
-                Error("world journal append failed", { cause: append.error })
-              );
-            return;
+  let s = worldJournalStorageKey(r);
+  let i = false;
+  let w = false;
+  let resolved = Promise.resolve();
+  let k = (R) => {
+    resolved = resolved
+      .then(async () => {
+        if (w) return;
+        if (isStorageV5Enabled() && n !== undefined && s !== undefined) {
+          let I = await n.append(s, [
+            {
+              data: toJsonLine(R),
+            },
+          ]);
+          if (!I.ok) {
+            logForDebugging(`world journal append failed: ${formatStorageError(I.error)}`, {
+              level: "warn",
+            });
+            throw Error("world journal append failed", {
+              cause: I.error,
+            });
           }
-          if (!i) (await mkdir(dirname(r), { recursive: !0 }), (i = !0));
-          await appendFile(r, toJsonLine(R));
-        })
-        .catch((I) => {
-          ((w = !0),
-            subscribe(),
-            logFeatureSad("workflow_journal", "append_failed"),
-            logForDebugging(
-              `world journal append failed; the writer detaches and this session's later rows stay in memory only: ${I}`,
-              { level: "warn" },
-            ));
+          return;
+        }
+        if (!i) {
+          await mkdir(dirname(r), {
+            recursive: true,
+          });
+          i = true;
+        }
+        await appendFile(r, toJsonLine(R));
+      })
+      .catch((error) => {
+        w = true;
+        y();
+        logFeatureSad("workflow_journal", "append_failed");
+        logForDebugging(
+          `world journal append failed; the writer detaches and this session's later rows stay in memory only: ${error}`,
+          {
+            level: "warn",
+          },
+        );
+      });
+  };
+  let y = e.subscribe((R) => {
+    switch (R.kind) {
+      case "put": {
+        let { addr, kind, fact, by, at, status } = R.row;
+        k({
+          k: "put",
+          addr,
+          kind,
+          fact,
+          by,
+          in: R.row.in,
+          at,
+          status,
         });
-    },
-    subscribe = e.subscribe((R) => {
-      switch (R.kind) {
-        case "put": {
-          let { addr: addr, kind: kind, fact: fact, by: by, at: at, status: status } = R.row;
-          k({ k: "put", addr: addr, kind: kind, fact: fact, by: by, in: R.row.in, at: at, status: status });
-          return;
-        }
-        case "settled": {
-          let { addr: addr, status: status, value: V, error: error } = R.row;
-          if (status === "done") k({ k: "settled", addr: addr, status: status, value: V });
-          else if (status === "failed") k({ k: "settled", addr: addr, status: status, error: error });
-          return;
-        }
-        case "retracted":
-          k({ k: "retracted", addr: R.row.addr });
-          return;
-        case "runaway":
-          return;
+        return;
       }
-    });
-  return () => (subscribe(), resolved);
+      case "settled": {
+        let { addr, status, value: V, error } = R.row;
+        if (status === "done")
+          k({
+            k: "settled",
+            addr,
+            status,
+            value: V,
+          });
+        else if (status === "failed")
+          k({
+            k: "settled",
+            addr,
+            status,
+            error,
+          });
+        return;
+      }
+      case "retracted":
+        k({
+          k: "retracted",
+          addr: R.row.addr,
+        });
+        return;
+      case "runaway":
+        return;
+    }
+  });
+  return () => {
+    y();
+    return resolved;
+  };
 }
 //@ chunk-y1shfdfm.js:52217-52805 placement
 async function readWorldJournal(e, r) {
   let n = worldJournalStorageKey(e);
-  if (isStorageV5Enabled() && r !== void 0 && n !== void 0) {
-    let k = await readRemoteJournalRecords(r, n);
-    if (k === void 0) return { lines: [], skipped: 0 };
-    let y = parseJournalLines(k),
-      statMeta = await r.statMeta(n);
-    if (!statMeta.ok)
-      throw (
-        logForDebugging(`world journal stat failed: ${formatStorageError(statMeta.error)}`, {
-          level: "warn",
-        }),
-        Error("world journal stat failed", { cause: statMeta.error })
-      );
-    return (statMeta.value.storedBytes ?? statMeta.value.size) > statMeta.value.size
-      ? { lines: y.lines, skipped: y.skipped + 1 }
-      : y;
+  if (isStorageV5Enabled() && r !== undefined && n !== undefined) {
+    let remoteJournalRecords = await readRemoteJournalRecords(r, n);
+    if (remoteJournalRecords === undefined)
+      return {
+        lines: [],
+        skipped: 0,
+      };
+    let journalLines = parseJournalLines(remoteJournalRecords);
+    let R = await r.statMeta(n);
+    if (!R.ok) {
+      logForDebugging(`world journal stat failed: ${formatStorageError(R.error)}`, {
+        level: "warn",
+      });
+      throw Error("world journal stat failed", {
+        cause: R.error,
+      });
+    }
+    return (R.value.storedBytes ?? R.value.size) > R.value.size
+      ? {
+          lines: journalLines.lines,
+          skipped: journalLines.skipped + 1,
+        }
+      : journalLines;
   }
   let s;
   try {
     s = await readFile(e, "utf8");
   } catch (error) {
-    if (isENOENT(error)) return { lines: [], skipped: 0 };
+    if (isENOENT(error))
+      return {
+        lines: [],
+        skipped: 0,
+      };
     throw error;
   }
-  let parts = s.split(`
-`),
-    w =
-      s.length > 0 &&
-      !s.endsWith(`
+  let lines = s.split(`
 `);
-  if (w) parts.pop();
-  let h = parseJournalLines(parts);
-  return w ? { lines: h.lines, skipped: h.skipped + 1 } : h;
+  let w =
+    s.length > 0 &&
+    !s.endsWith(`
+`);
+  if (w) lines.pop();
+  let journalLines = parseJournalLines(lines);
+  return w
+    ? {
+        lines: journalLines.lines,
+        skipped: journalLines.skipped + 1,
+      }
+    : journalLines;
 }
 //@ chunk-y1shfdfm.js:52805-53164 placement
 function parseJournalLines(e) {
-  let r = [],
-    n = new Set(),
-    s = 0;
+  let r = [];
+  let n = new Set();
+  let s = 0;
   for (let i of e) {
     if (!i) continue;
     let w;
@@ -147,68 +206,86 @@ function parseJournalLines(e) {
       s++;
       continue;
     }
-    let safeParse = worldJournalLineSchema().safeParse(w);
-    if (!safeParse.success) {
+    let h = worldJournalLineSchema().safeParse(w);
+    if (!h.success) {
       s++;
       continue;
     }
-    if (safeParse.data.k === "put") {
-      if (n.has(safeParse.data.addr)) {
+    if (h.data.k === "put") {
+      if (n.has(h.data.addr)) {
         s++;
         continue;
       }
-      n.add(safeParse.data.addr);
+      n.add(h.data.addr);
     }
-    r.push(safeParse.data);
+    r.push(h.data);
   }
-  if (s > 0) logForDebugging(`world journal: skipped ${s} malformed or invalid line(s)`, { level: "warn" });
-  return { lines: r, skipped: s };
+  if (s > 0)
+    logForDebugging(`world journal: skipped ${s} malformed or invalid line(s)`, {
+      level: "warn",
+    });
+  return {
+    lines: r,
+    skipped: s,
+  };
 }
 //@ chunk-y1shfdfm.js:53164-53235 placement
-function ot(e) {
+/**
+ * 由现有行计算下一个可用地址（最大地址 + 1）。
+ */
+function nextRowAddr(lines) {
   let r = 0;
-  for (let n of e) if (n.addr >= r) r = n.addr + 1;
+  for (let n of lines) if (n.addr >= r) r = n.addr + 1;
   return r;
 }
 //@ chunk-y1shfdfm.js:53235-53774 placement
 async function readRemoteJournalRecords(e, r) {
-  let textDecoder = new TextDecoder("utf-8", { ignoreBOM: !0 }),
-    s = [],
-    i;
+  let textDecoder = new TextDecoder("utf-8", {
+    ignoreBOM: true,
+  });
+  let s = [];
+  let i;
   for (;;) {
-    let records = await e.readRecords(r, { ...(i !== void 0 && { fromSeq: i }), maxBytes: Kt });
+    let records = await e.readRecords(r, {
+      ...(i !== undefined && {
+        fromSeq: i,
+      }),
+      maxBytes: MAX_WORLD_JOURNAL_READ_BYTES,
+    });
     if (!records.ok) {
       if (records.error.code === "NotFound") return;
-      throw (
-        logForDebugging(`world journal read failed: ${formatStorageError(records.error)}`, { level: "warn" }),
-        Error("world journal read failed", { cause: records.error })
-      );
+      logForDebugging(`world journal read failed: ${formatStorageError(records.error)}`, {
+        level: "warn",
+      });
+      throw Error("world journal read failed", {
+        cause: records.error,
+      });
     }
     for (let item of records.value.items) {
-      let decode = textDecoder.decode(item.data);
+      let y = textDecoder.decode(item.data);
       s.push(
-        decode.endsWith(`
+        y.endsWith(`
 `)
-          ? decode.slice(0, -1)
-          : decode,
+          ? y.slice(0, -1)
+          : y,
       );
     }
     let nextSeq = records.value.nextSeq;
-    if (nextSeq === void 0) return s;
-    if (i !== void 0 && nextSeq <= i) throw Error("world journal read cursor failed to advance");
+    if (nextSeq === undefined) return s;
+    if (i !== undefined && nextSeq <= i) throw Error("world journal read cursor failed to advance");
     i = nextSeq;
   }
 }
+//@ chunk-y1shfdfm.js:53774-54473 placement
 /**
  * 把日志行重放到空 world，重建行、规则与状态。
  */
-//@ chunk-y1shfdfm.js:53774-54473 placement
-function replayWorldJournal(e, r) {
+function replayWorldJournal(e, lines) {
   if (e.rows.length > 0) throw Error("replayWorldJournal: the world is not empty");
-  let n = new Map(),
-    s = new Map(),
-    i = new Set();
-  for (let h of r)
+  let n = new Map();
+  let s = new Map();
+  let i = new Set();
+  for (let h of lines)
     switch (h.k) {
       case "put":
         n.set(h.addr, h);
@@ -221,90 +298,114 @@ function replayWorldJournal(e, r) {
         break;
     }
   let w = [];
-  for (let h = 0; h < n.size; h++) {
-    let k = n.get(h);
+  for (let j = 0; j < n.size; j++) {
+    let k = n.get(j);
     if (!k) break;
-    let y = { addr: h, kind: k.kind, fact: k.fact, by: k.by, in: k.in, at: k.at, status: k.status },
-      R = s.get(h);
-    if (R)
-      if (((y.status = R.status), R.status === "done")) y.value = R.value;
+    let y = {
+      addr: j,
+      kind: k.kind,
+      fact: k.fact,
+      by: k.by,
+      in: k.in,
+      at: k.at,
+      status: k.status,
+    };
+    let R = s.get(j);
+    if (R) {
+      y.status = R.status;
+      if (R.status === "done") y.value = R.value;
       else y.error = R.error;
-    if (i.has(h)) y.status = "retracted";
+    }
+    if (i.has(j)) y.status = "retracted";
     else if (y.kind === "sub" && y.status === "live") y.status = "retracted";
-    else if (y.status === "pending") ((y.status = "failed"), (y.error = "lost on resume"));
+    else if (y.status === "pending") {
+      y.status = "failed";
+      y.error = "lost on resume";
+    }
     w.push(y);
   }
-  return (e.restore(w), w.length);
+  e.restore(w);
+  return w.length;
 }
 //@ chunk-y1shfdfm.js:54473-54499 placement
-var it = new SessionRootSlot(() => new WorldStore());
+/**
+ * 按会话根保存的世界存储实例。
+ */
+var worldStoreByRoot = new SessionRootSlot(() => new WorldStore());
 //@ chunk-y1shfdfm.js:54499-54530 placement
 function worldStateOf(e) {
-  return it.of(e);
+  return worldStoreByRoot.of(e);
 }
 //@ chunk-y1shfdfm.js:54558-54607 sole-consumer
-var kr = new SessionRootSlot(() => new call()),
-  Jt = new SessionRootSlot(() => new Map());
+/**
+ * 按会话根保存的 world 日志句柄。
+ */
+var journalByRoot = new SessionRootSlot(() => new call());
+var journalSubscribersByRoot = new SessionRootSlot(() => new Map());
 //@ chunk-y1shfdfm.js:54607-55713 placement
 function openWorldJournal(e, r) {
-  let of = kr.of(e);
-  if (of.opened) return of.opened;
-  if (of.unsubscribe === void 0) {
-    let s = getSessionId();
-    of.unsubscribe = onSessionSwitch((i, w) => {
-      if (w === "cd" || w === "hydrate" || i === s) return;
-      (of.unsubscribe?.(), kr.drop(e), it.drop(e));
+  let n = journalByRoot.of(e);
+  if (n.opened) return n.opened;
+  if (n.unsubscribe === undefined) {
+    let sessionId = getSessionId();
+    n.unsubscribe = onSessionSwitch((i, w) => {
+      if (w === "cd" || w === "hydrate" || i === sessionId) return;
+      n.unsubscribe?.();
+      journalByRoot.drop(e);
+      worldStoreByRoot.drop(e);
     });
   }
-  return (
-    (of.opened = (async () => {
-      let s = worldStateOf(e),
-        i = Zr(),
-        of_2 = Jt.of(e),
-        h = of_2.get(i);
-      if (h !== void 0) {
-        if (
-          (logFeatureSad("workflow_journal", "writer_reclaimed"),
-          logForDebugging(
-            `world journal at ${i} had a writer from before a session switch; the re-entered session reclaims the file and the pre-switch world stops journaling`,
-            { level: "warn" },
-          ),
-          await h(),
-          of_2.get(i) === h)
-        )
-          of_2.delete(i);
-      }
-      let k = 0,
-        y = !1,
-        R = !1;
-      try {
-        let { lines: lines, skipped: skipped } = await readWorldJournal(i, r);
-        if (lines.length > 0 && s.rows.length === 0) k = replayWorldJournal(s, lines);
-        y = skipped === 0 && k === ot(lines) && s.rows.length === k;
-      } catch (error) {
-        ((R = !0), logForDebugging(`world journal replay failed: ${error}`, { level: "warn" }));
-      }
-      if (kr.peek(e) !== of) return openWorldJournal(e, r);
-      if (!y) {
-        if (
-          (logFeatureSad("workflow_journal", R ? "replay_failed" : "not_whole"),
-          logForDebugging(
-            `world journal at ${i} is not whole after replay (${k} rows restored); the world stays in memory for this session`,
-            { level: "warn" },
-          ),
-          R)
-        )
-          of.opened = void 0;
-        return { restored: k, attached: !1 };
-      }
-      return (
-        of_2.set(i, createWorldJournalWriter(s, i, r)),
-        logFeatureOk("workflow_journal"),
-        { restored: k, attached: !0 }
+  n.opened = (async () => {
+    let s = worldStateOf(e);
+    let i = worldJournalPath();
+    let w = journalSubscribersByRoot.of(e);
+    let h = w.get(i);
+    if (h !== undefined) {
+      logFeatureSad("workflow_journal", "writer_reclaimed");
+      logForDebugging(
+        `world journal at ${i} had a writer from before a session switch; the re-entered session reclaims the file and the pre-switch world stops journaling`,
+        {
+          level: "warn",
+        },
       );
-    })()),
-    of.opened
-  );
+      await h();
+      if (w.get(i) === h) w.delete(i);
+    }
+    let k = 0;
+    let y = false;
+    let R = false;
+    try {
+      let { lines, skipped } = await readWorldJournal(i, r);
+      if (lines.length > 0 && s.rows.length === 0) k = replayWorldJournal(s, lines);
+      y = skipped === 0 && k === nextRowAddr(lines) && s.rows.length === k;
+    } catch (error) {
+      R = true;
+      logForDebugging(`world journal replay failed: ${error}`, {
+        level: "warn",
+      });
+    }
+    if (journalByRoot.peek(e) !== n) return openWorldJournal(e, r);
+    if (!y) {
+      logFeatureSad("workflow_journal", R ? "replay_failed" : "not_whole");
+      logForDebugging(
+        `world journal at ${i} is not whole after replay (${k} rows restored); the world stays in memory for this session`,
+        {
+          level: "warn",
+        },
+      );
+      if (R) n.opened = undefined;
+      return {
+        restored: k,
+        attached: false,
+      };
+    }
+    w.set(i, createWorldJournalWriter(s, i, r));
+    logFeatureOk("workflow_journal");
+    return {
+      restored: k,
+      attached: true,
+    };
+  })();
+  return n.opened;
 }
-
 export { openWorldJournal, worldStateOf };

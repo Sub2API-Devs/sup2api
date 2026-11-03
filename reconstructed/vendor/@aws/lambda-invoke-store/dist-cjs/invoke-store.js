@@ -8,104 +8,114 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-edce4vxq.js:2273-4337 cjs-fingerprint
-var Vr = x(function (yo) {
-  var ve = {
-      REQUEST_ID: Symbol.for("_AWS_LAMBDA_REQUEST_ID"),
-      X_RAY_TRACE_ID: Symbol.for("_AWS_LAMBDA_X_RAY_TRACE_ID"),
-      TENANT_ID: Symbol.for("_AWS_LAMBDA_TENANT_ID"),
-    },
-    included = ["true", "1"].includes(process.env?.AWS_LAMBDA_NODEJS_NO_GLOBAL_AWSLAMBDA ?? "");
-  if (!included) globalThis.awslambda = globalThis.awslambda || {};
-  class Xe {
-    static PROTECTED_KEYS = ve;
-    isProtectedKey(e) {
-      return Object.values(ve).includes(e);
+var require_invoke_store = x(function (cjsExports) {
+  var PROTECTED_KEYS = {
+    REQUEST_ID: Symbol.for("_AWS_LAMBDA_REQUEST_ID"),
+    X_RAY_TRACE_ID: Symbol.for("_AWS_LAMBDA_X_RAY_TRACE_ID"),
+    TENANT_ID: Symbol.for("_AWS_LAMBDA_TENANT_ID"),
+  };
+  var NO_GLOBAL_AWS_LAMBDA = ["true", "1"].includes(process.env?.AWS_LAMBDA_NODEJS_NO_GLOBAL_AWSLAMBDA ?? "");
+  if (!NO_GLOBAL_AWS_LAMBDA) globalThis.awslambda = globalThis.awslambda || {};
+  class InvokeStoreBase {
+    static PROTECTED_KEYS = PROTECTED_KEYS;
+    isProtectedKey(key) {
+      return Object.values(PROTECTED_KEYS).includes(key);
     }
     getRequestId() {
-      return this.get(ve.REQUEST_ID) ?? "-";
+      return this.get(PROTECTED_KEYS.REQUEST_ID) ?? "-";
     }
     getXRayTraceId() {
-      return this.get(ve.X_RAY_TRACE_ID);
+      return this.get(PROTECTED_KEYS.X_RAY_TRACE_ID);
     }
     getTenantId() {
-      return this.get(ve.TENANT_ID);
+      return this.get(PROTECTED_KEYS.TENANT_ID);
     }
   }
-  class Ur extends Xe {
+  class InvokeStoreSingle extends InvokeStoreBase {
     currentContext;
     getContext() {
       return this.currentContext;
     }
     hasContext() {
-      return this.currentContext !== void 0;
+      return this.currentContext !== undefined;
     }
-    get(e) {
-      return this.currentContext?.[e];
+    get(key) {
+      return this.currentContext?.[key];
     }
-    set(e, t) {
-      if (this.isProtectedKey(e)) throw Error(`Cannot modify protected Lambda context field: ${String(e)}`);
-      ((this.currentContext = this.currentContext || {}), (this.currentContext[e] = t));
+    set(key, value) {
+      if (this.isProtectedKey(key))
+        throw Error(`Cannot modify protected Lambda context field: ${String(key)}`);
+      this.currentContext = this.currentContext || {};
+      this.currentContext[key] = value;
     }
-    run(e, t) {
-      this.currentContext = e;
+    run(context, fn) {
+      this.currentContext = context;
       try {
-        return t();
+        return fn();
       } finally {
-        this.currentContext = void 0;
+        this.currentContext = undefined;
       }
     }
   }
-  class Nt extends Xe {
+  class InvokeStoreMulti extends InvokeStoreBase {
     als;
     static async create() {
-      let e = new Nt(),
-        t = await import("async_hooks");
-      return ((e.als = new t.AsyncLocalStorage()), e);
+      let instance = new InvokeStoreMulti();
+      let asyncHooks = await import("async_hooks");
+      instance.als = new asyncHooks.AsyncLocalStorage();
+      return instance;
     }
     getContext() {
       return this.als.getStore();
     }
     hasContext() {
-      return this.als.getStore() !== void 0;
+      return this.als.getStore() !== undefined;
     }
-    get(e) {
-      return this.als.getStore()?.[e];
+    get(key) {
+      return this.als.getStore()?.[key];
     }
-    set(e, t) {
-      if (this.isProtectedKey(e)) throw Error(`Cannot modify protected Lambda context field: ${String(e)}`);
+    set(key, value) {
+      if (this.isProtectedKey(key))
+        throw Error(`Cannot modify protected Lambda context field: ${String(key)}`);
       let store = this.als.getStore();
       if (!store) throw Error("No context available");
-      store[e] = t;
+      store[key] = value;
     }
-    run(e, t) {
-      return this.als.run(e, t);
+    run(context, fn) {
+      return this.als.run(context, fn);
     }
   }
-  yo.InvokeStore = void 0;
-  (function (e) {
-    let t = null;
-    async function r() {
-      if (!t)
-        t = (async () => {
-          let o = "AWS_LAMBDA_MAX_CONCURRENCY" in process.env ? await Nt.create() : new Ur();
-          if (!included && globalThis.awslambda?.InvokeStore) return globalThis.awslambda.InvokeStore;
-          else if (!included && globalThis.awslambda) return ((globalThis.awslambda.InvokeStore = o), o);
-          else return o;
+  cjsExports.InvokeStore = undefined;
+  (function (InvokeStore) {
+    let instance = null;
+    async function getInstanceAsync() {
+      if (!instance)
+        instance = (async () => {
+          let newInstance =
+            "AWS_LAMBDA_MAX_CONCURRENCY" in process.env
+              ? await InvokeStoreMulti.create()
+              : new InvokeStoreSingle();
+          if (!NO_GLOBAL_AWS_LAMBDA && globalThis.awslambda?.InvokeStore)
+            return globalThis.awslambda.InvokeStore;
+          else if (!NO_GLOBAL_AWS_LAMBDA && globalThis.awslambda) {
+            globalThis.awslambda.InvokeStore = newInstance;
+            return newInstance;
+          } else return newInstance;
         })();
-      return t;
+      return instance;
     }
-    ((e.getInstanceAsync = r),
-      (e._testing =
-        process.env.AWS_LAMBDA_BENCHMARK_MODE === "1"
-          ? {
-              reset: () => {
-                if (((t = null), globalThis.awslambda?.InvokeStore)) delete globalThis.awslambda.InvokeStore;
-                globalThis.awslambda = {};
-              },
-            }
-          : void 0));
-  })(yo.InvokeStore || (yo.InvokeStore = {}));
-  yo.InvokeStoreBase = Xe;
+    InvokeStore.getInstanceAsync = getInstanceAsync;
+    InvokeStore._testing =
+      process.env.AWS_LAMBDA_BENCHMARK_MODE === "1"
+        ? {
+            reset: () => {
+              instance = null;
+              if (globalThis.awslambda?.InvokeStore) delete globalThis.awslambda.InvokeStore;
+              globalThis.awslambda = {};
+            },
+          }
+        : undefined;
+  })(cjsExports.InvokeStore || (cjsExports.InvokeStore = {}));
+  cjsExports.InvokeStoreBase = InvokeStoreBase;
 });
-
-export { Vr };
+export { require_invoke_store };

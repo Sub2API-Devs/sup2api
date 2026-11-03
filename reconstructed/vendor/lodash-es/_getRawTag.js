@@ -8,24 +8,23 @@
 import { dV } from "./_root.js";
 
 //@ chunk-a16kyqj3.js:391-473 placement = substituteVariables (0.576)
-var e = Object.prototype,
-  { hasOwnProperty: hasOwnProperty, toString: toString } = e,
-  r = dV ? dV.toStringTag : void 0;
+var objectProto = Object.prototype;
+var { hasOwnProperty, toString: nativeObjectToString } = objectProto;
+var symToStringTag = dV ? dV.toStringTag : undefined;
 //@ chunk-a16kyqj3.js:473-606 placement
-function u(t) {
-  var f = hasOwnProperty.call(t, r),
-    i = t[r];
+function getRawTag(value) {
+  var isOwn = hasOwnProperty.call(value, symToStringTag);
+  var tag = value[symToStringTag];
   try {
-    t[r] = void 0;
-    var l = !0;
+    value[symToStringTag] = undefined;
+    var unmasked = true;
   } catch (error) {}
-  var b = toString.call(t);
-  if (l)
-    if (f) t[r] = i;
-    else delete t[r];
-  return b;
+  var result = nativeObjectToString.call(value);
+  if (unmasked)
+    if (isOwn) value[symToStringTag] = tag;
+    else delete value[symToStringTag];
+  return result;
 }
 //@ chunk-a16kyqj3.js:606-614 placement
-var o = u;
-
-export { o };
+var getRawTag_default = getRawTag;
+export { getRawTag_default };

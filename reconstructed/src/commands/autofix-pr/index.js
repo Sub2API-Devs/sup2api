@@ -14,25 +14,25 @@ import { isPolicyAllowed as isPolicyAllowed_3 } from "../../services/policyLimit
 import { getIsNonInteractiveSession } from "../../bootstrap/state.js";
 import { CLOUD_SESSIONS_POLICY } from "../../services/cloudSessions/cloudSessionsPolicy.js";
 
+//@ chunk-e6aww6q8.js:1685740-1685804 placement
 /**
  * isAutofixPrEnabled：(claude.ai 订阅 或 console 档案) 且 allow_remote_sessions。
  */
-//@ chunk-e6aww6q8.js:1685740-1685804 placement
 function isAutofixPrEnabled() {
   return (
     (isClaudeAISubscriber() || consoleProfileCanStartCloudSessions()) &&
     isPolicyAllowed_3("allow_remote_sessions")
   );
 }
+//@ chunk-e6aww6q8.js:1685804-1686086 placement
 /**
  * /autofix-pr 命令对象（local-jsx）；描述：Monitor and autofix any issues with the current PR；availability ["claude-ai","console-profile"]；isEnabled: ()=>GZt()&&!_e()；isHidden: {return!GZt()}；实现 chunk-4pdevvfa.js 的 fr。
  */
-//@ chunk-e6aww6q8.js:1685804-1686086 placement
 var autofixPrCommandDefinition = {
   type: "local-jsx",
   name: "autofix-pr",
   description: "Monitor and autofix any issues with the current PR",
-  argumentHint: void 0,
+  argumentHint: undefined,
   availability: ["claude-ai", "console-profile"],
   isEnabled: () => isAutofixPrEnabled() && !getIsNonInteractiveSession(),
   policyGate: CLOUD_SESSIONS_POLICY,
@@ -45,5 +45,4 @@ var autofixPrCommandDefinition = {
 };
 //@ chunk-e6aww6q8.js:1686086-1686098 placement
 var autofixPrCommand = autofixPrCommandDefinition;
-
 export { autofixPrCommand };

@@ -6,36 +6,40 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../runtime/bun-runtime.js";
-import { uh } from "../../compile/codegen/index.js";
-import { ew } from "../../compile/util.js";
-import { Oo } from "../../runtime/ucs2length.js";
+import { require_codegen_2 } from "../../compile/codegen/index.js";
+import { require_util_2 } from "../../compile/util.js";
+import { require_ucs2length } from "../../runtime/ucs2length.js";
 
 //@ chunk-s82q9s4x.js:85340-85927 cjs-fingerprint
-var Ro = x(function (xo) {
-  Object.defineProperty(xo, "__esModule", { value: !0 });
-  var G = uh(),
-    jo = ew(),
-    pf = Oo(),
-    hf = {
-      message({ keyword: e, schemaCode: t }) {
-        return G.str`must NOT have ${e === "maxLength" ? "more" : "fewer"} than ${t} characters`;
-      },
-      params: ({ schemaCode: schemaCode }) => G._`{limit: ${schemaCode}}`,
+var require_limitLength = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  var codegen_1 = require_codegen_2();
+  var util_1 = require_util_2();
+  var ucs2length_1 = require_ucs2length();
+  var error = {
+    message({ keyword, schemaCode }) {
+      return codegen_1.str`must NOT have ${keyword === "maxLength" ? "more" : "fewer"} than ${schemaCode} characters`;
     },
-    mf = {
-      keyword: ["maxLength", "minLength"],
-      type: "string",
-      schemaType: "number",
-      $data: !0,
-      error: hf,
-      code(e) {
-        let { keyword: keyword, data: r, schemaCode: schemaCode, it: it } = e,
-          o = keyword === "maxLength" ? G.operators.GT : G.operators.LT,
-          i = it.opts.unicode === !1 ? G._`${r}.length` : G._`${jo.useFunc(e.gen, pf.default)}(${r})`;
-        e.fail$data(G._`${i} ${o} ${schemaCode}`);
-      },
-    };
-  xo.default = mf;
+    params: ({ schemaCode }) => codegen_1._`{limit: ${schemaCode}}`,
+  };
+  var def = {
+    keyword: ["maxLength", "minLength"],
+    type: "string",
+    schemaType: "number",
+    $data: true,
+    error,
+    code(cxt) {
+      let { keyword, data, schemaCode, it } = cxt;
+      let op = keyword === "maxLength" ? codegen_1.operators.GT : codegen_1.operators.LT;
+      let len =
+        it.opts.unicode === false
+          ? codegen_1._`${data}.length`
+          : codegen_1._`${util_1.useFunc(cxt.gen, ucs2length_1.default)}(${data})`;
+      cxt.fail$data(codegen_1._`${len} ${op} ${schemaCode}`);
+    },
+  };
+  cjsExports.default = def;
 });
-
-export { Ro };
+export { require_limitLength };

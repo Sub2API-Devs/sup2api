@@ -6,19 +6,20 @@
  * attribution: cjs-require-graph 1
  */
 import { x } from "../../../../../../../../runtime/bun-runtime.js";
-import { Ds } from "../../../../cjs/codegenv2/file.js";
-import { Ts } from "../../../../cjs/codegenv2/message.js";
+import { require_file } from "../../../../cjs/codegenv2/file.js";
+import { require_message } from "../../../../cjs/codegenv2/message.js";
 
 //@ chunk-fq0cr76a.js:415973-416501 cjs-require-graph
-var Yg = x(function (TO) {
-  Object.defineProperty(TO, "__esModule", { value: !0 });
-  TO.AnySchema = TO.file_google_protobuf_any = void 0;
-  var vO = Ds(),
-    wO = Ts();
-  TO.file_google_protobuf_any = vO.fileDesc(
+var require_any_pb = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.AnySchema = cjsExports.file_google_protobuf_any = undefined;
+  var file_js_1 = require_file();
+  var message_js_1 = require_message();
+  cjsExports.file_google_protobuf_any = file_js_1.fileDesc(
     "Chlnb29nbGUvcHJvdG9idWYvYW55LnByb3RvEg9nb29nbGUucHJvdG9idWYiJgoDQW55EhAKCHR5cGVfdXJsGAEgASgJEg0KBXZhbHVlGAIgASgMQnYKE2NvbS5nb29nbGUucHJvdG9idWZCCEFueVByb3RvUAFaLGdvb2dsZS5nb2xhbmcub3JnL3Byb3RvYnVmL3R5cGVzL2tub3duL2FueXBiogIDR1BCqgIeR29vZ2xlLlByb3RvYnVmLldlbGxLbm93blR5cGVzYgZwcm90bzM",
   );
-  TO.AnySchema = wO.messageDesc(TO.file_google_protobuf_any, 0);
+  cjsExports.AnySchema = message_js_1.messageDesc(cjsExports.file_google_protobuf_any, 0);
 });
-
-export { Yg };
+export { require_any_pb };

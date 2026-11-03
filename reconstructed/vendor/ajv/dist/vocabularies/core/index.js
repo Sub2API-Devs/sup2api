@@ -6,25 +6,28 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../runtime/bun-runtime.js";
-import { go } from "./id.js";
-import { _Xr } from "./ref.js";
+import { require_id } from "./id.js";
+import { require_ref } from "./ref.js";
 
 //@ chunk-s82q9s4x.js:83654-83864 cjs-fingerprint
-var NQo = x(function (bo) {
-  Object.defineProperty(bo, "__esModule", { value: !0 });
-  var tf = go(),
-    rf = _Xr(),
-    sf = [
-      "$schema",
-      "$id",
-      "$defs",
-      "$vocabulary",
-      { keyword: "$comment" },
-      "definitions",
-      tf.default,
-      rf.default,
-    ];
-  bo.default = sf;
+var require_core = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  var id_1 = require_id();
+  var ref_1 = require_ref();
+  var core = [
+    "$schema",
+    "$id",
+    "$defs",
+    "$vocabulary",
+    {
+      keyword: "$comment",
+    },
+    "definitions",
+    id_1.default,
+    ref_1.default,
+  ];
+  cjsExports.default = core;
 });
-
-export { NQo };
+export { require_core };

@@ -6,43 +6,48 @@
  * attribution: cjs-fingerprint 1
  */
 import { x, importMetaRequire } from "../../runtime/bun-runtime.js";
-import { ut } from "./windows.js";
-import { pt } from "./mode.js";
+import { require_windows } from "./windows.js";
+import { require_mode } from "./mode.js";
 
 //@ chunk-m4p5zn6n.js:1714-2251 cjs-fingerprint
-var gt = x(function (pi, mt) {
-  var fi = importMetaRequire("fs"),
-    Z;
-  if (global.TESTING_WINDOWS) Z = ut();
-  else Z = pt();
-  mt.exports = ge;
-  ge.sync = Yn;
-  function ge(e, n, r) {
-    if (typeof n === "function") ((r = n), (n = {}));
-    if (!r) {
+var require_isexe = x(function (cjsExports, cjsModule) {
+  var fs = importMetaRequire("fs");
+  var core;
+  if (global.TESTING_WINDOWS) core = require_windows();
+  else core = require_mode();
+  cjsModule.exports = isexe;
+  isexe.sync = sync;
+  function isexe(path, options, cb) {
+    if (typeof options === "function") {
+      cb = options;
+      options = {};
+    }
+    if (!cb) {
       if (typeof Promise !== "function") throw TypeError("callback not provided");
-      return new Promise(function (o, s) {
-        ge(e, n || {}, function (u, d) {
-          if (u) s(u);
-          else o(d);
+      return new Promise(function (resolve, reject) {
+        isexe(path, options || {}, function (er, is) {
+          if (er) reject(er);
+          else resolve(is);
         });
       });
     }
-    Z(e, n || {}, function (o, s) {
-      if (o) {
-        if (o.code === "EACCES" || (n && n.ignoreErrors)) ((o = null), (s = !1));
+    core(path, options || {}, function (er, is) {
+      if (er) {
+        if (er.code === "EACCES" || (options && options.ignoreErrors)) {
+          er = null;
+          is = false;
+        }
       }
-      r(o, s);
+      cb(er, is);
     });
   }
-  function Yn(e, n) {
+  function sync(path, options) {
     try {
-      return Z.sync(e, n || {});
-    } catch (error) {
-      if ((n && n.ignoreErrors) || error.code === "EACCES") return !1;
-      else throw error;
+      return core.sync(path, options || {});
+    } catch (er) {
+      if ((options && options.ignoreErrors) || er.code === "EACCES") return false;
+      else throw er;
     }
   }
 });
-
-export { gt };
+export { require_isexe };

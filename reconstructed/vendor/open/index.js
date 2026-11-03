@@ -5,161 +5,204 @@
  * pieces: chunk-20ppca50.js (13)
  * attribution: esm-fingerprint 10, esm-layout 3
  */
-import {
-  promisify,
-  promisify as promisify_2,
-  promisify as promisify_3,
-  promisify as promisify_4,
-  promisify as promisify_5,
-} from "util";
+import { promisify } from "util";
 import child_process from "child_process";
 import path from "path";
 import { fileURLToPath } from "url";
-import N, { default as I, default as T, default as E, default as ee, default as te } from "process";
+import { default as E } from "process";
 import { Buffer as R } from "buffer";
-import fsPromises, { constants, constants as constants_2, default as fsPromises_2 } from "fs/promises";
-import { v } from "../wsl-utils/index.js";
-import { c, p } from "../is-wsl/index.js";
-import { B } from "../default-browser/index.js";
+import fsPromises, { constants } from "fs/promises";
+import { powerShellPath } from "../wsl-utils/index.js";
+import { is_wsl_default, p } from "../is-wsl/index.js";
+import { defaultBrowser } from "../default-browser/index.js";
 import { m } from "../default-browser-id/index.js";
 
 //@ chunk-20ppca50.js:4541-4641 esm-fingerprint
-var execFileAsync = promisify(child_process.execFile),
-  dir = path.dirname(fileURLToPath(import.meta.url)),
-  joined = path.join(dir, "xdg-open"),
-  { platform: platform, arch: arch } = N;
+var execFileAsync = promisify(child_process.execFile);
+var dir = path.dirname(fileURLToPath(import.meta.url));
+var localXdgOpenPath = path.join(dir, "xdg-open");
+var { platform, arch } = E;
 //@ chunk-20ppca50.js:4641-5137 esm-fingerprint
-async function ve() {
-  let e = await v(),
-    r = String.raw`(Get-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\Shell\Associations\UrlAssociations\http\UserChoice").ProgId`,
-    str = R.from(r, "utf16le").toString("base64"),
-    { stdout: stdout } = await execFileAsync(
-      e,
-      ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-EncodedCommand", str],
-      { encoding: "utf8" },
-    ),
-    trimmed = stdout.trim(),
-    s = {
-      ChromeHTML: "com.google.chrome",
-      BraveHTML: "com.brave.Browser",
-      MSEdgeHTM: "com.microsoft.edge",
-      FirefoxURL: "org.mozilla.firefox",
-    };
-  return s[trimmed] ? { id: s[trimmed] } : {};
+async function getWindowsDefaultBrowserFromWsl() {
+  let powershellPath = await powerShellPath();
+  let rawCommand = String.raw`(Get-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\Shell\Associations\UrlAssociations\http\UserChoice").ProgId`;
+  let encodedCommand = R.from(rawCommand, "utf16le").toString("base64");
+  let { stdout } = await execFileAsync(
+    powershellPath,
+    ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-EncodedCommand", encodedCommand],
+    {
+      encoding: "utf8",
+    },
+  );
+  let progId = stdout.trim();
+  let browserMap = {
+    ChromeHTML: "com.google.chrome",
+    BraveHTML: "com.brave.Browser",
+    MSEdgeHTM: "com.microsoft.edge",
+    FirefoxURL: "org.mozilla.firefox",
+  };
+  return browserMap[progId]
+    ? {
+        id: browserMap[progId],
+      }
+    : {};
 }
 //@ chunk-20ppca50.js:5137-7294 esm-layout
-var _ = async (e, r) => {
-    let o;
-    for (let n of e)
-      try {
-        return await r(n);
-      } catch (error) {
-        o = error;
-      }
-    throw o;
-  },
-  w = async (e) => {
-    if (
-      ((e = { wait: !1, background: !1, newInstance: !1, allowNonzeroExitCode: !1, ...e }),
-      Array.isArray(e.app))
-    )
-      return _(e.app, (i) => w({ ...e, app: i }));
-    let { name: r, arguments: o = [] } = e.app ?? {};
-    if (((o = [...o]), Array.isArray(r))) return _(r, (i) => w({ ...e, app: { name: i, arguments: o } }));
-    if (r === "browser" || r === "browserPrivate") {
-      let i = {
-          "com.google.chrome": "chrome",
-          "google-chrome.desktop": "chrome",
-          "com.brave.Browser": "brave",
-          "org.mozilla.firefox": "firefox",
-          "firefox.desktop": "firefox",
-          "com.microsoft.msedge": "edge",
-          "com.microsoft.edge": "edge",
-          "com.microsoft.edgemac": "edge",
-          "microsoft-edge.desktop": "edge",
-        },
-        a = { chrome: "--incognito", brave: "--incognito", firefox: "--private-window", edge: "--inPrivate" },
-        f = c ? await ve() : await B();
-      if (f.id in i) {
-        let C = i[f.id];
-        if (r === "browserPrivate") o.push(a[C]);
-        return w({ ...e, app: { name: l[C], arguments: o } });
-      }
-      throw Error(`${f.name} is not supported as a default browser`);
+var pTryEach = async (array, mapper) => {
+  let latestError;
+  for (let item of array)
+    try {
+      return await mapper(item);
+    } catch (error) {
+      latestError = error;
     }
-    let n,
-      t = [],
-      s = {};
-    if (platform === "darwin") {
-      if (((n = "open"), e.wait)) t.push("--wait-apps");
-      if (e.background) t.push("--background");
-      if (e.newInstance) t.push("--new");
-      if (r) t.push("-a", r);
-    } else if (platform === "win32" || (c && !p() && !r)) {
-      if (
-        ((n = await v()),
-        t.push("-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-EncodedCommand"),
-        !c)
-      )
-        s.windowsVerbatimArguments = !0;
-      let i = ["Start"];
-      if (e.wait) i.push("-Wait");
-      if (r) {
-        if ((i.push(`"\`"${r}\`""`), e.target)) o.push(e.target);
-      } else if (e.target) i.push(`"${e.target}"`);
-      if (o.length > 0) ((o = o.map((a) => `"\`"${a}\`""`)), i.push("-ArgumentList", o.join(",")));
-      e.target = R.from(i.join(" "), "utf16le").toString("base64");
-    } else {
-      if (r) n = r;
-      else {
-        let i = !dir || dir === "/",
-          a = !1;
-        try {
-          (await fsPromises.access(joined, constants.X_OK), (a = !0));
-        } catch {}
-        n = (N.versions.electron ?? (platform === "android" || i || !a)) ? "xdg-open" : joined;
-      }
-      if (o.length > 0) t.push(...o);
-      if (!e.wait) ((s.stdio = "ignore"), (s.detached = !0));
-    }
-    if (platform === "darwin" && o.length > 0) t.push("--args", ...o);
-    if (e.target) t.push(e.target);
-    let child = child_process.spawn(n, t, s);
-    if (e.wait)
-      return new Promise((i, a) => {
-        (child.once("error", a),
-          child.once("close", (f) => {
-            if (!e.allowNonzeroExitCode && f > 0) {
-              a(Error(`Exited with code ${f}`));
-              return;
-            }
-            i(child);
-          }));
-      });
-    return (child.unref(), child);
-  },
-  Se = (e, r) => {
-    if (typeof e !== "string") throw TypeError("Expected a `target`");
-    return w({ ...r, target: e });
+  throw latestError;
+};
+var baseOpen = async (options) => {
+  options = {
+    wait: false,
+    background: false,
+    newInstance: false,
+    allowNonzeroExitCode: false,
+    ...options,
   };
+  if (Array.isArray(options.app))
+    return pTryEach(options.app, (singleApp) =>
+      baseOpen({
+        ...options,
+        app: singleApp,
+      }),
+    );
+  let { name: app, arguments: appArguments = [] } = options.app ?? {};
+  appArguments = [...appArguments];
+  if (Array.isArray(app))
+    return pTryEach(app, (appName) =>
+      baseOpen({
+        ...options,
+        app: {
+          name: appName,
+          arguments: appArguments,
+        },
+      }),
+    );
+  if (app === "browser" || app === "browserPrivate") {
+    let ids = {
+      "com.google.chrome": "chrome",
+      "google-chrome.desktop": "chrome",
+      "com.brave.Browser": "brave",
+      "org.mozilla.firefox": "firefox",
+      "firefox.desktop": "firefox",
+      "com.microsoft.msedge": "edge",
+      "com.microsoft.edge": "edge",
+      "com.microsoft.edgemac": "edge",
+      "microsoft-edge.desktop": "edge",
+    };
+    let flags = {
+      chrome: "--incognito",
+      brave: "--incognito",
+      firefox: "--private-window",
+      edge: "--inPrivate",
+    };
+    let browser = is_wsl_default ? await getWindowsDefaultBrowserFromWsl() : await defaultBrowser();
+    if (browser.id in ids) {
+      let browserName = ids[browser.id];
+      if (app === "browserPrivate") appArguments.push(flags[browserName]);
+      return baseOpen({
+        ...options,
+        app: {
+          name: apps[browserName],
+          arguments: appArguments,
+        },
+      });
+    }
+    throw Error(`${browser.name} is not supported as a default browser`);
+  }
+  let command;
+  let cliArguments = [];
+  let childProcessOptions = {};
+  if (platform === "darwin") {
+    command = "open";
+    if (options.wait) cliArguments.push("--wait-apps");
+    if (options.background) cliArguments.push("--background");
+    if (options.newInstance) cliArguments.push("--new");
+    if (app) cliArguments.push("-a", app);
+  } else if (platform === "win32" || (is_wsl_default && !p() && !app)) {
+    command = await powerShellPath();
+    cliArguments.push("-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-EncodedCommand");
+    if (!is_wsl_default) childProcessOptions.windowsVerbatimArguments = true;
+    let encodedArguments = ["Start"];
+    if (options.wait) encodedArguments.push("-Wait");
+    if (app) {
+      encodedArguments.push(`"\`"${app}\`""`);
+      if (options.target) appArguments.push(options.target);
+    } else if (options.target) encodedArguments.push(`"${options.target}"`);
+    if (appArguments.length > 0) {
+      appArguments = appArguments.map((argument) => `"\`"${argument}\`""`);
+      encodedArguments.push("-ArgumentList", appArguments.join(","));
+    }
+    options.target = R.from(encodedArguments.join(" "), "utf16le").toString("base64");
+  } else {
+    if (app) command = app;
+    else {
+      let isBundled = !dir || dir === "/";
+      let exeLocalXdgOpen = false;
+      try {
+        await fsPromises.access(localXdgOpenPath, constants.X_OK);
+        exeLocalXdgOpen = true;
+      } catch {}
+      command =
+        (E.versions.electron ?? (platform === "android" || isBundled || !exeLocalXdgOpen))
+          ? "xdg-open"
+          : localXdgOpenPath;
+    }
+    if (appArguments.length > 0) cliArguments.push(...appArguments);
+    if (!options.wait) {
+      childProcessOptions.stdio = "ignore";
+      childProcessOptions.detached = true;
+    }
+  }
+  if (platform === "darwin" && appArguments.length > 0) cliArguments.push("--args", ...appArguments);
+  if (options.target) cliArguments.push(options.target);
+  let subprocess = child_process.spawn(command, cliArguments, childProcessOptions);
+  if (options.wait)
+    return new Promise((resolve, reject) => {
+      subprocess.once("error", reject);
+      subprocess.once("close", (exitCode) => {
+        if (!options.allowNonzeroExitCode && exitCode > 0) {
+          reject(Error(`Exited with code ${exitCode}`));
+          return;
+        }
+        resolve(subprocess);
+      });
+    });
+  subprocess.unref();
+  return subprocess;
+};
+var open = (target, options) => {
+  if (typeof target !== "string") throw TypeError("Expected a `target`");
+  return baseOpen({
+    ...options,
+    target,
+  });
+};
 //@ chunk-20ppca50.js:7294-7423 esm-fingerprint
-function U(e) {
-  if (typeof e === "string" || Array.isArray(e)) return e;
-  let { [arch]: r } = e;
-  if (!r) throw Error(`${arch} is not supported`);
-  return r;
+function detectArchBinary(binary) {
+  if (typeof binary === "string" || Array.isArray(binary)) return binary;
+  let { [arch]: archBinary } = binary;
+  if (!archBinary) throw Error(`${arch} is not supported`);
+  return archBinary;
 }
 //@ chunk-20ppca50.js:7423-7526 esm-fingerprint
-function g({ [platform]: e }, { wsl: wsl }) {
-  if (wsl && c) return U(wsl);
-  if (!e) throw Error(`${platform} is not supported`);
-  return U(e);
+function detectPlatformBinary({ [platform]: platformBinary }, { wsl }) {
+  if (wsl && is_wsl_default) return detectArchBinary(wsl);
+  if (!platformBinary) throw Error(`${platform} is not supported`);
+  return detectArchBinary(platformBinary);
 }
 //@ chunk-20ppca50.js:7526-7535 esm-layout
-var l = {};
+var apps = {};
 //@ chunk-20ppca50.js:7535-7865 esm-fingerprint
-m(l, "chrome", () =>
-  g(
+m(apps, "chrome", () =>
+  detectPlatformBinary(
     {
       darwin: "google chrome",
       win32: "chrome",
@@ -177,9 +220,13 @@ m(l, "chrome", () =>
   ),
 );
 //@ chunk-20ppca50.js:7865-8206 esm-fingerprint
-m(l, "brave", () =>
-  g(
-    { darwin: "brave browser", win32: "brave", linux: ["brave-browser", "brave"] },
+m(apps, "brave", () =>
+  detectPlatformBinary(
+    {
+      darwin: "brave browser",
+      win32: "brave",
+      linux: ["brave-browser", "brave"],
+    },
     {
       wsl: {
         ia32: "/mnt/c/Program Files (x86)/BraveSoftware/Brave-Browser/Application/brave.exe",
@@ -192,22 +239,34 @@ m(l, "brave", () =>
   ),
 );
 //@ chunk-20ppca50.js:8206-8383 esm-fingerprint
-m(l, "firefox", () =>
-  g(
-    { darwin: "firefox", win32: String.raw`C:\Program Files\Mozilla Firefox\firefox.exe`, linux: "firefox" },
-    { wsl: "/mnt/c/Program Files/Mozilla Firefox/firefox.exe" },
+m(apps, "firefox", () =>
+  detectPlatformBinary(
+    {
+      darwin: "firefox",
+      win32: String.raw`C:\Program Files\Mozilla Firefox\firefox.exe`,
+      linux: "firefox",
+    },
+    {
+      wsl: "/mnt/c/Program Files/Mozilla Firefox/firefox.exe",
+    },
   ),
 );
 //@ chunk-20ppca50.js:8383-8562 esm-fingerprint
-m(l, "edge", () =>
-  g(
-    { darwin: "microsoft edge", win32: "msedge", linux: ["microsoft-edge", "microsoft-edge-dev"] },
-    { wsl: "/mnt/c/Program Files (x86)/Microsoft/Edge/Application/msedge.exe" },
+m(apps, "edge", () =>
+  detectPlatformBinary(
+    {
+      darwin: "microsoft edge",
+      win32: "msedge",
+      linux: ["microsoft-edge", "microsoft-edge-dev"],
+    },
+    {
+      wsl: "/mnt/c/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
+    },
   ),
 );
 //@ chunk-20ppca50.js:8562-8591 esm-fingerprint
-m(l, "browser", () => "browser");
+m(apps, "browser", () => "browser");
 //@ chunk-20ppca50.js:8591-8634 esm-fingerprint
-m(l, "browserPrivate", () => "browserPrivate");
+m(apps, "browserPrivate", () => "browserPrivate");
 //@ chunk-20ppca50.js:8634-8644 esm-layout
-var hr = Se;
+var open_default = open;

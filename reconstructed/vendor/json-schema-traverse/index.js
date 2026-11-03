@@ -8,67 +8,115 @@
 import { x } from "../../runtime/bun-runtime.js";
 
 //@ chunk-s82q9s4x.js:38567-39807 cjs-fingerprint
-var un = x(function (om, cn) {
-  var ve = (cn.exports = function (e, t, r) {
-    if (typeof t == "function") ((r = t), (t = {}));
-    r = t.cb || r;
-    var s = typeof r == "function" ? r : r.pre || function () {},
-      n = r.post || function () {};
-    kt(t, s, n, e, "", e);
+var require_json_schema_traverse = x(function (cjsExports, cjsModule) {
+  var traverse = (cjsModule.exports = function (schema, opts, cb) {
+    if (typeof opts == "function") {
+      cb = opts;
+      opts = {};
+    }
+    cb = opts.cb || cb;
+    var pre = typeof cb == "function" ? cb : cb.pre || function () {};
+    var post = cb.post || function () {};
+    _traverse(opts, pre, post, schema, "", schema);
   });
-  ve.keywords = {
-    additionalItems: !0,
-    items: !0,
-    contains: !0,
-    additionalProperties: !0,
-    propertyNames: !0,
-    not: !0,
-    if: !0,
-    then: !0,
-    else: !0,
+  traverse.keywords = {
+    additionalItems: true,
+    items: true,
+    contains: true,
+    additionalProperties: true,
+    propertyNames: true,
+    not: true,
+    if: true,
+    then: true,
+    else: true,
   };
-  ve.arrayKeywords = { items: !0, allOf: !0, anyOf: !0, oneOf: !0 };
-  ve.propsKeywords = { $defs: !0, definitions: !0, properties: !0, patternProperties: !0, dependencies: !0 };
-  ve.skipKeywords = {
-    default: !0,
-    enum: !0,
-    const: !0,
-    required: !0,
-    maximum: !0,
-    minimum: !0,
-    exclusiveMaximum: !0,
-    exclusiveMinimum: !0,
-    multipleOf: !0,
-    maxLength: !0,
-    minLength: !0,
-    pattern: !0,
-    format: !0,
-    maxItems: !0,
-    minItems: !0,
-    uniqueItems: !0,
-    maxProperties: !0,
-    minProperties: !0,
+  traverse.arrayKeywords = {
+    items: true,
+    allOf: true,
+    anyOf: true,
+    oneOf: true,
   };
-  function kt(e, t, r, s, n, o, i, a, c, u) {
-    if (s && typeof s == "object" && !Array.isArray(s)) {
-      t(s, n, o, i, a, c, u);
-      for (var key in s) {
-        var f = s[key];
-        if (Array.isArray(f)) {
-          if (key in ve.arrayKeywords)
-            for (var b = 0; b < f.length; b++) kt(e, t, r, f[b], n + "/" + key + "/" + b, o, n, key, s, b);
-        } else if (key in ve.propsKeywords) {
-          if (f && typeof f == "object")
-            for (var key_2 in f) kt(e, t, r, f[key_2], n + "/" + key + "/" + Uu(key_2), o, n, key, s, key_2);
-        } else if (key in ve.keywords || (e.allKeys && !(key in ve.skipKeywords)))
-          kt(e, t, r, f, n + "/" + key, o, n, key, s);
+  traverse.propsKeywords = {
+    $defs: true,
+    definitions: true,
+    properties: true,
+    patternProperties: true,
+    dependencies: true,
+  };
+  traverse.skipKeywords = {
+    default: true,
+    enum: true,
+    const: true,
+    required: true,
+    maximum: true,
+    minimum: true,
+    exclusiveMaximum: true,
+    exclusiveMinimum: true,
+    multipleOf: true,
+    maxLength: true,
+    minLength: true,
+    pattern: true,
+    format: true,
+    maxItems: true,
+    minItems: true,
+    uniqueItems: true,
+    maxProperties: true,
+    minProperties: true,
+  };
+  function _traverse(
+    opts,
+    pre,
+    post,
+    schema,
+    jsonPtr,
+    rootSchema,
+    parentJsonPtr,
+    parentKeyword,
+    parentSchema,
+    keyIndex,
+  ) {
+    if (schema && typeof schema == "object" && !Array.isArray(schema)) {
+      pre(schema, jsonPtr, rootSchema, parentJsonPtr, parentKeyword, parentSchema, keyIndex);
+      for (var key in schema) {
+        var sch = schema[key];
+        if (Array.isArray(sch)) {
+          if (key in traverse.arrayKeywords)
+            for (var i = 0; i < sch.length; i++)
+              _traverse(
+                opts,
+                pre,
+                post,
+                sch[i],
+                jsonPtr + "/" + key + "/" + i,
+                rootSchema,
+                jsonPtr,
+                key,
+                schema,
+                i,
+              );
+        } else if (key in traverse.propsKeywords) {
+          if (sch && typeof sch == "object")
+            for (var prop in sch)
+              _traverse(
+                opts,
+                pre,
+                post,
+                sch[prop],
+                jsonPtr + "/" + key + "/" + escapeJsonPtr(prop),
+                rootSchema,
+                jsonPtr,
+                key,
+                schema,
+                prop,
+              );
+        } else if (key in traverse.keywords || (opts.allKeys && !(key in traverse.skipKeywords)))
+          _traverse(opts, pre, post, sch, jsonPtr + "/" + key, rootSchema, jsonPtr, key, schema);
       }
-      r(s, n, o, i, a, c, u);
+      post(schema, jsonPtr, rootSchema, parentJsonPtr, parentKeyword, parentSchema, keyIndex);
     }
   }
-  function Uu(e) {
-    return e.replace(/~/g, "~0").replace(/\//g, "~1");
+  function escapeJsonPtr(str) {
+    return str.replace(/~/g, "~0").replace(/\//g, "~1");
   }
 });
-
-export { un };
+export { require_json_schema_traverse };

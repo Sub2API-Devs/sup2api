@@ -14,16 +14,18 @@ import { isDeviceIdentityEnabledCached } from "../../services/analytics/violinGa
 //@ chunk-t2adxqya.js:262-293 placement
 var TENGU_VIOLIN_BRIDGEPIN = "tengu_violin_bridgepin";
 //@ chunk-t2adxqya.js:293-341 placement
-function o() {
+function isBridgePinGateEnabled() {
   try {
-    return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_VIOLIN_BRIDGEPIN, !1);
+    return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_VIOLIN_BRIDGEPIN, false);
   } catch {
-    return !1;
+    return false;
   }
 }
 //@ chunk-t2adxqya.js:341-373 placement
-function dce() {
-  return isDeviceIdentityEnabledCached() && o();
+/**
+ * 是否启用仓库信任门控（设备身份 + 开关）。
+ */
+function isRepositoryTrustGateEnabled() {
+  return isDeviceIdentityEnabledCached() && isBridgePinGateEnabled();
 }
-
-export { dce };
+export { isRepositoryTrustGateEnabled };

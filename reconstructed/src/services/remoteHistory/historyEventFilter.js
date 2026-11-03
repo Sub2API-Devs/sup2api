@@ -8,7 +8,12 @@
  * pieces: chunk-pmgfyvx7.js (15)
  * attribution: placement 15
  */
-import { parseSequenceNum, xmo, eCs, Xkr } from "../../remote/RemoteSessionManager.js";
+import {
+  parseSequenceNum,
+  isToolNameDifferent,
+  DIALOG_REQUEST_SUBTYPES,
+  MAX_CACHED_PERMISSION_REQUESTS,
+} from "../../remote/RemoteSessionManager.js";
 import { capFrameDepth, isSubagentToolRequest } from "../../remote/wireFrameShape.js";
 import {
   isModelRefusalFallback,
@@ -23,16 +28,26 @@ import {
   parseInitFrame,
   convertSDKMessage,
 } from "../../remote/sdkMessageAdapter.js";
-import { trackThinClientFrame, qkr, FORWARDED_MESSAGE_TYPES } from "../homeSeed/firstSend.js";
-import { pgr } from "../../utils/telemetry/memorySummary.js";
-import { Kkr, getForegroundBashToolUseIds, getToolResultIds } from "../../remote/backgroundTaskEvents.js";
-import { PREFETCH_STATE, G } from "./historyPrefetch.js";
+import { trackThinClientFrame, supportsSendNow, FORWARDED_MESSAGE_TYPES } from "../homeSeed/firstSend.js";
+import { permissionModeOfSystemEvent } from "../../utils/telemetry/memorySummary.js";
+import {
+  supportsBackgroundTasksMovesBash,
+  getForegroundBashToolUseIds,
+  getToolResultIds,
+} from "../../remote/backgroundTaskEvents.js";
+import { PREFETCH_STATE, projectPersonEventFilter } from "./historyPrefetch.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { errorMessage } from "../../utils/errors.js";
 import { markRemoteSourced } from "../../tools/ArtifactTool/artifactResumeCarry.js";
 import { isDeviceIdentityEnabledCached } from "../analytics/violinGates.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { Ir, u, T, kt, o } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  discriminatedUnion,
+  u,
+  literal,
+  looseObject,
+  string,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import {
   SDKControlCancelRequestMessageSchema,
   parseControlRequest,
@@ -44,18 +59,18 @@ import { createSystemMessage } from "../../utils/messages.js";
 import { getRemoteSessionUrl } from "../../constants/product.js";
 
 //@ chunk-pmgfyvx7.js:16650-17009 placement
-function parseHistoryLine(e) {
+function parseHistoryLine(body) {
   let r;
   try {
-    r = JSON.parse(e);
+    r = JSON.parse(body);
   } catch {
     return null;
   }
   if (r === null || typeof r !== "object") return null;
-  let i = Array.isArray(r.data) ? r.data : [],
-    m = [];
-  for (let l = i.length - 1; l >= 0; l--) {
-    let n = i[l];
+  let i = Array.isArray(r.data) ? r.data : [];
+  let m = [];
+  for (let idx = i.length - 1; idx >= 0; idx--) {
+    let n = i[idx];
     if (n?.payload)
       m.push({
         payload: n.payload,
@@ -64,76 +79,88 @@ function parseHistoryLine(e) {
         sequenceNum: parseSequenceNum(n),
       });
   }
-  let s = r.next_cursor ?? null;
-  return { events: m, firstId: s, hasMore: s !== null };
+  let nextCursor = r.next_cursor ?? null;
+  return {
+    events: m,
+    firstId: nextCursor,
+    hasMore: nextCursor !== null,
+  };
 }
+//@ chunk-pmgfyvx7.js:17009-19143 placement
 /**
  * 过滤远程会话历史事件：去掉控制帧与重复、配对工具结果、识别初始化帧。
  */
-//@ chunk-pmgfyvx7.js:17009-19143 placement
-function filterHistoryEvents(e) {
-  let r = indexControlEvents(e.events),
-    i = indexToolEvents(e.events),
-    m = void 0,
-    s = void 0,
-    l = [],
-    n = 0,
-    h = new Set(),
-    S = new Map(),
-    w = !1,
-    y = new Set(),
-    R,
-    _,
-    b,
-    E,
-    P,
-    K,
-    O,
-    U = [],
-    q = { running: new Map(), awaitingFinish: new Set(), foreground: new Set() },
-    W = new Map();
+function filterHistoryEvents(historyLine) {
+  let r = indexControlEvents(historyLine.events);
+  let i = indexToolEvents(historyLine.events);
+  let m = undefined;
+  let s = undefined;
+  let l = [];
+  let n = 0;
+  let h = new Set();
+  let S = new Map();
+  let w = false;
+  let y = new Set();
+  let lastActiveGoal;
+  let lastAutocompactState;
+  let lastSessionArtifacts;
+  let E;
+  let P;
+  let lastWorkerSendsNow;
+  let O;
+  let U = [];
+  let q = {
+    running: new Map(),
+    awaitingFinish: new Set(),
+    foreground: new Set(),
+  };
+  let W = new Map();
   for (let c of r) {
-    if (c.sequenceNum !== void 0 && c.sequenceNum > n) n = c.sequenceNum;
+    if (c.sequenceNum !== undefined && c.sequenceNum > n) n = c.sequenceNum;
     try {
       if (!capFrameDepth(c.payload)) continue;
       if (c.source === "worker") {
         let M = isModelRefusalFallback(c.payload);
         if (M) for (let uuid of M.uuids) h.add(uuid);
         if (c.payload.type === "active_goal") {
-          R = parseGoalState(c.payload.value);
+          lastActiveGoal = parseGoalState(c.payload.value);
           continue;
         }
         if (c.payload.type === "autocompact_state") {
-          _ = parseAutocompactState(c.payload.value);
+          lastAutocompactState = parseAutocompactState(c.payload.value);
           continue;
         }
         let D = sessionMetadataArtifacts(c.payload);
-        if (D !== void 0) {
-          b = D;
+        if (D !== undefined) {
+          lastSessionArtifacts = D;
           continue;
         }
         if (c.payload.type === "rate_limit_event") {
           let A = dropRemoteRateLimitFrame(c.payload.rate_limit_info);
-          if (A !== void 0) U.push(A);
+          if (A !== undefined) U.push(A);
           continue;
         }
         trackThinClientFrame(q, c.payload);
-        let parse = Date.parse(c.createdAt ?? "");
-        if (
-          (applyRemoteTaskEvent(W, c.payload, parse > 0 ? Math.min(parse, Date.now()) : Date.now()),
-          (E = pgr(c.payload) ?? E),
-          c.payload.type === "system" && c.payload.subtype === "init")
-        )
-          ((P = mergeSessionCapabilities(P, parseInitFrame(c.payload))),
-            (K = qkr(c.payload)),
-            (O = Kkr(c.payload)));
-        if (O === !0)
-          (getForegroundBashToolUseIds(c.payload).forEach((A) => q.foreground.add(A)),
-            getToolResultIds(c.payload).forEach((A) => q.foreground.delete(A)));
+        let timestamp = Date.parse(c.createdAt ?? "");
+        applyRemoteTaskEvent(W, c.payload, timestamp > 0 ? Math.min(timestamp, Date.now()) : Date.now());
+        E = permissionModeOfSystemEvent(c.payload) ?? E;
+        if (c.payload.type === "system" && c.payload.subtype === "init") {
+          P = mergeSessionCapabilities(P, parseInitFrame(c.payload));
+          lastWorkerSendsNow = supportsSendNow(c.payload);
+          O = supportsBackgroundTasksMovesBash(c.payload);
+        }
+        if (O === true) {
+          getForegroundBashToolUseIds(c.payload).forEach((A) => q.foreground.add(A));
+          getToolResultIds(c.payload).forEach((A) => q.foreground.delete(A));
+        }
       }
-      if (!isDisplayableHistoryEvent(c, !1)) continue;
+      if (!isDisplayableHistoryEvent(c, false)) continue;
       if (isConversationResetEvent(c)) {
-        ((l = []), h.clear(), S.clear(), (w = !1), y.clear());
+        l = [];
+        h.clear();
+        S.clear();
+        w = false;
+        y.clear();
         continue;
       }
       if (PREFETCH_STATE !== null) {
@@ -151,7 +178,9 @@ function filterHistoryEvents(e) {
         l.push(...v);
         continue;
       }
-      let C = convertSDKMessage(c.payload, { convertUserTextMessages: !0 });
+      let C = convertSDKMessage(c.payload, {
+        convertUserTextMessages: true,
+      });
       if (C.type === "message") {
         let message = C.message;
         l.push(message);
@@ -159,7 +188,9 @@ function filterHistoryEvents(e) {
     } catch (error) {
       logForDebugging(
         `[historyPrefetch] Skipping ${c.payload.type} frame seq=${c.sequenceNum ?? "?"} \u2014 conversion threw: ${errorMessage(error)}`,
-        { level: "error" },
+        {
+          level: "error",
+        },
       );
     }
   }
@@ -171,16 +202,16 @@ function filterHistoryEvents(e) {
   return {
     messages: markRemoteSourced(l),
     maxSequenceNum: n,
-    complete: !e.hasMore,
+    complete: !historyLine.hasMore,
     nestedUuidAliases: [...S.entries()].filter(([, c]) => c.length > 1),
     hasReplyChannel: w,
     replyChannelToolUseIds: [...y],
-    lastActiveGoal: R,
-    lastAutocompactState: _,
-    lastSessionArtifacts: b,
+    lastActiveGoal,
+    lastAutocompactState,
+    lastSessionArtifacts,
     lastWorkerPermissionMode: E,
     lastWorkerInventory: P,
-    lastWorkerSendsNow: K,
+    lastWorkerSendsNow,
     lastWorkerMovesBash: O,
     rateLimitInfos: U,
     backgroundTasks: {
@@ -193,11 +224,11 @@ function filterHistoryEvents(e) {
   };
 }
 //@ chunk-pmgfyvx7.js:19143-20129 placement
-function indexControlEvents(e) {
+function indexControlEvents(events) {
   let r = new Map();
-  for (let m = 0; m < e.length; m++) {
-    let s = e[m],
-      payload = s.payload;
+  for (let idx = 0; idx < events.length; idx++) {
+    let s = events[idx];
+    let payload = s.payload;
     if (payload.type === "control_response") {
       let response = payload.response;
       if (
@@ -208,7 +239,7 @@ function indexControlEvents(e) {
       ) {
         let h = r.get(response.request_id);
         if (!(
-          xmo(response, h?.toolName) ||
+          isToolNameDifferent(response, h?.toolName) ||
           (h?.subtype === "request_user_dialog" &&
             "subtype" in response &&
             response.subtype === "error" &&
@@ -226,7 +257,7 @@ function indexControlEvents(e) {
     else if (
       s.source === "worker" &&
       payload.type === "control_request" &&
-      s.sequenceNum !== void 0 &&
+      s.sequenceNum !== undefined &&
       typeof payload.request_id === "string"
     ) {
       let request = payload.request;
@@ -235,96 +266,109 @@ function indexControlEvents(e) {
         request !== null &&
         "subtype" in request &&
         typeof request.subtype === "string" &&
-        eCs.includes(request.subtype) &&
-        readWorkerPermissionRequest(s) === void 0
+        DIALOG_REQUEST_SUBTYPES.includes(request.subtype) &&
+        readWorkerPermissionRequest(s) === undefined
       )
         r.set(payload.request_id, {
-          at: m,
+          at: idx,
           subtype: request.subtype,
-          toolName: "tool_name" in request ? request.tool_name : void 0,
+          toolName: "tool_name" in request ? request.tool_name : undefined,
         });
     }
   }
-  if (r.size === 0) return e;
-  let i = e.length;
-  for (let { at: at } of r.values()) i = Math.min(i, at);
-  return e.slice(0, i);
+  if (r.size === 0) return events;
+  let i = events.length;
+  for (let { at } of r.values()) i = Math.min(i, at);
+  return events.slice(0, i);
 }
 //@ chunk-pmgfyvx7.js:20129-20224 placement
-var Se = DoctorLazy(() =>
-  Ir("type", [
+var historyControlMessageSchema = DoctorLazy(() =>
+  discriminatedUnion("type", [
     SDKControlCancelRequestMessageSchema(),
-    u({ type: T("control_response"), response: kt({ request_id: o() }) }),
+    u({
+      type: literal("control_response"),
+      response: looseObject({
+        request_id: string(),
+      }),
+    }),
   ]),
 );
 //@ chunk-pmgfyvx7.js:20224-20873 placement
-function indexToolEvents(e) {
-  let r = new Map(),
-    i = new Set(),
-    m = new Set();
-  for (let s of e) {
-    let l = readWorkerPermissionRequest(s);
-    if (l !== void 0) {
-      if (!r.has(l.request_id) && !i.has(l.request_id)) r.set(l.request_id, l);
+function indexToolEvents(events) {
+  let r = new Map();
+  let i = new Set();
+  let m = new Set();
+  for (let s of events) {
+    let workerPermissionRequest = readWorkerPermissionRequest(s);
+    if (workerPermissionRequest !== undefined) {
+      if (!r.has(workerPermissionRequest.request_id) && !i.has(workerPermissionRequest.request_id))
+        r.set(workerPermissionRequest.request_id, workerPermissionRequest);
       continue;
     }
     if (s.source === "worker" && s.payload.type === "result") {
-      for (let { request: request } of r.values()) m.add(String(request.agent_id));
+      for (let { request } of r.values()) m.add(String(request.agent_id));
       continue;
     }
-    let n = Se().safeParse(s.payload).data;
-    if (n === void 0) continue;
+    let n = historyControlMessageSchema().safeParse(s.payload).data;
+    if (n === undefined) continue;
     let h =
-        n.type === "control_cancel_request"
-          ? s.source === "worker"
-          : !xmo(n.response, r.get(n.response.request_id)?.request.tool_name),
-      S = n.type === "control_cancel_request" ? n.request_id : n.response.request_id;
-    if (h && r.delete(S)) i.add(S);
+      n.type === "control_cancel_request"
+        ? s.source === "worker"
+        : !isToolNameDifferent(n.response, r.get(n.response.request_id)?.request.tool_name);
+    let requestId = n.type === "control_cancel_request" ? n.request_id : n.response.request_id;
+    if (h && r.delete(requestId)) i.add(requestId);
   }
-  return { openSubagentRequests: [...r.values()].slice(-Xkr), askersPastATurn: [...m] };
+  return {
+    openSubagentRequests: [...r.values()].slice(-MAX_CACHED_PERMISSION_REQUESTS),
+    askersPastATurn: [...m],
+  };
 }
 //@ chunk-pmgfyvx7.js:20873-21055 placement
 function readWorkerPermissionRequest(e) {
   let payload = e.payload;
   if (e.source !== "worker" || payload.type !== "control_request") return;
-  let i = parseControlRequest(payload, "can_use_tool");
-  if (i === null || !isSubagentToolRequest(i.request)) return;
+  let controlRequest = parseControlRequest(payload, "can_use_tool");
+  if (controlRequest === null || !isSubagentToolRequest(controlRequest.request)) return;
   try {
-    return clone(i);
+    return clone(controlRequest);
   } catch {
     return;
   }
 }
 //@ chunk-pmgfyvx7.js:21055-21224 placement
-function collectReplyChannelToolUseIds(e, r) {
+function collectReplyChannelToolUseIds(payload, r) {
   let i = PREFETCH_STATE;
-  if (i === null || e.type !== "assistant") return;
-  for (let m of e.message.content)
-    if (m.type === "tool_use" && i.replyChannelBlockKind(m) !== void 0) r.add(m.id);
+  if (i === null || payload.type !== "assistant") return;
+  for (let m of payload.message.content)
+    if (m.type === "tool_use" && i.replyChannelBlockKind(m) !== undefined) r.add(m.id);
 }
 //@ chunk-pmgfyvx7.js:21224-21511 placement
-function isInitForCurrentSession(e) {
+function isInitForCurrentSession(frame) {
   let r = PREFETCH_STATE;
-  if (r === null) return !1;
-  if (e.type === "system" && e.subtype === "init") {
-    let i = parseInitFrame(e);
-    return r.hasReplyChannelInit({ mcp_servers: i.mcpServers, tools: i.tools });
+  if (r === null) return false;
+  if (frame.type === "system" && frame.subtype === "init") {
+    let initFrame = parseInitFrame(frame);
+    return r.hasReplyChannelInit({
+      mcp_servers: initFrame.mcpServers,
+      tools: initFrame.tools,
+    });
   }
   return (
-    e.type === "assistant" &&
-    !e.parent_tool_use_id &&
-    e.message.content.some((i) => r.replyChannelBlockKind(i) !== void 0)
+    frame.type === "assistant" &&
+    !frame.parent_tool_use_id &&
+    frame.message.content.some((i) => r.replyChannelBlockKind(i) !== undefined)
   );
 }
 //@ chunk-pmgfyvx7.js:21511-21686 placement
 function isConversationResetEvent(e) {
-  if (e.payload.type !== "conversation_reset" || (e.source !== void 0 && e.source !== "worker")) return !1;
-  let new_conversation_id = e.payload.new_conversation_id;
-  return typeof new_conversation_id === "string" && new_conversation_id !== "";
+  if (e.payload.type !== "conversation_reset" || (e.source !== undefined && e.source !== "worker"))
+    return false;
+  let newConversationId = e.payload.new_conversation_id;
+  return typeof newConversationId === "string" && newConversationId !== "";
 }
 //@ chunk-pmgfyvx7.js:21686-21717 placement
-function hasBackgroundEvents(e) {
-  return e.some(isConversationResetEvent);
+function hasBackgroundEvents(events) {
+  return events.some(isConversationResetEvent);
 }
 //@ chunk-pmgfyvx7.js:21717-21866 placement
 function isWorkerBackgroundEvent(e) {
@@ -337,10 +381,13 @@ function isWorkerBackgroundEvent(e) {
 }
 //@ chunk-pmgfyvx7.js:21866-22071 placement
 function isDisplayableHistoryEvent(e, r) {
-  if (e.source === void 0 || e.source === "worker") return !0;
+  if (e.source === undefined || e.source === "worker") return true;
   if (e.payload.type === "user")
     return (
-      !hasToolResultContent(e.payload) || (r && G !== null && G.isProjectPersonEvent(e.payload, e.source))
+      !hasToolResultContent(e.payload) ||
+      (r &&
+        projectPersonEventFilter !== null &&
+        projectPersonEventFilter.isProjectPersonEvent(e.payload, e.source))
     );
   return FORWARDED_MESSAGE_TYPES.has(e.payload.type);
 }
@@ -361,9 +408,11 @@ function nonEmptyHistoryPage(e) {
 //@ chunk-pmgfyvx7.js:22505-22622 placement
 function recentMessagesNotice(e) {
   return createSystemMessage(
-    `Showing recent messages \xB7 full history at ${getRemoteSessionUrl(e, void 0, { from: "cli", m: "0" })}`,
+    `Showing recent messages \xB7 full history at ${getRemoteSessionUrl(e, undefined, {
+      from: "cli",
+      m: "0",
+    })}`,
     "notice",
   );
 }
-
 export { parseHistoryLine, filterHistoryEvents, hasBackgroundEvents, isWorkerBackgroundEvent };

@@ -6,240 +6,267 @@
  * attribution: cjs-fingerprint 1
  */
 import { x, importMetaRequire } from "../../../../runtime/bun-runtime.js";
-import { Ln } from "./ril.js";
-import { it } from "../common/api.js";
+import { require_ril } from "./ril.js";
+import { require_api } from "../common/api.js";
 
 //@ chunk-t4ksmxzx.js:54469-59108 cjs-fingerprint
-var Mt = x(function (w) {
-  var Rs =
-      (w && w.__createBinding) ||
-      (Object.create
-        ? function (e, r, n, s) {
-            if (s === void 0) s = n;
-            var ownPropertyDescriptor = Object.getOwnPropertyDescriptor(r, n);
-            if (
-              !ownPropertyDescriptor ||
-              ("get" in ownPropertyDescriptor
-                ? !r.__esModule
-                : ownPropertyDescriptor.writable || ownPropertyDescriptor.configurable)
-            )
-              ownPropertyDescriptor = {
-                enumerable: !0,
-                get: function () {
-                  return r[n];
-                },
-              };
-            Object.defineProperty(e, s, ownPropertyDescriptor);
-          }
-        : function (e, r, n, s) {
-            if (s === void 0) s = n;
-            e[s] = r[n];
-          }),
-    Ps =
-      (w && w.__exportStar) ||
-      function (e, r) {
-        for (var key in e)
-          if (key !== "default" && !Object.prototype.hasOwnProperty.call(r, key)) Rs(r, e, key);
-      };
-  Object.defineProperty(w, "__esModule", { value: !0 });
-  w.createMessageConnection =
-    w.createServerSocketTransport =
-    w.createClientSocketTransport =
-    w.createServerPipeTransport =
-    w.createClientPipeTransport =
-    w.generateRandomPipeName =
-    w.StreamMessageWriter =
-    w.StreamMessageReader =
-    w.SocketMessageWriter =
-    w.SocketMessageReader =
-    w.PortMessageWriter =
-    w.PortMessageReader =
-    w.IPCMessageWriter =
-    w.IPCMessageReader =
-      void 0;
-  var Le = Ln();
-  Le.default.install();
-  var at = importMetaRequire("path"),
-    On = importMetaRequire("os"),
-    Mn = importMetaRequire("crypto"),
-    le = importMetaRequire("net"),
-    O = it();
-  Ps(it(), w);
-  class jn extends O.AbstractMessageReader {
+var require_vscode_jsonrpc = x(function (cjsExports) {
+  var __createBinding =
+    (cjsExports && cjsExports.__createBinding) ||
+    (Object.create
+      ? function (o, m, k, k2) {
+          if (k2 === undefined) k2 = k;
+          var desc = Object.getOwnPropertyDescriptor(m, k);
+          if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable))
+            desc = {
+              enumerable: true,
+              get: function () {
+                return m[k];
+              },
+            };
+          Object.defineProperty(o, k2, desc);
+        }
+      : function (o, m, k, k2) {
+          if (k2 === undefined) k2 = k;
+          o[k2] = m[k];
+        });
+  var __exportStar =
+    (cjsExports && cjsExports.__exportStar) ||
+    function (m, r) {
+      for (var p in m)
+        if (p !== "default" && !Object.prototype.hasOwnProperty.call(r, p)) __createBinding(r, m, p);
+    };
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.createMessageConnection =
+    cjsExports.createServerSocketTransport =
+    cjsExports.createClientSocketTransport =
+    cjsExports.createServerPipeTransport =
+    cjsExports.createClientPipeTransport =
+    cjsExports.generateRandomPipeName =
+    cjsExports.StreamMessageWriter =
+    cjsExports.StreamMessageReader =
+    cjsExports.SocketMessageWriter =
+    cjsExports.SocketMessageReader =
+    cjsExports.PortMessageWriter =
+    cjsExports.PortMessageReader =
+    cjsExports.IPCMessageWriter =
+    cjsExports.IPCMessageReader =
+      undefined;
+  var ril_1 = require_ril();
+  ril_1.default.install();
+  var path = importMetaRequire("path");
+  var os = importMetaRequire("os");
+  var crypto_1 = importMetaRequire("crypto");
+  var net_1 = importMetaRequire("net");
+  var api_1 = require_api();
+  __exportStar(require_api(), cjsExports);
+  class IPCMessageReader extends api_1.AbstractMessageReader {
     constructor(e) {
       super();
       this.process = e;
-      let r = this.process;
-      (r.on("error", (n) => this.fireError(n)), r.on("close", () => this.fireClose()));
+      let eventEmitter = this.process;
+      eventEmitter.on("error", (error) => this.fireError(error));
+      eventEmitter.on("close", () => this.fireClose());
     }
-    listen(e) {
-      return (this.process.on("message", e), O.Disposable.create(() => this.process.off("message", e)));
+    listen(callback) {
+      this.process.on("message", callback);
+      return api_1.Disposable.create(() => this.process.off("message", callback));
     }
   }
-  w.IPCMessageReader = jn;
-  class $n extends O.AbstractMessageWriter {
+  cjsExports.IPCMessageReader = IPCMessageReader;
+  class IPCMessageWriter extends api_1.AbstractMessageWriter {
     constructor(e) {
       super();
-      ((this.process = e), (this.errorCount = 0));
-      let r = this.process;
-      (r.on("error", (n) => this.fireError(n)), r.on("close", () => this.fireClose));
+      this.process = e;
+      this.errorCount = 0;
+      let eventEmitter = this.process;
+      eventEmitter.on("error", (error) => this.fireError(error));
+      eventEmitter.on("close", () => this.fireClose);
     }
-    write(e) {
+    write(msg) {
       try {
         if (typeof this.process.send === "function")
-          this.process.send(e, void 0, void 0, (r) => {
-            if (r) (this.errorCount++, this.handleError(r, e));
-            else this.errorCount = 0;
+          this.process.send(msg, undefined, undefined, (error) => {
+            if (error) {
+              this.errorCount++;
+              this.handleError(error, msg);
+            } else this.errorCount = 0;
           });
         return Promise.resolve();
       } catch (error) {
-        return (this.handleError(error, e), Promise.reject(error));
+        this.handleError(error, msg);
+        return Promise.reject(error);
       }
     }
-    handleError(e, r) {
-      (this.errorCount++, this.fireError(e, r, this.errorCount));
+    handleError(error, msg) {
+      this.errorCount++;
+      this.fireError(error, msg, this.errorCount);
     }
     end() {}
   }
-  w.IPCMessageWriter = $n;
-  class qn extends O.AbstractMessageReader {
-    constructor(e) {
+  cjsExports.IPCMessageWriter = IPCMessageWriter;
+  class PortMessageReader extends api_1.AbstractMessageReader {
+    constructor(port) {
       super();
-      ((this.onData = new O.Emitter()),
-        e.on("close", () => this.fireClose),
-        e.on("error", (r) => this.fireError(r)),
-        e.on("message", (r) => {
-          this.onData.fire(r);
-        }));
+      this.onData = new api_1.Emitter();
+      port.on("close", () => this.fireClose);
+      port.on("error", (error) => this.fireError(error));
+      port.on("message", (message) => {
+        this.onData.fire(message);
+      });
     }
-    listen(e) {
-      return this.onData.event(e);
+    listen(callback) {
+      return this.onData.event(callback);
     }
   }
-  w.PortMessageReader = qn;
-  class In extends O.AbstractMessageWriter {
-    constructor(e) {
+  cjsExports.PortMessageReader = PortMessageReader;
+  class PortMessageWriter extends api_1.AbstractMessageWriter {
+    constructor(port) {
       super();
-      ((this.port = e),
-        (this.errorCount = 0),
-        e.on("close", () => this.fireClose()),
-        e.on("error", (r) => this.fireError(r)));
+      this.port = port;
+      this.errorCount = 0;
+      port.on("close", () => this.fireClose());
+      port.on("error", (error) => this.fireError(error));
     }
-    write(e) {
+    write(msg) {
       try {
-        return (this.port.postMessage(e), Promise.resolve());
+        this.port.postMessage(msg);
+        return Promise.resolve();
       } catch (error) {
-        return (this.handleError(error, e), Promise.reject(error));
+        this.handleError(error, msg);
+        return Promise.reject(error);
       }
     }
-    handleError(e, r) {
-      (this.errorCount++, this.fireError(e, r, this.errorCount));
+    handleError(error, msg) {
+      this.errorCount++;
+      this.fireError(error, msg, this.errorCount);
     }
     end() {}
   }
-  w.PortMessageWriter = In;
-  class Ne extends O.ReadableStreamMessageReader {
-    constructor(e, r = "utf-8") {
-      super((0, Le.default)().stream.asReadableStream(e), r);
+  cjsExports.PortMessageWriter = PortMessageWriter;
+  class SocketMessageReader extends api_1.ReadableStreamMessageReader {
+    constructor(socket, encoding = "utf-8") {
+      super((0, ril_1.default)().stream.asReadableStream(socket), encoding);
     }
   }
-  w.SocketMessageReader = Ne;
-  class Oe extends O.WriteableStreamMessageWriter {
-    constructor(e, r) {
-      super((0, Le.default)().stream.asWritableStream(e), r);
-      this.socket = e;
+  cjsExports.SocketMessageReader = SocketMessageReader;
+  class SocketMessageWriter extends api_1.WriteableStreamMessageWriter {
+    constructor(socket, options) {
+      super((0, ril_1.default)().stream.asWritableStream(socket), options);
+      this.socket = socket;
     }
     dispose() {
-      (super.dispose(), this.socket.destroy());
+      super.dispose();
+      this.socket.destroy();
     }
   }
-  w.SocketMessageWriter = Oe;
-  class Nt extends O.ReadableStreamMessageReader {
-    constructor(e, r) {
-      super((0, Le.default)().stream.asReadableStream(e), r);
+  cjsExports.SocketMessageWriter = SocketMessageWriter;
+  class StreamMessageReader extends api_1.ReadableStreamMessageReader {
+    constructor(readable, encoding) {
+      super((0, ril_1.default)().stream.asReadableStream(readable), encoding);
     }
   }
-  w.StreamMessageReader = Nt;
-  class Ot extends O.WriteableStreamMessageWriter {
-    constructor(e, r) {
-      super((0, Le.default)().stream.asWritableStream(e), r);
+  cjsExports.StreamMessageReader = StreamMessageReader;
+  class StreamMessageWriter extends api_1.WriteableStreamMessageWriter {
+    constructor(writable, options) {
+      super((0, ril_1.default)().stream.asWritableStream(writable), options);
     }
   }
-  w.StreamMessageWriter = Ot;
-  var envXdgRuntimeDir = process.env.XDG_RUNTIME_DIR,
-    Ts = new Map([
-      ["linux", 107],
-      ["darwin", 103],
-    ]);
-  function Es() {
-    let str = Mn.randomBytes(21).toString("hex"),
-      r;
-    if (envXdgRuntimeDir) r = at.join(envXdgRuntimeDir, `vscode-ipc-${str}.sock`);
-    else r = at.join(On.tmpdir(), `vscode-${str}.sock`);
-    let n = Ts.get("linux");
-    if (n !== void 0 && r.length > n)
-      (0, Le.default)().console.warn(`WARNING: IPC handle "${r}" is longer than ${n} characters.`);
-    return r;
+  cjsExports.StreamMessageWriter = StreamMessageWriter;
+  var envXdgRuntimeDir = process.env.XDG_RUNTIME_DIR;
+  var safeIpcPathLengths = new Map([
+    ["linux", 107],
+    ["darwin", 103],
+  ]);
+  function generateRandomPipeName() {
+    let randomSuffix = crypto_1.randomBytes(21).toString("hex");
+    let result;
+    if (envXdgRuntimeDir) result = path.join(envXdgRuntimeDir, `vscode-ipc-${randomSuffix}.sock`);
+    else result = path.join(os.tmpdir(), `vscode-${randomSuffix}.sock`);
+    let limit = safeIpcPathLengths.get("linux");
+    if (limit !== undefined && result.length > limit)
+      (0, ril_1.default)().console.warn(
+        `WARNING: IPC handle "${result}" is longer than ${limit} characters.`,
+      );
+    return result;
   }
-  w.generateRandomPipeName = Es;
-  function Cs(e, r = "utf-8") {
-    let n,
-      promise = new Promise((c, h) => {
-        n = c;
+  cjsExports.generateRandomPipeName = generateRandomPipeName;
+  function createClientPipeTransport(pipeName, encoding = "utf-8") {
+    let connectResolve;
+    let connected = new Promise((resolve, _reject) => {
+      connectResolve = resolve;
+    });
+    return new Promise((resolve, reject) => {
+      let server = net_1.createServer((socket) => {
+        server.close();
+        connectResolve([
+          new SocketMessageReader(socket, encoding),
+          new SocketMessageWriter(socket, encoding),
+        ]);
       });
-    return new Promise((c, h) => {
-      let server = le.createServer((_) => {
-        (server.close(), n([new Ne(_, r), new Oe(_, r)]));
+      server.on("error", reject);
+      server.listen(pipeName, () => {
+        server.removeListener("error", reject);
+        resolve({
+          onConnected: () => connected,
+        });
       });
-      (server.on("error", h),
-        server.listen(e, () => {
-          (server.removeListener("error", h), c({ onConnected: () => promise }));
-        }));
     });
   }
-  w.createClientPipeTransport = Cs;
-  function xs(e, r = "utf-8") {
-    let connection = le.createConnection(e);
-    return [new Ne(connection, r), new Oe(connection, r)];
+  cjsExports.createClientPipeTransport = createClientPipeTransport;
+  function createServerPipeTransport(pipeName, encoding = "utf-8") {
+    let socket = net_1.createConnection(pipeName);
+    return [new SocketMessageReader(socket, encoding), new SocketMessageWriter(socket, encoding)];
   }
-  w.createServerPipeTransport = xs;
-  function ks(e, r = "utf-8") {
-    let n,
-      promise = new Promise((c, h) => {
-        n = c;
+  cjsExports.createServerPipeTransport = createServerPipeTransport;
+  function createClientSocketTransport(port, encoding = "utf-8") {
+    let connectResolve;
+    let connected = new Promise((resolve, _reject) => {
+      connectResolve = resolve;
+    });
+    return new Promise((resolve, reject) => {
+      let server = net_1.createServer((socket) => {
+        server.close();
+        connectResolve([
+          new SocketMessageReader(socket, encoding),
+          new SocketMessageWriter(socket, encoding),
+        ]);
       });
-    return new Promise((c, h) => {
-      let server = le.createServer((_) => {
-        (server.close(), n([new Ne(_, r), new Oe(_, r)]));
+      server.on("error", reject);
+      server.listen(port, "127.0.0.1", () => {
+        server.removeListener("error", reject);
+        resolve({
+          onConnected: () => connected,
+        });
       });
-      (server.on("error", h),
-        server.listen(e, "127.0.0.1", () => {
-          (server.removeListener("error", h), c({ onConnected: () => promise }));
-        }));
     });
   }
-  w.createClientSocketTransport = ks;
-  function Ls(e, r = "utf-8") {
-    let connection = le.createConnection(e, "127.0.0.1");
-    return [new Ne(connection, r), new Oe(connection, r)];
+  cjsExports.createClientSocketTransport = createClientSocketTransport;
+  function createServerSocketTransport(port, encoding = "utf-8") {
+    let socket = net_1.createConnection(port, "127.0.0.1");
+    return [new SocketMessageReader(socket, encoding), new SocketMessageWriter(socket, encoding)];
   }
-  w.createServerSocketTransport = Ls;
-  function Ns(e) {
-    let r = e;
-    return r.read !== void 0 && r.addListener !== void 0;
+  cjsExports.createServerSocketTransport = createServerSocketTransport;
+  function isReadableStream(value) {
+    let candidate = value;
+    return candidate.read !== undefined && candidate.addListener !== undefined;
   }
-  function Os(e) {
-    let r = e;
-    return r.write !== void 0 && r.addListener !== void 0;
+  function isWritableStream(value) {
+    let candidate = value;
+    return candidate.write !== undefined && candidate.addListener !== undefined;
   }
-  function Ms(e, r, n, s) {
-    if (!n) n = O.NullLogger;
-    let c = Ns(e) ? new Nt(e) : e,
-      h = Os(r) ? new Ot(r) : r;
-    if (O.ConnectionStrategy.is(s)) s = { connectionStrategy: s };
-    return O.createMessageConnection(c, h, n, s);
+  function createMessageConnection(input, output, logger, options) {
+    if (!logger) logger = api_1.NullLogger;
+    let reader = isReadableStream(input) ? new StreamMessageReader(input) : input;
+    let writer = isWritableStream(output) ? new StreamMessageWriter(output) : output;
+    if (api_1.ConnectionStrategy.is(options))
+      options = {
+        connectionStrategy: options,
+      };
+    return api_1.createMessageConnection(reader, writer, logger, options);
   }
-  w.createMessageConnection = Ms;
+  cjsExports.createMessageConnection = createMessageConnection;
 });
-
-export { Mt };
+export { require_vscode_jsonrpc };

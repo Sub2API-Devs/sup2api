@@ -10,33 +10,32 @@
  */
 import { getIsNonInteractiveSession } from "../../bootstrap/state.js";
 
+//@ chunk-e6aww6q8.js:1732503-1732969 fingerprint = mcp (0.488)
 /**
  * /mcp 命令对象（local）；描述：Manage MCP servers；isEnabled: ()=>_e()；isHidden: {return!_e()}；实现 chunk-3re05e6m.js 的 Le。
  */
-//@ chunk-e6aww6q8.js:1732503-1732969 fingerprint = mcp (0.488)
 var mcpNonInteractiveCommand = {
-    type: "local",
-    name: "mcp",
-    supportsNonInteractive: !0,
-    description: "Manage MCP servers",
-    argumentHint: "[reconnect|enable|disable [<server>|all]]",
-    thinClientDispatch: "post-text",
-    isEnabled: () => getIsNonInteractiveSession(),
-    get isHidden() {
-      return !getIsNonInteractiveSession();
-    },
-    load: () => import("./chunk-3re05e6m.js"),
+  type: "local",
+  name: "mcp",
+  supportsNonInteractive: true,
+  description: "Manage MCP servers",
+  argumentHint: "[reconnect|enable|disable [<server>|all]]",
+  thinClientDispatch: "post-text",
+  isEnabled: () => getIsNonInteractiveSession(),
+  get isHidden() {
+    return !getIsNonInteractiveSession();
   },
-  mcpCommandDefinition = {
-    type: "local-jsx",
-    name: "mcp",
-    description: "Manage MCP servers",
-    immediate: !0,
-    argumentHint: "[reconnect (<server>|all)|enable|disable [<server>|all]]",
-    get thinClientDispatch() {
-      return "twin";
-    },
+  load: () => import("./chunk-3re05e6m.js"),
+};
+var mcpCommandDefinition = {
+  type: "local-jsx",
+  name: "mcp",
+  description: "Manage MCP servers",
+  immediate: true,
+  argumentHint: "[reconnect (<server>|all)|enable|disable [<server>|all]]",
+  get thinClientDispatch() {
+    return "twin";
   },
-  mcpCommand = mcpCommandDefinition;
-
+};
+var mcpCommand = mcpCommandDefinition;
 export { mcpCommand, mcpNonInteractiveCommand };

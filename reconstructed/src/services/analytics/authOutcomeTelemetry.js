@@ -8,110 +8,130 @@
  * pieces: chunk-aepeg2w5.js (15)
  * attribution: placement 15
  */
-import { Ehe } from "../../utils/remoteEnvironment.js";
+import { isTopLevelBridgeSession } from "../../utils/remoteEnvironment.js";
 import { isReplBridgeActive, getIsInteractive, getMcpClientsFromAccessor } from "../../bootstrap/state.js";
 import { hasRelaySource } from "../projectsRelay/relayConfig.js";
 
 //@ chunk-aepeg2w5.js:690062-690104 placement
-var TR = ["daemon_child", "sdk_host", "repl"];
+var AUTH_SURFACE_NAMES = ["daemon_child", "sdk_host", "repl"];
 //@ chunk-aepeg2w5.js:690104-690195 placement
-function aro() {
-  if (Ehe()) return "daemon_child";
+/**
+ * 导出函数 `currentAuthSurface`：返回 "daemon_child"; if (!isReplBridgeActive()) return; return getIsInteractive() ? "repl" : "sdk_host"。
+ */
+function currentAuthSurface() {
+  if (isTopLevelBridgeSession()) return "daemon_child";
   if (!isReplBridgeActive()) return;
   return getIsInteractive() ? "repl" : "sdk_host";
 }
+//@ chunk-aepeg2w5.js:690195-690227 placement
 /**
  * 当前认证界面。
  */
-//@ chunk-aepeg2w5.js:690195-690227 placement
 function getCurrentAuthSurface() {
   return hasRelaySource(getMcpClientsFromAccessor());
 }
+//@ chunk-aepeg2w5.js:690227-690398 placement
 /**
  * 认证结果遥测的来源、组织拒绝原因与 allow_* 码格式。
  */
-//@ chunk-aepeg2w5.js:690227-690398 placement
-var AUTH_SURFACES = ["slash_command", "cli_flag", "startup", "tool", "dispatch", "cloud_session"],
-  ORG_DENIAL_REASONS = ["org_denied", "latched", "cache_miss", "route_missing"],
-  ALLOW_CODE_RE = /^allow_[a-z][a-z0-9_]{0,58}$/;
+var AUTH_SURFACES = ["slash_command", "cli_flag", "startup", "tool", "dispatch", "cloud_session"];
+var ORG_DENIAL_REASONS = ["org_denied", "latched", "cache_miss", "route_missing"];
+var ALLOW_CODE_RE = /^allow_[a-z][a-z0-9_]{0,58}$/;
+//@ chunk-aepeg2w5.js:690398-690967 placement
 /**
  * 组织级拒绝错误码集合。
  */
-//@ chunk-aepeg2w5.js:690398-690967 placement
 var ORG_DENIAL_CODES = new Set([
-    "oauth_not_allowed_for_organization",
-    "organization_disabled",
-    "organization_on_hold",
-    "claude_code_key_creator_not_member",
-    "ip_not_in_allowed_range",
-  ]),
-  NR = new Set(["oauth_application_deactivated"]),
-  FR = new Set(["org_access_revoked", "workspace_revoked"]),
-  ag = new Set(["account_not_member", "token_no_organization", "token_no_account"]),
-  ug = new Set(["oauth_account_not_member", "oauth_token_no_organization", "oauth_token_no_account"]),
-  oz = new Set([...FR, "application_deactivated"]),
-  iz = new Set(["token_expired", "token_revoked", "token_invalid", "credential_invalid"]);
+  "oauth_not_allowed_for_organization",
+  "organization_disabled",
+  "organization_on_hold",
+  "claude_code_key_creator_not_member",
+  "ip_not_in_allowed_range",
+]);
+var APPLICATION_DEACTIVATED_CODES = new Set(["oauth_application_deactivated"]);
+var ORG_REVOKED_SERVER_CODES = new Set(["org_access_revoked", "workspace_revoked"]);
+var ACCOUNT_NOT_MEMBER_CODES = new Set(["account_not_member", "token_no_organization", "token_no_account"]);
+var OAUTH_ACCOUNT_NOT_MEMBER_CODES = new Set([
+  "oauth_account_not_member",
+  "oauth_token_no_organization",
+  "oauth_token_no_account",
+]);
+var APPLICATION_DEACTIVATED_SERVER_CODES = new Set([...ORG_REVOKED_SERVER_CODES, "application_deactivated"]);
+var TOKEN_INVALID_CODES = new Set(["token_expired", "token_revoked", "token_invalid", "credential_invalid"]);
+//@ chunk-aepeg2w5.js:690967-691162 placement
 /**
  * 按错误码/服务端错误类型归类为组织拒绝（organization）或凭证失效（credential）。
  */
-//@ chunk-aepeg2w5.js:690967-691162 placement
 function classifyAuthDenial(e, n) {
-  if ((e !== void 0 && (ORG_DENIAL_CODES.has(e) || ug.has(e))) || (n !== void 0 && (FR.has(n) || ag.has(n))))
+  if (
+    (e !== undefined && (ORG_DENIAL_CODES.has(e) || OAUTH_ACCOUNT_NOT_MEMBER_CODES.has(e))) ||
+    (n !== undefined && (ORG_REVOKED_SERVER_CODES.has(n) || ACCOUNT_NOT_MEMBER_CODES.has(n)))
+  )
     return "organization";
-  if ((e !== void 0 && NR.has(e)) || n === "application_deactivated") return "credential";
+  if ((e !== undefined && APPLICATION_DEACTIVATED_CODES.has(e)) || n === "application_deactivated")
+    return "credential";
   return;
 }
+//@ chunk-aepeg2w5.js:691162-691478 placement
 /**
  * 凭据失败、刷新锁失败等错误码集合。
  */
-//@ chunk-aepeg2w5.js:691162-691478 placement
-var CREDENTIAL_FAILURE_CODES = new Set(["restricted_regime_endpoint", "oauth_scope_insufficient"]),
-  az = new Set(["known_dead_refresh_token", "no_refresh_token", "account_on_hold", "not_refreshable"]),
-  PR = new Set([
-    "lock_timeout",
-    "lock_busy",
-    "lock_compromised",
-    "lock_error",
-    "lock_disk_full",
-    "refresh_failed",
-  ]),
-  uz = new Set(["refreshed", "not_needed"]);
+var CREDENTIAL_FAILURE_CODES = new Set(["restricted_regime_endpoint", "oauth_scope_insufficient"]);
+var DEAD_REFRESH_TOKEN_REASONS = new Set([
+  "known_dead_refresh_token",
+  "no_refresh_token",
+  "account_on_hold",
+  "not_refreshable",
+]);
+var REFRESH_TRANSPORT_FAILURES = new Set([
+  "lock_timeout",
+  "lock_busy",
+  "lock_compromised",
+  "lock_error",
+  "lock_disk_full",
+  "refresh_failed",
+]);
+var REFRESH_HEALTHY_RESULTS = new Set(["refreshed", "not_needed"]);
+//@ chunk-aepeg2w5.js:691478-692739 placement
 /**
  * 把认证错误信息（错误码、HTTP 状态、服务端拒绝、刷新结果）归类为遥测结果。
  */
-//@ chunk-aepeg2w5.js:691478-692739 placement
 function classifyAuthOutcome(e) {
   let {
-      errorCode: errorCode,
-      httpStatus: httpStatus,
-      serverErrorType: serverErrorType,
-      serverErrorCode: serverErrorCode,
-      serverAuthDenial: serverAuthDenial,
-      authUnavailableReason: authUnavailableReason,
-      authType: authType,
-      credentialOrigin: credentialOrigin,
-    } = e,
-    x = authType === void 0 || authType === "oauth",
-    P = x ? e.tokenRefreshOutcome : void 0,
-    F = x ? (e.forcedRefreshOutcome ?? e.tokenRefreshOutcome) : void 0;
-  if (errorCode === void 0) return "unknown";
+    errorCode,
+    httpStatus,
+    serverErrorType,
+    serverErrorCode,
+    serverAuthDenial,
+    authUnavailableReason,
+    authType,
+    credentialOrigin,
+  } = e;
+  let x = authType === undefined || authType === "oauth";
+  let tokenRefreshOutcome = x ? e.tokenRefreshOutcome : undefined;
+  let F = x ? (e.forcedRefreshOutcome ?? e.tokenRefreshOutcome) : undefined;
+  if (errorCode === undefined) return "unknown";
   if (
-    (serverErrorCode !== void 0 && (ORG_DENIAL_CODES.has(serverErrorCode) || NR.has(serverErrorCode))) ||
-    (serverAuthDenial !== void 0 && oz.has(serverAuthDenial))
+    (serverErrorCode !== undefined &&
+      (ORG_DENIAL_CODES.has(serverErrorCode) || APPLICATION_DEACTIVATED_CODES.has(serverErrorCode))) ||
+    (serverAuthDenial !== undefined && APPLICATION_DEACTIVATED_SERVER_CODES.has(serverAuthDenial))
   )
     return "dead";
-  if (serverErrorCode !== void 0 && CREDENTIAL_FAILURE_CODES.has(serverErrorCode)) return "live";
+  if (serverErrorCode !== undefined && CREDENTIAL_FAILURE_CODES.has(serverErrorCode)) return "live";
   if (
     errorCode === "network_error" ||
     errorCode === "timeout" ||
     errorCode === "parse_failed" ||
     errorCode === "spurious_304" ||
     errorCode === "stale_tunnel_credential" ||
-    (errorCode === "request_failed" && httpStatus === void 0 && e.noResponse === !0)
+    (errorCode === "request_failed" && httpStatus === undefined && e.noResponse === true)
   )
     return "live";
-  if (httpStatus === void 0) {
-    if (authUnavailableReason === "no_oauth_token") return P !== void 0 && PR.has(P) ? "unknown" : "dead";
+  if (httpStatus === undefined) {
+    if (authUnavailableReason === "no_oauth_token")
+      return tokenRefreshOutcome !== undefined && REFRESH_TRANSPORT_FAILURES.has(tokenRefreshOutcome)
+        ? "unknown"
+        : "dead";
     return "unknown";
   }
   if (httpStatus >= 500 || httpStatus === 429 || serverErrorType === "rate_limit_error") return "live";
@@ -120,7 +140,8 @@ function classifyAuthOutcome(e) {
     if (credentialOrigin === "proxy") return "unknown";
     if (authType === "api_key") return credentialOrigin === "helper_key" ? "unknown" : "dead";
     let L =
-      serverErrorType === "authentication_error" || (serverAuthDenial !== void 0 && iz.has(serverAuthDenial));
+      serverErrorType === "authentication_error" ||
+      (serverAuthDenial !== undefined && TOKEN_INVALID_CODES.has(serverAuthDenial));
     if (credentialOrigin === "injected_token" && L)
       switch (e.injectedTokenRecovery) {
         case "none":
@@ -128,82 +149,87 @@ function classifyAuthOutcome(e) {
         case "sdk_host_refresh":
         case "runner_rotation":
           return "live";
-        case void 0:
+        case undefined:
           break;
       }
-    if (F === void 0) return "unknown";
-    if (az.has(F)) return "dead";
+    if (F === undefined) return "unknown";
+    if (DEAD_REFRESH_TOKEN_REASONS.has(F)) return "dead";
     if (credentialOrigin === "injected_token") return "unknown";
-    if (PR.has(F) || uz.has(F)) return "live";
+    if (REFRESH_TRANSPORT_FAILURES.has(F) || REFRESH_HEALTHY_RESULTS.has(F)) return "live";
     return "unknown";
   }
   return "unknown";
 }
+//@ chunk-aepeg2w5.js:692739-693838 placement
 /**
  * 托管设置拉取结果枚举。
  */
-//@ chunk-aepeg2w5.js:692739-693838 placement
 var SETTINGS_FETCH_OUTCOMES = [
-    "ok",
-    "not_modified",
-    "none_configured",
-    "refused_credential_expired",
-    "refused_credential_revoked",
-    "refused_credential",
-    "refused_not_entitled",
-    "refused_account_on_hold",
-    "refused_ip_allowlist",
-    "blocked_by_intermediary",
-    "unavailable_timeout",
-    "unavailable_connect",
-    "unavailable_tls",
-    "unavailable_server",
-    "unavailable_credential_exchange",
-    "client_no_credentials",
-    "client_scope_insufficient",
-    "client_error",
-    "not_attempted_env_token_only",
-    "not_attempted_key_helper_only",
-    "not_attempted_host_declared_consumer",
-    "not_attempted_consumer_plan",
-    "not_attempted_no_auth",
-    "not_attempted_custom_base_url",
-    "not_attempted_gateway",
-    "not_attempted_third_party",
-    "not_attempted_other",
-  ],
-  LR = new Set(["token_revoked", "org_access_revoked", "workspace_revoked", "application_deactivated"]),
-  lz = new Set([
-    "oauth_not_allowed_for_organization",
-    "claude_code_key_creator_not_member",
-    "restricted_regime_endpoint",
-  ]),
-  dz = new Set(["organization_on_hold", "organization_disabled"]),
-  cz = new Set(["credential_invalid", "token_invalid"]),
-  fz = new Set([
-    "ENOTFOUND",
-    "EAI_AGAIN",
-    "ECONNREFUSED",
-    "ECONNRESET",
-    "EHOSTUNREACH",
-    "ENETUNREACH",
-    "EPIPE",
-  ]);
+  "ok",
+  "not_modified",
+  "none_configured",
+  "refused_credential_expired",
+  "refused_credential_revoked",
+  "refused_credential",
+  "refused_not_entitled",
+  "refused_account_on_hold",
+  "refused_ip_allowlist",
+  "blocked_by_intermediary",
+  "unavailable_timeout",
+  "unavailable_connect",
+  "unavailable_tls",
+  "unavailable_server",
+  "unavailable_credential_exchange",
+  "client_no_credentials",
+  "client_scope_insufficient",
+  "client_error",
+  "not_attempted_env_token_only",
+  "not_attempted_key_helper_only",
+  "not_attempted_host_declared_consumer",
+  "not_attempted_consumer_plan",
+  "not_attempted_no_auth",
+  "not_attempted_custom_base_url",
+  "not_attempted_gateway",
+  "not_attempted_third_party",
+  "not_attempted_other",
+];
+var REVOKED_SERVER_DENIALS = new Set([
+  "token_revoked",
+  "org_access_revoked",
+  "workspace_revoked",
+  "application_deactivated",
+]);
+var RESTRICTED_SERVER_CODES = new Set([
+  "oauth_not_allowed_for_organization",
+  "claude_code_key_creator_not_member",
+  "restricted_regime_endpoint",
+]);
+var ORG_ON_HOLD_CODES = new Set(["organization_on_hold", "organization_disabled"]);
+var CREDENTIAL_INVALID_SERVER_CODES = new Set(["credential_invalid", "token_invalid"]);
+var NETWORK_ERROR_CODES = new Set([
+  "ENOTFOUND",
+  "EAI_AGAIN",
+  "ECONNREFUSED",
+  "ECONNRESET",
+  "EHOSTUNREACH",
+  "ENETUNREACH",
+  "EPIPE",
+]);
+//@ chunk-aepeg2w5.js:693838-693973 placement
 /**
  * 是否有服务端错误类型、错误码或认证拒绝信息。
  */
-//@ chunk-aepeg2w5.js:693838-693973 placement
 function hasServerAuthDetail(e) {
   return (
-    (e.serverErrorType !== void 0 && e.serverErrorType !== "other") ||
-    e.serverErrorCode !== void 0 ||
-    e.serverAuthDenial !== void 0
+    (e.serverErrorType !== undefined && e.serverErrorType !== "other") ||
+    e.serverErrorCode !== undefined ||
+    e.serverAuthDenial !== undefined
   );
 }
+//@ chunk-aepeg2w5.js:693973-695910 placement
 /**
  * 计算托管设置拉取结果。
  */
-//@ chunk-aepeg2w5.js:693973-695910 placement
 function settingsFetchOutcome(e) {
   if (e.succeeded)
     return e.responseKind === "not_modified"
@@ -214,59 +240,66 @@ function settingsFetchOutcome(e) {
   if (e.failure === "no_credentials") return "client_no_credentials";
   if (e.failure === "credential_exchange")
     return e.exchangeFinal ? "refused_credential_revoked" : "unavailable_credential_exchange";
-  let { httpStatus: httpStatus, serverErrorCode: serverErrorCode, serverAuthDenial: serverAuthDenial } = e;
-  if (httpStatus !== void 0 && (httpStatus >= 500 || httpStatus === 429)) return "unavailable_server";
+  let { httpStatus, serverErrorCode, serverAuthDenial } = e;
+  if (httpStatus !== undefined && (httpStatus >= 500 || httpStatus === 429)) return "unavailable_server";
   if (
-    httpStatus !== void 0 &&
+    httpStatus !== undefined &&
     !hasServerAuthDetail(e) &&
-    (httpStatus === 407 || e.responseContentType === "html" || e.requestIdPresent === !1)
+    (httpStatus === 407 || e.responseContentType === "html" || e.requestIdPresent === false)
   )
     return "blocked_by_intermediary";
   if (e.failure === "parse" && e.responseContentType === "html") return "blocked_by_intermediary";
   let h = e.forcedRefreshOutcome ?? e.tokenRefreshOutcome;
   if (serverErrorCode === "oauth_scope_insufficient") return "client_scope_insufficient";
   if (serverErrorCode === "ip_not_in_allowed_range") return "refused_ip_allowlist";
-  if ((serverErrorCode !== void 0 && dz.has(serverErrorCode)) || h === "account_on_hold")
+  if ((serverErrorCode !== undefined && ORG_ON_HOLD_CODES.has(serverErrorCode)) || h === "account_on_hold")
     return "refused_account_on_hold";
   if (
-    httpStatus !== void 0 &&
+    httpStatus !== undefined &&
     httpStatus < 500 &&
     httpStatus !== 429 &&
-    !lg(e.serverErrorType) &&
-    !lg(serverErrorCode) &&
-    !lg(serverAuthDenial) &&
-    (httpStatus === 407 || e.responseContentType === "html" || e.requestIdPresent === !1)
+    !isMeaningfulErrorValue(e.serverErrorType) &&
+    !isMeaningfulErrorValue(serverErrorCode) &&
+    !isMeaningfulErrorValue(serverAuthDenial) &&
+    (httpStatus === 407 || e.responseContentType === "html" || e.requestIdPresent === false)
   )
     return "blocked_by_intermediary";
   if (httpStatus === 401 || serverErrorCode === "token_expired") {
-    if (h === "known_dead_refresh_token" || (serverAuthDenial !== void 0 && LR.has(serverAuthDenial)))
+    if (
+      h === "known_dead_refresh_token" ||
+      (serverAuthDenial !== undefined && REVOKED_SERVER_DENIALS.has(serverAuthDenial))
+    )
       return "refused_credential_revoked";
     if (serverErrorCode === "token_expired" || serverAuthDenial === "token_expired")
       return "refused_credential_expired";
     return e.credentialState === "live" ? "client_error" : "refused_credential";
   }
   if (
-    (serverAuthDenial !== void 0 && LR.has(serverAuthDenial)) ||
+    (serverAuthDenial !== undefined && REVOKED_SERVER_DENIALS.has(serverAuthDenial)) ||
     serverErrorCode === "oauth_application_deactivated"
   )
     return "refused_credential_revoked";
-  if (serverAuthDenial !== void 0 && cz.has(serverAuthDenial)) return "refused_credential";
+  if (serverAuthDenial !== undefined && CREDENTIAL_INVALID_SERVER_CODES.has(serverAuthDenial))
+    return "refused_credential";
   if (
-    (serverErrorCode !== void 0 && (lz.has(serverErrorCode) || ug.has(serverErrorCode))) ||
-    (serverAuthDenial !== void 0 && ag.has(serverAuthDenial))
+    (serverErrorCode !== undefined &&
+      (RESTRICTED_SERVER_CODES.has(serverErrorCode) ||
+        OAUTH_ACCOUNT_NOT_MEMBER_CODES.has(serverErrorCode))) ||
+    (serverAuthDenial !== undefined && ACCOUNT_NOT_MEMBER_CODES.has(serverAuthDenial))
   )
     return "refused_not_entitled";
   if (httpStatus === 403) return "refused_not_entitled";
   if (e.errno === "CERT_ERROR" || e.failure === "tls") return "unavailable_tls";
   if (e.failure === "timeout" || e.errno === "ETIMEDOUT") return "unavailable_timeout";
   if (e.errno === "ABORTED") return "client_error";
-  if (e.failure === "network" || (e.errno !== void 0 && fz.has(e.errno))) return "unavailable_connect";
+  if (e.failure === "network" || (e.errno !== undefined && NETWORK_ERROR_CODES.has(e.errno)))
+    return "unavailable_connect";
   return "client_error";
 }
+//@ chunk-aepeg2w5.js:695910-696706 placement
 /**
  * 未尝试拉取托管设置的原因。
  */
-//@ chunk-aepeg2w5.js:695910-696706 placement
 function notAttemptedReason(e) {
   switch (e.ineligibleReason) {
     case "third_party_provider":
@@ -291,57 +324,62 @@ function notAttemptedReason(e) {
     case "claude_tag":
     case "hermetic_remote_session":
     case "hybrid_yields_to_device_policy":
-    case void 0:
+    case undefined:
       return "not_attempted_other";
   }
 }
 //@ chunk-aepeg2w5.js:696706-696752 placement
-function lg(e) {
-  return e !== void 0 && e !== "other";
+function isMeaningfulErrorValue(e) {
+  return e !== undefined && e !== "other";
 }
+//@ chunk-aepeg2w5.js:696752-697166 placement
 /**
  * 签名文档种类与验证失败原因枚举。
  */
-//@ chunk-aepeg2w5.js:696752-697166 placement
-var SIGNED_DOCUMENT_KINDS = ["managed-settings", "policy-limits"],
-  HR = [
-    "unsigned",
-    "malformed",
-    "no_embedded_root",
-    "bad_chain",
-    "cert_expired",
-    "no_marker",
-    "bad_signature",
-    "unsupported_version",
-    "wrong_type",
-    "aud_mismatch",
-    "sub_mismatch",
-    "ws_mismatch",
-    "sha_mismatch",
-    "abs_mismatch",
-    "future_iat",
-    "stale",
-  ],
-  BR = [...HR, "valid"],
-  mz = [...HR, "no_lifetime", "org_pin_mismatch", "org_pin_unknown", "error"],
-  KR = ["none", "not_read", "pending", "trusted", ...mz];
+var SIGNED_DOCUMENT_KINDS = ["managed-settings", "policy-limits"];
+var SIGNATURE_VERIFY_FAILURES = [
+  "unsigned",
+  "malformed",
+  "no_embedded_root",
+  "bad_chain",
+  "cert_expired",
+  "no_marker",
+  "bad_signature",
+  "unsupported_version",
+  "wrong_type",
+  "aud_mismatch",
+  "sub_mismatch",
+  "ws_mismatch",
+  "sha_mismatch",
+  "abs_mismatch",
+  "future_iat",
+  "stale",
+];
+var SIGNATURE_VERIFY_RESULTS = [...SIGNATURE_VERIFY_FAILURES, "valid"];
+var SIGNATURE_VERIFY_RESULTS_EXTENDED = [
+  ...SIGNATURE_VERIFY_FAILURES,
+  "no_lifetime",
+  "org_pin_mismatch",
+  "org_pin_unknown",
+  "error",
+];
+var SIGNATURE_TRUST_STATES = ["none", "not_read", "pending", "trusted", ...SIGNATURE_VERIFY_RESULTS_EXTENDED];
 //@ chunk-aepeg2w5.js:697166-697195 placement
-var GR = ["enforced", "shadow"];
-
+var ENFORCEMENT_MODES = ["enforced", "shadow"];
 export {
-  aro,
+  currentAuthSurface,
   getCurrentAuthSurface,
   classifyAuthOutcome,
   settingsFetchOutcome,
   notAttemptedReason,
-  KR,
-  GR,
+  SIGNATURE_TRUST_STATES,
+  ENFORCEMENT_MODES,
   ALLOW_CODE_RE,
   ORG_DENIAL_REASONS,
   AUTH_SURFACES,
   SETTINGS_FETCH_OUTCOMES,
   SIGNED_DOCUMENT_KINDS,
-  BR,
-  TR,
+  SIGNATURE_VERIFY_RESULTS,
+  AUTH_SURFACE_NAMES,
   classifyAuthDenial,
 };

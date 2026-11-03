@@ -17,13 +17,13 @@ import { saveGlobalConfig } from "../utils/config.js";
 import { logEvent } from "../services/analytics/index.js";
 import { fromEnum } from "../services/analytics/safeMetadata.js";
 
+//@ chunk-cjydagjy.js:9439-10044 fingerprint = migrateLegacyOpusToCurrent (0.818)
 /**
  * 迁移（仅 firstParty）：userSettings.model 为 Opus 4/4.1 的全名时改成当前 opus 别名。
  */
-//@ chunk-cjydagjy.js:9439-10044 fingerprint = migrateLegacyOpusToCurrent (0.818)
 async function migrateLegacyOpusToCurrent(e) {
-  if (getAPIProvider() !== "firstParty") return !0;
-  if (!isLegacyModelRemapEnabled()) return !0;
+  if (getAPIProvider() !== "firstParty") return true;
+  if (!isLegacyModelRemapEnabled()) return true;
   let model = getSettingsForSourceForUpkeep("userSettings")?.model;
   if (
     model !== "claude-opus-4-20250514" &&
@@ -31,20 +31,33 @@ async function migrateLegacyOpusToCurrent(e) {
     model !== "claude-opus-4-0" &&
     model !== "claude-opus-4-1"
   )
-    return !0;
-  let { error: error } = await updateSettingsForSource("userSettings", { model: "opus" }, void 0, e);
-  if (error)
-    return (
-      logForDebugging(`Failed to migrate legacy Opus model setting: ${error}`, { level: "error" }),
-      logFeatureBad("migration_legacy_opus_to_current", "migration_legacy_opus_write_failed"),
-      !1
-    );
-  return (
-    saveGlobalConfig((current) => ({ ...current, legacyOpusMigrationTimestamp: Date.now() }), e),
-    logEvent("tengu_legacy_opus_migration", { from_model: fromEnum(model) }),
-    logFeatureOk("migration_legacy_opus_to_current"),
-    !0
+    return true;
+  let { error } = await updateSettingsForSource(
+    "userSettings",
+    {
+      model: "opus",
+    },
+    undefined,
+    e,
   );
+  if (error) {
+    logForDebugging(`Failed to migrate legacy Opus model setting: ${error}`, {
+      level: "error",
+    });
+    logFeatureBad("migration_legacy_opus_to_current", "migration_legacy_opus_write_failed");
+    return false;
+  }
+  saveGlobalConfig(
+    (current) => ({
+      ...current,
+      legacyOpusMigrationTimestamp: Date.now(),
+    }),
+    e,
+  );
+  logEvent("tengu_legacy_opus_migration", {
+    from_model: fromEnum(model),
+  });
+  logFeatureOk("migration_legacy_opus_to_current");
+  return true;
 }
-
 export { migrateLegacyOpusToCurrent };

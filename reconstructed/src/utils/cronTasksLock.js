@@ -8,10 +8,10 @@
  * pieces: chunk-hnzqng4j.js (7)
  * attribution: fingerprint 4, layout 1, file-local 1, placement 1
  */
-import { join, join as join_2, join as join_3, dirname } from "path";
-import { readFile, readFile as readFile_2, writeFile, mkdir, mkdir as mkdir_2, unlink } from "fs/promises";
+import { join, dirname } from "path";
+import { readFile, writeFile, mkdir, unlink } from "fs/promises";
 import { DoctorLazy } from "../cli/handlers/util.js";
-import { u, o, E } from "../../vendor/zod/v4/classic/schemas.js";
+import { u, string, E } from "../../vendor/zod/v4/classic/schemas.js";
 import { getProjectRoot, getSessionId } from "../bootstrap/state.js";
 import { safeParseJSON } from "./json.js";
 import { jsonStringify } from "./slowOperations.js";
@@ -23,22 +23,27 @@ import { ownProcStart, isSameProcessAsync } from "./processIdentity.js";
 import { logForDebugging } from "./debug.js";
 import { isProcessRunning } from "./genericProcessUtils.js";
 
+//@ chunk-hnzqng4j.js:3042-3163 fingerprint = LOCK_FILE_REL (0.741)
 /**
  * 锁文件相对路径 .claude/scheduled_tasks.lock 与锁内容 schema {sessionId, pid, procStart?, acquiredAt}。
  */
-//@ chunk-hnzqng4j.js:3042-3163 fingerprint = LOCK_FILE_REL (0.741)
-var LOCK_FILE_REL = join_2(".claude", "scheduled_tasks.lock"),
-  schedulerLockSchema = DoctorLazy(() =>
-    u({ sessionId: o(), pid: E(), procStart: o().optional(), acquiredAt: E() }),
-  );
+var LOCK_FILE_REL = join(".claude", "scheduled_tasks.lock");
+var schedulerLockSchema = DoctorLazy(() =>
+  u({
+    sessionId: string(),
+    pid: E(),
+    procStart: string().optional(),
+    acquiredAt: E(),
+  }),
+);
 //@ chunk-hnzqng4j.js:3163-3199 layout
 function getLockPath(dir) {
-  return join_2(dir ?? getProjectRoot(), LOCK_FILE_REL);
+  return join(dir ?? getProjectRoot(), LOCK_FILE_REL);
 }
+//@ chunk-hnzqng4j.js:3199-3329 file-local
 /**
  * 读取并校验锁文件，失败返回 undefined。
  */
-//@ chunk-hnzqng4j.js:3199-3329 file-local
 async function readLock(dir) {
   let raw;
   try {
@@ -46,93 +51,106 @@ async function readLock(dir) {
   } catch {
     return;
   }
-  let result = schedulerLockSchema().safeParse(safeParseJSON(raw, !1));
-  return result.success ? result.data : void 0;
+  let result = schedulerLockSchema().safeParse(safeParseJSON(raw, false));
+  return result.success ? result.data : undefined;
 }
+//@ chunk-hnzqng4j.js:3329-3598 fingerprint = tryCreateExclusive (1)
 /**
  * 以 wx 独占方式创建锁文件（目录不存在时先建），已存在返回 false。
  */
-//@ chunk-hnzqng4j.js:3329-3598 fingerprint = tryCreateExclusive (1)
 async function tryCreateExclusive(lock, dir) {
-  let path = getLockPath(dir),
-    body = jsonStringify(lock);
+  let path = getLockPath(dir);
+  let body = jsonStringify(lock);
   try {
-    return (await writeFile(path, body, { flag: "wx" }), !0);
-  } catch (error) {
-    let code = getErrnoCode(error);
-    if (code === "EEXIST") return !1;
+    await writeFile(path, body, {
+      flag: "wx",
+    });
+    return true;
+  } catch (e) {
+    let code = getErrnoCode(e);
+    if (code === "EEXIST") return false;
     if (code === "ENOENT") {
-      await mkdir(dirname(path), { recursive: !0 });
+      await mkdir(dirname(path), {
+        recursive: true,
+      });
       try {
-        return (await writeFile(path, body, { flag: "wx" }), !0);
+        await writeFile(path, body, {
+          flag: "wx",
+        });
+        return true;
       } catch (retryErr) {
-        if (getErrnoCode(retryErr) === "EEXIST") return !1;
+        if (getErrnoCode(retryErr) === "EEXIST") return false;
         throw retryErr;
       }
     }
-    throw error;
+    throw e;
   }
 }
+//@ chunk-hnzqng4j.js:3598-3687 placement = unregisterAgentForeground (0.595)
 /**
  * 为调度锁登记一次性退出清理（进程退出时 releaseSchedulerLock）。实际属于 utils/cronTasksLock.ts。
  */
-//@ chunk-hnzqng4j.js:3598-3687 placement = unregisterAgentForeground (0.595)
 function registerSchedulerLockCleanup(lockState, options) {
-  (lockState.unregisterCleanup?.(),
-    (lockState.unregisterCleanup = registerCleanup(async () => {
-      await releaseSchedulerLock(lockState, options);
-    })));
+  lockState.unregisterCleanup?.();
+  lockState.unregisterCleanup = registerCleanup(async () => {
+    await releaseSchedulerLock(lockState, options);
+  });
 }
+//@ chunk-hnzqng4j.js:3687-4453 fingerprint = tryAcquireSchedulerLock (0.924)
 /**
  * 抢调度锁：独占创建成功即持有；同会话不同 PID 时改写为本进程；持有者进程仍在且身份匹配则失败（记录占用者）；否则视为陈旧锁删除后重试。持有时登记退出清理。
  */
-//@ chunk-hnzqng4j.js:3687-4453 fingerprint = tryAcquireSchedulerLock (0.924)
 async function tryAcquireSchedulerLock(lockState, options) {
   let dir = options?.dir;
-  if (isDurableCronUnavailable(dir)) return !1;
+  if (isDurableCronUnavailable(dir)) return false;
   await ensureClaudeRuntimeFilesExcluded(dir ?? getProjectRoot());
-  let sessionId = options?.lockIdentity ?? getSessionId(),
-    lockRecord = {
-      sessionId: sessionId,
-      pid: process.pid,
-      procStart: ownProcStart(),
-      acquiredAt: Date.now(),
-    };
-  if (await tryCreateExclusive(lockRecord, dir))
-    return (
-      (lockState.lastBlockedBy = void 0),
-      registerSchedulerLockCleanup(lockState, options),
-      logForDebugging(`[ScheduledTasks] acquired scheduler lock (PID ${process.pid})`),
-      !0
-    );
+  let sessionId = options?.lockIdentity ?? getSessionId();
+  let lockRecord = {
+    sessionId,
+    pid: process.pid,
+    procStart: ownProcStart(),
+    acquiredAt: Date.now(),
+  };
+  if (await tryCreateExclusive(lockRecord, dir)) {
+    lockState.lastBlockedBy = undefined;
+    registerSchedulerLockCleanup(lockState, options);
+    logForDebugging(`[ScheduledTasks] acquired scheduler lock (PID ${process.pid})`);
+    return true;
+  }
   let existing = await readLock(dir);
   if (existing?.sessionId === sessionId) {
-    if (existing.pid !== process.pid)
-      (await writeFile(getLockPath(dir), jsonStringify(lockRecord)),
-        registerSchedulerLockCleanup(lockState, options));
-    return !0;
+    if (existing.pid !== process.pid) {
+      await writeFile(getLockPath(dir), jsonStringify(lockRecord));
+      registerSchedulerLockCleanup(lockState, options);
+    }
+    return true;
   }
   if (
     existing &&
     isProcessRunning(existing.pid) &&
     (await isSameProcessAsync(existing.pid, existing.procStart))
   ) {
-    if (lockState.lastBlockedBy !== existing.sessionId)
-      ((lockState.lastBlockedBy = existing.sessionId),
-        logForDebugging(
-          `[ScheduledTasks] scheduler lock held by session ${existing.sessionId} (PID ${existing.pid})`,
-        ));
-    return !1;
+    if (lockState.lastBlockedBy !== existing.sessionId) {
+      lockState.lastBlockedBy = existing.sessionId;
+      logForDebugging(
+        `[ScheduledTasks] scheduler lock held by session ${existing.sessionId} (PID ${existing.pid})`,
+      );
+    }
+    return false;
   }
   if (existing) logForDebugging(`[ScheduledTasks] recovering stale scheduler lock from PID ${existing.pid}`);
-  if ((await unlink(getLockPath(dir)).catch(() => {}), await tryCreateExclusive(lockRecord, dir)))
-    return ((lockState.lastBlockedBy = void 0), registerSchedulerLockCleanup(lockState, options), !0);
-  return !1;
+  await unlink(getLockPath(dir)).catch(() => {});
+  if (await tryCreateExclusive(lockRecord, dir)) {
+    lockState.lastBlockedBy = undefined;
+    registerSchedulerLockCleanup(lockState, options);
+    return true;
+  }
+  return false;
 }
+//@ chunk-hnzqng4j.js:4453-4668 fingerprint = releaseSchedulerLock (0.914)
 /**
  * 释放调度锁：只有锁属于本会话时才删除。
  */
-//@ chunk-hnzqng4j.js:4453-4668 fingerprint = releaseSchedulerLock (0.914)
 async function releaseSchedulerLock(lockState, options) {
   lockState.reset();
   let dir = options?.dir;
@@ -141,12 +159,12 @@ async function releaseSchedulerLock(lockState, options) {
   } catch {
     return;
   }
-  let sessionId = options?.lockIdentity ?? getSessionId(),
-    existing = await readLock(dir);
+  let sessionId = options?.lockIdentity ?? getSessionId();
+  let existing = await readLock(dir);
   if (!existing || existing.sessionId !== sessionId) return;
   try {
-    (await unlink(getLockPath(dir)), logForDebugging("[ScheduledTasks] released scheduler lock"));
+    await unlink(getLockPath(dir));
+    logForDebugging("[ScheduledTasks] released scheduler lock");
   } catch {}
 }
-
 export { releaseSchedulerLock, tryAcquireSchedulerLock };

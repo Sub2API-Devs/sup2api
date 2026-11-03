@@ -20,9 +20,9 @@ function projectsActivityLabel(e) {
     case "project_search":
       return e.query ? `Search "${e.query}"` : "Search project";
     case "project_write": {
-      let n = e.path ?? "?",
-        r = e.local_path ? ` from ${resolveLocalPath(e.local_path)}` : "";
-      return `Write ${n}${r}`;
+      let path = e.path ?? "?";
+      let r = e.local_path ? ` from ${resolveLocalPath(e.local_path)}` : "";
+      return `Write ${path}${r}`;
     }
     case "project_delete":
       return e.path ? `Delete ${e.path}` : "Delete project doc";
@@ -34,5 +34,4 @@ function projectsActivityLabel(e) {
       return "Project";
   }
 }
-
 export { projectsActivityLabel };

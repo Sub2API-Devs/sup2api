@@ -6,27 +6,27 @@
  * attribution: esm-layout 3, esm-fingerprint 5
  */
 import { Xa } from "../../../../../../runtime/bun-runtime.js";
-import { ut, Er } from "../../../browser/runtime/timing_safe_equal.js";
+import { timingSafeEqual_default, timingSafeEqual } from "../../../browser/runtime/timing_safe_equal.js";
 
 //@ chunk-2tyrgda4.js:4322-4345 esm-layout
-var lt = Xa(() => {
-  ut = Er;
+var init_crypto_key = Xa(() => {
+  timingSafeEqual_default = timingSafeEqual;
 });
 //@ chunk-2tyrgda4.js:4345-4463 esm-fingerprint
-function x(e, t = "algorithm.name") {
-  return TypeError(`CryptoKey does not support this operation, its ${t} must be ${e}`);
+function unusable(name, prop = "algorithm.name") {
+  return TypeError(`CryptoKey does not support this operation, its ${prop} must be ${name}`);
 }
 //@ chunk-2tyrgda4.js:4463-4497 esm-layout
-function B(e, t) {
-  return e.name === t;
+function B(algorithm, t) {
+  return algorithm.name === t;
 }
 //@ chunk-2tyrgda4.js:4497-4548 esm-layout
-function be(e) {
-  return parseInt(e.name.slice(4), 10);
+function getHashLength(hash) {
+  return parseInt(hash.name.slice(4), 10);
 }
 //@ chunk-2tyrgda4.js:4548-4687 esm-fingerprint
-function Sr(e) {
-  switch (e) {
+function getNamedCurve(alg) {
+  switch (alg) {
     case "ES256":
       return "P-256";
     case "ES384":
@@ -38,109 +38,109 @@ function Sr(e) {
   }
 }
 //@ chunk-2tyrgda4.js:4687-4988 esm-fingerprint
-function ht(e, t) {
-  if (t.length && !t.some((r) => e.usages.includes(r))) {
-    let r = "CryptoKey does not support this operation, its usages must include ";
-    if (t.length > 2) {
-      let o = t.pop();
-      r += `one of ${t.join(", ")}, or ${o}.`;
-    } else if (t.length === 2) r += `one of ${t[0]} or ${t[1]}.`;
-    else r += `${t[0]}.`;
-    throw TypeError(r);
+function checkUsage(key, usages) {
+  if (usages.length && !usages.some((expected) => key.usages.includes(expected))) {
+    let msg = "CryptoKey does not support this operation, its usages must include ";
+    if (usages.length > 2) {
+      let last = usages.pop();
+      msg += `one of ${usages.join(", ")}, or ${last}.`;
+    } else if (usages.length === 2) msg += `one of ${usages[0]} or ${usages[1]}.`;
+    else msg += `${usages[0]}.`;
+    throw TypeError(msg);
   }
 }
 //@ chunk-2tyrgda4.js:4988-5939 esm-fingerprint
-function yt(e, t, ...r) {
-  switch (t) {
+function checkSigCryptoKey(key, alg, ...usages) {
+  switch (alg) {
     case "HS256":
     case "HS384":
     case "HS512": {
-      if (!B(e.algorithm, "HMAC")) throw x("HMAC");
-      let o = parseInt(t.slice(2), 10);
-      if (be(e.algorithm.hash) !== o) throw x(`SHA-${o}`, "algorithm.hash");
+      if (!B(key.algorithm, "HMAC")) throw unusable("HMAC");
+      let expected = parseInt(alg.slice(2), 10);
+      if (getHashLength(key.algorithm.hash) !== expected) throw unusable(`SHA-${expected}`, "algorithm.hash");
       break;
     }
     case "RS256":
     case "RS384":
     case "RS512": {
-      if (!B(e.algorithm, "RSASSA-PKCS1-v1_5")) throw x("RSASSA-PKCS1-v1_5");
-      let o = parseInt(t.slice(2), 10);
-      if (be(e.algorithm.hash) !== o) throw x(`SHA-${o}`, "algorithm.hash");
+      if (!B(key.algorithm, "RSASSA-PKCS1-v1_5")) throw unusable("RSASSA-PKCS1-v1_5");
+      let expected = parseInt(alg.slice(2), 10);
+      if (getHashLength(key.algorithm.hash) !== expected) throw unusable(`SHA-${expected}`, "algorithm.hash");
       break;
     }
     case "PS256":
     case "PS384":
     case "PS512": {
-      if (!B(e.algorithm, "RSA-PSS")) throw x("RSA-PSS");
-      let o = parseInt(t.slice(2), 10);
-      if (be(e.algorithm.hash) !== o) throw x(`SHA-${o}`, "algorithm.hash");
+      if (!B(key.algorithm, "RSA-PSS")) throw unusable("RSA-PSS");
+      let expected = parseInt(alg.slice(2), 10);
+      if (getHashLength(key.algorithm.hash) !== expected) throw unusable(`SHA-${expected}`, "algorithm.hash");
       break;
     }
     case "EdDSA": {
-      if (e.algorithm.name !== "Ed25519" && e.algorithm.name !== "Ed448") throw x("Ed25519 or Ed448");
+      if (key.algorithm.name !== "Ed25519" && key.algorithm.name !== "Ed448")
+        throw unusable("Ed25519 or Ed448");
       break;
     }
     case "ES256":
     case "ES384":
     case "ES512": {
-      if (!B(e.algorithm, "ECDSA")) throw x("ECDSA");
-      let o = Sr(t);
-      if (e.algorithm.namedCurve !== o) throw x(o, "algorithm.namedCurve");
+      if (!B(key.algorithm, "ECDSA")) throw unusable("ECDSA");
+      let expected = getNamedCurve(alg);
+      if (key.algorithm.namedCurve !== expected) throw unusable(expected, "algorithm.namedCurve");
       break;
     }
     default:
       throw TypeError("CryptoKey does not support this operation");
   }
-  ht(e, r);
+  checkUsage(key, usages);
 }
 //@ chunk-2tyrgda4.js:5939-6891 esm-fingerprint
-function J(e, t, ...r) {
-  switch (t) {
+function checkEncCryptoKey(key, alg, ...usages) {
+  switch (alg) {
     case "A128GCM":
     case "A192GCM":
     case "A256GCM": {
-      if (!B(e.algorithm, "AES-GCM")) throw x("AES-GCM");
-      let o = parseInt(t.slice(1, 4), 10);
-      if (e.algorithm.length !== o) throw x(o, "algorithm.length");
+      if (!B(key.algorithm, "AES-GCM")) throw unusable("AES-GCM");
+      let expected = parseInt(alg.slice(1, 4), 10);
+      if (key.algorithm.length !== expected) throw unusable(expected, "algorithm.length");
       break;
     }
     case "A128KW":
     case "A192KW":
     case "A256KW": {
-      if (!B(e.algorithm, "AES-KW")) throw x("AES-KW");
-      let o = parseInt(t.slice(1, 4), 10);
-      if (e.algorithm.length !== o) throw x(o, "algorithm.length");
+      if (!B(key.algorithm, "AES-KW")) throw unusable("AES-KW");
+      let expected = parseInt(alg.slice(1, 4), 10);
+      if (key.algorithm.length !== expected) throw unusable(expected, "algorithm.length");
       break;
     }
     case "ECDH": {
-      switch (e.algorithm.name) {
+      switch (key.algorithm.name) {
         case "ECDH":
         case "X25519":
         case "X448":
           break;
         default:
-          throw x("ECDH, X25519, or X448");
+          throw unusable("ECDH, X25519, or X448");
       }
       break;
     }
     case "PBES2-HS256+A128KW":
     case "PBES2-HS384+A192KW":
     case "PBES2-HS512+A256KW":
-      if (!B(e.algorithm, "PBKDF2")) throw x("PBKDF2");
+      if (!B(key.algorithm, "PBKDF2")) throw unusable("PBKDF2");
       break;
     case "RSA-OAEP":
     case "RSA-OAEP-256":
     case "RSA-OAEP-384":
     case "RSA-OAEP-512": {
-      if (!B(e.algorithm, "RSA-OAEP")) throw x("RSA-OAEP");
-      let o = parseInt(t.slice(9), 10) || 1;
-      if (be(e.algorithm.hash) !== o) throw x(`SHA-${o}`, "algorithm.hash");
+      if (!B(key.algorithm, "RSA-OAEP")) throw unusable("RSA-OAEP");
+      let expected = parseInt(alg.slice(9), 10) || 1;
+      if (getHashLength(key.algorithm.hash) !== expected) throw unusable(`SHA-${expected}`, "algorithm.hash");
       break;
     }
     default:
       throw TypeError("CryptoKey does not support this operation");
   }
-  ht(e, r);
+  checkUsage(key, usages);
 }
-
-export { J, lt, yt };
+export { checkEncCryptoKey, init_crypto_key, checkSigCryptoKey };

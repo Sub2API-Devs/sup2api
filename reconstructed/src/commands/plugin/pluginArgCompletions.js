@@ -8,7 +8,7 @@
  * pieces: chunk-rkhcn3s2.js (6)
  * attribution: placement 6
  */
-import { QE, jF } from "../../utils/plugins/pluginGates.js";
+import { isPluginDirectoryModeOn, lanternPrismEnabled } from "../../utils/plugins/pluginGates.js";
 import {
   getInstalledPlugins,
   hasInstallationForCurrentProject,
@@ -28,52 +28,113 @@ import { HostScoped } from "../../utils/hostScoped.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { isPluginBlockedByPolicy } from "../../utils/plugins/marketplacePolicy.js";
 
+//@ chunk-rkhcn3s2.js:11904-12316 placement
 /**
  * /plugin 参数补全的候选：list 的 --enabled/--disabled 过滤项，以及 marketplace 子命令（add/remove/update/list）。
  */
-//@ chunk-rkhcn3s2.js:11904-12316 placement
 var LIST_FLAG_COMPLETIONS = [
-    { value: "--enabled", description: "Only show enabled plugins", isFinal: !0 },
-    { value: "--disabled", description: "Only show disabled plugins", isFinal: !0 },
-  ],
-  MARKETPLACE_SUBCOMMAND_COMPLETIONS = [
-    { value: "add", description: "Add a marketplace from a URL or path" },
-    { value: "remove", description: "Remove a known marketplace" },
-    { value: "update", description: "Refresh a marketplace from its source" },
-    { value: "list", description: "List known marketplaces", isFinal: !0 },
-  ];
+  {
+    value: "--enabled",
+    description: "Only show enabled plugins",
+    isFinal: true,
+  },
+  {
+    value: "--disabled",
+    description: "Only show disabled plugins",
+    isFinal: true,
+  },
+];
+var MARKETPLACE_SUBCOMMAND_COMPLETIONS = [
+  {
+    value: "add",
+    description: "Add a marketplace from a URL or path",
+  },
+  {
+    value: "remove",
+    description: "Remove a known marketplace",
+  },
+  {
+    value: "update",
+    description: "Refresh a marketplace from its source",
+  },
+  {
+    value: "list",
+    description: "List known marketplaces",
+    isFinal: true,
+  },
+];
 //@ chunk-rkhcn3s2.js:12316-14075 placement
-async function pluginArgCompletions(i, t, r) {
+async function pluginArgCompletions(i, t, storage) {
   if (i.length === 0) {
     let n = [
-      { value: "list", description: "List installed plugins", isFinal: !0 },
-      { value: "enable", description: "Enable an installed plugin" },
-      { value: "disable", description: "Disable an installed plugin" },
-      { value: "install", description: "Install a plugin from a marketplace" },
-      { value: "uninstall", description: "Remove an installed plugin" },
-      { value: "marketplace", description: "Manage plugin marketplaces" },
-      ...(QE() ? [{ value: "directory", description: "Search the Anthropic Directory in Discover" }] : []),
-      ...(jF() ? [{ value: "stats", description: "Show skill usage and context costs", isFinal: !0 }] : []),
+      {
+        value: "list",
+        description: "List installed plugins",
+        isFinal: true,
+      },
+      {
+        value: "enable",
+        description: "Enable an installed plugin",
+      },
+      {
+        value: "disable",
+        description: "Disable an installed plugin",
+      },
+      {
+        value: "install",
+        description: "Install a plugin from a marketplace",
+      },
+      {
+        value: "uninstall",
+        description: "Remove an installed plugin",
+      },
+      {
+        value: "marketplace",
+        description: "Manage plugin marketplaces",
+      },
+      ...(isPluginDirectoryModeOn()
+        ? [
+            {
+              value: "directory",
+              description: "Search the Anthropic Directory in Discover",
+            },
+          ]
+        : []),
+      ...(lanternPrismEnabled()
+        ? [
+            {
+              value: "stats",
+              description: "Show skill usage and context costs",
+              isFinal: true,
+            },
+          ]
+        : []),
     ];
     return filterCompletionsByPrefix(n, t);
   }
-  let l = i[0]?.toLowerCase();
+  let lower = i[0]?.toLowerCase();
   if (i.length === 1)
-    switch (l) {
+    switch (lower) {
       case "enable":
       case "disable":
       case "uninstall": {
-        let n = getInstalledPlugins(),
-          filtered = Object.entries(n.plugins).filter(([, a]) => hasInstallationForCurrentProject(a));
-        if (l === "enable" || l === "disable") {
-          let a = getPluginEditableScopes(),
-            o = l === "disable";
-          filtered = filtered.filter(([d]) => a.has(d) === o);
+        let installedPlugins = getInstalledPlugins();
+        let filtered = Object.entries(installedPlugins.plugins).filter(([, value]) =>
+          hasInstallationForCurrentProject(value),
+        );
+        if (lower === "enable" || lower === "disable") {
+          let pluginEditableScopes = getPluginEditableScopes();
+          let o = lower === "disable";
+          filtered = filtered.filter(([d]) => pluginEditableScopes.has(d) === o);
         }
         let sorted = filtered
           .map(([a, o]) => {
-            let d = (findInstallationForCurrentProject(o) ?? o[0])?.version;
-            return { value: a, description: formatFirstKnownVersion(d), isFinal: !0 };
+            let version = (findInstallationForCurrentProject(o) ?? o[0])?.version;
+            return {
+              value: a,
+              description: formatFirstKnownVersion(version),
+              isFinal: true,
+            };
           })
           .sort((a, o) => a.value.localeCompare(o.value));
         return filterCompletionsByPrefix(sorted, t);
@@ -82,7 +143,10 @@ async function pluginArgCompletions(i, t, r) {
       case "i": {
         if (t.includes("/") || t.includes("\\")) return [];
         return filterCompletionsByPrefix(
-          await getInstallablePluginCompletions(f.of(getRootSession().host), r),
+          await getInstallablePluginCompletions(
+            INSTALLABLE_COMPLETIONS_CACHE.of(getRootSession().host),
+            storage,
+          ),
           t,
         );
       }
@@ -96,19 +160,30 @@ async function pluginArgCompletions(i, t, r) {
         return [];
     }
   let u =
-    t !== "" && i.length === 2 && (l === "install" || l === "i") ? parsePluginArgs(i.join(" ")) : void 0;
-  if (u?.type === "install" && u.plugin !== void 0 && u.marketplace === void 0)
+    t !== "" && i.length === 2 && (lower === "install" || lower === "i")
+      ? parsePluginArgs(i.join(" "))
+      : undefined;
+  if (u?.type === "install" && u.plugin !== undefined && u.marketplace === undefined)
     return filterCompletionsByPrefix(
-      [{ value: "--marketplace", description: "Install from a marketplace source, adding it first" }],
+      [
+        {
+          value: "--marketplace",
+          description: "Install from a marketplace source, adding it first",
+        },
+      ],
       t,
     );
-  if (i.length === 2 && (l === "marketplace" || l === "market")) {
-    let n = i[1]?.toLowerCase();
-    if (n === "remove" || n === "rm" || n === "update") {
-      let e = await loadKnownMarketplacesSafe(r),
-        sorted = Object.entries(e)
-          .map(([a, o]) => ({ value: a, description: getMarketplaceSourceDisplay(o.source), isFinal: !0 }))
-          .sort((a, o) => a.value.localeCompare(o.value));
+  if (i.length === 2 && (lower === "marketplace" || lower === "market")) {
+    let lower = i[1]?.toLowerCase();
+    if (lower === "remove" || lower === "rm" || lower === "update") {
+      let knownMarketplaces = await loadKnownMarketplacesSafe(storage);
+      let sorted = Object.entries(knownMarketplaces)
+        .map(([key, value]) => ({
+          value: key,
+          description: getMarketplaceSourceDisplay(value.source),
+          isFinal: true,
+        }))
+        .sort((a, o) => a.value.localeCompare(o.value));
       return filterCompletionsByPrefix(sorted, t);
     }
   }
@@ -119,47 +194,61 @@ class SingleEntryCache {
   key = null;
   candidates = [];
   get(i) {
-    return this.key === i ? this.candidates : void 0;
+    return this.key === i ? this.candidates : undefined;
   }
-  store(i, t) {
-    ((this.key = i), (this.candidates = t));
+  store(key, candidates) {
+    this.key = key;
+    this.candidates = candidates;
   }
 }
 //@ chunk-rkhcn3s2.js:14197-14220 placement
-var f = new HostScoped(() => new SingleEntryCache());
+var INSTALLABLE_COMPLETIONS_CACHE = new HostScoped(() => new SingleEntryCache());
+//@ chunk-rkhcn3s2.js:14220-14774 placement
 /**
  * 从已知市场的本地缓存汇总可安装插件（按市场状态做缓存键），排除已安装和被策略屏蔽的，返回 /plugin install 的补全候选。
  */
-//@ chunk-rkhcn3s2.js:14220-14774 placement
 async function getInstallablePluginCompletions(cache, storage) {
-  let knownMarketplaces = await loadKnownMarketplacesSafe(storage),
-    sorted = Object.keys(knownMarketplaces).sort(),
-    u = jsonStringify(
-      sorted.map((e) => [e, knownMarketplaces[e]?.installLocation, knownMarketplaces[e]?.lastUpdated]),
-    ),
-    candidates = cache.get(u);
-  if (candidates === void 0) {
+  let knownMarketplaces = await loadKnownMarketplacesSafe(storage);
+  let sorted = Object.keys(knownMarketplaces).sort();
+  let u = jsonStringify(
+    sorted.map((e) => [e, knownMarketplaces[e]?.installLocation, knownMarketplaces[e]?.lastUpdated]),
+  );
+  let candidates = cache.get(u);
+  if (candidates === undefined) {
     let results = await Promise.all(
-      sorted.map(async (s) => ({ name: s, marketplace: await getMarketplaceCacheOnly(s, storage) })),
+      sorted.map(async (s) => ({
+        name: s,
+        marketplace: await getMarketplaceCacheOnly(s, storage),
+      })),
     );
     candidates = [];
-    for (let { name: s, marketplace: marketplace } of results) {
+    for (let { name: s, marketplace } of results) {
       if (!marketplace) continue;
       for (let plugin of marketplace.plugins)
-        candidates.push({ pluginId: formatPluginId(plugin.name, s), description: plugin.description });
+        candidates.push({
+          pluginId: formatPluginId(plugin.name, s),
+          description: plugin.description,
+        });
     }
-    (candidates.sort((s, a) => s.pluginId.localeCompare(a.pluginId)), cache.store(u, candidates));
+    candidates.sort((s, a) => s.pluginId.localeCompare(a.pluginId));
+    cache.store(u, candidates);
   }
   return candidates
-    .filter((e) => !isPluginInstalled(e.pluginId) && !isPluginBlockedByPolicy(e.pluginId))
-    .map((e) => ({ value: e.pluginId, description: e.description, isFinal: !0 }));
+    .filter(
+      (candidate) => !isPluginInstalled(candidate.pluginId) && !isPluginBlockedByPolicy(candidate.pluginId),
+    )
+    .map((candidate) => ({
+      value: candidate.pluginId,
+      description: candidate.description,
+      isFinal: true,
+    }));
 }
 //@ chunk-rkhcn3s2.js:14774-14961 placement
 function filterCompletionsByPrefix(i, t) {
   if (!t) return i;
-  let lower = t.toLowerCase(),
-    l = [],
-    u = [];
+  let lower = t.toLowerCase();
+  let l = [];
+  let u = [];
   for (let n of i) {
     let lower_2 = n.value.toLowerCase();
     if (lower_2.startsWith(lower)) l.push(n);

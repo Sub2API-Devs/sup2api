@@ -6,40 +6,39 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../runtime/bun-runtime.js";
-import { it } from "./lib/lockfile.js";
+import { require_lockfile } from "./lib/lockfile.js";
 import { properLockfileAdapter } from "./lib/adapter.js";
 
 //@ chunk-bmbhxpfm.js:21622-22139 cjs-fingerprint
-var properLockfileIndex = x(function (ur, K) {
-  var U = it(),
-    { toPromise: toPromise, toSync: toSync, toSyncOptions: toSyncOptions } = properLockfileAdapter();
-  async function ct(e, r) {
-    let n = await toPromise(U.lock)(e, r);
-    return toPromise(n);
+var properLockfileIndex = x(function (cjsExports, cjsModule) {
+  var lockfile = require_lockfile();
+  var { toPromise, toSync, toSyncOptions } = properLockfileAdapter();
+  async function lock(file, options) {
+    let release = await toPromise(lockfile.lock)(file, options);
+    return toPromise(release);
   }
-  function Kt(e, r) {
-    let n = toSync(U.lock)(e, toSyncOptions(r));
-    return toSync(n);
+  function lockSync(file, options) {
+    let release = toSync(lockfile.lock)(file, toSyncOptions(options));
+    return toSync(release);
   }
-  function Qt(e, r) {
-    return toPromise(U.unlock)(e, r);
+  function unlock(file, options) {
+    return toPromise(lockfile.unlock)(file, options);
   }
-  function Bt(e, r) {
-    return toSync(U.unlock)(e, toSyncOptions(r));
+  function unlockSync(file, options) {
+    return toSync(lockfile.unlock)(file, toSyncOptions(options));
   }
-  function zt(e, r) {
-    return toPromise(U.check)(e, r);
+  function check(file, options) {
+    return toPromise(lockfile.check)(file, options);
   }
-  function Ht(e, r) {
-    return toSync(U.check)(e, toSyncOptions(r));
+  function checkSync(file, options) {
+    return toSync(lockfile.check)(file, toSyncOptions(options));
   }
-  K.exports = ct;
-  K.exports.lock = ct;
-  K.exports.unlock = Qt;
-  K.exports.lockSync = Kt;
-  K.exports.unlockSync = Bt;
-  K.exports.check = zt;
-  K.exports.checkSync = Ht;
+  cjsModule.exports = lock;
+  cjsModule.exports.lock = lock;
+  cjsModule.exports.unlock = unlock;
+  cjsModule.exports.lockSync = lockSync;
+  cjsModule.exports.unlockSync = unlockSync;
+  cjsModule.exports.check = check;
+  cjsModule.exports.checkSync = checkSync;
 });
-
 export { properLockfileIndex };

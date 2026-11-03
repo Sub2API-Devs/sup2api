@@ -8,146 +8,250 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:126377-128976 cjs-fingerprint
-var Vn = x(function (nE, Kn) {
-  function jl(e) {
-    let regex = e.regex,
-      n = "[a-zA-Z_][a-zA-Z0-9_.]*(!|\\?)?",
-      a = "[a-zA-Z_]\\w*[!?=]?|[-+~]@|<<|>>|=~|===?|<=>|[<>]=?|\\*\\*|[-/+%^&*~`|]|\\[\\]=?",
-      r = {
-        $pattern: "[a-zA-Z_][a-zA-Z0-9_.]*(!|\\?)?",
-        keyword: [
-          "after",
-          "alias",
-          "and",
-          "case",
-          "catch",
-          "cond",
-          "defstruct",
-          "defguard",
-          "do",
-          "else",
-          "end",
-          "fn",
-          "for",
-          "if",
-          "import",
-          "in",
-          "not",
-          "or",
-          "quote",
-          "raise",
-          "receive",
-          "require",
-          "reraise",
-          "rescue",
-          "try",
-          "unless",
-          "unquote",
-          "unquote_splicing",
-          "use",
-          "when",
-          "with|0",
-        ],
-        literal: ["false", "nil", "true"],
+var require_elixir = x(function (cjsExports, cjsModule) {
+  function elixir(hljs) {
+    let regex = hljs.regex;
+    let ELIXIR_IDENT_RE = "[a-zA-Z_][a-zA-Z0-9_.]*(!|\\?)?";
+    let ELIXIR_METHOD_RE = "[a-zA-Z_]\\w*[!?=]?|[-+~]@|<<|>>|=~|===?|<=>|[<>]=?|\\*\\*|[-/+%^&*~`|]|\\[\\]=?";
+    let KWS = {
+      $pattern: "[a-zA-Z_][a-zA-Z0-9_.]*(!|\\?)?",
+      keyword: [
+        "after",
+        "alias",
+        "and",
+        "case",
+        "catch",
+        "cond",
+        "defstruct",
+        "defguard",
+        "do",
+        "else",
+        "end",
+        "fn",
+        "for",
+        "if",
+        "import",
+        "in",
+        "not",
+        "or",
+        "quote",
+        "raise",
+        "receive",
+        "require",
+        "reraise",
+        "rescue",
+        "try",
+        "unless",
+        "unquote",
+        "unquote_splicing",
+        "use",
+        "when",
+        "with|0",
+      ],
+      literal: ["false", "nil", "true"],
+    };
+    let SUBST = {
+      className: "subst",
+      begin: /#\{/,
+      end: /\}/,
+      keywords: KWS,
+    };
+    let NUMBER = {
+      className: "number",
+      begin:
+        "(\\b0o[0-7_]+)|(\\b0b[01_]+)|(\\b0x[0-9a-fA-F_]+)|(-?\\b[0-9][0-9_]*(\\.[0-9_]+([eE][-+]?[0-9]+)?)?)",
+      relevance: 0,
+    };
+    let BACKSLASH_ESCAPE = {
+      match: /\\[\s\S]/,
+      scope: "char.escape",
+      relevance: 0,
+    };
+    let SIGIL_DELIMITERS = `[/|([{<"']`;
+    let SIGIL_DELIMITER_MODES = [
+      {
+        begin: /"/,
+        end: /"/,
       },
-      i = { className: "subst", begin: /#\{/, end: /\}/, keywords: r },
-      c = {
-        className: "number",
-        begin:
-          "(\\b0o[0-7_]+)|(\\b0b[01_]+)|(\\b0x[0-9a-fA-F_]+)|(-?\\b[0-9][0-9_]*(\\.[0-9_]+([eE][-+]?[0-9]+)?)?)",
+      {
+        begin: /'/,
+        end: /'/,
+      },
+      {
+        begin: /\//,
+        end: /\//,
+      },
+      {
+        begin: /\|/,
+        end: /\|/,
+      },
+      {
+        begin: /\(/,
+        end: /\)/,
+      },
+      {
+        begin: /\[/,
+        end: /\]/,
+      },
+      {
+        begin: /\{/,
+        end: /\}/,
+      },
+      {
+        begin: /</,
+        end: />/,
+      },
+    ];
+    let escapeSigilEnd = (end) => ({
+      scope: "char.escape",
+      begin: regex.concat(/\\/, end),
+      relevance: 0,
+    });
+    let LOWERCASE_SIGIL = {
+      className: "string",
+      begin: `~[a-z](?=[/|([{<"'])`,
+      contains: SIGIL_DELIMITER_MODES.map((x) =>
+        hljs.inherit(x, {
+          contains: [escapeSigilEnd(x.end), BACKSLASH_ESCAPE, SUBST],
+        }),
+      ),
+    };
+    let UPCASE_SIGIL = {
+      className: "string",
+      begin: `~[A-Z](?=[/|([{<"'])`,
+      contains: SIGIL_DELIMITER_MODES.map((x) =>
+        hljs.inherit(x, {
+          contains: [escapeSigilEnd(x.end)],
+        }),
+      ),
+    };
+    let REGEX_SIGIL = {
+      className: "regex",
+      variants: [
+        {
+          begin: `~r(?=[/|([{<"'])`,
+          contains: SIGIL_DELIMITER_MODES.map((x) =>
+            hljs.inherit(x, {
+              end: regex.concat(x.end, /[uismxfU]{0,7}/),
+              contains: [escapeSigilEnd(x.end), BACKSLASH_ESCAPE, SUBST],
+            }),
+          ),
+        },
+        {
+          begin: `~R(?=[/|([{<"'])`,
+          contains: SIGIL_DELIMITER_MODES.map((x) =>
+            hljs.inherit(x, {
+              end: regex.concat(x.end, /[uismxfU]{0,7}/),
+              contains: [escapeSigilEnd(x.end)],
+            }),
+          ),
+        },
+      ],
+    };
+    let STRING = {
+      className: "string",
+      contains: [hljs.BACKSLASH_ESCAPE, SUBST],
+      variants: [
+        {
+          begin: /"""/,
+          end: /"""/,
+        },
+        {
+          begin: /'''/,
+          end: /'''/,
+        },
+        {
+          begin: /~S"""/,
+          end: /"""/,
+          contains: [],
+        },
+        {
+          begin: /~S"/,
+          end: /"/,
+          contains: [],
+        },
+        {
+          begin: /~S'''/,
+          end: /'''/,
+          contains: [],
+        },
+        {
+          begin: /~S'/,
+          end: /'/,
+          contains: [],
+        },
+        {
+          begin: /'/,
+          end: /'/,
+        },
+        {
+          begin: /"/,
+          end: /"/,
+        },
+      ],
+    };
+    let FUNCTION = {
+      className: "function",
+      beginKeywords: "def defp defmacro defmacrop",
+      end: /\B\b/,
+      contains: [
+        hljs.inherit(hljs.TITLE_MODE, {
+          begin: "[a-zA-Z_][a-zA-Z0-9_.]*(!|\\?)?",
+          endsParent: true,
+        }),
+      ],
+    };
+    let CLASS = hljs.inherit(FUNCTION, {
+      className: "class",
+      beginKeywords: "defimpl defmodule defprotocol defrecord",
+      end: /\bdo\b|$|;/,
+    });
+    let ELIXIR_DEFAULT_CONTAINS = [
+      STRING,
+      REGEX_SIGIL,
+      UPCASE_SIGIL,
+      LOWERCASE_SIGIL,
+      hljs.HASH_COMMENT_MODE,
+      CLASS,
+      FUNCTION,
+      {
+        begin: "::",
+      },
+      {
+        className: "symbol",
+        begin: ":(?![\\s:])",
+        contains: [
+          STRING,
+          {
+            begin: "[a-zA-Z_]\\w*[!?=]?|[-+~]@|<<|>>|=~|===?|<=>|[<>]=?|\\*\\*|[-/+%^&*~`|]|\\[\\]=?",
+          },
+        ],
         relevance: 0,
       },
-      d = { match: /\\[\s\S]/, scope: "char.escape", relevance: 0 },
-      m = `[/|([{<"']`,
-      p = [
-        { begin: /"/, end: /"/ },
-        { begin: /'/, end: /'/ },
-        { begin: /\//, end: /\// },
-        { begin: /\|/, end: /\|/ },
-        { begin: /\(/, end: /\)/ },
-        { begin: /\[/, end: /\]/ },
-        { begin: /\{/, end: /\}/ },
-        { begin: /</, end: />/ },
-      ],
-      _ = (A) => ({ scope: "char.escape", begin: regex.concat(/\\/, A), relevance: 0 }),
-      E = {
-        className: "string",
-        begin: `~[a-z](?=[/|([{<"'])`,
-        contains: p.map((A) => e.inherit(A, { contains: [_(A.end), d, i] })),
+      {
+        className: "symbol",
+        begin: "[a-zA-Z_][a-zA-Z0-9_.]*(!|\\?)?:(?!:)",
+        relevance: 0,
       },
-      u = {
-        className: "string",
-        begin: `~[A-Z](?=[/|([{<"'])`,
-        contains: p.map((A) => e.inherit(A, { contains: [_(A.end)] })),
+      {
+        className: "title.class",
+        begin: /(\b[A-Z][a-zA-Z0-9_]+)/,
+        relevance: 0,
       },
-      b = {
-        className: "regex",
-        variants: [
-          {
-            begin: `~r(?=[/|([{<"'])`,
-            contains: p.map((A) =>
-              e.inherit(A, { end: regex.concat(A.end, /[uismxfU]{0,7}/), contains: [_(A.end), d, i] }),
-            ),
-          },
-          {
-            begin: `~R(?=[/|([{<"'])`,
-            contains: p.map((A) =>
-              e.inherit(A, { end: regex.concat(A.end, /[uismxfU]{0,7}/), contains: [_(A.end)] }),
-            ),
-          },
-        ],
+      NUMBER,
+      {
+        className: "variable",
+        begin: "(\\$\\W)|((\\$|@@?)(\\w+))",
       },
-      f = {
-        className: "string",
-        contains: [e.BACKSLASH_ESCAPE, i],
-        variants: [
-          { begin: /"""/, end: /"""/ },
-          { begin: /'''/, end: /'''/ },
-          { begin: /~S"""/, end: /"""/, contains: [] },
-          { begin: /~S"/, end: /"/, contains: [] },
-          { begin: /~S'''/, end: /'''/, contains: [] },
-          { begin: /~S'/, end: /'/, contains: [] },
-          { begin: /'/, end: /'/ },
-          { begin: /"/, end: /"/ },
-        ],
-      },
-      O = {
-        className: "function",
-        beginKeywords: "def defp defmacro defmacrop",
-        end: /\B\b/,
-        contains: [e.inherit(e.TITLE_MODE, { begin: "[a-zA-Z_][a-zA-Z0-9_.]*(!|\\?)?", endsParent: !0 })],
-      },
-      inherit = e.inherit(O, {
-        className: "class",
-        beginKeywords: "defimpl defmodule defprotocol defrecord",
-        end: /\bdo\b|$|;/,
-      }),
-      N = [
-        f,
-        b,
-        u,
-        E,
-        e.HASH_COMMENT_MODE,
-        inherit,
-        O,
-        { begin: "::" },
-        {
-          className: "symbol",
-          begin: ":(?![\\s:])",
-          contains: [
-            f,
-            { begin: "[a-zA-Z_]\\w*[!?=]?|[-+~]@|<<|>>|=~|===?|<=>|[<>]=?|\\*\\*|[-/+%^&*~`|]|\\[\\]=?" },
-          ],
-          relevance: 0,
-        },
-        { className: "symbol", begin: "[a-zA-Z_][a-zA-Z0-9_.]*(!|\\?)?:(?!:)", relevance: 0 },
-        { className: "title.class", begin: /(\b[A-Z][a-zA-Z0-9_]+)/, relevance: 0 },
-        c,
-        { className: "variable", begin: "(\\$\\W)|((\\$|@@?)(\\w+))" },
-      ];
-    return ((i.contains = N), { name: "Elixir", aliases: ["ex", "exs"], keywords: r, contains: N });
+    ];
+    SUBST.contains = ELIXIR_DEFAULT_CONTAINS;
+    return {
+      name: "Elixir",
+      aliases: ["ex", "exs"],
+      keywords: KWS,
+      contains: ELIXIR_DEFAULT_CONTAINS,
+    };
   }
-  Kn.exports = jl;
+  cjsModule.exports = elixir;
 });
-
-export { Vn };
+export { require_elixir };

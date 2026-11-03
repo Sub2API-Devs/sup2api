@@ -11,7 +11,7 @@
 import { createSignal } from "../../utils/signal.js";
 import { HostScoped } from "../../utils/hostScoped.js";
 import { getRootSession } from "../../bootstrap/state.js";
-import { oa } from "../../types/ids.js";
+import { identityId2 } from "../../types/ids.js";
 
 //@ chunk-wztb57wq.js:333-3409 placement
 class CliOwnedMcpClientState {
@@ -21,7 +21,7 @@ class CliOwnedMcpClientState {
   dialBlockCause = null;
   policyColdStartWaiter = null;
   skippedDynamicServers = [];
-  subagentBroughtOwnArtifactsServer = !1;
+  subagentBroughtOwnArtifactsServer = false;
   cliOwnedConfigs = new WeakSet();
   cliOwnedFirstPartyServerIds = new WeakMap();
   cliOwnedFileUploadSwitches = new WeakMap();
@@ -45,13 +45,13 @@ class CliOwnedMcpClientState {
   stepUpReauthFlights = new Map();
   stepUpReauthExhausted = new Map();
   identityEpoch = 0;
-  identityBaseline = void 0;
-  identitySeedAttempted = !1;
-  identityChangedThisProcess = !1;
+  identityBaseline = undefined;
+  identitySeedAttempted = false;
+  identityChangedThisProcess = false;
   identityTrippedHandler = null;
-  identityTripUnowned = !1;
+  identityTripUnowned = false;
   headlessMcpTeardown = null;
-  headlessConnectorMountInFlight = void 0;
+  headlessConnectorMountInFlight = undefined;
   transientRetryPasses = new Map();
   awaitsNextTurnRedial = null;
   searchRedial = null;
@@ -66,21 +66,21 @@ class CliOwnedMcpClientState {
   discoverVerdictsWriteChain = Promise.resolve();
   firstPartyDesignConsentAsks = new Map();
   claudeAiConfigsFetch = null;
-  claudeAiConnectorIdIndex = void 0;
+  claudeAiConnectorIdIndex = undefined;
   claudeAiConnectorListStatus = "pending";
   claudeAiConnectorListGeneration = 0;
   claudeAiConnectorListFetchSeq = 0;
   claudeAiConnectorListSettledSeq = 0;
   claudeAiConfigsFetchTransientFailures = new WeakSet();
-  pendingCrossOrgNotice = void 0;
+  pendingCrossOrgNotice = undefined;
   claudeAiConnectedThisSession = new Set();
   needsAuthNoticedThisSession = new Set();
-  pendingScopeExpansionNotice = void 0;
-  scopeExpansionDisclosed = !1;
-  officialUrls = void 0;
-  listableUrlLookedUp = !1;
-  officialUrlsFetchAwaitsLookup = !1;
-  officialUrlsFetch = void 0;
+  pendingScopeExpansionNotice = undefined;
+  scopeExpansionDisclosed = false;
+  officialUrls = undefined;
+  listableUrlLookedUp = false;
+  officialUrlsFetchAwaitsLookup = false;
+  officialUrlsFetch = undefined;
   urlsRegistryCannotList = new Set();
   vscodeClient = null;
   stopVscodePolicyGatesRefresh = null;
@@ -105,9 +105,9 @@ class CliOwnedMcpClientState {
   cachedFirstDialArmsRan = new WeakSet();
   supersededDials = new WeakSet();
   swrRefreshDialsInFlight = new WeakSet();
-  reauthDecisionSinkForTest = void 0;
-  holdStaleReauthEntryForTest = !1;
-  stdioProbeTimeoutMsForTest = void 0;
+  reauthDecisionSinkForTest = undefined;
+  holdStaleReauthEntryForTest = false;
+  stdioProbeTimeoutMsForTest = undefined;
   oauthCallbackListeners = new Map();
   oauthCallbackSubmitters = new Map();
   activeOAuthFlows = new Map();
@@ -117,24 +117,35 @@ class CliOwnedMcpClientState {
   cachedDialFailed = createSignal();
 }
 //@ chunk-wztb57wq.js:3409-3432 placement
-var s = new HostScoped(() => new CliOwnedMcpClientState());
+/**
+ * 按宿主保存的 CLI 自有 MCP 客户端状态。
+ */
+var cliOwnedStateSlot = new HostScoped(() => new CliOwnedMcpClientState());
 //@ chunk-wztb57wq.js:3432-3468 placement
-function ht() {
-  return s.of(getRootSession().host);
+/**
+ * 取当前宿主的 CLI 自有状态。
+ */
+function getCliOwnedState() {
+  return cliOwnedStateSlot.of(getRootSession().host);
 }
 //@ chunk-wztb57wq.js:3468-3534 placement
-function byr(e) {
-  return ht().clientAuthProviders.has(oa(e.client));
+/**
+ * 该客户端是否已登记 bearer 提供者。
+ */
+function hasCliOwnedAuthProvider(e) {
+  return getCliOwnedState().clientAuthProviders.has(identityId2(e.client));
 }
+//@ chunk-wztb57wq.js:3534-4429 placement
 /**
  * 把一个 MCP 服务器配置对象登记为 CLI 自有：按需记录一方服务器 id 与文件上传开关、同步/异步 bearer 提供者、响应观察者、请求头提供者、请求前钩子、凭据请求头集合、重发判定与扣留 bearer 的拒绝文案（都按配置对象做键）。
  */
-//@ chunk-wztb57wq.js:3534-4429 placement
 function registerCliOwnedConfig(config, options) {
-  let state = ht();
-  if ((state.cliOwnedConfigs.add(config), options?.firstPartyServer !== void 0))
-    (state.cliOwnedFirstPartyServerIds.set(config, options.firstPartyServer.id),
-      state.cliOwnedFileUploadSwitches.set(config, options.firstPartyServer.allowsFileUpload));
+  let state = getCliOwnedState();
+  state.cliOwnedConfigs.add(config);
+  if (options?.firstPartyServer !== undefined) {
+    state.cliOwnedFirstPartyServerIds.set(config, options.firstPartyServer.id);
+    state.cliOwnedFileUploadSwitches.set(config, options.firstPartyServer.allowsFileUpload);
+  }
   if (options?.getBearerToken) state.cliOwnedBearerProviders.set(config, options.getBearerToken);
   if (options?.resolveBearerToken) state.cliOwnedAsyncBearerProviders.set(config, options.resolveBearerToken);
   if (options?.onResponse) state.cliOwnedResponseObservers.set(config, options.onResponse);
@@ -150,51 +161,58 @@ function registerCliOwnedConfig(config, options) {
       ),
     );
   if (options?.resendAfter) state.cliOwnedResendDeciders.set(config, options.resendAfter);
-  if (options?.withheldBearerRefusal !== void 0)
+  if (options?.withheldBearerRefusal !== undefined)
     state.cliOwnedWithheldBearerRefusals.set(config, options.withheldBearerRefusal);
   return config;
 }
+//@ chunk-wztb57wq.js:4429-4532 placement
 /**
  * 取 CLI 自有 MCP 客户端被扣留的 bearer 令牌拒绝信息。
  */
-//@ chunk-wztb57wq.js:4429-4532 placement
 function withheldBearerRefusalFor(e) {
-  return typeof e === "object" && e !== null ? ht().cliOwnedWithheldBearerRefusals.get(e) : void 0;
+  return typeof e === "object" && e !== null
+    ? getCliOwnedState().cliOwnedWithheldBearerRefusals.get(e)
+    : undefined;
 }
 //@ chunk-wztb57wq.js:4532-4613 placement
-function Zl(e) {
-  return typeof e === "object" && e !== null && ht().cliOwnedConfigs.has(e);
+/**
+ * 判断配置对象是否属于 CLI 自有。
+ */
+function isCliOwnedConfig(config) {
+  return typeof config === "object" && config !== null && getCliOwnedState().cliOwnedConfigs.has(config);
 }
+//@ chunk-wztb57wq.js:4613-4713 placement
 /**
  * 取 CLI 自有 MCP 客户端对应的一方服务器 id。
  */
-//@ chunk-wztb57wq.js:4613-4713 placement
-function firstPartyServerIdFor(e) {
-  return typeof e === "object" && e !== null ? ht().cliOwnedFirstPartyServerIds.get(e) : void 0;
+function firstPartyServerIdFor(config) {
+  return typeof config === "object" && config !== null
+    ? getCliOwnedState().cliOwnedFirstPartyServerIds.get(config)
+    : undefined;
 }
+//@ chunk-wztb57wq.js:4713-4864 placement
 /**
  * 判断 CLI 自有 MCP 客户端是否允许文件上传（有开关时按开关，无开关时非一方服务器允许）。
  */
-//@ chunk-wztb57wq.js:4713-4864 placement
-function allowsFileUploadFor(e) {
-  if (typeof e !== "object" || e === null) return !0;
-  let n = ht().cliOwnedFileUploadSwitches.get(e);
-  if (n === void 0) return firstPartyServerIdFor(e) === void 0;
+function allowsFileUploadFor(config) {
+  if (typeof config !== "object" || config === null) return true;
+  let n = getCliOwnedState().cliOwnedFileUploadSwitches.get(config);
+  if (n === undefined) return firstPartyServerIdFor(config) === undefined;
   return n();
 }
+//@ chunk-wztb57wq.js:4864-5012 placement
 /**
  * 判断 MCP 配置是否由 CLI 提供 bearer 令牌（同步或异步提供者）。
  */
-//@ chunk-wztb57wq.js:4864-5012 placement
 function hasCliOwnedBearer(e) {
-  if (typeof e !== "object" || e === null) return !1;
-  let n = ht();
-  return n.cliOwnedBearerProviders.has(e) || n.cliOwnedAsyncBearerProviders.has(e);
+  if (typeof e !== "object" || e === null) return false;
+  let cliOwnedState = getCliOwnedState();
+  return cliOwnedState.cliOwnedBearerProviders.has(e) || cliOwnedState.cliOwnedAsyncBearerProviders.has(e);
 }
 //@ chunk-wztb57wq.js:5012-5171 placement
 function syncBearerTokenFor(e) {
   if (typeof e !== "object" || e === null) return null;
-  let n = ht().cliOwnedBearerProviders.get(e);
+  let n = getCliOwnedState().cliOwnedBearerProviders.get(e);
   if (!n) return null;
   try {
     return n() || null;
@@ -202,13 +220,13 @@ function syncBearerTokenFor(e) {
     return null;
   }
 }
+//@ chunk-wztb57wq.js:5171-5349 placement
 /**
  * 获取 CLI 自有 MCP 客户端的 bearer 令牌（优先异步提供者，失败返回 null）。
  */
-//@ chunk-wztb57wq.js:5171-5349 placement
 async function resolveBearerTokenFor(e) {
   if (typeof e !== "object" || e === null) return null;
-  let n = ht().cliOwnedAsyncBearerProviders.get(e);
+  let n = getCliOwnedState().cliOwnedAsyncBearerProviders.get(e);
   if (!n) return syncBearerTokenFor(e);
   try {
     return (await n()) || null;
@@ -216,23 +234,23 @@ async function resolveBearerTokenFor(e) {
     return null;
   }
 }
+//@ chunk-wztb57wq.js:5349-5475 placement
 /**
  * 在 CLI 自有 MCP 客户端发请求前运行注册的钩子（出错忽略）。
  */
-//@ chunk-wztb57wq.js:5349-5475 placement
 async function runBeforeRequestHook(e, n) {
   if (typeof e !== "object" || e === null) return;
   try {
-    await ht().cliOwnedBeforeRequestHooks.get(e)?.(n);
+    await getCliOwnedState().cliOwnedBeforeRequestHooks.get(e)?.(n);
   } catch {}
 }
+//@ chunk-wztb57wq.js:5475-5631 placement
 /**
  * 取 CLI 自有 MCP 客户端的额外请求头（出错返回空对象）。
  */
-//@ chunk-wztb57wq.js:5475-5631 placement
 function cliOwnedRequestHeaders(e, n) {
   if (typeof e !== "object" || e === null) return {};
-  let r = ht().cliOwnedRequestHeaderProviders.get(e);
+  let r = getCliOwnedState().cliOwnedRequestHeaderProviders.get(e);
   if (!r) return {};
   try {
     return r(n);
@@ -240,37 +258,45 @@ function cliOwnedRequestHeaders(e, n) {
     return {};
   }
 }
+//@ chunk-wztb57wq.js:5631-5760 placement
 /**
  * 判断请求头是否是 CLI 自有 MCP 客户端声明的凭据头。
  */
-//@ chunk-wztb57wq.js:5631-5760 placement
-function isCredentialRequestHeader(e, n) {
+function isCredentialRequestHeader(config, n) {
   return (
-    typeof e === "object" &&
-    e !== null &&
-    (ht().cliOwnedCredentialRequestHeaders.get(e)?.has(n.toLowerCase()) ?? !1)
+    typeof config === "object" &&
+    config !== null &&
+    (getCliOwnedState().cliOwnedCredentialRequestHeaders.get(config)?.has(n.toLowerCase()) ?? false)
   );
 }
+//@ chunk-wztb57wq.js:5760-5957 placement
 /**
  * 询问 CLI 自有 MCP 客户端是否需要按响应重发请求（出错视为否）。
  */
-//@ chunk-wztb57wq.js:5760-5957 placement
-async function shouldResendRequest(e, n, r) {
-  if (typeof e !== "object" || e === null) return !1;
+async function shouldResendRequest(config, response, owned) {
+  if (typeof config !== "object" || config === null) return false;
   try {
-    let t = ht().cliOwnedResendDeciders.get(e);
-    return t === void 0 ? !1 : await t({ status: n.status, headers: n.headers }, r);
+    let t = getCliOwnedState().cliOwnedResendDeciders.get(config);
+    return t === undefined
+      ? false
+      : await t(
+          {
+            status: response.status,
+            headers: response.headers,
+          },
+          owned,
+        );
   } catch {
-    return !1;
+    return false;
   }
 }
+//@ chunk-wztb57wq.js:5957-6209 placement
 /**
  * 把请求与响应摘要（方法、状态、头、令牌指纹）通知 CLI 自有 MCP 客户端的观察者。
  */
-//@ chunk-wztb57wq.js:5957-6209 placement
 function notifyResponseObserver(e, n) {
   if (typeof e !== "object" || e === null) return;
-  let r = ht().cliOwnedResponseObservers.get(e);
+  let r = getCliOwnedState().cliOwnedResponseObservers.get(e);
   if (!r) return;
   try {
     r({
@@ -282,11 +308,10 @@ function notifyResponseObserver(e, n) {
     });
   } catch {}
 }
-
 export {
-  Zl,
+  isCliOwnedConfig,
   registerCliOwnedConfig,
-  ht,
+  getCliOwnedState,
   hasCliOwnedBearer,
   runBeforeRequestHook,
   resolveBearerTokenFor,
@@ -296,6 +321,6 @@ export {
   notifyResponseObserver,
   shouldResendRequest,
   firstPartyServerIdFor,
-  byr,
+  hasCliOwnedAuthProvider,
   allowsFileUploadFor,
 };

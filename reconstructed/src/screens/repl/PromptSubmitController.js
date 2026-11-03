@@ -8,25 +8,7 @@
  * pieces: chunk-18hwfzwa.js (7)
  * attribution: placement 7
  */
-import {
-  randomUUID,
-  randomUUID as randomUUID_2,
-  randomUUID as randomUUID_3,
-  randomUUID as randomUUID_4,
-  randomUUID as randomUUID_5,
-  randomUUID as randomUUID_6,
-  randomUUID as randomUUID_7,
-  randomUUID as randomUUID_8,
-  randomUUID as randomUUID_9,
-  randomUUID as randomUUID_10,
-  randomUUID as randomUUID_11,
-  randomUUID as randomUUID_12,
-  randomUUID as randomUUID_13,
-  randomUUID as randomUUID_14,
-  randomUUID as randomUUID_15,
-  randomUUID as randomUUID_16,
-  randomUUID as randomUUID_17,
-} from "crypto";
+import { randomUUID } from "crypto";
 import {
   loadingScansRead,
   mayRegisterCommands,
@@ -46,22 +28,25 @@ import {
   looksLikeCommand,
   isSlashCommandBlockedByEndedByModel,
 } from "../../utils/processUserInput/processSlashCommand.js";
-import { e, r } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { logForDebugging } from "../../utils/debug.js";
-import { o } from "../../../vendor/zod/v4/classic/schemas.js";
+import { string } from "../../../vendor/zod/v4/classic/schemas.js";
 import { Text, Box } from "../../ink/components/Text.js";
-import { cX, handlePromptSubmit } from "../../utils/handlePromptSubmit.js";
+import { EXIT_COMMAND_WORDS, handlePromptSubmit } from "../../utils/handlePromptSubmit.js";
 import { RESUME_COMPACT_DIALOG } from "./resumeCompactOffer.js";
 import {
   COLD_RESUME_QUOTA,
   NEWER_MODEL_OFFER as NEWER_MODEL_OFFER_2,
   AUTOCOMPACT_OFFER,
 } from "../../components/nudges/nudgeIds.js";
-import { Sv } from "../../utils/newerModelOffer.js";
+import { endDrawnOffer } from "../../utils/newerModelOffer.js";
 import { isFrozenMarker } from "../../utils/frozenMarkers.js";
 import { prependModeCharacterToInput as prependModeCharacterToInput_3 } from "../../components/PromptInput/inputModes.js";
-import { Dvt, rpe, parsePastedRefs, ySe } from "../../history.js";
-import { M7s } from "../../utils/promptSubmissionOrigin.js";
+import { addHistoryEntryNoUndo, addPastedEntry, parsePastedRefs, addHistoryEntry } from "../../history.js";
+import { runsBesideTurns } from "../../utils/promptSubmissionOrigin.js";
 import { withTaskSuffix } from "../../tasks/endedByModel.js";
 import { resolveCommandDialog } from "../../commands/dialogs.js";
 import {
@@ -73,17 +58,17 @@ import {
 import { commandUnavailableMessage } from "./idleReturn.js";
 import { createPromptHistoryWriter } from "./lastPromptTracker.js";
 import { logEvent } from "../../services/analytics/index.js";
-import { Ypt, Xpt } from "../../components/VirtualMessageList.js";
+import { bumpClawdPoseRun, releaseKeptPoseIfStale } from "../../components/VirtualMessageList.js";
 import { runLocalCommandFromRepl } from "./runLocalCommand.js";
 import { createAbortController } from "../../utils/abortController.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { prependToShellHistoryCache } from "../../utils/suggestions/shellHistoryCompletion.js";
 import { recordSubmitTime, mainAgentId } from "../../bootstrap/state.js";
-import { htt } from "../../utils/remoteSessionCommands.js";
+import { remoteSessionAwaits } from "../../utils/remoteSessionCommands.js";
 import { env } from "../../utils/env.js";
 import { shouldUseResponsiveMode } from "../../plugins/bundled/responsiveMode.js";
-import { Avt } from "./ComposerChrome.js";
-import { sN } from "../../utils/model/modelSwitchHooks.js";
+import { scanQueueBeforeTurn } from "./ComposerChrome.js";
+import { switchSerializerSlot } from "../../utils/model/modelSwitchHooks.js";
 import { getMainLoopModelFromState } from "../../hooks/useMainLoopModel.js";
 import { restorePromptAfterCancel } from "./SessionController.js";
 import { getQuerySourceForREPL } from "../../utils/promptCategory.js";
@@ -92,7 +77,7 @@ import {
   snapshotHookRegistration,
   hasHookRegistrationChanged,
 } from "../../utils/plugins/functionHooks/hookRegistration.js";
-import { hA } from "../../utils/directMemberMessage.js";
+import { boldDirectMemberMessage } from "../../utils/directMemberMessage.js";
 import {
   createCommandInputMessage,
   formatCommandInputTags,
@@ -100,14 +85,14 @@ import {
 } from "../../utils/messages.js";
 import { LOCAL_COMMAND_STDOUT } from "../../constants/xml.js";
 import { escapeXml_2 as escapeXml } from "../../utils/confusables.js";
-import { dispatchCommandRunHooks, iUo } from "../../plugins/functionHooks/commandRunDispatch.js";
+import { dispatchCommandRunHooks, commandRunEvent } from "../../plugins/functionHooks/commandRunDispatch.js";
 import { getTipAttribution } from "../../services/tips/tipIds.js";
 import { hasSingleCommandRunHook } from "../../utils/processUserInput/surfaceCommandNotices.js";
 import { sendQueuedNow, handleSendNowKey } from "./sendNow.js";
 import { logError } from "../../utils/log.js";
-import { Gfn, h8n } from "../../components/PromptInput/promptFlags.js";
-import { r_s } from "../../remote/remoteMode.js";
-import { rW } from "../../components/dialogs/dialogKinds.js";
+import { isQueuedSendNowEnabled, isSendNowKeyEnabled } from "../../components/PromptInput/promptFlags.js";
+import { hasRemoteControlChannel } from "../../remote/remoteMode.js";
+import { requestDialogWrapper } from "../../components/dialogs/dialogKinds.js";
 import { isLocalAgent } from "../../state/teammateViewHelpers.js";
 import { markChatEngaged, queueAgentMessage } from "../../tasks/LocalAgentTask/childWork.js";
 import {
@@ -131,66 +116,65 @@ import {
 } from "../../components/PromptInput/inputDecorations.js";
 import { offsetDecorations } from "../../plugins/functionHooks/prompt/decorationSpans.js";
 import { mergeTurnTags } from "../../utils/userTurnTags.js";
-import { Up } from "../../utils/messageQueueManager.js";
+import { isRefillableInput } from "../../utils/messageQueueManager.js";
 import { shouldEscapeNdjsonForBridge } from "../../cli/ndjsonSafeStringify.js";
-import { oae } from "../../utils/hooks.js";
+import { areHooksEnabled } from "../../utils/hooks.js";
 import { getPluginRegistry } from "../../utils/plugins/pluginLoadState.js";
-import { j } from "../../../vendor/react/cjs/react.production.js";
+import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
 
+//@ chunk-18hwfzwa.js:1628953-1629068 placement
 /**
  * 等待前置任务后，在仍需要时先等扫描或回合，再等回合结束。
  */
-//@ chunk-18hwfzwa.js:1628953-1629068 placement
-async function awaitScanThenTurn(h, x, D) {
-  if (
-    (await D?.catch(() => {
-      return;
-    }),
-    !x())
-  )
+async function awaitScanThenTurn(activeMessageQueue, x, D) {
+  await D?.catch(() => {
     return;
-  if ((await Promise.race([h, loadingScansRead()]), x())) await h;
+  });
+  if (!x()) return;
+  await Promise.race([activeMessageQueue, loadingScansRead()]);
+  if (x()) await activeMessageQueue;
 }
+//@ chunk-18hwfzwa.js:1629068-1629379 placement
 /**
  * 解析斜杠命令（支持 “命令:子命令” 与子命令映射），返回启用的命令。
  */
-//@ chunk-18hwfzwa.js:1629068-1629379 placement
-function resolveSlashCommand({ commandName: commandName, args: args, isMcp: isMcp }, L) {
-  let ee = findCommand(commandName, L),
-    ke = ee !== void 0 && isCommandEnabled(ee),
-    [Re = "", ...Be] = args.split(/\s+/),
-    We = !ke && !isMcp && Re !== "" ? findCommand(`${commandName}:${Re}`, L) : void 0,
-    ze = ke ? ee : We;
-  if (ze === void 0) return;
-  let Xe = matchSubcommand(ze, We === void 0 ? args : Be.join(" ")),
-    rt = Xe === void 0 ? void 0 : findCommand(Xe.targetName, L);
-  return rt !== void 0 && isCommandEnabled(rt) ? rt : ze;
+function resolveSlashCommand({ commandName, args, isMcp }, L) {
+  let command = findCommand(commandName, L);
+  let ke = command !== undefined && isCommandEnabled(command);
+  let [Re = "", ...Be] = args.split(/\s+/);
+  let We = !ke && !isMcp && Re !== "" ? findCommand(`${commandName}:${Re}`, L) : undefined;
+  let ze = ke ? command : We;
+  if (ze === undefined) return;
+  let Xe = matchSubcommand(ze, We === undefined ? args : Be.join(" "));
+  let rt = Xe === undefined ? undefined : findCommand(Xe.targetName, L);
+  return rt !== undefined && isCommandEnabled(rt) ? rt : ze;
 }
+//@ chunk-18hwfzwa.js:1629379-1629688 placement
 /**
  * 输入是否会发送给模型（普通提示、prompt 类命令或可被钩子处理的命令）。
  */
-//@ chunk-18hwfzwa.js:1629379-1629688 placement
-function mayReachModel({ value: h, mode: mode, skipSlashCommands: skipSlashCommands }, L) {
-  if (mode === "bash" || mode === "poll-event") return !1;
-  let ke = typeof h === "string" ? h : "",
-    Be = mode === "prompt" && skipSlashCommands !== !0 && ke.startsWith("/") ? parseSlashCommand(ke) : null;
-  if (Be === null) return !0;
-  let He = resolveSlashCommand(Be, L);
-  if (He === void 0) return !looksLikeCommand(Be.commandName) || mayRegisterCommands();
-  return He.type === "prompt" || mayHookCommand(getCommandName(He));
+function mayReachModel({ value: h, mode, skipSlashCommands }, commands) {
+  if (mode === "bash" || mode === "poll-event") return false;
+  let ke = typeof h === "string" ? h : "";
+  let Be =
+    mode === "prompt" && skipSlashCommands !== true && ke.startsWith("/") ? parseSlashCommand(ke) : null;
+  if (Be === null) return true;
+  let slashCommand = resolveSlashCommand(Be, commands);
+  if (slashCommand === undefined) return !looksLikeCommand(Be.commandName) || mayRegisterCommands();
+  return slashCommand.type === "prompt" || mayHookCommand(getCommandName(slashCommand));
 }
 //@ chunk-18hwfzwa.js:1629688-1629730 placement
-function hte(h) {
+function isCompactCommand(h) {
   return h.name === "compact";
 }
+//@ chunk-18hwfzwa.js:1629730-1644033 placement
 /**
  * 提交控制器：处理 Enter 提交——斜杠命令（local/local-jsx/prompt）、bash 模式、/exit、建议接受、队列与发送到代理，记录 onSubmit 遥测。
  */
-//@ chunk-18hwfzwa.js:1629730-1644033 placement
 class PromptSubmitController {
   #e;
   #t = null;
-  #o = void 0;
+  #o = undefined;
   constructor(h) {
     this.#e = h;
   }
@@ -202,68 +186,76 @@ class PromptSubmitController {
     return this.#t;
   }
   submit = async (h, x, D) => {
-    let startTime = performance.now(),
-      {
-        store: store,
-        setAppState: setAppState,
-        setSessionState: setSessionState,
-        session: session,
-        storageV5: storageV5,
-        dialogStore: dialogStore,
-        spinnerStore: spinnerStore,
-        transcript: transcript,
-        turn: turn,
-        draft: draft,
-        messageQueue: messageQueue,
-        chrome: chrome,
-        scope: scope,
-        idleNudge: idleNudge,
-        transport: transport,
-        scrollPin: scrollPin,
-        addNotification: addNotification,
-      } = this.#e,
-      { mainLoopModel: mainLoopModel, canUseTool: canUseTool, onBeforeQuery: onBeforeQuery } = this.#n(),
-      po = D?.inputModeOverride ?? draft.mode,
-      ao = po !== "bash" && cX.includes(h.trim()),
-      co = ao && transport.activeRemote.isRemoteMode ? "/exit" : h,
-      bo = D?.pastedContentsOverride ?? draft.pastedContents,
-      isLoading = turn.getSnapshot().isLoading,
-      Bo = !1,
-      commands = scope.commands,
-      { ideSelection: ideSelection, onDetachToCaller: onDetachToCaller } = chrome.getSnapshot(),
-      Wo =
-        po !== "bash" && co.trim().startsWith("/")
-          ? findCommand(splitSlashCommandInput(co.trim()).name, commands)
-          : void 0,
-      mn = Wo?.type === "local-jsx" && Wo.keepsScrollPosition === !0 && co.startsWith("/") ? Wo : void 0;
-    if (!mn) scrollPin.repin(!1, "onSubmit");
-    (dialogStore.dismissKind(RESUME_COMPACT_DIALOG.kind),
-      dialogStore.dismissKind(COLD_RESUME_QUOTA),
-      dialogStore.dismissKind(NEWER_MODEL_OFFER_2),
-      Sv(),
-      dialogStore.dismissKind(AUTOCOMPACT_OFFER));
-    let Cn = isFrozenMarker(D?.composerEnter) && D?.inputSource !== "suggestion_accepted",
-      No = !1,
-      vo =
-        D?.fromKeybinding || No
-          ? void 0
-          : { display: prependModeCharacterToInput_3(h, po), pastedContents: bo };
-    if (onDetachToCaller !== void 0 && (ao || (Wo?.name === "exit" && Wo.type !== "prompt"))) {
-      if (vo) (draft.clear(), x.clearBuffer(), Dvt(vo, storageV5, po));
+    let submittedAtMs = performance.now();
+    let {
+      store,
+      setAppState,
+      setSessionState,
+      session,
+      storageV5,
+      dialogStore,
+      spinnerStore,
+      transcript,
+      turn,
+      draft,
+      messageQueue,
+      chrome,
+      scope,
+      idleNudge,
+      transport,
+      scrollPin,
+      addNotification,
+    } = this.#e;
+    let { mainLoopModel, canUseTool, onBeforeQuery } = this.#n();
+    let po = D?.inputModeOverride ?? draft.mode;
+    let ao = po !== "bash" && EXIT_COMMAND_WORDS.includes(h.trim());
+    let co = ao && transport.activeRemote.isRemoteMode ? "/exit" : h;
+    let bo = D?.pastedContentsOverride ?? draft.pastedContents;
+    let isLoading = turn.getSnapshot().isLoading;
+    let Bo = false;
+    let commands = scope.commands;
+    let { ideSelection, onDetachToCaller } = chrome.getSnapshot();
+    let Wo =
+      po !== "bash" && co.trim().startsWith("/")
+        ? findCommand(splitSlashCommandInput(co.trim()).name, commands)
+        : undefined;
+    let mn =
+      Wo?.type === "local-jsx" && Wo.keepsScrollPosition === true && co.startsWith("/") ? Wo : undefined;
+    if (!mn) scrollPin.repin(false, "onSubmit");
+    dialogStore.dismissKind(RESUME_COMPACT_DIALOG.kind);
+    dialogStore.dismissKind(COLD_RESUME_QUOTA);
+    dialogStore.dismissKind(NEWER_MODEL_OFFER_2);
+    endDrawnOffer();
+    dialogStore.dismissKind(AUTOCOMPACT_OFFER);
+    let Cn = isFrozenMarker(D?.composerEnter) && D?.inputSource !== "suggestion_accepted";
+    let No = false;
+    let vo =
+      D?.fromKeybinding || No
+        ? undefined
+        : {
+            display: prependModeCharacterToInput_3(h, po),
+            pastedContents: bo,
+          };
+    if (onDetachToCaller !== undefined && (ao || (Wo?.name === "exit" && Wo.type !== "prompt"))) {
+      if (vo) {
+        draft.clear();
+        x.clearBuffer();
+        addHistoryEntryNoUndo(vo, storageV5, po);
+      }
       onDetachToCaller();
       return;
     }
     if (co.trim().startsWith("/")) {
-      let trimmed = rpe(co, bo).trim(),
-        { name: Wn, args: args } = splitSlashCommandInput(trimmed),
-        Zn = findCommand(Wn, commands),
-        Un = Zn && isCommandEnabled(Zn) ? Zn : void 0;
+      let trimmed = addPastedEntry(co, bo).trim();
+      let { name: Wn, args } = splitSlashCommandInput(trimmed);
+      let command = findCommand(Wn, commands);
+      let Un = command && isCommandEnabled(command) ? command : undefined;
       if (Un?.name === "clear") idleNudge.onClearSubmitted();
-      let dr = isImmediateCommand(Un, args, this.#e.presentation),
-        or = turn.guard.isActive || !1,
-        pr = M7s(Un) && (po !== "bash" || D?.fromKeybinding === !0),
-        Qn = (or && (dr || D?.fromKeybinding)) || pr,
-        ur = Un?.type === "local" && or && dr;
+      let dr = isImmediateCommand(Un, args, this.#e.presentation);
+      let isActive = turn.guard.isActive || false;
+      let pr = runsBesideTurns(Un) && (po !== "bash" || D?.fromKeybinding === true);
+      let Qn = (isActive && (dr || D?.fromKeybinding)) || pr;
+      let ur = Un?.type === "local" && isActive && dr;
       if (Un && ((Qn && Un.type === "local-jsx") || ur)) {
         if (isSlashCommandBlockedByEndedByModel(Un, store.getState().endedByModel)) {
           addNotification({
@@ -276,42 +268,46 @@ class PromptSubmitController {
           });
           return;
         }
-        let Ir = resolveCommandDialog(Un);
-        if (Un.type === "local-jsx" && !Ir) {
-          (logFeatureBad(cmdFeature(Un.name), "cmd_local_jsx_no_dialog_resolution"),
-            addNotification({
-              key: `immediate-${Un.name}`,
-              kind: "feedback",
-              text: commandUnavailableMessage(Un),
-              priority: "immediate",
-            }));
+        let commandDialog = resolveCommandDialog(Un);
+        if (Un.type === "local-jsx" && !commandDialog) {
+          logFeatureBad(cmdFeature(Un.name), "cmd_local_jsx_no_dialog_resolution");
+          addNotification({
+            key: `immediate-${Un.name}`,
+            kind: "feedback",
+            text: commandUnavailableMessage(Un),
+            priority: "immediate",
+          });
           return;
         }
-        if (h.trim() === draft.value.trim()) (draft.clear(), x.clearBuffer());
-        let Pr = createPromptHistoryWriter({
-            entry: vo,
-            name: Wn,
-            typed: args,
-            write: (Zr) => Dvt(Zr, storageV5, po),
-          }),
-          filtered = parsePastedRefs(co).filter(
-            (Zr) => bo[Zr.id]?.type === "text" && !bo[Zr.id]?.unavailable,
-          ),
-          Gn = filtered.length,
-          reduced = filtered.reduce((Zr, wr) => Zr + (bo[wr.id]?.content.length ?? 0), 0);
-        if (
-          (logEvent("tengu_paste_text", { pastedTextCount: Gn, pastedTextBytes: reduced }),
-          logEvent("tengu_immediate_command_executed", {
-            commandName: shippedCommandNameForAnalytics(Un.name),
-            fromKeybinding: D?.fromKeybinding ?? !1,
-          }),
-          Un.type === "local")
-        ) {
-          let Zr = Ypt();
-          (runLocalCommandFromRepl({
+        if (h.trim() === draft.value.trim()) {
+          draft.clear();
+          x.clearBuffer();
+        }
+        let ranAs = createPromptHistoryWriter({
+          entry: vo,
+          name: Wn,
+          typed: args,
+          write: (Zr) => addHistoryEntryNoUndo(Zr, storageV5, po),
+        });
+        let filtered = parsePastedRefs(co).filter(
+          (Zr) => bo[Zr.id]?.type === "text" && !bo[Zr.id]?.unavailable,
+        );
+        let pastedTextCount = filtered.length;
+        let pastedTextBytes = filtered.reduce((acc, wr) => acc + (bo[wr.id]?.content.length ?? 0), 0);
+        logEvent("tengu_paste_text", {
+          pastedTextCount,
+          pastedTextBytes,
+        });
+        logEvent("tengu_immediate_command_executed", {
+          commandName: shippedCommandNameForAnalytics(Un.name),
+          fromKeybinding: D?.fromKeybinding ?? false,
+        });
+        if (Un.type === "local") {
+          let Zr = bumpClawdPoseRun();
+          runLocalCommandFromRepl({
             command: Un,
             commandName: Wn,
-            args: args,
+            args,
             context: {
               ...turn.buildToolUseContext(
                 transcript.getSnapshot(),
@@ -319,211 +315,248 @@ class PromptSubmitController {
                 createAbortController(),
                 mainLoopModel,
               ),
-              isMidTurn: !0,
+              isMidTurn: true,
               dispatchedAsImmediate: dr,
             },
             printRows: turn.appendAfterTurn,
-            ranAs: Pr,
-          }).finally(() => Xpt(Zr)),
-            this.#s({ toast: !0 }));
-        } else if (Ir) {
-          let Zr = Ypt();
+            ranAs,
+          }).finally(() => releaseKeptPoseIfStale(Zr));
+          this.#s({
+            toast: true,
+          });
+        } else if (commandDialog) {
+          let Zr = bumpClawdPoseRun();
           this.#c({
             command: Un,
             commandName: Wn,
             commandArgs: args,
             dispatchedAsImmediate: dr,
-            isMidTurn: or,
+            isMidTurn: isActive,
             besideTurns: pr,
-            loadDialog: Ir,
-            mainLoopModel: mainLoopModel,
+            loadDialog: commandDialog,
+            mainLoopModel,
             composerEnter: D?.composerEnter,
-            ranAs: Pr,
-          }).finally(() => Xpt(Zr));
+            ranAs,
+          }).finally(() => releaseKeptPoseIfStale(Zr));
         }
         return;
       }
     }
-    if (transport.refuseSubmit(co, po, { sentByPerson: Cn, pastedContents: bo })) return;
-    let isRemoteMode = transport.activeRemote.isRemoteMode,
-      kn = (!isLoading && !0) || isRemoteMode;
+    if (
+      transport.refuseSubmit(co, po, {
+        sentByPerson: Cn,
+        pastedContents: bo,
+      })
+    )
+      return;
+    let isRemoteMode = transport.activeRemote.isRemoteMode;
+    let kn = (!isLoading && true) || isRemoteMode;
     if (
       !D?.fromKeybinding &&
       po === "bash" &&
       !parsePastedRefs(co).some((Kn) => !Kn.match.startsWith("[Image"))
     )
       prependToShellHistoryCache(session, co.trim());
-    let startsWith = co.trim().startsWith("/"),
-      bn = randomUUID_15(),
-      Go = D?.inputModeOverride !== void 0 && (D.fromKeybinding === !0 || D.keepsComposer === !0),
-      hn =
-        D?.leavesIdeSelection !== !0 && (ideSelection?.source !== "diff" || (!startsWith && po !== "bash")),
-      cameBack = draft.getSnapshot().cameBack;
+    let Fn = co.trim().startsWith("/");
+    let bn = randomUUID();
+    let Go = D?.inputModeOverride !== undefined && (D.fromKeybinding === true || D.keepsComposer === true);
+    let hn = D?.leavesIdeSelection !== true && (ideSelection?.source !== "diff" || (!Fn && po !== "bash"));
+    let cameBack = draft.getSnapshot().cameBack;
     if (kn && !Go) draft.setMode("prompt");
     if (kn) {
       if (hn) chrome.consumeIdeSelection(bn);
     }
-    if (draft.stashedPrompt !== void 0 && !startsWith && kn)
-      (draft.popStash("outside"),
-        addNotification({
-          key: "stash-restored",
-          kind: "feedback",
-          text: "Draft restored",
-          priority: "high",
-          timeoutMs: 5000,
-        }));
-    else if (kn) {
+    if (draft.stashedPrompt !== undefined && !Fn && kn) {
+      draft.popStash("outside");
+      addNotification({
+        key: "stash-restored",
+        kind: "feedback",
+        text: "Draft restored",
+        priority: "high",
+        timeoutMs: 5000,
+      });
+    } else if (kn) {
       if (!D?.fromKeybinding && !D?.keepsComposer) draft.clear();
     }
-    if (!startsWith && po === "prompt") recordSubmitTime();
+    if (!Fn && po === "prompt") recordSubmitTime();
     if (kn) {
-      if ((turn.markSubmit(), x.clearBuffer(), !startsWith && po === "prompt" && !isRemoteMode && !htt()))
-        (turn.stream.setUserInputOnProcessing(co, { kind: "human" }), turn.resetTiming());
+      turn.markSubmit();
+      x.clearBuffer();
+      if (!Fn && po === "prompt" && !isRemoteMode && !remoteSessionAwaits()) {
+        turn.stream.setUserInputOnProcessing(co, {
+          kind: "human",
+        });
+        turn.resetTiming();
+      }
     }
-    let Xo = po === "prompt" && !startsWith ? this.#i() : void 0,
-      Sn =
-        Xo === void 0
-          ? void 0
-          : D?.sendNow === !0
-            ? "input_send_now_key"
-            : shouldUseResponsiveMode({
-                  text: co,
-                  pastedContents: bo,
-                  isSentByPerson: Cn,
-                  wait: D?.wait === !0,
-                })
-              ? "input_send_now_responsive_enter"
-              : void 0,
-      submit = transport.submit(co, {
-        inputMode: po,
-        pastedContents: bo,
-        fromKeybinding: D?.fromKeybinding ?? !1,
-        sentByPerson: Cn,
-        recordHistory: ({ startsTurn: startsTurn }) => {
-          if (!vo || Evt()) return;
-          if (startsTurn) ySe(vo, storageV5, { submitMode: po });
-          else Dvt(vo, storageV5, po);
-        },
-      });
-    if (submit) {
-      let Kn = Ypt(),
-        Wn = void 0;
+    let Xo = po === "prompt" && !Fn ? this.#i() : undefined;
+    let Sn =
+      Xo === undefined
+        ? undefined
+        : D?.sendNow === true
+          ? "input_send_now_key"
+          : shouldUseResponsiveMode({
+                text: co,
+                pastedContents: bo,
+                isSentByPerson: Cn,
+                wait: D?.wait === true,
+              })
+            ? "input_send_now_responsive_enter"
+            : undefined;
+    let $n = transport.submit(co, {
+      inputMode: po,
+      pastedContents: bo,
+      fromKeybinding: D?.fromKeybinding ?? false,
+      sentByPerson: Cn,
+      recordHistory: ({ startsTurn }) => {
+        if (!vo || shouldHoldPluginStorage()) return;
+        if (startsTurn)
+          addHistoryEntry(vo, storageV5, {
+            submitMode: po,
+          });
+        else addHistoryEntryNoUndo(vo, storageV5, po);
+      },
+    });
+    if ($n) {
+      let Kn = bumpClawdPoseRun();
+      let Wn = undefined;
       try {
-        Wn = await submit;
+        Wn = await $n;
       } finally {
-        Xpt(Kn);
+        releaseKeptPoseIfStale(Kn);
       }
       if (Wn?.handBack) {
-        if ((chrome.restoreIdeSelectionConsumedBy(bn), draft.value.trim() === ""))
-          (draft.replaceValue(co), draft.setPastedContents(bo));
-        else if (vo && !Evt()) Dvt(vo, storageV5, po);
-      } else if (Xo !== void 0 && Sn !== void 0 && Wn?.sent && this.#i() === Xo)
-        if (Sn === "input_send_now_responsive_enter" && Xo.workerSendsNow() === void 0)
+        chrome.restoreIdeSelectionConsumedBy(bn);
+        if (draft.value.trim() === "") {
+          draft.replaceValue(co);
+          draft.setPastedContents(bo);
+        } else if (vo && !shouldHoldPluginStorage()) addHistoryEntryNoUndo(vo, storageV5, po);
+      } else if (Xo !== undefined && Sn !== undefined && Wn?.sent && this.#i() === Xo)
+        if (Sn === "input_send_now_responsive_enter" && Xo.workerSendsNow() === undefined)
           logFeatureSad(Sn, "remote_version_unknown");
         else this.#a(Xo, Sn, Wn.uuid);
       return;
     }
     let any = parsePastedRefs(co).some((Kn) => bo[Kn.id]?.type === "text");
-    using trackSubmission = messageQueue.trackSubmission({
+    using _o = messageQueue.trackSubmission({
       agentId: mainAgentId(),
       mode: po,
       value: co,
       uuid: bn,
     });
-    let cn = kn ? Avt(() => any || mayReachModel({ value: co, mode: po }, commands), this.#o) : void 0;
+    let cn = kn
+      ? scanQueueBeforeTurn(
+          () =>
+            any ||
+            mayReachModel(
+              {
+                value: co,
+                mode: po,
+              },
+              commands,
+            ),
+          this.#o,
+        )
+      : undefined;
     if (cn) {
       this.#o = cn;
       try {
         await cn;
       } finally {
-        if (this.#o === cn) this.#o = void 0;
+        if (this.#o === cn) this.#o = undefined;
       }
     }
-    let of = sN.of(session);
-    if (of.pending > 0) await of.tail;
-    let wn = getMainLoopModelFromState(store.getState()),
-      mr = transcript.getSnapshot().length;
-    if (
-      (await handlePromptSubmit({
-        presentation: this.#e.presentation,
-        input: co,
-        uuid: bn,
-        submittedAtMs: startTime,
-        helpers: x,
-        turn: turn,
-        queue: messageQueue,
-        mode: po,
-        commands: commands,
-        onInputChange: Go
-          ? (Kn) => {
-              if ((draft.replaceValue(Kn), Kn === "")) draft.setMode("prompt");
-            }
-          : draft.replaceValue,
-        onPromptCameBack: draft.markCameBack,
-        getCurrentInput: () => draft.value,
-        composerClearedAtEnter: (kn && !D?.fromKeybinding) || D?.keepsComposer,
-        ...!1,
-        restoreHandedBackPrompt: (Kn) => {
-          (turn.consumeRateLimitAutoContinuePrefill(), restorePromptAfterCancel(draft, Kn));
-        },
-        onPromptHandedBack: chrome.restoreIdeSelectionConsumedBy,
-        setPastedContents: draft.setPastedContents,
-        messages: transcript.getSnapshot(),
-        mainLoopModel: wn,
-        suppressWorkflowKeyword: D?.suppressWorkflowKeyword,
-        resumesStaleQuotaWait: D?.resumesStaleQuotaWait,
-        wait: D?.wait,
-        inputSource: D?.inputSource,
-        pastedContents: bo,
-        keyboard: D?.keyboard,
-        composerEnter: D?.composerEnter,
-        session: session,
-        historyEntry: vo,
-        onSubmitProceed: kn || D?.keepsComposer ? void 0 : () => draft.setMode("prompt"),
-        onSubmitCancelRewind: kn
+    let Dn = switchSerializerSlot.of(session);
+    if (Dn.pending > 0) await Dn.tail;
+    let mainLoopModel_2 = getMainLoopModelFromState(store.getState());
+    let mr = transcript.getSnapshot().length;
+    await handlePromptSubmit({
+      presentation: this.#e.presentation,
+      input: co,
+      uuid: bn,
+      submittedAtMs,
+      helpers: x,
+      turn,
+      queue: messageQueue,
+      mode: po,
+      commands,
+      onInputChange: Go
+        ? (Kn) => {
+            draft.replaceValue(Kn);
+            if (Kn === "") draft.setMode("prompt");
+          }
+        : draft.replaceValue,
+      onPromptCameBack: draft.markCameBack,
+      getCurrentInput: () => draft.value,
+      composerClearedAtEnter: (kn && !D?.fromKeybinding) || D?.keepsComposer,
+      ...false,
+      restoreHandedBackPrompt: (Kn) => {
+        turn.consumeRateLimitAutoContinuePrefill();
+        restorePromptAfterCancel(draft, Kn);
+      },
+      onPromptHandedBack: chrome.restoreIdeSelectionConsumedBy,
+      setPastedContents: draft.setPastedContents,
+      messages: transcript.getSnapshot(),
+      mainLoopModel: mainLoopModel_2,
+      suppressWorkflowKeyword: D?.suppressWorkflowKeyword,
+      resumesStaleQuotaWait: D?.resumesStaleQuotaWait,
+      wait: D?.wait,
+      inputSource: D?.inputSource,
+      pastedContents: bo,
+      keyboard: D?.keyboard,
+      composerEnter: D?.composerEnter,
+      session,
+      historyEntry: vo,
+      onSubmitProceed: kn || D?.keepsComposer ? undefined : () => draft.setMode("prompt"),
+      onSubmitCancelRewind: kn
+        ? () => {
+            if (!Go) draft.setMode(po);
+            if (cameBack) draft.markCameBack();
+          }
+        : undefined,
+      replaceDraftWithNextInput: (Kn) => this.#r(Kn),
+      ideSelection,
+      takeIdeSelectionForQueue:
+        hn && po !== "bash" && (ideSelection?.text || ideSelection?.filePath)
           ? () => {
-              if (!Go) draft.setMode(po);
-              if (cameBack) draft.markCameBack();
+              if (!kn) chrome.consumeIdeSelection(bn);
+              return ideSelection;
             }
-          : void 0,
-        replaceDraftWithNextInput: (Kn) => this.#r(Kn),
-        ideSelection: ideSelection,
-        takeIdeSelectionForQueue:
-          hn && po !== "bash" && (ideSelection?.text || ideSelection?.filePath)
-            ? () => {
-                if (!kn) chrome.consumeIdeSelection(bn);
-                return ideSelection;
-              }
-            : void 0,
-        getAppState: () => store.getState(),
-        setAppState: setSessionState,
-        querySource: getQuerySourceForREPL(),
-        onBeforeQuery: onBeforeQuery,
-        canUseTool: canUseTool,
-        addNotification: addNotification,
-        streamMode: spinnerStore.get().mode,
-        deferSlashToEngine: hte,
-        storageV5: storageV5,
-      }),
+          : undefined,
+      getAppState: () => store.getState(),
+      setAppState: setSessionState,
+      querySource: getQuerySourceForREPL(),
+      onBeforeQuery,
+      canUseTool,
+      addNotification,
+      streamMode: spinnerStore.get().mode,
+      deferSlashToEngine: isCompactCommand,
+      storageV5,
+    });
+    if (
       mn &&
-        transcript
-          .getSnapshot()
-          .slice(mr)
-          .some(
-            (Kn) =>
-              Kn.uuid === bn ||
-              (Kn.type === "system" &&
-                Kn.subtype === "local_command" &&
-                Kn.commandRun?.command === getCommandName(mn)),
-          ))
+      transcript
+        .getSnapshot()
+        .slice(mr)
+        .some(
+          (Kn) =>
+            Kn.uuid === bn ||
+            (Kn.type === "system" &&
+              Kn.subtype === "local_command" &&
+              Kn.commandRun?.command === getCommandName(mn)),
+        )
     )
-      scrollPin.repin(!1, "commandOutput");
-    if (startsWith || isLoading) this.#s({ toast: !0 });
+      scrollPin.repin(false, "commandOutput");
+    if (Fn || isLoading)
+      this.#s({
+        toast: true,
+      });
   };
-  #s({ toast: h }) {
-    let { draft: draft, addNotification: addNotification } = this.#e;
-    if (draft.stashedPrompt === void 0 || draft.value.trim() !== "") return;
-    if ((draft.popStash("outside"), h))
+  #s({ toast }) {
+    let { draft, addNotification } = this.#e;
+    if (draft.stashedPrompt === undefined || draft.value.trim() !== "") return;
+    draft.popStash("outside");
+    if (toast)
       addNotification({
         key: "stash-restored",
         kind: "feedback",
@@ -533,241 +566,278 @@ class PromptSubmitController {
       });
   }
   #r(h) {
-    let { draft: draft } = this.#e;
-    (draft.setMode("prompt"), draft.replaceValue(h));
+    let { draft } = this.#e;
+    draft.setMode("prompt");
+    draft.replaceValue(h);
   }
   async #c({
-    command: h,
-    commandName: x,
-    commandArgs: D,
-    dispatchedAsImmediate: L,
-    isMidTurn: ee,
-    besideTurns: ke,
-    loadDialog: Re,
-    mainLoopModel: Be,
-    composerEnter: He,
-    ranAs: We,
+    command,
+    commandName,
+    commandArgs,
+    dispatchedAsImmediate,
+    isMidTurn,
+    besideTurns,
+    loadDialog,
+    mainLoopModel,
+    composerEnter,
+    ranAs,
   }) {
-    let {
-        transcript: transcript,
-        turn: turn,
-        messageQueue: messageQueue,
-        scope: scope,
-        addNotification: addNotification,
-      } = this.#e,
-      localJsx = scope.localJsx,
-      Ot = !1,
-      Et = isPromptHookObserved() ? "" : D,
-      Dt = snapshotHookRegistration(),
-      Lt,
-      oo = (po, ao) => {
-        ((Ot = !0), Lt?.close());
-        let co = [];
-        if (po && ao?.shouldQuery)
-          messageQueue.enqueue({
-            agentId: mainAgentId(),
-            value: po,
-            mode: "prompt",
-            origin: { kind: "auto-continuation" },
-          });
-        else if (po && ao?.display !== "skip") {
-          if (
-            (addNotification({
-              key: `immediate-${h.name}`,
-              kind: "feedback",
-              text: hA(po),
-              priority: "immediate",
-            }),
-            this.#e.presentation !== "fullscreen")
-          )
-            co.push(
-              createCommandInputMessage(formatCommandInputTags(getCommandName(h), Et)),
-              createCommandInputMessage(
-                `<${LOCAL_COMMAND_STDOUT}>${escapeXml(po)}</${LOCAL_COMMAND_STDOUT}>`,
-                { commandRun: buildCommandRunInfo(h, Et) },
-              ),
-            );
-        }
-        if (ao?.metaMessages?.length)
+    let { transcript, turn, messageQueue, scope, addNotification } = this.#e;
+    let localJsx = scope.localJsx;
+    let Ot = false;
+    let Et = isPromptHookObserved() ? "" : commandArgs;
+    let Dt = snapshotHookRegistration();
+    let Lt;
+    let oo = (text, ao) => {
+      Ot = true;
+      Lt?.close();
+      let co = [];
+      if (text && ao?.shouldQuery)
+        messageQueue.enqueue({
+          agentId: mainAgentId(),
+          value: text,
+          mode: "prompt",
+          origin: {
+            kind: "auto-continuation",
+          },
+        });
+      else if (text && ao?.display !== "skip") {
+        addNotification({
+          key: `immediate-${command.name}`,
+          kind: "feedback",
+          text: boldDirectMemberMessage(text),
+          priority: "immediate",
+        });
+        if (this.#e.presentation !== "fullscreen")
           co.push(
-            ...ao.metaMessages.map((metaMessage) =>
-              createUserMessage({ content: metaMessage, isMeta: !0, origin: ao.metaMessagesOrigin }),
+            createCommandInputMessage(formatCommandInputTags(getCommandName(command), Et)),
+            createCommandInputMessage(
+              `<${LOCAL_COMMAND_STDOUT}>${escapeXml(text)}</${LOCAL_COMMAND_STDOUT}>`,
+              {
+                commandRun: buildCommandRunInfo(command, Et),
+              },
             ),
           );
-        if ((turn.appendAfterTurn(co), this.#s({ toast: !ao?.nextInput }), ao?.nextInput))
-          if (ao.submitNextInput)
-            messageQueue.enqueue({
-              agentId: mainAgentId(),
-              value: ao.nextInput,
-              mode: "prompt",
-              origin: { kind: "auto-continuation" },
-            });
-          else this.#r(ao.nextInput);
-      },
-      toolUseContext = turn.buildToolUseContext(transcript.getSnapshot(), [], createAbortController(), Be),
-      io = await dispatchCommandRunHooks({
-        input: iUo(h, D, this.#e.presentation),
-        engine: {
-          run: async (po) => {
-            if (!hasHookRegistrationChanged(Dt)) Et = po;
-            return (
-              We(po),
-              (await Re()).call(
-                oo,
-                {
-                  ...toolUseContext,
-                  isMidTurn: ee,
-                  dispatchedAsImmediate: L,
-                  appendAfterTurn: turn.appendAfterTurn,
-                  runsBesideTurns: ke,
-                  ...(isFrozenMarker(He) && { submissionOrigin: { kind: "human" } }),
-                },
-                po,
-                x,
-              )
-            );
-          },
-          textOf: () => {
-            return;
-          },
-          contextOf: () => {
-            return;
-          },
-          retell: () => {
-            return;
-          },
-        },
-        queued: void 0,
-      });
-    if ((logFeatureOk(cmdFeature(h.name), getTipAttribution(h.name)), io.kind === "answered")) {
-      if (hasSingleCommandRunHook(getCommandName(h))) {
-        if (!hasHookRegistrationChanged(Dt)) Et = D;
-        We(D);
       }
-      oo(io.text, io.context === void 0 ? void 0 : { metaMessages: [...io.context] });
+      if (ao?.metaMessages?.length)
+        co.push(
+          ...ao.metaMessages.map((content) =>
+            createUserMessage({
+              content,
+              isMeta: true,
+              origin: ao.metaMessagesOrigin,
+            }),
+          ),
+        );
+      turn.appendAfterTurn(co);
+      this.#s({
+        toast: !ao?.nextInput,
+      });
+      if (ao?.nextInput)
+        if (ao.submitNextInput)
+          messageQueue.enqueue({
+            agentId: mainAgentId(),
+            value: ao.nextInput,
+            mode: "prompt",
+            origin: {
+              kind: "auto-continuation",
+            },
+          });
+        else this.#r(ao.nextInput);
+    };
+    let toolUseContext = turn.buildToolUseContext(
+      transcript.getSnapshot(),
+      [],
+      createAbortController(),
+      mainLoopModel,
+    );
+    let io = await dispatchCommandRunHooks({
+      input: commandRunEvent(command, commandArgs, this.#e.presentation),
+      engine: {
+        run: async (po) => {
+          if (!hasHookRegistrationChanged(Dt)) Et = po;
+          ranAs(po);
+          return (await loadDialog()).call(
+            oo,
+            {
+              ...toolUseContext,
+              isMidTurn,
+              dispatchedAsImmediate,
+              appendAfterTurn: turn.appendAfterTurn,
+              runsBesideTurns: besideTurns,
+              ...(isFrozenMarker(composerEnter) && {
+                submissionOrigin: {
+                  kind: "human",
+                },
+              }),
+            },
+            po,
+            commandName,
+          );
+        },
+        textOf: () => {
+          return;
+        },
+        contextOf: () => {
+          return;
+        },
+        retell: () => {
+          return;
+        },
+      },
+      queued: undefined,
+    });
+    logFeatureOk(cmdFeature(command.name), getTipAttribution(command.name));
+    if (io.kind === "answered") {
+      if (hasSingleCommandRunHook(getCommandName(command))) {
+        if (!hasHookRegistrationChanged(Dt)) Et = commandArgs;
+        ranAs(commandArgs);
+      }
+      oo(
+        io.text,
+        io.context === undefined
+          ? undefined
+          : {
+              metaMessages: [...io.context],
+            },
+      );
       return;
     }
     let ran = io.ran;
     if (ran && !Ot)
       Lt = localJsx.show(ran, {
-        commandName: getCommandName(h),
-        immediate: !0,
-        hidesPrompt: !1,
-        retireAtTurnBoundary: !0,
-        holdsQueue: !ke,
+        commandName: getCommandName(command),
+        immediate: true,
+        hidesPrompt: false,
+        retireAtTurnBoundary: true,
+        holdsQueue: !besideTurns,
       });
   }
   remoteSendsNow = {
     subscribe: (h) => {
-      let subscribe = this.#e.turn.subscribe(h),
-        subscribe_2 = this.#e.transport.subscribe(h),
-        subscribe_3 = this.#e.draft.subscribe(h),
-        subscribe_4 = this.#e.transcript.subscribe(h);
+      let x = this.#e.turn.subscribe(h);
+      let D = this.#e.transport.subscribe(h);
+      let L = this.#e.draft.subscribe(h);
+      let ee = this.#e.transcript.subscribe(h);
       return () => {
-        (subscribe(), subscribe_2(), subscribe_3(), subscribe_4());
+        x();
+        D();
+        L();
+        ee();
       };
     },
-    getSnapshot: () => this.#e.draft.mode === "prompt" && this.#i()?.workerSendsNow() === !0,
+    getSnapshot: () => this.#e.draft.mode === "prompt" && this.#i()?.workerSendsNow() === true,
   };
   submitEmpty = () => {
     let mode = this.#e.draft.mode;
-    if (sendQueuedNow(this.#l(mode))) return !0;
+    if (sendQueuedNow(this.#l(mode))) return true;
     let x = this.#i();
-    return x !== void 0 && Gfn() && mode === "prompt" && this.#a(x, "input_send_queued_now", void 0);
+    return (
+      x !== undefined &&
+      isQueuedSendNowEnabled() &&
+      mode === "prompt" &&
+      this.#a(x, "input_send_queued_now", undefined)
+    );
   };
   sendQueuedNow = (h, x) => {
     let D = () => this.#e.lowLatency.sendQueuedNow(x);
-    if (x === void 0) {
-      if (handleSendNowKey({ ...this.#l(h), deliverWithoutCancel: D })) return !0;
+    if (x === undefined) {
+      if (
+        handleSendNowKey({
+          ...this.#l(h),
+          deliverWithoutCancel: D,
+        })
+      )
+        return true;
       let L = this.#i();
-      return L !== void 0 && h === "prompt" && this.#a(L, "input_send_now_key", void 0);
+      return L !== undefined && h === "prompt" && this.#a(L, "input_send_now_key", undefined);
     }
-    return h === "prompt" && h8n() && D();
+    return h === "prompt" && isSendNowKeyEnabled() && D();
   };
   #i() {
     let activeRemote = this.#e.transport.activeRemote;
     return activeRemote.isRemoteMode &&
-      r_s(activeRemote) &&
+      hasRemoteControlChannel(activeRemote) &&
       activeRemote.caps.sendNow &&
       this.#e.turn.isExternalLoading &&
       !activeRemote.holdsSends()
       ? activeRemote
-      : void 0;
+      : undefined;
   }
   #a(h, x, D) {
-    if (h.workerSendsNow() === !1)
-      return (
-        logFeatureSad(x, "remote_not_supported"),
-        this.#e.addNotification({
-          key: "remote-send-now-unavailable",
-          kind: "feedback",
-          text: "Send now isn't available here \xB7 esc to interrupt and send",
-          priority: "immediate",
-        }),
-        !0
-      );
-    return (
-      h.sendQueuedNow(D).then((L) => {
-        switch (L) {
-          case "delivering":
-            logFeatureOk(x);
-            return;
-          case "stopped":
-            logFeatureSad(x, "fell_back_to_cancel");
-            return;
-          case "nothing_waiting":
-            logFeatureSad(x, "remote_nothing_waiting");
-            return;
-          case "not_asked":
-            logFeatureSad(x, "remote_not_asked");
-            return;
-          case "failed":
-            logFeatureBad(x, "remote_request_failed");
-            return;
-        }
-      }),
-      !0
-    );
+    if (h.workerSendsNow() === false) {
+      logFeatureSad(x, "remote_not_supported");
+      this.#e.addNotification({
+        key: "remote-send-now-unavailable",
+        kind: "feedback",
+        text: "Send now isn't available here \xB7 esc to interrupt and send",
+        priority: "immediate",
+      });
+      return true;
+    }
+    h.sendQueuedNow(D).then((L) => {
+      switch (L) {
+        case "delivering":
+          logFeatureOk(x);
+          return;
+        case "stopped":
+          logFeatureSad(x, "fell_back_to_cancel");
+          return;
+        case "nothing_waiting":
+          logFeatureSad(x, "remote_nothing_waiting");
+          return;
+        case "not_asked":
+          logFeatureSad(x, "remote_not_asked");
+          return;
+        case "failed":
+          logFeatureBad(x, "remote_request_failed");
+          return;
+      }
+    });
+    return true;
   }
-  #l(h) {
-    let { store: store, spinnerStore: spinnerStore, turn: turn, messageQueue: messageQueue } = this.#e,
-      { mainLoopModel: mainLoopModel } = this.#n();
+  #l(mode) {
+    let { store, spinnerStore, turn, messageQueue } = this.#e;
+    let { mainLoopModel } = this.#n();
     return {
-      mode: h,
-      turn: turn,
+      mode,
+      turn,
       queue: messageQueue,
       interruptRunningTurn: turn.interruptForSubmit,
       streamMode: spinnerStore.get().mode,
-      mainLoopModel: mainLoopModel,
+      mainLoopModel,
       getAppState: () => store.getState(),
     };
   }
   submitToAgent = async (h, x, D, L) => {
-    let {
-        taskRegistry: taskRegistry,
-        transcript: transcript,
-        turn: turn,
-        draft: draft,
-        messageQueue: messageQueue,
-        addNotification: addNotification,
-      } = this.#e,
-      { mainLoopModel: mainLoopModel, canUseTool: canUseTool } = this.#n(),
-      rt = rW(h, L ?? draft.pastedContents);
+    let { taskRegistry, transcript, turn, draft, messageQueue, addNotification } = this.#e;
+    let { mainLoopModel, canUseTool } = this.#n();
+    let text = requestDialogWrapper(h, L ?? draft.pastedContents);
     if (isLocalAgent(x)) {
       markChatEngaged(x.id, taskRegistry);
-      let kt = createUserMessage({ content: rt, origin: { kind: "human" } });
-      if ((appendAgentTranscriptMessage(x.id, kt, taskRegistry), x.status === "running"))
-        queueAgentMessage(x.id, rt, taskRegistry, {
-          isMeta: !0,
-          origin: { kind: "human" },
-          shownAs: kt.uuid,
+      let userMessage = createUserMessage({
+        content: text,
+        origin: {
+          kind: "human",
+        },
+      });
+      appendAgentTranscriptMessage(x.id, userMessage, taskRegistry);
+      if (x.status === "running")
+        queueAgentMessage(x.id, text, taskRegistry, {
+          isMeta: true,
+          origin: {
+            kind: "human",
+          },
+          shownAs: userMessage.uuid,
         });
       else
         resumeAgentBackground({
           agentId: x.id,
-          prompt: rt,
-          promptIsMeta: !0,
-          promptOrigin: { kind: "human" },
+          prompt: text,
+          promptIsMeta: true,
+          promptOrigin: {
+            kind: "human",
+          },
           toolUseContext: turn.buildToolUseContext(
             transcript.getSnapshot(),
             [],
@@ -775,8 +845,8 @@ class PromptSubmitController {
             mainLoopModel,
           ),
           liveTranscript: createQueueBusyCheck(messageQueue, () => transcript.getSnapshot()),
-          canUseTool: canUseTool,
-          userInitiated: !0,
+          canUseTool,
+          userInitiated: true,
         })
           .then((At) => {
             if (isResumeDenied(At))
@@ -788,14 +858,16 @@ class PromptSubmitController {
                 priority: "low",
               });
           })
-          .catch((At) => {
-            if (At instanceof AgentResumeInProgressError || At instanceof AgentStillStoppingError) {
+          .catch((error) => {
+            if (error instanceof AgentResumeInProgressError || error instanceof AgentStillStoppingError) {
               if (
-                sendMessageToAgent(x.id, rt, taskRegistry, {
-                  isMeta: !0,
-                  origin: { kind: "human" },
-                  userInitiated: !0,
-                  shownAs: kt.uuid,
+                sendMessageToAgent(x.id, text, taskRegistry, {
+                  isMeta: true,
+                  origin: {
+                    kind: "human",
+                  },
+                  userInitiated: true,
+                  shownAs: userMessage.uuid,
                 })
               ) {
                 logForDebugging("resumeAgentBackground lost the resume lock; typed message queued");
@@ -810,34 +882,49 @@ class PromptSubmitController {
               });
               return;
             }
-            (logForDebugging(`resumeAgentBackground failed: ${errorMessage(At)}`),
-              addNotification({
-                key: `resume-agent-failed-${x.id}`,
-                kind: "warning",
-                text: `Failed to resume agent: ${errorMessage(At)}`,
-                color: "error",
-                priority: "low",
-              }));
+            logForDebugging(`resumeAgentBackground failed: ${errorMessage(error)}`);
+            addNotification({
+              key: `resume-agent-failed-${x.id}`,
+              kind: "warning",
+              text: `Failed to resume agent: ${errorMessage(error)}`,
+              color: "error",
+              priority: "low",
+            });
           });
-    } else injectUserMessageToTeammate(x.id, rt, taskRegistry, { kind: "human" });
-    (draft.clear(), D.clearBuffer());
+    } else
+      injectUserMessageToTeammate(x.id, text, taskRegistry, {
+        kind: "human",
+      });
+    draft.clear();
+    D.clearBuffer();
   };
   submitSurveyFollowUp = (h) => {
-    this.submit(h, NOOP_HELPERS, { inputModeOverride: "prompt" }).catch((x) => {
-      logForDebugging(`Survey feedback request failed: ${x instanceof Error ? x.message : String(x)}`);
+    this.submit(h, NOOP_HELPERS, {
+      inputModeOverride: "prompt",
+    }).catch((error) => {
+      logForDebugging(
+        `Survey feedback request failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
     });
   };
   readDraft = () => {
-    let { draft: draft } = this.#e;
-    return { text: draft.value, cursor: draft.cursorOffset };
+    let { draft } = this.#e;
+    return {
+      text: draft.value,
+      cursor: draft.cursorOffset,
+    };
   };
   fillDraft = (h, x, D) => {
-    let { draft: draft, dialogStore: dialogStore } = this.#e,
-      { decorations: decorations, cursor: cursor } = D ?? {};
-    if (dialogStore.getState().open.length > 0) return { isFilled: !1, refusal: "dialog" };
-    let Be = decorations !== void 0 && h !== "",
-      He = Be && x === "insert" ? draft.value.normalize("NFC") : "",
-      We = x === "replace" ? 0 : draft.value.length;
+    let { draft, dialogStore } = this.#e;
+    let { decorations, cursor } = D ?? {};
+    if (dialogStore.getState().open.length > 0)
+      return {
+        isFilled: false,
+        refusal: "dialog",
+      };
+    let Be = decorations !== undefined && h !== "";
+    let He = Be && x === "insert" ? draft.value.normalize("NFC") : "";
+    let We = x === "replace" ? 0 : draft.value.length;
     switch (x) {
       case "replace":
         this.#r(h);
@@ -849,12 +936,12 @@ class PromptSubmitController {
         We = draft.insertText(h, "outside");
         break;
     }
-    if (cursor !== void 0) {
-      let fromText = Cursor.fromText(draft.value, 80, cursor);
+    if (cursor !== undefined) {
+      let rt = Cursor.fromText(draft.value, 80, cursor);
       draft.setCursorOffset(
         cursor >= draft.value.length
           ? draft.value.length
-          : fromText.measuredText.snapToGraphemeBoundary(fromText.snapOutOfPlaceholder(cursor, "start")),
+          : rt.measuredText.snapToGraphemeBoundary(rt.snapOutOfPlaceholder(cursor, "start")),
       );
     } else if (x !== "insert" && draft.cursorOffset !== draft.value.length)
       draft.setCursorOffset(draft.value.length);
@@ -873,84 +960,93 @@ class PromptSubmitController {
         ),
       );
     }
-    return { isFilled: !0 };
+    return {
+      isFilled: true,
+    };
   };
-  suggestDraft = (h, x) => {
-    let { draft: draft, turn: turn, setAppState: setAppState } = this.#e;
-    if (!(h.trim() !== "" && draft.value === "" && !turn.getSnapshot().isLoading)) return { isShown: !1 };
-    return (
-      setAppState((Re) => ({
-        ...Re,
-        promptSuggestion: { status: "generated", text: h, generationRequestId: x },
-      })),
-      { isShown: !0 }
-    );
+  suggestDraft = (h, generationRequestId) => {
+    let { draft, turn, setAppState } = this.#e;
+    if (!(h.trim() !== "" && draft.value === "" && !turn.getSnapshot().isLoading))
+      return {
+        isShown: false,
+      };
+    setAppState((Re) => ({
+      ...Re,
+      promptSuggestion: {
+        status: "generated",
+        text: h,
+        generationRequestId,
+      },
+    }));
+    return {
+      isShown: true,
+    };
   };
   popQueuedIntoDraft = () => {
-    let { draft: draft, setAppState: setAppState, messageQueue: messageQueue, chrome: chrome } = this.#e,
-      popAllEditable = messageQueue.popAllEditable(draft.value, 0, draft.pastedContents);
-    if (!popAllEditable) return;
-    if ((draft.replaceValue(popAllEditable.text), popAllEditable.unpassed)) draft.markCameBack();
-    if (
-      (draft.setMode(popAllEditable.mode),
-      chrome.returnIdeSelection(popAllEditable.ideSelection),
-      setAppState((ke) => (ke.queueEditIndex === null ? ke : { ...ke, queueEditIndex: null })),
-      popAllEditable.images.length > 0)
-    )
-      draft.setPastedContents((ke) => mergeTurnTags(ke, popAllEditable.images));
+    let { draft, setAppState, messageQueue, chrome } = this.#e;
+    let ee = messageQueue.popAllEditable(draft.value, 0, draft.pastedContents);
+    if (!ee) return;
+    draft.replaceValue(ee.text);
+    if (ee.unpassed) draft.markCameBack();
+    draft.setMode(ee.mode);
+    chrome.returnIdeSelection(ee.ideSelection);
+    setAppState((ke) =>
+      ke.queueEditIndex === null
+        ? ke
+        : {
+            ...ke,
+            queueEditIndex: null,
+          },
+    );
+    if (ee.images.length > 0) draft.setPastedContents((ke) => mergeTurnTags(ke, ee.images));
   };
   cancelAndDrainPending = () => {
-    let { turn: turn, messageQueue: messageQueue } = this.#e,
-      {
-        userInputOnProcessing: userInputOnProcessing,
-        followingPromptsOnProcessing: followingPromptsOnProcessing,
-      } = turn.stream.getSnapshot(),
-      ee =
-        turn.stream.placeholderTracker.pending && userInputOnProcessing
-          ? [userInputOnProcessing, ...followingPromptsOnProcessing.map((He) => He.text)].join(`
+    let { turn, messageQueue } = this.#e;
+    let { userInputOnProcessing, followingPromptsOnProcessing } = turn.stream.getSnapshot();
+    let ee =
+      turn.stream.placeholderTracker.pending && userInputOnProcessing
+        ? [userInputOnProcessing, ...followingPromptsOnProcessing.map((He) => He.text)].join(`
 `)
-          : void 0,
-      ke = [];
+        : undefined;
+    let ke = [];
     for (;;) {
-      let He = messageQueue.getCommandQueue().find(Up)?.pastedContents ?? {},
-        popEditableAt = messageQueue.popEditableAt(0, "", 0);
-      if (!popEditableAt) break;
+      let pastedContents = messageQueue.getCommandQueue().find(isRefillableInput)?.pastedContents ?? {};
+      let We = messageQueue.popEditableAt(0, "", 0);
+      if (!We) break;
       let ze = new Set(
-          popEditableAt.images
-            .filter((image) => image.type === "image" && !(image.id in He))
-            .map((rt) => rt.id),
-        ),
-        reduceRight = parsePastedRefs(popEditableAt.text)
-          .filter((rt) => rt.match.startsWith("[Image") && ze.has(rt.id))
-          .reduceRight(
-            (rt, kt) => rt.slice(0, kt.index) + rt.slice(kt.index + kt.match.length).replace(/^ /, ""),
-            popEditableAt.text,
-          );
-      if (reduceRight) {
-        let rt = rpe(reduceRight, Object.fromEntries(popEditableAt.images.map((image) => [image.id, image])));
-        ke.push(
-          rt.trimStart().startsWith("/") && !popEditableAt.text.trimStart().startsWith("/")
-            ? popEditableAt.text
-            : rt,
+        We.images
+          .filter((image) => image.type === "image" && !(image.id in pastedContents))
+          .map((image) => image.id),
+      );
+      let Xe = parsePastedRefs(We.text)
+        .filter((rt) => rt.match.startsWith("[Image") && ze.has(rt.id))
+        .reduceRight(
+          (rt, kt) => rt.slice(0, kt.index) + rt.slice(kt.index + kt.match.length).replace(/^ /, ""),
+          We.text,
         );
+      if (Xe) {
+        let rt = addPastedEntry(Xe, Object.fromEntries(We.images.map((image) => [image.id, image])));
+        ke.push(rt.trimStart().startsWith("/") && !We.text.trimStart().startsWith("/") ? We.text : rt);
       }
     }
     let Re =
       ke.join(`
-`) || void 0;
+`) || undefined;
+    turn.cancel("local");
     return (
-      turn.cancel("local"),
       [ee, Re].filter(Boolean).join(`
 
-`) || void 0
+`) || undefined
     );
   };
 }
 //@ chunk-18hwfzwa.js:1644033-1644107 placement
-function Evt() {
-  return shouldEscapeNdjsonForBridge() || (oae() && getPluginRegistry().unlatchedAbsentManagedIds.size > 0);
+function shouldHoldPluginStorage() {
+  return (
+    shouldEscapeNdjsonForBridge() ||
+    (areHooksEnabled() && getPluginRegistry().unlatchedAbsentManagedIds.size > 0)
+  );
 }
 //@ chunk-18hwfzwa.js:1644107-1644111 placement
-j();
-
-export { PromptSubmitController, hte, awaitScanThenTurn, resolveSlashCommand, mayReachModel };
+init_react_production();
+export { PromptSubmitController, isCompactCommand, awaitScanThenTurn, resolveSlashCommand, mayReachModel };

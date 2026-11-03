@@ -11,28 +11,36 @@
 import { w } from "../../vendor/react/compiler-runtime.js";
 import { shouldShowModelLabel } from "./MessageRow.js";
 import { bunStringWidth } from "../ink/stringWidth.js";
-import { e } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { jsxProd_default } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Box } from "../ink/components/Text.js";
 
 //@ chunk-ag5x7vhf.js:139092-139447 fingerprint = MessageModel (1)
-function MessageModel(t0) {
-  let $ = w(5),
-    { message: message, isTranscriptMode: isTranscriptMode } = t0;
+function MessageModel(props) {
+  let $ = w(5);
+  let { message, isTranscriptMode } = props;
   if (message.type !== "assistant" || !shouldShowModelLabel(message, isTranscriptMode)) {
     return null;
   }
-  const t1 = bunStringWidth(message.message.model) + 8;
-  let _;
-  if ($[0] !== message.message.model)
-    ((_ = e(Text, { dimColor: !0, children: message.message.model })),
-      ($[0] = message.message.model),
-      ($[1] = _));
-  else _ = $[1];
-  let I;
-  if ($[2] !== t1 || $[3] !== _)
-    ((I = e(Box, { minWidth: t1, children: _ })), ($[2] = t1), ($[3] = _), ($[4] = I));
-  else I = $[4];
-  return I;
+  const minWidth = bunStringWidth(message.message.model) + 8;
+  let children;
+  if ($[0] !== message.message.model) {
+    children = jsxProd_default(Text, {
+      dimColor: true,
+      children: message.message.model,
+    });
+    $[0] = message.message.model;
+    $[1] = children;
+  } else children = $[1];
+  let t3;
+  if ($[2] !== minWidth || $[3] !== children) {
+    t3 = jsxProd_default(Box, {
+      minWidth,
+      children,
+    });
+    $[2] = minWidth;
+    $[3] = children;
+    $[4] = t3;
+  } else t3 = $[4];
+  return t3;
 }
-
 export { MessageModel };

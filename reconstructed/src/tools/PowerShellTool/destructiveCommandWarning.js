@@ -9,10 +9,10 @@
  * attribution: fingerprint 1, layout 1, callgraph-fingerprint 1, placement 1
  */
 
+//@ chunk-e6aww6q8.js:1268611-1270651 fingerprint = DESTRUCTIVE_PATTERNS (0.676)
 /**
  * PowerShell 破坏性命令模式：Remove-Item -Recurse/-Force（含别名 rm/del/rd/ri）、Clear-Content *、Format-Volume、Clear-Disk、git reset --hard/push -f/clean -f/stash drop、SQL DROP/TRUNCATE、Stop/Restart-Computer、Clear-RecycleBin。
  */
-//@ chunk-e6aww6q8.js:1268611-1270651 fingerprint = DESTRUCTIVE_PATTERNS (0.676)
 var DESTRUCTIVE_PATTERNS = [
   {
     pattern: /(?:^|[|;&\n({])[ \t]*(Remove-Item|rm|del|rd|rmdir|ri)\b[^|;&\n}]*-Recurse\b[^|;&\n}]*-Force\b/i,
@@ -39,8 +39,16 @@ var DESTRUCTIVE_PATTERNS = [
     category: "clear_content_glob",
     warning: "Note: may clear content of multiple files",
   },
-  { pattern: /\bFormat-Volume\b/i, category: "format_volume", warning: "Note: may format a disk volume" },
-  { pattern: /\bClear-Disk\b/i, category: "clear_disk", warning: "Note: may clear a disk" },
+  {
+    pattern: /\bFormat-Volume\b/i,
+    category: "format_volume",
+    warning: "Note: may format a disk volume",
+  },
+  {
+    pattern: /\bClear-Disk\b/i,
+    category: "clear_disk",
+    warning: "Note: may clear a disk",
+  },
   {
     pattern: /\bgit\s+reset\s+--hard\b/i,
     category: "git_reset_hard",
@@ -66,7 +74,11 @@ var DESTRUCTIVE_PATTERNS = [
     category: "sql_drop_truncate",
     warning: "Note: may drop or truncate database objects",
   },
-  { pattern: /\bStop-Computer\b/i, category: "stop_computer", warning: "Note: will shut down the computer" },
+  {
+    pattern: /\bStop-Computer\b/i,
+    category: "stop_computer",
+    warning: "Note: will shut down the computer",
+  },
   {
     pattern: /\bRestart-Computer\b/i,
     category: "restart_computer",
@@ -78,25 +90,27 @@ var DESTRUCTIVE_PATTERNS = [
     warning: "Note: permanently deletes recycled files",
   },
 ];
+//@ chunk-e6aww6q8.js:1270651-1270762 layout
 /**
  * 返回 PowerShell 命令（前 10000 字符）命中的第一条破坏性模式。
  */
-//@ chunk-e6aww6q8.js:1270651-1270762 layout
 function matchDestructivePattern_2(e) {
   let n = e.length > 1e4 ? e.slice(0, 1e4) : e;
   for (let r of DESTRUCTIVE_PATTERNS) if (r.pattern.test(n)) return r;
   return null;
 }
+//@ chunk-e6aww6q8.js:1270762-1270807 callgraph-fingerprint = getDestructiveCommandWarning (0.68)
 /**
  * PowerShell 破坏性命令警告文字（用于权限对话框），没有命中返回 null。
  */
-//@ chunk-e6aww6q8.js:1270762-1270807 callgraph-fingerprint = getDestructiveCommandWarning (0.68)
 function getDestructiveCommandWarning(command) {
   return matchDestructivePattern_2(command)?.warning ?? null;
 }
 //@ chunk-e6aww6q8.js:1270807-1270853 placement
-function WSt(e) {
-  return matchDestructivePattern_2(e)?.category ?? null;
+/**
+ * 给出 PowerShell 破坏性命令的分类（无命中返回 null）。
+ */
+function getPowerShellDestructiveCategory(command) {
+  return matchDestructivePattern_2(command)?.category ?? null;
 }
-
-export { WSt, getDestructiveCommandWarning };
+export { getPowerShellDestructiveCategory, getDestructiveCommandWarning };

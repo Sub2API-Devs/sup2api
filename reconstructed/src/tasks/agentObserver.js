@@ -9,8 +9,8 @@
  * attribution: placement 3
  */
 import { writeAgentMetadata, readAgentMetadata } from "../utils/sessionStorage.js";
-import { Mr } from "../utils/agentId.js";
-import { getCwd, runWithCwdOverride, RDn } from "../utils/cwd.js";
+import { identityAgentId2 } from "../utils/agentId.js";
+import { getCwd, runWithCwdOverride, resolveFromCwd } from "../utils/cwd.js";
 import { getToolPermissionContext } from "../utils/permissions/toolPermissionContext.js";
 import { narrowerMode } from "../utils/permissions/browserToolNames.js";
 import { isMcpTool } from "../services/mcp/utils.js";
@@ -19,16 +19,16 @@ import { observerToolset } from "../tools/AgentTool/agentLaunch.js";
 import { resolveAgentTools, runAsyncAgentLifecycle } from "../tools/AgentTool/agentToolUtils.js";
 import { excludeCoordinatorCommsMcpTools } from "../coordinator/coordinatorMcpServers.js";
 import { bridgeToolsOf } from "../bridge/bridgePermissionResponse.js";
-import { bN } from "../services/accountMemory/memoryContext.js";
+import { memoryModeForSession } from "../services/accountMemory/memoryContext.js";
 import { getAgentModel } from "../utils/model/agent.js";
 import { registerAsyncAgent, markAgentNotified } from "./LocalAgentTask/LocalAgentTask.js";
-import { HM } from "../services/compact/compactCarry.js";
+import { willToolsLoseSessionState } from "../services/compact/compactCarry.js";
 import { mainAgentId } from "../bootstrap/state.js";
 import { isBuiltInAgent, isPluginAgent } from "../tools/AgentTool/loadAgentsDir.js";
 import { parsePluginIdentifier_2 } from "../utils/plugins/pluginIdentifier.js";
 import { getParentSessionId } from "../utils/teammate.js";
-import { rue, runAgent } from "../tools/AgentTool/runAgent.js";
-import { xo } from "../bootstrap/sessionSlices.js";
+import { createDeferredReviewTools, runAgent } from "../tools/AgentTool/runAgent.js";
+import { getSessionProject } from "../bootstrap/sessionSlices.js";
 import { createUserMessage } from "../utils/messages.js";
 import { getQuerySourceForAgent } from "../utils/promptCategory.js";
 import { agentModelRestrictionNotifier } from "../utils/model/agentModelRestriction.js";
@@ -36,147 +36,176 @@ import { resumeAgentInline } from "../tools/AgentTool/resumeAgent.js";
 import { setObserverSpawner } from "../services/agentObserver/agentObserver.js";
 import { logForDebugging } from "../utils/debug.js";
 
+//@ chunk-3h5pdzw6.js:12970-13139 placement
 /**
  * 写入并回读观察者代理的元数据标记。
  */
-//@ chunk-3h5pdzw6.js:12970-13139 placement
-async function writeObserverMarker(e, r, s) {
-  if (
-    (await writeAgentMetadata(Mr(e), { agentType: r.agentType, isObserver: !0 }, s),
-    (await readAgentMetadata(Mr(e), s))?.isObserver !== !0)
-  )
+async function writeObserverMarker(observerTaskId, observerDefinition, storageV5) {
+  await writeAgentMetadata(
+    identityAgentId2(observerTaskId),
+    {
+      agentType: observerDefinition.agentType,
+      isObserver: true,
+    },
+    storageV5,
+  );
+  if ((await readAgentMetadata(identityAgentId2(observerTaskId), storageV5))?.isObserver !== true)
     throw Error("observer marker read-back failed");
 }
+//@ chunk-3h5pdzw6.js:13139-15350 placement
 /**
  * 观察者代理的派生器：首次运行时写观察者标记、构造框架提示词并启动代理任务。
  */
-//@ chunk-3h5pdzw6.js:13139-15350 placement
 var OBSERVER_SPAWNER = {
-  async spawnFirstRun({
-    observerDefinition: e,
-    pairing: r,
-    framingPrompt: s,
-    digest: a,
-    toolUseContext: o,
-    canUseTool: w,
-  }) {
-    let observerTaskId = r.observerTaskId,
-      withProject = o.session.withProject({ cwd: getCwd() });
-    await writeObserverMarker(observerTaskId, e, o.storageV5);
-    let { taskRegistry: taskRegistry } = o,
-      m = getToolPermissionContext(o),
-      c = narrowerMode(r.armingPermissionMode, m.mode) ?? m.mode,
-      g = { ...m, mode: c },
-      filtered = o.options.tools.filter(isMcpTool),
-      l = `${e.agentType}@${r.observedEnvelopeName}`,
-      i = getAgentDepth(o.agentContext) + 1,
-      A = observerToolset(
-        resolveAgentTools(
-          e,
-          o.options.toolCatalog.assembleToolPool(g, excludeCoordinatorCommsMcpTools(filtered), {
-            skipReplFilter: !0,
-            machineMcpTools: bridgeToolsOf(o),
-          }),
-          !0,
-          !1,
-          !1,
-          i,
-          bN(o).mode,
-        ).resolvedTools,
-      ),
-      u = getAgentModel(e.model, o.options.mainLoopModel, void 0, g.mode),
-      y = registerAsyncAgent({
-        outputFileReadable: HM(o.options.tools),
-        agentId: observerTaskId,
-        ownerAgentId: mainAgentId(),
-        spawnDepth: i,
-        description: l,
-        prompt: s,
-        model: u,
-        selectedAgent: e,
-        taskRegistry: taskRegistry,
-        cwd: void 0,
-        isObserver: !0,
-        sessionScratch: o.session.sessionScratch,
-      });
+  async spawnFirstRun({ observerDefinition, pairing, framingPrompt, digest, toolUseContext, canUseTool }) {
+    let observerTaskId = pairing.observerTaskId;
+    let d = toolUseContext.session.withProject({
+      cwd: getCwd(),
+    });
+    await writeObserverMarker(observerTaskId, observerDefinition, toolUseContext.storageV5);
+    let { taskRegistry } = toolUseContext;
+    let toolPermissionContext = getToolPermissionContext(toolUseContext);
+    let c =
+      narrowerMode(pairing.armingPermissionMode, toolPermissionContext.mode) ?? toolPermissionContext.mode;
+    let g = {
+      ...toolPermissionContext,
+      mode: c,
+    };
+    let filtered = toolUseContext.options.tools.filter(isMcpTool);
+    let description = `${observerDefinition.agentType}@${pairing.observedEnvelopeName}`;
+    let i = getAgentDepth(toolUseContext.agentContext) + 1;
+    let availableTools = observerToolset(
+      resolveAgentTools(
+        observerDefinition,
+        toolUseContext.options.toolCatalog.assembleToolPool(g, excludeCoordinatorCommsMcpTools(filtered), {
+          skipReplFilter: true,
+          machineMcpTools: bridgeToolsOf(toolUseContext),
+        }),
+        true,
+        false,
+        false,
+        i,
+        memoryModeForSession(toolUseContext).mode,
+      ).resolvedTools,
+    );
+    let agentModel = getAgentModel(
+      observerDefinition.model,
+      toolUseContext.options.mainLoopModel,
+      undefined,
+      g.mode,
+    );
+    let y = registerAsyncAgent({
+      outputFileReadable: willToolsLoseSessionState(toolUseContext.options.tools),
+      agentId: observerTaskId,
+      ownerAgentId: mainAgentId(),
+      spawnDepth: i,
+      description,
+      prompt: framingPrompt,
+      model: agentModel,
+      selectedAgent: observerDefinition,
+      taskRegistry,
+      cwd: undefined,
+      isObserver: true,
+      sessionScratch: toolUseContext.session.sessionScratch,
+    });
     markAgentNotified(observerTaskId, taskRegistry);
     let k = {
-        prompt: s,
-        resolvedAgentModel: u,
-        isBuiltInAgent: isBuiltInAgent(e),
-        startTime: Date.now(),
-        agentType: e.agentType,
-        agentDepth: i,
-        isAsync: !0,
-        source: e.source,
-        pluginId: isPluginAgent(e) ? parsePluginIdentifier_2(e.plugin) : void 0,
-      },
-      f = {
-        agentId: observerTaskId,
-        parentAgentId: o.agentId,
-        depth: i,
-        parentSessionId: getParentSessionId(),
-        agentType: "subagent",
-        subagentName: e.agentType,
-        isBuiltIn: isBuiltInAgent(e),
-        invocationKind: "spawn",
-        invocationEmitted: !1,
-        ...getWorkflowRunFields(o.agentContext),
-      },
-      { onToolPool: onToolPool, reviewTools: reviewTools } = rue(o.options.tools);
+      prompt: framingPrompt,
+      resolvedAgentModel: agentModel,
+      isBuiltInAgent: isBuiltInAgent(observerDefinition),
+      startTime: Date.now(),
+      agentType: observerDefinition.agentType,
+      agentDepth: i,
+      isAsync: true,
+      source: observerDefinition.source,
+      pluginId: isPluginAgent(observerDefinition)
+        ? parsePluginIdentifier_2(observerDefinition.plugin)
+        : undefined,
+    };
+    let f = {
+      agentId: observerTaskId,
+      parentAgentId: toolUseContext.agentId,
+      depth: i,
+      parentSessionId: getParentSessionId(),
+      agentType: "subagent",
+      subagentName: observerDefinition.agentType,
+      isBuiltIn: isBuiltInAgent(observerDefinition),
+      invocationKind: "spawn",
+      invocationEmitted: false,
+      ...getWorkflowRunFields(toolUseContext.agentContext),
+    };
+    let { onToolPool, reviewTools } = createDeferredReviewTools(toolUseContext.options.tools);
     await runWithCwdOverride(f, () =>
-      RDn(xo(withProject).cwd, () =>
+      resolveFromCwd(getSessionProject(d).cwd, () =>
         runAsyncAgentLifecycle({
           taskId: observerTaskId,
           abortController: y.abortController,
-          makeStream: (v, I, b) =>
+          makeStream: (onCacheSafeParams, onQueryProgress, onStreamTokenEstimate) =>
             runAgent({
-              agentDefinition: e,
-              turnPrompt: s,
+              agentDefinition: observerDefinition,
+              turnPrompt: framingPrompt,
               promptMessages: [
-                createUserMessage({ content: s }),
-                createUserMessage({ content: a, origin: { kind: "observer-activity" } }),
+                createUserMessage({
+                  content: framingPrompt,
+                }),
+                createUserMessage({
+                  content: digest,
+                  origin: {
+                    kind: "observer-activity",
+                  },
+                }),
               ],
-              toolUseContext: o,
-              canUseTool: w,
-              isAsync: !0,
-              querySource: getQuerySourceForAgent(e.agentType, isBuiltInAgent(e)),
-              availableTools: A,
-              useExactTools: !0,
-              session: withProject,
+              toolUseContext,
+              canUseTool,
+              isAsync: true,
+              querySource: getQuerySourceForAgent(
+                observerDefinition.agentType,
+                isBuiltInAgent(observerDefinition),
+              ),
+              availableTools,
+              useExactTools: true,
+              session: d,
               spawnMode: c,
               override: {
-                agentId: Mr(observerTaskId),
+                agentId: identityAgentId2(observerTaskId),
                 abortController: y.abortController,
-                agentToolScope: e,
+                agentToolScope: observerDefinition,
               },
-              onModelRestricted: agentModelRestrictionNotifier(e.agentType, o.appendSystemMessage),
-              onCacheSafeParams: v,
-              onQueryProgress: I,
-              onStreamTokenEstimate: b,
-              onToolPool: onToolPool,
+              onModelRestricted: agentModelRestrictionNotifier(
+                observerDefinition.agentType,
+                toolUseContext.appendSystemMessage,
+              ),
+              onCacheSafeParams,
+              onQueryProgress,
+              onStreamTokenEstimate,
+              onToolPool,
             }),
-          metadata: { ...k, agentContext: f },
-          description: l,
-          toolUseContext: o,
-          reviewTools: reviewTools,
-          taskRegistry: taskRegistry,
+          metadata: {
+            ...k,
+            agentContext: f,
+          },
+          description,
+          toolUseContext,
+          reviewTools,
+          taskRegistry,
           agentIdForCleanup: observerTaskId,
-          enableSummarization: !1,
+          enableSummarization: false,
           getWorktreeResult: async () => ({}),
         }),
       ),
     );
   },
-  async deliver({ observerTaskId: e, digest: r, toolUseContext: s, canUseTool: a, armingPermissionMode: o }) {
+  async deliver({ observerTaskId, digest, toolUseContext, canUseTool, armingPermissionMode }) {
     await resumeAgentInline({
-      agentId: e,
-      prompt: r,
-      promptOrigin: { kind: "observer-activity" },
-      toolUseContext: s,
-      canUseTool: a,
-      suppressOwnerNotification: !0,
-      workerPermissionMode: o,
+      agentId: observerTaskId,
+      prompt: digest,
+      promptOrigin: {
+        kind: "observer-activity",
+      },
+      toolUseContext,
+      canUseTool,
+      suppressOwnerNotification: true,
+      workerPermissionMode: armingPermissionMode,
     });
   },
 };

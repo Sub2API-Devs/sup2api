@@ -12,57 +12,64 @@ import {
   AbortError,
   TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
 } from "../../utils/errors.js";
-import { b2, appToolServerUnavailableText } from "./appToolServerErrors.js";
+import { isHiddenReplyServer, appToolServerUnavailableText } from "./appToolServerErrors.js";
 import { getConnectionTimeoutMs } from "./client.js";
 import { createCombinedAbortSignal } from "../../utils/combinedAbortSignal.js";
 
+//@ chunk-sw4g2q2j.js:341-983 placement
 /**
  * 带超时与中止的懒拨号
  */
-//@ chunk-sw4g2q2j.js:341-983 placement
-function boundDialWithLatch(i, r, o, n = "connection", a) {
+function boundDialWithLatch(i, signal, serverName, context = "connection", signal_2) {
   let e = () =>
-    a?.aborted
-      ? new AbortError(`${n} for '${o}' aborted`)
+    signal_2?.aborted
+      ? new AbortError(`${context} for '${serverName}' aborted`)
       : Object.assign(
           new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-            b2(o) ? appToolServerUnavailableText("failed_retrying") : `${n} for '${o}' timed out connecting`,
+            isHiddenReplyServer(serverName)
+              ? appToolServerUnavailableText("failed_retrying")
+              : `${context} for '${serverName}' timed out connecting`,
             "MCP lazy dial timed out connecting",
           ),
-          { mcpErrorSource: "downstream_unreachable" },
+          {
+            mcpErrorSource: "downstream_unreachable",
+          },
         );
-  if (r.aborted)
-    return (
-      i.catch(() => {}),
-      Promise.reject(
-        a?.aborted
-          ? new AbortError(`${n} for '${o}' aborted before connect`)
-          : new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-              `${n} for '${o}' aborted before connect`,
-              "MCP lazy dial aborted before connect",
-            ),
-      )
+  if (signal.aborted) {
+    i.catch(() => {});
+    return Promise.reject(
+      signal_2?.aborted
+        ? new AbortError(`${context} for '${serverName}' aborted before connect`)
+        : new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
+            `${context} for '${serverName}' aborted before connect`,
+            "MCP lazy dial aborted before connect",
+          ),
     );
-  return new Promise((t, s) => {
-    let c = () => s(e());
-    (r.addEventListener("abort", c, { once: !0 }),
-      i.then(
-        (l) => {
-          (r.removeEventListener("abort", c), t(l));
-        },
-        (l) => {
-          (r.removeEventListener("abort", c), s(l));
-        },
-      ));
+  }
+  return new Promise((resolve, reject) => {
+    let c = () => reject(e());
+    signal.addEventListener("abort", c, {
+      once: true,
+    });
+    i.then(
+      (l) => {
+        signal.removeEventListener("abort", c);
+        resolve(l);
+      },
+      (error) => {
+        signal.removeEventListener("abort", c);
+        reject(error);
+      },
+    );
   });
 }
 //@ chunk-sw4g2q2j.js:983-1160 placement
 async function boundDial(i, r) {
-  let o = r.timeoutMs ?? getConnectionTimeoutMs(),
-    { signal: signal, cleanup: cleanup } = createCombinedAbortSignal(r.signal, {
-      timeoutMs: o,
-      refTimer: !0,
-    });
+  let timeoutMs = r.timeoutMs ?? getConnectionTimeoutMs();
+  let { signal, cleanup } = createCombinedAbortSignal(r.signal, {
+    timeoutMs,
+    refTimer: true,
+  });
   try {
     return await boundDialWithLatch(i, signal, r.serverName, r.context, r.signal);
   } finally {
@@ -70,29 +77,35 @@ async function boundDial(i, r) {
   }
 }
 //@ chunk-sw4g2q2j.js:1160-1180 placement
-var d = 5000,
-  m = 300000;
+/**
+ * 拨号失败闩锁的默认最长保持时间（300000 毫秒）。
+ */
+var DEFAULT_BASE_HOLD_MS = 5000;
+var DEFAULT_MAX_HOLD_MS = 300000;
+//@ chunk-sw4g2q2j.js:1180-1562 placement
 /**
  * MCP 懒拨号失败闩锁。
  */
-//@ chunk-sw4g2q2j.js:1180-1562 placement
 function createDialFailureLatch(i) {
-  let r = i?.baseHoldMs ?? d,
-    o = i?.maxHoldMs ?? m,
-    n = new Map(),
-    a = (e, t) => {
-      let s = n.get(e);
-      return s !== void 0 && t < s.holdUntil;
-    };
+  let baseHoldMs = i?.baseHoldMs ?? DEFAULT_BASE_HOLD_MS;
+  let maxHoldMs = i?.maxHoldMs ?? DEFAULT_MAX_HOLD_MS;
+  let n = new Map();
+  let a = (e, t) => {
+    let s = n.get(e);
+    return s !== undefined && t < s.holdUntil;
+  };
   return {
     shouldSkip(e, t = Date.now()) {
       return a(e, t);
     },
     recordFailure(e, t = Date.now()) {
       if (a(e, t)) return;
-      let c = (n.get(e)?.count ?? 0) + 1,
-        min = Math.min(o, r * 2 ** (c - 1));
-      n.set(e, { count: c, holdUntil: t + min });
+      let c = (n.get(e)?.count ?? 0) + 1;
+      let min = Math.min(maxHoldMs, baseHoldMs * 2 ** (c - 1));
+      n.set(e, {
+        count: c,
+        holdUntil: t + min,
+      });
     },
     recordSuccess(e) {
       n.delete(e);
@@ -102,5 +115,4 @@ function createDialFailureLatch(i) {
     },
   };
 }
-
 export { createDialFailureLatch, boundDial };

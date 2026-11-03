@@ -5,24 +5,24 @@
  * pieces: chunk-mrx6y2r5.js (2)
  * attribution: esm-fingerprint 2
  */
-import { Jl } from "./createAbortablePromise.js";
+import { createAbortablePromise } from "./createAbortablePromise.js";
 
 //@ chunk-mrx6y2r5.js:56444-56476 esm-fingerprint
-var vp = "The delay was aborted.";
+var StandardAbortMessage_2 = "The delay was aborted.";
 //@ chunk-mrx6y2r5.js:56476-56688 esm-fingerprint
-function ma(e, t) {
-  let r,
-    { abortSignal: abortSignal, abortErrorMsg: abortErrorMsg } = t !== null && t !== void 0 ? t : {};
-  return Jl(
-    (i) => {
-      r = setTimeout(i, e);
+function delay_2(timeInMs, options) {
+  let token;
+  let { abortSignal, abortErrorMsg } = options !== null && options !== undefined ? options : {};
+  return createAbortablePromise(
+    (resolve) => {
+      token = setTimeout(resolve, timeInMs);
     },
     {
-      cleanupBeforeAbort: () => clearTimeout(r),
-      abortSignal: abortSignal,
-      abortErrorMsg: abortErrorMsg !== null && abortErrorMsg !== void 0 ? abortErrorMsg : vp,
+      cleanupBeforeAbort: () => clearTimeout(token),
+      abortSignal,
+      abortErrorMsg:
+        abortErrorMsg !== null && abortErrorMsg !== undefined ? abortErrorMsg : StandardAbortMessage_2,
     },
   );
 }
-
-export { ma };
+export { delay_2 };

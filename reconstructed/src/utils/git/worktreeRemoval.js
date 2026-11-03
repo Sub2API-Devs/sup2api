@@ -8,43 +8,9 @@
  * pieces: chunk-2xm1rxms.js (34)
  * attribution: placement 29, affinity 2, sole-consumer 3
  */
-import {
-  join,
-  join as join_2,
-  join as join_3,
-  normalize,
-  normalize as normalize_2,
-  normalize as normalize_3,
-  dirname,
-  dirname as dirname_2,
-  dirname as dirname_3,
-  basename,
-  basename as basename_2,
-  parse,
-  parse as parse_2,
-  sep,
-  sep as sep_2,
-  sep as sep_3,
-  isAbsolute,
-  isAbsolute as isAbsolute_2,
-  isAbsolute as isAbsolute_3,
-  resolve,
-  resolve as resolve_2,
-  resolve as resolve_3,
-} from "path";
-import {
-  rm,
-  realpath,
-  realpath as realpath_2,
-  realpath as realpath_3,
-  lstat,
-  lstat as lstat_2,
-  lstat as lstat_3,
-  access,
-  readlink,
-  readlink as readlink_2,
-} from "fs/promises";
-import { constants, constants as constants_2 } from "fs";
+import { join, normalize, dirname, basename, parse, sep, isAbsolute, resolve } from "path";
+import { rm, realpath, lstat, access, readlink } from "fs/promises";
+import { constants } from "fs";
 import { randomBytes } from "crypto";
 import {
   safeListRegistrations,
@@ -53,8 +19,8 @@ import {
   getFileIdentity,
   removeAdminFiles,
   readOnlyOpenFlags,
+  WORKTREE_IO_LIMITS_2,
   WORKTREE_IO_LIMITS,
-  Jt,
 } from "./worktreeRegistrations.js";
 import {
   isENOENT,
@@ -64,61 +30,98 @@ import {
 } from "../errors.js";
 import { logForDebugging } from "../debug.js";
 import { getPlatform } from "../platform.js";
-import { Tc, Cp, normalizeCaseForPlatform, containsSamePath } from "../pathIdentity.js";
+import {
+  stripTrailingSeparators,
+  foldCaseBasic,
+  normalizeCaseForPlatform as normalizeCaseForPlatform_2,
+  containsSamePath,
+} from "../pathIdentity.js";
 import { vetWorktree, isSameRepository } from "./worktreeVetting.js";
 import { findCanonicalGitRootUncached } from "../git.js";
 import { refreshGitDir } from "./gitFilesystem.js";
 import { getFileIdentity_2 } from "../markdownConfigLoader.js";
 
+//@ chunk-2xm1rxms.js:25085-27973 placement
 /**
  * 安全删除 git worktree：校验目录、注销记录、处理锁定与二次强制，不跟随符号链接。
  */
-//@ chunk-2xm1rxms.js:25085-27973 placement
 async function removeWorktreeSafely(
   e,
   n,
   {
-    forceTwice: o = !1,
+    forceTwice: o = false,
     git: r,
     trustedRoot: s,
-    resolveAboveParent: a = !1,
-    deregisterIfStopped: l = !1,
-    pointerFirst: u = !1,
+    resolveAboveParent: a = false,
+    deregisterIfStopped: l = false,
+    pointerFirst: u = false,
   } = {},
 ) {
-  let c = await locateUnderRepoRoots(s === void 0 ? [e] : [e, s], n, { parentLinkToRoot: a });
-  if (c === null) return { outcome: "refused", reason: `${n} has no parent directory` };
-  if ("refused" in c) return { outcome: "refused", reason: c.refused };
-  let { base: base, rel: rel, underRoot: underRoot } = c,
-    b = r ?? (await inspectWorktreeDir(e));
+  let c = await locateUnderRepoRoots(s === undefined ? [e] : [e, s], n, {
+    parentLinkToRoot: a,
+  });
+  if (c === null)
+    return {
+      outcome: "refused",
+      reason: `${n} has no parent directory`,
+    };
+  if ("refused" in c)
+    return {
+      outcome: "refused",
+      reason: c.refused,
+    };
+  let { base, rel, underRoot } = c;
+  let b = r ?? (await inspectWorktreeDir(e));
   if ("why" in b)
     return {
       outcome: "refused",
       reason: `the repository's git directory failed its safety checks (${b.why})`,
     };
-  let dir = b.dir,
-    m = await resolveWorktreeBase(base, underRoot ? "root" : a ? "not_a_link" : "canonical");
-  if (!("held" in m)) return m.outcome === "unanchored" ? m : { outcome: "refused", reason: m.reason };
-  let { held: held, realBase: realBase } = m;
+  let dir = b.dir;
+  let worktreeBase = await resolveWorktreeBase(base, underRoot ? "root" : a ? "not_a_link" : "canonical");
+  if (!("held" in worktreeBase))
+    return worktreeBase.outcome === "unanchored"
+      ? worktreeBase
+      : {
+          outcome: "refused",
+          reason: worktreeBase.reason,
+        };
+  let { held, realBase } = worktreeBase;
   try {
     let E = await held.lstat(rel).then(
       (_) => _.isDirectory(),
-      () => !1,
+      () => false,
     );
     if (
       E &&
       (await held.list(rel).then(
-        () => !1,
-        (_) => Se(_),
+        () => false,
+        (error) => isListUnsupportedError(error),
       ))
     )
-      return { outcome: "unanchored", reason: "no_descriptor_listing" };
-    let v = underRoot || a ? [n, join_3(realBase, ...rel.split("/"))] : [n],
-      y = await safeListRegistrations(dir, { worktreePath: v, repoSpelled: b.root });
+      return {
+        outcome: "unanchored",
+        reason: "no_descriptor_listing",
+      };
+    let worktreePath = underRoot || a ? [n, join(realBase, ...rel.split("/"))] : [n];
+    let y = await safeListRegistrations(dir, {
+      worktreePath,
+      repoSpelled: b.root,
+    });
     if (E && y !== null && !("unavailable" in y)) {
-      let _ = await readRegisteredWorktreeName(held, rel, [n, join_3(realBase, ...rel.split("/"))], e, dir);
-      if (_ !== null && _ !== y.entryId) {
-        let X = await safeListRegistrations(dir, { entryId: _, worktreePath: v, repoSpelled: b.root });
+      let registeredWorktreeName = await readRegisteredWorktreeName(
+        held,
+        rel,
+        [n, join(realBase, ...rel.split("/"))],
+        e,
+        dir,
+      );
+      if (registeredWorktreeName !== null && registeredWorktreeName !== y.entryId) {
+        let X = await safeListRegistrations(dir, {
+          entryId: registeredWorktreeName,
+          worktreePath,
+          repoSpelled: b.root,
+        });
         if (X !== null && !("unavailable" in X)) y = X;
       }
     }
@@ -127,35 +130,52 @@ async function removeWorktreeSafely(
         outcome: "refused",
         reason: `git's records of worktrees in ${dir} could not be checked safely (${y.unavailable})`,
       };
-    if (y === null) return { outcome: "not_registered" };
+    if (y === null)
+      return {
+        outcome: "not_registered",
+      };
     if (
       !underRoot &&
-      !ut(
+      !isOneOfSamePaths(
         y.recordedGitdir,
-        [n, join_3(realBase, ...rel.split("/"))].map((_) => join_3(normalize_3(_), ".git")),
+        [n, join(realBase, ...rel.split("/"))].map((_) => join(normalize(_), ".git")),
       )
     )
       return {
         outcome: "refused",
         reason: `the folder holding ${n} resolved to a different place while it was being checked (a link may have been swapped in)`,
       };
-    if (y.locked && !o) return { outcome: "locked" };
-    let A = o ? "drop" : "keep",
-      P = await held.lstat(rel).then(
-        (_) => _,
-        (_) => ({ error: _ }),
-      );
+    if (y.locked && !o)
+      return {
+        outcome: "locked",
+      };
+    let A = o ? "drop" : "keep";
+    let P = await held.lstat(rel).then(
+      (_) => _,
+      (error) => ({
+        error,
+      }),
+    );
     if (
       "error" in P &&
       isENOENT(P.error) &&
-      (await held.lstat(nn(rel)).then(
+      (await held.lstat(dirnameOrEmpty(rel)).then(
         (_) => _.isDirectory(),
-        () => !1,
+        () => false,
       ))
     )
       return dropRegistrationAfter(
         n,
-        await deregisterWorktree(dir, { entryId: y.entryId, repoSpelled: b.root }, { locked: A }),
+        await deregisterWorktree(
+          dir,
+          {
+            entryId: y.entryId,
+            repoSpelled: b.root,
+          },
+          {
+            locked: A,
+          },
+        ),
         dir,
         y.entryId,
       );
@@ -167,35 +187,64 @@ async function removeWorktreeSafely(
             ? `the directory holding ${n} is missing`
             : `${n} is not a directory reachable without a link (${"error" in P ? (getErrnoCode(P.error) ?? "unknown error") : "not a directory"})`,
       };
-    let G = await readSmallFile(held, `${rel}/.git`);
-    if ("error" in G)
-      return { outcome: "refused", reason: `the .git file in ${n} could not be read (${G.error})` };
+    let smallFile = await readSmallFile(held, `${rel}/.git`);
+    if ("error" in smallFile)
+      return {
+        outcome: "refused",
+        reason: `the .git file in ${n} could not be read (${smallFile.error})`,
+      };
     if (
-      G.value === null ||
+      smallFile.value === null ||
       !(await isRegisteredWorktreeGitdir(
-        G.value,
-        [n, join_3(realBase, ...rel.split("/"))],
+        smallFile.value,
+        [n, join(realBase, ...rel.split("/"))],
         e,
         dir,
         y.entryId,
       ))
     )
-      return { outcome: "not_pointing_back" };
-    let V = l ? await statWorktreeAdminDir(dir, y.entryId) : null,
-      j = typeof V === "object" ? V : null,
-      D = { deleted: !1 };
+      return {
+        outcome: "not_pointing_back",
+      };
+    let V = l ? await statWorktreeAdminDir(dir, y.entryId) : null;
+    let j = typeof V === "object" ? V : null;
+    let D = {
+      deleted: false,
+    };
     try {
-      await removeWorktreeContents(held, rel, G.bytes, D, { pointerFirst: u });
+      await removeWorktreeContents(held, rel, smallFile.bytes, D, {
+        pointerFirst: u,
+      });
     } catch (error) {
-      if (!D.deleted && Se(error)) return { outcome: "unanchored", reason: "no_descriptor_listing" };
-      let X = un(error);
-      logForDebugging(`Worktree checkout ${n} not fully deleted: ${errorMessage(error)}`, { level: "warn" });
-      let kt = j !== null && D.deleted && (await removeHeldWorktree(dir, y.entryId, j, A));
-      return { outcome: "delete_failed", reason: X, started: D.deleted, deregistered: kt };
+      if (!D.deleted && isListUnsupportedError(error))
+        return {
+          outcome: "unanchored",
+          reason: "no_descriptor_listing",
+        };
+      let reason = describeRemovalError(error);
+      logForDebugging(`Worktree checkout ${n} not fully deleted: ${errorMessage(error)}`, {
+        level: "warn",
+      });
+      let deregistered = j !== null && D.deleted && (await removeHeldWorktree(dir, y.entryId, j, A));
+      return {
+        outcome: "delete_failed",
+        reason,
+        started: D.deleted,
+        deregistered,
+      };
     }
     return dropRegistrationAfter(
       n,
-      await deregisterWorktree(dir, { entryId: y.entryId, repoSpelled: b.root }, { locked: A }),
+      await deregisterWorktree(
+        dir,
+        {
+          entryId: y.entryId,
+          repoSpelled: b.root,
+        },
+        {
+          locked: A,
+        },
+      ),
       dir,
       y.entryId,
     );
@@ -204,11 +253,12 @@ async function removeWorktreeSafely(
   }
 }
 //@ chunk-2xm1rxms.js:27973-28767 placement
-async function vetWorktreeForRemoval(e, n, { rootIsCanonical: o = !1 } = {}) {
-  let r = n === void 0 ? splitParentAndName(e) : await locateUnderRepoRoots([n], e);
+async function vetWorktreeForRemoval(dirPath, zipPath, { rootIsCanonical: o = false } = {}) {
+  let r =
+    zipPath === undefined ? splitParentAndName(dirPath) : await locateUnderRepoRoots([zipPath], dirPath);
   if (r === null)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `${e} has no parent directory`,
+      `${dirPath} has no parent directory`,
       "the path to delete has no parent directory",
     );
   if ("refused" in r)
@@ -216,30 +266,40 @@ async function vetWorktreeForRemoval(e, n, { rootIsCanonical: o = !1 } = {}) {
       r.refused,
       "the path to delete reaches its root by a spelling that cannot be checked safely",
     );
-  let s = await resolveWorktreeBase(
+  let worktreeBase = await resolveWorktreeBase(
     r.base,
-    n === void 0 || !r.underRoot ? "not_a_link" : o ? "canonical" : "root",
+    zipPath === undefined || !r.underRoot ? "not_a_link" : o ? "canonical" : "root",
   );
-  if (!("held" in s)) {
-    if (s.outcome === "unanchored") return { unanchored: s.reason };
-    if (s.absent === !0) return "absent";
+  if (!("held" in worktreeBase)) {
+    if (worktreeBase.outcome === "unanchored")
+      return {
+        unanchored: worktreeBase.reason,
+      };
+    if (worktreeBase.absent === true) return "absent";
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `could not open the directory above ${e}: ${s.reason}`,
+      `could not open the directory above ${dirPath}: ${worktreeBase.reason}`,
       "the directory above the path to delete could not be opened",
     );
   }
   try {
-    return (await unlinkTracked(s.held, r.rel)) ? "deleted" : "absent";
+    return (await unlinkTracked(worktreeBase.held, r.rel)) ? "deleted" : "absent";
   } catch (error) {
-    if (Se(error)) return { unanchored: "no_descriptor_listing" };
+    if (isListUnsupportedError(error))
+      return {
+        unanchored: "no_descriptor_listing",
+      };
     throw error;
   } finally {
-    await s.held.close().catch(() => {});
+    await worktreeBase.held.close().catch(() => {});
   }
 }
 //@ chunk-2xm1rxms.js:28767-28869 placement = convertDirectoryToZipInPlace (1)
-async function convertDirectoryToZipInPlace(e, n, o = {}) {
-  if (typeof (await vetWorktreeForRemoval(e, n, o)) === "object") await rm(e, { recursive: !0, force: !0 });
+async function convertDirectoryToZipInPlace(dirPath, zipPath, zipData = {}) {
+  if (typeof (await vetWorktreeForRemoval(dirPath, zipPath, zipData)) === "object")
+    await rm(dirPath, {
+      recursive: true,
+      force: true,
+    });
 }
 //@ chunk-2xm1rxms.js:28869-30425 placement
 function worktreeRemovalText(e) {
@@ -255,7 +315,8 @@ function worktreeRemovalText(e) {
     case "refused":
       return `${e.reason}; nothing was deleted`;
     case "delete_failed":
-      if (e.reason === rt) return `${rt}; try removing it again once nothing is writing to it`;
+      if (e.reason === FILES_KEPT_APPEARING_REASON)
+        return `${FILES_KEPT_APPEARING_REASON}; try removing it again once nothing is writing to it`;
       if (e.reason === "WORKING_NAME_NOT_PLAIN")
         return "it holds a file name that Windows cannot delete this way; some of its other files may already be deleted";
       if (e.reason === "ENOTEMPTY")
@@ -274,123 +335,150 @@ function worktreeRemovalText(e) {
   }
 }
 //@ chunk-2xm1rxms.js:30425-30498 placement
-var rt = "files kept appearing in the worktree while it was being deleted";
+var FILES_KEPT_APPEARING_REASON = "files kept appearing in the worktree while it was being deleted";
 //@ chunk-2xm1rxms.js:30498-30554 placement
-function Se(e) {
-  return getErrnoCode(e) === "WORKING_LIST_UNSUPPORTED";
+function isListUnsupportedError(error) {
+  return getErrnoCode(error) === "WORKING_LIST_UNSUPPORTED";
 }
 //@ chunk-2xm1rxms.js:30554-30625 placement
-function nn(e) {
+function dirnameOrEmpty(e) {
   return e.includes("/") ? e.slice(0, e.lastIndexOf("/")) : "";
 }
 //@ chunk-2xm1rxms.js:30625-32547 placement
-async function resolveWorktreeBase(e, n, { holdBase: o = !1 } = {}) {
-  let r = (f, p = !1) => ({ outcome: "refused", reason: f, absent: p }),
-    a = await (async () => {
-      if (n === "root") return realpath_3(e);
-      let f = join_3(await realpath_3(dirname_3(e)), basename_2(e));
-      return n === "not_a_link" && getPlatform() !== "windows" && (await isRootOwnedLinkChain(f))
-        ? realpath_3(f)
-        : f;
-    })().catch((f) => (isENOENT(f) ? void 0 : getErrnoCode(f) === "ELOOP" ? "link" : null));
-  if (a === "link") return r(`${e} is a link, or its spelling differs from the one on disk`);
-  if (a === void 0 || a === null) return r(`${e} does not exist or cannot be read`, a === void 0);
-  if (n === "canonical" && !samePathKey(a, e))
+async function resolveWorktreeBase(base, n, { holdBase: o = false } = {}) {
+  let r = (reason, absent = false) => ({
+    outcome: "refused",
+    reason,
+    absent,
+  });
+  let a = await (async () => {
+    if (n === "root") return realpath(base);
+    let f = join(await realpath(dirname(base)), basename(base));
+    return n === "not_a_link" && getPlatform() !== "windows" && (await isRootOwnedLinkChain(f))
+      ? realpath(f)
+      : f;
+  })().catch((error) => (isENOENT(error) ? undefined : getErrnoCode(error) === "ELOOP" ? "link" : null));
+  if (a === "link") return r(`${base} is a link, or its spelling differs from the one on disk`);
+  if (a === undefined || a === null) return r(`${base} does not exist or cannot be read`, a === undefined);
+  if (n === "canonical" && !samePathKey(a, base))
     return r(
-      `${e} is reached through a link, or its spelling differs from the one on disk (it resolves to ${a})`,
+      `${base} is reached through a link, or its spelling differs from the one on disk (it resolves to ${a})`,
     );
-  let root = parse_2(a).root,
-    u = getPlatform() === "windows" || o ? a : await walkPathComponents(a);
-  if (u === null) return r(`a directory above ${e} cannot be read`);
-  let c = await loadNativeFsHelpers().catch((f) => ({ failed: errorMessage(f) }));
-  if ("failed" in c) return r(`${e} could not be opened safely (${c.failed})`);
-  let { tree: tree, host: host } = c,
-    g = await tree
-      .openTreeAnchor(host, { gitRoot: u, realRoot: u })
-      .catch((f) => ({ failed: errorMessage(f), code: getErrnoCode(f) }));
+  let root = parse(a).root;
+  let u = getPlatform() === "windows" || o ? a : await walkPathComponents(a);
+  if (u === null) return r(`a directory above ${base} cannot be read`);
+  let c = await loadNativeFsHelpers().catch((error) => ({
+    failed: errorMessage(error),
+  }));
+  if ("failed" in c) return r(`${base} could not be opened safely (${c.failed})`);
+  let { tree, host } = c;
+  let g = await tree
+    .openTreeAnchor(host, {
+      gitRoot: u,
+      realRoot: u,
+    })
+    .catch((error) => ({
+      failed: errorMessage(error),
+      code: getErrnoCode(error),
+    }));
   if ("failed" in g) {
     let f = u === a;
     return f && g.code === "ENOENT"
-      ? r(`${e} does not exist`, !0)
+      ? r(`${base} does not exist`, true)
       : f && (g.code === "ELOOP" || g.code === "ENOTDIR")
-        ? r(`${e} is a link, or changed while it was being opened`)
+        ? r(`${base} is a link, or changed while it was being opened`)
         : f && g.code === "WORKING_ROOT_NOT_CANONICAL"
-          ? r(`${e} is reached through a link, or its spelling differs from the one on disk`)
-          : r(`${e} could not be opened safely (${g.failed})`);
+          ? r(`${base} is reached through a link, or its spelling differs from the one on disk`)
+          : r(`${base} could not be opened safely (${g.failed})`);
   }
   if ("unavailable" in g) {
-    let unavailableReason = tree.getUnavailableReason(await tree.checkAnchoring(root, { host: host })),
-      p =
-        unavailableReason === "no_ffi" ||
-        (unavailableReason === "remote_volume" && (n !== "not_a_link" || (await isSameVolumeRoot(e, root))));
+    let unavailableReason = tree.getUnavailableReason(
+      await tree.checkAnchoring(root, {
+        host,
+      }),
+    );
+    let p =
+      unavailableReason === "no_ffi" ||
+      (unavailableReason === "remote_volume" && (n !== "not_a_link" || (await isSameVolumeRoot(base, root))));
     return unavailableReason !== null && (getPlatform() !== "windows" || p)
-      ? { outcome: "unanchored", reason: unavailableReason }
-      : r(`${e} could not be opened safely (${g.unavailable})`);
+      ? {
+          outcome: "unanchored",
+          reason: unavailableReason,
+        }
+      : r(`${base} could not be opened safely (${g.unavailable})`);
   }
-  let b = u === a ? "" : a.slice(Tc(u).length).split(sep_3).filter(Boolean).join("/"),
-    T = scopedFs(g, b),
-    m = await T.lstat("").then(
-      (f) => f,
-      (f) => ({ error: f }),
-    );
-  if ("error" in m || !m.isDirectory())
-    return (
-      await g.close().catch(() => {}),
-      "error" in m && isENOENT(m.error)
-        ? r(`${e} does not exist`, !0)
-        : r(`${e} is a link, or changed while it was being opened`)
-    );
-  return { held: T, realBase: a };
+  let b = u === a ? "" : a.slice(stripTrailingSeparators(u).length).split(sep).filter(Boolean).join("/");
+  let T = scopedFs(g, b);
+  let m = await T.lstat("").then(
+    (f) => f,
+    (error) => ({
+      error,
+    }),
+  );
+  if ("error" in m || !m.isDirectory()) {
+    await g.close().catch(() => {});
+    return "error" in m && isENOENT(m.error)
+      ? r(`${base} does not exist`, true)
+      : r(`${base} is a link, or changed while it was being opened`);
+  }
+  return {
+    held: T,
+    realBase: a,
+  };
 }
 //@ chunk-2xm1rxms.js:32547-32875 placement
 async function walkPathComponents(e) {
-  let root = parse_2(e).root,
-    filtered = e.slice(root.length).split(sep_3).filter(Boolean),
-    r = root,
-    s = root,
-    a = !1;
+  let root = parse(e).root;
+  let filtered = e.slice(root.length).split(sep).filter(Boolean);
+  let r = root;
+  let s = root;
+  let a = false;
   for (let l of filtered) {
-    let u = await probeAccess(s, constants_2.R_OK),
-      c = await probeAccess(s, constants_2.W_OK);
+    let u = await probeAccess(s, constants.R_OK);
+    let c = await probeAccess(s, constants.W_OK);
     if (u === null || c === null) return null;
     if (!u) {
-      let w = await lstat_3(s).then(
+      let w = await lstat(s).then(
         (h) => h.uid,
         () => null,
       );
       if (w === null || w === process.getuid?.() || c || a) return null;
-      r = join_3(s, l);
+      r = join(s, l);
     }
-    ((a ||= c), (s = join_3(s, l)));
+    a ||= c;
+    s = join(s, l);
   }
   return r;
 }
 //@ chunk-2xm1rxms.js:32875-32986 placement
-async function isSameVolumeRoot(e, n) {
-  let o = await realpath_3(parse_2(e).root).catch(() => null);
-  return o !== null && Cp(Tc(parse_2(o).root)) === Cp(Tc(n));
+async function isSameVolumeRoot(e, root) {
+  let o = await realpath(parse(e).root).catch(() => null);
+  return (
+    o !== null &&
+    foldCaseBasic(stripTrailingSeparators(parse(o).root)) === foldCaseBasic(stripTrailingSeparators(root))
+  );
 }
 //@ chunk-2xm1rxms.js:32986-33096 placement
 async function probeAccess(e, n) {
   return access(e, n).then(
-    () => !0,
-    (o) => (["EACCES", "EPERM", "EROFS"].includes(getErrnoCode(o) ?? "") ? !1 : null),
+    () => true,
+    (error) => (["EACCES", "EPERM", "EROFS"].includes(getErrnoCode(error) ?? "") ? false : null),
   );
 }
 //@ chunk-2xm1rxms.js:33096-33316 placement
 async function isRootOwnedLinkChain(e) {
-  let n = await lstat_3(e).catch(() => null);
-  if (n === null || !n.isSymbolicLink()) return !1;
-  for (let o = dirname_3(e); ; o = dirname_3(o)) {
+  let n = await lstat(e).catch(() => null);
+  if (n === null || !n.isSymbolicLink()) return false;
+  for (let o = dirname(e); ; o = dirname(o)) {
     if (
-      (await lstat_3(o).then(
+      (await lstat(o).then(
         (s) => s.uid,
         () => null,
       )) !== 0 ||
-      (await probeAccess(o, constants_2.W_OK)) !== !1
+      (await probeAccess(o, constants.W_OK)) !== false
     )
-      return !1;
-    if (dirname_3(o) === o) return !0;
+      return false;
+    if (dirname(o) === o) return true;
   }
 }
 //@ chunk-2xm1rxms.js:33316-33682 placement
@@ -411,19 +499,28 @@ function scopedFs(e, n) {
 }
 //@ chunk-2xm1rxms.js:33682-34641 placement
 async function inspectWorktreeDir(e) {
-  let n = e,
-    o = await vetWorktree(e, { dotGitLink: "vet" });
+  let n = e;
+  let o = await vetWorktree(e, {
+    dotGitLink: "vet",
+  });
   if ("skipped" in o && o.skipped === "pointer") {
-    let s = findCanonicalGitRootUncached(e);
-    if (s !== null && s !== e) ((n = s), (o = await vetWorktree(s, { dotGitLink: "vet" })));
-    else {
+    let canonicalGitRootUncached = findCanonicalGitRootUncached(e);
+    if (canonicalGitRootUncached !== null && canonicalGitRootUncached !== e) {
+      n = canonicalGitRootUncached;
+      o = await vetWorktree(canonicalGitRootUncached, {
+        dotGitLink: "vet",
+      });
+    } else {
       let a = await refreshGitDir(e);
-      if (a === null) return { why: "its .git file names no usable git directory" };
+      if (a === null)
+        return {
+          why: "its .git file names no usable git directory",
+        };
       if ("refused" in (await isSameRepository(e, a)))
         return {
           why: `its .git file names ${a}, which is inside the working tree, or could not be checked against it`,
         };
-      let [l, u] = await Promise.all([a, e].map((w) => realpath_3(w).catch(() => null)));
+      let [l, u] = await Promise.all([a, e].map((w) => realpath(w).catch(() => null)));
       if (l == null || u == null)
         return {
           why:
@@ -431,55 +528,78 @@ async function inspectWorktreeDir(e) {
               ? `its .git file names ${a}, which does not exist or cannot be resolved`
               : "the repository root cannot be resolved",
         };
-      if (ft(normalizeCaseForPlatform(l), normalizeCaseForPlatform(u)))
-        return { why: `its .git file names ${a}, which resolves into the working tree` };
-      return (await lstat_3(join_3(l, "commondir")).then(
-        () => !1,
-        (w) => isENOENT(w),
+      if (isPathAtOrUnder(normalizeCaseForPlatform_2(l), normalizeCaseForPlatform_2(u)))
+        return {
+          why: `its .git file names ${a}, which resolves into the working tree`,
+        };
+      return (await lstat(join(l, "commondir")).then(
+        () => false,
+        (error) => isENOENT(error),
       ))
-        ? { dir: l, root: e }
-        : { why: "its .git file names another worktree" };
+        ? {
+            dir: l,
+            root: e,
+          }
+        : {
+            why: "its .git file names another worktree",
+          };
     }
   }
-  if ("skipped" in o) return { why: o.why };
+  if ("skipped" in o)
+    return {
+      why: o.why,
+    };
   let r = await isSameRepository(n, o.gitDir);
-  return "refused" in r ? { why: r.refused } : { dir: r.gitDir, root: n };
+  return "refused" in r
+    ? {
+        why: r.refused,
+      }
+    : {
+        dir: r.gitDir,
+        root: n,
+      };
 }
 //@ chunk-2xm1rxms.js:34641-34710 placement
-async function it(e, n, o) {
-  return e.lstat(n).then(
+async function fileIdentityOrFalse(held, n, o) {
+  return held.lstat(n).then(
     (r) => getFileIdentity(r, o),
-    () => !1,
+    () => false,
   );
 }
 //@ chunk-2xm1rxms.js:34710-34872 placement
-async function hasGitDirOwnFiles(e, n) {
+async function hasGitDirOwnFiles(held, n) {
   for (let o of ["objects", "config", "packed-refs", "hooks", "worktrees"])
     if (
-      await e.lstat(`${n}/${o}`).then(
-        () => !0,
-        (s) => !isENOENT(s),
+      await held.lstat(`${n}/${o}`).then(
+        () => true,
+        (error) => !isENOENT(error),
       )
     )
-      return !0;
-  return !1;
+      return true;
+  return false;
 }
 //@ chunk-2xm1rxms.js:34872-36944 placement
-async function removeHeldWorktree(e, n, o, r) {
-  let s = await resolveWorktreeBase(e, "canonical", { holdBase: !0 });
-  if (!("held" in s))
-    return (logForDebugging(`Kept the registration ${n} in ${e}: ${s.reason}`, { level: "warn" }), !1);
+async function removeHeldWorktree(dir, entryId, o, r) {
+  let worktreeBase = await resolveWorktreeBase(dir, "canonical", {
+    holdBase: true,
+  });
+  if (!("held" in worktreeBase)) {
+    logForDebugging(`Kept the registration ${entryId} in ${dir}: ${worktreeBase.reason}`, {
+      level: "warn",
+    });
+    return false;
+  }
   try {
-    let a = `worktrees/${n}`;
-    if (!(await it(s.held, a, o)))
+    let a = `worktrees/${entryId}`;
+    if (!(await fileIdentityOrFalse(worktreeBase.held, a, o)))
       throw Error(
         "its folder changed after it was checked, or this volume cannot show it is the same folder",
       );
     if (
       r === "keep" &&
-      (await s.held.lstat(`worktrees/${n}/locked`).then(
-        () => !0,
-        (c) => !isENOENT(c),
+      (await worktreeBase.held.lstat(`worktrees/${entryId}/locked`).then(
+        () => true,
+        (error) => !isENOENT(error),
       ))
     )
       throw Error("it was locked while the checkout was being deleted");
@@ -487,183 +607,221 @@ async function removeHeldWorktree(e, n, o, r) {
       `${a} has a git directory's own files (objects, config, packed-refs, hooks or worktrees) in it, or could not be checked for them, so nothing in it was removed`,
       "the registration entry has a git directory's own files in it, or could not be checked for them",
     );
-    if (await hasGitDirOwnFiles(s.held, a)) throw l;
-    if (
-      (await s.held.unlink(`${a}/gitdir`).catch((c) => {
-        if (!isENOENT(c)) throw c;
-      }),
-      await hasGitDirOwnFiles(s.held, a))
-    )
-      return (
-        logForDebugging(
-          `Dropped the registration ${a} in ${e} (git no longer lists it) but left its folder, which now has a git directory's own files (objects, config, packed-refs, hooks or worktrees) in it, or could not be checked for them. git's next \`git worktree prune\` or \`git gc\` deletes that folder whole; move out anything you need first.`,
-          { level: "warn" },
-        ),
-        !1
+    if (await hasGitDirOwnFiles(worktreeBase.held, a)) throw l;
+    await worktreeBase.held.unlink(`${a}/gitdir`).catch((error) => {
+      if (!isENOENT(error)) throw error;
+    });
+    if (await hasGitDirOwnFiles(worktreeBase.held, a)) {
+      logForDebugging(
+        `Dropped the registration ${a} in ${dir} (git no longer lists it) but left its folder, which now has a git directory's own files (objects, config, packed-refs, hooks or worktrees) in it, or could not be checked for them. git's next \`git worktree prune\` or \`git gc\` deletes that folder whole; move out anything you need first.`,
+        {
+          level: "warn",
+        },
       );
+      return false;
+    }
+    await removeAdminFiles(worktreeBase.held, a, o);
     if (
-      (await removeAdminFiles(s.held, a, o),
-      await s.held.rmdir(a).then(
-        () => !0,
-        (c) => isENOENT(c),
-      ))
+      await worktreeBase.held.rmdir(a).then(
+        () => true,
+        (error) => isENOENT(error),
+      )
     )
-      return !0;
-    if (!(await it(s.held, a, o)))
-      return (
-        logForDebugging(
-          `Dropped the registration ${a} in ${e} (git no longer lists it) but left its folder: it changed while it was being emptied`,
-          { level: "warn" },
-        ),
-        !1
+      return true;
+    if (!(await fileIdentityOrFalse(worktreeBase.held, a, o))) {
+      logForDebugging(
+        `Dropped the registration ${a} in ${dir} (git no longer lists it) but left its folder: it changed while it was being emptied`,
+        {
+          level: "warn",
+        },
       );
+      return false;
+    }
     let u = `${a}.claude-dropped-${randomBytes(4).toString("hex")}`;
-    return await s.held.rename(a, u).then(
-      () => (
+    return await worktreeBase.held.rename(a, u).then(
+      () => {
         logForDebugging(
-          `Dropped the registration ${a} in ${e}; its folder held files Claude Code does not delete (such as a submodule's git directory), so it was moved to ${u}; git worktree prune removes it`,
-          { level: "warn" },
-        ),
-        !0
-      ),
-      (c) => (
+          `Dropped the registration ${a} in ${dir}; its folder held files Claude Code does not delete (such as a submodule's git directory), so it was moved to ${u}; git worktree prune removes it`,
+          {
+            level: "warn",
+          },
+        );
+        return true;
+      },
+      (error) => {
         logForDebugging(
-          `Dropped the registration ${a} in ${e} (git no longer lists it) but could not move its folder aside (${errorMessage(c)}); git worktree prune removes it`,
-          { level: "warn" },
-        ),
-        !1
-      ),
+          `Dropped the registration ${a} in ${dir} (git no longer lists it) but could not move its folder aside (${errorMessage(error)}); git worktree prune removes it`,
+          {
+            level: "warn",
+          },
+        );
+        return false;
+      },
     );
   } catch (error) {
-    return (
-      logForDebugging(`Kept the registration ${n} in ${e}: ${errorMessage(error)}`, { level: "warn" }),
-      !1
-    );
+    logForDebugging(`Kept the registration ${entryId} in ${dir}: ${errorMessage(error)}`, {
+      level: "warn",
+    });
+    return false;
   } finally {
-    await s.held.close().catch(() => {});
+    await worktreeBase.held.close().catch(() => {});
   }
 }
 //@ chunk-2xm1rxms.js:36944-37291 placement
-async function dropRegistrationAfter(e, n, o, r) {
-  let s = join_3(o, "worktrees", r);
-  if (n.outcome === "dropped" || (n.outcome === "none" && (await statWorktreeAdminDir(o, r)) === "absent"))
-    return { outcome: "removed" };
+async function dropRegistrationAfter(e, n, dir, entryId) {
+  let s = join(dir, "worktrees", entryId);
+  if (
+    n.outcome === "dropped" ||
+    (n.outcome === "none" && (await statWorktreeAdminDir(dir, entryId)) === "absent")
+  )
+    return {
+      outcome: "removed",
+    };
   let a = n.outcome === "kept" ? n.reason : `git's record of it at ${s} could not be read`;
-  return (
-    logForDebugging(`Worktree ${e} is gone but git still lists it: ${a}`, { level: "warn" }),
-    { outcome: "registration_kept", reason: a }
-  );
+  logForDebugging(`Worktree ${e} is gone but git still lists it: ${a}`, {
+    level: "warn",
+  });
+  return {
+    outcome: "registration_kept",
+    reason: a,
+  };
 }
 //@ chunk-2xm1rxms.js:37291-37538 placement
 async function statWorktreeAdminDir(e, n) {
-  let o = await resolveWorktreeBase(e, "canonical", { holdBase: !0 });
-  if (!("held" in o)) return null;
+  let worktreeBase = await resolveWorktreeBase(e, "canonical", {
+    holdBase: true,
+  });
+  if (!("held" in worktreeBase)) return null;
   try {
-    return await o.held.lstat(`worktrees/${n}`).then(
-      (r) => ({ dev: r.dev, ino: r.ino }),
-      (r) => (isENOENT(r) ? "absent" : null),
+    return await worktreeBase.held.lstat(`worktrees/${n}`).then(
+      (r) => ({
+        dev: r.dev,
+        ino: r.ino,
+      }),
+      (error) => (isENOENT(error) ? "absent" : null),
     );
   } finally {
-    await o.held.close().catch(() => {});
+    await worktreeBase.held.close().catch(() => {});
   }
 }
 //@ chunk-2xm1rxms.js:37538-37635 placement
-function un(e) {
-  return getErrnoCode(e) === "ENOTEMPTY" && !("syscall" in Object(e))
-    ? errorMessage(e)
-    : (getErrnoCode(e) ?? "an unknown error");
+function describeRemovalError(error) {
+  return getErrnoCode(error) === "ENOTEMPTY" && !("syscall" in Object(error))
+    ? errorMessage(error)
+    : (getErrnoCode(error) ?? "an unknown error");
 }
 //@ chunk-2xm1rxms.js:37635-37673 placement
 function samePathKey(e, n) {
-  return se(e) === se(n);
+  return normalizeCaseForPlatform(e) === normalizeCaseForPlatform(n);
 }
 //@ chunk-2xm1rxms.js:37673-37718 placement
-function ut(e, n) {
-  return containsSamePath(se(e), n.map(se));
+function isOneOfSamePaths(e, n) {
+  return containsSamePath(normalizeCaseForPlatform(e), n.map(normalizeCaseForPlatform));
 }
 //@ chunk-2xm1rxms.js:37718-37804 placement
-function se(e) {
+function normalizeCaseForPlatform(e) {
   return getPlatform() === "windows" ? e.replace(/^[a-z](?=:)/, (n) => n.toUpperCase()) : e;
 }
 //@ chunk-2xm1rxms.js:37804-37879 affinity
-function at(e, n) {
-  return e.length > n.length + 1 && samePathKey(e.slice(0, n.length + 1), n + sep_3);
+function isUnderPathWithSeparator(e, n) {
+  return e.length > n.length + 1 && samePathKey(e.slice(0, n.length + 1), n + sep);
 }
 //@ chunk-2xm1rxms.js:37879-37944 affinity
-function ft(e, n) {
-  return e === n || e.startsWith(n.endsWith(sep_3) ? n : n + sep_3);
+function isPathAtOrUnder(e, n) {
+  return e === n || e.startsWith(n.endsWith(sep) ? n : n + sep);
 }
+//@ chunk-2xm1rxms.js:38224-39569 sole-consumer
 /**
  * 把目标路径与仓库根（含真实路径）比较，返回 {base, rel, underRoot}；只在大小写/Unicode 形式上不同时， 非 Windows 且同一文件则接受，否则拒绝并说明。
  */
-//@ chunk-2xm1rxms.js:38224-39569 sole-consumer
-async function locateUnderRepoRoots(e, n, { parentLinkToRoot: o = !1 } = {}) {
-  let r = Tc(normalize_3(n)),
-    s = (h, g) =>
-      h
-        .slice(g.length + 1)
-        .split(sep_3)
-        .join("/"),
-    a = [],
-    l = [];
+async function locateUnderRepoRoots(e, n, { parentLinkToRoot: o = false } = {}) {
+  let r = stripTrailingSeparators(normalize(n));
+  let s = (h, g) =>
+    h
+      .slice(g.length + 1)
+      .split(sep)
+      .join("/");
+  let a = [];
+  let l = [];
   for (let h of e) {
-    let g = await realpath_3(h).catch(() => null);
-    if ((a.push(h, ...(g === null ? [] : [g])), g !== null)) l.push(Tc(g));
+    let g = await realpath(h).catch(() => null);
+    a.push(h, ...(g === null ? [] : [g]));
+    if (g !== null) l.push(stripTrailingSeparators(g));
   }
-  let mapped = a.map((h) => Tc(normalize_3(h)));
+  let mapped = a.map((h) => stripTrailingSeparators(normalize(h)));
   for (let h of mapped)
-    if (at(r, h)) {
+    if (isUnderPathWithSeparator(r, h)) {
       let sliced = r.slice(0, h.length);
-      return { base: sliced.endsWith(":") ? sliced + sep_3 : sliced, rel: s(r, h), underRoot: !0 };
+      return {
+        base: sliced.endsWith(":") ? sliced + sep : sliced,
+        rel: s(r, h),
+        underRoot: true,
+      };
     }
-  let c = (h) => Cp(h.normalize("NFC")),
-    found = mapped.find((h) => at(c(r), c(h)));
-  if (found !== void 0) {
-    let parts = r.split(sep_3),
-      g = found.split(sep_3).length;
-    if (getPlatform() !== "windows" && (await getFileIdentity_2(parts.slice(0, g).join(sep_3), found)))
-      return { base: found, rel: parts.slice(g).join("/"), underRoot: !0 };
+  let c = (h) => foldCaseBasic(h.normalize("NFC"));
+  let found = mapped.find((h) => isUnderPathWithSeparator(c(r), c(h)));
+  if (found !== undefined) {
+    let parts = r.split(sep);
+    let g = found.split(sep).length;
+    if (getPlatform() !== "windows" && (await getFileIdentity_2(parts.slice(0, g).join(sep), found)))
+      return {
+        base: found,
+        rel: parts.slice(g).join("/"),
+        underRoot: true,
+      };
     return {
       refused: `${n} spells the repository folder ${found} in another letter case or Unicode form (use the path as git records it)`,
     };
   }
   if (l.length > 0) {
-    let parts = r.split(sep_3),
-      g = null;
-    for (let f = 1; f < parts.length - 1; f++) {
-      let joined = parts.slice(0, f).join(sep_3),
-        E = joined === "" || joined.endsWith(":") ? joined + sep_3 : joined,
-        v = await realpath_3(E).catch(() => null);
+    let parts = r.split(sep);
+    let g = null;
+    for (let j = 1; j < parts.length - 1; j++) {
+      let joined = parts.slice(0, j).join(sep);
+      let E = joined === "" || joined.endsWith(":") ? joined + sep : joined;
+      let v = await realpath(E).catch(() => null);
       g = v;
-      let y = v === null ? null : Tc(v),
-        A = y === null ? void 0 : l.find((P) => samePathKey(y, P));
-      if (A !== void 0) return { base: A, rel: parts.slice(f).join("/"), underRoot: !0 };
-      if (y !== null && l.some((P) => ft(y, P)))
-        return { refused: `${n} is reached through a link into the repository at ${E}` };
+      let y = v === null ? null : stripTrailingSeparators(v);
+      let A = y === null ? undefined : l.find((P) => samePathKey(y, P));
+      if (A !== undefined)
+        return {
+          base: A,
+          rel: parts.slice(j).join("/"),
+          underRoot: true,
+        };
+      if (y !== null && l.some((P) => isPathAtOrUnder(y, P)))
+        return {
+          refused: `${n} is reached through a link into the repository at ${E}`,
+        };
     }
-    let b = g === null ? null : join_3(g, parts.at(-2)),
-      T = b === null || !o ? null : await readLinkTargetSafe(b),
-      found = [b, T]
-        .flatMap((f) => (f === null ? [] : [f]))
-        .map((f) => l.find((p) => samePathKey(f, p)))
-        .find((f) => f !== void 0);
-    if (found !== void 0) return { base: found, rel: parts.at(-1), underRoot: !0 };
+    let b = g === null ? null : join(g, parts.at(-2));
+    let T = b === null || !o ? null : await readLinkTargetSafe(b);
+    let found = [b, T]
+      .flatMap((f) => (f === null ? [] : [f]))
+      .map((f) => l.find((p) => samePathKey(f, p)))
+      .find((f) => f !== undefined);
+    if (found !== undefined)
+      return {
+        base: found,
+        rel: parts.at(-1),
+        underRoot: true,
+      };
   }
   return splitParentAndName(r);
 }
+//@ chunk-2xm1rxms.js:39569-39924 sole-consumer
 /**
  * 读链接目标，含 . / .. 段时返回 null。
  */
-//@ chunk-2xm1rxms.js:39569-39924 sole-consumer
 async function readLinkTargetSafe(e) {
-  let n = await readlink_2(e).catch(() => null);
+  let n = await readlink(e).catch(() => null);
   if (n === null) return null;
   let o = getPlatform() === "windows" && /^\\\\\?\\[A-Za-z]:\\/.test(n);
   if (o && n.includes("/")) return null;
-  let r = o ? n.slice(4) : n,
-    parts = r.split(sep_3 === "\\" ? /[\\/]/ : /\//);
+  let r = o ? n.slice(4) : n;
+  let parts = r.split(sep === "\\" ? /[\\/]/ : /\//);
   if (
-    (isAbsolute_3(r)
+    (isAbsolute(r)
       ? parts
       : parts.slice(
           Math.max(
@@ -674,112 +832,149 @@ async function readLinkTargetSafe(e) {
     ).some((l) => l === "." || l === "..")
   )
     return null;
-  return Tc(normalize_3(isAbsolute_3(r) ? r : join_3(dirname_3(e), r)));
+  return stripTrailingSeparators(normalize(isAbsolute(r) ? r : join(dirname(e), r)));
 }
 //@ chunk-2xm1rxms.js:39924-40096 sole-consumer
 function splitParentAndName(e) {
-  let n = Tc(normalize_3(e)),
-    root = parse_2(n).root,
-    index = n.lastIndexOf(sep_3);
+  let n = stripTrailingSeparators(normalize(e));
+  let root = parse(n).root;
+  let index = n.lastIndexOf(sep);
   if (n === root || index === n.length - 1 || index < 0) return null;
-  return { base: index < root.length ? root : n.slice(0, index), rel: n.slice(index + 1), underRoot: !1 };
+  return {
+    base: index < root.length ? root : n.slice(0, index),
+    rel: n.slice(index + 1),
+    underRoot: false,
+  };
 }
 //@ chunk-2xm1rxms.js:40096-40305 placement
 async function isRegisteredWorktreeGitdir(e, n, o, r, s) {
-  let a = isAbsolute_3(e) ? [normalize_3(e)] : n.map((c) => normalize_3(resolve_3(c, e))),
-    l = await realpath_3(o).catch(() => null),
-    mapped = [r, join_3(o, ".git")]
-      .concat(l === null ? [] : [join_3(l, ".git")])
-      .map((c) => join_3(c, "worktrees", s));
-  return a.some((c) => ut(c, mapped));
+  let a = isAbsolute(e) ? [normalize(e)] : n.map((c) => normalize(resolve(c, e)));
+  let l = await realpath(o).catch(() => null);
+  let mapped = [r, join(o, ".git")]
+    .concat(l === null ? [] : [join(l, ".git")])
+    .map((c) => join(c, "worktrees", s));
+  return a.some((c) => isOneOfSamePaths(c, mapped));
 }
 //@ chunk-2xm1rxms.js:40305-40468 placement
-async function readRegisteredWorktreeName(e, n, o, r, s) {
-  let a = await readSmallFile(e, `${n}/.git`);
-  if ("error" in a || a.value === null) return null;
-  let l = basename_2(normalize_3(a.value));
-  return (await isRegisteredWorktreeGitdir(a.value, o, r, s, l)) ? l : null;
+async function readRegisteredWorktreeName(held, n, o, r, dir) {
+  let smallFile = await readSmallFile(held, `${n}/.git`);
+  if ("error" in smallFile || smallFile.value === null) return null;
+  let l = basename(normalize(smallFile.value));
+  return (await isRegisteredWorktreeGitdir(smallFile.value, o, r, dir, l)) ? l : null;
 }
 //@ chunk-2xm1rxms.js:40468-40632 placement
 async function readHandleUpTo(e, n) {
-  let alloc = Buffer.alloc(n + 1),
-    r = 0;
+  let o = Buffer.alloc(n + 1);
+  let r = 0;
   for (;;) {
-    let { bytesRead: bytesRead } = await e.read(alloc, r, alloc.length - r, r);
-    if (bytesRead === 0) return alloc.subarray(0, r);
-    if (((r += bytesRead), r > n)) return null;
+    let { bytesRead } = await e.read(o, r, o.length - r, r);
+    if (bytesRead === 0) return o.subarray(0, r);
+    r += bytesRead;
+    if (r > n) return null;
   }
 }
 //@ chunk-2xm1rxms.js:40632-41063 placement
 async function readSmallFile(e, n) {
-  let o = { value: null, bytes: Buffer.alloc(0) },
-    r;
+  let o = {
+    value: null,
+    bytes: Buffer.alloc(0),
+  };
+  let r;
   try {
     r = await e.open(n, readOnlyOpenFlags());
   } catch (error) {
-    let a = getErrnoCode(error);
-    return a === "ENOENT" || a === "ELOOP" || a === "EISDIR" ? o : { error: a ?? errorMessage(error) };
+    let errnoCode = getErrnoCode(error);
+    return errnoCode === "ENOENT" || errnoCode === "ELOOP" || errnoCode === "EISDIR"
+      ? o
+      : {
+          error: errnoCode ?? errorMessage(error),
+        };
   }
   try {
     if (!(await r.stat()).isFile()) return o;
-    let s = await readHandleUpTo(r, WORKTREE_IO_LIMITS);
-    if (s === null) return o;
-    let match = /^gitdir: ([^\r\n]+)[\r\n]*$/.exec(s.toString("utf8"));
-    return { value: match ? match[1] : null, bytes: s };
+    let handleUpTo = await readHandleUpTo(r, WORKTREE_IO_LIMITS_2);
+    if (handleUpTo === null) return o;
+    let match = /^gitdir: ([^\r\n]+)[\r\n]*$/.exec(handleUpTo.toString("utf8"));
+    return {
+      value: match ? match[1] : null,
+      bytes: handleUpTo,
+    };
   } catch (error) {
-    return { error: getErrnoCode(error) ?? errorMessage(error) };
+    return {
+      error: getErrnoCode(error) ?? errorMessage(error),
+    };
   } finally {
     await r.close().catch(() => {});
   }
 }
 //@ chunk-2xm1rxms.js:41063-41383 placement
-async function unlinkTracked(e, n, o = { deleted: !1 }) {
+async function unlinkTracked(
+  e,
+  n,
+  o = {
+    deleted: false,
+  },
+) {
   try {
-    return (await e.unlink(n), (o.deleted = !0), !0);
+    await e.unlink(n);
+    o.deleted = true;
+    return true;
   } catch (error) {
-    let s = getErrnoCode(error);
-    if (s === "ENOENT") return !1;
-    if (s !== "EISDIR" && s !== "EPERM" && s !== "EACCES") throw error;
+    let errnoCode = getErrnoCode(error);
+    if (errnoCode === "ENOENT") return false;
+    if (errnoCode !== "EISDIR" && errnoCode !== "EPERM" && errnoCode !== "EACCES") throw error;
     let a = await e.lstat(n).catch(() => null);
     if (a === null || !a.isDirectory()) throw error;
-    return (
-      await e.removeTree(n, {
-        onDeleted: () => {
-          o.deleted = !0;
-        },
-      }),
-      !0
-    );
+    await e.removeTree(n, {
+      onDeleted: () => {
+        o.deleted = true;
+      },
+    });
+    return true;
   }
 }
 //@ chunk-2xm1rxms.js:41383-41995 placement
-async function removeWorktreeContents(e, n, o, r = { deleted: !1 }, { pointerFirst: s = !1 } = {}) {
-  if (s) (await e.unlink(`${n}/.git`), (r.deleted = !0));
-  for (let a = 0; ; a++) {
-    let filtered = (await e.list(n)).filter((u) => u !== ".git");
+async function removeWorktreeContents(
+  held,
+  n,
+  bytes,
+  r = {
+    deleted: false,
+  },
+  { pointerFirst: s = false } = {},
+) {
+  if (s) {
+    await held.unlink(`${n}/.git`);
+    r.deleted = true;
+  }
+  for (let j = 0; ; j++) {
+    let filtered = (await held.list(n)).filter((u) => u !== ".git");
     if (filtered.length === 0) break;
-    if (a === Jt) {
+    if (j === WORKTREE_IO_LIMITS) {
       let u = Error("files kept appearing in the worktree while it was being deleted");
-      throw ((u.code = "ENOTEMPTY"), u);
+      u.code = "ENOTEMPTY";
+      throw u;
     }
     if (filtered.some((u) => u.includes("\uFFFD"))) {
-      await e.removeTree(n, {
+      await held.removeTree(n, {
         keep: ".git",
         onDeleted: () => {
-          r.deleted = !0;
+          r.deleted = true;
         },
       });
       continue;
     }
-    for (let u of filtered) await unlinkTracked(e, `${n}/${u}`, r);
+    for (let u of filtered) await unlinkTracked(held, `${n}/${u}`, r);
   }
-  if (!s) (await e.unlink(`${n}/.git`), (r.deleted = !0));
+  if (!s) {
+    await held.unlink(`${n}/.git`);
+    r.deleted = true;
+  }
   try {
-    await e.removeTree(n);
+    await held.removeTree(n);
   } catch (error) {
-    if (!s) await e.create(`${n}/.git`, o, 420).catch(() => {});
+    if (!s) await held.create(`${n}/.git`, bytes, 420).catch(() => {});
     throw error;
   }
 }
-
 export { removeWorktreeSafely, worktreeRemovalText, convertDirectoryToZipInPlace };

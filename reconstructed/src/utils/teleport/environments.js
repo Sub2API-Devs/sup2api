@@ -9,7 +9,7 @@
  * attribution: placement 3, fingerprint 2, layout 2
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, A, hu, M, o } from "../../../vendor/zod/v4/classic/schemas.js";
+import { u, array, hu, M, string } from "../../../vendor/zod/v4/classic/schemas.js";
 import {
   TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
   toError,
@@ -27,30 +27,31 @@ import {
   CloudSessionAccessError,
 } from "./api.js";
 import { getOauthConfig } from "../../constants/oauth.js";
-import { Dt } from "../../../vendor/axios/dist/esm/axios.js";
+import { axios_default } from "../../../vendor/axios/dist/esm/axios.js";
 import { logForDebugging } from "../debug.js";
 import { getGlobalConfig, saveGlobalConfig } from "../config.js";
 import { logError } from "../log.js";
 
 //@ chunk-f25sswmp.js:15653-15750 placement
-function environmentSelector(e) {
-  return e.startsWith("ccpool_") ? { self_hosted_runner_pool_id: e } : { environment_id: e };
+function environmentSelector(environmentId) {
+  return environmentId.startsWith("ccpool_")
+    ? {
+        self_hosted_runner_pool_id: environmentId,
+      }
+    : {
+        environment_id: environmentId,
+      };
 }
 //@ chunk-f25sswmp.js:15750-15942 placement
 var environmentsPageSchema = DoctorLazy(() =>
-    u({
-      environments: A(hu((e) => typeof e === "object" && e !== null && !Array.isArray(e))),
-      has_more: M()
-        .optional()
-        .catch(void 0),
-      last_id: o()
-        .nullable()
-        .optional()
-        .catch(void 0),
-    }),
-  ),
-  ENVIRONMENTS_PAGE_LIMIT = 100,
-  MAX_ENVIRONMENT_PAGES = 10;
+  u({
+    environments: array(hu((e) => typeof e === "object" && e !== null && !Array.isArray(e))),
+    has_more: M().optional().catch(undefined),
+    last_id: string().nullable().optional().catch(undefined),
+  }),
+);
+var ENVIRONMENTS_PAGE_LIMIT = 100;
+var MAX_ENVIRONMENT_PAGES = 10;
 //@ chunk-f25sswmp.js:15942-16728 placement
 function parseEnvironmentsResponse(e) {
   if (typeof e === "string" && e.trim().length === 0)
@@ -68,18 +69,18 @@ function parseEnvironmentsResponse(e) {
     "fetchEnvironments: HTTP 200 JSON body without a valid environments array",
   );
 }
+//@ chunk-f25sswmp.js:16728-18042 fingerprint = fetchEnvironments (0.379)
 /**
  * GET /v1/environment_providers 列出可用的云端环境（仅第一方）。
  */
-//@ chunk-f25sswmp.js:16728-18042 fingerprint = fetchEnvironments (0.379)
-async function fetchEnvironments(e, n, r) {
+async function fetchEnvironments(e, storageV5, credentials) {
   return withFeatureTelemetry(
     "teleport_environments_list",
     async () => {
       if (getAPIProvider() !== "firstParty")
         throw Error("Remote environments are only available on the first-party Anthropic API provider.");
-      let i = isConsoleProfileSessionsCredential(),
-        y = e ?? (await sessionsApiAccessToken(i));
+      let i = isConsoleProfileSessionsCredential();
+      let y = e ?? (await sessionsApiAccessToken(i));
       if (!y)
         throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
           cloudSessionsSignInRefusal(),
@@ -89,47 +90,65 @@ async function fetchEnvironments(e, n, r) {
       if (!h) throw Error("Unable to get organization UUID");
       let url = `${getOauthConfig().BASE_API_URL}/v1/environment_providers`;
       try {
-        let I = [],
-          w;
-        for (let T = 0; T < MAX_ENVIRONMENT_PAGES; T++) {
+        let I = [];
+        let w;
+        for (let j = 0; j < MAX_ENVIRONMENT_PAGES; j++) {
           let S = await withSessionsApiBearer401Retry(
             (x) =>
-              Dt.get(url, {
-                headers: { ...getOAuthRequestHeaders(x), "x-organization-uuid": h },
-                params: { limit: ENVIRONMENTS_PAGE_LIMIT, ...(w !== void 0 && { after_id: w }) },
+              axios_default.get(url, {
+                headers: {
+                  ...getOAuthRequestHeaders(x),
+                  "x-organization-uuid": h,
+                },
+                params: {
+                  limit: ENVIRONMENTS_PAGE_LIMIT,
+                  ...(w !== undefined && {
+                    after_id: w,
+                  }),
+                },
                 timeout: 15000,
               }),
-            { profile: i, fallbackToken: y, credentials: r },
+            {
+              profile: i,
+              fallbackToken: y,
+              credentials,
+            },
           );
           if (S.status !== 200) throw Error(`Failed to fetch environments: HTTP ${S.status}`);
-          let safeParse = environmentsPageSchema().safeParse(S.data);
-          if (!safeParse.success) throw parseEnvironmentsResponse(S.data);
-          I.push(...safeParse.data.environments);
-          let last_id = safeParse.data.last_id;
-          if (
-            safeParse.data.has_more !== !0 ||
-            safeParse.data.environments.length === 0 ||
-            typeof last_id !== "string"
-          )
+          let v = environmentsPageSchema().safeParse(S.data);
+          if (!v.success) throw parseEnvironmentsResponse(S.data);
+          I.push(...v.data.environments);
+          let lastId = v.data.last_id;
+          if (v.data.has_more !== true || v.data.environments.length === 0 || typeof lastId !== "string")
             break;
-          if (T === MAX_ENVIRONMENT_PAGES - 1)
+          if (j === MAX_ENVIRONMENT_PAGES - 1)
             logForDebugging(
               `fetchEnvironments: stopped after ${MAX_ENVIRONMENT_PAGES} pages (${I.length} environments) although the server reports more; the rest are not listed`,
-              { level: "warn" },
+              {
+                level: "warn",
+              },
             );
-          w = last_id;
+          w = lastId;
         }
         let R = I.length > 0;
         if (getGlobalConfig().hasRemoteEnvironment !== R)
           await saveGlobalConfig(
-            (T) => (T.hasRemoteEnvironment === R ? T : { ...T, hasRemoteEnvironment: R }),
-            n,
+            (T) =>
+              T.hasRemoteEnvironment === R
+                ? T
+                : {
+                    ...T,
+                    hasRemoteEnvironment: R,
+                  },
+            storageV5,
           );
         return I;
       } catch (error) {
         let err = toError(error);
         if (isExpectedApiError(error, isCloudSessionAccessError))
-          logForDebugging(`fetchEnvironments failed: ${err.message}`, { level: "error" });
+          logForDebugging(`fetchEnvironments failed: ${err.message}`, {
+            level: "error",
+          });
         else logError(err);
         throw err;
       }
@@ -147,25 +166,25 @@ function classifyEnvironmentError(e) {
     ? "malformed_response"
     : "error";
 }
+//@ chunk-f25sswmp.js:18146-19007 fingerprint = createDefaultCloudEnvironment (0.867)
 /**
  * POST /v1/environment_providers/cloud/create 创建默认云环境。
  */
-//@ chunk-f25sswmp.js:18146-19007 fingerprint = createDefaultCloudEnvironment (0.867)
-async function createDefaultCloudEnvironment(e = "Default", n, r) {
+async function createDefaultCloudEnvironment(name = "Default", signal, r) {
   return withFeatureTelemetry("teleport_default_environment_create", async () => {
     if (getAPIProvider() !== "firstParty")
       throw Error("Remote environments are only available on the first-party Anthropic API provider.");
-    let s = isConsoleProfileSessionsCredential(),
-      i = r ?? (await sessionsApiAccessToken(s));
+    let s = isConsoleProfileSessionsCredential();
+    let i = r ?? (await sessionsApiAccessToken(s));
     if (!i) throw Error("No access token available");
-    let y = await sessionsApiOrganizationUUID(s);
-    if (!y) throw Error("Unable to get organization UUID");
+    let orgUUID = await sessionsApiOrganizationUUID(s);
+    if (!orgUUID) throw Error("Unable to get organization UUID");
     let url = `${getOauthConfig().BASE_API_URL}/v1/environment_providers/cloud/create`;
     return (
-      await Dt.post(
+      await axios_default.post(
         url,
         {
-          name: e,
+          name,
           kind: "anthropic_cloud",
           description: "Default - trusted network access",
           config: {
@@ -174,24 +193,32 @@ async function createDefaultCloudEnvironment(e = "Default", n, r) {
             init_script: null,
             environment: {},
             languages: [
-              { name: "python", version: "3.11" },
-              { name: "node", version: "20" },
+              {
+                name: "python",
+                version: "3.11",
+              },
+              {
+                name: "node",
+                version: "20",
+              },
             ],
-            network_config: { allowed_hosts: [], allow_default_hosts: !0 },
+            network_config: {
+              allowed_hosts: [],
+              allow_default_hosts: true,
+            },
           },
         },
         {
           headers: {
             ...getOAuthRequestHeaders(i),
             "anthropic-beta": "ccr-byoc-2025-07-29",
-            "x-organization-uuid": y,
+            "x-organization-uuid": orgUUID,
           },
           timeout: 15000,
-          signal: n,
+          signal,
         },
       )
     ).data;
   });
 }
-
 export { fetchEnvironments, environmentSelector, createDefaultCloudEnvironment, isCloudSessionAccessError };

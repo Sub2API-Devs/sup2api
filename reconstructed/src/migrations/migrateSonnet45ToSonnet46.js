@@ -17,13 +17,13 @@ import { getGlobalConfig, saveGlobalConfig } from "../utils/config.js";
 import { logEvent } from "../services/analytics/index.js";
 import { fromEnum } from "../services/analytics/safeMetadata.js";
 
+//@ chunk-cjydagjy.js:11557-12267 fingerprint = migrateSonnet45ToSonnet46 (0.869)
 /**
  * 迁移（仅 firstParty）：Sonnet 4.5 全名 → sonnet 别名（Sonnet 4.6 起）。
  */
-//@ chunk-cjydagjy.js:11557-12267 fingerprint = migrateSonnet45ToSonnet46 (0.869)
 async function migrateSonnet45ToSonnet46(e) {
-  if (getAPIProvider() !== "firstParty") return !0;
-  if (!isProSubscriber() && !isMaxSubscriber() && !isTeamPremiumSubscriber()) return !0;
+  if (getAPIProvider() !== "firstParty") return true;
+  if (!isProSubscriber() && !isMaxSubscriber() && !isTeamPremiumSubscriber()) return true;
   let model = getSettingsForSourceForUpkeep("userSettings")?.model;
   if (
     model !== "claude-sonnet-4-5-20250929" &&
@@ -31,27 +31,36 @@ async function migrateSonnet45ToSonnet46(e) {
     model !== "sonnet-4-5-20250929" &&
     model !== "sonnet-4-5-20250929[1m]"
   )
-    return !0;
-  let has1m = model.endsWith("[1m]"),
-    { error: error } = await updateSettingsForSource(
-      "userSettings",
-      { model: has1m ? "sonnet[1m]" : "sonnet" },
-      void 0,
+    return true;
+  let has1m = model.endsWith("[1m]");
+  let { error } = await updateSettingsForSource(
+    "userSettings",
+    {
+      model: has1m ? "sonnet[1m]" : "sonnet",
+    },
+    undefined,
+    e,
+  );
+  if (error) {
+    logForDebugging(`Failed to migrate Sonnet 4.5 model setting: ${error}`, {
+      level: "error",
+    });
+    logFeatureBad("migration_sonnet45_to_sonnet46", "migration_sonnet45_write_failed");
+    return false;
+  }
+  if (getGlobalConfig().numStartups > 1)
+    saveGlobalConfig(
+      (current) => ({
+        ...current,
+        sonnet45To46MigrationTimestamp: Date.now(),
+      }),
       e,
     );
-  if (error)
-    return (
-      logForDebugging(`Failed to migrate Sonnet 4.5 model setting: ${error}`, { level: "error" }),
-      logFeatureBad("migration_sonnet45_to_sonnet46", "migration_sonnet45_write_failed"),
-      !1
-    );
-  if (getGlobalConfig().numStartups > 1)
-    saveGlobalConfig((current) => ({ ...current, sonnet45To46MigrationTimestamp: Date.now() }), e);
-  return (
-    logEvent("tengu_sonnet45_to_46_migration", { from_model: fromEnum(model), has_1m: has1m }),
-    logFeatureOk("migration_sonnet45_to_sonnet46"),
-    !0
-  );
+  logEvent("tengu_sonnet45_to_46_migration", {
+    from_model: fromEnum(model),
+    has_1m: has1m,
+  });
+  logFeatureOk("migration_sonnet45_to_sonnet46");
+  return true;
 }
-
 export { migrateSonnet45ToSonnet46 };

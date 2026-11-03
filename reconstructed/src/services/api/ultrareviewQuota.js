@@ -17,155 +17,203 @@ import { logFeatureSad, logFeatureOk } from "../analytics/featureTelemetry.js";
 import { HostScoped } from "../../utils/hostScoped.js";
 import { getRootSession } from "../../bootstrap/state.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../analytics/growthbook.js";
-import { UF } from "../../commands/review/ultrareviewPreconditions.js";
+import { isUltrareviewWithBridge } from "../../commands/review/ultrareviewPreconditions.js";
 import { isPolicyAllowed } from "../policyLimits/policyEvidence.js";
 import { getGlobalConfig, saveGlobalConfig } from "../../utils/config.js";
 import { logEvent } from "../analytics/index.js";
 import { fromEnum } from "../analytics/safeMetadata.js";
 import { CODE_REVIEW } from "../../skills/bundled/bundledSkillNames.js";
-import { Soe, recordTipShown } from "../tips/tipIds.js";
+import { tipLifetimeShownCount, recordTipShown } from "../tips/tipIds.js";
 import { getSessionsSinceTipShown } from "../tips/tipHistory.js";
 
+//@ chunk-twvgrhqz.js:809-1486 fingerprint = fetchUltrareviewQuota (0.33)
 /**
  * 拉取 ultrareview 配额；fixture 环境变量优先。
  */
-//@ chunk-twvgrhqz.js:809-1486 fingerprint = fetchUltrareviewQuota (0.33)
-async function fetchUltrareviewQuota(e) {
+async function fetchUltrareviewQuota(credentials) {
   let CLAUDE_CODE_ULTRAREVIEW_QUOTA_FIXTURE = env.CLAUDE_CODE_ULTRAREVIEW_QUOTA_FIXTURE;
   if (CLAUDE_CODE_ULTRAREVIEW_QUOTA_FIXTURE)
     try {
-      let safeParse = checkOverageGate_2().safeParse(jsonParse(CLAUDE_CODE_ULTRAREVIEW_QUOTA_FIXTURE));
-      return safeParse.success ? safeParse.data : null;
+      let n = checkOverageGate_2().safeParse(jsonParse(CLAUDE_CODE_ULTRAREVIEW_QUOTA_FIXTURE));
+      return n.success ? n.data : null;
     } catch (error) {
-      return (logForDebugging(`fetchUltrareviewQuota fixture parse failed: ${error}`), null);
+      logForDebugging(`fetchUltrareviewQuota fixture parse failed: ${error}`);
+      return null;
     }
   try {
     let n = await apiClient.get("/v1/ultrareview/quota", {
       auth: "teleport-org",
       timeout: 3000,
-      credentials: e,
+      credentials,
     });
-    if (!n.ok) return (logFeatureSad("api_ultrareview_quota", "request_failed"), null);
-    let safeParse = checkOverageGate_2().safeParse(n.data);
-    if (!safeParse.success)
-      return (
-        logForDebugging(`fetchUltrareviewQuota schema mismatch: ${safeParse.error.message}`),
-        logFeatureSad("api_ultrareview_quota", "schema_mismatch"),
-        null
-      );
-    return (logFeatureOk("api_ultrareview_quota"), safeParse.data);
+    if (!n.ok) {
+      logFeatureSad("api_ultrareview_quota", "request_failed");
+      return null;
+    }
+    let o = checkOverageGate_2().safeParse(n.data);
+    if (!o.success) {
+      logForDebugging(`fetchUltrareviewQuota schema mismatch: ${o.error.message}`);
+      logFeatureSad("api_ultrareview_quota", "schema_mismatch");
+      return null;
+    }
+    logFeatureOk("api_ultrareview_quota");
+    return o.data;
   } catch (error) {
-    return (
-      logForDebugging(`fetchUltrareviewQuota failed: ${error}`),
-      logFeatureSad("api_ultrareview_quota", "request_failed"),
-      null
-    );
+    logForDebugging(`fetchUltrareviewQuota failed: ${error}`);
+    logFeatureSad("api_ultrareview_quota", "request_failed");
+    return null;
   }
 }
 //@ chunk-twvgrhqz.js:1486-1520 placement
-class l {
-  quota = void 0;
-  fetch = void 0;
+class UltrareviewQuotaState {
+  quota = undefined;
+  fetch = undefined;
 }
 //@ chunk-twvgrhqz.js:1520-1543 placement
-var S = new HostScoped(() => new l());
+var ultrareviewQuotaSlot = new HostScoped(() => new UltrareviewQuotaState());
 //@ chunk-twvgrhqz.js:1543-1578 placement
-function m() {
-  return S.of(getRootSession().host);
+function ultrareviewQuotaState() {
+  return ultrareviewQuotaSlot.of(getRootSession().host);
 }
 //@ chunk-twvgrhqz.js:1578-1647 placement
-async function uPo(e) {
-  let r = m();
-  ((r.fetch ??= fetchUltrareviewQuota(e)), (r.quota = await r.fetch));
+/**
+ * 导出函数 `refreshUltrareviewQuota`：参数 e。
+ */
+async function refreshUltrareviewQuota(credentials) {
+  let r = ultrareviewQuotaState();
+  r.fetch ??= fetchUltrareviewQuota(credentials);
+  r.quota = await r.fetch;
 }
 //@ chunk-twvgrhqz.js:1647-1727 placement
-function B2n(e) {
-  let r = m();
-  if (r.quota === void 0) return (uPo(e), null);
+/**
+ * 导出函数 `ultrareviewQuota`：参数 e，返回 (uPo(e), null); return r.quota。
+ */
+function ultrareviewQuota(credentials) {
+  let r = ultrareviewQuotaState();
+  if (r.quota === undefined) {
+    refreshUltrareviewQuota(credentials);
+    return null;
+  }
   return r.quota;
 }
 //@ chunk-twvgrhqz.js:1727-1763 placement
 var TENGU_ULTRAREVIEW_AWARENESS = "tengu_ultrareview_awareness";
 //@ chunk-twvgrhqz.js:1763-1797 placement
-function U() {
+function ultrareviewAwarenessFlags() {
   return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_ULTRAREVIEW_AWARENESS, null) ?? {};
 }
 //@ chunk-twvgrhqz.js:1797-1891 placement
-function zLr(e) {
-  if (!UF()) return !1;
-  if (!isPolicyAllowed("allow_remote_sessions")) return !1;
-  return U()[e] === !0;
+/**
+ * 导出函数 `isUltrareviewSurfaceOn`：参数 e，返回 !1; if (!isPolicyAllowed("allow_remote_sessions")) return !1; return U()[e] === !0。
+ */
+function isUltrareviewSurfaceOn(surface) {
+  if (!isUltrareviewWithBridge()) return false;
+  if (!isPolicyAllowed("allow_remote_sessions")) return false;
+  return ultrareviewAwarenessFlags()[surface] === true;
 }
 //@ chunk-twvgrhqz.js:1891-1941 placement
-function fPo() {
-  return getGlobalConfig().hasRunUltrareview === !0;
+/**
+ * 导出函数 `hasRunUltrareview`：返回 getGlobalConfig().hasRunUltrareview === !0。
+ */
+function hasRunUltrareview() {
+  return getGlobalConfig().hasRunUltrareview === true;
 }
 //@ chunk-twvgrhqz.js:1941-2018 placement
-function m1s(e) {
-  saveGlobalConfig((r) => (r.hasRunUltrareview ? r : { ...r, hasRunUltrareview: !0 }), e);
+/**
+ * 导出函数 `markUltrareviewRun`：参数 e。
+ */
+function markUltrareviewRun(storageV5) {
+  saveGlobalConfig(
+    (r) =>
+      r.hasRunUltrareview
+        ? r
+        : {
+            ...r,
+            hasRunUltrareview: true,
+          },
+    storageV5,
+  );
 }
 //@ chunk-twvgrhqz.js:2018-2086 placement
-function C(e) {
-  logEvent("tengu_ultrareview_awareness_shown", { surface: fromEnum(e) });
+function logAwarenessShown(surface) {
+  logEvent("tengu_ultrareview_awareness_shown", {
+    surface: fromEnum(surface),
+  });
 }
 //@ chunk-twvgrhqz.js:2086-2153 placement
-function pPo(e) {
-  return `${e} free ${e === 1 ? "review" : "reviews"} left`;
+/**
+ * 导出函数 `freeReviewsBadge`：参数 e，返回 `${e} free ${e === 1 ? "review" : "reviews"} left`。
+ */
+function freeReviewsBadge(reviewsRemaining) {
+  return `${reviewsRemaining} free ${reviewsRemaining === 1 ? "review" : "reviews"} left`;
 }
+//@ chunk-twvgrhqz.js:2153-2400 placement
 /**
  * 斜杠菜单中 ultrareview 与 code review 的免费次数徽标文字。
  */
-//@ chunk-twvgrhqz.js:2153-2400 placement
-function ultrareviewMenuBadge(e) {
-  if (e !== "ultrareview" && e !== CODE_REVIEW) return "";
-  if (!zLr("slash_menu")) return "";
-  let r = B2n();
+function ultrareviewMenuBadge(commandName) {
+  if (commandName !== "ultrareview" && commandName !== CODE_REVIEW) return "";
+  if (!isUltrareviewSurfaceOn("slash_menu")) return "";
+  let r = ultrareviewQuota();
   if (r === null || r.reviews_remaining <= 0) return "";
-  let reviews_remaining = r.reviews_remaining;
-  return e === "ultrareview"
-    ? `${reviews_remaining} free left \xB7 `
-    : `${reviews_remaining} free /ultrareview \xB7 `;
+  let reviewsRemaining = r.reviews_remaining;
+  return commandName === "ultrareview"
+    ? `${reviewsRemaining} free left \xB7 `
+    : `${reviewsRemaining} free /ultrareview \xB7 `;
 }
 //@ chunk-twvgrhqz.js:2400-2466 placement
-var ULTRAREVIEW_PROSE_POINTER = "ultrareview-prose-pointer",
-  ULTRAREVIEW_POST_COMMIT = "ultrareview-post-commit",
-  b = 5;
+/**
+ * ultrareview 提示的两种 key（prose-pointer、post-commit）与同一提示最多显示 5 次。
+ */
+var ULTRAREVIEW_PROSE_POINTER = "ultrareview-prose-pointer";
+var ULTRAREVIEW_POST_COMMIT = "ultrareview-post-commit";
+var MAX_TIP_SHOWS = 5;
 //@ chunk-twvgrhqz.js:2466-2696 placement
 function ultrareviewTip(surface, tipKey, format, storage, credentials) {
-  if (!zLr(surface)) return null;
-  if (fPo()) return null;
-  if (Soe(tipKey) >= b) return null;
+  if (!isUltrareviewSurfaceOn(surface)) return null;
+  if (hasRunUltrareview()) return null;
+  if (tipLifetimeShownCount(tipKey) >= MAX_TIP_SHOWS) return null;
   if (getSessionsSinceTipShown(tipKey) === 0) return null;
-  (recordTipShown(tipKey, storage), C(surface));
-  let u = B2n(credentials),
-    _ = u !== null && u.reviews_remaining > 0 ? ` \u2014 ${pPo(u.reviews_remaining)}` : "";
+  recordTipShown(tipKey, storage);
+  logAwarenessShown(surface);
+  let u = ultrareviewQuota(credentials);
+  let _ = u !== null && u.reviews_remaining > 0 ? ` \u2014 ${freeReviewsBadge(u.reviews_remaining)}` : "";
   return format(_);
 }
+//@ chunk-twvgrhqz.js:2696-2823 placement
 /**
  * 生成 /review 提示末尾推荐 /ultrareview 的提示文字（按展示规则与次数）。
  */
-//@ chunk-twvgrhqz.js:2696-2823 placement
-function ultrareviewProseTip(e, r) {
+function ultrareviewProseTip(storage, credentials) {
   return ultrareviewTip(
     "prose_pointer",
     ULTRAREVIEW_PROSE_POINTER,
     (n) => `Tip: For a deeper cloud-based review, try /ultrareview next time${n}.`,
-    e,
-    r,
+    storage,
+    credentials,
   );
 }
+//@ chunk-twvgrhqz.js:2823-2976 placement
 /**
  * 生成提交后推荐运行 /ultrareview 的提示文字。
  */
-//@ chunk-twvgrhqz.js:2823-2976 placement
-function ultrareviewPostCommitTip(e) {
+function ultrareviewPostCommitTip(storage) {
   return ultrareviewTip(
     "post_commit",
     ULTRAREVIEW_POST_COMMIT,
     (r) => `Tip: Run /ultrareview before you push to catch bugs with a cloud-based multi-agent review${r}.`,
-    e,
-    void 0,
+    storage,
+    undefined,
   );
 }
-
-export { ultrareviewMenuBadge, B2n, pPo, zLr, fPo, uPo, ultrareviewPostCommitTip, ultrareviewProseTip, m1s };
+export {
+  ultrareviewMenuBadge,
+  ultrareviewQuota,
+  freeReviewsBadge,
+  isUltrareviewSurfaceOn,
+  hasRunUltrareview,
+  refreshUltrareviewQuota,
+  ultrareviewPostCommitTip,
+  ultrareviewProseTip,
+  markUltrareviewRun,
+};

@@ -8,80 +8,12 @@
  * pieces: chunk-e6aww6q8.js (9)
  * attribution: placement 9
  */
-import {
-  basename,
-  basename as basename_2,
-  basename as basename_3,
-  basename as basename_4,
-  basename as basename_5,
-  basename as basename_6,
-  basename as basename_7,
-  basename as basename_8,
-  basename as basename_9,
-  basename as basename_10,
-  basename as basename_11,
-  basename as basename_12,
-  basename as basename_13,
-  basename as basename_14,
-  basename as basename_15,
-  basename as basename_16,
-  basename as basename_17,
-  basename as basename_18,
-  basename as basename_19,
-  basename as basename_20,
-  basename as basename_21,
-  basename as basename_22,
-  basename as basename_23,
-  basename as basename_24,
-  basename as basename_25,
-  basename as basename_26,
-  basename as basename_27,
-  basename as basename_28,
-  basename as basename_29,
-  basename as basename_30,
-  basename as basename_31,
-  basename as basename_32,
-  basename as basename_33,
-  basename as basename_34,
-  basename as basename_35,
-  basename as basename_36,
-  basename as basename_37,
-  basename as basename_38,
-  basename as basename_39,
-  basename as basename_40,
-  basename as basename_41,
-  basename as basename_42,
-  basename as basename_43,
-  basename as basename_45,
-  basename as basename_46,
-  basename as basename_47,
-  basename as basename_48,
-  basename as basename_49,
-  basename as basename_50,
-  basename as basename_51,
-  basename as basename_52,
-  basename as basename_53,
-  basename as basename_54,
-  basename as basename_55,
-  basename as basename_56,
-  basename as basename_57,
-  basename as basename_58,
-  basename as basename_59,
-  basename as basename_60,
-  basename as basename_61,
-  basename as basename_62,
-  basename as basename_63,
-  basename as basename_64,
-  basename as basename_65,
-  basename as basename_66,
-  basename as basename_67,
-  basename as basename_68,
-} from "path";
-import { readlinkSync, readlinkSync as readlinkSync_2, readlinkSync as readlinkSync_3 } from "fs";
+import { basename } from "path";
+import { readlinkSync } from "fs";
 import { Re } from "../../../runtime/bun-runtime.js";
-import { Vy } from "../../../vendor/semver/index.js";
+import { require_semver_3 } from "../../../vendor/semver/index.js";
 import { getLaunchCommand } from "../../utils/deepLink/registerProtocol.js";
-import { ge } from "../../utils/identity.js";
+import { identity as identity_2 } from "../../utils/identity.js";
 import {
   getDynamicConfig_CACHED_MAY_BE_STALE,
   hasGrowthBookOverride,
@@ -90,62 +22,83 @@ import {
 } from "../../services/analytics/growthbook.js";
 
 //@ chunk-e6aww6q8.js:2037905-2037923 placement
-var gZ = Re(Vy(), 1);
+var installedVersionSemver = Re(require_semver_3(), 1);
+//@ chunk-e6aww6q8.js:2037993-2038093 placement
 /**
  * 读取启动命令链接指向的已安装版本名（不是合法版本号时返回 undefined）。
  */
-//@ chunk-e6aww6q8.js:2037993-2038093 placement
 function installedVersionName(e) {
   try {
-    let n = basename_40(readlinkSync_3(e ?? getLaunchCommand().target));
-    return gZ.parse(n) === null ? void 0 : n;
+    let n = basename(readlinkSync(e ?? getLaunchCommand().target));
+    return installedVersionSemver.parse(n) === null ? undefined : n;
   } catch {
     return;
   }
 }
 //@ chunk-e6aww6q8.js:2038093-2038133 placement
-var mZ = ge({ until: 0, version: void 0 }, pjo);
+var INSTALLED_VERSION_CACHE = identity_2(
+  {
+    until: 0,
+    version: undefined,
+  },
+  resetInstalledVersionCache,
+);
 //@ chunk-e6aww6q8.js:2038133-2038238 placement
 function cachedInstalledVersion() {
   let startTime = performance.now();
-  if (startTime >= mZ.until) ((mZ.version = installedVersionName()), (mZ.until = startTime + 1000));
-  return mZ.version;
+  if (startTime >= INSTALLED_VERSION_CACHE.until) {
+    INSTALLED_VERSION_CACHE.version = installedVersionName();
+    INSTALLED_VERSION_CACHE.until = startTime + 1000;
+  }
+  return INSTALLED_VERSION_CACHE.version;
 }
 //@ chunk-e6aww6q8.js:2038238-2038264 placement
-function pjo() {
-  mZ.until = 0;
+/**
+ * 清空已安装版本缓存（until 置 0，下次读取重新探测）。
+ */
+function resetInstalledVersionCache() {
+  INSTALLED_VERSION_CACHE.until = 0;
 }
+//@ chunk-e6aww6q8.js:2038264-2038961 placement
 /**
  * 判断重启目标版本相对当前版本（2.1.316）的关系：未知、相同、更新或更旧（附目标版本号）。
  */
-//@ chunk-e6aww6q8.js:2038264-2038961 placement
 function restartVersionTarget(requested) {
-  let targetVersion = requested === void 0 ? cachedInstalledVersion() : installedVersionName(requested),
-    parse = gZ.parse(
-      {
-        ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
-        PACKAGE_URL: "@anthropic-ai/claude-code",
-        README_URL: "https://code.claude.com/docs/en/overview",
-        VERSION: "2.1.316",
-        FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-        BUILD_TIME: "2026-10-30T23:28:13Z",
-        GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
-        HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
-        DD_SOURCEMAP_GROUP: "default",
-      }.VERSION,
-    );
-  if (targetVersion === void 0 || parse === null) return { kind: "unknown" };
-  let comparison = gZ.parse(targetVersion)?.compare(parse) ?? 0;
-  if (comparison === 0) return { kind: "same" };
-  return { kind: comparison > 0 ? "newer" : "older", version: targetVersion };
+  let targetVersion = requested === undefined ? cachedInstalledVersion() : installedVersionName(requested);
+  let r = installedVersionSemver.parse(
+    {
+      ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
+      PACKAGE_URL: "@anthropic-ai/claude-code",
+      README_URL: "https://code.claude.com/docs/en/overview",
+      VERSION: "2.1.316",
+      FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
+      BUILD_TIME: "2026-10-30T23:28:13Z",
+      GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+      HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
+      DD_SOURCEMAP_GROUP: "default",
+    }.VERSION,
+  );
+  if (targetVersion === undefined || r === null)
+    return {
+      kind: "unknown",
+    };
+  let comparison = installedVersionSemver.parse(targetVersion)?.compare(r) ?? 0;
+  if (comparison === 0)
+    return {
+      kind: "same",
+    };
+  return {
+    kind: comparison > 0 ? "newer" : "older",
+    version: targetVersion,
+  };
 }
 //@ chunk-e6aww6q8.js:2038961-2039630 placement
-function resolveMaxVersionConfig(e = cachedInstalledVersion) {
+function resolveMaxVersionConfig(installedVersionName = cachedInstalledVersion) {
   let external = getDynamicConfig_CACHED_MAY_BE_STALE("tengu_max_version_config", {}).external;
   if (!external) return;
-  let s = e();
+  let s = installedVersionName();
   if (
-    s === void 0 ||
+    s === undefined ||
     s ===
       {
         ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
@@ -161,7 +114,7 @@ function resolveMaxVersionConfig(e = cachedInstalledVersion) {
   )
     return;
   try {
-    return (gZ.parse(s)?.compare(external) ?? 0) > 0 ? s : void 0;
+    return (installedVersionSemver.parse(s)?.compare(external) ?? 0) > 0 ? s : undefined;
   } catch {
     return;
   }
@@ -169,8 +122,14 @@ function resolveMaxVersionConfig(e = cachedInstalledVersion) {
 //@ chunk-e6aww6q8.js:2039630-2039656 placement
 var TENGU_FANCY_WAND = "tengu_fancy_wand";
 //@ chunk-e6aww6q8.js:2039656-2039698 placement
-function Orn() {
+function isGrowthBookFreshOrOverridden() {
   return hasGrowthBookOverride(TENGU_FANCY_WAND) || (isGrowthBookEnabled() && hasFreshGrowthBookFeatures());
 }
-
-export { Orn, resolveMaxVersionConfig, TENGU_FANCY_WAND, restartVersionTarget, installedVersionName, pjo };
+export {
+  isGrowthBookFreshOrOverridden,
+  resolveMaxVersionConfig,
+  TENGU_FANCY_WAND,
+  restartVersionTarget,
+  installedVersionName,
+  resetInstalledVersionCache,
+};

@@ -8,7 +8,7 @@
  * pieces: chunk-18hwfzwa.js (4)
  * attribution: placement 4
  */
-import { j } from "../../vendor/react/cjs/react.production.js";
+import { init_react_production } from "../../vendor/react/cjs/react.production.js";
 import {
   formatRefusalDetails,
   GENERIC_SAFEGUARD_MESSAGE,
@@ -22,69 +22,94 @@ import { w } from "../../vendor/react/compiler-runtime.js";
 import { sanitizeDisplayText } from "../utils/resultError.js";
 import { PermissionDialog_2 } from "./permissions/PermissionDialog.js";
 import { Box, Text } from "../ink/components/Text.js";
-import { e, r } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+} from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { LinkifiedText } from "./rateLimit/usageCreditsOffer.js";
 import { Blockquote } from "./Blockquote.js";
 import { ModelSelector } from "./agents/ModelSelector.js";
 import { NO_COMMITTED_ROW } from "./CustomSelect/select.js";
 
 //@ chunk-18hwfzwa.js:1403401-1403405 placement
-j();
+init_react_production();
 //@ chunk-18hwfzwa.js:1403405-1403643 placement
 function buildRefusalPausedMessage(model, refusal, fallbackModel) {
-  let L = formatRefusalDetails(refusal),
-    ee = renderModelName(model);
+  let L = formatRefusalDetails(refusal);
+  let ee = renderModelName(model);
   if (!hasVisibleText(ee)) return `${GENERIC_SAFEGUARD_MESSAGE} ${buildSafeguardsLearnMore(model)}${L}`;
-  let ke = safeLabel(ee),
-    Re = getSafeguardLead(ke, model, refusal),
-    Be = renderModelName(fallbackModel),
-    He = hasVisibleText(Be)
-      ? safeguardRecoveryLine("paused", { model: ke, fallback: safeLabel(Be) }, model, refusal)
-      : void 0;
-  return `${Re} ${He === void 0 ? "" : `${He} `}${buildSafeguardsLearnMore(model)}${L}`;
+  let ke = safeLabel(ee);
+  let safeguardLead = getSafeguardLead(ke, model, refusal);
+  let Be = renderModelName(fallbackModel);
+  let He = hasVisibleText(Be)
+    ? safeguardRecoveryLine(
+        "paused",
+        {
+          model: ke,
+          fallback: safeLabel(Be),
+        },
+        model,
+        refusal,
+      )
+    : undefined;
+  return `${safeguardLead} ${He === undefined ? "" : `${He} `}${buildSafeguardsLearnMore(model)}${L}`;
 }
 //@ chunk-18hwfzwa.js:1403643-1403844 placement
-function refusalPausedOptionLabels(h, x) {
-  let D = renderModelName(x),
-    L = renderModelName(h);
+function refusalPausedOptionLabels(originalModel, fallbackModel) {
+  let D = renderModelName(fallbackModel);
+  let L = renderModelName(originalModel);
   return {
     retry_fallback: hasVisibleText(D) ? `Switch to ${safeLabel(D)}` : "Switch to the fallback model",
     edit_prompt: hasVisibleText(L) ? `Edit prompt and retry with ${safeLabel(L)}` : "Edit prompt and retry",
   };
 }
 //@ chunk-18hwfzwa.js:1403844-1406026 placement
-function ModelRefusalPausedDialog(h) {
-  let $ = w(48),
-    { payload: payload, answer: answer } = h,
-    ee;
-  if ($[0] !== payload.fallbackModel || $[1] !== payload.originalModel)
-    ((ee = refusalPausedOptionLabels(payload.originalModel, payload.fallbackModel)),
-      ($[0] = payload.fallbackModel),
-      ($[1] = payload.originalModel),
-      ($[2] = ee));
-  else ee = $[2];
-  let ke = ee,
-    Re;
-  if ($[3] !== ke.retry_fallback)
-    ((Re = { value: "retry_fallback", label: ke.retry_fallback }), ($[3] = ke.retry_fallback), ($[4] = Re));
-  else Re = $[4];
+function ModelRefusalPausedDialog(props) {
+  let $ = w(48);
+  let { payload, answer } = props;
+  let ee;
+  if ($[0] !== payload.fallbackModel || $[1] !== payload.originalModel) {
+    ee = refusalPausedOptionLabels(payload.originalModel, payload.fallbackModel);
+    $[0] = payload.fallbackModel;
+    $[1] = payload.originalModel;
+    $[2] = ee;
+  } else ee = $[2];
+  let ke = ee;
+  let Re;
+  if ($[3] !== ke.retry_fallback) {
+    Re = {
+      value: "retry_fallback",
+      label: ke.retry_fallback,
+    };
+    $[3] = ke.retry_fallback;
+    $[4] = Re;
+  } else Re = $[4];
   let Be;
-  if ($[5] !== ke.edit_prompt)
-    ((Be = { value: "edit_prompt", label: ke.edit_prompt }), ($[5] = ke.edit_prompt), ($[6] = Be));
-  else Be = $[6];
+  if ($[5] !== ke.edit_prompt) {
+    Be = {
+      value: "edit_prompt",
+      label: ke.edit_prompt,
+    };
+    $[5] = ke.edit_prompt;
+    $[6] = Be;
+  } else Be = $[6];
   let He;
-  if ($[7] !== Re || $[8] !== Be) ((He = [Re, Be]), ($[7] = Re), ($[8] = Be), ($[9] = He));
-  else He = $[9];
-  let We = He,
-    ze,
-    Xe,
-    rt,
-    kt,
-    At,
-    It,
-    Ot,
-    Et,
-    Dt;
+  if ($[7] !== Re || $[8] !== Be) {
+    He = [Re, Be];
+    $[7] = Re;
+    $[8] = Be;
+    $[9] = He;
+  } else He = $[9];
+  let options = He;
+  let ze;
+  let Xe;
+  let color;
+  let title;
+  let flexDirection;
+  let marginTop;
+  let paddingX;
+  let Et;
+  let Dt;
   if (
     $[10] !== payload.apiRefusalCategory ||
     $[11] !== payload.fallbackModel ||
@@ -92,113 +117,137 @@ function ModelRefusalPausedDialog(h) {
     $[13] !== payload.originalModel
   ) {
     let Lt =
-      payload.guidanceText === void 0 ? "" : sanitizeDisplayText(payload.guidanceText, { maxCodeUnits: 512 });
+      payload.guidanceText === undefined
+        ? ""
+        : sanitizeDisplayText(payload.guidanceText, {
+            maxCodeUnits: 512,
+          });
     Xe = PermissionDialog_2;
-    rt = "warning";
-    kt = "Session paused";
+    color = "warning";
+    title = "Session paused";
     ze = Box;
-    At = "column";
-    It = 1;
-    Ot = 1;
-    let oo;
+    flexDirection = "column";
+    marginTop = 1;
+    paddingX = 1;
+    let children;
     if (
       $[23] !== payload.apiRefusalCategory ||
       $[24] !== payload.fallbackModel ||
       $[25] !== payload.originalModel
-    )
-      ((oo = buildRefusalPausedMessage(
+    ) {
+      children = buildRefusalPausedMessage(
         payload.originalModel,
         payload.apiRefusalCategory,
         payload.fallbackModel,
-      )),
-        ($[23] = payload.apiRefusalCategory),
-        ($[24] = payload.fallbackModel),
-        ($[25] = payload.originalModel),
-        ($[26] = oo));
-    else oo = $[26];
-    if ($[27] !== oo) ((Et = e(LinkifiedText, { children: oo })), ($[27] = oo), ($[28] = Et));
-    else Et = $[28];
+      );
+      $[23] = payload.apiRefusalCategory;
+      $[24] = payload.fallbackModel;
+      $[25] = payload.originalModel;
+      $[26] = children;
+    } else children = $[26];
+    if ($[27] !== children) {
+      Et = jsxProd_default(LinkifiedText, {
+        children,
+      });
+      $[27] = children;
+      $[28] = Et;
+    } else Et = $[28];
     Dt =
       Lt !== "" &&
-      e(Box, {
+      jsxProd_default(Box, {
         marginTop: 1,
-        children: e(Blockquote, {
+        children: jsxProd_default(Blockquote, {
           multiline: needsGutter(Lt),
-          children: e(Text, { color: "inactive", children: Lt }),
+          children: jsxProd_default(Text, {
+            color: "inactive",
+            children: Lt,
+          }),
         }),
       });
-    (($[10] = payload.apiRefusalCategory),
-      ($[11] = payload.fallbackModel),
-      ($[12] = payload.guidanceText),
-      ($[13] = payload.originalModel),
-      ($[14] = ze),
-      ($[15] = Xe),
-      ($[16] = rt),
-      ($[17] = kt),
-      ($[18] = At),
-      ($[19] = It),
-      ($[20] = Ot),
-      ($[21] = Et),
-      ($[22] = Dt));
-  } else
-    ((ze = $[14]),
-      (Xe = $[15]),
-      (rt = $[16]),
-      (kt = $[17]),
-      (At = $[18]),
-      (It = $[19]),
-      (Ot = $[20]),
-      (Et = $[21]),
-      (Dt = $[22]));
-  let oo;
-  if ($[29] !== answer) ((oo = () => answer("cancelled")), ($[29] = answer), ($[30] = oo));
-  else oo = $[30];
+    $[10] = payload.apiRefusalCategory;
+    $[11] = payload.fallbackModel;
+    $[12] = payload.guidanceText;
+    $[13] = payload.originalModel;
+    $[14] = ze;
+    $[15] = Xe;
+    $[16] = color;
+    $[17] = title;
+    $[18] = flexDirection;
+    $[19] = marginTop;
+    $[20] = paddingX;
+    $[21] = Et;
+    $[22] = Dt;
+  } else {
+    ze = $[14];
+    Xe = $[15];
+    color = $[16];
+    title = $[17];
+    flexDirection = $[18];
+    marginTop = $[19];
+    paddingX = $[20];
+    Et = $[21];
+    Dt = $[22];
+  }
+  let onCancel;
+  if ($[29] !== answer) {
+    onCancel = () => answer("cancelled");
+    $[29] = answer;
+    $[30] = onCancel;
+  } else onCancel = $[30];
   let Xt;
-  if ($[31] !== answer || $[32] !== We || $[33] !== oo)
-    ((Xt = e(Box, {
+  if ($[31] !== answer || $[32] !== options || $[33] !== onCancel) {
+    Xt = jsxProd_default(Box, {
       marginTop: 1,
-      children: e(ModelSelector, {
+      children: jsxProd_default(ModelSelector, {
         selectedValue: NO_COMMITTED_ROW,
-        options: We,
+        options,
         onChange: answer,
-        onCancel: oo,
+        onCancel,
       }),
-    })),
-      ($[31] = answer),
-      ($[32] = We),
-      ($[33] = oo),
-      ($[34] = Xt));
-  else Xt = $[34];
-  let io;
+    });
+    $[31] = answer;
+    $[32] = options;
+    $[33] = onCancel;
+    $[34] = Xt;
+  } else Xt = $[34];
+  let children;
   if (
     $[35] !== ze ||
     $[36] !== Xt ||
-    $[37] !== At ||
-    $[38] !== It ||
-    $[39] !== Ot ||
+    $[37] !== flexDirection ||
+    $[38] !== marginTop ||
+    $[39] !== paddingX ||
     $[40] !== Et ||
     $[41] !== Dt
-  )
-    ((io = r(ze, { flexDirection: At, marginTop: It, paddingX: Ot, children: [Et, Dt, Xt] })),
-      ($[35] = ze),
-      ($[36] = Xt),
-      ($[37] = At),
-      ($[38] = It),
-      ($[39] = Ot),
-      ($[40] = Et),
-      ($[41] = Dt),
-      ($[42] = io));
-  else io = $[42];
+  ) {
+    children = jsxProd_default_2(ze, {
+      flexDirection,
+      marginTop,
+      paddingX,
+      children: [Et, Dt, Xt],
+    });
+    $[35] = ze;
+    $[36] = Xt;
+    $[37] = flexDirection;
+    $[38] = marginTop;
+    $[39] = paddingX;
+    $[40] = Et;
+    $[41] = Dt;
+    $[42] = children;
+  } else children = $[42];
   let so;
-  if ($[43] !== Xe || $[44] !== rt || $[45] !== kt || $[46] !== io)
-    ((so = e(Xe, { color: rt, title: kt, children: io })),
-      ($[43] = Xe),
-      ($[44] = rt),
-      ($[45] = kt),
-      ($[46] = io),
-      ($[47] = so));
-  else so = $[47];
+  if ($[43] !== Xe || $[44] !== color || $[45] !== title || $[46] !== children) {
+    so = jsxProd_default(Xe, {
+      color,
+      title,
+      children,
+    });
+    $[43] = Xe;
+    $[44] = color;
+    $[45] = title;
+    $[46] = children;
+    $[47] = so;
+  } else so = $[47];
   return so;
 }
-
 export { ModelRefusalPausedDialog };

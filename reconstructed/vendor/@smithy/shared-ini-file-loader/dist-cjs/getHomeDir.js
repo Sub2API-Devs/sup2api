@@ -8,31 +8,27 @@
 import { x, importMetaRequire } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-a1ttyqdw.js:266-666 cjs-fingerprint
-var m = x(function (D) {
-  Object.defineProperty(D, "__esModule", { value: !0 });
-  D.getHomeDir = void 0;
-  var b = importMetaRequire("os"),
-    v = importMetaRequire("path"),
-    h = {},
-    Q = () => {
-      if (process && process.geteuid) return `${process.geteuid()}`;
-      return "DEFAULT";
-    },
-    Y = () => {
-      let {
-        HOME: HOME,
-        USERPROFILE: USERPROFILE,
-        HOMEPATH: HOMEPATH,
-        HOMEDRIVE: HOMEDRIVE = `C:${v.sep}`,
-      } = process.env;
-      if (HOME) return HOME;
-      if (USERPROFILE) return USERPROFILE;
-      if (HOMEPATH) return `${HOMEDRIVE}${HOMEPATH}`;
-      let n = Q();
-      if (!h[n]) h[n] = b.homedir();
-      return h[n];
-    };
-  D.getHomeDir = Y;
+var require_getHomeDir = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.getHomeDir = undefined;
+  var os_1 = importMetaRequire("os");
+  var path_1 = importMetaRequire("path");
+  var homeDirCache = {};
+  var getHomeDirCacheKey = () => {
+    if (process && process.geteuid) return `${process.geteuid()}`;
+    return "DEFAULT";
+  };
+  var getHomeDir = () => {
+    let { HOME, USERPROFILE, HOMEPATH, HOMEDRIVE = `C:${path_1.sep}` } = process.env;
+    if (HOME) return HOME;
+    if (USERPROFILE) return USERPROFILE;
+    if (HOMEPATH) return `${HOMEDRIVE}${HOMEPATH}`;
+    let homeDirCacheKey = getHomeDirCacheKey();
+    if (!homeDirCache[homeDirCacheKey]) homeDirCache[homeDirCacheKey] = os_1.homedir();
+    return homeDirCache[homeDirCacheKey];
+  };
+  cjsExports.getHomeDir = getHomeDir;
 });
-
-export { m };
+export { require_getHomeDir };

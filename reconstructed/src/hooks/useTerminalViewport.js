@@ -9,9 +9,12 @@
  * attribution: placement 4
  */
 import { Ar } from "../../runtime/bun-runtime.js";
-import { g2, describePanePlaced } from "../plugins/functionHooks/panes.js";
-import { P, R, j } from "../../vendor/react/cjs/react.production.js";
-import { cKt, rFi } from "../plugins/functionHooks/ui/renderInstances.js";
+import { paneHostSlot, describePanePlaced } from "../plugins/functionHooks/panes.js";
+import { P, R, init_react_production } from "../../vendor/react/cjs/react.production.js";
+import {
+  STEADY_REDRAW_INTERVAL_MS,
+  invalidateViewport,
+} from "../plugins/functionHooks/ui/renderInstances.js";
 import { hasRenderHooks } from "../plugins/functionHooks/ui/renderDispatch.js";
 
 //@ chunk-18hwfzwa.js:36697-36707 placement
@@ -23,13 +26,17 @@ Ar(useTerminalViewportNamespace, {
 });
 //@ chunk-18hwfzwa.js:1809635-1810034 placement
 function useTerminalViewport(h, x, D) {
-  let max = Math.max(1, h - D),
-    ee = g2.get();
+  let max = Math.max(1, h - D);
+  let ee = paneHostSlot.get();
   if (ee?.columns !== h || ee.rows !== x || ee.conversationColumns !== max)
-    g2.set({ columns: h, rows: x, conversationColumns: max });
+    paneHostSlot.set({
+      columns: h,
+      rows: x,
+      conversationColumns: max,
+    });
   P(() => {
-    let Be = setTimeout(describePanePlaced, cKt, h);
-    return () => clearTimeout(Be);
+    let timer = setTimeout(describePanePlaced, STEADY_REDRAW_INTERVAL_MS, h);
+    return () => clearTimeout(timer);
   }, [h]);
   let Re = R(max);
   P(() => {
@@ -38,18 +45,18 @@ function useTerminalViewport(h, x, D) {
       Re.current = max;
       return;
     }
-    let Be = setTimeout(
+    let timer = setTimeout(
       (He, We) => {
-        ((He.current = We), rFi());
+        He.current = We;
+        invalidateViewport();
       },
-      cKt,
+      STEADY_REDRAW_INTERVAL_MS,
       Re,
       max,
     );
-    return () => clearTimeout(Be);
+    return () => clearTimeout(timer);
   }, [max]);
 }
 //@ chunk-18hwfzwa.js:1810034-1810038 placement
-j();
-
+init_react_production();
 export { useTerminalViewportNamespace };

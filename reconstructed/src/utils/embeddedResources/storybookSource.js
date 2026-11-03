@@ -9,9 +9,15 @@
  * attribution: placement 2
  */
 import __cc_resource_0 from "../../../assets/source-storybook.mjs-125aecbd.txt.zst" with { type: "file" };
-import { Et } from "../embeddedAssets.js";
+import { readEmbeddedTextSync } from "../embeddedAssets.js";
 
 //@ chunk-0shjtwgf.js:319-341 placement
-var e = __cc_resource_0;
+/**
+ * storybook 源码的内嵌资源名。
+ */
+var STORYBOOK_SOURCE_RESOURCE = __cc_resource_0;
 //@ chunk-0shjtwgf.js:341-373 placement
-var i = Et(e, import.meta.dirname);
+/**
+ * 读出的 storybook 源码文本。
+ */
+var storybookSourceText = readEmbeddedTextSync(STORYBOOK_SOURCE_RESOURCE, import.meta.dirname);

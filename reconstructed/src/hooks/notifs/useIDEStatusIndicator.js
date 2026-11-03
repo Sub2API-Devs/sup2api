@@ -9,7 +9,7 @@
  * attribution: fingerprint 2, file-last-pair 1
  */
 import { useIdeConnectionStatus } from "../useIdeConnectionStatus.js";
-import { wt } from "../../remote/remoteMode.js";
+import { isRemoteSessionAvailable } from "../../remote/remoteMode.js";
 
 //@ chunk-18hwfzwa.js:348364-348523 fingerprint = _temp2 (0.379)
 function strandedResumeFailedNotification(hasShownHintRef_0, addNotification_0) {
@@ -23,64 +23,55 @@ function strandedResumeFailedNotification(hasShownHintRef_0, addNotification_0) 
 }
 //@ chunk-18hwfzwa.js:1761522-1761687 file-last-pair
 function ideStatusFromState(current) {
-  let { status: status, ideName: ideName } = useIdeConnectionStatus(current.mcpClients);
+  let { status, ideName } = useIdeConnectionStatus(current.mcpClients);
   return {
     ideStatus: status,
-    ideName: ideName,
+    ideName,
     showIDEInstallError: Boolean(current.ideInstallationStatus?.error) && status !== "connected",
   };
 }
+//@ chunk-18hwfzwa.js:1761687-1762535 fingerprint = useIDEStatusIndicator (0.719)
 /**
  * 启动通知规格：IDE 已断开（ide-status-disconnected）与 IDE 扩展安装失败（ide-status-install-error），状态恢复时自动移除。
  */
-//@ chunk-18hwfzwa.js:1761687-1762535 fingerprint = useIDEStatusIndicator (0.719)
 var IDE_DISCONNECTED_NOTICE_SPEC = {
-    id: "ide-status-disconnected",
-    deps: (h) => {
-      let {
-        ideStatus: ideStatus,
-        ideName: ideName,
-        showIDEInstallError: showIDEInstallError,
-      } = ideStatusFromState(h);
-      return [h.addNotification, h.removeNotification, ideStatus, ideName, showIDEInstallError];
-    },
-    setup: () => (h) => {
-      if (wt()) return;
-      let {
-        ideStatus: ideStatus,
-        ideName: ideName,
-        showIDEInstallError: showIDEInstallError,
-      } = ideStatusFromState(h);
-      if (showIDEInstallError || ideStatus !== "disconnected" || !ideName) {
-        h.removeNotification("ide-status-disconnected");
-        return;
-      }
-      h.addNotification({
-        key: "ide-status-disconnected",
-        kind: "warning",
-        text: `${ideName} disconnected`,
-        color: "error",
-        priority: "medium",
-      });
-    },
+  id: "ide-status-disconnected",
+  deps: (h) => {
+    let { ideStatus, ideName, showIDEInstallError } = ideStatusFromState(h);
+    return [h.addNotification, h.removeNotification, ideStatus, ideName, showIDEInstallError];
   },
-  IDE_INSTALL_ERROR_NOTICE_SPEC = {
-    id: "ide-status-install-error",
-    deps: (h) => [h.addNotification, h.removeNotification, ideStatusFromState(h).showIDEInstallError],
-    setup: () => (h) => {
-      if (wt()) return;
-      if (!ideStatusFromState(h).showIDEInstallError) {
-        h.removeNotification("ide-status-install-error");
-        return;
-      }
-      h.addNotification({
-        key: "ide-status-install-error",
-        kind: "warning",
-        text: "IDE extension install failed (see /status for info)",
-        color: "error",
-        priority: "medium",
-      });
-    },
-  };
-
+  setup: () => (h) => {
+    if (isRemoteSessionAvailable()) return;
+    let { ideStatus, ideName, showIDEInstallError } = ideStatusFromState(h);
+    if (showIDEInstallError || ideStatus !== "disconnected" || !ideName) {
+      h.removeNotification("ide-status-disconnected");
+      return;
+    }
+    h.addNotification({
+      key: "ide-status-disconnected",
+      kind: "warning",
+      text: `${ideName} disconnected`,
+      color: "error",
+      priority: "medium",
+    });
+  },
+};
+var IDE_INSTALL_ERROR_NOTICE_SPEC = {
+  id: "ide-status-install-error",
+  deps: (h) => [h.addNotification, h.removeNotification, ideStatusFromState(h).showIDEInstallError],
+  setup: () => (h) => {
+    if (isRemoteSessionAvailable()) return;
+    if (!ideStatusFromState(h).showIDEInstallError) {
+      h.removeNotification("ide-status-install-error");
+      return;
+    }
+    h.addNotification({
+      key: "ide-status-install-error",
+      kind: "warning",
+      text: "IDE extension install failed (see /status for info)",
+      color: "error",
+      priority: "medium",
+    });
+  },
+};
 export { strandedResumeFailedNotification, IDE_DISCONNECTED_NOTICE_SPEC, IDE_INSTALL_ERROR_NOTICE_SPEC };

@@ -6,19 +6,20 @@
  * attribution: cjs-require-graph 1
  */
 import { x } from "../../../../../../../../runtime/bun-runtime.js";
-import { Ds } from "../../../../cjs/codegenv2/file.js";
-import { Ts } from "../../../../cjs/codegenv2/message.js";
+import { require_file } from "../../../../cjs/codegenv2/file.js";
+import { require_message } from "../../../../cjs/codegenv2/message.js";
 
 //@ chunk-fq0cr76a.js:415008-415592 cjs-require-graph
-var m_ = x(function (mO) {
-  Object.defineProperty(mO, "__esModule", { value: !0 });
-  mO.DurationSchema = mO.file_google_protobuf_duration = void 0;
-  var pO = Ds(),
-    hO = Ts();
-  mO.file_google_protobuf_duration = pO.fileDesc(
+var require_duration_pb = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.DurationSchema = cjsExports.file_google_protobuf_duration = undefined;
+  var file_js_1 = require_file();
+  var message_js_1 = require_message();
+  cjsExports.file_google_protobuf_duration = file_js_1.fileDesc(
     "Ch5nb29nbGUvcHJvdG9idWYvZHVyYXRpb24ucHJvdG8SD2dvb2dsZS5wcm90b2J1ZiIqCghEdXJhdGlvbhIPCgdzZWNvbmRzGAEgASgDEg0KBW5hbm9zGAIgASgFQoMBChNjb20uZ29vZ2xlLnByb3RvYnVmQg1EdXJhdGlvblByb3RvUAFaMWdvb2dsZS5nb2xhbmcub3JnL3Byb3RvYnVmL3R5cGVzL2tub3duL2R1cmF0aW9ucGL4AQGiAgNHUEKqAh5Hb29nbGUuUHJvdG9idWYuV2VsbEtub3duVHlwZXNiBnByb3RvMw",
   );
-  mO.DurationSchema = hO.messageDesc(mO.file_google_protobuf_duration, 0);
+  cjsExports.DurationSchema = message_js_1.messageDesc(cjsExports.file_google_protobuf_duration, 0);
 });
-
-export { m_ };
+export { require_duration_pb };

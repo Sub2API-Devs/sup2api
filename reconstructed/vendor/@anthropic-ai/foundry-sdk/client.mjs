@@ -5,75 +5,100 @@
  * pieces: chunk-q01xm7xp.js (3)
  * attribution: esm-fingerprint 3
  */
-import { uPe } from "../sdk/client.mjs";
-import { u } from "./internal/utils/env.mjs";
-import { pr } from "../sdk/core/error.mjs";
-import { p } from "./internal/headers.mjs";
-import { Cx } from "../sdk/version.mjs";
-import { $ie } from "../sdk/resources/messages/messages.mjs";
-import { Nie } from "../sdk/resources/beta/beta.mjs";
+import { Anthropic } from "../sdk/client.mjs";
+import { readEnv } from "./internal/utils/env.mjs";
+import { AnthropicError } from "../sdk/core/error.mjs";
+import { buildHeaders } from "./internal/headers.mjs";
+import { VERSION } from "../sdk/version.mjs";
+import { Messages_2 } from "../sdk/resources/messages/messages.mjs";
+import { Beta } from "../sdk/resources/beta/beta.mjs";
 
 //@ chunk-q01xm7xp.js:1613-3141 esm-fingerprint
-class y extends uPe {
+class AnthropicFoundry extends Anthropic {
   constructor({
-    baseURL: e = u("ANTHROPIC_FOUNDRY_BASE_URL"),
-    apiKey: t = u("ANTHROPIC_FOUNDRY_API_KEY"),
-    resource: n = u("ANTHROPIC_FOUNDRY_RESOURCE"),
-    azureADTokenProvider: r,
-    dangerouslyAllowBrowser: o,
-    ...i
+    baseURL = readEnv("ANTHROPIC_FOUNDRY_BASE_URL"),
+    apiKey = readEnv("ANTHROPIC_FOUNDRY_API_KEY"),
+    resource = readEnv("ANTHROPIC_FOUNDRY_RESOURCE"),
+    azureADTokenProvider,
+    dangerouslyAllowBrowser,
+    ...opts
   } = {}) {
-    if (typeof r === "function") o = !0;
-    if (!r && !t)
-      throw new pr(
+    if (typeof azureADTokenProvider === "function") dangerouslyAllowBrowser = true;
+    if (!azureADTokenProvider && !apiKey)
+      throw new AnthropicError(
         "Missing credentials. Please pass one of `apiKey` and `azureTokenProvider`, or set the `ANTHROPIC_FOUNDRY_API_KEY` environment variable.",
       );
-    if (r && t)
-      throw new pr(
+    if (azureADTokenProvider && apiKey)
+      throw new AnthropicError(
         "The `apiKey` and `azureADTokenProvider` arguments are mutually exclusive; only one can be passed at a time.",
       );
-    if (!e) {
-      if (!n)
-        throw new pr(
+    if (!baseURL) {
+      if (!resource)
+        throw new AnthropicError(
           "Must provide one of the `baseURL` or `resource` arguments, or the `ANTHROPIC_FOUNDRY_RESOURCE` environment variable",
         );
-      e = `https://${n}.services.ai.azure.com/anthropic/`;
-    } else if (n) throw new pr("baseURL and resource are mutually exclusive");
-    super({ apiKey: r ?? t, baseURL: e, ...i, ...(o !== void 0 ? { dangerouslyAllowBrowser: o } : {}) });
-    ((this.resource = null), (this.messages = w(this)), (this.beta = E(this)), (this.models = void 0));
+      baseURL = `https://${resource}.services.ai.azure.com/anthropic/`;
+    } else if (resource) throw new AnthropicError("baseURL and resource are mutually exclusive");
+    super({
+      apiKey: azureADTokenProvider ?? apiKey,
+      baseURL,
+      ...opts,
+      ...(dangerouslyAllowBrowser !== undefined
+        ? {
+            dangerouslyAllowBrowser,
+          }
+        : {}),
+    });
+    this.resource = null;
+    this.messages = makeMessagesResource(this);
+    this.beta = makeBetaResource(this);
+    this.models = undefined;
   }
   async authHeaders() {
     if (typeof this._options.apiKey === "function") {
-      let e;
+      let token;
       try {
-        e = await this._options.apiKey();
-      } catch (error) {
-        if (error instanceof pr) throw error;
-        throw new pr(`Failed to get token from azureADTokenProvider: ${error.message}`, { cause: error });
+        token = await this._options.apiKey();
+      } catch (err) {
+        if (err instanceof AnthropicError) throw err;
+        throw new AnthropicError(`Failed to get token from azureADTokenProvider: ${err.message}`, {
+          cause: err,
+        });
       }
-      if (typeof e !== "string" || !e)
-        throw new pr(
-          `Expected azureADTokenProvider function argument to return a string but it returned ${e}`,
+      if (typeof token !== "string" || !token)
+        throw new AnthropicError(
+          `Expected azureADTokenProvider function argument to return a string but it returned ${token}`,
         );
-      return p([{ Authorization: `Bearer ${e}` }]);
+      return buildHeaders([
+        {
+          Authorization: `Bearer ${token}`,
+        },
+      ]);
     }
-    if (typeof this._options.apiKey === "string") return p([{ "x-api-key": this.apiKey }]);
+    if (typeof this._options.apiKey === "string")
+      return buildHeaders([
+        {
+          "x-api-key": this.apiKey,
+        },
+      ]);
     return;
   }
   validateHeaders() {
     return;
   }
   getUserAgent() {
-    return `AnthropicFoundry/JS ${Cx}`;
+    return `AnthropicFoundry/JS ${VERSION}`;
   }
 }
 //@ chunk-q01xm7xp.js:3141-3198 esm-fingerprint
-function w(e) {
-  let t = new $ie(e);
-  return (delete t.batches, t);
+function makeMessagesResource(client) {
+  let resource = new Messages_2(client);
+  delete resource.batches;
+  return resource;
 }
 //@ chunk-q01xm7xp.js:3198-3264 esm-fingerprint
-function E(e) {
-  let t = new Nie(e);
-  return (delete t.messages.batches, t);
+function makeBetaResource(client) {
+  let resource = new Beta(client);
+  delete resource.messages.batches;
+  return resource;
 }

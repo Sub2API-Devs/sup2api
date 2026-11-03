@@ -6,30 +6,31 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { yHr } from "./writer.js";
-import { Rr } from "./writer_buffer.js";
-import { _Hr } from "./reader.js";
-import { Fr } from "./reader_buffer.js";
-import { QGe } from "./util/minimal.js";
-import { ZPo } from "./rpc.js";
-import { eIo } from "./roots.js";
+import { require_writer } from "./writer.js";
+import { require_writer_buffer } from "./writer_buffer.js";
+import { require_reader } from "./reader.js";
+import { require_reader_buffer } from "./reader_buffer.js";
+import { require_minimal } from "./util/minimal.js";
+import { require_rpc } from "./rpc.js";
+import { require_roots } from "./roots.js";
 
 //@ chunk-798ashq9.js:40749-41036 cjs-fingerprint
-var tIo = x(function (Yr) {
-  var B = Yr;
-  B.build = "minimal";
-  B.Writer = yHr();
-  B.BufferWriter = Rr();
-  B.Reader = _Hr();
-  B.BufferReader = Fr();
-  B.util = QGe();
-  B.rpc = ZPo();
-  B.roots = eIo();
-  B.configure = Gr;
-  function Gr() {
-    (B.util._configure(), B.Writer._configure(B.BufferWriter), B.Reader._configure(B.BufferReader));
+var require_index_minimal = x(function (cjsExports) {
+  var protobuf = cjsExports;
+  protobuf.build = "minimal";
+  protobuf.Writer = require_writer();
+  protobuf.BufferWriter = require_writer_buffer();
+  protobuf.Reader = require_reader();
+  protobuf.BufferReader = require_reader_buffer();
+  protobuf.util = require_minimal();
+  protobuf.rpc = require_rpc();
+  protobuf.roots = require_roots();
+  protobuf.configure = configure;
+  function configure() {
+    protobuf.util._configure();
+    protobuf.Writer._configure(protobuf.BufferWriter);
+    protobuf.Reader._configure(protobuf.BufferReader);
   }
-  Gr();
+  configure();
 });
-
-export { tIo };
+export { require_index_minimal };

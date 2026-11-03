@@ -10,7 +10,7 @@
  */
 import { withHideWhile } from "./dialogRequests.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, A, o, U, Ue, T, hu } from "../../../vendor/zod/v4/classic/schemas.js";
+import { u, array, string, _enum, union, literal, hu } from "../../../vendor/zod/v4/classic/schemas.js";
 import {
   COST_THRESHOLD,
   AUTOCOMPACT_OFFER,
@@ -51,10 +51,10 @@ import {
   IDE_ONBOARDING_DIALOG,
   LEFT_ARROW_CONFIRM_DIALOG,
   LSP_RECOMMENDATION_DIALOG,
-  HXe,
+  PLUGIN_HINT_DIALOG,
 } from "../../screens/replDialogState.js";
 import { REMOTE_CALLOUT_DIALOG } from "../RemoteCallout.js";
-import { ULTRAPLAN_LAUNCH_DIALOG, IKe } from "../../commands/ultraplan.js";
+import { ULTRAPLAN_LAUNCH_DIALOG, ULTRAPLAN_CHOICE_DIALOG_SPEC } from "../../commands/ultraplan.js";
 import { FULLSCREEN_UPSELL_DIALOG } from "../FullscreenUpsellDialog.js";
 import { GOAL_PROPOSAL_DIALOG } from "../goal/goalProposalDialog.js";
 import { REFUSAL_FALLBACK_DIALOG } from "../../services/requestUserDialog.js";
@@ -67,82 +67,113 @@ import {
 import { useDialogSelector } from "../../state/dialogQueue.js";
 import { useStoreSelector } from "../../hooks/useStoreSelector.js";
 import { selectIsEmpty } from "../../screens/repl/PromptDraft.js";
-import { zt, j } from "../../../vendor/react/cjs/react.production.js";
+import { zt, init_react_production } from "../../../vendor/react/cjs/react.production.js";
 import { isVirtualPancakeEnabled } from "../../utils/permissions/permissionSetup.js";
-import { rpe } from "../../history.js";
-import { cbe, ofe } from "../../utils/userTurnTags.js";
+import { addPastedEntry } from "../../history.js";
+import { wrapUserTurnContent, escapePastedContentTag } from "../../utils/userTurnTags.js";
 
 //@ chunk-18hwfzwa.js:529449-529890 placement
+/**
+ * auto-mode-setup flagged 对话框 spec：kind 为 auto_mode_setup_review 的变体，带通知文案。
+ */
 var autoModeSetupReviewDialogDef = withHideWhile({
-    kind: "auto_mode_setup_review",
-    payload: DoctorLazy(() =>
+  kind: "auto_mode_setup_review",
+  payload: DoctorLazy(() =>
+    u({
+      environment: array(string()),
+      allow: array(string()),
+      soft_deny: array(string()),
+      hard_deny: array(string()),
+      remove_from_permissions_allow: array(string()),
+      notes: array(string()),
+      mode: _enum(["append", "replace"]),
+    }),
+  ),
+  result: DoctorLazy(() => _enum(["accept", "decline", "cancelled"])),
+  default: "cancelled",
+});
+var AUTO_MODE_SETUP_FLAGGED_DIALOG = withHideWhile({
+  kind: "auto_mode_flagged_allow",
+  payload: DoctorLazy(() =>
+    u({
+      flagged: array(string()),
+      runId: string(),
+    }),
+  ),
+  result: DoctorLazy(() =>
+    union([
       u({
-        environment: A(o()),
-        allow: A(o()),
-        soft_deny: A(o()),
-        hard_deny: A(o()),
-        remove_from_permissions_allow: A(o()),
-        notes: A(o()),
-        mode: U(["append", "replace"]),
+        toRemove: array(string()),
       }),
-    ),
-    result: DoctorLazy(() => U(["accept", "decline", "cancelled"])),
-    default: "cancelled",
-  }),
-  HZt = withHideWhile({
-    kind: "auto_mode_flagged_allow",
-    payload: DoctorLazy(() => u({ flagged: A(o()), runId: o() })),
-    result: DoctorLazy(() => Ue([u({ toRemove: A(o()) }), T("cancelled")])),
-    default: "cancelled",
-  });
+      literal("cancelled"),
+    ]),
+  ),
+  default: "cancelled",
+});
 //@ chunk-18hwfzwa.js:529890-529953 placement
-var IO = { clipboardRead: !1, clipboardWrite: !1, systemKeyCombos: !1 };
+var EMPTY_SANDBOX_FLAGS = {
+  clipboardRead: false,
+  clipboardWrite: false,
+  systemKeyCombos: false,
+};
 //@ chunk-18hwfzwa.js:529953-530142 placement
 var computerUseApprovalDialogDef = withHideWhile({
   kind: "computer_use_approval",
   payload: DoctorLazy(() => hu((h) => typeof h === "object" && h !== null)),
   result: DoctorLazy(() => hu((h) => typeof h === "object" && h !== null)),
-  default: { granted: [], denied: [], flags: IO },
+  default: {
+    granted: [],
+    denied: [],
+    flags: EMPTY_SANDBOX_FLAGS,
+  },
 });
 //@ chunk-18hwfzwa.js:530142-530251 placement
 var costThresholdDialogDef = withHideWhile({
   kind: COST_THRESHOLD,
   payload: DoctorLazy(() => u({})),
-  result: DoctorLazy(() => U(["acknowledged", "cancelled"])),
+  result: DoctorLazy(() => _enum(["acknowledged", "cancelled"])),
   default: "cancelled",
 });
 //@ chunk-18hwfzwa.js:530251-530408 placement
-async function acknowledgeCostThreshold(h, x) {
-  if ((await h(costThresholdDialogDef, {})) === "cancelled") return;
-  (saveGlobalConfig((L) => ({ ...L, hasAcknowledgedCostThreshold: !0 }), x),
-    logEvent("tengu_cost_threshold_acknowledged", {}));
+async function acknowledgeCostThreshold(requestDialog, storageV5) {
+  if ((await requestDialog(costThresholdDialogDef, {})) === "cancelled") return;
+  saveGlobalConfig(
+    (L) => ({
+      ...L,
+      hasAcknowledgedCostThreshold: true,
+    }),
+    storageV5,
+  );
+  logEvent("tengu_cost_threshold_acknowledged", {});
 }
 //@ chunk-18hwfzwa.js:530408-530585 placement
-var DIALOG_KINDS_PLACEHOLDER = null,
-  workflowPermissionDialog = require("./chunk-vhnfh0m3.js").workflowPermissionDialog,
-  workflowDialogKindsModule = require("./chunk-dkjq625a.js"),
-  dialogKindsModuleA = require("./chunk-c7qavzqd.js"),
-  dialogKindsModuleB = require("./chunk-j3dac3ab.js");
+var DIALOG_KINDS_PLACEHOLDER = null;
+var workflowPermissionDialog = require("./chunk-vhnfh0m3.js").workflowPermissionDialog;
+var workflowDialogKindsModule = require("./chunk-dkjq625a.js");
+var dialogKindsModuleA = require("./chunk-c7qavzqd.js");
+var dialogKindsModuleB = require("./chunk-j3dac3ab.js");
 //@ chunk-18hwfzwa.js:530585-530596 placement
-var oGt = {};
+var OPTIONAL_WORKFLOW_DIALOG_KINDS_1 = {};
 //@ chunk-18hwfzwa.js:530596-530614 placement
-var rGt = {},
-  sGt = {};
+var OPTIONAL_WORKFLOW_DIALOG_KINDS_2 = {};
+var OPTIONAL_WORKFLOW_DIALOG_META_2 = {};
 //@ chunk-18hwfzwa.js:530614-530632 placement
-var iGt = {},
-  aGt = {};
+var OPTIONAL_WORKFLOW_DIALOG_KINDS_3 = {};
+var OPTIONAL_WORKFLOW_DIALOG_META_3 = {};
 //@ chunk-18hwfzwa.js:530632-530722 placement
-var lGt = {},
-  ub = { text: "Claude needs your permission" },
-  dGt = [
-    MCP_ELICITATION_DIALOG.kind,
-    MCP_ELICITATION_WAITING_DIALOG.kind,
-    MCP_URL_ELICITATION_DIALOG.kind,
-    ...[],
-  ];
+var OPTIONAL_WORKFLOW_DIALOG_META_4 = {};
+var PERMISSION_NEEDED_NOTIFICATION = {
+  text: "Claude needs your permission",
+};
+var ELICITATION_DIALOG_KINDS = [
+  MCP_ELICITATION_DIALOG.kind,
+  MCP_ELICITATION_WAITING_DIALOG.kind,
+  MCP_URL_ELICITATION_DIALOG.kind,
+  ...[],
+];
 //@ chunk-18hwfzwa.js:530722-530782 placement
-function Bce(h) {
-  return typeof h === "string" && dGt.includes(h);
+function isElicitationDialogKind(blockingDialogKind) {
+  return typeof blockingDialogKind === "string" && ELICITATION_DIALOG_KINDS.includes(blockingDialogKind);
 }
 //@ chunk-18hwfzwa.js:530782-530890 placement
 var PERMISSION_CARD_KINDS = [
@@ -159,232 +190,336 @@ var PERMISSION_CARD_KINDS = [
   EXIT_PLAN_MODE_V2_PERMISSION_CARD.kind,
 ];
 //@ chunk-18hwfzwa.js:530890-530966 placement
-function EO(h) {
-  let safeParse = LOCAL_JSX_DIALOG.payload().safeParse(h);
-  return safeParse.success ? safeParse.data : null;
+function parseLocalJsxDialogPayload(h) {
+  let x = LOCAL_JSX_DIALOG.payload().safeParse(h);
+  return x.success ? x.data : null;
 }
+//@ chunk-18hwfzwa.js:530966-534705 placement
 /**
  * 对话框 kind → 元数据表：layout(fullscreen/modal/bottom/inline)、waitingFor 文案、终端通知（"Claude needs your permission" 等）、是否立即显示。
  */
-//@ chunk-18hwfzwa.js:530966-534705 placement
 var DIALOG_KIND_META = {
-    [LOCAL_JSX_DIALOG.kind]: {
-      layout: (h, x) => (x === "fullscreen" ? "modal" : EO(h)?.immediate ? "bottom" : "inline"),
-    },
-    [IT2_SETUP_DIALOG.kind]: {
-      waitingFor: "input needed",
-      needs: "choose: install the iTerm2 integration or use tmux",
-      notification: { text: "Teammate setup needs your input", type: "agent_needs_input" },
-    },
-    [computerUseApprovalDialogDef.kind]: {
-      needs: "choose: allow or deny the computer-use action",
-      notification: ub,
-    },
-    [costThresholdDialogDef.kind]: { waitingFor: "dialog open" },
-    [AUTOCOMPACT_OFFER]: { waitingFor: "dialog open" },
-    [serverFallbackNoticeSpec.kind]: {
-      waitingFor: "dialog open",
-      needs: "acknowledge the classifier billing notice (Enter continues in auto mode)",
-      notification: {
-        text: "Auto mode has a classifier billing notice to acknowledge",
-        type: "agent_needs_input",
-      },
-      layout: "bottom",
-    },
-    [RESUME_COMPACT_DIALOG.kind]: { waitingFor: "dialog open" },
-    [COLD_RESUME_QUOTA]: { waitingFor: "dialog open" },
-    [NEWER_MODEL_OFFER_2]: { waitingFor: "dialog open" },
-    [managedSettingsSecurityDialogDef.kind]: {
-      waitingFor: "dialog open",
-      notification: { text: "Managed settings need your review before they apply" },
-    },
-    [IDE_ONBOARDING_DIALOG.kind]: { waitingFor: "dialog open" },
-    [sandboxNetworkAccessDialogDef.kind]: {
-      waitingFor: "sandbox request",
-      notification: { text: "A sandboxed command needs network access" },
-    },
-    [LEFT_ARROW_CONFIRM_DIALOG.kind]: { waitingFor: "dialog open" },
-    [REMOTE_CALLOUT_DIALOG.kind]: { waitingFor: "dialog open" },
-    [ULTRAPLAN_LAUNCH_DIALOG.kind]: {
-      waitingFor: "dialog open",
-      needs: "choose: run ultraplan in the cloud",
-    },
-    [IKe.kind]: { waitingFor: "dialog open", layout: "modal" },
-    [LSP_RECOMMENDATION_DIALOG.kind]: { waitingFor: "dialog open" },
-    [HXe.kind]: { waitingFor: "dialog open" },
-    [AUTO_DEFAULT_NUDGE]: {
-      waitingFor: "dialog open",
-      needs: "choose: make auto mode the default permission mode",
-    },
-    [NUDGE_IDS]: { waitingFor: "dialog open" },
-    [FULLSCREEN_UPSELL_DIALOG.kind]: { waitingFor: "dialog open" },
-    ...{},
-    ...oGt,
-    ...rGt,
-    ...sGt,
-    ...iGt,
-    ...aGt,
-    [MCP_ELICITATION_DIALOG.kind]: {
-      waitingFor: "input needed",
-      notification: (h) => ({ text: lVe, type: cGt(h) ? "elicitation_url_dialog" : "elicitation_dialog" }),
-      layout: "bottom",
-    },
-    [MCP_ELICITATION_WAITING_DIALOG.kind]: {
-      waitingFor: "input needed",
-      notification: (h) => (uGt(h) ? { text: lVe, type: "elicitation_url_dialog" } : void 0),
-      layout: "bottom",
-    },
-    [MCP_URL_ELICITATION_DIALOG.kind]: {
-      waitingFor: "input needed",
-      needs: "MCP input: open link",
-      notification: { text: "An MCP server needs your input", type: "elicitation_url_dialog" },
-      layout: "bottom",
-    },
-    [PERMISSION_PROMPT_DIALOG.kind]: { notification: ub },
-    [WEBFETCH_PERMISSION_CARD.kind]: { notification: ub },
-    [SKILL_PERMISSION_CARD.kind]: { notification: ub },
-    [POWERSHELL_PERMISSION_CARD.kind]: { notification: ub },
-    [FILE_PERMISSION_CARD.kind]: { notification: ub },
-    [ASK_USER_QUESTION_PERMISSION_CARD.kind]: { waitingFor: "input needed", notification: ub },
-    [ENTER_PLAN_MODE_PERMISSION_CARD.kind]: {
-      notification: { text: "Claude Code wants to enter plan mode" },
-    },
-    [PUBLISH_PLUGIN_PERMISSION_CARD.kind]: { notification: { text: PUBLISH_WAITING_MESSAGE } },
-    [GOAL_PROPOSAL_DIALOG.kind]: {
-      waitingFor: "goal proposal",
-      notification: { text: "Claude proposed a session goal" },
-    },
-    [EXIT_PLAN_MODE_V2_PERMISSION_CARD.kind]: {
-      notification: { text: "Claude Code needs your approval for the plan" },
-      layout: "modal",
-    },
-    [MONITOR_PERMISSION_CARD.kind]: { notification: ub },
-    [BASH_PERMISSION_CARD.kind]: { notification: ub },
-    [REFUSAL_FALLBACK_DIALOG.kind]: {
-      waitingFor: "dialog open",
-      needs: "choose: retry on fallback model or edit prompt",
-      notification: { text: "Session paused" },
-    },
-    [FABLE_OVERAGE_CONSENT_DIALOG.kind]: {
-      waitingFor: "dialog open",
-      needs: "choose: continue on usage credits or switch models",
-      notification: { text: "Session paused" },
-    },
-    [BROWSER_PERMISSION_CARD.kind]: { notification: ub },
-    [peerInboundApprovalDialogDef.kind]: {
-      notification: { text: "A message from another session needs your approval" },
-    },
-    [CHROME_INSTALL_UPSELL_DIALOG.kind]: { notification: { text: "Claude wants to use your browser" } },
-    [CHROME_INSTALL_SETUP_DIALOG.kind]: { notification: { text: "Setting up Claude in Chrome" } },
-    ...{},
-    ...{},
-    ...{},
-    ...(DIALOG_KINDS_PLACEHOLDER && {
-      [DIALOG_KINDS_PLACEHOLDER.kind]: {
-        notification: { text: "Claude needs your approval for a review artifact" },
-      },
-    }),
-    ...(workflowDialogKindsModule
-      ? {
-          [workflowDialogKindsModule.projectContinuePermissionDialog.kind]: {
-            notification: { text: workflowDialogKindsModule.CONTINUE_NOTIFICATION },
-          },
-        }
-      : {}),
-    ...(dialogKindsModuleA
-      ? {
-          [dialogKindsModuleA.continueInProjectsTargetDialog.kind]: {
-            waitingFor: "dialog open",
-            needs: "choose: the project this session is sent to",
-          },
-        }
-      : {}),
-    ...(dialogKindsModuleB
-      ? {
-          [dialogKindsModuleB.continueInProjectsMessageDialog.kind]: {
-            waitingFor: "dialog open",
-            needs: "confirm: the message sent to the project",
-          },
-        }
-      : {}),
-    ...{},
-    ...{},
-    [workflowPermissionDialog.kind]: { notification: ub },
-    ...lGt,
-    [autoModeSetupReviewDialogDef.kind]: {
-      notification: { text: "Auto-mode setup proposal is ready for review" },
-    },
-    [HZt.kind]: { notification: { text: "Auto-mode setup flagged some permission rules for review" } },
+  [LOCAL_JSX_DIALOG.kind]: {
+    layout: (h, x) =>
+      x === "fullscreen" ? "modal" : parseLocalJsxDialogPayload(h)?.immediate ? "bottom" : "inline",
   },
-  lVe = "Claude Code needs your input";
+  [IT2_SETUP_DIALOG.kind]: {
+    waitingFor: "input needed",
+    needs: "choose: install the iTerm2 integration or use tmux",
+    notification: {
+      text: "Teammate setup needs your input",
+      type: "agent_needs_input",
+    },
+  },
+  [computerUseApprovalDialogDef.kind]: {
+    needs: "choose: allow or deny the computer-use action",
+    notification: PERMISSION_NEEDED_NOTIFICATION,
+  },
+  [costThresholdDialogDef.kind]: {
+    waitingFor: "dialog open",
+  },
+  [AUTOCOMPACT_OFFER]: {
+    waitingFor: "dialog open",
+  },
+  [serverFallbackNoticeSpec.kind]: {
+    waitingFor: "dialog open",
+    needs: "acknowledge the classifier billing notice (Enter continues in auto mode)",
+    notification: {
+      text: "Auto mode has a classifier billing notice to acknowledge",
+      type: "agent_needs_input",
+    },
+    layout: "bottom",
+  },
+  [RESUME_COMPACT_DIALOG.kind]: {
+    waitingFor: "dialog open",
+  },
+  [COLD_RESUME_QUOTA]: {
+    waitingFor: "dialog open",
+  },
+  [NEWER_MODEL_OFFER_2]: {
+    waitingFor: "dialog open",
+  },
+  [managedSettingsSecurityDialogDef.kind]: {
+    waitingFor: "dialog open",
+    notification: {
+      text: "Managed settings need your review before they apply",
+    },
+  },
+  [IDE_ONBOARDING_DIALOG.kind]: {
+    waitingFor: "dialog open",
+  },
+  [sandboxNetworkAccessDialogDef.kind]: {
+    waitingFor: "sandbox request",
+    notification: {
+      text: "A sandboxed command needs network access",
+    },
+  },
+  [LEFT_ARROW_CONFIRM_DIALOG.kind]: {
+    waitingFor: "dialog open",
+  },
+  [REMOTE_CALLOUT_DIALOG.kind]: {
+    waitingFor: "dialog open",
+  },
+  [ULTRAPLAN_LAUNCH_DIALOG.kind]: {
+    waitingFor: "dialog open",
+    needs: "choose: run ultraplan in the cloud",
+  },
+  [ULTRAPLAN_CHOICE_DIALOG_SPEC.kind]: {
+    waitingFor: "dialog open",
+    layout: "modal",
+  },
+  [LSP_RECOMMENDATION_DIALOG.kind]: {
+    waitingFor: "dialog open",
+  },
+  [PLUGIN_HINT_DIALOG.kind]: {
+    waitingFor: "dialog open",
+  },
+  [AUTO_DEFAULT_NUDGE]: {
+    waitingFor: "dialog open",
+    needs: "choose: make auto mode the default permission mode",
+  },
+  [NUDGE_IDS]: {
+    waitingFor: "dialog open",
+  },
+  [FULLSCREEN_UPSELL_DIALOG.kind]: {
+    waitingFor: "dialog open",
+  },
+  ...{},
+  ...OPTIONAL_WORKFLOW_DIALOG_KINDS_1,
+  ...OPTIONAL_WORKFLOW_DIALOG_KINDS_2,
+  ...OPTIONAL_WORKFLOW_DIALOG_META_2,
+  ...OPTIONAL_WORKFLOW_DIALOG_KINDS_3,
+  ...OPTIONAL_WORKFLOW_DIALOG_META_3,
+  [MCP_ELICITATION_DIALOG.kind]: {
+    waitingFor: "input needed",
+    notification: (h) => ({
+      text: NEEDS_INPUT_NOTIFICATION,
+      type: isUrlElicitationDialog(h) ? "elicitation_url_dialog" : "elicitation_dialog",
+    }),
+    layout: "bottom",
+  },
+  [MCP_ELICITATION_WAITING_DIALOG.kind]: {
+    waitingFor: "input needed",
+    notification: (h) =>
+      isWaitingElicitationDialog(h)
+        ? {
+            text: NEEDS_INPUT_NOTIFICATION,
+            type: "elicitation_url_dialog",
+          }
+        : undefined,
+    layout: "bottom",
+  },
+  [MCP_URL_ELICITATION_DIALOG.kind]: {
+    waitingFor: "input needed",
+    needs: "MCP input: open link",
+    notification: {
+      text: "An MCP server needs your input",
+      type: "elicitation_url_dialog",
+    },
+    layout: "bottom",
+  },
+  [PERMISSION_PROMPT_DIALOG.kind]: {
+    notification: PERMISSION_NEEDED_NOTIFICATION,
+  },
+  [WEBFETCH_PERMISSION_CARD.kind]: {
+    notification: PERMISSION_NEEDED_NOTIFICATION,
+  },
+  [SKILL_PERMISSION_CARD.kind]: {
+    notification: PERMISSION_NEEDED_NOTIFICATION,
+  },
+  [POWERSHELL_PERMISSION_CARD.kind]: {
+    notification: PERMISSION_NEEDED_NOTIFICATION,
+  },
+  [FILE_PERMISSION_CARD.kind]: {
+    notification: PERMISSION_NEEDED_NOTIFICATION,
+  },
+  [ASK_USER_QUESTION_PERMISSION_CARD.kind]: {
+    waitingFor: "input needed",
+    notification: PERMISSION_NEEDED_NOTIFICATION,
+  },
+  [ENTER_PLAN_MODE_PERMISSION_CARD.kind]: {
+    notification: {
+      text: "Claude Code wants to enter plan mode",
+    },
+  },
+  [PUBLISH_PLUGIN_PERMISSION_CARD.kind]: {
+    notification: {
+      text: PUBLISH_WAITING_MESSAGE,
+    },
+  },
+  [GOAL_PROPOSAL_DIALOG.kind]: {
+    waitingFor: "goal proposal",
+    notification: {
+      text: "Claude proposed a session goal",
+    },
+  },
+  [EXIT_PLAN_MODE_V2_PERMISSION_CARD.kind]: {
+    notification: {
+      text: "Claude Code needs your approval for the plan",
+    },
+    layout: "modal",
+  },
+  [MONITOR_PERMISSION_CARD.kind]: {
+    notification: PERMISSION_NEEDED_NOTIFICATION,
+  },
+  [BASH_PERMISSION_CARD.kind]: {
+    notification: PERMISSION_NEEDED_NOTIFICATION,
+  },
+  [REFUSAL_FALLBACK_DIALOG.kind]: {
+    waitingFor: "dialog open",
+    needs: "choose: retry on fallback model or edit prompt",
+    notification: {
+      text: "Session paused",
+    },
+  },
+  [FABLE_OVERAGE_CONSENT_DIALOG.kind]: {
+    waitingFor: "dialog open",
+    needs: "choose: continue on usage credits or switch models",
+    notification: {
+      text: "Session paused",
+    },
+  },
+  [BROWSER_PERMISSION_CARD.kind]: {
+    notification: PERMISSION_NEEDED_NOTIFICATION,
+  },
+  [peerInboundApprovalDialogDef.kind]: {
+    notification: {
+      text: "A message from another session needs your approval",
+    },
+  },
+  [CHROME_INSTALL_UPSELL_DIALOG.kind]: {
+    notification: {
+      text: "Claude wants to use your browser",
+    },
+  },
+  [CHROME_INSTALL_SETUP_DIALOG.kind]: {
+    notification: {
+      text: "Setting up Claude in Chrome",
+    },
+  },
+  ...{},
+  ...{},
+  ...{},
+  ...(DIALOG_KINDS_PLACEHOLDER && {
+    [DIALOG_KINDS_PLACEHOLDER.kind]: {
+      notification: {
+        text: "Claude needs your approval for a review artifact",
+      },
+    },
+  }),
+  ...(workflowDialogKindsModule
+    ? {
+        [workflowDialogKindsModule.projectContinuePermissionDialog.kind]: {
+          notification: {
+            text: workflowDialogKindsModule.CONTINUE_NOTIFICATION,
+          },
+        },
+      }
+    : {}),
+  ...(dialogKindsModuleA
+    ? {
+        [dialogKindsModuleA.continueInProjectsTargetDialog.kind]: {
+          waitingFor: "dialog open",
+          needs: "choose: the project this session is sent to",
+        },
+      }
+    : {}),
+  ...(dialogKindsModuleB
+    ? {
+        [dialogKindsModuleB.continueInProjectsMessageDialog.kind]: {
+          waitingFor: "dialog open",
+          needs: "confirm: the message sent to the project",
+        },
+      }
+    : {}),
+  ...{},
+  ...{},
+  [workflowPermissionDialog.kind]: {
+    notification: PERMISSION_NEEDED_NOTIFICATION,
+  },
+  ...OPTIONAL_WORKFLOW_DIALOG_META_4,
+  [autoModeSetupReviewDialogDef.kind]: {
+    notification: {
+      text: "Auto-mode setup proposal is ready for review",
+    },
+  },
+  [AUTO_MODE_SETUP_FLAGGED_DIALOG.kind]: {
+    notification: {
+      text: "Auto-mode setup flagged some permission rules for review",
+    },
+  },
+};
+var NEEDS_INPUT_NOTIFICATION = "Claude Code needs your input";
 //@ chunk-18hwfzwa.js:534705-534798 placement
-function cGt(h) {
-  let safeParse = MCP_ELICITATION_DIALOG.payload().safeParse(h);
-  return safeParse.success && safeParse.data.params.mode === "url";
+function isUrlElicitationDialog(h) {
+  let x = MCP_ELICITATION_DIALOG.payload().safeParse(h);
+  return x.success && x.data.params.mode === "url";
 }
 //@ chunk-18hwfzwa.js:534798-534894 placement
-function uGt(h) {
-  let safeParse = MCP_ELICITATION_WAITING_DIALOG.payload().safeParse(h);
-  return safeParse.success && safeParse.data.waitingState === void 0;
+function isWaitingElicitationDialog(h) {
+  let x = MCP_ELICITATION_WAITING_DIALOG.payload().safeParse(h);
+  return x.success && x.data.waitingState === undefined;
 }
 //@ chunk-18hwfzwa.js:534894-534985 placement
 function dialogNotification(h, x) {
-  let D = h[x.kind]?.notification;
-  return typeof D === "function" ? D(x.payload) : D;
+  let notification = h[x.kind]?.notification;
+  return typeof notification === "function" ? notification(x.payload) : notification;
 }
 //@ chunk-18hwfzwa.js:534985-535103 placement
-function dialogLayout(h, x, D) {
-  let L = h[x.kind]?.layout;
-  if (L === void 0) return "inline";
-  return typeof L === "function" ? L(x.payload, D) : L;
+function dialogLayout(h, x, renderMode) {
+  let layout = h[x.kind]?.layout;
+  if (layout === undefined) return "inline";
+  return typeof layout === "function" ? layout(x.payload, renderMode) : layout;
 }
 //@ chunk-18hwfzwa.js:535103-535166 placement
-function tW(h, x) {
+function dialogCueBehindDraft(h, x) {
   return h[x.kind]?.cueBehindDraft?.(x.payload);
 }
 //@ chunk-18hwfzwa.js:535166-535246 placement
-function pVe(h) {
-  return h === void 0 ? void 0 : (DIALOG_KIND_META[h]?.waitingFor ?? "permission prompt");
+function dialogWaitingForLabel(kind) {
+  return kind === undefined ? undefined : (DIALOG_KIND_META[kind]?.waitingFor ?? "permission prompt");
 }
 //@ chunk-18hwfzwa.js:535246-535322 placement
-function JY(h) {
-  return h.open.some((x) => DIALOG_KIND_META[x.kind]?.draftHiddenCue !== void 0);
+function hasDraftHiddenCueDialog(h) {
+  return h.open.some((x) => DIALOG_KIND_META[x.kind]?.draftHiddenCue !== undefined);
 }
 //@ chunk-18hwfzwa.js:535322-535419 placement
-function mGt(h) {
-  return JY(h) || h.open.some((x) => DIALOG_KIND_META[x.kind]?.mayBeHandedASecret?.(x.payload) === !0);
+function hasSecretEligibleDialog(h) {
+  return (
+    hasDraftHiddenCueDialog(h) ||
+    h.open.some((x) => DIALOG_KIND_META[x.kind]?.mayBeHandedASecret?.(x.payload) === true)
+  );
 }
 //@ chunk-18hwfzwa.js:535419-535507 placement
-function Hce(h) {
-  let x = useDialogSelector(mGt),
-    D = useStoreSelector(h, selectIsEmpty);
+function useHasSecretEligibleDialog(draft) {
+  let dialogSelector = useDialogSelector(hasSecretEligibleDialog);
+  let storeSelector = useStoreSelector(draft, selectIsEmpty);
   zt(() => {
-    if (x && !D) h.markMaybeSecret();
-  }, [h, x, D]);
+    if (dialogSelector && !storeSelector) draft.markMaybeSecret();
+  }, [draft, dialogSelector, storeSelector]);
 }
 //@ chunk-18hwfzwa.js:535507-535577 placement
-function rW(h, x) {
+function requestDialogWrapper(h, x) {
   let D = isVirtualPancakeEnabled();
-  return rpe(h, x, D ? cbe : void 0, D ? ofe : void 0);
+  return addPastedEntry(h, x, D ? wrapUserTurnContent : undefined, D ? escapePastedContentTag : undefined);
 }
 //@ chunk-18hwfzwa.js:535577-535581 placement
-j();
-
+init_react_production();
 export {
-  Bce,
-  Hce,
-  JY,
-  rW,
-  IO,
-  EO,
-  tW,
+  useHasSecretEligibleDialog,
+  hasDraftHiddenCueDialog,
+  requestDialogWrapper,
+  isElicitationDialogKind,
+  EMPTY_SANDBOX_FLAGS,
+  parseLocalJsxDialogPayload,
+  dialogCueBehindDraft,
   DIALOG_KIND_META,
-  pVe,
+  dialogWaitingForLabel,
   dialogLayout,
   computerUseApprovalDialogDef,
   costThresholdDialogDef,
   autoModeSetupReviewDialogDef,
-  HZt,
+  AUTO_MODE_SETUP_FLAGGED_DIALOG,
   dialogNotification,
   PERMISSION_CARD_KINDS,
   acknowledgeCostThreshold,

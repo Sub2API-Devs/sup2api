@@ -10,6 +10,11 @@
  */
 
 //@ chunk-n3nr6yb5.js:191-250 placement
-var UIr = (e) => ({ agentType: e || "teammate", source: "built-in" });
-
-export { UIr };
+/**
+ * 构造内置 teammate 的代理身份 {agentType, source}。
+ */
+var teammateAgentIdentity = (e) => ({
+  agentType: e || "teammate",
+  source: "built-in",
+});
+export { teammateAgentIdentity };

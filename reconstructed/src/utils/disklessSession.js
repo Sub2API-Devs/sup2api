@@ -12,18 +12,26 @@ import { isDiskless } from "../bootstrap/state.js";
 import { TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS } from "./errors.js";
 
 //@ chunk-m4p5zn6n.js:30752-30829 placement
-var ije = "Programs are unavailable in this session; the command was not run.";
+/**
+ * 无盘会话里“程序不可用、命令未运行”的提示。
+ */
+var DISKLESS_PROGRAM_REFUSAL = "Programs are unavailable in this session; the command was not run.";
 //@ chunk-m4p5zn6n.js:30829-30854 placement
-function Tv() {
+/**
+ * 当前是否为无盘会话。
+ */
+function isDisklessSession() {
   return isDiskless();
 }
 //@ chunk-m4p5zn6n.js:30854-30945 placement
-function CR() {
-  if (Tv())
+/**
+ * 无盘会话里尝试启动程序时抛出遥测安全错误。
+ */
+function assertProgramLaunchAllowed() {
+  if (isDisklessSession())
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      ije,
+      DISKLESS_PROGRAM_REFUSAL,
       "a program start was refused in a diskless session",
     );
 }
-
-export { Tv, ije, CR };
+export { isDisklessSession, DISKLESS_PROGRAM_REFUSAL, assertProgramLaunchAllowed };

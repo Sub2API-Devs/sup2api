@@ -10,11 +10,13 @@
  */
 
 //@ chunk-d12c53v7.js:191-235 placement
-class wUt {
-  id = void 0;
+/**
+ * 只保存一个 id 的小容器，可 clear。
+ */
+class IdHolder {
+  id = undefined;
   clear() {
-    this.id = void 0;
+    this.id = undefined;
   }
 }
-
-export { wUt };
+export { IdHolder };

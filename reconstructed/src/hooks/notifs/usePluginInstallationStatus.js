@@ -13,7 +13,7 @@ import { P } from "../../../vendor/react/cjs/react.production.js";
 
 //@ chunk-18hwfzwa.js:433650-433876 callgraph-fingerprint = usePluginInstallationStatus (0.338)
 function usePluginInstallationStatus(h, x, D, L, ee) {
-  let { addNotification: addNotification, removeNotification: removeNotification } = useNotifications();
+  let { addNotification, removeNotification } = useNotifications();
   P(() => {
     if (D === null) {
       removeNotification(h);
@@ -25,10 +25,9 @@ function usePluginInstallationStatus(h, x, D, L, ee) {
       color: ee?.color,
       wrap: ee?.wrap,
       priority: x,
-      pinned: !0,
+      pinned: true,
       jsx: L(D),
     });
   }, [D, h, x, L, ee, addNotification, removeNotification]);
 }
-
 export { usePluginInstallationStatus };

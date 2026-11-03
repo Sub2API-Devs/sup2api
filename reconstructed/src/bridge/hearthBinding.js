@@ -8,7 +8,12 @@
  * pieces: chunk-9wab212f.js (4)
  * attribution: placement 4
  */
-import { Hcs, HEARTHBOT, Ncs, HEARTH_TOOL_NAMES } from "../services/mcp/ccrMetaMcp.js";
+import {
+  TOOL_OR_SERVER_NAME_RE,
+  HEARTHBOT,
+  hearthMcpPath,
+  HEARTH_TOOL_NAMES,
+} from "../services/mcp/ccrMetaMcp.js";
 import { logForDebugging } from "../utils/debug.js";
 import { originIfValid } from "../services/mcp/ccrMcpUrls.js";
 import { parseMetaMcpTools } from "./metaMcpTools.js";
@@ -16,82 +21,125 @@ import { validateBridgeId } from "./sessionIdCompat.js";
 
 //@ chunk-9wab212f.js:384-417 placement
 var HEARTH_BINDING_CHANGED_HINT = "hearth_binding_changed";
+//@ chunk-9wab212f.js:417-1942 placement
 /**
  * 解析 hearth 工作者绑定（项目线程回复的 MCP 挂载信息），校验 id、服务名与地址来源。
  */
-//@ chunk-9wab212f.js:417-1942 placement
 function decodeHearthWorkerBinding(e, n) {
-  if (e === null || typeof e !== "object" || !("hearth" in e)) return { binding: null, reason: "not_joined" };
+  if (e === null || typeof e !== "object" || !("hearth" in e))
+    return {
+      binding: null,
+      reason: "not_joined",
+    };
   let hearth = e.hearth;
-  if (hearth === null || typeof hearth !== "object") return { binding: null, reason: "not_joined" };
-  let i = hearth,
-    l = typeof i.channel_id === "string" ? i.channel_id : "",
-    u = typeof i.thread_id === "string" ? i.thread_id : "";
-  if (!Hcs.test(l) || !Hcs.test(u))
-    return (
-      logForDebugging("[bridge:projects] binding ids are malformed \u2014 no mount", { level: "warn" }),
-      { binding: null, reason: "bad_ids" }
-    );
-  let mcp_server = i.mcp_server;
-  if (mcp_server === null || typeof mcp_server !== "object")
-    return { binding: null, reason: "bad_server_name" };
-  let o = mcp_server;
-  if (o.name !== HEARTHBOT)
-    return (
-      logForDebugging("[bridge:projects] binding names an unexpected MCP server \u2014 no mount", {
-        level: "warn",
-      }),
-      { binding: null, reason: "bad_server_name" }
-    );
-  if (o.type !== "http" || typeof o.url !== "string") return { binding: null, reason: "not_http" };
+  if (hearth === null || typeof hearth !== "object")
+    return {
+      binding: null,
+      reason: "not_joined",
+    };
+  let i = hearth;
+  let channelId = typeof i.channel_id === "string" ? i.channel_id : "";
+  let threadId = typeof i.thread_id === "string" ? i.thread_id : "";
+  if (!TOOL_OR_SERVER_NAME_RE.test(channelId) || !TOOL_OR_SERVER_NAME_RE.test(threadId)) {
+    logForDebugging("[bridge:projects] binding ids are malformed \u2014 no mount", {
+      level: "warn",
+    });
+    return {
+      binding: null,
+      reason: "bad_ids",
+    };
+  }
+  let mcpServer = i.mcp_server;
+  if (mcpServer === null || typeof mcpServer !== "object")
+    return {
+      binding: null,
+      reason: "bad_server_name",
+    };
+  let o = mcpServer;
+  if (o.name !== HEARTHBOT) {
+    logForDebugging("[bridge:projects] binding names an unexpected MCP server \u2014 no mount", {
+      level: "warn",
+    });
+    return {
+      binding: null,
+      reason: "bad_server_name",
+    };
+  }
+  if (o.type !== "http" || typeof o.url !== "string")
+    return {
+      binding: null,
+      reason: "not_http",
+    };
   let d = originIfValid(n.apiBaseUrl);
-  if (d === null)
-    return (
-      logForDebugging("[bridge:projects] api base is not an approved ingress origin \u2014 no mount", {
-        level: "warn",
-      }),
-      { binding: null, reason: "untrusted_origin" }
-    );
-  let c = `${d}${Ncs(n.sessionId)}`,
-    r;
+  if (d === null) {
+    logForDebugging("[bridge:projects] api base is not an approved ingress origin \u2014 no mount", {
+      level: "warn",
+    });
+    return {
+      binding: null,
+      reason: "untrusted_origin",
+    };
+  }
+  let mountUrl = `${d}${hearthMcpPath(n.sessionId)}`;
+  let r;
   try {
     r = new URL(o.url);
   } catch {
-    return { binding: null, reason: "url_mismatch" };
+    return {
+      binding: null,
+      reason: "url_mismatch",
+    };
   }
   if (
     r.origin !== d ||
-    r.pathname !== Ncs(n.sessionId) ||
+    r.pathname !== hearthMcpPath(n.sessionId) ||
     r.search !== "" ||
     r.hash !== "" ||
     r.username !== "" ||
     r.password !== ""
-  )
-    return (
-      logForDebugging(
-        "[bridge:projects] binding url is not this session\u2019s hearthbot mount on our own api base \u2014 no mount",
-        { level: "warn" },
-      ),
-      { binding: null, reason: "url_mismatch" }
+  ) {
+    logForDebugging(
+      "[bridge:projects] binding url is not this session\u2019s hearthbot mount on our own api base \u2014 no mount",
+      {
+        level: "warn",
+      },
     );
-  let g = parseMetaMcpTools(o, HEARTHBOT);
-  if (!g) return { binding: null, reason: "bad_tools" };
-  let filtered = g.filter((_) => HEARTH_TOOL_NAMES.has(_));
-  return { binding: { channelId: l, threadId: u, mountUrl: c, autoAllowTools: filtered } };
+    return {
+      binding: null,
+      reason: "url_mismatch",
+    };
+  }
+  let metaMcpTools = parseMetaMcpTools(o, HEARTHBOT);
+  if (!metaMcpTools)
+    return {
+      binding: null,
+      reason: "bad_tools",
+    };
+  let autoAllowTools = metaMcpTools.filter((metaMcpTool) => HEARTH_TOOL_NAMES.has(metaMcpTool));
+  return {
+    binding: {
+      channelId,
+      threadId,
+      mountUrl,
+      autoAllowTools,
+    },
+  };
 }
 //@ chunk-9wab212f.js:1942-1988 placement
-var p = /^(.*)\/v1\/code\/sessions\/([^/?#]+)$/;
+var HEARTH_SESSION_URL_PATTERN = /^(.*)\/v1\/code\/sessions\/([^/?#]+)$/;
 //@ chunk-9wab212f.js:1988-2150 placement
 function parseBridgeSdkUrl(e) {
   if (!e) return null;
-  let match = p.exec(e);
+  let match = HEARTH_SESSION_URL_PATTERN.exec(e);
   if (!match?.[1] || !match[2]) return null;
   try {
     validateBridgeId(match[2], "sessionId");
   } catch {
     return null;
   }
-  return { apiBaseUrl: match[1], sessionId: match[2] };
+  return {
+    apiBaseUrl: match[1],
+    sessionId: match[2],
+  };
 }
-
 export { decodeHearthWorkerBinding };

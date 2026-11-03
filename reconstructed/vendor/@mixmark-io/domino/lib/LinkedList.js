@@ -6,47 +6,46 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { ee } from "./utils.js";
+import { require_utils } from "./utils.js";
 
 //@ chunk-vwj6ccer.js:11263-12056 cjs-fingerprint
-var Ya = x(function (cd, Pi) {
-  var We = ee(),
-    Se = (Pi.exports = {
-      valid: function (e) {
-        return (
-          We.assert(e, "list falsy"),
-          We.assert(e._previousSibling, "previous falsy"),
-          We.assert(e._nextSibling, "next falsy"),
-          !0
-        );
-      },
-      insertBefore: function (e, t) {
-        We.assert(Se.valid(e) && Se.valid(t));
-        var r = e,
-          _previousSibling = e._previousSibling,
-          s = t,
-          _previousSibling_2 = t._previousSibling;
-        ((r._previousSibling = _previousSibling_2),
-          (_previousSibling._nextSibling = s),
-          (_previousSibling_2._nextSibling = r),
-          (s._previousSibling = _previousSibling),
-          We.assert(Se.valid(e) && Se.valid(t)));
-      },
-      replace: function (e, t) {
-        if ((We.assert(Se.valid(e) && (t === null || Se.valid(t))), t !== null)) Se.insertBefore(t, e);
-        (Se.remove(e), We.assert(Se.valid(e) && (t === null || Se.valid(t))));
-      },
-      remove: function (e) {
-        We.assert(Se.valid(e));
-        var _previousSibling = e._previousSibling;
-        if (_previousSibling === e) return;
-        var _nextSibling = e._nextSibling;
-        ((_previousSibling._nextSibling = _nextSibling),
-          (_nextSibling._previousSibling = _previousSibling),
-          (e._previousSibling = e._nextSibling = e),
-          We.assert(Se.valid(e)));
-      },
-    });
+var require_LinkedList = x(function (cjsExports, cjsModule) {
+  var utils = require_utils();
+  var LinkedList = (cjsModule.exports = {
+    valid: function (a) {
+      utils.assert(a, "list falsy");
+      utils.assert(a._previousSibling, "previous falsy");
+      utils.assert(a._nextSibling, "next falsy");
+      return true;
+    },
+    insertBefore: function (a_2, b) {
+      utils.assert(LinkedList.valid(a_2) && LinkedList.valid(b));
+      var a_first = a_2;
+      var a_last = a_2._previousSibling;
+      var b_first = b;
+      var b_last = b._previousSibling;
+      a_first._previousSibling = b_last;
+      a_last._nextSibling = b_first;
+      b_last._nextSibling = a_first;
+      b_first._previousSibling = a_last;
+      utils.assert(LinkedList.valid(a_2) && LinkedList.valid(b));
+    },
+    replace: function (a, b) {
+      utils.assert(LinkedList.valid(a) && (b === null || LinkedList.valid(b)));
+      if (b !== null) LinkedList.insertBefore(b, a);
+      LinkedList.remove(a);
+      utils.assert(LinkedList.valid(a) && (b === null || LinkedList.valid(b)));
+    },
+    remove: function (a) {
+      utils.assert(LinkedList.valid(a));
+      var prev = a._previousSibling;
+      if (prev === a) return;
+      var next = a._nextSibling;
+      prev._nextSibling = next;
+      next._previousSibling = prev;
+      a._previousSibling = a._nextSibling = a;
+      utils.assert(LinkedList.valid(a));
+    },
+  });
 });
-
-export { Ya };
+export { require_LinkedList };

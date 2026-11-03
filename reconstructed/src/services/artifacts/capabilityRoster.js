@@ -12,7 +12,7 @@ import { isServerIdentityActive } from "../mcp/serverIdentity.js";
 import { env } from "../../utils/env.js";
 import { getGatewayAccountInfo } from "../../utils/gatewayCredential.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, o, A, E } from "../../../vendor/zod/v4/classic/schemas.js";
+import { u, string, array, E } from "../../../vendor/zod/v4/classic/schemas.js";
 import { invalidateOverageCreditGrantCache } from "../api/overageCreditGrant.js";
 import { getGlobalConfig, saveGlobalConfig } from "../../utils/config.js";
 import { getLiveState } from "../liveReplica/liveReplica.js";
@@ -29,9 +29,9 @@ var FORCE_REFUSED_SENTENCE =
   " The server refuses force:true over a version saved from inside the page; only a publish built on that version is accepted.";
 //@ chunk-06y4szbn.js:2290-2537 placement
 function isHtmlCommentOnly(e) {
-  let trimEnd = e.trimEnd();
-  if (!trimEnd.startsWith("<!--") || !trimEnd.endsWith("-->") || trimEnd.length < 7) return !1;
-  let sliced = trimEnd.slice(4, -3);
+  let n = e.trimEnd();
+  if (!n.startsWith("<!--") || !n.endsWith("-->") || n.length < 7) return false;
+  let sliced = n.slice(4, -3);
   return (
     !sliced.startsWith(">") &&
     !sliced.startsWith("->") &&
@@ -43,42 +43,42 @@ function isHtmlCommentOnly(e) {
 }
 //@ chunk-06y4szbn.js:2537-2839 placement
 function rosterAccountKey() {
-  let CLAUDE_CODE_ACCOUNT_UUID = env.CLAUDE_CODE_ACCOUNT_UUID,
-    CLAUDE_CODE_ORGANIZATION_UUID = env.CLAUDE_CODE_ORGANIZATION_UUID;
+  let CLAUDE_CODE_ACCOUNT_UUID = env.CLAUDE_CODE_ACCOUNT_UUID;
+  let CLAUDE_CODE_ORGANIZATION_UUID = env.CLAUDE_CODE_ORGANIZATION_UUID;
   if (CLAUDE_CODE_ACCOUNT_UUID && CLAUDE_CODE_ORGANIZATION_UUID)
     return {
       accountUuid: CLAUDE_CODE_ACCOUNT_UUID.toLowerCase(),
       organizationUuid: CLAUDE_CODE_ORGANIZATION_UUID.toLowerCase(),
     };
-  let r = getGatewayAccountInfo();
-  if (!r?.accountUuid) return;
+  let gatewayAccountInfo = getGatewayAccountInfo();
+  if (!gatewayAccountInfo?.accountUuid) return;
   return {
-    accountUuid: r.accountUuid.toLowerCase(),
-    organizationUuid: r.organizationUuid?.toLowerCase() ?? null,
+    accountUuid: gatewayAccountInfo.accountUuid.toLowerCase(),
+    organizationUuid: gatewayAccountInfo.organizationUuid?.toLowerCase() ?? null,
   };
 }
+//@ chunk-06y4szbn.js:2839-3058 placement
 /**
  * 能力名册缓存的 schema（账号/组织、版本、能力列表、拉取时间），以及被拒记录的 schema（状态码、拒绝时间、令牌过期时间）。
  */
-//@ chunk-06y4szbn.js:2839-3058 placement
 var CAPABILITY_ROSTER_SCHEMA = DoctorLazy(() =>
-    u({
-      accountUuid: o(),
-      organizationUuid: o().nullable(),
-      version: o(),
-      capabilities: A(o()),
-      fetchedAt: E(),
-    }),
-  ),
-  CAPABILITY_DENIAL_SCHEMA = DoctorLazy(() =>
-    u({
-      accountUuid: o(),
-      organizationUuid: o().nullable(),
-      status: E(),
-      deniedAt: E(),
-      tokenExpiresAt: E(),
-    }),
-  );
+  u({
+    accountUuid: string(),
+    organizationUuid: string().nullable(),
+    version: string(),
+    capabilities: array(string()),
+    fetchedAt: E(),
+  }),
+);
+var CAPABILITY_DENIAL_SCHEMA = DoctorLazy(() =>
+  u({
+    accountUuid: string(),
+    organizationUuid: string().nullable(),
+    status: E(),
+    deniedAt: E(),
+    tokenExpiresAt: E(),
+  }),
+);
 //@ chunk-06y4szbn.js:3214-3282 placement
 function readCachedRoster() {
   return invalidateOverageCreditGrantCache(
@@ -94,37 +94,54 @@ function readRosterDenied() {
 //@ chunk-06y4szbn.js:3350-3521 placement
 function currentRoster() {
   let roster = getLiveState().roster;
-  if (roster !== void 0) return { roster: roster, source: "session" };
-  let n = env.CLAUDE_CODE_REMOTE ? void 0 : readCachedRoster();
-  return n === void 0 ? void 0 : { roster: n, source: "disk" };
+  if (roster !== undefined)
+    return {
+      roster,
+      source: "session",
+    };
+  let n = env.CLAUDE_CODE_REMOTE ? undefined : readCachedRoster();
+  return n === undefined
+    ? undefined
+    : {
+        roster: n,
+        source: "disk",
+      };
 }
 //@ chunk-06y4szbn.js:3521-3536 placement
-var to = 3600000;
+var ROSTER_CACHE_TTL_MS = 3600000;
+//@ chunk-06y4szbn.js:3536-4415 placement
 /**
  * 把 artifact 能力名册（capability roster）写入全局配置缓存，账号/epoch 不一致时放弃。
  */
-//@ chunk-06y4szbn.js:3536-4415 placement
 function saveRosterToConfig(e) {
-  let { session: session, epoch: epoch, roster: roster, storageV5: storageV5 } = e;
+  let { session, epoch, roster, storageV5 } = e;
   if (getLiveState() !== session || session.accountEpoch !== epoch)
-    return { adopted: !1, persisted: Promise.resolve() };
-  if (((session.roster = roster), roster.capabilities.includes("assets"))) session.assetsOnRoster = !0;
-  if (env.CLAUDE_CODE_REMOTE) return { adopted: !0, persisted: Promise.resolve() };
+    return {
+      adopted: false,
+      persisted: Promise.resolve(),
+    };
+  session.roster = roster;
+  if (roster.capabilities.includes("assets")) session.assetsOnRoster = true;
+  if (env.CLAUDE_CODE_REMOTE)
+    return {
+      adopted: true,
+      persisted: Promise.resolve(),
+    };
   return {
-    adopted: !0,
+    adopted: true,
     persisted: saveRosterDenied(session, epoch, storageV5, (y, x) => {
-      let safeParse = CAPABILITY_ROSTER_SCHEMA().safeParse(x.cachedArtifactRoster),
-        R = safeParse.success ? safeParse.data : void 0,
-        now = Date.now();
+      let w = CAPABILITY_ROSTER_SCHEMA().safeParse(x.cachedArtifactRoster);
+      let R = w.success ? w.data : undefined;
+      let now = Date.now();
       if (
-        x.artifactRosterDenied === void 0 &&
-        R !== void 0 &&
+        x.artifactRosterDenied === undefined &&
+        R !== undefined &&
         R.accountUuid === y.accountUuid &&
         R.organizationUuid === y.organizationUuid &&
         R.version === roster.version &&
         arraysEqual(R.capabilities, roster.capabilities) &&
         R.fetchedAt <= now &&
-        now - R.fetchedAt < to
+        now - R.fetchedAt < ROSTER_CACHE_TTL_MS
       )
         return;
       return {
@@ -134,26 +151,30 @@ function saveRosterToConfig(e) {
           capabilities: [...roster.capabilities],
           fetchedAt: now,
         },
-        artifactRosterDenied: void 0,
+        artifactRosterDenied: undefined,
       };
-    }).catch((y) => {
+    }).catch((error) => {
       logForDebugging(
-        `Could not save the artifact capability roster to config; it will be fetched again next start: ${errorMessage(y)}`,
+        `Could not save the artifact capability roster to config; it will be fetched again next start: ${errorMessage(error)}`,
       );
     }),
   };
 }
 //@ chunk-06y4szbn.js:4415-4627 placement
-async function saveRosterDenied(e, n, r, s) {
+async function saveRosterDenied(e, n, storageV5, s) {
   let h = rosterAccountKey();
-  if (h === void 0 || e.accountEpoch !== n) return;
+  if (h === undefined || e.accountEpoch !== n) return;
   await saveGlobalConfig((b) => {
     if (e.accountEpoch !== n || rosterAccountKey()?.accountUuid !== h.accountUuid) return b;
     let y = s(h, b);
-    return y === void 0 ? b : { ...b, ...y };
-  }, r);
+    return y === undefined
+      ? b
+      : {
+          ...b,
+          ...y,
+        };
+  }, storageV5);
 }
-
 export {
   rosterAccountKey,
   currentRoster,

@@ -8,29 +8,48 @@
  * pieces: chunk-ah34pb7m.js (2)
  * attribution: placement 2
  */
-import { e } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { MessageResponse } from "../../components/MessageResponse.js";
 import { HintText } from "../../components/design-system/HintText.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { OutputLine } from "../../components/shell/OutputLine.js";
 
+//@ chunk-ah34pb7m.js:31204-31379 placement
 /**
  * 渲染 MCP 资源列表结果：为空时显示"(No resources found)"，否则输出 JSON。（误归 MonitorTool/UI）
  */
-//@ chunk-ah34pb7m.js:31204-31379 placement
-function renderMcpResourceListResult(m, d, { verbose: verbose }) {
+function renderMcpResourceListResult(m, d, { verbose }) {
   if (!m || m.length === 0)
-    return e(MessageResponse, { height: 1, children: e(HintText, { children: "(No resources found)" }) });
-  let g = jsonStringify(m, null, 2);
-  return e(OutputLine, { content: g, verbose: verbose });
+    return jsxProd_default(MessageResponse, {
+      height: 1,
+      children: jsxProd_default(HintText, {
+        children: "(No resources found)",
+      }),
+    });
+  let content = jsonStringify(m, null, 2);
+  return jsxProd_default(OutputLine, {
+    content,
+    verbose,
+  });
 }
 //@ chunk-ah34pb7m.js:32406-32641 placement
-function renderMcpResourceDirResult(m, d, { verbose: verbose }) {
-  if (m?.error) return e(OutputLine, { content: m.error, verbose: verbose });
+function renderMcpResourceDirResult(m, d, { verbose }) {
+  if (m?.error)
+    return jsxProd_default(OutputLine, {
+      content: m.error,
+      verbose,
+    });
   if (!m || m.resources.length === 0)
-    return e(MessageResponse, { height: 1, children: e(HintText, { children: "(Empty directory)" }) });
-  let g = jsonStringify(m, null, 2);
-  return e(OutputLine, { content: g, verbose: verbose });
+    return jsxProd_default(MessageResponse, {
+      height: 1,
+      children: jsxProd_default(HintText, {
+        children: "(Empty directory)",
+      }),
+    });
+  let content = jsonStringify(m, null, 2);
+  return jsxProd_default(OutputLine, {
+    content,
+    verbose,
+  });
 }
-
 export { renderMcpResourceListResult, renderMcpResourceDirResult };

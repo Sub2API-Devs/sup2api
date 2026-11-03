@@ -8,30 +8,30 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-1ny7cxrt.js:585570-585984 cjs-require-graph
-var aT = x(function (ic) {
-  Object.defineProperty(ic, "__esModule", { value: !0 });
+var require_json_schema = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
   (function () {
-    var ownPropertyNames = Object.getOwnPropertyNames(ic);
-    for (var t = 0; t < ownPropertyNames.length; t++) {
-      var ownPropertyDescriptor = Object.getOwnPropertyDescriptor(ic, ownPropertyNames[t]);
-      if (!ownPropertyDescriptor || !ownPropertyDescriptor.get || !ownPropertyDescriptor.configurable)
-        continue;
-      var o;
+    var keys = Object.getOwnPropertyNames(cjsExports);
+    for (var i = 0; i < keys.length; i++) {
+      var desc = Object.getOwnPropertyDescriptor(cjsExports, keys[i]);
+      if (!desc || !desc.get || !desc.configurable) continue;
+      var value;
       try {
-        o = ownPropertyDescriptor.get();
-      } catch (error) {
+        value = desc.get();
+      } catch (e) {
         continue;
       }
-      if (o === void 0) continue;
-      Object.defineProperty(ic, ownPropertyNames[t], {
-        value: o,
-        writable: !1,
-        enumerable: ownPropertyDescriptor.enumerable,
-        configurable: !1,
+      if (value === undefined) continue;
+      Object.defineProperty(cjsExports, keys[i], {
+        value,
+        writable: false,
+        enumerable: desc.enumerable,
+        configurable: false,
       });
     }
-    Object.freeze(ic);
+    Object.freeze(cjsExports);
   })();
 });
-
-export { aT };
+export { require_json_schema };

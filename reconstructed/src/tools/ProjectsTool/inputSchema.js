@@ -12,13 +12,25 @@ import { resolve, isAbsolute } from "path";
 import { isPlainObject } from "../../utils/isPlainObject.js";
 import { SessionRootSlot, isNonConversationMessage } from "../../bootstrap/sessionSlices.js";
 import { getRootSession, getOriginalCwdOrNull } from "../../bootstrap/state.js";
-import { Us } from "../../services/projects/threadRows.js";
+import { messagesSinceCompactBoundary } from "../../services/projects/threadRows.js";
 import { isBareModeAttachmentDropped } from "../../utils/messages/apiNormalization.js";
 import { trackedProjectReads } from "./readTracking.js";
 import { safeParseJSON } from "../../utils/json.js";
 import { firstLineOf } from "../../utils/stringUtils.js";
-import { zodStrictObject, U, o, M, E, u, Ir, T, A, pe, oe } from "../../../vendor/zod/v4/classic/schemas.js";
-import { dy } from "../../utils/toolResultStorage.js";
+import {
+  zodStrictObject,
+  _enum,
+  string,
+  M,
+  E,
+  u,
+  discriminatedUnion,
+  literal,
+  array,
+  record,
+  unknown,
+} from "../../../vendor/zod/v4/classic/schemas.js";
+import { toolResultStoreOrNull } from "../../utils/toolResultStorage.js";
 import {
   getFeatureValue_SESSION_PINNED,
   getFeatureValue_CACHED_MAY_BE_STALE,
@@ -26,26 +38,34 @@ import {
 import { DoctorLazy } from "../../cli/handlers/util.js";
 
 //@ chunk-eg496hkq.js:12864-13067 placement
-var ORIGINAL_UNAVAILABLE_NOTE = "Note: `original` is not available in this session and was ignored.",
-  IF_VERSION_UNAVAILABLE_NOTE =
-    "Note: `if_version` is not available in this session and was ignored: this call did not check whether the doc had changed.";
+var ORIGINAL_UNAVAILABLE_NOTE = "Note: `original` is not available in this session and was ignored.";
+var IF_VERSION_UNAVAILABLE_NOTE =
+  "Note: `if_version` is not available in this session and was ignored: this call did not check whether the doc had changed.";
 //@ chunk-eg496hkq.js:13067-13546 placement
-function validateProjectWriteFlags(
-  e,
-  { originalOffered: originalOffered, docVersionsOffered: docVersionsOffered },
-) {
+function validateProjectWriteFlags(e, { originalOffered, docVersionsOffered }) {
   if (!isPlainObject(e)) return null;
-  let s = typeof e.force === "boolean",
-    l = !originalOffered && "original" in e,
-    h = !docVersionsOffered && "if_version" in e;
+  let s = typeof e.force === "boolean";
+  let l = !originalOffered && "original" in e;
+  let h = !docVersionsOffered && "if_version" in e;
   if (!s && !l && !h) return null;
-  let w = { ...e },
-    m = [];
-  if (s) (delete w.force, m.push("legacy_force"));
-  if (l) (delete w.original, m.push("original_while_off"));
-  if (h) (delete w.if_version, m.push("if_version_while_off"));
+  let w = {
+    ...e,
+  };
+  let m = [];
+  if (s) {
+    delete w.force;
+    m.push("legacy_force");
+  }
+  if (l) {
+    delete w.original;
+    m.push("original_while_off");
+  }
+  if (h) {
+    delete w.if_version;
+    m.push("if_version_while_off");
+  }
   let y = [
-    ...(l && e.original === !0 ? [ORIGINAL_UNAVAILABLE_NOTE] : []),
+    ...(l && e.original === true ? [ORIGINAL_UNAVAILABLE_NOTE] : []),
     ...(h ? [IF_VERSION_UNAVAILABLE_NOTE] : []),
   ];
   return {
@@ -61,19 +81,23 @@ function validateProjectWriteFlags(
 var PROJECT_HOST_STATE = new SessionRootSlot(() => ({}));
 //@ chunk-eg496hkq.js:13570-13619 placement
 function hasProjectHost() {
-  return PROJECT_HOST_STATE.peek(getRootSession())?.host !== void 0;
+  return PROJECT_HOST_STATE.peek(getRootSession())?.host !== undefined;
 }
 //@ chunk-eg496hkq.js:13619-14834 placement
-function findProjectDocInView(e, n, r, s) {
-  if (n === "") return { inView: !0, foundIn: "none" };
-  let l = Us(e),
-    h;
-  if (s !== void 0) {
+function findProjectDocInView(e, n, projectsToolAliases, toolUseId) {
+  if (n === "")
+    return {
+      inView: true,
+      foundIn: "none",
+    };
+  let l = messagesSinceCompactBoundary(e);
+  let h;
+  if (toolUseId !== undefined) {
     for (let m of l)
       if (
         m.type === "assistant" &&
         Array.isArray(m.message.content) &&
-        m.message.content.some((y) => y.type === "tool_use" && y.id === s)
+        m.message.content.some((y) => y.type === "tool_use" && y.id === toolUseId)
       ) {
         h = m.message.id;
         break;
@@ -88,11 +112,14 @@ function findProjectDocInView(e, n, r, s) {
       !isBareModeAttachmentDropped(m) &&
       trackedProjectReads(m.attachment)?.some((y) => y.read.content === n)
     )
-      return { inView: !0, foundIn: "attached_read" };
+      return {
+        inView: true,
+        foundIn: "attached_read",
+      };
     if (m.type === "assistant" && Array.isArray(m.message.content)) {
-      if (h !== void 0 && m.message.id === h) break;
+      if (h !== undefined && m.message.id === h) break;
       for (let y of m.message.content) {
-        if (y.type !== "tool_use" || !r.includes(y.name)) continue;
+        if (y.type !== "tool_use" || !projectsToolAliases.includes(y.name)) continue;
         w.add(y.id);
         let input = y.input;
         if (
@@ -103,7 +130,10 @@ function findProjectDocInView(e, n, r, s) {
           "content" in input &&
           input.content === n
         )
-          return { inView: !0, foundIn: "own_write" };
+          return {
+            inView: true,
+            foundIn: "own_write",
+          };
       }
     }
     if (m.type === "user" && Array.isArray(m.message.content))
@@ -111,7 +141,7 @@ function findProjectDocInView(e, n, r, s) {
         if (
           y.type !== "tool_result" ||
           !w.has(y.tool_use_id) ||
-          y.is_error === !0 ||
+          y.is_error === true ||
           typeof y.content !== "string"
         )
           continue;
@@ -122,7 +152,7 @@ function findProjectDocInView(e, n, r, s) {
 
 `,
           ),
-          !1,
+          false,
         );
         if (
           typeof j === "object" &&
@@ -132,15 +162,21 @@ function findProjectDocInView(e, n, r, s) {
           "content" in j &&
           j.content === n
         )
-          return { inView: !0, foundIn: "read_result" };
+          return {
+            inView: true,
+            foundIn: "read_result",
+          };
       }
   }
-  return { inView: !1, foundIn: "none" };
+  return {
+    inView: false,
+    foundIn: "none",
+  };
 }
 //@ chunk-eg496hkq.js:14834-16242 placement
 var projectsInputSchemaFor = (e, n) =>
   zodStrictObject({
-    method: U([
+    method: _enum([
       "project_info",
       "project_read",
       "project_search",
@@ -149,15 +185,15 @@ var projectsInputSchemaFor = (e, n) =>
       "project_memory_list",
       "project_memory_read",
     ]),
-    path: o()
+    path: string()
       .min(1)
       .max(255)
       .optional()
       .describe(
         'project_read/project_write/project_delete: doc path. project_write: an existing path is replaced in place; a new bare filename (no "/") is namespaced to "claude/<name>". project_memory_read: memory file path as listed by project_memory_list.',
       ),
-    content: o().optional().describe(e),
-    local_path: o().min(1).optional().describe(n),
+    content: string().optional().describe(e),
+    local_path: string().min(1).optional().describe(n),
     present_to_user: M()
       .optional()
       .describe(
@@ -165,12 +201,12 @@ var projectsInputSchemaFor = (e, n) =>
           "see \u2014 the deliverable they asked for or must act on. Defaults to " +
           "false; leave it unset for routine saves, notes, and bulk writes.",
       ),
-    if_version: o()
+    if_version: string()
       .optional()
       .describe(
         "project_write to an existing doc: the `version` that came with the copy you worked from (from project_read or project_write). The write is refused if the doc has changed since. Omit for a new doc.",
       ),
-    query: o().min(1).optional().describe("project_search: knowledge-base query"),
+    query: string().min(1).optional().describe("project_search: knowledge-base query"),
     n: E().int().min(1).max(15).optional().describe("project_search: number of hits (default 5)"),
     original: M()
       .optional()
@@ -180,149 +216,220 @@ var projectsInputSchemaFor = (e, n) =>
   });
 //@ chunk-eg496hkq.js:16242-16309 placement
 function isLocalUploadsEnabled() {
-  return dy()?.maxBytes !== 0 && getFeatureValue_SESSION_PINNED("tengu_mossy_wirth", !1);
+  return (
+    toolResultStoreOrNull()?.maxBytes !== 0 && getFeatureValue_SESSION_PINNED("tengu_mossy_wirth", false)
+  );
 }
 //@ chunk-eg496hkq.js:16309-18810 placement
+/**
+ * Projects 的 schema 组：各方法的输入/输出 schema、共用的 notice 字段、各方法的必填字段表，以及 Unicode 规范化比对用的放大系数与长度上限。
+ */
 var projectsInputSchema = DoctorLazy(() =>
-    projectsInputSchemaFor(
-      "project_write: inline doc text. Mutually exclusive with local_path. Use local_path for anything you have on disk.",
-      "project_write: a file inside the working directory to upload. The " +
-        "tool reads, encodes, and uploads directly \u2014 contents never enter " +
-        "your context. Mutually exclusive with content.",
-    ),
+  projectsInputSchemaFor(
+    "project_write: inline doc text. Mutually exclusive with local_path. Use local_path for anything you have on disk.",
+    "project_write: a file inside the working directory to upload. The " +
+      "tool reads, encodes, and uploads directly \u2014 contents never enter " +
+      "your context. Mutually exclusive with content.",
   ),
-  _e = DoctorLazy(() =>
-    projectsInputSchemaFor(
-      "project_write: inline doc text. Mutually exclusive with local_path.",
-      "project_write: the absolute path of a file that you have read or written in full in this session. Mutually exclusive with content.",
-    ),
+);
+var projectMethodOutputSchema = DoctorLazy(() =>
+  projectsInputSchemaFor(
+    "project_write: inline doc text. Mutually exclusive with local_path.",
+    "project_write: the absolute path of a file that you have read or written in full in this session. Mutually exclusive with content.",
   ),
-  bt = DoctorLazy(() => projectsInputSchema().omit({ original: !0 })),
-  vt = DoctorLazy(() => _e().omit({ original: !0 })),
-  Tt = DoctorLazy(() => projectsInputSchema().omit({ if_version: !0 })),
-  St = DoctorLazy(() => _e().omit({ if_version: !0 })),
-  Et = DoctorLazy(() => projectsInputSchema().omit({ original: !0, if_version: !0 })),
-  kt = DoctorLazy(() => _e().omit({ original: !0, if_version: !0 })),
-  Q = { notice: o().optional() },
-  Ce = {
-    version: o()
-      .optional()
-      .describe(
-        "@internal Lowercase hex SHA-256 of the UTF-8 bytes of a text doc's whole text. Set only where docVersionsOffered.",
+);
+var projectReadInputSchema = DoctorLazy(() =>
+  projectsInputSchema().omit({
+    original: true,
+  }),
+);
+var projectSearchInputSchema = DoctorLazy(() =>
+  projectMethodOutputSchema().omit({
+    original: true,
+  }),
+);
+var projectDeleteInputSchema = DoctorLazy(() =>
+  projectsInputSchema().omit({
+    if_version: true,
+  }),
+);
+var projectListInputSchema = DoctorLazy(() =>
+  projectMethodOutputSchema().omit({
+    if_version: true,
+  }),
+);
+var projectWriteInputSchema = DoctorLazy(() =>
+  projectsInputSchema().omit({
+    original: true,
+    if_version: true,
+  }),
+);
+var projectMemoryListInputSchema = DoctorLazy(() =>
+  projectMethodOutputSchema().omit({
+    original: true,
+    if_version: true,
+  }),
+);
+var NOTICE_FIELD_SCHEMA = {
+  notice: string().optional(),
+};
+var projectsReadOnlyMethods = {
+  version: string()
+    .optional()
+    .describe(
+      "@internal Lowercase hex SHA-256 of the UTF-8 bytes of a text doc's whole text. Set only where docVersionsOffered.",
+    ),
+};
+var projectsPermissionContext_2 = DoctorLazy(() =>
+  u({
+    knowledge_size: E(),
+    max_knowledge_size: E(),
+  }),
+);
+var projectToolOutputSchema = DoctorLazy(() =>
+  discriminatedUnion("method", [
+    u({
+      method: literal("project_info"),
+      ...NOTICE_FIELD_SCHEMA,
+      local_file: string().optional(),
+      name: string(),
+      description: string(),
+      instructions: string(),
+      docs: array(
+        u({
+          path: string(),
+          created_at: string().nullable(),
+        }),
       ),
-  },
-  At = DoctorLazy(() => u({ knowledge_size: E(), max_knowledge_size: E() })),
-  xt = DoctorLazy(() =>
-    Ir("method", [
-      u({
-        method: T("project_info"),
-        ...Q,
-        local_file: o().optional(),
-        name: o(),
-        description: o(),
-        instructions: o(),
-        docs: A(u({ path: o(), created_at: o().nullable() })),
-        files: A(u({ path: o(), file_kind: o(), created_at: o().nullable() })).optional(),
-        sync_sources: A(u({ type: o().nullable(), config: pe(o(), oe()) })).optional(),
-        knowledge: At(),
-      }),
-      u({
-        method: T("project_read"),
-        ...Q,
-        path: o(),
-        ...Ce,
-        file_kind: o().optional(),
-        content: o().optional(),
-        local_file: o().optional(),
-        size_bytes: E()
-          .optional()
-          .describe(
-            "@internal Size in UTF-8 bytes of the document's whole text. Set only when the text is in local_file and project_read had a token limit on inline text.",
-          ),
-        created_at: o().nullable(),
-      }),
-      u({
-        method: T("project_search"),
-        ...Q,
-        rag: M(),
-        hits: A(u({ name: o().optional(), doc_uuid: o().optional(), text: o().optional() })).optional(),
-        docs: A(o()).optional(),
-      }),
-      u({
-        method: T("project_write"),
-        ...Q,
-        path: o(),
-        doc_uuid: o(),
-        ...Ce,
-        replaced: M(),
-        present_to_user: M().optional(),
-        local_path: o().optional(),
-      }),
-      u({ method: T("project_delete"), ...Q, path: o(), deleted: M() }),
-      u({
-        method: T("project_memory_list"),
-        ...Q,
-        files: A(u({ path: o(), size_bytes: E(), updated_at: o().nullable(), truncated: M() })),
-        truncated: M(),
-      }),
-      u({
-        method: T("project_memory_read"),
-        ...Q,
-        path: o(),
-        content: o().optional(),
-        local_file: o().optional(),
-        size_bytes: E(),
-        updated_at: o().nullable(),
-        truncated: M(),
-      }),
-    ]),
-  ),
-  Rt = {
-    project_info: [],
-    project_read: ["path"],
-    project_search: ["query"],
-    project_write: ["path"],
-    project_delete: ["path"],
-    project_memory_list: [],
-    project_memory_read: ["path"],
-  };
+      files: array(
+        u({
+          path: string(),
+          file_kind: string(),
+          created_at: string().nullable(),
+        }),
+      ).optional(),
+      sync_sources: array(
+        u({
+          type: string().nullable(),
+          config: record(string(), unknown()),
+        }),
+      ).optional(),
+      knowledge: projectsPermissionContext_2(),
+    }),
+    u({
+      method: literal("project_read"),
+      ...NOTICE_FIELD_SCHEMA,
+      path: string(),
+      ...projectsReadOnlyMethods,
+      file_kind: string().optional(),
+      content: string().optional(),
+      local_file: string().optional(),
+      size_bytes: E()
+        .optional()
+        .describe(
+          "@internal Size in UTF-8 bytes of the document's whole text. Set only when the text is in local_file and project_read had a token limit on inline text.",
+        ),
+      created_at: string().nullable(),
+    }),
+    u({
+      method: literal("project_search"),
+      ...NOTICE_FIELD_SCHEMA,
+      rag: M(),
+      hits: array(
+        u({
+          name: string().optional(),
+          doc_uuid: string().optional(),
+          text: string().optional(),
+        }),
+      ).optional(),
+      docs: array(string()).optional(),
+    }),
+    u({
+      method: literal("project_write"),
+      ...NOTICE_FIELD_SCHEMA,
+      path: string(),
+      doc_uuid: string(),
+      ...projectsReadOnlyMethods,
+      replaced: M(),
+      present_to_user: M().optional(),
+      local_path: string().optional(),
+    }),
+    u({
+      method: literal("project_delete"),
+      ...NOTICE_FIELD_SCHEMA,
+      path: string(),
+      deleted: M(),
+    }),
+    u({
+      method: literal("project_memory_list"),
+      ...NOTICE_FIELD_SCHEMA,
+      files: array(
+        u({
+          path: string(),
+          size_bytes: E(),
+          updated_at: string().nullable(),
+          truncated: M(),
+        }),
+      ),
+      truncated: M(),
+    }),
+    u({
+      method: literal("project_memory_read"),
+      ...NOTICE_FIELD_SCHEMA,
+      path: string(),
+      content: string().optional(),
+      local_file: string().optional(),
+      size_bytes: E(),
+      updated_at: string().nullable(),
+      truncated: M(),
+    }),
+  ]),
+);
+var REQUIRED_FIELDS_BY_METHOD = {
+  project_info: [],
+  project_read: ["path"],
+  project_search: ["query"],
+  project_write: ["path"],
+  project_delete: ["path"],
+  project_memory_list: [],
+  project_memory_read: ["path"],
+};
 //@ chunk-eg496hkq.js:18810-18947 placement
-function isReadOnlyProjectMethod(e) {
+function isReadOnlyProjectMethod(method) {
   return (
-    e === "project_info" ||
-    e === "project_read" ||
-    e === "project_search" ||
-    e === "project_memory_list" ||
-    e === "project_memory_read"
+    method === "project_info" ||
+    method === "project_read" ||
+    method === "project_search" ||
+    method === "project_memory_list" ||
+    method === "project_memory_read"
   );
 }
 //@ chunk-eg496hkq.js:18947-19003 placement
-function isConfirmableProjectWrite(e) {
-  return !isReadOnlyProjectMethod(e) && getFeatureValue_CACHED_MAY_BE_STALE("tengu_serene_curry", !1);
+function isConfirmableProjectWrite(method) {
+  return !isReadOnlyProjectMethod(method) && getFeatureValue_CACHED_MAY_BE_STALE("tengu_serene_curry", false);
 }
 //@ chunk-eg496hkq.js:19003-19077 placement
-function resolveLocalPath(e) {
-  let n = getOriginalCwdOrNull();
-  if (n !== null) return resolve(n, e);
-  return isAbsolute(e) ? resolve(e) : e;
+function resolveLocalPath(localPath) {
+  let originalCwdOrNull = getOriginalCwdOrNull();
+  if (originalCwdOrNull !== null) return resolve(originalCwdOrNull, localPath);
+  return isAbsolute(localPath) ? resolve(localPath) : localPath;
 }
-
 export {
   resolveLocalPath,
   isLocalUploadsEnabled,
-  St,
-  kt,
-  Tt,
-  Et,
-  _e,
-  vt,
+  projectListInputSchema,
+  projectMemoryListInputSchema,
+  projectDeleteInputSchema,
+  projectWriteInputSchema,
+  projectMethodOutputSchema,
+  projectSearchInputSchema,
   projectsInputSchema,
-  bt,
-  xt,
+  projectReadInputSchema,
+  projectToolOutputSchema,
   isReadOnlyProjectMethod,
   isConfirmableProjectWrite,
   validateProjectWriteFlags,
-  Rt,
+  REQUIRED_FIELDS_BY_METHOD,
   PROJECT_HOST_STATE,
   findProjectDocInView,
   hasProjectHost,

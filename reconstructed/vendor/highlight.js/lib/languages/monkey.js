@@ -8,20 +8,43 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:302076-303563 cjs-fingerprint
-var ri = x(function (rg, ai) {
-  function Sp(e) {
-    let t = { className: "number", relevance: 0, variants: [{ begin: "[$][a-fA-F0-9]+" }, e.NUMBER_MODE] },
-      n = {
-        variants: [{ match: [/(function|method)/, /\s+/, e.UNDERSCORE_IDENT_RE] }],
-        scope: { 1: "keyword", 3: "title.function" },
+var require_monkey = x(function (cjsExports, cjsModule) {
+  function monkey(hljs) {
+    let NUMBER = {
+      className: "number",
+      relevance: 0,
+      variants: [
+        {
+          begin: "[$][a-fA-F0-9]+",
+        },
+        hljs.NUMBER_MODE,
+      ],
+    };
+    let FUNC_DEFINITION = {
+      variants: [
+        {
+          match: [/(function|method)/, /\s+/, hljs.UNDERSCORE_IDENT_RE],
+        },
+      ],
+      scope: {
+        1: "keyword",
+        3: "title.function",
       },
-      a = {
-        variants: [{ match: [/(class|interface|extends|implements)/, /\s+/, e.UNDERSCORE_IDENT_RE] }],
-        scope: { 1: "keyword", 3: "title.class" },
-      };
+    };
+    let CLASS_DEFINITION = {
+      variants: [
+        {
+          match: [/(class|interface|extends|implements)/, /\s+/, hljs.UNDERSCORE_IDENT_RE],
+        },
+      ],
+      scope: {
+        1: "keyword",
+        3: "title.class",
+      },
+    };
     return {
       name: "Monkey",
-      case_insensitive: !0,
+      case_insensitive: true,
       keywords: {
         keyword: [
           "public",
@@ -114,25 +137,40 @@ var ri = x(function (rg, ai) {
       },
       illegal: /\/\*/,
       contains: [
-        e.COMMENT("#rem", "#end"),
-        e.COMMENT("'", "$", { relevance: 0 }),
-        n,
-        a,
-        { className: "variable.language", begin: /\b(self|super)\b/ },
+        hljs.COMMENT("#rem", "#end"),
+        hljs.COMMENT("'", "$", {
+          relevance: 0,
+        }),
+        FUNC_DEFINITION,
+        CLASS_DEFINITION,
+        {
+          className: "variable.language",
+          begin: /\b(self|super)\b/,
+        },
         {
           className: "meta",
           begin: /\s*#/,
           end: "$",
-          keywords: { keyword: "if else elseif endif end then" },
+          keywords: {
+            keyword: "if else elseif endif end then",
+          },
         },
-        { match: [/^\s*/, /strict\b/], scope: { 2: "meta" } },
-        { beginKeywords: "alias", end: "=", contains: [e.UNDERSCORE_TITLE_MODE] },
-        e.QUOTE_STRING_MODE,
-        t,
+        {
+          match: [/^\s*/, /strict\b/],
+          scope: {
+            2: "meta",
+          },
+        },
+        {
+          beginKeywords: "alias",
+          end: "=",
+          contains: [hljs.UNDERSCORE_TITLE_MODE],
+        },
+        hljs.QUOTE_STRING_MODE,
+        NUMBER,
       ],
     };
   }
-  ai.exports = Sp;
+  cjsModule.exports = monkey;
 });
-
-export { ri };
+export { require_monkey };

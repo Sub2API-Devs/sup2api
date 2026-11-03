@@ -10,10 +10,13 @@
  */
 import { isUnattendedInteractiveSession } from "../../utils/concurrentSessions.js";
 import { isScreenReaderMode } from "../../utils/accessibility/screenReader.js";
-import { rLe, QAt } from "./idleReturn.js";
-import { e, r } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { isDriftingNovaEnabled, MAX_INT32 } from "./idleReturn.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { logForDebugging } from "../../utils/debug.js";
-import { o } from "../../../vendor/zod/v4/classic/schemas.js";
+import { string } from "../../../vendor/zod/v4/classic/schemas.js";
 import { Text, Box } from "../../ink/components/Text.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { env } from "../../utils/env.js";
@@ -21,7 +24,7 @@ import { logEvent } from "../../services/analytics/index.js";
 import { logError } from "../../utils/log.js";
 import { errorMessage } from "../../utils/errors.js";
 import { NOTIF_ACTIVE_THRESHOLD_MS } from "../../bootstrap/state.js";
-import { j, R } from "../../../vendor/react/cjs/react.production.js";
+import { init_react_production, R } from "../../../vendor/react/cjs/react.production.js";
 import { usePreDispatchKeyHandler } from "../../keybindings/useActionHandlers.js";
 import { needsArrowHint } from "../../components/ResumeStaleConversationDialog.js";
 import { isNonSpacePrintable } from "../../components/PromptInput/utils.js";
@@ -37,65 +40,70 @@ function isColdCacheWatchEnabled(h) {
     !h.isThinClient &&
     !isUnattendedInteractiveSession() &&
     !isScreenReaderMode() &&
-    rLe()
+    isDriftingNovaEnabled()
   );
 }
+//@ chunk-18hwfzwa.js:48653-49890 placement
 /**
  * 缓存失效计时器：每轮结束后按 expectedMissAt() 设定定时器，到点时（仍闲置）通知上层预先提醒或预热，dispose 时清理。
  */
-//@ chunk-18hwfzwa.js:48653-49890 placement
 class ColdCacheWatcher {
   #e;
   #t;
   #o = null;
   #n = null;
   #s;
-  #r = !1;
+  #r = false;
   constructor(h) {
-    ((this.#e = h), (this.#t = h.turn.getSnapshot()), (this.#s = h.turn.subscribe(this.#c)));
+    this.#e = h;
+    this.#t = h.turn.getSnapshot();
+    this.#s = h.turn.subscribe(this.#c);
   }
   dispose() {
     if (this.#r) return;
-    ((this.#r = !0), this.#s(), this.#i());
+    this.#r = true;
+    this.#s();
+    this.#i();
   }
   #c = () => {
-    let snapshot = this.#e.turn.getSnapshot(),
-      x = this.#t;
-    if (
-      ((this.#t = snapshot),
-      snapshot.isLoading !== x.isLoading || snapshot.lastQueryCompletionTime !== x.lastQueryCompletionTime)
-    )
+    let snapshot = this.#e.turn.getSnapshot();
+    let x = this.#t;
+    this.#t = snapshot;
+    if (snapshot.isLoading !== x.isLoading || snapshot.lastQueryCompletionTime !== x.lastQueryCompletionTime)
       this.#a();
   };
   #i() {
-    (this.#o?.(), (this.#o = null));
+    this.#o?.();
+    this.#o = null;
   }
   #a() {
-    if ((this.#i(), this.#r || this.#t.isLoading || !this.#e.isEnabled())) return;
-    let expectedMissAt = this.#e.expectedMissAt();
-    if (expectedMissAt !== null && expectedMissAt !== this.#n) this.#l(expectedMissAt);
+    this.#i();
+    if (this.#r || this.#t.isLoading || !this.#e.isEnabled()) return;
+    let h = this.#e.expectedMissAt();
+    if (h !== null && h !== this.#n) this.#l(h);
   }
   #l(h) {
-    (this.#i(),
-      (this.#o = this.#e.clock.setTimeout(
-        () => {
-          ((this.#o = null), this.#d());
-        },
-        Math.min(QAt, Math.max(0, h - this.#e.now())),
-      )));
+    this.#i();
+    this.#o = this.#e.clock.setTimeout(
+      () => {
+        this.#o = null;
+        this.#d();
+      },
+      Math.min(MAX_INT32, Math.max(0, h - this.#e.now())),
+    );
   }
   #d() {
     let h = this.#e;
     if (this.#r || this.#t.isLoading || !h.isEnabled()) return;
-    let expectedMissAt = h.expectedMissAt(),
-      now = h.now();
-    if (expectedMissAt === null || expectedMissAt === this.#n) return;
-    if (now < expectedMissAt) {
-      this.#l(expectedMissAt);
+    let x = h.expectedMissAt();
+    let D = h.now();
+    if (x === null || x === this.#n) return;
+    if (D < x) {
+      this.#l(x);
       return;
     }
     let L = h.getLastInteractionTime() + NOTIF_ACTIVE_THRESHOLD_MS;
-    if (now < L) {
+    if (D < L) {
       this.#l(L);
       return;
     }
@@ -106,78 +114,91 @@ class ColdCacheWatcher {
       h.hasArmedQuotaAutoResume() ||
       h.hasBackgroundAgents()
     ) {
-      this.#l(now + NOTIF_ACTIVE_THRESHOLD_MS);
+      this.#l(D + NOTIF_ACTIVE_THRESHOLD_MS);
       return;
     }
-    let pastUsageLimitUntil = h.pastUsageLimitUntil();
-    if (pastUsageLimitUntil !== null) {
-      this.#l(Number.isFinite(pastUsageLimitUntil) ? pastUsageLimitUntil : now + NOTIF_ACTIVE_THRESHOLD_MS);
+    let ee = h.pastUsageLimitUntil();
+    if (ee !== null) {
+      this.#l(Number.isFinite(ee) ? ee : D + NOTIF_ACTIVE_THRESHOLD_MS);
       return;
     }
-    this.#n = expectedMissAt;
-    let evaluate = h.evaluate();
-    if (evaluate === null) return;
-    (h.setIdleHintSuppressed(!0),
-      h
-        .ask(evaluate)
-        .catch(logError)
-        .finally(() => h.setIdleHintSuppressed(!1)));
+    this.#n = x;
+    let ke = h.evaluate();
+    if (ke === null) return;
+    h.setIdleHintSuppressed(true);
+    h.ask(ke)
+      .catch(logError)
+      .finally(() => h.setIdleHintSuppressed(false));
   }
 }
 //@ chunk-18hwfzwa.js:49890-49894 placement
-j();
+init_react_production();
 //@ chunk-18hwfzwa.js:49894-50624 placement
-function useIdleReturnTypeThrough({ onScreen: onScreen, dialogStore: dialogStore, draft: draft }) {
+function useIdleReturnTypeThrough({ onScreen, dialogStore, draft }) {
   let L = R(null);
-  return (
-    usePreDispatchKeyHandler(
-      (ee, ke, Re) => {
-        let Be = YAt(dialogStore);
-        if (Be === void 0) return;
-        let He = zAt(L, Be);
-        if (
-          ke.return ||
-          ee ===
-            `
+  usePreDispatchKeyHandler(
+    (input, key, Re) => {
+      let idleQuotaResumePayload = selectIdleQuotaResumePayload(dialogStore);
+      if (idleQuotaResumePayload === undefined) return;
+      let He = askBuffer(L, idleQuotaResumePayload);
+      if (
+        key.return ||
+        input ===
+          `
 `
-        )
-          return needsArrowHint(Be, draft.value);
-        if (ke.home || ke.end || ke.pageUp || ke.pageDown || (ke.ctrl && (ee === "n" || ee === "p")))
-          return !0;
-        if (ke.backspace) {
-          let at = He.chars.at(-1);
-          if (at !== void 0 && draft.value.endsWith(at))
-            (He.chars.pop(), draft.setValueRaw(draft.value.slice(0, -at.length)));
-          else if (He.chars.length === 0 && He.setBash) ((He.setBash = !1), draft.setMode("prompt"));
-          else return;
-          return !0;
-        }
-        let We = ee !== "" ? ee : Re;
-        if (!isNonSpacePrintable(We, ke)) return;
-        let ze = We;
-        if (draft.value === "" && draft.mode === "prompt" && We.startsWith("!"))
-          (draft.setMode("bash"), (He.setBash = !0), (ze = We.slice(1)));
-        return (draft.setValueRaw(draft.value + ze), He.chars.push(...ze), !0);
-      },
-      { isActive: onScreen },
-    ),
-    null
+      )
+        return needsArrowHint(idleQuotaResumePayload, draft.value);
+      if (key.home || key.end || key.pageUp || key.pageDown || (key.ctrl && (input === "n" || input === "p")))
+        return true;
+      if (key.backspace) {
+        let last = He.chars.at(-1);
+        if (last !== undefined && draft.value.endsWith(last)) {
+          He.chars.pop();
+          draft.setValueRaw(draft.value.slice(0, -last.length));
+        } else if (He.chars.length === 0 && He.setBash) {
+          He.setBash = false;
+          draft.setMode("prompt");
+        } else return;
+        return true;
+      }
+      let We = input !== "" ? input : Re;
+      if (!isNonSpacePrintable(We, key)) return;
+      let ze = We;
+      if (draft.value === "" && draft.mode === "prompt" && We.startsWith("!")) {
+        draft.setMode("bash");
+        He.setBash = true;
+        ze = We.slice(1);
+      }
+      draft.setValueRaw(draft.value + ze);
+      He.chars.push(...ze);
+      return true;
+    },
+    {
+      isActive: onScreen,
+    },
   );
+  return null;
 }
 //@ chunk-18hwfzwa.js:50624-50719 placement
-function zAt(h, x) {
-  if (h.current?.ask !== x) h.current = { ask: x, chars: [], setBash: !1 };
+function askBuffer(h, idleQuotaResumePayload) {
+  if (h.current?.ask !== idleQuotaResumePayload)
+    h.current = {
+      ask: idleQuotaResumePayload,
+      chars: [],
+      setBash: false,
+    };
   return h.current;
 }
 //@ chunk-18hwfzwa.js:50719-50809 placement
-function YAt(h) {
-  let x = topAutoDialog(h.getState()),
-    D = x?.payload;
-  return x?.kind === COLD_RESUME_QUOTA && JAt(D) ? D : void 0;
+function selectIdleQuotaResumePayload(dialogStore) {
+  let x = topAutoDialog(dialogStore.getState());
+  let payload = x?.payload;
+  return x?.kind === COLD_RESUME_QUOTA && isIdleTriggeredPayload(payload) ? payload : undefined;
 }
 //@ chunk-18hwfzwa.js:50809-50897 placement
-function JAt(h) {
-  return typeof h === "object" && h !== null && "trigger" in h && h.trigger === "idle";
+function isIdleTriggeredPayload(payload) {
+  return (
+    typeof payload === "object" && payload !== null && "trigger" in payload && payload.trigger === "idle"
+  );
 }
-
 export { ColdCacheWatcher, isColdCacheWatchEnabled, useIdleReturnTypeThrough };

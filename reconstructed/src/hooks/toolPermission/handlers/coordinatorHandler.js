@@ -12,30 +12,26 @@ import { logError } from "../../../utils/log.js";
 import { withTelemetryMessage } from "../../../utils/errors.js";
 import { logFeatureBad, logFeatureOk } from "../../../services/analytics/featureTelemetry.js";
 
+//@ chunk-s4bxxzsw.js:3950-4589 fingerprint = handleCoordinatorPermission (0.46)
 /**
  * 协调者模式：先运行自动权限检查，检查失败或需要人工时回到交互流程（reprompted）。
  */
-//@ chunk-s4bxxzsw.js:3950-4589 fingerprint = handleCoordinatorPermission (0.46)
 async function handleCoordinatorPermission(params) {
-  let {
-    ctx: ctx,
-    updatedInput: updatedInput,
-    suggestions: suggestions,
-    permissionMode: permissionMode,
-  } = params;
+  let { ctx, updatedInput, suggestions, permissionMode } = params;
   if (params.askIsPersonOnly) return null;
-  let R = !1;
+  let R = false;
   try {
-    let runHooks = await ctx.runHooks(
+    let C = await ctx.runHooks(
       permissionMode,
       suggestions,
       params.askSuppressesAlwaysAllowRule,
       () => ctx.toolUseContext.abortController.signal.aborted,
       updatedInput,
     );
-    if (runHooks && !("reprompted" in runHooks)) return runHooks;
+    if (C && !("reprompted" in C)) return C;
   } catch (error) {
-    if (((R = !0), error instanceof Error))
+    R = true;
+    if (error instanceof Error)
       logError(withTelemetryMessage(error, "coordinator automated permission check failed"));
     else
       logError(
@@ -50,5 +46,4 @@ async function handleCoordinatorPermission(params) {
   }
   return null;
 }
-
 export { handleCoordinatorPermission };

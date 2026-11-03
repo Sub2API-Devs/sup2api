@@ -9,10 +9,10 @@
  * attribution: placement 6
  */
 
+//@ chunk-4121qate.js:9532-9651 placement
 /**
  * 元素构造器必须返回对象，否则抛 TypeError。
  */
-//@ chunk-4121qate.js:9532-9651 placement
 function requireElement(e) {
   if (typeof e !== "object" || !e) throw TypeError("the element constructor did not build an element");
   return e;
@@ -21,16 +21,22 @@ function requireElement(e) {
 function createFunctionNameMarks() {
   let weakMap = new WeakMap();
   return {
-    mark: (o, r) => (weakMap.set(o, r), o),
-    nameOf: (o) => (typeof o === "function" ? weakMap.get(o) : void 0),
+    mark: (o, r) => {
+      weakMap.set(o, r);
+      return o;
+    },
+    nameOf: (o) => (typeof o === "function" ? weakMap.get(o) : undefined),
   };
 }
 //@ chunk-4121qate.js:9768-9781 placement
-var dfr = createFunctionNameMarks();
+/**
+ * 函数名标记表
+ */
+var functionNameMarks = createFunctionNameMarks();
+//@ chunk-4121qate.js:9803-29859 placement
 /**
  * 工作流/钩子 VM 的启动源码字符串（在隔离 realm 中求值）
  */
-//@ chunk-4121qate.js:9803-29859 placement
 var VM_BOOTSTRAP_SOURCE = String.raw`(() => {
   'use strict'
   const INTRINSIC = { Box: 'Box', Text: 'Text' }
@@ -1189,6 +1195,8 @@ var VM_PRELUDE_SOURCE = String.raw`(helpers => {
   })
 })`;
 //@ chunk-4121qate.js:49522-49554 placement
-var BT = (e) => `'use strict';${e}`;
-
-export { dfr, BT, VM_BOOTSTRAP_SOURCE, requireElement, VM_PRELUDE_SOURCE };
+/**
+ * 前置 'use strict'
+ */
+var withUseStrict = (e) => `'use strict';${e}`;
+export { functionNameMarks, withUseStrict, VM_BOOTSTRAP_SOURCE, requireElement, VM_PRELUDE_SOURCE };

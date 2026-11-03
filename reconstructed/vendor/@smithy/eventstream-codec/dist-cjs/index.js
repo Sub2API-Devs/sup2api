@@ -6,200 +6,236 @@
  * attribution: esm-layout 5, esm-fingerprint 7
  */
 import { Re } from "../../../../runtime/bun-runtime.js";
-import { K6t } from "../../util-hex-encoding/dist-cjs/index.js";
+import { require_util_hex_encoding } from "../../util-hex-encoding/dist-cjs/index.js";
 
 //@ chunk-3cddmtk7.js:4598-4614 esm-layout
-var m = Re(K6t());
+var utilHexEncoding = Re(require_util_hex_encoding());
 //@ chunk-3cddmtk7.js:4614-4631 esm-layout
-var ce = Re(K6t());
+var import_util_hex_encoding = Re(require_util_hex_encoding());
 //@ chunk-3cddmtk7.js:4631-5163 esm-fingerprint
-class h {
+class Int64 {
   bytes;
-  constructor(e) {
-    if (((this.bytes = e), e.byteLength !== 8)) throw Error("Int64 buffers must be exactly 8 bytes");
+  constructor(bytes) {
+    this.bytes = bytes;
+    if (bytes.byteLength !== 8) throw Error("Int64 buffers must be exactly 8 bytes");
   }
-  static fromNumber(e) {
-    if (e > 9223372036854776000 || e < -9223372036854776000)
-      throw Error(`${e} is too large (or, if negative, too small) to represent as an Int64`);
-    let uint8Array = new Uint8Array(8);
-    for (let o = 7, abs = Math.abs(Math.round(e)); o > -1 && abs > 0; o--, abs /= 256) uint8Array[o] = abs;
-    if (e < 0) ie(uint8Array);
-    return new h(uint8Array);
+  static fromNumber(number) {
+    if (number > 9223372036854776000 || number < -9223372036854776000)
+      throw Error(`${number} is too large (or, if negative, too small) to represent as an Int64`);
+    let bytes = new Uint8Array(8);
+    for (let i = 7, remaining = Math.abs(Math.round(number)); i > -1 && remaining > 0; i--, remaining /= 256)
+      bytes[i] = remaining;
+    if (number < 0) negate(bytes);
+    return new Int64(bytes);
   }
   valueOf() {
-    let sliced = this.bytes.slice(0),
-      t = sliced[0] & 128;
-    if (t) ie(sliced);
-    return parseInt(ce.toHex(sliced), 16) * (t ? -1 : 1);
+    let bytes = this.bytes.slice(0);
+    let negative = bytes[0] & 128;
+    if (negative) negate(bytes);
+    return parseInt(import_util_hex_encoding.toHex(bytes), 16) * (negative ? -1 : 1);
   }
   toString() {
     return String(this.valueOf());
   }
 }
 //@ chunk-3cddmtk7.js:5163-5254 esm-layout
-function ie(e) {
-  for (let t = 0; t < 8; t++) e[t] ^= 255;
-  for (let t = 7; t > -1; t--) if ((e[t]++, e[t] !== 0)) break;
+function negate(bytes) {
+  for (let i = 0; i < 8; i++) bytes[i] ^= 255;
+  for (let i = 7; i > -1; i--) {
+    bytes[i]++;
+    if (bytes[i] !== 0) break;
+  }
 }
 //@ chunk-3cddmtk7.js:5254-7788 esm-fingerprint
-class z {
+class HeaderMarshaller {
   toUtf8;
   fromUtf8;
-  constructor(e, t) {
-    ((this.toUtf8 = e), (this.fromUtf8 = t));
+  constructor(toUtf8, fromUtf8) {
+    this.toUtf8 = toUtf8;
+    this.fromUtf8 = fromUtf8;
   }
-  format(e) {
-    let t = [];
-    for (let n of Object.keys(e)) {
-      let fromUtf8 = this.fromUtf8(n);
-      t.push(Uint8Array.from([fromUtf8.byteLength]), fromUtf8, this.formatHeaderValue(e[n]));
+  format(headers) {
+    let chunks = [];
+    for (let headerName of Object.keys(headers)) {
+      let bytes = this.fromUtf8(headerName);
+      chunks.push(Uint8Array.from([bytes.byteLength]), bytes, this.formatHeaderValue(headers[headerName]));
     }
-    let uint8Array = new Uint8Array(t.reduce((n, s) => n + s.byteLength, 0)),
-      r = 0;
-    for (let n of t) (uint8Array.set(n, r), (r += n.byteLength));
-    return uint8Array;
+    let out = new Uint8Array(chunks.reduce((carry, bytes) => carry + bytes.byteLength, 0));
+    let position = 0;
+    for (let chunk of chunks) {
+      out.set(chunk, position);
+      position += chunk.byteLength;
+    }
+    return out;
   }
-  formatHeaderValue(e) {
-    switch (e.type) {
+  formatHeaderValue(header) {
+    switch (header.type) {
       case "boolean":
-        return Uint8Array.from([e.value ? 0 : 1]);
+        return Uint8Array.from([header.value ? 0 : 1]);
       case "byte":
-        return Uint8Array.from([2, e.value]);
+        return Uint8Array.from([2, header.value]);
       case "short":
-        let dataView = new DataView(new ArrayBuffer(3));
-        return (dataView.setUint8(0, 3), dataView.setInt16(1, e.value, !1), new Uint8Array(dataView.buffer));
+        let shortView = new DataView(new ArrayBuffer(3));
+        shortView.setUint8(0, 3);
+        shortView.setInt16(1, header.value, false);
+        return new Uint8Array(shortView.buffer);
       case "integer":
-        let dataView_2 = new DataView(new ArrayBuffer(5));
-        return (
-          dataView_2.setUint8(0, 4),
-          dataView_2.setInt32(1, e.value, !1),
-          new Uint8Array(dataView_2.buffer)
-        );
+        let intView = new DataView(new ArrayBuffer(5));
+        intView.setUint8(0, 4);
+        intView.setInt32(1, header.value, false);
+        return new Uint8Array(intView.buffer);
       case "long":
-        let uint8Array = new Uint8Array(9);
-        return ((uint8Array[0] = 5), uint8Array.set(e.value.bytes, 1), uint8Array);
+        let longBytes = new Uint8Array(9);
+        longBytes[0] = 5;
+        longBytes.set(header.value.bytes, 1);
+        return longBytes;
       case "binary":
-        let dataView_3 = new DataView(new ArrayBuffer(3 + e.value.byteLength));
-        (dataView_3.setUint8(0, 6), dataView_3.setUint16(1, e.value.byteLength, !1));
-        let uint8Array_2 = new Uint8Array(dataView_3.buffer);
-        return (uint8Array_2.set(e.value, 3), uint8Array_2);
+        let binView = new DataView(new ArrayBuffer(3 + header.value.byteLength));
+        binView.setUint8(0, 6);
+        binView.setUint16(1, header.value.byteLength, false);
+        let binBytes = new Uint8Array(binView.buffer);
+        binBytes.set(header.value, 3);
+        return binBytes;
       case "string":
-        let fromUtf8 = this.fromUtf8(e.value),
-          dataView_4 = new DataView(new ArrayBuffer(3 + fromUtf8.byteLength));
-        (dataView_4.setUint8(0, 7), dataView_4.setUint16(1, fromUtf8.byteLength, !1));
-        let uint8Array_3 = new Uint8Array(dataView_4.buffer);
-        return (uint8Array_3.set(fromUtf8, 3), uint8Array_3);
+        let utf8Bytes = this.fromUtf8(header.value);
+        let strView = new DataView(new ArrayBuffer(3 + utf8Bytes.byteLength));
+        strView.setUint8(0, 7);
+        strView.setUint16(1, utf8Bytes.byteLength, false);
+        let strBytes = new Uint8Array(strView.buffer);
+        strBytes.set(utf8Bytes, 3);
+        return strBytes;
       case "timestamp":
-        let uint8Array_4 = new Uint8Array(9);
-        return (
-          (uint8Array_4[0] = 8),
-          uint8Array_4.set(h.fromNumber(e.value.valueOf()).bytes, 1),
-          uint8Array_4
-        );
+        let tsBytes = new Uint8Array(9);
+        tsBytes[0] = 8;
+        tsBytes.set(Int64.fromNumber(header.value.valueOf()).bytes, 1);
+        return tsBytes;
       case "uuid":
-        if (!bt.test(e.value)) throw Error(`Invalid UUID received: ${e.value}`);
-        let uint8Array_5 = new Uint8Array(17);
-        return (
-          (uint8Array_5[0] = 9),
-          uint8Array_5.set(m.fromHex(e.value.replace(/\-/g, "")), 1),
-          uint8Array_5
-        );
+        if (!UUID_PATTERN.test(header.value)) throw Error(`Invalid UUID received: ${header.value}`);
+        let uuidBytes = new Uint8Array(17);
+        uuidBytes[0] = 9;
+        uuidBytes.set(utilHexEncoding.fromHex(header.value.replace(/\-/g, "")), 1);
+        return uuidBytes;
     }
   }
-  parse(e) {
-    let t = {},
-      o = 0;
-    while (o < e.byteLength) {
-      let uint8 = e.getUint8(o++),
-        toUtf8 = this.toUtf8(new Uint8Array(e.buffer, e.byteOffset + o, uint8));
-      switch (((o += uint8), e.getUint8(o++))) {
+  parse(headers) {
+    let out = {};
+    let position = 0;
+    while (position < headers.byteLength) {
+      let nameLength = headers.getUint8(position++);
+      let name = this.toUtf8(new Uint8Array(headers.buffer, headers.byteOffset + position, nameLength));
+      switch (((position += nameLength), headers.getUint8(position++))) {
         case 0:
-          t[toUtf8] = { type: BOOLEAN, value: !0 };
+          out[name] = {
+            type: BOOLEAN_TAG,
+            value: true,
+          };
           break;
         case 1:
-          t[toUtf8] = { type: BOOLEAN, value: !1 };
+          out[name] = {
+            type: BOOLEAN_TAG,
+            value: false,
+          };
           break;
         case 2:
-          t[toUtf8] = { type: BYTE, value: e.getInt8(o++) };
+          out[name] = {
+            type: BYTE_TAG,
+            value: headers.getInt8(position++),
+          };
           break;
         case 3:
-          ((t[toUtf8] = { type: SHORT, value: e.getInt16(o, !1) }), (o += 2));
+          out[name] = {
+            type: SHORT_TAG,
+            value: headers.getInt16(position, false),
+          };
+          position += 2;
           break;
         case 4:
-          ((t[toUtf8] = { type: INTEGER, value: e.getInt32(o, !1) }), (o += 4));
+          out[name] = {
+            type: INT_TAG,
+            value: headers.getInt32(position, false),
+          };
+          position += 4;
           break;
         case 5:
-          ((t[toUtf8] = { type: LONG, value: new h(new Uint8Array(e.buffer, e.byteOffset + o, 8)) }),
-            (o += 8));
+          out[name] = {
+            type: LONG_TAG,
+            value: new Int64(new Uint8Array(headers.buffer, headers.byteOffset + position, 8)),
+          };
+          position += 8;
           break;
         case 6:
-          let uint16 = e.getUint16(o, !1);
-          ((o += 2),
-            (t[toUtf8] = { type: BINARY, value: new Uint8Array(e.buffer, e.byteOffset + o, uint16) }),
-            (o += uint16));
+          let binaryLength = headers.getUint16(position, false);
+          position += 2;
+          out[name] = {
+            type: BINARY_TAG,
+            value: new Uint8Array(headers.buffer, headers.byteOffset + position, binaryLength),
+          };
+          position += binaryLength;
           break;
         case 7:
-          let uint16_2 = e.getUint16(o, !1);
-          ((o += 2),
-            (t[toUtf8] = {
-              type: STRING,
-              value: this.toUtf8(new Uint8Array(e.buffer, e.byteOffset + o, uint16_2)),
-            }),
-            (o += uint16_2));
+          let stringLength = headers.getUint16(position, false);
+          position += 2;
+          out[name] = {
+            type: STRING_TAG,
+            value: this.toUtf8(new Uint8Array(headers.buffer, headers.byteOffset + position, stringLength)),
+          };
+          position += stringLength;
           break;
         case 8:
-          ((t[toUtf8] = {
-            type: TIMESTAMP,
-            value: new Date(new h(new Uint8Array(e.buffer, e.byteOffset + o, 8)).valueOf()),
-          }),
-            (o += 8));
+          out[name] = {
+            type: TIMESTAMP_TAG,
+            value: new Date(
+              new Int64(new Uint8Array(headers.buffer, headers.byteOffset + position, 8)).valueOf(),
+            ),
+          };
+          position += 8;
           break;
         case 9:
-          let uint8Array = new Uint8Array(e.buffer, e.byteOffset + o, 16);
-          ((o += 16),
-            (t[toUtf8] = {
-              type: UUID,
-              value: `${m.toHex(uint8Array.subarray(0, 4))}-${m.toHex(uint8Array.subarray(4, 6))}-${m.toHex(uint8Array.subarray(6, 8))}-${m.toHex(uint8Array.subarray(8, 10))}-${m.toHex(uint8Array.subarray(10))}`,
-            }));
+          let uuidBytes = new Uint8Array(headers.buffer, headers.byteOffset + position, 16);
+          position += 16;
+          out[name] = {
+            type: UUID_TAG,
+            value: `${utilHexEncoding.toHex(uuidBytes.subarray(0, 4))}-${utilHexEncoding.toHex(uuidBytes.subarray(4, 6))}-${utilHexEncoding.toHex(uuidBytes.subarray(6, 8))}-${utilHexEncoding.toHex(uuidBytes.subarray(8, 10))}-${utilHexEncoding.toHex(uuidBytes.subarray(10))}`,
+          };
           break;
         default:
           throw Error("Unrecognized header type tag");
       }
     }
-    return t;
+    return out;
   }
 }
 //@ chunk-3cddmtk7.js:7788-7795 esm-layout
-var _e;
+var HEADER_VALUE_TYPE;
 //@ chunk-3cddmtk7.js:7795-8063 esm-fingerprint
-(function (e) {
-  ((e[(e.boolTrue = 0)] = "boolTrue"),
-    (e[(e.boolFalse = 1)] = "boolFalse"),
-    (e[(e.byte = 2)] = "byte"),
-    (e[(e.short = 3)] = "short"),
-    (e[(e.integer = 4)] = "integer"),
-    (e[(e.long = 5)] = "long"),
-    (e[(e.byteArray = 6)] = "byteArray"),
-    (e[(e.string = 7)] = "string"),
-    (e[(e.timestamp = 8)] = "timestamp"),
-    (e[(e.uuid = 9)] = "uuid"));
-})(_e || (_e = {}));
+(function (HEADER_VALUE_TYPE) {
+  HEADER_VALUE_TYPE[(HEADER_VALUE_TYPE.boolTrue = 0)] = "boolTrue";
+  HEADER_VALUE_TYPE[(HEADER_VALUE_TYPE.boolFalse = 1)] = "boolFalse";
+  HEADER_VALUE_TYPE[(HEADER_VALUE_TYPE.byte = 2)] = "byte";
+  HEADER_VALUE_TYPE[(HEADER_VALUE_TYPE.short = 3)] = "short";
+  HEADER_VALUE_TYPE[(HEADER_VALUE_TYPE.integer = 4)] = "integer";
+  HEADER_VALUE_TYPE[(HEADER_VALUE_TYPE.long = 5)] = "long";
+  HEADER_VALUE_TYPE[(HEADER_VALUE_TYPE.byteArray = 6)] = "byteArray";
+  HEADER_VALUE_TYPE[(HEADER_VALUE_TYPE.string = 7)] = "string";
+  HEADER_VALUE_TYPE[(HEADER_VALUE_TYPE.timestamp = 8)] = "timestamp";
+  HEADER_VALUE_TYPE[(HEADER_VALUE_TYPE.uuid = 9)] = "uuid";
+})(HEADER_VALUE_TYPE || (HEADER_VALUE_TYPE = {}));
 //@ chunk-3cddmtk7.js:8063-8241 esm-layout
-var BOOLEAN = "boolean",
-  BYTE = "byte",
-  SHORT = "short",
-  INTEGER = "integer",
-  LONG = "long",
-  BINARY = "binary",
-  STRING = "string",
-  TIMESTAMP = "timestamp",
-  UUID = "uuid",
-  bt = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
+var BOOLEAN_TAG = "boolean";
+var BYTE_TAG = "byte";
+var SHORT_TAG = "short";
+var INT_TAG = "integer";
+var LONG_TAG = "long";
+var BINARY_TAG = "binary";
+var STRING_TAG = "string";
+var TIMESTAMP_TAG = "timestamp";
+var UUID_TAG = "uuid";
+var UUID_PATTERN = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
 //@ chunk-3cddmtk7.js:10073-10276 esm-fingerprint
 class Q {
   options;
-  constructor(e) {
-    this.options = e;
+  constructor(options) {
+    this.options = options;
   }
   [Symbol.asyncIterator]() {
     return this.asyncIterator();
@@ -209,10 +245,10 @@ class Q {
   }
 }
 //@ chunk-3cddmtk7.js:10276-10537 esm-fingerprint
-class K {
+class MessageEncoderStream {
   options;
-  constructor(e) {
-    this.options = e;
+  constructor(options) {
+    this.options = options;
   }
   [Symbol.asyncIterator]() {
     return this.asyncIterator();
@@ -223,34 +259,33 @@ class K {
   }
 }
 //@ chunk-3cddmtk7.js:10537-10779 esm-fingerprint
-class J {
+class SmithyMessageDecoderStream {
   options;
-  constructor(e) {
-    this.options = e;
+  constructor(options) {
+    this.options = options;
   }
   [Symbol.asyncIterator]() {
     return this.asyncIterator();
   }
   async *asyncIterator() {
-    for await (let e of this.options.messageStream) {
-      let deserializer = await this.options.deserializer(e);
-      if (deserializer === void 0) continue;
-      yield deserializer;
+    for await (let message of this.options.messageStream) {
+      let deserialized = await this.options.deserializer(message);
+      if (deserialized === undefined) continue;
+      yield deserialized;
     }
   }
 }
 //@ chunk-3cddmtk7.js:10779-10978 esm-fingerprint
-class Z {
+class SmithyMessageEncoderStream {
   options;
-  constructor(e) {
-    this.options = e;
+  constructor(options) {
+    this.options = options;
   }
   [Symbol.asyncIterator]() {
     return this.asyncIterator();
   }
   async *asyncIterator() {
-    for await (let e of this.options.inputStream) yield this.options.serializer(e);
+    for await (let chunk of this.options.inputStream) yield this.options.serializer(chunk);
   }
 }
-
-export { z, J, Q, K, Z };
+export { HeaderMarshaller, SmithyMessageDecoderStream, Q, MessageEncoderStream, SmithyMessageEncoderStream };

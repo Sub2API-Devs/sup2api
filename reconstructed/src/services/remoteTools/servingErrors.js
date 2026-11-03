@@ -22,9 +22,9 @@ class ServingInstanceGoneError extends AbortError {
 //@ chunk-epgst2x5.js:375-567 placement
 class RequestDeliveryUnknownError extends AbortError {
   status;
-  constructor(e) {
+  constructor(status) {
     super("request event dropped after an upload attempt that may have landed; delivery unknown");
-    this.status = e;
+    this.status = status;
     this.name = "RequestDeliveryUnknownError";
   }
 }
@@ -38,13 +38,12 @@ class RequestWithdrawnUnsentError extends AbortError {
 //@ chunk-epgst2x5.js:713-877 placement
 class RequestNotDeliveredError extends AbortError {
   status;
-  constructor(e) {
+  constructor(status) {
     super("request event refused by the session service; not delivered");
-    this.status = e;
+    this.status = status;
     this.name = "RequestNotDeliveredError";
   }
 }
-
 export {
   RequestNotDeliveredError,
   RequestDeliveryUnknownError,

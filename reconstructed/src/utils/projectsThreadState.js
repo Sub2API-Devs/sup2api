@@ -19,71 +19,79 @@ import { logFeatureOk, logFeatureSad, logFeatureBad } from "../services/analytic
 import { logError } from "./log.js";
 
 //@ chunk-e6aww6q8.js:549847-549945 placement
-var TENGU_PROJECTS_THREAD_STATE_STAMP = "tengu_projects_thread_state_stamp",
-  TENGU_PROJECTS_THREAD_STATE = "tengu_projects_thread_state",
-  Fmo = new HostScoped(() => ({}));
+var TENGU_PROJECTS_THREAD_STATE_STAMP = "tengu_projects_thread_state_stamp";
+var TENGU_PROJECTS_THREAD_STATE = "tengu_projects_thread_state";
+var PROJECTS_THREAD_STATE_STAMP_FLAG = new HostScoped(() => ({}));
 //@ chunk-e6aww6q8.js:549945-549983 placement
-function Q9() {
-  return Fmo.of(getRootSession().host);
+function projectsThreadState() {
+  return PROJECTS_THREAD_STATE_STAMP_FLAG.of(getRootSession().host);
 }
 //@ chunk-e6aww6q8.js:549983-550013 placement
-function TXs(e) {
-  Q9().source = e;
+/**
+ * setProjectsThreadStateSource：设置线程状态来源。
+ */
+function setProjectsThreadStateSource(source) {
+  projectsThreadState().source = source;
 }
 //@ chunk-e6aww6q8.js:550013-550121 placement
 function isThreadStateStampEnabled() {
-  let source = Q9().source;
+  let source = projectsThreadState().source;
   return (
-    source !== void 0 &&
-    getFeatureValue_CACHED_MAY_BE_STALE(TENGU_PROJECTS_THREAD_STATE_STAMP, !1) &&
+    source !== undefined &&
+    getFeatureValue_CACHED_MAY_BE_STALE(TENGU_PROJECTS_THREAD_STATE_STAMP, false) &&
     isProjectsHumanOriginEnabled() &&
     resolvedRowsMode() === "full" &&
     source.isProjectsSession()
   );
 }
 //@ chunk-e6aww6q8.js:550121-550214 placement
-function $mo(e) {
-  return e.origin?.kind === "human" || Q9().source?.ownerRowsWrittenAt(e) !== void 0;
+function isHumanOrOwnerRowWritten(carrier) {
+  return (
+    carrier.origin?.kind === "human" ||
+    projectsThreadState().source?.ownerRowsWrittenAt(carrier) !== undefined
+  );
 }
 //@ chunk-e6aww6q8.js:550214-550336 placement
-function formatMinutesAgo(e) {
-  let max = Math.max(0, Math.floor(e / 60000));
+function formatMinutesAgo(sinceUserMs) {
+  let max = Math.max(0, Math.floor(sinceUserMs / 60000));
   if (max < 60) return `${max}m ago`;
   return `${Math.floor(max / 60)}h ${max % 60}m ago`;
 }
 //@ chunk-e6aww6q8.js:550336-550595 placement
-function getHumanTurnTimestamp(e, n) {
+function getHumanTurnTimestamp(message, n) {
   let r =
-    e.type === "user"
-      ? e
-      : e.type === "attachment" && e.attachment.type === "queued_command"
-        ? e.attachment
-        : void 0;
-  if (r === void 0) return;
+    message.type === "user"
+      ? message
+      : message.type === "attachment" && message.attachment.type === "queued_command"
+        ? message.attachment
+        : undefined;
+  if (r === undefined) return;
   if (r.origin?.kind === "human") {
-    let s = r.type === "user" ? void 0 : r.timestamp;
-    return Date.parse(s ?? e.timestamp);
+    let timestamp = r.type === "user" ? undefined : r.timestamp;
+    return Date.parse(timestamp ?? message.timestamp);
   }
   return n(r);
 }
+//@ chunk-e6aww6q8.js:550595-551039 placement
 /**
  * 找到最后一条人类输入的时间，统计其后助手消息中调用指定回答工具的次数，返回距该输入的毫秒数和回复次数。
  */
-//@ chunk-e6aww6q8.js:550595-551039 placement
 function measureRepliesSinceUser(
   e,
   n,
   r,
-  s = () => {
+  ownerRowsWrittenAt = () => {
     return;
   },
 ) {
-  let lastUserIndex = -1,
-    lastUserTime = -1 / 0;
+  let lastUserIndex = -1;
+  let lastUserTime = -1 / 0;
   for (let [index, message] of e.entries()) {
-    let timestamp = getHumanTurnTimestamp(message, s);
-    if (timestamp !== void 0 && Number.isFinite(timestamp) && timestamp >= lastUserTime)
-      ((lastUserIndex = index), (lastUserTime = timestamp));
+    let timestamp = getHumanTurnTimestamp(message, ownerRowsWrittenAt);
+    if (timestamp !== undefined && Number.isFinite(timestamp) && timestamp >= lastUserTime) {
+      lastUserIndex = index;
+      lastUserTime = timestamp;
+    }
   }
   if (lastUserIndex < 0) return;
   let replyCount = 0;
@@ -93,51 +101,68 @@ function measureRepliesSinceUser(
     if (Number.isFinite(messageTime) ? messageTime <= lastUserTime : w <= lastUserIndex) continue;
     for (let block of L.message.content) if (block.type === "tool_use" && block.name === r) replyCount++;
   }
-  return { sinceUserMs: n - lastUserTime, repliesSinceUser: replyCount };
+  return {
+    sinceUserMs: n - lastUserTime,
+    repliesSinceUser: replyCount,
+  };
 }
 //@ chunk-e6aww6q8.js:551039-551197 placement
 function logThreadStateOutcome(e) {
-  if ((logEvent(TENGU_PROJECTS_THREAD_STATE, { outcome: lit_2(e) }), e === "stamped"))
-    logFeatureOk("projects_thread_state");
+  logEvent(TENGU_PROJECTS_THREAD_STATE, {
+    outcome: lit_2(e),
+  });
+  if (e === "stamped") logFeatureOk("projects_thread_state");
   else if (e === "not_thread" || e === "no_user_message") logFeatureSad("projects_thread_state", e);
 }
+//@ chunk-e6aww6q8.js:551197-551497 placement
 /**
  * 判断本回合是否要附带 Projects 线程状态：需功能开启、处于线程（非概览）中，且不是用户回合或会话间消息回合。
  */
-//@ chunk-e6aww6q8.js:551197-551497 placement
 function shouldStampThreadState(e) {
   try {
-    let source = Q9().source;
-    if (source === void 0 || !isThreadStateStampEnabled() || source.isOverview()) return !1;
-    if (e.carrier !== void 0 && $mo(e.carrier)) return (logThreadStateOutcome("user_turn"), !1);
-    if (e.isPeer) return (logThreadStateOutcome("peer_turn"), !1);
-    if (!source.isThread()) return (logThreadStateOutcome("not_thread"), !1);
-    return !0;
+    let source = projectsThreadState().source;
+    if (source === undefined || !isThreadStateStampEnabled() || source.isOverview()) return false;
+    if (e.carrier !== undefined && isHumanOrOwnerRowWritten(e.carrier)) {
+      logThreadStateOutcome("user_turn");
+      return false;
+    }
+    if (e.isPeer) {
+      logThreadStateOutcome("peer_turn");
+      return false;
+    }
+    if (!source.isThread()) {
+      logThreadStateOutcome("not_thread");
+      return false;
+    }
+    return true;
   } catch (error) {
-    return (logError(error), logFeatureBad("projects_thread_state", "threw"), !1);
+    logError(error);
+    logFeatureBad("projects_thread_state", "threw");
+    return false;
   }
 }
+//@ chunk-e6aww6q8.js:551497-551822 placement
 /**
  * 计算 Projects 线程状态：距最后一次用户输入多久以及之后回复了几次；没有用户消息时返回 undefined。
  */
-//@ chunk-e6aww6q8.js:551497-551822 placement
 function getProjectsThreadState(e = Date.now()) {
   try {
-    let source = Q9().source;
-    if (source === void 0 || !isThreadStateStampEnabled()) return;
+    let source = projectsThreadState().source;
+    if (source === undefined || !isThreadStateStampEnabled()) return;
     let r = measureRepliesSinceUser(source.messages(), e, source.answerToolName(), source.ownerRowsWrittenAt);
     if (!r) {
       logThreadStateOutcome("no_user_message");
       return;
     }
-    return (
-      logThreadStateOutcome("stamped"),
-      { sinceUser: formatMinutesAgo(r.sinceUserMs), repliesSinceUser: r.repliesSinceUser }
-    );
+    logThreadStateOutcome("stamped");
+    return {
+      sinceUser: formatMinutesAgo(r.sinceUserMs),
+      repliesSinceUser: r.repliesSinceUser,
+    };
   } catch (error) {
-    (logError(error), logFeatureBad("projects_thread_state", "threw"));
+    logError(error);
+    logFeatureBad("projects_thread_state", "threw");
     return;
   }
 }
-
-export { shouldStampThreadState, TXs, getProjectsThreadState };
+export { shouldStampThreadState, setProjectsThreadStateSource, getProjectsThreadState };

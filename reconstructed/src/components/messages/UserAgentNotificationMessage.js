@@ -12,44 +12,59 @@ import { w } from "../../../vendor/react/compiler-runtime.js";
 import { EARLY_RETURN_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { parseUpdates, renderResourceUpdateRow } from "./UserResourceUpdateMessage.js";
 import { Box } from "../../ink/components/Text.js";
-import { e } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 
 //@ chunk-ah34pb7m.js:118642-119088 fingerprint = UserAgentNotificationMessage (0.623)
-function UserAgentNotificationMessage(t0) {
-  let $ = w(12),
-    { addMargin: addMargin, param: t1 } = t0,
-    { text: text } = t1,
-    h,
-    M,
-    T,
-    x,
-    k;
+function UserAgentNotificationMessage(props) {
+  let $ = w(12);
+  let { addMargin, param } = props;
+  let { text } = param;
+  let h;
+  let flexDirection;
+  let marginTop;
+  let children;
+  let k;
   if ($[0] !== addMargin || $[1] !== text) {
     k = EARLY_RETURN_SENTINEL;
     E: {
-      let b = parseUpdates(text);
-      if (b.length === 0) {
+      let updates = parseUpdates(text);
+      if (updates.length === 0) {
         k = null;
         break E;
       }
       h = Box;
-      M = "column";
-      T = addMargin ? 1 : 0;
-      x = b.map(renderResourceUpdateRow);
+      flexDirection = "column";
+      marginTop = addMargin ? 1 : 0;
+      children = updates.map(renderResourceUpdateRow);
     }
-    (($[0] = addMargin), ($[1] = text), ($[2] = h), ($[3] = M), ($[4] = T), ($[5] = x), ($[6] = k));
-  } else ((h = $[2]), (M = $[3]), (T = $[4]), (x = $[5]), (k = $[6]));
+    $[0] = addMargin;
+    $[1] = text;
+    $[2] = h;
+    $[3] = flexDirection;
+    $[4] = marginTop;
+    $[5] = children;
+    $[6] = k;
+  } else {
+    h = $[2];
+    flexDirection = $[3];
+    marginTop = $[4];
+    children = $[5];
+    k = $[6];
+  }
   if (k !== EARLY_RETURN_SENTINEL) return k;
   let B;
-  if ($[7] !== h || $[8] !== M || $[9] !== T || $[10] !== x)
-    ((B = e(h, { flexDirection: M, marginTop: T, children: x })),
-      ($[7] = h),
-      ($[8] = M),
-      ($[9] = T),
-      ($[10] = x),
-      ($[11] = B));
-  else B = $[11];
+  if ($[7] !== h || $[8] !== flexDirection || $[9] !== marginTop || $[10] !== children) {
+    B = jsxProd_default(h, {
+      flexDirection,
+      marginTop,
+      children,
+    });
+    $[7] = h;
+    $[8] = flexDirection;
+    $[9] = marginTop;
+    $[10] = children;
+    $[11] = B;
+  } else B = $[11];
   return B;
 }
-
 export { UserAgentNotificationMessage };

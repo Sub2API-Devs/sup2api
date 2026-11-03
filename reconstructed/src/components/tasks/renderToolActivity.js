@@ -11,25 +11,35 @@
 import { findToolByName, safeParseToolInput } from "../../Tool.js";
 import { describeUnparsedInput } from "../../utils/json.js";
 import { renderToolUseMessageFor } from "../messages/toolUseRenderers.js";
-import { r } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { jsxProd_default_2 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text } from "../../ink/components/Text.js";
 
 //@ chunk-18hwfzwa.js:686691-687040 fingerprint = renderToolActivity (0.567)
-function renderToolActivity(h, x, D, L) {
-  let tool = findToolByName(x, h.toolName);
-  if (!tool) return h.toolName;
+function renderToolActivity(activity, tools, theme, activeAgents) {
+  let tool = findToolByName(tools, activity.toolName);
+  if (!tool) return activity.toolName;
   try {
-    let ke = describeUnparsedInput(h.input),
-      Re = safeParseToolInput(tool, h.input),
-      parsedInput = Re.success ? Re.data : {},
-      userFacingName = tool.userFacingName(parsedInput, { activeAgents: L, webFetchByAgentType: !0 });
-    if (!userFacingName) return h.toolName;
-    let We = ke ?? renderToolUseMessageFor(tool, parsedInput, { theme: D, verbose: !1 });
-    if (We) return r(Text, { children: [userFacingName, "(", We, ")"] });
+    let ke = describeUnparsedInput(activity.input);
+    let Re = safeParseToolInput(tool, activity.input);
+    let parsedInput = Re.success ? Re.data : {};
+    let userFacingName = tool.userFacingName(parsedInput, {
+      activeAgents,
+      webFetchByAgentType: true,
+    });
+    if (!userFacingName) return activity.toolName;
+    let toolArgs =
+      ke ??
+      renderToolUseMessageFor(tool, parsedInput, {
+        theme,
+        verbose: false,
+      });
+    if (toolArgs)
+      return jsxProd_default_2(Text, {
+        children: [userFacingName, "(", toolArgs, ")"],
+      });
     return userFacingName;
   } catch {
-    return h.toolName;
+    return activity.toolName;
   }
 }
-
 export { renderToolActivity };

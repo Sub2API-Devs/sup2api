@@ -10,7 +10,7 @@
  */
 import { relative, sep } from "path";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, o, Ue, T } from "../../../vendor/zod/v4/classic/schemas.js";
+import { u, string, union, literal } from "../../../vendor/zod/v4/classic/schemas.js";
 import { HostScoped } from "../../utils/hostScoped.js";
 import { registerRepoRoot, registerRepoRootErrorClass, checkRepoRootScope } from "./registerRepoRoot.js";
 import { getToolPermissionContext } from "../../utils/permissions/toolPermissionContext.js";
@@ -25,34 +25,59 @@ import { SandboxManager } from "../../utils/sandbox/sandbox-adapter.js";
 import { reloadSkillsAfterDirectoryChange } from "../../utils/skills/skillChangeDetector.js";
 
 //@ chunk-0k2xkafk.js:612-862 placement
-var REGISTERREPOROOT = "RegisterRepoRoot",
-  x = 32,
-  Tfo = 4096,
-  _ = DoctorLazy(() => u({ directory: o().max(Tfo), askedBy: o().min(1).max(64).optional() })),
-  C = new HostScoped(() => new Map()),
-  B = DoctorLazy(() =>
-    Ue([
-      u({ directory: o().min(1).max(4096), alreadyTaken: T(!0).optional() }),
-      u({ refusal: o().min(1).max(64) }),
-    ]),
-  );
+/**
+ * 注册仓库根工具的限制、宿主槽与结果 schema。
+ */
+var REGISTERREPOROOT = "RegisterRepoRoot";
+var MAX_ASKED_BY_CHARS = 32;
+var MAX_REGISTER_DIRECTORY_CHARS = 4096;
+var _ = DoctorLazy(() =>
+  u({
+    directory: string().max(MAX_REGISTER_DIRECTORY_CHARS),
+    askedBy: string().min(1).max(64).optional(),
+  }),
+);
+var registerRepoRootSlots = new HostScoped(() => new Map());
+var registerRepoRootResultSchema = DoctorLazy(() =>
+  union([
+    u({
+      directory: string().min(1).max(4096),
+      alreadyTaken: literal(true).optional(),
+    }),
+    u({
+      refusal: string().min(1).max(64),
+    }),
+  ]),
+);
+//@ chunk-0k2xkafk.js:862-2022 placement
 /**
  * RegisterRepoRoot 工具的调用：在工作区根下注册文件夹。
  */
-//@ chunk-0k2xkafk.js:862-2022 placement
 async function callRegisterRepoRoot(s, f, a) {
-  let { directory: directory, askedBy: askedBy } = _().parse(s),
-    toolUseContext = a.toolUseContext(),
-    { workspaceRoot: workspaceRoot = { kind: "absent" } } = a,
-    e;
+  let { directory, askedBy } = _().parse(s);
+  let y = a.toolUseContext();
+  let {
+    workspaceRoot = {
+      kind: "absent",
+    },
+  } = a;
+  let e;
   try {
     e = await registerRepoRoot(
       directory,
       () => ({
-        ...getToolPermissionContext(toolUseContext),
+        ...getToolPermissionContext(y),
         additionalWorkingDirectories: new Map(
           workspaceRoot.kind === "valid"
-            ? [[workspaceRoot.root, { path: workspaceRoot.root, source: "cliArg" }]]
+            ? [
+                [
+                  workspaceRoot.root,
+                  {
+                    path: workspaceRoot.root,
+                    source: "cliArg",
+                  },
+                ],
+              ]
             : [],
         ),
       }),
@@ -60,7 +85,7 @@ async function callRegisterRepoRoot(s, f, a) {
     );
   } catch (error) {
     let l = registerRepoRootErrorClass(error);
-    if (l === void 0) throw error;
+    if (l === undefined) throw error;
     if (l === "outside_scope") {
       let h =
         workspaceRoot.kind === "valid"
@@ -68,9 +93,11 @@ async function callRegisterRepoRoot(s, f, a) {
           : workspaceRoot.kind === "invalid"
             ? `the workspace root is invalid: ${workspaceRoot.fault}`
             : "no workspace root";
-      logForDebugging(`${REGISTERREPOROOT}: outside_scope: ${h}`, { level: "warn" });
+      logForDebugging(`${REGISTERREPOROOT}: outside_scope: ${h}`, {
+        level: "warn",
+      });
     }
-    return R(l);
+    return refusalResult(l);
   }
   if (
     workspaceRoot.kind === "valid" &&
@@ -78,37 +105,45 @@ async function callRegisterRepoRoot(s, f, a) {
     relative(workspaceRoot.real, e)
       .split(sep)
       .some((i) => i === "" || i.startsWith("."))
-  )
-    return (
-      logForDebugging(
-        `${REGISTERREPOROOT}: outside_scope: the folder is not strictly below where the workspace root led at the daemon's start, or a folder on the way has a name that starts with a dot`,
-        { level: "warn" },
-      ),
-      R("outside_scope")
-    );
-  f.throwIfAborted();
-  let d = getAdditionalDirectoriesForClaudeMd(),
-    of = C.of(a.session.host),
-    included = d.includes(e);
-  if (!included) {
-    if (d.length >= x) return R("too_many");
-    if ((setAdditionalDirectoriesForClaudeMd([...d, e]), askedBy !== void 0)) of.set(e, askedBy);
-    (pinResolvedWorkingDirPath(e), SandboxManager.refreshConfig());
-  }
-  return (
-    await reloadSkillsAfterDirectoryChange(),
-    {
-      summary: "folder registered",
-      output: {
-        directory: e,
-        ...(included && (askedBy === void 0 || of.get(e) !== askedBy) && { alreadyTaken: !0 }),
+  ) {
+    logForDebugging(
+      `${REGISTERREPOROOT}: outside_scope: the folder is not strictly below where the workspace root led at the daemon's start, or a folder on the way has a name that starts with a dot`,
+      {
+        level: "warn",
       },
-    }
-  );
+    );
+    return refusalResult("outside_scope");
+  }
+  f.throwIfAborted();
+  let additionalDirectoriesForClaudeMd = getAdditionalDirectoriesForClaudeMd();
+  let c = registerRepoRootSlots.of(a.session.host);
+  let included = additionalDirectoriesForClaudeMd.includes(e);
+  if (!included) {
+    if (additionalDirectoriesForClaudeMd.length >= MAX_ASKED_BY_CHARS) return refusalResult("too_many");
+    setAdditionalDirectoriesForClaudeMd([...additionalDirectoriesForClaudeMd, e]);
+    if (askedBy !== undefined) c.set(e, askedBy);
+    pinResolvedWorkingDirPath(e);
+    SandboxManager.refreshConfig();
+  }
+  await reloadSkillsAfterDirectoryChange();
+  return {
+    summary: "folder registered",
+    output: {
+      directory: e,
+      ...(included &&
+        (askedBy === undefined || c.get(e) !== askedBy) && {
+          alreadyTaken: true,
+        }),
+    },
+  };
 }
 //@ chunk-0k2xkafk.js:2022-2101 placement
-function R(s) {
-  return { summary: `folder not registered: ${s}`, output: { refusal: s } };
+function refusalResult(s) {
+  return {
+    summary: `folder not registered: ${s}`,
+    output: {
+      refusal: s,
+    },
+  };
 }
-
-export { Tfo, REGISTERREPOROOT, callRegisterRepoRoot };
+export { MAX_REGISTER_DIRECTORY_CHARS, REGISTERREPOROOT, callRegisterRepoRoot };

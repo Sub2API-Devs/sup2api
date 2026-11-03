@@ -8,14 +8,15 @@
  * pieces: chunk-8eppk1se.js (2)
  * attribution: placement 2
  */
-
 //@ chunk-8eppk1se.js:227-314 placement
-var x = /^\s*<tool_use_error>([\s\S]*)<\/tool_use_error>\s*$/i,
-  f = /<\/?tool_use_error\b/i;
+var TOOL_USE_ERROR_WRAPPER_RE = /^\s*<tool_use_error>([\s\S]*)<\/tool_use_error>\s*$/i;
+var NESTED_TOOL_USE_ERROR_RE = /<\/?tool_use_error\b/i;
 //@ chunk-8eppk1se.js:753-829 placement
-function Dhn(n) {
-  let e = x.exec(n)?.[1];
-  return e !== void 0 && !f.test(e) ? e : void 0;
+/**
+ * 从 `<tool_use_error>` 包裹中取错误正文，嵌套时返回 undefined。
+ */
+function unwrapToolUseErrorText(n) {
+  let e = TOOL_USE_ERROR_WRAPPER_RE.exec(n)?.[1];
+  return e !== undefined && !NESTED_TOOL_USE_ERROR_RE.test(e) ? e : undefined;
 }
-
-export { Dhn };
+export { unwrapToolUseErrorText };

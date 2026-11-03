@@ -31,7 +31,7 @@ import { getRootSession } from "../../bootstrap/state.js";
 import { logForDebugging } from "../debug.js";
 import { isStorageV5Enabled } from "../hoverRest.js";
 import { jsonStringify } from "../slowOperations.js";
-import { FX } from "../../services/memorySync/pathScrub.js";
+import { isNonRegularError } from "../../services/memorySync/pathScrub.js";
 import { writeNewFile, writeIfMissing } from "../atomicPublishWrite.js";
 import { safeParseJSON } from "../json.js";
 import { getLaunchCommand } from "../deepLink/registerProtocol.js";
@@ -39,23 +39,23 @@ import { execFileNoThrow } from "../execFileNoThrow.js";
 import { readServedFolders } from "../../daemon/daemonStatus.js";
 
 //@ chunk-6erhssc0.js:715-1041 placement
-async function signalPid(e, r = {}) {
-  if (!isProbeablePid(e)) return "eperm";
+async function signalPid(pid, r = {}) {
+  if (!isProbeablePid(pid)) return "eperm";
   try {
-    process.kill(e, r.signal ?? "SIGTERM");
+    process.kill(pid, r.signal ?? "SIGTERM");
   } catch (error) {
     if (getErrnoCode(error) === "EPERM") return "eperm";
     return "exited";
   }
   let o = Date.now() + (r.gracefulMs ?? 2000);
-  while (!0) {
+  while (true) {
     let n = Date.now() >= o;
     try {
-      process.kill(e, 0);
+      process.kill(pid, 0);
     } catch {
       return "exited";
     }
-    if (await isExitedProcessAsync(e)) return "exited";
+    if (await isExitedProcessAsync(pid)) return "exited";
     if (n) return "timed-out";
     await sleep(50);
   }
@@ -71,37 +71,53 @@ function daemonLockStateKey() {
   return STORAGE_SPACES.state("daemon-lock");
 }
 //@ chunk-6erhssc0.js:1276-1323 placement
-function D(e) {
-  return e === "EISDIR" || e === "ENXIO";
+/**
+ * 判断 errno 是否表示锁目录已过期（EISDIR、ENXIO）。
+ */
+function isStaleLockDirErrno(telemetryCode) {
+  return telemetryCode === "EISDIR" || telemetryCode === "ENXIO";
 }
 //@ chunk-6erhssc0.js:1323-1404 placement
-class w {
-  logged = !1;
+/**
+ * 只打印一次日志的状态。
+ */
+class LogOnceState {
+  logged = false;
   markLogged() {
-    if (this.logged) return !1;
-    return ((this.logged = !0), !0);
+    if (this.logged) return false;
+    this.logged = true;
+    return true;
   }
 }
 //@ chunk-6erhssc0.js:1404-1427 placement
-var S = new HostScoped(() => new w());
+/**
+ * 按宿主隔离的“只打印一次”状态。
+ */
+var logOnceByHost = new HostScoped(() => new LogOnceState());
 //@ chunk-6erhssc0.js:1427-1462 placement
-function I() {
-  return S.of(getRootSession().host);
+/**
+ * 取出当前宿主的“只打印一次”状态。
+ */
+function shouldLogOnce() {
+  return logOnceByHost.of(getRootSession().host);
 }
 //@ chunk-6erhssc0.js:1462-1559 placement
-async function E() {
+/**
+ * 判断守护进程锁路径是否为符号链接。
+ */
+async function isDaemonLockSymlink() {
   let e = await lstat(daemonLockPath()).catch(() => {
     return;
   });
-  return e !== void 0 && e.isSymbolicLink();
+  return e !== undefined && e.isSymbolicLink();
 }
 //@ chunk-6erhssc0.js:1559-1958 placement
-async function removeStaleLockDir(e) {
-  let r = daemonLockPath(),
-    o = await lstat(r).catch(() => {
-      return;
-    });
-  if (o === void 0 || o.isFile()) return;
+async function removeStaleLockDir(telemetryCode) {
+  let r = daemonLockPath();
+  let o = await lstat(r).catch(() => {
+    return;
+  });
+  if (o === undefined || o.isFile()) return;
   let n = o.isDirectory()
     ? "directory"
     : o.isFIFO()
@@ -111,86 +127,108 @@ async function removeStaleLockDir(e) {
         : o.isSymbolicLink()
           ? "symlink"
           : "other non-regular node";
-  if (I().markLogged())
-    logForDebugging(`[DaemonLock] ${n} at the lock path (${e}) \u2014 removing it as the legacy path does`, {
-      level: "warn",
-    });
-  await rm(r, { recursive: !0, force: !0 }).catch(() => {});
+  if (shouldLogOnce().markLogged())
+    logForDebugging(
+      `[DaemonLock] ${n} at the lock path (${telemetryCode}) \u2014 removing it as the legacy path does`,
+      {
+        level: "warn",
+      },
+    );
+  await rm(r, {
+    recursive: true,
+    force: true,
+  }).catch(() => {});
 }
 //@ chunk-6erhssc0.js:1958-1970 placement
-var v = 65536;
+/**
+ * 读取守护进程锁文件的大小上限（64 KiB）。
+ */
+var MAX_DAEMON_LOCK_BYTES = 65536;
 //@ chunk-6erhssc0.js:1970-2687 placement
-async function writeDaemonLockRemote(e, r) {
-  if (isStorageV5Enabled() && r !== void 0) {
+async function writeDaemonLockRemote(e, storageV5) {
+  if (isStorageV5Enabled() && storageV5 !== undefined) {
     let o = () =>
-        r.write(daemonLockStateKey(), jsonStringify(e, null, 2), {
-          precondition: { type: "ifAbsent" },
-          mode: 438 & ~process.umask(),
-        }),
-      n = await o();
+      storageV5.write(daemonLockStateKey(), jsonStringify(e, null, 2), {
+        precondition: {
+          type: "ifAbsent",
+        },
+        mode: 438 & ~process.umask(),
+      });
+    let n = await o();
     for (let i of [0, 1]) {
-      if (n.ok) return !0;
-      if (n.error.code === "AlreadyExists") return !1;
-      let a = "telemetryCode" in n.error ? n.error.telemetryCode : void 0;
-      if (n.error.code !== "Failed" || !FX(a)) break;
-      if (a === "ELOOP") {
-        if (await E()) return !1;
+      if (n.ok) return true;
+      if (n.error.code === "AlreadyExists") return false;
+      let telemetryCode = "telemetryCode" in n.error ? n.error.telemetryCode : undefined;
+      if (n.error.code !== "Failed" || !isNonRegularError(telemetryCode)) break;
+      if (telemetryCode === "ELOOP") {
+        if (await isDaemonLockSymlink()) return false;
         break;
       }
       if (i === 1) break;
-      (await removeStaleLockDir(a), (n = await o()));
+      await removeStaleLockDir(telemetryCode);
+      n = await o();
     }
-    if (n.ok) return !0;
+    if (n.ok) return true;
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
       `[DaemonLock] Failed to acquire daemon lock: ${n.error.code}${"telemetryCode" in n.error && n.error.telemetryCode ? ` (${n.error.telemetryCode})` : ""}`,
       "[DaemonLock] v5 acquire write failed",
     );
   }
   try {
-    return (await writeNewFile(daemonLockPath(), jsonStringify(e, null, 2)), !0);
+    await writeNewFile(daemonLockPath(), jsonStringify(e, null, 2));
+    return true;
   } catch (error) {
-    if (getErrnoCode(error) === "EEXIST") return !1;
+    if (getErrnoCode(error) === "EEXIST") return false;
     throw error;
   }
 }
 //@ chunk-6erhssc0.js:2687-2818 placement
-async function releaseDaemonLock(e, r) {
-  let o = await readDaemonLock(r);
-  if (!o || o.pid !== e.pid || o.startedAt !== e.startedAt) return;
-  await writeDaemonLock({ ...o, bgDisabled: !0 }, r);
+async function releaseDaemonLock(e, storageV5) {
+  let daemonLock = await readDaemonLock(storageV5);
+  if (!daemonLock || daemonLock.pid !== e.pid || daemonLock.startedAt !== e.startedAt) return;
+  await writeDaemonLock(
+    {
+      ...daemonLock,
+      bgDisabled: true,
+    },
+    storageV5,
+  );
 }
+//@ chunk-6erhssc0.js:2818-3976 placement
 /**
  * 读取守护进程锁（本地文件或远程存储），返回持有者 pid 与启动时间。
  */
-//@ chunk-6erhssc0.js:2818-3976 placement
-async function readDaemonLock(e) {
+async function readDaemonLock(storageV5) {
   let r;
-  if (e) {
-    let read = await e.read([daemonLockStateKey()]);
-    if (!read.ok) {
+  if (storageV5) {
+    let n = await storageV5.read([daemonLockStateKey()]);
+    if (!n.ok) {
       if (!(
-        read.error.code === "Failed" &&
-        (read.error.telemetryCode === "ENXIO" ||
-          read.error.telemetryCode === "EFBIG" ||
-          read.error.telemetryCode === "ELOOP" ||
-          read.error.telemetryCode === "ENAMETOOLONG")
+        n.error.code === "Failed" &&
+        (n.error.telemetryCode === "ENXIO" ||
+          n.error.telemetryCode === "EFBIG" ||
+          n.error.telemetryCode === "ELOOP" ||
+          n.error.telemetryCode === "ENAMETOOLONG")
       ))
         throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          `[DaemonLock] Failed to read daemon lock: ${read.error.code}${"telemetryCode" in read.error && read.error.telemetryCode ? ` (${read.error.telemetryCode})` : ""}`,
+          `[DaemonLock] Failed to read daemon lock: ${n.error.code}${"telemetryCode" in n.error && n.error.telemetryCode ? ` (${n.error.telemetryCode})` : ""}`,
           "[DaemonLock] v5 lock read failed",
         );
-      let s = await e.delete(daemonLockStateKey());
+      let s = await storageV5.delete(daemonLockStateKey());
       if (!s.ok && s.error.code === "Failed") {
-        let m = "telemetryCode" in s.error ? s.error.telemetryCode : void 0;
-        if (D(m)) await removeStaleLockDir(m);
+        let telemetryCode = "telemetryCode" in s.error ? s.error.telemetryCode : undefined;
+        if (isStaleLockDirErrno(telemetryCode)) await removeStaleLockDir(telemetryCode);
       }
       return null;
     }
-    let i = read.value.items[0];
+    let i = n.value.items[0];
     if (!i.found) return null;
-    if (i.totalBytes > v) return (await e.delete(daemonLockStateKey()), null);
+    if (i.totalBytes > MAX_DAEMON_LOCK_BYTES) {
+      await storageV5.delete(daemonLockStateKey());
+      return null;
+    }
     r = Buffer.from(i.value).toString("utf8");
-    let a = safeParseJSON(r, !1);
+    let a = safeParseJSON(r, false);
     if (a && typeof a === "object") {
       let c = a;
       if (typeof c.pid === "number" && typeof c.version === "string") return a;
@@ -199,14 +237,19 @@ async function readDaemonLock(e) {
   }
   try {
     let n = await lstat(daemonLockPath());
-    if (!n.isFile() || n.size > 65536)
-      return (await rm(daemonLockPath(), { recursive: !0, force: !0 }).catch(() => {}), null);
+    if (!n.isFile() || n.size > 65536) {
+      await rm(daemonLockPath(), {
+        recursive: true,
+        force: true,
+      }).catch(() => {});
+      return null;
+    }
     r = await readFile(daemonLockPath(), "utf8");
   } catch (error) {
     if (isENOENT(error)) return null;
     throw error;
   }
-  let o = safeParseJSON(r, !1);
+  let o = safeParseJSON(r, false);
   if (o && typeof o === "object") {
     let n = o;
     if (typeof n.pid === "number" && typeof n.version === "string") return o;
@@ -214,53 +257,56 @@ async function readDaemonLock(e) {
   return null;
 }
 //@ chunk-6erhssc0.js:3976-4947 placement
-async function writeDaemonLock(e, r) {
-  if (r) {
-    let write = await r.write(daemonLockStateKey(), jsonStringify(e, null, 2), {
+async function writeDaemonLock(e, storageV5) {
+  if (storageV5) {
+    let i = await storageV5.write(daemonLockStateKey(), jsonStringify(e, null, 2), {
       mode: 438 & ~process.umask(),
     });
-    if (!write.ok) {
-      let c = "telemetryCode" in write.error ? write.error.telemetryCode : void 0;
-      if (c === "LockContended" || c === "LockSuspect") {
-        let s = await readDaemonLock(r);
-        if (s?.pid !== e.pid || s?.startedAt !== e.startedAt) return !1;
-        write = await r.write(daemonLockStateKey(), jsonStringify(e, null, 2), {
+    if (!i.ok) {
+      let telemetryCode = "telemetryCode" in i.error ? i.error.telemetryCode : undefined;
+      if (telemetryCode === "LockContended" || telemetryCode === "LockSuspect") {
+        let daemonLock = await readDaemonLock(storageV5);
+        if (daemonLock?.pid !== e.pid || daemonLock?.startedAt !== e.startedAt) return false;
+        i = await storageV5.write(daemonLockStateKey(), jsonStringify(e, null, 2), {
           mode: 438 & ~process.umask(),
         });
       }
-      if (!write.ok)
+      if (!i.ok)
         throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          `[DaemonLock] Failed to replace daemon lock: ${write.error.code}${"telemetryCode" in write.error && write.error.telemetryCode ? ` (${write.error.telemetryCode})` : ""}`,
+          `[DaemonLock] Failed to replace daemon lock: ${i.error.code}${"telemetryCode" in i.error && i.error.telemetryCode ? ` (${i.error.telemetryCode})` : ""}`,
           "[DaemonLock] v5 replace write failed",
         );
     }
-    let a = await readDaemonLock(r);
-    return a?.pid === e.pid && a?.startedAt === e.startedAt;
+    let daemonLock = await readDaemonLock(storageV5);
+    return daemonLock?.pid === e.pid && daemonLock?.startedAt === e.startedAt;
   }
   let o = await writeIfMissing(daemonLockPath(), jsonStringify(e, null, 2));
   try {
     await rename(o, daemonLockPath());
   } catch (error) {
-    let a = getErrnoCode(error);
-    if (a === "EEXIST" || a === "EPERM") {
+    let errnoCode = getErrnoCode(error);
+    if (errnoCode === "EEXIST" || errnoCode === "EPERM") {
       await unlink(daemonLockPath()).catch(() => {});
       try {
         await rename(o, daemonLockPath());
       } catch (error) {
         await unlink(o).catch(() => {});
-        let s = getErrnoCode(error);
-        if (s === "EEXIST" || s === "EPERM") return !1;
+        let errnoCode = getErrnoCode(error);
+        if (errnoCode === "EEXIST" || errnoCode === "EPERM") return false;
         throw error;
       }
-    } else throw (await unlink(o).catch(() => {}), error);
+    } else {
+      await unlink(o).catch(() => {});
+      throw error;
+    }
   }
-  let n = await readDaemonLock(r);
-  return n?.pid === e.pid && n?.startedAt === e.startedAt;
+  let daemonLock = await readDaemonLock(storageV5);
+  return daemonLock?.pid === e.pid && daemonLock?.startedAt === e.startedAt;
 }
 //@ chunk-6erhssc0.js:4947-5259 placement
-async function deleteDaemonLock(e) {
-  if (e) {
-    let r = await e.delete(daemonLockStateKey());
+async function deleteDaemonLock(storageV5) {
+  if (storageV5) {
+    let r = await storageV5.delete(daemonLockStateKey());
     if (!r.ok)
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
         `[DaemonLock] Failed to remove daemon lock: ${r.error.code}${"telemetryCode" in r.error && r.error.telemetryCode ? ` (${r.error.telemetryCode})` : ""}`,
@@ -275,12 +321,12 @@ async function deleteDaemonLock(e) {
   }
 }
 //@ chunk-6erhssc0.js:5259-5430 placement
-async function isClaudeProcess(e) {
+async function isClaudeProcess(pid) {
   let r;
   try {
-    r = await readFile(`/proc/${e}/cmdline`, "utf8");
+    r = await readFile(`/proc/${pid}/cmdline`, "utf8");
   } catch {
-    return !0;
+    return true;
   }
   let parts = r.split("\x00");
   return parts[0] === "claude daemon" || parts.slice(1, 4).includes("daemon");
@@ -288,22 +334,22 @@ async function isClaudeProcess(e) {
 //@ chunk-6erhssc0.js:5430-5567 placement
 function isClaudeCommandLine(e) {
   return (
-    e !== void 0 &&
+    e !== undefined &&
     (/(^|\/)claude(\.exe)?$|\/claude-code\/cli\.js$|\/claude\/versions\/[^/\s]+$/.test(e) ||
       e === getLaunchCommand().target)
   );
 }
 //@ chunk-6erhssc0.js:5567-6137 placement
-async function readProcCmdline(e) {
+async function readProcCmdline(pid) {
   let r = await withDeadline(
-    readFile(`/proc/${e}/cmdline`, "utf8").catch(() => {
+    readFile(`/proc/${pid}/cmdline`, "utf8").catch(() => {
       return;
     }),
     1000,
   );
-  if (r !== void 0) {
-    let parts = r.split("\x00"),
-      i = /(^|\/)(node|bun)$/.test(parts[0]) ? 1 : 0;
+  if (r !== undefined) {
+    let parts = r.split("\x00");
+    let i = /(^|\/)(node|bun)$/.test(parts[0]) ? 1 : 0;
     return (
       parts[0] === "claude daemon" ||
       (isClaudeCommandLine(parts[i]) &&
@@ -312,7 +358,10 @@ async function readProcCmdline(e) {
         ))
     );
   }
-  let o = await execFileNoThrow("ps", ["-ww", "-o", "args=", "-p", String(e)], { timeout: 1000, useCwd: !1 });
+  let o = await execFileNoThrow("ps", ["-ww", "-o", "args=", "-p", String(pid)], {
+    timeout: 1000,
+    useCwd: false,
+  });
   return isClaudeCommandLine(
     /^(?:(?:\S*\/)?(?:node|bun)\s+)?(\/\S+)\sdaemon\s(?:run(?:\s|$)|--json-path\s\S+\s--log-file\s\S+\s--origin\sservice\s*$)/.exec(
       o.code === 0 ? o.stdout : "",
@@ -320,46 +369,57 @@ async function readProcCmdline(e) {
   );
 }
 //@ chunk-6erhssc0.js:6137-6155 placement
-var LOCK_PROBE_LIMITS = 2,
-  KOr = 250;
+/**
+ * 锁探测的重试间隔（250 毫秒）。
+ */
+var LOCK_PROBE_LIMITS = 2;
+var LOCK_PROBE_RETRY_MS = 250;
 //@ chunk-6erhssc0.js:6155-6315 placement
-async function waitForProcessExit(e, r, o) {
-  if (r === void 0) return !0;
-  for (let n = 0; n < o; n++) {
-    if (n > 0) await sleep(KOr);
-    let i = await getProcessStartTimeAsync(e, { skipCache: n > 0 });
-    if (i !== void 0) return i === r;
+async function waitForProcessExit(pid, r, o) {
+  if (r === undefined) return true;
+  for (let j = 0; j < o; j++) {
+    if (j > 0) await sleep(LOCK_PROBE_RETRY_MS);
+    let processStartTime = await getProcessStartTimeAsync(pid, {
+      skipCache: j > 0,
+    });
+    if (processStartTime !== undefined) return processStartTime === r;
   }
-  return !1;
+  return false;
 }
 //@ chunk-6erhssc0.js:6315-6328 placement
-var x = 120000;
+/**
+ * 判断锁早于启动时允许的时间宽容（120 秒）。
+ */
+var BOOT_TIME_SLACK_MS = 120000;
 //@ chunk-6erhssc0.js:6328-6391 placement
-function P(e, r = Date.now(), o = uptime()) {
-  return e.startedAt < r - o * 1000 - x;
+/**
+ * 判断锁的启动时间是否早于本次系统启动。
+ */
+function predatesBoot(e, r = Date.now(), o = uptime()) {
+  return e.startedAt < r - o * 1000 - BOOT_TIME_SLACK_MS;
 }
 //@ chunk-6erhssc0.js:6391-6550 placement
 async function verifyLockHolder(e) {
   let r = procIdentityOf(e);
-  if (r !== void 0) {
+  if (r !== undefined) {
     let o = await provenSameProcessAsync(e.pid, r);
-    if (o === !0) return null;
-    if (o === !1) return "pid_recycled";
+    if (o === true) return null;
+    if (o === false) return "pid_recycled";
   }
-  return P(e) ? "predates_boot" : null;
+  return predatesBoot(e) ? "predates_boot" : null;
 }
 //@ chunk-6erhssc0.js:6550-6588 placement
 function hasProcIdentity(e) {
-  return procIdentityOf(e) !== void 0;
+  return procIdentityOf(e) !== undefined;
 }
 //@ chunk-6erhssc0.js:6588-6736 placement
 function stopDaemonHint() {
   return `Stop it with \`claude daemon stop --any\` (a graceful, socket-based stop); if nothing is running at that pid, delete ${daemonLockPath()}`;
 }
+//@ chunk-6erhssc0.js:6736-6924 placement = isProcessRunning (0.698)
 /**
  * （误归 computerUse）读服务器锁文件并确认持有进程仍存活且身份匹配，否则返回 null。
  */
-//@ chunk-6erhssc0.js:6736-6924 placement = isProcessRunning (0.698)
 async function readLiveServerLock(e = 1, r) {
   let lock = await readDaemonLock(r);
   if (!lock) return null;
@@ -372,28 +432,53 @@ async function readLiveServerLock(e = 1, r) {
   if (!(await waitForProcessExit(lock.pid, procIdentityOf(lock), e))) return null;
   return lock;
 }
+//@ chunk-6erhssc0.js:6924-7384 placement
 /**
  * （误归 computerUse）按锁的 origin 判断服务器状态：service/foreground/transient（transient 会尝试确认已停止）。
  */
-//@ chunk-6erhssc0.js:6924-7384 placement
 async function getServerLockStatus(e) {
   let lock = await readLiveServerLock(1, e).catch(() => null);
-  if (!lock) return { kind: "none" };
+  if (!lock)
+    return {
+      kind: "none",
+    };
   switch (lock.origin) {
     case "service":
-      return { kind: "service", lock: lock };
+      return {
+        kind: "service",
+        lock,
+      };
     case "foreground":
-      return { kind: "foreground", lock: lock };
+      return {
+        kind: "foreground",
+        lock,
+      };
     case "transient":
-    case void 0: {
-      if (!hasProcIdentity(lock)) return { kind: "not-stopped", pid: lock.pid, outcome: "unverified" };
+    case undefined: {
+      if (!hasProcIdentity(lock))
+        return {
+          kind: "not-stopped",
+          pid: lock.pid,
+          outcome: "unverified",
+        };
       let o = await signalPid(lock.pid);
       return o === "exited"
-        ? { kind: "stopped", pid: lock.pid }
-        : { kind: "not-stopped", pid: lock.pid, outcome: o };
+        ? {
+            kind: "stopped",
+            pid: lock.pid,
+          }
+        : {
+            kind: "not-stopped",
+            pid: lock.pid,
+            outcome: o,
+          };
     }
     default:
-      return (lock.origin, { kind: "unknown-origin", lock: lock });
+      lock.origin;
+      return {
+        kind: "unknown-origin",
+        lock,
+      };
   }
 }
 //@ chunk-6erhssc0.js:7384-7787 placement
@@ -416,15 +501,14 @@ async function isServerVersionMismatch(e, r) {
   let o = await readLiveServerLock(1, r).catch(() => null);
   return !!o && o.version !== e;
 }
+//@ chunk-7904g3ks.js:5826-5914 placement = tryAcquireComputerUseLock (0.172)
 /**
  * （误归 computerUse）读活锁后对持有进程 pid 执行后续查询；无锁返回 []。
  */
-//@ chunk-7904g3ks.js:5826-5914 placement = tryAcquireComputerUseLock (0.172)
 async function tryAcquireComputerUseLock(e) {
   let t = await readLiveServerLock(1, e).catch(() => null);
   return t === null ? [] : readServedFolders(t.pid, e);
 }
-
 export {
   readLiveServerLock,
   tryAcquireComputerUseLock,
@@ -440,7 +524,7 @@ export {
   hasProcIdentity,
   signalPid,
   isServerVersionMismatch,
-  KOr,
+  LOCK_PROBE_RETRY_MS,
   writeDaemonLockRemote,
   isClaudeProcess,
   writeDaemonLock,

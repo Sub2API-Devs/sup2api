@@ -9,13 +9,12 @@
  * attribution: fingerprint 1
  */
 import { Se } from "../../../vendor/react/cjs/react.production.js";
-import { he } from "./WizardProvider.js";
+import { wizardSlot } from "./WizardProvider.js";
 
 //@ chunk-095ptjmr.js:2900-3004 fingerprint = useWizard (1)
 function useWizard() {
-  let context = Se(he);
+  let context = Se(wizardSlot);
   if (!context) throw Error("useWizard must be used within a WizardProvider");
   return context;
 }
-
 export { useWizard };

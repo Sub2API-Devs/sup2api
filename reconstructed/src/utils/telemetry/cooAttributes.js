@@ -8,16 +8,22 @@
  * pieces: chunk-v2w606r1.js (1)
  * attribution: placement 1
  */
-import { cLi } from "../envUtils.js";
-import { kQt } from "../errorStackSanitize.js";
+import { emptyGkeCluster } from "../envUtils.js";
+import { noopProbe } from "../errorStackSanitize.js";
 
+//@ chunk-v2w606r1.js:265-375 placement
 /**
  * COO 命名空间与集群属性。
  */
-//@ chunk-v2w606r1.js:265-375 placement
 function cooAttributes() {
-  let { namespace: namespace, cluster: cluster } = cLi();
-  return { ...(namespace && { cooNamespace: kQt(namespace) }), ...(cluster && { cooCluster: kQt(cluster) }) };
+  let { namespace, cluster } = emptyGkeCluster();
+  return {
+    ...(namespace && {
+      cooNamespace: noopProbe(namespace),
+    }),
+    ...(cluster && {
+      cooCluster: noopProbe(cluster),
+    }),
+  };
 }
-
 export { cooAttributes };

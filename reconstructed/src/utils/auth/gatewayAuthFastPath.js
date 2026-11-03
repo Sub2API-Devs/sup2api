@@ -20,19 +20,15 @@ import { withoutHostManagedProviderVars } from "../managedEnv.js";
 import { restoreGatewayAuth } from "../auth.js";
 import { resetRemoteSettingsSyncCache } from "../../services/cloudSessions/eligibility.js";
 
+//@ chunk-mf4z1bxv.js:422-528 placement
 /**
  * 快速路径恢复网关认证（CA 证书、mTLS、托管环境）。
  */
-//@ chunk-mf4z1bxv.js:422-528 placement
 async function restoreGatewayAuthForFastPath(e, t) {
-  if (
-    (applyExtraCACertsFromConfig(),
-    await Promise.all([loadExtraCACerts(), loadMTLSClientMaterial()]),
-    setGatewayRequiredByHostPolicyReader(withoutHostManagedProviderVars),
-    await restoreGatewayAuth(e, t),
-    getGatewayAuth() || isGatewayRequiredByHostPolicy())
-  )
-    resetRemoteSettingsSyncCache();
+  applyExtraCACertsFromConfig();
+  await Promise.all([loadExtraCACerts(), loadMTLSClientMaterial()]);
+  setGatewayRequiredByHostPolicyReader(withoutHostManagedProviderVars);
+  await restoreGatewayAuth(e, t);
+  if (getGatewayAuth() || isGatewayRequiredByHostPolicy()) resetRemoteSettingsSyncCache();
 }
-
 export { restoreGatewayAuthForFastPath };

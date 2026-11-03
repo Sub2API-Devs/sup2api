@@ -6,20 +6,19 @@
  * attribution: cjs-require-graph 1
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { ee } from "../classes/range.js";
+import { require_range } from "../classes/range.js";
 
 //@ chunk-bwbq4xvm.js:21798-21935 cjs-require-graph
-var Sl = x(function (A2, El) {
-  var Pk = ee(),
-    Mk = (e, s) =>
-      new Pk(e, s).set.map((n) =>
-        n
-          .map((r) => r.value)
-          .join(" ")
-          .trim()
-          .split(" "),
-      );
-  El.exports = Mk;
+var require_to_comparators = x(function (cjsExports, cjsModule) {
+  var Range = require_range();
+  var toComparators = (range, options) =>
+    new Range(range, options).set.map((comp) =>
+      comp
+        .map((c) => c.value)
+        .join(" ")
+        .trim()
+        .split(" "),
+    );
+  cjsModule.exports = toComparators;
 });
-
-export { Sl };
+export { require_to_comparators };

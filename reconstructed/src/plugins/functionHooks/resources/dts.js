@@ -9,9 +9,15 @@
  * attribution: placement 2
  */
 import __cc_resource_0 from "../../../../assets/dts.mjs-59972049.txt.zst" with { type: "file" };
-import { Et } from "../../../utils/embeddedAssets.js";
+import { readEmbeddedTextSync } from "../../../utils/embeddedAssets.js";
 
 //@ chunk-xcj8pcqy.js:306-328 placement
-var m = __cc_resource_0;
+/**
+ * 内嵌资源
+ */
+var DTS_RESOURCE = __cc_resource_0;
 //@ chunk-xcj8pcqy.js:328-360 placement
-var s = Et(m, import.meta.dirname);
+/**
+ * 读取资源文本
+ */
+var dtsResourceText = readEmbeddedTextSync(DTS_RESOURCE, import.meta.dirname);

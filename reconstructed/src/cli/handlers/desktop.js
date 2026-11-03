@@ -25,171 +25,213 @@ import {
 } from "../../utils/sessionAttach.js";
 import { getCwd } from "../../utils/cwd.js";
 import { openCurrentSessionInDesktop } from "../../utils/desktopDeepLink.js";
-import { hr } from "../../utils/invisibleChars.js";
+import { stripInvisibleChars } from "../../utils/invisibleChars.js";
 import { logFeatureOkAsync, logFeatureBadAsync } from "../../services/analytics/featureTelemetry.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { printCliError } from "../exit.js";
 
 //@ chunk-wgcp7px2.js:12075-12238 placement
-var DESKTOP_NO_SESSION_HINT = "Run `claude --resume` to pick a session, then /desktop inside it.",
-  DESKTOP_IGNORED_OPTIONS = new Set([
-    "desktop",
-    "continue",
-    "resume",
-    "debug",
-    "debugToStderr",
-    "debugFile",
-    "verbose",
-  ]);
+var DESKTOP_NO_SESSION_HINT = "Run `claude --resume` to pick a session, then /desktop inside it.";
+var DESKTOP_IGNORED_OPTIONS = new Set([
+  "desktop",
+  "continue",
+  "resume",
+  "debug",
+  "debugToStderr",
+  "debugFile",
+  "verbose",
+]);
+//@ chunk-wgcp7px2.js:12238-15583 placement
 /**
  * `claude --desktop`：校验参数（不支持非交互/管道输入/prompt），把当前或指定会话交给 Claude Desktop 打开。
  */
-//@ chunk-wgcp7px2.js:12238-15583 placement
 async function launchDesktopHandoff({
   continue: d,
-  resume: resume,
-  nonInteractive: nonInteractive,
-  suppliedOptions: suppliedOptions,
-  prompt: prompt,
-  pipedStdin: pipedStdin,
-  pendingConnect: pendingConnect,
-  pendingSsh: pendingSsh,
-  storageV5: storageV5,
+  resume,
+  nonInteractive,
+  suppliedOptions,
+  prompt,
+  pipedStdin,
+  pendingConnect,
+  pendingSsh,
+  storageV5,
 }) {
   if (nonInteractive)
-    return n(
+    return failDesktopLaunch(
       "non_interactive",
       "--desktop opens the Claude Desktop app and can't run non-interactively (`--print`, `--sdk-url`, `--init-only`, or redirected output).",
     );
   let mapped = suppliedOptions
-    .filter(({ key: key }) => !DESKTOP_IGNORED_OPTIONS.has(key))
-    .map(({ flag: flag }) => `\`${flag}\``);
+    .filter(({ key }) => !DESKTOP_IGNORED_OPTIONS.has(key))
+    .map(({ flag }) => `\`${flag}\``);
   if (pendingConnect) mapped.push("a `cc://` connect URL");
   if (pendingSsh) mapped.push("`claude ssh`");
   let p = mapped.pop();
-  if (p !== void 0) {
+  if (p !== undefined) {
     let e = mapped.length > 0 ? `${mapped.join(", ")} or ${p}` : p;
-    return n("flag_conflict", `--desktop only opens the Claude Desktop app; it can't be combined with ${e}.`);
+    return failDesktopLaunch(
+      "flag_conflict",
+      `--desktop only opens the Claude Desktop app; it can't be combined with ${e}.`,
+    );
   }
-  let a = getPreSettingsEnvSnapshot(),
-    m = isEnvTruthy(a.CLAUDE_CODE_RESTRICTED)
-      ? "a restricted session: CLAUDE_CODE_RESTRICTED"
-      : isEnvTruthy(a.CLAUDE_CODE_RESTRICT_PERSONAL_CONFIG)
-        ? "a session that restricts your own Claude Code files: CLAUDE_CODE_RESTRICT_PERSONAL_CONFIG"
-        : isEnvTruthy(a.CLAUDE_CODE_SAFE_MODE)
-          ? "safe mode: CLAUDE_CODE_SAFE_MODE"
-          : isEnvTruthy(a.CLAUDE_CODE_SIMPLE)
-            ? "bare mode: CLAUDE_CODE_SIMPLE"
-            : void 0;
-  if (m !== void 0)
-    return n(
+  let preSettingsEnvSnapshot = getPreSettingsEnvSnapshot();
+  let m = isEnvTruthy(preSettingsEnvSnapshot.CLAUDE_CODE_RESTRICTED)
+    ? "a restricted session: CLAUDE_CODE_RESTRICTED"
+    : isEnvTruthy(preSettingsEnvSnapshot.CLAUDE_CODE_RESTRICT_PERSONAL_CONFIG)
+      ? "a session that restricts your own Claude Code files: CLAUDE_CODE_RESTRICT_PERSONAL_CONFIG"
+      : isEnvTruthy(preSettingsEnvSnapshot.CLAUDE_CODE_SAFE_MODE)
+        ? "safe mode: CLAUDE_CODE_SAFE_MODE"
+        : isEnvTruthy(preSettingsEnvSnapshot.CLAUDE_CODE_SIMPLE)
+          ? "bare mode: CLAUDE_CODE_SIMPLE"
+          : undefined;
+  if (m !== undefined)
+    return failDesktopLaunch(
       "restricted",
       `--desktop can't open the Claude Desktop app from ${m} wouldn't apply to the session the app starts.`,
     );
-  if (prompt !== void 0 && prompt !== "")
-    return n(
+  if (prompt !== undefined && prompt !== "")
+    return failDesktopLaunch(
       "prompt_unsupported",
       "--desktop doesn't take a prompt yet. Run `claude --desktop`, then type it in the app.",
     );
   if (pipedStdin)
-    return n(
+    return failDesktopLaunch(
       "stdin_not_tty",
       "--desktop doesn't take piped or redirected input yet. Run `claude --desktop` on its own, then type in the app.",
     );
   if (!isDesktopCommandEnabled())
-    return n(
+    return failDesktopLaunch(
       "unsupported_platform",
       "--desktop isn't available on this platform. It works on macOS and Windows (x64).",
     );
   if (!isClaudeAISubscriber())
-    return n(
+    return failDesktopLaunch(
       "not_subscriber",
       "--desktop requires signing in with a Claude account. Run `claude auth login` to sign in.",
     );
-  let k = d ? "continue" : resume !== void 0 ? "resume" : "new",
-    t;
+  let k = d ? "continue" : resume !== undefined ? "resume" : "new";
+  let sessionId;
   switch (k) {
     case "continue": {
-      let e,
-        o = await findLatestResumableLog({
-          storageV5: storageV5,
-          forkSession: !1,
-          onNewestRunningInBackground: (_) => {
-            e = _;
-          },
-        });
-      if (e) return n("session_live", backgroundSessionMovedNotice(e, { canFork: !1 }));
-      let s = o ? getSessionIdFromLog(o) : void 0;
-      if (!o || !s)
-        return n(
+      let state;
+      let latestResumableLog = await findLatestResumableLog({
+        storageV5,
+        forkSession: false,
+        onNewestRunningInBackground: (_) => {
+          state = _;
+        },
+      });
+      if (state)
+        return failDesktopLaunch(
+          "session_live",
+          backgroundSessionMovedNotice(state, {
+            canFork: false,
+          }),
+        );
+      let s = latestResumableLog ? getSessionIdFromLog(latestResumableLog) : undefined;
+      if (!latestResumableLog || !s)
+        return failDesktopLaunch(
           "session_not_found",
           "No session in this directory to continue. Run `claude --desktop` to start a new one in Claude Desktop.",
         );
-      t = { kind: "resume", sessionId: s };
+      sessionId = {
+        kind: "resume",
+        sessionId: s,
+      };
       break;
     }
     case "resume": {
-      if (resume === !0)
-        return n(
+      if (resume === true)
+        return failDesktopLaunch(
           "resume_without_id",
           "`--desktop --resume` needs a session ID. Pass one, or use `--desktop --continue` for the most recent session in this directory.",
         );
       let e = validateUuid(resume);
       if (!e)
-        return n(
+        return failDesktopLaunch(
           "resume_not_uuid",
           `\`--desktop --resume\` takes a session ID, not a name or path. ${DESKTOP_NO_SESSION_HINT}`,
         );
-      let o = getTranscriptStorageContext(storageV5),
-        s = isStorageV5Enabled();
+      let transcriptStorageContext = getTranscriptStorageContext(storageV5);
+      let s = isStorageV5Enabled();
       if (
         !(
-          (await resolveSessionFilePath(e, getOriginalCwd(), o, s)) ??
-          (await resolveSessionFilePath(e, void 0, o, s))
+          (await resolveSessionFilePath(e, getOriginalCwd(), transcriptStorageContext, s)) ??
+          (await resolveSessionFilePath(e, undefined, transcriptStorageContext, s))
         ) &&
-        (await listLiveSessionHolders(e, { rejectUnreadable: !0 }).catch(() => [])).length === 0
+        (
+          await listLiveSessionHolders(e, {
+            rejectUnreadable: true,
+          }).catch(() => [])
+        ).length === 0
       )
-        return n("session_not_found", `No session found with ID ${e}. ${DESKTOP_NO_SESSION_HINT}`);
-      t = { kind: "resume", sessionId: e };
+        return failDesktopLaunch(
+          "session_not_found",
+          `No session found with ID ${e}. ${DESKTOP_NO_SESSION_HINT}`,
+        );
+      sessionId = {
+        kind: "resume",
+        sessionId: e,
+      };
       break;
     }
     case "new":
-      t = { kind: "new-session", folder: getCwd() };
+      sessionId = {
+        kind: "new-session",
+        folder: getCwd(),
+      };
       break;
   }
-  if (t.kind === "resume") {
+  if (sessionId.kind === "resume") {
     let e;
     try {
-      e = await listLiveSessionHolders(t.sessionId, { rejectUnreadable: !0 });
+      e = await listLiveSessionHolders(sessionId.sessionId, {
+        rejectUnreadable: true,
+      });
     } catch {
-      return n("registry_unreadable", "Couldn't check whether that session is in use. Try again.");
+      return failDesktopLaunch(
+        "registry_unreadable",
+        "Couldn't check whether that session is in use. Try again.",
+      );
     }
     if (e.some((s) => s.kind === "interactive"))
-      return n(
+      return failDesktopLaunch(
         "session_live",
-        `Session ${t.sessionId} is open in another terminal. Run /desktop there instead.`,
+        `Session ${sessionId.sessionId} is open in another terminal. Run /desktop there instead.`,
       );
     let [o] = e;
     if (o) {
-      let s = (await findBackgroundSessionHolder(t.sessionId, storageV5)) ?? { kind: o.kind, jobId: void 0 };
-      return n("session_live", formatSessionRunningInBackground({ holder: s, canFork: !1 }));
+      let holder = (await findBackgroundSessionHolder(sessionId.sessionId, storageV5)) ?? {
+        kind: o.kind,
+        jobId: undefined,
+      };
+      return failDesktopLaunch(
+        "session_live",
+        formatSessionRunningInBackground({
+          holder,
+          canFork: false,
+        }),
+      );
     }
   }
-  let l = await openCurrentSessionInDesktop(t);
-  if (!l.success) return n(l.reason, l.error);
-  return (
-    process.stdout.write(
-      t.kind === "resume"
-        ? `Opening session ${t.sessionId} in Claude Desktop
+  let currentSessionInDesktop = await openCurrentSessionInDesktop(sessionId);
+  if (!currentSessionInDesktop.success)
+    return failDesktopLaunch(currentSessionInDesktop.reason, currentSessionInDesktop.error);
+  process.stdout.write(
+    sessionId.kind === "resume"
+      ? `Opening session ${sessionId.sessionId} in Claude Desktop
 `
-        : `Opening ${hr(t.folder)} in Claude Desktop
+      : `Opening ${stripInvisibleChars(sessionId.folder)} in Claude Desktop
 `,
-    ),
-    await logFeatureOkAsync("desktop_cli_launch", { mode: fromEnum(k) }),
-    0
   );
+  await logFeatureOkAsync("desktop_cli_launch", {
+    mode: fromEnum(k),
+  });
+  return 0;
 }
 //@ chunk-wgcp7px2.js:15583-15653 placement
-async function n(d, i) {
-  return (printCliError(i), await logFeatureBadAsync("desktop_cli_launch", d), 1);
+async function failDesktopLaunch(d, i) {
+  printCliError(i);
+  await logFeatureBadAsync("desktop_cli_launch", d);
+  return 1;
 }

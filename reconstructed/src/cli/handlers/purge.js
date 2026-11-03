@@ -15,24 +15,29 @@ import { logError } from "../../utils/log.js";
 import { toError } from "../../utils/errors.js";
 
 //@ chunk-shkzs7rp.js:23454-23641 placement
-var PROJECT_PURGE_RENAMED_NOTICE = "`claude project purge` is now `claude purge`",
-  PURGE_DESCRIPTION =
-    "Delete a project's Claude Code data (transcripts, tasks, file history, and its entry in ~/.claude.json) from this computer only";
+var PROJECT_PURGE_RENAMED_NOTICE = "`claude project purge` is now `claude purge`";
+var PURGE_DESCRIPTION =
+  "Delete a project's Claude Code data (transcripts, tasks, file history, and its entry in ~/.claude.json) from this computer only";
+//@ chunk-shkzs7rp.js:23641-23765 placement
 /**
  * 注册 purge [path] 与其旧名 project purge（隐藏，打印改名提示）。
  */
-//@ chunk-shkzs7rp.js:23641-23765 placement
-function registerPurgeCommands(n, e) {
-  registerPurgeCommand(n, e, !1);
-  let configureHelp = n
-    .command("project", { hidden: !0 })
+function registerPurgeCommands(program, withStorageV5) {
+  registerPurgeCommand(program, withStorageV5, false);
+  let S = program
+    .command("project", {
+      hidden: true,
+    })
     .description(PROJECT_PURGE_RENAMED_NOTICE)
     .configureHelp(createHelpConfig());
-  return (registerPurgeCommand(configureHelp, e, !0), configureHelp);
+  registerPurgeCommand(S, withStorageV5, true);
+  return S;
 }
 //@ chunk-shkzs7rp.js:23765-24422 placement
 function registerPurgeCommand(n, e, S) {
-  n.command("purge [path]", { hidden: S })
+  n.command("purge [path]", {
+    hidden: S,
+  })
     .description(S ? `${PROJECT_PURGE_RENAMED_NOTICE}. ${PURGE_DESCRIPTION}` : PURGE_DESCRIPTION)
     .allowExcessArguments(S)
     .option("--dry-run", "List what would be deleted without deleting anything")
@@ -41,16 +46,15 @@ function registerPurgeCommand(n, e, S) {
     .option("--all", "Purge state for every project (mutually exclusive with [path])")
     .action(
       e(async (A, r, s) => {
-        if (S)
-          (cliWarn(`${PROJECT_PURGE_RENAMED_NOTICE}. The old name still works for now.`),
-            await logEventAsync("tengu_dead_probe_project_purge_alias", { yes: s.yes === !0 }).catch((x) =>
-              logError(toError(x)),
-            ));
-        let { purgeProjectHandler: purgeProjectHandler, purgeStoppedByError: purgeStoppedByError } =
-          await import("./chunk-5f8vf2zr.js");
+        if (S) {
+          cliWarn(`${PROJECT_PURGE_RENAMED_NOTICE}. The old name still works for now.`);
+          await logEventAsync("tengu_dead_probe_project_purge_alias", {
+            yes: s.yes === true,
+          }).catch((error) => logError(toError(error)));
+        }
+        let { purgeProjectHandler, purgeStoppedByError } = await import("./chunk-5f8vf2zr.js");
         await purgeProjectHandler(r, s, A).catch(purgeStoppedByError);
       }),
     );
 }
-
 export { registerPurgeCommands };

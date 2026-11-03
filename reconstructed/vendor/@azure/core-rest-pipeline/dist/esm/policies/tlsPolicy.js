@@ -7,14 +7,13 @@
  */
 
 //@ chunk-mrx6y2r5.js:54960-55072 esm-fingerprint
-function fa(e) {
+function tlsPolicy(tlsSettings) {
   return {
     name: "tlsPolicy",
-    sendRequest: async (t, r) => {
-      if (!t.tlsSettings) t.tlsSettings = e;
-      return r(t);
+    sendRequest: async (req, next) => {
+      if (!req.tlsSettings) req.tlsSettings = tlsSettings;
+      return next(req);
     },
   };
 }
-
-export { fa };
+export { tlsPolicy };

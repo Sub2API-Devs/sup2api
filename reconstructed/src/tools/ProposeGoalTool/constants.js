@@ -12,7 +12,6 @@ import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/gr
 
 //@ chunk-wg3fnnjh.js:226-275 placement
 function isProposeGoalEnabled() {
-  return getFeatureValue_CACHED_MAY_BE_STALE("tengu_propose_goal", !1);
+  return getFeatureValue_CACHED_MAY_BE_STALE("tengu_propose_goal", false);
 }
-
 export { isProposeGoalEnabled };

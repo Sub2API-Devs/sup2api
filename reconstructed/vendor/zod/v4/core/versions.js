@@ -7,6 +7,9 @@
  */
 
 //@ chunk-7vp249v4.js:14365-14398 esm-fingerprint
-var Qr = { major: 4, minor: 6, patch: 2 };
-
-export { Qr };
+var version = {
+  major: 4,
+  minor: 6,
+  patch: 2,
+};
+export { version };

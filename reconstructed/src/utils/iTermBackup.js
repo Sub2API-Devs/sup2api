@@ -18,49 +18,68 @@ import { logForDebugging } from "./debug.js";
 
 //@ chunk-fhdzwff4.js:14223-14294 fingerprint = markITerm2SetupComplete (1)
 async function markITerm2SetupComplete(o) {
-  await saveGlobalConfig((current) => ({ ...current, iterm2SetupInProgress: !1 }), o);
+  await saveGlobalConfig(
+    (current) => ({
+      ...current,
+      iterm2SetupInProgress: false,
+    }),
+    o,
+  );
 }
 //@ chunk-fhdzwff4.js:14294-14402 fingerprint = getIterm2RecoveryInfo (1)
 function getIterm2RecoveryInfo() {
   let config = getGlobalConfig();
-  return { inProgress: config.iterm2SetupInProgress ?? !1, backupPath: config.iterm2BackupPath || null };
+  return {
+    inProgress: config.iterm2SetupInProgress ?? false,
+    backupPath: config.iterm2BackupPath || null,
+  };
 }
 //@ chunk-fhdzwff4.js:14402-14486 fingerprint = getITerm2PlistPath (1)
 function getITerm2PlistPath() {
   return join(homedir(), "Library", "Preferences", "com.googlecode.iterm2.plist");
 }
+//@ chunk-fhdzwff4.js:14486-14946 fingerprint = checkAndRestoreITerm2Backup (0.732)
 /**
  * 若上次修改 iTerm2 配置中断，则从备份恢复 com.googlecode.iterm2.plist。
  */
-//@ chunk-fhdzwff4.js:14486-14946 fingerprint = checkAndRestoreITerm2Backup (0.732)
 async function checkAndRestoreITerm2Backup(o) {
-  let { inProgress: inProgress, backupPath: backupPath } = getIterm2RecoveryInfo();
-  if (!inProgress) return { status: "no_backup" };
-  if (
-    (logEvent("tengu_dead_probe_iterm2_crash_restore", {
-      has_backup_path: fromEnum(backupPath ? "true" : "false"),
-    }),
-    !backupPath)
-  )
-    return (await markITerm2SetupComplete(o), { status: "no_backup" });
+  let { inProgress, backupPath } = getIterm2RecoveryInfo();
+  if (!inProgress)
+    return {
+      status: "no_backup",
+    };
+  logEvent("tengu_dead_probe_iterm2_crash_restore", {
+    has_backup_path: fromEnum(backupPath ? "true" : "false"),
+  });
+  if (!backupPath) {
+    await markITerm2SetupComplete(o);
+    return {
+      status: "no_backup",
+    };
+  }
   try {
     await stat(backupPath);
   } catch {
-    return (await markITerm2SetupComplete(o), { status: "no_backup" });
+    await markITerm2SetupComplete(o);
+    return {
+      status: "no_backup",
+    };
   }
   try {
-    return (
-      await copyFile(backupPath, getITerm2PlistPath()),
-      await markITerm2SetupComplete(o),
-      { status: "restored" }
-    );
+    await copyFile(backupPath, getITerm2PlistPath());
+    await markITerm2SetupComplete(o);
+    return {
+      status: "restored",
+    };
   } catch (restoreError) {
-    return (
-      logForDebugging(`Failed to restore iTerm2 settings with: ${restoreError}`, { level: "error" }),
-      await markITerm2SetupComplete(o),
-      { status: "failed", backupPath: backupPath }
-    );
+    logForDebugging(`Failed to restore iTerm2 settings with: ${restoreError}`, {
+      level: "error",
+    });
+    await markITerm2SetupComplete(o);
+    return {
+      status: "failed",
+      backupPath,
+    };
   }
 }
-
 export { checkAndRestoreITerm2Backup };

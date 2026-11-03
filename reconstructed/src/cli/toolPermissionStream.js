@@ -8,9 +8,9 @@
  * pieces: chunk-63641kq7.js (4)
  * attribution: placement 4
  */
-import { join, join as join_2, dirname, dirname as dirname_2 } from "path";
+import { join, dirname } from "path";
 import { readFile } from "fs/promises";
-import { W } from "../components/LogSelector.js";
+import { LogSelectorOptionsSchema } from "../components/LogSelector.js";
 import { sanitizeSessionTitle } from "../utils/stringUtils.js";
 import { isStorageV5Enabled } from "../utils/hoverRest.js";
 import { pathToSessionSideKey } from "../utils/storage/storageKeys.js";
@@ -18,51 +18,59 @@ import { isDiskless } from "../bootstrap/state.js";
 
 //@ chunk-63641kq7.js:5307-5362 placement
 function getCustomTitlePath(e, n) {
-  return join_2(dirname_2(e), n, "custom-title.json");
+  return join(dirname(e), n, "custom-title.json");
 }
 //@ chunk-63641kq7.js:5362-5556 placement
-async function readCustomTitle(e, n, r) {
-  let t = await readSideFileText(getCustomTitlePath(e, n), r);
-  if (t === void 0) return;
+async function readCustomTitle(fullPath, sessionId, r) {
+  let sideFileText = await readSideFileText(getCustomTitlePath(fullPath, sessionId), r);
+  if (sideFileText === undefined) return;
   let i;
   try {
-    i = JSON.parse(t);
+    i = JSON.parse(sideFileText);
   } catch {
     return;
   }
-  let safeParse = W().safeParse(i);
-  if (!safeParse.success) return;
-  return sanitizeSessionTitle(safeParse.data.customTitle) || void 0;
+  let s = LogSelectorOptionsSchema().safeParse(i);
+  if (!s.success) return;
+  return sanitizeSessionTitle(s.data.customTitle) || undefined;
 }
 //@ chunk-63641kq7.js:5556-5796 placement
-async function readSideFileText(e, n) {
-  if (isStorageV5Enabled() && n !== void 0)
+async function readSideFileText(customTitlePath, n) {
+  if (isStorageV5Enabled() && n !== undefined)
     try {
-      let r = pathToSessionSideKey(e);
-      if (r !== void 0) {
+      let r = pathToSessionSideKey(customTitlePath);
+      if (r !== undefined) {
         let text = await n.readText([r]);
         if (!text.ok) return;
         let i = text.value.items[0];
-        return i.found ? i.value : void 0;
+        return i.found ? i.value : undefined;
       }
     } catch {
       return;
     }
   if (isDiskless()) return;
   try {
-    return await readFile(e, "utf8");
+    return await readFile(customTitlePath, "utf8");
   } catch {
     return;
   }
 }
 //@ chunk-63641kq7.js:5796-5985 placement
-var TOOL_PERMISSION_REQUEST_FAILED = "Tool permission request failed",
-  oKo = "Tool permission stream closed before response received",
-  WVr = "Stream closed",
-  Ce = [
-    `${TOOL_PERMISSION_REQUEST_FAILED}: AbortError: ${oKo}`,
-    `${TOOL_PERMISSION_REQUEST_FAILED}: AbortError: ${WVr}`,
-    TOOL_PERMISSION_REQUEST_FAILED,
-  ];
-
-export { TOOL_PERMISSION_REQUEST_FAILED, readCustomTitle, oKo, WVr, getCustomTitlePath };
+/**
+ * 权限流的失败文案："Tool permission request failed: AbortError: …" 的几种变体，用于识别流提前关闭。
+ */
+var TOOL_PERMISSION_REQUEST_FAILED = "Tool permission request failed";
+var TOOL_PERMISSION_STREAM_CLOSED_TEXT = "Tool permission stream closed before response received";
+var STREAM_CLOSED_TEXT = "Stream closed";
+var STREAM_CLOSED_FAILURE_MESSAGES = [
+  `${TOOL_PERMISSION_REQUEST_FAILED}: AbortError: ${TOOL_PERMISSION_STREAM_CLOSED_TEXT}`,
+  `${TOOL_PERMISSION_REQUEST_FAILED}: AbortError: ${STREAM_CLOSED_TEXT}`,
+  TOOL_PERMISSION_REQUEST_FAILED,
+];
+export {
+  TOOL_PERMISSION_REQUEST_FAILED,
+  readCustomTitle,
+  TOOL_PERMISSION_STREAM_CLOSED_TEXT,
+  STREAM_CLOSED_TEXT,
+  getCustomTitlePath,
+};

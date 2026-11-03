@@ -13,119 +13,160 @@ import { HostScoped } from "../../utils/hostScoped.js";
 import { getRootSession } from "../../bootstrap/state.js";
 
 //@ chunk-6qtszw6g.js:300-330 placement
-var qyt = createLazySignal(() => a().rowStaged);
+/**
+ * 按宿主懒创建的 rowStaged 信号。
+ */
+var rowStagedSignal = createLazySignal(() => remoteIoFileStoreStateHandle().rowStaged);
 //@ chunk-6qtszw6g.js:330-377 placement
-function m() {
-  return a().attestationEnforcement;
+function attestationEnforcementState() {
+  return remoteIoFileStoreStateHandle().attestationEnforcement;
 }
 //@ chunk-6qtszw6g.js:377-420 placement
-function CWs() {
-  return m() === "not_enforced";
+/**
+ * 判断当前 attestation 强制级别是否为 not_enforced。
+ */
+function isAttestationNotEnforced() {
+  return attestationEnforcementState() === "not_enforced";
 }
 //@ chunk-6qtszw6g.js:420-453 placement
-var v = /^[A-Za-z_$][\w$.]{0,63}$/;
+var ERROR_NAME_PATTERN = /^[A-Za-z_$][\w$.]{0,63}$/;
+//@ chunk-6qtszw6g.js:453-587 placement
 /**
  * 取错误的 name（不是 Error 时取 typeof），只接受符合白名单正则的名字，否则或出错时返回 "unnamed"。
  */
-//@ chunk-6qtszw6g.js:453-587 placement
-function safeErrorName(e) {
+function safeErrorName(error) {
   try {
-    let t = e instanceof Error ? e.name : typeof e;
-    return typeof t === "string" && v.test(t) ? t : "unnamed";
+    let t = error instanceof Error ? error.name : typeof error;
+    return typeof t === "string" && ERROR_NAME_PATTERN.test(t) ? t : "unnamed";
   } catch {
     return "unnamed";
   }
 }
 //@ chunk-6qtszw6g.js:587-717 placement
-function nextVerdictDelivery(e, t) {
-  if (e === void 0) return "deliver";
-  if (t === e) return "repeat";
-  return e === "served" && t === "refused" ? "deliver" : "out_of_order";
+function nextVerdictDelivery(verdict, t) {
+  if (verdict === undefined) return "deliver";
+  if (t === verdict) return "repeat";
+  return verdict === "served" && t === "refused" ? "deliver" : "out_of_order";
 }
 //@ chunk-6qtszw6g.js:717-808 placement
-function g(e) {
+function isThenable(e) {
   return typeof e === "object" && e !== null && "then" in e && typeof e.then === "function";
 }
 //@ chunk-6qtszw6g.js:808-897 placement
-function y(e, t) {
-  if (!g(e)) return;
-  Promise.resolve(e).catch((s) => {
+function ignoreRejectedPromise(e, t) {
+  if (!isThenable(e)) return;
+  Promise.resolve(e).catch((error) => {
     try {
-      t?.(safeErrorName(s));
+      t?.(safeErrorName(error));
     } catch {}
   });
 }
 //@ chunk-6qtszw6g.js:897-1938 placement
 function deliverFileStoreVerdict() {
-  let e,
-    t = [],
-    s = !1,
-    c = [],
-    f = (r) => () => {
-      t = t.filter((n) => n !== r);
-    },
-    h = (r, n, o) => {
-      try {
-        return (y(r.listener(n, f(r)), o), null);
-      } catch (error) {
-        return safeErrorName(error);
-      }
-    },
-    l = ({ verdict: verdict, onRejected: onRejected }) => {
-      e = verdict;
-      let o = t,
-        i = 0,
-        d = [];
-      for (let u of o) {
-        if (!t.includes(u)) continue;
-        i++;
-        let S = h(u, verdict, onRejected);
-        if (S !== null) d.push(S);
-      }
-      if (verdict !== "served") t = [];
-      return { listeners: i, threw: d };
-    },
-    p = () => {
-      let r = [];
-      while (c.length > 0) r.push(...l(c.shift()).threw);
-      return r;
+  let e;
+  let t = [];
+  let s = false;
+  let c = [];
+  let f = (r) => () => {
+    t = t.filter((n) => n !== r);
+  };
+  let h = (r, verdict, onRejected) => {
+    try {
+      ignoreRejectedPromise(r.listener(verdict, f(r)), onRejected);
+      return null;
+    } catch (error) {
+      return safeErrorName(error);
+    }
+  };
+  let l = ({ verdict, onRejected }) => {
+    e = verdict;
+    let o = t;
+    let i = 0;
+    let d = [];
+    for (let u of o) {
+      if (!t.includes(u)) continue;
+      i++;
+      let S = h(u, verdict, onRejected);
+      if (S !== null) d.push(S);
+    }
+    if (verdict !== "served") t = [];
+    return {
+      listeners: i,
+      threw: d,
     };
+  };
+  let p = () => {
+    let r = [];
+    while (c.length > 0) r.push(...l(c.shift()).threw);
+    return r;
+  };
   return {
     current: () => e,
     subscribe: (r) => {
-      let n = { listener: r },
-        o = f(n);
-      if (e === void 0) return ((t = [...t, n]), o);
+      let n = {
+        listener: r,
+      };
+      let o = f(n);
+      if (e === undefined) {
+        t = [...t, n];
+        return o;
+      }
       let i = e;
       if (i === "served") t = [...t, n];
       let d = s;
-      s = !0;
+      s = true;
       try {
         let u = r(i, o);
-        if (g(u)) Promise.resolve(u).catch(() => {});
+        if (isThenable(u)) Promise.resolve(u).catch(() => {});
       } catch (error) {
-        throw (o(), error);
+        o();
+        throw error;
       } finally {
-        if (!d) (p(), (s = !1));
+        if (!d) {
+          p();
+          s = false;
+        }
       }
       return o;
     },
-    publish: (r, n) => {
-      let o = c.at(-1)?.verdict ?? e,
-        i = nextVerdictDelivery(o, r);
-      if (i === "repeat") return { kind: "repeat" };
-      if (i === "out_of_order") return { kind: "out_of_order", basis: o };
-      if ((c.push({ verdict: r, onRejected: n }), s)) return { kind: "queued" };
-      s = !0;
+    publish: (r, onRejected) => {
+      let verdict = c.at(-1)?.verdict ?? e;
+      let i = nextVerdictDelivery(verdict, r);
+      if (i === "repeat")
+        return {
+          kind: "repeat",
+        };
+      if (i === "out_of_order")
+        return {
+          kind: "out_of_order",
+          basis: verdict,
+        };
+      c.push({
+        verdict: r,
+        onRejected,
+      });
+      if (s)
+        return {
+          kind: "queued",
+        };
+      s = true;
       try {
         let d = l(c.shift());
-        return { kind: "delivered", listeners: d.listeners, threw: [...d.threw, ...p()] };
+        return {
+          kind: "delivered",
+          listeners: d.listeners,
+          threw: [...d.threw, ...p()],
+        };
       } finally {
-        ((c.length = 0), (s = !1));
+        c.length = 0;
+        s = false;
       }
     },
     reset: () => {
-      ((e = void 0), (t = []), (s = !1), (c.length = 0));
+      e = undefined;
+      t = [];
+      s = false;
+      c.length = 0;
     },
   };
 }
@@ -137,14 +178,16 @@ var remoteIOFileStoreState = new HostScoped(() => ({
   verdict: deliverFileStoreVerdict(),
 }));
 //@ chunk-6qtszw6g.js:2042-2077 placement
-function a() {
+function remoteIoFileStoreStateHandle() {
   return remoteIOFileStoreState.of(getRootSession().host);
 }
 //@ chunk-6qtszw6g.js:2077-2212 placement
-var freeze = Object.freeze({
-    current: () => a().verdict.current(),
-    subscribe: (e) => a().verdict.subscribe(e),
-  }),
-  xWs = (e, t) => a().verdict.publish(e, t);
-
-export { safeErrorName, qyt, freeze, CWs, xWs };
+/**
+ * 发布文件存储裁决（verdict）到宿主状态，供订阅方读取。
+ */
+var RWs = Object.freeze({
+  current: () => remoteIoFileStoreStateHandle().verdict.current(),
+  subscribe: (e) => remoteIoFileStoreStateHandle().verdict.subscribe(e),
+});
+var publishFileStoreVerdict = (e, t) => remoteIoFileStoreStateHandle().verdict.publish(e, t);
+export { safeErrorName, rowStagedSignal, RWs, isAttestationNotEnforced, publishFileStoreVerdict };

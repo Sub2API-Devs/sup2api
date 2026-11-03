@@ -8,26 +8,27 @@
  * pieces: chunk-e6aww6q8.js (2)
  * attribution: placement 2
  */
-import { H7e } from "../queryProfiler.js";
+import { queryProfileStorage } from "../queryProfiler.js";
 
 //@ chunk-e6aww6q8.js:2481777-2481814 placement = getAgentContext (1)
 function getAttachmentTimingStore() {
-  return H7e.getStore();
+  return queryProfileStorage.getStore();
 }
+//@ chunk-e6aww6q8.js:2481814-2481952 placement
 /**
  * 在附件计时上下文中计时一个异步附件生成函数。
  */
-//@ chunk-e6aww6q8.js:2481814-2481952 placement
 function timeAttachment(e, n) {
-  let store = H7e.getStore();
-  if (store === void 0) return n();
-  let begin = store.begin(e);
+  let r = queryProfileStorage.getStore();
+  if (r === undefined) return n();
+  let s = r.begin(e);
   try {
     let h = n();
-    return (h.then(begin, begin), h);
+    h.then(s, s);
+    return h;
   } catch (error) {
-    throw (begin(), error);
+    s();
+    throw error;
   }
 }
-
 export { timeAttachment, getAttachmentTimingStore };

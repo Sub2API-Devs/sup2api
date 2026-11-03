@@ -6,29 +6,31 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../runtime/bun-runtime.js";
-import { nr, or } from "./Reflect.getPrototypeOf.js";
-import { Go } from "../dunder-proto/get.js";
+import {
+  require_Reflect_getPrototypeOf,
+  require_Reflect_getPrototypeOf_2,
+} from "./Reflect.getPrototypeOf.js";
+import { require_get } from "../dunder-proto/get.js";
 
 //@ chunk-h6b7mazd.js:11796-12047 cjs-fingerprint
-var Qo = x(function (yp, Yo) {
-  var Jo = nr(),
-    Ko = or(),
-    Xo = Go();
-  Yo.exports = Jo
-    ? function (t) {
-        return Jo(t);
+var require_get_proto = x(function (cjsExports, cjsModule) {
+  var reflectGetProto = require_Reflect_getPrototypeOf();
+  var originalGetProto = require_Reflect_getPrototypeOf_2();
+  var getDunderProto = require_get();
+  cjsModule.exports = reflectGetProto
+    ? function (O) {
+        return reflectGetProto(O);
       }
-    : Ko
-      ? function (t) {
-          if (!t || (typeof t !== "object" && typeof t !== "function"))
+    : originalGetProto
+      ? function (O) {
+          if (!O || (typeof O !== "object" && typeof O !== "function"))
             throw TypeError("getProto: not an object");
-          return Ko(t);
+          return originalGetProto(O);
         }
-      : Xo
-        ? function (t) {
-            return Xo(t);
+      : getDunderProto
+        ? function (O) {
+            return getDunderProto(O);
           }
         : null;
 });
-
-export { Qo };
+export { require_get_proto };

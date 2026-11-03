@@ -6,33 +6,37 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../runtime/bun-runtime.js";
-import { uh } from "../codegen/index.js";
-import { ew } from "../util.js";
+import { require_codegen_2 } from "../codegen/index.js";
+import { require_util_2 } from "../util.js";
 
 //@ chunk-s82q9s4x.js:30071-30715 cjs-fingerprint
-var Hs = x(function (Fs) {
-  Object.defineProperty(Fs, "__esModule", { value: !0 });
-  Fs.assignDefaults = void 0;
-  var B = uh(),
-    Ks = ew();
-  function nu(e, t) {
-    let { properties: properties, items: items } = e.schema;
-    if (t === "object" && properties) for (let key in properties) Us(e, key, properties[key].default);
-    else if (t === "array" && Array.isArray(items)) items.forEach((n, o) => Us(e, o, n.default));
+var require_defaults = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.assignDefaults = undefined;
+  var codegen_1 = require_codegen_2();
+  var util_1 = require_util_2();
+  function assignDefaults(it, ty) {
+    let { properties, items } = it.schema;
+    if (ty === "object" && properties)
+      for (let key in properties) assignDefault(it, key, properties[key].default);
+    else if (ty === "array" && Array.isArray(items))
+      items.forEach((sch, i) => assignDefault(it, i, sch.default));
   }
-  Fs.assignDefaults = nu;
-  function Us(e, t, r) {
-    let { gen: gen, compositeRule: compositeRule, data: o, opts: opts } = e;
-    if (r === void 0) return;
-    let a = B._`${o}${B.getProperty(t)}`;
+  cjsExports.assignDefaults = assignDefaults;
+  function assignDefault(it, prop, defaultValue) {
+    let { gen, compositeRule, data, opts } = it;
+    if (defaultValue === undefined) return;
+    let childData = codegen_1._`${data}${codegen_1.getProperty(prop)}`;
     if (compositeRule) {
-      Ks.checkStrictMode(e, `default is ignored for: ${a}`);
+      util_1.checkStrictMode(it, `default is ignored for: ${childData}`);
       return;
     }
-    let c = B._`${a} === undefined`;
-    if (opts.useDefaults === "empty") c = B._`${c} || ${a} === null || ${a} === ""`;
-    gen.if(c, B._`${a} = ${B.stringify(r)}`);
+    let condition = codegen_1._`${childData} === undefined`;
+    if (opts.useDefaults === "empty")
+      condition = codegen_1._`${condition} || ${childData} === null || ${childData} === ""`;
+    gen.if(condition, codegen_1._`${childData} = ${codegen_1.stringify(defaultValue)}`);
   }
 });
-
-export { Hs };
+export { require_defaults };

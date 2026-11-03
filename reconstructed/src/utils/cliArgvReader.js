@@ -8,22 +8,29 @@
  * pieces: chunk-cmr2yp8m.js (3)
  * attribution: placement 3
  */
-import { ge } from "./identity.js";
+import { identity } from "./identity.js";
 
 //@ chunk-cmr2yp8m.js:227-272 placement
-var r = ge({ read: void 0 }, (e) => {
-  e.read = void 0;
-});
+/**
+ * 可注入的原始 argv 读取器状态（启动时设置）。
+ */
+var cliArgvReaderState = identity(
+  {
+    read: undefined,
+  },
+  (e) => {
+    e.read = undefined;
+  },
+);
 //@ chunk-cmr2yp8m.js:272-297 placement
-function installCliArgvReader(e) {
-  r.read = e;
+function installCliArgvReader(read) {
+  cliArgvReaderState.read = read;
 }
+//@ chunk-cmr2yp8m.js:297-326 placement
 /**
  * 注入式命令行参数读取器（避免循环依赖）。
  */
-//@ chunk-cmr2yp8m.js:297-326 placement
 function cliArgvReader() {
-  return r.read;
+  return cliArgvReaderState.read;
 }
-
 export { cliArgvReader };

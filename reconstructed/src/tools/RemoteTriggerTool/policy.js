@@ -8,9 +8,10 @@
  * pieces: chunk-yyyk1r28.js (1)
  * attribution: placement 1
  */
-
 //@ chunk-yyyk1r28.js:191-275 placement
-var ALLOW_ROUTINES = "allow_routines",
-  $Ns = "Routines are disabled by your organization's policy.";
-
-export { ALLOW_ROUTINES, $Ns };
+/**
+ * 组织策略禁用例行任务时的说明文本。
+ */
+var ALLOW_ROUTINES = "allow_routines";
+var ROUTINES_POLICY_DISABLED_TEXT = "Routines are disabled by your organization's policy.";
+export { ALLOW_ROUTINES, ROUTINES_POLICY_DISABLED_TEXT };

@@ -15,54 +15,69 @@ import { jsonStringify } from "../../utils/slowOperations.js";
 import { errorMessage } from "../../utils/errors.js";
 
 //@ chunk-1ny7cxrt.js:1455483-1455537 placement
-var x1 = "blocked by your organization's policy",
-  j1 = 500;
+/**
+ * 策略拒绝原因的最大字符数（500），超出截断加省略号。
+ */
+var DEFAULT_POLICY_BLOCK_REASON = "blocked by your organization's policy";
+var MAX_POLICY_REASON_CHARS = 500;
+//@ chunk-1ny7cxrt.js:1455537-1455700 placement
 /**
  * 清理策略 webhook 返回的拒绝原因（去控制字符、限长），空时用默认文案。
  */
-//@ chunk-1ny7cxrt.js:1455537-1455700 placement
-function sanitizePolicyReason(e) {
-  let trimmed = e.replace(/[\p{Cc}\p{Cf}]+/gu, " ").trim();
-  if (trimmed.length === 0) return x1;
+function sanitizePolicyReason(reason) {
+  let trimmed = reason.replace(/[\p{Cc}\p{Cf}]+/gu, " ").trim();
+  if (trimmed.length === 0) return DEFAULT_POLICY_BLOCK_REASON;
   let list = Array.from(trimmed);
-  return list.length > j1 ? list.slice(0, j1).join("") + "\u2026" : trimmed;
+  return list.length > MAX_POLICY_REASON_CHARS
+    ? list.slice(0, MAX_POLICY_REASON_CHARS).join("") + "\u2026"
+    : trimmed;
 }
+//@ chunk-1ny7cxrt.js:1455700-1457320 placement
 /**
  * CRI 策略 webhook：把请求路径/查询/头/正文 POST 给 webhook，block=true 时返回 400 policy_blocked；webhook 出错时按 fail_closed 拒绝或放行，并记录 policy.blocked/skipped。
  */
-//@ chunk-1ny7cxrt.js:1455700-1457320 placement
-function createPolicyWebhook(e) {
-  let t = e.cri?.enabled ? e.cri.policy?.webhook : void 0;
-  if (!t) return null;
-  let { url: url, timeout_ms: timeout_ms } = t,
-    failClosed = t.fail_closed !== !1;
-  function blockedResponse(a, l, c, u, f, h, m, y) {
-    return (
-      gatewayJsonLog("policy.blocked", {
-        request_id: l,
-        sub: a,
-        cause: c,
-        path: f,
-        ...(h !== void 0 && { org: h }),
-        ...(m !== void 0 && { act: m }),
-        ...(y !== void 0 && { rule_id: y }),
+function createPolicyWebhook(gatewayConfig) {
+  let webhook = gatewayConfig.cri?.enabled ? gatewayConfig.cri.policy?.webhook : undefined;
+  if (!webhook) return null;
+  let { url, timeout_ms: timeoutMs } = webhook;
+  let failClosed = webhook.fail_closed !== false;
+  function blockedResponse(sub, l, cause, u, path, h, m, y) {
+    gatewayJsonLog("policy.blocked", {
+      request_id: l,
+      sub,
+      cause,
+      path,
+      ...(h !== undefined && {
+        org: h,
       }),
-      jsonErrorResponse(400, "policy_blocked", u, l, { "x-should-retry": "false" })
-    );
+      ...(m !== undefined && {
+        act: m,
+      }),
+      ...(y !== undefined && {
+        rule_id: y,
+      }),
+    });
+    return jsonErrorResponse(400, "policy_blocked", u, l, {
+      "x-should-retry": "false",
+    });
   }
   return {
-    async precheck(a, l, c, u, f, h) {
-      let m,
-        y = (b) => {
-          gatewayJsonLog("policy.skipped", {
-            request_id: c,
-            sub: a.sub,
-            cause: b,
-            path: u.path,
-            ...(f !== void 0 && { org: f }),
-            ...(h !== void 0 && { act: h }),
-          });
-        };
+    async precheck(a, body, c, u, f, h) {
+      let m;
+      let y = (cause) => {
+        gatewayJsonLog("policy.skipped", {
+          request_id: c,
+          sub: a.sub,
+          cause,
+          path: u.path,
+          ...(f !== undefined && {
+            org: f,
+          }),
+          ...(h !== undefined && {
+            act: h,
+          }),
+        });
+      };
       try {
         let b = await fetchWithTimeout(
           url,
@@ -73,49 +88,55 @@ function createPolicyWebhook(e) {
               "x-request-id": c,
               "x-principal-sub": a.sub.replace(/[^\x21-\x7e]/g, ""),
             },
-            body: jsonStringify({ path: u.path, query: u.query, headers: u.headers, body: l }),
+            body: jsonStringify({
+              path: u.path,
+              query: u.query,
+              headers: u.headers,
+              body,
+            }),
           },
-          timeout_ms,
+          timeoutMs,
           "policy webhook timed out",
         );
-        if (!b.ok)
-          throw (
-            b.body?.cancel().catch(() => {}),
-            gatewayLog("warn", `policy check failed: webhook returned ${b.status}`),
-            Error("policy webhook returned a non-OK status")
-          );
-        let body = await b.json();
-        if (typeof body !== "object" || body === null || Array.isArray(body))
+        if (!b.ok) {
+          b.body?.cancel().catch(() => {});
+          gatewayLog("warn", `policy check failed: webhook returned ${b.status}`);
+          throw Error("policy webhook returned a non-OK status");
+        }
+        let body_2 = await b.json();
+        if (typeof body_2 !== "object" || body_2 === null || Array.isArray(body_2))
           throw Error("policy webhook returned a non-object decision");
-        if (((m = body), typeof m.block !== "boolean")) {
+        m = body_2;
+        if (typeof m.block !== "boolean") {
           if (failClosed) throw Error("policy webhook decision has no boolean block field");
-          return (
-            gatewayLog(
-              "warn",
-              "policy check: webhook decision has no boolean block field \u2014 allowing (fail-open)",
-            ),
-            y("decision_shape"),
-            null
+          gatewayLog(
+            "warn",
+            "policy check: webhook decision has no boolean block field \u2014 allowing (fail-open)",
           );
+          y("decision_shape");
+          return null;
         }
       } catch (error) {
-        if ((gatewayLog("warn", `policy check failed: ${errorMessage(error)}`), failClosed))
+        gatewayLog("warn", `policy check failed: ${errorMessage(error)}`);
+        if (failClosed)
           return blockedResponse(a.sub, c, "engine_error", "policy check unavailable", u.path, f, h);
-        return (y("engine_error"), null);
+        y("engine_error");
+        return null;
       }
-      if (m.block !== !0) return null;
+      if (m.block !== true) return null;
       return blockedResponse(
         a.sub,
         c,
         "policy_hit",
-        typeof m.reason === "string" && m.reason.length > 0 ? sanitizePolicyReason(m.reason) : x1,
+        typeof m.reason === "string" && m.reason.length > 0
+          ? sanitizePolicyReason(m.reason)
+          : DEFAULT_POLICY_BLOCK_REASON,
         u.path,
         f,
         h,
-        typeof m.rule_id === "string" ? m.rule_id : void 0,
+        typeof m.rule_id === "string" ? m.rule_id : undefined,
       );
     },
   };
 }
-
 export { createPolicyWebhook };

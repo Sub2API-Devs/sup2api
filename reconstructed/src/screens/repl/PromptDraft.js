@@ -8,13 +8,16 @@
  * pieces: chunk-18hwfzwa.js (8)
  * attribution: placement 8
  */
-import { isDeepStrictEqual, isDeepStrictEqual as isDeepStrictEqual_2 } from "util";
-import { j, y, R, P } from "../../../vendor/react/cjs/react.production.js";
+import { isDeepStrictEqual } from "util";
+import { init_react_production, y, R, P } from "../../../vendor/react/cjs/react.production.js";
 import { getGraphemeSegmenter } from "../../utils/intl.js";
 import { isPlaceholderAt } from "../../utils/Cursor.js";
-import { e, r } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { logForDebugging } from "../../utils/debug.js";
-import { o, u, T, M, A } from "../../../vendor/zod/v4/classic/schemas.js";
+import { string, u, literal, M, array } from "../../../vendor/zod/v4/classic/schemas.js";
 import { Text, Box } from "../../ink/components/Text.js";
 import { fromEnum, lit as lit_2 } from "../../services/analytics/safeMetadata.js";
 import { env } from "../../utils/env.js";
@@ -31,104 +34,114 @@ import { DoctorLazy } from "../../cli/handlers/util.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import { w } from "../../../vendor/react/compiler-runtime.js";
-import { freeze as freeze_8 } from "../../plugins/functionHooks/prompt/decorationSpans.js";
-import { setCameBack, setPromptValue, Z2n, UPo, setLaunchWarning } from "../../state/promptInputStore.js";
+import { PP } from "../../plugins/functionHooks/prompt/decorationSpans.js";
+import {
+  setCameBack,
+  setPromptValue,
+  setPromptActiveFor,
+  setPromptActive,
+  setLaunchWarning,
+} from "../../state/promptInputStore.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import {
   prependModeCharacterToInput as prependModeCharacterToInput_3,
   getModeFromInput as getModeFromInput_2,
 } from "../../components/PromptInput/inputModes.js";
-import { Rei } from "../../history.js";
+import { keepClearedDraft } from "../../history.js";
 import {
   normalizeInputDecorations,
-  gYs,
+  mergeDecorationMaps,
   shiftDecorationsForEdit,
 } from "../../components/PromptInput/inputDecorations.js";
 import { getPlatform } from "../../utils/platform.js";
 import { diffTextEdit } from "../../plugins/functionHooks/sessionEvents.js";
 
 //@ chunk-18hwfzwa.js:521487-521491 placement
-j();
+init_react_production();
 //@ chunk-18hwfzwa.js:521534-521554 placement
 var weakSet = new WeakSet();
 //@ chunk-18hwfzwa.js:521554-521612 placement
-function MO() {
-  let freeze = Object.freeze({});
-  return (weakSet.add(freeze), freeze);
+function createFrozenEmpty() {
+  let h = Object.freeze({});
+  weakSet.add(h);
+  return h;
 }
+//@ chunk-18hwfzwa.js:521612-521843 placement
 /**
  * 新文本是否只比旧文本多插入一个字符或删除了一段（用于判断键入编辑）。
  */
-//@ chunk-18hwfzwa.js:521612-521843 placement
 function isSingleCharEdit(h, x) {
-  let D = 0,
-    min = Math.min(h.length, x.length);
+  let D = 0;
+  let min = Math.min(h.length, x.length);
   while (D < min && h[D] === x[D]) D++;
   if (x.length === h.length + 1) return x.slice(D + 1) === h.slice(D);
   if (x.length < h.length) {
     let ee = h.length - x.length;
     return h.slice(D + ee) === x.slice(D);
   }
-  return !1;
+  return false;
 }
+//@ chunk-18hwfzwa.js:521843-522121 placement
 /**
  * 把前缀、插入文本和后缀按 NFC 规范化拼接，并把光标落到完整字素边界。
  */
-//@ chunk-18hwfzwa.js:521843-522121 placement
 function composeNormalized(h, x, D) {
-  let normalized = x.normalize("NFC"),
-    normalized_2 = (h + x).normalize("NFC"),
-    normalized_3 = (normalized_2 + D).normalize("NFC"),
-    Re = normalized_2.length;
+  let normalized = x.normalize("NFC");
+  let normalized_2 = (h + x).normalize("NFC");
+  let normalized_3 = (normalized_2 + D).normalize("NFC");
+  let Re = normalized_2.length;
   if (Re !== h.length + normalized.length)
-    for (let { index: index, segment: segment } of getGraphemeSegmenter().segment(normalized_3)) {
+    for (let { index, segment } of getGraphemeSegmenter().segment(normalized_3)) {
       if (index >= Re) break;
       let We = index + segment.length;
-      if (We > Re && !QKt(normalized_3, Re, We)) Re = We;
+      if (We > Re && !rangeHasPlaceholder(normalized_3, Re, We)) Re = We;
     }
-  return { written: normalized_3, end: Re };
+  return {
+    written: normalized_3,
+    end: Re,
+  };
 }
 //@ chunk-18hwfzwa.js:522121-522191 placement
-function QKt(h, x, D) {
-  for (let L = x; L < D; L++) if (isPlaceholderAt(h, L)) return !0;
-  return !1;
+function rangeHasPlaceholder(h, x, D) {
+  for (let L = x; L < D; L++) if (isPlaceholderAt(h, L)) return true;
+  return false;
 }
+//@ chunk-18hwfzwa.js:522191-522640 placement
 /**
  * 输入草稿常量与状态选择器（value/cursor/mode/粘贴/区间/装饰/stash/多行）及快照键列表。
  */
-//@ chunk-18hwfzwa.js:522191-522640 placement
-var TYPEAHEAD_WINDOW_MS = 1500,
-  selectDraftValue = (h) => h.value,
-  selectCursorOffset = (h) => h.cursorOffset,
-  selectInputMode = (h) => h.mode,
-  selectPastedContents = (h) => h.pastedContents,
-  selectInterimRange = (h) => h.interimRange,
-  selectDecorations = (h) => h.decorations,
-  selectCameBack = (h) => h.cameBack,
-  selectHasStash = (h) => h.stashedPrompt !== void 0,
-  selectIsEmpty = (h) => h.value.length === 0,
-  selectIsMultiline = (h) =>
-    h.value.includes(`
-`),
-  DRAFT_SNAPSHOT_KEYS = [
-    "value",
-    "cursorOffset",
-    "mode",
-    "pastedContents",
-    "stashedPrompt",
-    "isInputOverlayActive",
-    "isInputRowReplaced",
-    "isVimEditing",
-    "inputOwnsEscape",
-    "interimRange",
-    "decorations",
-    "cameBack",
-  ],
-  sVe = new Map();
+var TYPEAHEAD_WINDOW_MS = 1500;
+var selectDraftValue = (h) => h.value;
+var selectCursorOffset = (h) => h.cursorOffset;
+var selectInputMode = (h) => h.mode;
+var selectPastedContents = (h) => h.pastedContents;
+var selectInterimRange = (h) => h.interimRange;
+var selectDecorations = (h) => h.decorations;
+var selectCameBack = (h) => h.cameBack;
+var selectHasStash = (h) => h.stashedPrompt !== undefined;
+var selectIsEmpty = (h) => h.value.length === 0;
+var selectIsMultiline = (h) =>
+  h.value.includes(`
+`);
+var DRAFT_SNAPSHOT_KEYS = [
+  "value",
+  "cursorOffset",
+  "mode",
+  "pastedContents",
+  "stashedPrompt",
+  "isInputOverlayActive",
+  "isInputRowReplaced",
+  "isVimEditing",
+  "inputOwnsEscape",
+  "interimRange",
+  "decorations",
+  "cameBack",
+];
+var EMPTY_LAYER_MAP = new Map();
+//@ chunk-18hwfzwa.js:522640-529449 placement
 /**
  * 输入框草稿模型类：持有 value/cursor/粘贴内容/stash，负责 prompt.edit/prompt.change 钩子转发、类型提前缓冲、shell 补全中止与外部编辑重写。
  */
-//@ chunk-18hwfzwa.js:522640-529449 placement
 class PromptDraft {
   #e;
   #t;
@@ -142,57 +155,57 @@ class PromptDraft {
   #l = createSignal();
   #d = createSignal();
   #m;
-  shellCompletionAbort = { current: null };
+  shellCompletionAbort = {
+    current: null,
+  };
   #p = 0;
   #u;
   #f = null;
-  #S = !1;
-  #h = !0;
+  #S = false;
+  #h = true;
   #y = null;
-  #b = !1;
+  #b = false;
   #g = null;
   #v = null;
-  #C = sVe;
+  #C = EMPTY_LAYER_MAP;
   #w = null;
-  #T = !1;
-  constructor({
-    valueStore: h,
-    scheduleTimeout: x,
-    isTypedAhead: D,
-    rewriteEdit: L,
-    onEdit: ee,
-    screensPrompts: ke,
-    watchText: Re,
-  }) {
-    ((this.#e = h),
-      (this.#t = x),
-      (this.#o = D ?? !1),
-      (this.#n = L ?? ((ze) => ze)),
-      (this.#s = ee ?? (() => {})),
-      (this.#r = ke ?? (() => !1)));
-    let { value: Be, stash: stash, cameBack: cameBack } = h.getState();
-    ((this.#h = Be === ""),
-      (this.#u = {
-        value: Be,
-        cursorOffset: Be.length,
-        mode: "prompt",
-        pastedContents: {},
-        stashedPrompt: stash ?? void 0,
-        isInputOverlayActive: !1,
-        isInputRowReplaced: !1,
-        isVimEditing: !1,
-        inputOwnsEscape: !1,
-        interimRange: null,
-        decorations: freeze_8,
-        cameBack: cameBack && Be !== "",
-      }),
-      (this.#c = Re),
-      (this.#m = h.subscribe(this.#M)));
+  #T = false;
+  constructor({ valueStore, scheduleTimeout, isTypedAhead, rewriteEdit, onEdit, screensPrompts, watchText }) {
+    this.#e = valueStore;
+    this.#t = scheduleTimeout;
+    this.#o = isTypedAhead ?? false;
+    this.#n = rewriteEdit ?? ((ze) => ze);
+    this.#s = onEdit ?? (() => {});
+    this.#r = screensPrompts ?? (() => false);
+    let { value: Be, stash, cameBack } = valueStore.getState();
+    this.#h = Be === "";
+    this.#u = {
+      value: Be,
+      cursorOffset: Be.length,
+      mode: "prompt",
+      pastedContents: {},
+      stashedPrompt: stash ?? undefined,
+      isInputOverlayActive: false,
+      isInputRowReplaced: false,
+      isVimEditing: false,
+      inputOwnsEscape: false,
+      interimRange: null,
+      decorations: PP,
+      cameBack: cameBack && Be !== "",
+    };
+    this.#c = watchText;
+    this.#m = valueStore.subscribe(this.#M);
   }
-  subscribe = (h) => (this.#x(), this.#l.subscribe(h));
+  subscribe = (h) => {
+    this.#x();
+    return this.#l.subscribe(h);
+  };
   #x() {
     if (this.#b) return;
-    this.#i ??= this.#c?.(() => ({ text: this.#u.value, cursor: this.#u.cursorOffset }));
+    this.#i ??= this.#c?.(() => ({
+      text: this.#u.value,
+      cursor: this.#u.cursorOffset,
+    }));
   }
   getSnapshot = () => this.#u;
   get value() {
@@ -217,44 +230,66 @@ class PromptDraft {
     return this.#h;
   }
   #k(h) {
-    let x = this.#u,
-      D = { ...x, ...h };
-    if (((D.cursorOffset = Math.max(0, Math.min(D.value.length, D.cursorOffset))), D.value !== x.value)) {
-      if (((this.#v = this.#g?.value === x.value ? this.#g : null), this.#g !== null)) {
+    let x = this.#u;
+    let D = {
+      ...x,
+      ...h,
+    };
+    D.cursorOffset = Math.max(0, Math.min(D.value.length, D.cursorOffset));
+    if (D.value !== x.value) {
+      this.#v = this.#g?.value === x.value ? this.#g : null;
+      if (this.#g !== null) {
         let L = new Map();
-        for (let ee of this.#g.layers.keys()) L.set(ee, freeze_8);
+        for (let key of this.#g.layers.keys()) L.set(key, PP);
         this.#C = L;
       }
       this.#g = null;
     }
-    if (((D.decorations = this.#g?.value === D.value ? this.#g.shown : freeze_8), D.value === ""))
-      D.cameBack = !1;
+    D.decorations = this.#g?.value === D.value ? this.#g.shown : PP;
+    if (D.value === "") D.cameBack = false;
     if (DRAFT_SNAPSHOT_KEYS.every((L) => Object.is(D[L], x[L]))) return;
-    if (((this.#u = D), D.cameBack !== x.cameBack)) setCameBack(this.#e, D.cameBack);
-    if ((this.#l.emit(), D.value !== x.value && this.#i !== void 0))
+    this.#u = D;
+    if (D.cameBack !== x.cameBack) setCameBack(this.#e, D.cameBack);
+    this.#l.emit();
+    if (D.value !== x.value && this.#i !== undefined)
       try {
-        this.#i.changed({ before: x.value, after: D.value, ...(this.#a && { origin: this.#a }) });
+        this.#i.changed({
+          before: x.value,
+          after: D.value,
+          ...(this.#a && {
+            origin: this.#a,
+          }),
+        });
       } catch (error) {
         logError(error);
       }
   }
   #M = () => {
-    let { value: h, stash: stash } = this.#e.getState(),
-      D = stash ?? void 0;
+    let { value: h, stash } = this.#e.getState();
+    let stashedPrompt = stash ?? undefined;
     if (h === this.#u.value) {
-      this.#k({ stashedPrompt: D });
+      this.#k({
+        stashedPrompt,
+      });
       return;
     }
-    let L = this.#f,
-      ee = L !== null && L.value === h;
-    if (!ee) ((this.#S = !0), (this.#h = h === ""));
-    this.#k({ value: h, cursorOffset: ee ? L.cursorOffset : h.length, stashedPrompt: D });
+    let L = this.#f;
+    let ee = L !== null && L.value === h;
+    if (!ee) {
+      this.#S = true;
+      this.#h = h === "";
+    }
+    this.#k({
+      value: h,
+      cursorOffset: ee ? L.cursorOffset : h.length,
+      stashedPrompt,
+    });
   };
   setValue = (h) => {
-    this.#R(h, void 0, "input");
+    this.#R(h, undefined, "input");
   };
   setValueTyped = (h) => {
-    this.#R(h, void 0, "input", !0);
+    this.#R(h, undefined, "input", true);
   };
   setValueWithCursor = (h, x) => {
     this.#R(h, x, "input");
@@ -265,51 +300,66 @@ class PromptDraft {
   setValueRaw = (h) => {
     setPromptValue(this.#e, h);
   };
-  setCursorOffset = (h) => {
-    this.#k({ cursorOffset: h });
+  setCursorOffset = (cursorOffset) => {
+    this.#k({
+      cursorOffset,
+    });
   };
   insertText = (h, x = "input") => {
-    let { value: D, cursorOffset: cursorOffset } = this.#u;
-    if (h === "") return (this.#R(D, cursorOffset, x), cursorOffset);
-    let normalized = D.normalize("NFC"),
-      ke = cursorOffset < D.length ? cursorOffset : normalized.length,
-      { written: written, end: end } = composeNormalized(normalized.slice(0, ke), h, normalized.slice(ke));
-    return (this.#R(written, end, x), ke);
+    let { value: D, cursorOffset } = this.#u;
+    if (h === "") {
+      this.#R(D, cursorOffset, x);
+      return cursorOffset;
+    }
+    let normalized = D.normalize("NFC");
+    let ke = cursorOffset < D.length ? cursorOffset : normalized.length;
+    let { written, end } = composeNormalized(normalized.slice(0, ke), h, normalized.slice(ke));
+    this.#R(written, end, x);
+    return ke;
   };
   clear = () => {
-    (this.#R("", 0, "outside"), this.#k({ pastedContents: {} }));
+    this.#R("", 0, "outside");
+    this.#k({
+      pastedContents: {},
+    });
   };
-  #R(h, x, D, L = !1) {
+  #R(h, x, D, L = false) {
     this.#x();
-    let ee = this.#u.value,
-      ke = this.#n(h, ee),
-      Re = x ?? this.#u.cursorOffset;
-    if (D === "input") this.#S = !1;
-    else if (ke !== ee) this.#S = !0;
+    let ee = this.#u.value;
+    let ke = this.#n(h, ee);
+    let cursorOffset = x ?? this.#u.cursorOffset;
+    if (D === "input") this.#S = false;
+    else if (ke !== ee) this.#S = true;
     if (this.#T) {
-      if (((this.#T = !1), ke !== "")) this.#w = null;
+      this.#T = false;
+      if (ke !== "") this.#w = null;
     }
     if (D === "outside" && ke === "") this.#_();
-    if (ke === "") this.#h = !0;
-    else if (this.#h && ke !== ee && !(L && isSingleCharEdit(ee, ke))) this.#h = !1;
-    if (
-      ((this.#f = { value: ke, cursorOffset: Re }),
-      setPromptValue(this.#e, ke),
-      (this.#f = null),
-      this.#u.value === ke && D === "input")
-    )
-      this.#k({ cursorOffset: Re });
-    (this.#s(ke, ee), this.#P(ke));
+    if (ke === "") this.#h = true;
+    else if (this.#h && ke !== ee && !(L && isSingleCharEdit(ee, ke))) this.#h = false;
+    this.#f = {
+      value: ke,
+      cursorOffset,
+    };
+    setPromptValue(this.#e, ke);
+    this.#f = null;
+    if (this.#u.value === ke && D === "input")
+      this.#k({
+        cursorOffset,
+      });
+    this.#s(ke, ee);
+    this.#P(ke);
   }
   #P(h) {
     let x = h.trim().length > 0;
-    (Z2n(this.#e, x),
-      this.#y?.(),
-      (this.#y = x
-        ? this.#t(() => {
-            ((this.#y = null), Z2n(this.#e, !1));
-          }, TYPEAHEAD_WINDOW_MS)
-        : null));
+    setPromptActiveFor(this.#e, x);
+    this.#y?.();
+    this.#y = x
+      ? this.#t(() => {
+          this.#y = null;
+          setPromptActiveFor(this.#e, false);
+        }, TYPEAHEAD_WINDOW_MS)
+      : null;
   }
   start() {
     if (this.#o && !this.#b) this.#P(this.#u.value);
@@ -326,7 +376,7 @@ class PromptDraft {
   };
   markCameBack = () => {
     if (this.#u.value === "" || this.#u.cameBack) return;
-    let h = !0;
+    let h = true;
     try {
       h = this.#r();
     } catch (error) {
@@ -334,187 +384,235 @@ class PromptDraft {
         level: "error",
       });
     }
-    if (h) this.#k({ cameBack: !0 });
+    if (h)
+      this.#k({
+        cameBack: true,
+      });
   };
   markMaybeSecret = () => {
-    if (this.#u.value !== "") this.#k({ cameBack: !0 });
+    if (this.#u.value !== "")
+      this.#k({
+        cameBack: true,
+      });
   };
-  setMode = (h) => {
-    this.#k({ mode: h });
+  setMode = (mode) => {
+    this.#k({
+      mode,
+    });
   };
   setPastedContents = (h) => {
-    this.#k({ pastedContents: typeof h === "function" ? h(this.#u.pastedContents) : h });
+    this.#k({
+      pastedContents: typeof h === "function" ? h(this.#u.pastedContents) : h,
+    });
   };
   stash = () => {
-    let {
-        value: h,
-        cursorOffset: cursorOffset,
-        mode: mode,
-        pastedContents: pastedContents,
-        cameBack: cameBack,
-      } = this.#u,
-      launchWarning = this.#e.getState().launchWarning;
-    (UPo(this.#e, {
+    let { value: h, cursorOffset, mode, pastedContents, cameBack } = this.#u;
+    let launchWarning = this.#e.getState().launchWarning;
+    setPromptActive(this.#e, {
       text: h,
-      cursorOffset: cursorOffset,
-      mode: mode,
-      pastedContents: pastedContents,
-      launchWarning: launchWarning ?? void 0,
-      cameBack: cameBack,
-    }),
-      this.#R("", 0, "input"),
-      this.#k({ pastedContents: {}, mode: "prompt" }));
+      cursorOffset,
+      mode,
+      pastedContents,
+      launchWarning: launchWarning ?? undefined,
+      cameBack,
+    });
+    this.#R("", 0, "input");
+    this.#k({
+      pastedContents: {},
+      mode: "prompt",
+    });
   };
   popStash = (h) => {
     let stash = this.#e.getState().stash;
-    if (stash === null) return !1;
-    if (
-      (UPo(this.#e, null),
-      this.#R(stash.text, stash.cursorOffset, h),
-      this.#k({
-        pastedContents: stash.pastedContents,
-        mode: stash.mode,
-        cameBack: stash.cameBack === !0 && stash.text !== "",
-      }),
-      stash.launchWarning)
-    )
-      setLaunchWarning(this.#e, stash.launchWarning);
-    return !0;
+    if (stash === null) return false;
+    setPromptActive(this.#e, null);
+    this.#R(stash.text, stash.cursorOffset, h);
+    this.#k({
+      pastedContents: stash.pastedContents,
+      mode: stash.mode,
+      cameBack: stash.cameBack === true && stash.text !== "",
+    });
+    if (stash.launchWarning) setLaunchWarning(this.#e, stash.launchWarning);
+    return true;
   };
-  holdCleared = ({ intoHistory: intoHistory }) => {
-    let { value: x, mode: mode, pastedContents: pastedContents, cameBack: cameBack } = this.#u;
+  holdCleared = ({ intoHistory }) => {
+    let { value: x, mode, pastedContents, cameBack } = this.#u;
     if (x.trim() !== "") {
       let launchWarning = this.#e.getState().launchWarning;
-      (this.#_(),
-        (this.#w = {
-          text: x,
-          mode: mode,
-          pastedContents: pastedContents,
-          launchWarning: launchWarning ?? void 0,
-          cameBack: cameBack,
-          clearedAt: Date.now(),
-          intoHistory: intoHistory,
-        }),
-        (this.#T = !0));
+      this.#_();
+      this.#w = {
+        text: x,
+        mode,
+        pastedContents,
+        launchWarning: launchWarning ?? undefined,
+        cameBack,
+        clearedAt: Date.now(),
+        intoHistory,
+      };
+      this.#T = true;
     }
   };
   restoreCleared = () => {
     let h = this.#w;
-    if (h === null || this.#u.value !== "") return !1;
-    if (
-      ((this.#w = null),
-      this.#R(h.text, h.text.length, "input"),
-      this.#k({ pastedContents: h.pastedContents, mode: h.mode, cameBack: h.cameBack }),
-      h.launchWarning)
-    )
-      setLaunchWarning(this.#e, h.launchWarning);
-    return !0;
+    if (h === null || this.#u.value !== "") return false;
+    this.#w = null;
+    this.#R(h.text, h.text.length, "input");
+    this.#k({
+      pastedContents: h.pastedContents,
+      mode: h.mode,
+      cameBack: h.cameBack,
+    });
+    if (h.launchWarning) setLaunchWarning(this.#e, h.launchWarning);
+    return true;
   };
   #_() {
     let h = this.#w;
-    if (((this.#w = null), h === null || this.#T || !h.intoHistory || h.launchWarning || h.cameBack)) return;
+    this.#w = null;
+    if (h === null || this.#T || !h.intoHistory || h.launchWarning || h.cameBack) return;
     let x = prependModeCharacterToInput_3(h.text, h.mode);
-    if (getModeFromInput_2(x) === h.mode) Rei({ display: x, pastedContents: h.pastedContents }, h.clearedAt);
+    if (getModeFromInput_2(x) === h.mode)
+      keepClearedDraft(
+        {
+          display: x,
+          pastedContents: h.pastedContents,
+        },
+        h.clearedAt,
+      );
   }
-  setInputOverlayActive = (h) => {
-    this.#k({ isInputOverlayActive: h });
+  setInputOverlayActive = (isInputOverlayActive) => {
+    this.#k({
+      isInputOverlayActive,
+    });
   };
-  setInputRowReplaced = (h) => {
-    this.#k({ isInputRowReplaced: h });
+  setInputRowReplaced = (isInputRowReplaced) => {
+    this.#k({
+      isInputRowReplaced,
+    });
   };
-  setVimEditing = (h) => {
-    this.#k({ isVimEditing: h });
+  setVimEditing = (isVimEditing) => {
+    this.#k({
+      isVimEditing,
+    });
   };
-  setInputOwnsEscape = (h) => {
-    this.#k({ inputOwnsEscape: h });
+  setInputOwnsEscape = (inputOwnsEscape) => {
+    this.#k({
+      inputOwnsEscape,
+    });
   };
   setInterimRange = (h) => {
     let interimRange = this.#u.interimRange;
     if (h !== null && interimRange !== null && h.start === interimRange.start && h.end === interimRange.end)
       return;
-    this.#k({ interimRange: h });
+    this.#k({
+      interimRange: h,
+    });
   };
   paint = (h) => {
     this.#A(h, this.#g?.layers ?? this.#C);
   };
   paintLayer = (h, x, D) => {
-    let { value: L } = this.#u,
-      ee = x.length === 0;
-    if (!ee && L !== D) return { isPainted: !1 };
+    let { value: L } = this.#u;
+    let ee = x.length === 0;
+    if (!ee && L !== D)
+      return {
+        isPainted: false,
+      };
     let ke = this.#g?.layers ?? this.#C;
-    if (!ee || ke.has(h))
-      this.#A(this.#g?.runs ?? freeze_8, new Map(ke).set(h, normalizeInputDecorations(x, L)));
-    return { isPainted: !0 };
+    if (!ee || ke.has(h)) this.#A(this.#g?.runs ?? PP, new Map(ke).set(h, normalizeInputDecorations(x, L)));
+    return {
+      isPainted: true,
+    };
   };
   dropLayer = (h) => {
-    if (this.#v?.layers.has(h) === !0) {
+    if (this.#v?.layers.has(h) === true) {
       let L = new Map(this.#v.layers);
-      (L.delete(h), (this.#v = { ...this.#v, layers: L }));
+      L.delete(h);
+      this.#v = {
+        ...this.#v,
+        layers: L,
+      };
     }
     let x = new Map(this.#C);
-    (x.delete(h), (this.#C = x));
-    let D = new Map(this.#g?.layers ?? sVe);
-    if (D.delete(h)) this.#A(normalizeInputDecorations(this.#g?.runs ?? freeze_8, this.#u.value), D);
+    x.delete(h);
+    this.#C = x;
+    let D = new Map(this.#g?.layers ?? EMPTY_LAYER_MAP);
+    if (D.delete(h)) this.#A(normalizeInputDecorations(this.#g?.runs ?? PP, this.#u.value), D);
   };
   #A(h, x) {
-    if (((this.#v = null), h.length === 0 && x.size === 0 && this.#g === null)) return;
-    let { value: D, decorations: decorations } = this.#u,
-      ee = gYs(h, x, D);
-    ((this.#g =
+    this.#v = null;
+    if (h.length === 0 && x.size === 0 && this.#g === null) return;
+    let { value: D, decorations } = this.#u;
+    let ee = mergeDecorationMaps(h, x, D);
+    this.#g =
       h.length === 0 && x.size === 0
         ? null
-        : { value: D, runs: h, layers: x, shown: isDeepStrictEqual_2(ee, decorations) ? decorations : ee }),
-      this.#k({}));
+        : {
+            value: D,
+            runs: h,
+            layers: x,
+            shown: isDeepStrictEqual(ee, decorations) ? decorations : ee,
+          };
+    this.#k({});
   }
   carryPaint = (h, x) => {
-    this.#I(h, x, !0);
+    this.#I(h, x, true);
   };
   carryLayers = (h, x) => {
-    this.#I(h, x, !1);
+    this.#I(h, x, false);
   };
   #I(h, x, D) {
     let L = this.#v;
-    if (((this.#v = null), L === null || L.value !== h.text || this.#u.value !== x.text)) return;
-    let ee = diffTextEdit(h, x),
-      ke = D ? shiftDecorationsForEdit(L.runs, ee) : freeze_8,
-      Re = L.layers.size === 0 ? normalizeInputDecorations(ke, x.text) : ke,
-      Be = new Map();
+    this.#v = null;
+    if (L === null || L.value !== h.text || this.#u.value !== x.text) return;
+    let ee = diffTextEdit(h, x);
+    let ke = D ? shiftDecorationsForEdit(L.runs, ee) : PP;
+    let Re = L.layers.size === 0 ? normalizeInputDecorations(ke, x.text) : ke;
+    let Be = new Map();
     for (let [He, We] of L.layers) Be.set(He, shiftDecorationsForEdit(We, ee));
     this.#A(Re, Be);
   }
-  submit = (h, x = !1) => {
-    if (this.#p === 0) return !1;
-    return (this.#d.emit(h, x), !0);
+  submit = (h, x = false) => {
+    if (this.#p === 0) return false;
+    this.#d.emit(h, x);
+    return true;
   };
   onSubmitRequest = (h) => {
-    let subscribe = this.#d.subscribe(h);
+    let x = this.#d.subscribe(h);
     this.#p++;
-    let D = !0;
+    let D = true;
     return () => {
       if (!D) return;
-      ((D = !1), this.#p--, subscribe());
+      D = false;
+      this.#p--;
+      x();
     };
   };
   dispose() {
     if (this.#b) return;
-    if (((this.#b = !0), this.#m(), this.#i?.dispose(), this.#y))
-      (this.#y(), (this.#y = null), Z2n(this.#e, !1));
-    (this.#d.clear(), (this.#p = 0));
+    this.#b = true;
+    this.#m();
+    this.#i?.dispose();
+    if (this.#y) {
+      this.#y();
+      this.#y = null;
+      setPromptActiveFor(this.#e, false);
+    }
+    this.#d.clear();
+    this.#p = 0;
   }
 }
-
 export {
+  selectIsEmpty,
+  selectIsMultiline,
+  selectInputMode,
+  selectHasStash,
+  createFrozenEmpty,
   PromptDraft,
   selectDraftValue,
   selectCursorOffset,
-  selectInputMode,
   selectPastedContents,
   selectInterimRange,
   selectDecorations,
   selectCameBack,
-  MO,
   composeNormalized,
-  selectIsEmpty,
-  selectIsMultiline,
-  selectHasStash,
 };

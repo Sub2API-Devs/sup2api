@@ -8,8 +8,7 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-1ny7cxrt.js:10006-10077 cjs-require-graph
-var Ou = x(function (Lve, MO) {
-  MO.exports = () => Math.floor(Date.now() / 1000);
+var require_unix_timestamp = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = () => Math.floor(Date.now() / 1000);
 });
-
-export { Ou };
+export { require_unix_timestamp };

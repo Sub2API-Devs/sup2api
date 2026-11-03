@@ -10,42 +10,53 @@
  */
 
 //@ chunk-1fgvxqz2.js:191-269 placement
-function Xq(n, { omitCacheControl: t = !1 } = {}) {
+/**
+ * 导出函数 `canonicalFingerprint`：参数 n, { omitCacheControl: t = !1 } = {}，返回 (feedCanonicalJson(n, s, t), s.join(""))。
+ */
+function canonicalFingerprint(n, { omitCacheControl: t = false } = {}) {
   let s = [];
-  return (feedCanonicalJson(n, s, t), s.join(""));
+  feedCanonicalJson(n, s, t);
+  return s.join("");
 }
 //@ chunk-1fgvxqz2.js:410-422 placement
-var c = 65536;
+/**
+ * 请求指纹哈希分片阈值 64 KB：累积到该长度先 flush 一次。
+ */
+var FLUSH_THRESHOLD_CHARS = 65536;
 //@ chunk-1fgvxqz2.js:422-700 placement
 class HashFeeder {
   hashes;
   pieces = [];
   length = 0;
-  constructor(n) {
-    this.hashes = n;
+  constructor(hashes) {
+    this.hashes = hashes;
   }
   push(n) {
-    if ((this.pieces.push(n), (this.length += n.length), this.length >= c)) this.flush();
+    this.pieces.push(n);
+    this.length += n.length;
+    if (this.length >= FLUSH_THRESHOLD_CHARS) this.flush();
   }
   flush() {
     if (this.length === 0) return;
     let joined = this.pieces.join("");
-    for (let hashe of this.hashes) hashe.update(joined);
-    ((this.pieces.length = 0), (this.length = 0));
+    for (let hash of this.hashes) hash.update(joined);
+    this.pieces.length = 0;
+    this.length = 0;
   }
 }
+//@ chunk-1fgvxqz2.js:915-1596 placement
 /**
  * 按排序后的键把值序列化为规范 JSON 片段喂给哈希；长字符串分段（不拆代理对），可省略 cache_control 并记录是否出现过。
  */
-//@ chunk-1fgvxqz2.js:915-1596 placement
 function feedCanonicalJson(value, feeder, omitCacheControl, stats) {
-  if (typeof value === "string" && value.length > c) {
+  if (typeof value === "string" && value.length > FLUSH_THRESHOLD_CHARS) {
     feeder.push('"');
     for (let r = 0; r < value.length;) {
-      let min = Math.min(r + c, value.length),
-        code = value.charCodeAt(min - 1);
+      let min = Math.min(r + FLUSH_THRESHOLD_CHARS, value.length);
+      let code = value.charCodeAt(min - 1);
       if (min < value.length && code >= 55296 && code <= 56319) min--;
-      (feeder.push(JSON.stringify(value.slice(r, min)).slice(1, -1)), (r = min));
+      feeder.push(JSON.stringify(value.slice(r, min)).slice(1, -1));
+      r = min;
     }
     feeder.push('"');
     return;
@@ -55,27 +66,26 @@ function feedCanonicalJson(value, feeder, omitCacheControl, stats) {
     return;
   }
   if (Array.isArray(value)) {
-    (feeder.push("["),
-      value.forEach((r, e) => {
-        if (e > 0) feeder.push(",");
-        feedCanonicalJson(r, feeder, omitCacheControl, stats);
-      }),
-      feeder.push("]"));
+    feeder.push("[");
+    value.forEach((r, e) => {
+      if (e > 0) feeder.push(",");
+      feedCanonicalJson(r, feeder, omitCacheControl, stats);
+    });
+    feeder.push("]");
     return;
   }
   feeder.push("{");
-  let i = !0;
-  for (let r of Object.keys(value).sort()) {
-    let e = value[r];
-    if (r === "cache_control" && stats !== void 0) stats.cacheControl = !0;
-    if (e === void 0 || (omitCacheControl && r === "cache_control")) continue;
+  let i = true;
+  for (let key of Object.keys(value).sort()) {
+    let e = value[key];
+    if (key === "cache_control" && stats !== undefined) stats.cacheControl = true;
+    if (e === undefined || (omitCacheControl && key === "cache_control")) continue;
     if (!i) feeder.push(",");
-    ((i = !1),
-      feeder.push(JSON.stringify(r)),
-      feeder.push(":"),
-      feedCanonicalJson(e, feeder, omitCacheControl, stats));
+    i = false;
+    feeder.push(JSON.stringify(key));
+    feeder.push(":");
+    feedCanonicalJson(e, feeder, omitCacheControl, stats);
   }
   feeder.push("}");
 }
-
-export { Xq, HashFeeder, feedCanonicalJson };
+export { canonicalFingerprint, HashFeeder, feedCanonicalJson };

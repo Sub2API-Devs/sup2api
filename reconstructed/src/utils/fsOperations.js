@@ -10,379 +10,51 @@
  */
 import * as fsModule from "fs";
 import * as pathModule from "path";
-import {
-  isAbsolute,
-  isAbsolute as isAbsolute_2,
-  isAbsolute as isAbsolute_3,
-  isAbsolute as isAbsolute_4,
-  isAbsolute as isAbsolute_5,
-  isAbsolute as isAbsolute_6,
-  isAbsolute as isAbsolute_7,
-  isAbsolute as isAbsolute_8,
-  isAbsolute as isAbsolute_9,
-  isAbsolute as isAbsolute_10,
-  isAbsolute as isAbsolute_11,
-  isAbsolute as isAbsolute_12,
-  isAbsolute as isAbsolute_13,
-  isAbsolute as isAbsolute_14,
-  isAbsolute as isAbsolute_15,
-  isAbsolute as isAbsolute_16,
-  isAbsolute as isAbsolute_17,
-  isAbsolute as isAbsolute_18,
-  isAbsolute as isAbsolute_19,
-  isAbsolute as isAbsolute_20,
-  isAbsolute as isAbsolute_21,
-  isAbsolute as isAbsolute_22,
-  isAbsolute as isAbsolute_23,
-  isAbsolute as isAbsolute_24,
-  isAbsolute as isAbsolute_25,
-  isAbsolute as isAbsolute_26,
-  isAbsolute as isAbsolute_27,
-  isAbsolute as isAbsolute_28,
-  isAbsolute as isAbsolute_29,
-  isAbsolute as isAbsolute_30,
-  isAbsolute as isAbsolute_31,
-  isAbsolute as isAbsolute_32,
-  isAbsolute as isAbsolute_33,
-  isAbsolute as isAbsolute_34,
-  isAbsolute as isAbsolute_35,
-  isAbsolute as isAbsolute_36,
-  isAbsolute as isAbsolute_37,
-  isAbsolute as isAbsolute_38,
-  isAbsolute as isAbsolute_39,
-  isAbsolute as isAbsolute_40,
-  isAbsolute as isAbsolute_42,
-  isAbsolute as isAbsolute_43,
-  isAbsolute as isAbsolute_44,
-  isAbsolute as isAbsolute_45,
-  isAbsolute as isAbsolute_46,
-  isAbsolute as isAbsolute_47,
-  isAbsolute as isAbsolute_48,
-  isAbsolute as isAbsolute_49,
-  isAbsolute as isAbsolute_50,
-  isAbsolute as isAbsolute_51,
-  isAbsolute as isAbsolute_52,
-  isAbsolute as isAbsolute_53,
-  isAbsolute as isAbsolute_54,
-  isAbsolute as isAbsolute_55,
-  isAbsolute as isAbsolute_56,
-  isAbsolute as isAbsolute_57,
-  parse,
-  parse as parse_2,
-  parse as parse_3,
-  parse as parse_4,
-  parse as parse_5,
-  parse as parse_6,
-  parse as parse_7,
-  parse as parse_8,
-  parse as parse_9,
-  parse as parse_10,
-  parse as parse_11,
-  parse as parse_12,
-  parse as parse_13,
-  parse as parse_14,
-  resolve as resolve_2,
-  resolve as resolve_3,
-  resolve as resolve_4,
-  resolve as resolve_5,
-  resolve as resolve_6,
-  resolve as resolve_7,
-  resolve as resolve_8,
-  resolve as resolve_9,
-  resolve as resolve_10,
-  resolve as resolve_11,
-  resolve as resolve_12,
-  resolve as resolve_13,
-  resolve as resolve_14,
-  resolve as resolve_15,
-  resolve as resolve_16,
-  resolve as resolve_17,
-  resolve as resolve_18,
-  resolve as resolve_19,
-  resolve as resolve_20,
-  resolve as resolve_21,
-  resolve as resolve_22,
-  resolve as resolve_23,
-  resolve as resolve_24,
-  resolve as resolve_25,
-  resolve as resolve_26,
-  resolve as resolve_27,
-  resolve as resolve_28,
-  resolve as resolve_29,
-  resolve as resolve_30,
-  resolve as resolve_31,
-  resolve as resolve_32,
-  resolve as resolve_33,
-  resolve as resolve_34,
-  resolve as resolve_35,
-  resolve as resolve_36,
-  resolve as resolve_37,
-  resolve as resolve_38,
-  resolve as resolve_39,
-  resolve as resolve_40,
-  resolve as resolve_41,
-  resolve as resolve_42,
-  resolve as resolve_43,
-  resolve as resolve_44,
-  resolve as resolve_45,
-  resolve as resolve_46,
-  resolve as resolve_47,
-  resolve as resolve_48,
-  resolve as resolve_49,
-  resolve as resolve_50,
-  resolve as resolve_51,
-  resolve as resolve_52,
-  resolve as resolve_53,
-  resolve as resolve_54,
-  resolve as resolve_55,
-  resolve as resolve_56,
-  resolve as resolve_57,
-  resolve as resolve_58,
-  resolve as resolve_59,
-  resolve as resolve_60,
-  dirname,
-  dirname as dirname_2,
-  dirname as dirname_3,
-  dirname as dirname_4,
-  dirname as dirname_5,
-  dirname as dirname_6,
-  dirname as dirname_7,
-  dirname as dirname_8,
-  dirname as dirname_9,
-  dirname as dirname_10,
-  dirname as dirname_11,
-  dirname as dirname_12,
-  dirname as dirname_13,
-  dirname as dirname_14,
-  dirname as dirname_15,
-  dirname as dirname_16,
-  dirname as dirname_17,
-  dirname as dirname_18,
-  dirname as dirname_19,
-  dirname as dirname_20,
-  dirname as dirname_21,
-  dirname as dirname_22,
-  dirname as dirname_23,
-  dirname as dirname_24,
-  dirname as dirname_25,
-  dirname as dirname_26,
-  dirname as dirname_27,
-  dirname as dirname_28,
-  dirname as dirname_29,
-  dirname as dirname_30,
-  dirname as dirname_31,
-  dirname as dirname_32,
-  dirname as dirname_33,
-  dirname as dirname_34,
-  dirname as dirname_35,
-  dirname as dirname_36,
-  dirname as dirname_37,
-  dirname as dirname_38,
-  dirname as dirname_39,
-  dirname as dirname_40,
-  dirname as dirname_41,
-  dirname as dirname_42,
-  dirname as dirname_43,
-  dirname as dirname_44,
-  dirname as dirname_45,
-  dirname as dirname_46,
-  dirname as dirname_47,
-  dirname as dirname_48,
-  dirname as dirname_49,
-  dirname as dirname_50,
-  dirname as dirname_51,
-  dirname as dirname_52,
-  dirname as dirname_53,
-  dirname as dirname_54,
-  dirname as dirname_55,
-  dirname as dirname_56,
-  dirname as dirname_57,
-  dirname as dirname_58,
-  dirname as dirname_59,
-  dirname as dirname_60,
-  dirname as dirname_61,
-  dirname as dirname_62,
-  dirname as dirname_63,
-  dirname as dirname_64,
-  dirname as dirname_65,
-  dirname as dirname_66,
-  dirname as dirname_67,
-  dirname as dirname_68,
-  dirname as dirname_69,
-  dirname as dirname_70,
-  dirname as dirname_71,
-  dirname as dirname_72,
-  dirname as dirname_73,
-  dirname as dirname_74,
-  dirname as dirname_75,
-  dirname as dirname_76,
-  dirname as dirname_77,
-  sep,
-  sep as sep_2,
-  sep as sep_3,
-  sep as sep_4,
-  sep as sep_5,
-  sep as sep_6,
-  sep as sep_7,
-  sep as sep_8,
-  sep as sep_9,
-  sep as sep_10,
-  sep as sep_11,
-  sep as sep_12,
-  sep as sep_13,
-  sep as sep_14,
-  sep as sep_15,
-  sep as sep_16,
-  sep as sep_17,
-  sep as sep_18,
-  sep as sep_19,
-  sep as sep_20,
-  sep as sep_21,
-  sep as sep_22,
-  sep as sep_23,
-  sep as sep_24,
-  sep as sep_25,
-  sep as sep_26,
-  sep as sep_27,
-  sep as sep_28,
-  sep as sep_29,
-  sep as sep_30,
-  sep as sep_31,
-  sep as sep_32,
-  sep as sep_33,
-  sep as sep_34,
-  sep as sep_35,
-  sep as sep_36,
-  sep as sep_37,
-  sep as sep_38,
-  sep as sep_39,
-  sep as sep_40,
-  sep as sep_41,
-  sep as sep_42,
-  sep as sep_43,
-  sep as sep_44,
-  sep as sep_45,
-  sep as sep_46,
-  sep as sep_47,
-  sep as sep_48,
-  sep as sep_49,
-  sep as sep_50,
-  sep as sep_51,
-  sep as sep_52,
-  sep as sep_53,
-  sep as sep_54,
-  sep as sep_55,
-  sep as sep_56,
-  sep as sep_57,
-  sep as sep_58,
-  sep as sep_59,
-  sep as sep_60,
-  sep as sep_61,
-  sep as sep_62,
-  sep as sep_63,
-  sep as sep_64,
-  sep as sep_65,
-  sep as sep_66,
-  sep as sep_67,
-  sep as sep_68,
-  sep as sep_69,
-  sep as sep_70,
-  sep as sep_71,
-  sep as sep_72,
-  sep as sep_73,
-  relative,
-  relative as relative_2,
-  relative as relative_3,
-  relative as relative_4,
-  relative as relative_5,
-  relative as relative_6,
-  relative as relative_7,
-  relative as relative_8,
-  relative as relative_9,
-  relative as relative_10,
-  relative as relative_11,
-  relative as relative_12,
-  relative as relative_13,
-  relative as relative_14,
-  relative as relative_15,
-  relative as relative_16,
-  relative as relative_17,
-  relative as relative_18,
-  relative as relative_19,
-  relative as relative_20,
-  relative as relative_21,
-  relative as relative_22,
-  relative as relative_23,
-  relative as relative_24,
-  relative as relative_25,
-  relative as relative_26,
-  relative as relative_27,
-  relative as relative_28,
-  relative as relative_29,
-  relative as relative_30,
-  relative as relative_31,
-  relative as relative_32,
-  relative as relative_33,
-  relative as relative_34,
-  relative as relative_35,
-  relative as relative_36,
-  relative as relative_37,
-  relative as relative_38,
-  relative as relative_39,
-  relative as relative_40,
-  relative as relative_41,
-  relative as relative_42,
-  relative as relative_43,
-  relative as relative_44,
-  relative as relative_45,
-  relative as relative_46,
-  relative as relative_47,
-  relative as relative_48,
-} from "path";
+import { isAbsolute, parse, resolve as resolve_2, dirname, sep, relative } from "path";
 import { homedir } from "os";
 import {
   stat,
-  stat as stat_2,
   lstat,
   open,
   readdir,
   unlink,
-  unlink as unlink_2,
   rmdir,
   rm,
   mkdir,
-  mkdir as mkdir_2,
   readFile,
   rename,
-  rename as rename_2,
   realpath,
   readlink,
   copyFile,
   appendFile,
-  appendFile as appendFile_2,
   symlink,
-  symlink as symlink_2,
   link,
   chmod,
-  open as open_2,
-  open as open_3,
-  open as open_4,
-  open as open_5,
 } from "fs/promises";
 import {
   networkMountRootCached,
   isUnderNetworkDirCached,
   isForeignMountPath,
-  Ya,
+  isNetworkMountPath,
   networkMountHost,
-  ai,
-  yl,
+  isNonWslUncPath,
+  isNetworkMountRoot,
   isNetDir,
   isWslUncPath,
-  tP,
-  Lu,
+  neverOtherHostMount,
+  expandTildeWithHome,
 } from "./networkPaths.js";
-import { cl, Eh, isForeignNetworkPath, Qn, isMacSpecialPath, Mn, uT, gb, $j } from "./pathClassification.js";
+import {
+  hasDotSegment,
+  hasDotDotSegment,
+  isForeignNetworkPath,
+  isUncOrDevicePath,
+  isMacSpecialPath,
+  identity,
+  isDeviceNamespacePath,
+  isDevicePrefixPath,
+  hasDotSegmentAlias,
+} from "./pathClassification.js";
 import {
   getErrnoCode,
   isENOENT,
@@ -390,18 +62,18 @@ import {
 } from "./errors.js";
 import { launchCwd } from "./cwd.js";
 import { getResolvedPath } from "./swarm/permissionSync.js";
-import { isSentinelInode, li, slowLogging, nt } from "./slowOperations.js";
+import { isSentinelInode, realpathPromise, slowLogging, isBunVirtualPath } from "./slowOperations.js";
 import { toUncLongPath } from "./windowsUncPaths.js";
-import { e9 } from "./permissions/protectedDirs.js";
+import { realpathCacheEntry } from "./permissions/protectedDirs.js";
 import { GIT_INTERNAL_PATH_PATTERNS } from "../tools/BashTool/readOnlyValidation.js";
 import { getOriginalCwd } from "../bootstrap/state.js";
 import { isSpecialOrUnsafePath, isNonCanonicalSymlink } from "./claudemd.js";
-import { $c } from "./platformTargets.js";
+import { readOnlyNoFollowFlags } from "./platformTargets.js";
 
 //@ chunk-cgr0tezp.js:19756-19772 placement
-var Oi = "\u2192";
+var RENAME_ARROW = "\u2192";
 //@ chunk-cgr0tezp.js:19772-19839 placement
-function Li() {
+function noFollowNonblockFlags() {
   return fsModule.constants.O_NOFOLLOW | fsModule.constants.O_NONBLOCK;
 }
 //@ chunk-cgr0tezp.js:19839-19926 placement
@@ -409,14 +81,14 @@ function nonblockingReadFlags() {
   return fsModule.constants.O_RDONLY | fsModule.constants.O_NONBLOCK | fsModule.constants.O_NOCTTY;
 }
 //@ chunk-cgr0tezp.js:19926-19939 placement
-var ue = /\/+/;
+var PATH_SEPARATOR_RUN_RE = /\/+/;
 //@ chunk-cgr0tezp.js:19939-20126 placement
 function isSpelledStrictAncestor(e, n) {
-  let r = (u) => u.split(ue).filter(Boolean),
-    resolved = pathModule.resolve(e),
-    resolved_2 = pathModule.resolve(n),
-    o = r(resolved),
-    a = r(resolved_2);
+  let r = (u) => u.split(PATH_SEPARATOR_RUN_RE).filter(Boolean);
+  let resolved = pathModule.resolve(e);
+  let resolved_2 = pathModule.resolve(n);
+  let o = r(resolved);
+  let a = r(resolved_2);
   return (
     pathModule.parse(resolved).root === pathModule.parse(resolved_2).root &&
     o.length < a.length &&
@@ -434,36 +106,36 @@ function truncateAtDotSegment(e) {
   return replaced === "" ? e : replaced;
 }
 //@ chunk-cgr0tezp.js:20275-20398 placement
-function vi(e) {
+function normalizeNetworkMountPath(e) {
   if (e.startsWith("\\\\")) return truncateAtDotSegment(e);
-  let replaced = e.replace(/^\/+/, "/"),
-    r = networkMountRootCached(replaced);
+  let replaced = e.replace(/^\/+/, "/");
+  let r = networkMountRootCached(replaced);
   if (r !== null) return r;
   return truncateAtDotSegment(e);
 }
 //@ chunk-cgr0tezp.js:20398-20408 placement
-var Ti = vi;
+var networkMountPathOf = normalizeNetworkMountPath;
 //@ chunk-cgr0tezp.js:20408-20579 placement
-function joinRemainingSegments(e, n, r) {
-  let i = cl(e);
+function joinRemainingSegments(e, n, onCollapsedLanding) {
+  let i = hasDotSegment(e);
   if (n.length === 0 || i || n.some((s) => s === "." || s === "..")) {
-    if (r !== void 0 && (n.length > 0 || i)) r(pathModule.join(e, ...n));
-    return i ? Ti(e) : e;
+    if (onCollapsedLanding !== undefined && (n.length > 0 || i)) onCollapsedLanding(pathModule.join(e, ...n));
+    return i ? networkMountPathOf(e) : e;
   }
   return pathModule.join(e, ...n);
 }
 //@ chunk-cgr0tezp.js:20579-20639 placement
-var UNVERIFIED_ANCESTRY = "\x00unverified-ancestry",
-  OPAQUE_LINK_TEXT = "\x00opaque-link-text";
+var UNVERIFIED_ANCESTRY = "\x00unverified-ancestry";
+var OPAQUE_LINK_TEXT = "\x00opaque-link-text";
 //@ chunk-cgr0tezp.js:20639-20722 placement
-function st(e) {
-  return Eh(pathModule.isAbsolute(e) ? e : e.replace(/^(?:\.\.(?:[\\/]+|$))+/, ""));
+function hasParentSegment(text) {
+  return hasDotDotSegment(pathModule.isAbsolute(text) ? text : text.replace(/^(?:\.\.(?:[\\/]+|$))+/, ""));
 }
 //@ chunk-cgr0tezp.js:20722-20982 placement
-function isOpaqueLinkText(e, n = !1) {
+function isOpaqueLinkText(e, n = false) {
   return (
     e.includes("\uFFFD") ||
-    st(e) ||
+    hasParentSegment(e) ||
     (n &&
       (/^(?:[A-Za-z]:(?![\\/])|[\\/](?![\\/]))/.test(e) ||
         (/^[\\/]{2}\?[\\/]/.test(e) && !/^[\\/]{2}\?[\\/](?:[A-Za-z]:[\\/]|UNC[\\/])/i.test(e)) ||
@@ -471,132 +143,172 @@ function isOpaqueLinkText(e, n = !1) {
   );
 }
 //@ chunk-cgr0tezp.js:20982-21024 placement
-function isNetworkJunction(e) {
-  return e !== void 0 && e !== UNVERIFIED_ANCESTRY;
+function isNetworkJunction(intermediateUncJunction) {
+  return intermediateUncJunction !== undefined && intermediateUncJunction !== UNVERIFIED_ANCESTRY;
 }
 //@ chunk-cgr0tezp.js:21024-21136 placement
-function hopCapExhausted(e) {
-  return Object.assign(Error("ELOOP: symbolic link chain too long to vet"), { code: "ELOOP", path: e });
+function hopCapExhausted(path) {
+  return Object.assign(Error("ELOOP: symbolic link chain too long to vet"), {
+    code: "ELOOP",
+    path,
+  });
 }
 //@ chunk-cgr0tezp.js:21136-21370 placement
-function unverifiedAncestryReason(e, n, r = !1, i = !1, s = !1) {
+function unverifiedAncestryReason(e, n, r = false, i = false, s = false) {
   if (n?.unreadableAncestry !== "unverified") return;
-  let o = e !== void 0 && typeof e === "object" && "errno" in e ? e.errno : void 0;
-  if (o === "ENOENT" || o === "ENOTDIR") return;
-  if (o === "ENAMETOOLONG" && !r && !i && !s) return;
+  let errno = e !== undefined && typeof e === "object" && "errno" in e ? e.errno : undefined;
+  if (errno === "ENOENT" || errno === "ENOTDIR") return;
+  if (errno === "ENAMETOOLONG" && !r && !i && !s) return;
   return UNVERIFIED_ANCESTRY;
 }
 //@ chunk-cgr0tezp.js:21370-21398 placement
-function se(e) {
+function isUnderNetworkDir(e) {
   return isUnderNetworkDirCached(e);
 }
 //@ chunk-cgr0tezp.js:21398-21481 placement
-function Le(e, n) {
+function isNetworkPathUnderAnchors(e, anchors) {
   return (
-    n !== void 0 &&
-    n.some(
-      (r) => isUnderNetworkDirCached(r) && !isForeignMountPath(e, r) && (isPathUnderPosix(e, r) || Ya(e)),
+    anchors !== undefined &&
+    anchors.some(
+      (r) =>
+        isUnderNetworkDirCached(r) &&
+        !isForeignMountPath(e, r) &&
+        (isPathUnderPosix(e, r) || isNetworkMountPath(e)),
     )
   );
 }
 //@ chunk-cgr0tezp.js:21481-21545 placement
-function fn(e, n) {
-  return n !== void 0 && n.some((r) => isUnderNetworkDirCached(r) && isPathUnderPosix(r, e));
+function isAnchorUnderPath(e, anchors) {
+  return anchors !== undefined && anchors.some((r) => isUnderNetworkDirCached(r) && isPathUnderPosix(r, e));
 }
 //@ chunk-cgr0tezp.js:21545-21669 placement
 function isPathUnderPosix(e, n) {
-  let r = (o) => (o.length > 1 ? o.replace(/\/+$/, "") : o),
-    [i, s] = [r(e), r(n)];
+  let r = (o) => (o.length > 1 ? o.replace(/\/+$/, "") : o);
+  let [i, s] = [r(e), r(n)];
   return i === s || i.startsWith(s === "/" ? s : s + "/");
 }
 //@ chunk-cgr0tezp.js:21669-21727 placement
-function ce(e, n) {
-  return n === void 0 || n.every((r) => isForeignMountPath(e, r));
+function isForeignToAllMounts(e, anchors) {
+  return anchors === undefined || anchors.every((r) => isForeignMountPath(e, r));
 }
 //@ chunk-cgr0tezp.js:21727-21785 placement
-function Te(e, n) {
-  return n === void 0 || n.every((r) => isForeignNetworkPath(e, r));
+function isForeignToAllNetworks(e, anchors) {
+  return anchors === undefined || anchors.every((r) => isForeignNetworkPath(e, r));
 }
 //@ chunk-cgr0tezp.js:21785-21924 placement
-function gn(e, n, r) {
-  let i = Ya(e) ? networkMountRootCached(e) : null;
-  if (i === null || !ce(i, n)) return;
+function collapseNetworkLanding(e, anchors, onCollapsedLanding) {
+  let i = isNetworkMountPath(e) ? networkMountRootCached(e) : null;
+  if (i === null || !isForeignToAllMounts(i, anchors)) return;
   let joined = pathModule.join(e);
-  if (Ya(joined) && networkMountHost(joined) === networkMountHost(i)) return joined;
-  return joinRemainingSegments(e, [], r);
+  if (isNetworkMountPath(joined) && networkMountHost(joined) === networkMountHost(i)) return joined;
+  return joinRemainingSegments(e, [], onCollapsedLanding);
 }
 //@ chunk-cgr0tezp.js:21924-22043 placement
 function getAnchors(e) {
-  if (e?.anchors !== void 0 && e.anchors.length > 0) return e.anchors;
-  return e?.anchor !== void 0 ? [e.anchor] : void 0;
+  if (e?.anchors !== undefined && e.anchors.length > 0) return e.anchors;
+  return e?.anchor !== undefined ? [e.anchor] : undefined;
 }
 //@ chunk-cgr0tezp.js:22043-22111 placement
 function hasUntouchableRecordSpelling(e) {
   return (
-    Eh(e) || ai(e) || yl(e) || isNetDir(e) || findIntermediateUncJunction(NodeFsOperations, e) !== void 0
+    hasDotDotSegment(e) ||
+    isNonWslUncPath(e) ||
+    isNetworkMountRoot(e) ||
+    isNetDir(e) ||
+    findIntermediateUncJunction(NodeFsOperations, e) !== undefined
   );
 }
 //@ chunk-cgr0tezp.js:22111-22192 placement
 async function hasUntouchableRecordSpellingAsync(e) {
   return (
-    Eh(e) ||
-    ai(e) ||
-    yl(e) ||
+    hasDotDotSegment(e) ||
+    isNonWslUncPath(e) ||
+    isNetworkMountRoot(e) ||
     isNetDir(e) ||
-    (await findIntermediateUncJunctionAsync(NodeFsOperations, e)) !== void 0
+    (await findIntermediateUncJunctionAsync(NodeFsOperations, e)) !== undefined
   );
 }
 //@ chunk-cgr0tezp.js:22192-22320 placement
 function hasUntouchableRecordSpellingStrict(e, n = NodeFsOperations) {
   return (
-    Eh(e) ||
-    ai(e) ||
-    yl(e) ||
+    hasDotDotSegment(e) ||
+    isNonWslUncPath(e) ||
+    isNetworkMountRoot(e) ||
     isNetDir(e) ||
-    findIntermediateUncJunction(n, e, { surfaceNetworkRaw: !0, unreadableAncestry: "unverified" }) !== void 0
+    findIntermediateUncJunction(n, e, {
+      surfaceNetworkRaw: true,
+      unreadableAncestry: "unverified",
+    }) !== undefined
   );
 }
 //@ chunk-cgr0tezp.js:22320-22460 placement
 async function hasUntouchableRecordSpellingStrictAsync(e, n = NodeFsOperations) {
   return (
-    Eh(e) ||
-    ai(e) ||
-    yl(e) ||
+    hasDotDotSegment(e) ||
+    isNonWslUncPath(e) ||
+    isNetworkMountRoot(e) ||
     isNetDir(e) ||
     (await findIntermediateUncJunctionAsync(n, e, {
-      surfaceNetworkRaw: !0,
+      surfaceNetworkRaw: true,
       unreadableAncestry: "unverified",
-    })) !== void 0
+    })) !== undefined
   );
 }
 //@ chunk-cgr0tezp.js:22460-22659 placement
-async function entryReachesForeignNetwork(e, n, r = NodeFsOperations) {
-  if (Eh(e)) return !0;
-  if (ai(e)) return !0;
-  if (yl(e)) {
+async function entryReachesForeignNetwork(e, permissionScreenAnchor, fsImpl = NodeFsOperations) {
+  if (hasDotDotSegment(e)) return true;
+  if (isNonWslUncPath(e)) return true;
+  if (isNetworkMountRoot(e)) {
     let i = networkMountHost(e);
-    if (i === null || n === null || i !== networkMountHost(n)) return !0;
+    if (i === null || permissionScreenAnchor === null || i !== networkMountHost(permissionScreenAnchor))
+      return true;
   }
-  if (isNetDir(e)) return !0;
-  return (await examineEntryChain(e, n, { fsImpl: r })).verdict !== "clean";
+  if (isNetDir(e)) return true;
+  return (
+    (
+      await examineEntryChain(e, permissionScreenAnchor, {
+        fsImpl,
+      })
+    ).verdict !== "clean"
+  );
 }
 //@ chunk-cgr0tezp.js:22659-22925 placement
 async function examineEntryChain(e, n, { fsImpl: r = NodeFsOperations, signal: i } = {}) {
-  let s = await findIntermediateUncJunctionAsync(
+  let intermediateUncJunction = await findIntermediateUncJunctionAsync(
     r,
     e,
-    { ...(n === null ? {} : { anchor: n }), unreadableAncestry: "unverified", surfaceNetworkRaw: !0 },
+    {
+      ...(n === null
+        ? {}
+        : {
+            anchor: n,
+          }),
+      unreadableAncestry: "unverified",
+      surfaceNetworkRaw: true,
+    },
     i,
   );
-  if (s === void 0) return { verdict: "clean" };
-  if (s === UNVERIFIED_ANCESTRY) return { verdict: "unverified" };
-  return { verdict: "network", reaches: s };
+  if (intermediateUncJunction === undefined)
+    return {
+      verdict: "clean",
+    };
+  if (intermediateUncJunction === UNVERIFIED_ANCESTRY)
+    return {
+      verdict: "unverified",
+    };
+  return {
+    verdict: "network",
+    reaches: intermediateUncJunction,
+  };
 }
 //@ chunk-cgr0tezp.js:22925-23119 placement
 function findIntermediateUncJunction(e, n, r) {
   return returnValue(resolvePathSafely(n, r), (i) => {
     if (i.kind === "lstat") return e.lstatSync(i.path);
-    if (i.kind === "opendirNofollow") return (e.openDirNoFollowSync(i.path), "ok");
+    if (i.kind === "opendirNofollow") {
+      e.openDirNoFollowSync(i.path);
+      return "ok";
+    }
     return e.readlinkSync(i.path);
   });
 }
@@ -604,16 +316,21 @@ function findIntermediateUncJunction(e, n, r) {
 function findIntermediateUncJunctionAsync(e, n, r, i, s) {
   return returnValue_2(resolvePathSafely(n, r), i, async (o) => {
     if (o.kind === "lstat") {
-      if (s === void 0) return e.lstat(o.path);
+      if (s === undefined) return e.lstat(o.path);
       let a;
       try {
         a = await e.lstatBigint(o.path);
       } catch (error) {
-        throw (s(o.path, void 0), error);
+        s(o.path, undefined);
+        throw error;
       }
-      return (s(o.path, a), a);
+      s(o.path, a);
+      return a;
     }
-    if (o.kind === "opendirNofollow") return (await e.openDirNoFollow(o.path), "ok");
+    if (o.kind === "opendirNofollow") {
+      await e.openDirNoFollow(o.path);
+      return "ok";
+    }
     return e.readlink(o.path);
   });
 }
@@ -626,82 +343,99 @@ function returnValue(e, n) {
     try {
       r = n(i.value);
     } catch (error) {
-      r = { errno: getErrnoCode(error) };
+      r = {
+        errno: getErrnoCode(error),
+      };
     }
   }
 }
 //@ chunk-cgr0tezp.js:23543-23701 placement = returnValue (0.769)
-async function returnValue_2(e, n, r) {
+async function returnValue_2(path, n, r) {
   let i;
   for (;;) {
-    let s = e.next(i);
+    let s = path.next(i);
     if (s.done) return s.value;
-    if (n?.aborted === !0) return UNVERIFIED_ANCESTRY;
+    if (n?.aborted === true) return UNVERIFIED_ANCESTRY;
     try {
       i = await r(s.value);
     } catch (error) {
-      i = { errno: getErrnoCode(error) };
+      i = {
+        errno: getErrnoCode(error),
+      };
     }
   }
 }
+//@ chunk-cgr0tezp.js:23701-24117 placement
 /**
  * 驱动路径检查生成器执行文件系统步骤（可中止）。
  */
-//@ chunk-cgr0tezp.js:23701-24117 placement
 async function runFsSteps(e, n, r, i, s) {
-  let o = Symbol("cut short"),
-    a,
-    u =
-      n === void 0
-        ? void 0
-        : new Promise((l) => {
-            ((a = () => l(o)), n.addEventListener("abort", a, { once: !0 }));
-          }),
-    c;
+  let o = Symbol("cut short");
+  let a;
+  let u =
+    n === undefined
+      ? undefined
+      : new Promise((resolve) => {
+          a = () => resolve(o);
+          n.addEventListener("abort", a, {
+            once: true,
+          });
+        });
+  let c;
   try {
     for (;;) {
       let l = e.next(c);
       if (l.done) return l.value;
-      if (n?.aborted === !0 || r?.(l.value) === !1) return s;
-      let d = i(l.value).catch((y) => ({ errno: getErrnoCode(y) })),
-        g = await (u === void 0 ? d : Promise.race([d, u]));
+      if (n?.aborted === true || r?.(l.value) === false) return s;
+      let d = i(l.value).catch((error) => ({
+        errno: getErrnoCode(error),
+      }));
+      let g = await (u === undefined ? d : Promise.race([d, u]));
       if (g === o) return s;
       c = g;
     }
   } finally {
-    if (a !== void 0) n?.removeEventListener("abort", a);
+    if (a !== undefined) n?.removeEventListener("abort", a);
   }
 }
+//@ chunk-cgr0tezp.js:24117-27079 placement
 /**
  * 逐段解析路径的生成器（链接、网络、junction 检查）。
  */
-//@ chunk-cgr0tezp.js:24117-27079 placement
 function* resolvePathSafely(e, n) {
-  let r = getAnchors(n);
-  if (se(e) && !Le(e, r)) return e;
-  if ((Qn(e) && !isWslUncPath(e) && Te(e, r)) || (Ya(e) && ce(e, r))) return;
-  let resolved = pathModule.resolve(e),
-    root = pathModule.parse(resolved).root,
-    o = root,
-    filtered = resolved.slice(root.length).split(ue).filter(Boolean),
-    u = 0,
-    c = filtered.length,
-    l = !1,
-    d = !1,
-    g,
-    y = 64,
-    h = () => filtered.some((f) => cl(f)),
-    S = () => /[. ]$/.test(filtered[0]);
+  let anchors = getAnchors(n);
+  if (isUnderNetworkDir(e) && !isNetworkPathUnderAnchors(e, anchors)) return e;
+  if (
+    (isUncOrDevicePath(e) && !isWslUncPath(e) && isForeignToAllNetworks(e, anchors)) ||
+    (isNetworkMountPath(e) && isForeignToAllMounts(e, anchors))
+  )
+    return;
+  let resolved = pathModule.resolve(e);
+  let root = pathModule.parse(resolved).root;
+  let o = root;
+  let filtered = resolved.slice(root.length).split(PATH_SEPARATOR_RUN_RE).filter(Boolean);
+  let u = 0;
+  let c = filtered.length;
+  let l = false;
+  let d = false;
+  let g;
+  let y = 64;
+  let h = () => filtered.some((f) => hasDotSegment(f));
+  let S = () => /[. ]$/.test(filtered[0]);
   while (filtered.length > 0 && u < y) {
-    if (l && cl(filtered[0])) return UNVERIFIED_ANCESTRY;
+    if (l && hasDotSegment(filtered[0])) return UNVERIFIED_ANCESTRY;
     let joined = pathModule.join(o, filtered[0]);
-    if ((Ya(joined) && ce(joined, r)) || (se(joined) && !(Le(joined, r) || fn(joined, r))))
+    if (
+      (isNetworkMountPath(joined) && isForeignToAllMounts(joined, anchors)) ||
+      (isUnderNetworkDir(joined) &&
+        !(isNetworkPathUnderAnchors(joined, anchors) || isAnchorUnderPath(joined, anchors)))
+    )
       return joinRemainingSegments(joined, filtered.slice(1), n?.onCollapsedLanding);
     if (isMacSpecialPath(joined)) {
-      if (n?.surfaceNetworkRaw === !0 || n?.unreadableAncestry === "unverified") return UNVERIFIED_ANCESTRY;
+      if (n?.surfaceNetworkRaw === true || n?.unreadableAncestry === "unverified") return UNVERIFIED_ANCESTRY;
       return joinRemainingSegments(joined, filtered.slice(1), n?.onCollapsedLanding);
     }
-    let m = !1;
+    let m = false;
     if (
       m &&
       pathModule.dirname(joined) === "/dev/fd" &&
@@ -712,18 +446,32 @@ function* resolvePathSafely(e, n) {
       o = joined;
       continue;
     }
-    let b = m ? { errno: "ENOENT" } : yield { kind: "lstat", path: joined };
-    if (b === void 0 || typeof b === "string" || "errno" in b) {
+    let b = m
+      ? {
+          errno: "ENOENT",
+        }
+      : yield {
+          kind: "lstat",
+          path: joined,
+        };
+    if (b === undefined || typeof b === "string" || "errno" in b) {
       if (
         typeof b === "object" &&
         "errno" in b &&
-        b.errno !== void 0 &&
+        b.errno !== undefined &&
         b.errno !== "ENOENT" &&
         b.errno !== "ENOTDIR" &&
         b.errno !== "ENAMETOOLONG"
       ) {
-        if (typeof (yield { kind: "opendirNofollow", path: joined }) === "string") {
-          ((d = !0), filtered.shift(), (o = joined));
+        if (
+          typeof (yield {
+            kind: "opendirNofollow",
+            path: joined,
+          }) === "string"
+        ) {
+          d = true;
+          filtered.shift();
+          o = joined;
           continue;
         }
       }
@@ -735,7 +483,9 @@ function* resolvePathSafely(e, n) {
         (b.errno === "EPERM" || b.errno === "EACCES") &&
         isSpelledStrictAncestor(joined, n.launchAncestry)
       ) {
-        ((l = !0), filtered.shift(), (o = joined));
+        l = true;
+        filtered.shift();
+        o = joined;
         continue;
       }
       if (typeof b === "object" && "errno" in b && (b.errno === "ENOENT" || b.errno === "ENOTDIR"))
@@ -744,105 +494,152 @@ function* resolvePathSafely(e, n) {
           at: o,
           remaining: [...filtered],
           fromLinkTarget: filtered.length > c,
-          ...(b.errno === "ENOTDIR" && { notAFolder: !0 }),
+          ...(b.errno === "ENOTDIR" && {
+            notAFolder: true,
+          }),
         });
       return unverifiedAncestryReason(b, n, u > 0, h(), S());
     }
     let A = b;
-    if (((d = !0), !A.isSymbolicLink())) {
-      (filtered.shift(), (o = joined));
+    d = true;
+    if (!A.isSymbolicLink()) {
+      filtered.shift();
+      o = joined;
       continue;
     }
     u++;
     let x = joined + "\x00" + filtered.join("\x00");
     if ((g ??= new Set()).has(x)) return;
     g.add(x);
-    let L = yield { kind: "readlink", path: joined };
+    let L = yield {
+      kind: "readlink",
+      path: joined,
+    };
     if (typeof L !== "string") return unverifiedAncestryReason(L, n, u > 0, h(), S());
     let I = L;
     if (n?.literalLinkText === "opaque" && isOpaqueLinkText(I)) return OPAQUE_LINK_TEXT;
     if (!pathModule.isAbsolute(I)) {
-      let filtered_2 = I.split(ue).filter(Boolean);
-      if (n?.surfaceNetworkRaw === !0) {
-        let U = gn(
+      let filtered_2 = I.split(PATH_SEPARATOR_RUN_RE).filter(Boolean);
+      if (n?.surfaceNetworkRaw === true) {
+        let U = collapseNetworkLanding(
           (o.endsWith(pathModule.sep) ? o : o + pathModule.sep) +
             [...filtered_2, ...filtered.slice(1)].join(pathModule.sep),
-          r,
+          anchors,
           n?.onCollapsedLanding,
         );
-        if (U !== void 0) return U;
+        if (U !== undefined) return U;
       }
-      (filtered.shift(),
-        n?.onHop?.({ composed: pathModule.resolve(o, I, ...filtered), leaf: filtered.length === 0, text: I }),
-        (c = Math.min(c, filtered.length)),
-        (filtered = [...filtered_2, ...filtered]));
+      filtered.shift();
+      n?.onHop?.({
+        composed: pathModule.resolve(o, I, ...filtered),
+        leaf: filtered.length === 0,
+        text: I,
+      });
+      c = Math.min(c, filtered.length);
+      filtered = [...filtered_2, ...filtered];
       continue;
     }
     let w = I;
-    if (n?.surfaceNetworkRaw === !0 && filtered.length > 1 && isNetDir(w)) {
-      let T = gn([w, ...filtered.slice(1)].join(pathModule.sep), r, n?.onCollapsedLanding);
-      if (T !== void 0) return T;
+    if (n?.surfaceNetworkRaw === true && filtered.length > 1 && isNetDir(w)) {
+      let T = collapseNetworkLanding(
+        [w, ...filtered.slice(1)].join(pathModule.sep),
+        anchors,
+        n?.onCollapsedLanding,
+      );
+      if (T !== undefined) return T;
     }
     if (
-      (Qn(w) && !isWslUncPath(w) && Te(w, r)) ||
-      (Ya(w) && ce(w, r)) ||
-      (se(w) && !(Le(w, r) || (filtered.length > 1 && fn(w, r))))
-    )
-      return (filtered.shift(), joinRemainingSegments(w, filtered, n?.onCollapsedLanding));
-    if (n?.surfaceNetworkRaw === !0 && cl(w) && (Qn(w) || yl(w) || isUnderNetworkDirCached(w) || isNetDir(w)))
-      return (
-        filtered.shift(),
-        filtered.length === 0 ? w : w + pathModule.sep + filtered.join(pathModule.sep)
-      );
+      (isUncOrDevicePath(w) && !isWslUncPath(w) && isForeignToAllNetworks(w, anchors)) ||
+      (isNetworkMountPath(w) && isForeignToAllMounts(w, anchors)) ||
+      (isUnderNetworkDir(w) &&
+        !(isNetworkPathUnderAnchors(w, anchors) || (filtered.length > 1 && isAnchorUnderPath(w, anchors))))
+    ) {
+      filtered.shift();
+      return joinRemainingSegments(w, filtered, n?.onCollapsedLanding);
+    }
+    if (
+      n?.surfaceNetworkRaw === true &&
+      hasDotSegment(w) &&
+      (isUncOrDevicePath(w) || isNetworkMountRoot(w) || isUnderNetworkDirCached(w) || isNetDir(w))
+    ) {
+      filtered.shift();
+      return filtered.length === 0 ? w : w + pathModule.sep + filtered.join(pathModule.sep);
+    }
     filtered.shift();
-    let F = pathModule.parse(w).root || pathModule.sep,
-      root = pathModule.parse(joined).root,
-      P = /^[\\/]$/.test(F) && root !== "" && !/^[\\/]$/.test(root);
-    if (P && (n?.surfaceNetworkRaw === !0 || n?.unreadableAncestry === "unverified"))
+    let F = pathModule.parse(w).root || pathModule.sep;
+    let root = pathModule.parse(joined).root;
+    let P = /^[\\/]$/.test(F) && root !== "" && !/^[\\/]$/.test(root);
+    if (P && (n?.surfaceNetworkRaw === true || n?.unreadableAncestry === "unverified"))
       return UNVERIFIED_ANCESTRY;
-    (n?.onHop?.({
+    n?.onHop?.({
       composed: filtered.length === 0 ? w : pathModule.resolve(w, ...filtered),
       leaf: filtered.length === 0,
       text: I,
-    }),
-      (o = P ? root : F),
-      (d = !1),
-      (c = Math.min(c, filtered.length)),
-      (filtered = [...w.slice(F.length).split(ue).filter(Boolean), ...filtered]));
+    });
+    o = P ? root : F;
+    d = false;
+    c = Math.min(c, filtered.length);
+    filtered = [...w.slice(F.length).split(PATH_SEPARATOR_RUN_RE).filter(Boolean), ...filtered];
   }
   if (filtered.length > 0 && n?.literalLinkText === "opaque") return OPAQUE_LINK_TEXT;
   if (filtered.length > 0) return UNVERIFIED_ANCESTRY;
   if (u > 0 && isNetDir(o)) return o;
-  if (se(o) && !Le(o, r)) return o;
-  if (filtered.length === 0) n?.onOutcome?.({ kind: "resolved", path: o });
+  if (isUnderNetworkDir(o) && !isNetworkPathUnderAnchors(o, anchors)) return o;
+  if (filtered.length === 0)
+    n?.onOutcome?.({
+      kind: "resolved",
+      path: o,
+    });
   return;
 }
 //@ chunk-cgr0tezp.js:27079-27452 placement
-function safeResolvePath(e, n) {
-  if ((Qn(n) && !isWslUncPath(n)) || Ya(n) || tP(n))
-    return { resolvedPath: n, isSymlink: !1, isCanonical: !1 };
-  let r = findIntermediateUncJunction(e, n);
-  if (r === UNVERIFIED_ANCESTRY) return { resolvedPath: n, isSymlink: !1, isCanonical: !1 };
-  if (r !== void 0) return { resolvedPath: r, isSymlink: !0, isCanonical: !1 };
+function safeResolvePath(fsImplementation, n) {
+  if ((isUncOrDevicePath(n) && !isWslUncPath(n)) || isNetworkMountPath(n) || neverOtherHostMount(n))
+    return {
+      resolvedPath: n,
+      isSymlink: false,
+      isCanonical: false,
+    };
+  let intermediateUncJunction = findIntermediateUncJunction(fsImplementation, n);
+  if (intermediateUncJunction === UNVERIFIED_ANCESTRY)
+    return {
+      resolvedPath: n,
+      isSymlink: false,
+      isCanonical: false,
+    };
+  if (intermediateUncJunction !== undefined)
+    return {
+      resolvedPath: intermediateUncJunction,
+      isSymlink: true,
+      isCanonical: false,
+    };
   try {
-    let i = realpathExaminedSync(e, n);
-    return { resolvedPath: i, isSymlink: i !== n, isCanonical: !0 };
+    let i = realpathExaminedSync(fsImplementation, n);
+    return {
+      resolvedPath: i,
+      isSymlink: i !== n,
+      isCanonical: true,
+    };
   } catch (error) {
-    return { resolvedPath: n, isSymlink: !1, isCanonical: !1 };
+    return {
+      resolvedPath: n,
+      isSymlink: false,
+      isCanonical: false,
+    };
   }
 }
 //@ chunk-cgr0tezp.js:27452-27808 placement
-function vouchedLaunchAncestry(e) {
+function vouchedLaunchAncestry(fsImplementation) {
   let n = launchCwd();
   if (n === null) return null;
   try {
-    let resolved = pathModule.resolve(n),
-      resolved_2 = pathModule.resolve(e.cwd()),
-      root = pathModule.parse(resolved).root;
+    let resolved = pathModule.resolve(n);
+    let resolved_2 = pathModule.resolve(fsImplementation.cwd());
+    let root = pathModule.parse(resolved).root;
     if (root !== pathModule.parse(resolved_2).root) return null;
-    let filtered = resolved.slice(root.length).split(ue).filter(Boolean),
-      filtered_2 = resolved_2.slice(root.length).split(ue).filter(Boolean),
-      u = 0;
+    let filtered = resolved.slice(root.length).split(PATH_SEPARATOR_RUN_RE).filter(Boolean);
+    let filtered_2 = resolved_2.slice(root.length).split(PATH_SEPARATOR_RUN_RE).filter(Boolean);
+    let u = 0;
     while (u < filtered.length && u < filtered_2.length && filtered[u] === filtered_2[u]) u++;
     return u > 0 ? pathModule.join(root, ...filtered.slice(0, u)) : null;
   } catch {
@@ -850,24 +647,24 @@ function vouchedLaunchAncestry(e) {
   }
 }
 //@ chunk-cgr0tezp.js:27808-28206 placement
-function realpathExaminedSync(e, n) {
+function realpathExaminedSync(fsImplementation, n) {
   try {
-    return e.realpathSync(n);
+    return fsImplementation.realpathSync(n);
   } catch (error) {
-    let i = getErrnoCode(error);
-    if (i !== "EPERM" && i !== "EACCES") throw error;
-    let s,
-      o = vouchedLaunchAncestry(e);
+    let errnoCode = getErrnoCode(error);
+    if (errnoCode !== "EPERM" && errnoCode !== "EACCES") throw error;
+    let s;
+    let launchAncestry = vouchedLaunchAncestry(fsImplementation);
     if (
-      findIntermediateUncJunction(e, n, {
+      findIntermediateUncJunction(fsImplementation, n, {
         unreadableAncestry: "unverified",
-        surfaceNetworkRaw: !0,
-        launchAncestry: o,
+        surfaceNetworkRaw: true,
+        launchAncestry,
         onOutcome: (u) => {
           s = u;
         },
-      }) !== void 0 ||
-      s === void 0
+      }) !== undefined ||
+      s === undefined
     )
       throw error;
     if (s.kind === "absent")
@@ -876,83 +673,104 @@ function realpathExaminedSync(e, n) {
         syscall: "realpath",
         path: n,
       });
-    return Mn(s.path);
+    return identity(s.path);
   }
 }
 //@ chunk-cgr0tezp.js:28206-28244 placement
 var SYMLINK_TO_NETWORK_PATH_CODE = "ERR_SYMLINK_TO_NETWORK_PATH";
 //@ chunk-cgr0tezp.js:28244-28406 placement
-function vetRepoSettingsPath(e, n, r) {
-  let { asWritten: asWritten, opts: opts } = refuseUnvettablePath(e, n, r),
-    o,
-    a;
-  return (
-    refuseUnexaminedPath(
-      findIntermediateUncJunction(e, asWritten, {
-        ...opts,
-        onOutcome: (u) => {
-          ((o = getResolvedPath(u)), (a = absentSpellingInfo(u)));
-        },
-      }),
-      n,
-      asWritten,
-    ),
-    { ...xn(asWritten), linksResolvedPath: o, absentAt: a }
+function vetRepoSettingsPath(fsImplementation, path, r) {
+  let { asWritten, opts } = refuseUnvettablePath(fsImplementation, path, r);
+  let linksResolvedPath;
+  let absentAt;
+  refuseUnexaminedPath(
+    findIntermediateUncJunction(fsImplementation, asWritten, {
+      ...opts,
+      onOutcome: (target) => {
+        linksResolvedPath = getResolvedPath(target);
+        absentAt = absentSpellingInfo(target);
+      },
+    }),
+    path,
+    asWritten,
   );
+  return {
+    ...plainResolvedPathInfo(asWritten),
+    linksResolvedPath,
+    absentAt,
+  };
 }
 //@ chunk-cgr0tezp.js:28406-29083 placement
-async function vetRepoSettingsPathAsync(e, n, r) {
-  let { asWritten: asWritten, opts: opts, ownHost: ownHost } = refuseUnvettablePath(e, n, r),
-    a,
-    u,
-    c,
-    l,
-    d = !ownHost,
-    g = !1,
-    y,
-    h = [],
-    S = {
-      ...opts,
-      onOutcome: (f) => {
-        ((g = !0), (a = getResolvedPath(f)), (u = absentSpellingInfo(f)));
-        let m = y,
-          b = f.kind === "resolved" && m?.path === f.path;
-        ((d = !b),
-          (l = b ? m.stats : void 0),
-          (c =
-            b && !isSentinelInode(m.stats.ino)
-              ? { dev: m.stats.dev, ino: m.stats.ino, ctimeNs: m.stats.ctimeNs }
-              : void 0));
-      },
-    };
-  if (
-    (refuseUnexaminedPath(
-      await findIntermediateUncJunctionAsync(
-        e,
-        asWritten,
-        S,
-        void 0,
-        r?.fileIdentity === !0
-          ? (f, m) => {
-              if (((y = m === void 0 ? void 0 : { path: f, stats: m }), m?.isSymbolicLink() === !0))
-                h.push(m);
+async function vetRepoSettingsPathAsync(fsImplementation, path, r) {
+  let { asWritten, opts, ownHost } = refuseUnvettablePath(fsImplementation, path, r);
+  let linksResolvedPath;
+  let absentAt;
+  let c;
+  let l;
+  let d = !ownHost;
+  let g = false;
+  let y;
+  let h = [];
+  let S = {
+    ...opts,
+    onOutcome: (target) => {
+      g = true;
+      linksResolvedPath = getResolvedPath(target);
+      absentAt = absentSpellingInfo(target);
+      let m = y;
+      let b = target.kind === "resolved" && m?.path === target.path;
+      d = !b;
+      l = b ? m.stats : undefined;
+      c =
+        b && !isSentinelInode(m.stats.ino)
+          ? {
+              dev: m.stats.dev,
+              ino: m.stats.ino,
+              ctimeNs: m.stats.ctimeNs,
             }
-          : void 0,
-      ),
-      n,
+          : undefined;
+    },
+  };
+  refuseUnexaminedPath(
+    await findIntermediateUncJunctionAsync(
+      fsImplementation,
       asWritten,
+      S,
+      undefined,
+      r?.fileIdentity === true
+        ? (path, m) => {
+            y =
+              m === undefined
+                ? undefined
+                : {
+                    path,
+                    stats: m,
+                  };
+            if (m?.isSymbolicLink() === true) h.push(m);
+          }
+        : undefined,
     ),
-    !g && y?.stats.isSymbolicLink() === !0)
-  )
-    d = !0;
+    path,
+    asWritten,
+  );
+  if (!g && y?.stats.isSymbolicLink() === true) d = true;
   return {
-    ...xn(asWritten),
-    linksResolvedPath: a,
-    absentAt: u,
-    ...(c !== void 0 && { identity: c }),
-    ...(l !== void 0 && { endStats: l }),
-    ...(r?.fileIdentity === !0 && { linksFollowed: h }),
-    ...(r?.fileIdentity === !0 && d && { noFileSeen: !0 }),
+    ...plainResolvedPathInfo(asWritten),
+    linksResolvedPath,
+    absentAt,
+    ...(c !== undefined && {
+      identity: c,
+    }),
+    ...(l !== undefined && {
+      endStats: l,
+    }),
+    ...(r?.fileIdentity === true && {
+      linksFollowed: h,
+    }),
+    ...(r?.fileIdentity === true &&
+      d && {
+        noFileSeen: true,
+      }),
   };
 }
 //@ chunk-cgr0tezp.js:29143-29287 placement
@@ -962,39 +780,56 @@ function absentSpellingInfo(e) {
         at: e.at,
         remaining: e.remaining,
         fromLinkTarget: e.fromLinkTarget,
-        ...(e.notAFolder && { notAFolder: !0 }),
+        ...(e.notAFolder && {
+          notAFolder: true,
+        }),
       }
-    : void 0;
+    : undefined;
 }
+//@ chunk-cgr0tezp.js:29287-29988 placement
 /**
  * 设备命名空间路径拒绝读取。
  */
-//@ chunk-cgr0tezp.js:29287-29988 placement
 function refuseUnvettablePath(e, n, r) {
-  let i = toUncLongPath(n);
-  if (uT(i) || gb(i))
+  let uncLongPath = toUncLongPath(n);
+  if (isDeviceNamespacePath(uncLongPath) || isDevicePrefixPath(uncLongPath))
     throw Object.assign(
       Error(
         "Refusing to read a file whose path could not be vetted (a device-namespace spelling; use the plain drive or share path)",
       ),
-      { code: SYMLINK_TO_NETWORK_PATH_CODE, path: n, reason: "unexamined" },
+      {
+        code: SYMLINK_TO_NETWORK_PATH_CODE,
+        path: n,
+        reason: "unexamined",
+      },
     );
-  let s = pathModule.isAbsolute(i) ? pathModule.resolve(i) : pathModule.resolve(process.cwd(), i),
-    o = toUncLongPath(s);
-  if (uT(o) || gb(o))
+  let s = pathModule.isAbsolute(uncLongPath)
+    ? pathModule.resolve(uncLongPath)
+    : pathModule.resolve(process.cwd(), uncLongPath);
+  let uncLongPath_2 = toUncLongPath(s);
+  if (isDeviceNamespacePath(uncLongPath_2) || isDevicePrefixPath(uncLongPath_2))
     throw Object.assign(
       Error(
         "Refusing to read a file whose path could not be vetted (a device-namespace spelling; use the plain drive or share path)",
       ),
-      { code: SYMLINK_TO_NETWORK_PATH_CODE, path: n, reason: "unexamined" },
+      {
+        code: SYMLINK_TO_NETWORK_PATH_CODE,
+        path: n,
+        reason: "unexamined",
+      },
     );
-  let a = se(o) || Ya(o) || (Qn(o) && !isWslUncPath(o));
+  let a =
+    isUnderNetworkDir(uncLongPath_2) ||
+    isNetworkMountPath(uncLongPath_2) ||
+    (isUncOrDevicePath(uncLongPath_2) && !isWslUncPath(uncLongPath_2));
   return {
-    asWritten: o,
+    asWritten: uncLongPath_2,
     ownHost: a,
     opts: {
-      ...(a && { anchors: [o] }),
-      surfaceNetworkRaw: !0,
+      ...(a && {
+        anchors: [uncLongPath_2],
+      }),
+      surfaceNetworkRaw: true,
       ...((!a || r?.failClosed) && {
         unreadableAncestry: "unverified",
         launchAncestry: vouchedLaunchAncestry(e),
@@ -1003,30 +838,48 @@ function refuseUnvettablePath(e, n, r) {
   };
 }
 //@ chunk-cgr0tezp.js:29988-30054 placement
-function xn(e) {
-  return { resolvedPath: e, isSymlink: !1, isCanonical: !1 };
+function plainResolvedPathInfo(resolvedPath) {
+  return {
+    resolvedPath,
+    isSymlink: false,
+    isCanonical: false,
+  };
 }
+//@ chunk-cgr0tezp.js:30054-30618 placement
 /**
  * 无法检查的路径拒绝读取。
  */
-//@ chunk-cgr0tezp.js:30054-30618 placement
-function refuseUnexaminedPath(e, n, r) {
-  if (e === void 0) return;
-  let i = (o) =>
+function refuseUnexaminedPath(intermediateUncJunction, path, asWritten) {
+  if (intermediateUncJunction === undefined) return;
+  let i = (reason) =>
     Object.assign(
       Error(
         "Refusing to read a file whose path could not be vetted (a component that could not be examined, or a symbolic link chain too long to follow)",
       ),
-      { code: SYMLINK_TO_NETWORK_PATH_CODE, path: n, reason: o },
+      {
+        code: SYMLINK_TO_NETWORK_PATH_CODE,
+        path,
+        reason,
+      },
     );
-  if (e === UNVERIFIED_ANCESTRY) throw i("unexamined");
-  if (se(r) && e === r) return;
-  if (!(Qn(e) || yl(e) || se(e) || isNetDir(e))) throw i("unexamined");
+  if (intermediateUncJunction === UNVERIFIED_ANCESTRY) throw i("unexamined");
+  if (isUnderNetworkDir(asWritten) && intermediateUncJunction === asWritten) return;
+  if (!(
+    isUncOrDevicePath(intermediateUncJunction) ||
+    isNetworkMountRoot(intermediateUncJunction) ||
+    isUnderNetworkDir(intermediateUncJunction) ||
+    isNetDir(intermediateUncJunction)
+  ))
+    throw i("unexamined");
   throw Object.assign(
     Error(
       "Refusing to read a file through a symbolic link that leads onto a network share or automount path; replace the link with a regular file to use it",
     ),
-    { code: SYMLINK_TO_NETWORK_PATH_CODE, path: n, reason: "network" },
+    {
+      code: SYMLINK_TO_NETWORK_PATH_CODE,
+      path,
+      reason: "network",
+    },
   );
 }
 //@ chunk-cgr0tezp.js:30618-30652 placement
@@ -1037,13 +890,14 @@ function isSymlinkToNetworkPathError(e) {
 function repoSettingsRefusalReason(e) {
   if (!isSymlinkToNetworkPathError(e)) return;
   let reason = e.reason;
-  return reason === "network" || reason === "unexamined" ? reason : void 0;
+  return reason === "network" || reason === "unexamined" ? reason : undefined;
 }
 //@ chunk-cgr0tezp.js:30749-30837 placement
-function isDuplicatePath(e, n, r) {
-  let { resolvedPath: resolvedPath } = safeResolvePath(e, n);
-  if (r.has(resolvedPath)) return !0;
-  return (r.add(resolvedPath), !1);
+function isDuplicatePath(e, n, loadedPaths) {
+  let { resolvedPath } = safeResolvePath(e, n);
+  if (loadedPaths.has(resolvedPath)) return true;
+  loadedPaths.add(resolvedPath);
+  return false;
 }
 //@ chunk-cgr0tezp.js:30837-30869 placement
 var DOTDOT_SEGMENT_PATTERN = /(^|[\\/])\.\.([\\/]|$)/;
@@ -1054,77 +908,95 @@ function stripDotSegments(e, n = "linux") {
   if (n === "win32" && /^[A-Za-z]:$/.test(replaced)) return replaced + e[2];
   return replaced;
 }
+//@ chunk-cgr0tezp.js:31047-32818 placement = resolveDeepestExistingAncestorSync (0.643)
 /**
  * 对不存在的路径，找到最深的已存在祖先并 realpath，再拼回剩余部分（权限检查用于新建文件）。
  */
-//@ chunk-cgr0tezp.js:31047-32818 placement = resolveDeepestExistingAncestorSync (0.643)
-function resolveDeepestExistingAncestorSync(e, n, r) {
-  let i = getAnchors(r);
-  if ((Qn(n) && !isWslUncPath(n)) || Ya(n) || tP(n)) {
-    if (i !== void 0 && ((Ya(n) && !ce(n, i)) || (Qn(n) && !isWslUncPath(n) && !Te(n, i)))) {
-      let l = findIntermediateUncJunction(e, n, { anchors: i, surfaceNetworkRaw: r?.surfaceNetworkRaw });
-      if (l === UNVERIFIED_ANCESTRY && r?.surfaceNetworkRaw !== !0) {
-        if (r?.surfaceDotDotTargets === !0) throw hopCapExhausted(n);
-        return n;
+function resolveDeepestExistingAncestorSync(fsImplementation, path, r) {
+  let anchors = getAnchors(r);
+  if (
+    (isUncOrDevicePath(path) && !isWslUncPath(path)) ||
+    isNetworkMountPath(path) ||
+    neverOtherHostMount(path)
+  ) {
+    if (
+      anchors !== undefined &&
+      ((isNetworkMountPath(path) && !isForeignToAllMounts(path, anchors)) ||
+        (isUncOrDevicePath(path) && !isWslUncPath(path) && !isForeignToAllNetworks(path, anchors)))
+    ) {
+      let intermediateUncJunction = findIntermediateUncJunction(fsImplementation, path, {
+        anchors,
+        surfaceNetworkRaw: r?.surfaceNetworkRaw,
+      });
+      if (intermediateUncJunction === UNVERIFIED_ANCESTRY && r?.surfaceNetworkRaw !== true) {
+        if (r?.surfaceDotDotTargets === true) throw hopCapExhausted(path);
+        return path;
       }
-      return l;
+      return intermediateUncJunction;
     }
-    return n;
+    return path;
   }
-  let s = findIntermediateUncJunction(
-    e,
-    n,
-    r?.surfaceNetworkRaw === !0 ? { surfaceNetworkRaw: !0, anchors: i } : void 0,
+  let intermediateUncJunction = findIntermediateUncJunction(
+    fsImplementation,
+    path,
+    r?.surfaceNetworkRaw === true
+      ? {
+          surfaceNetworkRaw: true,
+          anchors,
+        }
+      : undefined,
   );
-  if (s === UNVERIFIED_ANCESTRY && r?.surfaceNetworkRaw !== !0) {
-    if (r?.surfaceDotDotTargets === !0) throw hopCapExhausted(n);
+  if (intermediateUncJunction === UNVERIFIED_ANCESTRY && r?.surfaceNetworkRaw !== true) {
+    if (r?.surfaceDotDotTargets === true) throw hopCapExhausted(path);
     return;
   }
-  if (s !== void 0) return r?.liveRoutesOnly === !0 ? void 0 : s;
-  let o = n,
-    segments = [],
-    u = r?.surfaceDotDotTargets === !0,
-    c = (l) =>
-      segments.length === 0
-        ? l
-        : u && DOTDOT_SEGMENT_PATTERN.test(l)
-          ? [l, ...segments].join(pathModule.sep)
-          : pathModule.join(l, ...segments);
+  if (intermediateUncJunction !== undefined)
+    return r?.liveRoutesOnly === true ? undefined : intermediateUncJunction;
+  let o = path;
+  let segments = [];
+  let u = r?.surfaceDotDotTargets === true;
+  let c = (l) =>
+    segments.length === 0
+      ? l
+      : u && DOTDOT_SEGMENT_PATTERN.test(l)
+        ? [l, ...segments].join(pathModule.sep)
+        : pathModule.join(l, ...segments);
   while (o !== pathModule.dirname(o)) {
-    let l, d;
+    let l;
+    let d;
     try {
-      l = e.readlinkSync(o);
+      l = fsImplementation.readlinkSync(o);
     } catch (error) {
       d = getErrnoCode(error);
     }
-    if (l !== void 0) {
+    if (l !== undefined) {
       if (u && DOTDOT_SEGMENT_PATTERN.test(l))
         return c(pathModule.isAbsolute(l) ? l : pathModule.dirname(o) + pathModule.sep + l);
       let g = pathModule.isAbsolute(l) ? l : pathModule.resolve(pathModule.dirname(o), l);
       if (
-        (Qn(g) && !isWslUncPath(g)) ||
-        Ya(g) ||
-        tP(g) ||
+        (isUncOrDevicePath(g) && !isWslUncPath(g)) ||
+        isNetworkMountPath(g) ||
+        neverOtherHostMount(g) ||
         isMacSpecialPath(g) ||
-        (r?.surfaceNetworkRaw === !0 && cl(g))
+        (r?.surfaceNetworkRaw === true && hasDotSegment(g))
       ) {
-        if (r?.liveRoutesOnly === !0) return;
-        return r?.surfaceNetworkRaw === !0 && segments.length > 0
+        if (r?.liveRoutesOnly === true) return;
+        return r?.surfaceNetworkRaw === true && segments.length > 0
           ? g + pathModule.sep + segments.join(pathModule.sep)
           : c(g);
       }
       try {
-        let y = realpathExaminedSync(e, o);
+        let y = realpathExaminedSync(fsImplementation, o);
         return c(y);
       } catch {
-        if (r?.liveRoutesOnly === !0) return;
-        let y = o,
-          h = 0,
-          S = 64;
+        if (r?.liveRoutesOnly === true) return;
+        let y = o;
+        let h = 0;
+        let S = 64;
         while (h < S) {
           let f;
           try {
-            f = e.readlinkSync(y);
+            f = fsImplementation.readlinkSync(y);
           } catch {
             break;
           }
@@ -1138,18 +1010,18 @@ function resolveDeepestExistingAncestorSync(e, n, r) {
               : f
             : pathModule.resolve(pathModule.dirname(y), f);
           if (
-            (Qn(m) && !isWslUncPath(m) && Te(m, i)) ||
-            (Ya(m) && ce(m, i)) ||
-            tP(m) ||
+            (isUncOrDevicePath(m) && !isWslUncPath(m) && isForeignToAllNetworks(m, anchors)) ||
+            (isNetworkMountPath(m) && isForeignToAllMounts(m, anchors)) ||
+            neverOtherHostMount(m) ||
             isMacSpecialPath(m) ||
-            (r?.surfaceNetworkRaw === !0 && cl(m))
+            (r?.surfaceNetworkRaw === true && hasDotSegment(m))
           ) {
             y = m;
             break;
           }
           let b;
           try {
-            b = e.lstatSync(m);
+            b = fsImplementation.lstatSync(m);
           } catch {
             y = m;
             break;
@@ -1158,22 +1030,28 @@ function resolveDeepestExistingAncestorSync(e, n, r) {
             y = m;
             break;
           }
-          ((y = m), h++);
+          y = m;
+          h++;
         }
-        if (h >= S && r?.surfaceNetworkRaw === !0) return UNVERIFIED_ANCESTRY;
-        return r?.surfaceNetworkRaw === !0 &&
+        if (h >= S && r?.surfaceNetworkRaw === true) return UNVERIFIED_ANCESTRY;
+        return r?.surfaceNetworkRaw === true &&
           segments.length > 0 &&
-          ((Qn(y) && !isWslUncPath(y)) || Ya(y) || tP(y) || isMacSpecialPath(y) || cl(y))
+          ((isUncOrDevicePath(y) && !isWslUncPath(y)) ||
+            isNetworkMountPath(y) ||
+            neverOtherHostMount(y) ||
+            isMacSpecialPath(y) ||
+            hasDotSegment(y))
           ? y + pathModule.sep + segments.join(pathModule.sep)
           : c(y);
       }
     }
     if (d === "ENOENT") {
-      (segments.unshift(pathModule.basename(o)), (o = pathModule.dirname(o)));
+      segments.unshift(pathModule.basename(o));
+      o = pathModule.dirname(o);
       continue;
     }
     try {
-      let g = realpathExaminedSync(e, o);
+      let g = realpathExaminedSync(fsImplementation, o);
       if (g !== o) return c(g);
     } catch (error) {
       if (u) throw error;
@@ -1184,27 +1062,27 @@ function resolveDeepestExistingAncestorSync(e, n, r) {
 }
 //@ chunk-cgr0tezp.js:32818-32868 placement
 function isSpecialPath(e) {
-  return (Qn(e) && !isWslUncPath(e)) || yl(e) || uT(e);
+  return (isUncOrDevicePath(e) && !isWslUncPath(e)) || isNetworkMountRoot(e) || isDeviceNamespacePath(e);
 }
 //@ chunk-cgr0tezp.js:32868-32903 placement
 function expandWin32ExistingLongNames(e) {
-  return resolveViaDeepestExistingAncestor(e, !1) ?? e;
+  return resolveViaDeepestExistingAncestor(e, false) ?? e;
 }
 //@ chunk-cgr0tezp.js:32903-32935 placement
 function expandWin32ExistingLongNamesStrict(e) {
-  return resolveViaDeepestExistingAncestor(e, !0);
+  return resolveViaDeepestExistingAncestor(e, true);
 }
+//@ chunk-cgr0tezp.js:32935-33259 placement
 /**
  * 找到最深的存在的祖先目录。
  */
-//@ chunk-cgr0tezp.js:32935-33259 placement
 function resolveViaDeepestExistingAncestor(e, n) {
   if (isSpecialPath(e)) return e;
-  let r = e,
-    i = "";
+  let r = e;
+  let i = "";
   for (;;) {
-    if (!cl(r)) {
-      let o = e9(r);
+    if (!hasDotSegment(r)) {
+      let o = realpathCacheEntry(r);
       if (o !== null) {
         let a = i === "" ? o : o.endsWith(pathModule.sep) ? o + i : o + pathModule.sep + i;
         if (isSpecialPath(a)) return n ? a : e;
@@ -1212,14 +1090,16 @@ function resolveViaDeepestExistingAncestor(e, n) {
       }
       if (n)
         try {
-          return (fsModule.lstatSync(r), null);
+          fsModule.lstatSync(r);
+          return null;
         } catch (error) {
           if (!isENOENT(error)) return null;
         }
     }
     let dir = pathModule.dirname(r);
     if (dir === r) return e;
-    ((i = i === "" ? pathModule.basename(r) : pathModule.basename(r) + pathModule.sep + i), (r = dir));
+    i = i === "" ? pathModule.basename(r) : pathModule.basename(r) + pathModule.sep + i;
+    r = dir;
   }
 }
 //@ chunk-cgr0tezp.js:33259-33300 placement
@@ -1227,32 +1107,42 @@ function walkPermissionCheckPaths(e) {
   return walkPathSpellingsSync(e, "permission");
 }
 //@ chunk-cgr0tezp.js:33300-33349 placement
-function walkPermissionCheckPathsAsync(e, n, r) {
-  return vetPathAsync(e, "permission", n, r);
+function walkPermissionCheckPathsAsync(e, signal, r) {
+  return vetPathAsync(e, "permission", signal, r);
 }
+//@ chunk-cgr0tezp.js:33349-33764 placement
 /**
  * 异步执行路径检查步骤。
  */
-//@ chunk-cgr0tezp.js:33349-33764 placement
 function vetPathAsync(e, n, r, i) {
-  let s = getFsImplementation();
+  let fsImplementation = getFsImplementation();
   return runFsSteps(
     vetPathSteps(e, n),
     r,
-    i === void 0 ? void 0 : (o) => i(o.path),
+    i === undefined ? undefined : (o) => i(o.path),
     async (o) => {
       switch (o.kind) {
         case "lstat":
-          return s.lstat(o.path);
+          return fsImplementation.lstat(o.path);
         case "opendirNofollow":
-          return (await s.openDirNoFollow(o.path), "ok");
+          await fsImplementation.openDirNoFollow(o.path);
+          return "ok";
         case "readlink":
-          return s.readlink(o.path);
+          return fsImplementation.readlink(o.path);
         case "realpath":
-          return s === NodeFsOperations ? Mn(await li(o.path)) : s.realpath(o.path);
+          return fsImplementation === NodeFsOperations
+            ? identity(await realpathPromise(o.path))
+            : fsImplementation.realpath(o.path);
       }
     },
-    { unresolved: !0, requested: e, spellings: [e], stoppedAt: e, leafIsSymlink: !1, reason: "cut-short" },
+    {
+      unresolved: true,
+      requested: e,
+      spellings: [e],
+      stoppedAt: e,
+      leafIsSymlink: false,
+      reason: "cut-short",
+    },
   );
 }
 //@ chunk-cgr0tezp.js:33764-33805 placement
@@ -1264,157 +1154,193 @@ function toPathCheckResult(e) {
   return {
     paths: e.spellings,
     vetted: !e.unresolved,
-    ...(!e.unresolved && e.linkTextClimbs && { linkTextClimbs: e.linkTextClimbs }),
+    ...(!e.unresolved &&
+      e.linkTextClimbs && {
+        linkTextClimbs: e.linkTextClimbs,
+      }),
   };
 }
 //@ chunk-cgr0tezp.js:33937-33998 placement
 async function getPathsForNetworkScreenAsync(e) {
-  return toPathCheckResult(await vetPathAsync(e, "screen", void 0));
+  return toPathCheckResult(await vetPathAsync(e, "screen", undefined));
 }
+//@ chunk-cgr0tezp.js:33998-34261 placement
 /**
  * 同步驱动 pathSpellingWalker（lstat/readlink/opendir），得到路径的全部拼写。
  */
-//@ chunk-cgr0tezp.js:33998-34261 placement
 function walkPathSpellingsSync(e, n) {
-  let r = getFsImplementation();
+  let fsImplementation = getFsImplementation();
   return returnValue(vetPathSteps(e, n), (i) => {
     switch (i.kind) {
       case "lstat":
-        return r.lstatSync(i.path);
+        return fsImplementation.lstatSync(i.path);
       case "opendirNofollow":
-        return (r.openDirNoFollowSync(i.path), "ok");
+        fsImplementation.openDirNoFollowSync(i.path);
+        return "ok";
       case "readlink":
-        return r.readlinkSync(i.path);
+        return fsImplementation.readlinkSync(i.path);
       case "realpath":
-        return r.realpathSync(i.path);
+        return fsImplementation.realpathSync(i.path);
     }
   });
 }
+//@ chunk-cgr0tezp.js:34261-36346 placement
 /**
  * 路径拼写生成器：展开 ~、逐段跟随符号链接，产出路径的全部等价拼写，供权限检查确保规则对真实位置生效；通过 yield 请求 lstat/readlink，可同步或异步驱动。
  */
-//@ chunk-cgr0tezp.js:34261-36346 placement
 function* vetPathSteps(e, n) {
   let r = e;
   if (r === "~") r = homedir().normalize("NFC");
   else if (r.startsWith("~/")) r = pathModule.join(homedir().normalize("NFC"), r.slice(2));
-  let i = new Set([r]),
-    s = !1,
-    o = (R, v = !1) => ({
-      unresolved: !1,
-      requested: r,
-      spellings: Array.from(i),
-      landing: R,
-      leafIsSymlink: v,
-      ...(s && { linkTextClimbs: s }),
-    });
-  if ((Qn(r) && !isWslUncPath(r)) || Ya(r) || tP(r)) return o(r);
-  let a = getFsImplementation(),
-    u = vouchedLaunchAncestry(a),
-    c,
-    l,
-    d = !1,
-    g = !1,
-    y = !1,
-    h = !1,
-    S = [],
-    f = new Set(),
-    m = (R) => {
-      let resolved = pathModule.resolve(R);
-      if (!f.has(resolved)) (f.add(resolved), S.push(R));
-    },
-    b = r,
-    A,
-    x = function* (R) {
-      let v;
-      for (;;) {
-        let j = R.next(v);
-        if (j.done) return j.value;
-        let G = j.value;
-        if (((b = G.path), G.kind === "readlink")) g = !0;
-        else A = void 0;
-        if (((v = yield G), typeof v === "object" && "errno" in v))
-          if (G.kind === "readlink") y = !0;
-          else ((A = v.errno), (h ||= G.kind === "opendirNofollow" && v.errno === "ELOOP"));
-      }
-    },
-    L = yield* x(
-      resolvePathSafely(r, {
-        unreadableAncestry: "unverified",
-        launchAncestry: u,
-        ...!1,
-        onCollapsedLanding: (R) => {
-          c = R;
-        },
-        onOutcome: (R) => {
-          l = R;
-        },
-        onHop: ({ composed: composed, leaf: leaf, text: text }) => {
-          if (leaf) (i.add(composed), (d = !0));
-          if (n === "screen" && st(text)) ((s = !0), m(composed));
-        },
-      }),
-    ),
-    I = n === "permission" && !g && (A === "ENAMETOOLONG" || A === "EACCES" || A === "EPERM"),
-    w = () => {
-      let R = Mn(r);
-      return (i.add(R), o(R));
-    },
-    M = () =>
-      I
-        ? w()
-        : {
-            unresolved: !0,
-            requested: r,
-            spellings: Array.from(i),
-            stoppedAt: b,
-            leafIsSymlink: d,
-            reason: g || h ? "past-a-link" : "unexamined",
-          },
-    F = 8,
-    O = function* () {
-      for (let R = 0; R < S.length; R++) {
-        if (R >= F) return !1;
-        let v = S[R];
-        if ((Qn(v) && !isWslUncPath(v)) || Ya(v) || tP(v)) {
-          i.add(v);
-          continue;
+  let i = new Set([r]);
+  let s = false;
+  let o = (landing, leafIsSymlink = false) => ({
+    unresolved: false,
+    requested: r,
+    spellings: Array.from(i),
+    landing,
+    leafIsSymlink,
+    ...(s && {
+      linkTextClimbs: s,
+    }),
+  });
+  if ((isUncOrDevicePath(r) && !isWslUncPath(r)) || isNetworkMountPath(r) || neverOtherHostMount(r))
+    return o(r);
+  let fsImplementation = getFsImplementation();
+  let launchAncestry = vouchedLaunchAncestry(fsImplementation);
+  let c;
+  let l;
+  let d = false;
+  let g = false;
+  let y = false;
+  let h = false;
+  let S = [];
+  let f = new Set();
+  let m = (composed) => {
+    let resolved = pathModule.resolve(composed);
+    if (!f.has(resolved)) {
+      f.add(resolved);
+      S.push(composed);
+    }
+  };
+  let stoppedAt = r;
+  let A;
+  let x = function* (path) {
+    let v;
+    for (;;) {
+      let j = path.next(v);
+      if (j.done) return j.value;
+      let G = j.value;
+      stoppedAt = G.path;
+      if (G.kind === "readlink") g = true;
+      else A = undefined;
+      v = yield G;
+      if (typeof v === "object" && "errno" in v)
+        if (G.kind === "readlink") y = true;
+        else {
+          A = v.errno;
+          h ||= G.kind === "opendirNofollow" && v.errno === "ELOOP";
         }
-        let j = yield* x(
-          resolvePathSafely(v, {
-            unreadableAncestry: "unverified",
-            launchAncestry: u,
-            onHop: ({ composed: composed, text: text }) => {
-              if (st(text)) m(composed);
-            },
-          }),
-        );
-        if (j === UNVERIFIED_ANCESTRY || y) return !1;
-        if (j !== void 0) i.add(j);
+    }
+  };
+  let L = yield* x(
+    resolvePathSafely(r, {
+      unreadableAncestry: "unverified",
+      launchAncestry,
+      ...false,
+      onCollapsedLanding: (R) => {
+        c = R;
+      },
+      onOutcome: (R) => {
+        l = R;
+      },
+      onHop: ({ composed, leaf, text }) => {
+        if (leaf) {
+          i.add(composed);
+          d = true;
+        }
+        if (n === "screen" && hasParentSegment(text)) {
+          s = true;
+          m(composed);
+        }
+      },
+    }),
+  );
+  let I = n === "permission" && !g && (A === "ENAMETOOLONG" || A === "EACCES" || A === "EPERM");
+  let w = () => {
+    let R = identity(r);
+    i.add(R);
+    return o(R);
+  };
+  let M = () =>
+    I
+      ? w()
+      : {
+          unresolved: true,
+          requested: r,
+          spellings: Array.from(i),
+          stoppedAt,
+          leafIsSymlink: d,
+          reason: g || h ? "past-a-link" : "unexamined",
+        };
+  let F = 8;
+  let O = function* () {
+    for (let idx = 0; idx < S.length; idx++) {
+      if (idx >= F) return false;
+      let v = S[idx];
+      if ((isUncOrDevicePath(v) && !isWslUncPath(v)) || isNetworkMountPath(v) || neverOtherHostMount(v)) {
+        i.add(v);
+        continue;
       }
-      return !0;
-    };
+      let j = yield* x(
+        resolvePathSafely(v, {
+          unreadableAncestry: "unverified",
+          launchAncestry,
+          onHop: ({ composed, text }) => {
+            if (hasParentSegment(text)) m(composed);
+          },
+        }),
+      );
+      if (j === UNVERIFIED_ANCESTRY || y) return false;
+      if (j !== undefined) i.add(j);
+    }
+    return true;
+  };
   if (L === UNVERIFIED_ANCESTRY || L === OPAQUE_LINK_TEXT) return M();
-  if (L !== void 0) {
+  if (L !== undefined) {
     if (n === "screen" && !(yield* O())) return M();
-    if (c !== void 0) i.add(c);
-    return (i.delete(L), i.add(L), o(L, d));
+    if (c !== undefined) i.add(c);
+    i.delete(L);
+    i.add(L);
+    return o(L, d);
   }
-  if (l === void 0) {
+  if (l === undefined) {
     if (n === "screen" && !y) return (yield* O()) ? w() : M();
     return M();
   }
   if (
     l.kind === "absent" &&
-    (n === "screen" ? l.remaining.some((R) => cl(R)) : g && l.remaining.some((R) => $j(R)))
+    (n === "screen"
+      ? l.remaining.some((R) => hasDotSegment(R))
+      : g && l.remaining.some((R) => hasDotSegmentAlias(R)))
   )
     return M();
-  let P = l.kind === "absent" ? l.at : l.path,
-    Z = l.kind === "absent" ? l.remaining.join(pathModule.sep) : "",
-    T = Mn(Z === "" ? P : pathModule.join(P, Z));
+  let P = l.kind === "absent" ? l.at : l.path;
+  let Z = l.kind === "absent" ? l.remaining.join(pathModule.sep) : "";
+  let T = identity(Z === "" ? P : pathModule.join(P, Z));
   if (g || P !== pathModule.parse(P).root) i.add(T);
-  let U = joinIfChanged(yield { kind: "realpath", path: P }, P, Z);
-  if (U !== void 0 && U !== T) (i.delete(U), i.add(U));
+  let U = joinIfChanged(
+    yield {
+      kind: "realpath",
+      path: P,
+    },
+    P,
+    Z,
+  );
+  if (U !== undefined && U !== T) {
+    i.delete(U);
+    i.add(U);
+  }
   if (n === "screen" && !(yield* O())) return M();
   return o(T, d);
 }
@@ -1424,8 +1350,14 @@ function joinIfChanged(e, n, r) {
   return r === "" ? e : pathModule.join(e, r);
 }
 //@ chunk-cgr0tezp.js:36430-36521 placement
-function resolvedSpellingWalk(e) {
-  return { unresolved: !1, requested: e, spellings: [e], landing: e, leafIsSymlink: !1 };
+function resolvedSpellingWalk(resolvedPath) {
+  return {
+    unresolved: false,
+    requested: resolvedPath,
+    spellings: [resolvedPath],
+    landing: resolvedPath,
+    leafIsSymlink: false,
+  };
 }
 //@ chunk-cgr0tezp.js:36521-36554 placement
 function getPathsForPermissionCheck(e) {
@@ -1434,11 +1366,7 @@ function getPathsForPermissionCheck(e) {
 //@ chunk-cgr0tezp.js:36554-36743 placement
 function permissionCheckSpellings(e) {
   if (!e.unresolved) return e.spellings;
-  let {
-    resolvedPath: resolvedPath,
-    isCanonical: isCanonical,
-    isSymlink: isSymlink,
-  } = safeResolvePath(getFsImplementation(), e.requested);
+  let { resolvedPath, isCanonical, isSymlink } = safeResolvePath(getFsImplementation(), e.requested);
   return (isCanonical || isSymlink) && !e.spellings.includes(resolvedPath)
     ? [...e.spellings, resolvedPath]
     : e.spellings;
@@ -1448,12 +1376,12 @@ var NodeFsOperations = {
   cwd() {
     return process.cwd();
   },
-  existsSync(e) {
-    using n = slowLogging`fs.existsSync(${e})`;
-    return fsModule.existsSync(e);
+  existsSync(fsPath) {
+    using n = slowLogging`fs.existsSync(${fsPath})`;
+    return fsModule.existsSync(fsPath);
   },
-  async stat(e) {
-    return stat_2(e);
+  async stat(fsPath) {
+    return stat(fsPath);
   },
   async lstat(e) {
     return lstat(e);
@@ -1462,42 +1390,53 @@ var NodeFsOperations = {
     await (await open(e, fsModule.constants.O_DIRECTORY | fsModule.constants.O_NOFOLLOW)).close();
   },
   openDirNoFollowSync(e) {
-    let openSync = fsModule.openSync(e, fsModule.constants.O_DIRECTORY | fsModule.constants.O_NOFOLLOW);
-    fsModule.closeSync(openSync);
+    let n = fsModule.openSync(e, fsModule.constants.O_DIRECTORY | fsModule.constants.O_NOFOLLOW);
+    fsModule.closeSync(n);
   },
   async lstatBigint(e) {
-    return lstat(e, { bigint: !0 });
+    return lstat(e, {
+      bigint: true,
+    });
   },
   async statBigint(e) {
-    return stat_2(e, { bigint: !0 });
+    return stat(e, {
+      bigint: true,
+    });
   },
-  async readdir(e) {
-    return readdir(e, { withFileTypes: !0 });
+  async readdir(fsPath) {
+    return readdir(fsPath, {
+      withFileTypes: true,
+    });
   },
-  async unlink(e) {
-    return unlink_2(e);
+  async unlink(fsPath) {
+    return unlink(fsPath);
   },
-  async rmdir(e) {
-    return rmdir(e);
+  async rmdir(fsPath) {
+    return rmdir(fsPath);
   },
-  async rm(e, n) {
-    return rm(e, n);
+  async rm(fsPath, options) {
+    return rm(fsPath, options);
   },
-  async mkdir(e, n) {
+  async mkdir(dirPath, options) {
     try {
-      await mkdir_2(e, { recursive: !0, ...n });
-    } catch (error) {
-      if (getErrnoCode(error) !== "EEXIST") throw error;
+      await mkdir(dirPath, {
+        recursive: true,
+        ...options,
+      });
+    } catch (e) {
+      if (getErrnoCode(e) !== "EEXIST") throw e;
     }
   },
-  async readFile(e, n) {
-    return readFile(e, { encoding: n.encoding });
+  async readFile(fsPath, options) {
+    return readFile(fsPath, {
+      encoding: options.encoding,
+    });
   },
-  async rename(e, n) {
-    return rename_2(e, n);
+  async rename(oldPath, newPath) {
+    return rename(oldPath, newPath);
   },
   async realpath(e) {
-    return Mn(await realpath(e));
+    return identity(await realpath(e));
   },
   async readlink(e) {
     return readlink(e);
@@ -1505,23 +1444,23 @@ var NodeFsOperations = {
   async copyFile(e, n) {
     return copyFile(e, n);
   },
-  async appendFile(e, n, r) {
-    if (r?.mode !== void 0)
+  async appendFile(path, data, options) {
+    if (options?.mode !== undefined)
       try {
-        let i = await open(e, "ax", r.mode);
+        let fd = await open(path, "ax", options.mode);
         try {
-          await i.appendFile(n);
+          await fd.appendFile(data);
         } finally {
-          await i.close();
+          await fd.close();
         }
         return;
-      } catch (error) {
-        if (getErrnoCode(error) !== "EEXIST") throw error;
+      } catch (e) {
+        if (getErrnoCode(e) !== "EEXIST") throw e;
       }
-    return appendFile_2(e, n);
+    return appendFile(path, data);
   },
   async symlink(e, n, r) {
-    return symlink_2(e, n, r);
+    return symlink(e, n, r);
   },
   async link(e, n) {
     return link(e, n);
@@ -1529,91 +1468,101 @@ var NodeFsOperations = {
   async chmod(e, n) {
     return chmod(e, n);
   },
-  statSync(e) {
-    using n = slowLogging`fs.statSync(${e})`;
-    return fsModule.statSync(e);
+  statSync(fsPath) {
+    using n = slowLogging`fs.statSync(${fsPath})`;
+    return fsModule.statSync(fsPath);
   },
-  lstatSync(e) {
-    using n = slowLogging`fs.lstatSync(${e})`;
-    return fsModule.lstatSync(e);
+  lstatSync(fsPath) {
+    using n = slowLogging`fs.lstatSync(${fsPath})`;
+    return fsModule.lstatSync(fsPath);
   },
-  readFileSync(e, n) {
-    using r = slowLogging`fs.readFileSync(${e})`;
-    return fsModule.readFileSync(e, { encoding: n.encoding });
+  readFileSync(fsPath, options) {
+    using r = slowLogging`fs.readFileSync(${fsPath})`;
+    return fsModule.readFileSync(fsPath, {
+      encoding: options.encoding,
+    });
   },
-  readSync(e, n) {
-    using r = slowLogging`fs.readSync(${e}, ${n.length} bytes)`;
-    let i = void 0;
+  readSync(fsPath, options) {
+    using r = slowLogging`fs.readSync(${fsPath}, ${options.length} bytes)`;
+    let fd = undefined;
     try {
-      i = fsModule.openSync(e, "r");
-      let s = [],
-        o = 0;
-      while (o < n.length) {
-        let allocUnsafe = Buffer.allocUnsafe(Math.min(65536, n.length - o)),
-          sync = fsModule.readSync(i, allocUnsafe, 0, allocUnsafe.length, o);
+      fd = fsModule.openSync(fsPath, "r");
+      let s = [];
+      let o = 0;
+      while (o < options.length) {
+        let u = Buffer.allocUnsafe(Math.min(65536, options.length - o));
+        let sync = fsModule.readSync(fd, u, 0, u.length, o);
         if (sync === 0) break;
-        (s.push(allocUnsafe.subarray(0, sync)), (o += sync));
+        s.push(u.subarray(0, sync));
+        o += sync;
       }
-      return { buffer: Buffer.concat(s, o), bytesRead: o };
+      return {
+        buffer: Buffer.concat(s, o),
+        bytesRead: o,
+      };
     } finally {
-      if (i !== void 0) fsModule.closeSync(i);
+      if (fd !== undefined) fsModule.closeSync(fd);
     }
   },
-  appendFileSync(e, n, r) {
-    using i = slowLogging`fs.appendFileSync(${e}, ${n.length} chars)`;
-    if (r?.mode !== void 0)
+  appendFileSync(path, data, options) {
+    using i = slowLogging`fs.appendFileSync(${path}, ${data.length} chars)`;
+    if (options?.mode !== undefined)
       try {
-        let openSync = fsModule.openSync(e, "ax", r.mode);
+        let fd = fsModule.openSync(path, "ax", options.mode);
         try {
-          fsModule.appendFileSync(openSync, n);
+          fsModule.appendFileSync(fd, data);
         } finally {
-          fsModule.closeSync(openSync);
+          fsModule.closeSync(fd);
         }
         return;
-      } catch (error) {
-        if (getErrnoCode(error) !== "EEXIST") throw error;
+      } catch (e) {
+        if (getErrnoCode(e) !== "EEXIST") throw e;
       }
-    fsModule.appendFileSync(e, n);
+    fsModule.appendFileSync(path, data);
   },
-  unlinkSync(e) {
-    using n = slowLogging`fs.unlinkSync(${e})`;
-    fsModule.unlinkSync(e);
+  unlinkSync(path) {
+    using n = slowLogging`fs.unlinkSync(${path})`;
+    fsModule.unlinkSync(path);
   },
-  renameSync(e, n) {
-    using r = slowLogging`fs.renameSync(${e} ${Oi} ${n})`;
-    fsModule.renameSync(e, n);
+  renameSync(oldPath, newPath) {
+    using r = slowLogging`fs.renameSync(${oldPath} ${RENAME_ARROW} ${newPath})`;
+    fsModule.renameSync(oldPath, newPath);
   },
-  readlinkSync(e) {
-    using n = slowLogging`fs.readlinkSync(${e})`;
-    return fsModule.readlinkSync(e);
+  readlinkSync(path) {
+    using n = slowLogging`fs.readlinkSync(${path})`;
+    return fsModule.readlinkSync(path);
   },
-  realpathSync(e) {
-    using n = slowLogging`fs.realpathSync(${e})`;
-    return Mn(fsModule.realpathSync(e));
+  realpathSync(path) {
+    using n = slowLogging`fs.realpathSync(${path})`;
+    return identity(fsModule.realpathSync(path));
   },
-  mkdirSync(e, n) {
-    using r = slowLogging`fs.mkdirSync(${e})`;
-    let i = { recursive: !0 };
-    if (n?.mode !== void 0) i.mode = n.mode;
+  mkdirSync(dirPath, options) {
+    using r = slowLogging`fs.mkdirSync(${dirPath})`;
+    let mkdirOptions = {
+      recursive: true,
+    };
+    if (options?.mode !== undefined) mkdirOptions.mode = options.mode;
     try {
-      fsModule.mkdirSync(e, i);
-    } catch (error) {
-      if (getErrnoCode(error) !== "EEXIST") throw error;
+      fsModule.mkdirSync(dirPath, mkdirOptions);
+    } catch (e) {
+      if (getErrnoCode(e) !== "EEXIST") throw e;
     }
   },
-  readdirSync(e) {
-    using n = slowLogging`fs.readdirSync(${e})`;
-    return fsModule.readdirSync(e, { withFileTypes: !0 });
+  readdirSync(dirPath) {
+    using n = slowLogging`fs.readdirSync(${dirPath})`;
+    return fsModule.readdirSync(dirPath, {
+      withFileTypes: true,
+    });
   },
-  rmSync(e, n) {
-    using r = slowLogging`fs.rmSync(${e})`;
-    fsModule.rmSync(e, n);
+  rmSync(dirPath, options) {
+    using r = slowLogging`fs.rmSync(${dirPath})`;
+    fsModule.rmSync(dirPath, options);
   },
   createWriteStream(e) {
     return fsModule.createWriteStream(e);
   },
   async readFileBytes(e, n) {
-    if (n === void 0) return readFile(e);
+    if (n === undefined) return readFile(e);
     let r = await open(e, nonblockingReadFlags());
     try {
       if (!(await r.stat()).isFile()) return Buffer.alloc(0);
@@ -1622,37 +1571,40 @@ var NodeFsOperations = {
       await r.close();
     }
   },
-  async readFileFdGated(e, n) {
+  async readFileFdGated(fsPath, n) {
     try {
-      let r = Li();
+      let r = noFollowNonblockFlags();
       if (r === 0) {
-        if (!(await lstat(e)).isFile()) return null;
+        if (!(await lstat(fsPath)).isFile()) return null;
       }
-      let i = await open(e, fsModule.constants.O_RDONLY | r);
+      let handle = await open(fsPath, fsModule.constants.O_RDONLY | r);
       try {
-        let stats = await i.stat();
+        let stats = await handle.stat();
         if (!stats.isFile() || stats.size > n) return null;
-        let o = Number(stats.size),
-          allocUnsafe = Buffer.allocUnsafe(o),
-          u = 0;
-        while (u < o) {
-          let { bytesRead: bytesRead } = await i.read(allocUnsafe, u, o - u, u);
+        let readSize = Number(stats.size);
+        let buffer = Buffer.allocUnsafe(readSize);
+        let offset = 0;
+        while (offset < readSize) {
+          let { bytesRead } = await handle.read(buffer, offset, readSize - offset, offset);
           if (bytesRead === 0) break;
-          u += bytesRead;
+          offset += bytesRead;
         }
-        return { content: (u < o ? allocUnsafe.subarray(0, u) : allocUnsafe).toString("utf8"), stats: stats };
+        return {
+          content: (offset < readSize ? buffer.subarray(0, offset) : buffer).toString("utf8"),
+          stats,
+        };
       } finally {
-        await i.close();
+        await handle.close();
       }
     } catch {
       return null;
     }
   },
 };
+//@ chunk-cgr0tezp.js:40014-40038 placement = getFsImplementation (0)
 /**
  * 返回全局文件系统抽象 NodeFsOperations（同步/异步 fs 包装，可在测试或宿主模式下替换）。全局约 400 处调用，项目内几乎所有文件读写都经过它。
  */
-//@ chunk-cgr0tezp.js:40014-40038 placement = getFsImplementation (0)
 function getFsImplementation() {
   return NodeFsOperations;
 }
@@ -1669,98 +1621,117 @@ function processChdir(e) {
   } catch {
     r = e;
   }
-  if (!nt(r)) return n;
-  if (n !== void 0)
+  if (!isBunVirtualPath(r)) return n;
+  if (n !== undefined)
     try {
-      (process.chdir(n), process.cwd());
+      process.chdir(n);
+      process.cwd();
     } catch {}
   throw Object.assign(
     new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
       `ENOENT: no such file or directory, chdir '${e}'`,
       "ENOENT: no such file or directory",
     ),
-    { code: "ENOENT", syscall: "chdir", path: e },
+    {
+      code: "ENOENT",
+      syscall: "chdir",
+      path: e,
+    },
   );
 }
 //@ chunk-cgr0tezp.js:40367-40709 placement = readFileRange (1)
 async function readFileRange(path, offset, maxBytes) {
   await using i = typeof path === "string" ? await open(path, "r") : null;
-  let s = typeof path === "string" ? i : path,
-    size = (await s.stat()).size;
+  let s = typeof path === "string" ? i : path;
+  let size = (await s.stat()).size;
   if (size <= offset) return null;
-  let bytesToRead = Math.min(size - offset, maxBytes),
-    buffer = Buffer.allocUnsafe(bytesToRead),
-    totalRead = 0;
+  let bytesToRead = Math.min(size - offset, maxBytes);
+  let buffer = Buffer.allocUnsafe(bytesToRead);
+  let totalRead = 0;
   while (totalRead < bytesToRead) {
-    let { bytesRead: bytesRead } = await s.read(
-      buffer,
-      totalRead,
-      bytesToRead - totalRead,
-      offset + totalRead,
-    );
+    let { bytesRead } = await s.read(buffer, totalRead, bytesToRead - totalRead, offset + totalRead);
     if (bytesRead === 0) break;
     totalRead += bytesRead;
   }
-  return { content: buffer.toString("utf8", 0, totalRead), bytesRead: totalRead, bytesTotal: size };
+  return {
+    content: buffer.toString("utf8", 0, totalRead),
+    bytesRead: totalRead,
+    bytesTotal: size,
+  };
 }
+//@ chunk-cgr0tezp.js:40709-40974 placement
 /**
  * 读取文件末尾若干字节/行（日志、转录尾部读取用）。
  */
-//@ chunk-cgr0tezp.js:40709-40974 placement
 async function readHandleUpTo(e, n, r) {
-  let i = r !== void 0 ? r === "file" : (await e.stat()).isFile(),
-    s = [],
-    o = 0;
+  let i = r !== undefined ? r === "file" : (await e.stat()).isFile();
+  let s = [];
+  let o = 0;
   while (o < n) {
-    let buffer = Buffer.allocUnsafe(Math.min(65536, n - o)),
-      { bytesRead: bytesRead } = await e.read(buffer, 0, buffer.length, i ? o : null);
+    let buffer = Buffer.allocUnsafe(Math.min(65536, n - o));
+    let { bytesRead } = await e.read(buffer, 0, buffer.length, i ? o : null);
     if (bytesRead === 0) break;
-    (s.push(buffer.subarray(0, bytesRead)), (o += bytesRead));
+    s.push(buffer.subarray(0, bytesRead));
+    o += bytesRead;
   }
   return Buffer.concat(s, o);
 }
+//@ chunk-cgr0tezp.js:40974-41352 placement = readFileRange (1)
 /**
  * 按字节范围读取文件片段。
  */
-//@ chunk-cgr0tezp.js:40974-41352 placement = readFileRange (1)
-async function tailFile(e, n) {
+async function tailFile(e, offset) {
   await using r = typeof e === "string" ? await open(e, "r") : null;
-  let i = typeof e === "string" ? r : e,
-    size = (await i.stat()).size;
-  if (size === 0) return { content: "", bytesRead: 0, bytesTotal: 0 };
-  let max = Math.max(0, size - n),
-    a = size - max,
-    buffer = Buffer.allocUnsafe(a),
-    totalRead = 0;
-  while (totalRead < a) {
-    let { bytesRead: bytesRead } = await i.read(buffer, totalRead, a - totalRead, max + totalRead);
+  let i = typeof e === "string" ? r : e;
+  let size = (await i.stat()).size;
+  if (size === 0)
+    return {
+      content: "",
+      bytesRead: 0,
+      bytesTotal: 0,
+    };
+  let offset_2 = Math.max(0, size - offset);
+  let bytesToRead = size - offset_2;
+  let buffer = Buffer.allocUnsafe(bytesToRead);
+  let totalRead = 0;
+  while (totalRead < bytesToRead) {
+    let { bytesRead } = await i.read(buffer, totalRead, bytesToRead - totalRead, offset_2 + totalRead);
     if (bytesRead === 0) break;
     totalRead += bytesRead;
   }
-  return { content: buffer.toString("utf8", 0, totalRead), bytesRead: totalRead, bytesTotal: size };
+  return {
+    content: buffer.toString("utf8", 0, totalRead),
+    bytesRead: totalRead,
+    bytesTotal: size,
+  };
 }
 //@ chunk-cgr0tezp.js:41352-41804 placement
 async function* readLines(e, n = 65536) {
-  let r = await open(e, "r"),
-    alloc = Buffer.alloc(n),
-    s = 0,
-    o = [],
-    a = 0;
+  let r = await open(e, "r");
+  let i = Buffer.alloc(n);
+  let s = 0;
+  let o = [];
+  let a = 0;
   try {
-    while (!0) {
-      let { bytesRead: bytesRead } = await r.read(alloc, 0, n, s);
+    while (true) {
+      let { bytesRead } = await r.read(i, 0, n, s);
       if (bytesRead === 0) break;
       s += bytesRead;
-      let chunk = alloc.subarray(0, bytesRead),
-        l = 0;
+      let chunk = i.subarray(0, bytesRead);
+      let l = 0;
       while (l < bytesRead) {
         let index = chunk.indexOf(10, l);
         if (index === -1) {
-          (o.push(Buffer.from(chunk.subarray(l))), (a += bytesRead - l));
+          o.push(Buffer.from(chunk.subarray(l)));
+          a += bytesRead - l;
           break;
         }
         if (a === 0) yield chunk.subarray(l, index);
-        else (yield Buffer.concat([...o, chunk.subarray(l, index)], a + (index - l)), (o = []), (a = 0));
+        else {
+          yield Buffer.concat([...o, chunk.subarray(l, index)], a + (index - l));
+          o = [];
+          a = 0;
+        }
         l = index + 1;
       }
     }
@@ -1770,66 +1741,68 @@ async function* readLines(e, n = 65536) {
   if (a > 0) yield o.length === 1 ? o[0] : Buffer.concat(o, a);
 }
 //@ chunk-cgr0tezp.js:41804-41815 placement
-var ye = 256;
+var REVERSE_READ_OVERLAP_BYTES = 256;
 //@ chunk-cgr0tezp.js:41815-42032 placement
 class FileChangedDuringReadError extends Error {
   partialRead;
-  constructor(e = !1) {
+  constructor(partialRead = false) {
     super("A file changed while it was being read, so the lines read from it may not be its current lines");
-    this.partialRead = e;
+    this.partialRead = partialRead;
     this.name = "FileChangedDuringReadError";
   }
 }
 //@ chunk-cgr0tezp.js:42032-43018 placement
-async function* readLinesReverse(e, n = 65536, { onOpen: r, strict: i = !0 } = {}) {
+async function* readLinesReverse(e, n = 65536, { onOpen: r, strict: i = true } = {}) {
   let s = await open(e, "r");
   try {
-    let { size: size } = await s.stat();
+    let { size } = await s.stat();
     r?.(size);
-    let allocUnsafe = Buffer.allocUnsafe(Math.min(n + ye, size)),
-      allocUnsafe_2 = Buffer.allocUnsafe(Math.min(ye, size)),
-      c = 0,
-      l = size,
-      d = 0,
-      g = size,
-      y,
-      h = async (f, m, b) => {
-        let A = 0;
-        while (A < m) {
-          let read = await s.read(f, A, m - A, b + A);
-          if (read.bytesRead === 0 || (i && read.bytesRead < m - A))
-            throw new FileChangedDuringReadError(read.bytesRead > 0);
-          A += read.bytesRead;
-        }
-        let x = l + d - b;
-        if (!f.subarray(x, x + c).equals(allocUnsafe_2.subarray(0, c)))
-          throw new FileChangedDuringReadError();
-      },
-      S = async (f) => {
-        let m = Math.max(g, l + d + c) - f,
-          allocUnsafe = Buffer.allocUnsafe(m);
-        return (await h(allocUnsafe, m, f), allocUnsafe.toString("utf8", 0, g - f));
-      };
+    let a = Buffer.allocUnsafe(Math.min(n + REVERSE_READ_OVERLAP_BYTES, size));
+    let u = Buffer.allocUnsafe(Math.min(REVERSE_READ_OVERLAP_BYTES, size));
+    let c = 0;
+    let l = size;
+    let d = 0;
+    let g = size;
+    let y;
+    let h = async (f, m, b) => {
+      let A = 0;
+      while (A < m) {
+        let L = await s.read(f, A, m - A, b + A);
+        if (L.bytesRead === 0 || (i && L.bytesRead < m - A))
+          throw new FileChangedDuringReadError(L.bytesRead > 0);
+        A += L.bytesRead;
+      }
+      let x = l + d - b;
+      if (!f.subarray(x, x + c).equals(u.subarray(0, c))) throw new FileChangedDuringReadError();
+    };
+    let S = async (f) => {
+      let m = Math.max(g, l + d + c) - f;
+      let b = Buffer.allocUnsafe(m);
+      await h(b, m, f);
+      return b.toString("utf8", 0, g - f);
+    };
     while (l > 0) {
-      if (
-        ((c = Math.min(ye, d)),
-        allocUnsafe.copy(allocUnsafe_2, 0, 0, c),
-        (d = Math.min(n, l, i && l === size ? ye : 1 / 0)),
-        (l -= d),
-        await h(allocUnsafe, d + c, l),
-        i)
-      )
-        y ??= Buffer.from(allocUnsafe.subarray(Math.max(0, d - ye), d));
-      let index = allocUnsafe.lastIndexOf(10, d - 1);
+      c = Math.min(REVERSE_READ_OVERLAP_BYTES, d);
+      a.copy(u, 0, 0, c);
+      d = Math.min(n, l, i && l === size ? REVERSE_READ_OVERLAP_BYTES : 1 / 0);
+      l -= d;
+      await h(a, d + c, l);
+      if (i) y ??= Buffer.from(a.subarray(Math.max(0, d - REVERSE_READ_OVERLAP_BYTES), d));
+      let index = a.lastIndexOf(10, d - 1);
       while (index !== -1) {
         let m = l + index + 1;
-        if (m < g) yield g <= l + d ? allocUnsafe.toString("utf8", index + 1, g - l) : await S(m);
-        ((g = l + index), (index = index === 0 ? -1 : allocUnsafe.lastIndexOf(10, index - 1)));
+        if (m < g) yield g <= l + d ? a.toString("utf8", index + 1, g - l) : await S(m);
+        g = l + index;
+        index = index === 0 ? -1 : a.lastIndexOf(10, index - 1);
       }
     }
-    if (g > 0) yield g <= d ? allocUnsafe.toString("utf8", 0, g) : await S(0);
-    if (y !== void 0)
-      ((l = size - y.length), (d = 0), (c = y.copy(allocUnsafe_2)), await h(allocUnsafe, c, l));
+    if (g > 0) yield g <= d ? a.toString("utf8", 0, g) : await S(0);
+    if (y !== undefined) {
+      l = size - y.length;
+      d = 0;
+      c = y.copy(u);
+      await h(a, c, l);
+    }
   } finally {
     await s.close();
   }
@@ -1837,86 +1810,94 @@ async function* readLinesReverse(e, n = 65536, { onOpen: r, strict: i = !0 } = {
 //@ chunk-cgr0tezp.js:43018-43122 placement
 function createOffsetMappedText(e) {
   let int32Array = new Int32Array(e.length);
-  for (let r = 0; r < e.length; r++) int32Array[r] = r;
-  return { text: e, origin: int32Array };
+  for (let i = 0; i < e.length; i++) int32Array[i] = i;
+  return {
+    text: e,
+    origin: int32Array,
+  };
 }
 //@ chunk-e6aww6q8.js:1151949-1152000 placement
 function resolveForPermissionCheck(e, n) {
-  return ai(n) || isMacSpecialPath(n) ? n : (resolveDeepestExistingAncestorSync(e, n) ?? n);
+  return isNonWslUncPath(n) || isMacSpecialPath(n) ? n : (resolveDeepestExistingAncestorSync(e, n) ?? n);
 }
 //@ chunk-e6aww6q8.js:1152000-1152140 layout
 function isPathMatchedForPermission(e, n) {
-  if (e === "") return !1;
+  if (e === "") return false;
   if (e.startsWith("~")) {
-    let r = Lu(e);
-    if (r.startsWith("~")) return !0;
+    let r = expandTildeWithHome(e);
+    if (r.startsWith("~")) return true;
     return getPathsForPermissionCheck_2(r, n) || getPathsForPermissionCheck_2(e, n);
   }
   return getPathsForPermissionCheck_2(e, n);
 }
+//@ chunk-e6aww6q8.js:1152140-1153141 callgraph-fingerprint = getPathsForPermissionCheck (0.425)
 /**
  * 返回权限检查需要比对的路径集合（原始、规范化、符号链接解析后）。
  */
-//@ chunk-e6aww6q8.js:1152140-1153141 callgraph-fingerprint = getPathsForPermissionCheck (0.425)
 function getPathsForPermissionCheck_2(e, n) {
   let fsImpl = getFsImplementation();
-  if (isMacSpecialPath(e)) return !0;
-  if ((!ai(e) || !0) && !Ya(e) && /(^|[/\\])\.\.(?:[/\\]|$)/.test(e)) {
-    let Se = /\/+/,
-      ke = isAbsolute_21(e) ? parse_4(e).root : "",
-      we = ke ? parse_4(resolve_18(n, e)).root : n,
-      parts = (ke ? e.slice(ke.length) : e).split(Se),
-      Ae = we;
+  if (isMacSpecialPath(e)) return true;
+  if ((!isNonWslUncPath(e) || true) && !isNetworkMountPath(e) && /(^|[/\\])\.\.(?:[/\\]|$)/.test(e)) {
+    let Se = /\/+/;
+    let root = isAbsolute(e) ? parse(e).root : "";
+    let we = root ? parse(resolve_2(n, e)).root : n;
+    let parts = (root ? e.slice(root.length) : e).split(Se);
+    let Ae = we;
     for (let depth = 0; depth < parts.length; depth++) {
       let Me = parts[depth];
       if (Me === "" || Me === ".") continue;
       if (Me === "..") {
-        Ae = dirname_28(Ae);
+        Ae = dirname(Ae);
         continue;
       }
-      if (((Ae = Ae.endsWith(sep_28) ? Ae + Me : Ae + sep_28 + Me), Ya(Ae))) break;
-      if (isMacSpecialPath(Ae)) return !0;
+      Ae = Ae.endsWith(sep) ? Ae + Me : Ae + sep + Me;
+      if (isNetworkMountPath(Ae)) break;
+      if (isMacSpecialPath(Ae)) return true;
       try {
-        if (fsImpl.lstatSync(Ae).isSymbolicLink() && parts.slice(depth + 1).includes("..")) return !0;
+        if (fsImpl.lstatSync(Ae).isSymbolicLink() && parts.slice(depth + 1).includes("..")) return true;
       } catch {}
     }
   }
-  let resolved = resolve_18(n, e),
-    normalized = resolveForPermissionCheck(fsImpl, resolved).normalize("NFC"),
-    normalized_2 = (resolveDeepestExistingAncestorSync(fsImpl, n) ?? n).normalize("NFC");
+  let resolved = resolve_2(n, e);
+  let normalized = resolveForPermissionCheck(fsImpl, resolved).normalize("NFC");
+  let normalized_2 = (resolveDeepestExistingAncestorSync(fsImpl, n) ?? n).normalize("NFC");
   function S(Se) {
-    let ke = relative_18(Se, normalized);
-    if (ke === "" || ke.startsWith(".." + sep_28) || isAbsolute_21(ke)) return !1;
+    let ke = relative(Se, normalized);
+    if (ke === "" || ke.startsWith(".." + sep) || isAbsolute(ke)) return false;
     let replaced = ke
-      .split(sep_28)
+      .split(sep)
       .join("/")
       .toLowerCase()
       .replace(/\u0131/g, "i")
       .replace(/\u017f/g, "s");
     return GIT_INTERNAL_PATH_PATTERNS.some((Ee) => Ee.test(replaced));
   }
-  if (S(normalized_2)) return !0;
-  if (!relative_18(normalized_2, normalized).startsWith(".." + sep_28)) return !1;
-  let L = getOriginalCwd(),
-    normalized_3 = (resolveDeepestExistingAncestorSync(fsImpl, L) ?? L).normalize("NFC"),
-    q = relative_18(normalized_3, normalized);
-  if (q === "" || q.startsWith(".." + sep_28) || isAbsolute_21(q)) return !1;
+  if (S(normalized_2)) return true;
+  if (!relative(normalized_2, normalized).startsWith(".." + sep)) return false;
+  let originalCwd = getOriginalCwd();
+  let normalized_3 = (resolveDeepestExistingAncestorSync(fsImpl, originalCwd) ?? originalCwd).normalize(
+    "NFC",
+  );
+  let q = relative(normalized_3, normalized);
+  if (q === "" || q.startsWith(".." + sep) || isAbsolute(q)) return false;
   let Z = normalized_2;
-  do if (((Z = dirname_28(Z)), S(Z))) return !0;
-  while (Z !== normalized_3 && Z !== dirname_28(Z));
-  return !1;
+  do {
+    Z = dirname(Z);
+    if (S(Z)) return true;
+  } while (Z !== normalized_3 && Z !== dirname(Z));
+  return false;
 }
 //@ chunk-e6aww6q8.js:1337160-1337480 fingerprint = isDuplicatePath (0.685)
-function isDuplicatePath_2(e, n) {
-  let mapped = n.map((s) => s.replaceAll("\\", "/"));
+function isDuplicatePath_2(fsImplementation, patterns) {
+  let mapped = patterns.map((s) => s.replaceAll("\\", "/"));
   for (let s of mapped) {
     if (!s.startsWith("/")) continue;
-    let search = s.search(/[*?{[]/),
-      y = search === -1 ? s : s.slice(0, search),
-      S = dirname_31(y);
+    let h = s.search(/[*?{[]/);
+    let y = h === -1 ? s : s.slice(0, h);
+    let S = dirname(y);
     try {
-      let w = safeResolvePath(e, S),
-        { resolvedPath: resolvedPath } = w;
+      let w = safeResolvePath(fsImplementation, S);
+      let { resolvedPath } = w;
       if (isSpecialOrUnsafePath(resolvedPath) || isNonCanonicalSymlink(S, w)) continue;
       let replaced = resolvedPath.replaceAll("\\", "/");
       if (replaced !== S) {
@@ -1931,12 +1912,12 @@ function isDuplicatePath_2(e, n) {
 async function readLinesReverse_2(n, e) {
   let r;
   try {
-    r = await open_5(n, $c());
+    r = await open(n, readOnlyNoFollowFlags());
     let stats = await r.stat();
     if (!stats.isFile() || stats.size > e) return;
-    let remainder = Buffer.alloc(stats.size + 1),
-      { bytesRead: bytesRead } = await r.read(remainder, 0, remainder.length, 0);
-    return bytesRead === stats.size ? remainder.subarray(0, bytesRead) : void 0;
+    let remainder = Buffer.alloc(stats.size + 1);
+    let { bytesRead } = await r.read(remainder, 0, remainder.length, 0);
+    return bytesRead === stats.size ? remainder.subarray(0, bytesRead) : undefined;
   } catch {
     return;
   } finally {
@@ -1955,7 +1936,6 @@ function safeResolvePath_2(o) {
     !o.isCharacterDevice()
   );
 }
-
 export {
   getFsImplementation,
   hasUntouchableRecordSpellingStrictAsync,
@@ -1978,12 +1958,12 @@ export {
   resolveDeepestExistingAncestorSync,
   UNVERIFIED_ANCESTRY,
   readFileRange,
+  readHandleUpTo,
   entryReachesForeignNetwork,
   isDuplicatePath_2,
   safeResolvePath_2,
   vetRepoSettingsPathAsync,
   nonblockingReadFlags,
-  readHandleUpTo,
   isOpaqueLinkText,
   findIntermediateUncJunctionAsync,
   OPAQUE_LINK_TEXT,

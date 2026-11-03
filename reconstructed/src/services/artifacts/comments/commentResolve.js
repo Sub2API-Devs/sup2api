@@ -15,8 +15,8 @@ import {
   errorMessage,
   errorReason,
   SUMMON_FOREIGN_SENDER,
-  W,
-  ve,
+  NO_USER_CREDENTIAL_TEXT,
+  ORG_SERVICE_KEY_WRITE_TEXT,
 } from "./commentReply.js";
 import { ARTIFACT_SLUG_RE } from "../../../tools/ArtifactTool/constants.js";
 import {
@@ -34,75 +34,106 @@ import { describeArtifactAuthFailure } from "../frameFlags.js";
 import { isOutsideOrgNotFound } from "../shareEntries.js";
 
 //@ chunk-b0a246e7.js:32199-32336 placement
-var EDIT_STALE_REASON = "the artifact changed since this edit",
-  EDIT_GRANT_INACTIVE_REASON = "this thread's edit grant is no longer active",
-  NOT_OWN_CREDENTIAL_REASON = "not published under your credential";
+var EDIT_STALE_REASON = "the artifact changed since this edit";
+var EDIT_GRANT_INACTIVE_REASON = "this thread's edit grant is no longer active";
+var NOT_OWN_CREDENTIAL_REASON = "not published under your credential";
 //@ chunk-b0a246e7.js:32336-32688 placement
-function classifyResolveError(e, t) {
-  if (e === 409 && t.includes(EDIT_STALE_REASON)) return { kind: "superseded" };
-  if (e === 403) {
-    if (t.includes(EDIT_GRANT_INACTIVE_REASON)) return { kind: "grant_inactive" };
-    if (t.includes(NOT_OWN_CREDENTIAL_REASON)) return { kind: "principal_mismatch" };
-    if (t.includes(COMMENT_ERROR_TEXT)) return { kind: "not_activated" };
+function classifyResolveError(status, t) {
+  if (status === 409 && t.includes(EDIT_STALE_REASON))
+    return {
+      kind: "superseded",
+    };
+  if (status === 403) {
+    if (t.includes(EDIT_GRANT_INACTIVE_REASON))
+      return {
+        kind: "grant_inactive",
+      };
+    if (t.includes(NOT_OWN_CREDENTIAL_REASON))
+      return {
+        kind: "principal_mismatch",
+      };
+    if (t.includes(COMMENT_ERROR_TEXT))
+      return {
+        kind: "not_activated",
+      };
   }
   return {
     kind: "error",
-    message: `thread resolve failed (status ${e})`,
-    reason: e === 404 ? "not_found" : e === 429 ? "rate_limited" : "http",
+    message: `thread resolve failed (status ${status})`,
+    reason: status === 404 ? "not_found" : status === 429 ? "rate_limited" : "http",
   };
 }
+//@ chunk-b0a246e7.js:32688-34137 placement
 /**
  * 把 artifact 评论线程标记为已解决（/api/frame/comments/.../resolve），校验 slug 与线程 id。
  */
-//@ chunk-b0a246e7.js:32688-34137 placement
 async function resolveCommentThread(e) {
-  let {
-    slug: slug,
-    threadId: threadId,
-    afterVersion: afterVersion,
-    signal: signal,
-    credentials: credentials,
-  } = e;
+  let { slug, threadId, afterVersion, signal, credentials } = e;
   if (!ARTIFACT_SLUG_RE.test(slug) || !ARTIFACT_SLUG_RE.test(threadId))
-    return { kind: "error", message: "invalid slug or thread id", reason: "input" };
-  let startTime = performance.now(),
-    a;
+    return {
+      kind: "error",
+      message: "invalid slug or thread id",
+      reason: "input",
+    };
+  let startTime = performance.now();
+  let a;
   try {
     a = await frameApi.postRelayBound(
       `/api/frame/comments/${encodeURIComponent(slug)}/${encodeURIComponent(threadId)}/resolve`,
-      { resolved: !0, after_version: afterVersion },
+      {
+        resolved: true,
+        after_version: afterVersion,
+      },
       frameRequestOptions(signal, credentials),
     );
   } catch (error) {
     if (isCancel(error)) throw error;
-    return (
-      logFeatureBad("artifact_comment_resolve", "request_error", getTransportErrorProps(error, startTime)),
-      { kind: "error", message: "thread resolve failed (network error)", reason: "request_error" }
-    );
+    logFeatureBad("artifact_comment_resolve", "request_error", getTransportErrorProps(error, startTime));
+    return {
+      kind: "error",
+      message: "thread resolve failed (network error)",
+      reason: "request_error",
+    };
   }
   if (!a.ok) {
-    if (a.reason === "relay-unavailable")
-      return (
-        logFeatureBad("artifact_comment_resolve", "relay_unavailable", { status: a.status }),
-        { kind: "error", message: "thread resolve not sent (relay unavailable)", reason: "relay_unavailable" }
-      );
-    return (
-      logFeatureBad("artifact_comment_resolve", a.reason.replace(/-/g, "_")),
-      { kind: "error", message: `thread resolve unavailable: ${a.reason}`, reason: "transport" }
-    );
-  }
-  if (a.status === 200) return (logFeatureOk("artifact_comment_resolve"), { kind: "ok" });
-  let d = networkOffRefusal(a, "thread resolve");
-  if (d) return (logFeatureSad("artifact_comment_resolve", "network_off"), d);
-  if (!a.fromFrame)
-    return (
-      logFeatureBad("artifact_comment_resolve", "relay_error", { status: a.status }),
-      {
+    if (a.reason === "relay-unavailable") {
+      logFeatureBad("artifact_comment_resolve", "relay_unavailable", {
+        status: a.status,
+      });
+      return {
         kind: "error",
-        message: `thread resolve outcome unknown (relay HTTP ${a.status})`,
-        reason: "relay_error",
-      }
-    );
+        message: "thread resolve not sent (relay unavailable)",
+        reason: "relay_unavailable",
+      };
+    }
+    logFeatureBad("artifact_comment_resolve", a.reason.replace(/-/g, "_"));
+    return {
+      kind: "error",
+      message: `thread resolve unavailable: ${a.reason}`,
+      reason: "transport",
+    };
+  }
+  if (a.status === 200) {
+    logFeatureOk("artifact_comment_resolve");
+    return {
+      kind: "ok",
+    };
+  }
+  let d = networkOffRefusal(a, "thread resolve");
+  if (d) {
+    logFeatureSad("artifact_comment_resolve", "network_off");
+    return d;
+  }
+  if (!a.fromFrame) {
+    logFeatureBad("artifact_comment_resolve", "relay_error", {
+      status: a.status,
+    });
+    return {
+      kind: "error",
+      message: `thread resolve outcome unknown (relay HTTP ${a.status})`,
+      reason: "relay_error",
+    };
+  }
   let l = classifyResolveError(a.status, errorMessage(a.data));
   if (l.kind === "error") logFeatureBad("artifact_comment_resolve", l.reason);
   else if (l.kind === "principal_mismatch") logFeatureBad("artifact_comment_resolve", l.kind);
@@ -110,114 +141,164 @@ async function resolveCommentThread(e) {
   return l;
 }
 //@ chunk-b0a246e7.js:34137-34182 placement
-var jt = "only the thread starter or a writer";
+var ONLY_STARTER_OR_WRITER_TEXT = "only the thread starter or a writer";
 //@ chunk-b0a246e7.js:34182-34627 placement
-var RESOLVE_ERROR_TEXT = "requires a claude.ai session",
-  RELAYED_CREDENTIAL = "relayed_credential",
-  THREAD_NOT_FOUND = "thread_not_found",
-  Xt = "CCR agent tokens cannot call this route",
-  q =
-    "thread resolve not confirmed (this session's comment connection failed on this attempt, so the thread may or may not be resolved) \u2014 retry the resolve once if you have not already, it is safe to repeat; if it fails again, leave the thread unresolved and, if you addressed it, say so in a reply on the thread";
+/**
+ * 线程解决的错误文案：需要 claude.ai 会话、CCR agent token 不可用、中继失败时不确认的说明。
+ */
+var RESOLVE_ERROR_TEXT = "requires a claude.ai session";
+var RELAYED_CREDENTIAL = "relayed_credential";
+var THREAD_NOT_FOUND = "thread_not_found";
+var CCR_TOKEN_DENIED_TEXT = "CCR agent tokens cannot call this route";
+var RESOLVE_NOT_CONFIRMED_TEXT =
+  "thread resolve not confirmed (this session's comment connection failed on this attempt, so the thread may or may not be resolved) \u2014 retry the resolve once if you have not already, it is safe to repeat; if it fails again, leave the thread unresolved and, if you addressed it, say so in a reply on the thread";
 //@ chunk-b0a246e7.js:34627-37756 placement
-async function reopenCommentThread({ slug: slug, threadId: threadId, credentials: credentials }, r) {
+async function reopenCommentThread({ slug, threadId, credentials }, signal) {
   if (!ARTIFACT_SLUG_RE.test(slug) || !ARTIFACT_SLUG_RE.test(threadId))
-    return { kind: "error", message: "invalid slug or thread id", reason: "input" };
-  let o = (E) => `/api/frame/comments/${encodeURIComponent(slug)}/${encodeURIComponent(threadId)}/${E}`,
-    u = (E) => frameApi.post(o(E), { resolved: !0 }, frameRequestOptions(r, credentials)),
-    startTime = performance.now(),
-    a = accountBotMayRelay(COMMENTS_RELAY_FAMILY),
-    d;
+    return {
+      kind: "error",
+      message: "invalid slug or thread id",
+      reason: "input",
+    };
+  let o = (E) => `/api/frame/comments/${encodeURIComponent(slug)}/${encodeURIComponent(threadId)}/${E}`;
+  let u = (E) =>
+    frameApi.post(
+      o(E),
+      {
+        resolved: true,
+      },
+      frameRequestOptions(signal, credentials),
+    );
+  let startTime = performance.now();
+  let a = accountBotMayRelay(COMMENTS_RELAY_FAMILY);
+  let d;
   try {
     if (frameVerbRelayActive(COMMENTS_RELAY_FAMILY) && !(a && relayDeclined(COMMENTS_RELAY_FAMILY))) {
-      if (
-        ((d = await frameApi.postRelayOnly(
-          o("resolve"),
-          { resolved: !0 },
-          frameRequestOptions(r, credentials),
-        )),
-        a && !d.ok && d.reason === "relay-unavailable")
-      )
-        (logFeatureSad("artifact_comment_session_resolve", "relay_declined", { status: d.status }),
-          (d = void 0));
+      d = await frameApi.postRelayOnly(
+        o("resolve"),
+        {
+          resolved: true,
+        },
+        frameRequestOptions(signal, credentials),
+      );
+      if (a && !d.ok && d.reason === "relay-unavailable") {
+        logFeatureSad("artifact_comment_session_resolve", "relay_declined", {
+          status: d.status,
+        });
+        d = undefined;
+      }
     }
-    if (d === void 0) {
-      ((startTime = performance.now()), (d = await u("session-resolve")));
-      let E = d.ok && d.status === 404 && errorReason(d.data) !== THREAD_NOT_FOUND,
-        y = d.ok && d.status === 403 && errorMessage(d.data).includes(Xt);
-      if (E || y)
-        (logFeatureSad(
+    if (d === undefined) {
+      startTime = performance.now();
+      d = await u("session-resolve");
+      let E = d.ok && d.status === 404 && errorReason(d.data) !== THREAD_NOT_FOUND;
+      let y = d.ok && d.status === 403 && errorMessage(d.data).includes(CCR_TOKEN_DENIED_TEXT);
+      if (E || y) {
+        logFeatureSad(
           "artifact_comment_session_resolve",
           y ? "session_route_ccr_denied" : "session_route_fell_back",
-        ),
-          (startTime = performance.now()),
-          (d = await u("resolve")));
+        );
+        startTime = performance.now();
+        d = await u("resolve");
+      }
     }
   } catch (error) {
     if (isCancel(error)) throw error;
-    if (threwOnRelayLeg(error))
-      return (
-        logFeatureBad("artifact_comment_session_resolve", "relay_request_error"),
-        { kind: "error", message: q, reason: "relay_request_error" }
-      );
-    return (
-      logFeatureBad(
-        "artifact_comment_session_resolve",
-        "request_error",
-        getTransportErrorProps(error, startTime),
-      ),
-      { kind: "error", message: "thread resolve failed (network error)", reason: "request_error" }
+    if (threwOnRelayLeg(error)) {
+      logFeatureBad("artifact_comment_session_resolve", "relay_request_error");
+      return {
+        kind: "error",
+        message: RESOLVE_NOT_CONFIRMED_TEXT,
+        reason: "relay_request_error",
+      };
+    }
+    logFeatureBad(
+      "artifact_comment_session_resolve",
+      "request_error",
+      getTransportErrorProps(error, startTime),
     );
+    return {
+      kind: "error",
+      message: "thread resolve failed (network error)",
+      reason: "request_error",
+    };
   }
   if (!d.ok) {
-    if (d.reason === "relay-unavailable")
-      return (
-        logFeatureBad("artifact_comment_session_resolve", "relay_unavailable", { status: d.status }),
-        { kind: "error", message: q, reason: "relay_unavailable" }
-      );
-    return (
-      logFeatureBad("artifact_comment_session_resolve", d.reason.replace(/-/g, "_")),
-      {
+    if (d.reason === "relay-unavailable") {
+      logFeatureBad("artifact_comment_session_resolve", "relay_unavailable", {
+        status: d.status,
+      });
+      return {
         kind: "error",
-        message:
-          d.reason === "no-auth"
-            ? describeArtifactAuthFailure(d.detail)
-            : `thread resolve unavailable: ${d.reason}`,
-        reason: "transport",
-      }
-    );
+        message: RESOLVE_NOT_CONFIRMED_TEXT,
+        reason: "relay_unavailable",
+      };
+    }
+    logFeatureBad("artifact_comment_session_resolve", d.reason.replace(/-/g, "_"));
+    return {
+      kind: "error",
+      message:
+        d.reason === "no-auth"
+          ? describeArtifactAuthFailure(d.detail)
+          : `thread resolve unavailable: ${d.reason}`,
+      reason: "transport",
+    };
   }
-  if (d.status === 200) return (logFeatureOk("artifact_comment_session_resolve"), { kind: "ok" });
+  if (d.status === 200) {
+    logFeatureOk("artifact_comment_session_resolve");
+    return {
+      kind: "ok",
+    };
+  }
   let l = networkOffRefusal(d, "thread resolve");
-  if (l) return (logFeatureSad("artifact_comment_session_resolve", "network_off"), l);
-  if (!d.fromFrame)
-    return (
-      logFeatureBad("artifact_comment_session_resolve", "relay_error", { status: d.status }),
-      { kind: "error", message: q, reason: "relay_error" }
-    );
+  if (l) {
+    logFeatureSad("artifact_comment_session_resolve", "network_off");
+    return l;
+  }
+  if (!d.fromFrame) {
+    logFeatureBad("artifact_comment_session_resolve", "relay_error", {
+      status: d.status,
+    });
+    return {
+      kind: "error",
+      message: RESOLVE_NOT_CONFIRMED_TEXT,
+      reason: "relay_error",
+    };
+  }
   let A = errorMessage(d.data);
   if (d.status === 403) {
-    if (A.includes(COMMENT_ERROR_TEXT))
-      return (logFeatureSad("artifact_comment_session_resolve", "not_activated"), { kind: "not_activated" });
-    if (A.includes(jt))
-      return (
-        logFeatureSad("artifact_comment_session_resolve", "not_authorized"),
-        { kind: "not_authorized" }
-      );
-    if (errorReason(d.data) === SUMMON_FOREIGN_SENDER)
-      return (
-        logFeatureSad("artifact_comment_session_resolve", "summon_foreign_sender"),
-        { kind: "summon_foreign" }
-      );
-    if (A.includes(RESOLVE_ERROR_TEXT) || errorReason(d.data) === RELAYED_CREDENTIAL)
-      return (
-        logFeatureSad("artifact_comment_session_resolve", "relayed_credential"),
-        { kind: "relayed_credential" }
-      );
-    if (A.includes(W))
-      return (
-        logFeatureSad("artifact_comment_session_resolve", "service_key_credential"),
-        { kind: "error", message: `thread resolve refused: ${ve}`, reason: "service_key_credential" }
-      );
+    if (A.includes(COMMENT_ERROR_TEXT)) {
+      logFeatureSad("artifact_comment_session_resolve", "not_activated");
+      return {
+        kind: "not_activated",
+      };
+    }
+    if (A.includes(ONLY_STARTER_OR_WRITER_TEXT)) {
+      logFeatureSad("artifact_comment_session_resolve", "not_authorized");
+      return {
+        kind: "not_authorized",
+      };
+    }
+    if (errorReason(d.data) === SUMMON_FOREIGN_SENDER) {
+      logFeatureSad("artifact_comment_session_resolve", "summon_foreign_sender");
+      return {
+        kind: "summon_foreign",
+      };
+    }
+    if (A.includes(RESOLVE_ERROR_TEXT) || errorReason(d.data) === RELAYED_CREDENTIAL) {
+      logFeatureSad("artifact_comment_session_resolve", "relayed_credential");
+      return {
+        kind: "relayed_credential",
+      };
+    }
+    if (A.includes(NO_USER_CREDENTIAL_TEXT)) {
+      logFeatureSad("artifact_comment_session_resolve", "service_key_credential");
+      return {
+        kind: "error",
+        message: `thread resolve refused: ${ORG_SERVICE_KEY_WRITE_TEXT}`,
+        reason: "service_key_credential",
+      };
+    }
   }
   let h =
     d.status === 403
@@ -230,8 +311,13 @@ async function reopenCommentThread({ slug: slug, threadId: threadId, credentials
             ? "unavailable"
             : "http";
   if (isOutsideOrgNotFound(slug, h))
-    logFeatureSad("artifact_comment_session_resolve", "not_found_outside_org", { status: d.status });
-  else logFeatureBad("artifact_comment_session_resolve", h, { status: d.status });
+    logFeatureSad("artifact_comment_session_resolve", "not_found_outside_org", {
+      status: d.status,
+    });
+  else
+    logFeatureBad("artifact_comment_session_resolve", h, {
+      status: d.status,
+    });
   let s = A !== "" ? `: ${A}` : "";
   return {
     kind: "error",
@@ -246,5 +332,4 @@ async function reopenCommentThread({ slug: slug, threadId: threadId, credentials
     reason: h,
   };
 }
-
 export { reopenCommentThread, resolveCommentThread };

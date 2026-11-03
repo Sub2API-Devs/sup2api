@@ -6,111 +6,112 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../runtime/bun-runtime.js";
-import { ba } from "../../../protobuf/dist/commonjs/reflect/index.js";
-import { Sp } from "./proto.js";
-import { wa } from "./value.js";
+import { require_reflect_2 } from "../../../protobuf/dist/commonjs/reflect/index.js";
+import { require_proto } from "./proto.js";
+import { require_value } from "./value.js";
 
 //@ chunk-fq0cr76a.js:468191-469618 cjs-fingerprint
-var $o = x(function (pL) {
-  Object.defineProperty(pL, "__esModule", { value: !0 });
-  pL.EMPTY_LIST = void 0;
-  pL.celList = cL;
-  pL.celListConcat = cQ;
-  pL.isCelList = uQ;
-  var aL = ba(),
-    lL = Sp(),
-    ad = wa(),
-    wy = Symbol.for("@bufbuild/cel/list");
-  function cL(e) {
-    if (aL.isReflectList(e)) return new dL(e);
-    return new uL(e);
+var require_list = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.EMPTY_LIST = undefined;
+  cjsExports.celList = celList;
+  cjsExports.celListConcat = celListConcat;
+  cjsExports.isCelList = isCelList;
+  var reflect_1 = require_reflect_2();
+  var proto_js_1 = require_proto();
+  var value_js_1 = require_value();
+  var privateSymbol = Symbol.for("@bufbuild/cel/list");
+  function celList(arrayOrReflectList) {
+    if (reflect_1.isReflectList(arrayOrReflectList)) return new RepeatedFieldList(arrayOrReflectList);
+    return new ArrayList(arrayOrReflectList);
   }
-  function cQ(...e) {
-    return new fL(e);
+  function celListConcat(...lists) {
+    return new ConcatList(lists);
   }
-  function uQ(e) {
-    return typeof e === "object" && e !== null && wy in e;
+  function isCelList(v) {
+    return typeof v === "object" && v !== null && privateSymbol in v;
   }
-  class uL {
+  class ArrayList {
     _array;
-    [wy] = {};
-    constructor(e) {
-      this._array = e;
+    [privateSymbol] = {};
+    constructor(_array) {
+      this._array = _array;
     }
     get size() {
       return this._array.length;
     }
-    get(e) {
-      if (e < 0 || e >= this.size) return;
-      return ad.toCel(this._array[e]);
+    get(index) {
+      if (index < 0 || index >= this.size) return;
+      return value_js_1.toCel(this._array[index]);
     }
     *values() {
-      for (let e of this._array.values()) yield ad.toCel(e);
+      for (let element of this._array.values()) yield value_js_1.toCel(element);
     }
     [Symbol.iterator]() {
       return this.values();
     }
   }
-  class dL {
+  class RepeatedFieldList {
     _list;
-    [wy] = {};
-    constructor(e) {
-      this._list = e;
+    [privateSymbol] = {};
+    constructor(_list) {
+      this._list = _list;
     }
     get size() {
       return this._list.size;
     }
-    get(e) {
-      let n = this._list.get(e);
-      if (n === void 0) return;
-      return oL(this._list.field(), n);
+    get(index) {
+      let val = this._list.get(index);
+      if (val === undefined) return;
+      return celFromListElem(this._list.field(), val);
     }
     *values() {
-      for (let e of this._list) yield oL(this._list.field(), e);
+      for (let val of this._list) yield celFromListElem(this._list.field(), val);
     }
     [Symbol.iterator]() {
       return this.values();
     }
   }
-  class fL {
+  class ConcatList {
     _lists;
-    [wy] = {};
+    [privateSymbol] = {};
     _size;
-    constructor(e) {
-      this._lists = e;
-      let n = 0;
-      for (let r of e) n += r.size;
-      this._size = n;
+    constructor(_lists) {
+      this._lists = _lists;
+      let size = 0;
+      for (let list of _lists) size += list.size;
+      this._size = size;
     }
     get size() {
       return this._size;
     }
-    get(e) {
-      if (e < 0 || e >= this.size) return;
-      for (let _list of this._lists) {
-        if (e < _list.size) return _list.get(e);
-        e = e - _list.size;
+    get(index) {
+      if (index < 0 || index >= this.size) return;
+      for (let list of this._lists) {
+        if (index < list.size) return list.get(index);
+        index = index - list.size;
       }
       return;
     }
     *values() {
-      for (let _list of this._lists) yield* _list.values();
+      for (let list of this._lists) yield* list.values();
     }
     [Symbol.iterator]() {
       return this.values();
     }
   }
-  function oL(e, n) {
-    switch (e.listKind) {
+  function celFromListElem(desc, v) {
+    switch (desc.listKind) {
       case "enum":
-        return BigInt(n);
+        return BigInt(v);
       case "message":
-        return ad.reflectMsgToCel(n);
+        return value_js_1.reflectMsgToCel(v);
       case "scalar":
-        return lL.celFromScalar(e.scalar, n);
+        return proto_js_1.celFromScalar(desc.scalar, v);
     }
   }
-  pL.EMPTY_LIST = cL([]);
+  cjsExports.EMPTY_LIST = celList([]);
 });
-
-export { $o };
+export { require_list };

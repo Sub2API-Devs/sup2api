@@ -29,198 +29,227 @@ import { ARTIFACT_FAMILY_TOOL_NAMES } from "../../tools/ArtifactTool/constants.j
 import { logError } from "../../utils/log.js";
 
 //@ chunk-rsfhsjj6.js:473-512 placement
-var ROSTER_COLD_AWAIT_MS = 1500,
-  ROSTER_REFRESH_TTL_MS = 86400000,
-  ROSTER_DENIED_TTL_MS = 14400000;
+var ROSTER_COLD_AWAIT_MS = 1500;
+var ROSTER_REFRESH_TTL_MS = 86400000;
+var ROSTER_DENIED_TTL_MS = 14400000;
 //@ chunk-rsfhsjj6.js:512-549 placement
 function artifactRosterIdentityKnown() {
-  return rosterAccountKey() !== void 0;
+  return rosterAccountKey() !== undefined;
 }
 //@ chunk-rsfhsjj6.js:549-725 placement
 function knownArtifactCapabilities() {
   let r = currentRoster();
-  if (r !== void 0) return { capabilities: r.roster.capabilities, source: r.source };
-  return { capabilities: void 0, source: rosterAccountKey() === void 0 ? "cold_no_identity" : "cold" };
+  if (r !== undefined)
+    return {
+      capabilities: r.roster.capabilities,
+      source: r.source,
+    };
+  return {
+    capabilities: undefined,
+    source: rosterAccountKey() === undefined ? "cold_no_identity" : "cold",
+  };
 }
 //@ chunk-rsfhsjj6.js:725-775 placement
 function artifactRosterCold() {
-  return knownArtifactCapabilities().capabilities === void 0;
+  return knownArtifactCapabilities().capabilities === undefined;
 }
+//@ chunk-rsfhsjj6.js:775-1333 placement
 /**
  * 冻结 schema 前等待 artifact 能力名单。
  */
-//@ chunk-rsfhsjj6.js:775-1333 placement
 function awaitArtifactRosterForSchemaFreeze(r = ROSTER_COLD_AWAIT_MS) {
-  let e = getLiveState();
-  if (e.frozenAssets !== void 0 || e.rosterHeard === void 0 || e.rosterWaitOver || !artifactRosterCold())
+  let liveState = getLiveState();
+  if (
+    liveState.frozenAssets !== undefined ||
+    liveState.rosterHeard === undefined ||
+    liveState.rosterWaitOver ||
+    !artifactRosterCold()
+  )
     return;
-  if (e.rosterWait !== void 0) return e.rosterWait;
-  let now = Date.now(),
-    accountEpoch = e.accountEpoch;
-  return (
-    (e.rosterWait = withTimeout(e.rosterHeard, r, "artifact-roster")
-      .then(
-        (a) => {
-          logFeatureOk("artifact_roster_wait", {
-            wait_ms: Date.now() - now,
-            heard: a,
-            cold: artifactRosterCold(),
-          });
-        },
-        () => {
-          logFeatureSad("artifact_roster_wait", "timeout", {
-            wait_ms: Date.now() - now,
-            cold: artifactRosterCold(),
-          });
-        },
-      )
-      .catch((a) => {
-        logForDebugging(`Artifact roster wait: recording its outcome failed: ${errorMessage(a)}`);
-      })
-      .finally(() => {
-        if (e.accountEpoch === accountEpoch) e.rosterWaitOver = !0;
-      })),
-    e.rosterWait
-  );
+  if (liveState.rosterWait !== undefined) return liveState.rosterWait;
+  let now = Date.now();
+  let accountEpoch = liveState.accountEpoch;
+  liveState.rosterWait = withTimeout(liveState.rosterHeard, r, "artifact-roster")
+    .then(
+      (heard) => {
+        logFeatureOk("artifact_roster_wait", {
+          wait_ms: Date.now() - now,
+          heard,
+          cold: artifactRosterCold(),
+        });
+      },
+      () => {
+        logFeatureSad("artifact_roster_wait", "timeout", {
+          wait_ms: Date.now() - now,
+          cold: artifactRosterCold(),
+        });
+      },
+    )
+    .catch((error) => {
+      logForDebugging(`Artifact roster wait: recording its outcome failed: ${errorMessage(error)}`);
+    })
+    .finally(() => {
+      if (liveState.accountEpoch === accountEpoch) liveState.rosterWaitOver = true;
+    });
+  return liveState.rosterWait;
 }
 //@ chunk-rsfhsjj6.js:1333-1667 placement
 async function artifactRosterSettled(r) {
   let e = Date.now() + r;
   for (;;) {
-    let o = getLiveState(),
-      rosterHeard = o.rosterHeard;
-    if (o.frozenAssets !== void 0 || rosterHeard === void 0 || o.rosterWaitOver) return !0;
-    let abortController = new AbortController(),
-      winner = await Promise.race([
-        rosterHeard.then(
-          () => !0,
-          () => !0,
-        ),
-        sleep(Math.max(0, e - Date.now()), abortController.signal, { unref: !0 }).then(() => !1),
-      ]);
-    if ((abortController.abort(), !winner)) return !1;
-    if (getLiveState().rosterHeard === rosterHeard) return !0;
+    let liveState = getLiveState();
+    let rosterHeard = liveState.rosterHeard;
+    if (liveState.frozenAssets !== undefined || rosterHeard === undefined || liveState.rosterWaitOver)
+      return true;
+    let abortController = new AbortController();
+    let winner = await Promise.race([
+      rosterHeard.then(
+        () => true,
+        () => true,
+      ),
+      sleep(Math.max(0, e - Date.now()), abortController.signal, {
+        unref: true,
+      }).then(() => false),
+    ]);
+    abortController.abort();
+    if (!winner) return false;
+    if (getLiveState().rosterHeard === rosterHeard) return true;
   }
 }
 //@ chunk-rsfhsjj6.js:1667-1768 placement
 function artifactRosterFresh(r = Date.now()) {
-  let e = readCachedRoster();
-  if (e === void 0) return !1;
-  let o = r - e.fetchedAt;
+  let cachedRoster = readCachedRoster();
+  if (cachedRoster === undefined) return false;
+  let o = r - cachedRoster.fetchedAt;
   return o >= 0 && o < ROSTER_REFRESH_TTL_MS;
 }
 //@ chunk-rsfhsjj6.js:1768-1919 placement
 function artifactRosterFetchDeferred(r = Date.now()) {
-  let e = readRosterDenied();
-  if (e === void 0) return !1;
-  let o = r - e.deniedAt;
+  let rosterDenied = readRosterDenied();
+  if (rosterDenied === undefined) return false;
+  let o = r - rosterDenied.deniedAt;
   return (
     o >= 0 &&
     o < ROSTER_DENIED_TTL_MS &&
-    getStoredOAuthTokenExpiresAt() === e.tokenExpiresAt &&
-    !isOAuthTokenExpired(e.tokenExpiresAt, r)
+    getStoredOAuthTokenExpiresAt() === rosterDenied.tokenExpiresAt &&
+    !isOAuthTokenExpired(rosterDenied.tokenExpiresAt, r)
   );
 }
 //@ chunk-rsfhsjj6.js:1919-2002 placement
 function refreshArtifactRoster(r) {
-  let e = getLiveState(),
-    o;
-  return (
-    (e.rosterHeard = new Promise((n) => {
-      o = n;
-    })),
-    refreshRosterUnchecked(e, r, o)
-  );
+  let liveState = getLiveState();
+  let o;
+  liveState.rosterHeard = new Promise((resolve) => {
+    o = resolve;
+  });
+  return refreshRosterUnchecked(liveState, r, o);
 }
+//@ chunk-rsfhsjj6.js:2002-2781 placement
 /**
  * 刷新 artifact 能力名单并记遥测
  */
-//@ chunk-rsfhsjj6.js:2002-2781 placement
-async function refreshRosterUnchecked(r, e, o) {
+async function refreshRosterUnchecked(liveState, e, o) {
   try {
-    let accountEpoch = r.accountEpoch,
-      a = getStoredOAuthTokenExpiresAt(),
-      now = Date.now(),
-      s = await resolveContract({ ...e, recoverOAuth401: !0 }),
-      l = Date.now() - now;
-    if ("err" in s) {
-      (logFeatureSad("artifact_roster_refresh", s.cause, {
-        duration_ms: l,
-        ...(s.status !== void 0 && { status: s.status }),
-      }),
-        logForDebugging(`Artifact roster refresh failed (${s.cause}): ${s.err}`));
-      let c = getStoredOAuthTokenExpiresAt(),
-        { cause: cause, status: status } = s;
+    let accountEpoch = liveState.accountEpoch;
+    let storedOAuthTokenExpiresAt = getStoredOAuthTokenExpiresAt();
+    let now = Date.now();
+    let contract = await resolveContract({
+      ...e,
+      recoverOAuth401: true,
+    });
+    let durationMs = Date.now() - now;
+    if ("err" in contract) {
+      logFeatureSad("artifact_roster_refresh", contract.cause, {
+        duration_ms: durationMs,
+        ...(contract.status !== undefined && {
+          status: contract.status,
+        }),
+      });
+      logForDebugging(`Artifact roster refresh failed (${contract.cause}): ${contract.err}`);
+      let storedOAuthTokenExpiresAt_2 = getStoredOAuthTokenExpiresAt();
+      let { cause, status } = contract;
+      o(false);
       if (
-        (o(!1),
         cause === "http_4xx" &&
-          (status === 403 || (status === 401 && c !== a)) &&
-          c !== null &&
-          getLiveState() === r)
+        (status === 403 || (status === 401 && storedOAuthTokenExpiresAt_2 !== storedOAuthTokenExpiresAt)) &&
+        storedOAuthTokenExpiresAt_2 !== null &&
+        getLiveState() === liveState
       )
-        await saveRosterDenied(r, accountEpoch, e.storageV5, (h) => ({
-          artifactRosterDenied: { ...h, status: status, deniedAt: Date.now(), tokenExpiresAt: c },
+        await saveRosterDenied(liveState, accountEpoch, e.storageV5, (h) => ({
+          artifactRosterDenied: {
+            ...h,
+            status,
+            deniedAt: Date.now(),
+            tokenExpiresAt: storedOAuthTokenExpiresAt_2,
+          },
         }));
-      return !1;
+      return false;
     }
-    logFeatureOk("artifact_roster_refresh", { duration_ms: l, schema_frozen: r.frozenAssets !== void 0 });
-    let { adopted: adopted, persisted: persisted } = saveRosterToConfig({
-      session: r,
+    logFeatureOk("artifact_roster_refresh", {
+      duration_ms: durationMs,
+      schema_frozen: liveState.frozenAssets !== undefined,
+    });
+    let { adopted, persisted } = saveRosterToConfig({
+      session: liveState,
       epoch: accountEpoch,
-      roster: s,
+      roster: contract,
       storageV5: e.storageV5,
     });
-    if (adopted) (o(!0), await persisted);
-    return !0;
+    if (adopted) {
+      o(true);
+      await persisted;
+    }
+    return true;
   } catch (error) {
-    return (logForDebugging(`Artifact roster refresh: ${errorMessage(error)}`), !1);
+    logForDebugging(`Artifact roster refresh: ${errorMessage(error)}`);
+    return false;
   } finally {
-    o(!1);
+    o(false);
   }
 }
 //@ chunk-s61vbvea.js:377847-377899 placement
-function T_() {
+function artifactFamilyModule() {
   return require("./chunk-rdzbcgex.js");
 }
 //@ chunk-s61vbvea.js:377899-377931 placement
-function mSe(e) {
-  return toolMatchesAnyName(e, ARTIFACT_FAMILY_TOOL_NAMES);
+/**
+ * 导出函数 `isArtifactFamilyTool`：参数 e，返回 toolMatchesAnyName(e, ARTIFACT_FAMILY_TOOL_NAMES)。
+ */
+function isArtifactFamilyTool(tool) {
+  return toolMatchesAnyName(tool, ARTIFACT_FAMILY_TOOL_NAMES);
 }
+//@ chunk-s61vbvea.js:377931-378098 placement
 /**
  * 工具列表包含 Artifact 工具时，等待 Artifact 能力名册就绪以便冻结 schema；出错只记录。
  */
-//@ chunk-s61vbvea.js:377931-378098 placement
-async function awaitArtifactRosterSafe(e) {
+async function awaitArtifactRosterSafe(tools) {
   try {
-    let n = T_();
-    if (n === null || !e.some(mSe)) return;
+    let n = artifactFamilyModule();
+    if (n === null || !tools.some(isArtifactFamilyTool)) return;
     await n.awaitArtifactRosterForSchemaFreeze();
   } catch (error) {
     logError(withTelemetryMessage(toError(error), "Artifact roster wait failed"));
   }
 }
+//@ chunk-s61vbvea.js:378098-378309 placement
 /**
  * 查询 Artifact 能力名册是否已就绪（不可用时视为就绪）；查询失败记调试日志并返回 false。
  */
-//@ chunk-s61vbvea.js:378098-378309 placement
 async function isArtifactRosterSettled(e) {
   try {
-    let n = T_();
+    let n = artifactFamilyModule();
     return n === null || (await n.artifactRosterSettled(e));
   } catch (error) {
-    return (
-      logForDebugging(
-        `Artifact roster status check failed; context-size telemetry leaves the Artifact tools out: ${errorMessage(error)}`,
-      ),
-      !1
+    logForDebugging(
+      `Artifact roster status check failed; context-size telemetry leaves the Artifact tools out: ${errorMessage(error)}`,
     );
+    return false;
   }
 }
-
 export {
   awaitArtifactRosterSafe,
   knownArtifactCapabilities,
-  mSe,
+  isArtifactFamilyTool,
   isArtifactRosterSettled,
   refreshArtifactRoster,
 };

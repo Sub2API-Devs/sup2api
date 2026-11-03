@@ -16,58 +16,71 @@ import { SHELL_TOOL_NAMES } from "./shell/shellToolUtils.js";
 import { nestedCommandSpans } from "./bash/commands.js";
 import { isGithubDotCom } from "./git/githubUrl.js";
 import { readFileGuarded, isMissingPathError } from "./fsSafety/guardedFileRead.js";
-import { wt } from "../remote/remoteMode.js";
+import { isRemoteSessionAvailable } from "../remote/remoteMode.js";
 import { findGitRoot, isHomeDirectoryGitRoot } from "./git.js";
 import { getCwd } from "./cwd.js";
-import { getGitRepoCache, uut } from "./git/gitRepoCache.js";
+import { getGitRepoCache, memoizeMap } from "./git/gitRepoCache.js";
 
 //@ chunk-dsy6gyxv.js:509-1657 placement
-var ASSIGNMENT_PATTERN_SOURCE = String.raw`(?:\[[^\]\n]{0,100}\]){0,4}["']?\]?[ \t]{0,20}(?:=>|[=:])[ \t]{0,20}[\["' ]{0,8}`,
-  w = String.raw`iphone(?:os|simulator)[\d.]{0,12}\b`,
-  regExp = new RegExp(
+/**
+ * IOS_SDK_VERSION_SOURCE：iOS SDK 版本匹配片段；IOS_SDKROOT_ASSIGNMENT_RE：Xcode 构建设置里的 iOS SDK 赋值；XCODE_PLATFORM_MARKER_RE：Xcode 工程里的 iOS 平台标记（同一声明共 9 个绑定）。
+ */
+var ASSIGNMENT_PATTERN_SOURCE = String.raw`(?:\[[^\]\n]{0,100}\]){0,4}["']?\]?[ \t]{0,20}(?:=>|[=:])[ \t]{0,20}[\["' ]{0,8}`;
+var IOS_SDK_VERSION_SOURCE = String.raw`iphone(?:os|simulator)[\d.]{0,12}\b`;
+var regExp = new RegExp(
+  [
+    String.raw`\bSDKROOT${ASSIGNMENT_PATTERN_SOURCE}${IOS_SDK_VERSION_SOURCE}`,
+    String.raw`\bTARGETED_DEVICE_FAMILY${ASSIGNMENT_PATTERN_SOURCE}(?:\d,){0,8}[12]\b`,
+    String.raw`\bSUPPORTED_PLATFORMS${ASSIGNMENT_PATTERN_SOURCE}[^;\n]{0,200}?\b${IOS_SDK_VERSION_SOURCE}`,
+  ].join("|"),
+);
+var IOS_SDKROOT_ASSIGNMENT_RE = /IPHONEOS_DEPLOYMENT_TARGET|TARGETED_DEVICE_FAMILY/;
+var XCODE_PLATFORM_MARKER_RE = /\bimport UIKit\b|#import\s*<UIKit\/|\.iOS\(/;
+var UIKIT_IMPORT_RE = [".swift", ".m", ".mm", ".h"];
+var IOS_ARTIFACT_EXTENSIONS = /simctl|devicectl|iphone(?:os|simulator)|platform=iOS|-apple-ios|Simulator/i;
+var SIMULATOR_COMMAND_RE = String.raw`-sdk\s+\S*iphone(?:os|simulator)`;
+var SIMULATOR_SDK_FLAG = String.raw`(?:"[^"]*"|'[^']*'|[^\s"'])*`;
+var regExp_2 = new RegExp(
+  String.raw`^(?:(?:\w+=${SIMULATOR_SDK_FLAG}|sudo|time|env|nice|caffeinate|xcrun|timeout\s+\S+|arch\s+-\S+)\s+){0,20}` +
+    String.raw`(?:\S*[\\/])?(?:` +
     [
-      String.raw`\bSDKROOT${ASSIGNMENT_PATTERN_SOURCE}${w}`,
-      String.raw`\bTARGETED_DEVICE_FAMILY${ASSIGNMENT_PATTERN_SOURCE}(?:\d,){0,8}[12]\b`,
-      String.raw`\bSUPPORTED_PLATFORMS${ASSIGNMENT_PATTERN_SOURCE}[^;\n]{0,200}?\b${w}`,
-    ].join("|"),
-  ),
-  L = /IPHONEOS_DEPLOYMENT_TARGET|TARGETED_DEVICE_FAMILY/,
-  v = /\bimport UIKit\b|#import\s*<UIKit\/|\.iOS\(/,
-  x = [".swift", ".m", ".mm", ".h"],
-  D = /simctl|devicectl|iphone(?:os|simulator)|platform=iOS|-apple-ios|Simulator/i,
-  y = String.raw`-sdk\s+\S*iphone(?:os|simulator)`,
-  j = String.raw`(?:"[^"]*"|'[^']*'|[^\s"'])*`,
-  regExp_2 = new RegExp(
-    String.raw`^(?:(?:\w+=${j}|sudo|time|env|nice|caffeinate|xcrun|timeout\s+\S+|arch\s+-\S+)\s+){0,20}` +
-      String.raw`(?:\S*[\\/])?(?:` +
-      [
-        String.raw`(?:xcrun\s[\s\S]*?)?\b(?:simctl|devicectl)\b`,
-        String.raw`xcrun\s[\s\S]*${y}`,
-        String.raw`xcodebuild\s[\s\S]*(?:${y}|platform=iOS\b)`,
-        String.raw`swift\s+(?:build|test|run)\s[\s\S]*(?:${y}|-triple\s+\S*-apple-ios)`,
-        String.raw`open\s[\s\S]*-a\s+["']?Simulator\b`,
-      ].join("|") +
-      ")",
-    "i",
-  ),
-  M = /\bsimctl\b|-sdk iphonesimulator|-sdk iphoneos|platform=iOS Simulator/,
-  W = new Set([FILE_EDIT_TOOL_NAME, FILE_WRITE_TOOL_NAME]);
+      String.raw`(?:xcrun\s[\s\S]*?)?\b(?:simctl|devicectl)\b`,
+      String.raw`xcrun\s[\s\S]*${SIMULATOR_COMMAND_RE}`,
+      String.raw`xcodebuild\s[\s\S]*(?:${SIMULATOR_COMMAND_RE}|platform=iOS\b)`,
+      String.raw`swift\s+(?:build|test|run)\s[\s\S]*(?:${SIMULATOR_COMMAND_RE}|-triple\s+\S*-apple-ios)`,
+      String.raw`open\s[\s\S]*-a\s+["']?Simulator\b`,
+    ].join("|") +
+    ")",
+  "i",
+);
+var XCODE_COMMAND_PREFIX = /\bsimctl\b|-sdk iphonesimulator|-sdk iphoneos|platform=iOS Simulator/;
+var IOS_BUILD_COMMAND_RE = new Set([FILE_EDIT_TOOL_NAME, FILE_WRITE_TOOL_NAME]);
 //@ chunk-dsy6gyxv.js:1657-1737 placement
-function Kjs() {
-  return { swiftFileEdited: !1, evidence: null, conclusiveEvidence: null };
+/**
+ * emptyProjectFactsEvidence：项目事实证据的初值。
+ */
+function emptyProjectFactsEvidence() {
+  return {
+    swiftFileEdited: false,
+    evidence: null,
+    conclusiveEvidence: null,
+  };
 }
 //@ chunk-dsy6gyxv.js:1737-1829 placement
-function mOo(e) {
+/**
+ * conclusiveEvidenceOf：项目证据（确定优先）。
+ */
+function conclusiveEvidenceOf(e) {
   return e.swiftFileEdited && e.evidence !== null ? e.evidence : e.conclusiveEvidence;
 }
 //@ chunk-dsy6gyxv.js:1829-1864 placement
-function F(e) {
-  return mOo(e) !== null;
+function hasProjectEvidence(e) {
+  return conclusiveEvidenceOf(e) !== null;
 }
 //@ chunk-dsy6gyxv.js:1864-2767 placement
 function countToolProgress(e, t) {
   for (let n of t) {
-    if (F(e)) return;
+    if (hasProjectEvidence(e)) return;
     let s =
       n.type === "progress" && (n.data.type === "agent_progress" || n.data.type === "skill_progress")
         ? n.data.message
@@ -78,113 +91,120 @@ function countToolProgress(e, t) {
         if (o.type !== "tool_use") continue;
         let input = o.input;
         if (typeof input !== "object" || input === null) continue;
-        if (W.has(o.name)) {
+        if (IOS_BUILD_COMMAND_RE.has(o.name)) {
           let i =
             "file_path" in input && typeof input.file_path === "string" ? input.file_path.toLowerCase() : "";
-          if (i.endsWith(".swift")) e.swiftFileEdited = !0;
-          let any = x.some((m) => i.endsWith(m));
-          if ("content" in input) R(e, input.content, any);
-          if ("new_string" in input) R(e, input.new_string, any);
+          if (i.endsWith(".swift")) e.swiftFileEdited = true;
+          let any = UIKIT_IMPORT_RE.some((m) => i.endsWith(m));
+          if ("content" in input) recordUIKitImport(e, input.content, any);
+          if ("new_string" in input) recordUIKitImport(e, input.new_string, any);
         } else if (
           SHELL_TOOL_NAMES.includes(o.name) &&
           "command" in input &&
           typeof input.command === "string"
         ) {
-          let i = U(input.command);
-          if (i || M.test(input.command)) g(e, "ios_command", i);
+          let i = isIosBuildCommand(input.command);
+          if (i || XCODE_COMMAND_PREFIX.test(input.command)) recordEvidence(e, "ios_command", i);
         }
       }
     } else if (s.type === "user") {
       if (!Array.isArray(s.message.content)) continue;
       for (let o of s.message.content)
-        if (o.type === "tool_result") for (let r of getTextParts(o.content)) A(e, r);
+        if (o.type === "tool_result") for (let r of getTextParts(o.content)) recordXcodeMarker(e, r);
     }
   }
 }
 //@ chunk-dsy6gyxv.js:2767-2830 placement
-function g(e, t, n) {
-  if (((e.evidence ??= t), n)) e.conclusiveEvidence ??= t;
+function recordEvidence(e, t, n) {
+  e.evidence ??= t;
+  if (n) e.conclusiveEvidence ??= t;
 }
 //@ chunk-dsy6gyxv.js:2830-2925 placement
-function A(e, t) {
-  if (regExp.test(t)) g(e, "xcode_project", !0);
-  else if (L.test(t)) g(e, "xcode_project", !1);
+function recordXcodeMarker(e, t) {
+  if (regExp.test(t)) recordEvidence(e, "xcode_project", true);
+  else if (IOS_SDKROOT_ASSIGNMENT_RE.test(t)) recordEvidence(e, "xcode_project", false);
 }
 //@ chunk-dsy6gyxv.js:2925-3015 placement
-function R(e, t, n) {
+function recordUIKitImport(e, t, n) {
   if (typeof t !== "string") return;
-  if (v.test(t)) g(e, "uikit_import", n);
-  A(e, t);
+  if (XCODE_PLATFORM_MARKER_RE.test(t)) recordEvidence(e, "uikit_import", n);
+  recordXcodeMarker(e, t);
 }
 //@ chunk-dsy6gyxv.js:3015-3133 placement
-function getTextParts(e) {
-  if (typeof e === "string") return [e];
-  return Array.isArray(e) ? e.flatMap((t) => (t.type === "text" ? [t.text] : [])) : [];
+function getTextParts(content) {
+  if (typeof content === "string") return [content];
+  return Array.isArray(content) ? content.flatMap((t) => (t.type === "text" ? [t.text] : [])) : [];
 }
 //@ chunk-dsy6gyxv.js:3133-3193 placement
-function U(e) {
-  return D.test(e) && nestedCommandSpans(e).some((t) => regExp_2.test(t));
+function isIosBuildCommand(command) {
+  return IOS_ARTIFACT_EXTENSIONS.test(command) && nestedCommandSpans(command).some((t) => regExp_2.test(t));
 }
 //@ chunk-dsy6gyxv.js:3193-4911 placement
-var MAX_MANIFEST_BYTES = 65536,
-  z = 20,
-  B = [
-    ["pnpm-lock.yaml", "pnpm"],
-    ["yarn.lock", "yarn"],
-    ["bun.lock", "bun"],
-    ["bun.lockb", "bun"],
-    ["package-lock.json", "npm"],
-    ["npm-shrinkwrap.json", "npm"],
-    ["deno.lock", "deno"],
-    ["poetry.lock", "poetry"],
-    ["uv.lock", "uv"],
-    ["Pipfile.lock", "pipenv"],
-    ["requirements.txt", "pip"],
-    ["Cargo.lock", "cargo"],
-    ["go.sum", "go"],
-    ["composer.lock", "composer"],
-    ["Gemfile.lock", "bundler"],
-    ["gradle.lockfile", "gradle"],
-    ["packages.lock.json", "nuget"],
-    ["Podfile.lock", "cocoapods"],
-    ["Package.resolved", "swift"],
-    ["mix.lock", "mix"],
-    ["pubspec.lock", "pub"],
-    ["conan.lock", "other"],
-  ],
-  H = /(?:registry|index-url)\s*=\s*["']?(https?:\/\/[^\s"'`]+)/g,
-  X = /\[\[tool\.(?:poetry\.source|uv\.index)\]\][^[]*?url\s*=\s*["'](https?:\/\/[^\s"'`]+)/g,
-  Y = /npmRegistryServer\s*:\s*["']?(https?:\/\/[^\s"'`]+)/g,
-  I = /(?:index|registry)\s*=\s*["']?(?:sparse\+)?(https?:\/\/[^\s"'`]+)/g,
-  V = /\b(?:VAULT_ADDR|SOPS_[A-Z_]*|op read|aws secretsmanager|gcloud secrets)\b/,
-  k = /\bcom\.android\.(?:application|library|test|dynamic-feature|tools\.build:gradle)\b/,
-  J =
-    /\b(?:enable_language\s*\(\s*CUDA|LANGUAGES\b[^)\n]{0,200}\bCUDA\b|find_package\s*\(\s*CUDA|cuda_add_(?:executable|library))/i,
-  q = /^[^\S\n]*-[^\S\n]*(?:[a-z][\w.-]*::)?(?:cudatoolkit|cuda-toolkit|cudnn|pytorch-cuda)\b/m,
-  Z = ["settings.gradle", "settings.gradle.kts", "build.gradle", "build.gradle.kts"],
-  Q = ["environment.yml", "environment.yaml"],
-  ee = ["ios", "iosapp", "macos", "apple"],
-  te = 5,
-  ne = 1048576,
-  oe = new Set([
-    "registry.npmjs.org",
-    "registry.yarnpkg.com",
-    "pypi.org",
-    "pypi.python.org",
-    "files.pythonhosted.org",
-    "crates.io",
-    "index.crates.io",
-    "static.crates.io",
-    "proxy.golang.org",
-    "localhost",
-    "127.0.0.1",
-    "0.0.0.0",
-    "[::1]",
-    "registry.npmmirror.com",
-    "registry.npm.taobao.org",
-    "pypi.tuna.tsinghua.edu.cn",
-    "mirrors.aliyun.com",
-  ]);
+/**
+ * MAX_LOCKFILE_ENTRIES_SCAN：扫描锁文件条数上限；PACKAGE_MANAGER_LOCKFILES：锁文件与包管理器对应表；PIP_INDEX_URL_RE：pip registry/index-url 配置（同一声明共 16 个绑定）。
+ */
+var MAX_MANIFEST_BYTES = 65536;
+var MAX_LOCKFILE_ENTRIES_SCAN = 20;
+var PACKAGE_MANAGER_LOCKFILES = [
+  ["pnpm-lock.yaml", "pnpm"],
+  ["yarn.lock", "yarn"],
+  ["bun.lock", "bun"],
+  ["bun.lockb", "bun"],
+  ["package-lock.json", "npm"],
+  ["npm-shrinkwrap.json", "npm"],
+  ["deno.lock", "deno"],
+  ["poetry.lock", "poetry"],
+  ["uv.lock", "uv"],
+  ["Pipfile.lock", "pipenv"],
+  ["requirements.txt", "pip"],
+  ["Cargo.lock", "cargo"],
+  ["go.sum", "go"],
+  ["composer.lock", "composer"],
+  ["Gemfile.lock", "bundler"],
+  ["gradle.lockfile", "gradle"],
+  ["packages.lock.json", "nuget"],
+  ["Podfile.lock", "cocoapods"],
+  ["Package.resolved", "swift"],
+  ["mix.lock", "mix"],
+  ["pubspec.lock", "pub"],
+  ["conan.lock", "other"],
+];
+var PIP_INDEX_URL_RE = /(?:registry|index-url)\s*=\s*["']?(https?:\/\/[^\s"'`]+)/g;
+var POETRY_UV_SOURCE_URL_RE =
+  /\[\[tool\.(?:poetry\.source|uv\.index)\]\][^[]*?url\s*=\s*["'](https?:\/\/[^\s"'`]+)/g;
+var YARN_NPM_REGISTRY_RE = /npmRegistryServer\s*:\s*["']?(https?:\/\/[^\s"'`]+)/g;
+var CARGO_INDEX_URL_RE = /(?:index|registry)\s*=\s*["']?(?:sparse\+)?(https?:\/\/[^\s"'`]+)/g;
+var SECRETS_TOOL_MARKER_RE = /\b(?:VAULT_ADDR|SOPS_[A-Z_]*|op read|aws secretsmanager|gcloud secrets)\b/;
+var ANDROID_APPLICATION_PLUGIN_RE =
+  /\bcom\.android\.(?:application|library|test|dynamic-feature|tools\.build:gradle)\b/;
+var CMAKE_CUDA_RE =
+  /\b(?:enable_language\s*\(\s*CUDA|LANGUAGES\b[^)\n]{0,200}\bCUDA\b|find_package\s*\(\s*CUDA|cuda_add_(?:executable|library))/i;
+var CONDA_CUDA_PACKAGE_RE =
+  /^[^\S\n]*-[^\S\n]*(?:[a-z][\w.-]*::)?(?:cudatoolkit|cuda-toolkit|cudnn|pytorch-cuda)\b/m;
+var GRADLE_BUILD_FILES = ["settings.gradle", "settings.gradle.kts", "build.gradle", "build.gradle.kts"];
+var CONDA_ENV_FILES = ["environment.yml", "environment.yaml"];
+var APPLE_PROJECT_DIRS = ["ios", "iosapp", "macos", "apple"];
+var MAX_XCODEPROJ_SCAN = 5;
+var MAX_MANIFEST_READ_BYTES = 1048576;
+var PUBLIC_REGISTRY_HOSTS = new Set([
+  "registry.npmjs.org",
+  "registry.yarnpkg.com",
+  "pypi.org",
+  "pypi.python.org",
+  "files.pythonhosted.org",
+  "crates.io",
+  "index.crates.io",
+  "static.crates.io",
+  "proxy.golang.org",
+  "localhost",
+  "127.0.0.1",
+  "0.0.0.0",
+  "[::1]",
+  "registry.npmmirror.com",
+  "registry.npm.taobao.org",
+  "pypi.tuna.tsinghua.edu.cn",
+  "mirrors.aliyun.com",
+]);
 //@ chunk-dsy6gyxv.js:4911-5378 placement
 function detectPrivateRegistry(e) {
   let t = e?.toLowerCase() ?? null;
@@ -217,69 +237,79 @@ function isCratesIoIndexUrl(url) {
       /^\/rust-lang\/crates\.io-index(?:\.git)?\/?$/.test(parsedUrl.pathname)
     );
   } catch {
-    return !1;
+    return false;
   }
 }
+//@ chunk-dsy6gyxv.js:5649-5874 placement
 /**
  * 从配置文本中按正则抽取主机名（跳过 # ; 注释行与 crates.io 索引 URL）；与 WebFetch 无关。
  */
-//@ chunk-dsy6gyxv.js:5649-5874 placement
-function extractRegistryHosts(e, t) {
-  let n = [],
-    joined = e
-      .split(
-        `
+function extractRegistryHosts(manifestFile, t) {
+  let n = [];
+  let joined = manifestFile
+    .split(
+      `
 `,
-      )
-      .filter((r) => !/^\s*[#;]/.test(r)).join(`
-`),
-    regExp = new RegExp(t.source, t.flags);
+    )
+    .filter((line) => !/^\s*[#;]/.test(line)).join(`
+`);
+  let regExp = new RegExp(t.source, t.flags);
   for (let r of joined.matchAll(regExp)) {
-    if (r[1] === void 0 || isCratesIoIndexUrl(r[1])) continue;
-    let i = extractHostname(r[1]);
-    if (i !== null) n.push(i);
+    if (r[1] === undefined || isCratesIoIndexUrl(r[1])) continue;
+    let hostname = extractHostname(r[1]);
+    if (hostname !== null) n.push(hostname);
   }
   return n;
 }
 //@ chunk-dsy6gyxv.js:5874-5992 placement
 async function readManifestFile(e, t) {
   try {
-    let n = await readFileGuarded(join(e, t), MAX_MANIFEST_BYTES, { noFollow: !0 });
-    return typeof n === "string" ? n : null;
+    let fileGuarded = await readFileGuarded(join(e, t), MAX_MANIFEST_BYTES, {
+      noFollow: true,
+    });
+    return typeof fileGuarded === "string" ? fileGuarded : null;
   } catch {
     return null;
   }
 }
 //@ chunk-dsy6gyxv.js:5992-6060 placement
-async function O(e) {
+async function isFileAsync(e) {
   try {
     return (await lstat(e)).isFile();
   } catch {
-    return !1;
+    return false;
   }
 }
 //@ chunk-dsy6gyxv.js:6060-6622 placement
 async function PACKAGE_CONFIG_FILES(e, t, n) {
   let s = [
-    ...[".npmrc", "pip.conf", "pyproject.toml", "bunfig.toml"].filter((o) => t.has(o)).map((o) => [o, H]),
-    ...(t.has("pyproject.toml") ? [["pyproject.toml", X]] : []),
-    ...(t.has(".yarnrc.yml") ? [[".yarnrc.yml", Y]] : []),
+    ...[".npmrc", "pip.conf", "pyproject.toml", "bunfig.toml"]
+      .filter((o) => t.has(o))
+      .map((o) => [o, PIP_INDEX_URL_RE]),
+    ...(t.has("pyproject.toml") ? [["pyproject.toml", POETRY_UV_SOURCE_URL_RE]] : []),
+    ...(t.has(".yarnrc.yml") ? [[".yarnrc.yml", YARN_NPM_REGISTRY_RE]] : []),
     ...(n
       ? [
-          [".cargo/config.toml", I],
-          [".cargo/config", I],
+          [".cargo/config.toml", CARGO_INDEX_URL_RE],
+          [".cargo/config", CARGO_INDEX_URL_RE],
         ]
       : []),
   ];
   for (let [o, r] of s) {
-    if (o.startsWith(".cargo/") && !(await O(join(e, o)))) continue;
-    let i = await readManifestFile(e, o);
-    if (i === null) continue;
-    for (let u of extractRegistryHosts(i, r))
-      if (!oe.has(u))
-        return { has_private_registry: !0, private_registry_host_class: detectPrivateRegistry(u) };
+    if (o.startsWith(".cargo/") && !(await isFileAsync(join(e, o)))) continue;
+    let manifestFile = await readManifestFile(e, o);
+    if (manifestFile === null) continue;
+    for (let u of extractRegistryHosts(manifestFile, r))
+      if (!PUBLIC_REGISTRY_HOSTS.has(u))
+        return {
+          has_private_registry: true,
+          private_registry_host_class: detectPrivateRegistry(u),
+        };
   }
-  return { has_private_registry: !1, private_registry_host_class: "none" };
+  return {
+    has_private_registry: false,
+    private_registry_host_class: "none",
+  };
 }
 //@ chunk-dsy6gyxv.js:6622-6975 placement
 async function SECRETS_TOOL_FILES(e, t) {
@@ -289,7 +319,7 @@ async function SECRETS_TOOL_FILES(e, t) {
       return lower === ".sops.yaml" || lower === ".sops.yml";
     })
   )
-    return !0;
+    return true;
   let sliced = t
     .filter((s) => {
       let lower = s.toLowerCase();
@@ -302,81 +332,83 @@ async function SECRETS_TOOL_FILES(e, t) {
       );
     })
     .sort()
-    .slice(0, z);
+    .slice(0, MAX_LOCKFILE_ENTRIES_SCAN);
   for (let s of sliced) {
-    let o = await readManifestFile(e, s);
-    if (o !== null && V.test(o)) return !0;
+    let manifestFile = await readManifestFile(e, s);
+    if (manifestFile !== null && SECRETS_TOOL_MARKER_RE.test(manifestFile)) return true;
   }
-  return !1;
+  return false;
 }
 //@ chunk-dsy6gyxv.js:6975-7049 placement
-async function ue(e) {
+async function isDirectoryAsync(e) {
   try {
     return (await lstat(e)).isDirectory();
   } catch {
-    return !1;
+    return false;
   }
 }
 //@ chunk-dsy6gyxv.js:7049-7218 placement
 async function hasGithubWorkflows(e) {
   try {
     let t = join(e, ".github", "workflows");
-    if (!(await ue(t))) return !1;
+    if (!(await isDirectoryAsync(t))) return false;
     return (await readdir(t)).some((s) => s.endsWith(".yml") || s.endsWith(".yaml"));
   } catch {
-    return !1;
+    return false;
   }
 }
 //@ chunk-dsy6gyxv.js:7218-7284 placement
-function pe(e) {
-  for (let [t, n] of B) if (e.has(t)) return n;
+function packageManagerFromLockfiles(e) {
+  for (let [t, n] of PACKAGE_MANAGER_LOCKFILES) if (e.has(t)) return n;
   return "none";
 }
 //@ chunk-dsy6gyxv.js:7284-7553 placement
-async function detectGradle(e, t, n) {
-  for (let s of Z) {
+async function detectGradle(dir, t, n) {
+  for (let s of GRADLE_BUILD_FILES) {
     if (!t.has(s)) continue;
-    let o = await readManifestFile(e, s);
-    if (o !== null && k.test(_(o))) return !0;
+    let manifestFile = await readManifestFile(dir, s);
+    if (manifestFile !== null && ANDROID_APPLICATION_PLUGIN_RE.test(_(manifestFile))) return true;
   }
   if (n) {
-    let s = join(e, "gradle", "libs.versions.toml");
-    if (await O(s)) {
-      let o = await readManifestFile(e, "gradle/libs.versions.toml");
-      if (o !== null && k.test(_(o))) return !0;
+    let s = join(dir, "gradle", "libs.versions.toml");
+    if (await isFileAsync(s)) {
+      let manifestFile = await readManifestFile(dir, "gradle/libs.versions.toml");
+      if (manifestFile !== null && ANDROID_APPLICATION_PLUGIN_RE.test(_(manifestFile))) return true;
     }
   }
-  return !1;
+  return false;
 }
 //@ chunk-dsy6gyxv.js:7553-7615 placement
-function _(e) {
-  return e.replace(/^[^\S\n]*(?:#|\/\/).*$/gm, "");
+function _(manifestFile) {
+  return manifestFile.replace(/^[^\S\n]*(?:#|\/\/).*$/gm, "");
 }
 //@ chunk-dsy6gyxv.js:7615-7836 placement
 async function hasMatchingBuildFile(e, t) {
   if (t.has("CMakeLists.txt")) {
-    let n = await readManifestFile(e, "CMakeLists.txt");
-    if (n !== null && J.test(_(n))) return !0;
+    let manifestFile = await readManifestFile(e, "CMakeLists.txt");
+    if (manifestFile !== null && CMAKE_CUDA_RE.test(_(manifestFile))) return true;
   }
-  for (let n of Q) {
+  for (let n of CONDA_ENV_FILES) {
     if (!t.has(n)) continue;
-    let s = await readManifestFile(e, n);
-    if (s !== null && q.test(_(s))) return !0;
+    let manifestFile = await readManifestFile(e, n);
+    if (manifestFile !== null && CONDA_CUDA_PACKAGE_RE.test(_(manifestFile))) return true;
   }
-  return !1;
+  return false;
 }
 //@ chunk-dsy6gyxv.js:7836-7989 placement
-function hasXcodeProject(e, t) {
+function hasXcodeProject(fileNames, dirNames) {
   return (
-    [...e, ...t].some((n) => {
+    [...fileNames, ...dirNames].some((n) => {
       let lower = n.toLowerCase();
       return lower.endsWith(".xcodeproj") || lower.endsWith(".xcworkspace");
-    }) || e.includes("Podfile")
+    }) || fileNames.includes("Podfile")
   );
 }
 //@ chunk-dsy6gyxv.js:7989-8220 placement
 async function listDirEntries(e) {
-  let t = await readdir(e, { withFileTypes: !0 }).catch((n) => (isMissingPathError(n) ? [] : null));
+  let t = await readdir(e, {
+    withFileTypes: true,
+  }).catch((error) => (isMissingPathError(error) ? [] : null));
   if (t === null) return null;
   return {
     dir: e,
@@ -387,55 +419,84 @@ async function listDirEntries(e) {
 //@ chunk-dsy6gyxv.js:8220-8452 placement
 async function readXcodeProject(e) {
   let found = e.fileNames.find((fileName) => fileName.toLowerCase() === "project.pbxproj");
-  if (found === void 0) return !1;
-  let n = await readFileGuarded(join(e.dir, found), ne, { noFollow: !0, fromTail: !0 });
-  if (n === "unreadable") return null;
-  return n !== null && regExp.test(n.content);
+  if (found === undefined) return false;
+  let fileGuarded = await readFileGuarded(join(e.dir, found), MAX_MANIFEST_READ_BYTES, {
+    noFollow: true,
+    fromTail: true,
+  });
+  if (fileGuarded === "unreadable") return null;
+  return fileGuarded !== null && regExp.test(fileGuarded.content);
 }
 //@ chunk-dsy6gyxv.js:8452-8596 placement
 async function isAndroidProjectDir(e) {
-  if (e.fileNames.includes("AndroidManifest.xml")) return !0;
+  if (e.fileNames.includes("AndroidManifest.xml")) return true;
   return detectGradle(e.dir, new Set(e.fileNames), e.dirNames.includes("gradle"));
 }
 //@ chunk-dsy6gyxv.js:8596-8869 placement
-async function detectAndroidProject(e, t, n) {
-  if (await isAndroidProjectDir({ dir: e, fileNames: t, dirNames: n }))
-    return { hasAndroidProject: !0, hasAndroidAppProject: !0 };
-  let found = n.find((r) => r.toLowerCase() === "android"),
-    o = found === void 0 ? null : await listDirEntries(join(e, found));
-  return { hasAndroidProject: !1, hasAndroidAppProject: o !== null && (await isAndroidProjectDir(o)) };
+async function detectAndroidProject(e, fileNames, n) {
+  if (
+    await isAndroidProjectDir({
+      dir: e,
+      fileNames,
+      dirNames: n,
+    })
+  )
+    return {
+      hasAndroidProject: true,
+      hasAndroidAppProject: true,
+    };
+  let found = n.find((r) => r.toLowerCase() === "android");
+  let o = found === undefined ? null : await listDirEntries(join(e, found));
+  return {
+    hasAndroidProject: false,
+    hasAndroidAppProject: o !== null && (await isAndroidProjectDir(o)),
+  };
 }
 //@ chunk-dsy6gyxv.js:8869-9445 placement
-async function detectXcodeProject(e, t, n) {
-  let flattened = ee.flatMap((c) => {
-      let found = n.find((d) => d.toLowerCase() === c);
-      return found === void 0 ? [] : [join(e, found)];
-    }),
-    o = [...(await Promise.all(flattened.map(listDirEntries))), { dir: e, fileNames: t, dirNames: n }],
-    included = o.includes(null),
-    filtered = o.filter((c) => c !== null),
-    any = filtered.some((c) => hasXcodeProject(c.fileNames, c.dirNames)),
-    sliced = filtered
-      .flatMap((c) =>
-        c.dirNames
-          .filter((dirName) => dirName.toLowerCase().endsWith(".xcodeproj"))
-          .sort()
-          .map((l) => join(c.dir, l)),
-      )
-      .slice(0, te);
+async function detectXcodeProject(e, fileNames, n) {
+  let flattened = APPLE_PROJECT_DIRS.flatMap((c) => {
+    let found = n.find((d) => d.toLowerCase() === c);
+    return found === undefined ? [] : [join(e, found)];
+  });
+  let o = [
+    ...(await Promise.all(flattened.map(listDirEntries))),
+    {
+      dir: e,
+      fileNames,
+      dirNames: n,
+    },
+  ];
+  let included = o.includes(null);
+  let filtered = o.filter((c) => c !== null);
+  let hasXcodeProject_2 = filtered.some((c) => hasXcodeProject(c.fileNames, c.dirNames));
+  let sliced = filtered
+    .flatMap((c) =>
+      c.dirNames
+        .filter((dirName) => dirName.toLowerCase().endsWith(".xcodeproj"))
+        .sort()
+        .map((dirName) => join(c.dir, dirName)),
+    )
+    .slice(0, MAX_XCODEPROJ_SCAN);
   for (let c of sliced) {
-    let l = await listDirEntries(c),
-      d = l === null ? null : await readXcodeProject(l);
-    if (d === !0) return { hasXcodeProject: any, hasIosAppProject: !0 };
+    let l = await listDirEntries(c);
+    let d = l === null ? null : await readXcodeProject(l);
+    if (d === true)
+      return {
+        hasXcodeProject: hasXcodeProject_2,
+        hasIosAppProject: true,
+      };
     included ||= d === null;
   }
-  return { hasXcodeProject: any, hasIosAppProject: included ? null : !1 };
+  return {
+    hasXcodeProject: hasXcodeProject_2,
+    hasIosAppProject: included ? null : false,
+  };
 }
 //@ chunk-dsy6gyxv.js:9445-9887 placement
-async function classifyProjectPlatforms(e, t, n, s, o) {
+async function classifyProjectPlatforms(e, t, n, hasXcodeProject, hasAndroidProject) {
   let mapped = t.map((i) => i.toLowerCase());
-  if (s) return "xcode";
-  if (o) return "android";
+  if (hasXcodeProject) return "xcode";
+  if (hasAndroidProject) return "android";
   if (mapped.some((i) => i.endsWith(".cu") || i.endsWith(".cuh")) || (await hasMatchingBuildFile(e, n)))
     return "cuda";
   if (mapped.some((i) => i.endsWith(".sln") || i.endsWith(".csproj"))) return "dotnet";
@@ -452,44 +513,52 @@ async function classifyProjectPlatforms(e, t, n, s, o) {
     return "windows_scripts";
   return "none";
 }
+//@ chunk-dsy6gyxv.js:9887-11269 placement
 /**
  * 扫描项目根目录得到技术栈事实（锁文件、配置、平台目录）。
  */
-//@ chunk-dsy6gyxv.js:9887-11269 placement
 async function detectProjectFacts(e) {
-  let t = await readdir(e, { withFileTypes: !0 }),
-    mapped = t.filter((a) => a.isFile()).map((a) => a.name),
-    mapped_2 = t.filter((a) => a.isDirectory()).map((a) => a.name),
-    o = new Set(mapped),
-    mapped_3 = mapped.map((a) => a.toLowerCase()),
-    i = new Set(mapped_2.map((a) => a.toLowerCase())),
-    [u, m, c, l, d] = await Promise.all([
-      PACKAGE_CONFIG_FILES(e, o, mapped_2.includes(".cargo")),
-      SECRETS_TOOL_FILES(e, mapped),
-      mapped_2.includes(".github") ? hasGithubWorkflows(e) : Promise.resolve(!1),
-      detectXcodeProject(e, mapped, mapped_2),
-      detectAndroidProject(e, mapped, mapped_2),
-    ]),
-    C = await classifyProjectPlatforms(e, mapped, o, l.hasXcodeProject, d.hasAndroidProject);
+  let t = await readdir(e, {
+    withFileTypes: true,
+  });
+  let fileNames = t.filter((a) => a.isFile()).map((a) => a.name);
+  let mapped = t.filter((a) => a.isDirectory()).map((a) => a.name);
+  let o = new Set(fileNames);
+  let mapped_2 = fileNames.map((a) => a.toLowerCase());
+  let i = new Set(mapped.map((a) => a.toLowerCase()));
+  let [u, m, c, xcodeProject, androidProject] = await Promise.all([
+    PACKAGE_CONFIG_FILES(e, o, mapped.includes(".cargo")),
+    SECRETS_TOOL_FILES(e, fileNames),
+    mapped.includes(".github") ? hasGithubWorkflows(e) : Promise.resolve(false),
+    detectXcodeProject(e, fileNames, mapped),
+    detectAndroidProject(e, fileNames, mapped),
+  ]);
+  let osLockedToolchain = await classifyProjectPlatforms(
+    e,
+    fileNames,
+    o,
+    xcodeProject.hasXcodeProject,
+    androidProject.hasAndroidProject,
+  );
   return {
-    has_dockerfile: mapped_3.some(
+    has_dockerfile: mapped_2.some(
       (a) => a === "dockerfile" || a.startsWith("dockerfile.") || a.endsWith(".dockerfile"),
     ),
-    has_compose: mapped_3.some((a) => /^(docker-)?compose(\..+)?\.ya?ml$/.test(a)),
-    has_devcontainer: i.has(".devcontainer") || mapped_3.includes(".devcontainer.json"),
+    has_compose: mapped_2.some((a) => /^(docker-)?compose(\..+)?\.ya?ml$/.test(a)),
+    has_devcontainer: i.has(".devcontainer") || mapped_2.includes(".devcontainer.json"),
     has_nix: ["flake.nix", "default.nix", "shell.nix"].some((a) => o.has(a)),
     has_bazel: ["WORKSPACE", "WORKSPACE.bazel", "MODULE.bazel", "BUILD", "BUILD.bazel", ".bazelrc"].some(
       (a) => o.has(a),
     ),
-    lockfile_family: pe(o),
-    has_env_file: mapped_3.some(
+    lockfile_family: packageManagerFromLockfiles(o),
+    has_env_file: mapped_2.some(
       (a) => (a === ".env" || a.startsWith(".env.")) && !/\.(example|sample|template|dist)$/.test(a),
     ),
     has_ci_config:
       c ||
       i.has(".circleci") ||
       i.has(".buildkite") ||
-      mapped_3.some((a) =>
+      mapped_2.some((a) =>
         [
           ".gitlab-ci.yml",
           "jenkinsfile",
@@ -500,15 +569,15 @@ async function detectProjectFacts(e) {
       ),
     ...u,
     has_secrets_manager_refs: m,
-    has_xcode_project: l.hasXcodeProject,
-    has_ios_app_project: l.hasIosAppProject,
-    has_android_project: d.hasAndroidProject,
-    has_android_app_project: d.hasAndroidAppProject,
-    os_locked_toolchain: C,
+    has_xcode_project: xcodeProject.hasXcodeProject,
+    has_ios_app_project: xcodeProject.hasIosAppProject,
+    has_android_project: androidProject.hasAndroidProject,
+    has_android_app_project: androidProject.hasAndroidAppProject,
+    os_locked_toolchain: osLockedToolchain,
   };
 }
 //@ chunk-dsy6gyxv.js:11269-11332 placement
-async function we(e) {
+async function detectProjectFactsSafe(e) {
   try {
     return await detectProjectFacts(e);
   } catch {
@@ -518,22 +587,30 @@ async function we(e) {
 //@ chunk-dsy6gyxv.js:11332-11626 placement
 async function getProjectFactsForStartup(e) {
   try {
-    if (wt()) return null;
-    let t = findGitRoot(getCwd());
-    if (t === null) return null;
-    if (await isHomeDirectoryGitRoot(t)) return null;
+    if (isRemoteSessionAvailable()) return null;
+    let gitRoot = findGitRoot(getCwd());
+    if (gitRoot === null) return null;
+    if (await isHomeDirectoryGitRoot(gitRoot)) return null;
     let markersByRoot = getGitRepoCache().markersByRoot;
-    if (e?.fresh === !0) markersByRoot.delete(t);
-    let s = uut(markersByRoot, t, we),
-      o = await s;
-    if ((o === null || o.has_ios_app_project === null) && markersByRoot.peek(t) === s)
-      markersByRoot.delete(t);
+    if (e?.fresh === true) markersByRoot.delete(gitRoot);
+    let s = memoizeMap(markersByRoot, gitRoot, detectProjectFactsSafe);
+    let o = await s;
+    if ((o === null || o.has_ios_app_project === null) && markersByRoot.peek(gitRoot) === s)
+      markersByRoot.delete(gitRoot);
     return o;
   } catch {
     return null;
   }
 }
 //@ chunk-dsy6gyxv.js:11626-11638 placement
-var qjs = 500;
-
-export { getProjectFactsForStartup, qjs, Kjs, countToolProgress, mOo };
+/**
+ * PROJECT_FACTS_CACHE_TTL_MS：项目事实缓存时长。
+ */
+var PROJECT_FACTS_CACHE_TTL_MS = 500;
+export {
+  getProjectFactsForStartup,
+  PROJECT_FACTS_CACHE_TTL_MS,
+  emptyProjectFactsEvidence,
+  countToolProgress,
+  conclusiveEvidenceOf,
+};

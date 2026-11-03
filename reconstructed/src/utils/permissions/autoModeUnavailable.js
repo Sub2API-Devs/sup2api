@@ -15,8 +15,8 @@ import { HostScoped } from "../hostScoped.js";
 //@ chunk-e6aww6q8.js:1277955-1278093 placement
 function shouldClassifyAskUserQuestion() {
   let e = antEnv.CLAUDE_CODE_AUTO_MODE_CLASSIFY_ASK_USER_QUESTION;
-  if (e !== void 0) return e;
-  return getAutoModeConfigOrDefault()?.classifyAskUserQuestion !== !1;
+  if (e !== undefined) return e;
+  return getAutoModeConfigOrDefault()?.classifyAskUserQuestion !== false;
 }
 //@ chunk-e6aww6q8.js:1278093-1278266 placement
 function describeAutoModeUnavailableCause(e) {
@@ -25,55 +25,77 @@ function describeAutoModeUnavailableCause(e) {
     : "its safety check keeps giving no result for this session's actions";
 }
 //@ chunk-e6aww6q8.js:1278266-1278293 placement
-var jjr = new HostScoped(() => new Map());
+/**
+ * autoModeUnavailableNotes：按宿主保存的 auto 模式不可用说明（Map）。
+ */
+var autoModeUnavailableNotes = new HostScoped(() => new Map());
+//@ chunk-e6aww6q8.js:1278293-1278609 placement
 /**
  * 代理因 auto 模式不可用被停止时返回给父代理的说明文字。
  */
-//@ chunk-e6aww6q8.js:1278293-1278609 placement
 function buildAutoModeStoppedMessage(e) {
   return `Auto mode is unavailable: ${describeAutoModeUnavailableCause(e)}, so this agent was stopped before it finished. Nobody interrupted it; whatever it returned is partial. Starting it again ${e === "no_classifier_for_session" ? "will" : "may"} stop the same way. Finish what you can without it, then tell the user what is blocked.`;
 }
 //@ chunk-e6aww6q8.js:1278609-1278680 placement
-function D4t() {
-  return getAutoModeConfigOrDefault()?.chromeGrantAllowlistWithoutClassifier !== !1;
+/**
+ * chromeGrantAllowlistWithoutClassifier：auto 模式是否允许无分类器时的 Chrome 授权白名单。
+ */
+function chromeGrantAllowlistWithoutClassifier() {
+  return getAutoModeConfigOrDefault()?.chromeGrantAllowlistWithoutClassifier !== false;
 }
 //@ chunk-e6aww6q8.js:1278680-1278713 placement
-var NNo = Symbol("AutoDenyWindow");
+var AUTO_DENY_WINDOW_SYMBOL = Symbol("AutoDenyWindow");
 //@ chunk-e6aww6q8.js:1278713-1278855 placement
 function buildAutoDenyMarker(e) {
   return {
-    [NNo]: !0,
+    [AUTO_DENY_WINDOW_SYMBOL]: true,
     autoDenyAfterMs: e.autoDenyAfterMs,
     autoDenyResolution: e.resolution,
-    ...(e.notASafetyCheck && { notASafetyCheck: !0 }),
+    ...(e.notASafetyCheck && {
+      notASafetyCheck: true,
+    }),
   };
 }
 //@ chunk-e6aww6q8.js:1278855-1278913 placement
-function _pn(e) {
-  return e !== void 0 && e.notASafetyCheck !== !0;
+/**
+ * isRealAutoDenyWindow：存在且不是 “非安全检查” 的自动拒绝窗口。
+ */
+function isRealAutoDenyWindow(autoDenyWindow) {
+  return autoDenyWindow !== undefined && autoDenyWindow.notASafetyCheck !== true;
 }
 //@ chunk-e6aww6q8.js:1278913-1278962 placement
-function N5s(e, n) {
-  return { ...e, deadlineEpochMs: n };
+/**
+ * withAutoDenyDeadline：给自动拒绝窗口附加截止时间。
+ */
+function withAutoDenyDeadline(autoDenyWindow, deadlineEpochMs) {
+  return {
+    ...autoDenyWindow,
+    deadlineEpochMs,
+  };
 }
 //@ chunk-e6aww6q8.js:1278962-1279002 placement
-function Lqe(e) {
+/**
+ * lacksCreateIfEmpty：输入未要求 createIfEmpty（只读工具判定）。
+ */
+function lacksCreateIfEmpty(e) {
   return !e?.createIfEmpty;
 }
 //@ chunk-e6aww6q8.js:1279002-1279034 placement
-function B4t(e) {
+/**
+ * lacksClear：输入未要求 clear（只读工具判定）。
+ */
+function lacksClear(e) {
   return !e?.clear;
 }
-
 export {
-  D4t,
+  chromeGrantAllowlistWithoutClassifier,
   shouldClassifyAskUserQuestion,
-  jjr,
+  autoModeUnavailableNotes,
   describeAutoModeUnavailableCause,
   buildAutoDenyMarker,
   buildAutoModeStoppedMessage,
-  B4t,
-  Lqe,
-  _pn,
-  N5s,
+  lacksClear,
+  lacksCreateIfEmpty,
+  isRealAutoDenyWindow,
+  withAutoDenyDeadline,
 };

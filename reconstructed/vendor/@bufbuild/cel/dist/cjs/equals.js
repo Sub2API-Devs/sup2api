@@ -6,75 +6,79 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../runtime/bun-runtime.js";
-import { ba } from "../../../protobuf/dist/commonjs/reflect/index.js";
-import { ld } from "./eval.js";
-import { li } from "../../../protobuf/dist/commonjs/index.js";
-import { $o } from "./list.js";
-import { Aa } from "./map.js";
-import { Bi } from "./uint.js";
-import { Ei } from "./type.js";
+import { require_reflect_2 } from "../../../protobuf/dist/commonjs/reflect/index.js";
+import { require_eval } from "./eval.js";
+import { require_protobuf } from "../../../protobuf/dist/commonjs/index.js";
+import { require_list } from "./list.js";
+import { require_map } from "./map.js";
+import { require_uint } from "./uint.js";
+import { require_type } from "./type.js";
 
 //@ chunk-fq0cr76a.js:482325-483569 cjs-fingerprint
-var F_ = x(function (fB) {
-  Object.defineProperty(fB, "__esModule", { value: !0 });
-  fB.equals = B_;
-  fB.equalsType = dB;
-  var ky = ba(),
-    cB = ld(),
-    uB = li(),
-    Dy = $o(),
-    Oy = Aa(),
-    Py = Bi(),
-    Ly = Ei();
-  function B_(e, n) {
-    if (e === n) return !0;
-    if (Py.isCelUint(e)) e = e.value;
-    if (Py.isCelUint(n)) n = n.value;
-    if ((typeof e === "number" || typeof e === "bigint") && (typeof n === "number" || typeof n === "bigint"))
-      return e == n;
-    switch (!0) {
-      case e instanceof Uint8Array:
-        return n instanceof Uint8Array && Vee(e, n);
-      case Dy.isCelList(e):
-        return Dy.isCelList(n) && Mee(e, n);
-      case Oy.isCelMap(e):
-        return Oy.isCelMap(n) && $ee(e, n);
-      case Ly.isCelType(e):
-        return Ly.isCelType(n) && dB(e, n);
+var require_equals_2 = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.equals = equals;
+  cjsExports.equalsType = equalsType;
+  var reflect_1 = require_reflect_2();
+  var eval_js_1 = require_eval();
+  var protobuf_1 = require_protobuf();
+  var list_js_1 = require_list();
+  var map_js_1 = require_map();
+  var uint_js_1 = require_uint();
+  var type_js_1 = require_type();
+  function equals(lhs, rhs) {
+    if (lhs === rhs) return true;
+    if (uint_js_1.isCelUint(lhs)) lhs = lhs.value;
+    if (uint_js_1.isCelUint(rhs)) rhs = rhs.value;
+    if (
+      (typeof lhs === "number" || typeof lhs === "bigint") &&
+      (typeof rhs === "number" || typeof rhs === "bigint")
+    )
+      return lhs == rhs;
+    switch (true) {
+      case lhs instanceof Uint8Array:
+        return rhs instanceof Uint8Array && equalsBytes(lhs, rhs);
+      case list_js_1.isCelList(lhs):
+        return list_js_1.isCelList(rhs) && equalsList(lhs, rhs);
+      case map_js_1.isCelMap(lhs):
+        return map_js_1.isCelMap(rhs) && equalsMap(lhs, rhs);
+      case type_js_1.isCelType(lhs):
+        return type_js_1.isCelType(rhs) && equalsType(lhs, rhs);
     }
-    if (ky.isReflectMessage(e)) {
-      if (!ky.isReflectMessage(n)) return !1;
-      if (e.desc.typeName !== n.desc.typeName) return !1;
-      return uB.equals(e.desc, e.message, n.message, {
-        registry: cB.getEvalContext().registry,
-        unpackAny: !0,
-        unknown: !0,
-        extensions: !0,
+    if (reflect_1.isReflectMessage(lhs)) {
+      if (!reflect_1.isReflectMessage(rhs)) return false;
+      if (lhs.desc.typeName !== rhs.desc.typeName) return false;
+      return protobuf_1.equals(lhs.desc, lhs.message, rhs.message, {
+        registry: eval_js_1.getEvalContext().registry,
+        unpackAny: true,
+        unknown: true,
+        extensions: true,
       });
     }
-    return !1;
+    return false;
   }
-  function dB(e, n) {
-    return e.kind === n.kind && e.name === n.name;
+  function equalsType(lhs, rhs) {
+    return lhs.kind === rhs.kind && lhs.name === rhs.name;
   }
-  function Mee(e, n) {
-    if (e.size !== n.size) return !1;
-    for (let r = 0; r < e.size; r++) if (!B_(e.get(r), n.get(r))) return !1;
-    return !0;
+  function equalsList(lhs, rhs) {
+    if (lhs.size !== rhs.size) return false;
+    for (let i = 0; i < lhs.size; i++) if (!equals(lhs.get(i), rhs.get(i))) return false;
+    return true;
   }
-  function $ee(e, n) {
-    if (e.size !== n.size) return !1;
-    for (let [r, s] of e) {
-      let h = n.get(r);
-      if (h === void 0 || !B_(s, h)) return !1;
+  function equalsMap(lhs, rhs) {
+    if (lhs.size !== rhs.size) return false;
+    for (let [k, v] of lhs) {
+      let rv = rhs.get(k);
+      if (rv === undefined || !equals(v, rv)) return false;
     }
-    return !0;
+    return true;
   }
-  function Vee(e, n) {
-    if (e.length !== n.length) return !1;
-    for (let r = 0; r < e.length; r++) if (e[r] !== n[r]) return !1;
-    return !0;
+  function equalsBytes(lhs, rhs) {
+    if (lhs.length !== rhs.length) return false;
+    for (let i = 0; i < lhs.length; i++) if (lhs[i] !== rhs[i]) return false;
+    return true;
   }
 });
-
-export { F_ };
+export { require_equals_2 };

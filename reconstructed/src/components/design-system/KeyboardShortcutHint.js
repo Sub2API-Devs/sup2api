@@ -10,69 +10,83 @@
  */
 import { w } from "../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
-import { e, r } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { BaseText } from "../../ink/components/Text.js";
 import { getShortcutDisplayPlatform } from "../../utils/keyboardShortcuts.js";
 import { formatKeyChords } from "../../keybindings/shortcutFormat.js";
 import { parseChord } from "../../keybindings/parser.js";
 
 //@ chunk-v6kts6xw.js:3401-4048 fingerprint = KeyboardShortcutHint (0.357)
-function KeyboardShortcutHint(t0) {
-  let $ = w(15),
-    { chord: chord, action: action, format: format, parens: t1, bold: t2, terse: terse } = t0,
-    x = t1 === void 0 ? !1 : t1,
-    c = t2 === void 0 ? !1 : t2,
-    i = terse === void 0 ? !1 : terse,
-    T;
-  if ($[0] === MEMO_CACHE_SENTINEL) ((T = getShortcutPlatform()), ($[0] = T));
-  else T = $[0];
-  let te = T,
-    F;
-  if ($[1] !== chord || $[2] !== format)
-    ((F = formatChordForPlatform(chord, format, te)), ($[1] = chord), ($[2] = format), ($[3] = F));
-  else F = $[3];
+function KeyboardShortcutHint(props) {
+  let $ = w(15);
+  let { chord, action, format, parens, bold, terse } = props;
+  let x = parens === undefined ? false : parens;
+  let c = bold === undefined ? false : bold;
+  let i = terse === undefined ? false : terse;
+  let T;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    T = getShortcutPlatform();
+    $[0] = T;
+  } else T = $[0];
+  let te = T;
+  let F;
+  if ($[1] !== chord || $[2] !== format) {
+    F = formatChordForPlatform(chord, format, te);
+    $[1] = chord;
+    $[2] = format;
+    $[3] = F;
+  } else F = $[3];
   let u = F;
   if (!u) {
     return null;
   }
   let L;
-  if ($[4] !== c || $[5] !== u)
-    ((L = c ? e(BaseText, { bold: !0, children: u }) : u), ($[4] = c), ($[5] = u), ($[6] = L));
-  else L = $[6];
-  let d = L,
-    m = i ? " " : " to ";
+  if ($[4] !== c || $[5] !== u) {
+    L = c
+      ? jsxProd_default(BaseText, {
+          bold: true,
+          children: u,
+        })
+      : u;
+    $[4] = c;
+    $[5] = u;
+    $[6] = L;
+  } else L = $[6];
+  let shortcutText = L;
+  let m = i ? " " : " to ";
   if (x) {
-    let h;
-    if ($[7] !== action || $[8] !== m || $[9] !== d)
-      ((h = r(BaseText, { children: ["(", d, m, action, ")"] })),
-        ($[7] = action),
-        ($[8] = m),
-        ($[9] = d),
-        ($[10] = h));
-    else h = $[10];
-    return h;
+    let t4;
+    if ($[7] !== action || $[8] !== m || $[9] !== shortcutText) {
+      t4 = jsxProd_default_2(BaseText, {
+        children: ["(", shortcutText, m, action, ")"],
+      });
+      $[7] = action;
+      $[8] = m;
+      $[9] = shortcutText;
+      $[10] = t4;
+    } else t4 = $[10];
+    return t4;
   }
-  let h;
-  if ($[11] !== action || $[12] !== m || $[13] !== d)
-    ((h = r(BaseText, { children: [d, m, action] })),
-      ($[11] = action),
-      ($[12] = m),
-      ($[13] = d),
-      ($[14] = h));
-  else h = $[14];
-  return h;
+  let t4;
+  if ($[11] !== action || $[12] !== m || $[13] !== shortcutText) {
+    t4 = jsxProd_default_2(BaseText, {
+      children: [shortcutText, m, action],
+    });
+    $[11] = action;
+    $[12] = m;
+    $[13] = shortcutText;
+    $[14] = t4;
+  } else t4 = $[14];
+  return t4;
 }
+//@ chunk-v6kts6xw.js:4048-4196 placement
 /**
  * 生成快捷键提示的纯文本 "<键> to <动作>"（terse 时省略 to，parens 时加括号）；按键无法格式化时返回空串。
  */
-//@ chunk-v6kts6xw.js:4048-4196 placement
-function formatShortcutHint({
-  chord: chord,
-  action: action,
-  format: format,
-  parens: parens = !1,
-  terse: terse = !1,
-}) {
+function formatShortcutHint({ chord, action, format, parens = false, terse = false }) {
   let l = formatChordForPlatform(chord, format, getShortcutPlatform());
   if (!l) return "";
   let p = `${l}${terse ? " " : " to "}${action}`;
@@ -83,9 +97,11 @@ function getShortcutPlatform() {
   return getShortcutDisplayPlatform() === "macos" ? "macos" : "other";
 }
 //@ chunk-v6kts6xw.js:4247-4373 placement
-function formatChordForPlatform(t, o, s) {
-  let filtered = (typeof t === "string" ? [t] : t).filter((a) => a !== "");
-  return formatKeyChords(filtered.map(parseChord), { ...o, platform: o?.platform ?? s });
+function formatChordForPlatform(chord, format, s) {
+  let filtered = (typeof chord === "string" ? [chord] : chord).filter((a) => a !== "");
+  return formatKeyChords(filtered.map(parseChord), {
+    ...format,
+    platform: format?.platform ?? s,
+  });
 }
-
 export { KeyboardShortcutHint, formatShortcutHint };

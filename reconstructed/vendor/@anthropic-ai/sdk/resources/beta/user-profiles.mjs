@@ -5,81 +5,100 @@
  * pieces: chunk-hwmsct5x.js (1)
  * attribution: esm-fingerprint 1
  */
-import { Y } from "../../core/resource.mjs";
-import { T } from "../../internal/headers.mjs";
+import { APIResource } from "../../core/resource.mjs";
+import { buildHeaders } from "../../internal/headers.mjs";
 import { I } from "../../internal/utils/path.mjs";
-import { ee } from "../../core/pagination.mjs";
+import { TokenPage } from "../../core/pagination.mjs";
 
 //@ chunk-hwmsct5x.js:51940-53298 esm-fingerprint
-class Ar extends Y {
-  create(e, n) {
-    let { betas: betas, workspace_id: workspace_id, ...h } = e;
+class UserProfiles extends APIResource {
+  create(params, options) {
+    let { betas, workspace_id, ...body } = params;
     return this._client.post("/v1/user_profiles?beta=true", {
-      body: h,
-      ...n,
-      headers: T([
+      body,
+      ...options,
+      headers: buildHeaders([
         {
           "anthropic-beta": [...(betas ?? []), "user-profiles-2026-08-18"].toString(),
-          ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0),
+          ...(workspace_id != null
+            ? {
+                "anthropic-workspace-id": workspace_id,
+              }
+            : undefined),
         },
-        n?.headers,
+        options?.headers,
       ]),
     });
   }
-  retrieve(e, n = {}, r) {
-    let { betas: betas, workspace_id: workspace_id } = n ?? {};
-    return this._client.get(I`/v1/user_profiles/${e}?beta=true`, {
-      ...r,
-      headers: T([
+  retrieve(userProfileID, params = {}, options) {
+    let { betas, workspace_id } = params ?? {};
+    return this._client.get(I`/v1/user_profiles/${userProfileID}?beta=true`, {
+      ...options,
+      headers: buildHeaders([
         {
           "anthropic-beta": [...(betas ?? []), "user-profiles-2026-08-18"].toString(),
-          ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0),
+          ...(workspace_id != null
+            ? {
+                "anthropic-workspace-id": workspace_id,
+              }
+            : undefined),
         },
-        r?.headers,
+        options?.headers,
       ]),
     });
   }
-  update(e, n, r) {
-    let { betas: betas, workspace_id: workspace_id, ...y } = n;
-    return this._client.post(I`/v1/user_profiles/${e}?beta=true`, {
-      body: y,
-      ...r,
-      headers: T([
+  update(userProfileID, params, options) {
+    let { betas, workspace_id, ...body } = params;
+    return this._client.post(I`/v1/user_profiles/${userProfileID}?beta=true`, {
+      body,
+      ...options,
+      headers: buildHeaders([
         {
           "anthropic-beta": [...(betas ?? []), "user-profiles-2026-08-18"].toString(),
-          ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0),
+          ...(workspace_id != null
+            ? {
+                "anthropic-workspace-id": workspace_id,
+              }
+            : undefined),
         },
-        r?.headers,
+        options?.headers,
       ]),
     });
   }
-  list(e = {}, n) {
-    let { betas: betas, workspace_id: workspace_id, ...h } = e ?? {};
-    return this._client.getAPIList("/v1/user_profiles?beta=true", ee, {
-      query: h,
-      ...n,
-      headers: T([
+  list(params = {}, options) {
+    let { betas, workspace_id, ...query } = params ?? {};
+    return this._client.getAPIList("/v1/user_profiles?beta=true", TokenPage, {
+      query,
+      ...options,
+      headers: buildHeaders([
         {
           "anthropic-beta": [...(betas ?? []), "user-profiles-2026-08-18"].toString(),
-          ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0),
+          ...(workspace_id != null
+            ? {
+                "anthropic-workspace-id": workspace_id,
+              }
+            : undefined),
         },
-        n?.headers,
+        options?.headers,
       ]),
     });
   }
-  createEnrollmentURL(e, n = {}, r) {
-    let { betas: betas, workspace_id: workspace_id } = n ?? {};
-    return this._client.post(I`/v1/user_profiles/${e}/enrollment_url?beta=true`, {
-      ...r,
-      headers: T([
+  createEnrollmentURL(userProfileID, params = {}, options) {
+    let { betas, workspace_id } = params ?? {};
+    return this._client.post(I`/v1/user_profiles/${userProfileID}/enrollment_url?beta=true`, {
+      ...options,
+      headers: buildHeaders([
         {
           "anthropic-beta": [...(betas ?? []), "user-profiles-2026-08-18"].toString(),
-          ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0),
+          ...(workspace_id != null
+            ? {
+                "anthropic-workspace-id": workspace_id,
+              }
+            : undefined),
         },
-        r?.headers,
+        options?.headers,
       ]),
     });
   }
 }
-
-export { Ar };
+export { UserProfiles };

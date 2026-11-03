@@ -6,117 +6,126 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { HQo } from "./core.js";
-import { qe } from "./vocabularies/draft7.js";
-import { jQo } from "./vocabularies/discriminator/index.js";
-import { Ne } from "./refs/json-schema-2020-12/index.js";
-import { Bvn } from "./compile/validate/index.js";
-import { uh } from "./compile/codegen/index.js";
-import { elr } from "./runtime/validation_error.js";
-import { jvn } from "./compile/ref_error.js";
+import { require_core_2 } from "./core.js";
+import { require_draft7 } from "./vocabularies/draft7.js";
+import { require_discriminator } from "./vocabularies/discriminator/index.js";
+import { require_json_schema_2020_12 } from "./refs/json-schema-2020-12/index.js";
+import { require_validate_2 as require_validate } from "./compile/validate/index.js";
+import { require_codegen_2 as require_codegen } from "./compile/codegen/index.js";
+import { require_validation_error_2 as require_validation_error } from "./runtime/validation_error.js";
+import { require_ref_error_2 as require_ref_error } from "./compile/ref_error.js";
 
 //@ chunk-1r4fv9mg.js:13281-14963 cjs-fingerprint
-var Ce = x(function (v, D) {
-  Object.defineProperty(v, "__esModule", { value: !0 });
-  v.MissingRefError =
-    v.ValidationError =
-    v.CodeGen =
-    v.Name =
-    v.nil =
-    v.stringify =
-    v.str =
-    v._ =
-    v.KeywordCxt =
-    v.Ajv2020 =
-      void 0;
-  var Zt = HQo(),
-    Bt = qe(),
-    Jt = jQo(),
-    Qt = Ne(),
-    V = "https://json-schema.org/draft/2020-12/schema";
-  class S extends Zt.default {
-    constructor(e = {}) {
-      super({ ...e, dynamicRef: !0, next: !0, unevaluated: !0 });
+var require_2020 = x(function (cjsExports, cjsModule) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.MissingRefError =
+    cjsExports.ValidationError =
+    cjsExports.CodeGen =
+    cjsExports.Name =
+    cjsExports.nil =
+    cjsExports.stringify =
+    cjsExports.str =
+    cjsExports._ =
+    cjsExports.KeywordCxt =
+    cjsExports.Ajv2020 =
+      undefined;
+  var core_1 = require_core_2();
+  var draft2020_1 = require_draft7();
+  var discriminator_1 = require_discriminator();
+  var json_schema_2020_12_1 = require_json_schema_2020_12();
+  var META_SCHEMA_ID = "https://json-schema.org/draft/2020-12/schema";
+  class Ajv2020 extends core_1.default {
+    constructor(opts = {}) {
+      super({
+        ...opts,
+        dynamicRef: true,
+        next: true,
+        unevaluated: true,
+      });
     }
     _addVocabularies() {
-      if (
-        (super._addVocabularies(), Bt.default.forEach((e) => this.addVocabulary(e)), this.opts.discriminator)
-      )
-        this.addKeyword(Jt.default);
+      super._addVocabularies();
+      draft2020_1.default.forEach((v) => this.addVocabulary(v));
+      if (this.opts.discriminator) this.addKeyword(discriminator_1.default);
     }
     _addDefaultMetaSchema() {
       super._addDefaultMetaSchema();
-      let { $data: $data, meta: meta } = this.opts;
+      let { $data, meta } = this.opts;
       if (!meta) return;
-      (Qt.default.call(this, $data), (this.refs["http://json-schema.org/schema"] = V));
+      json_schema_2020_12_1.default.call(this, $data);
+      this.refs["http://json-schema.org/schema"] = META_SCHEMA_ID;
     }
     defaultMeta() {
-      return (this.opts.defaultMeta = super.defaultMeta() || (this.getSchema(V) ? V : void 0));
+      return (this.opts.defaultMeta =
+        super.defaultMeta() || (this.getSchema(META_SCHEMA_ID) ? META_SCHEMA_ID : undefined));
     }
   }
-  v.Ajv2020 = S;
-  D.exports = v = S;
-  D.exports.Ajv2020 = S;
-  Object.defineProperty(v, "__esModule", { value: !0 });
-  v.default = S;
-  var er = Bvn();
-  Object.defineProperty(v, "KeywordCxt", {
-    enumerable: !0,
+  cjsExports.Ajv2020 = Ajv2020;
+  cjsModule.exports = cjsExports = Ajv2020;
+  cjsModule.exports.Ajv2020 = Ajv2020;
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.default = Ajv2020;
+  var validate_1 = require_validate();
+  Object.defineProperty(cjsExports, "KeywordCxt", {
+    enumerable: true,
     get: function () {
-      return er.KeywordCxt;
+      return validate_1.KeywordCxt;
     },
   });
-  var R = uh();
-  Object.defineProperty(v, "_", {
-    enumerable: !0,
+  var codegen_1 = require_codegen();
+  Object.defineProperty(cjsExports, "_", {
+    enumerable: true,
     get: function () {
-      return R._;
+      return codegen_1._;
     },
   });
-  Object.defineProperty(v, "str", {
-    enumerable: !0,
+  Object.defineProperty(cjsExports, "str", {
+    enumerable: true,
     get: function () {
-      return R.str;
+      return codegen_1.str;
     },
   });
-  Object.defineProperty(v, "stringify", {
-    enumerable: !0,
+  Object.defineProperty(cjsExports, "stringify", {
+    enumerable: true,
     get: function () {
-      return R.stringify;
+      return codegen_1.stringify;
     },
   });
-  Object.defineProperty(v, "nil", {
-    enumerable: !0,
+  Object.defineProperty(cjsExports, "nil", {
+    enumerable: true,
     get: function () {
-      return R.nil;
+      return codegen_1.nil;
     },
   });
-  Object.defineProperty(v, "Name", {
-    enumerable: !0,
+  Object.defineProperty(cjsExports, "Name", {
+    enumerable: true,
     get: function () {
-      return R.Name;
+      return codegen_1.Name;
     },
   });
-  Object.defineProperty(v, "CodeGen", {
-    enumerable: !0,
+  Object.defineProperty(cjsExports, "CodeGen", {
+    enumerable: true,
     get: function () {
-      return R.CodeGen;
+      return codegen_1.CodeGen;
     },
   });
-  var tr = elr();
-  Object.defineProperty(v, "ValidationError", {
-    enumerable: !0,
+  var validation_error_1 = require_validation_error();
+  Object.defineProperty(cjsExports, "ValidationError", {
+    enumerable: true,
     get: function () {
-      return tr.default;
+      return validation_error_1.default;
     },
   });
-  var rr = jvn();
-  Object.defineProperty(v, "MissingRefError", {
-    enumerable: !0,
+  var ref_error_1 = require_ref_error();
+  Object.defineProperty(cjsExports, "MissingRefError", {
+    enumerable: true,
     get: function () {
-      return rr.default;
+      return ref_error_1.default;
     },
   });
 });
-
-export { Ce };
+export { require_2020 };

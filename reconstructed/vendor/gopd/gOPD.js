@@ -8,8 +8,7 @@
 import { x } from "../../runtime/bun-runtime.js";
 
 //@ chunk-h6b7mazd.js:8285-8355 cjs-require-graph
-var Ro = x(function (tp, Eo) {
-  Eo.exports = Object.getOwnPropertyDescriptor;
+var require_gOPD = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = Object.getOwnPropertyDescriptor;
 });
-
-export { Ro };
+export { require_gOPD };

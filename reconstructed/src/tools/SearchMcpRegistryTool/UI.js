@@ -8,18 +8,18 @@
  * pieces: chunk-24trdjma.js (1)
  * attribution: placement 1
  */
-import { e } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { MessageResponse } from "../../components/MessageResponse.js";
 import { Text } from "../../ink/components/Text.js";
 import { plural } from "../../utils/stringUtils.js";
 
+//@ chunk-24trdjma.js:4532-4671 placement
 /**
  * 连接器搜索结果摘要（需要开启时显示消息）。
  */
-//@ chunk-24trdjma.js:4532-4671 placement
 function renderRegistryResult(r) {
-  return e(MessageResponse, {
-    children: e(Text, {
+  return jsxProd_default(MessageResponse, {
+    children: jsxProd_default(Text, {
       children: r.opt_in_required
         ? r.message
         : `${r.results.length} ${plural(r.results.length, "connector")}`,

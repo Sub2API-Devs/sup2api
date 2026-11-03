@@ -8,7 +8,7 @@
 
 //@ chunk-bzr73sfg.js:287550-288084 esm-fingerprint
 function indentString(input, count = 1, options = {}) {
-  let { indent: indent = " ", includeEmptyLines: includeEmptyLines = !1 } = options;
+  let { indent = " ", includeEmptyLines = false } = options;
   if (typeof input !== "string")
     throw TypeError(`Expected \`input\` to be a \`string\`, got \`${typeof input}\``);
   if (typeof count !== "number")
@@ -17,8 +17,7 @@ function indentString(input, count = 1, options = {}) {
   if (typeof indent !== "string")
     throw TypeError(`Expected \`options.indent\` to be a \`string\`, got \`${typeof indent}\``);
   if (count === 0) return input;
-  let g = includeEmptyLines ? /^/gm : /^(?!\s*$)/gm;
-  return input.replace(g, indent.repeat(count));
+  let regex = includeEmptyLines ? /^/gm : /^(?!\s*$)/gm;
+  return input.replace(regex, indent.repeat(count));
 }
-
 export { indentString };

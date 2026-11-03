@@ -6,373 +6,451 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { Ju } from "./registries.cjs";
-import { Ee } from "./util.cjs";
+import { require_registries } from "./registries.cjs";
+import { require_util } from "./util.cjs";
 
 //@ chunk-1ny7cxrt.js:556551-566438 cjs-fingerprint
-var td = x(function (Xl) {
-  Object.defineProperty(Xl, "__esModule", { value: !0 });
-  Xl.createStandardJSONSchemaMethod = Xl.createToJSONSchemaMethod = void 0;
-  Xl.initializeContext = X_;
-  Xl.handleUnrepresentable = g8;
-  Xl.processSchema = rl;
-  Xl.process = rl;
-  Xl.processSchema = rl;
-  Xl.process = rl;
-  Xl.extractDefs = Q_;
-  Xl.finalize = eb;
-  Xl.isTransforming = Er;
-  var BC = Ju(),
-    Ql = Ee();
-  function ed(e, ...t) {
-    for (let n of t)
-      for (let o of Reflect.ownKeys(n))
-        if (Object.prototype.propertyIsEnumerable.call(n, o)) Ql.assignProp(e, o, n[o]);
-    return e;
+var require_to_json_schema = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.createStandardJSONSchemaMethod = cjsExports.createToJSONSchemaMethod = undefined;
+  cjsExports.initializeContext = initializeContext;
+  cjsExports.handleUnrepresentable = handleUnrepresentable;
+  cjsExports.processSchema = processSchema;
+  cjsExports.process = processSchema;
+  cjsExports.processSchema = processSchema;
+  cjsExports.process = processSchema;
+  cjsExports.extractDefs = extractDefs;
+  cjsExports.finalize = finalize;
+  cjsExports.isTransforming = isTransforming;
+  var registries_js_1 = require_registries();
+  var util_js_1 = require_util();
+  function assignProps(target, ...sources) {
+    for (let source of sources)
+      for (let key of Reflect.ownKeys(source))
+        if (Object.prototype.propertyIsEnumerable.call(source, key))
+          util_js_1.assignProp(target, key, source[key]);
+    return target;
   }
-  function X_(e) {
-    let t = e?.target ?? "draft-2020-12";
-    if (t === "draft-4") t = "draft-04";
-    if (t === "draft-7") t = "draft-07";
+  function initializeContext(params) {
+    let target = params?.target ?? "draft-2020-12";
+    if (target === "draft-4") target = "draft-04";
+    if (target === "draft-7") target = "draft-07";
     return {
-      processors: e.processors ?? {},
-      metadataRegistry: e?.metadata ?? BC.globalRegistry,
-      target: t,
-      unrepresentable: e?.unrepresentable ?? "throw",
-      override: e?.override ?? (() => {}),
-      io: e?.io ?? "output",
+      processors: params.processors ?? {},
+      metadataRegistry: params?.metadata ?? registries_js_1.globalRegistry,
+      target,
+      unrepresentable: params?.unrepresentable ?? "throw",
+      override: params?.override ?? (() => {}),
+      io: params?.io ?? "output",
       counter: 0,
       seen: new Map(),
-      sharedDefsExtractedFor: void 0,
-      sharedEmitDoneFor: void 0,
-      cycles: e?.cycles ?? "ref",
-      reused: e?.reused ?? "inline",
+      sharedDefsExtractedFor: undefined,
+      sharedEmitDoneFor: undefined,
+      cycles: params?.cycles ?? "ref",
+      reused: params?.reused ?? "inline",
       intersections: [],
       deferred: [],
-      external: e?.external ?? void 0,
+      external: params?.external ?? undefined,
     };
   }
-  function g8(e, t, n, o, r) {
-    let s =
-      typeof t.unrepresentable === "function"
-        ? t.unrepresentable({ zodSchema: e, path: o.path, message: r })
-        : t.unrepresentable;
-    if (s === "any") return !1;
-    if (s === void 0 || s === "throw") throw Error(r);
-    return (Object.assign(n, s), !0);
+  function handleUnrepresentable(schema, ctx, json, params, message) {
+    let result =
+      typeof ctx.unrepresentable === "function"
+        ? ctx.unrepresentable({
+            zodSchema: schema,
+            path: params.path,
+            message,
+          })
+        : ctx.unrepresentable;
+    if (result === "any") return false;
+    if (result === undefined || result === "throw") throw Error(message);
+    Object.assign(json, result);
+    return true;
   }
-  function rl(e, t, n = { path: [], schemaPath: [] }) {
-    var o;
-    let def = e._zod.def,
-      s = t.seen.get(e);
-    if (s) {
-      if ((s.count++, n.schemaPath.includes(e))) s.cycle = n.path;
-      return s.schema;
+  function processSchema(
+    schema,
+    ctx,
+    _params = {
+      path: [],
+      schemaPath: [],
+    },
+  ) {
+    var _a;
+    let def = schema._zod.def;
+    let seen = ctx.seen.get(schema);
+    if (seen) {
+      seen.count++;
+      if (_params.schemaPath.includes(schema)) seen.cycle = _params.path;
+      return seen.schema;
     }
-    let a = { schema: {}, count: 1, cycle: void 0, path: n.path };
-    (t.seen.set(e, a), (t.sharedDefsExtractedFor = void 0), (t.sharedEmitDoneFor = void 0));
-    let l = e._zod.toJSONSchema?.();
-    if (l) a.schema = l;
+    let result = {
+      schema: {},
+      count: 1,
+      cycle: undefined,
+      path: _params.path,
+    };
+    ctx.seen.set(schema, result);
+    ctx.sharedDefsExtractedFor = undefined;
+    ctx.sharedEmitDoneFor = undefined;
+    let overrideSchema = schema._zod.toJSONSchema?.();
+    if (overrideSchema) result.schema = overrideSchema;
     else {
-      let f = { ...n, schemaPath: [...n.schemaPath, e], path: n.path };
-      if (e._zod.processJSONSchema) e._zod.processJSONSchema(t, a.schema, f);
-      else {
-        let schema = a.schema,
-          y = t.processors[def.type];
-        if (!y) throw Error(`[toJSONSchema]: Non-representable type encountered: ${def.type}`);
-        y(e, t, schema, f);
-      }
-      let parent = e._zod.parent;
-      if (parent) {
-        if (!a.ref) a.ref = parent;
-        (rl(parent, t, f), (t.seen.get(parent).isParent = !0));
-      }
-    }
-    let c = t.metadataRegistry.get(e);
-    if (c) ed(a.schema, c);
-    if (t.io === "input" && Er(e)) (delete a.schema.examples, delete a.schema.default);
-    if (t.io === "input" && "_prefault" in a.schema)
-      (o = a.schema).default ?? (o.default = a.schema._prefault);
-    return (delete a.schema._prefault, t.seen.get(e).schema);
-  }
-  function UC(e) {
-    return e.replace(/~/g, "~0").replace(/\//g, "~1");
-  }
-  function Q_(e, t) {
-    let n = e.seen.get(t);
-    if (!n) throw Error("Unprocessed schema. This is a bug in Zod.");
-    if (e.external && e.sharedDefsExtractedFor === e.external) return;
-    let o = new Map();
-    for (let a of e.seen.entries()) {
-      let l = e.metadataRegistry.get(a[0])?.id;
-      if (l) {
-        let c = o.get(l);
-        if (c && c !== a[0])
-          throw Error(
-            `Duplicate schema id "${l}" detected during JSON Schema conversion. Two different schemas cannot share the same id when converted together.`,
-          );
-        o.set(l, a[0]);
-      }
-    }
-    let r = (a) => {
-        let l = e.target === "draft-2020-12" ? "$defs" : "definitions";
-        if (e.external) {
-          let h = e.external.registry.get(a[0])?.id,
-            m = e.external.uri ?? ((b) => b);
-          if (h) return { ref: m(h) };
-          let y = a[1].defId ?? a[1].schema.id ?? `schema${e.counter++}`;
-          return ((a[1].defId = y), { defId: y, ref: `${m("__shared")}#/${l}/${UC(y)}` });
-        }
-        let c = "#",
-          u = `${c}/${l}/`;
-        if (a[1] === n && !a[1].schema.id) return { ref: c };
-        let f = a[1].schema.id ?? `__schema${e.counter++}`;
-        return { defId: f, ref: u + UC(f) };
-      },
-      s = (a) => {
-        if (a[1].schema.$ref) return;
-        let l = a[1],
-          { ref: ref, defId: defId } = r(a);
-        if (((l.def = { ...l.schema }), defId)) l.defId = defId;
-        let schema = l.schema;
-        for (let key in schema) delete schema[key];
-        schema.$ref = ref;
+      let params = {
+        ..._params,
+        schemaPath: [..._params.schemaPath, schema],
+        path: _params.path,
       };
-    if (e.cycles === "throw")
-      for (let a of e.seen.entries()) {
-        let l = a[1];
-        if (l.cycle)
-          throw Error(`Cycle detected: #/${l.cycle?.join("/")}/<root>
+      if (schema._zod.processJSONSchema) schema._zod.processJSONSchema(ctx, result.schema, params);
+      else {
+        let _json = result.schema;
+        let processor = ctx.processors[def.type];
+        if (!processor) throw Error(`[toJSONSchema]: Non-representable type encountered: ${def.type}`);
+        processor(schema, ctx, _json, params);
+      }
+      let parent = schema._zod.parent;
+      if (parent) {
+        if (!result.ref) result.ref = parent;
+        processSchema(parent, ctx, params);
+        ctx.seen.get(parent).isParent = true;
+      }
+    }
+    let meta = ctx.metadataRegistry.get(schema);
+    if (meta) assignProps(result.schema, meta);
+    if (ctx.io === "input" && isTransforming(schema)) {
+      delete result.schema.examples;
+      delete result.schema.default;
+    }
+    if (ctx.io === "input" && "_prefault" in result.schema)
+      (_a = result.schema).default ?? (_a.default = result.schema._prefault);
+    delete result.schema._prefault;
+    return ctx.seen.get(schema).schema;
+  }
+  function encodeJSONPointerSegment(segment) {
+    return segment.replace(/~/g, "~0").replace(/\//g, "~1");
+  }
+  function extractDefs(ctx, schema) {
+    let root = ctx.seen.get(schema);
+    if (!root) throw Error("Unprocessed schema. This is a bug in Zod.");
+    if (ctx.external && ctx.sharedDefsExtractedFor === ctx.external) return;
+    let idToSchema = new Map();
+    for (let entry of ctx.seen.entries()) {
+      let id = ctx.metadataRegistry.get(entry[0])?.id;
+      if (id) {
+        let existing = idToSchema.get(id);
+        if (existing && existing !== entry[0])
+          throw Error(
+            `Duplicate schema id "${id}" detected during JSON Schema conversion. Two different schemas cannot share the same id when converted together.`,
+          );
+        idToSchema.set(id, entry[0]);
+      }
+    }
+    let makeURI = (entry) => {
+      let defsSegment = ctx.target === "draft-2020-12" ? "$defs" : "definitions";
+      if (ctx.external) {
+        let externalId = ctx.external.registry.get(entry[0])?.id;
+        let uriGenerator = ctx.external.uri ?? ((id) => id);
+        if (externalId)
+          return {
+            ref: uriGenerator(externalId),
+          };
+        let id = entry[1].defId ?? entry[1].schema.id ?? `schema${ctx.counter++}`;
+        entry[1].defId = id;
+        return {
+          defId: id,
+          ref: `${uriGenerator("__shared")}#/${defsSegment}/${encodeJSONPointerSegment(id)}`,
+        };
+      }
+      let uriPrefix = "#";
+      let defUriPrefix = `${uriPrefix}/${defsSegment}/`;
+      if (entry[1] === root && !entry[1].schema.id)
+        return {
+          ref: uriPrefix,
+        };
+      let defId = entry[1].schema.id ?? `__schema${ctx.counter++}`;
+      return {
+        defId,
+        ref: defUriPrefix + encodeJSONPointerSegment(defId),
+      };
+    };
+    let extractToDef = (entry) => {
+      if (entry[1].schema.$ref) return;
+      let seen = entry[1];
+      let { ref, defId } = makeURI(entry);
+      seen.def = {
+        ...seen.schema,
+      };
+      if (defId) seen.defId = defId;
+      let schema = seen.schema;
+      for (let key in schema) delete schema[key];
+      schema.$ref = ref;
+    };
+    if (ctx.cycles === "throw")
+      for (let entry of ctx.seen.entries()) {
+        let seen = entry[1];
+        if (seen.cycle)
+          throw Error(`Cycle detected: #/${seen.cycle?.join("/")}/<root>
 
 Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.`);
       }
-    for (let a of e.seen.entries()) {
-      let l = a[1];
-      if (t === a[0]) {
-        s(a);
+    for (let entry of ctx.seen.entries()) {
+      let seen = entry[1];
+      if (schema === entry[0]) {
+        extractToDef(entry);
         continue;
       }
-      if (e.external) {
-        let u = e.external.registry.get(a[0])?.id;
-        if (t !== a[0] && u) {
-          s(a);
+      if (ctx.external) {
+        let ext = ctx.external.registry.get(entry[0])?.id;
+        if (schema !== entry[0] && ext) {
+          extractToDef(entry);
           continue;
         }
       }
-      if (e.metadataRegistry.get(a[0])?.id) {
-        s(a);
+      if (ctx.metadataRegistry.get(entry[0])?.id) {
+        extractToDef(entry);
         continue;
       }
-      if (l.cycle) {
-        s(a);
+      if (seen.cycle) {
+        extractToDef(entry);
         continue;
       }
-      if (l.count > 1) {
-        if (e.reused === "ref") s(a);
+      if (seen.count > 1) {
+        if (ctx.reused === "ref") extractToDef(entry);
       }
     }
-    if (e.external) e.sharedDefsExtractedFor = e.external;
+    if (ctx.external) ctx.sharedDefsExtractedFor = ctx.external;
   }
-  function HC(e) {
-    let anyOf = e.anyOf;
-    if (!Array.isArray(anyOf) || anyOf.length === 0 || e.type !== void 0) return;
-    let n = [];
-    for (let o of anyOf) {
-      if (!o || typeof o !== "object") return;
-      HC(o);
-      let keys = Object.keys(o);
+  function compactTypeUnion(schema) {
+    let options = schema.anyOf;
+    if (!Array.isArray(options) || options.length === 0 || schema.type !== undefined) return;
+    let types = [];
+    for (let option of options) {
+      if (!option || typeof option !== "object") return;
+      compactTypeUnion(option);
+      let keys = Object.keys(option);
       if (keys.length !== 1 || keys[0] !== "type") return;
-      let s = o.type;
-      for (let a of Array.isArray(s) ? s : [s]) {
-        if (typeof a !== "string") return;
-        if (!n.includes(a)) n.push(a);
+      let type = option.type;
+      for (let member of Array.isArray(type) ? type : [type]) {
+        if (typeof member !== "string") return;
+        if (!types.includes(member)) types.push(member);
       }
     }
-    (delete e.anyOf, (e.type = n.length === 1 ? n[0] : n));
+    delete schema.anyOf;
+    schema.type = types.length === 1 ? types[0] : types;
   }
-  var KC = new Set(["type", "properties", "required", "additionalProperties"]),
-    zC = ["oneOf", "anyOf"];
-  function FC(e) {
-    let additionalProperties = e.additionalProperties;
-    if (
-      additionalProperties === void 0 ||
-      additionalProperties === !1 ||
-      typeof additionalProperties !== "object" ||
-      additionalProperties === null
-    )
-      return null;
-    return Object.keys(additionalProperties).length ? additionalProperties : null;
+  var FOLDABLE_KEYS = new Set(["type", "properties", "required", "additionalProperties"]);
+  var UNION_KEYS = ["oneOf", "anyOf"];
+  function undeclaredConstraint(member) {
+    let extra = member.additionalProperties;
+    if (extra === undefined || extra === false || typeof extra !== "object" || extra === null) return null;
+    return Object.keys(extra).length ? extra : null;
   }
-  function J_(e) {
-    let t = [];
-    for (let s of e) {
-      if (typeof s !== "object" || s.type !== "object") return null;
-      for (let key in s) if (!KC.has(key)) return null;
-      t.push(s);
+  function foldObjects(members) {
+    let objects = [];
+    for (let member of members) {
+      if (typeof member !== "object" || member.type !== "object") return null;
+      for (let key in member) if (!FOLDABLE_KEYS.has(key)) return null;
+      objects.push(member);
     }
-    let n = {},
-      o = new Set();
-    for (let s of t) {
-      for (let key in s.properties) {
-        if (Object.prototype.hasOwnProperty.call(n, key)) continue;
-        let l = [];
-        for (let u of t) {
-          let f = u.properties?.[key] ?? FC(u);
-          if (f === null || f === void 0) continue;
-          if (!l.some((h) => JSON.stringify(h) === JSON.stringify(f))) l.push(f);
+    let properties = {};
+    let required = new Set();
+    for (let object of objects) {
+      for (let key in object.properties) {
+        if (Object.prototype.hasOwnProperty.call(properties, key)) continue;
+        let parts = [];
+        for (let other of objects) {
+          let part = other.properties?.[key] ?? undeclaredConstraint(other);
+          if (part === null || part === undefined) continue;
+          if (!parts.some((seen) => JSON.stringify(seen) === JSON.stringify(part))) parts.push(part);
         }
-        let c = l.length === 1 ? l[0] : (J_(l) ?? { allOf: l });
-        Ql.assignProp(n, key, c);
+        let merged =
+          parts.length === 1
+            ? parts[0]
+            : (foldObjects(parts) ?? {
+                allOf: parts,
+              });
+        util_js_1.assignProp(properties, key, merged);
       }
-      for (let a of s.required ?? []) o.add(a);
+      for (let key of object.required ?? []) required.add(key);
     }
-    let r = { type: "object", properties: n };
-    if (o.size) r.required = [...o];
-    if (t.every((s) => s.additionalProperties === !1)) r.additionalProperties = !1;
+    let folded = {
+      type: "object",
+      properties,
+    };
+    if (required.size) folded.required = [...required];
+    if (objects.every((object) => object.additionalProperties === false)) folded.additionalProperties = false;
     else {
-      let s = [];
-      for (let a of t) {
-        let l = FC(a);
-        if (l && !s.some((c) => JSON.stringify(c) === JSON.stringify(l))) s.push(l);
+      let constraints = [];
+      for (let object of objects) {
+        let constraint = undeclaredConstraint(object);
+        if (constraint && !constraints.some((seen) => JSON.stringify(seen) === JSON.stringify(constraint)))
+          constraints.push(constraint);
       }
-      if (s.length === 1) r.additionalProperties = s[0];
-      else if (s.length > 1) r.additionalProperties = { allOf: s };
+      if (constraints.length === 1) folded.additionalProperties = constraints[0];
+      else if (constraints.length > 1)
+        folded.additionalProperties = {
+          allOf: constraints,
+        };
     }
-    return r;
+    return folded;
   }
-  function y8(e) {
-    let allOf = e.allOf;
+  function foldIntersection(json) {
+    let allOf = json.allOf;
     if (!Array.isArray(allOf) || allOf.length < 2) return;
-    for (let r of KC) if (r in e) return;
-    let filtered = allOf.filter((r) => zC.some((s) => Array.isArray(r[s]))),
-      o = null;
-    if (!filtered.length) o = J_(allOf);
+    for (let key of FOLDABLE_KEYS) if (key in json) return;
+    let unions = allOf.filter((m) => UNION_KEYS.some((k) => Array.isArray(m[k])));
+    let folded = null;
+    if (!unions.length) folded = foldObjects(allOf);
     else {
-      let r = filtered[0],
-        found = zC.find((c) => Array.isArray(r[c]));
-      if (Object.keys(r).length !== 1) return;
-      let filtered_2 = allOf.filter((c) => c !== r),
-        mapped = r[found].map((c) => J_([...filtered_2, c]));
-      if (mapped.some((c) => !c)) return;
-      o = { [found]: mapped };
+      let union = unions[0];
+      let keyword = UNION_KEYS.find((k) => Array.isArray(union[k]));
+      if (Object.keys(union).length !== 1) return;
+      let rest = allOf.filter((m) => m !== union);
+      let branches = union[keyword].map((branch) => foldObjects([...rest, branch]));
+      if (branches.some((b) => !b)) return;
+      folded = {
+        [keyword]: branches,
+      };
     }
-    if (!o) return;
-    (delete e.allOf, ed(e, o));
+    if (!folded) return;
+    delete json.allOf;
+    assignProps(json, folded);
   }
-  function eb(e, t) {
-    let n = e.seen.get(t);
-    if (!n) throw Error("Unprocessed schema. This is a bug in Zod.");
-    let o = (l) => {
-      let c = e.seen.get(l);
-      if (c.ref === null) return;
-      let u = c.def ?? c.schema,
-        f = { ...u },
-        ref = c.ref;
-      if (((c.ref = null), ref)) {
-        o(ref);
-        let y = e.seen.get(ref),
-          schema = y.schema;
-        if (schema.$ref && (e.target === "draft-07" || e.target === "draft-04" || e.target === "openapi-3.0"))
-          ((u.allOf = u.allOf ?? []), u.allOf.push(schema));
-        else ed(u, schema);
-        if ((ed(u, f), l._zod.parent === ref))
-          for (let key in u) {
+  function finalize(ctx, schema) {
+    let root = ctx.seen.get(schema);
+    if (!root) throw Error("Unprocessed schema. This is a bug in Zod.");
+    let flattenRef = (zodSchema) => {
+      let seen = ctx.seen.get(zodSchema);
+      if (seen.ref === null) return;
+      let schema = seen.def ?? seen.schema;
+      let _cached = {
+        ...schema,
+      };
+      let ref = seen.ref;
+      seen.ref = null;
+      if (ref) {
+        flattenRef(ref);
+        let refSeen = ctx.seen.get(ref);
+        let refSchema = refSeen.schema;
+        if (
+          refSchema.$ref &&
+          (ctx.target === "draft-07" || ctx.target === "draft-04" || ctx.target === "openapi-3.0")
+        ) {
+          schema.allOf = schema.allOf ?? [];
+          schema.allOf.push(refSchema);
+        } else assignProps(schema, refSchema);
+        assignProps(schema, _cached);
+        if (zodSchema._zod.parent === ref)
+          for (let key in schema) {
             if (key === "$ref" || key === "allOf") continue;
-            if (!(key in f)) delete u[key];
+            if (!(key in _cached)) delete schema[key];
           }
-        if (schema.$ref && y.def)
-          for (let key in u) {
+        if (refSchema.$ref && refSeen.def)
+          for (let key in schema) {
             if (key === "$ref" || key === "allOf") continue;
-            if (key in y.def && JSON.stringify(u[key]) === JSON.stringify(y.def[key])) delete u[key];
+            if (key in refSeen.def && JSON.stringify(schema[key]) === JSON.stringify(refSeen.def[key]))
+              delete schema[key];
           }
       }
-      let parent = l._zod.parent;
+      let parent = zodSchema._zod.parent;
       if (parent && parent !== ref) {
-        o(parent);
-        let y = e.seen.get(parent);
-        if (y?.schema.$ref) {
-          if (((u.$ref = y.schema.$ref), y.def))
-            for (let key in u) {
+        flattenRef(parent);
+        let parentSeen = ctx.seen.get(parent);
+        if (parentSeen?.schema.$ref) {
+          schema.$ref = parentSeen.schema.$ref;
+          if (parentSeen.def)
+            for (let key in schema) {
               if (key === "$ref" || key === "allOf") continue;
-              if (key in y.def && JSON.stringify(u[key]) === JSON.stringify(y.def[key])) delete u[key];
+              if (
+                key in parentSeen.def &&
+                JSON.stringify(schema[key]) === JSON.stringify(parentSeen.def[key])
+              )
+                delete schema[key];
             }
         }
       }
-      e.override({ zodSchema: l, jsonSchema: u, path: c.path ?? [] });
+      ctx.override({
+        zodSchema,
+        jsonSchema: schema,
+        path: seen.path ?? [],
+      });
     };
-    if (!e.external || e.sharedEmitDoneFor !== e.external) {
-      for (let l of [...e.seen.entries()].reverse()) o(l[0]);
-      if (e.target !== "openapi-3.0") for (let l of e.seen.entries()) HC(l[1].def ?? l[1].schema);
-      for (let l of e.deferred) l();
-      if (e.intersections.length) {
-        let l = new Map();
-        for (let c of e.seen.values())
-          for (let u of [c.schema, c.def]) {
-            let f = u?.allOf;
-            if (!Array.isArray(f)) continue;
-            let h = l.get(f);
-            if (h) h.push(u);
-            else l.set(f, [u]);
+    if (!ctx.external || ctx.sharedEmitDoneFor !== ctx.external) {
+      for (let entry of [...ctx.seen.entries()].reverse()) flattenRef(entry[0]);
+      if (ctx.target !== "openapi-3.0")
+        for (let entry of ctx.seen.entries()) compactTypeUnion(entry[1].def ?? entry[1].schema);
+      for (let rewrite of ctx.deferred) rewrite();
+      if (ctx.intersections.length) {
+        let carriers = new Map();
+        for (let seen of ctx.seen.values())
+          for (let json of [seen.schema, seen.def]) {
+            let allOf = json?.allOf;
+            if (!Array.isArray(allOf)) continue;
+            let existing = carriers.get(allOf);
+            if (existing) existing.push(json);
+            else carriers.set(allOf, [json]);
           }
-        for (let intersection of e.intersections) for (let u of l.get(intersection) ?? []) y8(u);
+        for (let allOf of ctx.intersections)
+          for (let json of carriers.get(allOf) ?? []) foldIntersection(json);
       }
     }
-    let r = {};
-    if (e.target === "draft-2020-12") r.$schema = "https://json-schema.org/draft/2020-12/schema";
-    else if (e.target === "draft-07") r.$schema = "http://json-schema.org/draft-07/schema#";
-    else if (e.target === "draft-04") r.$schema = "http://json-schema.org/draft-04/schema#";
-    else if (e.target === "openapi-3.0");
-    if (e.external?.uri) {
-      let l = e.external.registry.get(t)?.id;
-      if (!l) throw Error("Schema is missing an `id` property");
-      r.$id = e.external.uri(l);
+    let result = {};
+    if (ctx.target === "draft-2020-12") result.$schema = "https://json-schema.org/draft/2020-12/schema";
+    else if (ctx.target === "draft-07") result.$schema = "http://json-schema.org/draft-07/schema#";
+    else if (ctx.target === "draft-04") result.$schema = "http://json-schema.org/draft-04/schema#";
+    else if (ctx.target === "openapi-3.0");
+    if (ctx.external?.uri) {
+      let id = ctx.external.registry.get(schema)?.id;
+      if (!id) throw Error("Schema is missing an `id` property");
+      result.$id = ctx.external.uri(id);
     }
-    ed(r, n.defId ? n.schema : (n.def ?? n.schema));
-    let s = e.metadataRegistry.get(t)?.id;
-    if (s !== void 0 && r.id === s) delete r.id;
-    let a = e.external?.defs ?? {};
-    if (!e.external || e.sharedEmitDoneFor !== e.external)
-      for (let l of e.seen.entries()) {
-        let c = l[1];
-        if (c.def && c.defId) {
-          if (c.def.id === c.defId) delete c.def.id;
-          Ql.assignProp(a, c.defId, c.def);
+    assignProps(result, root.defId ? root.schema : (root.def ?? root.schema));
+    let rootMetaId = ctx.metadataRegistry.get(schema)?.id;
+    if (rootMetaId !== undefined && result.id === rootMetaId) delete result.id;
+    let defs = ctx.external?.defs ?? {};
+    if (!ctx.external || ctx.sharedEmitDoneFor !== ctx.external)
+      for (let entry of ctx.seen.entries()) {
+        let seen = entry[1];
+        if (seen.def && seen.defId) {
+          if (seen.def.id === seen.defId) delete seen.def.id;
+          util_js_1.assignProp(defs, seen.defId, seen.def);
         }
       }
-    if (e.external) e.sharedEmitDoneFor = e.external;
-    if (e.external);
-    else if (Object.keys(a).length > 0)
-      if (e.target === "draft-2020-12") r.$defs = a;
-      else r.definitions = a;
+    if (ctx.external) ctx.sharedEmitDoneFor = ctx.external;
+    if (ctx.external);
+    else if (Object.keys(defs).length > 0)
+      if (ctx.target === "draft-2020-12") result.$defs = defs;
+      else result.definitions = defs;
     try {
-      let parsed = JSON.parse(JSON.stringify(r));
-      return (
-        Object.defineProperty(parsed, "~standard", {
-          value: {
-            ...t["~standard"],
-            jsonSchema: {
-              input: Xl.createStandardJSONSchemaMethod(t, "input", e.processors),
-              output: Xl.createStandardJSONSchemaMethod(t, "output", e.processors),
-            },
+      let finalized = JSON.parse(JSON.stringify(result));
+      Object.defineProperty(finalized, "~standard", {
+        value: {
+          ...schema["~standard"],
+          jsonSchema: {
+            input: cjsExports.createStandardJSONSchemaMethod(schema, "input", ctx.processors),
+            output: cjsExports.createStandardJSONSchemaMethod(schema, "output", ctx.processors),
           },
-          enumerable: !1,
-          writable: !1,
-        }),
-        parsed
-      );
-    } catch (error) {
+        },
+        enumerable: false,
+        writable: false,
+      });
+      return finalized;
+    } catch (_err) {
       throw Error("Error converting schema to JSON.");
     }
   }
-  function Er(e, t) {
-    let n = t ?? { seen: new Set() };
-    if (n.seen.has(e)) return !1;
-    n.seen.add(e);
-    let def = e._zod.def;
-    if (def.type === "transform") return !0;
-    if (def.type === "array") return Er(def.element, n);
-    if (def.type === "set") return Er(def.valueType, n);
-    if (def.type === "lazy") return Er(def.getter(), n);
+  function isTransforming(_schema, _ctx) {
+    let ctx = _ctx ?? {
+      seen: new Set(),
+    };
+    if (ctx.seen.has(_schema)) return false;
+    ctx.seen.add(_schema);
+    let def = _schema._zod.def;
+    if (def.type === "transform") return true;
+    if (def.type === "array") return isTransforming(def.element, ctx);
+    if (def.type === "set") return isTransforming(def.valueType, ctx);
+    if (def.type === "lazy") return isTransforming(def.getter(), ctx);
     if (
       def.type === "promise" ||
       def.type === "optional" ||
@@ -383,65 +461,76 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       def.type === "prefault" ||
       def.type === "catch"
     )
-      return Er(def.innerType, n);
-    if (def.type === "intersection") return Er(def.left, n) || Er(def.right, n);
-    if (def.type === "record" || def.type === "map") return Er(def.keyType, n) || Er(def.valueType, n);
+      return isTransforming(def.innerType, ctx);
+    if (def.type === "intersection") return isTransforming(def.left, ctx) || isTransforming(def.right, ctx);
+    if (def.type === "record" || def.type === "map")
+      return isTransforming(def.keyType, ctx) || isTransforming(def.valueType, ctx);
     if (def.type === "pipe") {
-      if (e._zod.traits.has("$ZodCodec")) return !0;
-      return Er(def.in, n) || Er(def.out, n);
+      if (_schema._zod.traits.has("$ZodCodec")) return true;
+      return isTransforming(def.in, ctx) || isTransforming(def.out, ctx);
     }
     if (def.type === "object") {
-      for (let key in def.shape) if (Er(def.shape[key], n)) return !0;
-      return !1;
+      for (let key in def.shape) if (isTransforming(def.shape[key], ctx)) return true;
+      return false;
     }
     if (def.type === "union") {
-      for (let option of def.options) if (Er(option, n)) return !0;
-      return !1;
+      for (let option of def.options) if (isTransforming(option, ctx)) return true;
+      return false;
     }
     if (def.type === "tuple") {
-      for (let item of def.items) if (Er(item, n)) return !0;
-      if (def.rest && Er(def.rest, n)) return !0;
-      return !1;
+      for (let item of def.items) if (isTransforming(item, ctx)) return true;
+      if (def.rest && isTransforming(def.rest, ctx)) return true;
+      return false;
     }
-    return !1;
+    return false;
   }
-  var _8 =
-    (e, t = {}) =>
-    (n) => {
-      let o = X_({ ...n, processors: t });
-      return (rl(e, o), Q_(o, e), eb(o, e));
+  var createToJSONSchemaMethod =
+    (schema, processors = {}) =>
+    (params) => {
+      let ctx = initializeContext({
+        ...params,
+        processors,
+      });
+      processSchema(schema, ctx);
+      extractDefs(ctx, schema);
+      return finalize(ctx, schema);
     };
-  Xl.createToJSONSchemaMethod = _8;
-  var b8 =
-    (e, t, n = {}) =>
-    (o) => {
-      let { libraryOptions: libraryOptions, target: target } = o ?? {},
-        a = X_({ ...(libraryOptions ?? {}), target: target, io: t, processors: n });
-      return (rl(e, a), Q_(a, e), eb(a, e));
+  cjsExports.createToJSONSchemaMethod = createToJSONSchemaMethod;
+  var createStandardJSONSchemaMethod =
+    (schema, io, processors = {}) =>
+    (params) => {
+      let { libraryOptions, target } = params ?? {};
+      let ctx = initializeContext({
+        ...(libraryOptions ?? {}),
+        target,
+        io,
+        processors,
+      });
+      processSchema(schema, ctx);
+      extractDefs(ctx, schema);
+      return finalize(ctx, schema);
     };
-  Xl.createStandardJSONSchemaMethod = b8;
+  cjsExports.createStandardJSONSchemaMethod = createStandardJSONSchemaMethod;
   (function () {
-    var ownPropertyNames = Object.getOwnPropertyNames(Xl);
-    for (var t = 0; t < ownPropertyNames.length; t++) {
-      var ownPropertyDescriptor = Object.getOwnPropertyDescriptor(Xl, ownPropertyNames[t]);
-      if (!ownPropertyDescriptor || !ownPropertyDescriptor.get || !ownPropertyDescriptor.configurable)
-        continue;
-      var o;
+    var keys = Object.getOwnPropertyNames(cjsExports);
+    for (var i = 0; i < keys.length; i++) {
+      var desc = Object.getOwnPropertyDescriptor(cjsExports, keys[i]);
+      if (!desc || !desc.get || !desc.configurable) continue;
+      var value;
       try {
-        o = ownPropertyDescriptor.get();
-      } catch (error) {
+        value = desc.get();
+      } catch (e) {
         continue;
       }
-      if (o === void 0) continue;
-      Object.defineProperty(Xl, ownPropertyNames[t], {
-        value: o,
-        writable: !1,
-        enumerable: ownPropertyDescriptor.enumerable,
-        configurable: !1,
+      if (value === undefined) continue;
+      Object.defineProperty(cjsExports, keys[i], {
+        value,
+        writable: false,
+        enumerable: desc.enumerable,
+        configurable: false,
       });
     }
-    Object.freeze(Xl);
+    Object.freeze(cjsExports);
   })();
 });
-
-export { td };
+export { require_to_json_schema };

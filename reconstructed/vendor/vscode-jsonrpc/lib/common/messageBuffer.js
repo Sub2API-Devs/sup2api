@@ -8,125 +8,136 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-t4ksmxzx.js:24791-26637 cjs-fingerprint
-var hn = x(function (ln) {
-  Object.defineProperty(ln, "__esModule", { value: !0 });
-  ln.AbstractMessageBuffer = void 0;
-  var Zi = 13,
-    es = 10,
-    ts = `\r
+var require_messageBuffer = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.AbstractMessageBuffer = undefined;
+  var Zi = 13;
+  var LF = 10;
+  var CRLF = `\r
 `;
-  class dn {
-    constructor(e = "utf-8") {
-      ((this._encoding = e), (this._chunks = []), (this._totalLength = 0));
+  class AbstractMessageBuffer {
+    constructor(encoding = "utf-8") {
+      this._encoding = encoding;
+      this._chunks = [];
+      this._totalLength = 0;
     }
     get encoding() {
       return this._encoding;
     }
-    append(e) {
-      let r = typeof e === "string" ? this.fromString(e, this._encoding) : e;
-      (this._chunks.push(r), (this._totalLength += r.byteLength));
+    append(chunk) {
+      let toAppend = typeof chunk === "string" ? this.fromString(chunk, this._encoding) : chunk;
+      this._chunks.push(toAppend);
+      this._totalLength += toAppend.byteLength;
     }
-    tryReadHeaders(e = !1) {
+    tryReadHeaders(lowerCaseKeys = false) {
       if (this._chunks.length === 0) return;
-      let r = 0,
-        n = 0,
-        s = 0,
-        c = 0;
-      e: while (n < this._chunks.length) {
-        let j = this._chunks[n];
-        s = 0;
-        t: while (s < j.length) {
-          switch (j[s]) {
+      let state = 0;
+      let chunkIndex = 0;
+      let offset = 0;
+      let chunkBytesRead = 0;
+      e: while (chunkIndex < this._chunks.length) {
+        let chunk = this._chunks[chunkIndex];
+        offset = 0;
+        t: while (offset < chunk.length) {
+          switch (chunk[offset]) {
             case Zi:
-              switch (r) {
+              switch (state) {
                 case 0:
-                  r = 1;
+                  state = 1;
                   break;
                 case 2:
-                  r = 3;
+                  state = 3;
                   break;
                 default:
-                  r = 0;
+                  state = 0;
               }
               break;
-            case es:
-              switch (r) {
+            case LF:
+              switch (state) {
                 case 1:
-                  r = 2;
+                  state = 2;
                   break;
                 case 3:
-                  ((r = 4), s++);
+                  state = 4;
+                  offset++;
                   break e;
                 default:
-                  r = 0;
+                  state = 0;
               }
               break;
             default:
-              r = 0;
+              state = 0;
           }
-          s++;
+          offset++;
         }
-        ((c += j.byteLength), n++);
+        chunkBytesRead += chunk.byteLength;
+        chunkIndex++;
       }
-      if (r !== 4) return;
-      let _read = this._read(c + s),
-        P = new Map(),
-        parts = this.toString(_read, "ascii").split(ts);
-      if (parts.length < 2) return P;
-      for (let j = 0; j < parts.length - 2; j++) {
-        let I = parts[j],
-          index = I.indexOf(":");
+      if (state !== 4) return;
+      let buffer = this._read(chunkBytesRead + offset);
+      let result = new Map();
+      let headers = this.toString(buffer, "ascii").split(CRLF);
+      if (headers.length < 2) return result;
+      for (let i = 0; i < headers.length - 2; i++) {
+        let header = headers[i];
+        let index = header.indexOf(":");
         if (index === -1)
           throw Error(`Message header must separate key and value using ':'
-${I}`);
-        let substr = I.substr(0, index),
-          trimmed = I.substr(index + 1).trim();
-        P.set(e ? substr.toLowerCase() : substr, trimmed);
+${header}`);
+        let key = header.substr(0, index);
+        let value = header.substr(index + 1).trim();
+        result.set(lowerCaseKeys ? key.toLowerCase() : key, value);
       }
-      return P;
+      return result;
     }
-    tryReadBody(e) {
-      if (this._totalLength < e) return;
-      return this._read(e);
+    tryReadBody(length) {
+      if (this._totalLength < length) return;
+      return this._read(length);
     }
     get numberOfBytes() {
       return this._totalLength;
     }
-    _read(e) {
-      if (e === 0) return this.emptyBuffer();
-      if (e > this._totalLength) throw Error("Cannot read so many bytes!");
-      if (this._chunks[0].byteLength === e) {
-        let c = this._chunks[0];
-        return (this._chunks.shift(), (this._totalLength -= e), this.asNative(c));
+    _read(byteCount) {
+      if (byteCount === 0) return this.emptyBuffer();
+      if (byteCount > this._totalLength) throw Error("Cannot read so many bytes!");
+      if (this._chunks[0].byteLength === byteCount) {
+        let chunk = this._chunks[0];
+        this._chunks.shift();
+        this._totalLength -= byteCount;
+        return this.asNative(chunk);
       }
-      if (this._chunks[0].byteLength > e) {
-        let c = this._chunks[0],
-          asNative = this.asNative(c, e);
-        return ((this._chunks[0] = c.slice(e)), (this._totalLength -= e), asNative);
+      if (this._chunks[0].byteLength > byteCount) {
+        let chunk = this._chunks[0];
+        let result = this.asNative(chunk, byteCount);
+        this._chunks[0] = chunk.slice(byteCount);
+        this._totalLength -= byteCount;
+        return result;
       }
-      let allocNative = this.allocNative(e),
-        n = 0,
-        s = 0;
-      while (e > 0) {
-        let c = this._chunks[s];
-        if (c.byteLength > e) {
-          let sliced = c.slice(0, e);
-          (allocNative.set(sliced, n),
-            (n += e),
-            (this._chunks[s] = c.slice(e)),
-            (this._totalLength -= e),
-            (e -= e));
-        } else
-          (allocNative.set(c, n),
-            (n += c.byteLength),
-            this._chunks.shift(),
-            (this._totalLength -= c.byteLength),
-            (e -= c.byteLength));
+      let result = this.allocNative(byteCount);
+      let resultOffset = 0;
+      let chunkIndex = 0;
+      while (byteCount > 0) {
+        let chunk = this._chunks[chunkIndex];
+        if (chunk.byteLength > byteCount) {
+          let chunkPart = chunk.slice(0, byteCount);
+          result.set(chunkPart, resultOffset);
+          resultOffset += byteCount;
+          this._chunks[chunkIndex] = chunk.slice(byteCount);
+          this._totalLength -= byteCount;
+          byteCount -= byteCount;
+        } else {
+          result.set(chunk, resultOffset);
+          resultOffset += chunk.byteLength;
+          this._chunks.shift();
+          this._totalLength -= chunk.byteLength;
+          byteCount -= chunk.byteLength;
+        }
       }
-      return allocNative;
+      return result;
     }
   }
-  ln.AbstractMessageBuffer = dn;
+  cjsExports.AbstractMessageBuffer = AbstractMessageBuffer;
 });
-
-export { hn };
+export { require_messageBuffer };

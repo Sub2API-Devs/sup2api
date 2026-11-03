@@ -9,13 +9,15 @@
  * attribution: placement 2
  */
 import { randomBytes } from "crypto";
-import { UAi } from "./peerMessageHeaders.js";
+import { hopIdHmac } from "./peerMessageHeaders.js";
 
 //@ chunk-41fxb5qj.js:265-277 placement
-var n = randomBytes(32);
+var randomIdSecret = randomBytes(32);
 //@ chunk-41fxb5qj.js:277-309 placement
-function lst(o) {
-  return UAi(o, n);
+/**
+ * hmacRandomId：用密钥做 HMAC 生成 id。
+ */
+function hmacRandomId(o) {
+  return hopIdHmac(o, randomIdSecret);
 }
-
-export { lst };
+export { hmacRandomId };

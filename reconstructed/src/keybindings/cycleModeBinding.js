@@ -10,14 +10,22 @@
  */
 
 //@ chunk-krdjvqaq.js:191-213 placement
-function tGn() {
+/**
+ * 快捷键相关模块的空实现桩。
+ */
+function noop() {
   return;
 }
 //@ chunk-krdjvqaq.js:213-232 placement
-function c$s(e, i) {}
+/**
+ * 带参数的空实现桩。
+ */
+function noopWithArgs(e, i) {}
 //@ chunk-krdjvqaq.js:232-271 placement
-function d$s(e) {
+/**
+ * 返回模式切换快捷键的动作名 chat:cycleMode。
+ */
+function cycleModeBindingName(e) {
   return "chat:cycleMode";
 }
-
-export { tGn, d$s, c$s };
+export { noop, cycleModeBindingName, noopWithArgs };

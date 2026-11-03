@@ -8,53 +8,61 @@
  * pieces: chunk-zw3bhs13.js (4)
  * attribution: placement 4
  */
-import { ge } from "../../identity.js";
-import { FDn } from "../../remoteCoworkSources.js";
+import { identity } from "../../identity.js";
+import { REMOTE_COWORK_SOURCE_KINDS } from "../../remoteCoworkSources.js";
 import { importMetaRequire } from "../../../../runtime/bun-runtime.js";
-import { oDt } from "../../platform.js";
+import { looksLikeWslVersion } from "../../platform.js";
 
+//@ chunk-zw3bhs13.js:442-658 placement
 /**
  * WSL 读取 Windows 注册表与托管设置的常量：超时、输出上限、reg.exe 路径、键不存在消息、托管目录与云会话缓存。
  */
-//@ chunk-zw3bhs13.js:442-658 placement
-var REG_QUERY_TIMEOUT_MS = 5000,
-  REG_QUERY_MAX_BUFFER = 2097152,
-  WSL_REG_EXE_PATH = "/mnt/c/Windows/System32/reg.exe",
-  REG_KEY_NOT_FOUND_TEXT = "unable to find the specified registry key or value",
-  WSL_MANAGED_SETTINGS_DIR = "/mnt/c/Program Files/ClaudeCode",
-  coworkCloudCache = ge({ isCoworkCloud: void 0 }, (e) => {
-    e.isCoworkCloud = void 0;
-  });
+var REG_QUERY_TIMEOUT_MS = 5000;
+var REG_QUERY_MAX_BUFFER = 2097152;
+var WSL_REG_EXE_PATH = "/mnt/c/Windows/System32/reg.exe";
+var REG_KEY_NOT_FOUND_TEXT = "unable to find the specified registry key or value";
+var WSL_MANAGED_SETTINGS_DIR = "/mnt/c/Program Files/ClaudeCode";
+var coworkCloudCache = identity(
+  {
+    isCoworkCloud: undefined,
+  },
+  (e) => {
+    e.isCoworkCloud = undefined;
+  },
+);
+//@ chunk-zw3bhs13.js:658-803 placement
 /**
  * 判断当前入口是否为云端协作会话（结果缓存）。
  */
-//@ chunk-zw3bhs13.js:658-803 placement
 function isCoworkCloudEntrypoint() {
-  if (coworkCloudCache.isCoworkCloud === void 0) {
+  if (coworkCloudCache.isCoworkCloud === undefined) {
     let envClaudeCodeEntrypoint = process.env.CLAUDE_CODE_ENTRYPOINT;
-    coworkCloudCache.isCoworkCloud = FDn.some((r) => r === envClaudeCodeEntrypoint);
+    coworkCloudCache.isCoworkCloud = REMOTE_COWORK_SOURCE_KINDS.some((r) => r === envClaudeCodeEntrypoint);
   }
   return coworkCloudCache.isCoworkCloud;
 }
 //@ chunk-zw3bhs13.js:803-847 placement
-function dxi() {
-  ((coworkCloudCache.isCoworkCloud = void 0), isCoworkCloudEntrypoint());
+/**
+ * resetCoworkCloudCache：重置 cowork 云缓存。
+ */
+function resetCoworkCloudCache() {
+  coworkCloudCache.isCoworkCloud = undefined;
+  isCoworkCloudEntrypoint();
 }
+//@ chunk-zw3bhs13.js:847-1018 placement
 /**
  * 判断是否运行在 WSL 中（环境变量或 /proc/version）。
  */
-//@ chunk-zw3bhs13.js:847-1018 placement
 function isWsl() {
   let e = isCoworkCloudEntrypoint();
-  if (process.env.WSL_DISTRO_NAME && !e) return !0;
+  if (process.env.WSL_DISTRO_NAME && !e) return true;
   try {
     let lower = importMetaRequire("fs").readFileSync("/proc/version", "utf8").toLowerCase();
-    return oDt(lower);
+    return looksLikeWslVersion(lower);
   } catch {
-    return !1;
+    return false;
   }
 }
-
 export {
   WSL_MANAGED_SETTINGS_DIR,
   WSL_REG_EXE_PATH,
@@ -63,5 +71,5 @@ export {
   REG_QUERY_TIMEOUT_MS,
   REG_KEY_NOT_FOUND_TEXT,
   REG_QUERY_MAX_BUFFER,
-  dxi,
+  resetCoworkCloudCache,
 };

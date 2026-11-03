@@ -8,55 +8,61 @@
 import { Xa } from "../../../../../runtime/bun-runtime.js";
 
 //@ chunk-5h78gfwc.js:588-628 esm-layout
-var textEncoder = new TextEncoder(),
-  textDecoder = new TextDecoder();
+var textEncoder = new TextEncoder();
+var textDecoder = new TextDecoder();
 //@ chunk-5h78gfwc.js:628-754 esm-fingerprint
-function E_2(...e) {
-  let reduced = e.reduce((i, { length: o }) => i + o, 0),
-    uint8Array = new Uint8Array(reduced),
-    n = 0;
-  for (let i of e) (uint8Array.set(i, n), (n += i.length));
-  return uint8Array;
+function concat(...buffers) {
+  let size = buffers.reduce((acc, { length }) => acc + length, 0);
+  let buf = new Uint8Array(size);
+  let i_2 = 0;
+  for (let buffer of buffers) {
+    buf.set(buffer, i_2);
+    i_2 += buffer.length;
+  }
+  return buf;
 }
 //@ chunk-5h78gfwc.js:754-904 esm-layout
-function Ke(e, t, r) {
-  if (t < 0 || t >= 4294967296) throw RangeError(`value must be >= 0 and <= 4294967295. Received ${t}`);
-  e.set([t >>> 24, t >>> 16, t >>> 8, t & 255], r);
+function writeUInt32BE(buf, value, offset) {
+  if (value < 0 || value >= 4294967296)
+    throw RangeError(`value must be >= 0 and <= 4294967295. Received ${value}`);
+  buf.set([value >>> 24, value >>> 16, value >>> 8, value & 255], offset);
 }
 //@ chunk-5h78gfwc.js:904-1014 esm-layout
-function xe(e) {
-  let floored = Math.floor(e / 4294967296),
-    r = e % 4294967296,
-    uint8Array = new Uint8Array(8);
-  return (Ke(uint8Array, floored, 0), Ke(uint8Array, r, 4), uint8Array);
+function xe(value) {
+  let high = Math.floor(value / 4294967296);
+  let low = value % 4294967296;
+  let buf = new Uint8Array(8);
+  writeUInt32BE(buf, high, 0);
+  writeUInt32BE(buf, low, 4);
+  return buf;
 }
 //@ chunk-5h78gfwc.js:1014-1070 esm-layout
-function fe(e) {
-  let uint8Array = new Uint8Array(4);
-  return (Ke(uint8Array, e), uint8Array);
+function fe(value) {
+  let buf = new Uint8Array(4);
+  writeUInt32BE(buf, value);
+  return buf;
 }
 //@ chunk-5h78gfwc.js:1070-1250 esm-fingerprint
-function A(e) {
-  let uint8Array = new Uint8Array(e.length);
-  for (let r = 0; r < e.length; r++) {
-    let code = e.charCodeAt(r);
+function encode(string) {
+  let bytes = new Uint8Array(string.length);
+  for (let i = 0; i < string.length; i++) {
+    let code = string.charCodeAt(i);
     if (code > 127) throw TypeError("non-ASCII string encountered in encode()");
-    uint8Array[r] = code;
+    bytes[i] = code;
   }
-  return uint8Array;
+  return bytes;
 }
 //@ chunk-2tyrgda4.js:227-263 esm-layout
-var p,
-  g = (e) => e instanceof CryptoKey;
+var p;
+var g = (key) => key instanceof CryptoKey;
 //@ chunk-2tyrgda4.js:263-288 esm-layout
-var W = Xa(() => {
+var init_buffer_utils = Xa(() => {
   p = crypto;
 });
 //@ chunk-2tyrgda4.js:288-389 esm-fingerprint
 var mr = async (e, t) => {
-    let r = `SHA-${e.slice(-3)}`;
-    return new Uint8Array(await p.subtle.digest(r, t));
-  },
-  ue;
-
-export { W, ue, mr, E_2, xe, p, g, textDecoder, textEncoder, fe, A };
+  let r = `SHA-${e.slice(-3)}`;
+  return new Uint8Array(await p.subtle.digest(r, t));
+};
+var ue;
+export { init_buffer_utils, ue, mr, concat, xe, p, g, textDecoder, textEncoder, fe, encode };

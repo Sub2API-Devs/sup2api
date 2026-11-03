@@ -18,12 +18,23 @@ import {
   containsHooks,
   GUARD_HOOK_EVENTS,
   stripInvalidHookEntries,
-  qn,
+  knownHookTypes,
 } from "../../schemas/hookEntryValidation.js";
 import { getReceivedType, filterInvalidPermissionRules } from "./validation.js";
 import { isPlainObject as isPlainObject_2 } from "../isPlainObject.js";
-import { Mu, plural } from "../stringUtils.js";
-import { Co, wo, Ao, getUnenforceableMarketplaceReason, cs, gs, ps, us, rJt, mct } from "./types.js";
+import { escapeControlCharsForDisplay, plural } from "../stringUtils.js";
+import {
+  allowedMcpServersSchema,
+  deniedMcpServersSchema,
+  RESTRICTIVE_TOP_LEVEL_SETTINGS,
+  getUnenforceableMarketplaceReason,
+  agentsSettingsSchema,
+  outputStylesSettingsSchema,
+  mcpSettingsSchema,
+  hooksSettingsSchema,
+  POLICY_HELPER_ON_FAILURE,
+  POLICY_HELPER_LOG_LEVELS,
+} from "./types.js";
 import {
   MarketplaceSourceStrictSchema,
   hasUnknownSourceType,
@@ -34,22 +45,22 @@ import {
   redactIssuePathKey,
 } from "../plugins/schemas.js";
 import { parseManagedMcpServers } from "../../services/mcp/types.js";
-import { cn, API_PROVIDER_KINDS } from "../permissions/autoModeRulesPrompt.js";
+import { isAnthropicProviderId, API_PROVIDER_KINDS } from "../permissions/autoModeRulesPrompt.js";
 import { applySettingAliases } from "./marketplaceSettingsAliases.js";
 
 //@ chunk-dcmhvw5a.js:443201-443220 placement
-var Lw = new Set(HOOK_EVENTS);
+var HOOK_EVENT_NAME_SET = new Set(HOOK_EVENTS);
+//@ chunk-dcmhvw5a.js:443220-443525 placement
 /**
  * 检查 hooks 中 PreToolUse/PermissionRequest 的配置问题。
  */
-//@ chunk-dcmhvw5a.js:443220-443525 placement
-function validateHookOutputs(e, n) {
+function validateHookOutputs(e, file) {
   if (!e || typeof e !== "object") return [];
   return [
     ...(hasNestedHooks(e, OPAQUE_SETTING_KEYS)
       ? [
           {
-            file: n,
+            file,
             path: "hooks",
             message: `PreToolUse/PermissionRequest hooks are declared outside "hooks" (at the top level or under another key) \u2014 ${UNLOADABLE_GUARD_NOTE}.`,
             severity: "fatal",
@@ -57,168 +68,185 @@ function validateHookOutputs(e, n) {
           },
         ]
       : []),
-    ...validateHooksSettings(e, n),
+    ...validateHooksSettings(e, file),
   ];
 }
+//@ chunk-dcmhvw5a.js:443525-446258 placement
 /**
  * 校验设置中的 hooks 结构（事件、匹配器、命令）。
  */
-//@ chunk-dcmhvw5a.js:443525-446258 placement
-function validateHooksSettings(e, n) {
+function validateHooksSettings(e, file) {
   if (!("hooks" in e)) return [];
   if (e.hooks === null || typeof e.hooks !== "object" || Array.isArray(e.hooks)) {
-    let a = getReceivedType(e.hooks);
+    let receivedType = getReceivedType(e.hooks);
     if (Array.isArray(e.hooks) && (e.hooks.some(isPlainObject_2) || hasGuardHooks_2(e.hooks)))
       return [
         {
-          file: n,
+          file,
           path: "hooks",
-          message: `"hooks" must be an object mapping event names to matcher arrays; received ${a} \u2014 ${UNLOADABLE_GUARD_NOTE}.`,
-          invalidValue: a,
+          message: `"hooks" must be an object mapping event names to matcher arrays; received ${receivedType} \u2014 ${UNLOADABLE_GUARD_NOTE}.`,
+          invalidValue: receivedType,
           docLink: "https://code.claude.com/docs/en/hooks",
         },
       ];
-    return (
-      delete e.hooks,
-      [
-        {
-          file: n,
-          path: "hooks",
-          message: `"hooks" must be an object mapping event names to matcher arrays; received ${a}. This field was ignored.`,
-          severity: "warning",
-          invalidValue: a,
-          docLink: "https://code.claude.com/docs/en/hooks",
-        },
-      ]
-    );
+    delete e.hooks;
+    return [
+      {
+        file,
+        path: "hooks",
+        message: `"hooks" must be an object mapping event names to matcher arrays; received ${receivedType}. This field was ignored.`,
+        severity: "warning",
+        invalidValue: receivedType,
+        docLink: "https://code.claude.com/docs/en/hooks",
+      },
+    ];
   }
   let hooks = e.hooks;
   if (looksLikeHookMatcher(hooks))
     return [
       {
-        file: n,
+        file,
         path: "hooks",
         message: `"hooks" must be an object mapping event names to matcher arrays; received a single matcher \u2014 ${UNLOADABLE_GUARD_NOTE}.`,
         docLink: "https://code.claude.com/docs/en/hooks",
       },
     ];
   let s = [];
-  for (let a of Object.keys(hooks)) {
-    let c = Mu(a);
-    if (!Lw.has(a)) {
-      if (containsHooks(hooks[a], 3, { matchersCount: !Array.isArray(hooks[a]) })) {
+  for (let key of Object.keys(hooks)) {
+    let c = escapeControlCharsForDisplay(key);
+    if (!HOOK_EVENT_NAME_SET.has(key)) {
+      if (
+        containsHooks(hooks[key], 3, {
+          matchersCount: !Array.isArray(hooks[key]),
+        })
+      ) {
         s.push({
-          file: n,
+          file,
           path: `hooks.${c}`,
           message: `"${c}" is not a hook event, but it holds PreToolUse/PermissionRequest hooks \u2014 ${UNLOADABLE_GUARD_NOTE}.`,
           docLink: "https://code.claude.com/docs/en/hooks",
         });
         continue;
       }
-      (delete hooks[a],
-        s.push({
-          file: n,
-          path: `hooks.${c}`,
-          message: `Unknown hook event "${c}" was ignored. Valid events: ${HOOK_EVENTS.join(", ")}`,
-          severity: "warning",
-          invalidValue: c,
-          docLink: "https://code.claude.com/docs/en/hooks",
-          preserveOnWrite: !0,
-        }));
+      delete hooks[key];
+      s.push({
+        file,
+        path: `hooks.${c}`,
+        message: `Unknown hook event "${c}" was ignored. Valid events: ${HOOK_EVENTS.join(", ")}`,
+        severity: "warning",
+        invalidValue: c,
+        docLink: "https://code.claude.com/docs/en/hooks",
+        preserveOnWrite: true,
+      });
       continue;
     }
-    if (!Array.isArray(hooks[a])) {
-      let g = hooks[a],
-        m = getReceivedType(g);
-      if ((GUARD_HOOK_EVENTS.has(a) && g !== null) || containsHooks(g, 3, { matchersCount: !1 })) {
+    if (!Array.isArray(hooks[key])) {
+      let g = hooks[key];
+      let receivedType = getReceivedType(g);
+      if (
+        (GUARD_HOOK_EVENTS.has(key) && g !== null) ||
+        containsHooks(g, 3, {
+          matchersCount: false,
+        })
+      ) {
         s.push({
-          file: n,
+          file,
           path: `hooks.${c}`,
-          message: `Hook event "${c}" must be an array of matchers; received ${m} \u2014 ${UNLOADABLE_GUARD_NOTE}.`,
-          invalidValue: m,
+          message: `Hook event "${c}" must be an array of matchers; received ${receivedType} \u2014 ${UNLOADABLE_GUARD_NOTE}.`,
+          invalidValue: receivedType,
           docLink: "https://code.claude.com/docs/en/hooks",
         });
         continue;
       }
-      (delete hooks[a],
-        s.push({
-          file: n,
-          path: `hooks.${c}`,
-          message: `Hook event "${c}" must be an array of matchers; received ${m}. This entry was ignored.`,
-          severity: "warning",
-          invalidValue: m,
-          docLink: "https://code.claude.com/docs/en/hooks",
-          ...(g !== null && { preserveOnWrite: !0 }),
-        }));
+      delete hooks[key];
+      s.push({
+        file,
+        path: `hooks.${c}`,
+        message: `Hook event "${c}" must be an array of matchers; received ${receivedType}. This entry was ignored.`,
+        severity: "warning",
+        invalidValue: receivedType,
+        docLink: "https://code.claude.com/docs/en/hooks",
+        ...(g !== null && {
+          preserveOnWrite: true,
+        }),
+      });
     }
   }
-  for (let [a, c] of Object.entries(hooks)) {
-    let { stripped: stripped, unloadableGuards: unloadableGuards } = stripInvalidHookEntries(c, a);
-    for (let f of unloadableGuards)
+  for (let [key, value] of Object.entries(hooks)) {
+    let { stripped, unloadableGuards } = stripInvalidHookEntries(value, key);
+    for (let unloadableGuard of unloadableGuards)
       s.push({
-        file: n,
-        path: f.aboutType ? `hooks.${a}.${f.path}.type` : `hooks.${a}.${f.path}`,
-        message: `${f.problem} \u2014 ${UNLOADABLE_GUARD_NOTE}.${f.aboutType ? ` Valid types: ${[...qn()].join(", ")}` : ""}`,
+        file,
+        path: unloadableGuard.aboutType
+          ? `hooks.${key}.${unloadableGuard.path}.type`
+          : `hooks.${key}.${unloadableGuard.path}`,
+        message: `${unloadableGuard.problem} \u2014 ${UNLOADABLE_GUARD_NOTE}.${unloadableGuard.aboutType ? ` Valid types: ${[...knownHookTypes()].join(", ")}` : ""}`,
         severity: "fatal",
-        invalidValue: f.received,
+        invalidValue: unloadableGuard.received,
         docLink: "https://code.claude.com/docs/en/hooks",
       });
     for (let f of stripped)
       s.push({
-        file: n,
-        path: f.aboutType ? `hooks.${a}.${f.path}.type` : `hooks.${a}.${f.path}`,
+        file,
+        path: f.aboutType ? `hooks.${key}.${f.path}.type` : `hooks.${key}.${f.path}`,
         message: f.aboutType
-          ? `${f.problem}; entry ignored. Valid types: ${[...qn()].join(", ")}`
-          : `${f.problem}; ${f.hookIndex === void 0 ? "matcher" : "entry"} ignored.`,
+          ? `${f.problem}; entry ignored. Valid types: ${[...knownHookTypes()].join(", ")}`
+          : `${f.problem}; ${f.hookIndex === undefined ? "matcher" : "entry"} ignored.`,
         severity: "warning",
         invalidValue: f.received,
         docLink: "https://code.claude.com/docs/en/hooks",
-        preserveOnWrite: !0,
+        preserveOnWrite: true,
       });
   }
   if (s.length > 0 && Object.keys(hooks).length === 0) delete e.hooks;
   return s;
 }
 //@ chunk-dcmhvw5a.js:446258-446338 placement
-var Hw = [
-  { key: "allowedMcpServers", schema: Co },
-  { key: "deniedMcpServers", schema: wo },
+var MCP_SERVER_LIST_SETTINGS = [
+  {
+    key: "allowedMcpServers",
+    schema: allowedMcpServersSchema,
+  },
+  {
+    key: "deniedMcpServers",
+    schema: deniedMcpServersSchema,
+  },
 ];
+//@ chunk-dcmhvw5a.js:446338-446986 placement
 /**
  * 按 schema 校验列表类设置项。
  */
-//@ chunk-dcmhvw5a.js:446338-446986 placement
-function validateListSettings(e, n, r) {
+function validateListSettings(e, file, r) {
   if (!e || typeof e !== "object") return [];
-  let s = e,
-    a = [];
-  for (let { key: key, schema: schema } of Hw) {
+  let s = e;
+  let a = [];
+  for (let { key, schema } of MCP_SERVER_LIST_SETTINGS) {
     if (!(key in s)) continue;
     if (!Array.isArray(s[key])) {
       if (r?.keepWholeFieldInvalid) continue;
       let h = s[key];
-      (delete s[key],
-        a.push({
-          file: n,
-          path: key,
-          message: `"${key}" must be an array; received ${getReceivedType(h)}. This field was ignored.`,
-          severity: "warning",
-          invalidValue: h,
-        }));
+      delete s[key];
+      a.push({
+        file,
+        path: key,
+        message: `"${key}" must be an array; received ${getReceivedType(h)}. This field was ignored.`,
+        severity: "warning",
+        invalidValue: h,
+      });
       continue;
     }
-    let m = s[key],
-      f = [];
-    for (let h = 0; h < m.length; h++) {
-      let safeParse = schema().safeParse(m[h]);
-      if (safeParse.success) f.push(m[h]);
+    let m = s[key];
+    let f = [];
+    for (let j = 0; j < m.length; j++) {
+      let y = schema().safeParse(m[j]);
+      if (y.success) f.push(m[j]);
       else
         a.push({
-          file: n,
-          path: `${key}[${h}]`,
-          message: `Invalid entry was ignored: ${safeParse.error.issues[0]?.message ?? "failed validation"}`,
+          file,
+          path: `${key}[${j}]`,
+          message: `Invalid entry was ignored: ${y.error.issues[0]?.message ?? "failed validation"}`,
           severity: "warning",
-          invalidValue: m[h],
+          invalidValue: m[j],
         });
     }
     if (f.length < m.length) s[key] = f;
@@ -226,104 +254,109 @@ function validateListSettings(e, n, r) {
   return a;
 }
 //@ chunk-dcmhvw5a.js:446986-447043 placement
-var Yp = ["strictKnownMarketplaces", "blockedMarketplaces"];
+var MARKETPLACE_LIST_SETTINGS = ["strictKnownMarketplaces", "blockedMarketplaces"];
 //@ chunk-dcmhvw5a.js:447043-447119 placement
-function Fw(e) {
+function dropNullRestrictionKeys(e) {
   if (!isPlainObject_2(e)) return;
-  for (let n of Ao()) if (e[n] === null) delete e[n];
+  for (let n of RESTRICTIVE_TOP_LEVEL_SETTINGS()) if (e[n] === null) delete e[n];
 }
+//@ chunk-dcmhvw5a.js:447119-447791 placement
 /**
  * 校验权限规则列表（逐条解析）。
  */
-//@ chunk-dcmhvw5a.js:447119-447791 placement
-function validatePermissionRuleLists(e, n, r) {
+function validatePermissionRuleLists(e, file, marketplacePatternIndexMapOut) {
   if (!isPlainObject_2(e)) return [];
   let s = [];
-  for (let a of Yp) {
+  for (let a of MARKETPLACE_LIST_SETTINGS) {
     let c = e[a];
     if (!Array.isArray(c)) continue;
-    let g = [],
-      m = [];
-    for (let f = 0; f < c.length; f++) {
-      let safeParse = MarketplaceSourceStrictSchema().safeParse(c[f]);
-      if (!safeParse.success) {
-        (g.push(c[f]), m.push(f));
+    let g = [];
+    let m = [];
+    for (let j = 0; j < c.length; j++) {
+      let h = MarketplaceSourceStrictSchema().safeParse(c[j]);
+      if (!h.success) {
+        g.push(c[j]);
+        m.push(j);
         continue;
       }
-      let y = getUnenforceableMarketplaceReason(safeParse.data);
-      if (y === null) {
-        (g.push(c[f]), m.push(f));
+      let unenforceableMarketplaceReason = getUnenforceableMarketplaceReason(h.data);
+      if (unenforceableMarketplaceReason === null) {
+        g.push(c[j]);
+        m.push(j);
         continue;
       }
       if (a === "blockedMarketplaces") {
-        (g.push(c[f]),
-          m.push(f),
-          s.push({
-            file: n,
-            path: `${a}[${f}]`,
-            message: `Unenforceable entry was kept: ${y}; it can never match a marketplace source, but marketplace restrictions stay active`,
-            severity: "warning",
-          }));
+        g.push(c[j]);
+        m.push(j);
+        s.push({
+          file,
+          path: `${a}[${j}]`,
+          message: `Unenforceable entry was kept: ${unenforceableMarketplaceReason}; it can never match a marketplace source, but marketplace restrictions stay active`,
+          severity: "warning",
+        });
         continue;
       }
       s.push({
-        file: n,
-        path: `${a}[${f}]`,
-        message: `Invalid entry was ignored: ${y}`,
+        file,
+        path: `${a}[${j}]`,
+        message: `Invalid entry was ignored: ${unenforceableMarketplaceReason}`,
         severity: "warning",
       });
     }
-    if (g.length < c.length) ((e[a] = g), r?.set(a, m));
+    if (g.length < c.length) {
+      e[a] = g;
+      marketplacePatternIndexMapOut?.set(a, m);
+    }
   }
   return s;
 }
+//@ chunk-dcmhvw5a.js:447791-448291 placement
 /**
  * 收集权限规则的警告。
  */
-//@ chunk-dcmhvw5a.js:447791-448291 placement
 function collectRuleWarnings(e) {
   if (!isPlainObject_2(e)) return [];
   let n = [];
-  for (let r of Yp) {
+  for (let r of MARKETPLACE_LIST_SETTINGS) {
     let s = e[r];
     if (!Array.isArray(s)) continue;
     for (let [a, c] of s.entries()) {
-      let safeParse = MarketplaceSourceStrictSchema().safeParse(c);
-      if (!safeParse.success) continue;
-      let m = getUnenforceableMarketplaceReason(safeParse.data);
-      if (m !== null)
+      let g = MarketplaceSourceStrictSchema().safeParse(c);
+      if (!g.success) continue;
+      let unenforceableMarketplaceReason = getUnenforceableMarketplaceReason(g.data);
+      if (unenforceableMarketplaceReason !== null)
         n.push(
-          `${r}[${a}]: ${m} \u2014 on policy tiers (managed settings) ${r === "blockedMarketplaces" ? "clients keep it with a warning, but it can never match, so it blocks nothing" : "clients silently strip it at load"}; in user/project/local files the key is inert; fix or remove the entry`,
+          `${r}[${a}]: ${unenforceableMarketplaceReason} \u2014 on policy tiers (managed settings) ${r === "blockedMarketplaces" ? "clients keep it with a warning, but it can never match, so it blocks nothing" : "clients silently strip it at load"}; in user/project/local files the key is inert; fix or remove the entry`,
         );
     }
   }
   return n;
 }
 //@ chunk-dcmhvw5a.js:448291-448439 placement
-function remapIssuePath(e, n) {
-  let r = e[0],
-    s = e[1];
-  if (typeof r !== "string" || typeof s !== "number") return e;
+function remapIssuePath(path, n) {
+  let r = path[0];
+  let s = path[1];
+  if (typeof r !== "string" || typeof s !== "number") return path;
   let a = n.get(r)?.[s];
-  return a === void 0 ? e : [r, a, ...e.slice(2)];
+  return a === undefined ? path : [r, a, ...path.slice(2)];
 }
+//@ chunk-dcmhvw5a.js:448439-448762 placement
 /**
  * 校验 managedMcpServers。
  */
-//@ chunk-dcmhvw5a.js:448439-448762 placement
-function validateManagedMcpServers(e, n) {
-  if (!isPlainObject_2(e) || e.managedMcpServers === void 0) return [];
-  let s = [],
-    a = parseManagedMcpServers(e.managedMcpServers, (c, g) =>
-      s.push({
-        file: n,
-        path: c ? `managedMcpServers.${c}` : "managedMcpServers",
-        message: c ? `Managed MCP server was ignored: ${g}` : g,
-        severity: "warning",
-      }),
-    );
-  if (a === void 0) delete e.managedMcpServers;
-  else e.managedMcpServers = a;
+function validateManagedMcpServers(e, file) {
+  if (!isPlainObject_2(e) || e.managedMcpServers === undefined) return [];
+  let s = [];
+  let managedMcpServers = parseManagedMcpServers(e.managedMcpServers, (c, g) =>
+    s.push({
+      file,
+      path: c ? `managedMcpServers.${c}` : "managedMcpServers",
+      message: c ? `Managed MCP server was ignored: ${g}` : g,
+      severity: "warning",
+    }),
+  );
+  if (managedMcpServers === undefined) delete e.managedMcpServers;
+  else e.managedMcpServers = managedMcpServers;
   return s;
 }
 //@ chunk-dcmhvw5a.js:448762-448911 placement
@@ -332,191 +365,192 @@ function marketplaceSourceType(e) {
   let source = e.source;
   if (!source || typeof source !== "object") return;
   let source_2 = source.source;
-  return typeof source_2 === "string" ? source_2 : void 0;
+  return typeof source_2 === "string" ? source_2 : undefined;
 }
 //@ chunk-dcmhvw5a.js:448911-449065 placement
 function hasUnknownPluginSourceType(e) {
-  if (!e || typeof e !== "object") return !1;
+  if (!e || typeof e !== "object") return false;
   let source = e.source;
-  if (!source || typeof source !== "object") return !1;
+  if (!source || typeof source !== "object") return false;
   let plugins = source.plugins;
   return Array.isArray(plugins) && plugins.some(hasUnknownSourceType);
 }
 //@ chunk-dcmhvw5a.js:449065-449182 placement
 function settingsMarketplaceName(e) {
-  let n = isPlainObject_2(e) ? e.source : void 0;
-  return isPlainObject_2(n) && n.source === "settings" && typeof n.name === "string" ? n.name : void 0;
+  let source = isPlainObject_2(e) ? e.source : undefined;
+  return isPlainObject_2(source) && source.source === "settings" && typeof source.name === "string"
+    ? source.name
+    : undefined;
 }
+//@ chunk-dcmhvw5a.js:449182-450456 placement
 /**
  * 校验 extraKnownMarketplaces。
  */
-//@ chunk-dcmhvw5a.js:449182-450456 placement
-function validateExtraMarketplaces(e, n) {
+function validateExtraMarketplaces(e, file) {
   if (!e || typeof e !== "object") return [];
-  let r = e,
-    s = "extraKnownMarketplaces";
+  let r = e;
+  let s = "extraKnownMarketplaces";
   if (!(s in r)) return [];
   let a = r[s];
   if (!a || typeof a !== "object" || Array.isArray(a)) {
-    let m = getReceivedType(a);
-    return (
-      delete r[s],
-      [
-        {
-          file: n,
-          path: s,
-          message: `"${s}" must be an object mapping marketplace names to declarations; received ${m}. This field was ignored.`,
-          severity: "warning",
-          invalidValue: m,
-        },
-      ]
-    );
-  }
-  let c = a,
-    g = [];
-  for (let m of Object.keys(c)) {
-    let safeParse = cs().safeParse(c[m]),
-      h,
-      y = !1;
-    if (!safeParse.success) {
-      let b = marketplaceSourceType(c[m]);
-      if ((b !== void 0 && !POLICY_SOURCE_TYPES.has(b)) || hasUnknownPluginSourceType(c[m])) continue;
-      h = formatZodIssuesBrief(safeParse.error.issues);
+    let receivedType = getReceivedType(a);
+    delete r[s];
+    return [
       {
-        let S = settingsMarketplaceName(c[m]);
+        file,
+        path: s,
+        message: `"${s}" must be an object mapping marketplace names to declarations; received ${receivedType}. This field was ignored.`,
+        severity: "warning",
+        invalidValue: receivedType,
+      },
+    ];
+  }
+  let c = a;
+  let g = [];
+  for (let key of Object.keys(c)) {
+    let f = agentsSettingsSchema().safeParse(c[key]);
+    let h;
+    let y = false;
+    if (!f.success) {
+      let b = marketplaceSourceType(c[key]);
+      if ((b !== undefined && !POLICY_SOURCE_TYPES.has(b)) || hasUnknownPluginSourceType(c[key])) continue;
+      h = formatZodIssuesBrief(f.error.issues);
+      {
+        let S = settingsMarketplaceName(c[key]);
         y =
-          safeParse.error.issues.every((issue) => issue.message === IMPERSONATION_ERROR_MESSAGE) &&
-          S === m &&
+          f.error.issues.every((issue) => issue.message === IMPERSONATION_ERROR_MESSAGE) &&
+          S === key &&
           isAsciiImpersonatingOfficialName(S);
       }
-    } else if (safeParse.data.source.source === "settings" && safeParse.data.source.name !== m)
-      h = `key "${redactIssuePathKey(m)}" must match the settings source name "${redactIssuePathKey(safeParse.data.source.name)}"`;
-    if (h !== void 0)
-      (g.push({
-        file: n,
-        path: `${s}.${redactIssuePathKey(m)}`,
+    } else if (f.data.source.source === "settings" && f.data.source.name !== key)
+      h = `key "${redactIssuePathKey(key)}" must match the settings source name "${redactIssuePathKey(f.data.source.name)}"`;
+    if (h !== undefined) {
+      g.push({
+        file,
+        path: `${s}.${redactIssuePathKey(key)}`,
         message: y
           ? "Marketplace entry was ignored: its name reads like an official Anthropic or Claude marketplace. It stays in this file: rename it (the key and the source's name) to use it, or delete it. If /plugin also shows a marketplace of this name as refused, remove that one in /plugin \u2192 Marketplaces once this entry is renamed or deleted."
           : `Invalid marketplace entry was ignored: ${h}`,
         severity: "warning",
-        ...(y && { preserveOnWrite: !0 }),
-      }),
-        delete c[m]);
+        ...(y && {
+          preserveOnWrite: true,
+        }),
+      });
+      delete c[key];
+    }
   }
   return g;
 }
+//@ chunk-dcmhvw5a.js:450456-451570 placement
 /**
  * 校验 modelPicker 设置。
  */
-//@ chunk-dcmhvw5a.js:450456-451570 placement
-function validateModelPicker(e, n) {
+function validateModelPicker(e, file) {
   if (!e || typeof e !== "object") return [];
-  let r = e,
-    s = "modelPicker";
+  let r = e;
+  let s = "modelPicker";
   if (!(s in r)) return [];
   let a = r[s];
   if (!isPlainObject_2(a) || !Array.isArray(a.options)) {
     let f = isPlainObject_2(a) ? `options: ${getReceivedType(a.options)}` : getReceivedType(a);
-    return (
-      delete r[s],
-      [
-        {
-          file: n,
-          path: s,
-          message: `"${s}" must be an object with an "options" array of { model, label?, description?, behavesAs? } rows; received ${f}. This field was ignored.`,
-          severity: "warning",
-          invalidValue: f,
-        },
-      ]
-    );
+    delete r[s];
+    return [
+      {
+        file,
+        path: s,
+        message: `"${s}" must be an object with an "options" array of { model, label?, description?, behavesAs? } rows; received ${f}. This field was ignored.`,
+        severity: "warning",
+        invalidValue: f,
+      },
+    ];
   }
   let c = [];
   if ("replaceBuiltInOptions" in a && typeof a.replaceBuiltInOptions !== "boolean") {
-    let f = getReceivedType(a.replaceBuiltInOptions);
-    (delete a.replaceBuiltInOptions,
-      c.push({
-        file: n,
-        path: `${s}.replaceBuiltInOptions`,
-        message: `"replaceBuiltInOptions" must be true or false; received ${f}. This entry was ignored (the rows are added to the built-in lineup).`,
-        severity: "warning",
-        invalidValue: f,
-      }));
+    let receivedType = getReceivedType(a.replaceBuiltInOptions);
+    delete a.replaceBuiltInOptions;
+    c.push({
+      file,
+      path: `${s}.replaceBuiltInOptions`,
+      message: `"replaceBuiltInOptions" must be true or false; received ${receivedType}. This entry was ignored (the rows are added to the built-in lineup).`,
+      severity: "warning",
+      invalidValue: receivedType,
+    });
   }
-  let options = a.options,
-    m = [];
-  for (let f = 0; f < options.length; f++) {
-    let safeParse = gs().safeParse(options[f]);
-    if (safeParse.success) {
-      m.push(options[f]);
+  let options = a.options;
+  let m = [];
+  for (let j = 0; j < options.length; j++) {
+    let h = outputStylesSettingsSchema().safeParse(options[j]);
+    if (h.success) {
+      m.push(options[j]);
       continue;
     }
     c.push({
-      file: n,
-      path: `${s}.options.${f}`,
-      message: `${modelPickerIssueText(safeParse.error.issues[0])}. This row was ignored; the other rows still apply.`,
+      file,
+      path: `${s}.options.${j}`,
+      message: `${modelPickerIssueText(h.error.issues[0])}. This row was ignored; the other rows still apply.`,
       severity: "warning",
-      invalidValue: getReceivedType(options[f]),
+      invalidValue: getReceivedType(options[j]),
     });
   }
   if (m.length !== options.length) a.options = m;
   return c;
 }
+//@ chunk-dcmhvw5a.js:451570-452878 placement
 /**
  * 校验 modelPricing 设置。
  */
-//@ chunk-dcmhvw5a.js:451570-452878 placement
-function validateModelPricing(e, n) {
+function validateModelPricing(e, file) {
   if (!e || typeof e !== "object" || Array.isArray(e)) return [];
   let r = e;
-  if (!("modelPricing" in r) || r.modelPricing === void 0) return [];
+  if (!("modelPricing" in r) || r.modelPricing === undefined) return [];
   let modelPricing = r.modelPricing;
-  if (!modelPricing || typeof modelPricing !== "object" || Array.isArray(modelPricing))
-    return (
-      delete r.modelPricing,
-      [
-        {
-          file: n,
-          path: "modelPricing",
-          message: `"modelPricing" must be an object; received ${getReceivedType(modelPricing)}. It was ignored.`,
-          severity: "warning",
-        },
-      ]
-    );
-  let a = modelPricing,
-    c = [];
-  if (a.multiplier !== void 0 && !ps().safeParse(a.multiplier).success)
-    (c.push({
-      file: n,
+  if (!modelPricing || typeof modelPricing !== "object" || Array.isArray(modelPricing)) {
+    delete r.modelPricing;
+    return [
+      {
+        file,
+        path: "modelPricing",
+        message: `"modelPricing" must be an object; received ${getReceivedType(modelPricing)}. It was ignored.`,
+        severity: "warning",
+      },
+    ];
+  }
+  let a = modelPricing;
+  let c = [];
+  if (a.multiplier !== undefined && !mcpSettingsSchema().safeParse(a.multiplier).success) {
+    c.push({
+      file,
       path: "modelPricing.multiplier",
       message: '"multiplier" must be a number greater than 0 and at most 10. It was ignored.',
       severity: "warning",
       invalidValue: a.multiplier,
-    }),
-      delete a.multiplier);
-  if (a.overrides !== void 0) {
+    });
+    delete a.multiplier;
+  }
+  if (a.overrides !== undefined) {
     let overrides = a.overrides;
-    if (!overrides || typeof overrides !== "object" || Array.isArray(overrides))
-      (c.push({
-        file: n,
+    if (!overrides || typeof overrides !== "object" || Array.isArray(overrides)) {
+      c.push({
+        file,
         path: "modelPricing.overrides",
         message: `"overrides" must be an object mapping model ID to rates; received ${getReceivedType(overrides)}. It was ignored.`,
         severity: "warning",
-      }),
-        delete a.overrides);
-    else {
+      });
+      delete a.overrides;
+    } else {
       let m = overrides;
-      for (let f of Object.keys(m)) {
-        let safeParse = us().safeParse(m[f]);
-        if (safeParse.success && f !== "constructor" && f !== "__proto__") continue;
-        let y = safeParse.success ? void 0 : safeParse.error.issues[0];
-        (c.push({
-          file: n,
-          path: `modelPricing.overrides.${redactIssuePathKey(f)}`,
+      for (let key of Object.keys(m)) {
+        let h = hooksSettingsSchema().safeParse(m[key]);
+        if (h.success && key !== "constructor" && key !== "__proto__") continue;
+        let y = h.success ? undefined : h.error.issues[0];
+        c.push({
+          file,
+          path: `modelPricing.overrides.${redactIssuePathKey(key)}`,
           message: `Invalid pricing row was ignored (${y ? `${y.path.join(".") || "row"}: ${y.message}` : "not a model ID"}).`,
           severity: "warning",
-          invalidValue: m[f],
-        }),
-          delete m[f]);
+          invalidValue: m[key],
+        });
+        delete m[key];
       }
     }
   }
@@ -528,40 +562,40 @@ function modelPickerIssueText(e) {
   return `modelPicker row ${e.path.length > 0 ? `"${e.path.join(".")}" ` : ""}${e.message}`.trim();
 }
 //@ chunk-dcmhvw5a.js:453021-453277 placement
-function sanitizeCrossSessionInbound(e, n, r) {
+function sanitizeCrossSessionInbound(e, file, r) {
   if (!e || typeof e !== "object" || Array.isArray(e)) return [];
-  let s = e,
-    crossSessionInbound = s.crossSessionInbound;
-  if (crossSessionInbound === void 0 || Xp(crossSessionInbound)) return [];
+  let s = e;
+  let crossSessionInbound = s.crossSessionInbound;
+  if (crossSessionInbound === undefined || isKnownHookEvent(crossSessionInbound)) return [];
   if (r?.policySource) s.crossSessionInbound = "refuse";
   else delete s.crossSessionInbound;
-  return [unknownValueWarning(crossSessionInbound, n, r?.policySource === !0)];
+  return [unknownValueWarning(crossSessionInbound, file, r?.policySource === true)];
 }
 //@ chunk-dcmhvw5a.js:453277-453336 placement
-function Xp(e) {
-  return typeof e === "string" && rJt.includes(e);
+function isKnownHookEvent(crossSessionInbound) {
+  return typeof crossSessionInbound === "string" && POLICY_HELPER_ON_FAILURE.includes(crossSessionInbound);
 }
 //@ chunk-dcmhvw5a.js:453336-453366 placement
 var CROSSSESSIONINBOUND = "crossSessionInbound";
+//@ chunk-dcmhvw5a.js:453366-453467 placement
 /**
  * 校验 crossSessionInbound 设置值，不合法时返回错误说明。
  */
-//@ chunk-dcmhvw5a.js:453366-453467 placement
 function crossSessionInboundError(e) {
   if (!isPlainObject_2(e)) return;
   let crossSessionInbound = e.crossSessionInbound;
-  if (crossSessionInbound === void 0 || Xp(crossSessionInbound)) return;
+  if (crossSessionInbound === undefined || isKnownHookEvent(crossSessionInbound)) return;
   return crossSessionInboundExpected(crossSessionInbound);
 }
+//@ chunk-dcmhvw5a.js:453467-453685 placement
 /**
  * 校验 strictPluginOnlyCustomization 设置（布尔或数组），不合法时返回错误说明。
  */
-//@ chunk-dcmhvw5a.js:453467-453685 placement
 function strictPluginOnlyCustomizationError(e) {
   if (!isPlainObject_2(e)) return;
   let strictPluginOnlyCustomization = e.strictPluginOnlyCustomization;
   if (
-    strictPluginOnlyCustomization === void 0 ||
+    strictPluginOnlyCustomization === undefined ||
     strictPluginOnlyCustomization === null ||
     typeof strictPluginOnlyCustomization === "boolean" ||
     Array.isArray(strictPluginOnlyCustomization)
@@ -569,79 +603,93 @@ function strictPluginOnlyCustomizationError(e) {
     return;
   return `must be true, false, or an array of surface names; received ${getReceivedType(strictPluginOnlyCustomization)}`;
 }
+//@ chunk-dcmhvw5a.js:453685-454139 placement
 /**
  * 校验 allowedProviders。
  */
-//@ chunk-dcmhvw5a.js:453685-454139 placement
 function validateAllowedProviders(e) {
   if (!isPlainObject_2(e)) return;
   let allowedProviders = e.allowedProviders;
-  if (allowedProviders === void 0) return;
+  if (allowedProviders === undefined) return;
   if (!Array.isArray(allowedProviders))
     return `must be an array of provider names; received ${getReceivedType(allowedProviders)}`;
-  let found = allowedProviders.find((a) => typeof a !== "string");
-  if (found !== void 0) return `entries must be provider names (strings); received ${getReceivedType(found)}`;
-  let filtered = allowedProviders.filter((a) => !cn(a));
+  let found = allowedProviders.find((allowedProvider) => typeof allowedProvider !== "string");
+  if (found !== undefined)
+    return `entries must be provider names (strings); received ${getReceivedType(found)}`;
+  let filtered = allowedProviders.filter((allowedProvider) => !isAnthropicProviderId(allowedProvider));
   return filtered.length === 0
-    ? void 0
+    ? undefined
     : `unknown provider ${plural(filtered.length, "name")} ${filtered.map((a) => JSON.stringify(a)).join(", ")}; known names: ${API_PROVIDER_KINDS.join(", ")}`;
 }
 //@ chunk-dcmhvw5a.js:454139-454274 placement
 function copyAllowedProviders(e, n) {
   if (!isPlainObject_2(e) || !Array.isArray(e.allowedProviders)) return;
-  Object.assign(n, { allowedProviders: e.allowedProviders.filter(cn) });
+  Object.assign(n, {
+    allowedProviders: e.allowedProviders.filter(isAnthropicProviderId),
+  });
 }
 //@ chunk-dcmhvw5a.js:454274-454442 placement
 function crossSessionInboundExpected(e) {
-  let joined = rJt.map((s) => `"${s}"`).join(", "),
-    r =
-      typeof e === "string" ? `"${redactIssuePathKey(e).replace(/^<key>$/, "<value>")}"` : getReceivedType(e);
+  let joined = POLICY_HELPER_ON_FAILURE.map((s) => `"${s}"`).join(", ");
+  let r =
+    typeof e === "string" ? `"${redactIssuePathKey(e).replace(/^<key>$/, "<value>")}"` : getReceivedType(e);
   return `must be one of ${joined}; received ${r}`;
 }
+//@ chunk-dcmhvw5a.js:454442-454970 placement
 /**
  * 无法识别的取值的警告（托管设置视为拒绝）。
  */
-//@ chunk-dcmhvw5a.js:454442-454970 placement
-function unknownValueWarning(e, n, r = !1) {
-  let joined = rJt.map((c) => `"${c}"`).join(", "),
-    a = r
-      ? 'In managed settings an unrecognized value is treated as "refuse" (the most restrictive): cross-session messages to this session are turned away until an administrator fixes it.'
-      : "This value was ignored; while it is present, cross-session messages are held for your approval instead of being delivered. Set it to one of the values above.";
+function unknownValueWarning(crossSessionInbound, file, r = false) {
+  let expected = POLICY_HELPER_ON_FAILURE.map((c) => `"${c}"`).join(", ");
+  let a = r
+    ? 'In managed settings an unrecognized value is treated as "refuse" (the most restrictive): cross-session messages to this session are turned away until an administrator fixes it.'
+    : "This value was ignored; while it is present, cross-session messages are held for your approval instead of being delivered. Set it to one of the values above.";
   return {
-    file: n,
+    file,
     path: CROSSSESSIONINBOUND,
-    message: `"crossSessionInbound" ${crossSessionInboundExpected(e)}. ${a}`,
+    message: `"crossSessionInbound" ${crossSessionInboundExpected(crossSessionInbound)}. ${a}`,
     severity: "warning",
-    expected: joined,
-    ...(r && { statusOnly: !0 }),
+    expected,
+    ...(r && {
+      statusOnly: true,
+    }),
   };
 }
 //@ chunk-dcmhvw5a.js:454970-455011 placement
 var REMOTECONTROL_SHAREHOSTPROFILE = "remoteControl.shareHostProfile";
+//@ chunk-dcmhvw5a.js:455011-456257 placement
 /**
  * 校验 remoteControl 设置。
  */
-//@ chunk-dcmhvw5a.js:455011-456257 placement
-function validateRemoteControlSetting(e, n, r) {
-  if (!isPlainObject_2(e) || e.remoteControl === void 0) return [];
-  let s = r?.policySource === !0,
-    joined = mct.map((S) => `"${S}"`).join(", "),
-    c = s
-      ? 'In managed settings this is treated as "off" (the most restrictive): Remote Control environments report nothing about this machine until an administrator fixes it.'
-      : "While it is present, Remote Control environments report nothing about this machine.",
-    g = (S) => ({
-      file: n,
-      path: REMOTECONTROL_SHAREHOSTPROFILE,
-      message: `${S}. ${c}`,
-      severity: "warning",
-      expected: joined,
-      ...(s ? { statusOnly: !0 } : { preserveOnWrite: !0 }),
-    }),
-    m = (S) =>
-      typeof S === "string" ? `"${redactIssuePathKey(S).replace(/^<key>$/, "<value>")}"` : getReceivedType(S),
-    remoteControl = e.remoteControl;
+function validateRemoteControlSetting(e, file, r) {
+  if (!isPlainObject_2(e) || e.remoteControl === undefined) return [];
+  let s = r?.policySource === true;
+  let joined = POLICY_HELPER_LOG_LEVELS.map((S) => `"${S}"`).join(", ");
+  let c = s
+    ? 'In managed settings this is treated as "off" (the most restrictive): Remote Control environments report nothing about this machine until an administrator fixes it.'
+    : "While it is present, Remote Control environments report nothing about this machine.";
+  let g = (S) => ({
+    file,
+    path: REMOTECONTROL_SHAREHOSTPROFILE,
+    message: `${S}. ${c}`,
+    severity: "warning",
+    expected: joined,
+    ...(s
+      ? {
+          statusOnly: true,
+        }
+      : {
+          preserveOnWrite: true,
+        }),
+  });
+  let m = (S) =>
+    typeof S === "string" ? `"${redactIssuePathKey(S).replace(/^<key>$/, "<value>")}"` : getReceivedType(S);
+  let remoteControl = e.remoteControl;
   if (!isPlainObject_2(remoteControl)) {
-    if (s) e.remoteControl = { shareHostProfile: "off" };
+    if (s)
+      e.remoteControl = {
+        shareHostProfile: "off",
+      };
     else delete e.remoteControl;
     return [
       g(
@@ -649,8 +697,8 @@ function validateRemoteControlSetting(e, n, r) {
       ),
     ];
   }
-  let h = [],
-    filtered = Object.keys(remoteControl).filter((S) => S !== "shareHostProfile");
+  let h = [];
+  let filtered = Object.keys(remoteControl).filter((key) => key !== "shareHostProfile");
   if (filtered.length > 0) {
     if (s) remoteControl.shareHostProfile = "off";
     h.push(
@@ -661,8 +709,8 @@ function validateRemoteControlSetting(e, n, r) {
   }
   let shareHostProfile = remoteControl.shareHostProfile;
   if (
-    shareHostProfile !== void 0 &&
-    !(typeof shareHostProfile === "string" && mct.includes(shareHostProfile))
+    shareHostProfile !== undefined &&
+    !(typeof shareHostProfile === "string" && POLICY_HELPER_LOG_LEVELS.includes(shareHostProfile))
   ) {
     if (s) remoteControl.shareHostProfile = "off";
     else delete remoteControl.shareHostProfile;
@@ -673,50 +721,54 @@ function validateRemoteControlSetting(e, n, r) {
   return h;
 }
 //@ chunk-dcmhvw5a.js:456257-456337 placement
-var nA = ["enabledMcpjsonServers", "disabledMcpjsonServers"],
-  lA = /^[A-Za-z0-9_-]+$/;
+var MCP_SERVER_ENABLED_SETTINGS = ["enabledMcpjsonServers", "disabledMcpjsonServers"];
+var MCP_SERVER_NAME_RE = /^[A-Za-z0-9_-]+$/;
+//@ chunk-dcmhvw5a.js:456337-456442 placement
 /**
  * 把应为数组的字符串设置包成数组。
  */
-//@ chunk-dcmhvw5a.js:456337-456442 placement
 function coerceStringListSettings(e) {
   if (!isPlainObject_2(e)) return;
-  for (let n of nA) {
+  for (let n of MCP_SERVER_ENABLED_SETTINGS) {
     let r = e[n];
-    if (typeof r === "string" && lA.test(r)) e[n] = [r];
+    if (typeof r === "string" && MCP_SERVER_NAME_RE.test(r)) e[n] = [r];
   }
 }
+//@ chunk-dcmhvw5a.js:456442-456962 placement
 /**
  * 校验整份设置文档（别名、hooks、规则等）。
  */
-//@ chunk-dcmhvw5a.js:456442-456962 placement
-function validateSettingsDocument(e, n, r) {
-  let s = [...applySettingAliases(e, n)];
-  if ((Fw(e), !r?.policySource)) coerceStringListSettings(e);
-  return (
-    s.push(
-      ...filterInvalidPermissionRules(e, n, {
-        policySource: r?.policySource,
-        strictParseFollows: r?.mcpServerEntrySalvageOnly,
-      }),
-      ...validateHookOutputs(e, n),
-      ...validateExtraMarketplaces(e, n),
-      ...validateModelPicker(e, n),
-      ...validateModelPricing(e, n),
-      ...sanitizeCrossSessionInbound(e, n, { policySource: r?.policySource }),
-      ...validateRemoteControlSetting(e, n, { policySource: r?.policySource }),
-      ...(r?.skipMcpServerEntryFilter
-        ? []
-        : validateListSettings(e, n, { keepWholeFieldInvalid: r?.mcpServerEntrySalvageOnly })),
-      ...(r?.mcpServerEntrySalvageOnly ? validateManagedMcpServers(e, n) : []),
-      ...(r?.mcpServerEntrySalvageOnly
-        ? validatePermissionRuleLists(e, n, r.marketplacePatternIndexMapOut)
-        : []),
-    ),
-    s
+function validateSettingsDocument(e, file, r) {
+  let s = [...applySettingAliases(e, file)];
+  dropNullRestrictionKeys(e);
+  if (!r?.policySource) coerceStringListSettings(e);
+  s.push(
+    ...filterInvalidPermissionRules(e, file, {
+      policySource: r?.policySource,
+      strictParseFollows: r?.mcpServerEntrySalvageOnly,
+    }),
+    ...validateHookOutputs(e, file),
+    ...validateExtraMarketplaces(e, file),
+    ...validateModelPicker(e, file),
+    ...validateModelPricing(e, file),
+    ...sanitizeCrossSessionInbound(e, file, {
+      policySource: r?.policySource,
+    }),
+    ...validateRemoteControlSetting(e, file, {
+      policySource: r?.policySource,
+    }),
+    ...(r?.skipMcpServerEntryFilter
+      ? []
+      : validateListSettings(e, file, {
+          keepWholeFieldInvalid: r?.mcpServerEntrySalvageOnly,
+        })),
+    ...(r?.mcpServerEntrySalvageOnly ? validateManagedMcpServers(e, file) : []),
+    ...(r?.mcpServerEntrySalvageOnly
+      ? validatePermissionRuleLists(e, file, r.marketplacePatternIndexMapOut)
+      : []),
   );
+  return s;
 }
-
 export {
   collectRuleWarnings,
   crossSessionInboundError,

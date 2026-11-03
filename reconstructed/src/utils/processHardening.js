@@ -9,16 +9,15 @@
  * attribution: placement 1
  */
 
+//@ chunk-0f5bp6p7.js:191-361 placement
 /**
  * 通过 prctl 关闭进程 dumpable。
  */
-//@ chunk-0f5bp6p7.js:191-361 placement
-function disableCoreDumps(r) {
+function disableCoreDumps(warn) {
   try {
-    if (!Bun.ant.setDumpable(!1)) r("prctl(PR_SET_DUMPABLE,0) returned nonzero");
+    if (!Bun.ant.setDumpable(false)) warn("prctl(PR_SET_DUMPABLE,0) returned nonzero");
   } catch (error) {
-    r(`prctl unavailable: ${error instanceof Error ? error.message : String(error)}`);
+    warn(`prctl unavailable: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
-
 export { disableCoreDumps };

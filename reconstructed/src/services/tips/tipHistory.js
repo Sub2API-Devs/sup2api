@@ -10,15 +10,14 @@
  */
 import { getGlobalConfig } from "../../utils/config.js";
 
+//@ chunk-jv3bzw2x.js:1564-1651 fingerprint = recordTipShown (1)
 /**
  * 某提示距上次显示经过了多少次启动（numStartups 差值）；从未显示返回 Infinity。用于冷却判断。
  */
-//@ chunk-jv3bzw2x.js:1564-1651 fingerprint = recordTipShown (1)
 function getSessionsSinceTipShown(tipId) {
-  let o = getGlobalConfig(),
-    n = o.tipsHistory?.[tipId];
-  if (!n) return 1 / 0;
-  return o.numStartups - n;
+  let config = getGlobalConfig();
+  let lastShown = config.tipsHistory?.[tipId];
+  if (!lastShown) return 1 / 0;
+  return config.numStartups - lastShown;
 }
-
 export { getSessionsSinceTipShown };

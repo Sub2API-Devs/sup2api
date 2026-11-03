@@ -13,10 +13,9 @@ import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../../services/analytics
 //@ chunk-h21vd5jd.js:226-301 placement
 function isServedCornerEnabled() {
   try {
-    return getFeatureValue_CACHED_MAY_BE_STALE("tengu_violin_corner", !1) === !0;
+    return getFeatureValue_CACHED_MAY_BE_STALE("tengu_violin_corner", false) === true;
   } catch {
-    return !1;
+    return false;
   }
 }
-
 export { isServedCornerEnabled };

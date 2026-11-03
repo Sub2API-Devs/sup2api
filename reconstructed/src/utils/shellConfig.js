@@ -8,10 +8,10 @@
  * pieces: chunk-6zvphrsz.js (8)
  * attribution: affinity 1, fingerprint 4, layout 2, callgraph-witnessed 1
  */
-import { homedir, homedir as homedir_2 } from "os";
+import { homedir } from "os";
 import { existsSync } from "fs";
-import { join, join as join_2, join as join_3 } from "path";
-import { readFile, open, stat, stat as stat_2 } from "fs/promises";
+import { join } from "path";
+import { readFile, open, stat } from "fs/promises";
 import { getLocalClaudePath } from "./localInstaller.js";
 import {
   isFsInaccessible,
@@ -25,75 +25,91 @@ import { logForDebugging } from "./debug.js";
 
 //@ chunk-6zvphrsz.js:4527-4559 affinity
 var CLAUDE_ALIAS_REGEX = /^\s*alias\s+claude\s*=/;
+//@ chunk-6zvphrsz.js:4559-4900 fingerprint = getShellConfigPaths (0.661)
 /**
  * 各 shell 的 rc 文件路径：zsh 用 $ZDOTDIR/.zshrc，bash 在 macOS 取已存在的 .bash_profile/.bash_login/.profile（另给 .bashrc），其他平台 .bashrc，fish 用 ~/.config/fish/config.fish。
  */
-//@ chunk-6zvphrsz.js:4559-4900 fingerprint = getShellConfigPaths (0.661)
 function getShellConfigPaths(options) {
-  let r = options?.homedir ?? homedir_2(),
-    n = options?.env ?? process.env,
-    o = options?.platform ?? "linux",
-    s = options?.fileExists ?? existsSync,
-    u = n.ZDOTDIR || r,
-    R =
-      o === "darwin"
-        ? ([".bash_profile", ".bash_login", ".profile"].find((p) => s(join_2(r, p))) ?? ".bash_profile")
-        : ".bashrc";
+  let home = options?.homedir ?? homedir();
+  let env = options?.env ?? process.env;
+  let platform = options?.platform ?? "linux";
+  let fileExists = options?.fileExists ?? existsSync;
+  let zshConfigDir = env.ZDOTDIR || home;
+  let R =
+    platform === "darwin"
+      ? ([".bash_profile", ".bash_login", ".profile"].find((p) => fileExists(join(home, p))) ??
+        ".bash_profile")
+      : ".bashrc";
   return {
-    zsh: join_2(u, ".zshrc"),
-    bash: join_2(r, R),
-    ...(o === "darwin" && { bashrc: join_2(r, ".bashrc") }),
-    fish: join_2(r, ".config/fish/config.fish"),
+    zsh: join(zshConfigDir, ".zshrc"),
+    bash: join(home, R),
+    ...(platform === "darwin" && {
+      bashrc: join(home, ".bashrc"),
+    }),
+    fish: join(home, ".config/fish/config.fish"),
   };
 }
+//@ chunk-6zvphrsz.js:4900-5149 fingerprint = filterClaudeAliases (1)
 /**
  * 从 rc 文件行中去掉指向本地安装 claude 的 alias claude=… 行，返回 {filtered, hadAlias}；安装器/迁移用。
  */
-//@ chunk-6zvphrsz.js:4900-5149 fingerprint = filterClaudeAliases (1)
 function filterClaudeAliases(lines) {
-  let r = !1;
+  let hadAlias = false;
   return {
     filtered: lines.filter((line) => {
       if (CLAUDE_ALIAS_REGEX.test(line)) {
         let match = line.match(/alias\s+claude\s*=\s*["']([^"']+)["']/);
         if (!match) match = line.match(/alias\s+claude\s*=\s*([^#\n]+)/);
         if (match && match[1]) {
-          if (match[1].trim() === getLocalClaudePath()) return ((r = !0), !1);
+          if (match[1].trim() === getLocalClaudePath()) {
+            hadAlias = true;
+            return false;
+          }
         }
       }
-      return !0;
+      return true;
     }),
-    hadAlias: r,
+    hadAlias,
   };
 }
+//@ chunk-6zvphrsz.js:5149-5339 layout
 /**
  * 读文件并按行切分；文件不存在返回 null，是目录时告警并返回 null，其他错误抛出。
  */
-//@ chunk-6zvphrsz.js:5149-5339 layout
-async function readFileLinesOrNull(e) {
+async function readFileLinesOrNull(filePath) {
   try {
-    return (await readFile(e, { encoding: "utf8" })).split(`
+    return (
+      await readFile(filePath, {
+        encoding: "utf8",
+      })
+    ).split(`
 `);
-  } catch (error) {
-    if (isFsInaccessible(error)) return null;
-    if (isEISDIR(error))
-      return (logForDebugging(`Skipping ${e}: path is a directory`, { level: "warn" }), null);
-    throw error;
+  } catch (e) {
+    if (isFsInaccessible(e)) return null;
+    if (isEISDIR(e)) {
+      logForDebugging(`Skipping ${filePath}: path is a directory`, {
+        level: "warn",
+      });
+      return null;
+    }
+    throw e;
   }
 }
+//@ chunk-6zvphrsz.js:5339-5482 fingerprint = writeFileLines (1)
 /**
  * 把行数组写回文件并 datasync。
  */
-//@ chunk-6zvphrsz.js:5339-5482 fingerprint = writeFileLines (1)
 async function writeFileLines(filePath, lines) {
   let fh = await open(filePath, "w");
   try {
-    (await fh.writeFile(
+    await fh.writeFile(
       lines.join(`
 `),
-      { encoding: "utf8" },
-    ),
-      await fh.datasync());
+      {
+        encoding: "utf8",
+      },
+    );
+    await fh.datasync();
   } finally {
     await fh.close();
   }
@@ -110,26 +126,31 @@ var UNREADABLE_CONFIG_ERROR_CODES = new Set([
   "EHOSTUNREACH",
   "ETIMEDOUT",
 ]);
+//@ chunk-6zvphrsz.js:5614-5981 callgraph-witnessed = findClaudeAlias (0)
 /**
  * 在 zsh/bash/fish 配置文件里查找 `alias claude=` 的目标；读不了的文件记日志跳过。
  */
-//@ chunk-6zvphrsz.js:5614-5981 callgraph-witnessed = findClaudeAlias (0)
 async function findClaudeAlias(options) {
   let configs = getShellConfigPaths(options);
   for (let configPath of Object.values(configs)) {
-    let o = await readFileLinesOrNull(configPath).catch((s) => {
-      if (isSadFsErrno(s) || isEnvFsErrno(s) || UNREADABLE_CONFIG_ERROR_CODES.has(getErrnoCode(s) ?? ""))
-        return (
-          logForDebugging(
-            `Skipping unreadable shell config ${configPath} during alias scan: ${errorMessage(s)}`,
-            { level: "warn" },
-          ),
-          null
+    let lines = await readFileLinesOrNull(configPath).catch((error) => {
+      if (
+        isSadFsErrno(error) ||
+        isEnvFsErrno(error) ||
+        UNREADABLE_CONFIG_ERROR_CODES.has(getErrnoCode(error) ?? "")
+      ) {
+        logForDebugging(
+          `Skipping unreadable shell config ${configPath} during alias scan: ${errorMessage(error)}`,
+          {
+            level: "warn",
+          },
         );
-      throw s;
+        return null;
+      }
+      throw error;
     });
-    if (!o) continue;
-    for (let line of o)
+    if (!lines) continue;
+    for (let line of lines)
       if (CLAUDE_ALIAS_REGEX.test(line)) {
         let match = line.match(/alias\s+claude=["']?([^"'\s]+)/);
         if (match && match[1]) return match[1];
@@ -137,22 +158,21 @@ async function findClaudeAlias(options) {
   }
   return null;
 }
+//@ chunk-6zvphrsz.js:5981-6186 fingerprint = findValidClaudeAlias (1)
 /**
  * 在 rc 文件中找 claude 别名，展开 ~ 后目标存在（文件或符号链接）才返回别名目标。
  */
-//@ chunk-6zvphrsz.js:5981-6186 fingerprint = findValidClaudeAlias (1)
 async function findValidClaudeAlias(options) {
   let aliasTarget = await findClaudeAlias(options);
   if (!aliasTarget) return null;
-  let home = options?.homedir ?? homedir_2(),
-    expandedPath = aliasTarget.startsWith("~") ? aliasTarget.replace("~", home) : aliasTarget;
+  let home = options?.homedir ?? homedir();
+  let expandedPath = aliasTarget.startsWith("~") ? aliasTarget.replace("~", home) : aliasTarget;
   try {
-    let stats = await stat_2(expandedPath);
+    let stats = await stat(expandedPath);
     if (stats.isFile() || stats.isSymbolicLink()) return aliasTarget;
   } catch {}
   return null;
 }
-
 export {
   getShellConfigPaths,
   readFileLinesOrNull,

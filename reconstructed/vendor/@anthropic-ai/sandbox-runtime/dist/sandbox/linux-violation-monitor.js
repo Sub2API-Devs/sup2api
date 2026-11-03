@@ -5,134 +5,109 @@
  * pieces: chunk-fq0cr76a.js (1)
  * attribution: esm-fingerprint 1
  */
-import {
-  mkdtempSync,
-  mkdtempSync as mkdtempSync_2,
-  rmSync,
-  rmSync as rmSync_2,
-  rmSync as rmSync_3,
-  rmSync as rmSync_4,
-} from "fs";
-import {
-  join,
-  join as join_2,
-  join as join_3,
-  join as join_4,
-  join as join_5,
-  join as join_6,
-  join as join_7,
-  join as join_8,
-  join as join_9,
-  join as join_10,
-  join as join_11,
-  posix,
-} from "path";
-import { tmpdir, tmpdir as tmpdir_2, tmpdir as tmpdir_3, tmpdir as tmpdir_4, tmpdir as tmpdir_5 } from "os";
-import {
-  randomBytes,
-  randomBytes as randomBytes_2,
-  randomBytes as randomBytes_3,
-  randomBytes as randomBytes_4,
-  randomBytes as randomBytes_5,
-} from "crypto";
-import { createServer as createServer_4, createServer as createServer_5 } from "net";
+import { mkdtempSync, rmSync } from "fs";
+import { join, posix } from "path";
+import { tmpdir } from "os";
+import { randomBytes } from "crypto";
+import { createServer as createServer_5 } from "net";
 import { createInterface } from "readline";
-import { At } from "../utils/debug.js";
-import { x4e, E8o } from "./sandbox-utils.js";
-import { Eu } from "./sandbox-violation-store.js";
+import { logForDebugging as logForDebugging_2 } from "../utils/debug.js";
+import { decodeSandboxedCommand, MAX_ENCODED_COMMAND_BYTES } from "./sandbox-utils.js";
+import { shouldIgnoreViolation } from "./sandbox-violation-store.js";
 
 //@ chunk-fq0cr76a.js:776092-777559 esm-fingerprint
-function R1(e, n) {
-  let {
-      allowWritePaths: allowWritePaths,
-      denyWritePaths: denyWritePaths,
-      ignoreViolations: ignoreViolations,
-      resolveCommandText: resolveCommandText,
-    } = n,
-    b = mkdtempSync_2(join_8(tmpdir_5(), "srt-obs-")),
-    S = join_8(b, `s${randomBytes_4(4).toString("hex")}.sock`),
-    w = (J, ie) => J === ie || J.startsWith(ie.endsWith("/") ? ie : ie + "/"),
-    R = (J) => {
-      if (denyWritePaths.some((ie) => w(J, ie))) return !0;
-      return !allowWritePaths.some((ie) => w(J, ie));
-    },
-    D = (J, ie) => {
-      if (J.observe_init_error) {
-        At(`[Sandbox Linux Monitor] observe filter not installed: ${J.observe_init_error}`);
+function startLinuxSandboxViolationMonitor(callback, opts) {
+  let { allowWritePaths, denyWritePaths, ignoreViolations, resolveCommandText } = opts;
+  let sockDir = mkdtempSync(join(tmpdir(), "srt-obs-"));
+  let sockPath = join(sockDir, `s${randomBytes(4).toString("hex")}.sock`);
+  let underPrefix = (p, prefix) => p === prefix || p.startsWith(prefix.endsWith("/") ? prefix : prefix + "/");
+  let isDenied = (p) => {
+    if (denyWritePaths.some((d) => underPrefix(p, d))) return true;
+    return !allowWritePaths.some((a) => underPrefix(p, a));
+  };
+  let handleEvent = (ev, encodedCommand) => {
+    if (ev.observe_init_error) {
+      logForDebugging_2(`[Sandbox Linux Monitor] observe filter not installed: ${ev.observe_init_error}`);
+      return;
+    }
+    if (typeof ev.path !== "string") return;
+    if (!ev.path.startsWith("/")) return;
+    let observedPath = posix.normalize(ev.path);
+    if (!isDenied(observedPath)) return;
+    let command;
+    if (encodedCommand)
+      try {
+        command = resolveCommandText(decodeSandboxedCommand(encodedCommand));
+      } catch {}
+    if (shouldIgnoreViolation(observedPath, command, ignoreViolations)) return;
+    let violation = {
+      line: `deny ${ev.syscall ?? "syscall"} ${observedPath}`,
+      command,
+      encodedCommand,
+      timestamp: new Date(),
+    };
+    callback(violation);
+  };
+  let resolveReady;
+  let ready = new Promise((res) => {
+    resolveReady = res;
+  });
+  let observeSocketPath = sockPath;
+  let server = createServer_5((conn) => {
+    let encodedCommand;
+    let rl = createInterface({
+      input: conn,
+    });
+    rl.on("line", (raw) => {
+      if (!raw) return;
+      let ev;
+      try {
+        ev = JSON.parse(raw);
+      } catch {
         return;
       }
-      if (typeof J.path !== "string") return;
-      if (!J.path.startsWith("/")) return;
-      let normalized = posix.normalize(J.path);
-      if (!R(normalized)) return;
-      let Se;
-      if (ie)
-        try {
-          Se = resolveCommandText(x4e(ie));
-        } catch {}
-      if (Eu(normalized, Se, ignoreViolations)) return;
-      let ue = {
-        line: `deny ${J.syscall ?? "syscall"} ${normalized}`,
-        command: Se,
-        encodedCommand: ie,
-        timestamp: new Date(),
-      };
-      e(ue);
-    },
-    O,
-    promise = new Promise((J) => {
-      O = J;
-    }),
-    V = S,
-    K = createServer_5((J) => {
-      let ie,
-        ae = createInterface({ input: J });
-      (ae.on("line", (Se) => {
-        if (!Se) return;
-        let ue;
-        try {
-          ue = JSON.parse(Se);
-        } catch {
-          return;
-        }
-        let me =
-          ue.encodedCommand !== void 0 && Buffer.byteLength(ue.encodedCommand) <= E8o
-            ? ue.encodedCommand
-            : void 0;
-        if (me && ie === void 0) ie = me;
-        D(ue, ie ?? me);
-      }),
-        J.on("error", () => ae.close()),
-        J.on("close", () => ae.close()));
+      let attribution =
+        ev.encodedCommand !== undefined && Buffer.byteLength(ev.encodedCommand) <= MAX_ENCODED_COMMAND_BYTES
+          ? ev.encodedCommand
+          : undefined;
+      if (attribution && encodedCommand === undefined) encodedCommand = attribution;
+      handleEvent(ev, encodedCommand ?? attribution);
     });
-  (K.on("error", (J) => {
-    (At(`[Sandbox Linux Monitor] listen failed: ${J.message} - violation monitoring disabled`, {
-      level: "warn",
-    }),
-      (V = void 0),
-      O());
-  }),
-    K.listen(S, () => O()));
-  let q = new Set();
-  return (
-    K.on("connection", (J) => {
-      (q.add(J), J.on("close", () => q.delete(J)));
-    }),
-    {
-      get observeSocketPath() {
-        return V;
+    conn.on("error", () => rl.close());
+    conn.on("close", () => rl.close());
+  });
+  server.on("error", (err) => {
+    logForDebugging_2(
+      `[Sandbox Linux Monitor] listen failed: ${err.message} - violation monitoring disabled`,
+      {
+        level: "warn",
       },
-      ready: promise,
-      stop: () => {
-        At("[Sandbox Linux Monitor] stopping");
-        for (let J of q) J.destroy();
-        K.close();
-        try {
-          rmSync_3(b, { recursive: !0, force: !0 });
-        } catch {}
-      },
-    }
-  );
+    );
+    observeSocketPath = undefined;
+    resolveReady();
+  });
+  server.listen(sockPath, () => resolveReady());
+  let sockets = new Set();
+  server.on("connection", (s) => {
+    sockets.add(s);
+    s.on("close", () => sockets.delete(s));
+  });
+  return {
+    get observeSocketPath() {
+      return observeSocketPath;
+    },
+    ready,
+    stop: () => {
+      logForDebugging_2("[Sandbox Linux Monitor] stopping");
+      for (let s of sockets) s.destroy();
+      server.close();
+      try {
+        rmSync(sockDir, {
+          recursive: true,
+          force: true,
+        });
+      } catch {}
+    },
+  };
 }
-
-export { R1 };
+export { startLinuxSandboxViolationMonitor };

@@ -8,8 +8,8 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-spjgqa4y.js:3101-5121 cjs-fingerprint
-var Kt = x(function (yi) {
-  yi.Patterns = {
+var require_mask_pattern = x(function (cjsExports) {
+  cjsExports.Patterns = {
     PATTERN000: 0,
     PATTERN001: 1,
     PATTERN010: 2,
@@ -19,111 +19,131 @@ var Kt = x(function (yi) {
     PATTERN110: 6,
     PATTERN111: 7,
   };
-  var G = { N1: 3, N2: 3, N3: 40, N4: 10 };
-  yi.isValid = function (e) {
-    return e != null && e !== "" && !isNaN(e) && e >= 0 && e <= 7;
+  var PenaltyScores = {
+    N1: 3,
+    N2: 3,
+    N3: 40,
+    N4: 10,
   };
-  yi.from = function (e) {
-    return yi.isValid(e) ? parseInt(e, 10) : void 0;
+  cjsExports.isValid = function (mask) {
+    return mask != null && mask !== "" && !isNaN(mask) && mask >= 0 && mask <= 7;
   };
-  yi.getPenaltyN1 = function (e) {
-    let size = e.size,
-      n = 0,
-      i = 0,
-      o = 0,
-      s = null,
-      l = null;
-    for (let u = 0; u < size; u++) {
-      ((i = o = 0), (s = l = null));
-      for (let f = 0; f < size; f++) {
-        let a = e.get(u, f);
-        if (a === s) i++;
+  cjsExports.from = function (value) {
+    return cjsExports.isValid(value) ? parseInt(value, 10) : undefined;
+  };
+  cjsExports.getPenaltyN1 = function (data) {
+    let size = data.size;
+    let points = 0;
+    let sameCountCol = 0;
+    let sameCountRow = 0;
+    let lastCol = null;
+    let lastRow = null;
+    for (let row = 0; row < size; row++) {
+      sameCountCol = sameCountRow = 0;
+      lastCol = lastRow = null;
+      for (let col = 0; col < size; col++) {
+        let a = data.get(row, col);
+        if (a === lastCol) sameCountCol++;
         else {
-          if (i >= 5) n += G.N1 + (i - 5);
-          ((s = a), (i = 1));
+          if (sameCountCol >= 5) points += PenaltyScores.N1 + (sameCountCol - 5);
+          lastCol = a;
+          sameCountCol = 1;
         }
-        if (((a = e.get(f, u)), a === l)) o++;
+        a = data.get(col, row);
+        if (a === lastRow) sameCountRow++;
         else {
-          if (o >= 5) n += G.N1 + (o - 5);
-          ((l = a), (o = 1));
+          if (sameCountRow >= 5) points += PenaltyScores.N1 + (sameCountRow - 5);
+          lastRow = a;
+          sameCountRow = 1;
         }
       }
-      if (i >= 5) n += G.N1 + (i - 5);
-      if (o >= 5) n += G.N1 + (o - 5);
+      if (sameCountCol >= 5) points += PenaltyScores.N1 + (sameCountCol - 5);
+      if (sameCountRow >= 5) points += PenaltyScores.N1 + (sameCountRow - 5);
     }
-    return n;
+    return points;
   };
-  yi.getPenaltyN2 = function (e) {
-    let size = e.size,
-      n = 0;
-    for (let i = 0; i < size - 1; i++)
-      for (let o = 0; o < size - 1; o++) {
-        let s = e.get(i, o) + e.get(i, o + 1) + e.get(i + 1, o) + e.get(i + 1, o + 1);
-        if (s === 4 || s === 0) n++;
+  cjsExports.getPenaltyN2 = function (data) {
+    let size = data.size;
+    let points = 0;
+    for (let row = 0; row < size - 1; row++)
+      for (let col = 0; col < size - 1; col++) {
+        let last =
+          data.get(row, col) + data.get(row, col + 1) + data.get(row + 1, col) + data.get(row + 1, col + 1);
+        if (last === 4 || last === 0) points++;
       }
-    return n * G.N2;
+    return points * PenaltyScores.N2;
   };
-  yi.getPenaltyN3 = function (e) {
-    let size = e.size,
-      n = 0,
-      i = 0,
-      o = 0;
-    for (let s = 0; s < size; s++) {
-      i = o = 0;
-      for (let l = 0; l < size; l++) {
-        if (((i = ((i << 1) & 2047) | e.get(s, l)), l >= 10 && (i === 1488 || i === 93))) n++;
-        if (((o = ((o << 1) & 2047) | e.get(l, s)), l >= 10 && (o === 1488 || o === 93))) n++;
+  cjsExports.getPenaltyN3 = function (data) {
+    let size = data.size;
+    let points = 0;
+    let bitsCol = 0;
+    let bitsRow = 0;
+    for (let row = 0; row < size; row++) {
+      bitsCol = bitsRow = 0;
+      for (let col = 0; col < size; col++) {
+        bitsCol = ((bitsCol << 1) & 2047) | data.get(row, col);
+        if (col >= 10 && (bitsCol === 1488 || bitsCol === 93)) points++;
+        bitsRow = ((bitsRow << 1) & 2047) | data.get(col, row);
+        if (col >= 10 && (bitsRow === 1488 || bitsRow === 93)) points++;
       }
     }
-    return n * G.N3;
+    return points * PenaltyScores.N3;
   };
-  yi.getPenaltyN4 = function (e) {
-    let r = 0,
-      n = e.data.length;
-    for (let o = 0; o < n; o++) r += e.data[o];
-    return Math.abs(Math.ceil((r * 100) / n / 5) - 10) * G.N4;
+  cjsExports.getPenaltyN4 = function (data) {
+    let darkCount = 0;
+    let modulesCount = data.data.length;
+    for (let i = 0; i < modulesCount; i++) darkCount += data.data[i];
+    return Math.abs(Math.ceil((darkCount * 100) / modulesCount / 5) - 10) * PenaltyScores.N4;
   };
-  function mi(t, e, r) {
-    switch (t) {
-      case yi.Patterns.PATTERN000:
-        return (e + r) % 2 === 0;
-      case yi.Patterns.PATTERN001:
-        return e % 2 === 0;
-      case yi.Patterns.PATTERN010:
-        return r % 3 === 0;
-      case yi.Patterns.PATTERN011:
-        return (e + r) % 3 === 0;
-      case yi.Patterns.PATTERN100:
-        return (Math.floor(e / 2) + Math.floor(r / 3)) % 2 === 0;
-      case yi.Patterns.PATTERN101:
-        return ((e * r) % 2) + ((e * r) % 3) === 0;
-      case yi.Patterns.PATTERN110:
-        return (((e * r) % 2) + ((e * r) % 3)) % 2 === 0;
-      case yi.Patterns.PATTERN111:
-        return (((e * r) % 3) + ((e + r) % 2)) % 2 === 0;
+  function getMaskAt(maskPattern, i, j) {
+    switch (maskPattern) {
+      case cjsExports.Patterns.PATTERN000:
+        return (i + j) % 2 === 0;
+      case cjsExports.Patterns.PATTERN001:
+        return i % 2 === 0;
+      case cjsExports.Patterns.PATTERN010:
+        return j % 3 === 0;
+      case cjsExports.Patterns.PATTERN011:
+        return (i + j) % 3 === 0;
+      case cjsExports.Patterns.PATTERN100:
+        return (Math.floor(i / 2) + Math.floor(j / 3)) % 2 === 0;
+      case cjsExports.Patterns.PATTERN101:
+        return ((i * j) % 2) + ((i * j) % 3) === 0;
+      case cjsExports.Patterns.PATTERN110:
+        return (((i * j) % 2) + ((i * j) % 3)) % 2 === 0;
+      case cjsExports.Patterns.PATTERN111:
+        return (((i * j) % 3) + ((i + j) % 2)) % 2 === 0;
       default:
-        throw Error("bad maskPattern:" + t);
+        throw Error("bad maskPattern:" + maskPattern);
     }
   }
-  yi.applyMask = function (e, r) {
-    let size = r.size;
-    for (let i = 0; i < size; i++)
-      for (let o = 0; o < size; o++) {
-        if (r.isReserved(o, i)) continue;
-        r.xor(o, i, mi(e, o, i));
+  cjsExports.applyMask = function (pattern, data) {
+    let size = data.size;
+    for (let col = 0; col < size; col++)
+      for (let row = 0; row < size; row++) {
+        if (data.isReserved(row, col)) continue;
+        data.xor(row, col, getMaskAt(pattern, row, col));
       }
   };
-  yi.getBestMask = function (e, r) {
-    let n = Object.keys(yi.Patterns).length,
-      i = 0,
-      o = 1 / 0;
-    for (let s = 0; s < n; s++) {
-      (r(s), yi.applyMask(s, e));
-      let l = yi.getPenaltyN1(e) + yi.getPenaltyN2(e) + yi.getPenaltyN3(e) + yi.getPenaltyN4(e);
-      if ((yi.applyMask(s, e), l < o)) ((o = l), (i = s));
+  cjsExports.getBestMask = function (data, setupFormatFunc) {
+    let numPatterns = Object.keys(cjsExports.Patterns).length;
+    let bestPattern = 0;
+    let lowerPenalty = 1 / 0;
+    for (let p = 0; p < numPatterns; p++) {
+      setupFormatFunc(p);
+      cjsExports.applyMask(p, data);
+      let penalty =
+        cjsExports.getPenaltyN1(data) +
+        cjsExports.getPenaltyN2(data) +
+        cjsExports.getPenaltyN3(data) +
+        cjsExports.getPenaltyN4(data);
+      cjsExports.applyMask(p, data);
+      if (penalty < lowerPenalty) {
+        lowerPenalty = penalty;
+        bestPattern = p;
+      }
     }
-    return i;
+    return bestPattern;
   };
 });
-
-export { Kt };
+export { require_mask_pattern };

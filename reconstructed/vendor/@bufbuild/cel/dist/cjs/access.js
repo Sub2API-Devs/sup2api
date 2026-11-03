@@ -6,72 +6,71 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../runtime/bun-runtime.js";
-import { av } from "./planner.js";
-import { bl } from "./error.js";
-import { MU } from "./field.js";
-import { Bi } from "./uint.js";
-import { Ei } from "./type.js";
+import { require_planner } from "./planner.js";
+import { require_error } from "./error.js";
+import { require_field } from "./field.js";
+import { require_uint } from "./uint.js";
+import { require_type } from "./type.js";
 
 //@ chunk-fq0cr76a.js:603440-611055 cjs-fingerprint
-var QU = x(function (XU) {
-  Object.defineProperty(XU, "__esModule", { value: !0 });
-  XU.ConcreteAttributeFactory = XU.ErrorAttr = void 0;
-  var $U = av(),
-    yr = bl(),
-    Mr = MU(),
-    VU = Bi(),
-    cr = Ei();
-  function s0(e, n, r, s) {
-    let resolved = s.resolve(n);
-    if (resolved === void 0) return;
-    if (yr.isCelError(resolved)) return resolved;
-    return e.newAccess(s.id, resolved, s.isOptional()).access(n, r);
+var require_access = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.ConcreteAttributeFactory = cjsExports.ErrorAttr = undefined;
+  var planner_js_1 = require_planner();
+  var error_js_1 = require_error();
+  var field_js_1 = require_field();
+  var uint_js_1 = require_uint();
+  var type_js_1 = require_type();
+  function attrAccess(factory, vars, obj, accAttr) {
+    let val = accAttr.resolve(vars);
+    if (val === undefined) return;
+    if (error_js_1.isCelError(val)) return val;
+    return factory.newAccess(accAttr.id, val, accAttr.isOptional()).access(vars, obj);
   }
-  function i0(e, n, r, s) {
-    let resolved = s.resolve(n);
-    if (resolved === void 0) return !1;
-    if (yr.isCelError(resolved)) return resolved;
-    return e.newAccess(s.id, resolved, s.isOptional()).isPresent(n, r);
+  function attrIsPresent(factory, vars, obj, accAttr) {
+    let val = accAttr.resolve(vars);
+    if (val === undefined) return false;
+    if (error_js_1.isCelError(val)) return val;
+    return factory.newAccess(accAttr.id, val, accAttr.isOptional()).isPresent(vars, obj);
   }
-  function o0(e, n, r, s, h) {
-    let resolved = s.resolve(n);
-    if (resolved === void 0) return;
-    if (yr.isCelError(resolved)) return resolved;
-    return e.newAccess(s.id, resolved, s.isOptional()).accessIfPresent(n, r, h);
+  function attrAccessIfPresent(factory, vars, obj, accAttr, presenceOnly) {
+    let val = accAttr.resolve(vars);
+    if (val === undefined) return;
+    if (error_js_1.isCelError(val)) return val;
+    return factory.newAccess(accAttr.id, val, accAttr.isOptional()).accessIfPresent(vars, obj, presenceOnly);
   }
-  function WU(e, n, r) {
-    if (r.length === 0) return n;
-    let s = n;
-    for (let h of r) {
-      let access = h.access(e, s);
-      if (access === void 0) return;
-      if (yr.isCelError(access)) return access;
-      s = access;
+  function applyAccesses(vars, obj, accesses) {
+    if (accesses.length === 0) return obj;
+    let cur = obj;
+    for (let access of accesses) {
+      let result = access.access(vars, cur);
+      if (result === undefined) return;
+      if (error_js_1.isCelError(result)) return result;
+      cur = result;
     }
-    return s;
+    return cur;
   }
-  class GU {
+  class AbsoluteAttr {
     id;
     nsNames;
     accesses_;
     registry;
     factory;
-    constructor(e, n, r, s, h) {
-      if (
-        ((this.id = e),
-        (this.nsNames = n),
-        (this.accesses_ = r),
-        (this.registry = s),
-        (this.factory = h),
-        n.length === 0)
-      )
-        throw Error("No names provided");
+    constructor(id, nsNames, accesses_, registry, factory) {
+      this.id = id;
+      this.nsNames = nsNames;
+      this.accesses_ = accesses_;
+      this.registry = registry;
+      this.factory = factory;
+      if (nsNames.length === 0) throw Error("No names provided");
     }
     isOptional() {
-      return !1;
+      return false;
     }
-    addAccess(e) {
-      this.accesses_.push(e);
+    addAccess(access) {
+      this.accesses_.push(access);
     }
     candidateNames() {
       return this.nsNames;
@@ -79,383 +78,411 @@ var QU = x(function (XU) {
     accesses() {
       return this.accesses_;
     }
-    access(e, n) {
-      return s0(this.factory, e, n, this);
+    access(vars, obj) {
+      return attrAccess(this.factory, vars, obj, this);
     }
-    isPresent(e, n) {
-      return i0(this.factory, e, n, this);
+    isPresent(vars, obj) {
+      return attrIsPresent(this.factory, vars, obj, this);
     }
-    accessIfPresent(e, n, r) {
-      return o0(this.factory, e, n, this, r);
+    accessIfPresent(vars, obj, presenceOnly) {
+      return attrAccessIfPresent(this.factory, vars, obj, this, presenceOnly);
     }
-    resolve(e) {
-      for (let nsName of this.nsNames) {
-        let resolved = e.resolve(nsName);
-        if (resolved !== void 0) {
-          if (yr.isCelError(resolved)) return resolved;
-          return WU(e, resolved, this.accesses_);
+    resolve(vars) {
+      for (let name of this.nsNames) {
+        let raw = vars.resolve(name);
+        if (raw !== undefined) {
+          if (error_js_1.isCelError(raw)) return raw;
+          return applyAccesses(vars, raw, this.accesses_);
         }
-        let ident = this.findIdent(nsName);
-        if (ident !== void 0 && this.accesses_.length === 0) return ident;
+        let typ = this.findIdent(name);
+        if (typ !== undefined && this.accesses_.length === 0) return typ;
       }
       return;
     }
-    findIdent(e) {
-      let message = this.registry.getMessage(e);
-      if (message) return cr.objectType(message);
-      if (e.indexOf(".") > 1) {
-        let index = e.lastIndexOf("."),
-          substring = e.substring(0, index),
-          substring_2 = e.substring(index + 1),
-          y = this.registry.getEnum(substring);
-        if (y) {
-          let found = y.values.find((S) => S.name === substring_2);
-          if (found) return BigInt(found.number);
+    findIdent(ident) {
+      let desc = this.registry.getMessage(ident);
+      if (desc) return type_js_1.objectType(desc);
+      if (ident.indexOf(".") > 1) {
+        let lastDot = ident.lastIndexOf(".");
+        let enumName = ident.substring(0, lastDot);
+        let valueName = ident.substring(lastDot + 1);
+        let descEnum = this.registry.getEnum(enumName);
+        if (descEnum) {
+          let enumValue = descEnum.values.find((v) => v.name === valueName);
+          if (enumValue) return BigInt(enumValue.number);
         }
       }
-      switch (e) {
+      switch (ident) {
         case "int":
-          return cr.CelScalar.INT;
+          return type_js_1.CelScalar.INT;
         case "uint":
-          return cr.CelScalar.UINT;
+          return type_js_1.CelScalar.UINT;
         case "double":
-          return cr.CelScalar.DOUBLE;
+          return type_js_1.CelScalar.DOUBLE;
         case "bool":
-          return cr.CelScalar.BOOL;
+          return type_js_1.CelScalar.BOOL;
         case "string":
-          return cr.CelScalar.STRING;
+          return type_js_1.CelScalar.STRING;
         case "bytes":
-          return cr.CelScalar.BYTES;
+          return type_js_1.CelScalar.BYTES;
         case "list":
-          return cr.listType(cr.CelScalar.DYN);
+          return type_js_1.listType(type_js_1.CelScalar.DYN);
         case "map":
-          return cr.mapType(cr.CelScalar.DYN, cr.CelScalar.DYN);
+          return type_js_1.mapType(type_js_1.CelScalar.DYN, type_js_1.CelScalar.DYN);
         case "null_type":
-          return cr.CelScalar.NULL;
+          return type_js_1.CelScalar.NULL;
         case "type":
-          return cr.CelScalar.TYPE;
+          return type_js_1.CelScalar.TYPE;
         default:
           return;
       }
     }
   }
-  class HU {
+  class ConditionalAttr {
     id;
     cond;
     t;
     f;
     factory;
-    constructor(e, n, r, s, h) {
-      ((this.id = e), (this.cond = n), (this.t = r), (this.f = s), (this.factory = h));
+    constructor(id, cond, t, f, factory) {
+      this.id = id;
+      this.cond = cond;
+      this.t = t;
+      this.f = f;
+      this.factory = factory;
     }
     isOptional() {
-      return !1;
+      return false;
     }
-    addAccess(e) {
-      (this.t.addAccess(e), this.f.addAccess(e));
+    addAccess(access) {
+      this.t.addAccess(access);
+      this.f.addAccess(access);
     }
-    access(e, n) {
-      return s0(this.factory, e, n, this);
+    access(vars, obj) {
+      return attrAccess(this.factory, vars, obj, this);
     }
-    isPresent(e, n) {
-      return i0(this.factory, e, n, this);
+    isPresent(vars, obj) {
+      return attrIsPresent(this.factory, vars, obj, this);
     }
-    accessIfPresent(e, n, r) {
-      return o0(this.factory, e, n, this, r);
+    accessIfPresent(vars, obj, presenceOnly) {
+      return attrAccessIfPresent(this.factory, vars, obj, this, presenceOnly);
     }
-    resolve(e) {
-      let n = this.cond.eval(e);
-      switch (!0) {
-        case n === !0:
-          return this.t.resolve(e);
-        case n === !1:
-          return this.f.resolve(e);
-        case yr.isCelError(n):
-          return n;
+    resolve(vars) {
+      let cond = this.cond.eval(vars);
+      switch (true) {
+        case cond === true:
+          return this.t.resolve(vars);
+        case cond === false:
+          return this.f.resolve(vars);
+        case error_js_1.isCelError(cond):
+          return cond;
       }
-      return yr.celError(
-        `found no matching overload for _?_:_ applied to '(${cr.celType(n).name})'`,
+      return error_js_1.celError(
+        `found no matching overload for _?_:_ applied to '(${type_js_1.celType(cond).name})'`,
         this.id,
       );
     }
   }
-  class KU {
+  class MaybeAttr {
     id;
     attrs;
     factory;
-    constructor(e, n, r) {
-      ((this.id = e), (this.attrs = n), (this.factory = r));
+    constructor(id, attrs, factory) {
+      this.id = id;
+      this.attrs = attrs;
+      this.factory = factory;
     }
     isOptional() {
-      return !1;
+      return false;
     }
-    addAccess(e) {
-      let n = [],
-        r;
-      if (e instanceof iv) r = e.name;
+    addAccess(access) {
+      let augmentedNames = [];
+      let str;
+      if (access instanceof StringAccess) str = access.name;
       for (let attr of this.attrs) {
-        if (r !== void 0 && attr.accesses().length === 0)
-          for (let h of attr.candidateNames()) n.push(h + "." + r);
-        attr.addAccess(e);
+        if (str !== undefined && attr.accesses().length === 0)
+          for (let name of attr.candidateNames()) augmentedNames.push(name + "." + str);
+        attr.addAccess(access);
       }
-      if (n.length > 0) {
-        let absolute = this.factory.createAbsolute(this.id, n);
-        this.attrs.unshift(absolute);
+      if (augmentedNames.length > 0) {
+        let newAttr = this.factory.createAbsolute(this.id, augmentedNames);
+        this.attrs.unshift(newAttr);
       }
     }
-    access(e, n) {
-      return s0(this.factory, e, n, this);
+    access(vars, obj) {
+      return attrAccess(this.factory, vars, obj, this);
     }
-    isPresent(e, n) {
-      return i0(this.factory, e, n, this);
+    isPresent(vars, obj) {
+      return attrIsPresent(this.factory, vars, obj, this);
     }
-    accessIfPresent(e, n, r) {
-      return o0(this.factory, e, n, this, r);
+    accessIfPresent(vars, obj, presenceOnly) {
+      return attrAccessIfPresent(this.factory, vars, obj, this, presenceOnly);
     }
-    resolve(e) {
+    resolve(vars) {
       for (let attr of this.attrs) {
-        let resolved = attr.resolve(e);
-        if (resolved !== void 0) return resolved;
+        let val = attr.resolve(vars);
+        if (val !== undefined) return val;
       }
       return;
     }
   }
-  class qU {
+  class RelativeAttr {
     id;
     operand;
     accesses_;
     factory;
-    constructor(e, n, r, s) {
-      ((this.id = e), (this.operand = n), (this.accesses_ = r), (this.factory = s));
+    constructor(id, operand, accesses_, factory) {
+      this.id = id;
+      this.operand = operand;
+      this.accesses_ = accesses_;
+      this.factory = factory;
     }
     isOptional() {
-      return !1;
+      return false;
     }
-    addAccess(e) {
-      this.accesses_.push(e);
+    addAccess(access) {
+      this.accesses_.push(access);
     }
-    access(e, n) {
-      return s0(this.factory, e, n, this);
+    access(vars, obj) {
+      return attrAccess(this.factory, vars, obj, this);
     }
-    isPresent(e, n) {
-      return i0(this.factory, e, n, this);
+    isPresent(vars, obj) {
+      return attrIsPresent(this.factory, vars, obj, this);
     }
-    accessIfPresent(e, n, r) {
-      return o0(this.factory, e, n, this, r);
+    accessIfPresent(vars, obj, presenceOnly) {
+      return attrAccessIfPresent(this.factory, vars, obj, this, presenceOnly);
     }
-    resolve(e) {
-      let n = this.operand.eval(e);
-      if (yr.isCelError(n)) return n;
-      return WU(e, n, this.accesses_);
+    resolve(vars) {
+      let v = this.operand.eval(vars);
+      if (error_js_1.isCelError(v)) return v;
+      return applyAccesses(vars, v, this.accesses_);
     }
   }
-  class iv {
+  class StringAccess {
     id;
     name;
     celVal;
     optional;
-    constructor(e, n, r, s) {
-      ((this.id = e), (this.name = n), (this.celVal = r), (this.optional = s));
+    constructor(id, name, celVal, optional) {
+      this.id = id;
+      this.name = name;
+      this.celVal = celVal;
+      this.optional = optional;
     }
     isOptional() {
       return this.optional;
     }
-    access(e, n) {
-      let accessByName = Mr.accessByName(n, this.name);
-      if (accessByName === void 0 && !this.optional) return Td(this.id, this.name);
-      return accessByName;
+    access(_vars, obj) {
+      let val = field_js_1.accessByName(obj, this.name);
+      if (val === undefined && !this.optional) return fieldNotFound(this.id, this.name);
+      return val;
     }
-    isPresent(e, n) {
-      let isSet = Mr.isSet(n, this.name);
-      if (isSet === void 0) return Td(this.id, this.name);
-      return isSet;
+    isPresent(_vars, obj) {
+      let set = field_js_1.isSet(obj, this.name);
+      if (set === undefined) return fieldNotFound(this.id, this.name);
+      return set;
     }
-    accessIfPresent(e, n, r) {
-      let accessByName = Mr.accessByName(n, this.name);
-      if (accessByName === void 0 && !this.optional && !r) return Td(this.id, this.name);
-      return accessByName;
+    accessIfPresent(_vars, obj, presenceOnly) {
+      let val = field_js_1.accessByName(obj, this.name);
+      if (val === undefined && !this.optional && !presenceOnly) return fieldNotFound(this.id, this.name);
+      return val;
     }
   }
-  class jU {
+  class BoolAccess {
     id;
     index;
     optional;
-    constructor(e, n, r) {
-      ((this.id = e), (this.index = n), (this.optional = r));
+    constructor(id, index, optional) {
+      this.id = id;
+      this.index = index;
+      this.optional = optional;
     }
     isOptional() {
       return this.optional;
     }
-    access(e, n) {
-      if (n === void 0) return n;
-      let accessByIndex = Mr.accessByIndex(n, this.index);
-      if (accessByIndex === void 0 && !this.optional) return Td(this.id, this.index);
-      return accessByIndex;
+    access(_vars, obj) {
+      if (obj === undefined) return obj;
+      let raw = field_js_1.accessByIndex(obj, this.index);
+      if (raw === undefined && !this.optional) return fieldNotFound(this.id, this.index);
+      return raw;
     }
-    isPresent(e, n) {
-      if (Mr.accessByIndex(n, this.index) === void 0 && !this.optional) return Td(this.id, this.index);
-      return !0;
+    isPresent(_vars, obj) {
+      if (field_js_1.accessByIndex(obj, this.index) === undefined && !this.optional)
+        return fieldNotFound(this.id, this.index);
+      return true;
     }
-    accessIfPresent(e, n, r) {
-      let accessByIndex = Mr.accessByIndex(n, this.index);
-      if (accessByIndex === void 0 && !this.optional) return Td(this.id, this.index);
-      return accessByIndex;
-    }
-  }
-  class YU {
-    id;
-    index;
-    celVal;
-    optional;
-    constructor(e, n, r, s) {
-      ((this.id = e), (this.index = n), (this.celVal = r), (this.optional = s));
-    }
-    isOptional() {
-      return this.optional;
-    }
-    access(e, n) {
-      if (n === void 0) return n;
-      let accessByIndex = Mr.accessByIndex(n, this.index);
-      if (accessByIndex === void 0 && !this.optional) return Cd(this.id, this.index, -1);
-      return accessByIndex;
-    }
-    isPresent(e, n) {
-      if (Mr.accessByIndex(n, this.index) === void 0 && !this.optional) return Cd(this.id, this.index, -1);
-      return !0;
-    }
-    accessIfPresent(e, n, r) {
-      let accessByIndex = Mr.accessByIndex(n, this.index);
-      if (accessByIndex === void 0 && !this.optional) return Cd(this.id, this.index, -1);
-      return accessByIndex;
+    accessIfPresent(_vars, obj, _presenceOnly) {
+      let raw = field_js_1.accessByIndex(obj, this.index);
+      if (raw === undefined && !this.optional) return fieldNotFound(this.id, this.index);
+      return raw;
     }
   }
-  class sv {
+  class NumAccess {
     id;
     index;
     celVal;
     optional;
-    constructor(e, n, r, s) {
-      ((this.id = e), (this.index = n), (this.celVal = r), (this.optional = s));
+    constructor(id, index, celVal, optional) {
+      this.id = id;
+      this.index = index;
+      this.celVal = celVal;
+      this.optional = optional;
     }
-    access(e, n) {
-      if (n === void 0) return n;
-      let accessByIndex = Mr.accessByIndex(n, this.index);
-      if (accessByIndex === void 0 && !this.optional) return Cd(this.id, Number(this.index), -1);
-      return accessByIndex;
+    isOptional() {
+      return this.optional;
     }
-    isPresent(e, n) {
-      if (Mr.accessByIndex(n, this.index) === void 0 && !this.optional)
-        return Cd(this.id, Number(this.index), -1);
-      return !0;
+    access(_vars, obj) {
+      if (obj === undefined) return obj;
+      let raw = field_js_1.accessByIndex(obj, this.index);
+      if (raw === undefined && !this.optional) return indexOutOfBounds(this.id, this.index, -1);
+      return raw;
     }
-    accessIfPresent(e, n, r) {
-      let accessByIndex = Mr.accessByIndex(n, this.index);
-      if (accessByIndex === void 0 && !this.optional) return Cd(this.id, Number(this.index), -1);
-      return accessByIndex;
+    isPresent(_vars, obj) {
+      if (field_js_1.accessByIndex(obj, this.index) === undefined && !this.optional)
+        return indexOutOfBounds(this.id, this.index, -1);
+      return true;
+    }
+    accessIfPresent(_vars, obj, _presenceOnly) {
+      let raw = field_js_1.accessByIndex(obj, this.index);
+      if (raw === undefined && !this.optional) return indexOutOfBounds(this.id, this.index, -1);
+      return raw;
+    }
+  }
+  class IntAccess {
+    id;
+    index;
+    celVal;
+    optional;
+    constructor(id, index, celVal, optional) {
+      this.id = id;
+      this.index = index;
+      this.celVal = celVal;
+      this.optional = optional;
+    }
+    access(_vars, obj) {
+      if (obj === undefined) return obj;
+      let raw = field_js_1.accessByIndex(obj, this.index);
+      if (raw === undefined && !this.optional) return indexOutOfBounds(this.id, Number(this.index), -1);
+      return raw;
+    }
+    isPresent(_vars, obj) {
+      if (field_js_1.accessByIndex(obj, this.index) === undefined && !this.optional)
+        return indexOutOfBounds(this.id, Number(this.index), -1);
+      return true;
+    }
+    accessIfPresent(_vars, obj, _presenceOnly) {
+      let raw = field_js_1.accessByIndex(obj, this.index);
+      if (raw === undefined && !this.optional) return indexOutOfBounds(this.id, Number(this.index), -1);
+      return raw;
     }
     isOptional() {
       return this.optional;
     }
   }
-  class ov {
+  class ErrorAttr {
     id;
     error;
     opt;
-    constructor(e, n, r) {
-      ((this.id = e), (this.error = n), (this.opt = r));
+    constructor(id, error, opt) {
+      this.id = id;
+      this.error = error;
+      this.opt = opt;
     }
-    addAccess(e) {}
-    resolve(e) {
+    addAccess(_access) {}
+    resolve(_vars) {
       return this.error;
     }
     isOptional() {
       return this.opt;
     }
-    access(e, n) {
+    access(_vars, _obj) {
       return this.error;
     }
-    isPresent(e, n) {
+    isPresent(_vars, _obj) {
       return this.error;
     }
-    accessIfPresent(e, n, r) {
+    accessIfPresent(_vars, _obj, _presenceOnly) {
       return this.error;
     }
   }
-  XU.ErrorAttr = ov;
-  class ZU {
+  cjsExports.ErrorAttr = ErrorAttr;
+  class EvalAccess {
     id;
     key;
     factory;
     optional;
-    constructor(e, n, r, s) {
-      ((this.id = e), (this.key = n), (this.factory = r), (this.optional = s));
+    constructor(id, key, factory, optional) {
+      this.id = id;
+      this.key = key;
+      this.factory = factory;
+      this.optional = optional;
     }
-    access(e, n) {
-      if (n === void 0) return n;
-      let r = this.key.eval(e);
-      if (yr.isCelError(r)) return r;
-      return this.factory.newAccess(this.id, r, this.optional).access(e, n);
+    access(vars, obj) {
+      if (obj === undefined) return obj;
+      let key = this.key.eval(vars);
+      if (error_js_1.isCelError(key)) return key;
+      return this.factory.newAccess(this.id, key, this.optional).access(vars, obj);
     }
-    isPresent(e, n) {
-      if (n === void 0) return !1;
-      let r = this.key.eval(e);
-      if (yr.isCelError(r)) return r;
-      return this.factory.newAccess(this.id, r, this.optional).isPresent(e, n);
+    isPresent(vars, obj) {
+      if (obj === undefined) return false;
+      let key = this.key.eval(vars);
+      if (error_js_1.isCelError(key)) return key;
+      return this.factory.newAccess(this.id, key, this.optional).isPresent(vars, obj);
     }
-    accessIfPresent(e, n, r) {
-      let s = this.key.eval(e);
-      if (yr.isCelError(s)) return s;
-      return this.factory.newAccess(this.id, s, this.optional).accessIfPresent(e, n, r);
+    accessIfPresent(vars, obj, presenceOnly) {
+      let key = this.key.eval(vars);
+      if (error_js_1.isCelError(key)) return key;
+      return this.factory.newAccess(this.id, key, this.optional).accessIfPresent(vars, obj, presenceOnly);
     }
     isOptional() {
       return this.optional;
     }
   }
-  class zU {
+  class ConcreteAttributeFactory {
     registry;
     container;
-    constructor(e, n) {
-      ((this.registry = e), (this.container = n));
+    constructor(registry, container) {
+      this.registry = registry;
+      this.container = container;
     }
-    createAbsolute(e, n) {
-      return new GU(e, n, [], this.registry, this);
+    createAbsolute(id, names) {
+      return new AbsoluteAttr(id, names, [], this.registry, this);
     }
-    createConditional(e, n, r, s) {
-      return new HU(e, n, r, s, this);
+    createConditional(id, cond, t, f) {
+      return new ConditionalAttr(id, cond, t, f, this);
     }
-    createMaybe(e, n) {
-      return new KU(e, [this.createAbsolute(e, this.container.resolveCandidateNames(n))], this);
+    createMaybe(id, name) {
+      return new MaybeAttr(id, [this.createAbsolute(id, this.container.resolveCandidateNames(name))], this);
     }
-    createRelative(e, n) {
-      return new qU(e, n, [], this);
+    createRelative(id, operand) {
+      return new RelativeAttr(id, operand, [], this);
     }
-    newAccess(e, n, r) {
-      switch (typeof n) {
+    newAccess(id, val, opt) {
+      switch (typeof val) {
         case "boolean":
-          return new jU(e, n, r);
+          return new BoolAccess(id, val, opt);
         case "number":
-          return new YU(e, n, n, r);
+          return new NumAccess(id, val, val, opt);
         case "bigint":
-          return new sv(e, n, n, r);
+          return new IntAccess(id, val, val, opt);
         case "string":
-          return new iv(e, n, n, r);
+          return new StringAccess(id, val, val, opt);
         case "object":
-          if (n instanceof $U.EvalAttr) return new ZU(e, n, this, r);
-          if (VU.isCelUint(n)) return new sv(e, n.value, n, r);
+          if (val instanceof planner_js_1.EvalAttr) return new EvalAccess(id, val, this, opt);
+          if (uint_js_1.isCelUint(val)) return new IntAccess(id, val.value, val, opt);
           break;
         default:
           break;
       }
-      return new ov(e, yr.celError("unsupported key type", e), r);
+      return new ErrorAttr(id, error_js_1.celError("unsupported key type", id), opt);
     }
   }
-  XU.ConcreteAttributeFactory = zU;
-  function Td(e, n) {
-    return yr.celError(`field not found: ${String(n)}`, e);
+  cjsExports.ConcreteAttributeFactory = ConcreteAttributeFactory;
+  function fieldNotFound(id, name) {
+    return error_js_1.celError(`field not found: ${String(name)}`, id);
   }
-  function Cd(e, n, r) {
-    return yr.celError(`index ${n} out of bounds [0, ${r})`, e);
+  function indexOutOfBounds(id, index, length) {
+    return error_js_1.celError(`index ${index} out of bounds [0, ${length})`, id);
   }
 });
-
-export { QU };
+export { require_access };

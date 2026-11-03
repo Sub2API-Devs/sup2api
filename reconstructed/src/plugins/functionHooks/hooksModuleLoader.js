@@ -9,195 +9,48 @@
  * attribution: placement 95
  */
 import { AsyncResource } from "async_hooks";
-import {
-  resolve as resolve_2,
-  resolve as resolve_3,
-  resolve as resolve_4,
-  resolve as resolve_5,
-  resolve as resolve_6,
-  resolve as resolve_7,
-  resolve as resolve_8,
-  resolve as resolve_9,
-  resolve as resolve_10,
-  resolve as resolve_11,
-  resolve as resolve_12,
-  resolve as resolve_13,
-  resolve as resolve_14,
-  resolve as resolve_15,
-  resolve as resolve_16,
-  resolve as resolve_17,
-  resolve as resolve_18,
-  resolve as resolve_19,
-  resolve as resolve_20,
-  resolve as resolve_21,
-  resolve as resolve_22,
-  resolve as resolve_23,
-  resolve as resolve_24,
-  resolve as resolve_25,
-  resolve as resolve_26,
-  resolve as resolve_27,
-  resolve as resolve_28,
-  resolve as resolve_29,
-  resolve as resolve_30,
-  resolve as resolve_31,
-  resolve as resolve_32,
-  resolve as resolve_33,
-  resolve as resolve_34,
-  resolve as resolve_35,
-  resolve as resolve_36,
-  resolve as resolve_37,
-  resolve as resolve_38,
-  resolve as resolve_39,
-  resolve as resolve_40,
-  resolve as resolve_41,
-  resolve as resolve_42,
-  resolve as resolve_43,
-  resolve as resolve_44,
-  resolve as resolve_45,
-  resolve as resolve_46,
-  resolve as resolve_47,
-  resolve as resolve_48,
-  resolve as resolve_49,
-  resolve as resolve_50,
-  resolve as resolve_51,
-  resolve as resolve_52,
-  resolve as resolve_53,
-  resolve as resolve_54,
-  resolve as resolve_55,
-  resolve as resolve_56,
-  resolve as resolve_57,
-  resolve as resolve_58,
-  resolve as resolve_59,
-  resolve as resolve_60,
-  sep,
-  sep as sep_2,
-  sep as sep_3,
-  sep as sep_4,
-  sep as sep_5,
-  sep as sep_6,
-  sep as sep_7,
-  sep as sep_8,
-  sep as sep_9,
-  sep as sep_10,
-  sep as sep_11,
-  sep as sep_12,
-  sep as sep_13,
-  sep as sep_14,
-  sep as sep_15,
-  sep as sep_16,
-  sep as sep_17,
-  sep as sep_18,
-  sep as sep_19,
-  sep as sep_20,
-  sep as sep_21,
-  sep as sep_22,
-  sep as sep_23,
-  sep as sep_24,
-  sep as sep_25,
-  sep as sep_26,
-  sep as sep_27,
-  sep as sep_28,
-  sep as sep_29,
-  sep as sep_30,
-  sep as sep_31,
-  sep as sep_32,
-  sep as sep_33,
-  sep as sep_34,
-  sep as sep_35,
-  sep as sep_36,
-  sep as sep_37,
-  sep as sep_38,
-  sep as sep_39,
-  sep as sep_40,
-  sep as sep_41,
-  sep as sep_42,
-  sep as sep_43,
-  sep as sep_44,
-  sep as sep_45,
-  sep as sep_46,
-  sep as sep_47,
-  sep as sep_48,
-  sep as sep_49,
-  sep as sep_50,
-  sep as sep_51,
-  sep as sep_52,
-  sep as sep_53,
-  sep as sep_54,
-  sep as sep_55,
-  sep as sep_56,
-  sep as sep_57,
-  sep as sep_58,
-  sep as sep_59,
-  sep as sep_60,
-  sep as sep_61,
-  sep as sep_62,
-  sep as sep_63,
-  sep as sep_64,
-  sep as sep_65,
-  sep as sep_66,
-  sep as sep_67,
-  sep as sep_68,
-  sep as sep_69,
-  sep as sep_70,
-  sep as sep_71,
-  sep as sep_72,
-  sep as sep_73,
-} from "path";
-import {
-  isDeepStrictEqual,
-  isDeepStrictEqual as isDeepStrictEqual_2,
-  isDeepStrictEqual as isDeepStrictEqual_3,
-  isDeepStrictEqual as isDeepStrictEqual_4,
-  isDeepStrictEqual as isDeepStrictEqual_5,
-  isDeepStrictEqual as isDeepStrictEqual_6,
-  isDeepStrictEqual as isDeepStrictEqual_7,
-  isDeepStrictEqual as isDeepStrictEqual_8,
-  isDeepStrictEqual as isDeepStrictEqual_9,
-  isDeepStrictEqual as isDeepStrictEqual_10,
-  isDeepStrictEqual as isDeepStrictEqual_11,
-  isDeepStrictEqual as isDeepStrictEqual_12,
-  isDeepStrictEqual as isDeepStrictEqual_13,
-  isDeepStrictEqual as isDeepStrictEqual_14,
-  isDeepStrictEqual as isDeepStrictEqual_15,
-  isDeepStrictEqual as isDeepStrictEqual_16,
-  isDeepStrictEqual as isDeepStrictEqual_17,
-  isDeepStrictEqual as isDeepStrictEqual_18,
-  isDeepStrictEqual as isDeepStrictEqual_19,
-} from "util";
-import { ge } from "../../utils/identity.js";
+import { resolve as resolve_2, sep } from "path";
+import { isDeepStrictEqual } from "util";
+import { identity as identity_2 } from "../../utils/identity.js";
 import { getPrintOutputFormat, getIsNonInteractiveSession } from "../../bootstrap/state.js";
 import { env } from "../../utils/env.js";
 import { writeToStderr } from "../../utils/process.js";
 import { marketplaceOf, pluginDisplayKey } from "../../utils/plugins/pluginIdentifier.js";
 import { INLINE_PLUGIN_MARKETPLACE } from "../../utils/telemetry/pluginTelemetry.js";
 import { stripControlChars as stripControlChars_3 } from "../../utils/settings/writeQueues.js";
-import { lCn, describeMatcher, ZUi } from "../../utils/hooks/functionHookMatchers.js";
-import { reportPluginProblem, pluginStorageKey, moduleMatcherAdmits, q4o, dkt } from "./hooksWorkerClient.js";
+import { PROTO_KEY, describeMatcher, reviveMatcherDefault } from "../../utils/hooks/functionHookMatchers.js";
+import {
+  reportPluginProblem,
+  pluginStorageKey,
+  moduleMatcherAdmits,
+  joinedKeys,
+  joinLabels,
+} from "./hooksWorkerClient.js";
 import { adviseUiRenderMatcher } from "./sites/uiSites.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { errorMessage } from "../../utils/errors.js";
-import { HOOK_EVENTS as HOOK_EVENTS_2, isHookEvent, isPluginDefinedEvent } from "./hookApiSurface.js";
+import { HOOK_EVENTS_2 as HOOK_EVENTS_2_2, isHookEvent, isPluginDefinedEvent } from "./hookApiSurface.js";
 import {
   CORE_ORIGIN,
   isEventPattern,
   matchesEventPattern,
-  jeo,
-  vSi,
+  eventPatternError,
+  nameOfEventPattern,
   matchesEventForPlugin,
   hooksModuleFiles,
 } from "./eventPatterns.js";
-import { HooksError, Aos, SIe, _xt, lpr } from "./hooksErrors.js";
+import { HooksError, causeString, envUnloadedError, tagError, tagPayload } from "./hooksErrors.js";
 import { tiersBeneath } from "./builtinHooksModule.js";
 import {
   telemetryStreamRefusal,
-  kqs,
+  telemetryRefSummary,
   listLinkedFiles,
   scanHooksModule,
   scanSealedHooksModule,
 } from "./hooksModuleScan.js";
 import { isOfficialMarketplacePlugin, classifyPluginOrigin } from "./panes.js";
-import { nCn } from "./moduleLoader.js";
-import { to } from "../../utils/valueSlot.js";
+import { createMemoMap } from "./moduleLoader.js";
+import { createValueSlot } from "../../utils/valueSlot.js";
 import {
   isOutsideOptions,
   clearPluginOptionsCache,
@@ -209,8 +62,8 @@ import {
 } from "../../utils/plugins/pluginOptionsStorage.js";
 import { pluginIdAliases, trustedPluginSetting } from "../../utils/plugins/pluginConfigSources.js";
 import { validateUserConfig } from "../../utils/plugins/mcpbHandler.js";
-import { Wq } from "../../utils/plugins/loadPluginHooks.js";
-import { pickNonSensitiveOptions, readSealedPluginTexts, x$t } from "./sealedPlugins.js";
+import { hasTrustedOnlyBuiltinPlugin } from "../../utils/plugins/loadPluginHooks.js";
+import { pickNonSensitiveOptions, readSealedPluginTexts, withSealedPlugin } from "./sealedPlugins.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { getSettingsForSource, getSettingsParseErrorsForSource } from "../../utils/settings/settings.js";
 import { loadHooksModuleGraph } from "./moduleScan.js";
@@ -224,151 +77,191 @@ import {
   admissionChangedListener,
   HookAdmissionRefusal,
 } from "../../utils/hooks.js";
-import { R6r, x6r, isModuleAdmitted } from "../../utils/plugins/functionHooks/admission.js";
+import {
+  moduleAdmissionCache,
+  moduleAdmissionCacheB,
+  isModuleAdmitted,
+} from "../../utils/plugins/functionHooks/admission.js";
 import { getVouchedPolicyPluginIds, resolveManagedPluginOrder } from "../../utils/plugins/managedPlugins.js";
 import { resolveManagedPluginDigests } from "../../utils/plugins/managedPluginSeating.js";
-import { pluginTier, createWithheldElementWarner, freeze_4 as freeze_4_2 } from "./dispatch/chain.js";
-import { cpr } from "../../utils/permissions/permissions.js";
+import { pluginTier, createWithheldElementWarner, Y6t } from "./dispatch/chain.js";
+import { copsSimilar } from "../../utils/permissions/permissions.js";
 import { getHostState } from "../../utils/hostEnvironment.js";
-import { lp, G3 } from "./surfaceBinding.js";
-import { M$e } from "../../services/mcp/mcpClientCapabilities.js";
+import { currentSurfaceBinding, surfaceComposer } from "./surfaceBinding.js";
+import { isModuleAdmittedByName } from "../../services/mcp/mcpClientCapabilities.js";
 import { getPluginRegistry } from "../../utils/plugins/pluginLoadState.js";
 import { logError } from "../../utils/log.js";
-import { jbi, Bbi } from "./vm/boundaryCopy.js";
+import { vmCreateElement, vmFragment } from "./vm/boundaryCopy.js";
 import { isBuiltinPluginId, getBuiltinPlugin } from "../builtinPlugins.js";
-import { isPlainObject as isPlainObject_4 } from "../../utils/isPlainObject.js";
+import { isPlainObject as isPlainObject_5 } from "../../utils/isPlainObject.js";
 import { buildElementTable } from "./ui/elements.js";
-import { createSurfaceAnswerCache, Oeo, noStreamingOps } from "./vm/moduleLoader.js";
+import { createSurfaceAnswerCache, cachedResolveAnswer, noStreamingOps } from "./vm/moduleLoader.js";
 import { registerHooksModule } from "./api/register.js";
 import { uniq, count } from "../../utils/collections.js";
 import { ensureNativeHost, ensureEnvironmentHost, initHooksHost } from "./hooksWorkerHost.js";
-import { releaseWaitingCalls, GAe } from "./commandApi.js";
-import { fLr, vOn } from "./modLoadTelemetry.js";
-import { dispatchHookCall, hookPluginLabel, Yni } from "./hookDispatch.js";
-import { _ee } from "../../utils/cloudTrash.js";
-import { or } from "../../utils/settings/commandSyncNames.js";
+import { releaseWaitingCalls, forgetCachedDescribe } from "./commandApi.js";
+import { countModLoadEvent, logModLoadFailed } from "./modLoadTelemetry.js";
+import { dispatchHookCall, hookPluginLabel, PLUGIN_UNLOADED_TEXT } from "./hookDispatch.js";
+import { moveToCloudTrash } from "../../utils/cloudTrash.js";
+import { invalidateCommandNames } from "../../utils/settings/commandSyncNames.js";
 import { assertPluginHooksAdmitted } from "../../utils/hooks/hookPolicyHold.js";
 import { logFeatureBad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 import {
-  glt,
-  Woe,
+  setKnownArgs,
+  invalidateAllHookedCaches,
   publishRenderPlugins,
   forgetPlugin,
   liftWithholdings,
   resetWithholdings,
-  mlt,
+  bumpGeneration,
   foldBaseForRespawn,
-  foldBaseWithout,
-  aBn,
+  foldBaseWithout_2,
+  isCrashedOrWithholding,
   withheldNounsOf,
   reportWorkerCrashWithholdings,
-  jes,
-  Ges,
+  foldBaseWithout,
+  lastFoldSummary,
   recordRefoldResult,
 } from "./sameThreadHost.js";
 import {
-  Rx,
+  PREVIOUS_VERSION_UNLOADED,
   shownPluginInfo,
   admitBuiltModules,
-  bBn,
+  runWhileAdmitting,
   judgePluginRegister,
   registerJudges,
   describeRegisterRefusal,
 } from "./pluginRegister.js";
 import {
   findReloadTriggerEvent,
-  ABn,
+  PARTIAL_REFOLD_TEXT,
   engineCreateFailedError,
   abandonIfWorkerDied,
   buildEngineApi,
 } from "./engineCreate.js";
 import { providerRank } from "./providerTiers.js";
 import { dependencyRefMatches, qualifyDependency } from "../../utils/plugins/dependencyResolver.js";
-import { SLOW_HOOK_REPORT_INTERVAL_MS } from "./dispatch/slowHookReports.js";
-import { freeze_3 as freeze_3_2 } from "./ui/renderSites.js";
-import { Y3 } from "./mcpServerHooks.js";
-import { qY } from "./mcpApi.js";
-import { XAe, ZV, l4 } from "./apiDispatch.js";
+import { SLOW_HOOK_REPORT_INTERVAL_MS_2 } from "./dispatch/slowHookReports.js";
+import { TUi } from "./ui/renderSites.js";
+import { forgetMcpServerFor } from "./mcpServerHooks.js";
+import { forgetMcpConnectsFor } from "./mcpApi.js";
+import { noteWorkersLoaded, workerSlots, storageIdOf } from "./apiDispatch.js";
 import { emit } from "../../components/permissions/AskUserQuestionPermissionRequest/uiRenderHook.js";
-import { ser } from "./ui/renderInstances.js";
-import { gMe } from "./promptApi.js";
+import { invalidateAll } from "./ui/renderInstances.js";
+import { forgetSessionStartCall } from "./promptApi.js";
 import { isStoredLoginPinned } from "../../cli/headlessCloud/attachServe.js";
-import { IT } from "../hooksModules/loadedModuleFilters.js";
+import { loadedModuleArgs } from "../hooksModules/loadedModuleFilters.js";
 
 //@ chunk-e6aww6q8.js:733946-733981 placement
-var kFt = ge(new Set(), (e) => e.clear());
+/**
+ * 内联问题去重集
+ */
+var inlineProblemsSeen = identity_2(new Set(), (e) => e.clear());
 //@ chunk-e6aww6q8.js:733981-734014 placement
-var Jpe = ge([], (e) => {
+/**
+ * 延迟输出的问题行
+ */
+var deferredProblemLines = identity_2([], (e) => {
   e.length = 0;
 });
 //@ chunk-e6aww6q8.js:734014-734086 placement
-function Zpe() {
+/**
+ * 文本输出且非 bg 会话
+ */
+function isPlainTextSession() {
   return getPrintOutputFormat() === "text" && env.CLAUDE_CODE_SESSION_KIND !== "bg";
 }
 //@ chunk-e6aww6q8.js:734086-734165 placement
-function bNi() {
-  let splice = Jpe.splice(0);
-  if (!Zpe()) return;
-  for (let n of splice)
+/**
+ * 输出延迟的问题
+ */
+function flushDeferredProblems() {
+  let e = deferredProblemLines.splice(0);
+  if (!isPlainTextSession()) return;
+  for (let n of e)
     writeToStderr(`${n}
 `);
 }
 //@ chunk-e6aww6q8.js:734165-734200 placement
-var Uje = ge(new Set(), (e) => e.clear());
+/**
+ * 已报告的内联问题
+ */
+var reportedInlineProblems = identity_2(new Set(), (e) => e.clear());
+//@ chunk-e6aww6q8.js:734200-734378 placement
 /**
  * 非交互会话里，内联插件的问题输出到 stderr（去重；格式化输出时先缓存）。
  */
-//@ chunk-e6aww6q8.js:734200-734378 placement
 function reportInlinePluginNotice(e, n) {
   let r = marketplaceOf(e.source) === INLINE_PLUGIN_MARKETPLACE;
   if (!getIsNonInteractiveSession() || !r) return;
   let s = stripControlChars_3(`${e.name}: ${n}`);
-  if (Uje.has(s)) return;
-  if ((Uje.add(s), getPrintOutputFormat() === null)) {
-    Jpe.push(s);
+  if (reportedInlineProblems.has(s)) return;
+  reportedInlineProblems.add(s);
+  if (getPrintOutputFormat() === null) {
+    deferredProblemLines.push(s);
     return;
   }
-  if (Zpe())
+  if (isPlainTextSession())
     writeToStderr(`${s}
 `);
 }
+//@ chunk-e6aww6q8.js:734378-734603 placement
 /**
  * 在所有宿主的进行中分发上执行回调。
  */
-//@ chunk-e6aww6q8.js:734378-734603 placement
 function withInFlightDispatches(e, n, r) {
-  let filtered = [e.state.environmentHost, e.state.nativeHost].filter((h) => h !== void 0);
-  return r(n, { [Symbol.iterator]: () => filtered.flatMap((h) => [...h.inFlight()]).values() }, (h) =>
-    filtered.map((y) => y.nameOf(h)).find((y) => y !== void 0),
+  let filtered = [e.state.environmentHost, e.state.nativeHost].filter((h) => h !== undefined);
+  return r(
+    n,
+    {
+      [Symbol.iterator]: () => filtered.flatMap((h) => [...h.inFlight()]).values(),
+    },
+    (h) => filtered.map((y) => y.nameOf(h)).find((y) => y !== undefined),
   );
 }
+//@ chunk-e6aww6q8.js:734603-734705 placement
 /**
  * 取 tool.call 事件中的工具名。
  */
-//@ chunk-e6aww6q8.js:734603-734705 placement
-function toolNameOfCall(e, n) {
-  let r = e === "tool.call" && "tool" in n ? n.tool : void 0;
-  return typeof r === "string" ? r : void 0;
+function toolNameOfCall(event, payload) {
+  let tool = event === "tool.call" && "tool" in payload ? payload.tool : undefined;
+  return typeof tool === "string" ? tool : undefined;
 }
 //@ chunk-e6aww6q8.js:734751-734782 placement
-var wFt = () => AsyncResource.bind((e) => e());
+/**
+ * 绑定 async 资源
+ */
+var bindAsyncResource = () => AsyncResource.bind((e) => e());
 //@ chunk-e6aww6q8.js:734782-734823 placement
-var TFt = (e, n, r) => ({ ...e, ...n, options: r });
+/**
+ * 合并出带 options 的对象
+ */
+var withOptions = (e, n, options) => ({
+  ...e,
+  ...n,
+  options,
+});
 //@ chunk-e6aww6q8.js:734823-734891 placement
-var jje = (e) => (e.startsWith("!") ? e.slice(1) : e).startsWith(`${lCn}.`);
+/**
+ * 以 ! 或内部前缀开头
+ */
+var isPrivateEventName = (e) => (e.startsWith("!") ? e.slice(1) : e).startsWith(`${PROTO_KEY}.`);
 //@ chunk-e6aww6q8.js:734891-735062 placement
-function warnProtoPatterns(e, n) {
-  for (let r of new Set(n.map((s) => s.pattern)))
-    if (jje(r) && !r.startsWith("!"))
-      reportPluginProblem(e, `registered ${r}; that name cannot be a noun, so this hook is never run`);
+function warnProtoPatterns(pluginName, registered) {
+  for (let r of new Set(registered.map((s) => s.pattern)))
+    if (isPrivateEventName(r) && !r.startsWith("!"))
+      reportPluginProblem(
+        pluginName,
+        `registered ${r}; that name cannot be a noun, so this hook is never run`,
+      );
 }
 //@ chunk-e6aww6q8.js:735062-735333 placement
-function adviseUiRenderMatchers(e, n) {
-  for (let { pattern: pattern, matcher: matcher } of n) {
-    if (!(pattern === "ui.render" && matcher !== void 0)) continue;
+function adviseUiRenderMatchers(e, registered) {
+  for (let { pattern, matcher } of registered) {
+    if (!(pattern === "ui.render" && matcher !== undefined)) continue;
     try {
       let y = adviseUiRenderMatcher(matcher);
-      if (y !== void 0)
+      if (y !== undefined)
         logForDebugging(`hooks module ${e}: on("ui.render", ${describeMatcher(matcher)}) ${y}`, {
           level: "warn",
         });
@@ -380,28 +273,28 @@ function adviseUiRenderMatchers(e, n) {
 //@ chunk-e6aww6q8.js:735333-736099 placement
 function reportUnmatchedHookRegistrations(e, n, r) {
   let s = [
-    ...HOOK_EVENTS_2,
-    ...Object.entries(r).flatMap(([h, y]) =>
-      y.owner !== CORE_ORIGIN ? y.methods.map((method) => `${h}.${method}`) : [],
+    ...HOOK_EVENTS_2_2,
+    ...Object.entries(r).flatMap(([key, value]) =>
+      value.owner !== CORE_ORIGIN ? value.methods.map((method) => `${key}.${method}`) : [],
     ),
   ];
   for (let h of n) {
-    if (jje(h)) continue;
+    if (isPrivateEventName(h)) continue;
     if (isEventPattern(h)) {
-      let startsWith = h.startsWith("!"),
-        q = startsWith ? h.slice(1) : h;
+      let G = h.startsWith("!");
+      let q = G ? h.slice(1) : h;
       if (!s.some((Se) => matchesEventPattern(q, Se)))
         throw new HooksError(
           `${e}: registered on("${h}"), ` +
-            (startsWith ? "whose negated pattern selects no event" : "which selects no event"),
+            (G ? "whose negated pattern selects no event" : "which selects no event"),
         );
       continue;
     }
     if (isHookEvent(h)) continue;
-    let index = h.indexOf("."),
-      sliced = h.slice(0, index),
-      sliced_2 = h.slice(index + 1),
-      L = Object.hasOwn(r, sliced) ? r[sliced] : void 0;
+    let index = h.indexOf(".");
+    let sliced = h.slice(0, index);
+    let sliced_2 = h.slice(index + 1);
+    let L = Object.hasOwn(r, sliced) ? r[sliced] : undefined;
     if (!L) throw new HooksError(`${e}: registered ${h}, but no loaded plugin provides $.${sliced}`);
     if (L.owner === CORE_ORIGIN)
       throw new HooksError(
@@ -411,13 +304,13 @@ function reportUnmatchedHookRegistrations(e, n, r) {
       throw new HooksError(`${e}: registered ${h}, but $.${sliced} (${L.owner}) has no method ${sliced_2}`);
   }
 }
+//@ chunk-e6aww6q8.js:736099-736506 placement
 /**
  * 校验扫描到的 next.to 目标：只有托管插件可用，且目标须在该层允许的下层之中。
  */
-//@ chunk-e6aww6q8.js:736099-736506 placement
-function checkNextToAllowed(e, n, r) {
+function checkNextToAllowed(e, scan, r) {
   let s = tiersBeneath(r);
-  for (let h of n.nextTo ?? []) {
+  for (let h of scan.nextTo ?? []) {
     if (s.length === 0)
       throw new HooksError(
         `${e}: hooks module not loaded; next.to is available to managed plugins (prependPlugins / appendPlugins) only, and this plugin is ${r} (policy/scan)`,
@@ -428,108 +321,124 @@ function checkNextToAllowed(e, n, r) {
       );
   }
 }
+//@ chunk-e6aww6q8.js:736506-736889 placement
 /**
  * 校验注册的事件：必须是已知事件或插件自定义事件，且出现在模块扫描结果里。
  */
-//@ chunk-e6aww6q8.js:736506-736889 placement
-function checkRegisteredEvents(e, n, r) {
+function checkRegisteredEvents(pluginName, scan, r) {
   for (let s of r) {
-    let h = jeo(s);
-    if (h !== void 0) throw new HooksError(`${e}: registered ${h}`);
-    let y = isHookEvent(s),
-      S = vSi(s);
-    if (S !== void 0 && !isHookEvent(S) && !isPluginDefinedEvent(S))
-      throw new HooksError(`${e}: registered "${s}", which is not an event`);
+    let h = eventPatternError(s);
+    if (h !== undefined) throw new HooksError(`${pluginName}: registered ${h}`);
+    let y = isHookEvent(s);
+    let S = nameOfEventPattern(s);
+    if (S !== undefined && !isHookEvent(S) && !isPluginDefinedEvent(S))
+      throw new HooksError(`${pluginName}: registered "${s}", which is not an event`);
     if (
-      !n.hooks.some(
+      !scan.hooks.some(
         (hook) =>
-          hook === s || (y && isEventPattern(hook) && matchesEventForPlugin(hook, s, { isBuiltin: !1 })),
+          hook === s ||
+          (y &&
+            isEventPattern(hook) &&
+            matchesEventForPlugin(hook, s, {
+              isBuiltin: false,
+            })),
       )
     )
       throw new HooksError(
-        `${e}: registered ${s}, which the scan of its hooks module did not see (host check)`,
+        `${pluginName}: registered ${s}, which the scan of its hooks module did not see (host check)`,
       );
   }
 }
 //@ chunk-e6aww6q8.js:743601-743796 placement
-function checkScanPolicy(e, n, r) {
-  let s = telemetryStreamRefusal(n, { isBuiltin: isOfficialMarketplacePlugin(r) });
-  if (s !== void 0) throw new HooksError(`${e}: hooks module not loaded; ${s} (policy/scan)`);
-  let h = kqs(n);
-  if (h !== void 0) logForDebugging(`${e}: hooks telemetry for: ${h}`);
+function checkScanPolicy(e, scan, r) {
+  let s = telemetryStreamRefusal(scan, {
+    isBuiltin: isOfficialMarketplacePlugin(r),
+  });
+  if (s !== undefined) throw new HooksError(`${e}: hooks module not loaded; ${s} (policy/scan)`);
+  let h = telemetryRefSummary(scan);
+  if (h !== undefined) logForDebugging(`${e}: hooks telemetry for: ${h}`);
 }
 //@ chunk-e6aww6q8.js:762691-762704 placement
-var T7 = nCn();
+/**
+ * 宿主状态
+ */
+var hostStateRef = createMemoMap();
 //@ chunk-e6aww6q8.js:762704-762740 placement
-var EBr = ge(to(), (e) => e.set(void 0));
+/**
+ * 已加载插件的选项
+ */
+var loadedPluginOptions = identity_2(createValueSlot(), (e) => e.set(undefined));
 //@ chunk-e6aww6q8.js:762740-762812 placement
-function O$t(e) {
-  let n = EBr.get();
-  return n?.pluginId === e ? n.options : void 0;
+/**
+ * 取某插件的选项
+ */
+function pluginOptionsFor(e) {
+  let n = loadedPluginOptions.get();
+  return n?.pluginId === e ? n.options : undefined;
 }
 //@ chunk-e6aww6q8.js:762812-763072 placement
-function warnOptionsOutsideChoices(e, n, r) {
-  for (let [s, h] of Object.entries(n)) {
-    let y = r[s]?.options;
-    if (y !== void 0 && isOutsideOptions(r[s], h)) {
-      let w = r[s]?.default,
-        L = w === void 0 ? "unset" : `the default, ${String(w)}`;
+function warnOptionsOutsideChoices(name, n, userConfig) {
+  for (let [key, value] of Object.entries(n)) {
+    let options = userConfig[key]?.options;
+    if (options !== undefined && isOutsideOptions(userConfig[key], value)) {
+      let w = userConfig[key]?.default;
+      let L = w === undefined ? "unset" : `the default, ${String(w)}`;
       reportPluginProblem(
-        e,
-        `option ${s} in settings is not one of ${y.join(", ")}; it reads as ${L}`,
+        name,
+        `option ${key} in settings is not one of ${options.join(", ")}; it reads as ${L}`,
         "once",
       );
     }
   }
 }
+//@ chunk-e6aww6q8.js:763072-763791 placement
 /**
  * 读取并校验插件 userConfig 选项：取设置中的值（项目设置不读）、补默认值并校验；不合法时内置插件抛错，其他回退为默认值。
  */
-//@ chunk-e6aww6q8.js:763072-763791 placement
 async function resolvePluginOptions(e) {
-  let n = e.manifest.userConfig ?? {};
-  if (Object.keys(n).length === 0) return {};
-  (clearPluginOptionsCache(),
-    T7.set(marketplaceSource(e), {
-      before: T7.get(marketplaceSource(e))?.now,
-      now: pluginOptionsFingerprint(marketplaceSource(e)),
-    }));
-  let r = O$t(marketplaceSource(e)) ?? (await loadPluginOptions(marketplaceSource(e))),
-    s =
-      "pluginConfigs[" +
-      pluginIdAliases(marketplaceSource(e))
-        .map((S) => JSON.stringify(S))
-        .join(" or ") +
-      "].options";
+  let userConfig = e.manifest.userConfig ?? {};
+  if (Object.keys(userConfig).length === 0) return {};
+  clearPluginOptionsCache();
+  hostStateRef.set(marketplaceSource(e), {
+    before: hostStateRef.get(marketplaceSource(e))?.now,
+    now: pluginOptionsFingerprint(marketplaceSource(e)),
+  });
+  let r = pluginOptionsFor(marketplaceSource(e)) ?? (await loadPluginOptions(marketplaceSource(e)));
+  let s =
+    "pluginConfigs[" +
+    pluginIdAliases(marketplaceSource(e))
+      .map((S) => JSON.stringify(S))
+      .join(" or ") +
+    "].options";
   if (Object.keys(r).length === 0)
     logForDebugging(
       `plugin ${e.name}: no ${s} in user, --settings or managed settings (project settings are not read); every option is its default`,
     );
-  warnOptionsOutsideChoices(e.name, r, n);
-  let h = applyUserConfigDefaults(r, n),
-    y = validateUserConfig(h, n);
+  warnOptionsOutsideChoices(e.name, r, userConfig);
+  let h = applyUserConfigDefaults(r, userConfig);
+  let y = validateUserConfig(h, userConfig);
   if (!y.valid) {
-    let S = Wq(marketplaceSource(e)),
-      w = `${e.name}: options do not fit plugin.json userConfig: ${y.errors.join("; ")} (settings.json ${s})`;
+    let S = hasTrustedOnlyBuiltinPlugin(marketplaceSource(e));
+    let w = `${e.name}: options do not fit plugin.json userConfig: ${y.errors.join("; ")} (settings.json ${s})`;
     if (!S) throw new HooksError(w);
-    return (
-      logForDebugging(`${w} \u2014 loading on its defaults instead`, { level: "error" }),
-      applyUserConfigDefaults({}, n)
-    );
+    logForDebugging(`${w} \u2014 loading on its defaults instead`, {
+      level: "error",
+    });
+    return applyUserConfigDefaults({}, userConfig);
   }
   return h;
 }
+//@ chunk-e6aww6q8.js:763791-763978 placement
 /**
  * 插件当前非敏感选项及其稳定 JSON 文本（用于比较是否变化）。
  */
-//@ chunk-e6aww6q8.js:763791-763978 placement
-function pluginOptionsSnapshot(e) {
+function pluginOptionsSnapshot(serverName) {
   let n = pickNonSensitiveOptions(
     applyUserConfigDefaults(
-      trustedPluginSetting(marketplaceSource(e)).options ?? {},
-      e.manifest.userConfig ?? {},
+      trustedPluginSetting(marketplaceSource(serverName)).options ?? {},
+      serverName.manifest.userConfig ?? {},
     ),
-    e,
+    serverName,
   );
   return {
     options: n,
@@ -537,235 +446,300 @@ function pluginOptionsSnapshot(e) {
   };
 }
 //@ chunk-e6aww6q8.js:763978-764059 placement
-var Ewo = () =>
+/**
+ * 找不可读的受信设置源
+ */
+var findBrokenTrustedSetting = () =>
   TRUSTED_SETTING_SOURCES.find(
     (e) =>
       getSettingsForSource(e) === null &&
       getSettingsParseErrorsForSource(e).some((n) => n.severity !== "warning"),
   );
+//@ chunk-e6aww6q8.js:764103-764429 placement
 /**
  * 加载插件的一个界面模块：读取、链接、检查导出，返回模块或问题。
  */
-//@ chunk-e6aww6q8.js:764103-764429 placement
 async function loadSurfaceModule(e, n, r) {
-  let s = resolve_12(n, ...e.split("/")),
-    { source: source, graph: graph } = await loadHooksModuleGraph(s, n, r),
-    S = graph.files.get(s),
-    w = S ? findSurfaceComponent(S.scanned.program) : { problem: "was not linked" };
-  if ("problem" in w) throw new HooksError(`${r}: surface module ${e.split("/").join(sep_23)} ` + w.problem);
-  return { module: e, modulePath: s, component: w.component, source: source, ...listLinkedFiles(graph, s) };
+  let s = resolve_2(n, ...e.split("/"));
+  let { source, graph } = await loadHooksModuleGraph(s, n, r);
+  let S = graph.files.get(s);
+  let w = S
+    ? findSurfaceComponent(S.scanned.program)
+    : {
+        problem: "was not linked",
+      };
+  if ("problem" in w) throw new HooksError(`${r}: surface module ${e.split("/").join(sep)} ` + w.problem);
+  return {
+    module: e,
+    modulePath: s,
+    component: w.component,
+    source,
+    ...listLinkedFiles(graph, s),
+  };
 }
+//@ chunk-e6aww6q8.js:764429-764540 placement
 /**
  * 依次加载插件的所有界面模块。
  */
-//@ chunk-e6aww6q8.js:764429-764540 placement
-async function loadSurfaceModules(e, n, r) {
-  if (!e || e.length === 0) return;
+async function loadSurfaceModules(clients, n, r) {
+  if (!clients || clients.length === 0) return;
   let s = [];
-  for (let h of e) s.push(await loadSurfaceModule(h, n, r));
+  for (let h of clients) s.push(await loadSurfaceModule(h, n, r));
   return s;
 }
+//@ chunk-e6aww6q8.js:764540-765457 placement
 /**
  * 为插件的 hooks 模块准备加载参数：检查准入与命名冲突、读取选项、扫描（或使用密封文本）、加载界面模块、确定层级并校验 next.to 与策略。
  */
-//@ chunk-e6aww6q8.js:764540-765457 placement
-async function prepareHooksModuleArgs(e, n, r) {
+async function prepareHooksModuleArgs(state, n, modulePath) {
   let s = hooksModulesRefusalReason();
-  if (s !== void 0) throw new HookAdmissionError(n.name, s);
-  if (
-    (R6r.set(() => getVouchedPolicyPluginIds()),
-    x6r.set((Se) => (resolveManagedPluginDigests(Se) ?? []).length > 0),
-    getPreToolStageOrder().includes(n.name))
-  )
+  if (s !== undefined) throw new HookAdmissionError(n.name, s);
+  moduleAdmissionCache.set(() => getVouchedPolicyPluginIds());
+  moduleAdmissionCacheB.set((Se) => (resolveManagedPluginDigests(Se) ?? []).length > 0);
+  if (getPreToolStageOrder().includes(n.name))
     throw new HooksError(
       `${n.name}: hooks module not loaded; the name is the engine's own chain member (plugin.json name)`,
     );
-  let h = await readSealedPluginTexts(e, n, r),
-    y = await resolvePluginOptions(n),
-    S =
-      h === void 0
-        ? await scanHooksModule(r, n.path, n.name)
-        : await scanSealedHooksModule({ modulePath: r, pluginRoot: n.path, pluginName: n.name, texts: h });
-  if (h !== void 0 && (S.scan.clients ?? []).length > 0)
+  let sealedPluginTexts = await readSealedPluginTexts(state, n, modulePath);
+  let options = await resolvePluginOptions(n);
+  let S =
+    sealedPluginTexts === undefined
+      ? await scanHooksModule(modulePath, n.path, n.name)
+      : await scanSealedHooksModule({
+          modulePath,
+          pluginRoot: n.path,
+          pluginName: n.name,
+          texts: sealedPluginTexts,
+        });
+  if (sealedPluginTexts !== undefined && (S.scan.clients ?? []).length > 0)
     throw new NotOrganizationPluginError(n.name, "it names surface modules");
-  let L = await loadSurfaceModules(S.scan.clients, n.path, n.name),
-    G = marketplaceSource(n),
-    q = h === void 0 ? getVouchedPolicyPluginIds() : x$t(G, getVouchedPolicyPluginIds()),
-    Z = pluginTier(G, q, resolveManagedPluginOrder());
-  return (
-    checkNextToAllowed(n.name, S.scan, Z),
-    checkScanPolicy(n.name, S.scan, G),
-    {
-      modulePath: r,
-      pluginName: n.name,
-      pluginRoot: n.path,
-      pluginStorageId: G,
-      tier: Z,
-      isPersons: cpr(G, q),
-      scan: S.scan,
-      source: S.source,
-      linked: S.linked,
-      links: S.links,
-      options: y,
-      ...(L !== void 0 && { surfaceModules: L }),
-      ...(h !== void 0 && { sealed: !0 }),
-      ...(!isFreshHeronEnabled() && { isLeavingUncopied: !0 }),
-    }
-  );
+  let surfaceModules = await loadSurfaceModules(S.scan.clients, n.path, n.name);
+  let G = marketplaceSource(n);
+  let q =
+    sealedPluginTexts === undefined
+      ? getVouchedPolicyPluginIds()
+      : withSealedPlugin(G, getVouchedPolicyPluginIds());
+  let Z = pluginTier(G, q, resolveManagedPluginOrder());
+  checkNextToAllowed(n.name, S.scan, Z);
+  checkScanPolicy(n.name, S.scan, G);
+  return {
+    modulePath,
+    pluginName: n.name,
+    pluginRoot: n.path,
+    pluginStorageId: G,
+    tier: Z,
+    isPersons: copsSimilar(G, q),
+    scan: S.scan,
+    source: S.source,
+    linked: S.linked,
+    links: S.links,
+    options,
+    ...(surfaceModules !== undefined && {
+      surfaceModules,
+    }),
+    ...(sealedPluginTexts !== undefined && {
+      sealed: true,
+    }),
+    ...(!isFreshHeronEnabled() && {
+      isLeavingUncopied: true,
+    }),
+  };
 }
 //@ chunk-e6aww6q8.js:765457-765505 placement
-var N$t = (e, n) => `${e}: not loaded within ${n}ms`;
+/**
+ * 未在 N 毫秒内加载
+ */
+var notLoadedWithinText = (pluginName, n) => `${pluginName}: not loaded within ${n}ms`;
 //@ chunk-e6aww6q8.js:765505-765583 placement
-function Fme(e) {
-  let n = Aos(e);
-  if (n === void 0) return errorMessage(e);
-  return `${errorMessage(e)} (${n})`;
+/**
+ * 错误文本加 cause
+ */
+function errorWithCause(error) {
+  let n = causeString(error);
+  if (n === undefined) return errorMessage(error);
+  return `${errorMessage(error)} (${n})`;
 }
 //@ chunk-e6aww6q8.js:765583-765662 placement
-async function P3n() {
-  (getHostState().agentDefinitions.clear(), await lp()?.refreshAgents());
+/**
+ * 清空并刷新代理定义
+ */
+async function refreshAgentsAndDefinitions() {
+  getHostState().agentDefinitions.clear();
+  await currentSurfaceBinding()?.refreshAgents();
 }
 //@ chunk-e6aww6q8.js:765662-765717 placement
-var cWe = (e) => `${pluginDisplayKey(e.plugin, e.pluginId)}:` + e.spec.name;
+/**
+ * 插件代理的唯一键
+ */
+var agentRegistrationKey = (e) => `${pluginDisplayKey(e.plugin, e.pluginId)}:` + e.spec.name;
+//@ chunk-e6aww6q8.js:765717-766018 placement
 /**
  * 插件登记的代理表：只列出可用插件的代理，支持登记与查询。
  */
-//@ chunk-e6aww6q8.js:765717-766018 placement
 function createRegisteredAgentsTable(e) {
   return {
-    list: () => [...e().values()].filter((n) => M$e(n.plugin)),
+    list: () => [...e().values()].filter((n) => isModuleAdmittedByName(n.plugin)),
     held: (n) => {
       let r = e().get(n);
-      return r !== void 0 && M$e(r.plugin) ? r : void 0;
+      return r !== undefined && isModuleAdmittedByName(r.plugin) ? r : undefined;
     },
     register: (n) => {
-      e().set(cWe(n), n);
+      e().set(agentRegistrationKey(n), n);
     },
     forget: (n) => {
-      let r = e(),
-        filtered = [...r.values()].filter((h) => h.plugin === n);
-      for (let h of filtered) r.delete(cWe(h));
+      let r = e();
+      let filtered = [...r.values()].filter((h) => h.plugin === n);
+      for (let h of filtered) r.delete(agentRegistrationKey(h));
       return filtered.length > 0;
     },
   };
 }
 //@ chunk-e6aww6q8.js:766018-766057 placement
-var fWe = createRegisteredAgentsTable(() => getPluginRegistry().registeredAgents);
+/**
+ * 插件登记的代理表
+ */
+var registeredAgentsTable = createRegisteredAgentsTable(() => getPluginRegistry().registeredAgents);
 //@ chunk-e6aww6q8.js:766057-766112 placement
-function ID(e) {
-  if (fWe.forget(e)) P3n().catch((n) => logError(n));
+/**
+ * 忘掉登记的代理并刷新
+ */
+function forgetRegisteredAgent(e) {
+  if (registeredAgentsTable.forget(e)) refreshAgentsAndDefinitions().catch((error) => logError(error));
 }
 //@ chunk-e6aww6q8.js:3701193-3701373 placement
 function installJsxGlobals() {
   let e = globalThis;
-  for (let [n, r] of Object.entries({ h: jbi, Fragment: Bbi }))
-    if (e[n] === void 0)
-      Object.defineProperty(e, n, { value: r, writable: !0, configurable: !0, enumerable: !1 });
+  for (let [key, value] of Object.entries({
+    h: vmCreateElement,
+    Fragment: vmFragment,
+  }))
+    if (e[key] === undefined)
+      Object.defineProperty(e, key, {
+        value,
+        writable: true,
+        configurable: true,
+        enumerable: false,
+      });
 }
+//@ chunk-e6aww6q8.js:3701373-3701505 placement
 /**
  * 若是内置插件，返回其内嵌的 hooks 模块对象。
  */
-//@ chunk-e6aww6q8.js:3701373-3701505 placement
 function builtinModuleOf(e) {
   if (!isBuiltinPluginId(e.pluginStorageId)) return;
-  let n = getBuiltinPlugin(e.pluginName)?.hooksModule;
-  return n !== void 0 && "module" in n ? n.module : void 0;
+  let hooksModule = getBuiltinPlugin(e.pluginName)?.hooksModule;
+  return hooksModule !== undefined && "module" in hooksModule ? hooksModule.module : undefined;
 }
 //@ chunk-e6aww6q8.js:3701505-3701623 placement
-function createUiResolveCopier(e) {
-  let n = createWithheldElementWarner(e);
+function createUiResolveCopier(pluginName) {
+  let withheldElementWarner = createWithheldElementWarner(pluginName);
   return (r, s) =>
-    isPlainObject_4(r)
+    isPlainObject_5(r)
       ? Object.freeze(
           Object.assign(
             Object.create(null),
-            buildElementTable(r, (h) => h, n(s)),
+            buildElementTable(r, (h) => h, withheldElementWarner(s)),
           ),
         )
       : r;
 }
+//@ chunk-e6aww6q8.js:3701623-3703563 placement
 /**
  * 校验 hooks 模块导出：必须是二进制内置的模块或函数形式，next 等字段类型正确。
  */
-//@ chunk-e6aww6q8.js:3701623-3703563 placement
 var validateHooksModuleExports = async (e, n, r = {}) => {
-  let { pluginName: pluginName } = n,
-    h = builtinModuleOf(n);
+  let { pluginName } = n;
+  let h = builtinModuleOf(n);
   if (!h)
     throw new HooksError(
       `${pluginName}: not a hooks module the binary carries; it loads in the plugin sandbox, not natively`,
     );
   installJsxGlobals();
-  let y = r.framed ?? ((Me, We) => We()),
-    S = !1,
-    weakMap = new WeakMap(),
-    L = createSurfaceAnswerCache(createUiResolveCopier(pluginName));
+  let framed = r.framed ?? ((Me, We) => We());
+  let S = false;
+  let weakMap = new WeakMap();
+  let surfaceAnswerCache = createSurfaceAnswerCache(createUiResolveCopier(pluginName));
   function G(Me) {
-    if (S) throw SIe(pluginName);
+    if (S) throw envUnloadedError(pluginName);
     if (typeof Me !== "function") throw new HooksError(`${pluginName}: not a function`);
     return Me;
   }
-  let q = async (Me, We, ze) => await Reflect.apply(G(Me), ze, We),
-    Z = (Me) => {
-      if (!(typeof Me === "object" && Me !== null && "next" in Me && typeof Me.next === "function"))
-        throw new HooksError(
-          `${pluginName}: a hook on a streaming event returns its async generator; got ${Me === null ? "null" : typeof Me}`,
-        );
-      return Me;
-    },
-    Se = (Me) =>
-      typeof Me === "function" && Object.prototype.toString.call(Me) === "[object AsyncGeneratorFunction]";
+  let invoke = async (Me, We, ze) => await Reflect.apply(G(Me), ze, We);
+  let iterate = (Me) => {
+    if (!(typeof Me === "object" && Me !== null && "next" in Me && typeof Me.next === "function"))
+      throw new HooksError(
+        `${pluginName}: a hook on a streaming event returns its async generator; got ${Me === null ? "null" : typeof Me}`,
+      );
+    return Me;
+  };
+  let isGeneratorHook = (Me) =>
+    typeof Me === "function" && Object.prototype.toString.call(Me) === "[object AsyncGeneratorFunction]";
   async function ke(...Me) {
     let [We, ze, lt] = Me;
     try {
       return await e(We, ze, lt);
     } catch (error) {
       if (typeof error === "object" && error)
-        weakMap.set(error, { plugin: pluginName, op: We, message: errorMessage(error) });
-      throw S ? _xt(error, Oeo(weakMap, error)) : error;
+        weakMap.set(error, {
+          plugin: pluginName,
+          op: We,
+          message: errorMessage(error),
+        });
+      throw S ? tagError(error, cachedResolveAnswer(weakMap, error)) : error;
     }
   }
   function we(Me, We, ze) {
     let lt = (r.hostStream ?? noStreamingOps)(Me, We, ze);
-    return (lt.result.catch((Je) => (S ? _xt(Je, lpr(pluginName, Me, errorMessage(Je))) : Je)), lt);
+    lt.result.catch((error) =>
+      S ? tagError(error, tagPayload(pluginName, Me, errorMessage(error))) : error,
+    );
+    return lt;
   }
-  let Ee = () => void (S = !0);
+  let Ee = () => void (S = true);
   function Ae(Me) {
-    return Me instanceof AbortSignal ? { signal: Me, unlink: () => {} } : void 0;
+    return Me instanceof AbortSignal
+      ? {
+          signal: Me,
+          unlink: () => {},
+        }
+      : undefined;
   }
-  r.signal?.addEventListener("abort", Ee, { once: !0 });
+  r.signal?.addEventListener("abort", Ee, {
+    once: true,
+  });
   let Ie;
   try {
-    if (
-      ((Ie = await registerHooksModule({
-        loaded: h,
-        args: n,
-        host: ke,
-        hostStream: we,
-        resolvedTable: L.read,
-        invoke: q,
-        iterate: Z,
-        streamIn: (Me) => Me,
-        isGeneratorHook: Se,
-        wrapMethod: (Me) => Me,
-        signalFrom: Ae,
-        makeSignal: () => {
-          let abortController = new AbortController();
-          return { signal: abortController.signal, abort: (We) => abortController.abort(We) };
-        },
-        copyMatcher: (Me) => Me,
-        stamped: (Me) => Me(),
-        framed: y,
-      })),
-      r.signal?.aborted === !0)
-    )
-      throw new HooksError(`${pluginName}: unloaded while its module loaded`);
+    Ie = await registerHooksModule({
+      loaded: h,
+      args: n,
+      host: ke,
+      hostStream: we,
+      resolvedTable: surfaceAnswerCache.read,
+      invoke,
+      iterate,
+      streamIn: (Me) => Me,
+      isGeneratorHook,
+      wrapMethod: (Me) => Me,
+      signalFrom: Ae,
+      makeSignal: () => {
+        let abortController = new AbortController();
+        return {
+          signal: abortController.signal,
+          abort: (We) => abortController.abort(We),
+        };
+      },
+      copyMatcher: (Me) => Me,
+      stamped: (Me) => Me(),
+      framed,
+    });
+    if (r.signal?.aborted === true) throw new HooksError(`${pluginName}: unloaded while its module loaded`);
   } catch (error) {
-    throw (Ee(), error);
+    Ee();
+    throw error;
   }
   return {
     activation: Ie,
-    invoke: q,
+    invoke,
     invokeSync: (Me, We) => G(Me)(We),
     applyIn: (Me, We, ...ze) => Reflect.apply(G(We), Me, ze),
     cloneIn: (Me) => Me,
@@ -774,45 +748,51 @@ var validateHooksModuleExports = async (e, n, r = {}) => {
     leaving: (Me) => Me,
     nextFor: (Me) => Me,
     streamNextFor: (Me) => Me,
-    storeResolved: L.store,
+    storeResolved: surfaceAnswerCache.store,
     dispose: () => {
-      (Ee(), Ie.dispose());
+      Ee();
+      Ie.dispose();
     },
-    opFailureOf: (Me) => Oeo(weakMap, Me),
-    ownsValue: () => !1,
+    opFailureOf: (Me) => cachedResolveAnswer(weakMap, Me),
+    ownsValue: () => false,
   };
 };
 //@ chunk-e6aww6q8.js:3703563-3703578 placement
-var AOn = (e) => e;
+/**
+ * 原样返回
+ */
+var identityOf = (e) => e;
+//@ chunk-e6aww6q8.js:3703578-3704164 placement
 /**
  * 为模块注册表建立按事件的索引：匹配的注册项、是否监听、是否有 catch、组合 matcher。
  */
-//@ chunk-e6aww6q8.js:3703578-3704164 placement
-function createRegistrationIndex(e, n) {
+function createRegistrationIndex(registered, n) {
   let r = new Map();
   function s(y) {
     let S = r.get(y);
-    if (S === void 0)
-      ((S = e.flatMap((w, L) => (matchesEventForPlugin(w.pattern, y, n) ? [L] : []))), r.set(y, S));
+    if (S === undefined) {
+      S = registered.flatMap((w, L) => (matchesEventForPlugin(w.pattern, y, n) ? [L] : []));
+      r.set(y, S);
+    }
     return S;
   }
   let h = (y, S = []) =>
     s(y).flatMap((w) => {
-      let L = e[w];
-      return L === void 0 || S.includes(w) ? [] : [L];
+      let L = registered[w];
+      return L === undefined || S.includes(w) ? [] : [L];
     });
   return {
-    patterns: uniq(e.map((y) => y.pattern)),
+    patterns: uniq(registered.map((y) => y.pattern)),
     registrationsFor: s,
     standingFor: h,
     hooks: (y, S) => h(y, S).length > 0,
     catches: (y, S, w) =>
-      h(y, S).some((L) => L.caught === !0 && (L.matcher === void 0 || w?.(L.matcher) !== !1)),
-    hasCatch: (y) => e[y]?.caught === !0,
+      h(y, S).some((L) => L.caught === true && (L.matcher === undefined || w?.(L.matcher) !== false)),
+    hasCatch: (y) => registered[y]?.caught === true,
     matcherFor: (y, S) => {
       let w;
       for (let [L, G] of h(y, S).entries()) {
-        if (G.matcher === void 0) return;
+        if (G.matcher === undefined) return;
         w = L === 0 ? G.matcher : [w, G.matcher];
       }
       return w;
@@ -820,40 +800,50 @@ function createRegistrationIndex(e, n) {
   };
 }
 //@ chunk-e6aww6q8.js:3704164-3704243 placement
-function yoe(e, n, r) {
+/**
+ * 未加载则拒绝
+ */
+function rejectIfUnloaded(e, n, r) {
   return e().kind === "unloaded" ? Promise.reject(new HooksError(n)) : r();
 }
+//@ chunk-e6aww6q8.js:3704243-3705997 placement
 /**
  * 描述 hooks 模块的当前状态（live、unloaded、retiring、dead、error）。
  */
-//@ chunk-e6aww6q8.js:3704243-3705997 placement
 async function describeHooksModuleState(e, n) {
   let r = hooksModulesRefusalReason();
-  if (r !== void 0) throw new HookAdmissionError(n.pluginName, r);
-  let h = builtinModuleOf(n) !== void 0 ? ensureNativeHost(e) : void 0,
-    y = h ?? ensureEnvironmentHost(e),
-    S = ++e.state.environmentCounter,
-    load = await y.load(S, n);
+  if (r !== undefined) throw new HookAdmissionError(n.pluginName, r);
+  let h = builtinModuleOf(n) !== undefined ? ensureNativeHost(e) : undefined;
+  let y = h ?? ensureEnvironmentHost(e);
+  let S = ++e.state.environmentCounter;
+  let w = await y.load(S, n);
   try {
     checkRegisteredEvents(
       n.pluginName,
       n.scan,
-      load.registered.map((Ee) => Ee.pattern),
+      w.registered.map((Ee) => Ee.pattern),
     );
   } catch (error) {
-    throw (y.unload(S), error);
+    y.unload(S);
+    throw error;
   }
   let L = pluginStorageKey(n);
-  (adviseUiRenderMatchers(L, load.registered),
-    warnProtoPatterns(n.pluginName, load.registered),
-    getPluginRegistry().moduleSeats.set(n.pluginName, n.tier),
-    e.state.environmentArgs.set(S, n));
-  let G = { kind: "live" },
-    q = 0,
-    Z = `hooks module ${L} unloaded`;
+  adviseUiRenderMatchers(L, w.registered);
+  warnProtoPatterns(n.pluginName, w.registered);
+  getPluginRegistry().moduleSeats.set(n.pluginName, n.tier);
+  e.state.environmentArgs.set(S, n);
+  let G = {
+    kind: "live",
+  };
+  let q = 0;
+  let Z = `hooks module ${L} unloaded`;
   function Se() {
     if (G.kind === "live" || G.kind === "retiring") {
-      ((G = { kind: "unloaded", retired: G.kind === "retiring" }), e.state.environmentArgs.delete(S));
+      G = {
+        kind: "unloaded",
+        retired: G.kind === "retiring",
+      };
+      e.state.environmentArgs.delete(S);
       try {
         y.unload(S);
       } finally {
@@ -863,71 +853,86 @@ async function describeHooksModuleState(e, n) {
   }
   function ke() {
     let died = y.died;
-    return died !== void 0 && G.kind !== "unloaded" ? { kind: "dead", reason: died } : G;
+    return died !== undefined && G.kind !== "unloaded"
+      ? {
+          kind: "dead",
+          reason: died,
+        }
+      : G;
   }
-  let we = AOn({
+  let we = identityOf({
     name: n.pluginName,
     label: L,
     tier: n.tier,
-    ...createRegistrationIndex(load.registered, {
+    ...createRegistrationIndex(w.registered, {
       isBuiltin: isOfficialMarketplacePlugin(n.pluginStorageId),
     }),
     args: n,
     environmentId: S,
     hopKey: y,
-    ...(h !== void 0 && { link: (Ee) => h.link(S, Ee), streamLinks: (Ee) => h.linkStreams(S, Ee) }),
+    ...(h !== undefined && {
+      link: (Ee) => h.link(S, Ee),
+      streamLinks: (Ee) => h.linkStreams(S, Ee),
+    }),
     status: ke,
     enter: () => {
-      ((q += 1), fLr(n.pluginStorageId));
+      q += 1;
+      countModLoadEvent(n.pluginStorageId);
     },
     leave() {
-      if (((q -= 1), G.kind === "retiring" && q === 0)) Se();
+      q -= 1;
+      if (G.kind === "retiring" && q === 0) Se();
     },
-    dispatch: (Ee, Ae, Ie) =>
+    dispatch: (event, Ae, Ie) =>
       dispatchHookCall({
         members: [we],
-        event: Ee,
+        event,
         e: Ae,
         call: Ie,
         signal: Ie.signal,
-        hookOrigin: void 0,
+        hookOrigin: undefined,
         origin: Ie.origin,
-        floors: freeze_4_2,
+        floors: Y6t,
       }),
     discard: Se,
     retire() {
-      (GAe(n.pluginName),
-        ID(n.pluginName),
-        e.state.environmentArgs.delete(S),
-        _ee.forgetPresses(n.pluginName));
+      forgetCachedDescribe(n.pluginName);
+      forgetRegisteredAgent(n.pluginName);
+      e.state.environmentArgs.delete(S);
+      moveToCloudTrash.forgetPresses(n.pluginName);
       try {
-        G3()?.forget(n.pluginName);
+        surfaceComposer()?.forget(n.pluginName);
       } catch (error) {
-        logForDebugging(`${n.pluginName}: ${errorMessage(error)}`, { level: "error" });
+        logForDebugging(`${n.pluginName}: ${errorMessage(error)}`, {
+          level: "error",
+        });
       }
-      if (G.kind === "live") G = { kind: "retiring" };
+      if (G.kind === "live")
+        G = {
+          kind: "retiring",
+        };
       if (q === 0) Se();
     },
     resolveTables: (Ee) =>
-      yoe(
+      rejectIfUnloaded(
         () => G,
         Z,
         () => y.resolveTables(S, Ee),
       ),
     build: (Ee, Ae) =>
-      yoe(
+      rejectIfUnloaded(
         () => G,
         Z,
         () => y.build(S, Ee, Ae),
       ),
     callInterface: (Ee, Ae) =>
-      yoe(
+      rejectIfUnloaded(
         () => G,
         Z,
         () => y.callInterface(S, Ee, Ae),
       ),
     press: (Ee, Ae) =>
-      yoe(
+      rejectIfUnloaded(
         () => G,
         Z,
         () => y.press(S, Ee, Ae),
@@ -939,151 +944,212 @@ async function describeHooksModuleState(e, n) {
   return we;
 }
 //@ chunk-e6aww6q8.js:3705997-3706009 placement
-var iEt = 1e4;
+/**
+ * hooks 宿主等待 worker 就绪的默认超时 10 秒；插件自己的 init 可覆盖。
+ */
+var HOOKS_READY_TIMEOUT_MS = 1e4;
+//@ chunk-e6aww6q8.js:3706009-3706161 placement
 /**
  * 复制注册子句（模式、matcher 与 caught）。
  */
-//@ chunk-e6aww6q8.js:3706009-3706161 placement
 var copyRegistrations = (e, n) =>
-  e.map(({ pattern: pattern, matcher: matcher, caught: caught }) => ({
-    pattern: pattern,
-    ...(matcher !== void 0 && { matcher: ZUi(matcher, `${n}: on("${pattern}", matcher)`) }),
-    ...(caught === !0 && { caught: caught }),
+  e.map(({ pattern, matcher, caught }) => ({
+    pattern,
+    ...(matcher !== undefined && {
+      matcher: reviveMatcherDefault(matcher, `${n}: on("${pattern}", matcher)`),
+    }),
+    ...(caught === true && {
+      caught,
+    }),
   }));
+//@ chunk-e6aww6q8.js:3706161-3706953 placement
 /**
  * 重载前重新扫描插件的 hooks 模块并重算层级；组织插件与密封插件有额外限制。
  */
-//@ chunk-e6aww6q8.js:3706161-3706953 placement
-async function rescanHooksModuleArgs(e, n, r) {
-  if (r) or();
+async function rescanHooksModuleArgs(state, n, r) {
+  if (r) invalidateCommandNames();
   let pluginStorageId = n.pluginStorageId;
-  if (resolveManagedPluginDigests(pluginStorageId) !== void 0) {
-    if (r?.modulePath === void 0)
+  if (resolveManagedPluginDigests(pluginStorageId) !== undefined) {
+    if (r?.modulePath === undefined)
       throw new NotOrganizationPluginError(n.pluginName, "no entry the host holds can be proved");
-    return prepareHooksModuleArgs(e, r, r.modulePath);
+    return prepareHooksModuleArgs(state, r, r.modulePath);
   }
-  if (n.sealed === !0)
+  if (n.sealed === true)
     throw new NotOrganizationPluginError(
       n.pluginName,
       "a proved module of this name may not come back from disk",
     );
-  assertPluginHooksAdmitted(e, { pluginName: n.pluginName, pluginId: pluginStorageId, plugin: r });
-  let y = r?.modulePath ?? n.modulePath,
-    S = r?.path ?? n.pluginRoot,
-    w = r?.name ?? n.pluginName,
-    L = await scanHooksModule(y, S, w),
-    { surfaceModules: surfaceModules, ...q } = n,
-    Z = await loadSurfaceModules(L.scan.clients, S, w),
-    Se = { ...q, ...(Z !== void 0 && { surfaceModules: Z }) },
-    ke = pluginTier(n.pluginStorageId, getVouchedPolicyPluginIds(), resolveManagedPluginOrder()),
-    we = cpr(n.pluginStorageId, getVouchedPolicyPluginIds());
-  if ((checkNextToAllowed(w, L.scan, ke), checkScanPolicy(w, L.scan, n.pluginStorageId), !r))
-    return { ...Se, ...L, tier: ke, isPersons: we };
-  return TFt({ ...Se, modulePath: y, tier: ke, isPersons: we }, L, await resolvePluginOptions(r));
+  assertPluginHooksAdmitted(state, {
+    pluginName: n.pluginName,
+    pluginId: pluginStorageId,
+    plugin: r,
+  });
+  let modulePath = r?.modulePath ?? n.modulePath;
+  let S = r?.path ?? n.pluginRoot;
+  let w = r?.name ?? n.pluginName;
+  let L = await scanHooksModule(modulePath, S, w);
+  let { surfaceModules, ...q } = n;
+  let surfaceModules_2 = await loadSurfaceModules(L.scan.clients, S, w);
+  let Se = {
+    ...q,
+    ...(surfaceModules_2 !== undefined && {
+      surfaceModules: surfaceModules_2,
+    }),
+  };
+  let ke = pluginTier(n.pluginStorageId, getVouchedPolicyPluginIds(), resolveManagedPluginOrder());
+  let isPersons = copsSimilar(n.pluginStorageId, getVouchedPolicyPluginIds());
+  checkNextToAllowed(w, L.scan, ke);
+  checkScanPolicy(w, L.scan, n.pluginStorageId);
+  if (!r)
+    return {
+      ...Se,
+      ...L,
+      tier: ke,
+      isPersons,
+    };
+  return withOptions(
+    {
+      ...Se,
+      modulePath,
+      tier: ke,
+      isPersons,
+    },
+    L,
+    await resolvePluginOptions(r),
+  );
 }
 //@ chunk-e6aww6q8.js:3706953-3706989 placement
-var r2r = ge(to(), (e) => e.set(void 0));
+/**
+ * worker 加载上报器
+ */
+var workersLoadedReporter = identity_2(createValueSlot(), (e) => e.set(undefined));
 //@ chunk-e6aww6q8.js:4053009-4053100 placement
-function zoe(e, n, r) {
-  if (!(e instanceof HookAdmissionError))
-    (logFeatureBad("plugin_function_hooks_load", n, classifyPluginOrigin(r)), vOn(r, n));
+/**
+ * 记录加载失败
+ */
+function logHookLoadFailure(e, n, r) {
+  if (!(e instanceof HookAdmissionError)) {
+    logFeatureBad("plugin_function_hooks_load", n, classifyPluginOrigin(r));
+    logModLoadFailed(r, n);
+  }
 }
 //@ chunk-e6aww6q8.js:4053100-4053221 placement
 async function reprepareFromPlugin(e, n) {
-  if (n?.modulePath === void 0) return;
-  let r = await prepareHooksModuleArgs(e.state, n, n.modulePath);
-  return (glt(e.state, r), r);
+  if (n?.modulePath === undefined) return;
+  let hooksModuleArgs = await prepareHooksModuleArgs(e.state, n, n.modulePath);
+  setKnownArgs(e.state, hooksModuleArgs);
+  return hooksModuleArgs;
 }
 //@ chunk-e6aww6q8.js:4053221-4053303 placement
-function nF(e, n) {
-  let r = errorMessage(n),
-    s = `${e}: `;
+/**
+ * 去掉 “插件名: ” 前缀
+ */
+function stripPluginPrefix(e, n) {
+  let r = errorMessage(n);
+  let s = `${e}: `;
   return r.startsWith(s) ? r.slice(s.length) : r;
 }
 //@ chunk-e6aww6q8.js:4053303-4053389 placement
-function I4(e, n, r) {
-  let s = `hooks module did not load: ${nF(e, n)}`;
-  if ((reportPluginProblem(e, s), r)) reportInlinePluginNotice(r, s);
+/**
+ * 上报模块加载失败
+ */
+function reportHookLoadFailure(e, error, r) {
+  let s = `hooks module did not load: ${stripPluginPrefix(e, error)}`;
+  reportPluginProblem(e, s);
+  if (r) reportInlinePluginNotice(r, s);
 }
 //@ chunk-e6aww6q8.js:4053389-4053425 placement
-function qoe(e, n, r) {
-  I4(e, errorMessage(n) + Rx, r);
+/**
+ * 上报重载失败
+ */
+function reportReloadFailure(name, error, r) {
+  reportHookLoadFailure(name, errorMessage(error) + PREVIOUS_VERSION_UNLOADED, r);
 }
 //@ chunk-e6aww6q8.js:4053425-4053473 placement
-var TBn = (e, n) => e.find((r) => r.name === n[0]?.hook);
+/**
+ * 按名字找钩子成员
+ */
+var findHookMemberByName = (e, n) => e.find((r) => r.name === n[0]?.hook);
+//@ chunk-e6aww6q8.js:4062208-4063156 placement
 /**
  * 判断加载这组模块时是否需要整组重新折叠 engine.create，返回原因文字（无需则 undefined）。
  */
-//@ chunk-e6aww6q8.js:4062208-4063156 placement
-function describeRefoldReason(
-  e,
-  { live: live, declaring: declaring, kept: kept, leaving: leaving, unloaded: unloaded },
-) {
-  let S = new Map(live.map((ke) => [ke.name, ke])),
-    w = new Map(declaring.map((ke) => [ke.pluginName, ke])),
-    L = new Set([...S.keys(), ...e.state.knownArgs.keys(), ...w.keys()]);
+function describeRefoldReason(e, { live, declaring, kept, leaving, unloaded }) {
+  let S = new Map(live.map((ke) => [ke.name, ke]));
+  let w = new Map(declaring.map((ke) => [ke.pluginName, ke]));
+  let L = new Set([...S.keys(), ...e.state.knownArgs.keys(), ...w.keys()]);
   for (let ke of L) {
     if (kept.has(ke) || unloaded.has(ke)) continue;
-    let we = e.state.knownArgs.get(ke),
-      Ee = w.get(ke),
-      flattened = [we, Ee].flatMap((ze) => (ze ? [ze.scan] : [])),
-      Ie = findReloadTriggerEvent({ live: S.get(ke), scans: flattened });
-    if (!Ie) continue;
-    let Me = S.has(ke) || we !== void 0;
-    return `${ke} hooks ${Ie} and ${!Ee ? "leaves" : Me ? "loads afresh" : "joins"}`;
+    let we = e.state.knownArgs.get(ke);
+    let Ee = w.get(ke);
+    let scans = [we, Ee].flatMap((ze) => (ze ? [ze.scan] : []));
+    let reloadTriggerEvent = findReloadTriggerEvent({
+      live: S.get(ke),
+      scans,
+    });
+    if (!reloadTriggerEvent) continue;
+    let Me = S.has(ke) || we !== undefined;
+    return `${ke} hooks ${reloadTriggerEvent} and ${!Ee ? "leaves" : Me ? "loads afresh" : "joins"}`;
   }
   let G = leaving[0] ?? e.state.crashedWithholders.keys().next().value;
-  if (G !== void 0) return `${G} crashed with its withholdings standing`;
-  if (e.state.lastEndedBy !== void 0) return `${e.state.lastEndedBy} ended the last fold without next`;
-  if (!e.state.isSetRecord) return ABn;
-  let flattened = live.flatMap((ke) => (kept.get(ke.name) === ke ? [ke.name] : [])),
-    flattened_2 = declaring.flatMap((ke) => (kept.has(ke.pluginName) ? [ke.pluginName] : []));
-  return flattened.some((ke, we) => flattened_2[we] !== ke) ? "the kept modules change order" : void 0;
+  if (G !== undefined) return `${G} crashed with its withholdings standing`;
+  if (e.state.lastEndedBy !== undefined) return `${e.state.lastEndedBy} ended the last fold without next`;
+  if (!e.state.isSetRecord) return PARTIAL_REFOLD_TEXT;
+  let flattened = live.flatMap((ke) => (kept.get(ke.name) === ke ? [ke.name] : []));
+  let flattened_2 = declaring.flatMap((ke) => (kept.has(ke.pluginName) ? [ke.pluginName] : []));
+  return flattened.some((ke, we) => flattened_2[we] !== ke) ? "the kept modules change order" : undefined;
 }
 //@ chunk-e6aww6q8.js:4063156-4063273 placement
-function handlesCommandRun(e, n) {
+function handlesCommandRun(scan, n) {
   return (
-    e.hooks.some((hook) => matchesEventPattern(hook, "command.run")) &&
-    (e.runCommands === void 0 || e.runCommands.includes(n))
+    scan.hooks.some((hook) => matchesEventPattern(hook, "command.run")) &&
+    (scan.runCommands === undefined || scan.runCommands.includes(n))
   );
 }
 //@ chunk-e6aww6q8.js:4063273-4063333 placement
-function xlt(e) {
-  return e.calls.includes("command.register");
+/**
+ * 该次扫描要重折叠
+ */
+function needsRefoldScan(scan) {
+  return scan.calls.includes("command.register");
 }
+//@ chunk-e6aww6q8.js:4063376-4063479 placement
 /**
  * 取插件适用的准入文本。
  */
-//@ chunk-e6aww6q8.js:4063376-4063479 placement
 function admissionTextFor(e) {
   let admissionText = getPluginRegistry().admissionText;
   if (admissionText === null) return admissionText;
-  return e !== void 0 && isModuleAdmitted(e) ? admissionText : e?.judgedUnder;
+  return e !== undefined && isModuleAdmitted(e) ? admissionText : e?.judgedUnder;
 }
 //@ chunk-e6aww6q8.js:4063479-4063613 placement
-function recordOptionsReloadFailure(e, n, r) {
+function recordOptionsReloadFailure(e, n, error) {
   e.state.optionsReloadFailures.set(n.name, {
     generation: e.state.generations.get(n.name),
     wanted: pluginOptionsSnapshot(n).text,
-    error: r,
+    error,
   });
 }
 //@ chunk-e6aww6q8.js:4063613-4063643 placement
-var OBn = (e) => providerRank(e, getVouchedPolicyPluginIds(), resolveManagedPluginOrder());
+/**
+ * 插件提供者层级
+ */
+var pluginProviderRank = (pluginStorageId) =>
+  providerRank(pluginStorageId, getVouchedPolicyPluginIds(), resolveManagedPluginOrder());
 //@ chunk-e6aww6q8.js:4063643-4063758 placement
 function providerRankOf(e) {
-  return e.sealed === !0
+  return e.sealed === true
     ? providerRank(
         e.pluginStorageId,
-        x$t(e.pluginStorageId, getVouchedPolicyPluginIds()),
+        withSealedPlugin(e.pluginStorageId, getVouchedPolicyPluginIds()),
         resolveManagedPluginOrder(),
       )
-    : OBn(e.pluginStorageId);
+    : pluginProviderRank(e.pluginStorageId);
 }
+//@ chunk-e6aww6q8.js:4063758-4063869 placement = findReverseDependents (0.826)
 /**
  * 插件 n 的 manifest.dependencies 是否引用插件 e。
  */
-//@ chunk-e6aww6q8.js:4063758-4063869 placement = findReverseDependents (0.826)
 function findReverseDependents(pluginId, plugins) {
   return (
     plugins !== pluginId &&
@@ -1092,37 +1158,41 @@ function findReverseDependents(pluginId, plugins) {
     )
   );
 }
+//@ chunk-e6aww6q8.js:4063869-4064754 placement
 /**
  * 按依赖关系对插件做拓扑排序（同层保持原顺序），并找出依赖环。
  */
-//@ chunk-e6aww6q8.js:4063869-4064754 placement
 function orderByDependencies(e, n) {
-  let r = new Set(e),
-    s = new Map(e.map((ke) => [ke, uniq(n(ke)).filter((we) => we !== ke && r.has(we))])),
-    h = new Map();
+  let r = new Set(e);
+  let s = new Map(e.map((ke) => [ke, uniq(n(ke)).filter((we) => we !== ke && r.has(we))]));
+  let h = new Map();
   for (let ke of e) {
-    let we = new Set(),
-      Ee = [...(s.get(ke) ?? [])];
-    for (let Ae = Ee.pop(); Ae; Ae = Ee.pop()) if (!we.has(Ae)) (we.add(Ae), Ee.push(...(s.get(Ae) ?? [])));
+    let we = new Set();
+    let Ee = [...(s.get(ke) ?? [])];
+    for (let Ae = Ee.pop(); Ae; Ae = Ee.pop())
+      if (!we.has(Ae)) {
+        we.add(Ae);
+        Ee.push(...(s.get(Ae) ?? []));
+      }
     h.set(ke, we);
   }
-  let y = (ke, we) => h.get(ke)?.has(we) === !0 && h.get(we)?.has(ke) === !0,
-    S = [];
+  let y = (ke, we) => h.get(ke)?.has(we) === true && h.get(we)?.has(ke) === true;
+  let S = [];
   for (let ke of e) {
     let filtered = e.filter((Ae) => Ae === ke || y(ke, Ae));
     if (filtered.length > 1 && filtered[0] === ke) S.push(filtered);
   }
   let w = new Map(
-      e.map((ke, we) => [
-        ke,
-        [...(s.get(ke) ?? []).filter((Ee) => !y(ke, Ee)), ...e.slice(we + 1).filter((Ee) => y(ke, Ee))],
-      ]),
-    ),
-    groupBy = Map.groupBy([...w.values()].flat(), (ke) => ke),
-    G = new Map(e.map((ke) => [ke, groupBy.get(ke)?.length ?? 0])),
-    q = (ke) => G.get(ke) === 0,
-    Z = [],
-    Se = e;
+    e.map((ke, we) => [
+      ke,
+      [...(s.get(ke) ?? []).filter((Ee) => !y(ke, Ee)), ...e.slice(we + 1).filter((Ee) => y(ke, Ee))],
+    ]),
+  );
+  let L = Map.groupBy([...w.values()].flat(), (ke) => ke);
+  let G = new Map(e.map((ke) => [ke, L.get(ke)?.length ?? 0]));
+  let q = (ke) => G.get(ke) === 0;
+  let Z = [];
+  let Se = e;
   while (Se.length > 0) {
     let max = Math.max(Se.findIndex(q), 0);
     for (let we of Se.slice(max, max + 1)) {
@@ -1131,39 +1201,49 @@ function orderByDependencies(e, n) {
     }
     Se = Se.toSpliced(max, 1);
   }
-  return { order: Z, cycles: S };
+  return {
+    order: Z,
+    cycles: S,
+  };
 }
+//@ chunk-e6aww6q8.js:4064754-4065681 placement
 /**
  * 按提供者层级与依赖关系排列 hooks 模块顺序，并说明冲突时谁优先。
  */
-//@ chunk-e6aww6q8.js:4064754-4065681 placement
 function orderHooksModules(e, n) {
-  let mapped = e.map((S) => ({ plugin: S, ...n(S) })),
-    s = new Map(
-      mapped.map((S) => {
-        let filtered = mapped.filter((L) => findReverseDependents(S.plugin, L.plugin));
-        for (let L of filtered) {
-          let G = L.rank < S.rank,
-            Z =
-              L.tier === S.tier
-                ? `placed outside it in the ${L.tier} tier; that place wins`
-                : `in the ${L.tier} tier, outside the ${S.tier} tier; tier order wins`;
-          if (G)
-            logForDebugging(
-              `hooks module order: ${S.plugin.source} depends on ${L.plugin.source}, which is ${Z}, so ${L.plugin.source} stays outer`,
-              { level: "warn" },
-            );
-        }
-        return [S, filtered];
-      }),
-    ),
-    h = [];
+  let mapped = e.map((S) => ({
+    plugin: S,
+    ...n(S),
+  }));
+  let s = new Map(
+    mapped.map((S) => {
+      let filtered = mapped.filter((L) => findReverseDependents(S.plugin, L.plugin));
+      for (let L of filtered) {
+        let G = L.rank < S.rank;
+        let Z =
+          L.tier === S.tier
+            ? `placed outside it in the ${L.tier} tier; that place wins`
+            : `in the ${L.tier} tier, outside the ${S.tier} tier; tier order wins`;
+        if (G)
+          logForDebugging(
+            `hooks module order: ${S.plugin.source} depends on ${L.plugin.source}, which is ${Z}, so ${L.plugin.source} stays outer`,
+            {
+              level: "warn",
+            },
+          );
+      }
+      return [S, filtered];
+    }),
+  );
+  let h = [];
   for (let S of Map.groupBy(mapped, (w) => w.rank).values()) {
     let w = orderByDependencies(S, (L) => s.get(L) ?? []);
     for (let cycle of w.cycles)
       logForDebugging(
         `hooks module order: ${cycle.map((G) => G.plugin.source).join(", ")} depend on one another in a cycle; that dependency order is refused and they register in the order they were chosen in`,
-        { level: "error" },
+        {
+          level: "error",
+        },
       );
     h.push(...w.order.map((L) => L.plugin));
   }
@@ -1171,61 +1251,72 @@ function orderHooksModules(e, n) {
     logForDebugging("hooks module order: dependencies register " + h.map((S) => S.source).join(", "));
   return h;
 }
+//@ chunk-e6aww6q8.js:4065681-4066023 placement
 /**
  * 让密封插件按指定顺序排在其他插件前面。
  */
-//@ chunk-e6aww6q8.js:4065681-4066023 placement
 function orderSealedModules(e, n) {
-  if (!e.some((h) => h.sealed === !0)) return e;
+  if (!e.some((h) => h.sealed === true)) return e;
   let s = new Map(e.map((h) => [h.pluginName, h]));
   return orderHooksModules(
     e.toSorted((h, y) => providerRankOf(h) - providerRankOf(y)).flatMap((h) => n.get(h.pluginName) ?? []),
     (h) => {
       let y = s.get(h.name);
-      if (y === void 0) throw Error("a plugin was placed with no declaration");
-      return { rank: providerRankOf(y), tier: y.tier };
+      if (y === undefined) throw Error("a plugin was placed with no declaration");
+      return {
+        rank: providerRankOf(y),
+        tier: y.tier,
+      };
     },
   ).flatMap((h) => s.get(h.name) ?? []);
 }
 //@ chunk-e6aww6q8.js:4066023-4066254 placement
 function logModsBackOn(e, n) {
-  let { modsOffAt: modsOffAt } = e.state,
-    s = count(n, (h) => builtinModuleOf(h.args) === void 0);
-  if (modsOffAt === void 0 || s === 0) return;
-  ((e.state.modsOffAt = void 0),
-    logFeatureOk("plugin_function_hooks_worker_mods", {
-      off_s: Math.max(0, Math.floor((Date.now() - modsOffAt) / SLOW_HOOK_REPORT_INTERVAL_MS)),
-      worker_mods: s,
-    }));
+  let { modsOffAt } = e.state;
+  let s = count(n, (h) => builtinModuleOf(h.args) === undefined);
+  if (modsOffAt === undefined || s === 0) return;
+  e.state.modsOffAt = undefined;
+  logFeatureOk("plugin_function_hooks_worker_mods", {
+    off_s: Math.max(0, Math.floor((Date.now() - modsOffAt) / SLOW_HOOK_REPORT_INTERVAL_MS_2)),
+    worker_mods: s,
+  });
 }
 //@ chunk-e6aww6q8.js:4066254-4066278 placement
-var Dlt = /\bimport\s*\(/;
+/**
+ * import( 检测
+ */
+var DYNAMIC_IMPORT_RE = /\bimport\s*\(/;
+//@ chunk-e6aww6q8.js:4066321-4066445 placement
 /**
  * 判断已加载模块的参数与展示是否与新的完全一致（且源码不含动态 import），可复用。
  */
-//@ chunk-e6aww6q8.js:4066321-4066445 placement
 function isModuleUnchanged(e, n, r) {
   return (
-    !Dlt.test(n.source) &&
-    !n.linked.some((s) => Dlt.test(s.source)) &&
-    isDeepStrictEqual_17(e.args, n) &&
-    isDeepStrictEqual_17(e.shown, shownPluginInfo(n, r))
+    !DYNAMIC_IMPORT_RE.test(n.source) &&
+    !n.linked.some((s) => DYNAMIC_IMPORT_RE.test(s.source)) &&
+    isDeepStrictEqual(e.args, n) &&
+    isDeepStrictEqual(e.shown, shownPluginInfo(n, r))
   );
 }
 //@ chunk-e6aww6q8.js:4066445-4066512 placement
-var pOe = () => (env.CLAUDE_CODE_HOOKS_SAME_THREAD ? "same-thread" : "worker");
+/**
+ * same-thread 或 worker
+ */
+var hookHostKind = () => (env.CLAUDE_CODE_HOOKS_SAME_THREAD ? "same-thread" : "worker");
 //@ chunk-e6aww6q8.js:4066512-4066751 placement
-function reusableLoadedModule(e, n, r) {
-  let found = getPluginRegistry().loadedModules.find((loadedModule) => loadedModule.name === n.pluginName),
-    environmentHost = e.state.environmentHost;
-  return found !== void 0 &&
+function reusableLoadedModule(e, hooksModuleArgs, r) {
+  let found = getPluginRegistry().loadedModules.find(
+    (loadedModule) => loadedModule.name === hooksModuleArgs.pluginName,
+  );
+  let environmentHost = e.state.environmentHost;
+  return found !== undefined &&
     found.status().kind === "live" &&
     (found.hopKey === e.state.nativeHost ||
-      (found.hopKey === environmentHost && environmentHost.kind === pOe())) &&
-    isModuleUnchanged(found, n, r) &&
+      (found.hopKey === environmentHost && environmentHost.kind === hookHostKind())) &&
+    isModuleUnchanged(found, hooksModuleArgs, r) &&
     isModuleAdmitted(found)
     ? found
-    : void 0;
+    : undefined;
 }
 //@ chunk-e6aww6q8.js:4066751-4066961 placement
 function uiResolveEnvironments(e, n, r) {
@@ -1244,10 +1335,10 @@ function uiResolveEnvironments(e, n, r) {
   }
   return s;
 }
+//@ chunk-e6aww6q8.js:4066961-4067284 placement
 /**
  * 让每个活动模块重新解析各 UI 组件的元素表（考虑其他模块的 ui.resolve 钩子），失败时保留旧表。
  */
-//@ chunk-e6aww6q8.js:4066961-4067284 placement
 async function resolveElementTables(e) {
   await Promise.all(
     e
@@ -1255,149 +1346,168 @@ async function resolveElementTables(e) {
       .map((n) =>
         n
           .resolveTables(
-            freeze_3_2.map((r) => ({
+            TUi.map((r) => ({
               surface: r.surface,
               component: r.component,
               environments: uiResolveEnvironments(e, n, r),
             })),
           )
-          .catch((r) => {
+          .catch((error) => {
             logForDebugging(
-              `hooks module ${n.label}: its element tables were not resolved (${errorMessage(r)}); it keeps the ones it had`,
-              { level: "error" },
+              `hooks module ${n.label}: its element tables were not resolved (${errorMessage(error)}); it keeps the ones it had`,
+              {
+                level: "error",
+              },
             );
           }),
       ),
   );
 }
+//@ chunk-e6aww6q8.js:4067284-4072469 placement
 /**
  * 加载声明的整组 hooks 模块：未变的保留、变化的全量重载，并记录失败与遥测。
  */
-//@ chunk-e6aww6q8.js:4067284-4072469 placement
 async function loadHooksModuleSet(e, n, r) {
-  let s = getPluginRegistry(),
-    loadedModules = s.loadedModules,
-    y = (rn) =>
-      r.judgedUnder === void 0 ? admissionTextFor(loadedModules.find((pn) => pn.name === rn)) : r.judgedUnder,
-    S = new Set(loadedModules.map((rn) => rn.name));
+  let pluginRegistry = getPluginRegistry();
+  let loadedModules = pluginRegistry.loadedModules;
+  let y = (pluginName) =>
+    r.judgedUnder === undefined
+      ? admissionTextFor(loadedModules.find((loadedModule) => loadedModule.name === pluginName))
+      : r.judgedUnder;
+  let S = new Set(loadedModules.map((loadedModule) => loadedModule.name));
   admissionChangedListener.set(() => {
-    (Woe(), publishRenderPlugins(e));
+    invalidateAllHookedCaches();
+    publishRenderPlugins(e);
   });
-  let w = new Map(),
-    L = [],
-    G = new Map(),
-    q = new Set(e.state.knownArgs.keys()),
-    Z = new Set();
+  let w = new Map();
+  let L = [];
+  let G = new Map();
+  let q = new Set(e.state.knownArgs.keys());
+  let Z = new Set();
   e.state.unattributedCrashes = 0;
   let Se = new Set(n.map((rn) => rn.name));
   for (let rn of n) {
-    if (rn.modulePath === void 0) continue;
+    if (rn.modulePath === undefined) continue;
     w.set(rn.name, rn);
     try {
-      let pn = await prepareHooksModuleArgs(e.state, rn, rn.modulePath),
-        no = reusableLoadedModule(e, pn, rn);
-      if (no !== void 0) G.set(no.name, no);
-      L.push(no?.args ?? pn);
+      let hooksModuleArgs = await prepareHooksModuleArgs(e.state, rn, rn.modulePath);
+      let no = reusableLoadedModule(e, hooksModuleArgs, rn);
+      if (no !== undefined) G.set(no.name, no);
+      L.push(no?.args ?? hooksModuleArgs);
     } catch (error) {
       let no = error instanceof NotOrganizationPluginError || error instanceof HookAdmissionRefusal;
       if (no) w.delete(rn.name);
       if (error instanceof HookAdmissionRefusal) {
-        logForDebugging(Fme(error));
+        logForDebugging(errorWithCause(error));
         continue;
       }
-      if (
-        (zoe(error, "declaration_failed", { pluginStorageId: marketplaceSource(rn), pluginRoot: rn.path }),
-        logForDebugging(`hooks module ${hookPluginLabel(rn)} failed to load: ` + Fme(error), {
-          level: "error",
-        }),
-        !no)
-      )
-        recordOptionsReloadFailure(e, rn, error);
-      S.has(rn.name) ? qoe(rn.name, error, rn) : I4(rn.name, error, rn);
+      logHookLoadFailure(error, "declaration_failed", {
+        pluginStorageId: marketplaceSource(rn),
+        pluginRoot: rn.path,
+      });
+      logForDebugging(`hooks module ${hookPluginLabel(rn)} failed to load: ` + errorWithCause(error), {
+        level: "error",
+      });
+      if (!no) recordOptionsReloadFailure(e, rn, error);
+      if (S.has(rn.name)) reportReloadFailure(rn.name, error, rn);
+      else reportHookLoadFailure(rn.name, error, rn);
     }
   }
-  (L.splice(0, 1 / 0, ...orderSealedModules(L, w)),
-    (r.scans = L.map((rn) => rn.scan)),
-    r.read.resolve(),
-    e.state.loadingRead.emit());
-  let mapped = L.map((rn) => rn.pluginName),
-    we = new Set(mapped),
-    Ee = new Set(
-      L.flatMap((rn) => {
-        let pn = e.state.unloadedSteps.get(rn.pluginName);
-        return pn !== void 0 &&
-          isModuleUnchanged(pn, rn, w.get(rn.pluginName)) &&
-          isDeepStrictEqual_16(
-            pn.order,
-            mapped.filter((hn) => pn.order.includes(hn)),
-          )
-          ? [rn.pluginName]
-          : [];
-      }),
-    ),
-    Ae = (rn) => G.get(rn.name) === rn,
-    filtered = [...e.state.crashedWithholders.keys()].filter((rn) => !Se.has(rn));
-  for (let rn of filtered) (e.state.crashedWithholders.delete(rn), e.state.withholdings.delete(rn));
+  L.splice(0, 1 / 0, ...orderSealedModules(L, w));
+  r.scans = L.map((rn) => rn.scan);
+  r.read.resolve();
+  e.state.loadingRead.emit();
+  let order = L.map((rn) => rn.pluginName);
+  let we = new Set(order);
+  let Ee = new Set(
+    L.flatMap((rn) => {
+      let pn = e.state.unloadedSteps.get(rn.pluginName);
+      return pn !== undefined &&
+        isModuleUnchanged(pn, rn, w.get(rn.pluginName)) &&
+        isDeepStrictEqual(
+          pn.order,
+          order.filter((hn) => pn.order.includes(hn)),
+        )
+        ? [rn.pluginName]
+        : [];
+    }),
+  );
+  let Ae = (rn) => G.get(rn.name) === rn;
+  let filtered = [...e.state.crashedWithholders.keys()].filter((key) => !Se.has(key));
+  for (let rn of filtered) {
+    e.state.crashedWithholders.delete(rn);
+    e.state.withholdings.delete(rn);
+  }
   function Me() {
     let rn = new Set([...q].filter((no) => !e.state.knownArgs.has(no)));
     e.state.knownPlugins.clear();
     for (let [no, hn] of w) e.state.knownPlugins.set(no, hn);
-    for (let no of L) if (!rn.has(no.pluginName) && !Z.has(no.pluginName)) glt(e.state, no);
+    for (let no of L) if (!rn.has(no.pluginName) && !Z.has(no.pluginName)) setKnownArgs(e.state, no);
     let pn = new Set([
-      ...[...e.state.crashedWithholders.keys()].filter((no) => !Se.has(no)),
-      ...[...e.state.knownArgs.keys()].filter((no) => Z.has(no) || !we.has(no)),
+      ...[...e.state.crashedWithholders.keys()].filter((key) => !Se.has(key)),
+      ...[...e.state.knownArgs.keys()].filter((key) => Z.has(key) || !we.has(key)),
     ]);
     for (let no of pn) forgetPlugin(no, e);
     if (pn.size > 0) liftWithholdings(e.state, pn);
   }
-  function We(rn) {
-    for (let pn of rn) if (!Ae(pn)) pn.discard();
+  function We(admitted) {
+    for (let pn of admitted) if (!Ae(pn)) pn.discard();
     Me();
   }
-  function ze(rn) {
-    let loadedModules = s.loadedModules,
-      no = new Set(rn),
-      hn = new Set(rn.map((ho) => ho.name));
-    s.loadedModules = rn;
-    for (let ho of rn) e.state.crashedWithholders.delete(ho.name);
+  function ze(admitted) {
+    let loadedModules = pluginRegistry.loadedModules;
+    let no = new Set(admitted);
+    let hn = new Set(admitted.map((ho) => ho.name));
+    pluginRegistry.loadedModules = admitted;
+    for (let ho of admitted) e.state.crashedWithholders.delete(ho.name);
     Me();
-    for (let ho of loadedModules) {
-      if (!no.has(ho)) ho.retire();
-      if (!hn.has(ho.name)) {
-        (Y3(ho.name), qY(ho.name), GAe(ho.name), ID(ho.name));
-        let yn = e.state.unloadedSteps.get(ho.name);
-        if (yn !== void 0 && Ee.has(ho.name))
-          qoe(
-            ho.name,
-            engineCreateFailedError(ho.name, { stage: "engine.create", reason: yn.reason }),
-            w.get(ho.name),
+    for (let loadedModule of loadedModules) {
+      if (!no.has(loadedModule)) loadedModule.retire();
+      if (!hn.has(loadedModule.name)) {
+        forgetMcpServerFor(loadedModule.name);
+        forgetMcpConnectsFor(loadedModule.name);
+        forgetCachedDescribe(loadedModule.name);
+        forgetRegisteredAgent(loadedModule.name);
+        let yn = e.state.unloadedSteps.get(loadedModule.name);
+        if (yn !== undefined && Ee.has(loadedModule.name))
+          reportReloadFailure(
+            loadedModule.name,
+            engineCreateFailedError(loadedModule.name, {
+              stage: "engine.create",
+              reason: yn.reason,
+            }),
+            w.get(loadedModule.name),
           );
       }
     }
-    if ((publishRenderPlugins(e), logModsBackOn(e, rn), loadedModules.length !== 0 || rn.length !== 0)) Woe();
-    (XAe(rn), (e.state.isSetRecord = !0));
+    publishRenderPlugins(e);
+    logModsBackOn(e, admitted);
+    if (loadedModules.length !== 0 || admitted.length !== 0) invalidateAllHookedCaches();
+    noteWorkersLoaded(admitted);
+    e.state.isSetRecord = true;
   }
   if (w.size === 0) {
-    (resetWithholdings(e.state), ze([]));
+    resetWithholdings(e.state);
+    ze([]);
     return;
   }
-  let filtered_2 = L.filter((rn) => !Ee.has(rn.pluginName)),
-    filtered_3 = loadedModules.filter((rn) => !Ee.has(rn.name)),
-    nt =
-      filtered.length === 0 &&
-      [...e.state.knownArgs.keys()].every((rn) => we.has(rn)) &&
-      filtered_2.length === filtered_3.length &&
-      filtered_2.every((rn, pn) => G.get(rn.pluginName) === filtered_3[pn]);
+  let filtered_2 = L.filter((rn) => !Ee.has(rn.pluginName));
+  let filtered_3 = loadedModules.filter((loadedModule) => !Ee.has(loadedModule.name));
+  let nt =
+    filtered.length === 0 &&
+    [...e.state.knownArgs.keys()].every((key) => we.has(key)) &&
+    filtered_2.length === filtered_3.length &&
+    filtered_2.every((rn, pn) => G.get(rn.pluginName) === filtered_3[pn]);
   if (!nt) Ee.clear();
   if (e.state.isSetRecord && nt && filtered_3.length === loadedModules.length) {
     Me();
-    let joined = loadedModules.map((pn) => pn.name).join(", ");
+    let joined = loadedModules.map((loadedModule) => loadedModule.name).join(", ");
     logForDebugging(`hooks modules unchanged, kept as loaded: ${joined}`);
     return;
   }
   let yt =
     G.size === 0
-      ? void 0
+      ? undefined
       : describeRefoldReason(e, {
           live: loadedModules,
           declaring: L,
@@ -1405,99 +1515,106 @@ async function loadHooksModuleSet(e, n, r) {
           leaving: filtered,
           unloaded: Ee,
         });
-  if (yt !== void 0) (G.clear(), logForDebugging(`hooks modules reloaded in full: ${yt}`));
-  let flattened = L.flatMap((rn) => G.get(rn.pluginName) ?? []),
-    At = new Set(flattened.map((rn) => rn.name)),
-    It = new Set([...loadedModules.map((rn) => rn.name), ...q, ...mapped].filter((rn) => !At.has(rn))),
-    Yt = new Set(),
-    qt = new Set(At),
-    Zt = new Map();
-  e.state.isSetRecord = !1;
+  if (yt !== undefined) {
+    G.clear();
+    logForDebugging(`hooks modules reloaded in full: ${yt}`);
+  }
+  let flattened = L.flatMap((rn) => G.get(rn.pluginName) ?? []);
+  let At = new Set(flattened.map((rn) => rn.name));
+  let It = new Set(
+    [...loadedModules.map((loadedModule) => loadedModule.name), ...q, ...order].filter((rn) => !At.has(rn)),
+  );
+  let Yt = new Set();
+  let qt = new Set(At);
+  let Zt = new Map();
+  e.state.isSetRecord = false;
   try {
     for (;;) {
       let rn = [];
       for (let Xn of L) {
         if (At.has(Xn.pluginName) || Z.has(Xn.pluginName) || Yt.has(Xn.pluginName) || Ee.has(Xn.pluginName))
           continue;
-        (q.add(Xn.pluginName), glt(e.state, Xn));
+        q.add(Xn.pluginName);
+        setKnownArgs(e.state, Xn);
         try {
           let To = await describeHooksModuleState(e, Xn);
-          ((To.shown = shownPluginInfo(Xn, w.get(Xn.pluginName))),
-            (To.judgedUnder = y(Xn.pluginName)),
-            rn.push(To),
-            e.state.unadmitted.add(To.environmentId),
-            Zt.set(To.environmentId, To),
-            mlt(Xn.pluginName, e),
-            logFeatureOk("plugin_function_hooks_load", classifyPluginOrigin(Xn)),
-            logForDebugging(
-              `hooks module ${To.label} loaded (${To.hopKey.kind}, environment ${To.environmentId}, tier ${To.tier}); events: ` +
-                q4o(To.patterns),
-            ));
+          To.shown = shownPluginInfo(Xn, w.get(Xn.pluginName));
+          To.judgedUnder = y(Xn.pluginName);
+          rn.push(To);
+          e.state.unadmitted.add(To.environmentId);
+          Zt.set(To.environmentId, To);
+          bumpGeneration(Xn.pluginName, e);
+          logFeatureOk("plugin_function_hooks_load", classifyPluginOrigin(Xn));
+          logForDebugging(
+            `hooks module ${To.label} loaded (${To.hopKey.kind}, environment ${To.environmentId}, tier ${To.tier}); events: ` +
+              joinedKeys(To.patterns),
+          );
         } catch (error) {
-          if (
-            (Yt.add(Xn.pluginName),
-            zoe(error, "module_load_failed", Xn),
-            logForDebugging(`hooks module ${pluginStorageKey(Xn)} failed to load: ` + Fme(error), {
-              level: "error",
-            }),
-            abandonIfWorkerDied(e, rn, "the load"))
-          ) {
+          Yt.add(Xn.pluginName);
+          logHookLoadFailure(error, "module_load_failed", Xn);
+          logForDebugging(`hooks module ${pluginStorageKey(Xn)} failed to load: ` + errorWithCause(error), {
+            level: "error",
+          });
+          if (abandonIfWorkerDied(e, rn, "the load")) {
             Me();
             return;
           }
           let bo = w.get(Xn.pluginName);
-          S.has(Xn.pluginName) ? qoe(Xn.pluginName, error, bo) : I4(Xn.pluginName, error, bo);
+          if (S.has(Xn.pluginName)) reportReloadFailure(Xn.pluginName, error, bo);
+          else reportHookLoadFailure(Xn.pluginName, error, bo);
         }
       }
       if (At.size > 0) {
         let joined = [...At].join(", ");
         logForDebugging(`hooks modules kept as loaded, unchanged: ${joined}`);
       }
-      let pn = At.size === 0,
-        no = await buildEngineApi(
-          e,
-          rn,
-          pn
-            ? foldBaseForRespawn(
-                e,
-                rn.map((Xn) => Xn.name),
-              )
-            : foldBaseWithout(e.state, It, mapped),
-        );
-      if (e.state.environmentHost?.died !== void 0) {
-        We(no);
+      let pn = At.size === 0;
+      let engineApi = await buildEngineApi(
+        e,
+        rn,
+        pn
+          ? foldBaseForRespawn(
+              e,
+              rn.map((Xn) => Xn.name),
+            )
+          : foldBaseWithout_2(e.state, It, order),
+      );
+      if (e.state.environmentHost?.died !== undefined) {
+        We(engineApi);
         return;
       }
-      let hn = new Map([...no, ...flattened].map((Xn) => [Xn.name, Xn])),
-        { admitted: admitted, refused: refused } = await admitBuiltModules(e, {
-          built: mapped.flatMap((Xn) => hn.get(Xn) ?? []),
-          plugins: w,
-          seated: qt,
-          serving: S,
-        });
+      let hn = new Map([...engineApi, ...flattened].map((Xn) => [Xn.name, Xn]));
+      let { admitted, refused } = await admitBuiltModules(e, {
+        built: order.flatMap((Xn) => hn.get(Xn) ?? []),
+        plugins: w,
+        seated: qt,
+        serving: S,
+      });
       for (let Xn of refused) Z.add(Xn.name);
-      if (e.state.environmentHost?.died !== void 0) {
+      if (e.state.environmentHost?.died !== undefined) {
         We(admitted);
         return;
       }
       let filtered = refused.filter((Xn) => Xn.hooks("engine.create"));
       if (filtered.length !== 0) {
         logForDebugging(
-          `hooks modules ${dkt(filtered)} refused after the engine.create fold ran with them; the set folds again without`,
+          `hooks modules ${joinLabels(filtered)} refused after the engine.create fold ran with them; the set folds again without`,
         );
-        for (let Xn of admitted) if ((qt.add(Xn.name), !Ae(Xn))) Xn.discard();
+        for (let Xn of admitted) {
+          qt.add(Xn.name);
+          if (!Ae(Xn)) Xn.discard();
+        }
         continue;
       }
       for (let Xn of rn)
-        if (!no.includes(Xn)) {
+        if (!engineApi.includes(Xn)) {
           let fo = engineCreateFailedError(Xn.name, e.state.buildFailures.get(Xn.name));
-          (S.has(Xn.name) ? qoe(Xn.name, fo, w.get(Xn.name)) : I4(Xn.name, fo, w.get(Xn.name)),
-            vOn(Xn.args, "fold_failed"));
+          if (S.has(Xn.name)) reportReloadFailure(Xn.name, fo, w.get(Xn.name));
+          else reportHookLoadFailure(Xn.name, fo, w.get(Xn.name));
+          logModLoadFailed(Xn.args, "fold_failed");
         }
-      if (
-        (await bBn(e, admitted, () => resolveElementTables(admitted)),
-        e.state.environmentHost?.died !== void 0)
-      ) {
+      await runWhileAdmitting(e, admitted, () => resolveElementTables(admitted));
+      if (e.state.environmentHost?.died !== undefined) {
         We(admitted);
         return;
       }
@@ -1505,25 +1622,36 @@ async function loadHooksModuleSet(e, n, r) {
       return;
     }
   } finally {
-    e.state.admitting = void 0;
+    e.state.admitting = undefined;
     for (let [rn, pn] of Zt) if (e.state.unadmitted.has(rn)) pn.discard();
   }
 }
 //@ chunk-e6aww6q8.js:4072469-4072580 placement
 function isLaterPlugin(e, n) {
-  let r = [...n.state.knownPlugins.keys()],
-    index = r.indexOf(e);
+  let r = [...n.state.knownPlugins.keys()];
+  let index = r.indexOf(e);
   return (h) => index !== -1 && r.indexOf(h.name) > index;
 }
 //@ chunk-e6aww6q8.js:4072580-4072604 placement
-var kns = (e) => providerRankOf(e.args);
+/**
+ * 取参数的层级
+ */
+var providerRankOfArgs = (e) => providerRankOf(e.args);
 //@ chunk-e6aww6q8.js:4072604-4072714 placement
-function needsFullReload(e, n, r) {
+function needsFullReload(e, n, live) {
   let s = n.state.knownArgs.get(e);
-  return findReloadTriggerEvent({ live: r, scans: s ? [s.scan] : [] }) !== void 0 || aBn(e, n);
+  return (
+    findReloadTriggerEvent({
+      live,
+      scans: s ? [s.scan] : [],
+    }) !== undefined || isCrashedOrWithholding(e, n)
+  );
 }
 //@ chunk-e6aww6q8.js:4072714-4072797 placement
-function BBn(e) {
+/**
+ * 逐个退役模块并收集错误
+ */
+function retireModules(e) {
   let n = [];
   for (let r of e)
     try {
@@ -1533,57 +1661,66 @@ function BBn(e) {
     }
   return n;
 }
+//@ chunk-e6aww6q8.js:4072797-4073208 placement
 /**
  * 某插件使 hooks worker 崩溃时：记遥测、报告插件问题（列出仍保持扣留的 $ 名称）并发出失败事件。
  */
-//@ chunk-e6aww6q8.js:4072797-4073208 placement
-function reportWorkerCrash({ state: state }, n, { reason: reason, fields: fields }) {
+function reportWorkerCrash({ state }, n, { reason, fields }) {
   let h = state.knownArgs.get(n);
-  if (h === void 0) return;
-  logFeatureBad("plugin_function_hooks_load", "crashed_worker", { ...classifyPluginOrigin(h), ...fields });
-  let mapped = withheldNounsOf(state, n).map((w) => `$.${w}`),
-    S = mapped.length > 0;
-  (reportPluginProblem(
+  if (h === undefined) return;
+  logFeatureBad("plugin_function_hooks_load", "crashed_worker", {
+    ...classifyPluginOrigin(h),
+    ...fields,
+  });
+  let mapped = withheldNounsOf(state, n).map((w) => `$.${w}`);
+  let S = mapped.length > 0;
+  reportPluginProblem(
     n,
     `${n} was unloaded: it crashed the hooks worker` +
       (S ? `; what it withheld (${mapped.join(", ")}) stays withheld until it reloads or is disabled` : ""),
-  ),
-    emit({ plugin: n, event: "*", reason: reason, effect: Yni, hasOverrun: !1 }));
+  );
+  emit({
+    plugin: n,
+    event: "*",
+    reason,
+    effect: PLUGIN_UNLOADED_TEXT,
+    hasOverrun: false,
+  });
 }
+//@ chunk-e6aww6q8.js:4073208-4073829 placement
 /**
  * 卸载一组 hooks 模块，记录退役时抛出的错误。
  */
-//@ chunk-e6aww6q8.js:4073208-4073829 placement
 async function unloadHooksModules(e, n, r) {
-  let s = typeof r === "string" ? void 0 : r,
-    h = getPluginRegistry(),
-    filtered = h.loadedModules.filter((loadedModule) => n.has(loadedModule.name)),
-    filtered_2 = h.loadedModules.filter((loadedModule) => !n.has(loadedModule.name)),
-    any = [...n].some((q) =>
-      needsFullReload(
-        q,
-        e,
-        filtered.find((Z) => Z.name === q),
-      ),
-    );
-  if (((h.loadedModules = filtered_2), any)) e.state.isSetRecord = !1;
+  let s = typeof r === "string" ? undefined : r;
+  let pluginRegistry = getPluginRegistry();
+  let filtered = pluginRegistry.loadedModules.filter((loadedModule) => n.has(loadedModule.name));
+  let filtered_2 = pluginRegistry.loadedModules.filter((loadedModule) => !n.has(loadedModule.name));
+  let any = [...n].some((q) =>
+    needsFullReload(
+      q,
+      e,
+      filtered.find((Z) => Z.name === q),
+    ),
+  );
+  pluginRegistry.loadedModules = filtered_2;
+  if (any) e.state.isSetRecord = false;
   for (let q of n) {
-    if (s !== void 0) reportWorkerCrash(e, q, s);
+    if (s !== undefined) reportWorkerCrash(e, q, s);
     forgetPlugin(q, e);
   }
-  s !== void 0 ? reportWorkerCrashWithholdings(e.state, n) : liftWithholdings(e.state, n);
-  let G = BBn(filtered);
-  if (
-    (publishRenderPlugins(e),
-    Woe(),
-    XAe(h.loadedModules),
-    logForDebugging(
-      `hooks modules unloaded: ${[...n].map((q) => filtered.find((Z) => Z.name === q)?.label ?? q).join(", ")} (${s?.reason ?? r})`,
-    ),
-    await resolveElementTables(filtered_2),
-    ser(),
-    G.length > 0)
-  )
+  if (s !== undefined) reportWorkerCrashWithholdings(e.state, n);
+  else liftWithholdings(e.state, n);
+  let G = retireModules(filtered);
+  publishRenderPlugins(e);
+  invalidateAllHookedCaches();
+  noteWorkersLoaded(pluginRegistry.loadedModules);
+  logForDebugging(
+    `hooks modules unloaded: ${[...n].map((q) => filtered.find((Z) => Z.name === q)?.label ?? q).join(", ")} (${s?.reason ?? r})`,
+  );
+  await resolveElementTables(filtered_2);
+  invalidateAll();
+  if (G.length > 0)
     throw AggregateError(G, "a hooks module threw as it retired: " + G.map(errorMessage).join("; "));
 }
 //@ chunk-e6aww6q8.js:4073829-4073968 placement
@@ -1601,22 +1738,26 @@ function insertionIndex(e, n, r) {
   return index === -1 ? e.length : index;
 }
 //@ chunk-e6aww6q8.js:4074080-4074165 placement
-function xns(e, n, r) {
-  let s = insertionIndex(e, r.rank(n), r);
-  return [...e.slice(0, s), n, ...e.slice(s)];
+/**
+ * 按层级插入模块
+ */
+function insertByRank(loadedModules, n, r) {
+  let s = insertionIndex(loadedModules, r.rank(n), r);
+  return [...loadedModules.slice(0, s), n, ...loadedModules.slice(s)];
 }
+//@ chunk-e6aww6q8.js:4074165-4076943 placement
 /**
  * 按名字重载一个 hooks 模块；worker 中途死亡、模块被移出声明集等情况都给出原因。
  */
-//@ chunk-e6aww6q8.js:4074165-4076943 placement
 async function reloadHooksModuleByName(e, n) {
-  let r = getPluginRegistry(),
-    found = r.loadedModules.find((loadedModule) => loadedModule.name === e),
-    h = n.state.knownPlugins.get(e),
-    y = found?.args ?? n.state.knownArgs.get(e) ?? (await reprepareFromPlugin(n, h));
+  let pluginRegistry = getPluginRegistry();
+  let live = pluginRegistry.loadedModules.find((loadedModule) => loadedModule.name === e);
+  let h = n.state.knownPlugins.get(e);
+  let y = live?.args ?? n.state.knownArgs.get(e) ?? (await reprepareFromPlugin(n, h));
   if (!y) throw new HooksError(`no hooks module named ${e} is loaded or declared`);
-  let S = y,
-    w = (Et) => `${e}: the hooks worker died during the reload (${Et}); the respawn reloads the declared set`;
+  let S = y;
+  let w = (died) =>
+    `${e}: the hooks worker died during the reload (${died}); the respawn reloads the declared set`;
   function L(Et) {
     if (!n.state.knownArgs.has(e))
       throw new HooksError(
@@ -1627,311 +1768,394 @@ async function reloadHooksModuleByName(e, n) {
   }
   let G = await rescanHooksModuleArgs(n.state, y, h);
   L("read its args");
-  let startTime = performance.now(),
-    loadedModules = r.loadedModules,
-    Se = needsFullReload(e, n, found) || findReloadTriggerEvent({ live: void 0, scans: [G.scan] }) !== void 0;
+  let startTime = performance.now();
+  let loadedModules = pluginRegistry.loadedModules;
+  let Se =
+    needsFullReload(e, n, live) ||
+    findReloadTriggerEvent({
+      live: undefined,
+      scans: [G.scan],
+    }) !== undefined;
   n.state.isSetRecord = n.state.isSetRecord && !Se;
-  let ke = { rank: kns, isBeneath: isLaterPlugin(e, n) },
-    we = found ? loadedModules.indexOf(found) : insertionIndex(loadedModules, providerRankOf(G), ke),
-    Ee = await judgePluginRegister({
-      args: G,
-      plugin: h,
-      judges: registerJudges({
-        before: loadedModules.slice(0, we),
-        after: loadedModules.slice(found ? we + 1 : we),
-        isNative: Boolean(builtinModuleOf(G)),
-        tier: G.tier,
-      }),
-    });
+  let ke = {
+    rank: providerRankOfArgs,
+    isBeneath: isLaterPlugin(e, n),
+  };
+  let we = live ? loadedModules.indexOf(live) : insertionIndex(loadedModules, providerRankOf(G), ke);
+  let Ee = await judgePluginRegister({
+    args: G,
+    plugin: h,
+    judges: registerJudges({
+      before: loadedModules.slice(0, we),
+      after: loadedModules.slice(live ? we + 1 : we),
+      isNative: Boolean(builtinModuleOf(G)),
+      tier: G.tier,
+    }),
+  });
   if (Ee) {
-    let Et = describeRegisterRefusal(Ee) + (found ? Rx : ""),
-      yt = new Set([e]);
-    if (found) await unloadHooksModules(n, yt, Et);
-    else (forgetPlugin(e, n), liftWithholdings(n.state, yt));
-    return { refused: Et, ms: performance.now() - startTime };
+    let Et = describeRegisterRefusal(Ee) + (live ? PREVIOUS_VERSION_UNLOADED : "");
+    let yt = new Set([e]);
+    if (live) await unloadHooksModules(n, yt, Et);
+    else {
+      forgetPlugin(e, n);
+      liftWithholdings(n.state, yt);
+    }
+    return {
+      refused: Et,
+      ms: performance.now() - startTime,
+    };
   }
-  (L("was admitted"), n.state.knownArgs.set(e, G));
-  let Ae,
-    Ie,
-    Me = jes(n.state, e),
-    We = Ges(n.state),
-    ze = n.state.withholdings.get(e);
+  L("was admitted");
+  n.state.knownArgs.set(e, G);
+  let Ae;
+  let Ie;
+  let Me = foldBaseWithout(n.state, e);
+  let We = lastFoldSummary(n.state);
+  let ze = n.state.withholdings.get(e);
   function lt() {
     if (n.state.knownArgs.has(e)) n.state.knownArgs.set(e, S);
-    (ze ? n.state.withholdings.set(e, ze) : n.state.withholdings.delete(e), recordRefoldResult(n.state, We));
+    if (ze) n.state.withholdings.set(e, ze);
+    else n.state.withholdings.delete(e);
+    recordRefoldResult(n.state, We);
   }
   try {
-    ((Ae = await describeHooksModuleState(n, G)),
-      (Ae.shown = shownPluginInfo(G, h)),
-      (Ae.judgedUnder = admissionTextFor(found)),
-      ([Ie] = await withUnadmitted(n, Ae, () => buildEngineApi(n, [Ae], Me))));
+    Ae = await describeHooksModuleState(n, G);
+    Ae.shown = shownPluginInfo(G, h);
+    Ae.judgedUnder = admissionTextFor(live);
+    [Ie] = await withUnadmitted(n, Ae, () => buildEngineApi(n, [Ae], Me));
   } catch (error) {
-    throw (lt(), error);
+    lt();
+    throw error;
   }
   if (!Ie) {
     lt();
-    let any = [...n.state.buildFailures.keys()].some((qt) => qt !== e);
+    let any = [...n.state.buildFailures.keys()].some((key) => key !== e);
     if (any) {
-      let qt = { scans: void 0, read: Promise.withResolvers(), judgedUnder: void 0 };
-      (n.state.loading.add(qt),
-        await loadHooksModuleSet(n, [...n.state.knownPlugins.values()], qt).finally(() => {
-          (n.state.loading.delete(qt), qt.read.resolve(), n.state.loadingRead.emit());
-        }));
+      let qt = {
+        scans: undefined,
+        read: Promise.withResolvers(),
+        judgedUnder: undefined,
+      };
+      n.state.loading.add(qt);
+      await loadHooksModuleSet(n, [...n.state.knownPlugins.values()], qt).finally(() => {
+        n.state.loading.delete(qt);
+        qt.read.resolve();
+        n.state.loadingRead.emit();
+      });
     }
-    let yt = n.state.environmentHost?.died,
-      found_2 = r.loadedModules.find((loadedModule) => any && yt === void 0 && loadedModule.name === e);
-    if (found_2 !== void 0) {
+    let died = n.state.environmentHost?.died;
+    let found = pluginRegistry.loadedModules.find(
+      (loadedModule) => any && died === undefined && loadedModule.name === e,
+    );
+    if (found !== undefined) {
       let qt = performance.now() - startTime;
-      return (
-        logForDebugging(
-          `hooks module ${found_2.label} reloaded with the whole set in ${qt.toFixed(1)}ms; events: ` +
-            q4o(found_2.patterns),
-        ),
-        { events: [...found_2.patterns], ms: qt }
+      logForDebugging(
+        `hooks module ${found.label} reloaded with the whole set in ${qt.toFixed(1)}ms; events: ` +
+          joinedKeys(found.patterns),
       );
+      return {
+        events: [...found.patterns],
+        ms: qt,
+      };
     }
-    let At = n.state.buildFailures.get(e),
-      It = any && At === void 0,
-      Yt = any && found !== void 0;
+    let At = n.state.buildFailures.get(e);
+    let It = any && At === undefined;
+    let Yt = any && live !== undefined;
     throw new HooksError(
-      yt === void 0
+      died === undefined
         ? `${e}: ` +
             (It
               ? "not loaded by the fold of the whole set"
               : `${At?.stage ?? "engine.create"} failed on reload` +
-                (At === void 0 ? "" : ` (${At.reason})`)) +
-            (Yt ? Rx : "")
-        : w(yt),
+                (At === undefined ? "" : ` (${At.reason})`)) +
+            (Yt ? PREVIOUS_VERSION_UNLOADED : "")
+        : w(died),
     );
   }
-  let Je = found
-    ? r.loadedModules.map((loadedModule) => (loadedModule === found ? Ae : loadedModule))
-    : xns(r.loadedModules, Ae, ke);
+  let Je = live
+    ? pluginRegistry.loadedModules.map((loadedModule) => (loadedModule === live ? Ae : loadedModule))
+    : insertByRank(pluginRegistry.loadedModules, Ae, ke);
   await resolveElementTables(Je);
-  let nt = n.state.environmentHost?.died;
-  if (nt !== void 0) throw (lt(), new HooksError(w(nt)));
-  ((r.loadedModules = Je),
-    n.state.unloadedSteps.clear(),
-    found?.retire(),
-    n.state.crashedWithholders.delete(e),
-    mlt(e, n),
-    publishRenderPlugins(n),
-    logModsBackOn(n, [Ae]),
-    Woe(),
-    gMe(e),
-    XAe(r.loadedModules));
+  let died = n.state.environmentHost?.died;
+  if (died !== undefined) {
+    lt();
+    throw new HooksError(w(died));
+  }
+  pluginRegistry.loadedModules = Je;
+  n.state.unloadedSteps.clear();
+  live?.retire();
+  n.state.crashedWithholders.delete(e);
+  bumpGeneration(e, n);
+  publishRenderPlugins(n);
+  logModsBackOn(n, [Ae]);
+  invalidateAllHookedCaches();
+  forgetSessionStartCall(e);
+  noteWorkersLoaded(pluginRegistry.loadedModules);
   let pt = performance.now() - startTime;
-  return (
-    logForDebugging(`hooks module ${Ae.label} reloaded in ${pt.toFixed(1)}ms; events: ` + q4o(Ae.patterns)),
-    { events: [...Ae.patterns], ms: pt }
+  logForDebugging(
+    `hooks module ${Ae.label} reloaded in ${pt.toFixed(1)}ms; events: ` + joinedKeys(Ae.patterns),
   );
+  return {
+    events: [...Ae.patterns],
+    ms: pt,
+  };
 }
 //@ chunk-e6aww6q8.js:4076943-4076964 placement
-class Wj extends HooksError {}
+/**
+ * 重载失败错误类
+ */
+class ReloadFailedError extends HooksError {}
+//@ chunk-e6aww6q8.js:4076964-4077156 placement
 /**
  * 执行重载，失败时包装为说明插件仍在旧版本运行的错误。
  */
-//@ chunk-e6aww6q8.js:4076964-4077156 placement
 async function wrapReloadError(e, n) {
-  let r = getPluginRegistry(),
-    found = r.loadedModules.find((loadedModule) => loadedModule.name === e);
+  let pluginRegistry = getPluginRegistry();
+  let found = pluginRegistry.loadedModules.find((loadedModule) => loadedModule.name === e);
   try {
     return await n();
   } catch (error) {
-    throw found?.status().kind === "live" && r.loadedModules.includes(found)
-      ? new Wj(errorMessage(error), { cause: error })
+    throw found?.status().kind === "live" && pluginRegistry.loadedModules.includes(found)
+      ? new ReloadFailedError(errorMessage(error), {
+          cause: error,
+        })
       : error;
   }
 }
 //@ chunk-e6aww6q8.js:4077156-4077210 placement
-var Flt = (e, n) => n.state.queue(() => wrapReloadError(e, () => reloadHooksModuleByName(e, n)));
+/**
+ * 排队重载模块
+ */
+var queueReload = (e, n) => n.state.queue(() => wrapReloadError(e, () => reloadHooksModuleByName(e, n)));
+//@ chunk-e6aww6q8.js:4077210-4077474 placement
 /**
  * 开始加载一批模块：设置重载器并登记加载状态。
  */
-//@ chunk-e6aww6q8.js:4077210-4077474 placement
-function startLoadingModules(e, n, r) {
-  (ZV.setReloader((h) => Flt(h, e)), isStoredLoginPinned());
-  let s = { scans: void 0, read: Promise.withResolvers(), judgedUnder: r };
-  return (
-    e.state.loading.add(s),
-    e.state
-      .queue(() => loadHooksModuleSet(e, n, s))
-      .finally(() => {
-        (e.state.loading.delete(s), s.read.resolve(), e.state.loadingRead.emit());
-      })
-  );
+function startLoadingModules(hooksHost, n, judgedUnder) {
+  workerSlots.setReloader((h) => queueReload(h, hooksHost));
+  isStoredLoginPinned();
+  let s = {
+    scans: undefined,
+    read: Promise.withResolvers(),
+    judgedUnder,
+  };
+  hooksHost.state.loading.add(s);
+  return hooksHost.state
+    .queue(() => loadHooksModuleSet(hooksHost, n, s))
+    .finally(() => {
+      hooksHost.state.loading.delete(s);
+      s.read.resolve();
+      hooksHost.state.loadingRead.emit();
+    });
 }
 //@ chunk-e6aww6q8.js:4077474-4077561 placement
-async function WBn(e) {
-  await Promise.all([...e.state.loading].map((n) => n.read.promise));
+/**
+ * 等待所有模块读取
+ */
+async function waitForModuleReads(hooksHost) {
+  await Promise.all([...hooksHost.state.loading].map((n) => n.read.promise));
 }
+//@ chunk-e6aww6q8.js:4077561-4077663 placement
 /**
  * 判断正在加载的模块中是否有处理某 command.run 的。
  */
-//@ chunk-e6aww6q8.js:4077561-4077663 placement
-function isLoadingCommandRun(e, n) {
-  return [...e.state.loading].some(
-    (r) => r.scans === void 0 || r.scans.some((scan) => handlesCommandRun(scan, n)),
+function isLoadingCommandRun(hooksHost, n) {
+  return [...hooksHost.state.loading].some(
+    (r) => r.scans === undefined || r.scans.some((scan) => handlesCommandRun(scan, n)),
   );
 }
+//@ chunk-e6aww6q8.js:4077663-4077809 placement
 /**
  * 判断正在加载或已知的模块中是否有处理任何 command.run 的。
  */
-//@ chunk-e6aww6q8.js:4077663-4077809 placement
-function isLoadingAnyCommandRun(e) {
+function isLoadingAnyCommandRun(hooksHost) {
   return (
-    [...e.state.loading].some((n) => n.scans === void 0 || n.scans.some(xlt)) ||
-    [...e.state.knownArgs.values()].some((n) => xlt(n.scan))
+    [...hooksHost.state.loading].some((n) => n.scans === undefined || n.scans.some(needsRefoldScan)) ||
+    [...hooksHost.state.knownArgs.values()].some((knownArg) => needsRefoldScan(knownArg.scan))
   );
 }
+//@ chunk-e6aww6q8.js:4077809-4077986 placement
 /**
  * 列出插件 hooks 模块的文件。
  */
-//@ chunk-e6aww6q8.js:4077809-4077986 placement
-function hooksModuleFilesOf(e, n) {
-  let r = IT(e) ?? n.state.knownArgs.get(e);
+function hooksModuleFilesOf(e, hooksHost) {
+  let r = loadedModuleArgs(e) ?? hooksHost.state.knownArgs.get(e);
   if (r) return hooksModuleFiles(r).map((y) => y.file);
-  let s = n.state.knownPlugins.get(e);
-  return s !== void 0 && s.modulePath === void 0 ? [] : void 0;
+  let s = hooksHost.state.knownPlugins.get(e);
+  return s !== undefined && s.modulePath === undefined ? [] : undefined;
 }
+//@ chunk-e6aww6q8.js:4077986-4078339 placement
 /**
  * 卸载已被禁用或卸载的插件的 hooks 模块（排队执行）。
  */
-//@ chunk-e6aww6q8.js:4077986-4078339 placement
-var unloadDisabledPlugins = (e, n) =>
-  e.state.queue(async () => {
+var unloadDisabledPlugins = (hooksHost, n) =>
+  hooksHost.state.queue(async () => {
     function r(h) {
-      let y = e.state.knownPlugins.get(h);
-      if (y === void 0) return l4(e.state, h);
+      let y = hooksHost.state.knownPlugins.get(h);
+      if (y === undefined) return storageIdOf(hooksHost.state, h);
       return marketplaceSource(y);
     }
     let s = new Set(
-      [...e.state.knownArgs.keys(), ...e.state.knownPlugins.keys()].filter((h) => !n.has(r(h))),
+      [...hooksHost.state.knownArgs.keys(), ...hooksHost.state.knownPlugins.keys()].filter(
+        (h) => !n.has(r(h)),
+      ),
     );
     if (s.size === 0) return;
-    for (let h of s) e.state.knownPlugins.delete(h);
-    await unloadHooksModules(e, s, "plugin disabled or uninstalled");
+    for (let h of s) hooksHost.state.knownPlugins.delete(h);
+    await unloadHooksModules(hooksHost, s, "plugin disabled or uninstalled");
   });
+//@ chunk-e6aww6q8.js:4078382-4079470 placement
 /**
  * 插件选项（options）状态文案：不能解析、被扣留、失败、已重载、被拒绝。
  */
-//@ chunk-e6aww6q8.js:4078382-4079470 placement
-var HOOKS_OPTIONS_STATUS_TEXT = (e, n) =>
-  e.state.queue(async () => {
-    let optionsReloadFailures = e.state.optionsReloadFailures,
-      s = Ewo(),
-      h = `${s} does not parse; options not read`;
-    async function y(w, L) {
-      if (!(Object.keys(L.manifest.userConfig ?? {}).length > 0)) return;
-      if (s !== void 0) return { name: w, kind: "held", reason: h };
-      let q = pluginOptionsSnapshot(L),
-        Z =
-          getPluginRegistry().loadedModules.find((loadedModule) => loadedModule.name === w)?.args ??
-          e.state.knownArgs.get(w);
-      if (Z !== void 0 && isDeepStrictEqual_18(q.options, pickNonSensitiveOptions(Z.options, L))) {
+var HOOKS_OPTIONS_STATUS_TEXT = (hooksHost, n) =>
+  hooksHost.state.queue(async () => {
+    let optionsReloadFailures = hooksHost.state.optionsReloadFailures;
+    let brokenTrustedSetting = findBrokenTrustedSetting();
+    let reason = `${brokenTrustedSetting} does not parse; options not read`;
+    async function y(w, serverName) {
+      if (!(Object.keys(serverName.manifest.userConfig ?? {}).length > 0)) return;
+      if (brokenTrustedSetting !== undefined)
+        return {
+          name: w,
+          kind: "held",
+          reason,
+        };
+      let q = pluginOptionsSnapshot(serverName);
+      let Z =
+        getPluginRegistry().loadedModules.find((loadedModule) => loadedModule.name === w)?.args ??
+        hooksHost.state.knownArgs.get(w);
+      if (Z !== undefined && isDeepStrictEqual(q.options, pickNonSensitiveOptions(Z.options, serverName))) {
         optionsReloadFailures.delete(w);
         return;
       }
-      let ke = optionsReloadFailures.get(w),
-        we = e.state.generations.get(w);
-      if (ke !== void 0 && ke.wanted === q.text && (Z === void 0 || ke.generation === we))
-        return { name: w, kind: "failing", error: ke.error };
+      let ke = optionsReloadFailures.get(w);
+      let we = hooksHost.state.generations.get(w);
+      if (ke !== undefined && ke.wanted === q.text && (Z === undefined || ke.generation === we))
+        return {
+          name: w,
+          kind: "failing",
+          error: ke.error,
+        };
       try {
         let Ae = await n(w);
-        if (Ae.refused === void 0)
-          return (
-            optionsReloadFailures.delete(w),
-            { name: w, kind: "reloaded", result: Ae, recovers: ke !== void 0 }
-          );
-        return (
-          optionsReloadFailures.set(w, {
-            generation: e.state.generations.get(w),
-            wanted: q.text,
-            error: new HooksError(Ae.refused),
-          }),
-          { name: w, kind: "refused", result: Ae }
-        );
+        if (Ae.refused === undefined) {
+          optionsReloadFailures.delete(w);
+          return {
+            name: w,
+            kind: "reloaded",
+            result: Ae,
+            recovers: ke !== undefined,
+          };
+        }
+        optionsReloadFailures.set(w, {
+          generation: hooksHost.state.generations.get(w),
+          wanted: q.text,
+          error: new HooksError(Ae.refused),
+        });
+        return {
+          name: w,
+          kind: "refused",
+          result: Ae,
+        };
       } catch (error) {
-        return (
-          optionsReloadFailures.set(w, { generation: we, wanted: q.text, error: error }),
-          { name: w, kind: "failed", error: error }
-        );
+        optionsReloadFailures.set(w, {
+          generation: we,
+          wanted: q.text,
+          error,
+        });
+        return {
+          name: w,
+          kind: "failed",
+          error,
+        };
       }
     }
-    for (let w of optionsReloadFailures.keys())
-      if (!e.state.knownPlugins.has(w)) optionsReloadFailures.delete(w);
+    for (let key of optionsReloadFailures.keys())
+      if (!hooksHost.state.knownPlugins.has(key)) optionsReloadFailures.delete(key);
     let S = [];
-    for (let [w, L] of e.state.knownPlugins) {
+    for (let [w, L] of hooksHost.state.knownPlugins) {
       let G = await y(w, L);
-      if (G !== void 0) S.push(G);
+      if (G !== undefined) S.push(G);
     }
     return S;
   });
+//@ chunk-e6aww6q8.js:4079513-4079732 placement
 /**
  * 合并插件记录：清单与 hooks 配置未变时保留原记录。
  */
-//@ chunk-e6aww6q8.js:4079513-4079732 placement
 function mergePluginRecord(e, n) {
-  let r = { ...n.manifest, name: e.manifest.name };
+  let r = {
+    ...n.manifest,
+    name: e.manifest.name,
+  };
   return e.modulePath === n.modulePath &&
-    isDeepStrictEqual_19(e.manifest, r) &&
-    isDeepStrictEqual_19(e.hooksConfig, n.hooksConfig)
+    isDeepStrictEqual(e.manifest, r) &&
+    isDeepStrictEqual(e.hooksConfig, n.hooksConfig)
     ? e
-    : { ...e, manifest: r, hooksConfig: n.hooksConfig, modulePath: n.modulePath };
+    : {
+        ...e,
+        manifest: r,
+        hooksConfig: n.hooksConfig,
+        modulePath: n.modulePath,
+      };
 }
+//@ chunk-e6aww6q8.js:4079732-4080103 placement
 /**
  * 重新读取已知插件记录（排队执行），manifest 不再指定 hooks 模块时卸载；返回前后的模块路径。
  */
-//@ chunk-e6aww6q8.js:4079732-4080103 placement
-var retargetKnownPlugin = (e, n, r) =>
-  n.state.queue(async () => {
-    let s = n.state.knownPlugins.get(e);
-    if (s === void 0) return;
-    let h = await wrapReloadError(e, () => r(s)),
-      y =
-        getPluginRegistry().loadedModules.some((loadedModule) => loadedModule.name === e) ||
-        n.state.knownArgs.has(e);
-    if ((n.state.knownPlugins.set(e, mergePluginRecord(s, h)), h.modulePath === void 0 && y))
-      await unloadHooksModules(n, new Set([e]), "its manifest names no hooks module now");
-    return { before: s.modulePath, now: h.modulePath };
+var retargetKnownPlugin = (e, hooksHost, r) =>
+  hooksHost.state.queue(async () => {
+    let s = hooksHost.state.knownPlugins.get(e);
+    if (s === undefined) return;
+    let h = await wrapReloadError(e, () => r(s));
+    let y =
+      getPluginRegistry().loadedModules.some((loadedModule) => loadedModule.name === e) ||
+      hooksHost.state.knownArgs.has(e);
+    hooksHost.state.knownPlugins.set(e, mergePluginRecord(s, h));
+    if (h.modulePath === undefined && y)
+      await unloadHooksModules(hooksHost, new Set([e]), "its manifest names no hooks module now");
+    return {
+      before: s.modulePath,
+      now: h.modulePath,
+    };
   });
+//@ chunk-e6aww6q8.js:4080103-4080272 placement
 /**
  * 记录 worker 中 mods 被关闭（数量与时间）。
  */
-//@ chunk-e6aww6q8.js:4080103-4080272 placement
 function logModsTurnedOff(e, n) {
-  let r = count(n, (s) => builtinModuleOf(s) !== void 0);
-  ((e.state.modsOffAt = Date.now()),
-    logFeatureBad("plugin_function_hooks_worker_mods", "turned_off", {
-      worker_mods: n.length - r,
-      native_mods: r,
-    }));
+  let r = count(n, (s) => builtinModuleOf(s) !== undefined);
+  e.state.modsOffAt = Date.now();
+  logFeatureBad("plugin_function_hooks_worker_mods", "turned_off", {
+    worker_mods: n.length - r,
+    native_mods: r,
+  });
 }
 //@ chunk-e6aww6q8.js:4116682-4117078 placement
 var {
-  loadHooksModules: loadHooksModules,
-  mayHookCommand: mayHookCommand,
-  mayRegisterCommands: mayRegisterCommands,
-  loadingScansRead: loadingScansRead,
-  onLoadingScansRead: onLoadingScansRead,
-  pruneHooksModules: pruneHooksModules,
-  reloadHooksModule: reloadHooksModule,
-  retryUnloadedModules: retryUnloadedModules,
-  refreshOptions: refreshOptions,
-  retargetHooksModule: retargetHooksModule,
-  loadedFilesOf: loadedFilesOf,
-  buildInterfaces: buildInterfaces,
-  routeInterfaceCall: routeInterfaceCall,
-  runHostOp: runHostOp,
-  retireEnvironmentHost: retireEnvironmentHost,
-  opsDelivered: opsDelivered,
-  workInFlight: workInFlight,
-  applyPendingInvalidations: applyPendingInvalidations,
+  loadHooksModules,
+  mayHookCommand,
+  mayRegisterCommands,
+  loadingScansRead,
+  onLoadingScansRead,
+  pruneHooksModules,
+  reloadHooksModule,
+  retryUnloadedModules,
+  refreshOptions,
+  retargetHooksModule,
+  loadedFilesOf,
+  buildInterfaces,
+  routeInterfaceCall,
+  runHostOp,
+  retireEnvironmentHost,
+  opsDelivered,
+  workInFlight,
+  applyPendingInvalidations,
 } = initHooksHost();
-
 export {
-  r2r,
-  bNi,
+  workersLoadedReporter,
+  flushDeferredProblems,
   retryUnloadedModules,
   opsDelivered,
   applyPendingInvalidations,
@@ -1940,53 +2164,53 @@ export {
   mayHookCommand,
   onLoadingScansRead,
   loadHooksModules,
-  EBr,
+  loadedPluginOptions,
   workInFlight,
   loadSurfaceModules,
   mergePluginRecord,
-  P3n,
-  kFt,
+  refreshAgentsAndDefinitions,
+  inlineProblemsSeen,
   orderHooksModules,
   reportInlinePluginNotice,
   pruneHooksModules,
   refreshOptions,
-  iEt,
-  fWe,
+  HOOKS_READY_TIMEOUT_MS,
+  registeredAgentsTable,
   toolNameOfCall,
-  N$t,
+  notLoadedWithinText,
   copyRegistrations,
-  ID,
+  forgetRegisteredAgent,
   pluginOptionsSnapshot,
   reportUnmatchedHookRegistrations,
-  TBn,
-  zoe,
+  findHookMemberByName,
+  logHookLoadFailure,
   builtinModuleOf,
   logModsTurnedOff,
   isModuleUnchanged,
   describeHooksModuleState,
   admissionTextFor,
-  Fme,
+  errorWithCause,
   resolveElementTables,
   reportWorkerCrash,
-  wFt,
+  bindAsyncResource,
   unloadHooksModules,
-  pOe,
+  hookHostKind,
   validateHooksModuleExports,
   withInFlightDispatches,
-  WBn,
+  waitForModuleReads,
   isLoadingAnyCommandRun,
   startLoadingModules,
   isLoadingCommandRun,
   unloadDisabledPlugins,
-  Flt,
+  queueReload,
   HOOKS_OPTIONS_STATUS_TEXT,
   wrapReloadError,
   reloadHooksModuleByName,
   retargetKnownPlugin,
   hooksModuleFilesOf,
-  nF,
-  Wj,
-  T7,
+  stripPluginPrefix,
+  ReloadFailedError,
+  hostStateRef,
   retargetHooksModule,
   findReverseDependents,
   loadedFilesOf,

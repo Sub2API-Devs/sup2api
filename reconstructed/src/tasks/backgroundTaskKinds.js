@@ -10,12 +10,11 @@
  */
 
 //@ chunk-e6aww6q8.js:3750553-3750768 placement
-var hasRunningBackgroundWorkForAgent = (e, n) =>
-  Object.values(n.all()).some((r) => {
+var hasRunningBackgroundWorkForAgent = (e, taskRegistry) =>
+  Object.values(taskRegistry.all()).some((r) => {
     let s = r.type === "local_bash" && Boolean(r.isBackgrounded) && !r.elsewhere;
     return (
       r.status === "running" && (s || r.type === "monitor_mcp" || r.type === "monitor_ws") && r.agentId === e
     );
   });
-
 export { hasRunningBackgroundWorkForAgent };

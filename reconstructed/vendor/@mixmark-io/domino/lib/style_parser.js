@@ -8,54 +8,61 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-vwj6ccer.js:76494-77213 cjs-fingerprint
-var N0 = x(function (T0) {
-  Object.defineProperty(T0, "__esModule", { value: !0 });
-  T0.hyphenate = T0.parse = void 0;
-  function hx(e) {
-    let t = [],
-      r = 0,
-      a = 0,
-      s = 0,
-      c = 0,
-      d = 0,
-      g = null;
-    while (r < e.length)
-      switch (e.charCodeAt(r++)) {
+var require_style_parser = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.hyphenate = cjsExports.parse = undefined;
+  function parse(value) {
+    let styles = [];
+    let i = 0;
+    let parenDepth = 0;
+    let quote = 0;
+    let valueStart = 0;
+    let propStart = 0;
+    let currentProp = null;
+    while (i < value.length)
+      switch (value.charCodeAt(i++)) {
         case 40:
-          a++;
+          parenDepth++;
           break;
         case 41:
-          a--;
+          parenDepth--;
           break;
         case 39:
-          if (s === 0) s = 39;
-          else if (s === 39 && e.charCodeAt(r - 1) !== 92) s = 0;
+          if (quote === 0) quote = 39;
+          else if (quote === 39 && value.charCodeAt(i - 1) !== 92) quote = 0;
           break;
         case 34:
-          if (s === 0) s = 34;
-          else if (s === 34 && e.charCodeAt(r - 1) !== 92) s = 0;
+          if (quote === 0) quote = 34;
+          else if (quote === 34 && value.charCodeAt(i - 1) !== 92) quote = 0;
           break;
         case 58:
-          if (!g && a === 0 && s === 0) ((g = v0(e.substring(d, r - 1).trim())), (c = r));
+          if (!currentProp && parenDepth === 0 && quote === 0) {
+            currentProp = hyphenate(value.substring(propStart, i - 1).trim());
+            valueStart = i;
+          }
           break;
         case 59:
-          if (g && c > 0 && a === 0 && s === 0) {
-            let trimmed = e.substring(c, r - 1).trim();
-            (t.push(g, trimmed), (d = r), (c = 0), (g = null));
+          if (currentProp && valueStart > 0 && parenDepth === 0 && quote === 0) {
+            let styleVal = value.substring(valueStart, i - 1).trim();
+            styles.push(currentProp, styleVal);
+            propStart = i;
+            valueStart = 0;
+            currentProp = null;
           }
           break;
       }
-    if (g && c) {
-      let trimmed = e.slice(c).trim();
-      t.push(g, trimmed);
+    if (currentProp && valueStart) {
+      let styleVal = value.slice(valueStart).trim();
+      styles.push(currentProp, styleVal);
     }
-    return t;
+    return styles;
   }
-  T0.parse = hx;
-  function v0(e) {
-    return e.replace(/[a-z][A-Z]/g, (t) => t.charAt(0) + "-" + t.charAt(1)).toLowerCase();
+  cjsExports.parse = parse;
+  function hyphenate(value) {
+    return value.replace(/[a-z][A-Z]/g, (v) => v.charAt(0) + "-" + v.charAt(1)).toLowerCase();
   }
-  T0.hyphenate = v0;
+  cjsExports.hyphenate = hyphenate;
 });
-
-export { N0 };
+export { require_style_parser };

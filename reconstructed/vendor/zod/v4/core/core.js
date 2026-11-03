@@ -5,119 +5,136 @@
  * pieces: chunk-t7zrjgp6.js (9)
  * attribution: esm-layout 3, esm-fingerprint 6
  */
-import { U, C } from "./util.js";
+import { CONSTANT_CATCH, C } from "./util.js";
 
 //@ chunk-t7zrjgp6.js:9655-9700 esm-layout
 function MIi(e) {
   let t = () => e;
-  return ((t[U] = !0), t);
+  t[CONSTANT_CATCH] = true;
+  return t;
 }
 //@ chunk-t7zrjgp6.js:9700-9815 esm-layout
-var N,
-  freeze = Object.freeze({ status: "aborted" }),
-  E = { value: void 0, enumerable: !1 },
-  R = "captureStackTrace" in Error ? Error : null;
+var _a;
+var bY = Object.freeze({
+  status: "aborted",
+});
+var _zodDesc = {
+  value: undefined,
+  enumerable: false,
+};
+var _E = "captureStackTrace" in Error ? Error : null;
 //@ chunk-t7zrjgp6.js:9815-10001 esm-fingerprint
-function L(e) {
-  let t = R;
-  if (t) {
-    let stackTraceLimit = t.stackTraceLimit;
-    if (typeof stackTraceLimit === "number") {
+function newError(Definition) {
+  let E = _E;
+  if (E) {
+    let saved = E.stackTraceLimit;
+    if (typeof saved === "number") {
       try {
-        t.stackTraceLimit = 0;
+        E.stackTraceLimit = 0;
       } catch {
-        return ((R = null), new e());
+        _E = null;
+        return new Definition();
       }
       try {
-        return new e();
+        return new Definition();
       } finally {
-        t.stackTraceLimit = stackTraceLimit;
+        E.stackTraceLimit = saved;
       }
     }
   }
-  return new e();
+  return new Definition();
 }
 //@ chunk-t7zrjgp6.js:10001-11065 esm-fingerprint
-function Fr(e, t, r, n) {
-  let o = {};
-  function i(s) {
-    ((this.def = s), (this.constr = g), (this.traits = new Set()));
+function Fr(name, initializer, proto, params) {
+  let zodProto = {};
+  function Internals(def) {
+    this.def = def;
+    this.constr = _;
+    this.traits = new Set();
   }
-  i.prototype = o;
-  let u = r,
-    c = u && new WeakSet();
-  function f(s, l) {
-    if (!s._zod) {
-      E.value = new i(l);
+  Internals.prototype = zodProto;
+  let protoMembers = proto;
+  let initialized = protoMembers && new WeakSet();
+  function init(inst, def) {
+    if (!inst._zod) {
+      _zodDesc.value = new Internals(def);
       try {
-        Object.defineProperty(s, "_zod", E);
+        Object.defineProperty(inst, "_zod", _zodDesc);
       } finally {
-        E.value = void 0;
+        _zodDesc.value = undefined;
       }
     }
-    if (s._zod.traits.has(e)) return;
-    if ((s._zod.traits.add(e), t(s, l), c)) {
-      let prototypeOf = Object.getPrototypeOf(s),
-        O = s._zod.constr.prototype,
-        x = prototypeOf;
-      while (x && x !== O) x = Object.getPrototypeOf(x);
-      let j = x ?? prototypeOf;
-      if (!c.has(j)) (c.add(j), C(j, u));
+    if (inst._zod.traits.has(name)) return;
+    inst._zod.traits.add(name);
+    initializer(inst, def);
+    if (initialized) {
+      let own = Object.getPrototypeOf(inst);
+      let ctorProto = inst._zod.constr.prototype;
+      let up = own;
+      while (up && up !== ctorProto) up = Object.getPrototypeOf(up);
+      let target = up ?? own;
+      if (!initialized.has(target)) {
+        initialized.add(target);
+        C(target, protoMembers);
+      }
     }
-    let b = g.prototype;
-    for (let key in b) {
-      if (!Object.prototype.hasOwnProperty.call(b, key)) continue;
-      if (!(key in s)) s[key] = b[key].bind(s);
+    let proto = _.prototype;
+    for (let k in proto) {
+      if (!Object.prototype.hasOwnProperty.call(proto, k)) continue;
+      if (!(k in inst)) inst[k] = proto[k].bind(inst);
     }
   }
-  let _ = n?.Parent ?? Object;
-  class y extends _ {}
-  Object.defineProperty(y, "name", { value: e });
-  function g(s) {
-    let l = n?.Parent ? L(y) : this;
-    f(l, s);
-    let deferred = l._zod.deferred;
+  let Parent = params?.Parent ?? Object;
+  class Definition extends Parent {}
+  Object.defineProperty(Definition, "name", {
+    value: name,
+  });
+  function _(def) {
+    let inst = params?.Parent ? newError(Definition) : this;
+    init(inst, def);
+    let deferred = inst._zod.deferred;
     if (deferred) {
-      for (let O of deferred) O();
-      l._zod.deferred = void 0;
+      for (let fn of deferred) fn();
+      inst._zod.deferred = undefined;
     }
-    let a = globalThis.__zod_globalConfig?.postProcessor;
-    if (a) a(l);
-    return l;
+    let pp = globalThis.__zod_globalConfig?.postProcessor;
+    if (pp) pp(inst);
+    return inst;
   }
-  return (
-    Object.defineProperty(g, "init", { value: f }),
-    Object.defineProperty(g, Symbol.hasInstance, {
-      value: (s) => {
-        if (n?.Parent && s instanceof n.Parent) return !0;
-        return s?._zod?.traits?.has(e);
-      },
-    }),
-    Object.defineProperty(g, "name", { value: e }),
-    g
-  );
+  Object.defineProperty(_, "init", {
+    value: init,
+  });
+  Object.defineProperty(_, Symbol.hasInstance, {
+    value: (inst) => {
+      if (params?.Parent && inst instanceof params.Parent) return true;
+      return inst?._zod?.traits?.has(name);
+    },
+  });
+  Object.defineProperty(_, "name", {
+    value: name,
+  });
+  return _;
 }
 //@ chunk-t7zrjgp6.js:11065-11186 esm-fingerprint
-class x8e extends Error {
+class $ZodAsyncError extends Error {
   constructor() {
     super("Encountered Promise during synchronous parse. Use .parseAsync() instead.");
   }
 }
 //@ chunk-t7zrjgp6.js:11186-11319 esm-fingerprint
-class ZodEncodeError extends Error {
-  constructor(e) {
-    super(`Encountered unidirectional transform during encode: ${e}`);
+class $ZodEncodeError extends Error {
+  constructor(name) {
+    super(`Encountered unidirectional transform during encode: ${name}`);
     this.name = "ZodEncodeError";
   }
 }
 //@ chunk-t7zrjgp6.js:11319-11380 esm-fingerprint
-(N = globalThis).__zod_globalConfig ?? (N.__zod_globalConfig = {});
+(_a = globalThis).__zod_globalConfig ?? (_a.__zod_globalConfig = {});
 //@ chunk-t7zrjgp6.js:11380-11418 esm-fingerprint
-var __zod_globalConfig = globalThis.__zod_globalConfig;
+var globalConfig = globalThis.__zod_globalConfig;
 //@ chunk-t7zrjgp6.js:11418-11471 esm-layout
-function Xne(e) {
-  if (e) Object.assign(__zod_globalConfig, e);
-  return __zod_globalConfig;
+function config(newConfig) {
+  if (newConfig) Object.assign(globalConfig, newConfig);
+  return globalConfig;
 }
-
-export { freeze, __zod_globalConfig, Xne, Fr, x8e, ZodEncodeError, MIi };
+export { bY, globalConfig, config, Fr, $ZodAsyncError, $ZodEncodeError, MIi };

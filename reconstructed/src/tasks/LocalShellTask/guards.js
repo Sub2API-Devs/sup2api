@@ -9,12 +9,11 @@
  * attribution: fingerprint 1
  */
 
+//@ chunk-s61vbvea.js:377065-377152 fingerprint = isLocalShellTask (1)
 /**
  * 是否是 local_bash 任务。
  */
-//@ chunk-s61vbvea.js:377065-377152 fingerprint = isLocalShellTask (1)
 function isLocalShellTask(task) {
   return typeof task === "object" && task !== null && "type" in task && task.type === "local_bash";
 }
-
 export { isLocalShellTask };

@@ -10,33 +10,43 @@
  */
 import { getLastInteractionTime } from "../bootstrap/state.js";
 import { useTerminalNotification } from "../ink/useTerminalNotification.js";
-import { Me } from "../components/design-system/ThemeProvider.js";
+import { useTheme_2 } from "../components/design-system/ThemeProvider.js";
 import { y, P } from "../../vendor/react/cjs/react.production.js";
 import { useInterval } from "../ink/components/Input.js";
-import { Yhn } from "../utils/hooks/hookEvents.js";
-import { gB } from "../utils/terminalProbe.js";
+import { HOOK_PROGRESS_INTERVAL_MS } from "../utils/hooks/hookEvents.js";
+import { notifyAsync } from "../utils/terminalProbe.js";
 
 //@ chunk-18hwfzwa.js:1445194-1445250 file-local
 function getTimeSinceLastInteraction(h, x) {
   return Date.now() - Math.max(getLastInteractionTime(), x) >= h;
 }
 //@ chunk-18hwfzwa.js:1445250-1445523 fingerprint = useNotifyAfterTimeout (1)
-function useNotifyAfterTimeout(h, x, D) {
-  let terminal = useTerminalNotification(),
-    { storageV5: storageV5, credentials: credentials } = Me(),
-    [Re, Be] = y(!1),
-    [He] = y(() => Date.now());
-  (P(() => {
-    Be(!1);
-  }, [h, x, terminal]),
-    useInterval(
-      () => {
-        if (!getTimeSinceLastInteraction(Yhn, He)) return;
-        if ((Be(!0), D !== void 0 && !D())) return;
-        gB({ message: h, notificationType: x }, terminal, { storageV5: storageV5, credentials: credentials });
-      },
-      Re ? null : Yhn,
-    ));
+function useNotifyAfterTimeout(text, notificationType, D) {
+  let terminal = useTerminalNotification();
+  let { storageV5, credentials } = useTheme_2();
+  let [Re, Be] = y(false);
+  let [He] = y(() => Date.now());
+  P(() => {
+    Be(false);
+  }, [text, notificationType, terminal]);
+  useInterval(
+    () => {
+      if (!getTimeSinceLastInteraction(HOOK_PROGRESS_INTERVAL_MS, He)) return;
+      Be(true);
+      if (D !== undefined && !D()) return;
+      notifyAsync(
+        {
+          message: text,
+          notificationType,
+        },
+        terminal,
+        {
+          storageV5,
+          credentials,
+        },
+      );
+    },
+    Re ? null : HOOK_PROGRESS_INTERVAL_MS,
+  );
 }
-
 export { useNotifyAfterTimeout };

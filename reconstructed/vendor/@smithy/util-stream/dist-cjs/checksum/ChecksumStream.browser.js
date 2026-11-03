@@ -8,12 +8,13 @@
 import { x } from "../../../../../runtime/bun-runtime.js";
 
 //@ chunk-wjd9n4jx.js:1816-2027 cjs-fingerprint
-var We = x(function (ve) {
-  Object.defineProperty(ve, "__esModule", { value: !0 });
-  ve.ChecksumStream = void 0;
-  var Ar = typeof ReadableStream === "function" ? ReadableStream : function () {};
-  class He extends Ar {}
-  ve.ChecksumStream = He;
+var require_ChecksumStream_browser = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.ChecksumStream = undefined;
+  var ReadableStreamRef = typeof ReadableStream === "function" ? ReadableStream : function () {};
+  class ChecksumStream extends ReadableStreamRef {}
+  cjsExports.ChecksumStream = ChecksumStream;
 });
-
-export { We };
+export { require_ChecksumStream_browser };

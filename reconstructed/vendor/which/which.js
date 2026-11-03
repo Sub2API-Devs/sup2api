@@ -6,79 +6,99 @@
  * attribution: cjs-fingerprint 1
  */
 import { x, importMetaRequire } from "../../runtime/bun-runtime.js";
-import { gt } from "../isexe/index.js";
+import { require_isexe } from "../isexe/index.js";
 
 //@ chunk-m4p5zn6n.js:2251-3688 cjs-fingerprint
-var bt = x(function (mi, xt) {
-  var R = process.env.OSTYPE === "cygwin" || process.env.OSTYPE === "msys",
-    Q = importMetaRequire("path"),
-    Zn = R ? ";" : ":",
-    he = gt(),
-    ht = (e) => Object.assign(Error(`not found: ${e}`), { code: "ENOENT" }),
-    yt = (e, n) => {
-      let r = n.colon || Zn,
-        o =
-          e.match(/\//) || (R && e.match(/\\/))
-            ? [""]
-            : [...(R ? [process.cwd()] : []), ...(n.path || process.env.PATH || "").split(r)],
-        s = R ? n.pathExt || process.env.PATHEXT || ".EXE;.CMD;.BAT;.COM" : "",
-        u = R ? s.split(r) : [""];
-      if (R) {
-        if (e.indexOf(".") !== -1 && u[0] !== "") u.unshift("");
-      }
-      return { pathEnv: o, pathExt: u, pathExtExe: s };
-    },
-    St = (e, n, r) => {
-      if (typeof n === "function") ((r = n), (n = {}));
-      if (!n) n = {};
-      let { pathEnv: pathEnv, pathExt: pathExt, pathExtExe: pathExtExe } = yt(e, n),
-        d = [],
-        l = (p) =>
-          new Promise((h, S) => {
-            if (p === pathEnv.length) return n.all && d.length ? h(d) : S(ht(e));
-            let y = pathEnv[p],
-              w = /^".*"$/.test(y) ? y.slice(1, -1) : y,
-              joined = Q.join(w, e),
-              v = !w && /^\.[\\\/]/.test(e) ? e.slice(0, 2) + joined : joined;
-            h(f(v, p, 0));
-          }),
-        f = (p, h, S) =>
-          new Promise((y, w) => {
-            if (S === pathExt.length) return y(l(h + 1));
-            let E = pathExt[S];
-            he(p + E, { pathExt: pathExtExe }, (v, A) => {
-              if (!v && A)
-                if (n.all) d.push(p + E);
-                else return y(p + E);
-              return y(f(p, h, S + 1));
-            });
-          });
-      return r ? l(0).then((p) => r(null, p), r) : l(0);
-    },
-    Qn = (e, n) => {
-      n = n || {};
-      let { pathEnv: pathEnv, pathExt: pathExt, pathExtExe: pathExtExe } = yt(e, n),
-        u = [];
-      for (let d = 0; d < pathEnv.length; d++) {
-        let l = pathEnv[d],
-          f = /^".*"$/.test(l) ? l.slice(1, -1) : l,
-          joined = Q.join(f, e),
-          h = !f && /^\.[\\\/]/.test(e) ? e.slice(0, 2) + joined : joined;
-        for (let S = 0; S < pathExt.length; S++) {
-          let y = h + pathExt[S];
-          try {
-            if (he.sync(y, { pathExt: pathExtExe }))
-              if (n.all) u.push(y);
-              else return y;
-          } catch (error) {}
-        }
-      }
-      if (n.all && u.length) return u;
-      if (n.nothrow) return null;
-      throw ht(e);
+var require_which = x(function (cjsExports, cjsModule) {
+  var isWindows = process.env.OSTYPE === "cygwin" || process.env.OSTYPE === "msys";
+  var path = importMetaRequire("path");
+  var COLON = isWindows ? ";" : ":";
+  var isexe = require_isexe();
+  var getNotFoundError = (cmd) =>
+    Object.assign(Error(`not found: ${cmd}`), {
+      code: "ENOENT",
+    });
+  var getPathInfo = (cmd, opt) => {
+    let colon = opt.colon || COLON;
+    let pathEnv =
+      cmd.match(/\//) || (isWindows && cmd.match(/\\/))
+        ? [""]
+        : [...(isWindows ? [process.cwd()] : []), ...(opt.path || process.env.PATH || "").split(colon)];
+    let pathExtExe = isWindows ? opt.pathExt || process.env.PATHEXT || ".EXE;.CMD;.BAT;.COM" : "";
+    let pathExt = isWindows ? pathExtExe.split(colon) : [""];
+    if (isWindows) {
+      if (cmd.indexOf(".") !== -1 && pathExt[0] !== "") pathExt.unshift("");
+    }
+    return {
+      pathEnv,
+      pathExt,
+      pathExtExe,
     };
-  xt.exports = St;
-  St.sync = Qn;
+  };
+  var which = (cmd, opt, cb) => {
+    if (typeof opt === "function") {
+      cb = opt;
+      opt = {};
+    }
+    if (!opt) opt = {};
+    let { pathEnv, pathExt, pathExtExe } = getPathInfo(cmd, opt);
+    let found = [];
+    let step = (i) =>
+      new Promise((resolve, reject) => {
+        if (i === pathEnv.length)
+          return opt.all && found.length ? resolve(found) : reject(getNotFoundError(cmd));
+        let ppRaw = pathEnv[i];
+        let pathPart = /^".*"$/.test(ppRaw) ? ppRaw.slice(1, -1) : ppRaw;
+        let pCmd = path.join(pathPart, cmd);
+        let p = !pathPart && /^\.[\\\/]/.test(cmd) ? cmd.slice(0, 2) + pCmd : pCmd;
+        resolve(subStep(p, i, 0));
+      });
+    let subStep = (p, i, ii) =>
+      new Promise((resolve, reject) => {
+        if (ii === pathExt.length) return resolve(step(i + 1));
+        let ext = pathExt[ii];
+        isexe(
+          p + ext,
+          {
+            pathExt: pathExtExe,
+          },
+          (er, is) => {
+            if (!er && is)
+              if (opt.all) found.push(p + ext);
+              else return resolve(p + ext);
+            return resolve(subStep(p, i, ii + 1));
+          },
+        );
+      });
+    return cb ? step(0).then((res) => cb(null, res), cb) : step(0);
+  };
+  var whichSync = (cmd, opt) => {
+    opt = opt || {};
+    let { pathEnv, pathExt, pathExtExe } = getPathInfo(cmd, opt);
+    let found = [];
+    for (let i = 0; i < pathEnv.length; i++) {
+      let ppRaw = pathEnv[i];
+      let pathPart = /^".*"$/.test(ppRaw) ? ppRaw.slice(1, -1) : ppRaw;
+      let pCmd = path.join(pathPart, cmd);
+      let p = !pathPart && /^\.[\\\/]/.test(cmd) ? cmd.slice(0, 2) + pCmd : pCmd;
+      for (let j = 0; j < pathExt.length; j++) {
+        let cur = p + pathExt[j];
+        try {
+          if (
+            isexe.sync(cur, {
+              pathExt: pathExtExe,
+            })
+          )
+            if (opt.all) found.push(cur);
+            else return cur;
+        } catch (ex) {}
+      }
+    }
+    if (opt.all && found.length) return found;
+    if (opt.nothrow) return null;
+    throw getNotFoundError(cmd);
+  };
+  cjsModule.exports = which;
+  which.sync = whichSync;
 });
-
-export { bt };
+export { require_which };

@@ -9,7 +9,7 @@
  * attribution: placement 22
  */
 import { env, antEnv } from "./env.js";
-import { DU } from "./settings/commandSyncNames.js";
+import { mergedCommandNames } from "./settings/commandSyncNames.js";
 import {
   getFeatureValue_CACHED_MAY_BE_STALE,
   initializeGrowthBook,
@@ -18,38 +18,44 @@ import { capitalize } from "./stringUtils.js";
 import { isEnvTruthy } from "./envUtils.js";
 
 //@ chunk-rm2h7nfx.js:375-408 placement
-function C2t() {
+/**
+ * 判断 agent 视图是否被禁用。
+ */
+function isAgentViewDisabled() {
   return agentViewDisabledReason() !== null;
 }
 //@ chunk-rm2h7nfx.js:408-617 placement
 function agentViewDisabledReason() {
   if (env.CLAUDE_CODE_DISABLE_AGENT_VIEW) return "is disabled by CLAUDE_CODE_DISABLE_AGENT_VIEW";
-  if (DU()?.settings.disableAgentView === !0) return "is disabled by the 'disableAgentView' setting";
+  if (mergedCommandNames()?.settings.disableAgentView === true)
+    return "is disabled by the 'disableAgentView' setting";
   return null;
 }
 //@ chunk-rm2h7nfx.js:617-644 placement
 function isAgentsFleetEnabled() {
-  return !C2t();
+  return !isAgentViewDisabled();
 }
 //@ chunk-rm2h7nfx.js:644-675 placement
 var TENGU_FLEETVIEW_SIMPLE = "tengu_fleetview_simple";
 //@ chunk-rm2h7nfx.js:675-737 placement
 function isAgentsSimpleViewEnabled() {
-  return env.CLAUDE_CODE_FLEETVIEW_SIMPLE || getFeatureValue_CACHED_MAY_BE_STALE(TENGU_FLEETVIEW_SIMPLE, !1);
+  return (
+    env.CLAUDE_CODE_FLEETVIEW_SIMPLE || getFeatureValue_CACHED_MAY_BE_STALE(TENGU_FLEETVIEW_SIMPLE, false)
+  );
 }
 //@ chunk-rm2h7nfx.js:737-891 placement
 async function ensureFleetGateHydrated(e = {}) {
-  if (DU() === null) {
-    let { getSettingsWithErrors: getSettingsWithErrors } = await import("./chunk-0crvnfjy.js");
+  if (mergedCommandNames() === null) {
+    let { getSettingsWithErrors } = await import("./chunk-0crvnfjy.js");
     getSettingsWithErrors();
   }
-  if (e.kickGrowthBook !== !1) initializeGrowthBook().catch(() => {});
+  if (e.kickGrowthBook !== false) initializeGrowthBook().catch(() => {});
 }
 //@ chunk-rm2h7nfx.js:891-988 placement
 function isPastSessionsExperimentEnabled() {
   return (
-    antEnv.CLAUDE_CODE_FLEET_PAST_SESSIONS === !0 ||
-    getFeatureValue_CACHED_MAY_BE_STALE("tengu_fleet_past_sessions", !1)
+    antEnv.CLAUDE_CODE_FLEET_PAST_SESSIONS === true ||
+    getFeatureValue_CACHED_MAY_BE_STALE("tengu_fleet_past_sessions", false)
   );
 }
 //@ chunk-rm2h7nfx.js:988-1015 placement
@@ -58,28 +64,28 @@ function isDaemonCliEnabled() {
 }
 //@ chunk-rm2h7nfx.js:1015-1039 placement
 function isDaemonWorkerRegistryEnabled() {
-  return !1;
+  return false;
 }
 //@ chunk-rm2h7nfx.js:1039-1088 placement
 function isDaemonServiceInstallEnabled() {
-  return getFeatureValue_CACHED_MAY_BE_STALE("tengu_amber_anchor", !1);
+  return getFeatureValue_CACHED_MAY_BE_STALE("tengu_amber_anchor", false);
 }
 //@ chunk-rm2h7nfx.js:1088-1139 placement
 function isDaemonServiceRecalled() {
-  return getFeatureValue_CACHED_MAY_BE_STALE("tengu_copper_lantern", !1);
+  return getFeatureValue_CACHED_MAY_BE_STALE("tengu_copper_lantern", false);
 }
 //@ chunk-rm2h7nfx.js:1139-1204 placement
-function a() {
-  return getFeatureValue_CACHED_MAY_BE_STALE("tengu_quiet_harbor", !1) ? "ask" : "transient";
+function transientRejectionKind() {
+  return getFeatureValue_CACHED_MAY_BE_STALE("tengu_quiet_harbor", false) ? "ask" : "transient";
 }
 //@ chunk-rm2h7nfx.js:1204-1377 placement
 function getDaemonColdStart() {
   let envClaudeCodeDaemonColdStart = process.env.CLAUDE_CODE_DAEMON_COLD_START;
   if (envClaudeCodeDaemonColdStart === "transient" || envClaudeCodeDaemonColdStart === "ask")
     return envClaudeCodeDaemonColdStart;
-  let t = DU()?.settings.daemonColdStart;
-  if (t !== void 0) return t;
-  return a();
+  let daemonColdStart = mergedCommandNames()?.settings.daemonColdStart;
+  if (daemonColdStart !== undefined) return daemonColdStart;
+  return transientRejectionKind();
 }
 //@ chunk-rm2h7nfx.js:1377-1434 placement
 function bgSupervisorNoun() {
@@ -104,15 +110,15 @@ function bgSupervisorStalledMessage() {
 //@ chunk-rm2h7nfx.js:1714-1839 placement
 function fleetGateRejected(e, t) {
   let o = t ?? agentViewDisabledReason() ?? "is not available in this environment";
-  (process.stderr.write(`'${e}' ${o}.
-`),
-    process.exit(1));
+  process.stderr.write(`'${e}' ${o}.
+`);
+  process.exit(1);
 }
 //@ chunk-rm2h7nfx.js:1839-1881 placement
 var AGENT_VIEW_RELAUNCH_ENV_KEY = "CLAUDE_CODE_AGENT_VIEW_RELAUNCH";
 //@ chunk-rm2h7nfx.js:1881-1905 placement
 function isLaunchComposerEnabled() {
-  return !1;
+  return false;
 }
 //@ chunk-rm2h7nfx.js:1905-1951 placement
 function isListReturnRelaunch() {
@@ -121,11 +127,11 @@ function isListReturnRelaunch() {
 //@ chunk-rm2h7nfx.js:1951-2026 placement
 function consumeAgentViewRelaunchMarker() {
   let e = isEnvTruthy(process.env[AGENT_VIEW_RELAUNCH_ENV_KEY]);
-  return (delete process.env[AGENT_VIEW_RELAUNCH_ENV_KEY], e);
+  delete process.env[AGENT_VIEW_RELAUNCH_ENV_KEY];
+  return e;
 }
-
 export {
-  C2t,
+  isAgentViewDisabled,
   isAgentsFleetEnabled,
   isPastSessionsExperimentEnabled,
   bgSupervisorStalledMessage,

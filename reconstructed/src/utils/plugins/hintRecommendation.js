@@ -8,7 +8,7 @@
  * pieces: chunk-18hwfzwa.js (6)
  * attribution: placement 1, layout 1, fingerprint 4
  */
-import { j } from "../../../vendor/react/cjs/react.production.js";
+import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
 import { isFirstPartyTelemetryBlocked } from "../hostEnvironment.js";
 import { getGlobalConfig, saveGlobalConfig } from "../config.js";
 import { parsePluginIdentifier, isOfficialMarketplaceName_3 } from "./pluginIdentifier.js";
@@ -18,95 +18,108 @@ import { getPluginRegistry } from "./pluginLoadState.js";
 import { installSelectedPlugins } from "./pluginStartupCheck.js";
 import { logForDebugging } from "../debug.js";
 import { getPluginByIdAnySource } from "./marketplaceManager.js";
-import { Bd } from "./commandSource.js";
+import { CommandSourceError } from "./commandSource.js";
 import { errorMessage } from "../errors.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { lit as lit_2 } from "../../services/analytics/safeMetadata.js";
 import { getPluginDisplayName } from "../../components/ManagedSettingsSecurityDialog/utils.js";
 
 //@ chunk-18hwfzwa.js:1804920-1804924 placement
-j();
+init_react_production();
 //@ chunk-18hwfzwa.js:1804924-1804936 layout
-var KGo = 100;
+var MAX_PLUGIN_HINTS_PER_SESSION = 100;
+//@ chunk-18hwfzwa.js:1804936-1805306 fingerprint = maybeRecordPluginHint (0.607)
 /**
  * 记录 CLI/工具输出中的 <claude-code-hint> 插件推荐（全局 claudeCodeHints，每会话最多一次）。
  */
-//@ chunk-18hwfzwa.js:1804936-1805306 fingerprint = maybeRecordPluginHint (0.607)
-function maybeRecordPluginHint(h, x) {
+function maybeRecordPluginHint(hint, pendingHint) {
   if (isFirstPartyTelemetryBlocked()) return;
-  if (x.shownThisSession) return;
+  if (pendingHint.shownThisSession) return;
   let state = getGlobalConfig().claudeCodeHints;
   if (state?.disabled) return;
   let shown = state?.plugin ?? [];
-  if (shown.length >= KGo) return;
-  let pluginId = h.value,
-    { name: name, marketplace: marketplace } = parsePluginIdentifier(pluginId);
+  if (shown.length >= MAX_PLUGIN_HINTS_PER_SESSION) return;
+  let pluginId = hint.value;
+  let { name, marketplace } = parsePluginIdentifier(pluginId);
   if (!name || !marketplace) return;
   if (!isOfficialMarketplaceName_3(marketplace)) return;
   if (shown.includes(pluginId)) return;
   if (isPluginInstalled(pluginId)) return;
   if (isPluginBlockedByPolicy(pluginId)) return;
-  let { hintedPluginIds: hintedPluginIds } = getPluginRegistry();
+  let { hintedPluginIds } = getPluginRegistry();
   if (hintedPluginIds.has(pluginId)) return;
-  (hintedPluginIds.add(pluginId), x.offer(h));
+  hintedPluginIds.add(pluginId);
+  pendingHint.offer(hint);
 }
+//@ chunk-18hwfzwa.js:1805306-1805970 fingerprint = resolvePluginHint (0.814)
 /**
  * 解析插件推荐：已安装（含别名 ID）则丢弃，否则从市场取条目供提示安装。
  */
-//@ chunk-18hwfzwa.js:1805306-1805970 fingerprint = resolvePluginHint (0.814)
-async function resolvePluginHint(h, x) {
-  let pluginId = h.value,
-    { name: name, marketplace: marketplace } = parsePluginIdentifier(pluginId);
-  if ((await installSelectedPlugins(pluginId, x)) !== void 0)
-    return (
-      logForDebugging(`[hintRecommendation] ${pluginId} is installed under its other id; hint dropped`),
-      null
-    );
-  let ke;
+async function resolvePluginHint(hint, storageV5) {
+  let pluginId = hint.value;
+  let { name, marketplace } = parsePluginIdentifier(pluginId);
+  if ((await installSelectedPlugins(pluginId, storageV5)) !== undefined) {
+    logForDebugging(`[hintRecommendation] ${pluginId} is installed under its other id; hint dropped`);
+    return null;
+  }
+  let pluginData;
   try {
-    ke = await getPluginByIdAnySource(pluginId, x, "install");
+    pluginData = await getPluginByIdAnySource(pluginId, storageV5, "install");
   } catch (error) {
-    if (error instanceof Bd)
-      return (logForDebugging(`Plugin hint ${pluginId} not resolvable: ${errorMessage(error)}`), null);
+    if (error instanceof CommandSourceError) {
+      logForDebugging(`Plugin hint ${pluginId} not resolvable: ${errorMessage(error)}`);
+      return null;
+    }
     throw error;
   }
-  if (
-    (logEvent("tengu_plugin_hint_detected", {
-      _PROTO_plugin_name: name ?? "",
-      _PROTO_marketplace_name: marketplace ?? "",
-      result: lit_2(ke ? "passed" : "not_in_cache"),
-    }),
-    !ke)
-  )
-    return (logForDebugging(`[hintRecommendation] ${pluginId} not found in marketplace cache`), null);
+  logEvent("tengu_plugin_hint_detected", {
+    _PROTO_plugin_name: name ?? "",
+    _PROTO_marketplace_name: marketplace ?? "",
+    result: lit_2(pluginData ? "passed" : "not_in_cache"),
+  });
+  if (!pluginData) {
+    logForDebugging(`[hintRecommendation] ${pluginId} not found in marketplace cache`);
+    return null;
+  }
   return {
-    pluginId: pluginId,
-    pluginName: getPluginDisplayName(ke.entry),
+    pluginId,
+    pluginName: getPluginDisplayName(pluginData.entry),
     marketplaceName: marketplace ?? "",
-    pluginDescription: ke.entry.description,
-    sourceCommand: h.sourceCommand,
+    pluginDescription: pluginData.entry.description,
+    sourceCommand: hint.sourceCommand,
   };
 }
+//@ chunk-18hwfzwa.js:1805970-1806131 fingerprint = markHintPluginShown (1)
 /**
  * 记下某插件推荐已展示过（全局配置 claudeCodeHints.plugin）。
  */
-//@ chunk-18hwfzwa.js:1805970-1806131 fingerprint = markHintPluginShown (1)
-function markHintPluginShown(h, x) {
+function markHintPluginShown(pluginId, storageV5) {
   saveGlobalConfig((current) => {
     let existing = current.claudeCodeHints?.plugin ?? [];
-    if (existing.includes(h)) return current;
-    return { ...current, claudeCodeHints: { ...current.claudeCodeHints, plugin: [...existing, h] } };
-  }, x);
+    if (existing.includes(pluginId)) return current;
+    return {
+      ...current,
+      claudeCodeHints: {
+        ...current.claudeCodeHints,
+        plugin: [...existing, pluginId],
+      },
+    };
+  }, storageV5);
 }
+//@ chunk-18hwfzwa.js:1806131-1806264 fingerprint = disableHintRecommendations (1)
 /**
  * 关闭插件推荐（claudeCodeHints.disabled=true）。
  */
-//@ chunk-18hwfzwa.js:1806131-1806264 fingerprint = disableHintRecommendations (1)
-function disableHintRecommendations(h) {
+function disableHintRecommendations(storageV5) {
   saveGlobalConfig((current) => {
     if (current.claudeCodeHints?.disabled) return current;
-    return { ...current, claudeCodeHints: { ...current.claudeCodeHints, disabled: !0 } };
-  }, h);
+    return {
+      ...current,
+      claudeCodeHints: {
+        ...current.claudeCodeHints,
+        disabled: true,
+      },
+    };
+  }, storageV5);
 }
-
 export { maybeRecordPluginHint, resolvePluginHint, markHintPluginShown, disableHintRecommendations };

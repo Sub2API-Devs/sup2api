@@ -18,10 +18,10 @@ import { logFeatureBad } from "../services/analytics/featureTelemetry.js";
 import { logError } from "../utils/log.js";
 import { withTelemetryMessage, toError } from "../utils/errors.js";
 
+//@ chunk-cshk0jw3.js:11889-12118 placement
 /**
  * Projects 回复门：对 SDK 轮次错误写记录（bridge_projects_reply_gate）
  */
-//@ chunk-cshk0jw3.js:11889-12118 placement
 function recordProjectsReplyTurnError(r, t, e) {
   try {
     if (

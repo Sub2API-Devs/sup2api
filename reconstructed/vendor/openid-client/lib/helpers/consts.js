@@ -8,10 +8,12 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-1ny7cxrt.js:20896-21000 cjs-fingerprint
-var _f = x(function (Kve, XO) {
-  var SF = Symbol(),
-    kF = Symbol();
-  XO.exports = { CLOCK_TOLERANCE: kF, HTTP_OPTIONS: SF };
+var require_consts = x(function (cjsExports, cjsModule) {
+  var HTTP_OPTIONS = Symbol();
+  var CLOCK_TOLERANCE = Symbol();
+  cjsModule.exports = {
+    CLOCK_TOLERANCE,
+    HTTP_OPTIONS,
+  };
 });
-
-export { _f };
+export { require_consts };

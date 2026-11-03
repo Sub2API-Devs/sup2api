@@ -9,62 +9,81 @@
  * attribution: placement 3
  */
 import { DoctorLazy } from "../cli/handlers/util.js";
-import { zodStrictObject, pe, T } from "../../vendor/zod/v4/classic/schemas.js";
+import { zodStrictObject, record, literal } from "../../vendor/zod/v4/classic/schemas.js";
 import { PluginIdSchema, isReservedMarketplaceName } from "../utils/plugins/schemas.js";
 import { registerSeedMarketplaces } from "../utils/plugins/marketplaceManager.js";
 import { parsePluginIdentifier } from "../utils/plugins/pluginIdentifier.js";
 import { getFlagSettingsInline, setFlagSettingsInline } from "../bootstrap/state.js";
-import { or } from "../utils/settings/commandSyncNames.js";
-import { nk } from "../utils/subprocessEnvLoader.js";
+import { invalidateCommandNames } from "../utils/settings/commandSyncNames.js";
+import { toolServerEnvAccessor } from "../utils/subprocessEnvLoader.js";
 import { env } from "../utils/env.js";
 import { safeParseJSON } from "../utils/json.js";
 import { hasProtoKeys } from "../utils/objectSafety.js";
 
 //@ chunk-qkxfkqxj.js:11900-11961 placement
-var l = 32,
-  s = 8192,
-  m = DoctorLazy(() => zodStrictObject({ enabledPlugins: pe(PluginIdSchema(), T(!0)) }));
+var MAX_PLUGIN_ID = 32;
+var MAX_PLUGINS_JSON_BYTES = 8192;
+var pluginsEnabledSchema = DoctorLazy(() =>
+  zodStrictObject({
+    enabledPlugins: record(PluginIdSchema(), literal(true)),
+  }),
+);
 //@ chunk-qkxfkqxj.js:11961-12414 placement
 async function resolveMcpServeEnabledPlugins() {
-  let e = readMcpServeEnabledPluginsEnv();
-  if (e.kind !== "named") return e;
-  let a = new Set(e.ids.length === 0 ? [] : (await registerSeedMarketplaces()).map(([n]) => n)),
-    filtered = e.ids.filter((id) => {
-      let { marketplace: marketplace } = parsePluginIdentifier(id);
-      return (
-        marketplace !== void 0 && a.has(marketplace) && !isReservedMarketplaceName(marketplace.toLowerCase())
-      );
-    });
+  let mcpServeEnabledPluginsEnv = readMcpServeEnabledPluginsEnv();
+  if (mcpServeEnabledPluginsEnv.kind !== "named") return mcpServeEnabledPluginsEnv;
+  let a = new Set(
+    mcpServeEnabledPluginsEnv.ids.length === 0 ? [] : (await registerSeedMarketplaces()).map(([n]) => n),
+  );
+  let filtered = mcpServeEnabledPluginsEnv.ids.filter((id) => {
+    let { marketplace } = parsePluginIdentifier(id);
+    return (
+      marketplace !== undefined && a.has(marketplace) && !isReservedMarketplaceName(marketplace.toLowerCase())
+    );
+  });
   if (filtered.length > 0) {
-    let n = getFlagSettingsInline() ?? {},
-      enabledPlugins = n.enabledPlugins,
-      d = {
-        ...n,
-        enabledPlugins: {
-          ...(typeof enabledPlugins === "object" && enabledPlugins !== null ? enabledPlugins : {}),
-          ...Object.fromEntries(filtered.map((o) => [o, !0])),
-        },
-      };
-    (setFlagSettingsInline(d), or());
+    let n = getFlagSettingsInline() ?? {};
+    let enabledPlugins = n.enabledPlugins;
+    let d = {
+      ...n,
+      enabledPlugins: {
+        ...(typeof enabledPlugins === "object" && enabledPlugins !== null ? enabledPlugins : {}),
+        ...Object.fromEntries(filtered.map((o) => [o, true])),
+      },
+    };
+    setFlagSettingsInline(d);
+    invalidateCommandNames();
   }
-  return { kind: "named", enabled: filtered.length, dropped: e.ids.length - filtered.length };
+  return {
+    kind: "named",
+    enabled: filtered.length,
+    dropped: mcpServeEnabledPluginsEnv.ids.length - filtered.length,
+  };
 }
 //@ chunk-qkxfkqxj.js:12414-12803 placement
 function readMcpServeEnabledPluginsEnv() {
-  let CLAUDE_CODE_MCP_SERVE_ENABLED_PLUGINS = nk.CLAUDE_CODE_MCP_SERVE_ENABLED_PLUGINS;
-  if (
-    (nk.unset("CLAUDE_CODE_MCP_SERVE_ENABLED_PLUGINS"),
-    CLAUDE_CODE_MCP_SERVE_ENABLED_PLUGINS === void 0 || CLAUDE_CODE_MCP_SERVE_ENABLED_PLUGINS === "")
-  )
-    return { kind: "absent" };
-  if (env.CLAUDE_CODE_REMOTE_HERMETIC_MODE) return { kind: "hermetic" };
+  let CLAUDE_CODE_MCP_SERVE_ENABLED_PLUGINS = toolServerEnvAccessor.CLAUDE_CODE_MCP_SERVE_ENABLED_PLUGINS;
+  toolServerEnvAccessor.unset("CLAUDE_CODE_MCP_SERVE_ENABLED_PLUGINS");
+  if (CLAUDE_CODE_MCP_SERVE_ENABLED_PLUGINS === undefined || CLAUDE_CODE_MCP_SERVE_ENABLED_PLUGINS === "")
+    return {
+      kind: "absent",
+    };
+  if (env.CLAUDE_CODE_REMOTE_HERMETIC_MODE)
+    return {
+      kind: "hermetic",
+    };
   let a =
-      CLAUDE_CODE_MCP_SERVE_ENABLED_PLUGINS.length > s
-        ? void 0
-        : safeParseJSON(CLAUDE_CODE_MCP_SERVE_ENABLED_PLUGINS, !1),
-    t = m().safeParse(a).data?.enabledPlugins,
-    keys = Object.keys(t ?? {});
-  return t === void 0 || hasProtoKeys(a) || keys.length > l
-    ? { kind: "unreadable" }
-    : { kind: "named", ids: keys };
+    CLAUDE_CODE_MCP_SERVE_ENABLED_PLUGINS.length > MAX_PLUGINS_JSON_BYTES
+      ? undefined
+      : safeParseJSON(CLAUDE_CODE_MCP_SERVE_ENABLED_PLUGINS, false);
+  let enabledPlugins = pluginsEnabledSchema().safeParse(a).data?.enabledPlugins;
+  let keys = Object.keys(enabledPlugins ?? {});
+  return enabledPlugins === undefined || hasProtoKeys(a) || keys.length > MAX_PLUGIN_ID
+    ? {
+        kind: "unreadable",
+      }
+    : {
+        kind: "named",
+        ids: keys,
+      };
 }

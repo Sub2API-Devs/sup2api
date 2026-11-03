@@ -8,7 +8,7 @@
  * pieces: chunk-1x527z82.js (3)
  * attribution: placement 3
  */
-import { D4, I3 } from "./bundledSkillsGate.js";
+import { isSkillOutsideCorePolicy, isBundledSkillsDisabled } from "./bundledSkillsGate.js";
 import { WORKFLOW_AUTHORING } from "./bundled/bundledSkillNames.js";
 import { isWorkflowsAvailable } from "../utils/workflows/workflowGates.js";
 import { getDisableSlashCommands, getSessionSkillAllowlist } from "../bootstrap/state.js";
@@ -18,23 +18,33 @@ import { toolMatchesName } from "../Tool.js";
 import { SKILL } from "../tools/SkillTool/skillToolNames.js";
 
 //@ chunk-1x527z82.js:484-540 placement
-function RGe(o) {
-  return isWorkflowAuthoringSkillAvailable() && !D4(WORKFLOW_AUTHORING) && (o === void 0 || r(o));
+/**
+ * 工作流编写技能是否可见（可用、未被禁用、且工具合适）。
+ */
+function isWorkflowAuthoringSkillVisible(tools) {
+  return (
+    isWorkflowAuthoringSkillAvailable() &&
+    !isSkillOutsideCorePolicy(WORKFLOW_AUTHORING) &&
+    (tools === undefined || toolsIncludeSkillTool(tools))
+  );
 }
 //@ chunk-1x527z82.js:540-788 placement
 function isWorkflowAuthoringSkillAvailable() {
-  if (!isWorkflowsAvailable()) return !1;
-  if (I3() || getDisableSlashCommands()) return !1;
-  if (env.CLAUDE_CODE_ENTRYPOINT === "local-agent") return !1;
+  if (!isWorkflowsAvailable()) return false;
+  if (isBundledSkillsDisabled() || getDisableSlashCommands()) return false;
+  if (env.CLAUDE_CODE_ENTRYPOINT === "local-agent") return false;
   let o = getInitialSettings_2().skillOverrides?.[WORKFLOW_AUTHORING];
-  if (o === "off" || o === "user-invocable-only") return !1;
-  let e = getSessionSkillAllowlist();
-  if (e !== void 0 && !e.includes(WORKFLOW_AUTHORING)) return !1;
-  return !0;
+  if (o === "off" || o === "user-invocable-only") return false;
+  let sessionSkillAllowlist = getSessionSkillAllowlist();
+  if (sessionSkillAllowlist !== undefined && !sessionSkillAllowlist.includes(WORKFLOW_AUTHORING))
+    return false;
+  return true;
 }
 //@ chunk-1x527z82.js:788-831 placement
-function r(o) {
+/**
+ * 工具表里是否有 Skill 工具。
+ */
+function toolsIncludeSkillTool(o) {
   return o.some((e) => toolMatchesName(e, SKILL));
 }
-
-export { RGe };
+export { isWorkflowAuthoringSkillVisible };

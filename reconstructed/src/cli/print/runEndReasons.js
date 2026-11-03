@@ -8,126 +8,141 @@
  * pieces: chunk-tyg7f3ek.js (9)
  * attribution: placement 9
  */
-import { lp } from "../../plugins/functionHooks/surfaceBinding.js";
-import { lhn, dhn, chn, oO, $f } from "../../utils/messageQueueManager.js";
-import { q$o, countHeldCommands } from "../../plugins/functionHooks/inputHold.js";
-import { rmo, tmo, nmo, cancelQueuedAutoInputs } from "./setModelControl.js";
-import { Ixo } from "../../query/turnHooks.js";
-import { Km } from "../../plugins/functionHooks/dispatch/dispatchScope.js";
+import { currentSurfaceBinding } from "../../plugins/functionHooks/surfaceBinding.js";
+import {
+  commandsConsumedSignal,
+  receiptQueuedProbe,
+  inFlightDrainProbe,
+  getCommandQueue,
+  isMainAgentCommand,
+} from "../../utils/messageQueueManager.js";
+import { holdReasonSlot, countHeldCommands } from "../../plugins/functionHooks/inputHold.js";
+import {
+  CANCELLED_COMMAND_STATE,
+  MODEL_SWITCH_STATE_CLEARER,
+  cancelQueuedAutoInput,
+  cancelQueuedAutoInputs,
+} from "./setModelControl.js";
+import { turnStepSlot } from "../../query/turnHooks.js";
+import { runIgnoringAbort } from "../../plugins/functionHooks/dispatch/dispatchScope.js";
 import { isHandedOffPersonTurn } from "./turnGate.js";
 import { notePromptOrigin } from "../../utils/processUserInput/promptOrigin.js";
 import { count } from "../../utils/collections.js";
 import { isAbortError } from "../../utils/errors.js";
 import { logError } from "../../utils/log.js";
-import { uN } from "../../cost-tracker.js";
+import { hasReachedBudget } from "../../cost-tracker.js";
 import { isHandedOffBatch, batchUuids, isResumedTurnBatch } from "./userFrameIntake.js";
 import { isTerminalShutdown } from "../../utils/terminalShutdown.js";
 import { userAbortReason } from "../../utils/abortController.js";
 
+//@ chunk-tyg7f3ek.js:303151-305608 placement
 /**
  * print 一次性运行的结束原因跟踪：宿主结束输入、--max-budget-usd、--max-turns 等。
  */
-//@ chunk-tyg7f3ek.js:303151-305608 placement
 class OneShotRunLimits {
   limits;
-  seatedIn = lp();
+  seatedIn = currentSurfaceBinding();
   turns = 0;
   asks = 0;
-  isHostHeard = !1;
-  isHostsOwnTurn = !1;
+  isHostHeard = false;
+  isHostsOwnTurn = false;
   isOneShotShape;
-  unwatch = lhn.subscribe((e) => this.tookIn(e));
-  constructor(e) {
-    this.limits = e;
-    (q$o.set(() => this.reached()),
-      rmo.set(() => this.taken()),
-      tmo.set(() => this.giveBackHeld()),
-      Ixo.set(() => this.spawnedTurnTaken()),
-      dhn.set(nmo),
-      chn.set(countHeldCommands));
+  unwatch = commandsConsumedSignal.subscribe((e) => this.tookIn(e));
+  constructor(limits) {
+    this.limits = limits;
+    holdReasonSlot.set(() => this.reached());
+    CANCELLED_COMMAND_STATE.set(() => this.taken());
+    MODEL_SWITCH_STATE_CLEARER.set(() => this.giveBackHeld());
+    turnStepSlot.set(() => this.spawnedTurnTaken());
+    receiptQueuedProbe.set(cancelQueuedAutoInput);
+    inFlightDrainProbe.set(countHeldCommands);
   }
   turnStarted(e) {
-    Km(() => {
-      ((this.isHostsOwnTurn = e.some(um)), this.tally(e));
-      let n = this.limits.drain.abortController?.signal.aborted === !0;
+    runIgnoringAbort(() => {
+      this.isHostsOwnTurn = e.some(isHostRelevantTurn);
+      this.tally(e);
+      let isStopped = this.limits.drain.abortController?.signal.aborted === true;
       e.filter(isHandedOffPersonTurn).forEach((r) => {
-        let s = r.handedOffTurn?.messages[0]?.uuid;
+        let uuid = r.handedOffTurn?.messages[0]?.uuid;
         notePromptOrigin({
-          uuid: s,
-          origin: void 0,
-          isHidden: !1,
-          isStopped: n,
-          isRelayed: !1,
-          foreignWord: void 0,
-          ownWordUuids: [s],
+          uuid,
+          origin: undefined,
+          isHidden: false,
+          isStopped,
+          isRelayed: false,
+          foreignWord: undefined,
+          ownWordUuids: [uuid],
           input: "",
         });
       });
     });
   }
   tookIn(e) {
-    Km(() => {
-      if (lp() !== this.seatedIn) {
+    runIgnoringAbort(() => {
+      if (currentSurfaceBinding() !== this.seatedIn) {
         this.unwatch();
         return;
       }
-      ((this.isHostsOwnTurn ||= e.some(um)),
-        this.tally(e),
-        e
-          .filter(eS)
-          .forEach((r) =>
-            notePromptOrigin({
-              uuid: r.uuid,
-              origin: r.origin,
-              isHidden: r.isMeta === !0,
-              isStopped: !1,
-              isRelayed: !1,
-              foreignWord: void 0,
-              ownWordUuids: [r.uuid ?? r.stopKey],
-              input: r.value,
-            }),
-          ));
+      this.isHostsOwnTurn ||= e.some(isHostRelevantTurn);
+      this.tally(e);
+      e.filter(isOwnWordTurn).forEach((r) =>
+        notePromptOrigin({
+          uuid: r.uuid,
+          origin: r.origin,
+          isHidden: r.isMeta === true,
+          isStopped: false,
+          isRelayed: false,
+          foreignWord: undefined,
+          ownWordUuids: [r.uuid ?? r.stopKey],
+          input: r.value,
+        }),
+      );
     });
   }
   turnEnded(e) {
-    Km(() => {
-      ((this.isOneShotShape ??= this.isHostsOwnTurn ? this.limits.drain.inputClosed : void 0),
-        (this.turns += e.num_turns));
-      let n = (this.spent() ?? this.inputOver()) !== void 0;
-      if (((this.isHostsOwnTurn = !1), n)) cancelQueuedAutoInputs({ turnGoesOn: !0 });
+    runIgnoringAbort(() => {
+      this.isOneShotShape ??= this.isHostsOwnTurn ? this.limits.drain.inputClosed : undefined;
+      this.turns += e.num_turns;
+      let n = (this.spent() ?? this.inputOver()) !== undefined;
+      this.isHostsOwnTurn = false;
+      if (n)
+        cancelQueuedAutoInputs({
+          turnGoesOn: true,
+        });
     });
   }
   spawnedTurnTaken() {
-    Km(() => {
-      let e = lp() === this.seatedIn;
-      if (((this.turns += e ? 1 : 0), this.spent() !== void 0)) cancelQueuedAutoInputs({ turnGoesOn: !0 });
+    runIgnoringAbort(() => {
+      let e = currentSurfaceBinding() === this.seatedIn;
+      this.turns += e ? 1 : 0;
+      if (this.spent() !== undefined)
+        cancelQueuedAutoInputs({
+          turnGoesOn: true,
+        });
     });
   }
   tally(e) {
-    if (
-      ((this.asks += count(e, Zy)),
-      (this.isHostHeard ||= e.some(um)),
-      e.some(eS) || e.some(isHandedOffPersonTurn))
-    )
-      this.turns = 0;
+    this.asks += count(e, isHostAskedTurn);
+    this.isHostHeard ||= e.some(isHostRelevantTurn);
+    if (e.some(isOwnWordTurn) || e.some(isHandedOffPersonTurn)) this.turns = 0;
   }
   reached() {
     try {
-      return lp() === this.seatedIn ? (this.inputOver() ?? this.spent()) : void 0;
+      return currentSurfaceBinding() === this.seatedIn ? (this.inputOver() ?? this.spent()) : undefined;
     } catch (error) {
       if (!isAbortError(error)) logError(error);
       return;
     }
   }
   taken() {
-    let { drain: drain, frameIntake: frameIntake, declinedRedeliveries: declinedRedeliveries } = this.limits,
-      s = lp() === this.seatedIn,
-      flattened = frameIntake.parkedCommands().flatMap((R) => R.stopKey ?? []),
-      { drainingHandoff: drainingHandoff } = drain,
-      S =
-        drainingHandoff?.running === !1
-          ? (drainingHandoff.command.handedOffTurn?.messages[0]?.uuid ?? [])
-          : [];
+    let { drain, frameIntake, declinedRedeliveries } = this.limits;
+    let s = currentSurfaceBinding() === this.seatedIn;
+    let flattened = frameIntake.parkedCommands().flatMap((R) => R.stopKey ?? []);
+    let { drainingHandoff } = drain;
+    let S =
+      drainingHandoff?.running === false
+        ? (drainingHandoff.command.handedOffTurn?.messages[0]?.uuid ?? [])
+        : [];
     return s
       ? [
           ...frameIntake.parkedUuids(),
@@ -140,105 +155,101 @@ class OneShotRunLimits {
       : [];
   }
   inputOver() {
-    let {
-        inputClosed: inputClosed,
-        endSessionRequested: endSessionRequested,
-        turnUnderWay: turnUnderWay,
-      } = this.limits.drain,
-      s = [...this.limits.frameIntake.parkedCommands(), ...oO()],
-      h = this.asks + count(s, Zy),
-      y = this.isHostHeard || s.some(um),
-      S = this.limits.isRemoteInput() ? this.isOneShotShape === !1 : h >= iq,
-      R = s.some(um) || (turnUnderWay && this.isHostsOwnTurn);
+    let { inputClosed, endSessionRequested, turnUnderWay } = this.limits.drain;
+    let s = [...this.limits.frameIntake.parkedCommands(), ...getCommandQueue()];
+    let h = this.asks + count(s, isHostAskedTurn);
+    let y = this.isHostHeard || s.some(isHostRelevantTurn);
+    let S = this.limits.isRemoteInput() ? this.isOneShotShape === false : h >= MIN_REMOTE_INPUT_MESSAGES;
+    let R = s.some(isHostRelevantTurn) || (turnUnderWay && this.isHostsOwnTurn);
     return endSessionRequested || (this.limits.endsItsInput && inputClosed && (!y || S) && !R)
       ? "the host has ended its input"
-      : void 0;
+      : undefined;
   }
   giveBackHeld() {
-    if (lp() === this.seatedIn) this.limits.held.giveBack();
+    if (currentSurfaceBinding() === this.seatedIn) this.limits.held.giveBack();
   }
   spent() {
-    let { maxTurns: maxTurns, maxBudgetUsd: maxBudgetUsd } = this.limits,
-      r = maxTurns !== void 0 && maxTurns > 0 && this.turns >= maxTurns;
-    return uN(maxBudgetUsd)
+    let { maxTurns, maxBudgetUsd } = this.limits;
+    let r = maxTurns !== undefined && maxTurns > 0 && this.turns >= maxTurns;
+    return hasReachedBudget(maxBudgetUsd)
       ? "the run is past its --max-budget-usd limit"
       : r
         ? "the run reached its --max-turns limit"
-        : void 0;
+        : undefined;
   }
 }
 //@ chunk-tyg7f3ek.js:305608-305617 placement
-var iq = 2;
+var MIN_REMOTE_INPUT_MESSAGES = 2;
 //@ chunk-tyg7f3ek.js:305617-305656 placement
-function Zy(e) {
-  return e.hostAsked === !0;
+function isHostAskedTurn(e) {
+  return e.hostAsked === true;
 }
 //@ chunk-tyg7f3ek.js:305656-305693 placement
-function eS(e) {
-  return e.ownWord === !0;
+function isOwnWordTurn(e) {
+  return e.ownWord === true;
 }
 //@ chunk-tyg7f3ek.js:305693-305728 placement
-function um(e) {
-  return Zy(e) || eS(e);
+function isHostRelevantTurn(e) {
+  return isHostAskedTurn(e) || isOwnWordTurn(e);
 }
 //@ chunk-tyg7f3ek.js:305728-305774 placement
 function isAimedAtTurn(e, n) {
   return isHandedOffBatch(n) || e.names(batchUuids(n));
 }
 //@ chunk-tyg7f3ek.js:305774-305814 placement
-function MM(e, n) {
+function shouldPrewaitIntent(e, n) {
   return isAimedAtTurn(e, n) || !isResumedTurnBatch(n);
 }
+//@ chunk-tyg7f3ek.js:305814-309435 placement
 /**
  * print 主循环的"预等待门闩"：在轮次开始前暂存意图批次、处理打断/停止与待答权限。
  */
-//@ chunk-tyg7f3ek.js:305814-309435 placement
 class PrewaitLatch {
-  interruptBeforeTurnArmed = !1;
-  intentDispatchPendingPreArm = !1;
+  interruptBeforeTurnArmed = false;
+  intentDispatchPendingPreArm = false;
   parkedBatch = [];
   latchDoomedCommands = null;
-  latchedWhileBatchParked = !1;
+  latchedWhileBatchParked = false;
   doomedOnlyAsWork = new Set();
   answersToStartAborted = new WeakSet();
   messageQueue;
   commandLacksUserIntent;
   unsubscribeRemovals;
-  constructor({ messageQueue: e, commandLacksUserIntent: n }) {
-    ((this.messageQueue = e),
-      (this.commandLacksUserIntent = n),
-      (this.unsubscribeRemovals = e.subscribeToRemovals(() => this.clearIfNothingPending())));
+  constructor({ messageQueue, commandLacksUserIntent }) {
+    this.messageQueue = messageQueue;
+    this.commandLacksUserIntent = commandLacksUserIntent;
+    this.unsubscribeRemovals = messageQueue.subscribeToRemovals(() => this.clearIfNothingPending());
   }
   interruptBeforeArm(e) {
-    if (e !== void 0) return this.latchForWorkReachedBy(e);
+    if (e !== undefined) return this.latchForWorkReachedBy(e);
     if (!(
       this.intentDispatchPendingPreArm ||
       this.messageQueue.getCommandQueue().some((n) => this.isUserIntent(n))
     ))
-      return !1;
-    return (
-      (this.interruptBeforeTurnArmed = !0),
-      (this.latchedWhileBatchParked = this.intentDispatchPendingPreArm),
-      this.doomedOnlyAsWork.clear(),
-      (this.latchDoomedCommands = new WeakSet(
-        this.messageQueue.getCommandQueue().filter((n) => this.isUserIntent(n)),
-      )),
-      !0
+      return false;
+    this.interruptBeforeTurnArmed = true;
+    this.latchedWhileBatchParked = this.intentDispatchPendingPreArm;
+    this.doomedOnlyAsWork.clear();
+    this.latchDoomedCommands = new WeakSet(
+      this.messageQueue.getCommandQueue().filter((n) => this.isUserIntent(n)),
     );
+    return true;
   }
   latchForWorkReachedBy(e) {
-    let n = this.intentDispatchPendingPreArm && MM(e, this.parkedBatch),
-      filtered = this.messageQueue.getCommandQueue().filter((s) => this.isUserIntent(s) && MM(e, [s]));
-    if (!n && filtered.length === 0) return !1;
-    ((this.interruptBeforeTurnArmed = !0),
-      (this.latchedWhileBatchParked ||= n),
-      (this.latchDoomedCommands ??= new WeakSet()));
+    let n = this.intentDispatchPendingPreArm && shouldPrewaitIntent(e, this.parkedBatch);
+    let filtered = this.messageQueue
+      .getCommandQueue()
+      .filter((s) => this.isUserIntent(s) && shouldPrewaitIntent(e, [s]));
+    if (!n && filtered.length === 0) return false;
+    this.interruptBeforeTurnArmed = true;
+    this.latchedWhileBatchParked ||= n;
+    this.latchDoomedCommands ??= new WeakSet();
     for (let s of filtered) {
       if (isAimedAtTurn(e, [s])) this.doomedOnlyAsWork.delete(s);
       else if (!this.latchDoomedCommands.has(s)) this.doomedOnlyAsWork.add(s);
       this.latchDoomedCommands.add(s);
     }
-    return !0;
+    return true;
   }
   startAborted(e) {
     for (let n of e) this.answersToStartAborted.add(n);
@@ -252,7 +263,7 @@ class PrewaitLatch {
     return [
       ...this.parkedIntentBatch(),
       ...(n ? [] : this.messageQueue.getCommandQueue().filter((r) => this.isUserIntent(r))),
-    ].filter((r) => r.orphanedPermission !== void 0 && (e === void 0 || isAimedAtTurn(e, [r])));
+    ].filter((r) => r.orphanedPermission !== undefined && (e === undefined || isAimedAtTurn(e, [r])));
   }
   namesQueuedWork(e) {
     return this.messageQueue.getCommandQueue().some((n) => this.isUserIntent(n) && isAimedAtTurn(e, [n]));
@@ -268,15 +279,16 @@ class PrewaitLatch {
         this.latchDoomedCommands.has(e) !== this.latchDoomedCommands.has(n))
     );
   }
-  parkBatch(e, n) {
-    ((this.intentDispatchPendingPreArm = e), (this.parkedBatch = n));
+  parkBatch(intentDispatchPendingPreArm, parkedBatch) {
+    this.intentDispatchPendingPreArm = intentDispatchPendingPreArm;
+    this.parkedBatch = parkedBatch;
   }
   parkedBatchStartsAborted() {
     return (
       this.intentDispatchPendingPreArm &&
       ((this.interruptBeforeTurnArmed &&
         (this.latchedWhileBatchParked ||
-          this.parkedBatch.some((e) => this.latchDoomedCommands?.has(e) ?? !1))) ||
+          this.parkedBatch.some((e) => this.latchDoomedCommands?.has(e) ?? false))) ||
         this.parkedBatch.some((e) => this.answersToStartAborted.has(e)))
     );
   }
@@ -287,32 +299,36 @@ class PrewaitLatch {
     return this.intentDispatchPendingPreArm ? this.parkedBatch : [];
   }
   dropParkedBatch() {
-    (this.reset(), (this.intentDispatchPendingPreArm = !1), (this.parkedBatch = []));
+    this.reset();
+    this.intentDispatchPendingPreArm = false;
+    this.parkedBatch = [];
   }
   consumeAtArm(e, n) {
     let any = e.some((s) => this.answersToStartAborted.has(s));
     return this.consumeLatchAtArm(e, n) || (n && any);
   }
   consumeLatchAtArm(e, n) {
+    this.intentDispatchPendingPreArm = false;
+    this.parkedBatch = [];
     if (
-      ((this.intentDispatchPendingPreArm = !1),
-      (this.parkedBatch = []),
       this.interruptBeforeTurnArmed &&
-        n &&
-        (this.latchedWhileBatchParked || e.some((r) => this.latchDoomedCommands?.has(r) ?? !1)))
-    )
-      return (this.reset(), !0);
+      n &&
+      (this.latchedWhileBatchParked || e.some((r) => this.latchDoomedCommands?.has(r) ?? false))
+    ) {
+      this.reset();
+      return true;
+    }
     if (this.doomedOnlyAsWork.size > 0 && n && isResumedTurnBatch(e)) {
       for (let r of this.doomedOnlyAsWork) this.latchDoomedCommands?.delete(r);
       this.doomedOnlyAsWork.clear();
     }
-    return !1;
+    return false;
   }
   reset() {
-    ((this.interruptBeforeTurnArmed = !1),
-      (this.latchDoomedCommands = null),
-      (this.latchedWhileBatchParked = !1),
-      this.doomedOnlyAsWork.clear());
+    this.interruptBeforeTurnArmed = false;
+    this.latchDoomedCommands = null;
+    this.latchedWhileBatchParked = false;
+    this.doomedOnlyAsWork.clear();
   }
   clearIfNothingPending() {
     let latchDoomedCommands = this.latchDoomedCommands;
@@ -330,11 +346,11 @@ class PrewaitLatch {
     this.unsubscribeRemovals();
   }
   isUserIntent(e) {
-    return $f(e) && !this.commandLacksUserIntent(e);
+    return isMainAgentCommand(e) && !this.commandLacksUserIntent(e);
   }
 }
 //@ chunk-tyg7f3ek.js:309435-309636 placement
-function interruptOnNowPriority({ messageQueue: messageQueue, drain: drain }) {
+function interruptOnNowPriority({ messageQueue, drain }) {
   return messageQueue.subscribe(() => {
     if (
       drain.abortController &&
@@ -345,5 +361,4 @@ function interruptOnNowPriority({ messageQueue: messageQueue, drain: drain }) {
       drain.abortController.abort(userAbortReason("interrupt"));
   });
 }
-
 export { PrewaitLatch, interruptOnNowPriority, OneShotRunLimits, isAimedAtTurn };

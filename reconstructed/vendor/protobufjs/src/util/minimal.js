@@ -6,173 +6,190 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { QPo } from "./aspromise.js";
-import { lr } from "./base64.js";
-import { ar } from "./eventemitter.js";
-import { mr } from "./float.js";
-import { br } from "./inquire.js";
-import { xr } from "./utf8.js";
-import { gr } from "./pool.js";
-import { Tr } from "./longbits.js";
+import { require_aspromise } from "./aspromise.js";
+import { require_base64 } from "./base64.js";
+import { require_eventemitter } from "./eventemitter.js";
+import { require_float } from "./float.js";
+import { require_inquire } from "./inquire.js";
+import { require_utf8 } from "./utf8.js";
+import { require_pool } from "./pool.js";
+import { require_longbits } from "./longbits.js";
 
 //@ chunk-798ashq9.js:27725-30944 cjs-fingerprint
-var QGe = x(function (Yt) {
-  var S = Yt;
-  S.asPromise = QPo();
-  S.base64 = lr();
-  S.EventEmitter = ar();
-  S.float = mr();
-  S.inquire = br();
-  S.utf8 = xr();
-  S.pool = gr();
-  S.LongBits = Tr();
-  S.isNode = Boolean(
-    typeof global < "u" &&
+var require_minimal = x(function (cjsExports) {
+  var util = cjsExports;
+  util.asPromise = require_aspromise();
+  util.base64 = require_base64();
+  util.EventEmitter = require_eventemitter();
+  util.float = require_float();
+  util.inquire = require_inquire();
+  util.utf8 = require_utf8();
+  util.pool = require_pool();
+  util.LongBits = require_longbits();
+  util.isNode = Boolean(
+    typeof global !== "undefined" &&
     global &&
     global.process &&
     global.process.versions &&
     global.process.versions.node,
   );
-  S.global = (S.isNode && global) || (typeof window < "u" && window) || (typeof self < "u" && self) || Yt;
-  S.emptyArray = Object.freeze ? Object.freeze([]) : [];
-  S.emptyObject = Object.freeze ? Object.freeze({}) : {};
-  S.isInteger =
+  util.global =
+    (util.isNode && global) ||
+    (typeof window !== "undefined" && window) ||
+    (typeof self !== "undefined" && self) ||
+    cjsExports;
+  util.emptyArray = Object.freeze ? Object.freeze([]) : [];
+  util.emptyObject = Object.freeze ? Object.freeze({}) : {};
+  util.isInteger =
     Number.isInteger ||
-    function (u) {
-      return typeof u === "number" && isFinite(u) && Math.floor(u) === u;
+    function (value) {
+      return typeof value === "number" && isFinite(value) && Math.floor(value) === value;
     };
-  S.isString = function (u) {
-    return typeof u === "string" || u instanceof String;
+  util.isString = function (value) {
+    return typeof value === "string" || value instanceof String;
   };
-  S.isObject = function (u) {
-    return u && typeof u === "object";
+  util.isObject = function (value) {
+    return value && typeof value === "object";
   };
-  S.isset = S.isSet = function (u, f) {
-    var d = u[f];
-    if (d != null && u.hasOwnProperty(f))
-      return typeof d !== "object" || (Array.isArray(d) ? d.length : Object.keys(d).length) > 0;
-    return !1;
+  util.isset = util.isSet = function (obj, prop) {
+    var value = obj[prop];
+    if (value != null && obj.hasOwnProperty(prop))
+      return (
+        typeof value !== "object" || (Array.isArray(value) ? value.length : Object.keys(value).length) > 0
+      );
+    return false;
   };
-  S.Buffer = (function () {
+  util.Buffer = (function () {
     try {
-      var l = S.inquire("buffer").Buffer;
+      var l = util.inquire("buffer").Buffer;
       return l.prototype.utf8Write ? l : null;
-    } catch (error) {
+    } catch (e) {
       return null;
     }
   })();
-  S._Buffer_from = null;
-  S._Buffer_allocUnsafe = null;
-  S.newBuffer = function (u) {
-    return typeof u === "number"
-      ? S.Buffer
-        ? S._Buffer_allocUnsafe(u)
-        : new S.Array(u)
-      : S.Buffer
-        ? S._Buffer_from(u)
-        : typeof Uint8Array > "u"
-          ? u
-          : new Uint8Array(u);
+  util._Buffer_from = null;
+  util._Buffer_allocUnsafe = null;
+  util.newBuffer = function (sizeOrArray) {
+    return typeof sizeOrArray === "number"
+      ? util.Buffer
+        ? util._Buffer_allocUnsafe(sizeOrArray)
+        : new util.Array(sizeOrArray)
+      : util.Buffer
+        ? util._Buffer_from(sizeOrArray)
+        : typeof Uint8Array === "undefined"
+          ? sizeOrArray
+          : new Uint8Array(sizeOrArray);
   };
-  S.Array = typeof Uint8Array < "u" ? Uint8Array : Array;
-  S.Long = (S.global.dcodeIO && S.global.dcodeIO.Long) || S.global.Long || S.inquire("long");
-  S.key2Re = /^true|false|0|1$/;
-  S.key32Re = /^-?(?:0|[1-9][0-9]*)$/;
-  S.key64Re = /^(?:[\\x00-\\xff]{8}|-?(?:0|[1-9][0-9]*))$/;
-  S.longToHash = function (u) {
-    return u ? S.LongBits.from(u).toHash() : S.LongBits.zeroHash;
+  util.Array = typeof Uint8Array !== "undefined" ? Uint8Array : Array;
+  util.Long = (util.global.dcodeIO && util.global.dcodeIO.Long) || util.global.Long || util.inquire("long");
+  util.key2Re = /^true|false|0|1$/;
+  util.key32Re = /^-?(?:0|[1-9][0-9]*)$/;
+  util.key64Re = /^(?:[\\x00-\\xff]{8}|-?(?:0|[1-9][0-9]*))$/;
+  util.longToHash = function (value) {
+    return value ? util.LongBits.from(value).toHash() : util.LongBits.zeroHash;
   };
-  S.longFromHash = function (u, f) {
-    var fromHash = S.LongBits.fromHash(u);
-    if (S.Long) return S.Long.fromBits(fromHash.lo, fromHash.hi, f);
-    return fromHash.toNumber(Boolean(f));
+  util.longFromHash = function (hash, unsigned) {
+    var bits = util.LongBits.fromHash(hash);
+    if (util.Long) return util.Long.fromBits(bits.lo, bits.hi, unsigned);
+    return bits.toNumber(Boolean(unsigned));
   };
-  function wr(l, u, f) {
-    for (var keys = Object.keys(u), i = 0; i < keys.length; ++i)
-      if (l[keys[i]] === void 0 || !f) {
-        if (keys[i] !== "__proto__") l[keys[i]] = u[keys[i]];
+  function merge(dst, src, ifNotSet) {
+    for (var keys = Object.keys(src), i = 0; i < keys.length; ++i)
+      if (dst[keys[i]] === undefined || !ifNotSet) {
+        if (keys[i] !== "__proto__") dst[keys[i]] = src[keys[i]];
       }
-    return l;
+    return dst;
   }
-  S.merge = wr;
-  S.recursionLimit = 100;
-  S.makeProp = function (u, f) {
-    Object.defineProperty(u, f, { enumerable: !0, configurable: !0, writable: !0 });
+  util.merge = merge;
+  util.recursionLimit = 100;
+  util.makeProp = function (obj, key) {
+    Object.defineProperty(obj, key, {
+      enumerable: true,
+      configurable: true,
+      writable: true,
+    });
   };
-  S.lcFirst = function (u) {
-    return u.charAt(0).toLowerCase() + u.substring(1);
+  util.lcFirst = function (str) {
+    return str.charAt(0).toLowerCase() + str.substring(1);
   };
-  function Er(l) {
-    function u(f, d) {
-      if (!(this instanceof u)) return new u(f, d);
-      if (
-        (Object.defineProperty(this, "message", {
-          get: function () {
-            return f;
-          },
-        }),
-        Error.captureStackTrace)
-      )
-        Error.captureStackTrace(this, u);
-      else Object.defineProperty(this, "stack", { value: Error().stack || "" });
-      if (d) wr(this, d);
+  function newError(name) {
+    function CustomError(message, properties) {
+      if (!(this instanceof CustomError)) return new CustomError(message, properties);
+      Object.defineProperty(this, "message", {
+        get: function () {
+          return message;
+        },
+      });
+      if (Error.captureStackTrace) Error.captureStackTrace(this, CustomError);
+      else
+        Object.defineProperty(this, "stack", {
+          value: Error().stack || "",
+        });
+      if (properties) merge(this, properties);
     }
-    return (
-      (u.prototype = Object.create(Error.prototype, {
-        constructor: { value: u, writable: !0, enumerable: !1, configurable: !0 },
-        name: {
-          get: function () {
-            return l;
-          },
-          set: void 0,
-          enumerable: !1,
-          configurable: !0,
+    CustomError.prototype = Object.create(Error.prototype, {
+      constructor: {
+        value: CustomError,
+        writable: true,
+        enumerable: false,
+        configurable: true,
+      },
+      name: {
+        get: function () {
+          return name;
         },
-        toString: {
-          value: function () {
-            return this.name + ": " + this.message;
-          },
-          writable: !0,
-          enumerable: !1,
-          configurable: !0,
+        set: undefined,
+        enumerable: false,
+        configurable: true,
+      },
+      toString: {
+        value: function () {
+          return this.name + ": " + this.message;
         },
-      })),
-      u
-    );
+        writable: true,
+        enumerable: false,
+        configurable: true,
+      },
+    });
+    return CustomError;
   }
-  S.newError = Er;
-  S.ProtocolError = Er("ProtocolError");
-  S.oneOfGetter = function (u) {
-    var f = {};
-    for (var d = 0; d < u.length; ++d) f[u[d]] = 1;
+  util.newError = newError;
+  util.ProtocolError = newError("ProtocolError");
+  util.oneOfGetter = function (fieldNames) {
+    var fieldMap = {};
+    for (var i = 0; i < fieldNames.length; ++i) fieldMap[fieldNames[i]] = 1;
     return function () {
-      for (var keys = Object.keys(this), o = keys.length - 1; o > -1; --o)
-        if (f[keys[o]] === 1 && this[keys[o]] !== void 0 && this[keys[o]] !== null) return keys[o];
+      for (var keys = Object.keys(this), i = keys.length - 1; i > -1; --i)
+        if (fieldMap[keys[i]] === 1 && this[keys[i]] !== undefined && this[keys[i]] !== null) return keys[i];
     };
   };
-  S.oneOfSetter = function (u) {
-    return function (f) {
-      for (var d = 0; d < u.length; ++d) if (u[d] !== f) delete this[u[d]];
+  util.oneOfSetter = function (fieldNames) {
+    return function (name) {
+      for (var i = 0; i < fieldNames.length; ++i) if (fieldNames[i] !== name) delete this[fieldNames[i]];
     };
   };
-  S.toJSONOptions = { longs: String, enums: String, bytes: String, json: !0 };
-  S._configure = function () {
-    var l = S.Buffer;
+  util.toJSONOptions = {
+    longs: String,
+    enums: String,
+    bytes: String,
+    json: true,
+  };
+  util._configure = function () {
+    var l = util.Buffer;
     if (!l) {
-      S._Buffer_from = S._Buffer_allocUnsafe = null;
+      util._Buffer_from = util._Buffer_allocUnsafe = null;
       return;
     }
-    ((S._Buffer_from =
+    util._Buffer_from =
       (l.from !== Uint8Array.from && l.from) ||
-      function (f, d) {
-        return new l(f, d);
-      }),
-      (S._Buffer_allocUnsafe =
-        l.allocUnsafe ||
-        function (f) {
-          return new l(f);
-        }));
+      function (value, encoding) {
+        return new l(value, encoding);
+      };
+    util._Buffer_allocUnsafe =
+      l.allocUnsafe ||
+      function (size) {
+        return new l(size);
+      };
   };
 });
-
-export { QGe };
+export { require_minimal };

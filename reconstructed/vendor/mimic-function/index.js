@@ -5,46 +5,49 @@
  * pieces: chunk-m4p5zn6n.js (2)
  * attribution: esm-fingerprint 2
  */
-
 //@ chunk-m4p5zn6n.js:8136-8992 esm-fingerprint
-var wr = (e, n, r, o) => {
-    if (r === "length" || r === "prototype") return;
-    if (r === "arguments" || r === "caller") return;
-    let ownPropertyDescriptor = Object.getOwnPropertyDescriptor(e, r),
-      ownPropertyDescriptor_2 = Object.getOwnPropertyDescriptor(n, r);
-    if (!Tr(ownPropertyDescriptor, ownPropertyDescriptor_2) && o) return;
-    Object.defineProperty(e, r, ownPropertyDescriptor_2);
-  },
-  Tr = function (e, n) {
-    return (
-      e === void 0 ||
-      e.configurable ||
-      (e.writable === n.writable &&
-        e.enumerable === n.enumerable &&
-        e.configurable === n.configurable &&
-        (e.writable || e.value === n.value))
-    );
-  },
-  Pr = (e, n) => {
-    let prototypeOf = Object.getPrototypeOf(n);
-    if (prototypeOf === Object.getPrototypeOf(e)) return;
-    Object.setPrototypeOf(e, prototypeOf);
-  },
-  Ir = (e, n) => `/* Wrapped ${e}*/
-${n}`,
-  ownPropertyDescriptor = Object.getOwnPropertyDescriptor(Function.prototype, "toString"),
-  ownPropertyDescriptor_2 = Object.getOwnPropertyDescriptor(Function.prototype.toString, "name"),
-  Ar = (e, n, r) => {
-    let o = r === "" ? "" : `with ${r.trim()}() `,
-      s = Ir.bind(null, o, n.toString());
-    (Object.defineProperty(s, "name", ownPropertyDescriptor_2),
-      Object.defineProperty(e, "toString", { ...ownPropertyDescriptor, value: s }));
-  };
+var copyProperty = (to, from, property, ignoreNonConfigurable) => {
+  if (property === "length" || property === "prototype") return;
+  if (property === "arguments" || property === "caller") return;
+  let toDescriptor = Object.getOwnPropertyDescriptor(to, property);
+  let fromDescriptor = Object.getOwnPropertyDescriptor(from, property);
+  if (!canCopyProperty(toDescriptor, fromDescriptor) && ignoreNonConfigurable) return;
+  Object.defineProperty(to, property, fromDescriptor);
+};
+var canCopyProperty = function (toDescriptor, fromDescriptor) {
+  return (
+    toDescriptor === undefined ||
+    toDescriptor.configurable ||
+    (toDescriptor.writable === fromDescriptor.writable &&
+      toDescriptor.enumerable === fromDescriptor.enumerable &&
+      toDescriptor.configurable === fromDescriptor.configurable &&
+      (toDescriptor.writable || toDescriptor.value === fromDescriptor.value))
+  );
+};
+var changePrototype = (to, from) => {
+  let fromPrototype = Object.getPrototypeOf(from);
+  if (fromPrototype === Object.getPrototypeOf(to)) return;
+  Object.setPrototypeOf(to, fromPrototype);
+};
+var wrappedToString = (withName, fromBody) => `/* Wrapped ${withName}*/
+${fromBody}`;
+var ownPropertyDescriptor = Object.getOwnPropertyDescriptor(Function.prototype, "toString");
+var ownPropertyDescriptor_2 = Object.getOwnPropertyDescriptor(Function.prototype.toString, "name");
+var changeToString = (to, from, name) => {
+  let withName = name === "" ? "" : `with ${name.trim()}() `;
+  let newToString = wrappedToString.bind(null, withName, from.toString());
+  Object.defineProperty(newToString, "name", ownPropertyDescriptor_2);
+  Object.defineProperty(to, "toString", {
+    ...ownPropertyDescriptor,
+    value: newToString,
+  });
+};
 //@ chunk-m4p5zn6n.js:8992-9126 esm-fingerprint
-function Ee(e, n, { ignoreNonConfigurable: r = !1 } = {}) {
-  let { name: o } = e;
-  for (let s of Reflect.ownKeys(n)) wr(e, n, s, r);
-  return (Pr(e, n), Ar(e, n, o), e);
+function mimicFunction(to, from, { ignoreNonConfigurable = false } = {}) {
+  let { name } = to;
+  for (let property of Reflect.ownKeys(from)) copyProperty(to, from, property, ignoreNonConfigurable);
+  changePrototype(to, from);
+  changeToString(to, from, name);
+  return to;
 }
-
-export { Ee };
+export { mimicFunction };

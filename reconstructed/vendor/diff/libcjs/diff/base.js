@@ -7,162 +7,208 @@
  */
 
 //@ chunk-7vb8p3zb.js:191-3027 esm-fingerprint
-class L {
-  diff(n, e, t = {}) {
-    let i;
-    if (typeof t === "function") ((i = t), (t = {}));
-    else if ("callback" in t) i = t.callback;
-    let castInput = this.castInput(n, t),
-      castInput_2 = this.castInput(e, t),
-      removeEmpty = this.removeEmpty(this.tokenize(castInput, t)),
-      removeEmpty_2 = this.removeEmpty(this.tokenize(castInput_2, t));
-    return this.diffWithOptionsObj(removeEmpty, removeEmpty_2, t, i);
+class Diff {
+  diff(oldStr, newStr, options = {}) {
+    let callback;
+    if (typeof options === "function") {
+      callback = options;
+      options = {};
+    } else if ("callback" in options) callback = options.callback;
+    let oldString = this.castInput(oldStr, options);
+    let newString = this.castInput(newStr, options);
+    let oldTokens = this.removeEmpty(this.tokenize(oldString, options));
+    let newTokens = this.removeEmpty(this.tokenize(newString, options));
+    return this.diffWithOptionsObj(oldTokens, newTokens, options, callback);
   }
-  diffWithOptionsObj(n, e, t, i) {
-    var l;
-    let r = (d) => {
-        if (((d = this.postProcess(d, t)), i)) {
-          setTimeout(function () {
-            i(d);
-          }, 0);
-          return;
-        } else return d;
-      },
-      s = e.length,
-      o = n.length,
-      f = 1,
-      u = s + o;
-    if (t.maxEditLength != null) u = Math.min(u, t.maxEditLength);
-    let h = (l = t.timeout) !== null && l !== void 0 ? l : 1 / 0,
-      c = Date.now() + h,
-      a = [{ oldPos: -1, lastComponent: void 0 }],
-      extractCommon = this.extractCommon(a[0], e, n, 0, t);
-    if (a[0].oldPos + 1 >= o && extractCommon + 1 >= s) return r(this.buildValues(a[0].lastComponent, e, n));
-    let w = -1 / 0,
-      P = 1 / 0,
-      C = () => {
-        for (let max = Math.max(w, -f); max <= Math.min(P, f); max += 2) {
-          let p,
-            m = a[max - 1],
-            x = a[max + 1];
-          if (m) a[max - 1] = void 0;
-          let v = !1;
-          if (x) {
-            let D = x.oldPos - max;
-            v = x && 0 <= D && D < s;
-          }
-          let S = m && m.oldPos + 1 < o;
-          if (!v && !S) {
-            a[max] = void 0;
-            continue;
-          }
-          if (!S || (v && m.oldPos < x.oldPos)) p = this.addToPath(x, !0, !1, 0, t);
-          else p = this.addToPath(m, !1, !0, 1, t);
-          if (
-            ((extractCommon = this.extractCommon(p, e, n, max, t)),
-            p.oldPos + 1 >= o && extractCommon + 1 >= s)
-          )
-            return r(this.buildValues(p.lastComponent, e, n)) || !0;
-          else {
-            if (((a[max] = p), p.oldPos + 1 >= o)) P = Math.min(P, max - 1);
-            if (extractCommon + 1 >= s) w = Math.max(w, max + 1);
-          }
-        }
-        f++;
-      };
-    if (i)
-      (function d() {
+  diffWithOptionsObj(oldTokens, newTokens, options, callback) {
+    var _a;
+    let done = (value) => {
+      value = this.postProcess(value, options);
+      if (callback) {
         setTimeout(function () {
-          if (f > u || Date.now() > c) return i(void 0);
-          if (!C()) d();
+          callback(value);
+        }, 0);
+        return;
+      } else return value;
+    };
+    let newLen = newTokens.length;
+    let oldLen = oldTokens.length;
+    let editLength = 1;
+    let maxEditLength = newLen + oldLen;
+    if (options.maxEditLength != null) maxEditLength = Math.min(maxEditLength, options.maxEditLength);
+    let maxExecutionTime = (_a = options.timeout) !== null && _a !== undefined ? _a : 1 / 0;
+    let abortAfterTimestamp = Date.now() + maxExecutionTime;
+    let bestPath = [
+      {
+        oldPos: -1,
+        lastComponent: undefined,
+      },
+    ];
+    let newPos = this.extractCommon(bestPath[0], newTokens, oldTokens, 0, options);
+    if (bestPath[0].oldPos + 1 >= oldLen && newPos + 1 >= newLen)
+      return done(this.buildValues(bestPath[0].lastComponent, newTokens, oldTokens));
+    let minDiagonalToConsider = -1 / 0;
+    let maxDiagonalToConsider = 1 / 0;
+    let execEditLength = () => {
+      for (
+        let diagonalPath = Math.max(minDiagonalToConsider, -editLength);
+        diagonalPath <= Math.min(maxDiagonalToConsider, editLength);
+        diagonalPath += 2
+      ) {
+        let basePath;
+        let removePath = bestPath[diagonalPath - 1];
+        let addPath = bestPath[diagonalPath + 1];
+        if (removePath) bestPath[diagonalPath - 1] = undefined;
+        let canAdd = false;
+        if (addPath) {
+          let addPathNewPos = addPath.oldPos - diagonalPath;
+          canAdd = addPath && 0 <= addPathNewPos && addPathNewPos < newLen;
+        }
+        let canRemove = removePath && removePath.oldPos + 1 < oldLen;
+        if (!canAdd && !canRemove) {
+          bestPath[diagonalPath] = undefined;
+          continue;
+        }
+        if (!canRemove || (canAdd && removePath.oldPos < addPath.oldPos))
+          basePath = this.addToPath(addPath, true, false, 0, options);
+        else basePath = this.addToPath(removePath, false, true, 1, options);
+        newPos = this.extractCommon(basePath, newTokens, oldTokens, diagonalPath, options);
+        if (basePath.oldPos + 1 >= oldLen && newPos + 1 >= newLen)
+          return done(this.buildValues(basePath.lastComponent, newTokens, oldTokens)) || true;
+        else {
+          bestPath[diagonalPath] = basePath;
+          if (basePath.oldPos + 1 >= oldLen)
+            maxDiagonalToConsider = Math.min(maxDiagonalToConsider, diagonalPath - 1);
+          if (newPos + 1 >= newLen) minDiagonalToConsider = Math.max(minDiagonalToConsider, diagonalPath + 1);
+        }
+      }
+      editLength++;
+    };
+    if (callback)
+      (function exec() {
+        setTimeout(function () {
+          if (editLength > maxEditLength || Date.now() > abortAfterTimestamp) return callback(undefined);
+          if (!execEditLength()) exec();
         }, 0);
       })();
     else
-      while (f <= u && Date.now() <= c) {
-        let d = C();
-        if (d) return d;
+      while (editLength <= maxEditLength && Date.now() <= abortAfterTimestamp) {
+        let ret = execEditLength();
+        if (ret) return ret;
       }
   }
-  addToPath(n, e, t, i, l) {
-    let lastComponent = n.lastComponent;
-    if (lastComponent && !l.oneChangePerToken && lastComponent.added === e && lastComponent.removed === t)
+  addToPath(path, added, removed, oldPosInc, options) {
+    let last = path.lastComponent;
+    if (last && !options.oneChangePerToken && last.added === added && last.removed === removed)
       return {
-        oldPos: n.oldPos + i,
+        oldPos: path.oldPos + oldPosInc,
         lastComponent: {
-          count: lastComponent.count + 1,
-          added: e,
-          removed: t,
-          previousComponent: lastComponent.previousComponent,
+          count: last.count + 1,
+          added,
+          removed,
+          previousComponent: last.previousComponent,
         },
       };
     else
       return {
-        oldPos: n.oldPos + i,
-        lastComponent: { count: 1, added: e, removed: t, previousComponent: lastComponent },
+        oldPos: path.oldPos + oldPosInc,
+        lastComponent: {
+          count: 1,
+          added,
+          removed,
+          previousComponent: last,
+        },
       };
   }
-  extractCommon(n, e, t, i, l) {
-    let r = e.length,
-      s = t.length,
-      oldPos = n.oldPos,
-      f = oldPos - i,
-      u = 0;
-    while (f + 1 < r && oldPos + 1 < s && this.equals(t[oldPos + 1], e[f + 1], l))
-      if ((f++, oldPos++, u++, l.oneChangePerToken))
-        n.lastComponent = { count: 1, previousComponent: n.lastComponent, added: !1, removed: !1 };
-    if (u && !l.oneChangePerToken)
-      n.lastComponent = { count: u, previousComponent: n.lastComponent, added: !1, removed: !1 };
-    return ((n.oldPos = oldPos), f);
+  extractCommon(basePath, newTokens, oldTokens, diagonalPath, options) {
+    let newLen = newTokens.length;
+    let oldLen = oldTokens.length;
+    let oldPos = basePath.oldPos;
+    let newPos = oldPos - diagonalPath;
+    let commonCount = 0;
+    while (
+      newPos + 1 < newLen &&
+      oldPos + 1 < oldLen &&
+      this.equals(oldTokens[oldPos + 1], newTokens[newPos + 1], options)
+    ) {
+      newPos++;
+      oldPos++;
+      commonCount++;
+      if (options.oneChangePerToken)
+        basePath.lastComponent = {
+          count: 1,
+          previousComponent: basePath.lastComponent,
+          added: false,
+          removed: false,
+        };
+    }
+    if (commonCount && !options.oneChangePerToken)
+      basePath.lastComponent = {
+        count: commonCount,
+        previousComponent: basePath.lastComponent,
+        added: false,
+        removed: false,
+      };
+    basePath.oldPos = oldPos;
+    return newPos;
   }
-  equals(n, e, t) {
-    if (t.comparator) return t.comparator(n, e);
-    else return n === e || (!!t.ignoreCase && n.toLowerCase() === e.toLowerCase());
+  equals(left, right, options) {
+    if (options.comparator) return options.comparator(left, right);
+    else return left === right || (!!options.ignoreCase && left.toLowerCase() === right.toLowerCase());
   }
-  removeEmpty(n) {
-    let e = [];
-    for (let t = 0; t < n.length; t++) if (n[t]) e.push(n[t]);
-    return e;
+  removeEmpty(array) {
+    let ret = [];
+    for (let i = 0; i < array.length; i++) if (array[i]) ret.push(array[i]);
+    return ret;
   }
-  castInput(n, e) {
-    return n;
+  castInput(value, options) {
+    return value;
   }
-  tokenize(n, e) {
-    return Array.from(n);
+  tokenize(value, options) {
+    return Array.from(value);
   }
-  join(n) {
-    return n.join("");
+  join(chars) {
+    return chars.join("");
   }
-  postProcess(n, e) {
-    return n;
+  postProcess(changeObjects, options) {
+    return changeObjects;
   }
   get useLongestToken() {
-    return !1;
+    return false;
   }
-  buildValues(n, e, t) {
-    let i = [],
-      l;
-    while (n) (i.push(n), (l = n.previousComponent), delete n.previousComponent, (n = l));
-    i.reverse();
-    let r = i.length,
-      s = 0,
-      o = 0,
-      f = 0;
-    for (; s < r; s++) {
-      let u = i[s];
-      if (!u.removed) {
-        if (!u.added && this.useLongestToken) {
-          let sliced = e.slice(o, o + u.count);
-          ((sliced = sliced.map(function (c, a) {
-            let g = t[f + a];
-            return g.length > c.length ? g : c;
-          })),
-            (u.value = this.join(sliced)));
-        } else u.value = this.join(e.slice(o, o + u.count));
-        if (((o += u.count), !u.added)) f += u.count;
-      } else ((u.value = this.join(t.slice(f, f + u.count))), (f += u.count));
+  buildValues(lastComponent, newTokens, oldTokens) {
+    let components = [];
+    let nextComponent;
+    while (lastComponent) {
+      components.push(lastComponent);
+      nextComponent = lastComponent.previousComponent;
+      delete lastComponent.previousComponent;
+      lastComponent = nextComponent;
     }
-    return i;
+    components.reverse();
+    let componentLen = components.length;
+    let componentPos = 0;
+    let newPos = 0;
+    let oldPos = 0;
+    for (; componentPos < componentLen; componentPos++) {
+      let component = components[componentPos];
+      if (!component.removed) {
+        if (!component.added && this.useLongestToken) {
+          let value = newTokens.slice(newPos, newPos + component.count);
+          value = value.map(function (value, i) {
+            let oldValue = oldTokens[oldPos + i];
+            return oldValue.length > value.length ? oldValue : value;
+          });
+          component.value = this.join(value);
+        } else component.value = this.join(newTokens.slice(newPos, newPos + component.count));
+        newPos += component.count;
+        if (!component.added) oldPos += component.count;
+      } else {
+        component.value = this.join(oldTokens.slice(oldPos, oldPos + component.count));
+        oldPos += component.count;
+      }
+    }
+    return components;
   }
 }
-
-export { L };
+export { Diff };

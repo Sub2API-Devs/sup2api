@@ -13,17 +13,22 @@
 class C4EUpsellRegistry {
   implementation = null;
   isC4EUpsellCommandEnabled() {
-    return this.implementation === null ? !1 : this.implementation();
+    return this.implementation === null ? false : this.implementation();
   }
-  register(e) {
-    this.implementation = e;
+  register(implementation) {
+    this.implementation = implementation;
   }
 }
 //@ chunk-8k8yqdkq.js:341-355 placement
-var wYo = new C4EUpsellRegistry();
+/**
+ * C4E upsell 命令的注册表单例。
+ */
+var C4E_UPSELL_REGISTRY = new C4EUpsellRegistry();
 //@ chunk-8k8yqdkq.js:355-413 placement
-function Pri(e) {
-  wYo.register(e.isC4EUpsellCommandEnabled);
+/**
+ * 把某个命令的 isC4EUpsellCommandEnabled 判定注册到注册表。
+ */
+function registerC4EUpsellGate(e) {
+  C4E_UPSELL_REGISTRY.register(e.isC4EUpsellCommandEnabled);
 }
-
-export { wYo, Pri };
+export { C4E_UPSELL_REGISTRY, registerC4EUpsellGate };

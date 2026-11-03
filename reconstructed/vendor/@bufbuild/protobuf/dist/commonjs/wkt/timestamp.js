@@ -6,40 +6,41 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../../runtime/bun-runtime.js";
-import { h_ } from "./google/protobuf/timestamp_pb.js";
-import { wl } from "../../cjs/create.js";
-import { ko } from "../proto-int64.js";
+import { require_timestamp_pb } from "./google/protobuf/timestamp_pb.js";
+import { require_create } from "../../cjs/create.js";
+import { require_proto_int64 } from "../proto-int64.js";
 
 //@ chunk-fq0cr76a.js:414492-415008 cjs-fingerprint
-var fO = x(function (dO) {
-  Object.defineProperty(dO, "__esModule", { value: !0 });
-  dO.timestampNow = Az;
-  dO.timestampFromDate = lO;
-  dO.timestampDate = Cz;
-  dO.timestampFromMs = cO;
-  dO.timestampMs = uO;
-  var iO = h_(),
-    oO = wl(),
-    aO = ko();
-  function Az() {
-    return lO(new Date());
+var require_timestamp = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.timestampNow = timestampNow;
+  cjsExports.timestampFromDate = timestampFromDate;
+  cjsExports.timestampDate = timestampDate;
+  cjsExports.timestampFromMs = timestampFromMs;
+  cjsExports.timestampMs = timestampMs;
+  var timestamp_pb_js_1 = require_timestamp_pb();
+  var create_js_1 = require_create();
+  var proto_int64_js_1 = require_proto_int64();
+  function timestampNow() {
+    return timestampFromDate(new Date());
   }
-  function lO(e) {
-    return cO(e.getTime());
+  function timestampFromDate(date) {
+    return timestampFromMs(date.getTime());
   }
-  function Cz(e) {
-    return new Date(uO(e));
+  function timestampDate(timestamp) {
+    return new Date(timestampMs(timestamp));
   }
-  function cO(e) {
-    let floored = Math.floor(e / 1000);
-    return oO.create(iO.TimestampSchema, {
-      seconds: aO.protoInt64.parse(floored),
-      nanos: (e - floored * 1000) * 1e6,
+  function timestampFromMs(timestampMs) {
+    let seconds = Math.floor(timestampMs / 1000);
+    return create_js_1.create(timestamp_pb_js_1.TimestampSchema, {
+      seconds: proto_int64_js_1.protoInt64.parse(seconds),
+      nanos: (timestampMs - seconds * 1000) * 1e6,
     });
   }
-  function uO(e) {
-    return Number(e.seconds) * 1000 + Math.round(e.nanos / 1e6);
+  function timestampMs(timestamp) {
+    return Number(timestamp.seconds) * 1000 + Math.round(timestamp.nanos / 1e6);
   }
 });
-
-export { fO };
+export { require_timestamp };

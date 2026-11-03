@@ -6,19 +6,19 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { W1e } from "../../types/dist-cjs/index.js";
+import { require_types } from "../../types/dist-cjs/index.js";
 
 //@ chunk-jn3x3dnx.js:263-482 cjs-fingerprint
-var bD = x(function (s) {
-  var r = W1e(),
-    o = (e) => e[r.SMITHY_CONTEXT_KEY] || (e[r.SMITHY_CONTEXT_KEY] = {}),
-    i = (e) => {
-      if (typeof e === "function") return e;
-      let resolved = Promise.resolve(e);
-      return () => resolved;
-    };
-  s.getSmithyContext = o;
-  s.normalizeProvider = i;
+var require_util_middleware = x(function (cjsExports) {
+  var import_types = require_types();
+  var getSmithyContext = (e) =>
+    e[import_types.SMITHY_CONTEXT_KEY] || (e[import_types.SMITHY_CONTEXT_KEY] = {});
+  var normalizeProvider = (input) => {
+    if (typeof input === "function") return input;
+    let promisified = Promise.resolve(input);
+    return () => promisified;
+  };
+  cjsExports.getSmithyContext = getSmithyContext;
+  cjsExports.normalizeProvider = normalizeProvider;
 });
-
-export { bD };
+export { require_util_middleware };

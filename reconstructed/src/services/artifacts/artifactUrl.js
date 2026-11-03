@@ -18,58 +18,88 @@ import {
 import { decodeBase58Uuid } from "../../utils/messages.js";
 import { artifactViewerUrlFor } from "../../tools/ArtifactTool/artifactUrls.js";
 import { claudeAiEnvironment } from "../../constants/claudeAiOrigin.js";
-import { ai, Ya, classifyHomeMount } from "../../utils/networkPaths.js";
+import { isNonWslUncPath, isNetworkMountPath, classifyHomeMount } from "../../utils/networkPaths.js";
 import { getPathsForNetworkScreen } from "../../utils/fsOperations.js";
 import { VERSION_MAX_ENTRIES } from "./publishInstanceFiles.js";
 
 //@ chunk-jv307fw4.js:1750-2215 placement
+/**
+ * claude.ai 链接族的分类表：chat/share/task/cowork/project/design/settings/api 各自是否需要 id，以及族到展示名的映射。
+ */
 var CLAUDE_AI_URL_FAMILIES = {
-    chat: { family: "chat", needsId: !0 },
-    share: { family: "share", needsId: !0 },
-    task: { family: "task", needsId: !0 },
-    cowork: { family: "cowork", needsId: !0 },
-    "cowork-artifact": { family: "cowork_artifact", needsId: !0 },
-    project: { family: "project", needsId: !0 },
-    design: { family: "design", needsId: !1 },
-    settings: { family: "settings", needsId: !1 },
-    api: { family: "api", needsId: !1 },
+  chat: {
+    family: "chat",
+    needsId: true,
   },
-  ht = {
-    chat: "chat",
-    share: "shared chat",
-    task: "task",
-    cowork: "task",
-    code_session: "session",
-    epitaxy: "session",
-    project: "project",
-  };
+  share: {
+    family: "share",
+    needsId: true,
+  },
+  task: {
+    family: "task",
+    needsId: true,
+  },
+  cowork: {
+    family: "cowork",
+    needsId: true,
+  },
+  "cowork-artifact": {
+    family: "cowork_artifact",
+    needsId: true,
+  },
+  project: {
+    family: "project",
+    needsId: true,
+  },
+  design: {
+    family: "design",
+    needsId: false,
+  },
+  settings: {
+    family: "settings",
+    needsId: false,
+  },
+  api: {
+    family: "api",
+    needsId: false,
+  },
+};
+var FAMILY_DISPLAY_NAMES = {
+  chat: "chat",
+  share: "shared chat",
+  task: "task",
+  cowork: "task",
+  code_session: "session",
+  epitaxy: "session",
+  project: "project",
+};
 //@ chunk-jv307fw4.js:2215-2856 placement
 function classifyClaudeAiPath(e) {
   let [n, r, s] = e;
-  if (n === void 0) return "other";
-  if (n === "artifact") return r === void 0 ? "artifact_bare" : "artifact";
-  if (n === "artifacts") return r === void 0 || r === "design" ? "artifacts_gallery" : "chat_artifact";
+  if (n === undefined) return "other";
+  if (n === "artifact") return r === undefined ? "artifact_bare" : "artifact";
+  if (n === "artifacts") return r === undefined || r === "design" ? "artifacts_gallery" : "chat_artifact";
   if (n === "public" && r === "artifacts") return "chat_artifact";
   if (n === "code") {
-    if (r === "artifact" || r === "frame") return s === void 0 ? "artifact_bare" : "artifact";
+    if (r === "artifact" || r === "frame") return s === undefined ? "artifact_bare" : "artifact";
     if (r === "artifacts") return "artifacts_gallery";
-    return r === void 0 ? "other" : "code_session";
+    return r === undefined ? "other" : "code_session";
   }
   if (n === "epitaxy") {
     if (r === "artifact") return "epitaxy_artifact";
-    return r === void 0 ? "other" : "epitaxy";
+    return r === undefined ? "other" : "epitaxy";
   }
-  let a = Object.hasOwn(CLAUDE_AI_URL_FAMILIES, n) ? CLAUDE_AI_URL_FAMILIES[n] : void 0;
-  if (a === void 0 || (a.needsId && r === void 0)) return "other";
+  let a = Object.hasOwn(CLAUDE_AI_URL_FAMILIES, n) ? CLAUDE_AI_URL_FAMILIES[n] : undefined;
+  if (a === undefined || (a.needsId && r === undefined)) return "other";
   return a.family;
 }
+//@ chunk-jv307fw4.js:2856-3186 placement
 /**
  * 解析 claude.ai 链接，识别 artifact/frame 参数、环境与链接族（chat/share/project/design…）。
  */
-//@ chunk-jv307fw4.js:2856-3186 placement
 function parseArtifactUrl(e) {
-  let n = canonicalizeArtifactUrlInput(e),
-    r = claudeAiWebEnvOf(n);
+  let n = canonicalizeArtifactUrlInput(e);
+  let r = claudeAiWebEnvOf(n);
   if (r === null) return null;
   let s;
   try {
@@ -77,8 +107,8 @@ function parseArtifactUrl(e) {
   } catch {
     return null;
   }
-  let a = s.searchParams.get("artifact") || s.searchParams.get("frame"),
-    l = null;
+  let a = s.searchParams.get("artifact") || s.searchParams.get("frame");
+  let l = null;
   if (a !== null) {
     let lower = a.toLowerCase();
     l = ARTIFACT_SLUG_RE.test(lower) ? lower : decodeBase58Uuid(a);
@@ -86,78 +116,93 @@ function parseArtifactUrl(e) {
   return {
     family: classifyClaudeAiPath(s.pathname.split("/").filter((d) => d !== "")),
     env: r,
-    artifact: l === null ? null : { slug: l },
+    artifact:
+      l === null
+        ? null
+        : {
+            slug: l,
+          },
   };
 }
+//@ chunk-jv307fw4.js:3186-4752 placement
 /**
  * 用户传入的不是 artifact URL 时，生成说明（是哪种 claude.ai 链接、该如何改用 artifact 自身 URL）。
  */
-//@ chunk-jv307fw4.js:3186-4752 placement
 function explainNonArtifactUrl(e, n = {}) {
-  let r = `not an artifact URL: ${e} \u2014`,
-    s = parseArtifactUrl(e),
-    a = s === null ? void 0 : ht[s.family];
-  if (s !== null && a !== void 0 && s.artifact !== null) {
-    let b = artifactViewerUrlFor({ slug: s.artifact.slug, env: s.env });
+  let r = `not an artifact URL: ${e} \u2014`;
+  let artifactUrl = parseArtifactUrl(e);
+  let a = artifactUrl === null ? undefined : FAMILY_DISPLAY_NAMES[artifactUrl.family];
+  if (artifactUrl !== null && a !== undefined && artifactUrl.artifact !== null) {
+    let b = artifactViewerUrlFor({
+      slug: artifactUrl.artifact.slug,
+      env: artifactUrl.env,
+    });
     return `${r} that is a claude.ai ${a} link; pass the artifact's own URL (${b}) as \`${n.field ?? "url"}\`.`;
   }
-  if (s?.family === "design") {
-    let b = n.designToolName === void 0 ? "" : `; use the ${n.designToolName} tool`;
+  if (artifactUrl?.family === "design") {
+    let b = n.designToolName === undefined ? "" : `; use the ${n.designToolName} tool`;
     return `${r} that is a Claude Design link, which the ${ARTIFACT_TOOL_NAME} tool cannot open${b}.`;
   }
   if (
-    s?.family === "chat_artifact" ||
+    artifactUrl?.family === "chat_artifact" ||
     /^https:\/\/(?:www\.)?claude\.site(?:[/?#]|$)/.test(canonicalizeArtifactUrlInput(e.trim()))
   )
     return `${r} that is an artifact from a claude.ai chat (the chat's artifact panel or its public page), which is separate from artifacts published with this tool and has no ${artifactLinkShapeHint()} link, so this tool cannot read it. If the user wants its content used here, ask them to paste it or save it to a file in this session; if they meant one of their published artifacts, action: "list" shows those.`;
-  if (a !== void 0)
+  if (a !== undefined)
     return `${r} that is a claude.ai ${a} link, not a published artifact, and this tool cannot read a ${a}. If the user meant an artifact shown in that ${a}, ask them for the artifact's own ${artifactLinkShapeHint()} link or find it with action: "list"; otherwise ask them to paste the content they want used.`;
-  let trimmed = e.trim(),
-    h = ARTIFACT_SLUG_RE.test(trimmed.toLowerCase()) ? trimmed.toLowerCase() : decodeBase58Uuid(trimmed);
-  if (s === null && h !== null)
-    return `${r} that looks like an artifact id on its own; if it is one, pass the full link ${artifactViewerUrlFor({ slug: h, env: claudeAiEnvironment() })} as \`${n.field ?? "url"}\`.`;
+  let trimmed = e.trim();
+  let h = ARTIFACT_SLUG_RE.test(trimmed.toLowerCase()) ? trimmed.toLowerCase() : decodeBase58Uuid(trimmed);
+  if (artifactUrl === null && h !== null)
+    return `${r} that looks like an artifact id on its own; if it is one, pass the full link ${artifactViewerUrlFor(
+      {
+        slug: h,
+        env: claudeAiEnvironment(),
+      },
+    )} as \`${n.field ?? "url"}\`.`;
   return `${r} pass the artifact's ${artifactLinkShapeHint()} link (action: "list" shows them).`;
 }
 //@ chunk-jv307fw4.js:4841-5012 placement
 async function readExactBytes(e, n) {
-  let alloc = Buffer.alloc(n + 1),
-    s = 0;
-  while (s < alloc.length) {
-    let { bytesRead: bytesRead } = await e.read(alloc, s, alloc.length - s, s);
+  let r = Buffer.alloc(n + 1);
+  let s = 0;
+  while (s < r.length) {
+    let { bytesRead } = await e.read(r, s, r.length - s, s);
     if (bytesRead === 0) break;
     s += bytesRead;
   }
-  return s === n ? alloc.subarray(0, n) : null;
+  return s === n ? r.subarray(0, n) : null;
 }
 //@ chunk-jv307fw4.js:5143-5186 placement
 function isProtectedPath(e) {
-  return ai(e) || Ya(e) || classifyHomeMount(e);
+  return isNonWslUncPath(e) || isNetworkMountPath(e) || classifyHomeMount(e);
 }
 //@ chunk-jv307fw4.js:5186-5270 placement
 function pathTouchesProtected(e) {
-  if (isProtectedPath(e)) return !0;
-  let { paths: paths, vetted: vetted } = getPathsForNetworkScreen(e);
+  if (isProtectedPath(e)) return true;
+  let { paths, vetted } = getPathsForNetworkScreen(e);
   return !vetted || paths.some(isProtectedPath);
 }
 //@ chunk-jv307fw4.js:5270-5312 placement
-function se(e) {
-  return ai(e) || Ya(e) || classifyHomeMount(e);
+function classifyArtifactUrl(e) {
+  return isNonWslUncPath(e) || isNetworkMountPath(e) || classifyHomeMount(e);
 }
 //@ chunk-jv307fw4.js:5312-5349 placement
-var MAX_PUBLISHED_PATH_LENGTH = 512,
-  JL = 255,
-  C5n = VERSION_MAX_ENTRIES - 1,
-  Rue = JL + 1;
-
+/**
+ * 发布路径长度上限 512 与单个 URL 段 255 字符。
+ */
+var MAX_PUBLISHED_PATH_LENGTH = 512;
+var MAX_URL_SEGMENT_CHARS = 255;
+var MAX_VERSION_INDEX = VERSION_MAX_ENTRIES - 1;
+var MAX_SEGMENT_WITH_SLASH = MAX_URL_SEGMENT_CHARS + 1;
 export {
   MAX_PUBLISHED_PATH_LENGTH,
-  JL,
-  Rue,
+  MAX_URL_SEGMENT_CHARS,
+  MAX_SEGMENT_WITH_SLASH,
   pathTouchesProtected,
   readExactBytes,
   isProtectedPath,
   parseArtifactUrl,
-  C5n,
+  MAX_VERSION_INDEX,
   explainNonArtifactUrl,
-  se,
+  classifyArtifactUrl,
 };

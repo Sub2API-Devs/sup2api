@@ -8,7 +8,7 @@
  * pieces: chunk-p2qwpk2k.js (11)
  * attribution: placement 7, layout 2, fingerprint 1, sole-consumer 1
  */
-import { j, y, P, zt, Q } from "../../../../vendor/react/cjs/react.production.js";
+import { init_react_production, y, P, zt, Q } from "../../../../vendor/react/cjs/react.production.js";
 import { INVISIBLE_SYMBOL_RE } from "../../../utils/emojiPatterns.js";
 import {
   hasVisibleText,
@@ -21,15 +21,18 @@ import {
 } from "../../../utils/permissions/approvalPayloadSerialization.js";
 import { truncateToLength, countCodePoints, plural } from "../../../utils/stringUtils.js";
 import { w } from "../../../../vendor/react/compiler-runtime.js";
-import { UWe, $nn } from "../../Spinner/spinnerStatus.js";
+import { statusSnapshot, statusRowTexts } from "../../Spinner/spinnerStatus.js";
 import { MEMO_CACHE_SENTINEL } from "../../../../runtime/bun-runtime.js";
-import { e, r } from "../../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+} from "../../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Box } from "../../../ink/components/Text.js";
 import { useTabHeaderFocus } from "../../design-system/Tabs.js";
 import { useIsScreenReaderEnabled } from "../../../ink/components/ErrorBoundary.js";
 import { useScrollViewportSize } from "../../ScrollViewportContext.js";
 import { useTerminalSize } from "../../../hooks/useTerminalSize.js";
-import { _Rr, NO_COMMITTED_ROW } from "../../CustomSelect/select.js";
+import { MAX_WIDTH_RATIO, NO_COMMITTED_ROW } from "../../CustomSelect/select.js";
 import { truncateToWidth } from "../../../utils/format.js";
 import { FittedOfferBody } from "../../AutocompactOfferDialog.js";
 import { useShortcutDisplay } from "../../../keybindings/useKeybindingDisplay.js";
@@ -43,60 +46,80 @@ import { formatHiddenRowsHint } from "../BashPermissionRequest/commandDisplay.js
 import { formatShortcutHint } from "../../design-system/KeyboardShortcutHint.js";
 
 //@ chunk-p2qwpk2k.js:25922-25926 placement
-j();
+init_react_production();
 //@ chunk-p2qwpk2k.js:25926-25954 placement
-var Kd = 8,
-  zd = 200,
-  jd = 80,
-  Qd = 14;
+var MAX_DENIAL_ROWS = 8;
+var MAX_DENIAL_TEXT = 200;
+var MIN_DECISION_COLUMN = 80;
+var MAX_DENIAL_LINES = 14;
 //@ chunk-p2qwpk2k.js:25954-26017 placement
-function Ml(h) {
-  return !h.replace(INVISIBLE_SYMBOL_RE, " ").split(/\s+/).some(hasVisibleText);
+function hasNoVisibleToken(text) {
+  return !text.replace(INVISIBLE_SYMBOL_RE, " ").split(/\s+/).some(hasVisibleText);
 }
 //@ chunk-p2qwpk2k.js:26017-26608 placement
 function RecentDenialRow(h, i) {
   let m = i.get(h);
-  if (m !== void 0) return m;
-  let a = serializeApprovalPayload(h.display, { maxUnits: MAX_PAYLOAD_UNITS }),
-    g = a.kind !== "withheld" && Ml(a.text) ? `Call with no description: ${h.toolName}` : h.display,
-    v =
-      h.command !== void 0
-        ? formatDenialCommand(h.command)
-        : h.input === void 0
-          ? void 0
-          : h.input.kind === "withheld"
-            ? { ...displayField("Input not shown"), refusal: bn("its input can't be read in full") }
-            : { text: h.input.text, needsGutter: h.input.needsGutter },
-    x = v === void 0 || (v.refusal === void 0 && Ml(v.text)),
-    C = {
-      label: g,
-      isUnreadable: x,
-      quote: x
-        ? {
-            ...displayField("Input not shown"),
-            refusal: bn(v === void 0 ? "its input wasn't recorded" : "its input can't be read"),
-          }
-        : v,
-    };
-  return (i.set(h, C), C);
+  if (m !== undefined) return m;
+  let a = serializeApprovalPayload(h.display, {
+    maxUnits: MAX_PAYLOAD_UNITS,
+  });
+  let label =
+    a.kind !== "withheld" && hasNoVisibleToken(a.text)
+      ? `Call with no description: ${h.toolName}`
+      : h.display;
+  let v =
+    h.command !== undefined
+      ? formatDenialCommand(h.command)
+      : h.input === undefined
+        ? undefined
+        : h.input.kind === "withheld"
+          ? {
+              ...displayField("Input not shown"),
+              refusal: notApprovableHereText("its input can't be read in full"),
+            }
+          : {
+              text: h.input.text,
+              needsGutter: h.input.needsGutter,
+            };
+  let x = v === undefined || (v.refusal === undefined && hasNoVisibleToken(v.text));
+  let C = {
+    label,
+    isUnreadable: x,
+    quote: x
+      ? {
+          ...displayField("Input not shown"),
+          refusal: notApprovableHereText(
+            v === undefined ? "its input wasn't recorded" : "its input can't be read",
+          ),
+        }
+      : v,
+  };
+  i.set(h, C);
+  return C;
 }
 //@ chunk-p2qwpk2k.js:26608-26646 placement
-function Cn(h, i) {
+function quotedReason(h, i) {
   return RecentDenialRow(h, i).quote;
 }
 //@ chunk-p2qwpk2k.js:26646-26684 placement
-function qd(h, i) {
-  return RecentDenialRow(h, i).label;
+function shortDenialLabel(denial, i) {
+  return RecentDenialRow(denial, i).label;
 }
 //@ chunk-p2qwpk2k.js:26684-26977 placement
-function formatDenialCommand(h) {
-  let i = serializeApprovalPayload(h, { maxUnits: MAX_PAYLOAD_UNITS });
-  if (i.kind !== "withheld") return { text: i.text, needsGutter: i.needsGutter };
-  let m = truncateToLength(h, MAX_DISPLAY_UNITS),
-    a = countCodePoints(h.slice(m.length));
+function formatDenialCommand(command) {
+  let i = serializeApprovalPayload(command, {
+    maxUnits: MAX_PAYLOAD_UNITS,
+  });
+  if (i.kind !== "withheld")
+    return {
+      text: i.text,
+      needsGutter: i.needsGutter,
+    };
+  let m = truncateToLength(command, MAX_DISPLAY_UNITS);
+  let a = countCodePoints(command.slice(m.length));
   return {
-    ...displayField(h),
-    refusal: bn(
+    ...displayField(command),
+    refusal: notApprovableHereText(
       a > 0
         ? `the other ${a.toLocaleString("en-US")} ${plural(a, "character")} can't be read`
         : "its command can't be read in full",
@@ -104,246 +127,309 @@ function formatDenialCommand(h) {
   };
 }
 //@ chunk-p2qwpk2k.js:26977-27038 layout
-function bn(h) {
+function notApprovableHereText(h) {
   return `This row can't be approved here: ${h}`;
 }
 //@ chunk-p2qwpk2k.js:27038-27115 layout
-function ts(h, i) {
-  if (!h.has(i)) return h;
+function withoutId(h, focusedIndex) {
+  if (!h.has(focusedIndex)) return h;
   let m = new Set(h);
-  return (m.delete(i), m);
+  m.delete(focusedIndex);
+  return m;
 }
 //@ chunk-p2qwpk2k.js:27115-27860 fingerprint = RecentDenialsTab (0.316)
-function RecentDenialsTab(t0) {
-  let $ = w(15),
-    { onHeaderFocusChange: onHeaderFocusChange, onStateChange: onStateChange, isMidTurn: isMidTurn } = t0,
-    { getDenials: getDenials } = UWe(),
-    [g] = y(getDenials),
-    t8 = g.length === 0,
-    C,
-    c;
-  if ($[0] !== t8 || $[1] !== onHeaderFocusChange)
-    ((C = () => {
-      if (t8) onHeaderFocusChange(!0);
-    }),
-      (c = [t8, onHeaderFocusChange]),
-      ($[0] = t8),
-      ($[1] = onHeaderFocusChange),
-      ($[2] = C),
-      ($[3] = c));
-  else ((C = $[2]), (c = $[3]));
+function RecentDenialsTab(props) {
+  let $ = w(15);
+  let { onHeaderFocusChange, onStateChange, isMidTurn } = props;
+  let { getDenials } = statusSnapshot();
+  let [g] = y(getDenials);
+  let t8 = g.length === 0;
+  let C;
+  let c;
+  if ($[0] !== t8 || $[1] !== onHeaderFocusChange) {
+    C = () => {
+      if (t8) onHeaderFocusChange(true);
+    };
+    c = [t8, onHeaderFocusChange];
+    $[0] = t8;
+    $[1] = onHeaderFocusChange;
+    $[2] = C;
+    $[3] = c;
+  } else {
+    C = $[2];
+    c = $[3];
+  }
   P(C, c);
-  let M, b;
-  if ($[4] !== g || $[5] !== t8 || $[6] !== onStateChange)
-    ((M = () => {
-      if (t8) onStateChange({ approved: new Set(), retry: new Set(), denials: g, canMark: !1 });
-    }),
-      (b = [t8, g, onStateChange]),
-      ($[4] = g),
-      ($[5] = t8),
-      ($[6] = onStateChange),
-      ($[7] = M),
-      ($[8] = b));
-  else ((M = $[7]), (b = $[8]));
-  if ((zt(M, b), t8)) {
+  let M;
+  let b;
+  if ($[4] !== g || $[5] !== t8 || $[6] !== onStateChange) {
+    M = () => {
+      if (t8)
+        onStateChange({
+          approved: new Set(),
+          retry: new Set(),
+          denials: g,
+          canMark: false,
+        });
+    };
+    b = [t8, g, onStateChange];
+    $[4] = g;
+    $[5] = t8;
+    $[6] = onStateChange;
+    $[7] = M;
+    $[8] = b;
+  } else {
+    M = $[7];
+    b = $[8];
+  }
+  zt(M, b);
+  if (t8) {
     let T;
-    if ($[9] === MEMO_CACHE_SENTINEL)
-      ((T = e(Text, {
-        dimColor: !0,
+    if ($[9] === MEMO_CACHE_SENTINEL) {
+      T = jsxProd_default(Text, {
+        dimColor: true,
         children: "No recent blocks. Commands auto mode blocks will appear here.",
-      })),
-        ($[9] = T));
-    else T = $[9];
+      });
+      $[9] = T;
+    } else T = $[9];
     return T;
   }
   let T;
-  if ($[10] !== g || $[11] !== isMidTurn || $[12] !== onHeaderFocusChange || $[13] !== onStateChange)
-    ((T = e(RecentDenialsList, {
+  if ($[10] !== g || $[11] !== isMidTurn || $[12] !== onHeaderFocusChange || $[13] !== onStateChange) {
+    T = jsxProd_default(RecentDenialsList, {
       denials: g,
-      onHeaderFocusChange: onHeaderFocusChange,
-      onStateChange: onStateChange,
-      isMidTurn: isMidTurn,
-    })),
-      ($[10] = g),
-      ($[11] = isMidTurn),
-      ($[12] = onHeaderFocusChange),
-      ($[13] = onStateChange),
-      ($[14] = T));
-  else T = $[14];
+      onHeaderFocusChange,
+      onStateChange,
+      isMidTurn,
+    });
+    $[10] = g;
+    $[11] = isMidTurn;
+    $[12] = onHeaderFocusChange;
+    $[13] = onStateChange;
+    $[14] = T;
+  } else T = $[14];
   return T;
 }
+//@ chunk-p2qwpk2k.js:27860-32506 sole-consumer
 /**
  * 最近 auto 模式拒绝列表：可标记批准（空格）或重试（r），按终端尺寸裁剪显示，聚焦项展开命令全文，状态通过 onStateChange 上报；终端缩小时清除标记。
  */
-//@ chunk-p2qwpk2k.js:27860-32506 sole-consumer
-function RecentDenialsList({
-  denials: denials,
-  onHeaderFocusChange: onHeaderFocusChange,
-  onStateChange: onStateChange,
-  isMidTurn: isMidTurn,
-}) {
-  let { headerFocused: headerFocused, focusHeader: focusHeader } = useTabHeaderFocus();
+function RecentDenialsList({ denials, onHeaderFocusChange, onStateChange, isMidTurn }) {
+  let { headerFocused, focusHeader } = useTabHeaderFocus();
   P(() => {
     onHeaderFocusChange(headerFocused);
   }, [headerFocused, onHeaderFocusChange]);
-  let v = $nn(),
-    [approved, setApproved] = y(() => new Set()),
-    [retry, setRetry] = y(() => new Set()),
-    [focusedIndex, setFocusedIndex] = y(0),
-    serialized = Q(
-      () =>
-        serializeApprovalList(
-          denials.map((W) => qd(W, v)),
-          { maxUnits: MAX_PAYLOAD_UNITS },
-        ),
-      [denials, v],
-    ),
-    isScreenReader = useIsScreenReaderEnabled(),
-    { rows: rows, columns: columns } = useScrollViewportSize(useTerminalSize()),
-    [L, B] = y({ rows: rows, columns: columns }),
-    [Y, se] = y(!1);
+  let v = statusRowTexts();
+  let [approved, setApproved] = y(() => new Set());
+  let [retry, setRetry] = y(() => new Set());
+  let [focusedIndex, setFocusedIndex] = y(0);
+  let serialized = Q(
+    () =>
+      serializeApprovalList(
+        denials.map((denial) => shortDenialLabel(denial, v)),
+        {
+          maxUnits: MAX_PAYLOAD_UNITS,
+        },
+      ),
+    [denials, v],
+  );
+  let isScreenReader = useIsScreenReaderEnabled();
+  let { rows, columns } = useScrollViewportSize(useTerminalSize());
+  let [L, B] = y({
+    rows,
+    columns,
+  });
+  let [Y, se] = y(false);
   if (rows !== L.rows || columns !== L.columns) {
-    if (
-      (B({ rows: rows, columns: columns }),
-      !isScreenReader && approved.size + retry.size > 0 && (rows < L.rows || columns < L.columns))
-    )
-      (setApproved(new Set()), setRetry(new Set()), se(!0));
+    B({
+      rows,
+      columns,
+    });
+    if (!isScreenReader && approved.size + retry.size > 0 && (rows < L.rows || columns < L.columns)) {
+      setApproved(new Set());
+      setRetry(new Set());
+      se(true);
+    }
   }
-  let max = Math.max(1, Math.min(jd, Math.floor(columns * _Rr) - Qd)),
-    le = Q(
-      () => serialized.map((W) => (W.withheld ? W.text : truncateToWidth(W.text, max))),
-      [serialized, max],
-    ),
-    J = Q(() => denials.map((W) => Cn(W, v)), [denials, v]),
-    K = isScreenReader ? void 0 : J[focusedIndex],
-    min = Math.min(10, denials.length),
-    ue = `${rows}x${columns}:${denials.length}:${K !== void 0}`,
-    [ee, ce] = y(),
-    te = ee?.listKey === ue ? ee.listed : min,
-    Se =
-      retry.size > 0
-        ? isMidTurn
-          ? `   Esc will tell Claude about ${retry.size} blocked ${plural(retry.size, "call")} at your next prompt`
-          : `   Esc will retry ${retry.size} blocked ${plural(retry.size, "call")}`
-        : approved.size > 0
-          ? `   Esc will approve ${approved.size} blocked ${plural(approved.size, "call")}`
-          : "",
-    de = Q(
-      () => ({ denials: denials, focusedIdx: focusedIndex, listed: te, listKey: ue }),
-      [denials, focusedIndex, te, ue],
-    ),
-    X = FittedOfferBody(K?.text ?? "", { isActive: K !== void 0, isCut: !0, contentKey: de, maxRows: Kd }),
-    Ve = X.hiddenRows > 0 || X.hiddenAbove > 0,
-    Le = K !== void 0 && X.isBodyOnScreen === !1,
-    vt = K !== void 0 && X.isBodyOnScreen !== !0,
-    $e = K?.refusal ?? (Le ? bn("this terminal is too short to show it") : void 0),
-    trimmed = `${Y ? "Marks cleared: terminal shrank. " : ""}${Le ? $e : ""}`.trim(),
-    [, Ge] = y(0);
+  let max = Math.max(
+    1,
+    Math.min(MIN_DECISION_COLUMN, Math.floor(columns * MAX_WIDTH_RATIO) - MAX_DENIAL_LINES),
+  );
+  let le = Q(
+    () => serialized.map((W) => (W.withheld ? W.text : truncateToWidth(W.text, max))),
+    [serialized, max],
+  );
+  let J = Q(() => denials.map((denial) => quotedReason(denial, v)), [denials, v]);
+  let K = isScreenReader ? undefined : J[focusedIndex];
+  let min = Math.min(10, denials.length);
+  let ue = `${rows}x${columns}:${denials.length}:${K !== undefined}`;
+  let [ee, ce] = y();
+  let te = ee?.listKey === ue ? ee.listed : min;
+  let Se =
+    retry.size > 0
+      ? isMidTurn
+        ? `   Esc will tell Claude about ${retry.size} blocked ${plural(retry.size, "call")} at your next prompt`
+        : `   Esc will retry ${retry.size} blocked ${plural(retry.size, "call")}`
+      : approved.size > 0
+        ? `   Esc will approve ${approved.size} blocked ${plural(approved.size, "call")}`
+        : "";
+  let de = Q(
+    () => ({
+      denials,
+      focusedIdx: focusedIndex,
+      listed: te,
+      listKey: ue,
+    }),
+    [denials, focusedIndex, te, ue],
+  );
+  let X = FittedOfferBody(K?.text ?? "", {
+    isActive: K !== undefined,
+    isCut: true,
+    contentKey: de,
+    maxRows: MAX_DENIAL_ROWS,
+  });
+  let Ve = X.hiddenRows > 0 || X.hiddenAbove > 0;
+  let Le = K !== undefined && X.isBodyOnScreen === false;
+  let vt = K !== undefined && X.isBodyOnScreen !== true;
+  let $e = K?.refusal ?? (Le ? notApprovableHereText("this terminal is too short to show it") : undefined);
+  let trimmed = `${Y ? "Marks cleared: terminal shrank. " : ""}${Le ? $e : ""}`.trim();
+  let [, Ge] = y(0);
   zt(() => {
     Ge((W) => W + 1);
   }, [de]);
-  let ot = ee?.listKey === ue && ee.isSettled,
-    at = ee?.listKey === ue ? ee.wasShort : 0,
-    Ze = ee?.wasFocused;
+  let isSettled = ee?.listKey === ue && ee.isSettled;
+  let wasShort = ee?.listKey === ue ? ee.wasShort : 0;
+  let wasFocused = ee?.wasFocused;
   zt(() => {
-    if (X.shortRows === 0 || ot) return;
+    if (X.shortRows === 0 || isSettled) return;
     if (te > 1)
-      ce({ listKey: ue, listed: te - 1, isSettled: !1, wasShort: X.shortRows, wasFocused: focusedIndex });
-    else if (denials.length === 2 && Ze === focusedIndex && X.shortRows >= at)
-      ce({ listKey: ue, listed: 2, isSettled: !0, wasShort: at, wasFocused: Ze });
-  }, [X.shortRows, ot, at, Ze, focusedIndex, te, ue, denials.length]);
-  let je = useShortcutDisplay("app:toggleTranscript", "Global", "ctrl+o"),
-    [bt, Te] = y(),
-    et = Q(
-      () => new Set(serialized.flatMap((W, N) => (W.withheld || J[N]?.refusal !== void 0 ? [N] : []))),
-      [serialized, J],
-    ),
-    rt = Q(() => (vt ? new Set(et).add(focusedIndex) : et), [vt, et, focusedIndex]),
-    dt = isScreenReader ? et.size < denials.length : !et.has(focusedIndex) && !Le;
-  (zt(() => {
-    if (Le) (setApproved((W) => ts(W, focusedIndex)), setRetry((W) => ts(W, focusedIndex)));
-  }, [Le, focusedIndex]),
-    zt(() => {
-      onStateChange({ approved: approved, retry: retry, denials: denials, canMark: dt });
-    }, [approved, retry, denials, dt, onStateChange]));
-  let [Qe, no] = y(),
-    Ht = (W) => {
-      let N = Number(W);
-      if (isScreenReader) no(N);
-      if (!isScreenReader && N !== focusedIndex) {
-        (setFocusedIndex(N), Te(W));
-        return;
-      }
-      if (rt.has(N)) return;
-      (se(!1),
-        setApproved((ae) => {
-          let ge = new Set(ae);
-          if (ge.has(N)) ge.delete(N);
-          else ge.add(N);
-          return ge;
-        }),
-        setRetry((ae) => ts(ae, N)));
-    },
-    ko = (W) => {
-      if (Number(W) !== focusedIndex) setFocusedIndex(Number(W));
-      if (isScreenReader) no(Number(W));
-      Te(void 0);
-    };
-  function fr(W) {
+      ce({
+        listKey: ue,
+        listed: te - 1,
+        isSettled: false,
+        wasShort: X.shortRows,
+        wasFocused: focusedIndex,
+      });
+    else if (denials.length === 2 && wasFocused === focusedIndex && X.shortRows >= wasShort)
+      ce({
+        listKey: ue,
+        listed: 2,
+        isSettled: true,
+        wasShort,
+        wasFocused,
+      });
+  }, [X.shortRows, isSettled, wasShort, wasFocused, focusedIndex, te, ue, denials.length]);
+  let chord = useShortcutDisplay("app:toggleTranscript", "Global", "ctrl+o");
+  let [bt, Te] = y();
+  let et = Q(
+    () => new Set(serialized.flatMap((W, N) => (W.withheld || J[N]?.refusal !== undefined ? [N] : []))),
+    [serialized, J],
+  );
+  let rt = Q(() => (vt ? new Set(et).add(focusedIndex) : et), [vt, et, focusedIndex]);
+  let dt = isScreenReader ? et.size < denials.length : !et.has(focusedIndex) && !Le;
+  zt(() => {
+    if (Le) {
+      setApproved((W) => withoutId(W, focusedIndex));
+      setRetry((W) => withoutId(W, focusedIndex));
+    }
+  }, [Le, focusedIndex]);
+  zt(() => {
+    onStateChange({
+      approved,
+      retry,
+      denials,
+      canMark: dt,
+    });
+  }, [approved, retry, denials, dt, onStateChange]);
+  let [Qe, no] = y();
+  let onChange = (W) => {
+    let N = Number(W);
+    if (isScreenReader) no(N);
+    if (!isScreenReader && N !== focusedIndex) {
+      setFocusedIndex(N);
+      Te(W);
+      return;
+    }
+    if (rt.has(N)) return;
+    se(false);
+    setApproved((ae) => {
+      let ge = new Set(ae);
+      if (ge.has(N)) ge.delete(N);
+      else ge.add(N);
+      return ge;
+    });
+    setRetry((ae) => withoutId(ae, N));
+  };
+  let onFocus = (W) => {
+    if (Number(W) !== focusedIndex) setFocusedIndex(Number(W));
+    if (isScreenReader) no(Number(W));
+    Te(undefined);
+  };
+  function fr(event) {
     if (headerFocused) return;
-    if (W.ctrl || W.meta || W.shift) return;
-    if (W.key !== "r") return;
-    W.preventDefault();
+    if (event.ctrl || event.meta || event.shift) return;
+    if (event.key !== "r") return;
+    event.preventDefault();
     let N = isScreenReader ? Qe : focusedIndex;
-    if (N === void 0 || rt.has(N)) return;
-    (se(!1),
-      setRetry((ae) => {
-        let ge = new Set(ae);
-        if (ge.has(N)) ge.delete(N);
-        else ge.add(N);
-        return ge;
-      }),
-      setApproved((ae) => {
-        if (ae.has(N)) return ae;
-        let ge = new Set(ae);
-        return (ge.add(N), ge);
-      }));
+    if (N === undefined || rt.has(N)) return;
+    se(false);
+    setRetry((ae) => {
+      let ge = new Set(ae);
+      if (ge.has(N)) ge.delete(N);
+      else ge.add(N);
+      return ge;
+    });
+    setApproved((ae) => {
+      if (ae.has(N)) return ae;
+      let ge = new Set(ae);
+      ge.add(N);
+      return ge;
+    });
   }
   let Do = Q(
-      () =>
-        denials.map((W) => {
-          let N = W.reason
-            ? replaceLineBreaks(displayField(W.reason).text).replace(/\s+/g, " ").trim()
-            : void 0;
-          return N && !isScreenReader ? truncateToWidth(N, zd) : N;
-        }),
-      [denials, isScreenReader],
-    ),
-    mapped = denials.map((W, N) => {
-      let ae = approved.has(N),
-        ge = retry.has(N)
-          ? " (retry)"
-          : !isScreenReader
-            ? ""
-            : ae
-              ? " (approved)"
-              : J[N]?.refusal !== void 0
-                ? " (can't be approved)"
-                : "",
-        ke = Do[N];
-      return {
-        label: r(Text, {
-          children: [
-            e(StatusIcon, { status: ae ? "success" : "error", withSpace: !0 }),
-            le[N],
-            e(Text, { dimColor: !0, children: ge }),
-          ],
-        }),
-        value: String(N),
-        ...(ke && { description: `${AUTO_MODE_PREFIX}${ke}`, dimDescription: !0 }),
-      };
-    });
-  return e(useDialogKeybindings, {
+    () =>
+      denials.map((denial) => {
+        let N = denial.reason
+          ? replaceLineBreaks(displayField(denial.reason).text).replace(/\s+/g, " ").trim()
+          : undefined;
+        return N && !isScreenReader ? truncateToWidth(N, MAX_DENIAL_TEXT) : N;
+      }),
+    [denials, isScreenReader],
+  );
+  let options = denials.map((denial, N) => {
+    let ae = approved.has(N);
+    let children = retry.has(N)
+      ? " (retry)"
+      : !isScreenReader
+        ? ""
+        : ae
+          ? " (approved)"
+          : J[N]?.refusal !== undefined
+            ? " (can't be approved)"
+            : "";
+    let ke = Do[N];
+    return {
+      label: jsxProd_default_2(Text, {
+        children: [
+          jsxProd_default(StatusIcon, {
+            status: ae ? "success" : "error",
+            withSpace: true,
+          }),
+          le[N],
+          jsxProd_default(Text, {
+            dimColor: true,
+            children,
+          }),
+        ],
+      }),
+      value: String(N),
+      ...(ke && {
+        description: `${AUTO_MODE_PREFIX}${ke}`,
+        dimDescription: true,
+      }),
+    };
+  });
+  return jsxProd_default(useDialogKeybindings, {
     bindings: [
       {
         action: "app:toggleTranscript",
@@ -352,28 +438,34 @@ function RecentDenialsList({
         },
       },
     ],
-    active: K !== void 0 && !headerFocused,
+    active: K !== undefined && !headerFocused,
     flexDirection: "column",
-    children: r(Box, {
+    children: jsxProd_default_2(Box, {
       flexDirection: "column",
       flexShrink: 0,
       onKeyDown: fr,
       children: [
-        trimmed !== "" && e(Text, { wrap: "truncate-end", children: trimmed }),
-        e(Text, { children: "Commands auto mode recently blocked. Approving adds no rule." }),
+        trimmed !== "" &&
+          jsxProd_default(Text, {
+            wrap: "truncate-end",
+            children: trimmed,
+          }),
+        jsxProd_default(Text, {
+          children: "Commands auto mode recently blocked. Approving adds no rule.",
+        }),
         isScreenReader &&
-          denials.map((W, N) => {
+          denials.map((denial, N) => {
             let ae = J[N];
             return (
-              ae !== void 0 &&
-              r(
+              ae !== undefined &&
+              jsxProd_default_2(
                 Box,
                 {
                   flexDirection: "column",
                   children: [
-                    r(Text, {
+                    jsxProd_default_2(Text, {
                       children: [
-                        RecentDenialRow(W, v).isUnreadable || W.command === void 0
+                        RecentDenialRow(denial, v).isUnreadable || denial.command === undefined
                           ? "Input for row"
                           : "Command for row",
                         " ",
@@ -381,20 +473,28 @@ function RecentDenialsList({
                         ":",
                       ],
                     }),
-                    e(Blockquote, { multiline: !0, children: e(Text, { children: ae.text }) }),
-                    ae.refusal !== void 0 && e(Text, { children: ae.refusal }),
+                    jsxProd_default(Blockquote, {
+                      multiline: true,
+                      children: jsxProd_default(Text, {
+                        children: ae.text,
+                      }),
+                    }),
+                    ae.refusal !== undefined &&
+                      jsxProd_default(Text, {
+                        children: ae.refusal,
+                      }),
                   ],
                 },
                 N,
               )
             );
           }),
-        e(Box, {
+        jsxProd_default(Box, {
           marginTop: trimmed === "" ? 1 : 0,
-          children: e(ModelSelector, {
-            options: mapped,
-            onChange: Ht,
-            onFocus: ko,
+          children: jsxProd_default(ModelSelector, {
+            options,
+            onChange,
+            onFocus,
             defaultFocusValue: bt,
             selectedValue: NO_COMMITTED_ROW,
             visibleOptionCount: te,
@@ -403,29 +503,36 @@ function RecentDenialsList({
             onUpFromFirstItem: focusHeader,
           }),
         }),
-        Se !== "" && e(Text, { dimColor: !0, wrap: "truncate-end", children: Se }),
-        K !== void 0 &&
-          e(Box, {
+        Se !== "" &&
+          jsxProd_default(Text, {
+            dimColor: true,
+            wrap: "truncate-end",
+            children: Se,
+          }),
+        K !== undefined &&
+          jsxProd_default(Box, {
             marginTop: Se === "" ? 1 : 0,
             flexDirection: "column",
-            children: r(DiffFrame, {
+            children: jsxProd_default_2(DiffFrame, {
               children: [
-                r(Box, {
+                jsxProd_default_2(Box, {
                   ref: X.box,
                   flexDirection: "column",
                   children: [
-                    e(Blockquote, {
+                    jsxProd_default(Blockquote, {
                       multiline: K.needsGutter,
-                      children: e(Box, {
+                      children: jsxProd_default(Box, {
                         ref: X.textBox,
                         flexDirection: "column",
                         flexGrow: 1,
-                        children: e(Text, { children: X.text }),
+                        children: jsxProd_default(Text, {
+                          children: X.text,
+                        }),
                       }),
                     }),
                     Ve &&
-                      e(Text, {
-                        dimColor: !0,
+                      jsxProd_default(Text, {
+                        dimColor: true,
                         wrap: "truncate-end",
                         children: formatHiddenRowsHint({
                           hiddenRows: X.hiddenRows,
@@ -433,17 +540,24 @@ function RecentDenialsList({
                           hint: headerFocused
                             ? ""
                             : formatShortcutHint({
-                                chord: je,
+                                chord,
                                 action: X.hiddenRows > 0 ? "see more" : "see the first lines",
-                                parens: !0,
-                                format: { keyCase: "lower" },
+                                parens: true,
+                                format: {
+                                  keyCase: "lower",
+                                },
                               }),
                           columns: X.columns,
                         }),
                       }),
                   ],
                 }),
-                $e !== void 0 && e(Text, { dimColor: !0, wrap: "truncate-end", children: $e }),
+                $e !== undefined &&
+                  jsxProd_default(Text, {
+                    dimColor: true,
+                    wrap: "truncate-end",
+                    children: $e,
+                  }),
               ],
             }),
           }),
@@ -451,5 +565,4 @@ function RecentDenialsList({
     }),
   });
 }
-
-export { Cn, RecentDenialsTab };
+export { quotedReason, RecentDenialsTab };

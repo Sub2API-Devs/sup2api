@@ -8,7 +8,10 @@
  * pieces: chunk-scv4whf4.js (1)
  * attribution: placement 1
  */
-import { e, r } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { MessageResponse } from "../MessageResponse.js";
 import { Text } from "../../ink/components/Text.js";
 import { plural } from "../../utils/stringUtils.js";
@@ -17,6 +20,10 @@ import { plural } from "../../utils/stringUtils.js";
 function createResultCountRenderer(o) {
   return function (s) {
     let t = s.results.length;
-    return e(MessageResponse, { children: r(Text, { children: [t, " ", plural(t, o)] }) });
+    return jsxProd_default(MessageResponse, {
+      children: jsxProd_default_2(Text, {
+        children: [t, " ", plural(t, o)],
+      }),
+    });
   };
 }

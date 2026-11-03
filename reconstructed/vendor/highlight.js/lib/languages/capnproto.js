@@ -8,70 +8,87 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:62603-63380 cjs-fingerprint
-var Kt = x(function (hu, zt) {
-  function ml(e) {
-    let t = [
-        "struct",
-        "enum",
-        "interface",
-        "union",
-        "group",
-        "import",
-        "using",
-        "const",
-        "annotation",
-        "extends",
-        "in",
-        "of",
-        "on",
-        "as",
-        "with",
-        "from",
-        "fixed",
+var require_capnproto = x(function (cjsExports, cjsModule) {
+  function capnproto(hljs) {
+    let KEYWORDS = [
+      "struct",
+      "enum",
+      "interface",
+      "union",
+      "group",
+      "import",
+      "using",
+      "const",
+      "annotation",
+      "extends",
+      "in",
+      "of",
+      "on",
+      "as",
+      "with",
+      "from",
+      "fixed",
+    ];
+    let TYPES = [
+      "Void",
+      "Bool",
+      "Int8",
+      "Int16",
+      "Int32",
+      "Int64",
+      "UInt8",
+      "UInt16",
+      "UInt32",
+      "UInt64",
+      "Float32",
+      "Float64",
+      "Text",
+      "Data",
+      "AnyPointer",
+      "AnyStruct",
+      "Capability",
+      "List",
+    ];
+    let LITERALS = ["true", "false"];
+    let CLASS_DEFINITION = {
+      variants: [
+        {
+          match: [/(struct|enum|interface)/, /\s+/, hljs.IDENT_RE],
+        },
+        {
+          match: [/extends/, /\s*\(/, hljs.IDENT_RE, /\s*\)/],
+        },
       ],
-      n = [
-        "Void",
-        "Bool",
-        "Int8",
-        "Int16",
-        "Int32",
-        "Int64",
-        "UInt8",
-        "UInt16",
-        "UInt32",
-        "UInt64",
-        "Float32",
-        "Float64",
-        "Text",
-        "Data",
-        "AnyPointer",
-        "AnyStruct",
-        "Capability",
-        "List",
-      ],
-      a = ["true", "false"],
-      s = {
-        variants: [
-          { match: [/(struct|enum|interface)/, /\s+/, e.IDENT_RE] },
-          { match: [/extends/, /\s*\(/, e.IDENT_RE, /\s*\)/] },
-        ],
-        scope: { 1: "keyword", 3: "title.class" },
-      };
+      scope: {
+        1: "keyword",
+        3: "title.class",
+      },
+    };
     return {
       name: "Cap\u2019n Proto",
       aliases: ["capnp"],
-      keywords: { keyword: t, type: n, literal: a },
+      keywords: {
+        keyword: KEYWORDS,
+        type: TYPES,
+        literal: LITERALS,
+      },
       contains: [
-        e.QUOTE_STRING_MODE,
-        e.NUMBER_MODE,
-        e.HASH_COMMENT_MODE,
-        { className: "meta", begin: /@0x[\w\d]{16};/, illegal: /\n/ },
-        { className: "symbol", begin: /@\d+\b/ },
-        s,
+        hljs.QUOTE_STRING_MODE,
+        hljs.NUMBER_MODE,
+        hljs.HASH_COMMENT_MODE,
+        {
+          className: "meta",
+          begin: /@0x[\w\d]{16};/,
+          illegal: /\n/,
+        },
+        {
+          className: "symbol",
+          begin: /@\d+\b/,
+        },
+        CLASS_DEFINITION,
       ],
     };
   }
-  zt.exports = ml;
+  cjsModule.exports = capnproto;
 });
-
-export { Kt };
+export { require_capnproto };

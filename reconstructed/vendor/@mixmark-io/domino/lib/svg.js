@@ -6,56 +6,56 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { Ft } from "./Element.js";
-import { jn } from "./defineElement.js";
-import { ee } from "./utils.js";
-import { oa } from "./CSSStyleDeclaration.js";
+import { require_Element } from "./Element.js";
+import { require_defineElement } from "./defineElement.js";
+import { require_utils } from "./utils.js";
+import { require_CSSStyleDeclaration } from "./CSSStyleDeclaration.js";
 
 //@ chunk-vwj6ccer.js:106314-107818 cjs-fingerprint
-var Xn = x(function (F0) {
-  var q0 = Ft(),
-    Sx = jn(),
-    Ax = ee(),
-    Cx = oa(),
-    Dx = (F0.elements = {}),
-    create = Object.create(null);
-  F0.createElement = function (e, t, r) {
-    var a = create[t] || Wn;
-    return new a(e, t, r);
+var require_svg = x(function (cjsExports) {
+  var Element = require_Element();
+  var defineElement = require_defineElement();
+  var utils = require_utils();
+  var CSSStyleDeclaration = require_CSSStyleDeclaration();
+  var svgElements = (cjsExports.elements = {});
+  var svgNameToImpl = Object.create(null);
+  cjsExports.createElement = function (doc, localName, prefix) {
+    var impl = svgNameToImpl[localName] || SVGElement;
+    return new impl(doc, localName, prefix);
   };
-  function zn(e) {
-    return Sx(e, Wn, Dx, create);
+  function define(spec) {
+    return defineElement(spec, SVGElement, svgElements, svgNameToImpl);
   }
-  var Wn = zn({
-    superclass: q0,
+  var SVGElement = define({
+    superclass: Element,
     name: "SVGElement",
-    ctor: function (t, r, a) {
-      q0.call(this, t, r, Ax.NAMESPACE.SVG, a);
+    ctor: function (doc, localName, prefix) {
+      Element.call(this, doc, localName, utils.NAMESPACE.SVG, prefix);
     },
     props: {
       style: {
         get: function () {
-          if (!this._style) this._style = new Cx(this);
+          if (!this._style) this._style = new CSSStyleDeclaration(this);
           return this._style;
         },
       },
     },
   });
-  zn({
+  define({
     name: "SVGSVGElement",
-    ctor: function (t, r, a) {
-      Wn.call(this, t, r, a);
+    ctor: function (doc, localName, prefix) {
+      SVGElement.call(this, doc, localName, prefix);
     },
     tag: "svg",
     props: {
       createSVGRect: {
         value: function () {
-          return F0.createElement(this.ownerDocument, "rect", null);
+          return cjsExports.createElement(this.ownerDocument, "rect", null);
         },
       },
     },
   });
-  zn({
+  define({
     tags: [
       "a",
       "altGlyph",
@@ -139,5 +139,4 @@ var Xn = x(function (F0) {
     ],
   });
 });
-
-export { Xn };
+export { require_svg };

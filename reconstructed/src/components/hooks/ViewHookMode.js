@@ -9,9 +9,13 @@
  * attribution: fingerprint 3, affinity 1
  */
 import { w } from "../../../vendor/react/compiler-runtime.js";
-import { Mu, escapeControlChars } from "../../utils/stringUtils.js";
+import { escapeControlCharsForDisplay, escapeControlChars } from "../../utils/stringUtils.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
-import { e, Fragment, r } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default,
+  Fragment,
+  jsxProd_default_2,
+} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { KeyboardShortcutHint } from "../design-system/KeyboardShortcutHint.js";
 import {
   hookSourceDescriptionDisplayString,
@@ -25,131 +29,213 @@ import { Dialog } from "../design-system/Dialog.js";
 import { scriptHookDisplayLabel } from "../../utils/hooks/scriptHooks.js";
 
 //@ chunk-bajxb7bf.js:44720-46942 fingerprint = ViewHookMode (0.41)
-function ViewHookMode(t0) {
-  let $ = w(45),
-    { selectedHook: selectedHook, eventSupportsMatcher: eventSupportsMatcher, onCancel: onCancel } = t0,
-    u;
-  if ($[0] !== selectedHook.matcher)
-    ((u = selectedHook.matcher ? Mu(selectedHook.matcher) : "matches everything"),
-      ($[0] = selectedHook.matcher),
-      ($[1] = u));
-  else u = $[1];
-  let t = u,
-    f;
-  if ($[2] !== selectedHook.config)
-    ((f = hookTypeLabel(selectedHook.config)), ($[2] = selectedHook.config), ($[3] = f));
-  else f = $[3];
-  const k = eventSupportsMatcher ? `${selectedHook.event} \xB7 ${t}` : selectedHook.event;
-  let C;
-  if ($[4] === MEMO_CACHE_SENTINEL)
-    ((C = e(KeyboardShortcutHint, { chord: "escape", action: "go back" })), ($[4] = C));
-  else C = $[4];
-  let D;
-  if ($[5] === MEMO_CACHE_SENTINEL) ((D = [{ bold: !0 }, {}]), ($[5] = D));
-  else D = $[5];
+function ViewHookMode(props) {
+  let $ = w(45);
+  let { selectedHook, eventSupportsMatcher, onCancel } = props;
+  let u;
+  if ($[0] !== selectedHook.matcher) {
+    u = selectedHook.matcher ? escapeControlCharsForDisplay(selectedHook.matcher) : "matches everything";
+    $[0] = selectedHook.matcher;
+    $[1] = u;
+  } else u = $[1];
+  let t = u;
+  let title;
+  if ($[2] !== selectedHook.config) {
+    title = hookTypeLabel(selectedHook.config);
+    $[2] = selectedHook.config;
+    $[3] = title;
+  } else title = $[3];
+  const subtitle = eventSupportsMatcher ? `${selectedHook.event} \xB7 ${t}` : selectedHook.event;
+  let inputGuide;
+  if ($[4] === MEMO_CACHE_SENTINEL) {
+    inputGuide = jsxProd_default(KeyboardShortcutHint, {
+      chord: "escape",
+      action: "go back",
+    });
+    $[4] = inputGuide;
+  } else inputGuide = $[4];
+  let columns;
+  if ($[5] === MEMO_CACHE_SENTINEL) {
+    columns = [
+      {
+        bold: true,
+      },
+      {},
+    ];
+    $[5] = columns;
+  } else columns = $[5];
   let M;
-  if ($[6] === MEMO_CACHE_SENTINEL) ((M = e(Fragment, { children: "Source:" })), ($[6] = M));
-  else M = $[6];
-  let g;
-  if ($[7] !== selectedHook.source)
-    ((g = hookSourceDescriptionDisplayString(selectedHook.source)), ($[7] = selectedHook.source), ($[8] = g));
-  else g = $[8];
-  let v;
-  if ($[9] !== g)
-    ((v = r(FlexDirectionRow.Row, { children: [M, e(Text, { dimColor: !0, children: g })] })),
-      ($[9] = g),
-      ($[10] = v));
-  else v = $[10];
-  let P;
-  if ($[11] !== selectedHook.pluginName)
-    ((P =
+  if ($[6] === MEMO_CACHE_SENTINEL) {
+    M = jsxProd_default(Fragment, {
+      children: "Source:",
+    });
+    $[6] = M;
+  } else M = $[6];
+  let children;
+  if ($[7] !== selectedHook.source) {
+    children = hookSourceDescriptionDisplayString(selectedHook.source);
+    $[7] = selectedHook.source;
+    $[8] = children;
+  } else children = $[8];
+  let t5;
+  if ($[9] !== children) {
+    t5 = jsxProd_default_2(FlexDirectionRow.Row, {
+      children: [
+        M,
+        jsxProd_default(Text, {
+          dimColor: true,
+          children,
+        }),
+      ],
+    });
+    $[9] = children;
+    $[10] = t5;
+  } else t5 = $[10];
+  let t6;
+  if ($[11] !== selectedHook.pluginName) {
+    t6 =
       selectedHook.pluginName &&
-      r(FlexDirectionRow.Row, {
+      jsxProd_default_2(FlexDirectionRow.Row, {
         children: [
-          e(Fragment, { children: "Plugin:" }),
-          e(Text, { dimColor: !0, children: Mu(selectedHook.pluginName) }),
+          jsxProd_default(Fragment, {
+            children: "Plugin:",
+          }),
+          jsxProd_default(Text, {
+            dimColor: true,
+            children: escapeControlCharsForDisplay(selectedHook.pluginName),
+          }),
         ],
-      })),
-      ($[11] = selectedHook.pluginName),
-      ($[12] = P));
-  else P = $[12];
+      });
+    $[11] = selectedHook.pluginName;
+    $[12] = t6;
+  } else t6 = $[12];
   let _;
-  if ($[13] !== selectedHook.config)
-    ((_ =
+  if ($[13] !== selectedHook.config) {
+    _ =
       "statusMessage" in selectedHook.config &&
       selectedHook.config.statusMessage &&
-      r(FlexDirectionRow.Row, {
+      jsxProd_default_2(FlexDirectionRow.Row, {
         children: [
-          e(Fragment, { children: "Status message:" }),
-          e(Text, { dimColor: !0, children: Mu(selectedHook.config.statusMessage) }),
+          jsxProd_default(Fragment, {
+            children: "Status message:",
+          }),
+          jsxProd_default(Text, {
+            dimColor: true,
+            children: escapeControlCharsForDisplay(selectedHook.config.statusMessage),
+          }),
         ],
-      })),
-      ($[13] = selectedHook.config),
-      ($[14] = _));
-  else _ = $[14];
+      });
+    $[13] = selectedHook.config;
+    $[14] = _;
+  } else _ = $[14];
   let b;
-  if ($[15] !== _ || $[16] !== v || $[17] !== P)
-    ((b = r(FlexDirectionRow, { columns: D, children: [v, P, _] })),
-      ($[15] = _),
-      ($[16] = v),
-      ($[17] = P),
-      ($[18] = b));
-  else b = $[18];
-  let E;
-  if ($[19] !== selectedHook.config)
-    ((E = getContentFieldLabel(selectedHook.config)), ($[19] = selectedHook.config), ($[20] = E));
-  else E = $[20];
+  if ($[15] !== _ || $[16] !== t5 || $[17] !== t6) {
+    b = jsxProd_default_2(FlexDirectionRow, {
+      columns,
+      children: [t5, t6, _],
+    });
+    $[15] = _;
+    $[16] = t5;
+    $[17] = t6;
+    $[18] = b;
+  } else b = $[18];
+  let children_2;
+  if ($[19] !== selectedHook.config) {
+    children_2 = getContentFieldLabel(selectedHook.config);
+    $[19] = selectedHook.config;
+    $[20] = children_2;
+  } else children_2 = $[20];
   let B;
-  if ($[21] !== E) ((B = e(Text, { dimColor: !0, children: E })), ($[21] = E), ($[22] = B));
-  else B = $[22];
-  let N;
-  if ($[23] !== selectedHook.config)
-    ((N =
+  if ($[21] !== children_2) {
+    B = jsxProd_default(Text, {
+      dimColor: true,
+      children: children_2,
+    });
+    $[21] = children_2;
+    $[22] = B;
+  } else B = $[22];
+  let t10;
+  if ($[23] !== selectedHook.config) {
+    t10 =
       selectedHook.config.type === "script"
         ? (selectedHook.config.file ?? selectedHook.config.script ?? "")
-        : getHookDisplayText(selectedHook.config)),
-      ($[23] = selectedHook.config),
-      ($[24] = N));
-  else N = $[24];
-  let L;
-  if ($[25] !== N) ((L = escapeControlChars(N)), ($[25] = N), ($[26] = L));
-  else L = $[26];
+        : getHookDisplayText(selectedHook.config);
+    $[23] = selectedHook.config;
+    $[24] = t10;
+  } else t10 = $[24];
+  let children_3;
+  if ($[25] !== t10) {
+    children_3 = escapeControlChars(t10);
+    $[25] = t10;
+    $[26] = children_3;
+  } else children_3 = $[26];
   let x;
-  if ($[27] !== L) ((x = e(DiffFrame, { children: e(Text, { children: L }) })), ($[27] = L), ($[28] = x));
-  else x = $[28];
+  if ($[27] !== children_3) {
+    x = jsxProd_default(DiffFrame, {
+      children: jsxProd_default(Text, {
+        children: children_3,
+      }),
+    });
+    $[27] = children_3;
+    $[28] = x;
+  } else x = $[28];
   let Y;
-  if ($[29] !== B || $[30] !== x)
-    ((Y = r(Box, { flexDirection: "column", children: [B, x] })), ($[29] = B), ($[30] = x), ($[31] = Y));
-  else Y = $[31];
-  let W;
-  if ($[32] !== selectedHook)
-    ((W = getHookSourceEditHint(selectedHook)), ($[32] = selectedHook), ($[33] = W));
-  else W = $[33];
+  if ($[29] !== B || $[30] !== x) {
+    Y = jsxProd_default_2(Box, {
+      flexDirection: "column",
+      children: [B, x],
+    });
+    $[29] = B;
+    $[30] = x;
+    $[31] = Y;
+  } else Y = $[31];
+  let children_4;
+  if ($[32] !== selectedHook) {
+    children_4 = getHookSourceEditHint(selectedHook);
+    $[32] = selectedHook;
+    $[33] = children_4;
+  } else children_4 = $[33];
   let X;
-  if ($[34] !== W) ((X = e(Text, { dimColor: !0, children: W })), ($[34] = W), ($[35] = X));
-  else X = $[35];
-  let ne;
-  if ($[36] !== b || $[37] !== Y || $[38] !== X)
-    ((ne = r(Box, { flexDirection: "column", gap: 1, children: [b, Y, X] })),
-      ($[36] = b),
-      ($[37] = Y),
-      ($[38] = X),
-      ($[39] = ne));
-  else ne = $[39];
-  let ce;
-  if ($[40] !== onCancel || $[41] !== f || $[42] !== ne || $[43] !== k)
-    ((ce = e(Dialog, { title: f, subtitle: k, onCancel: onCancel, inputGuide: C, children: ne })),
-      ($[40] = onCancel),
-      ($[41] = f),
-      ($[42] = ne),
-      ($[43] = k),
-      ($[44] = ce));
-  else ce = $[44];
-  return ce;
+  if ($[34] !== children_4) {
+    X = jsxProd_default(Text, {
+      dimColor: true,
+      children: children_4,
+    });
+    $[34] = children_4;
+    $[35] = X;
+  } else X = $[35];
+  let children_5;
+  if ($[36] !== b || $[37] !== Y || $[38] !== X) {
+    children_5 = jsxProd_default_2(Box, {
+      flexDirection: "column",
+      gap: 1,
+      children: [b, Y, X],
+    });
+    $[36] = b;
+    $[37] = Y;
+    $[38] = X;
+    $[39] = children_5;
+  } else children_5 = $[39];
+  let t16;
+  if ($[40] !== onCancel || $[41] !== title || $[42] !== children_5 || $[43] !== subtitle) {
+    t16 = jsxProd_default(Dialog, {
+      title,
+      subtitle,
+      onCancel,
+      inputGuide,
+      children: children_5,
+    });
+    $[40] = onCancel;
+    $[41] = title;
+    $[42] = children_5;
+    $[43] = subtitle;
+    $[44] = t16;
+  } else t16 = $[44];
+  return t16;
 }
 //@ chunk-bajxb7bf.js:46942-47171 affinity
-function hookTypeLabel(m) {
-  switch (m.type) {
+function hookTypeLabel(config) {
+  switch (config.type) {
     case "command":
       return "Command hook";
     case "prompt":
@@ -178,14 +264,14 @@ function getContentFieldLabel(config) {
     case "mcp_tool":
       return "MCP tool";
     case "script":
-      return config.file !== void 0 ? "Script file" : "Script";
+      return config.file !== undefined ? "Script file" : "Script";
   }
 }
 //@ chunk-mthxbav8.js:4203-4469 fingerprint = getContentFieldValue (0.677)
 function getContentFieldValue(config) {
   switch (config.type) {
     case "command":
-      return config.args === void 0 ? config.command : [config.command, ...config.args].join(" ");
+      return config.args === undefined ? config.command : [config.command, ...config.args].join(" ");
     case "http":
       return config.url;
     case "prompt":
@@ -197,5 +283,4 @@ function getContentFieldValue(config) {
       return config.file ?? scriptHookDisplayLabel(config.script ?? "");
   }
 }
-
 export { ViewHookMode, getContentFieldValue };

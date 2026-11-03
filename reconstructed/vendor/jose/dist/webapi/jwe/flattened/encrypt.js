@@ -5,17 +5,17 @@
  * pieces: chunk-5h78gfwc.js (1)
  * attribution: esm-fingerprint 1
  */
-import { W, Ze } from "../../lib/helpers.js";
-import { c, f_2 } from "../../../node/esm/util/errors.js";
-import { _ } from "../../lib/type_checks.js";
+import { assertNotSet, Ze } from "../../lib/helpers.js";
+import { JWEInvalid, JOSENotSupported } from "../../../node/esm/util/errors.js";
+import { isDisjoint } from "../../lib/type_checks.js";
 import { N } from "../../lib/options.js";
-import { B } from "../../lib/check_key_type.js";
-import { R } from "../../lib/normalize_key.js";
-import { Ct } from "../../lib/key_management.js";
-import { y } from "../../util/base64url.js";
-import { A, E_2 } from "../../lib/buffer_utils.js";
+import { checkKeyType } from "../../lib/check_key_type.js";
+import { normalizeKey } from "../../lib/normalize_key.js";
+import { encryptKeyManagement } from "../../lib/key_management.js";
+import { encode_2 } from "../../util/base64url.js";
+import { encode, concat } from "../../lib/buffer_utils.js";
 import { Wt } from "../../lib/deflate.js";
-import { we } from "../../lib/content_encryption.js";
+import { encrypt } from "../../lib/content_encryption.js";
 
 //@ chunk-5h78gfwc.js:35279-37807 esm-fingerprint
 class Re {
@@ -27,89 +27,129 @@ class Re {
   #o;
   #s;
   #i;
-  constructor(e) {
-    if (!(e instanceof Uint8Array)) throw TypeError("plaintext must be an instance of Uint8Array");
-    this.#e = e;
+  constructor(plaintext) {
+    if (!(plaintext instanceof Uint8Array)) throw TypeError("plaintext must be an instance of Uint8Array");
+    this.#e = plaintext;
   }
-  setKeyManagementParameters(e) {
-    return (W(this.#i, "setKeyManagementParameters"), (this.#i = e), this);
+  setKeyManagementParameters(parameters) {
+    assertNotSet(this.#i, "setKeyManagementParameters");
+    this.#i = parameters;
+    return this;
   }
-  setProtectedHeader(e) {
-    return (W(this.#t, "setProtectedHeader"), (this.#t = e), this);
+  setProtectedHeader(protectedHeader) {
+    assertNotSet(this.#t, "setProtectedHeader");
+    this.#t = protectedHeader;
+    return this;
   }
-  setSharedUnprotectedHeader(e) {
-    return (W(this.#r, "setSharedUnprotectedHeader"), (this.#r = e), this);
+  setSharedUnprotectedHeader(sharedUnprotectedHeader) {
+    assertNotSet(this.#r, "setSharedUnprotectedHeader");
+    this.#r = sharedUnprotectedHeader;
+    return this;
   }
-  setUnprotectedHeader(e) {
-    return (W(this.#n, "setUnprotectedHeader"), (this.#n = e), this);
+  setUnprotectedHeader(unprotectedHeader) {
+    assertNotSet(this.#n, "setUnprotectedHeader");
+    this.#n = unprotectedHeader;
+    return this;
   }
-  setAdditionalAuthenticatedData(e) {
-    return ((this.#a = e), this);
+  setAdditionalAuthenticatedData(aad) {
+    this.#a = aad;
+    return this;
   }
-  setContentEncryptionKey(e) {
-    return (W(this.#o, "setContentEncryptionKey"), (this.#o = e), this);
+  setContentEncryptionKey(cek) {
+    assertNotSet(this.#o, "setContentEncryptionKey");
+    this.#o = cek;
+    return this;
   }
-  setInitializationVector(e) {
-    return (W(this.#s, "setInitializationVector"), (this.#s = e), this);
+  setInitializationVector(iv) {
+    assertNotSet(this.#s, "setInitializationVector");
+    this.#s = iv;
+    return this;
   }
-  async encrypt(e, t) {
+  async encrypt(key, options) {
     if (!this.#t && !this.#n && !this.#r)
-      throw new c(
+      throw new JWEInvalid(
         "either setProtectedHeader, setUnprotectedHeader, or sharedUnprotectedHeader must be called before #encrypt()",
       );
-    if (!_(this.#t, this.#n, this.#r))
-      throw new c(
+    if (!isDisjoint(this.#t, this.#n, this.#r))
+      throw new JWEInvalid(
         "JWE Protected, JWE Shared Unprotected and JWE Per-Recipient Header Parameter names must be disjoint",
       );
-    let r = { ...this.#t, ...this.#n, ...this.#r };
-    if ((N(c, new Map(), t?.crit, this.#t, r), r.zip !== void 0 && r.zip !== "DEF"))
-      throw new f_2('Unsupported JWE "zip" (Compression Algorithm) Header Parameter value.');
-    if (r.zip !== void 0 && !this.#t?.zip)
-      throw new c('JWE "zip" (Compression Algorithm) Header Parameter MUST be in a protected header.');
-    let { alg: alg, enc: enc } = r;
+    let joseHeader = {
+      ...this.#t,
+      ...this.#n,
+      ...this.#r,
+    };
+    N(JWEInvalid, new Map(), options?.crit, this.#t, joseHeader);
+    if (joseHeader.zip !== undefined && joseHeader.zip !== "DEF")
+      throw new JOSENotSupported('Unsupported JWE "zip" (Compression Algorithm) Header Parameter value.');
+    if (joseHeader.zip !== undefined && !this.#t?.zip)
+      throw new JWEInvalid(
+        'JWE "zip" (Compression Algorithm) Header Parameter MUST be in a protected header.',
+      );
+    let { alg, enc } = joseHeader;
     if (typeof alg !== "string" || !alg)
-      throw new c('JWE "alg" (Algorithm) Header Parameter missing or invalid');
+      throw new JWEInvalid('JWE "alg" (Algorithm) Header Parameter missing or invalid');
     if (typeof enc !== "string" || !enc)
-      throw new c('JWE "enc" (Encryption Algorithm) Header Parameter missing or invalid');
-    let o;
+      throw new JWEInvalid('JWE "enc" (Encryption Algorithm) Header Parameter missing or invalid');
+    let encryptedKey;
     if (this.#o && (alg === "dir" || alg === "ECDH-ES"))
       throw TypeError(`setContentEncryptionKey cannot be called with JWE "alg" (Algorithm) Header ${alg}`);
-    B(alg === "dir" ? enc : alg, e, "encrypt");
-    let a;
+    checkKeyType(alg === "dir" ? enc : alg, key, "encrypt");
+    let cek;
     {
-      let g,
-        ge = await R(e, alg);
-      if ((({ cek: a, encryptedKey: o, parameters: g } = await Ct(alg, enc, ge, this.#o, this.#i)), g))
-        if (t && Ze in t)
-          if (!this.#n) this.setUnprotectedHeader(g);
-          else this.#n = { ...this.#n, ...g };
-        else if (!this.#t) this.setProtectedHeader(g);
-        else this.#t = { ...this.#t, ...g };
+      let parameters;
+      let k = await normalizeKey(key, alg);
+      ({ cek, encryptedKey, parameters } = await encryptKeyManagement(alg, enc, k, this.#o, this.#i));
+      if (parameters)
+        if (options && Ze in options) {
+          if (!this.#n) this.setUnprotectedHeader(parameters);
+          else
+            this.#n = {
+              ...this.#n,
+              ...parameters,
+            };
+        } else if (!this.#t) this.setProtectedHeader(parameters);
+        else
+          this.#t = {
+            ...this.#t,
+            ...parameters,
+          };
     }
-    let s, p, d, u;
-    if (this.#t) ((p = y(JSON.stringify(this.#t))), (d = A(p)));
-    else ((p = ""), (d = new Uint8Array()));
+    let additionalData;
+    let protectedHeaderS;
+    let protectedHeaderB;
+    let aadMember;
+    if (this.#t) {
+      protectedHeaderS = encode_2(JSON.stringify(this.#t));
+      protectedHeaderB = encode(protectedHeaderS);
+    } else {
+      protectedHeaderS = "";
+      protectedHeaderB = new Uint8Array();
+    }
     if (this.#a) {
-      u = y(this.#a);
-      let g = A(u);
-      s = E_2(d, A("."), g);
-    } else s = d;
-    let m = this.#e;
-    if (r.zip === "DEF")
-      m = await Wt(m).catch((g) => {
-        throw new c("Failed to compress plaintext", { cause: g });
+      aadMember = encode_2(this.#a);
+      let aadMemberBytes = encode(aadMember);
+      additionalData = concat(protectedHeaderB, encode("."), aadMemberBytes);
+    } else additionalData = protectedHeaderB;
+    let plaintext = this.#e;
+    if (joseHeader.zip === "DEF")
+      plaintext = await Wt(plaintext).catch((cause) => {
+        throw new JWEInvalid("Failed to compress plaintext", {
+          cause,
+        });
       });
-    let { ciphertext: ciphertext, tag: tag, iv: iv } = await we(enc, m, a, this.#s, s),
-      l = { ciphertext: y(ciphertext) };
-    if (iv) l.iv = y(iv);
-    if (tag) l.tag = y(tag);
-    if (o) l.encrypted_key = y(o);
-    if (u) l.aad = u;
-    if (this.#t) l.protected = p;
-    if (this.#r) l.unprotected = this.#r;
-    if (this.#n) l.header = this.#n;
-    return l;
+    let { ciphertext, tag, iv } = await encrypt(enc, plaintext, cek, this.#s, additionalData);
+    let jwe = {
+      ciphertext: encode_2(ciphertext),
+    };
+    if (iv) jwe.iv = encode_2(iv);
+    if (tag) jwe.tag = encode_2(tag);
+    if (encryptedKey) jwe.encrypted_key = encode_2(encryptedKey);
+    if (aadMember) jwe.aad = aadMember;
+    if (this.#t) jwe.protected = protectedHeaderS;
+    if (this.#r) jwe.unprotected = this.#r;
+    if (this.#n) jwe.header = this.#n;
+    return jwe;
   }
 }
-
 export { Re };

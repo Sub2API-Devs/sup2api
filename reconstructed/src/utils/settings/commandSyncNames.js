@@ -8,173 +8,194 @@
  * pieces: chunk-5hsd6qen.js (9)
  * attribution: placement 9
  */
-import { lEr } from "../../bootstrap/stateSlices.js";
+import { SETTINGS_CACHE_STORE_SLOT } from "../../bootstrap/stateSlices.js";
 import { getRootSession } from "../../bootstrap/state.js";
 
 //@ chunk-5hsd6qen.js:277-315 placement
-function is() {
-  return lEr.of(getRootSession().host);
+/**
+ * commandSyncNameState：按宿主保存的斜杠命令名单状态。
+ */
+function commandSyncNameState() {
+  return SETTINGS_CACHE_STORE_SLOT.of(getRootSession().host);
 }
 //@ chunk-5hsd6qen.js:315-356 placement
-function DU() {
-  return is().mergedSettings;
+/**
+ * mergedCommandNames：合并后的斜杠命令名单。
+ */
+function mergedCommandNames() {
+  return commandSyncNameState().mergedSettings;
 }
 //@ chunk-5hsd6qen.js:356-393 placement
-function or(e) {
-  is().invalidateAll(e);
+/**
+ * invalidateCommandNames：使命令名单缓存失效。
+ */
+function invalidateCommandNames(e) {
+  commandSyncNameState().invalidateAll(e);
 }
 //@ chunk-5hsd6qen.js:393-431 placement
-function RIn() {
-  return is().pluginBase;
+/**
+ * pluginCommandBase：插件命令名前缀。
+ */
+function pluginCommandBase() {
+  return commandSyncNameState().pluginBase;
 }
 //@ chunk-5hsd6qen.js:431-469 placement
-function oxi(e) {
-  is().setPluginBase(e);
+/**
+ * setPluginCommandBase：设置插件命令名前缀。
+ */
+function setPluginCommandBase(settings) {
+  commandSyncNameState().setPluginBase(settings);
 }
 //@ chunk-5hsd6qen.js:469-507 placement
-function sxi() {
-  is().clearPluginBase();
+/**
+ * clearPluginCommandBase：清空插件命令名前缀。
+ */
+function clearPluginCommandBase() {
+  commandSyncNameState().clearPluginBase();
 }
+//@ chunk-5hsd6qen.js:507-2957 placement
 /**
  * 斜杠命令名单（claude.ai 同步、配置类命令等）。
  */
-//@ chunk-5hsd6qen.js:507-2957 placement
-var CLAUDE_AI_SYNC_LABEL = "claude.ai sync",
-  a = {
-    advisor: "config",
-    agents: "config",
-    "auto-mode-setup": "config",
-    autocompact: "config",
-    brief: "config",
-    channel: "config",
-    chrome: "config",
-    clawd: "config",
-    "cloud-plugins": "config",
-    color: "config",
-    config: "config",
-    effort: "config",
-    env: "config",
-    experiments: "config",
-    "extra-usage": "config",
-    fast: "config",
-    focus: "config",
-    goal: "config",
-    hooks: "config",
-    ide: "config",
-    "install-github-app": "config",
-    "install-slack-app": "config",
-    issue: "config",
-    keybindings: "config",
-    mcp: "config",
-    memory: "config",
-    model: "config",
-    "output-style": "config",
-    passes: "config",
-    "pause-memory": "config",
-    permissions: "config",
-    plan: "config",
-    plugin: "config",
-    powerup: "config",
-    "privacy-settings": "config",
-    "pro-trial-expired": "config",
-    "rate-limit-options": "config",
-    "remote-control": "config",
-    "remote-env": "config",
-    sandbox: "config",
-    "scroll-speed": "config",
-    "setup-bedrock": "config",
-    "setup-vertex": "config",
-    "terminal-setup": "config",
-    theme: "config",
-    tui: "config",
-    upgrade: "config",
-    "usage-credits": "config",
-    vim: "config",
-    voice: "config",
-    "web-setup": "config",
-    wellbeing: "config",
-    "add-dir": "action",
-    "ant-trace": "action",
-    artifacts: "action",
-    background: "action",
-    branch: "action",
-    btw: "action",
-    bug: "action",
-    cd: "action",
-    clear: "action",
-    compact: "action",
-    copy: "action",
-    "debug-tool-call": "action",
-    desktop: "action",
-    exit: "action",
-    export: "action",
-    feedback: "action",
-    heapdump: "action",
-    "design-consent": "action",
-    "design-revoke": "action",
-    "design-login": "action",
-    login: "action",
-    logout: "action",
-    "low-priority": "action",
-    "limit-reset": "action",
-    "claim-credit": "action",
-    import: "action",
-    "mock-limits": "action",
-    "oauth-refresh": "action",
-    onboarding: "action",
-    "perf-issue": "action",
-    radio: "action",
-    "reload-plugins": "action",
-    "reload-skills": "action",
-    rename: "action",
-    "reset-limits": "action",
-    "settings-review": "config",
-    restart: "action",
-    update: "action",
-    resume: "action",
-    "simulate-usage": "action",
-    rewind: "action",
-    stickers: "action",
-    stop: "action",
-    teleport: "action",
-    thrash: "action",
-    context: "info",
-    diff: "info",
-    help: "info",
-    "input-debug": "info",
-    mobile: "info",
-    recap: "info",
-    "release-notes": "info",
-    "render-debug": "info",
-    session: "info",
-    "skill-doctor": "info",
-    skills: "info",
-    status: "info",
-    usage: "info",
-    version: "info",
-    "__remote-workflow": "agent",
-    "workflow-launch-exec": "agent",
-    "autofix-pr": "agent",
-    autopilot: "agent",
-    bugfix: "agent",
-    daemon: "agent",
-    dashboard: "agent",
-    docs: "agent",
-    fork: "agent",
-    subtask: "agent",
-    investigate: "agent",
-    schedule: "agent",
-    "list-agents": "agent",
-    loops: "agent",
-    tasks: "agent",
-    ultraplan: "agent",
-    ultrareview: "agent",
-    workflows: "agent",
-  };
+var CLAUDE_AI_SYNC_LABEL = "claude.ai sync";
+var COMMAND_NAME_SOURCES = {
+  advisor: "config",
+  agents: "config",
+  "auto-mode-setup": "config",
+  autocompact: "config",
+  brief: "config",
+  channel: "config",
+  chrome: "config",
+  clawd: "config",
+  "cloud-plugins": "config",
+  color: "config",
+  config: "config",
+  effort: "config",
+  env: "config",
+  experiments: "config",
+  "extra-usage": "config",
+  fast: "config",
+  focus: "config",
+  goal: "config",
+  hooks: "config",
+  ide: "config",
+  "install-github-app": "config",
+  "install-slack-app": "config",
+  issue: "config",
+  keybindings: "config",
+  mcp: "config",
+  memory: "config",
+  model: "config",
+  "output-style": "config",
+  passes: "config",
+  "pause-memory": "config",
+  permissions: "config",
+  plan: "config",
+  plugin: "config",
+  powerup: "config",
+  "privacy-settings": "config",
+  "pro-trial-expired": "config",
+  "rate-limit-options": "config",
+  "remote-control": "config",
+  "remote-env": "config",
+  sandbox: "config",
+  "scroll-speed": "config",
+  "setup-bedrock": "config",
+  "setup-vertex": "config",
+  "terminal-setup": "config",
+  theme: "config",
+  tui: "config",
+  upgrade: "config",
+  "usage-credits": "config",
+  vim: "config",
+  voice: "config",
+  "web-setup": "config",
+  wellbeing: "config",
+  "add-dir": "action",
+  "ant-trace": "action",
+  artifacts: "action",
+  background: "action",
+  branch: "action",
+  btw: "action",
+  bug: "action",
+  cd: "action",
+  clear: "action",
+  compact: "action",
+  copy: "action",
+  "debug-tool-call": "action",
+  desktop: "action",
+  exit: "action",
+  export: "action",
+  feedback: "action",
+  heapdump: "action",
+  "design-consent": "action",
+  "design-revoke": "action",
+  "design-login": "action",
+  login: "action",
+  logout: "action",
+  "low-priority": "action",
+  "limit-reset": "action",
+  "claim-credit": "action",
+  import: "action",
+  "mock-limits": "action",
+  "oauth-refresh": "action",
+  onboarding: "action",
+  "perf-issue": "action",
+  radio: "action",
+  "reload-plugins": "action",
+  "reload-skills": "action",
+  rename: "action",
+  "reset-limits": "action",
+  "settings-review": "config",
+  restart: "action",
+  update: "action",
+  resume: "action",
+  "simulate-usage": "action",
+  rewind: "action",
+  stickers: "action",
+  stop: "action",
+  teleport: "action",
+  thrash: "action",
+  context: "info",
+  diff: "info",
+  help: "info",
+  "input-debug": "info",
+  mobile: "info",
+  recap: "info",
+  "release-notes": "info",
+  "render-debug": "info",
+  session: "info",
+  "skill-doctor": "info",
+  skills: "info",
+  status: "info",
+  usage: "info",
+  version: "info",
+  "__remote-workflow": "agent",
+  "workflow-launch-exec": "agent",
+  "autofix-pr": "agent",
+  autopilot: "agent",
+  bugfix: "agent",
+  daemon: "agent",
+  dashboard: "agent",
+  docs: "agent",
+  fork: "agent",
+  subtask: "agent",
+  investigate: "agent",
+  schedule: "agent",
+  "list-agents": "agent",
+  loops: "agent",
+  tasks: "agent",
+  ultraplan: "agent",
+  ultrareview: "agent",
+  workflows: "agent",
+};
 //@ chunk-5hsd6qen.js:2957-3035 placement
-function ixi(e) {
+/**
+ * commandKindOf：取命令来源分类（prompt 视为 skill）。
+ */
+function commandKindOf(e) {
   if (e.type === "prompt") return "skill";
-  return a[e.name] ?? "action";
+  return COMMAND_NAME_SOURCES[e.name] ?? "action";
 }
 //@ chunk-5hsd6qen.js:3035-3444 placement
 function isBuiltinCommandSource(e) {
@@ -201,5 +222,14 @@ function isBuiltinCommandSource(e) {
       return "flag";
   }
 }
-
-export { DU, is, CLAUDE_AI_SYNC_LABEL, or, isBuiltinCommandSource, ixi, RIn, sxi, oxi };
+export {
+  mergedCommandNames,
+  commandSyncNameState,
+  CLAUDE_AI_SYNC_LABEL,
+  invalidateCommandNames,
+  isBuiltinCommandSource,
+  commandKindOf,
+  pluginCommandBase,
+  clearPluginCommandBase,
+  setPluginCommandBase,
+};

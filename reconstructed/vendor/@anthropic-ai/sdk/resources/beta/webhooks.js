@@ -6,23 +6,23 @@
  * attribution: esm-layout 1, esm-fingerprint 1
  */
 import { Re } from "../../../../../runtime/bun-runtime.js";
-import { Hu } from "../../../../standardwebhooks/dist/index.js";
-import { Y } from "../../core/resource.mjs";
+import { require_standardwebhooks } from "../../../../standardwebhooks/dist/index.js";
+import { APIResource } from "../../core/resource.mjs";
 
 //@ chunk-hwmsct5x.js:53298-53316 esm-layout
-var $u = Re(Hu(), 1);
+var import_standardwebhooks = Re(require_standardwebhooks(), 1);
 //@ chunk-hwmsct5x.js:53316-53673 esm-fingerprint
-class Mr extends Y {
-  parseUnverified(e) {
-    return JSON.parse(e);
+class Webhooks extends APIResource {
+  parseUnverified(body) {
+    return JSON.parse(body);
   }
-  unwrap(e, n) {
-    let r = n?.headers;
-    if (r == null) throw Error("Webhook headers are required in order to verify the signature");
-    let s = n.key === void 0 ? this._client.webhookKey : n.key;
-    if (!s) throw Error("Webhook key must not be null or empty in order to unwrap");
-    return (new $u.Webhook(s).verify(e, r), JSON.parse(e));
+  unwrap(body, options) {
+    let headers = options?.headers;
+    if (headers == null) throw Error("Webhook headers are required in order to verify the signature");
+    let keyStr = options.key === undefined ? this._client.webhookKey : options.key;
+    if (!keyStr) throw Error("Webhook key must not be null or empty in order to unwrap");
+    new import_standardwebhooks.Webhook(keyStr).verify(body, headers);
+    return JSON.parse(body);
   }
 }
-
-export { Mr };
+export { Webhooks };

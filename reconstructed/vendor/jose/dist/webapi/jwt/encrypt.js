@@ -6,7 +6,7 @@
  * attribution: esm-fingerprint 1
  */
 import { de } from "../lib/jwt_claims_set.js";
-import { W } from "../lib/helpers.js";
+import { assertNotSet } from "../lib/helpers.js";
 import { Ue } from "../jwe/compact/encrypt.js";
 
 //@ chunk-5h78gfwc.js:47558-48800 esm-fingerprint
@@ -19,65 +19,83 @@ class EncryptJWT {
   #o;
   #s;
   #i;
-  constructor(e = {}) {
-    this.#i = new de(e);
+  constructor(payload = {}) {
+    this.#i = new de(payload);
   }
-  setIssuer(e) {
-    return ((this.#i.iss = e), this);
+  setIssuer(issuer) {
+    this.#i.iss = issuer;
+    return this;
   }
-  setSubject(e) {
-    return ((this.#i.sub = e), this);
+  setSubject(subject) {
+    this.#i.sub = subject;
+    return this;
   }
-  setAudience(e) {
-    return ((this.#i.aud = e), this);
+  setAudience(audience) {
+    this.#i.aud = audience;
+    return this;
   }
-  setJti(e) {
-    return ((this.#i.jti = e), this);
+  setJti(jwtId) {
+    this.#i.jti = jwtId;
+    return this;
   }
-  setNotBefore(e) {
-    return ((this.#i.nbf = e), this);
+  setNotBefore(input) {
+    this.#i.nbf = input;
+    return this;
   }
-  setExpirationTime(e) {
-    return ((this.#i.exp = e), this);
+  setExpirationTime(input) {
+    this.#i.exp = input;
+    return this;
   }
-  setIssuedAt(e) {
-    return ((this.#i.iat = e), this);
+  setIssuedAt(input) {
+    this.#i.iat = input;
+    return this;
   }
-  setProtectedHeader(e) {
-    return (W(this.#n, "setProtectedHeader"), (this.#n = e), this);
+  setProtectedHeader(protectedHeader) {
+    assertNotSet(this.#n, "setProtectedHeader");
+    this.#n = protectedHeader;
+    return this;
   }
-  setKeyManagementParameters(e) {
-    return (W(this.#r, "setKeyManagementParameters"), (this.#r = e), this);
+  setKeyManagementParameters(parameters) {
+    assertNotSet(this.#r, "setKeyManagementParameters");
+    this.#r = parameters;
+    return this;
   }
-  setContentEncryptionKey(e) {
-    return (W(this.#e, "setContentEncryptionKey"), (this.#e = e), this);
+  setContentEncryptionKey(cek) {
+    assertNotSet(this.#e, "setContentEncryptionKey");
+    this.#e = cek;
+    return this;
   }
-  setInitializationVector(e) {
-    return (W(this.#t, "setInitializationVector"), (this.#t = e), this);
+  setInitializationVector(iv) {
+    assertNotSet(this.#t, "setInitializationVector");
+    this.#t = iv;
+    return this;
   }
   replicateIssuerAsHeader() {
-    return ((this.#a = !0), this);
+    this.#a = true;
+    return this;
   }
   replicateSubjectAsHeader() {
-    return ((this.#o = !0), this);
+    this.#o = true;
+    return this;
   }
   replicateAudienceAsHeader() {
-    return ((this.#s = !0), this);
+    this.#s = true;
+    return this;
   }
-  async encrypt(e, t) {
-    let r = new Ue(this.#i.data());
+  async encrypt(key, options) {
+    let enc = new Ue(this.#i.data());
     if (this.#n && (this.#a || this.#o || this.#s))
       this.#n = {
         ...this.#n,
-        iss: this.#a ? this.#i.iss : void 0,
-        sub: this.#o ? this.#i.sub : void 0,
-        aud: this.#s ? this.#i.aud : void 0,
+        iss: this.#a ? this.#i.iss : undefined,
+        sub: this.#o ? this.#i.sub : undefined,
+        aud: this.#s ? this.#i.aud : undefined,
       };
-    if ((r.setProtectedHeader(this.#n), this.#t)) r.setInitializationVector(this.#t);
-    if (this.#e) r.setContentEncryptionKey(this.#e);
-    if (this.#r) r.setKeyManagementParameters(this.#r);
-    return r.encrypt(e, t);
+    enc.setProtectedHeader(this.#n);
+    if (this.#t) enc.setInitializationVector(this.#t);
+    if (this.#e) enc.setContentEncryptionKey(this.#e);
+    if (this.#r) enc.setKeyManagementParameters(this.#r);
+    return enc.encrypt(key, options);
   }
 }
-
 export { EncryptJWT };

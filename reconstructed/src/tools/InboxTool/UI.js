@@ -8,60 +8,87 @@
  * pieces: chunk-w3kk5zb6.js (1)
  * attribution: placement 1
  */
-import { e, r } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { MessageResponse } from "../../components/MessageResponse.js";
 import { Text, Box } from "../../ink/components/Text.js";
-import { I1, stripControlChars } from "../../utils/stripControlChars.js";
+import { stripControlChars, stripControlChars_2 } from "../../utils/stripControlChars.js";
 import { foldSenderDisplayBrackets, inboxSenderProvenanceCaption } from "../../bridge/sessionInbox.js";
 
 //@ chunk-w3kk5zb6.js:4750-5746 placement
 function InboxReadResult(o) {
   if (!o.ok)
-    return e(MessageResponse, {
+    return jsxProd_default(MessageResponse, {
       height: 1,
-      children: e(Text, { dimColor: !0, children: `Inbox read failed \xB7 ${I1(o.reason) || "error"}` }),
+      children: jsxProd_default(Text, {
+        dimColor: true,
+        children: `Inbox read failed \xB7 ${stripControlChars(o.reason) || "error"}`,
+      }),
     });
-  let l = foldSenderDisplayBrackets(I1(o.sender_display)) || I1(o.sender_kind) || "unknown sender",
-    c = o.source === "slack" ? " via Slack" : "",
-    a = `[${inboxSenderProvenanceCaption(o.sender_kind)}]`,
-    m = o.sender_kind === "rc_owner",
-    t = I1(o.slack_permalink),
-    i = I1(o.received_at),
-    d = o.attachments_prefix?.trim();
-  return e(MessageResponse, {
-    children: r(Box, {
+  let l =
+    foldSenderDisplayBrackets(stripControlChars(o.sender_display)) ||
+    stripControlChars(o.sender_kind) ||
+    "unknown sender";
+  let c = o.source === "slack" ? " via Slack" : "";
+  let children = `[${inboxSenderProvenanceCaption(o.sender_kind)}]`;
+  let m = o.sender_kind === "rc_owner";
+  let t = stripControlChars(o.slack_permalink);
+  let i = stripControlChars(o.received_at);
+  let trimmed = o.attachments_prefix?.trim();
+  return jsxProd_default(MessageResponse, {
+    children: jsxProd_default_2(Box, {
       flexDirection: "column",
       children: [
-        r(Box, {
+        jsxProd_default_2(Box, {
           flexDirection: "row",
           children: [
-            e(Box, {
+            jsxProd_default(Box, {
               flexShrink: 0,
               children: m
-                ? e(Text, { color: "permission", children: a })
-                : e(Text, { dimColor: !0, children: a }),
+                ? jsxProd_default(Text, {
+                    color: "permission",
+                    children,
+                  })
+                : jsxProd_default(Text, {
+                    dimColor: true,
+                    children,
+                  }),
             }),
-            e(Box, {
+            jsxProd_default(Box, {
               flexGrow: 1,
               flexShrink: 1,
               paddingLeft: 1,
-              children: e(Text, { wrap: "wrap", children: `Inbox message from ${l}${c}:` }),
+              children: jsxProd_default(Text, {
+                wrap: "wrap",
+                children: `Inbox message from ${l}${c}:`,
+              }),
             }),
           ],
         }),
-        d ? e(Text, { dimColor: !0, wrap: "wrap", children: stripControlChars(d) }) : null,
-        e(Box, {
+        trimmed
+          ? jsxProd_default(Text, {
+              dimColor: true,
+              wrap: "wrap",
+              children: stripControlChars_2(trimmed),
+            })
+          : null,
+        jsxProd_default(Box, {
           borderStyle: "quote",
-          borderTop: !1,
-          borderBottom: !1,
-          borderRight: !1,
-          borderDimColor: !0,
+          borderTop: false,
+          borderBottom: false,
+          borderRight: false,
+          borderDimColor: true,
           paddingLeft: 1,
-          children: e(Text, { wrap: "wrap", children: stripControlChars(o.body) }),
+          children: jsxProd_default(Text, {
+            wrap: "wrap",
+            children: stripControlChars_2(o.body),
+          }),
         }),
         t || i
-          ? e(Text, {
-              dimColor: !0,
+          ? jsxProd_default(Text, {
+              dimColor: true,
               wrap: "wrap",
               children: [i && `received ${i}`, t].filter(Boolean).join(" \xB7 "),
             })

@@ -8,33 +8,43 @@
  * pieces: chunk-e6aww6q8.js (2)
  * attribution: fingerprint 2
  */
-import { $0, vWe } from "../plugins/functionHooks/personHold.js";
+import { currentTurnSlot, turnFinishedSignal } from "../plugins/functionHooks/personHold.js";
 import { classifierDenyKind } from "../types/permissions.js";
-import { AL } from "./permissions/permissions.js";
+import { sanitizeRuleCategory } from "./permissions/permissions.js";
 import { isToolDetailsLoggingEnabled } from "../services/analytics/metadata.js";
 
+//@ chunk-e6aww6q8.js:780189-780227 fingerprint = setClassifierChecking (0.643)
 /**
  * 标记某个 tool_use 正在被分类器检查（写入 $0 集合并通知 vWe 订阅者刷新 UI）。
  */
-//@ chunk-e6aww6q8.js:780189-780227 fingerprint = setClassifierChecking (0.643)
 function setClassifierChecking(toolUseID) {
-  ($0.bind(toolUseID), vWe.emit());
+  currentTurnSlot.bind(toolUseID);
+  turnFinishedSignal.emit();
 }
+//@ chunk-e6aww6q8.js:3761383-3761704 fingerprint = setYoloClassifierApproval (0.39)
 /**
  * 由 auto-mode 分类器的 decisionReason 生成遥测字段 {classifier_verdict, classifier_category?}；用户接受时只在分类器本已放行时报 allow；类别仅在允许记录工具细节时附带。
  */
-//@ chunk-e6aww6q8.js:3761383-3761704 fingerprint = setYoloClassifierApproval (0.39)
 function getClassifierVerdictAnalyticsFields(decision, decisionReason) {
   if (decisionReason?.type !== "classifier" || decisionReason.classifier !== "auto-mode") return;
   if (decision === "accept")
-    return decisionReason.classifierAllowed === !0 ? { classifier_verdict: "allow" } : void 0;
+    return decisionReason.classifierAllowed === true
+      ? {
+          classifier_verdict: "allow",
+        }
+      : undefined;
   let verdict = classifierDenyKind(decisionReason);
-  if (verdict !== "block") return { classifier_verdict: verdict };
-  let category = AL(decisionReason.category);
+  if (verdict !== "block")
+    return {
+      classifier_verdict: verdict,
+    };
+  let category = sanitizeRuleCategory(decisionReason.category);
   return {
     classifier_verdict: "block",
-    ...(category !== void 0 && isToolDetailsLoggingEnabled() && { classifier_category: category }),
+    ...(category !== undefined &&
+      isToolDetailsLoggingEnabled() && {
+        classifier_category: category,
+      }),
   };
 }
-
 export { setClassifierChecking, getClassifierVerdictAnalyticsFields };

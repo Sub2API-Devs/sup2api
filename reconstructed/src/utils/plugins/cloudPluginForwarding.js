@@ -8,10 +8,11 @@
  * pieces: chunk-dwd7meyg.js (1)
  * attribution: placement 1
  */
-
 //@ chunk-dwd7meyg.js:191-304 placement
-var CLOUD_PLUGINS_FORWARDED_KEY = "cloudPluginsForwarded",
-  DLs = ["enabledPlugins", "extraKnownMarketplaces"],
-  PLUGIN_FORWARDING_DISABLED = "plugin_forwarding_disabled";
-
-export { PLUGIN_FORWARDING_DISABLED, CLOUD_PLUGINS_FORWARDED_KEY, DLs };
+/**
+ * CLOUD_PLUGINS_FORWARDED_KEYS：云端插件转发时同步的设置在键。
+ */
+var CLOUD_PLUGINS_FORWARDED_KEY = "cloudPluginsForwarded";
+var CLOUD_PLUGINS_FORWARDED_KEYS = ["enabledPlugins", "extraKnownMarketplaces"];
+var PLUGIN_FORWARDING_DISABLED = "plugin_forwarding_disabled";
+export { PLUGIN_FORWARDING_DISABLED, CLOUD_PLUGINS_FORWARDED_KEY, CLOUD_PLUGINS_FORWARDED_KEYS };

@@ -8,36 +8,54 @@
  * pieces: chunk-4v9zy7gn.js (3)
  * attribution: file-local 1, fingerprint 2
  */
-import { e, r } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { BulletRow } from "../../components/design-system/BulletRow.js";
 import { Text, Box } from "../../ink/components/Text.js";
 import { w } from "../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { useKeybinding } from "../../keybindings/useKeybinding.js";
-import { re } from "../../../vendor/@inquirer/figures/dist/esm/index.js";
+import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/index.js";
 import { KeyboardShortcutHint } from "../../components/design-system/KeyboardShortcutHint.js";
 import { GITHUB_ACTION_SETUP_DOCS_URL } from "../../constants/github-app.js";
 
 //@ chunk-4v9zy7gn.js:47620-47693 file-local
-function us(instruction, i) {
-  return e(BulletRow, { children: e(Text, { dimColor: !0, children: instruction }) }, i);
+function renderDimInstruction(instruction, i) {
+  return jsxProd_default(
+    BulletRow,
+    {
+      children: jsxProd_default(Text, {
+        dimColor: true,
+        children: instruction,
+      }),
+    },
+    i,
+  );
 }
 //@ chunk-4v9zy7gn.js:47693-47961 fingerprint = _temp2 (1)
 function renderWarning(warning, index) {
-  return r(
+  return jsxProd_default_2(
     Box,
     {
       flexDirection: "column",
       marginBottom: 1,
       children: [
-        e(Text, { color: "warning", bold: !0, children: warning.title }),
-        e(Text, { children: warning.message }),
+        jsxProd_default(Text, {
+          color: "warning",
+          bold: true,
+          children: warning.title,
+        }),
+        jsxProd_default(Text, {
+          children: warning.message,
+        }),
         warning.instructions.length > 0 &&
-          e(Box, {
+          jsxProd_default(Box, {
             flexDirection: "column",
             marginLeft: 2,
             marginTop: 1,
-            children: warning.instructions.map(us),
+            children: warning.instructions.map(renderDimInstruction),
           }),
       ],
     },
@@ -45,73 +63,101 @@ function renderWarning(warning, index) {
   );
 }
 //@ chunk-4v9zy7gn.js:47961-48997 fingerprint = WarningsStep (0.398)
-function WarningsStep(t0) {
-  let f = w(9),
-    { warnings: warnings, onContinue: onContinue } = t0,
-    C;
-  if (f[0] === MEMO_CACHE_SENTINEL) ((C = { context: "Confirmation" }), (f[0] = C));
-  else C = f[0];
-  useKeybinding("confirm:yes", onContinue, C);
-  let u;
-  if (f[1] === MEMO_CACHE_SENTINEL)
-    ((u = r(Box, {
+function WarningsStep(props) {
+  let $ = w(9);
+  let { warnings, onContinue } = props;
+  let t1;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    t1 = {
+      context: "Confirmation",
+    };
+    $[0] = t1;
+  } else t1 = $[0];
+  useKeybinding("confirm:yes", onContinue, t1);
+  let t2;
+  if ($[1] === MEMO_CACHE_SENTINEL) {
+    t2 = jsxProd_default_2(Box, {
       flexDirection: "column",
       marginBottom: 1,
       children: [
-        r(Text, { bold: !0, children: [re.warning, " Setup Warnings"] }),
-        e(Text, { dimColor: !0, children: "We found some potential issues, but you can continue anyway" }),
+        jsxProd_default_2(Text, {
+          bold: true,
+          children: [figures_default.warning, " Setup Warnings"],
+        }),
+        jsxProd_default(Text, {
+          dimColor: true,
+          children: "We found some potential issues, but you can continue anyway",
+        }),
       ],
-    })),
-      (f[1] = u));
-  else u = f[1];
-  let o;
-  if (f[2] !== warnings) ((o = warnings.map(renderWarning)), (f[2] = warnings), (f[3] = o));
-  else o = f[3];
+    });
+    $[1] = t2;
+  } else t2 = $[1];
+  let t3;
+  if ($[2] !== warnings) {
+    t3 = warnings.map(renderWarning);
+    $[2] = warnings;
+    $[3] = t3;
+  } else t3 = $[3];
   let v;
-  if (f[4] === MEMO_CACHE_SENTINEL)
-    ((v = e(KeyboardShortcutHint, { chord: "enter", action: "continue anyway" })), (f[4] = v));
-  else v = f[4];
+  if ($[4] === MEMO_CACHE_SENTINEL) {
+    v = jsxProd_default(KeyboardShortcutHint, {
+      chord: "enter",
+      action: "continue anyway",
+    });
+    $[4] = v;
+  } else v = $[4];
   let A;
-  if (f[5] === MEMO_CACHE_SENTINEL)
-    ((A = e(Box, {
+  if ($[5] === MEMO_CACHE_SENTINEL) {
+    A = jsxProd_default(Box, {
       marginTop: 1,
-      children: r(Text, {
-        bold: !0,
+      children: jsxProd_default_2(Text, {
+        bold: true,
         color: "permission",
         children: [
           "Press ",
           v,
           ", or",
           " ",
-          e(KeyboardShortcutHint, {
+          jsxProd_default(KeyboardShortcutHint, {
             chord: "ctrl+c",
             action: "exit and fix issues",
-            format: { modCase: "title", charCase: "upper" },
+            format: {
+              modCase: "title",
+              charCase: "upper",
+            },
           }),
         ],
       }),
-    })),
-      (f[5] = A));
-  else A = f[5];
-  let g;
-  if (f[6] === MEMO_CACHE_SENTINEL)
-    ((g = e(Box, {
+    });
+    $[5] = A;
+  } else A = $[5];
+  let t5;
+  if ($[6] === MEMO_CACHE_SENTINEL) {
+    t5 = jsxProd_default(Box, {
       marginTop: 1,
-      children: r(Text, {
-        dimColor: !0,
+      children: jsxProd_default_2(Text, {
+        dimColor: true,
         children: [
           "You can also try the manual setup steps if needed:",
           " ",
-          e(Text, { color: "claude", children: GITHUB_ACTION_SETUP_DOCS_URL }),
+          jsxProd_default(Text, {
+            color: "claude",
+            children: GITHUB_ACTION_SETUP_DOCS_URL,
+          }),
         ],
       }),
-    })),
-      (f[6] = g));
-  else g = f[6];
-  let _;
-  if (f[7] !== o) ((_ = r(Box, { flexDirection: "column", children: [u, o, A, g] })), (f[7] = o), (f[8] = _));
-  else _ = f[8];
-  return _;
+    });
+    $[6] = t5;
+  } else t5 = $[6];
+  let t6;
+  if ($[7] !== t3) {
+    t6 = jsxProd_default_2(Box, {
+      flexDirection: "column",
+      children: [t2, t3, A, t5],
+    });
+    $[7] = t3;
+    $[8] = t6;
+  } else t6 = $[8];
+  return t6;
 }
-
 export { WarningsStep };

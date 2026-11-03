@@ -15,20 +15,14 @@ import { jsonParse, jsonStringify } from "./slowOperations.js";
 import { logForDebugging } from "./debug.js";
 import { writeFileAtomic } from "./atomicPublishWrite.js";
 
+//@ chunk-5rq13jpv.js:383-1160 placement
 /**
  * 创建 JSON 文件存储（默认值、权限、缩进、schema 校验）。
  */
-//@ chunk-5rq13jpv.js:383-1160 placement
 function createJsonStore(e, f, c) {
-  let {
-    defaultValue: defaultValue,
-    mode: mode,
-    ensureDir: ensureDir = !1,
-    indent: indent,
-    trailingNewline: trailingNewline = !1,
-  } = c;
+  let { defaultValue, mode, ensureDir = false, indent, trailingNewline = false } = c;
   function u() {
-    return S(defaultValue) ? defaultValue() : defaultValue;
+    return isFunction(defaultValue) ? defaultValue() : defaultValue;
   }
   async function m() {
     let n;
@@ -42,21 +36,26 @@ function createJsonStore(e, f, c) {
     try {
       r = jsonParse(n);
     } catch (error) {
-      return (logForDebugging(`jsonStore: ${e} is not valid JSON: ${error}`, { level: "warn" }), u());
+      logForDebugging(`jsonStore: ${e} is not valid JSON: ${error}`, {
+        level: "warn",
+      });
+      return u();
     }
-    let safeParse = f().safeParse(r);
-    if (!safeParse.success)
-      return (
-        logForDebugging(`jsonStore: ${e} failed schema validation: ${safeParse.error.message}`, {
-          level: "warn",
-        }),
-        u()
-      );
-    return safeParse.data;
+    let o = f().safeParse(r);
+    if (!o.success) {
+      logForDebugging(`jsonStore: ${e} failed schema validation: ${o.error.message}`, {
+        level: "warn",
+      });
+      return u();
+    }
+    return o.data;
   }
   async function d(n) {
-    if (ensureDir !== !1)
-      await mkdir(dirname(e), { recursive: !0, mode: ensureDir === !0 ? void 0 : ensureDir.mode });
+    if (ensureDir !== false)
+      await mkdir(dirname(e), {
+        recursive: true,
+        mode: ensureDir === true ? undefined : ensureDir.mode,
+      });
     let r =
       jsonStringify(n, null, indent) +
       (trailingNewline
@@ -69,19 +68,18 @@ function createJsonStore(e, f, c) {
   function y(n) {
     let r = resolved.then(async () => {
       let o = n(await m());
-      return (await d(o), o);
+      await d(o);
+      return o;
     });
-    return (
-      (resolved = r.then(
-        () => {
-          return;
-        },
-        () => {
-          return;
-        },
-      )),
-      r
+    resolved = r.then(
+      () => {
+        return;
+      },
+      () => {
+        return;
+      },
     );
+    return r;
   }
   return {
     path() {
@@ -93,8 +91,7 @@ function createJsonStore(e, f, c) {
   };
 }
 //@ chunk-5rq13jpv.js:1160-1203 placement
-function S(e) {
-  return typeof e === "function";
+function isFunction(defaultValue) {
+  return typeof defaultValue === "function";
 }
-
 export { createJsonStore };

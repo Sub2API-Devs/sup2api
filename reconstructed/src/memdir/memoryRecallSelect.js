@@ -8,56 +8,7 @@
  * pieces: chunk-e6aww6q8.js (9)
  * attribution: placement 9
  */
-import {
-  relative,
-  relative as relative_2,
-  relative as relative_3,
-  relative as relative_4,
-  relative as relative_5,
-  relative as relative_6,
-  relative as relative_7,
-  relative as relative_8,
-  relative as relative_9,
-  relative as relative_10,
-  relative as relative_11,
-  relative as relative_12,
-  relative as relative_13,
-  relative as relative_14,
-  relative as relative_15,
-  relative as relative_16,
-  relative as relative_17,
-  relative as relative_18,
-  relative as relative_19,
-  relative as relative_20,
-  relative as relative_21,
-  relative as relative_22,
-  relative as relative_23,
-  relative as relative_24,
-  relative as relative_25,
-  relative as relative_26,
-  relative as relative_27,
-  relative as relative_28,
-  relative as relative_29,
-  relative as relative_30,
-  relative as relative_31,
-  relative as relative_32,
-  relative as relative_33,
-  relative as relative_34,
-  relative as relative_35,
-  relative as relative_36,
-  relative as relative_37,
-  relative as relative_38,
-  relative as relative_39,
-  relative as relative_40,
-  relative as relative_41,
-  relative as relative_42,
-  relative as relative_43,
-  relative as relative_44,
-  relative as relative_45,
-  relative as relative_46,
-  relative as relative_47,
-  relative as relative_48,
-} from "path";
+import { relative } from "path";
 import { SessionRootSlot } from "../bootstrap/sessionSlices.js";
 import { getAutoMemPath } from "./paths.js";
 import { hasOrgMemoryDecisionRunStarted } from "../services/orgMemory/discovery.js";
@@ -78,7 +29,7 @@ import { fromEnum } from "../services/analytics/safeMetadata.js";
 import { logForDebugging } from "../utils/debug.js";
 import { errorMessage } from "../utils/errors.js";
 import {
-  XJt,
+  pickerStateForDir,
   startMemoryPickerState,
   setPickerAccountContext,
   pickerMessages,
@@ -88,19 +39,22 @@ import { MEMORY_TYPES } from "./memoryTypes.js";
 import { getDefaultSonnetModel } from "../utils/model/model.js";
 import { isNoModelFallbackEnabled } from "../utils/model/modelFallback.js";
 import { allowedVersionsInFamilyForProvider } from "../utils/model/modelAllowlist.js";
-import { Bn } from "../utils/model/modelIds.js";
+import { stripAnyVersatileSuffix } from "../utils/model/modelIds.js";
 import { isPermittedByOrgModelPolicy } from "../utils/model/defaultModel.js";
 import { calculateCostWithPricingSource } from "../utils/modelCost.js";
 import { EMPTY_USAGE } from "../services/api/emptyUsage.js";
 import { isModelNotFoundError, isModelPermissionDeniedError } from "../services/api/withRetry.js";
 
 //@ chunk-e6aww6q8.js:3302627-3302679 placement
-var uCn = new SessionRootSlot(() => new Map()),
-  cCn = new SessionRootSlot(() => new Set());
+/**
+ * 记忆选择器按会话保存的两张表（已展示条目与已用会话）。
+ */
+var memoryPickerMaps = new SessionRootSlot(() => new Map());
+var memoryPickerSets = new SessionRootSlot(() => new Set());
+//@ chunk-e6aww6q8.js:3302713-3304053 placement
 /**
  * 记忆召回选择器的系统提示（最多选 5 个、谨慎对待用户/项目概况记忆）及其输出 token 上限。
  */
-//@ chunk-e6aww6q8.js:3302713-3304053 placement
 var MEMORY_SELECTOR_PROMPT = `You are selecting memories that will be useful to Claude Code as it processes a user's query. The first message lists the available memory files with their filenames and descriptions; subsequent messages each contain one user query.
 
 Return a list of filenames for the memories that will clearly be useful to Claude Code as it processes the user's query (up to 5). Only include memories that you are certain will be helpful based on their name and description.
@@ -110,67 +64,75 @@ Return a list of filenames for the memories that will clearly be useful to Claud
 - Do not re-select memories you already returned for an earlier query in this conversation.
 
 Reply with only a JSON object of the form {"selected_memories": ["<filename>", ...]}.
-`,
-  SELECTOR_MAX_TOKENS = 512;
+`;
+var SELECTOR_MAX_TOKENS = 512;
+//@ chunk-e6aww6q8.js:3304053-3306754 placement
 /**
  * 记忆召回选择：按相关性下限从索引候选中挑选可返回的记忆，并记录无候选、扫描不完整等结果。
  */
-//@ chunk-e6aww6q8.js:3304053-3306754 placement
 async function selectMemoryRecall(
-  e,
+  session,
   n,
-  r,
-  s,
-  h,
-  y = new Set(),
-  S = !1,
+  dir,
+  memorySelector,
+  signal,
+  paths = new Set(),
+  S = false,
   w,
-  L = !1,
+  L = false,
   G,
-  q = () => !1,
-  Z,
-  Se,
-  ke = [],
-  we = !1,
+  isMultiStoreSyncAvailable = () => false,
+  storageV5,
+  credentials,
+  selectorTurnReverts = [],
+  regularFilesOnly = false,
   Ee,
-  Ae = !0,
+  Ae = true,
   Ie = Ee?.scope,
 ) {
-  if (((s.lastUsage = null), S))
+  memorySelector.lastUsage = null;
+  if (S)
     try {
-      if (r === getAutoMemPath() && (q() || hasOrgMemoryDecisionRunStarted()))
-        await waitForOrgMemoryDecisionSettledOnce(FIRST_STORE_PULL_WAIT_DEADLINE_MS, h);
-      if (h.aborted) return [];
-      let { searchMemoryFilesWithIndex: searchMemoryFilesWithIndex } = await import("./chunk-vp5gef34.js"),
-        rn = recallVisibleTeamMounts(r),
-        pn = 5 + Math.min(y.size + 10, 20),
-        { ranked: ranked, stats: stats } = await searchMemoryFilesWithIndex(
-          e,
-          n,
-          r,
-          h,
-          pn,
-          loadedIndexExclusions(),
-          w,
-          L,
-          (Kn) => isRecallVisiblePath(Kn, rn),
-        ),
-        ho = recallVisibleTeamMounts(r),
-        mapped = ranked
-          .filter(
-            (Kn) => isRecallVisiblePath(relative_33(r, Kn.path), ho) && !y.has(Kn.path) && !G?.(Kn.path),
-          )
-          .slice(0, 5)
-          .map((Kn) => ({ path: Kn.path, mtimeMs: Kn.mtimeMs }));
-      if (!h.aborted)
+      if (dir === getAutoMemPath() && (isMultiStoreSyncAvailable() || hasOrgMemoryDecisionRunStarted()))
+        await waitForOrgMemoryDecisionSettledOnce(FIRST_STORE_PULL_WAIT_DEADLINE_MS, signal);
+      if (signal.aborted) return [];
+      let { searchMemoryFilesWithIndex } = await import("./chunk-vp5gef34.js");
+      let rn = recallVisibleTeamMounts(dir);
+      let pn = 5 + Math.min(paths.size + 10, 20);
+      let { ranked, stats } = await searchMemoryFilesWithIndex(
+        session,
+        n,
+        dir,
+        signal,
+        pn,
+        loadedIndexExclusions(),
+        w,
+        L,
+        (Kn) => isRecallVisiblePath(Kn, rn),
+      );
+      let ho = recallVisibleTeamMounts(dir);
+      let mapped = ranked
+        .filter(
+          (Kn) => isRecallVisiblePath(relative(dir, Kn.path), ho) && !paths.has(Kn.path) && !G?.(Kn.path),
+        )
+        .slice(0, 5)
+        .map((Kn) => ({
+          path: Kn.path,
+          mtimeMs: Kn.mtimeMs,
+        }));
+      if (!signal.aborted)
         if (!stats.sync.scanCompleted)
-          logFeatureSad("memory_recall_select", "index_sweep_incomplete", { via_index: !0 });
+          logFeatureSad("memory_recall_select", "index_sweep_incomplete", {
+            via_index: true,
+          });
         else if (stats.docCount === 0)
-          logFeatureSad("memory_recall_select", "no_candidates", { via_index: !0 });
+          logFeatureSad("memory_recall_select", "no_candidates", {
+            via_index: true,
+          });
         else {
           let Kn =
             mapped.length > 0
-              ? void 0
+              ? undefined
               : stats.suppressedByFloor
                 ? "below_relevance_floor"
                 : stats.hitCount === 0
@@ -179,9 +141,11 @@ async function selectMemoryRecall(
                     ? "partially_below_floor"
                     : "all_filtered";
           logFeatureOk("memory_recall_select", {
-            via_index: !0,
+            via_index: true,
             selected_count: mapped.length,
-            ...(Kn !== void 0 && { selected_zero_reason: fromEnum(Kn) }),
+            ...(Kn !== undefined && {
+              selected_zero_reason: fromEnum(Kn),
+            }),
             candidate_docs: stats.docCount,
             index_query_term_count: stats.queryTermCount,
             index_hit_count: stats.hitCount,
@@ -197,128 +161,172 @@ async function selectMemoryRecall(
         }
       return mapped;
     } catch (error) {
-      if (!h.aborted)
-        (logFeatureSad("memory_recall_select", "index_query_failed", { via_index: !0 }),
-          logForDebugging(`index recall failed: ${errorMessage(error)}`));
+      if (!signal.aborted) {
+        logFeatureSad("memory_recall_select", "index_query_failed", {
+          via_index: true,
+        });
+        logForDebugging(`index recall failed: ${errorMessage(error)}`);
+      }
       return [];
     }
-  let Me = { type: "ephemeral" },
-    We = r === getAutoMemPath() && isFirstStorePullPending(),
-    ze = XJt(s, r),
-    Je =
-      (Ae ? (ze?.hydrated || We ? ze : void 0) : ze?.memories.length === 0 ? ze : void 0) ??
-      (await (Ae ? scanMemoryFiles(r, h, Z, { regularFilesOnly: we }) : Promise.resolve([])).then((Zt) => {
-        if (h.aborted) return;
-        if (Zt.length > 0) return startMemoryPickerState(s, r, Zt, formatMemoryManifest(Zt), Me, !We);
-        return Ee ? startMemoryPickerState(s, r, [], xxr, Me, !1) : void 0;
-      }));
-  setPickerAccountContext(s, r, Ee, Me, Ie);
-  let nt = Je?.account?.names ?? new Set(),
-    pt = recallVisibleTeamMounts(r),
-    Et = (Zt) => !y.has(Zt.filePath) && isRecallVisiblePath(Zt.filename, pt);
+  let Me = {
+    type: "ephemeral",
+  };
+  let We = dir === getAutoMemPath() && isFirstStorePullPending();
+  let ze = pickerStateForDir(memorySelector, dir);
+  let Je =
+    (Ae ? (ze?.hydrated || We ? ze : undefined) : ze?.memories.length === 0 ? ze : undefined) ??
+    (await (
+      Ae
+        ? scanMemoryFiles(dir, signal, storageV5, {
+            regularFilesOnly,
+          })
+        : Promise.resolve([])
+    ).then((memories) => {
+      if (signal.aborted) return;
+      if (memories.length > 0)
+        return startMemoryPickerState(memorySelector, dir, memories, formatMemoryManifest(memories), Me, !We);
+      return Ee
+        ? startMemoryPickerState(memorySelector, dir, [], NO_LOCAL_MEMORY_TEXT, Me, false)
+        : undefined;
+    }));
+  setPickerAccountContext(memorySelector, dir, Ee, Me, Ie);
+  let nt = Je?.account?.names ?? new Set();
+  let pt = recallVisibleTeamMounts(dir);
+  let Et = (Zt) => !paths.has(Zt.filePath) && isRecallVisiblePath(Zt.filename, pt);
   if (!Je || (!Je.memories.some(Et) && nt.size === 0)) {
-    if (!h.aborted)
+    if (!signal.aborted)
       logFeatureSad(
         "memory_recall_select",
         Je
-          ? Je.memories.some((memory) => !y.has(memory.filePath))
+          ? Je.memories.some((memory) => !paths.has(memory.filePath))
             ? "none_visible"
             : "all_surfaced"
           : "no_candidates",
       );
     return [];
   }
-  let yt = pickerMessages(Je),
-    gt = new Map(Je.memories.map((memory) => [memory.filename, memory])),
-    At = await selectRelevantMemories({
-      query: n,
-      memoryDir: r,
-      selectorCtx: s,
-      history: yt,
-      turnCount: (Je.messages.length - 1) / 2 + 1,
-      byFilename: gt,
-      accountNames: nt,
-      cacheControl: Me,
-      signal: h,
-      credentials: Se,
-      selectorTurnReverts: ke,
-    }),
-    It = recallVisibleTeamMounts(r),
-    Yt = [],
-    qt = [];
-  for (let Zt of At) {
-    let rn = gt.get(Zt);
-    if (rn === void 0) {
-      if (nt.has(Zt)) qt.push({ path: Zt, mtimeMs: 0, account: !0 });
-    } else if (!y.has(rn.filePath) && isRecallVisiblePath(rn.filename, It))
-      (Yt.push(rn), qt.push({ path: rn.filePath, mtimeMs: rn.mtimeMs }));
+  let history = pickerMessages(Je);
+  let gt = new Map(Je.memories.map((memory) => [memory.filename, memory]));
+  let relevantMemories = await selectRelevantMemories({
+    query: n,
+    memoryDir: dir,
+    selectorCtx: memorySelector,
+    history,
+    turnCount: (Je.messages.length - 1) / 2 + 1,
+    byFilename: gt,
+    accountNames: nt,
+    cacheControl: Me,
+    signal,
+    credentials,
+    selectorTurnReverts,
+  });
+  let It = recallVisibleTeamMounts(dir);
+  let Yt = [];
+  let qt = [];
+  for (let relevantMemory of relevantMemories) {
+    let rn = gt.get(relevantMemory);
+    if (rn === undefined) {
+      if (nt.has(relevantMemory))
+        qt.push({
+          path: relevantMemory,
+          mtimeMs: 0,
+          account: true,
+        });
+    } else if (!paths.has(rn.filePath) && isRecallVisiblePath(rn.filename, It)) {
+      Yt.push(rn);
+      qt.push({
+        path: rn.filePath,
+        mtimeMs: rn.mtimeMs,
+      });
+    }
   }
   return qt;
 }
 //@ chunk-e6aww6q8.js:3306754-3306853 placement
-var xxr = "(no local memory files)",
-  regExp_16 = new RegExp(`^\\[(?:${[...MEMORY_TYPES, "account"].join("|")})\\]\\s+`);
+/**
+ * 没有本地记忆时给模型看的占位文字，以及“记忆类型前缀”的匹配正则。
+ */
+var NO_LOCAL_MEMORY_TEXT = "(no local memory files)";
+var regExp_16 = new RegExp(`^\\[(?:${[...MEMORY_TYPES, "account"].join("|")})\\]\\s+`);
 //@ chunk-e6aww6q8.js:3308623-3308633 placement
-var Oxr = 2;
+/**
+ * 2
+ */
+var YIELD_EVERY_N = 2;
 //@ chunk-e6aww6q8.js:3308633-3308829 placement
 function* iterateSelectorModels() {
-  let e = getDefaultSonnetModel();
-  yield e;
-  let n = getMillionTokenCost(e);
-  if (isNoModelFallbackEnabled() || n === void 0) return;
+  let defaultSonnetModel = getDefaultSonnetModel();
+  yield defaultSonnetModel;
+  let millionTokenCost = getMillionTokenCost(defaultSonnetModel);
+  if (isNoModelFallbackEnabled() || millionTokenCost === undefined) return;
   let r = 0;
   for (let s of allowedVersionsInFamilyForProvider("sonnet")) {
-    let h = getMillionTokenCost(s);
-    if (Bn(s) !== Bn(e) && isPermittedByOrgModelPolicy(s) && h !== void 0 && h <= n) {
-      if ((yield s, ++r === Oxr)) return;
+    let millionTokenCost_2 = getMillionTokenCost(s);
+    if (
+      stripAnyVersatileSuffix(s) !== stripAnyVersatileSuffix(defaultSonnetModel) &&
+      isPermittedByOrgModelPolicy(s) &&
+      millionTokenCost_2 !== undefined &&
+      millionTokenCost_2 <= millionTokenCost
+    ) {
+      yield s;
+      if (++r === YIELD_EVERY_N) return;
     }
   }
 }
 //@ chunk-e6aww6q8.js:3308829-3308946 placement
 function getMillionTokenCost(e) {
-  let { usd: usd, pricing: pricing } = calculateCostWithPricingSource(e, {
+  let { usd, pricing } = calculateCostWithPricingSource(e, {
     ...EMPTY_USAGE,
     input_tokens: 1e6,
     output_tokens: 1e6,
   });
-  return pricing === "default" ? void 0 : usd;
+  return pricing === "default" ? undefined : usd;
 }
+//@ chunk-e6aww6q8.js:3308946-3309282 placement
 /**
  * 依次用候选模型执行请求，遇到 API 拒绝时换下一个模型；全部拒绝后抛出最后的错误。
  */
-//@ chunk-e6aww6q8.js:3308946-3309282 placement
-async function tryModelsUntilAccepted(e, n, r) {
-  let s,
-    h = 0,
-    y = e.next();
-  while (y.done !== !0)
+async function tryModelsUntilAccepted(e, n, signal) {
+  let s;
+  let h = 0;
+  let y = e.next();
+  while (y.done !== true)
     try {
-      return { result: await n(y.value), refusals: h };
+      return {
+        result: await n(y.value),
+        refusals: h,
+      };
     } catch (error) {
-      if (r.aborted || !hCn(error)) throw error;
-      ((s = error), h++);
+      if (signal.aborted || !isUnusableSelectorModel(error)) throw error;
+      s = error;
+      h++;
       let w = e.next();
-      (logForDebugging(
-        `[memdir] the API refused the selector request for ${y.value} (${errorMessage(error)}); ${w.done === !0 ? "no model left to try" : `trying ${w.value}`}`,
-        { level: "warn" },
-      ),
-        (y = w));
+      logForDebugging(
+        `[memdir] the API refused the selector request for ${y.value} (${errorMessage(error)}); ${w.done === true ? "no model left to try" : `trying ${w.value}`}`,
+        {
+          level: "warn",
+        },
+      );
+      y = w;
     }
   throw s;
 }
 //@ chunk-e6aww6q8.js:3309282-3309320 placement
-function hCn(e) {
+/**
+ * 模型不存在或无权限
+ */
+function isUnusableSelectorModel(e) {
   return isModelNotFoundError(e) || isModelPermissionDeniedError(e);
 }
-
 export {
   MEMORY_SELECTOR_PROMPT,
   SELECTOR_MAX_TOKENS,
   tryModelsUntilAccepted,
   iterateSelectorModels,
   regExp_16,
-  hCn,
-  uCn,
-  cCn,
+  isUnusableSelectorModel,
+  memoryPickerMaps,
+  memoryPickerSets,
   selectMemoryRecall,
 };

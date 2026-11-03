@@ -9,11 +9,14 @@
  * attribution: placement 3
  */
 import __cc_resource_0 from "../../../assets/SKILL-15dc2cc1.md.zst" with { type: "file" };
-import { Et } from "../../utils/embeddedAssets.js";
+import { readEmbeddedTextSync } from "../../utils/embeddedAssets.js";
 
 //@ chunk-9kwj0cf7.js:303-325 placement
-var t = __cc_resource_0;
+var skillPath = __cc_resource_0;
 //@ chunk-9kwj0cf7.js:325-357 placement
-var s = Et(t, import.meta.dirname);
+var skill = readEmbeddedTextSync(skillPath, import.meta.dirname);
 //@ chunk-9kwj0cf7.js:357-365 placement
-var o = s;
+/**
+ * skillMd 资源导出（SKILL.md 正文）。
+ */
+var skill2 = skill;

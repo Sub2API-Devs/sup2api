@@ -6,26 +6,31 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../runtime/bun-runtime.js";
-import { li } from "../../../protobuf/dist/commonjs/index.js";
-import { Os } from "../../../../@anthropic-ai/bedrock-sdk/core/error.js";
+import { require_protobuf } from "../../../protobuf/dist/commonjs/index.js";
+import { require_error_4 } from "../../../../@anthropic-ai/bedrock-sdk/core/error.js";
 
 //@ chunk-fq0cr76a.js:481955-482325 cjs-fingerprint
-var lB = x(function (aB) {
-  Object.defineProperty(aB, "__esModule", { value: !0 });
-  aB.createTimestamp = Uee;
-  var iB = li(),
-    oB = Os(),
-    Lee = 253402300799n,
-    Bee = -62135596800n,
-    vp = 1000000000n;
-  function Uee(e = 0n, n = 0n) {
-    let r = e * vp + BigInt(n),
-      s = r % vp < 0n ? 1n : 0n,
-      h = r / vp - s,
-      y = Number((r % vp) + s * vp);
-    if (h > Lee || h < Bee) throw Error("timestamp out of range");
-    return iB.create(oB.TimestampSchema, { seconds: h, nanos: y });
+var require_timestamp_2 = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.createTimestamp = createTimestamp;
+  var protobuf_1 = require_protobuf();
+  var wkt_1 = require_error_4();
+  var MAX_TIMESTAMP_SECONDS = 253402300799n;
+  var MIN_TIMESTAMP_SECONDS = -62135596800n;
+  var ONE_SECOND = 1000000000n;
+  function createTimestamp(s_2 = 0n, ns = 0n) {
+    let fullNanos = s_2 * ONE_SECOND + BigInt(ns);
+    let shift = fullNanos % ONE_SECOND < 0n ? 1n : 0n;
+    let seconds = fullNanos / ONE_SECOND - shift;
+    let nanos = Number((fullNanos % ONE_SECOND) + shift * ONE_SECOND);
+    if (seconds > MAX_TIMESTAMP_SECONDS || seconds < MIN_TIMESTAMP_SECONDS)
+      throw Error("timestamp out of range");
+    return protobuf_1.create(wkt_1.TimestampSchema, {
+      seconds,
+      nanos,
+    });
   }
 });
-
-export { lB };
+export { require_timestamp_2 };

@@ -8,44 +8,57 @@
 import { CallToolResultSchema, McpError, ErrorCode } from "../../types.js";
 
 //@ chunk-z1n5m6nf.js:16536-17770 esm-fingerprint
-class Zt {
-  constructor(e) {
-    this._client = e;
+class ExperimentalClientTasks {
+  constructor(_client) {
+    this._client = _client;
   }
-  async *callToolStream(e, r = CallToolResultSchema, n) {
-    let _client = this._client,
-      h = { ...n, task: n?.task ?? (_client.isToolTask(e.name) ? {} : void 0) },
-      requestStream = _client.requestStream({ method: "tools/call", params: e }, r, h),
-      toolOutputValidator = _client.getToolOutputValidator(e.name);
-    for await (let T of requestStream) {
-      if (T.type === "result" && toolOutputValidator) {
-        let M = T.result;
-        if (!M.structuredContent && !M.isError) {
+  async *callToolStream(params, resultSchema = CallToolResultSchema, options) {
+    let clientInternal = this._client;
+    let optionsWithTask = {
+      ...options,
+      task: options?.task ?? (clientInternal.isToolTask(params.name) ? {} : undefined),
+    };
+    let stream = clientInternal.requestStream(
+      {
+        method: "tools/call",
+        params,
+      },
+      resultSchema,
+      optionsWithTask,
+    );
+    let validator = clientInternal.getToolOutputValidator(params.name);
+    for await (let message of stream) {
+      if (message.type === "result" && validator) {
+        let result = message.result;
+        if (!result.structuredContent && !result.isError) {
           yield {
             type: "error",
             error: new McpError(
               ErrorCode.InvalidRequest,
-              `Tool ${e.name} has an output schema but did not return structured content`,
+              `Tool ${params.name} has an output schema but did not return structured content`,
             ),
           };
           return;
         }
-        if (M.structuredContent)
+        if (result.structuredContent)
           try {
-            let w = toolOutputValidator(M.structuredContent);
-            if (!w.valid) {
+            let validationResult = validator(result.structuredContent);
+            if (!validationResult.valid) {
               yield {
                 type: "error",
                 error: new McpError(
                   ErrorCode.InvalidParams,
-                  `Structured content does not match the tool's output schema: ${w.errorMessage}`,
+                  `Structured content does not match the tool's output schema: ${validationResult.errorMessage}`,
                 ),
               };
               return;
             }
           } catch (error) {
             if (error instanceof McpError) {
-              yield { type: "error", error: error };
+              yield {
+                type: "error",
+                error,
+              };
               return;
             }
             yield {
@@ -58,24 +71,46 @@ class Zt {
             return;
           }
       }
-      yield T;
+      yield message;
     }
   }
-  async getTask(e, r) {
-    return this._client.getTask({ taskId: e }, r);
+  async getTask(taskId, options) {
+    return this._client.getTask(
+      {
+        taskId,
+      },
+      options,
+    );
   }
-  async getTaskResult(e, r, n) {
-    return this._client.getTaskResult({ taskId: e }, r, n);
+  async getTaskResult(taskId, resultSchema, options) {
+    return this._client.getTaskResult(
+      {
+        taskId,
+      },
+      resultSchema,
+      options,
+    );
   }
-  async listTasks(e, r) {
-    return this._client.listTasks(e ? { cursor: e } : void 0, r);
+  async listTasks(cursor, options) {
+    return this._client.listTasks(
+      cursor
+        ? {
+            cursor,
+          }
+        : undefined,
+      options,
+    );
   }
-  async cancelTask(e, r) {
-    return this._client.cancelTask({ taskId: e }, r);
+  async cancelTask(taskId, options) {
+    return this._client.cancelTask(
+      {
+        taskId,
+      },
+      options,
+    );
   }
-  requestStream(e, r, n) {
-    return this._client.requestStream(e, r, n);
+  requestStream(request, resultSchema, options) {
+    return this._client.requestStream(request, resultSchema, options);
   }
 }
-
-export { Zt };
+export { ExperimentalClientTasks };

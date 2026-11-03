@@ -25,5 +25,4 @@ class StoredLoginHeldBackError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT
     this.name = "StoredLoginHeldBackError";
   }
 }
-
 export { StoredLoginHeldBackError };

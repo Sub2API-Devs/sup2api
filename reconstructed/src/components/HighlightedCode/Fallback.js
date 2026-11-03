@@ -9,134 +9,194 @@
  * attribution: fingerprint 3, placement 9
  */
 import { extname } from "path";
-import { j } from "../../../vendor/react/cjs/react.production.js";
-import { BRe } from "../../utils/highlight/pluginLanguages.js";
-import { kBe } from "../../ink/colorize.js";
-import { hDt } from "../../utils/pastedContent.js";
-import { XFn, truncateCode, bJe } from "./truncateCode.js";
+import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
+import { pluginHighlightLanguages } from "../../utils/highlight/pluginLanguages.js";
+import { levelGeneration } from "../../ink/colorize.js";
+import { bunHashPair } from "../../utils/pastedContent.js";
+import { MAX_CODE_CHARS, truncateCode, truncatedCharsSuffix } from "./truncateCode.js";
 import { sequential } from "../../utils/sequential.js";
 import { w } from "../../../vendor/react/compiler-runtime.js";
 import { EARLY_RETURN_SENTINEL, MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { convertLeadingTabsToSpaces } from "../../utils/file.js";
-import { e } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Ansi } from "../../ink/components/AnsiText.js";
 import { Text } from "../../ink/components/Text.js";
-import { Sz } from "../../utils/cliHighlight.js";
+import { getCliHighlightModule } from "../../utils/cliHighlight.js";
 import { useFrameRegistry } from "../../ink/renderModeContext.js";
 import { logForDebugging } from "../../utils/debug.js";
-import { Yn } from "../../utils/stripAnsi.js";
+import { stripAnsi } from "../../utils/stripAnsi.js";
 import { listWindow } from "../pluginUi/render/RenderInstance.js";
 
 //@ chunk-yqj79cx2.js:858-862 placement
-j();
+init_react_production();
 //@ chunk-yqj79cx2.js:862-866 placement
-j();
+init_react_production();
 //@ chunk-yqj79cx2.js:898-909 placement
 var HIGHLIGHT_CACHE_SIZE = 500;
 //@ chunk-yqj79cx2.js:909-1332 placement
-function getCachedHighlight(o, a, i, g, u = { left: Number.MAX_SAFE_INTEGER }) {
-  let l = `${g}\x00${BRe.pluginGrammarGeneration}\x00${kBe()}`,
-    d = hDt(l, i),
-    m = o.get(d);
-  if (m !== void 0) {
-    if ((o.delete(d), m.code === i && m.variant === l))
-      return (o.set(d, m), (u.left -= m.work), m.highlighted);
+function getCachedHighlight(
+  highlightedCode,
+  a,
+  text,
+  g,
+  work = {
+    left: Number.MAX_SAFE_INTEGER,
+  },
+) {
+  let l = `${g}\x00${pluginHighlightLanguages.pluginGrammarGeneration}\x00${levelGeneration()}`;
+  let d = bunHashPair(l, text);
+  let m = highlightedCode.get(d);
+  if (m !== undefined) {
+    highlightedCode.delete(d);
+    if (m.code === text && m.variant === l) {
+      highlightedCode.set(d, m);
+      work.left -= m.work;
+      return m.highlighted;
+    }
   }
-  let left = u.left,
-    highlight = a.highlight(i, { language: g, work: u });
-  if (o.size >= HIGHLIGHT_CACHE_SIZE) {
-    let p = o.keys().next().value;
-    if (p !== void 0) o.delete(p);
+  let left = work.left;
+  let c = a.highlight(text, {
+    language: g,
+    work,
+  });
+  if (highlightedCode.size >= HIGHLIGHT_CACHE_SIZE) {
+    let p = highlightedCode.keys().next().value;
+    if (p !== undefined) highlightedCode.delete(p);
   }
-  return (o.set(d, { variant: l, code: i, highlighted: highlight, work: left - u.left }), highlight);
+  highlightedCode.set(d, {
+    variant: l,
+    code: text,
+    highlighted: c,
+    work: left - work.left,
+  });
+  return c;
 }
 //@ chunk-yqj79cx2.js:1332-1539 placement
 function protectLongLines(o) {
   let a = new Map();
-  if (o.length <= XFn) return { text: o, markers: a };
+  if (o.length <= MAX_CODE_CHARS)
+    return {
+      text: o,
+      markers: a,
+    };
   return {
     text: o
       .split(
         `
 `,
       )
-      .map((u, l) => {
-        let { code: code, truncatedChars: truncatedChars } = truncateCode(u);
-        if (truncatedChars > 0) return (a.set(l, bJe(truncatedChars)), code);
-        return u;
+      .map((line, l) => {
+        let { code, truncatedChars } = truncateCode(line);
+        if (truncatedChars > 0) {
+          a.set(l, truncatedCharsSuffix(truncatedChars));
+          return code;
+        }
+        return line;
       }).join(`
 `),
     markers: a,
   };
 }
 //@ chunk-yqj79cx2.js:1539-1660 placement
-function restoreLongLines(o, a) {
-  if (a.size === 0) return o;
+function restoreLongLines(o, markers) {
+  if (markers.size === 0) return o;
   return o
     .split(
       `
 `,
     )
-    .map((i, g) => {
-      let u = a.get(g);
-      return u ? i + sequential.dim(u) : i;
+    .map((line, g) => {
+      let u = markers.get(g);
+      return u ? line + sequential.dim(u) : line;
     }).join(`
 `);
 }
 //@ chunk-yqj79cx2.js:1660-2341 fingerprint = HighlightedCodeFallback (0.837)
-function HighlightedCodeFallback(t0) {
-  let $ = w(16),
-    { code: code, filePath: filePath, dim: t1, skipColoring: t2 } = t0,
-    l = t1 === void 0 ? !1 : t1,
-    d = t2 === void 0 ? !1 : t2,
-    h,
-    c;
-  if ($[0] !== code || $[1] !== l || $[2] !== d) {
+function HighlightedCodeFallback(props) {
+  let $ = w(16);
+  let { code, filePath, dim, skipColoring } = props;
+  let dim_2 = dim === undefined ? false : dim;
+  let skipColoring_2 = skipColoring === undefined ? false : skipColoring;
+  let h;
+  let c;
+  if ($[0] !== code || $[1] !== dim_2 || $[2] !== skipColoring_2) {
     c = EARLY_RETURN_SENTINEL;
     pt: {
       h = convertLeadingTabsToSpaces(code);
-      if (d) {
-        let { text: text, markers: markers } = protectLongLines(h);
-        const f = e(Ansi, { children: restoreLongLines(text, markers) });
+      if (skipColoring_2) {
+        let { text, markers } = protectLongLines(h);
+        const children = jsxProd_default(Ansi, {
+          children: restoreLongLines(text, markers),
+        });
         let W;
-        if ($[5] !== l || $[6] !== f)
-          ((W = e(Text, { dimColor: l, children: f })), ($[5] = l), ($[6] = f), ($[7] = W));
-        else W = $[7];
+        if ($[5] !== dim_2 || $[6] !== children) {
+          W = jsxProd_default(Text, {
+            dimColor: dim_2,
+            children,
+          });
+          $[5] = dim_2;
+          $[6] = children;
+          $[7] = W;
+        } else W = $[7];
         c = W;
         break pt;
       }
     }
-    (($[0] = code), ($[1] = l), ($[2] = d), ($[3] = h), ($[4] = c));
-  } else ((h = $[3]), (c = $[4]));
+    $[0] = code;
+    $[1] = dim_2;
+    $[2] = skipColoring_2;
+    $[3] = h;
+    $[4] = c;
+  } else {
+    h = $[3];
+    c = $[4];
+  }
   if (c !== EARLY_RETURN_SENTINEL) return c;
   let f;
-  if ($[8] !== filePath) ((f = extname(filePath).slice(1)), ($[8] = filePath), ($[9] = f));
-  else f = $[9];
-  let x = f,
-    W;
-  if ($[10] !== h || $[11] !== x)
-    ((W = e(Highlighted, { codeWithSpaces: h, language: x })), ($[10] = h), ($[11] = x), ($[12] = W));
-  else W = $[12];
-  let Z;
-  if ($[13] !== l || $[14] !== W)
-    ((Z = e(Text, { dimColor: l, children: W })), ($[13] = l), ($[14] = W), ($[15] = Z));
-  else Z = $[15];
-  return Z;
+  if ($[8] !== filePath) {
+    f = extname(filePath).slice(1);
+    $[8] = filePath;
+    $[9] = f;
+  } else f = $[9];
+  let language = f;
+  let children;
+  if ($[10] !== h || $[11] !== language) {
+    children = jsxProd_default(Highlighted, {
+      codeWithSpaces: h,
+      language,
+    });
+    $[10] = h;
+    $[11] = language;
+    $[12] = children;
+  } else children = $[12];
+  let t8;
+  if ($[13] !== dim_2 || $[14] !== children) {
+    t8 = jsxProd_default(Text, {
+      dimColor: dim_2,
+      children,
+    });
+    $[13] = dim_2;
+    $[14] = children;
+    $[15] = t8;
+  } else t8 = $[15];
+  return t8;
 }
 //@ chunk-yqj79cx2.js:2341-3066 fingerprint = Highlighted (0.749)
-function Highlighted(t0) {
-  let $ = w(7),
-    { codeWithSpaces: codeWithSpaces, language: language } = t0,
-    u;
-  if ($[0] === MEMO_CACHE_SENTINEL) ((u = Sz()), ($[0] = u));
-  else u = $[0];
-  let l = u,
-    { highlightedCode: highlightedCode } = useFrameRegistry(),
-    pluginGrammarGeneration = BRe.pluginGrammarGeneration,
-    h;
+function Highlighted(props) {
+  let $ = w(7);
+  let { codeWithSpaces, language } = props;
+  let t1;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    t1 = getCliHighlightModule();
+    $[0] = t1;
+  } else t1 = $[0];
+  let l = t1;
+  let { highlightedCode } = useFrameRegistry();
+  let pluginGrammarGeneration = pluginHighlightLanguages.pluginGrammarGeneration;
+  let t2;
   if ($[1] !== codeWithSpaces || $[2] !== highlightedCode || $[3] !== language) {
     pt: {
-      let { text: text, markers: markers } = protectLongLines(codeWithSpaces);
+      let { text, markers } = protectLongLines(codeWithSpaces);
       let highlightLang = "markdown";
       if (language) {
         if (l.supportsLanguage(language)) highlightLang = language;
@@ -146,50 +206,65 @@ function Highlighted(t0) {
           );
       }
       try {
-        h = restoreLongLines(getCachedHighlight(highlightedCode, l, text, highlightLang), markers);
-      } catch (t3) {
-        let W = t3;
-        if (W instanceof Error && W.message.includes("Unknown language")) {
-          h =
+        t2 = restoreLongLines(getCachedHighlight(highlightedCode, l, text, highlightLang), markers);
+      } catch (error) {
+        let e = error;
+        if (e instanceof Error && e.message.includes("Unknown language")) {
+          t2 =
             (logForDebugging(
-              `Language not supported while highlighting code, falling back to markdown: ${W}`,
+              `Language not supported while highlighting code, falling back to markdown: ${e}`,
             ),
             restoreLongLines(getCachedHighlight(highlightedCode, l, text, "markdown"), markers));
           break pt;
         }
-        h = restoreLongLines(text, markers);
+        t2 = restoreLongLines(text, markers);
       }
     }
-    (($[1] = codeWithSpaces), ($[2] = highlightedCode), ($[3] = language), ($[4] = h));
-  } else h = $[4];
-  let x = h,
-    f;
-  if ($[5] !== x) ((f = e(Ansi, { children: x })), ($[5] = x), ($[6] = f));
-  else f = $[6];
-  return f;
+    $[1] = codeWithSpaces;
+    $[2] = highlightedCode;
+    $[3] = language;
+    $[4] = t2;
+  } else t2 = $[4];
+  let out = t2;
+  let t3;
+  if ($[5] !== out) {
+    t3 = jsxProd_default(Ansi, {
+      children: out,
+    });
+    $[5] = out;
+    $[6] = t3;
+  } else t3 = $[6];
+  return t3;
 }
 //@ chunk-yqj79cx2.js:3066-3131 placement
-function Me(Be, Xe) {
-  return e(Text, { children: e(Ansi, { children: Be }) }, Xe);
+function renderFallbackText(children, Xe) {
+  return jsxProd_default(
+    Text,
+    {
+      children: jsxProd_default(Ansi, {
+        children,
+      }),
+    },
+    Xe,
+  );
 }
 //@ chunk-yqj79cx2.js:3131-3154 placement
-function Re() {
+function fallbackLineCount() {
   return 1;
 }
 //@ chunk-yqj79cx2.js:3154-3215 placement
-function Fe(_e, tt) {
-  return tt === 0 || Yn(_e).trim() !== "" ? [tt] : [];
+function visibleLineIndexes(_e, tt) {
+  return tt === 0 || stripAnsi(_e).trim() !== "" ? [tt] : [];
 }
 //@ chunk-18hwfzwa.js:483909-483958 fingerprint = cachedHighlight (0.549)
-var cachedHighlight = (h, x) => (h === null ? 0 : listWindow(x, h.highlight).rows);
-
+var cachedHighlight = (open, x) => (open === null ? 0 : listWindow(x, open.highlight).rows);
 export {
   cachedHighlight,
-  Me,
+  renderFallbackText,
   HighlightedCodeFallback,
   protectLongLines,
   restoreLongLines,
-  Re,
-  Fe,
+  fallbackLineCount,
+  visibleLineIndexes,
   getCachedHighlight,
 };

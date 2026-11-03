@@ -8,46 +8,45 @@
 import { qgs } from "../../../../../zod/v4/core/parse.js";
 
 //@ chunk-zykv69v4.js:10458-10489 esm-fingerprint
-function $Qe(e) {
+function isZ4Schema(e) {
   return !!e._zod;
 }
 //@ chunk-zykv69v4.js:10489-10554 esm-fingerprint
-function q7(e, t) {
-  if ($Qe(e)) return qgs(e, t);
-  return e.safeParse(t);
+function objectFromShape(shape, t) {
+  if (isZ4Schema(shape)) return qgs(shape, t);
+  return shape.safeParse(t);
 }
 //@ chunk-zykv69v4.js:10554-10710 esm-fingerprint
-function J$t(e) {
-  if (!e) return;
-  let t;
-  if ($Qe(e)) t = e._zod?.def?.shape;
-  else t = e.shape;
-  if (!t) return;
-  if (typeof t === "function")
+function J$t(schema) {
+  if (!schema) return;
+  let rawShape;
+  if (isZ4Schema(schema)) rawShape = schema._zod?.def?.shape;
+  else rawShape = schema.shape;
+  if (!rawShape) return;
+  if (typeof rawShape === "function")
     try {
-      return t();
+      return rawShape();
     } catch {
       return;
     }
-  return t;
+  return rawShape;
 }
 //@ chunk-zykv69v4.js:10710-11023 esm-fingerprint
-function H(e) {
-  if ($Qe(e)) {
-    let s = e._zod?.def;
-    if (s) {
-      if (s.value !== void 0) return s.value;
-      if (Array.isArray(s.values) && s.values.length > 0) return s.values[0];
+function H(methodSchema) {
+  if (isZ4Schema(methodSchema)) {
+    let def = methodSchema._zod?.def;
+    if (def) {
+      if (def.value !== undefined) return def.value;
+      if (Array.isArray(def.values) && def.values.length > 0) return def.values[0];
     }
   }
-  let _def = e._def;
-  if (_def) {
-    if (_def.value !== void 0) return _def.value;
-    if (Array.isArray(_def.values) && _def.values.length > 0) return _def.values[0];
+  let def = methodSchema._def;
+  if (def) {
+    if (def.value !== undefined) return def.value;
+    if (Array.isArray(def.values) && def.values.length > 0) return def.values[0];
   }
-  let a = e.value;
-  if (a !== void 0) return a;
+  let directValue = methodSchema.value;
+  if (directValue !== undefined) return directValue;
   return;
 }
-
-export { J$t, $Qe, q7, H };
+export { J$t, isZ4Schema, objectFromShape, H };

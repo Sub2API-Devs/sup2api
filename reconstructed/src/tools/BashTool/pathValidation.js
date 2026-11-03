@@ -8,423 +8,8 @@
  * pieces: chunk-e6aww6q8.js (56)
  * attribution: fingerprint 12, file-local 3, layout 33, sole-consumer 2, affinity 3, placement 3
  */
-import {
-  isAbsolute,
-  isAbsolute as isAbsolute_2,
-  isAbsolute as isAbsolute_3,
-  isAbsolute as isAbsolute_4,
-  isAbsolute as isAbsolute_5,
-  isAbsolute as isAbsolute_6,
-  isAbsolute as isAbsolute_7,
-  isAbsolute as isAbsolute_8,
-  isAbsolute as isAbsolute_9,
-  isAbsolute as isAbsolute_10,
-  isAbsolute as isAbsolute_11,
-  isAbsolute as isAbsolute_12,
-  isAbsolute as isAbsolute_13,
-  isAbsolute as isAbsolute_14,
-  isAbsolute as isAbsolute_15,
-  isAbsolute as isAbsolute_16,
-  isAbsolute as isAbsolute_17,
-  isAbsolute as isAbsolute_18,
-  isAbsolute as isAbsolute_19,
-  isAbsolute as isAbsolute_20,
-  isAbsolute as isAbsolute_21,
-  isAbsolute as isAbsolute_22,
-  isAbsolute as isAbsolute_23,
-  isAbsolute as isAbsolute_24,
-  isAbsolute as isAbsolute_25,
-  isAbsolute as isAbsolute_26,
-  isAbsolute as isAbsolute_27,
-  isAbsolute as isAbsolute_28,
-  isAbsolute as isAbsolute_29,
-  isAbsolute as isAbsolute_30,
-  isAbsolute as isAbsolute_31,
-  isAbsolute as isAbsolute_32,
-  isAbsolute as isAbsolute_33,
-  isAbsolute as isAbsolute_34,
-  isAbsolute as isAbsolute_35,
-  isAbsolute as isAbsolute_36,
-  isAbsolute as isAbsolute_37,
-  isAbsolute as isAbsolute_38,
-  isAbsolute as isAbsolute_39,
-  isAbsolute as isAbsolute_40,
-  isAbsolute as isAbsolute_42,
-  isAbsolute as isAbsolute_43,
-  isAbsolute as isAbsolute_44,
-  isAbsolute as isAbsolute_45,
-  isAbsolute as isAbsolute_46,
-  isAbsolute as isAbsolute_47,
-  isAbsolute as isAbsolute_48,
-  isAbsolute as isAbsolute_49,
-  isAbsolute as isAbsolute_50,
-  isAbsolute as isAbsolute_51,
-  isAbsolute as isAbsolute_52,
-  isAbsolute as isAbsolute_53,
-  isAbsolute as isAbsolute_54,
-  isAbsolute as isAbsolute_55,
-  isAbsolute as isAbsolute_56,
-  isAbsolute as isAbsolute_57,
-  resolve as resolve_2,
-  resolve as resolve_3,
-  resolve as resolve_4,
-  resolve as resolve_5,
-  resolve as resolve_6,
-  resolve as resolve_7,
-  resolve as resolve_8,
-  resolve as resolve_9,
-  resolve as resolve_10,
-  resolve as resolve_11,
-  resolve as resolve_12,
-  resolve as resolve_13,
-  resolve as resolve_14,
-  resolve as resolve_15,
-  resolve as resolve_16,
-  resolve as resolve_17,
-  resolve as resolve_18,
-  resolve as resolve_19,
-  resolve as resolve_20,
-  resolve as resolve_21,
-  resolve as resolve_22,
-  resolve as resolve_23,
-  resolve as resolve_24,
-  resolve as resolve_25,
-  resolve as resolve_26,
-  resolve as resolve_27,
-  resolve as resolve_28,
-  resolve as resolve_29,
-  resolve as resolve_30,
-  resolve as resolve_31,
-  resolve as resolve_32,
-  resolve as resolve_33,
-  resolve as resolve_34,
-  resolve as resolve_35,
-  resolve as resolve_36,
-  resolve as resolve_37,
-  resolve as resolve_38,
-  resolve as resolve_39,
-  resolve as resolve_40,
-  resolve as resolve_41,
-  resolve as resolve_42,
-  resolve as resolve_43,
-  resolve as resolve_44,
-  resolve as resolve_45,
-  resolve as resolve_46,
-  resolve as resolve_47,
-  resolve as resolve_48,
-  resolve as resolve_49,
-  resolve as resolve_50,
-  resolve as resolve_51,
-  resolve as resolve_52,
-  resolve as resolve_53,
-  resolve as resolve_54,
-  resolve as resolve_55,
-  resolve as resolve_56,
-  resolve as resolve_57,
-  resolve as resolve_58,
-  resolve as resolve_59,
-  resolve as resolve_60,
-  normalize,
-  normalize as normalize_2,
-  normalize as normalize_3,
-  normalize as normalize_4,
-  normalize as normalize_5,
-  normalize as normalize_6,
-  normalize as normalize_7,
-  normalize as normalize_8,
-  normalize as normalize_9,
-  sep,
-  sep as sep_2,
-  sep as sep_3,
-  sep as sep_4,
-  sep as sep_5,
-  sep as sep_6,
-  sep as sep_7,
-  sep as sep_8,
-  sep as sep_9,
-  sep as sep_10,
-  sep as sep_11,
-  sep as sep_12,
-  sep as sep_13,
-  sep as sep_14,
-  sep as sep_15,
-  sep as sep_16,
-  sep as sep_17,
-  sep as sep_18,
-  sep as sep_19,
-  sep as sep_20,
-  sep as sep_21,
-  sep as sep_22,
-  sep as sep_23,
-  sep as sep_24,
-  sep as sep_25,
-  sep as sep_26,
-  sep as sep_27,
-  sep as sep_28,
-  sep as sep_29,
-  sep as sep_30,
-  sep as sep_31,
-  sep as sep_32,
-  sep as sep_33,
-  sep as sep_34,
-  sep as sep_35,
-  sep as sep_36,
-  sep as sep_37,
-  sep as sep_38,
-  sep as sep_39,
-  sep as sep_40,
-  sep as sep_41,
-  sep as sep_42,
-  sep as sep_43,
-  sep as sep_44,
-  sep as sep_45,
-  sep as sep_46,
-  sep as sep_47,
-  sep as sep_48,
-  sep as sep_49,
-  sep as sep_50,
-  sep as sep_51,
-  sep as sep_52,
-  sep as sep_53,
-  sep as sep_54,
-  sep as sep_55,
-  sep as sep_56,
-  sep as sep_57,
-  sep as sep_58,
-  sep as sep_59,
-  sep as sep_60,
-  sep as sep_61,
-  sep as sep_62,
-  sep as sep_63,
-  sep as sep_64,
-  sep as sep_65,
-  sep as sep_66,
-  sep as sep_67,
-  sep as sep_68,
-  sep as sep_69,
-  sep as sep_70,
-  sep as sep_71,
-  sep as sep_72,
-  sep as sep_73,
-  posix,
-  posix as posix_2,
-  posix as posix_3,
-  posix as posix_4,
-  posix as posix_5,
-  posix as posix_6,
-  posix as posix_7,
-  posix as posix_8,
-  posix as posix_9,
-  posix as posix_10,
-  posix as posix_11,
-  posix as posix_12,
-  basename,
-  basename as basename_2,
-  basename as basename_3,
-  basename as basename_4,
-  basename as basename_5,
-  basename as basename_6,
-  basename as basename_7,
-  basename as basename_8,
-  basename as basename_9,
-  basename as basename_10,
-  basename as basename_11,
-  basename as basename_12,
-  basename as basename_13,
-  basename as basename_14,
-  basename as basename_15,
-  basename as basename_16,
-  basename as basename_17,
-  basename as basename_18,
-  basename as basename_19,
-  basename as basename_20,
-  basename as basename_21,
-  basename as basename_22,
-  basename as basename_23,
-  basename as basename_24,
-  basename as basename_25,
-  basename as basename_26,
-  basename as basename_27,
-  basename as basename_28,
-  basename as basename_29,
-  basename as basename_30,
-  basename as basename_31,
-  basename as basename_32,
-  basename as basename_33,
-  basename as basename_34,
-  basename as basename_35,
-  basename as basename_36,
-  basename as basename_37,
-  basename as basename_38,
-  basename as basename_39,
-  basename as basename_40,
-  basename as basename_41,
-  basename as basename_42,
-  basename as basename_43,
-  basename as basename_45,
-  basename as basename_46,
-  basename as basename_47,
-  basename as basename_48,
-  basename as basename_49,
-  basename as basename_50,
-  basename as basename_51,
-  basename as basename_52,
-  basename as basename_53,
-  basename as basename_54,
-  basename as basename_55,
-  basename as basename_56,
-  basename as basename_57,
-  basename as basename_58,
-  basename as basename_59,
-  basename as basename_60,
-  basename as basename_61,
-  basename as basename_62,
-  basename as basename_63,
-  basename as basename_64,
-  basename as basename_65,
-  basename as basename_66,
-  basename as basename_67,
-  basename as basename_68,
-  relative,
-  relative as relative_2,
-  relative as relative_3,
-  relative as relative_4,
-  relative as relative_5,
-  relative as relative_6,
-  relative as relative_7,
-  relative as relative_8,
-  relative as relative_9,
-  relative as relative_10,
-  relative as relative_11,
-  relative as relative_12,
-  relative as relative_13,
-  relative as relative_14,
-  relative as relative_15,
-  relative as relative_16,
-  relative as relative_17,
-  relative as relative_18,
-  relative as relative_19,
-  relative as relative_20,
-  relative as relative_21,
-  relative as relative_22,
-  relative as relative_23,
-  relative as relative_24,
-  relative as relative_25,
-  relative as relative_26,
-  relative as relative_27,
-  relative as relative_28,
-  relative as relative_29,
-  relative as relative_30,
-  relative as relative_31,
-  relative as relative_32,
-  relative as relative_33,
-  relative as relative_34,
-  relative as relative_35,
-  relative as relative_36,
-  relative as relative_37,
-  relative as relative_38,
-  relative as relative_39,
-  relative as relative_40,
-  relative as relative_41,
-  relative as relative_42,
-  relative as relative_43,
-  relative as relative_44,
-  relative as relative_45,
-  relative as relative_46,
-  relative as relative_47,
-  relative as relative_48,
-  dirname,
-  dirname as dirname_2,
-  dirname as dirname_3,
-  dirname as dirname_4,
-  dirname as dirname_5,
-  dirname as dirname_6,
-  dirname as dirname_7,
-  dirname as dirname_8,
-  dirname as dirname_9,
-  dirname as dirname_10,
-  dirname as dirname_11,
-  dirname as dirname_12,
-  dirname as dirname_13,
-  dirname as dirname_14,
-  dirname as dirname_15,
-  dirname as dirname_16,
-  dirname as dirname_17,
-  dirname as dirname_18,
-  dirname as dirname_19,
-  dirname as dirname_20,
-  dirname as dirname_21,
-  dirname as dirname_22,
-  dirname as dirname_23,
-  dirname as dirname_24,
-  dirname as dirname_25,
-  dirname as dirname_26,
-  dirname as dirname_27,
-  dirname as dirname_28,
-  dirname as dirname_29,
-  dirname as dirname_30,
-  dirname as dirname_31,
-  dirname as dirname_32,
-  dirname as dirname_33,
-  dirname as dirname_34,
-  dirname as dirname_35,
-  dirname as dirname_36,
-  dirname as dirname_37,
-  dirname as dirname_38,
-  dirname as dirname_39,
-  dirname as dirname_40,
-  dirname as dirname_41,
-  dirname as dirname_42,
-  dirname as dirname_43,
-  dirname as dirname_44,
-  dirname as dirname_45,
-  dirname as dirname_46,
-  dirname as dirname_47,
-  dirname as dirname_48,
-  dirname as dirname_49,
-  dirname as dirname_50,
-  dirname as dirname_51,
-  dirname as dirname_52,
-  dirname as dirname_53,
-  dirname as dirname_54,
-  dirname as dirname_55,
-  dirname as dirname_56,
-  dirname as dirname_57,
-  dirname as dirname_58,
-  dirname as dirname_59,
-  dirname as dirname_60,
-  dirname as dirname_61,
-  dirname as dirname_62,
-  dirname as dirname_63,
-  dirname as dirname_64,
-  dirname as dirname_65,
-  dirname as dirname_66,
-  dirname as dirname_67,
-  dirname as dirname_68,
-  dirname as dirname_69,
-  dirname as dirname_70,
-  dirname as dirname_71,
-  dirname as dirname_72,
-  dirname as dirname_73,
-  dirname as dirname_74,
-  dirname as dirname_75,
-  dirname as dirname_76,
-  dirname as dirname_77,
-} from "path";
-import {
-  homedir,
-  homedir as homedir_2,
-  homedir as homedir_3,
-  homedir as homedir_4,
-  homedir as homedir_5,
-  homedir as homedir_6,
-  homedir as homedir_7,
-  homedir as homedir_8,
-  homedir as homedir_9,
-  homedir as homedir_10,
-  homedir as homedir_11,
-  homedir as homedir_12,
-} from "os";
+import { isAbsolute, resolve as resolve_2, normalize, sep, posix, basename, relative, dirname } from "path";
+import { homedir } from "os";
 import {
   safeResolvePath,
   getFsImplementation,
@@ -449,7 +34,7 @@ import {
   hardDeniedAsSpelled,
 } from "../../utils/permissions/filesystem.js";
 import {
-  Z7,
+  isDangerousRmEnabled,
   dangerousRemovalAsk,
   EMPTY_EXPANSION_HINT,
   DRIVE_ROOT_PREFIX,
@@ -461,10 +46,14 @@ import {
   redactPlaceholdersForDisplay,
   awkProgramHasExecBridge,
   isFindDangerousAction,
-  INPUT_REDIRECT_OPS,
+  INPUT_REDIRECT_OPS_2,
 } from "../../utils/bash/ast.js";
-import { TRACKED_VAR_TOP_LEVEL_RE, mye, S2t } from "./expansionAnalysis.js";
-import { Lu } from "../../utils/networkPaths.js";
+import {
+  TRACKED_VAR_TOP_LEVEL_RE,
+  isDangerousRemovalTarget,
+  matchesPathOrWindowsDrive,
+} from "./expansionAnalysis.js";
+import { expandTildeWithHome } from "../../utils/networkPaths.js";
 import {
   hasInteriorDotDot,
   validatePath,
@@ -475,7 +64,7 @@ import {
   internalDenyShellAskReason,
   globBeforeInteriorDotDot,
 } from "../../utils/permissions/pathValidation.js";
-import { Qn } from "../../utils/pathClassification.js";
+import { isUncOrDevicePath } from "../../utils/pathClassification.js";
 import { env } from "../../utils/env.js";
 import {
   outsideReadsRuntimePathAsk,
@@ -498,34 +87,34 @@ import { containsVulnerableUncPath } from "../../utils/shell/readOnlyCommandVali
 import { getOriginalCwd } from "../../bootstrap/state.js";
 import { NON_CREATING_WRITE_COMMANDS } from "./readOnlyValidation.js";
 
+//@ chunk-e6aww6q8.js:1070212-1074425 fingerprint = checkDangerousRemovalPaths (0.381)
 /**
  * rm/rmdir 危险目标检查：可能为空的变量 + 顶层目录名、反斜杠根、cd 后的相对通配、无法静态解析的通配目标、关键系统目录、工作目录及其祖先、挂载盘根（CLAUDE_CODE_DISABLE_MOUNTED_DRIVE_RM_PROMPT 可关）、跨多层的通配；命中返回不可被规则自动允许的 ask。
  */
-//@ chunk-e6aww6q8.js:1070212-1074425 fingerprint = checkDangerousRemovalPaths (0.381)
 function checkDangerousRemovalPaths(command, args, cwd, toolPermissionContext, cdBeforeRemoval) {
-  let extractor = PATH_EXTRACTORS[command],
-    paths = extractor(args),
-    { resolvedPath: resolvedPath } = safeResolvePath(getFsImplementation(), cwd),
-    L = resolvedPath === cwd ? [cwd] : [cwd, resolvedPath],
-    G = uniq(
-      [...L, ...(toolPermissionContext ? allWorkingDirectories(toolPermissionContext) : [])].flatMap((we) => {
-        let { resolvedPath: resolvedPath } = safeResolvePath(getFsImplementation(), we);
-        return resolvedPath === we ? [we] : [we, resolvedPath];
-      }),
-    ),
-    q = Z7(),
-    any = (args.includes("--") ? args.slice(0, args.indexOf("--")) : args).some(
-      (we) =>
-        /^--r|^-[a-zA-Z]*[rR]/.test(we) ||
-        (!we.includes("/") &&
-          (we.includes("__CMDSUB__") || containsAnyPlaceholder(we)) &&
-          /^(?:-|__(?:CMDSUB(?:_OUTPUT)?|TRACKED_VAR)__)/.test(we)),
-    ),
-    ke;
+  let extractor = PATH_EXTRACTORS[command];
+  let paths = extractor(args);
+  let { resolvedPath } = safeResolvePath(getFsImplementation(), cwd);
+  let L = resolvedPath === cwd ? [cwd] : [cwd, resolvedPath];
+  let G = uniq(
+    [...L, ...(toolPermissionContext ? allWorkingDirectories(toolPermissionContext) : [])].flatMap((we) => {
+      let { resolvedPath } = safeResolvePath(getFsImplementation(), we);
+      return resolvedPath === we ? [we] : [we, resolvedPath];
+    }),
+  );
+  let q = isDangerousRmEnabled();
+  let any = (args.includes("--") ? args.slice(0, args.indexOf("--")) : args).some(
+    (we) =>
+      /^--r|^-[a-zA-Z]*[rR]/.test(we) ||
+      (!we.includes("/") &&
+        (we.includes("__CMDSUB__") || containsAnyPlaceholder(we)) &&
+        /^(?:-|__(?:CMDSUB(?:_OUTPUT)?|TRACKED_VAR)__)/.test(we)),
+  );
+  let ke;
   for (let path of paths) {
     if (q) {
       let ze = TRACKED_VAR_TOP_LEVEL_RE.exec(path)?.[1];
-      if (ze !== void 0) {
+      if (ze !== undefined) {
         let cleanPath = redactPlaceholdersForDisplay(path);
         return dangerousRemovalAsk(
           command,
@@ -548,16 +137,16 @@ Write the directory you mean as a path, for example /c/work/build or C:/work/bui
           `${DRIVE_ROOT_PREFIX}${path}`,
         );
     }
-    let Ee = Lu(path),
-      Ae = isAbsolute_22(Ee) ? Ee : resolve_19(cwd, Ee),
-      Ie = Ae;
+    let Ee = expandTildeWithHome(path);
+    let Ae = isAbsolute(Ee) ? Ee : resolve_2(cwd, Ee);
+    let Ie = Ae;
     for (let ze = ""; ze !== Ie;) {
       ze = Ie;
       let lt = Ie.replace(/([\\/]\*+)+[\\/]*$/, "") || "/";
-      if (lt !== Ie) Ie = /[\\/]/.test(lt) ? normalize_3(lt) : lt;
+      if (lt !== Ie) Ie = /[\\/]/.test(lt) ? normalize(lt) : lt;
     }
     let Me = Ie !== Ae;
-    if (cdBeforeRemoval && Me && !isAbsolute_22(Ee) && /[\\/]\*$/.test(Ae))
+    if (cdBeforeRemoval && Me && !isAbsolute(Ee) && /[\\/]\*$/.test(Ae))
       return dangerousRemovalAsk(
         command,
         `Dangerous ${command} operation detected: '${Ae}'
@@ -566,8 +155,8 @@ This command changes directories before the removal, so the relative glob target
         `on statically-unresolvable target: ${Ae}`,
       );
     let We = Ie;
-    if (!isAbsolute_22(Ee)) {
-      let ze = /[\\/]$/.test(cwd) ? cwd : cwd + sep_29;
+    if (!isAbsolute(Ee)) {
+      let ze = /[\\/]$/.test(cwd) ? cwd : cwd + sep;
       if (Ie.startsWith(ze)) We = Ie.slice(ze.length);
       else if (Ie === cwd) We = "";
     }
@@ -576,12 +165,12 @@ This command changes directories before the removal, so the relative glob target
       (hasInteriorDotDot(Ee) ||
         containsAnyPlaceholder(Ae) ||
         Ee.startsWith("~") ||
-        Qn(Ee) ||
-        (!isAbsolute_22(Ee) && /(^|[\\/])\.\.([\\/]|$)/.test(Ee) && /[\\/]\*$/.test(Ae)) ||
+        isUncOrDevicePath(Ee) ||
+        (!isAbsolute(Ee) && /(^|[\\/])\.\.([\\/]|$)/.test(Ee) && /[\\/]\*$/.test(Ae)) ||
         (command === "rmdir" &&
           /[\\/]\*$/.test(Ae) &&
-          args.some((ze) => /^--p/.test(ze) || /^-[a-z]*p/.test(ze))) ||
-        (!isAbsolute_22(Ee) && /\*[\\/]+$/.test(Ee) && /[\\/]\*$/.test(Ae)))
+          args.some((arg) => /^--p/.test(arg) || /^-[a-z]*p/.test(arg))) ||
+        (!isAbsolute(Ee) && /\*[\\/]+$/.test(Ee) && /[\\/]\*$/.test(Ae)))
     )
       return dangerousRemovalAsk(
         command,
@@ -593,11 +182,11 @@ This command's removal target cannot be statically resolved to a directory. This
     if (!Me || !/[*?[]/.test(We)) {
       let ze = [Ie];
       if (Ie !== Ae) {
-        let { resolvedPath: resolvedPath } = safeResolvePath(getFsImplementation(), Ie);
+        let { resolvedPath } = safeResolvePath(getFsImplementation(), Ie);
         if (resolvedPath !== Ie) ze.push(resolvedPath);
       }
       for (let lt of ze) {
-        if (mye(lt))
+        if (isDangerousRemovalTarget(lt))
           return dangerousRemovalAsk(
             command,
             `Dangerous ${command} operation detected: '${Ae}'
@@ -606,7 +195,7 @@ This command would remove a critical system directory. This requires explicit ap
             `on critical path: ${Ae}`,
           );
         let Je = Me ? G : L;
-        if (S2t(lt, (nt) => Je.some((pt) => pathInWorkingPath(pt, nt))))
+        if (matchesPathOrWindowsDrive(lt, (nt) => Je.some((pt) => pathInWorkingPath(pt, nt))))
           return dangerousRemovalAsk(
             command,
             `Dangerous ${command} operation detected: '${Ae}'
@@ -616,13 +205,13 @@ This command would remove a workspace directory (the working directory, an addit
           );
       }
       if (
-        ke === void 0 &&
+        ke === undefined &&
         q &&
         !env.CLAUDE_CODE_DISABLE_MOUNTED_DRIVE_RM_PROMPT &&
         command === "rm" &&
         (any || Me) &&
         ze.some((lt) => {
-          let replaced = posix_6.normalize(lt).replace(/(.)\/$/, "$1");
+          let replaced = posix.normalize(lt).replace(/(.)\/$/, "$1");
           return lt.startsWith("/") && MOUNTED_VOLUME_PATH_RE.test(replaced);
         })
       ) {
@@ -640,9 +229,9 @@ If you meant something deeper inside, name it by its full path.`,
     }
     if (Me && /[\\/]\*$/.test(Ae)) {
       let ze =
-          count(Ae.split(/[\\/]+/), (Je) => Je && Je !== ".") -
-          count(Ie.split(/[\\/]+/), (Je) => Je && Je !== "."),
-        lt = count(We.split(/[\\/]+/), (Je) => /[*?[]/.test(Je));
+        count(Ae.split(/[\\/]+/), (Je) => Je && Je !== ".") -
+        count(Ie.split(/[\\/]+/), (Je) => Je && Je !== ".");
+      let lt = count(We.split(/[\\/]+/), (Je) => /[*?[]/.test(Je));
       if (ze + lt > 1)
         return dangerousRemovalAsk(
           command,
@@ -653,26 +242,34 @@ This command's glob pattern traverses directories that cannot be statically enum
         );
     }
   }
-  return ke ?? { behavior: "passthrough", message: `No dangerous removals detected for ${command} command` };
+  return (
+    ke ?? {
+      behavior: "passthrough",
+      message: `No dangerous removals detected for ${command} command`,
+    }
+  );
 }
+//@ chunk-e6aww6q8.js:1090073-1090223 file-local
 /**
  * 去掉 argv 中的选项，返回从第一个位置参数（或 -- 之后）开始的参数。
  */
-//@ chunk-e6aww6q8.js:1090073-1090223 file-local
 function filterOutFlags(args) {
-  let result = [],
-    r = !1,
-    s = !1;
+  let result = [];
+  let r = false;
+  let s = false;
   for (let arg of args)
     if (r || s) result.push(arg);
-    else if (arg === "--") r = !0;
-    else if (arg === "-" || !arg?.startsWith("-")) (result.push(arg), (s = !0));
+    else if (arg === "--") r = true;
+    else if (arg === "-" || !arg?.startsWith("-")) {
+      result.push(arg);
+      s = true;
+    }
   return result;
 }
+//@ chunk-e6aww6q8.js:1090223-1090994 layout
 /**
  * 按命令的选项规格（布尔/带值/粘连，长短）生成路径提取器：跳过选项及其值，遇到未知选项后不再跳选项。
  */
-//@ chunk-e6aww6q8.js:1090223-1090994 layout
 function makeFlagAwarePathExtractor(e) {
   let n = (r) => {
     if (r.startsWith("--")) {
@@ -682,31 +279,34 @@ function makeFlagAwarePathExtractor(e) {
       return e.valuedLong.has(r) ? "valued" : "unknown";
     }
     if (/^-\d+$/.test(r)) return "attached";
-    for (let s = 1; s < r.length; s++) {
-      let h = r[s];
+    for (let idx = 1; idx < r.length; idx++) {
+      let h = r[idx];
       if (e.booleanShort.includes(h)) continue;
       if (e.attachedShort?.includes(h)) return "attached";
       if (!e.valuedShort.includes(h)) return "unknown";
-      return s === r.length - 1 ? "valued" : "attached";
+      return idx === r.length - 1 ? "valued" : "attached";
     }
     return "boolean";
   };
   return (r) => {
-    let s = [],
-      h = !1,
-      y = !1,
-      S = !0;
-    for (let w = 0; w < r.length; w++) {
-      let L = r[w];
-      if (L === void 0 || L === null) continue;
+    let s = [];
+    let h = false;
+    let y = false;
+    let S = true;
+    for (let idx = 0; idx < r.length; idx++) {
+      let L = r[idx];
+      if (L === undefined || L === null) continue;
       if (h || y) s.push(L);
-      else if (L === "--") h = !0;
+      else if (L === "--") h = true;
       else if (L !== "-" && L.startsWith("-")) {
         if (!S) continue;
         let G = n(L);
-        if (G === "valued") w++;
-        else if (G === "unknown") S = !1;
-      } else (s.push(L), (y = !0));
+        if (G === "valued") idx++;
+        else if (G === "unknown") S = false;
+      } else {
+        s.push(L);
+        y = true;
+      }
     }
     return s;
   };
@@ -717,61 +317,66 @@ var DEVICE_PATHS = new Set(["/dev/null", "/dev/stdout", "/dev/stderr", "/dev/tty
 function filterDevicePaths(e) {
   return e.filter((n) => !DEVICE_PATHS.has(n));
 }
+//@ chunk-e6aww6q8.js:1091114-1091981 fingerprint = parsePatternCommand (0.526)
 /**
  * grep 类命令的路径提取：第一个位置参数是模式（有 -e/-f 时不是），-f/--file/--exclude-from 等的值也算路径；无路径时返回默认值。
  */
-//@ chunk-e6aww6q8.js:1091114-1091981 fingerprint = parsePatternCommand (0.526)
 function parsePatternCommand(args, flagsWithArgs, defaults = []) {
-  let paths = [],
-    h = !1,
-    y = !1,
-    S = !1;
-  for (let w = 0; w < args.length; w++) {
-    let L = args[w];
-    if (L === void 0 || L === null) continue;
+  let paths = [];
+  let h = false;
+  let y = false;
+  let S = false;
+  for (let idx = 0; idx < args.length; idx++) {
+    let L = args[idx];
+    if (L === undefined || L === null) continue;
     if (!y && !S && L === "--") {
-      y = !0;
+      y = true;
       continue;
     }
     if (!y && !S && L !== "-" && L.startsWith("-")) {
-      let index = L.indexOf("="),
-        q = index >= 0 ? L.slice(0, index) : L;
+      let index = L.indexOf("=");
+      let q = index >= 0 ? L.slice(0, index) : L;
       if (["-e", "--regexp", "-f", "--file"].includes(q)) {
-        if (((h = !0), q === "-f" || q === "--file")) {
-          let Z = index >= 0 ? L.slice(index + 1) : args[w + 1];
+        h = true;
+        if (q === "-f" || q === "--file") {
+          let Z = index >= 0 ? L.slice(index + 1) : args[idx + 1];
           if (Z) paths.push(Z);
         }
       }
-      if (/^-[a-zA-Z]*f$/.test(q) && q !== "-f" && index < 0 && args[w + 1] !== void 0) {
-        ((h = !0), paths.push(args[w + 1]), w++);
+      if (/^-[a-zA-Z]*f$/.test(q) && q !== "-f" && index < 0 && args[idx + 1] !== undefined) {
+        h = true;
+        paths.push(args[idx + 1]);
+        idx++;
         continue;
       }
       if (["--exclude-from", "--include-from", "--ignore-file"].includes(q)) {
-        let Z = index >= 0 ? L.slice(index + 1) : args[w + 1];
+        let Z = index >= 0 ? L.slice(index + 1) : args[idx + 1];
         if (Z) paths.push(Z);
-        if (index < 0) w++;
+        if (index < 0) idx++;
         continue;
       }
       if (index < 0) {
-        let Z = getAttachedFlagValue(L, ["-f", "--file"]);
-        if (Z !== void 0) {
-          ((h = !0), paths.push(Z));
+        let attachedFlagValue = getAttachedFlagValue(L, ["-f", "--file"]);
+        if (attachedFlagValue !== undefined) {
+          h = true;
+          paths.push(attachedFlagValue);
           continue;
         }
         if (L.length > 2 && L.startsWith("-e")) {
-          h = !0;
+          h = true;
           continue;
         }
       }
-      if (flagsWithArgs.has(q) && index < 0) w++;
+      if (flagsWithArgs.has(q) && index < 0) idx++;
       continue;
     }
     if (S && !y) {
-      let G = getAttachedFlagValue(L, ["-f", "--file"]);
-      if (G !== void 0) paths.push(G);
+      let attachedFlagValue = getAttachedFlagValue(L, ["-f", "--file"]);
+      if (attachedFlagValue !== undefined) paths.push(attachedFlagValue);
     }
-    if (((S = !0), !h)) {
-      h = !0;
+    S = true;
+    if (!h) {
+      h = true;
       continue;
     }
     paths.push(L);
@@ -789,24 +394,387 @@ function getAttachedFlagValue(e, n) {
   for (let s of n) if (s.length === 2 && s[0] === "-" && e.startsWith(s) && e !== s) return e.slice(2);
   return;
 }
+//@ chunk-e6aww6q8.js:1092205-1093136 layout
 /**
  * grep/egrep/fgrep 路径提取（-r 无路径时为 "."）；uye 是 awk 系的路径提取（-f/-E 的程序文件也算路径）。
  */
-//@ chunk-e6aww6q8.js:1092205-1093136 layout
-var extractGrepPaths = (e) => {
-    let r = parsePatternCommand(
-      e,
+var extractGrepPaths = (args) => {
+  let patternCommand = parsePatternCommand(
+    args,
+    new Set([
+      "-e",
+      "--regexp",
+      "-f",
+      "--file",
+      "--exclude",
+      "--include",
+      "--exclude-dir",
+      "--include-dir",
+      "-m",
+      "--max-count",
+      "-A",
+      "--after-context",
+      "-B",
+      "--before-context",
+      "-C",
+      "--context",
+    ]),
+  );
+  if (patternCommand.length === 0 && args.some((arg) => ["-r", "-R", "--recursive"].includes(arg)))
+    return ["."];
+  return patternCommand;
+};
+var extractAwkPaths = (e) => {
+  let n = new Set(["-F", "--field-separator", "-v", "--assign", "-e", "--source"]);
+  let r = new Set(["-f", "--file", "-E", "--exec"]);
+  let s = [];
+  let h = false;
+  let y = false;
+  let S = false;
+  for (let idx = 0; idx < e.length; idx++) {
+    let L = e[idx];
+    if (L === undefined || L === null) continue;
+    if (!h && !S && L === "--") {
+      h = true;
+      continue;
+    }
+    if (!h && !S && L !== "-" && L.startsWith("-")) {
+      let index = L.indexOf("=");
+      let q = index >= 0 ? L.slice(0, index) : L;
+      if (n.has(q)) {
+        if (q === "-e" || q === "--source") y = true;
+        if (index < 0) idx++;
+        continue;
+      }
+      if (r.has(q)) {
+        y = true;
+        if (index >= 0) s.push(L.slice(index + 1));
+        else {
+          let Z = e[idx + 1];
+          if (Z !== undefined) {
+            s.push(Z);
+            idx++;
+          }
+        }
+        continue;
+      }
+      continue;
+    }
+    if (S && !h) {
+      let attachedFlagValue = getAttachedFlagValue(L, ["-f", "--file", "-E", "--exec"]);
+      if (attachedFlagValue !== undefined) s.push(attachedFlagValue);
+    }
+    S = true;
+    if (!y) {
+      y = true;
+      continue;
+    }
+    s.push(L);
+  }
+  return s;
+};
+//@ chunk-e6aww6q8.js:1093136-1093201 layout
+function joinPathSegment(e, n) {
+  return e === "" ? n : `${e.replace(/\/+$/, "")}/${n}`;
+}
+//@ chunk-e6aww6q8.js:1093201-1099428 fingerprint = PATH_EXTRACTORS (0.427)
+/**
+ * 每个路径受限命令的路径提取器表 PATH_EXTRACTORS（cd/ls/find/rm/cp/cat/grep/rg/sed/jq/git…），以及 git 全局带值选项、rg 带值选项表。
+ */
+var GIT_GLOBAL_FLAGS_WITH_VALUE = new Set([
+  "-C",
+  "-c",
+  "--git-dir",
+  "--work-tree",
+  "--namespace",
+  "--super-prefix",
+  "--config-env",
+  "--attr-source",
+  "--shallow-file",
+]);
+var RG_FLAGS_WITH_VALUE = new Set([
+  "-e",
+  "--regexp",
+  "-f",
+  "--file",
+  "-A",
+  "--after-context",
+  "-B",
+  "--before-context",
+  "-C",
+  "--context",
+  "-m",
+  "--max-count",
+  "--max-depth",
+  "--threads",
+]);
+var PATH_EXTRACTORS = {
+  cd: (e) => {
+    let n = filterOutFlags(e);
+    if (n.length === 0) return e.at(-1) === "-" ? ["-"] : [homedir()];
+    return [n[0]];
+  },
+  ls: (args) => {
+    let paths = filterOutFlags(args);
+    return paths.length > 0 ? paths : ["."];
+  },
+  find: (args) => {
+    let paths = [];
+    let pathFlags = new Set([
+      "-newer",
+      "-anewer",
+      "-cnewer",
+      "-mnewer",
+      "-samefile",
+      "-path",
+      "-wholename",
+      "-ilname",
+      "-lname",
+      "-ipath",
+      "-iwholename",
+    ]);
+    let newerPattern = /^-newer[acmBt][acmtB]$/;
+    let foundNonGlobalFlag = false;
+    let afterDoubleDash = false;
+    for (let i = 0; i < args.length; i++) {
+      let arg = args[i];
+      if (!arg) continue;
+      if (afterDoubleDash) {
+        paths.push(arg);
+        continue;
+      }
+      if (arg === "--") {
+        afterDoubleDash = true;
+        continue;
+      }
+      if (arg.startsWith("-")) {
+        if (["-H", "-L", "-P"].includes(arg)) continue;
+        foundNonGlobalFlag = true;
+        if (pathFlags.has(arg) || newerPattern.test(arg)) {
+          let nextArg = args[i + 1];
+          if (nextArg) {
+            paths.push(nextArg);
+            i++;
+          }
+        }
+        continue;
+      }
+      if (!foundNonGlobalFlag) paths.push(arg);
+    }
+    return paths.length > 0 ? paths : ["."];
+  },
+  mkdir: filterOutFlags,
+  touch: filterOutFlags,
+  rm: filterOutFlags,
+  rmdir: filterOutFlags,
+  mv: filterOutFlags,
+  cp: filterOutFlags,
+  cat: filterOutFlags,
+  head: filterOutFlags,
+  tail: filterOutFlags,
+  sort: filterOutFlags,
+  uniq: filterOutFlags,
+  wc: filterOutFlags,
+  cut: makeFlagAwarePathExtractor({
+    booleanShort: "nswz",
+    valuedShort: "bcdf",
+    booleanLong: new Set(["--complement", "--only-delimited", "--zero-terminated"]),
+    valuedLong: new Set(["--bytes", "--characters", "--delimiter", "--fields", "--output-delimiter"]),
+  }),
+  paste: makeFlagAwarePathExtractor({
+    booleanShort: "sz",
+    valuedShort: "d",
+    booleanLong: new Set(["--serial", "--zero-terminated"]),
+    valuedLong: new Set(["--delimiters"]),
+  }),
+  column: makeFlagAwarePathExtractor({
+    booleanShort: "txdemLJhV",
+    valuedShort: "cosNOClEHRTWrip",
+    booleanLong: new Set([
+      "--table",
+      "--fillrows",
+      "--table-noheadings",
+      "--table-header-repeat",
+      "--table-maxout",
+      "--keep-empty-lines",
+      "--json",
+    ]),
+    valuedLong: new Set([
+      "--separator",
+      "--output-separator",
+      "--output-width",
+      "--table-name",
+      "--table-order",
+      "--table-column",
+      "--table-columns",
+      "--table-columns-limit",
+      "--table-noextreme",
+      "--table-hide",
+      "--table-right",
+      "--table-truncate",
+      "--table-wrap",
+      "--tree",
+      "--tree-id",
+      "--tree-parent",
+    ]),
+  }),
+  file: filterOutFlags,
+  stat: filterOutFlags,
+  diff: filterOutFlags,
+  awk: extractAwkPaths,
+  gawk: extractAwkPaths,
+  mawk: extractAwkPaths,
+  nawk: extractAwkPaths,
+  strings: filterOutFlags,
+  hexdump: filterOutFlags,
+  od: filterOutFlags,
+  base64: filterOutFlags,
+  nl: filterOutFlags,
+  sha256sum: filterOutFlags,
+  sha1sum: filterOutFlags,
+  md5sum: filterOutFlags,
+  tee: (e) => filterDevicePaths(filterOutFlags(e)),
+  tr: (args) => {
+    let hasDelete = args.some(
+      (arg) => arg === "-d" || arg === "--delete" || (arg.startsWith("-") && arg.includes("d")),
+    );
+    return filterOutFlags(args).slice(hasDelete ? 1 : 2);
+  },
+  grep: extractGrepPaths,
+  egrep: extractGrepPaths,
+  fgrep: extractGrepPaths,
+  tac: makeFlagAwarePathExtractor({
+    booleanShort: "br",
+    valuedShort: "s",
+    booleanLong: new Set(["--before", "--regex"]),
+    valuedLong: new Set(["--separator"]),
+  }),
+  rev: filterOutFlags,
+  fold: makeFlagAwarePathExtractor({
+    booleanShort: "bs",
+    valuedShort: "w",
+    booleanLong: new Set(["--bytes", "--spaces"]),
+    valuedLong: new Set(["--width"]),
+  }),
+  expand: makeFlagAwarePathExtractor({
+    booleanShort: "i",
+    valuedShort: "t",
+    booleanLong: new Set(["--initial"]),
+    valuedLong: new Set(["--tabs"]),
+  }),
+  unexpand: makeFlagAwarePathExtractor({
+    booleanShort: "af",
+    valuedShort: "t",
+    booleanLong: new Set(["--all", "--first-only"]),
+    valuedLong: new Set(["--tabs"]),
+  }),
+  fmt: makeFlagAwarePathExtractor({
+    booleanShort: "csumn",
+    valuedShort: "wgdl",
+    booleanLong: new Set(["--crown-margin", "--split-only", "--tagged-paragraph", "--uniform-spacing"]),
+    valuedLong: new Set(["--width", "--goal", "--prefix"]),
+  }),
+  comm: makeFlagAwarePathExtractor({
+    booleanShort: "123iz",
+    valuedShort: "",
+    booleanLong: new Set(["--check-order", "--nocheck-order", "--total", "--zero-terminated"]),
+    valuedLong: new Set(["--output-delimiter"]),
+  }),
+  cmp: makeFlagAwarePathExtractor({
+    booleanShort: "blsvxzh",
+    valuedShort: "",
+    booleanLong: new Set(["--print-bytes", "--verbose", "--quiet", "--silent"]),
+    valuedLong: new Set(["--ignore-initial", "--bytes"]),
+  }),
+  pr: makeFlagAwarePathExtractor({
+    booleanShort: "acdFfJmprtTv",
+    attachedShort: "einsS",
+    valuedShort: "hlwWoND",
+    booleanLong: new Set([
+      "--across",
+      "--show-control-chars",
+      "--double-space",
+      "--form-feed",
+      "--join-lines",
+      "--merge",
+      "--no-file-warnings",
+      "--omit-header",
+      "--omit-pagination",
+      "--show-nonprinting",
+    ]),
+    attachedLong: new Set([
+      "--expand-tabs",
+      "--output-tabs",
+      "--number-lines",
+      "--separator",
+      "--sep-string",
+    ]),
+    valuedLong: new Set([
+      "--header",
+      "--length",
+      "--width",
+      "--page-width",
+      "--indent",
+      "--first-line-number",
+      "--date-format",
+      "--columns",
+    ]),
+  }),
+  numfmt: makeFlagAwarePathExtractor({
+    booleanShort: "z",
+    valuedShort: "d",
+    booleanLong: new Set(["--grouping", "--zero-terminated", "--debug"]),
+    attachedLong: new Set(["--header"]),
+    valuedLong: new Set([
+      "--from",
+      "--to",
+      "--from-unit",
+      "--to-unit",
+      "--format",
+      "--padding",
+      "--delimiter",
+      "--field",
+      "--round",
+      "--suffix",
+      "--invalid",
+    ]),
+  }),
+  tsort: filterOutFlags,
+  man: (e) => {
+    let any = e.some((r) => r === "--local-file" || (/^-[^-]/.test(r) && r.includes("l")));
+    return e.flatMap((r, s) => {
+      if (s > 0 && (e[s - 1] === "-C" || e[s - 1] === "--config-file")) return [r];
+      let h = r.search(/[\\/~]/);
+      return (
+        !r.startsWith("-")
+          ? [r]
+          : uniq([
+              ...(r.includes("=") ? [r.slice(r.indexOf("=") + 1)] : []),
+              ...(r.length > 2 && !r.startsWith("--") ? [r.slice(2)] : []),
+              ...(h > 0 ? [r.slice(h)] : []),
+            ])
+      ).filter((S) => S !== "" && (any || /[\\/]/.test(S) || S.startsWith("~") || S.startsWith(".")));
+    });
+  },
+  rg: (args) =>
+    parsePatternCommand(
+      args,
       new Set([
         "-e",
         "--regexp",
         "-f",
         "--file",
-        "--exclude",
-        "--include",
-        "--exclude-dir",
-        "--include-dir",
+        "-t",
+        "--type",
+        "-T",
+        "--type-not",
+        "-g",
+        "--glob",
         "-m",
         "--max-count",
+        "--max-depth",
+        "-r",
+        "--replace",
         "-A",
         "--after-context",
         "-B",
@@ -814,625 +782,286 @@ var extractGrepPaths = (e) => {
         "-C",
         "--context",
       ]),
-    );
-    if (r.length === 0 && e.some((s) => ["-r", "-R", "--recursive"].includes(s))) return ["."];
-    return r;
-  },
-  extractAwkPaths = (e) => {
-    let n = new Set(["-F", "--field-separator", "-v", "--assign", "-e", "--source"]),
-      r = new Set(["-f", "--file", "-E", "--exec"]),
-      s = [],
-      h = !1,
-      y = !1,
-      S = !1;
-    for (let w = 0; w < e.length; w++) {
-      let L = e[w];
-      if (L === void 0 || L === null) continue;
-      if (!h && !S && L === "--") {
-        h = !0;
+      ["."],
+    ),
+  sed: (args) => {
+    let paths = [];
+    let skipNext = false;
+    let scriptFound = false;
+    let h = false;
+    let y = false;
+    for (let i = 0; i < args.length; i++) {
+      if (skipNext) {
+        skipNext = false;
         continue;
       }
-      if (!h && !S && L !== "-" && L.startsWith("-")) {
-        let index = L.indexOf("="),
-          q = index >= 0 ? L.slice(0, index) : L;
-        if (n.has(q)) {
-          if (q === "-e" || q === "--source") y = !0;
-          if (index < 0) w++;
-          continue;
-        }
-        if (r.has(q)) {
-          if (((y = !0), index >= 0)) s.push(L.slice(index + 1));
-          else {
-            let Z = e[w + 1];
-            if (Z !== void 0) (s.push(Z), w++);
+      let arg = args[i];
+      if (!arg) continue;
+      if (!h && !y && arg === "--") {
+        h = true;
+        continue;
+      }
+      if (!h && !y && arg !== "-" && arg.startsWith("-")) {
+        if (["-f", "--file"].includes(arg)) {
+          let scriptFile = args[i + 1];
+          if (scriptFile) {
+            paths.push(scriptFile);
+            skipNext = true;
           }
-          continue;
-        }
+          scriptFound = true;
+        } else if (["-e", "--expression"].includes(arg)) {
+          skipNext = true;
+          scriptFound = true;
+        } else if (arg.includes("e") || arg.includes("f")) scriptFound = true;
         continue;
       }
-      if (S && !h) {
-        let G = getAttachedFlagValue(L, ["-f", "--file", "-E", "--exec"]);
-        if (G !== void 0) s.push(G);
-      }
-      if (((S = !0), !y)) {
-        y = !0;
+      y = true;
+      if (!scriptFound) {
+        scriptFound = true;
         continue;
       }
-      s.push(L);
+      paths.push(arg);
     }
-    return s;
-  };
-//@ chunk-e6aww6q8.js:1093136-1093201 layout
-function joinPathSegment(e, n) {
-  return e === "" ? n : `${e.replace(/\/+$/, "")}/${n}`;
-}
-/**
- * 每个路径受限命令的路径提取器表 PATH_EXTRACTORS（cd/ls/find/rm/cp/cat/grep/rg/sed/jq/git…），以及 git 全局带值选项、rg 带值选项表。
- */
-//@ chunk-e6aww6q8.js:1093201-1099428 fingerprint = PATH_EXTRACTORS (0.427)
-var GIT_GLOBAL_FLAGS_WITH_VALUE = new Set([
-    "-C",
-    "-c",
-    "--git-dir",
-    "--work-tree",
-    "--namespace",
-    "--super-prefix",
-    "--config-env",
-    "--attr-source",
-    "--shallow-file",
-  ]),
-  RG_FLAGS_WITH_VALUE = new Set([
-    "-e",
-    "--regexp",
-    "-f",
-    "--file",
-    "-A",
-    "--after-context",
-    "-B",
-    "--before-context",
-    "-C",
-    "--context",
-    "-m",
-    "--max-count",
-    "--max-depth",
-    "--threads",
-  ]),
-  PATH_EXTRACTORS = {
-    cd: (e) => {
-      let n = filterOutFlags(e);
-      if (n.length === 0) return e.at(-1) === "-" ? ["-"] : [homedir_4()];
-      return [n[0]];
-    },
-    ls: (e) => {
-      let n = filterOutFlags(e);
-      return n.length > 0 ? n : ["."];
-    },
-    find: (e) => {
-      let n = [],
-        r = new Set([
-          "-newer",
-          "-anewer",
-          "-cnewer",
-          "-mnewer",
-          "-samefile",
-          "-path",
-          "-wholename",
-          "-ilname",
-          "-lname",
-          "-ipath",
-          "-iwholename",
-        ]),
-        s = /^-newer[acmBt][acmtB]$/,
-        h = !1,
-        y = !1;
-      for (let S = 0; S < e.length; S++) {
-        let w = e[S];
-        if (!w) continue;
-        if (y) {
-          n.push(w);
-          continue;
-        }
-        if (w === "--") {
-          y = !0;
-          continue;
-        }
-        if (w.startsWith("-")) {
-          if (["-H", "-L", "-P"].includes(w)) continue;
-          if (((h = !0), r.has(w) || s.test(w))) {
-            let L = e[S + 1];
-            if (L) (n.push(L), S++);
-          }
-          continue;
-        }
-        if (!h) n.push(w);
+    return paths;
+  },
+  jq: (args) => {
+    let n = [];
+    let flagsWithArgs = new Set([
+      "-e",
+      "--expression",
+      "--arg",
+      "--argjson",
+      "--args",
+      "--jsonargs",
+      "-L",
+      "--library-path",
+      "--indent",
+      "--tab",
+    ]);
+    let filterFound = false;
+    let afterDoubleDash = false;
+    for (let idx = 0; idx < args.length; idx++) {
+      let arg = args[idx];
+      if (arg === undefined || arg === null) continue;
+      if (!afterDoubleDash && arg === "--") {
+        afterDoubleDash = true;
+        continue;
       }
-      return n.length > 0 ? n : ["."];
-    },
-    mkdir: filterOutFlags,
-    touch: filterOutFlags,
-    rm: filterOutFlags,
-    rmdir: filterOutFlags,
-    mv: filterOutFlags,
-    cp: filterOutFlags,
-    cat: filterOutFlags,
-    head: filterOutFlags,
-    tail: filterOutFlags,
-    sort: filterOutFlags,
-    uniq: filterOutFlags,
-    wc: filterOutFlags,
-    cut: makeFlagAwarePathExtractor({
-      booleanShort: "nswz",
-      valuedShort: "bcdf",
-      booleanLong: new Set(["--complement", "--only-delimited", "--zero-terminated"]),
-      valuedLong: new Set(["--bytes", "--characters", "--delimiter", "--fields", "--output-delimiter"]),
-    }),
-    paste: makeFlagAwarePathExtractor({
-      booleanShort: "sz",
-      valuedShort: "d",
-      booleanLong: new Set(["--serial", "--zero-terminated"]),
-      valuedLong: new Set(["--delimiters"]),
-    }),
-    column: makeFlagAwarePathExtractor({
-      booleanShort: "txdemLJhV",
-      valuedShort: "cosNOClEHRTWrip",
-      booleanLong: new Set([
-        "--table",
-        "--fillrows",
-        "--table-noheadings",
-        "--table-header-repeat",
-        "--table-maxout",
-        "--keep-empty-lines",
-        "--json",
-      ]),
-      valuedLong: new Set([
-        "--separator",
-        "--output-separator",
-        "--output-width",
-        "--table-name",
-        "--table-order",
-        "--table-column",
-        "--table-columns",
-        "--table-columns-limit",
-        "--table-noextreme",
-        "--table-hide",
-        "--table-right",
-        "--table-truncate",
-        "--table-wrap",
-        "--tree",
-        "--tree-id",
-        "--tree-parent",
-      ]),
-    }),
-    file: filterOutFlags,
-    stat: filterOutFlags,
-    diff: filterOutFlags,
-    awk: extractAwkPaths,
-    gawk: extractAwkPaths,
-    mawk: extractAwkPaths,
-    nawk: extractAwkPaths,
-    strings: filterOutFlags,
-    hexdump: filterOutFlags,
-    od: filterOutFlags,
-    base64: filterOutFlags,
-    nl: filterOutFlags,
-    sha256sum: filterOutFlags,
-    sha1sum: filterOutFlags,
-    md5sum: filterOutFlags,
-    tee: (e) => filterDevicePaths(filterOutFlags(e)),
-    tr: (e) => {
-      let any = e.some((s) => s === "-d" || s === "--delete" || (s.startsWith("-") && s.includes("d")));
-      return filterOutFlags(e).slice(any ? 1 : 2);
-    },
-    grep: extractGrepPaths,
-    egrep: extractGrepPaths,
-    fgrep: extractGrepPaths,
-    tac: makeFlagAwarePathExtractor({
-      booleanShort: "br",
-      valuedShort: "s",
-      booleanLong: new Set(["--before", "--regex"]),
-      valuedLong: new Set(["--separator"]),
-    }),
-    rev: filterOutFlags,
-    fold: makeFlagAwarePathExtractor({
-      booleanShort: "bs",
-      valuedShort: "w",
-      booleanLong: new Set(["--bytes", "--spaces"]),
-      valuedLong: new Set(["--width"]),
-    }),
-    expand: makeFlagAwarePathExtractor({
-      booleanShort: "i",
-      valuedShort: "t",
-      booleanLong: new Set(["--initial"]),
-      valuedLong: new Set(["--tabs"]),
-    }),
-    unexpand: makeFlagAwarePathExtractor({
-      booleanShort: "af",
-      valuedShort: "t",
-      booleanLong: new Set(["--all", "--first-only"]),
-      valuedLong: new Set(["--tabs"]),
-    }),
-    fmt: makeFlagAwarePathExtractor({
-      booleanShort: "csumn",
-      valuedShort: "wgdl",
-      booleanLong: new Set(["--crown-margin", "--split-only", "--tagged-paragraph", "--uniform-spacing"]),
-      valuedLong: new Set(["--width", "--goal", "--prefix"]),
-    }),
-    comm: makeFlagAwarePathExtractor({
-      booleanShort: "123iz",
-      valuedShort: "",
-      booleanLong: new Set(["--check-order", "--nocheck-order", "--total", "--zero-terminated"]),
-      valuedLong: new Set(["--output-delimiter"]),
-    }),
-    cmp: makeFlagAwarePathExtractor({
-      booleanShort: "blsvxzh",
-      valuedShort: "",
-      booleanLong: new Set(["--print-bytes", "--verbose", "--quiet", "--silent"]),
-      valuedLong: new Set(["--ignore-initial", "--bytes"]),
-    }),
-    pr: makeFlagAwarePathExtractor({
-      booleanShort: "acdFfJmprtTv",
-      attachedShort: "einsS",
-      valuedShort: "hlwWoND",
-      booleanLong: new Set([
-        "--across",
-        "--show-control-chars",
-        "--double-space",
-        "--form-feed",
-        "--join-lines",
-        "--merge",
-        "--no-file-warnings",
-        "--omit-header",
-        "--omit-pagination",
-        "--show-nonprinting",
-      ]),
-      attachedLong: new Set([
-        "--expand-tabs",
-        "--output-tabs",
-        "--number-lines",
-        "--separator",
-        "--sep-string",
-      ]),
-      valuedLong: new Set([
-        "--header",
-        "--length",
-        "--width",
-        "--page-width",
-        "--indent",
-        "--first-line-number",
-        "--date-format",
-        "--columns",
-      ]),
-    }),
-    numfmt: makeFlagAwarePathExtractor({
-      booleanShort: "z",
-      valuedShort: "d",
-      booleanLong: new Set(["--grouping", "--zero-terminated", "--debug"]),
-      attachedLong: new Set(["--header"]),
-      valuedLong: new Set([
-        "--from",
-        "--to",
-        "--from-unit",
-        "--to-unit",
-        "--format",
-        "--padding",
-        "--delimiter",
-        "--field",
-        "--round",
-        "--suffix",
-        "--invalid",
-      ]),
-    }),
-    tsort: filterOutFlags,
-    man: (e) => {
-      let any = e.some((r) => r === "--local-file" || (/^-[^-]/.test(r) && r.includes("l")));
-      return e.flatMap((r, s) => {
-        if (s > 0 && (e[s - 1] === "-C" || e[s - 1] === "--config-file")) return [r];
-        let search = r.search(/[\\/~]/);
-        return (
-          !r.startsWith("-")
-            ? [r]
-            : uniq([
-                ...(r.includes("=") ? [r.slice(r.indexOf("=") + 1)] : []),
-                ...(r.length > 2 && !r.startsWith("--") ? [r.slice(2)] : []),
-                ...(search > 0 ? [r.slice(search)] : []),
-              ])
-        ).filter((S) => S !== "" && (any || /[\\/]/.test(S) || S.startsWith("~") || S.startsWith(".")));
-      });
-    },
-    rg: (e) =>
-      parsePatternCommand(
-        e,
-        new Set([
-          "-e",
-          "--regexp",
-          "-f",
-          "--file",
-          "-t",
-          "--type",
-          "-T",
-          "--type-not",
-          "-g",
-          "--glob",
-          "-m",
-          "--max-count",
-          "--max-depth",
-          "-r",
-          "--replace",
-          "-A",
-          "--after-context",
-          "-B",
-          "--before-context",
-          "-C",
-          "--context",
-        ]),
-        ["."],
-      ),
-    sed: (e) => {
-      let n = [],
-        r = !1,
-        s = !1,
-        h = !1,
-        y = !1;
-      for (let S = 0; S < e.length; S++) {
-        if (r) {
-          r = !1;
-          continue;
-        }
-        let w = e[S];
-        if (!w) continue;
-        if (!h && !y && w === "--") {
-          h = !0;
-          continue;
-        }
-        if (!h && !y && w !== "-" && w.startsWith("-")) {
-          if (["-f", "--file"].includes(w)) {
-            let L = e[S + 1];
-            if (L) (n.push(L), (r = !0));
-            s = !0;
-          } else if (["-e", "--expression"].includes(w)) ((r = !0), (s = !0));
-          else if (w.includes("e") || w.includes("f")) s = !0;
-          continue;
-        }
-        if (((y = !0), !s)) {
-          s = !0;
-          continue;
-        }
-        n.push(w);
-      }
-      return n;
-    },
-    jq: (e) => {
-      let n = [],
-        r = new Set([
-          "-e",
-          "--expression",
-          "--arg",
-          "--argjson",
-          "--args",
-          "--jsonargs",
-          "-L",
-          "--library-path",
-          "--indent",
-          "--tab",
-        ]),
-        s = !1,
-        h = !1;
-      for (let y = 0; y < e.length; y++) {
-        let S = e[y];
-        if (S === void 0 || S === null) continue;
-        if (!h && S === "--") {
-          h = !0;
-          continue;
-        }
-        if (!h && S.startsWith("-")) {
-          let index = S.indexOf("="),
-            L = index >= 0 ? S.slice(0, index) : S;
-          if (["-e", "--expression"].includes(L)) s = !0;
-          if (["-f", "--from-file"].includes(L)) {
-            if (((s = !0), index >= 0)) n.push(S.slice(index + 1));
-            else {
-              let G = e[y + 1];
-              if (G !== void 0) (n.push(G), y++);
+      if (!afterDoubleDash && arg.startsWith("-")) {
+        let index = arg.indexOf("=");
+        let L = index >= 0 ? arg.slice(0, index) : arg;
+        if (["-e", "--expression"].includes(L)) filterFound = true;
+        if (["-f", "--from-file"].includes(L)) {
+          filterFound = true;
+          if (index >= 0) n.push(arg.slice(index + 1));
+          else {
+            let G = args[idx + 1];
+            if (G !== undefined) {
+              n.push(G);
+              idx++;
             }
-            continue;
           }
-          if (["--slurpfile", "--rawfile"].includes(L)) {
-            let G = e[y + 2];
-            if (G !== void 0) n.push(G);
-            y += 2;
-            continue;
-          }
-          if (r.has(L) && index < 0) y++;
           continue;
         }
-        if (!s) {
-          s = !0;
+        if (["--slurpfile", "--rawfile"].includes(L)) {
+          let G = args[idx + 2];
+          if (G !== undefined) n.push(G);
+          idx += 2;
           continue;
         }
-        n.push(S);
+        if (flagsWithArgs.has(L) && index < 0) idx++;
+        continue;
       }
-      return n;
-    },
-    git: (e) => {
-      let n = "",
-        r = (G) => {
-          n = isAbsolute_22(Lu(G)) || G.startsWith("~") ? G : joinPathSegment(n, G);
-        },
-        { index: index, options: options } = parseLeadingGitOptions(e);
-      for (let { opt: opt, value: q } of options)
-        if (opt.startsWith("--work-tree=")) r(opt.slice(12));
-        else if (q !== void 0 && (opt === "-C" || opt === "--work-tree")) r(q);
-      let y = (G) => (n === "" || isAbsolute_22(Lu(G)) || G.startsWith("~") ? G : joinPathSegment(n, G)),
-        sliced = e.slice(index + 1);
-      if (e[index] === "grep") {
-        let G = parsePatternCommand(sliced, RG_FLAGS_WITH_VALUE);
-        return G.length > 0 ? G.map(y) : [n === "" ? "." : n];
+      if (!filterFound) {
+        filterFound = true;
+        continue;
       }
-      if (e[index] !== "diff") return [];
-      let w = [],
-        L = !1;
-      for (let G of sliced)
-        if (!L && G === "--") L = !0;
-        else if (L || G === "-" || !G.startsWith("-")) {
-          let q = y(G);
-          if (!isSpecialDevicePath(q)) w.push(q);
-        }
-      return w;
-    },
-  };
+      n.push(arg);
+    }
+    return n;
+  },
+  git: (e) => {
+    let n = "";
+    let r = (G) => {
+      n = isAbsolute(expandTildeWithHome(G)) || G.startsWith("~") ? G : joinPathSegment(n, G);
+    };
+    let { index, options } = parseLeadingGitOptions(e);
+    for (let { opt, value: q } of options)
+      if (opt.startsWith("--work-tree=")) r(opt.slice(12));
+      else if (q !== undefined && (opt === "-C" || opt === "--work-tree")) r(q);
+    let y = (G) =>
+      n === "" || isAbsolute(expandTildeWithHome(G)) || G.startsWith("~") ? G : joinPathSegment(n, G);
+    let sliced = e.slice(index + 1);
+    if (e[index] === "grep") {
+      let patternCommand = parsePatternCommand(sliced, RG_FLAGS_WITH_VALUE);
+      return patternCommand.length > 0 ? patternCommand.map(y) : [n === "" ? "." : n];
+    }
+    if (e[index] !== "diff") return [];
+    let w = [];
+    let L = false;
+    for (let G of sliced)
+      if (!L && G === "--") L = true;
+      else if (L || G === "-" || !G.startsWith("-")) {
+        let q = y(G);
+        if (!isSpecialDevicePath(q)) w.push(q);
+      }
+    return w;
+  },
+};
+//@ chunk-e6aww6q8.js:1099428-1102123 fingerprint = ACTION_VERBS (0.822)
 /**
  * 路径受限命令列表、每个命令的动作描述（用于提示文字）和操作类型（read/write/create），以及 mv/cp/cd 的参数安全检查。
  */
-//@ chunk-e6aww6q8.js:1099428-1102123 fingerprint = ACTION_VERBS (0.822)
-var SUPPORTED_PATH_COMMANDS = Object.keys(PATH_EXTRACTORS),
-  ACTION_VERBS = {
-    cd: "change directories to",
-    ls: "list files in",
-    find: "search files in",
-    mkdir: "create directories in",
-    touch: "create or modify files in",
-    rm: "remove files from",
-    rmdir: "remove directories from",
-    mv: "move files to/from",
-    cp: "copy files to/from",
-    cat: "concatenate files from",
-    head: "read the beginning of files from",
-    tail: "read the end of files from",
-    sort: "sort contents of files from",
-    uniq: "filter duplicate lines from files in",
-    wc: "count lines/words/bytes in files from",
-    cut: "extract columns from files in",
-    paste: "merge files from",
-    column: "format files from",
-    tr: "transform text from files in",
-    file: "examine file types in",
-    stat: "read file stats from",
-    diff: "compare files from",
-    awk: "process text from files in",
-    gawk: "process text from files in",
-    mawk: "process text from files in",
-    nawk: "process text from files in",
-    strings: "extract strings from files in",
-    hexdump: "display hex dump of files from",
-    od: "display octal dump of files from",
-    base64: "encode/decode files from",
-    nl: "number lines in files from",
-    tac: "read files (reversed) from",
-    man: "read manual page files from",
-    rev: "read files (reversed lines) from",
-    fold: "wrap lines of files from",
-    expand: "convert tabs in files from",
-    unexpand: "convert spaces in files from",
-    fmt: "reformat files from",
-    comm: "compare files from",
-    cmp: "compare files from",
-    pr: "paginate files from",
-    numfmt: "reformat numbers in files from",
-    tsort: "sort files from",
-    grep: "search for patterns in files from",
-    egrep: "search for patterns in files from",
-    fgrep: "search for patterns in files from",
-    rg: "search for patterns in files from",
-    sed: "edit files in",
-    git: "access files with git from",
-    jq: "process JSON from files in",
-    sha256sum: "compute SHA-256 checksums for files in",
-    sha1sum: "compute SHA-1 checksums for files in",
-    md5sum: "compute MD5 checksums for files in",
-    tee: "write to files in",
-  },
-  COMMAND_OPERATION_TYPE = {
-    cd: "read",
-    ls: "read",
-    find: "read",
-    mkdir: "create",
-    touch: "create",
-    rm: "write",
-    rmdir: "write",
-    mv: "write",
-    cp: "write",
-    cat: "read",
-    head: "read",
-    tail: "read",
-    sort: "read",
-    uniq: "read",
-    wc: "read",
-    cut: "read",
-    paste: "read",
-    column: "read",
-    tr: "read",
-    file: "read",
-    stat: "read",
-    diff: "read",
-    awk: "read",
-    gawk: "read",
-    mawk: "read",
-    nawk: "read",
-    strings: "read",
-    hexdump: "read",
-    od: "read",
-    base64: "read",
-    nl: "read",
-    tac: "read",
-    man: "read",
-    rev: "read",
-    fold: "read",
-    expand: "read",
-    unexpand: "read",
-    fmt: "read",
-    comm: "read",
-    cmp: "read",
-    pr: "read",
-    numfmt: "read",
-    tsort: "read",
-    grep: "read",
-    egrep: "read",
-    fgrep: "read",
-    rg: "read",
-    sed: "write",
-    git: "read",
-    jq: "read",
-    sha256sum: "read",
-    sha1sum: "read",
-    md5sum: "read",
-    tee: "write",
-  },
-  COMMAND_ARGS_SAFE_CHECKS = {
-    mv: (e) => !e.some((n) => n?.startsWith("-")),
-    cp: (e) => !e.some((n) => n?.startsWith("-")),
-    cd: (e) => {
-      let n = !1,
-        r = 0;
-      for (let s of e) {
-        if (!n) {
-          if (s === "--") {
-            n = !0;
-            continue;
-          }
-          if (s.startsWith("-") && s !== "-") continue;
-          n = !0;
+var SUPPORTED_PATH_COMMANDS = Object.keys(PATH_EXTRACTORS);
+var ACTION_VERBS = {
+  cd: "change directories to",
+  ls: "list files in",
+  find: "search files in",
+  mkdir: "create directories in",
+  touch: "create or modify files in",
+  rm: "remove files from",
+  rmdir: "remove directories from",
+  mv: "move files to/from",
+  cp: "copy files to/from",
+  cat: "concatenate files from",
+  head: "read the beginning of files from",
+  tail: "read the end of files from",
+  sort: "sort contents of files from",
+  uniq: "filter duplicate lines from files in",
+  wc: "count lines/words/bytes in files from",
+  cut: "extract columns from files in",
+  paste: "merge files from",
+  column: "format files from",
+  tr: "transform text from files in",
+  file: "examine file types in",
+  stat: "read file stats from",
+  diff: "compare files from",
+  awk: "process text from files in",
+  gawk: "process text from files in",
+  mawk: "process text from files in",
+  nawk: "process text from files in",
+  strings: "extract strings from files in",
+  hexdump: "display hex dump of files from",
+  od: "display octal dump of files from",
+  base64: "encode/decode files from",
+  nl: "number lines in files from",
+  tac: "read files (reversed) from",
+  man: "read manual page files from",
+  rev: "read files (reversed lines) from",
+  fold: "wrap lines of files from",
+  expand: "convert tabs in files from",
+  unexpand: "convert spaces in files from",
+  fmt: "reformat files from",
+  comm: "compare files from",
+  cmp: "compare files from",
+  pr: "paginate files from",
+  numfmt: "reformat numbers in files from",
+  tsort: "sort files from",
+  grep: "search for patterns in files from",
+  egrep: "search for patterns in files from",
+  fgrep: "search for patterns in files from",
+  rg: "search for patterns in files from",
+  sed: "edit files in",
+  git: "access files with git from",
+  jq: "process JSON from files in",
+  sha256sum: "compute SHA-256 checksums for files in",
+  sha1sum: "compute SHA-1 checksums for files in",
+  md5sum: "compute MD5 checksums for files in",
+  tee: "write to files in",
+};
+var COMMAND_OPERATION_TYPE = {
+  cd: "read",
+  ls: "read",
+  find: "read",
+  mkdir: "create",
+  touch: "create",
+  rm: "write",
+  rmdir: "write",
+  mv: "write",
+  cp: "write",
+  cat: "read",
+  head: "read",
+  tail: "read",
+  sort: "read",
+  uniq: "read",
+  wc: "read",
+  cut: "read",
+  paste: "read",
+  column: "read",
+  tr: "read",
+  file: "read",
+  stat: "read",
+  diff: "read",
+  awk: "read",
+  gawk: "read",
+  mawk: "read",
+  nawk: "read",
+  strings: "read",
+  hexdump: "read",
+  od: "read",
+  base64: "read",
+  nl: "read",
+  tac: "read",
+  man: "read",
+  rev: "read",
+  fold: "read",
+  expand: "read",
+  unexpand: "read",
+  fmt: "read",
+  comm: "read",
+  cmp: "read",
+  pr: "read",
+  numfmt: "read",
+  tsort: "read",
+  grep: "read",
+  egrep: "read",
+  fgrep: "read",
+  rg: "read",
+  sed: "write",
+  git: "read",
+  jq: "read",
+  sha256sum: "read",
+  sha1sum: "read",
+  md5sum: "read",
+  tee: "write",
+};
+var COMMAND_ARGS_SAFE_CHECKS = {
+  mv: (e) => !e.some((n) => n?.startsWith("-")),
+  cp: (e) => !e.some((n) => n?.startsWith("-")),
+  cd: (args) => {
+    let n = false;
+    let r = 0;
+    for (let arg of args) {
+      if (!n) {
+        if (arg === "--") {
+          n = true;
+          continue;
         }
-        r++;
+        if (arg.startsWith("-") && arg !== "-") continue;
+        n = true;
       }
-      return r <= 1;
-    },
-  };
+      r++;
+    }
+    return r <= 1;
+  },
+};
+//@ chunk-e6aww6q8.js:1102123-1103108 layout
 /**
  * pushd 或 env -C/--chdir 的目标目录读权限检查：命中拒绝规则→deny；读封锁（blockReadsOutsideWorkingDirectories）下工作目录外→ask；其余通过。
  */
-//@ chunk-e6aww6q8.js:1102123-1103108 layout
-function checkPushdEnvChdirPath(e, n, r) {
+function checkPushdEnvChdirPath(e, cwd, toolPermissionContext) {
   let s = e[0];
-  if (s === void 0) return;
-  let sliced = s.slice(s.lastIndexOf("/") + 1),
-    y;
+  if (s === undefined) return;
+  let sliced = s.slice(s.lastIndexOf("/") + 1);
+  let y;
   if (sliced === "pushd") {
-    if (((y = filterOutFlags(e.slice(1))[0]), y === void 0)) return;
+    y = filterOutFlags(e.slice(1))[0];
+    if (y === undefined) return;
   } else if (sliced === "env") {
-    for (let w = 1; w < e.length; w++) {
-      let L = e[w];
+    for (let idx = 1; idx < e.length; idx++) {
+      let L = e[idx];
       if (L === "-C" || L === "--chdir") {
-        y = e[w + 1];
+        y = e[idx + 1];
         break;
       }
       if (L.startsWith("--chdir=")) {
@@ -1444,10 +1073,10 @@ function checkPushdEnvChdirPath(e, n, r) {
         break;
       }
     }
-    if (y === void 0) return;
+    if (y === undefined) return;
   } else return;
   if (containsAnyPlaceholder(y)) return outsideReadsRuntimePathAsk(sliced);
-  let S = validatePath(y, n, r, "read");
+  let S = validatePath(y, cwd, toolPermissionContext, "read");
   if (S.allowed) return;
   if (S.decisionReason?.type === "rule")
     return {
@@ -1466,26 +1095,26 @@ function checkPushdEnvChdirPath(e, n, r) {
     };
   return outsideReadsRuntimePathAsk(sliced);
 }
+//@ chunk-e6aww6q8.js:1103108-1103912 layout
 /**
  * ln/link 源路径的读权限检查，规则同 pushd/env：拒绝规则→deny，读封锁下工作目录外→ask。
  */
-//@ chunk-e6aww6q8.js:1103108-1103912 layout
-function checkLinkSourcePaths(e, n, r) {
-  let s = stripWrappersFromArgvForPaths([...e]),
-    h = s[0],
-    y = h?.slice(h.lastIndexOf("/") + 1);
-  if (y !== "ln" && y !== "link") return;
-  let sliced = s.slice(1),
-    w = filterOutFlags(sliced),
-    G = w.length !== sliced.length || w.length === 1 ? w : w.slice(0, -1);
-  if (G.some((q) => containsAnyPlaceholder(q))) return outsideReadsRuntimePathAsk(y);
+function checkLinkSourcePaths(e, cwd, toolPermissionContext) {
+  let s = stripWrappersFromArgvForPaths([...e]);
+  let h = s[0];
+  let sliced = h?.slice(h.lastIndexOf("/") + 1);
+  if (sliced !== "ln" && sliced !== "link") return;
+  let sliced_2 = s.slice(1);
+  let w = filterOutFlags(sliced_2);
+  let G = w.length !== sliced_2.length || w.length === 1 ? w : w.slice(0, -1);
+  if (G.some((q) => containsAnyPlaceholder(q))) return outsideReadsRuntimePathAsk(sliced);
   for (let q of G) {
-    let Z = validatePath(q, n, r, "read");
+    let Z = validatePath(q, cwd, toolPermissionContext, "read");
     if (Z.allowed) continue;
     if (Z.decisionReason?.type === "rule")
       return {
         behavior: "deny",
-        message: `${y} in '${Z.resolvedPath}' was blocked by a deny rule`,
+        message: `${sliced} in '${Z.resolvedPath}' was blocked by a deny rule`,
         decisionReason: Z.decisionReason,
       };
     if (
@@ -1494,69 +1123,70 @@ function checkLinkSourcePaths(e, n, r) {
     )
       return {
         behavior: "ask",
-        message: `${y} names a path outside the working directories, which the read block does not allow without asking (permissions.blockReadsOutsideWorkingDirectories). Add the directory with /add-dir, or remove that setting.`,
+        message: `${sliced} names a path outside the working directories, which the read block does not allow without asking (permissions.blockReadsOutsideWorkingDirectories). Add the directory with /add-dir, or remove that setting.`,
         decisionReason: Z.decisionReason,
       };
-    return outsideReadsRuntimePathAsk(y);
+    return outsideReadsRuntimePathAsk(sliced);
   }
   return;
 }
 //@ chunk-e6aww6q8.js:1103912-1104143 layout
-function findBracketExpressionEnd(e) {
-  let n = e[1] === "!" || e[1] === "^" ? 2 : 1;
-  if (e[n] === "]") n++;
-  for (; n < e.length; n++) {
-    let r = e[n];
+function findBracketExpressionEnd(pattern) {
+  let n = pattern[1] === "!" || pattern[1] === "^" ? 2 : 1;
+  if (pattern[n] === "]") n++;
+  for (; n < pattern.length; n++) {
+    let r = pattern[n];
     if (r === "]") return n;
-    if (r === "[" && /^[:=.]/.test(e.slice(n + 1))) {
-      let s = e[n + 1],
-        index = e.indexOf(s + "]", n + 2);
+    if (r === "[" && /^[:=.]/.test(pattern.slice(n + 1))) {
+      let s = pattern[n + 1];
+      let index = pattern.indexOf(s + "]", n + 2);
       if (index !== -1) n = index + 1;
     }
   }
-  return e.length - 1;
+  return pattern.length - 1;
 }
 //@ chunk-e6aww6q8.js:1104143-1104811 layout = urlPatternToRegex (1)
 function urlPatternToRegex(pattern) {
-  if (firstGlobCharIndex(pattern) === -1) return !1;
+  if (firstGlobCharIndex(pattern) === -1) return false;
   if (pattern.startsWith("[")) {
     let sliced = pattern.slice(findBracketExpressionEnd(pattern) + 1);
-    if (firstGlobCharIndex(sliced) === -1 && sliced !== ".") return !1;
+    if (firstGlobCharIndex(sliced) === -1 && sliced !== ".") return false;
   }
-  if (/\[[:=.]/.test(pattern)) return !0;
-  if (pattern.startsWith("*") || pattern.startsWith("?")) return !1;
+  if (/\[[:=.]/.test(pattern)) return true;
+  if (pattern.startsWith("*") || pattern.startsWith("?")) return false;
   let n = "^";
-  for (let r = 0; r < pattern.length; r++) {
-    let s = pattern[r];
+  for (let idx = 0; idx < pattern.length; idx++) {
+    let s = pattern[idx];
     if (s === "*") n += ".*";
     else if (s === "?") n += ".";
     else if (s === "[") {
-      let h = pattern[r + 1] === "!" || pattern[r + 1] === "^",
-        index = pattern.indexOf("]", r + (h ? 3 : 2));
+      let h = pattern[idx + 1] === "!" || pattern[idx + 1] === "^";
+      let index = pattern.indexOf("]", idx + (h ? 3 : 2));
       if (index === -1) {
         n += "\\[";
         continue;
       }
-      if (r > 0 && (h || pattern.indexOf("]", index + 1) !== -1)) {
+      if (idx > 0 && (h || pattern.indexOf("]", index + 1) !== -1)) {
         n += ".*";
         break;
       }
-      let sliced = pattern.slice(r + 1, index);
+      let sliced = pattern.slice(idx + 1, index);
       if (sliced.startsWith("!") || sliced.startsWith("^")) sliced = "^" + sliced.slice(1);
-      ((n += "[" + sliced.replace(/[\\\]]/g, "\\$&") + "]"), (r = index));
+      n += "[" + sliced.replace(/[\\\]]/g, "\\$&") + "]";
+      idx = index;
     } else n += s.replace(/[.+^$()|{}\\]/g, "\\$&");
   }
   n += "$";
   try {
     return new RegExp(n).test("..");
   } catch {
-    return !0;
+    return true;
   }
 }
+//@ chunk-e6aww6q8.js:1104811-1105100 layout
 /**
  * 只检查拒绝规则的路径校验：写路径按操作类型、额外读路径按 read，命中拒绝规则即返回 deny。
  */
-//@ chunk-e6aww6q8.js:1104811-1105100 layout
 function checkDenyRulesForPaths(e, n, r, s, h, y = []) {
   for (let [S, w] of [
     [n, h],
@@ -1580,20 +1210,22 @@ var AWK_COMMANDS = new Set(["awk", "gawk", "mawk", "nawk"]);
 function isBashToolRule(e) {
   return e === FILE_READ_TOOL_NAME || e.startsWith(`${FILE_READ_TOOL_NAME}(`);
 }
+//@ chunk-e6aww6q8.js:1105200-1105285 layout
 /**
  * 任一来源存在 Bash(...) 拒绝规则。
  */
-//@ chunk-e6aww6q8.js:1105200-1105285 layout
 function hasBashDenyRule(e) {
-  return Object.values(e.alwaysDenyRules).some((n) => (n ?? []).some(isBashToolRule));
+  return Object.values(e.alwaysDenyRules).some((alwaysDenyRule) =>
+    (alwaysDenyRule ?? []).some(isBashToolRule),
+  );
 }
+//@ chunk-e6aww6q8.js:1105285-1105399 layout
 /**
  * 除 hostCredential 外，没有任何 Bash(...) 拒绝规则。
  */
-//@ chunk-e6aww6q8.js:1105285-1105399 layout
 function hasNoBashDenyRules(e) {
   return Object.entries(e.alwaysDenyRules).every(
-    ([n, r]) => n === "hostCredential" || !(r ?? []).some(isBashToolRule),
+    ([key, value]) => key === "hostCredential" || !(value ?? []).some(isBashToolRule),
   );
 }
 //@ chunk-e6aww6q8.js:1105399-1105518 layout
@@ -1611,171 +1243,200 @@ function getSourceArgsOfWriteCommand(e, n) {
 //@ chunk-e6aww6q8.js:1105518-1105644 layout
 var GIT_PATH_ENV_RE =
   /^(HOME|XDG_CONFIG_HOME|PROGRAMDATA|GIT_DIR|GIT_COMMON_DIR|GIT_CEILING_DIRECTORIES|GIT_EXEC_PATH|PATH)$|^GIT_CONFIG/i;
+//@ chunk-e6aww6q8.js:1105644-1105832 layout
 /**
  * 解析 git 子命令前的全局选项（-C、--git-dir 等带值选项），返回子命令下标与选项列表。
  */
-//@ chunk-e6aww6q8.js:1105644-1105832 layout
 function parseLeadingGitOptions(e) {
-  let n = [],
-    r = 0;
+  let n = [];
+  let r = 0;
   while (r < e.length && e[r].startsWith("-")) {
     let s = e[r];
-    if ((r++, GIT_GLOBAL_FLAGS_WITH_VALUE.has(s) && r < e.length)) (n.push({ opt: s, value: e[r] }), r++);
-    else n.push({ opt: s });
+    r++;
+    if (GIT_GLOBAL_FLAGS_WITH_VALUE.has(s) && r < e.length) {
+      n.push({
+        opt: s,
+        value: e[r],
+      });
+      r++;
+    } else
+      n.push({
+        opt: s,
+      });
   }
-  return { index: r, options: n };
+  return {
+    index: r,
+    options: n,
+  };
 }
+//@ chunk-e6aww6q8.js:1105832-1106720 layout
 /**
  * 找出需要额外做读检查的 glob 参数：无危险选项、无改变路径解析环境变量的普通 git 调用直接返回 []；否则返回未加引号、含通配且未在路径列表中的参数。
  */
-//@ chunk-e6aww6q8.js:1105832-1106720 layout
 function getGlobArgsNeedingCheck(e, n, r, s) {
   if (
     e === "git" &&
-    n !== void 0 &&
-    !n.argv.slice(0, n.argv.length - r.length - 1).some((w) => /(^|[\\/])env$/.test(w)) &&
+    n !== undefined &&
+    !n.argv.slice(0, n.argv.length - r.length - 1).some((arg) => /(^|[\\/])env$/.test(arg)) &&
     !n.envVars.some((envVar) => GIT_PATH_ENV_RE.test(envVar.name))
   ) {
-    let { index: index, options: options } = parseLeadingGitOptions(r),
-      G = r[index],
-      argvUnquotedGlob = n.argvUnquotedGlob,
-      Z = n.argv.length - r.length,
-      Se =
-        argvUnquotedGlob === void 0 ||
-        argvUnquotedGlob.length !== n.argv.length ||
-        Z < 1 ||
-        argvUnquotedGlob.slice(0, Z + index + 1).some(Boolean);
+    let { index, options } = parseLeadingGitOptions(r);
+    let G = r[index];
+    let argvUnquotedGlob = n.argvUnquotedGlob;
+    let Z = n.argv.length - r.length;
+    let Se =
+      argvUnquotedGlob === undefined ||
+      argvUnquotedGlob.length !== n.argv.length ||
+      Z < 1 ||
+      argvUnquotedGlob.slice(0, Z + index + 1).some(Boolean);
     if (
-      !options.some(({ opt: opt, value: Ee }) => {
+      !options.some(({ opt, value: Ee }) => {
         if (
           opt === "--bare" ||
           opt.startsWith("--config-env") ||
           opt.startsWith("--exec-path") ||
           opt.startsWith("--git-dir")
         )
-          return !0;
+          return true;
         let Ae = Ee?.trim() ?? "";
         return containsAnyPlaceholder(Ae) || /^(alias|include|includeif|help\.autocorrect)\b/i.test(Ae);
       }) &&
       !Se &&
-      G !== void 0 &&
+      G !== undefined &&
       !containsAnyPlaceholder(G) &&
       G !== "grep" &&
       G !== "diff"
     )
       return [];
   }
-  let h = getNewGlobArgs(r, s);
-  if (h.length === 0) return [];
-  if (n === void 0 || n.carveOutMayDesyncQuoteScan === !0) return h;
-  let argvUnquotedGlob = n.argvUnquotedGlob,
-    S = n.argv.length - r.length;
-  if (argvUnquotedGlob === void 0 || argvUnquotedGlob.length !== n.argv.length || S < 1) return h;
-  return h.filter((w) => r.some((L, G) => L === w && argvUnquotedGlob[S + G] === !0));
+  let newGlobArgs = getNewGlobArgs(r, s);
+  if (newGlobArgs.length === 0) return [];
+  if (n === undefined || n.carveOutMayDesyncQuoteScan === true) return newGlobArgs;
+  let argvUnquotedGlob = n.argvUnquotedGlob;
+  let S = n.argv.length - r.length;
+  if (argvUnquotedGlob === undefined || argvUnquotedGlob.length !== n.argv.length || S < 1)
+    return newGlobArgs;
+  return newGlobArgs.filter((newGlobArg) =>
+    r.some((L, G) => L === newGlobArg && argvUnquotedGlob[S + G] === true),
+  );
 }
 //@ chunk-e6aww6q8.js:1106720-1106828 layout
 function getNewGlobArgs(e, n) {
-  let r = new Set(n),
-    s = [];
-  for (let h of e) if (firstGlobCharIndex(h) !== -1 && !r.has(h)) (r.add(h), s.push(h));
+  let r = new Set(n);
+  let s = [];
+  for (let h of e)
+    if (firstGlobCharIndex(h) !== -1 && !r.has(h)) {
+      r.add(h);
+      s.push(h);
+    }
   return s;
 }
+//@ chunk-e6aww6q8.js:1106828-1107218 layout
 /**
  * 解析 cp/mv 的 -t / --target-directory，返回是否指定了目标目录和粘连写法里的目标路径。
  */
-//@ chunk-e6aww6q8.js:1106828-1107218 layout
 function getTargetDirectoryOption(e, n) {
-  let r = !1,
-    s = [];
+  let r = false;
+  let s = [];
   if (e === "cp" || e === "mv") {
     for (let h of n)
       if (h.startsWith("--")) {
         let y = firstLineOf(h.slice(2), "=");
         if (y !== "" && "target-directory".startsWith(y)) {
-          if (((r = !0), h.includes("="))) s.push(h.slice(h.indexOf("=") + 1));
+          r = true;
+          if (h.includes("=")) s.push(h.slice(h.indexOf("=") + 1));
         }
       } else if (h.startsWith("-") && h.indexOf("t") > 0) {
-        if (((r = !0), h.indexOf("t") < h.length - 1)) s.push(h.slice(h.indexOf("t") + 1));
+        r = true;
+        if (h.indexOf("t") < h.length - 1) s.push(h.slice(h.indexOf("t") + 1));
       }
   }
-  return { targetDirectoryGiven: r, attachedDestinations: s };
+  return {
+    targetDirectoryGiven: r,
+    attachedDestinations: s,
+  };
 }
+//@ chunk-e6aww6q8.js:1107218-1112301 fingerprint = validateCommandPaths (0.571)
 /**
  * 对一个路径受限命令的全部路径做权限校验：读封锁下的通配/占位符/~user 路径要询问；写操作的路径先按读校验；按操作类型 validatePath，deny 规则直接拒绝，不在工作目录内则 ask（带 blockedPath）。
  */
-//@ chunk-e6aww6q8.js:1107218-1112301 fingerprint = validateCommandPaths (0.571)
-function validateCommandPaths(e, n, r, s, h, y, S, w) {
-  let L = y ?? COMMAND_OPERATION_TYPE[e],
-    G = PATH_EXTRACTORS[e](n),
-    q = getGlobArgsNeedingCheck(e, w, n, G),
-    Z = L === "read" ? [...G, ...q] : G;
-  if (e === "tee" && Z.length === 0 && q.length === 0)
-    return { behavior: "passthrough", message: "Path validation passed for tee command" };
-  let Se = s.blockReadsOutsideWorkingDirectories === !0,
-    ke = COMMAND_ARGS_SAFE_CHECKS[e],
-    we = ke !== void 0 && !ke(n),
-    { targetDirectoryGiven: targetDirectoryGiven, attachedDestinations: attachedDestinations } =
-      getTargetDirectoryOption(e, n),
-    Ie = L === "read" ? [] : [...(targetDirectoryGiven ? Z : getSourceArgsOfWriteCommand(e, Z)), ...q],
-    Me = !Se ? [] : L === "read" ? Z : Ie;
+function validateCommandPaths(command, n, cwd, context, compoundCommandHasCd, operationTypeOverride, S, w) {
+  let L = operationTypeOverride ?? COMMAND_OPERATION_TYPE[command];
+  let G = PATH_EXTRACTORS[command](n);
+  let globArgsNeedingCheck = getGlobArgsNeedingCheck(command, w, n, G);
+  let Z = L === "read" ? [...G, ...globArgsNeedingCheck] : G;
+  if (command === "tee" && Z.length === 0 && globArgsNeedingCheck.length === 0)
+    return {
+      behavior: "passthrough",
+      message: "Path validation passed for tee command",
+    };
+  let Se = context.blockReadsOutsideWorkingDirectories === true;
+  let ke = COMMAND_ARGS_SAFE_CHECKS[command];
+  let we = ke !== undefined && !ke(n);
+  let { targetDirectoryGiven, attachedDestinations } = getTargetDirectoryOption(command, n);
+  let Ie =
+    L === "read"
+      ? []
+      : [...(targetDirectoryGiven ? Z : getSourceArgsOfWriteCommand(command, Z)), ...globArgsNeedingCheck];
+  let Me = !Se ? [] : L === "read" ? Z : Ie;
   if (
     Se &&
     (Me.some((gt) => shellPathSegments(gt).some((At) => urlPatternToRegex(At))) ||
-      (AWK_COMMANDS.has(e) && n.some((gt) => /getline/.test(gt) || awkProgramHasExecBridge(gt) !== !1)))
+      (AWK_COMMANDS.has(command) &&
+        n.some((gt) => /getline/.test(gt) || awkProgramHasExecBridge(gt) !== false)))
   ) {
-    let gt = checkDenyRulesForPaths(e, [...Z, ...attachedDestinations], r, s, L, Ie);
+    let gt = checkDenyRulesForPaths(command, [...Z, ...attachedDestinations], cwd, context, L, Ie);
     if (gt) return gt;
-    return outsideReadsRuntimePathAsk(e);
+    return outsideReadsRuntimePathAsk(command);
   }
   if (
     Me.some((gt) => containsAnyPlaceholder(gt)) ||
     Me.some((gt) => gt.startsWith("~") && gt !== "~" && !gt.startsWith("~/"))
   ) {
-    let gt = checkDenyRulesForPaths(e, [...Z, ...attachedDestinations], r, s, L, Ie);
+    let gt = checkDenyRulesForPaths(command, [...Z, ...attachedDestinations], cwd, context, L, Ie);
     if (gt) return gt;
-    return outsideReadsRuntimePathAsk(e);
+    return outsideReadsRuntimePathAsk(command);
   }
   if (L !== "read")
     for (let gt of Me) {
-      let {
-        allowed: allowed,
-        resolvedPath: resolvedPath,
-        decisionReason: decisionReason,
-      } = validatePath(gt, r, s, "read");
+      let { allowed, resolvedPath, decisionReason } = validatePath(gt, cwd, context, "read");
       if (!allowed && decisionReason?.type === "rule")
         return {
           behavior: "deny",
-          message: `${e} in '${resolvedPath}' was blocked by a deny rule`,
-          decisionReason: decisionReason,
+          message: `${command} in '${resolvedPath}' was blocked by a deny rule`,
+          decisionReason,
         };
       if (!allowed && isOutsideReadsBlockedAsk(decisionReason)) {
-        let qt = checkDenyRulesForPaths(e, [...Z, ...attachedDestinations], r, s, L, Ie);
+        let qt = checkDenyRulesForPaths(command, [...Z, ...attachedDestinations], cwd, context, L, Ie);
         if (qt) return qt;
         return {
           behavior: "ask",
           message:
-            we && (e === "cp" || e === "mv")
-              ? `${e} names a path outside the working directories, which the read block does not allow without asking (permissions.blockReadsOutsideWorkingDirectories). Add the directory with /add-dir, or remove that setting.`
+            we && (command === "cp" || command === "mv")
+              ? `${command} names a path outside the working directories, which the read block does not allow without asking (permissions.blockReadsOutsideWorkingDirectories). Add the directory with /add-dir, or remove that setting.`
               : decisionReason.reason,
-          decisionReason: decisionReason,
+          decisionReason,
         };
       }
     }
-  let mapped = Z.map((gt) => validatePath(gt, r, s, L)),
-    mapped_2 = attachedDestinations.map((gt) => validatePath(gt, r, s, L)),
-    mapped_3 = Ie.map((gt) => validatePath(gt, r, s, "read")),
-    Je = (gt) => !containsAnyPlaceholder(gt) && (!h || isAbsolute_22(gt) || gt.startsWith("~")),
-    nt =
-      mapped.find((gt, At) => !gt.allowed && gt.decisionReason?.type === "rule" && Je(Z[At])) ??
-      mapped_2.find(
-        (gt, At) => !gt.allowed && gt.decisionReason?.type === "rule" && Je(attachedDestinations[At]),
-      ) ??
-      mapped_3.find((gt, At) => !gt.allowed && gt.decisionReason?.type === "rule" && Je(Ie[At]));
-  if (nt?.decisionReason !== void 0)
+  let mapped = Z.map((gt) => validatePath(gt, cwd, context, L));
+  let mapped_2 = attachedDestinations.map((attachedDestination) =>
+    validatePath(attachedDestination, cwd, context, L),
+  );
+  let mapped_3 = Ie.map((gt) => validatePath(gt, cwd, context, "read"));
+  let Je = (gt) =>
+    !containsAnyPlaceholder(gt) && (!compoundCommandHasCd || isAbsolute(gt) || gt.startsWith("~"));
+  let nt =
+    mapped.find((gt, At) => !gt.allowed && gt.decisionReason?.type === "rule" && Je(Z[At])) ??
+    mapped_2.find(
+      (gt, At) => !gt.allowed && gt.decisionReason?.type === "rule" && Je(attachedDestinations[At]),
+    ) ??
+    mapped_3.find((gt, At) => !gt.allowed && gt.decisionReason?.type === "rule" && Je(Ie[At]));
+  if (nt?.decisionReason !== undefined)
     return {
       behavior: "deny",
       message: formatDenyRuleBlockedMessage(
-        e,
+        command,
         L === "read" || mapped_3.includes(nt) ? "from" : "to",
         nt.resolvedPath,
       ),
@@ -1784,16 +1445,16 @@ function validateCommandPaths(e, n, r, s, h, y, S, w) {
   if (L !== "read" && Z.some((gt) => containsAnyPlaceholder(gt)))
     return {
       behavior: "ask",
-      message: `${e} target contains command-substitution or untracked-variable output \u2014 the path is runtime-determined and cannot be validated`,
+      message: `${command} target contains command-substitution or untracked-variable output \u2014 the path is runtime-determined and cannot be validated`,
       decisionReason: {
         type: "other",
-        reason: `${e} path argument is runtime-determined`,
+        reason: `${command} path argument is runtime-determined`,
         bashMissKind: "shell-expansion",
       },
     };
   if (we) {
-    if (e === "cd") {
-      if (Se) return outsideReadsRuntimePathAsk(e);
+    if (command === "cd") {
+      if (Se) return outsideReadsRuntimePathAsk(command);
       return {
         behavior: "ask",
         message: `cd with two or more directory arguments requires manual approval. zsh's "cd OLD NEW" form substitutes OLD\u2192NEW in $PWD, producing a target path that cannot be statically validated.`,
@@ -1806,29 +1467,29 @@ function validateCommandPaths(e, n, r, s, h, y, S, w) {
     }
     return {
       behavior: "ask",
-      message: `${e} with flags requires manual approval to ensure path safety. For security, Claude Code cannot automatically validate ${e} commands that use flags, as some flags like --target-directory=PATH can bypass path validation.`,
+      message: `${command} with flags requires manual approval to ensure path safety. For security, Claude Code cannot automatically validate ${command} commands that use flags, as some flags like --target-directory=PATH can bypass path validation.`,
       decisionReason: {
         type: "other",
-        reason: `${e} command with flags requires manual approval`,
+        reason: `${command} command with flags requires manual approval`,
         bashMissKind: "flag-validation",
       },
     };
   }
   if (
-    h &&
+    compoundCommandHasCd &&
     L === "read" &&
-    Z.some((gt) => !isAbsolute_22(Lu(gt))) &&
-    (Se || (e !== "cd" && S !== !0 && hasBashDenyRule(s)))
+    Z.some((gt) => !isAbsolute(expandTildeWithHome(gt))) &&
+    (Se || (command !== "cd" && S !== true && hasBashDenyRule(context)))
   ) {
-    let gt = checkDenyRulesForPaths(e, Z, r, s, L);
+    let gt = checkDenyRulesForPaths(command, Z, cwd, context, L);
     if (gt) return gt;
-    if (Se) return outsideReadsRuntimePathAsk(e);
-    let paths = hasNoBashDenyRules(s);
+    if (Se) return outsideReadsRuntimePathAsk(command);
+    let paths = hasNoBashDenyRules(context);
     return {
       behavior: "ask",
       message: paths
-        ? `${e} reads a relative path after cd. That can't be checked against this computer's keys and sign-in files first.`
-        : `${e} reads a file by a relative path after a cd in a compound command; which file that is cannot be resolved statically while a Read() deny rule is configured, so this needs approval.`,
+        ? `${command} reads a relative path after cd. That can't be checked against this computer's keys and sign-in files first.`
+        : `${command} reads a file by a relative path after a cd in a compound command; which file that is cannot be resolved statically while a Read() deny rule is configured, so this needs approval.`,
       decisionReason: {
         type: "other",
         reason: paths
@@ -1838,7 +1499,7 @@ function validateCommandPaths(e, n, r, s, h, y, S, w) {
       },
     };
   }
-  if (h && L !== "read")
+  if (compoundCommandHasCd && L !== "read")
     return {
       behavior: "ask",
       message:
@@ -1850,37 +1511,36 @@ function validateCommandPaths(e, n, r, s, h, y, S, w) {
         bashMissKind: "cd-compound-write",
       },
     };
-  let pt,
-    filtered = mapped.filter((gt) => !gt.allowed && gt.decisionReason?.type === "safetyCheck"),
-    yt =
-      filtered.length === 0 ||
-      (e === "cp" && filtered.at(-1) !== mapped.at(-1)) ||
-      mapped.some((gt) => !gt.allowed && gt.decisionReason?.type === "rule");
-  for (let {
-    allowed: allowed,
-    resolvedPath: resolvedPath,
-    decisionReason: decisionReason,
-    isInWorkingDir: isInWorkingDir,
-  } of yt ? mapped : filtered.slice(0, 1))
+  let pt;
+  let filtered = mapped.filter((gt) => !gt.allowed && gt.decisionReason?.type === "safetyCheck");
+  let yt =
+    filtered.length === 0 ||
+    (command === "cp" && filtered.at(-1) !== mapped.at(-1)) ||
+    mapped.some((gt) => !gt.allowed && gt.decisionReason?.type === "rule");
+  for (let { allowed, resolvedPath, decisionReason, isInWorkingDir } of yt ? mapped : filtered.slice(0, 1))
     if (!allowed) {
-      let workingDirs = Array.from(allWorkingDirectories(s)),
-        dirListStr = formatDirectoryList(workingDirs),
-        rn = isInWorkingDir === !0 && decisionReason === void 0,
-        pn =
-          decisionReason?.type === "other" || decisionReason?.type === "safetyCheck"
-            ? decisionReason.reason
-            : rn
-              ? formatInsideWorkingDirApproval(`${e} in '${resolvedPath}'`, dirListStr)
-              : L !== "read" && decisionReason?.type !== "rule"
-                ? formatOutsideWorkingDirApproval(`${e} in '${resolvedPath}'`, dirListStr)
-                : `${e} in '${resolvedPath}' was blocked. For security, Claude Code may only ${ACTION_VERBS[e]} the allowed working directories for this session: ${dirListStr}.`;
+      let workingDirs = Array.from(allWorkingDirectories(context));
+      let dirListStr = formatDirectoryList(workingDirs);
+      let rn = isInWorkingDir === true && decisionReason === undefined;
+      let message =
+        decisionReason?.type === "other" || decisionReason?.type === "safetyCheck"
+          ? decisionReason.reason
+          : rn
+            ? formatInsideWorkingDirApproval(`${command} in '${resolvedPath}'`, dirListStr)
+            : L !== "read" && decisionReason?.type !== "rule"
+              ? formatOutsideWorkingDirApproval(`${command} in '${resolvedPath}'`, dirListStr)
+              : `${command} in '${resolvedPath}' was blocked. For security, Claude Code may only ${ACTION_VERBS[command]} the allowed working directories for this session: ${dirListStr}.`;
       if (decisionReason?.type === "rule")
-        return { behavior: "deny", message: pn, decisionReason: decisionReason };
+        return {
+          behavior: "deny",
+          message,
+          decisionReason,
+        };
       let no = {
         behavior: "ask",
-        message: pn,
+        message,
         blockedPath: resolvedPath,
-        decisionReason: decisionReason,
+        decisionReason,
         bashAllowRuleOverridable: rn,
       };
       if (rn) {
@@ -1890,138 +1550,185 @@ function validateCommandPaths(e, n, r, s, h, y, S, w) {
       return no;
     }
   if (pt) return pt;
-  return { behavior: "passthrough", message: `Path validation passed for ${e} command` };
+  return {
+    behavior: "passthrough",
+    message: `Path validation passed for ${command} command`,
+  };
 }
+//@ chunk-e6aww6q8.js:1112301-1112882 fingerprint = createPathChecker (1)
 /**
  * 为某命令生成路径检查器：validateCommandPaths + rm/rmdir 危险删除检查；ask 时附建议（读：会话读规则；写：加会话目录，必要时切 acceptEdits）。
  */
-//@ chunk-e6aww6q8.js:1112301-1112882 fingerprint = createPathChecker (1)
 function createPathChecker(command, operationTypeOverride) {
-  return (r, s, h, y, S, w) => {
-    let L = validateCommandPaths(command, r, s, h, y, operationTypeOverride, S, w);
-    if (L.behavior === "deny") return L;
+  return (args, cwd, context, compoundCommandHasCd, S, w) => {
+    let result = validateCommandPaths(
+      command,
+      args,
+      cwd,
+      context,
+      compoundCommandHasCd,
+      operationTypeOverride,
+      S,
+      w,
+    );
+    if (result.behavior === "deny") return result;
     if (command === "rm" || command === "rmdir") {
-      let G = checkDangerousRemovalPaths(command, r, s, h, y);
-      if (G.behavior !== "passthrough") return G;
+      let dangerousPathResult = checkDangerousRemovalPaths(command, args, cwd, context, compoundCommandHasCd);
+      if (dangerousPathResult.behavior !== "passthrough") return dangerousPathResult;
     }
-    if (L.behavior === "passthrough") return L;
-    if (L.behavior === "ask") {
-      let operationType = operationTypeOverride ?? COMMAND_OPERATION_TYPE[command],
-        suggestions = [];
-      if (L.blockedPath)
+    if (result.behavior === "passthrough") return result;
+    if (result.behavior === "ask") {
+      let operationType = operationTypeOverride ?? COMMAND_OPERATION_TYPE[command];
+      let suggestions = [];
+      if (result.blockedPath)
         if (operationType === "read") {
-          let dirPath = getDirectoryForPath(L.blockedPath),
-            suggestion = createReadRuleSuggestion(dirPath, "session");
+          let dirPath = getDirectoryForPath(result.blockedPath);
+          let suggestion = createReadRuleSuggestion(dirPath, "session");
           if (suggestion) suggestions.push(suggestion);
         } else
           suggestions.push({
             type: "addDirectories",
-            directories: [getDirectoryForPath(L.blockedPath)],
+            directories: [getDirectoryForPath(result.blockedPath)],
             destination: "session",
           });
-      if ((operationType === "write" || operationType === "create") && acceptEditsSuggestionApplies(h))
-        suggestions.push({ type: "setMode", mode: "acceptEdits", destination: "session" });
-      L.suggestions = suggestions;
+      if ((operationType === "write" || operationType === "create") && acceptEditsSuggestionApplies(context))
+        suggestions.push({
+          type: "setMode",
+          mode: "acceptEdits",
+          destination: "session",
+        });
+      result.suggestions = suggestions;
     }
-    return L;
+    return result;
   };
 }
 //@ chunk-e6aww6q8.js:1112882-1112911 layout
 function parseCommandArgs(e) {
   return getCommandArgv(e);
 }
+//@ chunk-e6aww6q8.js:1112911-1113249 fingerprint = validateSinglePathCommand (1)
 /**
  * 文本版：剥离包装后解析命令，若是路径受限命令则做路径检查（白名单内的 sed 视为读）。
  */
-//@ chunk-e6aww6q8.js:1112911-1113249 fingerprint = validateSinglePathCommand (1)
-function validateSinglePathCommand(e, n, r, s, h) {
-  let strippedCmd = stripSafeWrappers(e),
-    extractedArgs = parseCommandArgs(strippedCmd);
+function validateSinglePathCommand(cmd, cwd, toolPermissionContext, compoundCommandHasCd, h) {
+  let strippedCmd = stripSafeWrappers(cmd);
+  let extractedArgs = parseCommandArgs(strippedCmd);
   if (extractedArgs.length === 0)
-    return { behavior: "passthrough", message: "Empty command - no paths to validate" };
-  let [w, ...L] = extractedArgs,
-    G = normalizeCommandName(w);
-  if (!G || !SUPPORTED_PATH_COMMANDS.includes(G))
-    return { behavior: "passthrough", message: `Command '${G}' is not a path-restricted command` };
-  let operationTypeOverride = G === "sed" && sedCommandIsAllowedByAllowlist(strippedCmd) ? "read" : void 0;
-  return createPathChecker(G, operationTypeOverride)(L, n, r, s, h);
+    return {
+      behavior: "passthrough",
+      message: "Empty command - no paths to validate",
+    };
+  let [w, ...L] = extractedArgs;
+  let baseCmd = normalizeCommandName(w);
+  if (!baseCmd || !SUPPORTED_PATH_COMMANDS.includes(baseCmd))
+    return {
+      behavior: "passthrough",
+      message: `Command '${baseCmd}' is not a path-restricted command`,
+    };
+  let operationTypeOverride =
+    baseCmd === "sed" && sedCommandIsAllowedByAllowlist(strippedCmd) ? "read" : undefined;
+  return createPathChecker(baseCmd, operationTypeOverride)(
+    L,
+    cwd,
+    toolPermissionContext,
+    compoundCommandHasCd,
+    h,
+  );
 }
+//@ chunk-e6aww6q8.js:1113249-1113594 fingerprint = validateSinglePathCommandArgv (1)
 /**
  * AST 版：对 tree-sitter 解析出的简单命令做路径检查。
  */
-//@ chunk-e6aww6q8.js:1113249-1113594 fingerprint = validateSinglePathCommandArgv (1)
-function validateSinglePathCommandArgv(e, n, r, s, h) {
-  let argv = stripWrappersFromArgvForPaths(e.argv);
-  if (argv.length === 0) return { behavior: "passthrough", message: "Empty command - no paths to validate" };
-  let [S, ...w] = argv,
-    L = normalizeCommandName(S);
-  if (!L || !SUPPORTED_PATH_COMMANDS.includes(L))
-    return { behavior: "passthrough", message: `Command '${L}' is not a path-restricted command` };
+function validateSinglePathCommandArgv(cmd, cwd, toolPermissionContext, compoundCommandHasCd, h) {
+  let argv = stripWrappersFromArgvForPaths(cmd.argv);
+  if (argv.length === 0)
+    return {
+      behavior: "passthrough",
+      message: "Empty command - no paths to validate",
+    };
+  let [S, ...w] = argv;
+  let baseCmd = normalizeCommandName(S);
+  if (!baseCmd || !SUPPORTED_PATH_COMMANDS.includes(baseCmd))
+    return {
+      behavior: "passthrough",
+      message: `Command '${baseCmd}' is not a path-restricted command`,
+    };
   let operationTypeOverride =
-    L === "sed" && sedCommandIsAllowedByAllowlist(stripSafeWrappers(e.text)) ? "read" : void 0;
-  return createPathChecker(L, operationTypeOverride)(w, n, r, s, h, e);
+    baseCmd === "sed" && sedCommandIsAllowedByAllowlist(stripSafeWrappers(cmd.text)) ? "read" : undefined;
+  return createPathChecker(baseCmd, operationTypeOverride)(
+    w,
+    cwd,
+    toolPermissionContext,
+    compoundCommandHasCd,
+    h,
+    cmd,
+  );
 }
+//@ chunk-e6aww6q8.js:1113594-1113838 layout
 /**
  * 求 AST 命令读取的路径（路径提取 + 输入重定向），去掉占位符和特殊设备。
  */
-//@ chunk-e6aww6q8.js:1113594-1113838 layout
 function getReadPathsForAstCommand(e) {
-  let n = stripWrappersFromArgvForPaths(e.argv),
-    [r, ...s] = n,
-    h = normalizeCommandName(r),
-    y = [];
+  let n = stripWrappersFromArgvForPaths(e.argv);
+  let [r, ...s] = n;
+  let h = normalizeCommandName(r);
+  let y = [];
   if (h && SUPPORTED_PATH_COMMANDS.includes(h)) {
-    let S = h,
-      w = PATH_EXTRACTORS[S](s);
-    (y.push(...(COMMAND_OPERATION_TYPE[S] === "read" ? w : getSourceArgsOfWriteCommand(S, w))),
-      y.push(...getGlobArgsNeedingCheck(S, e, s, w)));
+    let S = h;
+    let w = PATH_EXTRACTORS[S](s);
+    y.push(...(COMMAND_OPERATION_TYPE[S] === "read" ? w : getSourceArgsOfWriteCommand(S, w)));
+    y.push(...getGlobArgsNeedingCheck(S, e, s, w));
   }
-  return (
-    y.push(...astRedirectsToOutputRedirections(e.redirects).inputRedirections),
-    y.filter((S) => !containsAnyPlaceholder(S) && !isSpecialDevicePath(S))
-  );
+  y.push(...astRedirectsToOutputRedirections(e.redirects).inputRedirections);
+  return y.filter((S) => !containsAnyPlaceholder(S) && !isSpecialDevicePath(S));
 }
+//@ chunk-e6aww6q8.js:1113838-1114900 layout
 /**
  * 求 AST 命令会写入的路径：写命令的目标、cp/mv 落点、输出重定向目标，并标记是否可能写入看不到的位置（sort -o、uniq 第二参数、find -fprint、sed 写、cp/mv --backup 等）。供文件监视/编辑 diff 使用。
  */
-//@ chunk-e6aww6q8.js:1113838-1114900 layout
-function getWriteTargetsForAstCommand(e) {
-  let n = stripWrappersFromArgvForPaths(e.argv),
-    [r, ...s] = n,
-    h = r?.replace(/^.*[\\/]/, ""),
-    y = [],
-    S = [],
-    w = [],
-    L = !1,
-    G = h !== void 0 && h !== "git" && SUPPORTED_PATH_COMMANDS.includes(h);
+function getWriteTargetsForAstCommand(simple) {
+  let n = stripWrappersFromArgvForPaths(simple.argv);
+  let [r, ...s] = n;
+  let replaced = r?.replace(/^.*[\\/]/, "");
+  let y = [];
+  let S = [];
+  let w = [];
+  let L = false;
+  let G = replaced !== undefined && replaced !== "git" && SUPPORTED_PATH_COMMANDS.includes(replaced);
   if (G) {
-    let q = h,
-      Z = PATH_EXTRACTORS[q](s),
-      Se = q === "sed" ? stripSafeWrappers(e.text) : "";
+    let q = replaced;
+    let Z = PATH_EXTRACTORS[q](s);
+    let Se = q === "sed" ? stripSafeWrappers(simple.text) : "";
     if (COMMAND_OPERATION_TYPE[q] === "read")
       L =
         (q === "sort" && s.some((ke) => /^-[A-Za-z]*o/.test(ke) || ke.startsWith("--o"))) ||
         (q === "uniq" && Z.length >= 2) ||
         (q === "find" && s.some((ke) => isFindDangerousAction(ke)));
     else if (q !== "sed" || !sedCommandIsAllowedByAllowlist(Se)) {
-      L = q === "sed" && !sedCommandIsAllowedByAllowlist(Se, { allowFileWrites: !0 });
-      let { targetDirectoryGiven: targetDirectoryGiven, attachedDestinations: attachedDestinations } =
-          getTargetDirectoryOption(q, s),
-        Ee = (q === "cp" || q === "mv") && !targetDirectoryGiven && Z.length >= 2;
-      if (Ee && q === "cp" && hasOnlyListOptions(s)) ((w = Z.slice(0, -1)), y.push(...Z.slice(-1)));
-      else y.push(...Z);
-      if ((y.push(...attachedDestinations), (q === "cp" || q === "mv") && hasBackupSuffixOption(s))) L = !0;
+      L =
+        q === "sed" &&
+        !sedCommandIsAllowedByAllowlist(Se, {
+          allowFileWrites: true,
+        });
+      let { targetDirectoryGiven, attachedDestinations } = getTargetDirectoryOption(q, s);
+      let Ee = (q === "cp" || q === "mv") && !targetDirectoryGiven && Z.length >= 2;
+      if (Ee && q === "cp" && hasOnlyListOptions(s)) {
+        w = Z.slice(0, -1);
+        y.push(...Z.slice(-1));
+      } else y.push(...Z);
+      y.push(...attachedDestinations);
+      if ((q === "cp" || q === "mv") && hasBackupSuffixOption(s)) L = true;
       if (q === "cp" && cpHasAmbiguousDestination(s, Ee ? Z.slice(0, -1) : targetDirectoryGiven ? Z : []))
-        L = !0;
+        L = true;
       let Ae = Ee ? Z.slice(-1) : targetDirectoryGiven ? [...Z, ...attachedDestinations] : [];
       for (let Ie of Ae)
         for (let Me of Z) {
-          let We = basename_20(Me);
+          let We = basename(Me);
           if (Me !== Ie && We !== "." && We !== "..") S.push(`${Ie.replace(/[\\/]+$/, "")}/${We}`);
         }
     }
   }
-  for (let redirect of e.redirects)
+  for (let redirect of simple.redirects)
     if (
       OUTPUT_REDIRECT_OPS.has(redirect.op) &&
       !(redirect.op === ">&" && /^(?:\d+|-)$/.test(redirect.target))
@@ -2039,7 +1746,7 @@ function getWriteTargetsForAstCommand(e) {
 function cpHasAmbiguousDestination(e, n) {
   return (
     n.some((r) => {
-      let s = basename_20(r);
+      let s = basename(r);
       return s === "." || s === ".." || (getPlatform() === "macos" && /[\\/]$/.test(r));
     }) || e.some((r) => r.startsWith("--no-t") || /^-[^-]*T/.test(r))
   );
@@ -2051,44 +1758,47 @@ function hasBackupSuffixOption(e) {
 //@ chunk-e6aww6q8.js:1115152-1115201 layout
 var OUTPUT_REDIRECT_OPS = new Set([">", ">|", "&>", ">>", "&>>", ">&"]);
 //@ chunk-e6aww6q8.js:1115201-1115382 layout
-function hasOnlyListOptions(e) {
-  let n = !1;
-  for (let r of e) {
-    if (r === "--") return !n;
-    if (!r.startsWith("-") || r === "-") n = !0;
-    else if (n || (r.startsWith("--") ? /^--[ls]/.test(r) : /[ls]/.test(r))) return !1;
+function hasOnlyListOptions(args) {
+  let n = false;
+  for (let arg of args) {
+    if (arg === "--") return !n;
+    if (!arg.startsWith("-") || arg === "-") n = true;
+    else if (n || (arg.startsWith("--") ? /^--[ls]/.test(arg) : /[ls]/.test(arg))) return false;
   }
-  return !0;
+  return true;
 }
 //@ chunk-e6aww6q8.js:1115382-1115420 layout
 var CASE_SENSITIVE_PATH_COMMANDS = new Set(["rm", "rmdir", "tee"]);
+//@ chunk-e6aww6q8.js:1115420-1115564 layout
 /**
  * 规范化命令名：rm/rmdir/tee 去掉目录前缀（tee 还去 .exe 并小写），其他保持原样。
  */
-//@ chunk-e6aww6q8.js:1115420-1115564 layout
 function normalizeCommandName(e) {
   if (!e) return e;
   let replaced = e.replace(/^.*[\\/]/, "");
   if (CASE_SENSITIVE_PATH_COMMANDS.has(replaced)) return replaced;
   return replaced.toLowerCase().replace(/\.exe$/, "") === "tee" ? "tee" : e;
 }
+//@ chunk-e6aww6q8.js:1115564-1117098 fingerprint = validateOutputRedirections (0.822)
 /**
  * 输出重定向检查：目标命中 deny 规则拒绝；复合命令含 cd 时任何重定向都要询问；目标不在可写范围则 ask 并建议添加会话目录。
  */
-//@ chunk-e6aww6q8.js:1115564-1117098 fingerprint = validateOutputRedirections (0.822)
 function validateOutputRedirections(redirections, cwd, toolPermissionContext, compoundCommandHasCd) {
   let mapped = redirections
-      .filter((w) => w.target !== "/dev/null")
-      .filter((w) => !compoundCommandHasCd || isAbsolute_22(w.target) || w.target.startsWith("~"))
-      .map((w) => validatePath(w.target, cwd, toolPermissionContext, "create")),
-    found = mapped.find((w) => !w.allowed && w.decisionReason?.type === "rule");
-  if (found?.decisionReason !== void 0)
+    .filter((redirection) => redirection.target !== "/dev/null")
+    .filter(
+      (redirection) =>
+        !compoundCommandHasCd || isAbsolute(redirection.target) || redirection.target.startsWith("~"),
+    )
+    .map((redirection) => validatePath(redirection.target, cwd, toolPermissionContext, "create"));
+  let found = mapped.find((w) => !w.allowed && w.decisionReason?.type === "rule");
+  if (found?.decisionReason !== undefined)
     return {
       behavior: "deny",
       message: formatDenyRuleBlockedMessage("Output redirection", "to", found.resolvedPath),
       decisionReason: found.decisionReason,
     };
-  if (compoundCommandHasCd && redirections.some((w) => w.target !== "/dev/null"))
+  if (compoundCommandHasCd && redirections.some((redirection) => redirection.target !== "/dev/null"))
     return {
       behavior: "ask",
       message:
@@ -2101,30 +1811,29 @@ function validateOutputRedirections(redirections, cwd, toolPermissionContext, co
       },
     };
   let S;
-  for (let {
-    allowed: allowed,
-    resolvedPath: resolvedPath,
-    decisionReason: decisionReason,
-    isInWorkingDir: isInWorkingDir,
-  } of mapped)
+  for (let { allowed, resolvedPath, decisionReason, isInWorkingDir } of mapped)
     if (!allowed) {
-      let workingDirs = Array.from(allWorkingDirectories(toolPermissionContext)),
-        dirListStr = formatDirectoryList(workingDirs),
-        message =
-          decisionReason?.type === "other" || decisionReason?.type === "safetyCheck"
-            ? decisionReason.reason
-            : decisionReason?.type === "rule"
-              ? formatDenyRuleBlockedMessage("Output redirection", "to", resolvedPath)
-              : isInWorkingDir === !0 && decisionReason === void 0
-                ? formatInsideWorkingDirApproval(`Output redirection to '${resolvedPath}'`, dirListStr)
-                : formatOutsideWorkingDirApproval(`Output redirection to '${resolvedPath}'`, dirListStr);
+      let workingDirs = Array.from(allWorkingDirectories(toolPermissionContext));
+      let dirListStr = formatDirectoryList(workingDirs);
+      let message =
+        decisionReason?.type === "other" || decisionReason?.type === "safetyCheck"
+          ? decisionReason.reason
+          : decisionReason?.type === "rule"
+            ? formatDenyRuleBlockedMessage("Output redirection", "to", resolvedPath)
+            : isInWorkingDir === true && decisionReason === undefined
+              ? formatInsideWorkingDirApproval(`Output redirection to '${resolvedPath}'`, dirListStr)
+              : formatOutsideWorkingDirApproval(`Output redirection to '${resolvedPath}'`, dirListStr);
       if (decisionReason?.type === "rule")
-        return { behavior: "deny", message: message, decisionReason: decisionReason };
+        return {
+          behavior: "deny",
+          message,
+          decisionReason,
+        };
       let we = {
         behavior: "ask",
-        message: message,
+        message,
         blockedPath: resolvedPath,
-        decisionReason: decisionReason,
+        decisionReason,
         suggestions: [
           {
             type: "addDirectories",
@@ -2136,7 +1845,12 @@ function validateOutputRedirections(redirections, cwd, toolPermissionContext, co
       if (decisionReason?.type === "safetyCheck") return we;
       S ??= we;
     }
-  return S ?? { behavior: "passthrough", message: "No unsafe redirections found" };
+  return (
+    S ?? {
+      behavior: "passthrough",
+      message: "No unsafe redirections found",
+    }
+  );
 }
 //@ chunk-e6aww6q8.js:1117098-1117225 sole-consumer
 function isHardSafetyAsk(e) {
@@ -2147,10 +1861,10 @@ function isHardSafetyAsk(e) {
     !isClassifierRoutedCircuitBreaker(e.decisionReason)
   );
 }
+//@ chunk-e6aww6q8.js:1117528-1123341 fingerprint = checkPathConstraints (0.338)
 /**
  * Bash 路径约束总检查：进程替换 >( <( 要询问；输入重定向检查；每个子命令的路径检查（deny 优先）；危险重定向目标检查（含 edit deny 规则）；输出重定向检查；汇总返回 deny/ask/passthrough。
  */
-//@ chunk-e6aww6q8.js:1117528-1123341 fingerprint = checkPathConstraints (0.338)
 function checkPathConstraints(
   input,
   cwd,
@@ -2161,54 +1875,51 @@ function checkPathConstraints(
   S,
 ) {
   let w =
-      !astCommands && />>\s*>\s*\(|>\s*>\s*\(|<\s*\(/.test(input.command)
-        ? {
-            behavior: "ask",
-            message:
-              "Process substitution (>(...) or <(...)) can execute arbitrary commands and requires manual approval",
-            decisionReason: {
-              type: "other",
-              reason: "Process substitution requires manual approval",
-              bashMissKind: "process-substitution",
-            },
-          }
-        : void 0,
-    L = astRedirects ? astRedirectsToOutputRedirections(astRedirects) : void 0,
-    {
-      redirections: redirections,
-      hasDangerousRedirection: hasDangerousRedirection,
-      dangerousRedirectionReason: dangerousRedirectionReason,
-    } = L ?? extractOutputRedirections(input.command),
-    Se = validateInputRedirections(
-      L?.inputRedirections ?? [],
-      cwd,
-      toolPermissionContext,
-      compoundCommandHasCd,
-    );
+    !astCommands && />>\s*>\s*\(|>\s*>\s*\(|<\s*\(/.test(input.command)
+      ? {
+          behavior: "ask",
+          message:
+            "Process substitution (>(...) or <(...)) can execute arbitrary commands and requires manual approval",
+          decisionReason: {
+            type: "other",
+            reason: "Process substitution requires manual approval",
+            bashMissKind: "process-substitution",
+          },
+        }
+      : undefined;
+  let L = astRedirects ? astRedirectsToOutputRedirections(astRedirects) : undefined;
+  let { redirections, hasDangerousRedirection, dangerousRedirectionReason } =
+    L ?? extractOutputRedirections(input.command);
+  let Se = validateInputRedirections(
+    L?.inputRedirections ?? [],
+    cwd,
+    toolPermissionContext,
+    compoundCommandHasCd,
+  );
   if (Se.behavior === "deny") return Se;
   let ke = astCommands
-      ? astCommands.map((yt) =>
-          validateSinglePathCommandArgv(yt, cwd, toolPermissionContext, compoundCommandHasCd, S),
-        )
-      : splitCommand(input.command).map((yt) =>
-          validateSinglePathCommand(yt, cwd, toolPermissionContext, compoundCommandHasCd, S),
-        ),
-    found = ke.find((yt) => yt.behavior === "deny");
-  if (found !== void 0) return found;
+    ? astCommands.map((astCommand) =>
+        validateSinglePathCommandArgv(astCommand, cwd, toolPermissionContext, compoundCommandHasCd, S),
+      )
+    : splitCommand(input.command).map((yt) =>
+        validateSinglePathCommand(yt, cwd, toolPermissionContext, compoundCommandHasCd, S),
+      );
+  let found = ke.find((yt) => yt.behavior === "deny");
+  if (found !== undefined) return found;
   let found_2 = ke.find(
     (yt) =>
       yt.behavior === "ask" &&
       yt.decisionReason?.type === "safetyCheck" &&
       isBypassImmuneCircuitBreaker(yt.decisionReason),
   );
-  if (w !== void 0) return found_2 ?? w;
+  if (w !== undefined) return found_2 ?? w;
   let Ae;
   if (hasDangerousRedirection) {
-    let yt,
-      gt,
-      At,
-      It = [],
-      Yt = !1;
+    let yt;
+    let gt;
+    let At;
+    let It = [];
+    let Yt = false;
     for (let no of [...(L?.denyCheckOutputRedirections ?? []), ...redirections].filter((hn) =>
       hasInteriorDotDot(hn.target),
     )) {
@@ -2220,22 +1931,18 @@ function checkPathConstraints(
       );
       if (redirectionResult.behavior === "deny") return redirectionResult;
       if (redirectionResult.behavior === "ask" && redirectionResult.decisionReason?.type === "safetyCheck") {
-        let {
-          circuitBreaker: circuitBreaker,
-          also: also,
-          classifierApprovable: classifierApprovable,
-        } = redirectionResult.decisionReason;
-        ((At ??= redirectionResult),
-          It.push(...(circuitBreaker !== void 0 ? [circuitBreaker] : []), ...(also ?? [])),
-          (Yt ||= !classifierApprovable));
+        let { circuitBreaker, also, classifierApprovable } = redirectionResult.decisionReason;
+        At ??= redirectionResult;
+        It.push(...(circuitBreaker !== undefined ? [circuitBreaker] : []), ...(also ?? []));
+        Yt ||= !classifierApprovable;
       }
     }
-    if (L !== void 0) {
+    if (L !== undefined) {
       let no = [...L.denyCheckOutputRedirections, ...redirections];
       for (let cmd of no)
         for (let ho of getRedirectTargetCandidates(cmd.target, cwd)) {
-          let yn = walkPermissionCheckPaths(ho.path),
-            Kn = permissionCheckSpellings(yn);
+          let yn = walkPermissionCheckPaths(ho.path);
+          let Kn = permissionCheckSpellings(yn);
           for (let ao of Kn) {
             let $o = matchingRuleForInput(ao, toolPermissionContext, "edit", "deny");
             if ($o !== null) {
@@ -2243,56 +1950,57 @@ function checkPathConstraints(
                 return {
                   behavior: "deny",
                   message: formatDenyRuleBlockedMessage("Output redirection", "to", ao),
-                  decisionReason: { type: "rule", rule: $o },
+                  decisionReason: {
+                    type: "rule",
+                    rule: $o,
+                  },
                 };
             }
           }
           let result = checkEditableInternalPath(ho.path, {}, Kn, {
-              restricted: toolPermissionContext.restricted,
-            }),
-            fo = result.behavior === "deny" && !0,
-            To = fo ? internalPathDenyWords(result.decisionReason) : void 0,
-            bo = fo ? hostPersonOnlyTag(result.decisionReason) : void 0,
-            vn = checkPathSafetyForAutoEdit(ho.path, Kn),
-            co = symlinkRedirect(yn, toolPermissionContext),
-            So;
+            restricted: toolPermissionContext.restricted,
+          });
+          let fo = result.behavior === "deny" && true;
+          let To = fo ? internalPathDenyWords(result.decisionReason) : undefined;
+          let bo = fo ? hostPersonOnlyTag(result.decisionReason) : undefined;
+          let vn = checkPathSafetyForAutoEdit(ho.path, Kn);
+          let co = symlinkRedirect(yn, toolPermissionContext);
+          let So;
           if (fo) {
-            if (
-              ((So =
-                co === null
-                  ? void 0
-                  : {
-                      sentence: symlinkRedirectSentence(ho.path, co),
-                      personOnly: co.carriedOut || !hardDeniedAsSpelled(ho.path, toolPermissionContext),
-                    }),
-              It.push("internalHardDeny", ...(bo !== void 0 ? [bo] : [])),
-              bo !== void 0 || So?.personOnly === !0)
-            )
-              Yt = !0;
-          }
-          let ko =
-              vn.safe || co === null
-                ? null
+            So =
+              co === null
+                ? undefined
                 : {
                     sentence: symlinkRedirectSentence(ho.path, co),
-                    personOnly: co.carriedOut || checkPathSafetyForAutoEdit(ho.path, [ho.path]).safe,
-                  },
-            un = vn.safe || (vn.classifierApprovable && ko?.personOnly !== !0 && So?.personOnly !== !0);
+                    personOnly: co.carriedOut || !hardDeniedAsSpelled(ho.path, toolPermissionContext),
+                  };
+            It.push("internalHardDeny", ...(bo !== undefined ? [bo] : []));
+            if (bo !== undefined || So?.personOnly === true) Yt = true;
+          }
+          let ko =
+            vn.safe || co === null
+              ? null
+              : {
+                  sentence: symlinkRedirectSentence(ho.path, co),
+                  personOnly: co.carriedOut || checkPathSafetyForAutoEdit(ho.path, [ho.path]).safe,
+                };
+          let un = vn.safe || (vn.classifierApprovable && ko?.personOnly !== true && So?.personOnly !== true);
           if (!vn.safe) {
-            if (
-              (It.push(...(vn.circuitBreaker !== void 0 ? [vn.circuitBreaker] : []), ...(vn.also ?? [])),
-              ko?.personOnly === !0)
-            )
-              Yt = !0;
+            It.push(...(vn.circuitBreaker !== undefined ? [vn.circuitBreaker] : []), ...(vn.also ?? []));
+            if (ko?.personOnly === true) Yt = true;
           }
           if (
-            yt === void 0 ||
+            yt === undefined ||
             (yt.decisionReason?.type === "safetyCheck" && yt.decisionReason.classifierApprovable)
           ) {
-            let ao = yt?.decisionReason?.type === "safetyCheck" ? yt.decisionReason.circuitBreaker : void 0;
-            if (!vn.safe && (yt === void 0 || !un || (vn.circuitBreaker !== void 0 && ao === void 0))) {
-              let $o = To ?? vn.message,
-                yo = ko === null ? $o : `${$o.endsWith(".") ? $o : `${$o}.`} ${ko.sentence}.`;
+            let circuitBreaker =
+              yt?.decisionReason?.type === "safetyCheck" ? yt.decisionReason.circuitBreaker : undefined;
+            if (
+              !vn.safe &&
+              (yt === undefined || !un || (vn.circuitBreaker !== undefined && circuitBreaker === undefined))
+            ) {
+              let $o = To ?? vn.message;
+              let yo = ko === null ? $o : `${$o.endsWith(".") ? $o : `${$o}.`} ${ko.sentence}.`;
               yt = {
                 behavior: "ask",
                 message: yo,
@@ -2300,8 +2008,14 @@ function checkPathConstraints(
                   type: "safetyCheck",
                   reason: yo,
                   ...(toolPermissionContext.restricted
-                    ? { classifierApprovable: !1, circuitBreaker: "restrictedMode" }
-                    : { classifierApprovable: un, circuitBreaker: vn.circuitBreaker ?? bo }),
+                    ? {
+                        classifierApprovable: false,
+                        circuitBreaker: "restrictedMode",
+                      }
+                    : {
+                        classifierApprovable: un,
+                        circuitBreaker: vn.circuitBreaker ?? bo,
+                      }),
                 },
               };
               continue;
@@ -2310,8 +2024,8 @@ function checkPathConstraints(
           if (
             vn.safe &&
             fo &&
-            (gt === void 0 ||
-              ((bo !== void 0 || So?.personOnly === !0) &&
+            (gt === undefined ||
+              ((bo !== undefined || So?.personOnly === true) &&
                 gt.decisionReason?.type === "safetyCheck" &&
                 gt.decisionReason.classifierApprovable))
           )
@@ -2320,15 +2034,19 @@ function checkPathConstraints(
               message: To ?? result.message,
               decisionReason: internalDenyShellAskReason(result, toolPermissionContext.restricted, So),
             };
-          if (vn.safe && !fo && co?.carriedOut === !0) {
-            Yt = !0;
-            let ao = symlinkRedirectSentence(ho.path, co),
-              $o = {
-                behavior: "ask",
-                message: ao,
-                decisionReason: { type: "safetyCheck", reason: ao, classifierApprovable: !1 },
-              };
-            if (yt === void 0) At ??= $o;
+          if (vn.safe && !fo && co?.carriedOut === true) {
+            Yt = true;
+            let ao = symlinkRedirectSentence(ho.path, co);
+            let $o = {
+              behavior: "ask",
+              message: ao,
+              decisionReason: {
+                type: "safetyCheck",
+                reason: ao,
+                classifierApprovable: false,
+              },
+            };
+            if (yt === undefined) At ??= $o;
             else if (yt.decisionReason?.type === "safetyCheck" && yt.decisionReason.classifierApprovable)
               yt = $o;
           }
@@ -2336,49 +2054,50 @@ function checkPathConstraints(
     }
     let qt = (no) => {
       if (no.behavior !== "ask" || no.decisionReason?.type !== "safetyCheck") return no;
-      let decisionReason = no.decisionReason,
-        filtered = uniq([...(decisionReason.also ?? []), ...It]).filter(
-          (yn) => yn !== decisionReason.circuitBreaker,
-        );
+      let decisionReason = no.decisionReason;
+      let filtered = uniq([...(decisionReason.also ?? []), ...It]).filter(
+        (yn) => yn !== decisionReason.circuitBreaker,
+      );
       return {
         ...no,
         decisionReason: {
           ...decisionReason,
           classifierApprovable: decisionReason.classifierApprovable && !Yt,
-          ...(filtered.length > 0 && { also: filtered }),
+          ...(filtered.length > 0 && {
+            also: filtered,
+          }),
         },
       };
     };
-    if (yt !== void 0) {
+    if (yt !== undefined) {
       let commands = qt(yt);
-      return found_2 === void 0 || isHardSafetyAsk(commands) ? commands : qt(found_2);
+      return found_2 === undefined || isHardSafetyAsk(commands) ? commands : qt(found_2);
     }
     let Zt =
-        dangerousRedirectionReason === "network_device"
-          ? "Redirect involving /dev/tcp or /dev/udp opens a network connection"
-          : dangerousRedirectionReason === "unc_path"
-            ? "Redirect target is a Windows UNC path \u2014 opening it triggers an SMB connection"
-            : "Shell expansion syntax in paths requires manual approval",
-      pn =
-        At !== void 0
-          ? qt(At)
-          : gt !== void 0
-            ? qt(gt)
-            : {
-                behavior: "ask",
-                message: Zt,
-                decisionReason: {
-                  type: "other",
-                  reason: Zt,
-                  bashMissKind:
-                    dangerousRedirectionReason === "network_device" ||
-                    dangerousRedirectionReason === "unc_path"
-                      ? "net-redirect"
-                      : "shell-expansion",
-                },
-              };
-    if (toolPermissionContext.blockReadsOutsideWorkingDirectories !== !0)
-      return found_2 === void 0 || isHardSafetyAsk(pn) ? pn : qt(found_2);
+      dangerousRedirectionReason === "network_device"
+        ? "Redirect involving /dev/tcp or /dev/udp opens a network connection"
+        : dangerousRedirectionReason === "unc_path"
+          ? "Redirect target is a Windows UNC path \u2014 opening it triggers an SMB connection"
+          : "Shell expansion syntax in paths requires manual approval";
+    let pn =
+      At !== undefined
+        ? qt(At)
+        : gt !== undefined
+          ? qt(gt)
+          : {
+              behavior: "ask",
+              message: Zt,
+              decisionReason: {
+                type: "other",
+                reason: Zt,
+                bashMissKind:
+                  dangerousRedirectionReason === "network_device" || dangerousRedirectionReason === "unc_path"
+                    ? "net-redirect"
+                    : "shell-expansion",
+              },
+            };
+    if (toolPermissionContext.blockReadsOutsideWorkingDirectories !== true)
+      return found_2 === undefined || isHardSafetyAsk(pn) ? pn : qt(found_2);
     Ae = pn;
   }
   let Ie;
@@ -2393,18 +2112,18 @@ function checkPathConstraints(
     }
     return;
   }
-  let We = validateOutputRedirections(redirections, cwd, toolPermissionContext, compoundCommandHasCd),
-    ze = Me(We),
-    lt;
+  let We = validateOutputRedirections(redirections, cwd, toolPermissionContext, compoundCommandHasCd);
+  let ze = Me(We);
+  let lt;
   if (ze) {
-    if (ze.behavior === "deny" || toolPermissionContext.blockReadsOutsideWorkingDirectories !== !0)
-      return ze.behavior === "ask" && found_2 !== void 0 && !isHardSafetyAsk(ze)
+    if (ze.behavior === "deny" || toolPermissionContext.blockReadsOutsideWorkingDirectories !== true)
+      return ze.behavior === "ask" && found_2 !== undefined && !isHardSafetyAsk(ze)
         ? mergeSafetyCheckAlso(found_2, ze)
         : ze;
     lt = ze;
   }
   let Je;
-  if (toolPermissionContext.blockReadsOutsideWorkingDirectories === !0 && astRedirects)
+  if (toolPermissionContext.blockReadsOutsideWorkingDirectories === true && astRedirects)
     for (let cmd of astRedirects) {
       if (cmd.op !== "<") continue;
       if (containsAnyPlaceholder(cmd.target)) {
@@ -2419,7 +2138,11 @@ function checkPathConstraints(
           decisionReason: gt.decisionReason,
         };
       if (!gt.allowed && isOutsideReadsBlockedAsk(gt.decisionReason)) {
-        Je ??= { behavior: "ask", message: gt.decisionReason.reason, decisionReason: gt.decisionReason };
+        Je ??= {
+          behavior: "ask",
+          message: gt.decisionReason.reason,
+          decisionReason: gt.decisionReason,
+        };
         continue;
       }
       if (
@@ -2433,9 +2156,9 @@ function checkPathConstraints(
       Je ??= outsideReadsRuntimePathAsk("input redirect");
     }
   let nt;
-  if (toolPermissionContext.blockReadsOutsideWorkingDirectories === !0) {
+  if (toolPermissionContext.blockReadsOutsideWorkingDirectories === true) {
     let yt = astCommands
-      ? astCommands.map((gt) => gt.argv)
+      ? astCommands.map((astCommand) => astCommand.argv)
       : splitCommand(input.command).map((gt) => parseCommandArgs(gt));
     for (let gt of yt) {
       let At =
@@ -2446,8 +2169,8 @@ function checkPathConstraints(
     }
   }
   nt ??= Je;
-  let pt = toolPermissionContext.blockReadsOutsideWorkingDirectories === !0,
-    Et;
+  let pt = toolPermissionContext.blockReadsOutsideWorkingDirectories === true;
+  let Et;
   for (let yt of ke) {
     let gt = Me(yt);
     if (!gt) continue;
@@ -2458,33 +2181,40 @@ function checkPathConstraints(
   if (nt) return nt;
   if (found_2)
     return (
-      [Ae, lt].find((yt) => yt !== void 0 && isHardSafetyAsk(yt)) ?? mergeSafetyCheckAlso(found_2, Ae ?? lt)
+      [Ae, lt].find((yt) => yt !== undefined && isHardSafetyAsk(yt)) ??
+      mergeSafetyCheckAlso(found_2, Ae ?? lt)
     );
   if (Ae) return Ae;
   if (lt) return lt;
   if (Et) return Et;
   if (Se.behavior === "ask") return Se;
   if (Ie) return Ie;
-  return { behavior: "passthrough", message: "All path commands validated successfully" };
+  return {
+    behavior: "passthrough",
+    message: "All path commands validated successfully",
+  };
 }
+//@ chunk-e6aww6q8.js:1123341-1124615 layout
 /**
  * 输入重定向（< file）检查：目标是通配或在 cd 之后时询问；命中 read deny 规则拒绝；否则按读路径校验。
  */
-//@ chunk-e6aww6q8.js:1123341-1124615 layout
-function validateInputRedirections(e, n, r, s) {
+function validateInputRedirections(e, cwd, toolPermissionContext, compoundCommandHasCd) {
   let h;
   for (let y of e) {
     if (isSpecialDevicePath(y)) continue;
-    if (firstGlobCharIndex(y) !== -1 || (s && !isAbsolute_22(y) && !y.startsWith("~"))) {
-      for (let q of getRedirectTargetCandidates(y, n)) {
-        if (!q.cwdIndependent && s) continue;
+    if (firstGlobCharIndex(y) !== -1 || (compoundCommandHasCd && !isAbsolute(y) && !y.startsWith("~"))) {
+      for (let q of getRedirectTargetCandidates(y, cwd)) {
+        if (!q.cwdIndependent && compoundCommandHasCd) continue;
         for (let Z of getPathsForPermissionCheck(q.path)) {
-          let Se = matchingRuleForInput(Z, r, "read", "deny");
+          let Se = matchingRuleForInput(Z, toolPermissionContext, "read", "deny");
           if (Se !== null)
             return {
               behavior: "deny",
               message: formatDenyRuleBlockedMessage("Input redirection", "from", Z),
-              decisionReason: { type: "rule", rule: Se },
+              decisionReason: {
+                type: "rule",
+                rule: Se,
+              },
             };
         }
       }
@@ -2500,36 +2230,39 @@ function validateInputRedirections(e, n, r, s) {
       };
       continue;
     }
-    let {
-      allowed: allowed,
-      resolvedPath: resolvedPath,
-      decisionReason: decisionReason,
-    } = validatePath(y, n, r, "read");
+    let { allowed, resolvedPath, decisionReason } = validatePath(y, cwd, toolPermissionContext, "read");
     if (allowed) continue;
     if (decisionReason?.type === "rule")
       return {
         behavior: "deny",
         message: formatDenyRuleBlockedMessage("Input redirection", "from", resolvedPath),
-        decisionReason: decisionReason,
+        decisionReason,
       };
-    let G = createReadRuleSuggestion(getDirectoryForPath(resolvedPath), "session");
+    let readRuleSuggestion = createReadRuleSuggestion(getDirectoryForPath(resolvedPath), "session");
     h ??= {
       behavior: "ask",
       message:
         decisionReason?.type === "other" || decisionReason?.type === "safetyCheck"
           ? decisionReason.reason
-          : `Input redirection from '${resolvedPath}' was blocked. For security, Claude Code may only read files in the allowed working directories for this session: ${formatDirectoryList(Array.from(allWorkingDirectories(r)))}.`,
+          : `Input redirection from '${resolvedPath}' was blocked. For security, Claude Code may only read files in the allowed working directories for this session: ${formatDirectoryList(Array.from(allWorkingDirectories(toolPermissionContext)))}.`,
       blockedPath: resolvedPath,
-      decisionReason: decisionReason,
-      ...(G && { suggestions: [G] }),
+      decisionReason,
+      ...(readRuleSuggestion && {
+        suggestions: [readRuleSuggestion],
+      }),
     };
   }
-  return h ?? { behavior: "passthrough", message: "No unsafe input redirections found" };
+  return (
+    h ?? {
+      behavior: "passthrough",
+      message: "No unsafe input redirections found",
+    }
+  );
 }
+//@ chunk-e6aww6q8.js:1124615-1124791 layout
 /**
  * /dev/null、/dev/std*、/dev/tty、/dev/fd/N、/proc/self/fd/0-2 等特殊设备路径。
  */
-//@ chunk-e6aww6q8.js:1124615-1124791 layout
 function isSpecialDevicePath(e) {
   return (
     e === "/dev/null" ||
@@ -2543,57 +2276,86 @@ function isSpecialDevicePath(e) {
 }
 //@ chunk-e6aww6q8.js:1124791-1124946 layout
 function getRedirectTargetCandidates(e, n) {
-  let r = [],
-    s = Lu(e);
-  if (s !== e) r.push({ path: s, cwdIndependent: !0 });
-  if (!e.startsWith("~")) r.push({ path: resolve_19(n, e), cwdIndependent: isAbsolute_22(e) });
-  return r;
+  let result = [];
+  let s = expandTildeWithHome(e);
+  if (s !== e)
+    result.push({
+      path: s,
+      cwdIndependent: true,
+    });
+  if (!e.startsWith("~"))
+    result.push({
+      path: resolve_2(n, e),
+      cwdIndependent: isAbsolute(e),
+    });
+  return result;
 }
+//@ chunk-e6aww6q8.js:1124946-1125928 fingerprint = astRedirectsToOutputRedirections (0.617)
 /**
  * 把 AST 重定向列表拆成输出重定向、输入重定向、需做 deny 检查的重定向，并标记危险重定向。
  */
-//@ chunk-e6aww6q8.js:1124946-1125928 fingerprint = astRedirectsToOutputRedirections (0.617)
 function astRedirectsToOutputRedirections(redirects) {
-  let n = [],
-    r = [],
-    s = [],
-    h = !1,
-    y;
-  for (let S of redirects) {
-    if (/^\/dev\/(tcp|udp)\//.test(S.target)) {
-      ((h = !0), (y = "network_device"));
+  let redirections = [];
+  let r = [];
+  let s = [];
+  let h = false;
+  let y;
+  for (let redirect of redirects) {
+    if (/^\/dev\/(tcp|udp)\//.test(redirect.target)) {
+      h = true;
+      y = "network_device";
       continue;
     }
-    if (containsVulnerableUncPath(S.target.replace(/\\/g, "/"), !0)) {
-      if (((h = !0), y !== "network_device")) y = "unc_path";
+    if (containsVulnerableUncPath(redirect.target.replace(/\\/g, "/"), true)) {
+      h = true;
+      if (y !== "network_device") y = "unc_path";
       continue;
     }
     if (
-      (S.op === ">" || S.op === ">|" || S.op === "&>" || S.op === ">>" || S.op === "&>>" || S.op === ">&") &&
-      (S.target.startsWith("~") || firstGlobCharIndex(S.target) !== -1)
+      (redirect.op === ">" ||
+        redirect.op === ">|" ||
+        redirect.op === "&>" ||
+        redirect.op === ">>" ||
+        redirect.op === "&>>" ||
+        redirect.op === ">&") &&
+      (redirect.target.startsWith("~") || firstGlobCharIndex(redirect.target) !== -1)
     ) {
-      if (((h = !0), y !== "network_device" && y !== "unc_path")) y = "shell_expansion";
-      s.push({ target: S.target, operator: S.op === ">>" || S.op === "&>>" ? ">>" : ">" });
+      h = true;
+      if (y !== "network_device" && y !== "unc_path") y = "shell_expansion";
+      s.push({
+        target: redirect.target,
+        operator: redirect.op === ">>" || redirect.op === "&>>" ? ">>" : ">",
+      });
       continue;
     }
-    switch (S.op) {
+    switch (redirect.op) {
       case ">":
       case ">|":
       case "&>":
-        n.push({ target: S.target, operator: ">" });
+        redirections.push({
+          target: redirect.target,
+          operator: ">",
+        });
         break;
       case ">>":
       case "&>>":
-        n.push({ target: S.target, operator: ">>" });
+        redirections.push({
+          target: redirect.target,
+          operator: ">>",
+        });
         break;
       case ">&":
-        if (!/^(?:\d+|-)$/.test(S.target)) n.push({ target: S.target, operator: ">" });
+        if (!/^(?:\d+|-)$/.test(redirect.target))
+          redirections.push({
+            target: redirect.target,
+            operator: ">",
+          });
         break;
       case "<":
-        r.push(S.target);
+        r.push(redirect.target);
         break;
       case "<&":
-        if (!/^(?:\d+|-)$/.test(S.target)) r.push(S.target);
+        if (!/^(?:\d+|-)$/.test(redirect.target)) r.push(redirect.target);
         break;
       case "<<":
       case "<<<":
@@ -2601,7 +2363,7 @@ function astRedirectsToOutputRedirections(redirects) {
     }
   }
   return {
-    redirections: n,
+    redirections,
     inputRedirections: r,
     hasDangerousRedirection: h,
     dangerousRedirectionReason: y,
@@ -2610,68 +2372,68 @@ function astRedirectsToOutputRedirections(redirects) {
 }
 //@ chunk-e6aww6q8.js:1125928-1126168 file-local
 function skipStdbufFlags(a) {
-  let n = 1;
-  while (n < a.length) {
-    let arg = a[n];
-    if (/^-[ioe]$/.test(arg) && a[n + 1]) n += 2;
-    else if (/^-[ioe]./.test(arg)) n++;
-    else if (/^--(input|output|error)=/.test(arg)) n++;
+  let i = 1;
+  while (i < a.length) {
+    let arg = a[i];
+    if (/^-[ioe]$/.test(arg) && a[i + 1]) i += 2;
+    else if (/^-[ioe]./.test(arg)) i++;
+    else if (/^--(input|output|error)=/.test(arg)) i++;
     else if (arg.startsWith("-")) return -1;
     else break;
   }
-  return n > 1 && n < a.length ? n : -1;
+  return i > 1 && i < a.length ? i : -1;
 }
 //@ chunk-e6aww6q8.js:1126168-1126404 file-local
 function skipEnvFlags(a) {
-  let n = 1;
-  while (n < a.length) {
-    let arg = a[n];
-    if (arg.includes("=") && !arg.startsWith("-")) n++;
-    else if (arg === "-i" || arg === "-0" || arg === "-v") n++;
-    else if (arg === "-u" && a[n + 1]) n += 2;
+  let i = 1;
+  while (i < a.length) {
+    let arg = a[i];
+    if (arg.includes("=") && !arg.startsWith("-")) i++;
+    else if (arg === "-i" || arg === "-0" || arg === "-v") i++;
+    else if (arg === "-u" && a[i + 1]) i += 2;
     else if (arg.startsWith("-")) return -1;
     else break;
   }
-  return n < a.length ? n : -1;
+  return i < a.length ? i : -1;
 }
+//@ chunk-e6aww6q8.js:1126404-1127358 fingerprint = stripWrappersFromArgv (0.809)
 /**
  * 剥离 time/nohup/timeout/nice/stdbuf/env/command 包装（含它们的选项），返回实际命令 argv。被 readOnlyValidation、沙箱读封锁等多处使用。
  */
-//@ chunk-e6aww6q8.js:1126404-1127358 fingerprint = stripWrappersFromArgv (0.809)
 function stripWrappersFromArgvForPaths(argv) {
   let n = argv;
   for (;;) {
-    let r = n[0]?.replace(/^.*[\\/]/, ""),
-      s =
-        r === "time" ||
-        r === "nohup" ||
-        r === "timeout" ||
-        r === "nice" ||
-        r === "stdbuf" ||
-        r === "env" ||
-        r === "command"
-          ? r
-          : n[0];
+    let replaced = n[0]?.replace(/^.*[\\/]/, "");
+    let s =
+      replaced === "time" ||
+      replaced === "nohup" ||
+      replaced === "timeout" ||
+      replaced === "nice" ||
+      replaced === "stdbuf" ||
+      replaced === "env" ||
+      replaced === "command"
+        ? replaced
+        : n[0];
     if (s === "time" || s === "nohup") n = n.slice(n[1] === "--" ? 2 : 1);
     else if (s === "timeout") {
-      let h = skipTimeoutFlags(n);
-      if (h < 0 || !n[h] || !/^\d+(?:\.\d+)?[smhd]?$/.test(n[h])) return n;
-      n = n.slice(h + 1);
-    } else if (s === "nice")
+      let i = skipTimeoutFlags(n);
+      if (i < 0 || !n[i] || !/^\d+(?:\.\d+)?[smhd]?$/.test(n[i])) return n;
+      n = n.slice(i + 1);
+    } else if (s === "nice") {
       if (n[1] === "-n" && n[2] && /^-?\d+$/.test(n[2])) n = n.slice(n[3] === "--" ? 4 : 3);
       else if (n[1] && /^-\d+$/.test(n[1])) n = n.slice(n[2] === "--" ? 3 : 2);
       else n = n.slice(n[1] === "--" ? 2 : 1);
-    else if (s === "stdbuf") {
-      let h = skipStdbufFlags(n);
-      if (h < 0) return n;
-      n = n.slice(h);
+    } else if (s === "stdbuf") {
+      let i = skipStdbufFlags(n);
+      if (i < 0) return n;
+      n = n.slice(i);
     } else if (s === "env") {
-      let h = skipEnvFlags(n);
-      if (h < 0) return n;
-      n = n.slice(h);
+      let i = skipEnvFlags(n);
+      if (i < 0) return n;
+      n = n.slice(i);
     } else if (s === "command") {
       let h = 1;
-      while (n[h] !== void 0 && /^-p+$/.test(n[h])) h++;
+      while (n[h] !== undefined && /^-p+$/.test(n[h])) h++;
       if (n[h] === "--") h++;
       if (h >= n.length || n[h].startsWith("-")) return n;
       n = n.slice(h);
@@ -2686,100 +2448,100 @@ function stripWrappersFromArgvForPaths(argv) {
   }
 }
 //@ chunk-e6aww6q8.js:1127358-1127430 affinity
-function formatDenyRuleBlockedMessage(e, n, r) {
-  return `${e} ${n} '${r}' was blocked by a deny rule.`;
+function formatDenyRuleBlockedMessage(e, n, resolvedPath) {
+  return `${e} ${n} '${resolvedPath}' was blocked by a deny rule.`;
 }
 //@ chunk-e6aww6q8.js:1127430-1127630 affinity
-function formatInsideWorkingDirApproval(e, n) {
-  return `${e} needs approval. The path is inside the working directories for this session (${n}), and Claude Code asks before a shell command creates, changes or removes files there.`;
+function formatInsideWorkingDirApproval(e, dirListStr) {
+  return `${e} needs approval. The path is inside the working directories for this session (${dirListStr}), and Claude Code asks before a shell command creates, changes or removes files there.`;
 }
 //@ chunk-e6aww6q8.js:1127630-1127784 affinity
-function formatOutsideWorkingDirApproval(e, n) {
-  return `${e} needs approval. The path is outside the working directories for this session (${n}). Allowing runs the command as written.`;
+function formatOutsideWorkingDirApproval(e, dirListStr) {
+  return `${e} needs approval. The path is outside the working directories for this session (${dirListStr}). Allowing runs the command as written.`;
 }
 //@ chunk-e6aww6q8.js:1153141-1153309 sole-consumer
 function isPathOrAncestorMatched(e, n) {
-  if (isPathMatchedForPermission(e, n)) return !0;
-  for (let r = 1; r < e.length; r++) {
-    let s = e[r],
-      h = e[r - 1];
-    if ((s === "/" || s === sep_28) && h !== "/" && h !== sep_28) {
-      if (isPathMatchedForPermission(e.slice(0, r), n)) return !0;
+  if (isPathMatchedForPermission(e, n)) return true;
+  for (let idx = 1; idx < e.length; idx++) {
+    let s = e[idx];
+    let h = e[idx - 1];
+    if ((s === "/" || s === sep) && h !== "/" && h !== sep) {
+      if (isPathMatchedForPermission(e.slice(0, idx), n)) return true;
     }
   }
-  return !1;
+  return false;
 }
 //@ chunk-e6aww6q8.js:1153309-1153579 placement = setCwdState (1)
 function isCaseVariantInsideCwd(e, n) {
   let lower = e.toLowerCase();
-  if (lower === n.toLowerCase()) return !0;
-  let s = getFsImplementation(),
-    normalized = (resolveDeepestExistingAncestorSync(s, getOriginalCwd()) ?? getOriginalCwd()).normalize(
-      "NFC",
-    ),
-    y = relative_18(normalized, n);
-  if (y === ".." || y.startsWith(".." + sep_28) || isAbsolute_21(y)) return !1;
+  if (lower === n.toLowerCase()) return true;
+  let fsImplementation = getFsImplementation();
+  let normalized = (
+    resolveDeepestExistingAncestorSync(fsImplementation, getOriginalCwd()) ?? getOriginalCwd()
+  ).normalize("NFC");
+  let y = relative(normalized, n);
+  if (y === ".." || y.startsWith(".." + sep) || isAbsolute(y)) return false;
   let S = n;
   for (;;) {
-    if (S.toLowerCase() === lower) return !0;
-    if (S === normalized || S === dirname_28(S)) return !1;
-    S = dirname_28(S);
+    if (S.toLowerCase() === lower) return true;
+    if (S === normalized || S === dirname(S)) return false;
+    S = dirname(S);
   }
 }
+//@ chunk-e6aww6q8.js:1153579-1154977 placement
 /**
  * 从 mkdir/touch 等命令中提取写入目标路径。
  */
-//@ chunk-e6aww6q8.js:1153579-1154977 placement
 function extractWriteTargets(e, n) {
   for (let r of e) {
     if (!r) continue;
     for (let redirect of r.redirects) {
-      if (INPUT_REDIRECT_OPS.has(redirect.op)) continue;
-      if (containsAnyPlaceholder(redirect.target)) return !0;
-      if (isPathMatchedForPermission(redirect.target, n)) return !0;
+      if (INPUT_REDIRECT_OPS_2.has(redirect.op)) continue;
+      if (containsAnyPlaceholder(redirect.target)) return true;
+      if (isPathMatchedForPermission(redirect.target, n)) return true;
     }
     let s = stripWrappersFromArgvForPaths(r.argv);
-    if (s[0] !== void 0 && containsAnyPlaceholder(s[0])) return !0;
+    if (s[0] !== undefined && containsAnyPlaceholder(s[0])) return true;
     let h = normalizeCommandName(s[0]);
     if (!h || !Object.hasOwn(COMMAND_OPERATION_TYPE, h)) continue;
     let y = COMMAND_OPERATION_TYPE[h];
     if ((y !== "write" && y !== "create") || NON_CREATING_WRITE_COMMANDS.has(h)) continue;
-    let S = PATH_EXTRACTORS[h](s.slice(1)),
-      w =
-        h === "mkdir" &&
-        s.slice(1).some((L) => /^-[^-]*p/.test(L) || (L.startsWith("--p") && "--parents".startsWith(L)));
+    let S = PATH_EXTRACTORS[h](s.slice(1));
+    let w =
+      h === "mkdir" &&
+      s.slice(1).some((L) => /^-[^-]*p/.test(L) || (L.startsWith("--p") && "--parents".startsWith(L)));
     for (let L of S) {
-      if (containsAnyPlaceholder(L)) return !0;
-      if (w ? isPathOrAncestorMatched(L, n) : isPathMatchedForPermission(L, n)) return !0;
+      if (containsAnyPlaceholder(L)) return true;
+      if (w ? isPathOrAncestorMatched(L, n) : isPathMatchedForPermission(L, n)) return true;
     }
     if ((h === "cp" || h === "mv") && S.length >= 1) {
-      let sliced = s.slice(1),
-        any = sliced.some((Se) => {
-          if (/^-[^-]*t/.test(Se)) return !0;
-          let index = Se.indexOf("="),
-            we = index >= 0 ? Se.slice(0, index) : Se;
-          return we.startsWith("--t") && "--target-directory".startsWith(we);
-        }),
-        any_2 = sliced.some(
-          (Se) => /^-[^-]*T/.test(Se) || (Se.startsWith("--n") && "--no-target-directory".startsWith(Se)),
-        ),
-        Z = !1;
+      let sliced = s.slice(1);
+      let any = sliced.some((Se) => {
+        if (/^-[^-]*t/.test(Se)) return true;
+        let index = Se.indexOf("=");
+        let we = index >= 0 ? Se.slice(0, index) : Se;
+        return we.startsWith("--t") && "--target-directory".startsWith(we);
+      });
+      let any_2 = sliced.some(
+        (Se) => /^-[^-]*T/.test(Se) || (Se.startsWith("--n") && "--no-target-directory".startsWith(Se)),
+      );
+      let Z = false;
       if (!any && S.length >= 2) {
-        let at = S.at(-1),
-          ke = [at];
-        if (at.startsWith("~")) {
-          let we = Lu(at);
-          if (we.startsWith("~")) Z = !0;
+        let last = S.at(-1);
+        let ke = [last];
+        if (last.startsWith("~")) {
+          let we = expandTildeWithHome(last);
+          if (we.startsWith("~")) Z = true;
           else ke.push(we);
         }
         if (!Z) {
-          let we = getFsImplementation(),
-            normalized = (resolveDeepestExistingAncestorSync(we, n) ?? n).normalize("NFC");
+          let fsImplementation = getFsImplementation();
+          let normalized = (resolveDeepestExistingAncestorSync(fsImplementation, n) ?? n).normalize("NFC");
           for (let Ae of ke) {
-            let Ie = resolve_18(n, Ae),
-              normalized_2 = resolveForPermissionCheck(we, Ie).normalize("NFC");
+            let Ie = resolve_2(n, Ae);
+            let normalized_2 = resolveForPermissionCheck(fsImplementation, Ie).normalize("NFC");
             if (isCaseVariantInsideCwd(normalized_2, normalized)) {
-              Z = !0;
+              Z = true;
               break;
             }
           }
@@ -2787,26 +2549,28 @@ function extractWriteTargets(e, n) {
       }
       if (any || Z) {
         let Se = any ? S : S.slice(0, -1);
-        if (any_2) return !0;
+        if (any_2) return true;
         for (let ke of Se) {
-          if (firstGlobCharIndex(ke) !== -1 || containsAnyPlaceholder(ke)) return !0;
-          let we = basename_19(ke);
-          if (we === "." || we === "..") return !0;
+          if (firstGlobCharIndex(ke) !== -1 || containsAnyPlaceholder(ke)) return true;
+          let we = basename(ke);
+          if (we === "." || we === "..") return true;
           if (ke.startsWith("~")) {
-            let Ee = Lu(ke);
-            if (Ee.startsWith("~")) return !0;
-            if (getPathsForPermissionCheck_2(basename_19(Ee), n) || getPathsForPermissionCheck_2(we, n))
-              return !0;
-          } else if (getPathsForPermissionCheck_2(we, n)) return !0;
+            let Ee = expandTildeWithHome(ke);
+            if (Ee.startsWith("~")) return true;
+            if (getPathsForPermissionCheck_2(basename(Ee), n) || getPathsForPermissionCheck_2(we, n))
+              return true;
+          } else if (getPathsForPermissionCheck_2(we, n)) return true;
         }
       }
     }
   }
-  return !1;
+  return false;
 }
 //@ chunk-e6aww6q8.js:1154977-1155016 placement
-var VIo = new Set(["<", "<<", "<&", "<<<"]);
-
+/**
+ * 输入类重定向操作符集合；只读命令判定时这类重定向不算“写”操作。
+ */
+var INPUT_REDIRECT_OPS = new Set(["<", "<<", "<&", "<<<"]);
 export {
   stripWrappersFromArgvForPaths,
   PATH_EXTRACTORS,
@@ -2818,7 +2582,7 @@ export {
   hasNoBashDenyRules,
   extractWriteTargets,
   COMMAND_OPERATION_TYPE,
-  VIo,
+  INPUT_REDIRECT_OPS,
   getReadPathsForAstCommand,
   getWriteTargetsForAstCommand,
 };

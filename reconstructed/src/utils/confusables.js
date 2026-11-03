@@ -9,14 +9,20 @@
  * attribution: placement 48
  */
 import { truncateToLength } from "./stringUtils.js";
-import { BRACKET_CONFUSABLES, NDi, normalizeNfkc, HDi, stripCombiningRepeated } from "./sanitization.js";
+import {
+  BRACKET_CONFUSABLES_2,
+  BRACKET_CONFUSABLES_WITH_ANGLES,
+  normalizeNfkc,
+  nfkdNormalize,
+  stripCombiningRepeated,
+} from "./sanitization.js";
 import { escapeInvisibleChars, toUnicodeEscapes } from "./resultError.js";
 import { Lu, uu } from "../../vendor/es-toolkit/dist/string/unescape.mjs";
 
+//@ chunk-p5akk6be.js:284-23659 placement
 /**
  * 每个拉丁字母的全角、数学字母、带圈、西里尔/希腊形近字符表（约 23 KB）。
  */
-//@ chunk-p5akk6be.js:284-23659 placement
 var LATIN_CONFUSABLES = new Map([
   [
     "a",
@@ -127,25 +133,25 @@ var LATIN_CONFUSABLES = new Map([
 function escapeXml_2(s) {
   return s.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 }
+//@ chunk-p5akk6be.js:23753-23831 placement
 /**
  * XML 转义并按上限截断。
  */
-//@ chunk-p5akk6be.js:23753-23831 placement
 function escapeXmlTruncated(u, d, e) {
   let a = escapeXml_2(u);
   if (a.length <= d) return a;
   return escapeXml_2(truncateBeforeEscape(u, d, e));
 }
+//@ chunk-p5akk6be.js:23831-24090 placement
 /**
  * 截断文本使其 XML 转义后的长度不超过上限，末尾加截断提示（默认“… [truncated]”）。
  */
-//@ chunk-p5akk6be.js:23831-24090 placement
 function truncateBeforeEscape(u, maxLength, formatSuffix) {
   let max = Math.max(0, Math.min(u.length, maxLength));
   for (;;) {
-    let n = truncateToLength(u, max),
-      f = formatSuffix?.(u.length - n.length) ?? "\u2026 [truncated]",
-      c = escapeXml_2(n).length + f.length - maxLength;
+    let n = truncateToLength(u, max);
+    let f = formatSuffix?.(u.length - n.length) ?? "\u2026 [truncated]";
+    let c = escapeXml_2(n).length + f.length - maxLength;
     if (c <= 0 || !(max > 0)) return n + f;
     max = n.length;
     while (c > 0 && max > 0) {
@@ -155,298 +161,336 @@ function truncateBeforeEscape(u, maxLength, formatSuffix) {
     }
   }
 }
-/**
- * 不可见/控制/格式字符的正则字符类。
- */
 //@ chunk-p5akk6be.js:24168-25745 placement
+/**
+ * 斜杠类形近字符到 “/” 的映射。
+ */
 var INVISIBLE_CHAR_CLASSES =
-    "\\u00ad\\u034f\\u0600-\\u0605\\u061c\\u06dd\\u070f\\u0890\\u0891\\u08e2\\u115f\\u1160\\u17b4\\u17b5\\u180b-\\u180f\\u200b-\\u200f\\u202a-\\u202e\\u2060-\\u206f\\u3164\\ufe00-\\ufe0f\\ufeff\\uffa0\\ufff0-\\ufffb\\u{110bd}\\u{110cd}\\u{13430}-\\u{1343f}\\u{1bca0}-\\u{1bca3}\\u{1d173}-\\u{1d17a}\\u{16fe4}\\u{e0000}-\\u{e0fff}",
-  S = new Map([
-    ...[...BRACKET_CONFUSABLES].filter(([u]) => !NDi.has(u)),
-    ["\uFF0F", "/"],
-    ["\u2215", "/"],
-    ["\u2044", "/"],
-  ]),
-  du =
-    "\\u0300-\\u0344\\u0346-\\u036f\\u0483-\\u0489\\u0591-\\u05bd\\u05bf\\u05c1\\u05c2\\u05c4\\u05c5\\u05c7\\u0610-\\u061a\\u064b-\\u065f\\u0670\\u06d6-\\u06dc\\u06df-\\u06e4\\u06e7\\u06e8\\u06ea-\\u06ed\\u1ab0-\\u1aff\\u1dc0-\\u1dff\\u20d0-\\u20ff\\u3099\\u309a\\ufe20-\\ufe2f",
-  Bdt = `${INVISIBLE_CHAR_CLASSES}${du}\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f-\\x9f\\u2028\\u2029`,
-  eu = "\\x0b\\x0c\\x1c-\\x1f\\x85\\u2028\\u2029\\u115f\\u1160\\u3164\\uffa0",
-  bXt = "A-Za-z0-9_\\-",
-  F = `(?:[^${bXt}]|$)`,
-  SXt = "\\p{Pd}\\u2212\\u207b\\u208b\\u02d7\\u2796\\u2043\\u30fc\\uff70",
-  N3e =
-    ":\\uff1a\\ufe55\\ufe13\\ua789\\u2236\\u02d0\\u02f8\\u05c3\\u0589\\u0703\\u0704\\u16ec\\u1803\\u1809\\u205a\\ua4fd\\ufe30",
-  G = "=\\u207c\\u208c\\ufe66\\uff1d\\ua78a\\u2550\\u268c\\ua4ff\\u{1f7f0}",
-  B = "\u2E40\u30A0\u1400",
-  H = `\\s\\u2800${Bdt}`,
-  Mso = `_\\p{Pc}\\u2017\\u02cd\\u07fa\\u0640${SXt}`,
-  v = `[${Mso}]`,
-  s = (() => {
-    let u = { "<": "<", ">": ">", "/": "/" };
-    for (let [d, e] of S) u[e] += d;
-    return {
-      open: u["<"],
-      close: u[">"],
-      slash: u["/"],
-      filler: `^${bXt}${u["<"]}${u[">"]}`,
-      lookalikePattern: new RegExp(`[${[...S.keys()].join("")}]`, "gu"),
-      invisiblePattern: new RegExp(`[${INVISIBLE_CHAR_CLASSES}]`, "gu"),
-    };
-  })(),
-  UK = { open: s.open, close: s.close, slash: s.slash };
+  "\\u00ad\\u034f\\u0600-\\u0605\\u061c\\u06dd\\u070f\\u0890\\u0891\\u08e2\\u115f\\u1160\\u17b4\\u17b5\\u180b-\\u180f\\u200b-\\u200f\\u202a-\\u202e\\u2060-\\u206f\\u3164\\ufe00-\\ufe0f\\ufeff\\uffa0\\ufff0-\\ufffb\\u{110bd}\\u{110cd}\\u{13430}-\\u{1343f}\\u{1bca0}-\\u{1bca3}\\u{1d173}-\\u{1d17a}\\u{16fe4}\\u{e0000}-\\u{e0fff}";
+var CONFUSABLE_SLASH_MAP = new Map([
+  ...[...BRACKET_CONFUSABLES_2].filter(([u]) => !BRACKET_CONFUSABLES_WITH_ANGLES.has(u)),
+  ["\uFF0F", "/"],
+  ["\u2215", "/"],
+  ["\u2044", "/"],
+]);
+var COMBINING_MARK_CLASSES =
+  "\\u0300-\\u0344\\u0346-\\u036f\\u0483-\\u0489\\u0591-\\u05bd\\u05bf\\u05c1\\u05c2\\u05c4\\u05c5\\u05c7\\u0610-\\u061a\\u064b-\\u065f\\u0670\\u06d6-\\u06dc\\u06df-\\u06e4\\u06e7\\u06e8\\u06ea-\\u06ed\\u1ab0-\\u1aff\\u1dc0-\\u1dff\\u20d0-\\u20ff\\u3099\\u309a\\ufe20-\\ufe2f";
+var FILLER_CHAR_CLASS = `${INVISIBLE_CHAR_CLASSES}${COMBINING_MARK_CLASSES}\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f-\\x9f\\u2028\\u2029`;
+var BOUNDARY_FILLER_CLASSES = "\\x0b\\x0c\\x1c-\\x1f\\x85\\u2028\\u2029\\u115f\\u1160\\u3164\\uffa0";
+var WORD_CHARS_CLASS = "A-Za-z0-9_\\-";
+var WORD_END_PATTERN = `(?:[^${WORD_CHARS_CLASS}]|$)`;
+var DASH_CHAR_CLASS = "\\p{Pd}\\u2212\\u207b\\u208b\\u02d7\\u2796\\u2043\\u30fc\\uff70";
+var COLON_CHAR_CLASS =
+  ":\\uff1a\\ufe55\\ufe13\\ua789\\u2236\\u02d0\\u02f8\\u05c3\\u0589\\u0703\\u0704\\u16ec\\u1803\\u1809\\u205a\\ua4fd\\ufe30";
+var EQUALS_CHAR_CLASS = "=\\u207c\\u208c\\ufe66\\uff1d\\ua78a\\u2550\\u268c\\ua4ff\\u{1f7f0}";
+var SPACE_LIKE_CHARS = "\u2E40\u30A0\u1400";
+var FILLER_WITH_SPACE_CLASS = `\\s\\u2800${FILLER_CHAR_CLASS}`;
+var CONNECTOR_CHAR_CLASS = `_\\p{Pc}\\u2017\\u02cd\\u07fa\\u0640${DASH_CHAR_CLASS}`;
+var CONNECTOR_CHAR_RE = `[${CONNECTOR_CHAR_CLASS}]`;
+var TAG_SCRUB_CLASSES = (() => {
+  let u = {
+    "<": "<",
+    ">": ">",
+    "/": "/",
+  };
+  for (let [d, e] of CONFUSABLE_SLASH_MAP) u[e] += d;
+  return {
+    open: u["<"],
+    close: u[">"],
+    slash: u["/"],
+    filler: `^${WORD_CHARS_CLASS}${u["<"]}${u[">"]}`,
+    lookalikePattern: new RegExp(`[${[...CONFUSABLE_SLASH_MAP.keys()].join("")}]`, "gu"),
+    invisiblePattern: new RegExp(`[${INVISIBLE_CHAR_CLASSES}]`, "gu"),
+  };
+})();
+var TAG_BRACKET_CLASSES = {
+  open: TAG_SCRUB_CLASSES.open,
+  close: TAG_SCRUB_CLASSES.close,
+  slash: TAG_SCRUB_CLASSES.slash,
+};
 //@ chunk-p5akk6be.js:25745-25786 placement
-function qIt() {
-  return s.invisiblePattern;
+/**
+ * 返回不可见字符的全局正则。
+ */
+function invisiblePatternAccessor() {
+  return TAG_SCRUB_CLASSES.invisiblePattern;
 }
 //@ chunk-p5akk6be.js:25786-25834 placement
 function stripInvisibleChars(u) {
-  return escapeInvisibleChars(u).replace(qIt(), toUnicodeEscapes);
+  return escapeInvisibleChars(u).replace(invisiblePatternAccessor(), toUnicodeEscapes);
 }
 //@ chunk-p5akk6be.js:25834-25884 placement
-function nve(u, d) {
+/**
+ * 生成带前瞻捕获的反向引用片段。
+ */
+function lookaheadCapture(u, d) {
   return `(?=([${u}]*))(?:\\${d})`;
 }
 //@ chunk-p5akk6be.js:25884-25918 placement
-function wXt(u) {
-  return nve(Bdt, u);
+/**
+ * 生成“匹配任意填充字符”的捕获片段。
+ */
+function fillerCapture(u) {
+  return lookaheadCapture(FILLER_CHAR_CLASS, u);
 }
 //@ chunk-p5akk6be.js:25918-25938 placement
-var x = new Map(),
-  au = 64;
+/**
+ * 标签正则的缓存表。
+ */
+var tagRegexCache = new Map();
+var MAX_TAG_REGEX_CACHE = 64;
 //@ chunk-p5akk6be.js:25938-26144 placement
 function getTagRegex(u, d) {
-  let e = `${d ? "/" : ""}${u}`,
-    a = x.get(e);
+  let e = `${d ? "/" : ""}${u}`;
+  let a = tagRegexCache.get(e);
   if (a) return a;
-  let n = buildTagRegex({
+  let tagRegex = buildTagRegex({
     tags: [u],
     closeOnly: d,
-    fillerClass: s.filler,
-    spell: (f) => (f === "-" || f === "_" ? v : f),
-    tail: void 0,
+    fillerClass: TAG_SCRUB_CLASSES.filler,
+    spell: (f) => (f === "-" || f === "_" ? CONNECTOR_CHAR_RE : f),
+    tail: undefined,
   });
-  if (x.size >= au) x.clear();
-  return (x.set(e, n), n);
+  if (tagRegexCache.size >= MAX_TAG_REGEX_CACHE) tagRegexCache.clear();
+  tagRegexCache.set(e, tagRegex);
+  return tagRegex;
 }
+//@ chunk-p5akk6be.js:26144-26463 placement
 /**
  * 构造匹配某些标签名（含易混淆字符与填充字符变体，可只匹配闭合标签）开头的全局 Unicode 正则。
  */
-//@ chunk-p5akk6be.js:26144-26463 placement
-function buildTagRegex({
-  tags: tags,
-  closeOnly: closeOnly,
-  fillerClass: fillerClass,
-  spell: spell,
-  tail: tail,
-}) {
-  let { open: open, slash: slash } = s,
-    t = 0,
-    r = closeOnly
-      ? `${nve(`${fillerClass}${slash}`, ++t)}[${slash}]${nve(fillerClass, ++t)}`
-      : nve(fillerClass, ++t),
-    mapped = tags.map((b) => [...b].map((C, R) => (R === 0 ? "" : wXt(++t)) + spell(C)).join("")),
-    g = tail === void 0 ? F : `${wXt(++t)}${tail}`;
+function buildTagRegex({ tags, closeOnly, fillerClass, spell, tail }) {
+  let { open, slash } = TAG_SCRUB_CLASSES;
+  let t = 0;
+  let r = closeOnly
+    ? `${lookaheadCapture(`${fillerClass}${slash}`, ++t)}[${slash}]${lookaheadCapture(fillerClass, ++t)}`
+    : lookaheadCapture(fillerClass, ++t);
+  let mapped = tags.map((tag) =>
+    [...tag].map((C, R) => (R === 0 ? "" : fillerCapture(++t)) + spell(C)).join(""),
+  );
+  let g = tail === undefined ? WORD_END_PATTERN : `${fillerCapture(++t)}${tail}`;
   return new RegExp(`[${open}](?!\\\\)(?=${r}(?:${mapped.join("|")})${g})`, "giu");
 }
 //@ chunk-p5akk6be.js:26463-26513 placement
-function jdt(u, d) {
-  return d.replace(getTagRegex(u, !0), "<\\");
+/**
+ * 把闭合标签的开头转义（只匹配闭合形式）。
+ */
+function scrubCloseTag(u, d) {
+  return d.replace(getTagRegex(u, true), "<\\");
 }
 //@ chunk-p5akk6be.js:26513-26563 placement
-function ZPn(u, d) {
-  return d.replace(getTagRegex(u, !1), "<\\");
+/**
+ * 把起始标签的开头转义。
+ */
+function scrubOpenTag(u, d) {
+  return d.replace(getTagRegex(u, false), "<\\");
 }
 //@ chunk-p5akk6be.js:26563-26632 placement
-function bv(u) {
-  return u.replace(s.lookalikePattern, (d) => S.get(d) ?? d);
+/**
+ * 用形近字符表把字符折叠成 ASCII 对应字符。
+ */
+function foldLookalikeChars(u) {
+  return u.replace(TAG_SCRUB_CLASSES.lookalikePattern, (d) => CONFUSABLE_SLASH_MAP.get(d) ?? d);
 }
 //@ chunk-p5akk6be.js:26632-26638 placement
-var M;
+/**
+ * 形近字符长度查表（支持双字符组合），首次使用时构建。
+ */
+var confusableLengthTable;
+//@ chunk-p5akk6be.js:26638-26876 placement
 /**
  * 统计文本中易混淆字符的个数（支持双字符组合）。
  */
-//@ chunk-p5akk6be.js:26638-26876 placement
 function countConfusables(u) {
-  let d = M;
-  if (d === void 0) {
-    d = M = new Uint8Array(65536);
-    for (let a of S.keys()) d[a.charCodeAt(0)] = a.length;
+  let d = confusableLengthTable;
+  if (d === undefined) {
+    d = confusableLengthTable = new Uint8Array(65536);
+    for (let key of CONFUSABLE_SLASH_MAP.keys()) d[key.charCodeAt(0)] = key.length;
   }
   let e = 0;
-  for (let a = 0; a < u.length; a++) {
-    let n = d[u.charCodeAt(a)];
+  for (let i = 0; i < u.length; i++) {
+    let n = d[u.charCodeAt(i)];
     if (n === 2) {
-      if (S.has(u.slice(a, a + 2))) (e++, a++);
+      if (CONFUSABLE_SLASH_MAP.has(u.slice(i, i + 2))) {
+        e++;
+        i++;
+      }
     } else e += n;
   }
   return e;
 }
+//@ chunk-p5akk6be.js:26876-28927 placement
 /**
  * 形近字符映射表（西里尔、希腊、小型大写、Cherokee、Lisu、Coptic 等 → ASCII 字母）；nu 是加入大写形式后的表和匹配正则。
  */
-//@ chunk-p5akk6be.js:26876-28927 placement
 var CONFUSABLE_CHAR_MAP = {
-    "\u0430": "a",
-    "\u0435": "e",
-    "\u043E": "o",
-    "\u0440": "p",
-    "\u0441": "c",
-    "\u0443": "y",
-    "\u0445": "x",
-    "\u043A": "k",
-    "\u0456": "i",
-    "\u0458": "j",
-    "\u0455": "s",
-    "\u0501": "d",
-    "\u051B": "q",
-    "\u051D": "w",
-    "\u04BB": "h",
-    "\u04CF": "l",
-    "\u0412": "b",
-    "\u041C": "m",
-    "\u041D": "h",
-    "\u0422": "t",
-    "\u03B1": "a",
-    "\u03B5": "e",
-    "\u03B9": "i",
-    "\u03BA": "k",
-    "\u03BD": "v",
-    "\u03BF": "o",
-    "\u03C1": "p",
-    "\u03C4": "t",
-    "\u03C5": "u",
-    "\u03C7": "x",
-    "\u03F3": "j",
-    "\u0392": "b",
-    "\u0396": "z",
-    "\u0397": "h",
-    "\u039C": "m",
-    "\u039D": "n",
-    "\u03A5": "y",
-    "\u1D00": "a",
-    "\u0299": "b",
-    "\u1D04": "c",
-    "\u1D05": "d",
-    "\u1D07": "e",
-    "\uA730": "f",
-    "\u0262": "g",
-    "\u029C": "h",
-    "\u026A": "i",
-    "\u1D0A": "j",
-    "\u1D0B": "k",
-    "\u029F": "l",
-    "\u1D0D": "m",
-    "\u0274": "n",
-    "\u1D0F": "o",
-    "\u1D18": "p",
-    "\u0280": "r",
-    "\uA731": "s",
-    "\u1D1B": "t",
-    "\u1D1C": "u",
-    "\u1D20": "v",
-    "\u1D21": "w",
-    "\u028F": "y",
-    "\u1D22": "z",
-    "\u0251": "a",
-    "\u0261": "g",
-    "\u0131": "i",
-    "\u0475": "v",
-    "\u0442": "t",
-    "\u043C": "m",
-    "\uAB70": "d",
-    "\uAB71": "r",
-    "\uAB72": "t",
-    "\uAB79": "y",
-    "\uAB7A": "a",
-    "\uAB7B": "j",
-    "\uAB7C": "e",
-    "\uAB83": "w",
-    "\uAB87": "m",
-    "\uAB8B": "h",
-    "\uAB90": "g",
-    "\uAB92": "h",
-    "\uAB93": "z",
-    "\uAB9C": "u",
-    "\uAB9F": "b",
-    "\uABA2": "r",
-    "\uABA4": "w",
-    "\uABA9": "v",
-    "\uABAA": "s",
-    "\uABAE": "l",
-    "\uABAF": "c",
-    "\uABB2": "p",
-    "\uABB6": "k",
-    "\uABB7": "d",
-    "\u13FC": "b",
-    "\uA4D0": "b",
-    "\uA4D1": "p",
-    "\uA4D3": "d",
-    "\uA4D4": "t",
-    "\uA4D6": "g",
-    "\uA4D7": "k",
-    "\uA4D9": "j",
-    "\uA4DA": "c",
-    "\uA4DC": "z",
-    "\uA4DD": "f",
-    "\uA4DF": "m",
-    "\uA4E0": "n",
-    "\uA4E1": "l",
-    "\uA4E2": "s",
-    "\uA4E3": "r",
-    "\uA4E6": "v",
-    "\uA4E7": "h",
-    "\uA4EA": "w",
-    "\uA4EB": "x",
-    "\uA4EC": "y",
-    "\uA4EE": "a",
-    "\uA4F0": "e",
-    "\uA4F2": "i",
-    "\uA4F3": "o",
-    "\uA4F4": "u",
-    "\u0566": "q",
-    "\u0570": "h",
-    "\u0578": "n",
-    "\u057D": "u",
-    "\u0581": "g",
-    "\u0585": "o",
-    "\u03F2": "c",
-    "\u2CA5": "c",
-    "\u0269": "i",
-    "\u2C81": "a",
-    "\u2C83": "b",
-    "\u2C89": "e",
-    "\u2C8F": "h",
-    "\u2C93": "i",
-    "\u2C95": "k",
-    "\u2C99": "m",
-    "\u2C9B": "n",
-    "\u2C9F": "o",
-    "\u2CA3": "p",
-    "\u2CA7": "t",
-    "\u2CA9": "y",
-    "\u2CAD": "x",
-    "\u2C8D": "z",
-  },
-  CONFUSABLE_CHAR_TABLE = (() => {
-    let u = { ...CONFUSABLE_CHAR_MAP };
-    for (let [d, e] of Object.entries(CONFUSABLE_CHAR_MAP)) {
-      let upper = d.toUpperCase();
-      if (upper !== d && [...upper].length === 1 && !(upper in u) && !/^[A-Za-z]$/.test(upper)) u[upper] = e;
-    }
-    return { table: u, pattern: new RegExp(`[${Object.keys(u).join("")}]`, "gu") };
-  })();
+  "\u0430": "a",
+  "\u0435": "e",
+  "\u043E": "o",
+  "\u0440": "p",
+  "\u0441": "c",
+  "\u0443": "y",
+  "\u0445": "x",
+  "\u043A": "k",
+  "\u0456": "i",
+  "\u0458": "j",
+  "\u0455": "s",
+  "\u0501": "d",
+  "\u051B": "q",
+  "\u051D": "w",
+  "\u04BB": "h",
+  "\u04CF": "l",
+  "\u0412": "b",
+  "\u041C": "m",
+  "\u041D": "h",
+  "\u0422": "t",
+  "\u03B1": "a",
+  "\u03B5": "e",
+  "\u03B9": "i",
+  "\u03BA": "k",
+  "\u03BD": "v",
+  "\u03BF": "o",
+  "\u03C1": "p",
+  "\u03C4": "t",
+  "\u03C5": "u",
+  "\u03C7": "x",
+  "\u03F3": "j",
+  "\u0392": "b",
+  "\u0396": "z",
+  "\u0397": "h",
+  "\u039C": "m",
+  "\u039D": "n",
+  "\u03A5": "y",
+  "\u1D00": "a",
+  "\u0299": "b",
+  "\u1D04": "c",
+  "\u1D05": "d",
+  "\u1D07": "e",
+  "\uA730": "f",
+  "\u0262": "g",
+  "\u029C": "h",
+  "\u026A": "i",
+  "\u1D0A": "j",
+  "\u1D0B": "k",
+  "\u029F": "l",
+  "\u1D0D": "m",
+  "\u0274": "n",
+  "\u1D0F": "o",
+  "\u1D18": "p",
+  "\u0280": "r",
+  "\uA731": "s",
+  "\u1D1B": "t",
+  "\u1D1C": "u",
+  "\u1D20": "v",
+  "\u1D21": "w",
+  "\u028F": "y",
+  "\u1D22": "z",
+  "\u0251": "a",
+  "\u0261": "g",
+  "\u0131": "i",
+  "\u0475": "v",
+  "\u0442": "t",
+  "\u043C": "m",
+  "\uAB70": "d",
+  "\uAB71": "r",
+  "\uAB72": "t",
+  "\uAB79": "y",
+  "\uAB7A": "a",
+  "\uAB7B": "j",
+  "\uAB7C": "e",
+  "\uAB83": "w",
+  "\uAB87": "m",
+  "\uAB8B": "h",
+  "\uAB90": "g",
+  "\uAB92": "h",
+  "\uAB93": "z",
+  "\uAB9C": "u",
+  "\uAB9F": "b",
+  "\uABA2": "r",
+  "\uABA4": "w",
+  "\uABA9": "v",
+  "\uABAA": "s",
+  "\uABAE": "l",
+  "\uABAF": "c",
+  "\uABB2": "p",
+  "\uABB6": "k",
+  "\uABB7": "d",
+  "\u13FC": "b",
+  "\uA4D0": "b",
+  "\uA4D1": "p",
+  "\uA4D3": "d",
+  "\uA4D4": "t",
+  "\uA4D6": "g",
+  "\uA4D7": "k",
+  "\uA4D9": "j",
+  "\uA4DA": "c",
+  "\uA4DC": "z",
+  "\uA4DD": "f",
+  "\uA4DF": "m",
+  "\uA4E0": "n",
+  "\uA4E1": "l",
+  "\uA4E2": "s",
+  "\uA4E3": "r",
+  "\uA4E6": "v",
+  "\uA4E7": "h",
+  "\uA4EA": "w",
+  "\uA4EB": "x",
+  "\uA4EC": "y",
+  "\uA4EE": "a",
+  "\uA4F0": "e",
+  "\uA4F2": "i",
+  "\uA4F3": "o",
+  "\uA4F4": "u",
+  "\u0566": "q",
+  "\u0570": "h",
+  "\u0578": "n",
+  "\u057D": "u",
+  "\u0581": "g",
+  "\u0585": "o",
+  "\u03F2": "c",
+  "\u2CA5": "c",
+  "\u0269": "i",
+  "\u2C81": "a",
+  "\u2C83": "b",
+  "\u2C89": "e",
+  "\u2C8F": "h",
+  "\u2C93": "i",
+  "\u2C95": "k",
+  "\u2C99": "m",
+  "\u2C9B": "n",
+  "\u2C9F": "o",
+  "\u2CA3": "p",
+  "\u2CA7": "t",
+  "\u2CA9": "y",
+  "\u2CAD": "x",
+  "\u2C8D": "z",
+};
+var CONFUSABLE_CHAR_TABLE = (() => {
+  let u = {
+    ...CONFUSABLE_CHAR_MAP,
+  };
+  for (let [key, value] of Object.entries(CONFUSABLE_CHAR_MAP)) {
+    let upper = key.toUpperCase();
+    if (upper !== key && [...upper].length === 1 && !(upper in u) && !/^[A-Za-z]$/.test(upper))
+      u[upper] = value;
+  }
+  return {
+    table: u,
+    pattern: new RegExp(`[${Object.keys(u).join("")}]`, "gu"),
+  };
+})();
+//@ chunk-p5akk6be.js:28927-29024 placement = COMMAND_SUBSTITUTION_PATTERNS (0.602)
 /**
  * 把字符串中的形近 Unicode 字符折叠成 ASCII（前后各折叠一次，中间做规范化并去附加符号），用于防同形字绕过。
  */
-//@ chunk-p5akk6be.js:28927-29024 placement = COMMAND_SUBSTITUTION_PATTERNS (0.602)
 function foldConfusableCharacters(u) {
-  let { table: table, pattern: pattern } = CONFUSABLE_CHAR_TABLE,
-    a = (n) => n.replace(pattern, (f) => table[f] ?? f);
+  let { table, pattern } = CONFUSABLE_CHAR_TABLE;
+  let a = (n) => n.replace(pattern, (f) => table[f] ?? f);
   return a(normalizeNfkc(normalizeAndStripMarks(a(u))));
 }
 //@ chunk-p5akk6be.js:29024-29076 placement
 function normalizeAndStripMarks(u) {
-  return HDi(u).replace(/\p{M}+/gu, "");
+  return nfkdNormalize(u).replace(/\p{M}+/gu, "");
 }
 //@ chunk-p5akk6be.js:29076-29113 placement
 var ABCDEFGHIJKLMNOPQRSTUVWXYZ = "abcdefghijklmnopqrstuvwxyz";
@@ -455,106 +499,118 @@ function latinLetterConfusableClass(letter) {
   if (!/^[a-z]$/.test(letter)) throw Error("latinLetterConfusableClass: expected one ASCII lowercase letter");
   return LATIN_CONFUSABLES.get(letter) ?? letter;
 }
+//@ chunk-p5akk6be.js:29248-29593 placement
 /**
  * 生成匹配某标签名所有易混淆拼写形式的正则。
  */
-//@ chunk-p5akk6be.js:29248-29593 placement
-function confusableTagScrubPattern(u, d) {
-  let e = s;
+function confusableTagScrubPattern(tags, d) {
+  let e = TAG_SCRUB_CLASSES;
   return buildTagRegex({
-    tags: u,
-    closeOnly: !1,
+    tags,
+    closeOnly: false,
     fillerClass: `${e.filler}${[...ABCDEFGHIJKLMNOPQRSTUVWXYZ].map(latinLetterConfusableClass).join("")}`,
     spell: (a) => {
       if (/^[a-z]$/.test(a)) return `[${latinLetterConfusableClass(a)}]`;
-      if (a === "-" || a === "_") return v;
+      if (a === "-" || a === "_") return CONNECTOR_CHAR_RE;
       if (/^[0-9]$/.test(a)) return a;
       throw Error("confusableTagScrubPattern: tag names are lowercase [a-z0-9_-]");
     },
-    tail: d?.({ name: bXt, close: e.close, colon: N3e }),
+    tail: d?.({
+      name: WORD_CHARS_CLASS,
+      close: e.close,
+      colon: COLON_CHAR_CLASS,
+    }),
   });
 }
 //@ chunk-p5akk6be.js:29593-29624 placement
-function QBe(u) {
+/**
+ * 生成“反斜杠 + 字符”的转义前缀。
+ */
+function escapedCharPrefix(u) {
   return `${u}\\`;
 }
+//@ chunk-p5akk6be.js:29624-29666 placement = CHANNEL_TAG (1)
 /**
  * 生成匹配 channel 标签（带 source 属性）的扫描器。旧版名 CHANNEL_TAG 为错配。
  */
-//@ chunk-p5akk6be.js:29624-29666 placement = CHANNEL_TAG (1)
 function buildChannelTagMatcher() {
   return confusableTagScrubPattern(["channel"], channelSourceAttrPattern);
 }
+//@ chunk-p5akk6be.js:29666-29876 placement
 /**
  * channel 标签 source 属性的正则片段。
  */
-//@ chunk-p5akk6be.js:29666-29876 placement
 function channelSourceAttrPattern({
   name: u,
-  close: close,
-  span: span = (n) => `[^${close}]{0,${n}}`,
-  assign: assign = (n) => `${n}(?=(?<assignGap>[${H}]*))\\k<assignGap>[${G}${B}]`,
+  close,
+  span = (n) => `[^${close}]{0,${n}}`,
+  assign = (n) =>
+    `${n}(?=(?<assignGap>[${FILLER_WITH_SPACE_CLASS}]*))\\k<assignGap>[${EQUALS_CHAR_CLASS}${SPACE_LIKE_CHARS}]`,
 }) {
-  return `(?:(?![${u}])|(?<=[${eu}][${Bdt}]*))${span(120)}(?<![\\w-])${assign("source")}`;
+  return `(?:(?![${u}])|(?<=[${BOUNDARY_FILLER_CLASSES}][${FILLER_CHAR_CLASS}]*))${span(120)}(?<![\\w-])${assign("source")}`;
 }
 //@ chunk-p5akk6be.js:29876-29892 placement
 var ANTML = "antml";
 //@ chunk-p5akk6be.js:29892-29946 placement
 function buildAntmlTagPattern() {
-  return confusableTagScrubPattern([ANTML], ({ colon: colon }) => `[${colon}]`);
+  return confusableTagScrubPattern([ANTML], ({ colon }) => `[${colon}]`);
 }
 //@ chunk-p5akk6be.js:29946-30310 placement
-var NON_ASCII_PATTERN = /[\u0080-\u{10ffff}]/u,
-  regExp = new RegExp(`[${s.open}]`, "u"),
-  regExp_2 = new RegExp(`[${SXt}]`, "gu"),
-  regExp_3 = new RegExp(`^[${Mso}]$`, "u"),
-  fromCharCode = String.fromCharCode(65533),
-  y = 57344,
-  bu = y + 32,
-  iu = y + 126,
-  P = 57856,
-  X = P + 32,
-  q = P + 126,
-  O = `${String.fromCharCode(X)}-${String.fromCharCode(q)}`,
-  W = ["nv", "uy"],
-  _ = 57600,
-  lu = _ + 255,
-  fromCharCode_2 = String.fromCharCode(_ + 240),
-  m = new Map(),
-  gu = 32768,
-  uint8Array = new Uint8Array(4352),
-  T;
+/**
+ * 全角私用区字符的基准码点（U+E000）。
+ */
+var NON_ASCII_PATTERN = /[\u0080-\u{10ffff}]/u;
+var regExp = new RegExp(`[${TAG_SCRUB_CLASSES.open}]`, "u");
+var regExp_2 = new RegExp(`[${DASH_CHAR_CLASS}]`, "gu");
+var regExp_3 = new RegExp(`^[${CONNECTOR_CHAR_CLASS}]$`, "u");
+var su = String.fromCharCode(65533);
+var PRIVATE_USE_BASE = 57344;
+var PRIVATE_USE_SINGLE_LOW = PRIVATE_USE_BASE + 32;
+var PRIVATE_USE_SINGLE_HIGH = PRIVATE_USE_BASE + 126;
+var PRIVATE_USE_PAIR_BASE = 57856;
+var PRIVATE_USE_PAIR_LOW = PRIVATE_USE_PAIR_BASE + 32;
+var PRIVATE_USE_PAIR_HIGH = PRIVATE_USE_PAIR_BASE + 126;
+var PRIVATE_USE_PAIR_CLASS = `${String.fromCharCode(PRIVATE_USE_PAIR_LOW)}-${String.fromCharCode(PRIVATE_USE_PAIR_HIGH)}`;
+var MULTI_CHAR_TAG_PIECES = ["nv", "uy"];
+var _ = 57600;
+var PRIVATE_USE_FOLDED_HIGH = _ + 255;
+var k = String.fromCharCode(_ + 240);
+var foldedCharCache = new Map();
+var MAX_FOLDED_CHAR_CACHE = 32768;
+var uint8Array = new Uint8Array(4352);
+var confusableReverseIndex;
 //@ chunk-p5akk6be.js:30310-30370 placement = normalizeFullWidthDigits (1)
 function normalizeFullWidthDigits(input) {
-  return String.fromCharCode(y + input.charCodeAt(0));
+  return String.fromCharCode(PRIVATE_USE_BASE + input.charCodeAt(0));
 }
 //@ chunk-p5akk6be.js:30370-30430 placement = normalizeFullWidthDigits (1)
 function normalizeFullWidthDigits_2(input) {
-  return String.fromCharCode(P + input.charCodeAt(0));
+  return String.fromCharCode(PRIVATE_USE_PAIR_BASE + input.charCodeAt(0));
 }
 //@ chunk-p5akk6be.js:30430-30538 placement
 function neutralizeCharCached(u) {
-  let d = m.get(u);
-  if (d !== void 0) return d;
+  let d = foldedCharCache.get(u);
+  if (d !== undefined) return d;
   let e = neutralizeSpecialChar(u);
-  if (m.size >= gu) m.clear();
-  return (m.set(u, e), e);
+  if (foldedCharCache.size >= MAX_FOLDED_CHAR_CACHE) foldedCharCache.clear();
+  foldedCharCache.set(u, e);
+  return e;
 }
 //@ chunk-p5akk6be.js:30538-31165 placement
 function neutralizeSpecialChar(u) {
-  let codePoint = u.codePointAt(0),
-    e = u;
+  let codePoint = u.codePointAt(0);
+  let e = u;
   if (
-    (codePoint >= bu && codePoint <= iu) ||
-    (codePoint >= X && codePoint <= q) ||
-    (codePoint >= _ && codePoint <= lu)
+    (codePoint >= PRIVATE_USE_SINGLE_LOW && codePoint <= PRIVATE_USE_SINGLE_HIGH) ||
+    (codePoint >= PRIVATE_USE_PAIR_LOW && codePoint <= PRIVATE_USE_PAIR_HIGH) ||
+    (codePoint >= _ && codePoint <= PRIVATE_USE_FOLDED_HIGH)
   )
-    e = fromCharCode;
-  else if (B.includes(u)) e = fromCharCode_2;
+    e = su;
+  else if (SPACE_LIKE_CHARS.includes(u)) e = k;
   else {
-    if (T === void 0) {
-      T = new Map();
-      for (let [c, t] of LATIN_CONFUSABLES) for (let r of t) T.set(r, c);
+    if (confusableReverseIndex === undefined) {
+      confusableReverseIndex = new Map();
+      for (let [c, t] of LATIN_CONFUSABLES) for (let r of t) confusableReverseIndex.set(r, c);
     }
     let a = new Set();
     for (let c of [
@@ -564,18 +620,18 @@ function neutralizeSpecialChar(u) {
       u.toUpperCase().toLowerCase(),
       u.toLowerCase().toUpperCase(),
     ]) {
-      let t = T.get(c);
-      if (t !== void 0) a.add(t);
+      let t = confusableReverseIndex.get(c);
+      if (t !== undefined) a.add(t);
     }
-    let joined = [...a].sort().join(""),
-      f =
-        joined ||
-        foldConfusableCharacters(u)
-          .replace(regExp_2, "-")
-          .toLowerCase()
-          .replace(/\u00DF/g, "ss");
+    let joined = [...a].sort().join("");
+    let f =
+      joined ||
+      foldConfusableCharacters(u)
+        .replace(regExp_2, "-")
+        .toLowerCase()
+        .replace(/\u00DF/g, "ss");
     if (a.size > 1) {
-      let index = W.indexOf(joined);
+      let index = MULTI_CHAR_TAG_PIECES.indexOf(joined);
       e = index === -1 ? normalizeFullWidthDigits(joined) : String.fromCharCode(_ + index);
     } else if (/^[a-z0-9_-]+$/.test(f))
       e = [...f]
@@ -586,43 +642,54 @@ function neutralizeSpecialChar(u) {
   return e;
 }
 //@ chunk-p5akk6be.js:31165-31301 placement
-function classifyCodeBlock(u) {
+function classifyCodeBlock(block) {
   let d = 1;
-  for (let max = Math.max(u << 8, 128); max < (u + 1) << 8; max++) {
-    let fromCodePoint = String.fromCodePoint(max);
-    if (neutralizeSpecialChar(fromCodePoint) !== fromCodePoint) {
+  for (let max = Math.max(block << 8, 128); max < (block + 1) << 8; max++) {
+    let a = String.fromCodePoint(max);
+    if (neutralizeSpecialChar(a) !== a) {
       d = 2;
       break;
     }
   }
-  return ((uint8Array[u] = d), d);
+  uint8Array[block] = d;
+  return d;
 }
 //@ chunk-p5akk6be.js:31301-31596 placement
 function buildTagCharClass(u) {
   if (/^[a-z0-9]$/.test(u)) {
-    let flattened = W.flatMap((e, a) => (e.includes(u) ? [String.fromCharCode(_ + a)] : []));
+    let flattened = MULTI_CHAR_TAG_PIECES.flatMap((e, a) =>
+      e.includes(u) ? [String.fromCharCode(_ + a)] : [],
+    );
     return `[${u}${normalizeFullWidthDigits(u)}${normalizeFullWidthDigits_2(u)}${flattened.join("")}]`;
   }
   if (u === "-" || u === "_")
-    return `[_\\-${normalizeFullWidthDigits("_")}${normalizeFullWidthDigits("-")}${normalizeFullWidthDigits_2("_")}${normalizeFullWidthDigits_2("-")}${fromCharCode_2}]`;
+    return `[_\\-${normalizeFullWidthDigits("_")}${normalizeFullWidthDigits("-")}${normalizeFullWidthDigits_2("_")}${normalizeFullWidthDigits_2("-")}${k}]`;
   throw Error("createTagFormScrub: tag names are lowercase [a-z0-9_-]");
 }
 //@ chunk-p5akk6be.js:31596-31974 placement
-function buildTagScrubPattern({ tags: tags, tail: tail }) {
-  let { open: open, close: close, filler: filler } = s,
-    f = 0,
-    c = (o) => [...o].map((g, b) => (b === 0 ? "" : wXt(++f)) + buildTagCharClass(g)).join(""),
-    mapped = tags.map(c),
-    r =
-      tail === void 0
-        ? F
-        : `${wXt(++f)}${tail({ name: bXt, close: close, colon: N3e, span: (o) => `[${O}]*(?:[^${close}${O}][${O}]*){0,${o}}`, spell: c, assign: (o) => `${c(o)}${nve(H, ++f)}[${G}${fromCharCode_2}]` })}`;
+function buildTagScrubPattern({ tags, tail }) {
+  let { open, close, filler } = TAG_SCRUB_CLASSES;
+  let f = 0;
+  let c = (o) => [...o].map((g, b) => (b === 0 ? "" : fillerCapture(++f)) + buildTagCharClass(g)).join("");
+  let mapped = tags.map(c);
+  let r =
+    tail === undefined
+      ? WORD_END_PATTERN
+      : `${fillerCapture(++f)}${tail({
+          name: WORD_CHARS_CLASS,
+          close,
+          colon: COLON_CHAR_CLASS,
+          span: (o) =>
+            `[${PRIVATE_USE_PAIR_CLASS}]*(?:[^${close}${PRIVATE_USE_PAIR_CLASS}][${PRIVATE_USE_PAIR_CLASS}]*){0,${o}}`,
+          spell: c,
+          assign: (o) => `${c(o)}${lookaheadCapture(FILLER_WITH_SPACE_CLASS, ++f)}[${EQUALS_CHAR_CLASS}${k}]`,
+        })}`;
   return new RegExp(`[${open}](?!\\\\)(?=[${filler}]*?(?:${mapped.join("|")})${r})`, "giu");
 }
+//@ chunk-p5akk6be.js:31974-32180 placement
 /**
  * 构造标签中和器：找出文本中给定伪 XML 标签的开头位置（考虑同形字符），neutralize 时把 '<' 改成 '<\' 以免被当作系统标签。
  */
-//@ chunk-p5akk6be.js:31974-32180 placement
 function createTagNeutralizer(u) {
   let mapped = u.filter((e) => e.tags.length > 0).map(buildTagScrubPattern);
   return {
@@ -630,156 +697,171 @@ function createTagNeutralizer(u) {
       return findTagOpenerOffsets(e, mapped);
     },
     neutralize(e) {
-      let a = "",
-        n = 0;
-      for (let f of findTagOpenerOffsets(e, mapped))
-        ((a += `${e.slice(n, f)}<\\`), (n = f + codePointLength(e, f)));
+      let a = "";
+      let n = 0;
+      for (let f of findTagOpenerOffsets(e, mapped)) {
+        a += `${e.slice(n, f)}<\\`;
+        n = f + codePointLength(e, f);
+      }
       return a + e.slice(n);
     },
   };
 }
+//@ chunk-p5akk6be.js:32180-32690 placement
 /**
  * 把文本中的易混淆非 ASCII 字符替换为中性读法（按 256 码位块缓存是否需要处理），返回替换后的读法与把读法偏移映射回原文偏移的函数。
  */
-//@ chunk-p5akk6be.js:32180-32690 placement
 function neutralizeConfusables(text) {
-  let offsets = [],
-    deltas = [],
-    reading = "",
-    lastIndex = 0;
+  let offsets = [];
+  let deltas = [];
+  let reading = "";
+  let lastIndex = 0;
   for (let index = 0; index < text.length; index++) {
     let code = text.charCodeAt(index);
     if (code < 128) continue;
-    let code_2 = text.charCodeAt(index + 1),
-      charLength = code >= 55296 && code <= 56319 && code_2 >= 56320 && code_2 <= 57343 ? 2 : 1,
-      block = (charLength === 2 ? text.codePointAt(index) : code) >> 8;
+    let code_2 = text.charCodeAt(index + 1);
+    let charLength = code >= 55296 && code <= 56319 && code_2 >= 56320 && code_2 <= 57343 ? 2 : 1;
+    let block = (charLength === 2 ? text.codePointAt(index) : code) >> 8;
     if ((uint8Array[block] || classifyCodeBlock(block)) === 1) {
       index += charLength - 1;
       continue;
     }
     let neutralized = neutralizeCharCached(text.slice(index, index + charLength));
-    if (
-      ((reading += text.slice(lastIndex, index) + neutralized),
-      (lastIndex = index + charLength),
-      neutralized.length !== charLength)
-    )
-      (offsets.push(reading.length), deltas.push(neutralized.length - charLength + (deltas.at(-1) ?? 0)));
+    reading += text.slice(lastIndex, index) + neutralized;
+    lastIndex = index + charLength;
+    if (neutralized.length !== charLength) {
+      offsets.push(reading.length);
+      deltas.push(neutralized.length - charLength + (deltas.at(-1) ?? 0));
+    }
     index += charLength - 1;
   }
-  return (
-    (reading += text.slice(lastIndex)),
-    {
-      reading: reading,
-      offsetInText(f) {
-        let c = 0,
-          t = offsets.length;
-        while (c < t) {
-          let r = (c + t) >> 1;
-          if (offsets[r] <= f) c = r + 1;
-          else t = r;
-        }
-        return c === 0 ? f : f - deltas[c - 1];
-      },
-    }
-  );
+  reading += text.slice(lastIndex);
+  return {
+    reading,
+    offsetInText(f) {
+      let c = 0;
+      let t = offsets.length;
+      while (c < t) {
+        let r = (c + t) >> 1;
+        if (offsets[r] <= f) c = r + 1;
+        else t = r;
+      }
+      return c === 0 ? f : f - deltas[c - 1];
+    },
+  };
 }
 //@ chunk-p5akk6be.js:32690-32742 placement
 function codePointLength(u, d) {
   return u.codePointAt(d) > 65535 ? 2 : 1;
 }
+//@ chunk-p5akk6be.js:32742-32951 placement
 /**
  * 返回文本中匹配任一标签模式的开头偏移（必要时先把非 ASCII 同形字符映射回 ASCII 再匹配）。
  */
-//@ chunk-p5akk6be.js:32742-32951 placement
-function findTagOpenerOffsets(u, d) {
-  if (!regExp.test(u)) return [];
-  let e = NON_ASCII_PATTERN.test(u) ? neutralizeConfusables(u) : void 0,
-    a = e?.reading ?? u,
-    n = new Set();
-  for (let f of d) for (let c of a.matchAll(f)) n.add(e ? e.offsetInText(c.index) : c.index);
+function findTagOpenerOffsets(text, d) {
+  if (!regExp.test(text)) return [];
+  let e = NON_ASCII_PATTERN.test(text) ? neutralizeConfusables(text) : undefined;
+  let reading = e?.reading ?? text;
+  let n = new Set();
+  for (let f of d) for (let c of reading.matchAll(f)) n.add(e ? e.offsetInText(c.index) : c.index);
   return [...n].sort((f, c) => f - c);
 }
 //@ chunk-p5akk6be.js:32951-33598 placement
+/**
+ * 右方括号类形近字符。
+ */
 var OPEN_BRACKET_CHARS =
-    "\\[\\uff3b\\ufe47\\u27e6\\u301a\\u2045\\u298b\\u298d\\u298f\\u3010\\u3014\\ufe5d\\u3016\\u3018\\u2772\\u27ec\\ufe17\\ufe39\\ufe3b",
-  z =
-    "\\]\\uff3d\\ufe48\\u27e7\\u301b\\u2046\\u298c\\u2990\\u298e\\u3011\\u3015\\ufe5e\\u3017\\u3019\\u2773\\u27ed\\ufe18\\ufe3a\\ufe3c",
-  YIt = `\\t\\v\\f \\u00a0\\u1680\\u2000-\\u200a\\u202f\\u205f\\u3000\\u2800${Bdt}`,
-  h = `\\r\\n${YIt}`,
-  Q = `\\p{Pc}\\u2017.\\u00b7\\u0387\\u2022\\u2219\\u22c5\\u2024\\u2026\\u2027\\u30fb\\ufe52\\uff65\\uff0e/\\u2044\\u2215\\uff0f\\\\\\u2216\\ufe68\\uff3c|\\u00a6\\uff5c~\\u223c\\uff5e${N3e};\\u037e\\ufe54\\uff1b`,
-  Z = `${SXt}${Q}`,
-  xu = "\\u30fc\\uff70\\u115f\\u1160\\u3164\\uffa0",
-  V = 4;
+  "\\[\\uff3b\\ufe47\\u27e6\\u301a\\u2045\\u298b\\u298d\\u298f\\u3010\\u3014\\ufe5d\\u3016\\u3018\\u2772\\u27ec\\ufe17\\ufe39\\ufe3b";
+var CLOSE_BRACKET_CHARS =
+  "\\]\\uff3d\\ufe48\\u27e7\\u301b\\u2046\\u298c\\u2990\\u298e\\u3011\\u3015\\ufe5e\\u3017\\u3019\\u2773\\u27ed\\ufe18\\ufe3a\\ufe3c";
+var EXTRA_SPACE_CHARS = `\\t\\v\\f \\u00a0\\u1680\\u2000-\\u200a\\u202f\\u205f\\u3000\\u2800${FILLER_CHAR_CLASS}`;
+var NEWLINE_OR_EXTRA_SPACE_CLASS = `\\r\\n${EXTRA_SPACE_CHARS}`;
+var SEPARATOR_CHAR_CLASS = `\\p{Pc}\\u2017.\\u00b7\\u0387\\u2022\\u2219\\u22c5\\u2024\\u2026\\u2027\\u30fb\\ufe52\\uff65\\uff0e/\\u2044\\u2215\\uff0f\\\\\\u2216\\ufe68\\uff3c|\\u00a6\\uff5c~\\u223c\\uff5e${COLON_CHAR_CLASS};\\u037e\\ufe54\\uff1b`;
+var DASH_OR_SEPARATOR_CLASS = `${DASH_CHAR_CLASS}${SEPARATOR_CHAR_CLASS}`;
+var LONG_VOWEL_AND_BLANK_CHARS = "\\u30fc\\uff70\\u115f\\u1160\\u3164\\uffa0";
+var MAX_FILLER_DEPTH = 4;
 //@ chunk-p5akk6be.js:33598-33711 placement
 function buildEscapedCharPattern(u) {
-  let d = `[${h}]*`,
-    e = "";
-  for (let a = 0; a < V; a++) e = `(?:[${Z}]${d}${e})?`;
+  let d = `[${NEWLINE_OR_EXTRA_SPACE_CLASS}]*`;
+  let e = "";
+  for (let i = 0; i < MAX_FILLER_DEPTH; i++) e = `(?:[${DASH_OR_SEPARATOR_CLASS}]${d}${e})?`;
   return `(?=(${d}${e}))(?:\\${u})`;
 }
+//@ chunk-p5akk6be.js:33711-33906 placement
 /**
  * 前导文本匹配模式与 LEAD_* 标记符号，用于识别标签前的上下文。
  */
-//@ chunk-p5akk6be.js:33711-33906 placement
-var LEAD_TAIL_PATTERN = `[^${OPEN_BRACKET_CHARS}${z}\\r\\n]{0,119}?(?:(?![${xu}])[\\p{L}\\p{N}]|(?![${z}])["')\\u2019\\u201d\\uff09\\p{Pe}\\p{Pf}])`,
-  LEAD_HEX_ID = Symbol("LEAD_HEX_ID"),
-  LEAD_SPAN = Symbol("LEAD_SPAN"),
-  LEAD_OPEN_END = Symbol("LEAD_OPEN_END");
+var LEAD_TAIL_PATTERN = `[^${OPEN_BRACKET_CHARS}${CLOSE_BRACKET_CHARS}\\r\\n]{0,119}?(?:(?![${LONG_VOWEL_AND_BLANK_CHARS}])[\\p{L}\\p{N}]|(?![${CLOSE_BRACKET_CHARS}])["')\\u2019\\u201d\\uff09\\p{Pe}\\p{Pf}])`;
+var LEAD_HEX_ID = Symbol("LEAD_HEX_ID");
+var LEAD_SPAN = Symbol("LEAD_SPAN");
+var LEAD_OPEN_END = Symbol("LEAD_OPEN_END");
 //@ chunk-p5akk6be.js:33906-34979 placement
 function buildLeadMarkerPattern(u) {
-  let d = 0,
-    e = () => buildEscapedCharPattern(++d),
-    a = () => nve(`\\r\\n${Bdt}`, ++d),
-    n = () => `(?=[${h}${Z}])` + e(),
-    f = () => `(?=[${Q}]{0,${V}}[${h}${SXt}])` + e(),
-    c = `0-9\\uff10-\\uff19\\u{1d7ce}-\\u{1d7ff}\\u2070\\u00b9\\u00b2\\u00b3\\u2074-\\u2079\\u2080-\\u2089${[..."abcdef"].map(latinLetterConfusableClass).join("")}`,
-    t = (l) => {
-      if (!/^[a-z]+$/.test(l)) throw Error("bracketedLeadScrubPattern: words are lowercase ASCII");
-      return [...l].map((E, i) => (i === 0 ? "" : a()) + `[${latinLetterConfusableClass(E)}]`).join("");
-    },
-    r = (l) =>
-      Array.from({ length: l }, (E, i) => (i === 0 ? "" : a()) + `[${c}]`).join("") + a() + `[${SXt}]`,
-    o = () => r(8) + e() + r(4) + e() + r(4),
-    g = "(?![0-9A-Za-z_])",
-    b = () => {
-      throw Error("bracketedLeadScrubPattern: LEAD_OPEN_END must be the last token in a lead");
-    },
-    C = e(),
-    mapped = u.map((l) => {
-      let E = l.at(-1) === LEAD_OPEN_END,
-        i = E ? l.slice(0, -1) : l;
-      if (i.length === 0) throw Error("bracketedLeadScrubPattern: a lead has at least one token");
-      let joined = i
-        .map(
-          (A, N) =>
-            (N === 0 ? "" : typeof A !== "string" ? e() : i[N - 1] === LEAD_SPAN ? f() : n()) +
-            (A === LEAD_HEX_ID
-              ? o()
-              : A === LEAD_SPAN
-                ? LEAD_TAIL_PATTERN
-                : A === LEAD_OPEN_END
-                  ? b()
-                  : t(A) + (i[N + 1] === LEAD_SPAN ? g : "")),
-        )
-        .join("");
-      return E || i.at(-1) === LEAD_HEX_ID ? joined : `${joined}${g}`;
-    });
+  let d = 0;
+  let e = () => buildEscapedCharPattern(++d);
+  let a = () => lookaheadCapture(`\\r\\n${FILLER_CHAR_CLASS}`, ++d);
+  let n = () => `(?=[${NEWLINE_OR_EXTRA_SPACE_CLASS}${DASH_OR_SEPARATOR_CLASS}])` + e();
+  let f = () =>
+    `(?=[${SEPARATOR_CHAR_CLASS}]{0,${MAX_FILLER_DEPTH}}[${NEWLINE_OR_EXTRA_SPACE_CLASS}${DASH_CHAR_CLASS}])` +
+    e();
+  let c = `0-9\\uff10-\\uff19\\u{1d7ce}-\\u{1d7ff}\\u2070\\u00b9\\u00b2\\u00b3\\u2074-\\u2079\\u2080-\\u2089${[..."abcdef"].map(latinLetterConfusableClass).join("")}`;
+  let t = (l) => {
+    if (!/^[a-z]+$/.test(l)) throw Error("bracketedLeadScrubPattern: words are lowercase ASCII");
+    return [...l].map((E, i) => (i === 0 ? "" : a()) + `[${latinLetterConfusableClass(E)}]`).join("");
+  };
+  let r = (l) =>
+    Array.from(
+      {
+        length: l,
+      },
+      (E, i) => (i === 0 ? "" : a()) + `[${c}]`,
+    ).join("") +
+    a() +
+    `[${DASH_CHAR_CLASS}]`;
+  let o = () => r(8) + e() + r(4) + e() + r(4);
+  let g = "(?![0-9A-Za-z_])";
+  let b = () => {
+    throw Error("bracketedLeadScrubPattern: LEAD_OPEN_END must be the last token in a lead");
+  };
+  let C = e();
+  let mapped = u.map((l) => {
+    let E = l.at(-1) === LEAD_OPEN_END;
+    let i = E ? l.slice(0, -1) : l;
+    if (i.length === 0) throw Error("bracketedLeadScrubPattern: a lead has at least one token");
+    let joined = i
+      .map(
+        (A, N) =>
+          (N === 0 ? "" : typeof A !== "string" ? e() : i[N - 1] === LEAD_SPAN ? f() : n()) +
+          (A === LEAD_HEX_ID
+            ? o()
+            : A === LEAD_SPAN
+              ? LEAD_TAIL_PATTERN
+              : A === LEAD_OPEN_END
+                ? b()
+                : t(A) + (i[N + 1] === LEAD_SPAN ? g : "")),
+      )
+      .join("");
+    return E || i.at(-1) === LEAD_HEX_ID ? joined : `${joined}${g}`;
+  });
   return new RegExp(`[${OPEN_BRACKET_CHARS}](?!\\\\)(?=${C}(?:${mapped.join("|")}))`, "giu");
 }
+//@ chunk-p5akk6be.js:34979-35215 placement
 /**
  * 把文本中伪造的（易混淆拼写的）标签中和掉。
  */
-//@ chunk-p5akk6be.js:34979-35215 placement
 function neutralizeConfusableTags(u, d) {
-  let e = ZPn(u, bv(stripCombiningRepeated(d).replace(qIt(), "")));
+  let e = scrubOpenTag(
+    u,
+    foldLookalikeChars(stripCombiningRepeated(d).replace(invisiblePatternAccessor(), "")),
+  );
   if (foldConfusableCharacters(e) === e) return e;
-  let a = getTagRegex(u, !1);
+  let tagRegex = getTagRegex(u, false);
   return e
     .split("<")
     .map((n, f) => {
       if (f === 0 || n.startsWith("\\")) return n;
       let c = foldConfusableCharacters(n);
-      return c !== n && `< ${c}`.search(a) === 0 ? `\\${n}` : n;
+      return c !== n && `< ${c}`.search(tagRegex) === 0 ? `\\${n}` : n;
     })
     .join("<");
 }
@@ -788,50 +870,59 @@ function unescapeHtmlEntities(u) {
   return u.replace(Lu, (d) => uu[d] ?? d);
 }
 //@ chunk-p5akk6be.js:35330-35403 placement
-var $u = /&(?:amp|lt|gt|quot|apos);/g,
-  Cu = { ...uu, "&quot;": '"', "&apos;": "'" };
+/**
+ * 匹配基本 HTML 实体（amp/lt/gt/quot/apos）的正则。
+ */
+var BASIC_HTML_ENTITY_RE = /&(?:amp|lt|gt|quot|apos);/g;
+var BASIC_HTML_ENTITY_MAP = {
+  ...uu,
+  "&quot;": '"',
+  "&apos;": "'",
+};
 //@ chunk-p5akk6be.js:35403-35454 placement
-function ove(u) {
-  return u.replace($u, (d) => Cu[d] ?? d);
+/**
+ * 解码基本 HTML 实体（未知实体原样保留）。
+ */
+function unescapeBasicHtmlEntities(u) {
+  return u.replace(BASIC_HTML_ENTITY_RE, (d) => BASIC_HTML_ENTITY_MAP[d] ?? d);
 }
-
 export {
-  UK,
-  nve,
+  TAG_BRACKET_CLASSES,
+  lookaheadCapture,
   escapeXml_2,
-  bv,
+  foldLookalikeChars,
   countConfusables,
-  jdt,
+  scrubCloseTag,
   unescapeHtmlEntities,
   INVISIBLE_CHAR_CLASSES,
   latinLetterConfusableClass,
   codePointLength,
   neutralizeConfusableTags,
-  ove,
+  unescapeBasicHtmlEntities,
   foldConfusableCharacters,
   confusableTagScrubPattern,
-  QBe,
+  escapedCharPrefix,
   escapeXmlTruncated,
   ABCDEFGHIJKLMNOPQRSTUVWXYZ,
   ANTML,
   OPEN_BRACKET_CHARS,
   createTagNeutralizer,
   channelSourceAttrPattern,
-  Bdt,
+  FILLER_CHAR_CLASS,
   truncateBeforeEscape,
-  qIt,
+  invisiblePatternAccessor,
   stripInvisibleChars,
-  YIt,
-  wXt,
-  N3e,
+  EXTRA_SPACE_CHARS,
+  fillerCapture,
+  COLON_CHAR_CLASS,
   buildChannelTagMatcher,
   buildAntmlTagPattern,
-  Mso,
-  ZPn,
-  bXt,
+  CONNECTOR_CHAR_CLASS,
+  scrubOpenTag,
+  WORD_CHARS_CLASS,
   LEAD_HEX_ID,
   LEAD_SPAN,
   LEAD_OPEN_END,
   buildLeadMarkerPattern,
-  SXt,
+  DASH_CHAR_CLASS,
 };

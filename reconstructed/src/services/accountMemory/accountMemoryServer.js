@@ -10,165 +10,214 @@
  */
 import { HostScoped } from "../../utils/hostScoped.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, o, U, A } from "../../../vendor/zod/v4/classic/schemas.js";
-import { isMemoryToolServer, TTi, Xro, MEMORY_CALLER_META_KEY, MEMEXTRACT } from "../../memdir/memoryTool.js";
+import { u, string, _enum, array } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  isMemoryToolServer_2,
+  MEMORY_SEARCH_TOOLS,
+  isLocalAgentDynamicMemoryServer,
+  MEMORY_CALLER_META_KEY,
+  MEMEXTRACT,
+} from "../../memdir/memoryTool.js";
 import { normalizeMemoryText } from "../../memdir/memdir.js";
 import { hasCommsRoledServer } from "../../coordinator/coordinatorMcpServers.js";
 import { MEMORY_READ } from "../../tools/MemoryTool/memoryToolNames.js";
 import { isCoordinatorMode_2 } from "../../coordinator/coordinatorMode.js";
 
 //@ chunk-s61vbvea.js:65885-65938 placement
-function ONe(e) {
+/**
+ * 导出函数 `normalizeServerPath`：参数 e，返回 ("/" + e).replace(/\/{2,}/g, "/")。
+ */
+function normalizeServerPath(e) {
   return ("/" + e).replace(/\/{2,}/g, "/");
 }
 //@ chunk-s61vbvea.js:65938-65970 placement
-var vq = new HostScoped(() => ({ port: null }));
+var memoryServerPortSlot = new HostScoped(() => ({
+  port: null,
+}));
 //@ chunk-s61vbvea.js:65970-66000 placement
-var Hq = DoctorLazy(() => u({ method: o() }));
+var memoryServerRequestSchema = DoctorLazy(() =>
+  u({
+    method: string(),
+  }),
+);
 //@ chunk-s61vbvea.js:66000-66051 placement
-var Gq = new HostScoped(() => ({ handle: null, undelivered: null }));
+var memoryServerHandleSlot = new HostScoped(() => ({
+  handle: null,
+  undelivered: null,
+}));
 //@ chunk-s61vbvea.js:66051-66401 placement
-var COORDINATOR = "coordinator",
-  ANTHROPIC_MEMORY = "anthropic/memory",
-  READ_ONLY = "read_only",
-  NONE = "none",
-  LT = 4096,
-  Ro = { all: 0, read_only: 1, none: 2 },
-  Ym = DoctorLazy(() =>
-    u({
-      subagent_memory: U(["all", "read_only", "none"]).optional().catch(NONE),
-      subagent_note: o()
-        .max(LT)
-        .optional()
-        .catch(void 0),
-      coordinator_memory: U(["all", "read_only", "none"]).optional().catch(NONE),
-      callers: A(o())
-        .optional()
-        .catch(void 0),
-    }),
-  );
+/**
+ * 账号记忆服务器的模式常量（all/read_only/none 及排序）与 capabilities.experimental["anthropic/memory"] 的 schema。
+ */
+var COORDINATOR = "coordinator";
+var ANTHROPIC_MEMORY = "anthropic/memory";
+var READ_ONLY = "read_only";
+var NONE = "none";
+var MAX_SUBAGENT_NOTE_CHARS = 4096;
+var MEMORY_MODE_RANK = {
+  all: 0,
+  read_only: 1,
+  none: 2,
+};
+var memoryCapabilitiesSchema = DoctorLazy(() =>
+  u({
+    subagent_memory: _enum(["all", "read_only", "none"]).optional().catch(NONE),
+    subagent_note: string().max(MAX_SUBAGENT_NOTE_CHARS).optional().catch(undefined),
+    coordinator_memory: _enum(["all", "read_only", "none"]).optional().catch(NONE),
+    callers: array(string()).optional().catch(undefined),
+  }),
+);
 //@ chunk-s61vbvea.js:66401-67008 placement
 function accountMemoryServerState(e, n) {
-  let r,
-    s,
-    h,
-    y = !1;
+  let r;
+  let s;
+  let h;
+  let y = false;
   for (let x of e ?? []) {
-    if (!isMemoryToolServer(x)) continue;
+    if (!isMemoryToolServer_2(x)) continue;
     if (x.type !== "connected") {
       y ||= x.type !== "disabled";
       continue;
     }
     let P = x.capabilities.experimental?.[ANTHROPIC_MEMORY];
-    if (P === void 0) continue;
-    let safeParse = Ym().safeParse(P),
-      G = safeParse.success ? safeParse.data.subagent_memory : NONE,
-      L = safeParse.success
-        ? normalizeMemoryText(safeParse.data.subagent_note ?? "").trim() || void 0
-        : void 0;
-    if (G === void 0) h ??= L;
-    else if (r === void 0 || Ro[G] > Ro[r]) ((r = G), (s = L));
+    if (P === undefined) continue;
+    let j = memoryCapabilitiesSchema().safeParse(P);
+    let G = j.success ? j.data.subagent_memory : NONE;
+    let L = j.success ? normalizeMemoryText(j.data.subagent_note ?? "").trim() || undefined : undefined;
+    if (G === undefined) h ??= L;
+    else if (r === undefined || MEMORY_MODE_RANK[G] > MEMORY_MODE_RANK[r]) {
+      r = G;
+      s = L;
+    }
   }
-  let S = r === void 0 ? n : n === void 0 || Ro[r] >= Ro[n] ? r : n,
-    w = S === void 0 ? "default" : S === r ? "served" : "fallback",
-    R = r === void 0 || S === r;
-  if (r === void 0) s = h;
+  let S = r === undefined ? n : n === undefined || MEMORY_MODE_RANK[r] >= MEMORY_MODE_RANK[n] ? r : n;
+  let source = S === undefined ? "default" : S === r ? "served" : "fallback";
+  let R = r === undefined || S === r;
+  if (r === undefined) s = h;
   return {
     mode: S ?? READ_ONLY,
-    source: w,
-    ...(s !== void 0 && R && { note: s }),
-    ...(S === void 0 && y && { serverPending: !0 }),
+    source,
+    ...(s !== undefined &&
+      R && {
+        note: s,
+      }),
+    ...(S === undefined &&
+      y && {
+        serverPending: true,
+      }),
   };
 }
 //@ chunk-s61vbvea.js:67008-67041 placement
-function eu(e) {
-  return TTi.has(e);
+function isAccountMemoryToolName(e) {
+  return MEMORY_SEARCH_TOOLS.has(e);
 }
+//@ chunk-s61vbvea.js:67041-67382 placement
 /**
  * 创建判断工具是否为账号记忆服务器工具且需受控的函数：惰性计算协调记忆模式（取所有记忆服务器中最宽的），按模式与工具名决定。
  */
-//@ chunk-s61vbvea.js:67041-67382 placement
 function createAccountMemoryToolGate(e) {
   let n;
   return (r) => {
     let mcpInfo = r.mcpInfo;
-    if (mcpInfo?.accountMemoryServer !== !0) return !1;
-    if (n === void 0) {
-      let h = e(),
-        y = hasCommsRoledServer(h) ? "none" : void 0;
+    if (mcpInfo?.accountMemoryServer !== true) return false;
+    if (n === undefined) {
+      let h = e();
+      let y = hasCommsRoledServer(h) ? "none" : undefined;
       for (let S of h) {
-        if (!isMemoryToolServer(S)) continue;
-        let w = (Xm(S) && !Xro(S, MEMORY_READ) && getMemoryCapabilities(S)?.coordinator_memory) || "none";
-        if (y === void 0 || Ro[w] > Ro[y]) y = w;
+        if (!isMemoryToolServer_2(S)) continue;
+        let w =
+          (isCoordinatorCapable(S) &&
+            !isLocalAgentDynamicMemoryServer(S, MEMORY_READ) &&
+            getMemoryCapabilities(S)?.coordinator_memory) ||
+          "none";
+        if (y === undefined || MEMORY_MODE_RANK[w] > MEMORY_MODE_RANK[y]) y = w;
       }
       n = y ?? "none";
     }
-    return n !== "none" && (eu(mcpInfo.toolName) || (n === "all" && mcpInfo.cliOwned !== !0));
+    return (
+      n !== "none" &&
+      (isAccountMemoryToolName(mcpInfo.toolName) || (n === "all" && mcpInfo.cliOwned !== true))
+    );
   };
 }
 //@ chunk-s61vbvea.js:67382-67515 placement
 function getMemoryCapabilities(e) {
   if (e.type !== "connected") return;
-  let safeParse = Ym().safeParse(e.capabilities.experimental?.[ANTHROPIC_MEMORY]);
-  return safeParse.success ? safeParse.data : void 0;
+  let n = memoryCapabilitiesSchema().safeParse(e.capabilities.experimental?.[ANTHROPIC_MEMORY]);
+  return n.success ? n.data : undefined;
 }
 //@ chunk-s61vbvea.js:67515-67571 placement
-function Xm(e) {
-  return getMemoryCapabilities(e)?.callers?.includes(COORDINATOR) === !0;
+function isCoordinatorCapable(e) {
+  return getMemoryCapabilities(e)?.callers?.includes(COORDINATOR) === true;
 }
 //@ chunk-s61vbvea.js:67571-67659 placement
-function Y2t(e, n) {
-  return e.mcpInfo?.accountMemoryServer === !0 && pVo(e.mcpInfo.toolName, n);
+/**
+ * 导出函数 `isServedAccountMemoryTool`：参数 e, n，返回 e.mcpInfo?.accountMemoryServer === !0 && pVo(e.mcpInfo.toolName, n)。
+ */
+function isServedAccountMemoryTool(tool, n) {
+  return tool.mcpInfo?.accountMemoryServer === true && isMemoryToolAllowed(tool.mcpInfo.toolName, n);
 }
 //@ chunk-s61vbvea.js:67659-67703 placement
-function pVo(e, n) {
-  return n === "none" || !eu(e);
+/**
+ * 导出函数 `isMemoryToolAllowed`：参数 e, n，返回 n === "none" || !eu(e)。
+ */
+function isMemoryToolAllowed(e, n) {
+  return n === "none" || !isAccountMemoryToolName(e);
 }
 //@ chunk-s61vbvea.js:67703-67755 placement
-function Jm(e) {
+function isMemextractCall(e) {
   return e.mcpRequestMeta?.[MEMORY_CALLER_META_KEY] === MEMEXTRACT;
 }
 //@ chunk-s61vbvea.js:67755-67860 placement
 function getMemoryCallerMeta(e, n, r) {
-  if (!e || Jm(n)) return;
-  let s = n.memoryCaller ?? (isCoordinatorMode_2() && Xm(r) ? COORDINATOR : void 0);
-  return s && { [MEMORY_CALLER_META_KEY]: s };
+  if (!e || isMemextractCall(n)) return;
+  let s = n.memoryCaller ?? (isCoordinatorMode_2() && isCoordinatorCapable(r) ? COORDINATOR : undefined);
+  return (
+    s && {
+      [MEMORY_CALLER_META_KEY]: s,
+    }
+  );
 }
+//@ chunk-s61vbvea.js:67860-67972 placement
 /**
  * 把调用方记忆元数据写入（或从）目标对象中移除，来源为工具输入或 MCP 请求元数据。
  */
-//@ chunk-s61vbvea.js:67860-67972 placement
 function applyMemoryCallerMeta(e, n, r, s) {
   let h =
     getMemoryCallerMeta(n, r, s)?.[MEMORY_CALLER_META_KEY] ?? r.mcpRequestMeta?.[MEMORY_CALLER_META_KEY];
-  if (h === void 0) delete e[MEMORY_CALLER_META_KEY];
+  if (h === undefined) delete e[MEMORY_CALLER_META_KEY];
   else e[MEMORY_CALLER_META_KEY] = h;
 }
 //@ chunk-s61vbvea.js:67972-68322 placement
-function refuseNonMainAccountMemoryWrite(e, n, r) {
-  let s = r.agentContext?.agentType !== "main" || r.agentId !== void 0 || r.memoryCaller !== void 0;
-  return e && s && !Jm(r) && !eu(n)
+function refuseNonMainAccountMemoryWrite(accountMemoryServer, name, r) {
+  let s = r.agentContext?.agentType !== "main" || r.agentId !== undefined || r.memoryCaller !== undefined;
+  return accountMemoryServer && s && !isMemextractCall(r) && !isAccountMemoryToolName(name)
     ? "Only the session's main agent can change the user's account memory; a subagent, teammate, fork or backgrounded query cannot. If something should be saved, say so in your reply so the main agent can save it."
-    : void 0;
+    : undefined;
 }
 //@ chunk-s61vbvea.js:68322-68398 placement
-function tZs({ isTeammate: isTeammate, isBackground: isBackground }) {
+/**
+ * 导出函数 `memoryCallerKind`：参数 { isTeammate: isTeammate, isBackground: isBackgrou…，返回 isTeammate || isBackground ? "worker" : "subagent"。
+ */
+function memoryCallerKind({ isTeammate, isBackground }) {
   return isTeammate || isBackground ? "worker" : "subagent";
 }
 //@ chunk-s61vbvea.js:68398-68451 placement
-function nZs(e) {
-  return e.mode === "none" ? void 0 : e.note;
+/**
+ * 导出函数 `memoryNoteIfEnabled`：参数 e，返回 e.mode === "none" ? void 0 : e.note; } export { READ_ONLY, Y2t, tZs, nZs, createAccountMemoryToolGate, refuseN…。
+ */
+function memoryNoteIfEnabled(e) {
+  return e.mode === "none" ? undefined : e.note;
 }
-
 export {
   READ_ONLY,
-  Y2t,
-  tZs,
-  nZs,
+  isServedAccountMemoryTool,
+  memoryCallerKind,
+  memoryNoteIfEnabled,
   createAccountMemoryToolGate,
   refuseNonMainAccountMemoryWrite,
   applyMemoryCallerMeta,
-  pVo,
+  isMemoryToolAllowed,
   accountMemoryServerState,
-  ONe,
+  normalizeServerPath,
 };

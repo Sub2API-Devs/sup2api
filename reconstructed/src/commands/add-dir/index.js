@@ -11,31 +11,30 @@
 import { getIsNonInteractiveSession } from "../../bootstrap/state.js";
 import { isDesktopTopNonClaudecode } from "../../utils/sessionShape.js";
 
+//@ chunk-e6aww6q8.js:1683961-1684398 fingerprint = addDir (0.589)
 /**
  * /add-dir 命令对象（local）；描述：Add a new working directory；isEnabled: ()=>_e()&&WMi()；isHidden: {return!_e()}；实现 chunk-efagea6a.js 的 d。
  */
-//@ chunk-e6aww6q8.js:1683961-1684398 fingerprint = addDir (0.589)
 var addDirNonInteractiveCommand = {
-    type: "local",
-    name: "add-dir",
-    description: "Add a new working directory",
-    argumentHint: "<path>",
-    supportsNonInteractive: !0,
-    thinClientDispatch: "post-text",
-    isEnabled: () => getIsNonInteractiveSession() && isDesktopTopNonClaudecode(),
-    get isHidden() {
-      return !getIsNonInteractiveSession();
-    },
-    load: () => import("./chunk-efagea6a.js"),
+  type: "local",
+  name: "add-dir",
+  description: "Add a new working directory",
+  argumentHint: "<path>",
+  supportsNonInteractive: true,
+  thinClientDispatch: "post-text",
+  isEnabled: () => getIsNonInteractiveSession() && isDesktopTopNonClaudecode(),
+  get isHidden() {
+    return !getIsNonInteractiveSession();
   },
-  addDirCommandDefinition = {
-    type: "local-jsx",
-    name: "add-dir",
-    description: "Add a new working directory",
-    argumentHint: "<path>",
-    immediate: (args, presentation) => args.trim() !== "" || presentation === "fullscreen",
-    thinClientDispatch: "twin",
-  },
-  addDirCommand = addDirCommandDefinition;
-
+  load: () => import("./chunk-efagea6a.js"),
+};
+var addDirCommandDefinition = {
+  type: "local-jsx",
+  name: "add-dir",
+  description: "Add a new working directory",
+  argumentHint: "<path>",
+  immediate: (args, presentation) => args.trim() !== "" || presentation === "fullscreen",
+  thinClientDispatch: "twin",
+};
+var addDirCommand = addDirCommandDefinition;
 export { addDirCommand, addDirNonInteractiveCommand };

@@ -5,35 +5,40 @@
  * pieces: chunk-hwmsct5x.js (1)
  * attribution: esm-fingerprint 1
  */
-import { pr } from "../core/error.mjs";
-import { T } from "../internal/headers.mjs";
+import { AnthropicError } from "../core/error.mjs";
+import { buildHeaders } from "../internal/headers.mjs";
 import { X_STAINLESS_HELPER } from "../internal/stainless-helper-header.mjs";
 
 //@ chunk-hwmsct5x.js:55923-56388 esm-fingerprint
-function ps(e, { authToken: authToken, helper: helper }) {
+function copyClientForHelper(client, { authToken, helper }) {
   if (!authToken)
-    throw new pr(
+    throw new AnthropicError(
       `copyClientForHelper: expected a non-empty authToken but received ${JSON.stringify(authToken)}`,
     );
-  let s = e,
-    defaultHeaders = s._options.defaultHeaders,
-    y = s._authState?.extraHeaders,
-    w = y
-      ? Object.fromEntries(
-          Object.entries(y).filter(([E]) => {
-            let lower = E.toLowerCase();
-            return lower !== "authorization" && lower !== "x-api-key";
-          }),
-        )
-      : void 0,
-    S = T([w, defaultHeaders, { [X_STAINLESS_HELPER]: helper }]);
-  return e.withOptions({
+  let internal = client;
+  let parentDefaults = internal._options.defaultHeaders;
+  let parentAuthExtraHeaders = internal._authState?.extraHeaders;
+  let inheritedAuthExtraHeaders = parentAuthExtraHeaders
+    ? Object.fromEntries(
+        Object.entries(parentAuthExtraHeaders).filter(([name]) => {
+          let lower = name.toLowerCase();
+          return lower !== "authorization" && lower !== "x-api-key";
+        }),
+      )
+    : undefined;
+  let defaultHeaders = buildHeaders([
+    inheritedAuthExtraHeaders,
+    parentDefaults,
+    {
+      [X_STAINLESS_HELPER]: helper,
+    },
+  ]);
+  return client.withOptions({
     apiKey: null,
-    authToken: authToken,
-    baseURL: e.baseURL,
-    credentials: void 0,
-    defaultHeaders: S,
+    authToken,
+    baseURL: client.baseURL,
+    credentials: undefined,
+    defaultHeaders,
   });
 }
-
-export { ps };
+export { copyClientForHelper };

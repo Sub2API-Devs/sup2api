@@ -21,82 +21,94 @@ import {
   setupWindowsSandboxOnce,
 } from "../../utils/sandbox/windowsSandboxSetup.js";
 import { getWindowsSandboxUserStatus } from "../../utils/sandbox/windowsSandboxStatus.js";
-import { e } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { SandboxSettings } from "../../components/sandbox/SandboxSettings.js";
 import { getCwdState } from "../../bootstrap/state.js";
 
+//@ chunk-55w3ydvj.js:30440-32799 fingerprint = call (0.739)
 /**
  * /sandbox 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
  */
-//@ chunk-55w3ydvj.js:30440-32799 fingerprint = call (0.739)
 async function call(onDone, context, args) {
-  let m = getSettings_DEPRECATED().theme || "light",
-    platform = getPlatform();
-  if (platform === "windows" && firstLineOf(args?.trim() ?? "", " ") === "uninstall")
-    return (
-      onDone(
-        color(
-          "warning",
-          m,
-        )(
-          "The sandbox can't be removed from inside a session. Close every Claude Code session, then run claude sandbox uninstall in a terminal.",
-        ),
+  let theme = getSettings_DEPRECATED().theme || "light";
+  let platform = getPlatform();
+  if (platform === "windows" && firstLineOf(args?.trim() ?? "", " ") === "uninstall") {
+    onDone(
+      color(
+        "warning",
+        theme,
+      )(
+        "The sandbox can't be removed from inside a session. Close every Claude Code session, then run claude sandbox uninstall in a terminal.",
       ),
-      null
     );
+    return null;
+  }
   if (!SandboxManager.isSupportedPlatform()) {
-    let a =
-        platform === "wsl"
-          ? "Error: Sandboxing requires WSL2. WSL1 is not supported."
-          : "Error: Sandboxing is currently only supported on macOS, Linux, and WSL2.",
-      message = color("error", m)(a);
-    return (onDone(message), null);
+    let errorMessage =
+      platform === "wsl"
+        ? "Error: Sandboxing requires WSL2. WSL1 is not supported."
+        : "Error: Sandboxing is currently only supported on macOS, Linux, and WSL2.";
+    let message = color("error", theme)(errorMessage);
+    onDone(message);
+    return null;
   }
   if (!SandboxManager.isPlatformInEnabledList()) {
     let message = color(
       "error",
-      m,
+      theme,
     )(`Error: Sandboxing is disabled for this platform (${platform}) via the enabledPlatforms setting.`);
-    return (onDone(message), null);
+    onDone(message);
+    return null;
   }
-  let i = args?.trim() || "",
-    p = firstLineOf(i, " ");
+  let i = args?.trim() || "";
+  let p = firstLineOf(i, " ");
   if (p === "install" && platform === "windows" && isWindowsSandboxEnabled()) {
-    if (i !== "install")
-      return (onDone(color("error", m)("install takes no arguments. Run /sandbox install by itself.")), null);
+    if (i !== "install") {
+      onDone(color("error", theme)("install takes no arguments. Run /sandbox install by itself."));
+      return null;
+    }
     context.appendSystemMessage?.({
       ...createSystemMessage(WINDOWS_SANDBOX_SETUP_NOTICE, "notice"),
-      persist: !1,
+      persist: false,
     });
     let a = await setupWindowsSandboxOnce(context.session.host);
-    return (
-      onDone(
-        color(
-          { ok: "success", cancelled: "warning", partial: "warning", error: "error" }[a.status],
-          m,
-        )(a.message),
-      ),
-      null
+    onDone(
+      color(
+        {
+          ok: "success",
+          cancelled: "warning",
+          partial: "warning",
+          error: "error",
+        }[a.status],
+        theme,
+      )(a.message),
     );
+    return null;
   }
   if (SandboxManager.areSandboxSettingsLockedByPolicy()) {
-    let a = SandboxManager.isSandboxEnabledInSettings() ? await getWindowsSandboxUserStatus() : void 0,
-      c = color(
-        "error",
-        m,
-      )(
-        `Error: Sandbox settings are overridden by a higher-priority configuration and cannot be changed locally.${
-          a === void 0
-            ? ""
-            : `
-${a}`
-        }`,
-      );
-    return (onDone(c), null);
+    let message = SandboxManager.isSandboxEnabledInSettings()
+      ? await getWindowsSandboxUserStatus()
+      : undefined;
+    let c = color(
+      "error",
+      theme,
+    )(
+      `Error: Sandbox settings are overridden by a higher-priority configuration and cannot be changed locally.${
+        message === undefined
+          ? ""
+          : `
+${message}`
+      }`,
+    );
+    onDone(c);
+    return null;
   }
   if (!i) {
-    let checkDependencies = SandboxManager.checkDependencies();
-    return e(SandboxSettings, { onComplete: onDone, depCheck: checkDependencies });
+    let depCheck = SandboxManager.checkDependencies();
+    return jsxProd_default(SandboxSettings, {
+      onComplete: onDone,
+      depCheck,
+    });
   }
   if (i)
     if (p === "exclude") {
@@ -104,35 +116,41 @@ ${a}`
       if (!commandPattern) {
         let message = color(
           "error",
-          m,
+          theme,
         )('Error: Please provide a command pattern to exclude (e.g., /sandbox exclude "npm run test:*")');
-        return (onDone(message), null);
+        onDone(message);
+        return null;
       }
-      let cleanPattern = commandPattern.replace(/^["']|["']$/g, ""),
-        C = addToExcludedCommands(cleanPattern);
+      let cleanPattern = commandPattern.replace(/^["']|["']$/g, "");
+      let C = addToExcludedCommands(cleanPattern);
       if (C.outcome === "refused") {
         let v = color(
           "error",
-          m,
+          theme,
         )(
           `Can't exclude "${cleanPattern}": this session's sandbox policy limits exclusions to trusted settings (managed policy, a --settings file, user settings), and user settings are turned off here (--setting-sources), so there is no settings file where the exclusion would take effect. Re-enable user settings, or add it to the managed or --settings configuration.`,
         );
-        return (onDone(v), null);
+        onDone(v);
+        return null;
       }
-      let { settingsSource: settingsSource } = C,
-        b = getSettingsFilePathForSource(settingsSource),
-        x = b ? relative(getCwdState(), b) : ".claude/settings.local.json",
-        P = b && x.startsWith("..") ? b : x,
-        message = color("success", m)(`Added "${cleanPattern}" to excluded commands in ${P}`);
-      return (onDone(message), null);
+      let { settingsSource } = C;
+      let settingsFilePathForSource = getSettingsFilePathForSource(settingsSource);
+      let x = settingsFilePathForSource
+        ? relative(getCwdState(), settingsFilePathForSource)
+        : ".claude/settings.local.json";
+      let P = settingsFilePathForSource && x.startsWith("..") ? settingsFilePathForSource : x;
+      let message = color("success", theme)(`Added "${cleanPattern}" to excluded commands in ${P}`);
+      onDone(message);
+      return null;
     } else {
       let message = color(
         "error",
-        m,
+        theme,
       )(
         `Error: Unknown subcommand "${p}". Available: ${platform === "windows" && isWindowsSandboxEnabled() ? "install, exclude" : "exclude"}`,
       );
-      return (onDone(message), null);
+      onDone(message);
+      return null;
     }
   return null;
 }

@@ -6,178 +6,258 @@
  * attribution: cjs-fingerprint 1
  */
 import { x, importMetaRequire } from "../../../runtime/bun-runtime.js";
-import { ge } from "../../graceful-fs/graceful-fs.js";
-import { He } from "../../retry/lib/retry.js";
-import { Xe } from "../../signal-exit/index.js";
-import { Je } from "./mtime-precision.js";
+import { require_graceful_fs } from "../../graceful-fs/graceful-fs.js";
+import { require_retry } from "../../retry/lib/retry.js";
+import { require_signal_exit } from "../../signal-exit/index.js";
+import { require_mtime_precision } from "./mtime-precision.js";
 
 //@ chunk-bmbhxpfm.js:17645-20904 cjs-fingerprint
-var it = x(function (Mt, ie) {
-  var Ze = importMetaRequire("path"),
-    Ne = ge(),
-    et = He(),
-    Dt = Xe(),
-    me = Je(),
-    A = {};
-  function ne(e, r) {
-    return r.lockfilePath || `${e}.lock`;
+var require_lockfile = x(function (cjsExports, cjsModule) {
+  var path = importMetaRequire("path");
+  var fs = require_graceful_fs();
+  var retry = require_retry();
+  var onExit = require_signal_exit();
+  var mtimePrecision = require_mtime_precision();
+  var locks = {};
+  function getLockFile(file, options) {
+    return options.lockfilePath || `${file}.lock`;
   }
-  function Pe(e, r, n) {
-    if (!r.realpath) return n(null, Ze.resolve(e));
-    r.fs.realpath(e, n);
+  function resolveCanonicalPath(file, options, callback) {
+    if (!options.realpath) return callback(null, path.resolve(file));
+    options.fs.realpath(file, callback);
   }
-  function De(e, r, n) {
-    let i = ne(e, r);
-    r.fs.mkdir(i, (u) => {
-      if (!u)
-        return me.probe(i, r.fs, (c, h, m) => {
-          if (c) return (r.fs.rmdir(i, () => {}), n(c));
-          n(null, h, m);
+  function acquireLock(file, options, callback) {
+    let lockfilePath = getLockFile(file, options);
+    options.fs.mkdir(lockfilePath, (err) => {
+      if (!err)
+        return mtimePrecision.probe(lockfilePath, options.fs, (err, mtime, mtimePrecision) => {
+          if (err) {
+            options.fs.rmdir(lockfilePath, () => {});
+            return callback(err);
+          }
+          callback(null, mtime, mtimePrecision);
         });
-      if (u.code !== "EEXIST") return n(u);
-      if (r.stale <= 0)
-        return n(Object.assign(Error("Lock file is already being held"), { code: "ELOCKED", file: e }));
-      r.fs.stat(i, (c, h) => {
-        if (c) {
-          if (c.code === "ENOENT") return De(e, { ...r, stale: 0 }, n);
-          return n(c);
+      if (err.code !== "EEXIST") return callback(err);
+      if (options.stale <= 0)
+        return callback(
+          Object.assign(Error("Lock file is already being held"), {
+            code: "ELOCKED",
+            file,
+          }),
+        );
+      options.fs.stat(lockfilePath, (err, stat) => {
+        if (err) {
+          if (err.code === "ENOENT")
+            return acquireLock(
+              file,
+              {
+                ...options,
+                stale: 0,
+              },
+              callback,
+            );
+          return callback(err);
         }
-        if (!tt(h, r))
-          return n(Object.assign(Error("Lock file is already being held"), { code: "ELOCKED", file: e }));
-        rt(e, r, (m) => {
-          if (m) return n(m);
-          De(e, { ...r, stale: 0 }, n);
+        if (!isLockStale(stat, options))
+          return callback(
+            Object.assign(Error("Lock file is already being held"), {
+              code: "ELOCKED",
+              file,
+            }),
+          );
+        removeLock(file, options, (err) => {
+          if (err) return callback(err);
+          acquireLock(
+            file,
+            {
+              ...options,
+              stale: 0,
+            },
+            callback,
+          );
         });
       });
     });
   }
-  function tt(e, r) {
-    return e.mtime.getTime() < Date.now() - r.stale;
+  function isLockStale(stat, options) {
+    return stat.mtime.getTime() < Date.now() - options.stale;
   }
-  function rt(e, r, n) {
-    r.fs.rmdir(ne(e, r), (i) => {
-      if (i && i.code !== "ENOENT") return n(i);
-      n();
+  function removeLock(file, options, callback) {
+    options.fs.rmdir(getLockFile(file, options), (err) => {
+      if (err && err.code !== "ENOENT") return callback(err);
+      callback();
     });
   }
-  function pe(e, r) {
-    let n = A[e];
-    if (n.updateTimeout) return;
-    if (
-      ((n.updateDelay = n.updateDelay || r.update),
-      (n.updateTimeout = setTimeout(() => {
-        ((n.updateTimeout = null),
-          r.fs.stat(n.lockfilePath, (i, u) => {
-            let c = n.lastUpdate + r.stale < Date.now();
-            if (i) {
-              if (i.code === "ENOENT" || c) return be(e, n, Object.assign(i, { code: "ECOMPROMISED" }));
-              return ((n.updateDelay = 1000), pe(e, r));
-            }
-            if (n.mtime.getTime() !== u.mtime.getTime())
-              return be(
-                e,
-                n,
-                Object.assign(Error("Unable to update lock within the stale threshold"), {
+  function updateLock(file, options) {
+    let lock = locks[file];
+    if (lock.updateTimeout) return;
+    lock.updateDelay = lock.updateDelay || options.update;
+    lock.updateTimeout = setTimeout(() => {
+      lock.updateTimeout = null;
+      options.fs.stat(lock.lockfilePath, (err, stat) => {
+        let isOverThreshold = lock.lastUpdate + options.stale < Date.now();
+        if (err) {
+          if (err.code === "ENOENT" || isOverThreshold)
+            return setLockAsCompromised(
+              file,
+              lock,
+              Object.assign(err, {
+                code: "ECOMPROMISED",
+              }),
+            );
+          lock.updateDelay = 1000;
+          return updateLock(file, options);
+        }
+        if (lock.mtime.getTime() !== stat.mtime.getTime())
+          return setLockAsCompromised(
+            file,
+            lock,
+            Object.assign(Error("Unable to update lock within the stale threshold"), {
+              code: "ECOMPROMISED",
+            }),
+          );
+        let mtime = mtimePrecision.getMtime(lock.mtimePrecision);
+        options.fs.utimes(lock.lockfilePath, mtime, mtime, (err) => {
+          let isOverThreshold = lock.lastUpdate + options.stale < Date.now();
+          if (lock.released) return;
+          if (err) {
+            if (err.code === "ENOENT" || isOverThreshold)
+              return setLockAsCompromised(
+                file,
+                lock,
+                Object.assign(err, {
                   code: "ECOMPROMISED",
                 }),
               );
-            let mtime = me.getMtime(n.mtimePrecision);
-            r.fs.utimes(n.lockfilePath, mtime, mtime, (E) => {
-              let b = n.lastUpdate + r.stale < Date.now();
-              if (n.released) return;
-              if (E) {
-                if (E.code === "ENOENT" || b) return be(e, n, Object.assign(E, { code: "ECOMPROMISED" }));
-                return ((n.updateDelay = 1000), pe(e, r));
-              }
-              ((n.mtime = mtime), (n.lastUpdate = Date.now()), (n.updateDelay = null), pe(e, r));
-            });
-          }));
-      }, n.updateDelay)),
-      n.updateTimeout.unref)
-    )
-      n.updateTimeout.unref();
+            lock.updateDelay = 1000;
+            return updateLock(file, options);
+          }
+          lock.mtime = mtime;
+          lock.lastUpdate = Date.now();
+          lock.updateDelay = null;
+          updateLock(file, options);
+        });
+      });
+    }, lock.updateDelay);
+    if (lock.updateTimeout.unref) lock.updateTimeout.unref();
   }
-  function be(e, r, n) {
-    if (((r.released = !0), r.updateTimeout)) clearTimeout(r.updateTimeout);
-    if (A[e] === r) delete A[e];
-    r.options.onCompromised(n);
+  function setLockAsCompromised(file, lock, err) {
+    lock.released = true;
+    if (lock.updateTimeout) clearTimeout(lock.updateTimeout);
+    if (locks[file] === lock) delete locks[file];
+    lock.options.onCompromised(err);
   }
-  function Nt(e, r, n) {
-    ((r = {
+  function lock(file, options, callback) {
+    options = {
       stale: 1e4,
       update: null,
-      realpath: !0,
+      realpath: true,
       retries: 0,
-      fs: Ne,
-      onCompromised: (i) => {
-        throw i;
+      fs,
+      onCompromised: (err) => {
+        throw err;
       },
-      ...r,
-    }),
-      (r.retries = r.retries || 0),
-      (r.retries = typeof r.retries === "number" ? { retries: r.retries } : r.retries),
-      (r.stale = Math.max(r.stale || 0, 2000)),
-      (r.update = r.update == null ? r.stale / 2 : r.update || 0),
-      (r.update = Math.max(Math.min(r.update, r.stale / 2), 1000)),
-      Pe(e, r, (i, u) => {
-        if (i) return n(i);
-        let operation = et.operation(r.retries);
-        operation.attempt(() => {
-          De(u, r, (h, m, E) => {
-            if (operation.retry(h)) return;
-            if (h) return n(operation.mainError());
-            let b = (A[u] = {
-              lockfilePath: ne(u, r),
-              mtime: m,
-              mtimePrecision: E,
-              options: r,
-              lastUpdate: Date.now(),
-            });
-            (pe(u, r),
-              n(null, (o) => {
-                if (b.released)
-                  return o && o(Object.assign(Error("Lock is already released"), { code: "ERELEASED" }));
-                nt(u, { ...r, realpath: !1 }, o);
-              }));
+      ...options,
+    };
+    options.retries = options.retries || 0;
+    options.retries =
+      typeof options.retries === "number"
+        ? {
+            retries: options.retries,
+          }
+        : options.retries;
+    options.stale = Math.max(options.stale || 0, 2000);
+    options.update = options.update == null ? options.stale / 2 : options.update || 0;
+    options.update = Math.max(Math.min(options.update, options.stale / 2), 1000);
+    resolveCanonicalPath(file, options, (err, file) => {
+      if (err) return callback(err);
+      let operation = retry.operation(options.retries);
+      operation.attempt(() => {
+        acquireLock(file, options, (err, mtime, mtimePrecision) => {
+          if (operation.retry(err)) return;
+          if (err) return callback(operation.mainError());
+          let lock = (locks[file] = {
+            lockfilePath: getLockFile(file, options),
+            mtime,
+            mtimePrecision,
+            options,
+            lastUpdate: Date.now(),
+          });
+          updateLock(file, options);
+          callback(null, (releasedCallback) => {
+            if (lock.released)
+              return (
+                releasedCallback &&
+                releasedCallback(
+                  Object.assign(Error("Lock is already released"), {
+                    code: "ERELEASED",
+                  }),
+                )
+              );
+            unlock(
+              file,
+              {
+                ...options,
+                realpath: false,
+              },
+              releasedCallback,
+            );
           });
         });
-      }));
+      });
+    });
   }
-  function nt(e, r, n) {
-    ((r = { fs: Ne, realpath: !0, ...r }),
-      Pe(e, r, (i, u) => {
-        if (i) return n(i);
-        let c = A[u];
-        if (!c) return n(Object.assign(Error("Lock is not acquired/owned by you"), { code: "ENOTACQUIRED" }));
-        (c.updateTimeout && clearTimeout(c.updateTimeout), (c.released = !0), delete A[u], rt(u, r, n));
-      }));
+  function unlock(file, options, callback) {
+    options = {
+      fs,
+      realpath: true,
+      ...options,
+    };
+    resolveCanonicalPath(file, options, (err, file) => {
+      if (err) return callback(err);
+      let lock = locks[file];
+      if (!lock)
+        return callback(
+          Object.assign(Error("Lock is not acquired/owned by you"), {
+            code: "ENOTACQUIRED",
+          }),
+        );
+      if (lock.updateTimeout) clearTimeout(lock.updateTimeout);
+      lock.released = true;
+      delete locks[file];
+      removeLock(file, options, callback);
+    });
   }
-  function Pt(e, r, n) {
-    ((r = { stale: 1e4, realpath: !0, fs: Ne, ...r }),
-      (r.stale = Math.max(r.stale || 0, 2000)),
-      Pe(e, r, (i, u) => {
-        if (i) return n(i);
-        r.fs.stat(ne(u, r), (c, h) => {
-          if (c) return c.code === "ENOENT" ? n(null, !1) : n(c);
-          return n(null, !tt(h, r));
-        });
-      }));
+  function check(file, options, callback) {
+    options = {
+      stale: 1e4,
+      realpath: true,
+      fs,
+      ...options,
+    };
+    options.stale = Math.max(options.stale || 0, 2000);
+    resolveCanonicalPath(file, options, (err, file) => {
+      if (err) return callback(err);
+      options.fs.stat(getLockFile(file, options), (err, stat) => {
+        if (err) return err.code === "ENOENT" ? callback(null, false) : callback(err);
+        return callback(null, !isLockStale(stat, options));
+      });
+    });
   }
-  function Rt() {
-    return A;
+  function getLocks() {
+    return locks;
   }
-  Dt(() => {
-    for (let key in A) {
-      let options = A[key].options;
+  onExit(() => {
+    for (let file in locks) {
+      let options = locks[file].options;
       try {
-        options.fs.rmdirSync(ne(key, options));
-      } catch (error) {}
+        options.fs.rmdirSync(getLockFile(file, options));
+      } catch (e) {}
     }
   });
-  Mt.lock = Nt;
-  Mt.unlock = nt;
-  Mt.check = Pt;
-  Mt.getLocks = Rt;
+  cjsExports.lock = lock;
+  cjsExports.unlock = unlock;
+  cjsExports.check = check;
+  cjsExports.getLocks = getLocks;
 });
-
-export { it };
+export { require_lockfile };

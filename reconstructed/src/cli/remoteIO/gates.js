@@ -10,40 +10,55 @@
  */
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import { env } from "../../utils/env.js";
-import { p7t } from "../../utils/sessionUrl.js";
+import { remoteSessionUrlId } from "../../utils/sessionUrl.js";
 import { GENERAL_PURPOSE_AGENT } from "../../tools/AgentTool/built-in/generalPurposeAgent.js";
 import { COORDINATOR_WORKER_AGENT_TYPE } from "../../coordinator/workerAgent.js";
 
 //@ chunk-z4g2ta8k.js:4350-4413 placement
 function isCcrSubagentSkipOnDeltaGateOn() {
-  return getFeatureValue_CACHED_MAY_BE_STALE("tengu_ccr_subagent_skip_on_delta", !1);
+  return getFeatureValue_CACHED_MAY_BE_STALE("tengu_ccr_subagent_skip_on_delta", false);
 }
 //@ chunk-z4g2ta8k.js:4413-4504 placement
-function UDs() {
+/**
+ * 是否开启 transcript 本地 GC：读 CLAUDE_CODE_TRANSCRIPT_LOCAL_GC 或特性开关 tengu_transcript_local_gc。
+ */
+function isTranscriptLocalGcEnabled() {
   return (
     env.CLAUDE_CODE_TRANSCRIPT_LOCAL_GC ??
-    getFeatureValue_CACHED_MAY_BE_STALE("tengu_transcript_local_gc", !1)
+    getFeatureValue_CACHED_MAY_BE_STALE("tengu_transcript_local_gc", false)
   );
 }
 //@ chunk-z4g2ta8k.js:4504-4570 placement
-function HPr() {
-  return p7t() !== null && getFeatureValue_CACHED_MAY_BE_STALE("tengu_wondrous_island", !1);
+/**
+ * tengu_wondrous_island 特性开且存在某模型参数时为真（远程 ingress 的一个附加开关）。
+ */
+function isWondrousIslandGateOn() {
+  return remoteSessionUrlId() !== null && getFeatureValue_CACHED_MAY_BE_STALE("tengu_wondrous_island", false);
 }
+//@ chunk-z4g2ta8k.js:4570-4836 placement
 /**
  * 按 task_id 去重任务列表，同一 id 保留第一条，但后来者有描述而前者没有时用后来者。
  */
-//@ chunk-z4g2ta8k.js:4570-4836 placement
 function dedupeTasksById(e) {
   let n = new Map();
   for (let r of e) {
     if (typeof r?.task_id !== "string" || !r.task_id) continue;
-    let s = typeof r.description === "string" ? r.description : "",
-      h = n.get(r.task_id);
-    if (!h || (!h.description && s)) n.set(r.task_id, { ...r, description: s });
+    let description = typeof r.description === "string" ? r.description : "";
+    let h = n.get(r.task_id);
+    if (!h || (!h.description && description))
+      n.set(r.task_id, {
+        ...r,
+        description,
+      });
   }
   return Array.from(n.values());
 }
 //@ chunk-z4g2ta8k.js:4836-4871 placement
-var ar = new Set([GENERAL_PURPOSE_AGENT.agentType, COORDINATOR_WORKER_AGENT_TYPE]);
-
-export { ar, dedupeTasksById, UDs, isCcrSubagentSkipOnDeltaGateOn, HPr };
+var BROADCAST_AGENT_TYPES = new Set([GENERAL_PURPOSE_AGENT.agentType, COORDINATOR_WORKER_AGENT_TYPE]);
+export {
+  BROADCAST_AGENT_TYPES,
+  dedupeTasksById,
+  isTranscriptLocalGcEnabled,
+  isCcrSubagentSkipOnDeltaGateOn,
+  isWondrousIslandGateOn,
+};

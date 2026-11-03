@@ -9,107 +9,113 @@ import { x } from "../../../runtime/bun-runtime.js";
 import { zr } from "./namespace.js";
 import { Rs } from "./method.js";
 import { de } from "./util.js";
-import { ZPo } from "./rpc.js";
+import { require_rpc as ZPo } from "./rpc.js";
 
 //@ chunk-pwh5dx3n.js:88399-90850 cjs-fingerprint
-var bs = x(function (aA, gd) {
-  gd.exports = De;
-  var Ft = zr();
-  ((De.prototype = Object.create(Ft.prototype)).constructor = De).className = "Service";
-  var Fa = Rs(),
-    Wr = de(),
-    cE = ZPo(),
-    reservedRe = Wr.patterns.reservedRe;
-  function De(e, t) {
-    (Ft.call(this, e, t), (this.methods = {}), (this._methodsArray = null));
+var bs = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = Service;
+  var Namespace = zr();
+  ((Service.prototype = Object.create(Namespace.prototype)).constructor = Service).className = "Service";
+  var Method = Rs();
+  var util = de();
+  var rpc = ZPo();
+  var reservedRe = util.patterns.reservedRe;
+  function Service(name, options) {
+    Namespace.call(this, name, options);
+    this.methods = {};
+    this._methodsArray = null;
   }
-  De.fromJSON = function (t, r, i) {
-    i = Wr.checkDepth(i);
-    var s = new De(t, r.options);
-    if (r.methods)
-      for (var keys = Object.keys(r.methods), a = 0; a < keys.length; ++a)
-        s.add(Fa.fromJSON(keys[a], r.methods[keys[a]]));
-    if (r.nested) s.addJSON(r.nested, i);
-    if (r.edition) s._edition = r.edition;
-    return ((s.comment = r.comment), (s._defaultEdition = "proto3"), s);
+  Service.fromJSON = function (name, json, depth) {
+    depth = util.checkDepth(depth);
+    var service = new Service(name, json.options);
+    if (json.methods)
+      for (var names = Object.keys(json.methods), i = 0; i < names.length; ++i)
+        service.add(Method.fromJSON(names[i], json.methods[names[i]]));
+    if (json.nested) service.addJSON(json.nested, depth);
+    if (json.edition) service._edition = json.edition;
+    service.comment = json.comment;
+    service._defaultEdition = "proto3";
+    return service;
   };
-  De.prototype.toJSON = function (t) {
-    var r = Ft.prototype.toJSON.call(this, t),
-      i = t ? Boolean(t.keepComments) : !1;
-    return Wr.toObject([
+  Service.prototype.toJSON = function (toJSONOptions) {
+    var inherited = Namespace.prototype.toJSON.call(this, toJSONOptions);
+    var keepComments = toJSONOptions ? Boolean(toJSONOptions.keepComments) : false;
+    return util.toObject([
       "edition",
       this._editionToJSON(),
       "options",
-      (r && r.options) || void 0,
+      (inherited && inherited.options) || undefined,
       "methods",
-      Ft.arrayToJSON(this.methodsArray, t) || {},
+      Namespace.arrayToJSON(this.methodsArray, toJSONOptions) || {},
       "nested",
-      (r && r.nested) || void 0,
+      (inherited && inherited.nested) || undefined,
       "comment",
-      i ? this.comment : void 0,
+      keepComments ? this.comment : undefined,
     ]);
   };
-  Object.defineProperty(De.prototype, "methodsArray", {
+  Object.defineProperty(Service.prototype, "methodsArray", {
     get: function () {
-      return this._methodsArray || (this._methodsArray = Wr.toArray(this.methods));
+      return this._methodsArray || (this._methodsArray = util.toArray(this.methods));
     },
   });
-  function pd(e) {
-    return ((e._methodsArray = null), e);
+  function clearCache(service) {
+    service._methodsArray = null;
+    return service;
   }
-  De.prototype.get = function (t) {
-    return Object.prototype.hasOwnProperty.call(this.methods, t)
-      ? this.methods[t]
-      : Ft.prototype.get.call(this, t);
+  Service.prototype.get = function (name) {
+    return Object.prototype.hasOwnProperty.call(this.methods, name)
+      ? this.methods[name]
+      : Namespace.prototype.get.call(this, name);
   };
-  De.prototype.resolveAll = function () {
+  Service.prototype.resolveAll = function () {
     if (!this._needsRecursiveResolve) return this;
-    Ft.prototype.resolve.call(this);
-    var methodsArray = this.methodsArray;
-    for (var r = 0; r < methodsArray.length; ++r) methodsArray[r].resolve();
+    Namespace.prototype.resolve.call(this);
+    var methods = this.methodsArray;
+    for (var i = 0; i < methods.length; ++i) methods[i].resolve();
     return this;
   };
-  De.prototype._resolveFeaturesRecursive = function (t) {
+  Service.prototype._resolveFeaturesRecursive = function (edition) {
     if (!this._needsRecursiveFeatureResolution) return this;
-    return (
-      (t = this._edition || t),
-      Ft.prototype._resolveFeaturesRecursive.call(this, t),
-      this.methodsArray.forEach((r) => {
-        r._resolveFeaturesRecursive(t);
-      }),
-      this
-    );
+    edition = this._edition || edition;
+    Namespace.prototype._resolveFeaturesRecursive.call(this, edition);
+    this.methodsArray.forEach((method) => {
+      method._resolveFeaturesRecursive(edition);
+    });
+    return this;
   };
-  De.prototype.add = function (t) {
-    if (this.get(t.name)) throw Error("duplicate name '" + t.name + "' in " + this);
-    if (t instanceof Fa) {
-      if (t.name === "__proto__") return this;
-      return ((this.methods[t.name] = t), (t.parent = this), pd(this));
+  Service.prototype.add = function (object) {
+    if (this.get(object.name)) throw Error("duplicate name '" + object.name + "' in " + this);
+    if (object instanceof Method) {
+      if (object.name === "__proto__") return this;
+      this.methods[object.name] = object;
+      object.parent = this;
+      return clearCache(this);
     }
-    return Ft.prototype.add.call(this, t);
+    return Namespace.prototype.add.call(this, object);
   };
-  De.prototype.remove = function (t) {
-    if (t instanceof Fa) {
-      if (this.methods[t.name] !== t) throw Error(t + " is not a member of " + this);
-      return (delete this.methods[t.name], (t.parent = null), pd(this));
+  Service.prototype.remove = function (object) {
+    if (object instanceof Method) {
+      if (this.methods[object.name] !== object) throw Error(object + " is not a member of " + this);
+      delete this.methods[object.name];
+      object.parent = null;
+      return clearCache(this);
     }
-    return Ft.prototype.remove.call(this, t);
+    return Namespace.prototype.remove.call(this, object);
   };
-  De.prototype.create = function (t, r, i) {
-    var s = new cE.Service(t, r, i);
-    for (var n = 0, a; n < this.methodsArray.length; ++n) {
-      var replaced = Wr.lcFirst((a = this._methodsArray[n]).resolve().name).replace(/[^$\w_]/g, "");
-      s[replaced] = Wr.codegen(
+  Service.prototype.create = function (rpcImpl, requestDelimited, responseDelimited) {
+    var rpcService = new rpc.Service(rpcImpl, requestDelimited, responseDelimited);
+    for (var i = 0, method; i < this.methodsArray.length; ++i) {
+      var methodName = util.lcFirst((method = this._methodsArray[i]).resolve().name).replace(/[^$\w_]/g, "");
+      rpcService[methodName] = util.codegen(
         ["r", "c"],
-        reservedRe.test(replaced) ? replaced + "_" : replaced,
+        reservedRe.test(methodName) ? methodName + "_" : methodName,
       )("return this.rpcCall(m,q,s,r,c)")({
-        m: a,
-        q: a.resolvedRequestType.ctor,
-        s: a.resolvedResponseType.ctor,
+        m: method,
+        q: method.resolvedRequestType.ctor,
+        s: method.resolvedResponseType.ctor,
       });
     }
-    return s;
+    return rpcService;
   };
 });
-
 export { bs };

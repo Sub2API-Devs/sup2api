@@ -16,19 +16,18 @@ import { getRootSession } from "../bootstrap/state.js";
 class BidiNeedDetector {
   needed;
   isNeeded() {
-    if (this.needed === void 0)
+    if (this.needed === undefined)
       this.needed = typeof process.env.WT_SESSION === "string" || env.TERM_PROGRAM === "vscode";
     return this.needed;
   }
 }
 //@ chunk-bzr73sfg.js:276011-276036 layout
 var bidiNeedByHost = new HostScoped(() => new BidiNeedDetector());
+//@ chunk-bzr73sfg.js:276036-276084 placement
 /**
  * 当前终端是否需要 Ink 自己做双向文本重排（Windows Terminal、VS Code 终端），传给 CellSegmenter 的 reorder 参数。
  */
-//@ chunk-bzr73sfg.js:276036-276084 placement
 function needsBidiReorder() {
   return bidiNeedByHost.of(getRootSession().host).isNeeded();
 }
-
 export { needsBidiReorder };

@@ -14,24 +14,21 @@ import {
   getFeatureValue_CACHED_MAY_BE_STALE,
 } from "../services/analytics/growthbook.js";
 
+//@ chunk-zzw8w3zt.js:232-470 placement
 /**
  * 读 tengu_radiant_heron 开关：下发/覆盖值、禁用为 false，未拉取时为 unknown。
  */
-//@ chunk-zzw8w3zt.js:232-470 placement
 function readRadiantHeron() {
   try {
-    let { value: e, source: source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE(
-      "tengu_radiant_heron",
-      !1,
-    );
+    let { value: e, source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE("tengu_radiant_heron", false);
     switch (source) {
       case "payload":
       case "override":
-        return e === !0;
+        return e === true;
       case "disabled":
-        return !1;
+        return false;
       case "fallback":
-        return hasFreshGrowthBookFeatures() ? !1 : "unknown";
+        return hasFreshGrowthBookFeatures() ? false : "unknown";
       case "disk":
         return "unknown";
     }
@@ -40,8 +37,10 @@ function readRadiantHeron() {
   }
 }
 //@ chunk-zzw8w3zt.js:470-520 placement
-function lOs() {
-  return getFeatureValue_CACHED_MAY_BE_STALE("tengu_radiant_heron", !1);
+/**
+ * 读取 tengu_radiant_heron 特性开关（默认关闭）。
+ */
+function radiantHeronFlag() {
+  return getFeatureValue_CACHED_MAY_BE_STALE("tengu_radiant_heron", false);
 }
-
-export { readRadiantHeron, lOs };
+export { readRadiantHeron, radiantHeronFlag };

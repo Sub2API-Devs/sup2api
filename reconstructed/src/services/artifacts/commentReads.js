@@ -12,53 +12,82 @@ import { randomUUID } from "crypto";
 import { getLiveState } from "../liveReplica/liveReplica.js";
 
 //@ chunk-bf8g35sz.js:263-273 placement
-var m = 256;
+/**
+ * 评论读取记录（按工具调用 id、按 slug）表的容量上限 256。
+ */
+var MAX_TRACKED_COMMENT_READS = 256;
 //@ chunk-bf8g35sz.js:273-362 placement
-function hqn(e = randomUUID(), t) {
-  if (t !== void 0) {
+/**
+ * 导出函数 `newLaneNoticeId`：参数 e = randomUUID(，返回 e。
+ */
+function newLaneNoticeId(handOff = randomUUID(), t) {
+  if (t !== undefined) {
     let laneNoticeSlugs = getLiveState().laneNoticeSlugs;
-    (laneNoticeSlugs.set(e, t), r(laneNoticeSlugs));
+    laneNoticeSlugs.set(handOff, t);
+    evictOldest(laneNoticeSlugs);
   }
-  return e;
+  return handOff;
 }
 //@ chunk-bf8g35sz.js:362-413 placement
-function fGs(e) {
-  return getLiveState().laneNoticeSlugs.get(e);
+/**
+ * 导出函数 `laneNoticeSlug`：参数 e，返回 getLiveState().laneNoticeSlugs.get(e)。
+ */
+function laneNoticeSlug(uuid) {
+  return getLiveState().laneNoticeSlugs.get(uuid);
 }
+//@ chunk-bf8g35sz.js:413-658 placement
 /**
  * 记录一次评论读取：按工具调用 id 记 slug 与是否只读自己的评论，更新该 slug 最近读取时间（表有上限）；读到他人评论时更新 lastOthersCommentReadAt。
  */
-//@ chunk-bf8g35sz.js:413-658 placement
-function recordCommentRead(e, t, o) {
-  let n = getLiveState(),
-    now = Date.now();
-  if (e !== void 0) (n.commentReads.set(e, { slug: t, ownWordsOnly: o }), r(n.commentReads));
-  if ((n.commentReadAtBySlug.delete(t), n.commentReadAtBySlug.set(t, now), r(n.commentReadAtBySlug) || !o))
-    n.lastOthersCommentReadAt = now;
+function recordCommentRead(toolUseId, slug, o) {
+  let liveState = getLiveState();
+  let now = Date.now();
+  if (toolUseId !== undefined) {
+    liveState.commentReads.set(toolUseId, {
+      slug,
+      ownWordsOnly: o,
+    });
+    evictOldest(liveState.commentReads);
+  }
+  liveState.commentReadAtBySlug.delete(slug);
+  liveState.commentReadAtBySlug.set(slug, now);
+  if (evictOldest(liveState.commentReadAtBySlug) || !o) liveState.lastOthersCommentReadAt = now;
 }
 //@ chunk-bf8g35sz.js:658-706 placement
-function mGs(e) {
-  return getLiveState().commentReads.get(e);
+/**
+ * 导出函数 `commentReadFor`：参数 e，返回 getLiveState().commentReads.get(e)。
+ */
+function commentReadFor(id) {
+  return getLiveState().commentReads.get(id);
 }
+//@ chunk-bf8g35sz.js:706-819 placement
 /**
  * 判断除给定 slug 外，是否有在某时间之后读过评论的 artifact。
  */
-//@ chunk-bf8g35sz.js:706-819 placement
 function hasOtherRecentCommentRead(e, t) {
   for (let [o, n] of getLiveState().commentReadAtBySlug)
-    if (o !== e && !(Number.isFinite(t) && n < t)) return !0;
-  return !1;
+    if (o !== e && !(Number.isFinite(t) && n < t)) return true;
+  return false;
 }
 //@ chunk-bf8g35sz.js:819-870 placement
-function _qn() {
+/**
+ * 导出函数 `lastOthersCommentReadAt`：返回 getLiveState().lastOthersCommentReadAt。
+ */
+function lastOthersCommentReadAt() {
   return getLiveState().lastOthersCommentReadAt;
 }
 //@ chunk-bf8g35sz.js:870-969 placement
-function r(e) {
-  if (e.size <= m) return !1;
+function evictOldest(e) {
+  if (e.size <= MAX_TRACKED_COMMENT_READS) return false;
   let t = e.keys().next().value;
-  if (t !== void 0) e.delete(t);
-  return !0;
+  if (t !== undefined) e.delete(t);
+  return true;
 }
-
-export { recordCommentRead, _qn, hasOtherRecentCommentRead, hqn, fGs, mGs };
+export {
+  recordCommentRead,
+  lastOthersCommentReadAt,
+  hasOtherRecentCommentRead,
+  newLaneNoticeId,
+  laneNoticeSlug,
+  commentReadFor,
+};

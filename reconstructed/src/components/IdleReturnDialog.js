@@ -11,75 +11,118 @@
 import { w } from "../../vendor/react/compiler-runtime.js";
 import { formatTokens } from "../utils/format.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
-import { e, r } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+} from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Box, Text } from "../ink/components/Text.js";
 import { ModelSelector } from "./agents/ModelSelector.js";
 import { Dialog } from "./design-system/Dialog.js";
 
 //@ chunk-18hwfzwa.js:1196896-1198240 fingerprint = IdleReturnDialog (0.463)
-function IdleReturnDialog(t0) {
-  let $ = w(22),
-    {
-      sessionAgeMinutes: sessionAgeMinutes,
-      estimatedTokens: estimatedTokens,
-      hasPrecomputedSummary: hasPrecomputedSummary,
-      onDone: onDone,
-    } = t0,
-    Re;
-  if ($[0] !== sessionAgeMinutes)
-    ((Re = formatIdleDuration(sessionAgeMinutes)), ($[0] = sessionAgeMinutes), ($[1] = Re));
-  else Re = $[1];
-  let Be = Re,
-    He;
-  if ($[2] !== estimatedTokens) ((He = formatTokens(estimatedTokens)), ($[2] = estimatedTokens), ($[3] = He));
-  else He = $[3];
-  const t3 = `This session is ${Be} old and ${He} tokens.`;
-  let Xe;
-  if ($[4] !== onDone) ((Xe = () => onDone("dismiss")), ($[4] = onDone), ($[5] = Xe));
-  else Xe = $[5];
-  let rt;
-  if ($[6] === MEMO_CACHE_SENTINEL)
-    ((rt = e(Box, {
+function IdleReturnDialog(props) {
+  let $ = w(22);
+  let {
+    sessionAgeMinutes: idleMinutes,
+    estimatedTokens: totalInputTokens,
+    hasPrecomputedSummary,
+    onDone,
+  } = props;
+  let t1;
+  if ($[0] !== idleMinutes) {
+    t1 = formatIdleDuration(idleMinutes);
+    $[0] = idleMinutes;
+    $[1] = t1;
+  } else t1 = $[1];
+  let formattedIdle = t1;
+  let t2;
+  if ($[2] !== totalInputTokens) {
+    t2 = formatTokens(totalInputTokens);
+    $[2] = totalInputTokens;
+    $[3] = t2;
+  } else t2 = $[3];
+  const title = `This session is ${formattedIdle} old and ${t2} tokens.`;
+  let onCancel;
+  if ($[4] !== onDone) {
+    onCancel = () => onDone("dismiss");
+    $[4] = onDone;
+    $[5] = onCancel;
+  } else onCancel = $[5];
+  let t5;
+  if ($[6] === MEMO_CACHE_SENTINEL) {
+    t5 = jsxProd_default(Box, {
       flexDirection: "column",
-      children: e(Text, {
+      children: jsxProd_default(Text, {
         children:
           "Resuming the full session will consume a substantial portion of your usage limits. We recommend resuming from a summary.",
       }),
-    })),
-      ($[6] = rt));
-  else rt = $[6];
-  const kt = hasPrecomputedSummary
+    });
+    $[6] = t5;
+  } else t5 = $[6];
+  const label = hasPrecomputedSummary
     ? "Resume from summary (instant, recommended)"
     : "Resume from summary (recommended)";
   let At;
-  if ($[7] !== kt) ((At = { value: "compact", label: kt }), ($[7] = kt), ($[8] = At));
-  else At = $[8];
-  let It, Ot;
-  if ($[9] === MEMO_CACHE_SENTINEL)
-    ((It = { value: "continue", label: "Resume full session as-is" }),
-      (Ot = { value: "never", label: "Don't ask me again" }),
-      ($[9] = It),
-      ($[10] = Ot));
-  else ((It = $[9]), (Ot = $[10]));
-  let Et;
-  if ($[11] !== At) ((Et = [At, It, Ot]), ($[11] = At), ($[12] = Et));
-  else Et = $[12];
-  let Dt;
-  if ($[13] !== onDone) ((Dt = (value) => onDone(value)), ($[13] = onDone), ($[14] = Dt));
-  else Dt = $[14];
+  if ($[7] !== label) {
+    At = {
+      value: "compact",
+      label,
+    };
+    $[7] = label;
+    $[8] = At;
+  } else At = $[8];
+  let It;
+  let Ot;
+  if ($[9] === MEMO_CACHE_SENTINEL) {
+    It = {
+      value: "continue",
+      label: "Resume full session as-is",
+    };
+    Ot = {
+      value: "never",
+      label: "Don't ask me again",
+    };
+    $[9] = It;
+    $[10] = Ot;
+  } else {
+    It = $[9];
+    Ot = $[10];
+  }
+  let options;
+  if ($[11] !== At) {
+    options = [At, It, Ot];
+    $[11] = At;
+    $[12] = options;
+  } else options = $[12];
+  let onChange;
+  if ($[13] !== onDone) {
+    onChange = (value) => onDone(value);
+    $[13] = onDone;
+    $[14] = onChange;
+  } else onChange = $[14];
   let oo;
-  if ($[15] !== Et || $[16] !== Dt)
-    ((oo = e(ModelSelector, { options: Et, onChange: Dt })), ($[15] = Et), ($[16] = Dt), ($[17] = oo));
-  else oo = $[17];
-  let Xt;
-  if ($[18] !== oo || $[19] !== t3 || $[20] !== Xe)
-    ((Xt = r(Dialog, { title: t3, onCancel: Xe, children: [rt, oo] })),
-      ($[18] = oo),
-      ($[19] = t3),
-      ($[20] = Xe),
-      ($[21] = Xt));
-  else Xt = $[21];
-  return Xt;
+  if ($[15] !== options || $[16] !== onChange) {
+    oo = jsxProd_default(ModelSelector, {
+      options,
+      onChange,
+    });
+    $[15] = options;
+    $[16] = onChange;
+    $[17] = oo;
+  } else oo = $[17];
+  let t10;
+  if ($[18] !== oo || $[19] !== title || $[20] !== onCancel) {
+    t10 = jsxProd_default_2(Dialog, {
+      title,
+      onCancel,
+      children: [t5, oo],
+    });
+    $[18] = oo;
+    $[19] = title;
+    $[20] = onCancel;
+    $[21] = t10;
+  } else t10 = $[21];
+  return t10;
 }
 //@ chunk-18hwfzwa.js:1198240-1198448 file-local
 function formatIdleDuration(minutes) {
@@ -89,9 +132,8 @@ function formatIdleDuration(minutes) {
     let remainingMinutes = Math.floor(minutes % 60);
     return remainingMinutes === 0 ? `${hours}h` : `${hours}h ${remainingMinutes}m`;
   }
-  let floored = Math.floor(hours / 24),
-    L = hours % 24;
+  let floored = Math.floor(hours / 24);
+  let L = hours % 24;
   return L === 0 ? `${floored}d` : `${floored}d ${L}h`;
 }
-
 export { IdleReturnDialog };

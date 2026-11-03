@@ -8,32 +8,46 @@
  * pieces: chunk-6zvepy0r.js (8)
  * attribution: fingerprint 3, file-local 2, layout 3
  */
-import { ae, ee, rnt, st } from "./settings/settingsReview.js";
+import {
+  DIFF_CONTEXT_LINES_BEFORE,
+  MAX_DIFF_CONTEXT_BYTES,
+  MAX_SETTINGS_FILE_BYTES,
+  DIFF_CONTEXT_LINES_AFTER,
+} from "./settings/settingsReview.js";
 import { detectEncodingFromBom, decodeTextBuffer } from "./fileRead.js";
 
 //@ chunk-6zvepy0r.js:18882-19567 fingerprint = scanForContext (0.932)
 async function scanForContext(handle, needle, contextLines) {
-  if (needle === "") return { content: "", lineOffset: 1, truncated: !1 };
-  let needleLF = Buffer.from(needle, "utf8"),
-    s = 0;
-  for (let x = 0; x < needleLF.length; x++) if (needleLF[x] === ae) s++;
-  let needleCRLF,
-    h = needleLF.length + s - 1,
-    max = Math.max(ee, h),
-    buf = Buffer.allocUnsafe(max + h),
-    y = 0,
-    b = 0,
-    P = 0;
-  while (y < rnt) {
-    let { bytesRead: bytesRead } = await handle.read(buf, P, max, y);
+  if (needle === "")
+    return {
+      content: "",
+      lineOffset: 1,
+      truncated: false,
+    };
+  let needleLF = Buffer.from(needle, "utf8");
+  let nlCount = 0;
+  for (let i = 0; i < needleLF.length; i++) if (needleLF[i] === DIFF_CONTEXT_LINES_BEFORE) nlCount++;
+  let needleCRLF;
+  let overlap = needleLF.length + nlCount - 1;
+  let max = Math.max(MAX_DIFF_CONTEXT_BYTES, overlap);
+  let buf = Buffer.allocUnsafe(max + overlap);
+  let pos = 0;
+  let linesBeforePos = 0;
+  let prevTail = 0;
+  while (pos < MAX_SETTINGS_FILE_BYTES) {
+    let { bytesRead } = await handle.read(buf, prevTail, max, pos);
     if (bytesRead === 0) break;
-    let v = P + bytesRead;
-    if (y === 0 && detectEncodingFromBom(buf.subarray(0, v)) !== "utf8")
-      return { content: "", lineOffset: 1, truncated: !1 };
-    let matchAt = indexOfWithin(buf, needleLF, v),
-      matchLen = needleLF.length;
-    if (matchAt === -1 && s > 0)
-      ((needleCRLF ??= Buffer.from(
+    let viewLen = prevTail + bytesRead;
+    if (pos === 0 && detectEncodingFromBom(buf.subarray(0, viewLen)) !== "utf8")
+      return {
+        content: "",
+        lineOffset: 1,
+        truncated: false,
+      };
+    let matchAt = indexOfWithin(buf, needleLF, viewLen);
+    let matchLen = needleLF.length;
+    if (matchAt === -1 && nlCount > 0) {
+      needleCRLF ??= Buffer.from(
         needle.replaceAll(
           `
 `,
@@ -41,38 +55,49 @@ async function scanForContext(handle, needle, contextLines) {
 `,
         ),
         "utf8",
-      )),
-        (matchAt = indexOfWithin(buf, needleCRLF, v)),
-        (matchLen = needleCRLF.length));
+      );
+      matchAt = indexOfWithin(buf, needleCRLF, viewLen);
+      matchLen = needleCRLF.length;
+    }
     if (matchAt !== -1) {
-      let M = y - P + matchAt;
+      let absMatch = pos - prevTail + matchAt;
       return await sliceContext(
         handle,
         buf,
-        M,
+        absMatch,
         matchLen,
         contextLines,
-        b + countLineBreaksInRange(buf, 0, matchAt),
+        linesBeforePos + countLineBreaksInRange(buf, 0, matchAt),
       );
     }
-    y += bytesRead;
-    let nextTail = Math.min(h, v);
-    ((b += countLineBreaksInRange(buf, 0, v - nextTail)), (P = nextTail), buf.copyWithin(0, v - P, v));
+    pos += bytesRead;
+    let nextTail = Math.min(overlap, viewLen);
+    linesBeforePos += countLineBreaksInRange(buf, 0, viewLen - nextTail);
+    prevTail = nextTail;
+    buf.copyWithin(0, viewLen - prevTail, viewLen);
   }
-  return { content: "", lineOffset: 1, truncated: y >= rnt };
+  return {
+    content: "",
+    lineOffset: 1,
+    truncated: pos >= MAX_SETTINGS_FILE_BYTES,
+  };
 }
 //@ chunk-6zvepy0r.js:19567-19838 fingerprint = readCapped (0.874)
 async function readCapped(handle) {
-  let buf = Buffer.allocUnsafe(ee),
-    total = 0;
+  let buf = Buffer.allocUnsafe(MAX_DIFF_CONTEXT_BYTES);
+  let total = 0;
   for (;;) {
     if (total === buf.length) {
-      let grown = Buffer.allocUnsafe(Math.min(buf.length * 2, rnt + ee));
-      (buf.copy(grown, 0, 0, total), (buf = grown));
+      let grown = Buffer.allocUnsafe(
+        Math.min(buf.length * 2, MAX_SETTINGS_FILE_BYTES + MAX_DIFF_CONTEXT_BYTES),
+      );
+      buf.copy(grown, 0, 0, total);
+      buf = grown;
     }
-    let { bytesRead: bytesRead } = await handle.read(buf, total, buf.length - total, total);
+    let { bytesRead } = await handle.read(buf, total, buf.length - total, total);
     if (bytesRead === 0) break;
-    if (((total += bytesRead), total > rnt)) return null;
+    total += bytesRead;
+    if (total > MAX_SETTINGS_FILE_BYTES) return null;
   }
   return decodeTextBuffer(buf.subarray(0, total));
 }
@@ -82,10 +107,10 @@ function indexOfWithin(buf, needle, end) {
   return at === -1 || at + needle.length > end ? -1 : at;
 }
 //@ chunk-6zvepy0r.js:19909-19982 layout
-function countLineBreaksInRange(e, n, r) {
-  let i = 0;
-  for (let s = n; s < r; s++) if (e[s] === ae) i++;
-  return i;
+function countLineBreaksInRange(buf, start, end) {
+  let n = 0;
+  for (let i = start; i < end; i++) if (buf[i] === DIFF_CONTEXT_LINES_BEFORE) n++;
+  return n;
 }
 //@ chunk-6zvepy0r.js:19982-20017 layout
 function isUtf8ContinuationByte(e) {
@@ -109,39 +134,47 @@ function normalizeCRLF(buf, len) {
 }
 //@ chunk-6zvepy0r.js:20164-20776 fingerprint = sliceContext (1)
 async function sliceContext(handle, scratch, matchStart, matchLen, contextLines, linesBeforeMatch) {
-  let backChunk = Math.min(matchStart, ee),
-    { bytesRead: backRead } = await handle.read(scratch, 0, backChunk, matchStart - backChunk),
-    w = matchStart,
-    y = 0;
-  for (let R = backRead - 1; R >= 0 && y <= contextLines; R--) {
-    if (scratch[R] === ae) {
-      if ((y++, y > contextLines)) break;
+  let backChunk = Math.min(matchStart, MAX_DIFF_CONTEXT_BYTES);
+  let { bytesRead: backRead } = await handle.read(scratch, 0, backChunk, matchStart - backChunk);
+  let ctxStart = matchStart;
+  let nlSeen = 0;
+  for (let i = backRead - 1; i >= 0 && nlSeen <= contextLines; i--) {
+    if (scratch[i] === DIFF_CONTEXT_LINES_BEFORE) {
+      nlSeen++;
+      if (nlSeen > contextLines) break;
     }
-    w--;
+    ctxStart--;
   }
   let b = matchStart - backRead;
-  for (let R = 0; R < 3 && w < matchStart && isUtf8ContinuationByte(scratch[w - b]); R++) w++;
-  let P = matchStart - w,
-    x = linesBeforeMatch - countLineBreaksInRange(scratch, backRead - P, backRead) + 1,
-    v = matchStart + matchLen,
-    { bytesRead: fwdRead } = await handle.read(scratch, 0, ee, v),
-    O = v;
-  y = 0;
-  for (let R = 0; R < fwdRead; R++)
-    if ((O++, scratch[R] === ae)) {
-      if ((y++, y >= contextLines + 1)) break;
+  for (let idx = 0; idx < 3 && ctxStart < matchStart && isUtf8ContinuationByte(scratch[ctxStart - b]); idx++)
+    ctxStart++;
+  let P = matchStart - ctxStart;
+  let lineOffset = linesBeforeMatch - countLineBreaksInRange(scratch, backRead - P, backRead) + 1;
+  let v = matchStart + matchLen;
+  let { bytesRead: fwdRead } = await handle.read(scratch, 0, MAX_DIFF_CONTEXT_BYTES, v);
+  let O = v;
+  nlSeen = 0;
+  for (let i = 0; i < fwdRead; i++) {
+    O++;
+    if (scratch[i] === DIFF_CONTEXT_LINES_BEFORE) {
+      nlSeen++;
+      if (nlSeen >= contextLines + 1) break;
     }
-  for (let R = 0; R <= 3 && O - 1 - R >= v; R++) {
-    let N = scratch[O - 1 - R - v];
+  }
+  for (let idx = 0; idx <= 3 && O - 1 - idx >= v; idx++) {
+    let N = scratch[O - 1 - idx - v];
     if (isUtf8ContinuationByte(N)) continue;
-    if (N >= 192 && utf8SequenceLength(N) > R + 1) O -= R + 1;
+    if (N >= 192 && utf8SequenceLength(N) > idx + 1) O -= idx + 1;
     break;
   }
-  if (O > v && scratch[O - 1 - v] === st) O--;
-  let D = O - w,
-    out = D <= scratch.length ? scratch : Buffer.allocUnsafe(D),
-    { bytesRead: outRead } = await handle.read(out, 0, D, w);
-  return { content: normalizeCRLF(out, outRead), lineOffset: x, truncated: !1 };
+  if (O > v && scratch[O - 1 - v] === DIFF_CONTEXT_LINES_AFTER) O--;
+  let len = O - ctxStart;
+  let out = len <= scratch.length ? scratch : Buffer.allocUnsafe(len);
+  let { bytesRead: outRead } = await handle.read(out, 0, len, ctxStart);
+  return {
+    content: normalizeCRLF(out, outRead),
+    lineOffset,
+    truncated: false,
+  };
 }
-
 export { scanForContext, readCapped };

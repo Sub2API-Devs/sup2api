@@ -6,15 +6,17 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../runtime/bun-runtime.js";
-import { z_ } from "./logic-manager.js";
+import { require_logic_manager } from "./logic-manager.js";
 
 //@ chunk-fq0cr76a.js:526143-532305 cjs-fingerprint
-var gU = x(function (mU) {
-  Object.defineProperty(mU, "__esModule", { value: !0 });
-  var Lie = z_(),
-    textEncoder = new TextEncoder(),
-    Cs = "@result";
-  class hU {
+var require_builder = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  var logic_manager_js_1 = require_logic_manager();
+  var encoder = new TextEncoder();
+  var accuVarName = "@result";
+  class Builder {
     #e = 0n;
     sourceInfo = {
       $typeName: "cel.expr.SourceInfo",
@@ -25,302 +27,397 @@ var gU = x(function (mU) {
       macroCalls: {},
       extensions: [],
     };
-    nextExpr(e, n) {
-      return (
-        (this.sourceInfo.positions[(++this.#e).toString()] = e),
-        { $typeName: "cel.expr.Expr", id: this.#e, exprKind: n }
-      );
+    nextExpr(offset, exprKind) {
+      this.sourceInfo.positions[(++this.#e).toString()] = offset;
+      return {
+        $typeName: "cel.expr.Expr",
+        id: this.#e,
+        exprKind,
+      };
     }
-    nextEntry(e, n, r) {
-      return (
-        (this.sourceInfo.positions[(++this.#e).toString()] = e),
-        {
-          $typeName: "cel.expr.Expr.CreateStruct.Entry",
-          id: this.#e,
-          keyKind: n,
-          value: r,
-          optionalEntry: !1,
-        }
-      );
+    nextEntry(offset, keyKind, value) {
+      this.sourceInfo.positions[(++this.#e).toString()] = offset;
+      return {
+        $typeName: "cel.expr.Expr.CreateStruct.Entry",
+        id: this.#e,
+        keyKind,
+        value,
+        optionalEntry: false,
+      };
     }
-    newConstExpr(e, n) {
-      return this.nextExpr(e, {
+    newConstExpr(offset, constantKind) {
+      return this.nextExpr(offset, {
         case: "constExpr",
-        value: { $typeName: "cel.expr.Constant", constantKind: n },
+        value: {
+          $typeName: "cel.expr.Constant",
+          constantKind,
+        },
       });
     }
-    newCallExpr(e, n, r) {
-      if (n === "has" && r.length === 1 && r[0].exprKind?.case === "selectExpr")
-        return this.expandHasMacro(e, r[0]);
-      if ((n === "_||_" || n === "_&&_") && r.length > 1) {
-        let newBalancingLogicManager = Lie.default.newBalancingLogicManager(this, n, r[0]);
-        for (let h = 1; h < r.length; h += 1) newBalancingLogicManager.addTerm(e, r[h]);
-        return newBalancingLogicManager.toExpr();
+    newCallExpr(offset, functionName, args) {
+      if (functionName === "has" && args.length === 1 && args[0].exprKind?.case === "selectExpr")
+        return this.expandHasMacro(offset, args[0]);
+      if ((functionName === "_||_" || functionName === "_&&_") && args.length > 1) {
+        let logicManager = logic_manager_js_1.default.newBalancingLogicManager(this, functionName, args[0]);
+        for (let i = 1; i < args.length; i += 1) logicManager.addTerm(offset, args[i]);
+        return logicManager.toExpr();
       }
-      return this.nextExpr(e, {
+      return this.nextExpr(offset, {
         case: "callExpr",
-        value: { $typeName: "cel.expr.Expr.Call", function: n, args: r },
+        value: {
+          $typeName: "cel.expr.Expr.Call",
+          function: functionName,
+          args,
+        },
       });
     }
-    newMemberCallExpr(e, n, r, s) {
+    newMemberCallExpr(offset, target, functionName, args) {
       return this.maybeExpand(
-        e,
-        this.nextExpr(e, {
+        offset,
+        this.nextExpr(offset, {
           case: "callExpr",
-          value: { $typeName: "cel.expr.Expr.Call", function: r, target: n, args: s },
+          value: {
+            $typeName: "cel.expr.Expr.Call",
+            function: functionName,
+            target,
+            args,
+          },
         }),
       );
     }
-    newStringExpr(e, n) {
-      return this.newConstExpr(e, {
+    newStringExpr(offset, sequence) {
+      return this.newConstExpr(offset, {
         case: "stringValue",
-        value: n.reduce((r, s) => {
-          if (typeof s !== "string") {
-            if (s.some((h) => h >= 55296 && h < 57344)) throw Error("surrogate code points are not allowed");
-            return r + String.fromCodePoint(...s);
+        value: sequence.reduce((string, chunk) => {
+          if (typeof chunk !== "string") {
+            if (chunk.some((cp) => cp >= 55296 && cp < 57344))
+              throw Error("surrogate code points are not allowed");
+            return string + String.fromCodePoint(...chunk);
           }
-          return r + s;
+          return string + chunk;
         }, ""),
       });
     }
-    newBytesExpr(e, n) {
-      let r = [],
-        s = 0;
-      for (let b of n) {
-        let S = typeof b === "string" ? textEncoder.encode(b) : b;
-        (r.push(S), (s += S.length));
+    newBytesExpr(offset, sequence) {
+      let chunks = [];
+      let totalSize = 0;
+      for (let rawChunk of sequence) {
+        let chunk = typeof rawChunk === "string" ? encoder.encode(rawChunk) : rawChunk;
+        chunks.push(chunk);
+        totalSize += chunk.length;
       }
-      let uint8Array = new Uint8Array(s),
-        y = 0;
-      for (let b of r) (uint8Array.set(b, y), (y += b.length));
-      return this.newConstExpr(e, { case: "bytesValue", value: uint8Array });
+      let value = new Uint8Array(totalSize);
+      let chunkOffset = 0;
+      for (let chunk of chunks) {
+        value.set(chunk, chunkOffset);
+        chunkOffset += chunk.length;
+      }
+      return this.newConstExpr(offset, {
+        case: "bytesValue",
+        value,
+      });
     }
-    newBoolExpr(e, n) {
-      return this.newConstExpr(e, { case: "boolValue", value: n === "true" });
+    newBoolExpr(offset, keyword) {
+      return this.newConstExpr(offset, {
+        case: "boolValue",
+        value: keyword === "true",
+      });
     }
-    newInt64Expr(e, n) {
-      return this.newConstExpr(e, {
+    newInt64Expr(offset, digits) {
+      return this.newConstExpr(offset, {
         case: "int64Value",
-        value: n[0] === "-" ? -BigInt(n.slice(1)) : BigInt(n),
+        value: digits[0] === "-" ? -BigInt(digits.slice(1)) : BigInt(digits),
       });
     }
-    newUnsignedInt64Expr(e, n) {
-      return this.newConstExpr(e, { case: "uint64Value", value: BigInt(n) });
+    newUnsignedInt64Expr(offset, digits) {
+      return this.newConstExpr(offset, {
+        case: "uint64Value",
+        value: BigInt(digits),
+      });
     }
-    newDoubleExpr(e, n) {
-      return this.newConstExpr(e, { case: "doubleValue", value: parseFloat(n) });
+    newDoubleExpr(offset, digits) {
+      return this.newConstExpr(offset, {
+        case: "doubleValue",
+        value: parseFloat(digits),
+      });
     }
-    newNullExpr(e) {
-      return this.newConstExpr(e, { case: "nullValue", value: 0 });
+    newNullExpr(offset) {
+      return this.newConstExpr(offset, {
+        case: "nullValue",
+        value: 0,
+      });
     }
-    newIdentExpr(e, n) {
-      return this.nextExpr(e, { case: "identExpr", value: { $typeName: "cel.expr.Expr.Ident", name: n } });
+    newIdentExpr(offset, name) {
+      return this.nextExpr(offset, {
+        case: "identExpr",
+        value: {
+          $typeName: "cel.expr.Expr.Ident",
+          name,
+        },
+      });
     }
-    newInfixExpr(e, n, r) {
-      return this.newCallExpr(e, n === "in" ? "@in" : `_${n}_`, r);
+    newInfixExpr(offset, op, args) {
+      return this.newCallExpr(offset, op === "in" ? "@in" : `_${op}_`, args);
     }
-    newSelectExpr(e, n, r) {
-      return this.nextExpr(e, {
+    newSelectExpr(offset, operand, field) {
+      return this.nextExpr(offset, {
         case: "selectExpr",
-        value: { $typeName: "cel.expr.Expr.Select", operand: n, field: r, testOnly: !1 },
+        value: {
+          $typeName: "cel.expr.Expr.Select",
+          operand,
+          field,
+          testOnly: false,
+        },
       });
     }
-    newIndexExpr(e, n, r) {
-      return this.newCallExpr(e, "_[_]", [n, r]);
+    newIndexExpr(offset, operand, index) {
+      return this.newCallExpr(offset, "_[_]", [operand, index]);
     }
-    expandHasMacro(e, n) {
-      if (n.exprKind.case !== "selectExpr") return this.newCallExpr(e, "has", [n]);
-      return ((n.exprKind.value.testOnly = !0), n);
+    expandHasMacro(offset, target) {
+      if (target.exprKind.case !== "selectExpr") return this.newCallExpr(offset, "has", [target]);
+      target.exprKind.value.testOnly = true;
+      return target;
     }
-    newListExpr(e, n) {
-      return this.nextExpr(e, {
+    newListExpr(offset, elements) {
+      return this.nextExpr(offset, {
         case: "listExpr",
-        value: { $typeName: "cel.expr.Expr.CreateList", elements: n, optionalIndices: [] },
-      });
-    }
-    newBoolMacro(e, n, r, s, h, y) {
-      return this.nextExpr(e, {
-        case: "comprehensionExpr",
         value: {
-          $typeName: "cel.expr.Expr.Comprehension",
-          accuVar: Cs,
-          accuInit: this.newConstExpr(e, { case: "boolValue", value: s }),
-          iterVar: r,
-          iterVar2: "",
-          iterRange: n,
-          loopStep: h,
-          loopCondition: y,
-          result: this.newIdentExpr(e, Cs),
+          $typeName: "cel.expr.Expr.CreateList",
+          elements,
+          optionalIndices: [],
         },
       });
     }
-    newListMacro(e, n, r, s) {
-      return this.nextExpr(e, {
+    newBoolMacro(offset, iterRange, iterVar, init, loopStep, loopCondition) {
+      return this.nextExpr(offset, {
         case: "comprehensionExpr",
         value: {
           $typeName: "cel.expr.Expr.Comprehension",
-          accuVar: Cs,
-          accuInit: this.newListExpr(e, []),
-          iterVar: r,
+          accuVar: accuVarName,
+          accuInit: this.newConstExpr(offset, {
+            case: "boolValue",
+            value: init,
+          }),
+          iterVar,
           iterVar2: "",
-          iterRange: n,
-          loopCondition: this.newConstExpr(e, { case: "boolValue", value: !0 }),
-          loopStep: s,
-          result: this.newIdentExpr(e, Cs),
+          iterRange,
+          loopStep,
+          loopCondition,
+          result: this.newIdentExpr(offset, accuVarName),
         },
       });
     }
-    expandExistsMacro(e, n, r, s) {
+    newListMacro(offset, iterRange, iterVar, loopStep) {
+      return this.nextExpr(offset, {
+        case: "comprehensionExpr",
+        value: {
+          $typeName: "cel.expr.Expr.Comprehension",
+          accuVar: accuVarName,
+          accuInit: this.newListExpr(offset, []),
+          iterVar,
+          iterVar2: "",
+          iterRange,
+          loopCondition: this.newConstExpr(offset, {
+            case: "boolValue",
+            value: true,
+          }),
+          loopStep,
+          result: this.newIdentExpr(offset, accuVarName),
+        },
+      });
+    }
+    expandExistsMacro(offset, target, x, test) {
       return this.newBoolMacro(
-        e,
-        n,
-        r,
-        !1,
-        this.newCallExpr(e, "_||_", [this.newIdentExpr(e, Cs), s]),
-        this.newCallExpr(e, "@not_strictly_false", [this.newCallExpr(e, "!_", [this.newIdentExpr(e, Cs)])]),
-      );
-    }
-    expandAllMacro(e, n, r, s) {
-      return this.newBoolMacro(
-        e,
-        n,
-        r,
-        !0,
-        this.newCallExpr(e, "_&&_", [this.newIdentExpr(e, Cs), s]),
-        this.newCallExpr(e, "@not_strictly_false", [this.newIdentExpr(e, Cs)]),
-      );
-    }
-    expandMapMacro(e, n, r, s) {
-      return this.newListMacro(
-        e,
-        n,
-        r,
-        this.newCallExpr(e, "_+_", [this.newIdentExpr(e, Cs), this.newListExpr(e, [s])]),
-      );
-    }
-    expandMapFilterMacro(e, n, r, s, h) {
-      return this.newListMacro(
-        e,
-        n,
-        r,
-        this.newCallExpr(e, "_?_:_", [
-          s,
-          this.newCallExpr(e, "_+_", [this.newIdentExpr(e, Cs), this.newListExpr(e, [h])]),
-          this.newIdentExpr(e, Cs),
+        offset,
+        target,
+        x,
+        false,
+        this.newCallExpr(offset, "_||_", [this.newIdentExpr(offset, accuVarName), test]),
+        this.newCallExpr(offset, "@not_strictly_false", [
+          this.newCallExpr(offset, "!_", [this.newIdentExpr(offset, accuVarName)]),
         ]),
       );
     }
-    expandFilterMacro(e, n, r, s) {
+    expandAllMacro(offset, target, x, test) {
+      return this.newBoolMacro(
+        offset,
+        target,
+        x,
+        true,
+        this.newCallExpr(offset, "_&&_", [this.newIdentExpr(offset, accuVarName), test]),
+        this.newCallExpr(offset, "@not_strictly_false", [this.newIdentExpr(offset, accuVarName)]),
+      );
+    }
+    expandMapMacro(offset, target, x, step) {
       return this.newListMacro(
-        e,
-        n,
-        r,
-        this.newCallExpr(e, "_?_:_", [
-          s,
-          this.newCallExpr(e, "_+_", [
-            this.newIdentExpr(e, Cs),
-            this.newListExpr(e, [this.newIdentExpr(e, r)]),
+        offset,
+        target,
+        x,
+        this.newCallExpr(offset, "_+_", [
+          this.newIdentExpr(offset, accuVarName),
+          this.newListExpr(offset, [step]),
+        ]),
+      );
+    }
+    expandMapFilterMacro(offset, target, x, test, step) {
+      return this.newListMacro(
+        offset,
+        target,
+        x,
+        this.newCallExpr(offset, "_?_:_", [
+          test,
+          this.newCallExpr(offset, "_+_", [
+            this.newIdentExpr(offset, accuVarName),
+            this.newListExpr(offset, [step]),
           ]),
-          this.newIdentExpr(e, Cs),
+          this.newIdentExpr(offset, accuVarName),
         ]),
       );
     }
-    expandExistsOne(e, n, r, s) {
-      return this.nextExpr(e, {
+    expandFilterMacro(offset, target, x, step) {
+      return this.newListMacro(
+        offset,
+        target,
+        x,
+        this.newCallExpr(offset, "_?_:_", [
+          step,
+          this.newCallExpr(offset, "_+_", [
+            this.newIdentExpr(offset, accuVarName),
+            this.newListExpr(offset, [this.newIdentExpr(offset, x)]),
+          ]),
+          this.newIdentExpr(offset, accuVarName),
+        ]),
+      );
+    }
+    expandExistsOne(offset, iterRange, iterVar, step) {
+      return this.nextExpr(offset, {
         case: "comprehensionExpr",
         value: {
           $typeName: "cel.expr.Expr.Comprehension",
-          accuVar: Cs,
-          accuInit: this.newConstExpr(e, { case: "int64Value", value: BigInt(0) }),
-          iterVar: r,
+          accuVar: accuVarName,
+          accuInit: this.newConstExpr(offset, {
+            case: "int64Value",
+            value: BigInt(0),
+          }),
+          iterVar,
           iterVar2: "",
-          iterRange: n,
-          loopCondition: this.newConstExpr(e, { case: "boolValue", value: !0 }),
-          loopStep: this.newCallExpr(e, "_?_:_", [
-            s,
-            this.newCallExpr(e, "_+_", [
-              this.newIdentExpr(e, Cs),
-              this.newConstExpr(e, { case: "int64Value", value: BigInt(1) }),
+          iterRange,
+          loopCondition: this.newConstExpr(offset, {
+            case: "boolValue",
+            value: true,
+          }),
+          loopStep: this.newCallExpr(offset, "_?_:_", [
+            step,
+            this.newCallExpr(offset, "_+_", [
+              this.newIdentExpr(offset, accuVarName),
+              this.newConstExpr(offset, {
+                case: "int64Value",
+                value: BigInt(1),
+              }),
             ]),
-            this.newIdentExpr(e, Cs),
+            this.newIdentExpr(offset, accuVarName),
           ]),
-          result: this.newCallExpr(e, "_==_", [
-            this.newIdentExpr(e, Cs),
-            this.newConstExpr(e, { case: "int64Value", value: BigInt(1) }),
+          result: this.newCallExpr(offset, "_==_", [
+            this.newIdentExpr(offset, accuVarName),
+            this.newConstExpr(offset, {
+              case: "int64Value",
+              value: BigInt(1),
+            }),
           ]),
         },
       });
     }
-    maybeExpand(e, n) {
-      if (n.exprKind.case === "callExpr") {
-        let r = n.exprKind.value,
-          s = r.args[0];
-        if (s !== void 0 && n.exprKind.value.target !== void 0 && s.exprKind?.case === "identExpr") {
-          if (r.args.length === 2)
-            switch (r.function) {
+    maybeExpand(offset, call) {
+      if (call.exprKind.case === "callExpr") {
+        let callExpr = call.exprKind.value;
+        let varName = callExpr.args[0];
+        if (
+          varName !== undefined &&
+          call.exprKind.value.target !== undefined &&
+          varName.exprKind?.case === "identExpr"
+        ) {
+          if (callExpr.args.length === 2)
+            switch (callExpr.function) {
               case "exists":
                 return this.expandExistsMacro(
-                  e,
-                  n.exprKind.value.target,
-                  s.exprKind.value.name,
-                  n.exprKind.value.args[1],
+                  offset,
+                  call.exprKind.value.target,
+                  varName.exprKind.value.name,
+                  call.exprKind.value.args[1],
                 );
               case "all":
                 return this.expandAllMacro(
-                  e,
-                  n.exprKind.value.target,
-                  s.exprKind.value.name,
-                  n.exprKind.value.args[1],
+                  offset,
+                  call.exprKind.value.target,
+                  varName.exprKind.value.name,
+                  call.exprKind.value.args[1],
                 );
               case "map":
                 return this.expandMapMacro(
-                  e,
-                  n.exprKind.value.target,
-                  s.exprKind.value.name,
-                  n.exprKind.value.args[1],
+                  offset,
+                  call.exprKind.value.target,
+                  varName.exprKind.value.name,
+                  call.exprKind.value.args[1],
                 );
               case "filter":
                 return this.expandFilterMacro(
-                  e,
-                  n.exprKind.value.target,
-                  s.exprKind.value.name,
-                  n.exprKind.value.args[1],
+                  offset,
+                  call.exprKind.value.target,
+                  varName.exprKind.value.name,
+                  call.exprKind.value.args[1],
                 );
               case "exists_one":
               case "existsOne":
                 return this.expandExistsOne(
-                  e,
-                  n.exprKind.value.target,
-                  s.exprKind.value.name,
-                  n.exprKind.value.args[1],
+                  offset,
+                  call.exprKind.value.target,
+                  varName.exprKind.value.name,
+                  call.exprKind.value.args[1],
                 );
             }
-          if (r.args.length === 3 && r.function == "map")
+          if (callExpr.args.length === 3 && callExpr.function == "map")
             return this.expandMapFilterMacro(
-              e,
-              n.exprKind.value.target,
-              s.exprKind.value.name,
-              n.exprKind.value.args[1],
-              n.exprKind.value.args[2],
+              offset,
+              call.exprKind.value.target,
+              varName.exprKind.value.name,
+              call.exprKind.value.args[1],
+              call.exprKind.value.args[2],
             );
         }
       }
-      return n;
+      return call;
     }
-    newMapEntry(e, n, r) {
-      return this.nextEntry(e, { case: "mapKey", value: n }, r);
+    newMapEntry(offset, key, value) {
+      return this.nextEntry(
+        offset,
+        {
+          case: "mapKey",
+          value: key,
+        },
+        value,
+      );
     }
-    newStructExpr(e, n, r = "") {
-      return this.nextExpr(e, {
+    newStructExpr(offset, entries, messageName = "") {
+      return this.nextExpr(offset, {
         case: "structExpr",
-        value: { $typeName: "cel.expr.Expr.CreateStruct", entries: n, messageName: r },
+        value: {
+          $typeName: "cel.expr.Expr.CreateStruct",
+          entries,
+          messageName,
+        },
       });
     }
-    newStructEntry(e, n, r) {
-      return this.nextEntry(e, { case: "fieldKey", value: n }, r);
+    newStructEntry(offset, field, value) {
+      return this.nextEntry(
+        offset,
+        {
+          case: "fieldKey",
+          value: field,
+        },
+        value,
+      );
     }
   }
-  mU.default = hU;
+  cjsExports.default = Builder;
 });
-
-export { gU };
+export { require_builder };

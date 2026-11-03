@@ -5,166 +5,257 @@
  * pieces: chunk-0dmzgg46.js (1)
  * attribution: esm-fingerprint 1
  */
-
 //@ chunk-0dmzgg46.js:5471-7771 esm-fingerprint
-var K = { ["required"]: !1, type: "string" },
-  H = { ["required"]: !0, default: !1, type: "boolean" },
-  z = { ["ref"]: "Endpoint" },
-  te = { ["fn"]: "booleanEquals", ["argv"]: [{ ["ref"]: "UseFIPS" }, !0] },
-  ne = { ["fn"]: "booleanEquals", ["argv"]: [{ ["ref"]: "UseDualStack" }, !0] },
-  _ = {},
-  Y = { ["fn"]: "getAttr", ["argv"]: [{ ["ref"]: "PartitionResult" }, "supportsFIPS"] },
-  X = {
-    ["fn"]: "booleanEquals",
-    ["argv"]: [!0, { ["fn"]: "getAttr", ["argv"]: [{ ["ref"]: "PartitionResult" }, "supportsDualStack"] }],
+var h_2 = {
+  ["required"]: false,
+  type: "string",
+};
+var i_2 = {
+  ["required"]: true,
+  default: false,
+  type: "boolean",
+};
+var j = {
+  ["ref"]: "Endpoint",
+};
+var k_2 = {
+  ["fn"]: "booleanEquals",
+  ["argv"]: [
+    {
+      ["ref"]: "UseFIPS",
+    },
+    true,
+  ],
+};
+var l = {
+  ["fn"]: "booleanEquals",
+  ["argv"]: [
+    {
+      ["ref"]: "UseDualStack",
+    },
+    true,
+  ],
+};
+var m = {};
+var n = {
+  ["fn"]: "getAttr",
+  ["argv"]: [
+    {
+      ["ref"]: "PartitionResult",
+    },
+    "supportsFIPS",
+  ],
+};
+var o = {
+  ["fn"]: "booleanEquals",
+  ["argv"]: [
+    true,
+    {
+      ["fn"]: "getAttr",
+      ["argv"]: [
+        {
+          ["ref"]: "PartitionResult",
+        },
+        "supportsDualStack",
+      ],
+    },
+  ],
+};
+var p = [k_2];
+var q = [l];
+var r = [
+  {
+    ["ref"]: "Region",
   },
-  Z = [te],
-  ee = [ne],
-  oe = [{ ["ref"]: "Region" }],
-  Qe = {
-    version: "1.0",
-    parameters: { Region: K, UseDualStack: H, UseFIPS: H, Endpoint: K },
-    rules: [
-      {
-        conditions: [{ ["fn"]: "isSet", ["argv"]: [z] }],
-        rules: [
-          {
-            conditions: Z,
-            error: "Invalid Configuration: FIPS and custom endpoint are not supported",
-            type: "error",
-          },
-          {
-            rules: [
-              {
-                conditions: ee,
-                error: "Invalid Configuration: Dualstack and custom endpoint are not supported",
-                type: "error",
+];
+var Qe = {
+  version: "1.0",
+  parameters: {
+    Region: h_2,
+    UseDualStack: i_2,
+    UseFIPS: i_2,
+    Endpoint: h_2,
+  },
+  rules: [
+    {
+      conditions: [
+        {
+          ["fn"]: "isSet",
+          ["argv"]: [j],
+        },
+      ],
+      rules: [
+        {
+          conditions: p,
+          error: "Invalid Configuration: FIPS and custom endpoint are not supported",
+          type: "error",
+        },
+        {
+          rules: [
+            {
+              conditions: q,
+              error: "Invalid Configuration: Dualstack and custom endpoint are not supported",
+              type: "error",
+            },
+            {
+              endpoint: {
+                url: j,
+                properties: m,
+                headers: m,
               },
-              { endpoint: { url: z, properties: _, headers: _ }, type: "endpoint" },
-            ],
-            type: "tree",
-          },
-        ],
-        type: "tree",
-      },
-      {
-        rules: [
-          {
-            conditions: [{ ["fn"]: "isSet", ["argv"]: oe }],
-            rules: [
-              {
-                conditions: [{ ["fn"]: "aws.partition", ["argv"]: oe, assign: "PartitionResult" }],
-                rules: [
-                  {
-                    conditions: [te, ne],
-                    rules: [
-                      {
-                        conditions: [{ ["fn"]: "booleanEquals", ["argv"]: [!0, Y] }, X],
-                        rules: [
-                          {
-                            rules: [
-                              {
-                                endpoint: {
-                                  url: "https://bedrock-fips.{Region}.{PartitionResult#dualStackDnsSuffix}",
-                                  properties: _,
-                                  headers: _,
-                                },
-                                type: "endpoint",
-                              },
-                            ],
-                            type: "tree",
-                          },
-                        ],
-                        type: "tree",
-                      },
-                      {
-                        error:
-                          "FIPS and DualStack are enabled, but this partition does not support one or both",
-                        type: "error",
-                      },
-                    ],
-                    type: "tree",
-                  },
-                  {
-                    conditions: Z,
-                    rules: [
-                      {
-                        conditions: [{ ["fn"]: "booleanEquals", ["argv"]: [Y, !0] }],
-                        rules: [
-                          {
-                            rules: [
-                              {
-                                endpoint: {
-                                  url: "https://bedrock-fips.{Region}.{PartitionResult#dnsSuffix}",
-                                  properties: _,
-                                  headers: _,
-                                },
-                                type: "endpoint",
-                              },
-                            ],
-                            type: "tree",
-                          },
-                        ],
-                        type: "tree",
-                      },
-                      { error: "FIPS is enabled but this partition does not support FIPS", type: "error" },
-                    ],
-                    type: "tree",
-                  },
-                  {
-                    conditions: ee,
-                    rules: [
-                      {
-                        conditions: [X],
-                        rules: [
-                          {
-                            rules: [
-                              {
-                                endpoint: {
-                                  url: "https://bedrock.{Region}.{PartitionResult#dualStackDnsSuffix}",
-                                  properties: _,
-                                  headers: _,
-                                },
-                                type: "endpoint",
-                              },
-                            ],
-                            type: "tree",
-                          },
-                        ],
-                        type: "tree",
-                      },
-                      {
-                        error: "DualStack is enabled but this partition does not support DualStack",
-                        type: "error",
-                      },
-                    ],
-                    type: "tree",
-                  },
-                  {
-                    rules: [
-                      {
-                        endpoint: {
-                          url: "https://bedrock.{Region}.{PartitionResult#dnsSuffix}",
-                          properties: _,
-                          headers: _,
+              type: "endpoint",
+            },
+          ],
+          type: "tree",
+        },
+      ],
+      type: "tree",
+    },
+    {
+      rules: [
+        {
+          conditions: [
+            {
+              ["fn"]: "isSet",
+              ["argv"]: r,
+            },
+          ],
+          rules: [
+            {
+              conditions: [
+                {
+                  ["fn"]: "aws.partition",
+                  ["argv"]: r,
+                  assign: "PartitionResult",
+                },
+              ],
+              rules: [
+                {
+                  conditions: [k_2, l],
+                  rules: [
+                    {
+                      conditions: [
+                        {
+                          ["fn"]: "booleanEquals",
+                          ["argv"]: [true, n],
                         },
-                        type: "endpoint",
+                        o,
+                      ],
+                      rules: [
+                        {
+                          rules: [
+                            {
+                              endpoint: {
+                                url: "https://bedrock-fips.{Region}.{PartitionResult#dualStackDnsSuffix}",
+                                properties: m,
+                                headers: m,
+                              },
+                              type: "endpoint",
+                            },
+                          ],
+                          type: "tree",
+                        },
+                      ],
+                      type: "tree",
+                    },
+                    {
+                      error:
+                        "FIPS and DualStack are enabled, but this partition does not support one or both",
+                      type: "error",
+                    },
+                  ],
+                  type: "tree",
+                },
+                {
+                  conditions: p,
+                  rules: [
+                    {
+                      conditions: [
+                        {
+                          ["fn"]: "booleanEquals",
+                          ["argv"]: [n, true],
+                        },
+                      ],
+                      rules: [
+                        {
+                          rules: [
+                            {
+                              endpoint: {
+                                url: "https://bedrock-fips.{Region}.{PartitionResult#dnsSuffix}",
+                                properties: m,
+                                headers: m,
+                              },
+                              type: "endpoint",
+                            },
+                          ],
+                          type: "tree",
+                        },
+                      ],
+                      type: "tree",
+                    },
+                    {
+                      error: "FIPS is enabled but this partition does not support FIPS",
+                      type: "error",
+                    },
+                  ],
+                  type: "tree",
+                },
+                {
+                  conditions: q,
+                  rules: [
+                    {
+                      conditions: [o],
+                      rules: [
+                        {
+                          rules: [
+                            {
+                              endpoint: {
+                                url: "https://bedrock.{Region}.{PartitionResult#dualStackDnsSuffix}",
+                                properties: m,
+                                headers: m,
+                              },
+                              type: "endpoint",
+                            },
+                          ],
+                          type: "tree",
+                        },
+                      ],
+                      type: "tree",
+                    },
+                    {
+                      error: "DualStack is enabled but this partition does not support DualStack",
+                      type: "error",
+                    },
+                  ],
+                  type: "tree",
+                },
+                {
+                  rules: [
+                    {
+                      endpoint: {
+                        url: "https://bedrock.{Region}.{PartitionResult#dnsSuffix}",
+                        properties: m,
+                        headers: m,
                       },
-                    ],
-                    type: "tree",
-                  },
-                ],
-                type: "tree",
-              },
-            ],
-            type: "tree",
-          },
-          { error: "Invalid Configuration: Missing Region", type: "error" },
-        ],
-        type: "tree",
-      },
-    ],
-  },
-  se = Qe;
-
+                      type: "endpoint",
+                    },
+                  ],
+                  type: "tree",
+                },
+              ],
+              type: "tree",
+            },
+          ],
+          type: "tree",
+        },
+        {
+          error: "Invalid Configuration: Missing Region",
+          type: "error",
+        },
+      ],
+      type: "tree",
+    },
+  ],
+};
+var se = Qe;
 export { se };

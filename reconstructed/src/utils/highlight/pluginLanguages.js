@@ -9,27 +9,33 @@
  * attribution: placement 8
  */
 import { extname } from "path";
-import { y, Hr, withBoundedRegexps } from "./boundedHighlight.js";
-import { Mis, LANGUAGE_NAMES, wPt, vki, sgr } from "../cliHighlight.js";
+import { noopRun, withMaxDepth, withBoundedRegexps } from "./boundedHighlight.js";
+import {
+  CEDAR_LANGUAGES,
+  LANGUAGE_NAMES,
+  HIGHLIGHT_LANGUAGE_NAME_MAP,
+  CEDAR_ALIASES,
+  CEDAR_DISPLAY_NAMES,
+} from "../cliHighlight.js";
 import { logError } from "../log.js";
 import { logFeatureSad } from "../../services/analytics/featureTelemetry.js";
 import { logForDebugging } from "../debug.js";
 import { lit, fromSanitizer_SANITIZER_OUTPUT_ONLY } from "../../services/analytics/safeMetadata.js";
 
 //@ chunk-n5fvvrgq.js:10960-11005 placement
-var Zr = /^[a-z0-9][a-z0-9_+#.-]{0,63}$/,
-  Fr = 16;
+var PLUGIN_LANGUAGE_ID_RE = /^[a-z0-9][a-z0-9_+#.-]{0,63}$/;
+var MAX_PLUGIN_LANGUAGE_ALIASES = 16;
 //@ chunk-n5fvvrgq.js:11005-11040 placement
-function Jr(r) {
+function pluginLanguageDefaultExport(r) {
   return r.default ?? r;
 }
+//@ chunk-n5fvvrgq.js:11040-13568 placement
 /**
  * 插件提供的 highlight.js 语言注册与解析
  */
-//@ chunk-n5fvvrgq.js:11040-13568 placement
 class PluginHighlightLanguages {
   hljs = null;
-  underMessage = y;
+  underMessage = noopRun;
   loaded = new Set();
   failed = new Set();
   runtimeDepsEnsured = new WeakSet();
@@ -39,37 +45,43 @@ class PluginHighlightLanguages {
   core(r) {
     if (this.hljs) return this.hljs;
     let core = r.loadCore();
-    this.underMessage = Hr(core);
-    for (let [o, n] of Object.entries(Mis))
-      if (!core.getLanguage(o)) core.registerLanguage(o, withBoundedRegexps(o, n));
+    this.underMessage = withMaxDepth(core);
+    for (let [key, value] of Object.entries(CEDAR_LANGUAGES))
+      if (!core.getLanguage(key)) core.registerLanguage(key, withBoundedRegexps(key, value));
     for (let [o, n] of this.pluginLanguages)
-      if (!core.getLanguage(o)) this.registerResolvedPluginLanguage(core, o, n, { emitSadTelemetry: !0 });
-    return ((this.hljs = core), core);
+      if (!core.getLanguage(o))
+        this.registerResolvedPluginLanguage(core, o, n, {
+          emitSadTelemetry: true,
+        });
+    this.hljs = core;
+    return core;
   }
   highlightUnderMessage(r, e, o) {
-    let core = this.core(r);
-    return this.underMessage(e, () => o(core));
+    let n = this.core(r);
+    return this.underMessage(e, () => o(n));
   }
   ensureLanguage(r, e) {
-    let core = this.core(e),
-      lower = r.toLowerCase(),
-      id = e.resolveId(lower);
+    let o = this.core(e);
+    let lower = r.toLowerCase();
+    let id = e.resolveId(lower);
     if (id !== null) {
       if (this.failed.has(id)) return null;
       if (!this.loaded.has(id)) {
         let a = e.loaders[id];
         if (typeof a !== "function") return null;
         try {
-          core.registerLanguage(id, withBoundedRegexps(id, Jr(a())));
+          o.registerLanguage(id, withBoundedRegexps(id, pluginLanguageDefaultExport(a())));
         } catch (error) {
-          return (this.failed.add(id), logError(error), null);
+          this.failed.add(id);
+          logError(error);
+          return null;
         }
         this.loaded.add(id);
         for (let p of e.subLanguageDeps[id] ?? []) this.ensureLanguage(p, e);
       }
       return id;
     }
-    let language = core.getLanguage(lower);
+    let language = o.getLanguage(lower);
     if (!language) return null;
     if (!this.runtimeDepsEnsured.has(language)) {
       this.runtimeDepsEnsured.add(language);
@@ -81,16 +93,17 @@ class PluginHighlightLanguages {
     return this.generation;
   }
   clearPluginLanguages() {
-    if ((this.generation++, this.hljs))
-      for (let r of this.pluginLanguages.keys()) this.hljs.unregisterLanguage(r);
-    (this.pluginLanguages.clear(), this.pluginAliases.clear());
+    this.generation++;
+    if (this.hljs) for (let key of this.pluginLanguages.keys()) this.hljs.unregisterLanguage(key);
+    this.pluginLanguages.clear();
+    this.pluginAliases.clear();
   }
   isReservedLanguageId(r) {
     return (
       Object.prototype.hasOwnProperty.call(LANGUAGE_NAMES, r) ||
-      Object.prototype.hasOwnProperty.call(wPt, r) ||
-      Object.prototype.hasOwnProperty.call(Mis, r) ||
-      vki.has(r) ||
+      Object.prototype.hasOwnProperty.call(HIGHLIGHT_LANGUAGE_NAME_MAP, r) ||
+      Object.prototype.hasOwnProperty.call(CEDAR_LANGUAGES, r) ||
+      CEDAR_ALIASES.has(r) ||
       this.pluginLanguages.has(r) ||
       this.pluginAliases.has(r)
     );
@@ -99,42 +112,53 @@ class PluginHighlightLanguages {
     return this.pluginLanguages.has(r) || this.pluginAliases.has(r);
   }
   addPluginLanguage(r, e, o) {
-    if (this.isReservedLanguageId(r)) return !1;
+    if (this.isReservedLanguageId(r)) return false;
     let sliced = o
-        .map((s) => s.toLowerCase())
-        .filter((s) => Zr.test(s) && s !== r && !this.isReservedLanguageId(s))
-        .slice(0, Fr),
-      i = (s) => {
-        let a = e(s);
-        return ((a.name = r), (a.aliases = sliced), (a.disableAutodetect = !0), a);
-      };
+      .map((s) => s.toLowerCase())
+      .filter((s) => PLUGIN_LANGUAGE_ID_RE.test(s) && s !== r && !this.isReservedLanguageId(s))
+      .slice(0, MAX_PLUGIN_LANGUAGE_ALIASES);
+    let i = (s) => {
+      let a = e(s);
+      a.name = r;
+      a.aliases = sliced;
+      a.disableAutodetect = true;
+      return a;
+    };
     this.pluginLanguages.set(r, i);
     for (let s of sliced) this.pluginAliases.add(s);
     if (this.hljs && !this.hljs.getLanguage(r))
-      return this.registerResolvedPluginLanguage(this.hljs, r, i, { emitSadTelemetry: !1 });
-    return !0;
+      return this.registerResolvedPluginLanguage(this.hljs, r, i, {
+        emitSadTelemetry: false,
+      });
+    return true;
   }
-  registerResolvedPluginLanguage(r, e, o, { emitSadTelemetry: n }) {
+  registerResolvedPluginLanguage(r, e, o, { emitSadTelemetry }) {
     try {
       let i = withBoundedRegexps(e, o)(r);
-      return (r.registerLanguage(e, () => i), r.highlight("", { language: e, ignoreIllegals: !0 }), !0);
+      r.registerLanguage(e, () => i);
+      r.highlight("", {
+        language: e,
+        ignoreIllegals: true,
+      });
+      return true;
     } catch (error) {
-      if ((this.pluginLanguages.delete(e), r.getLanguage(e))) r.unregisterLanguage(e);
-      if (n) logFeatureSad("plugin_hljs_languages", "resolve_failed");
-      return (
-        logForDebugging(
-          `plugin hljs grammar '${e}' failed to resolve at registration: ${error instanceof Error ? error.message : String(error)}`,
-          { level: "error" },
-        ),
-        !1
+      this.pluginLanguages.delete(e);
+      if (r.getLanguage(e)) r.unregisterLanguage(e);
+      if (emitSadTelemetry) logFeatureSad("plugin_hljs_languages", "resolve_failed");
+      logForDebugging(
+        `plugin hljs grammar '${e}' failed to resolve at registration: ${error instanceof Error ? error.message : String(error)}`,
+        {
+          level: "error",
+        },
       );
+      return false;
     }
   }
 }
 //@ chunk-n5fvvrgq.js:13568-13851 placement
 function subLanguagesOf(r) {
-  let e = new Set(),
-    o = new Set();
+  let e = new Set();
+  let o = new Set();
   function n(i) {
     if (i === null || typeof i !== "object" || o.has(i)) return;
     o.add(i);
@@ -144,38 +168,43 @@ function subLanguagesOf(r) {
     n(s.starts);
     for (let a of s.variants ?? []) n(a);
   }
-  return (n(r), e);
+  n(r);
+  return e;
 }
 //@ chunk-n5fvvrgq.js:13851-13866 placement
-var BRe = new PluginHighlightLanguages();
+/**
+ * 插件提供的高亮语言注册表单例。
+ */
+var pluginHighlightLanguages = new PluginHighlightLanguages();
+//@ chunk-n5fvvrgq.js:13866-14019 placement
 /**
  * 把语言名或别名转为 highlight 支持的规范名，未知时为 null。
  */
-//@ chunk-n5fvvrgq.js:13866-14019 placement
 function canonicalLanguageName(r) {
   let lower = r.toLowerCase();
   return Object.prototype.hasOwnProperty.call(LANGUAGE_NAMES, lower)
     ? lower
-    : Object.prototype.hasOwnProperty.call(wPt, lower)
-      ? (wPt[lower] ?? null)
+    : Object.prototype.hasOwnProperty.call(HIGHLIGHT_LANGUAGE_NAME_MAP, lower)
+      ? (HIGHLIGHT_LANGUAGE_NAME_MAP[lower] ?? null)
       : null;
 }
+//@ chunk-n5fvvrgq.js:14019-14266 placement
 /**
  * 按文件扩展名判断代码语言（用于权限遥测），插件语言标为 plugin，未知为 unknown。
  */
-//@ chunk-n5fvvrgq.js:14019-14266 placement
 async function languageForFilePath(r) {
   let sliced = extname(r).slice(1);
   if (!sliced) return lit("unknown");
-  let lower = sliced.toLowerCase(),
-    n = canonicalLanguageName(lower);
-  if (n !== null) return yr(LANGUAGE_NAMES[n]);
-  if (BRe.isPluginLanguageId(lower)) return lit("plugin");
-  return yr(Object.prototype.hasOwnProperty.call(sgr, lower) ? sgr[lower] : void 0);
+  let lower = sliced.toLowerCase();
+  let n = canonicalLanguageName(lower);
+  if (n !== null) return sanitizeLanguageName(LANGUAGE_NAMES[n]);
+  if (pluginHighlightLanguages.isPluginLanguageId(lower)) return lit("plugin");
+  return sanitizeLanguageName(
+    Object.prototype.hasOwnProperty.call(CEDAR_DISPLAY_NAMES, lower) ? CEDAR_DISPLAY_NAMES[lower] : undefined,
+  );
 }
 //@ chunk-n5fvvrgq.js:14266-14318 placement
-function yr(r) {
-  return r === void 0 ? lit("unknown") : fromSanitizer_SANITIZER_OUTPUT_ONLY(r);
+function sanitizeLanguageName(r) {
+  return r === undefined ? lit("unknown") : fromSanitizer_SANITIZER_OUTPUT_ONLY(r);
 }
-
-export { canonicalLanguageName, BRe, languageForFilePath };
+export { canonicalLanguageName, pluginHighlightLanguages, languageForFilePath };

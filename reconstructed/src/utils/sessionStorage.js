@@ -8,706 +8,31 @@
  * pieces: chunk-0j11jfmy.js (1), chunk-18hwfzwa.js (2), chunk-63641kq7.js (3), chunk-7dqf31r1.js (2), chunk-89ebz077.js (1), chunk-ad2e1aj6.js (1), chunk-bss4k1z9.js (1), chunk-cg2r2hy6.js (2), chunk-cgs3vg0v.js (1), chunk-dz3q485w.js (1), chunk-e6aww6q8.js (505), chunk-qzv7ezvq.js (19), chunk-rds552kq.js (1), chunk-wd9kxbpn.js (1), chunk-x753sk9t.js (8)
  * attribution: fingerprint 34, callgraph-fingerprint 6, placement 29, affinity 1, sole-consumer 1, layout 163, facade-majority 292, callgraph-witnessed 3, file-local 4, facade-exports 16
  */
-import {
-  resolve as resolve_2,
-  resolve as resolve_3,
-  resolve as resolve_4,
-  resolve as resolve_5,
-  resolve as resolve_6,
-  resolve as resolve_7,
-  resolve as resolve_8,
-  resolve as resolve_9,
-  resolve as resolve_10,
-  resolve as resolve_11,
-  resolve as resolve_12,
-  resolve as resolve_13,
-  resolve as resolve_14,
-  resolve as resolve_15,
-  resolve as resolve_16,
-  resolve as resolve_17,
-  resolve as resolve_18,
-  resolve as resolve_19,
-  resolve as resolve_20,
-  resolve as resolve_21,
-  resolve as resolve_22,
-  resolve as resolve_23,
-  resolve as resolve_24,
-  resolve as resolve_25,
-  resolve as resolve_26,
-  resolve as resolve_27,
-  resolve as resolve_28,
-  resolve as resolve_29,
-  resolve as resolve_30,
-  resolve as resolve_31,
-  resolve as resolve_32,
-  resolve as resolve_33,
-  resolve as resolve_34,
-  resolve as resolve_35,
-  resolve as resolve_36,
-  resolve as resolve_37,
-  resolve as resolve_38,
-  resolve as resolve_39,
-  resolve as resolve_40,
-  resolve as resolve_41,
-  resolve as resolve_42,
-  resolve as resolve_43,
-  resolve as resolve_44,
-  resolve as resolve_45,
-  resolve as resolve_46,
-  resolve as resolve_47,
-  resolve as resolve_48,
-  resolve as resolve_49,
-  resolve as resolve_50,
-  resolve as resolve_51,
-  resolve as resolve_52,
-  resolve as resolve_53,
-  resolve as resolve_54,
-  resolve as resolve_55,
-  resolve as resolve_56,
-  resolve as resolve_57,
-  resolve as resolve_58,
-  resolve as resolve_59,
-  resolve as resolve_60,
-  join,
-  join as join_2,
-  join as join_3,
-  join as join_4,
-  join as join_5,
-  join as join_6,
-  join as join_7,
-  join as join_8,
-  join as join_9,
-  join as join_10,
-  join as join_11,
-  join as join_12,
-  join as join_13,
-  join as join_14,
-  join as join_15,
-  join as join_16,
-  join as join_17,
-  join as join_18,
-  join as join_19,
-  join as join_20,
-  join as join_21,
-  join as join_22,
-  join as join_23,
-  join as join_24,
-  join as join_25,
-  join as join_26,
-  join as join_27,
-  join as join_28,
-  join as join_29,
-  join as join_30,
-  join as join_31,
-  join as join_32,
-  join as join_33,
-  join as join_34,
-  join as join_35,
-  join as join_36,
-  join as join_37,
-  join as join_38,
-  join as join_40,
-  join as join_41,
-  join as join_42,
-  join as join_43,
-  join as join_44,
-  join as join_45,
-  join as join_46,
-  join as join_47,
-  join as join_48,
-  join as join_49,
-  join as join_50,
-  join as join_51,
-  join as join_52,
-  join as join_53,
-  join as join_54,
-  join as join_55,
-  join as join_56,
-  join as join_57,
-  join as join_58,
-  join as join_59,
-  join as join_60,
-  join as join_61,
-  join as join_62,
-  join as join_63,
-  join as join_64,
-  join as join_65,
-  join as join_66,
-  join as join_67,
-  join as join_68,
-  join as join_69,
-  join as join_70,
-  join as join_71,
-  join as join_72,
-  join as join_73,
-  join as join_74,
-  join as join_75,
-  join as join_76,
-  join as join_77,
-  join as join_78,
-  join as join_79,
-  join as join_80,
-  join as join_81,
-  join as join_82,
-  join as join_84,
-  join as join_85,
-  join as join_86,
-  join as join_87,
-  join as join_88,
-  join as join_89,
-  join as join_90,
-  join as join_91,
-  join as join_92,
-  join as join_93,
-  join as join_94,
-  join as join_95,
-  join as join_96,
-  join as join_97,
-  join as join_98,
-  join as join_99,
-  join as join_100,
-  join as join_101,
-  join as join_102,
-  join as join_103,
-  join as join_104,
-  join as join_105,
-  join as join_106,
-  join as join_107,
-  join as join_108,
-  join as join_109,
-  join as join_110,
-  join as join_111,
-  join as join_112,
-  join as join_113,
-  join as join_114,
-  join as join_115,
-  join as join_116,
-  join as join_117,
-  join as join_118,
-  join as join_119,
-  join as join_120,
-  join as join_121,
-  join as join_122,
-  join as join_123,
-  join as join_124,
-  join as join_125,
-  join as join_126,
-  join as join_127,
-  join as join_128,
-  join as join_129,
-  dirname,
-  dirname as dirname_2,
-  dirname as dirname_3,
-  dirname as dirname_4,
-  dirname as dirname_5,
-  dirname as dirname_6,
-  dirname as dirname_7,
-  dirname as dirname_8,
-  dirname as dirname_9,
-  dirname as dirname_10,
-  dirname as dirname_11,
-  dirname as dirname_12,
-  dirname as dirname_13,
-  dirname as dirname_14,
-  dirname as dirname_15,
-  dirname as dirname_16,
-  dirname as dirname_17,
-  dirname as dirname_18,
-  dirname as dirname_19,
-  dirname as dirname_20,
-  dirname as dirname_21,
-  dirname as dirname_22,
-  dirname as dirname_23,
-  dirname as dirname_24,
-  dirname as dirname_25,
-  dirname as dirname_26,
-  dirname as dirname_27,
-  dirname as dirname_28,
-  dirname as dirname_29,
-  dirname as dirname_30,
-  dirname as dirname_31,
-  dirname as dirname_32,
-  dirname as dirname_33,
-  dirname as dirname_34,
-  dirname as dirname_35,
-  dirname as dirname_36,
-  dirname as dirname_37,
-  dirname as dirname_38,
-  dirname as dirname_39,
-  dirname as dirname_40,
-  dirname as dirname_41,
-  dirname as dirname_42,
-  dirname as dirname_43,
-  dirname as dirname_44,
-  dirname as dirname_45,
-  dirname as dirname_46,
-  dirname as dirname_47,
-  dirname as dirname_48,
-  dirname as dirname_49,
-  dirname as dirname_50,
-  dirname as dirname_51,
-  dirname as dirname_52,
-  dirname as dirname_53,
-  dirname as dirname_54,
-  dirname as dirname_55,
-  dirname as dirname_56,
-  dirname as dirname_57,
-  dirname as dirname_58,
-  dirname as dirname_59,
-  dirname as dirname_60,
-  dirname as dirname_61,
-  dirname as dirname_62,
-  dirname as dirname_63,
-  dirname as dirname_64,
-  dirname as dirname_65,
-  dirname as dirname_66,
-  dirname as dirname_67,
-  dirname as dirname_68,
-  dirname as dirname_69,
-  dirname as dirname_70,
-  dirname as dirname_71,
-  dirname as dirname_72,
-  dirname as dirname_73,
-  dirname as dirname_74,
-  dirname as dirname_75,
-  dirname as dirname_76,
-  dirname as dirname_77,
-  basename,
-  basename as basename_2,
-  basename as basename_3,
-  basename as basename_4,
-  basename as basename_5,
-  basename as basename_6,
-  basename as basename_7,
-  basename as basename_8,
-  basename as basename_9,
-  basename as basename_10,
-  basename as basename_11,
-  basename as basename_12,
-  basename as basename_13,
-  basename as basename_14,
-  basename as basename_15,
-  basename as basename_16,
-  basename as basename_17,
-  basename as basename_18,
-  basename as basename_19,
-  basename as basename_20,
-  basename as basename_21,
-  basename as basename_22,
-  basename as basename_23,
-  basename as basename_24,
-  basename as basename_25,
-  basename as basename_26,
-  basename as basename_27,
-  basename as basename_28,
-  basename as basename_29,
-  basename as basename_30,
-  basename as basename_31,
-  basename as basename_32,
-  basename as basename_33,
-  basename as basename_34,
-  basename as basename_35,
-  basename as basename_36,
-  basename as basename_37,
-  basename as basename_38,
-  basename as basename_39,
-  basename as basename_40,
-  basename as basename_41,
-  basename as basename_42,
-  basename as basename_43,
-  basename as basename_45,
-  basename as basename_46,
-  basename as basename_47,
-  basename as basename_48,
-  basename as basename_49,
-  basename as basename_50,
-  basename as basename_51,
-  basename as basename_52,
-  basename as basename_53,
-  basename as basename_54,
-  basename as basename_55,
-  basename as basename_56,
-  basename as basename_57,
-  basename as basename_58,
-  basename as basename_59,
-  basename as basename_60,
-  basename as basename_61,
-  basename as basename_62,
-  basename as basename_63,
-  basename as basename_64,
-  basename as basename_65,
-  basename as basename_66,
-  basename as basename_67,
-  basename as basename_68,
-  normalize,
-  normalize as normalize_2,
-  normalize as normalize_3,
-  normalize as normalize_4,
-  normalize as normalize_5,
-  normalize as normalize_6,
-  normalize as normalize_7,
-  normalize as normalize_8,
-  normalize as normalize_9,
-  sep,
-  sep as sep_2,
-  isAbsolute,
-  isAbsolute as isAbsolute_2,
-  relative,
-} from "path";
+import { resolve as resolve_2, join, dirname, basename, normalize, sep, isAbsolute, relative } from "path";
 import {
   readFile,
-  readFile as readFile_2,
-  readFile as readFile_3,
-  readFile as readFile_4,
-  readFile as readFile_5,
-  readFile as readFile_6,
-  readFile as readFile_7,
-  readFile as readFile_8,
-  readFile as readFile_9,
-  readFile as readFile_10,
-  readFile as readFile_11,
-  readFile as readFile_12,
-  readFile as readFile_13,
-  readFile as readFile_14,
-  readFile as readFile_15,
-  readFile as readFile_16,
-  readFile as readFile_17,
-  readFile as readFile_18,
-  readFile as readFile_19,
   mkdir,
-  mkdir as mkdir_2,
-  mkdir as mkdir_3,
-  mkdir as mkdir_4,
-  mkdir as mkdir_5,
-  mkdir as mkdir_6,
-  mkdir as mkdir_7,
-  mkdir as mkdir_8,
-  mkdir as mkdir_9,
-  mkdir as mkdir_10,
-  mkdir as mkdir_11,
-  mkdir as mkdir_12,
-  mkdir as mkdir_13,
-  mkdir as mkdir_14,
-  mkdir as mkdir_15,
-  mkdir as mkdir_16,
-  mkdir as mkdir_17,
-  mkdir as mkdir_18,
-  mkdir as mkdir_19,
-  mkdir as mkdir_20,
-  mkdir as mkdir_21,
-  mkdir as mkdir_22,
-  mkdir as mkdir_23,
-  mkdir as mkdir_24,
-  mkdir as mkdir_25,
-  mkdir as mkdir_26,
   writeFile,
-  writeFile as writeFile_2,
-  writeFile as writeFile_3,
-  writeFile as writeFile_4,
-  writeFile as writeFile_5,
-  writeFile as writeFile_6,
-  writeFile as writeFile_7,
-  writeFile as writeFile_8,
-  writeFile as writeFile_9,
-  writeFile as writeFile_10,
-  writeFile as writeFile_11,
-  writeFile as writeFile_12,
-  writeFile as writeFile_13,
-  writeFile as writeFile_14,
-  writeFile as writeFile_15,
-  writeFile as writeFile_16,
-  writeFile as writeFile_17,
-  writeFile as writeFile_18,
   unlink,
-  unlink as unlink_2,
-  unlink as unlink_3,
-  unlink as unlink_4,
-  unlink as unlink_5,
-  unlink as unlink_6,
-  unlink as unlink_7,
-  unlink as unlink_8,
-  unlink as unlink_9,
-  unlink as unlink_10,
-  unlink as unlink_11,
-  unlink as unlink_12,
-  unlink as unlink_13,
   readdir,
-  readdir as readdir_2,
-  readdir as readdir_3,
-  readdir as readdir_4,
-  readdir as readdir_5,
-  readdir as readdir_6,
-  readdir as readdir_7,
-  readdir as readdir_8,
-  readdir as readdir_9,
-  readdir as readdir_10,
-  readdir as readdir_11,
-  readdir as readdir_12,
-  readdir as readdir_13,
-  readdir as readdir_14,
-  readdir as readdir_15,
-  readdir as readdir_16,
-  readdir as readdir_17,
-  readdir as readdir_18,
-  readdir as readdir_19,
-  readdir as readdir_20,
-  readdir as readdir_21,
-  readdir as readdir_22,
-  readdir as readdir_23,
-  readdir as readdir_24,
-  readdir as readdir_25,
-  readdir as readdir_26,
-  readdir as readdir_27,
-  readdir as readdir_28,
-  readdir as readdir_29,
-  readdir as readdir_30,
-  readdir as readdir_31,
-  readdir as readdir_32,
   realpath,
-  realpath as realpath_2,
-  realpath as realpath_3,
-  realpath as realpath_4,
-  realpath as realpath_5,
-  realpath as realpath_6,
-  realpath as realpath_7,
-  realpath as realpath_8,
-  realpath as realpath_9,
-  realpath as realpath_10,
-  realpath as realpath_11,
-  realpath as realpath_12,
-  realpath as realpath_13,
-  realpath as realpath_14,
-  realpath as realpath_15,
-  realpath as realpath_16,
-  realpath as realpath_17,
-  realpath as realpath_18,
-  realpath as realpath_19,
-  realpath as realpath_20,
-  realpath as realpath_21,
-  realpath as realpath_22,
-  realpath as realpath_23,
-  realpath as realpath_24,
-  realpath as realpath_25,
-  realpath as realpath_26,
-  realpath as realpath_27,
-  realpath as realpath_28,
-  realpath as realpath_29,
-  realpath as realpath_30,
-  realpath as realpath_31,
-  realpath as realpath_32,
-  realpath as realpath_33,
-  realpath as realpath_34,
-  realpath as realpath_35,
-  realpath as realpath_36,
-  realpath as realpath_37,
-  realpath as realpath_38,
   appendFile,
-  appendFile as appendFile_2,
   open,
-  open as open_2,
-  open as open_3,
-  open as open_4,
-  open as open_5,
-  open as open_6,
-  open as open_7,
-  open as open_8,
-  open as open_9,
-  open as open_10,
-  open as open_11,
-  open as open_12,
-  open as open_13,
-  open as open_14,
-  open as open_15,
-  open as open_16,
-  open as open_17,
-  open as open_18,
-  open as open_19,
-  open as open_20,
-  open as open_21,
-  open as open_22,
-  open as open_23,
-  open as open_24,
-  open as open_25,
-  open as open_26,
-  open as open_27,
   stat,
-  stat as stat_2,
-  stat as stat_3,
-  stat as stat_4,
-  stat as stat_5,
-  stat as stat_6,
-  stat as stat_7,
-  stat as stat_8,
-  stat as stat_9,
-  stat as stat_10,
-  stat as stat_11,
-  stat as stat_12,
-  stat as stat_13,
-  stat as stat_14,
-  stat as stat_15,
-  stat as stat_16,
-  stat as stat_17,
-  stat as stat_18,
-  stat as stat_19,
-  stat as stat_20,
-  stat as stat_21,
-  stat as stat_22,
   utimes,
-  utimes as utimes_2,
-  utimes as utimes_3,
   rename,
-  rename as rename_2,
-  rename as rename_3,
-  rename as rename_4,
-  rename as rename_5,
-  rename as rename_6,
-  rename as rename_7,
   lutimes,
-  lutimes as lutimes_2,
-  lutimes as lutimes_3,
-  lutimes as lutimes_4,
-  lutimes as lutimes_5,
-  lutimes as lutimes_6,
   lstat,
-  lstat as lstat_2,
-  lstat as lstat_3,
-  lstat as lstat_4,
-  lstat as lstat_5,
-  lstat as lstat_6,
-  lstat as lstat_7,
-  lstat as lstat_8,
-  lstat as lstat_9,
-  lstat as lstat_10,
-  lstat as lstat_11,
-  lstat as lstat_12,
-  lstat as lstat_13,
-  lstat as lstat_14,
-  lstat as lstat_15,
-  lstat as lstat_16,
-  lstat as lstat_17,
-  lstat as lstat_18,
-  lstat as lstat_19,
-  lstat as lstat_20,
-  lstat as lstat_21,
-  lstat as lstat_22,
-  lstat as lstat_23,
-  lstat as lstat_24,
-  lstat as lstat_25,
-  lstat as lstat_26,
-  lstat as lstat_27,
-  lstat as lstat_28,
-  lstat as lstat_29,
-  lstat as lstat_30,
-  lstat as lstat_31,
-  lstat as lstat_32,
-  lstat as lstat_33,
-  lstat as lstat_34,
-  lstat as lstat_35,
-  lstat as lstat_36,
-  lstat as lstat_37,
-  lstat as lstat_38,
-  lstat as lstat_39,
-  lstat as lstat_40,
-  lstat as lstat_41,
-  lstat as lstat_42,
-  lstat as lstat_43,
   copyFile,
-  copyFile as copyFile_2,
-  copyFile as copyFile_3,
-  copyFile as copyFile_4,
-  copyFile as copyFile_5,
   rm as rm_2,
-  rm as rm_2_2,
-  rm as rm_3,
-  rm as rm_4,
-  rm as rm_5,
-  rm as rm_6,
-  rm as rm_7,
-  rm as rm_8,
-  rm as rm_9,
-  rm as rm_10,
-  rm as rm_11,
-  rm as rm_12,
-  rm as rm_13,
-  rm as rm_14,
-  rm as rm_15,
-  rm as rm_16,
-  rm as rm_17,
-  rm as rm_18,
-  rm as rm_19,
-  rm as rm_20,
-  rm as rm_21,
-  rm as rm_22,
-  rm as rm_23,
-  rm as rm_24,
-  rm as rm_25,
-  rm as rm_26,
-  rm as rm_27,
   link,
-  link as link_2,
-  link as link_3,
 } from "fs/promises";
-import {
-  constants,
-  constants as constants_3,
-  constants as constants_4,
-  constants as constants_5,
-  constants as constants_6,
-  constants as constants_7,
-  constants as constants_9,
-  constants as constants_10,
-  constants as constants_12,
-  constants as constants_13,
-  constants as constants_14,
-  constants as constants_15,
-  constants as constants_16,
-  constants as constants_17,
-  constants as constants_18,
-  constants as constants_19,
-  constants as constants_20,
-  constants as constants_21,
-  constants as constants_22,
-  constants as constants_23,
-  constants as constants_24,
-  constants as constants_25,
-  constants as constants_26,
-  constants as constants_27,
-  createReadStream,
-  createReadStream as createReadStream_2,
-  openSync,
-  openSync as openSync_2,
-  fstatSync,
-  fstatSync as fstatSync_2,
-  writeSync,
-  writeSync as writeSync_2,
-  writeSync as writeSync_3,
-  closeSync,
-  closeSync as closeSync_2,
-  closeSync as closeSync_3,
-  readSync,
-  readSync as readSync_2,
-  constants as constants_2,
-} from "fs";
-import {
-  randomBytes,
-  randomBytes as randomBytes_2,
-  randomBytes as randomBytes_3,
-  randomBytes as randomBytes_4,
-  randomBytes as randomBytes_5,
-  randomBytes as randomBytes_6,
-  randomBytes as randomBytes_7,
-  randomBytes as randomBytes_8,
-  randomBytes as randomBytes_9,
-  randomBytes as randomBytes_10,
-  randomBytes as randomBytes_11,
-  randomBytes as randomBytes_12,
-  randomBytes as randomBytes_13,
-  randomBytes as randomBytes_14,
-} from "crypto";
-import { constants as constants_2_2, constants as constants_8 } from "os";
+import { constants, createReadStream, openSync, fstatSync, writeSync, closeSync, readSync } from "fs";
+import { randomBytes } from "crypto";
+import { constants as constants_8 } from "os";
 import { StringDecoder } from "string_decoder";
 import { isAscii } from "buffer";
-import { Ws } from "../services/api/streamFallbackWarning.js";
+import { streamFallbackWarning } from "../services/api/streamFallbackWarning.js";
 import { isUnavailableErrorCode, isUnavailableError } from "./settings/managedEnvKeys.js";
 import {
   getErrnoCode,
@@ -728,18 +53,18 @@ import {
 } from "./errors.js";
 import {
   isStoreError,
-  wft,
+  isAbsentParentError,
   formatStorageError,
-  kDt,
-  d7t,
-  wbs,
+  isUnsupportedStorageError,
+  isByteViewUnsupportedError,
+  isStoreFencedError,
   storageErrorCode,
 } from "./storage/storageErrors.js";
 import {
   stopSiblingExists,
-  T9,
+  stopSiblingPath,
   stopSiblingCache,
-  w9,
+  readStopSiblingCount,
   removeStopSibling,
   persistSubagentStop,
 } from "./agentStopSiblings.js";
@@ -766,10 +91,10 @@ import {
   getSessionProjectDir,
   getOriginalCwdOrNull,
 } from "../bootstrap/state.js";
-import { gte } from "../plugins/functionHooks/devModsName.js";
-import { isPlainObject as isPlainObject_4 } from "./isPlainObject.js";
+import { devModsDir } from "../plugins/functionHooks/devModsName.js";
+import { isPlainObject as isPlainObject_5 } from "./isPlainObject.js";
 import { formatDurationCoarse, formatFileSize } from "./format.js";
-import { WDn, sortLogs } from "../types/logs.js";
+import { MAX_LOGS, sortLogs } from "../types/logs.js";
 import { defineOwnProperty } from "./objectSafety.js";
 import { createStore } from "../state/store.js";
 import { SessionRootSlot } from "../bootstrap/sessionSlices.js";
@@ -781,7 +106,7 @@ import {
 import {
   isCompactBoundaryOrSummary,
   dropLargeOriginalFile,
-  OB,
+  isReorderedRow,
   extractTag,
   rememberMovedRow,
   isInterruptionOnlyMessage,
@@ -844,7 +169,7 @@ import {
   getRegisteredSessionName,
   isUnattendedInteractiveSession,
 } from "./concurrentSessions.js";
-import { gl } from "./cwd.js";
+import { getCwdOrNull } from "./cwd.js";
 import { getBranch } from "./git.js";
 import {
   PROGRAMMATIC_ENTRYPOINTS,
@@ -878,11 +203,10 @@ import {
   getPinnedProjectDir,
   getProjectsDir as getProjectsDir_3,
   readSessionLite,
-  getProjectsDir as getProjectsDir_4,
   resolveSessionFilePath_2,
 } from "./sessionStoragePortable.js";
-import { STORAGE_SPACES, isValidKeySegment, uA } from "./storage/storageSpaces.js";
-import { Mn } from "./pathClassification.js";
+import { STORAGE_SPACES, isValidKeySegment, areValidKeySegments } from "./storage/storageSpaces.js";
+import { identity } from "./pathClassification.js";
 import { uniq, count } from "./collections.js";
 import { createSignal } from "./signal.js";
 import { io } from "../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
@@ -891,7 +215,7 @@ import {
   writeTranscriptFile,
   reportTranscriptWriteFailure,
   noteTranscriptWriteOk,
-  bPt,
+  slimCharsOf,
 } from "./transcript/transcriptWriter.js";
 import { HostScoped } from "./hostScoped.js";
 import { isDiagLogging, isInDiagScope, logForDiagnosticsNoPII } from "./diagLogs.js";
@@ -899,11 +223,11 @@ import { withDeadline, raceWithAbortSignal } from "./sleep.js";
 import { registerCleanup } from "./cleanupRegistry.js";
 import {
   RequestBlobStore,
-  b9,
+  clearAllReplayChains,
   isRequestBlobStoreEnabled,
   stripCacheControl as stripCacheControl_4,
   getToolResultDigests,
-  fRt,
+  setMarkerTextWriter,
 } from "./transcriptRequestBlobs.js";
 import { READ_LIMITS } from "./fsBoundRead.js";
 import {
@@ -918,27 +242,27 @@ import {
   findContinuedInSessionId,
 } from "./backgroundSessionResume.js";
 import {
-  ice,
+  stripLeadingNuls,
   deleteSessionTitleSidecar,
   transcriptStorageKeyForPath,
   removeTombstones,
   scanCompactBoundaries,
   makeLineEmitter,
-  wG,
+  transcriptKeyFor,
   transcriptScopeForDir,
-  _D,
+  contentHasBlockType,
   isAuxiliaryEntry,
-  lR,
-  vG,
+  indexOrMax,
+  mapKeysToIndex,
   buildChildrenIndex,
   collectLinearChain,
   writeSessionTitleSidecar,
   openTranscriptStream,
-  Qoe,
+  isTranscriptLoadError,
   collectLeafUuids,
   isWin32TranscriptEbadf,
   WIN32_EBADF_TELEMETRY_MESSAGE,
-  e0,
+  validatedTranscriptKey,
   findLastMessageTimestamp,
 } from "./transcript/transcriptFiles.js";
 import { isCompactBoundaryMessage as isCompactBoundaryMessage_3 } from "../services/projects/threadRows.js";
@@ -947,36 +271,54 @@ import { createKeyedQueue } from "./promiseQueue.js";
 import { isSillyShoreGateOn, tagUntrustedArtifactContent } from "./messages/untrustedArtifactContent.js";
 import {
   readTranscriptEntries,
-  yG,
+  skipNuls,
   readEnvelopeSessionId,
   ArtifactLedgerCollector,
   CostStateEntrySchema,
   resetArtifactLedgerState,
   isLaptopMemoryAttachment,
 } from "./transcript/entryTypes.js";
-import { writeFully, A7s } from "../services/memorySync/syncFiles.js";
-import { AI } from "./plugins/safeCopy.js";
+import { writeFully, WRITE_BUFFER_LIMIT_BYTES } from "../services/memorySync/syncFiles.js";
+import { ATOMIC_WRITE_ERRNOS } from "./plugins/safeCopy.js";
 import { refreshCheckoutMetadata } from "./git/repoCheckouts.js";
-import { Vt, G$, isSafeIdSegment, LE, Mr } from "./agentId.js";
+import {
+  normalizeUuidOrNull,
+  isSafeIdSegment,
+  isSafeIdSegment_2,
+  identityAgentId,
+  identityAgentId2,
+} from "./agentId.js";
 import { isEnvTruthy, getProjectDirNameOverride, getClaudeConfigDir } from "./envUtils.js";
 import { appendSessionLog, getSessionLogs } from "../services/api/sessionIngress.js";
-import { ws } from "./fsFlags.js";
+import { NOFOLLOW_NONBLOCK_FLAGS } from "./fsFlags.js";
 import { parseJSONL, bunJSONLParse } from "./json.js";
-import { Bxt, DHe, F9, zxt, createRewindTracker, Hxt, Uxt } from "./transcript/resumeLoadReport.js";
-import { validateAgentMetadata, UC } from "./agentMetadata.js";
-import { Br, iyi, syi } from "./startupTiming.js";
-import { mn, uC } from "./remoteEnvironment.js";
-import { gn } from "./shortHash.js";
-import { t7 } from "./messages/pluginPrompts.js";
+import {
+  rememberValidatedTip,
+  validatedTipOf,
+  rememberHydrateNote,
+  conversationChainOf,
+  createRewindTracker,
+  recordLoadReportFor,
+  recordLoadReportSafely,
+} from "./transcript/resumeLoadReport.js";
+import { validateAgentMetadata, describeStorageError } from "./agentMetadata.js";
+import { recordPhase, markResumeHydrateDelta, markResumeTranscriptScan } from "./startupTiming.js";
+import { isRemoteManagedEnvironment, isRemoteEnvironmentAny } from "./remoteEnvironment.js";
+import { shortHash } from "./shortHash.js";
+import { renderPluginPromptColon } from "./messages/pluginPrompts.js";
 import { flattenPastedBlocks } from "./pastedContent.js";
 import { COMMAND_NAME, TICK } from "../constants/xml.js";
-import { B6e } from "./messageKinds.js";
+import { restoredTaskMarkSymbol } from "./messageKinds.js";
 import { readSessionStartDate } from "./stats.js";
-import { isFoamySpringEnabled, isSideMessagesEnabled, Zos } from "../services/analytics/growthbookGates.js";
+import {
+  isFoamySpringEnabled,
+  isSideMessagesEnabled,
+  readGateTrueByDefault,
+} from "../services/analytics/growthbookGates.js";
 import { announceFirstTurnOnce } from "./transcript/resumeAnnouncements.js";
 import { hasEmbeddedSearchTools_2 } from "./embeddedTools.js";
 import { collectBlockFieldsByType, getToolResultIds } from "../services/api/claude.js";
-import { withEndedByModel, getEndedByModel, $nr } from "../tasks/endedByModel.js";
+import { withEndedByModel, getEndedByModel, isModelEndCheckSupported } from "../tasks/endedByModel.js";
 import { slugifySessionName } from "./sessionAddresses.js";
 import { settledYieldFor } from "./sessionNameUniqueness.js";
 import { getWorktreePaths } from "./getWorktreePaths.js";
@@ -984,69 +326,83 @@ import { createRowRepairer } from "./transcript/transcriptRepair.js";
 import { countToolCallsSince_2, restoreWireInputStamps } from "./wireToolInputEcho.js";
 import { sanitizeStringList } from "../bridge/controlRequests.js";
 import { limitConcurrency } from "./concurrencyLimit.js";
-import { S4 } from "../tools/REPLTool/constants.js";
+import { isExactReplToolName } from "../tools/REPLTool/constants.js";
 import { resolveMessageAlias } from "./pollEvents/fold.js";
 import { readCustomTitle } from "../cli/toolPermissionStream.js";
 import { getPluginsDirectory } from "./plugins/pluginDirectories.js";
 import { PathSpace } from "./resultError.js";
 import { ce } from "../../vendor/react/cjs/react.production.js";
-import { JM } from "../components/FeedbackSurvey/SurveyHost.js";
+import { endsWithNumberedList } from "../components/FeedbackSurvey/SurveyHost.js";
 import { useStoreSelector } from "../hooks/useStoreSelector.js";
 import { getPlatform } from "./platform.js";
-import { FTt, NTt } from "./sandbox/userNamespace.js";
-import { R7e } from "../tasks/taskState.js";
+import { daemonTokensFile, daemonAuthDir } from "./sandbox/userNamespace.js";
+import { spawnStatsSlots } from "../tasks/taskState.js";
 import { sameRepoWorktrees, isSameRepoPath } from "../services/projects/repoContext.js";
 import { getJobDir, readJobState } from "../services/daemon/jobState.js";
 import { pickWorktreeFields } from "../services/agentStatus/jobClassifier.js";
-import { q } from "../services/agentStatus/jobState.js";
+import { writeStateAndBroadcast } from "../services/agentStatus/jobState.js";
 
 //@ chunk-e6aww6q8.js:215483-215536 placement
-function BVs() {
-  Ws().lastIngressUuidBySession.clear();
+/**
+ * clearLastIngressUuid：清空按会话记录的最后入站 uuid。
+ */
+function clearLastIngressUuid() {
+  streamFallbackWarning().lastIngressUuidBySession.clear();
 }
 //@ chunk-e6aww6q8.js:220628-220716 placement
-function jVs(e) {
-  let n = e instanceof Error ? e.cause : void 0;
-  return isUnavailableErrorCode(getErrnoCode(e)) || (isStoreError(n) && isUnavailableError(n));
+/**
+ * isUnavailableStoreError：存储不可用错误（含 cause 链）。
+ */
+function isUnavailableStoreError(e) {
+  let cause = e instanceof Error ? e.cause : undefined;
+  return isUnavailableErrorCode(getErrnoCode(e)) || (isStoreError(cause) && isUnavailableError(cause));
 }
 //@ chunk-e6aww6q8.js:220716-220758 placement
-function ARt(e, n, r) {
-  return stopSiblingExists(T9(e, n), r);
+function stopSiblingExistsAt(agentMetadataPath, n, r) {
+  return stopSiblingExists(stopSiblingPath(agentMetadataPath, n), r);
 }
 //@ chunk-e6aww6q8.js:220758-220842 placement
-async function setAgentTranscriptSubdir_2(e, n, r) {
-  let s = T9(e, n);
-  (stopSiblingCache.set(s, w9(s) + 1), await runWithFileWriteContext(e, () => removeStopSibling(s, r)));
+async function setAgentTranscriptSubdir_2(agentMetadataPath, n, r) {
+  let s = stopSiblingPath(agentMetadataPath, n);
+  stopSiblingCache.set(s, readStopSiblingCount(s) + 1);
+  await runWithFileWriteContext(agentMetadataPath, () => removeStopSibling(s, r));
 }
 //@ chunk-e6aww6q8.js:220887-220972 placement
-function sjt(e, n) {
-  return !isDiskless() && /^[A-Za-z0-9_-]+$/.test(n) && resolve_2(e) === resolve_2(join_4(gte(), n));
+/**
+ * isSessionFileAt：该路径是否为指定会话的转录文件。
+ */
+function isSessionFileAt(e, sessionId) {
+  return (
+    !isDiskless() &&
+    /^[A-Za-z0-9_-]+$/.test(sessionId) &&
+    resolve_2(e) === resolve_2(join(devModsDir(), sessionId))
+  );
 }
 //@ chunk-e6aww6q8.js:220972-221079 placement
 var DISK_TRANSCRIPT_LAG_PREFIX =
   "When this session resumed, the copy of this conversation on the container's disk lacked at least";
 //@ chunk-e6aww6q8.js:221079-221757 placement
-function findUnresolvedToolUse_2(e, n, r) {
-  let lastIndex = e.findLastIndex((w) =>
-    [w.event_id, w.payload.uuid].some((L) => typeof L === "string" && n.has(L)),
+function findUnresolvedToolUse_2(events, resolvedEventIds, r) {
+  let lastIndex = events.findLastIndex((w) =>
+    [w.event_id, w.payload.uuid].some((L) => typeof L === "string" && resolvedEventIds.has(L)),
   );
   if (lastIndex === -1 && !r) return;
-  let h = new Set(),
-    y,
-    sliced = e.slice(lastIndex + 1);
-  for (let { payload: payload } of sliced) {
-    let message = payload.message,
-      G = isPlainObject_4(message) ? message.content : void 0,
-      q = Array.isArray(G) ? G : [];
-    for (let message of q.filter(isPlainObject_4)) {
+  let h = new Set();
+  let oldestToolRowAt;
+  let sliced = events.slice(lastIndex + 1);
+  for (let { payload } of sliced) {
+    let message = payload.message;
+    let content = isPlainObject_5(message) ? message.content : undefined;
+    let q = Array.isArray(content) ? content : [];
+    for (let message of q.filter(isPlainObject_5)) {
       let Se =
         message.type === "tool_use"
           ? message.id
           : message.type === "tool_result"
             ? message.tool_use_id
-            : void 0;
+            : undefined;
       if (typeof Se === "string") {
-        if (h.size === 0 && typeof payload.timestamp === "string") y = payload.timestamp;
+        if (h.size === 0 && typeof payload.timestamp === "string") oldestToolRowAt = payload.timestamp;
         h.add(Se);
       }
     }
@@ -1054,59 +410,77 @@ function findUnresolvedToolUse_2(e, n, r) {
   return {
     rows: sliced.length,
     toolCalls: h.size,
-    oldestToolRowAt: y,
-    remindedBefore: sliced.some(({ payload: payload }) => {
-      let attachment = payload.attachment,
-        G =
-          isPlainObject_4(attachment) && attachment.type === "critical_system_reminder"
-            ? attachment.content
-            : void 0;
-      return typeof G === "string" && G.startsWith(DISK_TRANSCRIPT_LAG_PREFIX);
+    oldestToolRowAt,
+    remindedBefore: sliced.some(({ payload }) => {
+      let attachment = payload.attachment;
+      let content =
+        isPlainObject_5(attachment) && attachment.type === "critical_system_reminder"
+          ? attachment.content
+          : undefined;
+      return typeof content === "string" && content.startsWith(DISK_TRANSCRIPT_LAG_PREFIX);
     }),
   };
 }
 //@ chunk-e6aww6q8.js:221757-222475 placement
 function describeDiskTranscriptLag(e, n) {
-  let parse = Date.parse(e.oldestToolRowAt ?? ""),
-    s =
-      parse <= n
-        ? ` The oldest call or result that the disk's copy lacked is from ${new Date(parse).toISOString().slice(0, 16).replace("T", " ")} UTC, about ${formatDurationCoarse(n - parse)} before this session resumed.`
-        : "",
-    h = e.remindedBefore
-      ? " The disk has been behind like this before in this conversation. Changes that you make on this disk may be lost again. Tell the user this."
+  let timestamp = Date.parse(e.oldestToolRowAt ?? "");
+  let s =
+    timestamp <= n
+      ? ` The oldest call or result that the disk's copy lacked is from ${new Date(timestamp).toISOString().slice(0, 16).replace("T", " ")} UTC, about ${formatDurationCoarse(n - timestamp)} before this session resumed.`
       : "";
+  let h = e.remindedBefore
+    ? " The disk has been behind like this before in this conversation. Changes that you make on this disk may be lost again. Tell the user this."
+    : "";
   return `${DISK_TRANSCRIPT_LAG_PREFIX} ${e.toolCalls} of your recent tool calls, so the disk may be older than the conversation.${s} Files that those calls created or changed may be missing or out of date, and installed packages may be gone. Check the files that you need before you rely on them, and tell the user if work was lost.${h}`;
 }
+//@ chunk-e6aww6q8.js:222475-223602 placement
 /**
  * 按转录消息顺序把文件历史快照与增量合成快照列表：同一消息的更新替换、增量合并或合成新快照，只保留最近若干个，被裁掉的部分折叠为基准状态。
  */
-//@ chunk-e6aww6q8.js:222475-223602 placement
-function buildFileHistorySnapshots(e, n, r) {
-  let ops = [],
-    indexByMessageId = new Map(),
-    nextIndex = 0;
-  for (let q of r) {
-    let Z = e.get(q.uuid);
+function buildFileHistorySnapshots(fileHistorySnapshots, fileHistoryDeltas, transcript) {
+  let ops = [];
+  let indexByMessageId = new Map();
+  let nextIndex = 0;
+  for (let q of transcript) {
+    let Z = fileHistorySnapshots.get(q.uuid);
     if (Z) {
-      let { snapshot: snapshot, isSnapshotUpdate: isSnapshotUpdate } = Z,
-        we = isSnapshotUpdate ? indexByMessageId.get(snapshot.messageId) : void 0;
-      if (we === void 0)
-        (indexByMessageId.set(snapshot.messageId, nextIndex),
-          ops.push({ kind: "append", index: nextIndex++, snapshot: snapshot }));
-      else ops.push({ kind: "replace", index: we, snapshot: snapshot });
+      let { snapshot, isSnapshotUpdate } = Z;
+      let we = isSnapshotUpdate ? indexByMessageId.get(snapshot.messageId) : undefined;
+      if (we === undefined) {
+        indexByMessageId.set(snapshot.messageId, nextIndex);
+        ops.push({
+          kind: "append",
+          index: nextIndex++,
+          snapshot,
+        });
+      } else
+        ops.push({
+          kind: "replace",
+          index: we,
+          snapshot,
+        });
     }
-    for (let Se of n.get(q.uuid) ?? []) {
+    for (let Se of fileHistoryDeltas.get(q.uuid) ?? []) {
       let ke = indexByMessageId.get(Se.snapshotMessageId);
-      if (ke === void 0)
-        (indexByMessageId.set(Se.snapshotMessageId, nextIndex),
-          ops.push({ kind: "synthesize", index: nextIndex++, delta: Se }));
-      else ops.push({ kind: "merge", index: ke, delta: Se });
+      if (ke === undefined) {
+        indexByMessageId.set(Se.snapshotMessageId, nextIndex);
+        ops.push({
+          kind: "synthesize",
+          index: nextIndex++,
+          delta: Se,
+        });
+      } else
+        ops.push({
+          kind: "merge",
+          index: ke,
+          delta: Se,
+        });
     }
   }
-  let max = Math.max(0, nextIndex - WDn),
-    snapshots = [],
-    ownedIndexes = new Set(),
-    baseState;
+  let max = Math.max(0, nextIndex - MAX_LOGS);
+  let snapshots = [];
+  let ownedIndexes = new Set();
+  let baseState;
   for (let q of ops) {
     if (q.index < max) {
       baseState = foldSnapshotBase(baseState, q);
@@ -1118,25 +492,32 @@ function buildFileHistorySnapshots(e, n, r) {
         snapshots.push(q.snapshot);
         break;
       case "replace":
-        ((snapshots[Z] = q.snapshot), ownedIndexes.delete(Z));
+        snapshots[Z] = q.snapshot;
+        ownedIndexes.delete(Z);
         break;
       case "synthesize":
-        (ownedIndexes.add(Z),
-          snapshots.push({
-            messageId: q.delta.snapshotMessageId,
-            trackedFileBackups: {
-              ...(Z > 0 ? snapshots[Z - 1].trackedFileBackups : baseState?.trackedFileBackups),
-              [q.delta.trackingPath]: q.delta.backup,
-            },
-            timestamp: new Date(q.delta.timestamp),
-          }));
+        ownedIndexes.add(Z);
+        snapshots.push({
+          messageId: q.delta.snapshotMessageId,
+          trackedFileBackups: {
+            ...(Z > 0 ? snapshots[Z - 1].trackedFileBackups : baseState?.trackedFileBackups),
+            [q.delta.trackingPath]: q.delta.backup,
+          },
+          timestamp: new Date(q.delta.timestamp),
+        });
         break;
       case "merge": {
         let Se = snapshots[Z];
-        if (!ownedIndexes.has(Z))
-          ((Se = { ...Se, trackedFileBackups: { ...Se.trackedFileBackups } }),
-            (snapshots[Z] = Se),
-            ownedIndexes.add(Z));
+        if (!ownedIndexes.has(Z)) {
+          Se = {
+            ...Se,
+            trackedFileBackups: {
+              ...Se.trackedFileBackups,
+            },
+          };
+          snapshots[Z] = Se;
+          ownedIndexes.add(Z);
+        }
         defineOwnProperty(Se.trackedFileBackups, q.delta.trackingPath, q.delta.backup);
         break;
       }
@@ -1144,23 +525,33 @@ function buildFileHistorySnapshots(e, n, r) {
   }
   return snapshots;
 }
+//@ chunk-e6aww6q8.js:223602-224004 placement
 /**
  * 把被裁掉的文件历史快照操作折叠进基准状态（追加/替换取快照，合成/合并累加增量）。
  */
-//@ chunk-e6aww6q8.js:223602-224004 placement
-function foldSnapshotBase(e, n) {
-  if ((n.kind === "replace" || n.kind === "merge") && n.index !== e?.index) return e;
+function foldSnapshotBase(baseState, n) {
+  if ((n.kind === "replace" || n.kind === "merge") && n.index !== baseState?.index) return baseState;
   switch (n.kind) {
     case "append":
     case "replace":
-      return { index: n.index, trackedFileBackups: n.snapshot.trackedFileBackups, owned: !1 };
+      return {
+        index: n.index,
+        trackedFileBackups: n.snapshot.trackedFileBackups,
+        owned: false,
+      };
     case "synthesize":
     case "merge": {
-      let r = e?.owned ? e.trackedFileBackups : { ...e?.trackedFileBackups };
-      return (
-        defineOwnProperty(r, n.delta.trackingPath, n.delta.backup),
-        { index: n.index, trackedFileBackups: r, owned: !0 }
-      );
+      let r = baseState?.owned
+        ? baseState.trackedFileBackups
+        : {
+            ...baseState?.trackedFileBackups,
+          };
+      defineOwnProperty(r, n.delta.trackingPath, n.delta.backup);
+      return {
+        index: n.index,
+        trackedFileBackups: r,
+        owned: true,
+      };
     }
   }
 }
@@ -1171,77 +562,80 @@ class TranscriptWriterHealth {
   abandonedPaths = new Set();
   abandonedPrefixes = new Set();
   abandonedPendingPaths = new Set();
-  latchingEnabled = !0;
-  firstWriteOkEmitted = !1;
+  latchingEnabled = true;
+  firstWriteOkEmitted = false;
   liveServing = null;
   degradedStore = createStore(null);
 }
 //@ chunk-e6aww6q8.js:338771-338796 placement
-var ZPt = new SessionRootSlot(() => ({}));
+var sessionStorageInitState = new SessionRootSlot(() => ({}));
 //@ chunk-e6aww6q8.js:338796-338831 placement
-function eMt(e) {
-  ZPt.of(getRootSession()).port = e;
+function setStoragePort(port) {
+  sessionStorageInitState.of(getRootSession()).port = port;
 }
 //@ chunk-e6aww6q8.js:338831-338873 placement
-function sfn() {
-  return ZPt.peek(getRootSession())?.port;
+/**
+ * storagePort：取存储端口。
+ */
+function storagePort() {
+  return sessionStorageInitState.peek(getRootSession())?.port;
 }
+//@ chunk-e6aww6q8.js:338873-340008 layout
 /**
  * 会话存储常量：CLI 版本、各种大小上限、合成用户文本（中断提示、标签开头）的正则。
  */
-//@ chunk-e6aww6q8.js:338873-340008 layout
 var CLI_VERSION =
-    typeof {
-      ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
-      PACKAGE_URL: "@anthropic-ai/claude-code",
-      README_URL: "https://code.claude.com/docs/en/overview",
-      VERSION: "2.1.316",
-      FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-      BUILD_TIME: "2026-10-30T23:28:13Z",
-      GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
-      HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
-      DD_SOURCEMAP_GROUP: "default",
-    } < "u"
-      ? {
-          ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
-          PACKAGE_URL: "@anthropic-ai/claude-code",
-          README_URL: "https://code.claude.com/docs/en/overview",
-          VERSION: "2.1.316",
-          FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-          BUILD_TIME: "2026-10-30T23:28:13Z",
-          GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
-          HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
-          DD_SOURCEMAP_GROUP: "default",
-        }.VERSION
-      : "unknown",
-  KHe = 52428800,
-  mpo = 2000000,
-  gpo = 52428800,
-  hpo = 4096,
-  aMt = 1048576,
-  ypo = 4194304,
-  SYNTHETIC_USER_TEXT_PATTERN = /^(?:\s*<[a-z][\w-]*[\s>]|\[Request interrupted by user[^\]]*\])/;
+  typeof {
+    ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
+    PACKAGE_URL: "@anthropic-ai/claude-code",
+    README_URL: "https://code.claude.com/docs/en/overview",
+    VERSION: "2.1.316",
+    FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
+    BUILD_TIME: "2026-10-30T23:28:13Z",
+    GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+    HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
+    DD_SOURCEMAP_GROUP: "default",
+  } !== "undefined"
+    ? {
+        ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
+        PACKAGE_URL: "@anthropic-ai/claude-code",
+        README_URL: "https://code.claude.com/docs/en/overview",
+        VERSION: "2.1.316",
+        FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
+        BUILD_TIME: "2026-10-30T23:28:13Z",
+        GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+        HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
+        DD_SOURCEMAP_GROUP: "default",
+      }.VERSION
+    : "unknown";
+var MAX_TRANSCRIPT_READ_BYTES_2 = 52428800;
+var MAX_SYNTHETIC_MESSAGE_BYTES = 2000000;
+var MAX_TRANSCRIPT_TAIL_BYTES = 52428800;
+var TRANSCRIPT_HEAD_BUFFER_BYTES = 4096;
+var TRANSCRIPT_PAGE_BYTES = 1048576;
+var MAX_PAGED_TRANSCRIPT_BYTES = 4194304;
+var SYNTHETIC_USER_TEXT_PATTERN = /^(?:\s*<[a-z][\w-]*[\s>]|\[Request interrupted by user[^\]]*\])/;
+//@ chunk-e6aww6q8.js:340008-340037 facade-majority
 /**
  * 是否为转录消息类型（user/assistant/attachment/system，排除 fork_briefing 附件）。
  */
-//@ chunk-e6aww6q8.js:340008-340037 facade-majority
 function isTranscriptMessage(e) {
   return isTranscriptMessage_3(e);
 }
 //@ chunk-e6aww6q8.js:340037-340075 layout
-function VHe(e) {
-  return isCompactBoundaryOrSummary(e) || tBe(e);
+function isCompactOrCarriedMessage(e) {
+  return isCompactBoundaryOrSummary(e) || isCarriedAttachment(e);
 }
 //@ chunk-e6aww6q8.js:340075-340113 layout
-function tBe(e) {
-  return cOt(e) || _po(e);
+function isCarriedAttachment(e) {
+  return isProjectsThreadAskAttachment(e) || isSessionCronCarryAttachment(e);
 }
 //@ chunk-e6aww6q8.js:340113-340202 layout
-function cOt(e) {
+function isProjectsThreadAskAttachment(e) {
   return e.type === "attachment" && e.attachment?.type === "projects_thread_ask";
 }
 //@ chunk-e6aww6q8.js:340202-340290 layout
-function _po(e) {
+function isSessionCronCarryAttachment(e) {
   return e.type === "attachment" && e.attachment?.type === "session_cron_carry";
 }
 //@ chunk-e6aww6q8.js:340290-340400 facade-majority = isLegacyProgressEntry (0.8)
@@ -1256,79 +650,79 @@ function isSyncedTranscriptEntry(entry) {
   );
 }
 //@ chunk-e6aww6q8.js:340400-340428 layout
-function isPlainObject_2(e) {
-  return isPlainObject_4(e);
+function isPlainObject_3(e) {
+  return isPlainObject_5(e);
 }
+//@ chunk-e6aww6q8.js:340428-341559 facade-majority
 /**
  * 记录类型写入策略表：user/assistant/attachment/system/progress 为 dedup-transcript（按 uuid 去重，子代理写入自己的转录）；summary、custom-title、tag、last-prompt、file-history-snapshot 等元数据为 always；content-replacement、api-request*、fork-context-ref、observer-ref 为 route-by-agent（有 agentId 时写入子代理文件）。
  */
-//@ chunk-e6aww6q8.js:340428-341559 facade-majority
 var ENTRY_APPEND_POLICY = {
-    user: "dedup-transcript",
-    assistant: "dedup-transcript",
-    attachment: "dedup-transcript",
-    system: "dedup-transcript",
-    progress: "dedup-transcript",
-    summary: "always",
-    "custom-title": "always",
-    "ended-by-model": "always",
-    "continued-in": "always",
-    "ai-title": "always",
-    "last-prompt": "always",
-    tag: "always",
-    relocated: "always",
-    "agent-name": "always",
-    "agent-color": "always",
-    "agent-setting": "always",
-    "pr-link": "always",
-    "frame-link": "always",
-    "artifact-comment-monitor": "always",
-    "artifact-autoreact-ledger": "always",
-    "bridge-session": "always",
-    "history-suppression": "always",
-    "file-history-snapshot": "always",
-    "file-history-delta": "always",
-    "attribution-snapshot": "always",
-    mode: "always",
-    "permission-mode": "always",
-    "isolation-latch": "always",
-    "dev-mods": "always",
-    "memory-mode": "always",
-    "atis-latch": "always",
-    "tools-used": "always",
-    "worktree-state": "always",
-    "cost-state": "always",
-    "queue-operation": "always",
-    "content-replacement": "route-by-agent",
-    "api-request-shape": "route-by-agent",
-    "api-request-blob": "route-by-agent",
-    "api-request": "route-by-agent",
-    "fork-context-ref": "route-by-agent",
-    "observer-ref": "route-by-agent",
-  },
-  COMPACT_MIN_FILE_BYTES = 5242880,
-  LG = 20971520,
-  Spo = 8 * LG,
-  kpo = 0.1;
+  user: "dedup-transcript",
+  assistant: "dedup-transcript",
+  attachment: "dedup-transcript",
+  system: "dedup-transcript",
+  progress: "dedup-transcript",
+  summary: "always",
+  "custom-title": "always",
+  "ended-by-model": "always",
+  "continued-in": "always",
+  "ai-title": "always",
+  "last-prompt": "always",
+  tag: "always",
+  relocated: "always",
+  "agent-name": "always",
+  "agent-color": "always",
+  "agent-setting": "always",
+  "pr-link": "always",
+  "frame-link": "always",
+  "artifact-comment-monitor": "always",
+  "artifact-autoreact-ledger": "always",
+  "bridge-session": "always",
+  "history-suppression": "always",
+  "file-history-snapshot": "always",
+  "file-history-delta": "always",
+  "attribution-snapshot": "always",
+  mode: "always",
+  "permission-mode": "always",
+  "isolation-latch": "always",
+  "dev-mods": "always",
+  "memory-mode": "always",
+  "atis-latch": "always",
+  "tools-used": "always",
+  "worktree-state": "always",
+  "cost-state": "always",
+  "queue-operation": "always",
+  "content-replacement": "route-by-agent",
+  "api-request-shape": "route-by-agent",
+  "api-request-blob": "route-by-agent",
+  "api-request": "route-by-agent",
+  "fork-context-ref": "route-by-agent",
+  "observer-ref": "route-by-agent",
+};
+var COMPACT_MIN_FILE_BYTES = 5242880;
+var ENTRY_APPEND_POLICY_2 = 20971520;
+var SESSION_ENTRY_APPEND_POLICY = 8 * ENTRY_APPEND_POLICY_2;
+var SESSION_ENTRY_APPEND_POLICY_2 = 0.1;
 //@ chunk-e6aww6q8.js:341559-341607 layout
 function forceGcIfBun(e) {
-  if (e && typeof Bun < "u") Bun.gc(!0);
+  if (e && typeof Bun !== "undefined") Bun.gc(true);
 }
 //@ chunk-e6aww6q8.js:341607-341640 layout
 function isLowYieldCompaction(e, n) {
-  return n < e * kpo;
+  return n < e * SESSION_ENTRY_APPEND_POLICY_2;
 }
 //@ chunk-e6aww6q8.js:341640-341690 facade-majority
-function setLowYieldCompactSkipForTesting(e) {
-  su().lowYieldCompactSkipEnabled = e;
+function setLowYieldCompactSkipForTesting(lowYieldCompactSkipEnabled) {
+  currentTranscriptStore().lowYieldCompactSkipEnabled = lowYieldCompactSkipEnabled;
 }
 //@ chunk-e6aww6q8.js:341690-341732 facade-majority
 function setTranscriptLocalGcEnabled(e) {
-  su().setLocalGcEnabled(e);
+  currentTranscriptStore().setLocalGcEnabled(e);
 }
 //@ chunk-e6aww6q8.js:341732-341782 facade-majority
 function setToolResultCopiesOnDisk(e) {
-  su().setToolResultCopiesOnDisk(e);
+  currentTranscriptStore().setToolResultCopiesOnDisk(e);
 }
 //@ chunk-e6aww6q8.js:341782-341830 facade-majority
 function getSessionRowsOffDisk() {
@@ -1336,7 +730,7 @@ function getSessionRowsOffDisk() {
 }
 //@ chunk-e6aww6q8.js:341830-341882 facade-majority
 function setKeepSessionMessagesCache(e) {
-  su().setKeepSessionMessagesCache(e);
+  currentTranscriptStore().setKeepSessionMessagesCache(e);
 }
 //@ chunk-e6aww6q8.js:341882-341924 facade-majority = countUnseenAssistantTurns (1)
 function isChainParticipant(e) {
@@ -1353,8 +747,10 @@ function transcriptCursorEnd(e, n, r) {
 }
 //@ chunk-e6aww6q8.js:342084-342203 layout
 function logLegacyProgressProbe(e) {
-  if (!su().claimLegacyProgressProbe(e)) return;
-  logEvent("tengu_dead_probe_legacy_progress_bridge", { signal: fromEnum(e) });
+  if (!currentTranscriptStore().claimLegacyProgressProbe(e)) return;
+  logEvent("tengu_dead_probe_legacy_progress_bridge", {
+    signal: fromEnum(e),
+  });
 }
 //@ chunk-e6aww6q8.js:342203-342327 fingerprint = isLegacyProgressEntry (1)
 function isLegacyProgressEntry(entry) {
@@ -1380,11 +776,11 @@ var EPHEMERAL_PROGRESS_TYPES = new Set([
 ]);
 //@ chunk-e6aww6q8.js:342471-342532 facade-majority
 function isEphemeralToolProgress(dataType) {
-  return typeof dataType === "string" && (EPHEMERAL_PROGRESS_TYPES.has(dataType) || !1);
+  return typeof dataType === "string" && (EPHEMERAL_PROGRESS_TYPES.has(dataType) || false);
 }
 //@ chunk-e6aww6q8.js:342532-342589 facade-majority
 function getMaterializedSessionFile() {
-  return su().project?.sessionFilePath ?? null;
+  return currentTranscriptStore().project?.sessionFilePath ?? null;
 }
 //@ chunk-e6aww6q8.js:342589-342616 facade-majority
 function locateMaterializedSessionFile() {
@@ -1396,54 +792,57 @@ function hasMaterializedSessionFile() {
 }
 //@ chunk-e6aww6q8.js:342650-342720 facade-majority
 function hasRecordedUserPrompt() {
-  return su().project?.currentSessionLastPrompt !== void 0;
+  return currentTranscriptStore().project?.currentSessionLastPrompt !== undefined;
 }
+//@ chunk-e6aww6q8.js:342720-342802 facade-majority = getErrorsPath (1)
 /**
  * 某会话的转录路径：当前会话返回已绑定的会话文件，否则 <当前项目目录>/<sessionId>.jsonl。
  */
-//@ chunk-e6aww6q8.js:342720-342802 facade-majority = getErrorsPath (1)
 function getTranscriptPathForSession(e) {
   if (e === getSessionId()) return getMaterializedSessionFile() ?? getTranscriptPath();
-  let n = resolveProjectDir();
-  return join_3(n, `${e}.jsonl`);
+  let projectDir = resolveProjectDir();
+  return join(projectDir, `${e}.jsonl`);
 }
 //@ chunk-e6aww6q8.js:342802-342831 facade-majority
 function locateTranscriptForSession(e) {
   return getTranscriptPathForSession(e);
 }
 //@ chunk-e6aww6q8.js:342831-342881 facade-majority
-var MAX_TRANSCRIPT_READ_BYTES = 52428800,
-  INDEX_HEAD_SCAN_BYTES = 256,
-  INDEX_BOUNDARY_SCAN_BYTES = 4096,
-  INDEX_LAST_PROMPT_SCAN_BYTES = 1024,
-  LAST_PROMPT_PREFIX_SCAN_BYTES = 64;
+var MAX_TRANSCRIPT_READ_BYTES = 52428800;
+var INDEX_HEAD_SCAN_BYTES = 256;
+var INDEX_BOUNDARY_SCAN_BYTES = 4096;
+var INDEX_LAST_PROMPT_SCAN_BYTES = 1024;
+var LAST_PROMPT_PREFIX_SCAN_BYTES = 64;
 //@ chunk-e6aww6q8.js:342881-342943 facade-majority = getAgentMetadataPath (1)
 function getAgentMetadataPath(agentId) {
   return getAgentTranscriptPath(agentId).replace(/\.jsonl$/, ".meta.json");
 }
 //@ chunk-e6aww6q8.js:342943-343074 facade-majority
 var RESERVED_AGENT_METADATA_FIELDS = [
-    "isObserver",
-    "observerStopped",
-    "observerTaskId",
-    "armingPermissionMode",
-    "revivedAt",
-  ],
-  fMt = [...RESERVED_AGENT_METADATA_FIELDS, "restartResumes", "model"];
+  "isObserver",
+  "observerStopped",
+  "observerTaskId",
+  "armingPermissionMode",
+  "revivedAt",
+];
+var AGENT_METADATA_FIELDS = [...RESERVED_AGENT_METADATA_FIELDS, "restartResumes", "model"];
 //@ chunk-e6aww6q8.js:343074-343475 facade-majority = readAgentMetadata (0.393)
 async function readAgentMetadataAtPath(e, n, r = isFsInaccessible) {
-  if (isStorageV5Enabled() && n !== void 0) {
+  if (isStorageV5Enabled() && n !== undefined) {
     let path = keyFromMetaPath(e);
-    if (path !== void 0) {
-      let read = await n.read([path]);
-      if (!read.ok) throw Error("readAgentMetadataAtPath: storage read failed", { cause: read.error });
-      let [S] = read.value.items;
+    if (path !== undefined) {
+      let y = await n.read([path]);
+      if (!y.ok)
+        throw Error("readAgentMetadataAtPath: storage read failed", {
+          cause: y.error,
+        });
+      let [S] = y.value.items;
       if (!S.found) return null;
       return jsonParse(Buffer.from(S.value).toString("utf-8"));
     }
   }
-  let s = yH(e);
-  if (s === void 0) return null;
+  let s = worktreeFromProgress(e);
+  if (s === undefined) return null;
   try {
     let raw = await readFile(s, "utf-8");
     return jsonParse(raw);
@@ -1452,14 +851,14 @@ async function readAgentMetadataAtPath(e, n, r = isFsInaccessible) {
     throw error;
   }
 }
+//@ chunk-e6aww6q8.js:343475-345781 layout
 /**
  * 写子代理元数据侧车 agent-<id>.meta.json（agentType、observer 状态等），已有内容时合并。
  */
-//@ chunk-e6aww6q8.js:343475-345781 layout
-async function persistAgentMetadata(e, n, r, s, h = !1) {
-  let y = n,
-    all = RESERVED_AGENT_METADATA_FIELDS.every((Se) => n[Se] !== void 0),
-    w = null;
+async function persistAgentMetadata(e, n, sessionId, s, h = false) {
+  let y = n;
+  let all = RESERVED_AGENT_METADATA_FIELDS.every((Se) => n[Se] !== undefined);
+  let w = null;
   try {
     w = await readAgentMetadataAtPath(e, s);
   } catch (error) {
@@ -1467,195 +866,326 @@ async function persistAgentMetadata(e, n, r, s, h = !1) {
   }
   if (w) {
     if (h) return;
-    for (let Se of fMt) if (n[Se] === void 0 && w[Se] !== void 0) y = { ...y, [Se]: w[Se] };
-    if (w.pluginSteered === !0) y = { ...y, pluginSteered: !0 };
+    for (let Se of AGENT_METADATA_FIELDS)
+      if (n[Se] === undefined && w[Se] !== undefined)
+        y = {
+          ...y,
+          [Se]: w[Se],
+        };
+    if (w.pluginSteered === true)
+      y = {
+        ...y,
+        pluginSteered: true,
+      };
   }
-  let L = isStorageV5Enabled() && s !== void 0 ? keyFromMetaPath(e) : void 0;
-  if (s !== void 0 && L !== void 0) {
-    let write = await s.write(L, jsonStringify(y), { mode: 438 & ~process.umask() });
-    if (!write.ok) throw Error("persistAgentMetadata: storage write failed", { cause: write.error });
-  } else
-    (assertDiskWritable("agent_metadata", e),
-      await mkdir(dirname(e), { recursive: !0 }),
-      await writeFileAtomic_2(e, jsonStringify(y)));
+  let L = isStorageV5Enabled() && s !== undefined ? keyFromMetaPath(e) : undefined;
+  if (s !== undefined && L !== undefined) {
+    let Se = await s.write(L, jsonStringify(y), {
+      mode: 438 & ~process.umask(),
+    });
+    if (!Se.ok)
+      throw Error("persistAgentMetadata: storage write failed", {
+        cause: Se.error,
+      });
+  } else {
+    assertDiskWritable("agent_metadata", e);
+    await mkdir(dirname(e), {
+      recursive: true,
+    });
+    await writeFileAtomic_2(e, jsonStringify(y));
+  }
   let replaced = e.replace(/\.meta\.json$/, ".jsonl");
   getProject().fireMirror(replaced, [
     {
       type: "agent_metadata",
       agentType: y.agentType,
-      ...(y.isFork !== void 0 && { isFork: y.isFork }),
-      ...(y.isBuiltIn !== void 0 && { isBuiltIn: y.isBuiltIn }),
-      ...(y.worktreePath && { worktreePath: y.worktreePath }),
-      ...(y.worktreeBranch && { worktreeBranch: y.worktreeBranch }),
-      ...(y.cwd && { cwd: y.cwd }),
-      ...(y.spawnMode && { spawnMode: y.spawnMode }),
-      ...(y.description && { description: y.description }),
-      ...(y.workflowPhase && { workflowPhase: y.workflowPhase }),
-      ...(y.name && { name: y.name }),
-      ...(y.toolUseId && { toolUseId: y.toolUseId }),
-      ...!1,
-      ...(y.parentAgentId && { parentAgentId: y.parentAgentId }),
-      ...(y.stoppedByUser && { stoppedByUser: !0 }),
-      ...(y.finished && { finished: !0 }),
-      ...(y.spawnDepth !== void 0 && { spawnDepth: y.spawnDepth }),
-      ...(y.requestShape && { requestShape: y.requestShape }),
-      ...(y.requestNonInteractive !== void 0 && { requestNonInteractive: y.requestNonInteractive }),
-      ...(y.taskKind && { taskKind: y.taskKind }),
-      ...(y.teamName && { teamName: y.teamName }),
-      ...(y.color && { color: y.color }),
-      ...(y.planModeRequired !== void 0 && { planModeRequired: y.planModeRequired }),
-      ...(y.customAgentType && { customAgentType: y.customAgentType }),
-      ...(y.spawnedAgentType && { spawnedAgentType: y.spawnedAgentType }),
-      ...(y.effort && { effort: y.effort }),
-      ...(y.permissionMode && { permissionMode: y.permissionMode }),
-      ...(y.launchedWithDefaults === !0 && { launchedWithDefaults: !0 }),
-      ...Object.fromEntries(fMt.filter((Se) => y[Se] !== void 0).map((Se) => [Se, y[Se]])),
-      ...(y.pluginSteered === !0 && { pluginSteered: !0 }),
+      ...(y.isFork !== undefined && {
+        isFork: y.isFork,
+      }),
+      ...(y.isBuiltIn !== undefined && {
+        isBuiltIn: y.isBuiltIn,
+      }),
+      ...(y.worktreePath && {
+        worktreePath: y.worktreePath,
+      }),
+      ...(y.worktreeBranch && {
+        worktreeBranch: y.worktreeBranch,
+      }),
+      ...(y.cwd && {
+        cwd: y.cwd,
+      }),
+      ...(y.spawnMode && {
+        spawnMode: y.spawnMode,
+      }),
+      ...(y.description && {
+        description: y.description,
+      }),
+      ...(y.workflowPhase && {
+        workflowPhase: y.workflowPhase,
+      }),
+      ...(y.name && {
+        name: y.name,
+      }),
+      ...(y.toolUseId && {
+        toolUseId: y.toolUseId,
+      }),
+      ...false,
+      ...(y.parentAgentId && {
+        parentAgentId: y.parentAgentId,
+      }),
+      ...(y.stoppedByUser && {
+        stoppedByUser: true,
+      }),
+      ...(y.finished && {
+        finished: true,
+      }),
+      ...(y.spawnDepth !== undefined && {
+        spawnDepth: y.spawnDepth,
+      }),
+      ...(y.requestShape && {
+        requestShape: y.requestShape,
+      }),
+      ...(y.requestNonInteractive !== undefined && {
+        requestNonInteractive: y.requestNonInteractive,
+      }),
+      ...(y.taskKind && {
+        taskKind: y.taskKind,
+      }),
+      ...(y.teamName && {
+        teamName: y.teamName,
+      }),
+      ...(y.color && {
+        color: y.color,
+      }),
+      ...(y.planModeRequired !== undefined && {
+        planModeRequired: y.planModeRequired,
+      }),
+      ...(y.customAgentType && {
+        customAgentType: y.customAgentType,
+      }),
+      ...(y.spawnedAgentType && {
+        spawnedAgentType: y.spawnedAgentType,
+      }),
+      ...(y.effort && {
+        effort: y.effort,
+      }),
+      ...(y.permissionMode && {
+        permissionMode: y.permissionMode,
+      }),
+      ...(y.launchedWithDefaults === true && {
+        launchedWithDefaults: true,
+      }),
+      ...Object.fromEntries(
+        AGENT_METADATA_FIELDS.filter((Se) => y[Se] !== undefined).map((Se) => [Se, y[Se]]),
+      ),
+      ...(y.pluginSteered === true && {
+        pluginSteered: true,
+      }),
     },
   ]);
-  let q = getProject(),
-    Z = /^agent-(.+)\.meta\.json$/.exec(basename_2(e))?.[1];
-  if (Z !== void 0 && !h && q.keepsAgentMetadataInStream())
-    q.mirrorWorkerEvent(
-      "agent_metadata",
-      { ...y, type: "agent_metadata" },
-      { sessionId: r, agentId: Z },
-    ).then(
-      (Se) => {
-        if (Se) logFeatureOk("subagent_sidecar_to_stream");
-        else logFeatureSad("subagent_sidecar_to_stream", "withheld");
-      },
-      (Se) => {
-        (logFeatureBad("subagent_sidecar_to_stream", "send_failed"), logError(Se));
-      },
-    );
+  let project = getProject();
+  let Z = /^agent-(.+)\.meta\.json$/.exec(basename(e))?.[1];
+  if (Z !== undefined && !h && project.keepsAgentMetadataInStream())
+    project
+      .mirrorWorkerEvent(
+        "agent_metadata",
+        {
+          ...y,
+          type: "agent_metadata",
+        },
+        {
+          sessionId,
+          agentId: Z,
+        },
+      )
+      .then(
+        (Se) => {
+          if (Se) logFeatureOk("subagent_sidecar_to_stream");
+          else logFeatureSad("subagent_sidecar_to_stream", "withheld");
+        },
+        (error) => {
+          logFeatureBad("subagent_sidecar_to_stream", "send_failed");
+          logError(error);
+        },
+      );
 }
 //@ chunk-e6aww6q8.js:345781-345866 facade-majority
-async function writeAgentMetadata(e, n, r, s = !1) {
-  let h = pinSessionId(getSessionId()),
-    y = getAgentMetadataPath(e);
-  await runWithFileWriteContext(y, () => persistAgentMetadata(y, n, h, r, s));
+async function writeAgentMetadata(e, n, r, s = false) {
+  let sessionId = pinSessionId(getSessionId());
+  let agentMetadataPath = getAgentMetadataPath(e);
+  await runWithFileWriteContext(agentMetadataPath, () =>
+    persistAgentMetadata(agentMetadataPath, n, sessionId, r, s),
+  );
 }
 //@ chunk-e6aww6q8.js:345866-345947 facade-majority
-async function updateAgentMetadata(e, n, r, s) {
-  let h = pinSessionId(getSessionId()),
-    y = getAgentMetadataPath(e);
-  await runWithFileWriteContext(y, () => mergeAgentMetadataUnderLock(y, n, h, r, s));
+async function updateAgentMetadata(e, n, storageV5, isPathAbsent) {
+  let h = pinSessionId(getSessionId());
+  let agentMetadataPath = getAgentMetadataPath(e);
+  await runWithFileWriteContext(agentMetadataPath, () =>
+    mergeAgentMetadataUnderLock(agentMetadataPath, n, h, storageV5, isPathAbsent),
+  );
 }
 //@ chunk-e6aww6q8.js:345947-346187 facade-majority
-async function mergeAgentMetadataUnderLock(e, n, r, s, h, y) {
-  let S = (await readAgentMetadataAtPath(e, s, h)) ?? y;
-  if (!S && n.agentType === void 0)
-    return (
-      logForDebugging(
-        `[updateAgentMetadata] dropped patch for ${e}: no existing sidecar and patch lacks agentType`,
-      ),
-      !1
+async function mergeAgentMetadataUnderLock(agentMetadataPath, n, sessionId, s, h, y) {
+  let S = (await readAgentMetadataAtPath(agentMetadataPath, s, h)) ?? y;
+  if (!S && n.agentType === undefined) {
+    logForDebugging(
+      `[updateAgentMetadata] dropped patch for ${agentMetadataPath}: no existing sidecar and patch lacks agentType`,
     );
-  let w = { ...S, ...n };
-  return (await persistAgentMetadata(e, w, r, s), !0);
+    return false;
+  }
+  let w = {
+    ...S,
+    ...n,
+  };
+  await persistAgentMetadata(agentMetadataPath, w, sessionId, s);
+  return true;
 }
 //@ chunk-e6aww6q8.js:346187-346250 layout
-function canPersistAgentMetadata(e, n) {
-  return !isDiskless() || (isStorageV5Enabled() && n !== void 0 && keyFromMetaPath(e) !== void 0);
+function canPersistAgentMetadata(agentMetadataPath, n) {
+  return (
+    !isDiskless() ||
+    (isStorageV5Enabled() && n !== undefined && keyFromMetaPath(agentMetadataPath) !== undefined)
+  );
 }
 //@ chunk-e6aww6q8.js:346250-346497 facade-majority
 function landAgentStop(e, n, r, s, h) {
   return (async () => {
-    let y = pinSessionId(getSessionId()),
-      S = getAgentMetadataPath(e);
-    if (!canPersistAgentMetadata(S, s)) {
-      (logForDebugging(`[agent stop] ${n} not kept for ${e}: diskless, and no store for its sidecar`),
-        warnDisklessSettingsWrite("agent_metadata", S));
+    let y = pinSessionId(getSessionId());
+    let agentMetadataPath = getAgentMetadataPath(e);
+    if (!canPersistAgentMetadata(agentMetadataPath, s)) {
+      logForDebugging(`[agent stop] ${n} not kept for ${e}: diskless, and no store for its sidecar`);
+      warnDisklessSettingsWrite("agent_metadata", agentMetadataPath);
       return;
     }
-    await persistSubagentStop(S, n, r, () => mergeAgentMetadataUnderLock(S, { [n]: !0 }, y, s), s, h);
+    await persistSubagentStop(
+      agentMetadataPath,
+      n,
+      r,
+      () =>
+        mergeAgentMetadataUnderLock(
+          agentMetadataPath,
+          {
+            [n]: true,
+          },
+          y,
+          s,
+        ),
+      s,
+      h,
+    );
   })().catch(logError);
 }
 //@ chunk-e6aww6q8.js:346497-346646 facade-majority
-function landStoppedByUser(e, n, r) {
+function landStoppedByUser(e, agentType, storageV5) {
   return landAgentStop(
     e,
     "stoppedByUser",
     async () => {
-      let s = pinSessionId(getSessionId()),
-        h = getAgentMetadataPath(e);
-      await runWithFileWriteContext(h, () =>
-        mergeAgentMetadataUnderLock(h, { stoppedByUser: !0 }, s, r, isPathAbsent, { agentType: n }),
+      let s = pinSessionId(getSessionId());
+      let agentMetadataPath = getAgentMetadataPath(e);
+      await runWithFileWriteContext(agentMetadataPath, () =>
+        mergeAgentMetadataUnderLock(
+          agentMetadataPath,
+          {
+            stoppedByUser: true,
+          },
+          s,
+          storageV5,
+          isPathAbsent,
+          {
+            agentType,
+          },
+        ),
       );
     },
-    r,
+    storageV5,
   );
 }
 //@ chunk-e6aww6q8.js:346646-346695 facade-majority
-async function hasAgentStopSibling(e, n, r) {
-  return ARt(getAgentMetadataPath(e), n, r);
+async function hasAgentStopSibling(e, n, storageV5) {
+  return stopSiblingExistsAt(getAgentMetadataPath(e), n, storageV5);
 }
 //@ chunk-e6aww6q8.js:346695-346743 facade-majority
-async function clearAgentStopSibling(e, n, r) {
-  await setAgentTranscriptSubdir_2(getAgentMetadataPath(e), n, r);
+async function clearAgentStopSibling(e, n, storageV5) {
+  await setAgentTranscriptSubdir_2(getAgentMetadataPath(e), n, storageV5);
 }
 //@ chunk-e6aww6q8.js:346743-346791 facade-majority
-async function readAgentMetadata(e, n, r) {
-  return readAgentMetadataAtPath(getAgentMetadataPath(e), n, r);
+async function readAgentMetadata(e, storageV5, isPathAbsent) {
+  return readAgentMetadataAtPath(getAgentMetadataPath(e), storageV5, isPathAbsent);
 }
 //@ chunk-e6aww6q8.js:346791-347245 layout
-var REMOTE_TASK_ID_PATTERN = /^r[0-9a-z]{8}$/,
-  vpo = /^(?!\.\.?$)[^\\/?#%\x00-\x20\x7f]+$/,
-  yOt = DoctorLazy(() =>
-    create({
-      taskId: create_2().regex(REMOTE_TASK_ID_PATTERN),
-      remoteTaskType: create_2(),
-      sessionId: create_2().regex(vpo),
-      title: create_2(),
-      command: create_2(),
-      spawnedAt: create_3(),
-      toolUseId: create_2().optional(),
-      runId: create_2().optional(),
-      isLongRunning: create_6().optional(),
-      isUltraplan: create_6().optional(),
-      isRemoteReview: create_6().optional(),
-      applyFixesOnComplete: create_6().optional(),
-      reviewInstructions: create_2().optional(),
-      remoteTaskMetadata: create_20(create_12()).optional(),
-    }).passthrough(),
-  );
+/**
+ * REMOTE_TASK_ID_PATTERN：远程任务 id 格式；REMOTE_TASK_ENTRY_SCHEMA：远程任务条目 schema（同一声明共 2 个绑定）。
+ */
+var REMOTE_TASK_ID_PATTERN_2 = /^r[0-9a-z]{8}$/;
+var REMOTE_TASK_ID_PATTERN = /^(?!\.\.?$)[^\\/?#%\x00-\x20\x7f]+$/;
+var REMOTE_TASK_ENTRY_SCHEMA = DoctorLazy(() =>
+  create({
+    taskId: create_2().regex(REMOTE_TASK_ID_PATTERN_2),
+    remoteTaskType: create_2(),
+    sessionId: create_2().regex(REMOTE_TASK_ID_PATTERN),
+    title: create_2(),
+    command: create_2(),
+    spawnedAt: create_3(),
+    toolUseId: create_2().optional(),
+    runId: create_2().optional(),
+    isLongRunning: create_6().optional(),
+    isUltraplan: create_6().optional(),
+    isRemoteReview: create_6().optional(),
+    applyFixesOnComplete: create_6().optional(),
+    reviewInstructions: create_2().optional(),
+    remoteTaskMetadata: create_20(create_12()).optional(),
+  }).passthrough(),
+);
 //@ chunk-e6aww6q8.js:347245-347304 fingerprint = getRemoteAgentsDir (1)
 function getRemoteAgentsDir() {
-  let e = resolveSessionProjectDir();
-  return join_3(e, getSessionId(), "remote-agents");
+  let projectDir = resolveSessionProjectDir();
+  return join(projectDir, getSessionId(), "remote-agents");
 }
 //@ chunk-e6aww6q8.js:347304-347367 fingerprint = getRemoteAgentMetadataPath (1)
 function getRemoteAgentMetadataPath(taskId) {
-  return join_3(getRemoteAgentsDir(), `remote-agent-${taskId}.meta.json`);
+  return join(getRemoteAgentsDir(), `remote-agent-${taskId}.meta.json`);
 }
 //@ chunk-e6aww6q8.js:347367-347694 facade-majority = writeRemoteAgentMetadata (0.137)
-async function writeRemoteAgentMetadata(e, n, r) {
-  let path = getRemoteAgentMetadataPath(e);
-  if (!isDiskless()) await mkdir(dirname(path), { recursive: !0 });
-  if (isStorageV5Enabled() && r !== void 0) {
+async function writeRemoteAgentMetadata(taskId, metadata, storageV5) {
+  let path = getRemoteAgentMetadataPath(taskId);
+  if (!isDiskless())
+    await mkdir(dirname(path), {
+      recursive: true,
+    });
+  if (isStorageV5Enabled() && storageV5 !== undefined) {
     let h = keyFromMetaPath(path);
-    if (h !== void 0) {
-      let write = await r.write(h, jsonStringify(n), { publishDiscipline: "inPlace" });
-      if (!write.ok) throw Error("writeRemoteAgentMetadata: storage write failed", { cause: write.error });
+    if (h !== undefined) {
+      let y = await storageV5.write(h, jsonStringify(metadata), {
+        publishDiscipline: "inPlace",
+      });
+      if (!y.ok)
+        throw Error("writeRemoteAgentMetadata: storage write failed", {
+          cause: y.error,
+        });
       return;
     }
   }
-  (assertDiskWritable("remote_agent_metadata", path), await writeFile(path, jsonStringify(n)));
+  assertDiskWritable("remote_agent_metadata", path);
+  await writeFile(path, jsonStringify(metadata));
 }
 //@ chunk-e6aww6q8.js:347694-347984 facade-majority
-async function deleteRemoteAgentMetadata(e, n) {
-  let r = getRemoteAgentMetadataPath(e);
-  if (isStorageV5Enabled() && n !== void 0) {
-    let h = keyFromMetaPath(r);
-    if (h !== void 0) {
-      let y = await n.delete(h);
-      if (!y.ok) throw Error("deleteRemoteAgentMetadata: storage delete failed", { cause: y.error });
+async function deleteRemoteAgentMetadata(taskId, storageV5) {
+  let remoteAgentMetadataPath = getRemoteAgentMetadataPath(taskId);
+  if (isStorageV5Enabled() && storageV5 !== undefined) {
+    let h = keyFromMetaPath(remoteAgentMetadataPath);
+    if (h !== undefined) {
+      let y = await storageV5.delete(h);
+      if (!y.ok)
+        throw Error("deleteRemoteAgentMetadata: storage delete failed", {
+          cause: y.error,
+        });
       return;
     }
   }
-  let s = yH(r);
-  if (s === void 0) return;
+  let s = worktreeFromProgress(remoteAgentMetadataPath);
+  if (s === undefined) return;
   try {
     await unlink(s);
   } catch (error) {
@@ -1663,120 +1193,127 @@ async function deleteRemoteAgentMetadata(e, n) {
     throw error;
   }
 }
+//@ chunk-e6aww6q8.js:347984-348089 facade-majority = removeRemoteAgentMetadata (1)
 /**
  * 删除远程代理任务的本地元数据（失败只记日志）。
  */
-//@ chunk-e6aww6q8.js:347984-348089 facade-majority = removeRemoteAgentMetadata (1)
 async function removeRemoteAgentMetadata(taskId, storageV5) {
   try {
     await deleteRemoteAgentMetadata(taskId, storageV5);
-  } catch (error) {
-    logForDebugging(`removeRemoteAgentMetadata failed: ${String(error)}`);
+  } catch (e) {
+    logForDebugging(`removeRemoteAgentMetadata failed: ${String(e)}`);
   }
 }
 //@ chunk-e6aww6q8.js:348089-348779 facade-majority = listRemoteAgentMetadata (0.645)
-async function listRemoteAgentMetadata(e) {
+async function listRemoteAgentMetadata(storageV5) {
   let dir = getRemoteAgentsDir();
-  if (isStorageV5Enabled() && e !== void 0) {
-    let y = keyFromMetaPath(join_3(dir, "probe.meta.json"));
-    if (y !== void 0 && y.namespace === "sidecar")
-      return listRemoteAgentMetadataViaStorage(e, {
+  if (isStorageV5Enabled() && storageV5 !== undefined) {
+    let y = keyFromMetaPath(join(dir, "probe.meta.json"));
+    if (y !== undefined && y.namespace === "sidecar")
+      return listRemoteAgentMetadataViaStorage(storageV5, {
         namespace: "sidecar",
         projectKey: y.projectKey,
         sessionId: y.sessionId,
         relPath: y.relPath.slice(0, -1),
       });
   }
-  let r = yH(dir);
-  if (r === void 0) return [];
+  let r = worktreeFromProgress(dir);
+  if (r === undefined) return [];
   let entries;
   try {
-    entries = await readdir(r, { withFileTypes: !0 });
-  } catch (error) {
-    if (isFsInaccessible(error)) return [];
-    throw error;
+    entries = await readdir(r, {
+      withFileTypes: true,
+    });
+  } catch (e) {
+    if (isFsInaccessible(e)) return [];
+    throw e;
   }
   let results = [];
   for (let entry of entries) {
     if (!entry.isFile() || !entry.name.endsWith(".meta.json")) continue;
     try {
-      let raw = await readFile(join_3(r, entry.name), "utf-8"),
-        safeParse = yOt().safeParse(jsonParse(raw));
-      if (!safeParse.success) {
-        logForDebugging(`listRemoteAgentMetadata: skipping ${entry.name}: ${String(safeParse.error)}`);
+      let raw = await readFile(join(r, entry.name), "utf-8");
+      let w = REMOTE_TASK_ENTRY_SCHEMA().safeParse(jsonParse(raw));
+      if (!w.success) {
+        logForDebugging(`listRemoteAgentMetadata: skipping ${entry.name}: ${String(w.error)}`);
         continue;
       }
-      results.push(safeParse.data);
-    } catch (error) {
-      logForDebugging(`listRemoteAgentMetadata: skipping ${entry.name}: ${String(error)}`);
+      results.push(w.data);
+    } catch (e) {
+      logForDebugging(`listRemoteAgentMetadata: skipping ${entry.name}: ${String(e)}`);
     }
   }
   return results;
 }
 //@ chunk-e6aww6q8.js:348779-349705 layout
 async function listRemoteAgentMetadataViaStorage(e, n) {
-  let r = [],
-    s = await readAllPages(
-      (S) => e.listEntries(n, { skipKeyStats: !0, skipScopeStats: !0, ...(S !== void 0 && { cursor: S }) }),
-      (S) => {
-        for (let w of S)
-          if (
-            w.kind === "key" &&
-            w.key.namespace === "sidecar" &&
-            w.key.relPath.length === n.relPath.length + 1 &&
-            w.key.relPath[n.relPath.length].endsWith(".meta.json")
-          )
-            r.push(w.key);
-      },
-    );
-  if (s.status !== "done") {
-    if (s.status === "error")
+  let r = [];
+  let allPages = await readAllPages(
+    (S) =>
+      e.listEntries(n, {
+        skipKeyStats: true,
+        skipScopeStats: true,
+        ...(S !== undefined && {
+          cursor: S,
+        }),
+      }),
+    (S) => {
+      for (let w of S)
+        if (
+          w.kind === "key" &&
+          w.key.namespace === "sidecar" &&
+          w.key.relPath.length === n.relPath.length + 1 &&
+          w.key.relPath[n.relPath.length].endsWith(".meta.json")
+        )
+          r.push(w.key);
+    },
+  );
+  if (allPages.status !== "done") {
+    if (allPages.status === "error")
       logForDebugging(
-        `listRemoteAgentMetadata: listing failed via storage (${s.error.code}) \u2014 empty restore`,
+        `listRemoteAgentMetadata: listing failed via storage (${allPages.error.code}) \u2014 empty restore`,
       );
     return [];
   }
   if (r.length === 0) return [];
   let text = await e.readText(r);
-  if (!text.ok)
-    return (
-      logForDebugging(
-        `listRemoteAgentMetadata: read failed via storage (${text.error.code}) \u2014 empty restore`,
-      ),
-      []
+  if (!text.ok) {
+    logForDebugging(
+      `listRemoteAgentMetadata: read failed via storage (${text.error.code}) \u2014 empty restore`,
     );
+    return [];
+  }
   let y = [];
-  return (
-    text.value.items.forEach((item, w) => {
-      let at = r[w].relPath.at(-1);
-      if (!item.found) return;
-      try {
-        let safeParse = yOt().safeParse(jsonParse(item.value));
-        if (!safeParse.success) {
-          logForDebugging(`listRemoteAgentMetadata: skipping ${at}: ${String(safeParse.error)}`);
-          return;
-        }
-        y.push(safeParse.data);
-      } catch (error) {
-        logForDebugging(`listRemoteAgentMetadata: skipping ${at}: ${String(error)}`);
+  text.value.items.forEach((item, w) => {
+    let last = r[w].relPath.at(-1);
+    if (!item.found) return;
+    try {
+      let G = REMOTE_TASK_ENTRY_SCHEMA().safeParse(jsonParse(item.value));
+      if (!G.success) {
+        logForDebugging(`listRemoteAgentMetadata: skipping ${last}: ${String(G.error)}`);
+        return;
       }
-    }),
-    y
-  );
+      y.push(G.data);
+    } catch (error) {
+      logForDebugging(`listRemoteAgentMetadata: skipping ${last}: ${String(error)}`);
+    }
+  });
+  return y;
 }
+//@ chunk-e6aww6q8.js:349705-349820 facade-majority = sessionIdExists (1)
 /**
  * 当前项目目录下是否存在 <sessionId>.jsonl。
  */
-//@ chunk-e6aww6q8.js:349705-349820 facade-majority = sessionIdExists (1)
 function sessionIdExists(sessionId) {
-  if (isDiskless()) return !1;
-  let n = resolveSessionProjectDir(),
-    sessionFile = join_3(n, `${sessionId}.jsonl`),
-    fs = getFsImplementation();
+  if (isDiskless()) return false;
+  let projectDir = resolveSessionProjectDir();
+  let sessionFile = join(projectDir, `${sessionId}.jsonl`);
+  let fs = getFsImplementation();
   try {
-    return (fs.statSync(sessionFile), !0);
+    fs.statSync(sessionFile);
+    return true;
   } catch {
-    return !1;
+    return false;
   }
 }
 //@ chunk-e6aww6q8.js:349820-349854 facade-majority = getEnvironmentForGrowthBook (1)
@@ -1796,96 +1333,113 @@ function getPersistenceSuppressionCause() {
   return null;
 }
 //@ chunk-e6aww6q8.js:350115-350229 facade-majority
-function transcriptStamp(e) {
+function transcriptStamp(sessionId) {
   return {
     sessionKind: envSessionKind(),
     userType: getUserType(),
-    entrypoint: hBe(),
-    cwd: gl() ?? void 0,
-    sessionId: e,
+    entrypoint: entrypointEnv(),
+    cwd: getCwdOrNull() ?? undefined,
+    sessionId,
     version: CLI_VERSION,
   };
 }
 //@ chunk-e6aww6q8.js:350229-350311 layout
-function TOt(e) {
-  return "version" in e && typeof e.version === "string" ? e.version : void 0;
+function transcriptVersion(e) {
+  return "version" in e && typeof e.version === "string" ? e.version : undefined;
 }
 //@ chunk-e6aww6q8.js:350311-350371 layout
-function vOt(e) {
-  return TOt(e) ?? ("sessionId" in e ? void 0 : CLI_VERSION);
+function transcriptVersionOrDefault(e) {
+  return transcriptVersion(e) ?? ("sessionId" in e ? undefined : CLI_VERSION);
 }
 //@ chunk-e6aww6q8.js:350371-350415 facade-majority
 function withVersionToRecord(e) {
-  return { ...e, version: vOt(e) };
+  return {
+    ...e,
+    version: transcriptVersionOrDefault(e),
+  };
 }
 //@ chunk-e6aww6q8.js:350415-350447 facade-majority
 function getUserType() {
   return "external";
 }
 //@ chunk-e6aww6q8.js:350447-350504 layout
-function hBe() {
+function entrypointEnv() {
   return process.env.CLAUDE_CODE_ENTRYPOINT;
 }
 //@ chunk-e6aww6q8.js:350504-350646 layout
 async function transcriptContextFields() {
-  let e = hBe();
+  let e = entrypointEnv();
   return {
-    cwd: gl() ?? void 0,
+    cwd: getCwdOrNull() ?? undefined,
     gitBranch: await getBranch().catch(() => {
       return;
     }),
-    entrypoint: e !== void 0 && PROGRAMMATIC_ENTRYPOINTS.has(e) ? void 0 : e,
+    entrypoint: e !== undefined && PROGRAMMATIC_ENTRYPOINTS.has(e) ? undefined : e,
   };
 }
 //@ chunk-e6aww6q8.js:350646-350670 facade-majority
 function isCustomTitleEnabled() {
-  return !0;
+  return true;
 }
 //@ chunk-e6aww6q8.js:350670-350697 layout
-var yBe = ".session-aliases";
+var SESSION_ALIASES_DIR = ".session-aliases";
 //@ chunk-e6aww6q8.js:350697-350904 layout
-function sessionAliasStorageTarget(e, n) {
-  if (!isStorageV5Enabled() || n === void 0 || dirname(e) !== getProjectsDir_2()) return;
-  let r = basename_2(e),
-    sessionAliases = STORAGE_SPACES.sessionAliases(r),
-    h = { namespace: "transcript", projectKey: r };
-  return validateStorageKey(sessionAliases) === void 0 && validateStorageScope(h) === void 0
-    ? { backend: n, key: sessionAliases, folder: h }
-    : void 0;
+function sessionAliasStorageTarget(projectDir, n) {
+  if (!isStorageV5Enabled() || n === undefined || dirname(projectDir) !== getProjectsDir()) return;
+  let r = basename(projectDir);
+  let s = STORAGE_SPACES.sessionAliases(r);
+  let h = {
+    namespace: "transcript",
+    projectKey: r,
+  };
+  return validateStorageKey(s) === undefined && validateStorageScope(h) === undefined
+    ? {
+        backend: n,
+        key: s,
+        folder: h,
+      }
+    : undefined;
 }
+//@ chunk-e6aww6q8.js:350904-351398 layout
 /**
  * 经存储后端把会话别名追加到别名记录（已存在则跳过）；目录不存在时先建作用域再重试，失败只记日志。
  */
-//@ chunk-e6aww6q8.js:350904-351398 layout
-async function appendSessionAliasViaStorage(e, n, r) {
+async function appendSessionAliasViaStorage(e, sessionProjectDir, projectDir) {
   let s = () =>
-      e.backend.updateText(
-        e.key,
-        (y) =>
-          y !== void 0 &&
-          y.value
-            .split(
-              `
+    e.backend.updateText(
+      e.key,
+      (y) =>
+        y !== undefined &&
+        y.value
+          .split(
+            `
 `,
-            )
-            .includes(n)
-            ? { skip: !0 }
-            : {
-                write:
-                  (y?.value ?? "") +
-                  n +
-                  `
+          )
+          .includes(sessionProjectDir)
+          ? {
+              skip: true,
+            }
+          : {
+              write:
+                (y?.value ?? "") +
+                sessionProjectDir +
+                `
 `,
-              },
-        { publishDiscipline: "inPlace", mode: 384 },
-      ),
-    h = await s();
-  if (!h.ok && wft(h.error)) {
-    let ensureScope = await e.backend.ensureScope(e.folder);
-    if (!ensureScope.ok) {
-      let S = transcriptMkdirFailedError(ensureScope.error);
+            },
+      {
+        publishDiscipline: "inPlace",
+        mode: 384,
+      },
+    );
+  let h = await s();
+  if (!h.ok && isAbsentParentError(h.error)) {
+    let y = await e.backend.ensureScope(e.folder);
+    if (!y.ok) {
+      let S = transcriptMkdirFailedError(y.error);
       if (isFsInaccessible(S)) {
-        logForDebugging(`recordSessionAlias: mkdir failed for ${join_3(r, yBe)}: ${S}`);
+        logForDebugging(
+          `recordSessionAlias: mkdir failed for ${join(projectDir, SESSION_ALIASES_DIR)}: ${S}`,
+        );
         return;
       }
       logError(S);
@@ -1899,35 +1453,37 @@ async function appendSessionAliasViaStorage(e, n, r) {
     });
 }
 //@ chunk-e6aww6q8.js:351398-352397 facade-majority
-async function recordSessionAlias(e, n) {
+async function recordSessionAlias(e, storageV5) {
   if (isTranscriptPersistenceDisabled()) return;
   let r = e;
   try {
-    if (isStorageV5Enabled() && n !== void 0) {
-      let w = await makeWorkspaceRealPath(n)(e);
-      if (w.ok && w.value.found) r = Mn(w.value.path);
+    if (isStorageV5Enabled() && storageV5 !== undefined) {
+      let w = await makeWorkspaceRealPath(storageV5)(e);
+      if (w.ok && w.value.found) r = identity(w.value.path);
       else if (!w.ok)
         logForDebugging(`recordSessionAlias: realpath failed for ${e}: ${formatStorageError(w.error)}`, {
-          level: kDt(w.error) ? "debug" : "error",
+          level: isUnsupportedStorageError(w.error) ? "debug" : "error",
         });
-    } else if (!isDiskless()) r = Mn(await realpath(e));
+    } else if (!isDiskless()) r = identity(await realpath(e));
   } catch (error) {
     if (!isENOENT(error))
-      logForDebugging(`recordSessionAlias: realpath failed for ${e}: ${error}`, { level: "error" });
+      logForDebugging(`recordSessionAlias: realpath failed for ${e}: ${error}`, {
+        level: "error",
+      });
   }
-  let s = resolveSessionProjectDir(),
-    h = getProjectDir_2(r);
-  if (h === s) return;
-  let y = sessionAliasStorageTarget(h, n);
-  if (y !== void 0) {
+  let sessionProjectDir = resolveSessionProjectDir();
+  let projectDir = getProjectDir(r);
+  if (projectDir === sessionProjectDir) return;
+  let y = sessionAliasStorageTarget(projectDir, storageV5);
+  if (y !== undefined) {
     try {
-      await appendSessionAliasViaStorage(y, s, h);
+      await appendSessionAliasViaStorage(y, sessionProjectDir, projectDir);
     } catch (error) {
       logForDebugging(`recordSessionAlias: update threw via storage: ${error}`);
     }
     return;
   }
-  let S = join_3(h, yBe);
+  let S = join(projectDir, SESSION_ALIASES_DIR);
   if (isDiskless()) {
     warnDisklessSettingsWrite("session_alias", S);
     return;
@@ -1939,7 +1495,7 @@ async function recordSessionAlias(e, n) {
           `
 `,
         )
-        .includes(s)
+        .includes(sessionProjectDir)
     )
       return;
   } catch (error) {
@@ -1952,7 +1508,10 @@ async function recordSessionAlias(e, n) {
       return;
     }
     try {
-      await mkdir(dirname(S), { recursive: !0, mode: 448 });
+      await mkdir(dirname(S), {
+        recursive: true,
+        mode: 448,
+      });
     } catch (error) {
       if (isFsInaccessible(error)) {
         logForDebugging(`recordSessionAlias: mkdir failed for ${S}: ${error}`);
@@ -1965,10 +1524,12 @@ async function recordSessionAlias(e, n) {
   try {
     await appendFile(
       S,
-      s +
+      sessionProjectDir +
         `
 `,
-      { mode: 384 },
+      {
+        mode: 384,
+      },
     );
   } catch (error) {
     if (isFsInaccessible(error)) {
@@ -1978,20 +1539,19 @@ async function recordSessionAlias(e, n) {
     logError(error);
   }
 }
+//@ chunk-e6aww6q8.js:352397-352965 layout
 /**
  * 读取项目目录下的会话别名列表：优先经存储后端，否则读本地文件，去重并忽略空行；读失败返回空列表。
  */
-//@ chunk-e6aww6q8.js:352397-352965 layout
 async function readSessionAliases(e, n) {
-  let storageTarget = sessionAliasStorageTarget(getProjectDir_2(e), n);
-  if (storageTarget !== void 0)
+  let storageTarget = sessionAliasStorageTarget(getProjectDir(e), n);
+  if (storageTarget !== undefined)
     try {
       let text = await storageTarget.backend.readText([storageTarget.key]);
-      if (!text.ok)
-        return (
-          logForDebugging(`readSessionAliases: read failed via storage (${formatStorageError(text.error)})`),
-          []
-        );
+      if (!text.ok) {
+        logForDebugging(`readSessionAliases: read failed via storage (${formatStorageError(text.error)})`);
+        return [];
+      }
       let y = text.value.items[0];
       return y.found
         ? uniq(
@@ -2000,23 +1560,24 @@ async function readSessionAliases(e, n) {
                 `
 `,
               )
-              .filter((S) => S.length > 0),
+              .filter((line) => line.length > 0),
           )
         : [];
     } catch (error) {
-      return (logForDebugging(`readSessionAliases: read threw via storage: ${error}`), []);
+      logForDebugging(`readSessionAliases: read threw via storage: ${error}`);
+      return [];
     }
-  let aliasesPath = yH(join_3(getProjectDir_2(e), yBe));
-  if (aliasesPath === void 0) return [];
+  let aliasesPath = worktreeFromProgress(join(getProjectDir(e), SESSION_ALIASES_DIR));
+  if (aliasesPath === undefined) return [];
   try {
-    let h = await readFile(aliasesPath, "utf8");
+    let file = await readFile(aliasesPath, "utf8");
     return uniq(
-      h
+      file
         .split(
           `
 `,
         )
-        .filter((y) => y.length > 0),
+        .filter((line) => line.length > 0),
     );
   } catch (error) {
     if (!isENOENT(error))
@@ -2026,27 +1587,27 @@ async function readSessionAliases(e, n) {
     return [];
   }
 }
+//@ chunk-e6aww6q8.js:352965-355234 layout
 /**
  * 会话转录存储的进程级状态：当前 Project、写入健康、退出重盖章、本地清理开关、工具结果副本方式、会话消息 uuid 缓存（含无文件恢复的预置）、迁移期间暂存的追加，以及各种信号。
  */
-//@ chunk-e6aww6q8.js:352965-355234 layout
 class TranscriptStore {
   getSessionId;
   project = null;
-  exitReStampRan = !1;
-  localGcEnabled = !1;
-  lowYieldCompactSkipEnabled = !0;
+  exitReStampRan = false;
+  localGcEnabled = false;
+  lowYieldCompactSkipEnabled = true;
   toolResultCopiesOnDisk = "whole";
-  slimAppendedRow = void 0;
-  keepSessionMessagesCache = !1;
-  hasFailedWrite = !1;
+  slimAppendedRow = undefined;
+  keepSessionMessagesCache = false;
+  hasFailedWrite = false;
   forkContextHydrationCache = new Map();
   forkContextHydrationsInFlight = new Map();
   warnedUnchainedSessions = new Set();
   legacyProgressProbeFired = new Set();
   relocationParkedAppends = null;
   relocationParkedPath = null;
-  liveSuppressionProbe = void 0;
+  liveSuppressionProbe = undefined;
   writerHealth = new TranscriptWriterHealth();
   exitReStampProviders = new Set();
   foreignExitReStampProviders = new Set();
@@ -2056,76 +1617,79 @@ class TranscriptStore {
   sessionAgentNameChanged = createSignal();
   sessionTitleChanged = createSignal();
   sessionFileMaterialized = createSignal();
-  filelessResumeUuids = void 0;
+  filelessResumeUuids = undefined;
   sessionMessages = io(
     async (e, n) => {
       let r = [];
       try {
-        let { messages: messages } = await loadSessionTranscript(
+        let { messages } = await loadSessionTranscript(
           e,
-          e === this.getSessionId() ? void 0 : this.project?.recordedSessionFile(e),
+          e === this.getSessionId() ? undefined : this.project?.recordedSessionFile(e),
           n,
         );
         r = messages.keys();
       } catch (error) {
         logForDebugging(
           `getSessionMessages: loadSessionFile failed: ${error instanceof Error ? error.message : String(error)}`,
-          { level: "error" },
+          {
+            level: "error",
+          },
         );
       }
-      let filelessResumeUuids = this.filelessResumeUuids,
-        h = new Set(filelessResumeUuids?.sessionId === e ? filelessResumeUuids.uuids : void 0);
+      let filelessResumeUuids = this.filelessResumeUuids;
+      let h = new Set(filelessResumeUuids?.sessionId === e ? filelessResumeUuids.uuids : undefined);
       for (let y of r) h.add(y);
       return h;
     },
     (e) => e,
   );
-  constructor(e) {
-    this.getSessionId = e;
+  constructor(getSessionId) {
+    this.getSessionId = getSessionId;
   }
-  setLocalGcEnabled(e) {
-    this.localGcEnabled = e;
+  setLocalGcEnabled(localGcEnabled) {
+    this.localGcEnabled = localGcEnabled;
   }
-  setKeepSessionMessagesCache(e) {
-    this.keepSessionMessagesCache = e;
+  setKeepSessionMessagesCache(keepSessionMessagesCache) {
+    this.keepSessionMessagesCache = keepSessionMessagesCache;
   }
   setToolResultCopiesOnDisk(e) {
-    ((this.toolResultCopiesOnDisk = e),
-      (this.slimAppendedRow = e === "slim" ? createToolResultSlimmer_2() : void 0));
+    this.toolResultCopiesOnDisk = e;
+    this.slimAppendedRow = e === "slim" ? createToolResultSlimmer_2() : undefined;
   }
   claimExitReStamp() {
-    if (this.exitReStampRan) return !1;
-    return ((this.exitReStampRan = !0), !0);
+    if (this.exitReStampRan) return false;
+    this.exitReStampRan = true;
+    return true;
   }
   exitReStampDone() {
     return this.exitReStampRan;
   }
   claimLegacyProgressProbe(e) {
-    if (this.legacyProgressProbeFired.has(e)) return !1;
-    return (this.legacyProgressProbeFired.add(e), !0);
+    if (this.legacyProgressProbeFired.has(e)) return false;
+    this.legacyProgressProbeFired.add(e);
+    return true;
   }
-  openAppendRelocationBracket(e) {
-    ((this.relocationParkedAppends ??= []), (this.relocationParkedPath = e));
+  openAppendRelocationBracket(relocationParkedPath) {
+    this.relocationParkedAppends ??= [];
+    this.relocationParkedPath = relocationParkedPath;
   }
   closeAppendRelocationBracket() {
     let relocationParkedAppends = this.relocationParkedAppends;
-    return (
-      (this.relocationParkedAppends = null),
-      (this.relocationParkedPath = null),
-      relocationParkedAppends
-    );
+    this.relocationParkedAppends = null;
+    this.relocationParkedPath = null;
+    return relocationParkedAppends;
   }
-  setLiveSuppressionProbe(e) {
-    this.liveSuppressionProbe = e;
+  setLiveSuppressionProbe(liveSuppressionProbe) {
+    this.liveSuppressionProbe = liveSuppressionProbe;
   }
   clearSessionMessagesCache() {
     if (this.keepSessionMessagesCache) return;
     this.sessionMessages.cache.clear?.();
   }
   primeSessionMessagesCache(e, n) {
-    let cache = this.sessionMessages.cache,
-      s = cache.get(e);
-    if (s === void 0) {
+    let cache = this.sessionMessages.cache;
+    let s = cache.get(e);
+    if (s === undefined) {
       cache.set(e, Promise.resolve(new Set(n)));
       return;
     }
@@ -2135,157 +1699,169 @@ class TranscriptStore {
   }
   primeFilelessResume(e, n) {
     let r = new Set(n);
-    ((this.filelessResumeUuids = { sessionId: e, uuids: r }), this.primeSessionMessagesCache(e, r));
+    this.filelessResumeUuids = {
+      sessionId: e,
+      uuids: r,
+    };
+    this.primeSessionMessagesCache(e, r);
   }
 }
 //@ chunk-e6aww6q8.js:355234-355283 facade-majority
-var transcriptStores = new SessionRootSlot(() => ({ current: new TranscriptStore(() => getSessionId()) }));
+var transcriptStores = new SessionRootSlot(() => ({
+  current: new TranscriptStore(() => getSessionId()),
+}));
 //@ chunk-e6aww6q8.js:355283-355324 layout
-function su() {
+/**
+ * currentTranscriptStore：当前转录存储。
+ */
+function currentTranscriptStore() {
   return transcriptStores.of(getRootSession()).current;
 }
 //@ chunk-e6aww6q8.js:355324-355411 layout
-class COt {
-  installed = !1;
+class RestoreClaim {
+  installed = false;
   claim() {
-    if (this.installed) return !1;
-    return ((this.installed = !0), !0);
+    if (this.installed) return false;
+    this.installed = true;
+    return true;
   }
 }
 //@ chunk-e6aww6q8.js:355411-355438 facade-majority
-var transcriptExitHooksLatches = new HostScoped(() => new COt());
+var transcriptExitHooksLatches = new HostScoped(() => new RestoreClaim());
 //@ chunk-e6aww6q8.js:355438-355478 facade-majority
 function getTranscriptWriterHealth() {
-  return su().writerHealth;
+  return currentTranscriptStore().writerHealth;
 }
 //@ chunk-e6aww6q8.js:355478-355528 facade-majority
 function getTranscriptWriteFailureSeq() {
-  return su().writerHealth.failureSeq;
+  return currentTranscriptStore().writerHealth.failureSeq;
 }
 //@ chunk-e6aww6q8.js:355528-355593 facade-majority
 function getTranscriptWriterDegraded() {
-  return su().writerHealth.degradedStore.getState();
+  return currentTranscriptStore().writerHealth.degradedStore.getState();
 }
 //@ chunk-e6aww6q8.js:355593-356221 facade-majority
 function reAppendSessionMetadataAtExit() {
   if (isDiagLogging() && !isInDiagScope()) return;
   if (isDiskless()) return;
-  let e = su();
+  let e = currentTranscriptStore();
   if (!e.claimExitReStamp()) return;
   try {
-    e.project?.reAppendSessionMetadata(!1, !1, !0);
+    e.project?.reAppendSessionMetadata(false, false, true);
   } catch {}
-  let n = isStorageV5Enabled() && e.takenForeignExitLines.size > 0 ? e.takenForeignExitLines : void 0,
-    r = n !== void 0 ? new Set() : void 0;
+  let takenForeignExitLines =
+    isStorageV5Enabled() && e.takenForeignExitLines.size > 0 ? e.takenForeignExitLines : undefined;
+  let r = takenForeignExitLines !== undefined ? new Set() : undefined;
   for (let foreignExitReStampProvider of e.foreignExitReStampProviders)
     try {
-      for (let { path: path, entry: entry, tornTailEntry: tornTailEntry } of foreignExitReStampProvider())
+      for (let { path, entry, tornTailEntry } of foreignExitReStampProvider())
         try {
-          (appendEntrySync(path, entry, tornTailEntry), r?.add(entryDedupKey(path, entry)));
+          appendEntrySync(path, entry, tornTailEntry);
+          r?.add(entryDedupKey(path, entry));
         } catch {}
     } catch {}
-  if (n !== void 0) {
-    for (let { path: path, entry: entry, tornTailEntry: tornTailEntry } of n) {
-      if (r?.has(entryDedupKey(path, entry)) === !0) continue;
+  if (takenForeignExitLines !== undefined) {
+    for (let { path, entry, tornTailEntry } of takenForeignExitLines) {
+      if (r?.has(entryDedupKey(path, entry)) === true) continue;
       try {
         appendEntrySync(path, entry, tornTailEntry);
       } catch {}
     }
-    n.clear();
+    takenForeignExitLines.clear();
   }
   for (let exitReStampProvider of e.exitReStampProviders)
     try {
       let h = exitReStampProvider();
-      if (h !== void 0) e.project?.appendOwedEntryAtExit(h);
+      if (h !== undefined) e.project?.appendOwedEntryAtExit(h);
     } catch {}
 }
 //@ chunk-e6aww6q8.js:356221-356319 facade-majority
 function registerTranscriptExitReStamp(e) {
-  return (
-    su().exitReStampProviders.add(e),
-    () => {
-      su().exitReStampProviders.delete(e);
-    }
-  );
+  currentTranscriptStore().exitReStampProviders.add(e);
+  return () => {
+    currentTranscriptStore().exitReStampProviders.delete(e);
+  };
 }
 //@ chunk-e6aww6q8.js:356319-356397 facade-majority
 function registerTranscriptExitDrain(e) {
-  return (
-    su().exitDrains.add(e),
-    () => {
-      su().exitDrains.delete(e);
-    }
-  );
+  currentTranscriptStore().exitDrains.add(e);
+  return () => {
+    currentTranscriptStore().exitDrains.delete(e);
+  };
 }
 //@ chunk-e6aww6q8.js:356397-356509 facade-majority
-function registerForeignTranscriptExitReStamp(e) {
-  return (
-    su().foreignExitReStampProviders.add(e),
-    () => {
-      su().foreignExitReStampProviders.delete(e);
-    }
-  );
+function registerForeignTranscriptExitReStamp(collectExitIntentEntries) {
+  currentTranscriptStore().foreignExitReStampProviders.add(collectExitIntentEntries);
+  return () => {
+    currentTranscriptStore().foreignExitReStampProviders.delete(collectExitIntentEntries);
+  };
 }
 //@ chunk-e6aww6q8.js:356509-356527 layout
-var mMt = 500,
-  Cpo = 3;
+var MAX_RELOCATION_RETRIES = 500;
+var RELOCATION_BACKOFF = 3;
 //@ chunk-e6aww6q8.js:356527-357248 facade-majority
 async function flushSessionStorageAtExit() {
   if (isDiagLogging() && !isInDiagScope()) return;
-  let e = su();
+  let e = currentTranscriptStore();
   try {
-    await withDeadline(Promise.allSettled([...e.exitDrains].map((s) => Promise.resolve().then(s))), 500);
+    await withDeadline(
+      Promise.allSettled([...e.exitDrains].map((exitDrain) => Promise.resolve().then(exitDrain))),
+      500,
+    );
     try {
       await e.project?.flush();
     } finally {
       e.project?.settleHeldReplayRecords();
     }
     await flushAppendEntryQueues();
-    let project = e.project,
-      r = project?.exitReStampSource();
-    if (isStorageV5Enabled() && project !== null && r !== void 0) {
+    let project = e.project;
+    let r = project?.exitReStampSource();
+    if (isStorageV5Enabled() && project !== null && r !== undefined) {
       if (
         (await withDeadline(
-          project.reStampAtExitAsync(r).then(() => !0),
-          mMt,
-        )) !== !0
+          project.reStampAtExitAsync(r).then(() => true),
+          MAX_RELOCATION_RETRIES,
+        )) !== true
       )
         logForDebugging(
-          `Exit re-stamp through the storage backend did not finish within ${mMt} ms; the synchronous re-stamp runs instead`,
-          { level: "warn" },
+          `Exit re-stamp through the storage backend did not finish within ${MAX_RELOCATION_RETRIES} ms; the synchronous re-stamp runs instead`,
+          {
+            level: "warn",
+          },
         );
     }
   } catch {
   } finally {
     reAppendSessionMetadataAtExit();
-    let n = getTranscriptWriterDegraded();
-    if (n !== null)
+    let transcriptWriterDegraded = getTranscriptWriterDegraded();
+    if (transcriptWriterDegraded !== null)
       logForDebugging(
-        `flushSessionStorageAtExit: transcript writer degraded (${n.code} at ${n.source}) \u2014 entries since the failure window may be missing from the transcript`,
-        { level: "error" },
+        `flushSessionStorageAtExit: transcript writer degraded (${transcriptWriterDegraded.code} at ${transcriptWriterDegraded.source}) \u2014 entries since the failure window may be missing from the transcript`,
+        {
+          level: "error",
+        },
       );
   }
 }
+//@ chunk-e6aww6q8.js:357248-357431 callgraph-witnessed = getProject (0)
 /**
  * 取当前宿主的会话存储单例 Project；首次创建时注册退出钩子，进程退出前把写队列刷到磁盘。
  */
-//@ chunk-e6aww6q8.js:357248-357431 callgraph-witnessed = getProject (0)
 function getProject() {
-  let e = su();
-  if (!e.project) {
-    if (((e.project = new Project(e)), transcriptExitHooksLatches.of(getRootSession().host).claim())) {
-      if (
-        (registerCleanup(flushSessionStorageAtExit),
-        !process.listeners("exit").includes(reAppendSessionMetadataAtExit))
-      )
+  let store = currentTranscriptStore();
+  if (!store.project) {
+    store.project = new Project(store);
+    if (transcriptExitHooksLatches.of(getRootSession().host).claim()) {
+      registerCleanup(flushSessionStorageAtExit);
+      if (!process.listeners("exit").includes(reAppendSessionMetadataAtExit))
         process.on("exit", reAppendSessionMetadataAtExit);
     }
   }
-  return e.project;
+  return store.project;
 }
 //@ chunk-e6aww6q8.js:357431-357479 facade-majority = resetProjectFlushStateForTesting (0.771)
 function resetProjectFlushStateForTesting() {
-  su().project?._resetFlushState();
+  currentTranscriptStore().project?._resetFlushState();
 }
 //@ chunk-e6aww6q8.js:357479-357531 facade-majority
 function resetProjectForTesting() {
@@ -2297,7 +1873,7 @@ function compactTranscriptForTesting(e, n, r, s, h) {
 }
 //@ chunk-e6aww6q8.js:357603-357652 facade-majority
 function requestCompactForTesting(e) {
-  getProject().requestCompact(e, void 0, !0);
+  getProject().requestCompact(e, undefined, true);
 }
 //@ chunk-e6aww6q8.js:357652-357691 facade-majority
 function setSessionFileForTesting(e) {
@@ -2312,12 +1888,12 @@ function readSessionAliasesForTesting(e, n) {
   return readSessionAliases(e, n);
 }
 //@ chunk-e6aww6q8.js:357763-357838 facade-majority
-async function reAppendSessionMetadataAsyncForTesting(e = !0, n) {
-  await getProject().reAppendSessionMetadataAsync(!1, e, n);
+async function reAppendSessionMetadataAsyncForTesting(e = true, n) {
+  await getProject().reAppendSessionMetadataAsync(false, e, n);
 }
 //@ chunk-e6aww6q8.js:357838-357901 facade-majority = recordContextCollapseCommit (1)
 async function appendEntryToSessionForTesting(e, n, r) {
-  await getProject().appendEntry(e, n, void 0, r);
+  await getProject().appendEntry(e, n, undefined, r);
 }
 //@ chunk-e6aww6q8.js:357901-357944 facade-majority
 function getCurrentSessionFile() {
@@ -2333,21 +1909,25 @@ function currentSessionFileIsFor(e) {
 }
 //@ chunk-e6aww6q8.js:358023-358088 facade-majority
 function onSessionFileMaterialized(e) {
-  return su().sessionFileMaterialized.subscribe(e);
+  return currentTranscriptStore().sessionFileMaterialized.subscribe(e);
 }
 //@ chunk-e6aww6q8.js:358088-358139 facade-majority
 function emitSessionFileMaterializedForTesting() {
-  su().sessionFileMaterialized.emit();
+  currentTranscriptStore().sessionFileMaterialized.emit();
 }
 //@ chunk-e6aww6q8.js:358139-358196 facade-majority = setInternalEventWriter (1)
-function setInternalEventWriter(e, n) {
-  (getProject().setInternalEventWriter(e, n), registerWorkerEventMirror());
+function setInternalEventWriter(writer, n) {
+  getProject().setInternalEventWriter(writer, n);
+  registerWorkerEventMirror();
 }
 //@ chunk-e6aww6q8.js:358196-358307 layout
 function registerWorkerEventMirror() {
-  eMt({
-    mirror: (e, n, { sessionId: sessionId, agentId: agentId }) =>
-      mirrorWorkerEventToRemote(e, n, { sessionId: pinSessionId(sessionId), agentId: agentId }),
+  setStoragePort({
+    mirror: (e, n, { sessionId, agentId }) =>
+      mirrorWorkerEventToRemote(e, n, {
+        sessionId: pinSessionId(sessionId),
+        agentId,
+      }),
     readAgent: readAgentWorkerEvents,
   });
 }
@@ -2372,41 +1952,41 @@ function fireSessionMirror(e, n) {
   getProject().fireMirror(e, n);
 }
 //@ chunk-e6aww6q8.js:358511-358689 facade-majority = setInternalEventReader (0.674)
-function setInternalEventReader(e, n, r) {
-  (getProject().setInternalEventReader(e),
-    getProject().setInternalSubagentEventReader(n),
-    getProject().setInternalAgentEventReader(r ?? null),
-    getProject().setAgentWorkerEventReader(r ?? null),
-    registerWorkerEventMirror());
+function setInternalEventReader(reader, subagentReader, r) {
+  getProject().setInternalEventReader(reader);
+  getProject().setInternalSubagentEventReader(subagentReader);
+  getProject().setInternalAgentEventReader(r ?? null);
+  getProject().setAgentWorkerEventReader(r ?? null);
+  registerWorkerEventMirror();
 }
 //@ chunk-e6aww6q8.js:358689-359050 facade-majority
-async function readAgentWorkerEvents(e, n) {
-  let r = getProject(),
-    agentWorkerEventReader = r.getAgentWorkerEventReader();
+async function readAgentWorkerEvents(agentId, signal) {
+  let project = getProject();
+  let agentWorkerEventReader = project.getAgentWorkerEventReader();
   if (agentWorkerEventReader === null) return;
-  if (r.isAgentOverBound(e)) return null;
-  let h = await agentWorkerEventReader(e, n);
-  if (h?.overBound) r.noteAgentOverBound(e);
+  if (project.isAgentOverBound(agentId)) return null;
+  let h = await agentWorkerEventReader(agentId, signal);
+  if (h?.overBound) project.noteAgentOverBound(agentId);
   if (h === null || h.overBound || h.encodedBody) return null;
-  let filtered = h.events.filter((event) => event.session_agent_id === e);
+  let filtered = h.events.filter((event) => event.session_agent_id === agentId);
   if (filtered.length === 0 && h.events.length > 0) return null;
   return filtered.map((S) => S.payload);
 }
 //@ chunk-e6aww6q8.js:359050-359100 facade-majority
-function setAgentMetadataInStreamGate(e) {
-  getProject().keepsAgentMetadataInStream = e;
+function setAgentMetadataInStreamGate(keepsAgentMetadataInStream) {
+  getProject().keepsAgentMetadataInStream = keepsAgentMetadataInStream;
 }
 //@ chunk-e6aww6q8.js:359100-359156 facade-majority
 function keepsAgentMetadataInStream() {
   return getProject().keepsAgentMetadataInStream();
 }
 //@ chunk-e6aww6q8.js:359156-359210 facade-majority
-function hasWrittenAgentTranscript(e) {
-  return getProject().hasWrittenAgentLocally(e);
+function hasWrittenAgentTranscript(agentId) {
+  return getProject().hasWrittenAgentLocally(agentId);
 }
 //@ chunk-e6aww6q8.js:359210-359258 facade-majority
-function isAgentTranscriptOverBound(e) {
-  return getProject().isAgentOverBound(e);
+function isAgentTranscriptOverBound(agentId) {
+  return getProject().isAgentOverBound(agentId);
 }
 //@ chunk-e6aww6q8.js:359258-359302 facade-majority = setRemoteIngressUrlForTesting (1)
 function setRemoteIngressUrlForTesting(url) {
@@ -2417,50 +1997,71 @@ var REPLAY_INDEX_SCAN_LIMIT = 10;
 //@ chunk-e6aww6q8.js:359313-360206 facade-majority
 async function seedReplayIndex(e, n) {
   let r = new RequestBlobStore();
-  if (isDiskless()) return { index: r, fileExisted: !1 };
+  if (isDiskless())
+    return {
+      index: r,
+      fileExisted: false,
+    };
   let s;
   try {
     let h = await open(e, constants.O_RDONLY | READ_LIMITS);
     s = h;
-    let { size: size } = await h.stat();
-    if (size === 0) return { index: r, fileExisted: !0 };
-    let max = Math.max(0, size - gpo),
-      w = n !== void 0 && n.start < n.fileSize && n.fileSize <= size ? Math.max(max, n.start) : max;
+    let { size } = await h.stat();
+    if (size === 0)
+      return {
+        index: r,
+        fileExisted: true,
+      };
+    let max = Math.max(0, size - MAX_TRANSCRIPT_TAIL_BYTES);
+    let w = n !== undefined && n.start < n.fileSize && n.fileSize <= size ? Math.max(max, n.start) : max;
     if (w > 0) {
       r.startMidFile();
-      let alloc = Buffer.alloc(hpo),
-        { bytesRead: bytesRead } = await h.read(alloc, 0, alloc.length, 0),
-        Z = getFirstLine(alloc.toString("utf8", 0, bytesRead));
+      let G = Buffer.alloc(TRANSCRIPT_HEAD_BUFFER_BYTES);
+      let { bytesRead } = await h.read(G, 0, G.length, 0);
+      let firstLine = getFirstLine(G.toString("utf8", 0, bytesRead));
       try {
-        if (jsonParse(Z)?.type === "fork-context-ref") r.hasForkContextRef = !0;
+        if (jsonParse(firstLine)?.type === "fork-context-ref") r.hasForkContextRef = true;
       } catch {}
     }
-    let L = transcriptLines(h.createReadStream({ encoding: "utf8", start: w, end: size - 1, autoClose: !0 }));
+    let L = transcriptLines(
+      h.createReadStream({
+        encoding: "utf8",
+        start: w,
+        end: size - 1,
+        autoClose: true,
+      }),
+    );
     for await (let G of L) {
       if (G.length === 0) continue;
-      let q = ice(G);
+      let q = stripLeadingNuls(G);
       try {
         let Z = jsonParse(q);
         if (q === G || isCompactBoundaryMessage_3(Z)) r.noteLine(Z);
-        else if (Z?.type === "user" || Z?.type === "assistant") r = r.successor(!0);
+        else if (Z?.type === "user" || Z?.type === "assistant") r = r.successor(true);
       } catch {}
     }
-    return { index: r, fileExisted: !0 };
+    return {
+      index: r,
+      fileExisted: true,
+    };
   } catch (error) {
     if (!isENOENT(error)) logError(error);
-    return { index: s === void 0 ? r : r.successor(!1), fileExisted: s !== void 0 };
+    return {
+      index: s === undefined ? r : r.successor(false),
+      fileExisted: s !== undefined,
+    };
   } finally {
     await s?.close().catch(() => {});
   }
 }
 //@ chunk-e6aww6q8.js:360206-360284 layout
-function Apo(e) {
-  return Array.isArray(e) && e.some((n) => n?.type === "tool_result");
+function hasToolResultMessage(content) {
+  return Array.isArray(content) && content.some((n) => n?.type === "tool_result");
 }
+//@ chunk-e6aww6q8.js:360284-407532 fingerprint = Project (0.319)
 /**
  * 会话转录写入器：按目标文件维护写队列，每 100ms（FLUSH_INTERVAL_MS）批量 flush，单块不超过 100MB；会话文件在第一条 user/assistant/system 消息时才创建；同时管理标题、tag、agent 名等会话元数据并在尾部重写（reAppendSessionMetadata），支持远程镜像、storage v5 后端与转录迁移。
  */
-//@ chunk-e6aww6q8.js:360284-407532 fingerprint = Project (0.319)
 class Project {
   store;
   currentSessionTag;
@@ -2504,85 +2105,80 @@ class Project {
     return this.sessionFile;
   }
   setSessionFile(e) {
-    if (
-      (writeTranscriptFile(
-        this.store.writerHealth,
-        this.sessionFile,
-        e,
-        void 0,
-        e === null ? Array.from(this.writeQueues.keys()) : [],
-      ),
-      this.compactAwaitingSummary?.filePath !== e)
-    )
-      this.compactAwaitingSummary = void 0;
-    if (((this.sessionFile = e), e !== null)) this.existingSessionFiles.set(this.store.getSessionId(), e);
+    writeTranscriptFile(
+      this.store.writerHealth,
+      this.sessionFile,
+      e,
+      undefined,
+      e === null ? Array.from(this.writeQueues.keys()) : [],
+    );
+    if (this.compactAwaitingSummary?.filePath !== e) this.compactAwaitingSummary = undefined;
+    this.sessionFile = e;
+    if (e !== null) this.existingSessionFiles.set(this.store.getSessionId(), e);
   }
   pendingEntries = [];
   heldReplayRecords = [];
-  awaitingFirstUserRow = !1;
+  awaitingFirstUserRow = false;
   relocationBuffer = null;
   remoteIngressUrl = null;
   internalEventWriter = null;
-  internalEventWriterSessionId = void 0;
+  internalEventWriterSessionId = undefined;
   internalEventReader = null;
   internalSubagentEventReader = null;
   internalAgentEventReader = null;
   agentWorkerEventReader = null;
-  keepsAgentMetadataInStream = () => !1;
+  keepsAgentMetadataInStream = () => false;
   agentIdsWrittenLocally = new Set();
   agentIdsFetched = new Set();
   agentIdsOverBound = new Set();
-  verifiesAgentTranscripts = !1;
+  verifiesAgentTranscripts = false;
   agentTranscriptFetches = new Map();
   mirrors = [];
   pendingWriteCount = 0;
   flushResolvers = [];
-  lastWriteInCallOrder = void 0;
+  lastWriteInCallOrder = undefined;
   shutdownSeen = createSignal();
   writeQueues = new Map();
   flushTimer = null;
   activeDrain = null;
-  storeFence = void 0;
+  storeFence = undefined;
   queueOperationsRaisedElsewhere = Promise.resolve();
   drainChain = Promise.resolve();
   FLUSH_INTERVAL_MS = 100;
   MAX_CHUNK_BYTES = 104857600;
   bytesSinceMetadataReAppend = 0;
-  sessionFileAppendSource = void 0;
+  sessionFileAppendSource = undefined;
   tornTailToSeal = null;
   bytesSinceCompact = 0;
-  backstopThresholdBytes = LG;
-  compactAwaitingSummary = void 0;
+  backstopThresholdBytes = ENTRY_APPEND_POLICY_2;
+  compactAwaitingSummary = undefined;
   sessionRewritesPending = new Set();
   sessionRowsDeleted = new Set();
-  sessionLastBoundaryUuid = void 0;
-  constructor(e) {
-    this.store = e;
+  sessionLastBoundaryUuid = undefined;
+  constructor(store) {
+    this.store = store;
   }
   _resetFlushState() {
-    if (
-      ((this.pendingWriteCount = 0),
-      (this.lastWriteInCallOrder = void 0),
-      this.shutdownSeen.clear(),
-      this.transcriptBatches.clearForTest(),
-      (this.storeFence = void 0),
-      (this.bytesSinceMetadataReAppend = 0),
-      (this.sessionFileAppendSource = void 0),
-      (this.tornTailToSeal = null),
-      (this.bytesSinceCompact = 0),
-      (this.compactAwaitingSummary = void 0),
-      this.sessionRewritesPending.clear(),
-      this.sessionRowsDeleted.clear(),
-      (this.sessionLastBoundaryUuid = void 0),
-      (this.flushResolvers = []),
-      this.flushTimer)
-    )
-      clearTimeout(this.flushTimer);
-    ((this.flushTimer = null),
-      (this.activeDrain = null),
-      (this.drainChain = Promise.resolve()),
-      (this.writeQueues = new Map()),
-      (this.mirrors = []));
+    this.pendingWriteCount = 0;
+    this.lastWriteInCallOrder = undefined;
+    this.shutdownSeen.clear();
+    this.transcriptBatches.clearForTest();
+    this.storeFence = undefined;
+    this.bytesSinceMetadataReAppend = 0;
+    this.sessionFileAppendSource = undefined;
+    this.tornTailToSeal = null;
+    this.bytesSinceCompact = 0;
+    this.compactAwaitingSummary = undefined;
+    this.sessionRewritesPending.clear();
+    this.sessionRowsDeleted.clear();
+    this.sessionLastBoundaryUuid = undefined;
+    this.flushResolvers = [];
+    if (this.flushTimer) clearTimeout(this.flushTimer);
+    this.flushTimer = null;
+    this.activeDrain = null;
+    this.drainChain = Promise.resolve();
+    this.writeQueues = new Map();
+    this.mirrors = [];
   }
   addMirror(e) {
     this.mirrors.push(e);
@@ -2595,54 +2191,59 @@ class Project {
       try {
         mirror(e, n);
       } catch (error) {
-        logForDebugging(`[SessionMirror] mirror failed for ${e}: ${error}`, { level: "error" });
+        logForDebugging(`[SessionMirror] mirror failed for ${e}: ${error}`, {
+          level: "error",
+        });
       }
   }
   incrementPendingWrites() {
     this.pendingWriteCount++;
   }
   decrementPendingWrites() {
-    if ((this.pendingWriteCount--, this.pendingWriteCount === 0)) {
-      for (let flushResolver of this.flushResolvers) flushResolver();
+    this.pendingWriteCount--;
+    if (this.pendingWriteCount === 0) {
+      for (let resolve of this.flushResolvers) resolve();
       this.flushResolvers = [];
     }
   }
-  async trackWrite(e) {
+  async trackWrite(fn) {
     this.incrementPendingWrites();
     try {
-      return await e();
+      return await fn();
     } finally {
       this.decrementPendingWrites();
     }
   }
   inCallOrder(e) {
     this.releaseWaitsForUploads();
-    let lastWriteInCallOrder = this.lastWriteInCallOrder,
-      { promise: promise, resolve: resolve } = Promise.withResolvers();
-    return (
-      (this.lastWriteInCallOrder = promise),
-      this.trackWrite(async () => {
-        try {
-          if (lastWriteInCallOrder !== void 0) await lastWriteInCallOrder;
-          return await e();
-        } finally {
-          if (this.lastWriteInCallOrder === promise) this.lastWriteInCallOrder = void 0;
-          resolve();
-        }
-      })
-    );
+    let lastWriteInCallOrder = this.lastWriteInCallOrder;
+    let { promise, resolve } = Promise.withResolvers();
+    this.lastWriteInCallOrder = promise;
+    return this.trackWrite(async () => {
+      try {
+        if (lastWriteInCallOrder !== undefined) await lastWriteInCallOrder;
+        return await e();
+      } finally {
+        if (this.lastWriteInCallOrder === promise) this.lastWriteInCallOrder = undefined;
+        resolve();
+      }
+    });
   }
   untilUploadedOrShutdown(e) {
-    return new Promise((n, r) => {
-      let subscribe = this.shutdownSeen.subscribe(() => {
-        (subscribe(), this.trackWrite(() => e.catch(logError)), n());
+    return new Promise((resolve, reject) => {
+      let s = this.shutdownSeen.subscribe(() => {
+        s();
+        this.trackWrite(() => e.catch(logError));
+        resolve();
       });
       e.then(
         () => {
-          (subscribe(), n());
+          s();
+          resolve();
         },
-        (h) => {
-          (subscribe(), r(h));
+        (error) => {
+          s();
+          reject(error);
         },
       );
     });
@@ -2652,82 +2253,104 @@ class Project {
   }
   transcriptBatches = createKeyedQueue();
   recordInTurn(e, n, r) {
-    return (
-      this.releaseWaitsForUploads(),
-      this.trackWrite(() =>
-        this.transcriptBatches.run(
-          `${e}
+    this.releaseWaitsForUploads();
+    return this.trackWrite(() =>
+      this.transcriptBatches.run(
+        `${e}
 ${n ?? ""}`,
-          r,
-        ),
-      )
+        r,
+      ),
     );
   }
   pushQueueItem(e, n) {
     let r = this.writeQueues.get(e);
-    if (!r) ((r = []), this.writeQueues.set(e, r));
-    (r.push(n), this.scheduleDrain());
-  }
-  enqueueWrite(e, n, r) {
-    if (this.appendsSealedForShutdown) return Promise.resolve();
-    if (isDiskless() && r === void 0) {
-      let s = Error("diskless session: transcript entry queued with no storage backend; entry dropped");
-      return (
-        logError(s),
-        warnDisklessSettingsWrite("transcript_lines", e),
-        reportTranscriptWriteFailure(this.store.writerHealth, "enqueue", s, e),
-        this.forgetLinesThatNeverLanded(e),
-        Promise.resolve()
-      );
+    if (!r) {
+      r = [];
+      this.writeQueues.set(e, r);
     }
-    return new Promise((s) => {
-      this.pushQueueItem(e, { entry: n, resolve: s, storageV5: r });
+    r.push(n);
+    this.scheduleDrain();
+  }
+  enqueueWrite(e, entry, r) {
+    if (this.appendsSealedForShutdown) return Promise.resolve();
+    if (isDiskless() && r === undefined) {
+      let s = Error("diskless session: transcript entry queued with no storage backend; entry dropped");
+      logError(s);
+      warnDisklessSettingsWrite("transcript_lines", e);
+      reportTranscriptWriteFailure(this.store.writerHealth, "enqueue", s, e);
+      this.forgetLinesThatNeverLanded(e);
+      return Promise.resolve();
+    }
+    return new Promise((resolve) => {
+      this.pushQueueItem(e, {
+        entry,
+        resolve,
+        storageV5: r,
+      });
     });
   }
   forgetLinesThatNeverLanded(e) {
-    if (this.replaySources.has(e)) (this.restartReplayIndex(e), b9());
+    if (this.replaySources.has(e)) {
+      this.restartReplayIndex(e);
+      clearAllReplayChains();
+    }
     this.queuedToolResults.clear();
   }
-  enqueueRemove(e, n, r) {
-    return new Promise((s) => {
-      this.pushQueueItem(e, { removeUuid: n, resolve: s, storageV5: r });
+  enqueueRemove(e, removeUuid, storageV5) {
+    return new Promise((resolve) => {
+      this.pushQueueItem(e, {
+        removeUuid,
+        resolve,
+        storageV5,
+      });
     });
   }
-  enqueueCompact(e, n, r) {
-    return new Promise((s) => {
-      this.pushQueueItem(e, { compact: !0, afterCompaction: r, resolve: s, storageV5: n });
+  enqueueCompact(e, storageV5, afterCompaction) {
+    return new Promise((resolve) => {
+      this.pushQueueItem(e, {
+        compact: true,
+        afterCompaction,
+        resolve,
+        storageV5,
+      });
     });
   }
-  queueLeafCheckpointWithdrawal(e) {
+  queueLeafCheckpointWithdrawal(withdrawal) {
     if (this.sessionFile === null || this.relocationBuffer !== null || this.shouldSkipPersistence()) return;
     this.pushQueueItem(this.sessionFile, {
-      withdrawal: e,
+      withdrawal,
       resolve: () => {},
       storageV5: this.exitReStampSource(),
     });
   }
   async performLeafCheckpointWithdrawal(e, n, r) {
     let any = (await readFileRange(e, r))
-        .split(
-          `
+      .split(
+        `
 `,
-        )
-        .some(isLastPromptLine),
-      y;
+      )
+      .some(isLastPromptLine);
+    let y;
     if (!any)
       try {
-        for await (let S of transcriptLines(createReadStream(e, { encoding: "utf8" })))
+        for await (let S of transcriptLines(
+          createReadStream(e, {
+            encoding: "utf8",
+          }),
+        ))
           if (isLastPromptLine(S)) {
-            any = !0;
+            any = true;
             break;
           }
       } catch (error) {
         y = `(${getErrnoCode(error)}): ${errorMessage(error)}`;
       }
-    if (!any && y !== void 0) {
+    if (!any && y !== undefined) {
       logForDebugging(
         `/clear: could not read the transcript it left, so any resume checkpoint in it is not withdrawn: ${e} ${y}`,
-        { level: "warn" },
+        {
+          level: "warn",
+        },
       );
       return;
     }
@@ -2735,24 +2358,25 @@ ${n ?? ""}`,
       logForDebugging(`/clear: no resume checkpoint in the transcript it left, so none withdrawn: ${e}`);
       return;
     }
-    (await this.appendToFile(e, toJsonLine(n), r),
-      this.fireMirror(e, [n]),
-      logForDebugging(`/clear: withdrew the resume checkpoint in the transcript it left: ${e}`));
+    await this.appendToFile(e, toJsonLine(n), r);
+    this.fireMirror(e, [n]);
+    logForDebugging(`/clear: withdrew the resume checkpoint in the transcript it left: ${e}`);
   }
-  requestCompact(e, n, r = !1) {
+  requestCompact(e, n, r = false) {
     if (!this.store.localGcEnabled) return;
-    (this.restartReplayIndex(e), b9(), this.queuedToolResults.clear());
-    let enqueueCompact = this.enqueueCompact(e, n, r);
-    (e === this.sessionFile && this.trackSessionRewrite(enqueueCompact), this.scheduleDrain());
+    this.restartReplayIndex(e);
+    clearAllReplayChains();
+    this.queuedToolResults.clear();
+    let s = this.enqueueCompact(e, n, r);
+    if (e === this.sessionFile) this.trackSessionRewrite(s);
+    this.scheduleDrain();
   }
   trackSessionRewrite(e) {
     let n = {};
-    return (
-      this.sessionRewritesPending.add(n),
-      e.finally(() => {
-        this.sessionRewritesPending.delete(n);
-      })
-    );
+    this.sessionRewritesPending.add(n);
+    return e.finally(() => {
+      this.sessionRewritesPending.delete(n);
+    });
   }
   sessionRowsOffDisk() {
     if (this.sessionRowsDeleted.size === 0 && this.sessionRewritesPending.size === 0) return;
@@ -2765,18 +2389,15 @@ ${n ?? ""}`,
   scheduleDrain() {
     if (this.flushTimer) return;
     this.flushTimer = setTimeout(async () => {
-      if (
-        ((this.flushTimer = null),
-        (this.activeDrain = this.drainWriteQueue()),
-        await this.activeDrain,
-        (this.activeDrain = null),
-        this.writeQueues.size > 0)
-      )
-        this.scheduleDrain();
+      this.flushTimer = null;
+      this.activeDrain = this.drainWriteQueue();
+      await this.activeDrain;
+      this.activeDrain = null;
+      if (this.writeQueues.size > 0) this.scheduleDrain();
     }, this.FLUSH_INTERVAL_MS);
   }
-  sealTornTailOnNextAppend(e) {
-    this.tornTailToSeal = e;
+  sealTornTailOnNextAppend(tornTailToSeal) {
+    this.tornTailToSeal = tornTailToSeal;
   }
   sealTornTailSync(e) {
     if (this.tornTailToSeal !== e || isDiskless()) return;
@@ -2788,13 +2409,13 @@ ${n ?? ""}`,
       return;
     }
     try {
-      let { size: size } = fstatSync(n);
+      let { size } = fstatSync(n);
       if (size > 0)
         writeSync(
           n,
           `
 `,
-          void 0,
+          undefined,
         );
     } finally {
       closeSync(n);
@@ -2808,7 +2429,7 @@ ${n ?? ""}`,
     if (this.tornTailToSeal === e) this.tornTailToSeal = null;
   }
   async appendToFile(e, n, r) {
-    if (this.storeFence !== void 0) throw this.storeFence;
+    if (this.storeFence !== undefined) throw this.storeFence;
     this.directAppendsInFlight++;
     let s;
     try {
@@ -2816,15 +2437,13 @@ ${n ?? ""}`,
     } finally {
       this.directAppendsInFlight--;
     }
-    if (
-      (noteTranscriptWriteOk(this.store.writerHealth, e),
-      this.sessionFilesNotYetWritten.delete(e),
-      e === this.sessionFile)
-    ) {
-      let byteLength = Buffer.byteLength(n, "utf8");
-      ((this.bytesSinceMetadataReAppend += byteLength),
-        (this.bytesSinceCompact += byteLength),
-        (this.sessionFileAppendSource = s ? r : void 0));
+    noteTranscriptWriteOk(this.store.writerHealth, e);
+    this.sessionFilesNotYetWritten.delete(e);
+    if (e === this.sessionFile) {
+      let h = Buffer.byteLength(n, "utf8");
+      this.bytesSinceMetadataReAppend += h;
+      this.bytesSinceCompact += h;
+      this.sessionFileAppendSource = s ? r : undefined;
     }
   }
   drainsInFlight = 0;
@@ -2835,89 +2454,101 @@ ${n ?? ""}`,
   drainWriteQueue() {
     this.drainsInFlight++;
     let e = this.drainChain.then(() => this.drainQueuesOnce());
-    return (
-      (this.drainChain = e
-        .catch(() => {})
-        .finally(() => {
-          this.drainsInFlight--;
-        })),
-      e
-    );
+    this.drainChain = e
+      .catch(() => {})
+      .finally(() => {
+        this.drainsInFlight--;
+      });
+    return e;
   }
   async drainQueuesOnce() {
     for (let [e, n] of this.writeQueues) {
       if (n.length === 0) continue;
-      let splice = n.splice(0),
-        s = 0;
+      let r = n.splice(0);
+      let s = 0;
       try {
-        let h = "",
-          y = 0,
-          S,
-          L = this.mirrors.length > 0 ? [] : void 0;
-        for (let G = 0; G < splice.length; G++) {
-          let q = splice[G];
+        let h = "";
+        let y = 0;
+        let S;
+        let L = this.mirrors.length > 0 ? [] : undefined;
+        for (let idx = 0; idx < r.length; idx++) {
+          let q = r[idx];
           if (!("entry" in q)) {
             if (h.length > 0) {
-              if ((await this.appendToFile(e, h, S), L && L.length > 0))
-                (this.fireMirror(e, L.slice()), (L.length = 0));
-              for (let ke = y; ke < G; ke++) splice[ke].resolve();
-              ((s = G), (h = ""));
+              await this.appendToFile(e, h, S);
+              if (L && L.length > 0) {
+                this.fireMirror(e, L.slice());
+                L.length = 0;
+              }
+              for (let ke = y; ke < idx; ke++) r[ke].resolve();
+              s = idx;
+              h = "";
             }
-            if (this.storeFence !== void 0) throw this.storeFence;
+            if (this.storeFence !== undefined) throw this.storeFence;
             if ("removeUuid" in q) await this.performRemoveByUuid(e, q.removeUuid, q.storageV5);
             else if ("compact" in q)
-              await this.performCompactTranscript(e, void 0, void 0, q.storageV5, q.afterCompaction);
+              await this.performCompactTranscript(e, undefined, undefined, q.storageV5, q.afterCompaction);
             else await this.performLeafCheckpointWithdrawal(e, q.withdrawal, q.storageV5);
-            (q.resolve(), (s = G + 1), (y = G + 1));
+            q.resolve();
+            s = idx + 1;
+            y = idx + 1;
             continue;
           }
-          let { entry: entry } = q,
-            Se = toJsonLine(entry);
-          if (h.length + Se.length >= this.MAX_CHUNK_BYTES || (q.storageV5 !== S && h.length > 0)) {
-            if ((await this.appendToFile(e, h, S), L && L.length > 0))
-              (this.fireMirror(e, L.slice()), (L.length = 0));
-            for (let ke = y; ke < G; ke++) splice[ke].resolve();
-            ((s = G), (y = G), (h = ""));
+          let { entry } = q;
+          let jsonLine = toJsonLine(entry);
+          if (h.length + jsonLine.length >= this.MAX_CHUNK_BYTES || (q.storageV5 !== S && h.length > 0)) {
+            await this.appendToFile(e, h, S);
+            if (L && L.length > 0) {
+              this.fireMirror(e, L.slice());
+              L.length = 0;
+            }
+            for (let ke = y; ke < idx; ke++) r[ke].resolve();
+            s = idx;
+            y = idx;
+            h = "";
           }
-          if (((S = q.storageV5), (h += Se), !entry.type.startsWith("api-request"))) L?.push(entry);
+          S = q.storageV5;
+          h += jsonLine;
+          if (!entry.type.startsWith("api-request")) L?.push(entry);
         }
         if (h.length > 0) {
-          if ((await this.appendToFile(e, h, S), L && L.length > 0)) this.fireMirror(e, L);
-          for (let G = y; G < splice.length; G++) splice[G].resolve();
-          s = splice.length;
+          await this.appendToFile(e, h, S);
+          if (L && L.length > 0) this.fireMirror(e, L);
+          for (let G = y; G < r.length; G++) r[G].resolve();
+          s = r.length;
         }
       } catch (error) {
         if (error !== this.storeFence) {
-          let y = getErrnoCode(error);
+          let errnoCode = getErrnoCode(error);
           if (isSyscallError(error))
-            logForDebugging(`Transcript write failed (${y}): ${errorMessage(error)}`, { level: "error" });
+            logForDebugging(`Transcript write failed (${errnoCode}): ${errorMessage(error)}`, {
+              level: "error",
+            });
           else logError(error);
-          if (
-            (reportTranscriptWriteFailure(this.store.writerHealth, "drain", error, e),
-            this.forgetLinesThatNeverLanded(e),
-            error instanceof Error && getStorageErrorCause(error) !== void 0)
-          )
-            this.storeFence = error;
+          reportTranscriptWriteFailure(this.store.writerHealth, "drain", error, e);
+          this.forgetLinesThatNeverLanded(e);
+          if (error instanceof Error && getStorageErrorCause(error) !== undefined) this.storeFence = error;
         }
-        this.store.hasFailedWrite = !0;
-        for (let y = s; y < splice.length; y++) splice[y].resolve();
+        this.store.hasFailedWrite = true;
+        for (let y = s; y < r.length; y++) r[y].resolve();
       }
     }
     for (let [e, n] of this.writeQueues) if (n.length === 0) this.writeQueues.delete(e);
     if (
       this.store.localGcEnabled &&
       this.sessionFile &&
-      this.storeFence === void 0 &&
-      this.compactAwaitingSummary === void 0 &&
+      this.storeFence === undefined &&
+      this.compactAwaitingSummary === undefined &&
       this.bytesSinceCompact >= this.backstopThresholdBytes
-    )
-      ((this.bytesSinceCompact = 0),
-        await this.trackSessionRewrite(
-          this.performCompactTranscript(this.sessionFile, void 0, void 0, this.sessionFileAppendSource),
-        ));
+    ) {
+      this.bytesSinceCompact = 0;
+      await this.trackSessionRewrite(
+        this.performCompactTranscript(this.sessionFile, undefined, undefined, this.sessionFileAppendSource),
+      );
+    }
     if (this.bytesSinceMetadataReAppend >= LITE_READ_BUF_SIZE / 2)
       try {
-        await this.reAppendSessionMetadataAsync(!1, !0, this.sessionFileAppendSource);
+        await this.reAppendSessionMetadataAsync(false, true, this.sessionFileAppendSource);
       } catch (error) {
         if (isSyscallError(error))
           logForDebugging(`Metadata re-append failed (${getErrnoCode(error)}): ${errorMessage(error)}`, {
@@ -2927,53 +2558,52 @@ ${n ?? ""}`,
       }
   }
   resetSessionFile() {
-    for (let { target: target } of this.heldReplayRecords.map((heldReplayRecord) => heldReplayRecord.records))
+    for (let { target } of this.heldReplayRecords.map((heldReplayRecord) => heldReplayRecord.records))
       if (
         target.sessionId !== getSessionId() &&
         getTranscriptPathForSession(target.sessionId) === this.sessionFile
       )
         this.existingSessionFiles.set(target.sessionId, this.sessionFile);
-    if (
-      (this.setSessionFile(null),
-      (this.pendingEntries = []),
-      (this.awaitingFirstUserRow = !1),
-      this.heldReplayRecords.length > 0)
-    )
-      this.releaseHeldReplayRecords();
-    ((this.bytesSinceMetadataReAppend = 0),
-      (this.sessionFileAppendSource = void 0),
-      (this.bytesSinceCompact = 0),
-      (this.backstopThresholdBytes = LG),
-      this.sessionRowsDeleted.clear(),
-      (this.sessionLastBoundaryUuid = void 0));
+    this.setSessionFile(null);
+    this.pendingEntries = [];
+    this.awaitingFirstUserRow = false;
+    if (this.heldReplayRecords.length > 0) this.releaseHeldReplayRecords();
+    this.bytesSinceMetadataReAppend = 0;
+    this.sessionFileAppendSource = undefined;
+    this.bytesSinceCompact = 0;
+    this.backstopThresholdBytes = ENTRY_APPEND_POLICY_2;
+    this.sessionRowsDeleted.clear();
+    this.sessionLastBoundaryUuid = undefined;
   }
-  reAppendSessionMetadata(e = !1, n = !1, r = !1, s = !1) {
+  reAppendSessionMetadata(e = false, n = false, r = false, s = false) {
     if (!this.sessionFile) return;
     this.bytesSinceMetadataReAppend = 0;
-    let h = readTranscriptTail(this.sessionFile);
+    let transcriptTail = readTranscriptTail(this.sessionFile);
     if (
       s &&
-      h !== "" &&
-      !h.endsWith(`
+      transcriptTail !== "" &&
+      !transcriptTail.endsWith(`
 `)
     )
       this.sealTornTailOnNextAppend(this.sessionFile);
-    let planReAppendSessionMetadata = this.planReAppendSessionMetadata(h, e, n, void 0, r);
-    if (!planReAppendSessionMetadata) return;
+    let y = this.planReAppendSessionMetadata(transcriptTail, e, n, undefined, r);
+    if (!y) return;
     try {
-      if (planReAppendSessionMetadata.entries.length > 0)
-        this.sealTornTailSync(planReAppendSessionMetadata.sessionFile);
-      for (let entry of planReAppendSessionMetadata.entries)
-        writeTranscriptMetadataSync(planReAppendSessionMetadata.sessionFile, entry);
+      if (y.entries.length > 0) this.sealTornTailSync(y.sessionFile);
+      for (let entry of y.entries) writeTranscriptMetadataSync(y.sessionFile, entry);
     } catch (error) {
-      for (let stamp of planReAppendSessionMetadata.stamps) stamp.inFlight = !1;
+      for (let stamp of y.stamps) stamp.inFlight = false;
       throw error;
     }
-    for (let stamp of planReAppendSessionMetadata.stamps) ((stamp.written = !0), (stamp.inFlight = !1));
+    for (let stamp of y.stamps) {
+      stamp.written = true;
+      stamp.inFlight = false;
+    }
   }
   appendOwedEntryAtExit(e) {
     if (!this.sessionFile) return;
-    (this.sealTornTailSync(this.sessionFile), writeTranscriptMetadataSync(this.sessionFile, e));
+    this.sealTornTailSync(this.sessionFile);
+    writeTranscriptMetadataSync(this.sessionFile, e);
   }
   exitReStampSource() {
     return this.sessionFileAppendSource;
@@ -2981,7 +2611,7 @@ ${n ?? ""}`,
   adoptAppendSource(e) {
     let sessionFile = this.sessionFile;
     this.sessionFileAppendSource =
-      sessionFile === null ? void 0 : getStorageTargetForPath(sessionFile, e)?.backend;
+      sessionFile === null ? undefined : getStorageTargetForPath(sessionFile, e)?.backend;
   }
   async reStampAtExitAsync(e) {
     let sessionFile = this.sessionFile;
@@ -2991,64 +2621,64 @@ ${n ?? ""}`,
       return;
     }
     try {
-      await this.reAppendSessionMetadataAsync(!1, !1, e, !1);
+      await this.reAppendSessionMetadataAsync(false, false, e, false);
     } catch (error) {
       logReStampFailure("Exit re-stamp through the storage backend failed", error);
       return;
     }
-    let r = !0,
-      s = new Set();
-    for (let h = 0; ; h++) {
+    let r = true;
+    let s = new Set();
+    for (let idx = 0; ; idx++) {
       if (this.store.exitReStampDone()) return;
-      let { lines: lines, clean: clean } = this.takeForeignExitLines(s);
-      if (((r &&= clean), h > 0 && lines.length === 0)) break;
-      if (h === Cpo) {
-        r = !1;
+      let { lines, clean } = this.takeForeignExitLines(s);
+      r &&= clean;
+      if (idx > 0 && lines.length === 0) break;
+      if (idx === RELOCATION_BACKOFF) {
+        r = false;
         break;
       }
-      for (let w of lines) {
+      for (let line of lines) {
         if (this.store.exitReStampDone()) return;
         try {
-          (await appendEntryToFileAsync(w.path, w.entry, e, {
-            onlyIfExists: !0,
-            tornTailEntry: w.tornTailEntry,
-          }),
-            this.store.takenForeignExitLines.delete(w));
+          await appendEntryToFileAsync(line.path, line.entry, e, {
+            onlyIfExists: true,
+            tornTailEntry: line.tornTailEntry,
+          });
+          this.store.takenForeignExitLines.delete(line);
         } catch (error) {
-          (logReStampFailure(
+          logReStampFailure(
             "Exit line owed to another session's transcript was not appended through the storage backend",
             error,
-          ),
-            (r = !1));
+          );
+          r = false;
         }
       }
-      if (h > 0) continue;
+      if (idx > 0) continue;
       for (let exitReStampProvider of this.store.exitReStampProviders) {
         if (this.store.exitReStampDone()) return;
         if (this.sessionFile !== sessionFile) {
-          r = !1;
+          r = false;
           break;
         }
         try {
           let L = exitReStampProvider();
-          if (L !== void 0)
-            (await appendToTranscriptFile(
+          if (L !== undefined) {
+            await appendToTranscriptFile(
               sessionFile,
               jsonStringify(L) +
                 `
 `,
               e,
-            ),
-              this.fireMirror(sessionFile, [L]));
+            );
+            this.fireMirror(sessionFile, [L]);
+          }
         } catch (error) {
-          if (
-            (logReStampFailure(
-              "Exit line owed to the transcript was not appended through the storage backend",
-              error,
-            ),
-            (r = !1),
-            error instanceof Error && getStorageErrorCause(error) !== void 0)
-          ) {
+          logReStampFailure(
+            "Exit line owed to the transcript was not appended through the storage backend",
+            error,
+          );
+          r = false;
+          if (error instanceof Error && getStorageErrorCause(error) !== undefined) {
             this.storeFence = error;
             break;
           }
@@ -3058,8 +2688,8 @@ ${n ?? ""}`,
     if (r && this.sessionFile === sessionFile) this.store.claimExitReStamp();
   }
   takeForeignExitLines(e) {
-    let n = [],
-      r = !0;
+    let n = [];
+    let clean = true;
     for (let foreignExitReStampProvider of this.store.foreignExitReStampProviders)
       try {
         for (let h of foreignExitReStampProvider()) {
@@ -3069,40 +2699,45 @@ ${n ?? ""}`,
 ` +
             jsonStringify(h.entry);
           if (e.has(y)) continue;
-          (e.add(y), this.store.takenForeignExitLines.add(h), n.push(h));
+          e.add(y);
+          this.store.takenForeignExitLines.add(h);
+          n.push(h);
         }
       } catch (error) {
-        (logReStampFailure("Exit lines owed to other sessions' transcripts could not be listed", error),
-          (r = !1));
+        logReStampFailure("Exit lines owed to other sessions' transcripts could not be listed", error);
+        clean = false;
       }
-    return { lines: n, clean: r };
+    return {
+      lines: n,
+      clean,
+    };
   }
-  async reAppendSessionMetadataAsync(e = !1, n = !1, r, s = !1) {
+  async reAppendSessionMetadataAsync(e = false, n = false, r, s = false) {
     let sessionFile = this.sessionFile;
-    if (!sessionFile || this.storeFence !== void 0) return;
+    if (!sessionFile || this.storeFence !== undefined) return;
     let sessionId = this.store.getSessionId();
-    ((this.bytesSinceMetadataReAppend = 0), await flushAppendEntryQueues());
-    let S = await readFileRange(sessionFile, r);
-    if (s && r !== void 0 && (this.sessionFile !== sessionFile || this.store.getSessionId() !== sessionId))
+    this.bytesSinceMetadataReAppend = 0;
+    await flushAppendEntryQueues();
+    let fileRange = await readFileRange(sessionFile, r);
+    if (s && r !== undefined && (this.sessionFile !== sessionFile || this.store.getSessionId() !== sessionId))
       return;
-    let planReAppendSessionMetadata = this.planReAppendSessionMetadata(S, e, n, r);
-    if (!planReAppendSessionMetadata || planReAppendSessionMetadata.entries.length === 0) return;
+    let w = this.planReAppendSessionMetadata(fileRange, e, n, r);
+    if (!w || w.entries.length === 0) return;
     this.directAppendsInFlight++;
     try {
-      await appendToTranscriptFile(
-        planReAppendSessionMetadata.sessionFile,
-        jsonlJoin(planReAppendSessionMetadata.entries),
-        r,
-      );
+      await appendToTranscriptFile(w.sessionFile, jsonlJoin(w.entries), r);
     } catch (error) {
-      if (error instanceof Error && getStorageErrorCause(error) !== void 0) this.storeFence = error;
-      for (let stamp of planReAppendSessionMetadata.stamps) stamp.inFlight = !1;
+      if (error instanceof Error && getStorageErrorCause(error) !== undefined) this.storeFence = error;
+      for (let stamp of w.stamps) stamp.inFlight = false;
       throw error;
     } finally {
       this.directAppendsInFlight--;
     }
-    for (let stamp of planReAppendSessionMetadata.stamps) ((stamp.written = !0), (stamp.inFlight = !1));
-    this.fireMirror(planReAppendSessionMetadata.sessionFile, planReAppendSessionMetadata.entries);
+    for (let stamp of w.stamps) {
+      stamp.written = true;
+      stamp.inFlight = false;
+    }
+    this.fireMirror(w.sessionFile, w.entries);
   }
   normalizeLastPrompt(e) {
     let trimmed = e
@@ -3114,89 +2749,145 @@ ${n ?? ""}`,
       .trim();
     return trimmed.length > 200 ? truncateToLength(trimmed, 200).trim() + "\u2026" : trimmed;
   }
-  planReAppendSessionMetadata(e, n, r, s, h = !1) {
+  planReAppendSessionMetadata(e, n, r, s, h = false) {
     if (!this.sessionFile) return null;
     let sessionId = this.store.getSessionId();
     if (!sessionId) return null;
-    let sessionFile = this.sessionFile,
-      parts = e.split(`
+    let sessionFile = this.sessionFile;
+    let lines = e.split(`
 `);
     if (!n) {
-      let We = !1,
-        last = parts.findLast((Je) => Je.includes('"type":"custom-title"') && Je.includes('"customTitle":"'));
+      let We = false;
+      let last = lines.findLast(
+        (line) => line.includes('"type":"custom-title"') && line.includes('"customTitle":"'),
+      );
       if (last) {
-        let Je = extractLastJsonStringField(last, "customTitle");
-        if (Je !== void 0) {
-          if (
-            ((We ||= this.currentSessionTitle !== (Je || void 0)),
-            (this.currentSessionTitle = Je || void 0),
-            !Je)
-          )
-            deleteSessionTitleSidecar(sessionFile, sessionId, s);
+        let lastJsonStringField = extractLastJsonStringField(last, "customTitle");
+        if (lastJsonStringField !== undefined) {
+          We ||= this.currentSessionTitle !== (lastJsonStringField || undefined);
+          this.currentSessionTitle = lastJsonStringField || undefined;
+          if (!lastJsonStringField) deleteSessionTitleSidecar(sessionFile, sessionId, s);
         }
       }
-      let last_2 = parts.findLast((Je) => Je.includes('"type":"ai-title"') && Je.includes('"aiTitle":"'));
+      let last_2 = lines.findLast(
+        (line) => line.includes('"type":"ai-title"') && line.includes('"aiTitle":"'),
+      );
       if (last_2) {
-        let Je = extractLastJsonStringField(last_2, "aiTitle");
-        if (Je !== void 0)
-          ((We ||= this.currentSessionAiTitle !== (Je || void 0)),
-            (this.currentSessionAiTitle = Je || void 0));
+        let lastJsonStringField = extractLastJsonStringField(last_2, "aiTitle");
+        if (lastJsonStringField !== undefined) {
+          We ||= this.currentSessionAiTitle !== (lastJsonStringField || undefined);
+          this.currentSessionAiTitle = lastJsonStringField || undefined;
+        }
       }
       if (We) this.store.sessionTitleChanged.emit();
     }
-    let last = parts.findLast((We) => We.includes('"type":"tag"') && We.includes('"tag":"'));
+    let last = lines.findLast((line) => line.includes('"type":"tag"') && line.includes('"tag":"'));
     if (last) {
-      let We = extractLastJsonStringField(last, "tag");
-      if (We !== void 0) this.currentSessionTag = We || void 0;
+      let lastJsonStringField = extractLastJsonStringField(last, "tag");
+      if (lastJsonStringField !== undefined) this.currentSessionTag = lastJsonStringField || undefined;
     }
-    let G = extractFieldFromLastEntryOfTypeStrict(e, "relocated", "relocatedCwd");
-    if (G) this.currentSessionRelocatedCwd ??= G;
-    if (this.currentSessionLeafUuid !== void 0) {
-      let We = extractFieldFromLastEntryOfTypeStrict(e, "last-prompt", "lastPrompt");
-      if (We) this.currentSessionLastPrompt ??= this.normalizeLastPrompt(We);
+    let fieldFromLastEntryOfTypeStrict = extractFieldFromLastEntryOfTypeStrict(
+      e,
+      "relocated",
+      "relocatedCwd",
+    );
+    if (fieldFromLastEntryOfTypeStrict) this.currentSessionRelocatedCwd ??= fieldFromLastEntryOfTypeStrict;
+    if (this.currentSessionLeafUuid !== undefined) {
+      let fieldFromLastEntryOfTypeStrict = extractFieldFromLastEntryOfTypeStrict(
+        e,
+        "last-prompt",
+        "lastPrompt",
+      );
+      if (fieldFromLastEntryOfTypeStrict)
+        this.currentSessionLastPrompt ??= this.normalizeLastPrompt(fieldFromLastEntryOfTypeStrict);
     }
     {
       let We = countFrameLinks(e);
-      if (We !== void 0)
+      if (We !== undefined)
         this.currentSessionArtifactCount = Math.max(this.currentSessionArtifactCount ?? 0, We);
     }
     let q = [];
-    if (this.currentSessionLastPrompt !== void 0 || this.currentSessionLeafUuid !== void 0)
+    if (this.currentSessionLastPrompt !== undefined || this.currentSessionLeafUuid !== undefined)
       q.push({
         type: "last-prompt",
-        ...(this.currentSessionLastPrompt && { lastPrompt: this.currentSessionLastPrompt }),
-        ...(this.currentSessionLeafUuid && { leafUuid: this.currentSessionLeafUuid }),
-        sessionId: sessionId,
+        ...(this.currentSessionLastPrompt && {
+          lastPrompt: this.currentSessionLastPrompt,
+        }),
+        ...(this.currentSessionLeafUuid && {
+          leafUuid: this.currentSessionLeafUuid,
+        }),
+        sessionId,
       });
     if (this.currentSessionTitle)
-      q.push({ type: "custom-title", customTitle: this.currentSessionTitle, sessionId: sessionId });
+      q.push({
+        type: "custom-title",
+        customTitle: this.currentSessionTitle,
+        sessionId,
+      });
     if (this.currentSessionAiTitle)
-      q.push({ type: "ai-title", aiTitle: this.currentSessionAiTitle, sessionId: sessionId });
-    if (this.currentSessionTag) q.push({ type: "tag", tag: this.currentSessionTag, sessionId: sessionId });
+      q.push({
+        type: "ai-title",
+        aiTitle: this.currentSessionAiTitle,
+        sessionId,
+      });
+    if (this.currentSessionTag)
+      q.push({
+        type: "tag",
+        tag: this.currentSessionTag,
+        sessionId,
+      });
     if (this.currentSessionRelocatedCwd && e !== "")
-      q.push({ type: "relocated", relocatedCwd: this.currentSessionRelocatedCwd, sessionId: sessionId });
+      q.push({
+        type: "relocated",
+        relocatedCwd: this.currentSessionRelocatedCwd,
+        sessionId,
+      });
     if (this.currentSessionAgentName)
-      q.push({ type: "agent-name", agentName: this.currentSessionAgentName, sessionId: sessionId });
+      q.push({
+        type: "agent-name",
+        agentName: this.currentSessionAgentName,
+        sessionId,
+      });
     if (this.currentSessionAgentColor)
-      q.push({ type: "agent-color", agentColor: this.currentSessionAgentColor, sessionId: sessionId });
+      q.push({
+        type: "agent-color",
+        agentColor: this.currentSessionAgentColor,
+        sessionId,
+      });
     if (this.currentSessionAgentSetting)
-      q.push({ type: "agent-setting", agentSetting: this.currentSessionAgentSetting, sessionId: sessionId });
+      q.push({
+        type: "agent-setting",
+        agentSetting: this.currentSessionAgentSetting,
+        sessionId,
+      });
     if (this.currentSessionMode)
-      q.push({ type: "mode", mode: this.currentSessionMode, sessionId: sessionId });
+      q.push({
+        type: "mode",
+        mode: this.currentSessionMode,
+        sessionId,
+      });
     if (this.currentSessionPermissionMode)
       q.push({
         type: "permission-mode",
         permissionMode: this.currentSessionPermissionMode,
-        sessionId: sessionId,
+        sessionId,
       });
     if (this.currentSessionIsolationLatch)
-      q.push({ type: "isolation-latch", side: this.currentSessionIsolationLatch, sessionId: sessionId });
+      q.push({
+        type: "isolation-latch",
+        side: this.currentSessionIsolationLatch,
+        sessionId,
+      });
     if (this.currentSessionDevModsFolder)
-      q.push({ type: "dev-mods", folder: this.currentSessionDevModsFolder, sessionId: sessionId });
+      q.push({
+        type: "dev-mods",
+        folder: this.currentSessionDevModsFolder,
+        sessionId,
+      });
     let index = this.currentSessionMemoryModeStamps.findIndex(
-        (currentSessionMemoryModeStamp) => !currentSessionMemoryModeStamp.written,
-      ),
-      Se = [];
+      (currentSessionMemoryModeStamp) => !currentSessionMemoryModeStamp.written,
+    );
+    let Se = [];
     if (
       index !== -1 &&
       (h ||
@@ -3204,41 +2895,66 @@ ${n ?? ""}`,
           (currentSessionMemoryModeStamp) => currentSessionMemoryModeStamp.inFlight,
         ))
     )
-      for (let We of this.currentSessionMemoryModeStamps.slice(index))
-        ((We.inFlight = !0),
-          Se.push(We),
-          q.push({
-            type: "memory-mode",
-            mode: We.mode,
-            afterUuid: We.afterUuid,
-            timestamp: We.timestamp,
-            ...(We.reason !== void 0 && { reason: We.reason }),
-            ...(We.account !== void 0 && { account: We.account }),
-            ...(We.accountChoice !== void 0 && { accountChoice: We.accountChoice }),
-            sessionId: sessionId,
-          }));
-    let ke = getConversationAtisLatch();
-    if (ke !== void 0)
-      (q.push({ type: "atis-latch", atis: ke, sessionId: sessionId }),
-        (this.atisLatchStamp = `${sessionFile}
-${ke}`));
-    let we = getConversationToolsUsed();
+      for (let currentSessionMemoryModeStamp of this.currentSessionMemoryModeStamps.slice(index)) {
+        currentSessionMemoryModeStamp.inFlight = true;
+        Se.push(currentSessionMemoryModeStamp);
+        q.push({
+          type: "memory-mode",
+          mode: currentSessionMemoryModeStamp.mode,
+          afterUuid: currentSessionMemoryModeStamp.afterUuid,
+          timestamp: currentSessionMemoryModeStamp.timestamp,
+          ...(currentSessionMemoryModeStamp.reason !== undefined && {
+            reason: currentSessionMemoryModeStamp.reason,
+          }),
+          ...(currentSessionMemoryModeStamp.account !== undefined && {
+            account: currentSessionMemoryModeStamp.account,
+          }),
+          ...(currentSessionMemoryModeStamp.accountChoice !== undefined && {
+            accountChoice: currentSessionMemoryModeStamp.accountChoice,
+          }),
+          sessionId,
+        });
+      }
+    let conversationAtisLatch = getConversationAtisLatch();
+    if (conversationAtisLatch !== undefined) {
+      q.push({
+        type: "atis-latch",
+        atis: conversationAtisLatch,
+        sessionId,
+      });
+      this.atisLatchStamp = `${sessionFile}
+${conversationAtisLatch}`;
+    }
+    let conversationToolsUsed = getConversationToolsUsed();
     if (
       isSillyShoreGateOn() &&
-      we.size() > 0 &&
+      conversationToolsUsed.size() > 0 &&
       this.toolsUsedStamp !==
         `${sessionFile}
-${we.generation()}`
+${conversationToolsUsed.generation()}`
+    ) {
+      q.push({
+        type: "tools-used",
+        tools: conversationToolsUsed.names(),
+        sessionId,
+      });
+      this.toolsUsedStamp = `${sessionFile}
+${conversationToolsUsed.generation()}`;
+    }
+    if (this.currentSessionWorktree !== undefined)
+      q.push({
+        type: "worktree-state",
+        worktreeSession: this.currentSessionWorktree,
+        sessionId,
+      });
+    if (
+      this.currentSessionPrNumber !== undefined &&
+      this.currentSessionPrUrl &&
+      this.currentSessionPrRepository
     )
-      (q.push({ type: "tools-used", tools: we.names(), sessionId: sessionId }),
-        (this.toolsUsedStamp = `${sessionFile}
-${we.generation()}`));
-    if (this.currentSessionWorktree !== void 0)
-      q.push({ type: "worktree-state", worktreeSession: this.currentSessionWorktree, sessionId: sessionId });
-    if (this.currentSessionPrNumber !== void 0 && this.currentSessionPrUrl && this.currentSessionPrRepository)
       q.push({
         type: "pr-link",
-        sessionId: sessionId,
+        sessionId,
         prNumber: this.currentSessionPrNumber,
         prUrl: this.currentSessionPrUrl,
         prRepository: this.currentSessionPrRepository,
@@ -3248,14 +2964,14 @@ ${we.generation()}`));
       q.push({
         type: "frame-link",
         artifactCount: this.currentSessionArtifactCount,
-        sessionId: sessionId,
+        sessionId,
         timestamp: new Date().toISOString(),
       });
     if (this.currentSessionHistorySuppressed) q.push(buildHistorySuppressionEntry(sessionId, "migration"));
     if (this.currentSessionBridgeId)
       q.push({
         type: "bridge-session",
-        sessionId: sessionId,
+        sessionId,
         bridgeSessionId: this.currentSessionBridgeId,
         lastSequenceNum: this.currentSessionBridgeSeq ?? 0,
         ...(this.currentSessionBridgeDialogKinds?.length && {
@@ -3264,7 +2980,9 @@ ${we.generation()}`));
         ...(this.currentSessionBridgeGroupingId && {
           sessionGroupingId: this.currentSessionBridgeGroupingId,
         }),
-        ...(this.currentSessionBridgeNoBackfill && { noHistoryBackfill: !0 }),
+        ...(this.currentSessionBridgeNoBackfill && {
+          noHistoryBackfill: true,
+        }),
         ...(this.currentSessionBridgeOwnerAccountUuid && {
           ownerAccountUuid: this.currentSessionBridgeOwnerAccountUuid,
         }),
@@ -3272,14 +2990,20 @@ ${we.generation()}`));
           ownerOrganizationUuid: this.currentSessionBridgeOwnerOrganizationUuid,
         }),
       });
-    if (r || q.length === 0) return { sessionFile: sessionFile, entries: q, stamps: Se };
-    let Ee = new Set(q.map((We) => We.type)),
-      Ae = new Map(),
-      Ie = 0;
-    for (let We = parts.length - 1; We >= 0; We--) {
+    if (r || q.length === 0)
+      return {
+        sessionFile,
+        entries: q,
+        stamps: Se,
+      };
+    let Ee = new Set(q.map((We) => We.type));
+    let Ae = new Map();
+    let Ie = 0;
+    for (let idx = lines.length - 1; idx >= 0; idx--) {
       if (Ae.size === Ee.size) break;
-      let ze = parts[We] ?? "";
-      if (((Ie += Buffer.byteLength(ze, "utf8") + 1), Ie > LITE_READ_BUF_SIZE / 2)) break;
+      let ze = lines[idx] ?? "";
+      Ie += Buffer.byteLength(ze, "utf8") + 1;
+      if (Ie > LITE_READ_BUF_SIZE / 2) break;
       if (!ze) continue;
       let lt;
       for (let Je of Ee)
@@ -3294,14 +3018,18 @@ ${we.generation()}`));
       } catch {}
     }
     let Me = (We) => {
-      if (We.type === "history-suppression") return jsonStringify({ type: We.type, sessionId: We.sessionId });
-      let { timestamp: timestamp, ts: ts, ...Je } = We;
+      if (We.type === "history-suppression")
+        return jsonStringify({
+          type: We.type,
+          sessionId: We.sessionId,
+        });
+      let { timestamp, ts, ...Je } = We;
       return jsonStringify(Je);
     };
     return {
-      sessionFile: sessionFile,
+      sessionFile,
       entries: q.filter((We) => {
-        if (We.type === "memory-mode") return !0;
+        if (We.type === "memory-mode") return true;
         let ze = Ae.get(We.type);
         return !ze || Me(We) !== Me(ze);
       }),
@@ -3309,18 +3037,22 @@ ${we.generation()}`));
     };
   }
   async flush() {
-    if ((this.releaseWaitsForUploads(), this.flushTimer))
-      (clearTimeout(this.flushTimer), (this.flushTimer = null));
+    this.releaseWaitsForUploads();
+    if (this.flushTimer) {
+      clearTimeout(this.flushTimer);
+      this.flushTimer = null;
+    }
     if (this.activeDrain) await this.activeDrain;
     await this.drainWriteQueue();
-    while (this.pendingWriteCount > 0)
-      (await new Promise((e) => {
-        this.flushResolvers.push(e);
-      }),
-        await this.drainWriteQueue());
+    while (this.pendingWriteCount > 0) {
+      await new Promise((resolve) => {
+        this.flushResolvers.push(resolve);
+      });
+      await this.drainWriteQueue();
+    }
     if (this.sessionFile !== null && this.heldReplayRecords.length > 0) await this.releaseHeldReplayRecords();
     if (this.writeQueues.size > 0) await this.drainWriteQueue();
-    if (this.storeFence !== void 0) throw this.storeFence;
+    if (this.storeFence !== undefined) throw this.storeFence;
   }
   drainQueuedRows(e, n, r) {
     if (!this.writeQueues.has(e)) return;
@@ -3329,45 +3061,55 @@ ${we.generation()}`));
       this.drainChain.then(() => "drained"),
       n,
     ).then((h) => h ?? "timed_out");
-    return r === void 0 ? s : raceWithAbortSignal(s, r, () => new AbortError_2());
+    return r === undefined ? s : raceWithAbortSignal(s, r, () => new AbortError_2());
   }
   async removeMessageByUuid(e, n, r) {
     return this.trackWrite(async () => {
       let s = n === this.store.getSessionId() ? this.sessionFile : await this.getExistingSessionFile(n, r);
-      if (!s) return { drained: Promise.resolve() };
-      (this.restartReplayIndex(s, !0), this.queuedToolResults.clear());
-      let enqueueRemove = this.enqueueRemove(s, e, r);
-      return (this.trackWrite(() => enqueueRemove), { drained: enqueueRemove });
+      if (!s)
+        return {
+          drained: Promise.resolve(),
+        };
+      this.restartReplayIndex(s, true);
+      this.queuedToolResults.clear();
+      let h = this.enqueueRemove(s, e, r);
+      this.trackWrite(() => h);
+      return {
+        drained: h,
+      };
     });
   }
   async performRemoveByUuid(e, n, r) {
-    let s = r !== void 0 ? transcriptStorageKeyForPath(e) : void 0;
-    if (isStorageV5Enabled() && r !== void 0 && s !== void 0) return this.removeByUuidV5(r, s, n);
+    let s = r !== undefined ? transcriptStorageKeyForPath(e) : undefined;
+    if (isStorageV5Enabled() && r !== undefined && s !== undefined) return this.removeByUuidV5(r, s, n);
     if (isDiskless()) return;
-    let h = !1;
+    let h = false;
     try {
-      let y = 0,
-        S = await open(e, "r+");
+      let y = 0;
+      let S = await open(e, "r+");
       try {
-        let { size: size } = await S.stat();
-        if (((y = size), size === 0)) return;
-        let min = Math.min(size, LITE_READ_BUF_SIZE),
-          Se = size - min,
-          allocUnsafe = Buffer.allocUnsafe(min),
-          { bytesRead: bytesRead } = await S.read(allocUnsafe, 0, min, Se),
-          chunk = allocUnsafe.subarray(0, bytesRead),
-          Ae = `"uuid":"${n}"`,
-          index = chunk.lastIndexOf(Ae);
+        let { size } = await S.stat();
+        y = size;
+        if (size === 0) return;
+        let min = Math.min(size, LITE_READ_BUF_SIZE);
+        let Se = size - min;
+        let ke = Buffer.allocUnsafe(min);
+        let { bytesRead } = await S.read(ke, 0, min, Se);
+        let chunk = ke.subarray(0, bytesRead);
+        let Ae = `"uuid":"${n}"`;
+        let index = chunk.lastIndexOf(Ae);
         if (index >= 0) {
           let index_2 = chunk.lastIndexOf(10, index);
           if (index_2 >= 0 || Se === 0) {
-            let We = index_2 + 1,
-              index_3 = chunk.indexOf(10, index + Ae.length),
-              lt = index_3 >= 0 ? index_3 + 1 : bytesRead,
-              Je = Se + We,
-              nt = bytesRead - lt;
-            if (((h = !0), await S.truncate(Je), nt > 0)) {
-              let { bytesWritten: bytesWritten } = await S.write(chunk, lt, nt, Je);
+            let We = index_2 + 1;
+            let index_3 = chunk.indexOf(10, index + Ae.length);
+            let lt = index_3 >= 0 ? index_3 + 1 : bytesRead;
+            let Je = Se + We;
+            let nt = bytesRead - lt;
+            h = true;
+            await S.truncate(Je);
+            if (nt > 0) {
+              let { bytesWritten } = await S.write(chunk, lt, nt, Je);
               if (bytesWritten < nt) throw Error("performRemoveByUuid: short write");
             }
             return;
@@ -3376,89 +3118,108 @@ ${we.generation()}`));
       } finally {
         await S.close();
       }
-      if (y > KHe) {
+      if (y > MAX_TRANSCRIPT_READ_BYTES_2) {
         logForDebugging(`Skipping tombstone removal: session file too large (${formatFileSize(y)})`, {
           level: "warn",
         });
         return;
       }
-      let parts = (await readFile(e, { encoding: "utf-8" })).split(`
+      let lines = (
+        await readFile(e, {
+          encoding: "utf-8",
+        })
+      ).split(`
+`);
+      let filtered = lines.filter((line) => {
+        if (!line.trim()) return true;
+        try {
+          return jsonParse(line).uuid !== n;
+        } catch {
+          return true;
+        }
+      });
+      if (filtered.length === lines.length) return;
+      h = true;
+      await writeFile(
+        e,
+        filtered.join(`
 `),
-        filtered = parts.filter((q) => {
-          if (!q.trim()) return !0;
-          try {
-            return jsonParse(q).uuid !== n;
-          } catch {
-            return !0;
-          }
-        });
-      if (filtered.length === parts.length) return;
-      ((h = !0),
-        await writeFile(
-          e,
-          filtered.join(`
-`),
-          { encoding: "utf8" },
-        ));
+        {
+          encoding: "utf8",
+        },
+      );
     } catch {
-      if (h && this.replaySources.has(e)) (this.restartReplayIndex(e), b9(), this.queuedToolResults.clear());
+      if (h && this.replaySources.has(e)) {
+        this.restartReplayIndex(e);
+        clearAllReplayChains();
+        this.queuedToolResults.clear();
+      }
     }
   }
   async removeByUuidV5(e, n, r) {
     try {
       let buffer = Buffer.from(`"uuid":"${r}"`);
-      for (let h = 1; h <= 3; h++) {
-        let read = await e.read([{ key: n, tail: LITE_READ_BUF_SIZE }]);
-        if (!read.ok) {
-          if (d7t(read.error))
+      for (let idx = 1; idx <= 3; idx++) {
+        let y = await e.read([
+          {
+            key: n,
+            tail: LITE_READ_BUF_SIZE,
+          },
+        ]);
+        if (!y.ok) {
+          if (isByteViewUnsupportedError(y.error))
             return await removeTombstones(e, n, r, {
               windowBytes: LITE_READ_BUF_SIZE,
-              pageBytes: aMt,
-              maxReadBytes: KHe,
+              pageBytes: TRANSCRIPT_PAGE_BYTES,
+              maxReadBytes: MAX_TRANSCRIPT_READ_BYTES_2,
             });
-          logForDebugging(`Tombstone removal abandoned: tail read failed (${read.error.code})`, {
+          logForDebugging(`Tombstone removal abandoned: tail read failed (${y.error.code})`, {
             level: "warn",
           });
           return;
         }
-        let [S] = read.value.items;
+        let [S] = y.value.items;
         if (!S.found) return;
         let buffer_2 = Buffer.from(S.value.buffer, S.value.byteOffset, S.value.byteLength);
         if (buffer_2.length === 0) return;
-        let L = S.totalBytes - buffer_2.length,
-          index = buffer_2.lastIndexOf(buffer),
-          q = index < 0 ? -1 : buffer_2.lastIndexOf(10, index);
+        let L = S.totalBytes - buffer_2.length;
+        let index = buffer_2.lastIndexOf(buffer);
+        let q = index < 0 ? -1 : buffer_2.lastIndexOf(10, index);
         if (index < 0 || (q < 0 && L > 0))
           return await this.removeByUuidSlowV5(e, n, r, S.totalBytes, S.version);
         let index_2 = buffer_2.indexOf(10, index + buffer.length);
         if (index_2 < 0) return;
-        let replaceRecords = await e.replaceRecords(n, [], {
+        let Se = await e.replaceRecords(n, [], {
           keepBefore: L + q + 1,
           preserveFrom: L + index_2 + 1,
           publishDiscipline: "inPlace",
-          precondition: S.version !== void 0 ? { type: "ifMatch", version: S.version } : { type: "none" },
+          precondition:
+            S.version !== undefined
+              ? {
+                  type: "ifMatch",
+                  version: S.version,
+                }
+              : {
+                  type: "none",
+                },
         });
-        if (replaceRecords.ok || replaceRecords.error.code === "NotFound") return;
-        if (
-          !(
-            replaceRecords.error.code === "PreconditionFailed" || replaceRecords.error.code === "Unavailable"
-          ) ||
-          h === 3
-        ) {
-          logForDebugging(
-            `Tombstone removal abandoned after ${h} attempt(s) (${replaceRecords.error.code})`,
-            { level: "warn" },
-          );
+        if (Se.ok || Se.error.code === "NotFound") return;
+        if (!(Se.error.code === "PreconditionFailed" || Se.error.code === "Unavailable") || idx === 3) {
+          logForDebugging(`Tombstone removal abandoned after ${idx} attempt(s) (${Se.error.code})`, {
+            level: "warn",
+          });
           return;
         }
       }
     } catch (error) {
-      logForDebugging(`Tombstone removal abandoned: ${errorMessage(error)}`, { level: "warn" });
+      logForDebugging(`Tombstone removal abandoned: ${errorMessage(error)}`, {
+        level: "warn",
+      });
     }
   }
   async removeByUuidSlowV5(e, n, r, s, h) {
     let y = h;
-    if (y === void 0) {
+    if (y === undefined) {
       let stats = await e.stat(n);
       if (!stats.ok) {
         if (stats.error.code !== "NotFound")
@@ -3467,22 +3228,25 @@ ${we.generation()}`));
           });
         return;
       }
-      ((s = stats.value.size), (y = stats.value.version));
+      s = stats.value.size;
+      y = stats.value.version;
     }
-    if (s > KHe) {
+    if (s > MAX_TRANSCRIPT_READ_BYTES_2) {
       logForDebugging(`Skipping tombstone removal: session file too large (${formatFileSize(s)})`, {
         level: "warn",
       });
       return;
     }
-    let S,
-      w = [],
-      L;
+    let S;
+    let w = [];
+    let L;
     for (;;) {
       let records = await e.readRecords(n, {
         order: "forward",
-        ...(L !== void 0 && { fromSeq: L }),
-        maxBytes: aMt,
+        ...(L !== undefined && {
+          fromSeq: L,
+        }),
+        maxBytes: TRANSCRIPT_PAGE_BYTES,
       });
       if (!records.ok) {
         logForDebugging(`Tombstone removal abandoned: paging failed (${records.error.code})`, {
@@ -3490,15 +3254,15 @@ ${we.generation()}`));
         });
         return;
       }
-      let Z = !1;
+      let Z = false;
       for (let item of records.value.items) {
         if (item.seq >= s) {
-          Z = !0;
+          Z = true;
           break;
         }
-        let str = Buffer.from(item.data.buffer, item.data.byteOffset, item.data.byteLength).toString("utf8"),
-          sliced = str.slice(0, -1),
-          Ae = !1;
+        let str = Buffer.from(item.data.buffer, item.data.byteOffset, item.data.byteLength).toString("utf8");
+        let sliced = str.slice(0, -1);
+        let Ae = false;
         if (sliced.trim())
           try {
             Ae = jsonParseRaw(sliced).uuid === r;
@@ -3507,132 +3271,159 @@ ${we.generation()}`));
           S ??= item.seq;
           continue;
         }
-        if (S !== void 0) w.push({ data: str });
+        if (S !== undefined)
+          w.push({
+            data: str,
+          });
       }
       let nextSeq = records.value.nextSeq;
-      if (Z || nextSeq === void 0 || nextSeq >= s) break;
+      if (Z || nextSeq === undefined || nextSeq >= s) break;
       L = nextSeq;
     }
-    if (S === void 0) return;
-    let replaceRecords = await e.replaceRecords(n, w, {
+    if (S === undefined) return;
+    let G = await e.replaceRecords(n, w, {
       keepBefore: S,
       preserveFrom: s,
       publishDiscipline: "inPlace",
-      precondition: y !== void 0 ? { type: "ifMatch", version: y } : { type: "none" },
+      precondition:
+        y !== undefined
+          ? {
+              type: "ifMatch",
+              version: y,
+            }
+          : {
+              type: "none",
+            },
     });
-    if (!replaceRecords.ok && replaceRecords.error.code !== "NotFound")
-      logForDebugging(`Tombstone removal abandoned on the paged path (${replaceRecords.error.code})`, {
+    if (!G.ok && G.error.code !== "NotFound")
+      logForDebugging(`Tombstone removal abandoned on the paged path (${G.error.code})`, {
         level: "warn",
       });
   }
-  async performCompactTranscript(e, n, r, s, h = !1) {
-    let y = s !== void 0 ? transcriptStorageKeyForPath(e) : void 0;
-    if (isStorageV5Enabled() && s !== void 0 && y !== void 0)
+  async performCompactTranscript(e, n, r, s, h = false) {
+    let y = s !== undefined ? transcriptStorageKeyForPath(e) : undefined;
+    if (isStorageV5Enabled() && s !== undefined && y !== undefined)
       return this.performCompactTranscriptV5(s, y, e, h);
     if (isDiskless()) return;
-    let S = `${e}.compact.tmp.${randomBytes(4).toString("hex")}`,
-      w = !1,
-      L = !1;
+    let S = `${e}.compact.tmp.${randomBytes(4).toString("hex")}`;
+    let w = false;
+    let L = false;
     try {
       let G = await stat(e);
       if (G.size < COMPACT_MIN_FILE_BYTES) return;
-      let q = 4096,
-        Z = [
-          [0, Math.min(q, G.size)],
-          [Math.max(0, Math.floor(G.size / 2) - q / 2), Math.min(q, G.size)],
-          [Math.max(0, G.size - q), Math.min(q, G.size)],
-        ],
-        Se = async () => {
-          let Et = await open(e, "r");
-          try {
-            let yt = [];
-            for (let [gt, At] of Z) {
-              let alloc = Buffer.alloc(At),
-                Yt = 0;
-              while (Yt < At) {
-                let { bytesRead: bytesRead } = await Et.read(alloc, Yt, At - Yt, gt + Yt);
-                if (bytesRead <= 0) break;
-                Yt += bytesRead;
-              }
-              yt.push(alloc.subarray(0, Yt));
+      let q = 4096;
+      let Z = [
+        [0, Math.min(q, G.size)],
+        [Math.max(0, Math.floor(G.size / 2) - q / 2), Math.min(q, G.size)],
+        [Math.max(0, G.size - q), Math.min(q, G.size)],
+      ];
+      let Se = async () => {
+        let Et = await open(e, "r");
+        try {
+          let yt = [];
+          for (let [gt, At] of Z) {
+            let It = Buffer.alloc(At);
+            let Yt = 0;
+            while (Yt < At) {
+              let { bytesRead } = await Et.read(It, Yt, At - Yt, gt + Yt);
+              if (bytesRead <= 0) break;
+              Yt += bytesRead;
             }
-            return yt;
-          } finally {
-            await Et.close().catch(() => {});
+            yt.push(It.subarray(0, Yt));
           }
-        },
-        ke = await Se(),
-        we = async () => {
-          let Et = await Se();
-          return ke.some((yt, gt) => !Et[gt] || !yt.equals(Et[gt]));
-        };
+          return yt;
+        } finally {
+          await Et.close().catch(() => {});
+        }
+      };
+      let ke = await Se();
+      let we = async () => {
+        let Et = await Se();
+        return ke.some((yt, gt) => !Et[gt] || !yt.equals(Et[gt]));
+      };
       {
         let Et = ke[2];
         if (!Et || Et.length === 0 || Et.at(-1) !== 10) {
-          logEvent("tengu_transcript_compact_failed", { reason: lit_2("snapshot_mid_line") });
+          logEvent("tengu_transcript_compact_failed", {
+            reason: lit_2("snapshot_mid_line"),
+          });
           return;
         }
       }
       let Ee = await scanCompactBoundaries(e, G.size);
-      if (Ee === 0 || this.skipLowYieldCompact(e, G.size, Ee, !0)) return;
-      let Ae = () => transcriptLines(createReadStream(e, { encoding: "utf8", end: G.size - 1 }));
+      if (Ee === 0 || this.skipLowYieldCompact(e, G.size, Ee, true)) return;
+      let Ae = () =>
+        transcriptLines(
+          createReadStream(e, {
+            encoding: "utf8",
+            end: G.size - 1,
+          }),
+        );
       forceGcIfBun(h);
-      let Ie = await readTranscriptEntries(Ae());
-      if (Ie.kind === "skip") return;
-      if (Ie.kind === "abort") {
-        logEvent("tengu_transcript_compact_failed", { reason: fromEnum(Ie.reason) });
+      let transcriptEntries = await readTranscriptEntries(Ae());
+      if (transcriptEntries.kind === "skip") return;
+      if (transcriptEntries.kind === "abort") {
+        logEvent("tengu_transcript_compact_failed", {
+          reason: fromEnum(transcriptEntries.reason),
+        });
         return;
       }
-      if (this.skipLowYieldCompact(e, G.size, Ie.reclaimableBytes)) return;
-      let Me = makeLineEmitter(Ie.plan),
-        We = await open(S, "w", 384),
-        ze = "",
-        lt = 0,
-        Je = async (Et) => {
-          (await writeFully(We, Et, null), (lt += Et.length));
-        },
-        nt = !1,
-        pt = async (Et) => {
-          if (
-            ((ze +=
-              ice(Et) +
-              `
-`),
-            ze.length >= LITE_READ_BUF_SIZE)
-          )
-            (await Je(Buffer.from(ze, "utf8")), (ze = ""));
-        };
+      if (this.skipLowYieldCompact(e, G.size, transcriptEntries.reclaimableBytes)) return;
+      let lineEmitter = makeLineEmitter(transcriptEntries.plan);
+      let We = await open(S, "w", 384);
+      let ze = "";
+      let lt = 0;
+      let Je = async (Et) => {
+        await writeFully(We, Et, null);
+        lt += Et.length;
+      };
+      let nt = false;
+      let pt = async (Et) => {
+        ze +=
+          stripLeadingNuls(Et) +
+          `
+`;
+        if (ze.length >= LITE_READ_BUF_SIZE) {
+          await Je(Buffer.from(ze, "utf8"));
+          ze = "";
+        }
+      };
       try {
         let Et = 0;
         for await (let At of Ae()) {
-          for (let It of Me(Et, At)) await pt(It);
+          for (let It of lineEmitter(Et, At)) await pt(It);
           Et++;
         }
-        (await Je(Buffer.from(ze, "utf8")), n?.());
+        await Je(Buffer.from(ze, "utf8"));
+        n?.();
         let yt = await stat(e);
         if (yt.ino !== G.ino || yt.size < G.size || (await we())) {
-          logEvent("tengu_transcript_compact_failed", { reason: lit_2("source_changed") });
+          logEvent("tengu_transcript_compact_failed", {
+            reason: lit_2("source_changed"),
+          });
           return;
         }
         if (yt.size > G.size) {
-          let alloc = Buffer.alloc(yt.size - G.size),
-            It = await open(e, "r"),
-            Yt = 0;
+          let At = Buffer.alloc(yt.size - G.size);
+          let It = await open(e, "r");
+          let Yt = 0;
           try {
-            while (Yt < alloc.length) {
-              let { bytesRead: bytesRead } = await It.read(alloc, Yt, alloc.length - Yt, G.size + Yt);
+            while (Yt < At.length) {
+              let { bytesRead } = await It.read(At, Yt, At.length - Yt, G.size + Yt);
               if (bytesRead <= 0) break;
               Yt += bytesRead;
             }
           } finally {
             await It.close().catch(() => {});
           }
-          if (Yt < alloc.length) {
-            logEvent("tengu_transcript_compact_failed", { reason: lit_2("appended_rows_unread") });
+          if (Yt < At.length) {
+            logEvent("tengu_transcript_compact_failed", {
+              reason: lit_2("appended_rows_unread"),
+            });
             return;
           }
-          while (Yt > 0 && alloc[Yt - 1] !== 10) Yt--;
-          await Je(alloc.subarray(0, Yt));
+          while (Yt > 0 && At[Yt - 1] !== 10) Yt--;
+          await Je(At.subarray(0, Yt));
         }
         await We.sync();
         let size = (await We.stat()).size;
@@ -3644,208 +3435,246 @@ ${we.generation()}`));
           });
           return;
         }
-        if ((r?.(), (await stat(e)).ino !== G.ino || (await we()))) {
-          logEvent("tengu_transcript_compact_failed", { reason: lit_2("source_changed") });
+        r?.();
+        if ((await stat(e)).ino !== G.ino || (await we())) {
+          logEvent("tengu_transcript_compact_failed", {
+            reason: lit_2("source_changed"),
+          });
           return;
         }
-        ((nt = !0), await We.close());
+        nt = true;
+        await We.close();
       } finally {
         if (!nt) await We.close().catch(() => {});
       }
-      if (((L = !0), await retryFsOp(S, e), (w = !0), e === this.sessionFile))
-        for (let deletedUuid of Ie.plan.deletedUuids) this.sessionRowsDeleted.add(deletedUuid);
-      if (
-        (this.queuedToolResults.clear(),
-        this.recordCompactYield(e, G.size, Ie.reclaimableBytes),
-        e === this.sessionFile)
-      )
-        await this.reAppendSessionMetadataAsync(!1, !0).catch(() => {});
-      logEvent("tengu_transcript_compact", { bytesBefore: G.size, bytesAfter: lt });
+      L = true;
+      await retryFsOp(S, e);
+      w = true;
+      if (e === this.sessionFile)
+        for (let deletedUuid of transcriptEntries.plan.deletedUuids) this.sessionRowsDeleted.add(deletedUuid);
+      this.queuedToolResults.clear();
+      this.recordCompactYield(e, G.size, transcriptEntries.reclaimableBytes);
+      if (e === this.sessionFile) await this.reAppendSessionMetadataAsync(false, true).catch(() => {});
+      logEvent("tengu_transcript_compact", {
+        bytesBefore: G.size,
+        bytesAfter: lt,
+      });
     } catch (error) {
-      let q = getErrnoCode(error);
-      (logEvent("tengu_transcript_compact_failed", {
-        reason: L && q !== void 0 && AI.has(q) ? lit_2("rename_fallback") : lit_2("io"),
+      let errnoCode = getErrnoCode(error);
+      logEvent("tengu_transcript_compact_failed", {
+        reason:
+          L && errnoCode !== undefined && ATOMIC_WRITE_ERRNOS.has(errnoCode)
+            ? lit_2("rename_fallback")
+            : lit_2("io"),
         error_code: sanitizedErrnoLowerForTelemetry(error),
-      }),
-        logForDebugging(`Transcript compact failed (${getErrnoCode(error)}): ${errorMessage(error)}`, {
-          level: "warn",
-        }));
+      });
+      logForDebugging(`Transcript compact failed (${getErrnoCode(error)}): ${errorMessage(error)}`, {
+        level: "warn",
+      });
     } finally {
       if (!w) await unlink(S).catch(() => {});
     }
   }
   async performCompactTranscriptV5(e, n, r, s) {
-    let h = (y, S) => {
+    let h = (y, error) => {
       logEvent("tengu_transcript_compact_failed", {
         reason: fromEnum(y),
-        ...((y === "io" || y === "rename_fallback") && { error_code: sanitizedErrnoLowerForTelemetry(S) }),
+        ...((y === "io" || y === "rename_fallback") && {
+          error_code: sanitizedErrnoLowerForTelemetry(error),
+        }),
       });
     };
     try {
-      let stats = await e.stat(n, { witness: !0 });
+      let stats = await e.stat(n, {
+        witness: true,
+      });
       if (!stats.ok) {
-        (h("io"),
-          logForDebugging(
-            `Transcript compact failed (${stats.error.code}): ${formatStorageError(stats.error)}`,
-            { level: "warn" },
-          ));
+        h("io");
+        logForDebugging(
+          `Transcript compact failed (${stats.error.code}): ${formatStorageError(stats.error)}`,
+          {
+            level: "warn",
+          },
+        );
         return;
       }
-      let size = stats.value.size,
-        w = stats.value.tornTailBytes ?? 0;
-      if (size + w < COMPACT_MIN_FILE_BYTES) return;
-      if (w > 0) {
+      let size = stats.value.size;
+      let tornTailBytes = stats.value.tornTailBytes ?? 0;
+      if (size + tornTailBytes < COMPACT_MIN_FILE_BYTES) return;
+      if (tornTailBytes > 0) {
         h("snapshot_mid_line");
         return;
       }
-      let L = -1,
-        G = async function* () {
-          let Ee;
-          for (;;) {
-            let records = await e.readRecords(n, {
-              order: "forward",
-              ...(Ee !== void 0 && { fromSeq: Ee }),
-              maxBytes: ypo,
+      let seq = -1;
+      let G = async function* () {
+        let Ee;
+        for (;;) {
+          let records = await e.readRecords(n, {
+            order: "forward",
+            ...(Ee !== undefined && {
+              fromSeq: Ee,
+            }),
+            maxBytes: MAX_PAGED_TRANSCRIPT_BYTES,
+          });
+          if (!records.ok) {
+            logForDebugging(
+              `Transcript compact: storage read failed (${records.error.code}): ${formatStorageError(records.error)}`,
+              {
+                level: "warn",
+              },
+            );
+            throw Error("transcript storage read failed", {
+              cause: records.error,
             });
-            if (!records.ok)
-              throw (
-                logForDebugging(
-                  `Transcript compact: storage read failed (${records.error.code}): ${formatStorageError(records.error)}`,
-                  { level: "warn" },
-                ),
-                Error("transcript storage read failed", { cause: records.error })
-              );
-            for (let item of records.value.items) {
-              if (item.seq >= size) return;
-              L = item.seq;
-              let str = Buffer.from(item.data.buffer, item.data.byteOffset, item.data.byteLength).toString(
-                "utf8",
-              );
-              if (
-                str.endsWith(`
-`)
-              )
-                str = str.slice(0, -1);
-              if (str.endsWith("\r")) str = str.slice(0, -1);
-              yield str;
-            }
-            let nextSeq = records.value.nextSeq;
-            if (nextSeq === void 0 || nextSeq >= size) return;
-            Ee = nextSeq;
           }
-        };
+          for (let item of records.value.items) {
+            if (item.seq >= size) return;
+            seq = item.seq;
+            let str = Buffer.from(item.data.buffer, item.data.byteOffset, item.data.byteLength).toString(
+              "utf8",
+            );
+            if (
+              str.endsWith(`
+`)
+            )
+              str = str.slice(0, -1);
+            if (str.endsWith("\r")) str = str.slice(0, -1);
+            yield str;
+          }
+          let nextSeq = records.value.nextSeq;
+          if (nextSeq === undefined || nextSeq >= size) return;
+          Ee = nextSeq;
+        }
+      };
       forceGcIfBun(s);
-      let q = await readTranscriptEntries(G());
-      if (q.kind === "skip") return;
-      if (q.kind === "abort") {
-        h(q.reason);
+      let transcriptEntries = await readTranscriptEntries(G());
+      if (transcriptEntries.kind === "skip") return;
+      if (transcriptEntries.kind === "abort") {
+        h(transcriptEntries.reason);
         return;
       }
-      if (this.skipLowYieldCompact(r, size, q.reclaimableBytes)) return;
-      let Z = makeLineEmitter(q.plan),
-        Se = async function* () {
-          let Ee = 0;
-          for await (let Ae of G()) {
-            for (let Ie of Z(Ee, Ae))
-              yield {
-                data:
-                  ice(Ie) +
-                  `
+      if (this.skipLowYieldCompact(r, size, transcriptEntries.reclaimableBytes)) return;
+      let lineEmitter = makeLineEmitter(transcriptEntries.plan);
+      let Se = async function* () {
+        let Ee = 0;
+        for await (let Ae of G()) {
+          for (let Ie of lineEmitter(Ee, Ae))
+            yield {
+              data:
+                stripLeadingNuls(Ie) +
+                `
 `,
-              };
-            Ee++;
-          }
+            };
+          Ee++;
+        }
+      };
+      let ke = await e.replaceRecords(n, Se(), {
+        preserveFrom: size,
+        precondition: {
+          type: "ifUnchangedThrough",
+          seq,
+          version: stats.value.version,
         },
-        replaceRecords = await e.replaceRecords(n, Se(), {
-          preserveFrom: size,
-          precondition: { type: "ifUnchangedThrough", seq: L, version: stats.value.version },
-          publishDiscipline: "atomic",
-          mode: 384,
-          parent: "mustExist",
-        });
-      if (!replaceRecords.ok) {
-        let error = replaceRecords.error;
+        publishDiscipline: "atomic",
+        mode: 384,
+        parent: "mustExist",
+      });
+      if (!ke.ok) {
+        let error = ke.error;
         if (error.code === "PreconditionFailed") {
           h("source_changed");
           return;
         }
-        let Ae = error.code === "Failed" || error.code === "Unavailable" ? error.telemetryCode : void 0;
+        let telemetryCode =
+          error.code === "Failed" || error.code === "Unavailable" ? error.telemetryCode : undefined;
         if (error.code === "InvalidArgument") {
-          (h(error.argument.startsWith("opts.precondition") ? "invalid_token" : "invalid_argument"),
-            logForDebugging(`Transcript compact skipped (${error.code}): ${formatStorageError(error)}`, {
-              level: "warn",
-            }));
+          h(error.argument.startsWith("opts.precondition") ? "invalid_token" : "invalid_argument");
+          logForDebugging(`Transcript compact skipped (${error.code}): ${formatStorageError(error)}`, {
+            level: "warn",
+          });
           return;
         }
         let Ie =
           (error.code === "Failed" || error.code === "Unavailable") &&
           error.phase === "publish" &&
-          Ae !== void 0 &&
-          AI.has(Ae);
-        (h(Ie ? "rename_fallback" : "io", { code: Ae }),
-          logForDebugging(`Transcript compact failed (${Ae ?? error.code}): ${formatStorageError(error)}`, {
+          telemetryCode !== undefined &&
+          ATOMIC_WRITE_ERRNOS.has(telemetryCode);
+        h(Ie ? "rename_fallback" : "io", {
+          code: telemetryCode,
+        });
+        logForDebugging(
+          `Transcript compact failed (${telemetryCode ?? error.code}): ${formatStorageError(error)}`,
+          {
             level: "warn",
-          }));
+          },
+        );
         return;
       }
       if (r === this.sessionFile)
-        for (let deletedUuid of q.plan.deletedUuids) this.sessionRowsDeleted.add(deletedUuid);
-      this.recordCompactYield(r, size, q.reclaimableBytes);
-      let sizeAfter = replaceRecords.value.sizeAfter;
-      if (r === this.sessionFile) await this.reAppendSessionMetadataAsync(!1, !0, e, !0).catch(() => {});
-      logEvent("tengu_transcript_compact", { bytesBefore: size, bytesAfter: sizeAfter });
+        for (let deletedUuid of transcriptEntries.plan.deletedUuids) this.sessionRowsDeleted.add(deletedUuid);
+      this.recordCompactYield(r, size, transcriptEntries.reclaimableBytes);
+      let bytesAfter = ke.value.sizeAfter;
+      if (r === this.sessionFile)
+        await this.reAppendSessionMetadataAsync(false, true, e, true).catch(() => {});
+      logEvent("tengu_transcript_compact", {
+        bytesBefore: size,
+        bytesAfter,
+      });
     } catch (error) {
-      (h("io", error),
-        logForDebugging(`Transcript compact failed (${getErrnoCode(error)}): ${errorMessage(error)}`, {
-          level: "warn",
-        }));
+      h("io", error);
+      logForDebugging(`Transcript compact failed (${getErrnoCode(error)}): ${errorMessage(error)}`, {
+        level: "warn",
+      });
     }
   }
-  skipLowYieldCompact(e, n, r, s = !1) {
-    if (!this.store.lowYieldCompactSkipEnabled || !isLowYieldCompaction(n, r)) return !1;
-    return (
-      this.recordCompactYield(e, n, r),
-      logEvent("tengu_transcript_compact_skipped", {
-        bytesBefore: n,
-        reclaimableBytes: r,
-        ...(s && { reclaimableBytesIsUpperBound: !0 }),
+  skipLowYieldCompact(e, n, r, s = false) {
+    if (!this.store.lowYieldCompactSkipEnabled || !isLowYieldCompaction(n, r)) return false;
+    this.recordCompactYield(e, n, r);
+    logEvent("tengu_transcript_compact_skipped", {
+      bytesBefore: n,
+      reclaimableBytes: r,
+      ...(s && {
+        reclaimableBytesIsUpperBound: true,
       }),
-      !0
-    );
+    });
+    return true;
   }
   recordCompactYield(e, n, r) {
-    if (((this.bytesSinceCompact = 0), e === this.sessionFile))
+    this.bytesSinceCompact = 0;
+    if (e === this.sessionFile)
       this.backstopThresholdBytes = isLowYieldCompaction(n, r)
-        ? Math.min(this.backstopThresholdBytes * 2, Spo)
-        : LG;
+        ? Math.min(this.backstopThresholdBytes * 2, SESSION_ENTRY_APPEND_POLICY)
+        : ENTRY_APPEND_POLICY_2;
   }
   shouldSkipPersistence() {
     return isTranscriptPersistenceDisabled() || this.appendsSealedForShutdown;
   }
-  appendsSealedForShutdown = !1;
+  appendsSealedForShutdown = false;
   sealAppendsForShutdown() {
-    this.appendsSealedForShutdown = !0;
+    this.appendsSealedForShutdown = true;
   }
   async materializeSessionFile(e) {
     if (this.shouldSkipPersistence()) return;
     try {
       this.ensureCurrentSessionFile();
       try {
-        await this.reAppendSessionMetadataAsync(!1, !1, e);
+        await this.reAppendSessionMetadataAsync(false, false, e);
       } catch (error) {
         swallowRefusedDirectWrite(error);
       }
       if (this.pendingEntries.length > 0) {
         let pendingEntries = this.pendingEntries;
         this.pendingEntries = [];
-        for (let { entry: entry, storageV5: storageV5 } of pendingEntries)
-          await this.appendEntry(entry, void 0, void 0, storageV5);
-        if (this.currentSessionRelocatedCwd) await this.reAppendSessionMetadataAsync(!0, !1, e);
+        for (let { entry, storageV5 } of pendingEntries)
+          await this.appendEntry(entry, undefined, undefined, storageV5);
+        if (this.currentSessionRelocatedCwd) await this.reAppendSessionMetadataAsync(true, false, e);
       }
     } catch (error) {
-      let r = getErrnoCode(error);
+      let errnoCode = getErrnoCode(error);
       if (isSyscallError(error))
-        logForDebugging(`Session file materialize failed (${r}): ${errorMessage(error)}`, { level: "error" });
+        logForDebugging(`Session file materialize failed (${errnoCode}): ${errorMessage(error)}`, {
+          level: "error",
+        });
       else logError(error);
       reportTranscriptWriteFailure(this.store.writerHealth, "materialize", error, this.sessionFile);
     }
@@ -3855,78 +3684,104 @@ ${we.generation()}`));
       if (isSyscallError(error))
         logForDebugging(
           `Session file materialize listener failed (${getErrnoCode(error)}): ${errorMessage(error)}`,
-          { level: "error" },
+          {
+            level: "error",
+          },
         );
       else logError(error);
     }
   }
   releaseHeldReplayRecords() {
     let heldReplayRecords = this.heldReplayRecords;
-    return (
-      (this.heldReplayRecords = []),
-      this.trackWrite(async () => {
-        for (let { records: records, resolve: resolve, reject: reject } of heldReplayRecords)
-          await this.writeRequestReplayRecords(records).then(resolve, reject);
-      })
-    );
+    this.heldReplayRecords = [];
+    return this.trackWrite(async () => {
+      for (let { records, resolve, reject } of heldReplayRecords)
+        await this.writeRequestReplayRecords(records).then(resolve, reject);
+    });
   }
   settleHeldReplayRecords() {
-    for (let { resolve: resolve } of this.heldReplayRecords) resolve("no_transcript");
+    for (let { resolve } of this.heldReplayRecords) resolve("no_transcript");
     this.heldReplayRecords = [];
   }
-  async insertMessageChain(e, n = !1, r, s, h, y, S, w, L, G, q) {
-    let Z = y ?? getSessionId(),
-      Se = S ?? isForeignToBinding(pinSessionId(Z)),
-      ke = L === void 0 ? (bridgeSessionForPulledWindow(pinSessionId(Z)) ?? null) : L,
-      we = G ?? K9(),
-      Ee = q === void 0 ? getPromptId_2() : q;
+  async insertMessageChain(transcript, n = false, agentId, s, h, y, S, w, L, G, q) {
+    let Z = y ?? getSessionId();
+    let Se = S ?? isForeignToBinding(pinSessionId(Z));
+    let ke = L === undefined ? (bridgeSessionForPulledWindow(pinSessionId(Z)) ?? null) : L;
+    let we = G ?? pulledRows();
+    let Ee = q === undefined ? getPromptId_2() : q;
     return this.trackWrite(async () => {
-      let Ae = s ?? null,
-        Ie;
+      let Ae = s ?? null;
+      let Ie;
       if (
         this.sessionFile === null &&
         Z === getSessionId() &&
-        e.some((nt) => nt.type === "user" || nt.type === "assistant" || nt.type === "system")
-      )
-        ((this.awaitingFirstUserRow = !0), await this.materializeSessionFile(w));
+        transcript.some((nt) => nt.type === "user" || nt.type === "assistant" || nt.type === "system")
+      ) {
+        this.awaitingFirstUserRow = true;
+        await this.materializeSessionFile(w);
+      }
       let Me;
       try {
         Me = await getBranch();
       } catch {
-        Me = void 0;
+        Me = undefined;
       }
       refreshCheckoutMetadata();
-      let We = Z,
-        ze = getPlanSlugCache().get(We),
-        lt = n || this.shouldSkipPersistence() ? null : await this.store.sessionMessages(We, w);
+      let sessionId = Z;
+      let slug = getPlanSlugCache().get(sessionId);
+      let lt = n || this.shouldSkipPersistence() ? null : await this.store.sessionMessages(sessionId, w);
       if (!n && !Se && this.sessionFile !== null && Z === getSessionId()) {
-        let nt = getConversationAtisLatch();
+        let conversationAtisLatch = getConversationAtisLatch();
         if (
-          nt !== void 0 &&
+          conversationAtisLatch !== undefined &&
           this.atisLatchStamp !==
             `${this.sessionFile}
-${nt}`
-        )
-          ((this.atisLatchStamp = `${this.sessionFile}
-${nt}`),
-            await this.appendEntry({ type: "atis-latch", atis: nt, sessionId: We }, We, void 0, w));
+${conversationAtisLatch}`
+        ) {
+          this.atisLatchStamp = `${this.sessionFile}
+${conversationAtisLatch}`;
+          await this.appendEntry(
+            {
+              type: "atis-latch",
+              atis: conversationAtisLatch,
+              sessionId,
+            },
+            sessionId,
+            undefined,
+            w,
+          );
+        }
       }
       if (!Se && this.sessionFile !== null && Z === getSessionId()) {
-        let nt = getConversationToolsUsed(),
-          pt = `${this.sessionFile}
-${nt.generation()}`;
-        if (isSillyShoreGateOn() && nt.size() > 0 && this.toolsUsedStamp !== pt)
-          (await this.appendEntry({ type: "tools-used", tools: nt.names(), sessionId: We }, We, void 0, w),
-            (this.toolsUsedStamp = pt));
+        let conversationToolsUsed = getConversationToolsUsed();
+        let pt = `${this.sessionFile}
+${conversationToolsUsed.generation()}`;
+        if (isSillyShoreGateOn() && conversationToolsUsed.size() > 0 && this.toolsUsedStamp !== pt) {
+          await this.appendEntry(
+            {
+              type: "tools-used",
+              tools: conversationToolsUsed.names(),
+              sessionId,
+            },
+            sessionId,
+            undefined,
+            w,
+          );
+          this.toolsUsedStamp = pt;
+        }
       }
-      let Je = !1;
-      for (let nt of e) {
-        let pt = isCompactBoundaryMessage_3(nt),
-          Et = !n && Z === getSessionId() ? this.sessionFile : null;
-        if (pt && Et)
-          ((this.compactAwaitingSummary = { filePath: Et, storageV5: w }),
-            (this.sessionLastBoundaryUuid = nt.uuid),
-            (Je = !1));
+      let Je = false;
+      for (let nt of transcript) {
+        let pt = isCompactBoundaryMessage_3(nt);
+        let sessionFile = !n && Z === getSessionId() ? this.sessionFile : null;
+        if (pt && sessionFile) {
+          this.compactAwaitingSummary = {
+            filePath: sessionFile,
+            storageV5: w,
+          };
+          this.sessionLastBoundaryUuid = nt.uuid;
+          Je = false;
+        }
         let yt = Ae;
         if (nt.type === "user" && "sourceToolAssistantUUID" in nt && nt.sourceToolAssistantUUID) {
           let sourceToolAssistantUUID = nt.sourceToolAssistantUUID;
@@ -3936,113 +3791,130 @@ ${nt.generation()}`;
         if (yt === nt.uuid) logEvent("tengu_chain_self_reference_write", {});
         let gt = {
           parentUuid: pt ? null : yt,
-          logicalParentUuid: pt ? Ae : void 0,
+          logicalParentUuid: pt ? Ae : undefined,
           isSidechain: n,
           teamName: h?.teamName,
           agentName: h?.agentName,
-          promptId: nt.type === "user" ? (Ee ?? void 0) : void 0,
-          agentId: r,
+          promptId: nt.type === "user" ? (Ee ?? undefined) : undefined,
+          agentId,
           ...withTaskProducerMarkRecorded(nt),
-          ...transcriptStamp(We),
-          version: vOt(nt),
+          ...transcriptStamp(sessionId),
+          version: transcriptVersionOrDefault(nt),
           gitBranch: Me,
-          slug: ze,
+          slug,
         };
-        if (((gt.isSidechain = n), n)) gt.agentId = r;
+        gt.isSidechain = n;
+        if (n) gt.agentId = agentId;
         if (gt.type === "user" && gt.toolUseResult != null)
           gt.toolUseResult = dropLargeOriginalFile(gt.toolUseResult);
+        await this.appendEntry(gt, Z, Se, w, ke, we);
         if (
-          (await this.appendEntry(gt, Z, Se, w, ke, we),
           this.awaitingFirstUserRow &&
-            !n &&
-            Z === getSessionId() &&
-            nt.type === "user" &&
-            !Apo(nt.message.content))
+          !n &&
+          Z === getSessionId() &&
+          nt.type === "user" &&
+          !hasToolResultMessage(nt.message.content)
         )
-          this.awaitingFirstUserRow = !1;
-        if (pt && Et) this.backstopThresholdBytes = LG;
-        if (Et && (nt.type === "user" || nt.type === "assistant")) Je = !0;
-        if (isChainParticipant(nt)) ((Ae = nt.uuid), (Ie = nt.timestamp));
+          this.awaitingFirstUserRow = false;
+        if (pt && sessionFile) this.backstopThresholdBytes = ENTRY_APPEND_POLICY_2;
+        if (sessionFile && (nt.type === "user" || nt.type === "assistant")) Je = true;
+        if (isChainParticipant(nt)) {
+          Ae = nt.uuid;
+          Ie = nt.timestamp;
+        }
       }
       if (Je && this.compactAwaitingSummary) {
-        let { filePath: filePath, storageV5: storageV5 } = this.compactAwaitingSummary;
-        if (((this.compactAwaitingSummary = void 0), filePath === this.sessionFile))
-          this.requestCompact(filePath, storageV5, !0);
+        let { filePath, storageV5 } = this.compactAwaitingSummary;
+        this.compactAwaitingSummary = undefined;
+        if (filePath === this.sessionFile) this.requestCompact(filePath, storageV5, true);
       }
       if (!n && Z === getSessionId()) {
-        if (Ae && Ie && (!this.currentSessionLeafTs || Ie >= this.currentSessionLeafTs))
-          ((this.currentSessionLeafUuid = Ae), (this.currentSessionLeafTs = Ie));
-        let nt = getFirstMeaningfulUserMessageTextContent(e);
-        if (nt) this.currentSessionLastPrompt = this.normalizeLastPrompt(nt);
+        if (Ae && Ie && (!this.currentSessionLeafTs || Ie >= this.currentSessionLeafTs)) {
+          this.currentSessionLeafUuid = Ae;
+          this.currentSessionLeafTs = Ie;
+        }
+        let firstMeaningfulUserMessageTextContent = getFirstMeaningfulUserMessageTextContent(transcript);
+        if (firstMeaningfulUserMessageTextContent)
+          this.currentSessionLastPrompt = this.normalizeLastPrompt(firstMeaningfulUserMessageTextContent);
       }
       if (!this.awaitingFirstUserRow && this.sessionFile !== null && this.heldReplayRecords.length > 0)
         await this.releaseHeldReplayRecords();
     });
   }
-  async insertFileHistorySnapshot(e, n, r, s) {
+  async insertFileHistorySnapshot(messageId, snapshot, isSnapshotUpdate, s) {
     return this.trackWrite(async () => {
-      let h = { type: "file-history-snapshot", messageId: e, snapshot: n, isSnapshotUpdate: r };
-      await this.appendEntry(h, void 0, void 0, s);
+      let fileHistoryMessage = {
+        type: "file-history-snapshot",
+        messageId,
+        snapshot,
+        isSnapshotUpdate,
+      };
+      await this.appendEntry(fileHistoryMessage, undefined, undefined, s);
     });
   }
   async insertFileHistoryDelta(e, n) {
     return this.trackWrite(async () => {
-      await this.appendEntry(e, void 0, void 0, n);
+      await this.appendEntry(e, undefined, undefined, n);
     });
   }
   async insertQueueOperation(e, n) {
     return this.trackWrite(async () => {
-      let r = Vt(e.sessionId);
+      let r = normalizeUuidOrNull(e.sessionId);
       if (r === null || r === this.store.getSessionId()) {
-        await this.appendEntry(e, void 0, void 0, n);
+        await this.appendEntry(e, undefined, undefined, n);
         return;
       }
       let s = this.queueOperationsRaisedElsewhere.then(async () => {
-        if ((await this.getExistingSessionFile(r, n)) !== null) await this.appendEntry(e, r, void 0, n);
+        if ((await this.getExistingSessionFile(r, n)) !== null) await this.appendEntry(e, r, undefined, n);
       });
-      ((this.queueOperationsRaisedElsewhere = s.catch(() => {})), await s);
+      this.queueOperationsRaisedElsewhere = s.catch(() => {});
+      await s;
     });
   }
   async insertAttributionSnapshot(e, n) {
     return this.trackWrite(async () => {
-      await this.appendEntry(e, void 0, void 0, n);
+      await this.appendEntry(e, undefined, undefined, n);
     });
   }
-  async insertContentReplacement(e, n, r) {
+  async insertContentReplacement(replacements, agentId, r) {
     return this.trackWrite(async () => {
       let s = {
         type: "content-replacement",
         sessionId: this.store.getSessionId(),
-        agentId: n,
-        replacements: e,
+        agentId,
+        replacements,
       };
-      await this.appendEntry(s, void 0, void 0, r);
+      await this.appendEntry(s, undefined, undefined, r);
     });
   }
   replaySources = new Map();
   queuedToolResults = new Map();
   oversizeReplayShapes = new Set();
   queuedToolResultDigest(e, n) {
-    if (e.storageV5 !== void 0 || e.sessionId !== this.store.getSessionId()) return;
+    if (e.storageV5 !== undefined || e.sessionId !== this.store.getSessionId()) return;
     let r = e.agentId ? agentTranscriptPathOfEntry(e.agentId) : this.sessionFile;
     return r
       ? this.queuedToolResults.get(`${r}
 ${n}`)
-      : void 0;
+      : undefined;
   }
-  restartReplayIndex(e, n = !1) {
-    if ((this.store.replaySeedStarts.delete(normalize(e)), !isRequestBlobStoreEnabled())) return;
-    let r = (h) => ({ index: (h?.index ?? new RequestBlobStore()).successor(n), fileExisted: !0 }),
-      s = this.replaySources.get(e);
-    this.replaySources.set(e, s === void 0 ? Promise.resolve(r()) : s.then(r));
+  restartReplayIndex(e, n = false) {
+    this.store.replaySeedStarts.delete(normalize(e));
+    if (!isRequestBlobStoreEnabled()) return;
+    let r = (h) => ({
+      index: (h?.index ?? new RequestBlobStore()).successor(n),
+      fileExisted: true,
+    });
+    let s = this.replaySources.get(e);
+    this.replaySources.set(e, s === undefined ? Promise.resolve(r()) : s.then(r));
   }
   replayIndexFor(e) {
     let n = this.replaySources.get(e);
-    if (n === void 0) {
+    if (n === undefined) {
       let r = normalize(e);
-      ((n = seedReplayIndex(e, this.store.replaySeedStarts.get(r))),
-        this.store.replaySeedStarts.delete(r),
-        this.replaySources.set(e, n));
+      n = seedReplayIndex(e, this.store.replaySeedStarts.get(r));
+      this.store.replaySeedStarts.delete(r);
+      this.replaySources.set(e, n);
     }
     return n;
   }
@@ -4051,7 +3923,7 @@ ${n}`)
       e.sessionId === this.store.getSessionId()
         ? this.sessionFile
         : await this.getExistingSessionFile(e.sessionId, e.storageV5);
-    if (n === null || n === void 0) return;
+    if (n === null || n === undefined) return;
     return e.agentId ? agentTranscriptPathOfEntry(e.agentId) : n;
   }
   isRemotelyMirrored() {
@@ -4059,77 +3931,102 @@ ${n}`)
   }
   async appendRequestReplayRecords(e) {
     if (!e.target.agentId && (this.sessionFile === null || this.awaitingFirstUserRow)) {
-      let n = stripCacheControl_4(e.shape),
-        r = clone(e.request.cacheControl),
-        s = { ...e.request, cacheControl: r };
-      return new Promise((h, y) => {
-        this.heldReplayRecords.push({ records: { ...e, shape: n, request: s }, resolve: h, reject: y });
+      let shape = stripCacheControl_4(e.shape);
+      let cacheControl = clone(e.request.cacheControl);
+      let request = {
+        ...e.request,
+        cacheControl,
+      };
+      return new Promise((resolve, reject) => {
+        this.heldReplayRecords.push({
+          records: {
+            ...e,
+            shape,
+            request,
+          },
+          resolve,
+          reject,
+        });
       });
     }
     return this.writeRequestReplayRecords(e);
   }
   async writeRequestReplayRecords(e) {
     return this.trackWrite(async () => {
-      let { target: target, request: request } = e;
+      let { target, request } = e;
       if (this.shouldSkipPersistence()) return "no_transcript";
       if (this.oversizeReplayShapes.has(e.shapeHash)) return "shape_too_large";
-      let replayTargetFile = await this.replayTargetFile(target);
-      if (replayTargetFile === void 0) return "no_transcript";
-      let { index: index, fileExisted: fileExisted } = await this.replayIndexFor(replayTargetFile);
+      let s = await this.replayTargetFile(target);
+      if (s === undefined) return "no_transcript";
+      let { index, fileExisted } = await this.replayIndexFor(s);
       if ((!fileExisted && !index.hasLines) || index.hasForkContextRef) return "no_transcript";
       let S = [];
       if (!index.has(e.shapeHash)) {
         let w = {
           type: "api-request-shape",
           sessionId: request.sessionId,
-          ...(request.agentId !== void 0 && { agentId: request.agentId }),
+          ...(request.agentId !== undefined && {
+            agentId: request.agentId,
+          }),
           shapeHash: e.shapeHash,
           timestamp: request.timestamp,
           version: request.version,
           shape: stripCacheControl_4(e.shape),
         };
-        if (Buffer.byteLength(jsonStringify(w)) > mpo)
-          return (
-            this.oversizeReplayShapes.add(e.shapeHash),
-            logError(
-              Error(
-                "request-replay: system+tools over the record size cap; not recording requests that use them",
-              ),
+        if (Buffer.byteLength(jsonStringify(w)) > MAX_SYNTHETIC_MESSAGE_BYTES) {
+          this.oversizeReplayShapes.add(e.shapeHash);
+          logError(
+            Error(
+              "request-replay: system+tools over the record size cap; not recording requests that use them",
             ),
-            "shape_too_large"
           );
-        (S.push(w), index.noteLine(w));
+          return "shape_too_large";
+        }
+        S.push(w);
+        index.noteLine(w);
       }
-      for (let { hash: hash, message: message } of e.blobCandidates)
+      for (let { hash, message } of e.blobCandidates)
         if (!index.has(hash)) {
           let G = {
             type: "api-request-blob",
             sessionId: request.sessionId,
-            ...(request.agentId !== void 0 && { agentId: request.agentId }),
-            hash: hash,
-            message: message,
+            ...(request.agentId !== undefined && {
+              agentId: request.agentId,
+            }),
+            hash,
+            message,
           };
-          (S.push(G), index.noteLine(G));
+          S.push(G);
+          index.noteLine(G);
         }
-      return (
-        await Promise.all(
-          [...S, request].map((w) => this.appendEntry(w, target.sessionId, void 0, target.storageV5)),
-        ),
-        "written"
+      await Promise.all(
+        [...S, request].map((w) => this.appendEntry(w, target.sessionId, undefined, target.storageV5)),
       );
+      return "written";
     });
   }
   async appendEntry(e, n = this.store.getSessionId(), r, s, h, y) {
     if ("agentId" in e && e.agentId) this.noteAgentWrittenLocally(e.agentId);
     if (this.shouldSkipPersistence()) return;
-    if (isTranscriptMessage(e) && VHe(e) && (r === !0 || isForeignToBinding(pinSessionId(n))))
+    if (
+      isTranscriptMessage(e) &&
+      isCompactOrCarriedMessage(e) &&
+      (r === true || isForeignToBinding(pinSessionId(n)))
+    )
       this.foreignWithheldEntryUuids.add(e.uuid);
     if (isTranscriptMessage(e) && !e.isSidechain) {
-      let G = imo((y ?? K9())?.get(e.uuid)),
-        q = G ?? (VHe(e) ? (h === void 0 ? bridgeSessionForPulledWindow(pinSessionId(n)) : h) : void 0);
-      if (q !== void 0 && q !== null) {
-        if (G !== void 0) this.windowNoteEntryUuids.delete(e.uuid);
-        else if (e.foreignToBridgeSession === void 0 && tBe(e)) this.windowNoteEntryUuids.add(e.uuid);
+      let G = firstConcreteBridgeSession((y ?? pulledRows())?.get(e.uuid));
+      let q =
+        G ??
+        (isCompactOrCarriedMessage(e)
+          ? h === undefined
+            ? bridgeSessionForPulledWindow(pinSessionId(n))
+            : h
+          : undefined);
+      if (q !== undefined && q !== null) {
+        if (G !== undefined) this.windowNoteEntryUuids.delete(e.uuid);
+        else if (e.foreignToBridgeSession === undefined && isCarriedAttachment(e))
+          this.windowNoteEntryUuids.add(e.uuid);
         e.foreignToBridgeSession = q;
       }
     }
@@ -4144,12 +4041,15 @@ ${n}`)
       });
       return;
     }
-    let sessionId = this.store.getSessionId(),
-      w = n === sessionId,
-      L;
+    let sessionId = this.store.getSessionId();
+    let w = n === sessionId;
+    let L;
     if (w) {
       if (this.sessionFile === null) {
-        this.pendingEntries.push({ entry: e, storageV5: s });
+        this.pendingEntries.push({
+          entry: e,
+          storageV5: s,
+        });
         return;
       }
       L = this.sessionFile;
@@ -4182,12 +4082,13 @@ ${n}`)
           e.agentId
             ? agentTranscriptPathOfEntry(e.agentId)
             : L;
-        if (G === void 0) {
+        if (G === undefined) {
           logError(Error("appendEntry invariant: agentId cannot name a transcript file; entry dropped"));
           return;
         }
-        if ((this.enqueueWrite(G, e, s), e.type === "fork-context-ref" && isRequestBlobStoreEnabled()))
-          this.replayIndexFor(G).then(({ index: index }) => index.noteLine(e));
+        this.enqueueWrite(G, e, s);
+        if (e.type === "fork-context-ref" && isRequestBlobStoreEnabled())
+          this.replayIndexFor(G).then(({ index }) => index.noteLine(e));
         return;
       }
       case "dedup-transcript": {
@@ -4197,10 +4098,10 @@ ${n}`)
           );
           return;
         }
-        let sessionMessages = await this.store.sessionMessages(n, s),
-          q = e.isSidechain && e.agentId !== void 0,
-          Z = q ? agentTranscriptPathOfEntry(e.agentId) : L;
-        if (Z === void 0) {
+        let G = await this.store.sessionMessages(n, s);
+        let q = e.isSidechain && e.agentId !== undefined;
+        let Z = q ? agentTranscriptPathOfEntry(e.agentId) : L;
+        if (Z === undefined) {
           logError(Error("appendEntry invariant: agentId cannot name a transcript file; entry dropped"));
           return;
         }
@@ -4211,12 +4112,13 @@ ${n}`)
           } catch (error) {
             logError(error);
           }
-        let ke = !sessionMessages.has(e.uuid);
+        let ke = !G.has(e.uuid);
         if (q || ke) {
-          this.enqueueWrite(Z, q || s !== void 0 ? e : (this.store.slimAppendedRow?.(e) ?? e), s);
+          this.enqueueWrite(Z, q || s !== undefined ? e : (this.store.slimAppendedRow?.(e) ?? e), s);
           try {
-            if (Se !== void 0) {
-              if ((Se.noteLine(e), isCompactBoundaryMessage_3(e))) b9();
+            if (Se !== undefined) {
+              Se.noteLine(e);
+              if (isCompactBoundaryMessage_3(e)) clearAllReplayChains();
               for (let [we, Ee] of getToolResultDigests(e))
                 this.queuedToolResults.set(
                   `${Z}
@@ -4228,10 +4130,12 @@ ${we}`,
             logError(error);
           }
           if (!q) {
-            if ((sessionMessages.add(e.uuid), isTranscriptMessage(e)))
-              if (this.internalEventWriter && isShuttingDown())
-                (this.releaseWaitsForUploads(), this.persistToRemote(n, e));
-              else await this.untilUploadedOrShutdown(this.persistToRemote(n, e));
+            G.add(e.uuid);
+            if (isTranscriptMessage(e))
+              if (this.internalEventWriter && isShuttingDown()) {
+                this.releaseWaitsForUploads();
+                this.persistToRemote(n, e);
+              } else await this.untilUploadedOrShutdown(this.persistToRemote(n, e));
           } else if (this.internalEventWriter && isTranscriptMessage(e)) this.persistToRemote(n, e);
         }
         return;
@@ -4246,21 +4150,24 @@ ${we}`,
   }
   async endTranscriptRelocation() {
     let relocationBuffer = this.relocationBuffer;
-    if (((this.relocationBuffer = null), !relocationBuffer)) return;
+    this.relocationBuffer = null;
+    if (!relocationBuffer) return;
     for (let {
-      entry: entry,
-      sessionId: sessionId,
-      storageV5: storageV5,
-      foreignAtEntry: foreignAtEntry,
-      pulledAtEntry: pulledAtEntry,
-      pulledRowsAtEntry: pulledRowsAtEntry,
+      entry,
+      sessionId,
+      storageV5,
+      foreignAtEntry,
+      pulledAtEntry,
+      pulledRowsAtEntry,
     } of relocationBuffer)
       await this.appendEntry(entry, sessionId, foreignAtEntry, storageV5, pulledAtEntry, pulledRowsAtEntry);
   }
   ensureCurrentSessionFile() {
     if (this.sessionFile === null) {
-      let e = getTranscriptPath();
-      return (this.setSessionFile(e), this.sessionFilesNotYetWritten.add(e), e);
+      let transcriptPath = getTranscriptPath();
+      this.setSessionFile(transcriptPath);
+      this.sessionFilesNotYetWritten.add(transcriptPath);
+      return transcriptPath;
     }
     return this.sessionFile;
   }
@@ -4280,123 +4187,142 @@ ${we}`,
       if (this.sessionFilesNotYetWritten.has(r)) return r;
       return (await this.probeTranscript(r, n).catch(() => "unknown")) === "absent" ? null : r;
     }
-    let s = getTranscriptPathForSession(e);
-    if ((await this.probeTranscript(s, n)) === "present") return (this.existingSessionFiles.set(e, s), s);
+    let transcriptPathForSession = getTranscriptPathForSession(e);
+    if ((await this.probeTranscript(transcriptPathForSession, n)) === "present") {
+      this.existingSessionFiles.set(e, transcriptPathForSession);
+      return transcriptPathForSession;
+    }
     return null;
   }
   async probeTranscript(e, n) {
-    let r = n !== void 0 ? transcriptStorageKeyForPath(e) : void 0;
-    if (isStorageV5Enabled() && n !== void 0 && r !== void 0)
+    let r = n !== undefined ? transcriptStorageKeyForPath(e) : undefined;
+    if (isStorageV5Enabled() && n !== undefined && r !== undefined)
       try {
-        let statMeta = await n.statMeta(r);
-        if (statMeta.ok) return "present";
-        if (statMeta.error.code === "NotFound") return "absent";
+        let s = await n.statMeta(r);
+        if (s.ok) return "present";
+        if (s.error.code === "NotFound") return "absent";
       } catch {}
     if (isDiskless()) return "unknown";
     try {
-      return (await stat(e), "present");
+      await stat(e);
+      return "present";
     } catch (error) {
-      let h = getErrnoCode(error);
-      if (h === "ENOENT" || h === "ENOTDIR") return "absent";
+      let errnoCode = getErrnoCode(error);
+      if (errnoCode === "ENOENT" || errnoCode === "ENOTDIR") return "absent";
       if (isFsInaccessible(error)) return "unknown";
       throw error;
     }
   }
-  async persistToRemote(e, n) {
+  async persistToRemote(sessionId, entry) {
     if (this.appendsSealedForShutdown) return;
     if (isShuttingDown() && !this.internalEventWriter) return;
-    let r = isRowForeignToBridgeSession(n, this.internalEventWriterSessionId);
-    if (r && !this.windowNoteEntryUuids.delete(n.uuid)) {
+    let r = isRowForeignToBridgeSession(entry, this.internalEventWriterSessionId);
+    if (r && !this.windowNoteEntryUuids.delete(entry.uuid)) {
       logForDebugging("[persist-remote] Skipping upload: the row is the /teleport-pulled conversation's");
       return;
     }
     if (
-      VHe(n) &&
-      (r || this.foreignWithheldEntryUuids.delete(n.uuid) || isRemoteEgressSuppressedFor(pinSessionId(e)))
+      isCompactOrCarriedMessage(entry) &&
+      (r ||
+        this.foreignWithheldEntryUuids.delete(entry.uuid) ||
+        isRemoteEgressSuppressedFor(pinSessionId(sessionId)))
     ) {
-      if (!tBe(n)) {
+      if (!isCarriedAttachment(entry)) {
         logForDebugging(
           "[persist-remote] Skipping compact-pair upload: conversation carries a history-suppression taint",
         );
         return;
       }
-      (logForDebugging(
+      logForDebugging(
         "[persist-remote] Emptying a carried note for upload: its conversation is withheld from this session",
-      ),
-        (n = {
-          ...n,
-          attachment: cOt(n)
-            ? { type: "projects_thread_ask", call: null }
-            : { type: "session_cron_carry", tasks: [] },
-        }));
+      );
+      entry = {
+        ...entry,
+        attachment: isProjectsThreadAskAttachment(entry)
+          ? {
+              type: "projects_thread_ask",
+              call: null,
+            }
+          : {
+              type: "session_cron_carry",
+              tasks: [],
+            },
+      };
     }
     if (this.internalEventWriter) {
       try {
-        await this.internalEventWriter("transcript", n, {
-          ...(isCompactBoundaryMessage_3(n) && {
-            isCompaction: !0,
-            preservedEventIds: n.compactMetadata?.preservedMessages?.uuids,
+        await this.internalEventWriter("transcript", entry, {
+          ...(isCompactBoundaryMessage_3(entry) && {
+            isCompaction: true,
+            preservedEventIds: entry.compactMetadata?.preservedMessages?.uuids,
           }),
-          ...(n.agentId && { agentId: n.agentId }),
+          ...(entry.agentId && {
+            agentId: entry.agentId,
+          }),
         });
       } catch {
-        (logEvent("tengu_session_persistence_failed", {}),
-          logForDebugging("Failed to write transcript as internal event"));
+        logEvent("tengu_session_persistence_failed", {});
+        logForDebugging("Failed to write transcript as internal event");
       }
       return;
     }
     if (!isEnvTruthy("true") || !this.remoteIngressUrl) return;
-    if (!(await appendSessionLog(e, n, this.remoteIngressUrl)))
-      (logEvent("tengu_session_persistence_failed", {}), gracefulShutdownSync(1, "other"));
+    if (!(await appendSessionLog(sessionId, entry, this.remoteIngressUrl))) {
+      logEvent("tengu_session_persistence_failed", {});
+      gracefulShutdownSync(1, "other");
+    }
   }
   async mirrorInternalEntry(e) {
     if (isRemoteEgressSuppressedFor(pinSessionId(this.store.getSessionId()))) {
       let n = e;
-      if (n.type !== "last-prompt" || n.explicit !== !0) return !1;
-      let { lastPrompt: lastPrompt, ...s } = e;
+      if (n.type !== "last-prompt" || n.explicit !== true) return false;
+      let { lastPrompt, ...s } = e;
       e = s;
     }
-    if (!this.internalEventWriter || isShuttingDown()) return !1;
+    if (!this.internalEventWriter || isShuttingDown()) return false;
     try {
       await this.internalEventWriter(e.type, e, {});
     } catch (error) {
-      throw (
-        logEvent("tengu_session_persistence_failed", {}),
-        logForDebugging("Failed to mirror internal entry to CCR"),
-        error
-      );
+      logEvent("tengu_session_persistence_failed", {});
+      logForDebugging("Failed to mirror internal entry to CCR");
+      throw error;
     }
-    return !0;
+    return true;
   }
   hasInternalEventWriter() {
     return this.internalEventWriter !== null;
   }
-  async mirrorWorkerEvent(e, n, { sessionId: r, agentId: s }) {
-    if (this.shouldSkipPersistence() || isRemoteEgressSuppressedFor(r)) return !1;
-    if (!this.internalEventWriter || isShuttingDown()) return !1;
-    return (await this.internalEventWriter(e, n, { agentId: s }), !0);
+  async mirrorWorkerEvent(e, n, { sessionId, agentId }) {
+    if (this.shouldSkipPersistence() || isRemoteEgressSuppressedFor(sessionId)) return false;
+    if (!this.internalEventWriter || isShuttingDown()) return false;
+    await this.internalEventWriter(e, n, {
+      agentId,
+    });
+    return true;
   }
-  setRemoteIngressUrl(e) {
-    if (((this.remoteIngressUrl = e), logForDebugging(`Remote persistence enabled with URL: ${e}`), e))
-      this.FLUSH_INTERVAL_MS = REPLAY_INDEX_SCAN_LIMIT;
+  setRemoteIngressUrl(url) {
+    this.remoteIngressUrl = url;
+    logForDebugging(`Remote persistence enabled with URL: ${url}`);
+    if (url) this.FLUSH_INTERVAL_MS = REPLAY_INDEX_SCAN_LIMIT;
   }
-  setInternalEventWriter(e, n) {
-    ((this.internalEventWriter = e),
-      (this.internalEventWriterSessionId = n),
-      logForDebugging("CCR v2 internal event writer registered for transcript persistence"),
-      (this.FLUSH_INTERVAL_MS = REPLAY_INDEX_SCAN_LIMIT));
+  setInternalEventWriter(internalEventWriter, internalEventWriterSessionId) {
+    this.internalEventWriter = internalEventWriter;
+    this.internalEventWriterSessionId = internalEventWriterSessionId;
+    logForDebugging("CCR v2 internal event writer registered for transcript persistence");
+    this.FLUSH_INTERVAL_MS = REPLAY_INDEX_SCAN_LIMIT;
   }
   clearInternalEventWriter() {
     if (!this.internalEventWriter) return;
-    ((this.internalEventWriter = null), logForDebugging("CCR v2 internal event writer cleared"));
+    this.internalEventWriter = null;
+    logForDebugging("CCR v2 internal event writer cleared");
   }
-  setInternalEventReader(e) {
-    ((this.internalEventReader = e),
-      logForDebugging("CCR v2 internal event reader registered for session resume"));
+  setInternalEventReader(internalEventReader) {
+    this.internalEventReader = internalEventReader;
+    logForDebugging("CCR v2 internal event reader registered for session resume");
   }
-  setInternalSubagentEventReader(e) {
-    ((this.internalSubagentEventReader = e),
-      logForDebugging("CCR v2 subagent event reader registered for session resume"));
+  setInternalSubagentEventReader(internalSubagentEventReader) {
+    this.internalSubagentEventReader = internalSubagentEventReader;
+    logForDebugging("CCR v2 subagent event reader registered for session resume");
   }
   getInternalEventReader() {
     return this.internalEventReader;
@@ -4404,11 +4330,11 @@ ${we}`,
   getInternalSubagentEventReader() {
     return this.internalSubagentEventReader;
   }
-  setInternalAgentEventReader(e) {
-    this.internalAgentEventReader = e;
+  setInternalAgentEventReader(internalAgentEventReader) {
+    this.internalAgentEventReader = internalAgentEventReader;
   }
-  setAgentWorkerEventReader(e) {
-    this.agentWorkerEventReader = e;
+  setAgentWorkerEventReader(agentWorkerEventReader) {
+    this.agentWorkerEventReader = agentWorkerEventReader;
   }
   getAgentWorkerEventReader() {
     return this.agentWorkerEventReader;
@@ -4422,8 +4348,8 @@ ${we}`,
   hasWrittenAgentLocally(e) {
     return this.agentIdsWrittenLocally.has(e);
   }
-  setVerifiesAgentTranscripts(e) {
-    this.verifiesAgentTranscripts = e;
+  setVerifiesAgentTranscripts(verifiesAgentTranscripts) {
+    this.verifiesAgentTranscripts = verifiesAgentTranscripts;
   }
   mustVerifyAgentTranscript(e) {
     return this.verifiesAgentTranscripts && !this.agentIdsWrittenLocally.has(e);
@@ -4434,14 +4360,14 @@ ${we}`,
   isAgentOverBound(e) {
     return this.agentIdsOverBound.has(e);
   }
-  async hydrateAgentTranscriptOnDemand(e, n, r, s = !1) {
+  async hydrateAgentTranscriptOnDemand(e, n, r, s = false) {
     let internalAgentEventReader = this.internalAgentEventReader;
     if (internalAgentEventReader === null) return "no_reader";
-    if (!G$(e)) return "unsafe_id";
+    if (!isSafeIdSegment(e)) return "unsafe_id";
     if (this.agentIdsOverBound.has(e)) throw new AgentTranscriptFetchError("over_bound");
     if (this.agentIdsFetched.has(e)) return "already_fetched";
-    let y = this.agentIdsWrittenLocally.has(e),
-      S = this.agentTranscriptFetches.get(e);
+    let y = this.agentIdsWrittenLocally.has(e);
+    let S = this.agentTranscriptFetches.get(e);
     if (S)
       try {
         return await S;
@@ -4457,39 +4383,41 @@ ${we}`,
     }
   }
   async fetchAgentTranscriptOnce(e, n, r, s, h, y) {
-    if (h && wrapStorageSource(getStorageTargetForPath(getAgentTranscriptPath(n), r)))
-      return (
-        this.agentIdsFetched.add(n),
-        logForDiagnosticsNoPII("info", "subagent_lazy_fetch", {
-          outcome: "backend_no_create",
-          written_locally: !0,
-        }),
-        "backend_no_create"
-      );
-    let now = Date.now(),
-      w = "read_fail",
-      L,
-      G,
-      q,
-      Z;
+    if (h && wrapStorageSource(getStorageTargetForPath(getAgentTranscriptPath(n), r))) {
+      this.agentIdsFetched.add(n);
+      logForDiagnosticsNoPII("info", "subagent_lazy_fetch", {
+        outcome: "backend_no_create",
+        written_locally: true,
+      });
+      return "backend_no_create";
+    }
+    let now = Date.now();
+    let outcome = "read_fail";
+    let pageCount;
+    let eventCount;
+    let q;
+    let Z;
     try {
       let Se;
       if (y && (await readAgentMetadata(n, r).catch(() => null)) !== null) {
-        let Me = await openRegularFile(getAgentTranscriptPath(n)).catch(() => null),
-          We = Me && (await tailFile(Me, 65536).catch(() => null));
+        let Me = await openRegularFile(getAgentTranscriptPath(n)).catch(() => null);
+        let We = Me && (await tailFile(Me, 65536).catch(() => null));
         await Me?.close().catch(() => {});
-        let ze = We?.content
+        let last = We?.content
           .split(
             `
 `,
           )
           .findLast(isConversationLine);
-        Se = ze && extractLastSyncedEventUuid(ze);
+        Se = last && extractLastSyncedEventUuid(last);
       }
       let ke = null;
-      if (Se !== void 0)
-        if (((ke = await e(n, s, Se).catch((Me) => (logError(Me), null))), ke === null))
-          Z = s?.aborted ? "aborted" : "failed";
+      if (Se !== undefined) {
+        ke = await e(n, s, Se).catch((error) => {
+          logError(error);
+          return null;
+        });
+        if (ke === null) Z = s?.aborted ? "aborted" : "failed";
         else if (ke.anchorFallback) Z = `anchor-${ke.anchorFallback}`;
         else
           Z =
@@ -4500,79 +4428,101 @@ ${we}`,
             )
               ? "not-current"
               : "current";
-      if (Z !== "current" && !ke?.anchorFallback) ke = await e(n, s).catch((Me) => (logError(Me), null));
+      }
+      if (Z !== "current" && !ke?.anchorFallback)
+        ke = await e(n, s).catch((error) => {
+          logError(error);
+          return null;
+        });
       if (ke === null) {
-        if (s?.aborted) throw ((w = "aborted"), new AbortError_2());
+        if (s?.aborted) {
+          outcome = "aborted";
+          throw new AbortError_2();
+        }
         throw new AgentTranscriptFetchError("read_fail");
       }
-      if (((L = ke.stats?.pageCount), ke.overBound))
-        throw (
-          (w = "over_bound"),
-          this.agentIdsOverBound.add(n),
-          new AgentTranscriptFetchError("over_bound")
-        );
-      if (ke.encodedBody) throw ((w = "body_encoded"), new AgentTranscriptFetchError("body_encoded"));
-      let we = await transcriptContextFields(),
-        mapped = ke.events
-          .filter((event) => event.session_agent_id === n)
-          .map((Me) => fillMissingTranscriptFields(Me.payload, we));
-      if (((G = mapped.length), mapped.length === 0 && ke.events.length > 0))
-        throw ((w = "unfiltered"), new AgentTranscriptFetchError("unfiltered"));
-      let last = mapped.findLast(isConversationEntry),
-        Ie = new Set();
-      if (y && last !== void 0)
+      pageCount = ke.stats?.pageCount;
+      if (ke.overBound) {
+        outcome = "over_bound";
+        this.agentIdsOverBound.add(n);
+        throw new AgentTranscriptFetchError("over_bound");
+      }
+      if (ke.encodedBody) {
+        outcome = "body_encoded";
+        throw new AgentTranscriptFetchError("body_encoded");
+      }
+      let we = await transcriptContextFields();
+      let mapped = ke.events
+        .filter((event) => event.session_agent_id === n)
+        .map((event) => fillMissingTranscriptFields(event.payload, we));
+      eventCount = mapped.length;
+      if (mapped.length === 0 && ke.events.length > 0) {
+        outcome = "unfiltered";
+        throw new AgentTranscriptFetchError("unfiltered");
+      }
+      let last = mapped.findLast(isConversationEntry);
+      let Ie = new Set();
+      if (y && last !== undefined)
         await someLineMatches(getAgentTranscriptPath(n), (Me) => {
           for (let We of collectTailUuids(Me)) Ie.add(We);
-          return !1;
-        }).catch((Me) => {
-          throw (
-            (w = "local_read_fail"),
-            (q = sanitizedErrnoLowerForTelemetry(Me)),
-            new AgentTranscriptFetchError(w, { cause: Me })
-          );
+          return false;
+        }).catch((error) => {
+          outcome = "local_read_fail";
+          q = sanitizedErrnoLowerForTelemetry(error);
+          throw new AgentTranscriptFetchError(outcome, {
+            cause: error,
+          });
         });
-      if (!h && this.agentIdsWrittenLocally.has(n)) return ((w = "superseded"), w);
+      if (!h && this.agentIdsWrittenLocally.has(n)) {
+        outcome = "superseded";
+        return outcome;
+      }
       if (y) {
         let Me =
-          last === void 0 || Ie.has(last.uuid)
+          last === undefined || Ie.has(last.uuid)
             ? []
             : mapped.filter((lt) => lt.type !== "agent_metadata" && !Ie.has(lt.uuid));
+        outcome = "write_fail";
         if (
-          ((w = "write_fail"),
-          (await appendToTranscriptFile(getAgentTranscriptPath(n), jsonlJoin(Me), r, !0).catch((lt) => {
-            throw (
-              (q = sanitizedErrnoLowerForTelemetry(lt)),
-              new AgentTranscriptFetchError("write_fail", { cause: lt })
-            );
-          })) === "skipped")
+          (await appendToTranscriptFile(getAgentTranscriptPath(n), jsonlJoin(Me), r, true).catch((error) => {
+            q = sanitizedErrnoLowerForTelemetry(error);
+            throw new AgentTranscriptFetchError("write_fail", {
+              cause: error,
+            });
+          })) === "skipped"
         )
           throw new AgentTranscriptFetchError("write_fail");
         let last_2 = mapped.findLast((lt) => lt.type === "agent_metadata");
-        if (last_2 !== void 0 && this.keepsAgentMetadataInStream())
+        if (last_2 !== undefined && this.keepsAgentMetadataInStream())
           await restoreAgentSidecarFromStream(n, last_2, r);
-        w = Me.length > 0 ? "hit" : last === void 0 && Z !== "current" ? "empty" : "local_current";
-      } else if (mapped.some(isConversationEntry))
-        ((w = "write_fail"),
-          (w =
-            (await writeHydratedAgentTranscript(n, mapped, r, { createOnly: h }).catch((We) => {
-              throw new AgentTranscriptFetchError("write_fail", { cause: We });
-            })) === "exists"
-              ? "superseded"
-              : "hit"));
-      else w = "empty";
-      return (this.agentIdsFetched.add(n), w);
+        outcome = Me.length > 0 ? "hit" : last === undefined && Z !== "current" ? "empty" : "local_current";
+      } else if (mapped.some(isConversationEntry)) {
+        outcome = "write_fail";
+        outcome =
+          (await writeHydratedAgentTranscript(n, mapped, r, {
+            createOnly: h,
+          }).catch((cause) => {
+            throw new AgentTranscriptFetchError("write_fail", {
+              cause,
+            });
+          })) === "exists"
+            ? "superseded"
+            : "hit";
+      } else outcome = "empty";
+      this.agentIdsFetched.add(n);
+      return outcome;
     } finally {
-      if (w === "hit" || w === "empty" || w === "local_current" || w === "superseded")
+      if (outcome === "hit" || outcome === "empty" || outcome === "local_current" || outcome === "superseded")
         logFeatureOk("ccr_subagent_lazy_fetch");
-      else if (w !== "aborted") logFeatureBad("ccr_subagent_lazy_fetch", w);
+      else if (outcome !== "aborted") logFeatureBad("ccr_subagent_lazy_fetch", outcome);
       logForDiagnosticsNoPII("info", "subagent_lazy_fetch", {
-        outcome: w,
+        outcome,
         written_locally: h,
         verify_local: y,
         probe: Z,
         errno: q,
-        page_count: L,
-        event_count: G,
+        page_count: pageCount,
+        event_count: eventCount,
         duration_ms: Date.now() - now,
       });
     }
@@ -4580,26 +4530,26 @@ ${we}`,
 }
 //@ chunk-e6aww6q8.js:407532-407706 facade-majority
 function readAtTranscriptEntry(e, n) {
-  let r = getSessionId();
+  let sessionId = getSessionId();
   return {
     cleanedMessages: cleanMessagesForLogging(e, n),
-    sessionId: r,
-    foreignAtEntry: isForeignToBinding(pinSessionId(r)),
-    pulledAtEntry: bridgeSessionForPulledWindow(pinSessionId(r)) ?? null,
-    pulledRowsAtEntry: K9(),
+    sessionId,
+    foreignAtEntry: isForeignToBinding(pinSessionId(sessionId)),
+    pulledAtEntry: bridgeSessionForPulledWindow(pinSessionId(sessionId)) ?? null,
+    pulledRowsAtEntry: pulledRows(),
     promptIdAtEntry: getPromptId_2(),
   };
 }
+//@ chunk-e6aww6q8.js:407706-408232 facade-majority = recordTranscript (0.261)
 /**
  * 记录一组消息到当前会话转录：清理消息后交给 Project.insertMessageChain，建立 parentUuid 链（压缩边界的 parentUuid 置空并记 logicalParentUuid），检测幻影父节点（tengu_phantom_parent_hint）。
  */
-//@ chunk-e6aww6q8.js:407706-408232 facade-majority = recordTranscript (0.261)
 async function recordTranscript(
-  e,
-  n,
-  r,
-  s,
-  h,
+  messages,
+  teamInfo,
+  startingParentUuidHint,
+  allMessages,
+  storageV5,
   {
     cleanedMessages: y,
     sessionId: S,
@@ -4607,71 +4557,94 @@ async function recordTranscript(
     pulledAtEntry: L,
     pulledRowsAtEntry: G,
     promptIdAtEntry: q,
-  } = readAtTranscriptEntry(e, s),
+  } = readAtTranscriptEntry(messages, allMessages),
 ) {
   let sessionId = getProject();
-  return sessionId.recordInTurn(S, void 0, async () => {
-    let sessionMessages = await su().sessionMessages(S, h),
-      newMessages = [],
-      startingParentUuid = r;
-    if (startingParentUuid && !isTranscriptPersistenceDisabled() && !sessionMessages.has(startingParentUuid))
+  return sessionId.recordInTurn(S, undefined, async () => {
+    let messageSet = await currentTranscriptStore().sessionMessages(S, storageV5);
+    let newMessages = [];
+    let startingParentUuid = startingParentUuidHint;
+    if (startingParentUuid && !isTranscriptPersistenceDisabled() && !messageSet.has(startingParentUuid))
       logEvent("tengu_phantom_parent_hint", {});
-    let Ee = !1;
-    for (let Ie of y)
-      if (sessionMessages.has(Ie.uuid)) {
-        if (!Ee && isChainParticipant(Ie) && !OB(Ie.uuid)) startingParentUuid = Ie.uuid;
-      } else (newMessages.push(Ie), (Ee = !0));
+    let seenNewMessage = false;
+    for (let m of y)
+      if (messageSet.has(m.uuid)) {
+        if (!seenNewMessage && isChainParticipant(m) && !isReorderedRow(m.uuid)) startingParentUuid = m.uuid;
+      } else {
+        newMessages.push(m);
+        seenNewMessage = true;
+      }
     if (newMessages.length > 0)
-      await sessionId.insertMessageChain(newMessages, !1, void 0, startingParentUuid, n, S, w, h, L, G, q);
+      await sessionId.insertMessageChain(
+        newMessages,
+        false,
+        undefined,
+        startingParentUuid,
+        teamInfo,
+        S,
+        w,
+        storageV5,
+        L,
+        G,
+        q,
+      );
     return newMessages.findLast(isChainParticipant)?.uuid ?? startingParentUuid ?? null;
   });
 }
+//@ chunk-e6aww6q8.js:408232-408523 facade-majority
 /**
  * 追加 last-prompt 记录：叶子 uuid 与最后一条提示，用于 resume 选取叶子与列表显示。
  */
-//@ chunk-e6aww6q8.js:408232-408523 facade-majority
 async function persistLeafCheckpoint(e, n, r) {
-  let s = getProject();
-  ((s.currentSessionLeafUuid = e ?? void 0),
-    (s.currentSessionLeafTs = new Date().toISOString()),
-    await s.appendEntry(
-      {
-        type: "last-prompt",
-        ...(s.currentSessionLastPrompt && { lastPrompt: s.currentSessionLastPrompt }),
-        leafUuid: e,
-        explicit: !0,
-        ...n,
-        sessionId: getSessionId(),
-      },
-      void 0,
-      void 0,
-      r,
-    ));
+  let project = getProject();
+  project.currentSessionLeafUuid = e ?? undefined;
+  project.currentSessionLeafTs = new Date().toISOString();
+  await project.appendEntry(
+    {
+      type: "last-prompt",
+      ...(project.currentSessionLastPrompt && {
+        lastPrompt: project.currentSessionLastPrompt,
+      }),
+      leafUuid: e,
+      explicit: true,
+      ...n,
+      sessionId: getSessionId(),
+    },
+    undefined,
+    undefined,
+    r,
+  );
 }
 //@ chunk-e6aww6q8.js:408523-408635 facade-majority
 function queueLeafCheckpointWithdrawal() {
   getProject().queueLeafCheckpointWithdrawal({
     type: "last-prompt",
     leafUuid: null,
-    explicit: !0,
+    explicit: true,
     sessionId: getSessionId(),
   });
 }
 //@ chunk-e6aww6q8.js:408635-408833 facade-majority
-async function mirrorLeafCheckpointToRemote(e, n) {
-  let r = getProject();
-  await r.mirrorInternalEntry({
+async function mirrorLeafCheckpointToRemote(leafUuid, n) {
+  let project = getProject();
+  await project.mirrorInternalEntry({
     type: "last-prompt",
-    ...(r.currentSessionLastPrompt && { lastPrompt: r.currentSessionLastPrompt }),
-    leafUuid: e,
-    explicit: !0,
+    ...(project.currentSessionLastPrompt && {
+      lastPrompt: project.currentSessionLastPrompt,
+    }),
+    leafUuid,
+    explicit: true,
     ...n,
     sessionId: getSessionId(),
   });
 }
 //@ chunk-e6aww6q8.js:408833-408932 facade-majority
-function mirrorCustomTitleToRemote(e, n) {
-  return getProject().mirrorInternalEntry({ type: "custom-title", customTitle: n, sessionId: e });
+function mirrorCustomTitleToRemote(sessionId, customTitle) {
+  return getProject().mirrorInternalEntry({
+    type: "custom-title",
+    customTitle,
+    sessionId,
+  });
 }
 //@ chunk-e6aww6q8.js:408932-408984 facade-majority
 function hasRemoteWorkerEventLog() {
@@ -4681,149 +4654,180 @@ function hasRemoteWorkerEventLog() {
 function mirrorWorkerEventToRemote(e, n, r) {
   return getProject().mirrorWorkerEvent(e, n, r);
 }
+//@ chunk-e6aww6q8.js:409041-409221 facade-majority = recordSidechainTranscript (0.678)
 /**
  * 记录子代理（sidechain）消息：isSidechain=true、带 agentId，写入 subagents/agent-<id>.jsonl。
  */
-//@ chunk-e6aww6q8.js:409041-409221 facade-majority = recordSidechainTranscript (0.678)
-async function recordSidechainTranscript(e, n, r, s) {
-  let h = getSessionId(),
-    y = isForeignToBinding(pinSessionId(h)),
-    S = bridgeSessionForPulledWindow(pinSessionId(h)) ?? null,
-    w = K9(),
-    L = getPromptId_2(),
-    G = cleanMessagesForLogging(e),
-    q = getProject();
-  await q.recordInTurn(h, n, () => q.insertMessageChain(G, !0, n, r, void 0, h, y, s, S, w, L));
+async function recordSidechainTranscript(e, n, r, storageV5) {
+  let sessionId = getSessionId();
+  let y = isForeignToBinding(pinSessionId(sessionId));
+  let S = bridgeSessionForPulledWindow(pinSessionId(sessionId)) ?? null;
+  let w = pulledRows();
+  let promptId = getPromptId_2();
+  let G = cleanMessagesForLogging(e);
+  let project = getProject();
+  await project.recordInTurn(sessionId, n, () =>
+    project.insertMessageChain(G, true, n, r, undefined, sessionId, y, storageV5, S, w, promptId),
+  );
 }
 //@ chunk-e6aww6q8.js:409221-409316 facade-majority = recordContextCollapseSnapshot (0.517)
-async function recordForkContextRef(e, n) {
-  await getProject().appendEntry({ type: "fork-context-ref", ...e }, void 0, void 0, n);
+async function recordForkContextRef(snapshot, storageV5) {
+  await getProject().appendEntry(
+    {
+      type: "fork-context-ref",
+      ...snapshot,
+    },
+    undefined,
+    undefined,
+    storageV5,
+  );
 }
 //@ chunk-e6aww6q8.js:409316-409387 facade-majority = recordContextCollapseCommit (1)
-async function recordArtifactAutoReactLedger(e, n) {
-  await getProject().appendEntry(e, e.sessionId, void 0, n);
+async function recordArtifactAutoReactLedger(ledgerEntry, n) {
+  await getProject().appendEntry(ledgerEntry, ledgerEntry.sessionId, undefined, n);
 }
 //@ chunk-e6aww6q8.js:409387-409455 facade-majority = recordContextCollapseCommit (1)
 function recordCostState(e, n) {
-  getProject()
-    .appendEntry(e, e.sessionId, void 0, n)
-    .catch(logError);
+  getProject().appendEntry(e, e.sessionId, undefined, n).catch(logError);
 }
 //@ chunk-e6aww6q8.js:409455-409464 layout
 registerCostStateRecorder(recordCostState);
+//@ chunk-e6aww6q8.js:409464-409590 facade-majority
 /**
  * 记录任务摘要（observer-ref 相关），供后台会话列表显示。
  */
-//@ chunk-e6aww6q8.js:409464-409590 facade-majority
 async function recordObserverRef(sessionId, summary) {
   await getProject().appendEntry(
-    { type: "observer-ref", ...sessionId, timestamp: new Date().toISOString() },
-    void 0,
-    void 0,
+    {
+      type: "observer-ref",
+      ...sessionId,
+      timestamp: new Date().toISOString(),
+    },
+    undefined,
+    undefined,
     summary,
   );
 }
 //@ chunk-e6aww6q8.js:409590-409790 facade-majority
-async function agentTranscriptExists(e, n) {
-  if (isStorageV5Enabled() && n !== void 0)
+async function agentTranscriptExists(e, storageV5) {
+  if (isStorageV5Enabled() && storageV5 !== undefined)
     try {
-      let r = locateAgentTranscript(e),
-        s = r === void 0 ? void 0 : wG(r);
-      if (s !== void 0 && (await n.stat(s)).ok) return !0;
+      let r = locateAgentTranscript(e);
+      let s = r === undefined ? undefined : transcriptKeyFor(r);
+      if (s !== undefined && (await storageV5.stat(s)).ok) return true;
     } catch {}
-  if (isDiskless()) return !1;
+  if (isDiskless()) return false;
   try {
-    return (await stat(getAgentTranscriptPath(e)), !0);
+    await stat(getAgentTranscriptPath(e));
+    return true;
   } catch {
-    return !1;
+    return false;
   }
 }
 //@ chunk-e6aww6q8.js:409790-409923 layout
 function splitJsonlLines(e) {
-  let n = [],
-    r = 0;
+  let n = [];
+  let r = 0;
   while (r < e.length) {
     let index = e.indexOf(
-        `
+      `
 `,
-        r,
-      ),
-      h = index === -1 ? e.length : index + 1;
-    (n.push({ data: e.slice(r, h) }), (r = h));
+      r,
+    );
+    let h = index === -1 ? e.length : index + 1;
+    n.push({
+      data: e.slice(r, h),
+    });
+    r = h;
   }
   return n;
 }
 //@ chunk-e6aww6q8.js:409923-410098 layout
 function getSessionScopeOfKey(e) {
   if (e.namespace !== "transcript") throw Error("sessionScopeOf: not a transcript key");
-  return { namespace: "transcript", projectKey: e.projectKey, sessionId: e.sessionId };
+  return {
+    namespace: "transcript",
+    projectKey: e.projectKey,
+    sessionId: e.sessionId,
+  };
 }
 //@ chunk-e6aww6q8.js:410098-410185 layout
-function getStorageErrorCause(e) {
-  let n = e instanceof Error ? e.cause : void 0;
-  return isStoreError(n) && wbs(n) ? n : void 0;
+function getStorageErrorCause(error) {
+  let cause = error instanceof Error ? error.cause : undefined;
+  return isStoreError(cause) && isStoreFencedError(cause) ? cause : undefined;
 }
 //@ chunk-e6aww6q8.js:410185-410360 layout
-function transcriptAppendFailedError(e) {
+function transcriptAppendFailedError(error) {
   let n = () =>
     Object.assign(
       new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `transcript storage append failed (${formatStorageErrorCode(e)})`,
+        `transcript storage append failed (${formatStorageErrorCode(error)})`,
         "transcript storage append failed",
       ),
-      { cause: e },
+      {
+        cause: error,
+      },
     );
-  return wbs(e) ? n() : withErrnoFromStorageError(e, n, "write");
+  return isStoreFencedError(error) ? n() : withErrnoFromStorageError(error, n, "write");
 }
 //@ chunk-e6aww6q8.js:410360-410481 layout
-function logReStampFailure(e, n) {
-  if (isSyscallError(n))
-    logForDebugging(`${e} (${getErrnoCode(n)}): ${errorMessage(n)}; the synchronous re-stamp runs instead`, {
-      level: "error",
-    });
-  else logError(n);
+function logReStampFailure(e, error) {
+  if (isSyscallError(error))
+    logForDebugging(
+      `${e} (${getErrnoCode(error)}): ${errorMessage(error)}; the synchronous re-stamp runs instead`,
+      {
+        level: "error",
+      },
+    );
+  else logError(error);
 }
 //@ chunk-e6aww6q8.js:410481-410576 layout
-function entryDedupKey(e, n) {
-  let r = "sessionId" in n ? n.sessionId : void 0;
-  return `${e}
-${n.type}
-${String(r)}`;
+function entryDedupKey(path, entry) {
+  let sessionId = "sessionId" in entry ? entry.sessionId : undefined;
+  return `${path}
+${entry.type}
+${String(sessionId)}`;
 }
 //@ chunk-e6aww6q8.js:410576-410822 layout
-function getAsideStrandedLeftover(e) {
-  if (e.code !== "Failed" || e.telemetryCode !== "AsideStranded") return;
-  let n = "cause" in e ? e.cause : void 0;
-  if (typeof n !== "object" || n === null || "moveError" in n) return;
-  let r = "path" in n ? n.path : void 0;
-  return { leftover: typeof r === "string" ? r : void 0 };
+function getAsideStrandedLeftover(error) {
+  if (error.code !== "Failed" || error.telemetryCode !== "AsideStranded") return;
+  let cause = "cause" in error ? error.cause : undefined;
+  if (typeof cause !== "object" || cause === null || "moveError" in cause) return;
+  let path = "path" in cause ? cause.path : undefined;
+  return {
+    leftover: typeof path === "string" ? path : undefined,
+  };
 }
 //@ chunk-e6aww6q8.js:410822-410975 layout
-function transcriptMoveFailedError(e) {
+function transcriptMoveFailedError(error) {
   return withErrnoFromStorageError(
-    e,
+    error,
     () =>
       Object.assign(
         new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          `transcript storage move failed (${formatStorageErrorCode(e)})`,
+          `transcript storage move failed (${formatStorageErrorCode(error)})`,
           "transcript storage move failed",
         ),
-        { cause: e },
+        {
+          cause: error,
+        },
       ),
     "rename",
   );
 }
 //@ chunk-e6aww6q8.js:410975-411149 layout
-function transcriptMkdirFailedError(e) {
+function transcriptMkdirFailedError(error) {
   return withErrnoFromStorageError(
-    e,
+    error,
     () =>
       Object.assign(
         new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          `transcript storage folder creation failed (${formatStorageErrorCode(e)})`,
+          `transcript storage folder creation failed (${formatStorageErrorCode(error)})`,
           "transcript storage folder creation failed",
         ),
-        { cause: e },
+        {
+          cause: error,
+        },
       ),
     "mkdir",
   );
@@ -4833,21 +4837,25 @@ function formatStorageErrorCode(e) {
   return "telemetryCode" in e && e.telemetryCode ? `${e.code} ${e.telemetryCode}` : e.code;
 }
 //@ chunk-e6aww6q8.js:411246-411437 layout
-function withErrnoFromStorageError(e, n, r) {
-  let s = "cause" in e ? e.cause : void 0;
-  if (isSyscallError(s)) return s;
-  let h = n(),
-    y = storageErrorToErrno(e, s);
-  if (y === void 0) return h;
-  let errno = constants_2_2.errno;
-  return Object.assign(h, { code: y, errno: -(errno[y] ?? 0), syscall: r });
+function withErrnoFromStorageError(e, n, syscall) {
+  let cause = "cause" in e ? e.cause : undefined;
+  if (isSyscallError(cause)) return cause;
+  let h = n();
+  let y = storageErrorToErrno(e, cause);
+  if (y === undefined) return h;
+  let errno = constants_8.errno;
+  return Object.assign(h, {
+    code: y,
+    errno: -(errno[y] ?? 0),
+    syscall,
+  });
 }
 //@ chunk-e6aww6q8.js:411437-411610 layout
-function storageErrorToErrno(e, n) {
+function storageErrorToErrno(e, cause) {
   let r = storageErrorCode(e);
   if (isErrnoCode(r)) return r;
-  let s = getErrnoCode(n);
-  if (isErrnoCode(s)) return s;
+  let errnoCode = getErrnoCode(cause);
+  if (isErrnoCode(errnoCode)) return errnoCode;
   switch (e.code) {
     case "NotFound":
       return "ENOENT";
@@ -4859,49 +4867,52 @@ function storageErrorToErrno(e, n) {
 }
 //@ chunk-e6aww6q8.js:411610-411668 layout
 function isErrnoCode(e) {
-  return e !== void 0 && /^E[A-Z0-9]+$/.test(e);
+  return e !== undefined && /^E[A-Z0-9]+$/.test(e);
 }
 //@ chunk-e6aww6q8.js:411668-411873 facade-majority
 class RefusedDirectWriteError extends Error {
   writer;
   name = "RefusedDirectWriteError";
-  constructor(e) {
+  constructor(writer) {
     super(
       "diskless session: refused a direct write of a session file (no storage backend, or no key for the path)",
     );
-    this.writer = e;
+    this.writer = writer;
   }
 }
 //@ chunk-e6aww6q8.js:411873-411922 layout
-function assertDiskWritable(e, n) {
-  if (isDiskless()) throw (warnDisklessSettingsWrite(e, n), new RefusedDirectWriteError(e));
+function assertDiskWritable(writer, n) {
+  if (isDiskless()) {
+    warnDisklessSettingsWrite(writer, n);
+    throw new RefusedDirectWriteError(writer);
+  }
 }
 //@ chunk-e6aww6q8.js:411922-411974 layout
-function swallowRefusedDirectWrite(e) {
-  if (!(e instanceof RefusedDirectWriteError)) throw e;
-  logError(e);
+function swallowRefusedDirectWrite(error) {
+  if (!(error instanceof RefusedDirectWriteError)) throw error;
+  logError(error);
 }
 //@ chunk-e6aww6q8.js:411974-412062 layout
 function getHydratedTranscriptTarget(e, n) {
   let r = wrapStorageSource(getStorageTargetForPath(e, n));
-  if (r === void 0) assertDiskWritable("hydrated_transcript", e);
+  if (r === undefined) assertDiskWritable("hydrated_transcript", e);
   return r;
 }
+//@ chunk-e6aww6q8.js:412062-413115 layout
 /**
  * 把一段 jsonl 文本追加到转录：文件以 O_APPEND 打开（必要时先补换行封闭撕裂的尾行），storage v5 后端时写记录。
  */
-//@ chunk-e6aww6q8.js:412062-413115 layout
 async function appendToTranscriptFile(e, n, r, s, h) {
-  let y = su(),
-    S = s !== !0 && y.project?.tornTailSealPending(e) === !0;
+  let y = currentTranscriptStore();
+  let S = s !== true && y.project?.tornTailSealPending(e) === true;
   if (S)
     n =
       `
 ` + n;
-  let w = !1,
-    L = r !== void 0 ? transcriptStorageKeyForPath(e) : void 0;
-  if (isStorageV5Enabled() && r !== void 0 && L !== void 0) {
-    if (s === !0) {
+  let w = false;
+  let L = r !== undefined ? transcriptStorageKeyForPath(e) : undefined;
+  if (isStorageV5Enabled() && r !== undefined && L !== undefined) {
+    if (s === true) {
       let stats = await r.stat(L);
       if (!stats.ok) {
         if (stats.error.code === "NotFound") return "skipped";
@@ -4914,38 +4925,56 @@ async function appendToTranscriptFile(e, n, r, s, h) {
                 `onlyIfExists stat failed (${formatStorageErrorCode(error)}) \u2014 append withheld`,
                 "onlyIfExists stat failed \u2014 append withheld",
               ),
-              { cause: error },
+              {
+                cause: error,
+              },
             ),
           "write",
         );
       }
       if ((stats.value.storedBytes ?? stats.value.size) === 0) return "skipped";
-      if ((stats.value.tornTailBytes ?? 0) > 0)
-        ((n =
+      if ((stats.value.tornTailBytes ?? 0) > 0) {
+        n =
           `
-` + (h ?? n)),
-          (w = !0));
+` + (h ?? n);
+        w = true;
+      }
     }
-    let append = await r.append(
+    let G = await r.append(
       L,
       splitJsonlLines(n),
-      s === !0 ? { precondition: { type: "ifExists" } } : void 0,
+      s === true
+        ? {
+            precondition: {
+              type: "ifExists",
+            },
+          }
+        : undefined,
     );
-    if (!append.ok) {
-      if (s === !0 && append.error.code === "NotFound") return "skipped";
-      throw transcriptAppendFailedError(append.error);
+    if (!G.ok) {
+      if (s === true && G.error.code === "NotFound") return "skipped";
+      throw transcriptAppendFailedError(G.error);
     }
     if (S) y.project?.tornTailSealLanded(e);
     return w ? "backend-torn" : "backend";
   }
-  if ((assertDiskWritable("transcript_lines", e), s === !0)) {
+  assertDiskWritable("transcript_lines", e);
+  if (s === true) {
     let G = await appendToExistingTranscript(e, n, h);
-    return G === !1 ? "skipped" : G === "torn" ? "direct-torn" : "direct";
+    return G === false ? "skipped" : G === "torn" ? "direct-torn" : "direct";
   }
   try {
-    await appendFile(e, n, { mode: 384 });
+    await appendFile(e, n, {
+      mode: 384,
+    });
   } catch {
-    (await mkdir(dirname(e), { recursive: !0, mode: 448 }), await appendFile(e, n, { mode: 384 }));
+    await mkdir(dirname(e), {
+      recursive: true,
+      mode: 448,
+    });
+    await appendFile(e, n, {
+      mode: 384,
+    });
   }
   if (S) y.project?.tornTailSealLanded(e);
   return "direct";
@@ -4954,33 +4983,34 @@ async function appendToTranscriptFile(e, n, r, s, h) {
 async function appendToExistingTranscript(e, n, r) {
   let s;
   try {
-    s = await open(e, constants.O_RDWR | constants.O_APPEND | ws);
+    s = await open(e, constants.O_RDWR | constants.O_APPEND | NOFOLLOW_NONBLOCK_FLAGS);
   } catch (error) {
-    let y = getErrnoCode(error);
-    if (y === "ENOENT" || y === "ENOTDIR") return !1;
+    let errnoCode = getErrnoCode(error);
+    if (errnoCode === "ENOENT" || errnoCode === "ENOTDIR") return false;
     throw error;
   }
   try {
-    let { size: size } = await s.stat();
-    if (size === 0) return !1;
-    let alloc = Buffer.alloc(1),
-      { bytesRead: bytesRead } = await s.read(alloc, 0, 1, size - 1),
-      w = bytesRead === 1 && alloc[0] === 10,
-      buffer = Buffer.from(
-        w
-          ? n
-          : `
+    let { size } = await s.stat();
+    if (size === 0) return false;
+    let y = Buffer.alloc(1);
+    let { bytesRead } = await s.read(y, 0, 1, size - 1);
+    let w = bytesRead === 1 && y[0] === 10;
+    let buffer = Buffer.from(
+      w
+        ? n
+        : `
 ` + (r ?? n),
-        "utf8",
-      ),
-      G = void 0,
-      q = 0;
+      "utf8",
+    );
+    let G = undefined;
+    let q = 0;
     while (q < buffer.length) {
-      let { bytesWritten: bytesWritten } = await s.write(buffer, q, buffer.length - q, G);
+      let { bytesWritten } = await s.write(buffer, q, buffer.length - q, G);
       if (bytesWritten <= 0) throw Error("appendToExistingTranscript: short write");
-      if (((q += bytesWritten), G !== void 0)) G += bytesWritten;
+      q += bytesWritten;
+      if (G !== undefined) G += bytesWritten;
     }
-    return w ? !0 : "torn";
+    return w ? true : "torn";
   } finally {
     await s.close();
   }
@@ -4989,128 +5019,162 @@ async function appendToExistingTranscript(e, n, r) {
 var OBSERVER_REF_TAIL_SCAN_BYTES = 1048576;
 //@ chunk-e6aww6q8.js:413653-413811 layout
 async function readTranscriptTailViaStorage(e, n, r) {
-  let s = wG(e);
-  if (s === void 0) return;
-  let h = await readTranscriptTailV5(s, n, r);
-  if (h === null) return null;
-  if (!h.ok) return;
-  return { content: h.content, cut: h.cut };
+  let s = transcriptKeyFor(e);
+  if (s === undefined) return;
+  let transcriptTailV5 = await readTranscriptTailV5(s, n, r);
+  if (transcriptTailV5 === null) return null;
+  if (!transcriptTailV5.ok) return;
+  return {
+    content: transcriptTailV5.content,
+    cut: transcriptTailV5.cut,
+  };
 }
 //@ chunk-e6aww6q8.js:413811-414178 facade-majority
-function readTranscriptTailV5(e, n, r) {
-  return r.read([{ key: e, tail: n }]).then((s) => {
-    if (!s.ok) return d7t(s.error) ? readStorageTailByRecords(e, n, r) : { ok: !1, error: s.error };
-    let [h] = s.value.items;
-    if (!h.found) return null;
-    return {
-      ok: !0,
-      content: Buffer.from(h.value.buffer, h.value.byteOffset, h.value.byteLength).toString("utf8"),
-      totalBytes: h.totalBytes,
-      byteLength: h.value.byteLength,
-      cut: h.totalBytes > h.value.byteLength,
-    };
-  });
+function readTranscriptTailV5(e, maxBytes, r) {
+  return r
+    .read([
+      {
+        key: e,
+        tail: maxBytes,
+      },
+    ])
+    .then((s) => {
+      if (!s.ok)
+        return isByteViewUnsupportedError(s.error)
+          ? readStorageTailByRecords(e, maxBytes, r)
+          : {
+              ok: false,
+              error: s.error,
+            };
+      let [h] = s.value.items;
+      if (!h.found) return null;
+      return {
+        ok: true,
+        content: Buffer.from(h.value.buffer, h.value.byteOffset, h.value.byteLength).toString("utf8"),
+        totalBytes: h.totalBytes,
+        byteLength: h.value.byteLength,
+        cut: h.totalBytes > h.value.byteLength,
+      };
+    });
 }
 //@ chunk-e6aww6q8.js:414178-414267 layout
-function isStorageTooLargeError(e) {
-  return e.code === "Failed" && "telemetryCode" in e && e.telemetryCode === "EFBIG";
+function isStorageTooLargeError(error) {
+  return error.code === "Failed" && "telemetryCode" in error && error.telemetryCode === "EFBIG";
 }
 //@ chunk-e6aww6q8.js:414267-414290 layout
-var PAGED_TRANSCRIPT_PAGE_BYTES = 4194304,
-  G9 = A7s;
+var PAGED_TRANSCRIPT_PAGE_BYTES = 4194304;
+var pagedTranscriptPageBytes = WRITE_BUFFER_LIMIT_BYTES;
 //@ chunk-e6aww6q8.js:414290-414405 layout
 function pagedTranscriptTooLargeError() {
-  return Object.assign(Error("loadTranscriptFile: the paged transcript is too large"), { code: "EFBIG" });
+  return Object.assign(Error("loadTranscriptFile: the paged transcript is too large"), {
+    code: "EFBIG",
+  });
 }
 //@ chunk-e6aww6q8.js:414405-415433 layout
-async function readPagedTranscript(e, n, r) {
+async function readPagedTranscript(backend, key, pagedTranscriptPageBytes_2) {
   let s;
   try {
-    s = await e.stat(n);
+    s = await backend.stat(key);
   } catch (error) {
-    if (r !== void 0) return;
+    if (pagedTranscriptPageBytes_2 !== undefined) return;
     throw error;
   }
   if (!s.ok) {
     if (s.error.code === "NotFound") return null;
-    if (r !== void 0) return;
-    return { failure: s.error };
+    if (pagedTranscriptPageBytes_2 !== undefined) return;
+    return {
+      failure: s.error,
+    };
   }
-  if (r !== void 0 && s.value.size > r) return;
-  if (s.value.size > G9) throw pagedTranscriptTooLargeError();
-  let allocUnsafe = Buffer.allocUnsafe(Math.min(s.value.size, G9)),
-    y = 0,
-    S = 0,
-    w;
+  if (pagedTranscriptPageBytes_2 !== undefined && s.value.size > pagedTranscriptPageBytes_2) return;
+  if (s.value.size > pagedTranscriptPageBytes) throw pagedTranscriptTooLargeError();
+  let h = Buffer.allocUnsafe(Math.min(s.value.size, pagedTranscriptPageBytes));
+  let y = 0;
+  let S = 0;
+  let w;
   for (;;) {
-    let records = await e.readRecords(n, {
+    let records = await backend.readRecords(key, {
       order: "forward",
       maxBytes: PAGED_TRANSCRIPT_PAGE_BYTES,
-      ...(w !== void 0 && { fromSeq: w }),
+      ...(w !== undefined && {
+        fromSeq: w,
+      }),
     });
     if (!records.ok) {
-      if (records.error.code === "NotFound" && w === void 0) return null;
-      return { failure: records.error };
+      if (records.error.code === "NotFound" && w === undefined) return null;
+      return {
+        failure: records.error,
+      };
     }
     for (let item of records.value.items) {
       let Z = y + item.data.byteLength;
-      if (Z > G9) throw pagedTranscriptTooLargeError();
-      if (Z > allocUnsafe.length) {
-        let allocUnsafe_2 = Buffer.allocUnsafe(Math.min(Math.max(Z, allocUnsafe.length * 2), G9));
-        (allocUnsafe.copy(allocUnsafe_2, 0, 0, y), (allocUnsafe = allocUnsafe_2));
+      if (Z > pagedTranscriptPageBytes) throw pagedTranscriptTooLargeError();
+      if (Z > h.length) {
+        let Se = Buffer.allocUnsafe(Math.min(Math.max(Z, h.length * 2), pagedTranscriptPageBytes));
+        h.copy(Se, 0, 0, y);
+        h = Se;
       }
-      (allocUnsafe.set(item.data, y), (y = Z), S++);
+      h.set(item.data, y);
+      y = Z;
+      S++;
     }
     let nextSeq = records.value.nextSeq;
-    if (nextSeq === void 0) break;
-    if (w !== void 0 && nextSeq <= w) throw Error("loadTranscriptFile: the record cursor did not advance");
+    if (nextSeq === undefined) break;
+    if (w !== undefined && nextSeq <= w) throw Error("loadTranscriptFile: the record cursor did not advance");
     w = nextSeq;
   }
-  return (
-    logForDebugging(`loadTranscriptFile: read ${S} records (${y} bytes) by page`),
-    {
-      bytes: allocUnsafe.subarray(0, y),
-      mtimeMs: s.value.mtimeMs,
-      storedBytes: Math.max(s.value.size, y),
-      tornTailBytes: s.value.tornTailBytes ?? 0,
-    }
-  );
+  logForDebugging(`loadTranscriptFile: read ${S} records (${y} bytes) by page`);
+  return {
+    bytes: h.subarray(0, y),
+    mtimeMs: s.value.mtimeMs,
+    storedBytes: Math.max(s.value.size, y),
+    tornTailBytes: s.value.tornTailBytes ?? 0,
+  };
 }
 //@ chunk-e6aww6q8.js:415433-415739 layout
-async function readStorageTailByRecords(e, n, r) {
-  let records = await r.readRecords(e, { order: "backward", maxBytes: n });
-  if (!records.ok) return records.error.code === "NotFound" ? null : { ok: !1, error: records.error };
+async function readStorageTailByRecords(e, maxBytes, r) {
+  let records = await r.readRecords(e, {
+    order: "backward",
+    maxBytes,
+  });
+  if (!records.ok)
+    return records.error.code === "NotFound"
+      ? null
+      : {
+          ok: false,
+          error: records.error,
+        };
   let buffer = Buffer.concat(records.value.items.map((item) => item.data).reverse());
   return {
-    ok: !0,
+    ok: true,
     content: buffer.toString("utf8"),
-    totalBytes: void 0,
+    totalBytes: undefined,
     byteLength: buffer.byteLength,
-    cut: !1,
+    cut: false,
   };
 }
 //@ chunk-e6aww6q8.js:415739-416177 facade-majority
-async function readLastObserverRef(e, n) {
-  let r = e ? getAgentTranscriptPath(e) : getTranscriptPath(),
-    s =
-      !isStorageV5Enabled() || n === void 0
-        ? void 0
-        : await readTranscriptTailViaStorage(r, OBSERVER_REF_TAIL_SCAN_BYTES, n).catch(() => {
-            return;
-          });
-  if (s === null || (s === void 0 && isDiskless())) return null;
+async function readLastObserverRef(e, storageV5) {
+  let r = e ? getAgentTranscriptPath(e) : getTranscriptPath();
+  let s =
+    !isStorageV5Enabled() || storageV5 === undefined
+      ? undefined
+      : await readTranscriptTailViaStorage(r, OBSERVER_REF_TAIL_SCAN_BYTES, storageV5).catch(() => {
+          return;
+        });
+  if (s === null || (s === undefined && isDiskless())) return null;
   let h =
-    s !== void 0
+    s !== undefined
       ? s
-      : await tailFile(r, OBSERVER_REF_TAIL_SCAN_BYTES).catch((S) => {
-          if (isFsInaccessible(S)) return null;
-          throw S;
+      : await tailFile(r, OBSERVER_REF_TAIL_SCAN_BYTES).catch((error) => {
+          if (isFsInaccessible(error)) return null;
+          throw error;
         });
   if (h == null) return null;
-  let parts = h.content.split(`
+  let lines = h.content.split(`
 `);
-  for (let S = parts.length - 1; S >= 0; S--) {
-    let w = parts[S];
+  for (let idx = lines.length - 1; idx >= 0; idx--) {
+    let w = lines[idx];
     if (!w || !w.includes('"observer-ref"')) continue;
     try {
       let L = jsonParse(w);
@@ -5120,265 +5184,303 @@ async function readLastObserverRef(e, n) {
   return null;
 }
 //@ chunk-e6aww6q8.js:416177-416200 layout
-var FORK_CONTEXT_MAX_DEPTH = 4,
-  $po = 16777216;
+var FORK_CONTEXT_MAX_DEPTH_2 = 4;
+var FORK_CONTEXT_MAX_DEPTH = 16777216;
+//@ chunk-e6aww6q8.js:416200-416535 facade-majority
 /**
  * 解析 fork-context-ref：加载父会话到 parentLastUuid 为止的前缀消息，带缓存与并发去重。
  */
-//@ chunk-e6aww6q8.js:416200-416535 facade-majority
-async function hydrateForkContext(e, n = $po, r) {
-  let {
-      forkContextHydrationCache: forkContextHydrationCache,
-      forkContextHydrationsInFlight: forkContextHydrationsInFlight,
-    } = su(),
-    y = forkContextHydrationCache.get(e.parentLastUuid);
-  if (y)
-    return (
-      forkContextHydrationCache.delete(e.parentLastUuid),
-      forkContextHydrationCache.set(e.parentLastUuid, y),
-      y.slice
-    );
+async function hydrateForkContext(e, n = FORK_CONTEXT_MAX_DEPTH, r) {
+  let { forkContextHydrationCache, forkContextHydrationsInFlight } = currentTranscriptStore();
+  let y = forkContextHydrationCache.get(e.parentLastUuid);
+  if (y) {
+    forkContextHydrationCache.delete(e.parentLastUuid);
+    forkContextHydrationCache.set(e.parentLastUuid, y);
+    return y.slice;
+  }
   let S = forkContextHydrationsInFlight.get(e.parentLastUuid);
   if (S) return S;
   let w = loadForkContextPrefix(e, n, r).finally(() =>
     forkContextHydrationsInFlight.delete(e.parentLastUuid),
   );
-  return (forkContextHydrationsInFlight.set(e.parentLastUuid, w), w);
+  forkContextHydrationsInFlight.set(e.parentLastUuid, w);
+  return w;
 }
 //@ chunk-e6aww6q8.js:416535-417329 layout
 async function loadForkContextPrefix(e, n, r) {
-  let { forkContextHydrationCache: forkContextHydrationCache } = su();
-  if (!isSafeIdSegment(e.parentSessionId))
-    return (
-      logForDebugging(
-        "[fork-context-ref] parent session id cannot name a transcript file; returning empty prefix",
-        { level: "warn" },
-      ),
-      []
+  let { forkContextHydrationCache } = currentTranscriptStore();
+  if (!isSafeIdSegment_2(e.parentSessionId)) {
+    logForDebugging(
+      "[fork-context-ref] parent session id cannot name a transcript file; returning empty prefix",
+      {
+        level: "warn",
+      },
     );
-  let h = getTranscriptPathForSession(e.parentSessionId),
-    y = getTranscriptStorageKey(h, r),
-    { messages: messages } = await loadTranscriptFile(h, y && { storageV5: y }),
-    w = messages.get(e.parentLastUuid);
-  if (!w)
-    return (
-      logForDebugging(
-        `[fork-context-ref] parent uuid ${e.parentLastUuid} not found in ${h}; returning empty prefix`,
-        { level: "warn" },
-      ),
-      []
+    return [];
+  }
+  let transcriptPathForSession = getTranscriptPathForSession(e.parentSessionId);
+  let transcriptStorageKey = getTranscriptStorageKey(transcriptPathForSession, r);
+  let { messages } = await loadTranscriptFile(
+    transcriptPathForSession,
+    transcriptStorageKey && {
+      storageV5: transcriptStorageKey,
+    },
+  );
+  let w = messages.get(e.parentLastUuid);
+  if (!w) {
+    logForDebugging(
+      `[fork-context-ref] parent uuid ${e.parentLastUuid} not found in ${transcriptPathForSession}; returning empty prefix`,
+      {
+        level: "warn",
+      },
     );
+    return [];
+  }
   let mapped = buildConversationChain(messages, w)
-      .filter((Z) => !Z.isSidechain)
-      .map(({ isSidechain: isSidechain, parentUuid: parentUuid, promptId: promptId, ...we }) =>
-        withoutTaskProducerMark(we),
-      ),
-    reduced = mapped.reduce((Z, Se) => Z + toJsonLine(Se).length, 0);
-  (forkContextHydrationCache.delete(e.parentLastUuid),
-    forkContextHydrationCache.set(e.parentLastUuid, { slice: mapped, bytes: reduced }));
+    .filter((Z) => !Z.isSidechain)
+    .map(({ isSidechain, parentUuid, promptId, ...we }) => withoutTaskProducerMark(we));
+  let bytes = mapped.reduce((acc, Se) => acc + toJsonLine(Se).length, 0);
+  forkContextHydrationCache.delete(e.parentLastUuid);
+  forkContextHydrationCache.set(e.parentLastUuid, {
+    slice: mapped,
+    bytes,
+  });
   let q = 0;
   for (let Z of forkContextHydrationCache.values()) q += Z.bytes;
   for (let [Z, Se] of forkContextHydrationCache) {
     if (
       forkContextHydrationCache.size <= 1 ||
-      (forkContextHydrationCache.size <= FORK_CONTEXT_MAX_DEPTH && q <= n)
+      (forkContextHydrationCache.size <= FORK_CONTEXT_MAX_DEPTH_2 && q <= n)
     )
       break;
-    ((q -= Se.bytes), forkContextHydrationCache.delete(Z));
+    q -= Se.bytes;
+    forkContextHydrationCache.delete(Z);
   }
   return mapped;
 }
+//@ chunk-e6aww6q8.js:417329-417390 facade-majority = recordQueueOperation (1)
 /**
  * 追加 queue-operation 记录（排队命令的入队/出队），可写入其他会话的文件。
  */
-//@ chunk-e6aww6q8.js:417329-417390 facade-majority = recordQueueOperation (1)
 async function recordQueueOperation(e, n) {
   await getProject().insertQueueOperation(e, n);
 }
+//@ chunk-e6aww6q8.js:417390-417547 facade-majority = removeTranscriptMessage (0.515)
 /**
  * 从转录中删除指定 uuid 的消息（排入写队列，执行时重写文件）。
  */
-//@ chunk-e6aww6q8.js:417390-417547 facade-majority = removeTranscriptMessage (0.515)
-async function removeTranscriptMessage(e, n, r) {
-  let s = isStorageV5Enabled() && n !== void 0 ? n : void 0,
-    h = r ?? getSessionId(),
-    y = getProject(),
-    { drained: drained } = await y.recordInTurn(h, void 0, () => y.removeMessageByUuid(e, h, s));
+async function removeTranscriptMessage(e, storageV5, sessionId) {
+  let s = isStorageV5Enabled() && storageV5 !== undefined ? storageV5 : undefined;
+  let h = sessionId ?? getSessionId();
+  let project = getProject();
+  let { drained } = await project.recordInTurn(h, undefined, () => project.removeMessageByUuid(e, h, s));
   await drained;
 }
 //@ chunk-e6aww6q8.js:417547-417773 facade-majority
-async function removeTranscriptMessageIfPersisted(e, n) {
-  let r = isStorageV5Enabled() && n !== void 0 ? n : void 0,
-    s = getSessionId(),
-    h = getProject(),
-    { drained: drained } = await h.recordInTurn(s, void 0, async () =>
-      (await su().sessionMessages(s, r)).has(e)
-        ? h.removeMessageByUuid(e, s, r)
-        : { drained: Promise.resolve() },
-    );
+async function removeTranscriptMessageIfPersisted(continuationReplacesUuid, storageV5) {
+  let r = isStorageV5Enabled() && storageV5 !== undefined ? storageV5 : undefined;
+  let sessionId = getSessionId();
+  let project = getProject();
+  let { drained } = await project.recordInTurn(sessionId, undefined, async () =>
+    (await currentTranscriptStore().sessionMessages(sessionId, r)).has(continuationReplacesUuid)
+      ? project.removeMessageByUuid(continuationReplacesUuid, sessionId, r)
+      : {
+          drained: Promise.resolve(),
+        },
+  );
   await drained;
 }
+//@ chunk-e6aww6q8.js:417773-417847 facade-majority = recordFileHistorySnapshot (1)
 /**
  * 追加 file-history-snapshot 记录（文件检查点，供 /rewind 回滚文件）。
  */
-//@ chunk-e6aww6q8.js:417773-417847 facade-majority = recordFileHistorySnapshot (1)
-async function recordFileHistorySnapshot(e, n, r, s) {
-  await getProject().insertFileHistorySnapshot(e, n, r, s);
+async function recordFileHistorySnapshot(messageId, n, r, s) {
+  await getProject().insertFileHistorySnapshot(messageId, n, r, s);
 }
 //@ chunk-e6aww6q8.js:417847-418033 facade-majority
-async function recordFileHistoryDelta(e, n, r, s, h) {
+async function recordFileHistoryDelta(messageId, snapshotMessageId, trackingPath, backup, h) {
   await getProject().insertFileHistoryDelta(
     {
       type: "file-history-delta",
-      messageId: e,
-      snapshotMessageId: n,
-      trackingPath: r,
-      backup: s,
+      messageId,
+      snapshotMessageId,
+      trackingPath,
+      backup,
       timestamp: new Date().toISOString(),
     },
     h,
   );
 }
+//@ chunk-e6aww6q8.js:418033-418099 facade-majority = recordAttributionSnapshot (1)
 /**
  * 追加 attribution-snapshot 记录（提交署名统计快照）。
  */
-//@ chunk-e6aww6q8.js:418033-418099 facade-majority = recordAttributionSnapshot (1)
 async function recordAttributionSnapshot(e, n) {
   await getProject().insertAttributionSnapshot(e, n);
 }
+//@ chunk-e6aww6q8.js:418099-418168 facade-majority = recordContentReplacement (1)
 /**
  * 追加 content-replacement 记录（大工具结果替换为引用），有 agentId 时写入子代理转录。
  */
-//@ chunk-e6aww6q8.js:418099-418168 facade-majority = recordContentReplacement (1)
-async function recordContentReplacement(e, n, r) {
-  await getProject().insertContentReplacement(e, n, r);
+async function recordContentReplacement(contentReplacements, n, storageV5) {
+  await getProject().insertContentReplacement(contentReplacements, n, storageV5);
 }
 //@ chunk-e6aww6q8.js:418168-418333 layout
-fRt({
+setMarkerTextWriter({
   canRecord: () => !isTranscriptPersistenceDisabled() && !getProject().isRemotelyMirrored(),
   append: (e) => getProject().appendRequestReplayRecords(e),
   storedToolResultDigest: (e, n) => getProject().queuedToolResultDigest(e, n),
 });
+//@ chunk-e6aww6q8.js:418333-418378 facade-majority = resetSessionFilePointer (1)
 /**
  * 重置会话文件指针（新 sessionId 时下次写入重新创建文件）。
  */
-//@ chunk-e6aww6q8.js:418333-418378 facade-majority = resetSessionFilePointer (1)
 async function resetSessionFilePointer() {
   getProject().resetSessionFile();
 }
+//@ chunk-e6aww6q8.js:418378-418687 facade-majority = adoptResumedSessionFile (0.214)
 /**
  * resume 同一会话时把会话文件指针指向被恢复的转录文件，并重写元数据。
  */
-//@ chunk-e6aww6q8.js:418378-418687 facade-majority = adoptResumedSessionFile (0.214)
 function adoptResumedSessionFile() {
-  let project = getProject(),
-    n = getTranscriptPath();
-  project.setSessionFile(n);
-  let date = new Date(),
-    s = yH(n);
-  if (s !== void 0) utimes(s, date, date).catch(() => {});
+  let project = getProject();
+  let transcriptPath = getTranscriptPath();
+  project.setSessionFile(transcriptPath);
+  let date = new Date();
+  let s = worktreeFromProgress(transcriptPath);
+  if (s !== undefined) utimes(s, date, date).catch(() => {});
   try {
-    project.reAppendSessionMetadata(!0, !1, !1, !0);
+    project.reAppendSessionMetadata(true, false, false, true);
   } catch (error) {
-    let y = getErrnoCode(error);
+    let errnoCode = getErrnoCode(error);
     if (isSyscallError(error))
-      logForDebugging(`Resume re-append failed (${y}): ${errorMessage(error)}`, { level: "error" });
+      logForDebugging(`Resume re-append failed (${errnoCode}): ${errorMessage(error)}`, {
+        level: "error",
+      });
     else logError(error);
-    reportTranscriptWriteFailure(su().writerHealth, "adopt", error, project.sessionFilePath);
+    reportTranscriptWriteFailure(
+      currentTranscriptStore().writerHealth,
+      "adopt",
+      error,
+      project.sessionFilePath,
+    );
   }
 }
 //@ chunk-e6aww6q8.js:418687-418982 facade-majority
-async function adoptResumedSessionFileAsync(e) {
-  let n = getProject(),
-    r = getTranscriptPath();
-  if ((n.setSessionFile(r), n.adoptAppendSource(e), touchTranscript(r, e), isTranscriptPersistenceDisabled()))
-    return;
+async function adoptResumedSessionFileAsync(storageV5) {
+  let project = getProject();
+  let transcriptPath = getTranscriptPath();
+  project.setSessionFile(transcriptPath);
+  project.adoptAppendSource(storageV5);
+  touchTranscript(transcriptPath, storageV5);
+  if (isTranscriptPersistenceDisabled()) return;
   try {
-    await n.reAppendSessionMetadataAsync(!0, !1, e, !0);
+    await project.reAppendSessionMetadataAsync(true, false, storageV5, true);
   } catch (error) {
-    let h = getErrnoCode(error);
+    let errnoCode = getErrnoCode(error);
     if (isSyscallError(error))
-      logForDebugging(`Resume re-append failed (${h}): ${errorMessage(error)}`, { level: "error" });
+      logForDebugging(`Resume re-append failed (${errnoCode}): ${errorMessage(error)}`, {
+        level: "error",
+      });
     else logError(error);
-    reportTranscriptWriteFailure(su().writerHealth, "adopt", error, r);
+    reportTranscriptWriteFailure(currentTranscriptStore().writerHealth, "adopt", error, transcriptPath);
   }
 }
 //@ chunk-e6aww6q8.js:418982-419053 facade-majority
-function touchSessionTranscript(e) {
+function touchSessionTranscript(storageV5) {
   let sessionFilePath = getProject().sessionFilePath;
   if (sessionFilePath === null) return;
-  touchTranscript(sessionFilePath, e);
+  touchTranscript(sessionFilePath, storageV5);
 }
 //@ chunk-e6aww6q8.js:419053-419235 layout
 function touchTranscript(e, n) {
-  if (isStorageV5Enabled() && n !== void 0) {
-    let h = wG(e);
-    if (h !== void 0) {
+  if (isStorageV5Enabled() && n !== undefined) {
+    let h = transcriptKeyFor(e);
+    if (h !== undefined) {
       try {
         n.touch(h).catch(() => {});
       } catch {}
       return;
     }
   }
-  let r = yH(e);
-  if (r === void 0) return;
+  let r = worktreeFromProgress(e);
+  if (r === undefined) return;
   let date = new Date();
   utimes(r, date, date).catch(() => {});
 }
+//@ chunk-e6aww6q8.js:419235-421372 facade-majority
 /**
  * cwd 改变（如进入 worktree）后把当前会话转录从旧项目目录迁到新项目目录，迁移期间新写入先缓存在 relocationBuffer。
  */
-//@ chunk-e6aww6q8.js:419235-421372 facade-majority
 async function relocateSessionTranscript(e) {
   if (isDiskless()) throw Error("A diskless session moves no transcript between project folders on disk");
-  let n = isStorageV5Enabled() && e !== void 0 ? e : void 0,
-    r = getSessionId(),
-    s = getProjectDir_2(getOriginalCwd()),
-    h = getProject(),
-    sessionFilePath = h.sessionFilePath;
+  let n = isStorageV5Enabled() && e !== undefined ? e : undefined;
+  let sessionId = getSessionId();
+  let projectDir = getProjectDir(getOriginalCwd());
+  let project = getProject();
+  let sessionFilePath = project.sessionFilePath;
   if (sessionFilePath === null || isTranscriptPersistenceDisabled()) {
-    ((h.currentSessionRelocatedCwd = getOriginalCwd()), switchSession(r, "cd", s));
+    project.currentSessionRelocatedCwd = getOriginalCwd();
+    switchSession(sessionId, "cd", projectDir);
     return;
   }
-  let S = join_3(s, `${r}.jsonl`);
+  let S = join(projectDir, `${sessionId}.jsonl`);
   if (sessionFilePath === S) {
-    switchSession(r, "cd", s);
-    let w = getOriginalCwd();
-    if (h.currentSessionRelocatedCwd !== w) {
-      h.currentSessionRelocatedCwd = w;
-      let L = { type: "relocated", sessionId: r, relocatedCwd: w };
-      (h.beginTranscriptRelocation(), OMt(sessionFilePath));
+    switchSession(sessionId, "cd", projectDir);
+    let originalCwd = getOriginalCwd();
+    if (project.currentSessionRelocatedCwd !== originalCwd) {
+      project.currentSessionRelocatedCwd = originalCwd;
+      let L = {
+        type: "relocated",
+        sessionId,
+        relocatedCwd: originalCwd,
+      };
+      project.beginTranscriptRelocation();
+      openRelocationBracket(sessionFilePath);
       try {
+        await project.flush();
+        await flushAppendEntryQueues();
         if (
-          (await h.flush(),
-          await flushAppendEntryQueues(),
           await tryAppendToTranscript(
             sessionFilePath,
             jsonStringify(L) +
               `
 `,
             getStorageTargetForPath(sessionFilePath, n),
-          ))
+          )
         )
-          h.fireMirror(sessionFilePath, [L]);
+          project.fireMirror(sessionFilePath, [L]);
       } catch (error) {
         logForDebugging(`relocateSessionTranscript: same-target relocated stamp failed: ${error}`);
       } finally {
-        (flushParkedAppends(sessionFilePath), await h.endTranscriptRelocation());
+        flushParkedAppends(sessionFilePath);
+        await project.endTranscriptRelocation();
       }
     }
     return;
   }
-  (h.beginTranscriptRelocation(), OMt(sessionFilePath));
+  project.beginTranscriptRelocation();
+  openRelocationBracket(sessionFilePath);
   try {
-    (await h.flush(), await flushAppendEntryQueues(), await mkdir(s, { recursive: !0, mode: 448 }));
-    let w = getRealPathOptions(e),
-      L = (await canonicalizePath(dirname(sessionFilePath), w)) === (await canonicalizePath(s, w));
+    await project.flush();
+    await flushAppendEntryQueues();
+    await mkdir(projectDir, {
+      recursive: true,
+      mode: 448,
+    });
+    let realPathOptions = getRealPathOptions(e);
+    let L =
+      (await canonicalizePath(dirname(sessionFilePath), realPathOptions)) ===
+      (await canonicalizePath(projectDir, realPathOptions));
     if (!L)
       try {
         let [Ie, Me] = await Promise.all([
-          stat(dirname(sessionFilePath), { bigint: !0 }),
-          stat(s, { bigint: !0 }),
+          stat(dirname(sessionFilePath), {
+            bigint: true,
+          }),
+          stat(projectDir, {
+            bigint: true,
+          }),
         ]);
         L = Ie.dev === Me.dev && Ie.ino === Me.ino;
       } catch (error) {
@@ -5386,60 +5488,82 @@ async function relocateSessionTranscript(e) {
       }
     let G;
     if (!L) G = await supersedeTranscriptFile(S);
-    let q = n && transcriptStorageKeyForPath(sessionFilePath),
-      Z = n && transcriptStorageKeyForPath(S),
-      Se = n !== void 0 && q !== void 0 && Z !== void 0,
-      ke = !0;
+    let q = n && transcriptStorageKeyForPath(sessionFilePath);
+    let Z = n && transcriptStorageKeyForPath(S);
+    let Se = n !== undefined && q !== undefined && Z !== undefined;
+    let ke = true;
     try {
-      await moveTranscript(sessionFilePath, S, n, Se ? { from: q, to: Z } : void 0);
+      await moveTranscript(
+        sessionFilePath,
+        S,
+        n,
+        Se
+          ? {
+              from: q,
+              to: Z,
+            }
+          : undefined,
+      );
     } catch (error) {
       if (isENOENT(error)) {
-        if (G !== void 0)
-          throw (
-            await rename(G, S).catch((Me) => {
-              logForDebugging(
-                `relocateSessionTranscript: could not restore set-aside destination after ENOENT move: ${Me}`,
-                { level: "warn" },
-              );
-            }),
-            error
-          );
-        (logForDebugging(`relocateSessionTranscript: old file missing: ${error}`), (ke = !1));
-      } else {
-        if (G !== void 0)
-          await rename(G, S).catch((Me) => {
+        if (G !== undefined) {
+          await rename(G, S).catch((error) => {
             logForDebugging(
-              `relocateSessionTranscript: could not restore set-aside destination after failed move: ${Me}`,
-              { level: "warn" },
+              `relocateSessionTranscript: could not restore set-aside destination after ENOENT move: ${error}`,
+              {
+                level: "warn",
+              },
+            );
+          });
+          throw error;
+        }
+        logForDebugging(`relocateSessionTranscript: old file missing: ${error}`);
+        ke = false;
+      } else {
+        if (G !== undefined)
+          await rename(G, S).catch((error) => {
+            logForDebugging(
+              `relocateSessionTranscript: could not restore set-aside destination after failed move: ${error}`,
+              {
+                level: "warn",
+              },
             );
           });
         throw error;
       }
     }
-    let we = join_3(dirname(sessionFilePath), r),
-      Ee = join_3(s, r),
-      Ae = !0;
+    let we = join(dirname(sessionFilePath), sessionId);
+    let Ee = join(projectDir, sessionId);
+    let Ae = true;
     try {
       await moveTranscript(
         we,
         Ee,
         n,
-        Se ? { fromScope: getSessionScopeOfKey(q), toScope: getSessionScopeOfKey(Z) } : void 0,
+        Se
+          ? {
+              fromScope: getSessionScopeOfKey(q),
+              toScope: getSessionScopeOfKey(Z),
+            }
+          : undefined,
       );
     } catch (error) {
-      if (((Ae = !1), !isENOENT(error))) logError(error);
+      Ae = false;
+      if (!isENOENT(error)) logError(error);
     }
-    if (
-      (h.noteSessionFileMoving(sessionFilePath, S),
-      h.setSessionFile(S),
-      switchSession(r, "cd", s),
-      (h.currentSessionRelocatedCwd = getOriginalCwd()),
-      ke)
-    )
+    project.noteSessionFileMoving(sessionFilePath, S);
+    project.setSessionFile(S);
+    switchSession(sessionId, "cd", projectDir);
+    project.currentSessionRelocatedCwd = getOriginalCwd();
+    if (ke)
       try {
         await appendEntryToFileAsync(
           S,
-          { type: "relocated", sessionId: r, relocatedCwd: h.currentSessionRelocatedCwd },
+          {
+            type: "relocated",
+            sessionId,
+            relocatedCwd: project.currentSessionRelocatedCwd,
+          },
           n,
         );
       } catch (error) {
@@ -5453,17 +5577,18 @@ async function relocateSessionTranscript(e) {
         logError(error);
       }
   } finally {
-    (flushParkedAppends(h.sessionFilePath ?? sessionFilePath), await h.endTranscriptRelocation());
+    flushParkedAppends(project.sessionFilePath ?? sessionFilePath);
+    await project.endTranscriptRelocation();
   }
 }
 //@ chunk-e6aww6q8.js:421372-421526 facade-majority
-function reportRelocateSessionTranscriptFailure(e, n) {
-  if (isSadFsErrno(e) || isEnvFsErrno(e))
-    logForDebugging(`${n}: transcript relocation failed (${getErrnoCode(e)}): ${errorMessage(e)}`, {
+function reportRelocateSessionTranscriptFailure(error, n) {
+  if (isSadFsErrno(error) || isEnvFsErrno(error))
+    logForDebugging(`${n}: transcript relocation failed (${getErrnoCode(error)}): ${errorMessage(error)}`, {
       level: "error",
     });
-  else logError(e);
-  reportTranscriptWriteFailure(su().writerHealth, "relocate", e);
+  else logError(error);
+  reportTranscriptWriteFailure(currentTranscriptStore().writerHealth, "relocate", error);
 }
 //@ chunk-e6aww6q8.js:421526-421574 facade-majority
 function beginTranscriptRelocationForTesting() {
@@ -5482,70 +5607,76 @@ async function supersedeTranscriptFile(e) {
     if (isENOENT(error)) return;
     throw error;
   }
-  let { isRetentionExemptionDisabled: isRetentionExemptionDisabled } = require("./chunk-xdz4h5jb.js");
+  let { isRetentionExemptionDisabled } = require("./chunk-xdz4h5jb.js");
   if (!isRetentionExemptionDisabled()) {
     let date = new Date();
-    await lutimes(n, date, date).catch((h) => {
+    await lutimes(n, date, date).catch((error) => {
       logForDebugging(
-        `relocateSessionTranscript: could not refresh the set-aside's mtime at ${n} (it ages from its old clock): ${h}`,
-        { level: "warn" },
+        `relocateSessionTranscript: could not refresh the set-aside's mtime at ${n} (it ages from its old clock): ${error}`,
+        {
+          level: "warn",
+        },
       );
     });
   }
-  return (
-    logForDebugging(`relocateSessionTranscript: existing destination set aside at ${n}`, { level: "warn" }),
-    n
-  );
+  logForDebugging(`relocateSessionTranscript: existing destination set aside at ${n}`, {
+    level: "warn",
+  });
+  return n;
 }
 //@ chunk-e6aww6q8.js:422089-422775 layout
-async function moveStorageScope(e, n, r) {
-  let moveScope = await e.moveScope(n, r);
-  if (!moveScope.ok || moveScope.value.published) return moveScope;
+async function moveStorageScope(e, fromScope, toScope) {
+  let s = await e.moveScope(fromScope, toScope);
+  if (!s.ok || s.value.published) return s;
   function h() {
     return Object.assign(Error("an occupant blocks the destination scope and could not be set aside"), {
       code: "EEXIST",
     });
   }
   let y =
-    r.namespace === "transcript" && r.sessionId !== void 0
-      ? { ...r, sessionId: `${r.sessionId}.superseded-${Date.now()}` }
-      : void 0;
-  if (y === void 0) throw h();
-  let moveScope_2 = await e.moveScope(r, y);
-  if (!moveScope_2.ok) throw transcriptMoveFailedError(moveScope_2.error);
-  if (!moveScope_2.value.published) throw h();
+    toScope.namespace === "transcript" && toScope.sessionId !== undefined
+      ? {
+          ...toScope,
+          sessionId: `${toScope.sessionId}.superseded-${Date.now()}`,
+        }
+      : undefined;
+  if (y === undefined) throw h();
+  let S = await e.moveScope(toScope, y);
+  if (!S.ok) throw transcriptMoveFailedError(S.error);
+  if (!S.value.published) throw h();
   logForDebugging(`renameWithFallbacks: existing destination scope set aside at ${y.sessionId}`, {
     level: "warn",
   });
-  let moveScope_3 = await e.moveScope(n, r);
-  if (moveScope_3.ok && moveScope_3.value.published) return moveScope_3;
-  if (
-    (await e.moveScope(y, r).catch(() => {
-      return;
-    }),
-    !moveScope_3.ok)
-  )
-    return moveScope_3;
+  let w = await e.moveScope(fromScope, toScope);
+  if (w.ok && w.value.published) return w;
+  await e.moveScope(y, toScope).catch(() => {
+    return;
+  });
+  if (!w.ok) return w;
   throw h();
 }
 //@ chunk-e6aww6q8.js:422775-424251 layout
 async function moveTranscript(e, n, r, s) {
-  if (isStorageV5Enabled() && r !== void 0 && s !== void 0) {
+  if (isStorageV5Enabled() && r !== undefined && s !== undefined) {
     let y = "fromScope" in s ? await moveStorageScope(r, s.fromScope, s.toScope) : await r.move(s.from, s.to);
     if (y.ok) return;
     if (y.error.code === "NotFound" || y.error.code === "ScopeNotFound")
-      throw Object.assign(Error("nothing to move at the old home"), { code: "ENOENT" });
+      throw Object.assign(Error("nothing to move at the old home"), {
+        code: "ENOENT",
+      });
     if (y.error.code === "Failed" && y.error.telemetryCode === "SameEntry") return;
-    let S = "fromScope" in s ? getAsideStrandedLeftover(y.error) : void 0;
-    if (S !== void 0) {
+    let S = "fromScope" in s ? getAsideStrandedLeftover(y.error) : undefined;
+    if (S !== undefined) {
+      logForDebugging(
+        `renameWithFallbacks: a scope move stood with its set-aside leftover stranded; left in place at ${S.leftover ?? "(unnamed)"}`,
+        {
+          level: "warn",
+        },
+      );
       if (
-        (logForDebugging(
-          `renameWithFallbacks: a scope move stood with its set-aside leftover stranded; left in place at ${S.leftover ?? "(unnamed)"}`,
-          { level: "warn" },
-        ),
         (await lstat(e).catch(() => {
           return;
-        })) !== void 0)
+        })) !== undefined
       )
         logForDebugging(`renameWithFallbacks: the session folder may also remain at ${e}; left in place`, {
           level: "warn",
@@ -5555,55 +5686,72 @@ async function moveTranscript(e, n, r, s) {
     throw transcriptMoveFailedError(y.error);
   }
   async function h(y, S) {
-    await mkdir(S, { recursive: !0, mode: 448 });
-    for (let w of await readdir(y, { withFileTypes: !0 }))
-      if (w.isDirectory()) await h(join_3(y, w.name), join_3(S, w.name));
-      else await copyFile(join_3(y, w.name), join_3(S, w.name));
+    await mkdir(S, {
+      recursive: true,
+      mode: 448,
+    });
+    for (let w of await readdir(y, {
+      withFileTypes: true,
+    }))
+      if (w.isDirectory()) await h(join(y, w.name), join(S, w.name));
+      else await copyFile(join(y, w.name), join(S, w.name));
   }
   try {
     await rename(e, n);
     return;
   } catch (error) {
-    let S = getErrnoCode(error);
-    if (S === "EEXIST" || S === "EPERM" || S === "EBUSY" || S === "ENOTEMPTY") {
+    let errnoCode = getErrnoCode(error);
+    if (
+      errnoCode === "EEXIST" ||
+      errnoCode === "EPERM" ||
+      errnoCode === "EBUSY" ||
+      errnoCode === "ENOTEMPTY"
+    ) {
       let w = await supersedeTranscriptFile(n).catch(() => {
         return;
       });
       try {
         await rename(e, n);
       } catch (error) {
-        if (w !== void 0) await rename(w, n).catch(() => {});
+        if (w !== undefined) await rename(w, n).catch(() => {});
         throw error;
       }
       return;
     }
-    if (S === "EXDEV") {
+    if (errnoCode === "EXDEV") {
       try {
         await copyFile(e, n);
       } catch (error) {
-        let L = getErrnoCode(error);
-        if (L === "EISDIR" || L === "ENOTSUP" || L === "EPERM") {
+        let errnoCode = getErrnoCode(error);
+        if (errnoCode === "EISDIR" || errnoCode === "ENOTSUP" || errnoCode === "EPERM") {
           let G = await supersedeTranscriptFile(n);
           try {
             await h(e, n);
           } catch (error) {
-            if (G !== void 0)
-              (await rm_2(n, { recursive: !0, force: !0 }).catch(() => {}),
-                await rename(G, n).catch(() => {}));
+            if (G !== undefined) {
+              await rm_2(n, {
+                recursive: true,
+                force: true,
+              }).catch(() => {});
+              await rename(G, n).catch(() => {});
+            }
             throw error;
           }
         } else throw error;
       }
-      await rm_2(e, { recursive: !0, force: !0 });
+      await rm_2(e, {
+        recursive: true,
+        force: true,
+      });
       return;
     }
     throw error;
   }
 }
+//@ chunk-e6aww6q8.js:424251-424290 facade-majority = flushSessionStorage (1)
 /**
  * 等待会话存储所有排队写入落盘。
  */
-//@ chunk-e6aww6q8.js:424251-424290 facade-majority = flushSessionStorage (1)
 async function flushSessionStorage() {
   await getProject().flush();
 }
@@ -5612,33 +5760,37 @@ async function inTranscriptCallOrder(e) {
   return await getProject().inCallOrder(e);
 }
 //@ chunk-e6aww6q8.js:424345-424474 facade-majority
-function appendEntryToCurrentTranscriptNow(e, n, r) {
-  let s = getProject(),
-    h = n ?? s.sessionFilePath;
+function appendEntryToCurrentTranscriptNow(e, n, tornTailEntry) {
+  let project = getProject();
+  let h = n ?? project.sessionFilePath;
   if (!h || isTranscriptPersistenceDisabled()) return;
   try {
-    (s.sealTornTailSync(h), appendEntrySync(h, e, r));
+    project.sealTornTailSync(h);
+    appendEntrySync(h, e, tornTailEntry);
   } catch (error) {
     reportStopNowAppendFailure(error, h);
   }
 }
 //@ chunk-e6aww6q8.js:424474-424626 layout
-function reportStopNowAppendFailure(e, n) {
-  if (isSyscallError(e))
-    logForDebugging(`Stop-gesture transcript append failed (${getErrnoCode(e)}): ${errorMessage(e)}`, {
-      level: "error",
-    });
-  else logError(e);
-  reportTranscriptWriteFailure(su().writerHealth, "stop_now", e, n);
+function reportStopNowAppendFailure(error, n) {
+  if (isSyscallError(error))
+    logForDebugging(
+      `Stop-gesture transcript append failed (${getErrnoCode(error)}): ${errorMessage(error)}`,
+      {
+        level: "error",
+      },
+    );
+  else logError(error);
+  reportTranscriptWriteFailure(currentTranscriptStore().writerHealth, "stop_now", error, n);
 }
 //@ chunk-e6aww6q8.js:424626-424684 facade-majority
 function sealTornTranscriptTail(e) {
   getProject().sealTornTailOnNextAppend(e ?? getTranscriptPathForSession(getSessionId()));
 }
 //@ chunk-e6aww6q8.js:424684-424789 layout
-function isConversationEntry(e) {
-  if (typeof e !== "object" || e === null) return !1;
-  let n = e.type;
+function isConversationEntry(payload) {
+  if (typeof payload !== "object" || payload === null) return false;
+  let n = payload.type;
   return n === "user" || n === "assistant";
 }
 //@ chunk-e6aww6q8.js:424789-424995 layout
@@ -5648,33 +5800,38 @@ async function openRegularFile(e) {
   try {
     if ((await n.stat()).isFile()) return n;
   } catch (error) {
-    throw (await n.close().catch(() => {}), error);
+    await n.close().catch(() => {});
+    throw error;
   }
-  return (await n.close().catch(() => {}), null);
+  await n.close().catch(() => {});
+  return null;
 }
 //@ chunk-e6aww6q8.js:424995-425085 facade-majority
-async function transcriptFileHasContentEntry(e, n) {
-  if (isStorageV5Enabled() && n !== void 0) return storedTranscriptHasContent(e, n);
-  return someLineMatches(e, isConversationLine).catch(() => !1);
+async function transcriptFileHasContentEntry(transcriptPath, backend) {
+  if (isStorageV5Enabled() && backend !== undefined)
+    return storedTranscriptHasContent(transcriptPath, backend);
+  return someLineMatches(transcriptPath, isConversationLine).catch(() => false);
 }
+//@ chunk-e6aww6q8.js:425085-425476 layout
 /**
  * 逐块读取文件并按行调用判断函数，任一行命中即返回 true。
  */
-//@ chunk-e6aww6q8.js:425085-425476 layout
 async function someLineMatches(e, n) {
   let s = null;
   try {
-    if (((s = await openRegularFile(e)), s === null)) throw Error("not a regular file");
-    let allocUnsafe = Buffer.allocUnsafe(65536),
-      y = new StringDecoder("utf8"),
-      S = "";
+    s = await openRegularFile(e);
+    if (s === null) throw Error("not a regular file");
+    let h = Buffer.allocUnsafe(65536);
+    let y = new StringDecoder("utf8");
+    let S = "";
     for (;;) {
-      let { bytesRead: bytesRead } = await s.read(allocUnsafe, 0, 65536, null);
+      let { bytesRead } = await s.read(h, 0, 65536, null);
       if (bytesRead <= 0) break;
-      let parts = y.write(allocUnsafe.subarray(0, bytesRead)).split(`
+      let lines = y.write(h.subarray(0, bytesRead)).split(`
 `);
-      ((parts[0] = S + (parts[0] ?? "")), (S = parts.pop() ?? ""));
-      for (let G of parts) if (n(G)) return !0;
+      lines[0] = S + (lines[0] ?? "");
+      S = lines.pop() ?? "";
+      for (let line of lines) if (n(line)) return true;
     }
     return n(S + y.end());
   } finally {
@@ -5685,38 +5842,50 @@ async function someLineMatches(e, n) {
   }
 }
 //@ chunk-e6aww6q8.js:425476-425490 layout
-var jpo = 65536;
+var MAX_TRANSCRIPT_HEAD_SCAN_BYTES = 65536;
+//@ chunk-e6aww6q8.js:425490-426134 layout
 /**
  * 判断转录是否含对话消息：无存储键时查本地文件；无盘模式读存储直到判定；否则先读存储记录前段，未截断时续读本地文件。
  */
-//@ chunk-e6aww6q8.js:425490-426134 layout
 async function storedTranscriptHasContent(transcriptPath, backend) {
   let storageKey = transcriptStorageKeyForPath(transcriptPath);
-  if (storageKey === void 0) return transcriptFileHasContentEntry(transcriptPath);
+  if (storageKey === undefined) return transcriptFileHasContentEntry(transcriptPath);
   if (isDiskless()) {
-    let state = await transcriptMessagesStateV5({ backend: backend, key: storageKey }, (h) =>
-      isConversationLine(h.toString("utf8")),
+    let state = await transcriptMessagesStateV5(
+      {
+        backend,
+        key: storageKey,
+      },
+      (h) => isConversationLine(h.toString("utf8")),
     );
-    if (state === "unknown")
-      (logForDebugging(
+    if (state === "unknown") {
+      logForDebugging(
         "transcriptFileHasContentEntry: could not read the stored transcript to its end; keeping it as if it holds a conversation",
-        { level: "warn" },
-      ),
-        logFeatureSad("transcript_content_probe", "undecided"));
+        {
+          level: "warn",
+        },
+      );
+      logFeatureSad("transcript_content_probe", "undecided");
+    }
     return state !== "none";
   }
   try {
-    let records = await backend.readRecords(storageKey, { order: "forward", maxBytes: jpo });
+    let records = await backend.readRecords(storageKey, {
+      order: "forward",
+      maxBytes: MAX_TRANSCRIPT_HEAD_SCAN_BYTES,
+    });
     if (records.ok) {
-      let textDecoder = new TextDecoder("utf-8", { ignoreBOM: !0 }),
-        bytesRead = 0,
-        complete = !0;
+      let textDecoder = new TextDecoder("utf-8", {
+        ignoreBOM: true,
+      });
+      let bytesRead = 0;
+      let complete = true;
       for (let item of records.value.items) {
-        if (item.truncated === !0) {
-          complete = !1;
+        if (item.truncated === true) {
+          complete = false;
           break;
         }
-        if (isConversationLine(textDecoder.decode(item.data))) return !0;
+        if (isConversationLine(textDecoder.decode(item.data))) return true;
         bytesRead += item.data.byteLength;
       }
       if (complete) return await readJSONLFile(transcriptPath, bytesRead);
@@ -5725,26 +5894,27 @@ async function storedTranscriptHasContent(transcriptPath, backend) {
   return transcriptFileHasContentEntry(transcriptPath);
 }
 //@ chunk-e6aww6q8.js:426134-426509 layout = readJSONLFile (0.869)
-async function readJSONLFile(e, n) {
+async function readJSONLFile(transcriptPath, bytesRead) {
   let s = null;
   try {
-    if (((s = await openRegularFile(e)), s === null)) return !1;
-    let buf = Buffer.allocUnsafe(65536),
-      y = new StringDecoder("utf8"),
-      S = "",
-      w = n;
+    s = await openRegularFile(transcriptPath);
+    if (s === null) return false;
+    let buf = Buffer.allocUnsafe(65536);
+    let y = new StringDecoder("utf8");
+    let S = "";
+    let w = bytesRead;
     for (;;) {
-      let { bytesRead: bytesRead } = await s.read(buf, 0, 65536, w);
+      let { bytesRead } = await s.read(buf, 0, 65536, w);
       if (bytesRead <= 0) break;
       w += bytesRead;
-      let parts = (S + y.write(buf.subarray(0, bytesRead))).split(`
+      let lines = (S + y.write(buf.subarray(0, bytesRead))).split(`
 `);
-      S = parts.pop() ?? "";
-      for (let Z of parts) if (isConversationLine(Z)) return !0;
+      S = lines.pop() ?? "";
+      for (let line of lines) if (isConversationLine(line)) return true;
     }
     return isConversationLine(S + y.end());
   } catch {
-    return !1;
+    return false;
   } finally {
     if (s)
       try {
@@ -5760,73 +5930,74 @@ function isConversationLine(e) {
     !e.includes('"type":"assistant"') &&
     !e.includes('"type": "assistant"')
   )
-    return !1;
+    return false;
   try {
     return isConversationEntry(jsonParseRaw(e));
   } catch {
-    return !1;
+    return false;
   }
 }
 //@ chunk-e6aww6q8.js:426704-426729 facade-majority
 function withoutFetchedCodeModeRecords(e) {
   return e;
 }
+//@ chunk-e6aww6q8.js:426729-427354 facade-majority = hydrateRemoteSession (0.588)
 /**
  * 远程会话（CCR）恢复：从服务器拉取会话条目写回本地转录。
  */
-//@ chunk-e6aww6q8.js:426729-427354 facade-majority = hydrateRemoteSession (0.588)
-async function hydrateRemoteSession(e, n, r) {
-  switchSession(LE(e), "hydrate");
+async function hydrateRemoteSession(sessionId, ingressUrl, storageV5) {
+  switchSession(identityAgentId(sessionId), "hydrate");
   let project = getProject();
   try {
-    let remoteLogs = (await getSessionLogs(e, n)) || [],
-      y = resolveProjectDir();
-    await ensureTranscriptDir(y, r);
-    let projectDir = getTranscriptPathForSession(e);
-    if (!remoteLogs.some(isConversationEntry) && (await transcriptFileHasContentEntry(projectDir, r)))
-      return (
-        logForDebugging(
-          `Skipping remote hydration: server set of ${remoteLogs.length} entries has no content-bearing entries but the local transcript does`,
-        ),
-        logForDiagnosticsNoPII("info", "hydrate_skip_zero_content_replace", {
-          path: "v1_session_ingress",
-          server_entry_count: remoteLogs.length,
-        }),
-        !0
+    let remoteLogs = (await getSessionLogs(sessionId, ingressUrl)) || [];
+    let projectDir = resolveProjectDir();
+    await ensureTranscriptDir(projectDir, storageV5);
+    let projectDir_2 = getTranscriptPathForSession(sessionId);
+    if (
+      !remoteLogs.some(isConversationEntry) &&
+      (await transcriptFileHasContentEntry(projectDir_2, storageV5))
+    ) {
+      logForDebugging(
+        `Skipping remote hydration: server set of ${remoteLogs.length} entries has no content-bearing entries but the local transcript does`,
       );
-    return (
-      await writeEntriesToJsonlFile(
-        projectDir,
-        withoutFetchedCodeModeRecords(remoteLogs),
-        getHydratedTranscriptTarget(projectDir, r),
-      ),
-      logForDebugging(`Hydrated ${remoteLogs.length} entries from remote`),
-      remoteLogs.length > 0
+      logForDiagnosticsNoPII("info", "hydrate_skip_zero_content_replace", {
+        path: "v1_session_ingress",
+        server_entry_count: remoteLogs.length,
+      });
+      return true;
+    }
+    await writeEntriesToJsonlFile(
+      projectDir_2,
+      withoutFetchedCodeModeRecords(remoteLogs),
+      getHydratedTranscriptTarget(projectDir_2, storageV5),
     );
+    logForDebugging(`Hydrated ${remoteLogs.length} entries from remote`);
+    return remoteLogs.length > 0;
   } catch (error) {
-    return (
-      logForDebugging(`Error hydrating session from remote: ${error}`),
-      logForDiagnosticsNoPII("error", "hydrate_remote_session_fail"),
-      !1
-    );
+    logForDebugging(`Error hydrating session from remote: ${error}`);
+    logForDiagnosticsNoPII("error", "hydrate_remote_session_fail");
+    return false;
   } finally {
-    project.setRemoteIngressUrl(n);
+    project.setRemoteIngressUrl(ingressUrl);
   }
 }
 //@ chunk-e6aww6q8.js:427354-427728 layout
 async function readHydrateTail(e, n, r) {
   let s =
-    isStorageV5Enabled() && r !== void 0
-      ? await readHydrateTailViaStorage(e, n, r).catch((S) => {
-          logForDebugging(`hydrate tail: backend tail read threw, using the raw tail: ${errorMessage(S)}`, {
-            level: "warn",
-          });
+    isStorageV5Enabled() && r !== undefined
+      ? await readHydrateTailViaStorage(e, n, r).catch((error) => {
+          logForDebugging(
+            `hydrate tail: backend tail read threw, using the raw tail: ${errorMessage(error)}`,
+            {
+              level: "warn",
+            },
+          );
           return;
         })
-      : void 0;
-  if (s !== void 0) return s;
-  let h = yH(e);
-  if (h === void 0) return null;
+      : undefined;
+  if (s !== undefined) return s;
+  let h = worktreeFromProgress(e);
+  if (h === undefined) return null;
   let y = await tailFile(h, n).catch(() => null);
   return (
     y && {
@@ -5839,22 +6010,25 @@ async function readHydrateTail(e, n, r) {
 }
 //@ chunk-e6aww6q8.js:427728-428352 layout
 async function readHydrateTailViaStorage(e, n, r) {
-  let s = wG(e);
-  if (s === void 0) return;
-  let [h, y] = await Promise.all([readTranscriptTailV5(s, n, r), r.stat(s)]);
-  if (h === null) return null;
-  if (!h.ok) {
-    logForDebugging(`hydrate tail: backend tail read failed (${h.error.code}), using the raw tail`, {
-      level: "warn",
-    });
+  let s = transcriptKeyFor(e);
+  if (s === undefined) return;
+  let [transcriptTailV5, y] = await Promise.all([readTranscriptTailV5(s, n, r), r.stat(s)]);
+  if (transcriptTailV5 === null) return null;
+  if (!transcriptTailV5.ok) {
+    logForDebugging(
+      `hydrate tail: backend tail read failed (${transcriptTailV5.error.code}), using the raw tail`,
+      {
+        level: "warn",
+      },
+    );
     return;
   }
   if (!y.ok) {
-    if (h.totalBytes === void 0)
+    if (transcriptTailV5.totalBytes === undefined)
       return {
-        content: h.content,
-        bytesTotal: h.byteLength,
-        endsOnLineBoundary: h.content.endsWith(`
+        content: transcriptTailV5.content,
+        bytesTotal: transcriptTailV5.byteLength,
+        endsOnLineBoundary: transcriptTailV5.content.endsWith(`
 `),
       };
     logForDebugging(`hydrate tail: backend stat failed (${y.error.code}), using the raw tail`, {
@@ -5862,50 +6036,62 @@ async function readHydrateTailViaStorage(e, n, r) {
     });
     return;
   }
-  let S = y.value.tornTailBytes ?? 0;
+  let tornTailBytes = y.value.tornTailBytes ?? 0;
   return {
-    content: h.content,
-    bytesTotal: (h.totalBytes ?? y.value.size) + S,
+    content: transcriptTailV5.content,
+    bytesTotal: (transcriptTailV5.totalBytes ?? y.value.size) + tornTailBytes,
     endsOnLineBoundary:
-      S === 0 &&
-      h.content.endsWith(`
+      tornTailBytes === 0 &&
+      transcriptTailV5.content.endsWith(`
 `),
   };
 }
 //@ chunk-e6aww6q8.js:428352-428553 layout
-async function ensureTranscriptDir(e, n) {
-  if (isStorageV5Enabled() && n !== void 0) {
-    let r = transcriptScopeForDir(e);
-    if (r !== void 0) {
-      let ensureScope = await n.ensureScope(r);
-      if (!ensureScope.ok) throw transcriptMkdirFailedError(ensureScope.error);
+async function ensureTranscriptDir(projectDir, n) {
+  if (isStorageV5Enabled() && n !== undefined) {
+    let r = transcriptScopeForDir(projectDir);
+    if (r !== undefined) {
+      let s = await n.ensureScope(r);
+      if (!s.ok) throw transcriptMkdirFailedError(s.error);
       return;
     }
   }
-  (assertDiskWritable("hydrated_transcript", e), await mkdir(e, { recursive: !0, mode: 448 }));
+  assertDiskWritable("hydrated_transcript", projectDir);
+  await mkdir(projectDir, {
+    recursive: true,
+    mode: 448,
+  });
 }
 //@ chunk-e6aww6q8.js:428553-428653 layout
 function getStorageTargetForPath(e, n) {
-  if (!isStorageV5Enabled() || n === void 0) return;
+  if (!isStorageV5Enabled() || n === undefined) return;
   let r = transcriptStorageKeyForPath(e);
-  return r === void 0 ? void 0 : { backend: n, key: r };
+  return r === undefined
+    ? undefined
+    : {
+        backend: n,
+        key: r,
+      };
 }
 //@ chunk-e6aww6q8.js:428653-428692 facade-majority
 function getSessionSidecarDir(e) {
-  return join_3(dirname(getTranscriptPathForSession(e)), e);
+  return join(dirname(getTranscriptPathForSession(e)), e);
 }
 //@ chunk-e6aww6q8.js:428692-428733 facade-majority
 function locateSidecarFile(e, n) {
-  return join_3(getSessionSidecarDir(e), ...n);
+  return join(getSessionSidecarDir(e), ...n);
 }
 //@ chunk-e6aww6q8.js:428733-428864 facade-majority
 async function ensureSidecarDirFor(e) {
   if (isDiskless()) throw Error("A diskless session writes no side file to disk");
-  await mkdir(dirname(e), { recursive: !0, mode: 448 });
+  await mkdir(dirname(e), {
+    recursive: true,
+    mode: 448,
+  });
 }
 //@ chunk-e6aww6q8.js:428864-428913 layout
 function getCcrTipPath(e) {
-  return join_3(getSessionSidecarDir(e), "ccr-tip.json");
+  return join(getSessionSidecarDir(e), "ccr-tip.json");
 }
 //@ chunk-e6aww6q8.js:428913-428959 layout
 function getLegacyCcrTipPath(e) {
@@ -5914,16 +6100,16 @@ function getLegacyCcrTipPath(e) {
 //@ chunk-e6aww6q8.js:428959-429070 facade-majority
 async function readCCRTip(e, n) {
   for (let r of [getCcrTipPath(e), getLegacyCcrTipPath(e)]) {
-    let s = await readRemoteAgentMetadata(r, n);
-    if (s !== "absent") return s;
+    let remoteAgentMetadata = await readRemoteAgentMetadata(r, n);
+    if (remoteAgentMetadata !== "absent") return remoteAgentMetadata;
   }
   return null;
 }
 //@ chunk-e6aww6q8.js:429070-429529 file-local
 async function readRemoteAgentMetadata(e, n) {
-  let r = n !== void 0 ? pathToSessionSideKey(e) : void 0,
-    s;
-  if (isStorageV5Enabled() && n !== void 0 && r !== void 0)
+  let r = n !== undefined ? pathToSessionSideKey(e) : undefined;
+  let s;
+  if (isStorageV5Enabled() && n !== undefined && r !== undefined)
     try {
       let text = await n.readText([r]);
       if (!text.ok) return null;
@@ -5934,8 +6120,8 @@ async function readRemoteAgentMetadata(e, n) {
       return null;
     }
   else {
-    let path = yH(e);
-    if (path === void 0) return "absent";
+    let path = worktreeFromProgress(e);
+    if (path === undefined) return "absent";
     try {
       s = await readFile(path, "utf-8");
     } catch (error) {
@@ -5950,69 +6136,87 @@ async function readRemoteAgentMetadata(e, n) {
     return null;
   }
 }
+//@ chunk-e6aww6q8.js:429529-430152 layout
 /**
  * 远程水合时查找未解决的 tool_use：收集本会话及来源会话在各项目目录下的 ccr-tip 记录，结合已解决事件找到未完成的工具调用，并定位其所在目录与会话。
  */
-//@ chunk-e6aww6q8.js:429529-430152 layout
 async function findUnresolvedToolUseTip(sessionId, folder, events, resolvedIds, h, storage) {
   let sessionIds = new Set([sessionId]);
-  for (let { payload: payload } of events) {
-    let Ee = Vt(payload.sessionId);
+  for (let { payload } of events) {
+    let Ee = normalizeUuidOrNull(payload.sessionId);
     if (Ee !== null) sessionIds.add(Ee);
   }
-  let folders = await readdir(getProjectsDir_2()).catch((we) => {
-      if (isPathAbsent(we)) return [];
-      throw we;
-    }),
-    resolvedEventIds = new Set(resolvedIds),
-    tips = [];
-  for (let we of folders)
-    for (let Ee of sessionIds) {
-      let tip = await readRemoteAgentMetadata(join_3(getProjectsDir_2(), we, Ee, "ccr-tip.json"), storage);
-      if (tip !== null && tip !== "absent")
-        (resolvedEventIds.add(tip.eventId),
-          tips.push({ eventId: tip.eventId, place: { folder: we, sessionId: Ee } }));
+  let folders = await readdir(getProjectsDir()).catch((error) => {
+    if (isPathAbsent(error)) return [];
+    throw error;
+  });
+  let resolvedEventIds = new Set(resolvedIds);
+  let tips = [];
+  for (let folder of folders)
+    for (let sessionId of sessionIds) {
+      let tip = await readRemoteAgentMetadata(
+        join(getProjectsDir(), folder, sessionId, "ccr-tip.json"),
+        storage,
+      );
+      if (tip !== null && tip !== "absent") {
+        resolvedEventIds.add(tip.eventId);
+        tips.push({
+          eventId: tip.eventId,
+          place: {
+            folder,
+            sessionId,
+          },
+        });
+      }
     }
   let unresolved = findUnresolvedToolUse_2(events, resolvedEventIds, h);
-  if (unresolved === void 0) return;
-  let at = events.at(-unresolved.rows - 1),
-    mapped = tips.filter((we) => [at?.event_id, at?.payload.uuid].includes(we.eventId)).map((we) => we.place),
-    found = mapped.find((we) => we.folder === folder && we.sessionId === sessionId);
-  return { ...unresolved, tipAt: found ?? mapped[0] };
+  if (unresolved === undefined) return;
+  let Z = events.at(-unresolved.rows - 1);
+  let mapped = tips.filter((we) => [Z?.event_id, Z?.payload.uuid].includes(we.eventId)).map((we) => we.place);
+  let found = mapped.find((we) => we.folder === folder && we.sessionId === sessionId);
+  return {
+    ...unresolved,
+    tipAt: found ?? mapped[0],
+  };
 }
 //@ chunk-e6aww6q8.js:430152-430517 layout
-async function writeCcrTip(e, n, r) {
-  let s = { eventId: n, updatedAt: new Date().toISOString() };
+async function writeCcrTip(e, eventId, r) {
+  let s = {
+    eventId,
+    updatedAt: new Date().toISOString(),
+  };
   try {
-    let h = getCcrTipPath(e),
-      y = r !== void 0 ? pathToSessionSideKey(h) : void 0;
-    if (isStorageV5Enabled() && r !== void 0 && y !== void 0) {
-      let write = await r.write(y, jsonStringify(s), { mode: 384 });
-      if (!write.ok) logForDebugging(`Failed to write CCR tip sidecar: ${formatStorageError(write.error)}`);
+    let ccrTipPath = getCcrTipPath(e);
+    let y = r !== undefined ? pathToSessionSideKey(ccrTipPath) : undefined;
+    if (isStorageV5Enabled() && r !== undefined && y !== undefined) {
+      let S = await r.write(y, jsonStringify(s), {
+        mode: 384,
+      });
+      if (!S.ok) logForDebugging(`Failed to write CCR tip sidecar: ${formatStorageError(S.error)}`);
       return;
     }
-    (assertDiskWritable("ccr_tip", h),
-      await ensureSidecarDirFor(h),
-      await writeFileAtomic_2(h, jsonStringify(s), 384));
+    assertDiskWritable("ccr_tip", ccrTipPath);
+    await ensureSidecarDirFor(ccrTipPath);
+    await writeFileAtomic_2(ccrTipPath, jsonStringify(s), 384);
   } catch (error) {
     logForDebugging(`Failed to write CCR tip sidecar: ${error}`);
   }
 }
 //@ chunk-e6aww6q8.js:430517-430678 facade-majority
-async function updateCCRTipFromAckedBatch(e, n) {
-  for (let r = e.length - 1; r >= 0; r--) {
-    let s = e[r];
+async function updateCCRTipFromAckedBatch(e, storageV5) {
+  for (let idx = e.length - 1; idx >= 0; idx--) {
+    let s = e[idx];
     if (!s || s.session_agent_id) continue;
     if (isSyncedTranscriptEntry(s.payload)) {
-      await writeCcrTip(getSessionId(), s.payload.uuid, n);
+      await writeCcrTip(getSessionId(), s.payload.uuid, storageV5);
       return;
     }
   }
 }
 //@ chunk-e6aww6q8.js:430678-430825 facade-majority
-function collectTailUuids(e) {
+function collectTailUuids(content) {
   let n = new Set();
-  for (let r of parseJSONL(e)) {
+  for (let r of parseJSONL(content)) {
     if (typeof r !== "object" || r === null) continue;
     let uuid = r.uuid;
     if (typeof uuid === "string") n.add(uuid);
@@ -6021,35 +6225,47 @@ function collectTailUuids(e) {
 }
 //@ chunk-e6aww6q8.js:430825-431087 facade-majority
 async function getValidatedCCRTip(e, n, r) {
-  let [s, h] = await Promise.all([readCCRTip(e, r), n !== void 0 ? n : readTranscriptTailForTip(e, r)]);
-  if (!s) return { fallbackReason: "no-sidecar" };
-  if (!h || !collectTailUuids(h.content).has(s.eventId)) return { fallbackReason: "tip-not-in-tail" };
-  let y = { eventId: s.eventId };
-  return (Bxt(y, s.updatedAt), y);
+  let [ccrTip, h] = await Promise.all([
+    readCCRTip(e, r),
+    n !== undefined ? n : readTranscriptTailForTip(e, r),
+  ]);
+  if (!ccrTip)
+    return {
+      fallbackReason: "no-sidecar",
+    };
+  if (!h || !collectTailUuids(h.content).has(ccrTip.eventId))
+    return {
+      fallbackReason: "tip-not-in-tail",
+    };
+  let y = {
+    eventId: ccrTip.eventId,
+  };
+  rememberValidatedTip(y, ccrTip.updatedAt);
+  return y;
 }
 //@ chunk-e6aww6q8.js:431087-431276 facade-majority
 async function readTranscriptTailForTip(e, n) {
-  let r = getTranscriptPathForSession(e);
-  if (isStorageV5Enabled() && n !== void 0) {
-    let h = await readTranscriptTailViaStorage(r, 65536, n).catch(() => {
+  let transcriptPathForSession = getTranscriptPathForSession(e);
+  if (isStorageV5Enabled() && n !== undefined) {
+    let h = await readTranscriptTailViaStorage(transcriptPathForSession, 65536, n).catch(() => {
       return;
     });
-    if (h !== void 0) return h;
+    if (h !== undefined) return h;
   }
-  let s = yH(r);
-  return s === void 0 ? null : tailFile(s, 65536).catch(() => null);
+  let s = worktreeFromProgress(transcriptPathForSession);
+  return s === undefined ? null : tailFile(s, 65536).catch(() => null);
 }
 //@ chunk-e6aww6q8.js:431276-431328 facade-majority
-function extractLastSyncedEventUuid(e) {
-  for (let n of iterateUuidsBackward(e)) return n;
+function extractLastSyncedEventUuid(content) {
+  for (let n of iterateUuidsBackward(content)) return n;
   return;
 }
 //@ chunk-e6aww6q8.js:431328-431477 layout
 function* iterateUuidsBackward(e) {
-  let parts = e.split(`
+  let lines = e.split(`
 `);
-  for (let r = parts.length - 1; r >= 0; r--) {
-    let s = parts[r];
+  for (let idx = lines.length - 1; idx >= 0; idx--) {
+    let s = lines[idx];
     if (!s) continue;
     let h;
     try {
@@ -6061,10 +6277,14 @@ function* iterateUuidsBackward(e) {
   }
 }
 //@ chunk-e6aww6q8.js:431477-431573 facade-majority
-function extractLatestIntersectingSyncedUuid(e, n) {
+function extractLatestIntersectingSyncedUuid(sessionId, n) {
   let r = 0;
-  for (let s of iterateUuidsBackward(e)) {
-    if (n.has(s)) return { uuid: s, walkback: r };
+  for (let s of iterateUuidsBackward(sessionId)) {
+    if (n.has(s))
+      return {
+        uuid: s,
+        walkback: r,
+      };
     r++;
   }
   return;
@@ -6073,59 +6293,64 @@ function extractLatestIntersectingSyncedUuid(e, n) {
 async function restoreAgentSidecarFromStream(e, n, r) {
   try {
     let s = validateAgentMetadata(n);
-    if (s === void 0) return (logFeatureSad("subagent_sidecar_from_stream", "entry_refused"), "refused");
-    return (await writeAgentMetadata(e, s, r, !0), logFeatureOk("subagent_sidecar_from_stream"), "restored");
+    if (s === undefined) {
+      logFeatureSad("subagent_sidecar_from_stream", "entry_refused");
+      return "refused";
+    }
+    await writeAgentMetadata(e, s, r, true);
+    logFeatureOk("subagent_sidecar_from_stream");
+    return "restored";
   } catch (error) {
-    return (
-      logForDebugging(`Sidecar of an agent not written from its stream: ${UC(error)}`, { level: "error" }),
-      logFeatureSad("subagent_sidecar_from_stream", "not_written"),
-      "failed"
-    );
+    logForDebugging(`Sidecar of an agent not written from its stream: ${describeStorageError(error)}`, {
+      level: "error",
+    });
+    logFeatureSad("subagent_sidecar_from_stream", "not_written");
+    return "failed";
   }
 }
 //@ chunk-e6aww6q8.js:431922-433001 facade-majority
 async function writeHydratedAgentTranscript(e, n, r, s) {
-  let filtered = n.filter((w) => w.type !== "agent_metadata"),
-    last = n.findLast((w) => w.type === "agent_metadata");
-  if (!G$(e))
-    return (
-      logForDiagnosticsNoPII("warn", "subagent_transcript_write_rejected", {
-        reason: "unsafe_id",
-        server_entry_count: filtered.length,
-      }),
-      "skipped"
-    );
-  if (!filtered.some(isConversationEntry))
-    return (
-      logForDiagnosticsNoPII("info", "hydrate_skip_zero_content_replace", {
-        path: "v2_subagent",
-        server_entry_count: filtered.length,
-      }),
-      "skipped"
-    );
-  if (last !== void 0 && getProject().keepsAgentMetadataInStream())
-    await restoreAgentSidecarFromStream(Mr(e), last, r);
-  let S = getAgentTranscriptPath(Mr(e));
+  let filtered = n.filter((w) => w.type !== "agent_metadata");
+  let last = n.findLast((w) => w.type === "agent_metadata");
+  if (!isSafeIdSegment(e)) {
+    logForDiagnosticsNoPII("warn", "subagent_transcript_write_rejected", {
+      reason: "unsafe_id",
+      server_entry_count: filtered.length,
+    });
+    return "skipped";
+  }
+  if (!filtered.some(isConversationEntry)) {
+    logForDiagnosticsNoPII("info", "hydrate_skip_zero_content_replace", {
+      path: "v2_subagent",
+      server_entry_count: filtered.length,
+    });
+    return "skipped";
+  }
+  if (last !== undefined && getProject().keepsAgentMetadataInStream())
+    await restoreAgentSidecarFromStream(identityAgentId2(e), last, r);
+  let agentTranscriptPath = getAgentTranscriptPath(identityAgentId2(e));
   try {
-    let w = getHydratedTranscriptTarget(S, r);
-    if ((await ensureTranscriptDir(dirname(S), r), s?.createOnly)) {
-      if (w) return "exists";
-      let L = await writeIfMissing(S, jsonlJoin(filtered), 384);
+    let hydratedTranscriptTarget = getHydratedTranscriptTarget(agentTranscriptPath, r);
+    await ensureTranscriptDir(dirname(agentTranscriptPath), r);
+    if (s?.createOnly) {
+      if (hydratedTranscriptTarget) return "exists";
+      let L = await writeIfMissing(agentTranscriptPath, jsonlJoin(filtered), 384);
       try {
-        (await assertPathSafeAsync(S),
-          await link(L, S).catch(async (G) => {
-            let q = getErrnoCode(G);
-            if (q !== "EPERM" && q !== "ENOSYS" && q !== "EOPNOTSUPP") throw G;
-            await writeNewFile(S, jsonlJoin(filtered), 384);
-          }));
+        await assertPathSafeAsync(agentTranscriptPath);
+        await link(L, agentTranscriptPath).catch(async (error) => {
+          let errnoCode = getErrnoCode(error);
+          if (errnoCode !== "EPERM" && errnoCode !== "ENOSYS" && errnoCode !== "EOPNOTSUPP") throw error;
+          await writeNewFile(agentTranscriptPath, jsonlJoin(filtered), 384);
+        });
       } catch (error) {
         if (getErrnoCode(error) === "EEXIST") return "exists";
         throw error;
       } finally {
         await unlink(L).catch(() => {});
       }
-    } else if (w) await writeEntriesToJsonlFile(S, filtered, w);
-    else await writeFileAtomic_2(S, jsonlJoin(filtered), 384);
+    } else if (hydratedTranscriptTarget)
+      await writeEntriesToJsonlFile(agentTranscriptPath, filtered, hydratedTranscriptTarget);
+    else await writeFileAtomic_2(agentTranscriptPath, jsonlJoin(filtered), 384);
     return "written";
   } catch (error) {
     if (isSyscallError(error))
@@ -6133,14 +6358,12 @@ async function writeHydratedAgentTranscript(e, n, r, s) {
         level: "error",
       });
     else logError(error);
-    throw (
-      logForDiagnosticsNoPII("warn", "subagent_transcript_write_rejected", {
-        reason: "write_failed",
-        server_entry_count: filtered.length,
-        errno: sanitizedErrnoLowerForTelemetry(error),
-      }),
-      error
-    );
+    logForDiagnosticsNoPII("warn", "subagent_transcript_write_rejected", {
+      reason: "write_failed",
+      server_entry_count: filtered.length,
+      errno: sanitizedErrnoLowerForTelemetry(error),
+    });
+    throw error;
   }
 }
 //@ chunk-e6aww6q8.js:433001-433058 facade-majority
@@ -6150,116 +6373,150 @@ function canFetchAgentTranscriptsOnDemand() {
 //@ chunk-e6aww6q8.js:433058-433242 facade-majority
 class AgentTranscriptFetchError extends Error {
   outcome;
-  constructor(e = "read_fail", n) {
+  constructor(outcome = "read_fail", n) {
     super("could not load this agent's earlier transcript; try again", n);
-    this.outcome = e;
+    this.outcome = outcome;
     this.name = "AgentTranscriptFetchError";
   }
 }
 //@ chunk-e6aww6q8.js:433242-433331 layout
 function slimToolResultsIfConfigured(e, n) {
-  return su().toolResultCopiesOnDisk === "slim" && n === void 0 ? e.map(createToolResultSlimmer_2()) : e;
+  return currentTranscriptStore().toolResultCopiesOnDisk === "slim" && n === undefined
+    ? e.map(createToolResultSlimmer_2())
+    : e;
 }
+//@ chunk-e6aww6q8.js:433331-438546 facade-majority = hydrateFromCCRv2InternalEvents (0.34)
 /**
  * 从 CCR v2 内部事件流重建本地转录（主会话与子代理）。
  */
-//@ chunk-e6aww6q8.js:433331-438546 facade-majority = hydrateFromCCRv2InternalEvents (0.34)
-async function hydrateFromCCRv2InternalEvents(e, n, r = !1, s, h, y = !1) {
+async function hydrateFromCCRv2InternalEvents(sessionId, n, r = false, storage, onDiskBehind, y = false) {
   let startMs = Date.now();
-  switchSession(LE(e), "hydrate");
-  let project = getProject(),
-    L = y && s === void 0;
+  switchSession(identityAgentId(sessionId), "hydrate");
+  let project = getProject();
+  let L = y && storage === undefined;
   project.setVerifiesAgentTranscripts(L);
   let reader = project.getInternalEventReader();
-  if (!reader) return (logForDebugging("No internal event reader registered for CCR v2 resume"), "no_reader");
-  let q,
-    Z = !1;
+  if (!reader) {
+    logForDebugging("No internal event reader registered for CCR v2 resume");
+    return "no_reader";
+  }
+  let q;
+  let Z = false;
   try {
-    let Se = getTranscriptPathForSession(e),
-      ke = readHydrateTail(Se, 65536, s),
-      we,
-      Ee,
-      Ae,
-      Ie;
-    if (n) ((we = n[0]), (Ee = n[2]?.eventId), (Ie = DHe(n[2])), (Ae = n[2]?.fallbackReason));
-    else {
-      let un = await getValidatedCCRTip(e, await ke, s);
-      ((Ee = un.eventId), (Ie = DHe(un)), (Ae = un.fallbackReason));
+    let transcriptPathForSession = getTranscriptPathForSession(sessionId);
+    let hydrateTail = readHydrateTail(transcriptPathForSession, 65536, storage);
+    let we;
+    let Ee;
+    let Ae;
+    let Ie;
+    if (n) {
+      we = n[0];
+      Ee = n[2]?.eventId;
+      Ie = validatedTipOf(n[2]);
+      Ae = n[2]?.fallbackReason;
+    } else {
+      let validatedCCRTip = await getValidatedCCRTip(sessionId, await hydrateTail, storage);
+      Ee = validatedCCRTip.eventId;
+      Ie = validatedTipOf(validatedCCRTip);
+      Ae = validatedCCRTip.fallbackReason;
       let startTime = performance.now();
-      ((Z = !0),
-        (we = await reader(Ee)),
-        (Z = !1),
-        Br("resume_hydrate_fetch_ms", performance.now() - startTime, startTime));
+      Z = true;
+      we = await reader(Ee);
+      Z = false;
+      recordPhase("resume_hydrate_fetch_ms", performance.now() - startTime, startTime);
     }
-    if (!we)
-      return (
-        logForDebugging("Failed to read internal events for resume"),
-        F9(project, e, { outcome: "read_fail" }),
-        logForDiagnosticsNoPII("error", "hydrate_ccr_v2_read_fail"),
-        "read_failed"
-      );
-    let { events: events, stats: stats } = we,
-      ze = resolveProjectDir();
-    await ensureTranscriptDir(ze, s);
-    let lt = await ke,
-      Je = lt?.bytesTotal ?? 0,
-      nt,
-      pt,
-      Et;
+    if (!we) {
+      logForDebugging("Failed to read internal events for resume");
+      rememberHydrateNote(project, sessionId, {
+        outcome: "read_fail",
+      });
+      logForDiagnosticsNoPII("error", "hydrate_ccr_v2_read_fail");
+      return "read_failed";
+    }
+    let { events, stats } = we;
+    let projectDir = resolveProjectDir();
+    await ensureTranscriptDir(projectDir, storage);
+    let lt = await hydrateTail;
+    let bytesTotal = lt?.bytesTotal ?? 0;
+    let onDiskLastUuid;
+    let pt;
+    let Et;
     if (lt) {
-      if (((nt = extractLastSyncedEventUuid(lt.content)), Ee === void 0)) {
+      onDiskLastUuid = extractLastSyncedEventUuid(lt.content);
+      if (Ee === undefined) {
         let un = new Map();
-        for (let ao = 0; ao < events.length; ao++) {
-          let $o = events[ao]?.payload.uuid;
-          if (typeof $o === "string") un.set($o, ao);
+        for (let idx = 0; idx < events.length; idx++) {
+          let uuid = events[idx]?.payload.uuid;
+          if (typeof uuid === "string") un.set(uuid, idx);
         }
-        ((pt = extractLatestIntersectingSyncedUuid(lt.content, un)),
-          (Et = pt === void 0 ? void 0 : un.get(pt.uuid)));
+        pt = extractLatestIntersectingSyncedUuid(lt.content, un);
+        Et = pt === undefined ? undefined : un.get(pt.uuid);
       }
     }
-    let yt = Et === void 0 ? events.length : events.length - 1 - Et;
-    iyi(Je, stats?.bytesReceived ?? null, events.length, yt, Ee !== void 0, pt?.walkback);
-    let gt = !1,
-      At = 0,
-      It = we.anchorFallback !== void 0,
-      Yt =
-        Ee !== void 0 &&
-        !It &&
-        events.some((un) => (un.event_id !== void 0 ? un.event_id === Ee : un.payload.uuid === Ee)),
-      qt = Ee !== void 0 && lt ? collectTailUuids(lt.content) : null,
-      Zt = Ee !== void 0 && lt !== null && qt !== null && qt.has(Ee) && lt.endsOnLineBoundary,
-      rn = events;
+    let yt = Et === undefined ? events.length : events.length - 1 - Et;
+    markResumeHydrateDelta(
+      bytesTotal,
+      stats?.bytesReceived ?? null,
+      events.length,
+      yt,
+      Ee !== undefined,
+      pt?.walkback,
+    );
+    let gt = false;
+    let At = 0;
+    let It = we.anchorFallback !== undefined;
+    let Yt =
+      Ee !== undefined &&
+      !It &&
+      events.some((event) =>
+        event.event_id !== undefined ? event.event_id === Ee : event.payload.uuid === Ee,
+      );
+    let qt = Ee !== undefined && lt ? collectTailUuids(lt.content) : null;
+    let endsOnLineBoundary =
+      Ee !== undefined && lt !== null && qt !== null && qt.has(Ee) && lt.endsOnLineBoundary;
+    let rn = events;
     if (Ee && !It && !Yt) {
-      if (!Zt) {
-        ((Ae = "tail-incoherent"), (Z = !0));
+      if (!endsOnLineBoundary) {
+        Ae = "tail-incoherent";
+        Z = true;
         let events = await reader();
-        if (((Z = !1), !events))
-          return (
-            logForDebugging("Failed to refetch full read after incoherent local tail"),
-            F9(project, e, { outcome: "read_fail" }),
-            logForDiagnosticsNoPII("error", "hydrate_ccr_v2_read_fail"),
-            "read_failed"
-          );
+        Z = false;
+        if (!events) {
+          logForDebugging("Failed to refetch full read after incoherent local tail");
+          rememberHydrateNote(project, sessionId, {
+            outcome: "read_fail",
+          });
+          logForDiagnosticsNoPII("error", "hydrate_ccr_v2_read_fail");
+          return "read_failed";
+        }
         rn = events.events;
       }
     }
-    let pn = await transcriptContextFields(),
-      no = !1;
-    if (Ee && !It && !Yt && Zt) {
+    let pn = await transcriptContextFields();
+    let no = false;
+    if (Ee && !It && !Yt && endsOnLineBoundary) {
       let un = slimToolResultsIfConfigured(
-          events.map(($o) => fillMissingTranscriptFields($o.payload, pn)),
-          s,
-        ),
-        filtered = withoutFetchedCodeModeRecords(un).filter(($o) => {
-          let uuid = $o.uuid;
-          return typeof uuid !== "string" || !qt.has(uuid);
-        });
+        events.map((event) => fillMissingTranscriptFields(event.payload, pn)),
+        storage,
+      );
+      let filtered = withoutFetchedCodeModeRecords(un).filter(($o) => {
+        let uuid = $o.uuid;
+        return typeof uuid !== "string" || !qt.has(uuid);
+      });
       if (filtered.length > 0)
-        await appendEntriesToJsonlFile(Se, filtered, getHydratedTranscriptTarget(Se, s));
-      if (((gt = !0), (At = filtered.length), (no = !0), su().localGcEnabled)) {
+        await appendEntriesToJsonlFile(
+          transcriptPathForSession,
+          filtered,
+          getHydratedTranscriptTarget(transcriptPathForSession, storage),
+        );
+      gt = true;
+      At = filtered.length;
+      no = true;
+      if (currentTranscriptStore().localGcEnabled) {
         let $o = 0;
         for (let yo of filtered) $o += Buffer.byteLength(toJsonLine(yo), "utf8");
-        if (Je + $o > LG) getProject().requestCompact(Se, s);
+        if (bytesTotal + $o > ENTRY_APPEND_POLICY_2)
+          getProject().requestCompact(transcriptPathForSession, storage);
       }
       logForDebugging(
         `Hydrated delta: appended ${filtered.length}/${events.length} foreground entries from CCR v2 internal events`,
@@ -6272,309 +6529,366 @@ async function hydrateFromCCRv2InternalEvents(e, n, r = !1, s, h, y = !1) {
             : we.anchorFallback === "not-found"
               ? "anchor-not-found"
               : "anchor-in-response";
-      if (!rn.some((ao) => isConversationEntry(ao.payload)) && (await transcriptFileHasContentEntry(Se, s)))
-        (logForDebugging(
+      if (
+        !rn.some((ao) => isConversationEntry(ao.payload)) &&
+        (await transcriptFileHasContentEntry(transcriptPathForSession, storage))
+      ) {
+        logForDebugging(
           `Skipping CCR v2 foreground hydration: fetched set of ${rn.length} events has no content-bearing entries but the local transcript does`,
-        ),
-          logForDiagnosticsNoPII("info", "hydrate_skip_zero_content_replace", {
-            path: "v2_foreground",
-            server_entry_count: rn.length,
-          }));
-      else {
+        );
+        logForDiagnosticsNoPII("info", "hydrate_skip_zero_content_replace", {
+          path: "v2_foreground",
+          server_entry_count: rn.length,
+        });
+      } else {
         let ao = slimToolResultsIfConfigured(
           rn.map(($o) => fillMissingTranscriptFields($o.payload, pn)),
-          s,
+          storage,
         );
-        (await writeEntriesToJsonlFile(
-          Se,
+        await writeEntriesToJsonlFile(
+          transcriptPathForSession,
           withoutFetchedCodeModeRecords(ao),
-          getHydratedTranscriptTarget(Se, s),
-        ),
-          (no = !0),
-          logForDebugging(`Hydrated ${rn.length} foreground entries from CCR v2 internal events`));
+          getHydratedTranscriptTarget(transcriptPathForSession, storage),
+        );
+        no = true;
+        logForDebugging(`Hydrated ${rn.length} foreground entries from CCR v2 internal events`);
       }
     }
-    let hn = gt ? events : rn;
-    q = hn.length > 0 ? "rows" : "no_rows";
-    let ho = mn(),
-      projectDir = basename_2(dirname(Se)),
-      Kn =
-        (gt ? At : yt) > 0 && ho
-          ? await findUnresolvedToolUseTip(
-              e,
-              projectDir,
-              hn,
-              qt ?? (pt === void 0 ? [] : [pt.uuid]),
-              gt,
-              s,
-            ).catch((un) => {
-              logError(un);
-              return;
-            })
-          : void 0;
-    if (Kn !== void 0 && Kn.toolCalls > 0) h?.(Kn);
+    let events_2 = gt ? events : rn;
+    q = events_2.length > 0 ? "rows" : "no_rows";
+    let ho = isRemoteManagedEnvironment();
+    let projectDir_2 = basename(dirname(transcriptPathForSession));
+    let Kn =
+      (gt ? At : yt) > 0 && ho
+        ? await findUnresolvedToolUseTip(
+            sessionId,
+            projectDir_2,
+            events_2,
+            qt ?? (pt === undefined ? [] : [pt.uuid]),
+            gt,
+            storage,
+          ).catch((error) => {
+            logError(error);
+            return;
+          })
+        : undefined;
+    if (Kn !== undefined && Kn.toolCalls > 0) onDiskBehind?.(Kn);
     if (no)
-      for (let un = hn.length - 1; un >= 0; un--) {
-        let ao = hn[un];
+      for (let idx = events_2.length - 1; idx >= 0; idx--) {
+        let ao = events_2[idx];
         if (ao && isSyncedTranscriptEntry(ao.payload)) {
-          await writeCcrTip(e, ao.event_id ?? ao.payload.uuid, s);
+          await writeCcrTip(sessionId, ao.event_id ?? ao.payload.uuid, storage);
           break;
         }
       }
-    let Xn = 0,
-      fo,
-      To = "none",
-      vn = !(!n || n[1] === void 0)
-        ? "eager"
-        : project.hasInternalAgentEventReader() && (gt || lt === null || L)
-          ? "lazy"
-          : r && gt
-            ? "skipped_delta"
-            : "eager",
-      subagentReader = project.getInternalSubagentEventReader();
+    let subagentEventCount = 0;
+    let fo;
+    let subagentRead = "none";
+    let vn = !(!n || n[1] === undefined)
+      ? "eager"
+      : project.hasInternalAgentEventReader() && (gt || lt === null || L)
+        ? "lazy"
+        : r && gt
+          ? "skipped_delta"
+          : "eager";
+    let subagentReader = project.getInternalSubagentEventReader();
     if (subagentReader && vn === "eager") {
-      let un = n && n[1] !== void 0 ? n[1] : await subagentReader();
-      ((fo = un?.stats), (To = n && n[1] !== void 0 ? "prefetched" : "inline"));
-      let ao = un !== null,
-        $o = un?.events;
-      if ($o && $o.length > 0) {
-        Xn = $o.length;
+      let un = n && n[1] !== undefined ? n[1] : await subagentReader();
+      fo = un?.stats;
+      subagentRead = n && n[1] !== undefined ? "prefetched" : "inline";
+      let ao = un !== null;
+      let events = un?.events;
+      if (events && events.length > 0) {
+        subagentEventCount = events.length;
         let byAgent = new Map();
-        for (let Ho of $o) {
-          let rr = Ho.session_agent_id || "";
-          if (!rr) continue;
-          let list = byAgent.get(rr);
-          if (!list) ((list = []), byAgent.set(rr, list));
-          list.push(fillMissingTranscriptFields(Ho.payload, pn));
+        for (let event of events) {
+          let sessionAgentId = event.session_agent_id || "";
+          if (!sessionAgentId) continue;
+          let list = byAgent.get(sessionAgentId);
+          if (!list) {
+            list = [];
+            byAgent.set(sessionAgentId, list);
+          }
+          list.push(fillMissingTranscriptFields(event.payload, pn));
         }
         for (let [Ho, rr] of byAgent)
-          await writeHydratedAgentTranscript(Ho, rr, s).catch(() => {
-            ao = !1;
+          await writeHydratedAgentTranscript(Ho, rr, storage).catch(() => {
+            ao = false;
           });
-        logForDebugging(`Hydrated ${$o.length} subagent entries across ${byAgent.size} agents`);
+        logForDebugging(`Hydrated ${events.length} subagent entries across ${byAgent.size} agents`);
       }
       if (ao) project.setInternalAgentEventReader(null);
     }
-    let parse = Date.parse(Ie ?? ""),
-      ko = Number.isFinite(parse) ? Math.round((startMs - parse) / 1000) : void 0;
-    return (
-      F9(project, e, {
-        outcome: "ok",
-        deltaApplied: gt,
-        deltaEvents: yt,
-        deltaAppended: At,
-        fallbackReason: Ae,
-        wroteFile: no,
-        onDiskBytes: Je,
-        tipAgeSeconds: ko,
+    let timestamp = Date.parse(Ie ?? "");
+    let ko = Number.isFinite(timestamp) ? Math.round((startMs - timestamp) / 1000) : undefined;
+    rememberHydrateNote(project, sessionId, {
+      outcome: "ok",
+      deltaApplied: gt,
+      deltaEvents: yt,
+      deltaAppended: At,
+      fallbackReason: Ae,
+      wroteFile: no,
+      onDiskBytes: bytesTotal,
+      tipAgeSeconds: ko,
+    });
+    logForDiagnosticsNoPII("info", "hydrate_ccr_v2_completed", {
+      duration_ms: Date.now() - startMs,
+      event_count: events_2.length,
+      subagent_event_count: subagentEventCount,
+      page_count: stats?.pageCount,
+      bytes_received: stats?.bytesReceived,
+      content_encoding: stats?.contentEncoding,
+      subagent_page_count: fo?.pageCount,
+      subagent_read: subagentRead,
+      subagent_bytes_received: fo?.bytesReceived,
+      prefetched: n?.[0] != null,
+      on_disk_bytes: bytesTotal,
+      project_folder_hash: ho ? shortHash(projectDir_2) : undefined,
+      local_session_id_hash: ho ? shortHash(sessionId) : undefined,
+      behind_tip_folder_hash: Kn?.tipAt && shortHash(Kn.tipAt.folder),
+      behind_tip_session_id_hash: Kn?.tipAt && shortHash(Kn.tipAt.sessionId),
+      delta_events: yt,
+      delta_fetch_attempted: Ee !== undefined,
+      delta_fetch_applied: gt,
+      delta_appended: At,
+      behind_rows: Kn?.rows,
+      behind_tool_calls: Kn?.toolCalls,
+      tip_age_s: ko,
+      subagent_skipped_local_reuse: vn === "skipped_delta",
+      subagent_hydrate: vn,
+      ...(Ae && {
+        delta_fallback_reason: Ae,
       }),
-      logForDiagnosticsNoPII("info", "hydrate_ccr_v2_completed", {
-        duration_ms: Date.now() - startMs,
-        event_count: hn.length,
-        subagent_event_count: Xn,
-        page_count: stats?.pageCount,
-        bytes_received: stats?.bytesReceived,
-        content_encoding: stats?.contentEncoding,
-        subagent_page_count: fo?.pageCount,
-        subagent_read: To,
-        subagent_bytes_received: fo?.bytesReceived,
-        prefetched: n?.[0] != null,
-        on_disk_bytes: Je,
-        project_folder_hash: ho ? gn(projectDir) : void 0,
-        local_session_id_hash: ho ? gn(e) : void 0,
-        behind_tip_folder_hash: Kn?.tipAt && gn(Kn.tipAt.folder),
-        behind_tip_session_id_hash: Kn?.tipAt && gn(Kn.tipAt.sessionId),
-        delta_events: yt,
-        delta_fetch_attempted: Ee !== void 0,
-        delta_fetch_applied: gt,
-        delta_appended: At,
-        behind_rows: Kn?.rows,
-        behind_tool_calls: Kn?.toolCalls,
-        tip_age_s: ko,
-        subagent_skipped_local_reuse: vn === "skipped_delta",
-        subagent_hydrate: vn,
-        ...(Ae && { delta_fallback_reason: Ae }),
-        delta_anchor: pt !== void 0 && pt.walkback > 0 ? "intersected" : "synced",
-        on_disk_last_uuid: nt,
-        anchor_uuid: pt?.uuid,
-        anchor_walkback: pt?.walkback,
-        ccr_last_uuid: hn.at(-1)?.payload.uuid,
-      }),
-      q
-    );
+      delta_anchor: pt !== undefined && pt.walkback > 0 ? "intersected" : "synced",
+      on_disk_last_uuid: onDiskLastUuid,
+      anchor_uuid: pt?.uuid,
+      anchor_walkback: pt?.walkback,
+      ccr_last_uuid: events_2.at(-1)?.payload.uuid,
+    });
+    return q;
   } catch (error) {
     if (error instanceof Error && error.message === "CCRClient: Epoch mismatch (409)") throw error;
-    return (
-      logForDebugging(`Error hydrating session from CCR v2: ${error}`),
-      F9(project, e, { outcome: "threw" }),
-      logForDiagnosticsNoPII("error", "hydrate_ccr_v2_fail", {
-        settled: q !== void 0,
-        errno: sanitizedErrnoLowerForTelemetry(error),
-      }),
-      q ?? (Z ? "read_failed" : "apply_failed")
-    );
+    logForDebugging(`Error hydrating session from CCR v2: ${error}`);
+    rememberHydrateNote(project, sessionId, {
+      outcome: "threw",
+    });
+    logForDiagnosticsNoPII("error", "hydrate_ccr_v2_fail", {
+      settled: q !== undefined,
+      errno: sanitizedErrnoLowerForTelemetry(error),
+    });
+    return q ?? (Z ? "read_failed" : "apply_failed");
   }
 }
 //@ chunk-e6aww6q8.js:438546-438675 layout
-function getFirstPromptInfo(e) {
-  let n = getFirstPromptPreview(e, "stored"),
-    r = n === extractFirstPrompt ? n : getFirstPromptPreview(e, "shown");
-  return r === n ? { firstPrompt: n } : { firstPrompt: n, firstPromptShown: r };
+function getFirstPromptInfo(transcript) {
+  let firstPromptPreview = getFirstPromptPreview(transcript, "stored");
+  let r =
+    firstPromptPreview === extractFirstPrompt
+      ? firstPromptPreview
+      : getFirstPromptPreview(transcript, "shown");
+  return r === firstPromptPreview
+    ? {
+        firstPrompt: firstPromptPreview,
+      }
+    : {
+        firstPrompt: firstPromptPreview,
+        firstPromptShown: r,
+      };
 }
 //@ chunk-e6aww6q8.js:438675-438695 fingerprint = extractFirstPrompt (1)
 var extractFirstPrompt = "No prompt";
 //@ chunk-e6aww6q8.js:438695-438833 layout
-function getFirstPromptPreview(e, n) {
-  let r = getFirstMeaningfulUserMessageTextContent(e, n);
-  if (r) {
-    let trimmed = r
+function getFirstPromptPreview(transcript, n) {
+  let textContent = getFirstMeaningfulUserMessageTextContent(transcript, n);
+  if (textContent) {
+    let result = textContent
       .replaceAll(
         `
 `,
         " ",
       )
       .trim();
-    if (trimmed.length > 200) trimmed = truncateToLength(trimmed, 200).trim() + "\u2026";
-    return trimmed;
+    if (result.length > 200) result = truncateToLength(result, 200).trim() + "\u2026";
+    return result;
   }
   return extractFirstPrompt;
 }
+//@ chunk-e6aww6q8.js:438833-439536 facade-majority = getFirstMeaningfulUserMessageTextContent (0.673)
 /**
  * 取第一条有意义的用户文本（跳过 meta、压缩摘要、命令输出），用于会话列表首条提示。
  */
-//@ chunk-e6aww6q8.js:438833-439536 facade-majority = getFirstMeaningfulUserMessageTextContent (0.673)
-function getFirstMeaningfulUserMessageTextContent(e, n = "stored") {
-  for (let msg of e) {
+function getFirstMeaningfulUserMessageTextContent(transcript, n = "stored") {
+  for (let msg of transcript) {
     if (msg.type !== "user" || msg.isMeta) continue;
     if ("isCompactSummary" in msg && msg.isCompactSummary) continue;
     let content = msg.message?.content;
     if (!content) continue;
-    let h = n === "shown" && typeof content === "string" ? t7(content, msg.pluginPrompt) : content,
-      y = h !== content,
-      texts = [];
+    let h =
+      n === "shown" && typeof content === "string"
+        ? renderPluginPromptColon(content, msg.pluginPrompt)
+        : content;
+    let y = h !== content;
+    let texts = [];
     if (typeof h === "string") texts.push(h);
     else if (Array.isArray(content)) {
       for (let block of content) if (block.type === "text" && block.text) texts.push(block.text);
     }
     for (let textContent of texts) {
       if (!textContent) continue;
-      let L = flattenPastedBlocks(textContent),
-        G = y ? null : extractTag(L, COMMAND_NAME);
-      if (G) {
-        let commandName = G.replace(/^\//, "");
+      let textContent_2 = flattenPastedBlocks(textContent);
+      let commandNameTag = y ? null : extractTag(textContent_2, COMMAND_NAME);
+      if (commandNameTag) {
+        let commandName = commandNameTag.replace(/^\//, "");
         if (require("./chunk-mvgsex7x.js").builtInCommandNames().has(commandName)) continue;
         else {
-          let commandArgs = extractTag(L, "command-args")?.trim();
+          let commandArgs = extractTag(textContent_2, "command-args")?.trim();
           if (!commandArgs) continue;
-          return `${G} ${commandArgs}`;
+          return `${commandNameTag} ${commandArgs}`;
         }
       }
-      let q = y ? null : extractTag(L, "bash-input");
-      if (q) return `! ${q}`;
-      if (SYNTHETIC_USER_TEXT_PATTERN.test(L)) continue;
-      return L;
+      let bashInput = y ? null : extractTag(textContent_2, "bash-input");
+      if (bashInput) return `! ${bashInput}`;
+      if (SYNTHETIC_USER_TEXT_PATTERN.test(textContent_2)) continue;
+      return textContent_2;
     }
   }
   return;
 }
 //@ chunk-e6aww6q8.js:439536-439637 facade-majority = removeExtraFields (0.786)
 function removeExtraFields(transcript) {
-  return transcript.map((n) => {
-    let { isSidechain: isSidechain, parentUuid: parentUuid, promptId: promptId, ...y } = n;
-    return withoutTaskProducerMark(y);
+  return transcript.map((m) => {
+    let { isSidechain, parentUuid, promptId, ...serializedMessage } = m;
+    return withoutTaskProducerMark(serializedMessage);
   });
 }
 //@ chunk-e6aww6q8.js:439637-440004 facade-majority
 function withoutTaskProducerMark(e) {
   if (e.type === "attachment" && e.attachment?.type === "queued_command") {
     let s = stripTaskProducer(e.attachment.origin);
-    return s === e.attachment.origin ? e : { ...e, attachment: { ...e.attachment, origin: s, [B6e]: !0 } };
+    return s === e.attachment.origin
+      ? e
+      : {
+          ...e,
+          attachment: {
+            ...e.attachment,
+            origin: s,
+            [restoredTaskMarkSymbol]: true,
+          },
+        };
   }
   if (e.type !== "user") return e;
-  let n = stripTaskProducer(e.origin),
-    r = stripTaskProducer(e.queueOrigin);
+  let n = stripTaskProducer(e.origin);
+  let r = stripTaskProducer(e.queueOrigin);
   return n === e.origin && r === e.queueOrigin
     ? e
-    : { ...e, origin: n, queueOrigin: r, ...(n !== e.origin && { [B6e]: !0 }) };
+    : {
+        ...e,
+        origin: n,
+        queueOrigin: r,
+        ...(n !== e.origin && {
+          [restoredTaskMarkSymbol]: true,
+        }),
+      };
 }
+//@ chunk-e6aww6q8.js:440004-440256 facade-majority = buildTranscriptEntries (0.777)
 /**
  * 对带内部标记（B6e）的 user 消息或 queued_command 附件，复制一份并把 task-notification 类 origin 的 producer 改成 "session-task"；其他消息原样返回。
  */
-//@ chunk-e6aww6q8.js:440004-440256 facade-majority = buildTranscriptEntries (0.777)
 function withTaskProducerMarkRecorded(message) {
   if (
     message.type === "attachment" &&
     message.attachment.type === "queued_command" &&
-    message.attachment[B6e] === !0
+    message.attachment[restoredTaskMarkSymbol] === true
   )
     return {
       ...message,
-      attachment: { ...message.attachment, origin: markSessionTaskProducer(message.attachment.origin) },
+      attachment: {
+        ...message.attachment,
+        origin: markSessionTaskProducer(message.attachment.origin),
+      },
     };
-  if (message.type === "user" && message[B6e] === !0)
-    return { ...message, origin: markSessionTaskProducer(message.origin) };
+  if (message.type === "user" && message[restoredTaskMarkSymbol] === true)
+    return {
+      ...message,
+      origin: markSessionTaskProducer(message.origin),
+    };
   return message;
 }
 //@ chunk-e6aww6q8.js:440256-440342 layout
 function markSessionTaskProducer(origin) {
-  return origin?.kind === "task-notification" ? { ...origin, producer: "session-task" } : origin;
+  return origin?.kind === "task-notification"
+    ? {
+        ...origin,
+        producer: "session-task",
+      }
+    : origin;
 }
 //@ chunk-e6aww6q8.js:440342-440453 layout
 function stripTaskProducer(e) {
-  if (e?.kind !== "task-notification" || e.producer === void 0) return e;
-  let { producer: producer, ...r } = e;
+  if (e?.kind !== "task-notification" || e.producer === undefined) return e;
+  let { producer, ...r } = e;
   return r;
 }
+//@ chunk-e6aww6q8.js:440453-441757 layout
 /**
  * 加载转录时应用压缩保留段：最后一个压缩边界带保留信息时，重新链接保留消息到锚点后、清零其用量，删除边界前其他消息并把孤立子节点接到保留段末尾，返回末条保留消息 uuid。
  */
-//@ chunk-e6aww6q8.js:440453-441757 layout
-function applyPreservedSegmentOnLoad(e) {
-  let preservedMeta,
-    preservedIndex = -1,
-    lastBoundaryIndex = -1,
-    indexByUuid = new Map(),
-    position = 0;
-  for (let Se of e.values()) {
-    if ((indexByUuid.set(Se.uuid, position), isCompactBoundaryMessage_3(Se))) {
+function applyPreservedSegmentOnLoad(messages) {
+  let preservedMeta;
+  let preservedIndex = -1;
+  let lastBoundaryIndex = -1;
+  let indexByUuid = new Map();
+  let position = 0;
+  for (let Se of messages.values()) {
+    indexByUuid.set(Se.uuid, position);
+    if (isCompactBoundaryMessage_3(Se)) {
       lastBoundaryIndex = position;
       let compactMetadata = Se.compactMetadata;
-      if (compactMetadata?.preservedMessages || compactMetadata?.preservedSegment)
-        ((preservedMeta = compactMetadata), (preservedIndex = position));
+      if (compactMetadata?.preservedMessages || compactMetadata?.preservedSegment) {
+        preservedMeta = compactMetadata;
+        preservedIndex = position;
+      }
     }
     position++;
   }
   if (!preservedMeta) return;
-  let isLastBoundary = preservedIndex === lastBoundaryIndex,
-    relink = isLastBoundary ? applyPreservedSegmentRelinks(preservedMeta, e) : void 0;
+  let isLastBoundary = preservedIndex === lastBoundaryIndex;
+  let relink = isLastBoundary ? applyPreservedSegmentRelinks(preservedMeta, messages) : undefined;
   if (isLastBoundary && !relink) return;
-  let preserved = relink && relink.preserved.uuids.length > 0 ? relink.preserved : void 0;
-  if (preserved?.uuids.some((Se) => !e.has(Se))) {
+  let preserved = relink && relink.preserved.uuids.length > 0 ? relink.preserved : undefined;
+  if (preserved?.uuids.some((uuid) => !messages.has(uuid))) {
     logEvent("tengu_relink_walk_broken", {
       source: fromEnumOpt(relink?.source),
       listed: preserved.uuids.length,
-      present: count(preserved.uuids, (Se) => e.has(Se)),
-      anchorInTranscript: e.has(preserved.anchorUuid),
-      transcriptSize: e.size,
+      present: count(preserved.uuids, (Se) => messages.has(Se)),
+      anchorInTranscript: messages.has(preserved.anchorUuid),
+      transcriptSize: messages.size,
     });
     return;
   }
-  let preservedUuids = preserved?.uuids ?? [],
-    preservedSet = new Set(preservedUuids);
+  let preservedUuids = preserved?.uuids ?? [];
+  let preservedSet = new Set(preservedUuids);
   if (preserved) {
-    let at = preservedUuids.at(-1),
-      anchorUuid = preserved.anchorUuid;
-    for (let we of preservedUuids) {
-      let Ee = e.get(we);
-      (e.set(we, { ...Ee, parentUuid: anchorUuid }), (anchorUuid = we));
+    let parentUuid = preservedUuids.at(-1);
+    let parentUuid_2 = preserved.anchorUuid;
+    for (let preservedUuid of preservedUuids) {
+      let Ee = messages.get(preservedUuid);
+      messages.set(preservedUuid, {
+        ...Ee,
+        parentUuid: parentUuid_2,
+      });
+      parentUuid_2 = preservedUuid;
     }
-    for (let [we, Ee] of e)
+    for (let [we, Ee] of messages)
       if (Ee.parentUuid === preserved.anchorUuid && we !== preservedUuids[0])
-        e.set(we, { ...Ee, parentUuid: at });
-    for (let we of preservedUuids) {
-      let Ee = e.get(we);
+        messages.set(we, {
+          ...Ee,
+          parentUuid,
+        });
+    for (let preservedUuid of preservedUuids) {
+      let Ee = messages.get(preservedUuid);
       if (Ee?.type !== "assistant") continue;
-      e.set(we, {
+      messages.set(preservedUuid, {
         ...Ee,
         message: {
           ...Ee.message,
@@ -6590,35 +6904,49 @@ function applyPreservedSegmentOnLoad(e) {
     }
   }
   let removed = [];
-  for (let [Se] of e) {
+  for (let [Se] of messages) {
     let ke = indexByUuid.get(Se);
-    if (ke !== void 0 && ke < lastBoundaryIndex && !preservedSet.has(Se)) removed.push(Se);
+    if (ke !== undefined && ke < lastBoundaryIndex && !preservedSet.has(Se)) removed.push(Se);
   }
-  for (let Se of removed) e.delete(Se);
+  for (let Se of removed) messages.delete(Se);
   if (preserved && removed.length > 0) {
-    let at = preservedUuids.at(-1),
-      ke = new Set(removed);
-    for (let [we, Ee] of e)
+    let parentUuid = preservedUuids.at(-1);
+    let ke = new Set(removed);
+    for (let [we, Ee] of messages)
       if ((Ee.type === "user" || Ee.type === "assistant") && Ee.parentUuid !== null && ke.has(Ee.parentUuid))
-        e.set(we, { ...Ee, parentUuid: at });
+        messages.set(we, {
+          ...Ee,
+          parentUuid,
+        });
   }
   return preservedUuids.at(-1);
 }
 //@ chunk-e6aww6q8.js:441757-442329 fingerprint = applyPreservedSegmentRelinks (0.702)
-function applyPreservedSegmentRelinks(e, n) {
-  if (e.preservedMessages) return { preserved: e.preservedMessages, source: "list" };
-  let preservedSegment = e.preservedSegment;
+function applyPreservedSegmentRelinks(preservedMeta, n) {
+  if (preservedMeta.preservedMessages)
+    return {
+      preserved: preservedMeta.preservedMessages,
+      source: "list",
+    };
+  let preservedSegment = preservedMeta.preservedSegment;
   if (!preservedSegment) return;
-  let entryIndex = new Set(),
-    toDelete = [],
-    idx = n.get(preservedSegment.tailUuid);
+  let entryIndex = new Set();
+  let toDelete = [];
+  let idx = n.get(preservedSegment.tailUuid);
   while (idx && !entryIndex.has(idx.uuid)) {
-    if ((entryIndex.add(idx.uuid), toDelete.push(idx.uuid), idx.uuid === preservedSegment.headUuid))
-      return (
-        toDelete.reverse(),
-        { preserved: { anchorUuid: preservedSegment.anchorUuid, uuids: toDelete }, source: "walk" }
-      );
-    idx = idx.parentUuid ? n.get(idx.parentUuid) : void 0;
+    entryIndex.add(idx.uuid);
+    toDelete.push(idx.uuid);
+    if (idx.uuid === preservedSegment.headUuid) {
+      toDelete.reverse();
+      return {
+        preserved: {
+          anchorUuid: preservedSegment.anchorUuid,
+          uuids: toDelete,
+        },
+        source: "walk",
+      };
+    }
+    idx = idx.parentUuid ? n.get(idx.parentUuid) : undefined;
   }
   logEvent("tengu_relink_walk_broken", {
     source: lit_2("walk"),
@@ -6632,81 +6960,90 @@ function applyPreservedSegmentRelinks(e, n) {
 }
 //@ chunk-e6aww6q8.js:442329-442447 callgraph-witnessed = findLatestMessage (1)
 function findLatestMessage(messages, predicate) {
-  let latest,
-    s = -1 / 0;
-  for (let h of messages) {
-    if (!predicate(h)) continue;
-    let parse = Date.parse(h.timestamp);
-    if (parse > s) ((s = parse), (latest = h));
+  let latest;
+  let maxTime = -1 / 0;
+  for (let m of messages) {
+    if (!predicate(m)) continue;
+    let t = Date.parse(m.timestamp);
+    if (t > maxTime) {
+      maxTime = t;
+      latest = m;
+    }
   }
   return latest;
 }
+//@ chunk-e6aww6q8.js:442447-442965 facade-majority = buildConversationChain (0.785)
 /**
  * 从叶子消息沿 parentUuid 回溯到根，反转得到对话链；检测环（tengu_chain_parent_cycle），断链时按时间戳回退，最后补回孤立的并行工具结果。
  */
-//@ chunk-e6aww6q8.js:442447-442965 facade-majority = buildConversationChain (0.785)
-function buildConversationChain(e, n, r) {
-  let transcript = [],
-    seen = new Set(),
-    y = { entriesBySide: void 0, timedSides: new Map() },
-    currentMsg = n;
+function buildConversationChain(messages, leafMessage, r) {
+  let transcript = [];
+  let seen = new Set();
+  let y = {
+    entriesBySide: undefined,
+    timedSides: new Map(),
+  };
+  let currentMsg = leafMessage;
   while (currentMsg) {
     if (seen.has(currentMsg.uuid)) {
-      (logError(
+      logError(
         Error(
           `Cycle detected in parentUuid chain at message ${currentMsg.uuid}. Returning partial transcript.`,
         ),
-      ),
-        logEvent("tengu_chain_parent_cycle", {}));
+      );
+      logEvent("tengu_chain_parent_cycle", {});
       break;
     }
-    (seen.add(currentMsg.uuid), transcript.push(currentMsg));
+    seen.add(currentMsg.uuid);
+    transcript.push(currentMsg);
     let parentUuid = currentMsg.parentUuid;
     if (!parentUuid) break;
-    let G = e.get(parentUuid);
+    let G = messages.get(parentUuid);
     if (!G || seen.has(G.uuid)) {
-      if (((G = readSessionStartDate(y, e, currentMsg, seen)), G))
-        logEvent("tengu_chain_timestamp_fallback", {});
+      G = readSessionStartDate(y, messages, currentMsg, seen);
+      if (G) logEvent("tengu_chain_timestamp_fallback", {});
     }
     currentMsg = G;
   }
-  if ((transcript.reverse(), isFoamySpringEnabled())) for (let L of zxt(e) ?? []) seen.add(L);
-  let w = recoverOrphanedParallelToolResults(e, transcript, seen);
-  return (
-    attachSideMessages(n, w, seen, r ?? groupNonChainChildrenByParent(e)),
-    announceFirstTurnOnce(e, w, seen),
-    w
-  );
+  transcript.reverse();
+  if (isFoamySpringEnabled()) for (let L of conversationChainOf(messages) ?? []) seen.add(L);
+  let w = recoverOrphanedParallelToolResults(messages, transcript, seen);
+  attachSideMessages(leafMessage, w, seen, r ?? groupNonChainChildrenByParent(messages));
+  announceFirstTurnOnce(messages, w, seen);
+  return w;
 }
 //@ chunk-e6aww6q8.js:442965-443830 facade-majority
-function warnIfTranscriptUnchained(e, n, r) {
+function warnIfTranscriptUnchained(messages, transcript, sessionId) {
   let s = 0;
-  for (let w of e.values()) {
+  for (let w of messages.values()) {
     if (w.type !== "user" && w.type !== "assistant") continue;
     if (w.parentUuid) return;
     s++;
   }
   if (s <= 1) return;
-  let h = r && Vt(r) !== null ? r : void 0;
+  let h = sessionId && normalizeUuidOrNull(sessionId) !== null ? sessionId : undefined;
   if (h) {
-    let { warnedUnchainedSessions: warnedUnchainedSessions } = su();
+    let { warnedUnchainedSessions } = currentTranscriptStore();
     if (warnedUnchainedSessions.has(h)) return;
     warnedUnchainedSessions.add(h);
   }
-  let y = count(n, (w) => w.type === "user" || w.type === "assistant"),
-    S = `Resume transcript${h ? ` (session ${h})` : ""} has ${s} user/assistant records but none carry parentUuid links; only ${y} reached the resumed conversation. Conversation reconstruction walks parentUuid from the last record, so unlinked records are dropped \u2014 the file's producer must chain records (parentUuid null on the first, the previous record's uuid on each subsequent one).`;
-  if (
-    (logEvent("tengu_resume_unchained_transcript", { conversational_records: s, survived: y }),
-    logForDebugging(S, { level: "error" }),
-    hasEmbeddedSearchTools_2() || env.CLAUDE_CODE_ENTRYPOINT === "bench")
-  )
+  let y = count(transcript, (w) => w.type === "user" || w.type === "assistant");
+  let S = `Resume transcript${h ? ` (session ${h})` : ""} has ${s} user/assistant records but none carry parentUuid links; only ${y} reached the resumed conversation. Conversation reconstruction walks parentUuid from the last record, so unlinked records are dropped \u2014 the file's producer must chain records (parentUuid null on the first, the previous record's uuid on each subsequent one).`;
+  logEvent("tengu_resume_unchained_transcript", {
+    conversational_records: s,
+    survived: y,
+  });
+  logForDebugging(S, {
+    level: "error",
+  });
+  if (hasEmbeddedSearchTools_2() || env.CLAUDE_CODE_ENTRYPOINT === "bench")
     process.stderr.write(`Warning: ${S}
 `);
 }
 //@ chunk-e6aww6q8.js:443830-443948 layout
-function getFileSnapshotMessages(e) {
+function getFileSnapshotMessages(messages) {
   let n = [];
-  for (let r of e.values()) if (r.type === "system" && r.subtype === "file_snapshot") n.push(r);
+  for (let r of messages.values()) if (r.type === "system" && r.subtype === "file_snapshot") n.push(r);
   return n;
 }
 //@ chunk-e6aww6q8.js:443948-444137 layout
@@ -6721,70 +7058,87 @@ function groupNonChainChildrenByParent(e) {
   return n;
 }
 //@ chunk-e6aww6q8.js:444137-444704 layout
-function attachSideMessages(e, n, r, s) {
+function attachSideMessages(leafMessage, n, seen, s) {
   if (isSideMessagesEnabled()) {
-    let S = (L, G) => (L.timestamp < G.timestamp ? -1 : L.timestamp > G.timestamp ? 1 : 0),
-      w = [e];
+    let S = (L, G) => (L.timestamp < G.timestamp ? -1 : L.timestamp > G.timestamp ? 1 : 0);
+    let w = [leafMessage];
     while (w.length > 0) {
       let L = w.pop();
-      if (L !== e) {
-        if (r.has(L.uuid)) continue;
-        (r.add(L.uuid), n.push(L));
+      if (L !== leafMessage) {
+        if (seen.has(L.uuid)) continue;
+        seen.add(L.uuid);
+        n.push(L);
       }
-      let G = s.get(L.uuid) ?? [],
-        q = G.length > 1 ? [...G].sort(S) : G;
-      for (let Z = q.length - 1; Z >= 0; Z--) if (!r.has(q[Z].uuid)) w.push(q[Z]);
+      let G = s.get(L.uuid) ?? [];
+      let q = G.length > 1 ? [...G].sort(S) : G;
+      for (let idx = q.length - 1; idx >= 0; idx--) if (!seen.has(q[idx].uuid)) w.push(q[idx]);
     }
     return;
   }
-  let h = [],
-    y = [e.uuid];
+  let h = [];
+  let y = [leafMessage.uuid];
   while (y.length > 0) {
     let S = y.shift();
     for (let w of s.get(S) ?? []) {
-      if (r.has(w.uuid)) continue;
-      (r.add(w.uuid), h.push(w), y.push(w.uuid));
+      if (seen.has(w.uuid)) continue;
+      seen.add(w.uuid);
+      h.push(w);
+      y.push(w.uuid);
     }
   }
   if (h.length > 1) h.sort((S, w) => (S.timestamp < w.timestamp ? -1 : S.timestamp > w.timestamp ? 1 : 0));
   n.push(...h);
 }
 //@ chunk-e6aww6q8.js:444704-444757 layout
-var TENGU_CCR_STORED_GAP_BRIDGE_ENABLED = "tengu_ccr_stored_gap_bridge_enabled",
-  Jpo = 16;
+var TENGU_CCR_STORED_GAP_BRIDGE_ENABLED = "tengu_ccr_stored_gap_bridge_enabled";
+var CCR_STORED_GAP_BRIDGE_FLAG = 16;
 //@ chunk-e6aww6q8.js:444757-445149 callgraph-fingerprint = applySnipRemovals (0.189)
-function applySnipRemovals(e, n) {
-  if (!uC() || !isFoamySpringEnabled() || !Zos(TENGU_CCR_STORED_GAP_BRIDGE_ENABLED)) return;
-  let toDelete = new Set(),
-    s = 0,
-    h = 0,
-    y = n ? e.get(n) : void 0;
+function applySnipRemovals(messages, n) {
+  if (
+    !isRemoteEnvironmentAny() ||
+    !isFoamySpringEnabled() ||
+    !readGateTrueByDefault(TENGU_CCR_STORED_GAP_BRIDGE_ENABLED)
+  )
+    return;
+  let toDelete = new Set();
+  let s = 0;
+  let newestGapMs = 0;
+  let y = n ? messages.get(n) : undefined;
   while (y?.parentUuid && !toDelete.has(y.uuid)) {
     toDelete.add(y.uuid);
-    let entry = e.get(y.parentUuid);
-    if (!entry && s < Jpo) {
-      if (((entry = removeExtraFields_2(e, y, toDelete)), entry))
-        (e.set(y.uuid, { ...y, parentUuid: entry.uuid }),
-          (h ||= Date.parse(y.timestamp) - Date.parse(entry.timestamp)),
-          s++);
+    let entry = messages.get(y.parentUuid);
+    if (!entry && s < CCR_STORED_GAP_BRIDGE_FLAG) {
+      entry = removeExtraFields_2(messages, y, toDelete);
+      if (entry) {
+        messages.set(y.uuid, {
+          ...y,
+          parentUuid: entry.uuid,
+        });
+        newestGapMs ||= Date.parse(y.timestamp) - Date.parse(entry.timestamp);
+        s++;
+      }
     }
     y = entry;
   }
   if (s > 0)
-    logEvent("tengu_ccr_stored_gap_bridged", { bridges: s, newest_gap_ms: h, message_count: e.size });
+    logEvent("tengu_ccr_stored_gap_bridged", {
+      bridges: s,
+      newest_gap_ms: newestGapMs,
+      message_count: messages.size,
+    });
 }
 //@ chunk-e6aww6q8.js:445149-445455 fingerprint = removeExtraFields (0.847)
-function removeExtraFields_2(e, n, r) {
+function removeExtraFields_2(e, n, toDelete) {
   let s = [];
   for (let S of e.values()) {
     if (S.uuid === n.uuid) break;
     if (!S.isSidechain && S.timestamp <= n.timestamp) s.push(S);
   }
-  let h = new Set(s.map((S) => S.parentUuid)),
-    y;
+  let h = new Set(s.map((S) => S.parentUuid));
+  let y;
   for (let S of s)
     if (
-      !r.has(S.uuid) &&
+      !toDelete.has(S.uuid) &&
       !h.has(S.uuid) &&
       !(S.type === "system" && !S.parentUuid) &&
       (!y || S.timestamp >= y.timestamp)
@@ -6794,7 +7148,7 @@ function removeExtraFields_2(e, n, r) {
 }
 //@ chunk-e6aww6q8.js:445455-445534 placement = countToolCallsSince (1)
 function countToolCallsSince_5(e) {
-  return e.type === "assistant" && _D(e.message?.content, "tool_use");
+  return e.type === "assistant" && contentHasBlockType(e.message?.content, "tool_use");
 }
 //@ chunk-e6aww6q8.js:445534-445621 placement = countToolCallsSince (1)
 function hasToolUseBlock(e) {
@@ -6806,13 +7160,13 @@ function countVisibleMessages_2(e, n) {
     case "assistant":
       return n !== null && e.message?.id === n;
     case "user":
-      return e.isMeta === !0 || _D(e.message?.content, "tool_result");
+      return e.isMeta === true || contentHasBlockType(e.message?.content, "tool_result");
     case "attachment":
-      return !0;
+      return true;
     case "system":
       return e.subtype !== "compact_boundary";
     default:
-      return !1;
+      return false;
   }
 }
 //@ chunk-e6aww6q8.js:446111-446162 layout
@@ -6820,70 +7174,70 @@ function isAssistantTranscriptEntry(e) {
   return isTranscriptMessage(e) && e.type === "assistant";
 }
 //@ chunk-e6aww6q8.js:446162-446211 layout
-function isChainLinkCandidate(e, n) {
-  return isLegacyProgressEntry(e) || (isTranscriptMessage(e) && countVisibleMessages_2(e, n));
+function isChainLinkCandidate(entry, n) {
+  return isLegacyProgressEntry(entry) || (isTranscriptMessage(entry) && countVisibleMessages_2(entry, n));
 }
 //@ chunk-e6aww6q8.js:446211-446265 layout
 function getAssistantMessageId(e, n) {
   return isAssistantTranscriptEntry(e) ? (e.message?.id ?? null) : n;
 }
 //@ chunk-e6aww6q8.js:446265-446309 layout
-function isProgressOrHiddenEntry(e) {
-  return isLegacyProgressEntry(e) || (isTranscriptMessage(e) && isAuxiliaryEntry(e));
+function isProgressOrHiddenEntry(entry) {
+  return isLegacyProgressEntry(entry) || (isTranscriptMessage(entry) && isAuxiliaryEntry(entry));
 }
 //@ chunk-e6aww6q8.js:446309-446394 layout
 function hasMalformedMessage(e) {
   return (
-    isTranscriptMessage(e) && (e.type === "user" || e.type === "assistant") && !isPlainObject_4(e.message)
+    isTranscriptMessage(e) && (e.type === "user" || e.type === "assistant") && !isPlainObject_5(e.message)
   );
 }
+//@ chunk-e6aww6q8.js:446394-450439 fingerprint = recoverOrphanedParallelToolResults (0.451)
 /**
  * 并行工具调用时多个 tool_result 只有一个在主链上，把同一 assistant 消息的其余 tool_result 找回插入链中。
  */
-//@ chunk-e6aww6q8.js:446394-450439 fingerprint = recoverOrphanedParallelToolResults (0.451)
 function recoverOrphanedParallelToolResults(messages, chain, seen) {
   let chainAssistants = chain.filter((It) => It.type === "assistant");
   if (chainAssistants.length === 0) return chain;
-  let h = isFoamySpringEnabled(),
-    anchorByMsgId = new Map(),
-    S = new Map(),
-    w = [];
+  let h = isFoamySpringEnabled();
+  let anchorByMsgId = new Map();
+  let S = new Map();
+  let w = [];
   for (let It of messages.values())
     if (It.type === "assistant" && It.message.id) {
       let Yt = anchorByMsgId.get(It.message.id);
       if (Yt) Yt.push(It);
       else anchorByMsgId.set(It.message.id, [It]);
-    } else if (It.type === "user" && _D(It.message?.content, "tool_result")) w.push(It);
-  let L = new Set(),
-    G = (It, Yt) => {
-      if (
-        L.has(
-          It +
-            `
-` +
-            Yt.uuid,
-        )
-      )
-        return;
-      L.add(
+    } else if (It.type === "user" && contentHasBlockType(It.message?.content, "tool_result")) w.push(It);
+  let L = new Set();
+  let G = (It, Yt) => {
+    if (
+      L.has(
         It +
           `
 ` +
           Yt.uuid,
-      );
-      let qt = S.get(It);
-      if (qt) qt.push(Yt);
-      else S.set(It, [Yt]);
-    },
-    q = (It, Yt) => (It.isSidechain ?? !1) === (Yt.isSidechain ?? !1) && It.agentId === Yt.agentId,
-    Z = [];
+      )
+    )
+      return;
+    L.add(
+      It +
+        `
+` +
+        Yt.uuid,
+    );
+    let qt = S.get(It);
+    if (qt) qt.push(Yt);
+    else S.set(It, [Yt]);
+  };
+  let q = (It, Yt) => (It.isSidechain ?? false) === (Yt.isSidechain ?? false) && It.agentId === Yt.agentId;
+  let Z = [];
   for (let It of w) {
     if (It.parentUuid) G(It.parentUuid, It);
     if (!h) continue;
-    let Yt = It.parentUuid ? messages.get(It.parentUuid) : void 0,
-      qt = new Set(Yt ? hasToolUseBlock(Yt) : []),
-      Zt = getToolResultIds(It);
-    if (Zt.length > 0 && Zt.every((rn) => qt.has(rn))) continue;
+    let Yt = It.parentUuid ? messages.get(It.parentUuid) : undefined;
+    let qt = new Set(Yt ? hasToolUseBlock(Yt) : []);
+    let toolResultIds = getToolResultIds(It);
+    if (toolResultIds.length > 0 && toolResultIds.every((toolResultId) => qt.has(toolResultId))) continue;
     Z.push(It);
   }
   let siblingsByMsgId = new Map();
@@ -6893,161 +7247,190 @@ function recoverOrphanedParallelToolResults(messages, chain, seen) {
         if (Yt.type !== "assistant") continue;
         for (let qt of hasToolUseBlock(Yt)) {
           let group = siblingsByMsgId.get(qt);
-          siblingsByMsgId.set(qt, group === void 0 || group?.message.id === Yt.message.id ? Yt : null);
+          siblingsByMsgId.set(qt, group === undefined || group?.message.id === Yt.message.id ? Yt : null);
         }
       }
   for (let It of Z) {
-    let Yt = "sourceToolAssistantUUID" in It ? It.sourceToolAssistantUUID : void 0,
-      qt = typeof Yt === "string" && Yt !== It.parentUuid ? messages.get(Yt) : void 0;
+    let sourceToolAssistantUUID = "sourceToolAssistantUUID" in It ? It.sourceToolAssistantUUID : undefined;
+    let qt =
+      typeof sourceToolAssistantUUID === "string" && sourceToolAssistantUUID !== It.parentUuid
+        ? messages.get(sourceToolAssistantUUID)
+        : undefined;
     if (qt && q(It, qt)) G(qt.uuid, It);
     for (let Zt of getToolResultIds(It)) {
       let group = siblingsByMsgId.get(Zt);
       if (group && group.uuid !== It.parentUuid && q(It, group)) G(group.uuid, It);
     }
   }
-  let ke,
-    we = () => {
-      if (ke === void 0) {
-        ke = new Set();
-        for (let It of chain) for (let Yt of getToolResultIds(It)) ke.add(Yt);
-      }
-      return ke;
-    },
-    processedGroups = new Map();
-  for (let It = 0; It < chain.length; It++) processedGroups.set(chain[It].uuid, It);
-  let inserts = new Set(),
-    Ie = [],
-    Me = 0,
-    We = 0,
-    ze = 0,
-    lt,
-    Je,
-    nt = new Map(),
-    pt = (It) => nt.get(It.uuid) ?? lR(Je, It),
-    Et = (It, Yt) => pt(It) - pt(Yt) || lR(Je, It) - lR(Je, Yt);
+  let ke;
+  let we = () => {
+    if (ke === undefined) {
+      ke = new Set();
+      for (let It of chain) for (let Yt of getToolResultIds(It)) ke.add(Yt);
+    }
+    return ke;
+  };
+  let processedGroups = new Map();
+  for (let idx = 0; idx < chain.length; idx++) processedGroups.set(chain[idx].uuid, idx);
+  let inserts = new Set();
+  let Ie = [];
+  let recoveredCount = 0;
+  let recoveredTailCount = 0;
+  let ze = 0;
+  let lt;
+  let Je;
+  let nt = new Map();
+  let pt = (It) => nt.get(It.uuid) ?? indexOrMax(Je, It);
+  let Et = (It, Yt) => pt(It) - pt(Yt) || indexOrMax(Je, It) - indexOrMax(Je, Yt);
   for (let asst of chainAssistants) {
     let msgId = asst.message.id;
     if (!msgId || inserts.has(msgId)) continue;
     inserts.add(msgId);
-    let group = anchorByMsgId.get(msgId) ?? [asst],
-      Zt = (fo) => !!fo && group.some((To) => To.uuid === fo),
-      orphanedSiblings = group.filter((fo) => !seen.has(fo.uuid)),
-      pn = [],
-      no = [],
-      hn = new Set();
+    let group = anchorByMsgId.get(msgId) ?? [asst];
+    let Zt = (fo) => !!fo && group.some((To) => To.uuid === fo);
+    let orphanedSiblings = group.filter((fo) => !seen.has(fo.uuid));
+    let pn = [];
+    let no = [];
+    let hn = new Set();
     for (let member of group)
       for (let To of S.get(member.uuid) ?? []) {
         if (seen.has(To.uuid) || hn.has(To.uuid)) continue;
-        if ((hn.add(To.uuid), Zt(To.parentUuid))) pn.push(To);
+        hn.add(To.uuid);
+        if (Zt(To.parentUuid)) pn.push(To);
         else no.push(To);
       }
     if (no.length > 0) {
-      Je ??= vG(messages);
+      Je ??= mapKeysToIndex(messages);
       let fo = new Set(we());
       for (let bo of pn) for (let vn of getToolResultIds(bo)) fo.add(vn);
       no.sort(Et);
-      let max = Math.max(...group.map((bo) => lR(Je, bo)));
+      let max = Math.max(...group.map((bo) => indexOrMax(Je, bo)));
       for (let bo of no) {
-        let vn = getToolResultIds(bo);
+        let toolResultIds = getToolResultIds(bo);
         if (
-          !vn.some((So) => {
-            let trs = siblingsByMsgId.get(So);
-            return !fo.has(So) && !!trs && Zt(trs.uuid);
+          !toolResultIds.some((toolResultId) => {
+            let trs = siblingsByMsgId.get(toolResultId);
+            return !fo.has(toolResultId) && !!trs && Zt(trs.uuid);
           })
         )
           continue;
-        for (let tr of vn) fo.add(tr);
-        (nt.set(bo.uuid, Math.max(lR(Je, bo), max + 0.5)), rememberMovedRow(bo.uuid), pn.push(bo), ze++);
+        for (let tr of toolResultIds) fo.add(tr);
+        nt.set(bo.uuid, Math.max(indexOrMax(Je, bo), max + 0.5));
+        rememberMovedRow(bo.uuid);
+        pn.push(bo);
+        ze++;
       }
     }
     let ho = [...orphanedSiblings, ...pn];
     for (let fo of ho) seen.add(fo.uuid);
-    let yn = processedGroups.get(asst.uuid),
-      Kn = yn + 1;
+    let yn = processedGroups.get(asst.uuid);
+    let Kn = yn + 1;
     for (let fo of group) {
       let To = processedGroups.get(fo.uuid);
-      if (To !== void 0 && To >= Kn) Kn = To + 1;
+      if (To !== undefined && To >= Kn) Kn = To + 1;
     }
     while (Kn < chain.length && countVisibleMessages_2(chain[Kn], msgId)) Kn++;
     let Xn = new Map();
     if (group.some(countToolCallsSince_5)) {
       lt ??= buildChildrenIndex(messages);
-      let fo = lt,
-        To = [...group],
-        bo = new Set(group.map((co) => co.uuid));
+      let fo = lt;
+      let To = [...group];
+      let bo = new Set(group.map((co) => co.uuid));
       for (let co of group)
         for (let So of S.get(co.uuid) ?? [])
-          if (seen.has(So.uuid) && !bo.has(So.uuid)) (bo.add(So.uuid), To.push(So));
+          if (seen.has(So.uuid) && !bo.has(So.uuid)) {
+            bo.add(So.uuid);
+            To.push(So);
+          }
       let vn = (co, So) => {
         let ko = nt.get(co.uuid);
         for (let un of fo.get(co.uuid) ?? []) {
-          let ao = collectLinearChain(un, co, fo, seen);
-          for (let $o of ao)
-            if ((seen.add($o.uuid), So.push($o), ko !== void 0))
-              ((Je ??= vG(messages)), nt.set($o.uuid, Math.max(lR(Je, $o), ko)), rememberMovedRow($o.uuid));
-          We += ao.length;
+          let linearChain = collectLinearChain(un, co, fo, seen);
+          for (let $o of linearChain) {
+            seen.add($o.uuid);
+            So.push($o);
+            if (ko !== undefined) {
+              Je ??= mapKeysToIndex(messages);
+              nt.set($o.uuid, Math.max(indexOrMax(Je, $o), ko));
+              rememberMovedRow($o.uuid);
+            }
+          }
+          recoveredTailCount += linearChain.length;
         }
       };
       for (let co of To) vn(co, ho);
       for (let co of chain.slice(yn + 1, Kn)) {
         if (!isAuxiliaryEntry(co)) continue;
         let So = [];
-        if ((vn(co, So), So.length > 0)) Xn.set(co.uuid, So);
+        vn(co, So);
+        if (So.length > 0) Xn.set(co.uuid, So);
       }
     }
     if (ho.length === 0 && Xn.size === 0) continue;
-    ((Me += orphanedSiblings.length + pn.length),
-      (Je ??= vG(messages)),
-      ho.sort(Et),
-      Ie.push({ start: yn, end: Kn, recovered: ho, anchored: Xn }));
+    recoveredCount += orphanedSiblings.length + pn.length;
+    Je ??= mapKeysToIndex(messages);
+    ho.sort(Et);
+    Ie.push({
+      start: yn,
+      end: Kn,
+      recovered: ho,
+      anchored: Xn,
+    });
   }
   if (Ie.length === 0) return chain;
-  if (
-    (logEvent("tengu_chain_parallel_tr_recovered", { recovered_count: Me, recovered_tail_count: We }), ze > 0)
-  )
-    logEvent("tengu_chain_tool_result_recovered_by_call_id", { recovered_count: ze });
+  logEvent("tengu_chain_parallel_tr_recovered", {
+    recovered_count: recoveredCount,
+    recovered_tail_count: recoveredTailCount,
+  });
+  if (ze > 0)
+    logEvent("tengu_chain_tool_result_recovered_by_call_id", {
+      recovered_count: ze,
+    });
   Ie.sort((It, Yt) => It.start - Yt.start);
   let yt = [];
   for (let It of Ie) {
-    let at = yt.at(-1);
-    if (at !== void 0 && It.start < at.end) {
-      ((at.end = Math.max(at.end, It.end)), (at.recovered = [...at.recovered, ...It.recovered].sort(Et)));
-      for (let [qt, Zt] of It.anchored) at.anchored.set(qt, [...(at.anchored.get(qt) ?? []), ...Zt]);
+    let last = yt.at(-1);
+    if (last !== undefined && It.start < last.end) {
+      last.end = Math.max(last.end, It.end);
+      last.recovered = [...last.recovered, ...It.recovered].sort(Et);
+      for (let [qt, Zt] of It.anchored) last.anchored.set(qt, [...(last.anchored.get(qt) ?? []), ...Zt]);
     } else yt.push(It);
   }
-  let gt = [],
-    At = 0;
-  for (let { start: start, end: end, recovered: recovered, anchored: anchored } of yt) {
+  let gt = [];
+  let At = 0;
+  for (let { start, end, recovered, anchored } of yt) {
     gt.push(...chain.slice(At, start + 1));
     let rn = 0;
-    for (let pn = start + 1; pn < end; pn++) {
-      let no = chain[pn],
-        hn = lR(Je, no);
+    for (let idx = start + 1; idx < end; idx++) {
+      let no = chain[idx];
+      let hn = indexOrMax(Je, no);
       while (rn < recovered.length && pt(recovered[rn]) < hn) gt.push(recovered[rn++]);
-      (gt.push(no), gt.push(...(anchored.get(no.uuid) ?? [])));
+      gt.push(no);
+      gt.push(...(anchored.get(no.uuid) ?? []));
     }
     while (rn < recovered.length) gt.push(recovered[rn++]);
     At = end;
   }
-  return (gt.push(...chain.slice(At)), gt);
+  gt.push(...chain.slice(At));
+  return gt;
 }
+//@ chunk-e6aww6q8.js:450439-450740 facade-majority = checkResumeConsistency (1)
 /**
  * 检查恢复的消息链与记录的轮次统计是否一致，偏差时打 tengu_resume_consistency_delta。
  */
-//@ chunk-e6aww6q8.js:450439-450740 facade-majority = checkResumeConsistency (1)
 function checkResumeConsistency(chain) {
-  for (let n = chain.length - 1; n >= 0; n--) {
-    let r = chain[n];
-    if (r.type !== "system" || r.subtype !== "turn_duration") continue;
-    let expected = r.messageCount;
-    if (expected === void 0) return;
-    let actual = n;
+  for (let i = chain.length - 1; i >= 0; i--) {
+    let m = chain[i];
+    if (m.type !== "system" || m.subtype !== "turn_duration") continue;
+    let expected = m.messageCount;
+    if (expected === undefined) return;
+    let actual = i;
     logEvent("tengu_resume_consistency_delta", {
-      expected: expected,
-      actual: actual,
+      expected,
+      actual,
       delta: actual - expected,
       chain_length: chain.length,
-      checkpoint_age_entries: chain.length - 1 - n,
+      checkpoint_age_entries: chain.length - 1 - i,
     });
     return;
   }
@@ -7059,122 +7442,132 @@ function buildAttributionSnapshotChain(attributionSnapshots, _conversation) {
 //@ chunk-e6aww6q8.js:450788-450856 facade-majority
 class TranscriptFileFormatError extends Error {
   code;
-  constructor(e, n) {
-    super(e);
-    this.code = n;
+  constructor(message, code) {
+    super(message);
+    this.code = code;
   }
 }
 //@ chunk-e6aww6q8.js:450856-452382 layout
-function buildLiteLogFromMessages(e, n, r) {
-  let s = findLatestMessage(e.messages.values(), () => !0)?.sessionId ?? r;
+function buildLiteLogFromMessages(transcriptFile, n, r) {
+  let sessionId = findLatestMessage(transcriptFile.messages.values(), () => true)?.sessionId ?? r;
   return {
     ...n,
     messages: [],
     value: n.value ?? 0,
     firstPrompt: "",
     messageCount: 0,
-    isSidechain: !1,
-    sessionId: s,
-    customTitle: e.customTitles.get(s) ?? n.customTitle,
-    aiTitle: e.aiTitles.get(s) ?? n.aiTitle,
-    tag: e.tags.get(s) ?? n.tag,
-    agentName: e.agentNames.get(s) ?? n.agentName,
-    agentColor: e.agentColors.get(s),
-    agentSetting: e.agentSettings.get(s) ?? n.agentSetting,
-    mode: e.modes.get(s),
-    permissionMode: e.permissionModes.get(s),
-    isolationLatch: e.isolationLatches.get(s),
-    devModsFolder: e.devModsFolders?.get(s),
-    memoryModeStamps: e.memoryModeStamps.get(s) ?? [],
-    atisLatch: e.atisLatches.get(s),
-    toolsUsed: e.toolsUsedLists?.get(s),
-    prNumber: e.prNumbers.get(s) ?? n.prNumber,
-    prUrl: e.prUrls.get(s) ?? n.prUrl,
-    prRepository: e.prRepositories.get(s) ?? n.prRepository,
-    bridgeSessionId: e.bridgeSessionIds.get(s),
-    bridgeLastSeq: e.bridgeLastSeqs.get(s),
-    bridgeDialogKinds: e.bridgeDialogKindsBySession.get(s),
-    bridgeSessionGroupingId: e.bridgeSessionGroupingIds.get(s),
-    bridgeNoHistoryBackfill: e.bridgeNoBackfill.get(s),
-    bridgeOwnerAccountUuid: e.bridgeOwnerAccountUuids.get(s),
-    bridgeOwnerOrganizationUuid: e.bridgeOwnerOrganizationUuids.get(s),
-    sessionHistorySuppressed: e.historySuppressed.has(s) ? !0 : void 0,
-    worktreeSession: e.worktreeStates.has(s) ? e.worktreeStates.get(s) : n.worktreeSession,
-    artifactCommentMonitor: e.artifactCommentMonitors.get(s),
-    artifactAutoReactLedger: e.artifactAutoReactLedgers.get(s),
-    costState: e.costStates.get(s),
-    contentReplacements: e.contentReplacements.get(s) ?? [],
-    rewindAnchorUuid: e.rewindAnchorUuid,
+    isSidechain: false,
+    sessionId,
+    customTitle: transcriptFile.customTitles.get(sessionId) ?? n.customTitle,
+    aiTitle: transcriptFile.aiTitles.get(sessionId) ?? n.aiTitle,
+    tag: transcriptFile.tags.get(sessionId) ?? n.tag,
+    agentName: transcriptFile.agentNames.get(sessionId) ?? n.agentName,
+    agentColor: transcriptFile.agentColors.get(sessionId),
+    agentSetting: transcriptFile.agentSettings.get(sessionId) ?? n.agentSetting,
+    mode: transcriptFile.modes.get(sessionId),
+    permissionMode: transcriptFile.permissionModes.get(sessionId),
+    isolationLatch: transcriptFile.isolationLatches.get(sessionId),
+    devModsFolder: transcriptFile.devModsFolders?.get(sessionId),
+    memoryModeStamps: transcriptFile.memoryModeStamps.get(sessionId) ?? [],
+    atisLatch: transcriptFile.atisLatches.get(sessionId),
+    toolsUsed: transcriptFile.toolsUsedLists?.get(sessionId),
+    prNumber: transcriptFile.prNumbers.get(sessionId) ?? n.prNumber,
+    prUrl: transcriptFile.prUrls.get(sessionId) ?? n.prUrl,
+    prRepository: transcriptFile.prRepositories.get(sessionId) ?? n.prRepository,
+    bridgeSessionId: transcriptFile.bridgeSessionIds.get(sessionId),
+    bridgeLastSeq: transcriptFile.bridgeLastSeqs.get(sessionId),
+    bridgeDialogKinds: transcriptFile.bridgeDialogKindsBySession.get(sessionId),
+    bridgeSessionGroupingId: transcriptFile.bridgeSessionGroupingIds.get(sessionId),
+    bridgeNoHistoryBackfill: transcriptFile.bridgeNoBackfill.get(sessionId),
+    bridgeOwnerAccountUuid: transcriptFile.bridgeOwnerAccountUuids.get(sessionId),
+    bridgeOwnerOrganizationUuid: transcriptFile.bridgeOwnerOrganizationUuids.get(sessionId),
+    sessionHistorySuppressed: transcriptFile.historySuppressed.has(sessionId) ? true : undefined,
+    worktreeSession: transcriptFile.worktreeStates.has(sessionId)
+      ? transcriptFile.worktreeStates.get(sessionId)
+      : n.worktreeSession,
+    artifactCommentMonitor: transcriptFile.artifactCommentMonitors.get(sessionId),
+    artifactAutoReactLedger: transcriptFile.artifactAutoReactLedgers.get(sessionId),
+    costState: transcriptFile.costStates.get(sessionId),
+    contentReplacements: transcriptFile.contentReplacements.get(sessionId) ?? [],
+    rewindAnchorUuid: transcriptFile.rewindAnchorUuid,
   };
 }
+//@ chunk-e6aww6q8.js:452382-455102 facade-majority = loadTranscriptFromFile (0.439)
 /**
  * 读取指定 jsonl 文件并构造日志对象（No messages found in JSONL file 时报错），用于 --resume <path>.jsonl。
  */
-//@ chunk-e6aww6q8.js:452382-455102 facade-majority = loadTranscriptFromFile (0.439)
-async function loadTranscriptFromFile(e, n) {
-  let r = isStorageV5Enabled() && n !== void 0 ? getTranscriptStorageKey(e, n) : void 0;
-  if (r === void 0 && isDiskless()) throw makeEnoentError(e);
-  if (e.endsWith(".jsonl")) {
-    let w = r ? void 0 : await stat(e),
-      L = await loadTranscriptFile(e, r && { storageV5: r });
-    if (L.servedBy === "absent") throw makeEnoentError(e);
+async function loadTranscriptFromFile(fullPath, storageV5) {
+  let r =
+    isStorageV5Enabled() && storageV5 !== undefined
+      ? getTranscriptStorageKey(fullPath, storageV5)
+      : undefined;
+  if (r === undefined && isDiskless()) throw makeEnoentError(fullPath);
+  if (fullPath.endsWith(".jsonl")) {
+    let w = r ? undefined : await stat(fullPath);
+    let transcriptFile = await loadTranscriptFile(
+      fullPath,
+      r && {
+        storageV5: r,
+      },
+    );
+    if (transcriptFile.servedBy === "absent") throw makeEnoentError(fullPath);
     let {
-      messages: messages,
-      summaries: summaries,
-      customTitles: customTitles,
-      endedSessions: endedSessions,
-      aiTitles: aiTitles,
-      tags: tags,
-      relocatedCwds: relocatedCwds,
-      fileHistorySnapshots: fileHistorySnapshots,
-      fileHistoryDeltas: fileHistoryDeltas,
-      attributionSnapshots: attributionSnapshots,
-      leafUuids: leafUuids,
-      contentReplacements: contentReplacements,
-      worktreeStates: worktreeStates,
-      artifactCommentMonitors: artifactCommentMonitors,
-      artifactAutoReactLedgers: artifactAutoReactLedgers,
-      costStates: costStates,
-      isolationLatches: isolationLatches,
-      devModsFolders: devModsFolders,
-      memoryModeStamps: memoryModeStamps,
-      atisLatches: atisLatches,
-      toolsUsedLists: toolsUsedLists,
-      bridgeSessionIds: bridgeSessionIds,
-      bridgeLastSeqs: bridgeLastSeqs,
-      bridgeDialogKindsBySession: bridgeDialogKindsBySession,
-      bridgeSessionGroupingIds: bridgeSessionGroupingIds,
-      bridgeNoBackfill: bridgeNoBackfill,
-      bridgeOwnerAccountUuids: bridgeOwnerAccountUuids,
-      bridgeOwnerOrganizationUuids: bridgeOwnerOrganizationUuids,
-      historySuppressed: historySuppressed,
-      clearedToEmpty: clearedToEmpty,
-    } = L;
+      messages,
+      summaries,
+      customTitles,
+      endedSessions,
+      aiTitles,
+      tags,
+      relocatedCwds,
+      fileHistorySnapshots,
+      fileHistoryDeltas,
+      attributionSnapshots,
+      leafUuids,
+      contentReplacements,
+      worktreeStates,
+      artifactCommentMonitors,
+      artifactAutoReactLedgers,
+      costStates,
+      isolationLatches,
+      devModsFolders,
+      memoryModeStamps,
+      atisLatches,
+      toolsUsedLists,
+      bridgeSessionIds,
+      bridgeLastSeqs,
+      bridgeDialogKindsBySession,
+      bridgeSessionGroupingIds,
+      bridgeNoBackfill,
+      bridgeOwnerAccountUuids,
+      bridgeOwnerOrganizationUuids,
+      historySuppressed,
+      clearedToEmpty,
+    } = transcriptFile;
     if (messages.size === 0)
       throw new TranscriptFileFormatError("No messages found in JSONL file", "no_messages");
-    let Kn =
-      findLatestMessage(messages.values(), (So) => leafUuids.has(So.uuid)) ??
+    let leafMessage =
+      findLatestMessage(messages.values(), (msg) => leafUuids.has(msg.uuid)) ??
       (leafUuids.size === 0 && !clearedToEmpty
         ? findLatestMessage(messages.values(), (msg) => !msg.isSidechain)
-        : void 0);
-    if (!Kn) {
+        : undefined);
+    if (!leafMessage) {
       if (clearedToEmpty) {
-        let So = w?.mtime ?? new Date(L.v5Read?.mtimeMs ?? 0);
-        return buildLiteLogFromMessages(L, {
+        let So = w?.mtime ?? new Date(transcriptFile.v5Read?.mtimeMs ?? 0);
+        return buildLiteLogFromMessages(transcriptFile, {
           date: So.toISOString(),
-          fullPath: e,
+          fullPath,
           created: So,
           modified: So,
         });
       }
       throw new TranscriptFileFormatError("No valid conversation chain found in JSONL file", "no_chain");
     }
-    let transcript = buildConversationChain(messages, Kn);
-    warnIfTranscriptUnchained(messages, transcript, Kn.sessionId);
-    let summary = summaries.get(Kn.uuid),
-      customTitle = customTitles.get(Kn.sessionId),
-      tag = tags.get(Kn.sessionId),
-      sessionId = Kn.sessionId;
+    let transcript = buildConversationChain(messages, leafMessage);
+    warnIfTranscriptUnchained(messages, transcript, leafMessage.sessionId);
+    let summary = summaries.get(leafMessage.uuid);
+    let customTitle = customTitles.get(leafMessage.sessionId);
+    let tag = tags.get(leafMessage.sessionId);
+    let sessionId = leafMessage.sessionId;
     return {
       ...convertToLogOption(
         transcript,
@@ -7183,16 +7576,16 @@ async function loadTranscriptFromFile(e, n) {
         customTitle,
         buildFileHistorySnapshots(fileHistorySnapshots, fileHistoryDeltas, transcript),
         tag,
-        e,
+        fullPath,
         buildAttributionSnapshotChain(attributionSnapshots, transcript),
-        void 0,
+        undefined,
         contentReplacements.get(sessionId) ?? [],
       ),
-      rewindAnchorUuid: L.rewindAnchorUuid,
+      rewindAnchorUuid: transcriptFile.rewindAnchorUuid,
       aiTitle: aiTitles.get(sessionId),
       relocatedCwd: relocatedCwds.get(sessionId),
       ...withEndedByModel({}, endedSessions.has(sessionId)),
-      worktreeSession: worktreeStates.has(sessionId) ? worktreeStates.get(sessionId) : void 0,
+      worktreeSession: worktreeStates.has(sessionId) ? worktreeStates.get(sessionId) : undefined,
       artifactCommentMonitor: artifactCommentMonitors.get(sessionId),
       artifactAutoReactLedger: artifactAutoReactLedgers.get(sessionId),
       costState: costStates.get(sessionId),
@@ -7208,35 +7601,38 @@ async function loadTranscriptFromFile(e, n) {
       bridgeNoHistoryBackfill: bridgeNoBackfill.get(sessionId),
       bridgeOwnerAccountUuid: bridgeOwnerAccountUuids.get(sessionId),
       bridgeOwnerOrganizationUuid: bridgeOwnerOrganizationUuids.get(sessionId),
-      sessionHistorySuppressed: historySuppressed.has(sessionId) ? !0 : void 0,
+      sessionHistorySuppressed: historySuppressed.has(sessionId) ? true : undefined,
     };
   }
-  let s = await stat(e);
+  let s = await stat(fullPath);
   if (s.size > 268435456)
     throw new TranscriptFileFormatError(
       `Transcript file too large to load as JSON (${s.size} bytes)`,
       "too_large",
     );
-  let content = await readFile(e, { encoding: "utf-8" }),
-    y;
+  let content = await readFile(fullPath, {
+    encoding: "utf-8",
+  });
+  let parsed;
   try {
-    y = jsonParse(content);
+    parsed = jsonParse(content);
   } catch (error) {
     throw new TranscriptFileFormatError(`Invalid JSON in transcript file: ${error}`, "invalid_json");
   }
-  let S;
-  if (Array.isArray(y)) S = y;
-  else if (y && typeof y === "object" && "messages" in y) {
-    if (!Array.isArray(y.messages))
+  let messages;
+  if (Array.isArray(parsed)) messages = parsed;
+  else if (parsed && typeof parsed === "object" && "messages" in parsed) {
+    if (!Array.isArray(parsed.messages))
       throw new TranscriptFileFormatError("Transcript messages must be an array", "bad_shape");
-    S = y.messages;
+    messages = parsed.messages;
   } else
     throw new TranscriptFileFormatError(
       "Transcript must be an array of messages or an object with a messages array",
       "bad_shape",
     );
-  if (S.length === 0) throw new TranscriptFileFormatError("No messages found in JSON file", "no_messages");
-  return convertToLogOption(S, 0, void 0, void 0, void 0, void 0, e);
+  if (messages.length === 0)
+    throw new TranscriptFileFormatError("No messages found in JSON file", "no_messages");
+  return convertToLogOption(messages, 0, undefined, undefined, undefined, undefined, fullPath);
 }
 //@ chunk-e6aww6q8.js:455102-455270 layout
 function makeEnoentError(e) {
@@ -7245,38 +7641,42 @@ function makeEnoentError(e) {
       `ENOENT: no such file or directory, stat '${e}'`,
       "ENOENT: no such file or directory",
     ),
-    { code: "ENOENT", syscall: "stat", path: e },
+    {
+      code: "ENOENT",
+      syscall: "stat",
+      path: e,
+    },
   );
 }
 //@ chunk-e6aww6q8.js:455270-455527 fingerprint = hasVisibleUserContent (1)
 function hasVisibleUserContent(message) {
-  if (message.type !== "user") return !1;
-  if (message.isMeta) return !1;
+  if (message.type !== "user") return false;
+  if (message.isMeta) return false;
   let content = message.message?.content;
-  if (!content) return !1;
+  if (!content) return false;
   if (typeof content === "string") return content.trim().length > 0;
   if (Array.isArray(content))
     return content.some(
       (block) => block.type === "text" || block.type === "image" || block.type === "document",
     );
-  return !1;
+  return false;
 }
+//@ chunk-e6aww6q8.js:455527-455721 file-local
 /**
  * assistant 消息含非空 text 块。旧版名 getAssistantMessageText 不准确。
  */
-//@ chunk-e6aww6q8.js:455527-455721 file-local
 function hasNonEmptyAssistantText(message) {
-  if (message.type !== "assistant") return !1;
+  if (message.type !== "assistant") return false;
   let content = message.message?.content;
-  if (!content || !Array.isArray(content)) return !1;
+  if (!content || !Array.isArray(content)) return false;
   return content.some(
     (block) => block.type === "text" && typeof block.text === "string" && block.text.trim().length > 0,
   );
 }
+//@ chunk-e6aww6q8.js:455721-455902 placement = isSyntheticMessage (1)
 /**
  * 统计含可见内容的 user/assistant 消息数（会话列表用）。旧版名 isSyntheticMessage 为错配。
  */
-//@ chunk-e6aww6q8.js:455721-455902 placement = isSyntheticMessage (1)
 function countVisibleMessages(message) {
   let n = 0;
   for (let r of message)
@@ -7307,54 +7707,55 @@ function convertToLogOption(
   agentSetting,
   contentReplacements,
 ) {
-  let lastMessage = transcript.at(-1),
-    firstMessage = transcript[0],
-    firstPrompt = getFirstPromptInfo(transcript),
-    created = new Date(firstMessage.timestamp),
-    modified = new Date(lastMessage.timestamp);
+  let lastMessage = transcript.at(-1);
+  let firstMessage = transcript[0];
+  let firstPrompt = getFirstPromptInfo(transcript);
+  let created = new Date(firstMessage.timestamp);
+  let modified = new Date(lastMessage.timestamp);
   return {
     date: lastMessage.timestamp,
     messages: removeExtraFields(transcript),
-    fullPath: fullPath,
-    value: value,
-    created: created,
-    modified: modified,
+    fullPath,
+    value,
+    created,
+    modified,
     ...firstPrompt,
     messageCount: countVisibleMessages(transcript),
     isSidechain: firstMessage.isSidechain,
     teamName: firstMessage.teamName,
     sessionKind: firstMessage.sessionKind,
     agentName: firstMessage.agentName,
-    agentSetting: agentSetting,
-    leafUuid: (transcript.findLast((Ee) => !OB(Ee.uuid)) ?? lastMessage).uuid,
-    summary: summary,
-    customTitle: customTitle,
-    tag: tag,
-    fileHistorySnapshots: fileHistorySnapshots,
-    attributionSnapshots: attributionSnapshots,
-    contentReplacements: contentReplacements,
+    agentSetting,
+    leafUuid: (transcript.findLast((Ee) => !isReorderedRow(Ee.uuid)) ?? lastMessage).uuid,
+    summary,
+    customTitle,
+    tag,
+    fileHistorySnapshots,
+    attributionSnapshots,
+    contentReplacements,
     gitBranch: lastMessage.gitBranch,
     projectPath: firstMessage.cwd,
   };
 }
+//@ chunk-e6aww6q8.js:456426-456852 fingerprint = trackSessionBranchingAnalytics (1)
 /**
  * 统计会话分叉（同一会话多叶子），打 tengu_session_forked_branches_fetched。
  */
-//@ chunk-e6aww6q8.js:456426-456852 fingerprint = trackSessionBranchingAnalytics (1)
 async function trackSessionBranchingAnalytics(logs) {
-  let sessionIdCounts = new Map(),
-    maxCount = 0;
+  let sessionIdCounts = new Map();
+  let maxCount = 0;
   for (let log of logs) {
     let sessionId = getSessionIdFromLog(log);
     if (sessionId) {
       let newCount = (sessionIdCounts.get(sessionId) || 0) + 1;
-      (sessionIdCounts.set(sessionId, newCount), (maxCount = Math.max(newCount, maxCount)));
+      sessionIdCounts.set(sessionId, newCount);
+      maxCount = Math.max(newCount, maxCount);
     }
   }
   if (maxCount <= 1) return;
-  let branchCounts = Array.from(sessionIdCounts.values()).filter((S) => S > 1),
-    sessionsWithBranches = branchCounts.length,
-    totalBranches = branchCounts.reduce((sum, count) => sum + count, 0);
+  let branchCounts = Array.from(sessionIdCounts.values()).filter((S) => S > 1);
+  let sessionsWithBranches = branchCounts.length;
+  let totalBranches = branchCounts.reduce((sum, count) => sum + count, 0);
   logEvent("tengu_session_forked_branches_fetched", {
     total_sessions: sessionIdCounts.size,
     sessions_with_branches: sessionsWithBranches,
@@ -7363,192 +7764,217 @@ async function trackSessionBranchingAnalytics(logs) {
     total_transcript_count: logs.length,
   });
 }
+//@ chunk-e6aww6q8.js:456852-457422 facade-majority = fetchLogs (0)
 /**
  * 列出当前项目（及 worktree）的会话日志（lite），供 /resume 与 --continue 使用。
  */
-//@ chunk-e6aww6q8.js:456852-457422 facade-majority = fetchLogs (0)
 async function fetchLogs(e, n) {
-  if (isDiskless() && getTranscriptStorageContext(n) === void 0) return [];
-  let r = getOriginalCwd(),
-    s = (await findProjectDir(r, wrapStorageSource(getTranscriptStorageContext(n)))) ?? getProjectDir_2(r),
-    [h, y] = await Promise.all([getSessionFilesLite(s, e, r, n), readSessionAliases(r, n)]),
-    S = h;
-  if (e !== void 0 && h.length === e && (await allLogsShareCwd(h, r, n))) {
-    let w = await getSessionFilesLite(s, void 0, r, n),
-      alloc = Buffer.alloc(LITE_READ_BUF_SIZE),
-      G = [];
-    for (let q of w)
-      if (!(await logCwdMatches(q, r, alloc, n))) {
-        if ((G.push(q), G.length === e)) break;
+  if (isDiskless() && getTranscriptStorageContext(n) === undefined) return [];
+  let originalCwd = getOriginalCwd();
+  let s =
+    (await findProjectDir(originalCwd, wrapStorageSource(getTranscriptStorageContext(n)))) ??
+    getProjectDir(originalCwd);
+  let [sessionFilesLite, sessionAliases] = await Promise.all([
+    getSessionFilesLite(s, e, originalCwd, n),
+    readSessionAliases(originalCwd, n),
+  ]);
+  let logs = sessionFilesLite;
+  if (
+    e !== undefined &&
+    sessionFilesLite.length === e &&
+    (await allLogsShareCwd(sessionFilesLite, originalCwd, n))
+  ) {
+    let sessionFilesLite = await getSessionFilesLite(s, undefined, originalCwd, n);
+    let L = Buffer.alloc(LITE_READ_BUF_SIZE);
+    let G = [];
+    for (let q of sessionFilesLite)
+      if (!(await logCwdMatches(q, originalCwd, L, n))) {
+        G.push(q);
+        if (G.length === e) break;
       }
-    S = G;
+    logs = G;
   }
-  if (UNSAFE_PATH_CHAR_PATTERN.test(r) && (await allLogsShareCwd(S, r, n)))
-    S = await getSessionFilesLite_2(r, s, e, !1, void 0, n);
-  if (y.length > 0) {
-    let mapped = (await Promise.all(y.map((L) => getSessionFilesLite(L, e, void 0, n))))
+  if (UNSAFE_PATH_CHAR_PATTERN.test(originalCwd) && (await allLogsShareCwd(logs, originalCwd, n)))
+    logs = await getSessionFilesLite_2(originalCwd, s, e, false, undefined, n);
+  if (sessionAliases.length > 0) {
+    let mapped = (
+      await Promise.all(
+        sessionAliases.map((sessionAlias) => getSessionFilesLite(sessionAlias, e, undefined, n)),
+      )
+    )
       .flat()
-      .map((L) => ({ ...L, isAlias: !0 }));
-    if (((S = latestLogPerSession(S.concat(mapped))), e !== void 0)) S = S.slice(0, e);
+      .map((L) => ({
+        ...L,
+        isAlias: true,
+      }));
+    logs = latestLogPerSession(logs.concat(mapped));
+    if (e !== undefined) logs = logs.slice(0, e);
   }
-  return (await trackSessionBranchingAnalytics(S), S);
+  await trackSessionBranchingAnalytics(logs);
+  return logs;
 }
 //@ chunk-e6aww6q8.js:457422-457634 layout
-function writeTranscriptMetadataSync(e, n) {
+function writeTranscriptMetadataSync(sessionFile, n) {
   if (isTranscriptPersistenceDisabled()) return;
-  assertDiskWritable("transcript_metadata", e);
-  let r = getFsImplementation(),
-    s =
-      jsonStringify(n) +
-      `
+  assertDiskWritable("transcript_metadata", sessionFile);
+  let fsImplementation = getFsImplementation();
+  let s =
+    jsonStringify(n) +
+    `
 `;
   try {
-    r.appendFileSync(e, s, { mode: 384 });
+    fsImplementation.appendFileSync(sessionFile, s, {
+      mode: 384,
+    });
   } catch {
-    (r.mkdirSync(dirname(e), { mode: 448 }), r.appendFileSync(e, s, { mode: 384 }));
+    fsImplementation.mkdirSync(dirname(sessionFile), {
+      mode: 448,
+    });
+    fsImplementation.appendFileSync(sessionFile, s, {
+      mode: 384,
+    });
   }
-  getProject().fireMirror(e, [n]);
+  getProject().fireMirror(sessionFile, [n]);
 }
+//@ chunk-e6aww6q8.js:457634-458137 layout
 /**
  * 同步向已存在的转录文件追加一条记录（文件末尾无换行时先补换行、可换用替代记录），完整写入后触发镜像；文件不存在或为空时跳过。
  */
-//@ chunk-e6aww6q8.js:457634-458137 layout
-function appendEntrySync(e, n, r) {
+function appendEntrySync(path, entry, tornTailEntry) {
   if (isTranscriptPersistenceDisabled()) return;
   if (isDiskless()) {
-    warnDisklessSettingsWrite("transcript_stop_now", e);
+    warnDisklessSettingsWrite("transcript_stop_now", path);
     return;
   }
   let line =
-      jsonStringify(n) +
-      `
-`,
-    fd;
+    jsonStringify(entry) +
+    `
+`;
+  let fd;
   try {
-    fd = openSync(e, constants.O_RDWR | constants.O_APPEND);
+    fd = openSync(path, constants.O_RDWR | constants.O_APPEND);
   } catch (error) {
-    let S = getErrnoCode(error);
-    if (S === "ENOENT" || S === "ENOTDIR") return;
+    let errnoCode = getErrnoCode(error);
+    if (errnoCode === "ENOENT" || errnoCode === "ENOTDIR") return;
     throw error;
   }
   try {
-    let { size: size } = fstatSync(fd);
+    let { size } = fstatSync(fd);
     if (size === 0) return;
     let S = !endsWithNewlineSync(fd, size);
-    if (S && r !== void 0) n = r;
+    if (S && tornTailEntry !== undefined) entry = tornTailEntry;
     let buffer = Buffer.from(
-        S
-          ? `
+      S
+        ? `
 ` +
-              jsonStringify(n) +
-              `
+            jsonStringify(entry) +
+            `
 `
-          : line,
-        "utf8",
-      ),
-      L = void 0,
-      G = 0;
+        : line,
+      "utf8",
+    );
+    let L = undefined;
+    let G = 0;
     while (G < buffer.length) {
       let q = writeSync(fd, buffer, G, buffer.length - G, L);
       if (q <= 0) throw Error("appendEntryToExistingFileSync: short write");
-      if (((G += q), L !== void 0)) L += q;
+      G += q;
+      if (L !== undefined) L += q;
     }
   } finally {
     closeSync(fd);
   }
-  getProject().fireMirror(e, [n]);
+  getProject().fireMirror(path, [entry]);
 }
 //@ chunk-e6aww6q8.js:458137-458381 layout
-function readTranscriptTail(e) {
+function readTranscriptTail(sessionFile) {
   if (isDiskless()) return "";
   let n;
   try {
-    n = openSync(e, "r");
-    let r = fstatSync(n),
-      max = Math.max(0, r.size - LITE_READ_BUF_SIZE),
-      allocUnsafe = Buffer.allocUnsafe(Math.min(LITE_READ_BUF_SIZE, r.size - max)),
-      y = readSync(n, allocUnsafe, 0, allocUnsafe.length, max);
-    return allocUnsafe.toString("utf8", 0, y);
+    n = openSync(sessionFile, "r");
+    let r = fstatSync(n);
+    let max = Math.max(0, r.size - LITE_READ_BUF_SIZE);
+    let h = Buffer.allocUnsafe(Math.min(LITE_READ_BUF_SIZE, r.size - max));
+    let y = readSync(n, h, 0, h.length, max);
+    return h.toString("utf8", 0, y);
   } catch {
     return "";
   } finally {
-    if (n !== void 0)
+    if (n !== undefined)
       try {
         closeSync(n);
       } catch {}
   }
 }
 //@ chunk-e6aww6q8.js:458381-458394 layout
-var sIt = createKeyedQueue();
+var transcriptRelocationQueue = createKeyedQueue();
 //@ chunk-e6aww6q8.js:458394-458446 layout
-function OMt(e) {
-  su().openAppendRelocationBracket(e);
+function openRelocationBracket(sessionFilePath) {
+  currentTranscriptStore().openAppendRelocationBracket(sessionFilePath);
 }
 //@ chunk-e6aww6q8.js:458446-458598 layout
-function flushParkedAppends(e) {
-  let closeAppendRelocationBracket = su().closeAppendRelocationBracket();
-  if (!closeAppendRelocationBracket) return;
-  for (let {
-    entry: entry,
-    storageV5: storageV5,
-    opts: opts,
-    resolve: resolve,
-    reject: reject,
-  } of closeAppendRelocationBracket)
-    appendEntryToFileAsync(e, entry, storageV5, opts).then(resolve, reject);
+function flushParkedAppends(sessionFilePath) {
+  let n = currentTranscriptStore().closeAppendRelocationBracket();
+  if (!n) return;
+  for (let { entry, storageV5, opts, resolve, reject } of n)
+    appendEntryToFileAsync(sessionFilePath, entry, storageV5, opts).then(resolve, reject);
 }
 //@ chunk-e6aww6q8.js:458598-459186 facade-majority
 function appendEntryToFileAsync(e, n, r, s) {
   if (isTranscriptPersistenceDisabled()) return Promise.resolve();
-  let { relocationParkedAppends: relocationParkedAppends, relocationParkedPath: relocationParkedPath } = su();
+  let { relocationParkedAppends, relocationParkedPath } = currentTranscriptStore();
   if (relocationParkedAppends !== null && e === relocationParkedPath)
-    return new Promise((G, q) => {
-      relocationParkedAppends.push({ entry: n, storageV5: r, opts: s, resolve: G, reject: q });
+    return new Promise((resolve, reject) => {
+      relocationParkedAppends.push({
+        entry: n,
+        storageV5: r,
+        opts: s,
+        resolve,
+        reject,
+      });
     });
   let S =
-      jsonStringify(n) +
-      `
-`,
-    w =
-      s?.tornTailEntry !== void 0
-        ? jsonStringify(s.tornTailEntry) +
-          `
+    jsonStringify(n) +
+    `
+`;
+  let w =
+    s?.tornTailEntry !== undefined
+      ? jsonStringify(s.tornTailEntry) +
+        `
 `
-        : void 0,
-    run = sIt.run(e, async () => {
-      let G = await appendToTranscriptFile(e, S, r, s?.onlyIfExists, w);
-      if (G !== "skipped") {
-        let q =
-          (G === "direct-torn" || G === "backend-torn") && s?.tornTailEntry !== void 0 ? s.tornTailEntry : n;
-        getProject().fireMirror(e, [q]);
-      }
+      : undefined;
+  let L = transcriptRelocationQueue.run(e, async () => {
+    let G = await appendToTranscriptFile(e, S, r, s?.onlyIfExists, w);
+    if (G !== "skipped") {
+      let q =
+        (G === "direct-torn" || G === "backend-torn") && s?.tornTailEntry !== undefined ? s.tornTailEntry : n;
+      getProject().fireMirror(e, [q]);
+    }
+  });
+  L.catch((error) => {
+    logForDebugging(`appendEntryToFileAsync: append to ${e} failed: ${errorMessage(error)}`, {
+      level: "error",
     });
-  return (
-    run.catch((G) => {
-      logForDebugging(`appendEntryToFileAsync: append to ${e} failed: ${errorMessage(G)}`, {
-        level: "error",
-      });
-    }),
-    run
-  );
+  });
+  return L;
 }
 //@ chunk-e6aww6q8.js:459186-459226 facade-majority
 async function flushAppendEntryQueues() {
-  await sIt.settle();
+  await transcriptRelocationQueue.settle();
 }
 //@ chunk-e6aww6q8.js:459226-459401 layout
 function isLastPromptLine(e) {
-  if (!e.includes('"type":"last-prompt"') || !e.includes('"leafUuid":')) return !1;
+  if (!e.includes('"type":"last-prompt"') || !e.includes('"leafUuid":')) return false;
   try {
     let n = jsonParseRaw(e);
-    return n.type === "last-prompt" && n.leafUuid !== void 0;
+    return n.type === "last-prompt" && n.leafUuid !== undefined;
   } catch {
-    return !1;
+    return false;
   }
 }
 //@ chunk-e6aww6q8.js:459401-459819 layout = readFileRange (0.819)
 async function readFileRange(e, n) {
-  if (isStorageV5Enabled() && n !== void 0 && wG(e) !== void 0)
+  if (isStorageV5Enabled() && n !== undefined && transcriptKeyFor(e) !== undefined)
     return (
       (
         await readTranscriptTailViaStorage(e, LITE_READ_BUF_SIZE, n).catch(() => {
@@ -7556,17 +7982,17 @@ async function readFileRange(e, n) {
         })
       )?.content ?? ""
     );
-  let r = yH(e);
-  if (r === void 0) return "";
+  let r = worktreeFromProgress(e);
+  if (r === undefined) return "";
   let s;
   try {
     s = await open(r, "r");
-    let stats = await s.stat(),
-      max = Math.max(0, stats.size - LITE_READ_BUF_SIZE),
-      bytesToRead = Math.min(LITE_READ_BUF_SIZE, stats.size - max);
+    let stats = await s.stat();
+    let max = Math.max(0, stats.size - LITE_READ_BUF_SIZE);
+    let bytesToRead = Math.min(LITE_READ_BUF_SIZE, stats.size - max);
     if (bytesToRead <= 0) return "";
-    let buffer = Buffer.allocUnsafe(bytesToRead),
-      { bytesRead: bytesRead } = await s.read(buffer, 0, bytesToRead, max);
+    let buffer = Buffer.allocUnsafe(bytesToRead);
+    let { bytesRead } = await s.read(buffer, 0, bytesToRead, max);
     return buffer.toString("utf8", 0, bytesRead);
   } catch {
     return "";
@@ -7578,134 +8004,190 @@ async function readFileRange(e, n) {
   }
 }
 //@ chunk-e6aww6q8.js:459819-460025 facade-majority
-async function markSessionEndedByModel(e, n) {
+async function markSessionEndedByModel(sessionId, storageV5) {
   if (isTranscriptPersistenceDisabled()) return;
   await appendEntryToFileAsync(
-    getTranscriptPathForSession(e),
-    { type: "ended-by-model", timestamp: new Date().toISOString(), sessionId: e },
-    n,
-  ).catch((r) => {
-    logForDebugging(`markSessionEndedByModel: transcript append failed: ${errorMessage(r)}`);
+    getTranscriptPathForSession(sessionId),
+    {
+      type: "ended-by-model",
+      timestamp: new Date().toISOString(),
+      sessionId,
+    },
+    storageV5,
+  ).catch((error) => {
+    logForDebugging(`markSessionEndedByModel: transcript append failed: ${errorMessage(error)}`);
   });
 }
 //@ chunk-e6aww6q8.js:460025-460111 facade-majority
-function applyEndedByModelOnResume(e, n) {
-  let r = Boolean(e);
-  n((s) => (s.endedByModel === r ? s : { ...s, endedByModel: r }));
+function applyEndedByModelOnResume(endedByModel, n) {
+  let r = Boolean(endedByModel);
+  n((s) =>
+    s.endedByModel === r
+      ? s
+      : {
+          ...s,
+          endedByModel: r,
+        },
+  );
 }
+//@ chunk-e6aww6q8.js:460111-460503 facade-majority = saveCustomTitle (0.756)
 /**
  * 追加 custom-title 记录（/rename 等），更新内存中的会话标题并发出标题变更事件。
  */
-//@ chunk-e6aww6q8.js:460111-460503 facade-majority = saveCustomTitle (0.756)
-async function saveCustomTitle(e, n, r, s = "user", h) {
-  let resolvedPath = r ?? getTranscriptPathForSession(e);
+async function saveCustomTitle(sessionId, customTitle, fullPath, source = "user", storageV5) {
+  let resolvedPath = fullPath ?? getTranscriptPathForSession(sessionId);
   try {
-    await appendEntryToFileAsync(resolvedPath, { type: "custom-title", customTitle: n, sessionId: e }, h);
+    await appendEntryToFileAsync(
+      resolvedPath,
+      {
+        type: "custom-title",
+        customTitle,
+        sessionId,
+      },
+      storageV5,
+    );
   } catch (error) {
     if (isSyscallError(error))
       logForDebugging(
         `saveCustomTitle: transcript append failed (${getErrnoCode(error)}): ${errorMessage(error)}`,
-        { level: "error" },
+        {
+          level: "error",
+        },
       );
     else throw error;
   }
   if (!isTranscriptPersistenceDisabled()) {
-    let S = e === getSessionId() ? getTranscriptPathForSession(e) : resolvedPath;
-    await writeSessionTitleSidecar(S, e, n, h);
+    let S = sessionId === getSessionId() ? getTranscriptPathForSession(sessionId) : resolvedPath;
+    await writeSessionTitleSidecar(S, sessionId, customTitle, storageV5);
   }
-  if (e === getSessionId()) ((getProject().currentSessionTitle = n), su().sessionTitleChanged.emit());
-  logEvent("tengu_session_renamed", { source: fromEnum(s) });
+  if (sessionId === getSessionId()) {
+    getProject().currentSessionTitle = customTitle;
+    currentTranscriptStore().sessionTitleChanged.emit();
+  }
+  logEvent("tengu_session_renamed", {
+    source: fromEnum(source),
+  });
 }
+//@ chunk-e6aww6q8.js:460503-460722 facade-majority = saveAiGeneratedTitle (0.539)
 /**
  * 追加 ai-title 记录（自动生成的会话标题）。
  */
-//@ chunk-e6aww6q8.js:460503-460722 facade-majority = saveAiGeneratedTitle (0.539)
-function saveAiGeneratedTitle(e, n, r) {
-  if (
-    (appendEntryToFileAsync(
-      getTranscriptPathForSession(e),
-      { type: "ai-title", aiTitle: n, sessionId: e },
-      r,
-    ).catch((s) => {
-      logForDebugging(`saveAiGeneratedTitle: transcript append failed: ${errorMessage(s)}`);
-    }),
-    e === getSessionId())
-  )
-    ((getProject().currentSessionAiTitle = n), su().sessionTitleChanged.emit());
+function saveAiGeneratedTitle(sessionId, n, storageV5) {
+  appendEntryToFileAsync(
+    getTranscriptPathForSession(sessionId),
+    {
+      type: "ai-title",
+      aiTitle: n,
+      sessionId,
+    },
+    storageV5,
+  ).catch((error) => {
+    logForDebugging(`saveAiGeneratedTitle: transcript append failed: ${errorMessage(error)}`);
+  });
+  if (sessionId === getSessionId()) {
+    getProject().currentSessionAiTitle = n;
+    currentTranscriptStore().sessionTitleChanged.emit();
+  }
 }
+//@ chunk-e6aww6q8.js:460722-461204 facade-majority = linkSessionToPR (0.804)
 /**
  * 追加 pr-link 记录（PR 编号、URL、仓库），打 tengu_session_linked_to_pr。
  */
-//@ chunk-e6aww6q8.js:460722-461204 facade-majority = linkSessionToPR (0.804)
-async function linkSessionToPR(e, n, r, s, h, y) {
-  let resolvedPath = h ?? getTranscriptPathForSession(e);
+async function linkSessionToPR(sessionId, prNumber, prUrl, prRepository, fullPath, y) {
+  let resolvedPath = fullPath ?? getTranscriptPathForSession(sessionId);
   try {
-    (await appendEntryToFileAsync(
+    await appendEntryToFileAsync(
       resolvedPath,
       {
         type: "pr-link",
-        sessionId: e,
-        prNumber: n,
-        prUrl: r,
-        prRepository: s,
+        sessionId,
+        prNumber,
+        prUrl,
+        prRepository,
         timestamp: new Date().toISOString(),
       },
       y,
-    ),
-      logEvent("tengu_session_linked_to_pr", { prNumber: n }));
+    );
+    logEvent("tengu_session_linked_to_pr", {
+      prNumber,
+    });
   } catch (error) {
-    let L = getErrnoCode(error);
+    let errnoCode = getErrnoCode(error);
     if (isSyscallError(error))
       logForDebugging(
-        `linkSessionToPR: failed to append pr-link entry to ${resolvedPath} (${L}): ${errorMessage(error)}`,
-        { level: "error" },
+        `linkSessionToPR: failed to append pr-link entry to ${resolvedPath} (${errnoCode}): ${errorMessage(error)}`,
+        {
+          level: "error",
+        },
       );
     else logError(error);
-    reportTranscriptWriteFailure(su().writerHealth, "pr_link", error, resolvedPath);
+    reportTranscriptWriteFailure(currentTranscriptStore().writerHealth, "pr_link", error, resolvedPath);
   }
-  if (e === getSessionId()) {
+  if (sessionId === getSessionId()) {
     let project = getProject();
-    ((project.currentSessionPrNumber = n),
-      (project.currentSessionPrUrl = r),
-      (project.currentSessionPrRepository = s));
+    project.currentSessionPrNumber = prNumber;
+    project.currentSessionPrUrl = prUrl;
+    project.currentSessionPrRepository = prRepository;
   }
 }
 //@ chunk-e6aww6q8.js:461204-461292 layout
-function iIt(e, n, r) {
-  return Boolean(e.sessionFilePath) || (r?.targetExists === !0 && n !== void 0);
+function needsTranscriptTarget(project, n, r) {
+  return Boolean(project.sessionFilePath) || (r?.targetExists === true && n !== undefined);
 }
 //@ chunk-e6aww6q8.js:461292-462041 facade-majority
-function saveBridgeSession(e, n, r, s, h, y, S, w, L, G) {
-  let q = getProject();
-  if (iIt(q, s, L))
+function saveBridgeSession(
+  sessionId,
+  bridgeSessionId,
+  lastSequenceNum,
+  s,
+  h,
+  sessionGroupingId,
+  S,
+  w,
+  L,
+  storageV5,
+) {
+  let project = getProject();
+  if (needsTranscriptTarget(project, s, L))
     appendEntryToFileAsync(
-      s ?? getTranscriptPathForSession(e),
+      s ?? getTranscriptPathForSession(sessionId),
       {
         type: "bridge-session",
-        sessionId: e,
-        bridgeSessionId: n,
-        lastSequenceNum: r,
-        ...(h?.length && { declaredDialogKinds: h }),
-        ...(y && { sessionGroupingId: y }),
-        ...(S && { noHistoryBackfill: !0 }),
-        ...(w?.accountUuid && { ownerAccountUuid: w.accountUuid }),
-        ...(w?.organizationUuid && { ownerOrganizationUuid: w.organizationUuid }),
+        sessionId,
+        bridgeSessionId,
+        lastSequenceNum,
+        ...(h?.length && {
+          declaredDialogKinds: h,
+        }),
+        ...(sessionGroupingId && {
+          sessionGroupingId,
+        }),
+        ...(S && {
+          noHistoryBackfill: true,
+        }),
+        ...(w?.accountUuid && {
+          ownerAccountUuid: w.accountUuid,
+        }),
+        ...(w?.organizationUuid && {
+          ownerOrganizationUuid: w.organizationUuid,
+        }),
       },
-      G,
-    ).catch((Z) => {
-      logForDebugging(`saveBridgeSession: transcript append failed: ${errorMessage(Z)}`);
+      storageV5,
+    ).catch((error) => {
+      logForDebugging(`saveBridgeSession: transcript append failed: ${errorMessage(error)}`);
     });
-  if (e === getSessionId())
-    ((q.currentSessionBridgeId = n),
-      (q.currentSessionBridgeSeq = r),
-      (q.currentSessionBridgeDialogKinds = h?.length ? h : void 0),
-      (q.currentSessionBridgeGroupingId = y),
-      (q.currentSessionBridgeNoBackfill = S ? !0 : void 0),
-      (q.currentSessionBridgeOwnerAccountUuid = w?.accountUuid),
-      (q.currentSessionBridgeOwnerOrganizationUuid = w?.organizationUuid));
+  if (sessionId === getSessionId()) {
+    project.currentSessionBridgeId = bridgeSessionId;
+    project.currentSessionBridgeSeq = lastSequenceNum;
+    project.currentSessionBridgeDialogKinds = h?.length ? h : undefined;
+    project.currentSessionBridgeGroupingId = sessionGroupingId;
+    project.currentSessionBridgeNoBackfill = S ? true : undefined;
+    project.currentSessionBridgeOwnerAccountUuid = w?.accountUuid;
+    project.currentSessionBridgeOwnerOrganizationUuid = w?.organizationUuid;
+  }
 }
 //@ chunk-e6aww6q8.js:462041-462279 facade-majority
-function writeHistorySuppression(e, n, r, s, h) {
+function writeHistorySuppression(e, n, r, s, storageV5) {
   let y = e ?? getSessionId();
   if (!y) return;
   let S;
@@ -7713,26 +8195,37 @@ function writeHistorySuppression(e, n, r, s, h) {
     S = appendEntryToFileAsync(
       n ?? getTranscriptPathForSession(y),
       buildHistorySuppressionEntry(y, r, s),
-      h,
-    ).catch((w) => {
-      logForDebugging(`writeHistorySuppression: transcript append failed: ${errorMessage(w)}`);
+      storageV5,
+    ).catch((error) => {
+      logForDebugging(`writeHistorySuppression: transcript append failed: ${errorMessage(error)}`);
     });
-  if ((markSessionHistorySuppressedFor(y), y === getSessionId()))
-    getProject().currentSessionHistorySuppressed = !0;
+  markSessionHistorySuppressedFor(y);
+  if (y === getSessionId()) getProject().currentSessionHistorySuppressed = true;
   return S;
 }
 //@ chunk-e6aww6q8.js:462279-462343 facade-majority
 function isSessionHistorySuppressed() {
-  return getProject().currentSessionHistorySuppressed === !0;
+  return getProject().currentSessionHistorySuppressed === true;
 }
 //@ chunk-e6aww6q8.js:462343-462597 facade-majority
 async function readHistorySuppressionFromDisk(e) {
-  let n = getSessionId(),
-    r = getMaterializedSessionFile(),
-    s = Boolean(n) && r !== null && !isOwnTranscriptFile(n, r);
+  let sessionId = getSessionId();
+  let materializedSessionFile = getMaterializedSessionFile();
+  let s =
+    Boolean(sessionId) &&
+    materializedSessionFile !== null &&
+    !isOwnTranscriptFile(sessionId, materializedSessionFile);
   try {
-    let h = s ? getDerivedTranscriptPathForSession(n) : (r ?? getTranscriptPath()),
-      y = await scanTranscriptForSuppression(h, { sid: n || void 0 }, e);
+    let h = s
+      ? getDerivedTranscriptPathForSession(sessionId)
+      : (materializedSessionFile ?? getTranscriptPath());
+    let y = await scanTranscriptForSuppression(
+      h,
+      {
+        sid: sessionId || undefined,
+      },
+      e,
+    );
     return s && y === "clean" ? "torn" : y;
   } catch (error) {
     if (isENOENT(error)) {
@@ -7751,81 +8244,90 @@ function mirrorInternalEntryForTesting(e) {
   return getProject().mirrorInternalEntry(e);
 }
 //@ chunk-e6aww6q8.js:462710-462745 facade-majority
-var SUPPRESSION_SCAN_MAX_LINES = 1e5,
-  SUPPRESSION_SCAN_MAX_LINES_ANT = 1e6,
-  SUPPRESSION_SCAN_MAX_BYTES_ANT = 4294967296;
+var SUPPRESSION_SCAN_MAX_LINES = 1e5;
+var SUPPRESSION_SCAN_MAX_LINES_ANT = 1e6;
+var SUPPRESSION_SCAN_MAX_BYTES_ANT = 4294967296;
 //@ chunk-e6aww6q8.js:462745-462989 facade-majority
 class SuppressionScanBudget {
   maxLines;
   maxBytes;
   lines = 0;
   chars = 0;
-  constructor(e = SUPPRESSION_SCAN_MAX_LINES, n = 1 / 0) {
-    this.maxLines = e;
-    this.maxBytes = n;
+  constructor(maxLines = SUPPRESSION_SCAN_MAX_LINES, maxBytes = 1 / 0) {
+    this.maxLines = maxLines;
+    this.maxBytes = maxBytes;
   }
   static forBackendRead() {
     return new SuppressionScanBudget(SUPPRESSION_SCAN_MAX_LINES, 1 / 0);
   }
   spend(e) {
-    return ((this.chars += e.length + 1), ++this.lines >= this.maxLines || this.chars >= this.maxBytes);
+    this.chars += e.length + 1;
+    return ++this.lines >= this.maxLines || this.chars >= this.maxBytes;
   }
 }
 //@ chunk-e6aww6q8.js:462989-463004 facade-majority
 var SUPPRESSION_SCAN_CHUNK_BYTES = 262144;
 //@ chunk-e6aww6q8.js:463004-463134 facade-majority
-function suppressionScanFailure(e) {
-  if (isENOENT(e)) return "no-file";
-  if (e instanceof FileChangedDuringReadError) return e.partialRead ? "partial-read" : "file-changed";
+function suppressionScanFailure(error) {
+  if (isENOENT(error)) return "no-file";
+  if (error instanceof FileChangedDuringReadError) return error.partialRead ? "partial-read" : "file-changed";
   return "read-error";
 }
 //@ chunk-e6aww6q8.js:463134-463151 facade-majority
 function logSuppressionScan(e) {}
 //@ chunk-e6aww6q8.js:463151-463643 facade-majority
-async function scanTranscriptForSuppression(e, n, r) {
-  let s = isStorageV5Enabled() && r !== void 0 ? getTranscriptStorageKey(e, r) : void 0,
-    h = n.budget ?? (s !== void 0 ? SuppressionScanBudget.forBackendRead() : new SuppressionScanBudget()),
-    now = Date.now(),
-    S,
-    w =
-      s !== void 0
-        ? openTranscriptStream(s.backend, s.key)
-        : readLinesReverse(e, SUPPRESSION_SCAN_CHUNK_BYTES, {
-            onOpen: (q) => {
-              S = q;
-            },
-          }),
-    L = "clean",
-    G;
+async function scanTranscriptForSuppression(e, n, storageV5) {
+  let s = isStorageV5Enabled() && storageV5 !== undefined ? getTranscriptStorageKey(e, storageV5) : undefined;
+  let h =
+    n.budget ?? (s !== undefined ? SuppressionScanBudget.forBackendRead() : new SuppressionScanBudget());
+  let startMs = Date.now();
+  let fileBytes;
+  let w =
+    s !== undefined
+      ? openTranscriptStream(s.backend, s.key)
+      : readLinesReverse(e, SUPPRESSION_SCAN_CHUNK_BYTES, {
+          onOpen: (q) => {
+            fileBytes = q;
+          },
+        });
+  let L = "clean";
+  let G;
   try {
     for await (let q of w) {
       G ??= q;
-      let spend = h.spend(q);
-      if (matchesHistorySuppressionLine(q, n)) return ((L = "found"), L);
-      if (spend) return ((L = "budget-exhausted"), L);
+      let Z = h.spend(q);
+      if (matchesHistorySuppressionLine(q, n)) {
+        L = "found";
+        return L;
+      }
+      if (Z) {
+        L = "budget-exhausted";
+        return L;
+      }
     }
     return "clean";
   } catch (error) {
-    throw ((L = suppressionScanFailure(error)), error);
+    L = suppressionScanFailure(error);
+    throw error;
   } finally {
     logSuppressionScan({
       leg: "transcript-scan",
-      throughBackend: s !== void 0,
+      throughBackend: s !== undefined,
       outcome: L,
       lines: h.lines,
       charsRead: h.chars,
-      fileBytes: S,
-      startMs: now,
+      fileBytes,
+      startMs,
     });
   }
 }
 //@ chunk-e6aww6q8.js:463643-464057 facade-majority
 async function scanAppendedForSuppression(e, n, r, s) {
   for (;;) {
-    let h = 0,
-      y = 0,
-      S,
-      w = !1;
+    let h = 0;
+    let y = 0;
+    let S;
+    let w = false;
     try {
       for await (let L of readLinesReverse(e, SUPPRESSION_SCAN_CHUNK_BYTES, {
         onOpen: (G) => {
@@ -7834,148 +8336,171 @@ async function scanAppendedForSuppression(e, n, r, s) {
       })) {
         if (h < n.size) break;
         if (L === n.lastLine && y === h - n.size) {
-          w = !0;
+          w = true;
           break;
         }
         S ??= L;
-        let spend = s.spend(L);
+        let G = s.spend(L);
         if (matchesHistorySuppressionLine(L, r)) return "found";
-        if (spend) return "budget-exhausted";
+        if (G) return "budget-exhausted";
         y += Buffer.byteLength(L) + 1;
       }
     } catch (error) {
       throw isENOENT(error) ? new FileChangedDuringReadError() : error;
     }
     if (h < n.size) throw new FileChangedDuringReadError();
-    if (h === n.size && (w || S === void 0)) return "clean";
-    n = { size: h, lastLine: S ?? n.lastLine };
+    if (h === n.size && (w || S === undefined)) return "clean";
+    n = {
+      size: h,
+      lastLine: S ?? n.lastLine,
+    };
   }
 }
 //@ chunk-e6aww6q8.js:464057-464124 facade-majority = getErrorsPath (1)
 function isOwnTranscriptFile(e, n) {
-  return e !== void 0 && n != null && basename_2(n) === `${e}.jsonl`;
+  return e !== undefined && n != null && basename(n) === `${e}.jsonl`;
 }
 //@ chunk-e6aww6q8.js:464124-464178 facade-majority = getErrorsPath (1)
-function getDerivedTranscriptPathForSession(e) {
-  let n = resolveProjectDir();
-  return join_3(n, `${e}.jsonl`);
+function getDerivedTranscriptPathForSession(sessionId) {
+  let projectDir = resolveProjectDir();
+  return join(projectDir, `${sessionId}.jsonl`);
 }
 //@ chunk-e6aww6q8.js:464178-464357 facade-majority
 function matchesHistorySuppressionLine(e, n = {}) {
-  if (!e.includes('"history-suppression"')) return !1;
+  if (!e.includes('"history-suppression"')) return false;
   try {
     let r = jsonParse(e);
-    return r.type === "history-suppression" && (n.sid === void 0 || r.sessionId === n.sid);
+    return r.type === "history-suppression" && (n.sid === undefined || r.sessionId === n.sid);
   } catch {
-    return !1;
+    return false;
   }
 }
 //@ chunk-e6aww6q8.js:464357-464879 facade-majority
 function buildForkAdoptionMeta(e, n = {}) {
   return {
     ...e,
-    ...(n.stripWorktreeSession && { worktreeSession: void 0 }),
-    ...(n.stripRelocatedCwd && { relocatedCwd: void 0 }),
-    memoryModeStamps: e.memoryModeStamps?.map((r) => ({
-      ...r,
-      written: e.forkedFromSessionId !== void 0 ? (r.written ?? !0) : !1,
+    ...(n.stripWorktreeSession && {
+      worktreeSession: undefined,
+    }),
+    ...(n.stripRelocatedCwd && {
+      relocatedCwd: undefined,
+    }),
+    memoryModeStamps: e.memoryModeStamps?.map((memoryModeStamp) => ({
+      ...memoryModeStamp,
+      written: e.forkedFromSessionId !== undefined ? (memoryModeStamp.written ?? true) : false,
     })),
-    devModsFolder: void 0,
-    artifactCommentMonitor: void 0,
-    artifactAutoReactLedger: void 0,
-    bridgeSessionId: void 0,
-    bridgeLastSeq: void 0,
-    bridgeDialogKinds: void 0,
-    bridgeSessionGroupingId: void 0,
-    bridgeNoHistoryBackfill: void 0,
-    bridgeOwnerAccountUuid: void 0,
-    bridgeOwnerOrganizationUuid: void 0,
+    devModsFolder: undefined,
+    artifactCommentMonitor: undefined,
+    artifactAutoReactLedger: undefined,
+    bridgeSessionId: undefined,
+    bridgeLastSeq: undefined,
+    bridgeDialogKinds: undefined,
+    bridgeSessionGroupingId: undefined,
+    bridgeNoHistoryBackfill: undefined,
+    bridgeOwnerAccountUuid: undefined,
+    bridgeOwnerOrganizationUuid: undefined,
   };
 }
 //@ chunk-e6aww6q8.js:464879-465180 facade-majority
 async function adoptForkSessionMetadata(e, n) {
-  let r = n.destSid ?? pinSessionId(getSessionId()),
-    s = e.sessionHistorySuppressed === !0 || isSessionHistorySuppressedFor(pinSessionId(e.sessionId));
-  if (s) await writeHistorySuppression(r, void 0, "fork_inherit", void 0, n.storageV5);
-  (restoreSessionMetadata(
-    buildForkAdoptionMeta(s && !e.sessionHistorySuppressed ? { ...e, sessionHistorySuppressed: !0 } : e, n),
-    { taintSid: r, storageV5: n.storageV5 },
-  ),
-    copyPrecautionarySuppressionTo(r, pinSessionId(e.sessionId)));
+  let r = n.destSid ?? pinSessionId(getSessionId());
+  let s = e.sessionHistorySuppressed === true || isSessionHistorySuppressedFor(pinSessionId(e.sessionId));
+  if (s) await writeHistorySuppression(r, undefined, "fork_inherit", undefined, n.storageV5);
+  restoreSessionMetadata(
+    buildForkAdoptionMeta(
+      s && !e.sessionHistorySuppressed
+        ? {
+            ...e,
+            sessionHistorySuppressed: true,
+          }
+        : e,
+      n,
+    ),
+    {
+      taintSid: r,
+      storageV5: n.storageV5,
+    },
+  );
+  copyPrecautionarySuppressionTo(r, pinSessionId(e.sessionId));
 }
 //@ chunk-e6aww6q8.js:465180-465235 facade-majority
 function holdSessionHistorySuppression() {
-  getProject().currentSessionHistorySuppressed = !0;
+  getProject().currentSessionHistorySuppressed = true;
 }
 //@ chunk-e6aww6q8.js:465235-465321 facade-majority
 function holdSessionHistorySuppressionFor(e) {
-  if ((markSessionHistorySuppressedFor(e), e !== void 0 && e === getSessionId()))
-    getProject().currentSessionHistorySuppressed = !0;
+  markSessionHistorySuppressedFor(e);
+  if (e !== undefined && e === getSessionId()) getProject().currentSessionHistorySuppressed = true;
 }
 //@ chunk-e6aww6q8.js:465321-465436 facade-majority
 function markSessionHistorySuppressedFor(e) {
-  if (e === void 0) return;
-  let n = getProject();
-  ((n.knownTaintedSessionIds ??= new Set()), n.knownTaintedSessionIds.add(e));
+  if (e === undefined) return;
+  let project = getProject();
+  project.knownTaintedSessionIds ??= new Set();
+  project.knownTaintedSessionIds.add(e);
 }
 //@ chunk-e6aww6q8.js:465436-465512 facade-majority
 function isSessionHistorySuppressedFor(e) {
-  return e !== void 0 && getProject().knownTaintedSessionIds?.has(e) === !0;
+  return e !== undefined && getProject().knownTaintedSessionIds?.has(e) === true;
 }
 //@ chunk-e6aww6q8.js:465512-465571 facade-majority
 function dropSessionHistorySuppression() {
-  getProject().currentSessionHistorySuppressed = void 0;
+  getProject().currentSessionHistorySuppressed = undefined;
 }
 //@ chunk-e6aww6q8.js:465571-465595 facade-majority
-function pinSessionId(e) {
-  return e;
+function pinSessionId(sessionId) {
+  return sessionId;
 }
 //@ chunk-e6aww6q8.js:465595-465734 facade-majority
-function holdPrecautionarySuppressionFor(e) {
-  if (!e) return;
-  let n = getProject();
-  ((n.currentSessionPrecautionarySuppression ??= new Set()), n.currentSessionPrecautionarySuppression.add(e));
+function holdPrecautionarySuppressionFor(boundSessionKey) {
+  if (!boundSessionKey) return;
+  let project = getProject();
+  project.currentSessionPrecautionarySuppression ??= new Set();
+  project.currentSessionPrecautionarySuppression.add(boundSessionKey);
 }
 //@ chunk-e6aww6q8.js:465734-465877 facade-majority
 function dropPrecautionarySuppressionForTesting() {
-  ((getProject().currentSessionPrecautionarySuppression = void 0),
-    (getProject().clearResilientPrecautionSids = void 0),
-    (getProject().scanUncertaintyHoldSids = void 0));
+  getProject().currentSessionPrecautionarySuppression = undefined;
+  getProject().clearResilientPrecautionSids = undefined;
+  getProject().scanUncertaintyHoldSids = undefined;
 }
 //@ chunk-e6aww6q8.js:465877-466002 facade-majority
 function releasePrecautionarySuppressionFor(e) {
-  let n = getProject();
-  if (e && !n.clearResilientPrecautionSids?.has(e)) n.currentSessionPrecautionarySuppression?.delete(e);
+  let project = getProject();
+  if (e && !project.clearResilientPrecautionSids?.has(e))
+    project.currentSessionPrecautionarySuppression?.delete(e);
 }
 //@ chunk-e6aww6q8.js:466002-466129 facade-majority
 function markPrecautionClearResilientFor(e) {
-  if (e === void 0) return;
-  let n = getProject();
-  ((n.clearResilientPrecautionSids ??= new Set()), n.clearResilientPrecautionSids.add(e));
+  if (e === undefined) return;
+  let project = getProject();
+  project.clearResilientPrecautionSids ??= new Set();
+  project.clearResilientPrecautionSids.add(e);
 }
 //@ chunk-e6aww6q8.js:466129-466246 facade-majority
 function markScanUncertaintyHoldFor(e) {
-  if (e === void 0) return;
-  let n = getProject();
-  ((n.scanUncertaintyHoldSids ??= new Set()), n.scanUncertaintyHoldSids.add(e));
+  if (e === undefined) return;
+  let project = getProject();
+  project.scanUncertaintyHoldSids ??= new Set();
+  project.scanUncertaintyHoldSids.add(e);
 }
 //@ chunk-e6aww6q8.js:466246-466323 facade-majority
 function isScanUncertaintyHoldFor(e) {
-  return e !== void 0 && getProject().scanUncertaintyHoldSids?.has(e) === !0;
+  return e !== undefined && getProject().scanUncertaintyHoldSids?.has(e) === true;
 }
 //@ chunk-e6aww6q8.js:466323-466400 facade-majority
-function claimPrecautionHoldForObservedCause(e) {
-  if (e === void 0) return;
-  getProject().scanUncertaintyHoldSids?.delete(e);
+function claimPrecautionHoldForObservedCause(boundSessionKey) {
+  if (boundSessionKey === undefined) return;
+  getProject().scanUncertaintyHoldSids?.delete(boundSessionKey);
 }
 //@ chunk-e6aww6q8.js:466400-466623 facade-majority
 function releaseScanUncertaintyHoldFor(e) {
-  if (e === void 0) return;
-  let n = getProject();
-  if (!n.scanUncertaintyHoldSids?.has(e)) return;
-  (n.scanUncertaintyHoldSids.delete(e),
-    n.clearResilientPrecautionSids?.delete(e),
-    n.currentSessionPrecautionarySuppression?.delete(e));
+  if (e === undefined) return;
+  let project = getProject();
+  if (!project.scanUncertaintyHoldSids?.has(e)) return;
+  project.scanUncertaintyHoldSids.delete(e);
+  project.clearResilientPrecautionSids?.delete(e);
+  project.currentSessionPrecautionarySuppression?.delete(e);
 }
 //@ chunk-e6aww6q8.js:466623-466658 facade-majority
 function isPrecautionarySuppressionHeld() {
@@ -7983,79 +8508,81 @@ function isPrecautionarySuppressionHeld() {
 }
 //@ chunk-e6aww6q8.js:466658-466750 facade-majority
 function isPrecautionarySuppressionHeldFor(e) {
-  return e !== void 0 && getProject().currentSessionPrecautionarySuppression?.has(e) === !0;
+  return e !== undefined && getProject().currentSessionPrecautionarySuppression?.has(e) === true;
 }
 //@ chunk-e6aww6q8.js:466750-466943 facade-majority
 function copyPrecautionarySuppressionTo(e, n) {
   if (!e || !n) return;
-  let r = getProject(),
-    currentSessionPrecautionarySuppression = r.currentSessionPrecautionarySuppression;
+  let project = getProject();
+  let currentSessionPrecautionarySuppression = project.currentSessionPrecautionarySuppression;
   if (currentSessionPrecautionarySuppression?.has(n)) {
-    if ((currentSessionPrecautionarySuppression.add(e), r.clearResilientPrecautionSids?.has(n)))
-      r.clearResilientPrecautionSids.add(e);
+    currentSessionPrecautionarySuppression.add(e);
+    if (project.clearResilientPrecautionSids?.has(n)) project.clearResilientPrecautionSids.add(e);
   }
 }
 //@ chunk-e6aww6q8.js:466943-466991 facade-majority
 function registerLiveSuppressionProbe(e) {
-  su().setLiveSuppressionProbe(e);
+  currentTranscriptStore().setLiveSuppressionProbe(e);
 }
 //@ chunk-e6aww6q8.js:466991-467048 facade-majority
 function isLiveBridgeSuppressed() {
-  return su().liveSuppressionProbe?.() === !0;
+  return currentTranscriptStore().liveSuppressionProbe?.() === true;
 }
 //@ chunk-e6aww6q8.js:467048-467069 facade-majority = orgStatus (1)
-var PENDING_BRIDGE_SESSION = "pending",
-  FG;
+var PENDING_BRIDGE_SESSION = "pending";
+var PENDING_BRIDGE_SESSION_2;
 //@ chunk-e6aww6q8.js:467069-467090 facade-majority
 function registerForeignConversationProbe(e) {
-  FG = e;
+  PENDING_BRIDGE_SESSION_2 = e;
 }
 //@ chunk-e6aww6q8.js:467090-467126 facade-majority
-function bridgeSessionsForPulledRow(e) {
-  return K9()?.get(e);
+function bridgeSessionsForPulledRow(uuid) {
+  return pulledRows()?.get(uuid);
 }
 //@ chunk-e6aww6q8.js:467126-467209 layout
-function imo(e) {
-  if (e === void 0) return;
+function firstConcreteBridgeSession(e) {
+  if (e === undefined) return;
   for (let n of e) if (n !== PENDING_BRIDGE_SESSION) return n;
   return PENDING_BRIDGE_SESSION;
 }
 //@ chunk-e6aww6q8.js:467209-467248 layout
-function K9() {
-  return FG?.().pulledRows;
+function pulledRows() {
+  return PENDING_BRIDGE_SESSION_2?.().pulledRows;
 }
 //@ chunk-e6aww6q8.js:467248-467422 facade-majority
 function isRowForeignToBridgeSession(e, n) {
-  if (n === void 0) return !1;
-  if (e.foreignToBridgeSession === n || e.foreignToBridgeSession === PENDING_BRIDGE_SESSION) return !0;
+  if (n === undefined) return false;
+  if (e.foreignToBridgeSession === n || e.foreignToBridgeSession === PENDING_BRIDGE_SESSION) return true;
   let r = bridgeSessionsForPulledRow(e.uuid);
-  return r !== void 0 && (r.has(n) || r.has(PENDING_BRIDGE_SESSION));
+  return r !== undefined && (r.has(n) || r.has(PENDING_BRIDGE_SESSION));
 }
 //@ chunk-e6aww6q8.js:467422-467463 facade-majority
 function isBridgeBindingForeign() {
-  return FG?.().foreign === !0;
+  return PENDING_BRIDGE_SESSION_2?.().foreign === true;
 }
 //@ chunk-e6aww6q8.js:467463-467570 facade-majority
 function isForeignToBinding(e) {
-  let n = FG?.();
-  if (n?.foreign !== !0) return !1;
-  if (!e || !n.boundSid) return !0;
+  let n = PENDING_BRIDGE_SESSION_2?.();
+  if (n?.foreign !== true) return false;
+  if (!e || !n.boundSid) return true;
   return e !== n.boundSid;
 }
 //@ chunk-e6aww6q8.js:467570-467682 facade-majority
 function bridgeSessionForPulledWindow(e) {
-  let n = FG?.().pulledWindow;
-  return n !== void 0 && e !== void 0 && n.sids.has(e) ? n.bridgeSessionId : void 0;
+  let pulledWindow = PENDING_BRIDGE_SESSION_2?.().pulledWindow;
+  return pulledWindow !== undefined && e !== undefined && pulledWindow.sids.has(e)
+    ? pulledWindow.bridgeSessionId
+    : undefined;
 }
 //@ chunk-e6aww6q8.js:467682-467720 facade-majority
 function getBridgeBoundConversationSid() {
-  return FG?.().boundSid;
+  return PENDING_BRIDGE_SESSION_2?.().boundSid;
 }
 //@ chunk-e6aww6q8.js:467720-467792 facade-majority
 function isCompactPairWithheldFromRemote() {
   return (
     isSessionHistorySuppressed() ||
-    getCurrentSessionBridge()?.noHistoryBackfill === !0 ||
+    getCurrentSessionBridge()?.noHistoryBackfill === true ||
     isLiveBridgeSuppressed() ||
     isPrecautionarySuppressionHeld()
   );
@@ -8082,63 +8609,68 @@ function clearBridgeSessionCache() {
   clearBridgeSessionFields(getProject());
 }
 //@ chunk-e6aww6q8.js:467914-468213 layout
-function clearBridgeSessionFields(e) {
-  ((e.currentSessionBridgeId = void 0),
-    (e.currentSessionBridgeSeq = void 0),
-    (e.currentSessionBridgeDialogKinds = void 0),
-    (e.currentSessionBridgeGroupingId = void 0),
-    (e.currentSessionBridgeNoBackfill = void 0),
-    (e.currentSessionBridgeOwnerAccountUuid = void 0),
-    (e.currentSessionBridgeOwnerOrganizationUuid = void 0));
+function clearBridgeSessionFields(project) {
+  project.currentSessionBridgeId = undefined;
+  project.currentSessionBridgeSeq = undefined;
+  project.currentSessionBridgeDialogKinds = undefined;
+  project.currentSessionBridgeGroupingId = undefined;
+  project.currentSessionBridgeNoBackfill = undefined;
+  project.currentSessionBridgeOwnerAccountUuid = undefined;
+  project.currentSessionBridgeOwnerOrganizationUuid = undefined;
 }
 //@ chunk-e6aww6q8.js:468213-468448 facade-majority
-function clearBridgeSession(e, n, r, s) {
-  let h = e ?? getSessionId(),
-    y = getProject();
-  if (iIt(y, n, r))
+function clearBridgeSession(e, n, r, storageV5) {
+  let h = e ?? getSessionId();
+  let project = getProject();
+  if (needsTranscriptTarget(project, n, r))
     appendEntryToFileAsync(
       n ?? getTranscriptPathForSession(h),
-      { type: "bridge-session", sessionId: h, bridgeSessionId: "", lastSequenceNum: 0 },
-      s,
-    ).catch((S) => {
-      logForDebugging(`clearBridgeSession: transcript append failed: ${errorMessage(S)}`);
+      {
+        type: "bridge-session",
+        sessionId: h,
+        bridgeSessionId: "",
+        lastSequenceNum: 0,
+      },
+      storageV5,
+    ).catch((error) => {
+      logForDebugging(`clearBridgeSession: transcript append failed: ${errorMessage(error)}`);
     });
-  if (h === getSessionId()) clearBridgeSessionFields(y);
+  if (h === getSessionId()) clearBridgeSessionFields(project);
 }
 //@ chunk-e6aww6q8.js:468448-468846 facade-majority
 function getCurrentSessionBridge() {
-  let e = getProject();
-  return e.currentSessionBridgeId
+  let project = getProject();
+  return project.currentSessionBridgeId
     ? {
-        id: e.currentSessionBridgeId,
-        seq: e.currentSessionBridgeSeq ?? 0,
-        declaredDialogKinds: e.currentSessionBridgeDialogKinds,
-        groupingId: e.currentSessionBridgeGroupingId,
-        noHistoryBackfill: e.currentSessionBridgeNoBackfill,
-        ownerAccountUuid: e.currentSessionBridgeOwnerAccountUuid,
-        ownerOrganizationUuid: e.currentSessionBridgeOwnerOrganizationUuid,
+        id: project.currentSessionBridgeId,
+        seq: project.currentSessionBridgeSeq ?? 0,
+        declaredDialogKinds: project.currentSessionBridgeDialogKinds,
+        groupingId: project.currentSessionBridgeGroupingId,
+        noHistoryBackfill: project.currentSessionBridgeNoBackfill,
+        ownerAccountUuid: project.currentSessionBridgeOwnerAccountUuid,
+        ownerOrganizationUuid: project.currentSessionBridgeOwnerOrganizationUuid,
       }
-    : void 0;
+    : undefined;
 }
+//@ chunk-e6aww6q8.js:468846-468911 facade-majority = getCurrentSessionTitle (1)
 /**
  * 当前（或指定）会话的自定义标题。
  */
-//@ chunk-e6aww6q8.js:468846-468911 facade-majority = getCurrentSessionTitle (1)
 function getCurrentSessionTitle(sessionId) {
   if (sessionId === getSessionId()) return getProject().currentSessionTitle;
   return;
 }
 //@ chunk-e6aww6q8.js:468911-468979 facade-majority
-function getCurrentSessionAiTitle(e) {
-  if (e === getSessionId()) return getProject().currentSessionAiTitle;
+function getCurrentSessionAiTitle(sessionId) {
+  if (sessionId === getSessionId()) return getProject().currentSessionAiTitle;
   return;
 }
+//@ chunk-e6aww6q8.js:468979-469015 facade-majority
 /**
  * 会话标题：自定义标题优先，否则 AI 生成标题。
  */
-//@ chunk-e6aww6q8.js:468979-469015 facade-majority
-function getCurrentSessionDisplayTitle(e) {
-  return getCurrentSessionTitle(e) ?? getCurrentSessionAiTitle(e);
+function getCurrentSessionDisplayTitle(sessionId) {
+  return getCurrentSessionTitle(sessionId) ?? getCurrentSessionAiTitle(sessionId);
 }
 //@ chunk-e6aww6q8.js:469015-469057 facade-majority
 function getCurrentSessionPeerName() {
@@ -8146,15 +8678,16 @@ function getCurrentSessionPeerName() {
 }
 //@ chunk-e6aww6q8.js:469057-469147 facade-majority
 function getCurrentSessionOffBoxPeerName() {
-  let e = getRegisteredSessionName();
+  let registeredSessionName = getRegisteredSessionName();
   return (
-    (e !== void 0 && e.source !== "derived" ? e.name : void 0) ??
-    getCurrentSessionDisplayTitle(getSessionId())
+    (registeredSessionName !== undefined && registeredSessionName.source !== "derived"
+      ? registeredSessionName.name
+      : undefined) ?? getCurrentSessionDisplayTitle(getSessionId())
   );
 }
 //@ chunk-e6aww6q8.js:469147-469195 facade-majority
-function getCurrentSessionPeerNameFor(e) {
-  return e === "bridge" ? getCurrentSessionOffBoxPeerName() : getCurrentSessionPeerName();
+function getCurrentSessionPeerNameFor(kind) {
+  return kind === "bridge" ? getCurrentSessionOffBoxPeerName() : getCurrentSessionPeerName();
 }
 //@ chunk-e6aww6q8.js:469195-469247 facade-majority = getCurrentSessionAgentColor (1)
 function getCurrentSessionAgentColor() {
@@ -8165,83 +8698,98 @@ function getCurrentSessionAgentName() {
   return getProject().currentSessionAgentName;
 }
 //@ chunk-e6aww6q8.js:469298-469373 facade-majority
-function restoreConversationToolsUsed(e, n) {
-  let r = getConversationToolsUsed();
-  (r.record(e ?? []), r.record(tagUntrustedArtifactContent(n ?? [], void 0, !1)));
+function restoreConversationToolsUsed(toolsUsed, messages) {
+  let conversationToolsUsed = getConversationToolsUsed();
+  conversationToolsUsed.record(toolsUsed ?? []);
+  conversationToolsUsed.record(tagUntrustedArtifactContent(messages ?? [], undefined, false));
 }
 //@ chunk-e6aww6q8.js:469373-469456 facade-majority = setSessionFileForTesting (0.526)
 function markToolsUsedWritten() {
-  let e = getProject();
-  e.toolsUsedStamp = `${e.sessionFile}
+  let project = getProject();
+  project.toolsUsedStamp = `${project.sessionFile}
 ${getConversationToolsUsed().generation()}`;
 }
+//@ chunk-e6aww6q8.js:469456-472098 facade-majority
 /**
  * resume 时把日志中的会话元数据（标题、AI 标题、tag、cwd 迁移、代理名/颜色/设置、模式、PR、worktree 等）装回 Project 当前会话字段。
  */
-//@ chunk-e6aww6q8.js:469456-472098 facade-majority
 function restoreSessionMetadata(e, n) {
-  let r = getProject();
-  if (e.customTitle) r.currentSessionTitle ??= e.customTitle;
-  if (e.aiTitle) r.currentSessionAiTitle ??= e.aiTitle;
-  if (e.customTitle || e.aiTitle) su().sessionTitleChanged.emit();
-  if (e.tag !== void 0) r.currentSessionTag = e.tag || void 0;
-  if (e.relocatedCwd) r.currentSessionRelocatedCwd ??= e.relocatedCwd;
-  if (e.agentName) r.currentSessionAgentName ??= e.agentName;
-  if (e.agentColor) r.currentSessionAgentColor ??= e.agentColor;
-  if (e.agentSetting) r.currentSessionAgentSetting = e.agentSetting;
-  if (e.mode) r.currentSessionMode = e.mode;
-  if (e.permissionMode) r.currentSessionPermissionMode = e.permissionMode;
-  if (e.isolationLatch) r.currentSessionIsolationLatch = e.isolationLatch;
+  let project = getProject();
+  if (e.customTitle) project.currentSessionTitle ??= e.customTitle;
+  if (e.aiTitle) project.currentSessionAiTitle ??= e.aiTitle;
+  if (e.customTitle || e.aiTitle) currentTranscriptStore().sessionTitleChanged.emit();
+  if (e.tag !== undefined) project.currentSessionTag = e.tag || undefined;
+  if (e.relocatedCwd) project.currentSessionRelocatedCwd ??= e.relocatedCwd;
+  if (e.agentName) project.currentSessionAgentName ??= e.agentName;
+  if (e.agentColor) project.currentSessionAgentColor ??= e.agentColor;
+  if (e.agentSetting) project.currentSessionAgentSetting = e.agentSetting;
+  if (e.mode) project.currentSessionMode = e.mode;
+  if (e.permissionMode) project.currentSessionPermissionMode = e.permissionMode;
+  if (e.isolationLatch) project.currentSessionIsolationLatch = e.isolationLatch;
   if (e.devModsFolder)
-    if (sjt(e.devModsFolder, getSessionId())) r.currentSessionDevModsFolder = e.devModsFolder;
+    if (isSessionFileAt(e.devModsFolder, getSessionId()))
+      project.currentSessionDevModsFolder = e.devModsFolder;
     else logForDebugging("dev mods: dropped a restored dev-mods folder not this session's");
   if (e.memoryModeStamps) {
-    r.currentSessionMemoryModeStamps = e.memoryModeStamps.map((memoryModeStamp) => ({
+    project.currentSessionMemoryModeStamps = e.memoryModeStamps.map((memoryModeStamp) => ({
       ...memoryModeStamp,
-      written: memoryModeStamp.written ?? !0,
+      written: memoryModeStamp.written ?? true,
     }));
-    let at = e.memoryModeStamps.at(-1);
+    let last = e.memoryModeStamps.at(-1);
     resetAgentLatches();
   }
-  if (e.atisLatch !== void 0) setConversationAtisLatch(e.atisLatch);
-  if (e.toolsUsed !== void 0 || e.messages !== void 0) restoreConversationToolsUsed(e.toolsUsed, e.messages);
-  if (e.worktreeSession !== void 0) r.currentSessionWorktree = e.worktreeSession;
-  if (e.artifactCommentMonitor !== void 0) r.resumedArtifactCommentMonitor = e.artifactCommentMonitor;
-  if (e.artifactAutoReactLedger !== void 0) r.resumedArtifactAutoReactLedger = e.artifactAutoReactLedger;
-  if (e.prNumber !== void 0) r.currentSessionPrNumber = e.prNumber;
-  if (e.prUrl) r.currentSessionPrUrl = e.prUrl;
-  if (e.prRepository) r.currentSessionPrRepository = e.prRepository;
-  if (e.artifactCount !== void 0) r.currentSessionArtifactCount = e.artifactCount;
-  if (e.bridgeSessionId)
-    ((r.currentSessionBridgeId = e.bridgeSessionId),
-      (r.currentSessionBridgeSeq = e.bridgeLastSeq),
-      (r.currentSessionBridgeDialogKinds = e.bridgeDialogKinds?.length ? e.bridgeDialogKinds : void 0),
-      (r.currentSessionBridgeGroupingId = e.bridgeSessionGroupingId),
-      (r.currentSessionBridgeNoBackfill = e.bridgeNoHistoryBackfill ? !0 : void 0),
-      (r.currentSessionBridgeOwnerAccountUuid = e.bridgeOwnerAccountUuid),
-      (r.currentSessionBridgeOwnerOrganizationUuid = e.bridgeOwnerOrganizationUuid));
+  if (e.atisLatch !== undefined) setConversationAtisLatch(e.atisLatch);
+  if (e.toolsUsed !== undefined || e.messages !== undefined)
+    restoreConversationToolsUsed(e.toolsUsed, e.messages);
+  if (e.worktreeSession !== undefined) project.currentSessionWorktree = e.worktreeSession;
+  if (e.artifactCommentMonitor !== undefined)
+    project.resumedArtifactCommentMonitor = e.artifactCommentMonitor;
+  if (e.artifactAutoReactLedger !== undefined)
+    project.resumedArtifactAutoReactLedger = e.artifactAutoReactLedger;
+  if (e.prNumber !== undefined) project.currentSessionPrNumber = e.prNumber;
+  if (e.prUrl) project.currentSessionPrUrl = e.prUrl;
+  if (e.prRepository) project.currentSessionPrRepository = e.prRepository;
+  if (e.artifactCount !== undefined) project.currentSessionArtifactCount = e.artifactCount;
+  if (e.bridgeSessionId) {
+    project.currentSessionBridgeId = e.bridgeSessionId;
+    project.currentSessionBridgeSeq = e.bridgeLastSeq;
+    project.currentSessionBridgeDialogKinds = e.bridgeDialogKinds?.length ? e.bridgeDialogKinds : undefined;
+    project.currentSessionBridgeGroupingId = e.bridgeSessionGroupingId;
+    project.currentSessionBridgeNoBackfill = e.bridgeNoHistoryBackfill ? true : undefined;
+    project.currentSessionBridgeOwnerAccountUuid = e.bridgeOwnerAccountUuid;
+    project.currentSessionBridgeOwnerOrganizationUuid = e.bridgeOwnerOrganizationUuid;
+  }
   if (e.sessionHistorySuppressed) {
-    let s = n?.taintSid ?? pinSessionId(getSessionId()),
-      h = s !== void 0 && s === getSessionId(),
-      y = h && !r.currentSessionHistorySuppressed;
-    if (h) r.currentSessionHistorySuppressed = !0;
-    if ((markSessionHistorySuppressedFor(s), y && s !== void 0)) {
-      let S = getMaterializedSessionFile();
-      if (!(S !== null && !isOwnTranscriptFile(s, S))) {
-        let L = S ?? getTranscriptPathForSession(s),
-          G = n?.storageV5;
+    let s = n?.taintSid ?? pinSessionId(getSessionId());
+    let h = s !== undefined && s === getSessionId();
+    let y = h && !project.currentSessionHistorySuppressed;
+    if (h) project.currentSessionHistorySuppressed = true;
+    markSessionHistorySuppressedFor(s);
+    if (y && s !== undefined) {
+      let materializedSessionFile = getMaterializedSessionFile();
+      if (!(materializedSessionFile !== null && !isOwnTranscriptFile(s, materializedSessionFile))) {
+        let L = materializedSessionFile ?? getTranscriptPathForSession(s);
+        let storageV5 = n?.storageV5;
         (async () => {
-          if ((await scanTranscriptForSuppression(L, { sid: s }, G)) === "clean")
-            await writeHistorySuppression(s, L, "meta_seed", void 0, G);
-        })().catch((q) => {
-          logForDebugging(`restoreSessionMetadata meta_seed failed: ${errorMessage(q)}`);
+          if (
+            (await scanTranscriptForSuppression(
+              L,
+              {
+                sid: s,
+              },
+              storageV5,
+            )) === "clean"
+          )
+            await writeHistorySuppression(s, L, "meta_seed", undefined, storageV5);
+        })().catch((error) => {
+          logForDebugging(`restoreSessionMetadata meta_seed failed: ${errorMessage(error)}`);
         });
       }
     }
   }
-  if (e.lastPrompt !== void 0) r.currentSessionLastPrompt = e.lastPrompt;
-  if (e.leafUuid !== void 0) r.currentSessionLeafUuid = e.leafUuid;
-  if (e.leafTs !== void 0) r.currentSessionLeafTs = e.leafTs;
+  if (e.lastPrompt !== undefined) project.currentSessionLastPrompt = e.lastPrompt;
+  if (e.leafUuid !== undefined) project.currentSessionLeafUuid = e.leafUuid;
+  if (e.leafTs !== undefined) project.currentSessionLeafTs = e.leafTs;
 }
 //@ chunk-e6aww6q8.js:472098-473538 facade-majority = restoreSessionMetadata (0.453)
 function snapshotSessionMetadata() {
@@ -8258,7 +8806,7 @@ function snapshotSessionMetadata() {
     permissionMode: project.currentSessionPermissionMode,
     isolationLatch: project.currentSessionIsolationLatch,
     devModsFolder: project.currentSessionDevModsFolder,
-    memoryModeStamps: project.currentSessionMemoryModeStamps.map(({ inFlight: inFlight, ...s }) => s),
+    memoryModeStamps: project.currentSessionMemoryModeStamps.map(({ inFlight, ...s }) => s),
     restoredMemoryPause: getRestoredMemoryPause(),
     atisLatch: getConversationAtisLatch(),
     toolsUsed: getConversationToolsUsed().names(),
@@ -8276,112 +8824,135 @@ function snapshotSessionMetadata() {
     bridgeNoHistoryBackfill: project.currentSessionBridgeNoBackfill,
     bridgeOwnerAccountUuid: project.currentSessionBridgeOwnerAccountUuid,
     bridgeOwnerOrganizationUuid: project.currentSessionBridgeOwnerOrganizationUuid,
-    sessionHistorySuppressed: project.currentSessionHistorySuppressed ? !0 : void 0,
+    sessionHistorySuppressed: project.currentSessionHistorySuppressed ? true : undefined,
     lastPrompt: project.currentSessionLastPrompt,
     leafUuid: project.currentSessionLeafUuid,
     leafTs: project.currentSessionLeafTs,
   };
 }
+//@ chunk-e6aww6q8.js:473538-474497 facade-majority = clearSessionMetadata (0.62)
 /**
  * 清空 Project 中当前会话的全部元数据字段（/clear、新会话时）。
  */
-//@ chunk-e6aww6q8.js:473538-474497 facade-majority = clearSessionMetadata (0.62)
 function clearSessionMetadata() {
-  let project = getProject(),
-    n = project.currentSessionTitle !== void 0 || project.currentSessionAiTitle !== void 0;
-  if (
-    ((project.currentSessionTitle = void 0),
-    (project.currentSessionAiTitle = void 0),
-    (project.currentSessionTag = void 0),
-    (project.currentSessionRelocatedCwd = void 0),
-    (project.currentSessionAgentName = void 0),
-    (project.currentSessionAgentColor = void 0),
-    (project.currentSessionLastPrompt = void 0),
-    (project.currentSessionLeafUuid = void 0),
-    (project.currentSessionLeafTs = void 0),
-    (project.currentSessionAgentSetting = void 0),
-    (project.currentSessionMode = void 0),
-    (project.currentSessionPermissionMode = void 0),
-    (project.currentSessionIsolationLatch = void 0),
-    (project.currentSessionDevModsFolder = void 0),
-    (project.currentSessionMemoryModeStamps = []),
-    resetAgentLatches(),
-    resetAtisLatches(),
-    setConversationAtisLatch(void 0),
-    getConversationToolsUsed().clear(),
-    (project.currentSessionWorktree = void 0),
-    (project.resumedArtifactCommentMonitor = void 0),
-    (project.resumedArtifactAutoReactLedger = void 0),
-    (project.currentSessionPrNumber = void 0),
-    (project.currentSessionPrUrl = void 0),
-    (project.currentSessionPrRepository = void 0),
-    (project.currentSessionArtifactCount = void 0),
-    clearBridgeSessionFields(project),
-    (project.currentSessionHistorySuppressed = void 0),
-    n)
-  )
-    su().sessionTitleChanged.emit();
+  let project = getProject();
+  let n = project.currentSessionTitle !== undefined || project.currentSessionAiTitle !== undefined;
+  project.currentSessionTitle = undefined;
+  project.currentSessionAiTitle = undefined;
+  project.currentSessionTag = undefined;
+  project.currentSessionRelocatedCwd = undefined;
+  project.currentSessionAgentName = undefined;
+  project.currentSessionAgentColor = undefined;
+  project.currentSessionLastPrompt = undefined;
+  project.currentSessionLeafUuid = undefined;
+  project.currentSessionLeafTs = undefined;
+  project.currentSessionAgentSetting = undefined;
+  project.currentSessionMode = undefined;
+  project.currentSessionPermissionMode = undefined;
+  project.currentSessionIsolationLatch = undefined;
+  project.currentSessionDevModsFolder = undefined;
+  project.currentSessionMemoryModeStamps = [];
+  resetAgentLatches();
+  resetAtisLatches();
+  setConversationAtisLatch(undefined);
+  getConversationToolsUsed().clear();
+  project.currentSessionWorktree = undefined;
+  project.resumedArtifactCommentMonitor = undefined;
+  project.resumedArtifactAutoReactLedger = undefined;
+  project.currentSessionPrNumber = undefined;
+  project.currentSessionPrUrl = undefined;
+  project.currentSessionPrRepository = undefined;
+  project.currentSessionArtifactCount = undefined;
+  clearBridgeSessionFields(project);
+  project.currentSessionHistorySuppressed = undefined;
+  if (n) currentTranscriptStore().sessionTitleChanged.emit();
 }
+//@ chunk-e6aww6q8.js:474497-474548 facade-majority = reAppendSessionMetadata (1)
 /**
  * 把当前会话元数据（标题、tag、last-prompt 等）重新追加到转录尾部，使 lite 读取（只读头尾）也能拿到最新元数据。
  */
-//@ chunk-e6aww6q8.js:474497-474548 facade-majority = reAppendSessionMetadata (1)
 function reAppendSessionMetadata() {
-  getProject().reAppendSessionMetadata(!1, !0);
+  getProject().reAppendSessionMetadata(false, true);
 }
 //@ chunk-e6aww6q8.js:474548-474703 facade-majority
-async function reAppendSessionMetadataAfterCompaction(e) {
+async function reAppendSessionMetadataAfterCompaction(storageV5) {
   try {
-    if (isStorageV5Enabled() && e !== void 0) {
+    if (isStorageV5Enabled() && storageV5 !== undefined) {
       if (isTranscriptPersistenceDisabled()) return;
-      await getProject().reAppendSessionMetadataAsync(!1, !0, e, !0);
+      await getProject().reAppendSessionMetadataAsync(false, true, storageV5, true);
       return;
     }
-    (await flushAppendEntryQueues(), reAppendSessionMetadata());
+    await flushAppendEntryQueues();
+    reAppendSessionMetadata();
   } catch (error) {
     swallowRefusedDirectWrite(error);
   }
 }
 //@ chunk-e6aww6q8.js:474703-474768 facade-majority
 function subscribeSessionAgentNameChanged(e) {
-  return su().sessionAgentNameChanged.subscribe(e);
+  return currentTranscriptStore().sessionAgentNameChanged.subscribe(e);
 }
+//@ chunk-e6aww6q8.js:474768-475111 facade-majority = saveAgentName (0.752)
 /**
  * 追加 agent-name 记录并更新当前会话代理名。
  */
-//@ chunk-e6aww6q8.js:474768-475111 facade-majority = saveAgentName (0.752)
-async function saveAgentName(e, n, r, s = "user", h) {
-  let resolvedPath = r ?? getTranscriptPathForSession(e);
+async function saveAgentName(sessionId, agentName, fullPath, source = "user", storageV5) {
+  let resolvedPath = fullPath ?? getTranscriptPathForSession(sessionId);
   try {
-    await appendEntryToFileAsync(resolvedPath, { type: "agent-name", agentName: n, sessionId: e }, h);
+    await appendEntryToFileAsync(
+      resolvedPath,
+      {
+        type: "agent-name",
+        agentName,
+        sessionId,
+      },
+      storageV5,
+    );
   } catch (error) {
     if (isSyscallError(error))
       logForDebugging(
         `saveAgentName: transcript append failed (${getErrnoCode(error)}): ${errorMessage(error)}`,
-        { level: "error" },
+        {
+          level: "error",
+        },
       );
     else throw error;
   }
-  if (e === getSessionId()) ((getProject().currentSessionAgentName = n), su().sessionAgentNameChanged.emit());
-  logEvent("tengu_agent_name_set", { source: fromEnum(s) });
+  if (sessionId === getSessionId()) {
+    getProject().currentSessionAgentName = agentName;
+    currentTranscriptStore().sessionAgentNameChanged.emit();
+  }
+  logEvent("tengu_agent_name_set", {
+    source: fromEnum(source),
+  });
 }
+//@ chunk-e6aww6q8.js:475111-475403 facade-majority = saveAgentColor (0.845)
 /**
  * 追加 agent-color 记录，打 tengu_agent_color_set。
  */
-//@ chunk-e6aww6q8.js:475111-475403 facade-majority = saveAgentColor (0.845)
-async function saveAgentColor(e, n, r, s) {
-  let resolvedPath = r ?? getTranscriptPathForSession(e);
+async function saveAgentColor(sessionId, agentColor, fullPath, storageV5) {
+  let resolvedPath = fullPath ?? getTranscriptPathForSession(sessionId);
   try {
-    await appendEntryToFileAsync(resolvedPath, { type: "agent-color", agentColor: n, sessionId: e }, s);
+    await appendEntryToFileAsync(
+      resolvedPath,
+      {
+        type: "agent-color",
+        agentColor,
+        sessionId,
+      },
+      storageV5,
+    );
   } catch (error) {
     if (isSyscallError(error))
       logForDebugging(
         `saveAgentColor: transcript append failed (${getErrnoCode(error)}): ${errorMessage(error)}`,
-        { level: "error" },
+        {
+          level: "error",
+        },
       );
     else throw error;
   }
-  if (e === getSessionId()) getProject().currentSessionAgentColor = n;
+  if (sessionId === getSessionId()) getProject().currentSessionAgentColor = agentColor;
   logEvent("tengu_agent_color_set", {});
 }
 //@ chunk-e6aww6q8.js:475403-475453 facade-majority = saveAgentSetting (1)
@@ -8390,96 +8961,120 @@ function saveAgentSetting(agentSetting) {
 }
 //@ chunk-e6aww6q8.js:475453-475514 facade-majority
 function subscribeSessionTitleChanged(e) {
-  return su().sessionTitleChanged.subscribe(e);
+  return currentTranscriptStore().sessionTitleChanged.subscribe(e);
 }
 //@ chunk-e6aww6q8.js:475514-475588 facade-majority = cacheSessionTitle (0.562)
 function cacheSessionTitle(customTitle) {
-  ((getProject().currentSessionTitle = customTitle), su().sessionTitleChanged.emit());
+  getProject().currentSessionTitle = customTitle;
+  currentTranscriptStore().sessionTitleChanged.emit();
 }
 //@ chunk-e6aww6q8.js:475588-475665 facade-majority
-function cacheAiTitle(e) {
-  ((getProject().currentSessionAiTitle = e), su().sessionTitleChanged.emit());
+function cacheAiTitle(currentSessionAiTitle) {
+  getProject().currentSessionAiTitle = currentSessionAiTitle;
+  currentTranscriptStore().sessionTitleChanged.emit();
 }
 //@ chunk-e6aww6q8.js:475665-475748 facade-majority
-function cacheAgentName(e) {
-  ((getProject().currentSessionAgentName = e), su().sessionAgentNameChanged.emit());
+function cacheAgentName(currentSessionAgentName) {
+  getProject().currentSessionAgentName = currentSessionAgentName;
+  currentTranscriptStore().sessionAgentNameChanged.emit();
 }
 //@ chunk-e6aww6q8.js:475748-475858 facade-majority
-function titleCacheStillOn(e, n, r) {
-  let s = getCurrentSessionTitle(e),
-    h = s && sanitizeSessionTitle(s);
-  if (!h) return !0;
+function titleCacheStillOn(id, n, r) {
+  let currentSessionTitle = getCurrentSessionTitle(id);
+  let h = currentSessionTitle && sanitizeSessionTitle(currentSessionTitle);
+  if (!h) return true;
   let y = slugifySessionName(h);
-  return y === slugifySessionName(n) || (r !== void 0 && y === slugifySessionName(r));
+  return y === slugifySessionName(n) || (r !== undefined && y === slugifySessionName(r));
 }
 //@ chunk-e6aww6q8.js:475858-476066 facade-majority
 function cacheHookSessionTitle(e) {
-  if (isTeammate()) return !1;
+  if (isTeammate()) return false;
   let n = sanitizeSessionTitle(e);
-  if (!n) return !1;
-  let r = getCurrentSessionTitle(getSessionId()),
-    s = r && sanitizeSessionTitle(r);
-  if (n === s || settledYieldFor(n, s || void 0) !== void 0) return !1;
-  return (
-    logForDebugging(`Hook sessionTitle cached (${[...n].length} chars)`),
-    cacheSessionTitle(n),
-    cacheAgentName(n),
-    !0
-  );
+  if (!n) return false;
+  let currentSessionTitle = getCurrentSessionTitle(getSessionId());
+  let s = currentSessionTitle && sanitizeSessionTitle(currentSessionTitle);
+  if (n === s || settledYieldFor(n, s || undefined) !== undefined) return false;
+  logForDebugging(`Hook sessionTitle cached (${[...n].length} chars)`);
+  cacheSessionTitle(n);
+  cacheAgentName(n);
+  return true;
 }
 //@ chunk-e6aww6q8.js:476066-476358 facade-majority
-async function applyResumeHookSessionTitle(e, n, r) {
+async function applyResumeHookSessionTitle(e, n, storageV5) {
   if (!cacheHookSessionTitle(e) || !currentSessionFileIsFor(n)) return;
   if (isTranscriptPersistenceDisabled()) return;
-  let s = getProject();
+  let project = getProject();
   try {
-    await s.reAppendSessionMetadataAsync(!0, !1, r, isStorageV5Enabled() && r !== void 0);
+    await project.reAppendSessionMetadataAsync(
+      true,
+      false,
+      storageV5,
+      isStorageV5Enabled() && storageV5 !== undefined,
+    );
   } catch (error) {
     if (isSyscallError(error))
       logForDebugging(`Hook title re-append failed (${getErrnoCode(error)}): ${errorMessage(error)}`, {
         level: "error",
       });
     else logError(error);
-    reportTranscriptWriteFailure(su().writerHealth, "adopt", error, s.sessionFilePath);
+    reportTranscriptWriteFailure(
+      currentTranscriptStore().writerHealth,
+      "adopt",
+      error,
+      project.sessionFilePath,
+    );
   }
 }
+//@ chunk-e6aww6q8.js:476358-476399 facade-majority = saveMode (1)
 /**
  * 记录会话模式（mode 记录）。
  */
-//@ chunk-e6aww6q8.js:476358-476399 facade-majority = saveMode (1)
 function saveMode(mode) {
   getProject().currentSessionMode = mode;
 }
 //@ chunk-e6aww6q8.js:476399-476451 facade-majority
-function savePermissionMode(e) {
-  getProject().currentSessionPermissionMode = e;
+function savePermissionMode(currentSessionPermissionMode) {
+  getProject().currentSessionPermissionMode = currentSessionPermissionMode;
 }
 //@ chunk-e6aww6q8.js:476451-476468 facade-majority
 function saveAutoMemorySessionSwitch(e) {}
 //@ chunk-e6aww6q8.js:476468-476578 facade-majority
 function queueSessionMetadataEntry(e) {
-  let n = getProject();
-  if (n.sessionFilePath) n.appendEntry(e, void 0, void 0, n.exitReStampSource()).catch(logError);
+  let project = getProject();
+  if (project.sessionFilePath)
+    project.appendEntry(e, undefined, undefined, project.exitReStampSource()).catch(logError);
 }
 //@ chunk-e6aww6q8.js:476578-476978 facade-majority
-function saveIsolationLatch(e, n) {
-  let r = getProject();
-  if (r.currentSessionIsolationLatch === e) return;
-  if (((r.currentSessionIsolationLatch = e), r.sessionFilePath)) {
-    let sessionFilePath = r.sessionFilePath;
+function saveIsolationLatch(e, storageV5) {
+  let project = getProject();
+  if (project.currentSessionIsolationLatch === e) return;
+  project.currentSessionIsolationLatch = e;
+  if (project.sessionFilePath) {
+    let sessionFilePath = project.sessionFilePath;
     appendEntryToFileAsync(
       sessionFilePath,
-      { type: "isolation-latch", side: e, sessionId: getSessionId() },
-      n,
-    ).catch((h) => {
-      let y = getErrnoCode(h);
-      if (isSyscallError(h))
+      {
+        type: "isolation-latch",
+        side: e,
+        sessionId: getSessionId(),
+      },
+      storageV5,
+    ).catch((error) => {
+      let errnoCode = getErrnoCode(error);
+      if (isSyscallError(error))
         logForDebugging(
-          `saveIsolationLatch: failed to append isolation-latch entry to ${sessionFilePath} (${y}): ${errorMessage(h)}`,
-          { level: "error" },
+          `saveIsolationLatch: failed to append isolation-latch entry to ${sessionFilePath} (${errnoCode}): ${errorMessage(error)}`,
+          {
+            level: "error",
+          },
         );
-      else logError(h);
-      reportTranscriptWriteFailure(su().writerHealth, "isolation_latch", h, sessionFilePath);
+      else logError(error);
+      reportTranscriptWriteFailure(
+        currentTranscriptStore().writerHealth,
+        "isolation_latch",
+        error,
+        sessionFilePath,
+      );
     });
   }
 }
@@ -8488,23 +9083,30 @@ function getCurrentSessionIsolationLatch() {
   return getProject().currentSessionIsolationLatch;
 }
 //@ chunk-e6aww6q8.js:477034-477404 facade-majority
-function saveDevModsFolder(e, n) {
-  let r = getProject();
-  if (r.currentSessionDevModsFolder === e) return;
-  if (((r.currentSessionDevModsFolder = e), r.sessionFilePath)) {
-    let sessionFilePath = r.sessionFilePath;
+function saveDevModsFolder(e, storageV5) {
+  let project = getProject();
+  if (project.currentSessionDevModsFolder === e) return;
+  project.currentSessionDevModsFolder = e;
+  if (project.sessionFilePath) {
+    let sessionFilePath = project.sessionFilePath;
     appendEntryToFileAsync(
       sessionFilePath,
-      { type: "dev-mods", folder: e, sessionId: getSessionId() },
-      n,
-    ).catch((h) => {
-      if (isSyscallError(h))
+      {
+        type: "dev-mods",
+        folder: e,
+        sessionId: getSessionId(),
+      },
+      storageV5,
+    ).catch((error) => {
+      if (isSyscallError(error))
         logForDebugging(
-          `saveDevModsFolder: failed to append dev-mods entry to ${sessionFilePath} (${getErrnoCode(h)}): ${errorMessage(h)}`,
-          { level: "error" },
+          `saveDevModsFolder: failed to append dev-mods entry to ${sessionFilePath} (${getErrnoCode(error)}): ${errorMessage(error)}`,
+          {
+            level: "error",
+          },
         );
-      else logError(h);
-      reportTranscriptWriteFailure(su().writerHealth, "dev_mods", h, sessionFilePath);
+      else logError(error);
+      reportTranscriptWriteFailure(currentTranscriptStore().writerHealth, "dev_mods", error, sessionFilePath);
     });
   }
 }
@@ -8513,55 +9115,65 @@ function getCurrentSessionDevModsFolder() {
   return getProject().currentSessionDevModsFolder;
 }
 //@ chunk-e6aww6q8.js:477459-478175 facade-majority
-function saveMemoryMode(
-  {
-    mode: mode,
-    afterUuid: afterUuid,
-    reason: reason,
-    account: account,
-    accountChoice: accountChoice,
-    timestamp: timestamp,
-  },
-  S,
-) {
-  let w = getProject(),
-    L = {
-      mode: mode,
-      afterUuid: afterUuid,
-      timestamp: timestamp ?? new Date().toISOString(),
-      ...(reason !== void 0 && { reason: reason }),
-      ...(account !== void 0 && { account: account }),
-      ...(accountChoice !== void 0 && { accountChoice: accountChoice }),
-      written: !1,
-    };
-  if ((w.currentSessionMemoryModeStamps.push(L), w.sessionFilePath)) {
-    let sessionFilePath = w.sessionFilePath;
+function saveMemoryMode({ mode, afterUuid, reason, account, accountChoice, timestamp }, storageV5) {
+  let project = getProject();
+  let L = {
+    mode,
+    afterUuid,
+    timestamp: timestamp ?? new Date().toISOString(),
+    ...(reason !== undefined && {
+      reason,
+    }),
+    ...(account !== undefined && {
+      account,
+    }),
+    ...(accountChoice !== undefined && {
+      accountChoice,
+    }),
+    written: false,
+  };
+  project.currentSessionMemoryModeStamps.push(L);
+  if (project.sessionFilePath) {
+    let sessionFilePath = project.sessionFilePath;
     appendEntryToFileAsync(
       sessionFilePath,
       {
         type: "memory-mode",
-        mode: mode,
-        afterUuid: afterUuid,
+        mode,
+        afterUuid,
         timestamp: L.timestamp,
-        ...(reason !== void 0 && { reason: reason }),
-        ...(account !== void 0 && { account: account }),
-        ...(accountChoice !== void 0 && { accountChoice: accountChoice }),
+        ...(reason !== undefined && {
+          reason,
+        }),
+        ...(account !== undefined && {
+          account,
+        }),
+        ...(accountChoice !== undefined && {
+          accountChoice,
+        }),
         sessionId: getSessionId(),
       },
-      S,
+      storageV5,
     )
       .then(() => {
-        L.written = !0;
+        L.written = true;
       })
-      .catch((q) => {
-        let Z = getErrnoCode(q);
-        if (isSyscallError(q))
+      .catch((error) => {
+        let errnoCode = getErrnoCode(error);
+        if (isSyscallError(error))
           logForDebugging(
-            `saveMemoryMode: failed to append memory-mode entry to ${sessionFilePath} (${Z}): ${errorMessage(q)}`,
-            { level: "error" },
+            `saveMemoryMode: failed to append memory-mode entry to ${sessionFilePath} (${errnoCode}): ${errorMessage(error)}`,
+            {
+              level: "error",
+            },
           );
-        else logError(q);
-        reportTranscriptWriteFailure(su().writerHealth, "memory_mode", q, sessionFilePath);
+        else logError(error);
+        reportTranscriptWriteFailure(
+          currentTranscriptStore().writerHealth,
+          "memory_mode",
+          error,
+          sessionFilePath,
+        );
       });
   }
 }
@@ -8571,31 +9183,39 @@ function getCurrentSessionMemoryModeStamps() {
 }
 //@ chunk-e6aww6q8.js:478233-478273 layout
 function resetAgentLatches() {
-  if (getRestoredMemoryPause()) (setRestoredMemoryPause(!1), setMemoryToggledOff(!1));
+  if (getRestoredMemoryPause()) {
+    setRestoredMemoryPause(false);
+    setMemoryToggledOff(false);
+  }
 }
 //@ chunk-e6aww6q8.js:478273-478313 layout
 function resetAtisLatches() {
-  if (getRestoredAutoMemoryOff()) (setRestoredAutoMemoryOff(!1), setAutoMemoryOffThisSession(!1));
+  if (getRestoredAutoMemoryOff()) {
+    setRestoredAutoMemoryOff(false);
+    setAutoMemoryOffThisSession(false);
+  }
 }
 //@ chunk-e6aww6q8.js:478313-478336 facade-majority
 function memoryPauseToggledByPerson() {
-  setRestoredMemoryPause(!1);
+  setRestoredMemoryPause(false);
 }
 //@ chunk-e6aww6q8.js:478336-478402 facade-majority = recordContextCollapseCommit (1)
-async function recordArtifactCommentMonitor(e, n) {
-  await getProject().appendEntry(e, void 0, void 0, n);
+async function recordArtifactCommentMonitor(entry, storageV5) {
+  await getProject().appendEntry(entry, undefined, undefined, storageV5);
 }
 //@ chunk-e6aww6q8.js:478402-478510 facade-majority
 function takeResumedArtifactCommentMonitor() {
-  let e = getProject(),
-    resumedArtifactCommentMonitor = e.resumedArtifactCommentMonitor;
-  return ((e.resumedArtifactCommentMonitor = void 0), resumedArtifactCommentMonitor);
+  let project = getProject();
+  let resumedArtifactCommentMonitor = project.resumedArtifactCommentMonitor;
+  project.resumedArtifactCommentMonitor = undefined;
+  return resumedArtifactCommentMonitor;
 }
 //@ chunk-e6aww6q8.js:478510-478620 facade-majority
 function takeResumedArtifactAutoReactLedger() {
-  let e = getProject(),
-    resumedArtifactAutoReactLedger = e.resumedArtifactAutoReactLedger;
-  return ((e.resumedArtifactAutoReactLedger = void 0), resumedArtifactAutoReactLedger);
+  let project = getProject();
+  let resumedArtifactAutoReactLedger = project.resumedArtifactAutoReactLedger;
+  project.resumedArtifactAutoReactLedger = undefined;
+  return resumedArtifactAutoReactLedger;
 }
 //@ chunk-e6aww6q8.js:478620-478678 facade-majority
 function peekResumedArtifactAutoReactLedger() {
@@ -8604,210 +9224,216 @@ function peekResumedArtifactAutoReactLedger() {
 //@ chunk-e6aww6q8.js:478678-478689 facade-majority
 var UNLATCHED_RESUMED_ATIS = "";
 //@ chunk-e6aww6q8.js:478689-478728 layout
-function getOrEmptyString(e, n) {
-  return e.get(n) ?? UNLATCHED_RESUMED_ATIS;
+function getOrEmptyString(atisLatches, sessionId) {
+  return atisLatches.get(sessionId) ?? UNLATCHED_RESUMED_ATIS;
 }
 //@ chunk-e6aww6q8.js:478728-478752 facade-majority
 var worktreeStateSignals = new HostScoped(() => createSignal());
+//@ chunk-e6aww6q8.js:478752-479396 facade-majority = saveWorktreeState (0.741)
 /**
  * 追加 worktree-state 记录（会话所在 worktree），resume 时据此恢复或退出 worktree。
  */
-//@ chunk-e6aww6q8.js:478752-479396 facade-majority = saveWorktreeState (0.741)
-function saveWorktreeState(e, n) {
-  let stripped = e
-      ? {
-          originalCwd: e.originalCwd,
-          preEnterOriginalCwd: e.preEnterOriginalCwd,
-          worktreePath: e.worktreePath,
-          worktreeName: e.worktreeName,
-          worktreeBranch: e.worktreeBranch,
-          originalBranch: e.originalBranch,
-          originalHeadCommit: e.originalHeadCommit,
-          sessionId: e.sessionId,
-          tmuxSessionName: e.tmuxSessionName,
-          hookBased: e.hookBased,
-          enteredExisting: e.enteredExisting,
-          madeElsewhere: e.madeElsewhere,
-        }
-      : null,
-    project = getProject();
-  if (
-    ((project.currentSessionWorktree = stripped),
-    worktreeStateSignals.of(getRootSession().host).emit(stripped),
-    project.sessionFilePath)
-  ) {
+function saveWorktreeState(worktreeSession, storageV5) {
+  let stripped = worktreeSession
+    ? {
+        originalCwd: worktreeSession.originalCwd,
+        preEnterOriginalCwd: worktreeSession.preEnterOriginalCwd,
+        worktreePath: worktreeSession.worktreePath,
+        worktreeName: worktreeSession.worktreeName,
+        worktreeBranch: worktreeSession.worktreeBranch,
+        originalBranch: worktreeSession.originalBranch,
+        originalHeadCommit: worktreeSession.originalHeadCommit,
+        sessionId: worktreeSession.sessionId,
+        tmuxSessionName: worktreeSession.tmuxSessionName,
+        hookBased: worktreeSession.hookBased,
+        enteredExisting: worktreeSession.enteredExisting,
+        madeElsewhere: worktreeSession.madeElsewhere,
+      }
+    : null;
+  let project = getProject();
+  project.currentSessionWorktree = stripped;
+  worktreeStateSignals.of(getRootSession().host).emit(stripped);
+  if (project.sessionFilePath) {
     let sessionFilePath = project.sessionFilePath;
     appendEntryToFileAsync(
       sessionFilePath,
-      { type: "worktree-state", worktreeSession: stripped, sessionId: getSessionId() },
-      n,
-    ).catch((y) => {
-      logForDebugging(`saveWorktreeState: transcript append failed: ${errorMessage(y)}`);
+      {
+        type: "worktree-state",
+        worktreeSession: stripped,
+        sessionId: getSessionId(),
+      },
+      storageV5,
+    ).catch((error) => {
+      logForDebugging(`saveWorktreeState: transcript append failed: ${errorMessage(error)}`);
     });
   }
 }
+//@ chunk-e6aww6q8.js:479396-479477 facade-majority = getSessionIdFromLog (0)
 /**
  * 从日志对象取 sessionId（最后一条消息的 sessionId 或日志自身）。
  */
-//@ chunk-e6aww6q8.js:479396-479477 facade-majority = getSessionIdFromLog (0)
 function getSessionIdFromLog(log) {
   if (log.sessionId) return log.sessionId;
   return log.messages[0]?.sessionId;
 }
 //@ chunk-e6aww6q8.js:479477-479544 facade-majority
 function isLiteLog(log) {
-  return log.messages.length === 0 && log.sessionId !== void 0;
+  return log.messages.length === 0 && log.sessionId !== undefined;
 }
+//@ chunk-e6aww6q8.js:479544-482685 facade-majority = loadFullLog (0.543)
 /**
  * 把 lite 日志（只读了头尾元数据）补全为完整日志：读取整份转录并建对话链。
  */
-//@ chunk-e6aww6q8.js:479544-482685 facade-majority = loadFullLog (0.543)
-async function loadFullLog(e, n) {
-  if (!isLiteLog(e)) return e;
-  let sessionFile = e.fullPath;
-  if (!sessionFile) return e;
+async function loadFullLog(log, n) {
+  if (!isLiteLog(log)) return log;
+  let sessionFile = log.fullPath;
+  if (!sessionFile) return log;
   try {
-    let s = getTranscriptStorageKey(sessionFile, n?.storageV5),
-      h = await loadTranscriptFile(sessionFile, s && { storageV5: s }),
-      {
-        messages: messages,
-        summaries: summaries,
-        customTitles: customTitles,
-        endedSessions: endedSessions,
-        aiTitles: aiTitles,
-        tags: tags,
-        relocatedCwds: relocatedCwds,
-        agentNames: agentNames,
-        agentColors: agentColors,
-        agentSettings: agentSettings,
-        prNumbers: prNumbers,
-        prUrls: prUrls,
-        prRepositories: prRepositories,
-        bridgeSessionIds: bridgeSessionIds,
-        bridgeLastSeqs: bridgeLastSeqs,
-        bridgeDialogKindsBySession: bridgeDialogKindsBySession,
-        bridgeSessionGroupingIds: bridgeSessionGroupingIds,
-        bridgeNoBackfill: bridgeNoBackfill,
-        bridgeOwnerAccountUuids: bridgeOwnerAccountUuids,
-        bridgeOwnerOrganizationUuids: bridgeOwnerOrganizationUuids,
-        historySuppressed: historySuppressed,
-        modes: modes,
-        permissionModes: permissionModes,
-        isolationLatches: isolationLatches,
-        devModsFolders: devModsFolders,
-        memoryModeStamps: memoryModeStamps,
-        atisLatches: atisLatches,
-        toolsUsedLists: toolsUsedLists,
-        worktreeStates: worktreeStates,
-        artifactCommentMonitors: artifactCommentMonitors,
-        artifactAutoReactLedgers: artifactAutoReactLedgers,
-        costStates: costStates,
-        fileHistorySnapshots: fileHistorySnapshots,
-        fileHistoryDeltas: fileHistoryDeltas,
-        attributionSnapshots: attributionSnapshots,
-        contentReplacements: contentReplacements,
-        leafUuids: leafUuids,
-        clearedToEmpty: clearedToEmpty,
-      } = h;
-    if (messages.size === 0) return e;
-    if (e.sessionId !== void 0) primeSessionMessagesCache(e.sessionId, messages.keys());
+    let transcriptStorageKey = getTranscriptStorageKey(sessionFile, n?.storageV5);
+    let transcriptFile = await loadTranscriptFile(
+      sessionFile,
+      transcriptStorageKey && {
+        storageV5: transcriptStorageKey,
+      },
+    );
+    let {
+      messages,
+      summaries,
+      customTitles,
+      endedSessions,
+      aiTitles,
+      tags,
+      relocatedCwds,
+      agentNames,
+      agentColors,
+      agentSettings,
+      prNumbers,
+      prUrls,
+      prRepositories,
+      bridgeSessionIds,
+      bridgeLastSeqs,
+      bridgeDialogKindsBySession,
+      bridgeSessionGroupingIds,
+      bridgeNoBackfill,
+      bridgeOwnerAccountUuids,
+      bridgeOwnerOrganizationUuids,
+      historySuppressed,
+      modes,
+      permissionModes,
+      isolationLatches,
+      devModsFolders,
+      memoryModeStamps,
+      atisLatches,
+      toolsUsedLists,
+      worktreeStates,
+      artifactCommentMonitors,
+      artifactAutoReactLedgers,
+      costStates,
+      fileHistorySnapshots,
+      fileHistoryDeltas,
+      attributionSnapshots,
+      contentReplacements,
+      leafUuids,
+      clearedToEmpty,
+    } = transcriptFile;
+    if (messages.size === 0) return log;
+    if (log.sessionId !== undefined) primeSessionMessagesCache(log.sessionId, messages.keys());
     let mostRecentLeaf = findLatestMessage(
       messages.values(),
       (msg) => leafUuids.has(msg.uuid) && (msg.type === "user" || msg.type === "assistant"),
     );
     if (!mostRecentLeaf) {
-      if (clearedToEmpty) return buildLiteLogFromMessages(h, e, e.sessionId);
-      return e;
+      if (clearedToEmpty) return buildLiteLogFromMessages(transcriptFile, log, log.sessionId);
+      return log;
     }
     let transcript = buildConversationChain(messages, mostRecentLeaf);
     warnIfTranscriptUnchained(messages, transcript, mostRecentLeaf.sessionId);
     let sessionId = mostRecentLeaf.sessionId;
     return {
-      ...e,
-      rewindAnchorUuid: h.rewindAnchorUuid,
+      ...log,
+      rewindAnchorUuid: transcriptFile.rewindAnchorUuid,
       messages: removeExtraFields(transcript),
-      firstPromptShown: void 0,
+      firstPromptShown: undefined,
       ...getFirstPromptInfo(transcript),
       messageCount: countVisibleMessages(transcript),
-      summary: mostRecentLeaf ? summaries.get(mostRecentLeaf.uuid) : e.summary,
-      customTitle: sessionId ? customTitles.get(sessionId) : e.customTitle,
-      ...withEndedByModel({}, sessionId ? endedSessions.has(sessionId) : getEndedByModel(e)),
-      aiTitle: sessionId ? aiTitles.get(sessionId) : e.aiTitle,
-      tag: sessionId ? tags.get(sessionId) : e.tag,
-      relocatedCwd: sessionId ? relocatedCwds.get(sessionId) : e.relocatedCwd,
-      agentName: sessionId ? agentNames.get(sessionId) : e.agentName,
-      agentColor: sessionId ? agentColors.get(sessionId) : e.agentColor,
-      agentSetting: sessionId ? agentSettings.get(sessionId) : e.agentSetting,
-      mode: sessionId ? modes.get(sessionId) : e.mode,
-      permissionMode: sessionId ? permissionModes.get(sessionId) : e.permissionMode,
-      isolationLatch: sessionId ? isolationLatches.get(sessionId) : e.isolationLatch,
-      devModsFolder: sessionId ? devModsFolders?.get(sessionId) : e.devModsFolder,
-      memoryModeStamps: sessionId ? (memoryModeStamps.get(sessionId) ?? []) : e.memoryModeStamps,
-      atisLatch: sessionId ? getOrEmptyString(atisLatches, sessionId) : e.atisLatch,
-      toolsUsed: sessionId ? toolsUsedLists?.get(sessionId) : e.toolsUsed,
+      summary: mostRecentLeaf ? summaries.get(mostRecentLeaf.uuid) : log.summary,
+      customTitle: sessionId ? customTitles.get(sessionId) : log.customTitle,
+      ...withEndedByModel({}, sessionId ? endedSessions.has(sessionId) : getEndedByModel(log)),
+      aiTitle: sessionId ? aiTitles.get(sessionId) : log.aiTitle,
+      tag: sessionId ? tags.get(sessionId) : log.tag,
+      relocatedCwd: sessionId ? relocatedCwds.get(sessionId) : log.relocatedCwd,
+      agentName: sessionId ? agentNames.get(sessionId) : log.agentName,
+      agentColor: sessionId ? agentColors.get(sessionId) : log.agentColor,
+      agentSetting: sessionId ? agentSettings.get(sessionId) : log.agentSetting,
+      mode: sessionId ? modes.get(sessionId) : log.mode,
+      permissionMode: sessionId ? permissionModes.get(sessionId) : log.permissionMode,
+      isolationLatch: sessionId ? isolationLatches.get(sessionId) : log.isolationLatch,
+      devModsFolder: sessionId ? devModsFolders?.get(sessionId) : log.devModsFolder,
+      memoryModeStamps: sessionId ? (memoryModeStamps.get(sessionId) ?? []) : log.memoryModeStamps,
+      atisLatch: sessionId ? getOrEmptyString(atisLatches, sessionId) : log.atisLatch,
+      toolsUsed: sessionId ? toolsUsedLists?.get(sessionId) : log.toolsUsed,
       worktreeSession:
-        sessionId && worktreeStates.has(sessionId) ? worktreeStates.get(sessionId) : e.worktreeSession,
-      artifactCommentMonitor: sessionId ? artifactCommentMonitors.get(sessionId) : e.artifactCommentMonitor,
+        sessionId && worktreeStates.has(sessionId) ? worktreeStates.get(sessionId) : log.worktreeSession,
+      artifactCommentMonitor: sessionId ? artifactCommentMonitors.get(sessionId) : log.artifactCommentMonitor,
       artifactAutoReactLedger: sessionId
         ? artifactAutoReactLedgers.get(sessionId)
-        : e.artifactAutoReactLedger,
-      costState: sessionId ? costStates.get(sessionId) : e.costState,
-      prNumber: sessionId ? prNumbers.get(sessionId) : e.prNumber,
-      prUrl: sessionId ? prUrls.get(sessionId) : e.prUrl,
-      prRepository: sessionId ? prRepositories.get(sessionId) : e.prRepository,
-      bridgeSessionId: sessionId ? bridgeSessionIds.get(sessionId) : e.bridgeSessionId,
-      bridgeLastSeq: sessionId ? bridgeLastSeqs.get(sessionId) : e.bridgeLastSeq,
-      bridgeDialogKinds: sessionId ? bridgeDialogKindsBySession.get(sessionId) : e.bridgeDialogKinds,
+        : log.artifactAutoReactLedger,
+      costState: sessionId ? costStates.get(sessionId) : log.costState,
+      prNumber: sessionId ? prNumbers.get(sessionId) : log.prNumber,
+      prUrl: sessionId ? prUrls.get(sessionId) : log.prUrl,
+      prRepository: sessionId ? prRepositories.get(sessionId) : log.prRepository,
+      bridgeSessionId: sessionId ? bridgeSessionIds.get(sessionId) : log.bridgeSessionId,
+      bridgeLastSeq: sessionId ? bridgeLastSeqs.get(sessionId) : log.bridgeLastSeq,
+      bridgeDialogKinds: sessionId ? bridgeDialogKindsBySession.get(sessionId) : log.bridgeDialogKinds,
       bridgeSessionGroupingId: sessionId
         ? bridgeSessionGroupingIds.get(sessionId)
-        : e.bridgeSessionGroupingId,
-      bridgeNoHistoryBackfill: sessionId ? bridgeNoBackfill.get(sessionId) : e.bridgeNoHistoryBackfill,
-      bridgeOwnerAccountUuid: sessionId ? bridgeOwnerAccountUuids.get(sessionId) : e.bridgeOwnerAccountUuid,
+        : log.bridgeSessionGroupingId,
+      bridgeNoHistoryBackfill: sessionId ? bridgeNoBackfill.get(sessionId) : log.bridgeNoHistoryBackfill,
+      bridgeOwnerAccountUuid: sessionId ? bridgeOwnerAccountUuids.get(sessionId) : log.bridgeOwnerAccountUuid,
       bridgeOwnerOrganizationUuid: sessionId
         ? bridgeOwnerOrganizationUuids.get(sessionId)
-        : e.bridgeOwnerOrganizationUuid,
+        : log.bridgeOwnerOrganizationUuid,
       sessionHistorySuppressed: sessionId
         ? historySuppressed.has(sessionId)
-          ? !0
-          : void 0
-        : e.sessionHistorySuppressed,
-      gitBranch: mostRecentLeaf?.gitBranch ?? e.gitBranch,
-      isSidechain: transcript[0]?.isSidechain ?? e.isSidechain,
-      teamName: transcript[0]?.teamName ?? e.teamName,
-      sessionKind: transcript[0]?.sessionKind ?? e.sessionKind,
-      leafUuid: mostRecentLeaf?.uuid ?? e.leafUuid,
+          ? true
+          : undefined
+        : log.sessionHistorySuppressed,
+      gitBranch: mostRecentLeaf?.gitBranch ?? log.gitBranch,
+      isSidechain: transcript[0]?.isSidechain ?? log.isSidechain,
+      teamName: transcript[0]?.teamName ?? log.teamName,
+      sessionKind: transcript[0]?.sessionKind ?? log.sessionKind,
+      leafUuid: mostRecentLeaf?.uuid ?? log.leafUuid,
       fileHistorySnapshots: buildFileHistorySnapshots(fileHistorySnapshots, fileHistoryDeltas, transcript),
       attributionSnapshots: buildAttributionSnapshotChain(attributionSnapshots, transcript),
-      contentReplacements: sessionId ? (contentReplacements.get(sessionId) ?? []) : e.contentReplacements,
+      contentReplacements: sessionId ? (contentReplacements.get(sessionId) ?? []) : log.contentReplacements,
       fileSnapshots: getFileSnapshotMessages(messages),
     };
   } catch (error) {
-    if (Qoe(error))
-      (logForDebugging(
-        `loadFullLog: transcript unreadable (${getErrnoCode(error)}): ${errorMessage(error)}`,
-        { level: "error" },
-      ),
-        n?.onTranscriptUnreadable?.(sanitizedErrnoLowerForTelemetry(error)));
-    else logError(error);
-    return e;
+    if (isTranscriptLoadError(error)) {
+      logForDebugging(`loadFullLog: transcript unreadable (${getErrnoCode(error)}): ${errorMessage(error)}`, {
+        level: "error",
+      });
+      n?.onTranscriptUnreadable?.(sanitizedErrnoLowerForTelemetry(error));
+    } else logError(error);
+    return log;
   }
 }
+//@ chunk-e6aww6q8.js:482685-483199 facade-majority = searchSessionsByCustomTitle (0.913)
 /**
  * 按自定义标题搜索会话（--resume <标题>）。
  */
-//@ chunk-e6aww6q8.js:482685-483199 facade-majority = searchSessionsByCustomTitle (0.913)
-async function searchSessionsByCustomTitle(e, n, r) {
-  let { limit: limit, exact: exact } = n || {},
-    worktreePaths = await getWorktreePaths(getOriginalCwd()),
-    S = await getStatOnlyLogsForWorktrees(worktreePaths, void 0, r),
-    { logs: logs } = await enrichLogs(S, 0, S.length, r),
-    normalizedQuery = e.toLowerCase().trim(),
-    matchingLogs = logs.filter((log) => {
-      let title = (log.customTitle ?? log.aiTitle)?.toLowerCase().trim();
-      if (!title) return !1;
-      return exact ? title === normalizedQuery : title.includes(normalizedQuery);
-    }),
-    sessionIdToLog = new Map();
+async function searchSessionsByCustomTitle(query, options, storageV5) {
+  let { limit, exact } = options || {};
+  let worktreePaths = await getWorktreePaths(getOriginalCwd());
+  let allStatLogs = await getStatOnlyLogsForWorktrees(worktreePaths, undefined, storageV5);
+  let { logs } = await enrichLogs(allStatLogs, 0, allStatLogs.length, storageV5);
+  let normalizedQuery = query.toLowerCase().trim();
+  let matchingLogs = logs.filter((log) => {
+    let title = (log.customTitle ?? log.aiTitle)?.toLowerCase().trim();
+    if (!title) return false;
+    return exact ? title === normalizedQuery : title.includes(normalizedQuery);
+  });
+  let sessionIdToLog = new Map();
   for (let log of matchingLogs) {
     let sessionId = getSessionIdFromLog(log);
     if (sessionId) {
@@ -8816,30 +9442,30 @@ async function searchSessionsByCustomTitle(e, n, r) {
     }
   }
   let deduplicated = Array.from(sessionIdToLog.values());
-  if ((deduplicated.sort((Se, ke) => ke.modified.getTime() - Se.modified.getTime()), limit))
-    return deduplicated.slice(0, limit);
+  deduplicated.sort((Se, ke) => ke.modified.getTime() - Se.modified.getTime());
+  if (limit) return deduplicated.slice(0, limit);
   return deduplicated;
 }
 //@ chunk-e6aww6q8.js:483199-483503 layout = hasPrefix (1)
 function hasPrefix_2(src, prefix, at, end) {
-  let L = end[0],
-    G = end.length,
-    q = 0,
-    Z = !1,
-    Se = !1;
+  let L = end[0];
+  let G = end.length;
+  let q = 0;
+  let Z = false;
+  let Se = false;
   for (let ke = prefix; ke < at; ke++) {
     let we = src[ke];
     if (Se) {
-      Se = !1;
+      Se = false;
       continue;
     }
     if (Z) {
-      if (we === 92) Se = !0;
-      else if (we === 34) Z = !1;
+      if (we === 92) Se = true;
+      else if (we === 34) Z = false;
       continue;
     }
     if (q === 1 && we === L && ke + G <= at && src.compare(end, 0, G, ke, ke + G) === 0) return ke;
-    if (we === 34) Z = !0;
+    if (we === 34) Z = true;
     else if (we === 123) q++;
     else if (we === 125) q--;
   }
@@ -8847,128 +9473,144 @@ function hasPrefix_2(src, prefix, at, end) {
 }
 //@ chunk-e6aww6q8.js:483503-483764 file-local
 function pickDepthOneUuidCandidate(buf, lineStart, candidates) {
-  let w = 0,
-    L = !1,
-    G = !1,
-    q = 0;
-  for (let Z = lineStart; q < candidates.length; Z++) {
-    if (Z === candidates[q]) {
-      if (w === 1 && !L) return candidates[q];
+  let w = 0;
+  let inString = false;
+  let escapeNext = false;
+  let q = 0;
+  for (let i = lineStart; q < candidates.length; i++) {
+    if (i === candidates[q]) {
+      if (w === 1 && !inString) return candidates[q];
       q++;
     }
-    let Se = buf[Z];
-    if (G) G = !1;
-    else if (L) {
-      if (Se === 92) G = !0;
-      else if (Se === 34) L = !1;
-    } else if (Se === 34) L = !0;
+    let Se = buf[i];
+    if (escapeNext) escapeNext = false;
+    else if (inString) {
+      if (Se === 92) escapeNext = true;
+      else if (Se === 34) inString = false;
+    } else if (Se === 34) inString = true;
     else if (Se === 123) w++;
     else if (Se === 125) w--;
   }
   return candidates.at(-1);
 }
+//@ chunk-e6aww6q8.js:483764-485959 fingerprint = walkChainBeforeParse (0.912)
 /**
  * 不解析 JSON，直接在字节缓冲中按 "parentUuid"/"uuid" 前缀走链，快速定位主链所需行。
  */
-//@ chunk-e6aww6q8.js:483764-485959 fingerprint = walkChainBeforeParse (0.912)
 function walkChainBeforeParse(buf) {
-  let PARENT_PREFIX = Buffer.from('{"parentUuid":'),
-    UUID_KEY = Buffer.from('"uuid":"'),
-    SIDECHAIN_TRUE = Buffer.from('"isSidechain":true'),
-    UUID_LEN = 36,
-    TS_SUFFIX = Buffer.from('","timestamp":"'),
-    TS_SUFFIX_LEN = TS_SUFFIX.length,
-    PREFIX_LEN = PARENT_PREFIX.length,
-    KEY_LEN = UUID_KEY.length,
-    Se = [],
-    ke = [],
-    uuidToSlot = new Map(),
-    Ee = 0,
-    len = buf.length;
-  while (Ee < len) {
-    let nl = buf.indexOf(10, Ee),
-      qt = nl === -1 ? len : nl + 1;
+  let PARENT_PREFIX = Buffer.from('{"parentUuid":');
+  let UUID_KEY = Buffer.from('"uuid":"');
+  let SIDECHAIN_TRUE = Buffer.from('"isSidechain":true');
+  let UUID_LEN = 36;
+  let TS_SUFFIX = Buffer.from('","timestamp":"');
+  let TS_SUFFIX_LEN = TS_SUFFIX.length;
+  let PREFIX_LEN = PARENT_PREFIX.length;
+  let KEY_LEN = UUID_KEY.length;
+  let msgIdx = [];
+  let metaRanges = [];
+  let uuidToSlot = new Map();
+  let pos = 0;
+  let len = buf.length;
+  while (pos < len) {
+    let nl = buf.indexOf(10, pos);
+    let lineEnd = nl === -1 ? len : nl + 1;
     if (
-      qt - Ee > PREFIX_LEN &&
-      buf[Ee] === 123 &&
-      buf.compare(PARENT_PREFIX, 0, PREFIX_LEN, Ee, Ee + PREFIX_LEN) === 0
+      lineEnd - pos > PREFIX_LEN &&
+      buf[pos] === 123 &&
+      buf.compare(PARENT_PREFIX, 0, PREFIX_LEN, pos, pos + PREFIX_LEN) === 0
     ) {
-      let Zt = buf[Ee + PREFIX_LEN] === 34 ? Ee + PREFIX_LEN + 1 : -1,
-        firstAny = -1,
-        suffix0 = -1,
-        suffixN,
-        hn = Ee;
+      let parentStart = buf[pos + PREFIX_LEN] === 34 ? pos + PREFIX_LEN + 1 : -1;
+      let firstAny = -1;
+      let suffix0 = -1;
+      let suffixN;
+      let from = pos;
       for (;;) {
-        let next = buf.indexOf(UUID_KEY, hn);
-        if (next < 0 || next >= qt) break;
+        let next = buf.indexOf(UUID_KEY, from);
+        if (next < 0 || next >= lineEnd) break;
         if (firstAny < 0) firstAny = next;
-        let Kn = next + KEY_LEN + 36;
+        let after = next + KEY_LEN + 36;
         if (
-          Kn + TS_SUFFIX_LEN <= qt &&
-          buf.compare(TS_SUFFIX, 0, TS_SUFFIX_LEN, Kn, Kn + TS_SUFFIX_LEN) === 0
+          after + TS_SUFFIX_LEN <= lineEnd &&
+          buf.compare(TS_SUFFIX, 0, TS_SUFFIX_LEN, after, after + TS_SUFFIX_LEN) === 0
         )
           if (suffix0 < 0) suffix0 = next;
           else (suffixN ??= [suffix0]).push(next);
-        hn = next + KEY_LEN;
+        from = next + KEY_LEN;
       }
-      let ho = suffixN ? pickDepthOneUuidCandidate(buf, Ee, suffixN) : suffix0 >= 0 ? suffix0 : firstAny;
+      let ho = suffixN ? pickDepthOneUuidCandidate(buf, pos, suffixN) : suffix0 >= 0 ? suffix0 : firstAny;
       if (ho >= 0) {
-        let yn = ho + KEY_LEN,
-          uuid = buf.toString("latin1", yn, yn + 36);
-        (uuidToSlot.set(uuid, Se.length), Se.push(Ee, qt, Zt));
-      } else ke.push(Ee, qt);
-    } else ke.push(Ee, qt);
-    Ee = qt;
+        let uuidStart = ho + KEY_LEN;
+        let uuid = buf.toString("latin1", uuidStart, uuidStart + 36);
+        uuidToSlot.set(uuid, msgIdx.length);
+        msgIdx.push(pos, lineEnd, parentStart);
+      } else metaRanges.push(pos, lineEnd);
+    } else metaRanges.push(pos, lineEnd);
+    pos = lineEnd;
   }
   let leafSlot = -1;
-  for (let Yt = Se.length - 3; Yt >= 0; Yt -= 3) {
-    let sc = buf.indexOf(SIDECHAIN_TRUE, Se[Yt]);
-    if (sc === -1 || sc >= Se[Yt + 1]) {
-      leafSlot = Yt;
+  for (let i = msgIdx.length - 3; i >= 0; i -= 3) {
+    let sc = buf.indexOf(SIDECHAIN_TRUE, msgIdx[i]);
+    if (sc === -1 || sc >= msgIdx[i + 1]) {
+      leafSlot = i;
       break;
     }
   }
   if (leafSlot < 0) return buf;
   function Me(Yt) {
-    let qt = Se[Yt + 2];
-    return qt < 0 ? void 0 : uuidToSlot.get(buf.toString("latin1", qt, qt + 36));
+    let qt = msgIdx[Yt + 2];
+    return qt < 0 ? undefined : uuidToSlot.get(buf.toString("latin1", qt, qt + 36));
   }
-  let seen = new Set(),
-    ze = 0,
-    lt = leafSlot;
-  while (lt !== void 0) {
-    if (seen.has(lt)) break;
-    (seen.add(lt), (ze += Se[lt + 1] - Se[lt]), (lt = Me(lt)));
+  let seen = new Set();
+  let ze = 0;
+  let slot = leafSlot;
+  while (slot !== undefined) {
+    if (seen.has(slot)) break;
+    seen.add(slot);
+    ze += msgIdx[slot + 1] - msgIdx[slot];
+    slot = Me(slot);
   }
   if (len - ze < len >> 1) return buf;
-  let chain = new Map(),
-    nt = new Map();
+  let chain = new Map();
+  let nt = new Map();
   function pt(Yt) {
     try {
-      let qt = jsonParseRaw(buf.toString("utf8", Se[Yt], Se[Yt + 1]));
-      return isPlainObject_2(qt) ? qt : null;
+      let qt = jsonParseRaw(buf.toString("utf8", msgIdx[Yt], msgIdx[Yt + 1]));
+      return isPlainObject_3(qt) ? qt : null;
     } catch {
       return null;
     }
   }
   function Et(Yt) {
     if (Yt !== null && isAssistantTranscriptEntry(Yt))
-      return { kind: "assistant", id: getAssistantMessageId(Yt, null) };
-    if (Yt !== null && isProgressOrHiddenEntry(Yt)) return { kind: "runLink", id: null };
-    return { kind: "other", id: null };
+      return {
+        kind: "assistant",
+        id: getAssistantMessageId(Yt, null),
+      };
+    if (Yt !== null && isProgressOrHiddenEntry(Yt))
+      return {
+        kind: "runLink",
+        id: null,
+      };
+    return {
+      kind: "other",
+      id: null,
+    };
   }
   function yt(Yt) {
     let qt = chain.get(Yt);
-    if (qt === void 0) ((qt = Et(pt(Yt))), chain.set(Yt, qt));
+    if (qt === undefined) {
+      qt = Et(pt(Yt));
+      chain.set(Yt, qt);
+    }
     return qt;
   }
-  function gt(Yt) {
-    let qt = new Set(),
-      Zt = null,
-      rn = Yt;
-    while (rn !== void 0 && !qt.has(rn)) {
+  function gt(start) {
+    let qt = new Set();
+    let Zt = null;
+    let rn = start;
+    while (rn !== undefined && !qt.has(rn)) {
       let pn = nt.get(rn);
-      if (pn !== void 0) {
+      if (pn !== undefined) {
         Zt = pn;
         break;
       }
@@ -8983,30 +9625,36 @@ function walkChainBeforeParse(buf) {
     for (let pn of qt) nt.set(pn, Zt);
     return Zt;
   }
-  let At = [],
-    It = 0;
-  for (let Yt = 0; Yt < Se.length; Yt += 3) {
-    let qt = Se[Yt];
-    while (It < ke.length && ke[It] < qt) (At.push(buf.subarray(ke[It], ke[It + 1])), (It += 2));
-    if (!seen.has(Yt)) {
-      let Zt = Me(Yt);
-      if (Zt === void 0 || !seen.has(Zt)) continue;
-      let rn = pt(Yt);
+  let parts = [];
+  let m = 0;
+  for (let i = 0; i < msgIdx.length; i += 3) {
+    let start = msgIdx[i];
+    while (m < metaRanges.length && metaRanges[m] < start) {
+      parts.push(buf.subarray(metaRanges[m], metaRanges[m + 1]));
+      m += 2;
+    }
+    if (!seen.has(i)) {
+      let start = Me(i);
+      if (start === undefined || !seen.has(start)) continue;
+      let rn = pt(i);
       if (rn === null || hasMalformedMessage(rn)) continue;
       let pn = Et(rn);
-      if ((chain.set(Yt, pn), isChainLinkCandidate(rn, pn.kind === "assistant" ? gt(Zt) : null)))
-        seen.add(Yt);
-      else if (yt(Zt).kind !== "runLink") continue;
+      chain.set(i, pn);
+      if (isChainLinkCandidate(rn, pn.kind === "assistant" ? gt(start) : null)) seen.add(i);
+      else if (yt(start).kind !== "runLink") continue;
     }
-    At.push(buf.subarray(qt, Se[Yt + 1]));
+    parts.push(buf.subarray(start, msgIdx[i + 1]));
   }
-  while (It < ke.length) (At.push(buf.subarray(ke[It], ke[It + 1])), (It += 2));
-  return Buffer.concat(At);
+  while (m < metaRanges.length) {
+    parts.push(buf.subarray(metaRanges[m], metaRanges[m + 1]));
+    m += 2;
+  }
+  return Buffer.concat(parts);
 }
 //@ chunk-e6aww6q8.js:485959-486712 layout
 function createFileChunkReader(e, n) {
-  let allocUnsafe = Buffer.allocUnsafe(1048576),
-    y = openSync(e, "r");
+  let h = Buffer.allocUnsafe(1048576);
+  let y = openSync(e, "r");
   function S(q, Z, Se) {
     let ke = 0;
     while (ke < Z) {
@@ -9016,22 +9664,24 @@ function createFileChunkReader(e, n) {
     }
     return ke;
   }
-  let allocUnsafe_2 = Buffer.allocUnsafe(65536);
+  let w = Buffer.allocUnsafe(65536);
   function L(q) {
-    let Z = -1,
-      Se = 0;
+    let Z = -1;
+    let Se = 0;
     while (Se < n) {
-      let ke = readSync(y, allocUnsafe, 0, Math.min(1048576, n - Se), Se);
+      let ke = readSync(y, h, 0, Math.min(1048576, n - Se), Se);
       if (ke === 0) break;
       let we = 0;
       while (we < ke) {
-        let index = allocUnsafe.indexOf(10, we);
+        let index = h.indexOf(10, we);
         if (index < 0 || index >= ke) break;
         if (Z >= 0) {
           let Ae = Se + index - Z;
-          if (Ae > allocUnsafe_2.length) allocUnsafe_2 = Buffer.allocUnsafe(Ae);
-          (S(allocUnsafe_2, Ae, Z), q(allocUnsafe_2, 0, Ae, Z), (Z = -1));
-        } else if (index > we) q(allocUnsafe, we, index - we, Se + we);
+          if (Ae > w.length) w = Buffer.allocUnsafe(Ae);
+          S(w, Ae, Z);
+          q(w, 0, Ae, Z);
+          Z = -1;
+        } else if (index > we) q(h, we, index - we, Se + we);
         we = index + 1;
       }
       if (we < ke && Z < 0) Z = Se + we;
@@ -9039,15 +9689,20 @@ function createFileChunkReader(e, n) {
     }
     if (Z >= 0) {
       let ke = n - Z;
-      if (ke > allocUnsafe_2.length) allocUnsafe_2 = Buffer.allocUnsafe(ke);
-      (S(allocUnsafe_2, ke, Z), q(allocUnsafe_2, 0, ke, Z));
+      if (ke > w.length) w = Buffer.allocUnsafe(ke);
+      S(w, ke, Z);
+      q(w, 0, ke, Z);
     }
   }
   function G(q, Z) {
-    if (Z > allocUnsafe_2.length) allocUnsafe_2 = Buffer.allocUnsafe(Math.max(Z, allocUnsafe_2.length * 2));
-    return allocUnsafe_2.subarray(0, S(allocUnsafe_2, Z, q));
+    if (Z > w.length) w = Buffer.allocUnsafe(Math.max(Z, w.length * 2));
+    return w.subarray(0, S(w, Z, q));
   }
-  return { scan: L, read: G, close: () => closeSync(y) };
+  return {
+    scan: L,
+    read: G,
+    close: () => closeSync(y),
+  };
 }
 //@ chunk-e6aww6q8.js:486712-486884 layout
 function createBufferLineScanner(e) {
@@ -9070,218 +9725,256 @@ function createBufferLineScanner(e) {
 //@ chunk-e6aww6q8.js:486884-487075 layout
 function reportUnparsableLines(e) {
   if (e <= 0) return;
-  (logForDebugging(
+  logForDebugging(
     `transcript load: skipped ${e} line(s) that did not parse as JSON (e.g. a torn or corrupt write)`,
-  ),
-    logFeatureSad("transcript_unparsable_lines", "lines_skipped", { lines: e }));
+  );
+  logFeatureSad("transcript_unparsable_lines", "lines_skipped", {
+    lines: e,
+  });
 }
 //@ chunk-e6aww6q8.js:487075-487102 layout
 var WHITESPACE_BYTES = new Set([32, 9, 13]);
 //@ chunk-e6aww6q8.js:487102-487279 layout
 function countJsonlLines(e) {
-  let n = parseJSONL(e),
-    r = 0;
+  let jsonl = parseJSONL(e);
+  let r = 0;
   for (let s = 0; s < e.length;) {
-    let index = e.indexOf(10, s),
-      y = index === -1 ? e.length : index;
+    let index = e.indexOf(10, s);
+    let y = index === -1 ? e.length : index;
     if (e.subarray(s, y).some((S) => !WHITESPACE_BYTES.has(S))) r++;
     s = y + 1;
   }
-  return (reportUnparsableLines(r - n.length), n);
+  reportUnparsableLines(r - jsonl.length);
+  return jsonl;
 }
 //@ chunk-e6aww6q8.js:487279-497626 layout
 function scanTranscriptBuffer(e, n, r, s) {
-  let buffer = Buffer.from('{"type":"attribution-snapshot"'),
-    buffer_2 = Buffer.from('{"parentUuid":'),
-    buffer_3 = Buffer.from('"parentUuid":'),
-    buffer_4 = Buffer.from('"uuid":"'),
-    buffer_5 = Buffer.from('","timestamp":"'),
-    buffer_6 = Buffer.from('"isSidechain":true'),
-    buffer_7 = Buffer.from('"compact_boundary"'),
-    buffer_8 = Buffer.from('"compactMetadata":'),
-    buffer_9 = Buffer.from('"type":"last-prompt"'),
-    buffer_10 = Buffer.from('{"type":"last-prompt"'),
-    buffer_11 = Buffer.from('"leafUuid":'),
-    buffer_12 = Buffer.from("\\ud"),
-    buffer_13 = Buffer.from("\\uD"),
-    buffer_14 = Buffer.from("null"),
-    We = 36,
-    ze = buffer_2.length,
-    lt = buffer_4.length,
-    Je = buffer_5.length,
-    nt = buffer_14.length,
-    pt = "parentUuid is neither a string nor null",
-    Et = [],
-    yt = [],
-    gt = [],
-    At = [],
-    It = new Map(),
-    Yt = [],
-    qt = [],
-    Zt = [],
-    rn = [],
-    pn = [],
-    no = -1,
-    hn = -1,
-    ho = !1,
-    yn = 1 / 0,
-    Kn = [],
-    Xn = 0,
-    fo = !1,
-    To = -1,
-    bo = new Set(),
-    vn = !1,
-    co,
-    So,
-    ko,
-    un = !1,
-    ao = -1,
-    $o = 0,
-    yo = [],
-    Ho = { offset: -1, length: 0 },
-    rr,
-    br = INDEX_HEAD_SCAN_BYTES,
-    Hr = INDEX_BOUNDARY_SCAN_BYTES,
-    Fr = INDEX_LAST_PROMPT_SCAN_BYTES;
-  function cs(Es, Nr) {
-    let Is = -1,
-      fs = -1,
-      as,
-      Vi = 0;
+  let buffer = Buffer.from('{"type":"attribution-snapshot"');
+  let buffer_2 = Buffer.from('{"parentUuid":');
+  let buffer_3 = Buffer.from('"parentUuid":');
+  let buffer_4 = Buffer.from('"uuid":"');
+  let buffer_5 = Buffer.from('","timestamp":"');
+  let buffer_6 = Buffer.from('"isSidechain":true');
+  let buffer_7 = Buffer.from('"compact_boundary"');
+  let buffer_8 = Buffer.from('"compactMetadata":');
+  let buffer_9 = Buffer.from('"type":"last-prompt"');
+  let buffer_10 = Buffer.from('{"type":"last-prompt"');
+  let buffer_11 = Buffer.from('"leafUuid":');
+  let buffer_12 = Buffer.from("\\ud");
+  let buffer_13 = Buffer.from("\\uD");
+  let buffer_14 = Buffer.from("null");
+  let We = 36;
+  let ze = buffer_2.length;
+  let lt = buffer_4.length;
+  let Je = buffer_5.length;
+  let nt = buffer_14.length;
+  let pt = "parentUuid is neither a string nor null";
+  let Et = [];
+  let yt = [];
+  let gt = [];
+  let At = [];
+  let It = new Map();
+  let Yt = [];
+  let qt = [];
+  let Zt = [];
+  let rn = [];
+  let pn = [];
+  let no = -1;
+  let hn = -1;
+  let ho = false;
+  let yn = 1 / 0;
+  let Kn = [];
+  let lazyBackscannedLines = 0;
+  let lazyBackfilledAll = false;
+  let To = -1;
+  let bo = new Set();
+  let vn = false;
+  let co;
+  let So;
+  let ko;
+  let un = false;
+  let ao = -1;
+  let $o = 0;
+  let yo = [];
+  let Ho = {
+    offset: -1,
+    length: 0,
+  };
+  let rr;
+  let br = INDEX_HEAD_SCAN_BYTES;
+  let Hr = INDEX_BOUNDARY_SCAN_BYTES;
+  let Fr = INDEX_LAST_PROMPT_SCAN_BYTES;
+  function cs(buf, Nr) {
+    let Is = -1;
+    let fs = -1;
+    let candidates;
+    let Vi = 0;
     for (;;) {
-      let index = Es.indexOf(buffer_4, Vi);
+      let index = buf.indexOf(buffer_4, Vi);
       if (index < 0) break;
       if (Is < 0) Is = index;
       let Wi = index + lt + 36;
-      if (Wi + Je <= Nr && Es.compare(buffer_5, 0, Je, Wi, Wi + Je) === 0)
+      if (Wi + Je <= Nr && buf.compare(buffer_5, 0, Je, Wi, Wi + Je) === 0)
         if (fs < 0) fs = index;
-        else (as ??= [fs]).push(index);
+        else (candidates ??= [fs]).push(index);
       Vi = index + lt;
     }
-    return as ? pickDepthOneUuidCandidate(Es, 0, as) : fs >= 0 ? fs : Is;
+    return candidates ? pickDepthOneUuidCandidate(buf, 0, candidates) : fs >= 0 ? fs : Is;
   }
   function _r(Es, Nr, Is, fs) {
-    let chunk = Es.subarray(Nr, Nr + Is);
-    if (
-      ((Ho.offset = fs),
-      (Ho.length = Is),
-      Is >= buffer.length && chunk.compare(buffer, 0, buffer.length, 0, buffer.length) === 0)
-    ) {
-      ((ao = fs), ($o = Is));
+    let src = Es.subarray(Nr, Nr + Is);
+    Ho.offset = fs;
+    Ho.length = Is;
+    if (Is >= buffer.length && src.compare(buffer, 0, buffer.length, 0, buffer.length) === 0) {
+      ao = fs;
+      $o = Is;
       return;
     }
-    if (hasPrefix(chunk, 0, Is)) {
-      yo.push({ offset: fs, length: Is });
+    if (hasPrefix(src, 0, Is)) {
+      yo.push({
+        offset: fs,
+        length: Is,
+      });
       return;
     }
     if (
       Is < Fr &&
       Is > buffer_10.length &&
-      chunk.compare(buffer_10, 0, buffer_10.length, 0, buffer_10.length) === 0
+      src.compare(buffer_10, 0, buffer_10.length, 0, buffer_10.length) === 0
     ) {
-      (Zt.push(fs), rn.push(Is), pn.push(chunk.includes(buffer_11)));
+      Zt.push(fs);
+      rn.push(Is);
+      pn.push(src.includes(buffer_11));
       return;
     }
-    if (Is < Fr && chunk.subarray(0, Math.min(Is, LAST_PROMPT_PREFIX_SCAN_BYTES)).includes(buffer_9)) {
+    if (Is < Fr && src.subarray(0, Math.min(Is, LAST_PROMPT_PREFIX_SCAN_BYTES)).includes(buffer_9)) {
       let ii;
       try {
-        ii = jsonParse(chunk.toString("utf8", 0, Is));
+        ii = jsonParse(src.toString("utf8", 0, Is));
       } catch {
         return;
       }
       if (ii?.type === "last-prompt") {
-        if (ii.leafUuid) ((rr = ii.leafUuid), (To = fs));
-        (Yt.push(fs), qt.push(Is));
+        if (ii.leafUuid) {
+          rr = ii.leafUuid;
+          To = fs;
+        }
+        Yt.push(fs);
+        qt.push(Is);
         return;
       }
     }
-    let Vi = yG(chunk, 0, Is),
-      chunk_2 = chunk.subarray(Vi, Math.min(Is, Vi + Hr));
-    if (chunk_2.includes(buffer_7) || (chunk_2.includes(buffer_8) && chunk.includes(buffer_7, Vi))) {
+    let Vi = skipNuls(src, 0, Is);
+    let chunk = src.subarray(Vi, Math.min(Is, Vi + Hr));
+    if (chunk.includes(buffer_7) || (chunk.includes(buffer_8) && src.includes(buffer_7, Vi))) {
       let ii;
       try {
-        ii = jsonParse(chunk.toString("utf8", Vi, Is));
+        ii = jsonParse(src.toString("utf8", Vi, Is));
       } catch {
         ii = null;
       }
       if (ii?.type === "system" && ii.subtype === "compact_boundary") {
         hn = fs;
-        let wa = ii.compactMetadata?.preservedMessages;
-        if (wa || ii.compactMetadata?.preservedSegment)
+        let preservedMessages = ii.compactMetadata?.preservedMessages;
+        if (preservedMessages || ii.compactMetadata?.preservedSegment) {
+          vn = true;
           if (
-            ((vn = !0),
-            wa &&
-              typeof wa.anchorUuid === "string" &&
-              Array.isArray(wa.uuids) &&
-              wa.uuids.length > 0 &&
-              wa.uuids.every((uuid) => typeof uuid === "string"))
+            preservedMessages &&
+            typeof preservedMessages.anchorUuid === "string" &&
+            Array.isArray(preservedMessages.uuids) &&
+            preservedMessages.uuids.length > 0 &&
+            preservedMessages.uuids.every((uuid) => typeof uuid === "string")
           ) {
-            if (((co = wa.uuids), (So = wa.anchorUuid), (ko = fs), !ho))
-              ((ho = !0), (yn = Math.min(yn, Et.length + 1)));
-          } else ((co = void 0), (So = void 0), (ko = void 0));
-        else {
-          if (
-            (bo.add(fs),
-            (Et.length = 0),
-            (yt.length = 0),
-            (gt.length = 0),
-            (At.length = 0),
-            (Kn.length = 0),
-            It.clear(),
-            (vn = !1),
-            (co = void 0),
-            (So = void 0),
-            (ko = void 0),
-            (un = !1),
-            (ao = -1),
-            ($o = 0),
-            (rr = void 0),
-            (To = -1),
-            (no = fs),
-            !ho)
-          )
-            ho = !0;
+            co = preservedMessages.uuids;
+            So = preservedMessages.anchorUuid;
+            ko = fs;
+            if (!ho) {
+              ho = true;
+              yn = Math.min(yn, Et.length + 1);
+            }
+          } else {
+            co = undefined;
+            So = undefined;
+            ko = undefined;
+          }
+        } else {
+          bo.add(fs);
+          Et.length = 0;
+          yt.length = 0;
+          gt.length = 0;
+          At.length = 0;
+          Kn.length = 0;
+          It.clear();
+          vn = false;
+          co = undefined;
+          So = undefined;
+          ko = undefined;
+          un = false;
+          ao = -1;
+          $o = 0;
+          rr = undefined;
+          To = -1;
+          no = fs;
+          if (!ho) ho = true;
           yn = 1;
         }
       }
     }
     let Wi;
-    if (Is > ze && chunk.compare(buffer_2, 0, ze, 0, ze) === 0) {
-      if (((Wi = ze), ho && Et.length >= yn)) {
-        (Et.push(fs), yt.push(Is), gt.push(null), At.push(!1), Kn.push(!0));
+    if (Is > ze && src.compare(buffer_2, 0, ze, 0, ze) === 0) {
+      Wi = ze;
+      if (ho && Et.length >= yn) {
+        Et.push(fs);
+        yt.push(Is);
+        gt.push(null);
+        At.push(false);
+        Kn.push(true);
         return;
       }
     } else {
-      if (((Wi = hasPrefix_2(chunk, 0, Is, buffer_3)), Wi < 0)) {
-        (Yt.push(fs), qt.push(Is));
+      Wi = hasPrefix_2(src, 0, Is, buffer_3);
+      if (Wi < 0) {
+        Yt.push(fs);
+        qt.push(Is);
         return;
       }
       Wi += buffer_3.length;
     }
-    Cr(chunk, Is, fs, Wi, Et.length);
+    Cr(src, Is, fs, Wi, Et.length);
   }
   function Cr(Es, Nr, Is, fs, as) {
     let Vi =
-        Es[fs] === 34
-          ? Es.toString("latin1", fs + 1, fs + 1 + 36)
-          : fs + nt <= Nr && Es.compare(buffer_14, 0, nt, fs, fs + nt) === 0
-            ? null
-            : "parentUuid is neither a string nor null",
-      ji = cs(Es, Nr);
+      Es[fs] === 34
+        ? Es.toString("latin1", fs + 1, fs + 1 + 36)
+        : fs + nt <= Nr && Es.compare(buffer_14, 0, nt, fs, fs + nt) === 0
+          ? null
+          : "parentUuid is neither a string nor null";
+    let ji = cs(Es, Nr);
     if (ji < 0) {
-      if ((Yt.push(Is), qt.push(Nr), as < Et.length)) ((yt[as] = -1), (Kn[as] = !1));
+      Yt.push(Is);
+      qt.push(Nr);
+      if (as < Et.length) {
+        yt[as] = -1;
+        Kn[as] = false;
+      }
       return;
     }
-    let str = Es.toString("latin1", ji + lt, ji + lt + 36),
-      included = (Nr <= br ? Es : Es.subarray(0, br)).includes(buffer_6);
-    if (It.has(str)) un = !0;
-    if (as === Et.length)
-      (It.set(str, as), Et.push(Is), yt.push(Nr), gt.push(Vi), At.push(included), Kn.push(!1));
-    else {
-      Kn[as] = !1;
+    let str = Es.toString("latin1", ji + lt, ji + lt + 36);
+    let included = (Nr <= br ? Es : Es.subarray(0, br)).includes(buffer_6);
+    if (It.has(str)) un = true;
+    if (as === Et.length) {
+      It.set(str, as);
+      Et.push(Is);
+      yt.push(Nr);
+      gt.push(Vi);
+      At.push(included);
+      Kn.push(false);
+    } else {
+      Kn[as] = false;
       let hr = It.get(str);
-      if (hr === void 0 || hr < as) It.set(str, as);
-      ((gt[as] = Vi), (At[as] = included));
+      if (hr === undefined || hr < as) It.set(str, as);
+      gt[as] = Vi;
+      At[as] = included;
     }
   }
   function Vr(Es, Nr) {
@@ -9291,55 +9984,61 @@ function scanTranscriptBuffer(e, n, r, s) {
         max++;
         continue;
       }
-      let as = Et[max],
-        Vi = as + yt[max],
-        ji = max + 1;
-      while (ji < Nr && Kn[ji] && Et[ji] === Vi + 1 && Et[ji] + yt[ji] - as <= 1048576)
-        ((Vi = Et[ji] + yt[ji]), ji++);
-      let read = e.read(as, Vi - as);
+      let as = Et[max];
+      let Vi = as + yt[max];
+      let ji = max + 1;
+      while (ji < Nr && Kn[ji] && Et[ji] === Vi + 1 && Et[ji] + yt[ji] - as <= 1048576) {
+        Vi = Et[ji] + yt[ji];
+        ji++;
+      }
+      let Wi = e.read(as, Vi - as);
       for (let ii = max; ii < ji; ii++) {
         let wa = Et[ii] - as;
-        if (wa + yt[ii] > read.length) {
-          ((yt[ii] = -1), (Kn[ii] = !1));
+        if (wa + yt[ii] > Wi.length) {
+          yt[ii] = -1;
+          Kn[ii] = false;
           continue;
         }
-        let chunk = read.subarray(wa, wa + yt[ii]);
+        let chunk = Wi.subarray(wa, wa + yt[ii]);
         Cr(chunk, yt[ii], Et[ii], ze, ii);
       }
       max = ji;
     }
   }
-  let startTime = performance.now(),
-    jr = 0,
-    Or = !1,
-    Io;
+  let startTime = performance.now();
+  let scanMs = 0;
+  let Or = false;
+  let Io;
   try {
     let Di = function (ga) {
-        while (Ja < Et.length && Et[Ja] < ga) Ja++;
-        return Ja < Et.length && Et[Ja] === ga && yt[Ja] >= 0 ? Ja : -1;
-      },
-      yr = function (ga) {
-        let Hl = _i[ga];
-        return Hl < 0 ? void 0 : Hl;
-      },
-      Kr = function (ga, Hl, hd) {
-        if (((Ti[ga] = Hl), hd)) Vs[ga] = 1;
-        for (let Sd = jo[ga]; Sd !== -1; Sd = Qr[Sd]) {
-          if (Sd < ga || yt[Sd] < 0 || as.has(Et[Sd])) continue;
-          let Ld = fi.length;
-          while (Ld > Ri && fi[Ld - 1] > Sd) Ld--;
-          fi.splice(Ld, 0, Sd);
-        }
-      };
-    if ((e.scan(_r), (jr = performance.now() - startTime), ho && yn < Et.length && !s)) {
+      while (Ja < Et.length && Et[Ja] < ga) Ja++;
+      return Ja < Et.length && Et[Ja] === ga && yt[Ja] >= 0 ? Ja : -1;
+    };
+    let yr = function (ga) {
+      let Hl = _i[ga];
+      return Hl < 0 ? undefined : Hl;
+    };
+    let Kr = function (ga, Hl, hd) {
+      Ti[ga] = Hl;
+      if (hd) Vs[ga] = 1;
+      for (let Sd = jo[ga]; Sd !== -1; Sd = Qr[Sd]) {
+        if (Sd < ga || yt[Sd] < 0 || as.has(Et[Sd])) continue;
+        let Ld = fi.length;
+        while (Ld > Ri && fi[Ld - 1] > Sd) Ld--;
+        fi.splice(Ld, 0, Sd);
+      }
+    };
+    e.scan(_r);
+    scanMs = performance.now() - startTime;
+    if (ho && yn < Et.length && !s) {
       let ga = 0;
-      if (vn && co && ko !== void 0) {
-        let Hl = 0,
-          hd = Et.length - 1,
-          Sd = -1;
+      if (vn && co && ko !== undefined) {
+        let Hl = 0;
+        let hd = Et.length - 1;
+        let Sd = -1;
         while (Hl <= hd) {
-          let Ld = (Hl + hd) >> 1,
-            vs = Et[Ld];
+          let Ld = (Hl + hd) >> 1;
+          let vs = Et[Ld];
           if (vs === ko) {
             Sd = Ld;
             break;
@@ -9347,21 +10046,25 @@ function scanTranscriptBuffer(e, n, r, s) {
           if (vs < ko) Hl = Ld + 1;
           else hd = Ld - 1;
         }
-        if (((ga = Sd < 0 ? 0 : Sd), Vr(Math.max(ga, yn), Et.length), Sd >= 0)) {
-          let vs = Math.min(Sd, Et.length) - 1,
-            ol = 0,
-            gd = () => co.some((Eu) => !It.has(Eu)) || !It.has(So);
+        ga = Sd < 0 ? 0 : Sd;
+        Vr(Math.max(ga, yn), Et.length);
+        if (Sd >= 0) {
+          let vs = Math.min(Sd, Et.length) - 1;
+          let ol = 0;
+          let gd = () => co.some((Eu) => !It.has(Eu)) || !It.has(So);
           while (vs >= yn && ol < 2048 && gd()) {
             let max = Math.max(yn, vs - 63);
-            (Vr(max, vs + 1), (ol += vs + 1 - max), (vs = max - 1));
+            Vr(max, vs + 1);
+            ol += vs + 1 - max;
+            vs = max - 1;
           }
-          Xn = ol;
+          lazyBackscannedLines = ol;
           let Su = gd();
           if (!Su) {
             let Eu = new Set();
             for (let Kc of co) {
               let _s = It.get(Kc);
-              if (_s !== void 0) Eu.add(_s);
+              if (_s !== undefined) Eu.add(_s);
             }
             let Uc = new Set();
             for (let Kc = Sd; Kc < Et.length && !Su; Kc++) {
@@ -9369,38 +10072,42 @@ function scanTranscriptBuffer(e, n, r, s) {
               let _s = gt[Kc];
               while (_s != null) {
                 let Qm = It.get(_s);
-                if (Qm === void 0) {
+                if (Qm === undefined) {
                   Su = vs >= yn;
                   break;
                 }
                 if (Qm >= Sd || Eu.has(Qm) || Uc.has(Qm)) break;
-                (Uc.add(Qm), (_s = gt[Qm]));
+                Uc.add(Qm);
+                _s = gt[Qm];
               }
             }
           }
-          if (Su && vs >= yn) ((fo = !0), Vr(yn, vs + 1));
+          if (Su && vs >= yn) {
+            lazyBackfilledAll = true;
+            Vr(yn, vs + 1);
+          }
         }
       } else if (!vn) Vr(yn, Et.length);
     }
-    let Es = bunJSONLParse(),
-      Nr = Es && Es(Buffer.from('{"a":1}')).values.length === 1 ? Es : void 0,
-      Is = (ga) => ga.length >= 3 && ga[0] === 239 && ga[1] === 187 && ga[2] === 191,
-      fs = (ga) => {
-        if (Nr) {
-          if (Is(ga)) throw SyntaxError("byte-order mark before the JSON value");
-          let Hl = Nr(ga);
-          if (Hl.values.length < 1) throw SyntaxError("no JSON value on line");
-          return Hl.values[0];
-        }
-        return jsonParse(ga.toString("utf8"));
-      };
-    for (let ga = Zt.length - 1; ga >= 0; ga--) {
-      let Hl = Zt[ga];
+    let Es = bunJSONLParse();
+    let Nr = Es && Es(Buffer.from('{"a":1}')).values.length === 1 ? Es : undefined;
+    let Is = (ga) => ga.length >= 3 && ga[0] === 239 && ga[1] === 187 && ga[2] === 191;
+    let fs = (ga) => {
+      if (Nr) {
+        if (Is(ga)) throw SyntaxError("byte-order mark before the JSON value");
+        let Hl = Nr(ga);
+        if (Hl.values.length < 1) throw SyntaxError("no JSON value on line");
+        return Hl.values[0];
+      }
+      return jsonParse(ga.toString("utf8"));
+    };
+    for (let idx = Zt.length - 1; idx >= 0; idx--) {
+      let Hl = Zt[idx];
       if (Hl < no || Hl < To) break;
-      let read = e.read(Hl, rn[ga]),
-        Sd;
+      let hd = e.read(Hl, rn[idx]);
+      let Sd;
       try {
-        Sd = fs(read);
+        Sd = fs(hd);
       } catch {
         continue;
       }
@@ -9409,16 +10116,16 @@ function scanTranscriptBuffer(e, n, r, s) {
         break;
       }
     }
-    let as = null,
-      Vi = null,
-      ji,
-      Wi;
-    if (vn && co && ko !== void 0) {
-      let ga = 0,
-        Hl = Et.length - 1;
+    let as = null;
+    let Vi = null;
+    let ji;
+    let Wi;
+    if (vn && co && ko !== undefined) {
+      let ga = 0;
+      let Hl = Et.length - 1;
       while (ga <= Hl) {
-        let hd = (ga + Hl) >> 1,
-          Sd = Et[hd];
+        let hd = (ga + Hl) >> 1;
+        let Sd = Et[hd];
         if (Sd === ko) {
           ji = hd;
           break;
@@ -9426,59 +10133,67 @@ function scanTranscriptBuffer(e, n, r, s) {
         if (Sd < ko) ga = hd + 1;
         else Hl = hd - 1;
       }
-      if (ji !== void 0) {
+      if (ji !== undefined) {
         Wi = [];
         for (let hd of co) {
           let Sd = It.get(hd);
-          if (Sd === void 0) {
-            Wi = void 0;
+          if (Sd === undefined) {
+            Wi = undefined;
             break;
           }
           Wi.push(Sd);
         }
       }
     }
-    let ii = ji !== void 0 && !Wi,
-      wa = !1;
-    if (Wi && ji !== void 0 && So) {
+    let ii = ji !== undefined && !Wi;
+    let wa = false;
+    if (Wi && ji !== undefined && So) {
       let ga = It.get(So);
-      if (ga !== void 0 && ga < ji && !Wi.includes(ga)) ((wa = !0), (Wi = void 0));
+      if (ga !== undefined && ga < ji && !Wi.includes(ga)) {
+        wa = true;
+        Wi = undefined;
+      }
     }
-    if (un) Wi = void 0;
-    if (!s && vn && !Wi)
-      ((Or = !0),
-        logEvent("tengu_transcript_preserved_dispatch", {
-          mode: lit_2("fallback_all"),
-          indexed_slots: Et.length,
-          reason: !co
-            ? lit_2("no_list")
-            : ji === void 0
-              ? lit_2("boundary_unindexed")
-              : ii
-                ? lit_2("uuid_missing")
-                : wa
-                  ? lit_2("anchor_before_boundary")
-                  : lit_2("duplicate_uuid"),
-        }));
-    if (!s && vn && Wi && ji !== void 0) {
-      ((as = new Set()), (Vi = []));
-      let ga = new Set(),
-        Hl = (Ld) => {
-          if ((ga.add(Ld), yt[Ld] < 0)) return;
-          (as.add(Et[Ld]), Vi.push([Et[Ld], yt[Ld]]));
-        },
-        hd = new Set(Wi);
+    if (un) Wi = undefined;
+    if (!s && vn && !Wi) {
+      Or = true;
+      logEvent("tengu_transcript_preserved_dispatch", {
+        mode: lit_2("fallback_all"),
+        indexed_slots: Et.length,
+        reason: !co
+          ? lit_2("no_list")
+          : ji === undefined
+            ? lit_2("boundary_unindexed")
+            : ii
+              ? lit_2("uuid_missing")
+              : wa
+                ? lit_2("anchor_before_boundary")
+                : lit_2("duplicate_uuid"),
+      });
+    }
+    if (!s && vn && Wi && ji !== undefined) {
+      as = new Set();
+      Vi = [];
+      let ga = new Set();
+      let Hl = (Ld) => {
+        ga.add(Ld);
+        if (yt[Ld] < 0) return;
+        as.add(Et[Ld]);
+        Vi.push([Et[Ld], yt[Ld]]);
+      };
+      let hd = new Set(Wi);
       if (Et.length > 0 && bo.has(Et[0])) Hl(0);
       for (let Ld of Wi) if (!ga.has(Ld)) Hl(Ld);
       let Sd = 0;
       for (let Ld = ji; Ld < Et.length; Ld++) {
         if (!ga.has(Ld)) Hl(Ld);
-        let vs = gt[Ld],
-          ol = vs == null ? void 0 : It.get(vs);
-        while (ol !== void 0 && ol < ji && !hd.has(ol) && !ga.has(ol)) {
-          (Hl(ol), Sd++);
+        let vs = gt[Ld];
+        let ol = vs == null ? undefined : It.get(vs);
+        while (ol !== undefined && ol < ji && !hd.has(ol) && !ga.has(ol)) {
+          Hl(ol);
+          Sd++;
           let gd = gt[ol];
-          ol = gd == null ? void 0 : It.get(gd);
+          ol = gd == null ? undefined : It.get(gd);
         }
       }
       logEvent("tengu_transcript_preserved_dispatch", {
@@ -9488,211 +10203,229 @@ function scanTranscriptBuffer(e, n, r, s) {
         preserved: Wi.length,
         straggler_ancestors: Sd,
         lazy_unindexed_slots: ho ? count(Kn, (Ld) => Ld) : 0,
-        lazy_backscanned_lines: Xn,
-        lazy_backfilled_all: fo,
+        lazy_backscanned_lines: lazyBackscannedLines,
+        lazy_backfilled_all: lazyBackfilledAll,
       });
     }
     let hr = -1;
     if (!s && !vn) {
-      for (let ga = Et.length - 1; ga >= 0; ga--)
-        if (!At[ga] && yt[ga] >= 0) {
-          hr = ga;
+      for (let idx = Et.length - 1; idx >= 0; idx--)
+        if (!At[idx] && yt[idx] >= 0) {
+          hr = idx;
           break;
         }
     }
     if (hr >= 0) {
-      ((as = new Set()), (Vi = []));
-      let ga = new Set(),
-        Hl,
-        hd = (Ld) => {
-          let vs = Ld,
-            ol = new Set();
-          while (vs !== void 0 && !ga.has(vs)) {
-            (ga.add(vs), ol.add(vs), as.add(Et[vs]), Vi.push([Et[vs], yt[vs]]));
-            let gd = gt[vs];
-            if (gd == null) {
-              vs = void 0;
-              break;
-            }
-            if (gd === "parentUuid is neither a string nor null") {
-              Hl ??= "non_string_parent";
-              break;
-            }
-            let Su = It.get(gd);
-            if (Su === void 0 || ol.has(Su)) {
-              Hl ??= Su === void 0 ? "unknown_parent" : "parent_cycle";
-              break;
-            }
-            vs = Su;
+      as = new Set();
+      Vi = [];
+      let ga = new Set();
+      let Hl;
+      let hd = (Ld) => {
+        let vs = Ld;
+        let ol = new Set();
+        while (vs !== undefined && !ga.has(vs)) {
+          ga.add(vs);
+          ol.add(vs);
+          as.add(Et[vs]);
+          Vi.push([Et[vs], yt[vs]]);
+          let gd = gt[vs];
+          if (gd == null) {
+            vs = undefined;
+            break;
           }
-        };
+          if (gd === "parentUuid is neither a string nor null") {
+            Hl ??= "non_string_parent";
+            break;
+          }
+          let Su = It.get(gd);
+          if (Su === undefined || ol.has(Su)) {
+            Hl ??= Su === undefined ? "unknown_parent" : "parent_cycle";
+            break;
+          }
+          vs = Su;
+        }
+      };
       hd(hr);
-      let Sd = rr ? It.get(rr) : void 0;
-      if ((hd(Sd), Hl !== void 0)) {
+      let Sd = rr ? It.get(rr) : undefined;
+      hd(Sd);
+      if (Hl !== undefined) {
         let Ld = Hl;
-        (logEvent("tengu_transcript_phantom_parent", {
+        logEvent("tengu_transcript_phantom_parent", {
           total_offsets: Et.length,
           walked_slots: as.size,
           reason: fromEnum(Ld),
-        }),
-          (as = null),
-          (Vi = null));
+        });
+        as = null;
+        Vi = null;
       }
     }
-    let mi = 1048576,
-      Ha = Vi ?? [];
+    let mi = 1048576;
+    let Ha = Vi ?? [];
     if (!Vi) {
-      for (let ga = 0; ga < Et.length; ga++) if (yt[ga] >= 0) Ha.push([Et[ga], yt[ga]]);
+      for (let idx = 0; idx < Et.length; idx++) if (yt[idx] >= 0) Ha.push([Et[idx], yt[idx]]);
     }
-    for (let ga = 0; ga < Yt.length; ga++) Ha.push([Yt[ga], qt[ga]]);
+    for (let idx = 0; idx < Yt.length; idx++) Ha.push([Yt[idx], qt[idx]]);
     let $a = -1;
     if (Et.length > 0 && bo.has(Et[0]) && !At[0]) $a = Et[0];
-    if (ji !== void 0 && Wi && !s && !At[ji] && Et[ji] > $a) $a = Et[ji];
-    for (let ga = 0; ga < Zt.length; ga++) if (Zt[ga] >= $a) Ha.push([Zt[ga], rn[ga]]);
-    for (let ga = Zt.length - 1; ga >= 0; ga--) {
-      let Hl = Zt[ga];
-      if (Hl >= $a || !pn[ga]) continue;
-      let read = e.read(Hl, rn[ga]),
-        Sd;
+    if (ji !== undefined && Wi && !s && !At[ji] && Et[ji] > $a) $a = Et[ji];
+    for (let idx = 0; idx < Zt.length; idx++) if (Zt[idx] >= $a) Ha.push([Zt[idx], rn[idx]]);
+    for (let idx = Zt.length - 1; idx >= 0; idx--) {
+      let Hl = Zt[idx];
+      if (Hl >= $a || !pn[idx]) continue;
+      let hd = e.read(Hl, rn[idx]);
+      let Sd;
       try {
-        Sd = fs(read);
+        Sd = fs(hd);
       } catch {
         continue;
       }
-      if (Sd?.leafUuid === void 0) continue;
-      Ha.push([Hl, rn[ga]]);
+      if (Sd?.leafUuid === undefined) continue;
+      Ha.push([Hl, rn[idx]]);
       break;
     }
     Ha.sort((ga, Hl) => ga[0] - Hl[0]);
-    let nr = as !== null,
-      Ti = [],
-      Vs = nr ? new Uint8Array(Et.length) : void 0,
-      _i = nr ? new Int32Array(Et.length).fill(-1) : void 0,
-      jo = nr ? new Int32Array(Et.length).fill(-1) : void 0,
-      Qr = nr ? new Int32Array(Et.length).fill(-1) : void 0;
+    let nr = as !== null;
+    let Ti = [];
+    let Vs = nr ? new Uint8Array(Et.length) : undefined;
+    let _i = nr ? new Int32Array(Et.length).fill(-1) : undefined;
+    let jo = nr ? new Int32Array(Et.length).fill(-1) : undefined;
+    let Qr = nr ? new Int32Array(Et.length).fill(-1) : undefined;
     if (_i && jo && Qr)
-      for (let ga = Et.length - 1; ga >= 0; ga--) {
-        let Hl = gt[ga],
-          hd = Hl == null ? void 0 : It.get(Hl);
-        if (hd === void 0) continue;
-        if (((_i[ga] = hd), hd === ga)) continue;
-        ((Qr[ga] = jo[hd]), (jo[hd] = ga));
+      for (let idx = Et.length - 1; idx >= 0; idx--) {
+        let Hl = gt[idx];
+        let hd = Hl == null ? undefined : It.get(Hl);
+        if (hd === undefined) continue;
+        _i[idx] = hd;
+        if (hd === idx) continue;
+        Qr[idx] = jo[hd];
+        jo[hd] = idx;
       }
-    let fi = [],
-      Ri = 0,
-      Ja = 0;
+    let fi = [];
+    let Ri = 0;
+    let Ja = 0;
     using Li = slowLogging`transcript load pass2 (${Ha.length} lines to parse)`;
-    let Qs = (ga) => ga.includes(buffer_12) || ga.includes(buffer_13),
-      Hi = (ga, Hl, hd) => {
-        if (nr) {
-          let Sd = Di(hd);
-          if (Sd >= 0) {
-            let Ld = yr(Sd),
-              vs = Ld === void 0 ? null : (Ti[Ld] ?? null),
-              ol = as.has(hd);
-            if (!ga) {
-              if (ol) Kr(Sd, vs, !1);
+    let Qs = (ga) => ga.includes(buffer_12) || ga.includes(buffer_13);
+    let Hi = (ga, Hl, hd) => {
+      if (nr) {
+        let Sd = Di(hd);
+        if (Sd >= 0) {
+          let Ld = yr(Sd);
+          let vs = Ld === undefined ? null : (Ti[Ld] ?? null);
+          let ol = as.has(hd);
+          if (!ga) {
+            if (ol) Kr(Sd, vs, false);
+            return;
+          }
+          if (!ol) {
+            if (hasMalformedMessage(ga)) return;
+            if (!isChainLinkCandidate(ga, vs)) {
+              if (Ld !== undefined && Vs[Ld]) n(ga, Qs(Hl));
               return;
             }
-            if (!ol) {
-              if (hasMalformedMessage(ga)) return;
-              if (!isChainLinkCandidate(ga, vs)) {
-                if (Ld !== void 0 && Vs[Ld]) n(ga, Qs(Hl));
-                return;
-              }
-            }
-            Kr(Sd, getAssistantMessageId(ga, vs), isProgressOrHiddenEntry(ga));
           }
+          Kr(Sd, getAssistantMessageId(ga, vs), isProgressOrHiddenEntry(ga));
         }
-        if (ga) n(ga, Qs(Hl));
-      },
-      Xa = 0,
-      ta = (ga, Hl, hd, Sd) => {
-        if (bo.has(Sd)) r();
-        let Ld = Hl,
-          vs = Hl + hd;
-        while (Ld < vs && ga[Ld] === 0) Ld++;
-        if (Ld === vs) return;
-        let chunk = ga.subarray(Ld, vs),
-          gd;
-        if (Nr) {
-          let Su;
-          try {
-            Su = Nr(chunk);
-          } catch {
-            (Xa++, Hi(null, chunk, Sd));
-            return;
-          }
-          if (Su.values.length < 1 || Is(chunk)) {
-            (Xa++, Hi(null, chunk, Sd));
-            return;
-          }
-          gd = Su.values[0];
-        } else
-          try {
-            gd = jsonParseRaw(ga.toString("utf8", Ld, vs));
-          } catch {
-            (Xa++, Hi(null, chunk, Sd));
-            return;
-          }
-        Hi(gd, chunk, Sd);
-      },
-      Bs = 0,
-      Ca = () => {
-        let ga = Bs < Ha.length ? Ha[Bs] : void 0;
-        if (Ri < fi.length) {
-          let Hl = fi[Ri];
-          if (ga === void 0 || Et[Hl] < ga[0]) return [Et[Hl], yt[Hl]];
+      }
+      if (ga) n(ga, Qs(Hl));
+    };
+    let Xa = 0;
+    let ta = (ga, Hl, hd, Sd) => {
+      if (bo.has(Sd)) r();
+      let Ld = Hl;
+      let vs = Hl + hd;
+      while (Ld < vs && ga[Ld] === 0) Ld++;
+      if (Ld === vs) return;
+      let chunk = ga.subarray(Ld, vs);
+      let gd;
+      if (Nr) {
+        let Su;
+        try {
+          Su = Nr(chunk);
+        } catch {
+          Xa++;
+          Hi(null, chunk, Sd);
+          return;
         }
-        return ga;
-      },
-      tu = () => {
-        if (Ri < fi.length && (Bs >= Ha.length || Et[fi[Ri]] < Ha[Bs][0])) Ri++;
-        else Bs++;
-      },
-      pd = [];
-    for (let ga = Ca(); ga !== void 0; ga = Ca()) {
-      ((pd.length = 0), pd.push(ga), tu());
-      let Hl = ga[0],
-        hd = Hl + ga[1];
-      for (let vs = Ca(); vs !== void 0 && vs[0] === hd + 1 && vs[0] + vs[1] - Hl <= mi; vs = Ca())
-        (pd.push(vs), tu(), (hd = vs[0] + vs[1]));
-      let read = e.read(Hl, hd - Hl),
-        Ld;
+        if (Su.values.length < 1 || Is(chunk)) {
+          Xa++;
+          Hi(null, chunk, Sd);
+          return;
+        }
+        gd = Su.values[0];
+      } else
+        try {
+          gd = jsonParseRaw(ga.toString("utf8", Ld, vs));
+        } catch {
+          Xa++;
+          Hi(null, chunk, Sd);
+          return;
+        }
+      Hi(gd, chunk, Sd);
+    };
+    let Bs = 0;
+    let Ca = () => {
+      let ga = Bs < Ha.length ? Ha[Bs] : undefined;
+      if (Ri < fi.length) {
+        let Hl = fi[Ri];
+        if (ga === undefined || Et[Hl] < ga[0]) return [Et[Hl], yt[Hl]];
+      }
+      return ga;
+    };
+    let tu = () => {
+      if (Ri < fi.length && (Bs >= Ha.length || Et[fi[Ri]] < Ha[Bs][0])) Ri++;
+      else Bs++;
+    };
+    let pd = [];
+    for (let ga = Ca(); ga !== undefined; ga = Ca()) {
+      pd.length = 0;
+      pd.push(ga);
+      tu();
+      let Hl = ga[0];
+      let hd = Hl + ga[1];
+      for (let vs = Ca(); vs !== undefined && vs[0] === hd + 1 && vs[0] + vs[1] - Hl <= mi; vs = Ca()) {
+        pd.push(vs);
+        tu();
+        hd = vs[0] + vs[1];
+      }
+      let Sd = e.read(Hl, hd - Hl);
+      let Ld;
       if (Nr && pd.length > 1) {
-        let vs = read.length === hd - Hl;
-        for (let ol = 0; vs && ol < pd.length; ol++) vs = pd[ol][1] >= 2 && read[pd[ol][0] - Hl] === 123;
-        if (vs && isAscii(read))
+        let vs = Sd.length === hd - Hl;
+        for (let idx = 0; vs && idx < pd.length; idx++) vs = pd[idx][1] >= 2 && Sd[pd[idx][0] - Hl] === 123;
+        if (vs && isAscii(Sd))
           try {
-            let ol = Nr(read);
+            let ol = Nr(Sd);
             if (
               !ol.error &&
               ol.values.length === pd.length &&
-              (ol.read === read.length || (ol.read === read.length - 1 && read.at(-1) === 13))
+              (ol.read === Sd.length || (ol.read === Sd.length - 1 && Sd.at(-1) === 13))
             )
               Ld = ol.values;
           } catch {
-            Ld = void 0;
+            Ld = undefined;
           }
       }
       if (Ld)
-        for (let vs = 0; vs < pd.length; vs++) {
-          let ol = pd[vs][0];
+        for (let idx = 0; idx < pd.length; idx++) {
+          let ol = pd[idx][0];
           if (bo.has(ol)) r();
           let gd = ol - Hl;
-          Hi(Ld[vs], read.subarray(gd, gd + pd[vs][1]), ol);
+          Hi(Ld[idx], Sd.subarray(gd, gd + pd[idx][1]), ol);
         }
-      else for (let vs = 0; vs < pd.length; vs++) ta(read, pd[vs][0] - Hl, pd[vs][1], pd[vs][0]);
+      else for (let idx = 0; idx < pd.length; idx++) ta(Sd, pd[idx][0] - Hl, pd[idx][1], pd[idx][0]);
     }
     reportUnparsableLines(Xa);
   } catch (error) {
-    throw ((Io = { error: error }), error);
+    Io = {
+      error,
+    };
+    throw error;
   } finally {
     closeAfterRead(() => e.close(), Io);
   }
-  let zo = (Or ? void 0 : ko) ?? Math.max(no, 0),
-    rs = 0;
-  for (let Es = 0; Es < Yt.length; Es++) if (Yt[Es] < zo) rs += qt[Es];
+  let zo = (Or ? undefined : ko) ?? Math.max(no, 0);
+  let earlierMetadataBytes = 0;
+  for (let idx = 0; idx < Yt.length; idx++) if (Yt[idx] < zo) earlierMetadataBytes += qt[idx];
   return {
     lastAttributionOffset: ao,
     lastAttributionLength: $o,
@@ -9702,73 +10435,84 @@ function scanTranscriptBuffer(e, n, r, s) {
       boundary: !vn ? (no >= 0 ? "plain" : "none") : Or ? "preserved_all_rows" : "preserved",
       keptFrom: zo,
       seedFrom: Math.max(hn, 0),
-      earlierMetadataBytes: rs,
-      scanMs: jr,
+      earlierMetadataBytes,
+      scanMs,
       scanStartMs: startTime,
     },
   };
 }
 //@ chunk-e6aww6q8.js:497626-497677 layout
-function scanTranscriptFile(e, n, r, s, h) {
-  return scanTranscriptBuffer(createFileChunkReader(e, n), r, s, h);
+function scanTranscriptFile(e, n, processEntry, dropPreBoundaryEntries, h) {
+  return scanTranscriptBuffer(createFileChunkReader(e, n), processEntry, dropPreBoundaryEntries, h);
 }
 //@ chunk-e6aww6q8.js:497677-497755 layout
 function endsWithNewlineSync(e, n) {
-  let alloc = Buffer.alloc(1);
-  return readSync(e, alloc, 0, 1, n - 1) === 1 && alloc[0] === 10;
+  let r = Buffer.alloc(1);
+  return readSync(e, r, 0, 1, n - 1) === 1 && r[0] === 10;
 }
 //@ chunk-e6aww6q8.js:497755-497974 layout
 async function endsWithNewline(e, n) {
-  if (n === 0) return !0;
-  let r = await open(e, "r"),
-    s;
+  if (n === 0) return true;
+  let r = await open(e, "r");
+  let s;
   try {
-    let alloc = Buffer.alloc(1),
-      { bytesRead: bytesRead } = await r.read(alloc, 0, 1, n - 1);
-    return bytesRead === 1 && alloc[0] === 10;
+    let h = Buffer.alloc(1);
+    let { bytesRead } = await r.read(h, 0, 1, n - 1);
+    return bytesRead === 1 && h[0] === 10;
   } catch (error) {
-    throw ((s = { error: error }), error);
+    s = {
+      error,
+    };
+    throw error;
   } finally {
     await closeAfterReadAsync(() => r.close(), s);
   }
 }
 //@ chunk-e6aww6q8.js:497974-498012 layout
-function gmo(e, n, r) {
-  return readJsonAtOffsetSync(e, n, r);
+function readJsonAtOffset(e, lastAttributionOffset, lastAttributionLength) {
+  return readJsonAtOffsetSync(e, lastAttributionOffset, lastAttributionLength);
 }
 //@ chunk-e6aww6q8.js:498012-498107 layout
 function readJsonAtOffsetSync(e, n, r) {
   if (n < 0 || r <= 0) return null;
-  let [s] = readFileTailSync(e, [{ offset: n, length: r }]);
-  return parseJsonBuffer(s);
+  let [line] = readFileTailSync(e, [
+    {
+      offset: n,
+      length: r,
+    },
+  ]);
+  return parseJsonBuffer(line);
 }
 //@ chunk-e6aww6q8.js:498107-498194 layout
-function parseJsonBuffer(e) {
-  if (!e) return null;
+function parseJsonBuffer(line) {
+  if (!line) return null;
   try {
-    return jsonParse(e.toString("utf8"));
+    return jsonParse(line.toString("utf8"));
   } catch {
     return null;
   }
 }
 //@ chunk-e6aww6q8.js:498194-498269 layout
-function readJsonAtOffset(e, n, r) {
-  if (n < 0 || r <= 0) return null;
-  return parseJsonBuffer(e.subarray(n, n + r));
+function readJsonAtOffset_2(e, lastAttributionOffset, lastAttributionLength) {
+  if (lastAttributionOffset < 0 || lastAttributionLength <= 0) return null;
+  return parseJsonBuffer(e.subarray(lastAttributionOffset, lastAttributionOffset + lastAttributionLength));
 }
 //@ chunk-e6aww6q8.js:498269-498511 fingerprint = readFileTailSync (0.701)
 function readFileTailSync(e, n) {
   if (n.length === 0) return [];
-  let r = openSync(e, "r"),
-    fd;
+  let r = openSync(e, "r");
+  let fd;
   try {
-    return n.map(({ offset: offset, length: y }) => {
+    return n.map(({ offset, length: y }) => {
       if (offset < 0 || y <= 0) return null;
       let buf = Buffer.allocUnsafe(y);
       return readSync(r, buf, 0, y, offset) < y ? null : buf;
     });
   } catch (error) {
-    throw ((fd = { error: error }), error);
+    fd = {
+      error,
+    };
+    throw error;
   } finally {
     closeAfterRead(() => closeSync(r), fd);
   }
@@ -9781,7 +10525,7 @@ function closeAfterRead(e, n) {
   try {
     e();
   } catch (error) {
-    if (n === void 0) throw error;
+    if (n === undefined) throw error;
     reportTranscriptCloseFailure(error, n.error);
   }
 }
@@ -9790,24 +10534,27 @@ async function closeAfterReadAsync(e, n) {
   try {
     await e();
   } catch (error) {
-    if (n === void 0) throw error;
+    if (n === undefined) throw error;
     reportTranscriptCloseFailure(error, n.error);
   }
 }
 //@ chunk-e6aww6q8.js:498762-498904 layout
-function reportTranscriptCloseFailure(e, n) {
-  if (isWin32ReadEbadf(n)) {
-    logForDebugging(`transcript close failed while an earlier error was propagating (${getErrnoCode(e)})`, {
-      level: "warn",
-    });
+function reportTranscriptCloseFailure(error, error_2) {
+  if (isWin32ReadEbadf(error_2)) {
+    logForDebugging(
+      `transcript close failed while an earlier error was propagating (${getErrnoCode(error)})`,
+      {
+        level: "warn",
+      },
+    );
     return;
   }
-  logError(withTelemetryMessage(e, TRANSCRIPT_CLOSE_FAILED_REPORT));
+  logError(withTelemetryMessage(error, TRANSCRIPT_CLOSE_FAILED_REPORT));
 }
 //@ chunk-e6aww6q8.js:498904-499117 layout
 function addTranscriptLine(e, n, r) {
-  let s = n === null ? null : n.subarray(yG(n, 0, n.length)),
-    h = null;
+  let s = n === null ? null : n.subarray(skipNuls(n, 0, n.length));
+  let h = null;
   if (s !== null)
     try {
       h = jsonParse(s.toString("utf8"));
@@ -9821,22 +10568,22 @@ function addTranscriptLine(e, n, r) {
   e.torn(s === null ? null : readEnvelopeSessionId(s), r);
 }
 //@ chunk-e6aww6q8.js:499117-499231 layout
-function rebuildFromLines(e, n, r) {
-  let s = new ArtifactLedgerCollector(),
-    h = 0;
+function rebuildFromLines(e, artifactAutoReactLedgers, r) {
+  let s = new ArtifactLedgerCollector();
+  let h = 0;
   for (let y of e) addTranscriptLine(s, y, h++);
-  n.clear();
-  for (let [y, S] of s.finish(r)) n.set(y, S);
+  artifactAutoReactLedgers.clear();
+  for (let [y, S] of s.finish(r)) artifactAutoReactLedgers.set(y, S);
 }
 //@ chunk-e6aww6q8.js:499231-499389 layout
 function isTornLine(e) {
-  if (e === null) return !0;
-  if (hasPrefix(e)) return !1;
+  if (e === null) return true;
+  if (hasPrefix(e)) return false;
   try {
-    let n = jsonParse(e.toString("utf8", yG(e, 0, e.length)));
+    let n = jsonParse(e.toString("utf8", skipNuls(e, 0, e.length)));
     return n === null || typeof n !== "object";
   } catch {
-    return !0;
+    return true;
   }
 }
 //@ chunk-e6aww6q8.js:499389-499508 layout
@@ -9857,7 +10604,7 @@ function* iterateEntryLines(e) {
   }
 }
 //@ chunk-e6aww6q8.js:499640-499693 layout
-function qMt(e) {
+function isObjectLike(e) {
   return typeof e === "object" && e !== null;
 }
 //@ chunk-e6aww6q8.js:499693-499819 layout
@@ -9874,54 +10621,60 @@ function writtenAtOrEarliest(e) {
 }
 //@ chunk-e6aww6q8.js:499944-501228 facade-majority
 function mergeArtifactCommentMonitorEntries(e, n) {
-  let artifacts = n.artifacts,
-    artifacts_2 = e.artifacts;
+  let artifacts = n.artifacts;
+  let artifacts_2 = e.artifacts;
   if (typeof artifacts !== "object" || artifacts === null)
     return typeof artifacts_2 === "object" && artifacts_2 !== null
-      ? e.crossLineMerged === !0
+      ? e.crossLineMerged === true
         ? e
-        : { ...e, crossLineMerged: !0 }
+        : {
+            ...e,
+            crossLineMerged: true,
+          }
       : n;
   let h = new Map(Object.entries(artifacts));
   if (typeof artifacts_2 === "object" && artifacts_2 !== null)
-    for (let [w, L] of Object.entries(artifacts_2)) {
-      if (!qMt(L)) continue;
-      let G = h.get(w),
-        q = qMt(G);
-      if (L.state !== "stopped") {
+    for (let [key, value] of Object.entries(artifacts_2)) {
+      if (!isObjectLike(value)) continue;
+      let G = h.get(key);
+      let q = isObjectLike(G);
+      if (value.state !== "stopped") {
         if (
-          L.state === "armed" &&
-          L.holder !== void 0 &&
+          value.state === "armed" &&
+          value.holder !== undefined &&
           q &&
           G.state === "armed" &&
-          (G.holder === void 0
-            ? writtenAtOrEarliest(G) <= writtenAtOrEarliest(L)
-            : writtenAtOrEarliest(G) < writtenAtOrEarliest(L))
+          (G.holder === undefined
+            ? writtenAtOrEarliest(G) <= writtenAtOrEarliest(value)
+            : writtenAtOrEarliest(G) < writtenAtOrEarliest(value))
         ) {
-          let {
-            holderPid: holderPid,
-            holderProcStart: holderProcStart,
-            holderProcStartFt: holderProcStartFt,
-            holderJob: holderJob,
-            holderPidSpace: holderPidSpace,
-            ...Me
-          } = G;
-          h.set(w, {
+          let { holderPid, holderProcStart, holderProcStartFt, holderJob, holderPidSpace, ...Me } = G;
+          h.set(key, {
             ...Me,
-            writtenAtMs: L.writtenAtMs,
-            holder: L.holder,
-            ...(L.holderPid !== void 0 && { holderPid: L.holderPid }),
-            ...(L.holderProcStart !== void 0 && { holderProcStart: L.holderProcStart }),
-            ...(L.holderProcStartFt !== void 0 && { holderProcStartFt: L.holderProcStartFt }),
-            ...(L.holderJob !== void 0 && { holderJob: L.holderJob }),
-            ...(L.holderPidSpace !== void 0 && { holderPidSpace: L.holderPidSpace }),
+            writtenAtMs: value.writtenAtMs,
+            holder: value.holder,
+            ...(value.holderPid !== undefined && {
+              holderPid: value.holderPid,
+            }),
+            ...(value.holderProcStart !== undefined && {
+              holderProcStart: value.holderProcStart,
+            }),
+            ...(value.holderProcStartFt !== undefined && {
+              holderProcStartFt: value.holderProcStartFt,
+            }),
+            ...(value.holderJob !== undefined && {
+              holderJob: value.holderJob,
+            }),
+            ...(value.holderPidSpace !== undefined && {
+              holderPidSpace: value.holderPidSpace,
+            }),
           });
         }
         continue;
       }
-      let Z = writtenAtOrLatest(L);
-      if (!h.has(w) || !q) {
-        h.set(w, L);
+      let Z = writtenAtOrLatest(value);
+      if (!h.has(key) || !q) {
+        h.set(key, value);
         continue;
       }
       let Se =
@@ -9930,62 +10683,76 @@ function mergeArtifactCommentMonitorEntries(e, n) {
           : G.state === "armed"
             ? writtenAtOrEarliest(G)
             : Number.NEGATIVE_INFINITY;
-      if (G.state === "stopped" ? Z > Se : Z >= Se) h.set(w, L);
+      if (G.state === "stopped" ? Z > Se : Z >= Se) h.set(key, value);
     }
-  let keys = Object.keys(artifacts),
-    S = h.size === keys.length && keys.every((w) => h.get(w) === artifacts[w]);
-  if (S && n.crossLineMerged === void 0) return n;
-  return { ...n, ...(S ? {} : { crossLineMerged: !0 }), artifacts: Object.fromEntries(h) };
+  let keys = Object.keys(artifacts);
+  let S = h.size === keys.length && keys.every((w) => h.get(w) === artifacts[w]);
+  if (S && n.crossLineMerged === undefined) return n;
+  return {
+    ...n,
+    ...(S
+      ? {}
+      : {
+          crossLineMerged: true,
+        }),
+    artifacts: Object.fromEntries(h),
+  };
 }
 //@ chunk-e6aww6q8.js:501228-502443 placement = shouldExtractMemory (0)
-function findToolUseSiblings(e, n, r, { direct: direct, throughBatch: throughBatch }) {
-  let y,
-    S = [],
-    w = !1;
+function findToolUseSiblings(messages, n, r, { direct, throughBatch }) {
+  let y;
+  let S = [];
+  let w = false;
   if (throughBatch) {
-    let Ee = new Set(),
-      Ae,
-      Ie = e.get(r);
-    while (Ie && isAuxiliaryEntry(Ie) && !Ee.has(Ie.uuid))
-      (Ee.add(Ie.uuid), (Ae = Ie), (Ie = Ie.parentUuid ? e.get(Ie.parentUuid) : void 0));
-    if (Ie?.type === "user" && _D(Ie.message?.content, "tool_result"))
-      ((S = getToolResultIds(Ie)), (y = Ie.parentUuid ? e.get(Ie.parentUuid) : void 0));
-    else if (Ae) {
-      let Me =
-          Ae.type === "attachment" && isPlainObject_4(Ae.attachment) && "toolUseID" in Ae.attachment
-            ? Ae.attachment.toolUseID
-            : void 0,
-        We = Ie?.type === "assistant" ? Ie.message?.id : void 0;
-      ((y =
-        Ie && We && typeof Me === "string"
-          ? [Ie, ...collectSameMessageSiblings(e, Ie, We)].find((ze) => hasToolUseBlock(ze).includes(Me))
-          : void 0),
-        (S = y && typeof Me === "string" ? [Me] : []),
-        (w = S.length > 0));
+    let Ee = new Set();
+    let Ae;
+    let Ie = messages.get(r);
+    while (Ie && isAuxiliaryEntry(Ie) && !Ee.has(Ie.uuid)) {
+      Ee.add(Ie.uuid);
+      Ae = Ie;
+      Ie = Ie.parentUuid ? messages.get(Ie.parentUuid) : undefined;
+    }
+    if (Ie?.type === "user" && contentHasBlockType(Ie.message?.content, "tool_result")) {
+      S = getToolResultIds(Ie);
+      y = Ie.parentUuid ? messages.get(Ie.parentUuid) : undefined;
+    } else if (Ae) {
+      let toolUseID =
+        Ae.type === "attachment" && isPlainObject_5(Ae.attachment) && "toolUseID" in Ae.attachment
+          ? Ae.attachment.toolUseID
+          : undefined;
+      let id = Ie?.type === "assistant" ? Ie.message?.id : undefined;
+      y =
+        Ie && id && typeof toolUseID === "string"
+          ? [Ie, ...collectSameMessageSiblings(messages, Ie, id)].find((ze) =>
+              hasToolUseBlock(ze).includes(toolUseID),
+            )
+          : undefined;
+      S = y && typeof toolUseID === "string" ? [toolUseID] : [];
+      w = S.length > 0;
     } else y = Ie;
   }
-  let L = y ? hasToolUseBlock(y) : [],
-    G = y?.type === "assistant" && L.length > 0 && y.message?.id ? y.message.id : void 0,
-    q = new Set(y && G ? collectSameMessageSiblings(e, y, G).map((Ee) => Ee.uuid) : []),
-    Z = new Set(),
-    Se,
-    ke = !1,
-    we = n;
+  let L = y ? hasToolUseBlock(y) : [];
+  let id = y?.type === "assistant" && L.length > 0 && y.message?.id ? y.message.id : undefined;
+  let q = new Set(y && id ? collectSameMessageSiblings(messages, y, id).map((Ee) => Ee.uuid) : []);
+  let Z = new Set();
+  let Se;
+  let ke = false;
+  let we = n;
   while (we && !Z.has(we)) {
-    if (direct && we === r) return !0;
+    if (direct && we === r) return true;
     Z.add(we);
-    let Ee = e.get(we);
-    if (y && G && Ee) {
-      if (ke && Ee.uuid === y.uuid) return !0;
+    let Ee = messages.get(we);
+    if (y && id && Ee) {
+      if (ke && Ee.uuid === y.uuid) return true;
       if (
         Ee.type === "assistant" &&
         Ee.uuid !== y.uuid &&
-        Ee.message?.id === G &&
+        Ee.message?.id === id &&
         countToolCallsSince_5(Ee)
       ) {
-        if (q.has(Ee.uuid)) return !0;
-        ke = !0;
-      } else if (!countVisibleMessages_2(Ee, G)) ke = !1;
+        if (q.has(Ee.uuid)) return true;
+        ke = true;
+      } else if (!countVisibleMessages_2(Ee, id)) ke = false;
     }
     if (
       y &&
@@ -9994,223 +10761,284 @@ function findToolUseSiblings(e, n, r, { direct: direct, throughBatch: throughBat
       S.some((Ae) => L.includes(Ae)) &&
       getToolResultIds(Se).some((Ae) => L.includes(Ae) && (w ? L.length > 1 : !S.includes(Ae)))
     )
-      return !0;
-    ((Se = Ee), (we = Ee?.parentUuid ?? void 0));
+      return true;
+    Se = Ee;
+    we = Ee?.parentUuid ?? undefined;
   }
-  return !1;
+  return false;
 }
 //@ chunk-e6aww6q8.js:502443-502643 placement
-function collectSameMessageSiblings(e, n, r) {
-  let s = [],
-    h = new Set([n.uuid]),
-    y = n.parentUuid ? e.get(n.parentUuid) : void 0;
-  while (y && !h.has(y.uuid) && countVisibleMessages_2(y, r))
-    (h.add(y.uuid), s.push(y), (y = y.parentUuid ? e.get(y.parentUuid) : void 0));
+function collectSameMessageSiblings(e, n, id) {
+  let s = [];
+  let h = new Set([n.uuid]);
+  let y = n.parentUuid ? e.get(n.parentUuid) : undefined;
+  while (y && !h.has(y.uuid) && countVisibleMessages_2(y, id)) {
+    h.add(y.uuid);
+    s.push(y);
+    y = y.parentUuid ? e.get(y.parentUuid) : undefined;
+  }
   return s;
 }
+//@ chunk-e6aww6q8.js:502643-511663 fingerprint = loadTranscriptFile (0.424)
 /**
  * 构造转录加载器：逐条处理 jsonl 记录，按 uuid 收集消息，按类型收集 summary、custom-title、tag、ai-title、file-history、attribution、content-replacement、worktree-state 等元数据，并找出叶子节点。
  */
-//@ chunk-e6aww6q8.js:502643-511663 fingerprint = loadTranscriptFile (0.424)
 function loadTranscriptFile_2(e) {
-  let messages = new Map(),
-    summaries = new Map(),
-    customTitles = new Map(),
-    tags = new Set(),
-    agentNames = new Map(),
-    agentColors = new Map(),
-    agentSettings = new Map(),
-    prNumbers = new Map(),
-    prUrls = new Map(),
-    prRepositories = new Map(),
-    modes = new Map(),
-    worktreeStates = new Map(),
-    fileHistorySnapshots = new Map(),
-    attributionSnapshots = new Map(),
-    contentReplacements = new Map(),
-    agentContentReplacements = new Map(),
-    Ie = new Map(),
-    Me = new Map(),
-    We = new Map(),
-    ze = new Map(),
-    lt = new Set(),
-    Je = new Map(),
-    nt = new Map(),
-    pt = new Map(),
-    Et = new Map(),
-    yt = new Map(),
-    gt = new Map(),
-    At = new Map(),
-    It = new Map(),
-    Yt = new Map(),
-    qt = new Map(),
-    Zt = new Map(),
-    rn = new Map(),
-    pn = new Map(),
-    no = new Map(),
-    hn = new Map(),
-    ho = new Map(),
-    yn = new Map(),
-    Kn = !1,
-    Xn,
-    fo,
-    To = "",
-    bo,
-    vn = !1,
-    co = !1,
-    So = !1,
-    ko = !1,
-    un = !1,
-    ao = 0,
-    $o = "leaf_scan",
-    yo = !1,
-    Ho,
-    rr = new Map(),
-    br = createRowRepairer(),
-    Hr = createRewindTracker(messages),
-    Fr = (Cr, Vr = !0) => {
-      if (!isPlainObject_2(Cr)) return;
-      let Oo = Cr;
-      if (isLegacyProgressEntry(Oo)) {
-        logLegacyProgressProbe("seen");
-        let parentUuid = Oo.parentUuid;
-        rr.set(Oo.uuid, parentUuid && rr.has(parentUuid) ? (rr.get(parentUuid) ?? null) : parentUuid);
-        return;
+  let messages = new Map();
+  let summaries = new Map();
+  let customTitles = new Map();
+  let tags = new Set();
+  let agentNames = new Map();
+  let agentColors = new Map();
+  let agentSettings = new Map();
+  let prNumbers = new Map();
+  let prUrls = new Map();
+  let prRepositories = new Map();
+  let modes = new Map();
+  let worktreeStates = new Map();
+  let fileHistorySnapshots = new Map();
+  let attributionSnapshots = new Map();
+  let contentReplacements = new Map();
+  let agentContentReplacements = new Map();
+  let Ie = new Map();
+  let Me = new Map();
+  let We = new Map();
+  let ze = new Map();
+  let lt = new Set();
+  let Je = new Map();
+  let nt = new Map();
+  let pt = new Map();
+  let Et = new Map();
+  let yt = new Map();
+  let gt = new Map();
+  let At = new Map();
+  let It = new Map();
+  let Yt = new Map();
+  let qt = new Map();
+  let Zt = new Map();
+  let rn = new Map();
+  let pn = new Map();
+  let no = new Map();
+  let hn = new Map();
+  let ho = new Map();
+  let yn = new Map();
+  let Kn = false;
+  let Xn;
+  let fo;
+  let To = "";
+  let bo;
+  let vn = false;
+  let co = false;
+  let So = false;
+  let ko = false;
+  let un = false;
+  let ao = 0;
+  let $o = "leaf_scan";
+  let prunedBeforeFold = false;
+  let Ho;
+  let rr = new Map();
+  let rowRepairer = createRowRepairer();
+  let rewindTracker = createRewindTracker(messages);
+  let Fr = (entry, Vr = true) => {
+    if (!isPlainObject_3(entry)) return;
+    let entry_2 = entry;
+    if (isLegacyProgressEntry(entry_2)) {
+      logLegacyProgressProbe("seen");
+      let parentUuid = entry_2.parentUuid;
+      rr.set(entry_2.uuid, parentUuid && rr.has(parentUuid) ? (rr.get(parentUuid) ?? null) : parentUuid);
+      return;
+    }
+    if (isTranscriptMessage(entry_2)) {
+      if (entry_2.parentUuid && rr.has(entry_2.parentUuid)) {
+        logLegacyProgressProbe("rewrote");
+        entry_2.parentUuid = rr.get(entry_2.parentUuid) ?? null;
       }
-      if (isTranscriptMessage(Oo)) {
-        if (Oo.parentUuid && rr.has(Oo.parentUuid))
-          (logLegacyProgressProbe("rewrote"), (Oo.parentUuid = rr.get(Oo.parentUuid) ?? null));
-        if (Ho !== void 0 && !Oo.isSidechain) {
-          if (Oo.parentUuid === null && !isCompactBoundaryMessage_3(Oo)) Oo.parentUuid = Ho;
-          Ho = void 0;
-        }
-        if (!br.admit(Oo, messages)) return;
-        if (Vr) repairMalformedStringsDeep(Oo);
-        if (Oo.type === "assistant" && Oo.wireToolInputs !== void 0) {
-          let jr = countToolCallsSince_2(Oo.wireToolInputs, Oo.message?.content, Oo.batchToolUses);
-          if (jr === void 0) delete Oo.wireToolInputs;
-          else Oo.wireToolInputs = jr;
-        }
-        if (Oo.type === "assistant" && (Oo.wireToolInputs !== void 0 || Oo.wireIngestContext !== void 0)) {
-          let jr = restoreWireInputStamps(Oo.wireIngestContext, Oo.wireToolInputs, Oo.message?.content);
-          if (jr === void 0) delete Oo.wireIngestContext;
-          else Oo.wireIngestContext = jr;
-        }
-        if ((messages.set(Oo.uuid, Oo), !Oo.isSidechain && !isTranscriptMessage_2(Oo))) {
-          if ((Hr.noteRow(Oo), (Xn = Oo.uuid), ao++, typeof Oo.timestamp === "string" && Oo.timestamp > To))
-            ((fo = Oo.uuid), (To = Oo.timestamp));
-          ((vn = !1), (So = !1), (ko = !1));
-        }
-        if (isCompactBoundaryMessage_3(Oo)) ((bo = void 0), (vn = !1), (co = !1), Hr.noteCompactBoundary());
-      } else if (Oo.type === "summary" && Oo.leafUuid) summaries.set(Oo.leafUuid, Oo.summary);
-      else if (Oo.type === "last-prompt") {
-        if ((Hr.noteCheckpoint(Oo), Oo.leafUuid !== void 0)) un = !0;
-        if (Oo.leafUuid)
-          ((vn = Oo.explicit === !0 || (vn && Oo.leafUuid === bo)),
-            (co = Oo.explicit === !0 || (co && Oo.leafUuid === bo)),
-            (ko = Oo.rewound === !0 || (ko && Oo.leafUuid === bo)),
-            (bo = Oo.leafUuid),
-            (ao = 0),
-            (So = !1));
-        else if (Oo.leafUuid === null && Oo.explicit === !0)
-          ((So = !0), (bo = void 0), (vn = !1), (co = !1), (ko = !1), (Ho = void 0));
-      } else if (Oo.type === "custom-title" && Oo.sessionId) customTitles.set(Oo.sessionId, Oo.customTitle);
-      else if (Oo.type === "ended-by-model" && Oo.sessionId && !$nr()) tags.add(Oo.sessionId);
-      else if (Oo.type === "ai-title" && Oo.sessionId) agentNames.set(Oo.sessionId, Oo.aiTitle);
-      else if (Oo.type === "tag" && Oo.sessionId) agentColors.set(Oo.sessionId, Oo.tag);
-      else if (Oo.type === "relocated" && Oo.sessionId) agentSettings.set(Oo.sessionId, Oo.relocatedCwd);
-      else if (Oo.type === "agent-name" && Oo.sessionId) prNumbers.set(Oo.sessionId, Oo.agentName);
-      else if (Oo.type === "agent-color" && Oo.sessionId) prUrls.set(Oo.sessionId, Oo.agentColor);
-      else if (Oo.type === "agent-setting" && Oo.sessionId) prRepositories.set(Oo.sessionId, Oo.agentSetting);
-      else if (Oo.type === "mode" && Oo.sessionId) Je.set(Oo.sessionId, Oo.mode);
-      else if (Oo.type === "permission-mode" && Oo.sessionId) nt.set(Oo.sessionId, Oo.permissionMode);
-      else if (Oo.type === "isolation-latch" && Oo.sessionId) pt.set(Oo.sessionId, Oo.side);
-      else if (Oo.type === "dev-mods" && Oo.sessionId)
-        if (typeof Oo.folder === "string" && sjt(Oo.folder, Oo.sessionId)) Et.set(Oo.sessionId, Oo.folder);
-        else logForDebugging("dev mods: dropped a dev-mods entry naming a folder not its own");
-      else if (
-        Oo.type === "memory-mode" &&
-        Oo.sessionId &&
-        (Oo.mode === "on" || Oo.mode === "off") &&
-        (typeof Oo.afterUuid === "string" || Oo.afterUuid === null) &&
-        typeof Oo.timestamp === "string"
+      if (Ho !== undefined && !entry_2.isSidechain) {
+        if (entry_2.parentUuid === null && !isCompactBoundaryMessage_3(entry_2)) entry_2.parentUuid = Ho;
+        Ho = undefined;
+      }
+      if (!rowRepairer.admit(entry_2, messages)) return;
+      if (Vr) repairMalformedStringsDeep(entry_2);
+      if (entry_2.type === "assistant" && entry_2.wireToolInputs !== undefined) {
+        let jr = countToolCallsSince_2(
+          entry_2.wireToolInputs,
+          entry_2.message?.content,
+          entry_2.batchToolUses,
+        );
+        if (jr === undefined) delete entry_2.wireToolInputs;
+        else entry_2.wireToolInputs = jr;
+      }
+      if (
+        entry_2.type === "assistant" &&
+        (entry_2.wireToolInputs !== undefined || entry_2.wireIngestContext !== undefined)
       ) {
-        let jr = yt.get(Oo.sessionId) ?? [];
-        (yt.set(Oo.sessionId, jr),
-          jr.push({
-            mode: Oo.mode,
-            afterUuid: Oo.afterUuid,
-            timestamp: Oo.timestamp,
-            ...((Oo.reason === "paused" ||
-              Oo.reason === "account_off" ||
-              Oo.reason === "account_read_only" ||
-              Oo.reason === "session_shape" ||
-              Oo.reason === "server_off") && { reason: Oo.reason }),
-            ...(typeof Oo.account === "string" && { account: Oo.account }),
-            ...((Oo.accountChoice === "on" ||
-              Oo.accountChoice === "read_only" ||
-              Oo.accountChoice === "off") && { accountChoice: Oo.accountChoice }),
-          }));
-      } else if (Oo.type === "atis-latch" && Oo.sessionId) {
-        if (typeof Oo.atis === "string" && /^[\x21-\x7e]*$/.test(Oo.atis)) gt.set(Oo.sessionId, Oo.atis);
-      } else if (Oo.type === "tools-used" && Oo.sessionId) {
-        if (Array.isArray(Oo.tools))
-          At.set(
-            Oo.sessionId,
-            Oo.tools.filter((tool) => typeof tool === "string" && tool !== ""),
-          );
-      } else if (Oo.type === "worktree-state" && Oo.sessionId) It.set(Oo.sessionId, Oo.worktreeSession);
-      else if (Oo.type === "artifact-comment-monitor" && Oo.sessionId) {
-        let jr = Yt.get(Oo.sessionId);
-        Yt.set(Oo.sessionId, jr === void 0 ? Oo : mergeArtifactCommentMonitorEntries(jr, Oo));
-      } else if (Oo.type === "artifact-autoreact-ledger" && Oo.sessionId) qt.set(Oo.sessionId, Oo);
-      else if (Oo.type === "cost-state" && Oo.sessionId) {
-        let safeParse = CostStateEntrySchema().safeParse(Oo);
-        if (safeParse.success) Zt.set(Oo.sessionId, { ...safeParse.data, sessionId: Oo.sessionId });
-      } else if (Oo.type === "pr-link" && Oo.sessionId)
-        (modes.set(Oo.sessionId, Oo.prNumber),
-          worktreeStates.set(Oo.sessionId, Oo.prUrl),
-          fileHistorySnapshots.set(Oo.sessionId, Oo.prRepository));
-      else if (Oo.type === "bridge-session" && Oo.sessionId) {
-        if (
-          (attributionSnapshots.set(Oo.sessionId, Oo.bridgeSessionId),
-          contentReplacements.set(Oo.sessionId, Oo.lastSequenceNum),
-          Oo.sessionGroupingId)
-        )
-          Ie.set(Oo.sessionId, Oo.sessionGroupingId);
-        else Ie.delete(Oo.sessionId);
-        if (Oo.noHistoryBackfill) Me.set(Oo.sessionId, !0);
-        else Me.delete(Oo.sessionId);
-        {
-          let { ownerAccountUuid: ownerAccountUuid, ownerOrganizationUuid: ownerOrganizationUuid } = Oo,
-            zo =
-              (ownerAccountUuid !== void 0 && !isUuidShaped(ownerAccountUuid)) ||
-              (ownerOrganizationUuid !== void 0 && !isUuidShaped(ownerOrganizationUuid));
-          if (!zo && ownerAccountUuid) We.set(Oo.sessionId, ownerAccountUuid);
-          else We.delete(Oo.sessionId);
-          if (!zo && ownerOrganizationUuid) ze.set(Oo.sessionId, ownerOrganizationUuid);
-          else ze.delete(Oo.sessionId);
+        let jr = restoreWireInputStamps(
+          entry_2.wireIngestContext,
+          entry_2.wireToolInputs,
+          entry_2.message?.content,
+        );
+        if (jr === undefined) delete entry_2.wireIngestContext;
+        else entry_2.wireIngestContext = jr;
+      }
+      messages.set(entry_2.uuid, entry_2);
+      if (!entry_2.isSidechain && !isTranscriptMessage_2(entry_2)) {
+        rewindTracker.noteRow(entry_2);
+        Xn = entry_2.uuid;
+        ao++;
+        if (typeof entry_2.timestamp === "string" && entry_2.timestamp > To) {
+          fo = entry_2.uuid;
+          To = entry_2.timestamp;
         }
-        let metaEntries = sanitizeStringList(Oo.declaredDialogKinds);
-        if (metaEntries.length > 0) agentContentReplacements.set(Oo.sessionId, metaEntries);
-        else agentContentReplacements.delete(Oo.sessionId);
-      } else if (Oo.type === "history-suppression" && Oo.sessionId) lt.add(Oo.sessionId);
-      else if (Oo.type === "file-history-snapshot") rn.set(Oo.messageId, Oo);
-      else if (Oo.type === "file-history-delta") {
-        let jr = pn.get(Oo.messageId);
-        if (jr) jr.push(Oo);
-        else pn.set(Oo.messageId, [Oo]);
-      } else if (Oo.type === "attribution-snapshot") (no.clear(), no.set(Oo.messageId, Oo));
-      else if (Oo.type === "content-replacement")
-        if (Oo.agentId) {
-          let jr = ho.get(Oo.agentId) ?? [];
-          (ho.set(Oo.agentId, jr), jr.push(...Oo.replacements));
-        } else {
-          let jr = hn.get(Oo.sessionId) ?? [];
-          (hn.set(Oo.sessionId, jr), jr.push(...Oo.replacements));
-        }
-      else if (Oo.type === "fork-context-ref") yn.set(Oo.agentId, Oo);
-    };
+        vn = false;
+        So = false;
+        ko = false;
+      }
+      if (isCompactBoundaryMessage_3(entry_2)) {
+        bo = undefined;
+        vn = false;
+        co = false;
+        rewindTracker.noteCompactBoundary();
+      }
+    } else if (entry_2.type === "summary" && entry_2.leafUuid)
+      summaries.set(entry_2.leafUuid, entry_2.summary);
+    else if (entry_2.type === "last-prompt") {
+      rewindTracker.noteCheckpoint(entry_2);
+      if (entry_2.leafUuid !== undefined) un = true;
+      if (entry_2.leafUuid) {
+        vn = entry_2.explicit === true || (vn && entry_2.leafUuid === bo);
+        co = entry_2.explicit === true || (co && entry_2.leafUuid === bo);
+        ko = entry_2.rewound === true || (ko && entry_2.leafUuid === bo);
+        bo = entry_2.leafUuid;
+        ao = 0;
+        So = false;
+      } else if (entry_2.leafUuid === null && entry_2.explicit === true) {
+        So = true;
+        bo = undefined;
+        vn = false;
+        co = false;
+        ko = false;
+        Ho = undefined;
+      }
+    } else if (entry_2.type === "custom-title" && entry_2.sessionId)
+      customTitles.set(entry_2.sessionId, entry_2.customTitle);
+    else if (entry_2.type === "ended-by-model" && entry_2.sessionId && !isModelEndCheckSupported())
+      tags.add(entry_2.sessionId);
+    else if (entry_2.type === "ai-title" && entry_2.sessionId)
+      agentNames.set(entry_2.sessionId, entry_2.aiTitle);
+    else if (entry_2.type === "tag" && entry_2.sessionId) agentColors.set(entry_2.sessionId, entry_2.tag);
+    else if (entry_2.type === "relocated" && entry_2.sessionId)
+      agentSettings.set(entry_2.sessionId, entry_2.relocatedCwd);
+    else if (entry_2.type === "agent-name" && entry_2.sessionId)
+      prNumbers.set(entry_2.sessionId, entry_2.agentName);
+    else if (entry_2.type === "agent-color" && entry_2.sessionId)
+      prUrls.set(entry_2.sessionId, entry_2.agentColor);
+    else if (entry_2.type === "agent-setting" && entry_2.sessionId)
+      prRepositories.set(entry_2.sessionId, entry_2.agentSetting);
+    else if (entry_2.type === "mode" && entry_2.sessionId) Je.set(entry_2.sessionId, entry_2.mode);
+    else if (entry_2.type === "permission-mode" && entry_2.sessionId)
+      nt.set(entry_2.sessionId, entry_2.permissionMode);
+    else if (entry_2.type === "isolation-latch" && entry_2.sessionId) pt.set(entry_2.sessionId, entry_2.side);
+    else if (entry_2.type === "dev-mods" && entry_2.sessionId) {
+      if (typeof entry_2.folder === "string" && isSessionFileAt(entry_2.folder, entry_2.sessionId))
+        Et.set(entry_2.sessionId, entry_2.folder);
+      else logForDebugging("dev mods: dropped a dev-mods entry naming a folder not its own");
+    } else if (
+      entry_2.type === "memory-mode" &&
+      entry_2.sessionId &&
+      (entry_2.mode === "on" || entry_2.mode === "off") &&
+      (typeof entry_2.afterUuid === "string" || entry_2.afterUuid === null) &&
+      typeof entry_2.timestamp === "string"
+    ) {
+      let jr = yt.get(entry_2.sessionId) ?? [];
+      yt.set(entry_2.sessionId, jr);
+      jr.push({
+        mode: entry_2.mode,
+        afterUuid: entry_2.afterUuid,
+        timestamp: entry_2.timestamp,
+        ...((entry_2.reason === "paused" ||
+          entry_2.reason === "account_off" ||
+          entry_2.reason === "account_read_only" ||
+          entry_2.reason === "session_shape" ||
+          entry_2.reason === "server_off") && {
+          reason: entry_2.reason,
+        }),
+        ...(typeof entry_2.account === "string" && {
+          account: entry_2.account,
+        }),
+        ...((entry_2.accountChoice === "on" ||
+          entry_2.accountChoice === "read_only" ||
+          entry_2.accountChoice === "off") && {
+          accountChoice: entry_2.accountChoice,
+        }),
+      });
+    } else if (entry_2.type === "atis-latch" && entry_2.sessionId) {
+      if (typeof entry_2.atis === "string" && /^[\x21-\x7e]*$/.test(entry_2.atis))
+        gt.set(entry_2.sessionId, entry_2.atis);
+    } else if (entry_2.type === "tools-used" && entry_2.sessionId) {
+      if (Array.isArray(entry_2.tools))
+        At.set(
+          entry_2.sessionId,
+          entry_2.tools.filter((tool) => typeof tool === "string" && tool !== ""),
+        );
+    } else if (entry_2.type === "worktree-state" && entry_2.sessionId)
+      It.set(entry_2.sessionId, entry_2.worktreeSession);
+    else if (entry_2.type === "artifact-comment-monitor" && entry_2.sessionId) {
+      let jr = Yt.get(entry_2.sessionId);
+      Yt.set(entry_2.sessionId, jr === undefined ? entry_2 : mergeArtifactCommentMonitorEntries(jr, entry_2));
+    } else if (entry_2.type === "artifact-autoreact-ledger" && entry_2.sessionId)
+      qt.set(entry_2.sessionId, entry_2);
+    else if (entry_2.type === "cost-state" && entry_2.sessionId) {
+      let jr = CostStateEntrySchema().safeParse(entry_2);
+      if (jr.success)
+        Zt.set(entry_2.sessionId, {
+          ...jr.data,
+          sessionId: entry_2.sessionId,
+        });
+    } else if (entry_2.type === "pr-link" && entry_2.sessionId) {
+      modes.set(entry_2.sessionId, entry_2.prNumber);
+      worktreeStates.set(entry_2.sessionId, entry_2.prUrl);
+      fileHistorySnapshots.set(entry_2.sessionId, entry_2.prRepository);
+    } else if (entry_2.type === "bridge-session" && entry_2.sessionId) {
+      attributionSnapshots.set(entry_2.sessionId, entry_2.bridgeSessionId);
+      contentReplacements.set(entry_2.sessionId, entry_2.lastSequenceNum);
+      if (entry_2.sessionGroupingId) Ie.set(entry_2.sessionId, entry_2.sessionGroupingId);
+      else Ie.delete(entry_2.sessionId);
+      if (entry_2.noHistoryBackfill) Me.set(entry_2.sessionId, true);
+      else Me.delete(entry_2.sessionId);
+      {
+        let { ownerAccountUuid, ownerOrganizationUuid } = entry_2;
+        let zo =
+          (ownerAccountUuid !== undefined && !isUuidShaped(ownerAccountUuid)) ||
+          (ownerOrganizationUuid !== undefined && !isUuidShaped(ownerOrganizationUuid));
+        if (!zo && ownerAccountUuid) We.set(entry_2.sessionId, ownerAccountUuid);
+        else We.delete(entry_2.sessionId);
+        if (!zo && ownerOrganizationUuid) ze.set(entry_2.sessionId, ownerOrganizationUuid);
+        else ze.delete(entry_2.sessionId);
+      }
+      let metaEntries = sanitizeStringList(entry_2.declaredDialogKinds);
+      if (metaEntries.length > 0) agentContentReplacements.set(entry_2.sessionId, metaEntries);
+      else agentContentReplacements.delete(entry_2.sessionId);
+    } else if (entry_2.type === "history-suppression" && entry_2.sessionId) lt.add(entry_2.sessionId);
+    else if (entry_2.type === "file-history-snapshot") rn.set(entry_2.messageId, entry_2);
+    else if (entry_2.type === "file-history-delta") {
+      let jr = pn.get(entry_2.messageId);
+      if (jr) jr.push(entry_2);
+      else pn.set(entry_2.messageId, [entry_2]);
+    } else if (entry_2.type === "attribution-snapshot") {
+      no.clear();
+      no.set(entry_2.messageId, entry_2);
+    } else if (entry_2.type === "content-replacement") {
+      if (entry_2.agentId) {
+        let jr = ho.get(entry_2.agentId) ?? [];
+        ho.set(entry_2.agentId, jr);
+        jr.push(...entry_2.replacements);
+      } else {
+        let jr = hn.get(entry_2.sessionId) ?? [];
+        hn.set(entry_2.sessionId, jr);
+        jr.push(...entry_2.replacements);
+      }
+    } else if (entry_2.type === "fork-context-ref") yn.set(entry_2.agentId, entry_2);
+  };
   return {
     processEntry: Fr,
     precede: (Cr) => {
@@ -10218,104 +11046,123 @@ function loadTranscriptFile_2(e) {
       Ho = Cr.findLast((Vr) => isChainParticipant(Vr) && messages.has(Vr.uuid))?.uuid;
     },
     dropPreBoundaryEntries: () => {
-      (messages.clear(), rn.clear(), pn.clear(), rr.clear());
+      messages.clear();
+      rn.clear();
+      pn.clear();
+      rr.clear();
     },
-    messages: messages,
+    messages,
     attributionSnapshots: no,
     artifactCommentMonitors: Yt,
     artifactAutoReactLedgers: qt,
     markPrunedBeforeFold: () => {
-      yo = !0;
+      prunedBeforeFold = true;
     },
     setTailTorn: (Cr) => {
       Kn = Cr;
     },
     finish: () => {
-      (br.finish(messages), Hr.publish());
+      rowRepairer.finish(messages);
+      rewindTracker.publish();
       let entries = applyPreservedSegmentOnLoad(messages);
       if (!e) applySnipRemovals(messages, fo);
       return cs(entries);
     },
   };
-  function cs(Cr) {
-    if (Kn) for (let [Nr, Is] of Yt) Yt.set(Nr, { ...Is, tailTorn: !0 });
+  function cs(entries) {
+    if (Kn)
+      for (let [Nr, Is] of Yt)
+        Yt.set(Nr, {
+          ...Is,
+          tailTorn: true,
+        });
     if (!e && So) return _r(new Set());
-    let progressBridge = new Set(),
-      Oo = vn && bo && messages.has(bo) && !messages.get(bo)?.isSidechain,
-      jr = (Nr) => {
-        let parentUuids = new Map([[Nr, !0]]),
-          fs = (msg) => {
-            let Wi = [],
-              ii = !1,
-              wa = msg;
-            while (wa) {
-              let hr = parentUuids.get(wa);
-              if (hr !== void 0) {
-                ii = hr;
-                break;
-              }
-              (parentUuids.set(wa, !1), Wi.push(wa), (wa = messages.get(wa)?.parentUuid ?? void 0));
-            }
-            for (let hr of Wi) parentUuids.set(hr, ii);
-            return ii;
-          },
-          as = Nr,
-          Vi = "";
-        for (let ji of messages.values())
-          if (
-            !ji.isSidechain &&
-            ji.uuid !== Nr &&
-            typeof ji.timestamp === "string" &&
-            ji.timestamp >= Vi &&
-            fs(ji.uuid)
-          )
-            ((as = ji.uuid), (Vi = ji.timestamp));
-        return as;
-      },
-      Or = Xn;
+    let progressBridge = new Set();
+    let Oo = vn && bo && messages.has(bo) && !messages.get(bo)?.isSidechain;
+    let jr = (Nr) => {
+      let parentUuids = new Map([[Nr, true]]);
+      let fs = (start) => {
+        let Wi = [];
+        let ii = false;
+        let cur = start;
+        while (cur) {
+          let hr = parentUuids.get(cur);
+          if (hr !== undefined) {
+            ii = hr;
+            break;
+          }
+          parentUuids.set(cur, false);
+          Wi.push(cur);
+          cur = messages.get(cur)?.parentUuid ?? undefined;
+        }
+        for (let hr of Wi) parentUuids.set(hr, ii);
+        return ii;
+      };
+      let as = Nr;
+      let Vi = "";
+      for (let ji of messages.values())
+        if (
+          !ji.isSidechain &&
+          ji.uuid !== Nr &&
+          typeof ji.timestamp === "string" &&
+          ji.timestamp >= Vi &&
+          fs(ji.uuid)
+        ) {
+          as = ji.uuid;
+          Vi = ji.timestamp;
+        }
+      return as;
+    };
+    let Or = Xn;
     if (!e && !un && Or && fo && fo !== Or) Or = jr(Or);
-    if (!e && (!Cr || Oo)) {
-      let Nr = bo && messages.has(bo) ? bo : void 0;
+    if (!e && (!entries || Oo)) {
+      let Nr = bo && messages.has(bo) ? bo : undefined;
       if (
         Nr &&
         !vn &&
         Xn &&
         messages.has(Xn) &&
         Xn !== Nr &&
-        findToolUseSiblings(messages, Xn, Nr, { direct: !0, throughBatch: !co })
+        findToolUseSiblings(messages, Xn, Nr, {
+          direct: true,
+          throughBatch: !co,
+        })
       )
         Nr = Xn;
-      if (!Cr) Nr ??= Or;
+      if (!entries) Nr ??= Or;
       if (Nr && messages.has(Nr)) {
-        let leafUuids = new Set(),
-          fs = messages.get(Nr);
+        let leafUuids = new Set();
+        let fs = messages.get(Nr);
         while (fs) {
           if (leafUuids.has(fs.uuid)) {
             logEvent("tengu_transcript_parent_cycle", {});
             break;
           }
-          if ((leafUuids.add(fs.uuid), fs.type === "user" || fs.type === "assistant")) {
+          leafUuids.add(fs.uuid);
+          if (fs.type === "user" || fs.type === "assistant") {
             progressBridge.add(fs.uuid);
             break;
           }
-          fs = fs.parentUuid ? messages.get(fs.parentUuid) : void 0;
+          fs = fs.parentUuid ? messages.get(fs.parentUuid) : undefined;
         }
-        if (progressBridge.size === 1)
-          return (($o = Nr === bo ? "checkpoint" : Nr === Xn ? "last_row" : "inferred"), _r(progressBridge));
+        if (progressBridge.size === 1) {
+          $o = Nr === bo ? "checkpoint" : Nr === Xn ? "last_row" : "inferred";
+          return _r(progressBridge);
+        }
       }
     }
-    let hasUserAssistantChild = new Set(),
-      seen = new Set();
+    let hasUserAssistantChild = new Set();
+    let seen = new Set();
     for (let Nr of messages.values())
       if (Nr.parentUuid !== null) {
-        if ((hasUserAssistantChild.add(Nr.parentUuid), Nr.type === "user" || Nr.type === "assistant"))
-          seen.add(Nr.parentUuid);
+        hasUserAssistantChild.add(Nr.parentUuid);
+        if (Nr.type === "user" || Nr.type === "assistant") seen.add(Nr.parentUuid);
       }
     let rs = [];
     for (let Nr of messages.values()) if (!hasUserAssistantChild.has(Nr.uuid)) rs.push(Nr);
     if (
       collectLeafUuids({
-        messages: messages,
+        messages,
         terminalMessages: rs,
         hasUserAssistantChild: seen,
         leafUuids: progressBridge,
@@ -10326,314 +11173,385 @@ function loadTranscriptFile_2(e) {
       let Nr =
         bo &&
         progressBridge.has(bo) &&
-        (vn || !Xn || !findToolUseSiblings(messages, Xn, bo, { direct: !1, throughBatch: !co }))
+        (vn ||
+          !Xn ||
+          !findToolUseSiblings(messages, Xn, bo, {
+            direct: false,
+            throughBatch: !co,
+          }))
           ? bo
           : Xn;
       if (!Nr || !messages.has(Nr)) return _r(progressBridge);
-      let seen = new Set(),
-        fs = messages.get(Nr);
+      let seen = new Set();
+      let fs = messages.get(Nr);
       while (fs) {
         if (seen.has(fs.uuid)) break;
-        if ((seen.add(fs.uuid), fs.type === "user" || fs.type === "assistant")) {
-          (progressBridge.clear(),
-            progressBridge.add(fs.uuid),
-            ($o = Nr === bo ? "checkpoint_pruned" : "last_row_pruned"));
+        seen.add(fs.uuid);
+        if (fs.type === "user" || fs.type === "assistant") {
+          progressBridge.clear();
+          progressBridge.add(fs.uuid);
+          $o = Nr === bo ? "checkpoint_pruned" : "last_row_pruned";
           break;
         }
-        fs = fs.parentUuid ? messages.get(fs.parentUuid) : void 0;
+        fs = fs.parentUuid ? messages.get(fs.parentUuid) : undefined;
       }
     }
     return _r(progressBridge);
   }
-  function _r(Cr) {
-    return (
-      Hxt(messages, {
-        chose: $o,
-        checkpoint: bo,
-        checkpointEverExplicit: co,
-        lastRow: Xn,
-        newestRow: fo,
-        rowsAfterLastCheckpoint: ao,
-        prunedBeforeFold: yo,
+  function _r(leafUuids) {
+    recordLoadReportFor(messages, {
+      chose: $o,
+      checkpoint: bo,
+      checkpointEverExplicit: co,
+      lastRow: Xn,
+      newestRow: fo,
+      rowsAfterLastCheckpoint: ao,
+      prunedBeforeFold,
+    });
+    return {
+      messages,
+      summaries,
+      customTitles,
+      endedSessions: tags,
+      aiTitles: agentNames,
+      tags: agentColors,
+      relocatedCwds: agentSettings,
+      agentNames: prNumbers,
+      agentColors: prUrls,
+      agentSettings: prRepositories,
+      prNumbers: modes,
+      prUrls: worktreeStates,
+      prRepositories: fileHistorySnapshots,
+      bridgeSessionIds: attributionSnapshots,
+      bridgeLastSeqs: contentReplacements,
+      bridgeDialogKindsBySession: agentContentReplacements,
+      bridgeSessionGroupingIds: Ie,
+      bridgeNoBackfill: Me,
+      bridgeOwnerAccountUuids: We,
+      bridgeOwnerOrganizationUuids: ze,
+      historySuppressed: lt,
+      modes: Je,
+      permissionModes: nt,
+      isolationLatches: pt,
+      ...(Et.size > 0 && {
+        devModsFolders: Et,
       }),
-      {
-        messages: messages,
-        summaries: summaries,
-        customTitles: customTitles,
-        endedSessions: tags,
-        aiTitles: agentNames,
-        tags: agentColors,
-        relocatedCwds: agentSettings,
-        agentNames: prNumbers,
-        agentColors: prUrls,
-        agentSettings: prRepositories,
-        prNumbers: modes,
-        prUrls: worktreeStates,
-        prRepositories: fileHistorySnapshots,
-        bridgeSessionIds: attributionSnapshots,
-        bridgeLastSeqs: contentReplacements,
-        bridgeDialogKindsBySession: agentContentReplacements,
-        bridgeSessionGroupingIds: Ie,
-        bridgeNoBackfill: Me,
-        bridgeOwnerAccountUuids: We,
-        bridgeOwnerOrganizationUuids: ze,
-        historySuppressed: lt,
-        modes: Je,
-        permissionModes: nt,
-        isolationLatches: pt,
-        ...(Et.size > 0 && { devModsFolders: Et }),
-        memoryModeStamps: yt,
-        atisLatches: gt,
-        ...(At.size > 0 && { toolsUsedLists: At }),
-        worktreeStates: It,
-        artifactCommentMonitors: Yt,
-        artifactAutoReactLedgers: qt,
-        costStates: Zt,
-        fileHistorySnapshots: rn,
-        fileHistoryDeltas: pn,
-        attributionSnapshots: no,
-        contentReplacements: hn,
-        agentContentReplacements: ho,
-        forkContextRefs: yn,
-        leafUuids: Cr,
-        clearedToEmpty: !e && So,
-        rewindAnchorUuid: ko ? bo : void 0,
-      }
-    );
+      memoryModeStamps: yt,
+      atisLatches: gt,
+      ...(At.size > 0 && {
+        toolsUsedLists: At,
+      }),
+      worktreeStates: It,
+      artifactCommentMonitors: Yt,
+      artifactAutoReactLedgers: qt,
+      costStates: Zt,
+      fileHistorySnapshots: rn,
+      fileHistoryDeltas: pn,
+      attributionSnapshots: no,
+      contentReplacements: hn,
+      agentContentReplacements: ho,
+      forkContextRefs: yn,
+      leafUuids,
+      clearedToEmpty: !e && So,
+      rewindAnchorUuid: ko ? bo : undefined,
+    };
   }
 }
 //@ chunk-e6aww6q8.js:511663-511764 facade-majority
 function loadTranscriptFromEntries(e, n) {
-  let r = loadTranscriptFile_2(n?.keepAllLeaves ?? !1);
-  for (let s of e) r.processEntry(s);
-  return r.finish();
+  let transcriptFile = loadTranscriptFile_2(n?.keepAllLeaves ?? false);
+  for (let s of e) transcriptFile.processEntry(s);
+  return transcriptFile.finish();
 }
+//@ chunk-e6aww6q8.js:511764-515250 facade-majority
 /**
  * 加载一份转录文件（或 storage 记录）：逐条解析，交给 loadTranscriptFile 处理器，跳过无法解析的行并统计。
  */
-//@ chunk-e6aww6q8.js:511764-515250 facade-majority
 async function loadTranscriptFile(e, n) {
-  let r = loadTranscriptFile_2(n?.keepAllLeaves ?? !1),
-    {
-      processEntry: processEntry,
-      artifactCommentMonitors: artifactCommentMonitors,
-      artifactAutoReactLedgers: artifactAutoReactLedgers,
-    } = r;
-  r.precede(n?.precedingEntries ?? []);
+  let transcriptFile = loadTranscriptFile_2(n?.keepAllLeaves ?? false);
+  let { processEntry, artifactCommentMonitors, artifactAutoReactLedgers } = transcriptFile;
+  transcriptFile.precede(n?.precedingEntries ?? []);
   let S = isEnvTruthy(process.env.CLAUDE_CODE_DISABLE_PRECOMPACT_SKIP);
   if (isStorageV5Enabled() && n?.storageV5) {
-    let { backend: backend, key: key } = n.storageV5,
-      read = await backend.read([key]),
-      q = read.ok
-        ? void 0
-        : d7t(read.error)
-          ? await readPagedTranscript(backend, key)
-          : isStorageTooLargeError(read.error)
-            ? await readPagedTranscript(backend, key, G9)
-            : void 0,
-      Z = read.ok ? void 0 : q === void 0 ? read.error : q !== null && "failure" in q ? q.failure : void 0;
-    if (Z !== void 0) {
-      if (Z.code === "Failed" && Z.failureClass === "permission")
-        return (
-          logForDebugging("loadTranscriptFile: v5 read inaccessible (permission) \u2014 empty result"),
-          Object.assign(r.finish(), { servedBy: "inaccessible" })
-        );
-      logForDebugging(`loadTranscriptFile: v5 read failed (${Z.code})`, { level: "error" });
-      let Ie = errnoShapedCode("telemetryCode" in Z ? Z.telemetryCode : void 0),
-        merged = Object.assign(
-          Error("loadTranscriptFile: transcript unreadable via storage backend", { cause: Z }),
-          Ie === void 0 ? {} : { code: Ie },
-        );
+    let { backend, key } = n.storageV5;
+    let G = await backend.read([key]);
+    let q = G.ok
+      ? undefined
+      : isByteViewUnsupportedError(G.error)
+        ? await readPagedTranscript(backend, key)
+        : isStorageTooLargeError(G.error)
+          ? await readPagedTranscript(backend, key, pagedTranscriptPageBytes)
+          : undefined;
+    let Z = G.ok
+      ? undefined
+      : q === undefined
+        ? G.error
+        : q !== null && "failure" in q
+          ? q.failure
+          : undefined;
+    if (Z !== undefined) {
+      if (Z.code === "Failed" && Z.failureClass === "permission") {
+        logForDebugging("loadTranscriptFile: v5 read inaccessible (permission) \u2014 empty result");
+        return Object.assign(transcriptFile.finish(), {
+          servedBy: "inaccessible",
+        });
+      }
+      logForDebugging(`loadTranscriptFile: v5 read failed (${Z.code})`, {
+        level: "error",
+      });
+      let Ie = errnoShapedCode("telemetryCode" in Z ? Z.telemetryCode : undefined);
+      let merged = Object.assign(
+        Error("loadTranscriptFile: transcript unreadable via storage backend", {
+          cause: Z,
+        }),
+        Ie === undefined
+          ? {}
+          : {
+              code: Ie,
+            },
+      );
       if (isWin32TranscriptEbadf(merged))
         logError(withTelemetryMessage(merged, WIN32_EBADF_TELEMETRY_MESSAGE));
       throw merged;
     }
-    let Se = read.ok ? read.value.items[0] : void 0,
-      ke = q !== void 0 && q !== null && "bytes" in q ? q : void 0,
-      we = Se?.found
-        ? { servedBy: "v5", v5Read: { mtimeMs: Se.mtimeMs } }
-        : ke
-          ? { servedBy: "v5-records", v5Read: { mtimeMs: ke.mtimeMs } }
-          : { servedBy: "absent" },
-      Ee = Se?.found ? Se.value : ke?.bytes,
-      Ae = Se?.found ? Se.storedBytes : ke?.storedBytes;
-    if (Ee !== void 0) {
-      let buffer = Buffer.from(Ee.buffer, Ee.byteOffset, Ee.byteLength),
-        Me = async () => {
-          if (ke !== void 0) return ke.tornTailBytes > 0;
-          let stats = await backend.stat(key);
-          return stats.ok && (stats.value.tornTailBytes ?? 0) > 0;
-        };
-      if (!S && (Ae ?? buffer.length) > SKIP_PRECOMPACT_THRESHOLD) {
-        let ze = scanTranscriptBuffer(
-            createBufferLineScanner(buffer),
-            processEntry,
-            r.dropPreBoundaryEntries,
-            n?.keepAllLeaves ?? !1,
-          ),
-          lt = readJsonAtOffset(buffer, ze.lastAttributionOffset, ze.lastAttributionLength);
-        if (lt) r.attributionSnapshots.set(lt.messageId, lt);
-        r.markPrunedBeforeFold();
-        let Je =
-            ze.finalLine.offset >= 0 &&
-            ze.ledgerLines.at(-1)?.offset !== ze.finalLine.offset &&
-            (ze.ledgerLines.length > 0 || artifactAutoReactLedgers.size > 0),
-          mapped = (Je ? [...ze.ledgerLines, ze.finalLine] : ze.ledgerLines).map(
-            ({ offset: offset, length: yt }) => buffer.subarray(offset, offset + yt),
-          ),
-          pt = Je && isTornLine(mapped.pop() ?? null);
-        if (
-          (rebuildFromLines(mapped, artifactAutoReactLedgers, pt),
-          artifactCommentMonitors.size > 0 || artifactAutoReactLedgers.size > 0)
-        ) {
-          let Et = await Me();
-          if ((r.setTailTorn(Et), Et))
-            for (let [yt, gt] of artifactAutoReactLedgers)
-              artifactAutoReactLedgers.set(yt, resetArtifactLedgerState(gt, !1));
+    let Se = G.ok ? G.value.items[0] : undefined;
+    let ke = q !== undefined && q !== null && "bytes" in q ? q : undefined;
+    let we = Se?.found
+      ? {
+          servedBy: "v5",
+          v5Read: {
+            mtimeMs: Se.mtimeMs,
+          },
         }
-        return Object.assign(r.finish(), we);
+      : ke
+        ? {
+            servedBy: "v5-records",
+            v5Read: {
+              mtimeMs: ke.mtimeMs,
+            },
+          }
+        : {
+            servedBy: "absent",
+          };
+    let Ee = Se?.found ? Se.value : ke?.bytes;
+    let storedBytes = Se?.found ? Se.storedBytes : ke?.storedBytes;
+    if (Ee !== undefined) {
+      let buffer = Buffer.from(Ee.buffer, Ee.byteOffset, Ee.byteLength);
+      let Me = async () => {
+        if (ke !== undefined) return ke.tornTailBytes > 0;
+        let stats = await backend.stat(key);
+        return stats.ok && (stats.value.tornTailBytes ?? 0) > 0;
+      };
+      if (!S && (storedBytes ?? buffer.length) > SKIP_PRECOMPACT_THRESHOLD) {
+        let ze = scanTranscriptBuffer(
+          createBufferLineScanner(buffer),
+          processEntry,
+          transcriptFile.dropPreBoundaryEntries,
+          n?.keepAllLeaves ?? false,
+        );
+        let jsonAtOffset = readJsonAtOffset_2(buffer, ze.lastAttributionOffset, ze.lastAttributionLength);
+        if (jsonAtOffset) transcriptFile.attributionSnapshots.set(jsonAtOffset.messageId, jsonAtOffset);
+        transcriptFile.markPrunedBeforeFold();
+        let Je =
+          ze.finalLine.offset >= 0 &&
+          ze.ledgerLines.at(-1)?.offset !== ze.finalLine.offset &&
+          (ze.ledgerLines.length > 0 || artifactAutoReactLedgers.size > 0);
+        let mapped = (Je ? [...ze.ledgerLines, ze.finalLine] : ze.ledgerLines).map(({ offset, length: yt }) =>
+          buffer.subarray(offset, offset + yt),
+        );
+        let pt = Je && isTornLine(mapped.pop() ?? null);
+        rebuildFromLines(mapped, artifactAutoReactLedgers, pt);
+        if (artifactCommentMonitors.size > 0 || artifactAutoReactLedgers.size > 0) {
+          let Et = await Me();
+          transcriptFile.setTailTorn(Et);
+          if (Et)
+            for (let [yt, gt] of artifactAutoReactLedgers)
+              artifactAutoReactLedgers.set(yt, resetArtifactLedgerState(gt, false));
+        }
+        return Object.assign(transcriptFile.finish(), we);
       }
       let We = isTornLine(lastLineOf(buffer));
-      if (!n?.keepAllLeaves && buffer.length > SKIP_PRECOMPACT_THRESHOLD)
-        ((buffer = walkChainBeforeParse(buffer)), r.markPrunedBeforeFold());
+      if (!n?.keepAllLeaves && buffer.length > SKIP_PRECOMPACT_THRESHOLD) {
+        buffer = walkChainBeforeParse(buffer);
+        transcriptFile.markPrunedBeforeFold();
+      }
       for (let ze of countJsonlLines(buffer)) processEntry(ze);
-      if (
-        (rebuildFromLines(iterateEntryLines(buffer), artifactAutoReactLedgers, We),
-        artifactCommentMonitors.size > 0 || artifactAutoReactLedgers.size > 0)
-      ) {
+      rebuildFromLines(iterateEntryLines(buffer), artifactAutoReactLedgers, We);
+      if (artifactCommentMonitors.size > 0 || artifactAutoReactLedgers.size > 0) {
         let ze = await Me();
-        if ((r.setTailTorn(ze), ze))
+        transcriptFile.setTailTorn(ze);
+        if (ze)
           for (let [lt, Je] of artifactAutoReactLedgers)
-            artifactAutoReactLedgers.set(lt, resetArtifactLedgerState(Je, !1));
+            artifactAutoReactLedgers.set(lt, resetArtifactLedgerState(Je, false));
       }
     }
-    return Object.assign(r.finish(), we);
+    return Object.assign(transcriptFile.finish(), we);
   }
-  if (isDiskless()) return r.finish();
+  if (isDiskless()) return transcriptFile.finish();
   try {
     if (!S) {
-      let { size: size } = await stat(e);
+      let { size } = await stat(e);
       if (size > SKIP_PRECOMPACT_THRESHOLD) {
-        let q = scanTranscriptFile(e, size, processEntry, r.dropPreBoundaryEntries, n?.keepAllLeaves ?? !1);
+        let q = scanTranscriptFile(
+          e,
+          size,
+          processEntry,
+          transcriptFile.dropPreBoundaryEntries,
+          n?.keepAllLeaves ?? false,
+        );
         if (!n?.keepAllLeaves) {
-          let { keptFrom: keptFrom, seedFrom: seedFrom, ...Ie } = q.scan;
-          (syi({
+          let { keptFrom, seedFrom, ...Ie } = q.scan;
+          markResumeTranscriptScan({
             ...Ie,
             bytes: size,
             keptBytes: size - keptFrom,
-            toolCopyChars: su().toolResultCopiesOnDisk === "whole" ? void 0 : bPt(r.messages.values()),
-          }),
-            su().replaySeedStarts.set(normalize(e), { start: seedFrom, fileSize: size }));
+            toolCopyChars:
+              currentTranscriptStore().toolResultCopiesOnDisk === "whole"
+                ? undefined
+                : slimCharsOf(transcriptFile.messages.values()),
+          });
+          currentTranscriptStore().replaySeedStarts.set(normalize(e), {
+            start: seedFrom,
+            fileSize: size,
+          });
         }
-        let Z = gmo(e, q.lastAttributionOffset, q.lastAttributionLength);
-        if (Z) r.attributionSnapshots.set(Z.messageId, Z);
-        r.markPrunedBeforeFold();
+        let jsonAtOffset = readJsonAtOffset(e, q.lastAttributionOffset, q.lastAttributionLength);
+        if (jsonAtOffset) transcriptFile.attributionSnapshots.set(jsonAtOffset.messageId, jsonAtOffset);
+        transcriptFile.markPrunedBeforeFold();
         let Se =
-            q.finalLine.offset >= 0 &&
-            q.ledgerLines.at(-1)?.offset !== q.finalLine.offset &&
-            (q.ledgerLines.length > 0 || artifactAutoReactLedgers.size > 0),
-          ke = readFileTailSync(e, Se ? [...q.ledgerLines, q.finalLine] : q.ledgerLines),
-          we = Se && isTornLine(ke.pop() ?? null);
-        if ((rebuildFromLines(ke, artifactAutoReactLedgers, we), artifactCommentMonitors.size > 0))
-          r.setTailTorn(!(await endsWithNewline(e, size)));
-        return r.finish();
+          q.finalLine.offset >= 0 &&
+          q.ledgerLines.at(-1)?.offset !== q.finalLine.offset &&
+          (q.ledgerLines.length > 0 || artifactAutoReactLedgers.size > 0);
+        let fileTail = readFileTailSync(e, Se ? [...q.ledgerLines, q.finalLine] : q.ledgerLines);
+        let we = Se && isTornLine(fileTail.pop() ?? null);
+        rebuildFromLines(fileTail, artifactAutoReactLedgers, we);
+        if (artifactCommentMonitors.size > 0) transcriptFile.setTailTorn(!(await endsWithNewline(e, size)));
+        return transcriptFile.finish();
       }
     }
-    let w = await readFile(e),
-      L = isTornLine(lastLineOf(w));
-    if (
-      (r.setTailTorn(w.length > 0 && w.at(-1) !== 10),
-      !n?.keepAllLeaves && w.length > SKIP_PRECOMPACT_THRESHOLD)
-    )
-      ((w = walkChainBeforeParse(w)), r.markPrunedBeforeFold());
-    for (let G of countJsonlLines(w)) processEntry(G);
-    rebuildFromLines(iterateEntryLines(w), artifactAutoReactLedgers, L);
+    let buf = await readFile(e);
+    let L = isTornLine(lastLineOf(buf));
+    transcriptFile.setTailTorn(buf.length > 0 && buf.at(-1) !== 10);
+    if (!n?.keepAllLeaves && buf.length > SKIP_PRECOMPACT_THRESHOLD) {
+      buf = walkChainBeforeParse(buf);
+      transcriptFile.markPrunedBeforeFold();
+    }
+    for (let G of countJsonlLines(buf)) processEntry(G);
+    rebuildFromLines(iterateEntryLines(buf), artifactAutoReactLedgers, L);
   } catch (error) {
     if (!isFsInaccessible(error)) {
       if (isWin32ReadEbadf(error)) logError(withTelemetryMessage(error, WIN32_EBADF_TELEMETRY_MESSAGE));
-      else if (Qoe(error))
+      else if (isTranscriptLoadError(error))
         logForDebugging(
           `loadTranscriptFile: transcript unreadable (${getErrnoCode(error)}): ${errorMessage(error)}`,
-          { level: "error" },
+          {
+            level: "error",
+          },
         );
       else logError(error);
       throw error;
     }
   }
-  return r.finish();
+  return transcriptFile.finish();
 }
+//@ chunk-e6aww6q8.js:515250-515696 layout
 /**
  * 按 sessionId 或显式路径加载会话转录，返回加载结果与会话文件路径。
  */
-//@ chunk-e6aww6q8.js:515250-515696 layout
-async function loadSessionTranscript(e, n, r, s) {
-  if (isStorageV5Enabled() && r !== void 0)
-    if (n === void 0) {
-      let S = await loadSessionFile(e, r);
-      if (S !== void 0) {
-        let w = await loadTranscriptFile(S.path, {
-          storageV5: { backend: r, key: S.key },
-          precedingEntries: s,
+async function loadSessionTranscript(e, n, r, precedingEntries) {
+  if (isStorageV5Enabled() && r !== undefined)
+    if (n === undefined) {
+      let sessionFile = await loadSessionFile(e, r);
+      if (sessionFile !== undefined) {
+        let transcriptFile = await loadTranscriptFile(sessionFile.path, {
+          storageV5: {
+            backend: r,
+            key: sessionFile.key,
+          },
+          precedingEntries,
         });
-        return Object.assign(w, { sessionFile: S.path });
+        return Object.assign(transcriptFile, {
+          sessionFile: sessionFile.path,
+        });
       }
     } else {
-      let S = getTranscriptStorageKey(n, r);
-      if (S !== void 0) {
-        let w = await loadTranscriptFile(n, { storageV5: S, precedingEntries: s });
-        return Object.assign(w, { sessionFile: n });
+      let transcriptStorageKey = getTranscriptStorageKey(n, r);
+      if (transcriptStorageKey !== undefined) {
+        let transcriptFile = await loadTranscriptFile(n, {
+          storageV5: transcriptStorageKey,
+          precedingEntries,
+        });
+        return Object.assign(transcriptFile, {
+          sessionFile: n,
+        });
       }
     }
-  let h = n ?? (await getErrorsPath(e)),
-    y = await loadTranscriptFile(h, { precedingEntries: s });
-  return Object.assign(y, { sessionFile: h });
+  let h = n ?? (await getErrorsPath(e));
+  let transcriptFile = await loadTranscriptFile(h, {
+    precedingEntries,
+  });
+  return Object.assign(transcriptFile, {
+    sessionFile: h,
+  });
 }
+//@ chunk-e6aww6q8.js:515696-516929 callgraph-fingerprint = loadSessionFile (0.183)
 /**
  * 按 sessionId 定位会话文件：先看会话记录的 projectDir，再看当前项目目录与清洗名截断冲突的兄弟目录。
  */
-//@ chunk-e6aww6q8.js:515696-516929 callgraph-fingerprint = loadSessionFile (0.183)
 async function loadSessionFile(e, n) {
   if (!isValidKeySegment(e)) return;
-  let r = getSessionProjectDir();
-  if (r !== null) {
-    let L = basename_2(r);
-    if (dirname(r) !== getProjectsDir_2() || !isValidKeySegment(L)) return;
-    let G = e0(STORAGE_SPACES.transcript(L, e));
-    if (G === void 0) return;
-    return { key: G, path: join_3(r, `${e}.jsonl`) };
+  let sessionProjectDir = getSessionProjectDir();
+  if (sessionProjectDir !== null) {
+    let L = basename(sessionProjectDir);
+    if (dirname(sessionProjectDir) !== getProjectsDir() || !isValidKeySegment(L)) return;
+    let G = validatedTranscriptKey(STORAGE_SPACES.transcript(L, e));
+    if (G === undefined) return;
+    return {
+      key: G,
+      path: join(sessionProjectDir, `${e}.jsonl`),
+    };
   }
-  let s = getOriginalCwdOrNull(),
-    h = getProjectDirNameOverride() ?? getProjectKey(getOriginalCwd()),
-    y = [h],
-    S = s === null ? void 0 : legacyDerivedProjectKey(s);
-  if (S !== void 0) y.push(S);
-  else if (s !== null && h.length > MAX_SANITIZED_LENGTH) {
-    let G = (Ie) => Ie,
-      q = G(h.slice(0, MAX_SANITIZED_LENGTH) + "-"),
-      Z = G(h),
-      Se = new Set(),
-      ke = [],
-      we,
-      Ee = 0;
+  let originalCwdOrNull = getOriginalCwdOrNull();
+  let h = getProjectDirNameOverride() ?? getProjectKey(getOriginalCwd());
+  let y = [h];
+  let S = originalCwdOrNull === null ? undefined : legacyDerivedProjectKey(originalCwdOrNull);
+  if (S !== undefined) y.push(S);
+  else if (originalCwdOrNull !== null && h.length > MAX_SANITIZED_LENGTH) {
+    let G = (projectKey) => projectKey;
+    let q = G(h.slice(0, MAX_SANITIZED_LENGTH) + "-");
+    let Z = G(h);
+    let Se = new Set();
+    let ke = [];
+    let we;
+    let Ee = 0;
     try {
       do {
-        let listEntries = await n.listEntries(
-          { namespace: "transcript" },
-          { skipScopeStats: !0, ...(we !== void 0 && { cursor: we }) },
+        let Ie = await n.listEntries(
+          {
+            namespace: "transcript",
+          },
+          {
+            skipScopeStats: true,
+            ...(we !== undefined && {
+              cursor: we,
+            }),
+          },
         );
-        if (!listEntries.ok) break;
-        for (let item of listEntries.value.items)
+        if (!Ie.ok) break;
+        for (let item of Ie.value.items)
           if (
             item.kind === "scope" &&
             item.scope.namespace === "transcript" &&
-            item.scope.projectKey !== void 0 &&
+            item.scope.projectKey !== undefined &&
             G(item.scope.projectKey).startsWith(q) &&
             G(item.scope.projectKey) !== Z &&
             isValidKeySegment(item.scope.projectKey) &&
             !Se.has(G(item.scope.projectKey))
-          )
-            (Se.add(G(item.scope.projectKey)), ke.push(item.scope.projectKey));
-        we = listEntries.value.cursor;
+          ) {
+            Se.add(G(item.scope.projectKey));
+            ke.push(item.scope.projectKey);
+          }
+        we = Ie.value.cursor;
       } while (we && ++Ee < MAX_LISTING_PAGES);
     } catch {}
     let Ae = {
@@ -10643,135 +11561,149 @@ async function loadSessionFile(e, n) {
       realWorkspacePath: makeWorkspaceRealPath(n),
     };
     for (let Ie of ke)
-      if (await dirBelongsToProject(join_3(getProjectsDir_2(), Ie), s, !1, wrapStorageSource(Ae))) y.push(Ie);
+      if (
+        await dirBelongsToProject(join(getProjectsDir(), Ie), originalCwdOrNull, false, wrapStorageSource(Ae))
+      )
+        y.push(Ie);
   }
   for (let L of y) {
-    let G = e0(STORAGE_SPACES.transcript(L, e));
-    if (G === void 0) continue;
-    if ((await n.stat(G)).ok) return { key: G, path: join_3(getProjectsDir_2(), L, `${e}.jsonl`) };
+    let G = validatedTranscriptKey(STORAGE_SPACES.transcript(L, e));
+    if (G === undefined) continue;
+    if ((await n.stat(G)).ok)
+      return {
+        key: G,
+        path: join(getProjectsDir(), L, `${e}.jsonl`),
+      };
   }
-  let w = e0(STORAGE_SPACES.transcript(h, e));
-  return w === void 0 ? void 0 : { key: w, path: join_3(getProjectsDir_2(), h, `${e}.jsonl`) };
+  let w = validatedTranscriptKey(STORAGE_SPACES.transcript(h, e));
+  return w === undefined
+    ? undefined
+    : {
+        key: w,
+        path: join(getProjectsDir(), h, `${e}.jsonl`),
+      };
 }
 //@ chunk-e6aww6q8.js:516929-517106 layout = getErrorsPath (1)
 async function getErrorsPath(e) {
-  let n = getSessionProjectDir(),
-    r = getOriginalCwd(),
-    s = `${e}.jsonl`,
-    h = join_3(n ?? getProjectDir_2(r), s);
-  if (n !== null) return h;
-  for (let y of await findProjectDirs(r)) {
-    let S = join_3(y, s);
+  let sessionProjectDir = getSessionProjectDir();
+  let originalCwd = getOriginalCwd();
+  let s = `${e}.jsonl`;
+  let h = join(sessionProjectDir ?? getProjectDir(originalCwd), s);
+  if (sessionProjectDir !== null) return h;
+  for (let y of await findProjectDirs(originalCwd)) {
+    let S = join(y, s);
     try {
-      return (await stat(S), S);
+      await stat(S);
+      return S;
     } catch {}
   }
   return h;
 }
 //@ chunk-e6aww6q8.js:517106-517154 facade-majority
 function clearSessionMessagesCache() {
-  su().clearSessionMessagesCache();
+  currentTranscriptStore().clearSessionMessagesCache();
 }
 //@ chunk-e6aww6q8.js:517154-517228 facade-majority
 function consumeFailedTranscriptWrite() {
-  let e = su(),
-    hasFailedWrite = e.hasFailedWrite;
-  return ((e.hasFailedWrite = !1), hasFailedWrite);
+  let e = currentTranscriptStore();
+  let hasFailedWrite = e.hasFailedWrite;
+  e.hasFailedWrite = false;
+  return hasFailedWrite;
 }
 //@ chunk-e6aww6q8.js:517228-517282 facade-majority
-function primeSessionMessagesCache(e, n) {
-  su().primeSessionMessagesCache(e, n);
+function primeSessionMessagesCache(sessionId, n) {
+  currentTranscriptStore().primeSessionMessagesCache(sessionId, n);
 }
 //@ chunk-e6aww6q8.js:517282-517355 facade-majority
-async function doesMessageExistInSession(e, n, r) {
-  return (await su().sessionMessages(e, r)).has(n);
+async function doesMessageExistInSession(sessionId, uuid, storageV5) {
+  return (await currentTranscriptStore().sessionMessages(sessionId, storageV5)).has(uuid);
 }
 //@ chunk-e6aww6q8.js:517355-517585 facade-majority
-async function isMessageTurnUnanswered(e, n, r) {
+async function isMessageTurnUnanswered(sessionId, n, storageV5) {
   try {
-    let { messages: messages } = await loadSessionTranscript(e, void 0, r);
+    let { messages } = await loadSessionTranscript(sessionId, undefined, storageV5);
     return isTurnUnanswered([...messages.values()], n);
   } catch (error) {
-    return (
-      logForDebugging(
-        `isMessageTurnUnanswered: loadSessionFile failed: ${error instanceof Error ? error.message : String(error)}`,
-        { level: "error" },
-      ),
-      !1
+    logForDebugging(
+      `isMessageTurnUnanswered: loadSessionFile failed: ${error instanceof Error ? error.message : String(error)}`,
+      {
+        level: "error",
+      },
     );
+    return false;
   }
 }
 //@ chunk-e6aww6q8.js:517585-518079 facade-majority
 function isTurnUnanswered(e, n) {
   let index = e.findIndex((y) => y.uuid === n);
-  if (index === -1) return !1;
+  if (index === -1) return false;
   let s = [];
-  for (let y = index + 1; y < e.length; y++) {
-    let S = e[y];
-    if ((S.type === "user" || S.type === "assistant") && !("isSidechain" in S && S.isSidechain === !0))
+  for (let idx = index + 1; idx < e.length; idx++) {
+    let S = e[idx];
+    if ((S.type === "user" || S.type === "assistant") && !("isSidechain" in S && S.isSidechain === true))
       s.push(S);
   }
-  if (s.length === 0) return !0;
-  let at = s.at(-1);
-  if (!(at.type === "user" && at.interruptedByShutdown === !0)) return !1;
-  for (let y = s.length - 2; y >= 0; y--) {
-    let S = s[y];
+  if (s.length === 0) return true;
+  let last = s.at(-1);
+  if (!(last.type === "user" && last.interruptedByShutdown === true)) return false;
+  for (let idx = s.length - 2; idx >= 0; idx--) {
+    let S = s[idx];
     if (S.type === "assistant") continue;
     if (
-      ("isCompactSummary" in S && S.isCompactSummary === !0) ||
+      ("isCompactSummary" in S && S.isCompactSummary === true) ||
       isInterruptionOnlyMessage(S) ||
       isToolResultMessage(S) ||
       isHarnessMetaMessage(S)
     )
       continue;
-    return !1;
+    return false;
   }
-  return !0;
+  return true;
 }
 //@ chunk-e6aww6q8.js:518335-520628 facade-majority = getLastSessionLog (0.235)
-async function sessionLogFromTranscriptLoad(e, n, r) {
+async function sessionLogFromTranscriptLoad(e, sessionTranscript, r) {
   let {
-    messages: messages,
-    summaries: summaries,
-    customTitles: customTitles,
-    endedSessions: endedSessions,
-    aiTitles: aiTitles,
-    tags: tags,
-    relocatedCwds: relocatedCwds,
-    agentNames: agentNames,
-    agentColors: agentColors,
-    agentSettings: agentSettings,
-    prNumbers: prNumbers,
-    prUrls: prUrls,
-    prRepositories: prRepositories,
-    bridgeSessionIds: bridgeSessionIds,
-    bridgeLastSeqs: bridgeLastSeqs,
-    bridgeDialogKindsBySession: bridgeDialogKindsBySession,
-    bridgeSessionGroupingIds: bridgeSessionGroupingIds,
-    bridgeNoBackfill: bridgeNoBackfill,
-    bridgeOwnerAccountUuids: bridgeOwnerAccountUuids,
-    bridgeOwnerOrganizationUuids: bridgeOwnerOrganizationUuids,
-    historySuppressed: historySuppressed,
-    modes: modes,
-    permissionModes: permissionModes,
-    isolationLatches: isolationLatches,
-    devModsFolders: devModsFolders,
-    memoryModeStamps: memoryModeStamps,
-    atisLatches: atisLatches,
-    toolsUsedLists: toolsUsedLists,
-    worktreeStates: worktreeStates,
-    artifactCommentMonitors: artifactCommentMonitors,
-    artifactAutoReactLedgers: artifactAutoReactLedgers,
-    costStates: costStates,
-    fileHistorySnapshots: fileHistorySnapshots,
-    fileHistoryDeltas: fileHistoryDeltas,
-    attributionSnapshots: attributionSnapshots,
-    contentReplacements: contentReplacements,
-    leafUuids: leafUuids,
-    clearedToEmpty: clearedToEmpty,
-  } = n;
+    messages,
+    summaries,
+    customTitles,
+    endedSessions,
+    aiTitles,
+    tags,
+    relocatedCwds,
+    agentNames,
+    agentColors,
+    agentSettings,
+    prNumbers,
+    prUrls,
+    prRepositories,
+    bridgeSessionIds,
+    bridgeLastSeqs,
+    bridgeDialogKindsBySession,
+    bridgeSessionGroupingIds,
+    bridgeNoBackfill,
+    bridgeOwnerAccountUuids,
+    bridgeOwnerOrganizationUuids,
+    historySuppressed,
+    modes,
+    permissionModes,
+    isolationLatches,
+    devModsFolders,
+    memoryModeStamps,
+    atisLatches,
+    toolsUsedLists,
+    worktreeStates,
+    artifactCommentMonitors,
+    artifactAutoReactLedgers,
+    costStates,
+    fileHistorySnapshots,
+    fileHistoryDeltas,
+    attributionSnapshots,
+    contentReplacements,
+    leafUuids,
+    clearedToEmpty,
+  } = sessionTranscript;
   if (messages.size === 0) return null;
-  if (r === void 0) su().primeFilelessResume(e, messages.keys());
+  if (r === undefined) currentTranscriptStore().primeFilelessResume(e, messages.keys());
   else primeSessionMessagesCache(e, messages.keys());
   let fo =
     findLatestMessage(
@@ -10780,13 +11712,18 @@ async function sessionLogFromTranscriptLoad(e, n, r) {
     ) ??
     (leafUuids.size === 0 && !clearedToEmpty
       ? findLatestMessage(messages.values(), (yo) => !yo.isSidechain)
-      : void 0);
+      : undefined);
   if (!fo) {
-    if (clearedToEmpty && r !== void 0) {
-      let modifiedAt = await r.modifiedAt();
+    if (clearedToEmpty && r !== undefined) {
+      let yo = await r.modifiedAt();
       return buildLiteLogFromMessages(
-        n,
-        { date: modifiedAt.toISOString(), fullPath: r.path, created: modifiedAt, modified: modifiedAt },
+        sessionTranscript,
+        {
+          date: yo.toISOString(),
+          fullPath: r.path,
+          created: yo,
+          modified: yo,
+        },
         e,
       );
     }
@@ -10794,84 +11731,94 @@ async function sessionLogFromTranscriptLoad(e, n, r) {
   }
   let transcript = buildConversationChain(messages, fo);
   warnIfTranscriptUnchained(messages, transcript, fo.sessionId);
-  let sessionId = fo.sessionId,
-    summary = summaries.get(fo.uuid),
-    customTitle = customTitles.get(sessionId),
-    tag = tags.get(sessionId),
-    agentSetting = agentSettings.get(sessionId),
-    un = convertToLogOption(
+  let sessionId = fo.sessionId;
+  let summary = summaries.get(fo.uuid);
+  let customTitle = customTitles.get(sessionId);
+  let tag = tags.get(sessionId);
+  let agentSetting = agentSettings.get(sessionId);
+  let un = convertToLogOption(
+    transcript,
+    0,
+    summary,
+    customTitle,
+    buildFileHistorySnapshots(fileHistorySnapshots, fileHistoryDeltas, transcript),
+    tag,
+    r?.path,
+    buildAttributionSnapshotChain(attributionSnapshots, transcript),
+    agentSetting,
+    contentReplacements.get(sessionId) ?? [],
+  );
+  let ao = relocatedCwds.get(sessionId);
+  let $o = {
+    ...un,
+    ...(r === undefined && {
+      sessionId: e,
+    }),
+    fileSnapshots: getFileSnapshotMessages(messages),
+    projectPath: ao ?? un.projectPath,
+    rewindAnchorUuid: sessionTranscript.rewindAnchorUuid,
+    aiTitle: aiTitles.get(sessionId),
+    relocatedCwd: ao,
+    ...withEndedByModel({}, endedSessions.has(sessionId)),
+    agentName: agentNames.get(sessionId) ?? un.agentName,
+    agentColor: agentColors.get(sessionId),
+    mode: modes.get(sessionId),
+    permissionMode: permissionModes.get(sessionId),
+    isolationLatch: isolationLatches.get(sessionId),
+    devModsFolder: devModsFolders?.get(sessionId),
+    memoryModeStamps: memoryModeStamps.get(sessionId) ?? [],
+    atisLatch: getOrEmptyString(atisLatches, sessionId),
+    toolsUsed: toolsUsedLists?.get(sessionId),
+    prNumber: prNumbers.get(sessionId),
+    prUrl: prUrls.get(sessionId),
+    prRepository: prRepositories.get(sessionId),
+    bridgeSessionId: bridgeSessionIds.get(sessionId),
+    bridgeLastSeq: bridgeLastSeqs.get(sessionId),
+    bridgeDialogKinds: bridgeDialogKindsBySession.get(sessionId),
+    bridgeSessionGroupingId: bridgeSessionGroupingIds.get(sessionId),
+    bridgeNoHistoryBackfill: bridgeNoBackfill.get(sessionId),
+    bridgeOwnerAccountUuid: bridgeOwnerAccountUuids.get(sessionId),
+    bridgeOwnerOrganizationUuid: bridgeOwnerOrganizationUuids.get(sessionId),
+    sessionHistorySuppressed: historySuppressed.has(sessionId) ? true : undefined,
+    worktreeSession: worktreeStates.get(sessionId),
+    artifactCommentMonitor: artifactCommentMonitors.get(sessionId),
+    artifactAutoReactLedger: artifactAutoReactLedgers.get(sessionId),
+    costState: costStates.get(sessionId),
+  };
+  if (r !== undefined) {
+    let project = currentTranscriptStore().project;
+    recordLoadReportSafely(
+      $o,
+      messages,
       transcript,
-      0,
-      summary,
-      customTitle,
-      buildFileHistorySnapshots(fileHistorySnapshots, fileHistoryDeltas, transcript),
-      tag,
-      r?.path,
-      buildAttributionSnapshotChain(attributionSnapshots, transcript),
-      agentSetting,
-      contentReplacements.get(sessionId) ?? [],
-    ),
-    ao = relocatedCwds.get(sessionId),
-    $o = {
-      ...un,
-      ...(r === void 0 && { sessionId: e }),
-      fileSnapshots: getFileSnapshotMessages(messages),
-      projectPath: ao ?? un.projectPath,
-      rewindAnchorUuid: n.rewindAnchorUuid,
-      aiTitle: aiTitles.get(sessionId),
-      relocatedCwd: ao,
-      ...withEndedByModel({}, endedSessions.has(sessionId)),
-      agentName: agentNames.get(sessionId) ?? un.agentName,
-      agentColor: agentColors.get(sessionId),
-      mode: modes.get(sessionId),
-      permissionMode: permissionModes.get(sessionId),
-      isolationLatch: isolationLatches.get(sessionId),
-      devModsFolder: devModsFolders?.get(sessionId),
-      memoryModeStamps: memoryModeStamps.get(sessionId) ?? [],
-      atisLatch: getOrEmptyString(atisLatches, sessionId),
-      toolsUsed: toolsUsedLists?.get(sessionId),
-      prNumber: prNumbers.get(sessionId),
-      prUrl: prUrls.get(sessionId),
-      prRepository: prRepositories.get(sessionId),
-      bridgeSessionId: bridgeSessionIds.get(sessionId),
-      bridgeLastSeq: bridgeLastSeqs.get(sessionId),
-      bridgeDialogKinds: bridgeDialogKindsBySession.get(sessionId),
-      bridgeSessionGroupingId: bridgeSessionGroupingIds.get(sessionId),
-      bridgeNoHistoryBackfill: bridgeNoBackfill.get(sessionId),
-      bridgeOwnerAccountUuid: bridgeOwnerAccountUuids.get(sessionId),
-      bridgeOwnerOrganizationUuid: bridgeOwnerOrganizationUuids.get(sessionId),
-      sessionHistorySuppressed: historySuppressed.has(sessionId) ? !0 : void 0,
-      worktreeSession: worktreeStates.get(sessionId),
-      artifactCommentMonitor: artifactCommentMonitors.get(sessionId),
-      artifactAutoReactLedger: artifactAutoReactLedgers.get(sessionId),
-      costState: costStates.get(sessionId),
-    };
-  if (r !== void 0) {
-    let project = su().project;
-    Uxt($o, messages, transcript, project ? { writer: project, sessionId: e } : void 0);
+      project
+        ? {
+            writer: project,
+            sessionId: e,
+          }
+        : undefined,
+    );
   }
   return $o;
 }
+//@ chunk-e6aww6q8.js:520628-520756 facade-majority = loadMessageLogs (1)
 /**
  * 加载当前项目的会话日志列表并富化。
  */
-//@ chunk-e6aww6q8.js:520628-520756 facade-majority = loadMessageLogs (1)
-async function loadMessageLogs(e, n) {
-  let r = await fetchLogs(e, n),
-    { logs: logs } = await enrichLogs(r, 0, r.length, n),
-    sorted = sortLogs(logs);
-  return (
-    sorted.forEach((log, S) => {
-      log.value = S;
-    }),
-    sorted
-  );
+async function loadMessageLogs(limit, n) {
+  let sessionLogs = await fetchLogs(limit, n);
+  let { logs: enriched } = await enrichLogs(sessionLogs, 0, sessionLogs.length, n);
+  let sorted = sortLogs(enriched);
+  sorted.forEach((log, i) => {
+    log.value = i;
+  });
+  return sorted;
 }
 //@ chunk-e6aww6q8.js:520756-520922 facade-majority
-async function findFirstMessageLog(e, n, r) {
-  let alloc = Buffer.alloc(LITE_READ_BUF_SIZE);
-  for (let h of e) {
-    let y = await enrichLog(h, alloc, r);
+async function findFirstMessageLog(logs, n, storageV5) {
+  let s = Buffer.alloc(LITE_READ_BUF_SIZE);
+  for (let h of logs) {
+    let y = await enrichLog(h, s, storageV5);
     if (!y) continue;
     let S = n(y);
     if (S === "stop") return null;
@@ -10879,10 +11826,10 @@ async function findFirstMessageLog(e, n, r) {
   }
   return null;
 }
+//@ chunk-e6aww6q8.js:520922-521054 facade-majority = loadAllProjectsMessageLogs (1)
 /**
  * 加载所有项目的会话日志（/resume 全部项目视图）。
  */
-//@ chunk-e6aww6q8.js:520922-521054 facade-majority = loadAllProjectsMessageLogs (1)
 async function loadAllProjectsMessageLogs(limit, options) {
   if (options?.skipIndex) return loadAllProjectsMessageLogsFull(limit, options.storageV5);
   return (
@@ -10897,21 +11844,28 @@ async function loadAllProjectsMessageLogs(limit, options) {
 var LOG_LIST_CONCURRENCY = 64;
 //@ chunk-e6aww6q8.js:521065-521368 layout
 async function listTranscriptProjectKeys(e) {
-  let n = new Set(),
-    r,
-    s = 0;
+  let n = new Set();
+  let r;
+  let s = 0;
   try {
     do {
-      let listEntries = await e.listEntries(
-        { namespace: "transcript" },
-        { skipScopeStats: !0, ...(r !== void 0 && { cursor: r }) },
+      let h = await e.listEntries(
+        {
+          namespace: "transcript",
+        },
+        {
+          skipScopeStats: true,
+          ...(r !== undefined && {
+            cursor: r,
+          }),
+        },
       );
-      if (!listEntries.ok) return;
-      for (let item of listEntries.value.items) {
+      if (!h.ok) return;
+      for (let item of h.value.items) {
         let S = listedProjectKey(item, isValidKeySegment);
-        if (S !== void 0) n.add(S);
+        if (S !== undefined) n.add(S);
       }
-      r = listEntries.value.cursor;
+      r = h.value.cursor;
     } while (r && ++s < LOG_LIST_CONCURRENCY);
     if (r) return;
   } catch {
@@ -10920,274 +11874,318 @@ async function listTranscriptProjectKeys(e) {
   return [...n];
 }
 //@ chunk-e6aww6q8.js:521368-522159 fingerprint = loadAllProjectsMessageLogsFull (0.838)
-async function loadAllProjectsMessageLogsFull(e, n) {
-  let projectsDir = getProjectsDir_2(),
-    s = isStorageV5Enabled() && n ? await listTranscriptProjectKeys(n) : void 0;
-  if (n && s !== void 0) {
+async function loadAllProjectsMessageLogsFull(limit, storageV5) {
+  let projectsDir = getProjectsDir();
+  let s = isStorageV5Enabled() && storageV5 ? await listTranscriptProjectKeys(storageV5) : undefined;
+  if (storageV5 && s !== undefined) {
     let results = await Promise.all(
-        s.map((ke) => getLogsWithoutIndex(join_3(projectsDir, ke), e, { backend: n, projectKey: ke })),
+      s.map((ke) =>
+        getLogsWithoutIndex(join(projectsDir, ke), limit, {
+          backend: storageV5,
+          projectKey: ke,
+        }),
       ),
-      Z = new Map();
+    );
+    let Z = new Map();
     for (let ke of results.flat()) {
-      let we = `${ke.sessionId ?? ""}:${ke.leafUuid ?? ""}`,
-        Ee = Z.get(we);
+      let we = `${ke.sessionId ?? ""}:${ke.leafUuid ?? ""}`;
+      let Ee = Z.get(we);
       if (!Ee || ke.modified.getTime() > Ee.modified.getTime()) Z.set(we, ke);
     }
     let Se = sortLogs([...Z.values()]);
-    return (
-      Se.forEach((ke, we) => {
-        ke.value = we;
-      }),
-      Se
-    );
+    Se.forEach((ke, value) => {
+      ke.value = value;
+    });
+    return Se;
   }
   if (isDiskless()) return [];
   let dirents;
   try {
-    dirents = await readdir(projectsDir, { withFileTypes: !0 });
+    dirents = await readdir(projectsDir, {
+      withFileTypes: true,
+    });
   } catch {
     return [];
   }
   let projectDirs = dirents
-      .filter((dirent) => dirent.isDirectory())
-      .map((dirent) => join_3(projectsDir, dirent.name)),
-    flat = (await Promise.all(projectDirs.map((projectDir) => getLogsWithoutIndex(projectDir, e)))).flat(),
-    deduped = new Map();
-  for (let log of flat) {
-    let key = `${log.sessionId ?? ""}:${log.leafUuid ?? ""}`,
-      existing = deduped.get(key);
+    .filter((dirent) => dirent.isDirectory())
+    .map((dirent) => join(projectsDir, dirent.name));
+  let w = (await Promise.all(projectDirs.map((projectDir) => getLogsWithoutIndex(projectDir, limit)))).flat();
+  let deduped = new Map();
+  for (let log of w) {
+    let key = `${log.sessionId ?? ""}:${log.leafUuid ?? ""}`;
+    let existing = deduped.get(key);
     if (!existing || log.modified.getTime() > existing.modified.getTime()) deduped.set(key, log);
   }
   let sorted = sortLogs([...deduped.values()]);
-  return (
-    sorted.forEach((log, Z) => {
-      log.value = Z;
-    }),
-    sorted
-  );
+  sorted.forEach((log, i) => {
+    log.value = i;
+  });
+  return sorted;
 }
+//@ chunk-e6aww6q8.js:522159-522662 facade-majority = loadAllProjectsMessageLogsProgressive (0.915)
 /**
  * 分批渐进加载所有项目的会话日志，默认每批 50。
  */
-//@ chunk-e6aww6q8.js:522159-522662 facade-majority = loadAllProjectsMessageLogsProgressive (0.915)
-async function loadAllProjectsMessageLogsProgressive(e, n = DEFAULT_LOG_PAGE_SIZE, r) {
-  let projectsDir = getProjectsDir_2(),
-    h = isStorageV5Enabled() && r ? await listTranscriptProjectKeys(r) : void 0,
-    y;
-  if (h !== void 0) y = h.map((q) => join_3(projectsDir, q));
-  else if (isDiskless()) return { logs: [], allStatLogs: [], nextIndex: 0 };
+async function loadAllProjectsMessageLogsProgressive(
+  limit,
+  initialEnrichCount = DEFAULT_LOG_PAGE_SIZE,
+  storageV5,
+) {
+  let projectsDir = getProjectsDir();
+  let h = isStorageV5Enabled() && storageV5 ? await listTranscriptProjectKeys(storageV5) : undefined;
+  let y;
+  if (h !== undefined) y = h.map((q) => join(projectsDir, q));
+  else if (isDiskless())
+    return {
+      logs: [],
+      allStatLogs: [],
+      nextIndex: 0,
+    };
   else {
-    let q;
+    let dirents;
     try {
-      q = await readdir(projectsDir, { withFileTypes: !0 });
+      dirents = await readdir(projectsDir, {
+        withFileTypes: true,
+      });
     } catch {
-      return { logs: [], allStatLogs: [], nextIndex: 0 };
+      return {
+        logs: [],
+        allStatLogs: [],
+        nextIndex: 0,
+      };
     }
-    y = q.filter((Z) => Z.isDirectory()).map((dirent) => join_3(projectsDir, dirent.name));
+    y = dirents.filter((dirent) => dirent.isDirectory()).map((dirent) => join(projectsDir, dirent.name));
   }
-  let results = await Promise.all(y.map((dirent) => getSessionFilesLite(dirent, e, void 0, r))),
-    sorted = latestLogPerSession(results.flat()),
-    { logs: logs, nextIndex: nextIndex } = await enrichLogs(sorted, 0, n, r);
-  return (
-    sortLogs(logs).forEach((log, Z) => {
-      log.value = Z;
-    }),
-    { logs: logs, allStatLogs: sorted, nextIndex: nextIndex }
+  let rawLogs = await Promise.all(
+    y.map((dirent) => getSessionFilesLite(dirent, limit, undefined, storageV5)),
   );
+  let sorted = latestLogPerSession(rawLogs.flat());
+  let { logs, nextIndex } = await enrichLogs(sorted, 0, initialEnrichCount, storageV5);
+  sortLogs(logs).forEach((log, i) => {
+    log.value = i;
+  });
+  return {
+    logs,
+    allStatLogs: sorted,
+    nextIndex,
+  };
 }
 //@ chunk-e6aww6q8.js:522662-522726 facade-majority = loadMessageLogs (1)
-async function loadSameRepoMessageLogs(e, n, r = DEFAULT_LOG_PAGE_SIZE, s) {
-  return (await loadSameRepoMessageLogsProgressive(e, n, r, s)).logs;
+async function loadSameRepoMessageLogs(worktreePaths, limit, initialEnrichCount = DEFAULT_LOG_PAGE_SIZE, s) {
+  return (await loadSameRepoMessageLogsProgressive(worktreePaths, limit, initialEnrichCount, s)).logs;
 }
+//@ chunk-e6aww6q8.js:522726-523031 facade-majority = loadSameRepoMessageLogsProgressive (1)
 /**
  * 渐进加载同一仓库（含其 worktree）的会话日志。
  */
-//@ chunk-e6aww6q8.js:522726-523031 facade-majority = loadSameRepoMessageLogsProgressive (1)
-async function loadSameRepoMessageLogsProgressive(e, n, r = DEFAULT_LOG_PAGE_SIZE, s) {
-  logForDebugging(`/resume: loading sessions for cwd=${getOriginalCwd()}, worktrees=[${e.join(", ")}]`);
-  let h = await getStatOnlyLogsForWorktrees(e, n, s);
-  logForDebugging(`/resume: found ${h.length} session files on disk`);
-  let { logs: logs, nextIndex: nextIndex } = await enrichLogs(h, 0, r, s);
-  return (
-    sortLogs(logs).forEach((log, L) => {
-      log.value = L;
-    }),
-    { logs: logs, allStatLogs: h, nextIndex: nextIndex }
+async function loadSameRepoMessageLogsProgressive(
+  worktreePaths,
+  limit,
+  initialEnrichCount = DEFAULT_LOG_PAGE_SIZE,
+  storageV5,
+) {
+  logForDebugging(
+    `/resume: loading sessions for cwd=${getOriginalCwd()}, worktrees=[${worktreePaths.join(", ")}]`,
   );
+  let allStatLogs = await getStatOnlyLogsForWorktrees(worktreePaths, limit, storageV5);
+  logForDebugging(`/resume: found ${allStatLogs.length} session files on disk`);
+  let { logs, nextIndex } = await enrichLogs(allStatLogs, 0, initialEnrichCount, storageV5);
+  sortLogs(logs).forEach((log, i) => {
+    log.value = i;
+  });
+  return {
+    logs,
+    allStatLogs,
+    nextIndex,
+  };
 }
+//@ chunk-e6aww6q8.js:523031-525836 fingerprint = getStatOnlyLogsForWorktrees (0.327)
 /**
  * 为各 worktree 对应的项目目录列出会话文件（只 stat 不读内容）。
  */
-//@ chunk-e6aww6q8.js:523031-525836 fingerprint = getStatOnlyLogsForWorktrees (0.327)
-async function getStatOnlyLogsForWorktrees(e, n, r) {
-  let projectsDir = getProjectsDir_2(),
-    cwd = getOriginalCwd(),
-    y,
-    S = (Et) => (y ??= listTranscriptProjectKeys(Et)),
-    w = normalizeSlashesForCompare,
-    projectDir = w(cwd),
-    G = e
-      .filter((Et) => {
-        let yt = w(Et);
-        return projectDir === yt || projectDir.startsWith(yt + "/");
-      })
-      .sort((Et, yt) => yt.length - Et.length)[0],
-    Z = uniq(
-      (await Promise.all((G && G !== cwd ? [cwd, G] : [cwd]).map((Et) => readSessionAliases(Et, r)))).flat(),
-    ),
-    Se =
-      Z.length > 0
-        ? (await Promise.all(Z.map((Et) => getSessionFilesLite(Et, n, void 0, r))))
-            .flat()
-            .map((Et) => ({ ...Et, isAlias: !0 }))
+async function getStatOnlyLogsForWorktrees(worktreePaths, n, r) {
+  let projectsDir = getProjectsDir();
+  let cwd = getOriginalCwd();
+  let y;
+  let S = (Et) => (y ??= listTranscriptProjectKeys(Et));
+  let w = normalizeSlashesForCompare;
+  let projectDir = w(cwd);
+  let G = worktreePaths
+    .filter((Et) => {
+      let yt = w(Et);
+      return projectDir === yt || projectDir.startsWith(yt + "/");
+    })
+    .sort((Et, yt) => yt.length - Et.length)[0];
+  let Z = uniq(
+    (await Promise.all((G && G !== cwd ? [cwd, G] : [cwd]).map((Et) => readSessionAliases(Et, r)))).flat(),
+  );
+  let Se =
+    Z.length > 0
+      ? (await Promise.all(Z.map((Et) => getSessionFilesLite(Et, n, undefined, r)))).flat().map((Et) => ({
+          ...Et,
+          isAlias: true,
+        }))
+      : [];
+  if (worktreePaths.length <= 1) {
+    let projectDir = getProjectDir(cwd);
+    let sessionFilesLite = await getSessionFilesLite(projectDir, undefined, cwd, r);
+    let gt =
+      UNSAFE_PATH_CHAR_PATTERN.test(cwd) && (await allLogsShareCwd(sessionFilesLite, cwd, r))
+        ? await getSessionFilesLite_2(cwd, projectDir, n, false, undefined, r, S)
         : [];
-  if (e.length <= 1) {
-    let Et = getProjectDir_2(cwd),
-      yt = await getSessionFilesLite(Et, void 0, cwd, r),
-      gt =
-        UNSAFE_PATH_CHAR_PATTERN.test(cwd) && (await allLogsShareCwd(yt, cwd, r))
-          ? await getSessionFilesLite_2(cwd, Et, n, !1, void 0, r, S)
-          : [],
-      At = G ?? cwd,
-      It = !1,
-      qt = `${sanitizePath(At)}--claude-worktrees-`,
-      Zt = [],
-      rn = isStorageV5Enabled() && r ? await S(r) : void 0;
-    if (rn !== void 0)
+    let At = G ?? cwd;
+    let It = false;
+    let qt = `${sanitizePath(At)}--claude-worktrees-`;
+    let Zt = [];
+    let rn = isStorageV5Enabled() && r ? await S(r) : undefined;
+    if (rn !== undefined)
       Zt = (
         await Promise.all(
           rn
             .filter((pn) => pn.startsWith(qt))
-            .map((pn) => getSessionFilesLite(join_3(projectsDir, pn), n, void 0, r)),
+            .map((pn) => getSessionFilesLite(join(projectsDir, pn), n, undefined, r)),
         )
       ).flat();
     else if (!isDiskless())
       try {
-        let pn = await readdir(projectsDir, { withFileTypes: !0 });
+        let pn = await readdir(projectsDir, {
+          withFileTypes: true,
+        });
         Zt = (
           await Promise.all(
             pn
               .filter((no) => no.isDirectory() && no.name.startsWith(qt))
-              .map((no) => getSessionFilesLite(join_3(projectsDir, no.name), n, void 0, r)),
+              .map((no) => getSessionFilesLite(join(projectsDir, no.name), n, undefined, r)),
           )
         ).flat();
       } catch (error) {
         logForDebugging(`Failed to sweep .claude/worktrees project dirs under ${projectsDir}: ${error}`);
       }
     if (Se.length > 0 || gt.length > 0 || Zt.length > 0)
-      return latestLogPerSession([...yt, ...gt, ...Zt, ...Se]);
-    return yt;
+      return latestLogPerSession([...sessionFilesLite, ...gt, ...Zt, ...Se]);
+    return sessionFilesLite;
   }
-  let ke = !1,
-    indexed = e.map((wt) => {
-      let sanitized = getProjectKey(wt),
-        gt = ke ? sanitized.toLowerCase() : sanitized;
-      return {
-        path: wt,
-        exactName: gt,
-        truncatedPrefix: sanitized.length > MAX_SANITIZED_LENGTH ? gt.slice(0, MAX_SANITIZED_LENGTH) : void 0,
-      };
-    });
+  let ke = false;
+  let indexed = worktreePaths.map((wt) => {
+    let sanitized = getProjectKey(wt);
+    let gt = ke ? sanitized.toLowerCase() : sanitized;
+    return {
+      path: wt,
+      exactName: gt,
+      truncatedPrefix:
+        sanitized.length > MAX_SANITIZED_LENGTH ? gt.slice(0, MAX_SANITIZED_LENGTH) : undefined,
+    };
+  });
   indexed.sort((Et, yt) => yt.exactName.length - Et.exactName.length);
-  let seenDirs = new Set(),
-    Ae,
-    Ie = isStorageV5Enabled() && r ? await S(r) : void 0;
-  if (Ie !== void 0) Ae = Ie;
+  let seenDirs = new Set();
+  let Ae;
+  let Ie = isStorageV5Enabled() && r ? await S(r) : undefined;
+  if (Ie !== undefined) Ae = Ie;
   else {
     let Et;
     try {
       if (isDiskless()) throw Error("not read in a diskless session");
-      Et = await readdir(projectsDir, { withFileTypes: !0 });
+      Et = await readdir(projectsDir, {
+        withFileTypes: true,
+      });
     } catch (error) {
       logForDebugging(
         `Failed to read projects dir ${projectsDir}, falling back to current project: ${error}`,
       );
-      let projectDir = getProjectDir_2(getOriginalCwd()),
-        At = await getSessionFilesLite(projectDir, n, getOriginalCwd(), r);
-      return Se.length > 0 ? latestLogPerSession(At.concat(Se)) : At;
+      let projectDir = getProjectDir(getOriginalCwd());
+      let sessionFilesLite = await getSessionFilesLite(projectDir, n, getOriginalCwd(), r);
+      return Se.length > 0 ? latestLogPerSession(sessionFilesLite.concat(Se)) : sessionFilesLite;
     }
     Ae = Et.filter((yt) => yt.isDirectory()).map((yt) => yt.name);
   }
-  let Me = G === void 0 ? [cwd, ...e] : e,
-    We = [];
-  if (G === void 0) {
-    let Et = getProjectDir_2(cwd),
-      yt = basename_2(Et);
-    (seenDirs.add(ke ? yt.toLowerCase() : yt), We.push({ projectDir: Et, wtPath: cwd }));
+  let Me = G === undefined ? [cwd, ...worktreePaths] : worktreePaths;
+  let We = [];
+  if (G === undefined) {
+    let projectDir = getProjectDir(cwd);
+    let yt = basename(projectDir);
+    seenDirs.add(ke ? yt.toLowerCase() : yt);
+    We.push({
+      projectDir,
+      wtPath: cwd,
+    });
   }
   for (let dirent of Ae) {
     let yt = ke ? dirent.toLowerCase() : dirent;
     if (seenDirs.has(yt)) continue;
-    for (let { path: wtPath, exactName: exactName, truncatedPrefix: truncatedPrefix } of indexed)
+    for (let { path: wtPath, exactName, truncatedPrefix } of indexed)
       if (
         yt === exactName ||
-        (truncatedPrefix !== void 0
+        (truncatedPrefix !== undefined
           ? yt.startsWith(truncatedPrefix + "-") &&
             (await dirBelongsToProject(
-              join_3(projectsDir, dirent),
+              join(projectsDir, dirent),
               wtPath,
               ke,
               wrapStorageSource(getTranscriptStorageContext(r)),
             ))
           : exactName.length < MAX_SANITIZED_LENGTH && yt.startsWith(exactName + "-"))
       ) {
-        (seenDirs.add(yt), We.push({ projectDir: join_3(projectsDir, dirent), wtPath: wtPath }));
+        seenDirs.add(yt);
+        We.push({
+          projectDir: join(projectsDir, dirent),
+          wtPath,
+        });
         break;
       }
   }
   let results = await Promise.all(
-      We.map(({ projectDir: projectDir, wtPath: wtPath }) =>
-        getSessionFilesLite(projectDir, void 0, wtPath, r, Me),
-      ),
-    ),
-    lt = new Map();
-  for (let Et = 0; Et < We.length; Et++) {
-    let wtPath = We[Et].wtPath,
-      gt = lt.get(wtPath) ?? [];
-    (gt.push(...results[Et]), lt.set(wtPath, gt));
+    We.map(({ projectDir, wtPath }) => getSessionFilesLite(projectDir, undefined, wtPath, r, Me)),
+  );
+  let lt = new Map();
+  for (let idx = 0; idx < We.length; idx++) {
+    let wtPath = We[idx].wtPath;
+    let gt = lt.get(wtPath) ?? [];
+    gt.push(...results[idx]);
+    lt.set(wtPath, gt);
   }
   let Je = [];
   for (let Et of Me)
     if (UNSAFE_PATH_CHAR_PATTERN.test(Et) && (await allLogsShareCwd(lt.get(Et) ?? [], Et, r, Me)))
       Je.push(Et);
-  let nt = Je.length > 0 ? await listProjectDirs(r, S) : [],
-    results_2 = await Promise.all(
-      Je.map(async (Et) => {
-        let yt = Et;
-        try {
-          if (isStorageV5Enabled() && r !== void 0) {
-            let gt = await makeWorkspaceRealPath(r)(Et);
-            if (gt.ok && gt.value.found) yt = Mn(gt.value.path);
-            else if (!gt.ok)
-              logForDebugging(
-                `/resume: worktree path not resolved through the storage backend (${formatStorageError(gt.error)}); using it as registered`,
-              );
-          } else yt = Mn(await realpath(Et));
-        } catch {}
-        return getSessionFilesLite_2(yt, getProjectDir_2(Et), n, !0, nt, r);
-      }),
-    );
+  let nt = Je.length > 0 ? await listProjectDirs(r, S) : [];
+  let results_2 = await Promise.all(
+    Je.map(async (Et) => {
+      let yt = Et;
+      try {
+        if (isStorageV5Enabled() && r !== undefined) {
+          let gt = await makeWorkspaceRealPath(r)(Et);
+          if (gt.ok && gt.value.found) yt = identity(gt.value.path);
+          else if (!gt.ok)
+            logForDebugging(
+              `/resume: worktree path not resolved through the storage backend (${formatStorageError(gt.error)}); using it as registered`,
+            );
+        } else yt = identity(await realpath(Et));
+      } catch {}
+      return getSessionFilesLite_2(yt, getProjectDir(Et), n, true, nt, r);
+    }),
+  );
   return latestLogPerSession(results.flat().concat(results_2.flat(), Se));
 }
 //@ chunk-e6aww6q8.js:525836-525869 layout
 function normalizeSlashesForCompare(e) {
-  return normalizePathForCwdCompare(e, !1);
+  return normalizePathForCwdCompare(e, false);
 }
 //@ chunk-e6aww6q8.js:525869-525897 layout
 var UNSAFE_PATH_CHAR_PATTERN = /[^a-zA-Z0-9/\\:-]/;
 //@ chunk-e6aww6q8.js:525897-526006 layout
-async function allLogsShareCwd(e, n, r, s) {
-  let alloc = Buffer.alloc(LITE_READ_BUF_SIZE);
-  for (let y of e) if (!(await logCwdMatches(y, n, alloc, r, s))) return !1;
-  return !0;
+async function allLogsShareCwd(sessionFilesLite, n, r, s) {
+  let h = Buffer.alloc(LITE_READ_BUF_SIZE);
+  for (let y of sessionFilesLite) if (!(await logCwdMatches(y, n, h, r, s))) return false;
+  return true;
 }
 //@ chunk-e6aww6q8.js:526006-526222 layout
-async function logCwdMatches(e, n, r, s, h) {
-  if (!e.fullPath) return !1;
-  let y = await readLiteMetadata(e.fullPath, e.fileSize ?? 0, r, s),
-    S = y.relocatedCwd ?? y.headCwdStrict;
-  if (S === void 0) return !1;
-  if (recordedCwdIsWithinOwnWorktrees(S, h, slugCollisionGuardFoldsCase())) return !1;
+async function logCwdMatches(e, n, buf, s, h) {
+  if (!e.fullPath) return false;
+  let liteMetadata = await readLiteMetadata(e.fullPath, e.fileSize ?? 0, buf, s);
+  let S = liteMetadata.relocatedCwd ?? liteMetadata.headCwdStrict;
+  if (S === undefined) return false;
+  if (recordedCwdIsWithinOwnWorktrees(S, h, slugCollisionGuardFoldsCase())) return false;
   return recordedCwdCollidesWithProjectResolved(
     S,
     n,
@@ -11200,206 +12198,228 @@ async function logCwdMatches(e, n, r, s, h) {
 var PROJECT_SCAN_CONCURRENCY = 32;
 //@ chunk-e6aww6q8.js:526233-526820 layout
 async function listProjectDirs(e, n) {
-  let r = getProjectsDir_2(),
-    s,
-    h = isStorageV5Enabled() && e ? await (n ?? listTranscriptProjectKeys)(e) : void 0;
-  if (h !== void 0) s = h;
+  let projectsDir = getProjectsDir();
+  let s;
+  let h = isStorageV5Enabled() && e ? await (n ?? listTranscriptProjectKeys)(e) : undefined;
+  if (h !== undefined) s = h;
   else if (isDiskless()) return [];
   else {
     let w;
     try {
-      w = await readdir(r, { withFileTypes: !0 });
+      w = await readdir(projectsDir, {
+        withFileTypes: true,
+      });
     } catch {
       return [];
     }
     s = w.filter((L) => L.isDirectory()).map((L) => L.name);
   }
   let y = limitConcurrency(PROJECT_SCAN_CONCURRENCY, async (w) => {
-    let L = join_3(r, w),
-      q = [...(await getSessionFilesWithMtime(L, e)).values()].sort((Se, ke) => ke.mtime - Se.mtime)[0];
+    let L = join(projectsDir, w);
+    let q = [...(await getSessionFilesWithMtime(L, e)).values()].sort((Se, ke) => ke.mtime - Se.mtime)[0];
     if (!q) return null;
-    let allocUnsafe = Buffer.allocUnsafe(LITE_READ_BUF_SIZE);
+    let buf = Buffer.allocUnsafe(LITE_READ_BUF_SIZE);
     try {
-      let Se = await readLiteMetadata(q.path, q.size, allocUnsafe, e),
-        ke = Se.relocatedCwd ?? Se.headCwdStrict;
-      if (ke) return { projectDir: L, recordedCwd: normalizeSlashesForCompare(ke) };
+      let liteMetadata = await readLiteMetadata(q.path, q.size, buf, e);
+      let ke = liteMetadata.relocatedCwd ?? liteMetadata.headCwdStrict;
+      if (ke)
+        return {
+          projectDir: L,
+          recordedCwd: normalizeSlashesForCompare(ke),
+        };
     } catch {}
     return null;
   });
   return (await Promise.all(s.map((w) => y(w)))).filter((w) => w !== null);
 }
+//@ chunk-e6aww6q8.js:526820-527428 layout = getSessionFilesLite (0.917)
 /**
  * 读取会话文件头尾得到 lite 日志（首条提示、标题、分支、cwd 等），不解析整份文件。
  */
-//@ chunk-e6aww6q8.js:526820-527428 layout = getSessionFilesLite (0.917)
-async function getSessionFilesLite_2(e, n, r, s = !1, h, y, S) {
-  let w = h ?? (await listProjectDirs(y, S)),
-    L = normalizeSlashesForCompare(e),
-    G = [];
-  for (let { projectDir: projectDir, recordedCwd: recordedCwd } of w) {
-    if (projectDir === n) continue;
+async function getSessionFilesLite_2(e, projectDir, r, s = false, h, y, S) {
+  let w = h ?? (await listProjectDirs(y, S));
+  let L = normalizeSlashesForCompare(e);
+  let logs = [];
+  for (let { projectDir: projectDir_2, recordedCwd } of w) {
+    if (projectDir_2 === projectDir) continue;
     if (recordedCwd !== L && !(s && recordedCwd.startsWith(L + "/"))) continue;
-    let entries = [...(await getSessionFilesWithMtime(projectDir, y)).entries()].sort(
+    let entries = [...(await getSessionFilesWithMtime(projectDir_2, y)).entries()].sort(
       (Ee, Ae) => Ae[1].mtime - Ee[1].mtime,
     );
     if (r && entries.length > r) entries = entries.slice(0, r);
-    for (let [Ee, Ae] of entries)
-      G.push({
-        date: new Date(Ae.mtime).toISOString(),
+    for (let [sessionId, fileInfo] of entries)
+      logs.push({
+        date: new Date(fileInfo.mtime).toISOString(),
         messages: [],
-        isLite: !0,
-        fullPath: Ae.path,
+        isLite: true,
+        fullPath: fileInfo.path,
         value: 0,
-        created: new Date(Ae.ctime),
-        modified: new Date(Ae.mtime),
+        created: new Date(fileInfo.ctime),
+        modified: new Date(fileInfo.mtime),
         firstPrompt: "",
         messageCount: 0,
-        fileSize: Ae.size,
-        isSidechain: !1,
-        sessionId: Ee,
+        fileSize: fileInfo.size,
+        isSidechain: false,
+        sessionId,
         projectPath: e,
       });
   }
-  let sorted = sortLogs(G);
-  return (
-    sorted.forEach((log, Se) => {
-      log.value = Se;
-    }),
-    sorted
-  );
+  let sorted = sortLogs(logs);
+  sorted.forEach((log, i) => {
+    log.value = i;
+  });
+  return sorted;
 }
 //@ chunk-e6aww6q8.js:527428-527441 facade-majority
 var QUEUED_ROWS_WAIT_MS = 2000;
 //@ chunk-e6aww6q8.js:527441-527861 layout
-function drainQueuedAgentRows(e, n) {
-  let { project: project, writerHealth: writerHealth } = su(),
-    startTime = performance.now(),
-    failureSeq = writerHealth.failureSeq;
+function drainQueuedAgentRows(e, signal) {
+  let { project, writerHealth } = currentTranscriptStore();
+  let startTime = performance.now();
+  let failureSeq = writerHealth.failureSeq;
   return e
     .reduce(
-      (w, L) => w ?? project?.drainQueuedRows(getAgentTranscriptPath(L), QUEUED_ROWS_WAIT_MS, n),
-      void 0,
+      (acc, L) => acc ?? project?.drainQueuedRows(getAgentTranscriptPath(L), QUEUED_ROWS_WAIT_MS, signal),
+      undefined,
     )
     ?.then((w) => {
-      let rounded = Math.round(performance.now() - startTime);
-      if (w === "timed_out") logFeatureSad("transcript_queued_agent_rows", "timed_out", { wait_ms: rounded });
+      let waitMs = Math.round(performance.now() - startTime);
+      if (w === "timed_out")
+        logFeatureSad("transcript_queued_agent_rows", "timed_out", {
+          wait_ms: waitMs,
+        });
       else if (writerHealth.failureSeq !== failureSeq)
-        logFeatureSad("transcript_queued_agent_rows", "write_failed", { wait_ms: rounded });
-      else logFeatureOk("transcript_queued_agent_rows", { wait_ms: rounded });
+        logFeatureSad("transcript_queued_agent_rows", "write_failed", {
+          wait_ms: waitMs,
+        });
+      else
+        logFeatureOk("transcript_queued_agent_rows", {
+          wait_ms: waitMs,
+        });
     });
 }
+//@ chunk-e6aww6q8.js:527861-528776 facade-majority
 /**
  * 读取子代理转录，校验路径在项目目录内，返回消息与状态。
  */
-//@ chunk-e6aww6q8.js:527861-528776 facade-majority
-async function getAgentTranscript(e, n, r) {
-  let s = r?.alreadyWaited ? void 0 : drainQueuedAgentRows([e], r?.signal);
-  if (s !== void 0) await s;
-  let h = await getAgentTranscript_2(e, n),
-    y = getProject();
-  if (h.transcript) {
-    if (r?.trustLocal || !y.mustVerifyAgentTranscript(e)) return h.transcript;
-    let hydrateAgentTranscriptOnDemand = await y.hydrateAgentTranscriptOnDemand(e, n, r?.signal, !0);
-    if (hydrateAgentTranscriptOnDemand !== "hit") return h.transcript;
-    let q = await getAgentTranscript_2(e, n);
-    if (!q.transcript)
+async function getAgentTranscript(agentId, storageV5, r) {
+  let s = r?.alreadyWaited ? undefined : drainQueuedAgentRows([agentId], r?.signal);
+  if (s !== undefined) await s;
+  let agentTranscript = await getAgentTranscript_2(agentId, storageV5);
+  let project = getProject();
+  if (agentTranscript.transcript) {
+    if (r?.trustLocal || !project.mustVerifyAgentTranscript(agentId)) return agentTranscript.transcript;
+    let G = await project.hydrateAgentTranscriptOnDemand(agentId, storageV5, r?.signal, true);
+    if (G !== "hit") return agentTranscript.transcript;
+    let agentTranscript_2 = await getAgentTranscript_2(agentId, storageV5);
+    if (!agentTranscript_2.transcript)
       logForDiagnosticsNoPII("warn", "agent_transcript_unresumable", {
-        reason: q.miss,
-        fetch: hydrateAgentTranscriptOnDemand,
+        reason: agentTranscript_2.miss,
+        fetch: G,
       });
-    return q.transcript;
+    return agentTranscript_2.transcript;
   }
-  if (!y.hasInternalAgentEventReader()) return null;
+  if (!project.hasInternalAgentEventReader()) return null;
   let S =
-      h.miss === "absent" ||
-      h.miss === "inaccessible" ||
-      (h.miss !== "load_threw" &&
-        !h.hasContent &&
-        !(await transcriptFileHasContentEntry(getAgentTranscriptPath(e), n))),
-    w = "skipped",
-    miss = h.miss;
+    agentTranscript.miss === "absent" ||
+    agentTranscript.miss === "inaccessible" ||
+    (agentTranscript.miss !== "load_threw" &&
+      !agentTranscript.hasContent &&
+      !(await transcriptFileHasContentEntry(getAgentTranscriptPath(agentId), storageV5)));
+  let w = "skipped";
+  let reason = agentTranscript.miss;
   if (S) {
     try {
-      w = await y.hydrateAgentTranscriptOnDemand(e, n, r?.signal);
+      w = await project.hydrateAgentTranscriptOnDemand(agentId, storageV5, r?.signal);
     } catch (error) {
-      if (!(error instanceof AgentTranscriptFetchError) || !y.hasWrittenAgentLocally(e)) throw error;
+      if (!(error instanceof AgentTranscriptFetchError) || !project.hasWrittenAgentLocally(agentId))
+        throw error;
       w = error.outcome;
     }
     if (w !== "unsafe_id") {
-      let G = await getAgentTranscript_2(e, n);
-      if (G.transcript) return G.transcript;
-      miss = G.miss;
+      let agentTranscript = await getAgentTranscript_2(agentId, storageV5);
+      if (agentTranscript.transcript) return agentTranscript.transcript;
+      reason = agentTranscript.miss;
     }
   }
-  return (logForDiagnosticsNoPII("warn", "agent_transcript_unresumable", { reason: miss, fetch: w }), null);
+  logForDiagnosticsNoPII("warn", "agent_transcript_unresumable", {
+    reason,
+    fetch: w,
+  });
+  return null;
 }
 //@ chunk-e6aww6q8.js:528776-530489 callgraph-fingerprint = getAgentTranscript (0.182)
-async function getAgentTranscript_2(e, n) {
-  let r = !1,
-    s = (w) => ({ transcript: null, miss: w, hasContent: r }),
-    agentFile = getAgentTranscriptPath(e),
-    y = n === void 0 ? void 0 : transcriptStorageKeyForPath(agentFile),
-    S =
-      !isStorageV5Enabled() || n === void 0 || y === void 0 ? void 0 : { storageV5: { backend: n, key: y } };
-  if (isStorageV5Enabled() && n !== void 0 && S === void 0)
+async function getAgentTranscript_2(agentId, n) {
+  let hasContent = false;
+  let s = (miss) => ({
+    transcript: null,
+    miss,
+    hasContent,
+  });
+  let agentFile = getAgentTranscriptPath(agentId);
+  let y = n === undefined ? undefined : transcriptStorageKeyForPath(agentFile);
+  let S =
+    !isStorageV5Enabled() || n === undefined || y === undefined
+      ? undefined
+      : {
+          storageV5: {
+            backend: n,
+            key: y,
+          },
+        };
+  if (isStorageV5Enabled() && n !== undefined && S === undefined)
     logForDebugging(
       "getAgentTranscript: agent transcript path is outside the storage keyspace; reading it raw",
     );
   try {
-    let w = await loadTranscriptFile(agentFile, S);
-    if (w.servedBy === "absent")
-      return (
-        logForDebugging("getAgentTranscript: the storage backend does not hold this agent transcript"),
-        s("absent")
+    let transcriptFile = await loadTranscriptFile(agentFile, S);
+    if (transcriptFile.servedBy === "absent") {
+      logForDebugging("getAgentTranscript: the storage backend does not hold this agent transcript");
+      return s("absent");
+    }
+    if (transcriptFile.servedBy === "inaccessible") {
+      logForDebugging(
+        "getAgentTranscript: the storage backend cannot serve this agent transcript (permission); not resumable",
       );
-    if (w.servedBy === "inaccessible")
-      return (
-        logForDebugging(
-          "getAgentTranscript: the storage backend cannot serve this agent transcript (permission); not resumable",
-        ),
-        s("inaccessible")
-      );
-    let {
-      messages: messages,
-      agentContentReplacements: agentContentReplacements,
-      forkContextRefs: forkContextRefs,
-    } = w;
+      return s("inaccessible");
+    }
+    let { messages, agentContentReplacements, forkContextRefs } = transcriptFile;
     for (let We of messages.values())
       if (isConversationEntry(We)) {
-        r = !0;
+        hasContent = true;
         break;
       }
-    let agentMessages = Array.from(messages.values()).filter((msg) => msg.agentId === e && msg.isSidechain);
+    let agentMessages = Array.from(messages.values()).filter(
+      (msg) => msg.agentId === agentId && msg.isSidechain,
+    );
     if (agentMessages.length === 0)
-      return s(w.servedBy === void 0 && messages.size === 0 ? "absent" : "no_agent_messages");
-    let parentUuids = new Set(agentMessages.map((msg) => msg.parentUuid)),
-      leafMessage = findLatestMessage(
-        agentMessages,
-        (msg) =>
-          !parentUuids.has(msg.uuid) &&
-          !(msg.type === "system" && "subtype" in msg && msg.subtype === "compact_boundary"),
-      );
+      return s(transcriptFile.servedBy === undefined && messages.size === 0 ? "absent" : "no_agent_messages");
+    let parentUuids = new Set(agentMessages.map((msg) => msg.parentUuid));
+    let leafMessage = findLatestMessage(
+      agentMessages,
+      (msg) =>
+        !parentUuids.has(msg.uuid) &&
+        !(msg.type === "system" && "subtype" in msg && msg.subtype === "compact_boundary"),
+    );
     if (!leafMessage) return s("no_leaf");
     let mapped = buildConversationChain(messages, leafMessage)
-        .filter((We) => We.agentId === e)
-        .map(({ isSidechain: isSidechain, parentUuid: parentUuid, promptId: promptId, ...Je }) =>
-          withoutTaskProducerMark(Je),
-        ),
-      Ie = forkContextRefs.get(e);
+      .filter((msg) => msg.agentId === agentId)
+      .map(({ isSidechain, parentUuid, promptId, ...msg }) => withoutTaskProducerMark(msg));
+    let Ie = forkContextRefs.get(agentId);
     return {
       transcript: {
-        messages: Ie === void 0 ? mapped : (await hydrateForkContext(Ie, void 0, n)).concat(mapped),
-        contentReplacements: agentContentReplacements.get(e) ?? [],
+        messages: Ie === undefined ? mapped : (await hydrateForkContext(Ie, undefined, n)).concat(mapped),
+        contentReplacements: agentContentReplacements.get(agentId) ?? [],
       },
     };
   } catch (error) {
-    if (S !== void 0) {
-      let L =
+    if (S !== undefined) {
+      let cause =
         error instanceof Error && typeof error.cause === "object" && error.cause !== null ? error.cause : {};
       logForDebugging(
-        L.failureClass === void 0
+        cause.failureClass === undefined
           ? "getAgentTranscript: cannot resume this agent transcript flag-on (thrown while loading)"
-          : `getAgentTranscript: the storage backend cannot serve this agent transcript (${[L.failureClass, L.telemetryCode].filter((msg) => msg !== void 0).join("/")}); not resumable`,
+          : `getAgentTranscript: the storage backend cannot serve this agent transcript (${[cause.failureClass, cause.telemetryCode].filter((msg) => msg !== undefined).join("/")}); not resumable`,
       );
     }
     return s("load_threw");
@@ -11423,14 +12443,21 @@ function extractAgentIdsFromMessages(messages) {
 }
 //@ chunk-e6aww6q8.js:530758-531129 facade-majority
 async function loadSubagentTranscripts(e, n) {
-  let filtered = e.filter(G$),
-    s = drainQueuedAgentRows(filtered.map(Mr));
-  if (s !== void 0) await s;
+  let filtered = e.filter(isSafeIdSegment);
+  let s = drainQueuedAgentRows(filtered.map(identityAgentId2));
+  if (s !== undefined) await s;
   let results = await Promise.all(
-    filtered.map(async (y) => {
+    filtered.map(async (agentId) => {
       try {
-        let S = await getAgentTranscript(Mr(y), n, { alreadyWaited: !0, trustLocal: !0 });
-        if (S && S.messages.length > 0) return { agentId: y, transcript: S.messages };
+        let result = await getAgentTranscript(identityAgentId2(agentId), n, {
+          alreadyWaited: true,
+          trustLocal: true,
+        });
+        if (result && result.messages.length > 0)
+          return {
+            agentId,
+            transcript: result.messages,
+          };
         return null;
       } catch {
         return null;
@@ -11440,10 +12467,10 @@ async function loadSubagentTranscripts(e, n) {
   return Object.fromEntries(results.filter((y) => y !== null).map((y) => [y.agentId, y.transcript]));
 }
 //@ chunk-e6aww6q8.js:531129-531201 facade-majority
-async function loadAllSubagentTranscriptsFromDisk(e) {
+async function loadAllSubagentTranscriptsFromDisk(storageV5) {
   return loadSubagentTranscripts(
-    await listSubagentIdsFromDisk(isStorageV5Enabled() && e !== void 0 ? e : void 0),
-    e,
+    await listSubagentIdsFromDisk(isStorageV5Enabled() && storageV5 !== undefined ? storageV5 : undefined),
+    storageV5,
   );
 }
 //@ chunk-e6aww6q8.js:531201-531221 layout
@@ -11452,12 +12479,12 @@ var EMPTY_SET = new Set([]);
 function isTranscriptMessage_2(entry) {
   return entry.type === "attachment" && entry.attachment?.type === "fork_briefing";
 }
+//@ chunk-e6aww6q8.js:531304-531699 facade-majority = isLoggableMessage (0.611)
 /**
  * 该消息是否应写入转录（过滤 progress、部分 attachment 与 hook 系统消息）。
  */
-//@ chunk-e6aww6q8.js:531304-531699 facade-majority = isLoggableMessage (0.611)
 function isLoggableMessage(m) {
-  if (m.type === "progress") return !1;
+  if (m.type === "progress") return false;
   if (
     m.type === "attachment" &&
     m.attachment.type === "hook_success" &&
@@ -11465,78 +12492,115 @@ function isLoggableMessage(m) {
     !m.attachment.stdout?.trim() &&
     !m.attachment.stderr?.trim()
   )
-    return !1;
-  if (m.type === "attachment" && getUserType() !== "ant" && EMPTY_SET.has(m.attachment.type)) return !1;
-  if (isLaptopMemoryAttachment(m) && m.attachment.content !== null) return !1;
-  if (m.type === "system" && "persist" in m && m.persist === !1) return !1;
-  return !0;
+    return false;
+  if (m.type === "attachment" && getUserType() !== "ant" && EMPTY_SET.has(m.attachment.type)) return false;
+  if (isLaptopMemoryAttachment(m) && m.attachment.content !== null) return false;
+  if (m.type === "system" && "persist" in m && m.persist === false) return false;
+  return true;
 }
 //@ chunk-e6aww6q8.js:531699-531886 facade-majority = countToolCallsSince (1)
 function collectReplIds(messages, sinceUuid = new Set()) {
   for (let message of messages)
     if (message.type === "assistant" && Array.isArray(message.message.content)) {
-      for (let s of message.message.content) if (s.type === "tool_use" && S4(s.name)) sinceUuid.add(s.id);
+      for (let s of message.message.content)
+        if (s.type === "tool_use" && isExactReplToolName(s.name)) sinceUuid.add(s.id);
     }
   return sinceUuid;
 }
 //@ chunk-e6aww6q8.js:531886-533052 fingerprint = transformMessagesForExternalTranscript (0.544)
 function transformMessagesForExternalTranscript(messages, replIds) {
   let r = new Set();
-  if (messages.some((s) => s.type === "assistant" && s.resumedFromIncompleteThinking === !0))
-    for (let { fromIdx: fromIdx, toIdx: toIdx } of findResumedThinkingRanges(messages))
+  if (
+    messages.some((message) => message.type === "assistant" && message.resumedFromIncompleteThinking === true)
+  )
+    for (let { fromIdx, toIdx } of findResumedThinkingRanges(messages))
       for (let y = fromIdx; y <= toIdx; y++) r.add(y);
-  return messages.flatMap((s, h) => {
-    if (s.type === "assistant" && Array.isArray(s.message.content)) {
-      let content = s.message.content,
-        w = content.some((L) => L.type === "tool_use" && S4(L.name))
-          ? content.filter((L) => !(L.type === "tool_use" && S4(L.name)))
-          : content;
+  return messages.flatMap((m, h) => {
+    if (m.type === "assistant" && Array.isArray(m.message.content)) {
+      let content = m.message.content;
+      let w = content.some((L) => L.type === "tool_use" && isExactReplToolName(L.name))
+        ? content.filter((L) => !(L.type === "tool_use" && isExactReplToolName(L.name)))
+        : content;
       if (w.length === 0) return [];
-      if (s.isVirtual && !r.has(h) && s.virtualInResumeRun !== !0) {
-        let { isVirtual: isVirtual, ...G } = s;
-        return [{ ...G, message: { ...s.message, content: w } }];
+      if (m.isVirtual && !r.has(h) && m.virtualInResumeRun !== true) {
+        let { isVirtual: _omit, ...rest } = m;
+        return [
+          {
+            ...rest,
+            message: {
+              ...m.message,
+              content: w,
+            },
+          },
+        ];
       }
-      if (w !== content) return [{ ...s, message: { ...s.message, content: w } }];
-      return [s];
+      if (w !== content)
+        return [
+          {
+            ...m,
+            message: {
+              ...m.message,
+              content: w,
+            },
+          },
+        ];
+      return [m];
     }
-    if (s.type === "user" && Array.isArray(s.message.content)) {
-      let content = s.message.content,
-        w = content.some((L) => L.type === "tool_result" && replIds.has(L.tool_use_id))
-          ? content.filter((L) => !(L.type === "tool_result" && replIds.has(L.tool_use_id)))
-          : content;
+    if (m.type === "user" && Array.isArray(m.message.content)) {
+      let content = m.message.content;
+      let w = content.some((L) => L.type === "tool_result" && replIds.has(L.tool_use_id))
+        ? content.filter((L) => !(L.type === "tool_result" && replIds.has(L.tool_use_id)))
+        : content;
       if (w.length === 0) return [];
-      if (s.isVirtual && !r.has(h) && s.virtualInResumeRun !== !0) {
-        let { isVirtual: isVirtual, ...G } = s;
-        return [{ ...G, message: { ...s.message, content: w } }];
+      if (m.isVirtual && !r.has(h) && m.virtualInResumeRun !== true) {
+        let { isVirtual: _omit, ...rest } = m;
+        return [
+          {
+            ...rest,
+            message: {
+              ...m.message,
+              content: w,
+            },
+          },
+        ];
       }
-      if (w !== content) return [{ ...s, message: { ...s.message, content: w } }];
-      return [s];
+      if (w !== content)
+        return [
+          {
+            ...m,
+            message: {
+              ...m.message,
+              content: w,
+            },
+          },
+        ];
+      return [m];
     }
     if (
-      "isVirtual" in s &&
-      s.isVirtual &&
+      "isVirtual" in m &&
+      m.isVirtual &&
       !r.has(h) &&
-      ("virtualInResumeRun" in s ? s.virtualInResumeRun !== !0 : !0)
+      ("virtualInResumeRun" in m ? m.virtualInResumeRun !== true : true)
     ) {
-      let { isVirtual: isVirtual, ...S } = s;
-      return [S];
+      let { isVirtual: _omit, ...rest } = m;
+      return [rest];
     }
-    return [s];
+    return [m];
   });
 }
 //@ chunk-e6aww6q8.js:533052-533264 facade-majority = loadMessagesFromJsonlPath (0.447)
-function toTranscriptEntries(e, n) {
+function toTranscriptEntries(rows, sessionId) {
   let tip = null;
-  return cleanMessagesForLogging(e.slice()).map((s) => {
+  return cleanMessagesForLogging(rows.slice()).map((s) => {
     let h = {
       ...s,
-      cwd: gl() ?? void 0,
+      cwd: getCwdOrNull() ?? undefined,
       userType: getUserType(),
-      sessionId: n,
+      sessionId,
       timestamp: s.timestamp,
-      version: TOt(s),
+      version: transcriptVersion(s),
       parentUuid: tip,
-      isSidechain: !1,
+      isSidechain: false,
     };
     if (isChainParticipant(s)) tip = s.uuid;
     return h;
@@ -11544,19 +12608,19 @@ function toTranscriptEntries(e, n) {
 }
 //@ chunk-e6aww6q8.js:533264-533420 facade-majority = cleanMessagesForLogging (1)
 function cleanMessagesForLogging(messages, allMessages = messages) {
-  let mapped = messages.filter(isLoggableMessage).map((h) => resolveMessageAlias(h));
-  if (getUserType() === "ant") return mapped;
-  let s =
+  let messages_2 = messages.filter(isLoggableMessage).map((message) => resolveMessageAlias(message));
+  if (getUserType() === "ant") return messages_2;
+  let replIds =
     allMessages instanceof Set
       ? allMessages
       : typeof allMessages === "function"
         ? allMessages()
         : collectReplIds(allMessages);
-  return transformMessagesForExternalTranscript(mapped, s);
+  return transformMessagesForExternalTranscript(messages_2, replIds);
 }
 //@ chunk-e6aww6q8.js:533420-533481 facade-majority
 async function getLogByIndex(e, n) {
-  return (await loadMessageLogs(void 0, n))[e] || null;
+  return (await loadMessageLogs(undefined, n))[e] || null;
 }
 //@ chunk-e6aww6q8.js:533481-533530 facade-majority
 function findUnresolvedToolUseInTranscript(e, n) {
@@ -11564,22 +12628,24 @@ function findUnresolvedToolUseInTranscript(e, n) {
 }
 //@ chunk-e6aww6q8.js:533530-533936 facade-majority = countToolCallsSince (1)
 function findUnresolvedToolUsesInTranscript(messages, sinceUuid) {
-  let r = new Set(sinceUuid),
-    s = new Map();
-  for (let h of messages)
-    if (h.type === "assistant") {
-      let content = h.message.content;
+  let r = new Set(sinceUuid);
+  let s = new Map();
+  for (let message of messages)
+    if (message.type === "assistant") {
+      let content = message.message.content;
       if (Array.isArray(content)) {
-        for (let message of content)
-          if (message.type === "tool_use" && r.has(message.id)) s.set(message.id, h);
+        for (let message_2 of content)
+          if (message_2.type === "tool_use" && r.has(message_2.id)) s.set(message_2.id, message);
       }
-    } else if (h.type === "user") {
-      if (isShutdownInterrupted(h)) continue;
-      let content = h.message.content;
+    } else if (message.type === "user") {
+      if (isShutdownInterrupted(message)) continue;
+      let content = message.message.content;
       if (Array.isArray(content)) {
         for (let S of content)
-          if (S.type === "tool_result" && r.has(S.tool_use_id))
-            (r.delete(S.tool_use_id), s.delete(S.tool_use_id));
+          if (S.type === "tool_result" && r.has(S.tool_use_id)) {
+            r.delete(S.tool_use_id);
+            s.delete(S.tool_use_id);
+          }
       }
     }
   return s;
@@ -11589,37 +12655,49 @@ async function findUnresolvedToolUse(e, n) {
   return (await findUnresolvedToolUses([e], n)).get(e) ?? null;
 }
 //@ chunk-e6aww6q8.js:533998-534092 facade-majority
-async function findUnresolvedToolUses(e, n) {
+async function findUnresolvedToolUses(e, storageV5) {
   if (e.length === 0) return new Map();
-  return (await findUnresolvedToolUsesInTranscript_2(e, n))?.found ?? new Map();
+  return (await findUnresolvedToolUsesInTranscript_2(e, storageV5))?.found ?? new Map();
 }
 //@ chunk-e6aww6q8.js:534092-534426 facade-majority
-async function findUnresolvedToolUseMessageRows(e, n) {
-  let r = await findUnresolvedToolUsesInTranscript_2([e], n),
-    s = r?.found.get(e);
-  if (r === null || s === void 0) return null;
+async function findUnresolvedToolUseMessageRows(e, storageV5) {
+  let unresolvedToolUsesInTranscript = await findUnresolvedToolUsesInTranscript_2([e], storageV5);
+  let s = unresolvedToolUsesInTranscript?.found.get(e);
+  if (unresolvedToolUsesInTranscript === null || s === undefined) return null;
   try {
-    return { holder: s, messageRows: assistantMessageRowsInTranscript(r.messages, s) };
+    return {
+      holder: s,
+      messageRows: assistantMessageRowsInTranscript(unresolvedToolUsesInTranscript.messages, s),
+    };
   } catch (error) {
-    return (
-      logForDebugging(
-        `findUnresolvedToolUseMessageRows: could not group the rows of tool_use ${e}'s message, restoring the call alone: ${error}`,
-        { level: "warn" },
-      ),
-      { holder: s, messageRows: [s] }
+    logForDebugging(
+      `findUnresolvedToolUseMessageRows: could not group the rows of tool_use ${e}'s message, restoring the call alone: ${error}`,
+      {
+        level: "warn",
+      },
     );
+    return {
+      holder: s,
+      messageRows: [s],
+    };
   }
 }
 //@ chunk-e6aww6q8.js:534426-535060 facade-majority
-function assistantMessageRowsInTranscript(e, n) {
-  let id = n.message.id,
-    s = e.get(n.uuid);
-  if (!id || s === void 0) return [n];
+function assistantMessageRowsInTranscript(messages, n) {
+  let id = n.message.id;
+  let s = messages.get(n.uuid);
+  if (!id || s === undefined) return [n];
   let h = new Set([s]);
-  for (let L = s.parentUuid && e.get(s.parentUuid); L && !h.has(L); L = L.parentUuid && e.get(L.parentUuid))
-    if ((h.add(L), !isAssistantWithMessageId(L, id) && isUserOrAssistant(L))) break;
+  for (
+    let L = s.parentUuid && messages.get(s.parentUuid);
+    L && !h.has(L);
+    L = L.parentUuid && messages.get(L.parentUuid)
+  ) {
+    h.add(L);
+    if (!isAssistantWithMessageId(L, id) && isUserOrAssistant(L)) break;
+  }
   let y = new Map();
-  for (let L of e.values())
+  for (let L of messages.values())
     if (L.parentUuid) {
       let G = y.get(L.parentUuid);
       if (G) G.push(L);
@@ -11631,12 +12709,13 @@ function assistantMessageRowsInTranscript(e, n) {
     for (let G of S)
       for (let q of y.get(G.uuid) ?? []) {
         if (h.has(q)) continue;
-        if ((h.add(q), isAssistantWithMessageId(q, id) || !isUserOrAssistant(q))) L.push(q);
+        h.add(q);
+        if (isAssistantWithMessageId(q, id) || !isUserOrAssistant(q)) L.push(q);
       }
     S = L;
   }
   let w = [];
-  for (let L of e.values())
+  for (let L of messages.values())
     if (
       L.type === "assistant" &&
       L.message.id === id &&
@@ -11650,84 +12729,89 @@ function getAssistantToolUseIds(e) {
   return Array.isArray(e.message.content) && e.message.content.some((block) => block.type === "tool_use");
 }
 //@ chunk-e6aww6q8.js:535166-535230 layout
-function isAssistantWithMessageId(e, n) {
-  return e.type === "assistant" && e.message.id === n;
+function isAssistantWithMessageId(e, id) {
+  return e.type === "assistant" && e.message.id === id;
 }
 //@ chunk-e6aww6q8.js:535230-535291 layout
 function isUserOrAssistant(e) {
   return e.type === "user" || e.type === "assistant";
 }
+//@ chunk-e6aww6q8.js:535291-535795 layout
 /**
  * 读取当前转录并找出给定 tool_use id 中尚未有结果的那些，未找到的记调试日志；读取失败返回 null。
  */
-//@ chunk-e6aww6q8.js:535291-535795 layout
 async function findUnresolvedToolUsesInTranscript_2(e, n) {
   let transcriptPath;
   try {
     transcriptPath = getTranscriptPath();
-    let s = getTranscriptStorageKey(transcriptPath, n),
-      { messages: messages } = await loadTranscriptFile(transcriptPath, s && { storageV5: s }),
-      found = findUnresolvedToolUsesInTranscript(messages.values(), e),
-      filtered = e.filter((w) => !found.has(w));
+    let transcriptStorageKey = getTranscriptStorageKey(transcriptPath, n);
+    let { messages } = await loadTranscriptFile(
+      transcriptPath,
+      transcriptStorageKey && {
+        storageV5: transcriptStorageKey,
+      },
+    );
+    let found = findUnresolvedToolUsesInTranscript(messages.values(), e);
+    let filtered = e.filter((w) => !found.has(w));
     if (filtered.length > 0)
       logForDebugging(
         `findUnresolvedToolUse: no unresolved tool_use ${filtered.join(", ")} \u2014 not found in transcript or already resolved by a tool_result (${transcriptPath}, ${messages.size} messages)`,
-        { level: "warn" },
+        {
+          level: "warn",
+        },
       );
-    return { found: found, messages: messages };
+    return {
+      found,
+      messages,
+    };
   } catch (error) {
-    return (
-      logForDebugging(
-        `findUnresolvedToolUse: failed to read transcript${transcriptPath ? ` ${transcriptPath}` : ""} for tool_use ${e.join(", ")}: ${error}`,
-        { level: "warn" },
-      ),
-      null
+    logForDebugging(
+      `findUnresolvedToolUse: failed to read transcript${transcriptPath ? ` ${transcriptPath}` : ""} for tool_use ${e.join(", ")}: ${error}`,
+      {
+        level: "warn",
+      },
     );
+    return null;
   }
 }
 //@ chunk-e6aww6q8.js:535795-536485 facade-majority
-async function findDeferredToolMarkerInTranscript(e, n) {
+async function findDeferredToolMarkerInTranscript(fullPath, storageV5) {
   try {
     let r =
-      !isStorageV5Enabled() || n === void 0
-        ? void 0
-        : await readTranscriptTailViaStorage(e, 1048576, n).catch(() => {
+      !isStorageV5Enabled() || storageV5 === undefined
+        ? undefined
+        : await readTranscriptTailViaStorage(fullPath, 1048576, storageV5).catch(() => {
             return;
           });
     if (r === null) return null;
     let s;
-    if (r !== void 0) {
-      if (
-        ((s = r.content.split(`
-`)),
-        r.cut)
-      )
-        s.shift();
+    if (r !== undefined) {
+      s = r.content.split(`
+`);
+      if (r.cut) s.shift();
     } else {
-      let w = yH(e);
-      if (w === void 0) return null;
-      let { content: content, bytesRead: bytesRead, bytesTotal: bytesTotal } = await tailFile(w, 1048576);
-      if (
-        ((s = content.split(`
-`)),
-        bytesRead < bytesTotal)
-      )
-        s.shift();
+      let w = worktreeFromProgress(fullPath);
+      if (w === undefined) return null;
+      let { content, bytesRead, bytesTotal } = await tailFile(w, 1048576);
+      s = content.split(`
+`);
+      if (bytesRead < bytesTotal) s.shift();
     }
-    let h = null,
-      y = -1;
-    for (let w = s.length - 1; w >= 0; w--) {
-      let trimmed = s[w].trim();
+    let h = null;
+    let y = -1;
+    for (let idx = s.length - 1; idx >= 0; idx--) {
+      let trimmed = s[idx].trim();
       if (!trimmed.includes('"hook_deferred_tool"')) continue;
       let G = jsonParse(trimmed);
       if (G?.type === "attachment" && G.attachment?.type === "hook_deferred_tool") {
-        ((h = G.attachment), (y = w));
+        h = G.attachment;
+        y = idx;
         break;
       }
     }
     if (!h) return null;
     let S = `"tool_use_id":"${h.toolUseID}"`;
-    for (let w = y + 1; w < s.length; w++) if (s[w].includes(S)) return null;
+    for (let idx = y + 1; idx < s.length; idx++) if (s[idx].includes(S)) return null;
     return h;
   } catch {
     return null;
@@ -11741,8 +12825,16 @@ async function listSessionFilesViaStorage(e, n) {
       await readAllPages(
         (h) =>
           e.listEntries(
-            { namespace: "transcript", projectKey: n },
-            { skipScopeStats: !0, ...(h !== void 0 && { cursor: h }) },
+            {
+              namespace: "transcript",
+              projectKey: n,
+            },
+            {
+              skipScopeStats: true,
+              ...(h !== undefined && {
+                cursor: h,
+              }),
+            },
           ),
         (h) => {
           for (let y of h) {
@@ -11750,139 +12842,156 @@ async function listSessionFilesViaStorage(e, n) {
               y.kind !== "key" ||
               y.key.namespace !== "transcript" ||
               y.key.projectKey !== n ||
-              y.key.agentId !== void 0 ||
-              y.key.agentRelPath !== void 0 ||
-              y.mtimeMs === void 0
+              y.key.agentId !== undefined ||
+              y.key.agentRelPath !== undefined ||
+              y.mtimeMs === undefined
             )
               continue;
-            let S = Vt(y.key.sessionId);
+            let S = normalizeUuidOrNull(y.key.sessionId);
             if (S === null || r.has(S)) continue;
-            let w = e0(STORAGE_SPACES.transcript(n, S));
-            if (w === void 0) continue;
-            r.set(S, { key: w, mtimeMs: y.mtimeMs, createdMs: y.createdMs, size: y.size });
+            let w = validatedTranscriptKey(STORAGE_SPACES.transcript(n, S));
+            if (w === undefined) continue;
+            r.set(S, {
+              key: w,
+              mtimeMs: y.mtimeMs,
+              createdMs: y.createdMs,
+              size: y.size,
+            });
           }
         },
-        { maxPages: LOG_LIST_CONCURRENCY },
+        {
+          maxPages: LOG_LIST_CONCURRENCY,
+        },
       )
     ).status === "done"
       ? r
-      : void 0;
+      : undefined;
   } catch {
     return;
   }
 }
 //@ chunk-e6aww6q8.js:537059-537303 layout
-async function getSessionFilesViaStorage(e, n) {
-  let r = basename_2(e);
-  if (dirname(e) !== getProjectsDir_2() || !isValidKeySegment(r)) return;
+async function getSessionFilesViaStorage(projectDir, n) {
+  let r = basename(projectDir);
+  if (dirname(projectDir) !== getProjectsDir() || !isValidKeySegment(r)) return;
   let s = await listSessionFilesViaStorage(n, r);
-  if (s === void 0) return;
+  if (s === undefined) return;
   let h = new Map();
   for (let [y, S] of s)
     h.set(y, {
-      path: join_3(e, `${y}.jsonl`),
+      path: join(projectDir, `${y}.jsonl`),
       mtime: S.mtimeMs,
       ctime: S.createdMs ?? S.mtimeMs,
       size: S.size ?? 0,
     });
   return h;
 }
+//@ chunk-e6aww6q8.js:537303-537861 facade-majority = getSessionFilesWithMtime (1)
 /**
  * 列出项目目录中的 .jsonl 会话文件及 mtime。
  */
-//@ chunk-e6aww6q8.js:537303-537861 facade-majority = getSessionFilesWithMtime (1)
-async function getSessionFilesWithMtime(e, n) {
-  let r = isStorageV5Enabled() && n ? await getSessionFilesViaStorage(e, n) : void 0;
-  if (r !== void 0) return r;
+async function getSessionFilesWithMtime(projectDir, n) {
+  let r = isStorageV5Enabled() && n ? await getSessionFilesViaStorage(projectDir, n) : undefined;
+  if (r !== undefined) return r;
   if (isDiskless()) return new Map();
-  let sessionFilesMap = new Map(),
-    dirents;
+  let sessionFilesMap = new Map();
+  let dirents;
   try {
-    dirents = await readdir(e, { withFileTypes: !0 });
+    dirents = await readdir(projectDir, {
+      withFileTypes: true,
+    });
   } catch {
     return sessionFilesMap;
   }
   let candidates = [];
   for (let dirent of dirents) {
     if (!dirent.isFile() || !dirent.name.endsWith(".jsonl")) continue;
-    let sessionId = Vt(basename_2(dirent.name, ".jsonl"));
+    let sessionId = normalizeUuidOrNull(basename(dirent.name, ".jsonl"));
     if (!sessionId) continue;
-    candidates.push({ sessionId: sessionId, filePath: join_3(e, dirent.name) });
+    candidates.push({
+      sessionId,
+      filePath: join(projectDir, dirent.name),
+    });
   }
-  return (
-    await Promise.all(
-      candidates.map(async ({ sessionId: sessionId, filePath: filePath }) => {
-        try {
-          let st = await stat(filePath);
-          sessionFilesMap.set(sessionId, {
-            path: filePath,
-            mtime: st.mtime.getTime(),
-            ctime: st.birthtime.getTime(),
-            size: st.size,
-          });
-        } catch {
-          logForDebugging(`Failed to stat session file: ${filePath}`);
-        }
-      }),
-    ),
-    sessionFilesMap
+  await Promise.all(
+    candidates.map(async ({ sessionId, filePath }) => {
+      try {
+        let st = await stat(filePath);
+        sessionFilesMap.set(sessionId, {
+          path: filePath,
+          mtime: st.mtime.getTime(),
+          ctime: st.birthtime.getTime(),
+          size: st.size,
+        });
+      } catch {
+        logForDebugging(`Failed to stat session file: ${filePath}`);
+      }
+    }),
   );
+  return sessionFilesMap;
 }
 //@ chunk-e6aww6q8.js:537861-537872 layout
 var DEFAULT_LOG_PAGE_SIZE = 50;
 //@ chunk-e6aww6q8.js:537872-539365 facade-majority = loadAllLogsFromSessionFile (0.77)
-async function loadAllLogsFromSessionFile(e, n, r) {
+async function loadAllLogsFromSessionFile(sessionFile, projectPathOverride, r) {
   let {
-    messages: messages,
-    summaries: summaries,
-    customTitles: customTitles,
-    endedSessions: endedSessions,
-    aiTitles: aiTitles,
-    tags: tags,
-    relocatedCwds: relocatedCwds,
-    agentNames: agentNames,
-    agentColors: agentColors,
-    agentSettings: agentSettings,
-    prNumbers: prNumbers,
-    prUrls: prUrls,
-    prRepositories: prRepositories,
-    modes: modes,
-    permissionModes: permissionModes,
-    isolationLatches: isolationLatches,
-    devModsFolders: devModsFolders,
-    memoryModeStamps: memoryModeStamps,
-    atisLatches: atisLatches,
-    toolsUsedLists: toolsUsedLists,
-    fileHistorySnapshots: fileHistorySnapshots,
-    fileHistoryDeltas: fileHistoryDeltas,
-    attributionSnapshots: attributionSnapshots,
-    contentReplacements: contentReplacements,
-    leafUuids: leafUuids,
+    messages,
+    summaries,
+    customTitles,
+    endedSessions,
+    aiTitles,
+    tags,
+    relocatedCwds,
+    agentNames,
+    agentColors,
+    agentSettings,
+    prNumbers,
+    prUrls,
+    prRepositories,
+    modes,
+    permissionModes,
+    isolationLatches,
+    devModsFolders,
+    memoryModeStamps,
+    atisLatches,
+    toolsUsedLists,
+    fileHistorySnapshots,
+    fileHistoryDeltas,
+    attributionSnapshots,
+    contentReplacements,
+    leafUuids,
   } = await loadTranscriptFile(
-    e,
-    isStorageV5Enabled() && r ? { keepAllLeaves: !0, storageV5: r } : { keepAllLeaves: !0 },
+    sessionFile,
+    isStorageV5Enabled() && r
+      ? {
+          keepAllLeaves: true,
+          storageV5: r,
+        }
+      : {
+          keepAllLeaves: true,
+        },
   );
   if (messages.size === 0) return [];
-  let At = [];
-  for (let msg of messages.values()) if (leafUuids.has(msg.uuid)) At.push(msg);
-  let It = groupNonChainChildrenByParent(messages),
-    Yt = [];
-  for (let leafMessage of At) {
-    let Zt = buildConversationChain(messages, leafMessage, It);
-    if (Zt.length === 0) continue;
-    let firstMessage = Zt[0],
-      sessionId = leafMessage.sessionId;
-    Yt.push({
+  let leafMessages = [];
+  for (let msg of messages.values()) if (leafUuids.has(msg.uuid)) leafMessages.push(msg);
+  let It = groupNonChainChildrenByParent(messages);
+  let logs = [];
+  for (let leafMessage of leafMessages) {
+    let chain = buildConversationChain(messages, leafMessage, It);
+    if (chain.length === 0) continue;
+    let firstMessage = chain[0];
+    let sessionId = leafMessage.sessionId;
+    logs.push({
       date: leafMessage.timestamp,
-      messages: removeExtraFields(Zt),
-      fullPath: e,
+      messages: removeExtraFields(chain),
+      fullPath: sessionFile,
       value: 0,
       created: new Date(firstMessage.timestamp),
       modified: new Date(leafMessage.timestamp),
-      ...getFirstPromptInfo(Zt),
-      messageCount: countVisibleMessages(Zt),
-      isSidechain: firstMessage.isSidechain ?? !1,
-      sessionId: sessionId,
+      ...getFirstPromptInfo(chain),
+      messageCount: countVisibleMessages(chain),
+      isSidechain: firstMessage.isSidechain ?? false,
+      sessionId,
       leafUuid: leafMessage.uuid,
       summary: summaries.get(leafMessage.uuid),
       customTitle: customTitles.get(sessionId),
@@ -11904,34 +13013,44 @@ async function loadAllLogsFromSessionFile(e, n, r) {
       prUrl: prUrls.get(sessionId),
       prRepository: prRepositories.get(sessionId),
       gitBranch: leafMessage.gitBranch,
-      projectPath: n ?? firstMessage.cwd,
-      fileHistorySnapshots: buildFileHistorySnapshots(fileHistorySnapshots, fileHistoryDeltas, Zt),
-      attributionSnapshots: buildAttributionSnapshotChain(attributionSnapshots, Zt),
+      projectPath: projectPathOverride ?? firstMessage.cwd,
+      fileHistorySnapshots: buildFileHistorySnapshots(fileHistorySnapshots, fileHistoryDeltas, chain),
+      attributionSnapshots: buildAttributionSnapshotChain(attributionSnapshots, chain),
       contentReplacements: contentReplacements.get(sessionId) ?? [],
     });
   }
-  return Yt;
+  return logs;
 }
 //@ chunk-e6aww6q8.js:539365-539514 layout
-async function getSessionFileEntriesViaStorage(e, n, r) {
-  let s = await listSessionFilesViaStorage(n, r);
-  return s === void 0
-    ? void 0
-    : Array.from(s, ([h, y]) => ({ path: join_3(e, `${h}.jsonl`), mtime: y.mtimeMs, key: y.key }));
+async function getSessionFileEntriesViaStorage(e, backend, projectKey) {
+  let s = await listSessionFilesViaStorage(backend, projectKey);
+  return s === undefined
+    ? undefined
+    : Array.from(s, ([h, y]) => ({
+        path: join(e, `${h}.jsonl`),
+        mtime: y.mtimeMs,
+        key: y.key,
+      }));
 }
 //@ chunk-e6aww6q8.js:539514-540131 fingerprint = getLogsWithoutIndex (0.804)
-async function getLogsWithoutIndex(e, n, r) {
+async function getLogsWithoutIndex(e, limit, r) {
   if (isStorageV5Enabled() && r) {
-    let { backend: backend, projectKey: projectKey } = r,
-      L = await getSessionFileEntriesViaStorage(e, backend, projectKey);
-    if (L !== void 0) {
-      if (L.length === 0) return [];
-      let G = n && L.length > n ? [...L].sort((Z, Se) => Se.mtime - Z.mtime).slice(0, n) : L,
-        q = [];
+    let { backend, projectKey } = r;
+    let sessionFileEntriesViaStorage = await getSessionFileEntriesViaStorage(e, backend, projectKey);
+    if (sessionFileEntriesViaStorage !== undefined) {
+      if (sessionFileEntriesViaStorage.length === 0) return [];
+      let G =
+        limit && sessionFileEntriesViaStorage.length > limit
+          ? [...sessionFileEntriesViaStorage].sort((Z, Se) => Se.mtime - Z.mtime).slice(0, limit)
+          : sessionFileEntriesViaStorage;
+      let q = [];
       for (let Z of G)
         try {
-          let Se = await loadAllLogsFromSessionFile(Z.path, void 0, { backend: backend, key: Z.key });
-          q.push(...Se);
+          let allLogsFromSessionFile = await loadAllLogsFromSessionFile(Z.path, undefined, {
+            backend,
+            key: Z.key,
+          });
+          q.push(...allLogsFromSessionFile);
         } catch {
           logForDebugging(`Failed to load session file: ${Z.path}`);
         }
@@ -11941,230 +13060,235 @@ async function getLogsWithoutIndex(e, n, r) {
   let sessionFilesMap = await getSessionFilesWithMtime(e);
   if (sessionFilesMap.size === 0) return [];
   let filesToProcess;
-  if (n && sessionFilesMap.size > n)
-    filesToProcess = [...sessionFilesMap.values()].sort((S, w) => w.mtime - S.mtime).slice(0, n);
+  if (limit && sessionFilesMap.size > limit)
+    filesToProcess = [...sessionFilesMap.values()].sort((S, w) => w.mtime - S.mtime).slice(0, limit);
   else filesToProcess = [...sessionFilesMap.values()];
-  let y = [];
+  let logs = [];
   for (let fileInfo of filesToProcess)
     try {
       let fileLogOptions = await loadAllLogsFromSessionFile(fileInfo.path);
-      y.push(...fileLogOptions);
+      logs.push(...fileLogOptions);
     } catch {
       logForDebugging(`Failed to load session file: ${fileInfo.path}`);
     }
-  return y;
+  return logs;
 }
+//@ chunk-e6aww6q8.js:540131-541827 fingerprint = readLiteMetadata (0.723)
 /**
  * 从文件头尾字节中抽取 lite 元数据：isSidechain、teamName、cwd、首条提示、custom-title、tag 等。
  */
-//@ chunk-e6aww6q8.js:540131-541827 fingerprint = readLiteMetadata (0.723)
-async function readLiteMetadata(e, n, r, s) {
-  let h = getTranscriptStorageKey(e, s),
-    { head: head, tail: tail } =
-      h === void 0 && isDiskless()
-        ? { head: "", tail: "" }
-        : await readHeadAndTail_2(e, n, r, wrapStorageSource(h));
-  if (!head) return { firstPrompt: "", isSidechain: !1, bookkeepingOnly: !1 };
-  let w = head.includes('"isSidechain":true') || head.includes('"isSidechain": true'),
-    projectPath = extractJsonStringField(head, "cwd"),
-    G = extractFieldFromFirstEntryStrict(head, "cwd"),
-    teamName = extractJsonStringField(head, "teamName"),
-    Z =
-      head
-        .split(
-          `
+async function readLiteMetadata(e, fileSize, buf, s) {
+  let transcriptStorageKey = getTranscriptStorageKey(e, s);
+  let { head, tail } =
+    transcriptStorageKey === undefined && isDiskless()
+      ? {
+          head: "",
+          tail: "",
+        }
+      : await readHeadAndTail_2(e, fileSize, buf, wrapStorageSource(transcriptStorageKey));
+  if (!head)
+    return {
+      firstPrompt: "",
+      isSidechain: false,
+      bookkeepingOnly: false,
+    };
+  let isSidechain = head.includes('"isSidechain":true') || head.includes('"isSidechain": true');
+  let projectPath = extractJsonStringField(head, "cwd");
+  let headCwdStrict = extractFieldFromFirstEntryStrict(head, "cwd");
+  let teamName = extractJsonStringField(head, "teamName");
+  let Z =
+    head
+      .split(
+        `
 `,
-        )
-        .find((hn) => hn.includes('"parentUuid":')) ?? head,
-    Se = extractJsonStringField(Z, "sessionKind"),
-    ke = Se === "bg" || Se === "daemon" || Se === "daemon-worker" ? Se : void 0,
-    agentSetting = extractJsonStringField(head, "agentSetting"),
-    Ee = extractJsonStringField(head, "entrypoint") ?? extractLastJsonStringField(tail, "entrypoint"),
-    Ae = isLoopCommandSession(head),
-    Ie = !(await transcriptMayContainMarker(e, head, tail, n, s)),
-    Me = extractLastJsonStringField(tail, "lastPrompt"),
-    We =
-      Me ||
-      extractFirstPromptFromChunk(head, "stored") ||
-      (tail === head ? "" : extractFirstPromptFromChunk(tail, "stored")) ||
-      "",
-    found = [
-      ...(Me && tail.includes('"pluginPrompt"')
-        ? tail
-            .split(
-              `
+      )
+      .find((line) => line.includes('"parentUuid":')) ?? head;
+  let jsonStringField = extractJsonStringField(Z, "sessionKind");
+  let sessionKind =
+    jsonStringField === "bg" || jsonStringField === "daemon" || jsonStringField === "daemon-worker"
+      ? jsonStringField
+      : undefined;
+  let agentSetting = extractJsonStringField(head, "agentSetting");
+  let entrypoint =
+    extractJsonStringField(head, "entrypoint") ?? extractLastJsonStringField(tail, "entrypoint");
+  let isLoopSession = isLoopCommandSession(head);
+  let bookkeepingOnly = !(await transcriptMayContainMarker(e, head, tail, fileSize, s));
+  let lastJsonStringField = extractLastJsonStringField(tail, "lastPrompt");
+  let We =
+    lastJsonStringField ||
+    extractFirstPromptFromChunk(head, "stored") ||
+    (tail === head ? "" : extractFirstPromptFromChunk(tail, "stored")) ||
+    "";
+  let found = [
+    ...(lastJsonStringField && tail.includes('"pluginPrompt"')
+      ? tail
+          .split(
+            `
 `,
-            )
-            .filter((hn) => hn.includes('"pluginPrompt"'))
-            .reverse()
-        : []),
-      head.includes('"pluginPrompt"') ? head : "",
-    ].find((hn) => hn !== "" && extractFirstPromptFromChunk(hn, "stored") === We),
-    lt = found === void 0 ? We : extractFirstPromptFromChunk(found, "shown"),
-    Je = extractLastJsonStringField(tail, "customTitle"),
-    nt = Je ?? extractLastJsonStringField(head, "customTitle"),
-    pt = extractLastJsonStringField(tail, "aiTitle") ?? extractLastJsonStringField(head, "aiTitle"),
-    Et = findLastFieldInType(tail, "summary", "summary"),
-    tag = extractLastJsonStringField(tail, "tag"),
-    gt = extractFieldFromLastEntryOfTypeStrict(tail, "relocated", "relocatedCwd"),
-    At = extractLastJsonStringField(tail, "gitBranch") ?? extractJsonStringField(head, "gitBranch"),
-    prUrl = extractLastJsonStringField(tail, "prUrl"),
-    prRepository = extractLastJsonStringField(tail, "prRepository"),
-    prNumber,
-    prNumStr = extractLastJsonStringField(tail, "prNumber");
-  if (prNumStr) prNumber = parseInt(prNumStr, 10) || void 0;
+          )
+          .filter((line) => line.includes('"pluginPrompt"'))
+          .reverse()
+      : []),
+    head.includes('"pluginPrompt"') ? head : "",
+  ].find((hn) => hn !== "" && extractFirstPromptFromChunk(hn, "stored") === We);
+  let lt = found === undefined ? We : extractFirstPromptFromChunk(found, "shown");
+  let lastJsonStringField_2 = extractLastJsonStringField(tail, "customTitle");
+  let customTitle = lastJsonStringField_2 ?? extractLastJsonStringField(head, "customTitle");
+  let aiTitle = extractLastJsonStringField(tail, "aiTitle") ?? extractLastJsonStringField(head, "aiTitle");
+  let summary = findLastFieldInType(tail, "summary", "summary");
+  let tag = extractLastJsonStringField(tail, "tag");
+  let relocatedCwd = extractFieldFromLastEntryOfTypeStrict(tail, "relocated", "relocatedCwd");
+  let gitBranch = extractLastJsonStringField(tail, "gitBranch") ?? extractJsonStringField(head, "gitBranch");
+  let prUrl = extractLastJsonStringField(tail, "prUrl");
+  let prRepository = extractLastJsonStringField(tail, "prRepository");
+  let prNumber;
+  let prNumStr = extractLastJsonStringField(tail, "prNumber");
+  if (prNumStr) prNumber = parseInt(prNumStr, 10) || undefined;
   if (!prNumber) {
     let prNumMatch = tail.lastIndexOf('"prNumber":');
     if (prNumMatch >= 0) {
-      let afterColon = tail.slice(prNumMatch + 11, prNumMatch + 25),
-        num = parseInt(afterColon.trim(), 10);
+      let afterColon = tail.slice(prNumMatch + 11, prNumMatch + 25);
+      let num = parseInt(afterColon.trim(), 10);
       if (num > 0) prNumber = num;
     }
   }
-  let rn = countFrameLinks(tail),
-    pn = findLastMessageTimestamp(tail),
-    no = findContinuedInSessionId(tail);
+  let artifactCount = countFrameLinks(tail);
+  let lastMessageAtMs = findLastMessageTimestamp(tail);
+  let continuedInSessionId = findContinuedInSessionId(tail);
   return {
     firstPrompt: We,
-    ...(lt !== We && { firstPromptShown: lt }),
-    gitBranch: At,
-    isSidechain: w,
-    projectPath: projectPath,
-    headCwdStrict: G,
-    relocatedCwd: gt,
-    teamName: teamName,
-    sessionKind: ke,
-    isLoopSession: Ae,
-    customTitle: nt,
-    customTitleFromTail: Je,
-    aiTitle: pt,
-    summary: Et,
-    tag: tag,
-    agentSetting: agentSetting,
-    entrypoint: Ee,
-    prNumber: prNumber,
-    prUrl: prUrl,
-    prRepository: prRepository,
-    artifactCount: rn,
-    lastMessageAtMs: pn,
-    continuedInSessionId: no,
-    bookkeepingOnly: Ie,
+    ...(lt !== We && {
+      firstPromptShown: lt,
+    }),
+    gitBranch,
+    isSidechain,
+    projectPath,
+    headCwdStrict,
+    relocatedCwd,
+    teamName,
+    sessionKind,
+    isLoopSession,
+    customTitle,
+    customTitleFromTail: lastJsonStringField_2,
+    aiTitle,
+    summary,
+    tag,
+    agentSetting,
+    entrypoint,
+    prNumber,
+    prUrl,
+    prRepository,
+    artifactCount,
+    lastMessageAtMs,
+    continuedInSessionId,
+    bookkeepingOnly,
   };
 }
 //@ chunk-e6aww6q8.js:541827-541970 layout
 var FrameLinkEntrySchema = DoctorLazy(() =>
   create({
     type: create_25("frame-link"),
-    frameUrl: create_2()
-      .optional()
-      .catch(void 0),
-    artifactCount: create_3()
-      .int()
-      .positive()
-      .optional()
-      .catch(void 0),
+    frameUrl: create_2().optional().catch(undefined),
+    artifactCount: create_3().int().positive().optional().catch(undefined),
   }),
 );
 //@ chunk-e6aww6q8.js:541970-542380 layout
 function countFrameLinks(e) {
   if (!e.includes('"type":"frame-link"')) return;
-  let n = 0,
-    r = new Set();
-  for (let h of e.split(`
+  let n = 0;
+  let r = new Set();
+  for (let line of e.split(`
 `)) {
-    if (!h.includes('"type":"frame-link"')) continue;
+    if (!line.includes('"type":"frame-link"')) continue;
     let y;
     try {
-      y = jsonParseRaw(h);
+      y = jsonParseRaw(line);
     } catch {
       continue;
     }
-    let safeParse = FrameLinkEntrySchema().safeParse(y);
-    if (!safeParse.success) continue;
-    if (safeParse.data.artifactCount !== void 0 && safeParse.data.artifactCount > n)
-      n = safeParse.data.artifactCount;
-    if (safeParse.data.frameUrl !== void 0) r.add(safeParse.data.frameUrl);
+    let S = FrameLinkEntrySchema().safeParse(y);
+    if (!S.success) continue;
+    if (S.data.artifactCount !== undefined && S.data.artifactCount > n) n = S.data.artifactCount;
+    if (S.data.frameUrl !== undefined) r.add(S.data.frameUrl);
   }
   let max = Math.max(n, r.size);
-  return max > 0 ? max : void 0;
+  return max > 0 ? max : undefined;
 }
 //@ chunk-e6aww6q8.js:542380-543149 layout
-function isLoopCommandSession(e) {
-  let r = 0;
-  while (r < e.length) {
-    let index = e.indexOf(
-        `
+function isLoopCommandSession(chunk) {
+  let start = 0;
+  while (start < chunk.length) {
+    let newlineIdx = chunk.indexOf(
+      `
 `,
-        r,
-      ),
-      h = index >= 0 ? e.slice(r, index) : e.slice(r),
-      y = index < 0;
-    if (
-      ((r = index >= 0 ? index + 1 : e.length), !h.includes('"type":"user"') && !h.includes('"type": "user"'))
-    )
-      continue;
-    if (h.includes('"tool_result"')) continue;
+      start,
+    );
+    let line = newlineIdx >= 0 ? chunk.slice(start, newlineIdx) : chunk.slice(start);
+    let y = newlineIdx < 0;
+    start = newlineIdx >= 0 ? newlineIdx + 1 : chunk.length;
+    if (!line.includes('"type":"user"') && !line.includes('"type": "user"')) continue;
+    if (line.includes('"tool_result"')) continue;
     let S;
     try {
-      S = jsonParse(h);
+      S = jsonParse(line);
     } catch {
-      if (y) return h.includes("<command-name>/loop</command-name>");
+      if (y) return line.includes("<command-name>/loop</command-name>");
       continue;
     }
     if (S.type !== "user") continue;
-    if (S.isMeta === !0 || S.isCompactSummary === !0) continue;
+    if (S.isMeta === true || S.isCompactSummary === true) continue;
     let message = S.message;
     if (!message) continue;
-    let content = message.content,
-      G = [];
-    if (typeof content === "string") G.push(content);
+    let content = message.content;
+    let texts = [];
+    if (typeof content === "string") texts.push(content);
     else if (Array.isArray(content)) {
-      let q = !1;
+      let q = false;
       for (let Z of content) {
         if (!Z || typeof Z !== "object") continue;
         if (Z.type === "tool_result") {
-          q = !0;
+          q = true;
           break;
         }
-        if (Z.type === "text" && typeof Z.text === "string") G.push(Z.text);
+        if (Z.type === "text" && typeof Z.text === "string") texts.push(Z.text);
       }
       if (q) continue;
     }
-    return G.some((q) => q.includes("<command-name>/loop</command-name>"));
+    return texts.some((text) => text.includes("<command-name>/loop</command-name>"));
   }
-  return !1;
+  return false;
 }
 //@ chunk-e6aww6q8.js:543149-544523 fingerprint = extractFirstPromptFromChunk (0.719)
-function extractFirstPromptFromChunk(e, n) {
-  let start = 0,
-    s = !1,
-    h = "",
-    firstCommandFallback = "";
-  while (start < e.length) {
-    let index = e.indexOf(
-        `
+function extractFirstPromptFromChunk(chunk, n) {
+  let start = 0;
+  let hasTickMessages = false;
+  let firstCommandFallback = "";
+  let firstCommandFallback_2 = "";
+  while (start < chunk.length) {
+    let newlineIdx = chunk.indexOf(
+      `
 `,
-        start,
-      ),
-      w = index >= 0 ? e.slice(start, index) : e.slice(start);
-    if (
-      ((start = index >= 0 ? index + 1 : e.length),
-      !w.includes('"type":"user"') && !w.includes('"type": "user"'))
-    )
-      continue;
-    if (w.includes('"tool_result"')) continue;
-    if (w.includes('"isMeta":true') || w.includes('"isMeta": true')) continue;
-    if (w.includes('"isCompactSummary":true') || w.includes('"isCompactSummary": true')) continue;
+      start,
+    );
+    let line = newlineIdx >= 0 ? chunk.slice(start, newlineIdx) : chunk.slice(start);
+    start = newlineIdx >= 0 ? newlineIdx + 1 : chunk.length;
+    if (!line.includes('"type":"user"') && !line.includes('"type": "user"')) continue;
+    if (line.includes('"tool_result"')) continue;
+    if (line.includes('"isMeta":true') || line.includes('"isMeta": true')) continue;
+    if (line.includes('"isCompactSummary":true') || line.includes('"isCompactSummary": true')) continue;
     try {
-      let entry = jsonParse(w);
+      let entry = jsonParse(line);
       if (entry.type !== "user") continue;
-      if (entry.isMeta === !0 || entry.isCompactSummary === !0) continue;
+      if (entry.isMeta === true || entry.isCompactSummary === true) continue;
       let message = entry.message;
       if (!message) continue;
-      let content = message.content,
-        Z = n === "shown" && typeof content === "string" ? t7(content, entry.pluginPrompt) : content,
-        Se = Z !== content,
-        texts = [];
+      let content = message.content;
+      let Z =
+        n === "shown" && typeof content === "string"
+          ? renderPluginPromptColon(content, entry.pluginPrompt)
+          : content;
+      let Se = Z !== content;
+      let texts = [];
       if (typeof Z === "string") texts.push(Z);
       else if (Array.isArray(content))
         for (let block of content) {
@@ -12174,59 +13298,61 @@ function extractFirstPromptFromChunk(e, n) {
       for (let text of texts) {
         if (!text) continue;
         let result = flattenPastedBlocks(text)
-            .replaceAll(
-              `
+          .replaceAll(
+            `
 `,
-              " ",
-            )
-            .trim(),
-          Ae = Se ? null : extractTag(result, COMMAND_NAME);
-        if (Ae) {
-          let name = Ae.replace(/^\//, ""),
-            We = extractTag(result, "command-args")?.trim() || "";
-          if (require("./chunk-mvgsex7x.js").builtInCommandNames().has(name) || !We) {
-            if (!h) h = Ae;
+            " ",
+          )
+          .trim();
+        let commandNameTag = Se ? null : extractTag(result, COMMAND_NAME);
+        if (commandNameTag) {
+          let name = commandNameTag.replace(/^\//, "");
+          let commandArgs = extractTag(result, "command-args")?.trim() || "";
+          if (require("./chunk-mvgsex7x.js").builtInCommandNames().has(name) || !commandArgs) {
+            if (!firstCommandFallback) firstCommandFallback = commandNameTag;
             continue;
           }
-          return We ? `${Ae} ${We}` : Ae;
+          return commandArgs ? `${commandNameTag} ${commandArgs}` : commandNameTag;
         }
-        let Ie = Se ? null : extractTag(result, "bash-input");
-        if (Ie) return `! ${Ie}`;
+        let bashInput = Se ? null : extractTag(result, "bash-input");
+        if (bashInput) return `! ${bashInput}`;
         if (SYNTHETIC_USER_TEXT_PATTERN.test(result)) {
-          if (result.startsWith(`<${TICK}>`)) s = !0;
+          if (result.startsWith(`<${TICK}>`)) hasTickMessages = true;
           continue;
         }
         if (result.length > 200) result = truncateToLength(result, 200).trim() + "\u2026";
         return result;
       }
     } catch {
-      if (index < 0) {
+      if (newlineIdx < 0) {
         let L =
-          extractJsonStringFieldPrefix(w, "content", 200) || extractJsonStringFieldPrefix(w, "text", 200);
-        if (!SYNTHETIC_USER_TEXT_PATTERN.test(L)) firstCommandFallback = L;
+          extractJsonStringFieldPrefix(line, "content", 200) ||
+          extractJsonStringFieldPrefix(line, "text", 200);
+        if (!SYNTHETIC_USER_TEXT_PATTERN.test(L)) firstCommandFallback_2 = L;
       }
       continue;
     }
   }
-  if (h) return h;
-  if (s) return "Proactive session";
-  return firstCommandFallback;
+  if (firstCommandFallback) return firstCommandFallback;
+  if (hasTickMessages) return "Proactive session";
+  return firstCommandFallback_2;
 }
 //@ chunk-e6aww6q8.js:544523-544740 layout
-function findLastFieldInType(e, n, r) {
-  let s = `"type":"${n}"`,
-    h = `"${r}":`,
-    y = e.length;
+function findLastFieldInType(tail, n, r) {
+  let s = `"type":"${n}"`;
+  let h = `"${r}":`;
+  let y = tail.length;
   while (y > 0) {
-    let index = e.lastIndexOf(
-        `
+    let index = tail.lastIndexOf(
+      `
 `,
-        y - 1,
-      ),
-      sliced = e.slice(index + 1, y);
-    if (((y = index), sliced.includes(s) && sliced.includes(h))) {
-      let L = extractJsonStringField(sliced, r);
-      if (L !== void 0) return L;
+      y - 1,
+    );
+    let sliced = tail.slice(index + 1, y);
+    y = index;
+    if (sliced.includes(s) && sliced.includes(h)) {
+      let jsonStringField = extractJsonStringField(sliced, r);
+      if (jsonStringField !== undefined) return jsonStringField;
     }
     if (index < 0) break;
   }
@@ -12238,18 +13364,20 @@ function extractJsonStringFieldPrefix(text, key, maxLen) {
   for (let pattern of patterns) {
     let idx = text.indexOf(pattern);
     if (idx < 0) continue;
-    let valueStart = idx + pattern.length,
-      w = valueStart,
-      collected = 0;
-    while (w < text.length && collected < maxLen) {
-      if (text[w] === "\\") {
-        ((w += 2), collected++);
+    let valueStart = idx + pattern.length;
+    let i = valueStart;
+    let collected = 0;
+    while (i < text.length && collected < maxLen) {
+      if (text[i] === "\\") {
+        i += 2;
+        collected++;
         continue;
       }
-      if (text[w] === '"') break;
-      (w++, collected++);
+      if (text[i] === '"') break;
+      i++;
+      collected++;
     }
-    return text.slice(valueStart, w).replaceAll("\\n", " ").replaceAll("\\t", " ").trim();
+    return text.slice(valueStart, i).replaceAll("\\n", " ").replaceAll("\\t", " ").trim();
   }
   return "";
 }
@@ -12261,49 +13389,52 @@ function latestLogPerSession(filteredLogs) {
     let existing = groups.get(log.sessionId);
     if (!existing || log.modified.getTime() > existing.modified.getTime()) groups.set(log.sessionId, log);
   }
-  return sortLogs([...groups.values()]).map((r, s) => ({ ...r, value: s }));
+  return sortLogs([...groups.values()]).map((r, value) => ({
+    ...r,
+    value,
+  }));
 }
 //@ chunk-e6aww6q8.js:545254-545715 facade-majority = getSessionFilesLite (0.952)
-async function getSessionFilesLite(e, n, r, s, h) {
-  let entries = [...(await getSessionFilesWithMtime(e, s)).entries()].sort((G, q) => q[1].mtime - G[1].mtime);
-  if (n && entries.length > n) entries = entries.slice(0, n);
+async function getSessionFilesLite(projectDir, limit, projectPath, s, ownWorktrees) {
+  let entries = [...(await getSessionFilesWithMtime(projectDir, s)).entries()].sort(
+    (G, q) => q[1].mtime - G[1].mtime,
+  );
+  if (limit && entries.length > limit) entries = entries.slice(0, limit);
   let logs = [];
-  for (let [G, q] of entries)
+  for (let [sessionId, fileInfo] of entries)
     logs.push({
-      date: new Date(q.mtime).toISOString(),
+      date: new Date(fileInfo.mtime).toISOString(),
       messages: [],
-      isLite: !0,
-      fullPath: q.path,
+      isLite: true,
+      fullPath: fileInfo.path,
       value: 0,
-      created: new Date(q.ctime),
-      modified: new Date(q.mtime),
+      created: new Date(fileInfo.ctime),
+      modified: new Date(fileInfo.mtime),
       firstPrompt: "",
       messageCount: 0,
-      fileSize: q.size,
-      isSidechain: !1,
-      sessionId: G,
-      projectPath: r,
-      ownWorktrees: h,
+      fileSize: fileInfo.size,
+      isSidechain: false,
+      sessionId,
+      projectPath,
+      ownWorktrees,
     });
   let sorted = sortLogs(logs);
-  return (
-    sorted.forEach((log, q) => {
-      log.value = q;
-    }),
-    sorted
-  );
+  sorted.forEach((log, i) => {
+    log.value = i;
+  });
+  return sorted;
 }
+//@ chunk-e6aww6q8.js:545715-547898 fingerprint = enrichLog (0.575)
 /**
  * 富化单个 lite 日志并过滤：cwd 不同、sidechain、无内容等不显示在 /resume。
  */
-//@ chunk-e6aww6q8.js:545715-547898 fingerprint = enrichLog (0.575)
-async function enrichLog(e, n, r) {
+async function enrichLog(e, buf, r) {
   if (!e.isLite || !e.fullPath) return e;
-  let s = await readLiteMetadata(e.fullPath, e.fileSize ?? 0, n, r),
-    h = s.relocatedCwd ?? s.headCwdStrict;
+  let liteMetadata = await readLiteMetadata(e.fullPath, e.fileSize ?? 0, buf, r);
+  let h = liteMetadata.relocatedCwd ?? liteMetadata.headCwdStrict;
   if (
-    e.projectPath !== void 0 &&
-    h !== void 0 &&
+    e.projectPath !== undefined &&
+    h !== undefined &&
     !recordedCwdIsWithinOwnWorktrees(h, e.ownWorktrees, slugCollisionGuardFoldsCase()) &&
     (await recordedCwdCollidesWithProjectResolved(
       h,
@@ -12312,130 +13443,151 @@ async function enrichLog(e, n, r) {
       hasUntouchableRecordSpellingAsync,
       getRealPathOptions(r),
     ))
-  )
-    return (
-      logForDebugging(
-        `Session ${e.sessionId} filtered from /resume: recorded cwd is a different directory with the same project slug`,
-      ),
-      null
+  ) {
+    logForDebugging(
+      `Session ${e.sessionId} filtered from /resume: recorded cwd is a different directory with the same project slug`,
     );
-  let y = (Se) => Se,
-    S = s.projectPath !== void 0 && y(dirname(e.fullPath)) === y(getProjectDir_2(s.projectPath)),
-    w = s.relocatedCwd ?? (S || e.projectPath === void 0 ? (s.projectPath ?? e.projectPath) : e.projectPath),
-    customTitleFromTail = s.customTitleFromTail;
-  if (customTitleFromTail === void 0)
-    customTitleFromTail =
-      (e.sessionId !== void 0 ? await readCustomTitle(e.fullPath, e.sessionId, r) : void 0) ?? s.customTitle;
-  let G = s.lastMessageAtMs !== void 0 ? new Date(Math.min(s.lastMessageAtMs, e.modified.getTime())) : void 0,
-    q = {
-      ...e,
-      ...(G !== void 0 && { date: G.toISOString(), modified: G }),
-      isLite: !1,
-      firstPrompt: s.firstPrompt,
-      ...(s.firstPromptShown !== void 0 && { firstPromptShown: s.firstPromptShown }),
-      gitBranch: s.gitBranch,
-      isSidechain: s.isSidechain,
-      teamName: s.teamName,
-      sessionKind: s.sessionKind,
-      customTitle: customTitleFromTail,
-      aiTitle: s.aiTitle,
-      summary: s.summary,
-      tag: s.tag,
-      agentSetting: s.agentSetting,
-      prNumber: s.prNumber,
-      prUrl: s.prUrl,
-      prRepository: s.prRepository,
-      artifactCount: s.artifactCount,
-      projectPath: w,
-    };
-  if (!q.firstPrompt && !q.customTitle && !q.aiTitle) q.firstPrompt = "(session)";
-  if (q.isSidechain)
-    return (logForDebugging(`Session ${e.sessionId} filtered from /resume: isSidechain=true`), null);
-  if (q.teamName)
-    return (logForDebugging(`Session ${e.sessionId} filtered from /resume: teamName=${q.teamName}`), null);
-  if (s.continuedInSessionId !== void 0) {
-    if (
-      ((q.continuedInSessionId = s.continuedInSessionId),
-      await getTranscriptPathForSession_2(e.fullPath, s.continuedInSessionId, r))
-    )
-      (logForDebugging(
-        `Session ${e.sessionId} filtered from /resume: continued in ${s.continuedInSessionId}`,
-      ),
-        (q.superseded = !0));
+    return null;
   }
-  if (s.bookkeepingOnly) q.bookkeepingOnly = !0;
-  if (q.sessionKind === "daemon" || q.sessionKind === "daemon-worker")
-    return (
-      logForDebugging(`Session ${e.sessionId} filtered from /resume: sessionKind=${q.sessionKind}`),
-      null
-    );
-  let Z = PROGRAMMATIC_ENTRYPOINTS.has(hBe() ?? "");
-  if (!Z && PROGRAMMATIC_ENTRYPOINTS.has(s.entrypoint ?? ""))
-    return (
-      logForDebugging(`Session ${e.sessionId} filtered from /resume: entrypoint=${s.entrypoint}`),
-      null
-    );
-  if (!Z && s.isLoopSession)
-    return (logForDebugging(`Session ${e.sessionId} filtered from /resume: /loop session`), null);
+  let y = (Se) => Se;
+  let S =
+    liteMetadata.projectPath !== undefined &&
+    y(dirname(e.fullPath)) === y(getProjectDir(liteMetadata.projectPath));
+  let projectPath =
+    liteMetadata.relocatedCwd ??
+    (S || e.projectPath === undefined ? (liteMetadata.projectPath ?? e.projectPath) : e.projectPath);
+  let customTitleFromTail = liteMetadata.customTitleFromTail;
+  if (customTitleFromTail === undefined)
+    customTitleFromTail =
+      (e.sessionId !== undefined ? await readCustomTitle(e.fullPath, e.sessionId, r) : undefined) ??
+      liteMetadata.customTitle;
+  let G =
+    liteMetadata.lastMessageAtMs !== undefined
+      ? new Date(Math.min(liteMetadata.lastMessageAtMs, e.modified.getTime()))
+      : undefined;
+  let q = {
+    ...e,
+    ...(G !== undefined && {
+      date: G.toISOString(),
+      modified: G,
+    }),
+    isLite: false,
+    firstPrompt: liteMetadata.firstPrompt,
+    ...(liteMetadata.firstPromptShown !== undefined && {
+      firstPromptShown: liteMetadata.firstPromptShown,
+    }),
+    gitBranch: liteMetadata.gitBranch,
+    isSidechain: liteMetadata.isSidechain,
+    teamName: liteMetadata.teamName,
+    sessionKind: liteMetadata.sessionKind,
+    customTitle: customTitleFromTail,
+    aiTitle: liteMetadata.aiTitle,
+    summary: liteMetadata.summary,
+    tag: liteMetadata.tag,
+    agentSetting: liteMetadata.agentSetting,
+    prNumber: liteMetadata.prNumber,
+    prUrl: liteMetadata.prUrl,
+    prRepository: liteMetadata.prRepository,
+    artifactCount: liteMetadata.artifactCount,
+    projectPath,
+  };
+  if (!q.firstPrompt && !q.customTitle && !q.aiTitle) q.firstPrompt = "(session)";
+  if (q.isSidechain) {
+    logForDebugging(`Session ${e.sessionId} filtered from /resume: isSidechain=true`);
+    return null;
+  }
+  if (q.teamName) {
+    logForDebugging(`Session ${e.sessionId} filtered from /resume: teamName=${q.teamName}`);
+    return null;
+  }
+  if (liteMetadata.continuedInSessionId !== undefined) {
+    q.continuedInSessionId = liteMetadata.continuedInSessionId;
+    if (await getTranscriptPathForSession_2(e.fullPath, liteMetadata.continuedInSessionId, r)) {
+      logForDebugging(
+        `Session ${e.sessionId} filtered from /resume: continued in ${liteMetadata.continuedInSessionId}`,
+      );
+      q.superseded = true;
+    }
+  }
+  if (liteMetadata.bookkeepingOnly) q.bookkeepingOnly = true;
+  if (q.sessionKind === "daemon" || q.sessionKind === "daemon-worker") {
+    logForDebugging(`Session ${e.sessionId} filtered from /resume: sessionKind=${q.sessionKind}`);
+    return null;
+  }
+  let Z = PROGRAMMATIC_ENTRYPOINTS.has(entrypointEnv() ?? "");
+  if (!Z && PROGRAMMATIC_ENTRYPOINTS.has(liteMetadata.entrypoint ?? "")) {
+    logForDebugging(`Session ${e.sessionId} filtered from /resume: entrypoint=${liteMetadata.entrypoint}`);
+    return null;
+  }
+  if (!Z && liteMetadata.isLoopSession) {
+    logForDebugging(`Session ${e.sessionId} filtered from /resume: /loop session`);
+    return null;
+  }
   return q;
 }
+//@ chunk-e6aww6q8.js:547898-548224 facade-majority = enrichLogs (0.969)
 /**
  * 批量富化 lite 日志，记录过滤计数（/resume: enriched … filtered out … visible）。
  */
-//@ chunk-e6aww6q8.js:547898-548224 facade-majority = enrichLogs (0.969)
-async function enrichLogs(e, n, r, s) {
-  let result = [],
-    readBuf = Buffer.alloc(LITE_READ_BUF_SIZE),
-    S = n;
-  while (S < e.length && result.length < r) {
-    let log = e[S];
-    S++;
-    let q = await enrichLog(log, readBuf, s);
-    if (q && !q.superseded) result.push(q);
+async function enrichLogs(allLogs, startIndex, count, s) {
+  let result = [];
+  let readBuf = Buffer.alloc(LITE_READ_BUF_SIZE);
+  let i = startIndex;
+  while (i < allLogs.length && result.length < count) {
+    let log = allLogs[i];
+    i++;
+    let enriched = await enrichLog(log, readBuf, s);
+    if (enriched && !enriched.superseded) result.push(enriched);
   }
-  let w = S - n,
-    L = w - result.length;
-  if (L > 0)
+  let scanned = i - startIndex;
+  let filtered = scanned - result.length;
+  if (filtered > 0)
     logForDebugging(
-      `/resume: enriched ${w} sessions, ${L} filtered out, ${result.length} visible (${e.length - S} remaining on disk)`,
+      `/resume: enriched ${scanned} sessions, ${filtered} filtered out, ${result.length} visible (${allLogs.length - i} remaining on disk)`,
     );
-  return { logs: result, nextIndex: S };
+  return {
+    logs: result,
+    nextIndex: i,
+  };
 }
 //@ chunk-e6aww6q8.js:1737819-1738199 fingerprint = METADATA_TYPE_MARKERS (0.44)
-var MAX_METADATA_SCAN_BYTES = 52428800,
-  J9o = 200,
-  Den = 60,
-  Z9o = /<command-name>\/([\w:-]+)<\/command-name>/g,
-  n8o = /"name":"mcp__([^"]+?)__([^"]+)"/g,
-  Len = '"content":"<command-name>/',
-  o8o = '"content":"<command-message>',
-  r8o = '"type":"tool_use"',
-  s8o = '"type":"custom-title"',
-  i8o = '"type":"pr-link"',
-  a8o = '"role":"user"',
-  l8o = /"customTitle":"([^"]+)"/,
-  d8o = /"prNumber":(\d+)/,
-  u8o = /"role":"user"[^}]*"content":"([^"]+)"/;
+/**
+ * MAX_FIRST_MESSAGE_CHARS：首条消息截断长度（200）；MAX_SESSION_DESCRIPTORS：会话描述条数上限（60）；COMMAND_NAME_RE：transcript 里的斜杠命令名（同一声明共 13 个绑定）。
+ */
+var MAX_METADATA_SCAN_BYTES = 52428800;
+var MAX_FIRST_MESSAGE_CHARS = 200;
+var MAX_SESSION_DESCRIPTORS = 60;
+var COMMAND_NAME_RE = /<command-name>\/([\w:-]+)<\/command-name>/g;
+var MCP_TOOL_USE_NAME_RE = /"name":"mcp__([^"]+?)__([^"]+)"/g;
+var COMMAND_NAME_CONTENT_MARKER = '"content":"<command-name>/';
+var COMMAND_MESSAGE_CONTENT_MARKER = '"content":"<command-message>';
+var TOOL_USE_TYPE_MARKER = '"type":"tool_use"';
+var CUSTOM_TITLE_TYPE_MARKER = '"type":"custom-title"';
+var PR_LINK_TYPE_MARKER = '"type":"pr-link"';
+var USER_ROLE_MARKER = '"role":"user"';
+var CUSTOM_TITLE_RE = /"customTitle":"([^"]+)"/;
+var PR_NUMBER_RE = /"prNumber":(\d+)/;
+var USER_CONTENT_RE = /"role":"user"[^}]*"content":"([^"]+)"/;
 //@ chunk-e6aww6q8.js:4338628-4338664 fingerprint = appendEntryToFile (0.638)
 function appendEntryToFile() {
   getFsImplementation().mkdirSync(getPluginsDirectory());
 }
+//@ chunk-qzv7ezvq.js:590-630 facade-exports = getProjectsDir (1)
 /**
  * <配置目录>/projects：所有项目转录目录的父目录。
  */
-//@ chunk-qzv7ezvq.js:590-630 facade-exports = getProjectsDir (1)
 function getProjectsDir() {
   return join(getClaudeConfigDir(), "projects");
 }
 //@ chunk-qzv7ezvq.js:630-676 facade-exports
 function getProjectKeyIfRepresentable(t) {
-  return dirname(t) === getProjectsDir() ? basename(t) : void 0;
+  return dirname(t) === getProjectsDir() ? basename(t) : undefined;
 }
 //@ chunk-qzv7ezvq.js:676-819 facade-exports
 function projectKeyOf(t) {
   if (typeof t === "string") return getProjectKeyIfRepresentable(t);
-  let { scope: scope } = t;
-  return scope.namespace === "transcript" && scope.sessionId === void 0 ? scope.projectKey : void 0;
+  let { scope } = t;
+  return scope.namespace === "transcript" && scope.sessionId === undefined ? scope.projectKey : undefined;
 }
 //@ chunk-qzv7ezvq.js:819-1121 layout
 class ProjectDirCacheState {
@@ -12456,31 +13608,32 @@ class ProjectDirCacheState {
 }
 //@ chunk-qzv7ezvq.js:1121-1144 layout
 var projectDirCacheByHost = new HostScoped(() => new ProjectDirCacheState());
+//@ chunk-qzv7ezvq.js:1144-1282 facade-exports
 /**
  * 项目目录：<配置目录>/projects/<cwd 清洗名>，cwd 中非字母数字字符换成 '-'，超过 200 字符截断并加 hash 后缀；按 cwd 缓存。
  */
-//@ chunk-qzv7ezvq.js:1144-1282 facade-exports
 function getProjectDir(t) {
-  let of = projectDirCacheByHost.of(getRootSession().host),
-    n = of.projectDirCache.get(t);
-  if (n !== void 0) return n;
+  let e = projectDirCacheByHost.of(getRootSession().host);
+  let n = e.projectDirCache.get(t);
+  if (n !== undefined) return n;
   let r = join(getProjectsDir(), getProjectKey(t));
-  return (of.cacheProjectDir(t, r), r);
+  e.cacheProjectDir(t, r);
+  return r;
 }
 //@ chunk-qzv7ezvq.js:1282-1356 facade-exports
 function resolveProjectDir() {
-  let t = getOriginalCwdOrNull();
-  if (t !== null) return getProjectDir(t);
+  let originalCwdOrNull = getOriginalCwdOrNull();
+  if (originalCwdOrNull !== null) return getProjectDir(originalCwdOrNull);
   return getPinnedProjectDir() ?? getProjectDir(getOriginalCwd());
 }
 //@ chunk-qzv7ezvq.js:1356-1390 facade-exports
 function resolveSessionProjectDir() {
   return getSessionProjectDir() ?? resolveProjectDir();
 }
+//@ chunk-qzv7ezvq.js:1390-1434 facade-exports = getErrorsPath (1)
 /**
  * 当前会话主转录路径：<项目目录>/<sessionId>.jsonl。
  */
-//@ chunk-qzv7ezvq.js:1390-1434 facade-exports = getErrorsPath (1)
 function getTranscriptPath() {
   return join(resolveSessionProjectDir(), `${getSessionId()}.jsonl`);
 }
@@ -12489,12 +13642,12 @@ function locateSessionProjectDir() {
   return resolveSessionProjectDir();
 }
 //@ chunk-qzv7ezvq.js:1461-1524 facade-exports
-function setAgentTranscriptSubdir(t, e) {
-  projectDirCacheByHost.of(getRootSession().host).setAgentTranscriptSubdir(t, e);
+function setAgentTranscriptSubdir(agentId, transcriptSubdir) {
+  projectDirCacheByHost.of(getRootSession().host).setAgentTranscriptSubdir(agentId, transcriptSubdir);
 }
 //@ chunk-qzv7ezvq.js:1524-1585 facade-exports
-function clearAgentTranscriptSubdir(t) {
-  projectDirCacheByHost.of(getRootSession().host).clearAgentTranscriptSubdir(t);
+function clearAgentTranscriptSubdir(agentId) {
+  projectDirCacheByHost.of(getRootSession().host).clearAgentTranscriptSubdir(agentId);
 }
 //@ chunk-qzv7ezvq.js:1585-1631 facade-exports
 function getSessionSubagentsDir() {
@@ -12504,52 +13657,68 @@ function getSessionSubagentsDir() {
 function locateAgentTranscript(t) {
   return getAgentTranscriptPath(t);
 }
+//@ chunk-qzv7ezvq.js:1660-1778 facade-exports
 /**
  * 子代理转录路径：<项目目录>/<sessionId>/subagents/[子目录/]agent-<agentId>.jsonl。
  */
-//@ chunk-qzv7ezvq.js:1660-1778 facade-exports
 function getAgentTranscriptPath(t) {
-  let e = projectDirCacheByHost.of(getRootSession().host).agentTranscriptSubdirs.get(t),
-    n = e ? join(getSessionSubagentsDir(), e) : getSessionSubagentsDir();
+  let e = projectDirCacheByHost.of(getRootSession().host).agentTranscriptSubdirs.get(t);
+  let n = e ? join(getSessionSubagentsDir(), e) : getSessionSubagentsDir();
   return join(n, `agent-${t}.jsonl`);
 }
 //@ chunk-qzv7ezvq.js:1778-1824 facade-exports
-function agentTranscriptPathOfEntry(t) {
-  return G$(t) ? getAgentTranscriptPath(Mr(t)) : void 0;
+function agentTranscriptPathOfEntry(agentId) {
+  return isSafeIdSegment(agentId) ? getAgentTranscriptPath(identityAgentId2(agentId)) : undefined;
 }
 //@ chunk-qzv7ezvq.js:1824-2105 facade-exports = loadAllSubagentTranscriptsFromDisk (0.818)
 async function listSubagentIdsFromDisk(t) {
-  let e = getProjectKeyIfRepresentable(resolveSessionProjectDir());
-  if (isStorageV5Enabled() && t !== void 0 && e !== void 0) return f_qzv7(t, e, getSessionId());
+  let projectKey = getProjectKeyIfRepresentable(resolveSessionProjectDir());
+  if (isStorageV5Enabled() && t !== undefined && projectKey !== undefined)
+    return listTranscriptEntries(t, projectKey, getSessionId());
   if (isDiskless()) return [];
   let entries;
   try {
-    entries = await readdir(getSessionSubagentsDir(), { withFileTypes: !0 });
+    entries = await readdir(getSessionSubagentsDir(), {
+      withFileTypes: true,
+    });
   } catch {
     return [];
   }
   return entries
-    .filter((r) => r.isFile() && r.name.startsWith("agent-") && r.name.endsWith(".jsonl"))
-    .map((r) => r.name.slice(6, -6));
+    .filter((entry) => entry.isFile() && entry.name.startsWith("agent-") && entry.name.endsWith(".jsonl"))
+    .map((entry) => entry.name.slice(6, -6));
 }
 //@ chunk-qzv7ezvq.js:2105-2495 layout
-async function f_qzv7(t, e, n) {
+/**
+ * listTranscriptEntries：分页列出转录条目（qzv7 备份实现）。
+ */
+async function listTranscriptEntries(t, projectKey, sessionId) {
   let r = [];
   try {
     return (
       await readAllPages(
         (a) =>
           t.listEntries(
-            { namespace: "transcript", projectKey: e, sessionId: n },
-            { skipKeyStats: !0, skipScopeStats: !0, ...(a !== void 0 && { cursor: a }) },
+            {
+              namespace: "transcript",
+              projectKey,
+              sessionId,
+            },
+            {
+              skipKeyStats: true,
+              skipScopeStats: true,
+              ...(a !== undefined && {
+                cursor: a,
+              }),
+            },
           ),
         (a) => {
           for (let s of a)
             if (
               s.kind === "key" &&
               s.key.namespace === "transcript" &&
-              s.key.agentId !== void 0 &&
-              s.key.agentRelPath === void 0 &&
+              s.key.agentId !== undefined &&
+              s.key.agentRelPath === undefined &&
               isValidKeySegment(s.key.agentId)
             )
               r.push(s.key.agentId);
@@ -12563,86 +13732,110 @@ async function f_qzv7(t, e, n) {
   }
 }
 //@ chunk-qzv7ezvq.js:2495-2680 facade-exports = extractTeammateTranscriptsFromTasks (1)
-function extractTeammateTranscriptsFromTasks(t, e) {
-  let transcripts = {};
-  for (let task of Object.values(t)) {
-    let o = e[task.id]?.messages;
-    if (task.type === "in_process_teammate" && task.identity?.agentId && o && o.length > 0)
-      transcripts[task.identity.agentId] = o;
+function extractTeammateTranscriptsFromTasks(tasks, transcripts) {
+  let transcripts_2 = {};
+  for (let task of Object.values(tasks)) {
+    let messages = transcripts[task.id]?.messages;
+    if (task.type === "in_process_teammate" && task.identity?.agentId && messages && messages.length > 0)
+      transcripts_2[task.identity.agentId] = messages;
   }
-  return transcripts;
+  return transcripts_2;
 }
 //@ chunk-x753sk9t.js:513-578 placement
 function resolveAgainstProcessCwd(e) {
   let cwd = process.cwd();
-  return cwd.endsWith(sep_2) ? cwd + e : cwd + sep_2 + e;
+  return cwd.endsWith(sep) ? cwd + e : cwd + sep + e;
 }
 //@ chunk-x753sk9t.js:578-673 placement
 function makeWorkspaceRealPath(e) {
   return (n) =>
-    e.hostFiles.realPath(PathSpace.workspace(n === "" || isAbsolute_2(n) ? n : resolveAgainstProcessCwd(n)), {
-      native: !0,
+    e.hostFiles.realPath(PathSpace.workspace(n === "" || isAbsolute(n) ? n : resolveAgainstProcessCwd(n)), {
+      native: true,
     });
 }
 //@ chunk-x753sk9t.js:673-747 placement
 function getRealPathOptions(e) {
-  return e === void 0 ? void 0 : { hoverRestOn: isStorageV5Enabled(), realPath: makeWorkspaceRealPath(e) };
+  return e === undefined
+    ? undefined
+    : {
+        hoverRestOn: isStorageV5Enabled(),
+        realPath: makeWorkspaceRealPath(e),
+      };
 }
 //@ chunk-x753sk9t.js:747-865 layout
-function getAgentIdFromTranscriptKey(e) {
-  return e.namespace !== "transcript" || e.journal !== void 0 || e.sessionJournal !== void 0
-    ? void 0
-    : (e.agentId ?? null);
+function getAgentIdFromTranscriptKey(key) {
+  return key.namespace !== "transcript" || key.journal !== undefined || key.sessionJournal !== undefined
+    ? undefined
+    : (key.agentId ?? null);
 }
+//@ chunk-x753sk9t.js:865-1185 callgraph-witnessed = getTranscriptPath (0.658)
 /**
  * storage v5 后端下把 <配置目录>/projects/<项目>/<session>.jsonl 形式的路径映射为转录存储 key；不在 projects 目录下或无后端时返回 undefined。
  */
-//@ chunk-x753sk9t.js:865-1185 callgraph-witnessed = getTranscriptPath (0.658)
 function getTranscriptStorageKey(e, n) {
-  if (!isStorageV5Enabled() || n === void 0) return;
+  if (!isStorageV5Enabled() || n === undefined) return;
   if (typeof e !== "string")
-    return getAgentIdFromTranscriptKey(e.key) === null ? { backend: n, key: e.key } : void 0;
+    return getAgentIdFromTranscriptKey(e.key) === null
+      ? {
+          backend: n,
+          key: e.key,
+        }
+      : undefined;
   if (!e.endsWith(".jsonl")) return;
   let t = dirname(e);
   if (dirname(t) !== getProjectsDir_3()) return;
-  let r = basename(t),
-    o = basename(e, ".jsonl");
+  let r = basename(t);
+  let o = basename(e, ".jsonl");
   if (e !== join(getProjectsDir_3(), r, `${o}.jsonl`)) return;
-  let transcript = STORAGE_SPACES.transcript(r, o);
-  return validateStorageKey(transcript) === void 0 ? { backend: n, key: transcript } : void 0;
+  let d = STORAGE_SPACES.transcript(r, o);
+  return validateStorageKey(d) === undefined
+    ? {
+        backend: n,
+        key: d,
+      }
+    : undefined;
 }
 //@ chunk-x753sk9t.js:1185-1734 layout = getAgentTranscriptPath (0.867)
-function getAgentTranscriptStorageKey(e, n) {
-  if (!isStorageV5Enabled() || n === void 0) return;
-  if (typeof e !== "string")
-    return typeof getAgentIdFromTranscriptKey(e.key) === "string" ? { backend: n, key: e.key } : void 0;
-  let t = relative(getProjectsDir_3(), e);
+function getAgentTranscriptStorageKey(agentTranscriptPath, n) {
+  if (!isStorageV5Enabled() || n === undefined) return;
+  if (typeof agentTranscriptPath !== "string")
+    return typeof getAgentIdFromTranscriptKey(agentTranscriptPath.key) === "string"
+      ? {
+          backend: n,
+          key: agentTranscriptPath.key,
+        }
+      : undefined;
+  let t = relative(getProjectsDir_3(), agentTranscriptPath);
   if (t === "" || t === ".." || t.startsWith(`..${sep}`) || isAbsolute(t)) return;
   let parts = t.split(sep);
-  if (e !== join(getProjectsDir_3(), ...parts)) return;
-  let at = parts.at(-1);
+  if (agentTranscriptPath !== join(getProjectsDir_3(), ...parts)) return;
+  let last = parts.at(-1);
   if (
     parts.length < 4 ||
     parts[2] !== "subagents" ||
-    at === void 0 ||
-    !at.startsWith("agent-") ||
-    !at.endsWith(".jsonl")
+    last === undefined ||
+    !last.startsWith("agent-") ||
+    !last.endsWith(".jsonl")
   )
     return;
-  let sliced = at.slice(6, -6),
-    sliced_2 = parts.slice(3, -1);
-  if (!uA([parts[0], parts[1], sliced]) || (sliced_2.length > 0 && !uA(sliced_2))) return;
-  let transcript = STORAGE_SPACES.transcript(
-    parts[0],
-    parts[1],
-    sliced,
-    sliced_2.length > 0 ? sliced_2 : void 0,
-  );
-  return validateStorageKey(transcript) === void 0 ? { backend: n, key: transcript } : void 0;
+  let sliced = last.slice(6, -6);
+  let sliced_2 = parts.slice(3, -1);
+  if (
+    !areValidKeySegments([parts[0], parts[1], sliced]) ||
+    (sliced_2.length > 0 && !areValidKeySegments(sliced_2))
+  )
+    return;
+  let s = STORAGE_SPACES.transcript(parts[0], parts[1], sliced, sliced_2.length > 0 ? sliced_2 : undefined);
+  return validateStorageKey(s) === undefined
+    ? {
+        backend: n,
+        key: s,
+      }
+    : undefined;
 }
 //@ chunk-x753sk9t.js:1734-1863 placement
 function getTranscriptStorageContext(e) {
-  if (!isStorageV5Enabled() || e === void 0) return;
+  if (!isStorageV5Enabled() || e === undefined) return;
   return {
     backend: e,
     transcriptKey: STORAGE_SPACES.transcript,
@@ -12652,46 +13845,56 @@ function getTranscriptStorageContext(e) {
 }
 //@ chunk-x753sk9t.js:1863-1930 placement
 function wrapStorageSource(e) {
-  return e === void 0 ? void 0 : { source: e, hoverRestOn: isStorageV5Enabled() };
+  return e === undefined
+    ? undefined
+    : {
+        source: e,
+        hoverRestOn: isStorageV5Enabled(),
+      };
 }
 //@ chunk-63641kq7.js:4535-4668 callgraph-fingerprint = getTranscriptPathForSession (0.661)
-async function getTranscriptPathForSession_2(e, n, r) {
-  let t = join(dirname(e), `${n}.jsonl`),
-    i = await readSessionLite(t, wrapStorageSource(getTranscriptStorageKey(t, r)));
-  return i !== null && (await transcriptMayContainMarker(t, i.head, i.tail, i.size, r));
+async function getTranscriptPathForSession_2(fullPath, continuedInSessionId, r) {
+  let t = join(dirname(fullPath), `${continuedInSessionId}.jsonl`);
+  let sessionLite = await readSessionLite(t, wrapStorageSource(getTranscriptStorageKey(t, r)));
+  return (
+    sessionLite !== null &&
+    (await transcriptMayContainMarker(t, sessionLite.head, sessionLite.tail, sessionLite.size, r))
+  );
 }
 //@ chunk-63641kq7.js:4668-4711 placement
-var f = '"parentUuid":',
-  A = 16777216,
-  E = 1048576;
+var PARENT_UUID_KEY = '"parentUuid":';
+var MAX_TRANSCRIPT_SCAN_BYTES = 16777216;
+var TRANSCRIPT_TAIL_SCAN_BYTES = 1048576;
+//@ chunk-63641kq7.js:4711-5193 placement
 /**
  * 判断转录头尾或全文是否含有某标记：头尾已命中返回 true，文件较小返回 false，存储模式保守返回 true，否则分块扫描文件直到上限。
  */
-//@ chunk-63641kq7.js:4711-5193 placement
-async function transcriptMayContainMarker(e, n, r, t, i) {
-  if (n.includes(f) || r.includes(f)) return !0;
-  if (t <= LITE_READ_BUF_SIZE) return !1;
-  if (getTranscriptStorageKey(e, i) !== void 0) return !0;
+async function transcriptMayContainMarker(e, head, tail, t, i) {
+  if (head.includes(PARENT_UUID_KEY) || tail.includes(PARENT_UUID_KEY)) return true;
+  if (t <= LITE_READ_BUF_SIZE) return false;
+  if (getTranscriptStorageKey(e, i) !== undefined) return true;
   try {
-    let d = await open_2(e, constants_2.O_RDONLY | constants_2.O_NOFOLLOW | constants_2.O_NONBLOCK);
+    let d = await open(e, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
     try {
-      if (!(await d.stat()).isFile()) return !1;
-      let allocUnsafe = Buffer.allocUnsafe(E + f.length),
-        c = 0,
-        m = 0;
-      while (m < A) {
-        let { bytesRead: bytesRead } = await d.read(allocUnsafe, c, E, m);
-        if (bytesRead === 0) return !1;
+      if (!(await d.stat()).isFile()) return false;
+      let a = Buffer.allocUnsafe(TRANSCRIPT_TAIL_SCAN_BYTES + PARENT_UUID_KEY.length);
+      let c = 0;
+      let m = 0;
+      while (m < MAX_TRANSCRIPT_SCAN_BYTES) {
+        let { bytesRead } = await d.read(a, c, TRANSCRIPT_TAIL_SCAN_BYTES, m);
+        if (bytesRead === 0) return false;
         let l = c + bytesRead;
-        if (allocUnsafe.subarray(0, l).includes(f)) return !0;
-        ((c = Math.min(f.length, l)), allocUnsafe.copyWithin(0, l - c, l), (m += bytesRead));
+        if (a.subarray(0, l).includes(PARENT_UUID_KEY)) return true;
+        c = Math.min(PARENT_UUID_KEY.length, l);
+        a.copyWithin(0, l - c, l);
+        m += bytesRead;
       }
-      return !0;
+      return true;
     } finally {
       await d.close();
     }
   } catch {
-    return !1;
+    return false;
   }
 }
 //@ chunk-18hwfzwa.js:441822-441905 fingerprint = extractTeammateTranscriptsFromTasks (1)
@@ -12699,14 +13902,14 @@ function extractTeammateTranscriptsFromTasks_2(tasks) {
   return tasks.type === "in_process_teammate" ? tasks.identity.agentId : tasks.agentId;
 }
 //@ chunk-18hwfzwa.js:1084489-1084597 fingerprint = loadSubagentTranscripts (0.658)
-function loadSubagentTranscripts_2({ isLoading: isLoading, transcript: transcript }) {
-  let D = ce((agentId) => !isLoading && JM(agentId), [isLoading]),
-    L = useStoreSelector(transcript, D),
-    ee = !isUnattendedInteractiveSession();
-  return !isLoading && !L && ee;
+function loadSubagentTranscripts_2({ isLoading, transcript }) {
+  let D = ce((agentId) => !isLoading && endsWithNumberedList(agentId), [isLoading]);
+  let storeSelector = useStoreSelector(transcript, D);
+  let ee = !isUnattendedInteractiveSession();
+  return !isLoading && !storeSelector && ee;
 }
 //@ chunk-7dqf31r1.js:4170-4264 affinity
-var REMOTE_ENTRYPOINTS_2 = new Set([
+var REMOTE_ENTRYPOINTS_3 = new Set([
   "remote",
   "remote_desktop",
   "remote_mobile",
@@ -12718,18 +13921,18 @@ function getEntrypoint() {
   let CLAUDE_CODE_ENTRYPOINT = env.CLAUDE_CODE_ENTRYPOINT;
   return (
     Boolean(env.CLAUDE_CODE_REMOTE) &&
-    CLAUDE_CODE_ENTRYPOINT !== void 0 &&
-    REMOTE_ENTRYPOINTS_2.has(CLAUDE_CODE_ENTRYPOINT)
+    CLAUDE_CODE_ENTRYPOINT !== undefined &&
+    REMOTE_ENTRYPOINTS_3.has(CLAUDE_CODE_ENTRYPOINT)
   );
 }
 //@ chunk-cg2r2hy6.js:24194-24674 fingerprint = getAgentTranscriptPath (0.928)
 function getAgentTranscriptPath_2(agentId) {
-  let u = getProjectsDir_4() + sep;
+  let u = getProjectsDir_3() + sep;
   if (!agentId.startsWith(u)) return null;
   let parts = agentId.slice(u.length).split(sep);
   if (parts.length === 2 && parts[1].endsWith(".jsonl")) {
-    let o = parts[0],
-      sliced = parts[1].slice(0, -6);
+    let o = parts[0];
+    let sliced = parts[1].slice(0, -6);
     return isValidKeySegment(o) && isValidKeySegment(sliced)
       ? pathIfNotStorageBacked(STORAGE_SPACES.transcript(o, sliced))
       : null;
@@ -12740,98 +13943,133 @@ function getAgentTranscriptPath_2(agentId) {
     parts.at(-1).startsWith("agent-") &&
     parts.at(-1).endsWith(".jsonl")
   ) {
-    let o = parts[0],
-      y = parts[1],
-      sliced = parts.slice(3, -1),
-      sliced_2 = parts.at(-1).slice(6, -6);
+    let o = parts[0];
+    let y = parts[1];
+    let sliced = parts.slice(3, -1);
+    let sliced_2 = parts.at(-1).slice(6, -6);
     return isValidKeySegment(o) &&
       isValidKeySegment(y) &&
       isValidKeySegment(sliced_2) &&
-      (sliced.length === 0 || uA(sliced))
-      ? pathIfNotStorageBacked(STORAGE_SPACES.transcript(o, y, sliced_2, sliced.length > 0 ? sliced : void 0))
+      (sliced.length === 0 || areValidKeySegments(sliced))
+      ? pathIfNotStorageBacked(
+          STORAGE_SPACES.transcript(o, y, sliced_2, sliced.length > 0 ? sliced : undefined),
+        )
       : null;
   }
   return null;
 }
 //@ chunk-cg2r2hy6.js:24674-24718 sole-consumer
 function pathIfNotStorageBacked(s) {
-  return validateStorageKey(s) === void 0 ? s : null;
+  return validateStorageKey(s) === undefined ? s : null;
 }
 //@ chunk-0j11jfmy.js:6045-6057 fingerprint = cleanMessagesForLogging (1)
 var cleanMessagesForLogging_2 = "ant";
 //@ chunk-89ebz077.js:16227-16458 fingerprint = writeAgentMetadata (0.515)
 async function writeAgentMetadata_2(agentId, metadata) {
   if (getPlatform() === "windows") return;
-  let path = FTt(agentId);
+  let path = daemonTokensFile(agentId);
   try {
-    return (
-      await mkdir_2(NTt(), { recursive: !0, mode: 448 }),
-      await writeFile(path, JSON.stringify(metadata), { mode: 384 }),
-      path
-    );
+    await mkdir(daemonAuthDir(), {
+      recursive: true,
+      mode: 448,
+    });
+    await writeFile(path, JSON.stringify(metadata), {
+      mode: 384,
+    });
+    return path;
   } catch (error) {
-    logForDebugging(`writeSocketTokensFile failed: ${errorMessage(error)}`, { level: "warn" });
+    logForDebugging(`writeSocketTokensFile failed: ${errorMessage(error)}`, {
+      level: "warn",
+    });
     return;
   }
 }
 //@ chunk-ad2e1aj6.js:22307-22511 fingerprint = scanPreBoundaryMetadata (0.481)
 function scanPreBoundaryMetadata(e, n, s) {
-  if (Buffer.byteLength(e) <= n) return { text: e, truncated: !1 };
+  if (Buffer.byteLength(e) <= n)
+    return {
+      text: e,
+      truncated: false,
+    };
   return {
-    text: `${new TextDecoder("utf-8", { fatal: !1 }).decode(Buffer.from(e).subarray(0, n)).replace(/\uFFFD$/, "")}${s}`,
-    truncated: !0,
+    text: `${new TextDecoder("utf-8", {
+      fatal: false,
+    })
+      .decode(Buffer.from(e).subarray(0, n))
+      .replace(/\uFFFD$/, "")}${s}`,
+    truncated: true,
   };
 }
 //@ chunk-bss4k1z9.js:33929-33956 fingerprint = getUserType (0.74)
 var getUserType_2 = (e) => e === "external";
 //@ chunk-cgs3vg0v.js:1502-1585 fingerprint = buildFileHistorySnapshotChain (0.456)
-function buildFileHistorySnapshotChain(e) {
-  if (!e) return;
+function buildFileHistorySnapshotChain(session) {
+  if (!session) return;
   try {
-    return R7e.of(e).snapshot();
+    return spawnStatsSlots.of(session).snapshot();
   } catch (error) {
     logError(error);
     return;
   }
 }
 //@ chunk-dz3q485w.js:15191-15469 callgraph-fingerprint = loadSameRepoMessageLogs (0.229)
-async function loadSameRepoMessageLogs_2(e, n) {
-  let s = await sameRepoWorktrees(e),
-    r = await loadSameRepoMessageLogsProgressive(s, void 0, void 0, n),
-    a = getSessionId(),
-    l = (b) =>
-      !b.isSidechain &&
-      b.isAlias !== !0 &&
-      b.sessionId !== a &&
-      (b.projectPath === void 0 || isSameRepoPath(b.projectPath, e, s)),
-    filtered = r.logs.filter(l),
-    h = count(r.allStatLogs.slice(r.nextIndex), resolveSessionFilePath_2);
-  return { logs: filtered, totalCount: count(filtered, resolveSessionFilePath_2) + h };
+async function loadSameRepoMessageLogs_2(cwd, credentials) {
+  let s = await sameRepoWorktrees(cwd);
+  let sameRepoMessageLogsProgressive = await loadSameRepoMessageLogsProgressive(
+    s,
+    undefined,
+    undefined,
+    credentials,
+  );
+  let sessionId = getSessionId();
+  let l = (b) =>
+    !b.isSidechain &&
+    b.isAlias !== true &&
+    b.sessionId !== sessionId &&
+    (b.projectPath === undefined || isSameRepoPath(b.projectPath, cwd, s));
+  let filtered = sameRepoMessageLogsProgressive.logs.filter(l);
+  let h = count(
+    sameRepoMessageLogsProgressive.allStatLogs.slice(sameRepoMessageLogsProgressive.nextIndex),
+    resolveSessionFilePath_2,
+  );
+  return {
+    logs: filtered,
+    totalCount: count(filtered, resolveSessionFilePath_2) + h,
+  };
 }
 //@ chunk-rds552kq.js:226-282 placement
-function yH(e) {
-  return typeof e !== "string" || isDiskless() ? void 0 : e;
+/**
+ * worktreeFromProgress：进度消息里的 worktree（磁盘模式下保留）。
+ */
+function worktreeFromProgress(e) {
+  return typeof e !== "string" || isDiskless() ? undefined : e;
 }
+//@ chunk-wd9kxbpn.js:18162-18427 placement = renderToolResultMessage (0.52)
 /**
  * 根据进度消息里的 worktree 信息更新已保存的会话元数据（路径/分支/hook 标记变化时写回）。
  */
-//@ chunk-wd9kxbpn.js:18162-18427 placement = renderToolResultMessage (0.52)
 async function renderToolResultMessage(output, _progressMessagesForMessage, _options) {
-  let u = getJobDir(output),
-    o = await readJobState(u, _options);
-  if (!o) return;
-  let d = pickWorktreeFields(_progressMessagesForMessage, o);
+  let jobDir = getJobDir(output);
+  let jobState = await readJobState(jobDir, _options);
+  if (!jobState) return;
+  let d = pickWorktreeFields(_progressMessagesForMessage, jobState);
   if (
-    d.worktreePath === o.worktreePath &&
-    d.worktreeBranch === o.worktreeBranch &&
-    d.worktreeHookBased === o.worktreeHookBased
+    d.worktreePath === jobState.worktreePath &&
+    d.worktreeBranch === jobState.worktreeBranch &&
+    d.worktreeHookBased === jobState.worktreeHookBased
   )
     return;
-  await q(u, { ...o, ...d, updatedAt: new Date().toISOString() }, {}, _options);
+  await writeStateAndBroadcast(
+    jobDir,
+    {
+      ...jobState,
+      ...d,
+      updatedAt: new Date().toISOString(),
+    },
+    {},
+    _options,
+  );
 }
-const getProjectsDir_2 = getProjectsDir; //@ cross-chunk alias
-const getProjectDir_2 = getProjectDir; //@ cross-chunk alias
-
 export {
   getEntrypoint,
   getSessionIdFromLog,
@@ -12854,7 +14092,7 @@ export {
   doesMessageExistInSession,
   isChainParticipant,
   updateAgentMetadata,
-  yH,
+  worktreeFromProgress,
   getAgentTranscriptPath,
   locateAgentTranscript,
   readAgentMetadata,
@@ -12868,7 +14106,7 @@ export {
   transcriptCursorEnd,
   loadSessionTranscript,
   sessionLogFromTranscriptLoad,
-  su,
+  currentTranscriptStore,
   fetchLogs,
   findFirstMessageLog,
   toTranscriptEntries,
@@ -12883,7 +14121,7 @@ export {
   cleanMessagesForLogging_2,
   AgentTranscriptFetchError,
   isAgentTranscriptOverBound,
-  jVs,
+  isUnavailableStoreError,
   hasAgentStopSibling,
   flushSessionStorage,
   getAgentTranscript,
@@ -13013,10 +14251,10 @@ export {
   resolveSessionProjectDir,
   setToolResultCopiesOnDisk,
   resolveProjectDir,
-  sfn,
+  storagePort,
   getRealPathOptions,
   loadSameRepoMessageLogs,
-  BVs,
+  clearLastIngressUuid,
   writeAgentMetadata_2,
   peekResumedArtifactAutoReactLedger,
   takeResumedArtifactAutoReactLedger,
@@ -13048,22 +14286,22 @@ export {
   loadSameRepoMessageLogs_2,
   scanTranscriptForSuppression,
   MAX_METADATA_SCAN_BYTES,
-  Len,
-  o8o,
-  Z9o,
-  r8o,
-  n8o,
-  s8o,
-  l8o,
-  i8o,
-  d8o,
-  a8o,
-  u8o,
-  J9o,
-  Den,
+  COMMAND_NAME_CONTENT_MARKER,
+  COMMAND_MESSAGE_CONTENT_MARKER,
+  COMMAND_NAME_RE,
+  TOOL_USE_TYPE_MARKER,
+  MCP_TOOL_USE_NAME_RE,
+  CUSTOM_TITLE_TYPE_MARKER,
+  CUSTOM_TITLE_RE,
+  PR_LINK_TYPE_MARKER,
+  PR_NUMBER_RE,
+  USER_ROLE_MARKER,
+  USER_CONTENT_RE,
+  MAX_FIRST_MESSAGE_CHARS,
+  MAX_SESSION_DESCRIPTORS,
   consumeFailedTranscriptWrite,
   clearSessionMessagesCache,
-  sjt,
+  isSessionFileAt,
   appendEntryToFile,
   projectKeyOf,
   hasRecordedUserPrompt,

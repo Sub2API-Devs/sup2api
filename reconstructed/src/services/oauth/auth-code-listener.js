@@ -14,16 +14,24 @@ import { logFeatureBad, logFeatureOk } from "../analytics/featureTelemetry.js";
 import { logEvent } from "../analytics/index.js";
 import { shouldUseClaudeAIAuth } from "./client.js";
 import { getOauthConfig } from "../../constants/oauth.js";
-import { BJt, ACCOUNT_ON_HOLD, OAuthCallbackError, isClaudeAiOrigin } from "./oauthErrors.js";
+import {
+  isRestrictedLinksEnabled,
+  ACCOUNT_ON_HOLD,
+  OAuthCallbackError,
+  isClaudeAiOrigin,
+} from "./oauthErrors.js";
 import { logError } from "../../utils/log.js";
 import { truncateToLength } from "../../utils/stringUtils.js";
 
 //@ chunk-b8krr1px.js:661-671 affinity
-var P = 200;
+/**
+ * 回显文本的最大字符数（200）。
+ */
+var MAX_ECHOED_TEXT_CHARS = 200;
+//@ chunk-b8krr1px.js:671-4544 fingerprint = AuthCodeListener (0.723)
 /**
  * 本地 OAuth 回调服务器：http.createServer 监听 127.0.0.1 随机端口的 /callback，校验 state 后取 code，并重定向到成功页。
  */
-//@ chunk-b8krr1px.js:671-4544 fingerprint = AuthCodeListener (0.723)
 class AuthCodeListener {
   localServer;
   port = 0;
@@ -32,20 +40,26 @@ class AuthCodeListener {
   expectedState = null;
   pendingResponse = null;
   callbackPath;
-  codeReceived = !1;
-  constructor(e = "/callback") {
-    ((this.localServer = createServer()), (this.callbackPath = e));
+  codeReceived = false;
+  constructor(callbackPath = "/callback") {
+    this.localServer = createServer();
+    this.callbackPath = callbackPath;
   }
-  async start(e) {
-    return new Promise((r, i) => {
-      (this.localServer.once("error", (o) => {
-        (logFeatureBad("oauth_callback_listener", "oauth_callback_server_start_failed"),
-          i(Error(`Failed to start OAuth callback server: ${o.message}`, { cause: o })));
-      }),
-        this.localServer.listen(e ?? 0, "127.0.0.1", () => {
-          let address = this.localServer.address();
-          ((this.port = address.port), r(this.port));
-        }));
+  async start(port) {
+    return new Promise((resolve, reject) => {
+      this.localServer.once("error", (err) => {
+        logFeatureBad("oauth_callback_listener", "oauth_callback_server_start_failed");
+        reject(
+          Error(`Failed to start OAuth callback server: ${err.message}`, {
+            cause: err,
+          }),
+        );
+      });
+      this.localServer.listen(port ?? 0, "127.0.0.1", () => {
+        let address = this.localServer.address();
+        this.port = address.port;
+        resolve(this.port);
+      });
     });
   }
   getPort() {
@@ -54,140 +68,163 @@ class AuthCodeListener {
   hasPendingResponse() {
     return this.pendingResponse !== null;
   }
-  async waitForAuthorization(e, r) {
-    return new Promise((i, o) => {
-      ((this.promiseResolver = i),
-        (this.promiseRejecter = o),
-        (this.expectedState = e),
-        this.startLocalListener(r));
+  async waitForAuthorization(state, onReady) {
+    return new Promise((resolve, reject) => {
+      this.promiseResolver = resolve;
+      this.promiseRejecter = reject;
+      this.expectedState = state;
+      this.startLocalListener(onReady);
     });
   }
-  handleSuccessRedirect(e, r) {
+  handleSuccessRedirect(scopes, customHandler) {
     if (!this.pendingResponse) return;
-    if (r) {
-      (r(this.pendingResponse, e),
-        (this.pendingResponse = null),
-        logEvent("tengu_oauth_automatic_redirect", { custom_handler: !0 }));
-      return;
-    }
-    let i = shouldUseClaudeAIAuth(e)
-      ? getOauthConfig().CLAUDEAI_SUCCESS_URL
-      : getOauthConfig().CONSOLE_SUCCESS_URL;
-    (this.pendingResponse.writeHead(302, { Location: i }),
-      this.pendingResponse.end(),
-      (this.pendingResponse = null),
-      logEvent("tengu_oauth_automatic_redirect", {}));
-  }
-  handleErrorRedirect() {
-    if (!this.pendingResponse) return;
-    let CLAUDEAI_SUCCESS_URL = getOauthConfig().CLAUDEAI_SUCCESS_URL;
-    (this.pendingResponse.writeHead(302, { Location: CLAUDEAI_SUCCESS_URL }),
-      this.pendingResponse.end(),
-      (this.pendingResponse = null),
-      logEvent("tengu_oauth_automatic_redirect_error", {}));
-  }
-  startLocalListener(e) {
-    (this.localServer.on("request", this.handleRedirect.bind(this)),
-      this.localServer.on("error", this.handleError.bind(this)),
-      e());
-  }
-  handleRedirect(e, r) {
-    let i = new URL(e.url || "", `http://${e.headers.host || "localhost"}`);
-    if (i.pathname !== this.callbackPath) {
-      (r.writeHead(404), r.end());
-      return;
-    }
-    let o = i.searchParams.get("code") ?? void 0,
-      n = i.searchParams.get("state") ?? void 0,
-      s = i.searchParams.get("error") ?? void 0;
-    if (!o && s && BJt()) {
-      this.respondToErrorCallback({
-        error: s,
-        errorDescription: i.searchParams.get("error_description") ?? void 0,
-        errorUri: i.searchParams.get("error_uri") ?? void 0,
-        state: n,
-        res: r,
+    if (customHandler) {
+      customHandler(this.pendingResponse, scopes);
+      this.pendingResponse = null;
+      logEvent("tengu_oauth_automatic_redirect", {
+        custom_handler: true,
       });
       return;
     }
-    this.validateAndRespond(o, n, r);
+    let successUrl = shouldUseClaudeAIAuth(scopes)
+      ? getOauthConfig().CLAUDEAI_SUCCESS_URL
+      : getOauthConfig().CONSOLE_SUCCESS_URL;
+    this.pendingResponse.writeHead(302, {
+      Location: successUrl,
+    });
+    this.pendingResponse.end();
+    this.pendingResponse = null;
+    logEvent("tengu_oauth_automatic_redirect", {});
   }
-  validateAndRespond(e, r, i) {
-    if (r === this.expectedState && this.answerIfCodeReceived(i)) return;
-    if (!e) {
-      (logFeatureBad("oauth_callback_listener", "oauth_callback_no_code"),
-        i.writeHead(400),
-        i.end("Authorization code not found"),
-        this.reject(Error("No authorization code received")));
+  handleErrorRedirect() {
+    if (!this.pendingResponse) return;
+    let errorUrl = getOauthConfig().CLAUDEAI_SUCCESS_URL;
+    this.pendingResponse.writeHead(302, {
+      Location: errorUrl,
+    });
+    this.pendingResponse.end();
+    this.pendingResponse = null;
+    logEvent("tengu_oauth_automatic_redirect_error", {});
+  }
+  startLocalListener(onReady) {
+    this.localServer.on("request", this.handleRedirect.bind(this));
+    this.localServer.on("error", this.handleError.bind(this));
+    onReady();
+  }
+  handleRedirect(req, res) {
+    let parsedUrl = new URL(req.url || "", `http://${req.headers.host || "localhost"}`);
+    if (parsedUrl.pathname !== this.callbackPath) {
+      res.writeHead(404);
+      res.end();
       return;
     }
-    if (this.rejectOnStateMismatch(r, i)) return;
-    ((this.codeReceived = !0),
-      (this.pendingResponse = i),
-      logFeatureOk("oauth_callback_listener"),
-      this.resolve(e));
+    let authCode = parsedUrl.searchParams.get("code") ?? undefined;
+    let state = parsedUrl.searchParams.get("state") ?? undefined;
+    let s = parsedUrl.searchParams.get("error") ?? undefined;
+    if (!authCode && s && isRestrictedLinksEnabled()) {
+      this.respondToErrorCallback({
+        error: s,
+        errorDescription: parsedUrl.searchParams.get("error_description") ?? undefined,
+        errorUri: parsedUrl.searchParams.get("error_uri") ?? undefined,
+        state,
+        res,
+      });
+      return;
+    }
+    this.validateAndRespond(authCode, state, res);
   }
-  respondToErrorCallback({ error: e, errorDescription: r, errorUri: i, state: o, res: n }) {
-    if (this.rejectOnStateMismatch(o, n)) return;
-    if (this.answerIfCodeReceived(n)) return;
-    let s = r === ACCOUNT_ON_HOLD;
-    (logFeatureBad(
+  validateAndRespond(authCode, state, res) {
+    if (state === this.expectedState && this.answerIfCodeReceived(res)) return;
+    if (!authCode) {
+      logFeatureBad("oauth_callback_listener", "oauth_callback_no_code");
+      res.writeHead(400);
+      res.end("Authorization code not found");
+      this.reject(Error("No authorization code received"));
+      return;
+    }
+    if (this.rejectOnStateMismatch(state, res)) return;
+    this.codeReceived = true;
+    this.pendingResponse = res;
+    logFeatureOk("oauth_callback_listener");
+    this.resolve(authCode);
+  }
+  respondToErrorCallback({ error, errorDescription, errorUri, state, res }) {
+    if (this.rejectOnStateMismatch(state, res)) return;
+    if (this.answerIfCodeReceived(res)) return;
+    let s = errorDescription === ACCOUNT_ON_HOLD;
+    logFeatureBad(
       "oauth_callback_listener",
       s ? "oauth_callback_account_on_hold" : "oauth_callback_authorize_error",
-    ),
-      n.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" }),
-      n.end(
-        s
-          ? "Your account is on hold. You can close this window."
-          : "Sign-in was canceled or failed. You can close this window.",
+    );
+    res.writeHead(200, {
+      "Content-Type": "text/plain; charset=utf-8",
+    });
+    res.end(
+      s
+        ? "Your account is on hold. You can close this window."
+        : "Sign-in was canceled or failed. You can close this window.",
+    );
+    this.reject(
+      new OAuthCallbackError(
+        sanitizeEchoedText(error),
+        errorDescription === undefined ? undefined : sanitizeEchoedText(errorDescription),
+        s ? isClaudeAiOrigin(errorUri) : undefined,
       ),
-      this.reject(
-        new OAuthCallbackError(S(e), r === void 0 ? void 0 : S(r), s ? isClaudeAiOrigin(i) : void 0),
-      ));
+    );
   }
   answerIfCodeReceived(e) {
-    if (!this.codeReceived) return !1;
-    return (
-      e.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" }),
-      e.end("Sign-in is already finishing. You can close this window."),
-      !0
-    );
+    if (!this.codeReceived) return false;
+    e.writeHead(200, {
+      "Content-Type": "text/plain; charset=utf-8",
+    });
+    e.end("Sign-in is already finishing. You can close this window.");
+    return true;
   }
   rejectOnStateMismatch(e, r) {
-    if (e === this.expectedState) return !1;
-    return (
-      logFeatureBad("oauth_callback_listener", "oauth_callback_state_mismatch"),
-      r.writeHead(400),
-      r.end("Invalid state parameter"),
-      this.reject(Error("Invalid state parameter")),
-      !0
-    );
+    if (e === this.expectedState) return false;
+    logFeatureBad("oauth_callback_listener", "oauth_callback_state_mismatch");
+    r.writeHead(400);
+    r.end("Invalid state parameter");
+    this.reject(Error("Invalid state parameter"));
+    return true;
   }
-  handleError(e) {
-    (logFeatureBad("oauth_callback_listener", "oauth_callback_server_error"),
-      logError(e),
-      this.close(),
-      this.reject(e));
+  handleError(err) {
+    logFeatureBad("oauth_callback_listener", "oauth_callback_server_error");
+    logError(err);
+    this.close();
+    this.reject(err);
   }
-  resolve(e) {
-    if (this.promiseResolver)
-      (this.promiseResolver(e), (this.promiseResolver = null), (this.promiseRejecter = null));
+  resolve(authorizationCode) {
+    if (this.promiseResolver) {
+      this.promiseResolver(authorizationCode);
+      this.promiseResolver = null;
+      this.promiseRejecter = null;
+    }
   }
-  reject(e) {
-    if (this.promiseRejecter)
-      (this.promiseRejecter(e), (this.promiseResolver = null), (this.promiseRejecter = null));
+  reject(error) {
+    if (this.promiseRejecter) {
+      this.promiseRejecter(error);
+      this.promiseResolver = null;
+      this.promiseRejecter = null;
+    }
   }
   close() {
     if (this.pendingResponse) this.handleErrorRedirect();
-    if (this.localServer) (this.localServer.removeAllListeners(), this.localServer.close());
+    if (this.localServer) {
+      this.localServer.removeAllListeners();
+      this.localServer.close();
+    }
   }
   [Symbol.dispose]() {
     this.close();
   }
 }
 //@ chunk-b8krr1px.js:4544-4622 layout
-function S(e) {
-  return truncateToLength(e.replace(/[\p{Cc}\p{Cf}\p{Cs}\u2028\u2029]/gu, ""), P);
+/**
+ * 清洗要回显的文本（去控制字符并截断）。
+ */
+function sanitizeEchoedText(e) {
+  return truncateToLength(e.replace(/[\p{Cc}\p{Cf}\p{Cs}\u2028\u2029]/gu, ""), MAX_ECHOED_TEXT_CHARS);
 }
 //@ chunk-b8krr1px.js:4622-4844 placement
 class AuthCodeRefusedError extends Error {
@@ -202,32 +239,36 @@ class AuthCodeRefusedError extends Error {
 function base64URLEncode(buffer) {
   return buffer.toString("base64").replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
 }
+//@ chunk-b8krr1px.js:4998-5027 placement
 /**
  * PKCE code verifier：32 字节随机数 base64url。
  */
-//@ chunk-b8krr1px.js:4998-5027 placement
 function generateCodeVerifier() {
   return base64URLEncode(randomBytes(32));
 }
 //@ chunk-b8krr1px.js:5092-5121 placement
-function y() {
+/**
+ * 生成随机 state（32 字节 base64url）。
+ */
+function generateState() {
   return base64URLEncode(randomBytes(32));
 }
 //@ chunk-b8krr1px.js:5121-5305 placement
 class CallbackListenerUnavailableError extends Error {
-  constructor(e) {
-    super("Couldn't start the local listener that receives the browser sign-in. Try again.", { cause: e });
+  constructor(cause) {
+    super("Couldn't start the local listener that receives the browser sign-in. Try again.", {
+      cause,
+    });
     this.name = "CallbackListenerUnavailableError";
   }
 }
+//@ chunk-b8krr1px.js:5305-5448 placement
 /**
  * 手动粘贴登录代码的提示文字。
  */
-//@ chunk-b8krr1px.js:5305-5448 placement
 var MANUAL_CODE_HINT =
-    "The browser can't return the sign-in to Claude Code automatically. After you sign in, paste the code shown.",
-  PASTE_CODE_PROMPT = "Paste code here > ";
-
+  "The browser can't return the sign-in to Claude Code automatically. After you sign in, paste the code shown.";
+var PASTE_CODE_PROMPT = "Paste code here > ";
 export {
   MANUAL_CODE_HINT,
   PASTE_CODE_PROMPT,
@@ -236,5 +277,5 @@ export {
   base64URLEncode,
   generateCodeVerifier,
   AuthCodeListener,
-  y,
+  generateState,
 };

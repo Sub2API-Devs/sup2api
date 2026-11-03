@@ -6,39 +6,52 @@
  * attribution: cjs-fingerprint 1
  */
 import { x, importMetaRequire } from "../../../runtime/bun-runtime.js";
-import { d } from "../../safe-buffer/index.js";
+import { require_safe_buffer } from "../../safe-buffer/index.js";
 
 //@ chunk-82d8c88w.js:3287-4019 cjs-fingerprint
-var N = x(function (Ir, te) {
-  var I = d().Buffer,
-    je = importMetaRequire("stream"),
-    Ce = importMetaRequire("util");
-  function P(e) {
-    if (((this.buffer = null), (this.writable = !0), (this.readable = !0), !e))
-      return ((this.buffer = I.alloc(0)), this);
-    if (typeof e.pipe === "function") return ((this.buffer = I.alloc(0)), e.pipe(this), this);
-    if (e.length || typeof e === "object")
-      return (
-        (this.buffer = e),
-        (this.writable = !1),
-        process.nextTick(
-          function () {
-            (this.emit("end", e), (this.readable = !1), this.emit("close"));
-          }.bind(this),
-        ),
-        this
+var require_data_stream = x(function (cjsExports, cjsModule) {
+  var I = require_safe_buffer().Buffer;
+  var Stream = importMetaRequire("stream");
+  var util = importMetaRequire("util");
+  function DataStream(data) {
+    this.buffer = null;
+    this.writable = true;
+    this.readable = true;
+    if (!data) {
+      this.buffer = I.alloc(0);
+      return this;
+    }
+    if (typeof data.pipe === "function") {
+      this.buffer = I.alloc(0);
+      data.pipe(this);
+      return this;
+    }
+    if (data.length || typeof data === "object") {
+      this.buffer = data;
+      this.writable = false;
+      process.nextTick(
+        function () {
+          this.emit("end", data);
+          this.readable = false;
+          this.emit("close");
+        }.bind(this),
       );
-    throw TypeError("Unexpected data type (" + typeof e + ")");
+      return this;
+    }
+    throw TypeError("Unexpected data type (" + typeof data + ")");
   }
-  Ce.inherits(P, je);
-  P.prototype.write = function (r) {
-    ((this.buffer = I.concat([this.buffer, I.from(r)])), this.emit("data", r));
+  util.inherits(DataStream, Stream);
+  DataStream.prototype.write = function (data) {
+    this.buffer = I.concat([this.buffer, I.from(data)]);
+    this.emit("data", data);
   };
-  P.prototype.end = function (r) {
-    if (r) this.write(r);
-    (this.emit("end", r), this.emit("close"), (this.writable = !1), (this.readable = !1));
+  DataStream.prototype.end = function (data) {
+    if (data) this.write(data);
+    this.emit("end", data);
+    this.emit("close");
+    this.writable = false;
+    this.readable = false;
   };
-  te.exports = P;
+  cjsModule.exports = DataStream;
 });
-
-export { N };
+export { require_data_stream };

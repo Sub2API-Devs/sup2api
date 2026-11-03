@@ -8,19 +8,28 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:229395-229632 cjs-fingerprint
-var Ar = x(function (qE, Sr) {
-  function Kd(e) {
+var require_ldif = x(function (cjsExports, cjsModule) {
+  function ldif(hljs) {
     return {
       name: "LDIF",
       contains: [
-        { className: "attribute", match: "^dn(?=:)", relevance: 10 },
-        { className: "attribute", match: "^\\w+(?=:)" },
-        { className: "literal", match: "^-" },
-        e.HASH_COMMENT_MODE,
+        {
+          className: "attribute",
+          match: "^dn(?=:)",
+          relevance: 10,
+        },
+        {
+          className: "attribute",
+          match: "^\\w+(?=:)",
+        },
+        {
+          className: "literal",
+          match: "^-",
+        },
+        hljs.HASH_COMMENT_MODE,
       ],
     };
   }
-  Sr.exports = Kd;
+  cjsModule.exports = ldif;
 });
-
-export { Ar };
+export { require_ldif };

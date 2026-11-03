@@ -5,28 +5,27 @@
  * pieces: chunk-3wydcdvj.js (2)
  * attribution: esm-fingerprint 2
  */
-import { pr } from "../../core/error.mjs";
+import { AnthropicError } from "../../core/error.mjs";
 
 //@ chunk-3wydcdvj.js:8059-8395 esm-fingerprint
-function P(e) {
-  if (!e) throw new pr("Identity token file path is empty");
+function identityTokenFromFile(path) {
+  if (!path) throw new AnthropicError("Identity token file path is empty");
   return async () => {
-    let { fs: fs } = await import("./chunk-a60jm9e8.js"),
-      r;
+    let { fs } = await import("./chunk-a60jm9e8.js");
+    let content;
     try {
-      r = await fs.promises.readFile(e, "utf-8");
-    } catch (error) {
-      throw new pr(`Failed to read identity token file at ${e}: ${error}`);
+      content = await fs.promises.readFile(path, "utf-8");
+    } catch (err) {
+      throw new AnthropicError(`Failed to read identity token file at ${path}: ${err}`);
     }
-    let trimmed = r.trim();
-    if (!trimmed) throw new pr(`Identity token file at ${e} is empty`);
-    return trimmed;
+    let token = content.trim();
+    if (!token) throw new AnthropicError(`Identity token file at ${path} is empty`);
+    return token;
   };
 }
 //@ chunk-3wydcdvj.js:8395-8473 esm-fingerprint
-function V(e) {
-  if (!e) throw new pr("Identity token value is empty");
-  return () => e;
+function identityTokenFromValue(token) {
+  if (!token) throw new AnthropicError("Identity token value is empty");
+  return () => token;
 }
-
-export { P, V };
+export { identityTokenFromFile, identityTokenFromValue };

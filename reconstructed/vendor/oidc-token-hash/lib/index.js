@@ -6,22 +6,22 @@
  * attribution: cjs-fingerprint 1
  */
 import { x, importMetaRequire } from "../../../runtime/bun-runtime.js";
-import { gO } from "./shake256.js";
+import { require_shake256 } from "./shake256.js";
 
 //@ chunk-1ny7cxrt.js:5641-7171 cjs-fingerprint
-var vO = x(function (Ive, bO) {
-  var { strict: strict } = importMetaRequire("assert"),
-    { createHash: createHash } = importMetaRequire("crypto"),
-    { format: format } = importMetaRequire("util"),
-    nF = gO(),
-    ny;
-  if (Buffer.isEncoding("base64url")) ny = (e) => e.toString("base64url");
+var require_oidc_token_hash = x(function (cjsExports, cjsModule) {
+  var { strict: assert } = importMetaRequire("assert");
+  var { createHash } = importMetaRequire("crypto");
+  var { format } = importMetaRequire("util");
+  var shake256 = require_shake256();
+  var encode;
+  if (Buffer.isEncoding("base64url")) encode = (input) => input.toString("base64url");
   else {
-    let e = (t) => t.replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
-    ny = (t) => e(t.toString("base64"));
+    let fromBase64 = (base64) => base64.replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
+    encode = (input) => fromBase64(input.toString("base64"));
   }
-  function rF(e, t) {
-    switch (e) {
+  function getHash(alg, crv) {
+    switch (alg) {
       case "HS256":
       case "RS256":
       case "PS256":
@@ -39,13 +39,15 @@ var vO = x(function (Ive, bO) {
       case "ES512":
         return createHash("sha512");
       case "EdDSA":
-        switch (t) {
+        switch (crv) {
           case "Ed25519":
             return createHash("sha512");
           case "Ed448":
-            if (!nF)
+            if (!shake256)
               throw TypeError("Ed448 *_hash calculation is not supported in your Node.js runtime version");
-            return createHash("shake256", { outputLength: 114 });
+            return createHash("shake256", {
+              outputLength: 114,
+            });
           default:
             throw TypeError("unrecognized or invalid EdDSA curve provided");
         }
@@ -53,24 +55,30 @@ var vO = x(function (Ive, bO) {
         throw TypeError("unrecognized or invalid JWS algorithm provided");
     }
   }
-  function _O(e, t, n) {
-    let digest = rF(t, n).update(e).digest();
-    return ny(digest.slice(0, digest.length / 2));
+  function generate(token, alg, crv) {
+    let digest = getHash(alg, crv).update(token).digest();
+    return encode(digest.slice(0, digest.length / 2));
   }
-  function iF(e, t, n, o, r) {
-    if (typeof e.claim !== "string" || !e.claim) throw TypeError("names.claim must be a non-empty string");
-    if (typeof e.source !== "string" || !e.source) throw TypeError("names.source must be a non-empty string");
-    (strict(typeof t === "string" && t, `${e.claim} must be a non-empty string`),
-      strict(typeof n === "string" && n, `${e.source} must be a non-empty string`));
-    let s, a;
+  function validate(names, actual, source, alg, crv) {
+    if (typeof names.claim !== "string" || !names.claim)
+      throw TypeError("names.claim must be a non-empty string");
+    if (typeof names.source !== "string" || !names.source)
+      throw TypeError("names.source must be a non-empty string");
+    assert(typeof actual === "string" && actual, `${names.claim} must be a non-empty string`);
+    assert(typeof source === "string" && source, `${names.source} must be a non-empty string`);
+    let expected;
+    let msg;
     try {
-      s = _O(n, o, r);
-    } catch (error) {
-      a = format("%s could not be validated (%s)", e.claim, error.message);
+      expected = generate(source, alg, crv);
+    } catch (err) {
+      msg = format("%s could not be validated (%s)", names.claim, err.message);
     }
-    ((a = a || format("%s mismatch, expected %s, got: %s", e.claim, s, t)), strict.equal(s, t, a));
+    msg = msg || format("%s mismatch, expected %s, got: %s", names.claim, expected, actual);
+    assert.equal(expected, actual, msg);
   }
-  bO.exports = { validate: iF, generate: _O };
+  cjsModule.exports = {
+    validate,
+    generate,
+  };
 });
-
-export { vO };
+export { require_oidc_token_hash };

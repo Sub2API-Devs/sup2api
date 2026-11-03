@@ -9,33 +9,44 @@
  * attribution: fingerprint 1
  */
 
+//@ chunk-wbbfk060.js:19273-19719 fingerprint = createCapacityWake (1)
 /**
  * 创建可唤醒信号：signal() 返回合并了外部中止与"唤醒"的一次性 signal，wake() 触发当前等待结束（会话结束腾出容量时调用）。
  */
-//@ chunk-wbbfk060.js:19273-19719 fingerprint = createCapacityWake (1)
 function createCapacityWake(outerSignal) {
   let wakeController = new AbortController();
   function wake() {
-    (wakeController.abort(), (wakeController = new AbortController()));
+    wakeController.abort();
+    wakeController = new AbortController();
   }
   function signal() {
-    let merged = new AbortController(),
-      abort = () => merged.abort();
-    if (outerSignal.aborted || wakeController.signal.aborted)
-      return (merged.abort(), { signal: merged.signal, cleanup: () => {} });
-    outerSignal.addEventListener("abort", abort, { once: !0 });
-    let capSig = wakeController.signal;
-    return (
-      capSig.addEventListener("abort", abort, { once: !0 }),
-      {
+    let merged = new AbortController();
+    let abort = () => merged.abort();
+    if (outerSignal.aborted || wakeController.signal.aborted) {
+      merged.abort();
+      return {
         signal: merged.signal,
-        cleanup: () => {
-          (outerSignal.removeEventListener("abort", abort), capSig.removeEventListener("abort", abort));
-        },
-      }
-    );
+        cleanup: () => {},
+      };
+    }
+    outerSignal.addEventListener("abort", abort, {
+      once: true,
+    });
+    let capSig = wakeController.signal;
+    capSig.addEventListener("abort", abort, {
+      once: true,
+    });
+    return {
+      signal: merged.signal,
+      cleanup: () => {
+        outerSignal.removeEventListener("abort", abort);
+        capSig.removeEventListener("abort", abort);
+      },
+    };
   }
-  return { signal: signal, wake: wake };
+  return {
+    signal,
+    wake,
+  };
 }
-
 export { createCapacityWake };

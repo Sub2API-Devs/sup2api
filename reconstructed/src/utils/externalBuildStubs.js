@@ -9,23 +9,25 @@
  * attribution: placement 3
  */
 
+//@ chunk-bv9st082.js:191-218 placement
 /**
  * 外部构建的空实现。
  */
-//@ chunk-bv9st082.js:191-218 placement
 function nullStub() {
   return null;
 }
 //@ chunk-bv9st082.js:218-245 placement
-function u_i() {
+/**
+ * 外部构建环境的空 stub，始终返回 null。
+ */
+function nullStub2() {
   return null;
 }
+//@ chunk-bv9st082.js:245-272 placement
 /**
  * 外部构建的空实现。
  */
-//@ chunk-bv9st082.js:245-272 placement
 function nullStub3() {
   return null;
 }
-
-export { nullStub3, nullStub, u_i };
+export { nullStub3, nullStub, nullStub2 };

@@ -6,111 +6,145 @@
  * attribution: esm-layout 1, esm-fingerprint 1
  */
 import { Xa } from "../../../../../../../runtime/bun-runtime.js";
-import { de, Or, X, Tt } from "../../../../webapi/lib/options.js";
+import {
+  validateAlgorithms_default,
+  validateAlgorithms,
+  X,
+  decryptKeyManagement_default,
+} from "../../../../webapi/lib/options.js";
 import { K, G } from "../../../../webapi/lib/validate.js";
 import { s, f, Q } from "../../../../webapi/lib/content_encryption.js";
-import { S, C, l } from "../../../../browser/runtime/base64url.js";
+import { decode, C, l } from "../../../../browser/runtime/base64url.js";
 import { V } from "../../../../browser/runtime/jwk_to_key.js";
-import { _ } from "../../lib/buffer_utils.js";
-import { Ke } from "../../../../browser/runtime/decrypt.js";
-import { Et } from "../../../../browser/runtime/zlib.js";
+import { concat } from "../../lib/buffer_utils.js";
+import { decrypt_default } from "../../../../browser/runtime/decrypt.js";
+import { inflate } from "../../../../browser/runtime/zlib.js";
 
 //@ chunk-2tyrgda4.js:23575-23598 esm-layout
-var et = Xa(() => {
-  de = Or;
+var init_decrypt = Xa(() => {
+  validateAlgorithms_default = validateAlgorithms;
 });
 //@ chunk-2tyrgda4.js:23598-26775 esm-fingerprint
-async function Dt(e, t, r) {
-  var o;
-  if (!K(e)) throw new s("Flattened JWE must be an object");
-  if (e.protected === void 0 && e.header === void 0 && e.unprotected === void 0)
+async function flattenedDecrypt(jwe, key, options) {
+  var _a;
+  if (!K(jwe)) throw new s("Flattened JWE must be an object");
+  if (jwe.protected === undefined && jwe.header === undefined && jwe.unprotected === undefined)
     throw new s("JOSE Header missing");
-  if (typeof e.iv !== "string") throw new s("JWE Initialization Vector missing or incorrect type");
-  if (typeof e.ciphertext !== "string") throw new s("JWE Ciphertext missing or incorrect type");
-  if (typeof e.tag !== "string") throw new s("JWE Authentication Tag missing or incorrect type");
-  if (e.protected !== void 0 && typeof e.protected !== "string")
+  if (typeof jwe.iv !== "string") throw new s("JWE Initialization Vector missing or incorrect type");
+  if (typeof jwe.ciphertext !== "string") throw new s("JWE Ciphertext missing or incorrect type");
+  if (typeof jwe.tag !== "string") throw new s("JWE Authentication Tag missing or incorrect type");
+  if (jwe.protected !== undefined && typeof jwe.protected !== "string")
     throw new s("JWE Protected Header incorrect type");
-  if (e.encrypted_key !== void 0 && typeof e.encrypted_key !== "string")
+  if (jwe.encrypted_key !== undefined && typeof jwe.encrypted_key !== "string")
     throw new s("JWE Encrypted Key incorrect type");
-  if (e.aad !== void 0 && typeof e.aad !== "string") throw new s("JWE AAD incorrect type");
-  if (e.header !== void 0 && !K(e.header)) throw new s("JWE Shared Unprotected Header incorrect type");
-  if (e.unprotected !== void 0 && !K(e.unprotected))
+  if (jwe.aad !== undefined && typeof jwe.aad !== "string") throw new s("JWE AAD incorrect type");
+  if (jwe.header !== undefined && !K(jwe.header)) throw new s("JWE Shared Unprotected Header incorrect type");
+  if (jwe.unprotected !== undefined && !K(jwe.unprotected))
     throw new s("JWE Per-Recipient Unprotected Header incorrect type");
-  let n;
-  if (e.protected)
+  let parsedProt;
+  if (jwe.protected)
     try {
-      let R = S(e.protected);
-      n = JSON.parse(C.decode(R));
+      let protectedHeader = decode(jwe.protected);
+      parsedProt = JSON.parse(C.decode(protectedHeader));
     } catch (error) {
       throw new s("JWE Protected Header is invalid");
     }
-  if (!G(n, e.header, e.unprotected))
+  if (!G(parsedProt, jwe.header, jwe.unprotected))
     throw new s(
       "JWE Protected, JWE Unprotected Header, and JWE Per-Recipient Unprotected Header Parameter names must be disjoint",
     );
-  let a = { ...n, ...e.header, ...e.unprotected };
-  if ((X(s, new Map(), r === null || r === void 0 ? void 0 : r.crit, n, a), a.zip !== void 0)) {
-    if (!n || !n.zip) throw new s('JWE "zip" (Compression Algorithm) Header MUST be integrity protected');
-    if (a.zip !== "DEF") throw new f('Unsupported JWE "zip" (Compression Algorithm) Header Parameter value');
+  let joseHeader = {
+    ...parsedProt,
+    ...jwe.header,
+    ...jwe.unprotected,
+  };
+  X(
+    s,
+    new Map(),
+    options === null || options === undefined ? undefined : options.crit,
+    parsedProt,
+    joseHeader,
+  );
+  if (joseHeader.zip !== undefined) {
+    if (!parsedProt || !parsedProt.zip)
+      throw new s('JWE "zip" (Compression Algorithm) Header MUST be integrity protected');
+    if (joseHeader.zip !== "DEF")
+      throw new f('Unsupported JWE "zip" (Compression Algorithm) Header Parameter value');
   }
-  let { alg: alg, enc: enc } = a;
+  let { alg, enc } = joseHeader;
   if (typeof alg !== "string" || !alg) throw new s("missing JWE Algorithm (alg) in JWE Header");
   if (typeof enc !== "string" || !enc) throw new s("missing JWE Encryption Algorithm (enc) in JWE Header");
-  let d = r && de("keyManagementAlgorithms", r.keyManagementAlgorithms),
-    u = r && de("contentEncryptionAlgorithms", r.contentEncryptionAlgorithms);
-  if (d && !d.has(alg)) throw new Q('"alg" (Algorithm) Header Parameter not allowed');
-  if (u && !u.has(enc)) throw new Q('"enc" (Encryption Algorithm) Header Parameter not allowed');
-  let h;
-  if (e.encrypted_key !== void 0)
+  let keyManagementAlgorithms =
+    options && validateAlgorithms_default("keyManagementAlgorithms", options.keyManagementAlgorithms);
+  let contentEncryptionAlgorithms =
+    options && validateAlgorithms_default("contentEncryptionAlgorithms", options.contentEncryptionAlgorithms);
+  if (keyManagementAlgorithms && !keyManagementAlgorithms.has(alg))
+    throw new Q('"alg" (Algorithm) Header Parameter not allowed');
+  if (contentEncryptionAlgorithms && !contentEncryptionAlgorithms.has(enc))
+    throw new Q('"enc" (Encryption Algorithm) Header Parameter not allowed');
+  let encryptedKey;
+  if (jwe.encrypted_key !== undefined)
     try {
-      h = S(e.encrypted_key);
+      encryptedKey = decode(jwe.encrypted_key);
     } catch (error) {
       throw new s("Failed to base64url decode the encrypted_key");
     }
-  let I = !1;
-  if (typeof t === "function") ((t = await t(n, e)), (I = !0));
-  let b;
-  try {
-    b = await Tt(alg, t, h, a, r);
-  } catch (error) {
-    if (error instanceof TypeError || error instanceof s || error instanceof f) throw error;
-    b = V(enc);
+  let resolvedKey = false;
+  if (typeof key === "function") {
+    key = await key(parsedProt, jwe);
+    resolvedKey = true;
   }
-  let H, T;
+  let cek;
   try {
-    H = S(e.iv);
+    cek = await decryptKeyManagement_default(alg, key, encryptedKey, joseHeader, options);
+  } catch (err) {
+    if (err instanceof TypeError || err instanceof s || err instanceof f) throw err;
+    cek = V(enc);
+  }
+  let iv;
+  let tag;
+  try {
+    iv = decode(jwe.iv);
   } catch (error) {
     throw new s("Failed to base64url decode the iv");
   }
   try {
-    T = S(e.tag);
+    tag = decode(jwe.tag);
   } catch (error) {
     throw new s("Failed to base64url decode the tag");
   }
-  let encode = l.encode((o = e.protected) !== null && o !== void 0 ? o : ""),
-    D;
-  if (e.aad !== void 0) D = _(encode, l.encode("."), l.encode(e.aad));
-  else D = encode;
-  let dt;
+  let protectedHeader = l.encode((_a = jwe.protected) !== null && _a !== undefined ? _a : "");
+  let additionalData;
+  if (jwe.aad !== undefined) additionalData = concat(protectedHeader, l.encode("."), l.encode(jwe.aad));
+  else additionalData = protectedHeader;
+  let ciphertext;
   try {
-    dt = S(e.ciphertext);
+    ciphertext = decode(jwe.ciphertext);
   } catch (error) {
     throw new s("Failed to base64url decode the ciphertext");
   }
-  let Je = await Ke(enc, b, dt, H, T, D);
-  if (a.zip === "DEF") Je = await ((r === null || r === void 0 ? void 0 : r.inflateRaw) || Et)(Je);
-  let Z = { plaintext: Je };
-  if (e.protected !== void 0) Z.protectedHeader = n;
-  if (e.aad !== void 0)
+  let plaintext = await decrypt_default(enc, cek, ciphertext, iv, tag, additionalData);
+  if (joseHeader.zip === "DEF")
+    plaintext = await (
+      (options === null || options === undefined ? undefined : options.inflateRaw) || inflate
+    )(plaintext);
+  let result = {
+    plaintext,
+  };
+  if (jwe.protected !== undefined) result.protectedHeader = parsedProt;
+  if (jwe.aad !== undefined)
     try {
-      Z.additionalAuthenticatedData = S(e.aad);
+      result.additionalAuthenticatedData = decode(jwe.aad);
     } catch (error) {
       throw new s("Failed to base64url decode the aad");
     }
-  if (e.unprotected !== void 0) Z.sharedUnprotectedHeader = e.unprotected;
-  if (e.header !== void 0) Z.unprotectedHeader = e.header;
-  if (I) return { ...Z, key: t };
-  return Z;
+  if (jwe.unprotected !== undefined) result.sharedUnprotectedHeader = jwe.unprotected;
+  if (jwe.header !== undefined) result.unprotectedHeader = jwe.header;
+  if (resolvedKey)
+    return {
+      ...result,
+      key,
+    };
+  return result;
 }
-
-export { et, Dt };
+export { init_decrypt, flattenedDecrypt };

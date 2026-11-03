@@ -12,25 +12,25 @@ import { x, Ar } from "../../../../runtime/bun-runtime.js";
 import { getStorageDir } from "../../../services/analytics/firstPartyEventLoggingExporter.js";
 import {
   TELEMETRY_PLUGIN,
-  Ye,
-  $e,
-  v,
-  K,
+  MAX_BATCH_EVENTS,
+  SEND_TIMEOUT_MS,
+  MAX_PROPS,
+  EVENT_NAME_RE,
   ENTRYPOINT_ALIASES,
   TENGU,
   CLOUD_DEV_ENVIRONMENTS,
   TENGU_PLUGIN,
   TENGU_FEATURE,
-  We,
-  J,
-  A,
-  ze,
-  q,
-  ee,
-  te,
-  O,
-  se,
-  N,
+  EVENT_LOG_BATCH_URL,
+  DECISION_KINDS,
+  MAX_PROP_LIST_ITEMS,
+  MAX_RETRY_AFTER_MS,
+  HTTP_REQUEST_TIMEOUT,
+  RETRY_STATUS_MIN,
+  HTTP_TOO_MANY_REQUESTS,
+  PROP_KEY_RE,
+  githubActionVersion,
+  settleDeny,
   authIdentity,
   serializeEventBatch,
   validateLogEntry,
@@ -38,29 +38,29 @@ import {
   validateProps,
   checkPropValue,
   resolveEntrypoint,
-  Xe,
+  cloudEnvironmentName,
   toInternalEvent,
-  X,
+  withTenguPrefix,
   isTelemetryDisabled,
   isNonEmpty,
   isEnvTruthy,
-  Q,
+  isDecisionKind,
   _,
-  Ke,
-  je,
+  isTelemetryDenyError,
+  isRetryableStatus,
   markToEvent,
-  U,
-  G,
-  d,
+  errorText,
+  encodeProps,
+  telemetryError,
   toSnakeCaseKeys,
 } from "./eventSchema.js";
 import {
-  tr,
-  I,
-  ke,
-  nt,
+  registerTelemetryPlugin,
+  TELEMETRY_NOT_FOR_PLUGINS,
+  TRUSTED_PLUGIN_TIERS,
+  telemetryGate,
   buildSenderContext,
-  Ne,
+  sanitizeSdkName,
   collectSenderContext,
   telemetryHooks,
   requireTrustedOrigin,
@@ -69,10 +69,10 @@ import {
   normalizeSdkVersion,
 } from "./sender.js";
 import {
-  Te,
+  HEX_RADIX,
   joined,
-  tt,
-  Re,
+  GIT_COMMAND_TIMEOUT_MS,
+  HEX_RADIX_BYTES,
   MIN_ID_LENGTH,
   MAX_ID_LENGTH,
   normalizeArch,
@@ -80,7 +80,7 @@ import {
   describeEnvironment,
   githubActionsIds,
   getClaudeJsonPath,
-  he,
+  hexOf,
   readClaudeJsonIdentity,
   readDistro,
   readLinuxDistroFacts,
@@ -100,10 +100,10 @@ import { DANGEROUS_SHELL_PREFIXES } from "../../../utils/shell/prefix.js";
 import { VCS_MARKERS, detectVcs_2 } from "../../../utils/platform.js";
 import { isFirstPartyTelemetryBlocked } from "../../../utils/hostEnvironment.js";
 
+//@ chunk-4m46mxx9.js:2324-4853 placement
 /**
  * 遥测插件 hooks 扫描清单。
  */
-//@ chunk-4m46mxx9.js:2324-4853 placement
 var TELEMETRY_HOOKS_SCAN = x(function (Hm, at) {
   at.exports = {
     scan: {
@@ -255,89 +255,95 @@ var TELEMETRY_HOOKS_SCAN = x(function (Hm, at) {
   };
 });
 //@ chunk-4m46mxx9.js:4853-4863 placement
-var be = {};
+/**
+ * 空对象
+ */
+var EMPTY_HOOKS_TELEMETRY = {};
 //@ chunk-4m46mxx9.js:4863-4965 placement
-Ar(be, {
+Ar(EMPTY_HOOKS_TELEMETRY, {
   MOD_FOLDER: () => getStorageDir,
   PLUGIN_LISTING: () => TELEMETRY_PLUGIN,
-  default: () => be,
-  isAvailable: () => F,
-  registerPlugin: () => tr,
+  default: () => EMPTY_HOOKS_TELEMETRY,
+  isAvailable: () => isTelemetryNotBlocked,
+  registerPlugin: () => registerTelemetryPlugin,
 });
 //@ chunk-4m46mxx9.js:4965-4974 placement
-var R = {};
+/**
+ * 空对象
+ */
+var EMPTY_HOOKS_INDEX = {};
 //@ chunk-4m46mxx9.js:4974-6556 placement
-Ar(R, {
-  BATCH_ROWS: () => Ye,
-  BATCH_WINDOW_MS: () => $e,
-  CHOICES_LIMIT: () => v,
-  CHOICE_TOKEN: () => K,
+Ar(EMPTY_HOOKS_INDEX, {
+  BATCH_ROWS: () => MAX_BATCH_EVENTS,
+  BATCH_WINDOW_MS: () => SEND_TIMEOUT_MS,
+  CHOICES_LIMIT: () => MAX_PROPS,
+  CHOICE_TOKEN: () => EVENT_NAME_RE,
   CLIENT_TYPE_BY_ENTRYPOINT: () => ENTRYPOINT_ALIASES,
   CORE_EVENT_PREFIX: () => TENGU,
   DEPLOYMENTS: () => CLOUD_DEV_ENVIRONMENTS,
   EVENT_PREFIX: () => TENGU_PLUGIN,
   FEATURE_PREFIX: () => TENGU_FEATURE,
-  HEX_RADIX: () => Te,
-  INGEST_URL: () => We,
+  HEX_RADIX: () => HEX_RADIX,
+  INGEST_URL: () => EVENT_LOG_BATCH_URL,
   JETBRAINS_IDES: () => JETBRAINS_IDES_2,
   KNOWN_SHELLS: () => DANGEROUS_SHELL_PREFIXES,
-  MARK_KINDS: () => J,
+  MARK_KINDS: () => DECISION_KINDS,
   PROBE_SCRIPT: () => joined,
-  PROBE_TIMEOUT_MS: () => tt,
-  PROP_LIMIT: () => A,
-  REFUSED: () => I,
-  REMOTE_HASH_LENGTH: () => Re,
-  RETRY_DELAY_MS: () => ze,
-  SERVED_TIERS: () => ke,
-  STATUS_REQUEST_TIMEOUT: () => q,
-  STATUS_SERVER_ERROR: () => ee,
-  STATUS_TOO_MANY_REQUESTS: () => te,
-  TOKEN: () => O,
+  PROBE_TIMEOUT_MS: () => GIT_COMMAND_TIMEOUT_MS,
+  PROP_LIMIT: () => MAX_PROP_LIST_ITEMS,
+  REFUSED: () => TELEMETRY_NOT_FOR_PLUGINS,
+  REMOTE_HASH_LENGTH: () => HEX_RADIX_BYTES,
+  RETRY_DELAY_MS: () => MAX_RETRY_AFTER_MS,
+  SERVED_TIERS: () => TRUSTED_PLUGIN_TIERS,
+  STATUS_REQUEST_TIMEOUT: () => HTTP_REQUEST_TIMEOUT,
+  STATUS_SERVER_ERROR: () => RETRY_STATUS_MIN,
+  STATUS_TOO_MANY_REQUESTS: () => HTTP_TOO_MANY_REQUESTS,
+  TOKEN: () => PROP_KEY_RE,
   UUID_LENGTH_FLOOR: () => MIN_ID_LENGTH,
   UUID_LENGTH_LIMIT: () => MAX_ID_LENGTH,
   VCS_MARKERS: () => VCS_MARKERS,
-  actionRefOf: () => se,
-  answerOf: () => N,
+  actionRefOf: () => githubActionVersion,
+  answerOf: () => settleDeny,
   archOf: () => normalizeArch,
   authOf: () => authIdentity,
   batchOf: () => serializeEventBatch,
-  caught: () => nt,
+  caught: () => telemetryGate,
   checkedFields: () => validateLogEntry,
   checkedMark: () => validateMarkEntry,
   checkedProps: () => validateProps,
   checkedValue: () => checkPropValue,
   clientTypeOf: () => resolveEntrypoint,
   contextOf: () => buildSenderContext,
-  default: () => R,
-  deploymentOf: () => Xe,
+  default: () => EMPTY_HOOKS_INDEX,
+  deploymentOf: () => cloudEnvironmentName,
   distinct: () => uniqueArray,
-  entrypointOf: () => Ne,
+  entrypointOf: () => sanitizeSdkName,
   environmentFieldsOf: () => describeEnvironment,
   eventDataOf: () => toInternalEvent,
-  fieldsOf: () => X,
+  fieldsOf: () => withTenguPrefix,
   githubActionsFieldsOf: () => githubActionsIds,
   globalConfigPath: () => getClaudeJsonPath,
-  hexOf: () => he,
+  hexOf: () => hexOf,
   identityOf: () => readClaudeJsonIdentity,
   isAnalyticsOff: () => isTelemetryDisabled,
   isEnvSet: () => isNonEmpty,
   isEnvTruthy: () => isEnvTruthy,
-  isMarkKind: () => Q,
+  isMarkKind: () => isDecisionKind,
   isRecord: () => _,
-  isRefusedEntry: () => Ke,
-  isRetriable: () => je,
+  isRefusedEntry: () => isTelemetryDenyError,
+  isRetriable: () => isRetryableStatus,
   linuxDistroOf: () => readDistro,
   linuxFilesOf: () => readLinuxDistroFacts,
   machineOf: () => readMachineFacts,
   markFieldsOf: () => markToEvent,
-  messageOf: () => U,
-  metadataOf: () => G,
+  messageOf: () => errorText,
+  metadataOf: () => encodeProps,
   normalizedRemoteOf: () => normalizeGitRemote,
   osReleaseValue: () => readOsReleaseField,
   platformOf: () => detectTerminal,
   plausibleUuid: () => pickValidId,
   probeOf: () => collectSenderContext,
-  refusal: () => d,
+  refusal: () => telemetryError,
   register: () => telemetryHooks,
   remoteHashOf: () => hashGitRemote,
   served: () => requireTrustedOrigin,
@@ -352,6 +358,8 @@ Ar(R, {
   wslVersionOf: () => detectWslVersion,
 });
 //@ chunk-4m46mxx9.js:6556-6572 placement
-var F = () => !isFirstPartyTelemetryBlocked();
-
-export { F, R, TELEMETRY_HOOKS_SCAN };
+/**
+ * 第一方遥测未被拦
+ */
+var isTelemetryNotBlocked = () => !isFirstPartyTelemetryBlocked();
+export { isTelemetryNotBlocked, EMPTY_HOOKS_INDEX, TELEMETRY_HOOKS_SCAN };

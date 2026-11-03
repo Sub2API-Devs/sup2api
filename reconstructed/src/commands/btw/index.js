@@ -8,20 +8,18 @@
  * pieces: chunk-e6aww6q8.js (1)
  * attribution: fingerprint 1
  */
-
+//@ chunk-e6aww6q8.js:1686098-1686326 fingerprint = btw (0.686)
 /**
  * /btw 命令对象（local-jsx）；描述：Ask a quick side question without interrupting the main conversation；实现 chunk-583vs41k.js 的 pr。
  */
-//@ chunk-e6aww6q8.js:1686098-1686326 fingerprint = btw (0.686)
 var btwCommandDefinition = {
-    type: "local-jsx",
-    name: "btw",
-    description: "Ask a quick side question without interrupting the main conversation",
-    immediate: !0,
-    keepsScrollPosition: !0,
-    argumentHint: "[question]",
-    thinClientDispatch: "control-request",
-  },
-  btwCommand = btwCommandDefinition;
-
+  type: "local-jsx",
+  name: "btw",
+  description: "Ask a quick side question without interrupting the main conversation",
+  immediate: true,
+  keepsScrollPosition: true,
+  argumentHint: "[question]",
+  thinClientDispatch: "control-request",
+};
+var btwCommand = btwCommandDefinition;
 export { btwCommand };

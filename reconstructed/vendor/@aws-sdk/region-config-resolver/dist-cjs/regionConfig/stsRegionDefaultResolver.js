@@ -6,32 +6,38 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../runtime/bun-runtime.js";
-import { dR } from "../../../../@smithy/core/dist-cjs/submodules/config/index.native.js";
-import { wD } from "../../../../@smithy/node-config-provider/dist-cjs/index.js";
+import { require_index_native } from "../../../../@smithy/core/dist-cjs/submodules/config/index.native.js";
+import { require_node_config_provider } from "../../../../@smithy/node-config-provider/dist-cjs/index.js";
 
 //@ chunk-edce4vxq.js:168080-168567 cjs-fingerprint
-var Si = x(function (Ei) {
-  Object.defineProperty(Ei, "__esModule", { value: !0 });
-  Ei.warning = void 0;
-  Ei.stsRegionDefaultResolver = nh;
-  var ft = dR(),
-    yi = wD();
-  function nh(e = {}) {
-    return yi.loadConfig(
+var require_stsRegionDefaultResolver = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.warning = undefined;
+  cjsExports.stsRegionDefaultResolver = stsRegionDefaultResolver;
+  var config_resolver_1 = require_index_native();
+  var node_config_provider_1 = require_node_config_provider();
+  function stsRegionDefaultResolver(loaderConfig = {}) {
+    return node_config_provider_1.loadConfig(
       {
-        ...ft.NODE_REGION_CONFIG_OPTIONS,
+        ...config_resolver_1.NODE_REGION_CONFIG_OPTIONS,
         async default() {
-          if (!Ei.warning.silence)
+          if (!cjsExports.warning.silence)
             console.warn(
               "@aws-sdk - WARN - default STS region of us-east-1 used. See @aws-sdk/credential-providers README and set a region explicitly.",
             );
           return "us-east-1";
         },
       },
-      { ...ft.NODE_REGION_CONFIG_FILE_OPTIONS, ...e },
+      {
+        ...config_resolver_1.NODE_REGION_CONFIG_FILE_OPTIONS,
+        ...loaderConfig,
+      },
     );
   }
-  Ei.warning = { silence: !1 };
+  cjsExports.warning = {
+    silence: false,
+  };
 });
-
-export { Si };
+export { require_stsRegionDefaultResolver };

@@ -10,132 +10,160 @@
  */
 import { jsonStringify } from "./slowOperations.js";
 import { logForDebugging } from "./debug.js";
-import { Dc } from "../../vendor/lru-cache/dist/esm/index.min.js";
+import { LRUCache } from "../../vendor/lru-cache/dist/esm/index.min.js";
 
+//@ chunk-02nm3ce0.js:17038-17853 fingerprint = memoizeWithTTL (0.683)
 /**
  * 带 TTL 的 memoize：过期后返回旧值并后台刷新。
  */
-//@ chunk-02nm3ce0.js:17038-17853 fingerprint = memoizeWithTTL (0.683)
 function memoizeWithTTL(e, i = 300000, s) {
-  let n = (o) => (typeof i === "function" ? i(o) : i),
-    cache = new Map(),
-    h = new Map(),
-    memoized = async (...o) => {
-      let key = jsonStringify(o),
-        cached = cache.get(key);
-      if (cached && s && !s(cached.value, cached.timestamp)) {
-        if (cached.refreshPromise) return cached.refreshPromise;
-        (cache.delete(key), (cached = void 0));
+  let n = (o) => (typeof i === "function" ? i(o) : i);
+  let cache = new Map();
+  let h = new Map();
+  let memoized = async (...args) => {
+    let key = jsonStringify(args);
+    let cached = cache.get(key);
+    if (cached && s && !s(cached.value, cached.timestamp)) {
+      if (cached.refreshPromise) return cached.refreshPromise;
+      cache.delete(key);
+      cached = undefined;
+    }
+    let now = Date.now();
+    if (!cached) {
+      let g = h.get(key);
+      if (g) return g;
+      let value = e(...args);
+      h.set(key, value);
+      try {
+        let w = await value;
+        if (h.get(key) === value)
+          cache.set(key, {
+            value: w,
+            timestamp: Date.now(),
+            refreshing: false,
+            lifetimeMs: n(w),
+          });
+        return w;
+      } finally {
+        if (h.get(key) === value) h.delete(key);
       }
-      let now = Date.now();
-      if (!cached) {
-        let g = h.get(key);
-        if (g) return g;
-        let value = e(...o);
-        h.set(key, value);
-        try {
-          let w = await value;
-          if (h.get(key) === value)
-            cache.set(key, { value: w, timestamp: Date.now(), refreshing: !1, lifetimeMs: n(w) });
-          return w;
-        } finally {
-          if (h.get(key) === value) h.delete(key);
-        }
-      }
-      if (cached && now - cached.timestamp > cached.lifetimeMs && !cached.refreshing) {
-        cached.refreshing = !0;
-        let g = cached,
-          newValue = e(...o);
-        return (
-          (g.refreshPromise = newValue),
-          newValue
-            .then((w) => {
-              if (cache.get(key) === g)
-                cache.set(key, { value: w, timestamp: Date.now(), refreshing: !1, lifetimeMs: n(w) });
-            })
-            .catch((w) => {
-              if ((logForDebugging(String(w), { level: "error" }), cache.get(key) === g)) cache.delete(key);
-            }),
-          cached.value
-        );
-      }
-      return cache.get(key).value;
-    };
-  return (
-    (memoized.cache = {
-      clear: () => {
-        (cache.clear(), h.clear());
-      },
-    }),
-    memoized
-  );
+    }
+    if (cached && now - cached.timestamp > cached.lifetimeMs && !cached.refreshing) {
+      cached.refreshing = true;
+      let g = cached;
+      let newValue = e(...args);
+      g.refreshPromise = newValue;
+      newValue
+        .then((w) => {
+          if (cache.get(key) === g)
+            cache.set(key, {
+              value: w,
+              timestamp: Date.now(),
+              refreshing: false,
+              lifetimeMs: n(w),
+            });
+        })
+        .catch((e) => {
+          logForDebugging(String(e), {
+            level: "error",
+          });
+          if (cache.get(key) === g) cache.delete(key);
+        });
+      return cached.value;
+    }
+    return cache.get(key).value;
+  };
+  memoized.cache = {
+    clear: () => {
+      cache.clear();
+      h.clear();
+    },
+  };
+  return memoized;
 }
+//@ chunk-02nm3ce0.js:17853-18135 fingerprint = memoizeWithLRU (1)
 /**
  * 带 LRU 容量上限的 memoize。
  */
-//@ chunk-02nm3ce0.js:17853-18135 fingerprint = memoizeWithLRU (1)
 function memoizeWithLRU(f, cacheFn, maxCacheSize = 100) {
-  let cache = new Dc({ max: maxCacheSize }),
-    memoized = (...h) => {
-      let key = cacheFn(...h),
-        cached = cache.get(key);
-      if (cached !== void 0) return cached;
-      let result = f(...h);
-      return (cache.set(key, result), result);
-    };
-  return (
-    (memoized.cache = {
-      clear: () => cache.clear(),
-      size: () => cache.size,
-      delete: (key) => cache.delete(key),
-      get: (key) => cache.peek(key),
-      has: (key) => cache.has(key),
-      set: (h, l) => void cache.set(h, l),
-    }),
-    memoized
-  );
+  let cache = new LRUCache({
+    max: maxCacheSize,
+  });
+  let memoized = (...args) => {
+    let key = cacheFn(...args);
+    let cached = cache.get(key);
+    if (cached !== undefined) return cached;
+    let result = f(...args);
+    cache.set(key, result);
+    return result;
+  };
+  memoized.cache = {
+    clear: () => cache.clear(),
+    size: () => cache.size,
+    delete: (key) => cache.delete(key),
+    get: (key) => cache.peek(key),
+    has: (key) => cache.has(key),
+    set: (h, l) => void cache.set(h, l),
+  };
+  return memoized;
 }
 //@ chunk-02nm3ce0.js:18135-18149 placement
-var P = new Set();
+/**
+ * 需要保留键的缓存集合（清理时不清这些）。
+ */
+var retainedCacheKeys = new Set();
 //@ chunk-02nm3ce0.js:18149-18182 placement
-function aV(e) {
-  return (P.add(e), e);
+/**
+ * 把对象登记为"保留键"缓存并返回它。
+ */
+function retainCacheKey(e) {
+  retainedCacheKeys.add(e);
+  return e;
 }
+//@ chunk-02nm3ce0.js:18182-18306 placement
 /**
  * 清空 Map 缓存，但保留指定键的条目。
  */
-//@ chunk-02nm3ce0.js:18182-18306 placement
 function retainCacheKeys(e, i) {
   let s = [];
   for (let n of i) {
     let r = e.get(n);
-    if (r !== void 0) s.push([n, r]);
+    if (r !== undefined) s.push([n, r]);
   }
   e.clear();
   for (let [n, r] of s) e.set(n, r);
 }
 //@ chunk-02nm3ce0.js:18306-18316 placement
-var G = 128;
+/**
+ * LRU 缓存默认容量。
+ */
+var DEFAULT_LRU_MAX_SIZE = 128;
 //@ chunk-02nm3ce0.js:18316-18579 placement
 function memoizeWithTTLAsync(e, i, s) {
-  let n = s?.maxSize ?? G,
-    cache = new Map();
-  P.add(cache);
+  let maxSize = s?.maxSize ?? DEFAULT_LRU_MAX_SIZE;
+  let cache = new Map();
+  retainedCacheKeys.add(cache);
   function h(...l) {
-    let o = i ? i(...l) : l[0],
-      cached = cache.get(o);
+    let o = i ? i(...l) : l[0];
+    let cached = cache.get(o);
     if (cached) return cached;
     let promise = e(...l);
-    if (cache.size >= n) cache.delete(cache.keys().next().value);
-    return (
-      cache.set(o, promise),
-      promise.catch(() => {
-        if (cache.get(o) === promise) cache.delete(o);
-      }),
-      promise
-    );
+    if (cache.size >= maxSize) cache.delete(cache.keys().next().value);
+    cache.set(o, promise);
+    promise.catch(() => {
+      if (cache.get(o) === promise) cache.delete(o);
+    });
+    return promise;
   }
-  return ((h.cache = cache), h);
+  h.cache = cache;
+  return h;
 }
-
-export { P, G, memoizeWithLRU, memoizeWithTTL, retainCacheKeys, memoizeWithTTLAsync, aV };
+export {
+  retainedCacheKeys,
+  DEFAULT_LRU_MAX_SIZE,
+  memoizeWithLRU,
+  memoizeWithTTL,
+  retainCacheKeys,
+  memoizeWithTTLAsync,
+  retainCacheKey,
+};

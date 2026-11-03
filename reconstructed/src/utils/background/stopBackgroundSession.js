@@ -11,7 +11,7 @@
 import { env } from "../env.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { lit, fromEnum } from "../../services/analytics/safeMetadata.js";
-import { ye } from "../startupMarks.js";
+import { sanitizeMarkName } from "../startupMarks.js";
 import { getSessionId, announcePendingLoopWakeup } from "../../bootstrap/state.js";
 import { isBgSession, isDaemonBgWorker } from "../concurrentSessions.js";
 import {
@@ -26,47 +26,49 @@ import { logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 import { gracefulShutdown } from "../gracefulShutdown.js";
 
 //@ chunk-8vcdnkwr.js:570-607 placement
-function p() {
+/**
+ * 返回后台任务的目录（环境变量 CLAUDE_JOB_DIR）。
+ */
+function jobDir() {
   return env.CLAUDE_JOB_DIR;
 }
+//@ chunk-8vcdnkwr.js:607-1141 placement
 /**
  * 停止当前后台会话：记录 tengu_bg_agent_action（stop），取消待定的 loop 唤醒；在后台会话中把未结束的任务状态写为 stopped 后再退出。
  */
-//@ chunk-8vcdnkwr.js:607-1141 placement
 async function stopBackgroundSession(source, sessionId, s) {
-  (logEvent("tengu_bg_agent_action", {
+  logEvent("tengu_bg_agent_action", {
     action: lit("stop"),
     source: fromEnum(source),
-    jobSessionId: ye(getSessionId()),
-  }),
-    announcePendingLoopWakeup(void 0));
-  let o = p();
+    jobSessionId: sanitizeMarkName(getSessionId()),
+  });
+  announcePendingLoopWakeup(undefined);
+  let o = jobDir();
   if (isBgSession() && o) {
-    let iso = new Date().toISOString(),
-      t = await readJobState(o, sessionId);
-    if (t && !isSettled(t))
+    let iso = new Date().toISOString();
+    let jobState = await readJobState(o, sessionId);
+    if (jobState && !isSettled(jobState))
       await writeStateAtomic(
         o,
         {
-          ...t,
+          ...jobState,
           state: "stopped",
           detail: "stopped from session",
           tempo: "idle",
-          needs: void 0,
-          block: void 0,
-          inFlight: void 0,
+          needs: undefined,
+          block: undefined,
+          inFlight: undefined,
           updatedAt: iso,
-          firstTerminalAt: t.firstTerminalAt ?? iso,
+          firstTerminalAt: jobState.firstTerminalAt ?? iso,
         },
         sessionId,
       ).catch(logJobWriteError);
     else await markJobStoppedOnRow(o, sessionId);
     if (isDaemonBgWorker()) process.stdout.write(daemonDetachApc(s ?? "Session stopped."));
   }
-  return (
-    logFeatureOk("job_stop_self"),
-    gracefulShutdown(0, "prompt_input_exit", { suppressResumeHint: !0 })
-  );
+  logFeatureOk("job_stop_self");
+  return gracefulShutdown(0, "prompt_input_exit", {
+    suppressResumeHint: true,
+  });
 }
-
 export { stopBackgroundSession };

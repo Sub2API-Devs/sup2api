@@ -8,71 +8,109 @@
  * pieces: chunk-xzrznswy.js (9)
  * attribution: placement 9
  */
-import { j, qt, y, Se, R, yt } from "../../vendor/react/cjs/react.production.js";
+import { init_react_production, qt, y, Se, R, yt } from "../../vendor/react/cjs/react.production.js";
 import { w } from "../../vendor/react/compiler-runtime.js";
-import { xo } from "../bootstrap/sessionSlices.js";
-import { e } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { getSessionProject } from "../bootstrap/sessionSlices.js";
+import { jsxProd_default } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 
 //@ chunk-xzrznswy.js:345-349 placement
-j();
+init_react_production();
 //@ chunk-xzrznswy.js:349-399 placement
-var l = qt(null),
-  d = qt(null),
-  P = qt(null),
-  h = () => () => {};
+var sessionContext = qt(null);
+var hostContext = qt(null);
+var storageContext = qt(null);
+var noopUnsubscribe = () => () => {};
+//@ chunk-xzrznswy.js:399-866 placement
 /**
  * 会话上下文 Provider：提供 session 本身、其 host，以及一个可订阅的项目视图（subscribe + 读取当前项目）。
  */
-//@ chunk-xzrznswy.js:399-866 placement
-function SessionProvider(i) {
-  let r = w(11),
-    { session: session, children: children } = i,
-    s;
-  if (r[0] !== session)
-    ((s = () => ({ subscribe: session.subscribe, get: () => xo(session) })), (r[0] = session), (r[1] = s));
-  else s = r[1];
-  let [u] = y(s),
-    t;
-  if (r[2] !== children || r[3] !== u)
-    ((t = e(P.Provider, { value: u, children: children })), (r[2] = children), (r[3] = u), (r[4] = t));
-  else t = r[4];
-  let n;
-  if (r[5] !== session.host || r[6] !== t)
-    ((n = e(d.Provider, { value: session.host, children: t })),
-      (r[5] = session.host),
-      (r[6] = t),
-      (r[7] = n));
-  else n = r[7];
+function SessionProvider(props) {
+  let r = w(11);
+  let { session, children } = props;
+  let s;
+  if (r[0] !== session) {
+    s = () => ({
+      subscribe: session.subscribe,
+      get: () => getSessionProject(session),
+    });
+    r[0] = session;
+    r[1] = s;
+  } else s = r[1];
+  let [u] = y(s);
+  let children_2;
+  if (r[2] !== children || r[3] !== u) {
+    children_2 = jsxProd_default(storageContext.Provider, {
+      value: u,
+      children,
+    });
+    r[2] = children;
+    r[3] = u;
+    r[4] = children_2;
+  } else children_2 = r[4];
+  let children_3;
+  if (r[5] !== session.host || r[6] !== children_2) {
+    children_3 = jsxProd_default(hostContext.Provider, {
+      value: session.host,
+      children: children_2,
+    });
+    r[5] = session.host;
+    r[6] = children_2;
+    r[7] = children_3;
+  } else children_3 = r[7];
   let p;
-  if (r[8] !== session || r[9] !== n)
-    ((p = e(l.Provider, { value: session, children: n })), (r[8] = session), (r[9] = n), (r[10] = p));
-  else p = r[10];
+  if (r[8] !== session || r[9] !== children_3) {
+    p = jsxProd_default(sessionContext.Provider, {
+      value: session,
+      children: children_3,
+    });
+    r[8] = session;
+    r[9] = children_3;
+    r[10] = p;
+  } else p = r[10];
   return p;
 }
+//@ chunk-xzrznswy.js:866-1210 placement
 /**
  * 在没有完整会话时直接提供 host 与固定的项目视图（不会变化的订阅）。
  */
-//@ chunk-xzrznswy.js:866-1210 placement
-function ProjectProvider(i) {
-  let s = w(8),
-    { host: host, project: project, children: children } = i,
-    u;
-  if (s[0] !== project) ((u = () => ({ subscribe: h, get: () => project })), (s[0] = project), (s[1] = u));
-  else u = s[1];
-  let [t] = y(u),
-    n;
-  if (s[2] !== children || s[3] !== t)
-    ((n = e(P.Provider, { value: t, children: children })), (s[2] = children), (s[3] = t), (s[4] = n));
-  else n = s[4];
+function ProjectProvider(props) {
+  let s = w(8);
+  let { host, project, children } = props;
+  let u;
+  if (s[0] !== project) {
+    u = () => ({
+      subscribe: noopUnsubscribe,
+      get: () => project,
+    });
+    s[0] = project;
+    s[1] = u;
+  } else u = s[1];
+  let [t] = y(u);
+  let children_2;
+  if (s[2] !== children || s[3] !== t) {
+    children_2 = jsxProd_default(storageContext.Provider, {
+      value: t,
+      children,
+    });
+    s[2] = children;
+    s[3] = t;
+    s[4] = children_2;
+  } else children_2 = s[4];
   let p;
-  if (s[5] !== host || s[6] !== n)
-    ((p = e(d.Provider, { value: host, children: n })), (s[5] = host), (s[6] = n), (s[7] = p));
-  else p = s[7];
+  if (s[5] !== host || s[6] !== children_2) {
+    p = jsxProd_default(hostContext.Provider, {
+      value: host,
+      children: children_2,
+    });
+    s[5] = host;
+    s[6] = children_2;
+    s[7] = p;
+  } else p = s[7];
   return p;
 }
 //@ chunk-xzrznswy.js:1210-1361 placement
 function useHost() {
-  let i = Se(d);
+  let i = Se(hostContext);
   if (!i) {
     throw ReferenceError(
       "useHost cannot be called outside of a <SessionProvider /> or <HostProjectProvider />",
@@ -81,49 +119,55 @@ function useHost() {
   return i;
 }
 //@ chunk-xzrznswy.js:1361-1539 placement
-function useProject(i) {
-  let o = Se(P);
+function useProject(selector) {
+  let o = Se(storageContext);
   if (!o) {
     throw ReferenceError(
       "useProject cannot be called outside of a <SessionProvider /> or <HostProjectProvider />",
     );
   }
-  return useStableSelectorStore(o, o.subscribe, o.get, i);
+  return useStableSelectorStore(o, o.subscribe, o.get, selector);
 }
 //@ chunk-xzrznswy.js:1539-1574 placement
-function iP() {
-  return Se(l) ?? void 0;
+/**
+ * 函数 useSessionOrUndefined（取会话，缺省 undefined）；位于「SessionProvider 及 useHost/useProject/useSession（2.1.316 新增）」模块。
+ */
+function useSessionOrUndefined() {
+  return Se(sessionContext) ?? undefined;
 }
 //@ chunk-xzrznswy.js:1574-1780 placement
-function useSession(i) {
-  let c = w(2),
-    o = Se(l);
+function useSession(selector) {
+  let c = w(2);
+  let o = Se(sessionContext);
   if (!o) {
     throw ReferenceError("useSession cannot be called outside of a <SessionProvider />");
   }
-  let r;
-  if (c[0] !== o) ((r = () => o), (c[0] = o), (c[1] = r));
-  else r = c[1];
-  return useStableSelectorStore(o, o.subscribe, r, i);
+  let read;
+  if (c[0] !== o) {
+    read = () => o;
+    c[0] = o;
+    c[1] = read;
+  } else read = c[1];
+  return useStableSelectorStore(o, o.subscribe, read, selector);
 }
 //@ chunk-xzrznswy.js:1780-2036 placement
-function useStableSelectorStore(i, o, c, r) {
+function useStableSelectorStore(i, subscribe, read, selector) {
   let s = R(null);
   if (s.current === null || s.current.owner !== i) {
     let t = {
       owner: i,
-      read: c,
-      selector: r,
+      read,
+      selector,
       get: () => {
-        let read = t.read();
-        return t.selector ? t.selector(read) : read;
+        let n = t.read();
+        return t.selector ? t.selector(n) : n;
       },
     };
     s.current = t;
   }
-  ((s.current.read = c), (s.current.selector = r));
+  s.current.read = read;
+  s.current.selector = selector;
   let u = s.current.get;
-  return yt(o, u, u);
+  return yt(subscribe, u, u);
 }
-
-export { iP, useHost, useSession, useProject, SessionProvider, ProjectProvider };
+export { useHost, useSessionOrUndefined, useSession, useProject, SessionProvider, ProjectProvider };

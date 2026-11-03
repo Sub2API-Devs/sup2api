@@ -12,6 +12,6 @@ import { isStorageV5Enabled } from "./hoverRest.js";
 import { primeFileDescriptorCredentials } from "./fileDescriptorCredentials.js";
 
 //@ chunk-ts9rfgqd.js:1383-1435 placement
-async function t(e) {
-  if (isStorageV5Enabled() && e !== void 0) await primeFileDescriptorCredentials(e);
+async function flushRemoteCredentials(e) {
+  if (isStorageV5Enabled() && e !== undefined) await primeFileDescriptorCredentials(e);
 }

@@ -30,5 +30,4 @@ var BUILTIN_SKILL_NAMES = [
   "verify",
   "workflow-authoring",
 ];
-
 export { BUILTIN_SKILL_NAMES };

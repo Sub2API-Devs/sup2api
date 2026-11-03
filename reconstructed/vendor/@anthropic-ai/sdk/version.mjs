@@ -7,6 +7,5 @@
  */
 
 //@ chunk-3wydcdvj.js:774-791 esm-fingerprint
-var Cx = "0.128.0";
-
-export { Cx };
+var VERSION = "0.128.0";
+export { VERSION };

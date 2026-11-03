@@ -6,143 +6,148 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { uh } from "./codegen/index.js";
-import { ew } from "./util.js";
-import { DPe } from "./names.js";
+import { require_codegen_2 } from "./codegen/index.js";
+import { require_util_2 } from "./util.js";
+import { require_names } from "./names.js";
 
 //@ chunk-s82q9s4x.js:21375-24395 cjs-fingerprint
-var ct = x(function (vs) {
-  Object.defineProperty(vs, "__esModule", { value: !0 });
-  vs.extendErrors =
-    vs.resetErrorsCount =
-    vs.reportExtraError =
-    vs.reportError =
-    vs.keyword$DataError =
-    vs.keywordError =
-      void 0;
-  var w = uh(),
-    ge = ew(),
-    L = DPe();
-  vs.keywordError = { message: ({ keyword: keyword }) => w.str`must pass "${keyword}" keyword validation` };
-  vs.keyword$DataError = {
-    message: ({ keyword: keyword, schemaType: schemaType }) =>
-      schemaType
-        ? w.str`"${keyword}" keyword must be ${schemaType} ($data)`
-        : w.str`"${keyword}" keyword is invalid ($data)`,
+var require_errors = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.extendErrors =
+    cjsExports.resetErrorsCount =
+    cjsExports.reportExtraError =
+    cjsExports.reportError =
+    cjsExports.keyword$DataError =
+    cjsExports.keywordError =
+      undefined;
+  var codegen_1 = require_codegen_2();
+  var util_1 = require_util_2();
+  var names_1 = require_names();
+  cjsExports.keywordError = {
+    message: ({ keyword }) => codegen_1.str`must pass "${keyword}" keyword validation`,
   };
-  function vc(e, t = vs.keywordError, r, s) {
-    let { it: it } = e,
-      { gen: gen, compositeRule: compositeRule, allErrors: allErrors } = it,
-      c = $s(e, t, r);
-    if (s !== null && s !== void 0 ? s : compositeRule || allErrors) _s(gen, c);
-    else gs(it, w._`[${c}]`);
+  cjsExports.keyword$DataError = {
+    message: ({ keyword, schemaType }) =>
+      schemaType
+        ? codegen_1.str`"${keyword}" keyword must be ${schemaType} ($data)`
+        : codegen_1.str`"${keyword}" keyword is invalid ($data)`,
+  };
+  function reportError(cxt, error = cjsExports.keywordError, errorPaths, overrideAllErrors) {
+    let { it } = cxt;
+    let { gen, compositeRule, allErrors } = it;
+    let errObj = errorObjectCode(cxt, error, errorPaths);
+    if (
+      overrideAllErrors !== null && overrideAllErrors !== undefined
+        ? overrideAllErrors
+        : compositeRule || allErrors
+    )
+      addError(gen, errObj);
+    else returnErrors(it, codegen_1._`[${errObj}]`);
   }
-  vs.reportError = vc;
-  function wc(e, t = vs.keywordError, r) {
-    let { it: it } = e,
-      { gen: gen, compositeRule: compositeRule, allErrors: allErrors } = it,
-      a = $s(e, t, r);
-    if ((_s(gen, a), !(compositeRule || allErrors))) gs(it, L.default.vErrors);
+  cjsExports.reportError = reportError;
+  function reportExtraError(cxt, error = cjsExports.keywordError, errorPaths) {
+    let { it } = cxt;
+    let { gen, compositeRule, allErrors } = it;
+    let errObj = errorObjectCode(cxt, error, errorPaths);
+    addError(gen, errObj);
+    if (!(compositeRule || allErrors)) returnErrors(it, names_1.default.vErrors);
   }
-  vs.reportExtraError = wc;
-  function bc(e, t) {
-    (e.assign(L.default.errors, t),
-      e.if(w._`${L.default.vErrors} !== null`, () =>
-        e.if(
-          t,
-          () => e.assign(w._`${L.default.vErrors}.length`, t),
-          () => e.assign(L.default.vErrors, null),
+  cjsExports.reportExtraError = reportExtraError;
+  function resetErrorsCount(gen, errsCount) {
+    gen.assign(names_1.default.errors, errsCount);
+    gen.if(codegen_1._`${names_1.default.vErrors} !== null`, () =>
+      gen.if(
+        errsCount,
+        () => gen.assign(codegen_1._`${names_1.default.vErrors}.length`, errsCount),
+        () => gen.assign(names_1.default.vErrors, null),
+      ),
+    );
+  }
+  cjsExports.resetErrorsCount = resetErrorsCount;
+  function extendErrors({ gen, keyword, schemaValue, data, errsCount, it }) {
+    if (errsCount === undefined) throw Error("ajv implementation error");
+    let err = gen.name("err");
+    gen.forRange("i", errsCount, names_1.default.errors, (i) => {
+      gen.const(err, codegen_1._`${names_1.default.vErrors}[${i}]`);
+      gen.if(codegen_1._`${err}.instancePath === undefined`, () =>
+        gen.assign(
+          codegen_1._`${err}.instancePath`,
+          codegen_1.strConcat(names_1.default.instancePath, it.errorPath),
         ),
-      ));
-  }
-  vs.resetErrorsCount = bc;
-  function Ec({
-    gen: gen,
-    keyword: keyword,
-    schemaValue: schemaValue,
-    data: s,
-    errsCount: errsCount,
-    it: it,
-  }) {
-    if (errsCount === void 0) throw Error("ajv implementation error");
-    let i = gen.name("err");
-    gen.forRange("i", errsCount, L.default.errors, (a) => {
-      if (
-        (gen.const(i, w._`${L.default.vErrors}[${a}]`),
-        gen.if(w._`${i}.instancePath === undefined`, () =>
-          gen.assign(w._`${i}.instancePath`, w.strConcat(L.default.instancePath, it.errorPath)),
-        ),
-        gen.assign(w._`${i}.schemaPath`, w.str`${it.errSchemaPath}/${keyword}`),
-        it.opts.verbose)
-      )
-        (gen.assign(w._`${i}.schema`, schemaValue), gen.assign(w._`${i}.data`, s));
+      );
+      gen.assign(codegen_1._`${err}.schemaPath`, codegen_1.str`${it.errSchemaPath}/${keyword}`);
+      if (it.opts.verbose) {
+        gen.assign(codegen_1._`${err}.schema`, schemaValue);
+        gen.assign(codegen_1._`${err}.data`, data);
+      }
     });
   }
-  vs.extendErrors = Ec;
-  function _s(e, t) {
-    let r = e.const("err", t);
-    (e.if(
-      w._`${L.default.vErrors} === null`,
-      () => e.assign(L.default.vErrors, w._`[${r}]`),
-      w._`${L.default.vErrors}.push(${r})`,
-    ),
-      e.code(w._`${L.default.errors}++`));
+  cjsExports.extendErrors = extendErrors;
+  function addError(gen, errObj) {
+    let err = gen.const("err", errObj);
+    gen.if(
+      codegen_1._`${names_1.default.vErrors} === null`,
+      () => gen.assign(names_1.default.vErrors, codegen_1._`[${err}]`),
+      codegen_1._`${names_1.default.vErrors}.push(${err})`,
+    );
+    gen.code(codegen_1._`${names_1.default.errors}++`);
   }
-  function gs(e, t) {
-    let { gen: gen, validateName: validateName, schemaEnv: schemaEnv } = e;
-    if (schemaEnv.$async) gen.throw(w._`new ${e.ValidationError}(${t})`);
-    else (gen.assign(w._`${validateName}.errors`, t), gen.return(!1));
+  function returnErrors(it, errs) {
+    let { gen, validateName, schemaEnv } = it;
+    if (schemaEnv.$async) gen.throw(codegen_1._`new ${it.ValidationError}(${errs})`);
+    else {
+      gen.assign(codegen_1._`${validateName}.errors`, errs);
+      gen.return(false);
+    }
   }
-  var Te = {
-    keyword: new w.Name("keyword"),
-    schemaPath: new w.Name("schemaPath"),
-    params: new w.Name("params"),
-    propertyName: new w.Name("propertyName"),
-    message: new w.Name("message"),
-    schema: new w.Name("schema"),
-    parentSchema: new w.Name("parentSchema"),
+  var E = {
+    keyword: new codegen_1.Name("keyword"),
+    schemaPath: new codegen_1.Name("schemaPath"),
+    params: new codegen_1.Name("params"),
+    propertyName: new codegen_1.Name("propertyName"),
+    message: new codegen_1.Name("message"),
+    schema: new codegen_1.Name("schema"),
+    parentSchema: new codegen_1.Name("parentSchema"),
   };
-  function $s(e, t, r) {
-    let { createErrors: createErrors } = e.it;
-    if (createErrors === !1) return w._`{}`;
-    return Sc(e, t, r);
+  function errorObjectCode(cxt, error, errorPaths) {
+    let { createErrors } = cxt.it;
+    if (createErrors === false) return codegen_1._`{}`;
+    return errorObject(cxt, error, errorPaths);
   }
-  function Sc(e, t, r = {}) {
-    let { gen: gen, it: it } = e,
-      o = [Pc(it, r), Nc(e, r)];
-    return (kc(e, t, o), gen.object(...o));
+  function errorObject(cxt, error, errorPaths = {}) {
+    let { gen, it } = cxt;
+    let keyValues = [errorInstancePath(it, errorPaths), errorSchemaPath(cxt, errorPaths)];
+    extraErrorProps(cxt, error, keyValues);
+    return gen.object(...keyValues);
   }
-  function Pc({ errorPath: errorPath }, { instancePath: instancePath }) {
-    let r = instancePath ? w.str`${errorPath}${ge.getErrorPath(instancePath, ge.Type.Str)}` : errorPath;
-    return [L.default.instancePath, w.strConcat(L.default.instancePath, r)];
+  function errorInstancePath({ errorPath }, { instancePath }) {
+    let instPath = instancePath
+      ? codegen_1.str`${errorPath}${util_1.getErrorPath(instancePath, util_1.Type.Str)}`
+      : errorPath;
+    return [names_1.default.instancePath, codegen_1.strConcat(names_1.default.instancePath, instPath)];
   }
-  function Nc(
-    { keyword: keyword, it: { errSchemaPath: t } },
-    { schemaPath: schemaPath, parentSchema: parentSchema },
-  ) {
-    let n = parentSchema ? t : w.str`${t}/${keyword}`;
-    if (schemaPath) n = w.str`${n}${ge.getErrorPath(schemaPath, ge.Type.Str)}`;
-    return [Te.schemaPath, n];
+  function errorSchemaPath({ keyword, it: { errSchemaPath } }, { schemaPath, parentSchema }) {
+    let schPath = parentSchema ? errSchemaPath : codegen_1.str`${errSchemaPath}/${keyword}`;
+    if (schemaPath) schPath = codegen_1.str`${schPath}${util_1.getErrorPath(schemaPath, util_1.Type.Str)}`;
+    return [E.schemaPath, schPath];
   }
-  function kc(e, { params: params, message: message }, s) {
-    let { keyword: keyword, data: o, schemaValue: schemaValue, it: it } = e,
-      { opts: opts, propertyName: propertyName, topSchemaRef: topSchemaRef, schemaPath: schemaPath } = it;
-    if (
-      (s.push(
-        [Te.keyword, keyword],
-        [Te.params, typeof params == "function" ? params(e) : params || w._`{}`],
-      ),
-      opts.messages)
-    )
-      s.push([Te.message, typeof message == "function" ? message(e) : message]);
+  function extraErrorProps(cxt, { params, message }, keyValues) {
+    let { keyword, data, schemaValue, it } = cxt;
+    let { opts, propertyName, topSchemaRef, schemaPath } = it;
+    keyValues.push(
+      [E.keyword, keyword],
+      [E.params, typeof params == "function" ? params(cxt) : params || codegen_1._`{}`],
+    );
+    if (opts.messages) keyValues.push([E.message, typeof message == "function" ? message(cxt) : message]);
     if (opts.verbose)
-      s.push(
-        [Te.schema, schemaValue],
-        [Te.parentSchema, w._`${topSchemaRef}${schemaPath}`],
-        [L.default.data, o],
+      keyValues.push(
+        [E.schema, schemaValue],
+        [E.parentSchema, codegen_1._`${topSchemaRef}${schemaPath}`],
+        [names_1.default.data, data],
       );
-    if (propertyName) s.push([Te.propertyName, propertyName]);
+    if (propertyName) keyValues.push([E.propertyName, propertyName]);
   }
 });
-
-export { ct };
+export { require_errors };

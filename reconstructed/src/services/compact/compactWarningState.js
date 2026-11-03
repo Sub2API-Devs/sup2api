@@ -10,12 +10,11 @@
  */
 import { microCompactFlagStore } from "../../utils/shell/shellToolUtils.js";
 
+//@ chunk-g54kbxqw.js:146493-146530 callgraph-witnessed = suppressCompactWarning (1)
 /**
  * 把压缩警告抑制标志置为 true（microcompact 清理后调用，避免误报上下文将满）。
  */
-//@ chunk-g54kbxqw.js:146493-146530 callgraph-witnessed = suppressCompactWarning (1)
 function suppressCompactWarning() {
-  microCompactFlagStore().setState(() => !0);
+  microCompactFlagStore().setState(() => true);
 }
-
 export { suppressCompactWarning };

@@ -6,273 +6,338 @@
  * attribution: cjs-fingerprint 1
  */
 import { x, importMetaRequire } from "../../runtime/bun-runtime.js";
-import { je } from "./polyfills.js";
-import { Ae } from "./legacy-streams.js";
-import { We } from "./clone.js";
+import { require_polyfills } from "./polyfills.js";
+import { require_legacy_streams } from "./legacy-streams.js";
+import { require_clone } from "./clone.js";
 
 //@ chunk-bmbhxpfm.js:6170-11354 cjs-fingerprint
-var ge = x(function (er, Oe) {
-  var F = importMetaRequire("fs"),
-    vt = je(),
-    St = Ae(),
-    _t = We(),
-    ce = importMetaRequire("util"),
-    G,
-    fe;
-  if (typeof Symbol === "function" && typeof Symbol.for === "function")
-    ((G = Symbol.for("graceful-fs.queue")), (fe = Symbol.for("graceful-fs.previous")));
-  else ((G = "___graceful-fs.queue"), (fe = "___graceful-fs.previous"));
-  function wt() {}
-  function Ot(e, r) {
-    Object.defineProperty(e, G, {
+var require_graceful_fs = x(function (cjsExports, cjsModule) {
+  var fs = importMetaRequire("fs");
+  var polyfills = require_polyfills();
+  var legacy = require_legacy_streams();
+  var clone = require_clone();
+  var util = importMetaRequire("util");
+  var gracefulQueue;
+  var previousSymbol;
+  if (typeof Symbol === "function" && typeof Symbol.for === "function") {
+    gracefulQueue = Symbol.for("graceful-fs.queue");
+    previousSymbol = Symbol.for("graceful-fs.previous");
+  } else {
+    gracefulQueue = "___graceful-fs.queue";
+    previousSymbol = "___graceful-fs.previous";
+  }
+  function noop() {}
+  function publishQueue(context, queue) {
+    Object.defineProperty(context, gracefulQueue, {
       get: function () {
-        return r;
+        return queue;
       },
     });
   }
-  var Q = wt;
-  if (ce.debuglog) Q = ce.debuglog("gfs4");
+  var debug = noop;
+  if (util.debuglog) debug = util.debuglog("gfs4");
   else if (/\bgfs4\b/i.test(process.env.NODE_DEBUG || ""))
-    Q = function () {
-      var e = ce.format.apply(ce, arguments);
-      ((e =
+    debug = function () {
+      var m = util.format.apply(util, arguments);
+      m =
         "GFS4: " +
-        e.split(/\n/).join(`
-GFS4: `)),
-        console.error(e));
+        m.split(/\n/).join(`
+GFS4: `);
+      console.error(m);
     };
-  if (!F[G]) {
-    if (
-      ((Se = global[G] || []),
-      Ot(F, Se),
-      (F.close = (function (e) {
-        function r(n, i) {
-          return e.call(F, n, function (u) {
-            if (!u) Ye();
-            if (typeof i === "function") i.apply(this, arguments);
-          });
-        }
-        return (Object.defineProperty(r, fe, { value: e }), r);
-      })(F.close)),
-      (F.closeSync = (function (e) {
-        function r(n) {
-          (e.apply(F, arguments), Ye());
-        }
-        return (Object.defineProperty(r, fe, { value: e }), r);
-      })(F.closeSync)),
-      /\bgfs4\b/i.test(process.env.NODE_DEBUG || ""))
-    )
+  if (!fs[gracefulQueue]) {
+    queue = global[gracefulQueue] || [];
+    publishQueue(fs, queue);
+    fs.close = (function (fs$close) {
+      function close(fd, cb) {
+        return fs$close.call(fs, fd, function (err) {
+          if (!err) resetQueue();
+          if (typeof cb === "function") cb.apply(this, arguments);
+        });
+      }
+      Object.defineProperty(close, previousSymbol, {
+        value: fs$close,
+      });
+      return close;
+    })(fs.close);
+    fs.closeSync = (function (fs$closeSync) {
+      function closeSync(fd) {
+        fs$closeSync.apply(fs, arguments);
+        resetQueue();
+      }
+      Object.defineProperty(closeSync, previousSymbol, {
+        value: fs$closeSync,
+      });
+      return closeSync;
+    })(fs.closeSync);
+    if (/\bgfs4\b/i.test(process.env.NODE_DEBUG || ""))
       process.on("exit", function () {
-        (Q(F[G]), importMetaRequire("assert").equal(F[G].length, 0));
+        debug(fs[gracefulQueue]);
+        importMetaRequire("assert").equal(fs[gracefulQueue].length, 0);
       });
   }
-  var Se;
-  Oe.exports = _e(_t(F));
-  if (process.env.TEST_GRACEFUL_FS_GLOBAL_PATCH && !F.__patched) ((Oe.exports = _e(F)), (F.__patched = !0));
-  function _e(e) {
-    (vt(e), (e.gracefulify = _e), (e.createReadStream = Me), (e.createWriteStream = Ce));
-    var readFile = e.readFile;
-    e.readFile = n;
-    function n(l, v, y) {
-      if (typeof v === "function") ((y = v), (v = null));
-      return P(l, v, y);
-      function P(R, N, I, L) {
-        return readFile(R, N, function (_) {
-          if (_ && (_.code === "EMFILE" || _.code === "ENFILE"))
-            V([P, [R, N, I], _, L || Date.now(), Date.now()]);
-          else if (typeof I === "function") I.apply(this, arguments);
+  var queue;
+  cjsModule.exports = patch(clone(fs));
+  if (process.env.TEST_GRACEFUL_FS_GLOBAL_PATCH && !fs.__patched) {
+    cjsModule.exports = patch(fs);
+    fs.__patched = true;
+  }
+  function patch(fs) {
+    polyfills(fs);
+    fs.gracefulify = patch;
+    fs.createReadStream = createReadStream;
+    fs.createWriteStream = createWriteStream;
+    var fs$readFile = fs.readFile;
+    fs.readFile = readFile;
+    function readFile(path, options, cb) {
+      if (typeof options === "function") {
+        cb = options;
+        options = null;
+      }
+      return go$readFile(path, options, cb);
+      function go$readFile(path, options, cb, startTime) {
+        return fs$readFile(path, options, function (err) {
+          if (err && (err.code === "EMFILE" || err.code === "ENFILE"))
+            enqueue([go$readFile, [path, options, cb], err, startTime || Date.now(), Date.now()]);
+          else if (typeof cb === "function") cb.apply(this, arguments);
         });
       }
     }
-    var writeFile = e.writeFile;
-    e.writeFile = u;
-    function u(l, v, y, P) {
-      if (typeof y === "function") ((P = y), (y = null));
-      return R(l, v, y, P);
-      function R(N, I, L, _, M) {
-        return writeFile(N, I, L, function (O) {
-          if (O && (O.code === "EMFILE" || O.code === "ENFILE"))
-            V([R, [N, I, L, _], O, M || Date.now(), Date.now()]);
-          else if (typeof _ === "function") _.apply(this, arguments);
+    var fs$writeFile = fs.writeFile;
+    fs.writeFile = writeFile;
+    function writeFile(path, data, options, cb) {
+      if (typeof options === "function") {
+        cb = options;
+        options = null;
+      }
+      return go$writeFile(path, data, options, cb);
+      function go$writeFile(path, data, options, cb, startTime) {
+        return fs$writeFile(path, data, options, function (err) {
+          if (err && (err.code === "EMFILE" || err.code === "ENFILE"))
+            enqueue([go$writeFile, [path, data, options, cb], err, startTime || Date.now(), Date.now()]);
+          else if (typeof cb === "function") cb.apply(this, arguments);
         });
       }
     }
-    var appendFile = e.appendFile;
-    if (appendFile) e.appendFile = h;
-    function h(l, v, y, P) {
-      if (typeof y === "function") ((P = y), (y = null));
-      return R(l, v, y, P);
-      function R(N, I, L, _, M) {
-        return appendFile(N, I, L, function (O) {
-          if (O && (O.code === "EMFILE" || O.code === "ENFILE"))
-            V([R, [N, I, L, _], O, M || Date.now(), Date.now()]);
-          else if (typeof _ === "function") _.apply(this, arguments);
+    var fs$appendFile = fs.appendFile;
+    if (fs$appendFile) fs.appendFile = appendFile;
+    function appendFile(path, data, options, cb) {
+      if (typeof options === "function") {
+        cb = options;
+        options = null;
+      }
+      return go$appendFile(path, data, options, cb);
+      function go$appendFile(path, data, options, cb, startTime) {
+        return fs$appendFile(path, data, options, function (err) {
+          if (err && (err.code === "EMFILE" || err.code === "ENFILE"))
+            enqueue([go$appendFile, [path, data, options, cb], err, startTime || Date.now(), Date.now()]);
+          else if (typeof cb === "function") cb.apply(this, arguments);
         });
       }
     }
-    var copyFile = e.copyFile;
-    if (copyFile) e.copyFile = E;
-    function E(l, v, y, P) {
-      if (typeof y === "function") ((P = y), (y = 0));
-      return R(l, v, y, P);
-      function R(N, I, L, _, M) {
-        return copyFile(N, I, L, function (O) {
-          if (O && (O.code === "EMFILE" || O.code === "ENFILE"))
-            V([R, [N, I, L, _], O, M || Date.now(), Date.now()]);
-          else if (typeof _ === "function") _.apply(this, arguments);
+    var fs$copyFile = fs.copyFile;
+    if (fs$copyFile) fs.copyFile = copyFile;
+    function copyFile(src, dest, flags, cb) {
+      if (typeof flags === "function") {
+        cb = flags;
+        flags = 0;
+      }
+      return go$copyFile(src, dest, flags, cb);
+      function go$copyFile(src, dest, flags, cb, startTime) {
+        return fs$copyFile(src, dest, flags, function (err) {
+          if (err && (err.code === "EMFILE" || err.code === "ENFILE"))
+            enqueue([go$copyFile, [src, dest, flags, cb], err, startTime || Date.now(), Date.now()]);
+          else if (typeof cb === "function") cb.apply(this, arguments);
         });
       }
     }
-    var readdir = e.readdir;
-    e.readdir = p;
-    var o = /^v[0-5]\./;
-    function p(l, v, y) {
-      if (typeof v === "function") ((y = v), (v = null));
-      var P = o.test(process.version)
-        ? function (I, L, _, M) {
-            return readdir(I, R(I, L, _, M));
+    var fs$readdir = fs.readdir;
+    fs.readdir = readdir;
+    var noReaddirOptionVersions = /^v[0-5]\./;
+    function readdir(path, options, cb) {
+      if (typeof options === "function") {
+        cb = options;
+        options = null;
+      }
+      var go$readdir = noReaddirOptionVersions.test(process.version)
+        ? function (path, options, cb, startTime) {
+            return fs$readdir(path, fs$readdirCallback(path, options, cb, startTime));
           }
-        : function (I, L, _, M) {
-            return readdir(I, L, R(I, L, _, M));
+        : function (path, options, cb, startTime) {
+            return fs$readdir(path, options, fs$readdirCallback(path, options, cb, startTime));
           };
-      return P(l, v, y);
-      function R(N, I, L, _) {
-        return function (M, O) {
-          if (M && (M.code === "EMFILE" || M.code === "ENFILE"))
-            V([P, [N, I, L], M, _ || Date.now(), Date.now()]);
+      return go$readdir(path, options, cb);
+      function fs$readdirCallback(path, options, cb, startTime) {
+        return function (err, files) {
+          if (err && (err.code === "EMFILE" || err.code === "ENFILE"))
+            enqueue([go$readdir, [path, options, cb], err, startTime || Date.now(), Date.now()]);
           else {
-            if (O && O.sort) O.sort();
-            if (typeof L === "function") L.call(this, M, O);
+            if (files && files.sort) files.sort();
+            if (typeof cb === "function") cb.call(this, err, files);
           }
         };
       }
     }
     if (process.version.substr(0, 4) === "v0.8") {
-      var f = St(e);
-      ((T = f.ReadStream), (C = f.WriteStream));
+      var legStreams = legacy(fs);
+      ReadStream = legStreams.ReadStream;
+      WriteStream = legStreams.WriteStream;
     }
-    var ReadStream = e.ReadStream;
-    if (ReadStream) ((T.prototype = Object.create(ReadStream.prototype)), (T.prototype.open = j));
-    var WriteStream = e.WriteStream;
-    if (WriteStream) ((C.prototype = Object.create(WriteStream.prototype)), (C.prototype.open = Z));
-    (Object.defineProperty(e, "ReadStream", {
-      get: function () {
-        return T;
-      },
-      set: function (l) {
-        T = l;
-      },
-      enumerable: !0,
-      configurable: !0,
-    }),
-      Object.defineProperty(e, "WriteStream", {
-        get: function () {
-          return C;
-        },
-        set: function (l) {
-          C = l;
-        },
-        enumerable: !0,
-        configurable: !0,
-      }));
-    var w = T;
-    Object.defineProperty(e, "FileReadStream", {
-      get: function () {
-        return w;
-      },
-      set: function (l) {
-        w = l;
-      },
-      enumerable: !0,
-      configurable: !0,
-    });
-    var S = C;
-    Object.defineProperty(e, "FileWriteStream", {
-      get: function () {
-        return S;
-      },
-      set: function (l) {
-        S = l;
-      },
-      enumerable: !0,
-      configurable: !0,
-    });
-    function T(l, v) {
-      if (this instanceof T) return (ReadStream.apply(this, arguments), this);
-      else return T.apply(Object.create(T.prototype), arguments);
+    var fs$ReadStream = fs.ReadStream;
+    if (fs$ReadStream) {
+      ReadStream.prototype = Object.create(fs$ReadStream.prototype);
+      ReadStream.prototype.open = ReadStream$open;
     }
-    function j() {
-      var l = this;
-      ve(l.path, l.flags, l.mode, function (v, y) {
-        if (v) {
-          if (l.autoClose) l.destroy();
-          l.emit("error", v);
-        } else ((l.fd = y), l.emit("open", y), l.read());
+    var fs$WriteStream = fs.WriteStream;
+    if (fs$WriteStream) {
+      WriteStream.prototype = Object.create(fs$WriteStream.prototype);
+      WriteStream.prototype.open = WriteStream$open;
+    }
+    Object.defineProperty(fs, "ReadStream", {
+      get: function () {
+        return ReadStream;
+      },
+      set: function (val) {
+        ReadStream = val;
+      },
+      enumerable: true,
+      configurable: true,
+    });
+    Object.defineProperty(fs, "WriteStream", {
+      get: function () {
+        return WriteStream;
+      },
+      set: function (val) {
+        WriteStream = val;
+      },
+      enumerable: true,
+      configurable: true,
+    });
+    var FileReadStream = ReadStream;
+    Object.defineProperty(fs, "FileReadStream", {
+      get: function () {
+        return FileReadStream;
+      },
+      set: function (val) {
+        FileReadStream = val;
+      },
+      enumerable: true,
+      configurable: true,
+    });
+    var FileWriteStream = WriteStream;
+    Object.defineProperty(fs, "FileWriteStream", {
+      get: function () {
+        return FileWriteStream;
+      },
+      set: function (val) {
+        FileWriteStream = val;
+      },
+      enumerable: true,
+      configurable: true,
+    });
+    function ReadStream(path, options) {
+      if (this instanceof ReadStream) {
+        fs$ReadStream.apply(this, arguments);
+        return this;
+      } else return ReadStream.apply(Object.create(ReadStream.prototype), arguments);
+    }
+    function ReadStream$open() {
+      var that = this;
+      open(that.path, that.flags, that.mode, function (err, fd) {
+        if (err) {
+          if (that.autoClose) that.destroy();
+          that.emit("error", err);
+        } else {
+          that.fd = fd;
+          that.emit("open", fd);
+          that.read();
+        }
       });
     }
-    function C(l, v) {
-      if (this instanceof C) return (WriteStream.apply(this, arguments), this);
-      else return C.apply(Object.create(C.prototype), arguments);
+    function WriteStream(path, options) {
+      if (this instanceof WriteStream) {
+        fs$WriteStream.apply(this, arguments);
+        return this;
+      } else return WriteStream.apply(Object.create(WriteStream.prototype), arguments);
     }
-    function Z() {
-      var l = this;
-      ve(l.path, l.flags, l.mode, function (v, y) {
-        if (v) (l.destroy(), l.emit("error", v));
-        else ((l.fd = y), l.emit("open", y));
+    function WriteStream$open() {
+      var that = this;
+      open(that.path, that.flags, that.mode, function (err, fd) {
+        if (err) {
+          that.destroy();
+          that.emit("error", err);
+        } else {
+          that.fd = fd;
+          that.emit("open", fd);
+        }
       });
     }
-    function Me(l, v) {
-      return new e.ReadStream(l, v);
+    function createReadStream(path, options) {
+      return new fs.ReadStream(path, options);
     }
-    function Ce(l, v) {
-      return new e.WriteStream(l, v);
+    function createWriteStream(path, options) {
+      return new fs.WriteStream(path, options);
     }
-    var open = e.open;
-    e.open = ve;
-    function ve(l, v, y, P) {
-      if (typeof y === "function") ((P = y), (y = null));
-      return R(l, v, y, P);
-      function R(N, I, L, _, M) {
-        return open(N, I, L, function (O, Vt) {
-          if (O && (O.code === "EMFILE" || O.code === "ENFILE"))
-            V([R, [N, I, L, _], O, M || Date.now(), Date.now()]);
-          else if (typeof _ === "function") _.apply(this, arguments);
+    var fs$open = fs.open;
+    fs.open = open;
+    function open(path, flags, mode, cb) {
+      if (typeof mode === "function") {
+        cb = mode;
+        mode = null;
+      }
+      return go$open(path, flags, mode, cb);
+      function go$open(path, flags, mode, cb, startTime) {
+        return fs$open(path, flags, mode, function (err, fd) {
+          if (err && (err.code === "EMFILE" || err.code === "ENFILE"))
+            enqueue([go$open, [path, flags, mode, cb], err, startTime || Date.now(), Date.now()]);
+          else if (typeof cb === "function") cb.apply(this, arguments);
         });
       }
     }
-    return e;
+    return fs;
   }
-  function V(e) {
-    (Q("ENQUEUE", e[0].name, e[1]), F[G].push(e), we());
+  function enqueue(elem) {
+    debug("ENQUEUE", elem[0].name, elem[1]);
+    fs[gracefulQueue].push(elem);
+    retry();
   }
-  var ae;
-  function Ye() {
+  var retryTimer;
+  function resetQueue() {
     var now = Date.now();
-    for (var r = 0; r < F[G].length; ++r) if (F[G][r].length > 2) ((F[G][r][3] = now), (F[G][r][4] = now));
-    we();
+    for (var i = 0; i < fs[gracefulQueue].length; ++i)
+      if (fs[gracefulQueue][i].length > 2) {
+        fs[gracefulQueue][i][3] = now;
+        fs[gracefulQueue][i][4] = now;
+      }
+    retry();
   }
-  function we() {
-    if ((clearTimeout(ae), (ae = void 0), F[G].length === 0)) return;
-    var e = F[G].shift(),
-      r = e[0],
-      n = e[1],
-      i = e[2],
-      u = e[3],
-      c = e[4];
-    if (u === void 0) (Q("RETRY", r.name, n), r.apply(null, n));
-    else if (Date.now() - u >= 60000) {
-      Q("TIMEOUT", r.name, n);
-      var h = n.pop();
-      if (typeof h === "function") h.call(null, i);
+  function retry() {
+    clearTimeout(retryTimer);
+    retryTimer = undefined;
+    if (fs[gracefulQueue].length === 0) return;
+    var elem = fs[gracefulQueue].shift();
+    var fn = elem[0];
+    var args = elem[1];
+    var err = elem[2];
+    var startTime = elem[3];
+    var lastTime = elem[4];
+    if (startTime === undefined) {
+      debug("RETRY", fn.name, args);
+      fn.apply(null, args);
+    } else if (Date.now() - startTime >= 60000) {
+      debug("TIMEOUT", fn.name, args);
+      var cb = args.pop();
+      if (typeof cb === "function") cb.call(null, err);
     } else {
-      var m = Date.now() - c,
-        max = Math.max(c - u, 1),
-        min = Math.min(max * 1.2, 100);
-      if (m >= min) (Q("RETRY", r.name, n), r.apply(null, n.concat([u])));
-      else F[G].push(e);
+      var sinceAttempt = Date.now() - lastTime;
+      var sinceStart = Math.max(lastTime - startTime, 1);
+      var desiredDelay = Math.min(sinceStart * 1.2, 100);
+      if (sinceAttempt >= desiredDelay) {
+        debug("RETRY", fn.name, args);
+        fn.apply(null, args.concat([startTime]));
+      } else fs[gracefulQueue].push(elem);
     }
-    if (ae === void 0) ae = setTimeout(we, 0);
+    if (retryTimer === undefined) retryTimer = setTimeout(retry, 0);
   }
 });
-
-export { ge };
+export { require_graceful_fs };

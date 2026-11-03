@@ -8,41 +8,46 @@
 import { x } from "../../../../../../runtime/bun-runtime.js";
 
 //@ chunk-fq0cr76a.js:332193-332773 cjs-require-graph
-var Rg = x(function (HN) {
-  Object.defineProperty(HN, "__esModule", { value: !0 });
-  HN.configureTextEncoding = zj;
-  HN.getTextEncoding = Xj;
-  var Cg = Symbol.for("@bufbuild/protobuf/text-encoding");
-  function zj(e) {
-    globalThis[Cg] = e;
+var require_text_encoding = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.configureTextEncoding = configureTextEncoding;
+  cjsExports.getTextEncoding = getTextEncoding;
+  var symbol = Symbol.for("@bufbuild/protobuf/text-encoding");
+  function configureTextEncoding(textEncoding) {
+    globalThis[symbol] = textEncoding;
   }
-  function Xj() {
-    if (globalThis[Cg] == null) {
-      let e = new globalThis.TextEncoder(),
-        n = new globalThis.TextDecoder(),
-        r;
-      globalThis[Cg] = {
-        encodeUtf8(s) {
-          return e.encode(s);
+  function getTextEncoding() {
+    if (globalThis[symbol] == null) {
+      let te = new globalThis.TextEncoder();
+      let td = new globalThis.TextDecoder();
+      let tdStrict;
+      globalThis[symbol] = {
+        encodeUtf8(text) {
+          return te.encode(text);
         },
-        decodeUtf8(s, h) {
-          if (h) {
-            if (r === void 0) r = new globalThis.TextDecoder("utf-8", { fatal: !0 });
-            return r.decode(s);
+        decodeUtf8(bytes, strict) {
+          if (strict) {
+            if (tdStrict === undefined)
+              tdStrict = new globalThis.TextDecoder("utf-8", {
+                fatal: true,
+              });
+            return tdStrict.decode(bytes);
           }
-          return n.decode(s);
+          return td.decode(bytes);
         },
-        checkUtf8(s) {
+        checkUtf8(text) {
           try {
-            return (encodeURIComponent(s), !0);
-          } catch (error) {
-            return !1;
+            encodeURIComponent(text);
+            return true;
+          } catch (_) {
+            return false;
           }
         },
       };
     }
-    return globalThis[Cg];
+    return globalThis[symbol];
   }
 });
-
-export { Rg };
+export { require_text_encoding };

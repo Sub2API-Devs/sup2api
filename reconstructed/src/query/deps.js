@@ -8,7 +8,7 @@
  * pieces: chunk-ha3km179.js (3)
  * attribution: placement 2, fingerprint 1
  */
-import { randomUUID, randomUUID as randomUUID_2, randomUUID as randomUUID_3 } from "crypto";
+import { randomUUID } from "crypto";
 import { NullBytePathError, UnstablePathError } from "../utils/path.js";
 import { logForDebugging } from "../utils/debug.js";
 import { logError } from "../utils/log.js";
@@ -17,43 +17,47 @@ import { SENDMESSAGE, stripObservableFields } from "../tools/SendMessageTool/con
 import { queryModelWithStreaming } from "../services/api/claude.js";
 import { runAutoCompactIfNeeded } from "../services/compact/autoCompact.js";
 
+//@ chunk-ha3km179.js:142929-143374 placement
 /**
  * 调用工具的 backfillObservableInput 补全可观察输入（失败时原样传递）。
  */
-//@ chunk-ha3km179.js:142929-143374 placement
-function backfillObservableInput(e, n, r) {
-  if (e === void 0) return Uu(r, n);
-  if (!e.backfillObservableInput) return null;
-  let s = { ...n };
+function backfillObservableInput(toolByName, n, name) {
+  if (toolByName === undefined) return stripSendMessageArgs(name, n);
+  if (!toolByName.backfillObservableInput) return null;
+  let s = {
+    ...n,
+  };
   try {
-    let h = e.backfillObservableInput(s) === !0;
-    return Object.keys(s).some((S) => !(S in n)) || h ? s : null;
+    let h = toolByName.backfillObservableInput(s) === true;
+    return Object.keys(s).some((key) => !(key in n)) || h ? s : null;
   } catch (error) {
-    if (error instanceof NullBytePathError || error instanceof UnstablePathError)
-      return (
-        logForDebugging(
-          `${e.name}: backfillObservableInput met a path that is refused (${error.name}); passing the tool input on as the model sent it`,
-        ),
-        null
+    if (error instanceof NullBytePathError || error instanceof UnstablePathError) {
+      logForDebugging(
+        `${toolByName.name}: backfillObservableInput met a path that is refused (${error.name}); passing the tool input on as the model sent it`,
       );
-    return (logError(withTelemetryMessage(toError(error), "backfillObservableInput threw")), Uu(r, n));
+      return null;
+    }
+    logError(withTelemetryMessage(toError(error), "backfillObservableInput threw"));
+    return stripSendMessageArgs(name, n);
   }
 }
 //@ chunk-ha3km179.js:143374-143423 placement
-function Uu(e, n) {
+/**
+ * 去掉可观察字段
+ */
+function stripSendMessageArgs(e, n) {
   return e === SENDMESSAGE ? (stripObservableFields(n) ?? null) : null;
 }
+//@ chunk-ha3km179.js:143460-143553 fingerprint = productionDeps (0.873)
 /**
  * productionDeps：callModel=queryModelWithStreaming、autocompact、uuid=randomUUID、now=ISO 时间串。
  */
-//@ chunk-ha3km179.js:143460-143553 fingerprint = productionDeps (0.873)
 function productionDeps() {
   return {
     callModel: queryModelWithStreaming,
     autocompact: runAutoCompactIfNeeded,
-    uuid: randomUUID_3,
+    uuid: randomUUID,
     now: () => new Date().toISOString(),
   };
 }
-
 export { productionDeps, backfillObservableInput };

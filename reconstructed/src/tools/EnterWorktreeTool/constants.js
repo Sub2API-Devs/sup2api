@@ -9,10 +9,9 @@
  * attribution: fingerprint 1
  */
 
+//@ chunk-3h9nvmn3.js:1215-1238 fingerprint = ENTER_WORKTREE_TOOL_NAME (1)
 /**
  * EnterWorktree 工具名常量。
  */
-//@ chunk-3h9nvmn3.js:1215-1238 fingerprint = ENTER_WORKTREE_TOOL_NAME (1)
 var ENTER_WORKTREE_TOOL_NAME = "EnterWorktree";
-
 export { ENTER_WORKTREE_TOOL_NAME };

@@ -16,18 +16,18 @@ function isInBundledMode(h) {
   if (typeof h === "object" && h !== null)
     return `{${Object.keys(h)
       .sort()
-      .map((x) => `${JSON.stringify(x)}:${isInBundledMode(h[x])}`)
+      .map((key) => `${JSON.stringify(key)}:${isInBundledMode(h[key])}`)
       .join(",")}}`;
   return JSON.stringify(h) ?? "undefined";
 }
 //@ chunk-s61vbvea.js:79753-79892 fingerprint = isRunningWithBun (0.611)
-function isRunningWithBun(e, n, r) {
-  if (!e?.versions || e.content === null || n?.version === e.version) return !1;
+function isRunningWithBun(held, lastMemoryContextAttachment, r) {
+  if (!held?.versions || held.content === null || lastMemoryContextAttachment?.version === held.version)
+    return false;
   try {
-    return findStaleReads(e.versions, r).length > 0;
+    return findStaleReads(held.versions, r).length > 0;
   } catch {
-    return !1;
+    return false;
   }
 }
-
 export { isInBundledMode, isRunningWithBun };

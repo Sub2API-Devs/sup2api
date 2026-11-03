@@ -7,100 +7,116 @@
  */
 
 //@ chunk-7vb8p3zb.js:3027-3138 esm-layout
-function H(n, e) {
-  let t;
-  for (t = 0; t < n.length && t < e.length; t++) if (n[t] != e[t]) return n.slice(0, t);
-  return n.slice(0, t);
+function longestCommonPrefix(str1, str2) {
+  let i;
+  for (i = 0; i < str1.length && i < str2.length; i++) if (str1[i] != str2[i]) return str1.slice(0, i);
+  return str1.slice(0, i);
 }
 //@ chunk-7vb8p3zb.js:3138-3322 esm-layout
-function b(n, e) {
-  let t;
-  if (!n || !e || n[n.length - 1] != e[e.length - 1]) return "";
-  for (t = 0; t < n.length && t < e.length; t++)
-    if (n[n.length - (t + 1)] != e[e.length - (t + 1)]) return n.slice(-t);
-  return n.slice(-t);
+function longestCommonSuffix(str1, str2) {
+  let i;
+  if (!str1 || !str2 || str1[str1.length - 1] != str2[str2.length - 1]) return "";
+  for (i = 0; i < str1.length && i < str2.length; i++)
+    if (str1[str1.length - (i + 1)] != str2[str2.length - (i + 1)]) return str1.slice(-i);
+  return str1.slice(-i);
 }
 //@ chunk-7vb8p3zb.js:3322-3498 esm-fingerprint
-function I(n, e, t) {
-  if (n.slice(0, e.length) != e)
-    throw Error(`string ${JSON.stringify(n)} doesn't start with prefix ${JSON.stringify(e)}; this is a bug`);
-  return t + n.slice(e.length);
+function replacePrefix(string, oldPrefix, newPrefix) {
+  if (string.slice(0, oldPrefix.length) != oldPrefix)
+    throw Error(
+      `string ${JSON.stringify(string)} doesn't start with prefix ${JSON.stringify(oldPrefix)}; this is a bug`,
+    );
+  return newPrefix + string.slice(oldPrefix.length);
 }
 //@ chunk-7vb8p3zb.js:3498-3691 esm-fingerprint
-function T(n, e, t) {
-  if (!e) return n + t;
-  if (n.slice(-e.length) != e)
-    throw Error(`string ${JSON.stringify(n)} doesn't end with suffix ${JSON.stringify(e)}; this is a bug`);
-  return n.slice(0, -e.length) + t;
+function replaceSuffix(string, oldSuffix, newSuffix) {
+  if (!oldSuffix) return string + newSuffix;
+  if (string.slice(-oldSuffix.length) != oldSuffix)
+    throw Error(
+      `string ${JSON.stringify(string)} doesn't end with suffix ${JSON.stringify(oldSuffix)}; this is a bug`,
+    );
+  return string.slice(0, -oldSuffix.length) + newSuffix;
 }
 //@ chunk-7vb8p3zb.js:3691-3724 esm-layout
-function W(n, e) {
-  return I(n, e, "");
+function W(string, oldPrefix) {
+  return replacePrefix(string, oldPrefix, "");
 }
 //@ chunk-7vb8p3zb.js:3724-3757 esm-layout
-function y(n, e) {
-  return T(n, e, "");
+function y(string, oldSuffix) {
+  return replaceSuffix(string, oldSuffix, "");
 }
 //@ chunk-7vb8p3zb.js:3757-3798 esm-layout
-function A(n, e) {
-  return e.slice(0, V(n, e));
+function maximumOverlap(string1, string2) {
+  return string2.slice(0, overlapCount(string1, string2));
 }
 //@ chunk-7vb8p3zb.js:3798-4128 esm-layout
-function V(n, e) {
-  let t = 0;
-  if (n.length > e.length) t = n.length - e.length;
-  let i = e.length;
-  if (n.length < e.length) i = n.length;
-  let l = Array(i),
-    r = 0;
-  l[0] = 0;
-  for (let s = 1; s < i; s++) {
-    if (e[s] == e[r]) l[s] = l[r];
-    else l[s] = r;
-    while (r > 0 && e[s] != e[r]) r = l[r];
-    if (e[s] == e[r]) r++;
+function overlapCount(a, b) {
+  let startA = 0;
+  if (a.length > b.length) startA = a.length - b.length;
+  let endB = b.length;
+  if (a.length < b.length) endB = a.length;
+  let map = Array(endB);
+  let k = 0;
+  map[0] = 0;
+  for (let j = 1; j < endB; j++) {
+    if (b[j] == b[k]) map[j] = map[k];
+    else map[j] = k;
+    while (k > 0 && b[j] != b[k]) k = map[k];
+    if (b[j] == b[k]) k++;
   }
-  r = 0;
-  for (let s = t; s < n.length; s++) {
-    while (r > 0 && n[s] != e[r]) r = l[r];
-    if (n[s] == e[r]) r++;
+  k = 0;
+  for (let i = startA; i < a.length; i++) {
+    while (k > 0 && a[i] != b[k]) k = map[k];
+    if (a[i] == b[k]) k++;
   }
-  return r;
+  return k;
 }
 //@ chunk-7vb8p3zb.js:4128-4301 esm-fingerprint
-function j(n, e) {
-  let t = [];
-  for (let i of Array.from(e.segment(n))) {
-    let segment = i.segment;
-    if (t.length && /\s/.test(t[t.length - 1]) && /\s/.test(segment)) t[t.length - 1] += segment;
-    else t.push(segment);
+function segment(string, segmenter) {
+  let parts = [];
+  for (let segmentObj of Array.from(segmenter.segment(string))) {
+    let segment = segmentObj.segment;
+    if (parts.length && /\s/.test(parts[parts.length - 1]) && /\s/.test(segment))
+      parts[parts.length - 1] += segment;
+    else parts.push(segment);
   }
-  return t;
+  return parts;
 }
 //@ chunk-7vb8p3zb.js:4301-4422 esm-fingerprint
-function O(n, e) {
-  if (e) return k(n, e)[1];
-  let t;
-  for (t = n.length - 1; t >= 0; t--) if (!n[t].match(/\s/)) break;
-  return n.substring(t + 1);
+function trailingWs(string, segmenter) {
+  if (segmenter) return leadingAndTrailingWs(string, segmenter)[1];
+  let i;
+  for (i = string.length - 1; i >= 0; i--) if (!string[i].match(/\s/)) break;
+  return string.substring(i + 1);
 }
 //@ chunk-7vb8p3zb.js:4422-4499 esm-fingerprint
-function E(n, e) {
-  if (e) return k(n, e)[0];
-  let match = n.match(/^\s*/);
+function leadingWs(string, segmenter) {
+  if (segmenter) return leadingAndTrailingWs(string, segmenter)[0];
+  let match = string.match(/^\s*/);
   return match ? match[0] : "";
 }
 //@ chunk-7vb8p3zb.js:4499-4740 esm-fingerprint
-function k(n, e) {
-  if (!e) return [E(n), O(n)];
-  if (e.resolvedOptions().granularity != "word")
+function leadingAndTrailingWs(string, segmenter) {
+  if (!segmenter) return [leadingWs(string), trailingWs(string)];
+  if (segmenter.resolvedOptions().granularity != "word")
     throw Error('The segmenter passed must have a granularity of "word"');
-  let t = j(n, e),
-    i = t[0],
-    l = t[t.length - 1],
-    r = /\s/.test(i) ? i : "",
-    s = /\s/.test(l) ? l : "";
-  return [r, s];
+  let segments = segment(string, segmenter);
+  let firstSeg = segments[0];
+  let lastSeg = segments[segments.length - 1];
+  let head = /\s/.test(firstSeg) ? firstSeg : "";
+  let tail = /\s/.test(lastSeg) ? lastSeg : "";
+  return [head, tail];
 }
-
-export { j, k, H, T, W, b, I, y, E, O, A };
+export {
+  segment,
+  leadingAndTrailingWs,
+  longestCommonPrefix,
+  replaceSuffix,
+  W,
+  longestCommonSuffix,
+  replacePrefix,
+  y,
+  leadingWs,
+  trailingWs,
+  maximumOverlap,
+};

@@ -6,27 +6,26 @@
  * attribution: cjs-require-graph 1
  */
 import { x, importMetaRequire } from "../../../../runtime/bun-runtime.js";
-import { hHr } from "../../../long/umd/index.js";
+import { require_long } from "../../../long/umd/index.js";
 
 //@ chunk-798ashq9.js:24303-24520 cjs-require-graph
-var br = x(function (dc, vr) {
-  vr.exports = Bi;
+var require_inquire = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = Bi;
   function Bi(l) {
     try {
-      var u =
+      var mod =
         l === "long"
-          ? hHr()
+          ? require_long()
           : l === "buffer"
             ? importMetaRequire("buffer")
             : l === "fs"
               ? importMetaRequire("fs")
               : importMetaRequire(l);
-      if (u && (u.length || Object.keys(u).length)) return u;
+      if (mod && (mod.length || Object.keys(mod).length)) return mod;
       return null;
     } catch (error) {
       return null;
     }
   }
 });
-
-export { br };
+export { require_inquire };

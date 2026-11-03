@@ -13,11 +13,11 @@ import {
 } from "../@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 
 //@ chunk-dcmhvw5a.js:143558-143700 placement
-function isIterateeCall(e, n, r) {
-  if (!RR(r)) return !1;
-  var s = typeof n;
-  if (s == "number" ? Phe(r) && Put(n, r.length) : s == "string" && n in r) return TMe(r[n], e);
-  return !1;
+function isIterateeCall(value, index, object) {
+  if (!RR(object)) return false;
+  var type = typeof index;
+  if (type == "number" ? Phe(object) && Put(index, object.length) : type == "string" && index in object)
+    return TMe(object[index], value);
+  return false;
 }
-
 export { isIterateeCall };

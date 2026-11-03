@@ -8,7 +8,7 @@
  * pieces: chunk-hntsfzas.js (5)
  * attribution: placement 5
  */
-import { join, join as join_2 } from "path";
+import { join } from "path";
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import { create, create_2, create_26 } from "../../../vendor/zod/lib/index.mjs";
 import { getClaudeConfigDir } from "../envUtils.js";
@@ -33,52 +33,65 @@ var updateResultSchema = DoctorLazy(() =>
   }),
 );
 //@ chunk-hntsfzas.js:1581-1636 placement
-function S() {
-  return join_2(getClaudeConfigDir(), ".last-update-result.json");
+function lastUpdateResultPath() {
+  return join(getClaudeConfigDir(), ".last-update-result.json");
 }
 //@ chunk-hntsfzas.js:1636-1687 placement
-function M() {
+function lastUpdateResultStorageKey() {
   return STORAGE_SPACES.state("last-update-result");
 }
 //@ chunk-hntsfzas.js:1687-1984 placement
-async function recordUpdateResult(e, n) {
-  if (isStorageV5Enabled() && n) {
-    let write = await n.write(M(), jsonStringify(e), { mode: 438 & ~process.umask() });
-    if (!write.ok) logForDebugging(`Failed to record update result: ${write.error.code}`, { level: "error" });
+async function recordUpdateResult(e, storageV5) {
+  if (isStorageV5Enabled() && storageV5) {
+    let a = await storageV5.write(lastUpdateResultStorageKey(), jsonStringify(e), {
+      mode: 438 & ~process.umask(),
+    });
+    if (!a.ok)
+      logForDebugging(`Failed to record update result: ${a.error.code}`, {
+        level: "error",
+      });
     return;
   }
   if (isDiskless()) return;
   try {
-    await getFileReader().atomicWrite(S(), jsonStringify(e));
+    await getFileReader().atomicWrite(lastUpdateResultPath(), jsonStringify(e));
   } catch (error) {
-    logForDebugging(`Failed to record update result: ${error}`, { level: "error" });
+    logForDebugging(`Failed to record update result: ${error}`, {
+      level: "error",
+    });
   }
 }
 //@ chunk-hntsfzas.js:1984-2441 placement
-async function readUpdateResult(e) {
+async function readUpdateResult(storageV5) {
   let n;
-  if (isStorageV5Enabled() && e) {
-    let read = await e.read([M()]);
-    if (!read.ok)
-      return (logForDebugging(`Failed to read update result: ${read.error.code}`, { level: "error" }), null);
-    let o = read.value.items[0];
+  if (isStorageV5Enabled() && storageV5) {
+    let a = await storageV5.read([lastUpdateResultStorageKey()]);
+    if (!a.ok) {
+      logForDebugging(`Failed to read update result: ${a.error.code}`, {
+        level: "error",
+      });
+      return null;
+    }
+    let o = a.value.items[0];
     if (!o.found) return null;
     n = Buffer.from(o.value).toString("utf8");
   } else {
     if (isDiskless()) return null;
     try {
-      n = await getFileReader().read(S());
+      n = await getFileReader().read(lastUpdateResultPath());
     } catch (error) {
-      if (!isENOENT(error)) logForDebugging(`Failed to read update result: ${error}`, { level: "error" });
+      if (!isENOENT(error))
+        logForDebugging(`Failed to read update result: ${error}`, {
+          level: "error",
+        });
       return null;
     }
   }
   try {
-    let safeParse = updateResultSchema().safeParse(jsonParse(n));
-    return safeParse.success ? safeParse.data : null;
+    let a = updateResultSchema().safeParse(jsonParse(n));
+    return a.success ? a.data : null;
   } catch {
     return null;
   }
 }
-
 export { readUpdateResult, recordUpdateResult };

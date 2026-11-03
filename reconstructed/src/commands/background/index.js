@@ -8,18 +8,17 @@
  * pieces: chunk-3m7t4vj8.js (1)
  * attribution: placement 1
  */
-
+//@ chunk-3m7t4vj8.js:191-391 placement
 /**
  * /background 命令对象（local-jsx）；描述：Send this session to the background and free the terminal；别名 ["bg"]；isEnabled: ()=>!0；实现 chunk-7c7hjd56.js 的 $ji。
  */
-//@ chunk-3m7t4vj8.js:191-391 placement
 var backgroundCommandDefinition = {
-    type: "local-jsx",
-    name: "background",
-    aliases: ["bg"],
-    description: "Send this session to the background and free the terminal",
-    argumentHint: "[prompt]",
-    immediate: (args) => !args.trim(),
-    isEnabled: () => !0,
-  },
-  backgroundCommand = backgroundCommandDefinition;
+  type: "local-jsx",
+  name: "background",
+  aliases: ["bg"],
+  description: "Send this session to the background and free the terminal",
+  argumentHint: "[prompt]",
+  immediate: (args) => !args.trim(),
+  isEnabled: () => true,
+};
+var backgroundCommand = backgroundCommandDefinition;

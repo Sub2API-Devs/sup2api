@@ -9,48 +9,68 @@
  * attribution: placement 1, fingerprint 1
  */
 import { w } from "../../../vendor/react/compiler-runtime.js";
-import { Tl } from "../ScrollViewportContext.js";
-import { e, r } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { useHasScrollViewport } from "../ScrollViewportContext.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Box } from "../../ink/components/Text.js";
 import { Divider } from "./Divider.js";
 
+//@ chunk-gtxctzsd.js:370-389 placement
 /**
  * Pane 组件的内边距常量。
  */
-//@ chunk-gtxctzsd.js:370-389 placement
-var PANE_PADDING = 2,
-  zR = 1,
-  l5 = 2;
+var PANE_PADDING = 2;
+var PANE_PADDING_X = 1;
+var PANE_WIDTH_RESERVE = 2;
 //@ chunk-gtxctzsd.js:389-859 fingerprint = Pane (1)
-function Pane(t0) {
-  let $ = w(9),
-    { children: children, color: color } = t0;
-  if (Tl()) {
-    let o;
-    if ($[0] !== children)
-      ((o = e(Box, { flexDirection: "column", paddingX: zR, flexShrink: 0, children: children })),
-        ($[0] = children),
-        ($[1] = o));
-    else o = $[1];
-    return o;
+function Pane(props) {
+  let $ = w(9);
+  let { children, color } = props;
+  if (useHasScrollViewport()) {
+    let t1;
+    if ($[0] !== children) {
+      t1 = jsxProd_default(Box, {
+        flexDirection: "column",
+        paddingX: PANE_PADDING_X,
+        flexShrink: 0,
+        children,
+      });
+      $[0] = children;
+      $[1] = t1;
+    } else t1 = $[1];
+    return t1;
   }
-  let o;
-  if ($[2] !== color) ((o = e(Divider, { color: color })), ($[2] = color), ($[3] = o));
-  else o = $[3];
-  let n;
-  if ($[4] !== children)
-    ((n = e(Box, { flexDirection: "column", paddingX: PANE_PADDING, children: children })),
-      ($[4] = children),
-      ($[5] = n));
-  else n = $[5];
-  let l;
-  if ($[6] !== o || $[7] !== n)
-    ((l = r(Box, { flexDirection: "column", paddingTop: 1, children: [o, n] })),
-      ($[6] = o),
-      ($[7] = n),
-      ($[8] = l));
-  else l = $[8];
-  return l;
+  let t1;
+  if ($[2] !== color) {
+    t1 = jsxProd_default(Divider, {
+      color,
+    });
+    $[2] = color;
+    $[3] = t1;
+  } else t1 = $[3];
+  let t2;
+  if ($[4] !== children) {
+    t2 = jsxProd_default(Box, {
+      flexDirection: "column",
+      paddingX: PANE_PADDING,
+      children,
+    });
+    $[4] = children;
+    $[5] = t2;
+  } else t2 = $[5];
+  let t3;
+  if ($[6] !== t1 || $[7] !== t2) {
+    t3 = jsxProd_default_2(Box, {
+      flexDirection: "column",
+      paddingTop: 1,
+      children: [t1, t2],
+    });
+    $[6] = t1;
+    $[7] = t2;
+    $[8] = t3;
+  } else t3 = $[8];
+  return t3;
 }
-
-export { PANE_PADDING, Pane, l5, zR };
+export { PANE_PADDING, Pane, PANE_WIDTH_RESERVE, PANE_PADDING_X };

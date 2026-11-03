@@ -13,5 +13,4 @@
 function parseYaml(input) {
   return Bun.YAML.parse(input);
 }
-
 export { parseYaml };

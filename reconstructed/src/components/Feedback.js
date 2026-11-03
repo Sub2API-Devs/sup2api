@@ -8,12 +8,12 @@
  * pieces: chunk-4121qate.js (1), chunk-hm0ce8vc.js (1), chunk-hwmsct5x.js (1), chunk-seqjkch8.js (13), chunk-xx1vmpsq.js (2)
  * attribution: fingerprint 8, placement 5, layout 3, sole-consumer 2
  */
-import { j, y, ce, fo, Qr } from "../../vendor/react/cjs/react.production.js";
+import { init_react_production, y, ce, fo, Qr } from "../../vendor/react/cjs/react.production.js";
 import { createStore } from "../state/store.js";
-import { Me } from "./design-system/ThemeProvider.js";
+import { useTheme_2 } from "./design-system/ThemeProvider.js";
 import { useHost } from "../context/session.js";
 import { useStoreSelector } from "../hooks/useStoreSelector.js";
-import { wt, Jn } from "../remote/remoteMode.js";
+import { isRemoteSessionAvailable, getRemoteCaps } from "../remote/remoteMode.js";
 import { getIsGit, getGitState } from "../utils/git.js";
 import { useAppState } from "../state/AppState.js";
 import { useTerminalSize } from "../hooks/useTerminalSize.js";
@@ -28,14 +28,18 @@ import {
   serverStatusSuffix,
   buildFeedbackPayload,
   TRANSCRIPT_FIELDS,
-  xs,
-  dDe,
+  SUBAGENT_TRANSCRIPT_FIELDS,
+  MAX_PAYLOAD_PART_COUNT,
   redactError,
   classifyFeedbackError,
 } from "../services/feedback/submitFeedback.js";
 import { useKeybinding } from "../keybindings/useKeybinding.js";
-import { fi } from "../utils/browser.js";
-import { e, r, Fragment } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { openValidatedUrlSucceeded } from "../utils/browser.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+  Fragment,
+} from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { FocusColumn } from "./design-system/FocusColumn.js";
 import { Dialog } from "./design-system/Dialog.js";
 import { Byline } from "./design-system/Byline.js";
@@ -48,7 +52,7 @@ import { ModelSelector } from "./agents/ModelSelector.js";
 import { env } from "../utils/env.js";
 import { StatusIcon } from "./design-system/StatusIcon.js";
 import { truncateToLength, getFirstLine } from "../utils/stringUtils.js";
-import { redactSecrets, redactSecrets as redactSecrets_2 } from "../services/teamMemorySync/secretScanner.js";
+import { redactSecrets } from "../services/teamMemorySync/secretScanner.js";
 import { queryHaikuWithFallback } from "../services/api/claude.js";
 import { asSystemPrompt } from "../utils/systemPromptType.js";
 import { mainAgentContext } from "../utils/agentContext.js";
@@ -67,67 +71,78 @@ import { describeThrownValue, createSealedError } from "../plugins/functionHooks
 import { jsonStringify } from "../utils/slowOperations.js";
 
 //@ chunk-seqjkch8.js:1689-1693 placement
-j();
+init_react_production();
 //@ chunk-seqjkch8.js:1693-1697 placement
-j();
+init_react_production();
 //@ chunk-seqjkch8.js:1697-1701 placement
-j();
+init_react_production();
+//@ chunk-seqjkch8.js:1701-3098 placement
 /**
  * /feedback 的文案常量：记录范围说明与选项、记录缺失/不完整/过大的提示、post/bundle/share 三种模式的同意与提交文案。
  */
-//@ chunk-seqjkch8.js:1701-3098 placement
-var MAX_FEEDBACK_BODY_CHARS = 7250,
-  MAX_ISSUE_TITLE_CHARS = 200,
-  TRANSCRIPT_SCOPE_DESCRIPTIONS = {
-    session: "this session only",
-    day: "this session + this project\u2019s other sessions from the last 24 hours",
-    week: "this session + this project\u2019s other sessions from the last 7 days",
+var MAX_FEEDBACK_BODY_CHARS = 7250;
+var MAX_ISSUE_TITLE_CHARS = 200;
+var TRANSCRIPT_SCOPE_DESCRIPTIONS = {
+  session: "this session only",
+  day: "this session + this project\u2019s other sessions from the last 24 hours",
+  week: "this session + this project\u2019s other sessions from the last 7 days",
+};
+var TRANSCRIPT_SCOPE_OPTIONS = [
+  {
+    label: "This session only",
+    value: "session",
   },
-  TRANSCRIPT_SCOPE_OPTIONS = [
-    { label: "This session only", value: "session" },
-    { label: "This session + the last 24 hours", value: "day" },
-    { label: "This session + the last 7 days", value: "week" },
-  ],
-  TRANSCRIPT_PROBLEM_NOTES = {
-    transcript_missing: "This session has no transcript on disk, so the bundle has the report only.",
-    transcript_incomplete:
-      "The session transcript couldn't be read in full, so the bundle is missing some or all of it.",
-    transcript_over_zip_limit:
-      "The session transcript is too large for one archive, so the bundle has only the start of it.",
+  {
+    label: "This session + the last 24 hours",
+    value: "day",
   },
-  FEEDBACK_MODE_COPY = {
-    post: {
-      consentAction: "submit",
-      consentIntro: "This report will include:",
-      consentFooter: "We may use these to debug related issues and improve Claude Code.",
-      submitting: "Submitting report\u2026",
-    },
-    bundle: {
-      consentAction: "save",
-      consentIntro: "An archive will be saved to disk containing:",
-      consentFooter:
-        "Nothing leaves this machine until you send the bundle file. Secrets (API keys, tokens, credentials) are redacted before writing.",
-      submitting: "Saving bundle\u2026",
-    },
-    share: {
-      consentAction: "share",
-      consentIntro: "This shared conversation will include:",
-      consentFooter:
-        "A shareable link will be created so you can post the conversation for debugging and support.",
-      submitting: "Uploading share\u2026",
-    },
-  };
+  {
+    label: "This session + the last 7 days",
+    value: "week",
+  },
+];
+var TRANSCRIPT_PROBLEM_NOTES = {
+  transcript_missing: "This session has no transcript on disk, so the bundle has the report only.",
+  transcript_incomplete:
+    "The session transcript couldn't be read in full, so the bundle is missing some or all of it.",
+  transcript_over_zip_limit:
+    "The session transcript is too large for one archive, so the bundle has only the start of it.",
+};
+var FEEDBACK_MODE_COPY = {
+  post: {
+    consentAction: "submit",
+    consentIntro: "This report will include:",
+    consentFooter: "We may use these to debug related issues and improve Claude Code.",
+    submitting: "Submitting report\u2026",
+  },
+  bundle: {
+    consentAction: "save",
+    consentIntro: "An archive will be saved to disk containing:",
+    consentFooter:
+      "Nothing leaves this machine until you send the bundle file. Secrets (API keys, tokens, credentials) are redacted before writing.",
+    submitting: "Saving bundle\u2026",
+  },
+  share: {
+    consentAction: "share",
+    consentIntro: "This shared conversation will include:",
+    consentFooter:
+      "A shareable link will be created so you can post the conversation for debugging and support.",
+    submitting: "Uploading share\u2026",
+  },
+};
+//@ chunk-seqjkch8.js:3098-3715 placement
 /**
  * 创建反馈提交状态存储（none/sending/delivered/saved/failed）；share 模式返回空操作版本，失败不会覆盖已送达或已保存的状态。
  */
-//@ chunk-seqjkch8.js:3098-3715 placement
 function createFeedbackStatusStore(mode) {
-  let store = createStore({ status: "none" }),
-    { subscribe: subscribe, getSnapshot: getSnapshot } = store;
+  let store = createStore({
+    status: "none",
+  });
+  let { subscribe, getSnapshot } = store;
   if (mode === "share")
     return {
-      subscribe: subscribe,
-      getSnapshot: getSnapshot,
+      subscribe,
+      getSnapshot,
       start() {},
       deliver() {},
       save() {},
@@ -135,249 +150,309 @@ function createFeedbackStatusStore(mode) {
       abandon() {},
     };
   return {
-    subscribe: subscribe,
-    getSnapshot: getSnapshot,
+    subscribe,
+    getSnapshot,
     start() {
-      store.setState(() => ({ status: "sending" }));
-    },
-    deliver(h) {
-      store.setState(() => ({ status: "delivered", referenceId: h }));
-    },
-    save(h, k, c) {
       store.setState(() => ({
-        status: "saved",
-        referenceId: h,
-        bundlePath: k,
-        ...(c !== void 0 && { transcriptProblem: c }),
+        status: "sending",
       }));
     },
-    fail(h, k) {
+    deliver(referenceId) {
+      store.setState(() => ({
+        status: "delivered",
+        referenceId,
+      }));
+    },
+    save(referenceId, bundlePath, c) {
+      store.setState(() => ({
+        status: "saved",
+        referenceId,
+        bundlePath,
+        ...(c !== undefined && {
+          transcriptProblem: c,
+        }),
+      }));
+    },
+    fail(reason, k) {
       store.setState((c) =>
         c.status === "delivered" || c.status === "saved"
           ? c
-          : { status: "failed", reason: h, ...(k === !0 && { final: k }) },
+          : {
+              status: "failed",
+              reason,
+              ...(k === true && {
+                final: k,
+              }),
+            },
       );
     },
     abandon() {
-      store.setState((h) => (h.status === "sending" ? { status: "none" } : h));
+      store.setState((h) =>
+        h.status === "sending"
+          ? {
+              status: "none",
+            }
+          : h,
+      );
     },
   };
 }
 //@ chunk-seqjkch8.js:3715-3773 layout
-async function Ut(d, o) {
+async function runThenAbandon(handleCancel, o) {
   try {
-    await d();
+    await handleCancel();
   } finally {
     o.abandon();
   }
 }
+//@ chunk-seqjkch8.js:3773-12089 fingerprint = Feedback (0.317)
 /**
  * /feedback：输入描述 → 确认是否附带记录 → 提交（submitFeedback）→ 显示 feedback ID 与可打开的 GitHub issue 链接。
  */
-//@ chunk-seqjkch8.js:3773-12089 fingerprint = Feedback (0.317)
 function Feedback({
-  abortController: abortController,
-  messages: messages,
-  initialDescription: initialDescription,
-  onDone: onDone,
-  applyMessageOp: applyMessageOp,
-  backgroundTasks: backgroundTasks = {},
-  mode: mode = "post",
-  readFileState: readFileState,
-  surveyFeedbackSource: surveyFeedbackSource,
-  command: command = "/feedback",
-  wholeTranscript: wholeTranscript,
-  send: send,
+  abortController,
+  messages,
+  initialDescription,
+  onDone,
+  applyMessageOp,
+  backgroundTasks = {},
+  mode = "post",
+  readFileState,
+  surveyFeedbackSource,
+  command = "/feedback",
+  wholeTranscript,
+  send,
 }) {
-  let { storageV5: storageV5, credentials: credentials } = Me(),
-    sanitizedErrors = useHost(),
-    [Ce, z] = y("userInput"),
-    [jt, Wt] = y(0),
-    [se, zt] = y(initialDescription ?? ""),
-    [Gt, Ue] = y(null),
-    [Vt, qt] = y(null),
-    [Xt, Jt] = y(null),
-    [xe, re] = y(null),
-    [Kt, ve] = y(!1),
-    [N] = y(() => send ?? createFeedbackStatusStore(mode)),
-    lastAssistantMessage = useStoreSelector(N),
-    [Zt, ft] = y(!1),
-    [Qt, eo] = y(null),
-    D = Qt ?? lastAssistantMessage,
-    V = mode !== "share" && !Zt && D.status !== "none",
-    to = V && D.status !== "failed",
-    oo = D.status === "sending" ? "submitting" : "done",
-    F = to ? oo : Ce,
-    no = V && D.status === "failed" ? D.reason : null,
-    U = xe ?? no,
-    fe = xe !== null ? Kt : V && D.status === "failed" && D.final === !0,
-    le = V && (D.status === "delivered" || D.status === "saved") ? D.referenceId : Gt,
-    ge = V && D.status === "saved" ? D.bundlePath : Vt,
-    Fe = V && D.status === "saved" ? (D.transcriptProblem ?? null) : Xt,
-    he = wt(),
-    ht = he ? (Jn()?.sessionId ?? null) : null,
-    [so] = y(() =>
-      he
-        ? Promise.resolve(null)
-        : getIsGit()
-            .then((f) => (f ? getGitState() : null))
-            .catch(() => null),
-    ),
-    [bt, ro] = y(null),
-    [be, ao] = y("session"),
-    teammateTranscripts = useAppState((f) => f.transcripts),
-    io = useTerminalSize().columns - 4,
-    Ho = nullStub(),
-    Re = getFeatureValue_CACHED_MAY_BE_STALE("tengu_amber_lynx", !1),
-    handleCancel = ce(async () => {
-      (z("submitting"), re(null), Ue(null), N.start());
-      let f = (input, I = !1) => {
-        (re(input), ve(I), z("userInput"), N.fail(input, I));
-      };
-      if (mode === "bundle") {
-        let K = checkProductFeedbackAllowed(command);
-        if (K !== null) {
-          (logFeatureBad("feedback_bundle", "disabled_at_save"), f(K));
-          return;
-        }
-        let I = await saveFeedbackBundle({
-          messages: messages,
-          description: se,
-          surface: "cli",
-          scope: be,
-          backgroundTasks: backgroundTasks,
-          transcripts: teammateTranscripts,
-          signal: abortController.signal,
-          surveyFeedbackSource: surveyFeedbackSource,
-          wholeTranscript: wholeTranscript,
-          storageV5: storageV5,
-          host: sanitizedErrors,
-        });
-        if (abortController.signal.aborted) return;
-        if (I.success)
-          (Ue(I.bundleId),
-            qt(I.zipPath),
-            Jt(I.transcriptProblem ?? null),
-            z("done"),
-            N.save(I.bundleId, I.zipPath, I.transcriptProblem));
-        else f(`Couldn't save the feedback bundle to disk: ${I.error}`);
+  let { storageV5, credentials } = useTheme_2();
+  let sanitizedErrors = useHost();
+  let [Ce, z] = y("userInput");
+  let [cursorOffset, setCursorOffset] = y(0);
+  let [description, setDescription] = y(initialDescription ?? "");
+  let [Gt, Ue] = y(null);
+  let [Vt, qt] = y(null);
+  let [Xt, Jt] = y(null);
+  let [xe, re] = y(null);
+  let [Kt, ve] = y(false);
+  let [N] = y(() => send ?? createFeedbackStatusStore(mode));
+  let lastAssistantMessage = useStoreSelector(N);
+  let [Zt, ft] = y(false);
+  let [Qt, eo] = y(null);
+  let D = Qt ?? lastAssistantMessage;
+  let V = mode !== "share" && !Zt && D.status !== "none";
+  let to = V && D.status !== "failed";
+  let oo = D.status === "sending" ? "submitting" : "done";
+  let F = to ? oo : Ce;
+  let reason = V && D.status === "failed" ? D.reason : null;
+  let U = xe ?? reason;
+  let fe = xe !== null ? Kt : V && D.status === "failed" && D.final === true;
+  let le = V && (D.status === "delivered" || D.status === "saved") ? D.referenceId : Gt;
+  let ge = V && D.status === "saved" ? D.bundlePath : Vt;
+  let Fe = V && D.status === "saved" ? (D.transcriptProblem ?? null) : Xt;
+  let he = isRemoteSessionAvailable();
+  let ht = he ? (getRemoteCaps()?.sessionId ?? null) : null;
+  let [so] = y(() =>
+    he
+      ? Promise.resolve(null)
+      : getIsGit()
+          .then((isGit) => (isGit ? getGitState() : null))
+          .catch(() => null),
+  );
+  let [bt, ro] = y(null);
+  let [be, ao] = y("session");
+  let teammateTranscripts = useAppState((f) => f.transcripts);
+  let textInputColumns = useTerminalSize().columns - 4;
+  let Ho = nullStub();
+  let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE("tengu_amber_lynx", false);
+  let handleCancel = ce(async () => {
+    z("submitting");
+    re(null);
+    Ue(null);
+    N.start();
+    let f = (input, I = false) => {
+      re(input);
+      ve(I);
+      z("userInput");
+      N.fail(input, I);
+    };
+    if (mode === "bundle") {
+      let K = checkProductFeedbackAllowed(command);
+      if (K !== null) {
+        logFeatureBad("feedback_bundle", "disabled_at_save");
+        f(K);
         return;
       }
-      let [A, po] = await Promise.all([
-        postFeedbackSubmission({
-          messages: messages,
-          description: se,
-          surface: "cli",
-          scope: be,
-          backgroundTasks: backgroundTasks,
-          transcripts: teammateTranscripts,
-          signal: abortController.signal,
-          surveyFeedbackSource: surveyFeedbackSource,
-          storageV5: storageV5,
-          host: sanitizedErrors,
-          credentials: credentials,
-        }),
-        Re ? Promise.resolve(null) : generateTitle(se, abortController.signal, credentials),
-      ]);
+      let I = await saveFeedbackBundle({
+        messages,
+        description,
+        surface: "cli",
+        scope: be,
+        backgroundTasks,
+        transcripts: teammateTranscripts,
+        signal: abortController.signal,
+        surveyFeedbackSource,
+        wholeTranscript,
+        storageV5,
+        host: sanitizedErrors,
+      });
       if (abortController.signal.aborted) return;
-      if ((ro(po), A.success)) (Ue(A.feedbackId), z("done"), N.deliver(A.feedbackId));
-      else {
-        let K = orgRefusalError(A),
-          I = K ?? credentialRefusalMessage(A);
-        if (I !== void 0) f(I, K !== void 0 && A.refusal?.reportContent !== !0);
-        else if (A.failureReason === "auth_error")
-          f("Couldn't send feedback: not signed in. Run /login, then retry.");
-        else if (A.failureReason === "policy_blocked")
-          f(checkProductFeedbackAllowed(command) ?? "Feedback is disabled by your organization's policy.");
-        else {
-          let mo =
-            serverStatusSuffix(A) ??
-            (A.failureReason === "timeout"
-              ? " (request timed out)"
-              : A.failureReason === "network_error"
-                ? " (couldn't reach the service)"
-                : "");
-          f(
-            `Couldn't send feedback${mo}. If it keeps failing, you can file at ${GITHUB_ISSUES_REPO_URL()} instead.`,
-          );
-        }
-      }
-    }, [
-      se,
-      messages,
-      Re,
-      backgroundTasks,
-      teammateTranscripts,
-      abortController,
-      mode,
-      be,
-      storageV5,
-      credentials,
-      command,
-      wholeTranscript,
-      N,
-      sanitizedErrors,
-    ]),
-    lo = ce(() => Ut(handleCancel, N), [handleCancel, N]),
-    Le = ce(() => {
-      if (V) {
-        let snapshot = N.getSnapshot();
-        eo((A) => A ?? snapshot);
-      }
-      (abortController.abort(), onDone("Feedback / bug report cancelled", { display: "system" }));
-    }, [onDone, abortController, N, V]),
-    jo = ce(() => {
+      if (I.success) {
+        Ue(I.bundleId);
+        qt(I.zipPath);
+        Jt(I.transcriptProblem ?? null);
+        z("done");
+        N.save(I.bundleId, I.zipPath, I.transcriptProblem);
+      } else f(`Couldn't save the feedback bundle to disk: ${I.error}`);
+      return;
+    }
+    let [A, po] = await Promise.all([
+      postFeedbackSubmission({
+        messages,
+        description,
+        surface: "cli",
+        scope: be,
+        backgroundTasks,
+        transcripts: teammateTranscripts,
+        signal: abortController.signal,
+        surveyFeedbackSource,
+        storageV5,
+        host: sanitizedErrors,
+        credentials,
+      }),
+      featureValue_CACHED_MAY_BE_STALE
+        ? Promise.resolve(null)
+        : generateTitle(description, abortController.signal, credentials),
+    ]);
+    if (abortController.signal.aborted) return;
+    ro(po);
+    if (A.success) {
+      Ue(A.feedbackId);
       z("done");
-    }, []),
-    Wo = ce((f) => {
-      (re(f), ve(!1), z("userInput"));
-    }, []);
-  useKeybinding("confirm:no", Le, { context: "Settings", isActive: F === "userInput" });
-  let co = F === "done" || (U && F !== "userInput");
-  function uo(f) {
-    if (f.ctrl || f.meta) return;
-    if (F === "done") {
-      if ((f.preventDefault(), mode === "share")) return;
-      if (!Re && f.key === "return" && bt) {
-        let A = createGitHubIssueUrl(le ?? "", bt, se);
-        fi(A);
+      N.deliver(A.feedbackId);
+    } else {
+      let K = orgRefusalError(A);
+      let I = K ?? credentialRefusalMessage(A);
+      if (I !== undefined) f(I, K !== undefined && A.refusal?.reportContent !== true);
+      else if (A.failureReason === "auth_error")
+        f("Couldn't send feedback: not signed in. Run /login, then retry.");
+      else if (A.failureReason === "policy_blocked")
+        f(checkProductFeedbackAllowed(command) ?? "Feedback is disabled by your organization's policy.");
+      else {
+        let mo =
+          serverStatusSuffix(A) ??
+          (A.failureReason === "timeout"
+            ? " (request timed out)"
+            : A.failureReason === "network_error"
+              ? " (couldn't reach the service)"
+              : "");
+        f(
+          `Couldn't send feedback${mo}. If it keeps failing, you can file at ${GITHUB_ISSUES_REPO_URL()} instead.`,
+        );
       }
-      if (U) onDone("Error submitting feedback / bug report", { display: "system" });
+    }
+  }, [
+    description,
+    messages,
+    featureValue_CACHED_MAY_BE_STALE,
+    backgroundTasks,
+    teammateTranscripts,
+    abortController,
+    mode,
+    be,
+    storageV5,
+    credentials,
+    command,
+    wholeTranscript,
+    N,
+    sanitizedErrors,
+  ]);
+  let lo = ce(() => runThenAbandon(handleCancel, N), [handleCancel, N]);
+  let Le = ce(() => {
+    if (V) {
+      let snapshot = N.getSnapshot();
+      eo((A) => A ?? snapshot);
+    }
+    abortController.abort();
+    onDone("Feedback / bug report cancelled", {
+      display: "system",
+    });
+  }, [onDone, abortController, N, V]);
+  let jo = ce(() => {
+    z("done");
+  }, []);
+  let Wo = ce((f) => {
+    re(f);
+    ve(false);
+    z("userInput");
+  }, []);
+  useKeybinding("confirm:no", Le, {
+    context: "Settings",
+    isActive: F === "userInput",
+  });
+  let co = F === "done" || (U && F !== "userInput");
+  function uo(event) {
+    if (event.ctrl || event.meta) return;
+    if (F === "done") {
+      event.preventDefault();
+      if (mode === "share") return;
+      if (!featureValue_CACHED_MAY_BE_STALE && event.key === "return" && bt) {
+        let issueUrl = createGitHubIssueUrl(le ?? "", bt, description);
+        openValidatedUrlSucceeded(issueUrl);
+      }
+      if (U)
+        onDone("Error submitting feedback / bug report", {
+          display: "system",
+        });
       else if (mode === "bundle" && ge)
         onDone(
           Fe === null
             ? `Feedback bundle saved to \`${ge}\``
             : `Feedback bundle saved to \`${ge}\`. ${TRANSCRIPT_PROBLEM_NOTES[Fe]}`,
-          { display: "system" },
+          {
+            display: "system",
+          },
         );
-      else onDone("Feedback / bug report submitted", { display: "system" });
+      else
+        onDone("Feedback / bug report submitted", {
+          display: "system",
+        });
       return;
     }
     if (U && F !== "userInput") {
-      (f.preventDefault(), onDone("Error submitting feedback / bug report", { display: "system" }));
+      event.preventDefault();
+      onDone("Error submitting feedback / bug report", {
+        display: "system",
+      });
       return;
     }
     if (F === "consent") {
-      if (f.key === "left") {
-        (f.preventDefault(), z(mode === "share" || he ? "userInput" : "scope"));
+      if (event.key === "left") {
+        event.preventDefault();
+        z(mode === "share" || he ? "userInput" : "scope");
         return;
       }
-      if (f.key === "return" || f.key === " ") (f.preventDefault(), lo());
+      if (event.key === "return" || event.key === " ") {
+        event.preventDefault();
+        lo();
+      }
     }
   }
-  return e(FocusColumn, {
+  return jsxProd_default(FocusColumn, {
     onKeyDown: uo,
-    children: r(Dialog, {
+    children: jsxProd_default_2(Dialog, {
       title: "Submit feedback / bug report",
       onCancel: Le,
       isCancelActive: F !== "userInput" && !co,
       hideInputGuide: F === "done",
       inputGuide:
         F === "userInput"
-          ? r(Byline, {
+          ? jsxProd_default_2(Byline, {
               children: [
-                !fe && e(KeyboardShortcutHint, { chord: "enter", action: "continue" }),
-                e(ConfigurableShortcutHint, {
+                !fe &&
+                  jsxProd_default(KeyboardShortcutHint, {
+                    chord: "enter",
+                    action: "continue",
+                  }),
+                jsxProd_default(ConfigurableShortcutHint, {
                   action: "confirm:no",
                   context: "Confirmation",
                   fallback: "Esc",
@@ -386,10 +461,13 @@ function Feedback({
               ],
             })
           : F === "scope"
-            ? r(Byline, {
+            ? jsxProd_default_2(Byline, {
                 children: [
-                  e(KeyboardShortcutHint, { chord: "enter", action: "choose" }),
-                  e(ConfigurableShortcutHint, {
+                  jsxProd_default(KeyboardShortcutHint, {
+                    chord: "enter",
+                    action: "choose",
+                  }),
+                  jsxProd_default(ConfigurableShortcutHint, {
                     action: "confirm:no",
                     context: "Confirmation",
                     fallback: "Esc",
@@ -398,14 +476,17 @@ function Feedback({
                 ],
               })
             : F === "consent"
-              ? r(Byline, {
+              ? jsxProd_default_2(Byline, {
                   children: [
-                    e(KeyboardShortcutHint, {
+                    jsxProd_default(KeyboardShortcutHint, {
                       chord: "enter",
                       action: FEEDBACK_MODE_COPY[mode].consentAction,
                     }),
-                    e(KeyboardShortcutHint, { chord: "left", action: "change" }),
-                    e(ConfigurableShortcutHint, {
+                    jsxProd_default(KeyboardShortcutHint, {
+                      chord: "left",
+                      action: "change",
+                    }),
+                    jsxProd_default(ConfigurableShortcutHint, {
                       action: "confirm:no",
                       context: "Confirmation",
                       fallback: "Esc",
@@ -416,86 +497,113 @@ function Feedback({
               : null,
       children: [
         F === "userInput" &&
-          r(Box, {
+          jsxProd_default_2(Box, {
             flexDirection: "column",
             gap: 1,
             children: [
-              e(Text, { children: "Describe the issue below:" }),
-              e(TextInput, {
-                value: se,
-                onChange: (f) => {
-                  if ((zt(f), fe && xe === null && U !== null)) (re(U), ve(!0));
-                  if ((ft(!0), U && !fe)) re(null);
+              jsxProd_default(Text, {
+                children: "Describe the issue below:",
+              }),
+              jsxProd_default(TextInput, {
+                value: description,
+                onChange: (value) => {
+                  setDescription(value);
+                  if (fe && xe === null && U !== null) {
+                    re(U);
+                    ve(true);
+                  }
+                  ft(true);
+                  if (U && !fe) re(null);
                 },
-                columns: io,
-                clearOnSubmit: !1,
+                columns: textInputColumns,
+                clearOnSubmit: false,
                 onSubmit: (f) => {
                   if (fe) return;
-                  if ((ft(!0), mode !== "share" && f.trim() === "")) {
-                    (re("Please describe the issue before submitting."), ve(!1));
+                  ft(true);
+                  if (mode !== "share" && f.trim() === "") {
+                    re("Please describe the issue before submitting.");
+                    ve(false);
                     return;
                   }
-                  (re(null), z(mode === "share" || he ? "consent" : "scope"));
+                  re(null);
+                  z(mode === "share" || he ? "consent" : "scope");
                 },
                 onExitMessage: (exitState) => {
-                  if (exitState)
-                    (abortController.abort(), onDone("Feedback cancelled", { display: "system" }));
+                  if (exitState) {
+                    abortController.abort();
+                    onDone("Feedback cancelled", {
+                      display: "system",
+                    });
+                  }
                 },
-                cursorOffset: jt,
-                onChangeCursorOffset: Wt,
-                showCursor: !0,
-                focus: !0,
+                cursorOffset,
+                onChangeCursorOffset: setCursorOffset,
+                showCursor: true,
+                focus: true,
               }),
               U &&
-                r(Box, {
+                jsxProd_default_2(Box, {
                   flexDirection: "column",
                   gap: 1,
                   children: [
-                    e(ErrorText, { error: U }),
+                    jsxProd_default(ErrorText, {
+                      error: U,
+                    }),
                     !fe &&
-                      e(Text, { dimColor: !0, children: "Edit and press Enter to retry, or Esc to cancel" }),
+                      jsxProd_default(Text, {
+                        dimColor: true,
+                        children: "Edit and press Enter to retry, or Esc to cancel",
+                      }),
                   ],
                 }),
             ],
           }),
         F === "scope" &&
-          r(Box, {
+          jsxProd_default_2(Box, {
             flexDirection: "column",
             gap: 1,
             children: [
-              e(Text, { children: "How much session history should we include?" }),
-              e(ModelSelector, {
+              jsxProd_default(Text, {
+                children: "How much session history should we include?",
+              }),
+              jsxProd_default(ModelSelector, {
                 options: TRANSCRIPT_SCOPE_OPTIONS,
                 defaultFocusValue: be,
                 onChange: (value) => {
-                  (ao(value), z("consent"));
+                  ao(value);
+                  z("consent");
                 },
                 onCancel: Le,
               }),
             ],
           }),
         F === "consent" &&
-          r(Box, {
+          jsxProd_default_2(Box, {
             flexDirection: "column",
             children: [
-              e(Text, { children: FEEDBACK_MODE_COPY[mode].consentIntro }),
-              r(Box, {
+              jsxProd_default(Text, {
+                children: FEEDBACK_MODE_COPY[mode].consentIntro,
+              }),
+              jsxProd_default_2(Box, {
                 marginLeft: 2,
                 flexDirection: "column",
                 children: [
-                  r(Text, {
+                  jsxProd_default_2(Text, {
                     children: [
                       "- Your feedback / bug description:",
                       " ",
-                      e(Text, { dimColor: !0, children: se }),
+                      jsxProd_default(Text, {
+                        dimColor: true,
+                        children: description,
+                      }),
                     ],
                   }),
-                  r(Text, {
+                  jsxProd_default_2(Text, {
                     children: [
                       "- Environment info:",
                       " ",
-                      r(Text, {
-                        dimColor: !0,
+                      jsxProd_default_2(Text, {
+                        dimColor: true,
                         children: [
                           env.platform,
                           ", ",
@@ -521,12 +629,12 @@ function Feedback({
                   }),
                   mode !== "share" &&
                     he &&
-                    r(Text, {
+                    jsxProd_default_2(Text, {
                       children: [
                         "- Remote workspace:",
                         " ",
-                        r(Text, {
-                          dimColor: !0,
+                        jsxProd_default_2(Text, {
+                          dimColor: true,
                           children: [
                             ht ? `session ${ht}; ` : "",
                             "git metadata is not collected from this machine",
@@ -535,13 +643,18 @@ function Feedback({
                       ],
                     }),
                   mode !== "share" &&
-                    e(fo, { fallback: null, children: e(GitMetadataLine, { gitStatePromise: so }) }),
-                  r(Text, {
+                    jsxProd_default(fo, {
+                      fallback: null,
+                      children: jsxProd_default(GitMetadataLine, {
+                        gitStatePromise: so,
+                      }),
+                    }),
+                  jsxProd_default_2(Text, {
                     children: [
                       "- Session transcript:",
                       " ",
-                      e(Text, {
-                        dimColor: !0,
+                      jsxProd_default(Text, {
+                        dimColor: true,
                         children:
                           mode === "share"
                             ? TRANSCRIPT_SCOPE_DESCRIPTIONS.session
@@ -550,12 +663,12 @@ function Feedback({
                     ],
                   }),
                   mode !== "share" &&
-                    r(Text, {
+                    jsxProd_default_2(Text, {
                       children: [
                         "- Recent error messages:",
                         " ",
-                        e(Text, {
-                          dimColor: !0,
+                        jsxProd_default(Text, {
+                          dimColor: true,
                           children:
                             "up to the last 100 since you launched Claude Code (may include file paths)",
                         }),
@@ -563,11 +676,11 @@ function Feedback({
                     }),
                 ],
               }),
-              e(Box, {
+              jsxProd_default(Box, {
                 marginTop: 1,
-                children: e(Text, {
+                children: jsxProd_default(Text, {
                   wrap: "wrap",
-                  dimColor: !0,
+                  dimColor: true,
                   children: FEEDBACK_MODE_COPY[mode].consentFooter,
                 }),
               }),
@@ -575,35 +688,62 @@ function Feedback({
           }),
         F === "submitting" &&
           mode !== "share" &&
-          e(Box, {
+          jsxProd_default(Box, {
             flexDirection: "row",
             gap: 1,
-            children: e(Text, { children: FEEDBACK_MODE_COPY[mode].submitting }),
+            children: jsxProd_default(Text, {
+              children: FEEDBACK_MODE_COPY[mode].submitting,
+            }),
           }),
         F === "done" &&
           mode === "bundle" &&
-          r(Box, {
+          jsxProd_default_2(Box, {
             flexDirection: "column",
             children: [
-              r(Text, {
+              jsxProd_default_2(Text, {
                 color: "success",
-                children: [e(StatusIcon, { status: "success", withSpace: !0 }), "Feedback bundle saved"],
+                children: [
+                  jsxProd_default(StatusIcon, {
+                    status: "success",
+                    withSpace: true,
+                  }),
+                  "Feedback bundle saved",
+                ],
               }),
               ge &&
-                r(Box, {
+                jsxProd_default_2(Box, {
                   marginTop: 1,
                   flexDirection: "column",
                   children: [
-                    r(Text, { children: ["Bundle: ", e(Text, { dimColor: !0, children: ge })] }),
-                    r(Text, { children: ["Reference ID: ", e(Text, { dimColor: !0, children: le })] }),
+                    jsxProd_default_2(Text, {
+                      children: [
+                        "Bundle: ",
+                        jsxProd_default(Text, {
+                          dimColor: true,
+                          children: ge,
+                        }),
+                      ],
+                    }),
+                    jsxProd_default_2(Text, {
+                      children: [
+                        "Reference ID: ",
+                        jsxProd_default(Text, {
+                          dimColor: true,
+                          children: le,
+                        }),
+                      ],
+                    }),
                     Fe &&
-                      e(Box, {
+                      jsxProd_default(Box, {
                         marginTop: 1,
-                        children: e(Text, { wrap: "wrap", children: TRANSCRIPT_PROBLEM_NOTES[Fe] }),
+                        children: jsxProd_default(Text, {
+                          wrap: "wrap",
+                          children: TRANSCRIPT_PROBLEM_NOTES[Fe],
+                        }),
                       }),
-                    e(Box, {
+                    jsxProd_default(Box, {
                       marginTop: 1,
-                      children: e(Text, {
+                      children: jsxProd_default(Text, {
                         wrap: "wrap",
                         children:
                           "Send this file to your Anthropic account representative or attach it to your support request.",
@@ -611,36 +751,53 @@ function Feedback({
                     }),
                   ],
                 }),
-              e(Box, {
+              jsxProd_default(Box, {
                 marginTop: 1,
-                children: e(Text, { dimColor: !0, children: "Press any key to close" }),
+                children: jsxProd_default(Text, {
+                  dimColor: true,
+                  children: "Press any key to close",
+                }),
               }),
             ],
           }),
         F === "done" &&
           mode === "post" &&
-          (Re || V
-            ? r(Box, {
+          (featureValue_CACHED_MAY_BE_STALE || V
+            ? jsxProd_default_2(Box, {
                 flexDirection: "column",
                 children: [
                   U
-                    ? e(ErrorText, { error: U })
-                    : r(Text, {
+                    ? jsxProd_default(ErrorText, {
+                        error: U,
+                      })
+                    : jsxProd_default_2(Text, {
                         color: "success",
-                        children: [e(StatusIcon, { status: "success", withSpace: !0 }), "Feedback sent"],
+                        children: [
+                          jsxProd_default(StatusIcon, {
+                            status: "success",
+                            withSpace: true,
+                          }),
+                          "Feedback sent",
+                        ],
                       }),
                   le &&
-                    r(Fragment, {
+                    jsxProd_default_2(Fragment, {
                       children: [
-                        e(Box, {
+                        jsxProd_default(Box, {
                           marginTop: 1,
-                          children: r(Text, {
-                            children: ["Reference ID: ", e(Text, { dimColor: !0, children: le })],
+                          children: jsxProd_default_2(Text, {
+                            children: [
+                              "Reference ID: ",
+                              jsxProd_default(Text, {
+                                dimColor: true,
+                                children: le,
+                              }),
+                            ],
                           }),
                         }),
-                        e(Box, {
+                        jsxProd_default(Box, {
                           marginTop: 1,
-                          children: e(Text, {
+                          children: jsxProd_default(Text, {
                             wrap: "wrap",
                             children:
                               "If you're working with Anthropic support, please include the ID above.",
@@ -648,28 +805,46 @@ function Feedback({
                         }),
                       ],
                     }),
-                  e(Box, {
+                  jsxProd_default(Box, {
                     marginTop: 1,
-                    children: e(Text, { dimColor: !0, italic: !0, children: "Any key to close" }),
+                    children: jsxProd_default(Text, {
+                      dimColor: true,
+                      italic: true,
+                      children: "Any key to close",
+                    }),
                   }),
                 ],
               })
-            : r(Box, {
+            : jsxProd_default_2(Box, {
                 flexDirection: "column",
                 children: [
                   U
-                    ? e(ErrorText, { error: U })
-                    : e(Text, { color: "success", children: "Thank you for your report!" }),
-                  le && r(Text, { dimColor: !0, children: ["Feedback ID: ", le] }),
-                  e(Box, {
+                    ? jsxProd_default(ErrorText, {
+                        error: U,
+                      })
+                    : jsxProd_default(Text, {
+                        color: "success",
+                        children: "Thank you for your report!",
+                      }),
+                  le &&
+                    jsxProd_default_2(Text, {
+                      dimColor: true,
+                      children: ["Feedback ID: ", le],
+                    }),
+                  jsxProd_default(Box, {
                     marginTop: 1,
-                    children: e(Text, {
-                      dimColor: !0,
-                      italic: !0,
-                      children: r(Byline, {
+                    children: jsxProd_default(Text, {
+                      dimColor: true,
+                      italic: true,
+                      children: jsxProd_default_2(Byline, {
                         children: [
-                          e(KeyboardShortcutHint, { chord: "enter", action: "open GitHub issue" }),
-                          e(Text, { children: "any key to close" }),
+                          jsxProd_default(KeyboardShortcutHint, {
+                            chord: "enter",
+                            action: "open GitHub issue",
+                          }),
+                          jsxProd_default(Text, {
+                            children: "any key to close",
+                          }),
                         ],
                       }),
                     }),
@@ -682,29 +857,41 @@ function Feedback({
   });
 }
 //@ chunk-seqjkch8.js:12089-13311 fingerprint = createGitHubIssueUrl (0.585)
-function createGitHubIssueUrl(d, o, a) {
-  let p = truncateToLength(redactSecrets(o), MAX_ISSUE_TITLE_CHARS),
-    sanitizedTitle = redactSecrets(a),
-    k = nullStub(),
-    errorSuffix = `${GITHUB_ISSUES_REPO_URL()}/new?title=${encodeURIComponent(p)}&labels=user-reported,bug&body=`,
-    errorsJson = encodeURIComponent(`**Bug Description**
-`),
-    encodedPrefix = encodeURIComponent(`
+function createGitHubIssueUrl(d, o, description) {
+  let p = truncateToLength(redactSecrets(o), MAX_ISSUE_TITLE_CHARS);
+  let sanitizedTitle = redactSecrets(description);
+  let k = nullStub();
+  let errorSuffix = `${GITHUB_ISSUES_REPO_URL()}/new?title=${encodeURIComponent(p)}&labels=user-reported,bug&body=`;
+  let errorsJson = encodeURIComponent(`**Bug Description**
+`);
+  let encodedPrefix = encodeURIComponent(`
 
 **Environment Info**
 - Platform: ${env.platform}
 - Terminal: ${env.terminal}
-- Version: ${{ ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues", PACKAGE_URL: "@anthropic-ai/claude-code", README_URL: "https://code.claude.com/docs/en/overview", VERSION: "2.1.316", FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues", BUILD_TIME: "2026-10-30T23:28:13Z", GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1", HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js", DD_SOURCEMAP_GROUP: "default" }.VERSION || "unknown"}
+- Version: ${
+    {
+      ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
+      PACKAGE_URL: "@anthropic-ai/claude-code",
+      README_URL: "https://code.claude.com/docs/en/overview",
+      VERSION: "2.1.316",
+      FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
+      BUILD_TIME: "2026-10-30T23:28:13Z",
+      GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+      HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
+      DD_SOURCEMAP_GROUP: "default",
+    }.VERSION || "unknown"
+  }
 - Feedback ID: ${d}
-`),
-    encodedSuffix = encodeURIComponent(sanitizedTitle),
-    W = MAX_FEEDBACK_BODY_CHARS - errorSuffix.length - errorsJson.length - encodedPrefix.length;
+`);
+  let encodedSuffix = encodeURIComponent(sanitizedTitle);
+  let W = MAX_FEEDBACK_BODY_CHARS - errorSuffix.length - errorsJson.length - encodedPrefix.length;
   if (encodedSuffix.length > W) {
     let encodedNote = encodeURIComponent(`\u2026
 
-**Note:** The description was shortened to fit GitHub's link length limit. The full description was sent to Anthropic with the feedback report; its Feedback ID is below.`),
-      buffer = 50,
-      pe = W - encodedNote.length - 50;
+**Note:** The description was shortened to fit GitHub's link length limit. The full description was sent to Anthropic with the feedback report; its Feedback ID is below.`);
+    let buffer = 50;
+    let pe = W - encodedNote.length - 50;
     encodedSuffix = "";
     for (let me of sanitizedTitle) {
       let encodedFullBody = encodeURIComponent(me);
@@ -715,92 +902,96 @@ function createGitHubIssueUrl(d, o, a) {
   }
   return errorSuffix + errorsJson + encodedSuffix + encodedPrefix;
 }
+//@ chunk-seqjkch8.js:13311-14915 fingerprint = generateTitle (0.938)
 /**
  * 用模型为公开 issue 生成简洁技术标题（不超过 80 字符），失败回落 "Bug Report"。
  */
-//@ chunk-seqjkch8.js:13311-14915 fingerprint = generateTitle (0.938)
-async function generateTitle(d, o, a) {
+async function generateTitle(description, abortSignal, credentials) {
   try {
     let response = await queryHaikuWithFallback({
-        systemPrompt: asSystemPrompt([
-          "Generate a concise, technical issue title (max 80 chars) for a public GitHub issue based on this bug report for Claude Code.",
-          "Claude Code is an agentic coding CLI based on the Anthropic API.",
-          "The title should:",
-          "- Include the type of issue [Bug] or [Feature Request] as the first thing in the title",
-          "- Be concise, specific and descriptive of the actual problem",
-          "- Use technical terminology appropriate for a software issue",
-          '- For error messages, extract the key error (e.g., "Missing Tool Result Block" rather than the full message)',
-          "- Be direct and clear for developers to understand the problem",
-          '- If you cannot determine a clear issue, use "Bug Report: [brief description]"',
-          "- Any LLM API errors are from the Anthropic API, not from any other model provider",
-          "Your response will be directly used as the title of the Github issue, and as such should not contain any other commentary or explaination",
-          'Examples of good titles include: "[Bug] Auto-Compact triggers to soon", "[Bug] Anthropic API Error: Missing Tool Result Block", "[Bug] Error: Invalid Model Name for Opus"',
-        ]),
-        userPrompt: d,
-        signal: o,
-        options: {
-          hasAppendSystemPrompt: !1,
-          toolChoice: void 0,
-          isNonInteractiveSession: !1,
-          agents: [],
-          querySource: "feedback",
-          mcpTools: [],
-          agentContext: mainAgentContext(),
-          credentials: a,
-        },
-      }),
-      title = response.message.content[0]?.type === "text" ? response.message.content[0].text : "Bug Report";
-    if (response.isApiErrorMessage || startsWithApiErrorPrefix(title)) return createFallbackTitle(d);
-    if (xo(title)) return createFallbackTitle(d);
+      systemPrompt: asSystemPrompt([
+        "Generate a concise, technical issue title (max 80 chars) for a public GitHub issue based on this bug report for Claude Code.",
+        "Claude Code is an agentic coding CLI based on the Anthropic API.",
+        "The title should:",
+        "- Include the type of issue [Bug] or [Feature Request] as the first thing in the title",
+        "- Be concise, specific and descriptive of the actual problem",
+        "- Use technical terminology appropriate for a software issue",
+        '- For error messages, extract the key error (e.g., "Missing Tool Result Block" rather than the full message)',
+        "- Be direct and clear for developers to understand the problem",
+        '- If you cannot determine a clear issue, use "Bug Report: [brief description]"',
+        "- Any LLM API errors are from the Anthropic API, not from any other model provider",
+        "Your response will be directly used as the title of the Github issue, and as such should not contain any other commentary or explaination",
+        'Examples of good titles include: "[Bug] Auto-Compact triggers to soon", "[Bug] Anthropic API Error: Missing Tool Result Block", "[Bug] Error: Invalid Model Name for Opus"',
+      ]),
+      userPrompt: description,
+      signal: abortSignal,
+      options: {
+        hasAppendSystemPrompt: false,
+        toolChoice: undefined,
+        isNonInteractiveSession: false,
+        agents: [],
+        querySource: "feedback",
+        mcpTools: [],
+        agentContext: mainAgentContext(),
+        credentials,
+      },
+    });
+    let title =
+      response.message.content[0]?.type === "text" ? response.message.content[0].text : "Bug Report";
+    if (response.isApiErrorMessage || startsWithApiErrorPrefix(title))
+      return createFallbackTitle(description);
+    if (isEmptyOrTemplate(title)) return createFallbackTitle(description);
     return title;
   } catch (error) {
     if (isAbortError(error))
-      logForDebugging("Feedback title generation via Haiku aborted, using fallback", { level: "debug" });
+      logForDebugging("Feedback title generation via Haiku aborted, using fallback", {
+        level: "debug",
+      });
     else logError(error);
-    return createFallbackTitle(d);
+    return createFallbackTitle(description);
   }
 }
 //@ chunk-seqjkch8.js:14915-15032 layout
 var REFUSAL_PREFIX_RE =
   /^(i can['\u2019]t|i cannot|i['\u2019]m unable|i am unable|i['\u2019]m sorry|i am sorry|i apologize|sorry,)/i;
 //@ chunk-seqjkch8.js:15032-15088 layout
-function xo(d) {
-  let trimmed = d.trim();
+function isEmptyOrTemplate(title) {
+  let trimmed = title.trim();
   return trimmed === "" || REFUSAL_PREFIX_RE.test(trimmed);
 }
 //@ chunk-seqjkch8.js:15088-15279 fingerprint = createFallbackTitle (1)
 function createFallbackTitle(description) {
-  let o = getFirstLine(description);
-  if (o.length <= 60 && o.length > 5) return o;
-  let truncated = o.slice(0, 60);
-  if (o.length > 60) {
+  let firstLine = getFirstLine(description);
+  if (firstLine.length <= 60 && firstLine.length > 5) return firstLine;
+  let truncated = firstLine.slice(0, 60);
+  if (firstLine.length > 60) {
     let lastSpace = truncated.lastIndexOf(" ");
     if (lastSpace > 30) truncated = truncated.slice(0, lastSpace);
     truncated += "...";
   }
   return truncated.length < 10 ? "Bug Report" : truncated;
 }
+//@ chunk-seqjkch8.js:15279-15835 sole-consumer
 /**
  * 反馈确认页中的一行 git 元数据：分支、短提交号、远程地址、是否未同步与有无本地改动。
  */
-//@ chunk-seqjkch8.js:15279-15835 sole-consumer
 function GitMetadataLine(props) {
-  let $ = w(8),
-    { gitStatePromise: gitStatePromise } = props,
-    gitState = Qr(gitStatePromise);
+  let $ = w(8);
+  let { gitStatePromise } = props;
+  let gitState = Qr(gitStatePromise);
   if (!gitState) {
     return null;
   }
   const branchName = gitState.branchName;
   let commitSuffix;
-  if ($[0] !== gitState.commitHash)
-    ((commitSuffix = gitState.commitHash ? `, ${gitState.commitHash.slice(0, 7)}` : ""),
-      ($[0] = gitState.commitHash),
-      ($[1] = commitSuffix));
-  else commitSuffix = $[1];
-  const remoteSuffix = gitState.remoteUrl ? ` @ ${gitState.remoteUrl}` : "",
-    unsyncedNote = !gitState.isHeadOnRemote && ", not synced",
-    dirtyNote = !gitState.isClean && ", has local changes";
+  if ($[0] !== gitState.commitHash) {
+    commitSuffix = gitState.commitHash ? `, ${gitState.commitHash.slice(0, 7)}` : "";
+    $[0] = gitState.commitHash;
+    $[1] = commitSuffix;
+  } else commitSuffix = $[1];
+  const remoteSuffix = gitState.remoteUrl ? ` @ ${gitState.remoteUrl}` : "";
+  const unsyncedNote = !gitState.isHeadOnRemote && ", not synced";
+  const dirtyNote = !gitState.isClean && ", has local changes";
   let content;
   if (
     $[2] !== gitState.branchName ||
@@ -808,102 +999,154 @@ function GitMetadataLine(props) {
     $[4] !== remoteSuffix ||
     $[5] !== unsyncedNote ||
     $[6] !== dirtyNote
-  )
-    ((content = r(Text, {
+  ) {
+    content = jsxProd_default_2(Text, {
       children: [
         "- Git repo metadata:",
         " ",
-        r(Text, {
-          dimColor: !0,
+        jsxProd_default_2(Text, {
+          dimColor: true,
           children: [branchName, commitSuffix, remoteSuffix, unsyncedNote, dirtyNote],
         }),
       ],
-    })),
-      ($[2] = gitState.branchName),
-      ($[3] = commitSuffix),
-      ($[4] = remoteSuffix),
-      ($[5] = unsyncedNote),
-      ($[6] = dirtyNote),
-      ($[7] = content));
-  else content = $[7];
+    });
+    $[2] = gitState.branchName;
+    $[3] = commitSuffix;
+    $[4] = remoteSuffix;
+    $[5] = unsyncedNote;
+    $[6] = dirtyNote;
+    $[7] = content;
+  } else content = $[7];
   return content;
 }
 //@ chunk-xx1vmpsq.js:18905-18966 sole-consumer
-function Vs(e) {
-  let s = e?.["request-id"];
-  return isSessionsToken(s) ? s : void 0;
+function requestIdHeader(headers) {
+  let s = headers?.["request-id"];
+  return isSessionsToken(s) ? s : undefined;
 }
+//@ chunk-xx1vmpsq.js:18966-20766 fingerprint = submitFeedback (0.33)
 /**
  * 提交反馈到 /api/claude_cli_feedback（检查策略 allow_product_feedback 与大小），返回 feedback ID。
  */
-//@ chunk-xx1vmpsq.js:18966-20766 fingerprint = submitFeedback (0.33)
-async function submitFeedback(e, s, n, y) {
-  if (isEssentialTrafficOnly()) return { success: !1 };
-  if (!isPolicyAllowed("allow_product_feedback")) return { success: !1, failureReason: "policy_blocked" };
+async function submitFeedback(e, signal, sessionIdForMessage, credentials) {
+  if (isEssentialTrafficOnly())
+    return {
+      success: false,
+    };
+  if (!isPolicyAllowed("allow_product_feedback"))
+    return {
+      success: false,
+      failureReason: "policy_blocked",
+    };
   let r = 0;
   try {
-    let w = buildFeedbackPayload(
+    let feedbackPayload = buildFeedbackPayload(
       e,
       TRANSCRIPT_FIELDS,
-      xs,
-      n === void 0 ? void 0 : { extraOuterFields: { session_id: n } },
+      SUBAGENT_TRANSCRIPT_FIELDS,
+      sessionIdForMessage === undefined
+        ? undefined
+        : {
+            extraOuterFields: {
+              session_id: sessionIdForMessage,
+            },
+          },
     );
-    if (((r = w.length), r > dDe))
-      return { success: !1, payloadTooLarge: !0, failureReason: "payload_too_large_precheck" };
+    r = feedbackPayload.length;
+    if (r > MAX_PAYLOAD_PART_COUNT)
+      return {
+        success: false,
+        payloadTooLarge: true,
+        failureReason: "payload_too_large_precheck",
+      };
     let T = await withOAuth401Retry(
       () =>
-        apiClient.post("/api/claude_cli_feedback", w, {
-          headers: { "Content-Type": "application/json" },
+        apiClient.post("/api/claude_cli_feedback", feedbackPayload, {
+          headers: {
+            "Content-Type": "application/json",
+          },
           timeout: 30000,
-          signal: s,
-          credentials: y,
+          signal,
+          credentials,
           validateStatus: (M) => M !== 401,
         }),
-      { gateToSessionOAuthCredential: !0, credentials: y },
+      {
+        gateToSessionOAuthCredential: true,
+        credentials,
+      },
     );
     if (!T.ok)
       switch (T.reason) {
         case "essential-traffic-only":
-          return { success: !1 };
+          return {
+            success: false,
+          };
         case "data-residency":
-          return { success: !1, failureReason: "data_residency" };
+          return {
+            success: false,
+            failureReason: "data_residency",
+          };
         case "no-auth":
-          return { success: !1, failureReason: "auth_error" };
+          return {
+            success: false,
+            failureReason: "auth_error",
+          };
       }
-    if (T.status === 200 && T.data?.feedback_id) return { success: !0, feedbackId: T.data.feedback_id };
-    let C = Vs(T.response.headers);
-    if (T.status === 200)
-      return (
-        redactError(Error("Failed to submit feedback: request did not return feedback_id")),
-        { success: !1, failureReason: "missing_feedback_id", requestId: C }
-      );
+    if (T.status === 200 && T.data?.feedback_id)
+      return {
+        success: true,
+        feedbackId: T.data.feedback_id,
+      };
+    let requestId = requestIdHeader(T.response.headers);
+    if (T.status === 200) {
+      redactError(Error("Failed to submit feedback: request did not return feedback_id"));
+      return {
+        success: false,
+        failureReason: "missing_feedback_id",
+        requestId,
+      };
+    }
     if (T.status === 413)
       return {
-        success: !1,
-        payloadTooLarge: !0,
+        success: false,
+        payloadTooLarge: true,
         failureReason: "payload_too_large_413",
         statusCode: 413,
-        requestId: C,
+        requestId,
       };
     let I = "Failed to submit feedback:" + T.status;
     if (T.status === 401 || T.status === 403 || T.status === 429) logForDebugging(I);
     else redactError(Error(I));
-    return { ...classifyFeedbackError(T.status, T.data), requestId: C };
+    return {
+      ...classifyFeedbackError(T.status, T.data),
+      requestId,
+    };
   } catch (err) {
-    if (isCancel(err)) return { success: !1 };
+    if (isCancel(err))
+      return {
+        success: false,
+      };
     if (err instanceof RangeError)
-      return { success: !1, payloadTooLarge: !0, failureReason: "payload_too_large_range_error" };
-    if (isAxiosError(err) && err.code === "ECONNABORTED" && r > dDe / 8)
-      return { success: !1, payloadTooLarge: !0, failureReason: "payload_too_large_timeout" };
-    if (isExpectedApiError(err)) logForDebugging(redactSecrets_2(errorMessage(err)));
+      return {
+        success: false,
+        payloadTooLarge: true,
+        failureReason: "payload_too_large_range_error",
+      };
+    if (isAxiosError(err) && err.code === "ECONNABORTED" && r > MAX_PAYLOAD_PART_COUNT / 8)
+      return {
+        success: false,
+        payloadTooLarge: true,
+        failureReason: "payload_too_large_timeout",
+      };
+    if (isExpectedApiError(err)) logForDebugging(redactSecrets(errorMessage(err)));
     else redactError(err);
     if (isAxiosError(err) && err.response)
       return {
         ...classifyFeedbackError(err.response.status, err.response.data),
-        requestId: Vs(err.response.headers),
+        requestId: requestIdHeader(err.response.headers),
       };
     return {
-      success: !1,
+      success: false,
       failureReason: isAxiosError(err) && err.code === "ECONNABORTED" ? "timeout" : "network_error",
     };
   }
@@ -914,23 +1157,23 @@ function sanitizeAndLogError(err) {
     try {
       return err(...r);
     } catch (error) {
-      let { msg: msg, name: i, stack: stack } = describeThrownValue(error);
+      let { msg, name: i, stack } = describeThrownValue(error);
       throw createSealedError(msg, i, stack);
     }
   };
-  return (Object.setPrototypeOf(o, null), o);
+  Object.setPrototypeOf(o, null);
+  return o;
 }
 //@ chunk-hm0ce8vc.js:67174-67301 fingerprint = loadRawTranscriptJsonl (0.519)
 function loadRawTranscriptJsonl(e) {
-  let n = jsonStringify(e) ?? String(e),
-    byteLength = Buffer.byteLength(n, "utf8");
-  return byteLength <= 200 ? n : `${n.slice(0, 200)}\u2026 (+${byteLength - 200} bytes)`;
+  let n = jsonStringify(e) ?? String(e);
+  let r = Buffer.byteLength(n, "utf8");
+  return r <= 200 ? n : `${n.slice(0, 200)}\u2026 (+${r - 200} bytes)`;
 }
 //@ chunk-hwmsct5x.js:197534-197606 fingerprint = GITHUB_ISSUES_REPO_URL (0.432)
 function GITHUB_ISSUES_REPO_URL() {
   return "https://github.com/anthropics/claude-code/issues";
 }
-
 export {
   sanitizeAndLogError,
   createFeedbackStatusStore,

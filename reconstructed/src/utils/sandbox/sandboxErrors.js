@@ -16,17 +16,20 @@ import { logForDebugging } from "../debug.js";
 import { errorMessage, withTelemetryMessage, toError, getTelemetryMessage } from "../errors.js";
 
 //@ chunk-fq0cr76a.js:854253-854277 placement
-var Yae = new HostScoped(() => createSignal());
+var sandboxErrorSignalSlot = new HostScoped(() => createSignal());
 //@ chunk-fq0cr76a.js:854277-854316 placement
-function Zae() {
-  return Yae.of(getRootSession().host);
+function sandboxErrorSignal() {
+  return sandboxErrorSignalSlot.of(getRootSession().host);
 }
 //@ chunk-fq0cr76a.js:854316-854331 placement
-var _v = createLazySignal(Zae);
+/**
+ * sandboxErrorSignalLazy：沙箱错误的惰性信号。
+ */
+var sandboxErrorSignalLazy = createLazySignal(sandboxErrorSignal);
+//@ chunk-fq0cr76a.js:854331-857015 placement
 /**
  * 沙箱各类失败的遥测安全消息（无法包装命令、配置无法安装、清扫残留等）。
  */
-//@ chunk-fq0cr76a.js:854331-857015 placement
 var SANDBOX_TELEMETRY_MESSAGES = {
   commandNotWrapped: "sandbox: sandbox-runtime could not wrap a command",
   configChangeAtStartNotApplied: "sandbox: config change caught during initialize could not be applied",
@@ -64,15 +67,15 @@ var SANDBOX_TELEMETRY_MESSAGES = {
     "sandbox: post-command scrub moved aside an indicator it could not classify at config build",
 };
 //@ chunk-fq0cr76a.js:857015-857237 placement
-function reportSandboxErrorUnderStandIn(e, n) {
-  let r = SANDBOX_TELEMETRY_MESSAGES[n],
-    s = hM(e, r);
-  if (s !== void 0) {
+function reportSandboxErrorUnderStandIn(error, n) {
+  let r = SANDBOX_TELEMETRY_MESSAGES[n];
+  let s = isTelemetryMessageWrapped(error, r);
+  if (s !== undefined) {
     logError(s);
     return;
   }
   try {
-    logForDebugging(`[sandbox] reported under a stand-in error as "${r}": ${errorMessage(e)}`, {
+    logForDebugging(`[sandbox] reported under a stand-in error as "${r}": ${errorMessage(error)}`, {
       level: "error",
     });
   } catch {}
@@ -80,9 +83,9 @@ function reportSandboxErrorUnderStandIn(e, n) {
 }
 //@ chunk-fq0cr76a.js:857237-857397 placement
 function describeUnreadableSandboxError(e, n) {
-  let r = SANDBOX_TELEMETRY_MESSAGES[n],
-    s = hM(e, r);
-  if (s !== void 0) return s;
+  let r = SANDBOX_TELEMETRY_MESSAGES[n];
+  let s = isTelemetryMessageWrapped(e, r);
+  if (s !== undefined) return s;
   let h = "sandbox error (its message could not be read)";
   try {
     h = String(errorMessage(e));
@@ -90,14 +93,17 @@ function describeUnreadableSandboxError(e, n) {
   return withTelemetryMessage(toError(h), r);
 }
 //@ chunk-fq0cr76a.js:857397-857431 placement
-function pM(e) {
+/**
+ * reportSandboxTelemetryError：上报沙箱遥测错误。
+ */
+function reportSandboxTelemetryError(e) {
   reportSandboxErrorUnderStandIn(Error(SANDBOX_TELEMETRY_MESSAGES[e]), e);
 }
 //@ chunk-fq0cr76a.js:857431-857514 placement
-function hM(e, n) {
+function isTelemetryMessageWrapped(e, n) {
   try {
     let r = withTelemetryMessage(toError(e), n);
-    return getTelemetryMessage(r) === void 0 ? void 0 : r;
+    return getTelemetryMessage(r) === undefined ? undefined : r;
   } catch {
     return;
   }
@@ -105,8 +111,8 @@ function hM(e, n) {
 //@ chunk-fq0cr76a.js:903620-903734 placement
 class SandboxInitFailedError extends Error {
   telemetryMessage = SANDBOX_TELEMETRY_MESSAGES.initFailed;
-  constructor(e) {
-    super(e);
+  constructor(message) {
+    super(message);
     this.name = "SandboxInitFailedError";
   }
 }
@@ -121,22 +127,24 @@ class SandboxProtectionNotRenewedError extends Error {
 }
 //@ chunk-fq0cr76a.js:904265-904355 placement
 class SandboxBridgeUnavailableError extends Error {
-  constructor(e) {
-    super(e);
+  constructor(message) {
+    super(message);
     this.name = "SandboxBridgeUnavailableError";
   }
 }
 //@ chunk-67q125t6.js:191-234 placement
-var wZt = "Sandbox required but unavailable";
-
+/**
+ * SANDBOX_UNAVAILABLE_MESSAGE：需要沙箱但不可用的说明。
+ */
+var SANDBOX_UNAVAILABLE_MESSAGE = "Sandbox required but unavailable";
 export {
   reportSandboxErrorUnderStandIn,
-  wZt,
+  SANDBOX_UNAVAILABLE_MESSAGE,
   SANDBOX_TELEMETRY_MESSAGES,
-  _v,
+  sandboxErrorSignalLazy,
   describeUnreadableSandboxError,
   SandboxInitFailedError,
   SandboxBridgeUnavailableError,
-  pM,
+  reportSandboxTelemetryError,
   SandboxProtectionNotRenewedError,
 };

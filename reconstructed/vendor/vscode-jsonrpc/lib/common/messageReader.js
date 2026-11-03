@@ -6,184 +6,209 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { de } from "./ral.js";
-import { we } from "./is.js";
-import { _e } from "./events.js";
-import { vt } from "./semaphore.js";
+import { require_ral } from "./ral.js";
+import { require_is } from "./is.js";
+import { require_events } from "./events.js";
+import { require_semaphore } from "./semaphore.js";
 
 //@ chunk-t4ksmxzx.js:18920-22660 cjs-fingerprint
-var en = x(function (Xr) {
-  Object.defineProperty(Xr, "__esModule", { value: !0 });
-  Xr.ReadableStreamMessageReader = Xr.AbstractMessageReader = Xr.MessageReader = void 0;
-  var wt = de(),
-    ee = we(),
-    Pe = _e(),
-    Gr = vt(),
-    Qr;
-  (function (e) {
-    function r(n) {
-      let s = n;
+var require_messageReader = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.ReadableStreamMessageReader =
+    cjsExports.AbstractMessageReader =
+    cjsExports.MessageReader =
+      undefined;
+  var ral_1 = require_ral();
+  var Is = require_is();
+  var events_1 = require_events();
+  var semaphore_1 = require_semaphore();
+  var MessageReader;
+  (function (MessageReader) {
+    function is(value) {
+      let candidate = value;
       return (
-        s &&
-        ee.func(s.listen) &&
-        ee.func(s.dispose) &&
-        ee.func(s.onError) &&
-        ee.func(s.onClose) &&
-        ee.func(s.onPartialMessage)
+        candidate &&
+        Is.func(candidate.listen) &&
+        Is.func(candidate.dispose) &&
+        Is.func(candidate.onError) &&
+        Is.func(candidate.onClose) &&
+        Is.func(candidate.onPartialMessage)
       );
     }
-    e.is = r;
-  })(Qr || (Xr.MessageReader = Qr = {}));
-  class St {
+    MessageReader.is = is;
+  })(MessageReader || (cjsExports.MessageReader = MessageReader = {}));
+  class AbstractMessageReader {
     constructor() {
-      ((this.errorEmitter = new Pe.Emitter()),
-        (this.closeEmitter = new Pe.Emitter()),
-        (this.partialMessageEmitter = new Pe.Emitter()));
+      this.errorEmitter = new events_1.Emitter();
+      this.closeEmitter = new events_1.Emitter();
+      this.partialMessageEmitter = new events_1.Emitter();
     }
     dispose() {
-      (this.errorEmitter.dispose(), this.closeEmitter.dispose());
+      this.errorEmitter.dispose();
+      this.closeEmitter.dispose();
     }
     get onError() {
       return this.errorEmitter.event;
     }
-    fireError(e) {
-      this.errorEmitter.fire(this.asError(e));
+    fireError(error) {
+      this.errorEmitter.fire(this.asError(error));
     }
     get onClose() {
       return this.closeEmitter.event;
     }
     fireClose() {
-      this.closeEmitter.fire(void 0);
+      this.closeEmitter.fire(undefined);
     }
     get onPartialMessage() {
       return this.partialMessageEmitter.event;
     }
-    firePartialMessage(e) {
-      this.partialMessageEmitter.fire(e);
+    firePartialMessage(info) {
+      this.partialMessageEmitter.fire(info);
     }
-    asError(e) {
-      if (e instanceof Error) return e;
-      else return Error(`Reader received error. Reason: ${ee.string(e.message) ? e.message : "unknown"}`);
+    asError(error) {
+      if (error instanceof Error) return error;
+      else
+        return Error(
+          `Reader received error. Reason: ${Is.string(error.message) ? error.message : "unknown"}`,
+        );
     }
   }
-  Xr.AbstractMessageReader = St;
-  var _t;
-  (function (e) {
-    function r(n) {
-      let s,
-        c,
-        h,
-        P = new Map(),
-        _,
-        j = new Map();
-      if (n === void 0 || typeof n === "string") s = n ?? "utf-8";
+  cjsExports.AbstractMessageReader = AbstractMessageReader;
+  var ResolvedMessageReaderOptions;
+  (function (ResolvedMessageReaderOptions) {
+    function fromOptions(options) {
+      let charset;
+      let result;
+      let contentDecoder;
+      let contentDecoders = new Map();
+      let contentTypeDecoder;
+      let contentTypeDecoders = new Map();
+      if (options === undefined || typeof options === "string") charset = options ?? "utf-8";
       else {
-        if (((s = n.charset ?? "utf-8"), n.contentDecoder !== void 0))
-          ((h = n.contentDecoder), P.set(h.name, h));
-        if (n.contentDecoders !== void 0)
-          for (let contentDecoder of n.contentDecoders) P.set(contentDecoder.name, contentDecoder);
-        if (n.contentTypeDecoder !== void 0) ((_ = n.contentTypeDecoder), j.set(_.name, _));
-        if (n.contentTypeDecoders !== void 0)
-          for (let contentTypeDecoder of n.contentTypeDecoders)
-            j.set(contentTypeDecoder.name, contentTypeDecoder);
+        charset = options.charset ?? "utf-8";
+        if (options.contentDecoder !== undefined) {
+          contentDecoder = options.contentDecoder;
+          contentDecoders.set(contentDecoder.name, contentDecoder);
+        }
+        if (options.contentDecoders !== undefined)
+          for (let decoder of options.contentDecoders) contentDecoders.set(decoder.name, decoder);
+        if (options.contentTypeDecoder !== undefined) {
+          contentTypeDecoder = options.contentTypeDecoder;
+          contentTypeDecoders.set(contentTypeDecoder.name, contentTypeDecoder);
+        }
+        if (options.contentTypeDecoders !== undefined)
+          for (let decoder of options.contentTypeDecoders) contentTypeDecoders.set(decoder.name, decoder);
       }
-      if (_ === void 0) ((_ = (0, wt.default)().applicationJson.decoder), j.set(_.name, _));
+      if (contentTypeDecoder === undefined) {
+        contentTypeDecoder = (0, ral_1.default)().applicationJson.decoder;
+        contentTypeDecoders.set(contentTypeDecoder.name, contentTypeDecoder);
+      }
       return {
-        charset: s,
-        contentDecoder: h,
-        contentDecoders: P,
-        contentTypeDecoder: _,
-        contentTypeDecoders: j,
+        charset,
+        contentDecoder,
+        contentDecoders,
+        contentTypeDecoder,
+        contentTypeDecoders,
       };
     }
-    e.fromOptions = r;
-  })(_t || (_t = {}));
-  class Yr extends St {
-    constructor(e, r) {
+    ResolvedMessageReaderOptions.fromOptions = fromOptions;
+  })(ResolvedMessageReaderOptions || (ResolvedMessageReaderOptions = {}));
+  class ReadableStreamMessageReader extends AbstractMessageReader {
+    constructor(readable, options) {
       super();
-      ((this.readable = e),
-        (this.options = _t.fromOptions(r)),
-        (this.buffer = (0, wt.default)().messageBuffer.create(this.options.charset)),
-        (this._partialMessageTimeout = 1e4),
-        (this.nextMessageLength = -1),
-        (this.messageToken = 0),
-        (this.readSemaphore = new Gr.Semaphore(1)));
+      this.readable = readable;
+      this.options = ResolvedMessageReaderOptions.fromOptions(options);
+      this.buffer = (0, ral_1.default)().messageBuffer.create(this.options.charset);
+      this._partialMessageTimeout = 1e4;
+      this.nextMessageLength = -1;
+      this.messageToken = 0;
+      this.readSemaphore = new semaphore_1.Semaphore(1);
     }
-    set partialMessageTimeout(e) {
-      this._partialMessageTimeout = e;
+    set partialMessageTimeout(timeout) {
+      this._partialMessageTimeout = timeout;
     }
     get partialMessageTimeout() {
       return this._partialMessageTimeout;
     }
-    listen(e) {
-      ((this.nextMessageLength = -1),
-        (this.messageToken = 0),
-        (this.partialMessageTimer = void 0),
-        (this.callback = e));
-      let onData = this.readable.onData((n) => {
-        this.onData(n);
+    listen(callback) {
+      this.nextMessageLength = -1;
+      this.messageToken = 0;
+      this.partialMessageTimer = undefined;
+      this.callback = callback;
+      let result = this.readable.onData((data) => {
+        this.onData(data);
       });
-      return (
-        this.readable.onError((n) => this.fireError(n)),
-        this.readable.onClose(() => this.fireClose()),
-        onData
-      );
+      this.readable.onError((error) => this.fireError(error));
+      this.readable.onClose(() => this.fireClose());
+      return result;
     }
-    onData(e) {
+    onData(data) {
       try {
-        this.buffer.append(e);
-        while (!0) {
+        this.buffer.append(data);
+        while (true) {
           if (this.nextMessageLength === -1) {
-            let tryReadHeaders = this.buffer.tryReadHeaders(!0);
-            if (!tryReadHeaders) return;
-            let s = tryReadHeaders.get("content-length");
-            if (!s) {
+            let headers = this.buffer.tryReadHeaders(true);
+            if (!headers) return;
+            let contentLength = headers.get("content-length");
+            if (!contentLength) {
               this.fireError(
                 Error(`Header must provide a Content-Length property.
-${JSON.stringify(Object.fromEntries(tryReadHeaders))}`),
+${JSON.stringify(Object.fromEntries(headers))}`),
               );
               return;
             }
-            let c = parseInt(s);
-            if (isNaN(c)) {
-              this.fireError(Error(`Content-Length value must be a number. Got ${s}`));
+            let length = parseInt(contentLength);
+            if (isNaN(length)) {
+              this.fireError(Error(`Content-Length value must be a number. Got ${contentLength}`));
               return;
             }
-            this.nextMessageLength = c;
+            this.nextMessageLength = length;
           }
-          let tryReadBody = this.buffer.tryReadBody(this.nextMessageLength);
-          if (tryReadBody === void 0) {
+          let body = this.buffer.tryReadBody(this.nextMessageLength);
+          if (body === undefined) {
             this.setPartialMessageTimer();
             return;
           }
-          (this.clearPartialMessageTimer(),
-            (this.nextMessageLength = -1),
-            this.readSemaphore
-              .lock(async () => {
-                let n =
-                    this.options.contentDecoder !== void 0
-                      ? await this.options.contentDecoder.decode(tryReadBody)
-                      : tryReadBody,
-                  decode = await this.options.contentTypeDecoder.decode(n, this.options);
-                this.callback(decode);
-              })
-              .catch((n) => {
-                this.fireError(n);
-              }));
+          this.clearPartialMessageTimer();
+          this.nextMessageLength = -1;
+          this.readSemaphore
+            .lock(async () => {
+              let bytes =
+                this.options.contentDecoder !== undefined
+                  ? await this.options.contentDecoder.decode(body)
+                  : body;
+              let message = await this.options.contentTypeDecoder.decode(bytes, this.options);
+              this.callback(message);
+            })
+            .catch((error) => {
+              this.fireError(error);
+            });
         }
       } catch (error) {
         this.fireError(error);
       }
     }
     clearPartialMessageTimer() {
-      if (this.partialMessageTimer) (this.partialMessageTimer.dispose(), (this.partialMessageTimer = void 0));
+      if (this.partialMessageTimer) {
+        this.partialMessageTimer.dispose();
+        this.partialMessageTimer = undefined;
+      }
     }
     setPartialMessageTimer() {
-      if ((this.clearPartialMessageTimer(), this._partialMessageTimeout <= 0)) return;
-      this.partialMessageTimer = (0, wt.default)().timer.setTimeout(
-        (e, r) => {
-          if (((this.partialMessageTimer = void 0), e === this.messageToken))
-            (this.firePartialMessage({ messageToken: e, waitingTime: r }), this.setPartialMessageTimer());
+      this.clearPartialMessageTimer();
+      if (this._partialMessageTimeout <= 0) return;
+      this.partialMessageTimer = (0, ral_1.default)().timer.setTimeout(
+        (token, timeout) => {
+          this.partialMessageTimer = undefined;
+          if (token === this.messageToken) {
+            this.firePartialMessage({
+              messageToken: token,
+              waitingTime: timeout,
+            });
+            this.setPartialMessageTimer();
+          }
         },
         this._partialMessageTimeout,
         this.messageToken,
@@ -191,7 +216,6 @@ ${JSON.stringify(Object.fromEntries(tryReadHeaders))}`),
       );
     }
   }
-  Xr.ReadableStreamMessageReader = Yr;
+  cjsExports.ReadableStreamMessageReader = ReadableStreamMessageReader;
 });
-
-export { en };
+export { require_messageReader };

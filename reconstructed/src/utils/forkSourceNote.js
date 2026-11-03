@@ -11,13 +11,13 @@
 import { basename } from "path";
 import { getSleepPreventer } from "../services/preventSleep.js";
 import { Re } from "../../runtime/bun-runtime.js";
-import { Vy } from "../../vendor/semver/index.js";
+import { require_semver_3 } from "../../vendor/semver/index.js";
 import { isCrossSessionMessagingEnabled } from "./crossSessionMessagingGate.js";
 import { FORK_SOURCE } from "../constants/xml.js";
-import { mo } from "../tasks/resumeOrphanedTasks.js";
+import { hasQueuedCommandMentioning } from "../tasks/resumeOrphanedTasks.js";
 import { findLivePeerBySessionId } from "./udsMessaging/udsClient.js";
 import { logFeatureSad, logFeatureOk } from "../services/analytics/featureTelemetry.js";
-import { Hb } from "./swarm/teammateIds.js";
+import { clipTeammateText } from "./swarm/teammateIds.js";
 import { escapeXml_2 as escapeXml } from "./confusables.js";
 import { LISTAGENTS } from "../tools/SendMessageTool/listAgents.js";
 import { enqueuePendingNotification } from "./messageQueueManager.js";
@@ -27,64 +27,76 @@ import { mainAgentId } from "../bootstrap/state.js";
 import { getUserMessageText } from "./messages.js";
 
 //@ chunk-0sfjpx19.js:49898-49928 placement
-function oen() {
+/**
+ * 获取系统休眠阻止器（acquire）。
+ */
+function acquireSleepPreventer() {
   getSleepPreventer().acquire();
 }
 //@ chunk-0sfjpx19.js:49928-49958 placement
-function sen() {
+/**
+ * 释放系统休眠阻止器。
+ */
+function releaseSleepPreventer() {
   getSleepPreventer().release();
 }
 //@ chunk-0sfjpx19.js:49958-49997 placement
-function DAs() {
+/**
+ * 判断是否正持有休眠阻止器。
+ */
+function isSleepPreventerHeld() {
   return getSleepPreventer().isHolding();
 }
 //@ chunk-0sfjpx19.js:49997-50015 placement
-var lt = Re(Vy(), 1);
+/**
+ * fs/promises 模块引用。
+ */
+var fsPromises = Re(require_semver_3(), 1);
+//@ chunk-0sfjpx19.js:50096-51143 placement
 /**
  * 向 fork 会话注入 fork_source_note：说明共享历史截止时间及如何联系源会话。
  */
-//@ chunk-0sfjpx19.js:50096-51143 placement
-async function appendForkSourceNote(e, n, r) {
+async function appendForkSourceNote(e, parentSessionId, boundaryAt) {
   if (isCrossSessionMessagingEnabled()) {
-    let s = `<${FORK_SOURCE}>`;
-    if (e.some((T) => messageContainsText(T, s)) || mo(s)) return;
-    let parse = Date.parse(r);
-    if (Number.isNaN(parse)) return;
-    let iso = new Date(parse).toISOString(),
-      _ = await findLivePeerBySessionId(n);
-    if (_ === null) {
+    let text = `<${FORK_SOURCE}>`;
+    if (e.some((T) => messageContainsText(T, text)) || hasQueuedCommandMentioning(text)) return;
+    let timestamp = Date.parse(boundaryAt);
+    if (Number.isNaN(timestamp)) return;
+    let iso = new Date(timestamp).toISOString();
+    let livePeerBySessionId = await findLivePeerBySessionId(parentSessionId);
+    if (livePeerBySessionId === null) {
       logFeatureSad("fork_source_note", "parent_gone");
       return;
     }
-    let b = Hb(_.name || basename(_.cwd)),
-      k = b && b !== "?" ? b : null,
-      w = k
-        ? `a session whose self-reported name is '${escapeXml(k)}'`
-        : "a session that was untitled when this note was written",
-      S = k
-        ? `find it in the ${LISTAGENTS} listing under that name (it may have been renamed since)`
-        : `find it in the ${LISTAGENTS} listing`;
-    if (mo(s)) return;
-    (logFeatureOk("fork_source_note"),
-      enqueuePendingNotification({
-        value: formatTaskNotification({
-          body: `
+    let b = clipTeammateText(livePeerBySessionId.name || basename(livePeerBySessionId.cwd));
+    let k = b && b !== "?" ? b : null;
+    let w = k
+      ? `a session whose self-reported name is '${escapeXml(k)}'`
+      : "a session that was untitled when this note was written";
+    let S = k
+      ? `find it in the ${LISTAGENTS} listing under that name (it may have been renamed since)`
+      : `find it in the ${LISTAGENTS} listing`;
+    if (hasQueuedCommandMentioning(text)) return;
+    logFeatureOk("fork_source_note");
+    enqueuePendingNotification({
+      value: formatTaskNotification({
+        body: `
 <${FORK_SOURCE}>
 This session began as a fork (copy) of another session that is still running: ${w}. The conversation up to ${iso} is shared history with it; the two sessions have since diverged, and neither sees the other's new activity. To coordinate with it \u2014 hand results back, ask what it has done since, avoid duplicating its work \u2014 ${S} and message it with ${SENDMESSAGE}.
 </${FORK_SOURCE}>`,
-        }),
-        agentId: mainAgentId(),
-        mode: "task-notification",
-        skipAttachments: !0,
-        priority: "next",
-        shouldQuery: !1,
-      }));
+      }),
+      agentId: mainAgentId(),
+      mode: "task-notification",
+      skipAttachments: true,
+      priority: "next",
+      shouldQuery: false,
+    });
   }
 }
+//@ chunk-0sfjpx19.js:51143-51318 placement = buildTranscriptEntries (0.777)
 /**
  * 判断消息（或 queued_command 附件的 prompt）是否包含指定文本。旧版名 buildTranscriptEntries 误配。
  */
-//@ chunk-0sfjpx19.js:51143-51318 placement = buildTranscriptEntries (0.777)
 function messageContainsText(message, text) {
   if (message.type === "attachment") {
     let attachment = message.attachment;
@@ -94,7 +106,12 @@ function messageContainsText(message, text) {
       attachment.prompt.includes(text)
     );
   }
-  return getUserMessageText(message)?.includes(text) ?? !1;
+  return getUserMessageText(message)?.includes(text) ?? false;
 }
-
-export { appendForkSourceNote, lt, sen, oen, DAs };
+export {
+  appendForkSourceNote,
+  fsPromises,
+  releaseSleepPreventer,
+  acquireSleepPreventer,
+  isSleepPreventerHeld,
+};

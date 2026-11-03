@@ -22,33 +22,37 @@ class ControlRequestTimeoutError extends Error {
 //@ chunk-6vnxsn99.js:21749-21868 placement
 class ControlRequestNotDeliveredError extends Error {
   subtype;
-  constructor(e) {
+  constructor(subtype) {
     super("Request was not delivered to the cloud session");
-    this.subtype = e;
+    this.subtype = subtype;
   }
 }
 //@ chunk-6vnxsn99.js:21868-22265 placement
-function classifyControlRequestError(e) {
-  if (e instanceof AbortError) return "aborted";
-  if (e instanceof ControlRequestTimeoutError) return "timeout";
-  if (e instanceof ControlRequestNotDeliveredError) return "not_delivered";
+function classifyControlRequestError(error) {
+  if (error instanceof AbortError) return "aborted";
+  if (error instanceof ControlRequestTimeoutError) return "timeout";
+  if (error instanceof ControlRequestNotDeliveredError) return "not_delivered";
   if (
-    e instanceof Error &&
-    (e.message.endsWith("Disconnected") || e.message.endsWith("Connection to remote lost"))
+    error instanceof Error &&
+    (error.message.endsWith("Disconnected") || error.message.endsWith("Connection to remote lost"))
   )
     return "disconnected";
-  if (e instanceof Error && (e.message.endsWith("not connected") || e.message.includes("Cannot send:")))
+  if (
+    error instanceof Error &&
+    (error.message.endsWith("not connected") || error.message.includes("Cannot send:"))
+  )
     return "not_connected";
   return "server_error";
 }
+//@ chunk-6vnxsn99.js:22265-22391 placement = abortSpeculation (0.378)
 /**
  * 执行异步函数并记成功/中止/失败遥测。旧版名 abortSpeculation 为错配。
  */
-//@ chunk-6vnxsn99.js:22265-22391 placement = abortSpeculation (0.378)
 async function withOutcomeTelemetry(e, n) {
   try {
     let r = await n();
-    return (logFeatureOk(e), r);
+    logFeatureOk(e);
+    return r;
   } catch (error) {
     if (error instanceof AbortError) logFeatureSad(e, "aborted");
     else logFeatureBad(e, classifyControlRequestError(error));
@@ -56,15 +60,14 @@ async function withOutcomeTelemetry(e, n) {
   }
 }
 //@ chunk-6vnxsn99.js:22391-22659 placement
-function controlResponseError(e) {
-  if (e.subtype === "error" && typeof e.error === "string") return Error(e.error);
+function controlResponseError(response) {
+  if (response.subtype === "error" && typeof response.error === "string") return Error(response.error);
   let n =
-    e.subtype === "error"
+    response.subtype === "error"
       ? "non-string error"
-      : `subtype ${typeof e.subtype === "string" ? "unrecognized" : typeof e.subtype}`;
+      : `subtype ${typeof response.subtype === "string" ? "unrecognized" : typeof response.subtype}`;
   return Error(`Malformed control_response from worker (${n})`);
 }
-
 export {
   controlResponseError,
   withOutcomeTelemetry,

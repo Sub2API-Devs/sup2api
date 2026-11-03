@@ -6,15 +6,14 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { Tn } from "./forge.js";
-import { AS } from "./mgf1.js";
+import { require_forge } from "./forge.js";
+import { require_mgf1 } from "./mgf1.js";
 
 //@ chunk-fq0cr76a.js:158596-158690 cjs-fingerprint
-var EA = x(function (kfe, SA) {
-  var rm = Tn();
-  AS();
-  SA.exports = rm.mgf = rm.mgf || {};
-  rm.mgf.mgf1 = rm.mgf1;
+var require_mgf = x(function (cjsExports, cjsModule) {
+  var forge = require_forge();
+  require_mgf1();
+  cjsModule.exports = forge.mgf = forge.mgf || {};
+  forge.mgf.mgf1 = forge.mgf1;
 });
-
-export { EA };
+export { require_mgf };

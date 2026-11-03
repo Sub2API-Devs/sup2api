@@ -10,10 +10,10 @@
  */
 import { InkEvent } from "./event.js";
 
+//@ chunk-bzr73sfg.js:190017-190998 fingerprint = TerminalEvent (0.981)
 /**
  * 终端 DOM 事件基类：type、时间戳、bubbles/cancelable、target/currentTarget/eventPhase，stopPropagation/stopImmediatePropagation/preventDefault，consume()=两者都做。
  */
-//@ chunk-bzr73sfg.js:190017-190998 fingerprint = TerminalEvent (0.981)
 class TerminalEvent extends InkEvent {
   type;
   timeStamp;
@@ -22,14 +22,14 @@ class TerminalEvent extends InkEvent {
   _target = null;
   _currentTarget = null;
   _eventPhase = "none";
-  _propagationStopped = !1;
-  _defaultPrevented = !1;
-  constructor(n, u) {
+  _propagationStopped = false;
+  _defaultPrevented = false;
+  constructor(type, init) {
     super();
-    ((this.type = n),
-      (this.timeStamp = performance.now()),
-      (this.bubbles = u?.bubbles ?? !0),
-      (this.cancelable = u?.cancelable ?? !0));
+    this.type = type;
+    this.timeStamp = performance.now();
+    this.bubbles = init?.bubbles ?? true;
+    this.cancelable = init?.cancelable ?? true;
   }
   get target() {
     return this._target;
@@ -44,25 +44,27 @@ class TerminalEvent extends InkEvent {
     return this._defaultPrevented;
   }
   stopPropagation() {
-    this._propagationStopped = !0;
+    this._propagationStopped = true;
   }
   stopImmediatePropagation() {
-    (super.stopImmediatePropagation(), (this._propagationStopped = !0));
+    super.stopImmediatePropagation();
+    this._propagationStopped = true;
   }
   preventDefault() {
-    if (this.cancelable) this._defaultPrevented = !0;
+    if (this.cancelable) this._defaultPrevented = true;
   }
   consume() {
-    (this.preventDefault(), this.stopImmediatePropagation());
+    this.preventDefault();
+    this.stopImmediatePropagation();
   }
-  _setTarget(n) {
-    this._target = n;
+  _setTarget(target) {
+    this._target = target;
   }
-  _setCurrentTarget(n) {
-    this._currentTarget = n;
+  _setCurrentTarget(target) {
+    this._currentTarget = target;
   }
-  _setEventPhase(n) {
-    this._eventPhase = n;
+  _setEventPhase(phase) {
+    this._eventPhase = phase;
   }
   _isPropagationStopped() {
     return this._propagationStopped;
@@ -70,7 +72,6 @@ class TerminalEvent extends InkEvent {
   _isImmediatePropagationStopped() {
     return this.didStopImmediatePropagation();
   }
-  _prepareForTarget(n) {}
+  _prepareForTarget(_target) {}
 }
-
 export { TerminalEvent };

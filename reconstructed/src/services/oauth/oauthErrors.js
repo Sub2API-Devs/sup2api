@@ -10,111 +10,155 @@
  */
 import { getOauthConfig } from "../../constants/oauth.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, U, T, oe } from "../../../vendor/zod/v4/classic/schemas.js";
+import { u, _enum, literal, unknown } from "../../../vendor/zod/v4/classic/schemas.js";
 import { jsonParse } from "../../utils/slowOperations.js";
 
 //@ chunk-640x3zn9.js:575-625 placement
-var UJt = /https?:\/\/[^\s"'<>\\\u2026\x00-\x1f]+/g;
+/**
+ * 匹配文本里 URL 的正则。
+ */
+var URL_IN_TEXT_RE = /https?:\/\/[^\s"'<>\\\u2026\x00-\x1f]+/g;
 //@ chunk-640x3zn9.js:625-696 placement
-function x(e) {
+/**
+ * 判断字符串整体是否为 http(s) URL。
+ */
+function isUrlString(e) {
   return /^https?:\/\/[^\s"'<>\\\u2026\x00-\x1f]+$/.test(e);
 }
 //@ chunk-640x3zn9.js:696-728 placement
-var q = { ")": "(", "]": "[", "}": "{" };
+/**
+ * 括号闭合符到开括号的映射。
+ */
+var CLOSING_TO_OPENING = {
+  ")": "(",
+  "]": "[",
+  "}": "{",
+};
 //@ chunk-640x3zn9.js:728-951 placement
 function trimTrailingPunctuation(e) {
   while (e.length > 0) {
-    let at = e.at(-1);
-    if (".,;:!?".includes(at)) {
+    let last = e.at(-1);
+    if (".,;:!?".includes(last)) {
       e = e.slice(0, -1);
       continue;
     }
-    let r = q[at];
+    let r = CLOSING_TO_OPENING[last];
     if (!r) break;
-    let s = 0,
-      c = 0;
+    let s = 0;
+    let c = 0;
     for (let a of e)
       if (a === r) s++;
-      else if (a === at) c++;
+      else if (a === last) c++;
     if (c > s) e = e.slice(0, -1);
     else break;
   }
   return e;
 }
 //@ chunk-640x3zn9.js:951-1020 placement
-function Bgs(e) {
-  for (let n of e.matchAll(UJt)) return trimTrailingPunctuation(n[0]);
+/**
+ * 取文本里第一个 URL 并去掉尾部标点。
+ */
+function firstUrlInText(e) {
+  for (let n of e.matchAll(URL_IN_TEXT_RE)) return trimTrailingPunctuation(n[0]);
   return;
 }
 //@ chunk-640x3zn9.js:1020-1048 placement
 var TENGU_LIVELY_BEAVER = "tengu_lively_beaver";
 //@ chunk-640x3zn9.js:1048-1122 placement
-class v {
+/**
+ * 持有“错误读取器”实现的容器。
+ */
+class ReaderHolder {
   reader = null;
-  register(e) {
-    let reader = this.reader;
-    return ((this.reader = e), reader);
+  register(reader) {
+    let reader_2 = this.reader;
+    this.reader = reader;
+    return reader_2;
   }
 }
 //@ chunk-640x3zn9.js:1122-1134 placement
-var N = new v();
+/**
+ * 全局的错误读取器持有者。
+ */
+var readerHolder = new ReaderHolder();
 //@ chunk-640x3zn9.js:1134-1171 placement
-function iIi(e) {
-  return N.register(e);
+/**
+ * 注册错误读取器。
+ */
+function registerErrorReader(getFeatureValue_CACHED_MAY_BE_STALE) {
+  return readerHolder.register(getFeatureValue_CACHED_MAY_BE_STALE);
 }
 //@ chunk-640x3zn9.js:1171-1256 placement
-function BJt() {
-  let reader = N.reader;
-  if (!reader) return !1;
+/**
+ * 受限链接功能是否开启（读 tengu_lively_beaver）。
+ */
+function isRestrictedLinksEnabled() {
+  let reader = readerHolder.reader;
+  if (!reader) return false;
   try {
-    return reader(TENGU_LIVELY_BEAVER, !1) === !0;
+    return reader(TENGU_LIVELY_BEAVER, false) === true;
   } catch {
-    return !1;
+    return false;
   }
 }
 //@ chunk-640x3zn9.js:1256-1397 placement
-var ACCOUNT_ON_HOLD = "account_on_hold",
-  HTTPS_CLAUDE_AI_RESTRICTED = "https://claude.ai/restricted",
-  y = "Your account is on hold and can't use Claude Code. View details or appeal: ";
+/**
+ * 账号冻结提示的前缀。
+ */
+var ACCOUNT_ON_HOLD = "account_on_hold";
+var HTTPS_CLAUDE_AI_RESTRICTED = "https://claude.ai/restricted";
+var ON_HOLD_PREFIX = "Your account is on hold and can't use Claude Code. View details or appeal: ";
 //@ chunk-640x3zn9.js:1397-1430 placement
-function jgs(e) {
-  return `${y}${e}`;
+/**
+ * 拼出带详情地址的冻结提示。
+ */
+function withOnHoldDetails(e) {
+  return `${ON_HOLD_PREFIX}${e}`;
 }
 //@ chunk-640x3zn9.js:1430-1541 placement
 function formatAccountOnHoldSignInError(e) {
   return `Your account is on hold and can't sign in to Claude Code. View details or appeal: ${e}`;
 }
 //@ chunk-640x3zn9.js:1541-1557 placement
-var Te = jgs(HTTPS_CLAUDE_AI_RESTRICTED);
+/**
+ * 默认的受限说明地址。
+ */
+var DEFAULT_RESTRICTED_URL = withOnHoldDetails(HTTPS_CLAUDE_AI_RESTRICTED);
+//@ chunk-640x3zn9.js:1557-1658 placement
 /**
  * 判断链接是否为指向 claude.ai 的站内链接。
  */
-//@ chunk-640x3zn9.js:1557-1658 placement
-function isClaudeAiOriginLink(e) {
-  if (!BJt() || !e.startsWith(y)) return !1;
-  let sliced = e.slice(y.length);
-  return x(sliced) && isClaudeAiOrigin(sliced) === sliced;
+function isClaudeAiOriginLink(text) {
+  if (!isRestrictedLinksEnabled() || !text.startsWith(ON_HOLD_PREFIX)) return false;
+  let sliced = text.slice(ON_HOLD_PREFIX.length);
+  return isUrlString(sliced) && isClaudeAiOrigin(sliced) === sliced;
 }
 //@ chunk-640x3zn9.js:1658-1752 placement
-var S = 2048,
-  Z = /^https:\/\/[a-z0-9.-]+\/[A-Za-z0-9/._~%-]*(?:\?[A-Za-z0-9._~%=&-]*)?(?<![.?])$/;
+/**
+ * 安全站内链接的正则。
+ */
+var MAX_LINK_CHARS = 2048;
+var SAFE_LINK_RE = /^https:\/\/[a-z0-9.-]+\/[A-Za-z0-9/._~%-]*(?:\?[A-Za-z0-9._~%=&-]*)?(?<![.?])$/;
 //@ chunk-640x3zn9.js:1752-1835 placement
-function Q(e) {
+/**
+ * 判断 URL 是否就是 claude.ai 的 origin。
+ */
+function isClaudeAiOriginUrl(origin) {
   try {
-    return e === new URL(getOauthConfig().CLAUDE_AI_ORIGIN).origin;
+    return origin === new URL(getOauthConfig().CLAUDE_AI_ORIGIN).origin;
   } catch {
-    return !1;
+    return false;
   }
 }
+//@ chunk-640x3zn9.js:1835-2189 placement
 /**
  * 判断 URL 是否为 https 的 claude.ai / anthropic.com 来源。
  */
-//@ chunk-640x3zn9.js:1835-2189 placement
-function isClaudeAiOrigin(e) {
-  if (typeof e !== "string" || e.length > S) return HTTPS_CLAUDE_AI_RESTRICTED;
+function isClaudeAiOrigin(errorUri) {
+  if (typeof errorUri !== "string" || errorUri.length > MAX_LINK_CHARS) return HTTPS_CLAUDE_AI_RESTRICTED;
   let n;
   try {
-    n = new URL(e);
+    n = new URL(errorUri);
   } catch {
     return HTTPS_CLAUDE_AI_RESTRICTED;
   }
@@ -125,23 +169,23 @@ function isClaudeAiOrigin(e) {
     hostname.endsWith(".claude.ai") ||
     hostname === "anthropic.com" ||
     hostname.endsWith(".anthropic.com") ||
-    Q(n.origin)) &&
-    n.href.length <= S &&
-    Z.test(n.href)
+    isClaudeAiOriginUrl(n.origin)) &&
+    n.href.length <= MAX_LINK_CHARS &&
+    SAFE_LINK_RE.test(n.href)
     ? n.href
     : HTTPS_CLAUDE_AI_RESTRICTED;
 }
 //@ chunk-640x3zn9.js:2189-2302 placement
 var OAUTH_DENIAL_ERRORS = DoctorLazy(() =>
   u({
-    error: U(["invalid_grant", "access_denied"]),
-    error_description: T(ACCOUNT_ON_HOLD),
-    error_uri: oe().optional(),
+    error: _enum(["invalid_grant", "access_denied"]),
+    error_description: literal(ACCOUNT_ON_HOLD),
+    error_uri: unknown().optional(),
   }),
 );
 //@ chunk-640x3zn9.js:2302-2509 placement
 function classifyOAuthErrorResponse(e) {
-  if (!BJt()) return null;
+  if (!isRestrictedLinksEnabled()) return null;
   let n = e;
   if (typeof n === "string") {
     if (!n.includes(ACCOUNT_ON_HOLD)) return null;
@@ -151,15 +195,19 @@ function classifyOAuthErrorResponse(e) {
       return null;
     }
   }
-  let safeParse = OAUTH_DENIAL_ERRORS().safeParse(n);
-  return safeParse.success ? { url: isClaudeAiOrigin(safeParse.data.error_uri) } : null;
+  let r = OAUTH_DENIAL_ERRORS().safeParse(n);
+  return r.success
+    ? {
+        url: isClaudeAiOrigin(r.data.error_uri),
+      }
+    : null;
 }
 //@ chunk-640x3zn9.js:2509-2634 placement
 class OAuthAccountOnHoldError extends Error {
   url;
-  constructor(e) {
+  constructor(url) {
     super("OAuth account is on hold");
-    this.url = e;
+    this.url = url;
     this.name = "OAuthAccountOnHoldError";
   }
 }
@@ -169,33 +217,33 @@ class OAuthCallbackError extends Error {
   errorDescription;
   errorUri;
   displayMessage;
-  constructor(e, n, r) {
+  constructor(e, n, errorUri) {
     super("OAuth authorization was denied or failed");
     this.error = e;
     this.errorDescription = n;
-    this.errorUri = r;
-    ((this.name = "OAuthCallbackError"), (this.displayMessage = n ? `${e}: ${n}` : e));
+    this.errorUri = errorUri;
+    this.name = "OAuthCallbackError";
+    this.displayMessage = n ? `${e}: ${n}` : e;
   }
 }
 //@ chunk-640x3zn9.js:2896-2962 placement
 function isOAuthCallbackError(e) {
   return e instanceof OAuthCallbackError && e.errorDescription === ACCOUNT_ON_HOLD;
 }
-
 export {
-  UJt,
+  URL_IN_TEXT_RE,
   trimTrailingPunctuation,
-  Bgs,
+  firstUrlInText,
   OAuthCallbackError,
-  BJt,
+  isRestrictedLinksEnabled,
   classifyOAuthErrorResponse,
   isOAuthCallbackError,
   formatAccountOnHoldSignInError,
   isClaudeAiOrigin,
   OAuthAccountOnHoldError,
-  jgs,
+  withOnHoldDetails,
   HTTPS_CLAUDE_AI_RESTRICTED,
   ACCOUNT_ON_HOLD,
-  iIi,
+  registerErrorReader,
   isClaudeAiOriginLink,
 };

@@ -6,42 +6,68 @@
  * attribution: esm-fingerprint 17, placement 5, esm-layout 5, layout 28
  */
 import { Re } from "../../../../runtime/bun-runtime.js";
-import { Rx } from "../../core/dist-cjs/index.js";
-import { Hme } from "../../util-user-agent-node/dist-cjs/index.js";
-import { dR } from "../../../@smithy/core/dist-cjs/submodules/config/index.native.js";
-import { EE } from "../../../@smithy/core/dist-cjs/index.js";
+import { require_core as require_core_2 } from "../../core/dist-cjs/index.js";
+import { require_util_user_agent_node } from "../../util-user-agent-node/dist-cjs/index.js";
+import { require_index_native } from "../../../@smithy/core/dist-cjs/submodules/config/index.native.js";
+import { require_core } from "../../../@smithy/core/dist-cjs/index.js";
 import { Nme, $me } from "../../../unresolved-cjs/index.js";
-import { dG } from "../../../@smithy/core/dist-cjs/submodules/retry/index.js";
-import { wD } from "../../../@smithy/node-config-provider/dist-cjs/index.js";
-import { E$ } from "../../../@smithy/node-http-handler/dist-cjs/index.js";
-import { Mae } from "../../../@smithy/core/dist-cjs/submodules/retry/index.browser.js";
-import { Fme } from "../../core/dist-cjs/submodules/protocols/index.js";
-import { ff } from "../../../@smithy/core/dist-cjs/submodules/client/index.js";
-import { P4 } from "../../../@smithy/url-parser/dist-cjs/index.js";
+import { require_retry } from "../../../@smithy/core/dist-cjs/submodules/retry/index.js";
+import { require_node_config_provider } from "../../../@smithy/node-config-provider/dist-cjs/index.js";
+import { require_node_http_handler } from "../../../@smithy/node-http-handler/dist-cjs/index.js";
+import { require_index_browser as require_index_browser_2 } from "../../../@smithy/core/dist-cjs/submodules/retry/index.browser.js";
+import { require_protocols } from "../../core/dist-cjs/submodules/protocols/index.js";
+import { require_client } from "../../../@smithy/core/dist-cjs/submodules/client/index.js";
+import { require_url_parser } from "../../../@smithy/url-parser/dist-cjs/index.js";
 import { base64Module } from "../../credential-provider-web-identity/dist-cjs/index.js";
-import { IR } from "../../../@smithy/util-utf8/dist-cjs/index.js";
-import { Iae } from "../../util-endpoints/dist-cjs/index.js";
-import { YJ } from "../../../@smithy/core/dist-cjs/submodules/endpoints/index.browser.js";
-import { Dae } from "../../region-config-resolver/dist-cjs/index.js";
-import { Kg } from "../../../@smithy/protocol-http/dist-cjs/index.js";
-import { he, S, I, De, D, Ge, O, Se, Ie, Ee, ye, m, U } from "./auth/httpAuthSchemeProvider.js";
-import { ve } from "./runtimeConfig.js";
-import { _D } from "../../../@smithy/core/dist-cjs/submodules/schema/index.js";
-import { pK } from "../../../@smithy/middleware-endpoint/dist-cjs/index.js";
+import { require_util_utf8 } from "../../../@smithy/util-utf8/dist-cjs/index.js";
+import { require_util_endpoints } from "../../util-endpoints/dist-cjs/index.js";
+import { require_index_browser } from "../../../@smithy/core/dist-cjs/submodules/endpoints/index.browser.js";
+import { require_region_config_resolver } from "../../region-config-resolver/dist-cjs/index.js";
+import { require_protocol_http } from "../../../@smithy/protocol-http/dist-cjs/index.js";
+import {
+  import_client,
+  import_middleware_user_agent,
+  import_retry,
+  import_index_native,
+  import_middleware_host_header,
+  import_middleware_endpoint,
+  resolveHttpAuthSchemeConfig,
+  import_schema,
+  import_middleware_host_header_2,
+  import_middleware_logger,
+  import_middleware_recursion_detection,
+  import_core,
+  defaultBedrockHttpAuthSchemeParametersProvider,
+} from "./auth/httpAuthSchemeProvider.js";
+import { getRuntimeConfig_2 } from "./runtimeConfig.js";
+import { require_schema } from "../../../@smithy/core/dist-cjs/submodules/schema/index.js";
+import { require_middleware_endpoint } from "../../../@smithy/middleware-endpoint/dist-cjs/index.js";
 
 //@ chunk-0dmzgg46.js:1886-2245 esm-fingerprint
-var j = (e) =>
-    Object.assign(e, {
-      useDualstackEndpoint: e.useDualstackEndpoint ?? !1,
-      useFipsEndpoint: e.useFipsEndpoint ?? !1,
-      defaultSigningName: "bedrock",
-    }),
-  M = {
-    UseFIPS: { type: "builtInParams", name: "useFipsEndpoint" },
-    Endpoint: { type: "builtInParams", name: "endpoint" },
-    Region: { type: "builtInParams", name: "region" },
-    UseDualStack: { type: "builtInParams", name: "useDualstackEndpoint" },
-  };
+var resolveClientEndpointParameters = (options) =>
+  Object.assign(options, {
+    useDualstackEndpoint: options.useDualstackEndpoint ?? false,
+    useFipsEndpoint: options.useFipsEndpoint ?? false,
+    defaultSigningName: "bedrock",
+  });
+var commonParams = {
+  UseFIPS: {
+    type: "builtInParams",
+    name: "useFipsEndpoint",
+  },
+  Endpoint: {
+    type: "builtInParams",
+    name: "endpoint",
+  },
+  Region: {
+    type: "builtInParams",
+    name: "region",
+  },
+  UseDualStack: {
+    type: "builtInParams",
+    name: "useDualstackEndpoint",
+  },
+};
 //@ chunk-0dmzgg46.js:2245-5230 placement
 var Q = {
   name: "@aws-sdk/client-bedrock",
@@ -61,7 +87,7 @@ var Q = {
   main: "./dist-cjs/index.js",
   types: "./dist-types/index.d.ts",
   module: "./dist-es/index.js",
-  sideEffects: !1,
+  sideEffects: false,
   dependencies: {
     "@aws-crypto/sha256-browser": "5.2.0",
     "@aws-crypto/sha256-js": "5.2.0",
@@ -112,13 +138,26 @@ var Q = {
     rimraf: "3.0.2",
     typescript: "~5.8.3",
   },
-  engines: { node: ">=18.0.0" },
-  typesVersions: { "<4.0": { "dist-types/*": ["dist-types/ts3.4/*"] } },
+  engines: {
+    node: ">=18.0.0",
+  },
+  typesVersions: {
+    "<4.0": {
+      "dist-types/*": ["dist-types/ts3.4/*"],
+    },
+  },
   files: ["dist-*/**"],
-  author: { name: "AWS SDK for JavaScript Team", url: "https://aws.amazon.com/javascript/" },
+  author: {
+    name: "AWS SDK for JavaScript Team",
+    url: "https://aws.amazon.com/javascript/",
+  },
   license: "Apache-2.0",
-  browser: { "./dist-es/runtimeConfig": "./dist-es/runtimeConfig.browser" },
-  "react-native": { "./dist-es/runtimeConfig": "./dist-es/runtimeConfig.native" },
+  browser: {
+    "./dist-es/runtimeConfig": "./dist-es/runtimeConfig.browser",
+  },
+  "react-native": {
+    "./dist-es/runtimeConfig": "./dist-es/runtimeConfig.native",
+  },
   homepage: "https://github.com/aws/aws-sdk-js-v3/tree/main/clients/client-bedrock",
   repository: {
     type: "git",
@@ -127,427 +166,542 @@ var Q = {
   },
 };
 //@ chunk-0dmzgg46.js:5230-5245 placement
-var R = Re(Rx());
+var import_core_4 = Re(require_core_2());
 //@ chunk-0dmzgg46.js:5245-5356 placement
-var v = Re(Hme()),
-  l = Re(dR()),
-  pe = Re(EE()),
-  me = Re(Nme()),
-  T = Re(dG()),
-  c = Re(wD()),
-  f = Re(E$()),
-  Ce = Re($me()),
-  Ae = Re(Mae());
+var import_util_user_agent_node = Re(require_util_user_agent_node());
+var import_index_native_2 = Re(require_index_native());
+var import_core_5 = Re(require_core());
+var me = Re(Nme());
+var import_retry_2 = Re(require_retry());
+var import_node_config_provider = Re(require_node_config_provider());
+var import_node_http_handler = Re(require_node_http_handler());
+var Ce = Re($me());
+var import_index_browser = Re(require_index_browser_2());
 //@ chunk-0dmzgg46.js:5356-5443 placement
-var ie = Re(Rx()),
-  _e = Re(Fme()),
-  ce = Re(EE()),
-  le = Re(ff()),
-  ue = Re(P4()),
-  g = Re(base64Module()),
-  P = Re(IR());
+var import_core_6 = Re(require_core_2());
+var import_protocols = Re(require_protocols());
+var import_core_7 = Re(require_core());
+var import_client_2 = Re(require_client());
+var import_url_parser = Re(require_url_parser());
+var import_credential_provider_web_identity = Re(base64Module());
+var import_util_utf8 = Re(require_util_utf8());
 //@ chunk-0dmzgg46.js:5443-5471 placement
-var re = Re(Iae()),
-  p = Re(YJ());
+var import_util_endpoints = Re(require_util_endpoints());
+var import_index_browser_2 = Re(require_index_browser());
 //@ chunk-0dmzgg46.js:10758-10796 esm-layout
-var x = Re(Dae()),
-  E = Re(Kg()),
-  y = Re(ff());
+var regionConfigResolver = Re(require_region_config_resolver());
+var protocolHttp = Re(require_protocol_http());
+var import_client_5 = Re(require_client());
 //@ chunk-0dmzgg46.js:10796-11322 esm-fingerprint
-var Te = (e) => {
-    let {
-      httpAuthSchemes: httpAuthSchemes,
-      httpAuthSchemeProvider: httpAuthSchemeProvider,
-      credentials: credentials,
-      token: token,
-    } = e;
-    return {
-      setHttpAuthScheme(n) {
-        let index = httpAuthSchemes.findIndex((A) => A.schemeId === n.schemeId);
-        if (index === -1) httpAuthSchemes.push(n);
-        else httpAuthSchemes.splice(index, 1, n);
-      },
-      httpAuthSchemes() {
-        return httpAuthSchemes;
-      },
-      setHttpAuthSchemeProvider(n) {
-        httpAuthSchemeProvider = n;
-      },
-      httpAuthSchemeProvider() {
-        return httpAuthSchemeProvider;
-      },
-      setCredentials(n) {
-        credentials = n;
-      },
-      credentials() {
-        return credentials;
-      },
-      setToken(n) {
-        token = n;
-      },
-      token() {
-        return token;
-      },
-    };
-  },
-  fe = (e) => ({
-    httpAuthSchemes: e.httpAuthSchemes(),
-    httpAuthSchemeProvider: e.httpAuthSchemeProvider(),
-    credentials: e.credentials(),
-    token: e.token(),
-  });
+var getHttpAuthExtensionConfiguration = (options) => {
+  let {
+    httpAuthSchemes: _httpAuthSchemes,
+    httpAuthSchemeProvider: _httpAuthSchemeProvider,
+    credentials: _credentials,
+    token: _token,
+  } = options;
+  return {
+    setHttpAuthScheme(httpAuthScheme) {
+      let index = _httpAuthSchemes.findIndex((scheme) => scheme.schemeId === httpAuthScheme.schemeId);
+      if (index === -1) _httpAuthSchemes.push(httpAuthScheme);
+      else _httpAuthSchemes.splice(index, 1, httpAuthScheme);
+    },
+    httpAuthSchemes() {
+      return _httpAuthSchemes;
+    },
+    setHttpAuthSchemeProvider(httpAuthSchemeProvider) {
+      _httpAuthSchemeProvider = httpAuthSchemeProvider;
+    },
+    httpAuthSchemeProvider() {
+      return _httpAuthSchemeProvider;
+    },
+    setCredentials(credentials) {
+      _credentials = credentials;
+    },
+    credentials() {
+      return _credentials;
+    },
+    setToken(token) {
+      _token = token;
+    },
+    token() {
+      return _token;
+    },
+  };
+};
+var resolveHttpAuthRuntimeConfig = (config) => ({
+  httpAuthSchemes: config.httpAuthSchemes(),
+  httpAuthSchemeProvider: config.httpAuthSchemeProvider(),
+  credentials: config.credentials(),
+  token: config.token(),
+});
 //@ chunk-0dmzgg46.js:11322-11660 esm-fingerprint
-var xe = (e, o) => {
-  let merged = Object.assign(
-    x.getAwsRegionExtensionConfiguration(e),
-    y.getDefaultExtensionConfiguration(e),
-    E.getHttpHandlerExtensionConfiguration(e),
-    Te(e),
+var resolveRuntimeExtensions = (runtimeConfig, extensions) => {
+  let extensionConfiguration = Object.assign(
+    regionConfigResolver.getAwsRegionExtensionConfiguration(runtimeConfig),
+    import_client_5.getDefaultExtensionConfiguration(runtimeConfig),
+    protocolHttp.getHttpHandlerExtensionConfiguration(runtimeConfig),
+    getHttpAuthExtensionConfiguration(runtimeConfig),
   );
-  return (
-    o.forEach((r) => r.configure(merged)),
-    Object.assign(
-      e,
-      x.resolveAwsRegionExtensionConfiguration(merged),
-      y.resolveDefaultRuntimeConfig(merged),
-      E.resolveHttpHandlerRuntimeConfig(merged),
-      fe(merged),
-    )
+  extensions.forEach((extension) => extension.configure(extensionConfiguration));
+  return Object.assign(
+    runtimeConfig,
+    regionConfigResolver.resolveAwsRegionExtensionConfiguration(extensionConfiguration),
+    import_client_5.resolveDefaultRuntimeConfig(extensionConfiguration),
+    protocolHttp.resolveHttpHandlerRuntimeConfig(extensionConfiguration),
+    resolveHttpAuthRuntimeConfig(extensionConfiguration),
   );
 };
 //@ chunk-0dmzgg46.js:11660-12750 esm-fingerprint
-class He extends he.Client {
+class BedrockClient extends import_client.Client {
   config;
-  constructor(...[e]) {
-    let o = ve(e || {});
-    super(o);
-    this.initConfig = o;
-    let t = j(o),
-      userAgentConfig = S.resolveUserAgentConfig(t),
-      retryConfig = I.resolveRetryConfig(userAgentConfig),
-      regionConfig = De.resolveRegionConfig(retryConfig),
-      hostHeaderConfig = D.resolveHostHeaderConfig(regionConfig),
-      endpointConfig = Ge.resolveEndpointConfig(hostHeaderConfig),
-      We = O(endpointConfig),
-      Ue = xe(We, e?.extensions || []);
-    ((this.config = Ue),
-      this.middlewareStack.use(Se.getSchemaSerdePlugin(this.config)),
-      this.middlewareStack.use(S.getUserAgentPlugin(this.config)),
-      this.middlewareStack.use(I.getRetryPlugin(this.config)),
-      this.middlewareStack.use(Ie.getContentLengthPlugin(this.config)),
-      this.middlewareStack.use(D.getHostHeaderPlugin(this.config)),
-      this.middlewareStack.use(Ee.getLoggerPlugin(this.config)),
-      this.middlewareStack.use(ye.getRecursionDetectionPlugin(this.config)),
-      this.middlewareStack.use(
-        m.getHttpAuthSchemeEndpointRuleSetPlugin(this.config, {
-          httpAuthSchemeParametersProvider: U,
-          identityProviderConfigProvider: async (q) =>
-            new m.DefaultIdentityProviderConfig({
-              "aws.auth#sigv4": q.credentials,
-              "smithy.api#httpBearerAuth": q.token,
-            }),
-        }),
-      ),
-      this.middlewareStack.use(m.getHttpSigningPlugin(this.config)));
+  constructor(...[configuration]) {
+    let _config_0 = getRuntimeConfig_2(configuration || {});
+    super(_config_0);
+    this.initConfig = _config_0;
+    let _config_1 = resolveClientEndpointParameters(_config_0);
+    let _config_2 = import_middleware_user_agent.resolveUserAgentConfig(_config_1);
+    let _config_3 = import_retry.resolveRetryConfig(_config_2);
+    let _config_4 = import_index_native.resolveRegionConfig(_config_3);
+    let _config_5 = import_middleware_host_header.resolveHostHeaderConfig(_config_4);
+    let _config_6 = import_middleware_endpoint.resolveEndpointConfig(_config_5);
+    let _config_7 = resolveHttpAuthSchemeConfig(_config_6);
+    let _config_8 = resolveRuntimeExtensions(_config_7, configuration?.extensions || []);
+    this.config = _config_8;
+    this.middlewareStack.use(import_schema.getSchemaSerdePlugin(this.config));
+    this.middlewareStack.use(import_middleware_user_agent.getUserAgentPlugin(this.config));
+    this.middlewareStack.use(import_retry.getRetryPlugin(this.config));
+    this.middlewareStack.use(import_middleware_host_header_2.getContentLengthPlugin(this.config));
+    this.middlewareStack.use(import_middleware_host_header.getHostHeaderPlugin(this.config));
+    this.middlewareStack.use(import_middleware_logger.getLoggerPlugin(this.config));
+    this.middlewareStack.use(import_middleware_recursion_detection.getRecursionDetectionPlugin(this.config));
+    this.middlewareStack.use(
+      import_core.getHttpAuthSchemeEndpointRuleSetPlugin(this.config, {
+        httpAuthSchemeParametersProvider: defaultBedrockHttpAuthSchemeParametersProvider,
+        identityProviderConfigProvider: async (config) =>
+          new import_core.DefaultIdentityProviderConfig({
+            "aws.auth#sigv4": config.credentials,
+            "smithy.api#httpBearerAuth": config.token,
+          }),
+      }),
+    );
+    this.middlewareStack.use(import_core.getHttpSigningPlugin(this.config));
   }
   destroy() {
     super.destroy();
   }
 }
 //@ chunk-0dmzgg46.js:12750-12765 esm-layout
-var i = Re(_D());
+var schema = Re(require_schema());
 //@ chunk-0dmzgg46.js:12765-12781 esm-layout
-var Le = Re(ff());
+var import_client_6 = Re(require_client());
 //@ chunk-0dmzgg46.js:12781-12882 esm-fingerprint
-class s extends Le.ServiceException {
-  constructor(e) {
-    super(e);
-    Object.setPrototypeOf(this, s.prototype);
+class BedrockServiceException$1 extends import_client_6.ServiceException {
+  constructor(options) {
+    super(options);
+    Object.setPrototypeOf(this, BedrockServiceException$1.prototype);
   }
 }
 //@ chunk-0dmzgg46.js:12882-13060 esm-fingerprint
-class G extends s {
+class G extends BedrockServiceException$1 {
   name = "AccessDeniedException";
   $fault = "client";
-  constructor(e) {
-    super({ name: "AccessDeniedException", $fault: "client", ...e });
+  constructor(opts) {
+    super({
+      name: "AccessDeniedException",
+      $fault: "client",
+      ...opts,
+    });
     Object.setPrototypeOf(this, G.prototype);
   }
 }
 //@ chunk-0dmzgg46.js:13060-13242 esm-fingerprint
-class h extends s {
+class h extends BedrockServiceException$1 {
   name = "InternalServerException";
   $fault = "server";
-  constructor(e) {
-    super({ name: "InternalServerException", $fault: "server", ...e });
+  constructor(opts) {
+    super({
+      name: "InternalServerException",
+      $fault: "server",
+      ...opts,
+    });
     Object.setPrototypeOf(this, h.prototype);
   }
 }
 //@ chunk-0dmzgg46.js:13242-13428 esm-fingerprint
-class L extends s {
+class ResourceNotFoundException$1 extends BedrockServiceException$1 {
   name = "ResourceNotFoundException";
   $fault = "client";
-  constructor(e) {
-    super({ name: "ResourceNotFoundException", $fault: "client", ...e });
-    Object.setPrototypeOf(this, L.prototype);
+  constructor(opts) {
+    super({
+      name: "ResourceNotFoundException",
+      $fault: "client",
+      ...opts,
+    });
+    Object.setPrototypeOf(this, ResourceNotFoundException$1.prototype);
   }
 }
 //@ chunk-0dmzgg46.js:13428-13602 esm-fingerprint
-class b extends s {
+class ThrottlingException$1 extends BedrockServiceException$1 {
   name = "ThrottlingException";
   $fault = "client";
-  constructor(e) {
-    super({ name: "ThrottlingException", $fault: "client", ...e });
-    Object.setPrototypeOf(this, b.prototype);
+  constructor(opts) {
+    super({
+      name: "ThrottlingException",
+      $fault: "client",
+      ...opts,
+    });
+    Object.setPrototypeOf(this, ThrottlingException$1.prototype);
   }
 }
 //@ chunk-0dmzgg46.js:13602-13776 esm-fingerprint
-class k extends s {
+class ValidationException$1 extends BedrockServiceException$1 {
   name = "ValidationException";
   $fault = "client";
-  constructor(e) {
-    super({ name: "ValidationException", $fault: "client", ...e });
-    Object.setPrototypeOf(this, k.prototype);
+  constructor(opts) {
+    super({
+      name: "ValidationException",
+      $fault: "client",
+      ...opts,
+    });
+    Object.setPrototypeOf(this, ValidationException$1.prototype);
   }
 }
 //@ chunk-0dmzgg46.js:13776-13946 esm-fingerprint
-class F extends s {
+class F extends BedrockServiceException$1 {
   name = "ConflictException";
   $fault = "client";
-  constructor(e) {
-    super({ name: "ConflictException", $fault: "client", ...e });
+  constructor(opts) {
+    super({
+      name: "ConflictException",
+      $fault: "client",
+      ...opts,
+    });
     Object.setPrototypeOf(this, F.prototype);
   }
 }
 //@ chunk-0dmzgg46.js:13946-14140 esm-fingerprint
-class B extends s {
+class ServiceQuotaExceededException$1 extends BedrockServiceException$1 {
   name = "ServiceQuotaExceededException";
   $fault = "client";
-  constructor(e) {
-    super({ name: "ServiceQuotaExceededException", $fault: "client", ...e });
-    Object.setPrototypeOf(this, B.prototype);
+  constructor(opts) {
+    super({
+      name: "ServiceQuotaExceededException",
+      $fault: "client",
+      ...opts,
+    });
+    Object.setPrototypeOf(this, ServiceQuotaExceededException$1.prototype);
   }
 }
 //@ chunk-0dmzgg46.js:14140-14362 esm-fingerprint
-class J extends s {
+class TooManyTagsException$1 extends BedrockServiceException$1 {
   name = "TooManyTagsException";
   $fault = "client";
   resourceName;
-  constructor(e) {
-    super({ name: "TooManyTagsException", $fault: "client", ...e });
-    (Object.setPrototypeOf(this, J.prototype), (this.resourceName = e.resourceName));
+  constructor(opts) {
+    super({
+      name: "TooManyTagsException",
+      $fault: "client",
+      ...opts,
+    });
+    Object.setPrototypeOf(this, TooManyTagsException$1.prototype);
+    this.resourceName = opts.resourceName;
   }
 }
 //@ chunk-0dmzgg46.js:14362-14542 esm-fingerprint
-class N extends s {
+class N extends BedrockServiceException$1 {
   name = "ResourceInUseException";
   $fault = "client";
-  constructor(e) {
-    super({ name: "ResourceInUseException", $fault: "client", ...e });
+  constructor(opts) {
+    super({
+      name: "ResourceInUseException",
+      $fault: "client",
+      ...opts,
+    });
     Object.setPrototypeOf(this, N.prototype);
   }
 }
 //@ chunk-0dmzgg46.js:14542-14732 esm-fingerprint
-class V extends s {
+class ServiceUnavailableException$1 extends BedrockServiceException$1 {
   name = "ServiceUnavailableException";
   $fault = "server";
-  constructor(e) {
-    super({ name: "ServiceUnavailableException", $fault: "server", ...e });
-    Object.setPrototypeOf(this, V.prototype);
+  constructor(opts) {
+    super({
+      name: "ServiceUnavailableException",
+      $fault: "server",
+      ...opts,
+    });
+    Object.setPrototypeOf(this, ServiceUnavailableException$1.prototype);
   }
 }
 //@ chunk-0dmzgg46.js:14732-14801 layout
-var be = [0, "com.amazonaws.bedrock", "InferenceProfileDescription", 8, 0];
+var EvaluationDatasetMetricConfigs = [0, "com.amazonaws.bedrock", "InferenceProfileDescription", 8, 0];
 //@ chunk-0dmzgg46.js:14801-14916 layout
 var ze = [
   -3,
   "com.amazonaws.bedrock",
   "AccessDeniedException",
-  { ["error"]: "client", ["httpError"]: 403 },
+  {
+    ["error"]: "client",
+    ["httpError"]: 403,
+  },
   ["message"],
   [0],
 ];
 //@ chunk-0dmzgg46.js:14916-14980 layout
-i.TypeRegistry.for("com.amazonaws.bedrock").registerError(ze, G);
+schema.TypeRegistry.for("com.amazonaws.bedrock").registerError(ze, G);
 //@ chunk-0dmzgg46.js:14980-15091 layout
 var $e = [
   -3,
   "com.amazonaws.bedrock",
   "ConflictException",
-  { ["error"]: "client", ["httpError"]: 400 },
+  {
+    ["error"]: "client",
+    ["httpError"]: 400,
+  },
   ["message"],
   [0],
 ];
 //@ chunk-0dmzgg46.js:15091-15155 layout
-i.TypeRegistry.for("com.amazonaws.bedrock").registerError($e, F);
+schema.TypeRegistry.for("com.amazonaws.bedrock").registerError($e, F);
 //@ chunk-0dmzgg46.js:15155-15488 layout
 var Ye = [
-    3,
-    "com.amazonaws.bedrock",
-    "GetInferenceProfileRequest",
-    0,
-    ["inferenceProfileIdentifier"],
-    [[0, 1]],
+  3,
+  "com.amazonaws.bedrock",
+  "GetInferenceProfileRequest",
+  0,
+  ["inferenceProfileIdentifier"],
+  [[0, 1]],
+];
+var Xe = [
+  3,
+  "com.amazonaws.bedrock",
+  "GetInferenceProfileResponse",
+  0,
+  [
+    "inferenceProfileName",
+    "description",
+    "createdAt",
+    "updatedAt",
+    "inferenceProfileArn",
+    "models",
+    "inferenceProfileId",
+    "status",
+    "type",
   ],
-  Xe = [
-    3,
-    "com.amazonaws.bedrock",
-    "GetInferenceProfileResponse",
+  [
     0,
-    [
-      "inferenceProfileName",
-      "description",
-      "createdAt",
-      "updatedAt",
-      "inferenceProfileArn",
-      "models",
-      "inferenceProfileId",
-      "status",
-      "type",
-    ],
-    [0, [() => be, 0], 5, 5, 0, () => ke, 0, 0, 0],
-  ];
+    [() => EvaluationDatasetMetricConfigs, 0],
+    5,
+    5,
+    0,
+    () => AutomatedReasoningPolicyDefinitionTypeList,
+    0,
+    0,
+    0,
+  ],
+];
 //@ chunk-0dmzgg46.js:15488-15903 layout
-var Ze = [3, "com.amazonaws.bedrock", "InferenceProfileModel", 0, ["modelArn"], [0]],
-  eo = [
-    3,
-    "com.amazonaws.bedrock",
-    "InferenceProfileSummary",
-    0,
-    [
-      "inferenceProfileName",
-      "description",
-      "createdAt",
-      "updatedAt",
-      "inferenceProfileArn",
-      "models",
-      "inferenceProfileId",
-      "status",
-      "type",
-    ],
-    [0, [() => be, 0], 5, 5, 0, () => ke, 0, 0, 0],
+var Ze = [3, "com.amazonaws.bedrock", "InferenceProfileModel", 0, ["modelArn"], [0]];
+var eo = [
+  3,
+  "com.amazonaws.bedrock",
+  "InferenceProfileSummary",
+  0,
+  [
+    "inferenceProfileName",
+    "description",
+    "createdAt",
+    "updatedAt",
+    "inferenceProfileArn",
+    "models",
+    "inferenceProfileId",
+    "status",
+    "type",
   ],
-  oo = [
-    -3,
-    "com.amazonaws.bedrock",
-    "InternalServerException",
-    { ["error"]: "server", ["httpError"]: 500 },
-    ["message"],
-    [0],
-  ];
+  [
+    0,
+    [() => EvaluationDatasetMetricConfigs, 0],
+    5,
+    5,
+    0,
+    () => AutomatedReasoningPolicyDefinitionTypeList,
+    0,
+    0,
+    0,
+  ],
+];
+var oo = [
+  -3,
+  "com.amazonaws.bedrock",
+  "InternalServerException",
+  {
+    ["error"]: "server",
+    ["httpError"]: 500,
+  },
+  ["message"],
+  [0],
+];
 //@ chunk-0dmzgg46.js:15903-15967 layout
-i.TypeRegistry.for("com.amazonaws.bedrock").registerError(oo, h);
+schema.TypeRegistry.for("com.amazonaws.bedrock").registerError(oo, h);
 //@ chunk-0dmzgg46.js:15967-16291 layout
 var to = [
-    3,
-    "com.amazonaws.bedrock",
-    "ListInferenceProfilesRequest",
-    0,
-    ["maxResults", "nextToken", "typeEquals"],
+  3,
+  "com.amazonaws.bedrock",
+  "ListInferenceProfilesRequest",
+  0,
+  ["maxResults", "nextToken", "typeEquals"],
+  [
     [
-      [1, { ["httpQuery"]: "maxResults" }],
-      [0, { ["httpQuery"]: "nextToken" }],
-      [0, { ["httpQuery"]: "type" }],
+      1,
+      {
+        ["httpQuery"]: "maxResults",
+      },
+    ],
+    [
+      0,
+      {
+        ["httpQuery"]: "nextToken",
+      },
+    ],
+    [
+      0,
+      {
+        ["httpQuery"]: "type",
+      },
     ],
   ],
-  no = [
-    3,
-    "com.amazonaws.bedrock",
-    "ListInferenceProfilesResponse",
-    0,
-    ["inferenceProfileSummaries", "nextToken"],
-    [[() => po, 0], 0],
-  ];
+];
+var no = [
+  3,
+  "com.amazonaws.bedrock",
+  "ListInferenceProfilesResponse",
+  0,
+  ["inferenceProfileSummaries", "nextToken"],
+  [[() => po, 0], 0],
+];
 //@ chunk-0dmzgg46.js:16291-16407 layout
 var so = [
   -3,
   "com.amazonaws.bedrock",
   "ResourceInUseException",
-  { ["error"]: "client", ["httpError"]: 400 },
+  {
+    ["error"]: "client",
+    ["httpError"]: 400,
+  },
   ["message"],
   [0],
 ];
 //@ chunk-0dmzgg46.js:16407-16471 layout
-i.TypeRegistry.for("com.amazonaws.bedrock").registerError(so, N);
+schema.TypeRegistry.for("com.amazonaws.bedrock").registerError(so, N);
 //@ chunk-0dmzgg46.js:16471-16590 layout
 var ro = [
   -3,
   "com.amazonaws.bedrock",
   "ResourceNotFoundException",
-  { ["error"]: "client", ["httpError"]: 404 },
+  {
+    ["error"]: "client",
+    ["httpError"]: 404,
+  },
   ["message"],
   [0],
 ];
 //@ chunk-0dmzgg46.js:16590-16654 layout
-i.TypeRegistry.for("com.amazonaws.bedrock").registerError(ro, L);
+schema.TypeRegistry.for("com.amazonaws.bedrock").registerError(ro, ResourceNotFoundException$1);
 //@ chunk-0dmzgg46.js:16654-16777 layout
 var ao = [
   -3,
   "com.amazonaws.bedrock",
   "ServiceQuotaExceededException",
-  { ["error"]: "client", ["httpError"]: 400 },
+  {
+    ["error"]: "client",
+    ["httpError"]: 400,
+  },
   ["message"],
   [0],
 ];
 //@ chunk-0dmzgg46.js:16777-16841 layout
-i.TypeRegistry.for("com.amazonaws.bedrock").registerError(ao, B);
+schema.TypeRegistry.for("com.amazonaws.bedrock").registerError(ao, ServiceQuotaExceededException$1);
 //@ chunk-0dmzgg46.js:16841-16962 layout
 var io = [
   -3,
   "com.amazonaws.bedrock",
   "ServiceUnavailableException",
-  { ["error"]: "server", ["httpError"]: 503 },
+  {
+    ["error"]: "server",
+    ["httpError"]: 503,
+  },
   ["message"],
   [0],
 ];
 //@ chunk-0dmzgg46.js:16962-17026 layout
-i.TypeRegistry.for("com.amazonaws.bedrock").registerError(io, V);
+schema.TypeRegistry.for("com.amazonaws.bedrock").registerError(io, ServiceUnavailableException$1);
 //@ chunk-0dmzgg46.js:17026-17139 layout
 var _o = [
   -3,
   "com.amazonaws.bedrock",
   "ThrottlingException",
-  { ["error"]: "client", ["httpError"]: 429 },
+  {
+    ["error"]: "client",
+    ["httpError"]: 429,
+  },
   ["message"],
   [0],
 ];
 //@ chunk-0dmzgg46.js:17139-17203 layout
-i.TypeRegistry.for("com.amazonaws.bedrock").registerError(_o, b);
+schema.TypeRegistry.for("com.amazonaws.bedrock").registerError(_o, ThrottlingException$1);
 //@ chunk-0dmzgg46.js:17203-17334 layout
 var co = [
   -3,
   "com.amazonaws.bedrock",
   "TooManyTagsException",
-  { ["error"]: "client", ["httpError"]: 400 },
+  {
+    ["error"]: "client",
+    ["httpError"]: 400,
+  },
   ["message", "resourceName"],
   [0, 0],
 ];
 //@ chunk-0dmzgg46.js:17334-17398 layout
-i.TypeRegistry.for("com.amazonaws.bedrock").registerError(co, J);
+schema.TypeRegistry.for("com.amazonaws.bedrock").registerError(co, TooManyTagsException$1);
 //@ chunk-0dmzgg46.js:17398-17511 layout
 var lo = [
   -3,
   "com.amazonaws.bedrock",
   "ValidationException",
-  { ["error"]: "client", ["httpError"]: 400 },
+  {
+    ["error"]: "client",
+    ["httpError"]: 400,
+  },
   ["message"],
   [0],
 ];
 //@ chunk-0dmzgg46.js:17511-17575 layout
-i.TypeRegistry.for("com.amazonaws.bedrock").registerError(lo, k);
+schema.TypeRegistry.for("com.amazonaws.bedrock").registerError(lo, ValidationException$1);
 //@ chunk-0dmzgg46.js:17575-17669 layout
 var uo = [-3, "smithy.ts.sdk.synthetic.com.amazonaws.bedrock", "BedrockServiceException", 0, [], []];
 //@ chunk-0dmzgg46.js:17669-17757 layout
-i.TypeRegistry.for("smithy.ts.sdk.synthetic.com.amazonaws.bedrock").registerError(uo, s);
+schema.TypeRegistry.for("smithy.ts.sdk.synthetic.com.amazonaws.bedrock").registerError(
+  uo,
+  BedrockServiceException$1,
+);
 //@ chunk-0dmzgg46.js:17757-17898 layout
-var ke = [1, "com.amazonaws.bedrock", "InferenceProfileModels", 0, () => Ze],
-  po = [1, "com.amazonaws.bedrock", "InferenceProfileSummaries", 0, [() => eo, 0]];
+var AutomatedReasoningPolicyDefinitionTypeList = [
+  1,
+  "com.amazonaws.bedrock",
+  "InferenceProfileModels",
+  0,
+  () => Ze,
+];
+var po = [1, "com.amazonaws.bedrock", "InferenceProfileSummaries", 0, [() => eo, 0]];
 //@ chunk-0dmzgg46.js:17898-18043 layout
-var Fe = [
+var GetInferenceProfile = [
   9,
   "com.amazonaws.bedrock",
   "GetInferenceProfile",
-  { ["http"]: ["GET", "/inference-profiles/{inferenceProfileIdentifier}", 200] },
+  {
+    ["http"]: ["GET", "/inference-profiles/{inferenceProfileIdentifier}", 200],
+  },
   () => Ye,
   () => Xe,
 ];
@@ -556,35 +710,61 @@ var Be = [
   9,
   "com.amazonaws.bedrock",
   "ListInferenceProfiles",
-  { ["http"]: ["GET", "/inference-profiles", 200] },
+  {
+    ["http"]: ["GET", "/inference-profiles", 200],
+  },
   () => to,
   () => no,
 ];
 //@ chunk-0dmzgg46.js:18161-18189 esm-layout
-var Je = Re(pK()),
-  Ne = Re(ff());
+var import_middleware_endpoint_2 = Re(require_middleware_endpoint());
+var import_client_7 = Re(require_client());
 //@ chunk-0dmzgg46.js:18189-18456 esm-fingerprint
-class Ro extends Ne.Command.classBuilder()
-  .ep(M)
-  .m(function (e, o, t, r) {
-    return [Je.getEndpointPlugin(t, e.getEndpointParameterInstructions())];
+class GetInferenceProfileCommand extends import_client_7.Command.classBuilder()
+  .ep(commonParams)
+  .m(function (Command, cs, config, o) {
+    return [
+      import_middleware_endpoint_2.getEndpointPlugin(config, Command.getEndpointParameterInstructions()),
+    ];
   })
   .s("AmazonBedrockControlPlaneService", "GetInferenceProfile", {})
   .n("BedrockClient", "GetInferenceProfileCommand")
-  .sc(Fe)
+  .sc(GetInferenceProfile)
   .build() {}
 //@ chunk-0dmzgg46.js:18456-18484 esm-layout
-var Ve = Re(pK()),
-  qe = Re(ff());
+var import_middleware_endpoint_3 = Re(require_middleware_endpoint());
+var import_client_8 = Re(require_client());
 //@ chunk-0dmzgg46.js:18484-18755 esm-fingerprint
-class mo extends qe.Command.classBuilder()
-  .ep(M)
-  .m(function (e, o, t, r) {
-    return [Ve.getEndpointPlugin(t, e.getEndpointParameterInstructions())];
+class ListInferenceProfilesCommand extends import_client_8.Command.classBuilder()
+  .ep(commonParams)
+  .m(function (Command, cs, config, o) {
+    return [
+      import_middleware_endpoint_3.getEndpointPlugin(config, Command.getEndpointParameterInstructions()),
+    ];
   })
   .s("AmazonBedrockControlPlaneService", "ListInferenceProfiles", {})
   .n("BedrockClient", "ListInferenceProfilesCommand")
   .sc(Be)
   .build() {}
-
-export { p, re, g, ie, ce, le, _e, ue, P, R, c, Ce, v, Q, pe, T, l, f, Ae, me };
+export {
+  import_index_browser_2,
+  import_util_endpoints,
+  import_credential_provider_web_identity,
+  import_core_6,
+  import_core_7,
+  import_client_2,
+  import_protocols,
+  import_url_parser,
+  import_util_utf8,
+  import_core_4,
+  import_node_config_provider,
+  Ce,
+  import_util_user_agent_node,
+  Q,
+  import_core_5,
+  import_retry_2,
+  import_index_native_2,
+  import_node_http_handler,
+  import_index_browser,
+  me,
+};

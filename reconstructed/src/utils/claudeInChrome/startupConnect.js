@@ -26,27 +26,27 @@ import { isChromeServerPolicyDenied } from "./serverPolicy.js";
 async function connectChromeAtStartup(e) {
   try {
     return await connectChromeAtStartupIfAllowed(
-      e?.settingOn ?? getGlobalConfig().claudeInChromeDefaultEnabled === !0,
+      e?.settingOn ?? getGlobalConfig().claudeInChromeDefaultEnabled === true,
     );
   } catch (error) {
-    return (logError(error), !1);
+    logError(error);
+    return false;
   }
 }
+//@ chunk-e2839z0z.js:12006-12380 placement
 /**
  * 启动时为编辑器连接 Claude in Chrome 的条件检查：设置开启、本会话未接入、组织策略允许且令牌可用、非安全模式/受限会话、Claude.ai 订阅用户等，满足后才连接。
  */
-//@ chunk-e2839z0z.js:12006-12380 placement
 async function connectChromeAtStartupIfAllowed(e) {
-  if (!e || !savedChromeDefaultCounts()) return !1;
-  if (isClaudeInChromeWiredThisSession()) return !1;
-  if (!isClaudeInChromeAllowed() || !canAuthenticateChromeBridge() || env.CLAUDE_CODE_ENABLE_CFC === !1)
-    return (
-      logForDebugging(
-        `[Claude in Chrome] Not connecting at startup for the editor: org policy allows=${isClaudeInChromeAllowed()}, token accepted by the Chrome extension=${canAuthenticateChromeBridge()}, CLAUDE_CODE_ENABLE_CFC=${String(env.CLAUDE_CODE_ENABLE_CFC)}`,
-      ),
-      !1
+  if (!e || !savedChromeDefaultCounts()) return false;
+  if (isClaudeInChromeWiredThisSession()) return false;
+  if (!isClaudeInChromeAllowed() || !canAuthenticateChromeBridge() || env.CLAUDE_CODE_ENABLE_CFC === false) {
+    logForDebugging(
+      `[Claude in Chrome] Not connecting at startup for the editor: org policy allows=${isClaudeInChromeAllowed()}, token accepted by the Chrome extension=${canAuthenticateChromeBridge()}, CLAUDE_CODE_ENABLE_CFC=${String(env.CLAUDE_CODE_ENABLE_CFC)}`,
     );
-  if (isSafeMode() || isRestrictedSession()) return !1;
-  if (!isClaudeAISubscriber()) return !1;
+    return false;
+  }
+  if (isSafeMode() || isRestrictedSession()) return false;
+  if (!isClaudeAISubscriber()) return false;
   return !isChromeServerPolicyDenied();
 }

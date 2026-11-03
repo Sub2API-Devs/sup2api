@@ -5,83 +5,111 @@
  * pieces: chunk-3wydcdvj.js (1)
  * attribution: esm-fingerprint 1
  */
-import { rMn, rp, hMt, Jao, REFRESH_TOKEN, Xao, OAUTH_2025_04_20, _he, Qao, v8e } from "./types.mjs";
+import {
+  checkCredentialsFileSafety,
+  WorkloadIdentityError,
+  hMt,
+  Jao,
+  GRANT_TYPE_REFRESH_TOKEN,
+  TOKEN_ENDPOINT,
+  OAUTH_API_BETA_HEADER,
+  redactSensitive,
+  parseTokenResponse,
+  writeCredentialsFileAtomic,
+} from "./types.mjs";
 import { y } from "./token-cache.mjs";
-import { Cx } from "../../version.mjs";
+import { VERSION } from "../../version.mjs";
 import { gAn } from "../../core/credentials.mjs";
 
 //@ chunk-3wydcdvj.js:10007-11752 esm-fingerprint
-function z(e) {
-  return async (n) => {
-    let { fs: fs } = await import("./chunk-a60jm9e8.js");
-    await rMn(e.credentialsPath, e.onSafetyWarning);
-    let s;
+function userOAuthProvider(config) {
+  return async (opts) => {
+    let { fs } = await import("./chunk-a60jm9e8.js");
+    await checkCredentialsFileSafety(config.credentialsPath, config.onSafetyWarning);
+    let raw;
     try {
-      s = await fs.promises.readFile(e.credentialsPath, "utf-8");
-    } catch (error) {
-      throw new rp(`Credentials file not found at ${e.credentialsPath}: ${error}`);
+      raw = await fs.promises.readFile(config.credentialsPath, "utf-8");
+    } catch (err) {
+      throw new WorkloadIdentityError(`Credentials file not found at ${config.credentialsPath}: ${err}`);
     }
-    let o;
+    let creds;
     try {
-      o = JSON.parse(s);
-    } catch (error) {
-      throw new rp(`Credentials file at ${e.credentialsPath} is not valid JSON: ${error}`);
-    }
-    let access_token = o.access_token;
-    if (!access_token) throw new rp(`Credentials file at ${e.credentialsPath} must include 'access_token'`);
-    let expires_at = o.expires_at;
-    if (!n?.forceRefresh && (expires_at == null || y() < expires_at - hMt))
-      return { token: access_token, expiresAt: expires_at ?? null };
-    let refresh_token = o.refresh_token;
-    if (!e.clientId || !refresh_token)
-      throw new rp(
-        `Access token at ${e.credentialsPath} has expired and no refresh is available (client_id ${e.clientId ? "set" : "empty"}, refresh_token ${refresh_token ? "set" : "empty"})`,
+      creds = JSON.parse(raw);
+    } catch (err) {
+      throw new WorkloadIdentityError(
+        `Credentials file at ${config.credentialsPath} is not valid JSON: ${err}`,
       );
-    Jao(e.baseURL);
-    let _ = { grant_type: REFRESH_TOKEN, refresh_token: refresh_token, client_id: e.clientId },
-      p = `${e.baseURL}${Xao}`,
-      w;
+    }
+    let accessToken = creds.access_token;
+    if (!accessToken)
+      throw new WorkloadIdentityError(
+        `Credentials file at ${config.credentialsPath} must include 'access_token'`,
+      );
+    let expiresAt = creds.expires_at;
+    if (!opts?.forceRefresh && (expiresAt == null || y() < expiresAt - hMt))
+      return {
+        token: accessToken,
+        expiresAt: expiresAt ?? null,
+      };
+    let refreshToken = creds.refresh_token;
+    if (!config.clientId || !refreshToken)
+      throw new WorkloadIdentityError(
+        `Access token at ${config.credentialsPath} has expired and no refresh is available (client_id ${config.clientId ? "set" : "empty"}, refresh_token ${refreshToken ? "set" : "empty"})`,
+      );
+    Jao(config.baseURL);
+    let body = {
+      grant_type: GRANT_TYPE_REFRESH_TOKEN,
+      refresh_token: refreshToken,
+      client_id: config.clientId,
+    };
+    let url = `${config.baseURL}${TOKEN_ENDPOINT}`;
+    let resp;
     try {
-      w = await e.fetch(p, {
+      resp = await config.fetch(url, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "anthropic-beta": OAUTH_2025_04_20,
-          "User-Agent": e.userAgent || `anthropic-sdk-typescript/${Cx} userOAuthProvider`,
+          "anthropic-beta": OAUTH_API_BETA_HEADER,
+          "User-Agent": config.userAgent || `anthropic-sdk-typescript/${VERSION} userOAuthProvider`,
         },
-        body: JSON.stringify(_),
+        body: JSON.stringify(body),
       });
-    } catch (error) {
-      throw new rp(`User OAuth refresh failed to reach token endpoint: ${error}`);
+    } catch (err) {
+      throw new WorkloadIdentityError(`User OAuth refresh failed to reach token endpoint: ${err}`);
     }
-    let E = w.headers.get("Request-Id");
-    if (!w.ok) {
-      let R = await w.text().catch(() => "");
-      throw new rp(`User OAuth refresh failed (HTTP ${w.status}): ${_he(R)}`, w.status, _he(R), E);
-    }
-    let k = await Qao(w, E),
-      T = Number(k.expires_in);
-    if (!Number.isFinite(T))
-      throw new rp(
-        `User OAuth refresh response missing or invalid expires_in: ${JSON.stringify(_he(k))}`,
-        w.status,
-        _he(k),
-        E,
+    let requestId = resp.headers.get("Request-Id");
+    if (!resp.ok) {
+      let text = await resp.text().catch(() => "");
+      throw new WorkloadIdentityError(
+        `User OAuth refresh failed (HTTP ${resp.status}): ${redactSensitive(text)}`,
+        resp.status,
+        redactSensitive(text),
+        requestId,
       );
-    let D = y() + T,
-      ee = k.refresh_token || refresh_token;
-    return (
-      await v8e(e.credentialsPath, {
-        ...o,
-        version: gAn,
-        type: "oauth_token",
-        access_token: k.access_token,
-        expires_at: D,
-        refresh_token: ee,
-      }),
-      { token: k.access_token, expiresAt: D }
-    );
+    }
+    let data = await parseTokenResponse(resp, requestId);
+    let expiresIn = Number(data.expires_in);
+    if (!Number.isFinite(expiresIn))
+      throw new WorkloadIdentityError(
+        `User OAuth refresh response missing or invalid expires_in: ${JSON.stringify(redactSensitive(data))}`,
+        resp.status,
+        redactSensitive(data),
+        requestId,
+      );
+    let newExpiresAt = y() + expiresIn;
+    let newRefreshToken = data.refresh_token || refreshToken;
+    await writeCredentialsFileAtomic(config.credentialsPath, {
+      ...creds,
+      version: gAn,
+      type: "oauth_token",
+      access_token: data.access_token,
+      expires_at: newExpiresAt,
+      refresh_token: newRefreshToken,
+    });
+    return {
+      token: data.access_token,
+      expiresAt: newExpiresAt,
+    };
   };
 }
-
-export { z };
+export { userOAuthProvider };

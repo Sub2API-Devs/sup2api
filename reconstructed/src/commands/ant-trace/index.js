@@ -10,6 +10,9 @@
  */
 
 //@ chunk-e6aww6q8.js:1686326-1686377 fingerprint = default (1)
-var qZt = { isEnabled: () => !1, isHidden: !0, name: "stub" };
-
-export { qZt };
+var stubAntTraceCommand = {
+  isEnabled: () => false,
+  isHidden: true,
+  name: "stub",
+};
+export { stubAntTraceCommand };

@@ -13,61 +13,72 @@ import {
   setSystemPromptSectionCacheEntry,
   getSystemPromptSectionCache,
 } from "../bootstrap/state.js";
-import { kkt, wio } from "../utils/contextAttachments/environment.js";
-import { resolvePromptSection, noteSectionAnswer, ile } from "../plugins/functionHooks/promptComposition.js";
+import { secondArgument, ENVIRONMENT_DEDUP_SEPARATOR } from "../utils/contextAttachments/environment.js";
+import {
+  resolvePromptSection,
+  noteSectionAnswer,
+  sectionIdOf,
+} from "../plugins/functionHooks/promptComposition.js";
 
+//@ chunk-e6aww6q8.js:104482-104539 fingerprint = systemPromptSection (1)
 /**
  * 定义一个可缓存的系统提示词分段 {name, compute, cacheBreak:false}；同名段在会话内只计算一次（bootstrap promptAssembly 缓存）。
  */
-//@ chunk-e6aww6q8.js:104482-104539 fingerprint = systemPromptSection (1)
 function systemPromptSection(name, compute) {
-  return { name: name, compute: compute, cacheBreak: !1 };
+  return {
+    name,
+    compute,
+    cacheBreak: false,
+  };
 }
 //@ chunk-e6aww6q8.js:104566-104733 placement
 async function computeAndCacheSection(
   name,
   compute,
-  { epoch: r = getSystemPromptSectionEpoch(), sentAs: s = kkt } = {},
+  { epoch: r = getSystemPromptSectionEpoch(), sentAs: s = secondArgument } = {},
 ) {
-  let compute_2 = await name.compute(),
-    y = await resolvePromptSection(compute, compute_2);
-  if (getSystemPromptSectionEpoch() === r)
-    (setSystemPromptSectionCacheEntry(name.name, y),
-      noteSectionAnswer(name.name, s(name.name, compute_2), s(name.name, y)));
-  return y;
+  let h = await name.compute();
+  let promptSection = await resolvePromptSection(compute, h);
+  if (getSystemPromptSectionEpoch() === r) {
+    setSystemPromptSectionCacheEntry(name.name, promptSection);
+    noteSectionAnswer(name.name, s(name.name, h), s(name.name, promptSection));
+  }
+  return promptSection;
 }
+//@ chunk-e6aww6q8.js:104733-105000 placement
 /**
  * 解析系统提示词分段：未要求打破缓存且已缓存的直接复用，否则计算（可选写入缓存并记录发送形式）。疑似放错文件：属系统提示词分段缓存而非环境附件。
  */
-//@ chunk-e6aww6q8.js:104733-105000 placement
 async function resolveSystemPromptSections(
   sections,
-  { isStored: n = !0, hookOrigin: r, since: s, sentAs: h = kkt } = {},
+  { isStored: n = true, hookOrigin: r, since: s, sentAs: h = secondArgument } = {},
 ) {
   let cache = getSystemPromptSectionCache();
   return Promise.all(
-    sections.map(async (S) => {
-      if (!S.cacheBreak && cache.has(S.name)) return cache.get(S.name) ?? null;
-      let w = ile(S.name);
+    sections.map(async (section) => {
+      if (!section.cacheBreak && cache.has(section.name)) return cache.get(section.name) ?? null;
+      let compute = sectionIdOf(section.name);
       return n
-        ? computeAndCacheSection(S, w, { epoch: s, sentAs: h })
-        : resolvePromptSection(w, await S.compute(), r);
+        ? computeAndCacheSection(section, compute, {
+            epoch: s,
+            sentAs: h,
+          })
+        : resolvePromptSection(compute, await section.compute(), r);
     }),
   );
 }
+//@ chunk-e6aww6q8.js:105015-105148 placement
 /**
  * 取系统提示词分段缓存中的内容，未缓存时计算并写入（按名称与参数组成键）；实为系统提示分段缓存，疑似放错文件。
  */
-//@ chunk-e6aww6q8.js:105015-105148 placement
-function cachedSectionFor(e, n) {
-  let r = `${e}${wio}${JSON.stringify(n)}`,
-    s = getSystemPromptSectionCache();
-  return s.has(r)
-    ? Promise.resolve(s.get(r) ?? null)
+function cachedSectionFor(compute, n) {
+  let name = `${compute}${ENVIRONMENT_DEDUP_SEPARATOR}${JSON.stringify(n)}`;
+  let systemPromptSectionCache = getSystemPromptSectionCache();
+  return systemPromptSectionCache.has(name)
+    ? Promise.resolve(systemPromptSectionCache.get(name) ?? null)
     : computeAndCacheSection(
-        systemPromptSection(r, () => n),
-        e,
+        systemPromptSection(name, () => n),
+        compute,
       );
 }
-
 export { cachedSectionFor, resolveSystemPromptSections, systemPromptSection };

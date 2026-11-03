@@ -8,29 +8,7 @@
  * pieces: chunk-tyg7f3ek.js (14)
  * attribution: placement 14
  */
-import {
-  randomUUID,
-  randomUUID as randomUUID_2,
-  randomUUID as randomUUID_3,
-  randomUUID as randomUUID_4,
-  randomUUID as randomUUID_5,
-  randomUUID as randomUUID_6,
-  randomUUID as randomUUID_7,
-  randomUUID as randomUUID_8,
-  randomUUID as randomUUID_9,
-  randomUUID as randomUUID_10,
-  randomUUID as randomUUID_11,
-  randomUUID as randomUUID_12,
-  randomUUID as randomUUID_13,
-  randomUUID as randomUUID_14,
-  randomUUID as randomUUID_15,
-  randomUUID as randomUUID_16,
-  randomUUID as randomUUID_17,
-  randomUUID as randomUUID_18,
-  randomUUID as randomUUID_19,
-  randomUUID as randomUUID_20,
-  randomUUID as randomUUID_21,
-} from "crypto";
+import { randomUUID } from "crypto";
 import { getSessionId } from "../../bootstrap/state.js";
 import { logError } from "../../utils/log.js";
 import {
@@ -39,13 +17,16 @@ import {
   userMessageToSdkReplay,
   localCommandOutputToSDKAssistantMessage,
   toSDKCompactMetadata,
-  mLr,
+  informationalSystemMessage as informationalSystemMessage_2,
 } from "../../utils/messages/mappers.js";
-import { parseQueuedCommandAttachment, btt } from "../../utils/messages.js";
-import { zfe, isBareTaskNotificationOrigin } from "../../utils/backgroundSessionResume.js";
+import { parseQueuedCommandAttachment, localCommandOutputOf } from "../../utils/messages.js";
+import {
+  isSessionTaskNotificationOrigin,
+  isBareTaskNotificationOrigin,
+} from "../../utils/backgroundSessionResume.js";
 import { toStreamEventMessage } from "./userPromptFiles.js";
 import { LOCAL_COMMAND_STDOUT, LOCAL_COMMAND_STDERR } from "../../constants/xml.js";
-import { Yn } from "../../utils/stripAnsi.js";
+import { stripAnsi } from "../../utils/stripAnsi.js";
 import { isCompactBoundaryMessage } from "../../services/projects/threadRows.js";
 import { normalizeMessage } from "../../utils/queryHelpers.js";
 import { unwrapAbortReason } from "../../utils/abortController.js";
@@ -54,22 +35,31 @@ import { isAbortError } from "../../utils/errors.js";
 
 //@ chunk-tyg7f3ek.js:244088-244160 placement
 function apiMessageIdField(e) {
-  return typeof e === "string" && e !== "" ? { api_message_id: e } : {};
+  return typeof e === "string" && e !== ""
+    ? {
+        api_message_id: e,
+      }
+    : {};
 }
 //@ chunk-tyg7f3ek.js:244305-244556 placement
-function streamMessageDelta(e, n, r, s, h) {
+function streamMessageDelta(e, stopReason, stopSequence, usage, h) {
   return [
     {
       type: "stream_event",
       event: {
         type: "message_delta",
         context_management: null,
-        delta: { container: null, stop_details: null, stop_reason: n, stop_sequence: r },
-        usage: s,
+        delta: {
+          container: null,
+          stop_details: null,
+          stop_reason: stopReason,
+          stop_sequence: stopSequence,
+        },
+        usage,
       },
       session_id: getSessionId(),
       parent_tool_use_id: null,
-      uuid: randomUUID_9(),
+      uuid: randomUUID(),
       ...apiMessageIdField(e),
     },
     streamMessageStop(e, h),
@@ -80,29 +70,34 @@ function streamMessageStop(e, n) {
   let r = apiMessageIdField(e);
   return {
     type: "stream_event",
-    event: { type: "message_stop" },
+    event: {
+      type: "message_stop",
+    },
     session_id: getSessionId(),
     parent_tool_use_id: null,
-    uuid: randomUUID_9(),
+    uuid: randomUUID(),
     ...r,
-    ...(r.api_message_id !== void 0 &&
-      n !== void 0 &&
+    ...(r.api_message_id !== undefined &&
+      n !== undefined &&
       Number.isSafeInteger(n) && {
-        abandoned_blocks: { api_message_id: r.api_message_id, from_block_index: n },
+        abandoned_blocks: {
+          api_message_id: r.api_message_id,
+          from_block_index: n,
+        },
       }),
   };
 }
 //@ chunk-tyg7f3ek.js:244834-245203 placement
-function usageForStream(e) {
+function usageForStream(usage) {
   return {
-    output_tokens_details: e.output_tokens_details ?? null,
-    cache_creation_input_tokens: e.cache_creation_input_tokens ?? null,
-    cache_read_input_tokens: e.cache_read_input_tokens ?? null,
-    input_tokens: e.input_tokens ?? null,
-    iterations: e.iterations ?? null,
-    output_tokens: e.output_tokens,
-    server_tool_use: e.server_tool_use ?? null,
-    fallback_credit: e.fallback_credit ?? null,
+    output_tokens_details: usage.output_tokens_details ?? null,
+    cache_creation_input_tokens: usage.cache_creation_input_tokens ?? null,
+    cache_read_input_tokens: usage.cache_read_input_tokens ?? null,
+    input_tokens: usage.input_tokens ?? null,
+    iterations: usage.iterations ?? null,
+    output_tokens: usage.output_tokens,
+    server_tool_use: usage.server_tool_use ?? null,
+    fallback_credit: usage.fallback_credit ?? null,
   };
 }
 //@ chunk-tyg7f3ek.js:245203-245327 placement
@@ -111,19 +106,19 @@ function passModelFallback(e) {
     return e;
   return e;
 }
+//@ chunk-tyg7f3ek.js:245327-247564 placement
 /**
  * 把内部消息（assistant/user/system/attachment/progress 等）转换为 SDK stream-json 消息序列。
  */
-//@ chunk-tyg7f3ek.js:245327-247564 placement
 function* toSdkMessages(e, n, r) {
-  let { replayUserMessages: replayUserMessages, includePartialMessages: includePartialMessages } = r;
+  let { replayUserMessages, includePartialMessages } = r;
   switch (e.type) {
     case "assistant":
-      if (!("parent_tool_use_id" in e)) yield* CP(e, n());
+      if (!("parent_tool_use_id" in e)) yield* normalizeMessageWithSessionId(e, n());
       return;
     case "user":
     case "progress":
-      yield* CP(e, n());
+      yield* normalizeMessageWithSessionId(e, n());
       return;
     case "system":
       switch (e.subtype) {
@@ -131,7 +126,7 @@ function* toSdkMessages(e, n, r) {
           if (e.status !== "requesting" || includePartialMessages) yield e;
           return;
         case "model_refusal_fallback": {
-          let { provisional: provisional, ...S } = e;
+          let { provisional, ...S } = e;
           yield S;
           return;
         }
@@ -155,7 +150,10 @@ function* toSdkMessages(e, n, r) {
           }
           let y;
           try {
-            y = { ...informationalSystemMessage(e), session_id: e.session_id };
+            y = {
+              ...informationalSystemMessage(e),
+              session_id: e.session_id,
+            };
           } catch (error) {
             logError(error);
           }
@@ -171,22 +169,30 @@ function* toSdkMessages(e, n, r) {
     case "attachment":
       if (replayUserMessages && e.attachment.type === "queued_command") {
         let y = queuedCommandToSdkUser(e.attachment, e);
-        if (y) yield { ...y, session_id: e.session_id };
+        if (y)
+          yield {
+            ...y,
+            session_id: e.session_id,
+          };
         return;
       }
       if (r.replayOwnTaskNotifications && e.attachment.type === "queued_command") {
         let y;
         try {
-          let S =
+          let origin =
             e.attachment.commandMode === "task-notification"
               ? parseQueuedCommandAttachment(e.attachment, e.uuid)?.origin
-              : void 0;
-          if (zfe(S) && isBareTaskNotificationOrigin(S)) y = queuedCommandToSdkUser(e.attachment, e);
+              : undefined;
+          if (isSessionTaskNotificationOrigin(origin) && isBareTaskNotificationOrigin(origin))
+            y = queuedCommandToSdkUser(e.attachment, e);
         } catch (error) {
           logError(error);
         }
         if (y) {
-          yield { ...y, session_id: e.session_id };
+          yield {
+            ...y,
+            session_id: e.session_id,
+          };
           return;
         }
       }
@@ -197,23 +203,22 @@ function* toSdkMessages(e, n, r) {
       yield* preservedAttachmentRows([e], e.session_id);
       return;
     case "result": {
-      let {
-        parent_tool_use_id: parent_tool_use_id,
-        priority: priority,
-        shouldQuery: shouldQuery,
-        timestamp: timestamp,
-        ...P
-      } = e;
-      if (P.subtype === "success" && P.deferred_tool_use !== void 0) {
+      let { parent_tool_use_id: parentToolUseId, priority, shouldQuery, timestamp, ...P } = e;
+      if (P.subtype === "success" && P.deferred_tool_use !== undefined) {
         let {
-          api_error_status: api_error_status,
-          api_error_code: api_error_code,
-          api_error_origin: api_error_origin,
-          api_error: api_error,
-          structured_output: structured_output,
+          api_error_status: apiErrorStatus,
+          api_error_code: apiErrorCode,
+          api_error_origin: apiErrorOrigin,
+          api_error: apiError,
+          structured_output: structuredOutput,
           ...re
         } = P;
-        yield { ...re, is_error: !1, stop_reason: "tool_deferred", result: "" };
+        yield {
+          ...re,
+          is_error: false,
+          stop_reason: "tool_deferred",
+          result: "",
+        };
         return;
       }
       yield P;
@@ -251,7 +256,7 @@ function* toSdkMessages(e, n, r) {
 }
 //@ chunk-tyg7f3ek.js:247564-247942 placement
 function systemMessageToSdk(e) {
-  if (e.type === "user" && typeof e.message.content === "string" && btt(e) !== void 0)
+  if (e.type === "user" && typeof e.message.content === "string" && localCommandOutputOf(e) !== undefined)
     return userMessageToSdkReplay(e, e.message.content);
   if (
     e.type === "system" &&
@@ -268,7 +273,7 @@ function systemMessageToSdk(e) {
         e.commandRun,
         e.usageReport,
         e.commandOutcome,
-      ) ?? void 0
+      ) ?? undefined
     );
   return;
 }
@@ -297,7 +302,9 @@ function* replayMessagesToSdk(e) {
         session_id: getSessionId(),
         uuid: n.uuid,
         compact_metadata: toSDKCompactMetadata(n.compactMetadata),
-        ...(n.logicalParentUuid !== void 0 && { logical_parent_uuid: n.logicalParentUuid }),
+        ...(n.logicalParentUuid !== undefined && {
+          logical_parent_uuid: n.logicalParentUuid,
+        }),
       };
     if (n.type === "system" && n.subtype === "informational") yield informationalSystemMessage(n);
   }
@@ -307,17 +314,25 @@ function informationalSystemMessage(e) {
   return {
     type: "system",
     subtype: "informational",
-    content: Yn(e.content),
+    content: stripAnsi(e.content),
     level: e.level,
-    ...(e.toolUseID && { tool_use_id: e.toolUseID }),
-    ...(e.preventContinuation && { prevent_continuation: e.preventContinuation }),
+    ...(e.toolUseID && {
+      tool_use_id: e.toolUseID,
+    }),
+    ...(e.preventContinuation && {
+      prevent_continuation: e.preventContinuation,
+    }),
     ...(e.promptSubmitEnding && {
       prompt_submit_outcome: {
         kind: e.promptSubmitEnding.ending.kind,
         prompt_kept: e.promptSubmitEnding.promptKept,
         ...(e.promptSubmitEnding.ending.kind === "no_verdict"
-          ? { no_verdict_kind: e.promptSubmitEnding.ending.noVerdictKind }
-          : e.promptSubmitEnding.ending.reason !== void 0 && { reason: e.promptSubmitEnding.ending.reason }),
+          ? {
+              no_verdict_kind: e.promptSubmitEnding.ending.noVerdictKind,
+            }
+          : e.promptSubmitEnding.ending.reason !== undefined && {
+              reason: e.promptSubmitEnding.ending.reason,
+            }),
       },
     }),
     uuid: e.uuid,
@@ -325,34 +340,45 @@ function informationalSystemMessage(e) {
   };
 }
 //@ chunk-tyg7f3ek.js:249078-249371 placement
-function preservedAttachmentRows(e, n) {
+function preservedAttachmentRows(e, sessionId) {
   try {
-    let r = e.find(isCompactBoundaryMessage)?.compactMetadata?.preservedMessages,
-      s = new Set(r?.allUuids ?? r?.uuids ?? []);
+    let preservedMessages = e.find(isCompactBoundaryMessage)?.compactMetadata?.preservedMessages;
+    let s = new Set(preservedMessages?.allUuids ?? preservedMessages?.uuids ?? []);
     return e.flatMap((h) =>
       h.type === "attachment" && h.attachment.type === "hook_system_message" && !s.has(h.uuid)
-        ? [{ ...mLr(h.attachment), uuid: h.uuid, session_id: n }]
+        ? [
+            {
+              ...informationalSystemMessage_2(h.attachment),
+              uuid: h.uuid,
+              session_id: sessionId,
+            },
+          ]
         : [],
     );
   } catch (error) {
-    return (logError(error), []);
+    logError(error);
+    return [];
   }
 }
 //@ chunk-tyg7f3ek.js:249371-249445 placement
-function* CP(e, n) {
-  for (let r of normalizeMessage(e, n)) yield { ...r, session_id: e.session_id };
+function* normalizeMessageWithSessionId(e, n) {
+  for (let r of normalizeMessage(e, n))
+    yield {
+      ...r,
+      session_id: e.session_id,
+    };
 }
 //@ chunk-tyg7f3ek.js:249445-249804 placement
-function isOrphanedPermissionTurn(e, n) {
-  let orphanedPermission = e.orphanedPermission,
-    s = orphanedPermission?.permissionResult?.toolUseID;
-  if (orphanedPermission === void 0 || s === void 0) return !1;
+function isOrphanedPermissionTurn(e, conversation) {
+  let orphanedPermission = e.orphanedPermission;
+  let toolUseID = orphanedPermission?.permissionResult?.toolUseID;
+  if (orphanedPermission === undefined || toolUseID === undefined) return false;
   let h = new Set([
-    s,
+    toolUseID,
     ...(orphanedPermission.siblings ?? []).map((y) => y.toolUseID),
     ...(orphanedPermission.notSent ?? []).map((y) => y.toolUseID),
   ]);
-  return !n.some(
+  return !conversation.some(
     (y) =>
       y.type === "user" &&
       Array.isArray(y.message.content) &&
@@ -360,24 +386,20 @@ function isOrphanedPermissionTurn(e, n) {
   );
 }
 //@ chunk-tyg7f3ek.js:249804-250538 placement
-function countUnsentBatchMessages({
-  batch: batch,
-  turnSignal: turnSignal,
-  isStopped: isStopped,
-  isSentNow: isSentNow,
-  conversation: conversation,
-  messageQueue: messageQueue,
-}) {
-  let S = new Set(),
-    R = 0;
+function countUnsentBatchMessages({ batch, turnSignal, isStopped, isSentNow, conversation, messageQueue }) {
+  let S = new Set();
+  let R = 0;
   if (!(!isStopped && (isSentNow || unwrapAbortReason(turnSignal.reason) === "interrupt")))
-    return { count: R, uuids: S };
+    return {
+      count: R,
+      uuids: S,
+    };
   let P = batch.members.length;
   try {
     for (let L = 0; L < P; L += 1) {
       let q = batch.members[isSentNow ? L : P - 1 - L];
       if (
-        q === void 0 ||
+        q === undefined ||
         q.origin?.kind === "plugin" ||
         (q.mode === "orphaned-permission" && !isOrphanedPermissionTurn(q, conversation))
       )
@@ -386,27 +408,33 @@ function countUnsentBatchMessages({
         !messageQueue.enqueueReportingAdmission(
           {
             ...q,
-            ...(q.priority === "now" && { priority: "next" }),
+            ...(q.priority === "now" && {
+              priority: "next",
+            }),
             admissionExempt: "resurrected",
-            screeningOwed: !0,
+            screeningOwed: true,
           },
-          { ahead: !isSentNow },
+          {
+            ahead: !isSentNow,
+          },
         ).admitted
       )
         continue;
-      if (((R += 1), q.uuid !== void 0)) S.add(q.uuid);
+      R += 1;
+      if (q.uuid !== undefined) S.add(q.uuid);
     }
     logForDebugging(
       `[headless] a prompt check cut for a message to run: ${R} of ${P} member(s) back on the queue`,
     );
   } catch (error) {
-    isAbortError(error)
-      ? logForDebugging(`[headless] putting a cut batch back aborted: ${error}`)
-      : logError(error);
+    if (isAbortError(error)) logForDebugging(`[headless] putting a cut batch back aborted: ${error}`);
+    else logError(error);
   }
-  return { count: R, uuids: S };
+  return {
+    count: R,
+    uuids: S,
+  };
 }
-
 export {
   apiMessageIdField,
   informationalSystemMessage,

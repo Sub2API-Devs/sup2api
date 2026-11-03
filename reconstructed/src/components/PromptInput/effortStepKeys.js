@@ -9,13 +9,13 @@
  * attribution: placement 2
  */
 import { w } from "../../../vendor/react/compiler-runtime.js";
-import { Cr, useSetAppState } from "../../state/AppState.js";
+import { useAppStoreDirect, useSetAppState } from "../../state/AppState.js";
 import { useMainLoopModel as useMainLoopModel_3 } from "../../hooks/useMainLoopModel.js";
 import { useSelection } from "../../ink/components/Input.js";
 import { useNotifications } from "../../context/notifications.js";
 import { useKeybindingContext } from "../../keybindings/KeybindingContext.js";
 import { y, P } from "../../../vendor/react/cjs/react.production.js";
-import { dg } from "../../context/QueuedMessageContext.js";
+import { useQueuedMessageText } from "../../context/QueuedMessageContext.js";
 import {
   getEffortLevelOrHigh,
   resolveEffortLevel,
@@ -30,7 +30,7 @@ import { EFFORT_LEVEL_KEY } from "../EffortIndicator.js";
 import { shouldShowEffortNotice } from "./promptInputState.js";
 import { isMainThreadSource } from "../../utils/querySource.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
-import { e } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Box } from "../../ink/components/Text.js";
 import { ModelEffortSwitchConfirm } from "../ModelEffortSwitchConfirm.js";
 import { useFooterAwareMessageActions } from "../CoordinatorAgentStatus.js";
@@ -38,153 +38,176 @@ import { useFooterAwareMessageActions } from "../CoordinatorAgentStatus.js";
 //@ chunk-18hwfzwa.js:925874-925910 placement
 var EFFORT_STEP_MAX_VIA_EFFORT = "effort-step-max-via-effort";
 //@ chunk-18hwfzwa.js:925910-927945 placement
-function useEffortStepKeys(h, x) {
-  let $ = w(32),
-    D = Cr(),
-    L = useSetAppState(),
-    ee = useMainLoopModel_3(),
-    ke = useSelection(),
-    { addNotification: addNotification, removeNotification: removeNotification } = useNotifications(),
-    He = useKeybindingContext(),
-    [We, ze] = y(null),
-    Xe = dg(),
-    kt;
-  if ($[0] !== Xe || $[1] !== ee)
-    ((kt = getEffortLevelOrHigh(ee, Xe)), ($[0] = Xe), ($[1] = ee), ($[2] = kt));
-  else kt = $[2];
-  let At = kt,
-    It;
-  if ($[3] !== removeNotification)
-    ((It = () => {
+function useEffortStepKeys(transcript, x) {
+  let $ = w(32);
+  let appStoreDirect = useAppStoreDirect();
+  let setAppState = useSetAppState();
+  let mainLoopModel = useMainLoopModel_3();
+  let selection = useSelection();
+  let { addNotification, removeNotification } = useNotifications();
+  let keybindingContext = useKeybindingContext();
+  let [We, ze] = y(null);
+  let queuedMessageText = useQueuedMessageText();
+  let kt;
+  if ($[0] !== queuedMessageText || $[1] !== mainLoopModel) {
+    kt = getEffortLevelOrHigh(mainLoopModel, queuedMessageText);
+    $[0] = queuedMessageText;
+    $[1] = mainLoopModel;
+    $[2] = kt;
+  } else kt = $[2];
+  let At = kt;
+  let It;
+  if ($[3] !== removeNotification) {
+    It = () => {
       removeNotification(EFFORT_STEP_MAX_VIA_EFFORT);
-    }),
-      ($[3] = removeNotification),
-      ($[4] = It));
-  else It = $[4];
+    };
+    $[3] = removeNotification;
+    $[4] = It;
+  } else It = $[4];
   let Ot;
-  if ($[5] !== ee || $[6] !== removeNotification || $[7] !== At)
-    ((Ot = [At, ee, removeNotification]), ($[5] = ee), ($[6] = removeNotification), ($[7] = At), ($[8] = Ot));
-  else Ot = $[8];
+  if ($[5] !== mainLoopModel || $[6] !== removeNotification || $[7] !== At) {
+    Ot = [At, mainLoopModel, removeNotification];
+    $[5] = mainLoopModel;
+    $[6] = removeNotification;
+    $[7] = At;
+    $[8] = Ot;
+  } else Ot = $[8];
   P(It, Ot);
-  let Et,
-    Dt = null,
-    Lt;
-  if ($[9] !== L || $[10] !== D)
-    ((Lt = (oo) => {
-      let state = D.getState();
-      (applyEffortCommand(
+  let Et;
+  let Dt = null;
+  let Lt;
+  if ($[9] !== setAppState || $[10] !== appStoreDirect) {
+    Lt = (oo) => {
+      let state = appStoreDirect.getState();
+      applyEffortCommand(
         oo,
-        { effort: resolveEffortLevel(state), ultracode: state.ultracode, route: "step_keys" },
-        L,
-        !1,
-      ),
-        logFeatureOk("effort_step_keybinding"));
-    }),
-      ($[9] = L),
-      ($[10] = D),
-      ($[11] = Lt));
-  else Lt = $[11];
+        {
+          effort: resolveEffortLevel(state),
+          ultracode: state.ultracode,
+          route: "step_keys",
+        },
+        setAppState,
+        false,
+      );
+      logFeatureOk("effort_step_keybinding");
+    };
+    $[9] = setAppState;
+    $[10] = appStoreDirect;
+    $[11] = Lt;
+  } else Lt = $[11];
   let io;
   if (
     $[12] !== addNotification ||
     $[13] !== Lt ||
-    $[14] !== He ||
-    $[15] !== ee ||
+    $[14] !== keybindingContext ||
+    $[15] !== mainLoopModel ||
     $[16] !== removeNotification ||
-    $[17] !== ke ||
-    $[18] !== D ||
-    $[19] !== h
-  )
-    ((io = (so) => {
-      if (ke.hasSelection() || !shouldShowEffortHint(ee)) {
-        return !1;
+    $[17] !== selection ||
+    $[18] !== appStoreDirect ||
+    $[19] !== transcript
+  ) {
+    io = (so) => {
+      if (selection.hasSelection() || !shouldShowEffortHint(mainLoopModel)) {
+        return false;
       }
-      let state = D.getState();
-      let ao = resolveEffortLevel(state);
-      let co = getEffortLevelOrHigh(ee, ao);
-      let bo = findAdjacentEffortLevel(ee, co, so);
-      if (bo === void 0) {
-        if (so === 1 && isOnlyMaxAboveEffort(ee, co)) {
-          let Ao = He?.getDisplayText("chat:increaseEffort", "Chat") ?? `shift+${UP_ARROW}`;
-          (removeNotification(EFFORT_LEVEL_KEY),
-            addNotification({
-              key: EFFORT_STEP_MAX_VIA_EFFORT,
-              kind: "feedback",
-              text: `${Ao} stops below max \xB7 /effort max to set it`,
-              priority: "immediate",
-            }));
+      let state = appStoreDirect.getState();
+      let effortLevel = resolveEffortLevel(state);
+      let effortLevelOrHigh = getEffortLevelOrHigh(mainLoopModel, effortLevel);
+      let adjacentEffortLevel = findAdjacentEffortLevel(mainLoopModel, effortLevelOrHigh, so);
+      if (adjacentEffortLevel === undefined) {
+        if (so === 1 && isOnlyMaxAboveEffort(mainLoopModel, effortLevelOrHigh)) {
+          let Ao = keybindingContext?.getDisplayText("chat:increaseEffort", "Chat") ?? `shift+${UP_ARROW}`;
+          removeNotification(EFFORT_LEVEL_KEY);
+          addNotification({
+            key: EFFORT_STEP_MAX_VIA_EFFORT,
+            kind: "feedback",
+            text: `${Ao} stops below max \xB7 /effort max to set it`,
+            priority: "immediate",
+          });
         }
         return;
       }
       if (
         shouldShowEffortNotice({
-          target: bo,
-          current: ao,
-          model: ee,
+          target: adjacentEffortLevel,
+          current: effortLevel,
+          model: mainLoopModel,
           permissionMode: state.toolPermissionContext.mode,
-          messages: h.getSnapshot(),
+          messages: transcript.getSnapshot(),
           ackedAtOutputTokens: state.cacheMissAckedAtOutputTokens,
-          promptCacheMayBeWarm: isMainThreadSource(h.getSnapshot()),
+          promptCacheMayBeWarm: isMainThreadSource(transcript.getSnapshot()),
         })
       ) {
-        (removeNotification(EFFORT_STEP_MAX_VIA_EFFORT), ze(bo));
+        removeNotification(EFFORT_STEP_MAX_VIA_EFFORT);
+        ze(adjacentEffortLevel);
         return;
       }
-      Lt(bo);
-    }),
-      ($[12] = addNotification),
-      ($[13] = Lt),
-      ($[14] = He),
-      ($[15] = ee),
-      ($[16] = removeNotification),
-      ($[17] = ke),
-      ($[18] = D),
-      ($[19] = h),
-      ($[20] = io));
-  else io = $[20];
-  let Bo = io,
-    Ro;
-  if ($[21] !== Bo || $[22] !== We)
-    ((Ro = ((Et = { "chat:increaseEffort": () => Bo(1), "chat:decreaseEffort": () => Bo(-1) }), We !== null)),
-      ($[21] = Bo),
-      ($[22] = We),
-      ($[23] = Ro),
-      ($[24] = Et));
-  else ((Ro = $[23]), (Et = $[24]));
-  if (Ro) {
-    let Ho;
-    if ($[25] !== Lt || $[26] !== We)
-      ((Ho = () => {
-        (ze(null), Lt(We));
+      Lt(adjacentEffortLevel);
+    };
+    $[12] = addNotification;
+    $[13] = Lt;
+    $[14] = keybindingContext;
+    $[15] = mainLoopModel;
+    $[16] = removeNotification;
+    $[17] = selection;
+    $[18] = appStoreDirect;
+    $[19] = transcript;
+    $[20] = io;
+  } else io = $[20];
+  let Bo = io;
+  let Ro;
+  if ($[21] !== Bo || $[22] !== We) {
+    Ro =
+      ((Et = {
+        "chat:increaseEffort": () => Bo(1),
+        "chat:decreaseEffort": () => Bo(-1),
       }),
-        ($[25] = Lt),
-        ($[26] = We),
-        ($[27] = Ho));
-    else Ho = $[27];
-    let Io;
-    if ($[28] === MEMO_CACHE_SENTINEL) ((Io = () => ze(null)), ($[28] = Io));
-    else Io = $[28];
+      We !== null);
+    $[21] = Bo;
+    $[22] = We;
+    $[23] = Ro;
+    $[24] = Et;
+  } else {
+    Ro = $[23];
+    Et = $[24];
+  }
+  if (Ro) {
+    let onConfirm;
+    if ($[25] !== Lt || $[26] !== We) {
+      onConfirm = () => {
+        ze(null);
+        Lt(We);
+      };
+      $[25] = Lt;
+      $[26] = We;
+      $[27] = onConfirm;
+    } else onConfirm = $[27];
+    let onCancel;
+    if ($[28] === MEMO_CACHE_SENTINEL) {
+      onCancel = () => ze(null);
+      $[28] = onCancel;
+    } else onCancel = $[28];
     let Wo;
-    if ($[29] !== Ho || $[30] !== We)
-      ((Wo = e(Box, {
+    if ($[29] !== onConfirm || $[30] !== We) {
+      Wo = jsxProd_default(Box, {
         flexDirection: "column",
         marginTop: 1,
-        children: e(ModelEffortSwitchConfirm, {
+        children: jsxProd_default(ModelEffortSwitchConfirm, {
           kind: "effort",
           model: null,
           effort: We,
-          overDraft: !0,
-          onConfirm: Ho,
-          onCancel: Io,
+          overDraft: true,
+          onConfirm,
+          onCancel,
         }),
-      })),
-        ($[29] = Ho),
-        ($[30] = We),
-        ($[31] = Wo));
-    else Wo = $[31];
+      });
+      $[29] = onConfirm;
+      $[30] = We;
+      $[31] = Wo;
+    } else Wo = $[31];
     Dt = Wo;
   }
-  return (useFooterAwareMessageActions(Et, x), Dt);
+  useFooterAwareMessageActions(Et, x);
+  return Dt;
 }
-
 export { useEffortStepKeys };

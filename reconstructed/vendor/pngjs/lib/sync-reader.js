@@ -8,25 +8,30 @@
 import { x } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-spjgqa4y.js:45541-46188 cjs-fingerprint
-var Et = x(function (eu, gn) {
-  var pn = (gn.exports = function (t) {
-    ((this._buffer = t), (this._reads = []));
+var require_sync_reader = x(function (cjsExports, cjsModule) {
+  var SyncReader = (cjsModule.exports = function (buffer) {
+    this._buffer = buffer;
+    this._reads = [];
   });
-  pn.prototype.read = function (t, e) {
-    this._reads.push({ length: Math.abs(t), allowLess: t < 0, func: e });
+  SyncReader.prototype.read = function (length, callback) {
+    this._reads.push({
+      length: Math.abs(length),
+      allowLess: length < 0,
+      func: callback,
+    });
   };
-  pn.prototype.process = function () {
+  SyncReader.prototype.process = function () {
     while (this._reads.length > 0 && this._buffer.length) {
-      let t = this._reads[0];
-      if (this._buffer.length && (this._buffer.length >= t.length || t.allowLess)) {
+      let read = this._reads[0];
+      if (this._buffer.length && (this._buffer.length >= read.length || read.allowLess)) {
         this._reads.shift();
-        let _buffer = this._buffer;
-        ((this._buffer = _buffer.slice(t.length)), t.func.call(this, _buffer.slice(0, t.length)));
+        let buf = this._buffer;
+        this._buffer = buf.slice(read.length);
+        read.func.call(this, buf.slice(0, read.length));
       } else break;
     }
     if (this._reads.length > 0) return Error("There are some read requests waitng on finished stream");
     if (this._buffer.length > 0) return Error("unrecognised content at end of stream");
   };
 });
-
-export { Et };
+export { require_sync_reader };

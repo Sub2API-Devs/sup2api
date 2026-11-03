@@ -6,88 +6,99 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { as } from "../internal/parse-options.js";
-import { Ye } from "../internal/re.js";
-import { Mn } from "../functions/cmp.js";
-import { St } from "../internal/debug.js";
-import { G } from "./semver.js";
-import { ee } from "./range.js";
+import { require_parse_options } from "../internal/parse-options.js";
+import { require_re } from "../internal/re.js";
+import { require_cmp } from "../functions/cmp.js";
+import { require_debug } from "../internal/debug.js";
+import { require_semver } from "./semver.js";
+import { require_range } from "./range.js";
 
 //@ chunk-bwbq4xvm.js:19771-21678 cjs-fingerprint
-var yt = x(function (w2, fl) {
-  var At = Symbol("SemVer ANY");
-  class bs {
+var require_comparator = x(function (cjsExports, cjsModule) {
+  var ANY = Symbol("SemVer ANY");
+  class Comparator {
     static get ANY() {
-      return At;
+      return ANY;
     }
-    constructor(e, s) {
-      if (((s = ul(s)), e instanceof bs))
-        if (e.loose === !!s.loose) return e;
-        else e = e.value;
-      if (
-        ((e = e.trim().split(/\s+/).join(" ")),
-        Dn("comparator", e, s),
-        (this.options = s),
-        (this.loose = !!s.loose),
-        this.parse(e),
-        this.semver === At)
-      )
-        this.value = "";
+    constructor(comp, options) {
+      options = parseOptions(options);
+      if (comp instanceof Comparator)
+        if (comp.loose === !!options.loose) return comp;
+        else comp = comp.value;
+      comp = comp.trim().split(/\s+/).join(" ");
+      debug("comparator", comp, options);
+      this.options = options;
+      this.loose = !!options.loose;
+      this.parse(comp);
+      if (this.semver === ANY) this.value = "";
       else this.value = this.operator + this.semver.version;
-      Dn("comp", this);
+      debug("comp", this);
     }
-    parse(e) {
-      let s = this.options.loose ? safeRe[ml.COMPARATORLOOSE] : safeRe[ml.COMPARATOR],
-        match = e.match(s);
-      if (!match) throw TypeError(`Invalid comparator: ${e}`);
-      if (((this.operator = match[1] !== void 0 ? match[1] : ""), this.operator === "=")) this.operator = "";
-      if (!match[2]) this.semver = At;
-      else this.semver = new _l(match[2], this.options.loose);
+    parse(comp) {
+      let r = this.options.loose ? re[t.COMPARATORLOOSE] : re[t.COMPARATOR];
+      let m = comp.match(r);
+      if (!m) throw TypeError(`Invalid comparator: ${comp}`);
+      this.operator = m[1] !== undefined ? m[1] : "";
+      if (this.operator === "=") this.operator = "";
+      if (!m[2]) this.semver = ANY;
+      else this.semver = new SemVer(m[2], this.options.loose);
     }
     toString() {
       return this.value;
     }
-    test(e) {
-      if ((Dn("Comparator.test", e, this.options.loose), this.semver === At || e === At)) return !0;
-      if (typeof e === "string")
+    test(version) {
+      debug("Comparator.test", version, this.options.loose);
+      if (this.semver === ANY || version === ANY) return true;
+      if (typeof version === "string")
         try {
-          e = new _l(e, this.options);
-        } catch (error) {
-          return !1;
+          version = new SemVer(version, this.options);
+        } catch (er) {
+          return false;
         }
-      return xn(e, this.operator, this.semver, this.options);
+      return cmp(version, this.operator, this.semver, this.options);
     }
-    intersects(e, s) {
-      if (!(e instanceof bs)) throw TypeError("a Comparator is required");
+    intersects(comp, options) {
+      if (!(comp instanceof Comparator)) throw TypeError("a Comparator is required");
       if (this.operator === "") {
-        if (this.value === "") return !0;
-        return new gl(e.value, s).test(this.value);
-      } else if (e.operator === "") {
-        if (e.value === "") return !0;
-        return new gl(this.value, s).test(e.semver);
+        if (this.value === "") return true;
+        return new Range(comp.value, options).test(this.value);
+      } else if (comp.operator === "") {
+        if (comp.value === "") return true;
+        return new Range(this.value, options).test(comp.semver);
       }
-      if (((s = ul(s)), s.includePrerelease && (this.value === "<0.0.0-0" || e.value === "<0.0.0-0")))
-        return !1;
-      if (!s.includePrerelease && (this.value.startsWith("<0.0.0") || e.value.startsWith("<0.0.0")))
-        return !1;
-      if (this.operator.startsWith(">") && e.operator.startsWith(">")) return !0;
-      if (this.operator.startsWith("<") && e.operator.startsWith("<")) return !0;
-      if (this.semver.version === e.semver.version && this.operator.includes("=") && e.operator.includes("="))
-        return !0;
-      if (xn(this.semver, "<", e.semver, s) && this.operator.startsWith(">") && e.operator.startsWith("<"))
-        return !0;
-      if (xn(this.semver, ">", e.semver, s) && this.operator.startsWith("<") && e.operator.startsWith(">"))
-        return !0;
-      return !1;
+      options = parseOptions(options);
+      if (options.includePrerelease && (this.value === "<0.0.0-0" || comp.value === "<0.0.0-0")) return false;
+      if (!options.includePrerelease && (this.value.startsWith("<0.0.0") || comp.value.startsWith("<0.0.0")))
+        return false;
+      if (this.operator.startsWith(">") && comp.operator.startsWith(">")) return true;
+      if (this.operator.startsWith("<") && comp.operator.startsWith("<")) return true;
+      if (
+        this.semver.version === comp.semver.version &&
+        this.operator.includes("=") &&
+        comp.operator.includes("=")
+      )
+        return true;
+      if (
+        cmp(this.semver, "<", comp.semver, options) &&
+        this.operator.startsWith(">") &&
+        comp.operator.startsWith("<")
+      )
+        return true;
+      if (
+        cmp(this.semver, ">", comp.semver, options) &&
+        this.operator.startsWith("<") &&
+        comp.operator.startsWith(">")
+      )
+        return true;
+      return false;
     }
   }
-  fl.exports = bs;
-  var ul = as(),
-    { safeRe: safeRe, t: ml } = Ye(),
-    xn = Mn(),
-    Dn = St(),
-    _l = G(),
-    gl = ee();
+  cjsModule.exports = Comparator;
+  var parseOptions = require_parse_options();
+  var { safeRe: re, t } = require_re();
+  var cmp = require_cmp();
+  var debug = require_debug();
+  var SemVer = require_semver();
+  var Range = require_range();
 });
-
-export { yt };
+export { require_comparator };

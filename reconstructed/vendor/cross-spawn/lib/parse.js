@@ -6,34 +6,50 @@
  * attribution: cjs-fingerprint 1
  */
 import { x, importMetaRequire } from "../../../runtime/bun-runtime.js";
-import { It } from "./util/resolveCommand.js";
-import { vt } from "./util/escape.js";
-import { kt } from "./util/readShebang.js";
+import { require_resolveCommand } from "./util/resolveCommand.js";
+import { require_escape } from "./util/escape.js";
+import { require_readShebang } from "./util/readShebang.js";
 
 //@ chunk-m4p5zn6n.js:5330-5816 cjs-fingerprint
-var Lt = x(function (bi, Gt) {
-  var Nt = importMetaRequire("path"),
-    Ft = It(),
-    ee = vt(),
-    cr = kt(),
-    lr = /\.(?:com|exe)$/i,
-    fr = /node_modules[\\/].bin[\\/][^\\/]+\.cmd$/i;
-  function pr(e) {
-    e.file = Ft(e);
-    let n = e.file && cr(e.file);
-    if (n) return (e.args.unshift(e.file), (e.command = n), Ft(e));
-    return e.file;
+var require_parse = x(function (cjsExports, cjsModule) {
+  var path = importMetaRequire("path");
+  var resolveCommand = require_resolveCommand();
+  var ee = require_escape();
+  var readShebang = require_readShebang();
+  var lr = /\.(?:com|exe)$/i;
+  var fr = /node_modules[\\/].bin[\\/][^\\/]+\.cmd$/i;
+  function detectShebang(parsed) {
+    parsed.file = resolveCommand(parsed);
+    let shebang = parsed.file && readShebang(parsed.file);
+    if (shebang) {
+      parsed.args.unshift(parsed.file);
+      parsed.command = shebang;
+      return resolveCommand(parsed);
+    }
+    return parsed.file;
   }
-  function mr(e) {
-    return e;
+  function parseNonShell(parsed) {
+    return parsed;
   }
-  function gr(e, n, r) {
-    if (n && !Array.isArray(n)) ((r = n), (n = null));
-    ((n = n ? n.slice(0) : []), (r = Object.assign({}, r)));
-    let o = { command: e, args: n, options: r, file: void 0, original: { command: e, args: n } };
-    return r.shell ? o : mr(o);
+  function parse(command, args, options) {
+    if (args && !Array.isArray(args)) {
+      options = args;
+      args = null;
+    }
+    args = args ? args.slice(0) : [];
+    options = Object.assign({}, options);
+    let parsed = {
+      command,
+      args,
+      options,
+      file: undefined,
+      original: {
+        command,
+        args,
+      },
+    };
+    return options.shell ? parsed : parseNonShell(parsed);
   }
-  Gt.exports = gr;
+  cjsModule.exports = parse;
 });
-
-export { Lt };
+export { require_parse };

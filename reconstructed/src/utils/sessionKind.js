@@ -11,18 +11,17 @@
 import { isActingAsBgJob } from "./concurrentSessions.js";
 import { getTodoToolsOptIn } from "../bootstrap/state.js";
 import { mainLoopCanonicalModel } from "./model/telemetryModelName.js";
-import { tAr, isTodoToolLegacyModel } from "./model/legacyModelNames.js";
+import { isInferenceProfileModelId, isTodoToolLegacyModel } from "./model/legacyModelNames.js";
 import { env } from "./env.js";
 
+//@ chunk-e6aww6q8.js:3232784-3232917 placement
 /**
  * 判断是否启用 Todo 工具：后台任务、显式开启、旧模型或模型未知时启用，否则看 CLAUDE_CODE_ENABLE_TODO_TOOLS。
  */
-//@ chunk-e6aww6q8.js:3232784-3232917 placement
 function todoToolsEnabled() {
-  if (isActingAsBgJob() || getTodoToolsOptIn()) return !0;
+  if (isActingAsBgJob() || getTodoToolsOptIn()) return true;
   let e = mainLoopCanonicalModel();
-  if (e === void 0 || tAr(e) || isTodoToolLegacyModel(e)) return !0;
-  return env.CLAUDE_CODE_ENABLE_TODO_TOOLS === !0;
+  if (e === undefined || isInferenceProfileModelId(e) || isTodoToolLegacyModel(e)) return true;
+  return env.CLAUDE_CODE_ENABLE_TODO_TOOLS === true;
 }
-
 export { todoToolsEnabled };

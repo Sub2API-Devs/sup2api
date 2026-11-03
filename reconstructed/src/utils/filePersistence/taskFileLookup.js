@@ -11,19 +11,18 @@
 import { filesPlacedByNameRegistry } from "../../bootstrap/state.js";
 import { nfc } from "./placedByName.js";
 
+//@ chunk-azz22fvc.js:1422-1568 placement
 /**
  * 判断给定文件中是否有与"按名称放置的文件"同名但 uuid 不同的冲突项。
  */
-//@ chunk-azz22fvc.js:1422-1568 placement
 function hasConflictingPlacedFile(e) {
   let t = filesPlacedByNameRegistry();
   return (
     t.size > 0 &&
-    e.some(({ fileUuid: fileUuid, name: a }) => {
+    e.some(({ fileUuid, name: a }) => {
       let n = t.get(nfc(a));
-      return n !== void 0 && n.fileUuid !== fileUuid.toLowerCase();
+      return n !== undefined && n.fileUuid !== fileUuid.toLowerCase();
     })
   );
 }
-
 export { hasConflictingPlacedFile };

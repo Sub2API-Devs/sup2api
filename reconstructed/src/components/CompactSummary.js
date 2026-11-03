@@ -8,87 +8,108 @@
  * pieces: chunk-ah34pb7m.js (5)
  * attribution: placement 4, fingerprint 1
  */
-import { j } from "../../vendor/react/cjs/react.production.js";
+import { init_react_production } from "../../vendor/react/cjs/react.production.js";
 import { w } from "../../vendor/react/compiler-runtime.js";
 import { actionKeysNamespace } from "./pluginUi/render/actionKeys.js";
 import { rewriteToolsUsedSummaryTag } from "../utils/messages/untrustedArtifactContent.js";
 import { getUserMessageText } from "../utils/messages.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
-import { e, r } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+} from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Box, Text } from "../ink/components/Text.js";
 import { BLACK_CIRCLE } from "../utils/permissions/autoModeRulesPrompt.js";
 import { MessageResponse } from "./MessageResponse.js";
 import { ConfigurableShortcutHint } from "./ConfigurableShortcutHint.js";
 
 //@ chunk-ah34pb7m.js:37715-37719 placement
-j();
+init_react_production();
 //@ chunk-ah34pb7m.js:37719-37745 placement
-function LU() {
+function nullRender() {
   return null;
 }
+//@ chunk-ah34pb7m.js:37745-38008 placement
 /**
  * 为消息（uuid/id/plugin）注册 "Placed" 渲染钩子的动作键输入。
  */
-//@ chunk-ah34pb7m.js:37745-38008 placement
 function usePlacedActionKeys(m) {
-  let f = w(5),
-    { uuid: uuid, id: id, plugin: plugin } = m.message,
-    h,
-    M;
-  if (f[0] !== id || f[1] !== plugin || f[2] !== uuid)
-    ((h = () => ({ requestId: uuid, props: { id: id, plugin: plugin } })),
-      (M = [uuid, id, plugin]),
-      (f[0] = id),
-      (f[1] = plugin),
-      (f[2] = uuid),
-      (f[3] = h),
-      (f[4] = M));
-  else ((h = f[3]), (M = f[4]));
-  return actionKeysNamespace.useRenderHook(actionKeysNamespace.useRenderInput("Placed", h, M), LU);
+  let f = w(5);
+  let { uuid, id, plugin } = m.message;
+  let h;
+  let M;
+  if (f[0] !== id || f[1] !== plugin || f[2] !== uuid) {
+    h = () => ({
+      requestId: uuid,
+      props: {
+        id,
+        plugin,
+      },
+    });
+    M = [uuid, id, plugin];
+    f[0] = id;
+    f[1] = plugin;
+    f[2] = uuid;
+    f[3] = h;
+    f[4] = M;
+  } else {
+    h = f[3];
+    M = f[4];
+  }
+  return actionKeysNamespace.useRenderHook(actionKeysNamespace.useRenderInput("Placed", h, M), nullRender);
 }
+//@ chunk-ah34pb7m.js:38008-38044 placement
 /**
  * 处理压缩摘要文本用于显示。
  */
-//@ chunk-ah34pb7m.js:38008-38044 placement
-function renderCompactSummaryText(m, d) {
-  return ((m = rewriteToolsUsedSummaryTag(m)), m);
+function renderCompactSummaryText(m, modelOnlyText) {
+  m = rewriteToolsUsedSummaryTag(m);
+  return m;
 }
 //@ chunk-ah34pb7m.js:38044-39964 fingerprint = CompactSummary (0.75)
-function CompactSummary(t0) {
-  let $ = w(24),
-    { message: message, screen: screen } = t0,
-    isTranscriptMode = screen === "transcript",
-    h;
-  if ($[0] !== message)
-    ((h = renderCompactSummaryText(getUserMessageText(message) || "", message.modelOnlyText)),
-      ($[0] = message),
-      ($[1] = h));
-  else h = $[1];
-  let textContent = h,
-    metadata = message.summarizeMetadata;
+function CompactSummary(props) {
+  let $ = w(24);
+  let { message, screen } = props;
+  let isTranscriptMode = screen === "transcript";
+  let t1;
+  if ($[0] !== message) {
+    t1 = renderCompactSummaryText(getUserMessageText(message) || "", message.modelOnlyText);
+    $[0] = message;
+    $[1] = t1;
+  } else t1 = $[1];
+  let textContent = t1;
+  let metadata = message.summarizeMetadata;
   if (metadata) {
-    let x;
-    if ($[2] === MEMO_CACHE_SENTINEL)
-      ((x = e(Box, {
+    let t2;
+    if ($[2] === MEMO_CACHE_SENTINEL) {
+      t2 = jsxProd_default(Box, {
         minWidth: 2,
-        children: e(Text, { "aria-hidden": !0, color: "text", children: BLACK_CIRCLE }),
-      })),
-        ($[2] = x));
-    else x = $[2];
-    let k;
-    if ($[3] === MEMO_CACHE_SENTINEL)
-      ((k = e(Text, { bold: !0, children: "Summarized conversation" })), ($[3] = k));
-    else k = $[3];
-    let b;
-    if ($[4] !== isTranscriptMode || $[5] !== metadata)
-      ((b =
+        children: jsxProd_default(Text, {
+          "aria-hidden": true,
+          color: "text",
+          children: BLACK_CIRCLE,
+        }),
+      });
+      $[2] = t2;
+    } else t2 = $[2];
+    let t3;
+    if ($[3] === MEMO_CACHE_SENTINEL) {
+      t3 = jsxProd_default(Text, {
+        bold: true,
+        children: "Summarized conversation",
+      });
+      $[3] = t3;
+    } else t3 = $[3];
+    let t4;
+    if ($[4] !== isTranscriptMode || $[5] !== metadata) {
+      t4 =
         !isTranscriptMode &&
-        e(MessageResponse, {
-          children: r(Box, {
+        jsxProd_default(MessageResponse, {
+          children: jsxProd_default_2(Box, {
             flexDirection: "column",
             children: [
-              r(Text, {
-                dimColor: !0,
+              jsxProd_default_2(Text, {
+                dimColor: true,
                 children: [
                   "Summarized ",
                   metadata.messagesSummarized,
@@ -98,105 +119,136 @@ function CompactSummary(t0) {
                 ],
               }),
               metadata.userContext &&
-                r(Text, { dimColor: !0, children: ["Context: ", "\u201C", metadata.userContext, "\u201D"] }),
-              e(Text, {
-                dimColor: !0,
-                children: e(ConfigurableShortcutHint, {
+                jsxProd_default_2(Text, {
+                  dimColor: true,
+                  children: ["Context: ", "\u201C", metadata.userContext, "\u201D"],
+                }),
+              jsxProd_default(Text, {
+                dimColor: true,
+                children: jsxProd_default(ConfigurableShortcutHint, {
                   action: "app:toggleTranscript",
                   context: "Global",
                   fallback: "ctrl+o",
                   description: "expand history",
-                  parens: !0,
+                  parens: true,
                 }),
               }),
             ],
           }),
-        })),
-        ($[4] = isTranscriptMode),
-        ($[5] = metadata),
-        ($[6] = b));
-    else b = $[6];
-    let E;
-    if ($[7] !== isTranscriptMode || $[8] !== textContent)
-      ((E = isTranscriptMode && e(MessageResponse, { children: e(Text, { children: textContent }) })),
-        ($[7] = isTranscriptMode),
-        ($[8] = textContent),
-        ($[9] = E));
-    else E = $[9];
-    let B;
-    if ($[10] !== b || $[11] !== E)
-      ((B = e(Box, {
+        });
+      $[4] = isTranscriptMode;
+      $[5] = metadata;
+      $[6] = t4;
+    } else t4 = $[6];
+    let t5;
+    if ($[7] !== isTranscriptMode || $[8] !== textContent) {
+      t5 =
+        isTranscriptMode &&
+        jsxProd_default(MessageResponse, {
+          children: jsxProd_default(Text, {
+            children: textContent,
+          }),
+        });
+      $[7] = isTranscriptMode;
+      $[8] = textContent;
+      $[9] = t5;
+    } else t5 = $[9];
+    let t6;
+    if ($[10] !== t4 || $[11] !== t5) {
+      t6 = jsxProd_default(Box, {
         flexDirection: "column",
         marginTop: 1,
-        children: r(Box, {
+        children: jsxProd_default_2(Box, {
           flexDirection: "row",
-          children: [x, r(Box, { flexDirection: "column", children: [k, b, E] })],
+          children: [
+            t2,
+            jsxProd_default_2(Box, {
+              flexDirection: "column",
+              children: [t3, t4, t5],
+            }),
+          ],
         }),
-      })),
-        ($[10] = b),
-        ($[11] = E),
-        ($[12] = B));
-    else B = $[12];
-    return B;
+      });
+      $[10] = t4;
+      $[11] = t5;
+      $[12] = t6;
+    } else t6 = $[12];
+    return t6;
   }
-  let x;
-  if ($[13] === MEMO_CACHE_SENTINEL)
-    ((x = e(Box, {
+  let t2;
+  if ($[13] === MEMO_CACHE_SENTINEL) {
+    t2 = jsxProd_default(Box, {
       minWidth: 2,
-      children: e(Text, { "aria-hidden": !0, color: "text", children: BLACK_CIRCLE }),
-    })),
-      ($[13] = x));
-  else x = $[13];
-  let k;
-  if ($[14] !== isTranscriptMode)
-    ((k =
+      children: jsxProd_default(Text, {
+        "aria-hidden": true,
+        color: "text",
+        children: BLACK_CIRCLE,
+      }),
+    });
+    $[13] = t2;
+  } else t2 = $[13];
+  let t3;
+  if ($[14] !== isTranscriptMode) {
+    t3 =
       !isTranscriptMode &&
-      r(Text, {
-        dimColor: !0,
+      jsxProd_default_2(Text, {
+        dimColor: true,
         children: [
           " ",
-          e(ConfigurableShortcutHint, {
+          jsxProd_default(ConfigurableShortcutHint, {
             action: "app:toggleTranscript",
             context: "Global",
             fallback: "ctrl+o",
             description: "expand",
-            parens: !0,
+            parens: true,
           }),
         ],
-      })),
-      ($[14] = isTranscriptMode),
-      ($[15] = k));
-  else k = $[15];
-  let b;
-  if ($[16] !== k)
-    ((b = r(Box, {
+      });
+    $[14] = isTranscriptMode;
+    $[15] = t3;
+  } else t3 = $[15];
+  let t4;
+  if ($[16] !== t3) {
+    t4 = jsxProd_default_2(Box, {
       flexDirection: "row",
       children: [
-        x,
-        e(Box, {
+        t2,
+        jsxProd_default(Box, {
           flexDirection: "column",
-          children: r(Text, { bold: !0, children: ["Compact summary", k] }),
+          children: jsxProd_default_2(Text, {
+            bold: true,
+            children: ["Compact summary", t3],
+          }),
         }),
       ],
-    })),
-      ($[16] = k),
-      ($[17] = b));
-  else b = $[17];
-  let E;
-  if ($[18] !== isTranscriptMode || $[19] !== textContent)
-    ((E = isTranscriptMode && e(MessageResponse, { children: e(Text, { children: textContent }) })),
-      ($[18] = isTranscriptMode),
-      ($[19] = textContent),
-      ($[20] = E));
-  else E = $[20];
-  let B;
-  if ($[21] !== b || $[22] !== E)
-    ((B = r(Box, { flexDirection: "column", marginTop: 1, children: [b, E] })),
-      ($[21] = b),
-      ($[22] = E),
-      ($[23] = B));
-  else B = $[23];
-  return B;
+    });
+    $[16] = t3;
+    $[17] = t4;
+  } else t4 = $[17];
+  let t5;
+  if ($[18] !== isTranscriptMode || $[19] !== textContent) {
+    t5 =
+      isTranscriptMode &&
+      jsxProd_default(MessageResponse, {
+        children: jsxProd_default(Text, {
+          children: textContent,
+        }),
+      });
+    $[18] = isTranscriptMode;
+    $[19] = textContent;
+    $[20] = t5;
+  } else t5 = $[20];
+  let t6;
+  if ($[21] !== t4 || $[22] !== t5) {
+    t6 = jsxProd_default_2(Box, {
+      flexDirection: "column",
+      marginTop: 1,
+      children: [t4, t5],
+    });
+    $[21] = t4;
+    $[22] = t5;
+    $[23] = t6;
+  } else t6 = $[23];
+  return t6;
 }
-
 export { renderCompactSummaryText, usePlacedActionKeys, CompactSummary };

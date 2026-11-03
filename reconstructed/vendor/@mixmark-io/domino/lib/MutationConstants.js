@@ -8,8 +8,14 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-vwj6ccer.js:107818-107912 cjs-fingerprint
-var U0 = x(function (zd, P0) {
-  P0.exports = { VALUE: 1, ATTR: 2, REMOVE_ATTR: 3, REMOVE: 4, MOVE: 5, INSERT: 6 };
+var require_MutationConstants = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = {
+    VALUE: 1,
+    ATTR: 2,
+    REMOVE_ATTR: 3,
+    REMOVE: 4,
+    MOVE: 5,
+    INSERT: 6,
+  };
 });
-
-export { U0 };
+export { require_MutationConstants };

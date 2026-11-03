@@ -21,7 +21,7 @@ import {
   cancelledResult,
   remoteRejectMessage,
   sanitizeForPrompt,
-  Hen,
+  MAX_MACHINE_MESSAGE_CHARS,
 } from "./resultConversion.js";
 import { analyzeTurnTail, isHumanTurn } from "../../utils/turnOrigin.js";
 import { logEvent } from "../analytics/index.js";
@@ -44,22 +44,22 @@ import {
 } from "./pathMapping.js";
 import { getOriginKindLabel } from "../../utils/messages/promptOrigin.js";
 import { RemoteAskSeat } from "./remoteAskSeat.js";
-import { ye } from "../../utils/startupMarks.js";
-import { gn } from "../../utils/shortHash.js";
+import { sanitizeMarkName } from "../../utils/startupMarks.js";
+import { shortHash } from "../../utils/shortHash.js";
 import {
-  DYt,
-  NXr,
+  REMOTE_TOOL_PROTOCOL_LABEL,
+  MAX_LINE_CHARS,
   buildRemoteToolCallMeta,
   WITHDRAWN,
   REMOTE_TOOL_CALL_META,
-  NPe,
+  MAX_MESSAGE_CHARS,
   wirePermissionMode,
 } from "../../remote/tools/protocolSchemas.js";
 import { isSemverString, splitOnDash } from "../../utils/model/modelCatalog/catalogCapabilities.js";
-import { compareVersions } from "./_new/compareVersions.js";
+import { compareVersions } from "../../utils/semver.js";
 import { sanitizeToolNameForAnalytics } from "../analytics/metadata.js";
 import { withConfusables } from "../../utils/sanitization.js";
-import { pVt } from "../mcp/redactMcpErrors.js";
+import { redactSecrets } from "../mcp/redactMcpErrors.js";
 import { replaceControlChars } from "../../utils/resultError.js";
 import { truncateToLength } from "../../utils/stringUtils.js";
 import {
@@ -76,7 +76,7 @@ import {
   hasSessionCapabilityPair,
 } from "./callProgress.js";
 import {
-  nt,
+  PROGRESS_WATCH_TIMING,
   formatRemoteOutputFence,
   checkRemoteToolPermission,
   isProceedVerdict,
@@ -91,7 +91,7 @@ import { RemoteCallLedger } from "./callOutcome.js";
 import { logForDebugging } from "../../utils/debug.js";
 import {
   isSameHostEpoch,
-  eKe,
+  restartNoticeFor,
   pendingPermissionNotice,
   neverReceivedNotice,
   stillRunningNotice,
@@ -113,7 +113,7 @@ import {
   stillRunningMessage,
   callTimedOutMessage,
 } from "./transportMessages.js";
-import { B7 } from "./shellForwarding.js";
+import { SYNC_ANSWER_TTL_MS } from "./shellForwarding.js";
 import { raceWithAbortSignal } from "../../utils/sleep.js";
 import { isTerminalShutdown, heldUntilExit } from "../../utils/terminalShutdown.js";
 import { countAfterDeviceCommand, clearForwardToDevice, heardSyncAnswer } from "./dirSync.js";
@@ -132,17 +132,17 @@ import {
 } from "./windowsPathSafety.js";
 import { toDisplayPath } from "../../utils/displayPath.js";
 import { uniq } from "../../utils/collections.js";
-import { R0e } from "../../tools/BashTool/dangerousRemoval.js";
-import { Yg } from "../../remote/remoteMode.js";
+import { runWithoutTelemetry } from "../../tools/BashTool/dangerousRemoval.js";
+import { runInRemoteCallFrameMain } from "../../remote/remoteMode.js";
 import { isCompactBoundaryMessage } from "../projects/threadRows.js";
 import { getMainLoopModel, getToolPermissionContext } from "../../utils/permissions/toolPermissionContext.js";
 import { getSessionId } from "../../bootstrap/state.js";
-import { Wer } from "../../tasks/LocalShellTask/backgroundNotices.js";
-import { iv } from "../../remote/tools/callResults.js";
+import { taskCwd } from "../../tasks/LocalShellTask/backgroundNotices.js";
+import { byteLengthOf } from "../../remote/tools/callResults.js";
 import { normalizeMcpServerName } from "../api/deferredToolsState.js";
 import { KeyedSemaphore, acquireSeat } from "../../utils/keyedSemaphore.js";
-import { _1o, O6s, runWithSlot } from "../../tools/WebFetchTool/fetchQueue.js";
-import { wgt } from "../../utils/sandbox/sandboxDefaultPolicy.js";
+import { KeyedSemaphoreSubclass, RELEASED_SLOT, runWithSlot } from "../../tools/WebFetchTool/fetchQueue.js";
+import { SANDBOX_MAX_DEPTH } from "../../utils/sandbox/sandboxDefaultPolicy.js";
 import { areAskSeatsOn } from "./servingGates.js";
 import {
   getAccountSetPermissionMode,
@@ -150,51 +150,48 @@ import {
 } from "../../utils/permissions/autoModeState.js";
 import { xr } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { logRemoteTools } from "./remoteToolsDebug.js";
-import { iwt } from "../../utils/permissions/permissions.js";
+import { isAskOnMutationTool } from "../../utils/permissions/permissions.js";
 
 //@ chunk-dtv8x2hx.js:24606-24866 placement
 function collectAskRules(e) {
   let decisionReason = e.decisionReason;
   return [
-    ...(e.matchedAskRule !== void 0 ? [e.matchedAskRule] : []),
+    ...(e.matchedAskRule !== undefined ? [e.matchedAskRule] : []),
     ...(decisionReason?.type === "rule" && decisionReason.rule.ruleBehavior === "ask"
       ? [decisionReason.rule]
       : []),
     ...(decisionReason?.type === "subcommandResults"
-      ? [...decisionReason.reasons.values()].flatMap((o) => (o.behavior === "ask" ? collectAskRules(o) : []))
+      ? [...decisionReason.reasons.values()].flatMap((reason) =>
+          reason.behavior === "ask" ? collectAskRules(reason) : [],
+        )
       : []),
   ];
 }
 //@ chunk-dtv8x2hx.js:24866-24939 placement
-function mt() {
+function isViolinWaistOn() {
   try {
-    return getFeatureValue_CACHED_MAY_BE_STALE("tengu_violin_waist", !1) === !0;
+    return getFeatureValue_CACHED_MAY_BE_STALE("tengu_violin_waist", false) === true;
   } catch {
-    return !1;
+    return false;
   }
 }
 //@ chunk-dtv8x2hx.js:24939-24952 placement
-var pt = 90000;
+var DEFAULT_RECONNECT_HOLD_MS = 90000;
+//@ chunk-dtv8x2hx.js:24952-25982 placement
 /**
  * 宿主断线时按 reconnect_hold 等待其回来，超时放弃。
  */
-//@ chunk-dtv8x2hx.js:24952-25982 placement
-async function holdForReconnect({
-  tool: tool,
-  host: host,
-  call: o,
-  signal: signal,
-  onStatus: onStatus,
-  holdMs: holdMs,
-}) {
-  if (!mt()) return;
-  let { name: p } = host,
-    i = { ended: "inconclusive" };
+async function holdForReconnect({ tool, host, call: o, signal, onStatus, holdMs }) {
+  if (!isViolinWaistOn()) return;
+  let { name: p } = host;
+  let i = {
+    ended: "inconclusive",
+  };
   try {
     let h = await host.transport
       .checkLive?.({
-        signal: signal,
-        ...(o.reconnectHoldMs === void 0 && {
+        signal,
+        ...(o.reconnectHoldMs === undefined && {
           hold: {
             ms: holdMs,
             notify: (k) => {
@@ -202,44 +199,48 @@ async function holdForReconnect({
                 i.ended = "back";
                 return;
               }
-              ((i.stopTiming = o.beginReconnectHold()),
-                onStatus?.(
-                  ASK_FIRST_REASON_TEXTS["reconnect_hold.waiting"]({ name: p, holdMs: holdMs }),
+              i.stopTiming = o.beginReconnectHold();
+              onStatus?.(
+                ASK_FIRST_REASON_TEXTS["reconnect_hold.waiting"]({
+                  name: p,
                   holdMs,
-                ));
+                }),
+                holdMs,
+              );
             },
           },
         }),
       })
-      ?.catch((k) => {
-        if (!isAbortError(k)) logError(k);
+      ?.catch((error) => {
+        if (!isAbortError(error)) logError(error);
         i.ended = "failed";
         return;
       });
     if (signal.aborted) i.ended = "interrupted";
-    else if (h !== void 0) i.ended = "still_away";
-    if (i.stopTiming !== void 0)
-      if (
-        (i.stopTiming(),
-        onStatus?.(
-          i.ended === "back"
-            ? ASK_FIRST_REASON_TEXTS["ask_seat.sending"](p)
-            : ASK_FIRST_REASON_TEXTS["reconnect_hold.ended"](p),
-        ),
-        i.ended === "back")
-      )
-        logFeatureOk("remote_tool_reconnect_hold");
+    else if (h !== undefined) i.ended = "still_away";
+    if (i.stopTiming !== undefined) {
+      i.stopTiming();
+      onStatus?.(
+        i.ended === "back"
+          ? ASK_FIRST_REASON_TEXTS["ask_seat.sending"](p)
+          : ASK_FIRST_REASON_TEXTS["reconnect_hold.ended"](p),
+      );
+      if (i.ended === "back") logFeatureOk("remote_tool_reconnect_hold");
       else if (i.ended === "still_away") logFeatureBad("remote_tool_reconnect_hold", i.ended);
       else logFeatureSad("remote_tool_reconnect_hold", i.ended);
-    if (h === void 0 || signal.aborted) return;
+    }
+    if (h === undefined || signal.aborted) return;
     let w = convertRemoteToolResult(tool, host, h);
-    return i.stopTiming === void 0 || w.outcome.kind !== "error"
+    return i.stopTiming === undefined || w.outcome.kind !== "error"
       ? w
       : {
           ...w,
           outcome: {
             ...w.outcome,
-            message: `${w.outcome.message} ${ASK_FIRST_REASON_TEXTS["reconnect_hold.gave_up"]({ name: p, holdMs: holdMs })}`,
+            message: `${w.outcome.message} ${ASK_FIRST_REASON_TEXTS["reconnect_hold.gave_up"]({
+              name: p,
+              holdMs,
+            })}`,
           },
         };
   } catch (error) {
@@ -248,73 +249,78 @@ async function holdForReconnect({
   }
 }
 //@ chunk-dtv8x2hx.js:25982-26023 placement
-var Bo = { [-1]: "older", 0: "same", 1: "newer" };
+var VERSION_COMPARISON_LABELS = {
+  [-1]: "older",
+  0: "same",
+  1: "newer",
+};
+//@ chunk-dtv8x2hx.js:26023-29905 placement
 /**
  * 记录远程调用结果遥测（completed/completed_no_envelope/错误、决定者来源、耗时）。
  */
-//@ chunk-dtv8x2hx.js:26023-29905 placement
-function logRemoteToolCallOutcome(e, n, o, r, s, u, p) {
-  let { outcome: outcome } = r,
-    elapsedMs = s.elapsedMs,
-    w = analyzeTurnTail(u.messages),
-    decider = w.decider,
-    S = decider?.origin,
-    A = decider == null ? void 0 : u.messages[decider.index],
-    R =
-      outcome.kind === "completed"
-        ? outcome.envelope !== "present"
-          ? "completed_no_envelope"
-          : outcome.disposition !== void 0 &&
-              outcome.disposition !== "ran" &&
-              outcome.disposition !== "approved_by_session"
-            ? "not_run_on_host"
-            : outcome.isError
-              ? "completed_error"
-              : "completed"
-        : outcome.code === "transport_error" && outcome.unreadableResult === !0
-          ? "unreadable_result"
-          : outcome.code;
-  (logEvent("tengu_remote_tool_forward", {
-    tool: hn(e),
-    transport: fromEnum(n.transport.kind),
-    entry: fromEnum(o),
+function logRemoteToolCallOutcome(tool, host, entry, r, s, toolUseContext, callerGate) {
+  let { outcome } = r;
+  let elapsedMs = s.elapsedMs;
+  let w = analyzeTurnTail(toolUseContext.messages);
+  let decider = w.decider;
+  let origin = decider?.origin;
+  let A = decider == null ? undefined : toolUseContext.messages[decider.index];
+  let R =
+    outcome.kind === "completed"
+      ? outcome.envelope !== "present"
+        ? "completed_no_envelope"
+        : outcome.disposition !== undefined &&
+            outcome.disposition !== "ran" &&
+            outcome.disposition !== "approved_by_session"
+          ? "not_run_on_host"
+          : outcome.isError
+            ? "completed_error"
+            : "completed"
+      : outcome.code === "transport_error" && outcome.unreadableResult === true
+        ? "unreadable_result"
+        : outcome.code;
+  logEvent("tengu_remote_tool_forward", {
+    tool: analyticsToolName(tool),
+    transport: fromEnum(host.transport.kind),
+    entry: fromEnum(entry),
     outcome: fromEnum(R),
     refusal_code: fromEnumOpt(r.refusalCode),
     failure_code: fromEnumOpt(r.failureCode),
-    disposition: fromEnumOpt(outcome.kind === "completed" ? outcome.disposition : void 0),
-    envelope: outcome.kind === "completed" ? fromEnum(outcome.envelope) : void 0,
-    output_parsed: outcome.kind === "completed" ? outcome.output !== void 0 : void 0,
-    patch_refused: outcome.kind === "completed" ? outcome.output === void 0 && outcome.patchRefused : void 0,
-    truncated: outcome.kind === "completed" ? outcome.truncated : void 0,
-    cut_here: outcome.kind === "completed" ? outcome.cutHere === !0 : void 0,
-    spilled: outcome.kind === "completed" ? outcome.spilled !== void 0 : void 0,
-    host_kind: fromEnumOpt(n.description?.kind),
-    host_platform: fromEnumOpt(detectTerminal(n.description?.platform)),
-    shell_second_look: SHELL_TOOL_NAMES.includes(e.name)
-      ? fromEnum(remoteDirKind(n.description).kind)
-      : void 0,
-    protocol_version: n.protocol.kind === "compatible" ? n.protocol.version : void 0,
+    disposition: fromEnumOpt(outcome.kind === "completed" ? outcome.disposition : undefined),
+    envelope: outcome.kind === "completed" ? fromEnum(outcome.envelope) : undefined,
+    output_parsed: outcome.kind === "completed" ? outcome.output !== undefined : undefined,
+    patch_refused:
+      outcome.kind === "completed" ? outcome.output === undefined && outcome.patchRefused : undefined,
+    truncated: outcome.kind === "completed" ? outcome.truncated : undefined,
+    cut_here: outcome.kind === "completed" ? outcome.cutHere === true : undefined,
+    spilled: outcome.kind === "completed" ? outcome.spilled !== undefined : undefined,
+    host_kind: fromEnumOpt(host.description?.kind),
+    host_platform: fromEnumOpt(detectTerminal(host.description?.platform)),
+    shell_second_look: SHELL_TOOL_NAMES.includes(tool.name)
+      ? fromEnum(remoteDirKind(host.description).kind)
+      : undefined,
+    protocol_version: host.protocol.kind === "compatible" ? host.protocol.version : undefined,
     approval: fromEnumOpt(r.approval),
     claimed_mode: fromEnumOpt(s.claimedMode),
     turn_opened_by: fromEnum(
-      decider?.strictHuman === !0 && A !== void 0 && isHumanTurn(A)
+      decider?.strictHuman === true && A !== undefined && isHumanTurn(A)
         ? "own_words"
         : w.scheduledTrigger
           ? "routine"
           : decider === null
             ? "unknown"
-            : S?.kind === "task-notification" && S.producer === "session-task"
+            : origin?.kind === "task-notification" && origin.producer === "session-task"
               ? "helper_report"
-              : getOriginKindLabel(S),
+              : getOriginKindLabel(origin),
     ),
-    from_agent: u.agentId !== void 0,
+    from_agent: toolUseContext.agentId !== undefined,
     standing_row: fromEnumOpt(s.card?.standingRow),
     standing_row_chosen: s.card?.chosen,
-    repeat_in_session: u.toolState.get(RemoteAskSeat).askedAboutBefore(s),
-    wait_announced: n.description?.limits.max_ask_ms !== void 0,
+    repeat_in_session: toolUseContext.toolState.get(RemoteAskSeat).askedAboutBefore(s),
+    wait_announced: host.description?.limits.max_ask_ms !== undefined,
     host_version_vs_worker: fromEnum(
-      xo(
-        n.description?.claude_code_version,
+      compareSemverOrDefaultUnknown(
+        host.description?.claude_code_version,
         typeof {
           ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
           PACKAGE_URL: "@anthropic-ai/claude-code",
@@ -325,8 +331,8 @@ function logRemoteToolCallOutcome(e, n, o, r, s, u, p) {
           GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
           HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
           DD_SOURCEMAP_GROUP: "default",
-        } > "u"
-          ? void 0
+        } === "undefined"
+          ? undefined
           : {
               ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
               PACKAGE_URL: "@anthropic-ai/claude-code",
@@ -340,12 +346,12 @@ function logRemoteToolCallOutcome(e, n, o, r, s, u, p) {
             }.VERSION,
       ),
     ),
-    caller_gate: fromEnumOpt(p),
+    caller_gate: fromEnumOpt(callerGate),
     approved_by: fromEnumOpt(s.approvedBy),
     refusal_reason: fromEnumOpt(r.askEndReason),
-    delivery: fromEnumOpt(outcome.kind === "completed" ? outcome.delivery : void 0),
+    delivery: fromEnumOpt(outcome.kind === "completed" ? outcome.delivery : undefined),
     adoption: fromEnumOpt(r.adoption),
-    inherited_withdrawn: s.inheritedRequestId === void 0 ? void 0 : s.inheritedWithdrawn,
+    inherited_withdrawn: s.inheritedRequestId === undefined ? undefined : s.inheritedWithdrawn,
     reconcile_trigger: fromEnumOpt(r.reconcile?.trigger),
     reconcile_leg: r.reconcile?.leg,
     reconcile_result: fromEnumOpt(r.reconcile?.result),
@@ -366,15 +372,15 @@ function logRemoteToolCallOutcome(e, n, o, r, s, u, p) {
     request_bytes: r.requestBytes,
     response_bytes: r.responseBytes,
     meta_copy: fromEnumOpt(r.metaCopy),
-    read_baseline_sent: r.readBaselineSent === !0,
-    call_id: ye(s.callId),
-    tool_use_id: ye(s.callId),
-    host_epoch: ye(s.sentUnderEpoch),
-    handle_hash: n.description === void 0 ? void 0 : gn(n.description.name),
-    host_device_id: ye(n.description?.device_id),
-    criteria_version: lit(DYt),
-  }),
-    classifyCompletion(R));
+    read_baseline_sent: r.readBaselineSent === true,
+    call_id: sanitizeMarkName(s.callId),
+    tool_use_id: sanitizeMarkName(s.callId),
+    host_epoch: sanitizeMarkName(s.sentUnderEpoch),
+    handle_hash: host.description === undefined ? undefined : shortHash(host.description.name),
+    host_device_id: sanitizeMarkName(host.description?.device_id),
+    criteria_version: lit(REMOTE_TOOL_PROTOCOL_LABEL),
+  });
+  classifyCompletion(R);
 }
 //@ chunk-dtv8x2hx.js:29905-30277 placement
 function classifyCompletion(e) {
@@ -403,43 +409,43 @@ function classifyCompletion(e) {
   }
 }
 //@ chunk-dtv8x2hx.js:30277-30663 placement
-function logRemoteToolForward(e, n, o, r, s) {
-  (logEvent("tengu_remote_tool_forward", {
-    tool: hn(e),
-    transport: fromEnum(n.transport.kind),
+function logRemoteToolForward(e, host, o, toolUseId, verdict) {
+  logEvent("tengu_remote_tool_forward", {
+    tool: analyticsToolName(e),
+    transport: fromEnum(host.transport.kind),
     entry: fromEnum(o),
     outcome: fromEnum("rejected_in_session"),
-    caller_gate: fromEnum(s),
-    host_kind: fromEnumOpt(n.description?.kind),
-    host_platform: fromEnumOpt(detectTerminal(n.description?.platform)),
-    call_id: ye(r),
-    tool_use_id: ye(r),
-    handle_hash: n.description === void 0 ? void 0 : gn(n.description.name),
-    criteria_version: lit(DYt),
-  }),
-    classifyCompletion("rejected_in_session"));
+    caller_gate: fromEnum(verdict),
+    host_kind: fromEnumOpt(host.description?.kind),
+    host_platform: fromEnumOpt(detectTerminal(host.description?.platform)),
+    call_id: sanitizeMarkName(toolUseId),
+    tool_use_id: sanitizeMarkName(toolUseId),
+    handle_hash: host.description === undefined ? undefined : shortHash(host.description.name),
+    criteria_version: lit(REMOTE_TOOL_PROTOCOL_LABEL),
+  });
+  classifyCompletion("rejected_in_session");
 }
 //@ chunk-dtv8x2hx.js:30663-30814 placement
-function logRemoteForward(e, n, o, r) {
-  (logEvent("tengu_remote_tool_forward", {
-    tool: hn(e),
+function logRemoteForward(tool, n, code, r) {
+  logEvent("tengu_remote_tool_forward", {
+    tool: analyticsToolName(tool),
     entry: fromEnum(n),
-    outcome: fromEnum(o),
-    call_id: ye(r),
-    tool_use_id: ye(r),
-    criteria_version: lit(DYt),
-  }),
-    classifyCompletion(o));
+    outcome: fromEnum(code),
+    call_id: sanitizeMarkName(r),
+    tool_use_id: sanitizeMarkName(r),
+    criteria_version: lit(REMOTE_TOOL_PROTOCOL_LABEL),
+  });
+  classifyCompletion(code);
 }
 //@ chunk-dtv8x2hx.js:30814-30884 placement
-function xo(e, n) {
-  return isSemverString(e) && isSemverString(n)
-    ? Bo[compareVersions(splitOnDash(e), splitOnDash(n))]
+function compareSemverOrDefaultUnknown(claudeCodeVersion, n) {
+  return isSemverString(claudeCodeVersion) && isSemverString(n)
+    ? VERSION_COMPARISON_LABELS[compareVersions(splitOnDash(claudeCodeVersion), splitOnDash(n))]
     : "unknown";
 }
 //@ chunk-dtv8x2hx.js:30884-31066 placement
 function buildTimingFields(e, n) {
-  return n === void 0
+  return n === undefined
     ? {}
     : {
         [`${e}_queue_ms`]: n.queueMs,
@@ -450,103 +456,108 @@ function buildTimingFields(e, n) {
       };
 }
 //@ chunk-dtv8x2hx.js:31066-31128 placement
-function hn(e) {
-  return e.isMcp === !0 ? sanitizeToolNameForAnalytics("mcp__tool") : sanitizeToolNameForAnalytics(e.name);
+function analyticsToolName(e) {
+  return e.isMcp === true ? sanitizeToolNameForAnalytics("mcp__tool") : sanitizeToolNameForAnalytics(e.name);
 }
 //@ chunk-dtv8x2hx.js:31128-31202 placement
-function kt() {
+function isViolinCornerOn() {
   try {
-    return getFeatureValue_CACHED_MAY_BE_STALE("tengu_violin_corner", !1) === !0;
+    return getFeatureValue_CACHED_MAY_BE_STALE("tengu_violin_corner", false) === true;
   } catch {
-    return !1;
+    return false;
   }
 }
 //@ chunk-dtv8x2hx.js:31202-31342 placement
-var MAX_REMEMBERED_ASKS = 32,
-  Tt = 5000,
-  Wo = 4,
-  Ko = 30000,
-  SESSION_ASK_RULE = "session:ask-rule",
-  Vo = 256,
-  kn = 1e4,
-  regExp = new RegExp(`[${withConfusables("<")}]`, "gu"),
-  regExp_2 = new RegExp(`[${withConfusables(">")}]`, "gu");
+/**
+ * 远程调用里 ask 相关的限额与默认值（保留的 ask 数、截止余量、并发上限、座席等待、提示截断等）。
+ */
+var MAX_REMEMBERED_ASKS = 32;
+var ASK_DEADLINE_SLACK_MS = 5000;
+var DEFAULT_MAX_IN_FLIGHT_CALLS = 4;
+var DEFAULT_ASK_SEAT_WAIT_MS = 30000;
+var SESSION_ASK_RULE = "session:ask-rule";
+var MAX_PROMPT_TEXT_CHARS = 256;
+var MAX_STANDING_ASK_DEADLINE_MS = 1e4;
+var regExp = new RegExp(`[${withConfusables("<")}]`, "gu");
+var regExp_2 = new RegExp(`[${withConfusables(">")}]`, "gu");
 //@ chunk-dtv8x2hx.js:31342-31438 placement
-function At(e) {
-  return pVt(
+function escapeForPrompt(e) {
+  return redactSecrets(
     replaceControlChars(e.normalize("NFKC")).replace(regExp, "&lt;").replace(regExp_2, "&gt;").trim(),
   );
 }
 //@ chunk-dtv8x2hx.js:31438-31501 placement
-function Xo(e) {
-  return At(truncateToLength(pVt(replaceControlChars(e.normalize("NFKC"))), NXr));
+function promptSafeTruncated(e) {
+  return escapeForPrompt(
+    truncateToLength(redactSecrets(replaceControlChars(e.normalize("NFKC"))), MAX_LINE_CHARS),
+  );
 }
+//@ chunk-dtv8x2hx.js:31501-32654 placement
 /**
  * 等待远端 ask 的回答（max_ask_ms 超时后提示）。
  */
-//@ chunk-dtv8x2hx.js:31501-32654 placement
 async function waitForAskAnswer({
-  tool: tool,
-  route: route,
-  rawInput: rawInput,
-  toolUseContext: toolUseContext,
-  toolUseId: toolUseId,
-  signal: signal,
-  entry: entry,
-  approve: approve,
-  speculation: speculation,
-  onStatus: onStatus,
-  onNotice: onNotice,
-  checkInTiming: checkInTiming,
-  earlyCheckTiming: earlyCheckTiming,
-  silentCallTiming: silentCallTiming,
-  askLapseMs: askLapseMs,
-  askSeatWaitMs: askSeatWaitMs,
-  reconnectHoldMs: reconnectHoldMs,
-  callerGate: callerGate,
+  tool,
+  route,
+  rawInput,
+  toolUseContext,
+  toolUseId,
+  signal,
+  entry,
+  approve,
+  speculation,
+  onStatus,
+  onNotice,
+  checkInTiming,
+  earlyCheckTiming,
+  silentCallTiming,
+  askLapseMs,
+  askSeatWaitMs,
+  reconnectHoldMs,
+  callerGate,
 }) {
-  let E = toolUseContext.toolState.get(RemoteAskSeat),
-    D = askLapseMs ?? clampedHostLimit(route.host, "max_ask_ms"),
-    begin = E.begin({
-      callId: toolUseId,
-      toolName: tool.name,
-      hostName: route.host.name,
-      dispatchEpoch: route.host.description?.epoch,
-      onAskEnded: (y) =>
-        onNotice?.(
-          ASK_FIRST_REASON_TEXTS["ask_ended.notice"]({
-            name: route.host.name,
-            toolName: tool.name,
-            reason: y,
-            afterMs: D,
-          }),
-        ),
-    }),
-    L = UNEXPECTED_FORWARD_ERROR;
+  let E = toolUseContext.toolState.get(RemoteAskSeat);
+  let D = askLapseMs ?? clampedHostLimit(route.host, "max_ask_ms");
+  let X = E.begin({
+    callId: toolUseId,
+    toolName: tool.name,
+    hostName: route.host.name,
+    dispatchEpoch: route.host.description?.epoch,
+    onAskEnded: (reason) =>
+      onNotice?.(
+        ASK_FIRST_REASON_TEXTS["ask_ended.notice"]({
+          name: route.host.name,
+          toolName: tool.name,
+          reason,
+          afterMs: D,
+        }),
+      ),
+  });
+  let L = UNEXPECTED_FORWARD_ERROR;
   try {
+    L = await resolveEarlyCheck({
+      tool,
+      entry,
+      host: route.host,
+      input: route.input,
+      rawInput,
+      toolUseContext,
+      call: X,
+      signal,
+      approve,
+      speculation,
+      onStatus,
+      checkInTiming: checkInTiming ?? progressCheckTiming(route.host),
+      earlyCheckTiming: earlyCheckTiming ?? PROGRESS_WATCH_TIMING,
+      silentCallTiming: silentCallTiming ?? SILENT_CALL_TIMING,
+      askLapseMs: D,
+      askSeatWaitMs: askSeatWaitMs ?? DEFAULT_ASK_SEAT_WAIT_MS,
+      reconnectHoldMs: reconnectHoldMs ?? DEFAULT_RECONNECT_HOLD_MS,
+      callerGate,
+    });
     if (
-      ((L = await resolveEarlyCheck({
-        tool: tool,
-        entry: entry,
-        host: route.host,
-        input: route.input,
-        rawInput: rawInput,
-        toolUseContext: toolUseContext,
-        call: begin,
-        signal: signal,
-        approve: approve,
-        speculation: speculation,
-        onStatus: onStatus,
-        checkInTiming: checkInTiming ?? progressCheckTiming(route.host),
-        earlyCheckTiming: earlyCheckTiming ?? nt,
-        silentCallTiming: silentCallTiming ?? SILENT_CALL_TIMING,
-        askLapseMs: D,
-        askSeatWaitMs: askSeatWaitMs ?? Ko,
-        reconnectHoldMs: reconnectHoldMs ?? pt,
-        callerGate: callerGate,
-      })),
       L.outcome.kind === "error" &&
-        (L.outcome.code === "unreachable" || L.outcome.code === "host_unresponsive"))
+      (L.outcome.code === "unreachable" || L.outcome.code === "host_unresponsive")
     )
       toolUseContext.toolState
         .get(AwayEpisodeTracker)
@@ -560,53 +571,51 @@ async function waitForAskAnswer({
     if (error instanceof AbortError || signal.aborted) L = INTERRUPTED_FORWARD;
     throw error;
   } finally {
-    (speculation?.abandon(),
-      E.settle(begin, L.outcome),
-      logRemoteToolCallOutcome(tool, route.host, entry, L, begin, toolUseContext, callerGate),
-      describeAskSeat(L, begin, {
-        tool: tool,
-        route: route,
-        rawInput: rawInput,
-        toolUseContext: toolUseContext,
-      }));
+    speculation?.abandon();
+    E.settle(X, L.outcome);
+    logRemoteToolCallOutcome(tool, route.host, entry, L, X, toolUseContext, callerGate);
+    describeAskSeat(L, X, {
+      tool,
+      route,
+      rawInput,
+      toolUseContext,
+    });
   }
 }
 //@ chunk-dtv8x2hx.js:32654-33567 placement
-function describeAskSeat(
-  e,
-  n,
-  { tool: tool, route: route, rawInput: rawInput, toolUseContext: toolUseContext },
-) {
+function describeAskSeat(e, n, { tool, route, rawInput, toolUseContext }) {
   if (route.host.transport.kind !== "session") return;
   try {
-    let p = toolUseContext.toolState.get(RemoteCallLedger),
-      i = e.outcome.kind === "error" ? e.outcome.open : void 0;
-    if (i === void 0) {
+    let p = toolUseContext.toolState.get(RemoteCallLedger);
+    let open = e.outcome.kind === "error" ? e.outcome.open : undefined;
+    if (open === undefined) {
       p.forget(n.callId);
       return;
     }
-    let held = n.held,
-      w = e.journalHost !== void 0 && e.journalHost !== route.host.name;
-    (p.gaveUp({
+    let held = n.held;
+    let w = e.journalHost !== undefined && e.journalHost !== route.host.name;
+    p.gaveUp({
       callId: n.callId,
       agentId: toolUseContext.agentId,
       hostName: e.journalHost ?? route.host.name,
       toolName: tool.name,
       wireToolName: n.wireName ?? tool.name,
       spelled: primaryInputPath(rawInput),
-      toldAs: i,
+      toldAs: open,
       machineHadCall:
-        e.approval !== void 0 ||
+        e.approval !== undefined ||
         e.reconcile?.trigger === "in_progress" ||
         e.adoption === "ask_in_flight" ||
         e.adoption === "interrupted",
-      transport: w ? void 0 : route.host.transport,
-      dispatchEpoch: e.adoption === void 0 ? n.sentUnderEpoch : e.journalEpoch,
-      standing: held !== void 0,
-      ...(held !== void 0 && { withdraw: held.withdraw }),
+      transport: w ? undefined : route.host.transport,
+      dispatchEpoch: e.adoption === undefined ? n.sentUnderEpoch : e.journalEpoch,
+      standing: held !== undefined,
+      ...(held !== undefined && {
+        withdraw: held.withdraw,
+      }),
       givenUpAt: Date.now(),
-    }),
-      held?.late.then((k) => p.answeredLate(n.callId, k)).catch(() => {}));
+    });
+    held?.late.then((k) => p.answeredLate(n.callId, k)).catch(() => {});
   } catch (error) {
     logForDebugging(
       `[remote-tools] could not record a given-up call for a later correction: ${errorMessage(error)}`,
@@ -614,104 +623,149 @@ function describeAskSeat(
   }
 }
 //@ chunk-dtv8x2hx.js:33567-33804 placement
-function primaryInputPath(e) {
+function primaryInputPath(rawInput) {
   let found = ["command", "file_path", "path", "notebook_path"]
-    .map((o) => e[o])
+    .map((o) => rawInput[o])
     .find((o) => typeof o === "string" && o !== "");
-  return found === void 0
+  return found === undefined
     ? "its input as sent"
-    : `"${truncateToLength(At(truncateToLength(found, 480)).replace(/[`"]/g, " ").replace(/\s+/g, " ").trim(), 120)}"`;
+    : `"${truncateToLength(escapeForPrompt(truncateToLength(found, 480)).replace(/[`"]/g, " ").replace(/\s+/g, " ").trim(), 120)}"`;
 }
 //@ chunk-dtv8x2hx.js:33804-34004 placement
 var INTERRUPTED_FORWARD = {
-    outcome: { kind: "error", code: "interrupted", message: "interrupted while forwarding" },
-    requestBytes: 0,
+  outcome: {
+    kind: "error",
+    code: "interrupted",
+    message: "interrupted while forwarding",
   },
-  UNEXPECTED_FORWARD_ERROR = {
-    outcome: { kind: "error", code: "transport_error", message: "unexpected error while forwarding" },
-  };
+  requestBytes: 0,
+};
+var UNEXPECTED_FORWARD_ERROR = {
+  outcome: {
+    kind: "error",
+    code: "transport_error",
+    message: "unexpected error while forwarding",
+  },
+};
+//@ chunk-dtv8x2hx.js:34004-36883 placement
 /**
  * 描述投递失败（交付未知、宿主重启、中断）。
  */
-//@ chunk-dtv8x2hx.js:34004-36883 placement
 async function describeDeliveryFailure(e, n, o) {
-  let { tool: tool, host: host, signal: signal } = e,
-    callId = e.call.callId,
-    i = machineIdentity(host),
-    h = { host: n.host },
-    w = { journalHost: n.host, ...(n.host_epoch !== void 0 && { journalEpoch: n.host_epoch }) },
-    k = (D, X, L, y, I) => ({
-      outcome: { kind: "error", code: D, message: X, host: i, ...(I !== void 0 && { open: I }) },
-      adoption: L,
-      ...w,
-      ...(y !== void 0 && { reconcile: y }),
+  let { tool, host, signal } = e;
+  let callId = e.call.callId;
+  let i = machineIdentity(host);
+  let h = {
+    host: n.host,
+  };
+  let w = {
+    journalHost: n.host,
+    ...(n.host_epoch !== undefined && {
+      journalEpoch: n.host_epoch,
     }),
-    S = n.parkedAtRestart ? void 0 : "delivery_unknown";
-  if (!isSameHostEpoch(n, host)) return k("host_restarted", eKe(h, n), "instance_gone", void 0, S);
+  };
+  let k = (code, message, adoption, y, I) => ({
+    outcome: {
+      kind: "error",
+      code,
+      message,
+      host: i,
+      ...(I !== undefined && {
+        open: I,
+      }),
+    },
+    adoption,
+    ...w,
+    ...(y !== undefined && {
+      reconcile: y,
+    }),
+  });
+  let S = n.parkedAtRestart ? undefined : "delivery_unknown";
+  if (!isSameHostEpoch(n, host))
+    return k("host_restarted", restartNoticeFor(h, n), "instance_gone", undefined, S);
   let A = remoteToolNames(tool, host);
-  if (A === void 0) return k("unreachable", eKe(h, n), "unknown", void 0, S);
-  let request_id = n.request_id;
-  if (request_id !== void 0 && host.transport.withdrawStanding !== void 0) {
-    if (n.instance_id !== void 0) e.call.recordAddressee(n.instance_id, n.host_epoch);
-    e.call.inherit(request_id, () => host.transport.withdrawStanding?.(request_id));
+  if (A === undefined) return k("unreachable", restartNoticeFor(h, n), "unknown", undefined, S);
+  let requestId = n.request_id;
+  if (requestId !== undefined && host.transport.withdrawStanding !== undefined) {
+    if (n.instance_id !== undefined) e.call.recordAddressee(n.instance_id, n.host_epoch);
+    e.call.inherit(requestId, () => host.transport.withdrawStanding?.(requestId));
   }
-  let checkInTiming = e.checkInTiming,
-    O = formatRemoteOutputFence({
-      name: host.name,
-      showForMs: 2 * checkInTiming.intervalMs,
-      onStatus: e.onStatus,
-      waiting: (D) =>
-        D ? ASK_FIRST_REASON_TEXTS["in_progress.checkin"](host.name) : reconnectingStatus(host.name),
-      standing: void 0,
-    }),
-    x = await awaitRemoteCallWithProgress({
-      host: host,
-      held: void 0,
-      dispatchEpoch: n.host_epoch,
-      toolName: A.wire,
-      callId: callId,
-      signal: signal,
-      timing: checkInTiming,
-      onAttempt: O.onAttempt,
-      onOutput: O.onOutput,
-    }),
-    { verdict: verdict } = x,
-    E = {
-      trigger: "resumed",
-      leg: 1,
-      result: verdict.kind === "unknown" ? `unknown_${verdict.why}` : verdict.kind,
-      attempts: x.attempts,
-      misses: x.misses,
-      held: !1,
-      epochChanged: x.epochChanged,
-    };
+  let checkInTiming = e.checkInTiming;
+  let O = formatRemoteOutputFence({
+    name: host.name,
+    showForMs: 2 * checkInTiming.intervalMs,
+    onStatus: e.onStatus,
+    waiting: (D) =>
+      D ? ASK_FIRST_REASON_TEXTS["in_progress.checkin"](host.name) : reconnectingStatus(host.name),
+    standing: undefined,
+  });
+  let x = await awaitRemoteCallWithProgress({
+    host,
+    held: undefined,
+    dispatchEpoch: n.host_epoch,
+    toolName: A.wire,
+    callId,
+    signal,
+    timing: checkInTiming,
+    onAttempt: O.onAttempt,
+    onOutput: O.onOutput,
+  });
+  let { verdict } = x;
+  let reconcile = {
+    trigger: "resumed",
+    leg: 1,
+    result: verdict.kind === "unknown" ? `unknown_${verdict.why}` : verdict.kind,
+    attempts: x.attempts,
+    misses: x.misses,
+    held: false,
+    epochChanged: x.epochChanged,
+  };
   switch (verdict.kind) {
     case "late":
     case "answer": {
-      let { transported: transported } = verdict;
-      if (transported.kind !== "result") return k("unreachable", eKe(h, n), "unknown", E, S);
-      let { envelope: envelope } = transported;
+      let { transported } = verdict;
+      if (transported.kind !== "result")
+        return k("unreachable", restartNoticeFor(h, n), "unknown", reconcile, S);
+      let { envelope } = transported;
       if (envelope?.outcome === "needs_approval") {
         let L =
-          host.description?.limits.max_ask_ms !== void 0 && Date.now() - n.dispatched_at <= B7 && kt()
+          host.description?.limits.max_ask_ms !== undefined &&
+          Date.now() - n.dispatched_at <= SYNC_ANSWER_TTL_MS &&
+          isViolinCornerOn()
             ? await o(transported)
-            : void 0;
-        if (L?.approval !== void 0) return { ...L, adoption: "ask_carried_over", ...w, reconcileLeg1: E };
-        return toolResultForInterruption(e, n, A.wire, envelope.ask_id, E);
+            : undefined;
+        if (L?.approval !== undefined)
+          return {
+            ...L,
+            adoption: "ask_carried_over",
+            ...w,
+            reconcileLeg1: reconcile,
+          };
+        return toolResultForInterruption(e, n, A.wire, envelope.ask_id, reconcile);
       }
       return {
-        reconcile: E,
+        reconcile,
         adoption: "after_reconnect",
-        ...convertRemoteToolResult(tool, host, { ...transported, metaCopy: void 0 }, { afterReconnect: !0 }),
+        ...convertRemoteToolResult(
+          tool,
+          host,
+          {
+            ...transported,
+            metaCopy: undefined,
+          },
+          {
+            afterReconnect: true,
+          },
+        ),
       };
     }
     case "ask_lost":
-      return k("still_running", pendingPermissionNotice(h), "ask_in_flight", E, "delivery_unknown");
+      return k("still_running", pendingPermissionNotice(h), "ask_in_flight", reconcile, "delivery_unknown");
     case "not_received":
-      return k("not_received", neverReceivedNotice(h), "never_received", E);
+      return k("not_received", neverReceivedNotice(h), "never_received", reconcile);
     case "host_restarted":
     case "gone":
-      return k("host_restarted", eKe(h, n), "instance_gone", E, S);
+      return k("host_restarted", restartNoticeFor(h, n), "instance_gone", reconcile, S);
     case "host_unresponsive":
       if (!verdict.stillConnected) host.transport.markUnresponsive?.();
       return k(
@@ -725,106 +779,134 @@ async function describeDeliveryFailure(e, n, o) {
           returnNoted: isHostAwayRecheckable(host),
         }) + O.outputNote(),
         "unknown",
-        E,
+        reconcile,
         "host_unresponsive",
       );
     case "host_asleep":
-      return (
-        host.transport.markUnresponsive?.(),
-        k(
-          "host_unresponsive",
-          ASK_FIRST_REASON_TEXTS.host_asleep({
-            name: host.name,
-            whileRunning: verdict.whileRunning,
-            withdrawn: !1,
-            returnNoted: hostAnnouncesReturn(host),
-          }) + O.outputNote(),
-          "unknown",
-          E,
-          "host_asleep",
-        )
+      host.transport.markUnresponsive?.();
+      return k(
+        "host_unresponsive",
+        ASK_FIRST_REASON_TEXTS.host_asleep({
+          name: host.name,
+          whileRunning: verdict.whileRunning,
+          withdrawn: false,
+          returnNoted: hostAnnouncesReturn(host),
+        }) + O.outputNote(),
+        "unknown",
+        reconcile,
+        "host_asleep",
       );
     case "unbound":
-      return (
-        host.transport.markUnresponsive?.(),
-        k(
-          "host_unresponsive",
-          ASK_FIRST_REASON_TEXTS["unverified_refusal.call_phase"]({
-            name: host.name,
-            whileRunning: verdict.whileRunning,
-          }) + O.outputNote(),
-          "unknown",
-          E,
-          "host_unresponsive",
-        )
+      host.transport.markUnresponsive?.();
+      return k(
+        "host_unresponsive",
+        ASK_FIRST_REASON_TEXTS["unverified_refusal.call_phase"]({
+          name: host.name,
+          whileRunning: verdict.whileRunning,
+        }) + O.outputNote(),
+        "unknown",
+        reconcile,
+        "host_unresponsive",
       );
     case "cancelled":
-      return (
-        e.call.withdrawInherited(),
-        { outcome: interruptedResult(i, { askLater: !0 }), adoption: "interrupted", ...w, reconcile: E }
-      );
+      e.call.withdrawInherited();
+      return {
+        outcome: interruptedResult(i, {
+          askLater: true,
+        }),
+        adoption: "interrupted",
+        ...w,
+        reconcile,
+      };
     case "unreachable":
     case "unknown":
-      return k("unreachable", eKe(h, n), "unknown", E, S);
+      return k("unreachable", restartNoticeFor(h, n), "unknown", reconcile, S);
   }
 }
 //@ chunk-dtv8x2hx.js:36883-38086 placement
-async function toolResultForInterruption(e, n, o, r, s) {
-  let { tool: tool, host: host, toolUseContext: toolUseContext } = e,
-    callId = e.call.callId,
-    w = machineIdentity(host),
-    k = { host: n.host },
-    defaultDeadlineMs = host.transport.limits.defaultDeadlineMs,
-    A = await raceWithAbortSignal(
-      host.transport
-        .call(
-          o,
-          e.input,
-          buildRemoteToolCallMeta({
-            callId: callId,
-            expiresInMs: Math.max(1, defaultDeadlineMs - Tt),
-            ...wirePermissionState(toolUseContext, tool.name),
-            approval: { ask_id: r, decision: "deny", feedback: WITHDRAWN },
-          }),
-          {
-            signal: new AbortController().signal,
-            deadlineMs: Math.min(defaultDeadlineMs, kn),
-            toolUseId: callId,
+async function toolResultForInterruption(e, n, wire, askId, reconcile) {
+  let { tool, host, toolUseContext } = e;
+  let callId = e.call.callId;
+  let w = machineIdentity(host);
+  let k = {
+    host: n.host,
+  };
+  let defaultDeadlineMs = host.transport.limits.defaultDeadlineMs;
+  let A = await raceWithAbortSignal(
+    host.transport
+      .call(
+        wire,
+        e.input,
+        buildRemoteToolCallMeta({
+          callId,
+          expiresInMs: Math.max(1, defaultDeadlineMs - ASK_DEADLINE_SLACK_MS),
+          ...wirePermissionState(toolUseContext, tool.name),
+          approval: {
+            ask_id: askId,
+            decision: "deny",
+            feedback: WITHDRAWN,
           },
-        )
-        .catch(() => {
-          return;
         }),
-      e.signal,
-      () => new AbortError(),
-    ).catch(() => {
-      return;
-    });
-  if (e.signal.aborted) return { outcome: interruptedResult(w), adoption: "interrupted", reconcile: s };
-  let R = A?.kind === "result" ? A.envelope : void 0;
+        {
+          signal: new AbortController().signal,
+          deadlineMs: Math.min(defaultDeadlineMs, MAX_STANDING_ASK_DEADLINE_MS),
+          toolUseId: callId,
+        },
+      )
+      .catch(() => {
+        return;
+      }),
+    e.signal,
+    () => new AbortError(),
+  ).catch(() => {
+    return;
+  });
+  if (e.signal.aborted)
+    return {
+      outcome: interruptedResult(w),
+      adoption: "interrupted",
+      reconcile,
+    };
+  let envelope = A?.kind === "result" ? A.envelope : undefined;
   if (
     A?.kind === "result" &&
-    R !== void 0 &&
-    R.outcome !== "acknowledged" &&
-    R.outcome !== "needs_approval" &&
-    R.outcome !== "in_progress" &&
-    R.replayed === !0
+    envelope !== undefined &&
+    envelope.outcome !== "acknowledged" &&
+    envelope.outcome !== "needs_approval" &&
+    envelope.outcome !== "in_progress" &&
+    envelope.replayed === true
   )
     return {
-      reconcile: s,
+      reconcile,
       adoption: "after_reconnect",
-      ...convertRemoteToolResult(tool, host, { ...A, metaCopy: void 0 }, { afterReconnect: !0 }),
+      ...convertRemoteToolResult(
+        tool,
+        host,
+        {
+          ...A,
+          metaCopy: undefined,
+        },
+        {
+          afterReconnect: true,
+        },
+      ),
     };
   if (
     A?.kind === "result" &&
-    (R?.outcome === "in_progress" || (R?.outcome === "completed" && R.disposition === "duplicate_call"))
+    (envelope?.outcome === "in_progress" ||
+      (envelope?.outcome === "completed" && envelope.disposition === "duplicate_call"))
   )
     return {
-      outcome: { kind: "error", code: "still_running", message: stillRunningNotice(k), host: w },
+      outcome: {
+        kind: "error",
+        code: "still_running",
+        message: stillRunningNotice(k),
+        host: w,
+      },
       adoption: "still_running",
-      reconcile: s,
+      reconcile,
     };
-  let T = R?.outcome === "acknowledged" && R.ask_id === r;
+  let T = envelope?.outcome === "acknowledged" && envelope.ask_id === askId;
   return {
     outcome: {
       kind: "error",
@@ -833,53 +915,59 @@ async function toolResultForInterruption(e, n, o, r, s) {
       host: w,
     },
     adoption: T ? "ask_withdrawn" : "unknown",
-    reconcile: s,
+    reconcile,
   };
 }
 //@ chunk-dtv8x2hx.js:38086-39430 placement
 async function resolveEarlyCheck(e) {
-  let n,
-    o = !1,
-    r = e.toolUseContext.toolState.get(ServedCallRegistry),
-    s,
-    u = (A) => {
-      if (A === void 0) return;
-      let R = s !== void 0;
-      if (((s = A), R)) return;
-      queueMicrotask(() => {
-        let T = s;
-        if (((s = void 0), T !== void 0))
-          e.toolUseContext.sessionState?.notifyInternalMetadataChanged({ in_flight_served_calls: T });
-      });
-    },
-    adopted = r.adopted(e.call.callId);
+  let n;
+  let o = false;
+  let r = e.toolUseContext.toolState.get(ServedCallRegistry);
+  let s;
+  let u = (A) => {
+    if (A === undefined) return;
+    let R = s !== undefined;
+    s = A;
+    if (R) return;
+    queueMicrotask(() => {
+      let T = s;
+      s = undefined;
+      if (T !== undefined)
+        e.toolUseContext.sessionState?.notifyInternalMetadataChanged({
+          in_flight_served_calls: T,
+        });
+    });
+  };
+  let p = r.adopted(e.call.callId);
   r.takeAdopted(e.call.callId);
-  let i,
-    h = () => {
-      let {
-        sentUnderEpoch: sentUnderEpoch,
-        carryingRequestId: carryingRequestId,
-        instanceId: instanceId,
-      } = e.call;
-      if (
-        i !== void 0 &&
-        i.host_epoch === sentUnderEpoch &&
-        i.request_id === carryingRequestId &&
-        i.instance_id === instanceId
-      )
-        return;
-      ((i = {
-        tool_use_id: e.call.callId,
-        tool: e.tool.name,
-        host: e.host.name,
-        ...(sentUnderEpoch !== void 0 && { host_epoch: sentUnderEpoch }),
-        ...(carryingRequestId !== void 0 && { request_id: carryingRequestId }),
-        ...(instanceId !== void 0 && { instance_id: instanceId }),
-        dispatched_at: i?.dispatched_at ?? Date.now(),
+  let i;
+  let h = () => {
+    let { sentUnderEpoch, carryingRequestId, instanceId } = e.call;
+    if (
+      i !== undefined &&
+      i.host_epoch === sentUnderEpoch &&
+      i.request_id === carryingRequestId &&
+      i.instance_id === instanceId
+    )
+      return;
+    i = {
+      tool_use_id: e.call.callId,
+      tool: e.tool.name,
+      host: e.host.name,
+      ...(sentUnderEpoch !== undefined && {
+        host_epoch: sentUnderEpoch,
       }),
-        u(r.add(i)));
-    },
-    w;
+      ...(carryingRequestId !== undefined && {
+        request_id: carryingRequestId,
+      }),
+      ...(instanceId !== undefined && {
+        instance_id: instanceId,
+      }),
+      dispatched_at: i?.dispatched_at ?? Date.now(),
+    };
+    u(r.add(i));
+  };
+  let w;
   try {
     let A = {
       ...e,
@@ -887,351 +975,483 @@ async function resolveEarlyCheck(e) {
         n = R;
       },
       noteReadBaselineSent: () => {
-        o = !0;
+        o = true;
       },
       onFirstSend: h,
       onAddressed: h,
     };
     w =
-      adopted !== void 0
-        ? await describeDeliveryFailure(e, adopted, (R) => runRemoteToolCall({ ...A, pendingAsk: R }))
+      p !== undefined
+        ? await describeDeliveryFailure(e, p, (pendingAsk) =>
+            runRemoteToolCall({
+              ...A,
+              pendingAsk,
+            }),
+          )
         : await runRemoteToolCall(A);
   } finally {
     if (!isTerminalShutdown()) r.remove(e.call.callId);
   }
-  let k = o ? { ...w, readBaselineSent: o } : w;
+  let k = o
+    ? {
+        ...w,
+        readBaselineSent: o,
+      }
+    : w;
   if (k.outcome.kind !== "completed" || !isRanOutcome(k.outcome.disposition)) return k;
-  if (k.outcome.dirSync !== void 0) await countAfterDeviceCommand(k.outcome.dirSync);
+  if (k.outcome.dirSync !== undefined) await countAfterDeviceCommand(k.outcome.dirSync);
   let S =
     e.call.approvedBy ??
-    (adopted === void 0 &&
-    e.callerGate === void 0 &&
+    (p === undefined &&
+    e.callerGate === undefined &&
     k.outcome.delivery === "fresh" &&
     k.outcome.disposition === "ran"
       ? "unasked"
-      : void 0);
+      : undefined);
   return {
     ...k,
     outcome: {
       ...k.outcome,
-      ...(S !== void 0 && { permittedBy: S }),
-      ...(n !== void 0 && { sessionNotes: [...(k.outcome.sessionNotes ?? []), { text: n }] }),
+      ...(S !== undefined && {
+        permittedBy: S,
+      }),
+      ...(n !== undefined && {
+        sessionNotes: [
+          ...(k.outcome.sessionNotes ?? []),
+          {
+            text: n,
+          },
+        ],
+      }),
     },
   };
 }
+//@ chunk-dtv8x2hx.js:39430-57316 placement
 /**
  * 远程工具调用主流程：权限、早期检查、发送、等待、重连、结果与遥测（约 18 KB）。
  */
-//@ chunk-dtv8x2hx.js:39430-57316 placement
 async function runRemoteToolCall({
-  tool: tool,
-  entry: entry,
-  host: host,
-  input: input,
-  rawInput: rawInput,
-  toolUseContext: toolUseContext,
+  tool,
+  entry,
+  host,
+  input,
+  rawInput,
+  toolUseContext,
   call: p,
-  signal: signal,
-  approve: approve,
-  speculation: speculation,
-  onStatus: onStatus,
-  checkInTiming: checkInTiming,
-  earlyCheckTiming: earlyCheckTiming,
-  silentCallTiming: silentCallTiming,
-  askLapseMs: askLapseMs,
-  askSeatWaitMs: askSeatWaitMs,
-  reconnectHoldMs: reconnectHoldMs,
-  noteSync: noteSync,
-  noteReadBaselineSent: noteReadBaselineSent,
-  onFirstSend: onFirstSend,
-  onAddressed: onAddressed,
-  pendingAsk: pendingAsk,
+  signal,
+  approve,
+  speculation,
+  onStatus,
+  checkInTiming,
+  earlyCheckTiming,
+  silentCallTiming,
+  askLapseMs,
+  askSeatWaitMs,
+  reconnectHoldMs,
+  noteSync,
+  noteReadBaselineSent,
+  onFirstSend,
+  onAddressed,
+  pendingAsk,
 }) {
-  let y = machineIdentity(host),
-    callId = p.callId,
-    { dispatchEpoch: dispatchEpoch } = p,
-    safeParse = tool.inputSchema.safeParse(input);
-  if (!safeParse.success)
+  let host_2 = machineIdentity(host);
+  let callId = p.callId;
+  let { dispatchEpoch } = p;
+  let Y = tool.inputSchema.safeParse(input);
+  if (!Y.success)
     return {
       outcome: {
         kind: "error",
         code: "invalid_input",
-        message: formatZodValidationError(tool.name, safeParse.error),
-        host: y,
+        message: formatZodValidationError(tool.name, Y.error),
+        host: host_2,
       },
     };
   let te = remoteToolNames(tool, host);
-  if (te === void 0)
+  if (te === undefined)
     return {
       outcome: {
         kind: "error",
         code: "not_served",
-        message: toolNotServedMessage({ name: host.name, toolName: tool.name }),
-        host: y,
+        message: toolNotServedMessage({
+          name: host.name,
+          toolName: tool.name,
+        }),
+        host: host_2,
       },
     };
-  let ee,
-    se,
-    ue = (C, P) =>
-      collectRemoteResult({
-        transported: C,
-        host: host,
-        call: p,
-        dispatchEpoch: dispatchEpoch,
-        toolName: te.wire,
-        callId: callId,
-        signal: signal,
-        timing: checkInTiming,
-        silentSince: se,
-        silentCallTiming: silentCallTiming,
-        onStatus: onStatus,
-        standingLine: ee,
-        approval: P,
-      }),
-    oe = safeParse.data,
-    ro = oe,
-    we = input,
-    ze = !1,
-    me = host.description === void 0 ? void 0 : remoteDirFacts(host.description),
-    pe = (C) =>
-      tool.backfillObservableInput === void 0 || me === void 0 ? C : resolveRemoteFilePathInput(C, me),
-    ie = tool.getPath === void 0 ? void 0 : tool.ruleContentField,
-    Nn = (C) =>
-      tool.name === GLOB_TOOL_NAME && me !== void 0 && typeof C.pattern === "string"
-        ? splitGlobRoot(C.pattern, me)
-        : void 0,
-    Hn = (C, P, G) => {
-      let V = ie === void 0 ? void 0 : C[ie];
-      if (ie === void 0 || me === void 0 || typeof V !== "string") return C;
-      if (V === P[ie] && typeof G[ie] === "string") return { ...C, [ie]: G[ie] };
-      let Q = toDisplayPath(V, me);
-      return Q === void 0 ? C : { ...C, [ie]: Q };
-    },
-    ge = oe,
-    io = (C) => {
-      let P = Nn(C),
-        G = P?.root ?? (ie === void 0 ? void 0 : (C[ie] ?? "."));
-      if (ie === void 0 || me === void 0 || typeof G !== "string") return [];
-      return remotePathSpellings(G, me)
-        .filter((V) => P !== void 0 || (V !== ge[ie] && V !== C[ie]))
-        .map((V) => (P === void 0 ? { ...C, [ie]: V } : { ...C, [ie]: V, pattern: P.rest }));
-    },
-    ao = (C) => {
-      let P =
-        ie === void 0 || me === void 0
-          ? void 0
-          : C.map((G) => {
-              let V = Nn(G);
-              return V === void 0 ? [G[ie], G[ie]] : [G.pattern, V.root];
-            })
-              .flatMap(([G, V]) =>
-                typeof G === "string" && typeof V === "string" ? [[G, checkWindowsPathSafety(V, me)]] : [],
-              )
-              .find(([, G]) => G !== void 0);
-      return P?.[1] === void 0
-        ? void 0
-        : {
-            kind: "refuse",
-            code: P[1] === "magic_link" ? "declined_magic_link" : "declined_spelling",
-            message: unmatchedPathSpellingMessage({
-              name: host.name,
-              toolName: tool.name,
-              path: P[0],
-              spellingIs: UNSAFE_PATH_REASON_TEXT[P[1]],
-            }),
-          };
-    },
-    Fn = SHELL_TOOL_NAMES.includes(tool.name) ? remoteDirKind(host.description) : void 0,
-    Ae = async (C, P) => {
-      let G = ao([ge, C]);
-      if (G !== void 0) return G;
-      let flattened = uniq([ge, ...io(C), C]).flatMap((re) => [
-          { parsedInput: re, machineDir: void 0 },
-          ...(Fn?.kind === "in_announced_dir" ? [{ parsedInput: re, machineDir: Fn.dir }] : []),
-        ]),
-        Q = { kind: "proceed" };
-      for (let { parsedInput: parsedInput, machineDir: machineDir } of flattened) {
-        if (Q.kind === "refuse") break;
-        let Z = () =>
-          checkRemoteToolPermission({
-            tool: tool,
-            parsedInput: parsedInput,
-            requestBytes: P,
-            toolUseContext: toolUseContext,
-            host: host,
-          });
-        Q = isProceedVerdict(Q, machineDir === void 0 ? await Z() : await R0e(() => Yg(machineDir, Z)));
-      }
-      return Q;
-    },
-    defaultDeadlineMs = host.transport.limits.defaultDeadlineMs,
-    max = Math.max(1, defaultDeadlineMs - Tt),
-    uo =
-      toolUseContext.agentId === void 0
-        ? toolUseContext.messages.findLast(isCompactBoundaryMessage)?.uuid
-        : void 0,
-    Re,
-    he = (C) => {
-      let P = wirePermissionState(toolUseContext, tool.name);
-      if (C === void 0) ((Re = P.permissionMode), (p.claimedMode = Re));
-      return buildRemoteToolCallMeta({
-        callId: callId,
-        expiresInMs: max,
-        ...P,
-        model: getMainLoopModel(toolUseContext),
-        conversationId: getSessionId(),
-        compactionId: uo,
-        ...(C !== void 0 && { approval: C }),
-        ...(C === void 0 && { readBaseline: co() }),
-      });
-    },
-    co = () =>
-      readBaselineForRemoteWrite({
-        tool: tool,
-        input: oe,
-        description: host.description,
-        readFileState: toolUseContext.readFileState,
-        sessionDir: () => Wer(toolUseContext.session),
-      }),
-    Je = (C) => iv({ name: te.wire, arguments: { ...we, [REMOTE_TOOL_CALL_META]: C } }),
-    Dn = (C, P = we) => {
-      (p.sent({ wireName: te.wire, input: P }), p.hold(void 0), toolUseContext.markToolCallRunning?.(callId));
-      let G,
-        V = !1,
-        Q = toolUseContext.toolState.get(RemoteCallState),
-        re = watchRemoteCallProgress({
-          host: host,
-          toolName: te.wire,
-          callId: callId,
-          signal: signal,
-          onStatus: onStatus,
-          timing: earlyCheckTiming,
-          mayCheck: () => SHELL_TOOL_NAMES.includes(tool.name) && V && Q.has(host.name, G),
-          onNoRecord: () => Q.forget(host.name, G),
-        }),
-        B = watchSilentCall({
-          host: host,
-          signal: signal,
-          checkMisses: checkInTiming.misses,
-          timing: silentCallTiming,
+  let ee;
+  let se;
+  let ue = (transported, approval) =>
+    collectRemoteResult({
+      transported,
+      host,
+      call: p,
+      dispatchEpoch,
+      toolName: te.wire,
+      callId,
+      signal,
+      timing: checkInTiming,
+      silentSince: se,
+      silentCallTiming,
+      onStatus,
+      standingLine: ee,
+      approval,
+    });
+  let oe = Y.data;
+  let ro = oe;
+  let we = input;
+  let editedByApproval = false;
+  let dirFacts = host.description === undefined ? undefined : remoteDirFacts(host.description);
+  let pe = (C) =>
+    tool.backfillObservableInput === undefined || dirFacts === undefined
+      ? C
+      : resolveRemoteFilePathInput(C, dirFacts);
+  let ruleContentField = tool.getPath === undefined ? undefined : tool.ruleContentField;
+  let Nn = (C) =>
+    tool.name === GLOB_TOOL_NAME && dirFacts !== undefined && typeof C.pattern === "string"
+      ? splitGlobRoot(C.pattern, dirFacts)
+      : undefined;
+  let Hn = (C, P, G) => {
+    let V = ruleContentField === undefined ? undefined : C[ruleContentField];
+    if (ruleContentField === undefined || dirFacts === undefined || typeof V !== "string") return C;
+    if (V === P[ruleContentField] && typeof G[ruleContentField] === "string")
+      return {
+        ...C,
+        [ruleContentField]: G[ruleContentField],
+      };
+    let displayPath = toDisplayPath(V, dirFacts);
+    return displayPath === undefined
+      ? C
+      : {
+          ...C,
+          [ruleContentField]: displayPath,
+        };
+  };
+  let ge = oe;
+  let io = (C) => {
+    let P = Nn(C);
+    let path = P?.root ?? (ruleContentField === undefined ? undefined : (C[ruleContentField] ?? "."));
+    if (ruleContentField === undefined || dirFacts === undefined || typeof path !== "string") return [];
+    return remotePathSpellings(path, dirFacts)
+      .filter((V) => P !== undefined || (V !== ge[ruleContentField] && V !== C[ruleContentField]))
+      .map((V) =>
+        P === undefined
+          ? {
+              ...C,
+              [ruleContentField]: V,
+            }
+          : {
+              ...C,
+              [ruleContentField]: V,
+              pattern: P.rest,
+            },
+      );
+  };
+  let ao = (C) => {
+    let P =
+      ruleContentField === undefined || dirFacts === undefined
+        ? undefined
+        : C.map((G) => {
+            let V = Nn(G);
+            return V === undefined ? [G[ruleContentField], G[ruleContentField]] : [G.pattern, V.root];
+          })
+            .flatMap(([G, V]) =>
+              typeof G === "string" && typeof V === "string"
+                ? [[G, checkWindowsPathSafety(V, dirFacts)]]
+                : [],
+            )
+            .find(([, G]) => G !== undefined);
+    return P?.[1] === undefined
+      ? undefined
+      : {
+          kind: "refuse",
+          code: P[1] === "magic_link" ? "declined_magic_link" : "declined_spelling",
+          message: unmatchedPathSpellingMessage({
+            name: host.name,
+            toolName: tool.name,
+            path: P[0],
+            spellingIs: UNSAFE_PATH_REASON_TEXT[P[1]],
+          }),
+        };
+  };
+  let Fn = SHELL_TOOL_NAMES.includes(tool.name) ? remoteDirKind(host.description) : undefined;
+  let Ae = async (C, requestBytes) => {
+    let G = ao([ge, C]);
+    if (G !== undefined) return G;
+    let flattened = uniq([ge, ...io(C), C]).flatMap((parsedInput) => [
+      {
+        parsedInput,
+        machineDir: undefined,
+      },
+      ...(Fn?.kind === "in_announced_dir"
+        ? [
+            {
+              parsedInput,
+              machineDir: Fn.dir,
+            },
+          ]
+        : []),
+    ]);
+    let Q = {
+      kind: "proceed",
+    };
+    for (let { parsedInput, machineDir } of flattened) {
+      if (Q.kind === "refuse") break;
+      let Z = () =>
+        checkRemoteToolPermission({
+          tool,
+          parsedInput,
+          requestBytes,
+          toolUseContext,
+          host,
         });
-      return host.transport
-        .call(te.wire, P, C, {
-          signal: signal,
-          deadlineMs: defaultDeadlineMs,
-          toolUseId: callId,
-          onSent: (Z) => {
-            ((G = Z.epoch),
-              (V = Q.has(host.name, Z.epoch)),
-              p.recordAddressee(Z.instanceId, Z.epoch, Z.requestId),
-              onAddressed?.());
-          },
-          ...(B.onAccepted === void 0
-            ? re.onAccepted !== void 0 && { onAccepted: re.onAccepted }
-            : {
-                onAccepted: () => {
-                  (B.onAccepted?.(), re.onAccepted?.());
-                },
-              }),
-          onTransit: (Z) => p.recordLegTransit(C.approval === void 0 ? 1 : 2, Z),
-          ...(hostSupportsProgressChecks(host) && { onHeldAtDeadline: (Z) => p.hold(Z) }),
-        })
-        .then(
-          (Z) => ((ee = re.stop()), B.stop(), (se = B.acceptedAt()), wn(host, Z), Q.note(host.name, G, Z), Z),
-        )
-        .catch(
-          (Z) => (
-            (ee = re.stop()),
-            B.stop(),
-            (se = void 0),
-            { kind: "transport_error", detail: `send failed: ${normalizeMcpServerName(errorMessage(Z))}` }
-          ),
-        );
-    },
-    $n = (C) => {
-      host.transport
-        .call(te.wire, we, he(C), {
-          signal: new AbortController().signal,
-          deadlineMs: Math.min(defaultDeadlineMs, kn),
-          toolUseId: callId,
-        })
-        .catch(() => {});
-    },
-    le = (C) => $n({ ask_id: C, decision: "deny", feedback: WITHDRAWN }),
-    mo = (C) =>
-      host.transport
-        .call(te.wire, we, he({ ask_id: C, decision: "deny", feedback: WITHDRAWN }), {
-          signal: new AbortController().signal,
-          deadlineMs: Math.min(defaultDeadlineMs, kn),
-          toolUseId: callId,
-        })
-        .catch(() => {
-          return;
-        }),
-    fo = (C) =>
-      raceWithAbortSignal(mo(C), signal, () => new AbortError()).catch(() => {
-        return;
+      Q = isProceedVerdict(
+        Q,
+        machineDir === undefined
+          ? await Z()
+          : await runWithoutTelemetry(() => runInRemoteCallFrameMain(machineDir, Z)),
+      );
+    }
+    return Q;
+  };
+  let defaultDeadlineMs = host.transport.limits.defaultDeadlineMs;
+  let expiresInMs = Math.max(1, defaultDeadlineMs - ASK_DEADLINE_SLACK_MS);
+  let compactionId =
+    toolUseContext.agentId === undefined
+      ? toolUseContext.messages.findLast(isCompactBoundaryMessage)?.uuid
+      : undefined;
+  let Re;
+  let he = (C) => {
+    let P = wirePermissionState(toolUseContext, tool.name);
+    if (C === undefined) {
+      Re = P.permissionMode;
+      p.claimedMode = Re;
+    }
+    return buildRemoteToolCallMeta({
+      callId,
+      expiresInMs,
+      ...P,
+      model: getMainLoopModel(toolUseContext),
+      conversationId: getSessionId(),
+      compactionId,
+      ...(C !== undefined && {
+        approval: C,
       }),
-    Bn = toolUseContext.toolState.get(KeyedSemaphore),
-    xn = host.description?.limits.max_in_flight ?? Wo,
-    go = toolUseContext.toolState.get(_1o),
-    ho = clampServingLimit("pending_asks_max", host.description?.limits.pending_asks_max) ?? wgt,
-    U = Je(he()),
-    _e = pendingAsk === void 0 ? await Ae(pe(oe), U) : { kind: "proceed" };
+      ...(C === undefined && {
+        readBaseline: co(),
+      }),
+    });
+  };
+  let co = () =>
+    readBaselineForRemoteWrite({
+      tool,
+      input: oe,
+      description: host.description,
+      readFileState: toolUseContext.readFileState,
+      sessionDir: () => taskCwd(toolUseContext.session),
+    });
+  let Je = (C) =>
+    byteLengthOf({
+      name: te.wire,
+      arguments: {
+        ...we,
+        [REMOTE_TOOL_CALL_META]: C,
+      },
+    });
+  let Dn = (C, P = we) => {
+    p.sent({
+      wireName: te.wire,
+      input: P,
+    });
+    p.hold(undefined);
+    toolUseContext.markToolCallRunning?.(callId);
+    let G;
+    let V = false;
+    let Q = toolUseContext.toolState.get(RemoteCallState);
+    let re = watchRemoteCallProgress({
+      host,
+      toolName: te.wire,
+      callId,
+      signal,
+      onStatus,
+      timing: earlyCheckTiming,
+      mayCheck: () => SHELL_TOOL_NAMES.includes(tool.name) && V && Q.has(host.name, G),
+      onNoRecord: () => Q.forget(host.name, G),
+    });
+    let B = watchSilentCall({
+      host,
+      signal,
+      checkMisses: checkInTiming.misses,
+      timing: silentCallTiming,
+    });
+    return host.transport
+      .call(te.wire, P, C, {
+        signal,
+        deadlineMs: defaultDeadlineMs,
+        toolUseId: callId,
+        onSent: (Z) => {
+          G = Z.epoch;
+          V = Q.has(host.name, Z.epoch);
+          p.recordAddressee(Z.instanceId, Z.epoch, Z.requestId);
+          onAddressed?.();
+        },
+        ...(B.onAccepted === undefined
+          ? re.onAccepted !== undefined && {
+              onAccepted: re.onAccepted,
+            }
+          : {
+              onAccepted: () => {
+                B.onAccepted?.();
+                re.onAccepted?.();
+              },
+            }),
+        onTransit: (Z) => p.recordLegTransit(C.approval === undefined ? 1 : 2, Z),
+        ...(hostSupportsProgressChecks(host) && {
+          onHeldAtDeadline: (Z) => p.hold(Z),
+        }),
+      })
+      .then((Z) => {
+        ee = re.stop();
+        B.stop();
+        se = B.acceptedAt();
+        noteDirSyncAnswer(host, Z);
+        Q.note(host.name, G, Z);
+        return Z;
+      })
+      .catch((error) => {
+        ee = re.stop();
+        B.stop();
+        se = undefined;
+        return {
+          kind: "transport_error",
+          detail: `send failed: ${normalizeMcpServerName(errorMessage(error))}`,
+        };
+      });
+  };
+  let $n = (C) => {
+    host.transport
+      .call(te.wire, we, he(C), {
+        signal: new AbortController().signal,
+        deadlineMs: Math.min(defaultDeadlineMs, MAX_STANDING_ASK_DEADLINE_MS),
+        toolUseId: callId,
+      })
+      .catch(() => {});
+  };
+  let le = (askId) =>
+    $n({
+      ask_id: askId,
+      decision: "deny",
+      feedback: WITHDRAWN,
+    });
+  let mo = (askId) =>
+    host.transport
+      .call(
+        te.wire,
+        we,
+        he({
+          ask_id: askId,
+          decision: "deny",
+          feedback: WITHDRAWN,
+        }),
+        {
+          signal: new AbortController().signal,
+          deadlineMs: Math.min(defaultDeadlineMs, MAX_STANDING_ASK_DEADLINE_MS),
+          toolUseId: callId,
+        },
+      )
+      .catch(() => {
+        return;
+      });
+  let fo = (askId) =>
+    raceWithAbortSignal(mo(askId), signal, () => new AbortError()).catch(() => {
+      return;
+    });
+  let Bn = toolUseContext.toolState.get(KeyedSemaphore);
+  let maxInFlight = host.description?.limits.max_in_flight ?? DEFAULT_MAX_IN_FLIGHT_CALLS;
+  let semaphore = toolUseContext.toolState.get(KeyedSemaphoreSubclass);
+  let limit =
+    clampServingLimit("pending_asks_max", host.description?.limits.pending_asks_max) ?? SANDBOX_MAX_DEPTH;
+  let U = Je(he());
+  let _e =
+    pendingAsk === undefined
+      ? await Ae(pe(oe), U)
+      : {
+          kind: "proceed",
+        };
   if (_e.kind === "refuse")
-    return { requestBytes: U, outcome: { kind: "error", code: _e.code, message: _e.message, host: y } };
-  let ke,
-    Qe = !1;
+    return {
+      requestBytes: U,
+      outcome: {
+        kind: "error",
+        code: _e.code,
+        message: _e.message,
+        host: host_2,
+      },
+    };
+  let ke;
+  let Qe = false;
   if (_e.kind === "ask_first") {
-    if (approve === void 0)
+    if (approve === undefined)
       return {
         requestBytes: U,
         outcome: {
           kind: "error",
           code: "denied_by_session_rule",
           message: `${_e.message} This session asks before running this call and could not raise its prompt here; ${host.name} was not contacted.`,
-          host: y,
+          host: host_2,
         },
       };
-    if (signal.aborted) return { outcome: cancelledResult(y), requestBytes: U };
-    ((Qe = getToolPermissionContext(toolUseContext).mode === "plan"),
-      (ge = oe),
-      (oe = pe(oe)),
-      (we = pe(we)),
-      (U = Je(he())));
-    let C = !1,
-      P = await waitWhileAsking(p, SESSION_ASK_RULE, askLapseMs, (G, V) =>
-        approve({
-          askId: SESSION_ASK_RULE,
-          ended: G,
-          host: y,
-          tool: tool.name,
-          input: oe,
-          message: _e.message,
-          decisionReason: void 0,
-          suggestions: [],
-          classifierEligible: !1,
-          keepsStandingApprovals: !1,
-          offeredStandingRules: [],
-          patience: V,
-          askEnded: () => p.askEnded !== void 0,
-          noteCard: (Q) => {
-            p.card = Q;
-          },
-        }).catch((Q) => {
-          if (Q instanceof AbortError && !signal.aborted) throw Q;
-          if (!signal.aborted)
-            ((C = !0),
-              logForDebugging(
-                `remote tool call: this session's own permission prompt failed: ${errorMessage(Q)}`,
-                { level: "error" },
-              ));
-          return;
-        }),
-      );
-    if (P !== void 0 && "ended" in P)
-      return { requestBytes: U, ...describeNoAnswer(host, y, P.ended, askLapseMs) };
-    if (((Qe &&= getToolPermissionContext(toolUseContext).mode === "plan"), P === void 0))
+    if (signal.aborted)
+      return {
+        outcome: cancelledResult(host_2),
+        requestBytes: U,
+      };
+    Qe = getToolPermissionContext(toolUseContext).mode === "plan";
+    ge = oe;
+    oe = pe(oe);
+    we = pe(we);
+    U = Je(he());
+    let C = false;
+    let P = await waitWhileAsking(p, SESSION_ASK_RULE, askLapseMs, (ended, patience) =>
+      approve({
+        askId: SESSION_ASK_RULE,
+        ended,
+        host: host_2,
+        tool: tool.name,
+        input: oe,
+        message: _e.message,
+        decisionReason: undefined,
+        suggestions: [],
+        classifierEligible: false,
+        keepsStandingApprovals: false,
+        offeredStandingRules: [],
+        patience,
+        askEnded: () => p.askEnded !== undefined,
+        noteCard: (card) => {
+          p.card = card;
+        },
+      }).catch((error) => {
+        if (error instanceof AbortError && !signal.aborted) throw error;
+        if (!signal.aborted) {
+          C = true;
+          logForDebugging(
+            `remote tool call: this session's own permission prompt failed: ${errorMessage(error)}`,
+            {
+              level: "error",
+            },
+          );
+        }
+        return;
+      }),
+    );
+    if (P !== undefined && "ended" in P)
+      return {
+        requestBytes: U,
+        ...describeNoAnswer(host, host_2, P.ended, askLapseMs),
+      };
+    Qe &&= getToolPermissionContext(toolUseContext).mode === "plan";
+    if (P === undefined)
       return {
         requestBytes: U,
         approval: C ? "prompt_failed" : "withdrawn",
@@ -1240,11 +1460,15 @@ async function runRemoteToolCall({
               kind: "error",
               code: "prompt_failed",
               message: `This session could not raise its permission prompt for ${host.name}; the call did not run.`,
-              host: y,
+              host: host_2,
             }
-          : cancelledResult(y),
+          : cancelledResult(host_2),
       };
-    if (signal.aborted && P.decision !== "deny") return { outcome: cancelledResult(y), requestBytes: U };
+    if (signal.aborted && P.decision !== "deny")
+      return {
+        outcome: cancelledResult(host_2),
+        requestBytes: U,
+      };
     if (P.decision === "unanswerable")
       return {
         requestBytes: U,
@@ -1253,25 +1477,27 @@ async function runRemoteToolCall({
           kind: "error",
           code: "prompt_failed",
           message: `${P.message} ${host.name} was not contacted.`,
-          host: y,
+          host: host_2,
         },
       };
     if (P.decision === "deny")
       return {
         requestBytes: U,
-        approval: P.insteadOfRejection === void 0 ? "denied" : "blocked",
+        approval: P.insteadOfRejection === undefined ? "denied" : "blocked",
         outcome: {
           kind: "error",
           code: "rejected_in_session",
           message: P.insteadOfRejection?.message ?? remoteRejectMessage(toolUseContext.agentId, P.feedback),
-          ...(P.insteadOfRejection !== void 0 && { denialKind: P.insteadOfRejection.denialKind }),
-          host: y,
+          ...(P.insteadOfRejection !== undefined && {
+            denialKind: P.insteadOfRejection.denialKind,
+          }),
+          host: host_2,
         },
       };
-    if (P.decidedBy !== void 0) p.recordApprovedBy(P.decidedBy);
-    if (P.updatedInput !== void 0) {
-      let safeParse = tool.inputSchema.safeParse(P.updatedInput);
-      if (!safeParse.success)
+    if (P.decidedBy !== undefined) p.recordApprovedBy(P.decidedBy);
+    if (P.updatedInput !== undefined) {
+      let G = tool.inputSchema.safeParse(P.updatedInput);
+      if (!G.success)
         return {
           requestBytes: U,
           approval: "withdrawn",
@@ -1279,89 +1505,126 @@ async function runRemoteToolCall({
             kind: "error",
             code: "invalid_input",
             message: `The edited ${tool.name} input from this session's prompt does not parse; ${host.name} was not contacted.`,
-            host: y,
+            host: host_2,
           },
         };
-      ((ge = Hn(safeParse.data, oe, ge)),
-        (oe = safeParse.data),
-        (we = P.updatedInput),
-        (ze = !0),
-        (U = Je(he())));
+      ge = Hn(G.data, oe, ge);
+      oe = G.data;
+      we = P.updatedInput;
+      editedByApproval = true;
+      U = Je(he());
       let V = await Ae(pe(oe), U);
       if (V.kind === "refuse")
         return {
           requestBytes: U,
           approval: "withdrawn",
-          outcome: { kind: "error", code: V.code, message: V.message, host: y },
+          outcome: {
+            kind: "error",
+            code: V.code,
+            message: V.message,
+            host: host_2,
+          },
         };
       ke = V.kind === "ask_first" ? V.rule : _e.rule;
     } else ke = _e.rule;
   }
   let Wn = () =>
-      holdForReconnect({
-        tool: tool,
-        host: host,
-        call: p,
-        signal: signal,
-        onStatus: onStatus,
-        holdMs: reconnectHoldMs,
-      }),
-    Kn = await Wn();
-  if (Kn !== void 0) return { requestBytes: U, ...Kn };
-  let beginAskSeatWait = p.beginAskSeatWait(),
-    Un = !1;
+    holdForReconnect({
+      tool,
+      host,
+      call: p,
+      signal,
+      onStatus,
+      holdMs: reconnectHoldMs,
+    });
+  let Kn = await Wn();
+  if (Kn !== undefined)
+    return {
+      requestBytes: U,
+      ...Kn,
+    };
+  let _o = p.beginAskSeatWait();
+  let Un = false;
   using Oe = areAskSeatsOn()
-    ? await acquireSeat(go, host.name, ho, signal, {
-        waitLimitMs: pendingAsk === void 0 ? askSeatWaitMs : 0,
+    ? await acquireSeat(semaphore, host.name, limit, signal, {
+        waitLimitMs: pendingAsk === undefined ? askSeatWaitMs : 0,
         onWait: () => {
-          if (pendingAsk !== void 0) return;
-          ((Un = !0), onStatus?.(ASK_FIRST_REASON_TEXTS["ask_seat.waiting"](host.name), askSeatWaitMs));
+          if (pendingAsk !== undefined) return;
+          Un = true;
+          onStatus?.(ASK_FIRST_REASON_TEXTS["ask_seat.waiting"](host.name), askSeatWaitMs);
         },
       })
-    : O6s;
-  if ((beginAskSeatWait(), Oe === void 0)) return { outcome: cancelledResult(y), requestBytes: U };
-  if (!Oe.seated && pendingAsk === void 0) p.noteSentWithoutAskSeat();
+    : RELEASED_SLOT;
+  _o();
+  if (Oe === undefined)
+    return {
+      outcome: cancelledResult(host_2),
+      requestBytes: U,
+    };
+  if (!Oe.seated && pendingAsk === undefined) p.noteSentWithoutAskSeat();
   if (Un) onStatus?.(ASK_FIRST_REASON_TEXTS["ask_seat.sending"](host.name));
-  let be = pendingAsk ?? (await ko());
+  let transported = pendingAsk ?? (await ko());
   async function ko() {
-    let beginQueuedWait = p.beginQueuedWait();
-    return runWithSlot(Bn, host.name, xn, signal, async () => {
-      if ((beginQueuedWait(), isTerminalShutdown() && !signal.aborted)) await heldUntilExit();
+    let C = p.beginQueuedWait();
+    return runWithSlot(Bn, host.name, maxInFlight, signal, async () => {
+      C();
+      if (isTerminalShutdown() && !signal.aborted) await heldUntilExit();
       let P = await Wn();
-      if (P !== void 0) return { requestBytes: U, ...P };
-      let G = !1;
+      if (P !== undefined)
+        return {
+          requestBytes: U,
+          ...P,
+        };
+      let readOnly = false;
       try {
-        G = tool.isReadOnly(oe);
+        readOnly = tool.isReadOnly(oe);
       } catch {}
-      let V = !1;
+      let V = false;
       try {
         V = tool.isConcurrencySafe(ro);
       } catch {}
       let Q = await clearForwardToDevice({
-        host: host,
-        readOnly: G,
-        runsBesideOthers: toolUseContext.agentId !== void 0 || entry === "repl" || V,
-        signal: signal,
-        onStatus: onStatus,
+        host,
+        readOnly,
+        runsBesideOthers: toolUseContext.agentId !== undefined || entry === "repl" || V,
+        signal,
+        onStatus,
       });
       if (Q.kind === "hold")
         return {
-          outcome: { kind: "error", code: "sync_failed", message: Q.message, host: y },
+          outcome: {
+            kind: "error",
+            code: "sync_failed",
+            message: Q.message,
+            host: host_2,
+          },
           requestBytes: U,
         };
-      if (Q.kind === "away") return { requestBytes: U, ...convertRemoteToolResult(tool, host, Q.outcome) };
+      if (Q.kind === "away")
+        return {
+          requestBytes: U,
+          ...convertRemoteToolResult(tool, host, Q.outcome),
+        };
       if (Q.kind === "go_with_note") noteSync(Q.note);
       let re = await Ae(pe(oe), U);
       if (re.kind === "refuse")
-        return { outcome: { kind: "error", code: re.code, message: re.message, host: y }, requestBytes: U };
+        return {
+          outcome: {
+            kind: "error",
+            code: re.code,
+            message: re.message,
+            host: host_2,
+          },
+          requestBytes: U,
+        };
       if (re.kind === "ask_first" && !isSameHostName(re.rule, ke))
-        return ke === void 0
+        return ke === undefined
           ? {
               outcome: {
                 kind: "error",
                 code: "denied_by_session_rule",
                 message: `${re.message} ${host.name} was not contacted.`,
-                host: y,
+                host: host_2,
               },
               requestBytes: U,
             }
@@ -1371,141 +1634,194 @@ async function runRemoteToolCall({
                 kind: "error",
                 code: "approval_no_longer_covers",
                 message: ASK_FIRST_REASON_TEXTS.approval_no_longer_covers(host.name),
-                host: y,
+                host: host_2,
               },
               requestBytes: U,
             };
-      if (signal.aborted) return { outcome: cancelledResult(y), requestBytes: U };
+      if (signal.aborted)
+        return {
+          outcome: cancelledResult(host_2),
+          requestBytes: U,
+        };
       if (isTerminalShutdown()) await heldUntilExit();
-      if ((onFirstSend?.(), ke === void 0)) speculation?.begin({ host: y, input: pe(oe) });
+      onFirstSend?.();
+      if (ke === undefined)
+        speculation?.begin({
+          host: host_2,
+          input: pe(oe),
+        });
       let B = he();
-      if (B.read_baseline !== void 0) noteReadBaselineSent();
+      if (B.read_baseline !== undefined) noteReadBaselineSent();
       return Dn(B);
     }).then((P) => {
-      if (P === void 0) beginQueuedWait();
+      if (P === undefined) C();
       return P;
     });
   }
-  if (be === void 0) return { outcome: cancelledResult(y), requestBytes: U };
-  if ("outcome" in be) return be;
-  if (!(be.kind === "result" && be.envelope?.outcome === "needs_approval")) Oe.release();
-  let fe = await ue(be);
-  if (fe.kind === "ended") return { requestBytes: U, reconcile: fe.trace, outcome: fe.outcome };
-  let transported = fe.transported,
-    W =
-      transported.kind === "result" && transported.envelope?.outcome === "needs_approval"
-        ? transported.envelope
-        : void 0;
-  if (W === void 0)
-    return (
-      speculation?.abandon(),
-      {
-        requestBytes: U,
-        reconcile: fe.trace,
-        ...convertRemoteToolResult(tool, host, transported, {
-          afterReconnect: fe.kind === "answered",
-          call: { input: oe, editedByApproval: ze },
-        }),
-      }
-    );
-  (Oe.retake(), toolUseContext.markToolCallRunning?.(callId, !1), p.questionRaised());
+  if (transported === undefined)
+    return {
+      outcome: cancelledResult(host_2),
+      requestBytes: U,
+    };
+  if ("outcome" in transported) return transported;
+  if (!(transported.kind === "result" && transported.envelope?.outcome === "needs_approval")) Oe.release();
+  let fe = await ue(transported);
+  if (fe.kind === "ended")
+    return {
+      requestBytes: U,
+      reconcile: fe.trace,
+      outcome: fe.outcome,
+    };
+  let transported_2 = fe.transported;
+  let envelope =
+    transported_2.kind === "result" && transported_2.envelope?.outcome === "needs_approval"
+      ? transported_2.envelope
+      : undefined;
+  if (envelope === undefined) {
+    speculation?.abandon();
+    return {
+      requestBytes: U,
+      reconcile: fe.trace,
+      ...convertRemoteToolResult(tool, host, transported_2, {
+        afterReconnect: fe.kind === "answered",
+        call: {
+          input: oe,
+          editedByApproval,
+        },
+      }),
+    };
+  }
+  Oe.retake();
+  toolUseContext.markToolCallRunning?.(callId, false);
+  p.questionRaised();
   let Ze = await (async () => {
-    if (approve === void 0)
-      return (
-        le(W.ask_id),
-        { requestBytes: U, approval: "no_handler", ...convertRemoteToolResult(tool, host, transported) }
-      );
-    let C = iv(W.input) <= maxRequestBytes(host) ? tool.inputSchema.safeParse(W.input) : { success: !1 };
-    if (W.tool !== te.ask || !C.success)
-      return (
-        le(W.ask_id),
-        {
-          requestBytes: U,
-          approval: "unreadable_ask",
-          outcome: {
-            kind: "error",
-            code: "refused_by_host",
-            message: refusedByMachineLine({
-              name: host.name,
-              message: "it asked for approval of a call this session could not read; nothing ran",
-            }),
-            host: y,
-          },
-        }
-      );
-    let P = await Ae(C.data, U).catch((q) => {
-      throw (le(W.ask_id), q);
+    if (approve === undefined) {
+      le(envelope.ask_id);
+      return {
+        requestBytes: U,
+        approval: "no_handler",
+        ...convertRemoteToolResult(tool, host, transported_2),
+      };
+    }
+    let C =
+      byteLengthOf(envelope.input) <= maxRequestBytes(host)
+        ? tool.inputSchema.safeParse(envelope.input)
+        : {
+            success: false,
+          };
+    if (envelope.tool !== te.ask || !C.success) {
+      le(envelope.ask_id);
+      return {
+        requestBytes: U,
+        approval: "unreadable_ask",
+        outcome: {
+          kind: "error",
+          code: "refused_by_host",
+          message: refusedByMachineLine({
+            name: host.name,
+            message: "it asked for approval of a call this session could not read; nothing ran",
+          }),
+          host: host_2,
+        },
+      };
+    }
+    let P = await Ae(C.data, U).catch((error) => {
+      le(envelope.ask_id);
+      throw error;
     });
-    if (P.kind === "refuse")
-      return (
-        le(W.ask_id),
-        { requestBytes: U, approval: "withdrawn", outcome: describeWithdrawnAsk(P, host.name, y) }
-      );
-    let G = !1,
-      V =
-        ke !== void 0 &&
-        (P.kind !== "ask_first" || isSameHostName(P.rule, ke)) &&
-        W.prior_answer_ok === !0 &&
-        sameInputsModuloDefaults(C.data, pe(oe), void 0),
-      Q =
-        W.classifier_eligible === !0 &&
-        P.kind !== "ask_first" &&
-        (Re === "auto" || (Re === "plan" && isAutoModeCapableHost(host))) &&
-        Re === wirePermissionState(toolUseContext, tool.name).permissionMode;
-    if (W.classifier_eligible === !0 && Re === "plan" && !Q)
+    if (P.kind === "refuse") {
+      le(envelope.ask_id);
+      return {
+        requestBytes: U,
+        approval: "withdrawn",
+        outcome: describeWithdrawnAsk(P, host.name, host_2),
+      };
+    }
+    let G = false;
+    let V =
+      ke !== undefined &&
+      (P.kind !== "ask_first" || isSameHostName(P.rule, ke)) &&
+      envelope.prior_answer_ok === true &&
+      sameInputsModuloDefaults(C.data, pe(oe), undefined);
+    let Q =
+      envelope.classifier_eligible === true &&
+      P.kind !== "ask_first" &&
+      (Re === "auto" || (Re === "plan" && isAutoModeCapableHost(host))) &&
+      Re === wirePermissionState(toolUseContext, tool.name).permissionMode;
+    if (envelope.classifier_eligible === true && Re === "plan" && !Q)
       logForDebugging(
-        `[remoteCall] plan-mode ask ${W.ask_id} goes to a person: host accepts plan answers=${hasCapability(host)}, account-set mode=${getAccountSetPermissionMode() ?? "unknown"}, reached over ${host.transport.kind}`,
+        `[remoteCall] plan-mode ask ${envelope.ask_id} goes to a person: host accepts plan answers=${hasCapability(host)}, account-set mode=${getAccountSetPermissionMode() ?? "unknown"}, reached over ${host.transport.kind}`,
       );
     if (V) p.answeredWithoutPrompt();
-    let re = getToolPermissionContext(toolUseContext).mode === "plan",
-      B = V
-        ? p.askEnded === void 0
-          ? { decision: "allow" }
-          : { ended: p.askEnded }
-        : await waitWhileAsking(p, W.ask_id, askLapseMs, (q, z) =>
-            approve({
-              askId: W.ask_id,
-              ended: q,
-              patience: z,
-              askEnded: () => p.askEnded !== void 0,
-              noteCard: (j) => {
-                p.card = j;
-              },
-              host: y,
-              tool: tool.name,
-              input: W.input,
-              message: sanitizeForPrompt(W.message, Hen),
-              decisionReason:
-                W.decision_reason === void 0 ? void 0 : sanitizeForPrompt(W.decision_reason, Hen),
-              suggestions: (W.suggestions ?? []).map((j) => sanitizeForPrompt(j, Vo)),
-              classifierEligible: Q,
-              keepsStandingApprovals: hasSessionCapability(host),
-              offeredStandingRules: hasSessionCapabilityPair(host) ? (W.suggestions ?? []) : [],
-              ...(pendingAsk !== void 0 && { pendingBeforeRestart: !0 }),
-              ...(Q &&
-                W.auto_mode !== void 0 && {
-                  hostRules: xr(W.auto_mode, (j) => j?.map((Se) => Xo(Se)).filter((Se) => Se !== "")),
-                }),
-            }).catch((j) => {
-              if (j instanceof AbortError && !signal.aborted) {
-                if (p.askEnded !== void 0) {
-                  toolUseContext.abortController.abort(j);
-                  return;
-                }
-                throw (le(W.ask_id), j);
-              }
-              if (((G = !signal.aborted), G))
-                logForDebugging(
-                  `remote tool call: the session's permission prompt failed: ${errorMessage(j)}`,
-                  { level: "error" },
-                );
-              return;
+    let re = getToolPermissionContext(toolUseContext).mode === "plan";
+    let B = V
+      ? p.askEnded === undefined
+        ? {
+            decision: "allow",
+          }
+        : {
+            ended: p.askEnded,
+          }
+      : await waitWhileAsking(p, envelope.ask_id, askLapseMs, (ended, patience) =>
+          approve({
+            askId: envelope.ask_id,
+            ended,
+            patience,
+            askEnded: () => p.askEnded !== undefined,
+            noteCard: (card) => {
+              p.card = card;
+            },
+            host: host_2,
+            tool: tool.name,
+            input: envelope.input,
+            message: sanitizeForPrompt(envelope.message, MAX_MACHINE_MESSAGE_CHARS),
+            decisionReason:
+              envelope.decision_reason === undefined
+                ? undefined
+                : sanitizeForPrompt(envelope.decision_reason, MAX_MACHINE_MESSAGE_CHARS),
+            suggestions: (envelope.suggestions ?? []).map((j) => sanitizeForPrompt(j, MAX_PROMPT_TEXT_CHARS)),
+            classifierEligible: Q,
+            keepsStandingApprovals: hasSessionCapability(host),
+            offeredStandingRules: hasSessionCapabilityPair(host) ? (envelope.suggestions ?? []) : [],
+            ...(pendingAsk !== undefined && {
+              pendingBeforeRestart: true,
             }),
-          );
-    if (B !== void 0 && "ended" in B)
-      return (le(W.ask_id), { requestBytes: U, ...describeNoAnswer(host, y, B.ended, askLapseMs) });
-    if (B === void 0 || (signal.aborted && B.decision !== "deny")) {
-      if ((le(W.ask_id), G && !signal.aborted))
+            ...(Q &&
+              envelope.auto_mode !== undefined && {
+                hostRules: xr(envelope.auto_mode, (j) =>
+                  j?.map((Se) => promptSafeTruncated(Se)).filter((Se) => Se !== ""),
+                ),
+              }),
+          }).catch((error) => {
+            if (error instanceof AbortError && !signal.aborted) {
+              if (p.askEnded !== undefined) {
+                toolUseContext.abortController.abort(error);
+                return;
+              }
+              le(envelope.ask_id);
+              throw error;
+            }
+            G = !signal.aborted;
+            if (G)
+              logForDebugging(
+                `remote tool call: the session's permission prompt failed: ${errorMessage(error)}`,
+                {
+                  level: "error",
+                },
+              );
+            return;
+          }),
+        );
+    if (B !== undefined && "ended" in B) {
+      le(envelope.ask_id);
+      return {
+        requestBytes: U,
+        ...describeNoAnswer(host, host_2, B.ended, askLapseMs),
+      };
+    }
+    if (B === undefined || (signal.aborted && B.decision !== "deny")) {
+      le(envelope.ask_id);
+      if (G && !signal.aborted)
         return {
           requestBytes: U,
           approval: "prompt_failed",
@@ -1513,219 +1829,276 @@ async function runRemoteToolCall({
             kind: "error",
             code: "prompt_failed",
             message: `This session could not raise its permission prompt for ${host.name}; the call did not run.`,
-            host: y,
+            host: host_2,
           },
         };
       return {
-        outcome: interruptedResult(y, { withdrawnAtAsk: !0 }),
+        outcome: interruptedResult(host_2, {
+          withdrawnAtAsk: true,
+        }),
         requestBytes: U,
         approval: "withdrawn",
       };
     }
-    if (B.decision === "unanswerable")
-      return (
-        le(W.ask_id),
-        {
-          requestBytes: U,
-          approval: "prompt_failed",
-          outcome: {
-            kind: "error",
-            code: "prompt_failed",
-            message: `${B.message} The call did not run on ${host.name}.`,
-            host: y,
-          },
-        }
-      );
-    let Z = B.feedback === void 0 ? void 0 : truncateToLength(B.feedback, NPe),
-      nn = {
-        ask_id: W.ask_id,
-        decision: B.decision,
-        ...(B.decision === "allow" && B.updatedInput !== void 0 && { updated_input: B.updatedInput }),
-        ...(Z !== void 0 && { feedback: Z }),
-        ...(B.decision === "allow" &&
-          B.permissionUpdates !== void 0 &&
-          B.permissionUpdates.length > 0 && {
-            permission_updates: B.permissionUpdates.slice(0, MAX_REMEMBERED_ASKS),
-          }),
+    if (B.decision === "unanswerable") {
+      le(envelope.ask_id);
+      return {
+        requestBytes: U,
+        approval: "prompt_failed",
+        outcome: {
+          kind: "error",
+          code: "prompt_failed",
+          message: `${B.message} The call did not run on ${host.name}.`,
+          host: host_2,
+        },
       };
-    if (B.decision === "allow" && !V && B.decidedBy !== void 0) p.recordApprovedBy(B.decidedBy);
-    let Ie = B.decision === "allow" && B.decidedBy === "classifier",
-      yo =
-        (B.decision === "allow" && B.raisedInPlanMode !== void 0 ? B.raisedInPlanMode : re) &&
-        getToolPermissionContext(toolUseContext).mode === "plan" &&
-        (!Ie || Re === "plan");
-    if (B.decision === "deny")
-      return (
-        $n(nn),
-        {
-          requestBytes: U,
-          approval: B.insteadOfRejection === void 0 ? "denied" : "blocked",
-          outcome: {
-            kind: "error",
-            code: "rejected_in_session",
-            message: B.insteadOfRejection?.message ?? remoteRejectMessage(toolUseContext.agentId, Z),
-            ...(B.insteadOfRejection !== void 0 && { denialKind: B.insteadOfRejection.denialKind }),
-            host: y,
-          },
-        }
-      );
-    let ve = B.updatedInput === void 0 ? void 0 : tool.inputSchema.safeParse(B.updatedInput);
+    }
+    let Z = B.feedback === undefined ? undefined : truncateToLength(B.feedback, MAX_MESSAGE_CHARS);
+    let nn = {
+      ask_id: envelope.ask_id,
+      decision: B.decision,
+      ...(B.decision === "allow" &&
+        B.updatedInput !== undefined && {
+          updated_input: B.updatedInput,
+        }),
+      ...(Z !== undefined && {
+        feedback: Z,
+      }),
+      ...(B.decision === "allow" &&
+        B.permissionUpdates !== undefined &&
+        B.permissionUpdates.length > 0 && {
+          permission_updates: B.permissionUpdates.slice(0, MAX_REMEMBERED_ASKS),
+        }),
+    };
+    if (B.decision === "allow" && !V && B.decidedBy !== undefined) p.recordApprovedBy(B.decidedBy);
+    let Ie = B.decision === "allow" && B.decidedBy === "classifier";
+    let yo =
+      (B.decision === "allow" && B.raisedInPlanMode !== undefined ? B.raisedInPlanMode : re) &&
+      getToolPermissionContext(toolUseContext).mode === "plan" &&
+      (!Ie || Re === "plan");
+    if (B.decision === "deny") {
+      $n(nn);
+      return {
+        requestBytes: U,
+        approval: B.insteadOfRejection === undefined ? "denied" : "blocked",
+        outcome: {
+          kind: "error",
+          code: "rejected_in_session",
+          message: B.insteadOfRejection?.message ?? remoteRejectMessage(toolUseContext.agentId, Z),
+          ...(B.insteadOfRejection !== undefined && {
+            denialKind: B.insteadOfRejection.denialKind,
+          }),
+          host: host_2,
+        },
+      };
+    }
+    let ve = B.updatedInput === undefined ? undefined : tool.inputSchema.safeParse(B.updatedInput);
     if (ve?.success) ge = Hn(ve.data, C.data, ge);
     let Be =
-      ve === void 0
-        ? void 0
+      ve === undefined
+        ? undefined
         : ve.success
-          ? await Ae(pe(ve.data), U).catch((q) => {
-              throw (le(W.ask_id), q);
+          ? await Ae(pe(ve.data), U).catch((error) => {
+              le(envelope.ask_id);
+              throw error;
             })
           : {
               kind: "refuse",
               code: "invalid_input",
               message: `The edited ${tool.name} input from this session's prompt does not parse; it was not sent.`,
             };
-    if (Be?.kind === "refuse")
-      return (
-        le(W.ask_id),
-        { requestBytes: U, approval: "withdrawn", outcome: describeWithdrawnAsk(Be, host.name, y) }
-      );
-    let Ro = he(nn),
-      input = W.input,
-      ce = iv({ name: te.wire, arguments: { ...input, [REMOTE_TOOL_CALL_META]: Ro } }),
-      Gn = maxRequestBytes(host);
-    if (ce > Gn)
-      return (
-        le(W.ask_id),
-        {
-          requestBytes: ce,
-          approval: "withdrawn",
-          outcome: {
-            kind: "error",
-            code: "request_too_large",
-            message: inputTooLargeMessage({ name: host.name, requestBytes: ce, capBytes: Gn }),
-            host: y,
-          },
+    if (Be?.kind === "refuse") {
+      le(envelope.ask_id);
+      return {
+        requestBytes: U,
+        approval: "withdrawn",
+        outcome: describeWithdrawnAsk(Be, host.name, host_2),
+      };
+    }
+    let Ro = he(nn);
+    let input = envelope.input;
+    let ce = byteLengthOf({
+      name: te.wire,
+      arguments: {
+        ...input,
+        [REMOTE_TOOL_CALL_META]: Ro,
+      },
+    });
+    let Gn = maxRequestBytes(host);
+    if (ce > Gn) {
+      le(envelope.ask_id);
+      return {
+        requestBytes: ce,
+        approval: "withdrawn",
+        outcome: {
+          kind: "error",
+          code: "request_too_large",
+          message: inputTooLargeMessage({
+            name: host.name,
+            requestBytes: ce,
+            capBytes: Gn,
+          }),
+          host: host_2,
+        },
+      };
+    }
+    let qn = B.updatedInput ?? C.data;
+    let call = ve?.success
+      ? {
+          input: ve.data,
+          editedByApproval: true,
         }
-      );
-    let qn = B.updatedInput ?? C.data,
-      tn = ve?.success
-        ? { input: ve.data, editedByApproval: !0 }
-        : sameInputsModuloDefaults(C.data, pe(oe), void 0)
-          ? { input: oe, editedByApproval: ze }
-          : void 0,
-      vo = () => {
-        let beginQueuedWait = p.beginQueuedWait();
-        return runWithSlot(Bn, host.name, xn, signal, async () => {
-          if ((beginQueuedWait(), isTerminalShutdown() && !signal.aborted)) await heldUntilExit();
-          let z = await Ae(pe(qn), ce);
-          if (z.kind === "refuse") return { kind: "late_refusal", verdict: z };
-          if (
-            z.kind === "ask_first" &&
-            !isSameHostName(z.rule, ke) &&
-            !(P.kind === "ask_first" && isSameHostName(z.rule, P.rule)) &&
-            !(Be?.kind === "ask_first" && isSameHostName(z.rule, Be.rule))
-          )
+      : sameInputsModuloDefaults(C.data, pe(oe), undefined)
+        ? {
+            input: oe,
+            editedByApproval,
+          }
+        : undefined;
+    let vo = () => {
+      let q = p.beginQueuedWait();
+      return runWithSlot(Bn, host.name, maxInFlight, signal, async () => {
+        q();
+        if (isTerminalShutdown() && !signal.aborted) await heldUntilExit();
+        let z = await Ae(pe(qn), ce);
+        if (z.kind === "refuse")
+          return {
+            kind: "late_refusal",
+            verdict: z,
+          };
+        if (
+          z.kind === "ask_first" &&
+          !isSameHostName(z.rule, ke) &&
+          !(P.kind === "ask_first" && isSameHostName(z.rule, P.rule)) &&
+          !(Be?.kind === "ask_first" && isSameHostName(z.rule, Be.rule))
+        )
+          return {
+            kind: "late_refusal",
+            verdict: {
+              code: "denied_by_session_rule",
+              message: `A permission rule of this session now asks before this ${tool.name} call; it appeared after the approval. ${host.name} was not contacted.`,
+            },
+          };
+        let j = !Ie || isAutoClassifierActive(getToolPermissionContext(toolUseContext).mode);
+        if (!(V ? Qe : yo && j) && getToolPermissionContext(toolUseContext).mode === "plan") {
+          let Xn = false;
+          try {
+            Xn = tool.isReadOnly(qn, toolUseContext);
+          } catch {}
+          if (!Xn)
             return {
               kind: "late_refusal",
               verdict: {
                 code: "denied_by_session_rule",
-                message: `A permission rule of this session now asks before this ${tool.name} call; it appeared after the approval. ${host.name} was not contacted.`,
+                message: ASK_FIRST_REASON_TEXTS["plan_mode.entered_while_asking"](tool.name),
               },
             };
-          let j = !Ie || isAutoClassifierActive(getToolPermissionContext(toolUseContext).mode);
-          if (!(V ? Qe : yo && j) && getToolPermissionContext(toolUseContext).mode === "plan") {
-            let Xn = !1;
-            try {
-              Xn = tool.isReadOnly(qn, toolUseContext);
-            } catch {}
-            if (!Xn)
-              return {
-                kind: "late_refusal",
-                verdict: {
-                  code: "denied_by_session_rule",
-                  message: ASK_FIRST_REASON_TEXTS["plan_mode.entered_while_asking"](tool.name),
-                },
-              };
-          }
-          if (signal.aborted) return { kind: "cancelled" };
-          if (isTerminalShutdown()) await heldUntilExit();
-          let Ao = Dn(he(nn), input);
-          return (Oe.release(), Ao);
-        }).then(
-          (z) => {
-            if (z === void 0) beginQueuedWait();
-            return z;
-          },
-          (z) => {
-            throw (le(W.ask_id), z);
-          },
-        );
-      },
-      xe = V ? "pre_approved" : "allowed",
-      To = (q, z) => {
-        let j = q?.kind === "result" ? q.envelope : void 0;
-        if (j?.outcome === "acknowledged" && j.ask_id === W.ask_id)
+        }
+        if (signal.aborted)
           return {
-            approval: "withdrawn",
-            outcome: {
-              kind: "error",
-              code: "approval_not_received",
-              message: approvalDroppedMessage(host.name, z, !0),
-              host: y,
-            },
+            kind: "cancelled",
           };
-        if (
-          q?.kind === "result" &&
-          j !== void 0 &&
-          (j.outcome === "in_progress" ||
-            (j.outcome !== "needs_approval" && j.outcome !== "acknowledged" && j.replayed === !0) ||
-            (j.outcome === "completed" && j.disposition === "duplicate_call"))
-        )
-          return {
-            approval: xe,
-            ...convertRemoteToolResult(tool, host, q, { afterReconnect: !0, call: tn }),
-          };
+        if (isTerminalShutdown()) await heldUntilExit();
+        let Ao = Dn(he(nn), input);
+        Oe.release();
+        return Ao;
+      }).then(
+        (z) => {
+          if (z === undefined) q();
+          return z;
+        },
+        (error) => {
+          le(envelope.ask_id);
+          throw error;
+        },
+      );
+    };
+    let approval = V ? "pre_approved" : "allowed";
+    let To = (q, trigger) => {
+      let envelope_2 = q?.kind === "result" ? q.envelope : undefined;
+      if (envelope_2?.outcome === "acknowledged" && envelope_2.ask_id === envelope.ask_id)
         return {
           approval: "withdrawn",
           outcome: {
             kind: "error",
             code: "approval_not_received",
-            message: approvalDroppedMessage(host.name, z, !1),
-            host: y,
-            open: "delivery_unknown",
+            message: approvalDroppedMessage(host.name, trigger, true),
+            host: host_2,
           },
         };
-      };
-    return (async (q) => {
-      if (q?.kind === "late_refusal")
-        return (
-          le(W.ask_id),
-          { requestBytes: ce, approval: "withdrawn", outcome: describeWithdrawnAsk(q.verdict, host.name, y) }
-        );
       if (
-        q === void 0 ||
-        q.kind === "cancelled" ||
-        q.kind === "unreachable" ||
-        q.kind === "stalled" ||
-        q.kind === "approval_unverified"
+        q?.kind === "result" &&
+        envelope_2 !== undefined &&
+        (envelope_2.outcome === "in_progress" ||
+          (envelope_2.outcome !== "needs_approval" &&
+            envelope_2.outcome !== "acknowledged" &&
+            envelope_2.replayed === true) ||
+          (envelope_2.outcome === "completed" && envelope_2.disposition === "duplicate_call"))
+      )
+        return {
+          approval,
+          ...convertRemoteToolResult(tool, host, q, {
+            afterReconnect: true,
+            call,
+          }),
+        };
+      return {
+        approval: "withdrawn",
+        outcome: {
+          kind: "error",
+          code: "approval_not_received",
+          message: approvalDroppedMessage(host.name, trigger, false),
+          host: host_2,
+          open: "delivery_unknown",
+        },
+      };
+    };
+    return (async (transported) => {
+      if (transported?.kind === "late_refusal") {
+        le(envelope.ask_id);
+        return {
+          requestBytes: ce,
+          approval: "withdrawn",
+          outcome: describeWithdrawnAsk(transported.verdict, host.name, host_2),
+        };
+      }
+      if (
+        transported === undefined ||
+        transported.kind === "cancelled" ||
+        transported.kind === "unreachable" ||
+        transported.kind === "stalled" ||
+        transported.kind === "approval_unverified"
       ) {
-        if ((le(W.ask_id), q?.kind === "stalled"))
+        le(envelope.ask_id);
+        if (transported?.kind === "stalled")
           return {
             requestBytes: ce,
             approval: "withdrawn",
             outcome: {
               kind: "error",
-              code: q.takenBack ? "stalled_unsent" : "stalled",
+              code: transported.takenBack ? "stalled_unsent" : "stalled",
               message:
-                q.request === "probe"
-                  ? livenessCheckWithdrawnMessage({ name: host.name, capMs: q.capMs })
-                  : q.takenBack
-                    ? approvalWithdrawnMessage({ name: host.name, capMs: q.capMs })
-                    : approvalNotSentMessage({ name: host.name, capMs: q.capMs }),
-              ...(q.request !== "probe" && !q.takenBack && { open: "stalled" }),
-              host: y,
+                transported.request === "probe"
+                  ? livenessCheckWithdrawnMessage({
+                      name: host.name,
+                      capMs: transported.capMs,
+                    })
+                  : transported.takenBack
+                    ? approvalWithdrawnMessage({
+                        name: host.name,
+                        capMs: transported.capMs,
+                      })
+                    : approvalNotSentMessage({
+                        name: host.name,
+                        capMs: transported.capMs,
+                      }),
+              ...(transported.request !== "probe" &&
+                !transported.takenBack && {
+                  open: "stalled",
+                }),
+              host: host_2,
             },
           };
-        if (q?.kind === "approval_unverified" && Ie)
+        if (transported?.kind === "approval_unverified" && Ie)
           return {
             requestBytes: ce,
             approval: "withdrawn",
@@ -1733,25 +2106,42 @@ async function runRemoteToolCall({
               kind: "error",
               code: "approval_unverified",
               message: classifierOnlyApprovalMessage(host.name, tool.name),
-              host: y,
+              host: host_2,
             },
           };
-        return q?.kind === "unreachable" || q?.kind === "approval_unverified"
+        return transported?.kind === "unreachable" || transported?.kind === "approval_unverified"
           ? {
               requestBytes: ce,
               approval: "withdrawn",
-              ...convertRemoteToolResult(tool, host, q, { call: tn }),
+              ...convertRemoteToolResult(tool, host, transported, {
+                call,
+              }),
             }
-          : { outcome: interruptedResult(y, { withdrawnAtAsk: !0 }), requestBytes: U, approval: "withdrawn" };
+          : {
+              outcome: interruptedResult(host_2, {
+                withdrawnAtAsk: true,
+              }),
+              requestBytes: U,
+              approval: "withdrawn",
+            };
       }
-      let z = await ue(q, { byClassifier: Ie, releaseAsk: () => le(W.ask_id) });
+      let z = await ue(transported, {
+        byClassifier: Ie,
+        releaseAsk: () => le(envelope.ask_id),
+      });
       if (z.kind === "ended") {
-        if (z.outcome.kind === "error" && z.outcome.code === "interrupted") le(W.ask_id);
-        return { requestBytes: ce, approval: xe, reconcile: z.trace, outcome: z.outcome };
+        if (z.outcome.kind === "error" && z.outcome.code === "interrupted") le(envelope.ask_id);
+        return {
+          requestBytes: ce,
+          approval,
+          reconcile: z.trace,
+          outcome: z.outcome,
+        };
       }
-      let transported = z.transported;
-      if (transported.kind !== "result" || transported.envelope?.outcome === "refused") le(W.ask_id);
-      if (transported.kind === "stalled" && transported.takenBack)
+      let transported_2 = z.transported;
+      if (transported_2.kind !== "result" || transported_2.envelope?.outcome === "refused")
+        le(envelope.ask_id);
+      if (transported_2.kind === "stalled" && transported_2.takenBack)
         return {
           requestBytes: ce,
           approval: "withdrawn",
@@ -1759,225 +2149,260 @@ async function runRemoteToolCall({
           outcome: {
             kind: "error",
             code: "stalled_unsent",
-            message: approvalWithdrawnMessage({ name: host.name, capMs: transported.capMs }),
-            host: y,
+            message: approvalWithdrawnMessage({
+              name: host.name,
+              capMs: transported_2.capMs,
+            }),
+            host: host_2,
           },
         };
       if (
-        transported.kind === "result" &&
-        transported.envelope?.outcome === "refused" &&
-        (transported.envelope.code === "withdrawn" ||
-          transported.envelope.code === "stale" ||
-          transported.envelope.reason === "stale_answer") &&
+        transported_2.kind === "result" &&
+        transported_2.envelope?.outcome === "refused" &&
+        (transported_2.envelope.code === "withdrawn" ||
+          transported_2.envelope.code === "stale" ||
+          transported_2.envelope.reason === "stale_answer") &&
         !Ie &&
         !V
       )
         p.endAsk(
           normalizeWithdrawReason(
-            transported.envelope.reason ?? (transported.envelope.code === "stale" ? "stale_answer" : ""),
+            transported_2.envelope.reason ?? (transported_2.envelope.code === "stale" ? "stale_answer" : ""),
           ),
         );
-      if (transported.kind === "result" && transported.envelope?.outcome === "needs_approval") {
-        if (z.kind === "answered" && transported.envelope.ask_id === W.ask_id) {
-          let Se = await fo(W.ask_id);
-          return { requestBytes: ce, reconcile: z.trace, ...To(Se, z.trace.trigger) };
-        }
-        return (
-          le(transported.envelope.ask_id),
-          {
+      if (transported_2.kind === "result" && transported_2.envelope?.outcome === "needs_approval") {
+        if (z.kind === "answered" && transported_2.envelope.ask_id === envelope.ask_id) {
+          let Se = await fo(envelope.ask_id);
+          return {
             requestBytes: ce,
-            approval: "asked_again",
             reconcile: z.trace,
-            outcome: {
-              kind: "error",
-              code: "refused_by_host",
-              message: `Your approval reached ${host.name} after it stopped waiting for it; nothing ran. Retry the call if it is still wanted.`,
-              host: y,
-            },
-          }
-        );
-      }
-      if (transported.kind === "dropped" && transported.why === "write_unresolved")
+            ...To(Se, z.trace.trigger),
+          };
+        }
+        le(transported_2.envelope.ask_id);
         return {
           requestBytes: ce,
-          approval: xe,
+          approval: "asked_again",
+          reconcile: z.trace,
+          outcome: {
+            kind: "error",
+            code: "refused_by_host",
+            message: `Your approval reached ${host.name} after it stopped waiting for it; nothing ran. Retry the call if it is still wanted.`,
+            host: host_2,
+          },
+        };
+      }
+      if (transported_2.kind === "dropped" && transported_2.why === "write_unresolved")
+        return {
+          requestBytes: ce,
+          approval,
           reconcile: z.trace,
           outcome: {
             kind: "error",
             code: "dropped",
             message: approvalUploadUnconfirmedMessage(host.name),
-            host: y,
+            host: host_2,
             open: "delivery_unknown",
           },
         };
       return {
         requestBytes: ce,
-        approval: xe,
+        approval,
         reconcile: z.trace,
-        ...convertRemoteToolResult(tool, host, transported, {
+        ...convertRemoteToolResult(tool, host, transported_2, {
           afterReconnect: z.kind === "answered",
-          call: tn,
+          call,
         }),
       };
     })(await vo());
   })();
-  return fe.trace !== void 0 && Ze.reconcile !== fe.trace ? { ...Ze, reconcileLeg1: fe.trace } : Ze;
+  return fe.trace !== undefined && Ze.reconcile !== fe.trace
+    ? {
+        ...Ze,
+        reconcileLeg1: fe.trace,
+      }
+    : Ze;
 }
 //@ chunk-dtv8x2hx.js:57316-61083 placement
 async function collectRemoteResult({
-  transported: transported,
-  host: host,
+  transported,
+  host,
   call: o,
-  dispatchEpoch: dispatchEpoch,
-  toolName: toolName,
-  callId: callId,
-  signal: signal,
-  timing: timing,
-  silentSince: silentSince,
-  silentCallTiming: silentCallTiming,
-  onStatus: onStatus,
-  standingLine: standingLine,
-  approval: approval,
+  dispatchEpoch,
+  toolName,
+  callId,
+  signal,
+  timing,
+  silentSince,
+  silentCallTiming,
+  onStatus,
+  standingLine,
+  approval,
 }) {
-  let R = approval === void 0 ? 1 : 2,
-    T =
-      R === 1 && transported.kind === "result" && transported.envelope?.outcome === "in_progress"
-        ? transported.envelope
-        : void 0,
-    O = transported.kind === "dropped" || transported.kind === "timed_out" ? transported : void 0;
-  if (O === void 0 && T === void 0) return { kind: "as_is", transported: transported, trace: void 0 };
+  let R = approval === undefined ? 1 : 2;
+  let envelope =
+    R === 1 && transported.kind === "result" && transported.envelope?.outcome === "in_progress"
+      ? transported.envelope
+      : undefined;
+  let O = transported.kind === "dropped" || transported.kind === "timed_out" ? transported : undefined;
+  if (O === undefined && envelope === undefined)
+    return {
+      kind: "as_is",
+      transported,
+      trace: undefined,
+    };
   let x =
-      T !== void 0
-        ? (T.host_epoch ?? dispatchEpoch)
-        : R === 1
-          ? (O?.sentUnderEpoch ?? dispatchEpoch)
-          : dispatchEpoch,
-    M = transported.kind === "timed_out" ? o.held : void 0,
-    E = (Y) => {
-      if (M === void 0) return;
-      (logRemoteTools(callId, "standing request withdrawn", { leg: R, why: Y }),
-        M.withdraw(),
-        o.hold(void 0));
-    };
-  if (x === void 0) return (E("no_epoch"), { kind: "as_is", transported: transported, trace: void 0 });
-  let D = machineIdentity(host),
-    X = O === void 0 ? "in_progress" : describeClassifierRefusal(O, approval),
-    L = formatRemoteOutputFence({
-      name: host.name,
-      showForMs: 2 * timing.intervalMs,
-      onStatus: onStatus,
-      waiting: (Y) =>
-        M === void 0 && T === void 0 && !Y
-          ? reconnectingStatus(host.name)
-          : ASK_FIRST_REASON_TEXTS["in_progress.checkin"](host.name),
-      standing: M === void 0 ? void 0 : standingLine,
-    }),
-    y = await awaitRemoteCallWithProgress({
-      host: host,
-      held: M,
-      dispatchEpoch: x,
-      toolName: toolName,
-      callId: callId,
-      signal: signal,
-      timing: timing,
-      ranBefore: T?.state === "running",
-      onAttempt: L.onAttempt,
-      onOutput: L.onOutput,
-      silentSince: silentSince,
-      silentCallTiming: silentCallTiming,
-    }),
-    { verdict: verdict } = y,
-    F = {
-      trigger: X,
+    envelope !== undefined
+      ? (envelope.host_epoch ?? dispatchEpoch)
+      : R === 1
+        ? (O?.sentUnderEpoch ?? dispatchEpoch)
+        : dispatchEpoch;
+  let held = transported.kind === "timed_out" ? o.held : undefined;
+  let E = (why) => {
+    if (held === undefined) return;
+    logRemoteTools(callId, "standing request withdrawn", {
       leg: R,
-      result: verdict.kind === "unknown" ? `unknown_${verdict.why}` : verdict.kind,
-      attempts: y.attempts,
-      misses: y.misses,
-      held: M !== void 0,
-      epochChanged: y.epochChanged,
+      why,
+    });
+    held.withdraw();
+    o.hold(undefined);
+  };
+  if (x === undefined) {
+    E("no_epoch");
+    return {
+      kind: "as_is",
+      transported,
+      trace: undefined,
     };
+  }
+  let D = machineIdentity(host);
+  let X = O === undefined ? "in_progress" : describeClassifierRefusal(O, approval);
+  let L = formatRemoteOutputFence({
+    name: host.name,
+    showForMs: 2 * timing.intervalMs,
+    onStatus,
+    waiting: (Y) =>
+      held === undefined && envelope === undefined && !Y
+        ? reconnectingStatus(host.name)
+        : ASK_FIRST_REASON_TEXTS["in_progress.checkin"](host.name),
+    standing: held === undefined ? undefined : standingLine,
+  });
+  let y = await awaitRemoteCallWithProgress({
+    host,
+    held,
+    dispatchEpoch: x,
+    toolName,
+    callId,
+    signal,
+    timing,
+    ranBefore: envelope?.state === "running",
+    onAttempt: L.onAttempt,
+    onOutput: L.onOutput,
+    silentSince,
+    silentCallTiming,
+  });
+  let { verdict } = y;
+  let trace = {
+    trigger: X,
+    leg: R,
+    result: verdict.kind === "unknown" ? `unknown_${verdict.why}` : verdict.kind,
+    attempts: y.attempts,
+    misses: y.misses,
+    held: held !== undefined,
+    epochChanged: y.epochChanged,
+  };
   switch (verdict.kind) {
     case "late":
-      return (wn(host, verdict.transported), { kind: "as_is", transported: verdict.transported, trace: F });
+      noteDirSyncAnswer(host, verdict.transported);
+      return {
+        kind: "as_is",
+        transported: verdict.transported,
+        trace,
+      };
     case "answer":
-      return (
-        wn(host, verdict.transported),
-        E(verdict.kind),
-        { kind: "answered", transported: { ...verdict.transported, metaCopy: void 0 }, trace: F }
-      );
+      noteDirSyncAnswer(host, verdict.transported);
+      E(verdict.kind);
+      return {
+        kind: "answered",
+        transported: {
+          ...verdict.transported,
+          metaCopy: undefined,
+        },
+        trace,
+      };
     case "host_restarted":
-      return (
-        E(verdict.kind),
-        {
-          kind: "ended",
-          trace: F,
-          outcome: {
-            kind: "error",
-            code: "host_restarted",
-            message: hostRestartedLostMessage(host.name, X),
-            host: D,
-          },
-        }
-      );
+      E(verdict.kind);
+      return {
+        kind: "ended",
+        trace,
+        outcome: {
+          kind: "error",
+          code: "host_restarted",
+          message: hostRestartedLostMessage(host.name, X),
+          host: D,
+        },
+      };
     case "not_received":
-      return (
-        E(verdict.kind),
-        R === 2 || T !== void 0
-          ? { kind: "as_is", transported: transported, trace: F }
-          : {
-              kind: "ended",
-              trace: F,
-              outcome: {
-                kind: "error",
-                code: "not_received",
-                message: neverReceivedMessage(host.name, X),
-                host: D,
-              },
-            }
-      );
+      E(verdict.kind);
+      return R === 2 || envelope !== undefined
+        ? {
+            kind: "as_is",
+            transported,
+            trace,
+          }
+        : {
+            kind: "ended",
+            trace,
+            outcome: {
+              kind: "error",
+              code: "not_received",
+              message: neverReceivedMessage(host.name, X),
+              host: D,
+            },
+          };
     case "ask_lost":
-      return (
-        E(verdict.kind),
-        {
-          kind: "ended",
-          trace: F,
-          outcome: {
-            kind: "error",
-            code: "still_running",
-            message: stillRunningMessage({ name: host.name, state: "awaiting_approval", cause: X }),
-            host: D,
-          },
-        }
-      );
+      E(verdict.kind);
+      return {
+        kind: "ended",
+        trace,
+        outcome: {
+          kind: "error",
+          code: "still_running",
+          message: stillRunningMessage({
+            name: host.name,
+            state: "awaiting_approval",
+            cause: X,
+          }),
+          host: D,
+        },
+      };
     case "unbound":
-      return (
-        host.transport.markUnresponsive?.(),
-        approval?.releaseAsk(),
-        {
-          kind: "ended",
-          trace: F,
-          outcome: {
-            kind: "error",
-            code: "host_unresponsive",
-            message:
-              ASK_FIRST_REASON_TEXTS["unverified_refusal.call_phase"]({
-                name: host.name,
-                whileRunning: verdict.whileRunning,
-              }) + L.outputNote(),
-            host: D,
-            open: "host_unresponsive",
-          },
-        }
-      );
+      host.transport.markUnresponsive?.();
+      approval?.releaseAsk();
+      return {
+        kind: "ended",
+        trace,
+        outcome: {
+          kind: "error",
+          code: "host_unresponsive",
+          message:
+            ASK_FIRST_REASON_TEXTS["unverified_refusal.call_phase"]({
+              name: host.name,
+              whileRunning: verdict.whileRunning,
+            }) + L.outputNote(),
+          host: D,
+          open: "host_unresponsive",
+        },
+      };
     case "host_unresponsive":
       if (!verdict.stillConnected) host.transport.markUnresponsive?.();
-      if (verdict.intervalMs !== void 0)
-        M?.late.then((Y) => {
+      if (verdict.intervalMs !== undefined)
+        held?.late.then((Y) => {
           if (Y.kind === "result") logFeatureSad("rtc_silent_call", "answered_late");
         });
       return {
         kind: "ended",
-        trace: F,
+        trace,
         outcome: {
           kind: "error",
           code: "host_unresponsive",
@@ -1995,61 +2420,82 @@ async function collectRemoteResult({
         },
       };
     case "host_asleep":
-      return (
-        host.transport.markUnresponsive?.(),
-        {
-          kind: "ended",
-          trace: F,
-          outcome: {
-            kind: "error",
-            code: "host_unresponsive",
-            message:
-              ASK_FIRST_REASON_TEXTS.host_asleep({
-                name: host.name,
-                whileRunning: verdict.whileRunning,
-                withdrawn: O?.kind === "timed_out" && M === void 0,
-                returnNoted: hostAnnouncesReturn(host),
-              }) + L.outputNote(),
-            host: D,
-            open: "host_asleep",
-          },
-        }
-      );
-    case "cancelled":
-      return (
-        E(verdict.kind),
-        { kind: "ended", trace: F, outcome: interruptedResult(D, { askLater: T !== void 0 }) }
-      );
-    case "gone":
-      return { kind: "as_is", transported: verdict.transported, trace: F };
-    case "unreachable":
-    case "unknown":
-      if (M?.takeBack() === !0)
-        return (
-          logRemoteTools(callId, "standing request taken back unsent", { leg: R }),
-          {
-            kind: "as_is",
-            transported: {
-              kind: "stalled",
-              capMs: transported.kind === "timed_out" ? transported.capMs : 0,
-              request: "call",
-              takenBack: !0,
-            },
-            trace: F,
-          }
-        );
-      if (M === void 0 || transported.kind !== "timed_out")
-        return { kind: "as_is", transported: transported, trace: F };
-      if (verdict.kind === "unreachable" && !M.accepted())
-        return (E("unreachable_unaccepted"), { kind: "as_is", transported: transported, trace: F });
+      host.transport.markUnresponsive?.();
       return {
         kind: "ended",
-        trace: F,
+        trace,
+        outcome: {
+          kind: "error",
+          code: "host_unresponsive",
+          message:
+            ASK_FIRST_REASON_TEXTS.host_asleep({
+              name: host.name,
+              whileRunning: verdict.whileRunning,
+              withdrawn: O?.kind === "timed_out" && held === undefined,
+              returnNoted: hostAnnouncesReturn(host),
+            }) + L.outputNote(),
+          host: D,
+          open: "host_asleep",
+        },
+      };
+    case "cancelled":
+      E(verdict.kind);
+      return {
+        kind: "ended",
+        trace,
+        outcome: interruptedResult(D, {
+          askLater: envelope !== undefined,
+        }),
+      };
+    case "gone":
+      return {
+        kind: "as_is",
+        transported: verdict.transported,
+        trace,
+      };
+    case "unreachable":
+    case "unknown":
+      if (held?.takeBack() === true) {
+        logRemoteTools(callId, "standing request taken back unsent", {
+          leg: R,
+        });
+        return {
+          kind: "as_is",
+          transported: {
+            kind: "stalled",
+            capMs: transported.kind === "timed_out" ? transported.capMs : 0,
+            request: "call",
+            takenBack: true,
+          },
+          trace,
+        };
+      }
+      if (held === undefined || transported.kind !== "timed_out")
+        return {
+          kind: "as_is",
+          transported,
+          trace,
+        };
+      if (verdict.kind === "unreachable" && !held.accepted()) {
+        E("unreachable_unaccepted");
+        return {
+          kind: "as_is",
+          transported,
+          trace,
+        };
+      }
+      return {
+        kind: "ended",
+        trace,
         outcome: {
           kind: "error",
           code: "timed_out",
           message:
-            callTimedOutMessage({ name: host.name, capMs: transported.capMs, left: !0 }) + L.outputNote(),
+            callTimedOutMessage({
+              name: host.name,
+              capMs: transported.capMs,
+              left: true,
+            }) + L.outputNote(),
           host: D,
           open: "timed_out",
         },
@@ -2057,85 +2503,109 @@ async function collectRemoteResult({
   }
 }
 //@ chunk-dtv8x2hx.js:61083-61320 placement
-function waitWhileAsking(e, n, o, r) {
-  let abortController = new AbortController(),
-    u,
-    promise = new Promise((i) => {
-      u = (h) => i({ ended: h });
-    });
+function waitWhileAsking(e, askId, afterMs, r) {
+  let abortController = new AbortController();
+  let u;
+  let promise = new Promise((resolve) => {
+    u = (ended) =>
+      resolve({
+        ended,
+      });
+  });
   return e.whileAsking(
     {
-      askId: n,
+      askId,
       end: (i) => {
-        (abortController.abort(i), u(i));
+        abortController.abort(i);
+        u(i);
       },
     },
     (i) => (abortController.signal.aborted ? promise : Promise.race([promise, r(abortController.signal, i)])),
-    { afterMs: o, reason: "no_answer" },
+    {
+      afterMs,
+      reason: "no_answer",
+    },
   );
 }
 //@ chunk-dtv8x2hx.js:61320-61662 placement
-function describeNoAnswer(e, n, o, r) {
+function describeNoAnswer(host, host_2, ended, afterMs) {
   return {
-    approval: o === "no_answer" ? "no_answer" : "withdrawn",
-    askEndReason: o,
+    approval: ended === "no_answer" ? "no_answer" : "withdrawn",
+    askEndReason: ended,
     outcome:
-      o === "no_answer"
+      ended === "no_answer"
         ? {
             kind: "error",
             code: "no_answer",
             message: ASK_FIRST_REASON_TEXTS.no_answer({
-              name: e.name,
-              afterMs: r,
-              waitAnnounced: e.description?.limits.max_ask_ms !== void 0,
+              name: host.name,
+              afterMs,
+              waitAnnounced: host.description?.limits.max_ask_ms !== undefined,
             }),
-            host: n,
+            host: host_2,
           }
         : {
             kind: "error",
             code: "withdrawn",
-            message: ASK_FIRST_REASON_TEXTS.withdrawn({ name: e.name, reason: o }),
-            host: n,
+            message: ASK_FIRST_REASON_TEXTS.withdrawn({
+              name: host.name,
+              reason: ended,
+            }),
+            host: host_2,
           },
   };
 }
 //@ chunk-dtv8x2hx.js:61662-61883 placement
-function describeClassifierRefusal(e, n) {
-  if (isUnverifiedRefusal(e)) return n?.byClassifier ? "classifier_refused" : "unverified_refusal";
+function describeClassifierRefusal(e, approval) {
+  if (isUnverifiedRefusal(e)) return approval?.byClassifier ? "classifier_refused" : "unverified_refusal";
   if (e.kind === "dropped" && e.why === "write_unresolved")
-    return n !== void 0 ? "approval_write_unresolved" : "write_unresolved";
+    return approval !== undefined ? "approval_write_unresolved" : "write_unresolved";
   return e.kind;
 }
 //@ chunk-dtv8x2hx.js:61883-62138 placement
-function describeWithdrawnAsk(e, n, o) {
-  let r = ` ${n} was not contacted.`,
-    s = e.message.endsWith(r) ? e.message.slice(0, -r.length) : e.message;
+function describeWithdrawnAsk(e, name, host) {
+  let r = ` ${name} was not contacted.`;
+  let s = e.message.endsWith(r) ? e.message.slice(0, -r.length) : e.message;
   return {
     kind: "error",
     code: e.code,
-    message: `${s} ${n} had already been asked; its suspended call was withdrawn and nothing ran there.`,
-    host: o,
+    message: `${s} ${name} had already been asked; its suspended call was withdrawn and nothing ran there.`,
+    host,
   };
 }
 //@ chunk-dtv8x2hx.js:62138-62317 placement
-function wirePermissionState(e, n) {
-  let o = getToolPermissionContext(e),
-    r = o.mode === "auto" && iwt(n, e.getProactivityLevel()) ? "default" : o.mode;
-  return { permissionMode: wirePermissionMode(r), isBypassAvailable: o.isBypassPermissionsModeAvailable };
+function wirePermissionState(toolUseContext, name) {
+  let toolPermissionContext = getToolPermissionContext(toolUseContext);
+  let mode =
+    toolPermissionContext.mode === "auto" && isAskOnMutationTool(name, toolUseContext.getProactivityLevel())
+      ? "default"
+      : toolPermissionContext.mode;
+  return {
+    permissionMode: wirePermissionMode(mode),
+    isBypassAvailable: toolPermissionContext.isBypassPermissionsModeAvailable,
+  };
 }
 //@ chunk-dtv8x2hx.js:62317-62404 placement
-function wn(e, n) {
-  if (n.kind === "result" && n.dirSync !== void 0)
+function noteDirSyncAnswer(host, transported) {
+  if (transported.kind === "result" && transported.dirSync !== undefined)
     try {
-      heardSyncAnswer(e, n.dirSync);
+      heardSyncAnswer(host, transported.dirSync);
     } catch {}
 }
 //@ chunk-dtv8x2hx.js:62404-62603 placement
-function remoteToolNames(e, n) {
-  if (e.isMcp !== !0) return { wire: e.name, ask: e.name };
-  let o = e.mcpInfo?.toolName,
-    r = o === void 0 ? void 0 : n.passthroughTools?.get(o);
-  return o === void 0 || r === void 0 ? void 0 : { wire: o, ask: r.localName };
+function remoteToolNames(tool, host) {
+  if (tool.isMcp !== true)
+    return {
+      wire: tool.name,
+      ask: tool.name,
+    };
+  let toolName = tool.mcpInfo?.toolName;
+  let r = toolName === undefined ? undefined : host.passthroughTools?.get(toolName);
+  return toolName === undefined || r === undefined
+    ? undefined
+    : {
+        wire: toolName,
+        ask: r.localName,
+      };
 }
-
 export { collectAskRules, logRemoteToolForward, waitForAskAnswer, logRemoteForward, primaryInputPath };

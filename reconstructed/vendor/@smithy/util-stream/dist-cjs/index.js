@@ -7,117 +7,117 @@
  */
 import { x } from "../../../../runtime/bun-runtime.js";
 import { base64Module } from "../../../@aws-sdk/credential-provider-web-identity/dist-cjs/index.js";
-import { IR } from "../../util-utf8/dist-cjs/index.js";
-import { me } from "./checksum/ChecksumStream.js";
-import { st } from "./checksum/createChecksumStream.js";
-import { bt } from "./createBufferedReadable.js";
-import { xt } from "./getAwsChunkedEncodingStream.js";
-import { Bt } from "./headStream.js";
-import { Wt } from "./sdk-stream-mixin.js";
-import { Zt } from "./splitStream.js";
-import { B } from "./stream-type-check.js";
+import { require_util_utf8 } from "../../util-utf8/dist-cjs/index.js";
+import { require_ChecksumStream } from "./checksum/ChecksumStream.js";
+import { require_createChecksumStream } from "./checksum/createChecksumStream.js";
+import { require_createBufferedReadable } from "./createBufferedReadable.js";
+import { require_getAwsChunkedEncodingStream } from "./getAwsChunkedEncodingStream.js";
+import { require_headStream } from "./headStream.js";
+import { require_sdk_stream_mixin } from "./sdk-stream-mixin.js";
+import { require_splitStream } from "./splitStream.js";
+import { require_stream_type_check } from "./stream-type-check.js";
 
 //@ chunk-wjd9n4jx.js:10678-12581 cjs-fingerprint
-var Xns = x(function (b) {
-  var Kt = base64Module(),
-    Xt = IR(),
-    er = me(),
-    tr = st(),
-    rr = bt(),
-    sr = xt(),
-    nr = Bt(),
-    ir = Wt(),
-    or = Zt(),
-    ar = B();
-  class U extends Uint8Array {
-    static fromString(e, t = "utf-8") {
-      if (typeof e === "string") {
-        if (t === "base64") return U.mutate(Kt.fromBase64(e));
-        return U.mutate(Xt.fromUtf8(e));
+var require_util_stream = x(function (cjsExports) {
+  var utilBase64 = base64Module();
+  var utilUtf8 = require_util_utf8();
+  var ChecksumStream = require_ChecksumStream();
+  var createChecksumStream = require_createChecksumStream();
+  var createBufferedReadable = require_createBufferedReadable();
+  var getAwsChunkedEncodingStream = require_getAwsChunkedEncodingStream();
+  var headStream = require_headStream();
+  var sdkStreamMixin = require_sdk_stream_mixin();
+  var splitStream = require_splitStream();
+  var streamTypeCheck = require_stream_type_check();
+  class Uint8ArrayBlobAdapter extends Uint8Array {
+    static fromString(source, encoding = "utf-8") {
+      if (typeof source === "string") {
+        if (encoding === "base64") return Uint8ArrayBlobAdapter.mutate(utilBase64.fromBase64(source));
+        return Uint8ArrayBlobAdapter.mutate(utilUtf8.fromUtf8(source));
       }
-      throw Error(`Unsupported conversion from ${typeof e} to Uint8ArrayBlobAdapter.`);
+      throw Error(`Unsupported conversion from ${typeof source} to Uint8ArrayBlobAdapter.`);
     }
-    static mutate(e) {
-      return (Object.setPrototypeOf(e, U.prototype), e);
+    static mutate(source) {
+      Object.setPrototypeOf(source, Uint8ArrayBlobAdapter.prototype);
+      return source;
     }
-    transformToString(e = "utf-8") {
-      if (e === "base64") return Kt.toBase64(this);
-      return Xt.toUtf8(this);
+    transformToString(encoding = "utf-8") {
+      if (encoding === "base64") return utilBase64.toBase64(this);
+      return utilUtf8.toUtf8(this);
     }
   }
-  b.Uint8ArrayBlobAdapter = U;
-  Object.keys(er).forEach(function (e) {
-    if (e !== "default" && !Object.prototype.hasOwnProperty.call(b, e))
-      Object.defineProperty(b, e, {
-        enumerable: !0,
+  cjsExports.Uint8ArrayBlobAdapter = Uint8ArrayBlobAdapter;
+  Object.keys(ChecksumStream).forEach(function (k) {
+    if (k !== "default" && !Object.prototype.hasOwnProperty.call(cjsExports, k))
+      Object.defineProperty(cjsExports, k, {
+        enumerable: true,
         get: function () {
-          return er[e];
+          return ChecksumStream[k];
         },
       });
   });
-  Object.keys(tr).forEach(function (e) {
-    if (e !== "default" && !Object.prototype.hasOwnProperty.call(b, e))
-      Object.defineProperty(b, e, {
-        enumerable: !0,
+  Object.keys(createChecksumStream).forEach(function (k) {
+    if (k !== "default" && !Object.prototype.hasOwnProperty.call(cjsExports, k))
+      Object.defineProperty(cjsExports, k, {
+        enumerable: true,
         get: function () {
-          return tr[e];
+          return createChecksumStream[k];
         },
       });
   });
-  Object.keys(rr).forEach(function (e) {
-    if (e !== "default" && !Object.prototype.hasOwnProperty.call(b, e))
-      Object.defineProperty(b, e, {
-        enumerable: !0,
+  Object.keys(createBufferedReadable).forEach(function (k) {
+    if (k !== "default" && !Object.prototype.hasOwnProperty.call(cjsExports, k))
+      Object.defineProperty(cjsExports, k, {
+        enumerable: true,
         get: function () {
-          return rr[e];
+          return createBufferedReadable[k];
         },
       });
   });
-  Object.keys(sr).forEach(function (e) {
-    if (e !== "default" && !Object.prototype.hasOwnProperty.call(b, e))
-      Object.defineProperty(b, e, {
-        enumerable: !0,
+  Object.keys(getAwsChunkedEncodingStream).forEach(function (k) {
+    if (k !== "default" && !Object.prototype.hasOwnProperty.call(cjsExports, k))
+      Object.defineProperty(cjsExports, k, {
+        enumerable: true,
         get: function () {
-          return sr[e];
+          return getAwsChunkedEncodingStream[k];
         },
       });
   });
-  Object.keys(nr).forEach(function (e) {
-    if (e !== "default" && !Object.prototype.hasOwnProperty.call(b, e))
-      Object.defineProperty(b, e, {
-        enumerable: !0,
+  Object.keys(headStream).forEach(function (k) {
+    if (k !== "default" && !Object.prototype.hasOwnProperty.call(cjsExports, k))
+      Object.defineProperty(cjsExports, k, {
+        enumerable: true,
         get: function () {
-          return nr[e];
+          return headStream[k];
         },
       });
   });
-  Object.keys(ir).forEach(function (e) {
-    if (e !== "default" && !Object.prototype.hasOwnProperty.call(b, e))
-      Object.defineProperty(b, e, {
-        enumerable: !0,
+  Object.keys(sdkStreamMixin).forEach(function (k) {
+    if (k !== "default" && !Object.prototype.hasOwnProperty.call(cjsExports, k))
+      Object.defineProperty(cjsExports, k, {
+        enumerable: true,
         get: function () {
-          return ir[e];
+          return sdkStreamMixin[k];
         },
       });
   });
-  Object.keys(or).forEach(function (e) {
-    if (e !== "default" && !Object.prototype.hasOwnProperty.call(b, e))
-      Object.defineProperty(b, e, {
-        enumerable: !0,
+  Object.keys(splitStream).forEach(function (k) {
+    if (k !== "default" && !Object.prototype.hasOwnProperty.call(cjsExports, k))
+      Object.defineProperty(cjsExports, k, {
+        enumerable: true,
         get: function () {
-          return or[e];
+          return splitStream[k];
         },
       });
   });
-  Object.keys(ar).forEach(function (e) {
-    if (e !== "default" && !Object.prototype.hasOwnProperty.call(b, e))
-      Object.defineProperty(b, e, {
-        enumerable: !0,
+  Object.keys(streamTypeCheck).forEach(function (k) {
+    if (k !== "default" && !Object.prototype.hasOwnProperty.call(cjsExports, k))
+      Object.defineProperty(cjsExports, k, {
+        enumerable: true,
         get: function () {
-          return ar[e];
+          return streamTypeCheck[k];
         },
       });
   });
 });
-
-export { Xns };
+export { require_util_stream };

@@ -8,70 +8,133 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:61419-62603 cjs-fingerprint
-var $t = x(function (yu, Ht) {
-  function pl(e) {
-    let regex = e.regex,
-      n = [
-        "div",
-        "mod",
-        "in",
-        "and",
-        "or",
-        "not",
-        "xor",
-        "asserterror",
-        "begin",
-        "case",
-        "do",
-        "downto",
-        "else",
-        "end",
-        "exit",
-        "for",
-        "local",
-        "if",
-        "of",
-        "repeat",
-        "then",
-        "to",
-        "until",
-        "while",
-        "with",
-        "var",
+var require_cal = x(function (cjsExports, cjsModule) {
+  function cal(hljs) {
+    let regex = hljs.regex;
+    let KEYWORDS = [
+      "div",
+      "mod",
+      "in",
+      "and",
+      "or",
+      "not",
+      "xor",
+      "asserterror",
+      "begin",
+      "case",
+      "do",
+      "downto",
+      "else",
+      "end",
+      "exit",
+      "for",
+      "local",
+      "if",
+      "of",
+      "repeat",
+      "then",
+      "to",
+      "until",
+      "while",
+      "with",
+      "var",
+    ];
+    let LITERALS = "false true";
+    let COMMENT_MODES = [
+      hljs.C_LINE_COMMENT_MODE,
+      hljs.COMMENT(/\{/, /\}/, {
+        relevance: 0,
+      }),
+      hljs.COMMENT(/\(\*/, /\*\)/, {
+        relevance: 10,
+      }),
+    ];
+    let STRING = {
+      className: "string",
+      begin: /'/,
+      end: /'/,
+      contains: [
+        {
+          begin: /''/,
+        },
       ],
-      a = "false true",
-      s = [
-        e.C_LINE_COMMENT_MODE,
-        e.COMMENT(/\{/, /\}/, { relevance: 0 }),
-        e.COMMENT(/\(\*/, /\*\)/, { relevance: 10 }),
-      ],
-      o = { className: "string", begin: /'/, end: /'/, contains: [{ begin: /''/ }] },
-      r = { className: "string", begin: /(#\d+)+/ },
-      i = { className: "number", begin: "\\b\\d+(\\.\\d+)?(DT|D|T)", relevance: 0 },
-      c = { className: "string", begin: '"', end: '"' },
-      l = {
-        match: [/procedure/, /\s+/, /[a-zA-Z_][\w@]*/, /\s*/],
-        scope: { 1: "keyword", 3: "title.function" },
-        contains: [
-          { className: "params", begin: /\(/, end: /\)/, keywords: n, contains: [o, r, e.NUMBER_MODE] },
-          ...s,
-        ],
+    };
+    let CHAR_STRING = {
+      className: "string",
+      begin: /(#\d+)+/,
+    };
+    let DATE = {
+      className: "number",
+      begin: "\\b\\d+(\\.\\d+)?(DT|D|T)",
+      relevance: 0,
+    };
+    let DBL_QUOTED_VARIABLE = {
+      className: "string",
+      begin: '"',
+      end: '"',
+    };
+    let PROCEDURE = {
+      match: [/procedure/, /\s+/, /[a-zA-Z_][\w@]*/, /\s*/],
+      scope: {
+        1: "keyword",
+        3: "title.function",
       },
-      d = ["Table", "Form", "Report", "Dataport", "Codeunit", "XMLport", "MenuSuite", "Page", "Query"],
-      m = {
-        match: [/OBJECT/, /\s+/, regex.either(...d), /\s+/, /\d+/, /\s+(?=[^\s])/, /.*/, /$/],
-        relevance: 3,
-        scope: { 1: "keyword", 3: "type", 5: "number", 7: "title" },
-      };
+      contains: [
+        {
+          className: "params",
+          begin: /\(/,
+          end: /\)/,
+          keywords: KEYWORDS,
+          contains: [STRING, CHAR_STRING, hljs.NUMBER_MODE],
+        },
+        ...COMMENT_MODES,
+      ],
+    };
+    let OBJECT_TYPES = [
+      "Table",
+      "Form",
+      "Report",
+      "Dataport",
+      "Codeunit",
+      "XMLport",
+      "MenuSuite",
+      "Page",
+      "Query",
+    ];
+    let OBJECT = {
+      match: [/OBJECT/, /\s+/, regex.either(...OBJECT_TYPES), /\s+/, /\d+/, /\s+(?=[^\s])/, /.*/, /$/],
+      relevance: 3,
+      scope: {
+        1: "keyword",
+        3: "type",
+        5: "number",
+        7: "title",
+      },
+    };
     return {
       name: "C/AL",
-      case_insensitive: !0,
-      keywords: { keyword: n, literal: "false true" },
+      case_insensitive: true,
+      keywords: {
+        keyword: KEYWORDS,
+        literal: "false true",
+      },
       illegal: /\/\*/,
-      contains: [{ match: /[\w]+(?=\=)/, scope: "attribute", relevance: 0 }, o, r, i, c, e.NUMBER_MODE, m, l],
+      contains: [
+        {
+          match: /[\w]+(?=\=)/,
+          scope: "attribute",
+          relevance: 0,
+        },
+        STRING,
+        CHAR_STRING,
+        DATE,
+        DBL_QUOTED_VARIABLE,
+        hljs.NUMBER_MODE,
+        OBJECT,
+        PROCEDURE,
+      ],
     };
   }
-  Ht.exports = pl;
+  cjsModule.exports = cal;
 });
-
-export { $t };
+export { require_cal };

@@ -5,61 +5,83 @@
  * pieces: chunk-5h78gfwc.js (1)
  * attribution: esm-fingerprint 1
  */
-import { W } from "../../lib/helpers.js";
-import { h } from "../../../node/esm/util/errors.js";
-import { _ } from "../../lib/type_checks.js";
+import { assertNotSet } from "../../lib/helpers.js";
+import { JWSInvalid } from "../../../node/esm/util/errors.js";
+import { isDisjoint } from "../../lib/type_checks.js";
 import { N } from "../../lib/options.js";
-import { B } from "../../lib/check_key_type.js";
-import { y } from "../../util/base64url.js";
-import { A, E_2 } from "../../lib/buffer_utils.js";
-import { R } from "../../lib/normalize_key.js";
-import { ft } from "../../lib/signing.js";
+import { checkKeyType } from "../../lib/check_key_type.js";
+import { encode_2 } from "../../util/base64url.js";
+import { encode, concat } from "../../lib/buffer_utils.js";
+import { normalizeKey } from "../../lib/normalize_key.js";
+import { sign } from "../../lib/signing.js";
 
 //@ chunk-5h78gfwc.js:45478-46644 esm-fingerprint
 class Oe {
   #e;
   #t;
   #r;
-  constructor(e) {
-    if (!(e instanceof Uint8Array)) throw TypeError("payload must be an instance of Uint8Array");
-    this.#e = e;
+  constructor(payload) {
+    if (!(payload instanceof Uint8Array)) throw TypeError("payload must be an instance of Uint8Array");
+    this.#e = payload;
   }
-  setProtectedHeader(e) {
-    return (W(this.#t, "setProtectedHeader"), (this.#t = e), this);
+  setProtectedHeader(protectedHeader) {
+    assertNotSet(this.#t, "setProtectedHeader");
+    this.#t = protectedHeader;
+    return this;
   }
-  setUnprotectedHeader(e) {
-    return (W(this.#r, "setUnprotectedHeader"), (this.#r = e), this);
+  setUnprotectedHeader(unprotectedHeader) {
+    assertNotSet(this.#r, "setUnprotectedHeader");
+    this.#r = unprotectedHeader;
+    return this;
   }
-  async sign(e, t) {
+  async sign(key, options) {
     if (!this.#t && !this.#r)
-      throw new h("either setProtectedHeader or setUnprotectedHeader must be called before #sign()");
-    if (!_(this.#t, this.#r))
-      throw new h("JWS Protected and JWS Unprotected Header Parameter names must be disjoint");
-    let r = { ...this.#t, ...this.#r },
-      n = N(h, new Map([["b64", !0]]), t?.crit, this.#t, r),
-      i = !0;
-    if (n.has("b64")) {
-      if (((i = this.#t.b64), typeof i !== "boolean"))
-        throw new h('The "b64" (base64url-encode payload) Header Parameter must be a boolean');
+      throw new JWSInvalid("either setProtectedHeader or setUnprotectedHeader must be called before #sign()");
+    if (!isDisjoint(this.#t, this.#r))
+      throw new JWSInvalid("JWS Protected and JWS Unprotected Header Parameter names must be disjoint");
+    let joseHeader = {
+      ...this.#t,
+      ...this.#r,
+    };
+    let extensions = N(JWSInvalid, new Map([["b64", true]]), options?.crit, this.#t, joseHeader);
+    let b64 = true;
+    if (extensions.has("b64")) {
+      b64 = this.#t.b64;
+      if (typeof b64 !== "boolean")
+        throw new JWSInvalid('The "b64" (base64url-encode payload) Header Parameter must be a boolean');
     }
-    let { alg: alg } = r;
+    let { alg } = joseHeader;
     if (typeof alg !== "string" || !alg)
-      throw new h('JWS "alg" (Algorithm) Header Parameter missing or invalid');
-    B(alg, e, "sign");
-    let a, s;
-    if (i) ((a = y(this.#e)), (s = A(a)));
-    else ((s = this.#e), (a = ""));
-    let p, d;
-    if (this.#t) ((p = y(JSON.stringify(this.#t))), (d = A(p)));
-    else ((p = ""), (d = new Uint8Array()));
-    let u = E_2(d, A("."), s),
-      m = await R(e, alg),
-      w = await ft(alg, m, u),
-      K = { signature: y(w), payload: a };
-    if (this.#r) K.header = this.#r;
-    if (this.#t) K.protected = p;
-    return K;
+      throw new JWSInvalid('JWS "alg" (Algorithm) Header Parameter missing or invalid');
+    checkKeyType(alg, key, "sign");
+    let payloadS;
+    let payloadB;
+    if (b64) {
+      payloadS = encode_2(this.#e);
+      payloadB = encode(payloadS);
+    } else {
+      payloadB = this.#e;
+      payloadS = "";
+    }
+    let protectedHeaderString;
+    let protectedHeaderBytes;
+    if (this.#t) {
+      protectedHeaderString = encode_2(JSON.stringify(this.#t));
+      protectedHeaderBytes = encode(protectedHeaderString);
+    } else {
+      protectedHeaderString = "";
+      protectedHeaderBytes = new Uint8Array();
+    }
+    let data = concat(protectedHeaderBytes, encode("."), payloadB);
+    let k = await normalizeKey(key, alg);
+    let signature = await sign(alg, k, data);
+    let jws = {
+      signature: encode_2(signature),
+      payload: payloadS,
+    };
+    if (this.#r) jws.header = this.#r;
+    if (this.#t) jws.protected = protectedHeaderString;
+    return jws;
   }
 }
-
 export { Oe };

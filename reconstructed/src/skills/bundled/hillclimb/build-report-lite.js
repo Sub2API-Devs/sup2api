@@ -9,7 +9,7 @@
  * attribution: placement 28, affinity 1
  */
 import {
-  constants,
+  constants as FS,
   lstatSync,
   openSync,
   fstatSync,
@@ -27,31 +27,31 @@ import { WIN } from "../../../constants/prompts.js";
 
 //@ build-report-lite-jwtbvm49.mjs:1316-1379 placement
 const isNum = (x) => typeof x === "number" && Number.isFinite(x);
+//@ build-report-lite-jwtbvm49.mjs:2195-2236 affinity
 /**
  * Windows 上为 0，否则 fs.constants.O_NOFOLLOW。属于 build-report-lite 脚本，不属于提示词模块。
  */
-//@ build-report-lite-jwtbvm49.mjs:2195-2236 affinity
-const NOFOLLOW = WIN ? 0 : constants.O_NOFOLLOW;
+const NOFOLLOW = WIN ? 0 : FS.O_NOFOLLOW;
 //@ build-report-lite-jwtbvm49.mjs:2396-2534 placement
 const isSymlink = (p) => {
   try {
     return lstatSync(p).isSymbolicLink();
-  } catch (error) {
-    if (error?.code === "ENOENT") return false;
-    throw error;
+  } catch (e) {
+    if (e?.code === "ENOENT") return false;
+    throw e;
   }
 };
 //@ build-report-lite-jwtbvm49.mjs:2655-2683 placement
 const skippedHardLinks = [];
+//@ build-report-lite-jwtbvm49.mjs:2684-3210 placement
 /**
  * 不跟随符号链接地读取文本文件，拒绝硬链接等异常情况，失败返回空字符串。
  */
-//@ build-report-lite-jwtbvm49.mjs:2684-3210 placement
 const readText = (p) => {
   let fd;
   try {
     if (WIN && isSymlink(p)) return "";
-    fd = openSync(p, constants.O_RDONLY | NOFOLLOW);
+    fd = openSync(p, FS.O_RDONLY | NOFOLLOW);
     const st = fstatSync(fd);
     // O_NOFOLLOW and lstat cannot see a hard link (a second name for a file
     // outside the flow dir); nothing in a flow dir needs one, so read nothing.
@@ -67,33 +67,33 @@ const readText = (p) => {
     if (fd !== undefined) closeSync(fd);
   }
 };
+//@ build-report-lite-jwtbvm49.mjs:3839-4144 placement
 /**
  * 确认目录真实路径位于输出根目录之内，否则抛错拒绝写入。
  */
-//@ build-report-lite-jwtbvm49.mjs:3839-4144 placement
 function assertContained(dir, root) {
   if (root == null) throw new Error("refusing to write: output root not resolved");
   const dirReal = realpathSync(dir);
   if (dirReal !== root && !dirReal.startsWith(root + (WIN ? "\\" : "/")))
     throw new Error("refusing to write outside " + root + ": " + dir);
 }
+//@ build-report-lite-jwtbvm49.mjs:4965-6030 placement
 /**
  * 解析并钉住输出根目录：拒绝 . / .. 段、相对路径中任一祖先是符号链接或根本身是符号链接，返回 realpath。
  */
-//@ build-report-lite-jwtbvm49.mjs:4965-6030 placement
 function resolveOutputRoot(root) {
   // Only Windows treats `\` as a separator; on POSIX it is a filename byte, so
   // splitting on it would walk prefixes that are not real path components.
   root = String(root).replace(WIN ? /(.)[\\/]+$/ : /(.)\/+$/, "$1");
-  const parts = root.split(WIN ? /[\\/]/ : "/");
+  const segments = root.split(WIN ? /[\\/]/ : "/");
   // A `.`/`..` segment (e.g. a trailing `/.`) makes the leaf lstat below
   // follow a planted link at the flow root, and the absolute branch skips the
   // ancestor walk. Refuse dot segments outright.
-  if (parts.some((seg) => seg === "." || seg === ".."))
+  if (segments.some((seg) => seg === "." || seg === ".."))
     throw new Error("refusing to write into " + root + ": '.'/'..' path segment");
   if (!isAbsolute(root)) {
     let walk = "";
-    for (const part of parts.filter(Boolean).slice(0, -1)) {
+    for (const part of segments.filter(Boolean).slice(0, -1)) {
       walk = walk ? join(walk, part) : part;
       if (isSymlink(walk))
         throw new Error("refusing to write into " + root + ": ancestor " + walk + " is a symlink");
@@ -102,17 +102,17 @@ function resolveOutputRoot(root) {
   if (isSymlink(root)) throw new Error("refusing to write into " + root + ": it is a symlink");
   return realpathSync(root);
 }
+//@ build-report-lite-jwtbvm49.mjs:6031-7026 placement
 /**
  * 不跟随符号链接地写文件：父目录不得是链接且须在输出根内，打开后确认是普通文件且没有多个硬链接，检查通过后才截断写入。
  */
-//@ build-report-lite-jwtbvm49.mjs:6031-7026 placement
 function writeNoFollow(p, data, root) {
   if (isSymlink(dirname(p))) throw new Error("refusing to write through symlinked directory: " + dirname(p));
   assertContained(dirname(p), root);
   if (WIN && isSymlink(p)) throw new Error("refusing to write through symlink: " + p);
   // Opened without O_TRUNC and truncated only after the checks, so a refused
   // file keeps its bytes.
-  const fd = openSync(p, constants.O_WRONLY | constants.O_CREAT | NOFOLLOW, 0o644);
+  const fd = openSync(p, FS.O_WRONLY | FS.O_CREAT | NOFOLLOW, 0o644);
   try {
     const st = fstatSync(fd);
     if (!st.isFile()) throw new Error("refusing to write to non-regular file: " + p);
@@ -133,7 +133,9 @@ function writeNoFollow(p, data, root) {
 //@ build-report-lite-jwtbvm49.mjs:7027-7296 placement
 function mkdirNoFollow(dir, root) {
   if (isSymlink(dir)) throw new Error("refusing to use symlinked directory: " + dir);
-  mkdirSync(dir, { recursive: true });
+  mkdirSync(dir, {
+    recursive: true,
+  });
   // Check after creating: mkdirSync(recursive) follows symlinked ancestors.
   assertContained(dir, root);
 }
@@ -154,47 +156,65 @@ const termSafe = (s) => String(s).replace(ESC_SEQ, "").replace(CONTROL, "");
 //@ build-report-lite-jwtbvm49.mjs:7853-7912 placement
 const eprint = (...a) => console.error(...a.map(termSafe));
 //@ build-report-lite-jwtbvm49.mjs:7913-8051 placement
+/**
+ * HTML 转义（& < > " '）。
+ */
 const esc = (s) =>
   String(s ?? "").replace(
     /[&<>"']/g,
-    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c],
+    (c) =>
+      ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;",
+      })[c],
   );
 //@ build-report-lite-jwtbvm49.mjs:8052-8101 placement
 const fmt = (x) => (x == null ? "" : x.toFixed(3));
 //@ build-report-lite-jwtbvm49.mjs:8432-8561 placement
 const tsvCell = (s) => {
-  const replaced = String(s).replace(/[\t\n\r]/g, " ");
-  return /^[=+\-@]/.test(replaced) ? "'" + replaced : replaced;
+  const flat = String(s).replace(/[\t\n\r]/g, " ");
+  return /^[=+\-@]/.test(flat) ? "'" + flat : flat;
 };
 //@ build-report-lite-jwtbvm49.mjs:8632-8928 placement
 function discoverVariants(flow) {
-  const mapped = readdirSync(flow, { withFileTypes: true })
+  const names = readdirSync(flow, {
+    withFileTypes: true,
+  })
     .filter((e) => e.isDirectory() && /^(baseline|v\d+)$/.test(e.name))
     .map((e) => e.name);
   const rank = (n) => (n === "baseline" ? -1 : +n.slice(1));
-  return mapped.sort((a, b) => rank(a) - rank(b));
+  return names.sort((a, b) => rank(a) - rank(b));
 }
+//@ build-report-lite-jwtbvm49.mjs:9046-9377 placement
 /**
  * 把评分结果规范为数值字典：对象取数值或布尔字段，布尔值转为 score。
  */
-//@ build-report-lite-jwtbvm49.mjs:9046-9377 placement
 function coerceScores(g) {
   if (g && typeof g === "object" && !Array.isArray(g)) {
     const out = {};
     for (const [k, v] of Object.entries(g)) if (isNum(v) || typeof v === "boolean") out[k] = +v;
     return out;
   }
-  if (typeof g === "boolean") return { score: g ? 1 : 0 };
-  if (isNum(g)) return { score: g };
+  if (typeof g === "boolean")
+    return {
+      score: g ? 1 : 0,
+    };
+  if (isNum(g))
+    return {
+      score: g,
+    };
   return {};
 }
+//@ build-report-lite-jwtbvm49.mjs:9379-10000 placement
 /**
  * 读取 results.jsonl，按用例 id 分组为行记录，解析失败的行记入警告。
  */
-//@ build-report-lite-jwtbvm49.mjs:9379-10000 placement
 function loadRows(p, warnings, dir) {
   // Keyed by data-supplied ids: null-prototype so '__proto__' is a key, not a crash.
-  const create = Object.create(null);
+  const byId = Object.create(null);
   readText(p)
     .split("\n")
     .forEach((line, i) => {
@@ -212,17 +232,17 @@ function loadRows(p, warnings, dir) {
         warnings.push(dir + "/results.jsonl:" + (i + 1) + ": no prompt_id, skipped");
         return;
       }
-      (create[pid] ||= []).push(r);
+      (byId[pid] ||= []).push(r);
     });
-  return create;
+  return byId;
 }
+//@ build-report-lite-jwtbvm49.mjs:10002-10391 placement
 /**
  * 统计 errors.jsonl 中的错误总数及按类别计数。
  */
-//@ build-report-lite-jwtbvm49.mjs:10002-10391 placement
 function countErrors(vdir) {
   let total = 0;
-  const create = Object.create(null);
+  const byClass = Object.create(null);
   for (const line of readText(join(vdir, "errors.jsonl")).split("\n")) {
     if (!line.trim()) continue;
     let e;
@@ -233,14 +253,17 @@ function countErrors(vdir) {
     }
     total++;
     const c = String(e?.failure_class ?? "error");
-    create[c] = (create[c] || 0) + 1;
+    byClass[c] = (byClass[c] || 0) + 1;
   }
-  return { total, byClass: create };
+  return {
+    total,
+    byClass,
+  };
 }
+//@ build-report-lite-jwtbvm49.mjs:10555-11173 placement
 /**
  * 从所有变体的结果中推断出现过的指标名及其类型。
  */
-//@ build-report-lite-jwtbvm49.mjs:10555-11173 placement
 function inferMetrics(rows, variants) {
   const seen = new Map();
   for (const v of variants)
@@ -248,7 +271,10 @@ function inferMetrics(rows, variants) {
       for (const r of reps) {
         const expl = r.explanation && typeof r.explanation === "object" ? r.explanation : {};
         for (const [k, val] of Object.entries(coerceScores(r.grade))) {
-          const m = seen.get(k) || { binary: true, judge: false };
+          const m = seen.get(k) || {
+            binary: true,
+            judge: false,
+          };
           if (val !== 0 && val !== 1) m.binary = false;
           if (k in expl) m.judge = true;
           seen.set(k, m);
@@ -259,13 +285,18 @@ function inferMetrics(rows, variants) {
     kind: s.judge ? "judge" : s.binary ? "binary" : "float",
   }));
 }
+//@ build-report-lite-jwtbvm49.mjs:11175-20623 placement
 /**
  * 读取 hillclimb 流程目录：发现 baseline/vN 变体目录（命名不符的目录给出警告），读 _state.json 的 train/val/test 划分、各变体 results.jsonl 与 errors.jsonl、traces 链接（经符号链接的不链接），汇总每个用例与指标的得分，写出 trajectory/scores.tsv 与 report.html。
  */
-//@ build-report-lite-jwtbvm49.mjs:11175-20623 placement
 function build(flowArg) {
   const flow = resolve(flowArg);
-  if (!statSync(flow, { throwIfNoEntry: false })?.isDirectory()) throw new Error("not a directory: " + flow);
+  if (
+    !statSync(flow, {
+      throwIfNoEntry: false,
+    })?.isDirectory()
+  )
+    throw new Error("not a directory: " + flow);
   // Pinned from the path as the caller named it, so the relative-ancestor
   // walk in resolveOutputRoot applies (resolve() would skip it).
   const flowRoot = resolveOutputRoot(flowArg);
@@ -284,7 +315,9 @@ function build(flowArg) {
     "target",
     "__pycache__",
   ]);
-  for (const e of readdirSync(flow, { withFileTypes: true }))
+  for (const e of readdirSync(flow, {
+    withFileTypes: true,
+  }))
     if (
       e.isDirectory() &&
       !variants.includes(e.name) &&
@@ -298,8 +331,7 @@ function build(flowArg) {
           "/' - variant dirs must be named 'baseline' or 'v<N>'; put the descriptive name in change.md's first line instead",
       );
   const state = readJSON(join(flow, "_state.json"), {}) || {};
-
-  const create = Object.create(null);
+  const splitOf = Object.create(null);
   for (const sp of ["train", "val", "test"]) {
     const ids = state[sp + "_ids"];
     if (ids == null) continue;
@@ -307,29 +339,28 @@ function build(flowArg) {
       warnings.push("_state.json " + sp + "_ids is not a list - ignored");
       continue;
     }
-    for (const pid of ids) create[String(pid)] = sp;
+    for (const pid of ids) splitOf[String(pid)] = sp;
   }
-
-  const create_2 = Object.create(null);
-  for (const v of variants) create_2[v] = loadRows(join(flow, v, "results.jsonl"), warnings, v);
+  const rows = Object.create(null);
+  for (const v of variants) rows[v] = loadRows(join(flow, v, "results.jsonl"), warnings, v);
 
   // Trace links are emitted only for a real traces/ directory that resolves
   // inside the pinned flow root: the per-file lstat below refuses a symlinked
   // trace but silently resolves a symlinked traces/ (or variant) directory,
   // which would link files from wherever it points into the report.
-  const create_3 = Object.create(null);
+  const traceDirOk = Object.create(null);
   for (const v of variants) {
     const tdir = join(flow, v, "traces");
     try {
       if (isSymlink(join(flow, v)) || isSymlink(tdir)) {
         warnings.push(v + "/traces is reached through a symlink - trace links omitted");
-        create_3[v] = false;
+        traceDirOk[v] = false;
       } else {
         const real = realpathSync(tdir);
-        create_3[v] = real.startsWith(flowRoot + (WIN ? "\\" : "/"));
+        traceDirOk[v] = real.startsWith(flowRoot + (WIN ? "\\" : "/"));
       }
     } catch {
-      create_3[v] = false;
+      traceDirOk[v] = false;
     }
   }
 
@@ -339,11 +370,11 @@ function build(flowArg) {
   // rather than overwrite a good trajectory/scores.tsv with a header-only file.
   for (let i = variants.length - 1; i > 0; i--) {
     const v = variants[i];
-    if (Object.keys(create_2[v]).length) continue;
+    if (Object.keys(rows[v]).length) continue;
     warnings.push(v + ": zero result rows - dropping (run not started or results.jsonl missing/empty)");
     variants.splice(i, 1);
   }
-  if (!Object.keys(create_2[variants[0]]).length)
+  if (!Object.keys(rows[variants[0]]).length)
     throw new Error(
       variants[0] +
         "/ has no result rows under " +
@@ -355,8 +386,7 @@ function build(flowArg) {
             " - replace with plain copies if they are yours)"
           : ""),
     );
-
-  const create_4 = Object.create(null);
+  const header = Object.create(null);
   for (const v of variants) {
     const vdir = join(flow, v);
     const change =
@@ -365,11 +395,11 @@ function build(flowArg) {
         .find((l) => l.trim()) || "";
     const summary = readJSON(join(vdir, "summary.json"), {}) || {};
     // Model: summary.json wins, else the most common row.model (what the app called).
-    const create = Object.create(null);
-    for (const reps of Object.values(create_2[v]))
-      for (const r of reps) if (typeof r.model === "string") create[r.model] = (create[r.model] || 0) + 1;
-    const rowModel = Object.entries(create).sort((a, b) => b[1] - a[1])[0]?.[0] || "";
-    create_4[v] = {
+    const tally = Object.create(null);
+    for (const reps of Object.values(rows[v]))
+      for (const r of reps) if (typeof r.model === "string") tally[r.model] = (tally[r.model] || 0) + 1;
+    const rowModel = Object.entries(tally).sort((a, b) => b[1] - a[1])[0]?.[0] || "";
+    header[v] = {
       change: change.replace(/^#+\s*/, ""),
       model: summary.model || rowModel,
       errors: countErrors(vdir),
@@ -382,38 +412,50 @@ function build(flowArg) {
   // selection the full builder's lib/adapter.mjs makes, so both builders
   // report the same metric's numbers on the same flow.
   const metricsCfg = state.metrics || state.criteria;
-  const filtered = (Array.isArray(metricsCfg) ? metricsCfg : [])
-    .map((m) => (typeof m === "string" ? { id: m } : { id: m?.id, kind: m?.kind }))
+  const declared = (Array.isArray(metricsCfg) ? metricsCfg : [])
+    .map((m) =>
+      typeof m === "string"
+        ? {
+            id: m,
+          }
+        : {
+            id: m?.id,
+            kind: m?.kind,
+          },
+    )
     .filter((m) => m.id);
-  const metrics = filtered.length ? filtered : inferMetrics(create_2, variants);
-  if (!metrics.length) metrics.push({ id: "score", kind: "float" });
-  const id = (metrics.find((m) => m.kind === "binary") || metrics[0]).id;
+  const metrics = declared.length ? declared : inferMetrics(rows, variants);
+  if (!metrics.length)
+    metrics.push({
+      id: "score",
+      kind: "float",
+    });
+  const primary = (metrics.find((m) => m.kind === "binary") || metrics[0]).id;
 
   // Cases: union of ids across variants, in first-seen order.
   const ids = [];
   const seenId = new Set();
   for (const v of variants)
-    for (const pid of Object.keys(create_2[v]))
+    for (const pid of Object.keys(rows[v]))
       if (!seenId.has(pid)) {
         seenId.add(pid);
         ids.push(pid);
       }
-
   const okReps = (reps) => reps.filter((r) => r.status == null || r.status === "ok");
   const caseMean = (reps, m) => {
-    const filtered = okReps(reps)
+    const vals = okReps(reps)
       .map((r) => coerceScores(r.grade)[m])
       .filter(isNum);
-    return filtered.length ? filtered.reduce((s, x) => s + x, 0) / filtered.length : null;
+    return vals.length ? vals.reduce((s, x) => s + x, 0) / vals.length : null;
   };
-  const mapped = ids.map((pid) => {
-    const first = variants.map((v) => create_2[v][pid]?.[0]).find(Boolean) || {};
+  const cases = ids.map((pid) => {
+    const first = variants.map((v) => rows[v][pid]?.[0]).find(Boolean) || {};
     const tags = Array.isArray(first.tags) ? first.tags.map(String) : [];
     const per = {};
     for (const v of variants) {
-      const reps = create_2[v][pid] || [];
+      const reps = rows[v][pid] || [];
       per[v] = {
-        mean: caseMean(reps, id),
+        mean: caseMean(reps, primary),
         reps: reps.length,
         truncated: reps.filter((r) => r.status === "truncated").length,
         traces: reps
@@ -431,7 +473,7 @@ function build(flowArg) {
             // charset (so `#`, `?`, `\\`, `%` and separators never reach the
             // link) and require an integer rep, on top of the traceDirOk
             // resolved-path check above and the lexical one below.
-            if (!create_3[v]) return null;
+            if (!traceDirOk[v]) return null;
             const rep = r.rep ?? k;
             if (!/^[A-Za-z0-9_.-]+$/.test(pid) || /^\.+$/.test(pid)) return null;
             if (!Number.isInteger(+rep) || +rep < 0) return null;
@@ -441,39 +483,51 @@ function build(flowArg) {
               const abs = resolve(flow, rel);
               if (dirname(abs) !== join(flow, v, "traces")) return null;
               // A hard-linked trace is no more ours than a symlinked one.
-              const ls = lstatSync(abs, { throwIfNoEntry: false });
-              if (ls?.isFile() && !(ls.nlink > 1)) return { rep, rel };
+              const ls = lstatSync(abs, {
+                throwIfNoEntry: false,
+              });
+              if (ls?.isFile() && !(ls.nlink > 1))
+                return {
+                  rep,
+                  rel,
+                };
             }
             return null;
           })
           .filter(Boolean),
       };
     }
-    return { id: pid, split: create[pid] || "", tags, prompt: String(first.prompt ?? ""), per };
+    return {
+      id: pid,
+      split: splitOf[pid] || "",
+      tags,
+      prompt: String(first.prompt ?? ""),
+      per,
+    };
   });
 
   // Per-variant aggregate: mean over cases that have a value, per split.
   const agg = {};
   for (const v of variants) {
-    const filtered = mapped.map((c) => c.per[v].mean).filter(isNum);
-    const filtered_2 = mapped
+    const all = cases.map((c) => c.per[v].mean).filter(isNum);
+    const test = cases
       .filter((c) => c.split === "test")
       .map((c) => c.per[v].mean)
       .filter(isNum);
     const m = (xs) => (xs.length ? xs.reduce((s, x) => s + x, 0) / xs.length : null);
     agg[v] = {
-      all: m(filtered),
-      n: filtered.length,
-      test: m(filtered_2),
-      nTest: filtered_2.length,
-      truncated: mapped.reduce((s, c) => s + c.per[v].truncated, 0),
+      all: m(all),
+      n: all.length,
+      test: m(test),
+      nTest: test.length,
+      truncated: cases.reduce((s, c) => s + c.per[v].truncated, 0),
     };
   }
 
   // trajectory/scores.tsv - same shape as the full builder.
   mkdirNoFollow(join(flow, "trajectory"), flowRoot);
   const tsv = [["id", "split", ...variants].join("\t")];
-  for (const c of mapped)
+  for (const c of cases)
     tsv.push(
       [tsvCell(c.id), tsvCell(c.split || "all"), ...variants.map((v) => fmt(c.per[v].mean))].join("\t"),
     );
@@ -487,7 +541,6 @@ function build(flowArg) {
     best = state.best.round === 0 ? "baseline" : "v" + state.best.round;
     if (!variants.includes(best)) best = null;
   }
-
   for (const p of new Set(skippedHardLinks))
     warnings.push(
       p.slice(flow.length + 1) +
@@ -496,30 +549,33 @@ function build(flowArg) {
   const html = render({
     flow,
     variants,
-    header: create_4,
+    header,
     agg,
-    cases: mapped,
-    primary: id,
+    cases,
+    primary,
     metrics: metrics.map((m) => m.id),
     warnings,
     best,
   });
   writeNoFollow(join(flow, "report.html"), html, flowRoot);
-  return { variants: variants.length, cases: mapped.length, warnings };
+  return {
+    variants: variants.length,
+    cases: cases.length,
+    warnings,
+  };
 }
+//@ build-report-lite-jwtbvm49.mjs:20625-24431 placement
 /**
  * 把汇总结果渲染为单文件 HTML 报告：变体概览表（得分、错误分类计数）、每个用例在各变体上的指标、警告列表；所有数据值经 HTML 转义。
  */
-//@ build-report-lite-jwtbvm49.mjs:20625-24431 placement
 function render({ flow, variants, header, agg, cases, primary, metrics, warnings, best }) {
-  const any = cases.some((c) => c.split);
-  const any_2 = variants.some((v) => agg[v].nTest > 0);
+  const hasSplit = cases.some((c) => c.split);
+  const hasTest = variants.some((v) => agg[v].nTest > 0);
   const th = (label, key) => '<th data-k="' + esc(key) + '">' + esc(label) + "</th>";
-
-  const joined = variants
+  const variantRows = variants
     .map((v) => {
-      const h = header[v],
-        a = agg[v];
+      const h = header[v];
+      const a = agg[v];
       const err = h.errors.total
         ? h.errors.total +
           " (" +
@@ -545,7 +601,7 @@ function render({ flow, variants, header, agg, cases, primary, metrics, warnings
         '</td><td class="num">' +
         a.n +
         "</td>" +
-        (any_2 ? '<td class="num">' + fmt(a.test) + '</td><td class="num">' + a.nTest + "</td>" : "") +
+        (hasTest ? '<td class="num">' + fmt(a.test) + '</td><td class="num">' + a.nTest + "</td>" : "") +
         '<td class="num">' +
         a.truncated +
         "</td><td>" +
@@ -554,14 +610,13 @@ function render({ flow, variants, header, agg, cases, primary, metrics, warnings
       );
     })
     .join("\n");
-
-  const joined_2 = cases
+  const caseRows = cases
     .map((c) => {
-      const joined = variants
+      const cells = variants
         .map((v) => {
           const p = c.per[v];
-          const joined = p.traces
-            .map((trace) => '<a href="' + esc(trace.rel) + '">rep' + esc(trace.rep) + "</a>")
+          const links = p.traces
+            .map((t) => '<a href="' + esc(t.rel) + '">rep' + esc(t.rep) + "</a>")
             .join(" ");
           return (
             '<td class="num" data-v="' +
@@ -569,7 +624,7 @@ function render({ flow, variants, header, agg, cases, primary, metrics, warnings
             '">' +
             fmt(p.mean) +
             (p.truncated ? ' <span class="pill warn">' + p.truncated + " truncated</span>" : "") +
-            (joined ? '<div class="links">' + joined + "</div>" : "") +
+            (links ? '<div class="links">' + links + "</div>" : "") +
             "</td>"
           );
         })
@@ -579,11 +634,11 @@ function render({ flow, variants, header, agg, cases, primary, metrics, warnings
         '<tr><td class="id">' +
         esc(c.id) +
         "</td>" +
-        (any ? "<td>" + esc(c.split) + "</td>" : "") +
+        (hasSplit ? "<td>" + esc(c.split) + "</td>" : "") +
         "<td>" +
-        c.tags.map((tag) => '<span class="pill">' + esc(tag) + "</span>").join(" ") +
+        c.tags.map((t) => '<span class="pill">' + esc(t) + "</span>").join(" ") +
         "</td>" +
-        joined +
+        cells +
         '<td class="prompt"><details><summary>' +
         esc(prompt.split("\n")[0].slice(0, 80)) +
         "</summary><pre>" +
@@ -592,13 +647,11 @@ function render({ flow, variants, header, agg, cases, primary, metrics, warnings
       );
     })
     .join("\n");
-
   const warn = warnings.length
     ? '<section class="warnings"><h2>Warnings</h2><ul>' +
       warnings.map((w) => "<li>" + esc(w) + "</li>").join("") +
       "</ul></section>"
     : "";
-
   return (
     '<!DOCTYPE html>\n<html lang="en"><head><meta charset="utf-8">' +
     '<meta name="viewport" content="width=device-width, initial-scale=1">' +
@@ -606,7 +659,7 @@ function render({ flow, variants, header, agg, cases, primary, metrics, warnings
     esc(flow.split(/[\\/]/).pop()) +
     " - eval report</title>" +
     "<style>" +
-    joined_3 +
+    CSS +
     "</style></head><body>" +
     "<header><h1>" +
     esc(flow.split(/[\\/]/).pop()) +
@@ -639,32 +692,32 @@ function render({ flow, variants, header, agg, cases, primary, metrics, warnings
     th("model", "s") +
     th("mean " + primary, "n") +
     th("cases", "n") +
-    (any_2 ? th("test mean", "n") + th("test cases", "n") : "") +
+    (hasTest ? th("test mean", "n") + th("test cases", "n") : "") +
     th("truncated", "n") +
     th("failed attempts", "s") +
     "</tr></thead><tbody>" +
-    joined +
+    variantRows +
     "</tbody></table></section>" +
     '<section><h2>Cases</h2><p class="hint">Click a column header to sort. Per-case values are the mean of <code>' +
     esc(primary) +
     "</code> over status-ok reps.</p>" +
     '<table id="cases"><thead><tr>' +
     th("id", "s") +
-    (any ? th("split", "s") : "") +
+    (hasSplit ? th("split", "s") : "") +
     th("tags", "s") +
     variants.map((v) => th(v, "n")).join("") +
     th("prompt", "s") +
     "</tr></thead><tbody>" +
-    joined_2 +
+    caseRows +
     "</tbody></table></section>" +
     warn +
     "<script>" +
-    joined_2_2 +
+    SORT_JS +
     "</script></body></html>\n"
   );
 }
 //@ build-report-lite-jwtbvm49.mjs:24433-25885 placement
-const joined_3 = [
+const CSS = [
   ":root{color-scheme:light dark;--fg:#1a1a1a;--bg:#fff;--muted:#666;--line:#ddd;--pill:#eee;--warn:#b45309;--best:#ecfdf5}",
   "@media(prefers-color-scheme:dark){:root{--fg:#e6e6e6;--bg:#121212;--muted:#9a9a9a;--line:#333;--pill:#2a2a2a;--warn:#f59e0b;--best:#0f2a1f}}",
   "body{font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:var(--fg);background:var(--bg);margin:0;padding:24px;max-width:1400px}",
@@ -678,7 +731,7 @@ const joined_3 = [
   ".warnings{color:var(--warn)}code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}",
 ].join("");
 //@ build-report-lite-jwtbvm49.mjs:25887-26791 placement
-const joined_2_2 = [
+const SORT_JS = [
   'document.querySelectorAll("th[data-k]").forEach(function(th){th.addEventListener("click",function(){',
   'var t=th.closest("table"),tb=t.tBodies[0],i=Array.prototype.indexOf.call(th.parentNode.children,th);',
   'var asc=!th.classList.contains("asc");t.querySelectorAll("th").forEach(function(h){h.classList.remove("asc","desc")});',
@@ -709,7 +762,7 @@ try {
       cases +
       " cases) and trajectory/scores.tsv",
   );
-} catch (error) {
-  eprint("build-report-lite: " + (error?.message || error));
+} catch (e) {
+  eprint("build-report-lite: " + (e?.message || e));
   process.exit(1);
 }

@@ -6,21 +6,20 @@
  * attribution: cjs-require-graph 2
  */
 import { x } from "../../runtime/bun-runtime.js";
-import { Ee } from "../function-bind/index.js";
+import { require_function_bind } from "../function-bind/index.js";
 
 //@ chunk-h6b7mazd.js:20524-20651 cjs-require-graph
-var fs = x(function (Rp, cs) {
-  var Vu = Function.prototype.call,
-    hasOwnProperty = Object.prototype.hasOwnProperty,
-    Gu = Ee();
-  cs.exports = Gu.call(Vu, hasOwnProperty);
+var require_hasown = x(function (cjsExports, cjsModule) {
+  var call = Function.prototype.call;
+  var $hasOwn = Object.prototype.hasOwnProperty;
+  var bind = require_function_bind();
+  cjsModule.exports = bind.call(call, $hasOwn);
 });
 //@ chunk-h6b7mazd.js:21208-21335 cjs-require-graph
-var ms = x(function (xp, hs) {
-  var Qu = Function.prototype.call,
-    hasOwnProperty = Object.prototype.hasOwnProperty,
-    ec = Ee();
-  hs.exports = ec.call(Qu, hasOwnProperty);
+var require_hasown_2 = x(function (cjsExports, cjsModule) {
+  var call = Function.prototype.call;
+  var $hasOwn = Object.prototype.hasOwnProperty;
+  var bind = require_function_bind();
+  cjsModule.exports = bind.call(call, $hasOwn);
 });
-
-export { fs, ms };
+export { require_hasown, require_hasown_2 };

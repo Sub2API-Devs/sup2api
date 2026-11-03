@@ -8,31 +8,31 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-g7fzcphx.js:226-761 cjs-fingerprint
-var K6t = x(function (c) {
-  var i = {},
-    r = {};
-  for (let e = 0; e < 256; e++) {
-    let lower = e.toString(16).toLowerCase();
-    if (lower.length === 1) lower = `0${lower}`;
-    ((i[e] = lower), (r[lower] = e));
+var require_util_hex_encoding = x(function (cjsExports) {
+  var SHORT_TO_HEX = {};
+  var HEX_TO_SHORT = {};
+  for (let i = 0; i < 256; i++) {
+    let encodedByte = i.toString(16).toLowerCase();
+    if (encodedByte.length === 1) encodedByte = `0${encodedByte}`;
+    SHORT_TO_HEX[i] = encodedByte;
+    HEX_TO_SHORT[encodedByte] = i;
   }
-  function s(e) {
-    if (e.length % 2 !== 0) throw Error("Hex encoded strings must have an even number length");
-    let uint8Array = new Uint8Array(e.length / 2);
-    for (let n = 0; n < e.length; n += 2) {
-      let lower = e.slice(n, n + 2).toLowerCase();
-      if (lower in r) uint8Array[n / 2] = r[lower];
-      else throw Error(`Cannot decode unrecognized sequence ${lower} as hexadecimal`);
+  function fromHex(encoded) {
+    if (encoded.length % 2 !== 0) throw Error("Hex encoded strings must have an even number length");
+    let out = new Uint8Array(encoded.length / 2);
+    for (let i = 0; i < encoded.length; i += 2) {
+      let encodedByte = encoded.slice(i, i + 2).toLowerCase();
+      if (encodedByte in HEX_TO_SHORT) out[i / 2] = HEX_TO_SHORT[encodedByte];
+      else throw Error(`Cannot decode unrecognized sequence ${encodedByte} as hexadecimal`);
     }
-    return uint8Array;
+    return out;
   }
-  function l(e) {
-    let t = "";
-    for (let n = 0; n < e.byteLength; n++) t += i[e[n]];
-    return t;
+  function toHex(bytes) {
+    let out = "";
+    for (let i = 0; i < bytes.byteLength; i++) out += SHORT_TO_HEX[bytes[i]];
+    return out;
   }
-  c.fromHex = s;
-  c.toHex = l;
+  cjsExports.fromHex = fromHex;
+  cjsExports.toHex = toHex;
 });
-
-export { K6t };
+export { require_util_hex_encoding };

@@ -9,8 +9,8 @@
  * attribution: placement 8
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, o, M } from "../../../vendor/zod/v4/classic/schemas.js";
-import { Bvt } from "./ultrareviewPreconditions.js";
+import { u, string, M } from "../../../vendor/zod/v4/classic/schemas.js";
+import { isUltrareviewPostEnabled } from "./ultrareviewPreconditions.js";
 import { raceWithAbortSignal, sleep } from "../../utils/sleep.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { errorMessage } from "../../utils/errors.js";
@@ -23,113 +23,161 @@ import { parseRetryAfterMs as parseRetryAfterMs_2 } from "../../bridge/debugUtil
 import { truncateToLength } from "../../utils/stringUtils.js";
 import { connectGithubUrl } from "../../services/cloudSessions/webSetup.js";
 
+//@ chunk-e6aww6q8.js:1767764-1768324 placement
 /**
  * 调用 /v1/code/github/post-review-comment 发布审查评论，网络错误单独归类。
  */
-//@ chunk-e6aww6q8.js:1767764-1768324 placement
-var postReviewComment = "/v1/code/github/post-review-comment",
-  L8o = 60000,
-  Xen = 90000,
-  N8o = 5000,
-  F8o = 1e4,
-  $8o = 20000,
-  H8o = new Set(["ENOTFOUND", "EAI_AGAIN", "ECONNREFUSED", "EHOSTUNREACH", "ENETUNREACH", "ETIMEDOUT"]),
-  B8o = DoctorLazy(() => u({ comment_url: o().min(1), already_posted: M().optional() })),
-  U8o = DoctorLazy(() =>
-    u({
-      error: u({
-        message: o().optional(),
-        reason: o().optional(),
-        details: o().optional(),
-        resource_type: o().optional(),
-      }),
+var postReviewComment = "/v1/code/github/post-review-comment";
+var POST_REVIEW_COMMENT_TIMEOUT_MS = 60000;
+var ULTRAVIEW_POST_TOTAL_BUDGET_MS = 90000;
+var DEFAULT_RETRY_AFTER_MS = 5000;
+var MAX_RETRY_AFTER_MS = 1e4;
+var RETRY_OVERHEAD_RESERVE_MS = 20000;
+var RETRYABLE_NETWORK_ERROR_CODES = new Set([
+  "ENOTFOUND",
+  "EAI_AGAIN",
+  "ECONNREFUSED",
+  "EHOSTUNREACH",
+  "ENETUNREACH",
+  "ETIMEDOUT",
+]);
+var postCommentReplySchema = DoctorLazy(() =>
+  u({
+    comment_url: string().min(1),
+    already_posted: M().optional(),
+  }),
+);
+var postCommentErrorSchema = DoctorLazy(() =>
+  u({
+    error: u({
+      message: string().optional(),
+      reason: string().optional(),
+      details: string().optional(),
+      resource_type: string().optional(),
     }),
-  ),
-  Ak = "The findings are above if you want to post them by hand.",
-  Ken =
-    "Check the pull request before posting by hand \u2014 if the request got through, the comment may still appear.";
+  }),
+);
+var FINDINGS_MANUAL_POST_HINT = "The findings are above if you want to post them by hand.";
+var CHECK_CONNECTION_HINT =
+  "Check the pull request before posting by hand \u2014 if the request got through, the comment may still appear.";
 //@ chunk-e6aww6q8.js:1768324-1768965 placement
-async function waitForUltrareviewPost(e, n) {
-  if (!Bvt()) return notPostedResult({ posted: !1, kind: "disabled" });
-  let timeout = AbortSignal.timeout(Xen),
-    s;
+async function waitForUltrareviewPost(sessionId, credentials) {
+  if (!isUltrareviewPostEnabled())
+    return notPostedResult({
+      posted: false,
+      kind: "disabled",
+    });
+  let r = AbortSignal.timeout(ULTRAVIEW_POST_TOTAL_BUDGET_MS);
+  let s;
   try {
-    s = await raceWithAbortSignal(classifyUltrareviewAuthFailure(e, timeout, n), timeout, () =>
+    s = await raceWithAbortSignal(classifyUltrareviewAuthFailure(sessionId, r, credentials), r, () =>
       Error("ultrareview post deadline"),
     );
   } catch (error) {
-    if (timeout.aborted) return notPostedResult({ posted: !1, kind: "deadline" });
+    if (r.aborted)
+      return notPostedResult({
+        posted: false,
+        kind: "deadline",
+      });
     logForDebugging(`ultrareview post did not complete: ${errorMessage(error)}`);
-    let y = !isAxiosError(error) || (error.response === void 0 && H8o.has(error.code ?? ""));
-    return notPostedResult({ posted: !1, kind: y ? "not_sent" : "no_answer" });
+    let y =
+      !isAxiosError(error) ||
+      (error.response === undefined && RETRYABLE_NETWORK_ERROR_CODES.has(error.code ?? ""));
+    return notPostedResult({
+      posted: false,
+      kind: y ? "not_sent" : "no_answer",
+    });
   }
   if (!s.posted) return notPostedResult(s);
-  return (
-    logEvent("tengu_ultrareview_post", {
-      outcome: s.alreadyPosted ? lit_2("already_posted") : lit_2("posted"),
-    }),
-    logFeatureOk("ultrareview_post", { already_posted: s.alreadyPosted }),
-    { status: "posted", commentUrl: s.commentUrl, alreadyPosted: s.alreadyPosted }
-  );
+  logEvent("tengu_ultrareview_post", {
+    outcome: s.alreadyPosted ? lit_2("already_posted") : lit_2("posted"),
+  });
+  logFeatureOk("ultrareview_post", {
+    already_posted: s.alreadyPosted,
+  });
+  return {
+    status: "posted",
+    commentUrl: s.commentUrl,
+    alreadyPosted: s.alreadyPosted,
+  };
 }
+//@ chunk-e6aww6q8.js:1768965-1769969 placement
 /**
  * 把 ultrareview 回贴时的认证失败（未登录、登录被拒、数据驻留限制）归类为原因码。
  */
-//@ chunk-e6aww6q8.js:1768965-1769969 placement
-async function classifyUltrareviewAuthFailure(e, n, r) {
+async function classifyUltrareviewAuthFailure(sessionId, n, credentials) {
   let now = Date.now();
   for (;;) {
-    let post = await apiClient.post(
+    let h = await apiClient.post(
       postReviewComment,
-      { session_id: e },
+      {
+        session_id: sessionId,
+      },
       {
         auth: "teleport-org",
-        isRouteOwned401: (q) => describeUltrareviewPostOutcome(401, Ven(q)) !== "sign_in_rejected",
-        timeout: L8o,
+        isRouteOwned401: (q) =>
+          describeUltrareviewPostOutcome(401, postErrorOfBody(q)) !== "sign_in_rejected",
+        timeout: POST_REVIEW_COMMENT_TIMEOUT_MS,
         signal: n,
-        validateStatus: () => !0,
-        credentials: r,
+        validateStatus: () => true,
+        credentials,
       },
     );
-    if (!post.ok)
-      return post.reason === "no-auth"
-        ? { posted: !1, kind: "not_logged_in", serverMessage: post.detail }
-        : {
-            posted: !1,
-            kind: post.reason === "data-residency" ? "data_residency" : "essential_traffic_only",
-          };
-    if (post.status >= 200 && post.status < 300) {
-      let safeParse = B8o().safeParse(post.data);
-      return safeParse.success
+    if (!h.ok)
+      return h.reason === "no-auth"
         ? {
-            posted: !0,
-            commentUrl: safeParse.data.comment_url,
-            alreadyPosted: safeParse.data.already_posted === !0,
+            posted: false,
+            kind: "not_logged_in",
+            serverMessage: h.detail,
           }
-        : { posted: !1, kind: "unconfirmed", status: post.status };
+        : {
+            posted: false,
+            kind: h.reason === "data-residency" ? "data_residency" : "essential_traffic_only",
+          };
+    if (h.status >= 200 && h.status < 300) {
+      let q = postCommentReplySchema().safeParse(h.data);
+      return q.success
+        ? {
+            posted: true,
+            commentUrl: q.data.comment_url,
+            alreadyPosted: q.data.already_posted === true,
+          }
+        : {
+            posted: false,
+            kind: "unconfirmed",
+            status: h.status,
+          };
     }
-    let y = Ven(post.data),
-      S = describeUltrareviewPostOutcome(post.status, y);
-    logForDebugging(
-      `ultrareview post refused: ${post.status} ${S}${y?.message ? ` \u2014 ${y.message}` : ""}`,
-    );
-    let w = { posted: !1, kind: S, status: post.status, serverMessage: y?.message };
+    let y = postErrorOfBody(h.data);
+    let S = describeUltrareviewPostOutcome(h.status, y);
+    logForDebugging(`ultrareview post refused: ${h.status} ${S}${y?.message ? ` \u2014 ${y.message}` : ""}`);
+    let w = {
+      posted: false,
+      kind: S,
+      status: h.status,
+      serverMessage: y?.message,
+    };
     if (S !== "findings_pending") return w;
-    let L = post.response.headers?.["retry-after"],
-      min = Math.min(parseRetryAfterMs_2(typeof L === "string" ? L : void 0) || N8o, F8o);
-    if (Date.now() - now + min + $8o > Xen) return w;
-    await sleep(min, n, { throwOnAbort: !0 });
+    let L = h.response.headers?.["retry-after"];
+    let min = Math.min(
+      parseRetryAfterMs_2(typeof L === "string" ? L : undefined) || DEFAULT_RETRY_AFTER_MS,
+      MAX_RETRY_AFTER_MS,
+    );
+    if (Date.now() - now + min + RETRY_OVERHEAD_RESERVE_MS > ULTRAVIEW_POST_TOTAL_BUDGET_MS) return w;
+    await sleep(min, n, {
+      throwOnAbort: true,
+    });
   }
 }
 //@ chunk-e6aww6q8.js:1769969-1770047 placement
-function Ven(e) {
-  let safeParse = U8o().safeParse(e);
-  return safeParse.success ? safeParse.data.error : void 0;
+function postErrorOfBody(e) {
+  let n = postCommentErrorSchema().safeParse(e);
+  return n.success ? n.data.error : undefined;
 }
+//@ chunk-e6aww6q8.js:1770047-1770859 placement
 /**
  * 把 ultrareview 回贴结果码转成给用户的说明。
  */
-//@ chunk-e6aww6q8.js:1770047-1770859 placement
 function describeUltrareviewPostOutcome(e, n) {
   switch (e) {
     case 400:
@@ -171,24 +219,24 @@ function describeUltrareviewPostOutcome(e, n) {
       return e >= 500 ? "unavailable" : "unexpected_response";
   }
 }
+//@ chunk-e6aww6q8.js:1770859-1771288 placement
 /**
  * 结果未发布到 PR 时上报并返回原因。
  */
-//@ chunk-e6aww6q8.js:1770859-1771288 placement
-function notPostedResult({ kind: kind, status: status, serverMessage: serverMessage }) {
-  if (
-    (logEvent("tengu_ultrareview_post", { outcome: fromEnum(kind), http_status: status }),
-    kind === "disabled")
-  )
-    logFeatureSad("ultrareview_post", "ultrareview_post_disabled");
+function notPostedResult({ kind, status, serverMessage }) {
+  logEvent("tengu_ultrareview_post", {
+    outcome: fromEnum(kind),
+    http_status: status,
+  });
+  if (kind === "disabled") logFeatureSad("ultrareview_post", "ultrareview_post_disabled");
   else logFeatureBad("ultrareview_post", `ultrareview_post_${kind}`);
   return {
     status: "not-posted",
     reason: postUltrareviewFindings(
       kind,
       status,
-      serverMessage === void 0
-        ? void 0
+      serverMessage === undefined
+        ? undefined
         : truncateToLength(
             serverMessage
               .normalize("NFKC")
@@ -201,26 +249,26 @@ function notPostedResult({ kind: kind, status: status, serverMessage: serverMess
     ),
   };
 }
+//@ chunk-e6aww6q8.js:1771288-1775153 placement
 /**
  * 把云端 ultrareview 的审查结论回贴到 PR；结论未就绪、路径不保留结论、非 PR 审查等情况各给出说明。
  */
-//@ chunk-e6aww6q8.js:1771288-1775153 placement
-function postUltrareviewFindings(e, n, r) {
-  switch (e) {
+function postUltrareviewFindings(kind, status, r) {
+  switch (kind) {
     case "findings_pending":
-      return `The review's findings weren't ready on the server yet, so nothing went to the pull request. ${Ak}`;
+      return `The review's findings weren't ready on the server yet, so nothing went to the pull request. ${FINDINGS_MANUAL_POST_HINT}`;
     case "findings_unavailable":
-      return `This review ran on a path that doesn't keep its findings for posting, so nothing went to the pull request. ${Ak}`;
+      return `This review ran on a path that doesn't keep its findings for posting, so nothing went to the pull request. ${FINDINGS_MANUAL_POST_HINT}`;
     case "no_pull_request":
       return "This review wasn't of a pull request, so there is nowhere to post the findings.";
     case "unsupported_host":
-      return `Posting is available for github.com pull requests only, so nothing was posted. ${Ak}`;
+      return `Posting is available for github.com pull requests only, so nothing was posted. ${FINDINGS_MANUAL_POST_HINT}`;
     case "review_failed":
-      return `The server recorded this review as incomplete, so nothing went to the pull request. ${Ak}`;
+      return `The server recorded this review as incomplete, so nothing went to the pull request. ${FINDINGS_MANUAL_POST_HINT}`;
     case "withheld_by_screen":
-      return `The comment was withheld by a content safety check (a finding matched a secret-like or unsafe pattern), so nothing went to the pull request. ${Ak}`;
+      return `The comment was withheld by a content safety check (a finding matched a secret-like or unsafe pattern), so nothing went to the pull request. ${FINDINGS_MANUAL_POST_HINT}`;
     case "github_rejected":
-      return `GitHub didn't accept the comment, so nothing was posted. ${Ak}`;
+      return `GitHub didn't accept the comment, so nothing was posted. ${FINDINGS_MANUAL_POST_HINT}`;
     case "check_the_pr":
       return "An earlier attempt to post this review may already have gone through, so it wasn't posted again. Check the pull request before posting by hand.";
     case "github_not_connected":
@@ -230,23 +278,23 @@ function postUltrareviewFindings(e, n, r) {
     case "sign_in_rejected":
       return "The server didn't accept this session's Claude sign-in for the post, so nothing went to the pull request. Run /login to fix that for next time; the findings are above if you want to post them by hand now.";
     case "session_not_found":
-      return `The server couldn't find this review session under your account, so nothing went to the pull request. ${Ak}`;
+      return `The server couldn't find this review session under your account, so nothing went to the pull request. ${FINDINGS_MANUAL_POST_HINT}`;
     case "pull_request_not_found":
-      return `GitHub couldn't find the pull request with your account (it may be private to you, deleted, or moved), so nothing was posted. ${Ak}`;
+      return `GitHub couldn't find the pull request with your account (it may be private to you, deleted, or moved), so nothing was posted. ${FINDINGS_MANUAL_POST_HINT}`;
     case "permission_denied":
-      return `Posting this comment isn't allowed for your account${r ? ` (${r})` : ""}, so nothing went to the pull request. ${Ak}`;
+      return `Posting this comment isn't allowed for your account${r ? ` (${r})` : ""}, so nothing went to the pull request. ${FINDINGS_MANUAL_POST_HINT}`;
     case "rate_limited":
-      return `Posting is being rate-limited right now, so nothing went to the pull request. ${Ak}`;
+      return `Posting is being rate-limited right now, so nothing went to the pull request. ${FINDINGS_MANUAL_POST_HINT}`;
     case "unavailable":
-      return `Posting is temporarily unavailable on the server, so nothing went to the pull request. ${Ak}`;
+      return `Posting is temporarily unavailable on the server, so nothing went to the pull request. ${FINDINGS_MANUAL_POST_HINT}`;
     case "route_unavailable":
-      return `This version of the server can't post review comments yet, so nothing went to the pull request. ${Ak}`;
+      return `This version of the server can't post review comments yet, so nothing went to the pull request. ${FINDINGS_MANUAL_POST_HINT}`;
     case "unexpected_response":
-      return `The post didn't go through (${r || `HTTP ${n}`}), so nothing went to the pull request. ${Ak}`;
+      return `The post didn't go through (${r || `HTTP ${status}`}), so nothing went to the pull request. ${FINDINGS_MANUAL_POST_HINT}`;
     case "unconfirmed":
       return "The server accepted the post but didn't say where the comment is. Check the pull request before posting by hand.";
     case "disabled":
-      return `Posting to the pull request is currently turned off, so nothing went to the PR. ${Ak}`;
+      return `Posting to the pull request is currently turned off, so nothing went to the PR. ${FINDINGS_MANUAL_POST_HINT}`;
     case "not_logged_in":
       return `Posting needs a working Claude sign-in here${r ? ` (${r})` : ""}, so nothing went to the pull request. Run /login to fix that for next time; the findings are above if you want to post them by hand now.`;
     case "data_residency":
@@ -254,14 +302,16 @@ function postUltrareviewFindings(e, n, r) {
     case "essential_traffic_only":
       return "Posting goes through Claude Code cloud sessions, which are unavailable while essential-traffic-only mode is active.";
     case "not_sent":
-      return `The post couldn't be sent (the request never reached the server), so nothing went to the pull request. ${Ak}`;
+      return `The post couldn't be sent (the request never reached the server), so nothing went to the pull request. ${FINDINGS_MANUAL_POST_HINT}`;
     case "no_answer":
-      return `The post couldn't be confirmed (no answer came back from the server). ${Ken}`;
+      return `The post couldn't be confirmed (no answer came back from the server). ${CHECK_CONNECTION_HINT}`;
     case "deadline":
-      return `The post took too long to confirm, so the findings are here without a confirmed post. ${Ken}`;
+      return `The post took too long to confirm, so the findings are here without a confirmed post. ${CHECK_CONNECTION_HINT}`;
   }
 }
 //@ chunk-e6aww6q8.js:1775153-1775166 placement
-var i9n = 1000;
-
-export { i9n, waitForUltrareviewPost };
+/**
+ * ultrareview 投递结果轮询间隔 1000ms。
+ */
+var POST_POLL_MS = 1000;
+export { POST_POLL_MS, waitForUltrareviewPost };

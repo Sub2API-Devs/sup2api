@@ -13,25 +13,24 @@ import { parseUserSpecifiedModel } from "./model/modelDisplay.js";
 import { getDefaultMainLoopModel } from "./model/modelFallback.js";
 import { supportsFastMode } from "./fastMode.js";
 import { usageCreditsBillingState } from "./planTiers.js";
-import { has1mSuffix } from "./model/contextWindow1m.js";
+import { has1mSuffix_2 } from "./model/contextWindow1m.js";
 
+//@ chunk-d1cgs5na.js:1188-1502 fingerprint = isBilledAsExtraUsage (0.61)
 /**
  * 订阅用户某次请求是否按额外用量（extra usage）计费：fast 模式、模型不在计划内，或 Opus/Sonnet 4.6 长上下文等情况。
  */
-//@ chunk-d1cgs5na.js:1188-1502 fingerprint = isBilledAsExtraUsage (0.61)
 function isBilledAsExtraUsage(model, isFastMode, isOpus1mMerged) {
-  if (!isClaudeAISubscriber()) return !1;
-  let a = model !== null ? parseUserSpecifiedModel(model) : getDefaultMainLoopModel(),
-    lower = a.toLowerCase(),
-    l = lower.includes("opus") || lower.includes("fable"),
-    included = lower.includes("opus-4-6"),
-    included_2 = lower.includes("sonnet-4-6");
-  if (isFastMode && supportsFastMode(model)) return !0;
+  if (!isClaudeAISubscriber()) return false;
+  let a = model !== null ? parseUserSpecifiedModel(model) : getDefaultMainLoopModel();
+  let lower = a.toLowerCase();
+  let l = lower.includes("opus") || lower.includes("fable");
+  let included = lower.includes("opus-4-6");
+  let included_2 = lower.includes("sonnet-4-6");
+  if (isFastMode && supportsFastMode(model)) return true;
   let u = usageCreditsBillingState(a);
-  if (u !== "pay_per_request" && u !== "included_in_plan") return !0;
-  if (!has1mSuffix(lower)) return !1;
-  if (l && isOpus1mMerged) return !1;
+  if (u !== "pay_per_request" && u !== "included_in_plan") return true;
+  if (!has1mSuffix_2(lower)) return false;
+  if (l && isOpus1mMerged) return false;
   return included || included_2;
 }
-
 export { isBilledAsExtraUsage };

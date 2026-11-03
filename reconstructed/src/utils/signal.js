@@ -10,27 +10,25 @@
  */
 import { bindAsyncResource } from "./asyncResourceBind.js";
 
+//@ chunk-0777tkjc.js:771-1031 callgraph-witnessed = createSignal (0.347)
 /**
  * 创建简单信号：subscribe 返回退订函数，emit 依次调用所有监听者，聚合监听者抛出的错误。
  */
-//@ chunk-0777tkjc.js:771-1031 callgraph-witnessed = createSignal (0.347)
 function createSignal() {
   let listeners = new Set();
   return {
     subscribe(n) {
       let r = bindAsyncResource(n);
-      return (
-        listeners.add(r),
-        () => {
-          listeners.delete(r);
-        }
-      );
+      listeners.add(r);
+      return () => {
+        listeners.delete(r);
+      };
     },
-    emit(...n) {
+    emit(...args) {
       let r;
       for (let listener of listeners)
         try {
-          listener(...n);
+          listener(...args);
         } catch (error) {
           (r ??= []).push(error);
         }
@@ -41,10 +39,10 @@ function createSignal() {
     },
   };
 }
+//@ chunk-ndmse9kj.js:508-617 placement
 /**
  * 创建惰性信号代理：subscribe/emit/clear 转发给按需获取的信号对象。
  */
-//@ chunk-ndmse9kj.js:508-617 placement
 function createLazySignal(e) {
   return {
     subscribe(n) {
@@ -58,5 +56,4 @@ function createLazySignal(e) {
     },
   };
 }
-
 export { createSignal, createLazySignal };

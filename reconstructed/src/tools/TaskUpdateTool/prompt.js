@@ -8,13 +8,12 @@
  * pieces: chunk-kxyd0g16.js (1)
  * attribution: fingerprint 1
  */
-
+//@ chunk-kxyd0g16.js:143782-146123 fingerprint = DESCRIPTION (1)
 /**
  * TaskUpdate 描述与提示词。
  */
-//@ chunk-kxyd0g16.js:143782-146123 fingerprint = DESCRIPTION (1)
-var TASK_UPDATE_DESCRIPTION = "Update a task in the task list",
-  TASK_UPDATE_PROMPT = `Use this tool to update a task in the task list.
+var TASK_UPDATE_DESCRIPTION = "Update a task in the task list";
+var TASK_UPDATE_PROMPT = `Use this tool to update a task in the task list.
 
 ## When to Use This Tool
 
@@ -89,5 +88,4 @@ Set up task dependencies:
 {"taskId": "2", "addBlockedBy": ["1"]}
 \`\`\`
 `;
-
 export { TASK_UPDATE_DESCRIPTION, TASK_UPDATE_PROMPT };

@@ -6,117 +6,153 @@
  * attribution: cjs-require-graph 1
  */
 import { x } from "../../../../../runtime/bun-runtime.js";
-import { wl } from "../cjs/create.js";
-import { Ku } from "./from-binary.js";
-import { Po } from "../cjs/reflect/reflect.js";
-import { El } from "./reflect/scalar.js";
-import { qu } from "../cjs/to-binary.js";
-import { xc } from "./wire/binary-encoding.js";
-import { Fu } from "../cjs/wkt/wrappers.js";
+import { require_create } from "../cjs/create.js";
+import { require_from_binary } from "./from-binary.js";
+import { require_reflect } from "../cjs/reflect/reflect.js";
+import { require_scalar } from "./reflect/scalar.js";
+import { require_to_binary } from "../cjs/to-binary.js";
+import { require_binary_encoding } from "./wire/binary-encoding.js";
+import { require_wrappers } from "../cjs/wkt/wrappers.js";
 
 //@ chunk-fq0cr76a.js:441299-443249 cjs-require-graph
-var gp = x(function (yP) {
-  Object.defineProperty(yP, "__esModule", { value: !0 });
-  yP.getExtension = mP;
-  yP.setExtension = YX;
-  yP.clearExtension = ZX;
-  yP.hasExtension = gP;
-  yP.hasOption = zX;
-  yP.getOption = XX;
-  yP.createExtensionContainer = oy;
-  var iy = wl(),
-    uP = Ku(),
-    dP = Po(),
-    fP = El(),
-    pP = qu(),
-    Qu = xc(),
-    hP = Fu();
-  function mP(e, n) {
-    S_(n, e);
-    let r = JX(e.$unknown, n),
-      [s, h, y] = oy(n);
-    for (let b of r) uP.readField(s, new Qu.BinaryReader(b.data), h, b.wireType, { readUnknownFields: !0 });
-    return y();
+var require_extensions = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.getExtension = getExtension;
+  cjsExports.setExtension = setExtension;
+  cjsExports.clearExtension = clearExtension;
+  cjsExports.hasExtension = hasExtension;
+  cjsExports.hasOption = hasOption;
+  cjsExports.getOption = getOption;
+  cjsExports.createExtensionContainer = createExtensionContainer;
+  var create_js_1 = require_create();
+  var from_binary_js_1 = require_from_binary();
+  var reflect_js_1 = require_reflect();
+  var scalar_js_1 = require_scalar();
+  var to_binary_js_1 = require_to_binary();
+  var binary_encoding_js_1 = require_binary_encoding();
+  var wrappers_js_1 = require_wrappers();
+  function getExtension(message, extension) {
+    assertExtendee(extension, message);
+    let ufs = filterUnknownFields(message.$unknown, extension);
+    let [container, field, get] = createExtensionContainer(extension);
+    for (let uf of ufs)
+      from_binary_js_1.readField(
+        container,
+        new binary_encoding_js_1.BinaryReader(uf.data),
+        field,
+        uf.wireType,
+        {
+          readUnknownFields: true,
+        },
+      );
+    return get();
   }
-  function YX(e, n, r) {
-    var s;
-    S_(n, e);
-    let filtered = ((s = e.$unknown) !== null && s !== void 0 ? s : []).filter((R) => R.no !== n.number),
-      [y, b] = oy(n, r),
-      S = new Qu.BinaryWriter();
-    pP.writeField(S, { writeUnknownFields: !0 }, y, b);
-    let w = new Qu.BinaryReader(S.finish());
-    while (w.pos < w.len) {
-      let [R, D] = w.tag(),
-        skip = w.skip(D, R);
-      filtered.push({ no: R, wireType: D, data: skip });
+  function setExtension(message, extension, value) {
+    var _a;
+    assertExtendee(extension, message);
+    let ufs = ((_a = message.$unknown) !== null && _a !== undefined ? _a : []).filter(
+      (uf) => uf.no !== extension.number,
+    );
+    let [container, field] = createExtensionContainer(extension, value);
+    let writer = new binary_encoding_js_1.BinaryWriter();
+    to_binary_js_1.writeField(
+      writer,
+      {
+        writeUnknownFields: true,
+      },
+      container,
+      field,
+    );
+    let reader = new binary_encoding_js_1.BinaryReader(writer.finish());
+    while (reader.pos < reader.len) {
+      let [no, wireType] = reader.tag();
+      let data = reader.skip(wireType, no);
+      ufs.push({
+        no,
+        wireType,
+        data,
+      });
     }
-    e.$unknown = filtered;
+    message.$unknown = ufs;
   }
-  function ZX(e, n) {
-    if ((S_(n, e), e.$unknown === void 0)) return;
-    e.$unknown = e.$unknown.filter((r) => r.no !== n.number);
+  function clearExtension(message, extension) {
+    assertExtendee(extension, message);
+    if (message.$unknown === undefined) return;
+    message.$unknown = message.$unknown.filter((uf) => uf.no !== extension.number);
   }
-  function gP(e, n) {
-    var r;
+  function hasExtension(message, extension) {
+    var _a;
     return (
-      n.extendee.typeName === e.$typeName &&
-      !!((r = e.$unknown) === null || r === void 0 ? void 0 : r.find((s) => s.no === n.number))
+      extension.extendee.typeName === message.$typeName &&
+      !!((_a = message.$unknown) === null || _a === undefined
+        ? undefined
+        : _a.find((uf) => uf.no === extension.number))
     );
   }
-  function zX(e, n) {
-    let options = e.proto.options;
-    if (!options) return !1;
-    return gP(options, n);
+  function hasOption(element, option) {
+    let message = element.proto.options;
+    if (!message) return false;
+    return hasExtension(message, option);
   }
-  function XX(e, n) {
-    let options = e.proto.options;
-    if (!options) {
-      let [, , s] = oy(n);
-      return s();
+  function getOption(element, option) {
+    let message = element.proto.options;
+    if (!message) {
+      let [, , get] = createExtensionContainer(option);
+      return get();
     }
-    return mP(options, n);
+    return getExtension(message, option);
   }
-  function JX(e, n) {
-    if (e === void 0) return [];
-    if (n.fieldKind === "enum" || n.fieldKind === "scalar") {
-      for (let r = e.length - 1; r >= 0; --r) if (e[r].no == n.number) return [e[r]];
+  function filterUnknownFields(unknownFields, extension) {
+    if (unknownFields === undefined) return [];
+    if (extension.fieldKind === "enum" || extension.fieldKind === "scalar") {
+      for (let i = unknownFields.length - 1; i >= 0; --i)
+        if (unknownFields[i].no == extension.number) return [unknownFields[i]];
       return [];
     }
-    return e.filter((r) => r.no === n.number);
+    return unknownFields.filter((uf) => uf.no === extension.number);
   }
-  function oy(e, n) {
-    let typeName = e.typeName,
-      merged = Object.assign(Object.assign({}, e), {
-        kind: "field",
-        parent: e.extendee,
-        localName: typeName,
-      }),
-      merged_2 = Object.assign(Object.assign({}, e.extendee), {
-        fields: [merged],
-        members: [merged],
-        oneofs: [],
-      }),
-      create = iy.create(merged_2, n !== void 0 ? { [typeName]: n } : void 0);
+  function createExtensionContainer(extension, value) {
+    let localName = extension.typeName;
+    let field = Object.assign(Object.assign({}, extension), {
+      kind: "field",
+      parent: extension.extendee,
+      localName,
+    });
+    let desc = Object.assign(Object.assign({}, extension.extendee), {
+      fields: [field],
+      members: [field],
+      oneofs: [],
+    });
+    let container = create_js_1.create(
+      desc,
+      value !== undefined
+        ? {
+            [localName]: value,
+          }
+        : undefined,
+    );
     return [
-      dP.reflect(merged_2, create),
-      merged,
+      reflect_js_1.reflect(desc, container),
+      field,
       () => {
-        let b = create[typeName];
-        if (b === void 0) {
-          let message = e.message;
-          if (hP.isWrapperDesc(message))
-            return fP.scalarZeroValue(message.fields[0].scalar, message.fields[0].longAsString);
-          return iy.create(message);
+        let value = container[localName];
+        if (value === undefined) {
+          let desc = extension.message;
+          if (wrappers_js_1.isWrapperDesc(desc))
+            return scalar_js_1.scalarZeroValue(desc.fields[0].scalar, desc.fields[0].longAsString);
+          return create_js_1.create(desc);
         }
-        return b;
+        return value;
       },
     ];
   }
-  function S_(e, n) {
-    if (e.extendee.typeName != n.$typeName)
-      throw Error(`extension ${e.typeName} can only be applied to message ${e.extendee.typeName}`);
+  function assertExtendee(extension, message) {
+    if (extension.extendee.typeName != message.$typeName)
+      throw Error(
+        `extension ${extension.typeName} can only be applied to message ${extension.extendee.typeName}`,
+      );
   }
 });
-
-export { gp };
+export { require_extensions };

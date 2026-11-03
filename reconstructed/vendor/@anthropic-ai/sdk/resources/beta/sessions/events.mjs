@@ -5,63 +5,78 @@
  * pieces: chunk-hwmsct5x.js (1)
  * attribution: esm-fingerprint 1
  */
-import { Y } from "../../../core/resource.mjs";
+import { APIResource } from "../../../core/resource.mjs";
 import { I } from "../../../internal/utils/path.mjs";
-import { ee } from "../../../core/pagination.mjs";
-import { T } from "../../../internal/headers.mjs";
-import { Br } from "../../../lib/tools/SessionToolRunner.mjs";
+import { TokenPage } from "../../../core/pagination.mjs";
+import { buildHeaders } from "../../../internal/headers.mjs";
+import { SessionToolRunner } from "../../../lib/tools/SessionToolRunner.mjs";
 
 //@ chunk-hwmsct5x.js:129788-130754 esm-fingerprint
-var Xs = (() => {
-  class e extends Y {
-    list(n, r = {}, s) {
-      let { betas: betas, workspace_id: workspace_id, ...w } = r ?? {};
-      return this._client.getAPIList(I`/v1/sessions/${n}/events?beta=true`, ee, {
-        query: w,
-        ...s,
-        headers: T([
+var Events = (() => {
+  class Events extends APIResource {
+    list(sessionID, params = {}, options) {
+      let { betas, workspace_id, ...query } = params ?? {};
+      return this._client.getAPIList(I`/v1/sessions/${sessionID}/events?beta=true`, TokenPage, {
+        query,
+        ...options,
+        headers: buildHeaders([
           {
             "anthropic-beta": [...(betas ?? []), "managed-agents-2026-04-01"].toString(),
-            ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0),
+            ...(workspace_id != null
+              ? {
+                  "anthropic-workspace-id": workspace_id,
+                }
+              : undefined),
           },
-          s?.headers,
+          options?.headers,
         ]),
       });
     }
-    send(n, r, s) {
-      let { betas: betas, workspace_id: workspace_id, ...w } = r;
-      return this._client.post(I`/v1/sessions/${n}/events?beta=true`, {
-        body: w,
-        ...s,
-        headers: T([
+    send(sessionID, params, options) {
+      let { betas, workspace_id, ...body } = params;
+      return this._client.post(I`/v1/sessions/${sessionID}/events?beta=true`, {
+        body,
+        ...options,
+        headers: buildHeaders([
           {
             "anthropic-beta": [...(betas ?? []), "managed-agents-2026-04-01"].toString(),
-            ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0),
+            ...(workspace_id != null
+              ? {
+                  "anthropic-workspace-id": workspace_id,
+                }
+              : undefined),
           },
-          s?.headers,
+          options?.headers,
         ]),
       });
     }
-    stream(n, r = {}, s) {
-      let { betas: betas, workspace_id: workspace_id, ...w } = r ?? {};
-      return this._client.get(I`/v1/sessions/${n}/events/stream?beta=true`, {
-        query: w,
-        ...s,
-        headers: T([
+    stream(sessionID, params = {}, options) {
+      let { betas, workspace_id, ...query } = params ?? {};
+      return this._client.get(I`/v1/sessions/${sessionID}/events/stream?beta=true`, {
+        query,
+        ...options,
+        headers: buildHeaders([
           {
             "anthropic-beta": [...(betas ?? []), "managed-agents-2026-04-01"].toString(),
-            ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0),
+            ...(workspace_id != null
+              ? {
+                  "anthropic-workspace-id": workspace_id,
+                }
+              : undefined),
           },
-          s?.headers,
+          options?.headers,
         ]),
-        stream: !0,
+        stream: true,
       });
     }
-    toolRunner(n, r) {
-      return new Br(n, { ...r, client: this._client });
+    toolRunner(sessionID, opts) {
+      return new SessionToolRunner(sessionID, {
+        ...opts,
+        client: this._client,
+      });
     }
   }
-  return ((e.SessionToolRunner = Br), e);
+  Events.SessionToolRunner = SessionToolRunner;
+  return Events;
 })();
-
-export { Xs };
+export { Events };

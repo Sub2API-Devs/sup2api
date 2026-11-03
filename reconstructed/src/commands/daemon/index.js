@@ -8,16 +8,17 @@
  * pieces: chunk-0e9ty0k2.js (1)
  * attribution: placement 1
  */
-
+//@ chunk-0e9ty0k2.js:191-319 placement
 /**
  * /daemon 命令对象（local-jsx）；描述：Manage background services and routines；实现 chunk-b7gstm5r.js 的 qo。
  */
-//@ chunk-0e9ty0k2.js:191-319 placement
 var daemonCommandDefinition = {
-    type: "local-jsx",
-    name: "daemon",
-    description: "Manage background services and routines",
-    immediate: !0,
-    requires: { ink: !0 },
+  type: "local-jsx",
+  name: "daemon",
+  description: "Manage background services and routines",
+  immediate: true,
+  requires: {
+    ink: true,
   },
-  daemonCommand = daemonCommandDefinition;
+};
+var daemonCommand = daemonCommandDefinition;

@@ -5,66 +5,98 @@
  * pieces: chunk-hwmsct5x.js (1)
  * attribution: esm-fingerprint 1
  */
-import { Y } from "../../../../core/resource.mjs";
-import { T } from "../../../../internal/headers.mjs";
+import { APIResource } from "../../../../core/resource.mjs";
+import { buildHeaders } from "../../../../internal/headers.mjs";
 import { I } from "../../../../internal/utils/path.mjs";
-import { ee } from "../../../../core/pagination.mjs";
+import { TokenPage } from "../../../../core/pagination.mjs";
 
 //@ chunk-hwmsct5x.js:121173-122282 esm-fingerprint
-class ao extends Y {
-  create(e, n) {
-    let { betas: betas, ...s } = e;
+class Issuers extends APIResource {
+  create(params, options) {
+    let { betas, ...body } = params;
     return this._client.post("/v1/organizations/federation_issuers?beta=true", {
-      body: s,
-      ...n,
-      headers: T([
-        { ...(betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0) },
-        n?.headers,
+      body,
+      ...options,
+      headers: buildHeaders([
+        {
+          ...(betas?.toString() != null
+            ? {
+                "anthropic-beta": betas?.toString(),
+              }
+            : undefined),
+        },
+        options?.headers,
       ]),
     });
   }
-  retrieve(e, n = {}, r) {
-    let { betas: betas } = n ?? {};
-    return this._client.get(I`/v1/organizations/federation_issuers/${e}?beta=true`, {
-      ...r,
-      headers: T([
-        { ...(betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0) },
-        r?.headers,
+  retrieve(federationIssuerID, params = {}, options) {
+    let { betas } = params ?? {};
+    return this._client.get(I`/v1/organizations/federation_issuers/${federationIssuerID}?beta=true`, {
+      ...options,
+      headers: buildHeaders([
+        {
+          ...(betas?.toString() != null
+            ? {
+                "anthropic-beta": betas?.toString(),
+              }
+            : undefined),
+        },
+        options?.headers,
       ]),
     });
   }
-  update(e, n, r) {
-    let { betas: betas, ...h } = n;
-    return this._client.post(I`/v1/organizations/federation_issuers/${e}?beta=true`, {
-      body: h,
-      ...r,
-      headers: T([
-        { ...(betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0) },
-        r?.headers,
+  update(federationIssuerID, params, options) {
+    let { betas, ...body } = params;
+    return this._client.post(I`/v1/organizations/federation_issuers/${federationIssuerID}?beta=true`, {
+      body,
+      ...options,
+      headers: buildHeaders([
+        {
+          ...(betas?.toString() != null
+            ? {
+                "anthropic-beta": betas?.toString(),
+              }
+            : undefined),
+        },
+        options?.headers,
       ]),
     });
   }
-  list(e = {}, n) {
-    let { betas: betas, ...s } = e ?? {};
-    return this._client.getAPIList("/v1/organizations/federation_issuers?beta=true", ee, {
-      query: s,
-      ...n,
-      headers: T([
-        { ...(betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0) },
-        n?.headers,
+  list(params = {}, options) {
+    let { betas, ...query } = params ?? {};
+    return this._client.getAPIList("/v1/organizations/federation_issuers?beta=true", TokenPage, {
+      query,
+      ...options,
+      headers: buildHeaders([
+        {
+          ...(betas?.toString() != null
+            ? {
+                "anthropic-beta": betas?.toString(),
+              }
+            : undefined),
+        },
+        options?.headers,
       ]),
     });
   }
-  archive(e, n = {}, r) {
-    let { betas: betas } = n ?? {};
-    return this._client.post(I`/v1/organizations/federation_issuers/${e}/archive?beta=true`, {
-      ...r,
-      headers: T([
-        { ...(betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0) },
-        r?.headers,
-      ]),
-    });
+  archive(federationIssuerID, params = {}, options) {
+    let { betas } = params ?? {};
+    return this._client.post(
+      I`/v1/organizations/federation_issuers/${federationIssuerID}/archive?beta=true`,
+      {
+        ...options,
+        headers: buildHeaders([
+          {
+            ...(betas?.toString() != null
+              ? {
+                  "anthropic-beta": betas?.toString(),
+                }
+              : undefined),
+          },
+          options?.headers,
+        ]),
+      },
+    );
   }
 }
-
-export { ao };
+export { Issuers };

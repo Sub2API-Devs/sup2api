@@ -28,47 +28,53 @@ var KNOWN_PUBLIC_HOSTS = [
   "storage.googleapis.com",
 ];
 //@ chunk-v00h76b6.js:538-710 layout
-function classifyFetchHost(t) {
-  let e,
-    match = /^[^@/]+@([^:/]+):/.exec(t);
-  if (match) e = match[1];
+function classifyFetchHost(urlOrSpec) {
+  let host;
+  let scpMatch = /^[^@/]+@([^:/]+):/.exec(urlOrSpec);
+  if (scpMatch) host = scpMatch[1];
   else
     try {
-      e = new URL(t).hostname;
+      host = new URL(urlOrSpec).hostname;
     } catch {
       return "unknown";
     }
-  let lower = e.toLowerCase();
-  return KNOWN_PUBLIC_HOSTS.find((r) => r === lower) ?? "other";
+  let normalized = host.toLowerCase();
+  return KNOWN_PUBLIC_HOSTS.find((r) => r === normalized) ?? "other";
 }
 //@ chunk-v00h76b6.js:710-762 layout = isOfficialRepo (1)
 function isOfficialRepo_2(urlOrSpec) {
   return urlOrSpec.includes(`anthropics/${CLAUDE_PLUGINS_OFFICIAL}`);
 }
+//@ chunk-v00h76b6.js:762-1157 fingerprint = logPluginFetch (0.448)
 /**
  * 记录插件远程获取遥测 tengu_plugin_remote_fetch（来源类型、主机（公共主机才记明文）、结果、耗时、错误类别）。
  */
-//@ chunk-v00h76b6.js:762-1157 fingerprint = logPluginFetch (0.448)
-function logPluginFetch(t, e, n, i, r, u, o) {
+function logPluginFetch(source, urlOrSpec, outcome, durationMs, errorKind, u, submodules) {
   logEvent("tengu_plugin_remote_fetch", {
-    source: fromEnum(t),
-    host: fromEnum(e ? classifyFetchHost(e) : "unknown"),
-    is_official: t === "plugin_catalog" || (e ? isOfficialRepo_2(e) : !1),
-    outcome: fromEnum(n),
-    duration_ms: Math.round(i),
-    ...(r && { error_kind: fromEnum(r) }),
-    ...(u !== void 0 ? { is_directory: u } : {}),
-    ...(o && {
-      submodule_selection: fromEnum(o.fetched === "all" ? "all" : "selected"),
-      submodules_recorded: o.recorded,
-      submodules_fetched: o.fetched === "all" ? o.recorded : o.fetched,
+    source: fromEnum(source),
+    host: fromEnum(urlOrSpec ? classifyFetchHost(urlOrSpec) : "unknown"),
+    is_official: source === "plugin_catalog" || (urlOrSpec ? isOfficialRepo_2(urlOrSpec) : false),
+    outcome: fromEnum(outcome),
+    duration_ms: Math.round(durationMs),
+    ...(errorKind && {
+      error_kind: fromEnum(errorKind),
+    }),
+    ...(u !== undefined
+      ? {
+          is_directory: u,
+        }
+      : {}),
+    ...(submodules && {
+      submodule_selection: fromEnum(submodules.fetched === "all" ? "all" : "selected"),
+      submodules_recorded: submodules.recorded,
+      submodules_fetched: submodules.fetched === "all" ? submodules.recorded : submodules.fetched,
     }),
   });
 }
+//@ chunk-v00h76b6.js:1157-1783 fingerprint = classifyFetchError (1)
 /**
  * 把获取错误归类：dns_or_refused、timeout、conflict、auth、not_found、tls、invalid_schema、other 等。
  */
-//@ chunk-v00h76b6.js:1157-1783 fingerprint = classifyFetchError (1)
 function classifyFetchError(error) {
   let msg = String(error?.message ?? error);
   if (/ENOTFOUND|ECONNREFUSED|EAI_AGAIN|Could not resolve host|Connection refused/i.test(msg))
@@ -81,10 +87,10 @@ function classifyFetchError(error) {
   if (/Invalid response format|Invalid marketplace schema/i.test(msg)) return "invalid_schema";
   return "other";
 }
+//@ chunk-1kaj6e83.js:12100-12189 fingerprint = extractHost (0.664)
 /**
  * URL 取 协议//主机。名字归属可疑（被 MCP auth 引用）。
  */
-//@ chunk-1kaj6e83.js:12100-12189 fingerprint = extractHost (0.664)
 function extractHost(urlOrSpec) {
   try {
     let t = new URL(urlOrSpec);
@@ -93,13 +99,13 @@ function extractHost(urlOrSpec) {
     return urlOrSpec;
   }
 }
+//@ chunk-1kaj6e83.js:12189-12270 affinity
 /**
  * URL 主机是否为本机回环（127.0.0.1/localhost）。
  */
-//@ chunk-1kaj6e83.js:12189-12270 affinity
-function isLoopbackOrigin_2(e) {
-  let t = extractHost(e);
-  return t === "http://127.0.0.1" || t === "http://localhost";
+function isLoopbackOrigin_2(urlOrSpec) {
+  let host = extractHost(urlOrSpec);
+  return host === "http://127.0.0.1" || host === "http://localhost";
 }
 //@ chunk-e6aww6q8.js:770392-770635 fingerprint = isOfficialRepo (1)
 function isOfficialRepo(urlOrSpec) {
@@ -107,9 +113,8 @@ function isOfficialRepo(urlOrSpec) {
     .split("/")
     .filter((y) => y !== "");
   if (!n.every((y) => /^[a-z0-9_][a-z0-9._-]*$/i.test(y))) return null;
-  let s = n.length === 2,
-    h = n.length === 1;
+  let s = n.length === 2;
+  let h = n.length === 1;
   return s ? `${n[0]}/${n[1]}` : h ? `anthropics/${n[0]}` : null;
 }
-
 export { isLoopbackOrigin_2, extractHost, logPluginFetch, classifyFetchError, isOfficialRepo };

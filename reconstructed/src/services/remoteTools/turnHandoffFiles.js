@@ -38,42 +38,40 @@ import {
 import { writtenInUploadsDir } from "../../bridge/inboundAttachments.js";
 import { readPeerFileBounded } from "../../utils/peerFileReceive.js";
 import { computeContentHash } from "../../utils/commitAttribution.js";
-import { ws } from "../../utils/fsFlags.js";
+import { NOFOLLOW_NONBLOCK_FLAGS } from "../../utils/fsFlags.js";
 import { READ_LIMITS } from "../../utils/fsBoundRead.js";
 import { readHandleBounded } from "../../utils/fsSafety/boundOpen.js";
 
+//@ chunk-648dqenp.js:6159-6951 placement
 /**
  * 回合交接时，按文件名刷新先前放到 home 目录的文件：对名字被新文件占用的条目，读取上传目录里对应的新内容（校验哈希）原子替换，或在内容未变时移除，并记事件。
  */
-//@ chunk-648dqenp.js:6159-6951 placement
 async function refreshFilesPlacedByName(files, byteLimit = COPIED_BYTES_LIMIT) {
   let e = filesPlacedByNameRegistry();
   if (!hasConflictingPlacedFile(files) || !isFilePersistenceEnabled()) return;
-  let startTime = performance.now(),
-    r = new Map();
-  for (let { fileUuid: fileUuid, name: i } of files) {
+  let startTime = performance.now();
+  let r = new Map();
+  for (let { fileUuid, name: i } of files) {
     let d = nfc(i);
     r.set(d, (r.get(d) ?? new Map()).set(fileUuid.toLowerCase(), fileUuid));
   }
-  let s = {},
-    f = 0,
-    c;
-  for (let [n, i] of r) {
-    let d = e.get(n);
-    if (d === void 0 || (i.size === 1 && i.has(d.fileUuid))) continue;
-    e.delete(n);
-    let [h] = i.size === 1 && !d.ambiguous ? i.values() : [],
-      u;
+  let s = {};
+  let f = 0;
+  let c;
+  for (let [name, i] of r) {
+    let row = e.get(name);
+    if (row === undefined || (i.size === 1 && i.has(row.fileUuid))) continue;
+    e.delete(name);
+    let [fileUuid] = i.size === 1 && !row.ambiguous ? i.values() : [];
+    let u;
     try {
-      let p = await refreshPlacedFile(n, d, h, byteLimit - f);
-      ((u = p.outcome), (f += p.bytes));
+      let p = await refreshPlacedFile(name, row, fileUuid, byteLimit - f);
+      u = p.outcome;
+      f += p.bytes;
     } catch (error) {
-      if (
-        ((c = sanitizeErrnoForTelemetry(error) ?? lit("unknown")),
-        (u = "failed"),
-        !e.has(n) && e.size < PLACED_BY_NAME_LIMITS)
-      )
-        e.set(n, d);
+      c = sanitizeErrnoForTelemetry(error) ?? lit("unknown");
+      u = "failed";
+      if (!e.has(name) && e.size < PLACED_BY_NAME_LIMITS) e.set(name, row);
     }
     s[u] = (s[u] ?? 0) + 1;
   }
@@ -82,46 +80,69 @@ async function refreshFilesPlacedByName(files, byteLimit = COPIED_BYTES_LIMIT) {
     duration_ms: Math.round(performance.now() - startTime),
     approx_copied_bytes: Number(f.toPrecision(2)),
     ...identityMap(s, (n, i) => `files_${i}`),
-    ...(c !== void 0 && { last_error_code: c }),
+    ...(c !== undefined && {
+      last_error_code: c,
+    }),
   };
-  (logEvent("tengu_turn_handoff_files_by_name_refresh", l),
-    logForDiagnosticsNoPII(c !== void 0 ? "warn" : "info", "turn_handoff_files_by_name_refresh", l));
+  logEvent("tengu_turn_handoff_files_by_name_refresh", l);
+  logForDiagnosticsNoPII(c !== undefined ? "warn" : "info", "turn_handoff_files_by_name_refresh", l);
 }
+//@ chunk-648dqenp.js:6951-7697 placement
 /**
  * 刷新一个按名放到 home 目录的文件：校验行信息后读取上传目录中的新内容（哈希一致），经临时文件原子替换并记录；无新内容时移除旧文件。
  */
-//@ chunk-648dqenp.js:6951-7697 placement
 async function refreshPlacedFile(name, row, fileUuid, byteLimit) {
-  let homeRoot = getHomeFilesRoot(),
-    base = posix.basename(row.path);
+  let homeRoot = getHomeFilesRoot();
+  let base = posix.basename(row.path);
   if (
     row.path !== posix.join(homeRoot, base) ||
     nfc(base) !== name ||
     row.size > COPIED_BYTES_LIMIT ||
-    fileNameRefusal(base) !== void 0 ||
+    fileNameRefusal(base) !== undefined ||
     (await checkHomeTarget(homeRoot, base))?.outcome === "refused_name"
   )
-    return { outcome: "row_refused", bytes: 0 };
-  let upload = fileUuid === void 0 ? void 0 : writtenInUploadsDir(fileUuid, void 0),
-    bytes =
-      upload === void 0 || upload.size > byteLimit
-        ? null
-        : await readPeerFileBounded(upload.path, upload.size),
-    verifiedBytes = bytes !== null && computeContentHash(bytes) === upload?.sha256 ? bytes : void 0;
-  if (fileUuid === void 0 || upload === void 0 || verifiedBytes === void 0)
-    return { outcome: (await removeIfStillPlaced(row)) ?? "removed", bytes: 0 };
-  let started = !1;
+    return {
+      outcome: "row_refused",
+      bytes: 0,
+    };
+  let upload = fileUuid === undefined ? undefined : writtenInUploadsDir(fileUuid, undefined);
+  let bytes =
+    upload === undefined || upload.size > byteLimit
+      ? null
+      : await readPeerFileBounded(upload.path, upload.size);
+  let verifiedBytes = bytes !== null && computeContentHash(bytes) === upload?.sha256 ? bytes : undefined;
+  if (fileUuid === undefined || upload === undefined || verifiedBytes === undefined)
+    return {
+      outcome: (await removeIfStillPlaced(row)) ?? "removed",
+      bytes: 0,
+    };
+  let started = false;
   try {
     return await withBytesInTemporaryFile(homeRoot, base, verifiedBytes, async (tempPath) => {
-      started = !0;
+      started = true;
       let leftOutcome = await removeIfStillPlaced(row);
-      if (leftOutcome !== void 0) return { outcome: leftOutcome, bytes: 0 };
-      if ((await publishHomeFile(tempPath, homeRoot, base, void 0)).outcome !== "placed")
-        return { outcome: "left_occupied", bytes: 0 };
-      return (
-        await notePlacedCopy(homeRoot, { fileUuid: fileUuid, name: base }, upload),
-        { outcome: "refreshed", bytes: verifiedBytes.length }
+      if (leftOutcome !== undefined)
+        return {
+          outcome: leftOutcome,
+          bytes: 0,
+        };
+      if ((await publishHomeFile(tempPath, homeRoot, base, undefined)).outcome !== "placed")
+        return {
+          outcome: "left_occupied",
+          bytes: 0,
+        };
+      await notePlacedCopy(
+        homeRoot,
+        {
+          fileUuid,
+          name: base,
+        },
+        upload,
       );
+      return {
+        outcome: "refreshed",
+        bytes: verifiedBytes.length,
+      };
     });
   } catch (error) {
     if (!started) await removeIfStillPlaced(row).catch(() => {});
@@ -129,19 +150,19 @@ async function refreshPlacedFile(name, row, fileUuid, byteLimit) {
   }
 }
 //@ chunk-648dqenp.js:7697-7815 placement
-async function removeIfStillPlaced(o) {
-  let t = await checkPlacedFileUnchanged(o);
+async function removeIfStillPlaced(row) {
+  let t = await checkPlacedFileUnchanged(row);
   if (typeof t === "string") return t;
-  return (await removeIfUnchanged(o.path, t)) ? void 0 : "left_changed";
+  return (await removeIfUnchanged(row.path, t)) ? undefined : "left_changed";
 }
+//@ chunk-648dqenp.js:7815-8336 placement
 /**
  * 检查之前放置的文件是否未被改动（同一 inode、mtime、大小与哈希一致），返回最新 stat 或 left_gone/left_changed。
  */
-//@ chunk-648dqenp.js:7815-8336 placement
 async function checkPlacedFileUnchanged(row) {
   let handle;
   try {
-    handle = await open(row.path, ws | READ_LIMITS);
+    handle = await open(row.path, NOFOLLOW_NONBLOCK_FLAGS | READ_LIMITS);
   } catch (error) {
     let errnoCode = getErrnoCode(error);
     if (errnoCode === "ENOENT") return "left_gone";

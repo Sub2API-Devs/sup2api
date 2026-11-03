@@ -6,153 +6,172 @@
  * attribution: cjs-require-graph 1
  */
 import { x } from "../../../../../runtime/bun-runtime.js";
-import { vg } from "./is-message.js";
-import { Ns } from "./descriptors.js";
-import { El } from "../commonjs/reflect/scalar.js";
-import { Uu } from "./reflect/guard.js";
-import { xl } from "./reflect/unsafe.js";
-import { Fu } from "./wkt/wrappers.js";
+import { require_is_message } from "./is-message.js";
+import { require_descriptors } from "./descriptors.js";
+import { require_scalar } from "../commonjs/reflect/scalar.js";
+import { require_guard } from "./reflect/guard.js";
+import { require_unsafe } from "./reflect/unsafe.js";
+import { require_wrappers } from "./wkt/wrappers.js";
 
 //@ chunk-fq0cr76a.js:343319-345921 cjs-require-graph
-var wl = x(function (yk) {
-  Object.defineProperty(yk, "__esModule", { value: !0 });
-  yk.create = mk;
-  var Lg = vg(),
-    $u = Ns(),
-    pk = El(),
-    Bg = Uu(),
-    Mu = xl(),
-    hk = Fu(),
-    gY = 999,
-    yY = 998,
-    Pg = 2;
-  function mk(e, n) {
-    if (Lg.isMessage(n, e)) return n;
-    let r = vY(e);
-    if (n !== void 0) bY(e, r, n);
-    return r;
+var require_create = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.create = create;
+  var is_message_js_1 = require_is_message();
+  var descriptors_js_1 = require_descriptors();
+  var scalar_js_1 = require_scalar();
+  var guard_js_1 = require_guard();
+  var unsafe_js_1 = require_unsafe();
+  var wrappers_js_1 = require_wrappers();
+  var EDITION_PROTO3 = 999;
+  var EDITION_PROTO2 = 998;
+  var IMPLICIT = 2;
+  function create(schema, init) {
+    if (is_message_js_1.isMessage(init, schema)) return init;
+    let message = createZeroMessage(schema);
+    if (init !== undefined) initMessage(schema, message, init);
+    return message;
   }
-  function bY(e, n, r) {
-    for (let member of e.members) {
-      let h = r[member.localName];
-      if (h == null) continue;
-      let y;
+  function initMessage(messageDesc, message, init) {
+    for (let member of messageDesc.members) {
+      let value = init[member.localName];
+      if (value == null) continue;
+      let field;
       if (member.kind == "oneof") {
-        let unsafeOneofCase = Mu.unsafeOneofCase(r, member);
-        if (!unsafeOneofCase) continue;
-        ((y = unsafeOneofCase), (h = Mu.unsafeGet(r, unsafeOneofCase)));
-      } else y = member;
-      switch (y.fieldKind) {
+        let oneofField = unsafe_js_1.unsafeOneofCase(init, member);
+        if (!oneofField) continue;
+        field = oneofField;
+        value = unsafe_js_1.unsafeGet(init, oneofField);
+      } else field = member;
+      switch (field.fieldKind) {
         case "message":
-          h = Wx(y, h);
+          value = toMessage(field, value);
           break;
         case "scalar":
-          h = gk(y, h);
+          value = initScalar(field, value);
           break;
         case "list":
-          h = xY(y, h);
+          value = initList(field, value);
           break;
         case "map":
-          h = EY(y, h);
+          value = initMap(field, value);
           break;
       }
-      Mu.unsafeSet(n, y, h);
+      unsafe_js_1.unsafeSet(message, field, value);
     }
-    return n;
+    return message;
   }
-  function gk(e, n) {
-    if (e.scalar == $u.ScalarType.BYTES) return Gx(n);
-    return n;
+  function initScalar(field, value) {
+    if (field.scalar == descriptors_js_1.ScalarType.BYTES) return toU8Arr(value);
+    return value;
   }
-  function EY(e, n) {
-    if (Bg.isObject(n)) {
-      if (e.scalar == $u.ScalarType.BYTES) return dk(n, Gx);
-      if (e.mapKind == "message") return dk(n, (r) => Wx(e, r));
+  function initMap(field, value) {
+    if (guard_js_1.isObject(value)) {
+      if (field.scalar == descriptors_js_1.ScalarType.BYTES) return convertObjectValues(value, toU8Arr);
+      if (field.mapKind == "message") return convertObjectValues(value, (val) => toMessage(field, val));
     }
-    return n;
+    return value;
   }
-  function xY(e, n) {
-    if (Array.isArray(n)) {
-      if (e.scalar == $u.ScalarType.BYTES) return n.map(Gx);
-      if (e.listKind == "message") return n.map((r) => Wx(e, r));
+  function initList(field, value) {
+    if (Array.isArray(value)) {
+      if (field.scalar == descriptors_js_1.ScalarType.BYTES) return value.map(toU8Arr);
+      if (field.listKind == "message") return value.map((item) => toMessage(field, item));
     }
-    return n;
+    return value;
   }
-  function Wx(e, n) {
-    if (e.fieldKind == "message" && !e.oneof && hk.isWrapperDesc(e.message))
-      return gk(e.message.fields[0], n);
-    if (Bg.isObject(n)) {
-      if (e.message.typeName == "google.protobuf.Struct" && e.parent.typeName !== "google.protobuf.Value")
-        return n;
-      if (!Lg.isMessage(n, e.message)) return mk(e.message, n);
+  function toMessage(field, value) {
+    if (field.fieldKind == "message" && !field.oneof && wrappers_js_1.isWrapperDesc(field.message))
+      return initScalar(field.message.fields[0], value);
+    if (guard_js_1.isObject(value)) {
+      if (
+        field.message.typeName == "google.protobuf.Struct" &&
+        field.parent.typeName !== "google.protobuf.Value"
+      )
+        return value;
+      if (!is_message_js_1.isMessage(value, field.message)) return create(field.message, value);
     }
-    return n;
+    return value;
   }
-  function Gx(e) {
-    return Array.isArray(e) ? new Uint8Array(e) : e;
+  function toU8Arr(value) {
+    return Array.isArray(value) ? new Uint8Array(value) : value;
   }
-  function dk(e, n) {
-    let r = {};
-    for (let s of Object.entries(e)) r[s[0]] = n(s[1]);
-    return r;
+  function convertObjectValues(obj, fn) {
+    let ret = {};
+    for (let entry of Object.entries(obj)) ret[entry[0]] = fn(entry[1]);
+    return ret;
   }
-  var _Y = Symbol(),
-    weakMap = new WeakMap();
-  function vY(e) {
-    let n;
-    if (!wY(e)) {
-      n = { $typeName: e.typeName };
-      for (let member of e.members)
-        if (member.kind == "oneof" || member.presence == Pg) n[member.localName] = Vx(member);
+  var tokenZeroMessageField = Symbol();
+  var messagePrototypes = new WeakMap();
+  function createZeroMessage(desc) {
+    let msg;
+    if (!needsPrototypeChain(desc)) {
+      msg = {
+        $typeName: desc.typeName,
+      };
+      for (let member of desc.members)
+        if (member.kind == "oneof" || member.presence == IMPLICIT)
+          msg[member.localName] = createZeroField(member);
     } else {
-      let r = weakMap.get(e),
-        s,
-        h;
-      if (r) ({ prototype: s, members: h } = r);
+      let cached = messagePrototypes.get(desc);
+      let prototype;
+      let members;
+      if (cached) ({ prototype, members } = cached);
       else {
-        ((s = {}), (h = new Set()));
-        for (let member of e.members) {
+        prototype = {};
+        members = new Set();
+        for (let member of desc.members) {
           if (member.kind == "oneof") continue;
           if (member.fieldKind != "scalar" && member.fieldKind != "enum") continue;
-          if (member.presence == Pg) continue;
-          (h.add(member), (s[member.localName] = Vx(member)));
+          if (member.presence == IMPLICIT) continue;
+          members.add(member);
+          prototype[member.localName] = createZeroField(member);
         }
-        weakMap.set(e, { prototype: s, members: h });
+        messagePrototypes.set(desc, {
+          prototype,
+          members,
+        });
       }
-      ((n = Object.create(s)), (n.$typeName = e.typeName));
-      for (let member of e.members) {
-        if (h.has(member)) continue;
+      msg = Object.create(prototype);
+      msg.$typeName = desc.typeName;
+      for (let member of desc.members) {
+        if (members.has(member)) continue;
         if (member.kind == "field") {
           if (member.fieldKind == "message") continue;
           if (member.fieldKind == "scalar" || member.fieldKind == "enum") {
-            if (member.presence != Pg) continue;
+            if (member.presence != IMPLICIT) continue;
           }
         }
-        n[member.localName] = Vx(member);
+        msg[member.localName] = createZeroField(member);
       }
     }
-    return n;
+    return msg;
   }
-  function wY(e) {
-    switch (e.file.edition) {
-      case gY:
-        return !1;
-      case yY:
-        return !0;
+  function needsPrototypeChain(desc) {
+    switch (desc.file.edition) {
+      case EDITION_PROTO3:
+        return false;
+      case EDITION_PROTO2:
+        return true;
       default:
-        return e.fields.some((field) => field.presence != Pg && field.fieldKind != "message" && !field.oneof);
+        return desc.fields.some((f) => f.presence != IMPLICIT && f.fieldKind != "message" && !f.oneof);
     }
   }
-  function Vx(e) {
-    if (e.kind == "oneof") return { case: void 0 };
-    if (e.fieldKind == "list") return [];
-    if (e.fieldKind == "map") return {};
-    if (e.fieldKind == "message") return _Y;
-    let defaultValue = e.getDefaultValue();
-    if (defaultValue !== void 0)
-      return e.fieldKind == "scalar" && e.longAsString ? defaultValue.toString() : defaultValue;
-    return e.fieldKind == "scalar" ? pk.scalarZeroValue(e.scalar, e.longAsString) : e.enum.values[0].number;
+  function createZeroField(field) {
+    if (field.kind == "oneof")
+      return {
+        case: undefined,
+      };
+    if (field.fieldKind == "list") return [];
+    if (field.fieldKind == "map") return {};
+    if (field.fieldKind == "message") return tokenZeroMessageField;
+    let defaultValue = field.getDefaultValue();
+    if (defaultValue !== undefined)
+      return field.fieldKind == "scalar" && field.longAsString ? defaultValue.toString() : defaultValue;
+    return field.fieldKind == "scalar"
+      ? scalar_js_1.scalarZeroValue(field.scalar, field.longAsString)
+      : field.enum.values[0].number;
   }
 });
-
-export { wl };
+export { require_create };

@@ -8,14 +8,14 @@
  * pieces: chunk-7fw14qgv.js (3)
  * attribution: placement 2, fingerprint 1
  */
-import { j } from "../../../vendor/react/cjs/react.production.js";
+import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
 
 //@ chunk-7fw14qgv.js:1951-1955 placement
-j();
+init_react_production();
+//@ chunk-7fw14qgv.js:2032-2173 fingerprint = TERM_PROGRAM_TO_APP (1)
 /**
  * TERM_PROGRAM → 深链接终端应用名映射（iTerm、Ghostty、kitty、Alacritty、WezTerm、Terminal）。
  */
-//@ chunk-7fw14qgv.js:2032-2173 fingerprint = TERM_PROGRAM_TO_APP (1)
 var TERM_PROGRAM_TO_APP = {
   iterm: "iTerm",
   "iterm.app": "iTerm",
@@ -26,8 +26,7 @@ var TERM_PROGRAM_TO_APP = {
   apple_terminal: "Terminal",
 };
 //@ chunk-7fw14qgv.js:2173-2195 placement
-function updateDeepLinkTerminalPreference(o) {
+function updateDeepLinkTerminalPreference(storageV5) {
   return;
 }
-
 export { updateDeepLinkTerminalPreference };

@@ -6,20 +6,21 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../runtime/bun-runtime.js";
-import { Ir } from "./items.js";
+import { require_items } from "./items.js";
 
 //@ chunk-s82q9s4x.js:94228-94448 cjs-fingerprint
-var ui = x(function (ci) {
-  Object.defineProperty(ci, "__esModule", { value: !0 });
-  var ai = Ir(),
-    np = {
-      keyword: "prefixItems",
-      type: "array",
-      schemaType: ["array"],
-      before: "uniqueItems",
-      code: (e) => ai.validateTuple(e, "items"),
-    };
-  ci.default = np;
+var require_prefixItems = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  var items_1 = require_items();
+  var def = {
+    keyword: "prefixItems",
+    type: "array",
+    schemaType: ["array"],
+    before: "uniqueItems",
+    code: (cxt) => items_1.validateTuple(cxt, "items"),
+  };
+  cjsExports.default = def;
 });
-
-export { ui };
+export { require_prefixItems };

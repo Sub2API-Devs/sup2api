@@ -8,9 +8,7 @@
  * pieces: chunk-0777tkjc.js (1)
  * attribution: placement 1
  */
-
 //@ chunk-0777tkjc.js:191-292 placement
-var asyncHooksModule = globalThis.process?.getBuiltinModule?.("async_hooks"),
-  bindAsyncResource = asyncHooksModule ? (e) => asyncHooksModule.AsyncResource.bind(e) : (e) => e;
-
+var asyncHooksModule = globalThis.process?.getBuiltinModule?.("async_hooks");
+var bindAsyncResource = asyncHooksModule ? (e) => asyncHooksModule.AsyncResource.bind(e) : (e) => e;
 export { bindAsyncResource };

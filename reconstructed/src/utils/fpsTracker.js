@@ -15,28 +15,28 @@ class FpsTracker {
   totalFrames = 0;
   firstRenderTime;
   lastRenderTime;
-  record(o) {
-    let startTime = performance.now();
-    if (this.firstRenderTime === void 0) this.firstRenderTime = startTime;
-    if (
-      ((this.lastRenderTime = startTime),
-      this.totalFrames++,
-      this.frameDurations.push(o),
-      this.frameDurations.length > 3600)
-    )
-      this.frameDurations.splice(0, this.frameDurations.length >> 1);
+  record(durationMs) {
+    let now = performance.now();
+    if (this.firstRenderTime === undefined) this.firstRenderTime = now;
+    this.lastRenderTime = now;
+    this.totalFrames++;
+    this.frameDurations.push(durationMs);
+    if (this.frameDurations.length > 3600) this.frameDurations.splice(0, this.frameDurations.length >> 1);
   }
   getMetrics() {
-    if (this.totalFrames === 0 || this.firstRenderTime === void 0 || this.lastRenderTime === void 0) return;
-    let o = this.lastRenderTime - this.firstRenderTime;
-    if (o <= 0) return;
-    let p = this.totalFrames / (o / 1000),
-      sorted = this.frameDurations.slice().sort((C, b) => b - C),
-      max = Math.max(0, Math.ceil(sorted.length * 0.01) - 1),
-      T = sorted[max],
-      A = T > 0 ? 1000 / T : 0;
-    return { averageFps: Math.round(p * 100) / 100, low1PctFps: Math.round(A * 100) / 100 };
+    if (this.totalFrames === 0 || this.firstRenderTime === undefined || this.lastRenderTime === undefined)
+      return;
+    let totalTimeMs = this.lastRenderTime - this.firstRenderTime;
+    if (totalTimeMs <= 0) return;
+    let p = this.totalFrames / (totalTimeMs / 1000);
+    let sorted = this.frameDurations.slice().sort((C, b) => b - C);
+    let p99Index = Math.max(0, Math.ceil(sorted.length * 0.01) - 1);
+    let p99FrameTimeMs = sorted[p99Index];
+    let low1PctFps = p99FrameTimeMs > 0 ? 1000 / p99FrameTimeMs : 0;
+    return {
+      averageFps: Math.round(p * 100) / 100,
+      low1PctFps: Math.round(low1PctFps * 100) / 100,
+    };
   }
 }
-
 export { FpsTracker };

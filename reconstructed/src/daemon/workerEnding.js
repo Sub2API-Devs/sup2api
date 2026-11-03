@@ -11,13 +11,16 @@
 import { Ar } from "../../runtime/bun-runtime.js";
 import { errorMessage } from "../utils/errors.js";
 import { PassingCauseError } from "../utils/errors/PassingCauseError.js";
-import { the, EXIT_CONFIG_ERROR } from "../utils/exitCodes.js";
+import { EXIT_TEMPFAIL, EXIT_CONFIG_ERROR } from "../utils/exitCodes.js";
 
 //@ chunk-vb0enkt7.js:339-350 placement
-var Kwo = {};
+/**
+ * 导出值：EMPTY_WORKER_ENDING（空对象）。
+ */
+var EMPTY_WORKER_ENDING = {};
 //@ chunk-vb0enkt7.js:350-440 placement
-Ar(Kwo, {
-  default: () => Kwo,
+Ar(EMPTY_WORKER_ENDING, {
+  default: () => EMPTY_WORKER_ENDING,
   endsInARowOf: () => endsInARowOf,
   unsettledBy: () => unsettledBy,
   workerEndingOf: () => workerEndingOf,
@@ -32,26 +35,26 @@ var unsettledBy = (e) => ({
   reason: `Error: ${errorMessage(e)}`,
   kind: e instanceof PassingCauseError ? "passing" : "lasting",
 });
+//@ chunk-vb0enkt7.js:595-758 placement
 /**
  * 工作进程重试次数与结束文案
  */
-//@ chunk-vb0enkt7.js:595-758 placement
-var WORKER_RETRY_LIMIT = 5,
-  m = `It did not pass in ${WORKER_RETRY_LIMIT} tries`,
-  p = "it is held for good, or refused to this process",
-  t = "Start the daemon again once this is mended.",
-  a = `${m}: ${p}. ${t}`;
+var WORKER_RETRY_LIMIT = 5;
+var TRIES_TEXT = `It did not pass in ${WORKER_RETRY_LIMIT} tries`;
+var HELD_TEXT = "it is held for good, or refused to this process";
+var RESTART_HINT = "Start the daemon again once this is mended.";
+var WORKER_ENDING_TEXT = `${TRIES_TEXT}: ${HELD_TEXT}. ${RESTART_HINT}`;
+//@ chunk-vb0enkt7.js:758-895 placement
 /**
  * 守护进程工作者结束码与说明。
  */
-//@ chunk-vb0enkt7.js:758-895 placement
 function workerEndingOf(e, n) {
-  let r = e.kind === "passing",
-    s = r && n + 1 < WORKER_RETRY_LIMIT,
-    i = r ? a : t;
+  let r = e.kind === "passing";
+  let s = r && n + 1 < WORKER_RETRY_LIMIT;
+  let i = r ? WORKER_ENDING_TEXT : RESTART_HINT;
   return s
     ? {
-        code: the,
+        code: EXIT_TEMPFAIL,
         said: `${e.reason}
 `,
       }
@@ -62,5 +65,4 @@ ${i}
 `,
       };
 }
-
 export { unsettledBy };

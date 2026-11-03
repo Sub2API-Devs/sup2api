@@ -15,7 +15,7 @@ import {
   onAttacherCapsChange,
   onRvSupervisorLinkChange,
 } from "../../bootstrap/state.js";
-import { getLiveState, stopSupervisor, Qcr } from "../liveReplica/liveReplica.js";
+import { getLiveState, stopSupervisor, disposePresenceSlug } from "../liveReplica/liveReplica.js";
 import {
   isSlugStopped,
   isSlugSwept,
@@ -26,34 +26,41 @@ import { createInformationalSystemMessage } from "../../utils/messages.js";
 import { plural } from "../../utils/stringUtils.js";
 
 //@ chunk-jh9jdn8w.js:434-493 placement
-function oAe() {
-  if (!isBgSession()) return !0;
+/**
+ * 导出函数 `canAutoReply`：返回 !0; return getAttacherCaps() !== null && getRvSupervisorLinkLive()。
+ */
+function canAutoReply() {
+  if (!isBgSession()) return true;
   return getAttacherCaps() !== null && getRvSupervisorLinkLive();
 }
 //@ chunk-jh9jdn8w.js:493-550 placement
-function HUs(e) {
-  let t = onAttacherCapsChange(e),
-    n = onRvSupervisorLinkChange(e);
+/**
+ * 导出函数 `subscribeAutoReplyChanges`：参数 e，返回 () => { (t(), n()); }。
+ */
+function subscribeAutoReplyChanges(e) {
+  let t = onAttacherCapsChange(e);
+  let n = onRvSupervisorLinkChange(e);
   return () => {
-    (t(), n());
+    t();
+    n();
   };
 }
+//@ chunk-jh9jdn8w.js:550-659 placement
 /**
  * 自动回复开启时，返回当前正在监听评论的 artifact slug 集合；否则返回空集。
  */
-//@ chunk-jh9jdn8w.js:550-659 placement
 function getAutoReactSlugs() {
-  if (getLiveState().autoReact.enabledMemo !== !0) return new Set();
+  if (getLiveState().autoReact.enabledMemo !== true) return new Set();
   return new Set(Array.from(iterateAutoReactSupervisors(), (e) => e.slug));
 }
+//@ chunk-jh9jdn8w.js:659-996 placement
 /**
  * 返回正在启动中、仍属本轮扫描且未被停止/撤销的自动回复监听 slug（新发布且刚清扫过的也算）；自动回复关闭或用户解除时返回空集。
  */
-//@ chunk-jh9jdn8w.js:659-996 placement
 function getBootingAutoReactSlugs() {
-  let { autoReact: autoReact, durable: durable, live: live, wakes: wakes } = getLiveState(),
-    i = new Set();
-  if (autoReact.enabledMemo === !1 || autoReact.userDisarmed) return i;
+  let { autoReact, durable, live, wakes } = getLiveState();
+  let i = new Set();
+  if (autoReact.enabledMemo === false || autoReact.userDisarmed) return i;
   for (let [o, s] of live.bootingWiredArms) {
     if (
       s.scanGeneration !== wakes.scanGeneration ||
@@ -68,33 +75,51 @@ function getBootingAutoReactSlugs() {
 }
 //@ chunk-jh9jdn8w.js:996-1116 placement
 function* iterateAutoReactSupervisors() {
-  for (let e of getLiveState().live.supervisors.values())
-    if (!e.stopped && e.autoReactWiring !== void 0 && !isSlugStoppedAnywhere(e.slug)) yield e;
+  for (let supervisor of getLiveState().live.supervisors.values())
+    if (
+      !supervisor.stopped &&
+      supervisor.autoReactWiring !== undefined &&
+      !isSlugStoppedAnywhere(supervisor.slug)
+    )
+      yield supervisor;
 }
+//@ chunk-jh9jdn8w.js:1116-1260 placement
 /**
  * 判断是否还有活跃的自动回复监听；重连时只算有定时器或在途订阅的监听。
  */
-//@ chunk-jh9jdn8w.js:1116-1260 placement
 function hasActiveAutoReactWatch(e) {
-  let { live: live } = getLiveState();
+  let { live } = getLiveState();
   for (let n of iterateAutoReactSupervisors())
-    if (e?.reconnecting !== !0 || n.timer !== void 0 || live.inFlightSubscribes.has(n.slug)) return !0;
-  return !1;
+    if (e?.reconnecting !== true || n.timer !== undefined || live.inFlightSubscribes.has(n.slug)) return true;
+  return false;
 }
 //@ chunk-jh9jdn8w.js:1260-1338 placement
-function NUs() {
-  return getLiveState().autoReact.enabledMemo === !0 && hasActiveAutoReactWatch({ reconnecting: !0 });
+/**
+ * 导出函数 `isAutoReactWatching`：返回 getLiveState().autoReact.enabledMemo === !0 && hasActiveAutoReactWatch({ reconnecting: !0 })。
+ */
+function isAutoReactWatching() {
+  return (
+    getLiveState().autoReact.enabledMemo === true &&
+    hasActiveAutoReactWatch({
+      reconnecting: true,
+    })
+  );
 }
+//@ chunk-jh9jdn8w.js:1338-1546 placement
 /**
  * 停止并移除给定 slug 的监听器，清掉已收到版本与相关缓存，通知头部订阅源结束，并撤销仍在途的订阅启动。
  */
-//@ chunk-jh9jdn8w.js:1338-1546 placement
 function stopArtifactSupervisors(e) {
   let live = getLiveState().live;
   for (let n of e) {
     let r = live.supervisors.get(n);
-    if (r !== void 0) (stopSupervisor(r), live.supervisors.delete(n));
-    (live.heardVersions.delete(n), Qcr(n), getLiveState().liveDocWatch.headSinks.get(n)?.sourceEnded());
+    if (r !== undefined) {
+      stopSupervisor(r);
+      live.supervisors.delete(n);
+    }
+    live.heardVersions.delete(n);
+    disposePresenceSlug(n);
+    getLiveState().liveDocWatch.headSinks.get(n)?.sourceEnded();
   }
   retireInFlightArms(e);
 }
@@ -102,65 +127,83 @@ function stopArtifactSupervisors(e) {
 function retireInFlightArms(e) {
   let live = getLiveState().live;
   for (let n of e)
-    if (live.inFlightSubscribes.has(n) && !live.supervisors.has(n))
-      (live.retiredInFlightArms.add(n), live.bootingWiredArms.delete(n), live.inFlightWiredIntent.delete(n));
+    if (live.inFlightSubscribes.has(n) && !live.supervisors.has(n)) {
+      live.retiredInFlightArms.add(n);
+      live.bootingWiredArms.delete(n);
+      live.inFlightWiredIntent.delete(n);
+    }
 }
 //@ chunk-jh9jdn8w.js:1735-1747 placement
-var oyt = 1e4;
+/**
+ * 无人值守自动回复计数的上限 10000（按 artifact slug 记）。
+ */
+var MAX_UNATTENDED_REPLY_COUNT = 1e4;
 //@ chunk-jh9jdn8w.js:1747-1800 placement
-function a() {
+function unattendedReplies() {
   return getLiveState().autoReact.unattendedReplies;
 }
 //@ chunk-jh9jdn8w.js:1800-1865 placement
-function URo(e) {
-  let t = a();
-  t.set(e, Math.min((t.get(e) ?? 0) + 1, oyt));
+/**
+ * 导出函数 `bumpUnattendedReply`：参数 e。
+ */
+function bumpUnattendedReply(slug) {
+  let t = unattendedReplies();
+  t.set(slug, Math.min((t.get(slug) ?? 0) + 1, MAX_UNATTENDED_REPLY_COUNT));
 }
 //@ chunk-jh9jdn8w.js:1865-1941 placement
-function BRo(e, t) {
-  if (t > 0) {
-    let n = a();
-    n.set(e, Math.min((n.get(e) ?? 0) + t, oyt));
+/**
+ * 导出函数 `addUnattendedReplies`：参数 e, t。
+ */
+function addUnattendedReplies(slug, unattendedReplies_2) {
+  if (unattendedReplies_2 > 0) {
+    let n = unattendedReplies();
+    n.set(slug, Math.min((n.get(slug) ?? 0) + unattendedReplies_2, MAX_UNATTENDED_REPLY_COUNT));
   }
 }
 //@ chunk-jh9jdn8w.js:1941-2002 placement
-function $Us(e) {
-  let t = a(),
-    n = t.get(e) ?? 0;
-  return (t.delete(e), n);
+/**
+ * 导出函数 `takeUnattendedReplies`：参数 e，返回 (t.delete(e), n)。
+ */
+function takeUnattendedReplies(e) {
+  let t = unattendedReplies();
+  let n = t.get(e) ?? 0;
+  t.delete(e);
+  return n;
 }
+//@ chunk-jh9jdn8w.js:2002-2150 placement
 /**
  * 取出并清空"无人值守时自动回复"的计数，返回总数与按 slug 的明细。
  */
-//@ chunk-jh9jdn8w.js:2002-2150 placement
 function drainUnattendedReplies() {
-  let autoReact = getLiveState().autoReact,
-    unattendedReplies = autoReact.unattendedReplies;
+  let autoReact = getLiveState().autoReact;
+  let unattendedReplies = autoReact.unattendedReplies;
   autoReact.unattendedReplies = new Map();
-  let n = 0;
-  for (let r of unattendedReplies.values()) n += r;
-  return { total: n, bySlug: unattendedReplies };
+  let total = 0;
+  for (let r of unattendedReplies.values()) total += r;
+  return {
+    total,
+    bySlug: unattendedReplies,
+  };
 }
 //@ chunk-jh9jdn8w.js:2150-2280 placement
-function formatAutoReplyNotice(e, { where: where, stop: stop }) {
+function formatAutoReplyNotice(e, { where, stop }) {
   return createInformationalSystemMessage(
     `Claude auto-replied to ${e} ${plural(e, "comment")}${where} while you were away.${stop}`,
     "notice",
   );
 }
-
 export {
-  $Us,
+  takeUnattendedReplies,
   formatAutoReplyNotice,
-  BRo,
-  oAe,
-  HUs,
+  addUnattendedReplies,
+  canAutoReply,
+  subscribeAutoReplyChanges,
   drainUnattendedReplies,
   getAutoReactSlugs,
   getBootingAutoReactSlugs,
-  oyt,
+  MAX_UNATTENDED_REPLY_COUNT,
   stopArtifactSupervisors,
-  URo,
+  bumpUnattendedReply,
   hasActiveAutoReactWatch,
-  NUs,
+  isAutoReactWatching,
 };

@@ -30,7 +30,7 @@ import {
   backgroundRefusalMessage,
   backgroundStopReasonText,
 } from "../../../services/remoteTools/hostRefusals.js";
-import { zbn } from "../../../tools/BashTool/prompt.js";
+import { getBackgroundTimeoutForDisplay } from "../../../tools/BashTool/prompt.js";
 import {
   retireServedBackgroundShell,
   fileServedBackgroundShell,
@@ -43,48 +43,54 @@ import { REMOTE_TOOL_PROTOCOL_VERSION } from "../protocolConstants.js";
 //@ chunk-tr0s0d0k.js:2841-3024 placement
 function readServedBackgroundOverride() {
   try {
-    let { value: e, source: source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE(
-      "tengu_ticklish_pnueli",
-      !1,
-    );
-    return e === !0 && source !== "override";
+    let { value: e, source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE("tengu_ticklish_pnueli", false);
+    return e === true && source !== "override";
   } catch (error) {
-    return (logError(Error("tengu_ticklish_pnueli could not be read", { cause: error })), !1);
+    logError(
+      Error("tengu_ticklish_pnueli could not be read", {
+        cause: error,
+      }),
+    );
+    return false;
   }
 }
 //@ chunk-tr0s0d0k.js:3024-3096 placement
 function isServedNeckEnabled() {
   try {
-    return getFeatureValue_CACHED_MAY_BE_STALE("tengu_violin_neck", !1) === !0;
+    return getFeatureValue_CACHED_MAY_BE_STALE("tengu_violin_neck", false) === true;
   } catch {
-    return !1;
+    return false;
   }
 }
 //@ chunk-tr0s0d0k.js:3096-3180 placement
 function isServedFrogEnabled() {
   try {
-    return getFeatureValue_CACHED_MAY_BE_STALE("tengu_violin_frog", !0) !== !1;
+    return getFeatureValue_CACHED_MAY_BE_STALE("tengu_violin_frog", true) !== false;
   } catch (error) {
-    return (logError(toError(error)), !1);
+    logError(toError(error));
+    return false;
   }
 }
 //@ chunk-tr0s0d0k.js:3180-3252 placement
 function isServedNutEnabled() {
   try {
-    return getFeatureValue_CACHED_MAY_BE_STALE("tengu_violin_nut", !1) === !0;
+    return getFeatureValue_CACHED_MAY_BE_STALE("tengu_violin_nut", false) === true;
   } catch {
-    return !1;
+    return false;
   }
 }
 //@ chunk-tr0s0d0k.js:3289-3321 placement
-var SERVED_BACKGROUND_LIMITS = 4,
-  To = 16,
-  Mo = 8192,
-  Oo = 1000;
+/**
+ * 远程工具服务端后台命令的限额：最多跟踪 4 条运行中的命令、16 条历史、输出尾部上限 8192 字节、停止轮询间隔 1 s。
+ */
+var SERVED_BACKGROUND_LIMITS = 4;
+var MAX_TRACKED_BACKGROUND_COMMANDS = 16;
+var MAX_BACKGROUND_OUTPUT_TAIL_BYTES = 8192;
+var BACKGROUND_STOP_POLL_MS = 1000;
+//@ chunk-tr0s0d0k.js:3321-5826 placement
 /**
  * 远程工具服务端的后台命令表：登记/停止被云会话调用的后台 shell 命令，处理时间上限与所有权。
  */
-//@ chunk-tr0s0d0k.js:3321-5826 placement
 class ServedBackgroundCommands {
   #e = new Map();
   #t = 0;
@@ -102,156 +108,195 @@ class ServedBackgroundCommands {
   }
   stop(e) {
     let n = this.#e.get(e);
-    return (n?.("caller_stopped"), n !== void 0);
+    n?.("caller_stopped");
+    return n !== undefined;
   }
   async statusOf(e) {
     let n = this.#n.get(e);
-    if (n === void 0) return;
-    let o = await getVerifiedTaskOutputTail(n.started.shellId, Mo).then(
-      (r) => r.content,
+    if (n === undefined) return;
+    let outputTail = await getVerifiedTaskOutputTail(
+      n.started.shellId,
+      MAX_BACKGROUND_OUTPUT_TAIL_BYTES,
+    ).then(
+      (verifiedTaskOutputTail) => verifiedTaskOutputTail.content,
       () => {
         return;
       },
     );
-    return { command: { ...n }, outputTail: o };
+    return {
+      command: {
+        ...n,
+      },
+      outputTail,
+    };
   }
   starterFor(e) {
-    let n = this.#o,
-      o = !1,
-      r,
-      s = () => {
-        if (o) ((o = !1), this.#t--);
-      },
-      d = () =>
-        e.lifetime.aborted || n !== this.#o || !e.enabled()
-          ? "unavailable"
-          : SandboxManager.getSandboxUnavailableReason() !== void 0 ||
-              (SandboxManager.passesCheapSandboxGates() && !SandboxManager.isSandboxingEnabled())
-            ? "sandbox_down"
-            : void 0,
-      u = () => {
-        let p = d() ?? (!o && this.#e.size + this.#t >= e.max ? "full" : void 0);
-        if (p === void 0) return;
-        return (logFeatureSad("remote_tool_serve_background", p), backgroundRefusalMessage(p, e));
-      };
+    let n = this.#o;
+    let o = false;
+    let r;
+    let s = () => {
+      if (o) {
+        o = false;
+        this.#t--;
+      }
+    };
+    let d = () =>
+      e.lifetime.aborted || n !== this.#o || !e.enabled()
+        ? "unavailable"
+        : SandboxManager.getSandboxUnavailableReason() !== undefined ||
+            (SandboxManager.passesCheapSandboxGates() && !SandboxManager.isSandboxingEnabled())
+          ? "sandbox_down"
+          : undefined;
+    let u = () => {
+      let p = d() ?? (!o && this.#e.size + this.#t >= e.max ? "full" : undefined);
+      if (p === undefined) return;
+      logFeatureSad("remote_tool_serve_background", p);
+      return backgroundRefusalMessage(p, e);
+    };
     return {
       started: () => r,
       settle: (p) => {
-        if ((s(), p && r !== void 0)) this.#e.get(r.shellId)?.("call_stopped");
+        s();
+        if (p && r !== undefined) this.#e.get(r.shellId)?.("call_stopped");
       },
       starter: {
         reserve: () => {
           let p = u();
-          if (p === void 0 && !o) ((o = !0), this.#t++);
+          if (p === undefined && !o) {
+            o = true;
+            this.#t++;
+          }
           return p;
         },
         adopt: (p, h, _) => {
           let S = o ? d() : "unavailable";
           s();
           try {
-            if (S !== void 0)
+            if (S !== undefined)
               throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
                 backgroundRefusalMessage("unavailable", e),
                 "served background command could not be owned",
               );
-            return ((r = this.#r(p, h, _, e)), logFeatureOk("remote_tool_serve_background"), r.shellId);
+            r = this.#r(p, h, _, e);
+            logFeatureOk("remote_tool_serve_background");
+            return r.shellId;
           } catch (error) {
-            throw (logFeatureBad("remote_tool_serve_background", "not_owned"), p.kill(), p.cleanup(), error);
+            logFeatureBad("remote_tool_serve_background", "not_owned");
+            p.kill();
+            p.cleanup();
+            throw error;
           }
         },
       },
     };
   }
-  #r(e, n, o, r) {
-    let taskId = e.taskOutput.taskId,
-      d = getTaskOutputPath(taskId);
-    if (!e.background(taskId, { atExit: "kill" }))
+  #r(e, n, command, r) {
+    let taskId = e.taskOutput.taskId;
+    let outputPath = getTaskOutputPath(taskId);
+    if (
+      !e.background(taskId, {
+        atExit: "kill",
+      })
+    )
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
         backgroundRefusalMessage("unavailable", r),
         "served background command had already ended",
       );
-    let u = zbn(n),
-      p = { shellId: taskId, outputPath: d, limitMs: u },
-      h = { started: p, startedAt: Date.now() };
+    let backgroundTimeoutForDisplay = getBackgroundTimeoutForDisplay(n);
+    let p = {
+      shellId: taskId,
+      outputPath,
+      limitMs: backgroundTimeoutForDisplay,
+    };
+    let h = {
+      started: p,
+      startedAt: Date.now(),
+    };
     this.#n.set(r.callId, h);
-    let _ = !1,
-      S = (O, X) => {
-        if (_) return;
-        if (
-          ((_ = !0),
-          clearTimeout(unref),
-          clearInterval(unref_2),
-          r.lifetime.removeEventListener("abort", R),
-          this.#e.delete(taskId),
-          (h.ended = { how: O, exitCode: X, at: Date.now() }),
-          this.#n.delete(r.callId),
-          O !== "call_stopped")
-        ) {
-          this.#n.set(r.callId, h);
-          let filtered = [...this.#n].filter(([, j]) => j.ended);
-          for (let [j] of filtered.slice(0, -To)) this.#n.delete(j);
-        }
-        try {
-          r.onEvent(taskId, O);
-        } catch (error) {
-          logError(toError(error));
-        }
-        let J;
-        try {
-          if (O !== "exited") J = e.kill();
-          (e.cleanup(),
-            appendTaskOutput(
-              taskId,
-              O === "exited"
-                ? `
-[exited with code ${X}]
+    let _ = false;
+    let S = (O, code) => {
+      if (_) return;
+      _ = true;
+      clearTimeout(B);
+      clearInterval(V);
+      r.lifetime.removeEventListener("abort", R);
+      this.#e.delete(taskId);
+      h.ended = {
+        how: O,
+        exitCode: code,
+        at: Date.now(),
+      };
+      this.#n.delete(r.callId);
+      if (O !== "call_stopped") {
+        this.#n.set(r.callId, h);
+        let filtered = [...this.#n].filter(([, j]) => j.ended);
+        for (let [j] of filtered.slice(0, -MAX_TRACKED_BACKGROUND_COMMANDS)) this.#n.delete(j);
+      }
+      try {
+        r.onEvent(taskId, O);
+      } catch (error) {
+        logError(toError(error));
+      }
+      let J;
+      try {
+        if (O !== "exited") J = e.kill();
+        e.cleanup();
+        appendTaskOutput(
+          taskId,
+          O === "exited"
+            ? `
+[exited with code ${code}]
 `
-                : `
+            : `
 [stopped ${backgroundStopReasonText(O, r.targetName)}]
 `,
-            ),
-            evictTaskOutput(taskId));
-        } catch (error) {
-          logError(toError(error));
-        }
-        L = L.then(() => J)
-          .then(() => retireServedBackgroundShell(taskId))
-          .catch((K) => logError(toError(K)))
-          .finally(A);
-      },
-      R = () => S("serving_ended"),
-      unref = setTimeout(S, u, "time_limit").unref(),
-      L = fileServedBackgroundShell({
-        id: taskId,
-        pid: e.pid,
-        command: o,
-        caller: r.caller,
-        folder: r.folder,
-      }),
-      unref_2 = setInterval(No, Oo, taskId, S).unref();
-    r.lifetime.addEventListener("abort", R, { once: !0 });
-    let A = registerCleanup(() => (R(), L));
-    return (
-      this.#e.set(taskId, S),
-      e.result
-        .then(async (O) => {
-          (await e.taskOutput.flush(), S("exited", O.code));
-        })
-        .catch((O) => logError(toError(O))),
-      r.onEvent(taskId, "started"),
-      p
-    );
+        );
+        evictTaskOutput(taskId);
+      } catch (error) {
+        logError(toError(error));
+      }
+      L = L.then(() => J)
+        .then(() => retireServedBackgroundShell(taskId))
+        .catch((error) => logError(toError(error)))
+        .finally(A);
+    };
+    let R = () => S("serving_ended");
+    let B = setTimeout(S, backgroundTimeoutForDisplay, "time_limit").unref();
+    let L = fileServedBackgroundShell({
+      id: taskId,
+      pid: e.pid,
+      command,
+      caller: r.caller,
+      folder: r.folder,
+    });
+    let V = setInterval(pollServedBackgroundStop, BACKGROUND_STOP_POLL_MS, taskId, S).unref();
+    r.lifetime.addEventListener("abort", R, {
+      once: true,
+    });
+    let A = registerCleanup(() => {
+      R();
+      return L;
+    });
+    this.#e.set(taskId, S);
+    e.result
+      .then(async (O) => {
+        await e.taskOutput.flush();
+        S("exited", O.code);
+      })
+      .catch((error) => logError(toError(error)));
+    r.onEvent(taskId, "started");
+    return p;
   }
 }
 //@ chunk-tr0s0d0k.js:5826-5891 placement
-function No(e, n) {
+function pollServedBackgroundStop(e, n) {
   takeServedBackgroundStopRequest(e).then((o) => {
     if (o) n("stopped_by_person");
   });
 }
 //@ chunk-tr0s0d0k.js:5891-5986 placement
-function sessionModeFromStamp(e) {
-  return e.arrivedOver === "session" && e.modeStamp === "present" ? e.sessionMode : void 0;
+function sessionModeFromStamp(facts) {
+  return facts.arrivedOver === "session" && facts.modeStamp === "present" ? facts.sessionMode : undefined;
 }
 //@ chunk-tr0s0d0k.js:5986-6083 placement
 function createNoteSet() {
@@ -264,24 +309,37 @@ function createNoteSet() {
   };
 }
 //@ chunk-tr0s0d0k.js:6083-6396 placement
-function refusedEnvelope(e, n, o, r, s = {}) {
+function refusedEnvelope(target, facts, code, r, s = {}) {
   let d = clipText(r);
   return {
     envelope: {
       v: REMOTE_TOOL_PROTOCOL_VERSION,
       outcome: "refused",
-      ...(n.envelope && { call_id: n.envelope.call_id }),
-      target: e,
-      code: o,
-      ...(s.reason !== void 0 && { reason: s.reason }),
-      ...(s.limit !== void 0 && { limit: s.limit }),
+      ...(facts.envelope && {
+        call_id: facts.envelope.call_id,
+      }),
+      target,
+      code,
+      ...(s.reason !== undefined && {
+        reason: s.reason,
+      }),
+      ...(s.limit !== undefined && {
+        limit: s.limit,
+      }),
       message: d,
-      ...(s.notes !== void 0 && s.notes.length > 0 && { notes: s.notes }),
+      ...(s.notes !== undefined &&
+        s.notes.length > 0 && {
+          notes: s.notes,
+        }),
     },
-    content: [{ type: "text", text: d }],
+    content: [
+      {
+        type: "text",
+        text: d,
+      },
+    ],
   };
 }
-
 export {
   refusedEnvelope,
   createNoteSet,

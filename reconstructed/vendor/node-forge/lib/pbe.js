@@ -6,650 +6,743 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { Tn } from "./forge.js";
-import { Xa } from "./aes.js";
-import { Xi } from "./asn1.js";
-import { bf } from "./des.js";
-import { bo } from "./md.js";
-import { Ja } from "./oids.js";
-import { Xh } from "./pbkdf2.js";
-import { sc } from "./pem.js";
-import { Ci } from "./random.js";
-import { hS } from "./rc2.js";
-import { xf } from "./rsa.js";
-import { Zn } from "./util.js";
+import { require_forge } from "./forge.js";
+import { require_aes } from "./aes.js";
+import { require_asn1 } from "./asn1.js";
+import { require_des } from "./des.js";
+import { require_md } from "./md.js";
+import { require_oids } from "./oids.js";
+import { require_pbkdf2 } from "./pbkdf2.js";
+import { require_pem } from "./pem.js";
+import { require_random } from "./random.js";
+import { require_rc2 } from "./rc2.js";
+import { require_rsa } from "./rsa.js";
+import { require_util } from "./util.js";
 
 //@ chunk-fq0cr76a.js:139209-152921 cjs-fingerprint
-var wS = x(function (Rfe, pA) {
-  var Rt = Tn();
-  Xa();
-  Xi();
-  bf();
-  bo();
-  Ja();
-  Xh();
-  sc();
-  Ci();
-  hS();
-  xf();
-  Zn();
-  if (typeof vS > "u") vS = Rt.jsbn.BigInteger;
-  var vS,
-    asn1 = Rt.asn1,
-    _n = (Rt.pki = Rt.pki || {});
-  pA.exports = _n.pbe = Rt.pbe = Rt.pbe || {};
-  var oids = _n.oids,
-    RG = {
-      name: "EncryptedPrivateKeyInfo",
-      tagClass: asn1.Class.UNIVERSAL,
-      type: asn1.Type.SEQUENCE,
-      constructed: !0,
-      value: [
-        {
-          name: "EncryptedPrivateKeyInfo.encryptionAlgorithm",
-          tagClass: asn1.Class.UNIVERSAL,
-          type: asn1.Type.SEQUENCE,
-          constructed: !0,
-          value: [
-            {
-              name: "AlgorithmIdentifier.algorithm",
-              tagClass: asn1.Class.UNIVERSAL,
-              type: asn1.Type.OID,
-              constructed: !1,
-              capture: "encryptionOid",
-            },
-            {
-              name: "AlgorithmIdentifier.parameters",
-              tagClass: asn1.Class.UNIVERSAL,
-              type: asn1.Type.SEQUENCE,
-              constructed: !0,
-              captureAsn1: "encryptionParams",
-            },
-          ],
-        },
-        {
-          name: "EncryptedPrivateKeyInfo.encryptedData",
-          tagClass: asn1.Class.UNIVERSAL,
-          type: asn1.Type.OCTETSTRING,
-          constructed: !1,
-          capture: "encryptedData",
-        },
-      ],
-    },
-    IG = {
-      name: "PBES2Algorithms",
-      tagClass: asn1.Class.UNIVERSAL,
-      type: asn1.Type.SEQUENCE,
-      constructed: !0,
-      value: [
-        {
-          name: "PBES2Algorithms.keyDerivationFunc",
-          tagClass: asn1.Class.UNIVERSAL,
-          type: asn1.Type.SEQUENCE,
-          constructed: !0,
-          value: [
-            {
-              name: "PBES2Algorithms.keyDerivationFunc.oid",
-              tagClass: asn1.Class.UNIVERSAL,
-              type: asn1.Type.OID,
-              constructed: !1,
-              capture: "kdfOid",
-            },
-            {
-              name: "PBES2Algorithms.params",
-              tagClass: asn1.Class.UNIVERSAL,
-              type: asn1.Type.SEQUENCE,
-              constructed: !0,
-              value: [
-                {
-                  name: "PBES2Algorithms.params.salt",
-                  tagClass: asn1.Class.UNIVERSAL,
-                  type: asn1.Type.OCTETSTRING,
-                  constructed: !1,
-                  capture: "kdfSalt",
-                },
-                {
-                  name: "PBES2Algorithms.params.iterationCount",
-                  tagClass: asn1.Class.UNIVERSAL,
-                  type: asn1.Type.INTEGER,
-                  constructed: !1,
-                  capture: "kdfIterationCount",
-                },
-                {
-                  name: "PBES2Algorithms.params.keyLength",
-                  tagClass: asn1.Class.UNIVERSAL,
-                  type: asn1.Type.INTEGER,
-                  constructed: !1,
-                  optional: !0,
-                  capture: "keyLength",
-                },
-                {
-                  name: "PBES2Algorithms.params.prf",
-                  tagClass: asn1.Class.UNIVERSAL,
-                  type: asn1.Type.SEQUENCE,
-                  constructed: !0,
-                  optional: !0,
-                  value: [
-                    {
-                      name: "PBES2Algorithms.params.prf.algorithm",
-                      tagClass: asn1.Class.UNIVERSAL,
-                      type: asn1.Type.OID,
-                      constructed: !1,
-                      capture: "prfOid",
-                    },
-                  ],
-                },
-              ],
-            },
-          ],
-        },
-        {
-          name: "PBES2Algorithms.encryptionScheme",
-          tagClass: asn1.Class.UNIVERSAL,
-          type: asn1.Type.SEQUENCE,
-          constructed: !0,
-          value: [
-            {
-              name: "PBES2Algorithms.encryptionScheme.oid",
-              tagClass: asn1.Class.UNIVERSAL,
-              type: asn1.Type.OID,
-              constructed: !1,
-              capture: "encOid",
-            },
-            {
-              name: "PBES2Algorithms.encryptionScheme.iv",
-              tagClass: asn1.Class.UNIVERSAL,
-              type: asn1.Type.OCTETSTRING,
-              constructed: !1,
-              capture: "encIv",
-            },
-          ],
-        },
-      ],
-    },
-    NG = {
-      name: "pkcs-12PbeParams",
-      tagClass: asn1.Class.UNIVERSAL,
-      type: asn1.Type.SEQUENCE,
-      constructed: !0,
-      value: [
-        {
-          name: "pkcs-12PbeParams.salt",
-          tagClass: asn1.Class.UNIVERSAL,
-          type: asn1.Type.OCTETSTRING,
-          constructed: !1,
-          capture: "salt",
-        },
-        {
-          name: "pkcs-12PbeParams.iterations",
-          tagClass: asn1.Class.UNIVERSAL,
-          type: asn1.Type.INTEGER,
-          constructed: !1,
-          capture: "iterations",
-        },
-      ],
-    };
-  _n.encryptPrivateKeyInfo = function (e, n, r) {
-    ((r = r || {}),
-      (r.saltSize = r.saltSize || 8),
-      (r.count = r.count || 2048),
-      (r.algorithm = r.algorithm || "aes128"),
-      (r.prfAlgorithm = r.prfAlgorithm || "sha1"));
-    var bytesSync = Rt.random.getBytesSync(r.saltSize),
-      count = r.count,
-      integerToDer = asn1.integerToDer(count),
-      b,
-      S,
-      w;
-    if (r.algorithm.indexOf("aes") === 0 || r.algorithm === "des") {
-      var R, D, O;
-      switch (r.algorithm) {
+var require_pbe = x(function (cjsExports, cjsModule) {
+  var forge = require_forge();
+  require_aes();
+  require_asn1();
+  require_des();
+  require_md();
+  require_oids();
+  require_pbkdf2();
+  require_pem();
+  require_random();
+  require_rc2();
+  require_rsa();
+  require_util();
+  if (typeof BigInteger === "undefined") BigInteger = forge.jsbn.BigInteger;
+  var BigInteger;
+  var asn1 = forge.asn1;
+  var pki = (forge.pki = forge.pki || {});
+  cjsModule.exports = pki.pbe = forge.pbe = forge.pbe || {};
+  var oids = pki.oids;
+  var encryptedPrivateKeyValidator = {
+    name: "EncryptedPrivateKeyInfo",
+    tagClass: asn1.Class.UNIVERSAL,
+    type: asn1.Type.SEQUENCE,
+    constructed: true,
+    value: [
+      {
+        name: "EncryptedPrivateKeyInfo.encryptionAlgorithm",
+        tagClass: asn1.Class.UNIVERSAL,
+        type: asn1.Type.SEQUENCE,
+        constructed: true,
+        value: [
+          {
+            name: "AlgorithmIdentifier.algorithm",
+            tagClass: asn1.Class.UNIVERSAL,
+            type: asn1.Type.OID,
+            constructed: false,
+            capture: "encryptionOid",
+          },
+          {
+            name: "AlgorithmIdentifier.parameters",
+            tagClass: asn1.Class.UNIVERSAL,
+            type: asn1.Type.SEQUENCE,
+            constructed: true,
+            captureAsn1: "encryptionParams",
+          },
+        ],
+      },
+      {
+        name: "EncryptedPrivateKeyInfo.encryptedData",
+        tagClass: asn1.Class.UNIVERSAL,
+        type: asn1.Type.OCTETSTRING,
+        constructed: false,
+        capture: "encryptedData",
+      },
+    ],
+  };
+  var PBES2AlgorithmsValidator = {
+    name: "PBES2Algorithms",
+    tagClass: asn1.Class.UNIVERSAL,
+    type: asn1.Type.SEQUENCE,
+    constructed: true,
+    value: [
+      {
+        name: "PBES2Algorithms.keyDerivationFunc",
+        tagClass: asn1.Class.UNIVERSAL,
+        type: asn1.Type.SEQUENCE,
+        constructed: true,
+        value: [
+          {
+            name: "PBES2Algorithms.keyDerivationFunc.oid",
+            tagClass: asn1.Class.UNIVERSAL,
+            type: asn1.Type.OID,
+            constructed: false,
+            capture: "kdfOid",
+          },
+          {
+            name: "PBES2Algorithms.params",
+            tagClass: asn1.Class.UNIVERSAL,
+            type: asn1.Type.SEQUENCE,
+            constructed: true,
+            value: [
+              {
+                name: "PBES2Algorithms.params.salt",
+                tagClass: asn1.Class.UNIVERSAL,
+                type: asn1.Type.OCTETSTRING,
+                constructed: false,
+                capture: "kdfSalt",
+              },
+              {
+                name: "PBES2Algorithms.params.iterationCount",
+                tagClass: asn1.Class.UNIVERSAL,
+                type: asn1.Type.INTEGER,
+                constructed: false,
+                capture: "kdfIterationCount",
+              },
+              {
+                name: "PBES2Algorithms.params.keyLength",
+                tagClass: asn1.Class.UNIVERSAL,
+                type: asn1.Type.INTEGER,
+                constructed: false,
+                optional: true,
+                capture: "keyLength",
+              },
+              {
+                name: "PBES2Algorithms.params.prf",
+                tagClass: asn1.Class.UNIVERSAL,
+                type: asn1.Type.SEQUENCE,
+                constructed: true,
+                optional: true,
+                value: [
+                  {
+                    name: "PBES2Algorithms.params.prf.algorithm",
+                    tagClass: asn1.Class.UNIVERSAL,
+                    type: asn1.Type.OID,
+                    constructed: false,
+                    capture: "prfOid",
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+      {
+        name: "PBES2Algorithms.encryptionScheme",
+        tagClass: asn1.Class.UNIVERSAL,
+        type: asn1.Type.SEQUENCE,
+        constructed: true,
+        value: [
+          {
+            name: "PBES2Algorithms.encryptionScheme.oid",
+            tagClass: asn1.Class.UNIVERSAL,
+            type: asn1.Type.OID,
+            constructed: false,
+            capture: "encOid",
+          },
+          {
+            name: "PBES2Algorithms.encryptionScheme.iv",
+            tagClass: asn1.Class.UNIVERSAL,
+            type: asn1.Type.OCTETSTRING,
+            constructed: false,
+            capture: "encIv",
+          },
+        ],
+      },
+    ],
+  };
+  var pkcs12PbeParamsValidator = {
+    name: "pkcs-12PbeParams",
+    tagClass: asn1.Class.UNIVERSAL,
+    type: asn1.Type.SEQUENCE,
+    constructed: true,
+    value: [
+      {
+        name: "pkcs-12PbeParams.salt",
+        tagClass: asn1.Class.UNIVERSAL,
+        type: asn1.Type.OCTETSTRING,
+        constructed: false,
+        capture: "salt",
+      },
+      {
+        name: "pkcs-12PbeParams.iterations",
+        tagClass: asn1.Class.UNIVERSAL,
+        type: asn1.Type.INTEGER,
+        constructed: false,
+        capture: "iterations",
+      },
+    ],
+  };
+  pki.encryptPrivateKeyInfo = function (obj, password, options) {
+    options = options || {};
+    options.saltSize = options.saltSize || 8;
+    options.count = options.count || 2048;
+    options.algorithm = options.algorithm || "aes128";
+    options.prfAlgorithm = options.prfAlgorithm || "sha1";
+    var salt = forge.random.getBytesSync(options.saltSize);
+    var count = options.count;
+    var countBytes = asn1.integerToDer(count);
+    var dkLen;
+    var encryptionAlgorithm;
+    var encryptedData;
+    if (options.algorithm.indexOf("aes") === 0 || options.algorithm === "des") {
+      var ivLen;
+      var encOid;
+      var cipherFn;
+      switch (options.algorithm) {
         case "aes128":
-          ((b = 16), (R = 16), (D = oids["aes128-CBC"]), (O = Rt.aes.createEncryptionCipher));
+          dkLen = 16;
+          ivLen = 16;
+          encOid = oids["aes128-CBC"];
+          cipherFn = forge.aes.createEncryptionCipher;
           break;
         case "aes192":
-          ((b = 24), (R = 16), (D = oids["aes192-CBC"]), (O = Rt.aes.createEncryptionCipher));
+          dkLen = 24;
+          ivLen = 16;
+          encOid = oids["aes192-CBC"];
+          cipherFn = forge.aes.createEncryptionCipher;
           break;
         case "aes256":
-          ((b = 32), (R = 16), (D = oids["aes256-CBC"]), (O = Rt.aes.createEncryptionCipher));
+          dkLen = 32;
+          ivLen = 16;
+          encOid = oids["aes256-CBC"];
+          cipherFn = forge.aes.createEncryptionCipher;
           break;
         case "des":
-          ((b = 8), (R = 8), (D = oids.desCBC), (O = Rt.des.createEncryptionCipher));
+          dkLen = 8;
+          ivLen = 8;
+          encOid = oids.desCBC;
+          cipherFn = forge.des.createEncryptionCipher;
           break;
         default:
-          var L = Error("Cannot encrypt private key. Unknown encryption algorithm.");
-          throw ((L.algorithm = r.algorithm), L);
+          var error = Error("Cannot encrypt private key. Unknown encryption algorithm.");
+          error.algorithm = options.algorithm;
+          throw error;
       }
-      var V = "hmacWith" + r.prfAlgorithm.toUpperCase(),
-        K = fA(V),
-        pbkdf2 = Rt.pkcs5.pbkdf2(n, bytesSync, count, b, K),
-        bytesSync_2 = Rt.random.getBytesSync(R),
-        encryptionCipher = O(pbkdf2);
-      (encryptionCipher.start(bytesSync_2),
-        encryptionCipher.update(asn1.toDer(e)),
-        encryptionCipher.finish(),
-        (w = encryptionCipher.output.getBytes()));
-      var ie = kG(bytesSync, integerToDer, b, V);
-      S = asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, !0, [
-        asn1.create(asn1.Class.UNIVERSAL, asn1.Type.OID, !1, asn1.oidToDer(oids.pkcs5PBES2).getBytes()),
-        asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, !0, [
-          asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, !0, [
-            asn1.create(asn1.Class.UNIVERSAL, asn1.Type.OID, !1, asn1.oidToDer(oids.pkcs5PBKDF2).getBytes()),
-            ie,
+      var prfAlgorithm = "hmacWith" + options.prfAlgorithm.toUpperCase();
+      var md = prfAlgorithmToMessageDigest(prfAlgorithm);
+      var dk = forge.pkcs5.pbkdf2(password, salt, count, dkLen, md);
+      var iv = forge.random.getBytesSync(ivLen);
+      var encryptionCipher = cipherFn(dk);
+      encryptionCipher.start(iv);
+      encryptionCipher.update(asn1.toDer(obj));
+      encryptionCipher.finish();
+      encryptedData = encryptionCipher.output.getBytes();
+      var params = createPbkdf2Params(salt, countBytes, dkLen, prfAlgorithm);
+      encryptionAlgorithm = asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, true, [
+        asn1.create(asn1.Class.UNIVERSAL, asn1.Type.OID, false, asn1.oidToDer(oids.pkcs5PBES2).getBytes()),
+        asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, true, [
+          asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, true, [
+            asn1.create(
+              asn1.Class.UNIVERSAL,
+              asn1.Type.OID,
+              false,
+              asn1.oidToDer(oids.pkcs5PBKDF2).getBytes(),
+            ),
+            params,
           ]),
-          asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, !0, [
-            asn1.create(asn1.Class.UNIVERSAL, asn1.Type.OID, !1, asn1.oidToDer(D).getBytes()),
-            asn1.create(asn1.Class.UNIVERSAL, asn1.Type.OCTETSTRING, !1, bytesSync_2),
+          asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, true, [
+            asn1.create(asn1.Class.UNIVERSAL, asn1.Type.OID, false, asn1.oidToDer(encOid).getBytes()),
+            asn1.create(asn1.Class.UNIVERSAL, asn1.Type.OCTETSTRING, false, iv),
           ]),
         ]),
       ]);
-    } else if (r.algorithm === "3des") {
-      b = 24;
-      var ae = new Rt.util.ByteBuffer(bytesSync),
-        pbkdf2 = _n.pbe.generatePkcs12Key(n, ae, 1, count, b),
-        bytesSync_2 = _n.pbe.generatePkcs12Key(n, ae, 2, count, b),
-        encryptionCipher = Rt.des.createEncryptionCipher(pbkdf2);
-      (encryptionCipher.start(bytesSync_2),
-        encryptionCipher.update(asn1.toDer(e)),
-        encryptionCipher.finish(),
-        (w = encryptionCipher.output.getBytes()),
-        (S = asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, !0, [
-          asn1.create(
-            asn1.Class.UNIVERSAL,
-            asn1.Type.OID,
-            !1,
-            asn1.oidToDer(oids["pbeWithSHAAnd3-KeyTripleDES-CBC"]).getBytes(),
-          ),
-          asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, !0, [
-            asn1.create(asn1.Class.UNIVERSAL, asn1.Type.OCTETSTRING, !1, bytesSync),
-            asn1.create(asn1.Class.UNIVERSAL, asn1.Type.INTEGER, !1, integerToDer.getBytes()),
-          ]),
-        ])));
+    } else if (options.algorithm === "3des") {
+      dkLen = 24;
+      var saltBytes = new forge.util.ByteBuffer(salt);
+      var dk = pki.pbe.generatePkcs12Key(password, saltBytes, 1, count, dkLen);
+      var iv = pki.pbe.generatePkcs12Key(password, saltBytes, 2, count, dkLen);
+      var encryptionCipher = forge.des.createEncryptionCipher(dk);
+      encryptionCipher.start(iv);
+      encryptionCipher.update(asn1.toDer(obj));
+      encryptionCipher.finish();
+      encryptedData = encryptionCipher.output.getBytes();
+      encryptionAlgorithm = asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, true, [
+        asn1.create(
+          asn1.Class.UNIVERSAL,
+          asn1.Type.OID,
+          false,
+          asn1.oidToDer(oids["pbeWithSHAAnd3-KeyTripleDES-CBC"]).getBytes(),
+        ),
+        asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, true, [
+          asn1.create(asn1.Class.UNIVERSAL, asn1.Type.OCTETSTRING, false, salt),
+          asn1.create(asn1.Class.UNIVERSAL, asn1.Type.INTEGER, false, countBytes.getBytes()),
+        ]),
+      ]);
     } else {
-      var L = Error("Cannot encrypt private key. Unknown encryption algorithm.");
-      throw ((L.algorithm = r.algorithm), L);
+      var error = Error("Cannot encrypt private key. Unknown encryption algorithm.");
+      error.algorithm = options.algorithm;
+      throw error;
     }
-    var create = asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, !0, [
-      S,
-      asn1.create(asn1.Class.UNIVERSAL, asn1.Type.OCTETSTRING, !1, w),
+    var rval = asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, true, [
+      encryptionAlgorithm,
+      asn1.create(asn1.Class.UNIVERSAL, asn1.Type.OCTETSTRING, false, encryptedData),
     ]);
-    return create;
+    return rval;
   };
-  _n.decryptPrivateKeyInfo = function (e, n) {
-    var r = null,
-      s = {},
-      h = [];
-    if (!asn1.validate(e, RG, s, h)) {
-      var y = Error(
+  pki.decryptPrivateKeyInfo = function (obj, password) {
+    var rval = null;
+    var capture = {};
+    var errors = [];
+    if (!asn1.validate(obj, encryptedPrivateKeyValidator, capture, errors)) {
+      var error = Error(
         "Cannot read encrypted private key. ASN.1 object is not a supported EncryptedPrivateKeyInfo.",
       );
-      throw ((y.errors = h), y);
+      error.errors = errors;
+      throw error;
     }
-    var derToOid = asn1.derToOid(s.encryptionOid),
-      cipher = _n.pbe.getCipher(derToOid, s.encryptionParams, n),
-      buffer = Rt.util.createBuffer(s.encryptedData);
-    if ((cipher.update(buffer), cipher.finish())) r = asn1.fromDer(cipher.output);
-    return r;
+    var oid = asn1.derToOid(capture.encryptionOid);
+    var cipher = pki.pbe.getCipher(oid, capture.encryptionParams, password);
+    var encrypted = forge.util.createBuffer(capture.encryptedData);
+    cipher.update(encrypted);
+    if (cipher.finish()) rval = asn1.fromDer(cipher.output);
+    return rval;
   };
-  _n.encryptedPrivateKeyToPem = function (e, n) {
-    var r = { type: "ENCRYPTED PRIVATE KEY", body: asn1.toDer(e).getBytes() };
-    return Rt.pem.encode(r, { maxline: n });
+  pki.encryptedPrivateKeyToPem = function (epki, maxline) {
+    var msg = {
+      type: "ENCRYPTED PRIVATE KEY",
+      body: asn1.toDer(epki).getBytes(),
+    };
+    return forge.pem.encode(msg, {
+      maxline,
+    });
   };
-  _n.encryptedPrivateKeyFromPem = function (e) {
-    var n = Rt.pem.decode(e)[0];
-    if (n.type !== "ENCRYPTED PRIVATE KEY") {
-      var r = Error(
+  pki.encryptedPrivateKeyFromPem = function (pem) {
+    var msg = forge.pem.decode(pem)[0];
+    if (msg.type !== "ENCRYPTED PRIVATE KEY") {
+      var error = Error(
         'Could not convert encrypted private key from PEM; PEM header type is "ENCRYPTED PRIVATE KEY".',
       );
-      throw ((r.headerType = n.type), r);
+      error.headerType = msg.type;
+      throw error;
     }
-    if (n.procType && n.procType.type === "ENCRYPTED")
+    if (msg.procType && msg.procType.type === "ENCRYPTED")
       throw Error("Could not convert encrypted private key from PEM; PEM is encrypted.");
-    return asn1.fromDer(n.body);
+    return asn1.fromDer(msg.body);
   };
-  _n.encryptRsaPrivateKey = function (e, n, r) {
-    if (((r = r || {}), !r.legacy)) {
-      var wrapRsaPrivateKey = _n.wrapRsaPrivateKey(_n.privateKeyToAsn1(e));
-      return (
-        (wrapRsaPrivateKey = _n.encryptPrivateKeyInfo(wrapRsaPrivateKey, n, r)),
-        _n.encryptedPrivateKeyToPem(wrapRsaPrivateKey)
-      );
+  pki.encryptRsaPrivateKey = function (rsaKey, password, options) {
+    options = options || {};
+    if (!options.legacy) {
+      var rval = pki.wrapRsaPrivateKey(pki.privateKeyToAsn1(rsaKey));
+      rval = pki.encryptPrivateKeyInfo(rval, password, options);
+      return pki.encryptedPrivateKeyToPem(rval);
     }
-    var h, y, b, S;
-    switch (r.algorithm) {
+    var algorithm;
+    var iv;
+    var dkLen;
+    var cipherFn;
+    switch (options.algorithm) {
       case "aes128":
-        ((h = "AES-128-CBC"),
-          (b = 16),
-          (y = Rt.random.getBytesSync(16)),
-          (S = Rt.aes.createEncryptionCipher));
+        algorithm = "AES-128-CBC";
+        dkLen = 16;
+        iv = forge.random.getBytesSync(16);
+        cipherFn = forge.aes.createEncryptionCipher;
         break;
       case "aes192":
-        ((h = "AES-192-CBC"),
-          (b = 24),
-          (y = Rt.random.getBytesSync(16)),
-          (S = Rt.aes.createEncryptionCipher));
+        algorithm = "AES-192-CBC";
+        dkLen = 24;
+        iv = forge.random.getBytesSync(16);
+        cipherFn = forge.aes.createEncryptionCipher;
         break;
       case "aes256":
-        ((h = "AES-256-CBC"),
-          (b = 32),
-          (y = Rt.random.getBytesSync(16)),
-          (S = Rt.aes.createEncryptionCipher));
+        algorithm = "AES-256-CBC";
+        dkLen = 32;
+        iv = forge.random.getBytesSync(16);
+        cipherFn = forge.aes.createEncryptionCipher;
         break;
       case "3des":
-        ((h = "DES-EDE3-CBC"),
-          (b = 24),
-          (y = Rt.random.getBytesSync(8)),
-          (S = Rt.des.createEncryptionCipher));
+        algorithm = "DES-EDE3-CBC";
+        dkLen = 24;
+        iv = forge.random.getBytesSync(8);
+        cipherFn = forge.des.createEncryptionCipher;
         break;
       case "des":
-        ((h = "DES-CBC"), (b = 8), (y = Rt.random.getBytesSync(8)), (S = Rt.des.createEncryptionCipher));
+        algorithm = "DES-CBC";
+        dkLen = 8;
+        iv = forge.random.getBytesSync(8);
+        cipherFn = forge.des.createEncryptionCipher;
         break;
       default:
-        var w = Error(
-          'Could not encrypt RSA private key; unsupported encryption algorithm "' + r.algorithm + '".',
+        var error = Error(
+          'Could not encrypt RSA private key; unsupported encryption algorithm "' + options.algorithm + '".',
         );
-        throw ((w.algorithm = r.algorithm), w);
+        error.algorithm = options.algorithm;
+        throw error;
     }
-    var opensslDeriveBytes = Rt.pbe.opensslDeriveBytes(n, y.substr(0, 8), b),
-      D = S(opensslDeriveBytes);
-    (D.start(y), D.update(asn1.toDer(_n.privateKeyToAsn1(e))), D.finish());
-    var O = {
+    var dk = forge.pbe.opensslDeriveBytes(password, iv.substr(0, 8), dkLen);
+    var cipher = cipherFn(dk);
+    cipher.start(iv);
+    cipher.update(asn1.toDer(pki.privateKeyToAsn1(rsaKey)));
+    cipher.finish();
+    var msg = {
       type: "RSA PRIVATE KEY",
-      procType: { version: "4", type: "ENCRYPTED" },
-      dekInfo: { algorithm: h, parameters: Rt.util.bytesToHex(y).toUpperCase() },
-      body: D.output.getBytes(),
+      procType: {
+        version: "4",
+        type: "ENCRYPTED",
+      },
+      dekInfo: {
+        algorithm,
+        parameters: forge.util.bytesToHex(iv).toUpperCase(),
+      },
+      body: cipher.output.getBytes(),
     };
-    return Rt.pem.encode(O);
+    return forge.pem.encode(msg);
   };
-  _n.decryptRsaPrivateKey = function (e, n) {
-    var r = null,
-      s = Rt.pem.decode(e)[0];
-    if (s.type !== "ENCRYPTED PRIVATE KEY" && s.type !== "PRIVATE KEY" && s.type !== "RSA PRIVATE KEY") {
-      var h = Error(
+  pki.decryptRsaPrivateKey = function (pem, password) {
+    var rval = null;
+    var msg = forge.pem.decode(pem)[0];
+    if (
+      msg.type !== "ENCRYPTED PRIVATE KEY" &&
+      msg.type !== "PRIVATE KEY" &&
+      msg.type !== "RSA PRIVATE KEY"
+    ) {
+      var error = Error(
         'Could not convert private key from PEM; PEM header type is not "ENCRYPTED PRIVATE KEY", "PRIVATE KEY", or "RSA PRIVATE KEY".',
       );
-      throw ((h.headerType = h), h);
+      error.headerType = error;
+      throw error;
     }
-    if (s.procType && s.procType.type === "ENCRYPTED") {
-      var y, b;
-      switch (s.dekInfo.algorithm) {
+    if (msg.procType && msg.procType.type === "ENCRYPTED") {
+      var dkLen;
+      var cipherFn;
+      switch (msg.dekInfo.algorithm) {
         case "DES-CBC":
-          ((y = 8), (b = Rt.des.createDecryptionCipher));
+          dkLen = 8;
+          cipherFn = forge.des.createDecryptionCipher;
           break;
         case "DES-EDE3-CBC":
-          ((y = 24), (b = Rt.des.createDecryptionCipher));
+          dkLen = 24;
+          cipherFn = forge.des.createDecryptionCipher;
           break;
         case "AES-128-CBC":
-          ((y = 16), (b = Rt.aes.createDecryptionCipher));
+          dkLen = 16;
+          cipherFn = forge.aes.createDecryptionCipher;
           break;
         case "AES-192-CBC":
-          ((y = 24), (b = Rt.aes.createDecryptionCipher));
+          dkLen = 24;
+          cipherFn = forge.aes.createDecryptionCipher;
           break;
         case "AES-256-CBC":
-          ((y = 32), (b = Rt.aes.createDecryptionCipher));
+          dkLen = 32;
+          cipherFn = forge.aes.createDecryptionCipher;
           break;
         case "RC2-40-CBC":
-          ((y = 5),
-            (b = function (O) {
-              return Rt.rc2.createDecryptionCipher(O, 40);
-            }));
+          dkLen = 5;
+          cipherFn = function (key) {
+            return forge.rc2.createDecryptionCipher(key, 40);
+          };
           break;
         case "RC2-64-CBC":
-          ((y = 8),
-            (b = function (O) {
-              return Rt.rc2.createDecryptionCipher(O, 64);
-            }));
+          dkLen = 8;
+          cipherFn = function (key) {
+            return forge.rc2.createDecryptionCipher(key, 64);
+          };
           break;
         case "RC2-128-CBC":
-          ((y = 16),
-            (b = function (O) {
-              return Rt.rc2.createDecryptionCipher(O, 128);
-            }));
+          dkLen = 16;
+          cipherFn = function (key) {
+            return forge.rc2.createDecryptionCipher(key, 128);
+          };
           break;
         default:
-          var h = Error(
-            'Could not decrypt private key; unsupported encryption algorithm "' + s.dekInfo.algorithm + '".',
+          var error = Error(
+            'Could not decrypt private key; unsupported encryption algorithm "' +
+              msg.dekInfo.algorithm +
+              '".',
           );
-          throw ((h.algorithm = s.dekInfo.algorithm), h);
+          error.algorithm = msg.dekInfo.algorithm;
+          throw error;
       }
-      var hexToBytes = Rt.util.hexToBytes(s.dekInfo.parameters),
-        opensslDeriveBytes = Rt.pbe.opensslDeriveBytes(n, hexToBytes.substr(0, 8), y),
-        R = b(opensslDeriveBytes);
-      if ((R.start(hexToBytes), R.update(Rt.util.createBuffer(s.body)), R.finish())) r = R.output.getBytes();
-      else return r;
-    } else r = s.body;
-    if (s.type === "ENCRYPTED PRIVATE KEY") r = _n.decryptPrivateKeyInfo(asn1.fromDer(r), n);
-    else r = asn1.fromDer(r);
-    if (r !== null) r = _n.privateKeyFromAsn1(r);
-    return r;
+      var iv = forge.util.hexToBytes(msg.dekInfo.parameters);
+      var dk = forge.pbe.opensslDeriveBytes(password, iv.substr(0, 8), dkLen);
+      var cipher = cipherFn(dk);
+      cipher.start(iv);
+      cipher.update(forge.util.createBuffer(msg.body));
+      if (cipher.finish()) rval = cipher.output.getBytes();
+      else return rval;
+    } else rval = msg.body;
+    if (msg.type === "ENCRYPTED PRIVATE KEY") rval = pki.decryptPrivateKeyInfo(asn1.fromDer(rval), password);
+    else rval = asn1.fromDer(rval);
+    if (rval !== null) rval = pki.privateKeyFromAsn1(rval);
+    return rval;
   };
-  _n.pbe.generatePkcs12Key = function (e, n, r, s, h, y) {
-    var b, S;
-    if (typeof y > "u" || y === null) {
-      if (!("sha1" in Rt.md)) throw Error('"sha1" hash algorithm unavailable.');
-      y = Rt.md.sha1.create();
+  pki.pbe.generatePkcs12Key = function (password, salt, id, iter, n, md) {
+    var j;
+    var l;
+    if (typeof md === "undefined" || md === null) {
+      if (!("sha1" in forge.md)) throw Error('"sha1" hash algorithm unavailable.');
+      md = forge.md.sha1.create();
     }
-    var digestLength = y.digestLength,
-      blockLength = y.blockLength,
-      D = new Rt.util.ByteBuffer(),
-      O = new Rt.util.ByteBuffer();
-    if (e !== null && e !== void 0) {
-      for (S = 0; S < e.length; S++) O.putInt16(e.charCodeAt(S));
-      O.putInt16(0);
+    var u = md.digestLength;
+    var v = md.blockLength;
+    var result = new forge.util.ByteBuffer();
+    var passBuf = new forge.util.ByteBuffer();
+    if (password !== null && password !== undefined) {
+      for (l = 0; l < password.length; l++) passBuf.putInt16(password.charCodeAt(l));
+      passBuf.putInt16(0);
     }
-    var L = O.length(),
-      V = n.length(),
-      K = new Rt.util.ByteBuffer();
-    K.fillWithByte(r, blockLength);
-    var q = blockLength * Math.ceil(V / blockLength),
-      Z = new Rt.util.ByteBuffer();
-    for (S = 0; S < q; S++) Z.putByte(n.at(S % V));
-    var J = blockLength * Math.ceil(L / blockLength),
-      ie = new Rt.util.ByteBuffer();
-    for (S = 0; S < J; S++) ie.putByte(O.at(S % L));
-    var ae = Z;
-    ae.putBuffer(ie);
-    var ceil = Math.ceil(h / digestLength);
-    for (var ue = 1; ue <= ceil; ue++) {
-      var me = new Rt.util.ByteBuffer();
-      (me.putBytes(K.bytes()), me.putBytes(ae.bytes()));
-      for (var Ne = 0; Ne < s; Ne++) (y.start(), y.update(me.getBytes()), (me = y.digest()));
-      var Ce = new Rt.util.ByteBuffer();
-      for (S = 0; S < blockLength; S++) Ce.putByte(me.at(S % digestLength));
-      var Ie = Math.ceil(V / blockLength) + Math.ceil(L / blockLength),
-        he = new Rt.util.ByteBuffer();
-      for (b = 0; b < Ie; b++) {
-        var ft = new Rt.util.ByteBuffer(ae.getBytes(blockLength)),
-          rt = 511;
-        for (S = Ce.length() - 1; S >= 0; S--)
-          ((rt = rt >> 8), (rt += Ce.at(S) + ft.at(S)), ft.setAt(S, rt & 255));
-        he.putBuffer(ft);
+    var p = passBuf.length();
+    var s = salt.length();
+    var D = new forge.util.ByteBuffer();
+    D.fillWithByte(id, v);
+    var Slen = v * Math.ceil(s / v);
+    var S = new forge.util.ByteBuffer();
+    for (l = 0; l < Slen; l++) S.putByte(salt.at(l % s));
+    var Plen = v * Math.ceil(p / v);
+    var P = new forge.util.ByteBuffer();
+    for (l = 0; l < Plen; l++) P.putByte(passBuf.at(l % p));
+    var I = S;
+    I.putBuffer(P);
+    var c = Math.ceil(n / u);
+    for (var i = 1; i <= c; i++) {
+      var buf = new forge.util.ByteBuffer();
+      buf.putBytes(D.bytes());
+      buf.putBytes(I.bytes());
+      for (var round = 0; round < iter; round++) {
+        md.start();
+        md.update(buf.getBytes());
+        buf = md.digest();
       }
-      ((ae = he), D.putBuffer(me));
+      var B = new forge.util.ByteBuffer();
+      for (l = 0; l < v; l++) B.putByte(buf.at(l % u));
+      var k = Math.ceil(s / v) + Math.ceil(p / v);
+      var Inew = new forge.util.ByteBuffer();
+      for (j = 0; j < k; j++) {
+        var chunk = new forge.util.ByteBuffer(I.getBytes(v));
+        var x = 511;
+        for (l = B.length() - 1; l >= 0; l--) {
+          x = x >> 8;
+          x += B.at(l) + chunk.at(l);
+          chunk.setAt(l, x & 255);
+        }
+        Inew.putBuffer(chunk);
+      }
+      I = Inew;
+      result.putBuffer(buf);
     }
-    return (D.truncate(D.length() - h), D);
+    result.truncate(result.length() - n);
+    return result;
   };
-  _n.pbe.getCipher = function (e, n, r) {
-    switch (e) {
-      case _n.oids.pkcs5PBES2:
-        return _n.pbe.getCipherForPBES2(e, n, r);
-      case _n.oids["pbeWithSHAAnd3-KeyTripleDES-CBC"]:
-      case _n.oids["pbewithSHAAnd40BitRC2-CBC"]:
-        return _n.pbe.getCipherForPKCS12PBE(e, n, r);
+  pki.pbe.getCipher = function (oid, params, password) {
+    switch (oid) {
+      case pki.oids.pkcs5PBES2:
+        return pki.pbe.getCipherForPBES2(oid, params, password);
+      case pki.oids["pbeWithSHAAnd3-KeyTripleDES-CBC"]:
+      case pki.oids["pbewithSHAAnd40BitRC2-CBC"]:
+        return pki.pbe.getCipherForPKCS12PBE(oid, params, password);
       default:
-        var s = Error("Cannot read encrypted PBE data block. Unsupported OID.");
-        throw (
-          (s.oid = e),
-          (s.supportedOids = ["pkcs5PBES2", "pbeWithSHAAnd3-KeyTripleDES-CBC", "pbewithSHAAnd40BitRC2-CBC"]),
-          s
-        );
+        var error = Error("Cannot read encrypted PBE data block. Unsupported OID.");
+        error.oid = oid;
+        error.supportedOids = ["pkcs5PBES2", "pbeWithSHAAnd3-KeyTripleDES-CBC", "pbewithSHAAnd40BitRC2-CBC"];
+        throw error;
     }
   };
-  _n.pbe.getCipherForPBES2 = function (e, n, r) {
-    var s = {},
-      h = [];
-    if (!asn1.validate(n, IG, s, h)) {
-      var y = Error(
+  pki.pbe.getCipherForPBES2 = function (oid, params, password) {
+    var capture = {};
+    var errors = [];
+    if (!asn1.validate(params, PBES2AlgorithmsValidator, capture, errors)) {
+      var error = Error(
         "Cannot read password-based-encryption algorithm parameters. ASN.1 object is not a supported EncryptedPrivateKeyInfo.",
       );
-      throw ((y.errors = h), y);
+      error.errors = errors;
+      throw error;
     }
-    if (((e = asn1.derToOid(s.kdfOid)), e !== _n.oids.pkcs5PBKDF2)) {
-      var y = Error("Cannot read encrypted private key. Unsupported key derivation function OID.");
-      throw ((y.oid = e), (y.supportedOids = ["pkcs5PBKDF2"]), y);
+    oid = asn1.derToOid(capture.kdfOid);
+    if (oid !== pki.oids.pkcs5PBKDF2) {
+      var error = Error("Cannot read encrypted private key. Unsupported key derivation function OID.");
+      error.oid = oid;
+      error.supportedOids = ["pkcs5PBKDF2"];
+      throw error;
     }
+    oid = asn1.derToOid(capture.encOid);
     if (
-      ((e = asn1.derToOid(s.encOid)),
-      e !== _n.oids["aes128-CBC"] &&
-        e !== _n.oids["aes192-CBC"] &&
-        e !== _n.oids["aes256-CBC"] &&
-        e !== _n.oids["des-EDE3-CBC"] &&
-        e !== _n.oids.desCBC)
+      oid !== pki.oids["aes128-CBC"] &&
+      oid !== pki.oids["aes192-CBC"] &&
+      oid !== pki.oids["aes256-CBC"] &&
+      oid !== pki.oids["des-EDE3-CBC"] &&
+      oid !== pki.oids.desCBC
     ) {
-      var y = Error("Cannot read encrypted private key. Unsupported encryption scheme OID.");
-      throw (
-        (y.oid = e),
-        (y.supportedOids = ["aes128-CBC", "aes192-CBC", "aes256-CBC", "des-EDE3-CBC", "desCBC"]),
-        y
-      );
+      var error = Error("Cannot read encrypted private key. Unsupported encryption scheme OID.");
+      error.oid = oid;
+      error.supportedOids = ["aes128-CBC", "aes192-CBC", "aes256-CBC", "des-EDE3-CBC", "desCBC"];
+      throw error;
     }
-    var kdfSalt = s.kdfSalt,
-      buffer = Rt.util.createBuffer(s.kdfIterationCount);
-    buffer = buffer.getInt(buffer.length() << 3);
-    var w, R;
-    switch (_n.oids[e]) {
+    var salt = capture.kdfSalt;
+    var count = forge.util.createBuffer(capture.kdfIterationCount);
+    count = count.getInt(count.length() << 3);
+    var dkLen;
+    var cipherFn;
+    switch (pki.oids[oid]) {
       case "aes128-CBC":
-        ((w = 16), (R = Rt.aes.createDecryptionCipher));
+        dkLen = 16;
+        cipherFn = forge.aes.createDecryptionCipher;
         break;
       case "aes192-CBC":
-        ((w = 24), (R = Rt.aes.createDecryptionCipher));
+        dkLen = 24;
+        cipherFn = forge.aes.createDecryptionCipher;
         break;
       case "aes256-CBC":
-        ((w = 32), (R = Rt.aes.createDecryptionCipher));
+        dkLen = 32;
+        cipherFn = forge.aes.createDecryptionCipher;
         break;
       case "des-EDE3-CBC":
-        ((w = 24), (R = Rt.des.createDecryptionCipher));
+        dkLen = 24;
+        cipherFn = forge.des.createDecryptionCipher;
         break;
       case "desCBC":
-        ((w = 8), (R = Rt.des.createDecryptionCipher));
+        dkLen = 8;
+        cipherFn = forge.des.createDecryptionCipher;
         break;
     }
-    var D = dA(s.prfOid),
-      pbkdf2 = Rt.pkcs5.pbkdf2(r, kdfSalt, buffer, w, D),
-      encIv = s.encIv,
-      V = R(pbkdf2);
-    return (V.start(encIv), V);
+    var md = prfOidToMessageDigest(capture.prfOid);
+    var dk = forge.pkcs5.pbkdf2(password, salt, count, dkLen, md);
+    var iv = capture.encIv;
+    var cipher = cipherFn(dk);
+    cipher.start(iv);
+    return cipher;
   };
-  _n.pbe.getCipherForPKCS12PBE = function (e, n, r) {
-    var s = {},
-      h = [];
-    if (!asn1.validate(n, NG, s, h)) {
-      var y = Error(
+  pki.pbe.getCipherForPKCS12PBE = function (oid, params, password) {
+    var capture = {};
+    var errors = [];
+    if (!asn1.validate(params, pkcs12PbeParamsValidator, capture, errors)) {
+      var error = Error(
         "Cannot read password-based-encryption algorithm parameters. ASN.1 object is not a supported EncryptedPrivateKeyInfo.",
       );
-      throw ((y.errors = h), y);
+      error.errors = errors;
+      throw error;
     }
-    var buffer = Rt.util.createBuffer(s.salt),
-      buffer_2 = Rt.util.createBuffer(s.iterations);
-    buffer_2 = buffer_2.getInt(buffer_2.length() << 3);
-    var w, R, D;
-    switch (e) {
-      case _n.oids["pbeWithSHAAnd3-KeyTripleDES-CBC"]:
-        ((w = 24), (R = 8), (D = Rt.des.startDecrypting));
+    var salt = forge.util.createBuffer(capture.salt);
+    var count = forge.util.createBuffer(capture.iterations);
+    count = count.getInt(count.length() << 3);
+    var dkLen;
+    var dIvLen;
+    var cipherFn;
+    switch (oid) {
+      case pki.oids["pbeWithSHAAnd3-KeyTripleDES-CBC"]:
+        dkLen = 24;
+        dIvLen = 8;
+        cipherFn = forge.des.startDecrypting;
         break;
-      case _n.oids["pbewithSHAAnd40BitRC2-CBC"]:
-        ((w = 5),
-          (R = 8),
-          (D = function (q, Z) {
-            var decryptionCipher = Rt.rc2.createDecryptionCipher(q, 40);
-            return (decryptionCipher.start(Z, null), decryptionCipher);
-          }));
+      case pki.oids["pbewithSHAAnd40BitRC2-CBC"]:
+        dkLen = 5;
+        dIvLen = 8;
+        cipherFn = function (key, iv) {
+          var cipher = forge.rc2.createDecryptionCipher(key, 40);
+          cipher.start(iv, null);
+          return cipher;
+        };
         break;
       default:
-        var y = Error("Cannot read PKCS #12 PBE data block. Unsupported OID.");
-        throw ((y.oid = e), y);
+        var error = Error("Cannot read PKCS #12 PBE data block. Unsupported OID.");
+        error.oid = oid;
+        throw error;
     }
-    var O = dA(s.prfOid),
-      generatePkcs12Key = _n.pbe.generatePkcs12Key(r, buffer, 1, buffer_2, w, O);
-    O.start();
-    var generatePkcs12Key_2 = _n.pbe.generatePkcs12Key(r, buffer, 2, buffer_2, R, O);
-    return D(generatePkcs12Key, generatePkcs12Key_2);
+    var md = prfOidToMessageDigest(capture.prfOid);
+    var key = pki.pbe.generatePkcs12Key(password, salt, 1, count, dkLen, md);
+    md.start();
+    var iv = pki.pbe.generatePkcs12Key(password, salt, 2, count, dIvLen, md);
+    return cipherFn(key, iv);
   };
-  _n.pbe.opensslDeriveBytes = function (e, n, r, s) {
-    if (typeof s > "u" || s === null) {
-      if (!("md5" in Rt.md)) throw Error('"md5" hash algorithm unavailable.');
-      s = Rt.md.md5.create();
+  pki.pbe.opensslDeriveBytes = function (password, salt, dkLen, md) {
+    if (typeof md === "undefined" || md === null) {
+      if (!("md5" in forge.md)) throw Error('"md5" hash algorithm unavailable.');
+      md = forge.md.md5.create();
     }
-    if (n === null) n = "";
-    var h = [uA(s, e + n)];
-    for (var y = 16, b = 1; y < r; ++b, y += 16) h.push(uA(s, h[b - 1] + e + n));
-    return h.join("").substr(0, r);
+    if (salt === null) salt = "";
+    var digests = [hash(md, password + salt)];
+    for (var length = 16, i = 1; length < dkLen; ++i, length += 16)
+      digests.push(hash(md, digests[i - 1] + password + salt));
+    return digests.join("").substr(0, dkLen);
   };
-  function uA(e, n) {
-    return e.start().update(n).digest().getBytes();
+  function hash(md, bytes) {
+    return md.start().update(bytes).digest().getBytes();
   }
-  function dA(e) {
-    var n;
-    if (!e) n = "hmacWithSHA1";
-    else if (((n = _n.oids[asn1.derToOid(e)]), !n)) {
-      var r = Error("Unsupported PRF OID.");
-      throw (
-        (r.oid = e),
-        (r.supported = [
+  function prfOidToMessageDigest(prfOid) {
+    var prfAlgorithm;
+    if (!prfOid) prfAlgorithm = "hmacWithSHA1";
+    else {
+      prfAlgorithm = pki.oids[asn1.derToOid(prfOid)];
+      if (!prfAlgorithm) {
+        var error = Error("Unsupported PRF OID.");
+        error.oid = prfOid;
+        error.supported = [
           "hmacWithSHA1",
           "hmacWithSHA224",
           "hmacWithSHA256",
           "hmacWithSHA384",
           "hmacWithSHA512",
-        ]),
-        r
-      );
+        ];
+        throw error;
+      }
     }
-    return fA(n);
+    return prfAlgorithmToMessageDigest(prfAlgorithm);
   }
-  function fA(e) {
-    var md = Rt.md;
-    switch (e) {
+  function prfAlgorithmToMessageDigest(prfAlgorithm) {
+    var factory = forge.md;
+    switch (prfAlgorithm) {
       case "hmacWithSHA224":
-        md = Rt.md.sha512;
+        factory = forge.md.sha512;
       case "hmacWithSHA1":
       case "hmacWithSHA256":
       case "hmacWithSHA384":
       case "hmacWithSHA512":
-        e = e.substr(8).toLowerCase();
+        prfAlgorithm = prfAlgorithm.substr(8).toLowerCase();
         break;
       default:
-        var r = Error("Unsupported PRF algorithm.");
-        throw (
-          (r.algorithm = e),
-          (r.supported = [
-            "hmacWithSHA1",
-            "hmacWithSHA224",
-            "hmacWithSHA256",
-            "hmacWithSHA384",
-            "hmacWithSHA512",
-          ]),
-          r
-        );
+        var error = Error("Unsupported PRF algorithm.");
+        error.algorithm = prfAlgorithm;
+        error.supported = [
+          "hmacWithSHA1",
+          "hmacWithSHA224",
+          "hmacWithSHA256",
+          "hmacWithSHA384",
+          "hmacWithSHA512",
+        ];
+        throw error;
     }
-    if (!md || !(e in md)) throw Error("Unknown hash algorithm: " + e);
-    return md[e].create();
+    if (!factory || !(prfAlgorithm in factory)) throw Error("Unknown hash algorithm: " + prfAlgorithm);
+    return factory[prfAlgorithm].create();
   }
-  function kG(e, n, r, s) {
-    var create = asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, !0, [
-      asn1.create(asn1.Class.UNIVERSAL, asn1.Type.OCTETSTRING, !1, e),
-      asn1.create(asn1.Class.UNIVERSAL, asn1.Type.INTEGER, !1, n.getBytes()),
+  function createPbkdf2Params(salt, countBytes, dkLen, prfAlgorithm) {
+    var params = asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, true, [
+      asn1.create(asn1.Class.UNIVERSAL, asn1.Type.OCTETSTRING, false, salt),
+      asn1.create(asn1.Class.UNIVERSAL, asn1.Type.INTEGER, false, countBytes.getBytes()),
     ]);
-    if (s !== "hmacWithSHA1")
-      create.value.push(
-        asn1.create(asn1.Class.UNIVERSAL, asn1.Type.INTEGER, !1, Rt.util.hexToBytes(r.toString(16))),
-        asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, !0, [
-          asn1.create(asn1.Class.UNIVERSAL, asn1.Type.OID, !1, asn1.oidToDer(_n.oids[s]).getBytes()),
-          asn1.create(asn1.Class.UNIVERSAL, asn1.Type.NULL, !1, ""),
+    if (prfAlgorithm !== "hmacWithSHA1")
+      params.value.push(
+        asn1.create(
+          asn1.Class.UNIVERSAL,
+          asn1.Type.INTEGER,
+          false,
+          forge.util.hexToBytes(dkLen.toString(16)),
+        ),
+        asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, true, [
+          asn1.create(
+            asn1.Class.UNIVERSAL,
+            asn1.Type.OID,
+            false,
+            asn1.oidToDer(pki.oids[prfAlgorithm]).getBytes(),
+          ),
+          asn1.create(asn1.Class.UNIVERSAL, asn1.Type.NULL, false, ""),
         ]),
       );
-    return create;
+    return params;
   }
 });
-
-export { wS };
+export { require_pbe };

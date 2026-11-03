@@ -15,14 +15,14 @@ import { FILE_READ_TOOL_NAME } from "../../tools/FileReadTool/constants.js";
 import { FILE_EDIT_TOOL_NAME } from "../../tools/FileEditTool/constants.js";
 import { reportSandboxErrorUnderStandIn } from "./sandboxErrors.js";
 
+//@ chunk-scjksyt8.js:386-511 placement
 /**
  * 清洗控制字符后列出前几项，超出部分显示为"(N more)"。
  */
-//@ chunk-scjksyt8.js:386-511 placement
 function summarizeList(t, e = 3) {
-  let mapped = t.map((s) => replaceControlChars(stripVTControlCharacters(s)).trim()),
-    joined = mapped.slice(0, e).join(", "),
-    n = mapped.length - e;
+  let mapped = t.map((s) => replaceControlChars(stripVTControlCharacters(s)).trim());
+  let joined = mapped.slice(0, e).join(", ");
+  let n = mapped.length - e;
   return n > 0 ? `${joined} (${n} more)` : joined;
 }
 //@ chunk-scjksyt8.js:511-1299 placement
@@ -53,5 +53,4 @@ function warnOfDeniesOnAnotherHostOnStderr() {
 
 `);
 }
-
 export { warnOfDeniesOnAnotherHostOnStderr, summarizeList, describeDeniesOnAnotherHost };

@@ -6,182 +6,195 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { uh } from "./codegen/index.js";
-import { it } from "./codegen/code.js";
+import { require_codegen_2 } from "./codegen/index.js";
+import { require_code } from "./codegen/code.js";
 
 //@ chunk-s82q9s4x.js:17192-20766 cjs-fingerprint
-var ew = x(function (hs) {
-  Object.defineProperty(hs, "__esModule", { value: !0 });
-  hs.checkStrictMode =
-    hs.getErrorPath =
-    hs.Type =
-    hs.useFunc =
-    hs.setEvaluated =
-    hs.evaluatedPropsToName =
-    hs.mergeEvaluated =
-    hs.eachItem =
-    hs.unescapeJsonPointer =
-    hs.escapeJsonPointer =
-    hs.escapeFragment =
-    hs.unescapeFragment =
-    hs.schemaRefOrVal =
-    hs.schemaHasRulesButRef =
-    hs.schemaHasRules =
-    hs.checkUnknownRules =
-    hs.alwaysValidSchema =
-    hs.toHash =
-      void 0;
-  var E = uh(),
-    cs = it();
-  function Ga(e) {
-    let t = {};
-    for (let r of e) t[r] = !0;
-    return t;
+var require_util_2 = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.checkStrictMode =
+    cjsExports.getErrorPath =
+    cjsExports.Type =
+    cjsExports.useFunc =
+    cjsExports.setEvaluated =
+    cjsExports.evaluatedPropsToName =
+    cjsExports.mergeEvaluated =
+    cjsExports.eachItem =
+    cjsExports.unescapeJsonPointer =
+    cjsExports.escapeJsonPointer =
+    cjsExports.escapeFragment =
+    cjsExports.unescapeFragment =
+    cjsExports.schemaRefOrVal =
+    cjsExports.schemaHasRulesButRef =
+    cjsExports.schemaHasRules =
+    cjsExports.checkUnknownRules =
+    cjsExports.alwaysValidSchema =
+    cjsExports.toHash =
+      undefined;
+  var codegen_1 = require_codegen_2();
+  var code_1 = require_code();
+  function toHash(arr) {
+    let hash = {};
+    for (let item of arr) hash[item] = true;
+    return hash;
   }
-  hs.toHash = Ga;
-  function Ja(e, t) {
-    if (typeof t == "boolean") return t;
-    if (Object.keys(t).length === 0) return !0;
-    return (us(e, t), !ls(t, e.self.RULES.all));
+  cjsExports.toHash = toHash;
+  function alwaysValidSchema(it, schema) {
+    if (typeof schema == "boolean") return schema;
+    if (Object.keys(schema).length === 0) return true;
+    checkUnknownRules(it, schema);
+    return !schemaHasRules(schema, it.self.RULES.all);
   }
-  hs.alwaysValidSchema = Ja;
-  function us(e, t = e.schema) {
-    let { opts: opts, self: s } = e;
+  cjsExports.alwaysValidSchema = alwaysValidSchema;
+  function checkUnknownRules(it, schema = it.schema) {
+    let { opts, self: s } = it;
     if (!opts.strictSchema) return;
-    if (typeof t === "boolean") return;
-    let keywords = s.RULES.keywords;
-    for (let key in t) if (!keywords[key]) ps(e, `unknown keyword: "${key}"`);
+    if (typeof schema === "boolean") return;
+    let rules = s.RULES.keywords;
+    for (let key in schema) if (!rules[key]) checkStrictMode(it, `unknown keyword: "${key}"`);
   }
-  hs.checkUnknownRules = us;
-  function ls(e, t) {
-    if (typeof e == "boolean") return !e;
-    for (let key in e) if (t[key]) return !0;
-    return !1;
+  cjsExports.checkUnknownRules = checkUnknownRules;
+  function schemaHasRules(schema, rules) {
+    if (typeof schema == "boolean") return !schema;
+    for (let key in schema) if (rules[key]) return true;
+    return false;
   }
-  hs.schemaHasRules = ls;
-  function Wa(e, t) {
-    if (typeof e == "boolean") return !e;
-    for (let key in e) if (key !== "$ref" && t.all[key]) return !0;
-    return !1;
+  cjsExports.schemaHasRules = schemaHasRules;
+  function schemaHasRulesButRef(schema, RULES) {
+    if (typeof schema == "boolean") return !schema;
+    for (let key in schema) if (key !== "$ref" && RULES.all[key]) return true;
+    return false;
   }
-  hs.schemaHasRulesButRef = Wa;
-  function Ba({ topSchemaRef: topSchemaRef, schemaPath: schemaPath }, r, s, n) {
-    if (!n) {
-      if (typeof r == "number" || typeof r == "boolean") return r;
-      if (typeof r == "string") return E._`${r}`;
+  cjsExports.schemaHasRulesButRef = schemaHasRulesButRef;
+  function schemaRefOrVal({ topSchemaRef, schemaPath }, schema, keyword, $data) {
+    if (!$data) {
+      if (typeof schema == "number" || typeof schema == "boolean") return schema;
+      if (typeof schema == "string") return codegen_1._`${schema}`;
     }
-    return E._`${topSchemaRef}${schemaPath}${E.getProperty(s)}`;
+    return codegen_1._`${topSchemaRef}${schemaPath}${codegen_1.getProperty(keyword)}`;
   }
-  hs.schemaRefOrVal = Ba;
-  function Qa(e) {
-    return ds(decodeURIComponent(e));
+  cjsExports.schemaRefOrVal = schemaRefOrVal;
+  function unescapeFragment(str) {
+    return unescapeJsonPointer(decodeURIComponent(str));
   }
-  hs.unescapeFragment = Qa;
-  function Xa(e) {
-    return encodeURIComponent(lr(e));
+  cjsExports.unescapeFragment = unescapeFragment;
+  function escapeFragment(str) {
+    return encodeURIComponent(escapeJsonPointer(str));
   }
-  hs.escapeFragment = Xa;
-  function lr(e) {
-    if (typeof e == "number") return `${e}`;
-    return e.replace(/~/g, "~0").replace(/\//g, "~1");
+  cjsExports.escapeFragment = escapeFragment;
+  function escapeJsonPointer(str) {
+    if (typeof str == "number") return `${str}`;
+    return str.replace(/~/g, "~0").replace(/\//g, "~1");
   }
-  hs.escapeJsonPointer = lr;
-  function ds(e) {
-    return e.replace(/~1/g, "/").replace(/~0/g, "~");
+  cjsExports.escapeJsonPointer = escapeJsonPointer;
+  function unescapeJsonPointer(str) {
+    return str.replace(/~1/g, "/").replace(/~0/g, "~");
   }
-  hs.unescapeJsonPointer = ds;
-  function Ya(e, t) {
-    if (Array.isArray(e)) for (let r of e) t(r);
-    else t(e);
+  cjsExports.unescapeJsonPointer = unescapeJsonPointer;
+  function eachItem(xs, f) {
+    if (Array.isArray(xs)) for (let x of xs) f(x);
+    else f(xs);
   }
-  hs.eachItem = Ya;
-  function is({
-    mergeNames: mergeNames,
-    mergeToName: mergeToName,
-    mergeValues: mergeValues,
-    resultToName: resultToName,
-  }) {
-    return (n, o, i, a) => {
-      let c =
-        i === void 0
-          ? o
-          : i instanceof E.Name
-            ? (o instanceof E.Name ? mergeNames(n, o, i) : mergeToName(n, o, i), i)
-            : o instanceof E.Name
-              ? (mergeToName(n, i, o), o)
-              : mergeValues(o, i);
-      return a === E.Name && !(c instanceof E.Name) ? resultToName(n, c) : c;
+  cjsExports.eachItem = eachItem;
+  function makeMergeEvaluated({ mergeNames, mergeToName, mergeValues, resultToName }) {
+    return (gen, from, to, toName) => {
+      let res =
+        to === undefined
+          ? from
+          : to instanceof codegen_1.Name
+            ? (from instanceof codegen_1.Name ? mergeNames(gen, from, to) : mergeToName(gen, from, to), to)
+            : from instanceof codegen_1.Name
+              ? (mergeToName(gen, to, from), from)
+              : mergeValues(from, to);
+      return toName === codegen_1.Name && !(res instanceof codegen_1.Name) ? resultToName(gen, res) : res;
     };
   }
-  hs.mergeEvaluated = {
-    props: is({
-      mergeNames: (e, t, r) =>
-        e.if(E._`${r} !== true && ${t} !== undefined`, () => {
-          e.if(
-            E._`${t} === true`,
-            () => e.assign(r, !0),
-            () => e.assign(r, E._`${r} || {}`).code(E._`Object.assign(${r}, ${t})`),
+  cjsExports.mergeEvaluated = {
+    props: makeMergeEvaluated({
+      mergeNames: (gen, from, to) =>
+        gen.if(codegen_1._`${to} !== true && ${from} !== undefined`, () => {
+          gen.if(
+            codegen_1._`${from} === true`,
+            () => gen.assign(to, true),
+            () => gen.assign(to, codegen_1._`${to} || {}`).code(codegen_1._`Object.assign(${to}, ${from})`),
           );
         }),
-      mergeToName: (e, t, r) =>
-        e.if(E._`${r} !== true`, () => {
-          if (t === !0) e.assign(r, !0);
-          else (e.assign(r, E._`${r} || {}`), dr(e, r, t));
+      mergeToName: (gen, from, to) =>
+        gen.if(codegen_1._`${to} !== true`, () => {
+          if (from === true) gen.assign(to, true);
+          else {
+            gen.assign(to, codegen_1._`${to} || {}`);
+            setEvaluated(gen, to, from);
+          }
         }),
-      mergeValues: (e, t) => (e === !0 ? !0 : { ...e, ...t }),
-      resultToName: fs,
+      mergeValues: (from, to) =>
+        from === true
+          ? true
+          : {
+              ...from,
+              ...to,
+            },
+      resultToName: evaluatedPropsToName,
     }),
-    items: is({
-      mergeNames: (e, t, r) =>
-        e.if(E._`${r} !== true && ${t} !== undefined`, () =>
-          e.assign(r, E._`${t} === true ? true : ${r} > ${t} ? ${r} : ${t}`),
+    items: makeMergeEvaluated({
+      mergeNames: (gen, from, to) =>
+        gen.if(codegen_1._`${to} !== true && ${from} !== undefined`, () =>
+          gen.assign(to, codegen_1._`${from} === true ? true : ${to} > ${from} ? ${to} : ${from}`),
         ),
-      mergeToName: (e, t, r) =>
-        e.if(E._`${r} !== true`, () => e.assign(r, t === !0 ? !0 : E._`${r} > ${t} ? ${r} : ${t}`)),
-      mergeValues: (e, t) => (e === !0 ? !0 : Math.max(e, t)),
-      resultToName: (e, t) => e.var("items", t),
+      mergeToName: (gen, from, to) =>
+        gen.if(codegen_1._`${to} !== true`, () =>
+          gen.assign(to, from === true ? true : codegen_1._`${to} > ${from} ? ${to} : ${from}`),
+        ),
+      mergeValues: (from, to) => (from === true ? true : Math.max(from, to)),
+      resultToName: (gen, items) => gen.var("items", items),
     }),
   };
-  function fs(e, t) {
-    if (t === !0) return e.var("props", !0);
-    let r = e.var("props", E._`{}`);
-    if (t !== void 0) dr(e, r, t);
-    return r;
+  function evaluatedPropsToName(gen, ps) {
+    if (ps === true) return gen.var("props", true);
+    let props = gen.var("props", codegen_1._`{}`);
+    if (ps !== undefined) setEvaluated(gen, props, ps);
+    return props;
   }
-  hs.evaluatedPropsToName = fs;
-  function dr(e, t, r) {
-    Object.keys(r).forEach((s) => e.assign(E._`${t}${E.getProperty(s)}`, !0));
+  cjsExports.evaluatedPropsToName = evaluatedPropsToName;
+  function setEvaluated(gen, props, ps) {
+    Object.keys(ps).forEach((p) => gen.assign(codegen_1._`${props}${codegen_1.getProperty(p)}`, true));
   }
-  hs.setEvaluated = dr;
-  var as = {};
-  function Za(e, t) {
-    return e.scopeValue("func", { ref: t, code: as[t.code] || (as[t.code] = new cs._Code(t.code)) });
+  cjsExports.setEvaluated = setEvaluated;
+  var snippets = {};
+  function useFunc(gen, f) {
+    return gen.scopeValue("func", {
+      ref: f,
+      code: snippets[f.code] || (snippets[f.code] = new code_1._Code(f.code)),
+    });
   }
-  hs.useFunc = Za;
-  var ur;
-  (function (e) {
-    ((e[(e.Num = 0)] = "Num"), (e[(e.Str = 1)] = "Str"));
-  })(ur || (hs.Type = ur = {}));
-  function ec(e, t, r) {
-    if (e instanceof E.Name) {
-      let s = t === ur.Num;
-      return r
-        ? s
-          ? E._`"[" + ${e} + "]"`
-          : E._`"['" + ${e} + "']"`
-        : s
-          ? E._`"/" + ${e}`
-          : E._`"/" + ${e}.replace(/~/g, "~0").replace(/\\//g, "~1")`;
+  cjsExports.useFunc = useFunc;
+  var Type;
+  (function (Type) {
+    Type[(Type.Num = 0)] = "Num";
+    Type[(Type.Str = 1)] = "Str";
+  })(Type || (cjsExports.Type = Type = {}));
+  function getErrorPath(dataProp, dataPropType, jsPropertySyntax) {
+    if (dataProp instanceof codegen_1.Name) {
+      let isNumber = dataPropType === Type.Num;
+      return jsPropertySyntax
+        ? isNumber
+          ? codegen_1._`"[" + ${dataProp} + "]"`
+          : codegen_1._`"['" + ${dataProp} + "']"`
+        : isNumber
+          ? codegen_1._`"/" + ${dataProp}`
+          : codegen_1._`"/" + ${dataProp}.replace(/~/g, "~0").replace(/\\//g, "~1")`;
     }
-    return r ? E.getProperty(e).toString() : "/" + lr(e);
+    return jsPropertySyntax ? codegen_1.getProperty(dataProp).toString() : "/" + escapeJsonPointer(dataProp);
   }
-  hs.getErrorPath = ec;
-  function ps(e, t, r = e.opts.strictSchema) {
-    if (!r) return;
-    if (((t = `strict mode: ${t}`), r === !0)) throw Error(t);
-    e.self.logger.warn(t);
+  cjsExports.getErrorPath = getErrorPath;
+  function checkStrictMode(it, msg, mode = it.opts.strictSchema) {
+    if (!mode) return;
+    msg = `strict mode: ${msg}`;
+    if (mode === true) throw Error(msg);
+    it.self.logger.warn(msg);
   }
-  hs.checkStrictMode = ps;
+  cjsExports.checkStrictMode = checkStrictMode;
 });
-
-export { ew };
+export { require_util_2 };

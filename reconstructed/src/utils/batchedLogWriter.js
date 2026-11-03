@@ -20,9 +20,9 @@ import { registerCleanup, registerPreExitFlush } from "./cleanupRegistry.js";
 function createJsonlWriter(options) {
   let writer = createBufferedWriter_2(options);
   return {
-    write(o) {
+    write(obj) {
       writer.write(
-        jsonStringify(o) +
+        jsonStringify(obj) +
           `
 `,
       );
@@ -33,52 +33,55 @@ function createJsonlWriter(options) {
 }
 //@ chunk-k7fgdyw5.js:891-905 placement
 function noop() {}
+//@ chunk-k7fgdyw5.js:905-1618 placement
 /**
  * 按文件批量追加写日志，同一文件的写入排队执行。
  */
-//@ chunk-k7fgdyw5.js:905-1618 placement
 class BatchedLogWriter {
   writers = new Map();
   pendingWrites = createKeyedQueue();
   writerFor(e) {
     let r = this.writers.get(e);
     if (!r) {
-      let o = dirname(e),
-        s = !1;
-      ((r = createJsonlWriter({
+      let o = dirname(e);
+      let s = false;
+      r = createJsonlWriter({
         writeFn: (n) => {
           this.pendingWrites.run(e, async () => {
             try {
               await appendToFile(o, e, n);
             } catch (error) {
-              if (!s)
-                ((s = !0),
-                  logForDebugging(
-                    `Dropping log batch for ${e}: ${error instanceof Error ? error.message : String(error)}`,
-                  ));
+              if (!s) {
+                s = true;
+                logForDebugging(
+                  `Dropping log batch for ${e}: ${error instanceof Error ? error.message : String(error)}`,
+                );
+              }
             }
           });
         },
         flushIntervalMs: 1000,
         maxBufferSize: 50,
-      })),
-        this.writers.set(e, r),
-        registerCleanup(async () => {
-          (r?.dispose(), await this.pendingWrites.settle());
-        }),
-        registerPreExitFlush(this.flushBeforeExit));
+      });
+      this.writers.set(e, r);
+      registerCleanup(async () => {
+        r?.dispose();
+        await this.pendingWrites.settle();
+      });
+      registerPreExitFlush(this.flushBeforeExit);
     }
     return r;
   }
   async flush() {
-    for (let e of this.writers.values()) e.flush();
+    for (let writer of this.writers.values()) writer.flush();
     await this.pendingWrites.settle();
   }
   flushBeforeExit = () => this.flush();
   async reset() {
-    for (let e of this.writers.values()) e.dispose();
-    (await this.pendingWrites.settle(), this.writers.clear(), this.pendingWrites.clearForTest());
+    for (let writer of this.writers.values()) writer.dispose();
+    await this.pendingWrites.settle();
+    this.writers.clear();
+    this.pendingWrites.clearForTest();
   }
 }
-
 export { noop, BatchedLogWriter };

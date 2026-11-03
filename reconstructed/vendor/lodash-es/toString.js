@@ -15,29 +15,29 @@ function s(r) {
 //@ chunk-byv2e1t5.js:280-289 placement
 var lV = s;
 //@ chunk-byv2e1t5.js:289-314 placement
-var isArray = Array.isArray,
-  ME = isArray;
+var isArray = Array.isArray;
+var ME = isArray;
 //@ chunk-byv2e1t5.js:396-406 placement
 var isSymbolAlias = isSymbol;
 //@ chunk-byv2e1t5.js:406-501 placement
 function u(r, t) {
-  var o = -1,
-    i = r == null ? 0 : r.length,
-    n = Array(i);
+  var o = -1;
+  var i = r == null ? 0 : r.length;
+  var n = Array(i);
   while (++o < i) n[o] = t(r[o], o, r);
   return n;
 }
 //@ chunk-byv2e1t5.js:501-511 placement
 var s9e = u;
 //@ chunk-byv2e1t5.js:511-568 placement
-var a = 1 / 0,
-  e = dV ? dV.prototype : void 0,
-  f = e ? e.toString : void 0;
+var a = 1 / 0;
+var e = dV ? dV.prototype : undefined;
+var toString = e ? e.toString : undefined;
 //@ chunk-byv2e1t5.js:568-714 placement
 function m(r) {
   if (typeof r == "string") return r;
   if (ME(r)) return s9e(r, m) + "";
-  if (isSymbolAlias(r)) return f ? f.call(r) : "";
+  if (isSymbolAlias(r)) return toString ? toString.call(r) : "";
   var t = r + "";
   return t == "0" && 1 / r == -a ? "-0" : t;
 }
@@ -49,5 +49,4 @@ function d(r) {
 }
 //@ chunk-byv2e1t5.js:759-769 placement
 var vde = d;
-
 export { s9e, vde, ME, lV, isSymbolAlias };

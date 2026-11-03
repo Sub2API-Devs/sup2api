@@ -8,86 +8,99 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-bjd2sxgw.js:226-1497 cjs-fingerprint
-var $h = x(function (h) {
-  class s extends Error {
+var require_property_provider = x(function (cjsExports) {
+  class ProviderError extends Error {
     name = "ProviderError";
     tryNextLink;
-    constructor(r, t = !0) {
-      let n,
-        e = !0;
-      if (typeof t === "boolean") ((n = void 0), (e = t));
-      else if (t != null && typeof t === "object") ((n = t.logger), (e = t.tryNextLink ?? !0));
-      super(r);
-      ((this.tryNextLink = e),
-        Object.setPrototypeOf(this, s.prototype),
-        n?.debug?.(`@smithy/property-provider ${e ? "->" : "(!)"} ${r}`));
+    constructor(message, t = true) {
+      let n;
+      let e = true;
+      if (typeof t === "boolean") {
+        n = undefined;
+        e = t;
+      } else if (t != null && typeof t === "object") {
+        n = t.logger;
+        e = t.tryNextLink ?? true;
+      }
+      super(message);
+      this.tryNextLink = e;
+      Object.setPrototypeOf(this, ProviderError.prototype);
+      n?.debug?.(`@smithy/property-provider ${e ? "->" : "(!)"} ${message}`);
     }
-    static from(r, t = !0) {
-      return Object.assign(new this(r.message, t), r);
+    static from(r, tryNextLink = true) {
+      return Object.assign(new this(r.message, tryNextLink), r);
     }
   }
-  class f extends s {
+  class f extends ProviderError {
     name = "CredentialsProviderError";
-    constructor(r, t = !0) {
-      super(r, t);
+    constructor(message, tryNextLink = true) {
+      super(message, tryNextLink);
       Object.setPrototypeOf(this, f.prototype);
     }
   }
-  class l extends s {
+  class l extends ProviderError {
     name = "TokenProviderError";
-    constructor(r, t = !0) {
-      super(r, t);
+    constructor(message, tryNextLink = true) {
+      super(message, tryNextLink);
       Object.setPrototypeOf(this, l.prototype);
     }
   }
-  var y =
-      (...r) =>
-      async () => {
-        if (r.length === 0) throw new s("No providers in chain");
-        let t;
-        for (let n of r)
-          try {
-            return await n();
-          } catch (error) {
-            if (((t = error), error?.tryNextLink)) continue;
-            throw error;
-          }
-        throw t;
-      },
-    p = (r) => () => Promise.resolve(r),
-    d = (r, t, n) => {
-      let e,
-        o,
-        i,
-        c = !1,
-        a = async () => {
-          if (!o) o = r();
-          try {
-            ((e = await o), (i = !0), (c = !1));
-          } finally {
-            o = void 0;
-          }
-          return e;
-        };
-      if (t === void 0)
-        return async (u) => {
-          if (!i || u?.forceRefresh) e = await a();
-          return e;
-        };
-      return async (u) => {
-        if (!i || u?.forceRefresh) e = await a();
-        if (c) return e;
-        if (n && !n(e)) return ((c = !0), e);
-        if (t(e)) return (await a(), e);
-        return e;
-      };
+  var chain =
+    (...providers) =>
+    async () => {
+      if (providers.length === 0) throw new ProviderError("No providers in chain");
+      let t;
+      for (let provider of providers)
+        try {
+          return await provider();
+        } catch (error) {
+          t = error;
+          if (error?.tryNextLink) continue;
+          throw error;
+        }
+      throw t;
     };
-  h.CredentialsProviderError = f;
-  h.ProviderError = s;
-  h.TokenProviderError = l;
-  h.chain = y;
-  h.fromStatic = p;
-  h.memoize = d;
+  var fromStatic = (staticValue) => () => Promise.resolve(staticValue);
+  var memoize = (provider, isExpired, requiresRefresh) => {
+    let resolved;
+    let pending;
+    let hasResult;
+    let isConstant = false;
+    let coalesceProvider = async () => {
+      if (!pending) pending = provider();
+      try {
+        resolved = await pending;
+        hasResult = true;
+        isConstant = false;
+      } finally {
+        pending = undefined;
+      }
+      return resolved;
+    };
+    if (isExpired === undefined)
+      return async (options) => {
+        if (!hasResult || options?.forceRefresh) resolved = await coalesceProvider();
+        return resolved;
+      };
+    return async (options) => {
+      if (!hasResult || options?.forceRefresh) resolved = await coalesceProvider();
+      if (isConstant) return resolved;
+      if (requiresRefresh && !requiresRefresh(resolved)) {
+        isConstant = true;
+        return resolved;
+      }
+      if (isExpired(resolved)) {
+        await coalesceProvider();
+        return resolved;
+      }
+      return resolved;
+    };
+  };
+  cjsExports.CredentialsProviderError = f;
+  cjsExports.ProviderError = ProviderError;
+  cjsExports.TokenProviderError = l;
+  cjsExports.chain = chain;
+  cjsExports.fromStatic = fromStatic;
+  cjsExports.memoize = memoize;
 });
-
-export { $h };
+export { require_property_provider };

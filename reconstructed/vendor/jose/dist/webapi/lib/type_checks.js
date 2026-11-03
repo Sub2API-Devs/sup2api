@@ -7,37 +7,37 @@
  */
 
 //@ chunk-5h78gfwc.js:11400-11442 esm-layout
-var Vt = (e) => typeof e === "object" && e !== null;
+var isObjectLike = (value) => typeof value === "object" && value !== null;
 //@ chunk-5h78gfwc.js:11442-11683 esm-fingerprint
-function b(e) {
-  if (!Vt(e) || Object.prototype.toString.call(e) !== "[object Object]") return !1;
-  if (Object.getPrototypeOf(e) === null) return !0;
-  let t = e;
-  while (Object.getPrototypeOf(t) !== null) t = Object.getPrototypeOf(t);
-  return Object.getPrototypeOf(e) === t;
+function isObject(input) {
+  if (!isObjectLike(input) || Object.prototype.toString.call(input) !== "[object Object]") return false;
+  if (Object.getPrototypeOf(input) === null) return true;
+  let proto = input;
+  while (Object.getPrototypeOf(proto) !== null) proto = Object.getPrototypeOf(proto);
+  return Object.getPrototypeOf(input) === proto;
 }
 //@ chunk-5h78gfwc.js:11683-11903 esm-fingerprint
-function _(...e) {
-  let filtered = e.filter(Boolean);
-  if (filtered.length === 0 || filtered.length === 1) return !0;
-  let r;
-  for (let n of filtered) {
-    let keys = Object.keys(n);
-    if (!r || r.size === 0) {
-      r = new Set(keys);
+function isDisjoint(...headers) {
+  let sources = headers.filter(Boolean);
+  if (sources.length === 0 || sources.length === 1) return true;
+  let acc;
+  for (let header of sources) {
+    let parameters = Object.keys(header);
+    if (!acc || acc.size === 0) {
+      acc = new Set(parameters);
       continue;
     }
-    for (let o of keys) {
-      if (r.has(o)) return !1;
-      r.add(o);
+    for (let parameter of parameters) {
+      if (acc.has(parameter)) return false;
+      acc.add(parameter);
     }
   }
-  return !0;
+  return true;
 }
 //@ chunk-5h78gfwc.js:11903-12131 esm-fingerprint
-var te = (e) => b(e) && typeof e.kty === "string",
-  et = (e) => e.kty !== "oct" && ((e.kty === "AKP" && typeof e.priv === "string") || typeof e.d === "string"),
-  tt = (e) => e.kty !== "oct" && e.d === void 0 && e.priv === void 0,
-  rt = (e) => e.kty === "oct" && typeof e.k === "string";
-
-export { b, te, rt, et, tt, _ };
+var isJWK = (key) => isObject(key) && typeof key.kty === "string";
+var isPrivateJWK = (key) =>
+  key.kty !== "oct" && ((key.kty === "AKP" && typeof key.priv === "string") || typeof key.d === "string");
+var tt = (key) => key.kty !== "oct" && key.d === undefined && key.priv === undefined;
+var isSecretJWK = (key) => key.kty === "oct" && typeof key.k === "string";
+export { isObject, isJWK, isSecretJWK, isPrivateJWK, tt, isDisjoint };

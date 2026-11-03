@@ -14,114 +14,154 @@ import { sleep } from "../sleep.js";
 import { logForDebugging } from "../debug.js";
 
 //@ chunk-e6aww6q8.js:2010166-2010185 affinity
-var POLL_INTERVAL_MS = 3000,
-  MAX_CONSECUTIVE_FAILURES = 5;
+var POLL_INTERVAL_MS = 3000;
+var MAX_CONSECUTIVE_FAILURES = 5;
 //@ chunk-e6aww6q8.js:2010185-2010355 fingerprint = UltraplanPollError (0.667)
 class UltraplanPollError extends Error {
   reason;
   rejectCount;
   eventStats;
-  constructor(e, n, r, s, h) {
-    super(e, h);
-    this.reason = n;
-    this.rejectCount = r;
-    this.eventStats = s;
+  constructor(message, reason, rejectCount, eventStats, options) {
+    super(message, options);
+    this.reason = reason;
+    this.rejectCount = rejectCount;
+    this.eventStats = eventStats;
     this.name = "UltraplanPollError";
   }
 }
 //@ chunk-e6aww6q8.js:2010355-2010394 fingerprint = ULTRAPLAN_TELEPORT_SENTINEL (1)
 var ULTRAPLAN_TELEPORT_SENTINEL = "__ULTRAPLAN_TELEPORT_LOCAL__";
+//@ chunk-e6aww6q8.js:2010394-2011874 fingerprint = ExitPlanModeScanner (1)
 /**
  * 扫描远程事件：记录 ExitPlanMode 调用及其 tool_result，判定最新一次为 pending / approved（含计划）/ teleport（回本地执行）/ rejected / terminated。
  */
-//@ chunk-e6aww6q8.js:2010394-2011874 fingerprint = ExitPlanModeScanner (1)
 class ExitPlanModeScanner {
   exitPlanCalls = [];
   results = new Map();
   rejectedIds = new Set();
   terminated = null;
-  rescanAfterRejection = !1;
-  everSeenPending = !1;
+  rescanAfterRejection = false;
+  everSeenPending = false;
   get rejectCount() {
     return this.rejectedIds.size;
   }
   get hasPendingPlan() {
-    let last = this.exitPlanCalls.findLast((n) => !this.rejectedIds.has(n));
-    return last !== void 0 && !this.results.has(last);
+    let id = this.exitPlanCalls.findLast((exitPlanCall) => !this.rejectedIds.has(exitPlanCall));
+    return id !== undefined && !this.results.has(id);
   }
-  ingest(e) {
-    for (let s of e)
-      if (s.type === "assistant")
-        for (let h of s.message.content) {
-          if (h.type !== "tool_use") continue;
-          let y = h;
+  ingest(newEvents) {
+    for (let m of newEvents)
+      if (m.type === "assistant")
+        for (let block of m.message.content) {
+          if (block.type !== "tool_use") continue;
+          let y = block;
           if (y.name === EXITPLANMODE_2) this.exitPlanCalls.push(y.id);
         }
-      else if (s.type === "user") {
-        let content = s.message.content;
+      else if (m.type === "user") {
+        let content = m.message.content;
         if (!Array.isArray(content)) continue;
-        for (let y of content)
-          if (y.type === "tool_result" && this.exitPlanCalls.includes(y.tool_use_id))
-            this.results.set(y.tool_use_id, y);
-      } else if (s.type === "result" && s.subtype !== "success") this.terminated = { subtype: s.subtype };
-    let n = e.length > 0 || this.rescanAfterRejection;
-    this.rescanAfterRejection = !1;
-    let r = null;
-    if (n) {
-      for (let s = this.exitPlanCalls.length - 1; s >= 0; s--) {
-        let h = this.exitPlanCalls[s];
-        if (this.rejectedIds.has(h)) continue;
-        let y = this.results.get(h);
-        if (!y) r = { kind: "pending" };
-        else if (y.is_error === !0) {
-          let S = extractTeleportPlan(y.content);
-          r = S !== null ? { kind: "teleport", plan: S } : { kind: "rejected", id: h };
-        } else r = { kind: "approved", plan: extractApprovedPlan(y.content) };
+        for (let block of content)
+          if (block.type === "tool_result" && this.exitPlanCalls.includes(block.tool_use_id))
+            this.results.set(block.tool_use_id, block);
+      } else if (m.type === "result" && m.subtype !== "success")
+        this.terminated = {
+          subtype: m.subtype,
+        };
+    let shouldScan = newEvents.length > 0 || this.rescanAfterRejection;
+    this.rescanAfterRejection = false;
+    let found = null;
+    if (shouldScan) {
+      for (let i = this.exitPlanCalls.length - 1; i >= 0; i--) {
+        let id = this.exitPlanCalls[i];
+        if (this.rejectedIds.has(id)) continue;
+        let y = this.results.get(id);
+        if (!y)
+          found = {
+            kind: "pending",
+          };
+        else if (y.is_error === true) {
+          let teleportPlan = extractTeleportPlan(y.content);
+          found =
+            teleportPlan !== null
+              ? {
+                  kind: "teleport",
+                  plan: teleportPlan,
+                }
+              : {
+                  kind: "rejected",
+                  id,
+                };
+        } else
+          found = {
+            kind: "approved",
+            plan: extractApprovedPlan(y.content),
+          };
         break;
       }
-      if (r?.kind === "approved" || r?.kind === "teleport") return r;
+      if (found?.kind === "approved" || found?.kind === "teleport") return found;
     }
-    if (r?.kind === "rejected") (this.rejectedIds.add(r.id), (this.rescanAfterRejection = !0));
-    if (this.terminated) return { kind: "terminated", subtype: this.terminated.subtype };
-    if (r?.kind === "rejected") return r;
-    if (r?.kind === "pending") return ((this.everSeenPending = !0), r);
-    return { kind: "unchanged" };
+    if (found?.kind === "rejected") {
+      this.rejectedIds.add(found.id);
+      this.rescanAfterRejection = true;
+    }
+    if (this.terminated)
+      return {
+        kind: "terminated",
+        subtype: this.terminated.subtype,
+      };
+    if (found?.kind === "rejected") return found;
+    if (found?.kind === "pending") {
+      this.everSeenPending = true;
+      return found;
+    }
+    return {
+      kind: "unchanged",
+    };
   }
 }
+//@ chunk-e6aww6q8.js:2011874-2013559 fingerprint = pollForApprovedExitPlanMode (0.86)
 /**
  * 每 3 秒轮询云会话事件直到批准或超时：approved → executionTarget=remote，teleport → local；网络错误连续 5 次放弃；阶段变化（running/needs_input/plan_ready）回调通知。
  */
-//@ chunk-e6aww6q8.js:2011874-2013559 fingerprint = pollForApprovedExitPlanMode (0.86)
 async function pollForApprovedExitPlanMode(sessionId, timeoutMs, onPhaseChange, shouldStop, credentials) {
-  let deadline = Date.now() + timeoutMs,
-    scanner = new ExitPlanModeScanner(),
-    w = { eventsReceived: 0, firstEventAt: void 0, lastEventAt: void 0 },
-    cursor = null,
-    failures = 0,
-    lastPhase = "running";
+  let deadline = Date.now() + timeoutMs;
+  let scanner = new ExitPlanModeScanner();
+  let w = {
+    eventsReceived: 0,
+    firstEventAt: undefined,
+    lastEventAt: undefined,
+  };
+  let cursor = null;
+  let failures = 0;
+  let lastPhase = "running";
   while (Date.now() < deadline) {
     if (shouldStop()) throw Error("poll stopped by caller");
-    let ke, we;
+    let newEvents;
+    let sessionStatus;
     try {
-      let Me = await pollRemoteSessionEvents(sessionId, cursor, { credentials: credentials });
-      if (
-        ((ke = Me.newEvents),
-        (cursor = Me.lastEventId),
-        (we = Me.sessionStatus),
-        (failures = 0),
-        ke.length > 0)
-      ) {
+      let resp = await pollRemoteSessionEvents(sessionId, cursor, {
+        credentials,
+      });
+      newEvents = resp.newEvents;
+      cursor = resp.lastEventId;
+      sessionStatus = resp.sessionStatus;
+      failures = 0;
+      if (newEvents.length > 0) {
         let now = Date.now();
-        ((w.eventsReceived += ke.length), (w.firstEventAt ??= now), (w.lastEventAt = now));
+        w.eventsReceived += newEvents.length;
+        w.firstEventAt ??= now;
+        w.lastEventAt = now;
       }
-    } catch (error) {
-      if (!isTransientNetworkError(error))
+    } catch (e) {
+      if (!isTransientNetworkError(e))
         throw new UltraplanPollError(
-          error instanceof Error ? error.message : String(error),
+          e instanceof Error ? e.message : String(e),
           "network_or_unknown",
           scanner.rejectCount,
           w,
-          { cause: error },
+          {
+            cause: e,
+          },
         );
       if (++failures >= MAX_CONSECUTIVE_FAILURES)
         throw new UltraplanPollError(
@@ -129,41 +169,55 @@ async function pollForApprovedExitPlanMode(sessionId, timeoutMs, onPhaseChange, 
           "network_or_unknown",
           scanner.rejectCount,
           w,
-          { cause: error },
+          {
+            cause: e,
+          },
         );
       await sleep(POLL_INTERVAL_MS);
       continue;
     }
-    let Ee;
+    let result;
     try {
-      Ee = scanner.ingest(ke);
-    } catch (error) {
+      result = scanner.ingest(newEvents);
+    } catch (e) {
       throw new UltraplanPollError(
-        error instanceof Error ? error.message : String(error),
+        e instanceof Error ? e.message : String(e),
         "extract_marker_missing",
         scanner.rejectCount,
         w,
       );
     }
-    if (Ee.kind === "approved")
-      return { plan: Ee.plan, rejectCount: scanner.rejectCount, executionTarget: "remote" };
-    if (Ee.kind === "teleport")
-      return { plan: Ee.plan, rejectCount: scanner.rejectCount, executionTarget: "local" };
-    if (Ee.kind === "terminated")
+    if (result.kind === "approved")
+      return {
+        plan: result.plan,
+        rejectCount: scanner.rejectCount,
+        executionTarget: "remote",
+      };
+    if (result.kind === "teleport")
+      return {
+        plan: result.plan,
+        rejectCount: scanner.rejectCount,
+        executionTarget: "local",
+      };
+    if (result.kind === "terminated")
       throw new UltraplanPollError(
-        `cloud session ended (${Ee.subtype}) before plan approval`,
+        `cloud session ended (${result.subtype}) before plan approval`,
         "terminated",
         scanner.rejectCount,
         w,
       );
-    let quietIdle = (we === "idle" || we === "requires_action") && ke.length === 0,
-      Ie = scanner.hasPendingPlan ? "plan_ready" : quietIdle ? "needs_input" : "running";
-    if (Ie !== lastPhase)
-      (logForDebugging(`[ultraplan] phase ${lastPhase} \u2192 ${Ie}`), (lastPhase = Ie), onPhaseChange(Ie));
+    let quietIdle =
+      (sessionStatus === "idle" || sessionStatus === "requires_action") && newEvents.length === 0;
+    let phase = scanner.hasPendingPlan ? "plan_ready" : quietIdle ? "needs_input" : "running";
+    if (phase !== lastPhase) {
+      logForDebugging(`[ultraplan] phase ${lastPhase} \u2192 ${phase}`);
+      lastPhase = phase;
+      onPhaseChange(phase);
+    }
     await sleep(POLL_INTERVAL_MS);
   }
-  let rounded = Math.round(timeoutMs / 60000),
-    Se = rounded === 1 ? "minute" : "minutes";
+  let rounded = Math.round(timeoutMs / 60000);
+  let Se = rounded === 1 ? "minute" : "minutes";
   throw new UltraplanPollError(
     scanner.everSeenPending
       ? `no approval after ${rounded} ${Se}`
@@ -183,22 +237,22 @@ function contentToText(content) {
 }
 //@ chunk-e6aww6q8.js:2013668-2013783 callgraph-witnessed = extractTeleportPlan (1)
 function extractTeleportPlan(content) {
-  let text = contentToText(content),
-    marker = `${ULTRAPLAN_TELEPORT_SENTINEL}
-`,
-    idx = text.indexOf(marker);
+  let text = contentToText(content);
+  let marker = `${ULTRAPLAN_TELEPORT_SENTINEL}
+`;
+  let idx = text.indexOf(marker);
   if (idx === -1) return null;
   return text.slice(idx + marker.length).trimEnd();
 }
 //@ chunk-e6aww6q8.js:2013783-2014140 fingerprint = extractApprovedPlan (0.565)
 function extractApprovedPlan(content) {
-  let text = contentToText(content),
-    markers = [
-      `## Approved Plan (edited by user):
+  let text = contentToText(content);
+  let markers = [
+    `## Approved Plan (edited by user):
 `,
-      `## Approved Plan:
+    `## Approved Plan:
 `,
-    ];
+  ];
   for (let marker of markers) {
     let idx = text.indexOf(marker);
     if (idx !== -1) return text.slice(idx + marker.length).trimEnd();
@@ -207,5 +261,4 @@ function extractApprovedPlan(content) {
     `ExitPlanMode approved but tool_result has no "## Approved Plan:" marker \u2014 remote may have hit the empty-plan or isAgent branch. Content preview: ${text.slice(0, 200)}`,
   );
 }
-
 export { pollForApprovedExitPlanMode, UltraplanPollError };

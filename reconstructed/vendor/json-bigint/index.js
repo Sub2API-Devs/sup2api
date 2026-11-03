@@ -6,18 +6,20 @@
  * attribution: cjs-require-graph 1
  */
 import { x } from "../../runtime/bun-runtime.js";
-import { nn } from "./lib/stringify.js";
-import { an } from "./lib/parse.js";
+import { require_stringify } from "./lib/stringify.js";
+import { require_parse } from "./lib/parse.js";
 
 //@ chunk-na3pph4p.js:43194-43354 cjs-require-graph
-var ln = x(function (Md, Ft) {
-  var stringify = nn().stringify,
-    un = an();
-  Ft.exports = function (e) {
-    return { parse: un(e), stringify: stringify };
+var require_json_bigint = x(function (cjsExports, cjsModule) {
+  var json_stringify = require_stringify().stringify;
+  var json_parse = require_parse();
+  cjsModule.exports = function (options) {
+    return {
+      parse: json_parse(options),
+      stringify: json_stringify,
+    };
   };
-  Ft.exports.parse = un();
-  Ft.exports.stringify = stringify;
+  cjsModule.exports.parse = json_parse();
+  cjsModule.exports.stringify = json_stringify;
 });
-
-export { ln };
+export { require_json_bigint };

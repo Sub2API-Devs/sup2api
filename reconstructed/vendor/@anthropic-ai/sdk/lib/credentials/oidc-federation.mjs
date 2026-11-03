@@ -5,67 +5,78 @@
  * pieces: chunk-3wydcdvj.js (1)
  * attribution: esm-fingerprint 1
  */
-import { Jao, rp, aIi, Xao, OAUTH_2025_04_20, OIDC_FEDERATION_2026_04_01, _he, Qao } from "./types.mjs";
-import { Cx } from "../../version.mjs";
+import {
+  Jao,
+  WorkloadIdentityError,
+  GRANT_TYPE_JWT_BEARER,
+  TOKEN_ENDPOINT,
+  OAUTH_API_BETA_HEADER,
+  FEDERATION_BETA_HEADER,
+  redactSensitive,
+  parseTokenResponse,
+} from "./types.mjs";
+import { VERSION } from "../../version.mjs";
 import { y } from "./token-cache.mjs";
 
 //@ chunk-3wydcdvj.js:8473-10007 esm-fingerprint
-function j(e) {
+function oidcFederationProvider(config) {
   return async () => {
-    Jao(e.baseURL);
-    let identityTokenProvider = await e.identityTokenProvider();
-    if (identityTokenProvider.length > 16384)
-      throw new rp(
-        `Identity token is ${Math.ceil(identityTokenProvider.length / 1024)} KiB, exceeds the 16 KiB assertion limit`,
+    Jao(config.baseURL);
+    let jwt = await config.identityTokenProvider();
+    if (jwt.length > 16384)
+      throw new WorkloadIdentityError(
+        `Identity token is ${Math.ceil(jwt.length / 1024)} KiB, exceeds the 16 KiB assertion limit`,
       );
-    let r = {
-      grant_type: aIi,
-      assertion: identityTokenProvider,
-      federation_rule_id: e.federationRuleId,
-      organization_id: e.organizationId,
+    let body = {
+      grant_type: GRANT_TYPE_JWT_BEARER,
+      assertion: jwt,
+      federation_rule_id: config.federationRuleId,
+      organization_id: config.organizationId,
     };
-    if (e.serviceAccountId) r.service_account_id = e.serviceAccountId;
-    if (e.workspaceId) r.workspace_id = e.workspaceId;
-    let s = `${e.baseURL}${Xao}`,
-      o;
+    if (config.serviceAccountId) body.service_account_id = config.serviceAccountId;
+    if (config.workspaceId) body.workspace_id = config.workspaceId;
+    let url = `${config.baseURL}${TOKEN_ENDPOINT}`;
+    let resp;
     try {
-      o = await e.fetch(s, {
+      resp = await config.fetch(url, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "anthropic-beta": `${OAUTH_2025_04_20},${OIDC_FEDERATION_2026_04_01}`,
-          "User-Agent": e.userAgent || `anthropic-sdk-typescript/${Cx} oidcFederationProvider`,
+          "anthropic-beta": `${OAUTH_API_BETA_HEADER},${FEDERATION_BETA_HEADER}`,
+          "User-Agent": config.userAgent || `anthropic-sdk-typescript/${VERSION} oidcFederationProvider`,
         },
-        body: JSON.stringify(r),
+        body: JSON.stringify(body),
       });
-    } catch (error) {
-      throw new rp(`Failed to reach token endpoint ${s}: ${error}`);
+    } catch (err) {
+      throw new WorkloadIdentityError(`Failed to reach token endpoint ${url}: ${err}`);
     }
-    let u = o.headers.get("Request-Id");
-    if (!o.ok) {
-      let _ = await o.text().catch(() => ""),
-        p = _he(_),
-        w = "";
-      if (o.status === 401)
-        w = ` Ensure your federation rule matches your identity token. ${e.workspaceId ? "" : "If your federation rule is scoped to multiple workspaces, set the ANTHROPIC_WORKSPACE_ID environment variable, the 'workspace_id' config key, or the `workspaceId` option. "}View your authentication events in the Workload identity page of Claude Console for more details.`;
-      throw new rp(
-        `Token exchange failed with status ${o.status}${u ? ` (request-id ${u})` : ""}: ${p}${w}`,
-        o.status,
-        p,
-        u,
+    let requestId = resp.headers.get("Request-Id");
+    if (!resp.ok) {
+      let text = await resp.text().catch(() => "");
+      let redacted = redactSensitive(text);
+      let hint = "";
+      if (resp.status === 401)
+        hint = ` Ensure your federation rule matches your identity token. ${config.workspaceId ? "" : "If your federation rule is scoped to multiple workspaces, set the ANTHROPIC_WORKSPACE_ID environment variable, the 'workspace_id' config key, or the `workspaceId` option. "}View your authentication events in the Workload identity page of Claude Console for more details.`;
+      throw new WorkloadIdentityError(
+        `Token exchange failed with status ${resp.status}${requestId ? ` (request-id ${requestId})` : ""}: ${redacted}${hint}`,
+        resp.status,
+        redacted,
+        requestId,
       );
     }
-    let f = await Qao(o, u),
-      h = Number(f.expires_in);
-    if (!Number.isFinite(h))
-      throw new rp(
-        `Token endpoint response missing required fields: ${JSON.stringify(_he(f))}`,
-        o.status,
-        _he(f),
-        u,
+    let data = await parseTokenResponse(resp, requestId);
+    let expiresIn = Number(data.expires_in);
+    if (!Number.isFinite(expiresIn))
+      throw new WorkloadIdentityError(
+        `Token endpoint response missing required fields: ${JSON.stringify(redactSensitive(data))}`,
+        resp.status,
+        redactSensitive(data),
+        requestId,
       );
-    return { token: f.access_token, expiresAt: y() + h };
+    return {
+      token: data.access_token,
+      expiresAt: y() + expiresIn,
+    };
   };
 }
-
-export { j };
+export { oidcFederationProvider };

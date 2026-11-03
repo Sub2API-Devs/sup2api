@@ -6,80 +6,73 @@
  * attribution: cjs-fingerprint 1
  */
 import { x, importMetaRequire } from "../../../runtime/bun-runtime.js";
-import { vO } from "../../oidc-token-hash/lib/index.js";
-import { kO } from "./helpers/is_key_object.js";
-import { PO } from "./helpers/decode_jwt.js";
-import { vu } from "./helpers/base64url.js";
-import { ly } from "./helpers/defaults.js";
-import { cy } from "./helpers/www_authenticate_parser.js";
-import { uf } from "./helpers/assert.js";
-import { df } from "./helpers/pick.js";
-import { wu } from "./helpers/is_plain_object.js";
-import { pf } from "./helpers/process_response.js";
-import { dy } from "./token_set.js";
-import { Ki } from "./errors.js";
-import { Ou } from "./helpers/unix_timestamp.js";
-import { Su } from "./helpers/generators.js";
-import { Ol } from "./helpers/request.js";
-import { _f } from "./helpers/consts.js";
-import { wf } from "./helpers/weak_cache.js";
-import { gy } from "./helpers/keystore.js";
-import { Pu } from "./helpers/deep_clone.js";
-import { by } from "./helpers/client.js";
-import { ky } from "./helpers/issuer.js";
-import { NS } from "./device_flow_handle.js";
+import { require_oidc_token_hash } from "../../oidc-token-hash/lib/index.js";
+import { require_is_key_object } from "./helpers/is_key_object.js";
+import { require_decode_jwt } from "./helpers/decode_jwt.js";
+import { require_base64url } from "./helpers/base64url.js";
+import { require_defaults } from "./helpers/defaults.js";
+import { require_www_authenticate_parser } from "./helpers/www_authenticate_parser.js";
+import { require_assert } from "./helpers/assert.js";
+import { require_pick } from "./helpers/pick.js";
+import { require_is_plain_object } from "./helpers/is_plain_object.js";
+import { require_process_response } from "./helpers/process_response.js";
+import { require_token_set } from "./token_set.js";
+import { require_errors } from "./errors.js";
+import { require_unix_timestamp } from "./helpers/unix_timestamp.js";
+import { require_generators } from "./helpers/generators.js";
+import { require_request } from "./helpers/request.js";
+import { require_consts } from "./helpers/consts.js";
+import { require_weak_cache } from "./helpers/weak_cache.js";
+import { require_keystore } from "./helpers/keystore.js";
+import { require_deep_clone } from "./helpers/deep_clone.js";
+import { require_client } from "./helpers/client.js";
+import { require_issuer_2 } from "./helpers/issuer.js";
+import { require_device_flow_handle } from "./device_flow_handle.js";
 import { env } from "../../../src/utils/env.js";
 
 //@ chunk-1ny7cxrt.js:40798-68879 cjs-fingerprint
-var Ly = x(function (Jve, xy) {
-  var { inspect: inspect } = importMetaRequire("util"),
-    XS = importMetaRequire("http"),
-    El = importMetaRequire("crypto"),
-    { strict: strict } = importMetaRequire("assert"),
-    Il = importMetaRequire("querystring"),
-    Cl = importMetaRequire("url"),
-    { URL: zS, URLSearchParams: FS } = importMetaRequire("url"),
-    on = require("./chunk-2tyrgda4.js"),
-    Pl = vO(),
-    QS = kO(),
-    tB = PO(),
-    qs = vu(),
-    BS = ly(),
-    nB = cy(),
-    {
-      assertSigningAlgValuesSupport: assertSigningAlgValuesSupport,
-      assertIssuerConfiguration: assertIssuerConfiguration,
-    } = uf(),
-    Dy = df(),
-    Vs = wu(),
-    Ks = pf(),
-    Vr = dy(),
-    { OPError: OPError, RPError: RPError } = Ki(),
-    Ay = Ou(),
-    { random: random } = Su(),
-    Al = Ol(),
-    { CLOCK_TOLERANCE: CLOCK_TOLERANCE } = _f(),
-    { keystores: keystores } = wf(),
-    ek = gy(),
-    ZS = Pu(),
-    {
-      authenticatedPost: authenticatedPost,
-      resolveResponseType: resolveResponseType,
-      resolveRedirectUri: resolveRedirectUri,
-    } = by(),
-    { queryKeyStore: queryKeyStore } = ky(),
-    oB = NS(),
-    [qS, sB] = process.version
-      .slice(1)
-      .split(".")
-      .map((e) => parseInt(e, 10)),
-    aB = qS >= 17 || (qS === 16 && sB >= 9),
-    Cy = Symbol(),
-    GS = Symbol(),
-    WS = Symbol();
-  function Zs(e) {
-    return Dy(
-      e,
+var require_client_2 = x(function (cjsExports, cjsModule) {
+  var { inspect } = importMetaRequire("util");
+  var stdhttp = importMetaRequire("http");
+  var El = importMetaRequire("crypto");
+  var { strict: assert } = importMetaRequire("assert");
+  var querystring = importMetaRequire("querystring");
+  var url = importMetaRequire("url");
+  var { URL: zS, URLSearchParams: FS } = importMetaRequire("url");
+  var jose = require("./chunk-2tyrgda4.js");
+  var tokenHash = require_oidc_token_hash();
+  var isKeyObject = require_is_key_object();
+  var decodeJWT = require_decode_jwt();
+  var base64url = require_base64url();
+  var defaults = require_defaults();
+  var parseWwwAuthenticate = require_www_authenticate_parser();
+  var { assertSigningAlgValuesSupport, assertIssuerConfiguration } = require_assert();
+  var pick = require_pick();
+  var isPlainObject = require_is_plain_object();
+  var processResponse = require_process_response();
+  var TokenSet = require_token_set();
+  var { OPError, RPError } = require_errors();
+  var now = require_unix_timestamp();
+  var { random } = require_generators();
+  var request = require_request();
+  var { CLOCK_TOLERANCE } = require_consts();
+  var { keystores } = require_weak_cache();
+  var KeyStore = require_keystore();
+  var clone = require_deep_clone();
+  var { authenticatedPost, resolveResponseType, resolveRedirectUri } = require_client();
+  var { queryKeyStore } = require_issuer_2();
+  var DeviceFlowHandle = require_device_flow_handle();
+  var [major, minor] = process.version
+    .slice(1)
+    .split(".")
+    .map((str) => parseInt(str, 10));
+  var aB = major >= 17 || (major === 16 && minor >= 9);
+  var retryAttempt = Symbol();
+  var skipNonceCheck = Symbol();
+  var skipMaxAgeCheck = Symbol();
+  function pickCb(input) {
+    return pick(
+      input,
       "access_token",
       "code",
       "error_description",
@@ -94,84 +87,95 @@ var Ly = x(function (Jve, xy) {
       "token_type",
     );
   }
-  function Ty(e, t = "Bearer") {
-    return `${t} ${e}`;
+  function authorizationHeaderValue(token, tokenType = "Bearer") {
+    return `${tokenType} ${token}`;
   }
-  function $y(e) {
-    let parse = Cl.parse(e);
-    if (!parse.search) return {};
-    return Il.parse(parse.search.substring(1));
+  function getSearchParams(input) {
+    let parsed = url.parse(input);
+    if (!parsed.search) return {};
+    return querystring.parse(parsed.search.substring(1));
   }
-  function lB(e, t, n) {
-    if (e[n] === void 0) throw new RPError({ message: `missing required JWT property ${n}`, jwt: t });
+  function verifyPresence(payload, jwt, prop) {
+    if (payload[prop] === undefined)
+      throw new RPError({
+        message: `missing required JWT property ${prop}`,
+        jwt,
+      });
   }
-  function kf(e) {
-    let t = {
+  function authorizationParams(params) {
+    let authParams = {
       client_id: this.client_id,
       scope: "openid",
       response_type: resolveResponseType.call(this),
       redirect_uri: resolveRedirectUri.call(this),
-      ...e,
+      ...params,
     };
-    return (
-      Object.entries(t).forEach(([n, o]) => {
-        if (o === null || o === void 0) delete t[n];
-        else if (n === "claims" && typeof o === "object") t[n] = JSON.stringify(o);
-        else if (n === "resource" && Array.isArray(o)) t[n] = o;
-        else if (typeof o !== "string") t[n] = String(o);
-      }),
-      t
-    );
+    Object.entries(authParams).forEach(([key, value]) => {
+      if (value === null || value === undefined) delete authParams[key];
+      else if (key === "claims" && typeof value === "object") authParams[key] = JSON.stringify(value);
+      else if (key === "resource" && Array.isArray(value)) authParams[key] = value;
+      else if (typeof value !== "string") authParams[key] = String(value);
+    });
+    return authParams;
   }
-  function YS(e) {
-    if (!Vs(e) || !Array.isArray(e.keys) || e.keys.some((key) => !Vs(key) || !("kty" in key)))
+  function getKeystore(jwks) {
+    if (
+      !isPlainObject(jwks) ||
+      !Array.isArray(jwks.keys) ||
+      jwks.keys.some((k) => !isPlainObject(k) || !("kty" in k))
+    )
       throw TypeError("jwks must be a JSON Web Key Set formatted object");
-    return ek.fromJWKS(e, { onlyPrivate: !0 });
+    return KeyStore.fromJWKS(jwks, {
+      onlyPrivate: true,
+    });
   }
-  function cB(e, t) {
+  function checkBasicSupport(client, properties) {
     try {
-      let token_endpoint_auth_methods_supported = e.issuer.token_endpoint_auth_methods_supported;
-      if (!token_endpoint_auth_methods_supported.includes(t.token_endpoint_auth_method)) {
-        if (token_endpoint_auth_methods_supported.includes("client_secret_post"))
-          t.token_endpoint_auth_method = "client_secret_post";
+      let supported = client.issuer.token_endpoint_auth_methods_supported;
+      if (!supported.includes(properties.token_endpoint_auth_method)) {
+        if (supported.includes("client_secret_post"))
+          properties.token_endpoint_auth_method = "client_secret_post";
       }
-    } catch (error) {}
+    } catch (err) {}
   }
-  function uB(e, t, n) {
-    if (!t.token_endpoint_auth_method) cB(e, n);
-    if (t.redirect_uri) {
-      if (t.redirect_uris) throw TypeError("provide a redirect_uri or redirect_uris, not both");
-      ((n.redirect_uris = [t.redirect_uri]), delete n.redirect_uri);
+  function handleCommonMistakes(client, metadata, properties) {
+    if (!metadata.token_endpoint_auth_method) checkBasicSupport(client, properties);
+    if (metadata.redirect_uri) {
+      if (metadata.redirect_uris) throw TypeError("provide a redirect_uri or redirect_uris, not both");
+      properties.redirect_uris = [metadata.redirect_uri];
+      delete properties.redirect_uri;
     }
-    if (t.response_type) {
-      if (t.response_types) throw TypeError("provide a response_type or response_types, not both");
-      ((n.response_types = [t.response_type]), delete n.response_type);
+    if (metadata.response_type) {
+      if (metadata.response_types) throw TypeError("provide a response_type or response_types, not both");
+      properties.response_types = [metadata.response_type];
+      delete properties.response_type;
     }
   }
-  function dB(e, t, n) {
-    if (!t[`${e}_endpoint`]) return;
+  function getDefaultsForEndpoint(endpoint, issuer, properties) {
+    if (!issuer[`${endpoint}_endpoint`]) return;
     let {
-        token_endpoint_auth_method: token_endpoint_auth_method,
-        token_endpoint_auth_signing_alg: token_endpoint_auth_signing_alg,
-      } = n,
-      s = `${e}_endpoint_auth_method`,
-      a = `${e}_endpoint_auth_signing_alg`;
-    if (n[s] === void 0 && n[a] === void 0) {
-      if (token_endpoint_auth_method !== void 0) n[s] = token_endpoint_auth_method;
-      if (token_endpoint_auth_signing_alg !== void 0) n[a] = token_endpoint_auth_signing_alg;
+      token_endpoint_auth_method: tokenEndpointAuthMethod,
+      token_endpoint_auth_signing_alg: tokenEndpointAuthSigningAlg,
+    } = properties;
+    let eam = `${endpoint}_endpoint_auth_method`;
+    let easa = `${endpoint}_endpoint_auth_signing_alg`;
+    if (properties[eam] === undefined && properties[easa] === undefined) {
+      if (tokenEndpointAuthMethod !== undefined) properties[eam] = tokenEndpointAuthMethod;
+      if (tokenEndpointAuthSigningAlg !== undefined) properties[easa] = tokenEndpointAuthSigningAlg;
     }
   }
-  class jy {
+  class BaseClient {
     #e;
     #t;
     #r;
     #i;
-    constructor(e, t, n = {}, o, r) {
-      if (
-        ((this.#e = new Map()), (this.#t = e), (this.#r = t), typeof n.client_id !== "string" || !n.client_id)
-      )
+    constructor(issuer, aadIssValidation, metadata = {}, jwks, options) {
+      this.#e = new Map();
+      this.#t = issuer;
+      this.#r = aadIssValidation;
+      if (typeof metadata.client_id !== "string" || !metadata.client_id)
         throw TypeError("client_id is required");
-      let s = {
+      let properties = {
         grant_types: ["authorization_code"],
         id_token_signed_response_alg: "RS256",
         authorization_signed_response_alg: "RS256",
@@ -183,80 +187,83 @@ var Ly = x(function (Jve, xy) {
               id_token_signed_response_alg: "PS256",
               authorization_signed_response_alg: "PS256",
               response_types: ["code id_token"],
-              tls_client_certificate_bound_access_tokens: !0,
-              token_endpoint_auth_method: void 0,
+              tls_client_certificate_bound_access_tokens: true,
+              token_endpoint_auth_method: undefined,
             }
-          : void 0),
+          : undefined),
         ...(this.fapi2()
           ? {
               id_token_signed_response_alg: "PS256",
               authorization_signed_response_alg: "PS256",
-              token_endpoint_auth_method: void 0,
+              token_endpoint_auth_method: undefined,
             }
-          : void 0),
-        ...n,
+          : undefined),
+        ...metadata,
       };
       if (this.fapi())
-        switch (s.token_endpoint_auth_method) {
+        switch (properties.token_endpoint_auth_method) {
           case "self_signed_tls_client_auth":
           case "tls_client_auth":
             break;
           case "private_key_jwt":
-            if (!o) throw TypeError("jwks is required");
+            if (!jwks) throw TypeError("jwks is required");
             break;
-          case void 0:
+          case undefined:
             throw TypeError("token_endpoint_auth_method is required");
           default:
             throw TypeError("invalid or unsupported token_endpoint_auth_method");
         }
       if (this.fapi2()) {
-        if (s.tls_client_certificate_bound_access_tokens && s.dpop_bound_access_tokens)
+        if (properties.tls_client_certificate_bound_access_tokens && properties.dpop_bound_access_tokens)
           throw TypeError(
             "either tls_client_certificate_bound_access_tokens or dpop_bound_access_tokens must be set to true",
           );
-        if (!s.tls_client_certificate_bound_access_tokens && !s.dpop_bound_access_tokens)
+        if (!properties.tls_client_certificate_bound_access_tokens && !properties.dpop_bound_access_tokens)
           throw TypeError(
             "either tls_client_certificate_bound_access_tokens or dpop_bound_access_tokens must be set to true",
           );
       }
-      if (
-        (uB(this, n, s),
-        assertSigningAlgValuesSupport("token", this.issuer, s),
-        ["introspection", "revocation"].forEach((a) => {
-          (dB(a, this.issuer, s), assertSigningAlgValuesSupport(a, this.issuer, s));
-        }),
-        Object.entries(s).forEach(([a, l]) => {
-          if ((this.#e.set(a, l), !this[a]))
-            Object.defineProperty(this, a, {
-              get() {
-                return this.#e.get(a);
-              },
-              enumerable: !0,
-            });
-        }),
-        o !== void 0)
-      ) {
-        let a = YS.call(this, o);
-        keystores.set(this, a);
+      handleCommonMistakes(this, metadata, properties);
+      assertSigningAlgValuesSupport("token", this.issuer, properties);
+      ["introspection", "revocation"].forEach((endpoint) => {
+        getDefaultsForEndpoint(endpoint, this.issuer, properties);
+        assertSigningAlgValuesSupport(endpoint, this.issuer, properties);
+      });
+      Object.entries(properties).forEach(([key, value]) => {
+        this.#e.set(key, value);
+        if (!this[key])
+          Object.defineProperty(this, key, {
+            get() {
+              return this.#e.get(key);
+            },
+            enumerable: true,
+          });
+      });
+      if (jwks !== undefined) {
+        let keystore = getKeystore.call(this, jwks);
+        keystores.set(this, keystore);
       }
-      if (r != null && r.additionalAuthorizedParties) this.#i = ZS(r.additionalAuthorizedParties);
+      if (options != null && options.additionalAuthorizedParties)
+        this.#i = clone(options.additionalAuthorizedParties);
       this[CLOCK_TOLERANCE] = 0;
     }
-    authorizationUrl(e = {}) {
-      if (!Vs(e)) throw TypeError("params must be a plain object");
+    authorizationUrl(params = {}) {
+      if (!isPlainObject(params)) throw TypeError("params must be a plain object");
       assertIssuerConfiguration(this.issuer, "authorization_endpoint");
-      let t = new zS(this.issuer.authorization_endpoint);
-      for (let [n, o] of Object.entries(kf.call(this, e)))
-        if (Array.isArray(o)) {
-          t.searchParams.delete(n);
-          for (let r of o) t.searchParams.append(n, r);
-        } else t.searchParams.set(n, o);
-      return t.href.replace(/\+/g, "%20");
+      let target = new zS(this.issuer.authorization_endpoint);
+      for (let [name, value] of Object.entries(authorizationParams.call(this, params)))
+        if (Array.isArray(value)) {
+          target.searchParams.delete(name);
+          for (let member of value) target.searchParams.append(name, member);
+        } else target.searchParams.set(name, value);
+      return target.href.replace(/\+/g, "%20");
     }
-    authorizationPost(e = {}) {
-      if (!Vs(e)) throw TypeError("params must be a plain object");
-      let t = kf.call(this, e),
-        joined = Object.keys(t).map((o) => `<input type="hidden" name="${o}" value="${t[o]}"/>`).join(`
+    authorizationPost(params = {}) {
+      if (!isPlainObject(params)) throw TypeError("params must be a plain object");
+      let inputs = authorizationParams.call(this, params);
+      let formInputs = Object.keys(inputs).map(
+        (name) => `<input type="hidden" name="${name}" value="${inputs[name]}"/>`,
+      ).join(`
 `);
       return `<!DOCTYPE html>
 <head>
@@ -264,800 +271,1097 @@ var Ly = x(function (Jve, xy) {
 </head>
 <body onload="javascript:document.forms[0].submit()">
 <form method="post" action="${this.issuer.authorization_endpoint}">
-  ${joined}
+  ${formInputs}
 </form>
 </body>
 </html>`;
     }
-    endSessionUrl(e = {}) {
+    endSessionUrl(params = {}) {
       assertIssuerConfiguration(this.issuer, "end_session_endpoint");
-      let { 0: t, length: n } = this.post_logout_redirect_uris || [],
-        { post_logout_redirect_uri: post_logout_redirect_uri = n === 1 ? t : void 0 } = e,
-        r;
-      if ((({ id_token_hint: r, ...e } = e), r instanceof Vr)) {
-        if (!r.id_token) throw TypeError("id_token not present in TokenSet");
-        r = r.id_token;
+      let { 0: postLogout, length } = this.post_logout_redirect_uris || [];
+      let { post_logout_redirect_uri = length === 1 ? postLogout : undefined } = params;
+      let id_token_hint;
+      ({ id_token_hint, ...params } = params);
+      if (id_token_hint instanceof TokenSet) {
+        if (!id_token_hint.id_token) throw TypeError("id_token not present in TokenSet");
+        id_token_hint = id_token_hint.id_token;
       }
-      let parse = Cl.parse(this.issuer.end_session_endpoint),
-        a = BS(
-          $y(this.issuer.end_session_endpoint),
-          e,
-          { post_logout_redirect_uri: post_logout_redirect_uri, client_id: this.client_id },
-          { id_token_hint: r },
-        );
-      return (
-        Object.entries(a).forEach(([l, c]) => {
-          if (c === null || c === void 0) delete a[l];
-        }),
-        (parse.search = null),
-        (parse.query = a),
-        Cl.format(parse)
+      let target = url.parse(this.issuer.end_session_endpoint);
+      let query = defaults(
+        getSearchParams(this.issuer.end_session_endpoint),
+        params,
+        {
+          post_logout_redirect_uri,
+          client_id: this.client_id,
+        },
+        {
+          id_token_hint,
+        },
       );
+      Object.entries(query).forEach(([key, value]) => {
+        if (value === null || value === undefined) delete query[key];
+      });
+      target.search = null;
+      target.query = query;
+      return url.format(target);
     }
-    callbackParams(e) {
-      let t = e instanceof XS.IncomingMessage || (e && e.method && e.url);
-      if (typeof e !== "string" && !t)
+    callbackParams(input) {
+      let isIncomingMessage =
+        input instanceof stdhttp.IncomingMessage || (input && input.method && input.url);
+      if (typeof input !== "string" && !isIncomingMessage)
         throw TypeError("#callbackParams only accepts string urls, http.IncomingMessage or a lookalike");
-      if (t)
-        switch (e.method) {
+      if (isIncomingMessage)
+        switch (input.method) {
           case "GET":
-            return Zs($y(e.url));
+            return pickCb(getSearchParams(input.url));
           case "POST":
-            if (e.body === void 0)
+            if (input.body === undefined)
               throw TypeError(
                 "incoming message body missing, include a body parser prior to this method call",
               );
-            switch (typeof e.body) {
+            switch (typeof input.body) {
               case "object":
               case "string":
-                if (Buffer.isBuffer(e.body)) return Zs(Il.parse(e.body.toString("utf-8")));
-                if (typeof e.body === "string") return Zs(Il.parse(e.body));
-                return Zs(e.body);
+                if (Buffer.isBuffer(input.body))
+                  return pickCb(querystring.parse(input.body.toString("utf-8")));
+                if (typeof input.body === "string") return pickCb(querystring.parse(input.body));
+                return pickCb(input.body);
               default:
                 throw TypeError("invalid IncomingMessage body object");
             }
           default:
             throw TypeError("invalid IncomingMessage method");
         }
-      else return Zs($y(e));
+      else return pickCb(getSearchParams(input));
     }
-    async callback(e, t, n = {}, { exchangeBody: o, clientAssertionPayload: r, DPoP: s } = {}) {
-      let a = Zs(t);
-      if (n.jarm && !("response" in t))
-        throw new RPError({ message: "expected a JARM response", checks: n, params: a });
-      else if ("response" in t) {
-        let decryptJARM = await this.decryptJARM(a.response);
-        a = await this.validateJARM(decryptJARM);
-      }
-      if (this.default_max_age && !n.max_age) n.max_age = this.default_max_age;
-      if (a.state && !n.state) throw TypeError("checks.state argument is missing");
-      if (!a.state && n.state)
-        throw new RPError({ message: "state missing from the response", checks: n, params: a });
-      if (n.state !== a.state)
+    async callback(
+      redirectUri,
+      parameters,
+      checks = {},
+      { exchangeBody, clientAssertionPayload, DPoP } = {},
+    ) {
+      let params = pickCb(parameters);
+      if (checks.jarm && !("response" in parameters))
         throw new RPError({
-          printf: ["state mismatch, expected %s, got: %s", n.state, a.state],
-          checks: n,
-          params: a,
+          message: "expected a JARM response",
+          checks,
+          params,
         });
-      if ("iss" in a) {
-        if ((assertIssuerConfiguration(this.issuer, "issuer"), a.iss !== this.issuer.issuer))
+      else if ("response" in parameters) {
+        let decrypted = await this.decryptJARM(params.response);
+        params = await this.validateJARM(decrypted);
+      }
+      if (this.default_max_age && !checks.max_age) checks.max_age = this.default_max_age;
+      if (params.state && !checks.state) throw TypeError("checks.state argument is missing");
+      if (!params.state && checks.state)
+        throw new RPError({
+          message: "state missing from the response",
+          checks,
+          params,
+        });
+      if (checks.state !== params.state)
+        throw new RPError({
+          printf: ["state mismatch, expected %s, got: %s", checks.state, params.state],
+          checks,
+          params,
+        });
+      if ("iss" in params) {
+        assertIssuerConfiguration(this.issuer, "issuer");
+        if (params.iss !== this.issuer.issuer)
           throw new RPError({
-            printf: ["iss mismatch, expected %s, got: %s", this.issuer.issuer, a.iss],
-            params: a,
+            printf: ["iss mismatch, expected %s, got: %s", this.issuer.issuer, params.iss],
+            params,
           });
       } else if (
         this.issuer.authorization_response_iss_parameter_supported &&
-        !("id_token" in a) &&
-        !("response" in t)
+        !("id_token" in params) &&
+        !("response" in parameters)
       )
-        throw new RPError({ message: "iss missing from the response", params: a });
-      if (a.error) throw new OPError(a);
-      let l = { code: ["code"], id_token: ["id_token"], token: ["access_token", "token_type"] };
-      if (n.response_type) {
-        for (let c of n.response_type.split(" "))
-          if (c === "none") {
-            if (a.code || a.id_token || a.access_token)
+        throw new RPError({
+          message: "iss missing from the response",
+          params,
+        });
+      if (params.error) throw new OPError(params);
+      let RESPONSE_TYPE_REQUIRED_PARAMS = {
+        code: ["code"],
+        id_token: ["id_token"],
+        token: ["access_token", "token_type"],
+      };
+      if (checks.response_type) {
+        for (let type of checks.response_type.split(" "))
+          if (type === "none") {
+            if (params.code || params.id_token || params.access_token)
               throw new RPError({
                 message: 'unexpected params encountered for "none" response',
-                checks: n,
-                params: a,
+                checks,
+                params,
               });
           } else
-            for (let u of l[c])
-              if (!a[u]) throw new RPError({ message: `${u} missing from response`, checks: n, params: a });
+            for (let param of RESPONSE_TYPE_REQUIRED_PARAMS[type])
+              if (!params[param])
+                throw new RPError({
+                  message: `${param} missing from response`,
+                  checks,
+                  params,
+                });
       }
-      if (a.id_token) {
-        let c = new Vr(a);
-        if (
-          (await this.decryptIdToken(c),
-          await this.validateIdToken(c, n.nonce, "authorization", n.max_age, n.state),
-          !a.code)
-        )
-          return c;
+      if (params.id_token) {
+        let tokenset = new TokenSet(params);
+        await this.decryptIdToken(tokenset);
+        await this.validateIdToken(tokenset, checks.nonce, "authorization", checks.max_age, checks.state);
+        if (!params.code) return tokenset;
       }
-      if (a.code) {
-        let grant = await this.grant(
+      if (params.code) {
+        let tokenset = await this.grant(
           {
-            ...o,
+            ...exchangeBody,
             grant_type: "authorization_code",
-            code: a.code,
-            redirect_uri: e,
-            code_verifier: n.code_verifier,
+            code: params.code,
+            redirect_uri: redirectUri,
+            code_verifier: checks.code_verifier,
           },
-          { clientAssertionPayload: r, DPoP: s },
+          {
+            clientAssertionPayload,
+            DPoP,
+          },
         );
-        if (
-          (await this.decryptIdToken(grant),
-          await this.validateIdToken(grant, n.nonce, "token", n.max_age),
-          a.session_state)
-        )
-          grant.session_state = a.session_state;
-        return grant;
+        await this.decryptIdToken(tokenset);
+        await this.validateIdToken(tokenset, checks.nonce, "token", checks.max_age);
+        if (params.session_state) tokenset.session_state = params.session_state;
+        return tokenset;
       }
-      return new Vr(a);
+      return new TokenSet(params);
     }
-    async oauthCallback(e, t, n = {}, { exchangeBody: o, clientAssertionPayload: r, DPoP: s } = {}) {
-      let a = Zs(t);
-      if (n.jarm && !("response" in t))
-        throw new RPError({ message: "expected a JARM response", checks: n, params: a });
-      else if ("response" in t) {
-        let decryptJARM = await this.decryptJARM(a.response);
-        a = await this.validateJARM(decryptJARM);
-      }
-      if (a.state && !n.state) throw TypeError("checks.state argument is missing");
-      if (!a.state && n.state)
-        throw new RPError({ message: "state missing from the response", checks: n, params: a });
-      if (n.state !== a.state)
+    async oauthCallback(
+      redirectUri,
+      parameters,
+      checks = {},
+      { exchangeBody, clientAssertionPayload, DPoP } = {},
+    ) {
+      let params = pickCb(parameters);
+      if (checks.jarm && !("response" in parameters))
         throw new RPError({
-          printf: ["state mismatch, expected %s, got: %s", n.state, a.state],
-          checks: n,
-          params: a,
+          message: "expected a JARM response",
+          checks,
+          params,
         });
-      if ("iss" in a) {
-        if ((assertIssuerConfiguration(this.issuer, "issuer"), a.iss !== this.issuer.issuer))
+      else if ("response" in parameters) {
+        let decrypted = await this.decryptJARM(params.response);
+        params = await this.validateJARM(decrypted);
+      }
+      if (params.state && !checks.state) throw TypeError("checks.state argument is missing");
+      if (!params.state && checks.state)
+        throw new RPError({
+          message: "state missing from the response",
+          checks,
+          params,
+        });
+      if (checks.state !== params.state)
+        throw new RPError({
+          printf: ["state mismatch, expected %s, got: %s", checks.state, params.state],
+          checks,
+          params,
+        });
+      if ("iss" in params) {
+        assertIssuerConfiguration(this.issuer, "issuer");
+        if (params.iss !== this.issuer.issuer)
           throw new RPError({
-            printf: ["iss mismatch, expected %s, got: %s", this.issuer.issuer, a.iss],
-            params: a,
+            printf: ["iss mismatch, expected %s, got: %s", this.issuer.issuer, params.iss],
+            params,
           });
       } else if (
         this.issuer.authorization_response_iss_parameter_supported &&
-        !("id_token" in a) &&
-        !("response" in t)
+        !("id_token" in params) &&
+        !("response" in parameters)
       )
-        throw new RPError({ message: "iss missing from the response", params: a });
-      if (a.error) throw new OPError(a);
-      if (typeof a.id_token === "string" && a.id_token.length)
+        throw new RPError({
+          message: "iss missing from the response",
+          params,
+        });
+      if (params.error) throw new OPError(params);
+      if (typeof params.id_token === "string" && params.id_token.length)
         throw new RPError({
           message:
             "id_token detected in the response, you must use client.callback() instead of client.oauthCallback()",
-          params: a,
+          params,
         });
-      delete a.id_token;
-      let l = { code: ["code"], token: ["access_token", "token_type"] };
-      if (n.response_type)
-        for (let c of n.response_type.split(" ")) {
-          if (c === "none") {
-            if (a.code || a.id_token || a.access_token)
+      delete params.id_token;
+      let RESPONSE_TYPE_REQUIRED_PARAMS = {
+        code: ["code"],
+        token: ["access_token", "token_type"],
+      };
+      if (checks.response_type)
+        for (let type of checks.response_type.split(" ")) {
+          if (type === "none") {
+            if (params.code || params.id_token || params.access_token)
               throw new RPError({
                 message: 'unexpected params encountered for "none" response',
-                checks: n,
-                params: a,
+                checks,
+                params,
               });
           }
-          if (l[c]) {
-            for (let u of l[c])
-              if (!a[u]) throw new RPError({ message: `${u} missing from response`, checks: n, params: a });
+          if (RESPONSE_TYPE_REQUIRED_PARAMS[type]) {
+            for (let param of RESPONSE_TYPE_REQUIRED_PARAMS[type])
+              if (!params[param])
+                throw new RPError({
+                  message: `${param} missing from response`,
+                  checks,
+                  params,
+                });
           }
         }
-      if (a.code) {
-        let grant = await this.grant(
+      if (params.code) {
+        let tokenset = await this.grant(
           {
-            ...o,
+            ...exchangeBody,
             grant_type: "authorization_code",
-            code: a.code,
-            redirect_uri: e,
-            code_verifier: n.code_verifier,
+            code: params.code,
+            redirect_uri: redirectUri,
+            code_verifier: checks.code_verifier,
           },
-          { clientAssertionPayload: r, DPoP: s },
+          {
+            clientAssertionPayload,
+            DPoP,
+          },
         );
-        if (typeof grant.id_token === "string" && grant.id_token.length)
+        if (typeof tokenset.id_token === "string" && tokenset.id_token.length)
           throw new RPError({
             message:
               "id_token detected in the response, you must use client.callback() instead of client.oauthCallback()",
-            params: a,
+            params,
           });
-        return (delete grant.id_token, grant);
+        delete tokenset.id_token;
+        return tokenset;
       }
-      return new Vr(a);
+      return new TokenSet(params);
     }
-    async decryptIdToken(e) {
-      if (!this.id_token_encrypted_response_alg) return e;
-      let t = e;
-      if (t instanceof Vr) {
-        if (!t.id_token) throw TypeError("id_token not present in TokenSet");
-        t = t.id_token;
+    async decryptIdToken(token) {
+      if (!this.id_token_encrypted_response_alg) return token;
+      let idToken = token;
+      if (idToken instanceof TokenSet) {
+        if (!idToken.id_token) throw TypeError("id_token not present in TokenSet");
+        idToken = idToken.id_token;
       }
-      let id_token_encrypted_response_alg = this.id_token_encrypted_response_alg,
-        id_token_encrypted_response_enc = this.id_token_encrypted_response_enc,
-        decryptJWE = await this.decryptJWE(
-          t,
-          id_token_encrypted_response_alg,
-          id_token_encrypted_response_enc,
-        );
-      if (e instanceof Vr) return ((e.id_token = decryptJWE), e);
-      return decryptJWE;
+      let expectedAlg = this.id_token_encrypted_response_alg;
+      let expectedEnc = this.id_token_encrypted_response_enc;
+      let result = await this.decryptJWE(idToken, expectedAlg, expectedEnc);
+      if (token instanceof TokenSet) {
+        token.id_token = result;
+        return token;
+      }
+      return result;
     }
-    async validateJWTUserinfo(e) {
-      let userinfo_signed_response_alg = this.userinfo_signed_response_alg;
-      return this.validateJWT(e, userinfo_signed_response_alg, []);
+    async validateJWTUserinfo(body) {
+      let expectedAlg = this.userinfo_signed_response_alg;
+      return this.validateJWT(body, expectedAlg, []);
     }
-    async decryptJARM(e) {
-      if (!this.authorization_encrypted_response_alg) return e;
-      let authorization_encrypted_response_alg = this.authorization_encrypted_response_alg,
-        authorization_encrypted_response_enc = this.authorization_encrypted_response_enc;
-      return this.decryptJWE(e, authorization_encrypted_response_alg, authorization_encrypted_response_enc);
+    async decryptJARM(response) {
+      if (!this.authorization_encrypted_response_alg) return response;
+      let expectedAlg = this.authorization_encrypted_response_alg;
+      let expectedEnc = this.authorization_encrypted_response_enc;
+      return this.decryptJWE(response, expectedAlg, expectedEnc);
     }
-    async decryptJWTUserinfo(e) {
-      if (!this.userinfo_encrypted_response_alg) return e;
-      let userinfo_encrypted_response_alg = this.userinfo_encrypted_response_alg,
-        userinfo_encrypted_response_enc = this.userinfo_encrypted_response_enc;
-      return this.decryptJWE(e, userinfo_encrypted_response_alg, userinfo_encrypted_response_enc);
+    async decryptJWTUserinfo(body) {
+      if (!this.userinfo_encrypted_response_alg) return body;
+      let expectedAlg = this.userinfo_encrypted_response_alg;
+      let expectedEnc = this.userinfo_encrypted_response_enc;
+      return this.decryptJWE(body, expectedAlg, expectedEnc);
     }
-    async decryptJWE(e, t, n = "A128CBC-HS256") {
-      let parsed = JSON.parse(qs.decode(e.split(".")[0]));
-      if (parsed.alg !== t)
+    async decryptJWE(jwe, expectedAlg, expectedEnc = "A128CBC-HS256") {
+      let header = JSON.parse(base64url.decode(jwe.split(".")[0]));
+      if (header.alg !== expectedAlg)
         throw new RPError({
-          printf: ["unexpected JWE alg received, expected %s, got: %s", t, parsed.alg],
-          jwt: e,
+          printf: ["unexpected JWE alg received, expected %s, got: %s", expectedAlg, header.alg],
+          jwt: jwe,
         });
-      if (parsed.enc !== n)
+      if (header.enc !== expectedEnc)
         throw new RPError({
-          printf: ["unexpected JWE enc received, expected %s, got: %s", n, parsed.enc],
-          jwt: e,
+          printf: ["unexpected JWE enc received, expected %s, got: %s", expectedEnc, header.enc],
+          jwt: jwe,
         });
-      let r = (a) => new TextDecoder().decode(a.plaintext),
-        s;
-      if (t.match(/^(?:RSA|ECDH)/)) {
-        let a = await keystores.get(this),
-          decodeProtectedHeader = on.decodeProtectedHeader(e);
-        for (let c of a.all({ ...decodeProtectedHeader, use: "enc" }))
-          if (
-            ((s = await on.compactDecrypt(e, await c.keyObject(decodeProtectedHeader.alg)).then(r, () => {})),
-            s)
-          )
-            break;
-      } else s = await on.compactDecrypt(e, this.secretForAlg(t === "dir" ? n : t)).then(r, () => {});
-      if (!s) throw new RPError({ message: "failed to decrypt JWE", jwt: e });
-      return s;
+      let getPlaintext = (result) => new TextDecoder().decode(result.plaintext);
+      let plaintext;
+      if (expectedAlg.match(/^(?:RSA|ECDH)/)) {
+        let keystore = await keystores.get(this);
+        let protectedHeader = jose.decodeProtectedHeader(jwe);
+        for (let key of keystore.all({
+          ...protectedHeader,
+          use: "enc",
+        })) {
+          plaintext = await jose
+            .compactDecrypt(jwe, await key.keyObject(protectedHeader.alg))
+            .then(getPlaintext, () => {});
+          if (plaintext) break;
+        }
+      } else
+        plaintext = await jose
+          .compactDecrypt(jwe, this.secretForAlg(expectedAlg === "dir" ? expectedEnc : expectedAlg))
+          .then(getPlaintext, () => {});
+      if (!plaintext)
+        throw new RPError({
+          message: "failed to decrypt JWE",
+          jwt: jwe,
+        });
+      return plaintext;
     }
-    async validateIdToken(e, t, n, o, r) {
-      let s = e,
-        id_token_signed_response_alg = this.id_token_signed_response_alg;
-      if (s instanceof Vr) {
-        if (!s.id_token) throw TypeError("id_token not present in TokenSet");
-        s = s.id_token;
+    async validateIdToken(tokenSet, nonce, returnedBy, maxAge, state) {
+      let idToken = tokenSet;
+      let expectedAlg = this.id_token_signed_response_alg;
+      if (idToken instanceof TokenSet) {
+        if (!idToken.id_token) throw TypeError("id_token not present in TokenSet");
+        idToken = idToken.id_token;
       }
-      s = String(s);
-      let c = Ay(),
-        {
-          protected: u,
-          payload: payload,
-          key: key,
-        } = await this.validateJWT(s, id_token_signed_response_alg);
-      if (typeof o === "number" || (o !== WS && this.require_auth_time)) {
+      idToken = String(idToken);
+      let timestamp = now();
+      let { protected: header, payload, key } = await this.validateJWT(idToken, expectedAlg);
+      if (typeof maxAge === "number" || (maxAge !== skipMaxAgeCheck && this.require_auth_time)) {
         if (!payload.auth_time)
-          throw new RPError({ message: "missing required JWT property auth_time", jwt: s });
+          throw new RPError({
+            message: "missing required JWT property auth_time",
+            jwt: idToken,
+          });
         if (typeof payload.auth_time !== "number")
-          throw new RPError({ message: "JWT auth_time claim must be a JSON numeric value", jwt: s });
+          throw new RPError({
+            message: "JWT auth_time claim must be a JSON numeric value",
+            jwt: idToken,
+          });
       }
-      if (typeof o === "number" && payload.auth_time + o < c - this[CLOCK_TOLERANCE])
+      if (typeof maxAge === "number" && payload.auth_time + maxAge < timestamp - this[CLOCK_TOLERANCE])
         throw new RPError({
           printf: [
             "too much time has elapsed since the last End-User authentication, max_age %i, auth_time: %i, now %i",
-            o,
+            maxAge,
             payload.auth_time,
-            c - this[CLOCK_TOLERANCE],
+            timestamp - this[CLOCK_TOLERANCE],
           ],
-          now: c,
+          now: timestamp,
           tolerance: this[CLOCK_TOLERANCE],
           auth_time: payload.auth_time,
-          jwt: s,
+          jwt: idToken,
         });
-      if (t !== GS && (payload.nonce || t !== void 0) && payload.nonce !== t)
-        throw new RPError({ printf: ["nonce mismatch, expected %s, got: %s", t, payload.nonce], jwt: s });
-      if (n === "authorization") {
-        if (!payload.at_hash && e.access_token)
-          throw new RPError({ message: "missing required property at_hash", jwt: s });
-        if (!payload.c_hash && e.code)
-          throw new RPError({ message: "missing required property c_hash", jwt: s });
+      if (nonce !== skipNonceCheck && (payload.nonce || nonce !== undefined) && payload.nonce !== nonce)
+        throw new RPError({
+          printf: ["nonce mismatch, expected %s, got: %s", nonce, payload.nonce],
+          jwt: idToken,
+        });
+      if (returnedBy === "authorization") {
+        if (!payload.at_hash && tokenSet.access_token)
+          throw new RPError({
+            message: "missing required property at_hash",
+            jwt: idToken,
+          });
+        if (!payload.c_hash && tokenSet.code)
+          throw new RPError({
+            message: "missing required property c_hash",
+            jwt: idToken,
+          });
         if (this.fapi1()) {
-          if (!payload.s_hash && (e.state || r))
-            throw new RPError({ message: "missing required property s_hash", jwt: s });
+          if (!payload.s_hash && (tokenSet.state || state))
+            throw new RPError({
+              message: "missing required property s_hash",
+              jwt: idToken,
+            });
         }
         if (payload.s_hash) {
-          if (!r) throw TypeError('cannot verify s_hash, "checks.state" property not provided');
+          if (!state) throw TypeError('cannot verify s_hash, "checks.state" property not provided');
           try {
-            Pl.validate(
-              { claim: "s_hash", source: "state" },
+            tokenHash.validate(
+              {
+                claim: "s_hash",
+                source: "state",
+              },
               payload.s_hash,
-              r,
-              u.alg,
+              state,
+              header.alg,
               key.jwk && key.jwk.crv,
             );
-          } catch (error) {
-            throw new RPError({ message: error.message, jwt: s });
+          } catch (err) {
+            throw new RPError({
+              message: err.message,
+              jwt: idToken,
+            });
           }
         }
       }
-      if (this.fapi() && payload.iat < c - 3600)
+      if (this.fapi() && payload.iat < timestamp - 3600)
         throw new RPError({
-          printf: ["JWT issued too far in the past, now %i, iat %i", c, payload.iat],
-          now: c,
+          printf: ["JWT issued too far in the past, now %i, iat %i", timestamp, payload.iat],
+          now: timestamp,
           tolerance: this[CLOCK_TOLERANCE],
           iat: payload.iat,
-          jwt: s,
+          jwt: idToken,
         });
-      if (e.access_token && payload.at_hash !== void 0)
+      if (tokenSet.access_token && payload.at_hash !== undefined)
         try {
-          Pl.validate(
-            { claim: "at_hash", source: "access_token" },
+          tokenHash.validate(
+            {
+              claim: "at_hash",
+              source: "access_token",
+            },
             payload.at_hash,
-            e.access_token,
-            u.alg,
+            tokenSet.access_token,
+            header.alg,
             key.jwk && key.jwk.crv,
           );
-        } catch (error) {
-          throw new RPError({ message: error.message, jwt: s });
+        } catch (err) {
+          throw new RPError({
+            message: err.message,
+            jwt: idToken,
+          });
         }
-      if (e.code && payload.c_hash !== void 0)
+      if (tokenSet.code && payload.c_hash !== undefined)
         try {
-          Pl.validate(
-            { claim: "c_hash", source: "code" },
+          tokenHash.validate(
+            {
+              claim: "c_hash",
+              source: "code",
+            },
             payload.c_hash,
-            e.code,
-            u.alg,
+            tokenSet.code,
+            header.alg,
             key.jwk && key.jwk.crv,
           );
-        } catch (error) {
-          throw new RPError({ message: error.message, jwt: s });
+        } catch (err) {
+          throw new RPError({
+            message: err.message,
+            jwt: idToken,
+          });
         }
-      return e;
+      return tokenSet;
     }
-    async validateJWT(e, t, n = ["iss", "sub", "aud", "exp", "iat"]) {
-      let o = this.issuer.issuer === "https://self-issued.me",
-        r = Ay(),
-        s,
-        a;
+    async validateJWT(jwt, expectedAlg, required = ["iss", "sub", "aud", "exp", "iat"]) {
+      let isSelfIssued = this.issuer.issuer === "https://self-issued.me";
+      let timestamp = now();
+      let header;
+      let payload;
       try {
-        ({ header: s, payload: a } = tB(e, { complete: !0 }));
-      } catch (error) {
-        throw new RPError({ printf: ["failed to decode JWT (%s: %s)", error.name, error.message], jwt: e });
-      }
-      if (s.alg !== t)
+        ({ header, payload } = decodeJWT(jwt, {
+          complete: true,
+        }));
+      } catch (err) {
         throw new RPError({
-          printf: ["unexpected JWT alg received, expected %s, got: %s", t, s.alg],
-          jwt: e,
+          printf: ["failed to decode JWT (%s: %s)", err.name, err.message],
+          jwt,
         });
-      if (o) n = [...n, "sub_jwk"];
-      if ((n.forEach(lB.bind(void 0, a, e)), a.iss !== void 0)) {
-        let issuer = this.issuer.issuer;
-        if (this.#r) issuer = this.issuer.issuer.replace("{tenantid}", a.tid);
-        if (a.iss !== issuer)
+      }
+      if (header.alg !== expectedAlg)
+        throw new RPError({
+          printf: ["unexpected JWT alg received, expected %s, got: %s", expectedAlg, header.alg],
+          jwt,
+        });
+      if (isSelfIssued) required = [...required, "sub_jwk"];
+      required.forEach(verifyPresence.bind(undefined, payload, jwt));
+      if (payload.iss !== undefined) {
+        let expectedIss = this.issuer.issuer;
+        if (this.#r) expectedIss = this.issuer.issuer.replace("{tenantid}", payload.tid);
+        if (payload.iss !== expectedIss)
           throw new RPError({
-            printf: ["unexpected iss value, expected %s, got: %s", issuer, a.iss],
-            jwt: e,
+            printf: ["unexpected iss value, expected %s, got: %s", expectedIss, payload.iss],
+            jwt,
           });
       }
-      if (a.iat !== void 0) {
-        if (typeof a.iat !== "number")
-          throw new RPError({ message: "JWT iat claim must be a JSON numeric value", jwt: e });
-      }
-      if (a.nbf !== void 0) {
-        if (typeof a.nbf !== "number")
-          throw new RPError({ message: "JWT nbf claim must be a JSON numeric value", jwt: e });
-        if (a.nbf > r + this[CLOCK_TOLERANCE])
+      if (payload.iat !== undefined) {
+        if (typeof payload.iat !== "number")
           throw new RPError({
-            printf: ["JWT not active yet, now %i, nbf %i", r + this[CLOCK_TOLERANCE], a.nbf],
-            now: r,
+            message: "JWT iat claim must be a JSON numeric value",
+            jwt,
+          });
+      }
+      if (payload.nbf !== undefined) {
+        if (typeof payload.nbf !== "number")
+          throw new RPError({
+            message: "JWT nbf claim must be a JSON numeric value",
+            jwt,
+          });
+        if (payload.nbf > timestamp + this[CLOCK_TOLERANCE])
+          throw new RPError({
+            printf: ["JWT not active yet, now %i, nbf %i", timestamp + this[CLOCK_TOLERANCE], payload.nbf],
+            now: timestamp,
             tolerance: this[CLOCK_TOLERANCE],
-            nbf: a.nbf,
-            jwt: e,
+            nbf: payload.nbf,
+            jwt,
           });
       }
-      if (a.exp !== void 0) {
-        if (typeof a.exp !== "number")
-          throw new RPError({ message: "JWT exp claim must be a JSON numeric value", jwt: e });
-        if (r - this[CLOCK_TOLERANCE] >= a.exp)
+      if (payload.exp !== undefined) {
+        if (typeof payload.exp !== "number")
           throw new RPError({
-            printf: ["JWT expired, now %i, exp %i", r - this[CLOCK_TOLERANCE], a.exp],
-            now: r,
+            message: "JWT exp claim must be a JSON numeric value",
+            jwt,
+          });
+        if (timestamp - this[CLOCK_TOLERANCE] >= payload.exp)
+          throw new RPError({
+            printf: ["JWT expired, now %i, exp %i", timestamp - this[CLOCK_TOLERANCE], payload.exp],
+            now: timestamp,
             tolerance: this[CLOCK_TOLERANCE],
-            exp: a.exp,
-            jwt: e,
+            exp: payload.exp,
+            jwt,
           });
       }
-      if (a.aud !== void 0) {
-        if (Array.isArray(a.aud)) {
-          if (a.aud.length > 1 && !a.azp)
-            throw new RPError({ message: "missing required JWT property azp", jwt: e });
-          if (!a.aud.includes(this.client_id))
+      if (payload.aud !== undefined) {
+        if (Array.isArray(payload.aud)) {
+          if (payload.aud.length > 1 && !payload.azp)
+            throw new RPError({
+              message: "missing required JWT property azp",
+              jwt,
+            });
+          if (!payload.aud.includes(this.client_id))
             throw new RPError({
               printf: [
                 "aud is missing the client_id, expected %s to be included in %j",
                 this.client_id,
-                a.aud,
+                payload.aud,
               ],
-              jwt: e,
+              jwt,
             });
-        } else if (a.aud !== this.client_id)
+        } else if (payload.aud !== this.client_id)
           throw new RPError({
-            printf: ["aud mismatch, expected %s, got: %s", this.client_id, a.aud],
-            jwt: e,
+            printf: ["aud mismatch, expected %s, got: %s", this.client_id, payload.aud],
+            jwt,
           });
       }
-      if (a.azp !== void 0) {
-        let c = this.#i;
-        if (typeof c === "string") c = [this.client_id, c];
-        else if (Array.isArray(c)) c = [this.client_id, ...c];
-        else c = [this.client_id];
-        if (!c.includes(a.azp)) throw new RPError({ printf: ["azp mismatch, got: %s", a.azp], jwt: e });
+      if (payload.azp !== undefined) {
+        let additionalAuthorizedParties = this.#i;
+        if (typeof additionalAuthorizedParties === "string")
+          additionalAuthorizedParties = [this.client_id, additionalAuthorizedParties];
+        else if (Array.isArray(additionalAuthorizedParties))
+          additionalAuthorizedParties = [this.client_id, ...additionalAuthorizedParties];
+        else additionalAuthorizedParties = [this.client_id];
+        if (!additionalAuthorizedParties.includes(payload.azp))
+          throw new RPError({
+            printf: ["azp mismatch, got: %s", payload.azp],
+            jwt,
+          });
       }
-      let l;
-      if (o) {
+      let keys;
+      if (isSelfIssued) {
         try {
-          strict(Vs(a.sub_jwk));
-          let importJWK = await on.importJWK(a.sub_jwk, s.alg);
-          (strict.equal(importJWK.type, "public"),
-            (l = [
-              {
-                keyObject() {
-                  return importJWK;
-                },
+          assert(isPlainObject(payload.sub_jwk));
+          let key = await jose.importJWK(payload.sub_jwk, header.alg);
+          assert.equal(key.type, "public");
+          keys = [
+            {
+              keyObject() {
+                return key;
               },
-            ]));
-        } catch (error) {
-          throw new RPError({ message: "failed to use sub_jwk claim as an asymmetric JSON Web Key", jwt: e });
+            },
+          ];
+        } catch (err) {
+          throw new RPError({
+            message: "failed to use sub_jwk claim as an asymmetric JSON Web Key",
+            jwt,
+          });
         }
-        if ((await on.calculateJwkThumbprint(a.sub_jwk)) !== a.sub)
-          throw new RPError({ message: "failed to match the subject with sub_jwk", jwt: e });
-      } else if (s.alg.startsWith("HS")) l = [this.secretForAlg(s.alg)];
-      else if (s.alg !== "none") l = await queryKeyStore.call(this.issuer, { ...s, use: "sig" });
-      if (!l && s.alg === "none") return { protected: s, payload: a };
-      for (let c of l) {
-        let u = await on
-          .compactVerify(e, c instanceof Uint8Array ? c : await c.keyObject(s.alg))
+        if ((await jose.calculateJwkThumbprint(payload.sub_jwk)) !== payload.sub)
+          throw new RPError({
+            message: "failed to match the subject with sub_jwk",
+            jwt,
+          });
+      } else if (header.alg.startsWith("HS")) keys = [this.secretForAlg(header.alg)];
+      else if (header.alg !== "none")
+        keys = await queryKeyStore.call(this.issuer, {
+          ...header,
+          use: "sig",
+        });
+      if (!keys && header.alg === "none")
+        return {
+          protected: header,
+          payload,
+        };
+      for (let key of keys) {
+        let verified = await jose
+          .compactVerify(jwt, key instanceof Uint8Array ? key : await key.keyObject(header.alg))
           .catch(() => {});
-        if (u) return { payload: a, protected: u.protectedHeader, key: c };
+        if (verified)
+          return {
+            payload,
+            protected: verified.protectedHeader,
+            key,
+          };
       }
-      throw new RPError({ message: "failed to validate JWT signature", jwt: e });
+      throw new RPError({
+        message: "failed to validate JWT signature",
+        jwt,
+      });
     }
-    async refresh(e, { exchangeBody: t, clientAssertionPayload: n, DPoP: o } = {}) {
-      let r = e;
-      if (r instanceof Vr) {
-        if (!r.refresh_token) throw TypeError("refresh_token not present in TokenSet");
-        r = r.refresh_token;
+    async refresh(refreshToken, { exchangeBody, clientAssertionPayload, DPoP } = {}) {
+      let token = refreshToken;
+      if (token instanceof TokenSet) {
+        if (!token.refresh_token) throw TypeError("refresh_token not present in TokenSet");
+        token = token.refresh_token;
       }
-      let grant = await this.grant(
-        { ...t, grant_type: "refresh_token", refresh_token: String(r) },
-        { clientAssertionPayload: n, DPoP: o },
+      let tokenset = await this.grant(
+        {
+          ...exchangeBody,
+          grant_type: "refresh_token",
+          refresh_token: String(token),
+        },
+        {
+          clientAssertionPayload,
+          DPoP,
+        },
       );
-      if (grant.id_token) {
-        if (
-          (await this.decryptIdToken(grant),
-          await this.validateIdToken(grant, GS, "token", WS),
-          e instanceof Vr && e.id_token)
-        ) {
-          let sub = e.claims().sub,
-            sub_2 = grant.claims().sub;
-          if (sub_2 !== sub)
+      if (tokenset.id_token) {
+        await this.decryptIdToken(tokenset);
+        await this.validateIdToken(tokenset, skipNonceCheck, "token", skipMaxAgeCheck);
+        if (refreshToken instanceof TokenSet && refreshToken.id_token) {
+          let expectedSub = refreshToken.claims().sub;
+          let actualSub = tokenset.claims().sub;
+          if (actualSub !== expectedSub)
             throw new RPError({
-              printf: ["sub mismatch, expected %s, got: %s", sub, sub_2],
-              jwt: grant.id_token,
+              printf: ["sub mismatch, expected %s, got: %s", expectedSub, actualSub],
+              jwt: tokenset.id_token,
             });
         }
       }
-      return grant;
+      return tokenset;
     }
     async requestResource(
-      e,
-      t,
+      resourceUrl,
+      accessToken,
       {
-        method: n,
-        headers: o,
-        body: r,
-        DPoP: s,
-        tokenType: a = s ? "DPoP" : t instanceof Vr ? t.token_type : "Bearer",
+        method,
+        headers,
+        body,
+        DPoP,
+        tokenType = DPoP ? "DPoP" : accessToken instanceof TokenSet ? accessToken.token_type : "Bearer",
       } = {},
-      l,
+      retry,
     ) {
-      if (t instanceof Vr) {
-        if (!t.access_token) throw TypeError("access_token not present in TokenSet");
-        t = t.access_token;
+      if (accessToken instanceof TokenSet) {
+        if (!accessToken.access_token) throw TypeError("access_token not present in TokenSet");
+        accessToken = accessToken.access_token;
       }
-      if (!t) throw TypeError("no access token provided");
-      else if (typeof t !== "string") throw TypeError("invalid access token provided");
-      let c = { headers: { Authorization: Ty(t, a), ...o }, body: r },
-        u = !!this.tls_client_certificate_bound_access_tokens,
-        f = await Al.call(
-          this,
-          { ...c, responseType: "buffer", method: n, url: e },
-          { accessToken: t, mTLS: u, DPoP: s },
-        ),
-        h = f.headers["www-authenticate"];
-      if (l !== Cy && h && h.toLowerCase().startsWith("dpop ") && nB(h).error === "use_dpop_nonce")
-        return this.requestResource(e, t, { method: n, headers: o, body: r, DPoP: s, tokenType: a });
-      return f;
+      if (!accessToken) throw TypeError("no access token provided");
+      else if (typeof accessToken !== "string") throw TypeError("invalid access token provided");
+      let requestOpts = {
+        headers: {
+          Authorization: authorizationHeaderValue(accessToken, tokenType),
+          ...headers,
+        },
+        body,
+      };
+      let mTLS = !!this.tls_client_certificate_bound_access_tokens;
+      let response = await request.call(
+        this,
+        {
+          ...requestOpts,
+          responseType: "buffer",
+          method,
+          url: resourceUrl,
+        },
+        {
+          accessToken,
+          mTLS,
+          DPoP,
+        },
+      );
+      let wwwAuthenticate = response.headers["www-authenticate"];
+      if (
+        retry !== retryAttempt &&
+        wwwAuthenticate &&
+        wwwAuthenticate.toLowerCase().startsWith("dpop ") &&
+        parseWwwAuthenticate(wwwAuthenticate).error === "use_dpop_nonce"
+      )
+        return this.requestResource(resourceUrl, accessToken, {
+          method,
+          headers,
+          body,
+          DPoP,
+          tokenType,
+        });
+      return response;
     }
-    async userinfo(e, { method: t = "GET", via: n = "header", tokenType: o, params: r, DPoP: s } = {}) {
+    async userinfo(accessToken, { method = "GET", via = "header", tokenType, params, DPoP } = {}) {
       assertIssuerConfiguration(this.issuer, "userinfo_endpoint");
-      let a = { tokenType: o, method: String(t).toUpperCase(), DPoP: s };
-      if (a.method !== "GET" && a.method !== "POST")
+      let options = {
+        tokenType,
+        method: String(method).toUpperCase(),
+        DPoP,
+      };
+      if (options.method !== "GET" && options.method !== "POST")
         throw TypeError("#userinfo() method can only be POST or a GET");
-      if (n === "body" && a.method !== "POST") throw TypeError("can only send body on POST");
-      let l = !!(this.userinfo_signed_response_alg || this.userinfo_encrypted_response_alg);
-      if (l) a.headers = { Accept: "application/jwt" };
-      else a.headers = { Accept: "application/json" };
-      let c = !!this.tls_client_certificate_bound_access_tokens,
-        u;
-      if (c && this.issuer.mtls_endpoint_aliases) u = this.issuer.mtls_endpoint_aliases.userinfo_endpoint;
-      if (((u = new zS(u || this.issuer.userinfo_endpoint)), n === "body"))
-        ((a.headers.Authorization = void 0),
-          (a.headers["Content-Type"] = "application/x-www-form-urlencoded"),
-          (a.body = new FS()),
-          a.body.append("access_token", e instanceof Vr ? e.access_token : e));
-      if (r)
-        if (a.method === "GET")
-          Object.entries(r).forEach(([m, y]) => {
-            u.searchParams.append(m, y);
+      if (via === "body" && options.method !== "POST") throw TypeError("can only send body on POST");
+      let jwt = !!(this.userinfo_signed_response_alg || this.userinfo_encrypted_response_alg);
+      if (jwt)
+        options.headers = {
+          Accept: "application/jwt",
+        };
+      else
+        options.headers = {
+          Accept: "application/json",
+        };
+      let mTLS = !!this.tls_client_certificate_bound_access_tokens;
+      let targetUrl;
+      if (mTLS && this.issuer.mtls_endpoint_aliases)
+        targetUrl = this.issuer.mtls_endpoint_aliases.userinfo_endpoint;
+      targetUrl = new zS(targetUrl || this.issuer.userinfo_endpoint);
+      if (via === "body") {
+        options.headers.Authorization = undefined;
+        options.headers["Content-Type"] = "application/x-www-form-urlencoded";
+        options.body = new FS();
+        options.body.append(
+          "access_token",
+          accessToken instanceof TokenSet ? accessToken.access_token : accessToken,
+        );
+      }
+      if (params)
+        if (options.method === "GET")
+          Object.entries(params).forEach(([key, value]) => {
+            targetUrl.searchParams.append(key, value);
           });
-        else if (a.body)
-          Object.entries(r).forEach(([m, y]) => {
-            a.body.append(m, y);
+        else if (options.body)
+          Object.entries(params).forEach(([key, value]) => {
+            options.body.append(key, value);
           });
-        else
-          ((a.body = new FS()),
-            (a.headers["Content-Type"] = "application/x-www-form-urlencoded"),
-            Object.entries(r).forEach(([m, y]) => {
-              a.body.append(m, y);
-            }));
-      if (a.body) a.body = a.body.toString();
-      let requestResource = await this.requestResource(u, e, a),
-        h = Ks(requestResource, { bearer: !0 });
-      if (l) {
-        if (!/^application\/jwt/.test(requestResource.headers["content-type"]))
+        else {
+          options.body = new FS();
+          options.headers["Content-Type"] = "application/x-www-form-urlencoded";
+          Object.entries(params).forEach(([key, value]) => {
+            options.body.append(key, value);
+          });
+        }
+      if (options.body) options.body = options.body.toString();
+      let response = await this.requestResource(targetUrl, accessToken, options);
+      let parsed = processResponse(response, {
+        bearer: true,
+      });
+      if (jwt) {
+        if (!/^application\/jwt/.test(response.headers["content-type"]))
           throw new RPError({
             message: "expected application/jwt response from the userinfo_endpoint",
-            response: requestResource,
+            response,
           });
-        let str = requestResource.body.toString(),
-          decryptJWTUserinfo = await this.decryptJWTUserinfo(str);
+        let body = response.body.toString();
+        let userinfo = await this.decryptJWTUserinfo(body);
         if (!this.userinfo_signed_response_alg)
           try {
-            ((h = JSON.parse(decryptJWTUserinfo)), strict(Vs(h)));
-          } catch (error) {
+            parsed = JSON.parse(userinfo);
+            assert(isPlainObject(parsed));
+          } catch (err) {
             throw new RPError({
               message: "failed to parse userinfo JWE payload as JSON",
-              jwt: decryptJWTUserinfo,
+              jwt: userinfo,
             });
           }
-        else ({ payload: h } = await this.validateJWTUserinfo(decryptJWTUserinfo));
+        else ({ payload: parsed } = await this.validateJWTUserinfo(userinfo));
       } else
         try {
-          h = JSON.parse(requestResource.body);
-        } catch (error) {
-          throw (Object.defineProperty(error, "response", { value: requestResource }), error);
+          parsed = JSON.parse(response.body);
+        } catch (err) {
+          Object.defineProperty(err, "response", {
+            value: response,
+          });
+          throw err;
         }
-      if (e instanceof Vr && e.id_token) {
-        let sub = e.claims().sub;
-        if (h.sub !== sub)
+      if (accessToken instanceof TokenSet && accessToken.id_token) {
+        let expectedSub = accessToken.claims().sub;
+        if (parsed.sub !== expectedSub)
           throw new RPError({
-            printf: ["userinfo sub mismatch, expected %s, got: %s", sub, h.sub],
-            body: h,
-            jwt: e.id_token,
+            printf: ["userinfo sub mismatch, expected %s, got: %s", expectedSub, parsed.sub],
+            body: parsed,
+            jwt: accessToken.id_token,
           });
       }
-      return h;
+      return parsed;
     }
-    encryptionSecret(e) {
-      let t = e <= 256 ? "sha256" : e <= 384 ? "sha384" : e <= 512 ? "sha512" : !1;
-      if (!t) throw Error("unsupported symmetric encryption key derivation");
-      return El.createHash(t)
+    encryptionSecret(len) {
+      let hash = len <= 256 ? "sha256" : len <= 384 ? "sha384" : len <= 512 ? "sha512" : false;
+      if (!hash) throw Error("unsupported symmetric encryption key derivation");
+      return El.createHash(hash)
         .update(this.client_secret)
         .digest()
-        .slice(0, e / 8);
+        .slice(0, len / 8);
     }
-    secretForAlg(e) {
+    secretForAlg(alg) {
       if (!this.client_secret) throw TypeError("client_secret is required");
-      if (/^A(\d{3})(?:GCM)?KW$/.test(e)) return this.encryptionSecret(parseInt(RegExp.$1, 10));
-      if (/^A(\d{3})(?:GCM|CBC-HS(\d{3}))$/.test(e))
+      if (/^A(\d{3})(?:GCM)?KW$/.test(alg)) return this.encryptionSecret(parseInt(RegExp.$1, 10));
+      if (/^A(\d{3})(?:GCM|CBC-HS(\d{3}))$/.test(alg))
         return this.encryptionSecret(parseInt(RegExp.$2 || RegExp.$1, 10));
       return new TextEncoder().encode(this.client_secret);
     }
-    async grant(e, { clientAssertionPayload: t, DPoP: n } = {}, o) {
+    async grant(body, { clientAssertionPayload, DPoP } = {}, retry) {
       assertIssuerConfiguration(this.issuer, "token_endpoint");
-      let r = await authenticatedPost.call(
-          this,
-          "token",
-          { form: e, responseType: "json" },
-          { clientAssertionPayload: t, DPoP: n },
-        ),
-        s;
+      let response = await authenticatedPost.call(
+        this,
+        "token",
+        {
+          form: body,
+          responseType: "json",
+        },
+        {
+          clientAssertionPayload,
+          DPoP,
+        },
+      );
+      let responseBody;
       try {
-        s = Ks(r);
-      } catch (error) {
-        if (o !== Cy && error instanceof OPError && error.error === "use_dpop_nonce")
-          return this.grant(e, { clientAssertionPayload: t, DPoP: n }, Cy);
-        throw error;
+        responseBody = processResponse(response);
+      } catch (err) {
+        if (retry !== retryAttempt && err instanceof OPError && err.error === "use_dpop_nonce")
+          return this.grant(
+            body,
+            {
+              clientAssertionPayload,
+              DPoP,
+            },
+            retryAttempt,
+          );
+        throw err;
       }
-      return new Vr(s);
+      return new TokenSet(responseBody);
     }
-    async deviceAuthorization(e = {}, { exchangeBody: t, clientAssertionPayload: n, DPoP: o } = {}) {
-      (assertIssuerConfiguration(this.issuer, "device_authorization_endpoint"),
-        assertIssuerConfiguration(this.issuer, "token_endpoint"));
-      let r = kf.call(this, { client_id: this.client_id, redirect_uri: null, response_type: null, ...e }),
-        s = await authenticatedPost.call(
-          this,
-          "device_authorization",
-          { responseType: "json", form: r },
-          { clientAssertionPayload: n, endpointAuthMethod: "token" },
-        ),
-        a = Ks(s);
-      return new oB({
+    async deviceAuthorization(params = {}, { exchangeBody, clientAssertionPayload, DPoP } = {}) {
+      assertIssuerConfiguration(this.issuer, "device_authorization_endpoint");
+      assertIssuerConfiguration(this.issuer, "token_endpoint");
+      let body = authorizationParams.call(this, {
+        client_id: this.client_id,
+        redirect_uri: null,
+        response_type: null,
+        ...params,
+      });
+      let response = await authenticatedPost.call(
+        this,
+        "device_authorization",
+        {
+          responseType: "json",
+          form: body,
+        },
+        {
+          clientAssertionPayload,
+          endpointAuthMethod: "token",
+        },
+      );
+      let responseBody = processResponse(response);
+      return new DeviceFlowHandle({
         client: this,
-        exchangeBody: t,
-        clientAssertionPayload: n,
-        response: a,
-        maxAge: e.max_age,
-        DPoP: o,
+        exchangeBody,
+        clientAssertionPayload,
+        response: responseBody,
+        maxAge: params.max_age,
+        DPoP,
       });
     }
-    async revoke(e, t, { revokeBody: n, clientAssertionPayload: o } = {}) {
-      if (
-        (assertIssuerConfiguration(this.issuer, "revocation_endpoint"), t !== void 0 && typeof t !== "string")
-      )
-        throw TypeError("hint must be a string");
-      let r = { ...n, token: e };
-      if (t) r.token_type_hint = t;
-      let s = await authenticatedPost.call(this, "revocation", { form: r }, { clientAssertionPayload: o });
-      Ks(s, { body: !1 });
+    async revoke(token, hint, { revokeBody, clientAssertionPayload } = {}) {
+      assertIssuerConfiguration(this.issuer, "revocation_endpoint");
+      if (hint !== undefined && typeof hint !== "string") throw TypeError("hint must be a string");
+      let form = {
+        ...revokeBody,
+        token,
+      };
+      if (hint) form.token_type_hint = hint;
+      let response = await authenticatedPost.call(
+        this,
+        "revocation",
+        {
+          form,
+        },
+        {
+          clientAssertionPayload,
+        },
+      );
+      processResponse(response, {
+        body: false,
+      });
     }
-    async introspect(e, t, { introspectBody: n, clientAssertionPayload: o } = {}) {
-      if (
-        (assertIssuerConfiguration(this.issuer, "introspection_endpoint"),
-        t !== void 0 && typeof t !== "string")
-      )
-        throw TypeError("hint must be a string");
-      let r = { ...n, token: e };
-      if (t) r.token_type_hint = t;
+    async introspect(token, hint, { introspectBody, clientAssertionPayload } = {}) {
+      assertIssuerConfiguration(this.issuer, "introspection_endpoint");
+      if (hint !== undefined && typeof hint !== "string") throw TypeError("hint must be a string");
+      let form = {
+        ...introspectBody,
+        token,
+      };
+      if (hint) form.token_type_hint = hint;
       let s = await authenticatedPost.call(
         this,
         "introspection",
-        { form: r, responseType: "json" },
-        { clientAssertionPayload: o },
-      );
-      return Ks(s);
-    }
-    static async register(e, t = {}) {
-      let { initialAccessToken: initialAccessToken, jwks: jwks, ...r } = t;
-      if (
-        (assertIssuerConfiguration(this.issuer, "registration_endpoint"),
-        jwks !== void 0 && !(e.jwks || e.jwks_uri))
-      ) {
-        let l = await YS.call(this, jwks);
-        e.jwks = l.toJWKS();
-      }
-      let s = await Al.call(this, {
-          headers: {
-            Accept: "application/json",
-            ...(initialAccessToken ? { Authorization: Ty(initialAccessToken) } : void 0),
-          },
+        {
+          form,
           responseType: "json",
-          json: e,
-          url: this.issuer.registration_endpoint,
-          method: "POST",
-        }),
-        a = Ks(s, { statusCode: 201, bearer: !0 });
-      return new this(a, jwks, r);
+        },
+        {
+          clientAssertionPayload,
+        },
+      );
+      return processResponse(s);
+    }
+    static async register(metadata, options = {}) {
+      let { initialAccessToken, jwks, ...clientOptions } = options;
+      assertIssuerConfiguration(this.issuer, "registration_endpoint");
+      if (jwks !== undefined && !(metadata.jwks || metadata.jwks_uri)) {
+        let keystore = await getKeystore.call(this, jwks);
+        metadata.jwks = keystore.toJWKS();
+      }
+      let response = await request.call(this, {
+        headers: {
+          Accept: "application/json",
+          ...(initialAccessToken
+            ? {
+                Authorization: authorizationHeaderValue(initialAccessToken),
+              }
+            : undefined),
+        },
+        responseType: "json",
+        json: metadata,
+        url: this.issuer.registration_endpoint,
+        method: "POST",
+      });
+      let responseBody = processResponse(response, {
+        statusCode: 201,
+        bearer: true,
+      });
+      return new this(responseBody, jwks, clientOptions);
     }
     get metadata() {
-      return ZS(Object.fromEntries(this.#e.entries()));
+      return clone(Object.fromEntries(this.#e.entries()));
     }
-    static async fromUri(e, t, n, o) {
-      let r = await Al.call(this, {
-          method: "GET",
-          url: e,
-          responseType: "json",
-          headers: { Authorization: Ty(t), Accept: "application/json" },
-        }),
-        s = Ks(r, { bearer: !0 });
-      return new this(s, n, o);
+    static async fromUri(registrationClientUri, registrationAccessToken, jwks, clientOptions) {
+      let response = await request.call(this, {
+        method: "GET",
+        url: registrationClientUri,
+        responseType: "json",
+        headers: {
+          Authorization: authorizationHeaderValue(registrationAccessToken),
+          Accept: "application/json",
+        },
+      });
+      let responseBody = processResponse(response, {
+        bearer: true,
+      });
+      return new this(responseBody, jwks, clientOptions);
     }
     async requestObject(
-      e = {},
+      requestObject = {},
       {
-        sign: t = this.request_object_signing_alg || "none",
+        sign: signingAlgorithm = this.request_object_signing_alg || "none",
         encrypt: {
-          alg: n = this.request_object_encryption_alg,
-          enc: o = this.request_object_encryption_enc || "A128CBC-HS256",
+          alg: eKeyManagement = this.request_object_encryption_alg,
+          enc: eContentEncryption = this.request_object_encryption_enc || "A128CBC-HS256",
         } = {},
       } = {},
     ) {
-      if (!Vs(e)) throw TypeError("requestObject must be a plain object");
-      let r,
-        s,
-        a = Ay(),
-        l = { alg: t, typ: "oauth-authz-req+jwt" },
-        json = JSON.stringify(
-          BS({}, e, {
-            iss: this.client_id,
-            aud: this.issuer.issuer,
-            client_id: this.client_id,
-            jti: random(),
-            iat: a,
-            exp: a + 300,
-            ...(this.fapi() ? { nbf: a } : void 0),
-          }),
-        );
-      if (t === "none") r = [qs.encode(JSON.stringify(l)), qs.encode(json), ""].join(".");
+      if (!isPlainObject(requestObject)) throw TypeError("requestObject must be a plain object");
+      let signed;
+      let key;
+      let unix = now();
+      let header = {
+        alg: signingAlgorithm,
+        typ: "oauth-authz-req+jwt",
+      };
+      let payload = JSON.stringify(
+        defaults({}, requestObject, {
+          iss: this.client_id,
+          aud: this.issuer.issuer,
+          client_id: this.client_id,
+          jti: random(),
+          iat: unix,
+          exp: unix + 300,
+          ...(this.fapi()
+            ? {
+                nbf: unix,
+              }
+            : undefined),
+        }),
+      );
+      if (signingAlgorithm === "none")
+        signed = [base64url.encode(JSON.stringify(header)), base64url.encode(payload), ""].join(".");
       else {
-        let startsWith = t.startsWith("HS");
-        if (startsWith) s = this.secretForAlg(t);
+        let symmetric = signingAlgorithm.startsWith("HS");
+        if (symmetric) key = this.secretForAlg(signingAlgorithm);
         else {
-          let h = await keystores.get(this);
-          if (!h) throw TypeError(`no keystore present for client, cannot sign using alg ${t}`);
-          if (((s = h.get({ alg: t, use: "sig" })), !s))
-            throw TypeError(`no key to sign with found for alg ${t}`);
+          let keystore = await keystores.get(this);
+          if (!keystore)
+            throw TypeError(`no keystore present for client, cannot sign using alg ${signingAlgorithm}`);
+          key = keystore.get({
+            alg: signingAlgorithm,
+            use: "sig",
+          });
+          if (!key) throw TypeError(`no key to sign with found for alg ${signingAlgorithm}`);
         }
-        r = await new on.CompactSign(new TextEncoder().encode(json))
-          .setProtectedHeader({ ...l, kid: startsWith ? void 0 : s.jwk.kid })
-          .sign(startsWith ? s : await s.keyObject(t));
+        signed = await new jose.CompactSign(new TextEncoder().encode(payload))
+          .setProtectedHeader({
+            ...header,
+            kid: symmetric ? undefined : key.jwk.kid,
+          })
+          .sign(symmetric ? key : await key.keyObject(signingAlgorithm));
       }
-      if (!n) return r;
-      let u = { alg: n, enc: o, cty: "oauth-authz-req+jwt" };
-      if (u.alg.match(/^(RSA|ECDH)/))
-        [s] = await queryKeyStore.call(this.issuer, { alg: u.alg, use: "enc" }, { allowMulti: !0 });
-      else s = this.secretForAlg(u.alg === "dir" ? u.enc : u.alg);
-      return new on.CompactEncrypt(new TextEncoder().encode(r))
-        .setProtectedHeader({ ...u, kid: s instanceof Uint8Array ? void 0 : s.jwk.kid })
-        .encrypt(s instanceof Uint8Array ? s : await s.keyObject(u.alg));
+      if (!eKeyManagement) return signed;
+      let fields = {
+        alg: eKeyManagement,
+        enc: eContentEncryption,
+        cty: "oauth-authz-req+jwt",
+      };
+      if (fields.alg.match(/^(RSA|ECDH)/))
+        [key] = await queryKeyStore.call(
+          this.issuer,
+          {
+            alg: fields.alg,
+            use: "enc",
+          },
+          {
+            allowMulti: true,
+          },
+        );
+      else key = this.secretForAlg(fields.alg === "dir" ? fields.enc : fields.alg);
+      return new jose.CompactEncrypt(new TextEncoder().encode(signed))
+        .setProtectedHeader({
+          ...fields,
+          kid: key instanceof Uint8Array ? undefined : key.jwk.kid,
+        })
+        .encrypt(key instanceof Uint8Array ? key : await key.keyObject(fields.alg));
     }
-    async pushedAuthorizationRequest(e = {}, { clientAssertionPayload: t } = {}) {
+    async pushedAuthorizationRequest(params = {}, { clientAssertionPayload } = {}) {
       assertIssuerConfiguration(this.issuer, "pushed_authorization_request_endpoint");
-      let n = { ...("request" in e ? e : kf.call(this, e)), client_id: this.client_id },
-        o = await authenticatedPost.call(
-          this,
-          "pushed_authorization_request",
-          { responseType: "json", form: n },
-          { clientAssertionPayload: t, endpointAuthMethod: "token" },
-        ),
-        r = Ks(o, { statusCode: 201 });
-      if (!("expires_in" in r))
+      let body = {
+        ...("request" in params ? params : authorizationParams.call(this, params)),
+        client_id: this.client_id,
+      };
+      let response = await authenticatedPost.call(
+        this,
+        "pushed_authorization_request",
+        {
+          responseType: "json",
+          form: body,
+        },
+        {
+          clientAssertionPayload,
+          endpointAuthMethod: "token",
+        },
+      );
+      let responseBody = processResponse(response, {
+        statusCode: 201,
+      });
+      if (!("expires_in" in responseBody))
         throw new RPError({
           message: "expected expires_in in Pushed Authorization Successful Response",
-          response: o,
+          response,
         });
-      if (typeof r.expires_in !== "number")
+      if (typeof responseBody.expires_in !== "number")
         throw new RPError({
           message: "invalid expires_in value in Pushed Authorization Successful Response",
-          response: o,
+          response,
         });
-      if (!("request_uri" in r))
+      if (!("request_uri" in responseBody))
         throw new RPError({
           message: "expected request_uri in Pushed Authorization Successful Response",
-          response: o,
+          response,
         });
-      if (typeof r.request_uri !== "string")
+      if (typeof responseBody.request_uri !== "string")
         throw new RPError({
           message: "invalid request_uri value in Pushed Authorization Successful Response",
-          response: o,
+          response,
         });
-      return r;
+      return responseBody;
     }
     get issuer() {
       return this.#t;
     }
     [inspect.custom]() {
-      return `${this.constructor.name} ${inspect(this.metadata, { depth: 1 / 0, colors: process.stdout.isTTY, compact: !1, sorted: !0 })}`;
+      return `${this.constructor.name} ${inspect(this.metadata, {
+        depth: 1 / 0,
+        colors: process.stdout.isTTY,
+        compact: false,
+        sorted: true,
+      })}`;
     }
     fapi() {
       return this.fapi1() || this.fapi2();
@@ -1068,39 +1372,42 @@ var Ly = x(function (Jve, xy) {
     fapi2() {
       return this.constructor.name === "FAPI2Client";
     }
-    async validateJARM(e) {
-      let authorization_signed_response_alg = this.authorization_signed_response_alg,
-        { payload: payload } = await this.validateJWT(e, authorization_signed_response_alg, [
-          "iss",
-          "exp",
-          "aud",
-        ]);
-      return Zs(payload);
+    async validateJARM(response) {
+      let expectedAlg = this.authorization_signed_response_alg;
+      let { payload } = await this.validateJWT(response, expectedAlg, ["iss", "exp", "aud"]);
+      return pickCb(payload);
     }
-    async dpopProof(e, t, n) {
-      if (!Vs(e)) throw TypeError("payload must be a plain object");
-      let o;
-      if (QS(t)) o = t;
-      else if (t[Symbol.toStringTag] === "CryptoKey") o = t;
-      else if (on.cryptoRuntime === "node:crypto") o = El.createPrivateKey(t);
+    async dpopProof(payload, privateKeyInput, accessToken) {
+      if (!isPlainObject(payload)) throw TypeError("payload must be a plain object");
+      let privateKey;
+      if (isKeyObject(privateKeyInput)) privateKey = privateKeyInput;
+      else if (privateKeyInput[Symbol.toStringTag] === "CryptoKey") privateKey = privateKeyInput;
+      else if (jose.cryptoRuntime === "node:crypto") privateKey = El.createPrivateKey(privateKeyInput);
       else throw TypeError("unrecognized crypto runtime");
-      if (o.type !== "private") throw TypeError('"DPoP" option must be a private key');
-      let r = My.call(this, o, t);
-      if (!r) throw TypeError("could not determine DPoP JWS Algorithm");
-      return new on.SignJWT({ ath: n ? qs.encode(El.createHash("sha256").update(n).digest()) : void 0, ...e })
-        .setProtectedHeader({ alg: r, typ: "dpop+jwt", jwk: await fB(o, t) })
+      if (privateKey.type !== "private") throw TypeError('"DPoP" option must be a private key');
+      let alg = My.call(this, privateKey, privateKeyInput);
+      if (!alg) throw TypeError("could not determine DPoP JWS Algorithm");
+      return new jose.SignJWT({
+        ath: accessToken ? base64url.encode(El.createHash("sha256").update(accessToken).digest()) : undefined,
+        ...payload,
+      })
+        .setProtectedHeader({
+          alg,
+          typ: "dpop+jwt",
+          jwk: await getJwk(privateKey, privateKeyInput),
+        })
         .setIssuedAt()
         .setJti(random())
-        .sign(o);
+        .sign(privateKey);
     }
   }
-  function JS(e) {
-    switch (e.algorithm.name) {
+  function JS(cryptoKey) {
+    switch (cryptoKey.algorithm.name) {
       case "Ed25519":
       case "Ed448":
         return "EdDSA";
       case "ECDSA": {
-        switch (e.algorithm.namedCurve) {
+        switch (cryptoKey.algorithm.namedCurve) {
           case "P-256":
             return "ES256";
           case "P-384":
@@ -1113,96 +1420,116 @@ var Ly = x(function (Jve, xy) {
         break;
       }
       case "RSASSA-PKCS1-v1_5":
-        return `RS${e.algorithm.hash.name.slice(4)}`;
+        return `RS${cryptoKey.algorithm.hash.name.slice(4)}`;
       case "RSA-PSS":
-        return `PS${e.algorithm.hash.name.slice(4)}`;
+        return `PS${cryptoKey.algorithm.hash.name.slice(4)}`;
       default:
         throw TypeError("unsupported DPoP private key");
     }
   }
   var My;
-  if (on.cryptoRuntime === "node:crypto") {
-    let t = function (l, c, u) {
-        if (typeof c === "object" && c.format === "jwk" && c.key && c.key.alg) return c.key.alg;
-        if (Array.isArray(u)) {
-          let filtered = u.filter(RegExp.prototype.test.bind(e));
-          if (l.asymmetricKeyType === "rsa-pss") filtered = filtered.filter((h) => h.startsWith("PS"));
-          return ["PS256", "PS384", "PS512", "RS256", "RS384", "RS384"].find((h) => filtered.includes(h));
-        }
-        return "PS256";
-      },
-      a = function (l, c) {
-        switch (typeof c === "object" && typeof c.key === "object" && c.key.crv) {
-          case "P-256":
-            return "ES256";
-          case "secp256k1":
-            return "ES256K";
-          case "P-384":
-            return "ES384";
-          case "P-512":
-            return "ES512";
-          default:
-            break;
-        }
-        let u = l.export({ format: "der", type: "pkcs8" }),
-          f = u[1] < 128 ? 17 : 18,
-          h = u[f],
-          sliced = u.slice(f + 1, f + 1 + h);
-        if (sliced.equals(buffer)) return "ES256";
-        if (sliced.equals(buffer_2)) return "ES384";
-        if (sliced.equals(buffer_3)) return "ES512";
-        if (sliced.equals(buffer_4)) return "ES256K";
-        throw TypeError("unsupported DPoP private key curve");
-      };
-    ((pB = t),
-      (hB = a),
-      (My = function (l, c) {
-        if (c[Symbol.toStringTag] === "CryptoKey") return JS(l);
-        switch (l.asymmetricKeyType) {
-          case "ed25519":
-          case "ed448":
-            return "EdDSA";
-          case "ec":
-            return a(l, c);
-          case "rsa":
-          case aB && "rsa-pss":
-            return t(l, c, this.issuer.dpop_signing_alg_values_supported);
-          default:
-            throw TypeError("unsupported DPoP private key");
-        }
-      }));
-    let e = /^(?:RS|PS)(?:256|384|512)$/,
-      buffer = Buffer.from([42, 134, 72, 206, 61, 3, 1, 7]),
-      buffer_2 = Buffer.from([43, 129, 4, 0, 34]),
-      buffer_3 = Buffer.from([43, 129, 4, 0, 35]),
-      buffer_4 = Buffer.from([43, 129, 4, 0, 10]);
-  } else My = JS;
-  var pB,
-    hB,
-    weakMap = new WeakMap();
-  async function fB(e, t) {
-    if (
-      on.cryptoRuntime === "node:crypto" &&
-      typeof t === "object" &&
-      typeof t.key === "object" &&
-      t.format === "jwk"
-    )
-      return Dy(t.key, "kty", "crv", "x", "y", "e", "n");
-    if (weakMap.has(t)) return weakMap.get(t);
-    let n = Dy(await on.exportJWK(e), "kty", "crv", "x", "y", "e", "n");
-    if (QS(t) || on.cryptoRuntime === "WebCryptoAPI") weakMap.set(t, n);
-    return n;
-  }
-  xy.exports = (e, t = !1) =>
-    class extends jy {
-      constructor(...o) {
-        super(e, t, ...o);
+  if (jose.cryptoRuntime === "node:crypto") {
+    let determineDPoPAlgorithmFromCryptoKey = function (l, privateKeyInput, valuesSupported) {
+      if (
+        typeof privateKeyInput === "object" &&
+        privateKeyInput.format === "jwk" &&
+        privateKeyInput.key &&
+        privateKeyInput.key.alg
+      )
+        return privateKeyInput.key.alg;
+      if (Array.isArray(valuesSupported)) {
+        let candidates = valuesSupported.filter(RegExp.prototype.test.bind(e));
+        if (l.asymmetricKeyType === "rsa-pss")
+          candidates = candidates.filter((value) => value.startsWith("PS"));
+        return ["PS256", "PS384", "PS512", "RS256", "RS384", "RS384"].find((preferred) =>
+          candidates.includes(preferred),
+        );
       }
-      static get issuer() {
-        return e;
+      return "PS256";
+    };
+    let a = function (privateKey, privateKeyInput) {
+      switch (
+        typeof privateKeyInput === "object" &&
+        typeof privateKeyInput.key === "object" &&
+        privateKeyInput.key.crv
+      ) {
+        case "P-256":
+          return "ES256";
+        case "secp256k1":
+          return "ES256K";
+        case "P-384":
+          return "ES384";
+        case "P-512":
+          return "ES512";
+        default:
+          break;
+      }
+      let buf = privateKey.export({
+        format: "der",
+        type: "pkcs8",
+      });
+      let i = buf[1] < 128 ? 17 : 18;
+      let len = buf[i];
+      let curveOid = buf.slice(i + 1, i + 1 + len);
+      if (curveOid.equals(p256)) return "ES256";
+      if (curveOid.equals(buffer)) return "ES384";
+      if (curveOid.equals(buffer_2)) return "ES512";
+      if (curveOid.equals(buffer_3)) return "ES256K";
+      throw TypeError("unsupported DPoP private key curve");
+    };
+    pB = determineDPoPAlgorithmFromCryptoKey;
+    hB = a;
+    My = function (l, privateKeyInput) {
+      if (privateKeyInput[Symbol.toStringTag] === "CryptoKey") return JS(l);
+      switch (l.asymmetricKeyType) {
+        case "ed25519":
+        case "ed448":
+          return "EdDSA";
+        case "ec":
+          return a(l, privateKeyInput);
+        case "rsa":
+        case aB && "rsa-pss":
+          return determineDPoPAlgorithmFromCryptoKey(
+            l,
+            privateKeyInput,
+            this.issuer.dpop_signing_alg_values_supported,
+          );
+        default:
+          throw TypeError("unsupported DPoP private key");
       }
     };
-  xy.exports.BaseClient = jy;
+    let e = /^(?:RS|PS)(?:256|384|512)$/;
+    let p256 = Buffer.from([42, 134, 72, 206, 61, 3, 1, 7]);
+    let buffer = Buffer.from([43, 129, 4, 0, 34]);
+    let buffer_2 = Buffer.from([43, 129, 4, 0, 35]);
+    let buffer_3 = Buffer.from([43, 129, 4, 0, 10]);
+  } else My = JS;
+  var pB;
+  var hB;
+  var weakMap = new WeakMap();
+  async function getJwk(keyObject, privateKeyInput) {
+    if (
+      jose.cryptoRuntime === "node:crypto" &&
+      typeof privateKeyInput === "object" &&
+      typeof privateKeyInput.key === "object" &&
+      privateKeyInput.format === "jwk"
+    )
+      return pick(privateKeyInput.key, "kty", "crv", "x", "y", "e", "n");
+    if (weakMap.has(privateKeyInput)) return weakMap.get(privateKeyInput);
+    let jwk = pick(await jose.exportJWK(keyObject), "kty", "crv", "x", "y", "e", "n");
+    if (isKeyObject(privateKeyInput) || jose.cryptoRuntime === "WebCryptoAPI")
+      weakMap.set(privateKeyInput, jwk);
+    return jwk;
+  }
+  cjsModule.exports = (issuer, aadIssValidation = false) =>
+    class extends BaseClient {
+      constructor(...args) {
+        super(issuer, aadIssValidation, ...args);
+      }
+      static get issuer() {
+        return issuer;
+      }
+    };
+  cjsModule.exports.BaseClient = BaseClient;
 });
-
-export { Ly };
+export { require_client_2 };

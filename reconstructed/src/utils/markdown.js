@@ -9,58 +9,63 @@
  * attribution: fingerprint 4, layout 20, placement 4, file-local 1
  */
 import {
-  $e,
-  Xe,
-  Qt,
+  markedConfigStateMemo,
+  MARKED_CONFIG_CACHE_SIZE,
+  markedExtensions,
   controlCharTokens,
-  Wt,
+  ESC_NON_CSI_RE,
   OSC8_LINK_PATTERN,
-  Bt,
-  Ht,
+  C1_OSC_RE,
+  ESC_NON_CSI_GLOBAL_RE,
   drawAround,
   WORD_BOUNDARY_PATTERNS,
   renderWithSafeLinks,
-  De,
-  z,
-  pe,
-  v,
+  labelWithReset,
+  afterStyleReset,
+  labelWithHint,
+  stripDecisionSurfaceChars,
   regExp_3,
-  fe,
+  labelForLink,
 } from "./markdownInlineRendering.js";
-import { Ah, zVe } from "../../vendor/marked/lib/marked.esm.js";
+import { marked, Marked } from "../../vendor/marked/lib/marked.esm.js";
 import { lexMarkdownWindowed, supportsStrikethrough } from "./doctorContextWarnings.js";
 import { stripPromptXMLTags } from "./messages.js";
 import { supportsHyperlinks } from "../ink/supports-hyperlinks.js";
 import { color } from "../components/design-system/color.js";
 import { sequential } from "./sequential.js";
 import { createHyperlink, isUrl } from "./hyperlink.js";
-import { Yn } from "./stripAnsi.js";
+import { stripAnsi } from "./stripAnsi.js";
 import {
   isCanonicalArtifactViewerUrl,
   isDecisionSurfaceControl,
 } from "../tools/ArtifactTool/artifactUrls.js";
-import { hf, lps } from "./permissions/autoModeRulesPrompt.js";
+import { BOXED_DIAMOND_GLYPH, withBoxedDiamond } from "./permissions/autoModeRulesPrompt.js";
 import { repeatString, ANY_CONTROL_CHAR_RE } from "./stringUtils.js";
 import { bunStringWidth } from "../ink/stringWidth.js";
 import { fileUrlToPath } from "./markdownFileLinks.js";
-import { decodePercentEncoding, Ees, CQr } from "./pathSanitize.js";
+import {
+  decodePercentEncoding,
+  stripLeadingInvisibleChars,
+  isUnsafePathAfterDecode,
+} from "./pathSanitize.js";
 import { getCachedRepositoryHost } from "./detectRepository.js";
 import { getGitHostKind } from "./gitHosts.js";
 import { normalizeHostCached, GITHUB_HOST } from "./git/githubUrl.js";
 
 //@ chunk-wj577vf9.js:13206-13268 fingerprint = configureMarked (0.369)
 function configureMarked() {
-  if ($e.configured) return;
-  ($e.set(), Ah.use(Xe, Qt));
+  if (markedConfigStateMemo.configured) return;
+  markedConfigStateMemo.set();
+  marked.use(MARKED_CONFIG_CACHE_SIZE, markedExtensions);
 }
+//@ chunk-wj577vf9.js:13268-13497 layout
 /**
  * 插件 Markdown 用的受限词法器：关闭表格、引用、分隔线、链接、自动链接、转义与换行等语法。
  */
-//@ chunk-wj577vf9.js:13268-13497 layout
-var pluginMarkdownLexer = new zVe(Xe, {
+var pluginMarkdownLexer = new Marked(MARKED_CONFIG_CACHE_SIZE, {
   tokenizer: {
     emStrong(e) {
-      return e.startsWith("_") ? void 0 : !1;
+      return e.startsWith("_") ? undefined : false;
     },
     table() {
       return;
@@ -91,22 +96,22 @@ var pluginMarkdownLexer = new zVe(Xe, {
     },
   },
 });
+//@ chunk-wj577vf9.js:13497-13710 layout
 /**
  * 把 Markdown 渲染为 ANSI 文本（去除提示 XML 标签，支持窗口化词法与超链接）。
  */
-//@ chunk-wj577vf9.js:13497-13710 layout
-function renderMarkdownToAnsi(e, t, n = null) {
+function renderMarkdownToAnsi(content, theme, highlight = null) {
   configureMarked();
-  let { tokens: tokens, isWindowed: isWindowed } = lexMarkdownWindowed(Ah, stripPromptXMLTags(e)),
-    s = !isWindowed && supportsHyperlinks();
+  let { tokens, isWindowed } = lexMarkdownWindowed(marked, stripPromptXMLTags(content));
+  let linkCap = !isWindowed && supportsHyperlinks();
   return controlCharTokens(tokens)
     .map((l) =>
-      formatTokenWindowed(l, t, {
+      formatTokenWindowed(l, theme, {
         listDepth: 0,
         orderedListNumber: null,
         parent: null,
-        highlight: n,
-        linkCap: s,
+        highlight,
+        linkCap,
         windowed: isWindowed,
       }),
     )
@@ -114,88 +119,103 @@ function renderMarkdownToAnsi(e, t, n = null) {
     .trim();
 }
 //@ chunk-wj577vf9.js:13710-13774 layout
-var qt = /\s/,
-  Xt = /&(?:nbsp|#0{0,4}160|#[xX]0{0,4}[aA]0);/g,
-  Kyo = 32;
+/**
+ * Markdown 渲染用空白正则、&nbsp; 实体正则与最大缩进空格数。
+ */
+var WHITESPACE_RE = /\s/;
+var NBSP_ENTITY_RE = /&(?:nbsp|#0{0,4}160|#[xX]0{0,4}[aA]0);/g;
+var MAX_INDENT_SPACES = 32;
 //@ chunk-wj577vf9.js:13774-13914 layout
 function endsWithHardBreak(e) {
   if (
     !e.endsWith(`
 `)
   )
-    return !1;
-  for (let t = e.length - 2; t >= 0; t--) {
-    let n = e[t];
+    return false;
+  for (let k = e.length - 2; k >= 0; k--) {
+    let n = e[k];
     if (
       n ===
       `
 `
     )
-      return !0;
-    if (!qt.test(n)) return !1;
+      return true;
+    if (!WHITESPACE_RE.test(n)) return false;
   }
-  return !1;
+  return false;
 }
 //@ chunk-wj577vf9.js:13914-14028 layout
 function formatTokenWindowed(e, t, n) {
   let r = formatToken(e, t, n);
-  return n.windowed && Wt.test(r) ? r.replace(OSC8_LINK_PATTERN, "").replace(Bt, "").replace(Ht, "") : r;
+  return n.windowed && ESC_NON_CSI_RE.test(r)
+    ? r.replace(OSC8_LINK_PATTERN, "").replace(C1_OSC_RE, "").replace(ESC_NON_CSI_GLOBAL_RE, "")
+    : r;
 }
 //@ chunk-wj577vf9.js:14028-19907 fingerprint = formatToken (0.729)
 function formatToken(e, t, n) {
   let {
-      listDepth: listDepth = 0,
-      orderedListNumber: orderedListNumber = null,
-      parent: parent = null,
-      highlight: highlight = null,
-      glueProse: glueProse = !1,
-      screenReader: screenReader = !1,
-      listIndent: listIndent = "",
-      promptMode: promptMode = !1,
-      windowed: windowed,
-      quotesAround: quotesAround = 0,
-    } = n,
-    y = !windowed && (n.linkCap ?? supportsHyperlinks());
+    listDepth = 0,
+    orderedListNumber = null,
+    parent = null,
+    highlight = null,
+    glueProse = false,
+    screenReader = false,
+    listIndent = "",
+    promptMode = false,
+    windowed,
+    quotesAround = 0,
+  } = n;
+  let y = !windowed && (n.linkCap ?? supportsHyperlinks());
   switch (e.type) {
     case "blockquote":
-      return drawAround(e.tokens ?? [], quotesAround, (u, f) =>
+      return drawAround(e.tokens ?? [], quotesAround, (u, quotesAround) =>
         formatTokenWindowed(u, t, {
           listDepth: 0,
           orderedListNumber: null,
           parent: null,
-          highlight: highlight,
-          glueProse: !1,
+          highlight,
+          glueProse: false,
           linkCap: y,
-          windowed: windowed,
-          screenReader: screenReader,
-          promptMode: promptMode,
-          quotesAround: f,
+          windowed,
+          screenReader,
+          promptMode,
+          quotesAround,
         }),
       );
     case "code": {
-      let u = e.lang ?? "";
-      if (!u && e.codeBlockStyle !== "indented")
+      let lang = e.lang ?? "";
+      if (!lang && e.codeBlockStyle !== "indented")
         return e.text.replace(/\S(?:.*\S)?/g, color("permission", t)) + WORD_BOUNDARY_PATTERNS;
-      let f = u.match(/^[\w.+#-]+/)?.[0] ?? "",
-        h =
-          highlight && u && highlight.supportsLanguage(u)
-            ? u
-            : highlight && f && highlight.supportsLanguage(f)
-              ? f
-              : "plaintext",
-        T = u && !highlight?.supportsLanguage(u) ? sequential.dim(u) + WORD_BOUNDARY_PATTERNS : "";
+      let f = lang.match(/^[\w.+#-]+/)?.[0] ?? "";
+      let language =
+        highlight && lang && highlight.supportsLanguage(lang)
+          ? lang
+          : highlight && f && highlight.supportsLanguage(f)
+            ? f
+            : "plaintext";
+      let T = lang && !highlight?.supportsLanguage(lang) ? sequential.dim(lang) + WORD_BOUNDARY_PATTERNS : "";
       if (!highlight) return T + e.text + WORD_BOUNDARY_PATTERNS;
-      return T + highlight.highlight(e.text, { language: h, fence: e }) + WORD_BOUNDARY_PATTERNS;
+      return (
+        T +
+        highlight.highlight(e.text, {
+          language,
+          fence: e,
+        }) +
+        WORD_BOUNDARY_PATTERNS
+      );
     }
     case "codespan": {
-      let u = color("permission", t)(e.text),
-        f =
-          promptMode ||
-          parent?.type === "link" ||
-          ("defanged" in e && e.defanged === !0) ||
-          ("afterStyle" in e && e.afterStyle === !0);
-      if (y && !f && Ze.test(e.text) && URL.canParse(e.text))
-        return createHyperlink(e.text, u, { themeName: t, supportsHyperlinks: !0 });
+      let u = color("permission", t)(e.text);
+      let f =
+        promptMode ||
+        parent?.type === "link" ||
+        ("defanged" in e && e.defanged === true) ||
+        ("afterStyle" in e && e.afterStyle === true);
+      if (y && !f && HTTP_URL_RE.test(e.text) && URL.canParse(e.text))
+        return createHyperlink(e.text, u, {
+          themeName: t,
+          supportsHyperlinks: true,
+        });
       return u;
     }
     case "em":
@@ -205,12 +225,12 @@ function formatToken(e, t, n) {
             formatTokenWindowed(u, t, {
               listDepth: 0,
               orderedListNumber: null,
-              parent: parent,
-              highlight: highlight,
-              glueProse: glueProse,
+              parent,
+              highlight,
+              glueProse,
               linkCap: y,
-              windowed: windowed,
-              promptMode: promptMode,
+              windowed,
+              promptMode,
             }),
           )
           .join(""),
@@ -222,12 +242,12 @@ function formatToken(e, t, n) {
             formatTokenWindowed(u, t, {
               listDepth: 0,
               orderedListNumber: null,
-              parent: parent,
-              highlight: highlight,
-              glueProse: glueProse,
+              parent,
+              highlight,
+              glueProse,
               linkCap: y,
-              windowed: windowed,
-              promptMode: promptMode,
+              windowed,
+              promptMode,
             }),
           )
           .join(""),
@@ -238,12 +258,12 @@ function formatToken(e, t, n) {
           formatTokenWindowed(f, t, {
             listDepth: 0,
             orderedListNumber: null,
-            parent: parent,
-            highlight: highlight,
-            glueProse: glueProse,
+            parent,
+            highlight,
+            glueProse,
             linkCap: y,
-            windowed: windowed,
-            promptMode: promptMode,
+            windowed,
+            promptMode,
           }),
         )
         .join("");
@@ -259,11 +279,11 @@ function formatToken(e, t, n) {
               listDepth: 0,
               orderedListNumber: null,
               parent: null,
-              highlight: highlight,
-              glueProse: !1,
+              highlight,
+              glueProse: false,
               linkCap: y,
-              windowed: windowed,
-              promptMode: promptMode,
+              windowed,
+              promptMode,
             }),
           )
           .join("");
@@ -278,145 +298,160 @@ function formatToken(e, t, n) {
     case "hr":
       return "---" + WORD_BOUNDARY_PATTERNS;
     case "image": {
-      if (!e.text && !e.title) return De(e.href, z(e));
-      let u = e.title ? ` "${e.title}"` : "",
-        f = pe(e.href, z(e), u);
+      if (!e.text && !e.title) return labelWithReset(e.href, afterStyleReset(e));
+      let u = e.title ? ` "${e.title}"` : "";
+      let f = labelWithHint(e.href, afterStyleReset(e), u);
       return e.text ? `${e.text}${f}` : f.replace(" (", "(");
     }
     case "link": {
       let u = e.title ? ` ("${e.title}")` : "";
       if (/^mailto:/i.test(e.href)) {
-        let replaced = e.href.replace(/^mailto:/i, ""),
-          K = z(e);
-        return (e.text && e.text !== v(replaced) ? `${e.text}${pe(replaced, K)}` : De(replaced, K)) + u;
+        let replaced = e.href.replace(/^mailto:/i, "");
+        let K = afterStyleReset(e);
+        return (
+          (e.text && e.text !== stripDecisionSurfaceChars(replaced)
+            ? `${e.text}${labelWithHint(replaced, K)}`
+            : labelWithReset(replaced, K)) + u
+        );
       }
-      let f = y ? localFileLinkPath(e.href) : null,
-        h = "defanged" in e && e.defanged === !0,
-        T = f !== null && !h,
-        k = z(e),
-        g = T ? f : v(f ?? e.href),
-        joined = (e.tokens ?? [])
-          .map((I) =>
-            formatTokenWindowed(I, t, {
-              listDepth: 0,
-              orderedListNumber: null,
-              parent: e,
-              highlight: highlight,
-              glueProse: !1,
-              linkCap: y,
-              windowed: windowed,
-              promptMode: promptMode,
-            }),
-          )
-          .join(""),
-        L = Yn(joined),
-        w = isCanonicalArtifactViewerUrl(e.href),
-        R = Boolean(L && L !== e.href),
-        _ = (I) => I.replace(regExp_3, "").startsWith(hf),
-        M = _(L) || _(e.text ?? ""),
-        x = L.includes(hf) || (e.text ?? "").includes(hf);
+      let f = y ? localFileLinkPath(e.href) : null;
+      let h = "defanged" in e && e.defanged === true;
+      let T = f !== null && !h;
+      let k = afterStyleReset(e);
+      let g = T ? f : stripDecisionSurfaceChars(f ?? e.href);
+      let joined = (e.tokens ?? [])
+        .map((I) =>
+          formatTokenWindowed(I, t, {
+            listDepth: 0,
+            orderedListNumber: null,
+            parent: e,
+            highlight,
+            glueProse: false,
+            linkCap: y,
+            windowed,
+            promptMode,
+          }),
+        )
+        .join("");
+      let L = stripAnsi(joined);
+      let w = isCanonicalArtifactViewerUrl(e.href);
+      let R = Boolean(L && L !== e.href);
+      let _ = (I) => I.replace(regExp_3, "").startsWith(BOXED_DIAMOND_GLYPH);
+      let M = _(L) || _(e.text ?? "");
+      let x = L.includes(BOXED_DIAMOND_GLYPH) || (e.text ?? "").includes(BOXED_DIAMOND_GLYPH);
       if (w && R) {
         let joined = Array.from(L)
-            .filter((Ye) => {
-              let Q = Ye.codePointAt(0) ?? 0;
-              if (Q === 8205 || (Q >= 65024 && Q <= 65039)) return !0;
-              return !isDecisionSurfaceControl(Q);
-            })
-            .join(""),
-          K = M ? joined : lps(joined);
+          .filter((Ye) => {
+            let Q = Ye.codePointAt(0) ?? 0;
+            if (Q === 8205 || (Q >= 65024 && Q <= 65039)) return true;
+            return !isDecisionSurfaceControl(Q);
+          })
+          .join("");
+        let K = M ? joined : withBoxedDiamond(joined);
         return (
-          createHyperlink(g, K, { themeName: t, supportsHyperlinks: T, shownUrlStart: k }) +
-          (T && e.title ? fe(g) : "") +
+          createHyperlink(g, K, {
+            themeName: t,
+            supportsHyperlinks: T,
+            shownUrlStart: k,
+          }) +
+          (T && e.title ? labelForLink(g) : "") +
           u
         );
       }
-      let G = !R || isUrl(g, L),
-        N = T && G ? k : "",
-        Z = N === "" ? joined : v(L),
-        U = R ? Z : T ? v(e.href) : g,
-        C = createHyperlink(g, U, { themeName: t, supportsHyperlinks: T, shownUrlStart: k }),
-        V = (!w && x) || Boolean(e.title);
-      if (T && R && V) return N + C + fe(g) + u;
-      return N + (w ? lps(C) : C) + u;
+      let G = !R || isUrl(g, L);
+      let N = T && G ? k : "";
+      let Z = N === "" ? joined : stripDecisionSurfaceChars(L);
+      let U = R ? Z : T ? stripDecisionSurfaceChars(e.href) : g;
+      let hyperlink = createHyperlink(g, U, {
+        themeName: t,
+        supportsHyperlinks: T,
+        shownUrlStart: k,
+      });
+      let V = (!w && x) || Boolean(e.title);
+      if (T && R && V) return N + hyperlink + labelForLink(g) + u;
+      return N + (w ? withBoxedDiamond(hyperlink) : hyperlink) + u;
     }
     case "list":
       return e.items
         .map((item, f) =>
           formatTokenWindowed(item, t, {
-            listDepth: listDepth,
+            listDepth,
             orderedListNumber: e.ordered ? e.start + f : null,
             parent: e,
-            highlight: highlight,
-            glueProse: !1,
+            highlight,
+            glueProse: false,
             linkCap: y,
-            windowed: windowed,
-            screenReader: screenReader,
-            listIndent: listIndent,
-            promptMode: promptMode,
-            quotesAround: quotesAround,
+            windowed,
+            screenReader,
+            listIndent,
+            promptMode,
+            quotesAround,
           }),
         )
         .join("");
     case "list_item": {
       let f =
-          (promptMode && orderedListNumber !== null ? /^ *(\d+[.)])/.exec(e.raw)?.[1] : void 0) ??
-          qyo(
-            listDepth,
-            orderedListNumber !== null && parent?.type === "list"
-              ? { number: orderedListNumber, ...Vyo(parent) }
-              : null,
-          ),
-        h = listIndent + repeatString(" ", bunStringWidth(f) + 1),
-        T = repeatString(" ", Math.min(h.length, Kyo)),
-        k = e.tokens ? flattenNumberOnlyLists(e) : e,
-        g = k.tokens ?? [],
-        index = g.findIndex((x) => x.type !== "space"),
-        L = index === -1 ? [] : g.slice(index),
-        w = L[0],
-        R =
-          w !== void 0 &&
-          (w.type === "code" ||
-            w.type === "blockquote" ||
-            w.type === "hr" ||
-            w.type === "table" ||
-            w.type === "list"),
-        _ = !R,
-        joined = L.map((x) => {
-          let G = x.type === "blockquote" ? leadingBlockToken(x, highlight) : void 0,
-            N = formatTokenWindowed(G ?? x, t, {
-              listDepth: listDepth + 1,
-              orderedListNumber: orderedListNumber,
-              parent: k,
-              highlight: highlight,
-              glueProse: !1,
-              linkCap: y,
-              windowed: windowed,
-              screenReader: screenReader,
-              listIndent: T,
-              promptMode: promptMode,
-              quotesAround: quotesAround,
-            });
-          if (x.type === "code" && N === WORD_BOUNDARY_PATTERNS) return "";
-          if (
-            x.type === "code" ||
-            x.type === "blockquote" ||
-            x.type === "hr" ||
-            x.type === "table" ||
-            x.type === "list" ||
-            x.type === "space"
-          )
-            return (x.type === "blockquote" && G === void 0) || x.type === "hr" || x.type === "table"
-              ? N.replace(/^\n+/, "")
-              : N;
-          let Z = _ ? `${listIndent}${f} ` : h;
-          _ = !1;
-          let linkText = N.split(WORD_BOUNDARY_PATTERNS)
-            .map((C, index) => (index === 0 ? Z + C : C === "" ? C : h + C))
-            .join(WORD_BOUNDARY_PATTERNS);
-          return x.type === "html" && !linkText.endsWith(WORD_BOUNDARY_PATTERNS)
-            ? linkText + WORD_BOUNDARY_PATTERNS
-            : linkText;
-        }).join("");
+        (promptMode && orderedListNumber !== null ? /^ *(\d+[.)])/.exec(e.raw)?.[1] : undefined) ??
+        listMarkerText(
+          listDepth,
+          orderedListNumber !== null && parent?.type === "list"
+            ? {
+                number: orderedListNumber,
+                ...orderedListRange(parent),
+              }
+            : null,
+        );
+      let h = listIndent + repeatString(" ", bunStringWidth(f) + 1);
+      let listIndent_2 = repeatString(" ", Math.min(h.length, MAX_INDENT_SPACES));
+      let k = e.tokens ? flattenNumberOnlyLists(e) : e;
+      let tokens = k.tokens ?? [];
+      let index = tokens.findIndex((token) => token.type !== "space");
+      let L = index === -1 ? [] : tokens.slice(index);
+      let w = L[0];
+      let R =
+        w !== undefined &&
+        (w.type === "code" ||
+          w.type === "blockquote" ||
+          w.type === "hr" ||
+          w.type === "table" ||
+          w.type === "list");
+      let _ = !R;
+      let joined = L.map((x) => {
+        let G = x.type === "blockquote" ? leadingBlockToken(x, highlight) : undefined;
+        let N = formatTokenWindowed(G ?? x, t, {
+          listDepth: listDepth + 1,
+          orderedListNumber,
+          parent: k,
+          highlight,
+          glueProse: false,
+          linkCap: y,
+          windowed,
+          screenReader,
+          listIndent: listIndent_2,
+          promptMode,
+          quotesAround,
+        });
+        if (x.type === "code" && N === WORD_BOUNDARY_PATTERNS) return "";
+        if (
+          x.type === "code" ||
+          x.type === "blockquote" ||
+          x.type === "hr" ||
+          x.type === "table" ||
+          x.type === "list" ||
+          x.type === "space"
+        )
+          return (x.type === "blockquote" && G === undefined) || x.type === "hr" || x.type === "table"
+            ? N.replace(/^\n+/, "")
+            : N;
+        let Z = _ ? `${listIndent}${f} ` : h;
+        _ = false;
+        let linkText = N.split(WORD_BOUNDARY_PATTERNS)
+          .map((C, index) => (index === 0 ? Z + C : C === "" ? C : h + C))
+          .join(WORD_BOUNDARY_PATTERNS);
+        return x.type === "html" && !linkText.endsWith(WORD_BOUNDARY_PATTERNS)
+          ? linkText + WORD_BOUNDARY_PATTERNS
+          : linkText;
+      }).join("");
       return _ || R ? `${listIndent}${f}${WORD_BOUNDARY_PATTERNS}${joined}` : joined;
     }
     case "paragraph":
@@ -428,11 +463,11 @@ function formatToken(e, t, n) {
                 listDepth: 0,
                 orderedListNumber: null,
                 parent: null,
-                highlight: highlight,
-                glueProse: !1,
+                highlight,
+                glueProse: false,
                 linkCap: y,
-                windowed: windowed,
-                promptMode: promptMode,
+                windowed,
+                promptMode,
               }),
             )
             .join(""),
@@ -444,103 +479,101 @@ function formatToken(e, t, n) {
       return WORD_BOUNDARY_PATTERNS;
     case "text": {
       if (parent?.type === "link") return e.text;
-      let u = !promptMode && e.escaped === !1 ? e.text.replace(Xt, " ") : e.text;
+      let u = !promptMode && e.escaped === false ? e.text.replace(NBSP_ENTITY_RE, " ") : e.text;
       if (parent?.type === "list_item") {
         let h = e.tokens
-            ? renderWithSafeLinks(e.tokens, () =>
-                (e.tokens ?? [])
-                  .map((g) =>
-                    formatTokenWindowed(g, t, {
-                      listDepth: listDepth,
-                      orderedListNumber: orderedListNumber,
-                      parent: e,
-                      highlight: highlight,
-                      glueProse: !0,
-                      linkCap: y,
-                      windowed: windowed,
-                      promptMode: promptMode,
-                    }),
-                  )
-                  .join(""),
-              )
-            : Ue(ve(u, t, y, parent, promptMode)),
-          T = parent.tokens?.[0] === e;
-        return `${parent.task && T ? `[${parent.checked ? "x" : " "}] ` : ""}${h}${WORD_BOUNDARY_PATTERNS}`;
-      }
-      let f = ve(u, t, y, parent, promptMode);
-      return glueProse ? Ue(f) : f;
-    }
-    case "table": {
-      let f = function (g) {
-          return renderWithSafeLinks(
-            g,
-            () =>
-              g
-                ?.map((E) =>
-                  formatTokenWindowed(E, t, {
-                    listDepth: 0,
-                    orderedListNumber: null,
-                    parent: null,
-                    highlight: highlight,
-                    glueProse: !1,
+          ? renderWithSafeLinks(e.tokens, () =>
+              (e.tokens ?? [])
+                .map((g) =>
+                  formatTokenWindowed(g, t, {
+                    listDepth,
+                    orderedListNumber,
+                    parent: e,
+                    highlight,
+                    glueProse: true,
                     linkCap: y,
-                    windowed: windowed,
-                    promptMode: promptMode,
+                    windowed,
+                    promptMode,
                   }),
                 )
-                .join("") ?? "",
-          );
-        },
-        h = function (g) {
-          return Yn(f(g));
-        },
-        tableToken = e;
+                .join(""),
+            )
+          : glueListMarkers(linkifyInline(u, t, y, parent, promptMode));
+        let T = parent.tokens?.[0] === e;
+        return `${parent.task && T ? `[${parent.checked ? "x" : " "}] ` : ""}${h}${WORD_BOUNDARY_PATTERNS}`;
+      }
+      let f = linkifyInline(u, t, y, parent, promptMode);
+      return glueProse ? glueListMarkers(f) : f;
+    }
+    case "table": {
+      let f = function (tokens) {
+        return renderWithSafeLinks(
+          tokens,
+          () =>
+            tokens
+              ?.map((E) =>
+                formatTokenWindowed(E, t, {
+                  listDepth: 0,
+                  orderedListNumber: null,
+                  parent: null,
+                  highlight,
+                  glueProse: false,
+                  linkCap: y,
+                  windowed,
+                  promptMode,
+                }),
+              )
+              .join("") ?? "",
+        );
+      };
+      let h = function (tokens) {
+        return stripAnsi(f(tokens));
+      };
+      let tableToken = e;
       if (screenReader)
         return (
           summarizeMarkdownText(
             tableToken.header.map((g) => h(g.tokens)),
-            tableToken.rows.map((tokens) => tokens.map((E) => h(E.tokens))),
+            tableToken.rows.map((tokens) => tokens.map((token) => h(token.tokens))),
           ) +
           WORD_BOUNDARY_PATTERNS +
           WORD_BOUNDARY_PATTERNS
         );
       let columnWidths = tableToken.header.map((header, index) => {
-          let maxWidth = bunStringWidth(h(header.tokens));
-          for (let row of tableToken.rows) {
-            let cellLength = bunStringWidth(h(row[index]?.tokens));
-            maxWidth = Math.max(maxWidth, cellLength);
-          }
-          return Math.max(maxWidth, 3);
-        }),
-        tableOutput = "| ";
-      return (
-        tableToken.header.forEach((header, index) => {
-          let L = f(header.tokens),
-            displayText = h(header.tokens),
-            R = columnWidths[index],
-            align = tableToken.align?.[index];
-          tableOutput += padAligned(L, bunStringWidth(displayText), R, align) + " | ";
-        }),
-        (tableOutput = tableOutput.trimEnd() + WORD_BOUNDARY_PATTERNS),
-        (tableOutput += "|"),
-        columnWidths.forEach((width) => {
-          let separator = "-".repeat(width + 2);
-          tableOutput += separator + "|";
-        }),
-        (tableOutput += WORD_BOUNDARY_PATTERNS),
-        tableToken.rows.forEach((row) => {
-          ((tableOutput += "| "),
-            row.forEach((cell, index) => {
-              let w = f(cell.tokens),
-                displayText = h(cell.tokens),
-                _ = columnWidths[index],
-                align = tableToken.align?.[index];
-              tableOutput += padAligned(w, bunStringWidth(displayText), _, align) + " | ";
-            }),
-            (tableOutput = tableOutput.trimEnd() + WORD_BOUNDARY_PATTERNS));
-        }),
-        tableOutput + WORD_BOUNDARY_PATTERNS
-      );
+        let maxWidth = bunStringWidth(h(header.tokens));
+        for (let row of tableToken.rows) {
+          let cellLength = bunStringWidth(h(row[index]?.tokens));
+          maxWidth = Math.max(maxWidth, cellLength);
+        }
+        return Math.max(maxWidth, 3);
+      });
+      let tableOutput = "| ";
+      tableToken.header.forEach((header, index) => {
+        let content = f(header.tokens);
+        let displayText = h(header.tokens);
+        let targetWidth = columnWidths[index];
+        let align = tableToken.align?.[index];
+        tableOutput += padAligned(content, bunStringWidth(displayText), targetWidth, align) + " | ";
+      });
+      tableOutput = tableOutput.trimEnd() + WORD_BOUNDARY_PATTERNS;
+      tableOutput += "|";
+      columnWidths.forEach((width) => {
+        let separator = "-".repeat(width + 2);
+        tableOutput += separator + "|";
+      });
+      tableOutput += WORD_BOUNDARY_PATTERNS;
+      tableToken.rows.forEach((row) => {
+        tableOutput += "| ";
+        row.forEach((cell, index) => {
+          let content = f(cell.tokens);
+          let displayText = h(cell.tokens);
+          let width = columnWidths[index];
+          let align = tableToken.align?.[index];
+          tableOutput += padAligned(content, bunStringWidth(displayText), width, align) + " | ";
+        });
+        tableOutput = tableOutput.trimEnd() + WORD_BOUNDARY_PATTERNS;
+      });
+      return tableOutput + WORD_BOUNDARY_PATTERNS;
     }
     case "escape":
       return e.text;
@@ -552,25 +585,37 @@ function formatToken(e, t, n) {
   return e.raw;
 }
 //@ chunk-wj577vf9.js:19907-20150 layout
-var ISSUE_REFERENCE_RE = /(^|[^\w./-])([A-Za-z0-9][\w-]*\/[A-Za-z0-9][\w.-]*)#(\d+)\b/g,
-  Vt = new Set(["gitlab.com", "bitbucket.org", "codeberg.org", "gitea.com", "git.sr.ht", "dev.azure.com"]),
-  ze = /^[a-z][a-z0-9+.-]*:/i,
-  Ze = /^https?:\/\/[\w\-.~:/?#[\]@!$&'()*+,;=%]+$/i;
+/**
+ * issue 引用正则、被视为非 GitHub 的托管站点列表以及 URL 正则。
+ */
+var ISSUE_REFERENCE_RE = /(^|[^\w./-])([A-Za-z0-9][\w-]*\/[A-Za-z0-9][\w.-]*)#(\d+)\b/g;
+var NON_GITHUB_ISSUE_HOSTS = new Set([
+  "gitlab.com",
+  "bitbucket.org",
+  "codeberg.org",
+  "gitea.com",
+  "git.sr.ht",
+  "dev.azure.com",
+]);
+var URL_SCHEME_RE = /^[a-z][a-z0-9+.-]*:/i;
+var HTTP_URL_RE = /^https?:\/\/[\w\-.~:/?#[\]@!$&'()*+,;=%]+$/i;
 //@ chunk-wj577vf9.js:20150-20313 layout
-function isUnsafeLinkHref(e, t) {
-  let n = ze.exec(e)?.[0];
-  if (n !== void 0) return !t.has(n.slice(0, -1).toLowerCase());
-  let r = e.split(/[/?#]/, 1)[0] ?? "";
+function isUnsafeLinkHref(href, t) {
+  let n = URL_SCHEME_RE.exec(href)?.[0];
+  if (n !== undefined) return !t.has(n.slice(0, -1).toLowerCase());
+  let r = href.split(/[/?#]/, 1)[0] ?? "";
   return !/^[A-Za-z0-9._~-]*$/.test(r);
 }
+//@ chunk-wj577vf9.js:20313-20644 layout
 /**
  * 递归标记不安全的链接与代码片段为 defanged（表格、列表、子令牌都处理）。
  */
-//@ chunk-wj577vf9.js:20313-20644 layout
-function defangTokens(e, t) {
-  for (let n of e) {
+function defangTokens(tokens, t) {
+  for (let n of tokens) {
     if (n.type === "codespan" || (n.type === "link" && isUnsafeLinkHref(n.href, t)))
-      Object.assign(n, { defanged: !0 });
+      Object.assign(n, {
+        defanged: true,
+      });
     if (n.type === "table") {
       let r = n;
       for (let o of [...r.header, ...r.rows.flat()]) defangTokens(o.tokens, t);
@@ -579,19 +624,19 @@ function defangTokens(e, t) {
   }
 }
 //@ chunk-wj577vf9.js:20644-20837 layout
-function localFileLinkPath(e) {
-  let t = fileUrlToPath(e);
+function localFileLinkPath(href) {
+  let t = fileUrlToPath(href);
   if (t === null || ANY_CONTROL_CHAR_RE.test(t) || regExp_3.test(t) || t !== t.trimEnd()) return null;
-  if (ze.test(t)) return t;
-  let n = decodePercentEncoding(t),
-    any = n.some((o) => /^file:/i.test(Ees(o)));
-  return CQr(t, n) || any ? null : t;
+  if (URL_SCHEME_RE.test(t)) return t;
+  let n = decodePercentEncoding(t);
+  let any = n.some((o) => /^file:/i.test(stripLeadingInvisibleChars(o)));
+  return isUnsafePathAfterDecode(t, n) || any ? null : t;
 }
 //@ chunk-wj577vf9.js:20837-21446 placement
 function escapePipesInCode(e) {
   if (!e.includes("`") || !e.includes("|")) return e;
-  let t = [],
-    n = [];
+  let t = [];
+  let n = [];
   for (let c = 0; c < e.length;) {
     if (e[c] !== "`") {
       c++;
@@ -599,61 +644,68 @@ function escapePipesInCode(e) {
     }
     let p = 0;
     while (e[c + p] === "`") p++;
-    (t.push(c), n.push(p), (c += p));
+    t.push(c);
+    n.push(p);
+    c += p;
   }
-  let fill = Array(t.length).fill(-1),
-    o = new Map();
-  for (let c = t.length - 1; c >= 0; c--) {
-    let p = o.get(n[c]);
-    if (p !== void 0) fill[c] = p;
-    o.set(n[c], c);
+  let r = Array(t.length).fill(-1);
+  let o = new Map();
+  for (let k = t.length - 1; k >= 0; k--) {
+    let p = o.get(n[k]);
+    if (p !== undefined) r[k] = p;
+    o.set(n[k], k);
   }
-  let s = "",
-    l = 0,
-    a = 0;
+  let s = "";
+  let l = 0;
+  let a = 0;
   while (l < e.length) {
     if (e[l] !== "`") {
       s += e[l++];
       continue;
     }
-    let c = n[a],
-      sliced = e.slice(l, l + c),
-      d = fill[a];
+    let c = n[a];
+    let sliced = e.slice(l, l + c);
+    let d = r[a];
     if (d === -1) {
-      ((s += sliced), (l += c), a++);
+      s += sliced;
+      l += c;
+      a++;
       continue;
     }
     let b = t[d];
     s += sliced;
     let S = 0;
-    for (let y = l + c; y < b; y++) {
-      let u = e[y];
+    for (let k = l + c; k < b; k++) {
+      let u = e[k];
       if (u === "\\") {
-        (S++, (s += u));
+        S++;
+        s += u;
         continue;
       }
       if (u === "|") s += S % 2 === 0 ? "\\|" : "|";
       else s += u;
       S = 0;
     }
-    ((s += sliced), (l = b + c), (a = d + 1));
+    s += sliced;
+    l = b + c;
+    a = d + 1;
   }
   return s;
 }
 //@ chunk-wj577vf9.js:21446-21566 placement
 function tableHasExtraCells(e, t) {
-  for (let n = 2; n < e.length; n++) {
-    let r = addToInMemoryErrorLog(e[n]);
-    for (let o = t; o < r.length; o++) if (r[o].trim()) return !0;
+  for (let k = 2; k < e.length; k++) {
+    let r = addToInMemoryErrorLog(e[k]);
+    for (let o = t; o < r.length; o++) if (r[o].trim()) return true;
   }
-  return !1;
+  return false;
 }
 //@ chunk-wj577vf9.js:21566-21767 placement = addToInMemoryErrorLog (0.678)
 function addToInMemoryErrorLog(errorInfo) {
   let parts = errorInfo
     .replace(/\|/g, (r, o, s) => {
-      let l = !1,
-        a = o;
+      let l = false;
+      let a = o;
       while (--a >= 0 && s[a] === "\\") l = !l;
       return l ? "|" : " |";
     })
@@ -663,29 +715,34 @@ function addToInMemoryErrorLog(errorInfo) {
   return parts;
 }
 //@ chunk-wj577vf9.js:21767-21831 layout
-function ve(e, t, n, r, o) {
-  if (o) return e;
-  return rn(linkifyIssueReferences(e, t, n), t, n, r);
+function linkifyInline(e, themeName, n, parent, promptMode) {
+  if (promptMode) return e;
+  return withHyperlinks(linkifyIssueReferences(e, themeName, n), themeName, n, parent);
 }
 //@ chunk-wj577vf9.js:21831-21866 layout
-function rn(e, t, n = supportsHyperlinks(), r) {
+function withHyperlinks(e, t, n = supportsHyperlinks(), r) {
   return e;
 }
 //@ chunk-wj577vf9.js:21866-22169 fingerprint = linkifyIssueReferences (0.327)
-function linkifyIssueReferences(e, t, n = supportsHyperlinks()) {
+function linkifyIssueReferences(e, themeName, n = supportsHyperlinks()) {
   if (!n) return e;
   if (!e.includes("#")) return e;
-  let r = getCachedRepositoryHost(),
-    o = r !== null && getGitHostKind(r) === "gitlab";
-  if (!o && r !== null && Vt.has(normalizeHostCached(r))) return e;
-  let s = r ?? GITHUB_HOST,
-    l = o ? "/-/issues/" : "/issues/";
+  let cachedRepositoryHost = getCachedRepositoryHost();
+  let o = cachedRepositoryHost !== null && getGitHostKind(cachedRepositoryHost) === "gitlab";
+  if (
+    !o &&
+    cachedRepositoryHost !== null &&
+    NON_GITHUB_ISSUE_HOSTS.has(normalizeHostCached(cachedRepositoryHost))
+  )
+    return e;
+  let s = cachedRepositoryHost ?? GITHUB_HOST;
+  let l = o ? "/-/issues/" : "/issues/";
   return e.replace(
     ISSUE_REFERENCE_RE,
-    (a, prefix, repo, num) =>
+    (_match, prefix, repo, num) =>
       prefix +
       createHyperlink(`https://${s}/${repo}${l}${num}`, `${repo}#${num}`, {
-        themeName: t,
+        themeName,
         supportsHyperlinks: n,
       }),
   );
@@ -693,7 +750,11 @@ function linkifyIssueReferences(e, t, n = supportsHyperlinks()) {
 //@ chunk-wj577vf9.js:22169-22268 file-local
 function numberToLetter(n) {
   let result = "";
-  while (n > 0) (n--, (result = String.fromCharCode(97 + (n % 26)) + result), (n = Math.floor(n / 26)));
+  while (n > 0) {
+    n--;
+    result = String.fromCharCode(97 + (n % 26)) + result;
+    n = Math.floor(n / 26);
+  }
   return result;
 }
 //@ chunk-wj577vf9.js:22268-22402 layout
@@ -713,75 +774,102 @@ var ROMAN_NUMERALS = [
   [1, "i"],
 ];
 //@ chunk-wj577vf9.js:22402-22474 layout
-function an(e) {
+function toRomanNumeral(number) {
   let t = "";
-  for (let [n, r] of ROMAN_NUMERALS) while (e >= n) ((t += r), (e -= n));
+  for (let [n, r] of ROMAN_NUMERALS)
+    while (number >= n) {
+      t += r;
+      number -= n;
+    }
   return t;
 }
 //@ chunk-wj577vf9.js:22474-22540 layout
-function Ue(e) {
+function glueListMarkers(e) {
   return e.replace(/ (\d{1,9}[.)])(?!\w)/g, "\xA0$1");
 }
 //@ chunk-wj577vf9.js:22540-22625 layout
-function Vyo(e) {
-  let t = e.start === "" ? 1 : e.start;
-  return { first: t, last: t + e.items.length - 1 };
+/**
+ * 取有序列表的首末编号。
+ */
+function orderedListRange(e) {
+  let start = e.start === "" ? 1 : e.start;
+  return {
+    first: start,
+    last: start + e.items.length - 1,
+  };
 }
+//@ chunk-wj577vf9.js:22625-22941 layout
 /**
  * 把只含编号、没有内容的有序列表折成纯文本（避免渲染为空列表）。
  */
-//@ chunk-wj577vf9.js:22625-22941 layout
 function flattenNumberOnlyLists(e) {
   let mapped = e.tokens.map((token) => {
     if (token.type !== "list" || !token.ordered) return token;
     let r = [];
     for (let item of token.items) {
       let l = /^ *(\d{1,9}[.)])/.exec(item.raw)?.[1];
-      if (item.tokens.length > 0 || l === void 0) return token;
+      if (item.tokens.length > 0 || l === undefined) return token;
       r.push(l);
     }
     let joined = r.join(`
 `);
-    return { type: "text", raw: joined, text: joined };
+    return {
+      type: "text",
+      raw: joined,
+      text: joined,
+    };
   });
-  return mapped.every((n, r) => n === e.tokens[r]) ? e : { ...e, tokens: mapped };
+  return mapped.every((n, r) => n === e.tokens[r])
+    ? e
+    : {
+        ...e,
+        tokens: mapped,
+      };
 }
 //@ chunk-wj577vf9.js:22941-23178 layout
 function isBlankToken(e, t) {
   switch (e.type) {
     case "space":
-      return !0;
+      return true;
     case "code":
-      return e.text === "" && (!e.lang || t?.supportsLanguage(e.lang) === !0);
+      return e.text === "" && (!e.lang || t?.supportsLanguage(e.lang) === true);
     case "heading":
       return e.text === "";
     case "blockquote":
       return (e.tokens ?? []).every((n) => isBlankToken(n, t));
     default:
-      return !1;
+      return false;
   }
 }
+//@ chunk-wj577vf9.js:23178-23361 layout
 /**
  * 跳过空白令牌，返回以首个实质块（代码或引用中的代码）开头的令牌。
  */
-//@ chunk-wj577vf9.js:23178-23361 layout
-function leadingBlockToken(e, t) {
-  let index = e.tokens.findIndex((token) => !isBlankToken(token, t)),
-    r = e.tokens[index],
-    o = r?.type === "blockquote" ? leadingBlockToken(r, t) : r?.type === "code" ? r : void 0;
-  return o && { ...e, tokens: [o, ...e.tokens.slice(index + 1)] };
+function leadingBlockToken(token, highlight) {
+  let index = token.tokens.findIndex((token) => !isBlankToken(token, highlight));
+  let r = token.tokens[index];
+  let o = r?.type === "blockquote" ? leadingBlockToken(r, highlight) : r?.type === "code" ? r : undefined;
+  return (
+    o && {
+      ...token,
+      tokens: [o, ...token.tokens.slice(index + 1)],
+    }
+  );
 }
 //@ chunk-wj577vf9.js:23361-23415 layout
-function qyo(e, t) {
-  return t === null ? "-" : `${listMarkerText(e + 1, t)}.`;
+/**
+ * 根据列表序号与编号样式生成列表符号。
+ */
+function listMarkerText(listDepth, t) {
+  return t === null ? "-" : `${listMarkerText_2(listDepth + 1, t)}.`;
 }
 //@ chunk-wj577vf9.js:23415-23580 layout
-function listMarkerText(e, { number: number, first: first, last: last }) {
+function listMarkerText_2(e, { number, first, last }) {
   switch (e) {
     case 2:
       return first >= 1 ? numberToLetter(number) : number.toString();
     case 3:
-      return first >= 1 && last <= 3999 ? an(number) : number.toString();
+      return first >= 1 && last <= 3999 ? toRomanNumeral(number) : number.toString();
     default:
       return number.toString();
   }
@@ -807,8 +895,8 @@ function summarizeMarkdownText(e, t) {
   function o(l) {
     return l
       .map((a, c) => {
-        let p = n(e[c] ?? ""),
-          d = n(a);
+        let p = n(e[c] ?? "");
+        let d = n(a);
         if (!p && !d) return null;
         return r(p ? `${p}: ${d}` : d);
       })
@@ -819,22 +907,21 @@ function summarizeMarkdownText(e, t) {
     .filter((l) => l.length > 0)
     .join(WORD_BOUNDARY_PATTERNS);
 }
-
 export {
   renderMarkdownToAnsi,
   formatTokenWindowed,
   summarizeMarkdownText,
   padAligned,
   flattenNumberOnlyLists,
-  Vyo,
-  qyo,
+  orderedListRange,
+  listMarkerText,
   endsWithHardBreak,
   leadingBlockToken,
-  Kyo,
+  MAX_INDENT_SPACES,
   pluginMarkdownLexer,
   configureMarked,
   defangTokens,
-  Ze,
+  HTTP_URL_RE,
   escapePipesInCode,
   tableHasExtraCells,
 };

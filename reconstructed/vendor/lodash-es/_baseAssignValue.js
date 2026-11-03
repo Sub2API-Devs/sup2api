@@ -5,12 +5,17 @@
  * pieces: chunk-3a1caa6f.js (1)
  * attribution: placement 1
  */
-import { fDn } from "../../src/utils/git/gitSafeEnv.js";
+import { definePropertyFn } from "../../src/utils/git/gitSafeEnv.js";
 
 //@ chunk-3a1caa6f.js:499-613 placement
-function baseAssignValue(e, r, n) {
-  if (r == "__proto__" && fDn) fDn(e, r, { configurable: !0, enumerable: !0, value: n, writable: !0 });
-  else e[r] = n;
+function baseAssignValue(object, key, value) {
+  if (key == "__proto__" && definePropertyFn)
+    definePropertyFn(object, key, {
+      configurable: true,
+      enumerable: true,
+      value,
+      writable: true,
+    });
+  else object[key] = value;
 }
-
 export { baseAssignValue };

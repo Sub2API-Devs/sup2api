@@ -5,27 +5,43 @@
  * pieces: chunk-a8ee6x44.js (1)
  * attribution: cjs-require-graph 1
  */
-import { x as x_2 } from "../../../../../../../runtime/bun-runtime.js";
+import { x } from "../../../../../../../runtime/bun-runtime.js";
 
 //@ chunk-a8ee6x44.js:1925-2573 cjs-require-graph
-var de = x_2(function (Re) {
-  Object.defineProperty(Re, "__esModule", { value: !0 });
-  Re.commonParams = Re.resolveClientEndpointParameters = void 0;
-  var Ao = (e) =>
-    Object.assign(e, {
-      useDualstackEndpoint: e.useDualstackEndpoint ?? !1,
-      useFipsEndpoint: e.useFipsEndpoint ?? !1,
-      useGlobalEndpoint: e.useGlobalEndpoint ?? !1,
+var require_EndpointParameters = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.commonParams = cjsExports.resolveClientEndpointParameters = undefined;
+  var resolveClientEndpointParameters = (options) =>
+    Object.assign(options, {
+      useDualstackEndpoint: options.useDualstackEndpoint ?? false,
+      useFipsEndpoint: options.useFipsEndpoint ?? false,
+      useGlobalEndpoint: options.useGlobalEndpoint ?? false,
       defaultSigningName: "sts",
     });
-  Re.resolveClientEndpointParameters = Ao;
-  Re.commonParams = {
-    UseGlobalEndpoint: { type: "builtInParams", name: "useGlobalEndpoint" },
-    UseFIPS: { type: "builtInParams", name: "useFipsEndpoint" },
-    Endpoint: { type: "builtInParams", name: "endpoint" },
-    Region: { type: "builtInParams", name: "region" },
-    UseDualStack: { type: "builtInParams", name: "useDualstackEndpoint" },
+  cjsExports.resolveClientEndpointParameters = resolveClientEndpointParameters;
+  cjsExports.commonParams = {
+    UseGlobalEndpoint: {
+      type: "builtInParams",
+      name: "useGlobalEndpoint",
+    },
+    UseFIPS: {
+      type: "builtInParams",
+      name: "useFipsEndpoint",
+    },
+    Endpoint: {
+      type: "builtInParams",
+      name: "endpoint",
+    },
+    Region: {
+      type: "builtInParams",
+      name: "region",
+    },
+    UseDualStack: {
+      type: "builtInParams",
+      name: "useDualstackEndpoint",
+    },
   };
 });
-
-export { de };
+export { require_EndpointParameters };

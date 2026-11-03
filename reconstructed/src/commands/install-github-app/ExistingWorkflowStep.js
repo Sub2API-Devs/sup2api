@@ -10,98 +10,130 @@
  */
 import { w } from "../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
-import { e, r } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Box, Text } from "../../ink/components/Text.js";
 import { ModelSelector } from "../../components/agents/ModelSelector.js";
 
 //@ chunk-4v9zy7gn.js:31502-32810 fingerprint = ExistingWorkflowStep (0.605)
-function ExistingWorkflowStep(t0) {
-  let p = w(13),
-    { onSelectAction: onSelectAction } = t0,
-    f;
-  if (p[0] === MEMO_CACHE_SENTINEL)
-    ((f = [
-      { label: "Update workflow file with latest version", value: "update" },
-      { label: "Skip workflow update (configure secrets only)", value: "skip" },
-      { label: "Exit without making changes", value: "exit" },
-    ]),
-      (p[0] = f));
-  else f = p[0];
-  let C = f,
-    u;
-  if (p[1] !== onSelectAction)
-    ((u = (value) => {
+function ExistingWorkflowStep(props) {
+  let $ = w(13);
+  let { onSelectAction } = props;
+  let t1;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    t1 = [
+      {
+        label: "Update workflow file with latest version",
+        value: "update",
+      },
+      {
+        label: "Skip workflow update (configure secrets only)",
+        value: "skip",
+      },
+      {
+        label: "Exit without making changes",
+        value: "exit",
+      },
+    ];
+    $[0] = t1;
+  } else t1 = $[0];
+  let options = t1;
+  let t2;
+  if ($[1] !== onSelectAction) {
+    t2 = (value) => {
       onSelectAction(value);
-    }),
-      (p[1] = onSelectAction),
-      (p[2] = u));
-  else u = p[2];
-  let v = u,
-    A;
-  if (p[3] !== onSelectAction)
-    ((A = () => {
+    };
+    $[1] = onSelectAction;
+    $[2] = t2;
+  } else t2 = $[2];
+  let handleSelect = t2;
+  let t3;
+  if ($[3] !== onSelectAction) {
+    t3 = () => {
       onSelectAction("exit");
-    }),
-      (p[3] = onSelectAction),
-      (p[4] = A));
-  else A = p[4];
-  let g = A,
-    _;
-  if (p[5] === MEMO_CACHE_SENTINEL)
-    ((_ = e(Box, { marginBottom: 1, children: e(Text, { bold: !0, children: "Existing Workflow Found" }) })),
-      (p[5] = _));
-  else _ = p[5];
+    };
+    $[3] = onSelectAction;
+    $[4] = t3;
+  } else t3 = $[4];
+  let handleCancel = t3;
+  let t4;
+  if ($[5] === MEMO_CACHE_SENTINEL) {
+    t4 = jsxProd_default(Box, {
+      marginBottom: 1,
+      children: jsxProd_default(Text, {
+        bold: true,
+        children: "Existing Workflow Found",
+      }),
+    });
+    $[5] = t4;
+  } else t4 = $[5];
   let k;
-  if (p[6] === MEMO_CACHE_SENTINEL)
-    ((k = r(Box, {
+  if ($[6] === MEMO_CACHE_SENTINEL) {
+    k = jsxProd_default_2(Box, {
       flexDirection: "column",
       marginBottom: 1,
       children: [
-        r(Text, {
+        jsxProd_default_2(Text, {
           children: [
             "A Claude workflow file already exists at",
             " ",
-            e(Text, { color: "claude", children: ".github/workflows/claude.yml" }),
+            jsxProd_default(Text, {
+              color: "claude",
+              children: ".github/workflows/claude.yml",
+            }),
           ],
         }),
-        e(Text, { dimColor: !0, children: "What would you like to do?" }),
+        jsxProd_default(Text, {
+          dimColor: true,
+          children: "What would you like to do?",
+        }),
       ],
-    })),
-      (p[6] = k));
-  else k = p[6];
+    });
+    $[6] = k;
+  } else k = $[6];
   let E;
-  if (p[7] !== g || p[8] !== v)
-    ((E = e(Box, {
+  if ($[7] !== handleCancel || $[8] !== handleSelect) {
+    E = jsxProd_default(Box, {
       flexDirection: "column",
-      children: e(ModelSelector, { options: C, onChange: v, onCancel: g }),
-    })),
-      (p[7] = g),
-      (p[8] = v),
-      (p[9] = E));
-  else E = p[9];
-  let x;
-  if (p[10] === MEMO_CACHE_SENTINEL)
-    ((x = e(Box, {
+      children: jsxProd_default(ModelSelector, {
+        options,
+        onChange: handleSelect,
+        onCancel: handleCancel,
+      }),
+    });
+    $[7] = handleCancel;
+    $[8] = handleSelect;
+    $[9] = E;
+  } else E = $[9];
+  let t8;
+  if ($[10] === MEMO_CACHE_SENTINEL) {
+    t8 = jsxProd_default(Box, {
       marginTop: 1,
-      children: r(Text, {
-        dimColor: !0,
+      children: jsxProd_default_2(Text, {
+        dimColor: true,
         children: [
           "View the latest workflow template at:",
           " ",
-          e(Text, {
+          jsxProd_default(Text, {
             color: "claude",
             children: "https://github.com/anthropics/claude-code-action/blob/main/examples/claude.yml",
           }),
         ],
       }),
-    })),
-      (p[10] = x));
-  else x = p[10];
-  let T;
-  if (p[11] !== E)
-    ((T = r(Box, { flexDirection: "column", children: [_, k, E, x] })), (p[11] = E), (p[12] = T));
-  else T = p[12];
-  return T;
+    });
+    $[10] = t8;
+  } else t8 = $[10];
+  let t9;
+  if ($[11] !== E) {
+    t9 = jsxProd_default_2(Box, {
+      flexDirection: "column",
+      children: [t4, k, E, t8],
+    });
+    $[11] = E;
+    $[12] = t9;
+  } else t9 = $[12];
+  return t9;
 }
-
 export { ExistingWorkflowStep };

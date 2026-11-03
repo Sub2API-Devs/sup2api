@@ -6,85 +6,85 @@
  * attribution: esm-fingerprint 3, esm-layout 1
  */
 import { RFC1738 } from "./formats.mjs";
-import { Ye } from "../utils/values.mjs";
+import { isArray } from "../utils/values.mjs";
 
 //@ chunk-hwmsct5x.js:19193-19407 esm-fingerprint
-var Wo = (e, n) => (
-    (Wo = Object.hasOwn ?? Function.prototype.call.bind(Object.prototype.hasOwnProperty)),
-    Wo(e, n)
-  ),
-  yt = (() => {
-    let e = [];
-    for (let n = 0; n < 256; ++n) e.push("%" + ((n < 16 ? "0" : "") + n.toString(16)).toUpperCase());
-    return e;
-  })();
+var has = (obj, key) => {
+  has = Object.hasOwn ?? Function.prototype.call.bind(Object.prototype.hasOwnProperty);
+  return has(obj, key);
+};
+var hex_table = (() => {
+  let array = [];
+  for (let i = 0; i < 256; ++i) array.push("%" + ((i < 16 ? "0" : "") + i.toString(16)).toUpperCase());
+  return array;
+})();
 //@ chunk-hwmsct5x.js:19407-20285 esm-fingerprint
-var Wi = 1024,
-  Ql = (e, n, r, s, h) => {
-    if (e.length === 0) return e;
-    let y = e;
-    if (typeof e === "symbol") y = Symbol.prototype.toString.call(e);
-    else if (typeof e !== "string") y = String(e);
-    if (r === "iso-8859-1")
-      return escape(y).replace(/%u[0-9a-f]{4}/gi, function (S) {
-        return "%26%23" + parseInt(S.slice(2), 16) + "%3B";
-      });
-    let w = "";
-    for (let S = 0; S < y.length; S += Wi) {
-      let E = y.length >= Wi ? y.slice(S, S + Wi) : y,
-        R = [];
-      for (let L = 0; L < E.length; ++L) {
-        let code = E.charCodeAt(L);
-        if (
-          code === 45 ||
-          code === 46 ||
-          code === 95 ||
-          code === 126 ||
-          (code >= 48 && code <= 57) ||
-          (code >= 65 && code <= 90) ||
-          (code >= 97 && code <= 122) ||
-          (h === RFC1738 && (code === 40 || code === 41))
-        ) {
-          R[R.length] = E.charAt(L);
-          continue;
-        }
-        if (code < 128) {
-          R[R.length] = yt[code];
-          continue;
-        }
-        if (code < 2048) {
-          R[R.length] = yt[192 | (code >> 6)] + yt[128 | (code & 63)];
-          continue;
-        }
-        if (code < 55296 || code >= 57344) {
-          R[R.length] = yt[224 | (code >> 12)] + yt[128 | ((code >> 6) & 63)] + yt[128 | (code & 63)];
-          continue;
-        }
-        ((L += 1),
-          (code = 65536 + (((code & 1023) << 10) | (E.charCodeAt(L) & 1023))),
-          (R[R.length] =
-            yt[240 | (code >> 18)] +
-            yt[128 | ((code >> 12) & 63)] +
-            yt[128 | ((code >> 6) & 63)] +
-            yt[128 | (code & 63)]));
+var limit = 1024;
+var encode = (str, _defaultEncoder, charset, _kind, format) => {
+  if (str.length === 0) return str;
+  let string = str;
+  if (typeof str === "symbol") string = Symbol.prototype.toString.call(str);
+  else if (typeof str !== "string") string = String(str);
+  if (charset === "iso-8859-1")
+    return escape(string).replace(/%u[0-9a-f]{4}/gi, function ($0) {
+      return "%26%23" + parseInt($0.slice(2), 16) + "%3B";
+    });
+  let out = "";
+  for (let j = 0; j < string.length; j += limit) {
+    let segment = string.length >= limit ? string.slice(j, j + limit) : string;
+    let arr = [];
+    for (let i = 0; i < segment.length; ++i) {
+      let c = segment.charCodeAt(i);
+      if (
+        c === 45 ||
+        c === 46 ||
+        c === 95 ||
+        c === 126 ||
+        (c >= 48 && c <= 57) ||
+        (c >= 65 && c <= 90) ||
+        (c >= 97 && c <= 122) ||
+        (format === RFC1738 && (c === 40 || c === 41))
+      ) {
+        arr[arr.length] = segment.charAt(i);
+        continue;
       }
-      w += R.join("");
+      if (c < 128) {
+        arr[arr.length] = hex_table[c];
+        continue;
+      }
+      if (c < 2048) {
+        arr[arr.length] = hex_table[192 | (c >> 6)] + hex_table[128 | (c & 63)];
+        continue;
+      }
+      if (c < 55296 || c >= 57344) {
+        arr[arr.length] =
+          hex_table[224 | (c >> 12)] + hex_table[128 | ((c >> 6) & 63)] + hex_table[128 | (c & 63)];
+        continue;
+      }
+      i += 1;
+      c = 65536 + (((c & 1023) << 10) | (segment.charCodeAt(i) & 1023));
+      arr[arr.length] =
+        hex_table[240 | (c >> 18)] +
+        hex_table[128 | ((c >> 12) & 63)] +
+        hex_table[128 | ((c >> 6) & 63)] +
+        hex_table[128 | (c & 63)];
     }
-    return w;
-  };
+    out += arr.join("");
+  }
+  return out;
+};
 //@ chunk-hwmsct5x.js:20285-20411 esm-fingerprint
-function isBufferLike(e) {
-  if (!e || typeof e !== "object") return !1;
-  return !!(e.constructor && e.constructor.isBuffer && e.constructor.isBuffer(e));
+function isBufferLike(obj) {
+  if (!obj || typeof obj !== "object") return false;
+  return !!(obj.constructor && obj.constructor.isBuffer && obj.constructor.isBuffer(obj));
 }
 //@ chunk-hwmsct5x.js:20411-20512 esm-layout
-function zi(e, n) {
-  if (Ye(e)) {
-    let r = [];
-    for (let s = 0; s < e.length; s += 1) r.push(n(e[s]));
-    return r;
+function zi(val, fn) {
+  if (isArray(val)) {
+    let mapped = [];
+    for (let i = 0; i < val.length; i += 1) mapped.push(fn(val[i]));
+    return mapped;
   }
-  return n(e);
+  return fn(val);
 }
-
-export { Ql, zi, isBufferLike, Wo };
+export { encode, zi, isBufferLike, has };

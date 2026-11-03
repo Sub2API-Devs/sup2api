@@ -8,8 +8,8 @@
 import { x } from "../../runtime/bun-runtime.js";
 
 //@ chunk-1ny7cxrt.js:19351-20896 cjs-fingerprint
-var JO = x(function (Hve, OF) {
-  OF.exports = {
+var require_package = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = {
     name: "openid-client",
     version: "5.7.1",
     description:
@@ -36,10 +36,16 @@ var JO = x(function (Hve, OF) {
     ],
     homepage: "https://github.com/panva/openid-client",
     repository: "panva/openid-client",
-    funding: { url: "https://github.com/sponsors/panva" },
+    funding: {
+      url: "https://github.com/sponsors/panva",
+    },
     license: "MIT",
     author: "Filip Skokan <panva.ip@gmail.com>",
-    exports: { types: "./types/index.d.ts", import: "./lib/index.mjs", require: "./lib/index.js" },
+    exports: {
+      types: "./types/index.d.ts",
+      import: "./lib/index.mjs",
+      require: "./lib/index.js",
+    },
     main: "./lib/index.js",
     types: "./types/index.d.ts",
     files: ["lib", "types/index.d.ts"],
@@ -66,19 +72,46 @@ var JO = x(function (Hve, OF) {
       timekeeper: "^2.3.1",
     },
     "standard-version": {
-      scripts: { postchangelog: "sed -i '' -e 's/### \\[/## [/g' CHANGELOG.md" },
+      scripts: {
+        postchangelog: "sed -i '' -e 's/### \\[/## [/g' CHANGELOG.md",
+      },
       types: [
-        { type: "feat", section: "Features" },
-        { type: "fix", section: "Fixes" },
-        { type: "chore", hidden: !0 },
-        { type: "docs", hidden: !0 },
-        { type: "style", hidden: !0 },
-        { type: "refactor", section: "Refactor", hidden: !1 },
-        { type: "perf", section: "Performance", hidden: !1 },
-        { type: "test", hidden: !0 },
+        {
+          type: "feat",
+          section: "Features",
+        },
+        {
+          type: "fix",
+          section: "Fixes",
+        },
+        {
+          type: "chore",
+          hidden: true,
+        },
+        {
+          type: "docs",
+          hidden: true,
+        },
+        {
+          type: "style",
+          hidden: true,
+        },
+        {
+          type: "refactor",
+          section: "Refactor",
+          hidden: false,
+        },
+        {
+          type: "perf",
+          section: "Performance",
+          hidden: false,
+        },
+        {
+          type: "test",
+          hidden: true,
+        },
       ],
     },
   };
 });
-
-export { JO };
+export { require_package };

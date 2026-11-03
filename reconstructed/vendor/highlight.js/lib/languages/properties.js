@@ -8,43 +8,62 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:373395-374067 cjs-fingerprint
-var es = x(function (hg, ji) {
-  function Vp(e) {
-    let a = "[ \\t\\f]*[:=][ \\t\\f]*",
-      s = "[ \\t\\f]+",
-      o = "(" + a + "|[ \\t\\f]+)",
-      r = "([^\\\\:= \\t\\f\\n]|\\\\.)+",
-      i = {
-        end: o,
+var require_properties = x(function (cjsExports, cjsModule) {
+  function properties(hljs) {
+    let EQUAL_DELIM = "[ \\t\\f]*[:=][ \\t\\f]*";
+    let WS1 = "[ \\t\\f]+";
+    let end = "(" + EQUAL_DELIM + "|[ \\t\\f]+)";
+    let KEY = "([^\\\\:= \\t\\f\\n]|\\\\.)+";
+    let DELIM_AND_VALUE = {
+      end,
+      relevance: 0,
+      starts: {
+        className: "string",
+        end: /$/,
         relevance: 0,
-        starts: {
-          className: "string",
-          end: /$/,
-          relevance: 0,
-          contains: [{ begin: "\\\\\\\\" }, { begin: "\\\\\\n" }],
-        },
-      };
+        contains: [
+          {
+            begin: "\\\\\\\\",
+          },
+          {
+            begin: "\\\\\\n",
+          },
+        ],
+      },
+    };
     return {
       name: ".properties",
-      disableAutodetect: !0,
-      case_insensitive: !0,
+      disableAutodetect: true,
+      case_insensitive: true,
       illegal: /\S/,
       contains: [
-        e.COMMENT("^\\s*[!#]", "$"),
+        hljs.COMMENT("^\\s*[!#]", "$"),
         {
-          returnBegin: !0,
+          returnBegin: true,
           variants: [
-            { begin: "([^\\\\:= \\t\\f\\n]|\\\\.)+" + a },
-            { begin: "([^\\\\:= \\t\\f\\n]|\\\\.)+[ \\t\\f]+" },
+            {
+              begin: "([^\\\\:= \\t\\f\\n]|\\\\.)+" + EQUAL_DELIM,
+            },
+            {
+              begin: "([^\\\\:= \\t\\f\\n]|\\\\.)+[ \\t\\f]+",
+            },
           ],
-          contains: [{ className: "attr", begin: "([^\\\\:= \\t\\f\\n]|\\\\.)+", endsParent: !0 }],
-          starts: i,
+          contains: [
+            {
+              className: "attr",
+              begin: "([^\\\\:= \\t\\f\\n]|\\\\.)+",
+              endsParent: true,
+            },
+          ],
+          starts: DELIM_AND_VALUE,
         },
-        { className: "attr", begin: "([^\\\\:= \\t\\f\\n]|\\\\.)+[ \\t\\f]*$" },
+        {
+          className: "attr",
+          begin: "([^\\\\:= \\t\\f\\n]|\\\\.)+[ \\t\\f]*$",
+        },
       ],
     };
   }
-  ji.exports = Vp;
+  cjsModule.exports = properties;
 });
-
-export { es };
+export { require_properties };

@@ -9,30 +9,36 @@
  * attribution: placement 2
  */
 
+//@ chunk-pjt9hgpa.js:319-475 placement
 /**
  * 把 Headers、二维数组或普通对象形式的请求头转成普通对象。
  */
-//@ chunk-pjt9hgpa.js:319-475 placement
-function headersToObject(e) {
-  if (!e) return {};
-  if (e instanceof Headers) return Object.fromEntries(e.entries());
-  if (Array.isArray(e)) return Object.fromEntries(e);
-  return { ...e };
+function headersToObject(headers) {
+  if (!headers) return {};
+  if (headers instanceof Headers) return Object.fromEntries(headers.entries());
+  if (Array.isArray(headers)) return Object.fromEntries(headers);
+  return {
+    ...headers,
+  };
 }
+//@ chunk-pjt9hgpa.js:475-634 placement
 /**
  * 包装 fetch，使每次请求合并默认 init（请求头逐项合并）。
  */
-//@ chunk-pjt9hgpa.js:475-634 placement
 function createFetchWithDefaults(e = fetch, t) {
   if (!t) return e;
   return async (r, s) => {
     let a = {
       ...t,
       ...s,
-      headers: s?.headers ? { ...headersToObject(t.headers), ...headersToObject(s.headers) } : t.headers,
+      headers: s?.headers
+        ? {
+            ...headersToObject(t.headers),
+            ...headersToObject(s.headers),
+          }
+        : t.headers,
     };
     return e(r, a);
   };
 }
-
 export { createFetchWithDefaults, headersToObject };

@@ -14,33 +14,39 @@ import {
   getUltracodeRequested,
 } from "../../utils/permissions/toolPermissionContext.js";
 import { isBgSession } from "../../utils/concurrentSessions.js";
-import { Yqe } from "../../utils/swarm/permissionSync.js";
+import { isTeammateContextReady } from "../../utils/swarm/permissionSync.js";
 import { isUltracodeActive } from "../../utils/effort.js";
 import { hasSkipWorkflowUsageWarning, updateSettingsForSource } from "../../utils/settings/settings.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { logEvent } from "../analytics/index.js";
 
 //@ chunk-hxj257dq.js:3902-4170 placement
-function needsWorkflowUsageConsent(e, o) {
-  if (e !== WORKFLOW_TOOL_NAME) return !1;
-  if (o.options.isNonInteractiveSession) return !1;
-  if (getToolPermissionContext(o).shouldAvoidPermissionPrompts) return !1;
-  if (isBgSession()) return !1;
-  if (Yqe()) return !1;
-  if (isUltracodeActive(getUltracodeRequested(o), o.options.mainLoopModel)) return !1;
-  return !o.session.workflowUsageConsent.isGranted() && !hasSkipWorkflowUsageWarning();
+function needsWorkflowUsageConsent(e, toolUseContext) {
+  if (e !== WORKFLOW_TOOL_NAME) return false;
+  if (toolUseContext.options.isNonInteractiveSession) return false;
+  if (getToolPermissionContext(toolUseContext).shouldAvoidPermissionPrompts) return false;
+  if (isBgSession()) return false;
+  if (isTeammateContextReady()) return false;
+  if (isUltracodeActive(getUltracodeRequested(toolUseContext), toolUseContext.options.mainLoopModel))
+    return false;
+  return !toolUseContext.session.workflowUsageConsent.isGranted() && !hasSkipWorkflowUsageWarning();
 }
 //@ chunk-hxj257dq.js:4170-4432 placement
 async function acceptWorkflowUsageWarning(e, o) {
-  if ((e.grant(), hasSkipWorkflowUsageWarning())) return;
-  let { error: error } = await updateSettingsForSource(
+  e.grant();
+  if (hasSkipWorkflowUsageWarning()) return;
+  let { error } = await updateSettingsForSource(
     "userSettings",
-    { skipWorkflowUsageWarning: !0 },
-    void 0,
+    {
+      skipWorkflowUsageWarning: true,
+    },
+    undefined,
     o,
   );
   if (error) {
-    logForDebugging(`Failed to persist skipWorkflowUsageWarning: ${error.message}`, { level: "error" });
+    logForDebugging(`Failed to persist skipWorkflowUsageWarning: ${error.message}`, {
+      level: "error",
+    });
     return;
   }
   logEvent("tengu_workflow_usage_warning_accepted", {});

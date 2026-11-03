@@ -10,148 +10,171 @@
  */
 import { w } from "../../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../../runtime/bun-runtime.js";
-import { e, r } from "../../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+} from "../../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Divider } from "../../design-system/Divider.js";
-import { QuestionNavigationBar, fp } from "./QuestionNavigationBar.js";
+import { QuestionNavigationBar, ownLookup } from "./QuestionNavigationBar.js";
 import { PermissionRequestTitle } from "../PermissionRequestTitle.js";
 import { Box, Text } from "../../../ink/components/Text.js";
 import { StatusRow } from "../../Settings/Status.js";
 import { Blockquote } from "../../Blockquote.js";
 import { BulletRow } from "../../design-system/BulletRow.js";
-import { re } from "../../../../vendor/@inquirer/figures/dist/esm/index.js";
+import { figures_default } from "../../../../vendor/@inquirer/figures/dist/esm/index.js";
 import { PermissionRuleExplanation } from "../PermissionRuleExplanation.js";
 import { ConfirmSelect } from "../../design-system/ConfirmSelect.js";
 
 //@ chunk-18hwfzwa.js:1293852-1295825 fingerprint = SubmitQuestionsView (0.78)
-function SubmitQuestionsView(t0) {
-  let $ = w(24),
-    {
-      questions: questions,
-      currentQuestionIndex: currentQuestionIndex,
-      answers: answers,
-      allQuestionsAnswered: allQuestionsAnswered,
-      permissionResult: permissionResult,
-      onFinalResponse: onFinalResponse,
-    } = t0,
-    He;
-  if ($[0] === MEMO_CACHE_SENTINEL) ((He = e(Divider, { color: "inactive" })), ($[0] = He));
-  else He = $[0];
+function SubmitQuestionsView(props) {
+  let $ = w(24);
+  let { questions, currentQuestionIndex, answers, allQuestionsAnswered, permissionResult, onFinalResponse } =
+    props;
+  let t1;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    t1 = jsxProd_default(Divider, {
+      color: "inactive",
+    });
+    $[0] = t1;
+  } else t1 = $[0];
   let We;
-  if ($[1] !== answers || $[2] !== currentQuestionIndex || $[3] !== questions)
-    ((We = e(QuestionNavigationBar, {
-      questions: questions,
-      currentQuestionIndex: currentQuestionIndex,
-      answers: answers,
-    })),
-      ($[1] = answers),
-      ($[2] = currentQuestionIndex),
-      ($[3] = questions),
-      ($[4] = We));
-  else We = $[4];
-  let ze;
-  if ($[5] === MEMO_CACHE_SENTINEL)
-    ((ze = e(PermissionRequestTitle, { title: "Review your answers", color: "text" })), ($[5] = ze));
-  else ze = $[5];
+  if ($[1] !== answers || $[2] !== currentQuestionIndex || $[3] !== questions) {
+    We = jsxProd_default(QuestionNavigationBar, {
+      questions,
+      currentQuestionIndex,
+      answers,
+    });
+    $[1] = answers;
+    $[2] = currentQuestionIndex;
+    $[3] = questions;
+    $[4] = We;
+  } else We = $[4];
+  let t3;
+  if ($[5] === MEMO_CACHE_SENTINEL) {
+    t3 = jsxProd_default(PermissionRequestTitle, {
+      title: "Review your answers",
+      color: "text",
+    });
+    $[5] = t3;
+  } else t3 = $[5];
   let Xe;
-  if ($[6] !== allQuestionsAnswered)
-    ((Xe =
+  if ($[6] !== allQuestionsAnswered) {
+    Xe =
       !allQuestionsAnswered &&
-      e(Box, {
+      jsxProd_default(Box, {
         marginBottom: 1,
-        children: e(StatusRow, { status: "warning", children: "You have not answered all questions" }),
-      })),
-      ($[6] = allQuestionsAnswered),
-      ($[7] = Xe));
-  else Xe = $[7];
+        children: jsxProd_default(StatusRow, {
+          status: "warning",
+          children: "You have not answered all questions",
+        }),
+      });
+    $[6] = allQuestionsAnswered;
+    $[7] = Xe;
+  } else Xe = $[7];
   let rt;
-  if ($[8] !== answers || $[9] !== questions)
-    ((rt =
+  if ($[8] !== answers || $[9] !== questions) {
+    rt =
       Object.keys(answers).length > 0 &&
-      e(Box, {
+      jsxProd_default(Box, {
         flexDirection: "column",
         marginBottom: 1,
         children: questions
-          .filter((kt) => fp(answers, kt?.key))
+          .filter((question) => ownLookup(answers, question?.key))
           .map((q_0) => {
-            let It = fp(answers, q_0?.key);
-            return r(
+            let answer = ownLookup(answers, q_0?.key);
+            return jsxProd_default_2(
               Box,
               {
                 flexDirection: "column",
                 marginLeft: 1,
                 children: [
-                  e(Blockquote, {
-                    multiline: q_0?.displayQuestion.needsGutter ?? !1,
-                    children: e(BulletRow, { children: q_0?.displayQuestion.text || "Question" }),
+                  jsxProd_default(Blockquote, {
+                    multiline: q_0?.displayQuestion.needsGutter ?? false,
+                    children: jsxProd_default(BulletRow, {
+                      children: q_0?.displayQuestion.text || "Question",
+                    }),
                   }),
-                  e(Box, {
+                  jsxProd_default(Box, {
                     marginLeft: 2,
-                    children: r(Text, { color: "success", children: [re.arrowRight, " ", It] }),
+                    children: jsxProd_default_2(Text, {
+                      color: "success",
+                      children: [figures_default.arrowRight, " ", answer],
+                    }),
                   }),
                 ],
               },
               q_0?.key || "answer",
             );
           }),
-      })),
-      ($[8] = answers),
-      ($[9] = questions),
-      ($[10] = rt));
-  else rt = $[10];
+      });
+    $[8] = answers;
+    $[9] = questions;
+    $[10] = rt;
+  } else rt = $[10];
   let Ot;
-  if ($[11] !== permissionResult)
-    ((Ot = e(PermissionRuleExplanation, { permissionResult: permissionResult, toolType: "tool" })),
-      ($[11] = permissionResult),
-      ($[12] = Ot));
-  else Ot = $[12];
-  let Et;
-  if ($[13] === MEMO_CACHE_SENTINEL)
-    ((Et = e(Text, { color: "inactive", children: "Ready to submit your answers?" })), ($[13] = Et));
-  else Et = $[13];
+  if ($[11] !== permissionResult) {
+    Ot = jsxProd_default(PermissionRuleExplanation, {
+      permissionResult,
+      toolType: "tool",
+    });
+    $[11] = permissionResult;
+    $[12] = Ot;
+  } else Ot = $[12];
+  let t7;
+  if ($[13] === MEMO_CACHE_SENTINEL) {
+    t7 = jsxProd_default(Text, {
+      color: "inactive",
+      children: "Ready to submit your answers?",
+    });
+    $[13] = t7;
+  } else t7 = $[13];
   let Dt;
-  if ($[14] !== onFinalResponse)
-    ((Dt = e(Box, {
+  if ($[14] !== onFinalResponse) {
+    Dt = jsxProd_default(Box, {
       marginTop: 1,
-      children: e(ConfirmSelect, {
+      children: jsxProd_default(ConfirmSelect, {
         confirmLabel: "Submit answers",
         cancelLabel: "Cancel",
         onConfirm: () => onFinalResponse("submit"),
         onCancel: () => onFinalResponse("cancel"),
       }),
-    })),
-      ($[14] = onFinalResponse),
-      ($[15] = Dt));
-  else Dt = $[15];
-  let Lt;
-  if ($[16] !== Xe || $[17] !== rt || $[18] !== Ot || $[19] !== Dt)
-    ((Lt = r(Box, { flexDirection: "column", marginTop: 1, children: [Xe, rt, Ot, Et, Dt] })),
-      ($[16] = Xe),
-      ($[17] = rt),
-      ($[18] = Ot),
-      ($[19] = Dt),
-      ($[20] = Lt));
-  else Lt = $[20];
-  let oo;
-  if ($[21] !== We || $[22] !== Lt)
-    ((oo = r(Box, {
+    });
+    $[14] = onFinalResponse;
+    $[15] = Dt;
+  } else Dt = $[15];
+  let t11;
+  if ($[16] !== Xe || $[17] !== rt || $[18] !== Ot || $[19] !== Dt) {
+    t11 = jsxProd_default_2(Box, {
+      flexDirection: "column",
+      marginTop: 1,
+      children: [Xe, rt, Ot, t7, Dt],
+    });
+    $[16] = Xe;
+    $[17] = rt;
+    $[18] = Ot;
+    $[19] = Dt;
+    $[20] = t11;
+  } else t11 = $[20];
+  let t12;
+  if ($[21] !== We || $[22] !== t11) {
+    t12 = jsxProd_default_2(Box, {
       flexDirection: "column",
       marginTop: 1,
       children: [
-        He,
-        r(Box, {
+        t1,
+        jsxProd_default_2(Box, {
           flexDirection: "column",
-          borderTop: !0,
+          borderTop: true,
           borderColor: "inactive",
           paddingTop: 0,
-          children: [We, ze, Lt],
+          children: [We, t3, t11],
         }),
       ],
-    })),
-      ($[21] = We),
-      ($[22] = Lt),
-      ($[23] = oo));
-  else oo = $[23];
-  return oo;
+    });
+    $[21] = We;
+    $[22] = t11;
+    $[23] = t12;
+  } else t12 = $[23];
+  return t12;
 }
-
 export { SubmitQuestionsView };

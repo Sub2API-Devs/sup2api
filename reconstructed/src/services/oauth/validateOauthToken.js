@@ -16,34 +16,49 @@ import { isExpectedApiError, isNonRetryableClientError } from "../../utils/error
 import { logForDebugging } from "../../utils/debug.js";
 import { logError } from "../../utils/log.js";
 import { getOauthConfig } from "../../constants/oauth.js";
-import { Dt } from "../../../vendor/axios/dist/esm/axios.js";
+import { axios_default } from "../../../vendor/axios/dist/esm/axios.js";
 import { claudeCodeUserAgent } from "../../utils/http.js";
-import { hn } from "../api/verificationRequired.js";
+import { FAST_MODE_CHECK_HTTP_OPTIONS } from "../api/verificationRequired.js";
 
 //@ chunk-aepeg2w5.js:293799-293883 placement
-var sv = DoctorLazy(() => create_2().regex(/^[\p{L}\p{N}](?:[\p{L}\p{N} .+-]{0,38}[\p{L}\p{N}+])?$/u));
+/**
+ * 套餐显示名的 schema（字母数字开头，允许空格与 .+-）。
+ */
+var planDisplayNameSchema = DoctorLazy(() =>
+  create_2().regex(/^[\p{L}\p{N}](?:[\p{L}\p{N} .+-]{0,38}[\p{L}\p{N}+])?$/u),
+);
 //@ chunk-aepeg2w5.js:293883-293932 placement
-function isPlanDisplayName(e) {
-  return sv().safeParse(e).success;
+function isPlanDisplayName(planDisplayName) {
+  return planDisplayNameSchema().safeParse(planDisplayName).success;
 }
 //@ chunk-aepeg2w5.js:293932-294143 placement
 function planDisplayNameFromProfile(e) {
-  let n = e?.organization?.plan_display_name;
-  if (n === void 0 || n === null) return null;
-  let safeParse = sv().safeParse(n);
-  if (!safeParse.success) return (logFeatureSad("oauth_profile_fetch", "plan_display_name_rejected"), null);
-  return safeParse.data;
+  let planDisplayName = e?.organization?.plan_display_name;
+  if (planDisplayName === undefined || planDisplayName === null) return null;
+  let r = planDisplayNameSchema().safeParse(planDisplayName);
+  if (!r.success) {
+    logFeatureSad("oauth_profile_fetch", "plan_display_name_rejected");
+    return null;
+  }
+  return r.data;
 }
 //@ chunk-aepeg2w5.js:294143-294454 placement
-async function validateOauthToken(e, n = []) {
-  let r = await validateOauthTokenWithOutcome(e);
+async function validateOauthToken(accessToken, n = []) {
+  let r = await validateOauthTokenWithOutcome(accessToken);
   for (let s of n) {
     if (r.ok || !isTransientValidateFailure(r)) break;
-    (await sleep(s), (r = await validateOauthTokenWithOutcome(e)));
+    await sleep(s);
+    r = await validateOauthTokenWithOutcome(accessToken);
   }
-  if (r.ok) return (logFeatureOk("oauth_token_validate"), r.data);
-  if ((logFeatureSad("oauth_token_validate", "oauth_validate_failed"), isExpectedApiError(r.error)))
-    logForDebugging(`Failed to validate OAuth token: ${r.error}`, { level: "error" });
+  if (r.ok) {
+    logFeatureOk("oauth_token_validate");
+    return r.data;
+  }
+  logFeatureSad("oauth_token_validate", "oauth_validate_failed");
+  if (isExpectedApiError(r.error))
+    logForDebugging(`Failed to validate OAuth token: ${r.error}`, {
+      level: "error",
+    });
   else logError(r.error);
   return;
 }
@@ -54,10 +69,10 @@ function isTransientValidateFailure(e) {
     case "dns":
     case "connect":
     case "network_error":
-      return !0;
+      return true;
     case "http_error":
       return (
-        e.status !== void 0 &&
+        e.status !== undefined &&
         (e.status >= 500 ||
           (e.status >= 300 && e.status < 400) ||
           (e.status >= 400 && !isNonRetryableClientError(e.status)))
@@ -67,7 +82,7 @@ function isTransientValidateFailure(e) {
     case "unauthorized":
     case "forbidden":
     case "error":
-      return !1;
+      return false;
   }
 }
 //@ chunk-aepeg2w5.js:294752-295624 placement
@@ -75,53 +90,76 @@ async function validateOauthTokenWithOutcome(e) {
   let n = `${getOauthConfig().BASE_API_URL}/api/oauth/validate`;
   try {
     return {
-      ok: !0,
+      ok: true,
       data: (
-        await Dt.post(n, null, {
+        await axios_default.post(n, null, {
           headers: {
             "User-Agent": claudeCodeUserAgent(),
             Authorization: `Bearer ${e}`,
             "Content-Type": "application/json",
           },
           timeout: 1e4,
-          ...hn,
+          ...FAST_MODE_CHECK_HTTP_OPTIONS,
         })
       ).data,
     };
   } catch (error) {
-    if (!Dt.isAxiosError(error)) return { ok: !1, reason: "error", error: error };
-    let s = error.response?.status;
-    if (s !== void 0)
+    if (!axios_default.isAxiosError(error))
       return {
-        ok: !1,
-        reason: s === 401 ? "unauthorized" : s === 403 ? "forbidden" : s === 407 ? "proxy" : "http_error",
-        status: s,
-        error: error,
+        ok: false,
+        reason: "error",
+        error,
+      };
+    let status = error.response?.status;
+    if (status !== undefined)
+      return {
+        ok: false,
+        reason:
+          status === 401
+            ? "unauthorized"
+            : status === 403
+              ? "forbidden"
+              : status === 407
+                ? "proxy"
+                : "http_error",
+        status,
+        error,
       };
     switch (error.code) {
       case "ECONNABORTED":
       case "ETIMEDOUT":
-        return { ok: !1, reason: "timeout", error: error };
+        return {
+          ok: false,
+          reason: "timeout",
+          error,
+        };
       case "ENOTFOUND":
       case "EAI_AGAIN":
-        return { ok: !1, reason: "dns", error: error };
+        return {
+          ok: false,
+          reason: "dns",
+          error,
+        };
       case "ECONNREFUSED":
       case "ECONNRESET":
       case "EHOSTUNREACH":
       case "ENETUNREACH":
       case "EPIPE":
-        return { ok: !1, reason: "connect", error: error };
+        return {
+          ok: false,
+          reason: "connect",
+          error,
+        };
       default:
         return {
-          ok: !1,
+          ok: false,
           reason:
-            error.code !== void 0 && /CERT|TLS|SSL|SELF_SIGNED|UNABLE_TO_VERIFY|EPROTO/.test(error.code)
+            error.code !== undefined && /CERT|TLS|SSL|SELF_SIGNED|UNABLE_TO_VERIFY|EPROTO/.test(error.code)
               ? "tls"
               : "network_error",
-          error: error,
+          error,
         };
     }
   }
 }
-
 export { isPlanDisplayName, validateOauthToken, planDisplayNameFromProfile };

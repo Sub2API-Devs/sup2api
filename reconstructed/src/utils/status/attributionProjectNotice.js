@@ -12,18 +12,18 @@ import { getSubscriberAttributionProject } from "../attributionProject.js";
 import { tildify } from "../path.js";
 import { getSettingsFilePathForSource } from "../settings/settings.js";
 
+//@ chunk-x08x6vab.js:3380-4330 placement
 /**
  * /status 中关于用量报告归属的 claude.ai Project 的说明（来源、忽略的无效值或缺失警告）。
  */
-//@ chunk-x08x6vab.js:3380-4330 placement
 var ATTRIBUTION_PROJECT_NOTICE = {
   id: "attribution-project",
   compute: () => {
-    let t = getSubscriberAttributionProject();
-    if (t === void 0) return null;
-    let { project: project, written: written, ignored: ignored } = t,
-      [e] = ignored;
-    if (project !== void 0) {
+    let subscriberAttributionProject = getSubscriberAttributionProject();
+    if (subscriberAttributionProject === undefined) return null;
+    let { project, written, ignored } = subscriberAttributionProject;
+    let [e] = ignored;
+    if (project !== undefined) {
       let i;
       switch (project.source) {
         case "harness":
@@ -35,7 +35,7 @@ var ATTRIBUTION_PROJECT_NOTICE = {
         default:
           i = settingsSourceLabel(project.source);
       }
-      let u = e === void 0 ? "" : `; ignored the invalid ${attributionSourceLabel(e)}`;
+      let u = e === undefined ? "" : `; ignored the invalid ${attributionSourceLabel(e)}`;
       return {
         key: "attribution-project",
         kind: "contextual",
@@ -44,7 +44,7 @@ var ATTRIBUTION_PROJECT_NOTICE = {
       };
     }
     switch (e) {
-      case void 0:
+      case undefined:
         return null;
       case "managed":
       case "admin_default":

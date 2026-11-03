@@ -8,8 +8,8 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-pwh5dx3n.js:169471-171114 cjs-fingerprint
-var fh = x(function (PA, wT) {
-  wT.exports = {
+var fh = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = {
     nested: {
       google: {
         nested: {
@@ -17,26 +17,78 @@ var fh = x(function (PA, wT) {
             nested: {
               Type: {
                 fields: {
-                  name: { type: "string", id: 1 },
-                  fields: { rule: "repeated", type: "Field", id: 2 },
-                  oneofs: { rule: "repeated", type: "string", id: 3 },
-                  options: { rule: "repeated", type: "Option", id: 4 },
-                  sourceContext: { type: "SourceContext", id: 5 },
-                  syntax: { type: "Syntax", id: 6 },
+                  name: {
+                    type: "string",
+                    id: 1,
+                  },
+                  fields: {
+                    rule: "repeated",
+                    type: "Field",
+                    id: 2,
+                  },
+                  oneofs: {
+                    rule: "repeated",
+                    type: "string",
+                    id: 3,
+                  },
+                  options: {
+                    rule: "repeated",
+                    type: "Option",
+                    id: 4,
+                  },
+                  sourceContext: {
+                    type: "SourceContext",
+                    id: 5,
+                  },
+                  syntax: {
+                    type: "Syntax",
+                    id: 6,
+                  },
                 },
               },
               Field: {
                 fields: {
-                  kind: { type: "Kind", id: 1 },
-                  cardinality: { type: "Cardinality", id: 2 },
-                  number: { type: "int32", id: 3 },
-                  name: { type: "string", id: 4 },
-                  typeUrl: { type: "string", id: 6 },
-                  oneofIndex: { type: "int32", id: 7 },
-                  packed: { type: "bool", id: 8 },
-                  options: { rule: "repeated", type: "Option", id: 9 },
-                  jsonName: { type: "string", id: 10 },
-                  defaultValue: { type: "string", id: 11 },
+                  kind: {
+                    type: "Kind",
+                    id: 1,
+                  },
+                  cardinality: {
+                    type: "Cardinality",
+                    id: 2,
+                  },
+                  number: {
+                    type: "int32",
+                    id: 3,
+                  },
+                  name: {
+                    type: "string",
+                    id: 4,
+                  },
+                  typeUrl: {
+                    type: "string",
+                    id: 6,
+                  },
+                  oneofIndex: {
+                    type: "int32",
+                    id: 7,
+                  },
+                  packed: {
+                    type: "bool",
+                    id: 8,
+                  },
+                  options: {
+                    rule: "repeated",
+                    type: "Option",
+                    id: 9,
+                  },
+                  jsonName: {
+                    type: "string",
+                    id: 10,
+                  },
+                  defaultValue: {
+                    type: "string",
+                    id: 11,
+                  },
                 },
                 nested: {
                   Kind: {
@@ -74,24 +126,85 @@ var fh = x(function (PA, wT) {
               },
               Enum: {
                 fields: {
-                  name: { type: "string", id: 1 },
-                  enumvalue: { rule: "repeated", type: "EnumValue", id: 2 },
-                  options: { rule: "repeated", type: "Option", id: 3 },
-                  sourceContext: { type: "SourceContext", id: 4 },
-                  syntax: { type: "Syntax", id: 5 },
+                  name: {
+                    type: "string",
+                    id: 1,
+                  },
+                  enumvalue: {
+                    rule: "repeated",
+                    type: "EnumValue",
+                    id: 2,
+                  },
+                  options: {
+                    rule: "repeated",
+                    type: "Option",
+                    id: 3,
+                  },
+                  sourceContext: {
+                    type: "SourceContext",
+                    id: 4,
+                  },
+                  syntax: {
+                    type: "Syntax",
+                    id: 5,
+                  },
                 },
               },
               EnumValue: {
                 fields: {
-                  name: { type: "string", id: 1 },
-                  number: { type: "int32", id: 2 },
-                  options: { rule: "repeated", type: "Option", id: 3 },
+                  name: {
+                    type: "string",
+                    id: 1,
+                  },
+                  number: {
+                    type: "int32",
+                    id: 2,
+                  },
+                  options: {
+                    rule: "repeated",
+                    type: "Option",
+                    id: 3,
+                  },
                 },
               },
-              Option: { fields: { name: { type: "string", id: 1 }, value: { type: "Any", id: 2 } } },
-              Syntax: { values: { SYNTAX_PROTO2: 0, SYNTAX_PROTO3: 1 } },
-              Any: { fields: { type_url: { type: "string", id: 1 }, value: { type: "bytes", id: 2 } } },
-              SourceContext: { fields: { fileName: { type: "string", id: 1 } } },
+              Option: {
+                fields: {
+                  name: {
+                    type: "string",
+                    id: 1,
+                  },
+                  value: {
+                    type: "Any",
+                    id: 2,
+                  },
+                },
+              },
+              Syntax: {
+                values: {
+                  SYNTAX_PROTO2: 0,
+                  SYNTAX_PROTO3: 1,
+                },
+              },
+              Any: {
+                fields: {
+                  type_url: {
+                    type: "string",
+                    id: 1,
+                  },
+                  value: {
+                    type: "bytes",
+                    id: 2,
+                  },
+                },
+              },
+              SourceContext: {
+                fields: {
+                  fileName: {
+                    type: "string",
+                    id: 1,
+                  },
+                },
+              },
             },
           },
         },
@@ -99,5 +212,4 @@ var fh = x(function (PA, wT) {
     },
   };
 });
-
 export { fh };

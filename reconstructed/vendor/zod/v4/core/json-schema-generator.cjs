@@ -6,16 +6,18 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { nd } from "./json-schema-processors.cjs";
-import { td } from "./to-json-schema.cjs";
+import { require_json_schema_processors } from "./json-schema-processors.cjs";
+import { require_to_json_schema } from "./to-json-schema.cjs";
 
 //@ chunk-1ny7cxrt.js:584049-585570 cjs-fingerprint
-var sT = x(function (rc) {
-  Object.defineProperty(rc, "__esModule", { value: !0 });
-  rc.JSONSchemaGenerator = void 0;
-  var rT = nd(),
-    ta = td();
-  class iT {
+var require_json_schema_generator = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.JSONSchemaGenerator = undefined;
+  var json_schema_processors_js_1 = require_json_schema_processors();
+  var to_json_schema_js_1 = require_to_json_schema();
+  class JSONSchemaGenerator {
     get metadataRegistry() {
       return this.ctx.metadataRegistry;
     }
@@ -34,65 +36,77 @@ var sT = x(function (rc) {
     get counter() {
       return this.ctx.counter;
     }
-    set counter(e) {
-      this.ctx.counter = e;
+    set counter(value) {
+      this.ctx.counter = value;
     }
     get seen() {
       return this.ctx.seen;
     }
-    constructor(e) {
-      let t = e?.target ?? "draft-2020-12";
-      if (t === "draft-4") t = "draft-04";
-      if (t === "draft-7") t = "draft-07";
-      this.ctx = ta.initializeContext({
-        processors: rT.allProcessors,
-        target: t,
-        ...(e?.metadata && { metadata: e.metadata }),
-        ...(e?.unrepresentable && { unrepresentable: e.unrepresentable }),
-        ...(e?.override && { override: e.override }),
-        ...(e?.io && { io: e.io }),
+    constructor(params) {
+      let normalizedTarget = params?.target ?? "draft-2020-12";
+      if (normalizedTarget === "draft-4") normalizedTarget = "draft-04";
+      if (normalizedTarget === "draft-7") normalizedTarget = "draft-07";
+      this.ctx = to_json_schema_js_1.initializeContext({
+        processors: json_schema_processors_js_1.allProcessors,
+        target: normalizedTarget,
+        ...(params?.metadata && {
+          metadata: params.metadata,
+        }),
+        ...(params?.unrepresentable && {
+          unrepresentable: params.unrepresentable,
+        }),
+        ...(params?.override && {
+          override: params.override,
+        }),
+        ...(params?.io && {
+          io: params.io,
+        }),
       });
     }
-    process(e, t = { path: [], schemaPath: [] }) {
-      return ta.processSchema(e, this.ctx, t);
+    process(
+      schema,
+      _params = {
+        path: [],
+        schemaPath: [],
+      },
+    ) {
+      return to_json_schema_js_1.processSchema(schema, this.ctx, _params);
     }
-    emit(e, t) {
-      if (t) {
-        if (t.cycles) this.ctx.cycles = t.cycles;
-        if (t.reused) this.ctx.reused = t.reused;
-        if (t.external) this.ctx.external = t.external;
+    emit(schema, _params) {
+      if (_params) {
+        if (_params.cycles) this.ctx.cycles = _params.cycles;
+        if (_params.reused) this.ctx.reused = _params.reused;
+        if (_params.external) this.ctx.external = _params.external;
       }
-      ((this.ctx.sharedDefsExtractedFor = void 0),
-        (this.ctx.sharedEmitDoneFor = void 0),
-        ta.extractDefs(this.ctx, e));
-      let finalize = ta.finalize(this.ctx, e),
-        { "~standard": o, ...r } = finalize;
-      return r;
+      this.ctx.sharedDefsExtractedFor = undefined;
+      this.ctx.sharedEmitDoneFor = undefined;
+      to_json_schema_js_1.extractDefs(this.ctx, schema);
+      let result = to_json_schema_js_1.finalize(this.ctx, schema);
+      let { "~standard": _, ...plainResult } = result;
+      return plainResult;
     }
   }
-  rc.JSONSchemaGenerator = iT;
+  cjsExports.JSONSchemaGenerator = JSONSchemaGenerator;
   (function () {
-    var ownPropertyNames = Object.getOwnPropertyNames(rc);
-    for (var t = 0; t < ownPropertyNames.length; t++) {
-      var ownPropertyDescriptor = Object.getOwnPropertyDescriptor(rc, ownPropertyNames[t]);
-      if (!ownPropertyDescriptor || !ownPropertyDescriptor.get || !ownPropertyDescriptor.configurable)
-        continue;
-      var o;
+    var keys = Object.getOwnPropertyNames(cjsExports);
+    for (var i = 0; i < keys.length; i++) {
+      var desc = Object.getOwnPropertyDescriptor(cjsExports, keys[i]);
+      if (!desc || !desc.get || !desc.configurable) continue;
+      var value;
       try {
-        o = ownPropertyDescriptor.get();
-      } catch (error) {
+        value = desc.get();
+      } catch (e) {
         continue;
       }
-      if (o === void 0) continue;
-      Object.defineProperty(rc, ownPropertyNames[t], {
-        value: o,
-        writable: !1,
-        enumerable: ownPropertyDescriptor.enumerable,
-        configurable: !1,
+      if (value === undefined) continue;
+      Object.defineProperty(cjsExports, keys[i], {
+        value,
+        writable: false,
+        enumerable: desc.enumerable,
+        configurable: false,
       });
     }
-    Object.freeze(rc);
+    Object.freeze(cjsExports);
   })();
 });
-
-export { sT };
+export { require_json_schema_generator };

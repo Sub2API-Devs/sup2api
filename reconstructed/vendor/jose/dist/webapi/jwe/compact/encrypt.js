@@ -10,25 +10,28 @@ import { Re } from "../flattened/encrypt.js";
 //@ chunk-5h78gfwc.js:45018-45478 esm-fingerprint
 class Ue {
   #e;
-  constructor(e) {
-    this.#e = new Re(e);
+  constructor(plaintext) {
+    this.#e = new Re(plaintext);
   }
-  setContentEncryptionKey(e) {
-    return (this.#e.setContentEncryptionKey(e), this);
+  setContentEncryptionKey(cek) {
+    this.#e.setContentEncryptionKey(cek);
+    return this;
   }
-  setInitializationVector(e) {
-    return (this.#e.setInitializationVector(e), this);
+  setInitializationVector(iv) {
+    this.#e.setInitializationVector(iv);
+    return this;
   }
-  setProtectedHeader(e) {
-    return (this.#e.setProtectedHeader(e), this);
+  setProtectedHeader(protectedHeader) {
+    this.#e.setProtectedHeader(protectedHeader);
+    return this;
   }
-  setKeyManagementParameters(e) {
-    return (this.#e.setKeyManagementParameters(e), this);
+  setKeyManagementParameters(parameters) {
+    this.#e.setKeyManagementParameters(parameters);
+    return this;
   }
-  async encrypt(e, t) {
-    let encrypt = await this.#e.encrypt(e, t);
-    return [encrypt.protected, encrypt.encrypted_key, encrypt.iv, encrypt.ciphertext, encrypt.tag].join(".");
+  async encrypt(key, options) {
+    let jwe = await this.#e.encrypt(key, options);
+    return [jwe.protected, jwe.encrypted_key, jwe.iv, jwe.ciphertext, jwe.tag].join(".");
   }
 }
-
 export { Ue };

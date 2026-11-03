@@ -8,34 +8,10 @@
  * pieces: chunk-8wvtd8sr.js (23)
  * attribution: placement 23
  */
-import {
-  mkdtemp,
-  mkdtemp as mkdtemp_2,
-  writeFile,
-  writeFile as writeFile_2,
-  chmod,
-  rm as rm_2,
-  rm as rm_3,
-} from "fs/promises";
-import {
-  join,
-  join as join_2,
-  join as join_3,
-  join as join_4,
-  join as join_5,
-  join as join_6,
-  extname,
-  extname as extname_2,
-  extname as extname_3,
-} from "path";
-import { tmpdir as tmpdir_2, tmpdir as tmpdir_3 } from "os";
-import {
-  randomUUID,
-  randomUUID as randomUUID_2,
-  randomUUID as randomUUID_3,
-  randomUUID as randomUUID_4,
-  randomUUID as randomUUID_5,
-} from "crypto";
+import { mkdtemp, writeFile, chmod, rm as rm_2 } from "fs/promises";
+import { join, extname } from "path";
+import { tmpdir as tmpdir_2 } from "os";
+import { randomUUID } from "crypto";
 import { tmpdir, PREVIEW_COPY_DIR_PREFIX } from "../../../utils/tempDir.js";
 import { runEmulatorLook } from "./emulatorLook.js";
 import {
@@ -49,13 +25,13 @@ import { safeSpawn } from "../../../utils/safeSpawn.js";
 import { registerCleanup } from "../../../utils/cleanupRegistry.js";
 import { HostScoped } from "../../../utils/hostScoped.js";
 import {
-  Ht,
+  sanitizeDisplay,
   PreviewIssueCollector,
   staticPageIssues,
   composePreviewPage,
   raceWithStepTimeout,
   servePreviewPages,
-  Hf,
+  themeForViewportWidth,
   parsePageMeasurement,
   layoutIssuesFromMeasurement,
   cspViolationIssues,
@@ -69,39 +45,58 @@ import {
 import { prepareArtifactBody } from "../../../services/artifacts/pagePreparation.js";
 import { composeArtifactPage } from "../../../services/artifacts/composePage.js";
 import { encodePreviewJpeg } from "../../../utils/imageResizer.js";
-import { pHo, Z$r } from "../promptText.js";
+import { DEFAULT_PREVIEW_WIDTHS, MAX_PREVIEW_SCREENSHOT_HEIGHT } from "../promptText.js";
 import { ensureToolResultsDir, writeToolResultFile } from "../../../utils/toolResultStorage.js";
 
+//@ chunk-8wvtd8sr.js:165072-165606 placement
 /**
  * 仿真预览后端（artifact 查看器）：把页面字节写到私有临时目录，交给查看器仿真"看一眼"，返回 {engine:"emulator", look, durationMs}；中断时 look 为 aborted，结束后删除临时目录。
  */
-//@ chunk-8wvtd8sr.js:165072-165606 placement
 var EMULATOR_PREVIEW_BACKEND = {
   name: "emulator",
   async refusal() {
     return;
   },
-  async render({ bytes: e, fileName: n, shotDir: s, shotName: r, signal: h }) {
-    let now = Date.now(),
-      p = await mkdtemp(join_3(tmpdir(), PREVIEW_COPY_DIR_PREFIX));
+  async render({ bytes, fileName, shotDir, shotName, signal }) {
+    let now = Date.now();
+    let p = await mkdtemp(join(tmpdir(), PREVIEW_COPY_DIR_PREFIX));
     try {
-      let w = join_3(p, `page${extname_3(n).toLowerCase()}`);
-      return (
-        await writeFile_2(w, e, { flag: "wx" }),
-        await chmod(w, 420),
-        await chmod(p, 493),
-        {
-          engine: "emulator",
-          look: await runEmulatorLook({ kind: "page", source: w }, { signal: h, shotDir: s, shotName: r }),
-          durationMs: Date.now() - now,
-        }
-      );
+      let w = join(p, `page${extname(fileName).toLowerCase()}`);
+      await writeFile(w, bytes, {
+        flag: "wx",
+      });
+      await chmod(w, 420);
+      await chmod(p, 493);
+      return {
+        engine: "emulator",
+        look: await runEmulatorLook(
+          {
+            kind: "page",
+            source: w,
+          },
+          {
+            signal,
+            shotDir,
+            shotName,
+          },
+        ),
+        durationMs: Date.now() - now,
+      };
     } catch (error) {
       if (error instanceof AbortError)
-        return { engine: "emulator", look: { kind: "aborted" }, durationMs: Date.now() - now };
+        return {
+          engine: "emulator",
+          look: {
+            kind: "aborted",
+          },
+          durationMs: Date.now() - now,
+        };
       throw error;
     } finally {
-      await rm_2(p, { recursive: !0, force: !0 });
+      await rm_2(p, {
+        recursive: true,
+        force: true,
+      });
     }
   },
 };
@@ -115,18 +110,21 @@ class PreviewBrowserGone extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_
 //@ chunk-8wvtd8sr.js:165926-166065 placement
 class CdpCommandError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS {
   method;
-  constructor(e, n) {
+  constructor(method, n) {
     super(n, "artifact preview: protocol command failed");
-    this.method = e;
+    this.method = method;
     this.name = "CdpCommandError";
   }
 }
 //@ chunk-8wvtd8sr.js:166065-166081 placement
-var Cw = 67108864;
+/**
+ * CDP 消息的字节上限（超过即判定浏览器异常）。
+ */
+var MAX_CDP_MESSAGE_BYTES = 67108864;
+//@ chunk-8wvtd8sr.js:166081-168131 placement
 /**
  * 通过 --remote-debugging-pipe 与 Chrome 通信的 CDP 连接：以 NUL 分隔的 JSON 消息收发，按 id 匹配请求应答、按事件名分发；消息过大或管道断开时以 PreviewBrowserGone 失败所有挂起请求。
  */
-//@ chunk-8wvtd8sr.js:166081-168131 placement
 class CdpPipeConnection {
   out;
   onFailed;
@@ -137,33 +135,56 @@ class CdpPipeConnection {
   partialBytes = 0;
   gone;
   ended = createSignal();
-  constructor(e, n, s) {
-    this.out = e;
+  constructor(pipeOut, pipeIn, s) {
+    this.out = pipeOut;
     this.onFailed = s;
-    n.on("data", (h) => this.receive(h));
+    pipeIn.on("data", (h) => this.receive(h));
     let r = s ? () => {} : () => this.fail(new PreviewBrowserGone("Chrome closed the pipe"));
-    (n.on("end", r), n.on("close", r), n.on("error", r), e.on("error", r));
+    pipeIn.on("end", r);
+    pipeIn.on("close", r);
+    pipeIn.on("error", r);
+    pipeOut.on("error", r);
   }
   get closedBecause() {
     return this.gone;
   }
-  send(e, n = {}, s) {
+  send(method, params = {}, s) {
     if (this.gone) return Promise.reject(this.gone);
     let r = ++this.nextId;
-    return new Promise((h, y) => {
-      this.pending.set(r, { method: e, resolve: h, reject: y });
+    return new Promise((resolve, reject) => {
+      this.pending.set(r, {
+        method,
+        resolve,
+        reject,
+      });
       let p = jsonStringify(
-        s === void 0 ? { id: r, method: e, params: n } : { id: r, method: e, params: n, sessionId: s },
+        s === undefined
+          ? {
+              id: r,
+              method,
+              params,
+            }
+          : {
+              id: r,
+              method,
+              params,
+              sessionId: s,
+            },
       );
       this.out.write(p + "\x00", (w) => {
-        if (w && this.pending.delete(r)) y(this.gone ?? new PreviewBrowserGone("the pipe to Chrome broke"));
+        if (w && this.pending.delete(r))
+          reject(this.gone ?? new PreviewBrowserGone("the pipe to Chrome broke"));
       });
     });
   }
   on(e, n) {
     let s = this.handlers.get(e);
-    if (!s) ((s = new Set()), this.handlers.set(e, s));
-    return (s.add(n), () => s.delete(n));
+    if (!s) {
+      s = new Set();
+      this.handlers.set(e, s);
+    }
+    s.add(n);
+    return () => s.delete(n);
   }
   onGone(e) {
     return this.gone ? () => {} : this.ended.subscribe(e);
@@ -176,40 +197,43 @@ class CdpPipeConnection {
     try {
       this.ended.emit(e);
     } catch {}
-    (this.ended.clear(), this.onFailed?.(e));
+    this.ended.clear();
+    this.onFailed?.(e);
   }
   receive(e) {
     if (this.gone) return;
     let n = 0;
     for (;;) {
-      let index = e.indexOf(0, n),
-        r = index === -1 ? e.length : index;
-      if (this.partialBytes + (r - n) > Cw) {
-        ((this.partial = []),
-          (this.partialBytes = 0),
-          this.fail(
-            new PreviewBrowserGone(
-              "the page produced a browser message too large to handle; preview stopped",
-            ),
-          ));
+      let index = e.indexOf(0, n);
+      let r = index === -1 ? e.length : index;
+      if (this.partialBytes + (r - n) > MAX_CDP_MESSAGE_BYTES) {
+        this.partial = [];
+        this.partialBytes = 0;
+        this.fail(
+          new PreviewBrowserGone("the page produced a browser message too large to handle; preview stopped"),
+        );
         return;
       }
       if (index === -1) {
-        if (n < e.length)
-          (this.partial.push(n === 0 ? e : e.subarray(n)), (this.partialBytes += e.length - n));
+        if (n < e.length) {
+          this.partial.push(n === 0 ? e : e.subarray(n));
+          this.partialBytes += e.length - n;
+        }
         return;
       }
-      let chunk = e.subarray(n, index),
-        y = this.partial.length === 0 ? chunk : Buffer.concat([...this.partial, chunk]);
-      if (((this.partial = []), (this.partialBytes = 0), this.dispatch(y.toString("utf8")), this.gone))
-        return;
+      let chunk = e.subarray(n, index);
+      let y = this.partial.length === 0 ? chunk : Buffer.concat([...this.partial, chunk]);
+      this.partial = [];
+      this.partialBytes = 0;
+      this.dispatch(y.toString("utf8"));
+      if (this.gone) return;
       n = index + 1;
     }
   }
   dispatch(e) {
     let n;
     try {
-      n = Na(jsonParse(e));
+      n = asRecord(jsonParse(e));
     } catch {
       return;
     }
@@ -217,20 +241,20 @@ class CdpPipeConnection {
       let s = this.pending.get(n.id);
       if (!s) return;
       this.pending.delete(n.id);
-      let r = Na(n.error);
-      if (n.error !== void 0)
-        s.reject(new CdpCommandError(s.method, `${s.method}: ${Lw(r.message) || "failed"}`));
-      else s.resolve(Na(n.result));
+      let r = asRecord(n.error);
+      if (n.error !== undefined)
+        s.reject(new CdpCommandError(s.method, `${s.method}: ${stringOrEmpty(r.message) || "failed"}`));
+      else s.resolve(asRecord(n.result));
       return;
     }
     if (typeof n.method === "string") {
       let s = this.handlers.get(n.method);
       if (!s) return;
-      let r = Na(n.params),
-        h = typeof n.sessionId === "string" ? n.sessionId : void 0;
+      let r = asRecord(n.params);
+      let sessionId = typeof n.sessionId === "string" ? n.sessionId : undefined;
       for (let y of s)
         try {
-          y(r, h);
+          y(r, sessionId);
         } catch {}
     }
   }
@@ -240,11 +264,12 @@ class TailBuffer {
   max;
   chunks = [];
   size = 0;
-  constructor(e) {
-    this.max = e;
+  constructor(max) {
+    this.max = max;
   }
   push(e) {
-    (this.chunks.push(e), (this.size += e.length));
+    this.chunks.push(e);
+    this.size += e.length;
     while (this.size > this.max && this.chunks.length > 1) this.size -= this.chunks.shift().length;
   }
   text() {
@@ -254,86 +279,100 @@ class TailBuffer {
 }
 //@ chunk-8wvtd8sr.js:168424-168680 placement
 var DEFAULT_CHROME_DEPS = {
-    spawn: (e, n) =>
-      safeSpawn(e, n, {
-        stdio: ["ignore", "ignore", "pipe", "pipe", "pipe"],
-        detached: !1,
-        windowsHide: !0,
-        cwd: void 0,
-        toolCgroupClass: "helper",
-      }),
-    mkdtemp: mkdtemp_2,
-    rm: rm_3,
-    setTimeout,
-    clearTimeout,
-    registerCleanup: (e) => registerCleanup(e),
-  },
-  CHROME_CLOSE_GRACE_MS = 2000,
-  CLAUDE_ARTIFACT_PREVIEW = "claude-artifact-preview-",
-  STDERR_TAIL_BYTES = 8192;
+  spawn: (e, n) =>
+    safeSpawn(e, n, {
+      stdio: ["ignore", "ignore", "pipe", "pipe", "pipe"],
+      detached: false,
+      windowsHide: true,
+      cwd: undefined,
+      toolCgroupClass: "helper",
+    }),
+  mkdtemp,
+  rm: rm_2,
+  setTimeout,
+  clearTimeout,
+  registerCleanup: (e) => registerCleanup(e),
+};
+var CHROME_CLOSE_GRACE_MS = 2000;
+var CLAUDE_ARTIFACT_PREVIEW = "claude-artifact-preview-";
+var STDERR_TAIL_BYTES = 8192;
+//@ chunk-8wvtd8sr.js:168680-169908 placement
 /**
  * 启动无头 Chrome 预览进程：临时 user-data-dir、fd 3/4 作为 CDP 管道、保留 stderr 尾部；返回 {cdp, profileDir, exited, stderrTail, close, kill}。
  * close 先发 Browser.close 等待片刻再强杀，最后删除临时目录；进程注册了退出清理。
  */
-//@ chunk-8wvtd8sr.js:168680-169908 placement
 async function launchPreviewChrome(chromePath, args, deps = DEFAULT_CHROME_DEPS) {
-  let mkdtemp = await deps.mkdtemp(join_6(tmpdir_3(), CLAUDE_ARTIFACT_PREVIEW)),
-    removeProfileDir = () => deps.rm(mkdtemp, { recursive: !0, force: !0, maxRetries: 3 }).catch(() => {}),
-    child;
+  let r = await deps.mkdtemp(join(tmpdir_2(), CLAUDE_ARTIFACT_PREVIEW));
+  let removeProfileDir = () =>
+    deps
+      .rm(r, {
+        recursive: true,
+        force: true,
+        maxRetries: 3,
+      })
+      .catch(() => {});
+  let child;
   try {
-    child = deps.spawn(chromePath, [...args, `--user-data-dir=${mkdtemp}`]);
+    child = deps.spawn(chromePath, [...args, `--user-data-dir=${r}`]);
   } catch {
-    throw (await removeProfileDir(), new PreviewBrowserGone("Chrome did not start"));
+    await removeProfileDir();
+    throw new PreviewBrowserGone("Chrome did not start");
   }
   child.on("error", () => {});
   let stderrTail = new TailBuffer(STDERR_TAIL_BYTES);
-  (child.stderr?.on("data", (M) => stderrTail.push(M)), child.stderr?.on("error", () => {}));
-  let pipeOut = child.stdio[3],
-    pipeIn = child.stdio[4];
-  if (!Ow(pipeOut) || !isFileReadDenied(pipeIn))
-    throw (child.kill("SIGKILL"), await removeProfileDir(), new PreviewBrowserGone("Chrome did not start"));
+  child.stderr?.on("data", (M) => stderrTail.push(M));
+  child.stderr?.on("error", () => {});
+  let pipeOut = child.stdio[3];
+  let pipeIn = child.stdio[4];
+  if (!isWritablePipe(pipeOut) || !isFileReadDenied(pipeIn)) {
+    child.kill("SIGKILL");
+    await removeProfileDir();
+    throw new PreviewBrowserGone("Chrome did not start");
+  }
   child.unref();
   for (let M of [child.stderr, pipeOut, pipeIn]) unrefStream(M);
-  let exited = !1,
-    cdp = new CdpPipeConnection(pipeOut, pipeIn, () => {
-      if (!exited) child.kill("SIGKILL");
-    }),
-    promise = new Promise((M) => {
-      let x = (q) => {
-        if (exited) return;
-        ((exited = !0), cdp.fail(new PreviewBrowserGone(q)), M());
-      };
-      (child.once("exit", (q, re) => x(re ? `Chrome was killed (${re})` : `Chrome exited (${q ?? "?"})`)),
-        child.once("error", () => x("Chrome did not start")));
-    }),
-    P,
-    shutdown = (M) => {
-      if (!M && !exited) child.kill("SIGKILL");
-      return (
-        (P ??= (async () => {
-          if ((registerCleanup(), !exited && M && cdp.closedBecause === void 0)) {
-            cdp.send("Browser.close").catch(() => {});
-            let x,
-              promise_2 = new Promise((Z) => {
-                x = deps.setTimeout(() => Z("lingered"), CHROME_CLOSE_GRACE_MS);
-              }),
-              winner = await Promise.race([promise, promise_2]);
-            if (x !== void 0) deps.clearTimeout(x);
-            if (winner === "lingered" && !exited) child.kill("SIGKILL");
-          } else if (!exited) child.kill("SIGKILL");
-          (await promise, await removeProfileDir());
-        })()),
-        P
-      );
-    },
-    registerCleanup = deps.registerCleanup(() => shutdown(!1));
+  let exited = false;
+  let cdp = new CdpPipeConnection(pipeOut, pipeIn, () => {
+    if (!exited) child.kill("SIGKILL");
+  });
+  let promise = new Promise((resolve) => {
+    let x = (q) => {
+      if (exited) return;
+      exited = true;
+      cdp.fail(new PreviewBrowserGone(q));
+      resolve();
+    };
+    child.once("exit", (q, re) => x(re ? `Chrome was killed (${re})` : `Chrome exited (${q ?? "?"})`));
+    child.once("error", () => x("Chrome did not start"));
+  });
+  let P;
+  let shutdown = (M) => {
+    if (!M && !exited) child.kill("SIGKILL");
+    P ??= (async () => {
+      V();
+      if (!exited && M && cdp.closedBecause === undefined) {
+        cdp.send("Browser.close").catch(() => {});
+        let x;
+        let promise_2 = new Promise((resolve) => {
+          x = deps.setTimeout(() => resolve("lingered"), CHROME_CLOSE_GRACE_MS);
+        });
+        let winner = await Promise.race([promise, promise_2]);
+        if (x !== undefined) deps.clearTimeout(x);
+        if (winner === "lingered" && !exited) child.kill("SIGKILL");
+      } else if (!exited) child.kill("SIGKILL");
+      await promise;
+      await removeProfileDir();
+    })();
+    return P;
+  };
+  let V = deps.registerCleanup(() => shutdown(false));
   return {
-    cdp: cdp,
-    profileDir: mkdtemp,
+    cdp,
+    profileDir: r,
     exited: promise,
     stderrTail: () => stderrTail.text(),
-    close: () => shutdown(!0),
-    kill: () => shutdown(!1),
+    close: () => shutdown(true),
+    kill: () => shutdown(false),
   };
 }
 //@ chunk-8wvtd8sr.js:169908-170008 placement
@@ -341,159 +380,209 @@ function unrefStream(e) {
   if (e !== null && typeof e === "object" && "unref" in e && typeof e.unref === "function") e.unref();
 }
 //@ chunk-8wvtd8sr.js:170008-170073 placement
-function Ow(e) {
-  return e !== null && typeof e === "object" && "write" in e;
+/**
+ * 判断对象是否是可写管道。
+ */
+function isWritablePipe(pipeOut) {
+  return pipeOut !== null && typeof pipeOut === "object" && "write" in pipeOut;
 }
 //@ chunk-8wvtd8sr.js:170073-170147 placement = isFileReadDenied (1)
-function isFileReadDenied(e) {
-  return e !== null && typeof e === "object" && "on" in e && "read" in e;
+function isFileReadDenied(pipeIn) {
+  return pipeIn !== null && typeof pipeIn === "object" && "on" in pipeIn && "read" in pipeIn;
 }
 //@ chunk-8wvtd8sr.js:170147-170204 placement
-function Na(e) {
+/**
+ * 非空对象原样返回，否则空对象。
+ */
+function asRecord(e) {
   return e !== null && typeof e === "object" ? e : {};
 }
 //@ chunk-8wvtd8sr.js:170204-170251 placement
-function Lw(e) {
-  return typeof e === "string" ? e : "";
+/**
+ * 字符串原样返回，否则空串。
+ */
+function stringOrEmpty(message) {
+  return typeof message === "string" ? message : "";
 }
 //@ chunk-8wvtd8sr.js:170288-170311 placement
-var Fw = 300000,
-  Nw = 60000;
+/**
+ * 预览浏览器空闲关闭时间与启动超时。
+ */
+var BROWSER_IDLE_MS = 300000;
+var BROWSER_START_TIMEOUT_MS = 60000;
 //@ chunk-8wvtd8sr.js:170311-170371 placement
-function Ql() {
-  return `p${randomUUID_5().replaceAll("-", "")}.localhost`;
+/**
+ * 生成随机预览主机名（p<uuid>.localhost）。
+ */
+function randomPreviewHost() {
+  return `p${randomUUID().replaceAll("-", "")}.localhost`;
 }
+//@ chunk-8wvtd8sr.js:170371-171754 placement
 /**
  * 预览浏览器的串行租用池：acquire 排队获取（可被 signal 放弃），同参数复用已有 Chrome，否则启动新的；release 后空闲 idleMs 关闭浏览器。
  */
-//@ chunk-8wvtd8sr.js:170371-171754 placement
 function createPreviewBrowserPool(timers) {
-  let current,
-    idleTimer,
-    leased = !1,
-    waiting = 0,
-    resolved = Promise.resolve(),
-    p = (A) => {
-      if (current?.browser === A) current = void 0;
-    },
-    w = () => {
-      let A = current?.browser;
-      if (A !== void 0 && waiting === 0)
-        (timers.clearTimeout(idleTimer),
-          (idleTimer = timers.setTimeout(() => {
-            if (!leased && current?.browser === A) A.close().catch(() => {});
-          }, timers.idleMs)));
-    };
+  let current;
+  let idleTimer;
+  let leased = false;
+  let waiting = 0;
+  let resolved = Promise.resolve();
+  let p = (A) => {
+    if (current?.browser === A) current = undefined;
+  };
+  let w = () => {
+    let browser = current?.browser;
+    if (browser !== undefined && waiting === 0) {
+      timers.clearTimeout(idleTimer);
+      idleTimer = timers.setTimeout(() => {
+        if (!leased && current?.browser === browser) browser.close().catch(() => {});
+      }, timers.idleMs);
+    }
+  };
   return {
     async acquire(A) {
-      let S,
-        promise = new Promise((ie) => (S = ie)),
-        T = resolved;
-      ((resolved = T.then(() => promise)), waiting++);
-      let P,
-        promise_2 = new Promise((ie) => {
-          ((P = () => ie("abandoned")), A?.addEventListener("abort", P, { once: !0 }));
-        }),
-        V = A?.aborted === !0 ? "abandoned" : await Promise.race([T, promise_2]);
-      if ((A?.removeEventListener("abort", P), waiting--, V === "abandoned"))
-        throw (
-          T.then(() => {
-            (w(), S());
-          }),
-          new PreviewBrowserGone("the preview was interrupted while waiting for the browser")
-        );
-      ((leased = !0), timers.clearTimeout(idleTimer));
-      let M = current?.host ?? Ql(),
-        x = !1,
-        q = 0,
-        re = !1,
-        Z,
-        ue = () => {
-          if (re) return;
-          ((re = !0), (leased = !1), timers.clearTimeout(Z), w(), S());
-        },
-        we = () => {
-          if (x && q === 0) ue();
-        },
-        Ie = () => new PreviewBrowserGone("the preview stopped waiting for the browser");
+      let S;
+      let promise = new Promise((resolve) => (S = resolve));
+      let T = resolved;
+      resolved = T.then(() => promise);
+      waiting++;
+      let P;
+      let promise_2 = new Promise((resolve) => {
+        P = () => resolve("abandoned");
+        A?.addEventListener("abort", P, {
+          once: true,
+        });
+      });
+      let V = A?.aborted === true ? "abandoned" : await Promise.race([T, promise_2]);
+      A?.removeEventListener("abort", P);
+      waiting--;
+      if (V === "abandoned") {
+        T.then(() => {
+          w();
+          S();
+        });
+        throw new PreviewBrowserGone("the preview was interrupted while waiting for the browser");
+      }
+      leased = true;
+      timers.clearTimeout(idleTimer);
+      let host = current?.host ?? randomPreviewHost();
+      let x = false;
+      let q = 0;
+      let re = false;
+      let Z;
+      let ue = () => {
+        if (re) return;
+        re = true;
+        leased = false;
+        timers.clearTimeout(Z);
+        w();
+        S();
+      };
+      let we = () => {
+        if (x && q === 0) ue();
+      };
+      let Ie = () => new PreviewBrowserGone("the preview stopped waiting for the browser");
       return {
-        host: M,
+        host,
         async browser(ie, _e, Oe) {
           if (x) throw Ie();
           q++;
           try {
             let joined = [ie, ..._e].join("\x00");
             if (
-              current !== void 0 &&
-              (current.key !== joined || current.browser.cdp.closedBecause !== void 0)
+              current !== undefined &&
+              (current.key !== joined || current.browser.cdp.closedBecause !== undefined)
             ) {
               let browser = current.browser;
-              ((current = void 0), await browser.kill());
+              current = undefined;
+              await browser.kill();
             }
             if (re) throw Ie();
-            if (current === void 0) {
+            if (current === undefined) {
               let ge = await Oe(ie, _e);
-              if (re) throw (ge.kill().catch(() => {}), Ie());
-              let Je = { ...ge, close: () => (p(Je), ge.close()), kill: () => (p(Je), ge.kill()) };
-              ((current = { browser: Je, key: joined, host: M }),
-                ge.exited.then(() => Je.close().catch(() => {})));
+              if (re) {
+                ge.kill().catch(() => {});
+                throw Ie();
+              }
+              let Je = {
+                ...ge,
+                close: () => {
+                  p(Je);
+                  return ge.close();
+                },
+                kill: () => {
+                  p(Je);
+                  return ge.kill();
+                },
+              };
+              current = {
+                browser: Je,
+                key: joined,
+                host,
+              };
+              ge.exited.then(() => Je.close().catch(() => {}));
             }
             if (x) throw Ie();
             return current.browser;
           } finally {
-            (q--, we());
+            q--;
+            we();
           }
         },
         release() {
           if (x) return;
-          if (((x = !0), q > 0)) Z = timers.setTimeout(ue, timers.startMs);
+          x = true;
+          if (q > 0) Z = timers.setTimeout(ue, timers.startMs);
           we();
         },
       };
     },
   };
 }
+//@ chunk-8wvtd8sr.js:171754-171875 placement
 /**
  * 预览用浏览器进程池（懒创建，带空闲回收与启动超时）。
  */
-//@ chunk-8wvtd8sr.js:171754-171875 placement
 var previewBrowserPool = new HostScoped(() =>
   createPreviewBrowserPool({
     setTimeout: (e, n) => setTimeout(e, n).unref(),
     clearTimeout: (e) => clearTimeout(e),
-    idleMs: Fw,
-    startMs: Nw,
+    idleMs: BROWSER_IDLE_MS,
+    startMs: BROWSER_START_TIMEOUT_MS,
   }),
 );
 //@ chunk-8wvtd8sr.js:171875-174709 placement
-var PREVIEW_SETTLE_TIMEOUT_MS = 20000,
-  Hw = 60000,
-  Ww = 2000,
-  xw = 24,
-  nd = 6,
-  sd = 6,
-  jf = 6,
-  Vw = 5,
-  zw = 8,
-  zf = 8,
-  qw = 8,
-  Ma = 16,
-  id = 262144,
-  Kf =
-    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob:; font-src 'self' data: https://fonts.gstatic.com; media-src 'self' data: blob:; connect-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com; worker-src 'self' blob:; form-action 'self'; frame-src 'self' blob: data:; object-src 'none'; webrtc 'block'; base-uri 'self'",
-  Yf = new Set(Kf.match(/https:\/\/[^\s;']+/g) ?? []),
-  Kw =
-    "(function(){for(var k of ['RTCPeerConnection','webkitRTCPeerConnection','RTCDataChannel','RTCSessionDescription','RTCIceCandidate']){try{Object.defineProperty(window,k,{value:undefined,writable:false,configurable:true})}catch(e){try{delete window[k]}catch(e2){}}}})();(function(){var ap=Reflect.apply,gd=Object.getOwnPropertyDescriptor,EP=Element.prototype,MR=MutationRecord.prototype,NL=NodeList.prototype;var ln=gd(EP,'localName').get,ga=EP.getAttribute,ra=EP.removeAttribute,rm=EP.remove,qsa=EP.querySelectorAll,dq=Document.prototype.querySelectorAll,fq=DocumentFragment.prototype.querySelectorAll,sr=gd(EP,'shadowRoot').get,AS=EP.attachShadow,nt=gd(Node.prototype,'nodeType').get;var mA=gd(MR,'addedNodes').get,mT=gd(MR,'target').get,mK=gd(MR,'type').get,nL=gd(NL,'length').get,nI=NL.item,test=RegExp.prototype.test,observe=MutationObserver.prototype.observe;var H=/(^|\\s)(preconnect|dns-prefetch|prerender)(\\s|$)/i,S=/^\\s*speculationrules\\s*$/i,Q='link[rel],script[type]',opts={subtree:true,childList:true,attributes:true,attributeFilter:['rel','type']};function each(l,f){for(var i=0,n=ap(nL,l,[]);i<n;i++)f(ap(nI,l,[i]))}function all(root,sel){var t=ap(nt,root,[]);return ap(t===9?dq:t===11?fq:qsa,root,[sel])}function watch(root){try{ap(observe,obs,[root,opts]);each(all(root,Q),strip);each(all(root,'*'),hosted)}catch(e){}}function hosted(n){try{var s=ap(sr,n,[]);if(s)watch(s)}catch(e){}}function strip(n){try{if(!n||ap(nt,n,[])!==1)return;var l=ap(ln,n,[]);if(l==='link'&&ap(test,H,[ap(ga,n,['rel'])||'']))ap(ra,n,['rel']);if(l==='script'&&ap(test,S,[ap(ga,n,['type'])||''])){ap(rm,n,[]);return}hosted(n);each(all(n,Q),strip);each(all(n,'*'),hosted)}catch(e){}}var obs=new MutationObserver(function(ms){for(var i=0;i<ms.length;i++){var m=ms[i];if(ap(mK,m,[])==='attributes')strip(ap(mT,m,[]));else each(ap(mA,m,[]),strip)}});try{EP.attachShadow=function(init){var r=ap(AS,this,[init]);watch(r);return r}}catch(e){}watch(document)})();",
-  Yw =
-    "<script>window.__claudePreviewCsp=[];document.addEventListener('securitypolicyviolation',function(e){var l=window.__claudePreviewCsp;if(l.length<64)l.push({uri:String(e.blockedURI||'').slice(0,512),directive:String(e.effectiveDirective||e.violatedDirective||'').slice(0,64)})});</script>";
+/**
+ * 预览租用池的默认参数与报告上限：启动/稳定等待、各类清单条数、CSP 与注入脚本。
+ */
+var PREVIEW_SETTLE_TIMEOUT_MS = 20000;
+var PREVIEW_START_TIMEOUT_MS = 60000;
+var PREVIEW_SETTLE_DELAY_MS = 2000;
+var MAX_PAGE_USES = 24;
+var MAX_PAGE_OBSERVERS = 6;
+var MAX_SVG_CLIPS = 6;
+var MAX_FAILED_CHECKS = 6;
+var MAX_LISTED_MISSING_FILES = 5;
+var MAX_TRACKED_SESSIONS = 8;
+var MAX_LISTED_UNLOADED_FILES = 8;
+var MAX_LISTED_REFS = 8;
+var MAX_COLLECTED_USES = 16;
+var MAX_CDP_EVENT_CHARS = 262144;
+var PREVIEW_CSP_POLICY =
+  "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob:; font-src 'self' data: https://fonts.gstatic.com; media-src 'self' data: blob:; connect-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com; worker-src 'self' blob:; form-action 'self'; frame-src 'self' blob: data:; object-src 'none'; webrtc 'block'; base-uri 'self'";
+var CSP_ALLOWED_ORIGINS = new Set(PREVIEW_CSP_POLICY.match(/https:\/\/[^\s;']+/g) ?? []);
+var CSP_AND_RTC_BLOCK_SCRIPT =
+  "(function(){for(var k of ['RTCPeerConnection','webkitRTCPeerConnection','RTCDataChannel','RTCSessionDescription','RTCIceCandidate']){try{Object.defineProperty(window,k,{value:undefined,writable:false,configurable:true})}catch(e){try{delete window[k]}catch(e2){}}}})();(function(){var ap=Reflect.apply,gd=Object.getOwnPropertyDescriptor,EP=Element.prototype,MR=MutationRecord.prototype,NL=NodeList.prototype;var ln=gd(EP,'localName').get,ga=EP.getAttribute,ra=EP.removeAttribute,rm=EP.remove,qsa=EP.querySelectorAll,dq=Document.prototype.querySelectorAll,fq=DocumentFragment.prototype.querySelectorAll,sr=gd(EP,'shadowRoot').get,AS=EP.attachShadow,nt=gd(Node.prototype,'nodeType').get;var mA=gd(MR,'addedNodes').get,mT=gd(MR,'target').get,mK=gd(MR,'type').get,nL=gd(NL,'length').get,nI=NL.item,test=RegExp.prototype.test,observe=MutationObserver.prototype.observe;var H=/(^|\\s)(preconnect|dns-prefetch|prerender)(\\s|$)/i,S=/^\\s*speculationrules\\s*$/i,Q='link[rel],script[type]',opts={subtree:true,childList:true,attributes:true,attributeFilter:['rel','type']};function each(l,f){for(var i=0,n=ap(nL,l,[]);i<n;i++)f(ap(nI,l,[i]))}function all(root,sel){var t=ap(nt,root,[]);return ap(t===9?dq:t===11?fq:qsa,root,[sel])}function watch(root){try{ap(observe,obs,[root,opts]);each(all(root,Q),strip);each(all(root,'*'),hosted)}catch(e){}}function hosted(n){try{var s=ap(sr,n,[]);if(s)watch(s)}catch(e){}}function strip(n){try{if(!n||ap(nt,n,[])!==1)return;var l=ap(ln,n,[]);if(l==='link'&&ap(test,H,[ap(ga,n,['rel'])||'']))ap(ra,n,['rel']);if(l==='script'&&ap(test,S,[ap(ga,n,['type'])||''])){ap(rm,n,[]);return}hosted(n);each(all(n,Q),strip);each(all(n,'*'),hosted)}catch(e){}}var obs=new MutationObserver(function(ms){for(var i=0;i<ms.length;i++){var m=ms[i];if(ap(mK,m,[])==='attributes')strip(ap(mT,m,[]));else each(ap(mA,m,[]),strip)}});try{EP.attachShadow=function(init){var r=ap(AS,this,[init]);watch(r);return r}}catch(e){}watch(document)})();";
+var CSP_VIOLATION_COLLECTOR_SCRIPT =
+  "<script>window.__claudePreviewCsp=[];document.addEventListener('securitypolicyviolation',function(e){var l=window.__claudePreviewCsp;if(l.length<64)l.push({uri:String(e.blockedURI||'').slice(0,512),directive:String(e.effectiveDirective||e.violatedDirective||'').slice(0,64)})});</script>";
 //@ chunk-8wvtd8sr.js:174709-174894 placement
 class PreviewStepTimeout extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS {
   step;
   ms;
-  constructor(e, n) {
-    super(`${e} timed out after ${Math.round(n / 1000)}s`, "artifact preview step timed out");
-    this.step = e;
-    this.ms = n;
+  constructor(stepName, timeoutMs) {
+    super(`${stepName} timed out after ${Math.round(timeoutMs / 1000)}s`, "artifact preview step timed out");
+    this.step = stepName;
+    this.ms = timeoutMs;
     this.name = "PreviewStepTimeout";
   }
 }
@@ -509,10 +598,10 @@ class PreviewNavigatedAway extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_COD
     this.name = "PreviewNavigatedAway";
   }
 }
+//@ chunk-8wvtd8sr.js:175158-175274 placement
 /**
  * 判断 URL 是否为与给定地址同源的 http 地址（解析失败时比较字符串）。
  */
-//@ chunk-8wvtd8sr.js:175158-175274 placement
 function isSameHttpOrigin(e, n) {
   try {
     let s = new URL(e);
@@ -521,52 +610,58 @@ function isSameHttpOrigin(e, n) {
     return e === n;
   }
 }
+//@ chunk-8wvtd8sr.js:175274-175650 placement
 /**
  * 描述预览页被导航去的目标：同一文件的不同地址、另一个本地文件、http(s) 源、加载被拒的错误页，或其他协议的 URL。
  */
-//@ chunk-8wvtd8sr.js:175274-175650 placement
 function describeNavigationTarget(e, n) {
   try {
     let s = new URL(e);
     if (s.protocol === "file:")
       return s.pathname === new URL(n).pathname ? "a different address for this file" : "another local file";
-    if (s.protocol === "http:" || s.protocol === "https:") return Ht(s.origin, 80);
+    if (s.protocol === "http:" || s.protocol === "https:") return sanitizeDisplay(s.origin, 80);
     if (s.protocol === "chrome-error:") return "another document (the load was refused)";
-    return `a ${Ht(s.protocol, 20)} URL`;
+    return `a ${sanitizeDisplay(s.protocol, 20)} URL`;
   } catch {
     return "another document";
   }
 }
 //@ chunk-8wvtd8sr.js:175650-179080 placement
-async function renderPreviewDocument(e, n, s, r) {
-  let h = await prepareArtifactBody(e, { injectDiagramRuntime: !0, injectHighlightRuntime: !0 }),
-    y = composeArtifactPage(h.body, h.roundTripLang, h.roundTripCover),
-    byteLength = Buffer.byteLength(y, "utf8"),
-    w = new PreviewIssueCollector(n.length * s.length);
-  for (let Se of staticPageIssues(e, byteLength)) w.add(Se);
+async function renderPreviewDocument(html, widths, themes, r) {
+  let artifactBody = await prepareArtifactBody(html, {
+    injectDiagramRuntime: true,
+    injectHighlightRuntime: true,
+  });
+  let y = composeArtifactPage(artifactBody.body, artifactBody.roundTripLang, artifactBody.roundTripCover);
+  let publishedBytes = Buffer.byteLength(y, "utf8");
+  let collector = new PreviewIssueCollector(widths.length * themes.length);
+  for (let Se of staticPageIssues(html, publishedBytes)) collector.add(Se);
   let A = new Map();
-  for (let Se of s) A.set(Se, composePreviewPage(y, Se));
-  let S = [],
-    R = r.stepTimeoutMs ?? PREVIEW_SETTLE_TIMEOUT_MS,
-    T = r.startTimeoutMs ?? Hw,
-    P = r.settleMs ?? Ww,
-    L = r.timers ?? { setTimeout: (Se, ce) => setTimeout(Se, ce), clearTimeout: (Se) => clearTimeout(Se) },
-    V = r.encode ?? encodePreviewJpeg,
-    M = (Se, ce) => raceWithStepTimeout(Se, R, ce, L, r.signal),
-    x = () => r.signal?.aborted === !0,
-    q = (Se) => Se instanceof PreviewStepTimeout || x() || Se instanceof PreviewBrowserGone,
-    re = (Se) => Se instanceof PreviewStepTimeout || Se instanceof PreviewBrowserGone,
-    Z = n[0] ?? pHo[0],
-    ue = (Se) => {
-      let { issues: issues, dropped: dropped } = w.done();
-      return {
-        bytes: byteLength,
-        shots: S,
-        issues: issues,
-        issuesDropped: dropped,
-        renderError: Ht(Se instanceof Error ? Se.message : String(Se), 200),
-      };
+  for (let Se of themes) A.set(Se, composePreviewPage(y, Se));
+  let S = [];
+  let stepTimeoutMs = r.stepTimeoutMs ?? PREVIEW_SETTLE_TIMEOUT_MS;
+  let startTimeoutMs = r.startTimeoutMs ?? PREVIEW_START_TIMEOUT_MS;
+  let settleMs = r.settleMs ?? PREVIEW_SETTLE_DELAY_MS;
+  let timers = r.timers ?? {
+    setTimeout: (Se, ce) => setTimeout(Se, ce),
+    clearTimeout: (Se) => clearTimeout(Se),
+  };
+  let encode = r.encode ?? encodePreviewJpeg;
+  let M = (promise, stepName) => raceWithStepTimeout(promise, stepTimeoutMs, stepName, timers, r.signal);
+  let x = () => r.signal?.aborted === true;
+  let q = (error) => error instanceof PreviewStepTimeout || x() || error instanceof PreviewBrowserGone;
+  let re = (error) => error instanceof PreviewStepTimeout || error instanceof PreviewBrowserGone;
+  let Z = widths[0] ?? DEFAULT_PREVIEW_WIDTHS[0];
+  let ue = (error) => {
+    let { issues, dropped } = collector.done();
+    return {
+      bytes: publishedBytes,
+      shots: S,
+      issues,
+      issuesDropped: dropped,
+      renderError: sanitizeDisplay(error instanceof Error ? error.message : String(error), 200),
     };
+  };
   if (x()) return ue(Error("preview aborted"));
   let we;
   try {
@@ -579,133 +674,191 @@ async function renderPreviewDocument(e, n, s, r) {
       ),
     );
   }
-  if (x()) return (we.close(), ue(Error("preview aborted")));
-  let baseUrl = we.baseUrl,
-    ie,
-    abortController = new AbortController(),
-    open = r.browser.open(Z, Hf(Z), new URL(baseUrl).hostname, abortController.signal);
-  try {
-    ie = await raceWithStepTimeout(open, T, "starting the browser", L, r.signal);
-  } catch (error) {
-    return (
-      abortController.abort(),
-      open.then(
-        (ce) => void ce.close().catch(() => {}),
-        () => {},
-      ),
-      we.close(),
-      ue(error)
-    );
+  if (x()) {
+    we.close();
+    return ue(Error("preview aborted"));
   }
-  let me = new Set(),
-    ge = new Set(),
-    Je = new Set(),
-    He = [],
-    se = new Set(),
-    B = !1,
-    U = 0,
-    he,
-    $e = !1;
+  let baseUrl = we.baseUrl;
+  let ie;
+  let abortController = new AbortController();
+  let promise = r.browser.open(
+    Z,
+    themeForViewportWidth(Z),
+    new URL(baseUrl).hostname,
+    abortController.signal,
+  );
   try {
-    for (let Se of s)
-      for (let ce of n) {
-        let Re = { width: ce, theme: Se };
+    ie = await raceWithStepTimeout(promise, startTimeoutMs, "starting the browser", timers, r.signal);
+  } catch (error) {
+    abortController.abort();
+    promise.then(
+      (ce) => void ce.close().catch(() => {}),
+      () => {},
+    );
+    we.close();
+    return ue(error);
+  }
+  let me = new Set();
+  let ge = new Set();
+  let seenUrls = new Set();
+  let relativeRefs = [];
+  let se = new Set();
+  let B = false;
+  let U = 0;
+  let he;
+  let $e = false;
+  try {
+    for (let Se of themes)
+      for (let ce of widths) {
+        let Re = {
+          width: ce,
+          theme: Se,
+        };
         S.push(Re);
         let Fe = `${ce} ${Se}`;
-        if (he !== void 0) {
-          ((Re.error = "render stopped before this capture"), U++);
+        if (he !== undefined) {
+          Re.error = "render stopped before this capture";
+          U++;
           continue;
         }
-        let urlFor = we.urlFor(Se),
-          it = [],
-          Tt = [];
+        let pageUrl = we.urlFor(Se);
+        let it = [];
+        let Tt = [];
         try {
-          let ze = Hf(ce);
-          (await M(ie.resize(ce, ze), "resize"), await M(ie.load(urlFor, Se, we.topUrlFor(Se)), "load"));
+          let ze = themeForViewportWidth(ce);
+          await M(ie.resize(ce, ze), "resize");
+          await M(ie.load(pageUrl, Se, we.topUrlFor(Se)), "load");
           let Mt = ze;
           try {
-            let Pt = parsePageMeasurement(await M(ie.measure(P), "checks"));
-            if (!isSameHttpOrigin(Pt.href, urlFor)) throw new PreviewNavigatedAway(Pt.href, urlFor);
-            it = layoutIssuesFromMeasurement(Pt);
-            for (let use of Pt.uses)
-              if (se.size < Ma) se.add(use);
-              else if (!se.has(use)) B = !0;
-            ((B ||= Pt.usesMore), (Tt = [...cspViolationIssues(Pt, me, w), ...dialogIssues(Pt, ge)]));
-            let max = Math.max(Pt.sh, ze);
-            if (((Mt = Math.min(max, Z$r)), max > Mt)) Re.pageHeight = max;
+            let measurement = parsePageMeasurement(await M(ie.measure(settleMs), "checks"));
+            if (!isSameHttpOrigin(measurement.href, pageUrl))
+              throw new PreviewNavigatedAway(measurement.href, pageUrl);
+            it = layoutIssuesFromMeasurement(measurement);
+            for (let use of measurement.uses)
+              if (se.size < MAX_COLLECTED_USES) se.add(use);
+              else if (!se.has(use)) B = true;
+            B ||= measurement.usesMore;
+            Tt = [...cspViolationIssues(measurement, me, collector), ...dialogIssues(measurement, ge)];
+            let max = Math.max(measurement.sh, ze);
+            Mt = Math.min(max, MAX_PREVIEW_SCREENSHOT_HEIGHT);
+            if (max > Mt) Re.pageHeight = max;
           } catch (error) {
             if (q(error) || error instanceof PreviewNavigatedAway) throw error;
-            w.add(
+            collector.add(
               {
                 kind: "load",
-                text: `the checks could not run on this page (${Ht(error instanceof Error ? error.message : String(error), 100)})`,
+                text: `the checks could not run on this page (${sanitizeDisplay(error instanceof Error ? error.message : String(error), 100)})`,
               },
               Fe,
             );
           }
-          if (((Re.height = Mt), Mt !== ze)) await M(ie.resize(ce, Mt), "resize");
+          Re.height = Mt;
+          if (Mt !== ze) await M(ie.resize(ce, Mt), "resize");
           let Ct = await M(ie.settle(), "settle");
-          if (typeof Ct === "string" && !isSameHttpOrigin(Ct, urlFor))
-            throw new PreviewNavigatedAway(Ct, urlFor);
-          let nn = await M(ie.screenshot(), "capture"),
-            { jpeg: jpeg } = await V(nn);
-          await ensureToolResultsDir(r.shotDir, void 0);
-          let Et = join_5(r.shotDir, `${r.shotName(U)}.jpg`);
-          (await writeToolResultFile(Et, jpeg), (Re.path = Et), (Re.base64 = jpeg.toString("base64")));
+          if (typeof Ct === "string" && !isSameHttpOrigin(Ct, pageUrl))
+            throw new PreviewNavigatedAway(Ct, pageUrl);
+          let nn = await M(ie.screenshot(), "capture");
+          let { jpeg } = await encode(nn);
+          await ensureToolResultsDir(r.shotDir, undefined);
+          let Et = join(r.shotDir, `${r.shotName(U)}.jpg`);
+          await writeToolResultFile(Et, jpeg);
+          Re.path = Et;
+          Re.base64 = jpeg.toString("base64");
         } catch (error) {
-          if (((Re.error = Ht(error instanceof Error ? error.message : String(error), 200)), q(error)))
-            ((he = { label: Fe, error: Re.error }), ($e ||= re(error)), ie.stopLoading().catch(() => {}));
-          else w.add({ kind: "load", text: `not captured \u2014 ${Re.error}` }, Fe);
+          Re.error = sanitizeDisplay(error instanceof Error ? error.message : String(error), 200);
+          if (q(error)) {
+            he = {
+              label: Fe,
+              error: Re.error,
+            };
+            $e ||= re(error);
+            ie.stopLoading().catch(() => {});
+          } else
+            collector.add(
+              {
+                kind: "load",
+                text: `not captured \u2014 ${Re.error}`,
+              },
+              Fe,
+            );
         } finally {
-          if (he === void 0)
-            await M(ie.closeStrayWindows(), "cleanup").catch((ze) => {
-              if (q(ze)) ((he = { label: Fe, error: Ht(errorMessage(ze), 200) }), ($e ||= re(ze)));
+          if (he === undefined)
+            await M(ie.closeStrayWindows(), "cleanup").catch((error) => {
+              if (q(error)) {
+                he = {
+                  label: Fe,
+                  error: sanitizeDisplay(errorMessage(error), 200),
+                };
+                $e ||= re(error);
+              }
             });
-          for (let ze of Tt) w.add(ze);
-          for (let ze of blockedRequestIssues(ie.takeBlocked(), baseUrl, urlFor, Je, He, w)) w.add(ze);
-          for (let ze of consoleErrorIssues(ie.takeErrors())) w.add(ze, Fe);
-          for (let ze of it) w.add(ze, Fe);
+          for (let ze of Tt) collector.add(ze);
+          for (let ze of blockedRequestIssues(
+            ie.takeBlocked(),
+            baseUrl,
+            pageUrl,
+            seenUrls,
+            relativeRefs,
+            collector,
+          ))
+            collector.add(ze);
+          for (let ze of consoleErrorIssues(ie.takeErrors())) collector.add(ze, Fe);
+          for (let ze of it) collector.add(ze, Fe);
           U++;
         }
       }
   } finally {
-    (await raceWithStepTimeout(
-      ie.close({ broken: $e }),
-      x() ? CHROME_CLOSE_GRACE_MS : R,
+    await raceWithStepTimeout(
+      ie.close({
+        broken: $e,
+      }),
+      x() ? CHROME_CLOSE_GRACE_MS : stepTimeoutMs,
       "cleanup",
-      L,
-      void 0,
-    ).catch(() => ie.close({ broken: !0 }).catch(() => {})),
-      we.close());
+      timers,
+      undefined,
+    ).catch(() =>
+      ie
+        .close({
+          broken: true,
+        })
+        .catch(() => {}),
+    );
+    we.close();
   }
-  if (he !== void 0) w.add({ kind: "load", text: `render stopped at ${he.label}: ${he.error}` });
-  for (let Se of identicalThemeRenderIssues(S)) w.add(Se);
-  let { issues: issues, dropped: dropped } = w.done();
-  return (
-    issues.push(...relativeRefsNotLoadedIssues(He), ...missingRuntimeCapabilityIssues(se, B)),
-    { bytes: byteLength, shots: S, issues: issues, issuesDropped: dropped }
-  );
+  if (he !== undefined)
+    collector.add({
+      kind: "load",
+      text: `render stopped at ${he.label}: ${he.error}`,
+    });
+  for (let Se of identicalThemeRenderIssues(S)) collector.add(Se);
+  let { issues, dropped } = collector.done();
+  issues.push(...relativeRefsNotLoadedIssues(relativeRefs), ...missingRuntimeCapabilityIssues(se, B));
+  return {
+    bytes: publishedBytes,
+    shots: S,
+    issues,
+    issuesDropped: dropped,
+  };
 }
-
 export {
-  zf,
-  Yw,
-  Kf,
-  xw,
-  qw,
-  Ma,
-  nd,
-  sd,
-  id,
-  jf,
-  zw,
-  Yf,
-  Vw,
+  MAX_LISTED_UNLOADED_FILES,
+  CSP_VIOLATION_COLLECTOR_SCRIPT,
+  PREVIEW_CSP_POLICY,
+  MAX_PAGE_USES,
+  MAX_LISTED_REFS,
+  MAX_COLLECTED_USES,
+  MAX_PAGE_OBSERVERS,
+  MAX_SVG_CLIPS,
+  MAX_CDP_EVENT_CHARS,
+  MAX_FAILED_CHECKS,
+  MAX_TRACKED_SESSIONS,
+  CSP_ALLOWED_ORIGINS,
+  MAX_LISTED_MISSING_FILES,
   PreviewStepTimeout,
-  Ql,
+  randomPreviewHost,
   launchPreviewChrome,
   PreviewBrowserGone,
-  Kw,
+  CSP_AND_RTC_BLOCK_SCRIPT,
   isSameHttpOrigin,
   PreviewNavigatedAway,
   previewBrowserPool,

@@ -6,436 +6,483 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { Tn } from "./forge.js";
-import { Zn } from "./util.js";
+import { require_forge } from "./forge.js";
+import { require_util } from "./util.js";
 
 //@ chunk-fq0cr76a.js:30483-43142 cjs-fingerprint
-var tS = x(function (cfe, mT) {
-  var ds = Tn();
-  Zn();
-  ds.cipher = ds.cipher || {};
-  var Ln = (mT.exports = ds.cipher.modes = ds.cipher.modes || {});
-  Ln.ecb = function (e) {
-    ((e = e || {}),
-      (this.name = "ECB"),
-      (this.cipher = e.cipher),
-      (this.blockSize = e.blockSize || 16),
-      (this._ints = this.blockSize / 4),
-      (this._inBlock = Array(this._ints)),
-      (this._outBlock = Array(this._ints)));
+var require_cipherModes = x(function (cjsExports, cjsModule) {
+  var forge = require_forge();
+  require_util();
+  forge.cipher = forge.cipher || {};
+  var modes = (cjsModule.exports = forge.cipher.modes = forge.cipher.modes || {});
+  modes.ecb = function (options) {
+    options = options || {};
+    this.name = "ECB";
+    this.cipher = options.cipher;
+    this.blockSize = options.blockSize || 16;
+    this._ints = this.blockSize / 4;
+    this._inBlock = Array(this._ints);
+    this._outBlock = Array(this._ints);
   };
-  Ln.ecb.prototype.start = function (e) {};
-  Ln.ecb.prototype.encrypt = function (e, n, r) {
-    if (e.length() < this.blockSize && !(r && e.length() > 0)) return !0;
-    for (var s = 0; s < this._ints; ++s) this._inBlock[s] = e.getInt32();
+  modes.ecb.prototype.start = function (options) {};
+  modes.ecb.prototype.encrypt = function (input, output, finish) {
+    if (input.length() < this.blockSize && !(finish && input.length() > 0)) return true;
+    for (var i = 0; i < this._ints; ++i) this._inBlock[i] = input.getInt32();
     this.cipher.encrypt(this._inBlock, this._outBlock);
-    for (var s = 0; s < this._ints; ++s) n.putInt32(this._outBlock[s]);
+    for (var i = 0; i < this._ints; ++i) output.putInt32(this._outBlock[i]);
   };
-  Ln.ecb.prototype.decrypt = function (e, n, r) {
-    if (e.length() < this.blockSize && !(r && e.length() > 0)) return !0;
-    for (var s = 0; s < this._ints; ++s) this._inBlock[s] = e.getInt32();
+  modes.ecb.prototype.decrypt = function (input, output, finish) {
+    if (input.length() < this.blockSize && !(finish && input.length() > 0)) return true;
+    for (var i = 0; i < this._ints; ++i) this._inBlock[i] = input.getInt32();
     this.cipher.decrypt(this._inBlock, this._outBlock);
-    for (var s = 0; s < this._ints; ++s) n.putInt32(this._outBlock[s]);
+    for (var i = 0; i < this._ints; ++i) output.putInt32(this._outBlock[i]);
   };
-  Ln.ecb.prototype.pad = function (e, n) {
-    var r = e.length() === this.blockSize ? this.blockSize : this.blockSize - e.length();
-    return (e.fillWithByte(r, r), !0);
+  modes.ecb.prototype.pad = function (input, options) {
+    var padding = input.length() === this.blockSize ? this.blockSize : this.blockSize - input.length();
+    input.fillWithByte(padding, padding);
+    return true;
   };
-  Ln.ecb.prototype.unpad = function (e, n) {
-    if (n.overflow > 0) return !1;
-    var r = e.length(),
-      at = e.at(r - 1);
-    if (at > this.blockSize << 2) return !1;
-    return (e.truncate(at), !0);
+  modes.ecb.prototype.unpad = function (output, options) {
+    if (options.overflow > 0) return false;
+    var len = output.length();
+    var count = output.at(len - 1);
+    if (count > this.blockSize << 2) return false;
+    output.truncate(count);
+    return true;
   };
-  Ln.cbc = function (e) {
-    ((e = e || {}),
-      (this.name = "CBC"),
-      (this.cipher = e.cipher),
-      (this.blockSize = e.blockSize || 16),
-      (this._ints = this.blockSize / 4),
-      (this._inBlock = Array(this._ints)),
-      (this._outBlock = Array(this._ints)));
+  modes.cbc = function (options) {
+    options = options || {};
+    this.name = "CBC";
+    this.cipher = options.cipher;
+    this.blockSize = options.blockSize || 16;
+    this._ints = this.blockSize / 4;
+    this._inBlock = Array(this._ints);
+    this._outBlock = Array(this._ints);
   };
-  Ln.cbc.prototype.start = function (e) {
-    if (e.iv === null) {
+  modes.cbc.prototype.start = function (options) {
+    if (options.iv === null) {
       if (!this._prev) throw Error("Invalid IV parameter.");
       this._iv = this._prev.slice(0);
-    } else if (!("iv" in e)) throw Error("Invalid IV parameter.");
-    else ((this._iv = Vh(e.iv, this.blockSize)), (this._prev = this._iv.slice(0)));
+    } else if (!("iv" in options)) throw Error("Invalid IV parameter.");
+    else {
+      this._iv = transformIV(options.iv, this.blockSize);
+      this._prev = this._iv.slice(0);
+    }
   };
-  Ln.cbc.prototype.encrypt = function (e, n, r) {
-    if (e.length() < this.blockSize && !(r && e.length() > 0)) return !0;
-    for (var s = 0; s < this._ints; ++s) this._inBlock[s] = this._prev[s] ^ e.getInt32();
+  modes.cbc.prototype.encrypt = function (input, output, finish) {
+    if (input.length() < this.blockSize && !(finish && input.length() > 0)) return true;
+    for (var i = 0; i < this._ints; ++i) this._inBlock[i] = this._prev[i] ^ input.getInt32();
     this.cipher.encrypt(this._inBlock, this._outBlock);
-    for (var s = 0; s < this._ints; ++s) n.putInt32(this._outBlock[s]);
+    for (var i = 0; i < this._ints; ++i) output.putInt32(this._outBlock[i]);
     this._prev = this._outBlock;
   };
-  Ln.cbc.prototype.decrypt = function (e, n, r) {
-    if (e.length() < this.blockSize && !(r && e.length() > 0)) return !0;
-    for (var s = 0; s < this._ints; ++s) this._inBlock[s] = e.getInt32();
+  modes.cbc.prototype.decrypt = function (input, output, finish) {
+    if (input.length() < this.blockSize && !(finish && input.length() > 0)) return true;
+    for (var i = 0; i < this._ints; ++i) this._inBlock[i] = input.getInt32();
     this.cipher.decrypt(this._inBlock, this._outBlock);
-    for (var s = 0; s < this._ints; ++s) n.putInt32(this._prev[s] ^ this._outBlock[s]);
+    for (var i = 0; i < this._ints; ++i) output.putInt32(this._prev[i] ^ this._outBlock[i]);
     this._prev = this._inBlock.slice(0);
   };
-  Ln.cbc.prototype.pad = function (e, n) {
-    var r = e.length() === this.blockSize ? this.blockSize : this.blockSize - e.length();
-    return (e.fillWithByte(r, r), !0);
+  modes.cbc.prototype.pad = function (input, options) {
+    var padding = input.length() === this.blockSize ? this.blockSize : this.blockSize - input.length();
+    input.fillWithByte(padding, padding);
+    return true;
   };
-  Ln.cbc.prototype.unpad = function (e, n) {
-    if (n.overflow > 0) return !1;
-    var r = e.length(),
-      at = e.at(r - 1);
-    if (at > this.blockSize << 2) return !1;
-    return (e.truncate(at), !0);
+  modes.cbc.prototype.unpad = function (output, options) {
+    if (options.overflow > 0) return false;
+    var len = output.length();
+    var count = output.at(len - 1);
+    if (count > this.blockSize << 2) return false;
+    output.truncate(count);
+    return true;
   };
-  Ln.cfb = function (e) {
-    ((e = e || {}),
-      (this.name = "CFB"),
-      (this.cipher = e.cipher),
-      (this.blockSize = e.blockSize || 16),
-      (this._ints = this.blockSize / 4),
-      (this._inBlock = null),
-      (this._outBlock = Array(this._ints)),
-      (this._partialBlock = Array(this._ints)),
-      (this._partialOutput = ds.util.createBuffer()),
-      (this._partialBytes = 0));
+  modes.cfb = function (options) {
+    options = options || {};
+    this.name = "CFB";
+    this.cipher = options.cipher;
+    this.blockSize = options.blockSize || 16;
+    this._ints = this.blockSize / 4;
+    this._inBlock = null;
+    this._outBlock = Array(this._ints);
+    this._partialBlock = Array(this._ints);
+    this._partialOutput = forge.util.createBuffer();
+    this._partialBytes = 0;
   };
-  Ln.cfb.prototype.start = function (e) {
-    if (!("iv" in e)) throw Error("Invalid IV parameter.");
-    ((this._iv = Vh(e.iv, this.blockSize)), (this._inBlock = this._iv.slice(0)), (this._partialBytes = 0));
+  modes.cfb.prototype.start = function (options) {
+    if (!("iv" in options)) throw Error("Invalid IV parameter.");
+    this._iv = transformIV(options.iv, this.blockSize);
+    this._inBlock = this._iv.slice(0);
+    this._partialBytes = 0;
   };
-  Ln.cfb.prototype.encrypt = function (e, n, r) {
-    var s = e.length();
-    if (s === 0) return !0;
-    if (
-      (this.cipher.encrypt(this._inBlock, this._outBlock), this._partialBytes === 0 && s >= this.blockSize)
-    ) {
-      for (var h = 0; h < this._ints; ++h)
-        ((this._inBlock[h] = e.getInt32() ^ this._outBlock[h]), n.putInt32(this._inBlock[h]));
+  modes.cfb.prototype.encrypt = function (input, output, finish) {
+    var inputLength = input.length();
+    if (inputLength === 0) return true;
+    this.cipher.encrypt(this._inBlock, this._outBlock);
+    if (this._partialBytes === 0 && inputLength >= this.blockSize) {
+      for (var i = 0; i < this._ints; ++i) {
+        this._inBlock[i] = input.getInt32() ^ this._outBlock[i];
+        output.putInt32(this._inBlock[i]);
+      }
       return;
     }
-    var y = (this.blockSize - s) % this.blockSize;
-    if (y > 0) y = this.blockSize - y;
+    var partialBytes = (this.blockSize - inputLength) % this.blockSize;
+    if (partialBytes > 0) partialBytes = this.blockSize - partialBytes;
     this._partialOutput.clear();
-    for (var h = 0; h < this._ints; ++h)
-      ((this._partialBlock[h] = e.getInt32() ^ this._outBlock[h]),
-        this._partialOutput.putInt32(this._partialBlock[h]));
-    if (y > 0) e.read -= this.blockSize;
-    else for (var h = 0; h < this._ints; ++h) this._inBlock[h] = this._partialBlock[h];
+    for (var i = 0; i < this._ints; ++i) {
+      this._partialBlock[i] = input.getInt32() ^ this._outBlock[i];
+      this._partialOutput.putInt32(this._partialBlock[i]);
+    }
+    if (partialBytes > 0) input.read -= this.blockSize;
+    else for (var i = 0; i < this._ints; ++i) this._inBlock[i] = this._partialBlock[i];
     if (this._partialBytes > 0) this._partialOutput.getBytes(this._partialBytes);
-    if (y > 0 && !r)
-      return (n.putBytes(this._partialOutput.getBytes(y - this._partialBytes)), (this._partialBytes = y), !0);
-    (n.putBytes(this._partialOutput.getBytes(s - this._partialBytes)), (this._partialBytes = 0));
+    if (partialBytes > 0 && !finish) {
+      output.putBytes(this._partialOutput.getBytes(partialBytes - this._partialBytes));
+      this._partialBytes = partialBytes;
+      return true;
+    }
+    output.putBytes(this._partialOutput.getBytes(inputLength - this._partialBytes));
+    this._partialBytes = 0;
   };
-  Ln.cfb.prototype.decrypt = function (e, n, r) {
-    var s = e.length();
-    if (s === 0) return !0;
-    if (
-      (this.cipher.encrypt(this._inBlock, this._outBlock), this._partialBytes === 0 && s >= this.blockSize)
-    ) {
-      for (var h = 0; h < this._ints; ++h)
-        ((this._inBlock[h] = e.getInt32()), n.putInt32(this._inBlock[h] ^ this._outBlock[h]));
+  modes.cfb.prototype.decrypt = function (input, output, finish) {
+    var inputLength = input.length();
+    if (inputLength === 0) return true;
+    this.cipher.encrypt(this._inBlock, this._outBlock);
+    if (this._partialBytes === 0 && inputLength >= this.blockSize) {
+      for (var i = 0; i < this._ints; ++i) {
+        this._inBlock[i] = input.getInt32();
+        output.putInt32(this._inBlock[i] ^ this._outBlock[i]);
+      }
       return;
     }
-    var y = (this.blockSize - s) % this.blockSize;
-    if (y > 0) y = this.blockSize - y;
+    var partialBytes = (this.blockSize - inputLength) % this.blockSize;
+    if (partialBytes > 0) partialBytes = this.blockSize - partialBytes;
     this._partialOutput.clear();
-    for (var h = 0; h < this._ints; ++h)
-      ((this._partialBlock[h] = e.getInt32()),
-        this._partialOutput.putInt32(this._partialBlock[h] ^ this._outBlock[h]));
-    if (y > 0) e.read -= this.blockSize;
-    else for (var h = 0; h < this._ints; ++h) this._inBlock[h] = this._partialBlock[h];
+    for (var i = 0; i < this._ints; ++i) {
+      this._partialBlock[i] = input.getInt32();
+      this._partialOutput.putInt32(this._partialBlock[i] ^ this._outBlock[i]);
+    }
+    if (partialBytes > 0) input.read -= this.blockSize;
+    else for (var i = 0; i < this._ints; ++i) this._inBlock[i] = this._partialBlock[i];
     if (this._partialBytes > 0) this._partialOutput.getBytes(this._partialBytes);
-    if (y > 0 && !r)
-      return (n.putBytes(this._partialOutput.getBytes(y - this._partialBytes)), (this._partialBytes = y), !0);
-    (n.putBytes(this._partialOutput.getBytes(s - this._partialBytes)), (this._partialBytes = 0));
+    if (partialBytes > 0 && !finish) {
+      output.putBytes(this._partialOutput.getBytes(partialBytes - this._partialBytes));
+      this._partialBytes = partialBytes;
+      return true;
+    }
+    output.putBytes(this._partialOutput.getBytes(inputLength - this._partialBytes));
+    this._partialBytes = 0;
   };
-  Ln.ofb = function (e) {
-    ((e = e || {}),
-      (this.name = "OFB"),
-      (this.cipher = e.cipher),
-      (this.blockSize = e.blockSize || 16),
-      (this._ints = this.blockSize / 4),
-      (this._inBlock = null),
-      (this._outBlock = Array(this._ints)),
-      (this._partialOutput = ds.util.createBuffer()),
-      (this._partialBytes = 0));
+  modes.ofb = function (options) {
+    options = options || {};
+    this.name = "OFB";
+    this.cipher = options.cipher;
+    this.blockSize = options.blockSize || 16;
+    this._ints = this.blockSize / 4;
+    this._inBlock = null;
+    this._outBlock = Array(this._ints);
+    this._partialOutput = forge.util.createBuffer();
+    this._partialBytes = 0;
   };
-  Ln.ofb.prototype.start = function (e) {
-    if (!("iv" in e)) throw Error("Invalid IV parameter.");
-    ((this._iv = Vh(e.iv, this.blockSize)), (this._inBlock = this._iv.slice(0)), (this._partialBytes = 0));
+  modes.ofb.prototype.start = function (options) {
+    if (!("iv" in options)) throw Error("Invalid IV parameter.");
+    this._iv = transformIV(options.iv, this.blockSize);
+    this._inBlock = this._iv.slice(0);
+    this._partialBytes = 0;
   };
-  Ln.ofb.prototype.encrypt = function (e, n, r) {
-    var s = e.length();
-    if (e.length() === 0) return !0;
-    if (
-      (this.cipher.encrypt(this._inBlock, this._outBlock), this._partialBytes === 0 && s >= this.blockSize)
-    ) {
-      for (var h = 0; h < this._ints; ++h)
-        (n.putInt32(e.getInt32() ^ this._outBlock[h]), (this._inBlock[h] = this._outBlock[h]));
+  modes.ofb.prototype.encrypt = function (input, output, finish) {
+    var inputLength = input.length();
+    if (input.length() === 0) return true;
+    this.cipher.encrypt(this._inBlock, this._outBlock);
+    if (this._partialBytes === 0 && inputLength >= this.blockSize) {
+      for (var i = 0; i < this._ints; ++i) {
+        output.putInt32(input.getInt32() ^ this._outBlock[i]);
+        this._inBlock[i] = this._outBlock[i];
+      }
       return;
     }
-    var y = (this.blockSize - s) % this.blockSize;
-    if (y > 0) y = this.blockSize - y;
+    var partialBytes = (this.blockSize - inputLength) % this.blockSize;
+    if (partialBytes > 0) partialBytes = this.blockSize - partialBytes;
     this._partialOutput.clear();
-    for (var h = 0; h < this._ints; ++h) this._partialOutput.putInt32(e.getInt32() ^ this._outBlock[h]);
-    if (y > 0) e.read -= this.blockSize;
-    else for (var h = 0; h < this._ints; ++h) this._inBlock[h] = this._outBlock[h];
+    for (var i = 0; i < this._ints; ++i) this._partialOutput.putInt32(input.getInt32() ^ this._outBlock[i]);
+    if (partialBytes > 0) input.read -= this.blockSize;
+    else for (var i = 0; i < this._ints; ++i) this._inBlock[i] = this._outBlock[i];
     if (this._partialBytes > 0) this._partialOutput.getBytes(this._partialBytes);
-    if (y > 0 && !r)
-      return (n.putBytes(this._partialOutput.getBytes(y - this._partialBytes)), (this._partialBytes = y), !0);
-    (n.putBytes(this._partialOutput.getBytes(s - this._partialBytes)), (this._partialBytes = 0));
+    if (partialBytes > 0 && !finish) {
+      output.putBytes(this._partialOutput.getBytes(partialBytes - this._partialBytes));
+      this._partialBytes = partialBytes;
+      return true;
+    }
+    output.putBytes(this._partialOutput.getBytes(inputLength - this._partialBytes));
+    this._partialBytes = 0;
   };
-  Ln.ofb.prototype.decrypt = Ln.ofb.prototype.encrypt;
-  Ln.ctr = function (e) {
-    ((e = e || {}),
-      (this.name = "CTR"),
-      (this.cipher = e.cipher),
-      (this.blockSize = e.blockSize || 16),
-      (this._ints = this.blockSize / 4),
-      (this._inBlock = null),
-      (this._outBlock = Array(this._ints)),
-      (this._partialOutput = ds.util.createBuffer()),
-      (this._partialBytes = 0));
+  modes.ofb.prototype.decrypt = modes.ofb.prototype.encrypt;
+  modes.ctr = function (options) {
+    options = options || {};
+    this.name = "CTR";
+    this.cipher = options.cipher;
+    this.blockSize = options.blockSize || 16;
+    this._ints = this.blockSize / 4;
+    this._inBlock = null;
+    this._outBlock = Array(this._ints);
+    this._partialOutput = forge.util.createBuffer();
+    this._partialBytes = 0;
   };
-  Ln.ctr.prototype.start = function (e) {
-    if (!("iv" in e)) throw Error("Invalid IV parameter.");
-    ((this._iv = Vh(e.iv, this.blockSize)), (this._inBlock = this._iv.slice(0)), (this._partialBytes = 0));
+  modes.ctr.prototype.start = function (options) {
+    if (!("iv" in options)) throw Error("Invalid IV parameter.");
+    this._iv = transformIV(options.iv, this.blockSize);
+    this._inBlock = this._iv.slice(0);
+    this._partialBytes = 0;
   };
-  Ln.ctr.prototype.encrypt = function (e, n, r) {
-    var s = e.length();
-    if (s === 0) return !0;
-    if ((this.cipher.encrypt(this._inBlock, this._outBlock), this._partialBytes === 0 && s >= this.blockSize))
-      for (var h = 0; h < this._ints; ++h) n.putInt32(e.getInt32() ^ this._outBlock[h]);
+  modes.ctr.prototype.encrypt = function (input, output, finish) {
+    var inputLength = input.length();
+    if (inputLength === 0) return true;
+    this.cipher.encrypt(this._inBlock, this._outBlock);
+    if (this._partialBytes === 0 && inputLength >= this.blockSize)
+      for (var i = 0; i < this._ints; ++i) output.putInt32(input.getInt32() ^ this._outBlock[i]);
     else {
-      var y = (this.blockSize - s) % this.blockSize;
-      if (y > 0) y = this.blockSize - y;
+      var partialBytes = (this.blockSize - inputLength) % this.blockSize;
+      if (partialBytes > 0) partialBytes = this.blockSize - partialBytes;
       this._partialOutput.clear();
-      for (var h = 0; h < this._ints; ++h) this._partialOutput.putInt32(e.getInt32() ^ this._outBlock[h]);
-      if (y > 0) e.read -= this.blockSize;
+      for (var i = 0; i < this._ints; ++i) this._partialOutput.putInt32(input.getInt32() ^ this._outBlock[i]);
+      if (partialBytes > 0) input.read -= this.blockSize;
       if (this._partialBytes > 0) this._partialOutput.getBytes(this._partialBytes);
-      if (y > 0 && !r)
-        return (
-          n.putBytes(this._partialOutput.getBytes(y - this._partialBytes)),
-          (this._partialBytes = y),
-          !0
-        );
-      (n.putBytes(this._partialOutput.getBytes(s - this._partialBytes)), (this._partialBytes = 0));
+      if (partialBytes > 0 && !finish) {
+        output.putBytes(this._partialOutput.getBytes(partialBytes - this._partialBytes));
+        this._partialBytes = partialBytes;
+        return true;
+      }
+      output.putBytes(this._partialOutput.getBytes(inputLength - this._partialBytes));
+      this._partialBytes = 0;
     }
-    Wh(this._inBlock);
+    inc32(this._inBlock);
   };
-  Ln.ctr.prototype.decrypt = Ln.ctr.prototype.encrypt;
-  Ln.gcm = function (e) {
-    ((e = e || {}),
-      (this.name = "GCM"),
-      (this.cipher = e.cipher),
-      (this.blockSize = e.blockSize || 16),
-      (this._ints = this.blockSize / 4),
-      (this._inBlock = Array(this._ints)),
-      (this._outBlock = Array(this._ints)),
-      (this._partialOutput = ds.util.createBuffer()),
-      (this._partialBytes = 0),
-      (this._R = 3774873600));
+  modes.ctr.prototype.decrypt = modes.ctr.prototype.encrypt;
+  modes.gcm = function (options) {
+    options = options || {};
+    this.name = "GCM";
+    this.cipher = options.cipher;
+    this.blockSize = options.blockSize || 16;
+    this._ints = this.blockSize / 4;
+    this._inBlock = Array(this._ints);
+    this._outBlock = Array(this._ints);
+    this._partialOutput = forge.util.createBuffer();
+    this._partialBytes = 0;
+    this._R = 3774873600;
   };
-  Ln.gcm.prototype.start = function (e) {
-    if (!("iv" in e)) throw Error("Invalid IV parameter.");
-    var buffer = ds.util.createBuffer(e.iv);
+  modes.gcm.prototype.start = function (options) {
+    if (!("iv" in options)) throw Error("Invalid IV parameter.");
+    var iv = forge.util.createBuffer(options.iv);
     this._cipherLength = 0;
-    var r;
-    if ("additionalData" in e) r = ds.util.createBuffer(e.additionalData);
-    else r = ds.util.createBuffer();
-    if ("tagLength" in e) this._tagLength = e.tagLength;
+    var additionalData;
+    if ("additionalData" in options) additionalData = forge.util.createBuffer(options.additionalData);
+    else additionalData = forge.util.createBuffer();
+    if ("tagLength" in options) this._tagLength = options.tagLength;
     else this._tagLength = 128;
-    if (((this._tag = null), e.decrypt)) {
-      if (((this._tag = ds.util.createBuffer(e.tag).getBytes()), this._tag.length !== this._tagLength / 8))
+    this._tag = null;
+    if (options.decrypt) {
+      this._tag = forge.util.createBuffer(options.tag).getBytes();
+      if (this._tag.length !== this._tagLength / 8)
         throw Error("Authentication tag does not match tag length.");
     }
-    ((this._hashBlock = Array(this._ints)),
-      (this.tag = null),
-      (this._hashSubkey = Array(this._ints)),
-      this.cipher.encrypt([0, 0, 0, 0], this._hashSubkey),
-      (this.componentBits = 4),
-      (this._m = this.generateHashTable(this._hashSubkey, this.componentBits)));
-    var s = buffer.length();
-    if (s === 12) this._j0 = [buffer.getInt32(), buffer.getInt32(), buffer.getInt32(), 1];
+    this._hashBlock = Array(this._ints);
+    this.tag = null;
+    this._hashSubkey = Array(this._ints);
+    this.cipher.encrypt([0, 0, 0, 0], this._hashSubkey);
+    this.componentBits = 4;
+    this._m = this.generateHashTable(this._hashSubkey, this.componentBits);
+    var ivLength = iv.length();
+    if (ivLength === 12) this._j0 = [iv.getInt32(), iv.getInt32(), iv.getInt32(), 1];
     else {
       this._j0 = [0, 0, 0, 0];
-      while (buffer.length() > 0)
+      while (iv.length() > 0)
         this._j0 = this.ghash(this._hashSubkey, this._j0, [
-          buffer.getInt32(),
-          buffer.getInt32(),
-          buffer.getInt32(),
-          buffer.getInt32(),
+          iv.getInt32(),
+          iv.getInt32(),
+          iv.getInt32(),
+          iv.getInt32(),
         ]);
-      this._j0 = this.ghash(this._hashSubkey, this._j0, [0, 0].concat(eS(s * 8)));
+      this._j0 = this.ghash(this._hashSubkey, this._j0, [0, 0].concat(from64To32(ivLength * 8)));
     }
-    ((this._inBlock = this._j0.slice(0)),
-      Wh(this._inBlock),
-      (this._partialBytes = 0),
-      (r = ds.util.createBuffer(r)),
-      (this._aDataLength = eS(r.length() * 8)));
-    var h = r.length() % this.blockSize;
-    if (h) r.fillWithByte(0, this.blockSize - h);
+    this._inBlock = this._j0.slice(0);
+    inc32(this._inBlock);
+    this._partialBytes = 0;
+    additionalData = forge.util.createBuffer(additionalData);
+    this._aDataLength = from64To32(additionalData.length() * 8);
+    var overflow = additionalData.length() % this.blockSize;
+    if (overflow) additionalData.fillWithByte(0, this.blockSize - overflow);
     this._s = [0, 0, 0, 0];
-    while (r.length() > 0)
+    while (additionalData.length() > 0)
       this._s = this.ghash(this._hashSubkey, this._s, [
-        r.getInt32(),
-        r.getInt32(),
-        r.getInt32(),
-        r.getInt32(),
+        additionalData.getInt32(),
+        additionalData.getInt32(),
+        additionalData.getInt32(),
+        additionalData.getInt32(),
       ]);
   };
-  Ln.gcm.prototype.encrypt = function (e, n, r) {
-    var s = e.length();
-    if (s === 0) return !0;
-    if (
-      (this.cipher.encrypt(this._inBlock, this._outBlock), this._partialBytes === 0 && s >= this.blockSize)
-    ) {
-      for (var h = 0; h < this._ints; ++h) n.putInt32((this._outBlock[h] ^= e.getInt32()));
+  modes.gcm.prototype.encrypt = function (input, output, finish) {
+    var inputLength = input.length();
+    if (inputLength === 0) return true;
+    this.cipher.encrypt(this._inBlock, this._outBlock);
+    if (this._partialBytes === 0 && inputLength >= this.blockSize) {
+      for (var i = 0; i < this._ints; ++i) output.putInt32((this._outBlock[i] ^= input.getInt32()));
       this._cipherLength += this.blockSize;
     } else {
-      var y = (this.blockSize - s) % this.blockSize;
-      if (y > 0) y = this.blockSize - y;
+      var partialBytes = (this.blockSize - inputLength) % this.blockSize;
+      if (partialBytes > 0) partialBytes = this.blockSize - partialBytes;
       this._partialOutput.clear();
-      for (var h = 0; h < this._ints; ++h) this._partialOutput.putInt32(e.getInt32() ^ this._outBlock[h]);
-      if (y <= 0 || r) {
-        if (r) {
-          var b = s % this.blockSize;
-          ((this._cipherLength += b), this._partialOutput.truncate(this.blockSize - b));
+      for (var i = 0; i < this._ints; ++i) this._partialOutput.putInt32(input.getInt32() ^ this._outBlock[i]);
+      if (partialBytes <= 0 || finish) {
+        if (finish) {
+          var overflow = inputLength % this.blockSize;
+          this._cipherLength += overflow;
+          this._partialOutput.truncate(this.blockSize - overflow);
         } else this._cipherLength += this.blockSize;
-        for (var h = 0; h < this._ints; ++h) this._outBlock[h] = this._partialOutput.getInt32();
+        for (var i = 0; i < this._ints; ++i) this._outBlock[i] = this._partialOutput.getInt32();
         this._partialOutput.read -= this.blockSize;
       }
       if (this._partialBytes > 0) this._partialOutput.getBytes(this._partialBytes);
-      if (y > 0 && !r)
-        return (
-          (e.read -= this.blockSize),
-          n.putBytes(this._partialOutput.getBytes(y - this._partialBytes)),
-          (this._partialBytes = y),
-          !0
-        );
-      (n.putBytes(this._partialOutput.getBytes(s - this._partialBytes)), (this._partialBytes = 0));
+      if (partialBytes > 0 && !finish) {
+        input.read -= this.blockSize;
+        output.putBytes(this._partialOutput.getBytes(partialBytes - this._partialBytes));
+        this._partialBytes = partialBytes;
+        return true;
+      }
+      output.putBytes(this._partialOutput.getBytes(inputLength - this._partialBytes));
+      this._partialBytes = 0;
     }
-    ((this._s = this.ghash(this._hashSubkey, this._s, this._outBlock)), Wh(this._inBlock));
+    this._s = this.ghash(this._hashSubkey, this._s, this._outBlock);
+    inc32(this._inBlock);
   };
-  Ln.gcm.prototype.decrypt = function (e, n, r) {
-    var s = e.length();
-    if (s < this.blockSize && !(r && s > 0)) return !0;
-    (this.cipher.encrypt(this._inBlock, this._outBlock),
-      Wh(this._inBlock),
-      (this._hashBlock[0] = e.getInt32()),
-      (this._hashBlock[1] = e.getInt32()),
-      (this._hashBlock[2] = e.getInt32()),
-      (this._hashBlock[3] = e.getInt32()),
-      (this._s = this.ghash(this._hashSubkey, this._s, this._hashBlock)));
-    for (var h = 0; h < this._ints; ++h) n.putInt32(this._outBlock[h] ^ this._hashBlock[h]);
-    if (s < this.blockSize) this._cipherLength += s % this.blockSize;
+  modes.gcm.prototype.decrypt = function (input, output, finish) {
+    var inputLength = input.length();
+    if (inputLength < this.blockSize && !(finish && inputLength > 0)) return true;
+    this.cipher.encrypt(this._inBlock, this._outBlock);
+    inc32(this._inBlock);
+    this._hashBlock[0] = input.getInt32();
+    this._hashBlock[1] = input.getInt32();
+    this._hashBlock[2] = input.getInt32();
+    this._hashBlock[3] = input.getInt32();
+    this._s = this.ghash(this._hashSubkey, this._s, this._hashBlock);
+    for (var i = 0; i < this._ints; ++i) output.putInt32(this._outBlock[i] ^ this._hashBlock[i]);
+    if (inputLength < this.blockSize) this._cipherLength += inputLength % this.blockSize;
     else this._cipherLength += this.blockSize;
   };
-  Ln.gcm.prototype.afterFinish = function (e, n) {
-    var r = !0;
-    if (n.decrypt && n.overflow) e.truncate(this.blockSize - n.overflow);
-    this.tag = ds.util.createBuffer();
-    var combined = this._aDataLength.concat(eS(this._cipherLength * 8));
-    this._s = this.ghash(this._hashSubkey, this._s, combined);
-    var h = [];
-    this.cipher.encrypt(this._j0, h);
-    for (var y = 0; y < this._ints; ++y) this.tag.putInt32(this._s[y] ^ h[y]);
-    if (
-      (this.tag.truncate(this.tag.length() % (this._tagLength / 8)),
-      n.decrypt && this.tag.bytes() !== this._tag)
-    )
-      r = !1;
-    return r;
+  modes.gcm.prototype.afterFinish = function (output, options) {
+    var rval = true;
+    if (options.decrypt && options.overflow) output.truncate(this.blockSize - options.overflow);
+    this.tag = forge.util.createBuffer();
+    var lengths = this._aDataLength.concat(from64To32(this._cipherLength * 8));
+    this._s = this.ghash(this._hashSubkey, this._s, lengths);
+    var tag = [];
+    this.cipher.encrypt(this._j0, tag);
+    for (var i = 0; i < this._ints; ++i) this.tag.putInt32(this._s[i] ^ tag[i]);
+    this.tag.truncate(this.tag.length() % (this._tagLength / 8));
+    if (options.decrypt && this.tag.bytes() !== this._tag) rval = false;
+    return rval;
   };
-  Ln.gcm.prototype.multiply = function (e, n) {
-    var r = [0, 0, 0, 0],
-      sliced = n.slice(0);
-    for (var h = 0; h < 128; ++h) {
-      var y = e[(h / 32) | 0] & (1 << (31 - (h % 32)));
-      if (y) ((r[0] ^= sliced[0]), (r[1] ^= sliced[1]), (r[2] ^= sliced[2]), (r[3] ^= sliced[3]));
-      this.pow(sliced, sliced);
-    }
-    return r;
-  };
-  Ln.gcm.prototype.pow = function (e, n) {
-    var r = e[3] & 1;
-    for (var s = 3; s > 0; --s) n[s] = (e[s] >>> 1) | ((e[s - 1] & 1) << 31);
-    if (((n[0] = e[0] >>> 1), r)) n[0] ^= this._R;
-  };
-  Ln.gcm.prototype.tableMultiply = function (e) {
-    var n = [0, 0, 0, 0];
-    for (var r = 0; r < 32; ++r) {
-      var s = (r / 8) | 0,
-        h = (e[s] >>> ((7 - (r % 8)) * 4)) & 15,
-        y = this._m[r][h];
-      ((n[0] ^= y[0]), (n[1] ^= y[1]), (n[2] ^= y[2]), (n[3] ^= y[3]));
-    }
-    return n;
-  };
-  Ln.gcm.prototype.ghash = function (e, n, r) {
-    return ((n[0] ^= r[0]), (n[1] ^= r[1]), (n[2] ^= r[2]), (n[3] ^= r[3]), this.tableMultiply(n));
-  };
-  Ln.gcm.prototype.generateHashTable = function (e, n) {
-    var r = 8 / n,
-      s = 4 * r,
-      h = 16 * r,
-      y = Array(h);
-    for (var b = 0; b < h; ++b) {
-      var S = [0, 0, 0, 0],
-        w = (b / s) | 0,
-        R = (s - 1 - (b % s)) * n;
-      ((S[w] = (1 << (n - 1)) << R), (y[b] = this.generateSubHashTable(this.multiply(S, e), n)));
-    }
-    return y;
-  };
-  Ln.gcm.prototype.generateSubHashTable = function (e, n) {
-    var r = 1 << n,
-      s = r >>> 1,
-      h = Array(r);
-    h[s] = e.slice(0);
-    var y = s >>> 1;
-    while (y > 0) (this.pow(h[2 * y], (h[y] = [])), (y >>= 1));
-    y = 2;
-    while (y < s) {
-      for (var b = 1; b < y; ++b) {
-        var S = h[y],
-          w = h[b];
-        h[y + b] = [S[0] ^ w[0], S[1] ^ w[1], S[2] ^ w[2], S[3] ^ w[3]];
+  modes.gcm.prototype.multiply = function (x, y_2) {
+    var z_i = [0, 0, 0, 0];
+    var v_i = y_2.slice(0);
+    for (var i = 0; i < 128; ++i) {
+      var x_i = x[(i / 32) | 0] & (1 << (31 - (i % 32)));
+      if (x_i) {
+        z_i[0] ^= v_i[0];
+        z_i[1] ^= v_i[1];
+        z_i[2] ^= v_i[2];
+        z_i[3] ^= v_i[3];
       }
-      y *= 2;
+      this.pow(v_i, v_i);
     }
-    h[0] = [0, 0, 0, 0];
-    for (y = s + 1; y < r; ++y) {
-      var R = h[y ^ s];
-      h[y] = [e[0] ^ R[0], e[1] ^ R[1], e[2] ^ R[2], e[3] ^ R[3]];
-    }
-    return h;
+    return z_i;
   };
-  function Vh(e, n) {
-    if (typeof e === "string") e = ds.util.createBuffer(e);
-    if (ds.util.isArray(e) && e.length > 4) {
-      var r = e;
-      e = ds.util.createBuffer();
-      for (var s = 0; s < r.length; ++s) e.putByte(r[s]);
+  modes.gcm.prototype.pow = function (x, out) {
+    var lsb = x[3] & 1;
+    for (var i = 3; i > 0; --i) out[i] = (x[i] >>> 1) | ((x[i - 1] & 1) << 31);
+    out[0] = x[0] >>> 1;
+    if (lsb) out[0] ^= this._R;
+  };
+  modes.gcm.prototype.tableMultiply = function (x) {
+    var z = [0, 0, 0, 0];
+    for (var i = 0; i < 32; ++i) {
+      var idx = (i / 8) | 0;
+      var x_i = (x[idx] >>> ((7 - (i % 8)) * 4)) & 15;
+      var ah = this._m[i][x_i];
+      z[0] ^= ah[0];
+      z[1] ^= ah[1];
+      z[2] ^= ah[2];
+      z[3] ^= ah[3];
     }
-    if (e.length() < n)
-      throw Error("Invalid IV length; got " + e.length() + " bytes and expected " + n + " bytes.");
-    if (!ds.util.isArray(e)) {
-      var h = [],
-        y = n / 4;
-      for (var s = 0; s < y; ++s) h.push(e.getInt32());
-      e = h;
+    return z;
+  };
+  modes.gcm.prototype.ghash = function (h, y, x) {
+    y[0] ^= x[0];
+    y[1] ^= x[1];
+    y[2] ^= x[2];
+    y[3] ^= x[3];
+    return this.tableMultiply(y);
+  };
+  modes.gcm.prototype.generateHashTable = function (h_2, bits) {
+    var multiplier = 8 / bits;
+    var perInt = 4 * multiplier;
+    var size = 16 * multiplier;
+    var m = Array(size);
+    for (var i = 0; i < size; ++i) {
+      var tmp = [0, 0, 0, 0];
+      var idx = (i / perInt) | 0;
+      var shft = (perInt - 1 - (i % perInt)) * bits;
+      tmp[idx] = (1 << (bits - 1)) << shft;
+      m[i] = this.generateSubHashTable(this.multiply(tmp, h_2), bits);
     }
-    return e;
+    return m;
+  };
+  modes.gcm.prototype.generateSubHashTable = function (mid, bits) {
+    var size = 1 << bits;
+    var half = size >>> 1;
+    var m = Array(size);
+    m[half] = mid.slice(0);
+    var i = half >>> 1;
+    while (i > 0) {
+      this.pow(m[2 * i], (m[i] = []));
+      i >>= 1;
+    }
+    i = 2;
+    while (i < half) {
+      for (var j = 1; j < i; ++j) {
+        var m_i = m[i];
+        var m_j = m[j];
+        m[i + j] = [m_i[0] ^ m_j[0], m_i[1] ^ m_j[1], m_i[2] ^ m_j[2], m_i[3] ^ m_j[3]];
+      }
+      i *= 2;
+    }
+    m[0] = [0, 0, 0, 0];
+    for (i = half + 1; i < size; ++i) {
+      var c = m[i ^ half];
+      m[i] = [mid[0] ^ c[0], mid[1] ^ c[1], mid[2] ^ c[2], mid[3] ^ c[3]];
+    }
+    return m;
+  };
+  function transformIV(iv, blockSize) {
+    if (typeof iv === "string") iv = forge.util.createBuffer(iv);
+    if (forge.util.isArray(iv) && iv.length > 4) {
+      var tmp = iv;
+      iv = forge.util.createBuffer();
+      for (var i = 0; i < tmp.length; ++i) iv.putByte(tmp[i]);
+    }
+    if (iv.length() < blockSize)
+      throw Error("Invalid IV length; got " + iv.length() + " bytes and expected " + blockSize + " bytes.");
+    if (!forge.util.isArray(iv)) {
+      var ints = [];
+      var blocks = blockSize / 4;
+      for (var i = 0; i < blocks; ++i) ints.push(iv.getInt32());
+      iv = ints;
+    }
+    return iv;
   }
-  function Wh(e) {
-    e[e.length - 1] = (e[e.length - 1] + 1) & 4294967295;
+  function inc32(block) {
+    block[block.length - 1] = (block[block.length - 1] + 1) & 4294967295;
   }
-  function eS(e) {
-    return [(e / 4294967296) | 0, e & 4294967295];
+  function from64To32(num) {
+    return [(num / 4294967296) | 0, num & 4294967295];
   }
 });
-
-export { tS };
+export { require_cipherModes };

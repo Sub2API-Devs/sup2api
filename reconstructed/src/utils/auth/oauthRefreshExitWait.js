@@ -10,24 +10,30 @@
  */
 
 //@ chunk-tss4qggm.js:191-209 placement
-class e {
+/**
+ * 保存“退出前等待刷新”回调的槽位。
+ */
+class OAuthRefreshExitWaitSlot {
   wait = null;
 }
 //@ chunk-tss4qggm.js:209-221 placement
-var t = new e();
+/**
+ * 全局唯一的退出等待槽位。
+ */
+var oauthRefreshExitWait = new OAuthRefreshExitWaitSlot();
 //@ chunk-tss4qggm.js:221-268 placement
-function registerOAuthRefreshExitWait(i) {
-  let wait = t.wait;
-  return ((t.wait = i), wait);
+function registerOAuthRefreshExitWait(wait) {
+  let wait_2 = oauthRefreshExitWait.wait;
+  oauthRefreshExitWait.wait = wait;
+  return wait_2;
 }
+//@ chunk-tss4qggm.js:268-318 placement
 /**
  * 退出前等待进行中的 OAuth 刷新。
  */
-//@ chunk-tss4qggm.js:268-318 placement
 async function waitForOAuthRefreshBeforeExit() {
   try {
-    await t.wait?.();
+    await oauthRefreshExitWait.wait?.();
   } catch {}
 }
-
 export { registerOAuthRefreshExitWait, waitForOAuthRefreshBeforeExit };

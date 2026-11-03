@@ -11,13 +11,13 @@
 import { createHash } from "crypto";
 import { base64URLEncode } from "./auth-code-listener.js";
 
+//@ chunk-b8krr1px.js:5027-5092 fingerprint = generateCodeChallenge (1)
 /**
  * PKCE：sha256(verifier) 的 base64url。
  */
-//@ chunk-b8krr1px.js:5027-5092 fingerprint = generateCodeChallenge (1)
 function generateCodeChallenge(verifier) {
   let hash = createHash("sha256");
-  return (hash.update(verifier), base64URLEncode(hash.digest()));
+  hash.update(verifier);
+  return base64URLEncode(hash.digest());
 }
-
 export { generateCodeChallenge };

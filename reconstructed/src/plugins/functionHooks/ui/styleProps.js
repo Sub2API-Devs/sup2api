@@ -11,7 +11,10 @@
 import { BORDER_STYLE_NAMES } from "../../../ink/render-border.js";
 
 //@ chunk-4121qate.js:109038-109061 placement
-var Ir = ["start", "end"];
+/**
+ * start/end
+ */
+var DECORATION_EDGE_KEYS = ["start", "end"];
 //@ chunk-4121qate.js:109061-109152 placement
 var TEXT_STYLE_PROPS = [
   "color",
@@ -25,9 +28,15 @@ var TEXT_STYLE_PROPS = [
 //@ chunk-4121qate.js:109152-109173 placement
 var VIRTUALTEXT = "virtualText";
 //@ chunk-4121qate.js:109173-109198 placement
-var vs = [...Ir, ...TEXT_STYLE_PROPS, VIRTUALTEXT];
+/**
+ * 文本样式键集合
+ */
+var TEXT_STYLE_KEYS = [...DECORATION_EDGE_KEYS, ...TEXT_STYLE_PROPS, VIRTUALTEXT];
 //@ chunk-4121qate.js:109198-109288 placement
-function yf(e) {
+/**
+ * 基本类型或空串
+ */
+function primitiveOrEmpty(e) {
   return typeof e === "string" || typeof e === "number" || typeof e === "boolean" ? e : "";
 }
 //@ chunk-4121qate.js:109288-109406 placement
@@ -74,11 +83,26 @@ var HOVER_PROPS = {
 };
 //@ chunk-4121qate.js:109731-109846 placement
 var SPACE_CELLS = {
-  xs: { across: 1, down: 0 },
-  sm: { across: 1, down: 0 },
-  md: { across: 2, down: 1 },
-  lg: { across: 3, down: 1 },
-  xl: { across: 4, down: 2 },
+  xs: {
+    across: 1,
+    down: 0,
+  },
+  sm: {
+    across: 1,
+    down: 0,
+  },
+  md: {
+    across: 2,
+    down: 1,
+  },
+  lg: {
+    across: 3,
+    down: 1,
+  },
+  xl: {
+    across: 4,
+    down: 2,
+  },
 };
 //@ chunk-4121qate.js:109846-109911 placement
 function isSpaceStep(e) {
@@ -202,26 +226,26 @@ var SIZE_LIMIT = 1e4;
 var SIZE_PROPS = new Set(["width", "height", "minWidth", "minHeight"]);
 //@ chunk-4121qate.js:111879-111944 placement
 var CONCEALING_PROPS = new Set(["display", "overflow", "position", ...SIZE_PROPS, ...OFFSET_PROPS]);
+//@ chunk-4121qate.js:111944-112922 placement
 /**
  * 校验声明式 UI 的样式属性值（枚举、尺寸、间距 token、定位整数、颜色、布尔），不合法返回原因文字。注意：这不是 Ink 的 styles.ts。
  */
-//@ chunk-4121qate.js:111944-112922 placement
 function propValueProblem(prop, value) {
   let r = PROP_VALUES[prop];
-  if (r !== void 0)
-    return typeof value === "string" && r.has(value) ? void 0 : `must be one of ${[...r].join(", ")}`;
+  if (r !== undefined)
+    return typeof value === "string" && r.has(value) ? undefined : `must be one of ${[...r].join(", ")}`;
   if (SIZE_PROPS.has(prop)) {
     if (typeof value === "number")
       return Number.isFinite(value) && value >= 0 && value <= SIZE_LIMIT
-        ? void 0
+        ? undefined
         : `must be a finite number between 0 and ${SIZE_LIMIT}`;
     return typeof value === "string" && /^\d{1,3}%$/.test(value)
-      ? void 0
+      ? undefined
       : "must be a number or a percentage";
   }
   if (NUMBER_PROPS.has(prop)) {
-    let n = typeof value === "number" && Number.isFinite(value) && Math.abs(value) <= SIZE_LIMIT,
-      s = SPACE_PROPS.has(prop);
+    let n = typeof value === "number" && Number.isFinite(value) && Math.abs(value) <= SIZE_LIMIT;
+    let s = SPACE_PROPS.has(prop);
     if (n || (s && isSpaceStep(value))) return;
     return s
       ? `must be a number of cells from -${SIZE_LIMIT} to ${SIZE_LIMIT}, or one of ${Object.keys(SPACE_CELLS).join(", ")}`
@@ -229,13 +253,13 @@ function propValueProblem(prop, value) {
   }
   if (OFFSET_PROPS.has(prop))
     return typeof value === "number" && Number.isInteger(value) && Math.abs(value) <= SIZE_LIMIT
-      ? void 0
+      ? undefined
       : `must be an integer within ${SIZE_LIMIT} (character cells)`;
   if (COLOR_PROPS.has(prop))
     return typeof value === "string" && /^[#a-zA-Z0-9_().,% -]{1,40}$/.test(value)
-      ? void 0
+      ? undefined
       : "must be a color (a theme key, a name, or hex)";
-  if (BOOLEAN_PROPS.has(prop)) return typeof value === "boolean" ? void 0 : "must be a boolean";
+  if (BOOLEAN_PROPS.has(prop)) return typeof value === "boolean" ? undefined : "must be a boolean";
   return "has no value rule";
 }
 //@ chunk-4121qate.js:112922-113028 placement
@@ -249,14 +273,13 @@ var ROWS_PER_UNIT = {
   marginTop: 1,
   marginBottom: 1,
 };
-
 export {
-  vs,
-  Ir,
+  TEXT_STYLE_KEYS,
+  DECORATION_EDGE_KEYS,
   VIRTUALTEXT,
   TEXT_STYLE_PROPS,
   propValueProblem,
-  yf,
+  primitiveOrEmpty,
   OFFSET_PROPS,
   HOVER_PROPS,
   BORDER_STYLES,

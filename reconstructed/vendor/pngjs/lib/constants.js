@@ -8,8 +8,8 @@
 import { x } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-spjgqa4y.js:26249-26646 cjs-fingerprint
-var se = x(function (vl, Dr) {
-  Dr.exports = {
+var require_constants = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = {
     PNG_SIGNATURE: [137, 80, 78, 71, 13, 10, 26, 10],
     TYPE_IHDR: 1229472850,
     TYPE_IEND: 1229278788,
@@ -23,9 +23,14 @@ var se = x(function (vl, Dr) {
     COLORTYPE_ALPHA: 4,
     COLORTYPE_PALETTE_COLOR: 3,
     COLORTYPE_COLOR_ALPHA: 6,
-    COLORTYPE_TO_BPP_MAP: { 0: 1, 2: 3, 3: 1, 4: 2, 6: 4 },
+    COLORTYPE_TO_BPP_MAP: {
+      0: 1,
+      2: 3,
+      3: 1,
+      4: 2,
+      6: 4,
+    },
     GAMMA_DIVISION: 1e5,
   };
 });
-
-export { se };
+export { require_constants };

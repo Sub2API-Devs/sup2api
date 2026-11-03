@@ -16,23 +16,26 @@ import {
 import { canonicalToolName } from "../../utils/permissions/permissionRuleParser.js";
 import { getConversationToolsUsed } from "../../bootstrap/state.js";
 import { logError } from "../../utils/log.js";
-import { uLn } from "../../bootstrap/stateSlices.js";
+import { isGmailAttachmentTool } from "../../bootstrap/stateSlices.js";
 
 //@ chunk-s61vbvea.js:377152-377237 placement
-function D7s(e, n) {
+/**
+ * 记录一次工具使用（工具名 + 输入），供清理/压缩时保留相关工具；开关关闭或出错时静默。
+ */
+function recordToolUsePair(e, name) {
   try {
     if (isSillyShoreGateOn()) {
       let r = canonicalToolName(e.trim());
-      getConversationToolsUsed().record([r, n]);
+      getConversationToolsUsed().record([r, name]);
     }
   } catch (error) {
     logError(error);
   }
 }
+//@ chunk-s61vbvea.js:377237-377427 placement
 /**
  * 记录助手消息中用到的服务端/MCP 工具（用于清理时保留）。
  */
-//@ chunk-s61vbvea.js:377237-377427 placement
 function recordServerToolsUsed(e) {
   try {
     if (!isSillyShoreGateOn()) return;
@@ -45,7 +48,10 @@ function recordServerToolsUsed(e) {
   }
 }
 //@ chunk-s61vbvea.js:377427-377486 placement
-function Uv(e) {
+/**
+ * 记录一个用过的工具名。
+ */
+function recordToolUsed(e) {
   try {
     if (isSillyShoreGateOn()) getConversationToolsUsed().record([e]);
   } catch (error) {
@@ -53,35 +59,59 @@ function Uv(e) {
   }
 }
 //@ chunk-s61vbvea.js:377486-377558 placement
-function XKo(e) {
+/**
+ * 记录经标签处理的工具输入（artifact 内容加不可信标记）。
+ */
+function recordToolUseTagged(e) {
   try {
-    if (isSillyShoreGateOn()) getConversationToolsUsed().record(tagUntrustedArtifactContent(e, void 0, !1));
+    if (isSillyShoreGateOn())
+      getConversationToolsUsed().record(tagUntrustedArtifactContent(e, undefined, false));
   } catch (error) {
     logError(error);
   }
 }
 //@ chunk-s61vbvea.js:377558-377568 placement
-var eL = 64;
+/**
+ * 从内部元数据恢复 tools_kept_by_clear 时最多恢复的工具数（64）。
+ */
+var MAX_RESTORED_TOOLS = 64;
+//@ chunk-s61vbvea.js:377568-377682 placement
 /**
  * 从内部元数据恢复 tools_kept_by_clear 记录。
  */
-//@ chunk-s61vbvea.js:377568-377682 placement
-function restoreToolsKeptByClear(e) {
-  let n = e?.internal?.tools_kept_by_clear;
-  if (Array.isArray(n)) getConversationToolsUsed().record(n.slice(0, eL).filter(uLn));
+function restoreToolsKeptByClear(restoredWorkerState) {
+  let toolsKeptByClear = restoredWorkerState?.internal?.tools_kept_by_clear;
+  if (Array.isArray(toolsKeptByClear))
+    getConversationToolsUsed().record(
+      toolsKeptByClear.slice(0, MAX_RESTORED_TOOLS).filter(isGmailAttachmentTool),
+    );
 }
 //@ chunk-s61vbvea.js:377682-377773 placement
-function nL() {
-  let filtered = getConversationToolsUsed().names().filter(uLn);
-  return { tools_kept_by_clear: filtered.length > 0 ? filtered : null };
+/**
+ * 生成要写回内部元数据的 tools_kept_by_clear 字段。
+ */
+function toolsKeptMetadata() {
+  let filtered = getConversationToolsUsed().names().filter(isGmailAttachmentTool);
+  return {
+    tools_kept_by_clear: filtered.length > 0 ? filtered : null,
+  };
 }
 //@ chunk-s61vbvea.js:377773-377847 placement
-function N7s(e) {
+/**
+ * 把当前保留工具列表写回会话内部元数据（出错静默）。
+ */
+function notifyToolsKept(sessionState) {
   try {
-    e?.notifyInternalMetadataChanged(nL());
+    sessionState?.notifyInternalMetadataChanged(toolsKeptMetadata());
   } catch (error) {
     logError(error);
   }
 }
-
-export { XKo, Uv, restoreToolsKeptByClear, N7s, recordServerToolsUsed, D7s };
+export {
+  recordToolUseTagged,
+  recordToolUsed,
+  restoreToolsKeptByClear,
+  notifyToolsKept,
+  recordServerToolsUsed,
+  recordToolUsePair,
+};

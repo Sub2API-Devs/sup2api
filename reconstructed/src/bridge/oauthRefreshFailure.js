@@ -16,14 +16,14 @@ import {
   getOAuthAccountOnHold,
 } from "../utils/auth.js";
 
+//@ chunk-znt1ceq9.js:275-400 placement
 /**
  * 分类失败的 OAuth 刷新。
  */
-//@ chunk-znt1ceq9.js:275-400 placement
 function classifyFailedOAuthRefresh() {
   try {
     if (
-      getBridgeTokenOverride() === void 0 &&
+      getBridgeTokenOverride() === undefined &&
       getClaudeAIOAuthTokenOrigin() === "store" &&
       hasStoredOAuthRefreshToken() &&
       !isOAuthRefreshKnownDead() &&
@@ -33,5 +33,4 @@ function classifyFailedOAuthRefresh() {
   } catch {}
   return "rejected";
 }
-
 export { classifyFailedOAuthRefresh };

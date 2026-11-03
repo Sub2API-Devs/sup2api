@@ -14,7 +14,7 @@ import { HostScoped } from "../hostScoped.js";
 import { getRootSession } from "../../bootstrap/state.js";
 
 //@ chunk-yf5m6p65.js:333-517 placement
-var freeze = Object.freeze({
+var hpr = Object.freeze({
   open: Object.freeze([]),
   unplaced: Object.freeze([]),
   asked: Object.freeze([]),
@@ -24,18 +24,26 @@ var freeze = Object.freeze({
   placements: 0,
   closing: Object.freeze([]),
 });
+//@ chunk-yf5m6p65.js:517-812 placement
 /**
  * 创建插件状态存储（值、读者、挂载、折叠等）。
  */
-//@ chunk-yf5m6p65.js:517-812 placement
 var createPluginStateStore = () => ({
   values: createStore(new Map()),
   readers: new Map(),
   readersOf: new Map(),
   mounted: new Map(),
   folds: {
-    steady: { stale: new Set(), lastAt: Number.NEGATIVE_INFINITY, pending: void 0 },
-    live: { stale: new Set(), lastAt: Number.NEGATIVE_INFINITY, pending: void 0 },
+    steady: {
+      stale: new Set(),
+      lastAt: Number.NEGATIVE_INFINITY,
+      pending: undefined,
+    },
+    live: {
+      stale: new Set(),
+      lastAt: Number.NEGATIVE_INFINITY,
+      pending: undefined,
+    },
   },
   staleListeners: new Set(),
   faultRuns: new Map(),
@@ -43,67 +51,73 @@ var createPluginStateStore = () => ({
   versionFloor: 0,
 });
 //@ chunk-yf5m6p65.js:812-859 placement
-var Ios = () => ({ pending: void 0, pausedAt: void 0 });
+/**
+ * emptyPluginLoadState：插件加载状态初值。
+ */
+var emptyPluginLoadState = () => ({
+  pending: undefined,
+  pausedAt: undefined,
+});
+//@ chunk-yf5m6p65.js:859-3981 placement
 /**
  * 创建插件加载状态（加载、缓存、注册表等）。
  */
-//@ chunk-yf5m6p65.js:859-3981 placement
 function createPluginLoadState() {
   return {
-    pluginLoad: void 0,
-    pluginLoadArm: void 0,
-    pluginLoadCacheOnly: void 0,
-    pluginLoadCacheOnlyArm: void 0,
+    pluginLoad: undefined,
+    pluginLoadArm: undefined,
+    pluginLoadCacheOnly: undefined,
+    pluginLoadCacheOnlyArm: undefined,
     pluginLoadsRunning: 0,
     pluginLoadMarks: new WeakMap(),
-    commands: void 0,
-    skills: void 0,
-    skillsV5: void 0,
-    agents: void 0,
-    handedIn: void 0,
-    outputStyles: void 0,
-    workflows: void 0,
-    hookRegistration: void 0,
+    commands: undefined,
+    skills: undefined,
+    skillsV5: undefined,
+    agents: undefined,
+    handedIn: undefined,
+    outputStyles: undefined,
+    workflows: undefined,
+    hookRegistration: undefined,
     organizationAsk: {
-      isHeld: !1,
-      isWaited: !1,
-      isTold: !1,
-      startHooksWait: void 0,
-      isBoundSpent: !1,
-      hasHeld: !1,
-      isCommandHeld: !1,
+      isHeld: false,
+      isWaited: false,
+      isTold: false,
+      startHooksWait: undefined,
+      isBoundSpent: false,
+      hasHeld: false,
+      isCommandHeld: false,
       heldReresolve: null,
-      isMarketplaceHeld: !1,
+      isMarketplaceHeld: false,
       asking: null,
       answerWait: null,
     },
     admissionText: null,
-    isJudgedAgainTold: !1,
-    hookModulesAwaitTrust: !1,
-    hookRegistrationInFlight: void 0,
+    isJudgedAgainTold: false,
+    hookModulesAwaitTrust: false,
+    hookRegistrationInFlight: undefined,
     hookRegistrationsInFlight: new Set(),
-    hooksLoadAtStartup: void 0,
-    hookRegistrationOwed: !1,
-    hooksUnknownCause: void 0,
-    hookRegistrationRanBlind: !1,
+    hooksLoadAtStartup: undefined,
+    hookRegistrationOwed: false,
+    hooksUnknownCause: undefined,
+    hookRegistrationRanBlind: false,
     pluginsWithHooks: new Set(),
     folderReadAt: new Map(),
     hookRegistrationEpoch: 0,
     hookSwapEpoch: 0,
-    hooksModulesSwitchRead: void 0,
-    hooksModulesSwitchFollowing: void 0,
-    hooksModulesSwitchRereading: void 0,
+    hooksModulesSwitchRead: undefined,
+    hooksModulesSwitchFollowing: undefined,
+    hooksModulesSwitchRereading: undefined,
     hooksModulesWakeBound: "ahead",
-    organizationsStatusLoad: void 0,
+    organizationsStatusLoad: undefined,
     unlatchedAbsentManagedIds: new Set(),
     hooksLeftOutByName: [],
     hooksLeftOutByNameChanged: createSignal(),
     hookRegistrationEnded: createSignal(),
-    hookRegistrationArgs: void 0,
-    hookHotReloadUnsubscribe: void 0,
-    hooksModulesSwitchUnwatch: void 0,
-    hookHotReloadSettingsSnapshot: void 0,
-    hookHotReloadTierSnapshot: void 0,
+    hookRegistrationArgs: undefined,
+    hookHotReloadUnsubscribe: undefined,
+    hooksModulesSwitchUnwatch: undefined,
+    hookHotReloadSettingsSnapshot: undefined,
+    hookHotReloadTierSnapshot: undefined,
     hooksRespawns: new Set(),
     appendsInFlight: new Set(),
     loadedModules: [],
@@ -116,17 +130,17 @@ function createPluginLoadState() {
     unnamedSteered: new Set(),
     registeredAgents: new Map(),
     renderVersions: createStore(new Map()),
-    panes: createStore(freeze),
+    panes: createStore(hpr),
     placed: createSignal(),
     pluginState: createPluginStateStore(),
-    toastClock: Ios(),
+    toastClock: emptyPluginLoadState(),
     hoverGroups: createStore(new Map()),
     scrollSites: new Map(),
     focusSites: new Map(),
     focusSiteDraws: createSignal(),
     mountedRasters: new Map(),
     mountedImages: new Map(),
-    rasterAdmission: void 0,
+    rasterAdmission: undefined,
     uiLogSink: null,
     pendingUiLog: [],
     armedMonitorKeys: new Set(),
@@ -134,13 +148,13 @@ function createPluginLoadState() {
     marketplaces: new Map(),
     marketplaceRefreshesInFlight: new Map(),
     marketplaceHelperMemo: new Map(),
-    addDirMarketplacesMemo: void 0,
-    headlessInstallPass: void 0,
-    installedPluginsMigrated: !1,
+    addDirMarketplacesMemo: undefined,
+    headlessInstallPass: undefined,
+    installedPluginsMigrated: false,
     installedPluginsFile: null,
     installedPluginsEpoch: 0,
-    recordSpellingsCounted: !1,
-    recordSpellingFallbackReported: !1,
+    recordSpellingsCounted: false,
+    recordSpellingFallbackReported: false,
     installedPluginsSnapshot: null,
     optionValues: new Map(),
     flaggedPlugins: null,
@@ -155,88 +169,103 @@ function createPluginLoadState() {
     commandProducerDirsDenied: new Set(),
     commandProducerDirsScannedAt: 0,
     commandProducerDirsComparable: null,
-    commandProducerDirsNeedCanonicalCandidate: !1,
-    commandProducerDirsWslProviderUndeterminable: !1,
+    commandProducerDirsNeedCanonicalCandidate: false,
+    commandProducerDirsWslProviderUndeterminable: false,
     commandProducerDirsChanged: createSignal(),
-    denyJoinedPluginRoot: void 0,
-    sandboxBringUp: void 0,
-    inUseMarkerCleanup: void 0,
+    denyJoinedPluginRoot: undefined,
+    sandboxBringUp: undefined,
+    inUseMarkerCleanup: undefined,
     vouchedManagedPluginIds: new Set(),
     hintedPluginIds: new Set(),
     seenHintPluginIds: new Set(),
-    gitAvailable: void 0,
-    operatorDeclaredMemo: void 0,
+    gitAvailable: undefined,
+    operatorDeclaredMemo: undefined,
     marketplaceResolutionNoticesLogged: new Set(),
     marketplaceAdmissionVerdicts: new Map(),
-    hiddenRegistryEntries: { raw: new Map(), v5: new Map() },
-    releasedRegistryEntries: { raw: new Set(), v5: new Set() },
-    cacheRootComparableMemo: void 0,
+    hiddenRegistryEntries: {
+      raw: new Map(),
+      v5: new Map(),
+    },
+    releasedRegistryEntries: {
+      raw: new Set(),
+      v5: new Set(),
+    },
+    cacheRootComparableMemo: undefined,
     provenLocalRoots: new Map(),
-    wslProviderOfPluginsRootMemo: void 0,
-    inlinePluginRootsComparableMemo: void 0,
+    wslProviderOfPluginsRootMemo: undefined,
+    inlinePluginRootsComparableMemo: undefined,
   };
 }
 //@ chunk-yf5m6p65.js:3981-4002 placement
-class n {
+class PluginRegistryHolder {
   registry = createPluginLoadState();
 }
 //@ chunk-yf5m6p65.js:4002-4025 placement
-var a = new HostScoped(() => new n());
+var pluginRegistryHolder = new HostScoped(() => new PluginRegistryHolder());
 //@ chunk-yf5m6p65.js:4025-4060 placement
-function r() {
-  return a.of(getRootSession().host);
+function pluginRegistryHost() {
+  return pluginRegistryHolder.of(getRootSession().host);
 }
+//@ chunk-yf5m6p65.js:4060-4094 placement
 /**
  * 取插件注册表。
  */
-//@ chunk-yf5m6p65.js:4060-4094 placement
 function getPluginRegistry() {
-  return r().registry;
+  return pluginRegistryHost().registry;
 }
 //@ chunk-yf5m6p65.js:4094-4146 placement
-function zSi(e) {
-  return getPluginRegistry().registeredAgents.has(e);
+/**
+ * isRegisteredAgent：代理是否已登记。
+ */
+function isRegisteredAgent(agentType) {
+  return getPluginRegistry().registeredAgents.has(agentType);
 }
 //@ chunk-yf5m6p65.js:4146-4193 placement
-function ypr() {
+/**
+ * isPluginLoadCacheOnly：插件仅从缓存加载。
+ */
+function isPluginLoadCacheOnly() {
   return getPluginRegistry().pluginLoadCacheOnly;
 }
+//@ chunk-yf5m6p65.js:4193-4229 placement
 /**
  * 清除插件命令缓存。
  */
-//@ chunk-yf5m6p65.js:4193-4229 placement
 function clearPluginCommands() {
-  getPluginRegistry().commands = void 0;
+  getPluginRegistry().commands = undefined;
 }
 //@ chunk-yf5m6p65.js:4229-4289 placement
-function oto() {
-  let e = getPluginRegistry();
-  ((e.skills = void 0), (e.skillsV5 = void 0));
+/**
+ * clearPluginSkillsCache：清除插件技能缓存。
+ */
+function clearPluginSkillsCache() {
+  let pluginRegistry = getPluginRegistry();
+  pluginRegistry.skills = undefined;
+  pluginRegistry.skillsV5 = undefined;
 }
+//@ chunk-yf5m6p65.js:4289-4323 placement
 /**
  * 清除插件代理缓存。
  */
-//@ chunk-yf5m6p65.js:4289-4323 placement
 function clearPluginAgents() {
-  getPluginRegistry().agents = void 0;
+  getPluginRegistry().agents = undefined;
 }
+//@ chunk-yf5m6p65.js:4363-4400 placement
 /**
  * 清除插件工作流缓存。
  */
-//@ chunk-yf5m6p65.js:4363-4400 placement
 function clearPluginWorkflows() {
-  getPluginRegistry().workflows = void 0;
+  getPluginRegistry().workflows = undefined;
 }
-
 export {
   getPluginRegistry,
   clearPluginAgents,
-  Ios,
-  ypr,
-  zSi,
+  emptyPluginLoadState,
+  isPluginLoadCacheOnly,
+  isRegisteredAgent,
   clearPluginCommands,
-  oto,
+  clearPluginSkillsCache,
   clearPluginWorkflows,
   createPluginStateStore,
-  freeze,
+  hpr,
 };

@@ -9,35 +9,34 @@
  * attribution: callgraph-fingerprint 1
  */
 import { getCommandArgv } from "../../utils/bash/commands.js";
-import { HKt } from "./sedValidation.js";
+import { MULTIPLE_INPLACE_MARKER } from "./sedValidation.js";
 
+//@ chunk-e6aww6q8.js:1059048-1059563 callgraph-fingerprint = parseSedEditCommand (0.304)
 /**
  * 从 sed -i 命令中取出编辑表达式（-e/--expression 或第一个非选项参数）；没有 -i 返回 null，多个 -i 返回 __SED_MULTIPLE_I_FLAGS__。
  */
-//@ chunk-e6aww6q8.js:1059048-1059563 callgraph-fingerprint = parseSedEditCommand (0.304)
 function getSedInPlaceExpression(command) {
-  let n = getCommandArgv(command);
-  if (n[0] !== "sed") return null;
-  let withoutSed = n.slice(1),
-    args = [];
-  for (let S = 0; S < withoutSed.length; S++) {
-    let w = withoutSed[S];
-    if (w === "-i" || /^-[Er]+i$/.test(w)) args.push(S);
+  let commandArgv = getCommandArgv(command);
+  if (commandArgv[0] !== "sed") return null;
+  let withoutSed = commandArgv.slice(1);
+  let args = [];
+  for (let idx = 0; idx < withoutSed.length; idx++) {
+    let w = withoutSed[idx];
+    if (w === "-i" || /^-[Er]+i$/.test(w)) args.push(idx);
   }
   if (args.length === 0) return null;
-  if (args.length > 1) return HKt;
-  let h = args[0],
-    y = withoutSed[h + 1];
-  if (y === void 0) return null;
+  if (args.length > 1) return MULTIPLE_INPLACE_MARKER;
+  let h = args[0];
+  let y = withoutSed[h + 1];
+  if (y === undefined) return null;
   if (y === "" || y.startsWith(".") || y.startsWith("-")) return null;
-  for (let S = h + 2; S < withoutSed.length; S++) {
-    let w = withoutSed[S];
-    if (w === "-e" || w === "--expression") return withoutSed[S + 1] ?? null;
+  for (let idx = h + 2; idx < withoutSed.length; idx++) {
+    let w = withoutSed[idx];
+    if (w === "-e" || w === "--expression") return withoutSed[idx + 1] ?? null;
     if (w.startsWith("--expression=")) return w.slice(13);
     if (w.startsWith("-")) continue;
     return w;
   }
   return null;
 }
-
 export { getSedInPlaceExpression };

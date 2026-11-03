@@ -8,34 +8,54 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:274621-275687 cjs-fingerprint
-var Hr = x(function (ZE, qr) {
-  function _p(e) {
-    let t = {
-        className: "variable",
-        variants: [
-          { begin: "\\$\\(" + e.UNDERSCORE_IDENT_RE + "\\)", contains: [e.BACKSLASH_ESCAPE] },
-          { begin: /\$[@%<?\^\+\*]/ },
-        ],
-      },
-      n = { className: "string", begin: /"/, end: /"/, contains: [e.BACKSLASH_ESCAPE, t] },
-      a = {
-        className: "variable",
-        begin: /\$\([\w-]+\s/,
-        end: /\)/,
-        keywords: {
-          built_in:
-            "subst patsubst strip findstring filter filter-out sort word wordlist firstword lastword dir notdir suffix basename addsuffix addprefix join wildcard realpath abspath error warning shell origin flavor foreach if or and call eval file value",
+var require_makefile = x(function (cjsExports, cjsModule) {
+  function makefile(hljs) {
+    let VARIABLE = {
+      className: "variable",
+      variants: [
+        {
+          begin: "\\$\\(" + hljs.UNDERSCORE_IDENT_RE + "\\)",
+          contains: [hljs.BACKSLASH_ESCAPE],
         },
-        contains: [t, n],
+        {
+          begin: /\$[@%<?\^\+\*]/,
+        },
+      ],
+    };
+    let QUOTE_STRING = {
+      className: "string",
+      begin: /"/,
+      end: /"/,
+      contains: [hljs.BACKSLASH_ESCAPE, VARIABLE],
+    };
+    let FUNC = {
+      className: "variable",
+      begin: /\$\([\w-]+\s/,
+      end: /\)/,
+      keywords: {
+        built_in:
+          "subst patsubst strip findstring filter filter-out sort word wordlist firstword lastword dir notdir suffix basename addsuffix addprefix join wildcard realpath abspath error warning shell origin flavor foreach if or and call eval file value",
       },
-      s = { begin: "^" + e.UNDERSCORE_IDENT_RE + "\\s*(?=[:+?]?=)" },
-      o = {
-        className: "meta",
-        begin: /^\.PHONY:/,
-        end: /$/,
-        keywords: { $pattern: /[\.\w]+/, keyword: ".PHONY" },
+      contains: [VARIABLE, QUOTE_STRING],
+    };
+    let ASSIGNMENT = {
+      begin: "^" + hljs.UNDERSCORE_IDENT_RE + "\\s*(?=[:+?]?=)",
+    };
+    let META = {
+      className: "meta",
+      begin: /^\.PHONY:/,
+      end: /$/,
+      keywords: {
+        $pattern: /[\.\w]+/,
+        keyword: ".PHONY",
       },
-      r = { className: "section", begin: /^[^\s]+:/, end: /$/, contains: [t] };
+    };
+    let TARGET = {
+      className: "section",
+      begin: /^[^\s]+:/,
+      end: /$/,
+      contains: [VARIABLE],
+    };
     return {
       name: "Makefile",
       aliases: ["mk", "mak", "make"],
@@ -44,10 +64,9 @@ var Hr = x(function (ZE, qr) {
         keyword:
           "define endef undefine ifdef ifndef ifeq ifneq else endif include -include sinclude override export unexport private vpath",
       },
-      contains: [e.HASH_COMMENT_MODE, t, n, a, s, o, r],
+      contains: [hljs.HASH_COMMENT_MODE, VARIABLE, QUOTE_STRING, FUNC, ASSIGNMENT, META, TARGET],
     };
   }
-  qr.exports = _p;
+  cjsModule.exports = makefile;
 });
-
-export { Hr };
+export { require_makefile };

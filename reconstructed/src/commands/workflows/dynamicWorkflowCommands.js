@@ -9,26 +9,26 @@
  * attribution: placement 3
  */
 import { isWorkflowsDisabled, isWorkflowsAvailable } from "../../utils/workflows/workflowGates.js";
-import { PGe } from "../../services/workflow/loadWorkflows.js";
+import { allWorkflowsForHost } from "../../services/workflow/loadWorkflows.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
-import { RGe } from "../../skills/skillVisibility.js";
+import { isWorkflowAuthoringSkillVisible } from "../../skills/skillVisibility.js";
 import { WORKFLOW_AUTHORING } from "../../skills/bundled/bundledSkillNames.js";
 
 //@ chunk-qzez70vf.js:11972-12025 placement
-async function g(o, n) {
+async function refreshDynamicWorkflowsIfEnabled(o, n) {
   if (isWorkflowsDisabled()) return;
-  await PGe(o, n);
+  await allWorkflowsForHost(o, n);
 }
+//@ chunk-qzez70vf.js:12025-13135 placement
 /**
  * 动态生成的 prompt 命令对象（name=o.name）；描述：o.description。
  */
-//@ chunk-qzez70vf.js:12025-13135 placement
 function dynamicWorkflowToCommand(o) {
   return {
     type: "prompt",
     name: o.name,
     description: o.description,
-    hasUserSpecifiedDescription: !0,
+    hasUserSpecifiedDescription: true,
     whenToUse: o.whenToUse,
     progressMessage: "running dynamic workflow",
     contentLength: o.script.length,
@@ -38,7 +38,9 @@ function dynamicWorkflowToCommand(o) {
       pluginInfo: {
         pluginManifest: o.pluginManifest,
         repository: o.plugin,
-        ...(o.serverPluginId !== void 0 && { serverPluginId: o.serverPluginId }),
+        ...(o.serverPluginId !== undefined && {
+          serverPluginId: o.serverPluginId,
+        }),
       },
     }),
     kind: "workflow",
@@ -46,21 +48,21 @@ function dynamicWorkflowToCommand(o) {
       typeof o.disableModelInvocation === "function" ? o.disableModelInvocation() : o.disableModelInvocation,
     async getPromptForCommand(args, context) {
       let s = o.phases
-          ? `
+        ? `
 
 Phases:
 ` +
-            o.phases.map((phase) => `- ${phase.title}${phase.detail ? `: ${phase.detail}` : ""}`).join(`
+          o.phases.map((phase) => `- ${phase.title}${phase.detail ? `: ${phase.detail}` : ""}`).join(`
 `)
-          : "",
-        trimmed = args.trim(),
-        i = jsonStringify(o.name),
-        a = trimmed ? `{ name: ${i}, args: ${jsonStringify(trimmed)} }` : `{ name: ${i} }`,
-        l = RGe(context?.options?.tools)
-          ? `
+        : "";
+      let trimmed = args.trim();
+      let i = jsonStringify(o.name);
+      let a = trimmed ? `{ name: ${i}, args: ${jsonStringify(trimmed)} }` : `{ name: ${i} }`;
+      let l = isWorkflowAuthoringSkillVisible(context?.options?.tools)
+        ? `
 
 If the user asks you to modify this workflow or write a new script, load the \`${WORKFLOW_AUTHORING}\` skill first.`
-          : "";
+        : "";
       return [
         {
           type: "text",
@@ -81,7 +83,7 @@ Invoke: Workflow(${a})${l}`,
   };
 }
 //@ chunk-qzez70vf.js:13135-13205 placement
-async function d(o, n) {
+async function listDynamicWorkflowCommands(o, n) {
   if (!isWorkflowsAvailable()) return [];
-  return (await PGe(o, n)).map(dynamicWorkflowToCommand);
+  return (await allWorkflowsForHost(o, n)).map(dynamicWorkflowToCommand);
 }

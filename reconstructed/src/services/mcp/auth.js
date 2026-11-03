@@ -5,55 +5,59 @@
  *
  * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/mcp/auth.ts
- * pieces: chunk-1kaj6e83.js (43), chunk-4w0z5wdp.js (6), chunk-cyj440je.js (10), chunk-n1aavqzh.js (54), chunk-yqnmafqp.js (36)
- * attribution: sole-consumer 12, affinity 4, facade-exports 50, layout 42, fingerprint 10, placement 30, callgraph-fingerprint 1
+ * pieces: chunk-1kaj6e83.js (43), chunk-4w0z5wdp.js (6), chunk-cyj440je.js (10), chunk-n1aavqzh.js (56), chunk-yqnmafqp.js (36)
+ * attribution: sole-consumer 12, affinity 4, facade-exports 50, layout 42, fingerprint 10, placement 32, callgraph-fingerprint 1
  */
 import { randomUUID, randomBytes, createHash } from "crypto";
 import { createServer } from "http";
 import { parse } from "url";
 import { join } from "path";
 import {
+  discoverOAuthProtectedResourceMetadata,
+  discoverAuthorizationServerMetadata as discoverAuthorizationServerMetadata_2,
+  et,
+  IssuerMismatchError,
+  RegistrationRejectedError,
+  discoverOAuthServerInfo as discoverOAuthServerInfo_2,
+  UnauthorizedError as UnauthorizedError_2,
+  auth as auth_2,
+  extractWWWAuthenticateParams as extractWWWAuthenticateParams_2,
+  refreshAuthorization as refreshAuthorization_2,
+} from "../../../vendor/@modelcontextprotocol/client/dist/index.mjs";
+import {
   defaultXaaFetch_2,
+  normalizeUrl_2,
   JWT_BEARER_GRANT_2,
   redactTokens_2,
   makeXaaFetch_2,
-  normalizeUrl_2,
   XaaTokenExchangeError_2,
   performCrossAppAccess_2,
   XaaTokenExchangeError,
 } from "./xaa.js";
-import { Ny, basicAuthValue } from "./discoveryIdentity.js";
-import { redactUrlSecrets } from "../../utils/urlRedaction.js";
 import {
-  JwtBearerResponseSchema_2,
-  strip as strip_2,
-  OBt,
-  M_t,
-} from "../../../vendor/@modelcontextprotocol/core/dist/auth-CUe6YdwF.mjs";
-import { logMCPDebug } from "../../utils/log.js";
-import {
-  discoverProtectedResource,
-  discoverAuthorizationServer,
-} from "./_new/discoverAuthorizationServer.js";
-import {
-  TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
   isAbortError,
+  TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
   getErrnoCode,
   errorMessage,
 } from "../../utils/errors.js";
+import { redactUrlSecrets } from "../../utils/urlRedaction.js";
+import { getPresentedCredentialLog, basicAuthValue } from "./discoveryIdentity.js";
 import {
-  et_2,
-  D_t,
-  XNr,
-  QNr,
-  LBt,
-  UnauthorizedError,
-  DBt,
-  Mze,
-  dLo,
-} from "../../../vendor/@modelcontextprotocol/client/dist/index.mjs";
-import { LK, PU, extractConnectionErrorDetails } from "../api/errorUtils.js";
-import { Sue, OAuthError } from "../../../vendor/@modelcontextprotocol/client/dist/src-D_zzAWoS.mjs";
+  JwtBearerResponseSchema_2,
+  OAuthTokensSchema as OAuthTokensSchema_2,
+  OAuthErrorResponseSchema as OAuthErrorResponseSchema_2,
+  OAuthMetadataSchema as OAuthMetadataSchema_2,
+} from "../../../vendor/@modelcontextprotocol/core/dist/auth-CUe6YdwF.mjs";
+import { logMCPDebug } from "../../utils/log.js";
+import {
+  TRANSIENT_SOCKET_CODES,
+  UNREACHABLE_ERROR_CODES,
+  extractConnectionErrorDetails,
+} from "../api/errorUtils.js";
+import {
+  OAuthErrorCode,
+  OAuthError as OAuthError_2,
+} from "../../../vendor/@modelcontextprotocol/client/dist/src-D_zzAWoS.mjs";
 import {
   fromEnumOpt,
   lit,
@@ -67,28 +71,33 @@ import { jsonParse, jsonStringify } from "../../utils/slowOperations.js";
 import { sleep } from "../../utils/sleep.js";
 import { getProxyFetchOptions } from "../../utils/proxy.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../analytics/growthbook.js";
-import { ET, McpCredentialStoreUnavailableError } from "./client.js";
+import { loggingSafeOrigin, McpCredentialStoreUnavailableError } from "./client.js";
 import { isMcpServerLoggableInAnalytics } from "../analytics/metadata.js";
 import { logEvent } from "../analytics/index.js";
-import { gn } from "../../utils/shortHash.js";
-import { buildRedirectUri, findAvailablePort, Pdn } from "./oauthPort.js";
+import { shortHash } from "../../utils/shortHash.js";
+import { buildRedirectUri, findAvailablePort, firstOf } from "./oauthPort.js";
 import { env } from "../../utils/env.js";
 import { MCP_CLIENT_METADATA_URL } from "../../constants/oauth.js";
-import { ht, Zl } from "./cliOwnedClients.js";
+import { getCliOwnedState, isCliOwnedConfig } from "./cliOwnedClients.js";
 import { getSecureStorage } from "../../utils/secureStorage/index.js";
 import {
   xaaPinnedServer,
   authDiscoveryState,
   pinXaaAuth,
-  Adn,
+  isTokenRejected,
   withoutTokenlessRejection,
   mergeSignInAuth,
   recordSavedAccessToken,
   mergeDiscoveredAuth,
   tokenlessRejectedAt,
 } from "./signedOutFallback.js";
-import { G4n, wrapFetchWithHeaders, W4n, mcpServerTelemetry } from "./headersHelper.js";
-import { Dt } from "../../../vendor/axios/dist/esm/axios.js";
+import {
+  sameOriginRedirectGuard,
+  wrapFetchWithHeaders,
+  dynamicHeadersForRequest,
+  mcpServerTelemetry,
+} from "./headersHelper.js";
+import { axios_default } from "../../../vendor/axios/dist/esm/axios.js";
 import { logFeatureOk, logFeatureSad, logFeatureBad } from "../analytics/featureTelemetry.js";
 import { readSecureStorageForMcp } from "./credentialStoreRead.js";
 import { READ_FAILED } from "../../utils/secureStorage/storageWriteLock.js";
@@ -108,10 +117,10 @@ import {
   discoverOidc,
   clearIdpIdToken,
 } from "./xaaIdpLogin.js";
-import { ye } from "../../utils/startupMarks.js";
+import { sanitizeMarkName } from "../../utils/startupMarks.js";
 import { callbackPageBody } from "../oauth/callbackPage.js";
 import { getPlatform } from "../../utils/platform.js";
-import { isBrowserUnavailable, fi } from "../../utils/browser.js";
+import { isBrowserUnavailable, openValidatedUrlSucceeded } from "../../utils/browser.js";
 import { isDiskless } from "../../bootstrap/state.js";
 import {
   getProjectDirsUpToHome,
@@ -121,47 +130,129 @@ import { getFsImplementation } from "../../utils/fsOperations.js";
 import { lock } from "../../utils/lockfile.js";
 import { AUTH_LOST_SIGNAL } from "./connectionFlags.js";
 import {
-  TM,
-  J_t,
-  Jze,
-  scn,
-  icn,
+  OAuthError,
+  InvalidGrantError,
+  ServerError,
+  TemporarilyUnavailableError,
+  TooManyRequestsError,
 } from "../../../vendor/@modelcontextprotocol/sdk/dist/esm/server/auth/errors.js";
-import { strip, R$r, KYn } from "../../../vendor/@modelcontextprotocol/sdk/dist/esm/shared/auth.js";
 import {
-  QLo,
-  s1t,
-  AM,
-  Aue,
-  NHe,
-  eHo,
+  OAuthTokensSchema,
+  OAuthErrorResponseSchema,
+  OAuthMetadataSchema,
+} from "../../../vendor/@modelcontextprotocol/sdk/dist/esm/shared/auth.js";
+import {
+  discoverOAuthServerInfo,
+  discoverAuthorizationServerMetadata,
+  UnauthorizedError,
+  auth,
+  extractWWWAuthenticateParams,
+  refreshAuthorization,
 } from "../../../vendor/@modelcontextprotocol/sdk/dist/esm/client/auth.js";
 import { isLoopbackOrigin_2, extractHost } from "../../utils/plugins/fetchTelemetry.js";
 import { uniq } from "../../utils/collections.js";
 import { DOCS_MCP_PATH } from "./firstPartyServerIds.js";
 import { isFirstPartyAnthropicHost, isFirstPartyProvider } from "../../utils/model/providers.js";
-import { uo } from "../api/deferredToolsState.js";
+import { normalizeServerNameShort } from "../api/deferredToolsState.js";
 import { claudeCommand } from "../../utils/worktreeResumeHint.js";
 import { isCcrInjectedMcpUrl } from "./ccrMcpUrls.js";
 
+//@ chunk-n1aavqzh.js:2890-3504 placement = discoverProtectedResource (0.828)
+/**
+ * discoverProtectedResource（v2 副本）。
+ */
+async function discoverProtectedResource(serverUrl, opts) {
+  let prm;
+  try {
+    prm = await discoverOAuthProtectedResourceMetadata(
+      serverUrl,
+      undefined,
+      opts?.fetchFn ?? defaultXaaFetch_2,
+    );
+  } catch (error) {
+    if (isAbortError(error)) throw error;
+    let s = error instanceof Error ? /^HTTP (\d{3}) /.exec(error.message)?.[1] : undefined;
+    throw Error(
+      `XAA: PRM discovery failed for ${redactUrlSecrets(serverUrl)} (${s ? `HTTP ${s}` : error instanceof Error ? error.name : typeof error})`,
+    );
+  }
+  if (!prm.resource || !prm.authorization_servers?.[0])
+    throw Error("XAA: PRM discovery failed: PRM missing resource or authorization_servers");
+  if (normalizeUrl_2(prm.resource) !== normalizeUrl_2(serverUrl))
+    throw Error(
+      `XAA: PRM discovery failed: PRM resource mismatch: expected ${redactUrlSecrets(serverUrl)}, got ${redactUrlSecrets(prm.resource)}`,
+    );
+  return {
+    resource: prm.resource,
+    authorization_servers: prm.authorization_servers,
+  };
+}
+//@ chunk-n1aavqzh.js:3504-4420 placement = discoverAuthorizationServer (0.794)
+/**
+ * discoverAuthorizationServer（v2 副本，元数据发现跳过 issuer 内建校验后自行比对）。
+ */
+async function discoverAuthorizationServer(asUrl, opts) {
+  let meta;
+  try {
+    meta = await discoverAuthorizationServerMetadata_2(asUrl, {
+      fetchFn: opts?.fetchFn ?? defaultXaaFetch_2,
+      skipIssuerValidation: true,
+    });
+  } catch (error) {
+    if (isAbortError(error)) throw error;
+    let s = error instanceof Error ? /^HTTP (\d{3}) /.exec(error.message)?.[1] : undefined;
+    throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
+      `XAA: AS metadata discovery failed (${s ? `HTTP ${s}` : error instanceof Error ? error.name : typeof error})`,
+      "XAA: AS metadata discovery failed",
+    );
+  }
+  if (!meta?.issuer || !meta.token_endpoint)
+    throw Error(`XAA: AS metadata discovery failed: no valid metadata at ${redactUrlSecrets(asUrl)}`);
+  if (normalizeUrl_2(meta.issuer) !== normalizeUrl_2(asUrl))
+    throw Error(
+      `XAA: AS metadata discovery failed: issuer mismatch: expected ${redactUrlSecrets(asUrl)}, got ${redactUrlSecrets(meta.issuer)}`,
+    );
+  if (!URL.canParse(meta.token_endpoint) || new URL(meta.token_endpoint).protocol !== "https:")
+    throw Error(`XAA: refusing non-HTTPS token endpoint: ${redactUrlSecrets(meta.token_endpoint)}`);
+  return {
+    issuer: meta.issuer,
+    token_endpoint: meta.token_endpoint,
+    grant_types_supported: meta.grant_types_supported,
+    token_endpoint_auth_methods_supported: meta.token_endpoint_auth_methods_supported,
+  };
+}
+//@ chunk-n1aavqzh.js:5535-6523 sole-consumer = exchangeJwtAuthGrant (0.989)
 /**
  * exchangeJwtAuthGrant（v2 副本）。
  */
-//@ chunk-n1aavqzh.js:5535-6523 sole-consumer = exchangeJwtAuthGrant (0.989)
 async function exchangeJwtAuthGrant(opts) {
-  let t = opts.fetchFn ?? defaultXaaFetch_2,
-    n = opts.authMethod ?? "client_secret_basic",
-    params = new URLSearchParams({ grant_type: JWT_BEARER_GRANT_2, assertion: opts.assertion });
+  let fetchFn = opts.fetchFn ?? defaultXaaFetch_2;
+  let authMethod = opts.authMethod ?? "client_secret_basic";
+  let params = new URLSearchParams({
+    grant_type: JWT_BEARER_GRANT_2,
+    assertion: opts.assertion,
+  });
   if (opts.scope) params.set("scope", opts.scope);
-  let headers = { "Content-Type": "application/x-www-form-urlencoded" };
-  if (n === "client_secret_basic") {
+  let headers = {
+    "Content-Type": "application/x-www-form-urlencoded",
+  };
+  if (authMethod === "client_secret_basic") {
     let basicAuth = Buffer.from(
       `${encodeURIComponent(opts.clientId)}:${encodeURIComponent(opts.clientSecret)}`,
     ).toString("base64");
-    ((headers.Authorization = `Basic ${basicAuth}`), Ny().record(basicAuth));
-  } else (params.set("client_id", opts.clientId), params.set("client_secret", opts.clientSecret));
-  (Ny().record(opts.clientSecret), Ny().record(opts.assertion));
-  let res = await t(opts.tokenEndpoint, { method: "POST", headers: headers, body: params });
+    headers.Authorization = `Basic ${basicAuth}`;
+    getPresentedCredentialLog().record(basicAuth);
+  } else {
+    params.set("client_id", opts.clientId);
+    params.set("client_secret", opts.clientSecret);
+  }
+  getPresentedCredentialLog().record(opts.clientSecret);
+  getPresentedCredentialLog().record(opts.assertion);
+  let res = await fetchFn(opts.tokenEndpoint, {
+    method: "POST",
+    headers,
+    body: params,
+  });
   if (!res.ok) {
     let body = redactTokens_2(await res.text()).slice(0, 200);
     throw Error(`XAA: jwt-bearer grant failed: HTTP ${res.status}: ${body}`);
@@ -179,103 +270,116 @@ async function exchangeJwtAuthGrant(opts) {
     throw Error(`XAA: jwt-bearer response did not match expected shape: ${redactTokens_2(rawTokens)}`);
   return tokensParsed.data;
 }
+//@ chunk-n1aavqzh.js:6523-8495 sole-consumer = performCrossAppAccess (0.894)
 /**
  * performCrossAppAccess（v2 副本）。
  */
-//@ chunk-n1aavqzh.js:6523-8495 sole-consumer = performCrossAppAccess (0.894)
 async function performCrossAppAccess(serverUrl, config, serverName = "xaa", abortSignal) {
   let fetchFn = makeXaaFetch_2(abortSignal);
   logMCPDebug(serverName, `XAA: discovering PRM for ${redactUrlSecrets(serverUrl)}`);
-  let prm = await discoverProtectedResource(serverUrl, { fetchFn: fetchFn });
+  let prm = await discoverProtectedResource(serverUrl, {
+    fetchFn,
+  });
   logMCPDebug(
     serverName,
     `XAA: discovered resource=${redactUrlSecrets(prm.resource)} ASes=[${prm.authorization_servers.map(redactUrlSecrets).join(", ")}]`,
   );
-  let pinnedAuthorizationServer = config.pinnedAuthorizationServer,
-    A =
-      pinnedAuthorizationServer === void 0
-        ? prm.authorization_servers
-        : prm.authorization_servers.filter(
-            (authorization_server) =>
-              normalizeUrl_2(authorization_server) === normalizeUrl_2(pinnedAuthorizationServer),
-          );
-  if (pinnedAuthorizationServer !== void 0 && A.length === 0)
+  let pinnedAuthorizationServer = config.pinnedAuthorizationServer;
+  let A =
+    pinnedAuthorizationServer === undefined
+      ? prm.authorization_servers
+      : prm.authorization_servers.filter(
+          (authorizationServer) =>
+            normalizeUrl_2(authorizationServer) === normalizeUrl_2(pinnedAuthorizationServer),
+        );
+  if (pinnedAuthorizationServer !== undefined && A.length === 0)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
       `XAA: authorization server changed: signed in with ${redactUrlSecrets(pinnedAuthorizationServer)}, server now names [${prm.authorization_servers.map(redactUrlSecrets).join(", ")}]. If this move is expected, run \`claude mcp remove\` for this server and add it again with its client secret.`,
       "XAA: authorization server changed",
     );
-  let l,
-    asErrors = [];
-  for (let F of A) {
-    let x;
+  let asMeta;
+  let asErrors = [];
+  for (let asUrl of A) {
+    let candidate;
     try {
-      x = await discoverAuthorizationServer(F, { fetchFn: fetchFn });
-    } catch (error) {
-      if (abortSignal?.aborted) throw error;
-      asErrors.push(`${redactUrlSecrets(F)}: ${error instanceof Error ? error.message : String(error)}`);
+      candidate = await discoverAuthorizationServer(asUrl, {
+        fetchFn,
+      });
+    } catch (e) {
+      if (abortSignal?.aborted) throw e;
+      asErrors.push(`${redactUrlSecrets(asUrl)}: ${e instanceof Error ? e.message : String(e)}`);
       continue;
     }
-    if (x.grant_types_supported && !x.grant_types_supported.includes(JWT_BEARER_GRANT_2)) {
+    if (candidate.grant_types_supported && !candidate.grant_types_supported.includes(JWT_BEARER_GRANT_2)) {
       asErrors.push(
-        `${redactUrlSecrets(F)}: does not advertise jwt-bearer grant (supported: ${x.grant_types_supported.join(", ")})`,
+        `${redactUrlSecrets(asUrl)}: does not advertise jwt-bearer grant (supported: ${candidate.grant_types_supported.join(", ")})`,
       );
       continue;
     }
-    l = x;
+    asMeta = candidate;
     break;
   }
-  if (!l)
+  if (!asMeta)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
       `XAA: no authorization server supports jwt-bearer. Tried: ${asErrors.join("; ")}`,
       `XAA: no authorization server supports jwt-bearer (tried ${A.length})`,
     );
-  let authMethods = l.token_endpoint_auth_methods_supported,
-    R =
-      authMethods &&
-      !authMethods.includes("client_secret_basic") &&
-      authMethods.includes("client_secret_post")
-        ? "client_secret_post"
-        : "client_secret_basic";
-  (logMCPDebug(
+  let authMethods = asMeta.token_endpoint_auth_methods_supported;
+  let authMethod =
+    authMethods && !authMethods.includes("client_secret_basic") && authMethods.includes("client_secret_post")
+      ? "client_secret_post"
+      : "client_secret_basic";
+  logMCPDebug(
     serverName,
-    `XAA: AS issuer=${redactUrlSecrets(l.issuer)} token_endpoint=${redactUrlSecrets(l.token_endpoint)} auth_method=${R}`,
-  ),
-    logMCPDebug(serverName, "XAA: exchanging id_token for ID-JAG at IdP"));
-  let jag = await et_2({
+    `XAA: AS issuer=${redactUrlSecrets(asMeta.issuer)} token_endpoint=${redactUrlSecrets(asMeta.token_endpoint)} auth_method=${authMethod}`,
+  );
+  logMCPDebug(serverName, "XAA: exchanging id_token for ID-JAG at IdP");
+  let jag = await et({
     tokenEndpoint: config.idpTokenEndpoint,
-    audience: l.issuer,
+    audience: asMeta.issuer,
     resource: prm.resource,
     idToken: config.idpIdToken,
     clientId: config.idpClientId,
     clientSecret: config.idpClientSecret,
-    fetchFn: fetchFn,
+    fetchFn,
   });
-  (logMCPDebug(serverName, "XAA: ID-JAG obtained"),
-    logMCPDebug(serverName, "XAA: exchanging ID-JAG for access_token at AS"));
+  logMCPDebug(serverName, "XAA: ID-JAG obtained");
+  logMCPDebug(serverName, "XAA: exchanging ID-JAG for access_token at AS");
   let tokens = await exchangeJwtAuthGrant({
-    tokenEndpoint: l.token_endpoint,
+    tokenEndpoint: asMeta.token_endpoint,
     assertion: jag.jwtAuthGrant,
     clientId: config.clientId,
     clientSecret: config.clientSecret,
-    authMethod: R,
-    fetchFn: fetchFn,
+    authMethod,
+    fetchFn,
   });
-  return (
-    logMCPDebug(serverName, "XAA: access_token obtained"),
-    { ...tokens, authorizationServerUrl: l.issuer }
-  );
+  logMCPDebug(serverName, "XAA: access_token obtained");
+  return {
+    ...tokens,
+    authorizationServerUrl: asMeta.issuer,
+  };
 }
 //@ chunk-n1aavqzh.js:8495-8563 sole-consumer
-var at = 30000,
-  ct = 500,
-  Ie = 600000,
-  dt = new Set([...LK, ...PU, "ETIMEDOUT"]);
+/**
+ * 认证重试前的等待。
+ */
+var AUTH_REQUEST_TIMEOUT_MS = 30000;
+var AUTH_RETRY_DELAY_MS = 500;
+var AUTH_FLOW_DISCOVERY_TTL_MS = 600000;
+var RETRYABLE_CONNECTION_ERRORS = new Set([
+  ...TRANSIENT_SOCKET_CODES,
+  ...UNREACHABLE_ERROR_CODES,
+  "ETIMEDOUT",
+]);
 //@ chunk-n1aavqzh.js:8563-8696 sole-consumer
-function ut(e) {
-  if (isAbortError(e)) return !0;
-  if (e instanceof Error && e.name === "TimeoutError") return !0;
-  let t = extractConnectionErrorDetails(e);
-  return t !== null && dt.has(t.code);
+/**
+ * 判断错误是否可重试（中止、超时或连接错误）。
+ */
+function isRetryableAuthError(error) {
+  if (isAbortError(error)) return true;
+  if (error instanceof Error && error.name === "TimeoutError") return true;
+  let connectionErrorDetails = extractConnectionErrorDetails(error);
+  return connectionErrorDetails !== null && RETRYABLE_CONNECTION_ERRORS.has(connectionErrorDetails.code);
 }
 //@ chunk-n1aavqzh.js:8696-8797 sole-consumer
 function isZodError_2(e) {
@@ -283,50 +387,54 @@ function isZodError_2(e) {
   return (t?.name === "ZodError" || t?.name === "$ZodError") && Array.isArray(t?.issues);
 }
 //@ chunk-n1aavqzh.js:8797-8922 affinity
-var DEVICE_FLOW_PENDING_ERRORS = new Set(Object.values(Sue)),
-  ft = ["authorization_pending", "expired_token", "slow_down"],
-  pt = [...Object.values(Sue), ...ft];
+/**
+ * 已知 OAuth 错误码全集（设备流 + 重试类）。
+ */
+var DEVICE_FLOW_PENDING_ERRORS = new Set(Object.values(OAuthErrorCode));
+var DEVICE_FLOW_RETRY_ERRORS = ["authorization_pending", "expired_token", "slow_down"];
+var KNOWN_OAUTH_ERROR_CODES = [...Object.values(OAuthErrorCode), ...DEVICE_FLOW_RETRY_ERRORS];
+//@ chunk-n1aavqzh.js:8922-8989 facade-exports
 /**
  * 把 OAuth 错误码收敛成遥测白名单值：命中已知错误码表则原样（标为可上报）返回，否则记为 `other`，避免把服务器自定义字符串送进遥测。（v2）
  */
-//@ chunk-n1aavqzh.js:8922-8989 facade-exports
 function sanitizeOAuthErrorCodeForAnalytics_2(e) {
-  let found = pt.find((n) => n === e);
+  let found = KNOWN_OAUTH_ERROR_CODES.find((n) => n === e);
   return fromEnumOpt(found) ?? lit("other");
 }
+//@ chunk-n1aavqzh.js:8989-9816 facade-exports
 /**
  * describeIssuerEchoError：把 issuer 回显错误归类为 issuer_echo_denied/mismatch 等原因码。
  */
-//@ chunk-n1aavqzh.js:8989-9816 facade-exports
-function classifySdkAuthFailure_2(e, t) {
+function classifySdkAuthFailure_2(msg, cause) {
   let n =
-    t instanceof Error
-      ? `${e}
-${t.message}`
-      : e;
-  if (t instanceof IssuerEchoCrossOriginError) return "issuer_echo_denied";
-  if (t instanceof D_t) return t.kind === "metadata" ? "issuer_echo_mismatch" : "issuer_response_mismatch";
-  if (t instanceof XNr) return "dcr_rejected";
+    cause instanceof Error
+      ? `${msg}
+${cause.message}`
+      : msg;
+  if (cause instanceof IssuerEchoCrossOriginError) return "issuer_echo_denied";
+  if (cause instanceof IssuerMismatchError)
+    return cause.kind === "metadata" ? "issuer_echo_mismatch" : "issuer_response_mismatch";
+  if (cause instanceof RegistrationRejectedError) return "dcr_rejected";
   if (
     n.includes("dynamic client registration") ||
-    (t instanceof OAuthError && t.code === "invalid_client_metadata")
+    (cause instanceof OAuthError_2 && cause.code === "invalid_client_metadata")
   )
     return "dcr_failed";
   if ((n.includes("trying to load") && n.includes("metadata")) || n.includes("Incompatible auth server"))
     return "discovery_failed";
-  if (t instanceof OAuthError) return "dcr_rejected";
+  if (cause instanceof OAuthError_2) return "dcr_rejected";
   if (n.includes("Issuer mismatch in authorization server metadata")) return "issuer_echo_mismatch";
   if (n.includes("Issuer mismatch in authorization response")) return "issuer_response_mismatch";
-  let r = getErrnoCode(t) ?? getErrnoCode(t instanceof Error ? t.cause : void 0);
+  let r = getErrnoCode(cause) ?? getErrnoCode(cause instanceof Error ? cause.cause : undefined);
   if (r && UNREACHABLE_ERRNOS.has(r)) return "network_failed";
   return "sdk_auth_failed";
 }
 //@ chunk-n1aavqzh.js:9816-9825 layout
 var MAX_METADATA_REDIRECTS_2 = 5;
+//@ chunk-n1aavqzh.js:9825-9879 facade-exports
 /**
  * 生成用于调试日志的授权 URL：origin+path 经 URL 脱敏（用户名/密码/查询值替换为 REDACTED）后，再拼上只保留参数名的查询摘要。（v2）
  */
-//@ chunk-n1aavqzh.js:9825-9879 facade-exports
 function authorizationUrlForDebugLog_2(e) {
   return redactUrlSecrets(e.origin + e.pathname) + redactUrlSearchParams(e);
 }
@@ -336,21 +444,21 @@ var NONSTANDARD_INVALID_GRANT_ALIASES_2 = new Set([
   "expired_refresh_token",
   "token_expired",
 ]);
+//@ chunk-n1aavqzh.js:9961-10425 facade-exports = normalizeOAuthErrorBody (1)
 /**
  * normalizeOAuthErrorBody（v2 副本）：把非标准 OAuth 错误体（如 invalid_refresh_token 等别名）规范化为标准 invalid_grant，便于 SDK 正确处理刷新失败。
  */
-//@ chunk-n1aavqzh.js:9961-10425 facade-exports = normalizeOAuthErrorBody (1)
 async function normalizeOAuthErrorBody_2(response) {
   if (!response.ok) return response;
-  let text = await response.text(),
-    parsed;
+  let text = await response.text();
+  let parsed;
   try {
     parsed = jsonParse(text);
   } catch {
     return new Response(text, response);
   }
-  if (strip_2.safeParse(parsed).success) return new Response(text, response);
-  let result = OBt.safeParse(parsed);
+  if (OAuthTokensSchema_2.safeParse(parsed).success) return new Response(text, response);
+  let result = OAuthErrorResponseSchema_2.safeParse(parsed);
   if (!result.success) return new Response(text, response);
   let normalized = NONSTANDARD_INVALID_GRANT_ALIASES_2.has(result.data.error)
     ? {
@@ -365,66 +473,80 @@ async function normalizeOAuthErrorBody_2(response) {
     headers: response.headers,
   });
 }
+//@ chunk-n1aavqzh.js:10425-10585 facade-exports
 /**
  * throwIfAborted：返回一个在信号已中止时抛出的检查函数（OAuth 请求用）。
  */
-//@ chunk-n1aavqzh.js:10425-10585 facade-exports
 function createAuthFetch_2() {
-  return async (e, t) => {
+  return async (url, init) => {
     try {
-      return await createAuthFetch_4(e, t);
+      return await createAuthFetch_4(url, init);
     } catch (error) {
-      if (t?.signal?.aborted || !ut(error)) throw error;
-      return (await sleep(ct, t?.signal ?? void 0), await createAuthFetch_4(e, t));
+      if (init?.signal?.aborted || !isRetryableAuthError(error)) throw error;
+      await sleep(AUTH_RETRY_DELAY_MS, init?.signal ?? undefined);
+      return await createAuthFetch_4(url, init);
     }
   };
 }
 //@ chunk-n1aavqzh.js:10585-11116 layout = createAuthFetch (1)
-async function createAuthFetch_4(e, t) {
-  let timeoutSignal = AbortSignal.timeout(at),
-    isPost = t?.method?.toUpperCase() === "POST",
-    s = getProxyFetchOptions({ url: String(e) });
-  if (!t?.signal) {
-    let l;
+async function createAuthFetch_4(url, init) {
+  let timeoutSignal = AbortSignal.timeout(AUTH_REQUEST_TIMEOUT_MS);
+  let isPost = init?.method?.toUpperCase() === "POST";
+  let proxyFetchOptions = getProxyFetchOptions({
+    url: String(url),
+  });
+  if (!init?.signal) {
+    let response;
     try {
-      l = await fetch(e, { ...t, ...s, signal: timeoutSignal });
+      response = await fetch(url, {
+        ...init,
+        ...proxyFetchOptions,
+        signal: timeoutSignal,
+      });
     } catch (error) {
-      rethrowRedactedFetchError(error, e);
+      rethrowRedactedFetchError(error, url);
     }
-    return isPost ? normalizeOAuthErrorBody_2(l) : l;
+    return isPost ? normalizeOAuthErrorBody_2(response) : response;
   }
-  let controller = new AbortController(),
-    abort = () => controller.abort();
-  (t.signal.addEventListener("abort", abort), timeoutSignal.addEventListener("abort", abort));
+  let controller = new AbortController();
+  let abort = () => controller.abort();
+  init.signal.addEventListener("abort", abort);
+  timeoutSignal.addEventListener("abort", abort);
   let cleanup = () => {
-    (t.signal?.removeEventListener("abort", abort), timeoutSignal.removeEventListener("abort", abort));
+    init.signal?.removeEventListener("abort", abort);
+    timeoutSignal.removeEventListener("abort", abort);
   };
-  if (t.signal.aborted) controller.abort();
+  if (init.signal.aborted) controller.abort();
   try {
-    let response = await fetch(e, { ...t, ...s, signal: controller.signal });
-    return (cleanup(), isPost ? normalizeOAuthErrorBody_2(response) : response);
+    let response = await fetch(url, {
+      ...init,
+      ...proxyFetchOptions,
+      signal: controller.signal,
+    });
+    cleanup();
+    return isPost ? normalizeOAuthErrorBody_2(response) : response;
   } catch (error) {
-    (cleanup(), rethrowRedactedFetchError(error, e));
+    cleanup();
+    rethrowRedactedFetchError(error, url);
   }
 }
+//@ chunk-n1aavqzh.js:11116-12321 layout
 /**
  * fetchAuthServerMetadata：授权服务器元数据发现：配置的 authServerMetadataUrl（必须 https）直接用，否则按资源元数据/RFC 8414/OIDC 路径探测，支持限次重定向。
  */
-//@ chunk-n1aavqzh.js:11116-12321 layout
 async function fetchAuthServerMetadata(serverName, serverUrl, options) {
-  let {
-      configuredMetadataUrl: configuredMetadataUrl,
-      fetchFn: fetchFn,
-      resourceMetadataUrl: resourceMetadataUrl,
-      serverConfigForAnalytics: serverConfigForAnalytics,
-    } = options ?? {},
-    A = fetchFn ?? createAuthFetch_2();
+  let { configuredMetadataUrl, fetchFn, resourceMetadataUrl, serverConfigForAnalytics } = options ?? {};
+  let A = fetchFn ?? createAuthFetch_2();
   if (configuredMetadataUrl) {
     if (!configuredMetadataUrl.startsWith("https://"))
       throw Error(
         `authServerMetadataUrl must use https:// (got: ${redactUrlSecrets(configuredMetadataUrl)})`,
       );
-    let y = await A(configuredMetadataUrl, { headers: { Accept: "application/json" } });
+    let y = await A(configuredMetadataUrl, {
+      headers: {
+        Accept: "application/json",
+      },
+    });
     if (y.ok) {
       let w;
       try {
@@ -434,84 +556,94 @@ async function fetchAuthServerMetadata(serverName, serverUrl, options) {
           `Configured auth server metadata at ${redactUrlSecrets(configuredMetadataUrl)} is not valid JSON`,
         );
       }
-      return M_t.parse(w);
+      return OAuthMetadataSchema_2.parse(w);
     }
     throw Error(
       `HTTP ${y.status} fetching configured auth server metadata from ${redactUrlSecrets(configuredMetadataUrl)}`,
     );
   }
   try {
-    let {
-      authorizationServerUrl: authorizationServerUrl,
-      authorizationServerMetadata: authorizationServerMetadata,
-    } = await QNr(serverUrl, {
+    let { authorizationServerUrl, authorizationServerMetadata } = await discoverOAuthServerInfo_2(serverUrl, {
       fetchFn: A,
-      ...(resourceMetadataUrl && { resourceMetadataUrl: resourceMetadataUrl }),
-      skipIssuerMetadataValidation: !0,
+      ...(resourceMetadataUrl && {
+        resourceMetadataUrl,
+      }),
+      skipIssuerMetadataValidation: true,
     });
-    if (authorizationServerMetadata)
-      return (
-        evaluateIssuerEchoPolicy({
-          serverName: serverName,
-          site: "rfc9728_chain",
-          expectedIssuer: authorizationServerUrl,
-          receivedIssuer: authorizationServerMetadata.issuer,
-          serverConfig: serverConfigForAnalytics,
-        }),
-        authorizationServerMetadata
-      );
-  } catch (error) {
-    if (error instanceof IssuerEchoCrossOriginError) throw error;
-    logMCPDebug(serverName, `RFC 9728 discovery failed, falling back: ${yF(error, serverUrl)}`);
-  }
-  let l = new URL(serverUrl);
-  if (l.pathname === "/") return;
-  try {
-    let y = await LBt(l, { fetchFn: A, skipIssuerValidation: !0 });
-    if (y)
+    if (authorizationServerMetadata) {
       evaluateIssuerEchoPolicy({
-        serverName: serverName,
-        site: "legacy_path_fallback",
-        expectedIssuer: l.href,
-        receivedIssuer: y.issuer,
+        serverName,
+        site: "rfc9728_chain",
+        expectedIssuer: authorizationServerUrl,
+        receivedIssuer: authorizationServerMetadata.issuer,
         serverConfig: serverConfigForAnalytics,
       });
-    return y;
+      return authorizationServerMetadata;
+    }
   } catch (error) {
     if (error instanceof IssuerEchoCrossOriginError) throw error;
-    logMCPDebug(serverName, `Path-aware auth server discovery failed: ${yF(error, serverUrl)}`);
+    logMCPDebug(
+      serverName,
+      `RFC 9728 discovery failed, falling back: ${describeSdkFetchError(error, serverUrl)}`,
+    );
+  }
+  let url = new URL(serverUrl);
+  if (url.pathname === "/") return;
+  try {
+    let authorizationServerMetadata = await discoverAuthorizationServerMetadata_2(url, {
+      fetchFn: A,
+      skipIssuerValidation: true,
+    });
+    if (authorizationServerMetadata)
+      evaluateIssuerEchoPolicy({
+        serverName,
+        site: "legacy_path_fallback",
+        expectedIssuer: url.href,
+        receivedIssuer: authorizationServerMetadata.issuer,
+        serverConfig: serverConfigForAnalytics,
+      });
+    return authorizationServerMetadata;
+  } catch (error) {
+    if (error instanceof IssuerEchoCrossOriginError) throw error;
+    logMCPDebug(
+      serverName,
+      `Path-aware auth server discovery failed: ${describeSdkFetchError(error, serverUrl)}`,
+    );
     return;
   }
 }
+//@ chunk-n1aavqzh.js:12321-12621 facade-exports
 /**
  * IssuerEchoCrossOriginError：issuer 回显跨源不一致错误。
  */
-//@ chunk-n1aavqzh.js:12321-12621 facade-exports
 class IssuerEchoCrossOriginError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS {
   expected;
   received;
-  constructor(e, t) {
+  constructor(expectedIssuer, receivedIssuer) {
     super(
-      `Issuer echo cross-origin mismatch (RFC 8414 \xA73.3): expected ${jsonStringify(e)}, received ${jsonStringify(t)}`,
+      `Issuer echo cross-origin mismatch (RFC 8414 \xA73.3): expected ${jsonStringify(expectedIssuer)}, received ${jsonStringify(receivedIssuer)}`,
       "issuer echo cross-origin mismatch (RFC 8414 \xA73.3)",
       "issuer_echo_denied",
     );
-    this.expected = e;
-    this.received = t;
+    this.expected = expectedIssuer;
+    this.received = receivedIssuer;
     this.name = "IssuerEchoCrossOriginError";
   }
 }
 //@ chunk-n1aavqzh.js:12621-12704 layout
 function isIssuerStrictEchoEnabled() {
   try {
-    return getFeatureValue_CACHED_MAY_BE_STALE("tengu_mcp_issuer_strict_echo", !1) === !0;
+    return getFeatureValue_CACHED_MAY_BE_STALE("tengu_mcp_issuer_strict_echo", false) === true;
   } catch {
-    return !1;
+    return false;
   }
 }
 //@ chunk-n1aavqzh.js:12704-12770 layout
-function stripTrailingSlash(e, t) {
-  return t === e || (e.endsWith("/") && t === e.slice(0, -1));
+function stripTrailingSlash(expectedIssuer, receivedIssuer) {
+  return (
+    receivedIssuer === expectedIssuer ||
+    (expectedIssuer.endsWith("/") && receivedIssuer === expectedIssuer.slice(0, -1))
+  );
 }
 //@ chunk-n1aavqzh.js:12770-12897 layout
 function getHttpOrigin(e) {
@@ -522,73 +654,76 @@ function getHttpOrigin(e) {
   return;
 }
 //@ chunk-n1aavqzh.js:12897-13139 layout
-function compareIssuerOrigin(e, t) {
-  let n = getHttpOrigin(e),
-    r = getHttpOrigin(t);
-  if (!n || !r) return "unparseable";
+function compareIssuerOrigin(expectedIssuer, receivedIssuer) {
+  let httpOrigin = getHttpOrigin(expectedIssuer);
+  let httpOrigin_2 = getHttpOrigin(receivedIssuer);
+  if (!httpOrigin || !httpOrigin_2) return "unparseable";
   if (
-    n.username !== "" ||
-    n.password !== "" ||
-    r.username !== "" ||
-    r.password !== "" ||
-    r.search !== "" ||
-    r.hash !== ""
+    httpOrigin.username !== "" ||
+    httpOrigin.password !== "" ||
+    httpOrigin_2.username !== "" ||
+    httpOrigin_2.password !== "" ||
+    httpOrigin_2.search !== "" ||
+    httpOrigin_2.hash !== ""
   )
     return "cross_origin";
-  return n.origin === r.origin ? "same_origin" : "cross_origin";
+  return httpOrigin.origin === httpOrigin_2.origin ? "same_origin" : "cross_origin";
 }
 //@ chunk-n1aavqzh.js:13139-13568 layout
-function diffUrlComponents(e, t) {
-  let n = getHttpOrigin(e),
-    r = getHttpOrigin(t);
-  if (!n || !r) return [];
+function diffUrlComponents(expectedIssuer, receivedIssuer) {
+  let httpOrigin = getHttpOrigin(expectedIssuer);
+  let httpOrigin_2 = getHttpOrigin(receivedIssuer);
+  if (!httpOrigin || !httpOrigin_2) return [];
   let s = [];
-  if (n.protocol !== r.protocol) s.push("scheme");
-  if (n.username !== r.username || n.password !== r.password) s.push("userinfo");
-  if (n.hostname !== r.hostname) s.push("host");
-  if (n.port !== r.port) s.push("port");
-  if (n.pathname !== r.pathname) s.push("path");
-  if (n.search !== r.search) s.push("query");
-  if (n.hash !== r.hash) s.push("fragment");
+  if (httpOrigin.protocol !== httpOrigin_2.protocol) s.push("scheme");
+  if (httpOrigin.username !== httpOrigin_2.username || httpOrigin.password !== httpOrigin_2.password)
+    s.push("userinfo");
+  if (httpOrigin.hostname !== httpOrigin_2.hostname) s.push("host");
+  if (httpOrigin.port !== httpOrigin_2.port) s.push("port");
+  if (httpOrigin.pathname !== httpOrigin_2.pathname) s.push("path");
+  if (httpOrigin.search !== httpOrigin_2.search) s.push("query");
+  if (httpOrigin.hash !== httpOrigin_2.hash) s.push("fragment");
   if (s.length === 0) s.push("normalization_only");
   return s;
 }
+//@ chunk-n1aavqzh.js:13568-14262 facade-exports
 /**
  * checkIssuerEcho：校验授权响应回显的 issuer（RFC 9207）与预期一致，enforce 模式拒绝跨源不一致，observe 模式只记录。
  */
-//@ chunk-n1aavqzh.js:13568-14262 facade-exports
-function evaluateIssuerEchoPolicy({
-  serverName: serverName,
-  site: site,
-  expectedIssuer: expectedIssuer,
-  receivedIssuer: receivedIssuer,
-  serverConfig: serverConfig,
-}) {
-  if (expectedIssuer === void 0) return;
-  if (receivedIssuer !== void 0 && stripTrailingSlash(expectedIssuer, receivedIssuer)) return;
-  let S = receivedIssuer === void 0 ? "unparseable" : compareIssuerOrigin(expectedIssuer, receivedIssuer),
-    h = isIssuerStrictEchoEnabled() ? "enforce" : "observe",
-    A = h === "enforce" && S !== "same_origin";
+function evaluateIssuerEchoPolicy({ serverName, site, expectedIssuer, receivedIssuer, serverConfig }) {
+  if (expectedIssuer === undefined) return;
+  if (receivedIssuer !== undefined && stripTrailingSlash(expectedIssuer, receivedIssuer)) return;
+  let S = receivedIssuer === undefined ? "unparseable" : compareIssuerOrigin(expectedIssuer, receivedIssuer);
+  let h = isIssuerStrictEchoEnabled() ? "enforce" : "observe";
+  let A = h === "enforce" && S !== "same_origin";
   try {
     let l =
-        receivedIssuer === void 0 ? ["issuer_missing"] : diffUrlComponents(expectedIssuer, receivedIssuer),
-      y = serverConfig ? ET(serverConfig) : void 0,
-      w = serverConfig
-        ? mcpNameForAnalytics_GATE_EVALUATED(
-            serverName,
-            isMcpServerLoggableInAnalytics(serverName, serverConfig),
-          )
-        : void 0;
+      receivedIssuer === undefined ? ["issuer_missing"] : diffUrlComponents(expectedIssuer, receivedIssuer);
+    let y = serverConfig ? loggingSafeOrigin(serverConfig) : undefined;
+    let w = serverConfig
+      ? mcpNameForAnalytics_GATE_EVALUATED(
+          serverName,
+          isMcpServerLoggableInAnalytics(serverName, serverConfig),
+        )
+      : undefined;
     logEvent("tengu_mcp_oauth_issuer_echo_mismatch", {
       site: fromEnum(site),
       mode: fromEnum(h),
       originRelation: fromEnum(S),
       outcome: A ? lit("denied") : lit("proceeded"),
-      ...(l.length > 0 && { mismatchFacets: fromEnumArr(l) }),
-      expectedIssuerHash: gn(expectedIssuer),
-      ...(receivedIssuer !== void 0 && { receivedIssuerHash: gn(receivedIssuer) }),
-      ...(y && { mcpServerBaseUrl: y }),
-      ...(w && { mcpServerName: w }),
+      ...(l.length > 0 && {
+        mismatchFacets: fromEnumArr(l),
+      }),
+      expectedIssuerHash: shortHash(expectedIssuer),
+      ...(receivedIssuer !== undefined && {
+        receivedIssuerHash: shortHash(receivedIssuer),
+      }),
+      ...(y && {
+        mcpServerBaseUrl: y,
+      }),
+      ...(w && {
+        mcpServerName: w,
+      }),
     });
   } catch (error) {
     try {
@@ -597,22 +732,22 @@ function evaluateIssuerEchoPolicy({
   }
   if (A) throw new IssuerEchoCrossOriginError(expectedIssuer, receivedIssuer);
 }
+//@ chunk-n1aavqzh.js:14262-14470 facade-exports
 /**
  * McpClientRegistrationDeferredError：需要认证但客户端注册推迟到用户认证时。
  */
-//@ chunk-n1aavqzh.js:14262-14470 facade-exports
-class McpClientRegistrationDeferredError_2 extends UnauthorizedError {
+class McpClientRegistrationDeferredError_2 extends UnauthorizedError_2 {
   serverName;
-  constructor(e) {
+  constructor(serverName) {
     super("Authentication required; client registration is deferred until the user authenticates");
-    this.serverName = e;
+    this.serverName = serverName;
     this.name = "McpClientRegistrationDeferredError";
   }
 }
+//@ chunk-n1aavqzh.js:14470-14588 facade-exports = AuthenticationCancelledError (1)
 /**
  * 用户取消 MCP OAuth 授权时抛出的错误类（消息 `Authentication was cancelled`），调用方据此区分"取消"与"失败"。（v2）
  */
-//@ chunk-n1aavqzh.js:14470-14588 facade-exports = AuthenticationCancelledError (1)
 class AuthenticationCancelledError_2 extends Error {
   constructor() {
     super("Authentication was cancelled");
@@ -620,83 +755,90 @@ class AuthenticationCancelledError_2 extends Error {
   }
 }
 //@ chunk-n1aavqzh.js:14588-14677 layout
-function getUrlOriginNoPort(e) {
+function getUrlOriginNoPort(redirectUri) {
   try {
-    let t = new URL(e);
+    let t = new URL(redirectUri);
     return `${t.protocol}//${t.hostname}`;
   } catch {
-    return e;
+    return redirectUri;
   }
 }
 //@ chunk-n1aavqzh.js:14677-14758 layout
 function isLoopbackOrigin(e) {
-  let t = getUrlOriginNoPort(e);
-  return t === "http://127.0.0.1" || t === "http://localhost";
+  let urlOriginNoPort = getUrlOriginNoPort(e);
+  return urlOriginNoPort === "http://127.0.0.1" || urlOriginNoPort === "http://localhost";
 }
 //@ chunk-n1aavqzh.js:14758-14955 layout
 function getRegisteredLoopbackPort_2(e) {
   if (!e?.clientId || !e.redirectUri || !isLoopbackOrigin(e.redirectUri)) return;
   let t = Number(new URL(e.redirectUri).port);
-  return t && e.redirectUri.replace("//127.0.0.1:", "//localhost:") === buildRedirectUri(t) ? t : void 0;
+  return t && e.redirectUri.replace("//127.0.0.1:", "//localhost:") === buildRedirectUri(t) ? t : undefined;
 }
 //@ chunk-n1aavqzh.js:14955-15013 layout
 function getClientMetadataDocumentUrl_2() {
   return env.MCP_OAUTH_CLIENT_METADATA_URL || MCP_CLIENT_METADATA_URL;
 }
 //@ chunk-n1aavqzh.js:15013-15108 layout
-function isLoopbackCallbackUri_2(e) {
-  if (!isLoopbackOrigin(e)) return !1;
+function isLoopbackCallbackUri_2(redirectUri) {
+  if (!isLoopbackOrigin(redirectUri)) return false;
   try {
-    return new URL(e).pathname === "/callback";
+    return new URL(redirectUri).pathname === "/callback";
   } catch {
-    return !1;
+    return false;
   }
 }
 //@ chunk-n1aavqzh.js:15108-15162 layout
-function isClientMetadataDocumentId_2(e) {
-  return e !== void 0 && (e === MCP_CLIENT_METADATA_URL || e === getClientMetadataDocumentUrl_2());
+function isClientMetadataDocumentId_2(clientId) {
+  return (
+    clientId !== undefined &&
+    (clientId === MCP_CLIENT_METADATA_URL || clientId === getClientMetadataDocumentUrl_2())
+  );
 }
+//@ chunk-n1aavqzh.js:15162-15221 facade-exports
 /**
  * 按服务器键取出进程级状态里登记的 OAuth 回调提交器（用于把粘贴的回调 URL 交给正在等待的授权流程）。（v2）
  */
-//@ chunk-n1aavqzh.js:15162-15221 facade-exports
 function getOAuthCallbackSubmitter_2(e) {
-  return ht().oauthCallbackSubmitters.get(e);
+  return getCliOwnedState().oauthCallbackSubmitters.get(e);
 }
+//@ chunk-n1aavqzh.js:15221-15337 facade-exports
 /**
  * 登记某服务器正在进行的 OAuth 授权 Promise，结束后（无论成败）若仍是同一个则从 activeOAuthFlows 移除，用于并发去重。（v2）
  */
-//@ chunk-n1aavqzh.js:15221-15337 facade-exports
 function setActiveOAuthPromise_2(e, t) {
-  let activeOAuthFlows = ht().activeOAuthFlows;
-  (activeOAuthFlows.set(e, t),
-    t
-      .finally(() => {
-        if (activeOAuthFlows.get(e) === t) activeOAuthFlows.delete(e);
-      })
-      .catch(() => {}));
+  let activeOAuthFlows = getCliOwnedState().activeOAuthFlows;
+  activeOAuthFlows.set(e, t);
+  t.finally(() => {
+    if (activeOAuthFlows.get(e) === t) activeOAuthFlows.delete(e);
+  }).catch(() => {});
 }
+//@ chunk-n1aavqzh.js:15337-15389 facade-exports
 /**
  * 取出某服务器正在进行的 OAuth 授权 Promise（没有则 undefined），让并发的授权请求复用同一流程。（v2）
  */
-//@ chunk-n1aavqzh.js:15337-15389 facade-exports
 function getActiveOAuthPromise_2(e) {
-  return ht().activeOAuthFlows.get(e);
+  return getCliOwnedState().activeOAuthFlows.get(e);
 }
+//@ chunk-n1aavqzh.js:15389-15769 facade-exports
 /**
  * clearTokenlessStub：删除既无令牌也无发现状态的占位凭证条目。
  */
-//@ chunk-n1aavqzh.js:15389-15769 facade-exports
 async function clearMcpOAuthStubIfTokenless_2(e, t) {
-  let n = getServerKey(e, t),
-    r = (await getSecureStorage().readAsync())?.mcpOAuth?.[n];
+  let serverKey = getServerKey(e, t);
+  let r = (await getSecureStorage().readAsync())?.mcpOAuth?.[serverKey];
   if (!r || r.accessToken || r.refreshToken || xaaPinnedServer(r.discoveryState)) return;
   try {
     await getSecureStorage().mutate((s) => {
-      let S = s.mcpOAuth?.[n];
+      let S = s.mcpOAuth?.[serverKey];
       if (!S || S.accessToken || S.refreshToken || xaaPinnedServer(S.discoveryState)) return s;
-      let h = { ...s.mcpOAuth };
-      return (delete h[n], { ...s, mcpOAuth: h });
+      let h = {
+        ...s.mcpOAuth,
+      };
+      delete h[serverKey];
+      return {
+        ...s,
+        mcpOAuth: h,
+      };
     });
   } catch (error) {
     logMCPDebug(e, `clear tokenless stub failed: ${errorMessage(error)}`);
@@ -704,209 +846,254 @@ async function clearMcpOAuthStubIfTokenless_2(e, t) {
 }
 //@ chunk-n1aavqzh.js:15769-16823 layout = revokeToken (0.967)
 async function revokeToken_2({
-  serverName: serverName,
-  endpoint: endpoint,
-  token: token,
-  tokenTypeHint: tokenTypeHint,
-  clientId: clientId,
-  clientSecret: clientSecret,
-  accessToken: accessToken,
-  authMethod: authMethod = "client_secret_basic",
-  configuredHeaders: configuredHeaders,
+  serverName,
+  endpoint,
+  token,
+  tokenTypeHint,
+  clientId,
+  clientSecret,
+  accessToken,
+  authMethod = "client_secret_basic",
+  configuredHeaders,
 }) {
   let params = new URLSearchParams();
-  (params.set("token", token), params.set("token_type_hint", tokenTypeHint));
-  let w = { ...configuredHeaders, "Content-Type": "application/x-www-form-urlencoded" },
-    R = Object.keys(configuredHeaders).length > 0 ? { beforeRedirect: G4n(endpoint) } : {};
-  if (clientId && clientSecret)
-    if (authMethod === "client_secret_post")
-      (params.set("client_id", clientId), params.set("client_secret", clientSecret));
-    else {
+  params.set("token", token);
+  params.set("token_type_hint", tokenTypeHint);
+  let headers = {
+    ...configuredHeaders,
+    "Content-Type": "application/x-www-form-urlencoded",
+  };
+  let R =
+    Object.keys(configuredHeaders).length > 0
+      ? {
+          beforeRedirect: sameOriginRedirectGuard(endpoint),
+        }
+      : {};
+  if (clientId && clientSecret) {
+    if (authMethod === "client_secret_post") {
+      params.set("client_id", clientId);
+      params.set("client_secret", clientSecret);
+    } else {
       let basic = Buffer.from(`${encodeURIComponent(clientId)}:${encodeURIComponent(clientSecret)}`).toString(
         "base64",
       );
-      ((w.Authorization = `Basic ${basic}`), Ny().record(basic));
+      headers.Authorization = `Basic ${basic}`;
+      getPresentedCredentialLog().record(basic);
     }
-  else if (clientId) params.set("client_id", clientId);
+  } else if (clientId) params.set("client_id", clientId);
   else logMCPDebug(serverName, `No client_id available for ${tokenTypeHint} revocation - server may reject`);
   try {
-    (await Dt.post(endpoint, params, { headers: w, ...R }),
-      logMCPDebug(serverName, `Successfully revoked ${tokenTypeHint}`));
+    await axios_default.post(endpoint, params, {
+      headers,
+      ...R,
+    });
+    logMCPDebug(serverName, `Successfully revoked ${tokenTypeHint}`);
   } catch (error) {
-    if (Dt.isAxiosError(error) && error.response?.status === 401 && accessToken)
-      (logMCPDebug(serverName, `Got 401, retrying ${tokenTypeHint} revocation with Bearer auth`),
-        params.delete("client_id"),
-        params.delete("client_secret"),
-        await Dt.post(endpoint, params, { headers: { ...w, Authorization: `Bearer ${accessToken}` }, ...R }),
-        logMCPDebug(serverName, `Successfully revoked ${tokenTypeHint} with Bearer auth`));
-    else throw error;
+    if (axios_default.isAxiosError(error) && error.response?.status === 401 && accessToken) {
+      logMCPDebug(serverName, `Got 401, retrying ${tokenTypeHint} revocation with Bearer auth`);
+      params.delete("client_id");
+      params.delete("client_secret");
+      await axios_default.post(endpoint, params, {
+        headers: {
+          ...headers,
+          Authorization: `Bearer ${accessToken}`,
+        },
+        ...R,
+      });
+      logMCPDebug(serverName, `Successfully revoked ${tokenTypeHint} with Bearer auth`);
+    } else throw error;
   }
 }
+//@ chunk-n1aavqzh.js:16823-17121 facade-exports
 /**
  * readStoredServerCredentials：读取服务器的令牌/客户端信息。
  */
-//@ chunk-n1aavqzh.js:16823-17121 facade-exports
 async function snapshotServerTokens_2(e, t) {
   let r = (await getSecureStorage().readAsync())?.mcpOAuth?.[getServerKey(e, t)];
   if (!r?.accessToken && !r?.refreshToken) return;
   return {
-    accessToken: r.accessToken || void 0,
+    accessToken: r.accessToken || undefined,
     refreshToken: r.refreshToken,
     clientId: r.clientId,
     clientSecret: r.clientSecret,
-    ...(r.discoveryState && { discoveryState: authDiscoveryState(r.discoveryState) }),
+    ...(r.discoveryState && {
+      discoveryState: authDiscoveryState(r.discoveryState),
+    }),
   };
 }
 //@ chunk-n1aavqzh.js:17121-18760 layout = revokeServerTokens (0.772)
-async function revokeServerTokens_4(serverName, serverConfig, n) {
-  let storage = Ny();
-  (storage.record(n.accessToken), storage.record(n.refreshToken), storage.record(n.clientSecret));
+async function revokeServerTokens_4(serverName, serverConfig, tokenData) {
+  let storage = getPresentedCredentialLog();
+  storage.record(tokenData.accessToken);
+  storage.record(tokenData.refreshToken);
+  storage.record(tokenData.clientSecret);
   let s;
   try {
-    let S = n.discoveryState?.authorizationServerUrl ?? serverConfig.url,
-      metadata = await fetchAuthServerMetadata(serverName, S, {
-        configuredMetadataUrl: xaaPinnedServer(n.discoveryState)
-          ? void 0
-          : serverConfig.oauth?.authServerMetadataUrl,
-        fetchFn: wrapFetchWithHeaders(serverName, serverConfig, createAuthFetch_2()),
-        serverConfigForAnalytics: serverConfig,
-      });
-    if (!metadata) (logMCPDebug(serverName, "No OAuth metadata found"), (s = "no_metadata"));
-    else {
-      let A = "revocation_endpoint" in metadata ? metadata.revocation_endpoint : null;
-      if (!A)
-        (logMCPDebug(serverName, "Server does not support token revocation"), (s = "no_revocation_endpoint"));
-      else {
-        let revocationEndpointStr = String(A),
-          y = await W4n(serverName, serverConfig, revocationEndpointStr),
-          w =
-            ("revocation_endpoint_auth_methods_supported" in metadata
-              ? metadata.revocation_endpoint_auth_methods_supported
-              : void 0) ??
-            ("token_endpoint_auth_methods_supported" in metadata
-              ? metadata.token_endpoint_auth_methods_supported
-              : void 0),
-          R =
-            w && !w.includes("client_secret_basic") && w.includes("client_secret_post")
-              ? "client_secret_post"
-              : "client_secret_basic";
-        if (
-          (logMCPDebug(serverName, `Revoking tokens via ${redactUrlSecrets(revocationEndpointStr)} (${R})`),
-          n.refreshToken)
-        )
+    let asUrl = tokenData.discoveryState?.authorizationServerUrl ?? serverConfig.url;
+    let metadata = await fetchAuthServerMetadata(serverName, asUrl, {
+      configuredMetadataUrl: xaaPinnedServer(tokenData.discoveryState)
+        ? undefined
+        : serverConfig.oauth?.authServerMetadataUrl,
+      fetchFn: wrapFetchWithHeaders(serverName, serverConfig, createAuthFetch_2()),
+      serverConfigForAnalytics: serverConfig,
+    });
+    if (!metadata) {
+      logMCPDebug(serverName, "No OAuth metadata found");
+      s = "no_metadata";
+    } else {
+      let revocationEndpoint = "revocation_endpoint" in metadata ? metadata.revocation_endpoint : null;
+      if (!revocationEndpoint) {
+        logMCPDebug(serverName, "Server does not support token revocation");
+        s = "no_revocation_endpoint";
+      } else {
+        let revocationEndpointStr = String(revocationEndpoint);
+        let configuredHeaders = await dynamicHeadersForRequest(
+          serverName,
+          serverConfig,
+          revocationEndpointStr,
+        );
+        let authMethods =
+          ("revocation_endpoint_auth_methods_supported" in metadata
+            ? metadata.revocation_endpoint_auth_methods_supported
+            : undefined) ??
+          ("token_endpoint_auth_methods_supported" in metadata
+            ? metadata.token_endpoint_auth_methods_supported
+            : undefined);
+        let authMethod =
+          authMethods &&
+          !authMethods.includes("client_secret_basic") &&
+          authMethods.includes("client_secret_post")
+            ? "client_secret_post"
+            : "client_secret_basic";
+        logMCPDebug(
+          serverName,
+          `Revoking tokens via ${redactUrlSecrets(revocationEndpointStr)} (${authMethod})`,
+        );
+        if (tokenData.refreshToken)
           try {
             await revokeToken_2({
-              serverName: serverName,
+              serverName,
               endpoint: revocationEndpointStr,
-              token: n.refreshToken,
+              token: tokenData.refreshToken,
               tokenTypeHint: "refresh_token",
-              clientId: n.clientId,
-              clientSecret: n.clientSecret,
-              accessToken: n.accessToken,
-              authMethod: R,
-              configuredHeaders: y,
+              clientId: tokenData.clientId,
+              clientSecret: tokenData.clientSecret,
+              accessToken: tokenData.accessToken,
+              authMethod,
+              configuredHeaders,
             });
           } catch (error) {
-            (logMCPDebug(serverName, `Failed to revoke refresh token: ${errorMessage(error)}`),
-              (s = "server_revoke_failed"));
+            logMCPDebug(serverName, `Failed to revoke refresh token: ${errorMessage(error)}`);
+            s = "server_revoke_failed";
           }
-        if (n.accessToken)
+        if (tokenData.accessToken)
           try {
             await revokeToken_2({
-              serverName: serverName,
+              serverName,
               endpoint: revocationEndpointStr,
-              token: n.accessToken,
+              token: tokenData.accessToken,
               tokenTypeHint: "access_token",
-              clientId: n.clientId,
-              clientSecret: n.clientSecret,
-              accessToken: n.accessToken,
-              authMethod: R,
-              configuredHeaders: y,
+              clientId: tokenData.clientId,
+              clientSecret: tokenData.clientSecret,
+              accessToken: tokenData.accessToken,
+              authMethod,
+              configuredHeaders,
             });
           } catch (error) {
-            (logMCPDebug(serverName, `Failed to revoke access token: ${errorMessage(error)}`),
-              (s = "server_revoke_failed"));
+            logMCPDebug(serverName, `Failed to revoke access token: ${errorMessage(error)}`);
+            s = "server_revoke_failed";
           }
       }
     }
   } catch (error) {
-    (logMCPDebug(serverName, `Failed to revoke tokens: ${errorMessage(error)}`),
-      (s = error instanceof IssuerEchoCrossOriginError ? "issuer_echo_denied" : "server_revoke_failed"));
+    logMCPDebug(serverName, `Failed to revoke tokens: ${errorMessage(error)}`);
+    s = error instanceof IssuerEchoCrossOriginError ? "issuer_echo_denied" : "server_revoke_failed";
   }
   return s;
 }
+//@ chunk-n1aavqzh.js:18760-19280 facade-exports
 /**
  * revokeReplacedTokens：令牌被替换后撤销旧令牌。
  */
-//@ chunk-n1aavqzh.js:18760-19280 facade-exports
-async function revokeReplacedServerTokens_2(e, t, n) {
+async function revokeReplacedServerTokens_2(serverName, serverConfig, n) {
   let r;
   try {
-    let s = (await getSecureStorage().readAsync())?.mcpOAuth?.[getServerKey(e, t)],
-      S = {
-        ...n,
-        accessToken: n.accessToken && n.accessToken !== s?.accessToken ? n.accessToken : void 0,
-        refreshToken: n.refreshToken && n.refreshToken !== s?.refreshToken ? n.refreshToken : void 0,
-      };
-    if (!S.accessToken && !S.refreshToken) {
-      (logMCPDebug(e, "No replaced tokens to revoke"), logFeatureOk("mcp_oauth_revoke"));
+    let s = (await getSecureStorage().readAsync())?.mcpOAuth?.[getServerKey(serverName, serverConfig)];
+    let tokenData = {
+      ...n,
+      accessToken: n.accessToken && n.accessToken !== s?.accessToken ? n.accessToken : undefined,
+      refreshToken: n.refreshToken && n.refreshToken !== s?.refreshToken ? n.refreshToken : undefined,
+    };
+    if (!tokenData.accessToken && !tokenData.refreshToken) {
+      logMCPDebug(serverName, "No replaced tokens to revoke");
+      logFeatureOk("mcp_oauth_revoke");
       return;
     }
-    r = await revokeServerTokens_4(e, t, S);
+    r = await revokeServerTokens_4(serverName, serverConfig, tokenData);
   } catch (error) {
-    (logMCPDebug(e, `Failed to revoke replaced tokens: ${errorMessage(error)}`),
-      (r = "server_revoke_failed"));
+    logMCPDebug(serverName, `Failed to revoke replaced tokens: ${errorMessage(error)}`);
+    r = "server_revoke_failed";
   }
   if (r) logFeatureSad("mcp_oauth_revoke", r);
   else logFeatureOk("mcp_oauth_revoke");
 }
+//@ chunk-n1aavqzh.js:19280-21238 facade-exports
 /**
  * clearServerTokens：撤销并清除服务器令牌（可保留 step-up 状态），凭证存储不可读时放弃。
  */
-//@ chunk-n1aavqzh.js:19280-21238 facade-exports
-async function revokeServerTokens_2(serverName, serverConfig, { preserveStepUpState: n = !1 } = {}) {
-  let r = getSecureStorage(),
-    s = await readSecureStorageForMcp();
-  if (s === READ_FAILED)
-    return (
-      logMCPDebug(serverName, "Could not read the credential store to clear tokens"),
-      logFeatureBad("mcp_oauth_revoke", "local_read_failed"),
-      { cleared: !1, reason: "credential_store_failed" }
-    );
-  let S = getServerKey(serverName, serverConfig),
-    h = s?.mcpOAuth?.[S],
-    A;
+async function revokeServerTokens_2(serverName, serverConfig, { preserveStepUpState: n = false } = {}) {
+  let secureStorage = getSecureStorage();
+  let secureStorageForMcp = await readSecureStorageForMcp();
+  if (secureStorageForMcp === READ_FAILED) {
+    logMCPDebug(serverName, "Could not read the credential store to clear tokens");
+    logFeatureBad("mcp_oauth_revoke", "local_read_failed");
+    return {
+      cleared: false,
+      reason: "credential_store_failed",
+    };
+  }
+  let serverKey = getServerKey(serverName, serverConfig);
+  let h = secureStorageForMcp?.mcpOAuth?.[serverKey];
+  let A;
   if (h?.accessToken || h?.refreshToken)
     A = await revokeServerTokens_4(serverName, serverConfig, {
-      accessToken: h.accessToken || void 0,
+      accessToken: h.accessToken || undefined,
       refreshToken: h.refreshToken,
       clientId: h.clientId,
       clientSecret: h.clientSecret,
-      ...(h.discoveryState && { discoveryState: authDiscoveryState(h.discoveryState) }),
+      ...(h.discoveryState && {
+        discoveryState: authDiscoveryState(h.discoveryState),
+      }),
     });
   else logMCPDebug(serverName, "No tokens to revoke");
-  let l = !1;
+  let l = false;
   try {
     if (n && h && (h.stepUpScope || h.discoveryState || h.clientId)) {
-      let mutate = await r.mutate((w) => {
-        let R = w.mcpOAuth?.[S];
+      let y = await secureStorage.mutate((w) => {
+        let R = w.mcpOAuth?.[serverKey];
         if (R?.accessToken !== h.accessToken || R?.clientId !== h.clientId) return w;
         return {
           ...w,
           mcpOAuth: {
             ...w.mcpOAuth,
-            [S]: {
-              serverName: serverName,
+            [serverKey]: {
+              serverName,
               serverUrl: serverConfig.url,
               accessToken: "",
-              refreshToken: void 0,
-              expiresAt: void 0,
+              refreshToken: undefined,
+              expiresAt: undefined,
               ...(h.clientId && {
                 clientId: h.clientId,
-                ...(h.redirectUri && { redirectUri: h.redirectUri }),
-                ...(h.clientSecret !== void 0 && { clientSecret: h.clientSecret }),
+                ...(h.redirectUri && {
+                  redirectUri: h.redirectUri,
+                }),
+                ...(h.clientSecret !== undefined && {
+                  clientSecret: h.clientSecret,
+                }),
               }),
-              ...(h.stepUpScope && { stepUpScope: h.stepUpScope }),
+              ...(h.stepUpScope && {
+                stepUpScope: h.stepUpScope,
+              }),
               ...(h.discoveryState && {
                 discoveryState: {
                   ...authDiscoveryState(h.discoveryState),
@@ -918,98 +1105,131 @@ async function revokeServerTokens_2(serverName, serverConfig, { preserveStepUpSt
           },
         };
       });
-      ((l = mutate.success),
-        logMCPDebug(
-          serverName,
-          mutate.success
-            ? "Preserved step-up auth state across revocation"
-            : `clear local tokens failed: ${mutate.warning ?? "storage write failed"}`,
-        ));
+      l = y.success;
+      logMCPDebug(
+        serverName,
+        y.success
+          ? "Preserved step-up auth state across revocation"
+          : `clear local tokens failed: ${y.warning ?? "storage write failed"}`,
+      );
     } else if (n) l = (await clearServerTokensFromLocalStorage_2(serverName, serverConfig)).success;
     else {
       let y = await confirmCredentialRemoval(
-        r,
+        secureStorage,
         (w) => {
-          if (!w.mcpOAuth?.[S]) return w;
-          let { [S]: R, ...T } = w.mcpOAuth;
-          return { ...w, mcpOAuth: T };
+          if (!w.mcpOAuth?.[serverKey]) return w;
+          let { [serverKey]: R, ...T } = w.mcpOAuth;
+          return {
+            ...w,
+            mcpOAuth: T,
+          };
         },
-        (w) => w.mcpOAuth?.[S] !== void 0,
+        (w) => w.mcpOAuth?.[serverKey] !== undefined,
       );
-      if (!y.confirmed && y.reason === "keychain_unreadable")
-        return (
-          logMCPDebug(serverName, "Could not read the keychain to clear tokens"),
-          logFeatureBad("mcp_oauth_revoke", "keychain_unreadable"),
-          { cleared: !1, reason: "keychain_unreadable" }
-        );
+      if (!y.confirmed && y.reason === "keychain_unreadable") {
+        logMCPDebug(serverName, "Could not read the keychain to clear tokens");
+        logFeatureBad("mcp_oauth_revoke", "keychain_unreadable");
+        return {
+          cleared: false,
+          reason: "keychain_unreadable",
+        };
+      }
       l = y.confirmed;
     }
   } catch (error) {
     logMCPDebug(serverName, `clear local tokens failed: ${errorMessage(error)}`);
   }
   if (!l) A ??= "local_clear_failed";
-  if ((clearDiscoveryPathMemo(serverName), A)) logFeatureSad("mcp_oauth_revoke", A);
+  clearDiscoveryPathMemo(serverName);
+  if (A) logFeatureSad("mcp_oauth_revoke", A);
   else logFeatureOk("mcp_oauth_revoke");
-  return l ? { cleared: !0 } : { cleared: !1, reason: "credential_store_failed" };
+  return l
+    ? {
+        cleared: true,
+      }
+    : {
+        cleared: false,
+        reason: "credential_store_failed",
+      };
 }
+//@ chunk-n1aavqzh.js:21238-21871 facade-exports
 /**
  * clearServerTokensFromLocalStorage：只清本地存储里的令牌，可保留客户端注册。
  */
-//@ chunk-n1aavqzh.js:21238-21871 facade-exports
 async function clearServerTokensFromLocalStorage_2(serverName, serverConfig, n) {
-  let r = getServerKey(serverName, serverConfig),
-    s,
-    mutate = await getSecureStorage().mutate((h) => {
-      let A = h.mcpOAuth?.[r];
-      if (!A) return h;
-      let l = { ...h.mcpOAuth };
-      if (A.clientId && n?.preserveClientRegistration?.(A)) {
-        if (!A.accessToken && !A.refreshToken) return h;
-        ((l[r] = { ...A, accessToken: "", refreshToken: void 0, expiresAt: 0, scope: void 0 }),
-          (s = "tokens"));
-      } else if (n?.keepXaaPin && xaaPinnedServer(A.discoveryState))
-        ((l[r] = {
-          serverName: A.serverName,
-          serverUrl: A.serverUrl,
-          accessToken: "",
-          expiresAt: 0,
-          discoveryState: A.discoveryState,
-        }),
-          (s = "all"));
-      else (delete l[r], (s = "all"));
-      return { ...h, mcpOAuth: l };
-    });
+  let serverKey = getServerKey(serverName, serverConfig);
+  let s;
+  let S = await getSecureStorage().mutate((h) => {
+    let A = h.mcpOAuth?.[serverKey];
+    if (!A) return h;
+    let l = {
+      ...h.mcpOAuth,
+    };
+    if (A.clientId && n?.preserveClientRegistration?.(A)) {
+      if (!A.accessToken && !A.refreshToken) return h;
+      l[serverKey] = {
+        ...A,
+        accessToken: "",
+        refreshToken: undefined,
+        expiresAt: 0,
+        scope: undefined,
+      };
+      s = "tokens";
+    } else if (n?.keepXaaPin && xaaPinnedServer(A.discoveryState)) {
+      l[serverKey] = {
+        serverName: A.serverName,
+        serverUrl: A.serverUrl,
+        accessToken: "",
+        expiresAt: 0,
+        discoveryState: A.discoveryState,
+      };
+      s = "all";
+    } else {
+      delete l[serverKey];
+      s = "all";
+    }
+    return {
+      ...h,
+      mcpOAuth: l,
+    };
+  });
   if (s)
     logMCPDebug(
       serverName,
       s === "tokens" ? "Cleared stored tokens (preserved client registration)" : "Cleared stored tokens",
     );
-  return mutate;
+  return S;
 }
 //@ chunk-n1aavqzh.js:21871-22160 layout
-function logStorageWriteFailure_2(e, t, n, r) {
+function logStorageWriteFailure_2(serverName, serverConfig, n, r) {
   if (n?.success) return;
-  let s = r ? "mutate_rejected" : "storage_write_failed",
-    S = r ? errorMessage(r) : (n?.warning ?? "storage write failed");
-  logMCPDebug(e, `Token persist failed: ${S}`);
-  let h = ET(t);
+  let s = r ? "mutate_rejected" : "storage_write_failed";
+  let S = r ? errorMessage(r) : (n?.warning ?? "storage write failed");
+  logMCPDebug(serverName, `Token persist failed: ${S}`);
+  let h = loggingSafeOrigin(serverConfig);
   logEvent("tengu_mcp_oauth_token_persist_failed", {
-    transportType: fromEnum(t.type),
-    ...(h && { mcpServerBaseUrl: h }),
+    transportType: fromEnum(serverConfig.type),
+    ...(h && {
+      mcpServerBaseUrl: h,
+    }),
     reason: fromEnum(s),
   });
 }
 //@ chunk-n1aavqzh.js:22160-22319 layout
-async function hasStoredOAuthState_2(e, t) {
-  let n = getServerKey(e, t),
-    r = await readSecureStorageForMcp();
-  if (r === READ_FAILED || (t.oauth?.xaa && !r?.mcpOAuthClientConfig?.[n])) return READ_FAILED;
-  return xaaPinnedServer(r?.mcpOAuth?.[n]?.discoveryState);
+async function hasStoredOAuthState_2(serverName, serverConfig) {
+  let serverKey = getServerKey(serverName, serverConfig);
+  let secureStorageForMcp = await readSecureStorageForMcp();
+  if (
+    secureStorageForMcp === READ_FAILED ||
+    (serverConfig.oauth?.xaa && !secureStorageForMcp?.mcpOAuthClientConfig?.[serverKey])
+  )
+    return READ_FAILED;
+  return xaaPinnedServer(secureStorageForMcp?.mcpOAuth?.[serverKey]?.discoveryState);
 }
+//@ chunk-n1aavqzh.js:22319-24942 layout = performMCPXaaAuth (0.9)
 /**
  * performMCPXaaAuth（v2）：XAA 认证：取 IdP 设置与 client secret，acquireIdpIdToken 后 performCrossAppAccess，令牌写入存储并固定授权服务器。
  */
-//@ chunk-n1aavqzh.js:22319-24942 layout = performMCPXaaAuth (0.9)
 async function performMCPXaaAuth_2(
   serverName,
   serverConfig,
@@ -1027,67 +1247,67 @@ async function performMCPXaaAuth_2(
   if (!clientId) throw Error(`XAA: server '${serverName}' needs an AS client_id. Re-add with --client-id.`);
   let clientSecret = (await getMcpClientConfig_2(serverName, serverConfig))?.clientSecret;
   if (!clientSecret) {
-    let wantedKey = getServerKey(serverName, serverConfig),
-      haveKeys = Object.keys((await getSecureStorage().readAsync())?.mcpOAuthClientConfig ?? {}),
-      idpClientSecret = redactHeaders(serverConfig.headers ?? {});
-    throw (
-      logMCPDebug(
-        serverName,
-        `XAA: secret lookup miss. wanted=${wantedKey} have=[${haveKeys.join(", ")}] configHeaders=${jsonStringify(idpClientSecret)}`,
-      ),
-      Error(`XAA: AS client secret not found for '${serverName}'. Re-add with --client-secret.`)
+    let wantedKey = getServerKey(serverName, serverConfig);
+    let haveKeys = Object.keys((await getSecureStorage().readAsync())?.mcpOAuthClientConfig ?? {});
+    let headersForLogging = redactHeaders(serverConfig.headers ?? {});
+    logMCPDebug(
+      serverName,
+      `XAA: secret lookup miss. wanted=${wantedKey} have=[${haveKeys.join(", ")}] configHeaders=${jsonStringify(headersForLogging)}`,
     );
+    throw Error(`XAA: AS client secret not found for '${serverName}'. Re-add with --client-secret.`);
   }
   if ((await hasStoredOAuthState_2(serverName, serverConfig)) === READ_FAILED)
     throw new McpCredentialStoreUnavailableError(serverName);
   logMCPDebug(serverName, "XAA: starting cross-app access flow");
-  let y = await getIdpClientSecret_2(idp.issuer),
-    idTokenCacheHit = (await getCachedIdpIdToken_2(idp.issuer)) !== void 0,
-    failureStage = "idp_login";
+  let idpClientSecret = await getIdpClientSecret_2(idp.issuer);
+  let idTokenCacheHit = (await getCachedIdpIdToken_2(idp.issuer)) !== undefined;
+  let failureStage = "idp_login";
   try {
-    let T;
+    let idToken;
     try {
-      T = await acquireIdpIdToken_2({
+      idToken = await acquireIdpIdToken_2({
         idpIssuer: idp.issuer,
         idpClientId: idp.clientId,
-        idpClientSecret: y,
+        idpClientSecret,
         callbackPort: idp.callbackPort,
-        onAuthorizationUrl: onAuthorizationUrl,
-        skipBrowserOpen: skipBrowserOpen,
-        abortSignal: abortSignal,
+        onAuthorizationUrl,
+        skipBrowserOpen,
+        abortSignal,
       });
-    } catch (error) {
+    } catch (e) {
       if (abortSignal?.aborted) throw new AuthenticationCancelledError_2();
-      throw error;
+      throw e;
     }
     failureStage = "discovery";
     let oidc = await discoverOidc_2(idp.issuer);
-    ((failureStage = "token_exchange"), Ny().record(clientSecret));
+    failureStage = "token_exchange";
+    getPresentedCredentialLog().record(clientSecret);
     let F = await hasStoredOAuthState_2(serverName, serverConfig);
     if (F === READ_FAILED) throw new McpCredentialStoreUnavailableError(serverName);
-    let x;
+    let tokens;
     try {
-      x = await performCrossAppAccess(
+      tokens = await performCrossAppAccess(
         serverConfig.url,
         {
-          clientId: clientId,
-          clientSecret: clientSecret,
+          clientId,
+          clientSecret,
           idpClientId: idp.clientId,
-          idpClientSecret: y,
-          idpIdToken: T,
+          idpClientSecret,
+          idpIdToken: idToken,
           idpTokenEndpoint: oidc.token_endpoint,
           pinnedAuthorizationServer: F,
         },
         serverName,
         abortSignal,
       );
-    } catch (error) {
+    } catch (e) {
       if (abortSignal?.aborted) throw new AuthenticationCancelledError_2();
-      let msg = errorMessage(error);
-      if (error instanceof XaaTokenExchangeError_2) {
-        if (error.shouldClearIdToken)
-          (await clearIdpIdToken_2(idp.issuer),
-            logMCPDebug(serverName, "XAA: cleared cached id_token after token-exchange failure"));
+      let msg = errorMessage(e);
+      if (e instanceof XaaTokenExchangeError_2) {
+        if (e.shouldClearIdToken) {
+          await clearIdpIdToken_2(idp.issuer);
+          logMCPDebug(serverName, "XAA: cleared cached id_token after token-exchange failure");
+        }
       } else if (
         msg.includes("PRM discovery failed") ||
         msg.includes("AS metadata discovery failed") ||
@@ -1096,33 +1316,35 @@ async function performMCPXaaAuth_2(
       )
         failureStage = "discovery";
       else if (msg.includes("jwt-bearer")) failureStage = "jwt_bearer";
-      throw error;
+      throw e;
     }
-    let U = getServerKey(serverName, serverConfig),
-      storage = Ny();
-    (storage.record(x.access_token), storage.record(x.refresh_token));
-    let D, W;
+    let serverKey = getServerKey(serverName, serverConfig);
+    let storage = getPresentedCredentialLog();
+    storage.record(tokens.access_token);
+    storage.record(tokens.refresh_token);
+    let D;
+    let W;
     try {
-      D = await getSecureStorage().mutate((O) => {
-        let prev = O.mcpOAuth?.[U];
+      D = await getSecureStorage().mutate((existingData) => {
+        let prev = existingData.mcpOAuth?.[serverKey];
         return {
-          ...O,
+          ...existingData,
           mcpOAuth: {
-            ...O.mcpOAuth,
-            [U]: {
+            ...existingData.mcpOAuth,
+            [serverKey]: {
               ...prev,
-              serverName: serverName,
+              serverName,
               serverUrl: serverConfig.url,
-              accessToken: x.access_token,
-              refreshToken: x.refresh_token ?? prev?.refreshToken,
-              expiresAt: x.expires_in != null ? Date.now() + x.expires_in * 1000 : void 0,
-              scope: x.scope,
-              clientId: clientId,
-              clientSecret: clientSecret,
+              accessToken: tokens.access_token,
+              refreshToken: tokens.refresh_token ?? prev?.refreshToken,
+              expiresAt: tokens.expires_in != null ? Date.now() + tokens.expires_in * 1000 : undefined,
+              scope: tokens.scope,
+              clientId,
+              clientSecret,
               discoveryState: pinXaaAuth({
                 previous: prev?.discoveryState,
-                issuedBy: x.authorizationServerUrl,
-                interactiveSignIn: !0,
+                issuedBy: tokens.authorizationServerUrl,
+                interactiveSignIn: true,
               }),
             },
           },
@@ -1133,34 +1355,35 @@ async function performMCPXaaAuth_2(
     }
     if (D?.success) logMCPDebug(serverName, "XAA: tokens saved");
     else logStorageWriteFailure_2(serverName, serverConfig, D, W);
-    (logEvent("tengu_mcp_oauth_flow_success", { authMethod: lit("xaa"), idTokenCacheHit: idTokenCacheHit }),
-      logFeatureOk("mcp_oauth_flow"));
-  } catch (error) {
-    if (error instanceof AuthenticationCancelledError_2) throw error;
-    throw (
-      logFeatureBad("mcp_oauth_flow", "mcp_oauth_xaa_failed"),
-      logEvent("tengu_mcp_oauth_flow_failure", {
-        authMethod: lit("xaa"),
-        xaaFailureStage: fromEnum(failureStage),
-        idTokenCacheHit: idTokenCacheHit,
-      }),
-      error
-    );
+    logEvent("tengu_mcp_oauth_flow_success", {
+      authMethod: lit("xaa"),
+      idTokenCacheHit,
+    });
+    logFeatureOk("mcp_oauth_flow");
+  } catch (e) {
+    if (e instanceof AuthenticationCancelledError_2) throw e;
+    logFeatureBad("mcp_oauth_flow", "mcp_oauth_xaa_failed");
+    logEvent("tengu_mcp_oauth_flow_failure", {
+      authMethod: lit("xaa"),
+      xaaFailureStage: fromEnum(failureStage),
+      idTokenCacheHit,
+    });
+    throw e;
   }
 }
+//@ chunk-n1aavqzh.js:24942-33269 facade-exports = performMCPOAuthFlow (0.765)
 /**
  * performMCPOAuthFlow（v2）：MCP OAuth 主流程：XAA 分支；否则选回调端口（配置 callbackPort/重用已注册端口/findAvailablePort）、清旧令牌、起 127.0.0.1 回调服务器、ClaudeAuthProvider 发起授权（CIMD 或 DCR、PKCE）、浏览器打开、等待回调换令牌，记录 tengu_mcp_oauth_flow_* 遥测。
  */
-//@ chunk-n1aavqzh.js:24942-33269 facade-exports = performMCPOAuthFlow (0.765)
 async function performMCPOAuthFlow_2(serverName, serverConfig, onAuthorizationUrl, abortSignal, options) {
   if (!URL.canParse(serverConfig.url)) {
     logFeatureBad("mcp_oauth_flow", "mcp_oauth_no_valid_url");
-    let U =
+    let configError =
       "configError" in serverConfig && typeof serverConfig.configError === "string"
         ? serverConfig.configError
-        : void 0;
+        : undefined;
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      U ||
+      configError ||
         "This server's URL is missing or not a valid URL, so sign-in can't start. Fix the URL in its MCP config (or set the environment variable it uses) and try again.",
       "MCP OAuth refused: no valid server URL",
     );
@@ -1170,341 +1393,389 @@ async function performMCPOAuthFlow_2(serverName, serverConfig, onAuthorizationUr
       throw Error(
         `XAA is not enabled (set CLAUDE_CODE_ENABLE_XAA=1). Remove 'oauth.xaa' from server '${serverName}' to use the standard consent flow.`,
       );
-    (logEvent("tengu_mcp_oauth_flow_start", {
-      isOAuthFlow: !0,
+    logEvent("tengu_mcp_oauth_flow_start", {
+      isOAuthFlow: true,
       authMethod: lit("xaa"),
       transportType: fromEnum(serverConfig.type),
-      ...(ET(serverConfig) && { mcpServerBaseUrl: ET(serverConfig) }),
-    }),
-      await performMCPXaaAuth_2(
-        serverName,
-        serverConfig,
-        onAuthorizationUrl,
-        abortSignal,
-        options?.skipBrowserOpen,
-      ));
+      ...(loggingSafeOrigin(serverConfig) && {
+        mcpServerBaseUrl: loggingSafeOrigin(serverConfig),
+      }),
+    });
+    await performMCPXaaAuth_2(
+      serverName,
+      serverConfig,
+      onAuthorizationUrl,
+      abortSignal,
+      options?.skipBrowserOpen,
+    );
     return;
   }
-  let storage = getSecureStorage(),
-    serverKey = getServerKey(serverName, serverConfig),
-    cachedEntry = (await storage.readAsync())?.mcpOAuth?.[serverKey],
-    cachedStepUpScope = cachedEntry?.stepUpScope,
-    cachedResourceMetadataUrl = cachedEntry?.discoveryState?.resourceMetadataUrl,
-    w = getRegisteredLoopbackPort_2(cachedEntry),
-    R;
+  let storage = getSecureStorage();
+  let serverKey = getServerKey(serverName, serverConfig);
+  let cachedEntry = (await storage.readAsync())?.mcpOAuth?.[serverKey];
+  let cachedStepUpScope = cachedEntry?.stepUpScope;
+  let cachedResourceMetadataUrl = cachedEntry?.discoveryState?.resourceMetadataUrl;
+  let registeredLoopbackPort = getRegisteredLoopbackPort_2(cachedEntry);
+  let resourceMetadataUrl;
   if (cachedResourceMetadataUrl)
     try {
-      R = new URL(cachedResourceMetadataUrl);
+      resourceMetadataUrl = new URL(cachedResourceMetadataUrl);
     } catch {
       logMCPDebug(
         serverName,
         `Invalid cached resourceMetadataUrl: ${redactUrlSecrets(cachedResourceMetadataUrl)}`,
       );
     }
-  let wwwAuthParams = { scope: cachedStepUpScope, resourceMetadataUrl: R },
-    flowAttemptId = randomUUID(),
-    F = mcpServerTelemetry(serverConfig, options?.redirectUri);
+  let wwwAuthParams = {
+    scope: cachedStepUpScope,
+    resourceMetadataUrl,
+  };
+  let flowAttemptId = randomUUID();
+  let F = mcpServerTelemetry(serverConfig, options?.redirectUri);
   logEvent("tengu_mcp_oauth_flow_start", {
-    flowAttemptId: ye(flowAttemptId),
-    isOAuthFlow: !0,
+    flowAttemptId: sanitizeMarkName(flowAttemptId),
+    isOAuthFlow: true,
     transportType: fromEnum(serverConfig.type),
     ...F,
-    ...(ET(serverConfig) && { mcpServerBaseUrl: ET(serverConfig) }),
+    ...(loggingSafeOrigin(serverConfig) && {
+      mcpServerBaseUrl: loggingSafeOrigin(serverConfig),
+    }),
   });
-  let x = !1;
+  let x = false;
   try {
-    let configuredCallbackPort = serverConfig.oauth?.callbackPort,
-      P = !!options?.redirectUri,
-      D = P ? 0 : (configuredCallbackPort ?? (await findAvailablePort(w))),
-      W = options?.redirectUri ?? buildRedirectUri(D);
+    let configuredCallbackPort = serverConfig.oauth?.callbackPort;
+    let P = !!options?.redirectUri;
+    let D = P ? 0 : (configuredCallbackPort ?? (await findAvailablePort(registeredLoopbackPort)));
+    let redirectUri = options?.redirectUri ?? buildRedirectUri(D);
     logMCPDebug(
       serverName,
       P
-        ? `Using custom redirectUri: ${redactUrlSecrets(W)} (no localhost listener)`
-        : `Using redirect port: ${D}${configuredCallbackPort ? " (from config)" : w && D === w ? " (reusing registered port)" : ""}`,
+        ? `Using custom redirectUri: ${redactUrlSecrets(redirectUri)} (no localhost listener)`
+        : `Using redirect port: ${D}${configuredCallbackPort ? " (from config)" : registeredLoopbackPort && D === registeredLoopbackPort ? " (reusing registered port)" : ""}`,
     );
     try {
       await clearServerTokensFromLocalStorage_2(serverName, serverConfig, {
-        preserveClientRegistration: (j) => D === getRegisteredLoopbackPort_2(j) || j.redirectUri === W,
-        keepXaaPin: !0,
+        preserveClientRegistration: (j) =>
+          D === getRegisteredLoopbackPort_2(j) || j.redirectUri === redirectUri,
+        keepXaaPin: true,
       });
     } catch (error) {
       logMCPDebug(serverName, `clear stored credentials failed: ${errorMessage(error)}`);
     }
-    let O = ht(),
-      abortController = new AbortController();
-    if (!P) (O.oauthCallbackListeners.get(D)?.abort(), O.oauthCallbackListeners.set(D, abortController));
+    let cliOwnedState = getCliOwnedState();
+    let abortController = new AbortController();
+    if (!P) {
+      cliOwnedState.oauthCallbackListeners.get(D)?.abort();
+      cliOwnedState.oauthCallbackListeners.set(D, abortController);
+    }
     let G = new ClaudeAuthProvider_2(
-        serverName,
-        serverConfig,
-        W,
-        !0,
-        onAuthorizationUrl,
-        options?.skipBrowserOpen,
-      ),
-      redirectUri = Boolean(serverConfig.oauth?.scopes || serverConfig.oauth?.authServerMetadataUrl);
-    if (wwwAuthParams.scope && !redirectUri) G.markStepUpPending(wwwAuthParams.scope);
-    let me = wrapFetchWithHeaders(serverName, serverConfig, createAuthFetch_2());
+      serverName,
+      serverConfig,
+      redirectUri,
+      true,
+      onAuthorizationUrl,
+      options?.skipBrowserOpen,
+    );
+    let redirectUri_2 = Boolean(serverConfig.oauth?.scopes || serverConfig.oauth?.authServerMetadataUrl);
+    if (wwwAuthParams.scope && !redirectUri_2) G.markStepUpPending(wwwAuthParams.scope);
+    let fetchFn = wrapFetchWithHeaders(serverName, serverConfig, createAuthFetch_2());
     try {
-      let j = await fetchAuthServerMetadata(serverName, serverConfig.url, {
+      let metadata = await fetchAuthServerMetadata(serverName, serverConfig.url, {
         configuredMetadataUrl: serverConfig.oauth?.authServerMetadataUrl,
-        fetchFn: me,
+        fetchFn,
         resourceMetadataUrl: wwwAuthParams.resourceMetadataUrl,
         serverConfigForAnalytics: serverConfig,
       });
-      if (j)
-        (G.setMetadata(j),
-          logMCPDebug(
-            serverName,
-            `Fetched OAuth metadata with scope: ${redactSensitiveUrlParams("scope", getScopeFromMetadata_2(j) ?? "") || "NONE"}`,
-          ));
+      if (metadata) {
+        G.setMetadata(metadata);
+        logMCPDebug(
+          serverName,
+          `Fetched OAuth metadata with scope: ${redactSensitiveUrlParams("scope", getScopeFromMetadata_2(metadata) ?? "") || "NONE"}`,
+        );
+      }
     } catch (error) {
       if (error instanceof IssuerEchoCrossOriginError) throw error;
-      logMCPDebug(serverName, `Failed to fetch OAuth metadata: ${yF(error, serverConfig.url)}`);
+      logMCPDebug(
+        serverName,
+        `Failed to fetch OAuth metadata: ${describeSdkFetchError(error, serverConfig.url)}`,
+      );
     }
-    let oauthState = await G.state(),
-      server = null,
-      timeoutId = null,
-      abortHandler = null,
-      Ce = null,
-      cleanup = () => {
-        if (server)
-          (server.removeAllListeners(), server.on("error", () => {}), server.close(), (server = null));
-        if (timeoutId) (clearTimeout(timeoutId), (timeoutId = null));
-        if (abortHandler)
-          (abortSignal?.removeEventListener("abort", abortHandler),
-            abortController.signal.removeEventListener("abort", abortHandler),
-            (abortHandler = null));
-        if (O.oauthCallbackListeners.get(D) === abortController) O.oauthCallbackListeners.delete(D);
-        if (O.oauthCallbackSubmitters.get(serverName) === Ce) O.oauthCallbackSubmitters.delete(serverName);
-        logMCPDebug(serverName, "MCP OAuth server cleaned up");
-      },
-      { code: code, iss: iss } = await new Promise((j, He) => {
-        let ce = !1,
-          Re = (resolve, reject) => {
-            if (ce) return;
-            ((ce = !0), j({ code: resolve, iss: reject }));
-          },
-          resolveOnce = (code) => {
-            if (ce) return;
-            ((ce = !0), He(code));
-          };
-        if (
-          ((abortHandler = () => {
-            (cleanup(), resolveOnce(new AuthenticationCancelledError_2()));
-          }),
-          abortSignal?.aborted || abortController.signal.aborted)
-        ) {
-          abortHandler();
-          return;
-        }
-        (abortSignal?.addEventListener("abort", abortHandler),
-          abortController.signal.addEventListener("abort", abortHandler));
-        {
-          let rejectOnce = (error) => {
-            try {
-              let parsed = new URL(error),
-                code = parsed.searchParams.get("code"),
-                state = parsed.searchParams.get("state"),
-                error_2 = parsed.searchParams.get("error"),
-                ie = Pdn(parsed.searchParams.get("iss"));
-              if (!code && !error_2) return !1;
-              if (state !== oauthState)
-                return (
-                  logMCPDebug(
-                    serverName,
-                    "Ignoring manual callback URL whose state belongs to a different flow",
-                  ),
-                  !1
-                );
-              if (error_2) {
-                let ue = parsed.searchParams.get("error_description") || "";
-                return (cleanup(), resolveOnce(Error(`OAuth error: ${error_2} - ${ue}`)), !0);
-              }
-              if (!code) return !1;
-              return (
-                logMCPDebug(serverName, "Received auth code via manual callback URL"),
-                cleanup(),
-                Re(code, ie),
-                !0
-              );
-            } catch {
-              return !1;
-            }
-          };
-          ((Ce = rejectOnce),
-            O.oauthCallbackSubmitters.set(serverName, rejectOnce),
-            options?.onWaitingForCallback?.(rejectOnce, D, oauthState));
-        }
-        let Oe = async () => {
+    let oauthState = await G.state();
+    let server = null;
+    let timeoutId = null;
+    let abortHandler = null;
+    let Ce = null;
+    let cleanup = () => {
+      if (server) {
+        server.removeAllListeners();
+        server.on("error", () => {});
+        server.close();
+        server = null;
+      }
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+      if (abortHandler) {
+        abortSignal?.removeEventListener("abort", abortHandler);
+        abortController.signal.removeEventListener("abort", abortHandler);
+        abortHandler = null;
+      }
+      if (cliOwnedState.oauthCallbackListeners.get(D) === abortController)
+        cliOwnedState.oauthCallbackListeners.delete(D);
+      if (cliOwnedState.oauthCallbackSubmitters.get(serverName) === Ce)
+        cliOwnedState.oauthCallbackSubmitters.delete(serverName);
+      logMCPDebug(serverName, "MCP OAuth server cleaned up");
+    };
+    let { code, iss } = await new Promise((resolve, reject) => {
+      let resolved = false;
+      let resolveOnce = (resolve_2, reject) => {
+        if (resolved) return;
+        resolved = true;
+        resolve({
+          code: resolve_2,
+          iss: reject,
+        });
+      };
+      let rejectOnce = (error) => {
+        if (resolved) return;
+        resolved = true;
+        reject(error);
+      };
+      abortHandler = () => {
+        cleanup();
+        rejectOnce(new AuthenticationCancelledError_2());
+      };
+      if (abortSignal?.aborted || abortController.signal.aborted) {
+        abortHandler();
+        return;
+      }
+      abortSignal?.addEventListener("abort", abortHandler);
+      abortController.signal.addEventListener("abort", abortHandler);
+      {
+        let rejectOnce_2 = (callbackUrl) => {
           try {
-            (logMCPDebug(serverName, "Starting SDK auth"),
-              logMCPDebug(serverName, `Server URL: ${redactUrlSecrets(serverConfig.url)}`));
-            let N = await DBt(G, {
-              serverUrl: serverConfig.url,
-              scope: wwwAuthParams.scope,
-              resourceMetadataUrl: wwwAuthParams.resourceMetadataUrl,
-              fetchFn: me,
-              skipIssuerMetadataValidation: !0,
-            });
-            if ((logMCPDebug(serverName, `Initial auth result: ${N}`), N !== "REDIRECT"))
-              logMCPDebug(serverName, `Unexpected auth result, expected REDIRECT: ${N}`);
-          } catch (error) {
-            (logMCPDebug(serverName, `SDK auth error: ${yF(error, serverConfig.url)}`),
-              cleanup(),
-              resolveOnce(
-                Object.assign(
-                  new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-                    `SDK auth failed: ${yF(error, serverConfig.url)}`,
-                    "SDK auth failed",
-                  ),
-                  { cause: error },
-                ),
-              ));
+            let parsed = new URL(callbackUrl);
+            let code = parsed.searchParams.get("code");
+            let state = parsed.searchParams.get("state");
+            let error = parsed.searchParams.get("error");
+            let reject = firstOf(parsed.searchParams.get("iss"));
+            if (!code && !error) return false;
+            if (state !== oauthState) {
+              logMCPDebug(serverName, "Ignoring manual callback URL whose state belongs to a different flow");
+              return false;
+            }
+            if (error) {
+              let errorDescription = parsed.searchParams.get("error_description") || "";
+              cleanup();
+              rejectOnce(Error(`OAuth error: ${error} - ${errorDescription}`));
+              return true;
+            }
+            if (!code) return false;
+            logMCPDebug(serverName, "Received auth code via manual callback URL");
+            cleanup();
+            resolveOnce(code, reject);
+            return true;
+          } catch {
+            return false;
           }
         };
-        if (P) Oe();
-        else
-          ((server = createServer((req, res) => {
-            let parsedUrl = parse(req.url || "", !0);
-            if (parsedUrl.pathname === "/callback") {
-              let code = parsedUrl.query.code,
-                state = parsedUrl.query.state,
-                error = parsedUrl.query.error,
-                errorDescription = parsedUrl.query.error_description,
-                errorUri = parsedUrl.query.error_uri,
-                sanitizedError = Pdn(parsedUrl.query.iss);
-              if (state !== oauthState) {
-                (res.writeHead(400, { "Content-Type": "text/html" }),
-                  res.end(
-                    callbackPageBody({
-                      ok: !1,
-                      heading: "Authentication failed",
-                      message: "Invalid state parameter. Close this tab and try again from Claude Code.",
-                    }),
-                  ));
-                return;
-              }
-              if (error) {
-                (res.writeHead(200, { "Content-Type": "text/html" }),
-                  res.end(
-                    callbackPageBody({
-                      ok: !1,
-                      heading: "Authentication failed",
-                      message: "Close this tab and try again from Claude Code.",
-                      detail: `${String(error)}: ${errorDescription ?? ""}`,
-                    }),
-                  ),
-                  cleanup());
-                let errorMessage = `OAuth error: ${error}`;
-                if (errorDescription) errorMessage += ` - ${errorDescription}`;
-                if (errorUri) errorMessage += ` (See: ${errorUri})`;
-                resolveOnce(Error(errorMessage));
-                return;
-              }
-              if (code)
-                (res.writeHead(200, { "Content-Type": "text/html" }),
-                  res.end(
-                    callbackPageBody({
-                      ok: !0,
-                      heading: "Authentication successful",
-                      message: "You can close this tab and return to Claude Code.",
-                    }),
-                  ),
-                  cleanup(),
-                  Re(code, sanitizedError));
-            } else
-              (res.writeHead(404, { "Content-Type": "text/html" }),
-                res.end(
-                  callbackPageBody({
-                    ok: !1,
-                    heading: "Not found",
-                    message: `This is the Claude Code MCP OAuth callback listener. It only handles /callback. If your OAuth provider redirected here, the registered redirect_uri must be ${redactUrlSecrets(W)}.`,
-                  }),
-                ));
-          })),
-            server.on("error", (err) => {
-              if ((cleanup(), err.code === "EADDRINUSE")) {
-                let B =
-                  getPlatform() === "windows" ? `netstat -ano | findstr :${D}` : `lsof -ti:${D} -sTCP:LISTEN`;
-                resolveOnce(
-                  new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-                    `OAuth callback port ${D} is already in use \u2014 another process may be holding it. ` +
-                      `Run \`${B}\` to find it.`,
-                    "OAuth callback port already in use",
-                  ),
-                );
-              } else
-                resolveOnce(
-                  new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-                    `OAuth callback server failed: ${err.message}`,
-                    "OAuth callback server failed",
-                  ),
-                );
-            }),
-            server.listen(D, "127.0.0.1", () => void Oe()),
-            server.unref());
-        ((timeoutId = setTimeout(
-          (cleanup, rejectOnce) => {
-            (cleanup(),
-              rejectOnce(
-                new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-                  "Authentication timeout",
-                  "Authentication timeout",
-                ),
-              ));
-          },
-          300000,
-          cleanup,
-          resolveOnce,
-        )),
-          timeoutId.unref());
-      });
-    ((x = !0), logMCPDebug(serverName, "Completing auth flow with authorization code"), Ny().record(code));
-    let result = await DBt(G, {
+        Ce = rejectOnce_2;
+        cliOwnedState.oauthCallbackSubmitters.set(serverName, rejectOnce_2);
+        options?.onWaitingForCallback?.(rejectOnce_2, D, oauthState);
+      }
+      let Oe = async () => {
+        try {
+          logMCPDebug(serverName, "Starting SDK auth");
+          logMCPDebug(serverName, `Server URL: ${redactUrlSecrets(serverConfig.url)}`);
+          let result = await auth_2(G, {
+            serverUrl: serverConfig.url,
+            scope: wwwAuthParams.scope,
+            resourceMetadataUrl: wwwAuthParams.resourceMetadataUrl,
+            fetchFn,
+            skipIssuerMetadataValidation: true,
+          });
+          logMCPDebug(serverName, `Initial auth result: ${result}`);
+          if (result !== "REDIRECT")
+            logMCPDebug(serverName, `Unexpected auth result, expected REDIRECT: ${result}`);
+        } catch (error) {
+          logMCPDebug(serverName, `SDK auth error: ${describeSdkFetchError(error, serverConfig.url)}`);
+          cleanup();
+          rejectOnce(
+            Object.assign(
+              new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
+                `SDK auth failed: ${describeSdkFetchError(error, serverConfig.url)}`,
+                "SDK auth failed",
+              ),
+              {
+                cause: error,
+              },
+            ),
+          );
+        }
+      };
+      if (P) Oe();
+      else {
+        server = createServer((req, res) => {
+          let parsedUrl = parse(req.url || "", true);
+          if (parsedUrl.pathname === "/callback") {
+            let code = parsedUrl.query.code;
+            let state = parsedUrl.query.state;
+            let error = parsedUrl.query.error;
+            let errorDescription = parsedUrl.query.error_description;
+            let errorUri = parsedUrl.query.error_uri;
+            let sanitizedError = firstOf(parsedUrl.query.iss);
+            if (state !== oauthState) {
+              res.writeHead(400, {
+                "Content-Type": "text/html",
+              });
+              res.end(
+                callbackPageBody({
+                  ok: false,
+                  heading: "Authentication failed",
+                  message: "Invalid state parameter. Close this tab and try again from Claude Code.",
+                }),
+              );
+              return;
+            }
+            if (error) {
+              res.writeHead(200, {
+                "Content-Type": "text/html",
+              });
+              res.end(
+                callbackPageBody({
+                  ok: false,
+                  heading: "Authentication failed",
+                  message: "Close this tab and try again from Claude Code.",
+                  detail: `${String(error)}: ${errorDescription ?? ""}`,
+                }),
+              );
+              cleanup();
+              let errorMessage = `OAuth error: ${error}`;
+              if (errorDescription) errorMessage += ` - ${errorDescription}`;
+              if (errorUri) errorMessage += ` (See: ${errorUri})`;
+              rejectOnce(Error(errorMessage));
+              return;
+            }
+            if (code) {
+              res.writeHead(200, {
+                "Content-Type": "text/html",
+              });
+              res.end(
+                callbackPageBody({
+                  ok: true,
+                  heading: "Authentication successful",
+                  message: "You can close this tab and return to Claude Code.",
+                }),
+              );
+              cleanup();
+              resolveOnce(code, sanitizedError);
+            }
+          } else {
+            res.writeHead(404, {
+              "Content-Type": "text/html",
+            });
+            res.end(
+              callbackPageBody({
+                ok: false,
+                heading: "Not found",
+                message: `This is the Claude Code MCP OAuth callback listener. It only handles /callback. If your OAuth provider redirected here, the registered redirect_uri must be ${redactUrlSecrets(redirectUri)}.`,
+              }),
+            );
+          }
+        });
+        server.on("error", (err) => {
+          cleanup();
+          if (err.code === "EADDRINUSE") {
+            let findCmd =
+              getPlatform() === "windows" ? `netstat -ano | findstr :${D}` : `lsof -ti:${D} -sTCP:LISTEN`;
+            rejectOnce(
+              new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
+                `OAuth callback port ${D} is already in use \u2014 another process may be holding it. ` +
+                  `Run \`${findCmd}\` to find it.`,
+                "OAuth callback port already in use",
+              ),
+            );
+          } else
+            rejectOnce(
+              new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
+                `OAuth callback server failed: ${err.message}`,
+                "OAuth callback server failed",
+              ),
+            );
+        });
+        server.listen(D, "127.0.0.1", () => void Oe());
+        server.unref();
+      }
+      timeoutId = setTimeout(
+        (cleanup, rejectOnce) => {
+          cleanup();
+          rejectOnce(
+            new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
+              "Authentication timeout",
+              "Authentication timeout",
+            ),
+          );
+        },
+        300000,
+        cleanup,
+        rejectOnce,
+      );
+      timeoutId.unref();
+    });
+    x = true;
+    logMCPDebug(serverName, "Completing auth flow with authorization code");
+    getPresentedCredentialLog().record(code);
+    let result = await auth_2(G, {
       serverUrl: serverConfig.url,
       authorizationCode: code,
-      iss: iss,
+      iss,
       resourceMetadataUrl: wwwAuthParams.resourceMetadataUrl,
       fetchFn: wrapFetchWithHeaders(serverName, serverConfig, createAuthFetch_2()),
-      skipIssuerMetadataValidation: !0,
+      skipIssuerMetadataValidation: true,
     });
-    if ((logMCPDebug(serverName, `Auth result: ${result}`), result === "AUTHORIZED")) {
-      let j = await G.tokens().catch(() => {
+    logMCPDebug(serverName, `Auth result: ${result}`);
+    if (result === "AUTHORIZED") {
+      let savedTokens = await G.tokens().catch(() => {
         return;
       });
-      if ((logMCPDebug(serverName, `Tokens after auth: ${j ? "Present" : "Missing"}`), j))
-        logMCPDebug(serverName, `Token expires_in: ${j.expires_in}`);
-      (logEvent("tengu_mcp_oauth_flow_success", {
-        flowAttemptId: ye(flowAttemptId),
+      logMCPDebug(serverName, `Tokens after auth: ${savedTokens ? "Present" : "Missing"}`);
+      if (savedTokens) logMCPDebug(serverName, `Token expires_in: ${savedTokens.expires_in}`);
+      logEvent("tengu_mcp_oauth_flow_success", {
+        flowAttemptId: sanitizeMarkName(flowAttemptId),
         transportType: fromEnum(serverConfig.type),
         ...F,
-        ...(ET(serverConfig) && { mcpServerBaseUrl: ET(serverConfig) }),
-      }),
-        logFeatureOk("mcp_oauth_flow"));
+        ...(loggingSafeOrigin(serverConfig) && {
+          mcpServerBaseUrl: loggingSafeOrigin(serverConfig),
+        }),
+      });
+      logFeatureOk("mcp_oauth_flow");
     } else
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
         "Unexpected auth result: " + result,
         "Unexpected auth result",
       );
   } catch (error) {
-    logMCPDebug(serverName, `Error during auth completion: ${yF(error, serverConfig.url)}`);
-    let reason = "unknown",
-      D,
-      W,
-      msg = errorMessage(error),
-      M = error instanceof Error ? error.cause : void 0;
+    logMCPDebug(
+      serverName,
+      `Error during auth completion: ${describeSdkFetchError(error, serverConfig.url)}`,
+    );
+    let reason = "unknown";
+    let D;
+    let W;
+    let msg = errorMessage(error);
+    let cause = error instanceof Error ? error.cause : undefined;
     if (error instanceof AuthenticationCancelledError_2) reason = "cancelled";
-    else if (error instanceof IssuerEchoCrossOriginError || M instanceof IssuerEchoCrossOriginError)
+    else if (error instanceof IssuerEchoCrossOriginError || cause instanceof IssuerEchoCrossOriginError)
       reason = "issuer_echo_denied";
-    else if (error instanceof D_t || M instanceof D_t)
+    else if (error instanceof IssuerMismatchError || cause instanceof IssuerMismatchError)
       reason =
-        [error, M].find((z) => z instanceof D_t)?.kind === "metadata"
+        [error, cause].find((z) => z instanceof IssuerMismatchError)?.kind === "metadata"
           ? "issuer_echo_mismatch"
           : "issuer_response_mismatch";
     else if (/AADSTS\d/.test(msg)) reason = "entra_specific";
     else if (/redirect[_ ]uri/i.test(msg)) reason = "redirect_uri_mismatch";
-    else if (x && (isZodError_2(error) || isZodError_2(M))) reason = "token_response_schema_rejected";
+    else if (x && (isZodError_2(error) || isZodError_2(cause))) reason = "token_response_schema_rejected";
     else if (x) reason = "token_exchange_failed";
     else if (msg.includes("Authentication timeout")) reason = "timeout";
     else if (msg.includes("OAuth error:")) reason = "provider_denied";
@@ -1515,22 +1786,32 @@ async function performMCPOAuthFlow_2(serverName, serverConfig, onAuthorizationUr
       msg.includes("No available port")
     )
       reason = "port_unavailable";
-    else if (msg.includes("SDK auth failed")) reason = classifySdkAuthFailure_2(msg, M);
-    let found = [M, error].find((L) => L instanceof XNr),
-      ae = (M instanceof Error ? M : error instanceof Error ? error : null)?.message.match(/^HTTP (\d{3})\b/);
+    else if (msg.includes("SDK auth failed")) reason = classifySdkAuthFailure_2(msg, cause);
+    let found = [cause, error].find((L) => L instanceof RegistrationRejectedError);
+    let match = (cause instanceof Error ? cause : error instanceof Error ? error : null)?.message.match(
+      /^HTTP (\d{3})\b/,
+    );
     if (found) W = found.status;
-    else if (ae) W = Number(ae[1]);
-    if (M instanceof OAuthError) D = M.code;
-    if (error instanceof OAuthError) {
-      if (((D = error.code), error.code === "invalid_client" || error.code === "unauthorized_client")) {
-        let L = getServerKey(serverName, serverConfig);
+    else if (match) W = Number(match[1]);
+    if (cause instanceof OAuthError_2) D = cause.code;
+    if (error instanceof OAuthError_2) {
+      D = error.code;
+      if (error.code === "invalid_client" || error.code === "unauthorized_client") {
+        let serverKey = getServerKey(serverName, serverConfig);
         try {
           await getSecureStorage().mutate((z) => {
-            let H = z.mcpOAuth?.[L];
+            let H = z.mcpOAuth?.[serverKey];
             if (!H) return z;
             return {
               ...z,
-              mcpOAuth: { ...z.mcpOAuth, [L]: { ...H, clientId: void 0, clientSecret: void 0 } },
+              mcpOAuth: {
+                ...z.mcpOAuth,
+                [serverKey]: {
+                  ...H,
+                  clientId: undefined,
+                  clientSecret: undefined,
+                },
+              },
             };
           });
         } catch (error) {
@@ -1542,58 +1823,73 @@ async function performMCPOAuthFlow_2(serverName, serverConfig, onAuthorizationUr
       !/^OAuth error: access_denied(?: |$)/.test(msg) &&
       (reason === "timeout" || msg.includes("OAuth error:"))
     ) {
-      let L = getServerKey(serverName, serverConfig);
+      let serverKey = getServerKey(serverName, serverConfig);
       await getSecureStorage()
         .mutate((z) => {
-          let H = z.mcpOAuth?.[L];
+          let H = z.mcpOAuth?.[serverKey];
           if (!H?.clientId || H.accessToken || H.refreshToken || H.clientId !== cachedEntry?.clientId)
             return z;
-          return { ...z, mcpOAuth: { ...z.mcpOAuth, [L]: { ...H, clientId: void 0, clientSecret: void 0 } } };
+          return {
+            ...z,
+            mcpOAuth: {
+              ...z.mcpOAuth,
+              [serverKey]: {
+                ...H,
+                clientId: undefined,
+                clientSecret: undefined,
+              },
+            },
+          };
         })
-        .catch((z) => logMCPDebug(serverName, `drop clientId failed: ${errorMessage(z)}`));
+        .catch((error) => logMCPDebug(serverName, `drop clientId failed: ${errorMessage(error)}`));
     }
     if (reason !== "cancelled") logFeatureBad("mcp_oauth_flow", "mcp_oauth_flow_failed");
     logEvent("tengu_mcp_oauth_flow_error", {
-      flowAttemptId: ye(flowAttemptId),
+      flowAttemptId: sanitizeMarkName(flowAttemptId),
       reason: fromEnum(reason),
-      error_code: D === void 0 ? void 0 : sanitizeOAuthErrorCodeForAnalytics_2(D),
+      error_code: D === undefined ? undefined : sanitizeOAuthErrorCodeForAnalytics_2(D),
       http_status: fromNumberOpt(W),
       transportType: fromEnum(serverConfig.type),
       ...F,
-      ...(ET(serverConfig) && { mcpServerBaseUrl: ET(serverConfig) }),
+      ...(loggingSafeOrigin(serverConfig) && {
+        mcpServerBaseUrl: loggingSafeOrigin(serverConfig),
+      }),
     });
-    let serverKey = yF(error, serverConfig.url);
-    throw serverKey === errorMessage(error) ? error : Error(serverKey, { cause: error });
+    let serverKey = describeSdkFetchError(error, serverConfig.url);
+    throw serverKey === errorMessage(error)
+      ? error
+      : Error(serverKey, {
+          cause: error,
+        });
   }
 }
+//@ chunk-n1aavqzh.js:33269-33798 facade-exports
 /**
  * wrapFetchWithAuthChallengeDetection：记录 401/403 认证挑战与 insufficient_scope（step-up）信息到 provider。
  */
-//@ chunk-n1aavqzh.js:33269-33798 facade-exports
 function wrapFetchWithStepUpDetection_2(fetchFn, authProvider) {
   return async (n, r) => {
     let s = await fetchFn(n, r);
-    if (s.status === 401 || s.status === 403) authProvider.sawAuthChallenge = !0;
-    if (
-      (authProvider.noteServerAnswer(
-        n,
-        s.status === 401 || (s.status === 403 && Mze(s).error === "insufficient_scope"),
-      ),
-      s.status === 401 || s.status === 403)
-    )
+    if (s.status === 401 || s.status === 403) authProvider.sawAuthChallenge = true;
+    authProvider.noteServerAnswer(
+      n,
+      s.status === 401 ||
+        (s.status === 403 && extractWWWAuthenticateParams_2(s).error === "insufficient_scope"),
+    );
+    if (s.status === 401 || s.status === 403)
       authProvider.noteAuthRejection(n, s.status, new Headers(r?.headers).get("authorization"));
     if (!new Headers(r?.headers).has("authorization")) return s;
     if (s.status === 403) {
-      let { error: error, scope: scope } = Mze(s);
+      let { error, scope } = extractWWWAuthenticateParams_2(s);
       if (error === "insufficient_scope" && scope) authProvider.markStepUpPending(scope);
     } else if (s.status === 401) authProvider.clearStepUpPending();
     return s;
   };
 }
+//@ chunk-n1aavqzh.js:33798-62345 facade-exports
 /**
  * ClaudeAuthProvider（v2）：OAuthClientProvider 实现：客户端元数据（CIMD URL 或 DCR）、令牌读写（安全存储 mcpOAuth[serverKey]）、XAA 静默刷新、刷新令牌并发协调、step-up scope、发现状态缓存、重定向到授权页。
  */
-//@ chunk-n1aavqzh.js:33798-62345 facade-exports
 class ClaudeAuthProvider_2 {
   serverName;
   serverConfig;
@@ -1602,7 +1898,7 @@ class ClaudeAuthProvider_2 {
   _codeVerifier;
   _flowDiscoveryState;
   _flowDiscoveryStateAt = 0;
-  _flowDiscoveryStateFromConfiguredUrl = !1;
+  _flowDiscoveryStateFromConfiguredUrl = false;
   _metadataEchoMode;
   _authorizationUrl;
   _state;
@@ -1620,14 +1916,21 @@ class ClaudeAuthProvider_2 {
   _presented;
   onAuthorizationUrlCallback;
   skipBrowserOpen;
-  constructor(e, t, n = buildRedirectUri(), r = !1, s, S) {
-    ((this.serverName = e),
-      (this.serverConfig = t),
-      (this.redirectUri = n),
-      (this.handleRedirection = r),
-      (this.onAuthorizationUrlCallback = s),
-      (this.skipBrowserOpen = S ?? !1),
-      (this._presented = Ny()));
+  constructor(
+    serverName,
+    serverConfig,
+    redirectUri = buildRedirectUri(),
+    handleRedirection = false,
+    onAuthorizationUrl,
+    skipBrowserOpen,
+  ) {
+    this.serverName = serverName;
+    this.serverConfig = serverConfig;
+    this.redirectUri = redirectUri;
+    this.handleRedirection = handleRedirection;
+    this.onAuthorizationUrlCallback = onAuthorizationUrl;
+    this.skipBrowserOpen = skipBrowserOpen ?? false;
+    this._presented = getPresentedCredentialLog();
   }
   get redirectUrl() {
     return this.redirectUri;
@@ -1636,21 +1939,22 @@ class ClaudeAuthProvider_2 {
     return this._authorizationUrl;
   }
   get clientMetadata() {
-    let e = {
-        client_name: `Claude Code (${this.serverName})`,
-        redirect_uris: [this.redirectUri],
-        grant_types: ["authorization_code", "refresh_token"],
-        response_types: ["code"],
-        token_endpoint_auth_method: "none",
-      },
-      curatedMetadataScope = this.getCuratedMetadataScope();
-    if (curatedMetadataScope)
-      ((e.scope = curatedMetadataScope),
-        logMCPDebug(
-          this.serverName,
-          `Using scope from metadata: ${redactSensitiveUrlParams("scope", e.scope)}`,
-        ));
-    return e;
+    let metadata = {
+      client_name: `Claude Code (${this.serverName})`,
+      redirect_uris: [this.redirectUri],
+      grant_types: ["authorization_code", "refresh_token"],
+      response_types: ["code"],
+      token_endpoint_auth_method: "none",
+    };
+    let metadataScope = this.getCuratedMetadataScope();
+    if (metadataScope) {
+      metadata.scope = metadataScope;
+      logMCPDebug(
+        this.serverName,
+        `Using scope from metadata: ${redactSensitiveUrlParams("scope", metadata.scope)}`,
+      );
+    }
+    return metadata;
   }
   get clientMetadataUrl() {
     if (!isLoopbackCallbackUri_2(this.redirectUri)) {
@@ -1660,23 +1964,25 @@ class ClaudeAuthProvider_2 {
       );
       return;
     }
-    let e = getClientMetadataDocumentUrl_2();
-    if (e !== MCP_CLIENT_METADATA_URL) logMCPDebug(this.serverName, `Using CIMD URL from env: ${e}`);
-    return e;
+    let override = getClientMetadataDocumentUrl_2();
+    if (override !== MCP_CLIENT_METADATA_URL)
+      logMCPDebug(this.serverName, `Using CIMD URL from env: ${override}`);
+    return override;
   }
-  setMetadata(e) {
-    ((this._metadata = e), (this._metadataEchoMode = isIssuerStrictEchoEnabled() ? "enforce" : "observe"));
+  setMetadata(metadata) {
+    this._metadata = metadata;
+    this._metadataEchoMode = isIssuerStrictEchoEnabled() ? "enforce" : "observe";
   }
   getCuratedMetadataScope() {
-    let e = getScopeFromMetadata_2(this._metadata);
-    if (e !== void 0) return e;
+    let scopeFromMetadata = getScopeFromMetadata_2(this._metadata);
+    if (scopeFromMetadata !== undefined) return scopeFromMetadata;
     if (this.serverConfig.oauth?.authServerMetadataUrl && Array.isArray(this._metadata?.scopes_supported))
       return this._metadata.scopes_supported.join(" ");
     return;
   }
-  markStepUpPending(e) {
-    ((this._pendingStepUpScope = e),
-      logMCPDebug(this.serverName, `Marked step-up pending: ${redactSensitiveUrlParams("scope", e)}`));
+  markStepUpPending(scope) {
+    this._pendingStepUpScope = scope;
+    logMCPDebug(this.serverName, `Marked step-up pending: ${redactSensitiveUrlParams("scope", scope)}`);
   }
   get pendingStepUpScope() {
     return this._pendingStepUpScope;
@@ -1684,79 +1990,83 @@ class ClaudeAuthProvider_2 {
   get lastAuthRejection() {
     return this._lastAuthRejection;
   }
-  noteAuthRejection(e, t, n) {
+  noteAuthRejection(e, status, n) {
     let url = this.serverConfig.url;
     if (String(e) === (URL.canParse(url) ? new URL(url).href : url))
-      this._lastAuthRejection = { status: t, accessToken: n?.startsWith("Bearer ") ? n.slice(7) : void 0 };
+      this._lastAuthRejection = {
+        status,
+        accessToken: n?.startsWith("Bearer ") ? n.slice(7) : undefined,
+      };
   }
   clearStepUpPending() {
-    this._pendingStepUpScope = void 0;
+    this._pendingStepUpScope = undefined;
   }
   clearStepUpPendingOnCredentialGone() {
     if (!this.handleRedirection) this.clearStepUpPending();
   }
-  sawAuthChallenge = !1;
-  authChallengeOpen = !1;
-  noteServerAnswer(e, t) {
+  sawAuthChallenge = false;
+  authChallengeOpen = false;
+  noteServerAnswer(e, authChallengeOpen) {
     let url = this.serverConfig.url;
-    if (String(e) === (URL.canParse(url) ? new URL(url).href : url)) this.authChallengeOpen = t;
+    if (String(e) === (URL.canParse(url) ? new URL(url).href : url))
+      this.authChallengeOpen = authChallengeOpen;
   }
-  registrationOfferedByDiscovery = !1;
+  registrationOfferedByDiscovery = false;
   async readCredentialStore() {
-    let e = await readSecureStorageForMcp(
+    let secureStorageForMcp = await readSecureStorageForMcp(
       this.handleRedirection
-        ? void 0
+        ? undefined
         : {
             serverName: this.serverName,
             serverConfig: this.serverConfig,
             challenged: this.authChallengeOpen,
           },
     );
-    if (e === READ_FAILED)
-      throw (
-        logMCPDebug(
-          this.serverName,
-          "Credential store could not be read (the login keychain may be locked); not reporting credentials as absent",
-        ),
-        new McpCredentialStoreUnavailableError(this.serverName)
+    if (secureStorageForMcp === READ_FAILED) {
+      logMCPDebug(
+        this.serverName,
+        "Credential store could not be read (the login keychain may be locked); not reporting credentials as absent",
       );
-    return e;
+      throw new McpCredentialStoreUnavailableError(this.serverName);
+    }
+    return secureStorageForMcp;
   }
   async state() {
-    if (!this._state)
-      ((this._state = randomBytes(32).toString("base64url")),
-        logMCPDebug(this.serverName, "Generated new OAuth state"));
+    if (!this._state) {
+      this._state = randomBytes(32).toString("base64url");
+      logMCPDebug(this.serverName, "Generated new OAuth state");
+    }
     return this._state;
   }
   async clientInformation() {
     let clientInformation = await this.resolveClientInformation();
-    return (
-      this._presented.record(clientInformation?.client_secret),
-      this._presented.record(basicAuthValue(clientInformation?.client_id, clientInformation?.client_secret)),
-      clientInformation
-    );
+    this._presented.record(clientInformation?.client_secret);
+    this._presented.record(basicAuthValue(clientInformation?.client_id, clientInformation?.client_secret));
+    return clientInformation;
   }
   async resolveClientInformation() {
-    let credentialStore = await this.readCredentialStore(),
-      t = getServerKey(this.serverName, this.serverConfig),
-      n = credentialStore?.mcpOAuthClientConfig?.[t]?.clientSecret,
-      r = this.serverConfig.oauth?.clientId,
-      s = credentialStore?.mcpOAuth?.[t],
-      S =
-        this.handleRedirection &&
-        isClientMetadataDocumentId_2(s?.clientId) &&
-        !isLoopbackCallbackUri_2(this.redirectUri);
+    let credentialStore = await this.readCredentialStore();
+    let serverKey = getServerKey(this.serverName, this.serverConfig);
+    let clientSecret = credentialStore?.mcpOAuthClientConfig?.[serverKey]?.clientSecret;
+    let clientId = this.serverConfig.oauth?.clientId;
+    let s = credentialStore?.mcpOAuth?.[serverKey];
+    let S =
+      this.handleRedirection &&
+      isClientMetadataDocumentId_2(s?.clientId) &&
+      !isLoopbackCallbackUri_2(this.redirectUri);
     if (S) {
-      if (
-        (logMCPDebug(
-          this.serverName,
-          `Stored client_id is the CIMD document URL (loopback /callback only); current redirectUri is ${redactUrlSecrets(this.redirectUri)} \u2014 ${r ? "serving the configured client" : "registering via DCR"} instead`,
-        ),
-        r)
-      )
+      logMCPDebug(
+        this.serverName,
+        `Stored client_id is the CIMD document URL (loopback /callback only); current redirectUri is ${redactUrlSecrets(this.redirectUri)} \u2014 ${clientId ? "serving the configured client" : "registering via DCR"} instead`,
+      );
+      if (clientId)
         await this.patchStoredClientEntry(
-          t,
-          { clientId: r, clientSecret: void 0, redirectUri: this.redirectUri },
+          serverKey,
+          {
+            clientId,
+            clientSecret: undefined,
+            redirectUri: this.redirectUri,
+          },
           "stale CIMD client_id repair",
         );
     }
@@ -1769,61 +2079,74 @@ class ClaudeAuthProvider_2 {
           : !this.redirectUri.startsWith("http://localhost"))
       ) {
         let A = redirectUri ? redactUrlSecrets(redirectUri) : "localhost";
-        if (!r) {
+        if (!clientId) {
           logMCPDebug(
             this.serverName,
             `Cached client_id was registered for ${A}; current redirectUri is ${redactUrlSecrets(this.redirectUri)} \u2014 forcing re-DCR`,
           );
           return;
         }
-        if (s.clientId !== r)
-          return (
-            logMCPDebug(
-              this.serverName,
-              `Stored client_id is stale and its redirectUri ${A} predates ${redactUrlSecrets(this.redirectUri)} \u2014 serving the configured client (no registration to redo)`,
-            ),
-            await this.patchStoredClientEntry(
-              t,
-              { clientId: r, clientSecret: void 0, redirectUri: this.redirectUri },
-              "stale client_id repair",
-            ),
-            (this._lastServedClientId = r),
-            { client_id: r, issuer: s.issuer, client_secret: n }
+        if (s.clientId !== clientId) {
+          logMCPDebug(
+            this.serverName,
+            `Stored client_id is stale and its redirectUri ${A} predates ${redactUrlSecrets(this.redirectUri)} \u2014 serving the configured client (no registration to redo)`,
           );
-        (logMCPDebug(
-          this.serverName,
-          `Stored redirectUri ${A} predates ${redactUrlSecrets(this.redirectUri)}, but the client_id is the configured one \u2014 serving it (no registration to redo)`,
-        ),
           await this.patchStoredClientEntry(
-            t,
-            { redirectUri: this.redirectUri },
-            "stored redirectUri convergence",
-          ));
-      }
-      return (
-        logMCPDebug(this.serverName, "Found client info"),
-        (this._lastServedClientId = s.clientId),
-        {
-          client_id: s.clientId,
-          issuer: s.issuer,
-          client_secret: s.clientSecret ?? (s.clientId === r ? n : void 0),
+            serverKey,
+            {
+              clientId,
+              clientSecret: undefined,
+              redirectUri: this.redirectUri,
+            },
+            "stale client_id repair",
+          );
+          this._lastServedClientId = clientId;
+          return {
+            client_id: clientId,
+            issuer: s.issuer,
+            client_secret: clientSecret,
+          };
         }
-      );
-    }
-    if (r)
-      return (
-        logMCPDebug(this.serverName, "Using pre-configured client ID"),
-        (this._lastServedClientId = r),
-        { client_id: r, client_secret: n }
-      );
-    if (!this.handleRedirection && this.registrationOfferedByDiscovery && !s?.accessToken && !s?.refreshToken)
-      throw (
         logMCPDebug(
           this.serverName,
-          "No client info found; deferring client registration to authentication time",
-        ),
-        new McpClientRegistrationDeferredError_2(this.serverName)
+          `Stored redirectUri ${A} predates ${redactUrlSecrets(this.redirectUri)}, but the client_id is the configured one \u2014 serving it (no registration to redo)`,
+        );
+        await this.patchStoredClientEntry(
+          serverKey,
+          {
+            redirectUri: this.redirectUri,
+          },
+          "stored redirectUri convergence",
+        );
+      }
+      logMCPDebug(this.serverName, "Found client info");
+      this._lastServedClientId = s.clientId;
+      return {
+        client_id: s.clientId,
+        issuer: s.issuer,
+        client_secret: s.clientSecret ?? (s.clientId === clientId ? clientSecret : undefined),
+      };
+    }
+    if (clientId) {
+      logMCPDebug(this.serverName, "Using pre-configured client ID");
+      this._lastServedClientId = clientId;
+      return {
+        client_id: clientId,
+        client_secret: clientSecret,
+      };
+    }
+    if (
+      !this.handleRedirection &&
+      this.registrationOfferedByDiscovery &&
+      !s?.accessToken &&
+      !s?.refreshToken
+    ) {
+      logMCPDebug(
+        this.serverName,
+        "No client info found; deferring client registration to authentication time",
       );
+      throw new McpClientRegistrationDeferredError_2(this.serverName);
+    }
     logMCPDebug(this.serverName, "No client info found");
     return;
   }
@@ -1834,7 +2157,16 @@ class ClaudeAuthProvider_2 {
           await getSecureStorage().mutate((s) => {
             let S = s.mcpOAuth?.[e];
             if (!S) return s;
-            return { ...s, mcpOAuth: { ...s.mcpOAuth, [e]: { ...S, ...t } } };
+            return {
+              ...s,
+              mcpOAuth: {
+                ...s.mcpOAuth,
+                [e]: {
+                  ...S,
+                  ...t,
+                },
+              },
+            };
           })
         )?.success
       )
@@ -1844,9 +2176,9 @@ class ClaudeAuthProvider_2 {
     }
   }
   async saveClientInformation(e) {
-    (this._presented.record(e.client_secret),
-      this._presented.record(basicAuthValue(e.client_id, e.client_secret)));
-    let t = getServerKey(this.serverName, this.serverConfig);
+    this._presented.record(e.client_secret);
+    this._presented.record(basicAuthValue(e.client_id, e.client_secret));
+    let serverKey = getServerKey(this.serverName, this.serverConfig);
     try {
       if (
         (
@@ -1854,25 +2186,25 @@ class ClaudeAuthProvider_2 {
             ...r,
             mcpOAuth: {
               ...r.mcpOAuth,
-              [t]: {
-                ...r.mcpOAuth?.[t],
+              [serverKey]: {
+                ...r.mcpOAuth?.[serverKey],
                 serverName: this.serverName,
                 serverUrl: this.serverConfig.url,
                 clientId: e.client_id,
                 clientSecret:
-                  e.issuer !== void 0 &&
-                  e.client_id === r.mcpOAuth?.[t]?.clientId &&
-                  r.mcpOAuth?.[t]?.clientSecret === void 0 &&
+                  e.issuer !== undefined &&
+                  e.client_id === r.mcpOAuth?.[serverKey]?.clientId &&
+                  r.mcpOAuth?.[serverKey]?.clientSecret === undefined &&
                   e.client_id === this.serverConfig.oauth?.clientId
-                    ? void 0
+                    ? undefined
                     : e.client_secret,
-                issuer: e.issuer ?? r.mcpOAuth?.[t]?.issuer,
+                issuer: e.issuer ?? r.mcpOAuth?.[serverKey]?.issuer,
                 redirectUri:
-                  !this.handleRedirection && e.client_id === r.mcpOAuth?.[t]?.clientId
-                    ? r.mcpOAuth?.[t]?.redirectUri
+                  !this.handleRedirection && e.client_id === r.mcpOAuth?.[serverKey]?.clientId
+                    ? r.mcpOAuth?.[serverKey]?.redirectUri
                     : this.redirectUri,
-                accessToken: r.mcpOAuth?.[t]?.accessToken || "",
-                expiresAt: r.mcpOAuth?.[t]?.expiresAt,
+                accessToken: r.mcpOAuth?.[serverKey]?.accessToken || "",
+                expiresAt: r.mcpOAuth?.[serverKey]?.expiresAt,
               },
             },
           }))
@@ -1885,144 +2217,164 @@ class ClaudeAuthProvider_2 {
     }
   }
   async tokens() {
-    let credentialStore = await this.readCredentialStore(),
-      t = getServerKey(this.serverName, this.serverConfig),
-      n = credentialStore?.mcpOAuth?.[t];
+    let credentialStore = await this.readCredentialStore();
+    let serverKey = getServerKey(this.serverName, this.serverConfig);
+    let tokenData = credentialStore?.mcpOAuth?.[serverKey];
     if (
       isXaaEnabled() &&
       this.serverConfig.oauth?.xaa &&
-      !n?.refreshToken &&
-      (!n?.accessToken || (n.expiresAt != null && (n.expiresAt - Date.now()) / 1000 <= 300))
+      !tokenData?.refreshToken &&
+      (!tokenData?.accessToken ||
+        (tokenData.expiresAt != null && (tokenData.expiresAt - Date.now()) / 1000 <= 300))
     ) {
-      if (!this._refreshInProgress)
-        (logMCPDebug(
+      if (!this._refreshInProgress) {
+        logMCPDebug(
           this.serverName,
-          n
+          tokenData
             ? "XAA: access_token expiring, attempting silent exchange"
             : "XAA: no access_token yet, attempting silent exchange",
-        ),
-          (this._refreshInProgress = this.xaaRefresh().finally(() => {
-            this._refreshInProgress = void 0;
-          })));
+        );
+        this._refreshInProgress = this.xaaRefresh().finally(() => {
+          this._refreshInProgress = undefined;
+        });
+      }
       try {
         let _refreshInProgress = await this._refreshInProgress;
-        if (_refreshInProgress)
-          return (
-            (this._lastServedAccessToken = _refreshInProgress.access_token),
-            this._presented.record(_refreshInProgress.access_token),
-            this._presented.record(_refreshInProgress.refresh_token),
-            (this._lastServedRefreshToken = _refreshInProgress.refresh_token ?? this._lastServedRefreshToken),
-            { ..._refreshInProgress, issuer: n?.issuer }
-          );
-      } catch (error) {
-        logMCPDebug(this.serverName, `XAA silent exchange failed: ${errorMessage(error)}`);
+        if (_refreshInProgress) {
+          this._lastServedAccessToken = _refreshInProgress.access_token;
+          this._presented.record(_refreshInProgress.access_token);
+          this._presented.record(_refreshInProgress.refresh_token);
+          this._lastServedRefreshToken = _refreshInProgress.refresh_token ?? this._lastServedRefreshToken;
+          return {
+            ..._refreshInProgress,
+            issuer: tokenData?.issuer,
+          };
+        }
+      } catch (e) {
+        logMCPDebug(this.serverName, `XAA silent exchange failed: ${errorMessage(e)}`);
       }
     }
-    if (!n) {
-      (logMCPDebug(this.serverName, "No token data found"), this.clearStepUpPendingOnCredentialGone());
+    if (!tokenData) {
+      logMCPDebug(this.serverName, "No token data found");
+      this.clearStepUpPendingOnCredentialGone();
       return;
     }
-    if (!n.accessToken) {
-      (logMCPDebug(this.serverName, "No access token in storage"), this.clearStepUpPendingOnCredentialGone());
+    if (!tokenData.accessToken) {
+      logMCPDebug(this.serverName, "No access token in storage");
+      this.clearStepUpPendingOnCredentialGone();
       return;
     }
-    if (Adn(t, n.accessToken)) {
+    if (isTokenRejected(serverKey, tokenData.accessToken)) {
       logMCPDebug(
         this.serverName,
         "Not sending the stored access token, because the server rejected it earlier in this session",
       );
       return;
     }
-    ((this._lastServedAccessToken = n.accessToken),
-      this._presented.record(n.accessToken),
-      this._presented.record(n.refreshToken),
-      (this._lastServedRefreshToken = n.refreshToken));
-    let r = n.expiresAt != null ? (n.expiresAt - Date.now()) / 1000 : void 0,
-      _pendingStepUpScope = this._pendingStepUpScope,
-      S = _pendingStepUpScope !== void 0;
-    if (S)
+    this._lastServedAccessToken = tokenData.accessToken;
+    this._presented.record(tokenData.accessToken);
+    this._presented.record(tokenData.refreshToken);
+    this._lastServedRefreshToken = tokenData.refreshToken;
+    let expiresIn = tokenData.expiresAt != null ? (tokenData.expiresAt - Date.now()) / 1000 : undefined;
+    let _pendingStepUpScope = this._pendingStepUpScope;
+    let needsStepUp = _pendingStepUpScope !== undefined;
+    if (needsStepUp)
       logMCPDebug(
         this.serverName,
         `Step-up pending (${redactSensitiveUrlParams("scope", _pendingStepUpScope)}), omitting refresh_token`,
       );
-    if (r != null && r <= 0 && !n.refreshToken) {
-      (logMCPDebug(this.serverName, "Token expired without refresh token"),
-        this.clearStepUpPendingOnCredentialGone());
+    if (expiresIn != null && expiresIn <= 0 && !tokenData.refreshToken) {
+      logMCPDebug(this.serverName, "Token expired without refresh token");
+      this.clearStepUpPendingOnCredentialGone();
       return;
     }
-    if (r != null && r <= 300 && n.refreshToken && !S) {
-      if (!this._refreshInProgress)
-        (logMCPDebug(this.serverName, `Token expires in ${Math.floor(r)}s, attempting proactive refresh`),
-          (this._refreshInProgress = this.refreshAuthorization(n.refreshToken).finally(() => {
-            this._refreshInProgress = void 0;
-          })));
-      else logMCPDebug(this.serverName, "Token refresh already in progress, reusing existing promise");
+    if (expiresIn != null && expiresIn <= 300 && tokenData.refreshToken && !needsStepUp) {
+      if (!this._refreshInProgress) {
+        logMCPDebug(
+          this.serverName,
+          `Token expires in ${Math.floor(expiresIn)}s, attempting proactive refresh`,
+        );
+        this._refreshInProgress = this.refreshAuthorization(tokenData.refreshToken).finally(() => {
+          this._refreshInProgress = undefined;
+        });
+      } else logMCPDebug(this.serverName, "Token refresh already in progress, reusing existing promise");
       try {
         let _refreshInProgress = await this._refreshInProgress;
-        if (_refreshInProgress)
-          return (
-            logMCPDebug(this.serverName, "Token refreshed successfully"),
-            (this._lastServedAccessToken = _refreshInProgress.access_token),
-            this._presented.record(_refreshInProgress.access_token),
-            this._presented.record(_refreshInProgress.refresh_token),
-            (this._lastServedRefreshToken = _refreshInProgress.refresh_token ?? this._lastServedRefreshToken),
-            { ..._refreshInProgress, issuer: n?.issuer }
-          );
+        if (_refreshInProgress) {
+          logMCPDebug(this.serverName, "Token refreshed successfully");
+          this._lastServedAccessToken = _refreshInProgress.access_token;
+          this._presented.record(_refreshInProgress.access_token);
+          this._presented.record(_refreshInProgress.refresh_token);
+          this._lastServedRefreshToken = _refreshInProgress.refresh_token ?? this._lastServedRefreshToken;
+          return {
+            ..._refreshInProgress,
+            issuer: tokenData?.issuer,
+          };
+        }
         logMCPDebug(this.serverName, "Token refresh failed, returning current tokens");
       } catch (error) {
-        logMCPDebug(this.serverName, `Token refresh error: ${yF(error, this.serverConfig.url)}`);
+        logMCPDebug(
+          this.serverName,
+          `Token refresh error: ${describeSdkFetchError(error, this.serverConfig.url)}`,
+        );
       }
     }
-    let h = {
-      access_token: n.accessToken,
-      refresh_token: S ? void 0 : n.refreshToken,
-      expires_in: r,
-      scope: n.scope,
+    let tokens = {
+      access_token: tokenData.accessToken,
+      refresh_token: needsStepUp ? undefined : tokenData.refreshToken,
+      expires_in: expiresIn,
+      scope: tokenData.scope,
       token_type: "Bearer",
-      issuer: n.issuer,
+      issuer: tokenData.issuer,
     };
-    return (
-      logMCPDebug(this.serverName, "Returning tokens"),
-      logMCPDebug(this.serverName, `Has refresh token: ${!!h.refresh_token}`),
-      logMCPDebug(this.serverName, r != null ? `Expires in: ${Math.floor(r)}s` : "No expiration specified"),
-      h
+    logMCPDebug(this.serverName, "Returning tokens");
+    logMCPDebug(this.serverName, `Has refresh token: ${!!tokens.refresh_token}`);
+    logMCPDebug(
+      this.serverName,
+      expiresIn != null ? `Expires in: ${Math.floor(expiresIn)}s` : "No expiration specified",
     );
+    return tokens;
   }
   async saveTokens(e) {
-    (this._presented.record(e.access_token), this._presented.record(e.refresh_token));
-    let t = e.access_token !== this._lastServedAccessToken,
-      _flowDiscoveryStateAt = this._flowDiscoveryStateAt;
-    if (t && this.handleRedirection) this._pendingStepUpScope = void 0;
-    let r = getServerKey(this.serverName, this.serverConfig);
-    (logMCPDebug(this.serverName, "Saving tokens"),
-      logMCPDebug(this.serverName, `Token expires in: ${e.expires_in}`),
-      logMCPDebug(this.serverName, `Has refresh token: ${!!e.refresh_token}`));
-    let s =
-        this._servedOverrideAuthorizationServerUrl === void 0
-          ? this._discoveredAuthorizationServer
-          : { authorizationServerUrl: this._servedOverrideAuthorizationServerUrl, oauthMetadataFound: !0 },
-      S = this.servedMetadataUrl() ?? this._discoveredAuthorizationServer?.servedMetadataUrl,
-      h,
-      A;
+    this._presented.record(e.access_token);
+    this._presented.record(e.refresh_token);
+    let t = e.access_token !== this._lastServedAccessToken;
+    let _flowDiscoveryStateAt = this._flowDiscoveryStateAt;
+    if (t && this.handleRedirection) this._pendingStepUpScope = undefined;
+    let serverKey = getServerKey(this.serverName, this.serverConfig);
+    logMCPDebug(this.serverName, "Saving tokens");
+    logMCPDebug(this.serverName, `Token expires in: ${e.expires_in}`);
+    logMCPDebug(this.serverName, `Has refresh token: ${!!e.refresh_token}`);
+    let signIn =
+      this._servedOverrideAuthorizationServerUrl === undefined
+        ? this._discoveredAuthorizationServer
+        : {
+            authorizationServerUrl: this._servedOverrideAuthorizationServerUrl,
+            oauthMetadataFound: true,
+          };
+    let servedMetadataUrl =
+      this.servedMetadataUrl() ?? this._discoveredAuthorizationServer?.servedMetadataUrl;
+    let h;
+    let A;
     try {
       h = await getSecureStorage().mutate((l) => ({
         ...l,
         mcpOAuth: {
           ...l.mcpOAuth,
-          [r]: {
-            ...l.mcpOAuth?.[r],
+          [serverKey]: {
+            ...l.mcpOAuth?.[serverKey],
             serverName: this.serverName,
             serverUrl: this.serverConfig.url,
             accessToken: e.access_token,
-            refreshToken: e.refresh_token ?? l.mcpOAuth?.[r]?.refreshToken,
-            expiresAt: e.expires_in != null ? Date.now() + e.expires_in * 1000 : void 0,
+            refreshToken: e.refresh_token ?? l.mcpOAuth?.[serverKey]?.refreshToken,
+            expiresAt: e.expires_in != null ? Date.now() + e.expires_in * 1000 : undefined,
             scope: e.scope,
-            issuer: e.issuer ?? l.mcpOAuth?.[r]?.issuer,
+            issuer: e.issuer ?? l.mcpOAuth?.[serverKey]?.issuer,
             discoveryState: withoutTokenlessRejection(
               mergeSignInAuth({
-                previous: l.mcpOAuth?.[r]?.discoveryState,
-                signIn: s,
-                servedMetadataUrl: S,
+                previous: l.mcpOAuth?.[serverKey]?.discoveryState,
+                signIn,
+                servedMetadataUrl,
                 interactiveSignIn: this.handleRedirection,
               }),
             ),
@@ -2032,27 +2384,31 @@ class ClaudeAuthProvider_2 {
     } catch (error) {
       A = error;
     }
-    if (h?.success)
-      ((this._lastServedAccessToken = e.access_token),
-        (this._lastServedRefreshToken = e.refresh_token ?? this._lastServedRefreshToken),
-        recordSavedAccessToken(r, e.access_token));
-    if ((this.logTokenPersistFailed(h, A), t && this._flowDiscoveryStateAt === _flowDiscoveryStateAt))
-      ((this._flowDiscoveryState = void 0), (this._flowDiscoveryStateAt = 0));
+    if (h?.success) {
+      this._lastServedAccessToken = e.access_token;
+      this._lastServedRefreshToken = e.refresh_token ?? this._lastServedRefreshToken;
+      recordSavedAccessToken(serverKey, e.access_token);
+    }
+    this.logTokenPersistFailed(h, A);
+    if (t && this._flowDiscoveryStateAt === _flowDiscoveryStateAt) {
+      this._flowDiscoveryState = undefined;
+      this._flowDiscoveryStateAt = 0;
+    }
   }
   logTokenPersistFailed(e, t) {
     logStorageWriteFailure_2(this.serverName, this.serverConfig, e, t);
   }
   async xaaRefresh() {
-    let e = getXaaIdpSettings();
-    if (!e) return;
-    let t = await getCachedIdpIdToken_2(e.issuer);
-    if (!t) {
+    let idp = getXaaIdpSettings();
+    if (!idp) return;
+    let idToken = await getCachedIdpIdToken_2(idp.issuer);
+    if (!idToken) {
       logMCPDebug(this.serverName, "XAA: id_token not cached, needs interactive re-auth");
       return;
     }
-    let n = this.serverConfig.oauth?.clientId,
-      r = await getMcpClientConfig_2(this.serverName, this.serverConfig);
-    if (!n || !r?.clientSecret) {
+    let clientId = this.serverConfig.oauth?.clientId;
+    let clientConfig = await getMcpClientConfig_2(this.serverName, this.serverConfig);
+    if (!clientId || !clientConfig?.clientSecret) {
       logMCPDebug(
         this.serverName,
         "XAA: missing clientId or clientSecret in config \u2014 skipping silent refresh",
@@ -2064,60 +2420,64 @@ class ClaudeAuthProvider_2 {
       logMCPDebug(this.serverName, "XAA: stored credentials unreadable");
       return;
     }
-    let S = s ? void 0 : await getSecureStorage().readAsyncStrict?.(void 0, { inaccessibleAs: "failure" });
+    let S = s
+      ? undefined
+      : await getSecureStorage().readAsyncStrict?.(undefined, {
+          inaccessibleAs: "failure",
+        });
     if (S === READ_FAILED) {
       logMCPDebug(this.serverName, "XAA: no pin and the keychain is unreadable");
       return;
     }
-    let h =
-        s ?? xaaPinnedServer(S?.mcpOAuth?.[getServerKey(this.serverName, this.serverConfig)]?.discoveryState),
-      A = await getIdpClientSecret_2(e.issuer),
-      l;
+    let pinnedAuthorizationServer =
+      s ?? xaaPinnedServer(S?.mcpOAuth?.[getServerKey(this.serverName, this.serverConfig)]?.discoveryState);
+    let idpClientSecret = await getIdpClientSecret_2(idp.issuer);
+    let oidc;
     try {
-      l = await discoverOidc_2(e.issuer);
-    } catch (error) {
-      logMCPDebug(this.serverName, `XAA: OIDC discovery failed in silent refresh: ${errorMessage(error)}`);
+      oidc = await discoverOidc_2(idp.issuer);
+    } catch (e) {
+      logMCPDebug(this.serverName, `XAA: OIDC discovery failed in silent refresh: ${errorMessage(e)}`);
       return;
     }
-    this._presented.record(r.clientSecret);
+    this._presented.record(clientConfig.clientSecret);
     try {
-      let y = await performCrossAppAccess(
-          this.serverConfig.url,
-          {
-            clientId: n,
-            clientSecret: r.clientSecret,
-            idpClientId: e.clientId,
-            idpClientSecret: A,
-            idpIdToken: t,
-            idpTokenEndpoint: l.token_endpoint,
-            pinnedAuthorizationServer: h,
-          },
-          this.serverName,
-        ),
-        w = getServerKey(this.serverName, this.serverConfig),
-        R,
-        T;
+      let tokens = await performCrossAppAccess(
+        this.serverConfig.url,
+        {
+          clientId,
+          clientSecret: clientConfig.clientSecret,
+          idpClientId: idp.clientId,
+          idpClientSecret,
+          idpIdToken: idToken,
+          idpTokenEndpoint: oidc.token_endpoint,
+          pinnedAuthorizationServer,
+        },
+        this.serverName,
+      );
+      let serverKey = getServerKey(this.serverName, this.serverConfig);
+      let R;
+      let T;
       try {
-        R = await getSecureStorage().mutate((E) => {
-          let F = E.mcpOAuth?.[w];
+        R = await getSecureStorage().mutate((existingData) => {
+          let prev = existingData.mcpOAuth?.[serverKey];
           return {
-            ...E,
+            ...existingData,
             mcpOAuth: {
-              ...E.mcpOAuth,
-              [w]: {
-                ...F,
+              ...existingData.mcpOAuth,
+              [serverKey]: {
+                ...prev,
                 serverName: this.serverName,
                 serverUrl: this.serverConfig.url,
-                accessToken: y.access_token,
-                refreshToken: y.refresh_token ?? F?.refreshToken,
-                expiresAt: y.expires_in != null ? Date.now() + y.expires_in * 1000 : void 0,
-                scope: y.scope,
-                clientId: n,
-                clientSecret: r.clientSecret,
+                accessToken: tokens.access_token,
+                refreshToken: tokens.refresh_token ?? prev?.refreshToken,
+                expiresAt: tokens.expires_in != null ? Date.now() + tokens.expires_in * 1000 : undefined,
+                scope: tokens.scope,
+                clientId,
+                clientSecret: clientConfig.clientSecret,
                 discoveryState: pinXaaAuth({
-                  previous: F?.discoveryState,
-                  issuedBy: y.authorizationServerUrl,
-                  interactiveSignIn: !1,
+                  previous: prev?.discoveryState,
+                  issuedBy: tokens.authorizationServerUrl,
+                  interactiveSignIn: false,
                 }),
               },
             },
@@ -2126,30 +2486,29 @@ class ClaudeAuthProvider_2 {
       } catch (error) {
         T = error;
       }
-      return (
-        this.logTokenPersistFailed(R, T),
-        {
-          access_token: y.access_token,
-          token_type: "Bearer",
-          expires_in: y.expires_in,
-          scope: y.scope,
-          refresh_token: y.refresh_token,
-        }
-      );
-    } catch (error) {
-      if (error instanceof XaaTokenExchangeError_2 && error.shouldClearIdToken)
-        (await clearIdpIdToken_2(e.issuer),
-          logMCPDebug(this.serverName, "XAA: cleared id_token after exchange failure"));
-      throw error;
+      this.logTokenPersistFailed(R, T);
+      return {
+        access_token: tokens.access_token,
+        token_type: "Bearer",
+        expires_in: tokens.expires_in,
+        scope: tokens.scope,
+        refresh_token: tokens.refresh_token,
+      };
+    } catch (e) {
+      if (e instanceof XaaTokenExchangeError_2 && e.shouldClearIdToken) {
+        await clearIdpIdToken_2(idp.issuer);
+        logMCPDebug(this.serverName, "XAA: cleared id_token after exchange failure");
+      }
+      throw e;
     }
   }
   async redirectToAuthorization(e) {
     let t = this._pendingStepUpScope
-        ? void 0
-        : this.serverConfig.oauth?.scopes ||
-          (this.serverConfig.oauth?.authServerMetadataUrl ? this.getCuratedMetadataScope() : void 0),
-      n = e.searchParams.get("scope"),
-      r = t ?? n;
+      ? undefined
+      : this.serverConfig.oauth?.scopes ||
+        (this.serverConfig.oauth?.authServerMetadataUrl ? this.getCuratedMetadataScope() : undefined);
+    let n = e.searchParams.get("scope");
+    let r = t ?? n;
     if (r !== n)
       logMCPDebug(
         this.serverName,
@@ -2157,50 +2516,58 @@ class ClaudeAuthProvider_2 {
       );
     let s = r === null ? null : maybeAppendOfflineAccess_2(r, this._metadata);
     if (s !== null && s !== n) {
-      if ((e.searchParams.set("scope", s), s !== t))
-        logMCPDebug(this.serverName, "Appended offline_access to authorization scope");
+      e.searchParams.set("scope", s);
+      if (s !== t) logMCPDebug(this.serverName, "Appended offline_access to authorization scope");
     }
-    let S = isEntraLoginUrl_2(e),
-      all = e.searchParams.getAll("prompt"),
-      A = S ? all.filter((E) => E !== "consent") : all;
+    let S = isEntraLoginUrl_2(e);
+    let all = e.searchParams.getAll("prompt");
+    let A = S ? all.filter((E) => E !== "consent") : all;
     if (A.length !== all.length || A.length > 1) {
-      if ((e.searchParams.delete("prompt"), A.length > 0))
-        e.searchParams.set("prompt", A.includes("consent") ? "consent" : A.at(-1));
+      e.searchParams.delete("prompt");
+      if (A.length > 0) e.searchParams.set("prompt", A.includes("consent") ? "consent" : A.at(-1));
     }
     this._authorizationUrl = e.toString();
-    let l = e.searchParams.get("scope");
-    if (
-      (logMCPDebug(this.serverName, `Authorization URL: ${authorizationUrlForDebugLog_2(e)}`),
+    let scopes = e.searchParams.get("scope");
+    logMCPDebug(this.serverName, `Authorization URL: ${authorizationUrlForDebugLog_2(e)}`);
+    logMCPDebug(
+      this.serverName,
+      `Scopes in URL: ${scopes ? redactSensitiveUrlParams("scope", scopes) : "NOT FOUND"}`,
+    );
+    if (scopes) {
+      this._scopes = scopes;
       logMCPDebug(
         this.serverName,
-        `Scopes in URL: ${l ? redactSensitiveUrlParams("scope", l) : "NOT FOUND"}`,
-      ),
-      l)
-    )
-      ((this._scopes = l),
+        `Captured scopes from authorization URL: ${redactSensitiveUrlParams("scope", scopes)}`,
+      );
+    } else {
+      let metadataScope = this.getCuratedMetadataScope();
+      if (metadataScope) {
+        this._scopes = metadataScope;
         logMCPDebug(
           this.serverName,
-          `Captured scopes from authorization URL: ${redactSensitiveUrlParams("scope", l)}`,
-        ));
-    else {
-      let curatedMetadataScope = this.getCuratedMetadataScope();
-      if (curatedMetadataScope)
-        ((this._scopes = curatedMetadataScope),
-          logMCPDebug(
-            this.serverName,
-            `Using scopes from metadata: ${redactSensitiveUrlParams("scope", curatedMetadataScope)}`,
-          ));
-      else logMCPDebug(this.serverName, "No scopes available from URL or metadata");
+          `Using scopes from metadata: ${redactSensitiveUrlParams("scope", metadataScope)}`,
+        );
+      } else logMCPDebug(this.serverName, "No scopes available from URL or metadata");
     }
     if (this._scopes && !this.handleRedirection && this._pendingStepUpScope) {
-      let E = getServerKey(this.serverName, this.serverConfig),
-        _scopes = this._scopes,
-        x = !1;
+      let serverKey = getServerKey(this.serverName, this.serverConfig);
+      let _scopes = this._scopes;
+      let x = false;
       try {
         await getSecureStorage().mutate((U) => {
-          let P = U.mcpOAuth?.[E];
+          let P = U.mcpOAuth?.[serverKey];
           if (!P) return U;
-          return ((x = !0), { ...U, mcpOAuth: { ...U.mcpOAuth, [E]: { ...P, stepUpScope: _scopes } } });
+          x = true;
+          return {
+            ...U,
+            mcpOAuth: {
+              ...U.mcpOAuth,
+              [serverKey]: {
+                ...P,
+                stepUpScope: _scopes,
+              },
+            },
+          };
         });
       } catch (error) {
         logMCPDebug(this.serverName, `step-up scope persist failed: ${errorMessage(error)}`);
@@ -2215,13 +2582,13 @@ class ClaudeAuthProvider_2 {
       logMCPDebug(this.serverName, "Redirection handling is disabled, skipping redirect");
       return;
     }
-    let str = e.toString();
-    if (!str.startsWith("http://") && !str.startsWith("https://"))
+    let urlString = e.toString();
+    if (!urlString.startsWith("http://") && !urlString.startsWith("https://"))
       throw Error("Invalid authorization URL: must use http:// or https:// scheme");
     logMCPDebug(this.serverName, "Redirecting to authorization URL");
     let w = authorizationUrlForDebugLog_2(e);
-    if ((logMCPDebug(this.serverName, `Authorization URL: ${w}`), this.onAuthorizationUrlCallback))
-      this.onAuthorizationUrlCallback(str);
+    logMCPDebug(this.serverName, `Authorization URL: ${w}`);
+    if (this.onAuthorizationUrlCallback) this.onAuthorizationUrlCallback(urlString);
     if (this.skipBrowserOpen) {
       logMCPDebug(this.serverName, `Skipping browser open (skipBrowserOpen=true). URL: ${w}`);
       return;
@@ -2229,71 +2596,78 @@ class ClaudeAuthProvider_2 {
     let R = isBrowserUnavailable();
     if (R) logMCPDebug(this.serverName, `Skipping browser open (headless environment). URL: ${w}`);
     else logMCPDebug(this.serverName, `Opening authorization URL: ${w}`);
-    let T = R ? !1 : await fi(str);
-    if (
-      (logEvent("tengu_mcp_oauth_browser_open", {
-        success: T,
-        headless: R,
-        platform: fromEnum(getPlatform()),
-      }),
-      !R && !T)
-    )
-      logMCPDebug(this.serverName, "Browser didn't open automatically. URL is shown in UI.");
+    let T = R ? false : await openValidatedUrlSucceeded(urlString);
+    logEvent("tengu_mcp_oauth_browser_open", {
+      success: T,
+      headless: R,
+      platform: fromEnum(getPlatform()),
+    });
+    if (!R && !T) logMCPDebug(this.serverName, "Browser didn't open automatically. URL is shown in UI.");
   }
-  async saveCodeVerifier(e) {
-    (logMCPDebug(this.serverName, "Saving code verifier"), (this._codeVerifier = e));
+  async saveCodeVerifier(codeVerifier) {
+    logMCPDebug(this.serverName, "Saving code verifier");
+    this._codeVerifier = codeVerifier;
   }
   async codeVerifier() {
-    if (!this._codeVerifier)
-      throw (logMCPDebug(this.serverName, "No code verifier saved"), Error("No code verifier saved"));
-    return (
-      logMCPDebug(this.serverName, "Returning code verifier"),
-      this._presented.record(this._codeVerifier),
-      this._codeVerifier
-    );
+    if (!this._codeVerifier) {
+      logMCPDebug(this.serverName, "No code verifier saved");
+      throw Error("No code verifier saved");
+    }
+    logMCPDebug(this.serverName, "Returning code verifier");
+    this._presented.record(this._codeVerifier);
+    return this._codeVerifier;
   }
   async invalidateCredentials(e) {
     if (e === "verifier") {
-      ((this._codeVerifier = void 0),
-        logMCPDebug(this.serverName, "Invalidated credentials (scope: verifier)"));
+      this._codeVerifier = undefined;
+      logMCPDebug(this.serverName, "Invalidated credentials (scope: verifier)");
       return;
     }
-    let t = e,
-      n = getServerKey(this.serverName, this.serverConfig),
-      r = !1;
+    let t = e;
+    let serverKey = getServerKey(this.serverName, this.serverConfig);
+    let r = false;
     try {
-      let _lastServedClientId = this._lastServedClientId,
-        _lastServedAccessToken = this._lastServedAccessToken,
-        _lastServedRefreshToken = this._lastServedRefreshToken;
+      let _lastServedClientId = this._lastServedClientId;
+      let _lastServedAccessToken = this._lastServedAccessToken;
+      let _lastServedRefreshToken = this._lastServedRefreshToken;
       await getSecureStorage().mutate((A) => {
-        let l = A.mcpOAuth?.[n];
+        let l = A.mcpOAuth?.[serverKey];
         if (!l) return A;
-        let y = { ...A.mcpOAuth };
+        let y = {
+          ...A.mcpOAuth,
+        };
         switch (t) {
           case "all": {
             let w =
-                _lastServedAccessToken != null && !!l.accessToken && l.accessToken !== _lastServedAccessToken,
-              R = _lastServedClientId != null && l.clientId != null && l.clientId !== _lastServedClientId;
-            if (w || R)
-              return (
-                logMCPDebug(
-                  this.serverName,
-                  `invalidateCredentials('all') preserved: ${w ? "foreign token" : "concurrent re-registration"}`,
-                ),
-                A
+              _lastServedAccessToken != null && !!l.accessToken && l.accessToken !== _lastServedAccessToken;
+            let R = _lastServedClientId != null && l.clientId != null && l.clientId !== _lastServedClientId;
+            if (w || R) {
+              logMCPDebug(
+                this.serverName,
+                `invalidateCredentials('all') preserved: ${w ? "foreign token" : "concurrent re-registration"}`,
               );
+              return A;
+            }
             if (!l.clientId && !l.refreshToken && l.accessToken === "") return A;
-            y[n] = {
+            y[serverKey] = {
               serverName: l.serverName,
               serverUrl: l.serverUrl,
               accessToken: "",
-              ...(l.discoveryState && { discoveryState: l.discoveryState }),
-              ...(l.stepUpScope && { stepUpScope: l.stepUpScope }),
+              ...(l.discoveryState && {
+                discoveryState: l.discoveryState,
+              }),
+              ...(l.stepUpScope && {
+                stepUpScope: l.stepUpScope,
+              }),
             };
             break;
           }
           case "client":
-            y[n] = { ...l, clientId: void 0, clientSecret: void 0 };
+            y[serverKey] = {
+              ...l,
+              clientId: undefined,
+              clientSecret: undefined,
+            };
             break;
           case "tokens": {
             if (
@@ -2301,31 +2675,38 @@ class ClaudeAuthProvider_2 {
                 l.refreshToken &&
                 l.refreshToken !== _lastServedRefreshToken) ||
               (_lastServedAccessToken != null && !!l.accessToken && l.accessToken !== _lastServedAccessToken)
-            )
-              return (
-                logMCPDebug(
-                  this.serverName,
-                  "invalidateCredentials('tokens') preserved: concurrent rotation",
-                ),
-                A
-              );
-            y[n] = { ...l, accessToken: "", refreshToken: void 0, expiresAt: 0 };
+            ) {
+              logMCPDebug(this.serverName, "invalidateCredentials('tokens') preserved: concurrent rotation");
+              return A;
+            }
+            y[serverKey] = {
+              ...l,
+              accessToken: "",
+              refreshToken: undefined,
+              expiresAt: 0,
+            };
             break;
           }
           case "discovery": {
-            if (!l.discoveryState?.authorizationServerMetadata)
-              return (
-                logMCPDebug(
-                  this.serverName,
-                  "invalidateCredentials('discovery') preserved: concurrent URL-only re-save",
-                ),
-                A
+            if (!l.discoveryState?.authorizationServerMetadata) {
+              logMCPDebug(
+                this.serverName,
+                "invalidateCredentials('discovery') preserved: concurrent URL-only re-save",
               );
-            y[n] = { ...l, discoveryState: authDiscoveryState(l.discoveryState) };
+              return A;
+            }
+            y[serverKey] = {
+              ...l,
+              discoveryState: authDiscoveryState(l.discoveryState),
+            };
             break;
           }
         }
-        return ((r = !0), { ...A, mcpOAuth: y });
+        r = true;
+        return {
+          ...A,
+          mcpOAuth: y,
+        };
       });
     } catch (error) {
       logMCPDebug(this.serverName, `invalidateCredentials persist failed: ${errorMessage(error)}`);
@@ -2342,57 +2723,60 @@ class ClaudeAuthProvider_2 {
         serverConfig: this.serverConfig,
       });
     if (this.serverConfig.oauth?.xaa) return;
-    ((this._flowDiscoveryState = e),
-      (this._flowDiscoveryStateAt = Date.now()),
-      (this._flowDiscoveryStateFromConfiguredUrl = !1));
-    let t = getServerKey(this.serverName, this.serverConfig);
+    this._flowDiscoveryState = e;
+    this._flowDiscoveryStateAt = Date.now();
+    this._flowDiscoveryStateFromConfiguredUrl = false;
+    let serverKey = getServerKey(this.serverName, this.serverConfig);
     logMCPDebug(
       this.serverName,
       `Saving discovery state (authServer: ${redactUrlSecrets(e.authorizationServerUrl)})`,
     );
     let authorizationServerMetadata = e.authorizationServerMetadata;
     this.registrationOfferedByDiscovery =
-      authorizationServerMetadata !== void 0 &&
+      authorizationServerMetadata !== undefined &&
       (typeof authorizationServerMetadata.registration_endpoint === "string" ||
-        (authorizationServerMetadata.client_id_metadata_document_supported === !0 &&
-          this.clientMetadataUrl !== void 0));
+        (authorizationServerMetadata.client_id_metadata_document_supported === true &&
+          this.clientMetadataUrl !== undefined));
     let r = {
-        authorizationServerUrl: e.authorizationServerUrl,
-        oauthMetadataFound: !!e.authorizationServerMetadata,
-      },
-      s =
-        (e.authorizationServerMetadata !== void 0
-          ? this._servedOverrideDocuments.get(e.authorizationServerMetadata)
-          : void 0) ?? this.servedMetadataUrl();
-    this._discoveredAuthorizationServer = { ...r, servedMetadataUrl: s };
+      authorizationServerUrl: e.authorizationServerUrl,
+      oauthMetadataFound: !!e.authorizationServerMetadata,
+    };
+    let servedMetadataUrl =
+      (e.authorizationServerMetadata !== undefined
+        ? this._servedOverrideDocuments.get(e.authorizationServerMetadata)
+        : undefined) ?? this.servedMetadataUrl();
+    this._discoveredAuthorizationServer = {
+      ...r,
+      servedMetadataUrl,
+    };
     try {
       await getSecureStorage().mutate((S) => {
         let h = mergeDiscoveredAuth({
-          previous: S.mcpOAuth?.[t]?.discoveryState,
+          previous: S.mcpOAuth?.[serverKey]?.discoveryState,
           discovered: r,
-          servedMetadataUrl: s,
+          servedMetadataUrl,
         });
         return {
           ...S,
           mcpOAuth: {
             ...S.mcpOAuth,
-            [t]: {
-              ...S.mcpOAuth?.[t],
+            [serverKey]: {
+              ...S.mcpOAuth?.[serverKey],
               serverName: this.serverName,
               serverUrl: this.serverConfig.url,
-              accessToken: S.mcpOAuth?.[t]?.accessToken || "",
-              expiresAt: S.mcpOAuth?.[t]?.expiresAt,
+              accessToken: S.mcpOAuth?.[serverKey]?.accessToken || "",
+              expiresAt: S.mcpOAuth?.[serverKey]?.expiresAt,
               discoveryState: {
                 ...h,
                 resourceMetadataUrl: e.resourceMetadataUrl,
-                tokenlessRejectedAt: tokenlessRejectedAt(t, S.mcpOAuth?.[t]),
+                tokenlessRejectedAt: tokenlessRejectedAt(serverKey, S.mcpOAuth?.[serverKey]),
                 registrationNotOfferedAt:
-                  authorizationServerMetadata === void 0
-                    ? S.mcpOAuth?.[t]?.discoveryState?.registrationNotOfferedAt
+                  authorizationServerMetadata === undefined
+                    ? S.mcpOAuth?.[serverKey]?.discoveryState?.registrationNotOfferedAt
                     : typeof authorizationServerMetadata.registration_endpoint !== "string" &&
-                        authorizationServerMetadata.client_id_metadata_document_supported !== !0
+                        authorizationServerMetadata.client_id_metadata_document_supported !== true
                       ? Date.now()
-                      : void 0,
+                      : undefined,
               },
             },
           },
@@ -2413,129 +2797,139 @@ class ClaudeAuthProvider_2 {
           serverConfig: this.serverConfig,
         });
       } catch (error) {
-        if (error instanceof IssuerEchoCrossOriginError && this._flowDiscoveryState === e)
-          ((this._flowDiscoveryState = void 0), (this._flowDiscoveryStateAt = 0));
+        if (error instanceof IssuerEchoCrossOriginError && this._flowDiscoveryState === e) {
+          this._flowDiscoveryState = undefined;
+          this._flowDiscoveryStateAt = 0;
+        }
         throw error;
       }
     return e;
   }
   servedMetadataUrl() {
-    return this._servedOverrideAuthorizationServerUrl === void 0
-      ? void 0
+    return this._servedOverrideAuthorizationServerUrl === undefined
+      ? undefined
       : this.serverConfig.oauth?.authServerMetadataUrl;
   }
   async discoveryState() {
-    this._servedOverrideAuthorizationServerUrl = void 0;
-    let e = this.serverConfig.oauth?.authServerMetadataUrl;
+    this._servedOverrideAuthorizationServerUrl = undefined;
+    let authServerMetadataUrl = this.serverConfig.oauth?.authServerMetadataUrl;
     if (this.authChallengeOpen) await this.readCredentialStore();
     let t = await hasStoredOAuthState_2(this.serverName, this.serverConfig);
     if (t === READ_FAILED) {
       if (this.serverConfig.oauth?.xaa) throw new McpCredentialStoreUnavailableError(this.serverName);
-    } else if (t) return { authorizationServerUrl: t };
-    if (e) {
-      logMCPDebug(this.serverName, `Fetching metadata from configured URL: ${redactUrlSecrets(e)}`);
+    } else if (t)
+      return {
+        authorizationServerUrl: t,
+      };
+    if (authServerMetadataUrl) {
+      logMCPDebug(
+        this.serverName,
+        `Fetching metadata from configured URL: ${redactUrlSecrets(authServerMetadataUrl)}`,
+      );
       try {
-        let A = await fetchAuthServerMetadata(this.serverName, this.serverConfig.url, {
-          configuredMetadataUrl: e,
+        let authServerMetadata = await fetchAuthServerMetadata(this.serverName, this.serverConfig.url, {
+          configuredMetadataUrl: authServerMetadataUrl,
           fetchFn: wrapFetchWithHeaders(this.serverName, this.serverConfig, createAuthFetch_2()),
         });
-        if (A) {
-          let l = { authorizationServerUrl: A.issuer, authorizationServerMetadata: A };
-          return (
-            (this._servedOverrideAuthorizationServerUrl = A.issuer),
-            this._servedOverrideDocuments.set(A, e),
-            (this._flowDiscoveryState = l),
-            (this._flowDiscoveryStateFromConfiguredUrl = !0),
-            this.servePolicyCheckedDiscoveryState(l)
-          );
+        if (authServerMetadata) {
+          let l = {
+            authorizationServerUrl: authServerMetadata.issuer,
+            authorizationServerMetadata: authServerMetadata,
+          };
+          this._servedOverrideAuthorizationServerUrl = authServerMetadata.issuer;
+          this._servedOverrideDocuments.set(authServerMetadata, authServerMetadataUrl);
+          this._flowDiscoveryState = l;
+          this._flowDiscoveryStateFromConfiguredUrl = true;
+          return this.servePolicyCheckedDiscoveryState(l);
         }
       } catch (error) {
         logMCPDebug(
           this.serverName,
-          `Failed to fetch from configured metadata URL: ${yF(error, this.serverConfig.url)}`,
+          `Failed to fetch from configured metadata URL: ${describeSdkFetchError(error, this.serverConfig.url)}`,
         );
       }
       if (this._flowDiscoveryStateFromConfiguredUrl)
         this._servedOverrideAuthorizationServerUrl = this._flowDiscoveryState?.authorizationServerUrl;
       return this.servePolicyCheckedDiscoveryState(this._flowDiscoveryState);
     }
-    if (this._flowDiscoveryState && Date.now() - this._flowDiscoveryStateAt < Ie)
+    if (this._flowDiscoveryState && Date.now() - this._flowDiscoveryStateAt < AUTH_FLOW_DISCOVERY_TTL_MS)
       return this.servePolicyCheckedDiscoveryState(this._flowDiscoveryState);
-    let _flowDiscoveryStateAt = this._flowDiscoveryStateAt,
-      async = await getSecureStorage().readAsync();
+    let _flowDiscoveryStateAt = this._flowDiscoveryStateAt;
+    let async = await getSecureStorage().readAsync();
     if (
       this._flowDiscoveryState &&
       this._flowDiscoveryStateAt !== _flowDiscoveryStateAt &&
-      Date.now() - this._flowDiscoveryStateAt < Ie
+      Date.now() - this._flowDiscoveryStateAt < AUTH_FLOW_DISCOVERY_TTL_MS
     )
       return this.servePolicyCheckedDiscoveryState(this._flowDiscoveryState);
-    let S = getServerKey(this.serverName, this.serverConfig),
-      h = async?.mcpOAuth?.[S]?.discoveryState;
-    if (h?.authorizationServerUrl) {
+    let serverKey = getServerKey(this.serverName, this.serverConfig);
+    let cached = async?.mcpOAuth?.[serverKey]?.discoveryState;
+    if (cached?.authorizationServerUrl) {
       logMCPDebug(
         this.serverName,
-        `Returning cached discovery state (authServer: ${redactUrlSecrets(h.authorizationServerUrl)})`,
+        `Returning cached discovery state (authServer: ${redactUrlSecrets(cached.authorizationServerUrl)})`,
       );
       let A = {
-        authorizationServerUrl: h.authorizationServerUrl,
-        resourceMetadataUrl: h.resourceMetadataUrl,
-        resourceMetadata: h.resourceMetadata,
-        authorizationServerMetadata: h.authorizationServerMetadata,
+        authorizationServerUrl: cached.authorizationServerUrl,
+        resourceMetadataUrl: cached.resourceMetadataUrl,
+        resourceMetadata: cached.resourceMetadata,
+        authorizationServerMetadata: cached.authorizationServerMetadata,
       };
       try {
         this.servePolicyCheckedDiscoveryState(A);
       } catch (error) {
         if (error instanceof IssuerEchoCrossOriginError) {
-          if (
-            (await this.invalidateCredentials("discovery").catch(() => {}),
-            this._flowDiscoveryStateAt === _flowDiscoveryStateAt)
-          )
-            ((this._flowDiscoveryState = void 0), (this._flowDiscoveryStateAt = 0));
+          await this.invalidateCredentials("discovery").catch(() => {});
+          if (this._flowDiscoveryStateAt === _flowDiscoveryStateAt) {
+            this._flowDiscoveryState = undefined;
+            this._flowDiscoveryStateAt = 0;
+          }
         }
         throw error;
       }
-      return ((this._flowDiscoveryStateFromConfiguredUrl = !1), (this._flowDiscoveryState = A));
+      this._flowDiscoveryStateFromConfiguredUrl = false;
+      return (this._flowDiscoveryState = A);
     }
     return this.servePolicyCheckedDiscoveryState(this._flowDiscoveryState);
   }
-  async refreshAuthorization(e) {
+  async refreshAuthorization(refreshToken) {
     if (isDiskless()) {
       logMCPDebug(this.serverName, "claude-code-server session; skipping refresh");
       return;
     }
-    let t = getServerKey(this.serverName, this.serverConfig),
-      n = getProjectDirsUpToHome();
-    await getFsImplementation().mkdir(n);
-    let replaced = t.replace(/[^a-zA-Z0-9]/g, "_"),
-      s = join(n, `mcp-refresh-${replaced}.lock`),
-      S;
-    for (let h = 0; h < MAX_METADATA_REDIRECTS_2; h++)
+    let serverKey = getServerKey(this.serverName, this.serverConfig);
+    let claudeDir = getProjectDirsUpToHome();
+    await getFsImplementation().mkdir(claudeDir);
+    let sanitizedKey = serverKey.replace(/[^a-zA-Z0-9]/g, "_");
+    let lockfilePath = join(claudeDir, `mcp-refresh-${sanitizedKey}.lock`);
+    let release;
+    for (let retry = 0; retry < MAX_METADATA_REDIRECTS_2; retry++)
       try {
-        (logMCPDebug(this.serverName, `Acquiring refresh lock (attempt ${h + 1})`),
-          (S = await lock(s, {
-            realpath: !1,
-            stale: 60000,
-            update: 5000,
-            onCompromised: () => {
-              logMCPDebug(this.serverName, "Refresh lock was compromised");
-            },
-          })),
-          logMCPDebug(this.serverName, "Acquired refresh lock"));
+        logMCPDebug(this.serverName, `Acquiring refresh lock (attempt ${retry + 1})`);
+        release = await lock(lockfilePath, {
+          realpath: false,
+          stale: 60000,
+          update: 5000,
+          onCompromised: () => {
+            logMCPDebug(this.serverName, "Refresh lock was compromised");
+          },
+        });
+        logMCPDebug(this.serverName, "Acquired refresh lock");
         break;
-      } catch (error) {
-        let l = getErrnoCode(error);
-        if (l === "ELOCKED") {
-          (logMCPDebug(
+      } catch (e) {
+        let code = getErrnoCode(e);
+        if (code === "ELOCKED") {
+          logMCPDebug(
             this.serverName,
-            `Refresh lock held by another process, waiting (attempt ${h + 1}/${MAX_METADATA_REDIRECTS_2})`,
-          ),
-            await sleep(1000 + Math.random() * 1000));
+            `Refresh lock held by another process, waiting (attempt ${retry + 1}/${MAX_METADATA_REDIRECTS_2})`,
+          );
+          await sleep(1000 + Math.random() * 1000);
           continue;
         }
-        logMCPDebug(this.serverName, `Failed to acquire refresh lock: ${l}; skipping refresh`);
+        logMCPDebug(this.serverName, `Failed to acquire refresh lock: ${code}; skipping refresh`);
         return;
       }
-    if (!S) {
+    if (!release) {
       logMCPDebug(
         this.serverName,
         `Could not acquire refresh lock after ${MAX_METADATA_REDIRECTS_2} retries; skipping refresh`,
@@ -2544,35 +2938,36 @@ class ClaudeAuthProvider_2 {
     }
     try {
       clearKeychainCache();
-      let l = (await getSecureStorage().readAsync())?.mcpOAuth?.[t];
+      let l = (await getSecureStorage().readAsync())?.mcpOAuth?.[serverKey];
       if (l) {
-        let y = l.expiresAt != null ? (l.expiresAt - Date.now()) / 1000 : void 0;
-        if (l.accessToken && (y == null || y > 300))
-          return (
-            logMCPDebug(
-              this.serverName,
-              y != null
-                ? `Another process already refreshed tokens (expires in ${Math.floor(y)}s)`
-                : "Another process already refreshed tokens (no expiration)",
-            ),
-            {
-              access_token: l.accessToken,
-              refresh_token: l.refreshToken,
-              expires_in: y,
-              scope: l.scope,
-              token_type: "Bearer",
-            }
+        let y = l.expiresAt != null ? (l.expiresAt - Date.now()) / 1000 : undefined;
+        if (l.accessToken && (y == null || y > 300)) {
+          logMCPDebug(
+            this.serverName,
+            y != null
+              ? `Another process already refreshed tokens (expires in ${Math.floor(y)}s)`
+              : "Another process already refreshed tokens (no expiration)",
           );
-        if (l.refreshToken)
-          ((e = l.refreshToken),
-            (this._lastServedRefreshToken = l.refreshToken),
-            this._presented.record(l.refreshToken));
+          return {
+            access_token: l.accessToken,
+            refresh_token: l.refreshToken,
+            expires_in: y,
+            scope: l.scope,
+            token_type: "Bearer",
+          };
+        }
+        if (l.refreshToken) {
+          refreshToken = l.refreshToken;
+          this._lastServedRefreshToken = l.refreshToken;
+          this._presented.record(l.refreshToken);
+        }
       }
-      return await this._doRefresh(e);
+      return await this._doRefresh(refreshToken);
     } finally {
-      if (S)
+      if (release)
         try {
-          (await S(), logMCPDebug(this.serverName, "Released refresh lock"));
+          await release();
+          logMCPDebug(this.serverName, "Released refresh lock");
         } catch {
           logMCPDebug(this.serverName, "Failed to release refresh lock");
         }
@@ -2581,254 +2976,296 @@ class ClaudeAuthProvider_2 {
   async readConcurrentRefreshWinner() {
     clearKeychainCache();
     let t = (await getSecureStorage().readAsync())?.mcpOAuth?.[
-        getServerKey(this.serverName, this.serverConfig)
-      ],
-      n = t?.expiresAt != null ? (t.expiresAt - Date.now()) / 1000 : void 0;
+      getServerKey(this.serverName, this.serverConfig)
+    ];
+    let n = t?.expiresAt != null ? (t.expiresAt - Date.now()) / 1000 : undefined;
     if (t?.accessToken && (n == null || n > 300)) {
       logMCPDebug(this.serverName, "Another process landed fresh tokens; using those");
-      let r = {
+      let freshTokens = {
         access_token: t.accessToken,
         refresh_token: t.refreshToken,
         expires_in: n,
         scope: t.scope,
         token_type: "Bearer",
       };
-      return { tokenData: t, freshTokens: r };
-    }
-    return { tokenData: t, freshTokens: void 0 };
-  }
-  async _doRefresh(e) {
-    this._presented.record(e);
-    let t = 3,
-      n = ET(this.serverConfig),
-      r = (s, S) => {
-        logEvent(s === "success" ? "tengu_mcp_oauth_refresh_success" : "tengu_mcp_oauth_refresh_failure", {
-          transportType: fromEnum(this.serverConfig.type),
-          ...(n && { mcpServerBaseUrl: n }),
-          ...(S && { reason: fromEnum(S) }),
-        });
+      return {
+        tokenData: t,
+        freshTokens,
       };
-    for (let s = 1; s <= t; s++) {
+    }
+    return {
+      tokenData: t,
+      freshTokens: undefined,
+    };
+  }
+  async _doRefresh(refreshToken) {
+    this._presented.record(refreshToken);
+    let MAX_ATTEMPTS = 3;
+    let mcpServerBaseUrl = loggingSafeOrigin(this.serverConfig);
+    let emitRefreshEvent = (outcome, reason) => {
+      logEvent(
+        outcome === "success" ? "tengu_mcp_oauth_refresh_success" : "tengu_mcp_oauth_refresh_failure",
+        {
+          transportType: fromEnum(this.serverConfig.type),
+          ...(mcpServerBaseUrl && {
+            mcpServerBaseUrl,
+          }),
+          ...(reason && {
+            reason: fromEnum(reason),
+          }),
+        },
+      );
+    };
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
       let S;
       try {
         logMCPDebug(this.serverName, "Starting token refresh");
-        let h = wrapFetchWithHeaders(this.serverName, this.serverConfig, createAuthFetch_2()),
-          A = isIssuerStrictEchoEnabled() ? "enforce" : "observe",
-          l = this._metadataEchoMode === A ? this._metadata : void 0;
-        if (!l) {
-          let discoveryState = await this.discoveryState();
-          if (discoveryState?.authorizationServerMetadata) l = discoveryState.authorizationServerMetadata;
-          else if (discoveryState?.authorizationServerUrl) {
+        let authFetch = wrapFetchWithHeaders(this.serverName, this.serverConfig, createAuthFetch_2());
+        let A = isIssuerStrictEchoEnabled() ? "enforce" : "observe";
+        let metadata = this._metadataEchoMode === A ? this._metadata : undefined;
+        if (!metadata) {
+          let cached = await this.discoveryState();
+          if (cached?.authorizationServerMetadata) metadata = cached.authorizationServerMetadata;
+          else if (cached?.authorizationServerUrl) {
             logMCPDebug(
               this.serverName,
-              `Re-discovering metadata from persisted auth server URL: ${redactUrlSecrets(discoveryState.authorizationServerUrl)}`,
+              `Re-discovering metadata from persisted auth server URL: ${redactUrlSecrets(cached.authorizationServerUrl)}`,
             );
-            let authorizationServerUrl = discoveryState.authorizationServerUrl;
-            if (((l = await LBt(authorizationServerUrl, { fetchFn: h, skipIssuerValidation: !0 })), l))
+            let authorizationServerUrl = cached.authorizationServerUrl;
+            metadata = await discoverAuthorizationServerMetadata_2(authorizationServerUrl, {
+              fetchFn: authFetch,
+              skipIssuerValidation: true,
+            });
+            if (metadata)
               evaluateIssuerEchoPolicy({
                 serverName: this.serverName,
                 site: "refresh_rediscovery",
                 expectedIssuer: authorizationServerUrl,
-                receivedIssuer: l.issuer,
+                receivedIssuer: metadata.issuer,
                 serverConfig: this.serverConfig,
               });
           }
         }
         if (
-          !l &&
+          !metadata &&
           !this.serverConfig.oauth?.xaa &&
-          (await hasStoredOAuthState_2(this.serverName, this.serverConfig)) === void 0
+          (await hasStoredOAuthState_2(this.serverName, this.serverConfig)) === undefined
         )
-          l = await fetchAuthServerMetadata(this.serverName, this.serverConfig.url, {
+          metadata = await fetchAuthServerMetadata(this.serverName, this.serverConfig.url, {
             configuredMetadataUrl: this.serverConfig.oauth?.authServerMetadataUrl,
-            fetchFn: h,
+            fetchFn: authFetch,
             serverConfigForAnalytics: this.serverConfig,
           });
-        if (!l) {
-          (logMCPDebug(this.serverName, "Failed to discover OAuth metadata"),
-            r("failure", "metadata_discovery_failed"),
-            logFeatureBad("mcp_oauth_refresh", "mcp_oauth_refresh_metadata_failed"));
+        if (!metadata) {
+          logMCPDebug(this.serverName, "Failed to discover OAuth metadata");
+          emitRefreshEvent("failure", "metadata_discovery_failed");
+          logFeatureBad("mcp_oauth_refresh", "mcp_oauth_refresh_metadata_failed");
           return;
         }
-        if (
-          ((this._metadata = l),
-          (this._metadataEchoMode = isIssuerStrictEchoEnabled() ? "enforce" : "observe"),
-          (S = await this.clientInformation()),
-          !S)
-        ) {
-          (logMCPDebug(this.serverName, "No client information available"),
-            r("failure", "no_client_info"),
-            logFeatureBad("mcp_oauth_refresh", "mcp_oauth_refresh_no_client_info"));
+        this._metadata = metadata;
+        this._metadataEchoMode = isIssuerStrictEchoEnabled() ? "enforce" : "observe";
+        S = await this.clientInformation();
+        if (!S) {
+          logMCPDebug(this.serverName, "No client information available");
+          emitRefreshEvent("failure", "no_client_info");
+          logFeatureBad("mcp_oauth_refresh", "mcp_oauth_refresh_no_client_info");
           return;
         }
-        let y = await dLo(new URL(this.serverConfig.url), {
-          metadata: l,
+        let newTokens = await refreshAuthorization_2(new URL(this.serverConfig.url), {
+          metadata,
           clientInformation: S,
-          refreshToken: e,
+          refreshToken,
           resource: new URL(this.serverConfig.url),
-          fetchFn: h,
+          fetchFn: authFetch,
         });
-        if (y)
-          return (
-            logMCPDebug(this.serverName, "Token refresh successful"),
-            await this.saveTokens(y),
-            r("success"),
-            logFeatureOk("mcp_oauth_refresh"),
-            y
-          );
-        (logMCPDebug(this.serverName, "Token refresh returned no tokens"),
-          r("failure", "no_tokens_returned"),
-          logFeatureBad("mcp_oauth_refresh", "mcp_oauth_refresh_no_tokens"));
+        if (newTokens) {
+          logMCPDebug(this.serverName, "Token refresh successful");
+          await this.saveTokens(newTokens);
+          emitRefreshEvent("success");
+          logFeatureOk("mcp_oauth_refresh");
+          return newTokens;
+        }
+        logMCPDebug(this.serverName, "Token refresh returned no tokens");
+        emitRefreshEvent("failure", "no_tokens_returned");
+        logFeatureBad("mcp_oauth_refresh", "mcp_oauth_refresh_no_tokens");
         return;
       } catch (error) {
         if (error instanceof IssuerEchoCrossOriginError) {
-          (logMCPDebug(this.serverName, `Token refresh denied by issuer-echo policy: ${errorMessage(error)}`),
-            r("failure", "issuer_echo_denied"),
-            logFeatureBad("mcp_oauth_refresh", "mcp_oauth_refresh_issuer_echo_denied"));
+          logMCPDebug(this.serverName, `Token refresh denied by issuer-echo policy: ${errorMessage(error)}`);
+          emitRefreshEvent("failure", "issuer_echo_denied");
+          logFeatureBad("mcp_oauth_refresh", "mcp_oauth_refresh_issuer_echo_denied");
           return;
         }
-        if (error instanceof OAuthError && error.code === Sue.InvalidGrant) {
+        if (error instanceof OAuthError_2 && error.code === OAuthErrorCode.InvalidGrant) {
           logMCPDebug(this.serverName, `Token refresh failed with invalid_grant: ${error.message}`);
-          let { freshTokens: freshTokens } = await this.readConcurrentRefreshWinner();
-          if (freshTokens)
-            return (logFeatureSad("mcp_oauth_refresh", "mcp_oauth_refresh_concurrent_winner"), freshTokens);
-          (logMCPDebug(this.serverName, "No valid tokens in storage, clearing stored tokens"),
-            r("failure", "invalid_grant"),
-            logFeatureBad("mcp_oauth_refresh", "mcp_oauth_refresh_invalid_grant"),
-            await this.invalidateCredentials("tokens"),
-            AUTH_LOST_SIGNAL.emit(this.serverName));
+          let { freshTokens } = await this.readConcurrentRefreshWinner();
+          if (freshTokens) {
+            logFeatureSad("mcp_oauth_refresh", "mcp_oauth_refresh_concurrent_winner");
+            return freshTokens;
+          }
+          logMCPDebug(this.serverName, "No valid tokens in storage, clearing stored tokens");
+          emitRefreshEvent("failure", "invalid_grant");
+          logFeatureBad("mcp_oauth_refresh", "mcp_oauth_refresh_invalid_grant");
+          await this.invalidateCredentials("tokens");
+          AUTH_LOST_SIGNAL.emit(this.serverName);
           return;
         }
         if (
-          error instanceof OAuthError &&
+          error instanceof OAuthError_2 &&
           (error.code === "invalid_client" || error.code === "unauthorized_client")
         ) {
           logMCPDebug(
             this.serverName,
             "Token refresh failed: DCR client expired or invalid; clearing stored client registration",
           );
-          let { tokenData: tokenData, freshTokens: freshTokens } = await this.readConcurrentRefreshWinner();
-          if (freshTokens)
-            return (logFeatureSad("mcp_oauth_refresh", "mcp_oauth_refresh_concurrent_winner"), freshTokens);
+          let { tokenData, freshTokens } = await this.readConcurrentRefreshWinner();
+          if (freshTokens) {
+            logFeatureSad("mcp_oauth_refresh", "mcp_oauth_refresh_concurrent_winner");
+            return freshTokens;
+          }
           if (tokenData?.clientId && S && tokenData.clientId !== S.client_id) {
-            (logMCPDebug(this.serverName, "Another process re-registered client; preserving"),
-              r("failure", "concurrent_reregister"),
-              logFeatureSad("mcp_oauth_refresh", "mcp_oauth_refresh_concurrent_reregister"));
+            logMCPDebug(this.serverName, "Another process re-registered client; preserving");
+            emitRefreshEvent("failure", "concurrent_reregister");
+            logFeatureSad("mcp_oauth_refresh", "mcp_oauth_refresh_concurrent_reregister");
             return;
           }
-          (r("failure", error.code === "unauthorized_client" ? "unauthorized_client" : "invalid_client"),
-            logFeatureBad(
-              "mcp_oauth_refresh",
-              error.code === "unauthorized_client"
-                ? "mcp_oauth_refresh_unauthorized_client"
-                : "mcp_oauth_refresh_invalid_client",
-            ),
-            await this.invalidateCredentials("all"),
-            AUTH_LOST_SIGNAL.emit(this.serverName));
+          emitRefreshEvent(
+            "failure",
+            error.code === "unauthorized_client" ? "unauthorized_client" : "invalid_client",
+          );
+          logFeatureBad(
+            "mcp_oauth_refresh",
+            error.code === "unauthorized_client"
+              ? "mcp_oauth_refresh_unauthorized_client"
+              : "mcp_oauth_refresh_invalid_client",
+          );
+          await this.invalidateCredentials("all");
+          AUTH_LOST_SIGNAL.emit(this.serverName);
           return;
         }
         if (isZodError_2(error)) {
-          (logMCPDebug(
+          logMCPDebug(
             this.serverName,
             `Token refresh failed: token response rejected by SDK schema: ${errorMessage(error)}`,
-          ),
-            r("failure", "token_response_schema_rejected"),
-            logFeatureBad("mcp_oauth_refresh", "mcp_oauth_refresh_token_response_schema_rejected"));
+          );
+          emitRefreshEvent("failure", "token_response_schema_rejected");
+          logFeatureBad("mcp_oauth_refresh", "mcp_oauth_refresh_token_response_schema_rejected");
           return;
         }
-        let A = error instanceof McpCredentialStoreUnavailableError,
-          l = error instanceof Error && /timeout|timed out|etimedout|econnreset/i.test(error.message),
-          y =
-            error instanceof OAuthError &&
-            (error.code === Sue.ServerError ||
-              error.code === Sue.TemporarilyUnavailable ||
-              error.code === Sue.TooManyRequests ||
-              !DEVICE_FLOW_PENDING_ERRORS.has(error.code)),
-          w = l || y || A;
-        if (!w || s >= t) {
-          (logMCPDebug(this.serverName, `Token refresh failed: ${yF(error, this.serverConfig.url)}`),
-            r("failure", w ? "transient_retries_exhausted" : "request_failed"),
-            logFeatureBad("mcp_oauth_refresh", "mcp_oauth_refresh_request_failed"));
+        let A = error instanceof McpCredentialStoreUnavailableError;
+        let l = error instanceof Error && /timeout|timed out|etimedout|econnreset/i.test(error.message);
+        let isTransientServerError =
+          error instanceof OAuthError_2 &&
+          (error.code === OAuthErrorCode.ServerError ||
+            error.code === OAuthErrorCode.TemporarilyUnavailable ||
+            error.code === OAuthErrorCode.TooManyRequests ||
+            !DEVICE_FLOW_PENDING_ERRORS.has(error.code));
+        let isRetryable = l || isTransientServerError || A;
+        if (!isRetryable || attempt >= MAX_ATTEMPTS) {
+          logMCPDebug(
+            this.serverName,
+            `Token refresh failed: ${describeSdkFetchError(error, this.serverConfig.url)}`,
+          );
+          emitRefreshEvent("failure", isRetryable ? "transient_retries_exhausted" : "request_failed");
+          logFeatureBad("mcp_oauth_refresh", "mcp_oauth_refresh_request_failed");
           return;
         }
-        let R = 1000 * Math.pow(2, s - 1);
-        (logMCPDebug(this.serverName, `Token refresh failed, retrying in ${R}ms (attempt ${s}/${t})`),
-          await sleep(R));
+        let delayMs = 1000 * Math.pow(2, attempt - 1);
+        logMCPDebug(
+          this.serverName,
+          `Token refresh failed, retrying in ${delayMs}ms (attempt ${attempt}/${MAX_ATTEMPTS})`,
+        );
+        await sleep(delayMs);
       }
     }
     return;
   }
 }
+//@ chunk-n1aavqzh.js:62345-63004 facade-exports = readClientSecret (1)
 /**
  * readClientSecret：从 MCP_CLIENT_SECRET 或 TTY 交互读取 client secret。
  */
-//@ chunk-n1aavqzh.js:62345-63004 facade-exports = readClientSecret (1)
 async function readClientSecret_2() {
   let envSecret = process.env.MCP_CLIENT_SECRET;
   if (envSecret) return envSecret;
   if (!process.stdin.isTTY)
     throw Error("No TTY available to prompt for client secret. Set MCP_CLIENT_SECRET env var instead.");
   return new Promise((resolve, reject) => {
-    (process.stderr.write("Enter OAuth client secret: "), process.stdin.setRawMode?.(!0));
-    let secret = "",
-      onData = (ch) => {
-        let str = ch.toString();
-        if (
-          str ===
-            `
+    process.stderr.write("Enter OAuth client secret: ");
+    process.stdin.setRawMode?.(true);
+    let secret = "";
+    let onData = (ch) => {
+      let str = ch.toString();
+      if (
+        str ===
+          `
 ` ||
-          str === "\r"
-        )
-          (process.stdin.setRawMode?.(!1),
-            process.stdin.removeListener("data", onData),
-            process.stderr.write(`
-`),
-            resolve(secret));
-        else if (str === "\x03")
-          (process.stdin.setRawMode?.(!1),
-            process.stdin.removeListener("data", onData),
-            reject(Error("Cancelled")));
-        else if (str === "\x7F" || str === "\b") secret = secret.slice(0, -1);
-        else secret += str;
-      };
+        str === "\r"
+      ) {
+        process.stdin.setRawMode?.(false);
+        process.stdin.removeListener("data", onData);
+        process.stderr.write(`
+`);
+        resolve(secret);
+      } else if (str === "\x03") {
+        process.stdin.setRawMode?.(false);
+        process.stdin.removeListener("data", onData);
+        reject(Error("Cancelled"));
+      } else if (str === "\x7F" || str === "\b") secret = secret.slice(0, -1);
+      else secret += str;
+    };
     process.stdin.on("data", onData);
   });
 }
+//@ chunk-n1aavqzh.js:63004-63200 facade-exports
 /**
  * saveMcpClientSecret：把 client secret 写入 mcpOAuthClientConfig[serverKey]。
  */
-//@ chunk-n1aavqzh.js:63004-63200 facade-exports
-async function saveMcpClientSecret_2(e, t, n) {
-  let r = getServerKey(e, t);
+async function saveMcpClientSecret_2(serverName, serverConfig, clientSecret) {
+  let serverKey = getServerKey(serverName, serverConfig);
   try {
     return await getSecureStorage().mutate((s) => ({
       ...s,
-      mcpOAuthClientConfig: { ...s.mcpOAuthClientConfig, [r]: { clientSecret: n } },
+      mcpOAuthClientConfig: {
+        ...s.mcpOAuthClientConfig,
+        [serverKey]: {
+          clientSecret,
+        },
+      },
     }));
   } catch (error) {
-    return { success: !1, warning: errorMessage(error) };
+    return {
+      success: false,
+      warning: errorMessage(error),
+    };
   }
 }
+//@ chunk-n1aavqzh.js:63200-63388 facade-exports
 /**
  * clearMcpClientConfig：删除 mcpOAuthClientConfig 条目。
  */
-//@ chunk-n1aavqzh.js:63200-63388 facade-exports
 async function clearMcpClientConfig_2(e, t) {
-  let n = getServerKey(e, t);
+  let serverKey = getServerKey(e, t);
   await getSecureStorage().mutate((r) => {
-    if (!r.mcpOAuthClientConfig?.[n]) return r;
-    let s = { ...r.mcpOAuthClientConfig };
-    return (delete s[n], { ...r, mcpOAuthClientConfig: s });
+    if (!r.mcpOAuthClientConfig?.[serverKey]) return r;
+    let s = {
+      ...r.mcpOAuthClientConfig,
+    };
+    delete s[serverKey];
+    return {
+      ...r,
+      mcpOAuthClientConfig: s,
+    };
   });
 }
+//@ chunk-n1aavqzh.js:63388-63487 facade-exports
 /**
  * 从安全存储读取某服务器（名字+配置算出的键）保存的 OAuth 客户端配置 `mcpOAuthClientConfig`（如 DCR 得到的 client_id/secret）。（v2）
  */
-//@ chunk-n1aavqzh.js:63388-63487 facade-exports
-async function getMcpClientConfig_2(e, t) {
-  let async = await getSecureStorage().readAsync(),
-    s = getServerKey(e, t);
-  return async?.mcpOAuthClientConfig?.[s];
+async function getMcpClientConfig_2(serverName, serverConfig) {
+  let async = await getSecureStorage().readAsync();
+  let serverKey = getServerKey(serverName, serverConfig);
+  return async?.mcpOAuthClientConfig?.[serverKey];
 }
 //@ chunk-n1aavqzh.js:63487-63660 layout = getScopeFromMetadata (0.903)
 function getScopeFromMetadata_2(metadata) {
@@ -2838,10 +3275,10 @@ function getScopeFromMetadata_2(metadata) {
     return metadata.default_scope;
   return;
 }
+//@ chunk-n1aavqzh.js:63660-63856 facade-exports
 /**
  * shouldRequestOfflineAccess：元数据 scopes_supported 含 offline_access。
  */
-//@ chunk-n1aavqzh.js:63660-63856 facade-exports
 function maybeAppendOfflineAccess_2(e, t) {
   if (e !== null && e.split(" ").includes("offline_access")) return e;
   if (!t?.scopes_supported?.includes("offline_access")) return e;
@@ -2849,16 +3286,16 @@ function maybeAppendOfflineAccess_2(e, t) {
 }
 //@ chunk-n1aavqzh.js:63856-64018 layout
 var ENTRA_LOGIN_HOSTS = [
-    "login.microsoftonline.com",
-    "login.microsoftonline.us",
-    "login.partner.microsoftonline.cn",
-    "login.chinacloudapi.cn",
-  ],
-  ENTRA_LOGIN_HOST_SUFFIXES = [".b2clogin.com", ".ciamlogin.com"];
+  "login.microsoftonline.com",
+  "login.microsoftonline.us",
+  "login.partner.microsoftonline.cn",
+  "login.chinacloudapi.cn",
+];
+var ENTRA_LOGIN_HOST_SUFFIXES = [".b2clogin.com", ".ciamlogin.com"];
+//@ chunk-n1aavqzh.js:64018-64155 facade-exports
 /**
  * 判断 URL 主机是否属于 Microsoft Entra ID 登录域（精确列表或后缀匹配），解析失败返回 false；用于对 Entra 授权服务器做特殊处理。（v2）
  */
-//@ chunk-n1aavqzh.js:64018-64155 facade-exports
 function isEntraLoginUrl_2(e) {
   try {
     let hostname = (typeof e === "string" ? new URL(e) : e).hostname;
@@ -2866,29 +3303,36 @@ function isEntraLoginUrl_2(e) {
       ENTRA_LOGIN_HOSTS.includes(hostname) || ENTRA_LOGIN_HOST_SUFFIXES.some((n) => hostname.endsWith(n))
     );
   } catch {
-    return !1;
+    return false;
   }
 }
 //@ chunk-1kaj6e83.js:8424-8482 sole-consumer
-var tt = 30000,
-  rt = 500,
-  nt = new Set([...LK, ...PU, "ETIMEDOUT"]);
+/**
+ * 可重试连接错误码集合。
+ */
+var AUTH_REQUEST_TIMEOUT_MS_ALT = 30000;
+var AUTH_RETRY_DELAY_MS_2 = 500;
+var RETRYABLE_CONNECTION_ERRORS_ALT = new Set([
+  ...TRANSIENT_SOCKET_CODES,
+  ...UNREACHABLE_ERROR_CODES,
+  "ETIMEDOUT",
+]);
 //@ chunk-1kaj6e83.js:8482-8615 sole-consumer
-function isTransientAuthFetchError(e) {
-  if (isAbortError(e)) return !0;
-  if (e instanceof Error && e.name === "TimeoutError") return !0;
-  let t = extractConnectionErrorDetails(e);
-  return t !== null && nt.has(t.code);
+function isTransientAuthFetchError(error) {
+  if (isAbortError(error)) return true;
+  if (error instanceof Error && error.name === "TimeoutError") return true;
+  let connectionErrorDetails = extractConnectionErrorDetails(error);
+  return connectionErrorDetails !== null && RETRYABLE_CONNECTION_ERRORS_ALT.has(connectionErrorDetails.code);
 }
 //@ chunk-1kaj6e83.js:8615-8716 sole-consumer
 function isZodError(e) {
   let t = e;
   return (t?.name === "ZodError" || t?.name === "$ZodError") && Array.isArray(t?.issues);
 }
+//@ chunk-1kaj6e83.js:8716-9122 affinity
 /**
  * 可上报的 OAuth 错误码白名单。
  */
-//@ chunk-1kaj6e83.js:8716-9122 affinity
 var OAUTH_ERROR_CODES = [
   "invalid_request",
   "invalid_client",
@@ -2911,42 +3355,42 @@ var OAUTH_ERROR_CODES = [
   "expired_token",
   "slow_down",
 ];
+//@ chunk-1kaj6e83.js:9122-9189 facade-exports
 /**
  * 把 OAuth 错误码收敛成遥测白名单值，未知码记为 `other`。（v1 副本，同 chunk-n1aavqzh.js#q0i）
  */
-//@ chunk-1kaj6e83.js:9122-9189 facade-exports
 function sanitizeOAuthErrorCodeForAnalytics(e) {
   let found = OAUTH_ERROR_CODES.find((r) => r === e);
   return fromEnumOpt(found) ?? lit("other");
 }
+//@ chunk-1kaj6e83.js:9189-9650 facade-exports
 /**
  * 把 SDK 授权失败按消息与错误类型归类：dcr_failed（动态注册/客户端元数据无效）、discovery_failed（元数据加载失败或授权服务器不兼容）、dcr_rejected、network_failed（网络错误码）、其余 sdk_auth_failed；供遥测与提示。（v1 副本）
  */
-//@ chunk-1kaj6e83.js:9189-9650 facade-exports
-function classifySdkAuthFailure(e, t) {
+function classifySdkAuthFailure(msg, cause) {
   let r =
-    t instanceof Error
-      ? `${e}
-${t.message}`
-      : e;
+    cause instanceof Error
+      ? `${msg}
+${cause.message}`
+      : msg;
   if (
     r.includes("dynamic client registration") ||
-    (t instanceof TM && t.errorCode === "invalid_client_metadata")
+    (cause instanceof OAuthError && cause.errorCode === "invalid_client_metadata")
   )
     return "dcr_failed";
   if ((r.includes("trying to load") && r.includes("metadata")) || r.includes("Incompatible auth server"))
     return "discovery_failed";
-  if (t instanceof TM) return "dcr_rejected";
-  let n = getErrnoCode(t) ?? getErrnoCode(t instanceof Error ? t.cause : void 0);
+  if (cause instanceof OAuthError) return "dcr_rejected";
+  let n = getErrnoCode(cause) ?? getErrnoCode(cause instanceof Error ? cause.cause : undefined);
   if (n && UNREACHABLE_ERRNOS.has(n)) return "network_failed";
   return "sdk_auth_failed";
 }
 //@ chunk-1kaj6e83.js:9650-9659 layout
 var MAX_METADATA_REDIRECTS = 5;
+//@ chunk-1kaj6e83.js:9659-9713 facade-exports
 /**
  * 生成脱敏后的授权 URL 调试日志串。（v1 副本，同 chunk-n1aavqzh.js#izs）
  */
-//@ chunk-1kaj6e83.js:9659-9713 facade-exports
 function authorizationUrlForDebugLog(e) {
   return redactUrlSecrets(e.origin + e.pathname) + redactUrlSearchParams(e);
 }
@@ -2956,21 +3400,21 @@ var NONSTANDARD_INVALID_GRANT_ALIASES = new Set([
   "expired_refresh_token",
   "token_expired",
 ]);
+//@ chunk-1kaj6e83.js:9795-10259 facade-exports = normalizeOAuthErrorBody (1)
 /**
  * normalizeOAuthErrorBody：把非标准 OAuth 错误体（NONSTANDARD_INVALID_GRANT_ALIASES 中的别名）改写成 invalid_grant。
  */
-//@ chunk-1kaj6e83.js:9795-10259 facade-exports = normalizeOAuthErrorBody (1)
 async function normalizeOAuthErrorBody(response) {
   if (!response.ok) return response;
-  let text = await response.text(),
-    parsed;
+  let text = await response.text();
+  let parsed;
   try {
     parsed = jsonParse(text);
   } catch {
     return new Response(text, response);
   }
-  if (strip.safeParse(parsed).success) return new Response(text, response);
-  let result = R$r.safeParse(parsed);
+  if (OAuthTokensSchema.safeParse(parsed).success) return new Response(text, response);
+  let result = OAuthErrorResponseSchema.safeParse(parsed);
   if (!result.success) return new Response(text, response);
   let normalized = NONSTANDARD_INVALID_GRANT_ALIASES.has(result.data.error)
     ? {
@@ -2985,65 +3429,80 @@ async function normalizeOAuthErrorBody(response) {
     headers: response.headers,
   });
 }
+//@ chunk-1kaj6e83.js:10259-10419 facade-exports
 /**
  * throwIfAborted（v1 副本）。
  */
-//@ chunk-1kaj6e83.js:10259-10419 facade-exports
 function createAuthFetch() {
-  return async (e, t) => {
+  return async (url, init) => {
     try {
-      return await createAuthFetch_3(e, t);
+      return await createAuthFetch_3(url, init);
     } catch (error) {
-      if (t?.signal?.aborted || !isTransientAuthFetchError(error)) throw error;
-      return (await sleep(rt, t?.signal ?? void 0), await createAuthFetch_3(e, t));
+      if (init?.signal?.aborted || !isTransientAuthFetchError(error)) throw error;
+      await sleep(AUTH_RETRY_DELAY_MS_2, init?.signal ?? undefined);
+      return await createAuthFetch_3(url, init);
     }
   };
 }
 //@ chunk-1kaj6e83.js:10419-10950 fingerprint = createAuthFetch (1)
-async function createAuthFetch_3(e, t) {
-  let timeoutSignal = AbortSignal.timeout(tt),
-    isPost = t?.method?.toUpperCase() === "POST",
-    s = getProxyFetchOptions({ url: String(e) });
-  if (!t?.signal) {
-    let v;
+async function createAuthFetch_3(url, init) {
+  let timeoutSignal = AbortSignal.timeout(AUTH_REQUEST_TIMEOUT_MS_ALT);
+  let isPost = init?.method?.toUpperCase() === "POST";
+  let proxyFetchOptions = getProxyFetchOptions({
+    url: String(url),
+  });
+  if (!init?.signal) {
+    let response;
     try {
-      v = await fetch(e, { ...t, ...s, signal: timeoutSignal });
+      response = await fetch(url, {
+        ...init,
+        ...proxyFetchOptions,
+        signal: timeoutSignal,
+      });
     } catch (error) {
-      rethrowRedactedFetchError(error, e);
+      rethrowRedactedFetchError(error, url);
     }
-    return isPost ? normalizeOAuthErrorBody(v) : v;
+    return isPost ? normalizeOAuthErrorBody(response) : response;
   }
-  let controller = new AbortController(),
-    abort = () => controller.abort();
-  (t.signal.addEventListener("abort", abort), timeoutSignal.addEventListener("abort", abort));
+  let controller = new AbortController();
+  let abort = () => controller.abort();
+  init.signal.addEventListener("abort", abort);
+  timeoutSignal.addEventListener("abort", abort);
   let cleanup = () => {
-    (t.signal?.removeEventListener("abort", abort), timeoutSignal.removeEventListener("abort", abort));
+    init.signal?.removeEventListener("abort", abort);
+    timeoutSignal.removeEventListener("abort", abort);
   };
-  if (t.signal.aborted) controller.abort();
+  if (init.signal.aborted) controller.abort();
   try {
-    let response = await fetch(e, { ...t, ...s, signal: controller.signal });
-    return (cleanup(), isPost ? normalizeOAuthErrorBody(response) : response);
+    let response = await fetch(url, {
+      ...init,
+      ...proxyFetchOptions,
+      signal: controller.signal,
+    });
+    cleanup();
+    return isPost ? normalizeOAuthErrorBody(response) : response;
   } catch (error) {
-    (cleanup(), rethrowRedactedFetchError(error, e));
+    cleanup();
+    rethrowRedactedFetchError(error, url);
   }
 }
+//@ chunk-1kaj6e83.js:10950-11774 fingerprint = fetchAuthServerMetadata (0.81)
 /**
  * fetchAuthServerMetadata（v1）。
  */
-//@ chunk-1kaj6e83.js:10950-11774 fingerprint = fetchAuthServerMetadata (0.81)
 async function fetchAuthServerMetadata_2(serverName, serverUrl, options) {
-  let {
-      configuredMetadataUrl: configuredMetadataUrl,
-      fetchFn: fetchFn,
-      resourceMetadataUrl: resourceMetadataUrl,
-    } = options ?? {},
-    authFetch = fetchFn ?? createAuthFetch();
+  let { configuredMetadataUrl, fetchFn, resourceMetadataUrl } = options ?? {};
+  let authFetch = fetchFn ?? createAuthFetch();
   if (configuredMetadataUrl) {
     if (!configuredMetadataUrl.startsWith("https://"))
       throw Error(
         `authServerMetadataUrl must use https:// (got: ${redactUrlSecrets(configuredMetadataUrl)})`,
       );
-    let response = await authFetch(configuredMetadataUrl, { headers: { Accept: "application/json" } });
+    let response = await authFetch(configuredMetadataUrl, {
+      headers: {
+        Accept: "application/json",
+      },
+    });
     if (response.ok) {
       let A;
       try {
@@ -3053,46 +3512,56 @@ async function fetchAuthServerMetadata_2(serverName, serverUrl, options) {
           `Configured auth server metadata at ${redactUrlSecrets(configuredMetadataUrl)} is not valid JSON`,
         );
       }
-      return KYn.parse(A);
+      return OAuthMetadataSchema.parse(A);
     }
     throw Error(
       `HTTP ${response.status} fetching configured auth server metadata from ${redactUrlSecrets(configuredMetadataUrl)}`,
     );
   }
   try {
-    let { authorizationServerMetadata: authorizationServerMetadata } = await QLo(serverUrl, {
+    let { authorizationServerMetadata } = await discoverOAuthServerInfo(serverUrl, {
       fetchFn: authFetch,
-      ...(resourceMetadataUrl && { resourceMetadataUrl: resourceMetadataUrl }),
+      ...(resourceMetadataUrl && {
+        resourceMetadataUrl,
+      }),
     });
     if (authorizationServerMetadata) return authorizationServerMetadata;
   } catch (err) {
-    logMCPDebug(serverName, `RFC 9728 discovery failed, falling back: ${yF(err, serverUrl)}`);
+    logMCPDebug(
+      serverName,
+      `RFC 9728 discovery failed, falling back: ${describeSdkFetchError(err, serverUrl)}`,
+    );
   }
   let url = new URL(serverUrl);
   if (url.pathname === "/") return;
   try {
-    return await s1t(url, { fetchFn: authFetch });
+    return await discoverAuthorizationServerMetadata(url, {
+      fetchFn: authFetch,
+    });
   } catch (error) {
-    logMCPDebug(serverName, `Path-aware auth server discovery failed: ${yF(error, serverUrl)}`);
+    logMCPDebug(
+      serverName,
+      `Path-aware auth server discovery failed: ${describeSdkFetchError(error, serverUrl)}`,
+    );
     return;
   }
 }
+//@ chunk-1kaj6e83.js:11774-11982 facade-exports
 /**
  * McpClientRegistrationDeferredError（v1 副本）。
  */
-//@ chunk-1kaj6e83.js:11774-11982 facade-exports
-class McpClientRegistrationDeferredError extends AM {
+class McpClientRegistrationDeferredError extends UnauthorizedError {
   serverName;
-  constructor(e) {
+  constructor(serverName) {
     super("Authentication required; client registration is deferred until the user authenticates");
-    this.serverName = e;
+    this.serverName = serverName;
     this.name = "McpClientRegistrationDeferredError";
   }
 }
+//@ chunk-1kaj6e83.js:11982-12100 facade-exports = AuthenticationCancelledError (1)
 /**
  * 用户取消 MCP OAuth 授权时抛出的错误类。（v1 副本）
  */
-//@ chunk-1kaj6e83.js:11982-12100 facade-exports = AuthenticationCancelledError (1)
 class AuthenticationCancelledError extends Error {
   constructor() {
     super("Authentication was cancelled");
@@ -3103,66 +3572,73 @@ class AuthenticationCancelledError extends Error {
 function getRegisteredLoopbackPort(e) {
   if (!e?.clientId || !e.redirectUri || !isLoopbackOrigin_2(e.redirectUri)) return;
   let t = Number(new URL(e.redirectUri).port);
-  return t && e.redirectUri.replace("//127.0.0.1:", "//localhost:") === buildRedirectUri(t) ? t : void 0;
+  return t && e.redirectUri.replace("//127.0.0.1:", "//localhost:") === buildRedirectUri(t) ? t : undefined;
 }
 //@ chunk-1kaj6e83.js:12467-12525 sole-consumer
 function getClientMetadataDocumentUrl() {
   return env.MCP_OAUTH_CLIENT_METADATA_URL || MCP_CLIENT_METADATA_URL;
 }
 //@ chunk-1kaj6e83.js:12525-12620 sole-consumer
-function isLoopbackCallbackUri(e) {
-  if (!isLoopbackOrigin_2(e)) return !1;
+function isLoopbackCallbackUri(redirectUri) {
+  if (!isLoopbackOrigin_2(redirectUri)) return false;
   try {
-    return new URL(e).pathname === "/callback";
+    return new URL(redirectUri).pathname === "/callback";
   } catch {
-    return !1;
+    return false;
   }
 }
 //@ chunk-1kaj6e83.js:12620-12674 sole-consumer
-function isClientMetadataDocumentId(e) {
-  return e !== void 0 && (e === MCP_CLIENT_METADATA_URL || e === getClientMetadataDocumentUrl());
+function isClientMetadataDocumentId(clientId) {
+  return (
+    clientId !== undefined &&
+    (clientId === MCP_CLIENT_METADATA_URL || clientId === getClientMetadataDocumentUrl())
+  );
 }
+//@ chunk-1kaj6e83.js:12674-12733 facade-exports
 /**
  * 按服务器键取 OAuth 回调提交器。（v1 副本）
  */
-//@ chunk-1kaj6e83.js:12674-12733 facade-exports
 function getOAuthCallbackSubmitter(e) {
-  return ht().oauthCallbackSubmitters.get(e);
+  return getCliOwnedState().oauthCallbackSubmitters.get(e);
 }
+//@ chunk-1kaj6e83.js:12733-12849 facade-exports
 /**
  * 登记进行中的 OAuth 授权 Promise，结束后自动移除。（v1 副本）
  */
-//@ chunk-1kaj6e83.js:12733-12849 facade-exports
 function setActiveOAuthPromise(e, t) {
-  let activeOAuthFlows = ht().activeOAuthFlows;
-  (activeOAuthFlows.set(e, t),
-    t
-      .finally(() => {
-        if (activeOAuthFlows.get(e) === t) activeOAuthFlows.delete(e);
-      })
-      .catch(() => {}));
+  let activeOAuthFlows = getCliOwnedState().activeOAuthFlows;
+  activeOAuthFlows.set(e, t);
+  t.finally(() => {
+    if (activeOAuthFlows.get(e) === t) activeOAuthFlows.delete(e);
+  }).catch(() => {});
 }
+//@ chunk-1kaj6e83.js:12849-12901 facade-exports
 /**
  * 取出进行中的 OAuth 授权 Promise。（v1 副本）
  */
-//@ chunk-1kaj6e83.js:12849-12901 facade-exports
 function getActiveOAuthPromise(e) {
-  return ht().activeOAuthFlows.get(e);
+  return getCliOwnedState().activeOAuthFlows.get(e);
 }
+//@ chunk-1kaj6e83.js:12901-13281 facade-exports
 /**
  * 清理"无令牌桩"：安全存储里某服务器的 mcpOAuth 记录既无 accessToken 也无 refreshToken、且没有进行中的发现状态时，原子地删除该条；失败只记 MCP 调试日志。（v1）
  */
-//@ chunk-1kaj6e83.js:12901-13281 facade-exports
 async function clearMcpOAuthStubIfTokenless(e, t) {
-  let r = getServerKey(e, t),
-    n = (await getSecureStorage().readAsync())?.mcpOAuth?.[r];
+  let serverKey = getServerKey(e, t);
+  let n = (await getSecureStorage().readAsync())?.mcpOAuth?.[serverKey];
   if (!n || n.accessToken || n.refreshToken || xaaPinnedServer(n.discoveryState)) return;
   try {
     await getSecureStorage().mutate((s) => {
-      let h = s.mcpOAuth?.[r];
+      let h = s.mcpOAuth?.[serverKey];
       if (!h || h.accessToken || h.refreshToken || xaaPinnedServer(h.discoveryState)) return s;
-      let l = { ...s.mcpOAuth };
-      return (delete l[r], { ...s, mcpOAuth: l });
+      let l = {
+        ...s.mcpOAuth,
+      };
+      delete l[serverKey];
+      return {
+        ...s,
+        mcpOAuth: l,
+      };
     });
   } catch (error) {
     logMCPDebug(e, `clear tokenless stub failed: ${errorMessage(error)}`);
@@ -3170,211 +3646,256 @@ async function clearMcpOAuthStubIfTokenless(e, t) {
 }
 //@ chunk-1kaj6e83.js:13281-14335 fingerprint = revokeToken (0.967)
 async function revokeToken({
-  serverName: serverName,
-  endpoint: endpoint,
-  token: token,
-  tokenTypeHint: tokenTypeHint,
-  clientId: clientId,
-  clientSecret: clientSecret,
-  accessToken: accessToken,
-  authMethod: authMethod = "client_secret_basic",
-  configuredHeaders: configuredHeaders,
+  serverName,
+  endpoint,
+  token,
+  tokenTypeHint,
+  clientId,
+  clientSecret,
+  accessToken,
+  authMethod = "client_secret_basic",
+  configuredHeaders,
 }) {
   let params = new URLSearchParams();
-  (params.set("token", token), params.set("token_type_hint", tokenTypeHint));
-  let y = { ...configuredHeaders, "Content-Type": "application/x-www-form-urlencoded" },
-    U = Object.keys(configuredHeaders).length > 0 ? { beforeRedirect: G4n(endpoint) } : {};
-  if (clientId && clientSecret)
-    if (authMethod === "client_secret_post")
-      (params.set("client_id", clientId), params.set("client_secret", clientSecret));
-    else {
+  params.set("token", token);
+  params.set("token_type_hint", tokenTypeHint);
+  let headers = {
+    ...configuredHeaders,
+    "Content-Type": "application/x-www-form-urlencoded",
+  };
+  let U =
+    Object.keys(configuredHeaders).length > 0
+      ? {
+          beforeRedirect: sameOriginRedirectGuard(endpoint),
+        }
+      : {};
+  if (clientId && clientSecret) {
+    if (authMethod === "client_secret_post") {
+      params.set("client_id", clientId);
+      params.set("client_secret", clientSecret);
+    } else {
       let basic = Buffer.from(`${encodeURIComponent(clientId)}:${encodeURIComponent(clientSecret)}`).toString(
         "base64",
       );
-      ((y.Authorization = `Basic ${basic}`), Ny().record(basic));
+      headers.Authorization = `Basic ${basic}`;
+      getPresentedCredentialLog().record(basic);
     }
-  else if (clientId) params.set("client_id", clientId);
+  } else if (clientId) params.set("client_id", clientId);
   else logMCPDebug(serverName, `No client_id available for ${tokenTypeHint} revocation - server may reject`);
   try {
-    (await Dt.post(endpoint, params, { headers: y, ...U }),
-      logMCPDebug(serverName, `Successfully revoked ${tokenTypeHint}`));
+    await axios_default.post(endpoint, params, {
+      headers,
+      ...U,
+    });
+    logMCPDebug(serverName, `Successfully revoked ${tokenTypeHint}`);
   } catch (error) {
-    if (Dt.isAxiosError(error) && error.response?.status === 401 && accessToken)
-      (logMCPDebug(serverName, `Got 401, retrying ${tokenTypeHint} revocation with Bearer auth`),
-        params.delete("client_id"),
-        params.delete("client_secret"),
-        await Dt.post(endpoint, params, { headers: { ...y, Authorization: `Bearer ${accessToken}` }, ...U }),
-        logMCPDebug(serverName, `Successfully revoked ${tokenTypeHint} with Bearer auth`));
-    else throw error;
+    if (axios_default.isAxiosError(error) && error.response?.status === 401 && accessToken) {
+      logMCPDebug(serverName, `Got 401, retrying ${tokenTypeHint} revocation with Bearer auth`);
+      params.delete("client_id");
+      params.delete("client_secret");
+      await axios_default.post(endpoint, params, {
+        headers: {
+          ...headers,
+          Authorization: `Bearer ${accessToken}`,
+        },
+        ...U,
+      });
+      logMCPDebug(serverName, `Successfully revoked ${tokenTypeHint} with Bearer auth`);
+    } else throw error;
   }
 }
+//@ chunk-1kaj6e83.js:14335-14633 facade-exports
 /**
  * readStoredServerCredentials（v1 副本）。
  */
-//@ chunk-1kaj6e83.js:14335-14633 facade-exports
 async function snapshotServerTokens(e, t) {
   let n = (await getSecureStorage().readAsync())?.mcpOAuth?.[getServerKey(e, t)];
   if (!n?.accessToken && !n?.refreshToken) return;
   return {
-    accessToken: n.accessToken || void 0,
+    accessToken: n.accessToken || undefined,
     refreshToken: n.refreshToken,
     clientId: n.clientId,
     clientSecret: n.clientSecret,
-    ...(n.discoveryState && { discoveryState: authDiscoveryState(n.discoveryState) }),
+    ...(n.discoveryState && {
+      discoveryState: authDiscoveryState(n.discoveryState),
+    }),
   };
 }
+//@ chunk-1kaj6e83.js:14633-16208 fingerprint = revokeServerTokens (0.795)
 /**
  * revokeServerTokens（v1）：按 RFC 7009 撤销访问与刷新令牌。
  */
-//@ chunk-1kaj6e83.js:14633-16208 fingerprint = revokeServerTokens (0.795)
-async function revokeServerTokens_3(serverName, serverConfig, r) {
-  let storage = Ny();
-  (storage.record(r.accessToken), storage.record(r.refreshToken), storage.record(r.clientSecret));
+async function revokeServerTokens_3(serverName, serverConfig, tokenData) {
+  let storage = getPresentedCredentialLog();
+  storage.record(tokenData.accessToken);
+  storage.record(tokenData.refreshToken);
+  storage.record(tokenData.clientSecret);
   let s;
   try {
-    let h = r.discoveryState?.authorizationServerUrl ?? serverConfig.url,
-      metadata = await fetchAuthServerMetadata_2(serverName, h, {
-        configuredMetadataUrl: xaaPinnedServer(r.discoveryState)
-          ? void 0
-          : serverConfig.oauth?.authServerMetadataUrl,
-        fetchFn: wrapFetchWithHeaders(serverName, serverConfig, createAuthFetch()),
-      });
-    if (!metadata) (logMCPDebug(serverName, "No OAuth metadata found"), (s = "no_metadata"));
-    else {
-      let S = "revocation_endpoint" in metadata ? metadata.revocation_endpoint : null;
-      if (!S)
-        (logMCPDebug(serverName, "Server does not support token revocation"), (s = "no_revocation_endpoint"));
-      else {
-        let revocationEndpointStr = String(S),
-          A = await W4n(serverName, serverConfig, revocationEndpointStr),
-          y =
-            ("revocation_endpoint_auth_methods_supported" in metadata
-              ? metadata.revocation_endpoint_auth_methods_supported
-              : void 0) ??
-            ("token_endpoint_auth_methods_supported" in metadata
-              ? metadata.token_endpoint_auth_methods_supported
-              : void 0),
-          U =
-            y && !y.includes("client_secret_basic") && y.includes("client_secret_post")
-              ? "client_secret_post"
-              : "client_secret_basic";
-        if (
-          (logMCPDebug(serverName, `Revoking tokens via ${redactUrlSecrets(revocationEndpointStr)} (${U})`),
-          r.refreshToken)
-        )
+    let asUrl = tokenData.discoveryState?.authorizationServerUrl ?? serverConfig.url;
+    let metadata = await fetchAuthServerMetadata_2(serverName, asUrl, {
+      configuredMetadataUrl: xaaPinnedServer(tokenData.discoveryState)
+        ? undefined
+        : serverConfig.oauth?.authServerMetadataUrl,
+      fetchFn: wrapFetchWithHeaders(serverName, serverConfig, createAuthFetch()),
+    });
+    if (!metadata) {
+      logMCPDebug(serverName, "No OAuth metadata found");
+      s = "no_metadata";
+    } else {
+      let revocationEndpoint = "revocation_endpoint" in metadata ? metadata.revocation_endpoint : null;
+      if (!revocationEndpoint) {
+        logMCPDebug(serverName, "Server does not support token revocation");
+        s = "no_revocation_endpoint";
+      } else {
+        let revocationEndpointStr = String(revocationEndpoint);
+        let configuredHeaders = await dynamicHeadersForRequest(
+          serverName,
+          serverConfig,
+          revocationEndpointStr,
+        );
+        let authMethods =
+          ("revocation_endpoint_auth_methods_supported" in metadata
+            ? metadata.revocation_endpoint_auth_methods_supported
+            : undefined) ??
+          ("token_endpoint_auth_methods_supported" in metadata
+            ? metadata.token_endpoint_auth_methods_supported
+            : undefined);
+        let authMethod =
+          authMethods &&
+          !authMethods.includes("client_secret_basic") &&
+          authMethods.includes("client_secret_post")
+            ? "client_secret_post"
+            : "client_secret_basic";
+        logMCPDebug(
+          serverName,
+          `Revoking tokens via ${redactUrlSecrets(revocationEndpointStr)} (${authMethod})`,
+        );
+        if (tokenData.refreshToken)
           try {
             await revokeToken({
-              serverName: serverName,
+              serverName,
               endpoint: revocationEndpointStr,
-              token: r.refreshToken,
+              token: tokenData.refreshToken,
               tokenTypeHint: "refresh_token",
-              clientId: r.clientId,
-              clientSecret: r.clientSecret,
-              accessToken: r.accessToken,
-              authMethod: U,
-              configuredHeaders: A,
+              clientId: tokenData.clientId,
+              clientSecret: tokenData.clientSecret,
+              accessToken: tokenData.accessToken,
+              authMethod,
+              configuredHeaders,
             });
           } catch (error) {
-            (logMCPDebug(serverName, `Failed to revoke refresh token: ${errorMessage(error)}`),
-              (s = "server_revoke_failed"));
+            logMCPDebug(serverName, `Failed to revoke refresh token: ${errorMessage(error)}`);
+            s = "server_revoke_failed";
           }
-        if (r.accessToken)
+        if (tokenData.accessToken)
           try {
             await revokeToken({
-              serverName: serverName,
+              serverName,
               endpoint: revocationEndpointStr,
-              token: r.accessToken,
+              token: tokenData.accessToken,
               tokenTypeHint: "access_token",
-              clientId: r.clientId,
-              clientSecret: r.clientSecret,
-              accessToken: r.accessToken,
-              authMethod: U,
-              configuredHeaders: A,
+              clientId: tokenData.clientId,
+              clientSecret: tokenData.clientSecret,
+              accessToken: tokenData.accessToken,
+              authMethod,
+              configuredHeaders,
             });
           } catch (error) {
-            (logMCPDebug(serverName, `Failed to revoke access token: ${errorMessage(error)}`),
-              (s = "server_revoke_failed"));
+            logMCPDebug(serverName, `Failed to revoke access token: ${errorMessage(error)}`);
+            s = "server_revoke_failed";
           }
       }
     }
   } catch (error) {
-    (logMCPDebug(serverName, `Failed to revoke tokens: ${errorMessage(error)}`),
-      (s = "server_revoke_failed"));
+    logMCPDebug(serverName, `Failed to revoke tokens: ${errorMessage(error)}`);
+    s = "server_revoke_failed";
   }
   return s;
 }
+//@ chunk-1kaj6e83.js:16208-16728 facade-exports
 /**
  * revokeReplacedTokens（v1 副本）。
  */
-//@ chunk-1kaj6e83.js:16208-16728 facade-exports
-async function revokeReplacedServerTokens(e, t, r) {
+async function revokeReplacedServerTokens(serverName, serverConfig, r) {
   let n;
   try {
-    let s = (await getSecureStorage().readAsync())?.mcpOAuth?.[getServerKey(e, t)],
-      h = {
-        ...r,
-        accessToken: r.accessToken && r.accessToken !== s?.accessToken ? r.accessToken : void 0,
-        refreshToken: r.refreshToken && r.refreshToken !== s?.refreshToken ? r.refreshToken : void 0,
-      };
-    if (!h.accessToken && !h.refreshToken) {
-      (logMCPDebug(e, "No replaced tokens to revoke"), logFeatureOk("mcp_oauth_revoke"));
+    let s = (await getSecureStorage().readAsync())?.mcpOAuth?.[getServerKey(serverName, serverConfig)];
+    let tokenData = {
+      ...r,
+      accessToken: r.accessToken && r.accessToken !== s?.accessToken ? r.accessToken : undefined,
+      refreshToken: r.refreshToken && r.refreshToken !== s?.refreshToken ? r.refreshToken : undefined,
+    };
+    if (!tokenData.accessToken && !tokenData.refreshToken) {
+      logMCPDebug(serverName, "No replaced tokens to revoke");
+      logFeatureOk("mcp_oauth_revoke");
       return;
     }
-    n = await revokeServerTokens_3(e, t, h);
+    n = await revokeServerTokens_3(serverName, serverConfig, tokenData);
   } catch (error) {
-    (logMCPDebug(e, `Failed to revoke replaced tokens: ${errorMessage(error)}`),
-      (n = "server_revoke_failed"));
+    logMCPDebug(serverName, `Failed to revoke replaced tokens: ${errorMessage(error)}`);
+    n = "server_revoke_failed";
   }
   if (n) logFeatureSad("mcp_oauth_revoke", n);
   else logFeatureOk("mcp_oauth_revoke");
 }
+//@ chunk-1kaj6e83.js:16728-18686 facade-exports
 /**
  * clearServerTokens（v1）。
  */
-//@ chunk-1kaj6e83.js:16728-18686 facade-exports
-async function revokeServerTokens(serverName, serverConfig, { preserveStepUpState: r = !1 } = {}) {
-  let n = getSecureStorage(),
-    s = await readSecureStorageForMcp();
-  if (s === READ_FAILED)
-    return (
-      logMCPDebug(serverName, "Could not read the credential store to clear tokens"),
-      logFeatureBad("mcp_oauth_revoke", "local_read_failed"),
-      { cleared: !1, reason: "credential_store_failed" }
-    );
-  let h = getServerKey(serverName, serverConfig),
-    l = s?.mcpOAuth?.[h],
-    S;
+async function revokeServerTokens(serverName, serverConfig, { preserveStepUpState: r = false } = {}) {
+  let secureStorage = getSecureStorage();
+  let secureStorageForMcp = await readSecureStorageForMcp();
+  if (secureStorageForMcp === READ_FAILED) {
+    logMCPDebug(serverName, "Could not read the credential store to clear tokens");
+    logFeatureBad("mcp_oauth_revoke", "local_read_failed");
+    return {
+      cleared: false,
+      reason: "credential_store_failed",
+    };
+  }
+  let serverKey = getServerKey(serverName, serverConfig);
+  let l = secureStorageForMcp?.mcpOAuth?.[serverKey];
+  let S;
   if (l?.accessToken || l?.refreshToken)
     S = await revokeServerTokens_3(serverName, serverConfig, {
-      accessToken: l.accessToken || void 0,
+      accessToken: l.accessToken || undefined,
       refreshToken: l.refreshToken,
       clientId: l.clientId,
       clientSecret: l.clientSecret,
-      ...(l.discoveryState && { discoveryState: authDiscoveryState(l.discoveryState) }),
+      ...(l.discoveryState && {
+        discoveryState: authDiscoveryState(l.discoveryState),
+      }),
     });
   else logMCPDebug(serverName, "No tokens to revoke");
-  let v = !1;
+  let v = false;
   try {
     if (r && l && (l.stepUpScope || l.discoveryState || l.clientId)) {
-      let mutate = await n.mutate((y) => {
-        let U = y.mcpOAuth?.[h];
+      let A = await secureStorage.mutate((y) => {
+        let U = y.mcpOAuth?.[serverKey];
         if (U?.accessToken !== l.accessToken || U?.clientId !== l.clientId) return y;
         return {
           ...y,
           mcpOAuth: {
             ...y.mcpOAuth,
-            [h]: {
-              serverName: serverName,
+            [serverKey]: {
+              serverName,
               serverUrl: serverConfig.url,
               accessToken: "",
-              refreshToken: void 0,
-              expiresAt: void 0,
+              refreshToken: undefined,
+              expiresAt: undefined,
               ...(l.clientId && {
                 clientId: l.clientId,
-                ...(l.redirectUri && { redirectUri: l.redirectUri }),
-                ...(l.clientSecret !== void 0 && { clientSecret: l.clientSecret }),
+                ...(l.redirectUri && {
+                  redirectUri: l.redirectUri,
+                }),
+                ...(l.clientSecret !== undefined && {
+                  clientSecret: l.clientSecret,
+                }),
               }),
-              ...(l.stepUpScope && { stepUpScope: l.stepUpScope }),
+              ...(l.stepUpScope && {
+                stepUpScope: l.stepUpScope,
+              }),
               ...(l.discoveryState && {
                 discoveryState: {
                   ...authDiscoveryState(l.discoveryState),
@@ -3386,98 +3907,131 @@ async function revokeServerTokens(serverName, serverConfig, { preserveStepUpStat
           },
         };
       });
-      ((v = mutate.success),
-        logMCPDebug(
-          serverName,
-          mutate.success
-            ? "Preserved step-up auth state across revocation"
-            : `clear local tokens failed: ${mutate.warning ?? "storage write failed"}`,
-        ));
+      v = A.success;
+      logMCPDebug(
+        serverName,
+        A.success
+          ? "Preserved step-up auth state across revocation"
+          : `clear local tokens failed: ${A.warning ?? "storage write failed"}`,
+      );
     } else if (r) v = (await clearServerTokensFromLocalStorage(serverName, serverConfig)).success;
     else {
       let A = await confirmCredentialRemoval(
-        n,
+        secureStorage,
         (y) => {
-          if (!y.mcpOAuth?.[h]) return y;
-          let { [h]: U, ...w } = y.mcpOAuth;
-          return { ...y, mcpOAuth: w };
+          if (!y.mcpOAuth?.[serverKey]) return y;
+          let { [serverKey]: U, ...w } = y.mcpOAuth;
+          return {
+            ...y,
+            mcpOAuth: w,
+          };
         },
-        (y) => y.mcpOAuth?.[h] !== void 0,
+        (y) => y.mcpOAuth?.[serverKey] !== undefined,
       );
-      if (!A.confirmed && A.reason === "keychain_unreadable")
-        return (
-          logMCPDebug(serverName, "Could not read the keychain to clear tokens"),
-          logFeatureBad("mcp_oauth_revoke", "keychain_unreadable"),
-          { cleared: !1, reason: "keychain_unreadable" }
-        );
+      if (!A.confirmed && A.reason === "keychain_unreadable") {
+        logMCPDebug(serverName, "Could not read the keychain to clear tokens");
+        logFeatureBad("mcp_oauth_revoke", "keychain_unreadable");
+        return {
+          cleared: false,
+          reason: "keychain_unreadable",
+        };
+      }
       v = A.confirmed;
     }
   } catch (error) {
     logMCPDebug(serverName, `clear local tokens failed: ${errorMessage(error)}`);
   }
   if (!v) S ??= "local_clear_failed";
-  if ((clearDiscoveryPathMemo(serverName), S)) logFeatureSad("mcp_oauth_revoke", S);
+  clearDiscoveryPathMemo(serverName);
+  if (S) logFeatureSad("mcp_oauth_revoke", S);
   else logFeatureOk("mcp_oauth_revoke");
-  return v ? { cleared: !0 } : { cleared: !1, reason: "credential_store_failed" };
+  return v
+    ? {
+        cleared: true,
+      }
+    : {
+        cleared: false,
+        reason: "credential_store_failed",
+      };
 }
+//@ chunk-1kaj6e83.js:18686-19319 facade-exports = clearServerTokensFromLocalStorage (0.306)
 /**
  * clearServerTokensFromLocalStorage（v1）。
  */
-//@ chunk-1kaj6e83.js:18686-19319 facade-exports = clearServerTokensFromLocalStorage (0.306)
 async function clearServerTokensFromLocalStorage(serverName, serverConfig, r) {
-  let serverKey = getServerKey(serverName, serverConfig),
-    s,
-    mutate = await getSecureStorage().mutate((l) => {
-      let S = l.mcpOAuth?.[serverKey];
-      if (!S) return l;
-      let v = { ...l.mcpOAuth };
-      if (S.clientId && r?.preserveClientRegistration?.(S)) {
-        if (!S.accessToken && !S.refreshToken) return l;
-        ((v[serverKey] = { ...S, accessToken: "", refreshToken: void 0, expiresAt: 0, scope: void 0 }),
-          (s = "tokens"));
-      } else if (r?.keepXaaPin && xaaPinnedServer(S.discoveryState))
-        ((v[serverKey] = {
-          serverName: S.serverName,
-          serverUrl: S.serverUrl,
-          accessToken: "",
-          expiresAt: 0,
-          discoveryState: S.discoveryState,
-        }),
-          (s = "all"));
-      else (delete v[serverKey], (s = "all"));
-      return { ...l, mcpOAuth: v };
-    });
+  let serverKey = getServerKey(serverName, serverConfig);
+  let s;
+  let h = await getSecureStorage().mutate((l) => {
+    let S = l.mcpOAuth?.[serverKey];
+    if (!S) return l;
+    let v = {
+      ...l.mcpOAuth,
+    };
+    if (S.clientId && r?.preserveClientRegistration?.(S)) {
+      if (!S.accessToken && !S.refreshToken) return l;
+      v[serverKey] = {
+        ...S,
+        accessToken: "",
+        refreshToken: undefined,
+        expiresAt: 0,
+        scope: undefined,
+      };
+      s = "tokens";
+    } else if (r?.keepXaaPin && xaaPinnedServer(S.discoveryState)) {
+      v[serverKey] = {
+        serverName: S.serverName,
+        serverUrl: S.serverUrl,
+        accessToken: "",
+        expiresAt: 0,
+        discoveryState: S.discoveryState,
+      };
+      s = "all";
+    } else {
+      delete v[serverKey];
+      s = "all";
+    }
+    return {
+      ...l,
+      mcpOAuth: v,
+    };
+  });
   if (s)
     logMCPDebug(
       serverName,
       s === "tokens" ? "Cleared stored tokens (preserved client registration)" : "Cleared stored tokens",
     );
-  return mutate;
+  return h;
 }
 //@ chunk-1kaj6e83.js:19319-19608 layout
-function logStorageWriteFailure(e, t, r, n) {
+function logStorageWriteFailure(serverName, serverConfig, r, n) {
   if (r?.success) return;
-  let s = n ? "mutate_rejected" : "storage_write_failed",
-    h = n ? errorMessage(n) : (r?.warning ?? "storage write failed");
-  logMCPDebug(e, `Token persist failed: ${h}`);
-  let l = ET(t);
+  let s = n ? "mutate_rejected" : "storage_write_failed";
+  let h = n ? errorMessage(n) : (r?.warning ?? "storage write failed");
+  logMCPDebug(serverName, `Token persist failed: ${h}`);
+  let l = loggingSafeOrigin(serverConfig);
   logEvent("tengu_mcp_oauth_token_persist_failed", {
-    transportType: fromEnum(t.type),
-    ...(l && { mcpServerBaseUrl: l }),
+    transportType: fromEnum(serverConfig.type),
+    ...(l && {
+      mcpServerBaseUrl: l,
+    }),
     reason: fromEnum(s),
   });
 }
 //@ chunk-1kaj6e83.js:19608-19767 layout
-async function hasStoredOAuthState(e, t) {
-  let r = getServerKey(e, t),
-    n = await readSecureStorageForMcp();
-  if (n === READ_FAILED || (t.oauth?.xaa && !n?.mcpOAuthClientConfig?.[r])) return READ_FAILED;
-  return xaaPinnedServer(n?.mcpOAuth?.[r]?.discoveryState);
+async function hasStoredOAuthState(serverName, serverConfig) {
+  let serverKey = getServerKey(serverName, serverConfig);
+  let secureStorageForMcp = await readSecureStorageForMcp();
+  if (
+    secureStorageForMcp === READ_FAILED ||
+    (serverConfig.oauth?.xaa && !secureStorageForMcp?.mcpOAuthClientConfig?.[serverKey])
+  )
+    return READ_FAILED;
+  return xaaPinnedServer(secureStorageForMcp?.mcpOAuth?.[serverKey]?.discoveryState);
 }
+//@ chunk-1kaj6e83.js:19767-22390 fingerprint = performMCPXaaAuth (0.9)
 /**
  * performMCPXaaAuth（v1）。
  */
-//@ chunk-1kaj6e83.js:19767-22390 fingerprint = performMCPXaaAuth (0.9)
 async function performMCPXaaAuth(serverName, serverConfig, onAuthorizationUrl, abortSignal, skipBrowserOpen) {
   if (!serverConfig.oauth?.xaa) throw Error("XAA: oauth.xaa must be set");
   let idp = getXaaIdpSettings();
@@ -3489,67 +4043,67 @@ async function performMCPXaaAuth(serverName, serverConfig, onAuthorizationUrl, a
   if (!clientId) throw Error(`XAA: server '${serverName}' needs an AS client_id. Re-add with --client-id.`);
   let clientSecret = (await getMcpClientConfig(serverName, serverConfig))?.clientSecret;
   if (!clientSecret) {
-    let wantedKey = getServerKey(serverName, serverConfig),
-      haveKeys = Object.keys((await getSecureStorage().readAsync())?.mcpOAuthClientConfig ?? {}),
-      idpClientSecret = redactHeaders(serverConfig.headers ?? {});
-    throw (
-      logMCPDebug(
-        serverName,
-        `XAA: secret lookup miss. wanted=${wantedKey} have=[${haveKeys.join(", ")}] configHeaders=${jsonStringify(idpClientSecret)}`,
-      ),
-      Error(`XAA: AS client secret not found for '${serverName}'. Re-add with --client-secret.`)
+    let wantedKey = getServerKey(serverName, serverConfig);
+    let haveKeys = Object.keys((await getSecureStorage().readAsync())?.mcpOAuthClientConfig ?? {});
+    let headersForLogging = redactHeaders(serverConfig.headers ?? {});
+    logMCPDebug(
+      serverName,
+      `XAA: secret lookup miss. wanted=${wantedKey} have=[${haveKeys.join(", ")}] configHeaders=${jsonStringify(headersForLogging)}`,
     );
+    throw Error(`XAA: AS client secret not found for '${serverName}'. Re-add with --client-secret.`);
   }
   if ((await hasStoredOAuthState(serverName, serverConfig)) === READ_FAILED)
     throw new McpCredentialStoreUnavailableError(serverName);
   logMCPDebug(serverName, "XAA: starting cross-app access flow");
-  let A = await getIdpClientSecret(idp.issuer),
-    idTokenCacheHit = (await getCachedIdpIdToken(idp.issuer)) !== void 0,
-    failureStage = "idp_login";
+  let idpClientSecret = await getIdpClientSecret(idp.issuer);
+  let idTokenCacheHit = (await getCachedIdpIdToken(idp.issuer)) !== undefined;
+  let failureStage = "idp_login";
   try {
-    let w;
+    let idToken;
     try {
-      w = await acquireIdpIdToken({
+      idToken = await acquireIdpIdToken({
         idpIssuer: idp.issuer,
         idpClientId: idp.clientId,
-        idpClientSecret: A,
+        idpClientSecret,
         callbackPort: idp.callbackPort,
-        onAuthorizationUrl: onAuthorizationUrl,
-        skipBrowserOpen: skipBrowserOpen,
-        abortSignal: abortSignal,
+        onAuthorizationUrl,
+        skipBrowserOpen,
+        abortSignal,
       });
-    } catch (error) {
+    } catch (e) {
       if (abortSignal?.aborted) throw new AuthenticationCancelledError();
-      throw error;
+      throw e;
     }
     failureStage = "discovery";
     let oidc = await discoverOidc(idp.issuer);
-    ((failureStage = "token_exchange"), Ny().record(clientSecret));
+    failureStage = "token_exchange";
+    getPresentedCredentialLog().record(clientSecret);
     let F = await hasStoredOAuthState(serverName, serverConfig);
     if (F === READ_FAILED) throw new McpCredentialStoreUnavailableError(serverName);
-    let P;
+    let tokens;
     try {
-      P = await performCrossAppAccess_2(
+      tokens = await performCrossAppAccess_2(
         serverConfig.url,
         {
-          clientId: clientId,
-          clientSecret: clientSecret,
+          clientId,
+          clientSecret,
           idpClientId: idp.clientId,
-          idpClientSecret: A,
-          idpIdToken: w,
+          idpClientSecret,
+          idpIdToken: idToken,
           idpTokenEndpoint: oidc.token_endpoint,
           pinnedAuthorizationServer: F,
         },
         serverName,
         abortSignal,
       );
-    } catch (error) {
+    } catch (e) {
       if (abortSignal?.aborted) throw new AuthenticationCancelledError();
-      let msg = errorMessage(error);
-      if (error instanceof XaaTokenExchangeError) {
-        if (error.shouldClearIdToken)
-          (await clearIdpIdToken(idp.issuer),
-            logMCPDebug(serverName, "XAA: cleared cached id_token after token-exchange failure"));
+      let msg = errorMessage(e);
+      if (e instanceof XaaTokenExchangeError) {
+        if (e.shouldClearIdToken) {
+          await clearIdpIdToken(idp.issuer);
+          logMCPDebug(serverName, "XAA: cleared cached id_token after token-exchange failure");
+        }
       } else if (
         msg.includes("PRM discovery failed") ||
         msg.includes("AS metadata discovery failed") ||
@@ -3558,33 +4112,35 @@ async function performMCPXaaAuth(serverName, serverConfig, onAuthorizationUrl, a
       )
         failureStage = "discovery";
       else if (msg.includes("jwt-bearer")) failureStage = "jwt_bearer";
-      throw error;
+      throw e;
     }
-    let T = getServerKey(serverName, serverConfig),
-      storage = Ny();
-    (storage.record(P.access_token), storage.record(P.refresh_token));
-    let x, B;
+    let serverKey = getServerKey(serverName, serverConfig);
+    let storage = getPresentedCredentialLog();
+    storage.record(tokens.access_token);
+    storage.record(tokens.refresh_token);
+    let x;
+    let B;
     try {
-      x = await getSecureStorage().mutate((R) => {
-        let prev = R.mcpOAuth?.[T];
+      x = await getSecureStorage().mutate((existingData) => {
+        let prev = existingData.mcpOAuth?.[serverKey];
         return {
-          ...R,
+          ...existingData,
           mcpOAuth: {
-            ...R.mcpOAuth,
-            [T]: {
+            ...existingData.mcpOAuth,
+            [serverKey]: {
               ...prev,
-              serverName: serverName,
+              serverName,
               serverUrl: serverConfig.url,
-              accessToken: P.access_token,
-              refreshToken: P.refresh_token ?? prev?.refreshToken,
-              expiresAt: P.expires_in != null ? Date.now() + P.expires_in * 1000 : void 0,
-              scope: P.scope,
-              clientId: clientId,
-              clientSecret: clientSecret,
+              accessToken: tokens.access_token,
+              refreshToken: tokens.refresh_token ?? prev?.refreshToken,
+              expiresAt: tokens.expires_in != null ? Date.now() + tokens.expires_in * 1000 : undefined,
+              scope: tokens.scope,
+              clientId,
+              clientSecret,
               discoveryState: pinXaaAuth({
                 previous: prev?.discoveryState,
-                issuedBy: P.authorizationServerUrl,
-                interactiveSignIn: !0,
+                issuedBy: tokens.authorizationServerUrl,
+                interactiveSignIn: true,
               }),
             },
           },
@@ -3595,34 +4151,35 @@ async function performMCPXaaAuth(serverName, serverConfig, onAuthorizationUrl, a
     }
     if (x?.success) logMCPDebug(serverName, "XAA: tokens saved");
     else logStorageWriteFailure(serverName, serverConfig, x, B);
-    (logEvent("tengu_mcp_oauth_flow_success", { authMethod: lit("xaa"), idTokenCacheHit: idTokenCacheHit }),
-      logFeatureOk("mcp_oauth_flow"));
-  } catch (error) {
-    if (error instanceof AuthenticationCancelledError) throw error;
-    throw (
-      logFeatureBad("mcp_oauth_flow", "mcp_oauth_xaa_failed"),
-      logEvent("tengu_mcp_oauth_flow_failure", {
-        authMethod: lit("xaa"),
-        xaaFailureStage: fromEnum(failureStage),
-        idTokenCacheHit: idTokenCacheHit,
-      }),
-      error
-    );
+    logEvent("tengu_mcp_oauth_flow_success", {
+      authMethod: lit("xaa"),
+      idTokenCacheHit,
+    });
+    logFeatureOk("mcp_oauth_flow");
+  } catch (e) {
+    if (e instanceof AuthenticationCancelledError) throw e;
+    logFeatureBad("mcp_oauth_flow", "mcp_oauth_xaa_failed");
+    logEvent("tengu_mcp_oauth_flow_failure", {
+      authMethod: lit("xaa"),
+      xaaFailureStage: fromEnum(failureStage),
+      idTokenCacheHit,
+    });
+    throw e;
   }
 }
+//@ chunk-1kaj6e83.js:22390-30247 facade-exports = performMCPOAuthFlow (0.792)
 /**
  * performMCPOAuthFlow（v1）：同 v2，回调不处理 iss。
  */
-//@ chunk-1kaj6e83.js:22390-30247 facade-exports = performMCPOAuthFlow (0.792)
 async function performMCPOAuthFlow(serverName, serverConfig, onAuthorizationUrl, abortSignal, options) {
   if (!URL.canParse(serverConfig.url)) {
     logFeatureBad("mcp_oauth_flow", "mcp_oauth_no_valid_url");
-    let T =
+    let configError =
       "configError" in serverConfig && typeof serverConfig.configError === "string"
         ? serverConfig.configError
-        : void 0;
+        : undefined;
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      T ||
+      configError ||
         "This server's URL is missing or not a valid URL, so sign-in can't start. Fix the URL in its MCP config (or set the environment variable it uses) and try again.",
       "MCP OAuth refused: no valid server URL",
     );
@@ -3632,330 +4189,376 @@ async function performMCPOAuthFlow(serverName, serverConfig, onAuthorizationUrl,
       throw Error(
         `XAA is not enabled (set CLAUDE_CODE_ENABLE_XAA=1). Remove 'oauth.xaa' from server '${serverName}' to use the standard consent flow.`,
       );
-    (logEvent("tengu_mcp_oauth_flow_start", {
-      isOAuthFlow: !0,
+    logEvent("tengu_mcp_oauth_flow_start", {
+      isOAuthFlow: true,
       authMethod: lit("xaa"),
       transportType: fromEnum(serverConfig.type),
-      ...(ET(serverConfig) && { mcpServerBaseUrl: ET(serverConfig) }),
-    }),
-      await performMCPXaaAuth(
-        serverName,
-        serverConfig,
-        onAuthorizationUrl,
-        abortSignal,
-        options?.skipBrowserOpen,
-      ));
+      ...(loggingSafeOrigin(serverConfig) && {
+        mcpServerBaseUrl: loggingSafeOrigin(serverConfig),
+      }),
+    });
+    await performMCPXaaAuth(
+      serverName,
+      serverConfig,
+      onAuthorizationUrl,
+      abortSignal,
+      options?.skipBrowserOpen,
+    );
     return;
   }
-  let storage = getSecureStorage(),
-    serverKey = getServerKey(serverName, serverConfig),
-    cachedEntry = (await storage.readAsync())?.mcpOAuth?.[serverKey],
-    cachedStepUpScope = cachedEntry?.stepUpScope,
-    cachedResourceMetadataUrl = cachedEntry?.discoveryState?.resourceMetadataUrl,
-    y = getRegisteredLoopbackPort(cachedEntry),
-    U;
+  let storage = getSecureStorage();
+  let serverKey = getServerKey(serverName, serverConfig);
+  let cachedEntry = (await storage.readAsync())?.mcpOAuth?.[serverKey];
+  let cachedStepUpScope = cachedEntry?.stepUpScope;
+  let cachedResourceMetadataUrl = cachedEntry?.discoveryState?.resourceMetadataUrl;
+  let registeredLoopbackPort = getRegisteredLoopbackPort(cachedEntry);
+  let resourceMetadataUrl;
   if (cachedResourceMetadataUrl)
     try {
-      U = new URL(cachedResourceMetadataUrl);
+      resourceMetadataUrl = new URL(cachedResourceMetadataUrl);
     } catch {
       logMCPDebug(
         serverName,
         `Invalid cached resourceMetadataUrl: ${redactUrlSecrets(cachedResourceMetadataUrl)}`,
       );
     }
-  let wwwAuthParams = { scope: cachedStepUpScope, resourceMetadataUrl: U },
-    flowAttemptId = randomUUID(),
-    F = mcpServerTelemetry(serverConfig, options?.redirectUri);
+  let wwwAuthParams = {
+    scope: cachedStepUpScope,
+    resourceMetadataUrl,
+  };
+  let flowAttemptId = randomUUID();
+  let F = mcpServerTelemetry(serverConfig, options?.redirectUri);
   logEvent("tengu_mcp_oauth_flow_start", {
-    flowAttemptId: ye(flowAttemptId),
-    isOAuthFlow: !0,
+    flowAttemptId: sanitizeMarkName(flowAttemptId),
+    isOAuthFlow: true,
     transportType: fromEnum(serverConfig.type),
     ...F,
-    ...(ET(serverConfig) && { mcpServerBaseUrl: ET(serverConfig) }),
+    ...(loggingSafeOrigin(serverConfig) && {
+      mcpServerBaseUrl: loggingSafeOrigin(serverConfig),
+    }),
   });
-  let P = !1;
+  let authorizationCodeObtained = false;
   try {
-    let configuredCallbackPort = serverConfig.oauth?.callbackPort,
-      E = !!options?.redirectUri,
-      x = E ? 0 : (configuredCallbackPort ?? (await findAvailablePort(y))),
-      B = options?.redirectUri ?? buildRedirectUri(x);
+    let configuredCallbackPort = serverConfig.oauth?.callbackPort;
+    let E = !!options?.redirectUri;
+    let port = E ? 0 : (configuredCallbackPort ?? (await findAvailablePort(registeredLoopbackPort)));
+    let redirectUri = options?.redirectUri ?? buildRedirectUri(port);
     logMCPDebug(
       serverName,
       E
-        ? `Using custom redirectUri: ${redactUrlSecrets(B)} (no localhost listener)`
-        : `Using redirect port: ${x}${configuredCallbackPort ? " (from config)" : y && x === y ? " (reusing registered port)" : ""}`,
+        ? `Using custom redirectUri: ${redactUrlSecrets(redirectUri)} (no localhost listener)`
+        : `Using redirect port: ${port}${configuredCallbackPort ? " (from config)" : registeredLoopbackPort && port === registeredLoopbackPort ? " (reusing registered port)" : ""}`,
     );
     try {
       await clearServerTokensFromLocalStorage(serverName, serverConfig, {
-        preserveClientRegistration: (z) => x === getRegisteredLoopbackPort(z) || z.redirectUri === B,
-        keepXaaPin: !0,
+        preserveClientRegistration: (z) =>
+          port === getRegisteredLoopbackPort(z) || z.redirectUri === redirectUri,
+        keepXaaPin: true,
       });
     } catch (error) {
       logMCPDebug(serverName, `clear stored credentials failed: ${errorMessage(error)}`);
     }
-    let R = ht(),
-      abortController = new AbortController();
-    if (!E) (R.oauthCallbackListeners.get(x)?.abort(), R.oauthCallbackListeners.set(x, abortController));
-    let K = new ClaudeAuthProvider(
-        serverName,
-        serverConfig,
-        B,
-        !0,
-        onAuthorizationUrl,
-        options?.skipBrowserOpen,
-      ),
-      redirectUri = Boolean(serverConfig.oauth?.scopes || serverConfig.oauth?.authServerMetadataUrl);
-    if (wwwAuthParams.scope && !redirectUri) K.markStepUpPending(wwwAuthParams.scope);
-    let re = wrapFetchWithHeaders(serverName, serverConfig, createAuthFetch());
+    let cliOwnedState = getCliOwnedState();
+    let abortController = new AbortController();
+    if (!E) {
+      cliOwnedState.oauthCallbackListeners.get(port)?.abort();
+      cliOwnedState.oauthCallbackListeners.set(port, abortController);
+    }
+    let provider = new ClaudeAuthProvider(
+      serverName,
+      serverConfig,
+      redirectUri,
+      true,
+      onAuthorizationUrl,
+      options?.skipBrowserOpen,
+    );
+    let redirectUri_2 = Boolean(serverConfig.oauth?.scopes || serverConfig.oauth?.authServerMetadataUrl);
+    if (wwwAuthParams.scope && !redirectUri_2) provider.markStepUpPending(wwwAuthParams.scope);
+    let fetchFn = wrapFetchWithHeaders(serverName, serverConfig, createAuthFetch());
     try {
-      let z = await fetchAuthServerMetadata_2(serverName, serverConfig.url, {
+      let metadata = await fetchAuthServerMetadata_2(serverName, serverConfig.url, {
         configuredMetadataUrl: serverConfig.oauth?.authServerMetadataUrl,
-        fetchFn: re,
+        fetchFn,
         resourceMetadataUrl: wwwAuthParams.resourceMetadataUrl,
       });
-      if (z)
-        (K.setMetadata(z),
-          logMCPDebug(
-            serverName,
-            `Fetched OAuth metadata with scope: ${redactSensitiveUrlParams("scope", getScopeFromMetadata(z) ?? "") || "NONE"}`,
-          ));
+      if (metadata) {
+        provider.setMetadata(metadata);
+        logMCPDebug(
+          serverName,
+          `Fetched OAuth metadata with scope: ${redactSensitiveUrlParams("scope", getScopeFromMetadata(metadata) ?? "") || "NONE"}`,
+        );
+      }
     } catch (error) {
-      logMCPDebug(serverName, `Failed to fetch OAuth metadata: ${yF(error, serverConfig.url)}`);
+      logMCPDebug(
+        serverName,
+        `Failed to fetch OAuth metadata: ${describeSdkFetchError(error, serverConfig.url)}`,
+      );
     }
-    let oauthState = await K.state(),
-      server = null,
-      timeoutId = null,
-      abortHandler = null,
-      Se = null,
-      cleanup = () => {
-        if (server)
-          (server.removeAllListeners(), server.on("error", () => {}), server.close(), (server = null));
-        if (timeoutId) (clearTimeout(timeoutId), (timeoutId = null));
-        if (abortHandler)
-          (abortSignal?.removeEventListener("abort", abortHandler),
-            abortController.signal.removeEventListener("abort", abortHandler),
-            (abortHandler = null));
-        if (R.oauthCallbackListeners.get(x) === abortController) R.oauthCallbackListeners.delete(x);
-        if (R.oauthCallbackSubmitters.get(serverName) === Se) R.oauthCallbackSubmitters.delete(serverName);
-        logMCPDebug(serverName, "MCP OAuth server cleaned up");
-      },
-      authorizationCode = await new Promise((resolve, reject) => {
-        let ae = !1,
-          resolveOnce = (code) => {
-            if (ae) return;
-            ((ae = !0), resolve(code));
-          },
-          rejectOnce = (error) => {
-            if (ae) return;
-            ((ae = !0), reject(error));
-          };
-        if (
-          ((abortHandler = () => {
-            (cleanup(), rejectOnce(new AuthenticationCancelledError()));
-          }),
-          abortSignal?.aborted || abortController.signal.aborted)
-        ) {
-          abortHandler();
-          return;
-        }
-        (abortSignal?.addEventListener("abort", abortHandler),
-          abortController.signal.addEventListener("abort", abortHandler));
-        {
-          let L = (callbackUrl) => {
-            try {
-              let parsed = new URL(callbackUrl),
-                code = parsed.searchParams.get("code"),
-                state = parsed.searchParams.get("state"),
-                error = parsed.searchParams.get("error");
-              if (!code && !error) return !1;
-              if (state !== oauthState)
-                return (
-                  logMCPDebug(
-                    serverName,
-                    "Ignoring manual callback URL whose state belongs to a different flow",
-                  ),
-                  !1
-                );
-              if (error) {
-                let ne = parsed.searchParams.get("error_description") || "";
-                return (cleanup(), rejectOnce(Error(`OAuth error: ${error} - ${ne}`)), !0);
-              }
-              if (!code) return !1;
-              return (
-                logMCPDebug(serverName, "Received auth code via manual callback URL"),
-                cleanup(),
-                resolveOnce(code),
-                !0
-              );
-            } catch {
-              return !1;
-            }
-          };
-          ((Se = L),
-            R.oauthCallbackSubmitters.set(serverName, L),
-            options?.onWaitingForCallback?.(L, x, oauthState));
-        }
-        let Te = async () => {
+    let oauthState = await provider.state();
+    let server = null;
+    let timeoutId = null;
+    let abortHandler = null;
+    let Se = null;
+    let cleanup = () => {
+      if (server) {
+        server.removeAllListeners();
+        server.on("error", () => {});
+        server.close();
+        server = null;
+      }
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+      if (abortHandler) {
+        abortSignal?.removeEventListener("abort", abortHandler);
+        abortController.signal.removeEventListener("abort", abortHandler);
+        abortHandler = null;
+      }
+      if (cliOwnedState.oauthCallbackListeners.get(port) === abortController)
+        cliOwnedState.oauthCallbackListeners.delete(port);
+      if (cliOwnedState.oauthCallbackSubmitters.get(serverName) === Se)
+        cliOwnedState.oauthCallbackSubmitters.delete(serverName);
+      logMCPDebug(serverName, "MCP OAuth server cleaned up");
+    };
+    let authorizationCode = await new Promise((resolve, reject) => {
+      let resolved = false;
+      let resolveOnce = (code) => {
+        if (resolved) return;
+        resolved = true;
+        resolve(code);
+      };
+      let rejectOnce = (error) => {
+        if (resolved) return;
+        resolved = true;
+        reject(error);
+      };
+      abortHandler = () => {
+        cleanup();
+        rejectOnce(new AuthenticationCancelledError());
+      };
+      if (abortSignal?.aborted || abortController.signal.aborted) {
+        abortHandler();
+        return;
+      }
+      abortSignal?.addEventListener("abort", abortHandler);
+      abortController.signal.addEventListener("abort", abortHandler);
+      {
+        let L = (callbackUrl) => {
           try {
-            (logMCPDebug(serverName, "Starting SDK auth"),
-              logMCPDebug(serverName, `Server URL: ${redactUrlSecrets(serverConfig.url)}`));
-            let L = await Aue(K, {
-              serverUrl: serverConfig.url,
-              scope: wwwAuthParams.scope,
-              resourceMetadataUrl: wwwAuthParams.resourceMetadataUrl,
-              fetchFn: re,
-            });
-            if ((logMCPDebug(serverName, `Initial auth result: ${L}`), L !== "REDIRECT"))
-              logMCPDebug(serverName, `Unexpected auth result, expected REDIRECT: ${L}`);
-          } catch (error) {
-            (logMCPDebug(serverName, `SDK auth error: ${yF(error, serverConfig.url)}`),
-              cleanup(),
-              rejectOnce(
-                Object.assign(
-                  new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-                    `SDK auth failed: ${yF(error, serverConfig.url)}`,
-                    "SDK auth failed",
-                  ),
-                  { cause: error },
-                ),
-              ));
+            let parsed = new URL(callbackUrl);
+            let code = parsed.searchParams.get("code");
+            let state = parsed.searchParams.get("state");
+            let error = parsed.searchParams.get("error");
+            if (!code && !error) return false;
+            if (state !== oauthState) {
+              logMCPDebug(serverName, "Ignoring manual callback URL whose state belongs to a different flow");
+              return false;
+            }
+            if (error) {
+              let errorDescription = parsed.searchParams.get("error_description") || "";
+              cleanup();
+              rejectOnce(Error(`OAuth error: ${error} - ${errorDescription}`));
+              return true;
+            }
+            if (!code) return false;
+            logMCPDebug(serverName, "Received auth code via manual callback URL");
+            cleanup();
+            resolveOnce(code);
+            return true;
+          } catch {
+            return false;
           }
         };
-        if (E) Te();
-        else
-          ((server = createServer((req, res) => {
-            let parsedUrl = parse(req.url || "", !0);
-            if (parsedUrl.pathname === "/callback") {
-              let code = parsedUrl.query.code,
-                state = parsedUrl.query.state,
-                error = parsedUrl.query.error,
-                errorDescription = parsedUrl.query.error_description,
-                errorUri = parsedUrl.query.error_uri;
-              if (state !== oauthState) {
-                (res.writeHead(400, { "Content-Type": "text/html" }),
-                  res.end(
-                    callbackPageBody({
-                      ok: !1,
-                      heading: "Authentication failed",
-                      message: "Invalid state parameter. Close this tab and try again from Claude Code.",
-                    }),
-                  ));
-                return;
-              }
-              if (error) {
-                (res.writeHead(200, { "Content-Type": "text/html" }),
-                  res.end(
-                    callbackPageBody({
-                      ok: !1,
-                      heading: "Authentication failed",
-                      message: "Close this tab and try again from Claude Code.",
-                      detail: `${String(error)}: ${errorDescription ?? ""}`,
-                    }),
-                  ),
-                  cleanup());
-                let errorMessage = `OAuth error: ${error}`;
-                if (errorDescription) errorMessage += ` - ${errorDescription}`;
-                if (errorUri) errorMessage += ` (See: ${errorUri})`;
-                rejectOnce(Error(errorMessage));
-                return;
-              }
-              if (code)
-                (res.writeHead(200, { "Content-Type": "text/html" }),
-                  res.end(
-                    callbackPageBody({
-                      ok: !0,
-                      heading: "Authentication successful",
-                      message: "You can close this tab and return to Claude Code.",
-                    }),
-                  ),
-                  cleanup(),
-                  resolveOnce(code));
-            } else
-              (res.writeHead(404, { "Content-Type": "text/html" }),
-                res.end(
-                  callbackPageBody({
-                    ok: !1,
-                    heading: "Not found",
-                    message: `This is the Claude Code MCP OAuth callback listener. It only handles /callback. If your OAuth provider redirected here, the registered redirect_uri must be ${redactUrlSecrets(B)}.`,
-                  }),
-                ));
-          })),
-            server.on("error", (err) => {
-              if ((cleanup(), err.code === "EADDRINUSE")) {
-                let j =
-                  getPlatform() === "windows" ? `netstat -ano | findstr :${x}` : `lsof -ti:${x} -sTCP:LISTEN`;
-                rejectOnce(
-                  new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-                    `OAuth callback port ${x} is already in use \u2014 another process may be holding it. ` +
-                      `Run \`${j}\` to find it.`,
-                    "OAuth callback port already in use",
-                  ),
-                );
-              } else
-                rejectOnce(
-                  new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-                    `OAuth callback server failed: ${err.message}`,
-                    "OAuth callback server failed",
-                  ),
-                );
-            }),
-            server.listen(x, "127.0.0.1", () => void Te()),
-            server.unref());
-        ((timeoutId = setTimeout(
-          (cleanup, rejectOnce) => {
-            (cleanup(),
-              rejectOnce(
-                new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-                  "Authentication timeout",
-                  "Authentication timeout",
-                ),
-              ));
-          },
-          300000,
-          cleanup,
-          rejectOnce,
-        )),
-          timeoutId.unref());
-      });
-    ((P = !0),
-      logMCPDebug(serverName, "Completing auth flow with authorization code"),
-      Ny().record(authorizationCode));
-    let result = await Aue(K, {
+        Se = L;
+        cliOwnedState.oauthCallbackSubmitters.set(serverName, L);
+        options?.onWaitingForCallback?.(L, port, oauthState);
+      }
+      let Te = async () => {
+        try {
+          logMCPDebug(serverName, "Starting SDK auth");
+          logMCPDebug(serverName, `Server URL: ${redactUrlSecrets(serverConfig.url)}`);
+          let result = await auth(provider, {
+            serverUrl: serverConfig.url,
+            scope: wwwAuthParams.scope,
+            resourceMetadataUrl: wwwAuthParams.resourceMetadataUrl,
+            fetchFn,
+          });
+          logMCPDebug(serverName, `Initial auth result: ${result}`);
+          if (result !== "REDIRECT")
+            logMCPDebug(serverName, `Unexpected auth result, expected REDIRECT: ${result}`);
+        } catch (error) {
+          logMCPDebug(serverName, `SDK auth error: ${describeSdkFetchError(error, serverConfig.url)}`);
+          cleanup();
+          rejectOnce(
+            Object.assign(
+              new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
+                `SDK auth failed: ${describeSdkFetchError(error, serverConfig.url)}`,
+                "SDK auth failed",
+              ),
+              {
+                cause: error,
+              },
+            ),
+          );
+        }
+      };
+      if (E) Te();
+      else {
+        server = createServer((req, res) => {
+          let parsedUrl = parse(req.url || "", true);
+          if (parsedUrl.pathname === "/callback") {
+            let code = parsedUrl.query.code;
+            let state = parsedUrl.query.state;
+            let error = parsedUrl.query.error;
+            let errorDescription = parsedUrl.query.error_description;
+            let errorUri = parsedUrl.query.error_uri;
+            if (state !== oauthState) {
+              res.writeHead(400, {
+                "Content-Type": "text/html",
+              });
+              res.end(
+                callbackPageBody({
+                  ok: false,
+                  heading: "Authentication failed",
+                  message: "Invalid state parameter. Close this tab and try again from Claude Code.",
+                }),
+              );
+              return;
+            }
+            if (error) {
+              res.writeHead(200, {
+                "Content-Type": "text/html",
+              });
+              res.end(
+                callbackPageBody({
+                  ok: false,
+                  heading: "Authentication failed",
+                  message: "Close this tab and try again from Claude Code.",
+                  detail: `${String(error)}: ${errorDescription ?? ""}`,
+                }),
+              );
+              cleanup();
+              let errorMessage = `OAuth error: ${error}`;
+              if (errorDescription) errorMessage += ` - ${errorDescription}`;
+              if (errorUri) errorMessage += ` (See: ${errorUri})`;
+              rejectOnce(Error(errorMessage));
+              return;
+            }
+            if (code) {
+              res.writeHead(200, {
+                "Content-Type": "text/html",
+              });
+              res.end(
+                callbackPageBody({
+                  ok: true,
+                  heading: "Authentication successful",
+                  message: "You can close this tab and return to Claude Code.",
+                }),
+              );
+              cleanup();
+              resolveOnce(code);
+            }
+          } else {
+            res.writeHead(404, {
+              "Content-Type": "text/html",
+            });
+            res.end(
+              callbackPageBody({
+                ok: false,
+                heading: "Not found",
+                message: `This is the Claude Code MCP OAuth callback listener. It only handles /callback. If your OAuth provider redirected here, the registered redirect_uri must be ${redactUrlSecrets(redirectUri)}.`,
+              }),
+            );
+          }
+        });
+        server.on("error", (err) => {
+          cleanup();
+          if (err.code === "EADDRINUSE") {
+            let findCmd =
+              getPlatform() === "windows"
+                ? `netstat -ano | findstr :${port}`
+                : `lsof -ti:${port} -sTCP:LISTEN`;
+            rejectOnce(
+              new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
+                `OAuth callback port ${port} is already in use \u2014 another process may be holding it. ` +
+                  `Run \`${findCmd}\` to find it.`,
+                "OAuth callback port already in use",
+              ),
+            );
+          } else
+            rejectOnce(
+              new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
+                `OAuth callback server failed: ${err.message}`,
+                "OAuth callback server failed",
+              ),
+            );
+        });
+        server.listen(port, "127.0.0.1", () => void Te());
+        server.unref();
+      }
+      timeoutId = setTimeout(
+        (cleanup, rejectOnce) => {
+          cleanup();
+          rejectOnce(
+            new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
+              "Authentication timeout",
+              "Authentication timeout",
+            ),
+          );
+        },
+        300000,
+        cleanup,
+        rejectOnce,
+      );
+      timeoutId.unref();
+    });
+    authorizationCodeObtained = true;
+    logMCPDebug(serverName, "Completing auth flow with authorization code");
+    getPresentedCredentialLog().record(authorizationCode);
+    let result = await auth(provider, {
       serverUrl: serverConfig.url,
-      authorizationCode: authorizationCode,
+      authorizationCode,
       resourceMetadataUrl: wwwAuthParams.resourceMetadataUrl,
       fetchFn: wrapFetchWithHeaders(serverName, serverConfig, createAuthFetch()),
     });
-    if ((logMCPDebug(serverName, `Auth result: ${result}`), result === "AUTHORIZED")) {
-      let z = await K.tokens().catch(() => {
+    logMCPDebug(serverName, `Auth result: ${result}`);
+    if (result === "AUTHORIZED") {
+      let savedTokens = await provider.tokens().catch(() => {
         return;
       });
-      if ((logMCPDebug(serverName, `Tokens after auth: ${z ? "Present" : "Missing"}`), z))
-        logMCPDebug(serverName, `Token expires_in: ${z.expires_in}`);
-      (logEvent("tengu_mcp_oauth_flow_success", {
-        flowAttemptId: ye(flowAttemptId),
+      logMCPDebug(serverName, `Tokens after auth: ${savedTokens ? "Present" : "Missing"}`);
+      if (savedTokens) logMCPDebug(serverName, `Token expires_in: ${savedTokens.expires_in}`);
+      logEvent("tengu_mcp_oauth_flow_success", {
+        flowAttemptId: sanitizeMarkName(flowAttemptId),
         transportType: fromEnum(serverConfig.type),
         ...F,
-        ...(ET(serverConfig) && { mcpServerBaseUrl: ET(serverConfig) }),
-      }),
-        logFeatureOk("mcp_oauth_flow"));
+        ...(loggingSafeOrigin(serverConfig) && {
+          mcpServerBaseUrl: loggingSafeOrigin(serverConfig),
+        }),
+      });
+      logFeatureOk("mcp_oauth_flow");
     } else
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
         "Unexpected auth result: " + result,
         "Unexpected auth result",
       );
   } catch (error) {
-    logMCPDebug(serverName, `Error during auth completion: ${yF(error, serverConfig.url)}`);
-    let reason = "unknown",
-      x,
-      B,
-      msg = errorMessage(error),
-      N = error instanceof Error ? error.cause : void 0;
+    logMCPDebug(
+      serverName,
+      `Error during auth completion: ${describeSdkFetchError(error, serverConfig.url)}`,
+    );
+    let reason = "unknown";
+    let x;
+    let B;
+    let msg = errorMessage(error);
+    let cause = error instanceof Error ? error.cause : undefined;
     if (error instanceof AuthenticationCancelledError) reason = "cancelled";
     else if (/AADSTS\d/.test(msg)) reason = "entra_specific";
     else if (/redirect[_ ]uri/i.test(msg)) reason = "redirect_uri_mismatch";
-    else if (P && (isZodError(error) || isZodError(N))) reason = "token_response_schema_rejected";
-    else if (P) reason = "token_exchange_failed";
+    else if (authorizationCodeObtained && (isZodError(error) || isZodError(cause)))
+      reason = "token_response_schema_rejected";
+    else if (authorizationCodeObtained) reason = "token_exchange_failed";
     else if (msg.includes("Authentication timeout")) reason = "timeout";
     else if (msg.includes("OAuth error:")) reason = "provider_denied";
     else if (
@@ -3965,25 +4568,30 @@ async function performMCPOAuthFlow(serverName, serverConfig, onAuthorizationUrl,
       msg.includes("No available port")
     )
       reason = "port_unavailable";
-    else if (msg.includes("SDK auth failed")) reason = classifySdkAuthFailure(msg, N);
-    let K = (N instanceof Error ? N : error instanceof Error ? error : null)?.message.match(
+    else if (msg.includes("SDK auth failed")) reason = classifySdkAuthFailure(msg, cause);
+    let statusMatch = (cause instanceof Error ? cause : error instanceof Error ? error : null)?.message.match(
       /^HTTP (\d{3})\b/,
     );
-    if (K) B = Number(K[1]);
-    if (N instanceof TM) x = N.errorCode;
-    if (error instanceof TM) {
-      if (
-        ((x = error.errorCode),
-        error.errorCode === "invalid_client" || error.errorCode === "unauthorized_client")
-      ) {
-        let W = getServerKey(serverName, serverConfig);
+    if (statusMatch) B = Number(statusMatch[1]);
+    if (cause instanceof OAuthError) x = cause.errorCode;
+    if (error instanceof OAuthError) {
+      x = error.errorCode;
+      if (error.errorCode === "invalid_client" || error.errorCode === "unauthorized_client") {
+        let serverKey = getServerKey(serverName, serverConfig);
         try {
           await getSecureStorage().mutate((M) => {
-            let D = M.mcpOAuth?.[W];
+            let D = M.mcpOAuth?.[serverKey];
             if (!D) return M;
             return {
               ...M,
-              mcpOAuth: { ...M.mcpOAuth, [W]: { ...D, clientId: void 0, clientSecret: void 0 } },
+              mcpOAuth: {
+                ...M.mcpOAuth,
+                [serverKey]: {
+                  ...D,
+                  clientId: undefined,
+                  clientSecret: undefined,
+                },
+              },
             };
           });
         } catch (error) {
@@ -3995,58 +4603,73 @@ async function performMCPOAuthFlow(serverName, serverConfig, onAuthorizationUrl,
       !/^OAuth error: access_denied(?: |$)/.test(msg) &&
       (reason === "timeout" || msg.includes("OAuth error:"))
     ) {
-      let W = getServerKey(serverName, serverConfig);
+      let serverKey = getServerKey(serverName, serverConfig);
       await getSecureStorage()
         .mutate((M) => {
-          let D = M.mcpOAuth?.[W];
+          let D = M.mcpOAuth?.[serverKey];
           if (!D?.clientId || D.accessToken || D.refreshToken || D.clientId !== cachedEntry?.clientId)
             return M;
-          return { ...M, mcpOAuth: { ...M.mcpOAuth, [W]: { ...D, clientId: void 0, clientSecret: void 0 } } };
+          return {
+            ...M,
+            mcpOAuth: {
+              ...M.mcpOAuth,
+              [serverKey]: {
+                ...D,
+                clientId: undefined,
+                clientSecret: undefined,
+              },
+            },
+          };
         })
-        .catch((M) => logMCPDebug(serverName, `drop clientId failed: ${errorMessage(M)}`));
+        .catch((error) => logMCPDebug(serverName, `drop clientId failed: ${errorMessage(error)}`));
     }
     if (reason !== "cancelled") logFeatureBad("mcp_oauth_flow", "mcp_oauth_flow_failed");
     logEvent("tengu_mcp_oauth_flow_error", {
-      flowAttemptId: ye(flowAttemptId),
+      flowAttemptId: sanitizeMarkName(flowAttemptId),
       reason: fromEnum(reason),
-      error_code: x === void 0 ? void 0 : sanitizeOAuthErrorCodeForAnalytics(x),
+      error_code: x === undefined ? undefined : sanitizeOAuthErrorCodeForAnalytics(x),
       http_status: fromNumberOpt(B),
       transportType: fromEnum(serverConfig.type),
       ...F,
-      ...(ET(serverConfig) && { mcpServerBaseUrl: ET(serverConfig) }),
+      ...(loggingSafeOrigin(serverConfig) && {
+        mcpServerBaseUrl: loggingSafeOrigin(serverConfig),
+      }),
     });
-    let serverKey = yF(error, serverConfig.url);
-    throw serverKey === errorMessage(error) ? error : Error(serverKey, { cause: error });
+    let serverKey = describeSdkFetchError(error, serverConfig.url);
+    throw serverKey === errorMessage(error)
+      ? error
+      : Error(serverKey, {
+          cause: error,
+        });
   }
 }
+//@ chunk-1kaj6e83.js:30247-30776 facade-exports = wrapFetchWithStepUpDetection (0.428)
 /**
  * wrapFetchWithAuthChallengeDetection（v1 副本）。
  */
-//@ chunk-1kaj6e83.js:30247-30776 facade-exports = wrapFetchWithStepUpDetection (0.428)
 function wrapFetchWithStepUpDetection(fetchFn, authProvider) {
   return async (url, init) => {
     let response = await fetchFn(url, init);
-    if (response.status === 401 || response.status === 403) authProvider.sawAuthChallenge = !0;
-    if (
-      (authProvider.noteServerAnswer(
-        url,
-        response.status === 401 || (response.status === 403 && NHe(response).error === "insufficient_scope"),
-      ),
-      response.status === 401 || response.status === 403)
-    )
+    if (response.status === 401 || response.status === 403) authProvider.sawAuthChallenge = true;
+    authProvider.noteServerAnswer(
+      url,
+      response.status === 401 ||
+        (response.status === 403 && extractWWWAuthenticateParams(response).error === "insufficient_scope"),
+    );
+    if (response.status === 401 || response.status === 403)
       authProvider.noteAuthRejection(url, response.status, new Headers(init?.headers).get("authorization"));
     if (!new Headers(init?.headers).has("authorization")) return response;
     if (response.status === 403) {
-      let { error: error, scope: scope } = NHe(response);
+      let { error, scope } = extractWWWAuthenticateParams(response);
       if (error === "insufficient_scope" && scope) authProvider.markStepUpPending(scope);
     } else if (response.status === 401) authProvider.clearStepUpPending();
     return response;
   };
 }
+//@ chunk-1kaj6e83.js:30776-56066 facade-exports = ClaudeAuthProvider (0.728)
 /**
  * ClaudeAuthProvider（v1）。
  */
-//@ chunk-1kaj6e83.js:30776-56066 facade-exports = ClaudeAuthProvider (0.728)
 class ClaudeAuthProvider {
   serverName;
   serverConfig;
@@ -4069,14 +4692,21 @@ class ClaudeAuthProvider {
   _presented;
   onAuthorizationUrlCallback;
   skipBrowserOpen;
-  constructor(e, t, r = buildRedirectUri(), n = !1, s, h) {
-    ((this.serverName = e),
-      (this.serverConfig = t),
-      (this.redirectUri = r),
-      (this.handleRedirection = n),
-      (this.onAuthorizationUrlCallback = s),
-      (this.skipBrowserOpen = h ?? !1),
-      (this._presented = Ny()));
+  constructor(
+    serverName,
+    serverConfig,
+    redirectUri = buildRedirectUri(),
+    handleRedirection = false,
+    onAuthorizationUrl,
+    skipBrowserOpen,
+  ) {
+    this.serverName = serverName;
+    this.serverConfig = serverConfig;
+    this.redirectUri = redirectUri;
+    this.handleRedirection = handleRedirection;
+    this.onAuthorizationUrlCallback = onAuthorizationUrl;
+    this.skipBrowserOpen = skipBrowserOpen ?? false;
+    this._presented = getPresentedCredentialLog();
   }
   get redirectUrl() {
     return this.redirectUri;
@@ -4085,21 +4715,22 @@ class ClaudeAuthProvider {
     return this._authorizationUrl;
   }
   get clientMetadata() {
-    let e = {
-        client_name: `Claude Code (${this.serverName})`,
-        redirect_uris: [this.redirectUri],
-        grant_types: ["authorization_code", "refresh_token"],
-        response_types: ["code"],
-        token_endpoint_auth_method: "none",
-      },
-      curatedMetadataScope = this.getCuratedMetadataScope();
-    if (curatedMetadataScope)
-      ((e.scope = curatedMetadataScope),
-        logMCPDebug(
-          this.serverName,
-          `Using scope from metadata: ${redactSensitiveUrlParams("scope", e.scope)}`,
-        ));
-    return e;
+    let metadata = {
+      client_name: `Claude Code (${this.serverName})`,
+      redirect_uris: [this.redirectUri],
+      grant_types: ["authorization_code", "refresh_token"],
+      response_types: ["code"],
+      token_endpoint_auth_method: "none",
+    };
+    let metadataScope = this.getCuratedMetadataScope();
+    if (metadataScope) {
+      metadata.scope = metadataScope;
+      logMCPDebug(
+        this.serverName,
+        `Using scope from metadata: ${redactSensitiveUrlParams("scope", metadata.scope)}`,
+      );
+    }
+    return metadata;
   }
   get clientMetadataUrl() {
     if (!isLoopbackCallbackUri(this.redirectUri)) {
@@ -4109,23 +4740,24 @@ class ClaudeAuthProvider {
       );
       return;
     }
-    let e = getClientMetadataDocumentUrl();
-    if (e !== MCP_CLIENT_METADATA_URL) logMCPDebug(this.serverName, `Using CIMD URL from env: ${e}`);
-    return e;
+    let override = getClientMetadataDocumentUrl();
+    if (override !== MCP_CLIENT_METADATA_URL)
+      logMCPDebug(this.serverName, `Using CIMD URL from env: ${override}`);
+    return override;
   }
-  setMetadata(e) {
-    this._metadata = e;
+  setMetadata(metadata) {
+    this._metadata = metadata;
   }
   getCuratedMetadataScope() {
-    let e = getScopeFromMetadata(this._metadata);
-    if (e !== void 0) return e;
+    let scopeFromMetadata = getScopeFromMetadata(this._metadata);
+    if (scopeFromMetadata !== undefined) return scopeFromMetadata;
     if (this.serverConfig.oauth?.authServerMetadataUrl && Array.isArray(this._metadata?.scopes_supported))
       return this._metadata.scopes_supported.join(" ");
     return;
   }
-  markStepUpPending(e) {
-    ((this._pendingStepUpScope = e),
-      logMCPDebug(this.serverName, `Marked step-up pending: ${redactSensitiveUrlParams("scope", e)}`));
+  markStepUpPending(scope) {
+    this._pendingStepUpScope = scope;
+    logMCPDebug(this.serverName, `Marked step-up pending: ${redactSensitiveUrlParams("scope", scope)}`);
   }
   get pendingStepUpScope() {
     return this._pendingStepUpScope;
@@ -4133,79 +4765,83 @@ class ClaudeAuthProvider {
   get lastAuthRejection() {
     return this._lastAuthRejection;
   }
-  noteAuthRejection(e, t, r) {
+  noteAuthRejection(e, status, r) {
     let url = this.serverConfig.url;
     if (String(e) === (URL.canParse(url) ? new URL(url).href : url))
-      this._lastAuthRejection = { status: t, accessToken: r?.startsWith("Bearer ") ? r.slice(7) : void 0 };
+      this._lastAuthRejection = {
+        status,
+        accessToken: r?.startsWith("Bearer ") ? r.slice(7) : undefined,
+      };
   }
   clearStepUpPending() {
-    this._pendingStepUpScope = void 0;
+    this._pendingStepUpScope = undefined;
   }
   clearStepUpPendingOnCredentialGone() {
     if (!this.handleRedirection) this.clearStepUpPending();
   }
-  sawAuthChallenge = !1;
-  authChallengeOpen = !1;
-  noteServerAnswer(e, t) {
+  sawAuthChallenge = false;
+  authChallengeOpen = false;
+  noteServerAnswer(e, authChallengeOpen) {
     let url = this.serverConfig.url;
-    if (String(e) === (URL.canParse(url) ? new URL(url).href : url)) this.authChallengeOpen = t;
+    if (String(e) === (URL.canParse(url) ? new URL(url).href : url))
+      this.authChallengeOpen = authChallengeOpen;
   }
-  registrationOfferedByDiscovery = !1;
+  registrationOfferedByDiscovery = false;
   async readCredentialStore() {
-    let e = await readSecureStorageForMcp(
+    let secureStorageForMcp = await readSecureStorageForMcp(
       this.handleRedirection
-        ? void 0
+        ? undefined
         : {
             serverName: this.serverName,
             serverConfig: this.serverConfig,
             challenged: this.authChallengeOpen,
           },
     );
-    if (e === READ_FAILED)
-      throw (
-        logMCPDebug(
-          this.serverName,
-          "Credential store could not be read (the login keychain may be locked); not reporting credentials as absent",
-        ),
-        new McpCredentialStoreUnavailableError(this.serverName)
+    if (secureStorageForMcp === READ_FAILED) {
+      logMCPDebug(
+        this.serverName,
+        "Credential store could not be read (the login keychain may be locked); not reporting credentials as absent",
       );
-    return e;
+      throw new McpCredentialStoreUnavailableError(this.serverName);
+    }
+    return secureStorageForMcp;
   }
   async state() {
-    if (!this._state)
-      ((this._state = randomBytes(32).toString("base64url")),
-        logMCPDebug(this.serverName, "Generated new OAuth state"));
+    if (!this._state) {
+      this._state = randomBytes(32).toString("base64url");
+      logMCPDebug(this.serverName, "Generated new OAuth state");
+    }
     return this._state;
   }
   async clientInformation() {
     let clientInformation = await this.resolveClientInformation();
-    return (
-      this._presented.record(clientInformation?.client_secret),
-      this._presented.record(basicAuthValue(clientInformation?.client_id, clientInformation?.client_secret)),
-      clientInformation
-    );
+    this._presented.record(clientInformation?.client_secret);
+    this._presented.record(basicAuthValue(clientInformation?.client_id, clientInformation?.client_secret));
+    return clientInformation;
   }
   async resolveClientInformation() {
-    let credentialStore = await this.readCredentialStore(),
-      t = getServerKey(this.serverName, this.serverConfig),
-      r = credentialStore?.mcpOAuthClientConfig?.[t]?.clientSecret,
-      n = this.serverConfig.oauth?.clientId,
-      s = credentialStore?.mcpOAuth?.[t],
-      h =
-        this.handleRedirection &&
-        isClientMetadataDocumentId(s?.clientId) &&
-        !isLoopbackCallbackUri(this.redirectUri);
+    let data = await this.readCredentialStore();
+    let serverKey = getServerKey(this.serverName, this.serverConfig);
+    let clientSecret = data?.mcpOAuthClientConfig?.[serverKey]?.clientSecret;
+    let clientId = this.serverConfig.oauth?.clientId;
+    let s = data?.mcpOAuth?.[serverKey];
+    let h =
+      this.handleRedirection &&
+      isClientMetadataDocumentId(s?.clientId) &&
+      !isLoopbackCallbackUri(this.redirectUri);
     if (h) {
-      if (
-        (logMCPDebug(
-          this.serverName,
-          `Stored client_id is the CIMD document URL (loopback /callback only); current redirectUri is ${redactUrlSecrets(this.redirectUri)} \u2014 ${n ? "serving the configured client" : "registering via DCR"} instead`,
-        ),
-        n)
-      )
+      logMCPDebug(
+        this.serverName,
+        `Stored client_id is the CIMD document URL (loopback /callback only); current redirectUri is ${redactUrlSecrets(this.redirectUri)} \u2014 ${clientId ? "serving the configured client" : "registering via DCR"} instead`,
+      );
+      if (clientId)
         await this.patchStoredClientEntry(
-          t,
-          { clientId: n, clientSecret: void 0, redirectUri: this.redirectUri },
+          serverKey,
+          {
+            clientId,
+            clientSecret: undefined,
+            redirectUri: this.redirectUri,
+          },
           "stale CIMD client_id repair",
         );
     }
@@ -4218,57 +4854,72 @@ class ClaudeAuthProvider {
           : !this.redirectUri.startsWith("http://localhost"))
       ) {
         let S = redirectUri ? redactUrlSecrets(redirectUri) : "localhost";
-        if (!n) {
+        if (!clientId) {
           logMCPDebug(
             this.serverName,
             `Cached client_id was registered for ${S}; current redirectUri is ${redactUrlSecrets(this.redirectUri)} \u2014 forcing re-DCR`,
           );
           return;
         }
-        if (s.clientId !== n)
-          return (
-            logMCPDebug(
-              this.serverName,
-              `Stored client_id is stale and its redirectUri ${S} predates ${redactUrlSecrets(this.redirectUri)} \u2014 serving the configured client (no registration to redo)`,
-            ),
-            await this.patchStoredClientEntry(
-              t,
-              { clientId: n, clientSecret: void 0, redirectUri: this.redirectUri },
-              "stale client_id repair",
-            ),
-            (this._lastServedClientId = n),
-            { client_id: n, client_secret: r }
+        if (s.clientId !== clientId) {
+          logMCPDebug(
+            this.serverName,
+            `Stored client_id is stale and its redirectUri ${S} predates ${redactUrlSecrets(this.redirectUri)} \u2014 serving the configured client (no registration to redo)`,
           );
-        (logMCPDebug(
-          this.serverName,
-          `Stored redirectUri ${S} predates ${redactUrlSecrets(this.redirectUri)}, but the client_id is the configured one \u2014 serving it (no registration to redo)`,
-        ),
           await this.patchStoredClientEntry(
-            t,
-            { redirectUri: this.redirectUri },
-            "stored redirectUri convergence",
-          ));
-      }
-      return (
-        logMCPDebug(this.serverName, "Found client info"),
-        (this._lastServedClientId = s.clientId),
-        { client_id: s.clientId, client_secret: s.clientSecret ?? (s.clientId === n ? r : void 0) }
-      );
-    }
-    if (n)
-      return (
-        logMCPDebug(this.serverName, "Using pre-configured client ID"),
-        (this._lastServedClientId = n),
-        { client_id: n, client_secret: r }
-      );
-    if (!this.handleRedirection && this.registrationOfferedByDiscovery && !s?.accessToken && !s?.refreshToken)
-      throw (
+            serverKey,
+            {
+              clientId,
+              clientSecret: undefined,
+              redirectUri: this.redirectUri,
+            },
+            "stale client_id repair",
+          );
+          this._lastServedClientId = clientId;
+          return {
+            client_id: clientId,
+            client_secret: clientSecret,
+          };
+        }
         logMCPDebug(
           this.serverName,
-          "No client info found; deferring client registration to authentication time",
-        ),
-        new McpClientRegistrationDeferredError(this.serverName)
+          `Stored redirectUri ${S} predates ${redactUrlSecrets(this.redirectUri)}, but the client_id is the configured one \u2014 serving it (no registration to redo)`,
+        );
+        await this.patchStoredClientEntry(
+          serverKey,
+          {
+            redirectUri: this.redirectUri,
+          },
+          "stored redirectUri convergence",
+        );
+      }
+      logMCPDebug(this.serverName, "Found client info");
+      this._lastServedClientId = s.clientId;
+      return {
+        client_id: s.clientId,
+        client_secret: s.clientSecret ?? (s.clientId === clientId ? clientSecret : undefined),
+      };
+    }
+    if (clientId) {
+      logMCPDebug(this.serverName, "Using pre-configured client ID");
+      this._lastServedClientId = clientId;
+      return {
+        client_id: clientId,
+        client_secret: clientSecret,
+      };
+    }
+    if (
+      !this.handleRedirection &&
+      this.registrationOfferedByDiscovery &&
+      !s?.accessToken &&
+      !s?.refreshToken
+    ) {
+      logMCPDebug(
+        this.serverName,
+        "No client info found; deferring client registration to authentication time",
       );
+      throw new McpClientRegistrationDeferredError(this.serverName);
+    }
     logMCPDebug(this.serverName, "No client info found");
     return;
   }
@@ -4279,7 +4930,16 @@ class ClaudeAuthProvider {
           await getSecureStorage().mutate((s) => {
             let h = s.mcpOAuth?.[e];
             if (!h) return s;
-            return { ...s, mcpOAuth: { ...s.mcpOAuth, [e]: { ...h, ...t } } };
+            return {
+              ...s,
+              mcpOAuth: {
+                ...s.mcpOAuth,
+                [e]: {
+                  ...h,
+                  ...t,
+                },
+              },
+            };
           })
         )?.success
       )
@@ -4288,176 +4948,186 @@ class ClaudeAuthProvider {
       logMCPDebug(this.serverName, `${r} failed: ${errorMessage(error)}`);
     }
   }
-  async saveClientInformation(e) {
-    (this._presented.record(e.client_secret),
-      this._presented.record(basicAuthValue(e.client_id, e.client_secret)));
-    let t = getServerKey(this.serverName, this.serverConfig);
+  async saveClientInformation(clientInformation) {
+    this._presented.record(clientInformation.client_secret);
+    this._presented.record(basicAuthValue(clientInformation.client_id, clientInformation.client_secret));
+    let serverKey = getServerKey(this.serverName, this.serverConfig);
     try {
       if (
         (
-          await getSecureStorage().mutate((n) => ({
-            ...n,
+          await getSecureStorage().mutate((existingData) => ({
+            ...existingData,
             mcpOAuth: {
-              ...n.mcpOAuth,
-              [t]: {
-                ...n.mcpOAuth?.[t],
+              ...existingData.mcpOAuth,
+              [serverKey]: {
+                ...existingData.mcpOAuth?.[serverKey],
                 serverName: this.serverName,
                 serverUrl: this.serverConfig.url,
-                clientId: e.client_id,
-                clientSecret: e.client_secret,
+                clientId: clientInformation.client_id,
+                clientSecret: clientInformation.client_secret,
                 redirectUri: this.redirectUri,
-                accessToken: n.mcpOAuth?.[t]?.accessToken || "",
-                expiresAt: n.mcpOAuth?.[t]?.expiresAt,
+                accessToken: existingData.mcpOAuth?.[serverKey]?.accessToken || "",
+                expiresAt: existingData.mcpOAuth?.[serverKey]?.expiresAt,
               },
             },
           }))
         )?.success
       )
-        this._lastServedClientId = e.client_id;
+        this._lastServedClientId = clientInformation.client_id;
       else logMCPDebug(this.serverName, "saveClientInformation persist resolved unsuccessful");
     } catch (error) {
       logMCPDebug(this.serverName, `saveClientInformation persist failed: ${errorMessage(error)}`);
     }
   }
   async tokens() {
-    let credentialStore = await this.readCredentialStore(),
-      t = getServerKey(this.serverName, this.serverConfig),
-      r = credentialStore?.mcpOAuth?.[t];
+    let credentialStore = await this.readCredentialStore();
+    let serverKey = getServerKey(this.serverName, this.serverConfig);
+    let tokenData = credentialStore?.mcpOAuth?.[serverKey];
     if (
       isXaaEnabled() &&
       this.serverConfig.oauth?.xaa &&
-      !r?.refreshToken &&
-      (!r?.accessToken || (r.expiresAt != null && (r.expiresAt - Date.now()) / 1000 <= 300))
+      !tokenData?.refreshToken &&
+      (!tokenData?.accessToken ||
+        (tokenData.expiresAt != null && (tokenData.expiresAt - Date.now()) / 1000 <= 300))
     ) {
-      if (!this._refreshInProgress)
-        (logMCPDebug(
+      if (!this._refreshInProgress) {
+        logMCPDebug(
           this.serverName,
-          r
+          tokenData
             ? "XAA: access_token expiring, attempting silent exchange"
             : "XAA: no access_token yet, attempting silent exchange",
-        ),
-          (this._refreshInProgress = this.xaaRefresh().finally(() => {
-            this._refreshInProgress = void 0;
-          })));
+        );
+        this._refreshInProgress = this.xaaRefresh().finally(() => {
+          this._refreshInProgress = undefined;
+        });
+      }
       try {
         let _refreshInProgress = await this._refreshInProgress;
-        if (_refreshInProgress)
-          return (
-            (this._lastServedAccessToken = _refreshInProgress.access_token),
-            this._presented.record(_refreshInProgress.access_token),
-            this._presented.record(_refreshInProgress.refresh_token),
-            (this._lastServedRefreshToken = _refreshInProgress.refresh_token ?? this._lastServedRefreshToken),
-            _refreshInProgress
-          );
-      } catch (error) {
-        logMCPDebug(this.serverName, `XAA silent exchange failed: ${errorMessage(error)}`);
+        if (_refreshInProgress) {
+          this._lastServedAccessToken = _refreshInProgress.access_token;
+          this._presented.record(_refreshInProgress.access_token);
+          this._presented.record(_refreshInProgress.refresh_token);
+          this._lastServedRefreshToken = _refreshInProgress.refresh_token ?? this._lastServedRefreshToken;
+          return _refreshInProgress;
+        }
+      } catch (e) {
+        logMCPDebug(this.serverName, `XAA silent exchange failed: ${errorMessage(e)}`);
       }
     }
-    if (!r) {
-      (logMCPDebug(this.serverName, "No token data found"), this.clearStepUpPendingOnCredentialGone());
+    if (!tokenData) {
+      logMCPDebug(this.serverName, "No token data found");
+      this.clearStepUpPendingOnCredentialGone();
       return;
     }
-    if (!r.accessToken) {
-      (logMCPDebug(this.serverName, "No access token in storage"), this.clearStepUpPendingOnCredentialGone());
+    if (!tokenData.accessToken) {
+      logMCPDebug(this.serverName, "No access token in storage");
+      this.clearStepUpPendingOnCredentialGone();
       return;
     }
-    if (Adn(t, r.accessToken)) {
+    if (isTokenRejected(serverKey, tokenData.accessToken)) {
       logMCPDebug(
         this.serverName,
         "Not sending the stored access token, because the server rejected it earlier in this session",
       );
       return;
     }
-    ((this._lastServedAccessToken = r.accessToken),
-      this._presented.record(r.accessToken),
-      this._presented.record(r.refreshToken),
-      (this._lastServedRefreshToken = r.refreshToken));
-    let n = r.expiresAt != null ? (r.expiresAt - Date.now()) / 1000 : void 0,
-      _pendingStepUpScope = this._pendingStepUpScope,
-      h = _pendingStepUpScope !== void 0;
-    if (h)
+    this._lastServedAccessToken = tokenData.accessToken;
+    this._presented.record(tokenData.accessToken);
+    this._presented.record(tokenData.refreshToken);
+    this._lastServedRefreshToken = tokenData.refreshToken;
+    let expiresIn = tokenData.expiresAt != null ? (tokenData.expiresAt - Date.now()) / 1000 : undefined;
+    let _pendingStepUpScope = this._pendingStepUpScope;
+    let needsStepUp = _pendingStepUpScope !== undefined;
+    if (needsStepUp)
       logMCPDebug(
         this.serverName,
         `Step-up pending (${redactSensitiveUrlParams("scope", _pendingStepUpScope)}), omitting refresh_token`,
       );
-    if (n != null && n <= 0 && !r.refreshToken) {
-      (logMCPDebug(this.serverName, "Token expired without refresh token"),
-        this.clearStepUpPendingOnCredentialGone());
+    if (expiresIn != null && expiresIn <= 0 && !tokenData.refreshToken) {
+      logMCPDebug(this.serverName, "Token expired without refresh token");
+      this.clearStepUpPendingOnCredentialGone();
       return;
     }
-    if (n != null && n <= 300 && r.refreshToken && !h) {
-      if (!this._refreshInProgress)
-        (logMCPDebug(this.serverName, `Token expires in ${Math.floor(n)}s, attempting proactive refresh`),
-          (this._refreshInProgress = this.refreshAuthorization(r.refreshToken).finally(() => {
-            this._refreshInProgress = void 0;
-          })));
-      else logMCPDebug(this.serverName, "Token refresh already in progress, reusing existing promise");
+    if (expiresIn != null && expiresIn <= 300 && tokenData.refreshToken && !needsStepUp) {
+      if (!this._refreshInProgress) {
+        logMCPDebug(
+          this.serverName,
+          `Token expires in ${Math.floor(expiresIn)}s, attempting proactive refresh`,
+        );
+        this._refreshInProgress = this.refreshAuthorization(tokenData.refreshToken).finally(() => {
+          this._refreshInProgress = undefined;
+        });
+      } else logMCPDebug(this.serverName, "Token refresh already in progress, reusing existing promise");
       try {
         let _refreshInProgress = await this._refreshInProgress;
-        if (_refreshInProgress)
-          return (
-            logMCPDebug(this.serverName, "Token refreshed successfully"),
-            (this._lastServedAccessToken = _refreshInProgress.access_token),
-            this._presented.record(_refreshInProgress.access_token),
-            this._presented.record(_refreshInProgress.refresh_token),
-            (this._lastServedRefreshToken = _refreshInProgress.refresh_token ?? this._lastServedRefreshToken),
-            _refreshInProgress
-          );
+        if (_refreshInProgress) {
+          logMCPDebug(this.serverName, "Token refreshed successfully");
+          this._lastServedAccessToken = _refreshInProgress.access_token;
+          this._presented.record(_refreshInProgress.access_token);
+          this._presented.record(_refreshInProgress.refresh_token);
+          this._lastServedRefreshToken = _refreshInProgress.refresh_token ?? this._lastServedRefreshToken;
+          return _refreshInProgress;
+        }
         logMCPDebug(this.serverName, "Token refresh failed, returning current tokens");
       } catch (error) {
-        logMCPDebug(this.serverName, `Token refresh error: ${yF(error, this.serverConfig.url)}`);
+        logMCPDebug(
+          this.serverName,
+          `Token refresh error: ${describeSdkFetchError(error, this.serverConfig.url)}`,
+        );
       }
     }
-    let l = {
-      access_token: r.accessToken,
-      refresh_token: h ? void 0 : r.refreshToken,
-      expires_in: n,
-      scope: r.scope,
+    let tokens = {
+      access_token: tokenData.accessToken,
+      refresh_token: needsStepUp ? undefined : tokenData.refreshToken,
+      expires_in: expiresIn,
+      scope: tokenData.scope,
       token_type: "Bearer",
     };
-    return (
-      logMCPDebug(this.serverName, "Returning tokens"),
-      logMCPDebug(this.serverName, `Has refresh token: ${!!l.refresh_token}`),
-      logMCPDebug(this.serverName, n != null ? `Expires in: ${Math.floor(n)}s` : "No expiration specified"),
-      l
+    logMCPDebug(this.serverName, "Returning tokens");
+    logMCPDebug(this.serverName, `Has refresh token: ${!!tokens.refresh_token}`);
+    logMCPDebug(
+      this.serverName,
+      expiresIn != null ? `Expires in: ${Math.floor(expiresIn)}s` : "No expiration specified",
     );
+    return tokens;
   }
-  async saveTokens(e) {
-    if (
-      (this._presented.record(e.access_token),
-      this._presented.record(e.refresh_token),
-      this.handleRedirection)
-    )
-      this._pendingStepUpScope = void 0;
-    let t = getServerKey(this.serverName, this.serverConfig);
-    (logMCPDebug(this.serverName, "Saving tokens"),
-      logMCPDebug(this.serverName, `Token expires in: ${e.expires_in}`),
-      logMCPDebug(this.serverName, `Has refresh token: ${!!e.refresh_token}`));
-    let r =
-        this._servedOverrideAuthorizationServerUrl === void 0
-          ? this._discoveredAuthorizationServer
-          : { authorizationServerUrl: this._servedOverrideAuthorizationServerUrl, oauthMetadataFound: !0 },
-      n = this.servedMetadataUrl() ?? this._discoveredAuthorizationServer?.servedMetadataUrl,
-      s,
-      h;
+  async saveTokens(tokens) {
+    this._presented.record(tokens.access_token);
+    this._presented.record(tokens.refresh_token);
+    if (this.handleRedirection) this._pendingStepUpScope = undefined;
+    let serverKey = getServerKey(this.serverName, this.serverConfig);
+    logMCPDebug(this.serverName, "Saving tokens");
+    logMCPDebug(this.serverName, `Token expires in: ${tokens.expires_in}`);
+    logMCPDebug(this.serverName, `Has refresh token: ${!!tokens.refresh_token}`);
+    let signIn =
+      this._servedOverrideAuthorizationServerUrl === undefined
+        ? this._discoveredAuthorizationServer
+        : {
+            authorizationServerUrl: this._servedOverrideAuthorizationServerUrl,
+            oauthMetadataFound: true,
+          };
+    let servedMetadataUrl =
+      this.servedMetadataUrl() ?? this._discoveredAuthorizationServer?.servedMetadataUrl;
+    let s;
+    let h;
     try {
       s = await getSecureStorage().mutate((l) => ({
         ...l,
         mcpOAuth: {
           ...l.mcpOAuth,
-          [t]: {
-            ...l.mcpOAuth?.[t],
+          [serverKey]: {
+            ...l.mcpOAuth?.[serverKey],
             serverName: this.serverName,
             serverUrl: this.serverConfig.url,
-            accessToken: e.access_token,
-            refreshToken: e.refresh_token ?? l.mcpOAuth?.[t]?.refreshToken,
-            expiresAt: e.expires_in != null ? Date.now() + e.expires_in * 1000 : void 0,
-            scope: e.scope,
+            accessToken: tokens.access_token,
+            refreshToken: tokens.refresh_token ?? l.mcpOAuth?.[serverKey]?.refreshToken,
+            expiresAt: tokens.expires_in != null ? Date.now() + tokens.expires_in * 1000 : undefined,
+            scope: tokens.scope,
             discoveryState: withoutTokenlessRejection(
               mergeSignInAuth({
-                previous: l.mcpOAuth?.[t]?.discoveryState,
-                signIn: r,
-                servedMetadataUrl: n,
+                previous: l.mcpOAuth?.[serverKey]?.discoveryState,
+                signIn,
+                servedMetadataUrl,
                 interactiveSignIn: this.handleRedirection,
               }),
             ),
@@ -4467,26 +5137,27 @@ class ClaudeAuthProvider {
     } catch (error) {
       h = error;
     }
-    if (s?.success)
-      ((this._lastServedAccessToken = e.access_token),
-        (this._lastServedRefreshToken = e.refresh_token ?? this._lastServedRefreshToken),
-        recordSavedAccessToken(t, e.access_token));
+    if (s?.success) {
+      this._lastServedAccessToken = tokens.access_token;
+      this._lastServedRefreshToken = tokens.refresh_token ?? this._lastServedRefreshToken;
+      recordSavedAccessToken(serverKey, tokens.access_token);
+    }
     this.logTokenPersistFailed(s, h);
   }
   logTokenPersistFailed(e, t) {
     logStorageWriteFailure(this.serverName, this.serverConfig, e, t);
   }
   async xaaRefresh() {
-    let e = getXaaIdpSettings();
-    if (!e) return;
-    let t = await getCachedIdpIdToken(e.issuer);
-    if (!t) {
+    let idp = getXaaIdpSettings();
+    if (!idp) return;
+    let idToken = await getCachedIdpIdToken(idp.issuer);
+    if (!idToken) {
       logMCPDebug(this.serverName, "XAA: id_token not cached, needs interactive re-auth");
       return;
     }
-    let r = this.serverConfig.oauth?.clientId,
-      n = await getMcpClientConfig(this.serverName, this.serverConfig);
-    if (!r || !n?.clientSecret) {
+    let clientId = this.serverConfig.oauth?.clientId;
+    let clientConfig = await getMcpClientConfig(this.serverName, this.serverConfig);
+    if (!clientId || !clientConfig?.clientSecret) {
       logMCPDebug(
         this.serverName,
         "XAA: missing clientId or clientSecret in config \u2014 skipping silent refresh",
@@ -4498,60 +5169,64 @@ class ClaudeAuthProvider {
       logMCPDebug(this.serverName, "XAA: stored credentials unreadable");
       return;
     }
-    let h = s ? void 0 : await getSecureStorage().readAsyncStrict?.(void 0, { inaccessibleAs: "failure" });
+    let h = s
+      ? undefined
+      : await getSecureStorage().readAsyncStrict?.(undefined, {
+          inaccessibleAs: "failure",
+        });
     if (h === READ_FAILED) {
       logMCPDebug(this.serverName, "XAA: no pin and the keychain is unreadable");
       return;
     }
-    let l =
-        s ?? xaaPinnedServer(h?.mcpOAuth?.[getServerKey(this.serverName, this.serverConfig)]?.discoveryState),
-      S = await getIdpClientSecret(e.issuer),
-      v;
+    let pinnedAuthorizationServer =
+      s ?? xaaPinnedServer(h?.mcpOAuth?.[getServerKey(this.serverName, this.serverConfig)]?.discoveryState);
+    let idpClientSecret = await getIdpClientSecret(idp.issuer);
+    let oidc;
     try {
-      v = await discoverOidc(e.issuer);
-    } catch (error) {
-      logMCPDebug(this.serverName, `XAA: OIDC discovery failed in silent refresh: ${errorMessage(error)}`);
+      oidc = await discoverOidc(idp.issuer);
+    } catch (e) {
+      logMCPDebug(this.serverName, `XAA: OIDC discovery failed in silent refresh: ${errorMessage(e)}`);
       return;
     }
-    this._presented.record(n.clientSecret);
+    this._presented.record(clientConfig.clientSecret);
     try {
-      let A = await performCrossAppAccess_2(
-          this.serverConfig.url,
-          {
-            clientId: r,
-            clientSecret: n.clientSecret,
-            idpClientId: e.clientId,
-            idpClientSecret: S,
-            idpIdToken: t,
-            idpTokenEndpoint: v.token_endpoint,
-            pinnedAuthorizationServer: l,
-          },
-          this.serverName,
-        ),
-        y = getServerKey(this.serverName, this.serverConfig),
-        U,
-        w;
+      let tokens = await performCrossAppAccess_2(
+        this.serverConfig.url,
+        {
+          clientId,
+          clientSecret: clientConfig.clientSecret,
+          idpClientId: idp.clientId,
+          idpClientSecret,
+          idpIdToken: idToken,
+          idpTokenEndpoint: oidc.token_endpoint,
+          pinnedAuthorizationServer,
+        },
+        this.serverName,
+      );
+      let serverKey = getServerKey(this.serverName, this.serverConfig);
+      let U;
+      let w;
       try {
-        U = await getSecureStorage().mutate((O) => {
-          let F = O.mcpOAuth?.[y];
+        U = await getSecureStorage().mutate((existingData) => {
+          let prev = existingData.mcpOAuth?.[serverKey];
           return {
-            ...O,
+            ...existingData,
             mcpOAuth: {
-              ...O.mcpOAuth,
-              [y]: {
-                ...F,
+              ...existingData.mcpOAuth,
+              [serverKey]: {
+                ...prev,
                 serverName: this.serverName,
                 serverUrl: this.serverConfig.url,
-                accessToken: A.access_token,
-                refreshToken: A.refresh_token ?? F?.refreshToken,
-                expiresAt: A.expires_in != null ? Date.now() + A.expires_in * 1000 : void 0,
-                scope: A.scope,
-                clientId: r,
-                clientSecret: n.clientSecret,
+                accessToken: tokens.access_token,
+                refreshToken: tokens.refresh_token ?? prev?.refreshToken,
+                expiresAt: tokens.expires_in != null ? Date.now() + tokens.expires_in * 1000 : undefined,
+                scope: tokens.scope,
+                clientId,
+                clientSecret: clientConfig.clientSecret,
                 discoveryState: pinXaaAuth({
-                  previous: F?.discoveryState,
-                  issuedBy: A.authorizationServerUrl,
-                  interactiveSignIn: !1,
+                  previous: prev?.discoveryState,
+                  issuedBy: tokens.authorizationServerUrl,
+                  interactiveSignIn: false,
                 }),
               },
             },
@@ -4560,30 +5235,29 @@ class ClaudeAuthProvider {
       } catch (error) {
         w = error;
       }
-      return (
-        this.logTokenPersistFailed(U, w),
-        {
-          access_token: A.access_token,
-          token_type: "Bearer",
-          expires_in: A.expires_in,
-          scope: A.scope,
-          refresh_token: A.refresh_token,
-        }
-      );
-    } catch (error) {
-      if (error instanceof XaaTokenExchangeError && error.shouldClearIdToken)
-        (await clearIdpIdToken(e.issuer),
-          logMCPDebug(this.serverName, "XAA: cleared id_token after exchange failure"));
-      throw error;
+      this.logTokenPersistFailed(U, w);
+      return {
+        access_token: tokens.access_token,
+        token_type: "Bearer",
+        expires_in: tokens.expires_in,
+        scope: tokens.scope,
+        refresh_token: tokens.refresh_token,
+      };
+    } catch (e) {
+      if (e instanceof XaaTokenExchangeError && e.shouldClearIdToken) {
+        await clearIdpIdToken(idp.issuer);
+        logMCPDebug(this.serverName, "XAA: cleared id_token after exchange failure");
+      }
+      throw e;
     }
   }
   async redirectToAuthorization(e) {
     let t = this._pendingStepUpScope
-        ? void 0
-        : this.serverConfig.oauth?.scopes ||
-          (this.serverConfig.oauth?.authServerMetadataUrl ? this.getCuratedMetadataScope() : void 0),
-      r = e.searchParams.get("scope"),
-      n = t ?? r;
+      ? undefined
+      : this.serverConfig.oauth?.scopes ||
+        (this.serverConfig.oauth?.authServerMetadataUrl ? this.getCuratedMetadataScope() : undefined);
+    let r = e.searchParams.get("scope");
+    let n = t ?? r;
     if (n !== r)
       logMCPDebug(
         this.serverName,
@@ -4591,50 +5265,58 @@ class ClaudeAuthProvider {
       );
     let s = n === null ? null : maybeAppendOfflineAccess(n, this._metadata);
     if (s !== null && s !== r) {
-      if ((e.searchParams.set("scope", s), s !== t))
-        logMCPDebug(this.serverName, "Appended offline_access to authorization scope");
+      e.searchParams.set("scope", s);
+      if (s !== t) logMCPDebug(this.serverName, "Appended offline_access to authorization scope");
     }
-    let h = isEntraLoginUrl(e),
-      all = e.searchParams.getAll("prompt"),
-      S = h ? all.filter((O) => O !== "consent") : all;
+    let h = isEntraLoginUrl(e);
+    let all = e.searchParams.getAll("prompt");
+    let S = h ? all.filter((O) => O !== "consent") : all;
     if (S.length !== all.length || S.length > 1) {
-      if ((e.searchParams.delete("prompt"), S.length > 0))
-        e.searchParams.set("prompt", S.includes("consent") ? "consent" : S.at(-1));
+      e.searchParams.delete("prompt");
+      if (S.length > 0) e.searchParams.set("prompt", S.includes("consent") ? "consent" : S.at(-1));
     }
     this._authorizationUrl = e.toString();
-    let v = e.searchParams.get("scope");
-    if (
-      (logMCPDebug(this.serverName, `Authorization URL: ${authorizationUrlForDebugLog(e)}`),
+    let scopes = e.searchParams.get("scope");
+    logMCPDebug(this.serverName, `Authorization URL: ${authorizationUrlForDebugLog(e)}`);
+    logMCPDebug(
+      this.serverName,
+      `Scopes in URL: ${scopes ? redactSensitiveUrlParams("scope", scopes) : "NOT FOUND"}`,
+    );
+    if (scopes) {
+      this._scopes = scopes;
       logMCPDebug(
         this.serverName,
-        `Scopes in URL: ${v ? redactSensitiveUrlParams("scope", v) : "NOT FOUND"}`,
-      ),
-      v)
-    )
-      ((this._scopes = v),
+        `Captured scopes from authorization URL: ${redactSensitiveUrlParams("scope", scopes)}`,
+      );
+    } else {
+      let metadataScope = this.getCuratedMetadataScope();
+      if (metadataScope) {
+        this._scopes = metadataScope;
         logMCPDebug(
           this.serverName,
-          `Captured scopes from authorization URL: ${redactSensitiveUrlParams("scope", v)}`,
-        ));
-    else {
-      let curatedMetadataScope = this.getCuratedMetadataScope();
-      if (curatedMetadataScope)
-        ((this._scopes = curatedMetadataScope),
-          logMCPDebug(
-            this.serverName,
-            `Using scopes from metadata: ${redactSensitiveUrlParams("scope", curatedMetadataScope)}`,
-          ));
-      else logMCPDebug(this.serverName, "No scopes available from URL or metadata");
+          `Using scopes from metadata: ${redactSensitiveUrlParams("scope", metadataScope)}`,
+        );
+      } else logMCPDebug(this.serverName, "No scopes available from URL or metadata");
     }
     if (this._scopes && !this.handleRedirection && this._pendingStepUpScope) {
-      let O = getServerKey(this.serverName, this.serverConfig),
-        _scopes = this._scopes,
-        P = !1;
+      let serverKey = getServerKey(this.serverName, this.serverConfig);
+      let _scopes = this._scopes;
+      let P = false;
       try {
         await getSecureStorage().mutate((T) => {
-          let E = T.mcpOAuth?.[O];
+          let E = T.mcpOAuth?.[serverKey];
           if (!E) return T;
-          return ((P = !0), { ...T, mcpOAuth: { ...T.mcpOAuth, [O]: { ...E, stepUpScope: _scopes } } });
+          P = true;
+          return {
+            ...T,
+            mcpOAuth: {
+              ...T.mcpOAuth,
+              [serverKey]: {
+                ...E,
+                stepUpScope: _scopes,
+              },
+            },
+          };
         });
       } catch (error) {
         logMCPDebug(this.serverName, `step-up scope persist failed: ${errorMessage(error)}`);
@@ -4649,85 +5331,92 @@ class ClaudeAuthProvider {
       logMCPDebug(this.serverName, "Redirection handling is disabled, skipping redirect");
       return;
     }
-    let str = e.toString();
-    if (!str.startsWith("http://") && !str.startsWith("https://"))
+    let urlString = e.toString();
+    if (!urlString.startsWith("http://") && !urlString.startsWith("https://"))
       throw Error("Invalid authorization URL: must use http:// or https:// scheme");
     logMCPDebug(this.serverName, "Redirecting to authorization URL");
-    let y = authorizationUrlForDebugLog(e);
-    if ((logMCPDebug(this.serverName, `Authorization URL: ${y}`), this.onAuthorizationUrlCallback))
-      this.onAuthorizationUrlCallback(str);
+    let redactedUrl = authorizationUrlForDebugLog(e);
+    logMCPDebug(this.serverName, `Authorization URL: ${redactedUrl}`);
+    if (this.onAuthorizationUrlCallback) this.onAuthorizationUrlCallback(urlString);
     if (this.skipBrowserOpen) {
-      logMCPDebug(this.serverName, `Skipping browser open (skipBrowserOpen=true). URL: ${y}`);
+      logMCPDebug(this.serverName, `Skipping browser open (skipBrowserOpen=true). URL: ${redactedUrl}`);
       return;
     }
     let U = isBrowserUnavailable();
-    if (U) logMCPDebug(this.serverName, `Skipping browser open (headless environment). URL: ${y}`);
-    else logMCPDebug(this.serverName, `Opening authorization URL: ${y}`);
-    let w = U ? !1 : await fi(str);
-    if (
-      (logEvent("tengu_mcp_oauth_browser_open", {
-        success: w,
-        headless: U,
-        platform: fromEnum(getPlatform()),
-      }),
-      !U && !w)
-    )
-      logMCPDebug(this.serverName, "Browser didn't open automatically. URL is shown in UI.");
+    if (U) logMCPDebug(this.serverName, `Skipping browser open (headless environment). URL: ${redactedUrl}`);
+    else logMCPDebug(this.serverName, `Opening authorization URL: ${redactedUrl}`);
+    let w = U ? false : await openValidatedUrlSucceeded(urlString);
+    logEvent("tengu_mcp_oauth_browser_open", {
+      success: w,
+      headless: U,
+      platform: fromEnum(getPlatform()),
+    });
+    if (!U && !w) logMCPDebug(this.serverName, "Browser didn't open automatically. URL is shown in UI.");
   }
-  async saveCodeVerifier(e) {
-    (logMCPDebug(this.serverName, "Saving code verifier"), (this._codeVerifier = e));
+  async saveCodeVerifier(codeVerifier) {
+    logMCPDebug(this.serverName, "Saving code verifier");
+    this._codeVerifier = codeVerifier;
   }
   async codeVerifier() {
-    if (!this._codeVerifier)
-      throw (logMCPDebug(this.serverName, "No code verifier saved"), Error("No code verifier saved"));
-    return (
-      logMCPDebug(this.serverName, "Returning code verifier"),
-      this._presented.record(this._codeVerifier),
-      this._codeVerifier
-    );
+    if (!this._codeVerifier) {
+      logMCPDebug(this.serverName, "No code verifier saved");
+      throw Error("No code verifier saved");
+    }
+    logMCPDebug(this.serverName, "Returning code verifier");
+    this._presented.record(this._codeVerifier);
+    return this._codeVerifier;
   }
   async invalidateCredentials(e) {
     if (e === "verifier") {
-      ((this._codeVerifier = void 0),
-        logMCPDebug(this.serverName, "Invalidated credentials (scope: verifier)"));
+      this._codeVerifier = undefined;
+      logMCPDebug(this.serverName, "Invalidated credentials (scope: verifier)");
       return;
     }
-    let t = e,
-      r = getServerKey(this.serverName, this.serverConfig),
-      n = !1;
+    let t = e;
+    let serverKey = getServerKey(this.serverName, this.serverConfig);
+    let n = false;
     try {
-      let _lastServedClientId = this._lastServedClientId,
-        _lastServedAccessToken = this._lastServedAccessToken,
-        _lastServedRefreshToken = this._lastServedRefreshToken;
+      let _lastServedClientId = this._lastServedClientId;
+      let _lastServedAccessToken = this._lastServedAccessToken;
+      let _lastServedRefreshToken = this._lastServedRefreshToken;
       await getSecureStorage().mutate((S) => {
-        let v = S.mcpOAuth?.[r];
+        let v = S.mcpOAuth?.[serverKey];
         if (!v) return S;
-        let A = { ...S.mcpOAuth };
+        let A = {
+          ...S.mcpOAuth,
+        };
         switch (t) {
           case "all": {
             let y =
-                _lastServedAccessToken != null && !!v.accessToken && v.accessToken !== _lastServedAccessToken,
-              U = _lastServedClientId != null && v.clientId != null && v.clientId !== _lastServedClientId;
-            if (y || U)
-              return (
-                logMCPDebug(
-                  this.serverName,
-                  `invalidateCredentials('all') preserved: ${y ? "foreign token" : "concurrent re-registration"}`,
-                ),
-                S
+              _lastServedAccessToken != null && !!v.accessToken && v.accessToken !== _lastServedAccessToken;
+            let U = _lastServedClientId != null && v.clientId != null && v.clientId !== _lastServedClientId;
+            if (y || U) {
+              logMCPDebug(
+                this.serverName,
+                `invalidateCredentials('all') preserved: ${y ? "foreign token" : "concurrent re-registration"}`,
               );
+              return S;
+            }
             if (!v.clientId && !v.refreshToken && v.accessToken === "") return S;
-            A[r] = {
+            A[serverKey] = {
               serverName: v.serverName,
               serverUrl: v.serverUrl,
               accessToken: "",
-              ...(v.discoveryState && { discoveryState: v.discoveryState }),
-              ...(v.stepUpScope && { stepUpScope: v.stepUpScope }),
+              ...(v.discoveryState && {
+                discoveryState: v.discoveryState,
+              }),
+              ...(v.stepUpScope && {
+                stepUpScope: v.stepUpScope,
+              }),
             };
             break;
           }
           case "client":
-            A[r] = { ...v, clientId: void 0, clientSecret: void 0 };
+            A[serverKey] = {
+              ...v,
+              clientId: undefined,
+              clientSecret: undefined,
+            };
             break;
           case "tokens": {
             if (
@@ -4735,26 +5424,31 @@ class ClaudeAuthProvider {
                 v.refreshToken &&
                 v.refreshToken !== _lastServedRefreshToken) ||
               (_lastServedAccessToken != null && !!v.accessToken && v.accessToken !== _lastServedAccessToken)
-            )
-              return (
-                logMCPDebug(
-                  this.serverName,
-                  "invalidateCredentials('tokens') preserved: concurrent rotation",
-                ),
-                S
-              );
-            A[r] = { ...v, accessToken: "", refreshToken: void 0, expiresAt: 0 };
+            ) {
+              logMCPDebug(this.serverName, "invalidateCredentials('tokens') preserved: concurrent rotation");
+              return S;
+            }
+            A[serverKey] = {
+              ...v,
+              accessToken: "",
+              refreshToken: undefined,
+              expiresAt: 0,
+            };
             break;
           }
           case "discovery":
-            A[r] = {
+            A[serverKey] = {
               ...v,
               discoveryState: v.discoveryState && authDiscoveryState(v.discoveryState),
-              stepUpScope: void 0,
+              stepUpScope: undefined,
             };
             break;
         }
-        return ((n = !0), { ...S, mcpOAuth: A });
+        n = true;
+        return {
+          ...S,
+          mcpOAuth: A,
+        };
       });
     } catch (error) {
       logMCPDebug(this.serverName, `invalidateCredentials persist failed: ${errorMessage(error)}`);
@@ -4763,54 +5457,57 @@ class ClaudeAuthProvider {
   }
   async saveDiscoveryState(e) {
     if (this.serverConfig.oauth?.xaa) return;
-    let t = getServerKey(this.serverName, this.serverConfig);
+    let serverKey = getServerKey(this.serverName, this.serverConfig);
     logMCPDebug(
       this.serverName,
       `Saving discovery state (authServer: ${redactUrlSecrets(e.authorizationServerUrl)})`,
     );
     let authorizationServerMetadata = e.authorizationServerMetadata;
     this.registrationOfferedByDiscovery =
-      authorizationServerMetadata !== void 0 &&
+      authorizationServerMetadata !== undefined &&
       (typeof authorizationServerMetadata.registration_endpoint === "string" ||
-        (authorizationServerMetadata.client_id_metadata_document_supported === !0 &&
-          this.clientMetadataUrl !== void 0));
+        (authorizationServerMetadata.client_id_metadata_document_supported === true &&
+          this.clientMetadataUrl !== undefined));
     let n = {
-        authorizationServerUrl: e.authorizationServerUrl,
-        oauthMetadataFound: !!e.authorizationServerMetadata,
-      },
-      s =
-        (e.authorizationServerMetadata !== void 0
-          ? this._servedOverrideDocuments.get(e.authorizationServerMetadata)
-          : void 0) ?? this.servedMetadataUrl();
-    this._discoveredAuthorizationServer = { ...n, servedMetadataUrl: s };
+      authorizationServerUrl: e.authorizationServerUrl,
+      oauthMetadataFound: !!e.authorizationServerMetadata,
+    };
+    let servedMetadataUrl =
+      (e.authorizationServerMetadata !== undefined
+        ? this._servedOverrideDocuments.get(e.authorizationServerMetadata)
+        : undefined) ?? this.servedMetadataUrl();
+    this._discoveredAuthorizationServer = {
+      ...n,
+      servedMetadataUrl,
+    };
     try {
       await getSecureStorage().mutate((h) => {
         let l = mergeDiscoveredAuth({
-          previous: h.mcpOAuth?.[t]?.discoveryState,
+          previous: h.mcpOAuth?.[serverKey]?.discoveryState,
           discovered: n,
-          servedMetadataUrl: s,
+          servedMetadataUrl,
         });
         return {
           ...h,
           mcpOAuth: {
             ...h.mcpOAuth,
-            [t]: {
-              ...h.mcpOAuth?.[t],
+            [serverKey]: {
+              ...h.mcpOAuth?.[serverKey],
               serverName: this.serverName,
               serverUrl: this.serverConfig.url,
-              accessToken: h.mcpOAuth?.[t]?.accessToken || "",
-              expiresAt: h.mcpOAuth?.[t]?.expiresAt,
+              accessToken: h.mcpOAuth?.[serverKey]?.accessToken || "",
+              expiresAt: h.mcpOAuth?.[serverKey]?.expiresAt,
               discoveryState: {
                 ...l,
                 resourceMetadataUrl: e.resourceMetadataUrl,
-                tokenlessRejectedAt: tokenlessRejectedAt(t, h.mcpOAuth?.[t]),
+                tokenlessRejectedAt: tokenlessRejectedAt(serverKey, h.mcpOAuth?.[serverKey]),
                 registrationNotOfferedAt:
-                  authorizationServerMetadata === void 0
-                    ? h.mcpOAuth?.[t]?.discoveryState?.registrationNotOfferedAt
+                  authorizationServerMetadata === undefined
+                    ? h.mcpOAuth?.[serverKey]?.discoveryState?.registrationNotOfferedAt
                     : typeof authorizationServerMetadata.registration_endpoint !== "string" &&
-                        authorizationServerMetadata.client_id_metadata_document_supported !== !0
+                        authorizationServerMetadata.client_id_metadata_document_supported !== true
                       ? Date.now()
-                      : void 0,
+                      : undefined,
               },
             },
           },
@@ -4821,95 +5518,102 @@ class ClaudeAuthProvider {
     }
   }
   servedMetadataUrl() {
-    return this._servedOverrideAuthorizationServerUrl === void 0
-      ? void 0
+    return this._servedOverrideAuthorizationServerUrl === undefined
+      ? undefined
       : this.serverConfig.oauth?.authServerMetadataUrl;
   }
   async discoveryState() {
-    this._servedOverrideAuthorizationServerUrl = void 0;
-    let e = this.serverConfig.oauth?.authServerMetadataUrl;
+    this._servedOverrideAuthorizationServerUrl = undefined;
+    let authServerMetadataUrl = this.serverConfig.oauth?.authServerMetadataUrl;
     if (this.authChallengeOpen) await this.readCredentialStore();
     let t = await hasStoredOAuthState(this.serverName, this.serverConfig);
     if (t === READ_FAILED) {
       if (this.serverConfig.oauth?.xaa) throw new McpCredentialStoreUnavailableError(this.serverName);
-    } else if (t) return { authorizationServerUrl: t };
-    if (e) {
-      logMCPDebug(this.serverName, `Fetching metadata from configured URL: ${redactUrlSecrets(e)}`);
+    } else if (t)
+      return {
+        authorizationServerUrl: t,
+      };
+    if (authServerMetadataUrl) {
+      logMCPDebug(
+        this.serverName,
+        `Fetching metadata from configured URL: ${redactUrlSecrets(authServerMetadataUrl)}`,
+      );
       try {
-        let l = await fetchAuthServerMetadata_2(this.serverName, this.serverConfig.url, {
-          configuredMetadataUrl: e,
+        let authServerMetadata = await fetchAuthServerMetadata_2(this.serverName, this.serverConfig.url, {
+          configuredMetadataUrl: authServerMetadataUrl,
           fetchFn: wrapFetchWithHeaders(this.serverName, this.serverConfig, createAuthFetch()),
         });
-        if (l)
-          return (
-            (this._servedOverrideAuthorizationServerUrl = l.issuer),
-            this._servedOverrideDocuments.set(l, e),
-            { authorizationServerUrl: l.issuer, authorizationServerMetadata: l }
-          );
+        if (authServerMetadata) {
+          this._servedOverrideAuthorizationServerUrl = authServerMetadata.issuer;
+          this._servedOverrideDocuments.set(authServerMetadata, authServerMetadataUrl);
+          return {
+            authorizationServerUrl: authServerMetadata.issuer,
+            authorizationServerMetadata: authServerMetadata,
+          };
+        }
       } catch (error) {
         logMCPDebug(
           this.serverName,
-          `Failed to fetch from configured metadata URL: ${yF(error, this.serverConfig.url)}`,
+          `Failed to fetch from configured metadata URL: ${describeSdkFetchError(error, this.serverConfig.url)}`,
         );
       }
       return;
     }
-    let async = await getSecureStorage().readAsync(),
-      s = getServerKey(this.serverName, this.serverConfig),
-      h = async?.mcpOAuth?.[s]?.discoveryState;
-    if (h?.authorizationServerUrl)
-      return (
-        logMCPDebug(
-          this.serverName,
-          `Returning cached discovery state (authServer: ${redactUrlSecrets(h.authorizationServerUrl)})`,
-        ),
-        {
-          authorizationServerUrl: h.authorizationServerUrl,
-          resourceMetadataUrl: h.resourceMetadataUrl,
-          resourceMetadata: h.resourceMetadata,
-          authorizationServerMetadata: h.authorizationServerMetadata,
-        }
+    let async = await getSecureStorage().readAsync();
+    let serverKey = getServerKey(this.serverName, this.serverConfig);
+    let cached = async?.mcpOAuth?.[serverKey]?.discoveryState;
+    if (cached?.authorizationServerUrl) {
+      logMCPDebug(
+        this.serverName,
+        `Returning cached discovery state (authServer: ${redactUrlSecrets(cached.authorizationServerUrl)})`,
       );
+      return {
+        authorizationServerUrl: cached.authorizationServerUrl,
+        resourceMetadataUrl: cached.resourceMetadataUrl,
+        resourceMetadata: cached.resourceMetadata,
+        authorizationServerMetadata: cached.authorizationServerMetadata,
+      };
+    }
     return;
   }
-  async refreshAuthorization(e) {
+  async refreshAuthorization(refreshToken) {
     if (isDiskless()) {
       logMCPDebug(this.serverName, "claude-code-server session; skipping refresh");
       return;
     }
-    let t = getServerKey(this.serverName, this.serverConfig),
-      r = getProjectDirsUpToHome();
-    await getFsImplementation().mkdir(r);
-    let replaced = t.replace(/[^a-zA-Z0-9]/g, "_"),
-      s = join(r, `mcp-refresh-${replaced}.lock`),
-      h;
-    for (let l = 0; l < MAX_METADATA_REDIRECTS; l++)
+    let serverKey = getServerKey(this.serverName, this.serverConfig);
+    let claudeDir = getProjectDirsUpToHome();
+    await getFsImplementation().mkdir(claudeDir);
+    let sanitizedKey = serverKey.replace(/[^a-zA-Z0-9]/g, "_");
+    let lockfilePath = join(claudeDir, `mcp-refresh-${sanitizedKey}.lock`);
+    let release;
+    for (let retry = 0; retry < MAX_METADATA_REDIRECTS; retry++)
       try {
-        (logMCPDebug(this.serverName, `Acquiring refresh lock (attempt ${l + 1})`),
-          (h = await lock(s, {
-            realpath: !1,
-            stale: 60000,
-            update: 5000,
-            onCompromised: () => {
-              logMCPDebug(this.serverName, "Refresh lock was compromised");
-            },
-          })),
-          logMCPDebug(this.serverName, "Acquired refresh lock"));
+        logMCPDebug(this.serverName, `Acquiring refresh lock (attempt ${retry + 1})`);
+        release = await lock(lockfilePath, {
+          realpath: false,
+          stale: 60000,
+          update: 5000,
+          onCompromised: () => {
+            logMCPDebug(this.serverName, "Refresh lock was compromised");
+          },
+        });
+        logMCPDebug(this.serverName, "Acquired refresh lock");
         break;
-      } catch (error) {
-        let v = getErrnoCode(error);
-        if (v === "ELOCKED") {
-          (logMCPDebug(
+      } catch (e) {
+        let code = getErrnoCode(e);
+        if (code === "ELOCKED") {
+          logMCPDebug(
             this.serverName,
-            `Refresh lock held by another process, waiting (attempt ${l + 1}/${MAX_METADATA_REDIRECTS})`,
-          ),
-            await sleep(1000 + Math.random() * 1000));
+            `Refresh lock held by another process, waiting (attempt ${retry + 1}/${MAX_METADATA_REDIRECTS})`,
+          );
+          await sleep(1000 + Math.random() * 1000);
           continue;
         }
-        logMCPDebug(this.serverName, `Failed to acquire refresh lock: ${v}; skipping refresh`);
+        logMCPDebug(this.serverName, `Failed to acquire refresh lock: ${code}; skipping refresh`);
         return;
       }
-    if (!h) {
+    if (!release) {
       logMCPDebug(
         this.serverName,
         `Could not acquire refresh lock after ${MAX_METADATA_REDIRECTS} retries; skipping refresh`,
@@ -4918,35 +5622,36 @@ class ClaudeAuthProvider {
     }
     try {
       clearKeychainCache();
-      let v = (await getSecureStorage().readAsync())?.mcpOAuth?.[t];
+      let v = (await getSecureStorage().readAsync())?.mcpOAuth?.[serverKey];
       if (v) {
-        let A = v.expiresAt != null ? (v.expiresAt - Date.now()) / 1000 : void 0;
-        if (v.accessToken && (A == null || A > 300))
-          return (
-            logMCPDebug(
-              this.serverName,
-              A != null
-                ? `Another process already refreshed tokens (expires in ${Math.floor(A)}s)`
-                : "Another process already refreshed tokens (no expiration)",
-            ),
-            {
-              access_token: v.accessToken,
-              refresh_token: v.refreshToken,
-              expires_in: A,
-              scope: v.scope,
-              token_type: "Bearer",
-            }
+        let A = v.expiresAt != null ? (v.expiresAt - Date.now()) / 1000 : undefined;
+        if (v.accessToken && (A == null || A > 300)) {
+          logMCPDebug(
+            this.serverName,
+            A != null
+              ? `Another process already refreshed tokens (expires in ${Math.floor(A)}s)`
+              : "Another process already refreshed tokens (no expiration)",
           );
-        if (v.refreshToken)
-          ((e = v.refreshToken),
-            (this._lastServedRefreshToken = v.refreshToken),
-            this._presented.record(v.refreshToken));
+          return {
+            access_token: v.accessToken,
+            refresh_token: v.refreshToken,
+            expires_in: A,
+            scope: v.scope,
+            token_type: "Bearer",
+          };
+        }
+        if (v.refreshToken) {
+          refreshToken = v.refreshToken;
+          this._lastServedRefreshToken = v.refreshToken;
+          this._presented.record(v.refreshToken);
+        }
       }
-      return await this._doRefresh(e);
+      return await this._doRefresh(refreshToken);
     } finally {
-      if (h)
+      if (release)
         try {
-          (await h(), logMCPDebug(this.serverName, "Released refresh lock"));
+          await release();
+          logMCPDebug(this.serverName, "Released refresh lock");
         } catch {
           logMCPDebug(this.serverName, "Failed to release refresh lock");
         }
@@ -4955,228 +5660,275 @@ class ClaudeAuthProvider {
   async readConcurrentRefreshWinner() {
     clearKeychainCache();
     let t = (await getSecureStorage().readAsync())?.mcpOAuth?.[
-        getServerKey(this.serverName, this.serverConfig)
-      ],
-      r = t?.expiresAt != null ? (t.expiresAt - Date.now()) / 1000 : void 0;
+      getServerKey(this.serverName, this.serverConfig)
+    ];
+    let r = t?.expiresAt != null ? (t.expiresAt - Date.now()) / 1000 : undefined;
     if (t?.accessToken && (r == null || r > 300)) {
       logMCPDebug(this.serverName, "Another process landed fresh tokens; using those");
-      let n = {
+      let freshTokens = {
         access_token: t.accessToken,
         refresh_token: t.refreshToken,
         expires_in: r,
         scope: t.scope,
         token_type: "Bearer",
       };
-      return { tokenData: t, freshTokens: n };
-    }
-    return { tokenData: t, freshTokens: void 0 };
-  }
-  async _doRefresh(e) {
-    this._presented.record(e);
-    let t = 3,
-      r = ET(this.serverConfig),
-      n = (s, h) => {
-        logEvent(s === "success" ? "tengu_mcp_oauth_refresh_success" : "tengu_mcp_oauth_refresh_failure", {
-          transportType: fromEnum(this.serverConfig.type),
-          ...(r && { mcpServerBaseUrl: r }),
-          ...(h && { reason: fromEnum(h) }),
-        });
+      return {
+        tokenData: t,
+        freshTokens,
       };
-    for (let s = 1; s <= t; s++) {
+    }
+    return {
+      tokenData: t,
+      freshTokens: undefined,
+    };
+  }
+  async _doRefresh(refreshToken) {
+    this._presented.record(refreshToken);
+    let MAX_ATTEMPTS = 3;
+    let mcpServerBaseUrl = loggingSafeOrigin(this.serverConfig);
+    let emitRefreshEvent = (outcome, reason) => {
+      logEvent(
+        outcome === "success" ? "tengu_mcp_oauth_refresh_success" : "tengu_mcp_oauth_refresh_failure",
+        {
+          transportType: fromEnum(this.serverConfig.type),
+          ...(mcpServerBaseUrl && {
+            mcpServerBaseUrl,
+          }),
+          ...(reason && {
+            reason: fromEnum(reason),
+          }),
+        },
+      );
+    };
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
       let h;
       try {
         logMCPDebug(this.serverName, "Starting token refresh");
-        let l = wrapFetchWithHeaders(this.serverName, this.serverConfig, createAuthFetch()),
-          _metadata = this._metadata;
-        if (!_metadata) {
-          let discoveryState = await this.discoveryState();
-          if (discoveryState?.authorizationServerMetadata)
-            _metadata = discoveryState.authorizationServerMetadata;
-          else if (discoveryState?.authorizationServerUrl)
-            (logMCPDebug(
+        let authFetch = wrapFetchWithHeaders(this.serverName, this.serverConfig, createAuthFetch());
+        let metadata = this._metadata;
+        if (!metadata) {
+          let cached = await this.discoveryState();
+          if (cached?.authorizationServerMetadata) metadata = cached.authorizationServerMetadata;
+          else if (cached?.authorizationServerUrl) {
+            logMCPDebug(
               this.serverName,
-              `Re-discovering metadata from persisted auth server URL: ${redactUrlSecrets(discoveryState.authorizationServerUrl)}`,
-            ),
-              (_metadata = await s1t(discoveryState.authorizationServerUrl, { fetchFn: l })));
+              `Re-discovering metadata from persisted auth server URL: ${redactUrlSecrets(cached.authorizationServerUrl)}`,
+            );
+            metadata = await discoverAuthorizationServerMetadata(cached.authorizationServerUrl, {
+              fetchFn: authFetch,
+            });
+          }
         }
         if (
-          !_metadata &&
+          !metadata &&
           !this.serverConfig.oauth?.xaa &&
-          (await hasStoredOAuthState(this.serverName, this.serverConfig)) === void 0
+          (await hasStoredOAuthState(this.serverName, this.serverConfig)) === undefined
         )
-          _metadata = await fetchAuthServerMetadata_2(this.serverName, this.serverConfig.url, {
+          metadata = await fetchAuthServerMetadata_2(this.serverName, this.serverConfig.url, {
             configuredMetadataUrl: this.serverConfig.oauth?.authServerMetadataUrl,
-            fetchFn: l,
+            fetchFn: authFetch,
           });
-        if (!_metadata) {
-          (logMCPDebug(this.serverName, "Failed to discover OAuth metadata"),
-            n("failure", "metadata_discovery_failed"),
-            logFeatureBad("mcp_oauth_refresh", "mcp_oauth_refresh_metadata_failed"));
+        if (!metadata) {
+          logMCPDebug(this.serverName, "Failed to discover OAuth metadata");
+          emitRefreshEvent("failure", "metadata_discovery_failed");
+          logFeatureBad("mcp_oauth_refresh", "mcp_oauth_refresh_metadata_failed");
           return;
         }
-        if (((this._metadata = _metadata), (h = await this.clientInformation()), !h)) {
-          (logMCPDebug(this.serverName, "No client information available"),
-            n("failure", "no_client_info"),
-            logFeatureBad("mcp_oauth_refresh", "mcp_oauth_refresh_no_client_info"));
+        this._metadata = metadata;
+        h = await this.clientInformation();
+        if (!h) {
+          logMCPDebug(this.serverName, "No client information available");
+          emitRefreshEvent("failure", "no_client_info");
+          logFeatureBad("mcp_oauth_refresh", "mcp_oauth_refresh_no_client_info");
           return;
         }
-        let v = await eHo(new URL(this.serverConfig.url), {
-          metadata: _metadata,
+        let newTokens = await refreshAuthorization(new URL(this.serverConfig.url), {
+          metadata,
           clientInformation: h,
-          refreshToken: e,
+          refreshToken,
           resource: new URL(this.serverConfig.url),
-          fetchFn: l,
+          fetchFn: authFetch,
         });
-        if (v)
-          return (
-            logMCPDebug(this.serverName, "Token refresh successful"),
-            await this.saveTokens(v),
-            n("success"),
-            logFeatureOk("mcp_oauth_refresh"),
-            v
-          );
-        (logMCPDebug(this.serverName, "Token refresh returned no tokens"),
-          n("failure", "no_tokens_returned"),
-          logFeatureBad("mcp_oauth_refresh", "mcp_oauth_refresh_no_tokens"));
+        if (newTokens) {
+          logMCPDebug(this.serverName, "Token refresh successful");
+          await this.saveTokens(newTokens);
+          emitRefreshEvent("success");
+          logFeatureOk("mcp_oauth_refresh");
+          return newTokens;
+        }
+        logMCPDebug(this.serverName, "Token refresh returned no tokens");
+        emitRefreshEvent("failure", "no_tokens_returned");
+        logFeatureBad("mcp_oauth_refresh", "mcp_oauth_refresh_no_tokens");
         return;
       } catch (error) {
-        if (error instanceof J_t) {
+        if (error instanceof InvalidGrantError) {
           logMCPDebug(this.serverName, `Token refresh failed with invalid_grant: ${error.message}`);
-          let { freshTokens: freshTokens } = await this.readConcurrentRefreshWinner();
-          if (freshTokens)
-            return (logFeatureSad("mcp_oauth_refresh", "mcp_oauth_refresh_concurrent_winner"), freshTokens);
-          (logMCPDebug(this.serverName, "No valid tokens in storage, clearing stored tokens"),
-            n("failure", "invalid_grant"),
-            logFeatureBad("mcp_oauth_refresh", "mcp_oauth_refresh_invalid_grant"),
-            await this.invalidateCredentials("tokens"),
-            AUTH_LOST_SIGNAL.emit(this.serverName));
+          let { freshTokens } = await this.readConcurrentRefreshWinner();
+          if (freshTokens) {
+            logFeatureSad("mcp_oauth_refresh", "mcp_oauth_refresh_concurrent_winner");
+            return freshTokens;
+          }
+          logMCPDebug(this.serverName, "No valid tokens in storage, clearing stored tokens");
+          emitRefreshEvent("failure", "invalid_grant");
+          logFeatureBad("mcp_oauth_refresh", "mcp_oauth_refresh_invalid_grant");
+          await this.invalidateCredentials("tokens");
+          AUTH_LOST_SIGNAL.emit(this.serverName);
           return;
         }
         if (
-          error instanceof TM &&
+          error instanceof OAuthError &&
           (error.errorCode === "invalid_client" || error.errorCode === "unauthorized_client")
         ) {
           logMCPDebug(
             this.serverName,
             "Token refresh failed: DCR client expired or invalid; clearing stored client registration",
           );
-          let { tokenData: tokenData, freshTokens: freshTokens } = await this.readConcurrentRefreshWinner();
-          if (freshTokens)
-            return (logFeatureSad("mcp_oauth_refresh", "mcp_oauth_refresh_concurrent_winner"), freshTokens);
+          let { tokenData, freshTokens } = await this.readConcurrentRefreshWinner();
+          if (freshTokens) {
+            logFeatureSad("mcp_oauth_refresh", "mcp_oauth_refresh_concurrent_winner");
+            return freshTokens;
+          }
           if (tokenData?.clientId && h && tokenData.clientId !== h.client_id) {
-            (logMCPDebug(this.serverName, "Another process re-registered client; preserving"),
-              n("failure", "concurrent_reregister"),
-              logFeatureSad("mcp_oauth_refresh", "mcp_oauth_refresh_concurrent_reregister"));
+            logMCPDebug(this.serverName, "Another process re-registered client; preserving");
+            emitRefreshEvent("failure", "concurrent_reregister");
+            logFeatureSad("mcp_oauth_refresh", "mcp_oauth_refresh_concurrent_reregister");
             return;
           }
-          (n("failure", error.errorCode === "unauthorized_client" ? "unauthorized_client" : "invalid_client"),
-            logFeatureBad(
-              "mcp_oauth_refresh",
-              error.errorCode === "unauthorized_client"
-                ? "mcp_oauth_refresh_unauthorized_client"
-                : "mcp_oauth_refresh_invalid_client",
-            ),
-            await this.invalidateCredentials("all"),
-            AUTH_LOST_SIGNAL.emit(this.serverName));
+          emitRefreshEvent(
+            "failure",
+            error.errorCode === "unauthorized_client" ? "unauthorized_client" : "invalid_client",
+          );
+          logFeatureBad(
+            "mcp_oauth_refresh",
+            error.errorCode === "unauthorized_client"
+              ? "mcp_oauth_refresh_unauthorized_client"
+              : "mcp_oauth_refresh_invalid_client",
+          );
+          await this.invalidateCredentials("all");
+          AUTH_LOST_SIGNAL.emit(this.serverName);
           return;
         }
         if (isZodError(error)) {
-          (logMCPDebug(
+          logMCPDebug(
             this.serverName,
             `Token refresh failed: token response rejected by SDK schema: ${errorMessage(error)}`,
-          ),
-            n("failure", "token_response_schema_rejected"),
-            logFeatureBad("mcp_oauth_refresh", "mcp_oauth_refresh_token_response_schema_rejected"));
+          );
+          emitRefreshEvent("failure", "token_response_schema_rejected");
+          logFeatureBad("mcp_oauth_refresh", "mcp_oauth_refresh_token_response_schema_rejected");
           return;
         }
-        let S = error instanceof McpCredentialStoreUnavailableError,
-          v = error instanceof Error && /timeout|timed out|etimedout|econnreset/i.test(error.message),
-          A = error instanceof Jze || error instanceof scn || error instanceof icn,
-          y = v || A || S;
-        if (!y || s >= t) {
-          (logMCPDebug(this.serverName, `Token refresh failed: ${yF(error, this.serverConfig.url)}`),
-            n("failure", y ? "transient_retries_exhausted" : "request_failed"),
-            logFeatureBad("mcp_oauth_refresh", "mcp_oauth_refresh_request_failed"));
+        let S = error instanceof McpCredentialStoreUnavailableError;
+        let v = error instanceof Error && /timeout|timed out|etimedout|econnreset/i.test(error.message);
+        let isTransientServerError =
+          error instanceof ServerError ||
+          error instanceof TemporarilyUnavailableError ||
+          error instanceof TooManyRequestsError;
+        let isRetryable = v || isTransientServerError || S;
+        if (!isRetryable || attempt >= MAX_ATTEMPTS) {
+          logMCPDebug(
+            this.serverName,
+            `Token refresh failed: ${describeSdkFetchError(error, this.serverConfig.url)}`,
+          );
+          emitRefreshEvent("failure", isRetryable ? "transient_retries_exhausted" : "request_failed");
+          logFeatureBad("mcp_oauth_refresh", "mcp_oauth_refresh_request_failed");
           return;
         }
-        let U = 1000 * Math.pow(2, s - 1);
-        (logMCPDebug(this.serverName, `Token refresh failed, retrying in ${U}ms (attempt ${s}/${t})`),
-          await sleep(U));
+        let delayMs = 1000 * Math.pow(2, attempt - 1);
+        logMCPDebug(
+          this.serverName,
+          `Token refresh failed, retrying in ${delayMs}ms (attempt ${attempt}/${MAX_ATTEMPTS})`,
+        );
+        await sleep(delayMs);
       }
     }
     return;
   }
 }
+//@ chunk-1kaj6e83.js:56066-56725 facade-exports = readClientSecret (1)
 /**
  * readClientSecret（v1）。
  */
-//@ chunk-1kaj6e83.js:56066-56725 facade-exports = readClientSecret (1)
 async function readClientSecret() {
   let envSecret = process.env.MCP_CLIENT_SECRET;
   if (envSecret) return envSecret;
   if (!process.stdin.isTTY)
     throw Error("No TTY available to prompt for client secret. Set MCP_CLIENT_SECRET env var instead.");
   return new Promise((resolve, reject) => {
-    (process.stderr.write("Enter OAuth client secret: "), process.stdin.setRawMode?.(!0));
-    let secret = "",
-      onData = (ch) => {
-        let str = ch.toString();
-        if (
-          str ===
-            `
+    process.stderr.write("Enter OAuth client secret: ");
+    process.stdin.setRawMode?.(true);
+    let secret = "";
+    let onData = (ch) => {
+      let str = ch.toString();
+      if (
+        str ===
+          `
 ` ||
-          str === "\r"
-        )
-          (process.stdin.setRawMode?.(!1),
-            process.stdin.removeListener("data", onData),
-            process.stderr.write(`
-`),
-            resolve(secret));
-        else if (str === "\x03")
-          (process.stdin.setRawMode?.(!1),
-            process.stdin.removeListener("data", onData),
-            reject(Error("Cancelled")));
-        else if (str === "\x7F" || str === "\b") secret = secret.slice(0, -1);
-        else secret += str;
-      };
+        str === "\r"
+      ) {
+        process.stdin.setRawMode?.(false);
+        process.stdin.removeListener("data", onData);
+        process.stderr.write(`
+`);
+        resolve(secret);
+      } else if (str === "\x03") {
+        process.stdin.setRawMode?.(false);
+        process.stdin.removeListener("data", onData);
+        reject(Error("Cancelled"));
+      } else if (str === "\x7F" || str === "\b") secret = secret.slice(0, -1);
+      else secret += str;
+    };
     process.stdin.on("data", onData);
   });
 }
+//@ chunk-1kaj6e83.js:56725-56921 facade-exports = saveMcpClientSecret (0.631)
 /**
  * saveMcpClientSecret（v1）。
  */
-//@ chunk-1kaj6e83.js:56725-56921 facade-exports = saveMcpClientSecret (0.631)
 async function saveMcpClientSecret(serverName, serverConfig, clientSecret) {
   let serverKey = getServerKey(serverName, serverConfig);
   try {
-    return await getSecureStorage().mutate((s) => ({
-      ...s,
-      mcpOAuthClientConfig: { ...s.mcpOAuthClientConfig, [serverKey]: { clientSecret: clientSecret } },
+    return await getSecureStorage().mutate((existingData) => ({
+      ...existingData,
+      mcpOAuthClientConfig: {
+        ...existingData.mcpOAuthClientConfig,
+        [serverKey]: {
+          clientSecret,
+        },
+      },
     }));
   } catch (error) {
-    return { success: !1, warning: errorMessage(error) };
+    return {
+      success: false,
+      warning: errorMessage(error),
+    };
   }
 }
+//@ chunk-1kaj6e83.js:56921-57109 facade-exports = getMcpClientConfig (0.711)
 /**
  * getMcpClientConfig（v1）：读 mcpOAuthClientConfig[serverKey]。
  */
-//@ chunk-1kaj6e83.js:56921-57109 facade-exports = getMcpClientConfig (0.711)
 async function clearMcpClientConfig(serverName, serverConfig) {
   let serverKey = getServerKey(serverName, serverConfig);
   await getSecureStorage().mutate((n) => {
     if (!n.mcpOAuthClientConfig?.[serverKey]) return n;
-    let s = { ...n.mcpOAuthClientConfig };
-    return (delete s[serverKey], { ...n, mcpOAuthClientConfig: s });
+    let s = {
+      ...n.mcpOAuthClientConfig,
+    };
+    delete s[serverKey];
+    return {
+      ...n,
+      mcpOAuthClientConfig: s,
+    };
   });
 }
+//@ chunk-1kaj6e83.js:57109-57208 facade-exports
 /**
  * 从安全存储读取某服务器的 OAuth 客户端配置。（v1 副本）
  */
-//@ chunk-1kaj6e83.js:57109-57208 facade-exports
-async function getMcpClientConfig(e, t) {
-  let async = await getSecureStorage().readAsync(),
-    s = getServerKey(e, t);
-  return async?.mcpOAuthClientConfig?.[s];
+async function getMcpClientConfig(serverName, serverConfig) {
+  let async = await getSecureStorage().readAsync();
+  let serverKey = getServerKey(serverName, serverConfig);
+  return async?.mcpOAuthClientConfig?.[serverKey];
 }
 //@ chunk-1kaj6e83.js:57208-57381 fingerprint = getScopeFromMetadata (0.903)
 function getScopeFromMetadata(metadata) {
@@ -5186,10 +5938,10 @@ function getScopeFromMetadata(metadata) {
     return metadata.default_scope;
   return;
 }
+//@ chunk-1kaj6e83.js:57381-57577 facade-exports
 /**
  * shouldRequestOfflineAccess（v1 副本）。
  */
-//@ chunk-1kaj6e83.js:57381-57577 facade-exports
 function maybeAppendOfflineAccess(e, t) {
   if (e !== null && e.split(" ").includes("offline_access")) return e;
   if (!t?.scopes_supported?.includes("offline_access")) return e;
@@ -5197,16 +5949,16 @@ function maybeAppendOfflineAccess(e, t) {
 }
 //@ chunk-1kaj6e83.js:57577-57739 layout
 var ENTRA_LOGIN_HOSTS_V1 = [
-    "login.microsoftonline.com",
-    "login.microsoftonline.us",
-    "login.partner.microsoftonline.cn",
-    "login.chinacloudapi.cn",
-  ],
-  ENTRA_LOGIN_HOST_SUFFIXES_V1 = [".b2clogin.com", ".ciamlogin.com"];
+  "login.microsoftonline.com",
+  "login.microsoftonline.us",
+  "login.partner.microsoftonline.cn",
+  "login.chinacloudapi.cn",
+];
+var ENTRA_LOGIN_HOST_SUFFIXES_V1 = [".b2clogin.com", ".ciamlogin.com"];
+//@ chunk-1kaj6e83.js:57739-57876 facade-exports
 /**
  * 判断 URL 是否是 Microsoft Entra 登录域。（v1 副本）
  */
-//@ chunk-1kaj6e83.js:57739-57876 facade-exports
 function isEntraLoginUrl(e) {
   try {
     let hostname = (typeof e === "string" ? new URL(e) : e).hostname;
@@ -5215,24 +5967,46 @@ function isEntraLoginUrl(e) {
       ENTRA_LOGIN_HOST_SUFFIXES_V1.some((r) => hostname.endsWith(r))
     );
   } catch {
-    return !1;
+    return false;
   }
 }
 //@ chunk-yqnmafqp.js:338-346 placement
-var N = 8;
+/**
+ * 授权服务器发现的最大尝试次数（8）。
+ */
+var MAX_DISCOVERY_ATTEMPTS = 8;
 //@ chunk-yqnmafqp.js:346-376 placement
-var F = /^v?\d+(?:[._-]\d+)*$/i;
+/**
+ * 匹配版本号样式的正则。
+ */
+var VERSION_STRING_RE = /^v?\d+(?:[._-]\d+)*$/i;
 //@ chunk-yqnmafqp.js:376-557 placement
-var regExp = new RegExp("^[A-Za-z0-9._~+/=%-]+$"),
-  regExp_2 = new RegExp("[^A-Za-z0-9._~+/=%-]+"),
-  K = /^(?=.{1,32}$)(?:[a-z]+|[A-Z][a-z]{2,}|[A-Z]+|\d+)(?:[-_](?:[a-z]+|[A-Z][a-z]{2,}|[A-Z]+|\d+))*$/;
+/**
+ * scope 记号格式正则。
+ */
+var regExp = new RegExp("^[A-Za-z0-9._~+/=%-]+$");
+var regExp_2 = new RegExp("[^A-Za-z0-9._~+/=%-]+");
+var SCOPE_TOKEN_RE =
+  /^(?=.{1,32}$)(?:[a-z]+|[A-Z][a-z]{2,}|[A-Z]+|\d+)(?:[-_](?:[a-z]+|[A-Z][a-z]{2,}|[A-Z]+|\d+))*$/;
 //@ chunk-yqnmafqp.js:557-644 placement
-function p_yqnm(t) {
+/**
+ * 判断字符串是否看起来像随机令牌。
+ */
+function looksRandomToken(t) {
   return /[a-z]/i.test(t) && (/\d/.test(t) || (/[a-z]/.test(t) && /[A-Z]/.test(t)));
 }
 //@ chunk-yqnmafqp.js:644-719 placement
-function h(t) {
-  return t.length >= 24 && regExp.test(t) && !F.test(t) && !K.test(t) && p_yqnm(t);
+/**
+ * 判断字符串是否像令牌（长度、字符集、不像版本号/scope）。
+ */
+function isTokenLike(t) {
+  return (
+    t.length >= 24 &&
+    regExp.test(t) &&
+    !VERSION_STRING_RE.test(t) &&
+    !SCOPE_TOKEN_RE.test(t) &&
+    looksRandomToken(t)
+  );
 }
 //@ chunk-yqnmafqp.js:719-860 placement
 function safeDecodeURIComponent(t) {
@@ -5243,123 +6017,158 @@ function safeDecodeURIComponent(t) {
   }
 }
 //@ chunk-yqnmafqp.js:860-1169 placement
+/**
+ * 匹配结尾多余分隔符的正则。
+ */
 var MEDIA_TYPE_RE =
-    /^(?:\*|application|audio|font|example|haptics|image|message|model|multipart|text|video)\/(?:\*|[a-z0-9](?:[a-z0-9!#$&^_.+-])*)(?:\s*;\s*[a-z0-9!#$&^_.-]+=[\w!#$&^_.+-]*)*$/i,
-  q = /^(?:gzip|x-gzip|deflate|br|zstd|compress|identity|\*)(?:\s*;\s*q=[\d.]+)?$/i,
-  G = /^charset=[\w.:-]+$/i,
-  V = /(?<![;,\s])[;,\s]+$/;
+  /^(?:\*|application|audio|font|example|haptics|image|message|model|multipart|text|video)\/(?:\*|[a-z0-9](?:[a-z0-9!#$&^_.+-])*)(?:\s*;\s*[a-z0-9!#$&^_.-]+=[\w!#$&^_.+-]*)*$/i;
+var ACCEPT_ENCODING_RE = /^(?:gzip|x-gzip|deflate|br|zstd|compress|identity|\*)(?:\s*;\s*q=[\d.]+)?$/i;
+var CHARSET_PARAM_RE = /^charset=[\w.:-]+$/i;
+var TRAILING_SEPARATOR_RE = /(?<![;,\s])[;,\s]+$/;
 //@ chunk-yqnmafqp.js:1169-1329 placement
 function isBenignHeaderValue(t) {
   let filtered = t
-    .replace(V, "")
+    .replace(TRAILING_SEPARATOR_RE, "")
     .split(",")
     .map((n) => n.trim())
     .filter(Boolean);
-  if (filtered.length === 0) return !1;
-  return filtered.every((n) => MEDIA_TYPE_RE.test(n) || q.test(n) || G.test(n));
+  if (filtered.length === 0) return false;
+  return filtered.every(
+    (n) => MEDIA_TYPE_RE.test(n) || ACCEPT_ENCODING_RE.test(n) || CHARSET_PARAM_RE.test(n),
+  );
 }
 //@ chunk-yqnmafqp.js:1329-1617 placement
+/**
+ * 请求头分隔符正则。
+ */
 var BENIGN_HEADER_NAMES = new Set([
-    "accept",
-    "accept-encoding",
-    "content-length",
-    "content-type",
-    "user-agent",
-  ]),
-  Q = /^\d+$/,
-  W = /(?:^|[^A-Za-z0-9_-])[A-Za-z][A-Za-z0-9_-]{1,31}\s+[A-Za-z0-9._~+/=%-]{8,}(?![A-Za-z0-9._~+/=%-])/,
-  Y = /([;,&\s]+)/,
-  J = /[a-z0-9+.-]+/gi,
-  X = /^(?:https?|wss?|ftp)$/i,
-  tt_yqnm = /[;,&=]/,
-  et = /[\t\n\r]/g;
+  "accept",
+  "accept-encoding",
+  "content-length",
+  "content-type",
+  "user-agent",
+]);
+var NUMERIC_STRING_RE = /^\d+$/;
+var SECRET_IN_PROSE_RE =
+  /(?:^|[^A-Za-z0-9_-])[A-Za-z][A-Za-z0-9_-]{1,31}\s+[A-Za-z0-9._~+/=%-]{8,}(?![A-Za-z0-9._~+/=%-])/;
+var SEPARATOR_SPLIT_RE = /([;,&\s]+)/;
+var SCHEME_LIKE_RE = /[a-z0-9+.-]+/gi;
+var URL_SCHEME_RE = /^(?:https?|wss?|ftp)$/i;
+var HEADER_SEPARATOR_RE = /[;,&=]/;
+var WHITESPACE_RE = /[\t\n\r]/g;
 //@ chunk-yqnmafqp.js:1617-1663 placement
 function looksLikeTokenSegment(t) {
-  return t.length >= N && p_yqnm(t) && !isBenignHeaderValue(t);
+  return t.length >= MAX_DISCOVERY_ATTEMPTS && looksRandomToken(t) && !isBenignHeaderValue(t);
 }
 //@ chunk-yqnmafqp.js:1663-1728 placement
-function b(t) {
+/**
+ * 判断单个片段是否像令牌。
+ */
+function hasTokenSegment(t) {
   return looksLikeTokenSegment(t) || (t.includes("+") && t.split("+").some(looksLikeTokenSegment));
 }
 //@ chunk-yqnmafqp.js:1728-1921 placement
-function nt_yqnm(t) {
+/**
+ * 判断请求头值里是否含密钥。
+ */
+function headerValueHasSecret(t) {
   return (
     t.split(/\s+/).some((e) => e.includes("+") && e.split("+").some(looksLikeTokenSegment)) ||
     t.split(/[;,&\s]+/).some((e) => {
       let index = e.indexOf("=");
-      return index === -1 ? b(e) : b(e.slice(0, index)) || b(e.slice(index + 1));
+      return index === -1
+        ? hasTokenSegment(e)
+        : hasTokenSegment(e.slice(0, index)) || hasTokenSegment(e.slice(index + 1));
     })
   );
 }
 //@ chunk-yqnmafqp.js:1921-2006 placement
 function isSafeHeaderValue(t, e) {
-  if (t === "user-agent") return !W.test(e);
-  return Q.test(e) || (isBenignHeaderValue(e) && !nt_yqnm(e));
+  if (t === "user-agent") return !SECRET_IN_PROSE_RE.test(e);
+  return NUMERIC_STRING_RE.test(e) || (isBenignHeaderValue(e) && !headerValueHasSecret(e));
 }
+//@ chunk-yqnmafqp.js:2006-2134 placement = redactSecrets (0.815)
 /**
  * 请求头脱敏：只有白名单内的无害头名且值通过安全检查时保留原值，其余一律替换成 `[REDACTED]`；用于 MCP/XAA 调试日志打印请求头。
  */
-//@ chunk-yqnmafqp.js:2006-2134 placement = redactSecrets (0.815)
 function redactHeaders(content) {
   let e = {};
-  for (let [n, o] of Object.entries(content)) {
-    let lower = n.toLowerCase();
-    e[n] = BENIGN_HEADER_NAMES.has(lower) && isSafeHeaderValue(lower, o) ? o : "[REDACTED]";
+  for (let [key, value] of Object.entries(content)) {
+    let lower = key.toLowerCase();
+    e[key] = BENIGN_HEADER_NAMES.has(lower) && isSafeHeaderValue(lower, value) ? value : "[REDACTED]";
   }
   return e;
 }
 //@ chunk-yqnmafqp.js:2134-2403 layout
-function looksLikeUrlWithScheme(t, e = !1) {
-  let replaced = t.replace(et, "");
-  if (!replaced.includes(":")) return !1;
+function looksLikeUrlWithScheme(t, e = false) {
+  let replaced = t.replace(WHITESPACE_RE, "");
+  if (!replaced.includes(":")) return false;
   let o = e ? -1 : replaced.lastIndexOf("?");
-  for (let r of replaced.matchAll(J)) {
+  for (let r of replaced.matchAll(SCHEME_LIKE_RE)) {
     let c = r.index + r[0].length;
     if (replaced[c] !== ":" || !/[a-z]/i.test(r[0])) continue;
-    if (/[/\\]/.test(replaced[c + 1] ?? "") || (!e && X.test(r[0])) || o > c) return !0;
+    if (/[/\\]/.test(replaced[c + 1] ?? "") || (!e && URL_SCHEME_RE.test(r[0])) || o > c) return true;
   }
-  return !1;
+  return false;
 }
 //@ chunk-yqnmafqp.js:2403-2500 layout
-function R(t) {
+/**
+ * 判断字符串是否（多次解码后）是带协议的 URL。
+ */
+function isEncodedUrl(t) {
   let e = t;
-  for (let n = 0; ; n++) {
-    if (looksLikeUrlWithScheme(e)) return !0;
-    let o = n < 3 ? safeDecodeURIComponent(e) : e;
-    if (o === e) return !1;
+  for (let i = 0; ; i++) {
+    if (looksLikeUrlWithScheme(e)) return true;
+    let o = i < 3 ? safeDecodeURIComponent(e) : e;
+    if (o === e) return false;
     e = o;
   }
 }
 //@ chunk-yqnmafqp.js:2500-2607 layout
 function userinfoAtIndex(t) {
-  let e = t.length < 2 ? -1 : t.lastIndexOf("@", t.length - 2),
-    index = t.indexOf(":");
+  let e = t.length < 2 ? -1 : t.lastIndexOf("@", t.length - 2);
+  let index = t.indexOf(":");
   return index !== -1 && e > index + 1 ? e : -1;
 }
 //@ chunk-yqnmafqp.js:2607-2784 layout
-function looksLikeSecretBearingText(t, e = !0) {
+function looksLikeSecretBearingText(t, e = true) {
   for (let n of uniq([t, t.replaceAll(" ", "+")])) {
     let o = n;
-    for (let r = 0; ; r++) {
-      if (h(o) || looksLikeUrlWithScheme(o) || userinfoAtIndex(o) !== -1 || (e && A(o))) return !0;
-      let c = r < 3 ? safeDecodeURIComponent(o) : o;
+    for (let i = 0; ; i++) {
+      if (
+        isTokenLike(o) ||
+        looksLikeUrlWithScheme(o) ||
+        userinfoAtIndex(o) !== -1 ||
+        (e && hasEmbeddedSecret(o))
+      )
+        return true;
+      let c = i < 3 ? safeDecodeURIComponent(o) : o;
       if (c === o) break;
       o = c;
     }
   }
-  return !1;
+  return false;
 }
 //@ chunk-yqnmafqp.js:2784-2828 layout
-function x(t, e) {
+/**
+ * 安全时原样返回，疑似密钥则返回 REDACTED。
+ */
+function redactUnlessSafe(t, e) {
   return !e || looksLikeSecretBearingText(t) ? "REDACTED" : t;
 }
 //@ chunk-yqnmafqp.js:2828-2863 layout
-function m(t) {
-  return h(t) || h(safeDecodeURIComponent(t));
+/**
+ * 判断片段或其 URL 解码形式是否像令牌。
+ */
+function anySegmentTokenLike(t) {
+  return isTokenLike(t) || isTokenLike(safeDecodeURIComponent(t));
 }
 //@ chunk-yqnmafqp.js:2863-2923 layout
-function A(t) {
-  return t.replace(/\s+/g, "+").split(regExp_2).some(m);
+/**
+ * 判断空白分隔的片段里是否有密钥。
+ */
+function hasEmbeddedSecret(t) {
+  return t.replace(/\s+/g, "+").split(regExp_2).some(anySegmentTokenLike);
 }
 //@ chunk-yqnmafqp.js:2923-3325 fingerprint = SENSITIVE_OAUTH_PARAMS (0.414)
 var SENSITIVE_OAUTH_PARAMS = new Map([
@@ -5380,76 +6189,93 @@ var SENSITIVE_OAUTH_PARAMS = new Map([
   ["access_type", "judged"],
   ["display", "judged"],
 ]);
+//@ chunk-yqnmafqp.js:3325-3506 layout
 /**
  * redactUrlSearchParams：把 URL 查询串中的敏感 OAuth 参数值替换为 REDACTED。
  */
-//@ chunk-yqnmafqp.js:3325-3506 layout
 function redactUrlSearchParams(t) {
   let uRLSearchParams = new URLSearchParams();
   for (let [o, r] of t.searchParams) {
-    let c = x(o, r !== "");
+    let c = redactUnlessSafe(o, r !== "");
     uRLSearchParams.append(c, c === "REDACTED" ? "REDACTED" : redactSensitiveUrlParams(o, r));
   }
   let str = uRLSearchParams.toString();
   return str === "" ? "" : `?${str}`;
 }
+//@ chunk-yqnmafqp.js:3506-3707 callgraph-fingerprint = redactSensitiveUrlParams (0.308)
 /**
  * redactSensitiveUrlParams：日志中把 URL/字段里的敏感 OAuth 参数（state、nonce、code…）替换为 REDACTED。
  */
-//@ chunk-yqnmafqp.js:3506-3707 callgraph-fingerprint = redactSensitiveUrlParams (0.308)
 function redactSensitiveUrlParams(t, e) {
   let n = SENSITIVE_OAUTH_PARAMS.get(t);
-  if (n === void 0) return "REDACTED";
+  if (n === undefined) return "REDACTED";
   switch (n) {
     case "sensitive":
       return "[REDACTED]";
     case "url":
-      return R(e) || R(e.replaceAll(" ", "+")) ? redactUrlSecrets(e) : "REDACTED";
+      return isEncodedUrl(e) || isEncodedUrl(e.replaceAll(" ", "+")) ? redactUrlSecrets(e) : "REDACTED";
     case "judged":
-      return st(e);
+      return redactWords(e);
   }
 }
 //@ chunk-yqnmafqp.js:3707-3870 affinity
-function st(t) {
-  let e = [],
-    n = [],
-    o = () => {
-      if (n.length > 0) (e.push(...it(n)), (n = []));
-    };
+/**
+ * 按 URL 与非 URL 分段脱敏。
+ */
+function redactWords(t) {
+  let e = [];
+  let n = [];
+  let o = () => {
+    if (n.length > 0) {
+      e.push(...redactTokens(n));
+      n = [];
+    }
+  };
   for (let r of t.split(" "))
-    if (R(r)) (o(), e.push(redactUrlSecrets(r)));
-    else n.push(r);
-  return (o(), e.join(" "));
+    if (isEncodedUrl(r)) {
+      o();
+      e.push(redactUrlSecrets(r));
+    } else n.push(r);
+  o();
+  return e.join(" ");
 }
 //@ chunk-yqnmafqp.js:3870-4135 affinity
-function it(t) {
-  if (looksLikeSecretBearingText(t.join(" "), !1)) return ["REDACTED"];
-  let e = [],
-    n = [],
-    o = () => {
-      if (n.length > 0)
-        (e.push(
-          ...(looksLikeSecretBearingText(n.join("+"))
-            ? ["REDACTED"]
-            : n.map((r) => (looksLikeSecretBearingText(r) ? "REDACTED" : r))),
-        ),
-          (n = []));
-    };
+/**
+ * 对一组片段做脱敏（含逐段判断）。
+ */
+function redactTokens(t) {
+  if (looksLikeSecretBearingText(t.join(" "), false)) return ["REDACTED"];
+  let e = [];
+  let n = [];
+  let o = () => {
+    if (n.length > 0) {
+      e.push(
+        ...(looksLikeSecretBearingText(n.join("+"))
+          ? ["REDACTED"]
+          : n.map((r) => (looksLikeSecretBearingText(r) ? "REDACTED" : r))),
+      );
+      n = [];
+    }
+  };
   for (let r of t)
     if (r === "" || regExp.test(r)) n.push(r);
-    else (o(), e.push(looksLikeSecretBearingText(r) || A(r) ? "REDACTED" : r));
-  return (o(), e);
+    else {
+      o();
+      e.push(looksLikeSecretBearingText(r) || hasEmbeddedSecret(r) ? "REDACTED" : r);
+    }
+  o();
+  return e;
 }
+//@ chunk-yqnmafqp.js:5542-5633 placement = validateURL (0.823)
 /**
  * URL 带用户名/密码或无法解析时返回 true。
  */
-//@ chunk-yqnmafqp.js:5542-5633 placement = validateURL (0.823)
 function urlHasCredentials(url) {
   try {
-    let e = new URL(url);
-    return e.username !== "" || e.password !== "";
+    let parsedUrl = new URL(url);
+    return parsedUrl.username !== "" || parsedUrl.password !== "";
   } catch {
-    return !0;
+    return true;
   }
 }
 //@ chunk-yqnmafqp.js:5633-5764 placement
@@ -5461,45 +6287,54 @@ function isExpectedAuthError(t) {
   );
 }
 //@ chunk-yqnmafqp.js:5764-5879 placement
-function at_yqnm(t, e) {
-  let n = String(e);
-  return urlHasCredentials(n) && !isExpectedAuthError(t)
-    ? `${t instanceof Error ? t.name : typeof t} fetching ${redactUrlSecrets(n)}`
+/**
+ * 生成 fetch 错误描述。
+ */
+function describeFetchError(t, e) {
+  let url = String(e);
+  return urlHasCredentials(url) && !isExpectedAuthError(t)
+    ? `${t instanceof Error ? t.name : typeof t} fetching ${redactUrlSecrets(url)}`
     : errorMessage(t);
 }
 //@ chunk-yqnmafqp.js:5879-5945 placement
-function ct_yqnm(t) {
+/**
+ * 判断 URL 脱敏后是否与规范化形式一致。
+ */
+function urlAlreadyClean(t) {
   try {
     return redactUrlSecrets(t) === new URL(t).href;
   } catch {
-    return !1;
+    return false;
   }
 }
 //@ chunk-yqnmafqp.js:5945-6007 placement
-function yF(t, e) {
-  return describeFetchError(t, String(e), "from the MCP SDK for");
+/**
+ * 生成 MCP SDK 请求失败的描述。
+ */
+function describeSdkFetchError(error, url) {
+  return describeFetchError_2(error, String(url), "from the MCP SDK for");
 }
 //@ chunk-yqnmafqp.js:6007-6229 placement
-function describeFetchError(t, e, n) {
-  if (isExpectedAuthError(t) || ct_yqnm(e)) return errorMessage(t);
-  let o = t instanceof Error ? /\bHTTP (\d{3})\b/.exec(t.message)?.[1] : void 0,
-    r = extractConnectionErrorDetails(t)?.code;
-  return `${o ? `HTTP ${o}` : t instanceof Error ? t.name : typeof t} ${n} ${redactUrlSecrets(e)}${r ? ` (${r})` : ""}`;
+function describeFetchError_2(t, e, n) {
+  if (isExpectedAuthError(t) || urlAlreadyClean(e)) return errorMessage(t);
+  let o = t instanceof Error ? /\bHTTP (\d{3})\b/.exec(t.message)?.[1] : undefined;
+  let code = extractConnectionErrorDetails(t)?.code;
+  return `${o ? `HTTP ${o}` : t instanceof Error ? t.name : typeof t} ${n} ${redactUrlSecrets(e)}${code ? ` (${code})` : ""}`;
 }
+//@ chunk-yqnmafqp.js:6229-6345 placement
 /**
  * 简要描述错误：可安全展示的直接用消息，否则只给错误类型与错误码。
  */
-//@ chunk-yqnmafqp.js:6229-6345 placement
-function describeErrorBrief(t) {
-  if (isExpectedAuthError(t)) return errorMessage(t);
-  let e = extractConnectionErrorDetails(t)?.code;
-  return `${t instanceof Error ? t.name : typeof t}${e ? ` (${e})` : ""}`;
+function describeErrorBrief(error) {
+  if (isExpectedAuthError(error)) return errorMessage(error);
+  let code = extractConnectionErrorDetails(error)?.code;
+  return `${error instanceof Error ? error.name : typeof error}${code ? ` (${code})` : ""}`;
 }
+//@ chunk-yqnmafqp.js:6345-6547 placement = expandEnvVars (0.824)
 /**
  * describeConnectError：连接错误描述，远程传输附带 URL（拨号阶段）。
  */
-//@ chunk-yqnmafqp.js:6345-6547 placement = expandEnvVars (0.824)
-function describeConnectError(t, e) {
+function describeConnectError(error, e) {
   switch (e.type) {
     case "ws":
     case "ws-ide":
@@ -5507,196 +6342,239 @@ function describeConnectError(t, e) {
     case "sse-ide":
     case "http":
     case "claudeai-proxy":
-      return describeFetchError(t, e.url, "dialing");
-    case void 0:
+      return describeFetchError_2(error, e.url, "dialing");
+    case undefined:
     case "stdio":
     case "sdk":
-      return errorMessage(t);
+      return errorMessage(error);
     default:
       return e;
   }
 }
 //@ chunk-yqnmafqp.js:6547-6599 placement
-function JHe(t, e) {
-  let n = describeConnectError(t, e);
-  return n === errorMessage(t) ? t : n;
+/**
+ * 连接错误里含凭据时抛脱敏后的错误。
+ */
+function rethrowRedactedConnectError(error, serverRef) {
+  let n = describeConnectError(error, serverRef);
+  return n === errorMessage(error) ? error : n;
 }
+//@ chunk-yqnmafqp.js:6599-6738 placement
 /**
  * fetch 出错时若 URL 含凭据，抛出不含凭据的 TypeError（保留错误码），否则原样抛出。
  */
-//@ chunk-yqnmafqp.js:6599-6738 placement
-function rethrowRedactedFetchError(t, e) {
-  if (isExpectedAuthError(t)) throw t;
+function rethrowRedactedFetchError(error, e) {
+  if (isExpectedAuthError(error)) throw error;
   if (urlHasCredentials(String(e))) {
-    let n = extractConnectionErrorDetails(t)?.code;
-    throw Object.assign(TypeError(at_yqnm(t, e)), n === void 0 ? {} : { code: n });
+    let code = extractConnectionErrorDetails(error)?.code;
+    throw Object.assign(
+      TypeError(describeFetchError(error, e)),
+      code === undefined
+        ? {}
+        : {
+            code,
+          },
+    );
   }
-  throw t;
+  throw error;
 }
+//@ chunk-cyj440je.js:8407-8551 fingerprint = getServerKey (1)
 /**
  * getServerKey：OAuth 令牌存储键 "<name>|<sha256(type,url,headers) 前 16 位>"。
  */
-//@ chunk-cyj440je.js:8407-8551 fingerprint = getServerKey (1)
 function getServerKey(serverName, serverConfig) {
   let configJson = jsonStringify({
-      type: serverConfig.type,
-      url: serverConfig.url,
-      headers: serverConfig.headers || {},
-    }),
-    hash = createHash("sha256").update(configJson).digest("hex").substring(0, 16);
+    type: serverConfig.type,
+    url: serverConfig.url,
+    headers: serverConfig.headers || {},
+  });
+  let hash = createHash("sha256").update(configJson).digest("hex").substring(0, 16);
   return `${serverName}|${hash}`;
 }
+//@ chunk-cyj440je.js:8551-8634 layout
 /**
  * 判断请求头对象里是否有 Authorization 头（大小写不敏感）。
  */
-//@ chunk-cyj440je.js:8551-8634 layout
 function hasAuthorizationHeader(e) {
-  return Object.keys(e).some((r) => r.toLowerCase() === "authorization");
+  return Object.keys(e).some((key) => key.toLowerCase() === "authorization");
 }
+//@ chunk-cyj440je.js:8634-8675 layout
 /**
  * 判断 MCP 服务器配置的 headers 是否带 Authorization 头（带了就视为外部自带凭证，不走 OAuth）。
  */
-//@ chunk-cyj440je.js:8634-8675 layout
-function configHasAuthorizationHeader(e) {
-  return hasAuthorizationHeader(e.headers ?? {});
+function configHasAuthorizationHeader(config) {
+  return hasAuthorizationHeader(config.headers ?? {});
 }
 //@ chunk-cyj440je.js:8675-8724 layout
-var DESIGN_PATH_PREFIX = "/v1/design/",
-  FIRST_PARTY_MCP_PATH_PREFIXES = [DESIGN_PATH_PREFIX, "/v1/claude/test/", DOCS_MCP_PATH];
+var DESIGN_PATH_PREFIX = "/v1/design/";
+var FIRST_PARTY_MCP_PATH_PREFIXES = [DESIGN_PATH_PREFIX, "/v1/claude/test/", DOCS_MCP_PATH];
+//@ chunk-cyj440je.js:8724-8913 layout
 /**
  * isFirstPartyMcpUrl：https 且 Anthropic 域名下 /v1/design/、/v1/claude/test/ 等一方 MCP 路径。
  */
-//@ chunk-cyj440je.js:8724-8913 layout
-function isFirstPartyMcpUrl(e) {
+function isFirstPartyMcpUrl(url) {
   try {
-    let r = new URL(e);
-    if (r.protocol !== "https:" || !isFirstPartyAnthropicHost(r.href)) return !1;
+    let r = new URL(url);
+    if (r.protocol !== "https:" || !isFirstPartyAnthropicHost(r.href)) return false;
     if (
       FIRST_PARTY_MCP_PATH_PREFIXES.some((o) =>
         o.endsWith("/") ? r.pathname.startsWith(o) : r.pathname === o,
       )
     )
-      return !0;
-    return !1;
+      return true;
+    return false;
   } catch {
-    return !1;
+    return false;
   }
 }
+//@ chunk-cyj440je.js:8913-9004 layout
 /**
  * 判断 URL 是否是一方 MCP 网关上的 Design 连接器路径（一方 MCP 主机且 path 以 Design 前缀开头）；解析失败返回 false。
  */
-//@ chunk-cyj440je.js:8913-9004 layout
-function isDesignMcpUrl(e) {
+function isDesignMcpUrl(url) {
   try {
-    let r = new URL(e);
+    let r = new URL(url);
     return isFirstPartyMcpUrl(r) && r.pathname.startsWith(DESIGN_PATH_PREFIX);
   } catch {
-    return !1;
+    return false;
   }
 }
+//@ chunk-cyj440je.js:9004-9159 layout
 /**
  * usesNonOAuthAuth：XAA、自定义 headers/headersHelper 或一方登录的服务器（不走标准 OAuth 发现）。
  */
-//@ chunk-cyj440je.js:9004-9159 layout
 function usesNonOAuthAuth(e) {
-  if (isXaaEnabled() && e.oauth?.xaa) return !0;
-  if (e.headersHelper || (e.headers && Object.keys(e.headers).length > 0)) return !0;
-  if (isFirstPartyMcpUrl(e.url) && isFirstPartyProvider()) return !0;
-  return !1;
+  if (isXaaEnabled() && e.oauth?.xaa) return true;
+  if (e.headersHelper || (e.headers && Object.keys(e.headers).length > 0)) return true;
+  if (isFirstPartyMcpUrl(e.url) && isFirstPartyProvider()) return true;
+  return false;
 }
+//@ chunk-cyj440je.js:9159-9217 layout
 /**
  * 判断服务器是否已有"外部认证"：配置了 Authorization 头、或是 CCR 托管配置、或是一方 MCP URL 且已一方登录并允许使用；有则跳过 OAuth 流程。
  */
-//@ chunk-cyj440je.js:9159-9217 layout
-function hasExternalAuthForConfig(e, r) {
+function hasExternalAuthForConfig(config, r) {
   return (
-    configHasAuthorizationHeader(e) || Zl(e) || (isFirstPartyMcpUrl(e.url) && isFirstPartyProvider() && r)
+    configHasAuthorizationHeader(config) ||
+    isCliOwnedConfig(config) ||
+    (isFirstPartyMcpUrl(config.url) && isFirstPartyProvider() && r)
   );
 }
+//@ chunk-cyj440je.js:9217-9322 layout
 /**
  * 异步判断安全存储里某服务器是否保存了 refresh token（存储为特殊哨兵值时视为有）；用于决定能否静默刷新而不是标记 needs-auth。
  */
-//@ chunk-cyj440je.js:9217-9322 layout
 async function hasStoredRefreshToken(e, r) {
-  let o = await readSecureStorageForMcp();
-  if (o === READ_FAILED) return !0;
-  return !!o?.mcpOAuth?.[getServerKey(e, r)]?.refreshToken;
+  let secureStorageForMcp = await readSecureStorageForMcp();
+  if (secureStorageForMcp === READ_FAILED) return true;
+  return !!secureStorageForMcp?.mcpOAuth?.[getServerKey(e, r)]?.refreshToken;
 }
+//@ chunk-cyj440je.js:9322-9454 fingerprint = hasMcpDiscoveryButNoToken (0.717)
 /**
  * hasMcpDiscoveryButNoToken：存储里有发现状态但没有访问令牌。
  */
-//@ chunk-cyj440je.js:9322-9454 fingerprint = hasMcpDiscoveryButNoToken (0.717)
 async function hasMcpDiscoveryButNoToken(serverName, serverConfig) {
-  let o = await readSecureStorageForMcp();
-  if (o === READ_FAILED) return READ_FAILED;
-  let entry = o?.mcpOAuth?.[getServerKey(serverName, serverConfig)];
+  let secureStorageForMcp = await readSecureStorageForMcp();
+  if (secureStorageForMcp === READ_FAILED) return READ_FAILED;
+  let entry = secureStorageForMcp?.mcpOAuth?.[getServerKey(serverName, serverConfig)];
   return !!entry?.accessToken || !!entry?.refreshToken;
 }
 //@ chunk-4w0z5wdp.js:335-418 placement
-var i = ["microsoft365.mcp.claude.com", "gmail.mcp.claude.com", "gcal.mcp.claude.com"];
+/**
+ * 不提供本地 OAuth 的托管 MCP 主机名。
+ */
+var LOCAL_OAUTH_BLOCKED_HOSTS = [
+  "microsoft365.mcp.claude.com",
+  "gmail.mcp.claude.com",
+  "gcal.mcp.claude.com",
+];
 //@ chunk-4w0z5wdp.js:418-473 placement
-function p(t) {
-  return t.toLowerCase().replace(/\.$/, "");
+function normalizeHostname(hostname) {
+  return hostname.toLowerCase().replace(/\.$/, "");
 }
 //@ chunk-4w0z5wdp.js:473-708 placement
 function localOAuthBlockedHosts() {
-  let t = getFeatureValue_CACHED_MAY_BE_STALE("tengu_mcp_local_oauth_blocked_hosts", { hosts: i }),
-    e = i;
-  if (t !== null && typeof t === "object" && "hosts" in t && Array.isArray(t.hosts)) {
-    let filtered = t.hosts.filter((host) => typeof host === "string");
+  let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE(
+    "tengu_mcp_local_oauth_blocked_hosts",
+    {
+      hosts: LOCAL_OAUTH_BLOCKED_HOSTS,
+    },
+  );
+  let e = LOCAL_OAUTH_BLOCKED_HOSTS;
+  if (
+    featureValue_CACHED_MAY_BE_STALE !== null &&
+    typeof featureValue_CACHED_MAY_BE_STALE === "object" &&
+    "hosts" in featureValue_CACHED_MAY_BE_STALE &&
+    Array.isArray(featureValue_CACHED_MAY_BE_STALE.hosts)
+  ) {
+    let filtered = featureValue_CACHED_MAY_BE_STALE.hosts.filter((host) => typeof host === "string");
     if (filtered.length > 0) e = filtered;
   }
-  return new Set(e.map(p));
+  return new Set(e.map(normalizeHostname));
 }
 //@ chunk-4w0z5wdp.js:708-804 placement
-function c(t) {
-  if (!t) return !1;
+/**
+ * 判断主机是否属于不允许本地 OAuth 的托管服务。
+ */
+function isLocalOAuthBlockedHost(url) {
+  if (!url) return false;
   try {
-    let e = p(new URL(t).hostname);
+    let e = normalizeHostname(new URL(url).hostname);
     return localOAuthBlockedHosts().has(e);
   } catch {
-    return !1;
+    return false;
   }
 }
+//@ chunk-4w0z5wdp.js:804-1195 placement
 /**
  * Anthropic 托管 MCP 服务器不支持本地 OAuth 时的提示：请在 claude.ai 连接器中连接，可附带移除旧配置的命令。
  */
-//@ chunk-4w0z5wdp.js:804-1195 placement
-function anthropicHostedOAuthMessage(t, e = {}) {
+function anthropicHostedOAuthMessage(serverName, e = {}) {
   let o =
-      `"${uo(t)}" is Anthropic-hosted and doesn't support local OAuth. ` +
-      "Connect it via Settings \u2192 Connectors on claude.ai (requires " +
-      "`claude login`), then it'll be available here automatically.",
-    r =
-      e.scope === "local" || e.scope === "project" || e.scope === "user"
-        ? claudeCommand("mcp remove", t)
-        : null,
-    s = r ? `${o} Remove the stale entry with: \`${r}\`` : o;
+    `"${normalizeServerNameShort(serverName)}" is Anthropic-hosted and doesn't support local OAuth. ` +
+    "Connect it via Settings \u2192 Connectors on claude.ai (requires " +
+    "`claude login`), then it'll be available here automatically.";
+  let r =
+    e.scope === "local" || e.scope === "project" || e.scope === "user"
+      ? claudeCommand("mcp remove", serverName)
+      : null;
+  let s = r ? `${o} Remove the stale entry with: \`${r}\`` : o;
   return r && [...s].length <= 1024 ? s : o;
 }
+//@ chunk-4w0z5wdp.js:1195-1820 placement
 /**
  * 判断一个 MCP 服务器能否在本地做 OAuth：claude.ai 代理、非 HTTP 传输、Anthropic 托管（附去 claude.ai 连接的提示）、云服务注入的服务器，或普通 oauth。
  */
-//@ chunk-4w0z5wdp.js:1195-1820 placement
 function classifyMcpAuthTarget(serverName, config) {
-  if (config.type === "claudeai-proxy") return { kind: "claudeai-proxy", config: config };
+  if (config.type === "claudeai-proxy")
+    return {
+      kind: "claudeai-proxy",
+      config,
+    };
   if (config.type !== "sse" && config.type !== "http")
-    return { kind: "unsupported-transport", transport: config.type ?? "stdio" };
-  if (c(config.url))
+    return {
+      kind: "unsupported-transport",
+      transport: config.type ?? "stdio",
+    };
+  if (isLocalOAuthBlockedHost(config.url))
     return {
       kind: "anthropic-hosted",
-      config: config,
-      message: anthropicHostedOAuthMessage(serverName, { scope: config.scope }),
+      config,
+      message: anthropicHostedOAuthMessage(serverName, {
+        scope: config.scope,
+      }),
     };
   if (isCcrInjectedMcpUrl(serverName, config))
     return {
       kind: "anthropic-hosted",
-      config: config,
-      message: `"${uo(serverName)}" is provided to this session by Claude Code's cloud service, which holds its sign-in, so it can't be signed in to from here. If it is one of your claude.ai connectors, reconnect it under Settings \u2192 Connectors on claude.ai and then start a new session.`,
+      config,
+      message: `"${normalizeServerNameShort(serverName)}" is provided to this session by Claude Code's cloud service, which holds its sign-in, so it can't be signed in to from here. If it is one of your claude.ai connectors, reconnect it under Settings \u2192 Connectors on claude.ai and then start a new session.`,
     };
-  return { kind: "oauth", config: config };
+  return {
+    kind: "oauth",
+    config,
+  };
 }
-
 export {
   describeErrorBrief,
   isFirstPartyMcpUrl,
@@ -5712,7 +6590,7 @@ export {
   wrapFetchWithStepUpDetection_2,
   redactHeaders,
   describeConnectError,
-  JHe,
+  rethrowRedactedConnectError,
   performMCPOAuthFlow_2,
   clearMcpOAuthStubIfTokenless_2,
   redactSensitiveUrlParams,
@@ -5722,14 +6600,14 @@ export {
   classifyMcpAuthTarget,
   hasMcpDiscoveryButNoToken,
   hasExternalAuthForConfig,
-  m,
-  p_yqnm,
-  Y,
-  R,
-  A,
+  anySegmentTokenLike,
+  looksRandomToken,
+  SEPARATOR_SPLIT_RE,
+  isEncodedUrl,
+  hasEmbeddedSecret,
   safeDecodeURIComponent,
   userinfoAtIndex,
   looksLikeUrlWithScheme,
-  tt_yqnm,
-  x,
+  HEADER_SEPARATOR_RE,
+  redactUnlessSafe,
 };

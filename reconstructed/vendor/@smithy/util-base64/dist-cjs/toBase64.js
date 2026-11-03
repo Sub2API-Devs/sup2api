@@ -6,24 +6,31 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { UQt } from "../../util-buffer-from/dist-cjs/index.js";
-import { IR } from "../../util-utf8/dist-cjs/index.js";
+import { require_util_buffer_from } from "../../util-buffer-from/dist-cjs/index.js";
+import { require_util_utf8 } from "../../util-utf8/dist-cjs/index.js";
 
 //@ chunk-wr8v03d0.js:1939-2388 cjs-fingerprint
-var H = x(function (S) {
-  Object.defineProperty(S, "__esModule", { value: !0 });
-  S.toBase64 = void 0;
-  var L = UQt(),
-    _ = IR(),
-    se = (e) => {
-      let r;
-      if (typeof e === "string") r = _.fromUtf8(e);
-      else r = e;
-      if (typeof r !== "object" || typeof r.byteOffset !== "number" || typeof r.byteLength !== "number")
-        throw Error("@smithy/util-base64: toBase64 encoder function only accepts string | Uint8Array.");
-      return L.fromArrayBuffer(r.buffer, r.byteOffset, r.byteLength).toString("base64");
-    };
-  S.toBase64 = se;
+var require_toBase64 = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.toBase64 = undefined;
+  var util_buffer_from_1 = require_util_buffer_from();
+  var util_utf8_1 = require_util_utf8();
+  var toBase64 = (_input) => {
+    let input;
+    if (typeof _input === "string") input = util_utf8_1.fromUtf8(_input);
+    else input = _input;
+    if (
+      typeof input !== "object" ||
+      typeof input.byteOffset !== "number" ||
+      typeof input.byteLength !== "number"
+    )
+      throw Error("@smithy/util-base64: toBase64 encoder function only accepts string | Uint8Array.");
+    return util_buffer_from_1
+      .fromArrayBuffer(input.buffer, input.byteOffset, input.byteLength)
+      .toString("base64");
+  };
+  cjsExports.toBase64 = toBase64;
 });
-
-export { H };
+export { require_toBase64 };

@@ -9,7 +9,7 @@
  * attribution: placement 3
  */
 import { DoctorLazy } from "../cli/handlers/util.js";
-import { u, o } from "../../vendor/zod/v4/classic/schemas.js";
+import { u, string } from "../../vendor/zod/v4/classic/schemas.js";
 import { logForDebugging } from "./debug.js";
 import { errorMessage } from "./errors.js";
 import { logFeatureSad, logFeatureOk } from "../services/analytics/featureTelemetry.js";
@@ -20,47 +20,56 @@ import { readDeviceKeyOutcome, createClientEventSigner } from "../bridge/clientE
 
 //@ chunk-fwcps4x0.js:5673-5818 placement
 var SessionSecuritySchema = DoctorLazy(() => {
-  let e = u({ security_tier: o().nullish(), bound_device_uuid: o().nullish() });
-  return u({ response_shape: e.nullish(), session: e.nullish() });
+  let e = u({
+    security_tier: string().nullish(),
+    bound_device_uuid: string().nullish(),
+  });
+  return u({
+    response_shape: e.nullish(),
+    session: e.nullish(),
+  });
 });
 //@ chunk-fwcps4x0.js:5818-5995 placement
 async function signForElevatedPeer(e, i, n, a) {
-  let r = createPeerSendSigner(e, a).catch((s) => {
-    (logForDebugging(`[peerSendSigner] event not signed: ${errorMessage(s)}`, { level: "warn" }),
-      logFeatureSad("peer_send_signer", "unavailable"));
+  let r = createPeerSendSigner(e, a).catch((error) => {
+    logForDebugging(`[peerSendSigner] event not signed: ${errorMessage(error)}`, {
+      level: "warn",
+    });
+    logFeatureSad("peer_send_signer", "unavailable");
     return;
   });
   return signClientEvent(r, i, n);
 }
+//@ chunk-fwcps4x0.js:5995-6658 placement
 /**
  * 创建跨会话发送签名器（账号、所有者、设备密钥校验）。
  */
-//@ chunk-fwcps4x0.js:5995-6658 placement
 async function createPeerSendSigner(e, i) {
-  let n = await resolveCurrentDeviceBinding(i);
-  if (n.status === "mismatch") {
+  let currentDeviceBinding = await resolveCurrentDeviceBinding(i);
+  if (currentDeviceBinding.status === "mismatch") {
     logFeatureSad("peer_send_signer", "account_mismatch");
     return;
   }
-  if (n.status !== "resolved") {
+  if (currentDeviceBinding.status !== "resolved") {
     logFeatureSad("peer_send_signer", "no_account");
     return;
   }
   let a = bridgeOwnerAccount();
-  if (a && a.accountUuid.toLowerCase() !== n.accountUuid.toLowerCase()) {
+  if (a && a.accountUuid.toLowerCase() !== currentDeviceBinding.accountUuid.toLowerCase()) {
     logFeatureSad("peer_send_signer", "owner_mismatch");
     return;
   }
-  let r = await readDeviceKeyOutcome(n.accountUuid, i);
-  if (r.status !== "loaded") return;
-  let safeParse = SessionSecuritySchema().safeParse(await e()),
-    c = safeParse.success ? (safeParse.data.response_shape ?? safeParse.data.session) : void 0;
+  let deviceKeyOutcome = await readDeviceKeyOutcome(currentDeviceBinding.accountUuid, i);
+  if (deviceKeyOutcome.status !== "loaded") return;
+  let s = SessionSecuritySchema().safeParse(await e());
+  let c = s.success ? (s.data.response_shape ?? s.data.session) : undefined;
   if (c?.security_tier !== "elevated") return;
-  let lower = r.rowPk.toLowerCase(),
-    m = c.bound_device_uuid?.toLowerCase();
-  if (m && m !== lower) {
+  let lower = deviceKeyOutcome.rowPk.toLowerCase();
+  let lower_2 = c.bound_device_uuid?.toLowerCase();
+  if (lower_2 && lower_2 !== lower) {
     logFeatureSad("peer_send_signer", "bound_elsewhere");
     return;
   }
-  return (logFeatureOk("peer_send_signer"), createClientEventSigner(lower, r.key));
+  logFeatureOk("peer_send_signer");
+  return createClientEventSigner(lower, deviceKeyOutcome.key);
 }

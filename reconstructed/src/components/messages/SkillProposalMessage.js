@@ -8,7 +8,10 @@
  * pieces: chunk-ah34pb7m.js (5)
  * attribution: placement 5
  */
-import { e, r } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { MessageResponse } from "../MessageResponse.js";
 import { Text, Box } from "../../ink/components/Text.js";
 import { stripNonPrintable } from "../../utils/truncateGraphemes.js";
@@ -33,8 +36,8 @@ import { ASKUSERQUESTION } from "../../tools/AskUserQuestionTool/prompt.js";
 import {
   AskUserQuestionResult,
   AskUserQuestionDeclined,
-  iM,
-  lM,
+  renderNoToolUseProgress,
+  renderNoToolUseError,
 } from "../../tools/AskUserQuestionTool/UI.js";
 import { BRIEF_TOOL_NAME } from "../../tools/BriefTool/prompt.js";
 import { EXITPLANMODE_2 } from "../../tools/ExitPlanModeTool/constants.js";
@@ -62,7 +65,13 @@ import { FallbackToolUseRejectedMessage } from "../FallbackToolUseRejectedMessag
 import { WEBSEARCH } from "../../tools/WebSearchTool/prompt.js";
 import { renderToolResultMessage_9, renderToolUseProgressMessage_4 } from "../../tools/WebSearchTool/UI.js";
 import { REPORTFINDINGS } from "../../tools/ReportFindingsTool/constants.js";
-import { renderFindingsResult, yM, TM, MM, EM } from "../../tools/ReportFindingsTool/UI.js";
+import {
+  renderFindingsResult,
+  noFindingError,
+  noFindingToolUseMessage,
+  noFindingProgressMessage,
+  noFindingResultMessage,
+} from "../../tools/ReportFindingsTool/UI.js";
 import { SKILL } from "../../tools/SkillTool/skillToolNames.js";
 import {
   LSP_TOOL_NAME,
@@ -75,11 +84,20 @@ import {
   renderMcpResourceListResult,
   renderMcpResourceDirResult,
 } from "../../tools/ListMcpResourcesTool/UI.js";
-import { HM, KM, renderMonitorStarted, PushNotificationResult } from "../../tools/MonitorTool/UI.js";
+import {
+  exceedsMonitorLineLimit,
+  exceedsPushNotificationLineLimit,
+  renderMonitorStarted,
+  PushNotificationResult,
+} from "../../tools/MonitorTool/UI.js";
 import { READ_MCP_RESOURCE_DIR_TOOL_NAME } from "../../tools/ReadMcpResourceDirTool/prompt.js";
 import { READMCPRESOURCETOOL } from "../../tools/ReadMcpResourceTool/prompt.js";
 import { renderToolResultMessage_5 } from "../../tools/ReadMcpResourceTool/UI.js";
-import { YM, renderNotificationsResult, renderHttpStatusLine } from "../../tools/NotificationsTool/UI.js";
+import {
+  exceedsNotificationsLineLimit,
+  renderNotificationsResult,
+  renderHttpStatusLine,
+} from "../../tools/NotificationsTool/UI.js";
 import { READNOTIFICATIONS } from "../../tools/ReadNotificationsTool/ReadNotificationsTool.js";
 import { ENTER_PLAN_MODE_TOOL_NAME } from "../../tools/EnterPlanModeTool/constants.js";
 import { EnterPlanModeResult, PlanModeDeclinedMessage } from "../../tools/EnterPlanModeTool/UI.js";
@@ -98,7 +116,7 @@ import {
   renderCronList,
 } from "../../tools/ScheduleCronTool/UI.js";
 import { REMOTETRIGGER } from "../../tools/RemoteTriggerTool/prompt.js";
-import { MCP, MCP_DISPLAY_ONLY } from "../../tools/MCPTool/MCPTool.js";
+import { MCP_UI_TABLE_KEY, MCP_DISPLAY_ONLY } from "../../tools/MCPTool/MCPTool.js";
 import {
   renderMcpToolResultMessage,
   renderToolUseProgressMessage as renderToolUseProgressMessage_5,
@@ -121,29 +139,56 @@ import { COMPUTER_USE_MCP_SERVER_NAME } from "../../utils/computerUse/common.js"
 //@ chunk-ah34pb7m.js:256269-256563 placement
 function renderFileOpResult(m) {
   if (typeof m === "string")
-    return e(MessageResponse, { children: e(Text, { dimColor: !0, children: stripNonPrintable(m) }) });
-  let filtered = m.files.filter((file) => file.error !== void 0);
-  return r(MessageResponse, {
+    return jsxProd_default(MessageResponse, {
+      children: jsxProd_default(Text, {
+        dimColor: true,
+        children: stripNonPrintable(m),
+      }),
+    });
+  let filtered = m.files.filter((file) => file.error !== undefined);
+  return jsxProd_default_2(MessageResponse, {
     children: [
-      e(Text, { dimColor: !0, children: stripNonPrintable(m.message) }),
+      jsxProd_default(Text, {
+        dimColor: true,
+        children: stripNonPrintable(m.message),
+      }),
       filtered.map((c) =>
-        r(Text, { color: "warning", children: ["  ", stripNonPrintable(`${c.path}: ${c.error}`)] }, c.path),
+        jsxProd_default_2(
+          Text,
+          {
+            color: "warning",
+            children: ["  ", stripNonPrintable(`${c.path}: ${c.error}`)],
+          },
+          c.path,
+        ),
       ),
     ],
   });
 }
 //@ chunk-ah34pb7m.js:256563-256810 placement
 function renderAttachmentCaption(m) {
-  return r(Box, {
+  return jsxProd_default_2(Box, {
     flexDirection: "row",
     marginTop: 1,
     children: [
-      e(Box, { minWidth: 2, children: e(Text, { color: "text", children: BLACK_CIRCLE }) }),
-      r(Box, {
+      jsxProd_default(Box, {
+        minWidth: 2,
+        children: jsxProd_default(Text, {
+          color: "text",
+          children: BLACK_CIRCLE,
+        }),
+      }),
+      jsxProd_default_2(Box, {
         flexDirection: "column",
         children: [
-          m.caption ? e(Text, { children: m.caption }) : null,
-          e(AttachmentList, { attachments: m.attachments }),
+          m.caption
+            ? jsxProd_default(Text, {
+                children: m.caption,
+              })
+            : null,
+          jsxProd_default(AttachmentList, {
+            attachments: m.attachments,
+          }),
         ],
       }),
     ],
@@ -151,322 +196,412 @@ function renderAttachmentCaption(m) {
 }
 //@ chunk-ah34pb7m.js:256810-256923 placement
 function renderRolePickerResult(m) {
-  return e(MessageResponse, {
-    children: e(Text, { children: m.role !== void 0 ? `Role: ${m.role}` : "Role picker dismissed" }),
+  return jsxProd_default(MessageResponse, {
+    children: jsxProd_default(Text, {
+      children: m.role !== undefined ? `Role: ${m.role}` : "Role picker dismissed",
+    }),
   });
 }
 //@ chunk-ah34pb7m.js:256923-257050 placement
 function renderSkillProposalResult(m) {
-  return e(Text, {
+  return jsxProd_default(Text, {
     children: `Shown ${m.proposalCount} ${plural(m.proposalCount, "skill proposal")} to the user for review`,
   });
 }
+//@ chunk-ah34pb7m.js:257050-265304 placement
 /**
  * 工具名到 UI 模块的映射（MCP 注册表搜索、连接器建议、Artifact、工作流等）。
  */
-//@ chunk-ah34pb7m.js:257050-265304 placement
 var SEARCH_MCP_REGISTRY_TOOL_UI = {
-    name: require("./chunk-1rsxrh43.js").SEARCH_MCP_REGISTRY_TOOL_NAME,
-    ui: require("./chunk-24trdjma.js"),
+  name: require("./chunk-1rsxrh43.js").SEARCH_MCP_REGISTRY_TOOL_NAME,
+  ui: require("./chunk-24trdjma.js"),
+};
+var SUGGEST_CONNECTORS_TOOL_UI = {
+  name: require("./chunk-69v1fc7x.js").SUGGEST_CONNECTORS_TOOL_NAME,
+  ui: require("./chunk-xw402a7j.js"),
+};
+var disabledToolUi_1 = null;
+var disabledToolUi_2 = null;
+var LIST_CONNECTORS_TOOL_UI = {
+  name: require("./chunk-gkmh922z.js").LIST_CONNECTORS_TOOL_NAME,
+  ui: require("./chunk-jrhqpnjr.js"),
+};
+var disabledToolUi_3 = null;
+var disabledToolUi_4 = null;
+var disabledToolUi_5 = null;
+var FETCH_INBOX_MESSAGE_TOOL_UI = {
+  name: require("./chunk-dkev0ya5.js").FETCH_INBOX_MESSAGE_TOOL_NAME,
+  ui: require("./chunk-w3kk5zb6.js"),
+};
+var disabledToolUi_6 = null;
+var WORKFLOW_TOOL_UI = {
+  name: require("./chunk-5xj1j2bn.js").WORKFLOW_TOOL_NAME,
+  ui: require("./chunk-9hy503gy.js"),
+};
+var disabledToolUi_7 = null;
+var toolUiModule = require("./chunk-scv4whf4.js");
+var disabledToolUi_8 = null;
+var disabledToolUi_9 = null;
+var ARTIFACT_TOOL_UI = {
+  name: require("./chunk-ecvm5qmk.js").ARTIFACT_TOOL_NAME,
+  names: require("./chunk-ecvm5qmk.js"),
+  ui: require("./chunk-wc0ezwp2.js"),
+};
+var END_CONVERSATION_TOOL_UI = {
+  name: require("./chunk-jbpmz76b.js").END_CONVERSATION_TOOL_NAME,
+  ui: require("./chunk-cckztz9w.js"),
+};
+var GROUPED_TOOL_USE_RENDERERS = {
+  [AGENT]: {
+    renderGroupedToolUse: renderGroupedAgentToolUse,
+    renderToolResultMessage,
+    renderToolUseErrorMessage,
+    renderToolUseProgressMessage,
+    renderToolUseRejectedMessage,
+    renderToolUseTag,
+    userFacingNameBackgroundColor,
   },
-  Hh = {
-    name: require("./chunk-69v1fc7x.js").SUGGEST_CONNECTORS_TOOL_NAME,
-    ui: require("./chunk-xw402a7j.js"),
+  get [BASH_TOOL_NAME]() {
+    let m = require("./chunk-ncbkecaq.js");
+    return {
+      renderToolResultMessage: m.renderToolResultMessage,
+      renderToolUseProgressMessage: m.renderToolUseProgressMessage,
+      renderToolUseQueuedMessage: m.renderToolUseQueuedMessage,
+      renderToolUseErrorMessage: m.renderToolUseErrorMessage,
+      isResultTruncated: m.isResultTruncated,
+    };
   },
-  qm = null,
-  $h = null,
-  Gh = { name: require("./chunk-gkmh922z.js").LIST_CONNECTORS_TOOL_NAME, ui: require("./chunk-jrhqpnjr.js") },
-  qh = null,
-  bo = null,
-  Kh = null,
-  Vh = {
-    name: require("./chunk-dkev0ya5.js").FETCH_INBOX_MESSAGE_TOOL_NAME,
-    ui: require("./chunk-w3kk5zb6.js"),
+  [TASKSTOP]: {
+    renderToolResultMessage: renderToolResultMessage_8,
   },
-  Km = null,
-  Vm = { name: require("./chunk-5xj1j2bn.js").WORKFLOW_TOOL_NAME, ui: require("./chunk-9hy503gy.js") },
-  Ym = null,
-  Ho = require("./chunk-scv4whf4.js"),
-  zm = null,
-  Qm = null,
-  hs = {
-    name: require("./chunk-ecvm5qmk.js").ARTIFACT_TOOL_NAME,
-    names: require("./chunk-ecvm5qmk.js"),
-    ui: require("./chunk-wc0ezwp2.js"),
+  [ASKUSERQUESTION]: {
+    renderToolResultMessage: AskUserQuestionResult,
+    renderToolUseRejectedMessage: AskUserQuestionDeclined,
+    renderToolUseProgressMessage: renderNoToolUseProgress,
+    renderToolUseErrorMessage: renderNoToolUseError,
   },
-  Yh = {
-    name: require("./chunk-jbpmz76b.js").END_CONVERSATION_TOOL_NAME,
-    ui: require("./chunk-cckztz9w.js"),
+  [BRIEF_TOOL_NAME]: {
+    renderToolResultMessage: renderToolResultMessage_6,
   },
-  zh = {
-    [AGENT]: {
-      renderGroupedToolUse: renderGroupedAgentToolUse,
-      renderToolResultMessage: renderToolResultMessage,
-      renderToolUseErrorMessage: renderToolUseErrorMessage,
-      renderToolUseProgressMessage: renderToolUseProgressMessage,
-      renderToolUseRejectedMessage: renderToolUseRejectedMessage,
-      renderToolUseTag: renderToolUseTag,
-      userFacingNameBackgroundColor: userFacingNameBackgroundColor,
-    },
-    get [BASH_TOOL_NAME]() {
-      let m = require("./chunk-ncbkecaq.js");
-      return {
-        renderToolResultMessage: m.renderToolResultMessage,
-        renderToolUseProgressMessage: m.renderToolUseProgressMessage,
-        renderToolUseQueuedMessage: m.renderToolUseQueuedMessage,
-        renderToolUseErrorMessage: m.renderToolUseErrorMessage,
-        isResultTruncated: m.isResultTruncated,
-      };
-    },
-    [TASKSTOP]: { renderToolResultMessage: renderToolResultMessage_8 },
-    [ASKUSERQUESTION]: {
-      renderToolResultMessage: AskUserQuestionResult,
-      renderToolUseRejectedMessage: AskUserQuestionDeclined,
-      renderToolUseProgressMessage: iM,
-      renderToolUseErrorMessage: lM,
-    },
-    [BRIEF_TOOL_NAME]: { renderToolResultMessage: renderToolResultMessage_6 },
-    [EXITPLANMODE_2]: {
-      renderToolResultMessage: renderToolResultMessage_10,
-      renderToolUseRejectedMessage: renderToolUseRejectedMessage_2,
-    },
-    get [FILE_EDIT_TOOL_NAME]() {
-      let m = require("./chunk-smaqkhx4.js");
-      return {
-        renderToolResultMessage: m.renderToolResultMessage,
-        renderToolUseRejectedMessage: m.renderToolUseRejectedMessage,
-        renderToolUseErrorMessage: m.renderToolUseErrorMessage,
-      };
-    },
-    get [FILE_WRITE_TOOL_NAME]() {
-      let m = require("./chunk-5t7pjfd2.js");
-      return {
-        renderToolResultMessage: m.renderToolResultMessage,
-        renderToolUseRejectedMessage: m.renderToolUseRejectedMessage,
-        renderToolUseErrorMessage: m.renderToolUseErrorMessage,
-        isResultTruncated: m.isResultTruncated,
-      };
-    },
-    get [MEMORY_WRITE]() {
-      let m = require("./chunk-x5e9ztk0.js");
-      return {
-        renderToolResultMessage: m.renderToolResultMessage,
-        renderToolUseErrorMessage: m.renderToolUseErrorMessage,
-        isResultTruncated: m.isResultTruncated,
-      };
-    },
-    get [FILE_READ_TOOL_NAME]() {
-      let m = require("./chunk-nc07tp5s.js");
-      return {
-        renderToolResultMessage: m.renderToolResultMessage,
-        renderToolUseErrorMessage: m.renderToolUseErrorMessage,
-        renderToolUseTag: m.renderToolUseTag,
-      };
-    },
-    get [NOTEBOOK_EDIT_TOOL_NAME]() {
-      let m = require("./chunk-q466qetm.js");
-      return {
-        renderToolResultMessage: m.renderToolResultMessage,
-        renderToolUseRejectedMessage: m.renderToolUseRejectedMessage,
-        renderToolUseErrorMessage: m.renderToolUseErrorMessage,
-      };
-    },
-    get [POWERSHELL_TOOL_NAME]() {
-      let m = require("./chunk-hkh7sq9y.js");
-      return {
-        renderToolResultMessage: m.renderToolResultMessage,
-        renderToolUseErrorMessage: m.renderToolUseErrorMessage,
-        renderToolUseProgressMessage: m.renderToolUseProgressMessage,
-        renderToolUseQueuedMessage: m.renderToolUseQueuedMessage,
-        isResultTruncated: m.isResultTruncated,
-      };
-    },
-    [GREP_TOOL_NAME]: {
-      renderToolResultMessage: renderToolResultMessage_3,
-      renderToolUseErrorMessage: renderToolUseErrorMessage_3,
-    },
-    [GLOB_TOOL_NAME]: {
-      renderToolResultMessage: renderToolResultMessage_3,
-      renderToolUseErrorMessage: renderToolUseErrorMessage_3,
-    },
-    [WEBFETCH]: {
-      renderToolResultMessage: renderToolResultMessage_11,
-      renderToolUseProgressMessage: FallbackToolUseRejectedMessage,
-    },
-    [WEBSEARCH]: {
-      renderToolResultMessage: renderToolResultMessage_9,
-      renderToolUseProgressMessage: renderToolUseProgressMessage_4,
-    },
-    [REPORTFINDINGS]: { renderToolResultMessage: renderFindingsResult },
-    get [SKILL]() {
-      let m = require("./chunk-8ndmcarc.js");
-      return {
-        renderToolResultMessage: m.renderToolResultMessage,
-        renderToolUseProgressMessage: m.renderToolUseProgressMessage,
-        renderToolUseRejectedMessage: m.renderToolUseRejectedMessage,
-        renderToolUseErrorMessage: m.renderToolUseErrorMessage,
-      };
-    },
-    [LSP_TOOL_NAME]: {
-      renderToolResultMessage: renderToolResultMessage_4,
-      renderToolUseErrorMessage: renderToolUseErrorMessage_2,
-    },
-    [REPL_TOOL_NAME]: {
-      renderToolUseErrorMessage: yM,
-      renderToolUseProgressMessage: TM,
-      renderToolUseRejectedMessage: MM,
-    },
-    [LISTMCPRESOURCESTOOL]: { renderToolResultMessage: renderMcpResourceListResult, isResultTruncated: HM },
-    [READ_MCP_RESOURCE_DIR_TOOL_NAME]: {
-      renderToolResultMessage: renderMcpResourceDirResult,
-      isResultTruncated: KM,
-    },
-    [READMCPRESOURCETOOL]: { renderToolResultMessage: renderToolResultMessage_5, isResultTruncated: YM },
-    [READNOTIFICATIONS]: { renderToolResultMessage: renderNotificationsResult },
-    [ENTER_PLAN_MODE_TOOL_NAME]: {
-      renderToolResultMessage: EnterPlanModeResult,
-      renderToolUseRejectedMessage: PlanModeDeclinedMessage,
-    },
-    [ENTER_WORKTREE_TOOL_NAME]: { renderToolResultMessage: WorktreeSwitchedMessage },
-    [EXIT_WORKTREE_TOOL_NAME]: { renderToolResultMessage: renderToolResultMessage_7 },
-    [CRON_CREATE_TOOL_NAME]: { renderToolResultMessage: renderCreateResultMessage },
-    [CRON_DELETE_TOOL_NAME]: { renderToolResultMessage: renderDeleteResultMessage },
-    [CRON_LIST_TOOL_NAME]: { renderToolResultMessage: renderCronList },
-    [REMOTETRIGGER]: { renderToolResultMessage: renderHttpStatusLine },
-    [MCP]: {
-      renderToolResultMessage: renderMcpToolResultMessage,
+  [EXITPLANMODE_2]: {
+    renderToolResultMessage: renderToolResultMessage_10,
+    renderToolUseRejectedMessage: renderToolUseRejectedMessage_2,
+  },
+  get [FILE_EDIT_TOOL_NAME]() {
+    let m = require("./chunk-smaqkhx4.js");
+    return {
+      renderToolResultMessage: m.renderToolResultMessage,
+      renderToolUseRejectedMessage: m.renderToolUseRejectedMessage,
+      renderToolUseErrorMessage: m.renderToolUseErrorMessage,
+    };
+  },
+  get [FILE_WRITE_TOOL_NAME]() {
+    let m = require("./chunk-5t7pjfd2.js");
+    return {
+      renderToolResultMessage: m.renderToolResultMessage,
+      renderToolUseRejectedMessage: m.renderToolUseRejectedMessage,
+      renderToolUseErrorMessage: m.renderToolUseErrorMessage,
+      isResultTruncated: m.isResultTruncated,
+    };
+  },
+  get [MEMORY_WRITE]() {
+    let m = require("./chunk-x5e9ztk0.js");
+    return {
+      renderToolResultMessage: m.renderToolResultMessage,
+      renderToolUseErrorMessage: m.renderToolUseErrorMessage,
+      isResultTruncated: m.isResultTruncated,
+    };
+  },
+  get [FILE_READ_TOOL_NAME]() {
+    let m = require("./chunk-nc07tp5s.js");
+    return {
+      renderToolResultMessage: m.renderToolResultMessage,
+      renderToolUseErrorMessage: m.renderToolUseErrorMessage,
+      renderToolUseTag: m.renderToolUseTag,
+    };
+  },
+  get [NOTEBOOK_EDIT_TOOL_NAME]() {
+    let m = require("./chunk-q466qetm.js");
+    return {
+      renderToolResultMessage: m.renderToolResultMessage,
+      renderToolUseRejectedMessage: m.renderToolUseRejectedMessage,
+      renderToolUseErrorMessage: m.renderToolUseErrorMessage,
+    };
+  },
+  get [POWERSHELL_TOOL_NAME]() {
+    let m = require("./chunk-hkh7sq9y.js");
+    return {
+      renderToolResultMessage: m.renderToolResultMessage,
+      renderToolUseErrorMessage: m.renderToolUseErrorMessage,
+      renderToolUseProgressMessage: m.renderToolUseProgressMessage,
+      renderToolUseQueuedMessage: m.renderToolUseQueuedMessage,
+      isResultTruncated: m.isResultTruncated,
+    };
+  },
+  [GREP_TOOL_NAME]: {
+    renderToolResultMessage: renderToolResultMessage_3,
+    renderToolUseErrorMessage: renderToolUseErrorMessage_3,
+  },
+  [GLOB_TOOL_NAME]: {
+    renderToolResultMessage: renderToolResultMessage_3,
+    renderToolUseErrorMessage: renderToolUseErrorMessage_3,
+  },
+  [WEBFETCH]: {
+    renderToolResultMessage: renderToolResultMessage_11,
+    renderToolUseProgressMessage: FallbackToolUseRejectedMessage,
+  },
+  [WEBSEARCH]: {
+    renderToolResultMessage: renderToolResultMessage_9,
+    renderToolUseProgressMessage: renderToolUseProgressMessage_4,
+  },
+  [REPORTFINDINGS]: {
+    renderToolResultMessage: renderFindingsResult,
+  },
+  get [SKILL]() {
+    let m = require("./chunk-8ndmcarc.js");
+    return {
+      renderToolResultMessage: m.renderToolResultMessage,
+      renderToolUseProgressMessage: m.renderToolUseProgressMessage,
+      renderToolUseRejectedMessage: m.renderToolUseRejectedMessage,
+      renderToolUseErrorMessage: m.renderToolUseErrorMessage,
+    };
+  },
+  [LSP_TOOL_NAME]: {
+    renderToolResultMessage: renderToolResultMessage_4,
+    renderToolUseErrorMessage: renderToolUseErrorMessage_2,
+  },
+  [REPL_TOOL_NAME]: {
+    renderToolUseErrorMessage: noFindingError,
+    renderToolUseProgressMessage: noFindingToolUseMessage,
+    renderToolUseRejectedMessage: noFindingProgressMessage,
+  },
+  [LISTMCPRESOURCESTOOL]: {
+    renderToolResultMessage: renderMcpResourceListResult,
+    isResultTruncated: exceedsMonitorLineLimit,
+  },
+  [READ_MCP_RESOURCE_DIR_TOOL_NAME]: {
+    renderToolResultMessage: renderMcpResourceDirResult,
+    isResultTruncated: exceedsPushNotificationLineLimit,
+  },
+  [READMCPRESOURCETOOL]: {
+    renderToolResultMessage: renderToolResultMessage_5,
+    isResultTruncated: exceedsNotificationsLineLimit,
+  },
+  [READNOTIFICATIONS]: {
+    renderToolResultMessage: renderNotificationsResult,
+  },
+  [ENTER_PLAN_MODE_TOOL_NAME]: {
+    renderToolResultMessage: EnterPlanModeResult,
+    renderToolUseRejectedMessage: PlanModeDeclinedMessage,
+  },
+  [ENTER_WORKTREE_TOOL_NAME]: {
+    renderToolResultMessage: WorktreeSwitchedMessage,
+  },
+  [EXIT_WORKTREE_TOOL_NAME]: {
+    renderToolResultMessage: renderToolResultMessage_7,
+  },
+  [CRON_CREATE_TOOL_NAME]: {
+    renderToolResultMessage: renderCreateResultMessage,
+  },
+  [CRON_DELETE_TOOL_NAME]: {
+    renderToolResultMessage: renderDeleteResultMessage,
+  },
+  [CRON_LIST_TOOL_NAME]: {
+    renderToolResultMessage: renderCronList,
+  },
+  [REMOTETRIGGER]: {
+    renderToolResultMessage: renderHttpStatusLine,
+  },
+  [MCP_UI_TABLE_KEY]: {
+    renderToolResultMessage: renderMcpToolResultMessage,
+    renderToolUseProgressMessage: renderToolUseProgressMessage_5,
+    isResultTruncated: isLargeMcpOutput,
+  },
+  get [MCP_DISPLAY_ONLY]() {
+    let displayOnlyMcpToolUi = require("./chunk-r1c2dfcg.js").displayOnlyMcpToolUi;
+    return {
+      renderToolUseProgressMessage: renderToolUseProgressMessage_5,
+      renderToolResultMessage: displayOnlyMcpToolUi.renderToolResultMessage,
+      isResultTruncated: displayOnlyMcpToolUi.isResultTruncated,
+    };
+  },
+  [MCP_SLACK_SEND]: {
+    renderToolResultMessage: renderMcpToolResultMessage,
+    renderToolUseProgressMessage: renderToolUseProgressMessage_5,
+    renderToolUseTag: renderToolUseTag_2,
+    isResultTruncated: isLargeMcpOutput,
+  },
+  get [MCP_CLAUDE_TEST_WRITE]() {
+    let m = require("./chunk-ytava78w.js");
+    return {
+      renderToolResultMessage: m.renderClaudeTestDraftResult,
       renderToolUseProgressMessage: renderToolUseProgressMessage_5,
       isResultTruncated: isLargeMcpOutput,
-    },
-    get [MCP_DISPLAY_ONLY]() {
-      let displayOnlyMcpToolUi = require("./chunk-r1c2dfcg.js").displayOnlyMcpToolUi;
-      return {
-        renderToolUseProgressMessage: renderToolUseProgressMessage_5,
-        renderToolResultMessage: displayOnlyMcpToolUi.renderToolResultMessage,
-        isResultTruncated: displayOnlyMcpToolUi.isResultTruncated,
-      };
-    },
-    [MCP_SLACK_SEND]: {
-      renderToolResultMessage: renderMcpToolResultMessage,
-      renderToolUseProgressMessage: renderToolUseProgressMessage_5,
-      renderToolUseTag: renderToolUseTag_2,
-      isResultTruncated: isLargeMcpOutput,
-    },
-    get [MCP_CLAUDE_TEST_WRITE]() {
-      let m = require("./chunk-ytava78w.js");
-      return {
-        renderToolResultMessage: m.renderClaudeTestDraftResult,
-        renderToolUseProgressMessage: renderToolUseProgressMessage_5,
-        isResultTruncated: isLargeMcpOutput,
-      };
-    },
-    [MONITOR]: { renderToolResultMessage: renderMonitorStarted },
-    [SEND_USER_FILE_TOOL_NAME]: { renderToolResultMessage: renderAttachmentCaption },
-    [SENDFILE]: { renderToolResultMessage: renderFileOpResult },
-    [PROPOSE_SKILLS]: { renderToolResultMessage: renderSkillProposalResult },
-    [PUSHNOTIFICATION]: { renderToolResultMessage: PushNotificationResult },
-    [SENDMESSAGE]: { renderToolResultMessage: MCPTextOutput },
-    [SHOWONBOARDINGROLEPICKER]: { renderToolResultMessage: renderRolePickerResult },
-    ...(SEARCH_MCP_REGISTRY_TOOL_UI && {
-      [SEARCH_MCP_REGISTRY_TOOL_UI.name]: {
-        renderToolResultMessage: SEARCH_MCP_REGISTRY_TOOL_UI.ui.renderToolResultMessage,
-      },
-    }),
-    ...(Hh && { [Hh.name]: { renderToolResultMessage: Hh.ui.renderToolResultMessage } }),
-    ...(qm && {
-      [qm.name]: {
-        renderToolResultMessage: qm.ui.renderToolResultMessage,
-        isResultTruncated: qm.ui.isResultTruncated,
-      },
-    }),
-    ...($h && { [$h.name]: { renderToolResultMessage: $h.ui.renderToolResultMessage } }),
-    ...(Gh && { [Gh.name]: { renderToolResultMessage: Gh.ui.renderToolResultMessage } }),
-    ...(qh && { [qh.name]: { renderToolResultMessage: qh.ui.renderToolResultMessage } }),
-    ...(bo && {
-      [bo.readName]: {
-        renderToolResultMessage: bo.ui.renderToolResultMessage,
-        renderToolUseErrorMessage: bo.ui.renderToolUseErrorMessage,
-      },
-      [bo.changeName]: {
-        renderToolResultMessage: bo.ui.renderToolResultMessage,
-        renderToolUseProgressMessage: bo.ui.renderToolUseProgressMessage,
-        renderToolUseRejectedMessage: bo.ui.renderToolUseRejectedMessage,
-        renderToolUseErrorMessage: bo.ui.renderToolUseErrorMessage,
-        endedByChoice: bo.ui.endedByChoice,
-      },
-      [bo.joinName]: {
-        renderToolResultMessage: bo.ui.renderToolResultMessage,
-        renderToolUseProgressMessage: bo.ui.renderToolUseProgressMessage,
-        renderToolUseRejectedMessage: bo.ui.renderToolUseRejectedMessage,
-        renderToolUseErrorMessage: bo.ui.renderToolUseErrorMessage,
-        endedByChoice: bo.ui.endedByChoice,
-      },
-    }),
-    [SHAREONBOARDINGGUIDE]: { renderToolResultMessage: EM },
-    ...(Kh && { [Kh.name]: { renderToolResultMessage: Kh.ui.renderToolResultMessage } }),
-    ...(Vh && { [Vh.name]: { renderToolResultMessage: Vh.ui.renderToolResultMessage } }),
-    ...(Km && {
-      [Km.name]: {
-        renderToolResultMessage: Km.ui.renderToolResultMessage,
-        renderToolUseProgressMessage: Km.ui.renderToolUseProgressMessage,
-      },
-    }),
-    [GET_TASK_TOOL_TEXT]: {
-      renderToolResultMessage: renderTaskOutputResult,
-      renderToolUseErrorMessage: renderToolUseErrorMessage_4,
-    },
-    [Vm.name]: {
-      renderToolResultMessage: Vm.ui.renderToolResultMessage,
-      renderToolUseProgressMessage: Vm.ui.renderToolUseProgressMessage,
-      renderToolUseRejectedMessage: Vm.ui.renderToolUseRejectedMessage,
-    },
-    ...(Ym && {
-      [Ym.name]: {
-        renderToolResultMessage: Ym.ui.renderToolResultMessage,
-        renderToolUseRejectedMessage: Ym.ui.renderToolUseRejectedMessage,
-      },
-    }),
-    ...(zm && {
-      [zm.name]: {
-        renderToolResultMessage: zm.ui.renderToolResultMessage,
-        renderToolUseProgressMessage: zm.ui.renderToolUseProgressMessage,
-      },
-    }),
-    ...(Qm && {
-      [Qm.name]: {
-        renderToolResultMessage: Qm.ui.renderToolResultMessage,
-        renderToolUseProgressMessage: Qm.ui.renderToolUseProgressMessage,
-      },
-    }),
-    ...(hs &&
-      Object.fromEntries(
-        [
-          hs.name,
-          hs.names.ARTIFACT_COMMENTS_TOOL_NAME,
-          hs.names.ARTIFACT_DATA_TOOL_NAME,
-          hs.names.ARTIFACT_CHECK_TOOL_NAME,
-        ].map((m) => [
-          m,
-          {
-            renderToolResultMessage: hs.ui.renderToolResultMessage,
-            renderToolUseProgressMessage: hs.ui.renderToolUseProgressMessage,
-            renderToolUseErrorMessage: hs.ui.renderToolUseErrorMessage,
-            renderToolUseQueuedMessage: hs.ui.renderToolUseQueuedMessage,
-          },
-        ]),
-      )),
-    ...(Yh && { [Yh.name]: { renderToolResultMessage: Yh.ui.renderToolResultMessage } }),
-    ...(Ho && {
-      ListPlugins: { renderToolResultMessage: Ho.makeResultCountRenderer("plugin") },
-      ListSkills: { renderToolResultMessage: Ho.makeResultCountRenderer("skill") },
-      SearchPlugins: { renderToolResultMessage: Ho.makeResultCountRenderer("plugin") },
-      SearchSkills: { renderToolResultMessage: Ho.makeResultCountRenderer("skill") },
-      SuggestPluginInstall: {
-        renderToolResultMessage: (m) => Ho.makeResultCountRenderer("plugin")({ results: m.plugins }),
-      },
-      SuggestSkills: { renderToolResultMessage: Ho.makeResultCountRenderer("skill") },
-    }),
+    };
   },
-  m1 = `mcp__${COMPUTER_USE_MCP_SERVER_NAME}__`;
-
-export { zh, m1 };
+  [MONITOR]: {
+    renderToolResultMessage: renderMonitorStarted,
+  },
+  [SEND_USER_FILE_TOOL_NAME]: {
+    renderToolResultMessage: renderAttachmentCaption,
+  },
+  [SENDFILE]: {
+    renderToolResultMessage: renderFileOpResult,
+  },
+  [PROPOSE_SKILLS]: {
+    renderToolResultMessage: renderSkillProposalResult,
+  },
+  [PUSHNOTIFICATION]: {
+    renderToolResultMessage: PushNotificationResult,
+  },
+  [SENDMESSAGE]: {
+    renderToolResultMessage: MCPTextOutput,
+  },
+  [SHOWONBOARDINGROLEPICKER]: {
+    renderToolResultMessage: renderRolePickerResult,
+  },
+  ...(SEARCH_MCP_REGISTRY_TOOL_UI && {
+    [SEARCH_MCP_REGISTRY_TOOL_UI.name]: {
+      renderToolResultMessage: SEARCH_MCP_REGISTRY_TOOL_UI.ui.renderToolResultMessage,
+    },
+  }),
+  ...(SUGGEST_CONNECTORS_TOOL_UI && {
+    [SUGGEST_CONNECTORS_TOOL_UI.name]: {
+      renderToolResultMessage: SUGGEST_CONNECTORS_TOOL_UI.ui.renderToolResultMessage,
+    },
+  }),
+  ...(disabledToolUi_1 && {
+    [disabledToolUi_1.name]: {
+      renderToolResultMessage: disabledToolUi_1.ui.renderToolResultMessage,
+      isResultTruncated: disabledToolUi_1.ui.isResultTruncated,
+    },
+  }),
+  ...(disabledToolUi_2 && {
+    [disabledToolUi_2.name]: {
+      renderToolResultMessage: disabledToolUi_2.ui.renderToolResultMessage,
+    },
+  }),
+  ...(LIST_CONNECTORS_TOOL_UI && {
+    [LIST_CONNECTORS_TOOL_UI.name]: {
+      renderToolResultMessage: LIST_CONNECTORS_TOOL_UI.ui.renderToolResultMessage,
+    },
+  }),
+  ...(disabledToolUi_3 && {
+    [disabledToolUi_3.name]: {
+      renderToolResultMessage: disabledToolUi_3.ui.renderToolResultMessage,
+    },
+  }),
+  ...(disabledToolUi_4 && {
+    [disabledToolUi_4.readName]: {
+      renderToolResultMessage: disabledToolUi_4.ui.renderToolResultMessage,
+      renderToolUseErrorMessage: disabledToolUi_4.ui.renderToolUseErrorMessage,
+    },
+    [disabledToolUi_4.changeName]: {
+      renderToolResultMessage: disabledToolUi_4.ui.renderToolResultMessage,
+      renderToolUseProgressMessage: disabledToolUi_4.ui.renderToolUseProgressMessage,
+      renderToolUseRejectedMessage: disabledToolUi_4.ui.renderToolUseRejectedMessage,
+      renderToolUseErrorMessage: disabledToolUi_4.ui.renderToolUseErrorMessage,
+      endedByChoice: disabledToolUi_4.ui.endedByChoice,
+    },
+    [disabledToolUi_4.joinName]: {
+      renderToolResultMessage: disabledToolUi_4.ui.renderToolResultMessage,
+      renderToolUseProgressMessage: disabledToolUi_4.ui.renderToolUseProgressMessage,
+      renderToolUseRejectedMessage: disabledToolUi_4.ui.renderToolUseRejectedMessage,
+      renderToolUseErrorMessage: disabledToolUi_4.ui.renderToolUseErrorMessage,
+      endedByChoice: disabledToolUi_4.ui.endedByChoice,
+    },
+  }),
+  [SHAREONBOARDINGGUIDE]: {
+    renderToolResultMessage: noFindingResultMessage,
+  },
+  ...(disabledToolUi_5 && {
+    [disabledToolUi_5.name]: {
+      renderToolResultMessage: disabledToolUi_5.ui.renderToolResultMessage,
+    },
+  }),
+  ...(FETCH_INBOX_MESSAGE_TOOL_UI && {
+    [FETCH_INBOX_MESSAGE_TOOL_UI.name]: {
+      renderToolResultMessage: FETCH_INBOX_MESSAGE_TOOL_UI.ui.renderToolResultMessage,
+    },
+  }),
+  ...(disabledToolUi_6 && {
+    [disabledToolUi_6.name]: {
+      renderToolResultMessage: disabledToolUi_6.ui.renderToolResultMessage,
+      renderToolUseProgressMessage: disabledToolUi_6.ui.renderToolUseProgressMessage,
+    },
+  }),
+  [GET_TASK_TOOL_TEXT]: {
+    renderToolResultMessage: renderTaskOutputResult,
+    renderToolUseErrorMessage: renderToolUseErrorMessage_4,
+  },
+  [WORKFLOW_TOOL_UI.name]: {
+    renderToolResultMessage: WORKFLOW_TOOL_UI.ui.renderToolResultMessage,
+    renderToolUseProgressMessage: WORKFLOW_TOOL_UI.ui.renderToolUseProgressMessage,
+    renderToolUseRejectedMessage: WORKFLOW_TOOL_UI.ui.renderToolUseRejectedMessage,
+  },
+  ...(disabledToolUi_7 && {
+    [disabledToolUi_7.name]: {
+      renderToolResultMessage: disabledToolUi_7.ui.renderToolResultMessage,
+      renderToolUseRejectedMessage: disabledToolUi_7.ui.renderToolUseRejectedMessage,
+    },
+  }),
+  ...(disabledToolUi_8 && {
+    [disabledToolUi_8.name]: {
+      renderToolResultMessage: disabledToolUi_8.ui.renderToolResultMessage,
+      renderToolUseProgressMessage: disabledToolUi_8.ui.renderToolUseProgressMessage,
+    },
+  }),
+  ...(disabledToolUi_9 && {
+    [disabledToolUi_9.name]: {
+      renderToolResultMessage: disabledToolUi_9.ui.renderToolResultMessage,
+      renderToolUseProgressMessage: disabledToolUi_9.ui.renderToolUseProgressMessage,
+    },
+  }),
+  ...(ARTIFACT_TOOL_UI &&
+    Object.fromEntries(
+      [
+        ARTIFACT_TOOL_UI.name,
+        ARTIFACT_TOOL_UI.names.ARTIFACT_COMMENTS_TOOL_NAME,
+        ARTIFACT_TOOL_UI.names.ARTIFACT_DATA_TOOL_NAME,
+        ARTIFACT_TOOL_UI.names.ARTIFACT_CHECK_TOOL_NAME,
+      ].map((m) => [
+        m,
+        {
+          renderToolResultMessage: ARTIFACT_TOOL_UI.ui.renderToolResultMessage,
+          renderToolUseProgressMessage: ARTIFACT_TOOL_UI.ui.renderToolUseProgressMessage,
+          renderToolUseErrorMessage: ARTIFACT_TOOL_UI.ui.renderToolUseErrorMessage,
+          renderToolUseQueuedMessage: ARTIFACT_TOOL_UI.ui.renderToolUseQueuedMessage,
+        },
+      ]),
+    )),
+  ...(END_CONVERSATION_TOOL_UI && {
+    [END_CONVERSATION_TOOL_UI.name]: {
+      renderToolResultMessage: END_CONVERSATION_TOOL_UI.ui.renderToolResultMessage,
+    },
+  }),
+  ...(toolUiModule && {
+    ListPlugins: {
+      renderToolResultMessage: toolUiModule.makeResultCountRenderer("plugin"),
+    },
+    ListSkills: {
+      renderToolResultMessage: toolUiModule.makeResultCountRenderer("skill"),
+    },
+    SearchPlugins: {
+      renderToolResultMessage: toolUiModule.makeResultCountRenderer("plugin"),
+    },
+    SearchSkills: {
+      renderToolResultMessage: toolUiModule.makeResultCountRenderer("skill"),
+    },
+    SuggestPluginInstall: {
+      renderToolResultMessage: (m) =>
+        toolUiModule.makeResultCountRenderer("plugin")({
+          results: m.plugins,
+        }),
+    },
+    SuggestSkills: {
+      renderToolResultMessage: toolUiModule.makeResultCountRenderer("skill"),
+    },
+  }),
+};
+var MCP_TOOL_NAME_PREFIX = `mcp__${COMPUTER_USE_MCP_SERVER_NAME}__`;
+export { GROUPED_TOOL_USE_RENDERERS, MCP_TOOL_NAME_PREFIX };

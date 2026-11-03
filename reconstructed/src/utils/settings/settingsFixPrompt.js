@@ -11,26 +11,26 @@
 import { replaceControlChars } from "../resultError.js";
 
 //@ chunk-n37wdxq8.js:283-293 placement
-var f = 500;
+var MAX_FIX_PROMPT_CHARS = 500;
 //@ chunk-n37wdxq8.js:293-350 placement
-function i(t) {
-  return replaceControlChars(t).replaceAll("`", "").slice(0, f);
+function buildSettingsFixPromptText(t) {
+  return replaceControlChars(t).replaceAll("`", "").slice(0, MAX_FIX_PROMPT_CHARS);
 }
+//@ chunk-n37wdxq8.js:350-1589 placement
 /**
  * 生成"帮我修复这些设置问题"的提示词
  */
-//@ chunk-n37wdxq8.js:350-1589 placement
 function buildSettingsFixPrompt(t, { flagSettingsPath: n } = {}) {
   if (t.length === 0) return null;
-  let a = n !== void 0 && t.some((e) => e.file === n),
-    mapped = t.map((e) => {
-      let joined = [e.file, e.path].flatMap((o) => (o ? [i(o)] : [])).join(" \u203A "),
-        l = e.suggestion
-          ? `
-  Suggested fix: ${i(e.suggestion)}`
-          : "";
-      return `- Settings${joined ? ` (${joined})` : ""}: ${i(e.message)}${l}`;
-    });
+  let a = n !== undefined && t.some((e) => e.file === n);
+  let mapped = t.map((e) => {
+    let joined = [e.file, e.path].flatMap((o) => (o ? [buildSettingsFixPromptText(o)] : [])).join(" \u203A ");
+    let l = e.suggestion
+      ? `
+  Suggested fix: ${buildSettingsFixPromptText(e.suggestion)}`
+      : "";
+    return `- Settings${joined ? ` (${joined})` : ""}: ${buildSettingsFixPromptText(e.message)}${l}`;
+  });
   return [
     "Help me fix these Claude Code settings issues.",
     "",

@@ -24,22 +24,28 @@ import { refreshGrowthBookAfterAuthChange } from "../../services/analytics/growt
 import { logForDebugging } from "../../utils/debug.js";
 import { logFeatureBad } from "../../services/analytics/featureTelemetry.js";
 import { validateOauthToken } from "../../services/oauth/validateOauthToken.js";
-import { processSessionStartHooks, PGt, processSetupHooks } from "../../utils/sessionStart.js";
+import {
+  processSessionStartHooks,
+  takePendingHookSessionTitle,
+  processSetupHooks,
+} from "../../utils/sessionStart.js";
 import { cacheHookSessionTitle } from "../../utils/sessionStorage.js";
 
 //@ chunk-3wek6r2k.js:16735-16911 placement
 function settleLauncherHostLogin(e) {
   if (usableLauncherHostLoginToken() === null) {
     if (!takeLauncherHostLoginEnd()) return e;
-    return (
-      clearOAuthTokenCache(),
-      refreshGrowthBookAfterAuthChange(),
-      e.valid && launcherHostLoginRefusal() === "login_method_pin" ? (launcherClaudeAiLoginRefusal() ?? e) : e
-    );
+    clearOAuthTokenCache();
+    refreshGrowthBookAfterAuthChange();
+    return e.valid && launcherHostLoginRefusal() === "login_method_pin"
+      ? (launcherClaudeAiLoginRefusal() ?? e)
+      : e;
   }
   let o = e.valid ? launcherClaudeAiLoginRefusal() : e;
   if (o === null) return e;
-  return (forgetLauncherHostLogin(), clearOAuthTokenCache(), o);
+  forgetLauncherHostLogin();
+  clearOAuthTokenCache();
+  return o;
 }
 //@ chunk-3wek6r2k.js:16911-17243 placement
 function forgetLauncherHostLoginForCloud(e) {
@@ -52,54 +58,86 @@ function forgetLauncherHostLoginForCloud(e) {
       e.projectBrowse !== null) &&
     forgetLauncherHostLogin() &&
     takeLauncherHostLoginEnd()
-  )
-    (logForDebugging(
+  ) {
+    logForDebugging(
       "[launcher-host-login] the desktop app's sign-in is over for this process (session_elsewhere)",
-      { level: "warn" },
-    ),
-      logFeatureBad("auth_launcher_host_login", "session_elsewhere"),
-      clearOAuthTokenCache(),
-      refreshGrowthBookAfterAuthChange());
+      {
+        level: "warn",
+      },
+    );
+    logFeatureBad("auth_launcher_host_login", "session_elsewhere");
+    clearOAuthTokenCache();
+    refreshGrowthBookAfterAuthChange();
+  }
 }
 //@ chunk-3wek6r2k.js:17243-17429 placement
 async function validateLoginIdentity(e) {
-  let o = await validateOauthToken(e),
-    n = o?.organization_uuid,
-    r = o?.account_uuid;
-  return typeof n === "string" && n !== "" && typeof r === "string" && r !== ""
-    ? { organizationUuid: n, accountUuid: r }
+  let o = await validateOauthToken(e);
+  let organizationUuid = o?.organization_uuid;
+  let accountUuid = o?.account_uuid;
+  return typeof organizationUuid === "string" &&
+    organizationUuid !== "" &&
+    typeof accountUuid === "string" &&
+    accountUuid !== ""
+    ? {
+        organizationUuid,
+        accountUuid,
+      }
     : null;
 }
+//@ chunk-3wek6r2k.js:17429-18214 placement
 /**
  * 校验桌面应用替换的登录令牌（launcher-host-login）：组织校验、身份是否与启动身份一致。
  */
-//@ chunk-3wek6r2k.js:17429-18214 placement
-async function verifyLauncherHostLogin(e, o) {
-  let n = launcherClaudeAiLoginRefusal(),
-    r = null;
-  if (n !== null) r = { verdict: "refused", why: n.reason };
+async function verifyLauncherHostLogin(credentials, o) {
+  let n = launcherClaudeAiLoginRefusal();
+  let r = null;
+  if (n !== null)
+    r = {
+      verdict: "refused",
+      why: n.reason,
+    };
   else {
     let [u, p] = await Promise.all([
-        learnLauncherHostLoginIdentity(validateLoginIdentity),
-        validateLoginIdentity(o),
-      ]),
-      h = await validateForceLoginOrg(e, void 0, { accessToken: o, organizationUuid: p?.organizationUuid }),
-      S = launcherClaudeAiLoginRefusal();
-    if (S !== null) r = { verdict: "refused", why: S.reason };
+      learnLauncherHostLoginIdentity(validateLoginIdentity),
+      validateLoginIdentity(o),
+    ]);
+    let h = await validateForceLoginOrg(credentials, undefined, {
+      accessToken: o,
+      organizationUuid: p?.organizationUuid,
+    });
+    let S = launcherClaudeAiLoginRefusal();
+    if (S !== null)
+      r = {
+        verdict: "refused",
+        why: S.reason,
+      };
     else if (!h.valid)
-      r = { verdict: h.reason === "org_verify_failed" ? "unverified" : "refused", why: h.reason };
-    else if (p === null) r = { verdict: "unverified", why: "identity_not_learned" };
-    else if (u === null) r = { verdict: "held_unknown", why: "identity_not_learned" };
+      r = {
+        verdict: h.reason === "org_verify_failed" ? "unverified" : "refused",
+        why: h.reason,
+      };
+    else if (p === null)
+      r = {
+        verdict: "unverified",
+        why: "identity_not_learned",
+      };
+    else if (u === null)
+      r = {
+        verdict: "held_unknown",
+        why: "identity_not_learned",
+      };
     else if (u.organizationUuid !== p.organizationUuid || u.accountUuid !== p.accountUuid)
-      r = { verdict: "refused", why: "not_the_startup_identity" };
+      r = {
+        verdict: "refused",
+        why: "not_the_startup_identity",
+      };
   }
   if (r === null) return "allowed";
-  return (
-    logForDebugging(`[launcher-host-login] the desktop app's replacement sign-in is not taken (${r.why})`, {
-      level: "warn",
-    }),
-    r.verdict
-  );
+  logForDebugging(`[launcher-host-login] the desktop app's replacement sign-in is not taken (${r.why})`, {
+    level: "warn",
+  });
+  return r.verdict;
 }
 //@ chunk-3wek6r2k.js:18214-18425 placement
 function launcherClaudeAiLoginRefusal() {
@@ -107,7 +145,7 @@ function launcherClaudeAiLoginRefusal() {
   return e === null
     ? null
     : {
-        valid: !1,
+        valid: false,
         reason: "managed_settings_invalid",
         message: `The sign-in the desktop app provided is a claude.ai sign-in, which the settings in force do not allow.
 
@@ -115,10 +153,10 @@ ${e}`,
       };
 }
 //@ chunk-3wek6r2k.js:18425-18905 placement
-async function runStartupHooks(e, o) {
+async function runStartupHooks(trigger, o) {
   switch (o.kind) {
     case "session-start": {
-      let n = await processSessionStartHooks(e, o.source, {
+      let n = await processSessionStartHooks(trigger, o.source, {
         sessionId: o.sessionId,
         agentType: o.agentType,
         model: o.model,
@@ -129,12 +167,12 @@ async function runStartupHooks(e, o) {
         credentials: o.credentials,
       });
       if (o.orphaned?.aborted) return n;
-      let r = PGt();
+      let r = takePendingHookSessionTitle();
       if (r) cacheHookSessionTitle(r);
       return n;
     }
     case "setup":
-      return processSetupHooks(e, o.trigger, {
+      return processSetupHooks(trigger, o.trigger, {
         forceSyncExecution: o.forceSyncExecution,
         storageV5: o.storageV5,
         credentials: o.credentials,
@@ -151,7 +189,6 @@ ${o}`;
 }
 //@ chunk-3wek6r2k.js:18992-19020 placement
 var HOSTED_RULES_FLAG = "tengu_harp_voatavo";
-
 export {
   settleLauncherHostLogin,
   runStartupHooks,

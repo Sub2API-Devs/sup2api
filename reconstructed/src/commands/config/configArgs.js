@@ -18,27 +18,27 @@ import {
 import { sanitizeTelemetryString } from "../../utils/sanitization.js";
 import { isBridgeOrTransport } from "../../cli/transportState.js";
 
+//@ chunk-8ncxevqn.js:12839-13225 placement
 /**
  * /config 的 local call(args, context, invokedName) 实现入口（由命令对象 load() 返回）。
  */
-//@ chunk-8ncxevqn.js:12839-13225 placement
 async function runConfigSetCommand(args, context) {
-  let trimmed = args.trim(),
-    lower = trimmed.toLowerCase();
+  let trimmed = args.trim();
+  let lower = trimmed.toLowerCase();
   if (!lower || COMMON_HELP_ARGS.includes(lower) || COMMON_INFO_ARGS_ALIAS.includes(lower))
     return {
       type: "text",
       value: `Usage: /config key=value [key=value ...]
 ${listConfigKeys(context)}`,
     };
-  let a = parseConfigShorthand(trimmed);
-  if (!a)
+  let configShorthand = parseConfigShorthand(trimmed);
+  if (!configShorthand)
     return {
       type: "text",
       value: `Expected key=value, got "${sanitizeTelemetryString(trimmed)}". Run /config to see what's available.`,
     };
-  let r = await applyConfigShorthand(a, context),
-    s = isBridgeOrTransport(context.session);
+  let r = await applyConfigShorthand(configShorthand, context);
+  let s = isBridgeOrTransport(context.session);
   return {
     type: "text",
     value: r.map((i) => collapseShorthandResultOffBox(i, s)).join(`

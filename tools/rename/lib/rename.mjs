@@ -131,7 +131,8 @@ class Planner {
   request(b, want, info) {
     const key = b.key;
     if (b.frozen) {
-      this.rejected.push({ key, from: b.name, wanted: want, reason: `frozen: ${b.frozen}`, origin: info.origin });
+      // keeping the current name is not a rename: nothing to reject
+      if (want !== b.name) this.rejected.push({ key, from: b.name, wanted: want, reason: `frozen: ${b.frozen}`, origin: info.origin });
       return;
     }
     if (!isValidBindingName(want)) {

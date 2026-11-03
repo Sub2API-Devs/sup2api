@@ -21,30 +21,34 @@ import {
 import { hardlinkedRefusalText } from "../plugins/safeCopy.js";
 import { logFeatureBad } from "../../services/analytics/featureTelemetry.js";
 import { getPathsForPermissionCheck } from "../fsOperations.js";
-import { BMe } from "../../bootstrap/sessionSlices.js";
+import { PERMISSION_STASH_EVICTED_SYMBOL } from "../../bootstrap/sessionSlices.js";
 import { logForDebugging } from "../debug.js";
 import { slowLogging } from "../slowOperations.js";
 
+//@ chunk-847rdpmn.js:1235-1516 placement
 /**
  * 记录暂存目录的 dev/ino 与打开的句柄（替换或重置时关闭旧句柄）。
  */
-//@ chunk-847rdpmn.js:1235-1516 placement
 class StagingDirIdentities {
   identities = new Map();
-  record(e, n, r, s) {
-    let u = Z(e),
-      o = this.identities.get(u);
+  record(e, dev, ino, fd) {
+    let stagingPath = resolveStagingPath(e);
+    let o = this.identities.get(stagingPath);
     if (o)
       try {
         closeSync(o.fd);
       } catch {}
-    this.identities.set(u, { dev: n, ino: r, fd: s });
+    this.identities.set(stagingPath, {
+      dev,
+      ino,
+      fd,
+    });
   }
   identity(e) {
-    return this.identities.get(Z(e));
+    return this.identities.get(resolveStagingPath(e));
   }
   reset() {
-    for (let { fd: fd } of this.identities.values())
+    for (let { fd } of this.identities.values())
       try {
         closeSync(fd);
       } catch {}
@@ -52,141 +56,153 @@ class StagingDirIdentities {
   }
 }
 //@ chunk-847rdpmn.js:1516-1541 placement
-var ge = new HostScoped(() => new StagingDirIdentities());
+var stagingIdentitiesRegistry = new HostScoped(() => new StagingDirIdentities());
 //@ chunk-847rdpmn.js:1541-1577 placement
-function V() {
-  return ge.of(getRootSession().host);
+function currentStagingIdentities() {
+  return stagingIdentitiesRegistry.of(getRootSession().host);
 }
 //@ chunk-847rdpmn.js:1577-1603 placement
-function Z(e) {
+function resolveStagingPath(e) {
   return resolve(e);
 }
 //@ chunk-847rdpmn.js:1603-1645 placement
-function cMi(e, n, r, s) {
-  V().record(e, n, r, s);
+/**
+ * 记录原子写入暂存目录的身份（供后续校验未变）。
+ */
+function recordStagingDirIdentity(e, n, r, s) {
+  currentStagingIdentities().record(e, n, r, s);
 }
+//@ chunk-847rdpmn.js:1645-2157 placement
 /**
  * 验证原子写入的暂存目录仍可用（身份未变）。
  */
-//@ chunk-847rdpmn.js:1645-2157 placement
-function verifyStagingDir(e) {
-  if (!e) return;
-  let identity = V().identity(e);
-  if (!identity) return;
+function verifyStagingDir(stagingDir) {
+  if (!stagingDir) return;
+  let n = currentStagingIdentities().identity(stagingDir);
+  if (!n) return;
   let r;
   try {
-    r = openSync(e, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
+    r = openSync(stagingDir, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
   } catch (error) {
-    let u = getErrnoCode(error);
-    if (u === "ENOENT" || u === "ENOTDIR" || u === "ELOOP" || u === "EACCES")
-      YMt(
-        `Staging dir ${e} was established for a sandboxed command but is now unopenable (${u}) \u2014 refusing atomic write`,
+    let errnoCode = getErrnoCode(error);
+    if (errnoCode === "ENOENT" || errnoCode === "ENOTDIR" || errnoCode === "ELOOP" || errnoCode === "EACCES")
+      throwStagingTampered(
+        `Staging dir ${stagingDir} was established for a sandboxed command but is now unopenable (${errnoCode}) \u2014 refusing atomic write`,
       );
     throw error;
   }
   try {
     let s = fstatSync(r);
-    if (s.dev !== identity.dev || s.ino !== identity.ino)
-      YMt(
-        `Staging dir ${e} identity changed (expected ${identity.dev}/${identity.ino}, found ${s.dev}/${s.ino}) \u2014 refusing atomic write`,
+    if (s.dev !== n.dev || s.ino !== n.ino)
+      throwStagingTampered(
+        `Staging dir ${stagingDir} identity changed (expected ${n.dev}/${n.ino}, found ${s.dev}/${s.ino}) \u2014 refusing atomic write`,
       );
   } finally {
     closeSync(r);
   }
 }
+//@ chunk-847rdpmn.js:2157-3173 placement
 /**
  * 生成原子写入暂存路径（检查父目录）。
  */
-//@ chunk-847rdpmn.js:2157-3173 placement
-function stagingPathFor(e, n, r, s) {
+function stagingPathFor(stagingDir, n, r, s) {
   let u = `${n}${r}`;
-  if (!e) return u;
-  let identity = V().identity(e);
-  if (s && dirname(n) !== dirname(e)) return (verifyStagingDir(e), u);
+  if (!stagingDir) return u;
+  let o = currentStagingIdentities().identity(stagingDir);
+  if (s && dirname(n) !== dirname(stagingDir)) {
+    verifyStagingDir(stagingDir);
+    return u;
+  }
   let a = constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW;
   try {
-    closeSync(openSync(dirname(e), a));
+    closeSync(openSync(dirname(stagingDir), a));
   } catch (error) {
-    let g = getErrnoCode(error);
-    if (g === "ELOOP" || g === "ENOTDIR") {
-      if (identity)
-        YMt(
-          `Staging dir parent ${dirname(e)} is ${g} but a sandboxed command established ${e} \u2014 refusing sibling fallback`,
+    let errnoCode = getErrnoCode(error);
+    if (errnoCode === "ELOOP" || errnoCode === "ENOTDIR") {
+      if (o)
+        throwStagingTampered(
+          `Staging dir parent ${dirname(stagingDir)} is ${errnoCode} but a sandboxed command established ${stagingDir} \u2014 refusing sibling fallback`,
         );
       if (s) return u;
       throw new SymlinkWriteRefusedError(
-        `Refusing to stage atomic write under non-directory parent: ${dirname(e)}`,
+        `Refusing to stage atomic write under non-directory parent: ${dirname(stagingDir)}`,
       );
     }
     if (!isENOENT(error)) throw error;
-    if (identity)
-      YMt(
-        `Staging dir parent ${dirname(e)} is absent but a sandboxed command established ${e} \u2014 refusing sibling fallback`,
+    if (o)
+      throwStagingTampered(
+        `Staging dir parent ${dirname(stagingDir)} is absent but a sandboxed command established ${stagingDir} \u2014 refusing sibling fallback`,
       );
     return u;
   }
   let f;
   try {
-    f = openSync(e, a);
+    f = openSync(stagingDir, a);
   } catch (error) {
-    let g = getErrnoCode(error);
-    if (g === "ENOENT" || g === "ENOTDIR" || g === "ELOOP") {
-      if (identity)
-        YMt(
-          `Staging dir ${e} is ${g} but a sandboxed command established it \u2014 refusing sibling fallback`,
+    let errnoCode = getErrnoCode(error);
+    if (errnoCode === "ENOENT" || errnoCode === "ENOTDIR" || errnoCode === "ELOOP") {
+      if (o)
+        throwStagingTampered(
+          `Staging dir ${stagingDir} is ${errnoCode} but a sandboxed command established it \u2014 refusing sibling fallback`,
         );
       return u;
     }
     throw error;
   }
   try {
-    if (identity) {
+    if (o) {
       let y = fstatSync(f);
-      if (y.dev !== identity.dev || y.ino !== identity.ino)
-        YMt(
-          `Staging dir ${e} identity changed (expected ${identity.dev}/${identity.ino}, found ${y.dev}/${y.ino}) \u2014 refusing atomic write`,
+      if (y.dev !== o.dev || y.ino !== o.ino)
+        throwStagingTampered(
+          `Staging dir ${stagingDir} identity changed (expected ${o.dev}/${o.ino}, found ${y.dev}/${y.ino}) \u2014 refusing atomic write`,
         );
     }
   } finally {
     closeSync(f);
   }
-  return join(e, `${basename(n)}${r}`);
+  return join(stagingDir, `${basename(n)}${r}`);
 }
+//@ chunk-847rdpmn.js:3173-3258 placement
 /**
  * 拒绝通过符号链接写入的错误（及硬链接子类）。
  */
-//@ chunk-847rdpmn.js:3173-3258 placement
 class SymlinkWriteRefusedError extends Error {
-  constructor(e) {
-    super(e);
+  constructor(message) {
+    super(message);
     this.name = "SymlinkWriteRefusedError";
   }
 }
 //@ chunk-847rdpmn.js:3258-3351 placement
 class HardLinkWriteRefusedError extends SymlinkWriteRefusedError {
-  constructor(e, n) {
-    super(hardlinkedRefusalText(e, n));
+  constructor(e, nlink) {
+    super(hardlinkedRefusalText(e, nlink));
     this.name = "HardLinkWriteRefusedError";
   }
 }
 //@ chunk-847rdpmn.js:3351-3425 placement
-function re(e) {
-  return { flags: constants.O_WRONLY | constants.O_CREAT | e, flagsIfMissing: void 0 };
+/**
+ * 生成写入打开的 flags 描述（O_WRONLY|O_CREAT 加上调用方标志）。
+ */
+function openWriteFlags(e) {
+  return {
+    flags: constants.O_WRONLY | constants.O_CREAT | e,
+    flagsIfMissing: undefined,
+  };
 }
+//@ chunk-847rdpmn.js:3425-3509 placement
 /**
  * 拒绝通过符号链接读取的错误。
  */
-//@ chunk-847rdpmn.js:3425-3509 placement
 class SymlinkReadRefusedError extends Error {
-  constructor(e) {
-    super(e);
+  constructor(message) {
+    super(message);
     this.name = "SymlinkReadRefusedError";
   }
 }
+//@ chunk-847rdpmn.js:3509-3988 placement
 /**
  * 确认目录链在基目录内且没有链接。
  */
-//@ chunk-847rdpmn.js:3509-3988 placement
 async function assertDirChainReal(e, n) {
   let r = relative(e, n);
   if (r === "" || r.startsWith("..") || isAbsolute(r))
@@ -200,93 +216,94 @@ async function assertDirChainReal(e, n) {
     try {
       await (await open(s, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW)).close();
     } catch (error) {
-      let a = getErrnoCode(error);
-      if (a === "ELOOP" || a === "ENOTDIR")
+      let errnoCode = getErrnoCode(error);
+      if (errnoCode === "ELOOP" || errnoCode === "ENOTDIR")
         throw new SymlinkWriteRefusedError(`Refusing to write under symlinked or non-directory path: ${s}`);
-      if (a === "ENOENT") return;
+      if (errnoCode === "ENOENT") return;
       throw error;
     }
   }
 }
 //@ chunk-847rdpmn.js:3988-4073 placement
 class StagingDirTamperedError extends Error {
-  constructor(e) {
-    super(e);
+  constructor(message) {
+    super(message);
     this.name = "StagingDirTamperedError";
   }
 }
 //@ chunk-847rdpmn.js:4073-4160 placement
-function YMt(e) {
-  throw (logFeatureBad("sandbox_exec", "atomic_write_staging_dir_tampered"), new StagingDirTamperedError(e));
+/**
+ * 抛出"暂存目录被篡改"错误并上报 sandbox_exec 失败。
+ */
+function throwStagingTampered(message) {
+  logFeatureBad("sandbox_exec", "atomic_write_staging_dir_tampered");
+  throw new StagingDirTamperedError(message);
 }
+//@ chunk-847rdpmn.js:4160-4212 placement
 /**
  * 取出写入权限暂存的路径拼写（过期时拒绝）。
  */
-//@ chunk-847rdpmn.js:4160-4212 placement
 function consumeWritePermission(e, n, r = "write") {
   return consumePermissionStash(e, n, r) ?? getPathsForPermissionCheck(n);
 }
+//@ chunk-847rdpmn.js:4212-4621 placement
 /**
  * 从权限暂存中取出路径批准。
  */
-//@ chunk-847rdpmn.js:4212-4621 placement
 function consumePermissionStash(e, n, r) {
-  let consume = e.session.writePermissionStash.consume(e.toolUseId, n, r);
-  if (consume === BMe)
+  let s = e.session.writePermissionStash.consume(e.toolUseId, n, r);
+  if (s === PERMISSION_STASH_EVICTED_SYMBOL)
     throw new (r === "read" ? SymlinkReadRefusedError : SymlinkWriteRefusedError)(
       `Refusing to ${r === "read" ? "read" : "write"} ${n}: its permission check expired before it ran (too many concurrent file operations). Retry.`,
     );
-  if (consume !== void 0) return consume;
+  if (s !== undefined) return s;
   if (e.toolUseId)
     logForDebugging(
       `takeApprovedPathsForWrite: no check-time stash for toolUseId=${e.toolUseId}; using fresh resolution`,
     );
   return;
 }
+//@ chunk-847rdpmn.js:4621-4662 placement = isFileReadDenied (1)
 /**
  * 取出读取权限暂存。
  */
-//@ chunk-847rdpmn.js:4621-4662 placement = isFileReadDenied (1)
 function consumeReadPermission(filePath, toolPermissionContext) {
   return consumeWritePermission(filePath, toolPermissionContext, "read");
 }
+//@ chunk-847rdpmn.js:4810-4873 placement
 /**
  * 路径是否存在。
  */
-//@ chunk-847rdpmn.js:4810-4873 placement
 async function pathExists(e) {
   try {
-    return (await stat(e), !0);
+    await stat(e);
+    return true;
   } catch {
-    return !1;
+    return false;
   }
 }
+//@ chunk-847rdpmn.js:4873-4974 placement
 /**
  * 路径存在/消失/不可读。
  */
-//@ chunk-847rdpmn.js:4873-4974 placement
 async function pathPresence(e) {
   return lstat(e).then(
     () => "present",
-    (n) => (isENOENT(n) || getErrnoCode(n) === "ENOTDIR" ? "gone" : "unreadable"),
+    (error) => (isENOENT(error) || getErrnoCode(error) === "ENOTDIR" ? "gone" : "unreadable"),
   );
 }
+//@ chunk-847rdpmn.js:4974-4989 placement
 /**
  * 有界读取的上限。
  */
-//@ chunk-847rdpmn.js:4974-4989 placement
 var BOUNDED_READ_MAX = 262144;
+//@ chunk-847rdpmn.js:4989-5373 placement
 /**
  * 有界同步读取文件（可拒绝链接、只读常规文件）。
  */
-//@ chunk-847rdpmn.js:4989-5373 placement
 function readBoundedSync(
   e,
-  {
-    maxBytes: maxBytes,
-    symlinkAtPath: symlinkAtPath = "follow",
-    regularFileOnly: regularFileOnly = symlinkAtPath === "refuse",
-  },
+  { maxBytes, symlinkAtPath = "follow", regularFileOnly = symlinkAtPath === "refuse" },
 ) {
   using u = slowLogging`fs.readBoundedSync(${e}, max ${maxBytes} bytes)`;
   let o = "r";
@@ -296,54 +313,61 @@ function readBoundedSync(
   try {
     if (regularFileOnly) {
       if (!fstatSync(a).isFile())
-        throw Object.assign(Error("EINVAL: not a regular file"), { code: "EINVAL" });
+        throw Object.assign(Error("EINVAL: not a regular file"), {
+          code: "EINVAL",
+        });
     }
     return readFdBounded(a, e, maxBytes);
   } finally {
     closeSync(a);
   }
 }
+//@ chunk-847rdpmn.js:5638-5697 placement
 /**
  * 路径是否为 socket。
  */
-//@ chunk-847rdpmn.js:5638-5697 placement
 function isSocket(e) {
   try {
     return fstatSync(e).isSocket();
   } catch {
-    return !1;
+    return false;
   }
 }
 //@ chunk-847rdpmn.js:5697-5775 placement
-function he(e, n) {
+/**
+ * 有界读取文件描述符内容（读到换行为止），读完关闭 fd。
+ */
+function readBoundedFdClose(e, maxBytes) {
   try {
-    return readFdBounded(e, `fd ${e}`, n, { untilNewline: !0 });
+    return readFdBounded(e, `fd ${e}`, maxBytes, {
+      untilNewline: true,
+    });
   } finally {
     closeSync(e);
   }
 }
+//@ chunk-847rdpmn.js:5775-6208 placement
 /**
  * 有界读取文件描述符内容。
  */
-//@ chunk-847rdpmn.js:5775-6208 placement
-function readFdBounded(e, n, r, { untilNewline: s = !1 } = {}) {
-  let u = [],
-    o = 0,
-    alloc = Buffer.alloc(8192);
-  while (!0) {
-    let f = readSync(e, alloc, 0, alloc.length, null);
+function readFdBounded(e, n, r, { untilNewline: s = false } = {}) {
+  let u = [];
+  let o = 0;
+  let a = Buffer.alloc(8192);
+  while (true) {
+    let f = readSync(e, a, 0, a.length, null);
     if (f === 0) return Buffer.concat(u).toString("utf8");
-    if (((o += f), o > r))
+    o += f;
+    if (o > r)
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
         `refusing to read ${n}: content exceeds ${r} byte limit`,
         "readBoundedSync: content exceeds byte limit",
       );
-    let y = s ? alloc.subarray(0, f).indexOf(10) : -1;
-    if ((u.push(Buffer.from(alloc.subarray(0, y === -1 ? f : y + 1))), y !== -1))
-      return Buffer.concat(u).toString("utf8");
+    let y = s ? a.subarray(0, f).indexOf(10) : -1;
+    u.push(Buffer.from(a.subarray(0, y === -1 ? f : y + 1)));
+    if (y !== -1) return Buffer.concat(u).toString("utf8");
   }
 }
-
 export {
   consumeWritePermission,
   SymlinkWriteRefusedError,
@@ -354,14 +378,14 @@ export {
   verifyStagingDir,
   HardLinkWriteRefusedError,
   StagingDirTamperedError,
-  re,
+  openWriteFlags,
   BOUNDED_READ_MAX,
   consumePermissionStash,
   isSocket,
-  he,
+  readBoundedFdClose,
   assertDirChainReal,
   SymlinkReadRefusedError,
+  recordStagingDirIdentity,
+  throwStagingTampered,
   consumeReadPermission,
-  cMi,
-  YMt,
 };

@@ -6,152 +6,168 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { QGe } from "./util/minimal.js";
+import { require_minimal } from "./util/minimal.js";
 
 //@ chunk-798ashq9.js:34984-39108 cjs-fingerprint
-var _Hr = x(function (Sc, Vr) {
-  Vr.exports = U;
-  var z = QGe(),
-    re,
-    { LongBits: LongBits, utf8: utf8 } = z;
-  function Y(l, u) {
-    return RangeError("index out of range: " + l.pos + " + " + (u || 1) + " > " + l.len);
+var require_reader = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = Reader;
+  var util = require_minimal();
+  var BufferReader;
+  var { LongBits, utf8 } = util;
+  function indexOutOfRange(reader, writeLength) {
+    return RangeError("index out of range: " + reader.pos + " + " + (writeLength || 1) + " > " + reader.len);
   }
-  function U(l) {
-    ((this.buf = l), (this.pos = 0), (this.len = l.length));
+  function Reader(buffer) {
+    this.buf = buffer;
+    this.pos = 0;
+    this.len = buffer.length;
   }
-  var kr =
-      typeof Uint8Array < "u"
-        ? function (u) {
-            if (u instanceof Uint8Array || Array.isArray(u)) return new U(u);
-            throw Error("illegal buffer");
-          }
-        : function (u) {
-            if (Array.isArray(u)) return new U(u);
-            throw Error("illegal buffer");
-          },
-    Cr = function () {
-      return z.Buffer
-        ? function (f) {
-            return (U.create = function (i) {
-              return z.Buffer.isBuffer(i) ? new re(i) : kr(i);
-            })(f);
-          }
-        : kr;
-    };
-  U.create = Cr();
-  U.prototype._slice = z.Array.prototype.subarray || z.Array.prototype.slice;
-  U.prototype.uint32 = (function () {
-    var u = 4294967295;
+  var create_array =
+    typeof Uint8Array !== "undefined"
+      ? function (buffer) {
+          if (buffer instanceof Uint8Array || Array.isArray(buffer)) return new Reader(buffer);
+          throw Error("illegal buffer");
+        }
+      : function (buffer) {
+          if (Array.isArray(buffer)) return new Reader(buffer);
+          throw Error("illegal buffer");
+        };
+  var create = function () {
+    return util.Buffer
+      ? function (buffer) {
+          return (Reader.create = function (buffer) {
+            return util.Buffer.isBuffer(buffer) ? new BufferReader(buffer) : create_array(buffer);
+          })(buffer);
+        }
+      : create_array;
+  };
+  Reader.create = create();
+  Reader.prototype._slice = util.Array.prototype.subarray || util.Array.prototype.slice;
+  Reader.prototype.uint32 = (function () {
+    var value = 4294967295;
     return function () {
-      if (((u = (this.buf[this.pos] & 127) >>> 0), this.buf[this.pos++] < 128)) return u;
-      if (((u = (u | ((this.buf[this.pos] & 127) << 7)) >>> 0), this.buf[this.pos++] < 128)) return u;
-      if (((u = (u | ((this.buf[this.pos] & 127) << 14)) >>> 0), this.buf[this.pos++] < 128)) return u;
-      if (((u = (u | ((this.buf[this.pos] & 127) << 21)) >>> 0), this.buf[this.pos++] < 128)) return u;
-      if (((u = (u | ((this.buf[this.pos] & 15) << 28)) >>> 0), this.buf[this.pos++] < 128)) return u;
-      if ((this.pos += 5) > this.len) throw ((this.pos = this.len), Y(this, 10));
-      return u;
+      value = (this.buf[this.pos] & 127) >>> 0;
+      if (this.buf[this.pos++] < 128) return value;
+      value = (value | ((this.buf[this.pos] & 127) << 7)) >>> 0;
+      if (this.buf[this.pos++] < 128) return value;
+      value = (value | ((this.buf[this.pos] & 127) << 14)) >>> 0;
+      if (this.buf[this.pos++] < 128) return value;
+      value = (value | ((this.buf[this.pos] & 127) << 21)) >>> 0;
+      if (this.buf[this.pos++] < 128) return value;
+      value = (value | ((this.buf[this.pos] & 15) << 28)) >>> 0;
+      if (this.buf[this.pos++] < 128) return value;
+      if ((this.pos += 5) > this.len) {
+        this.pos = this.len;
+        throw indexOutOfRange(this, 10);
+      }
+      return value;
     };
   })();
-  U.prototype.int32 = function () {
+  Reader.prototype.int32 = function () {
     return this.uint32() | 0;
   };
-  U.prototype.sint32 = function () {
-    var uint32 = this.uint32();
-    return ((uint32 >>> 1) ^ -(uint32 & 1)) | 0;
+  Reader.prototype.sint32 = function () {
+    var value = this.uint32();
+    return ((value >>> 1) ^ -(value & 1)) | 0;
   };
-  function ee() {
-    var l = new LongBits(0, 0),
-      u = 0;
+  function readLongVarint() {
+    var bits = new LongBits(0, 0);
+    var i = 0;
     if (this.len - this.pos > 4) {
-      for (; u < 4; ++u)
-        if (((l.lo = (l.lo | ((this.buf[this.pos] & 127) << (u * 7))) >>> 0), this.buf[this.pos++] < 128))
-          return l;
-      if (
-        ((l.lo = (l.lo | ((this.buf[this.pos] & 127) << 28)) >>> 0),
-        (l.hi = (l.hi | ((this.buf[this.pos] & 127) >> 4)) >>> 0),
-        this.buf[this.pos++] < 128)
-      )
-        return l;
-      u = 0;
-    } else {
-      for (; u < 3; ++u) {
-        if (this.pos >= this.len) throw Y(this);
-        if (((l.lo = (l.lo | ((this.buf[this.pos] & 127) << (u * 7))) >>> 0), this.buf[this.pos++] < 128))
-          return l;
+      for (; i < 4; ++i) {
+        bits.lo = (bits.lo | ((this.buf[this.pos] & 127) << (i * 7))) >>> 0;
+        if (this.buf[this.pos++] < 128) return bits;
       }
-      return ((l.lo = (l.lo | ((this.buf[this.pos++] & 127) << (u * 7))) >>> 0), l);
+      bits.lo = (bits.lo | ((this.buf[this.pos] & 127) << 28)) >>> 0;
+      bits.hi = (bits.hi | ((this.buf[this.pos] & 127) >> 4)) >>> 0;
+      if (this.buf[this.pos++] < 128) return bits;
+      i = 0;
+    } else {
+      for (; i < 3; ++i) {
+        if (this.pos >= this.len) throw indexOutOfRange(this);
+        bits.lo = (bits.lo | ((this.buf[this.pos] & 127) << (i * 7))) >>> 0;
+        if (this.buf[this.pos++] < 128) return bits;
+      }
+      bits.lo = (bits.lo | ((this.buf[this.pos++] & 127) << (i * 7))) >>> 0;
+      return bits;
     }
     if (this.len - this.pos > 4) {
-      for (; u < 5; ++u)
-        if (((l.hi = (l.hi | ((this.buf[this.pos] & 127) << (u * 7 + 3))) >>> 0), this.buf[this.pos++] < 128))
-          return l;
+      for (; i < 5; ++i) {
+        bits.hi = (bits.hi | ((this.buf[this.pos] & 127) << (i * 7 + 3))) >>> 0;
+        if (this.buf[this.pos++] < 128) return bits;
+      }
     } else
-      for (; u < 5; ++u) {
-        if (this.pos >= this.len) throw Y(this);
-        if (((l.hi = (l.hi | ((this.buf[this.pos] & 127) << (u * 7 + 3))) >>> 0), this.buf[this.pos++] < 128))
-          return l;
+      for (; i < 5; ++i) {
+        if (this.pos >= this.len) throw indexOutOfRange(this);
+        bits.hi = (bits.hi | ((this.buf[this.pos] & 127) << (i * 7 + 3))) >>> 0;
+        if (this.buf[this.pos++] < 128) return bits;
       }
     throw Error("invalid varint encoding");
   }
-  U.prototype.bool = function () {
+  Reader.prototype.bool = function () {
     return this.uint32() !== 0;
   };
-  function wt(l, u) {
-    return (l[u - 4] | (l[u - 3] << 8) | (l[u - 2] << 16) | (l[u - 1] << 24)) >>> 0;
+  function readFixed32_end(buf, end) {
+    return (buf[end - 4] | (buf[end - 3] << 8) | (buf[end - 2] << 16) | (buf[end - 1] << 24)) >>> 0;
   }
-  U.prototype.fixed32 = function () {
-    if (this.pos + 4 > this.len) throw Y(this, 4);
-    return wt(this.buf, (this.pos += 4));
+  Reader.prototype.fixed32 = function () {
+    if (this.pos + 4 > this.len) throw indexOutOfRange(this, 4);
+    return readFixed32_end(this.buf, (this.pos += 4));
   };
-  U.prototype.sfixed32 = function () {
-    if (this.pos + 4 > this.len) throw Y(this, 4);
-    return wt(this.buf, (this.pos += 4)) | 0;
+  Reader.prototype.sfixed32 = function () {
+    if (this.pos + 4 > this.len) throw indexOutOfRange(this, 4);
+    return readFixed32_end(this.buf, (this.pos += 4)) | 0;
   };
-  function Dr() {
-    if (this.pos + 8 > this.len) throw Y(this, 8);
-    return new LongBits(wt(this.buf, (this.pos += 4)), wt(this.buf, (this.pos += 4)));
+  function readFixed64() {
+    if (this.pos + 8 > this.len) throw indexOutOfRange(this, 8);
+    return new LongBits(
+      readFixed32_end(this.buf, (this.pos += 4)),
+      readFixed32_end(this.buf, (this.pos += 4)),
+    );
   }
-  U.prototype.float = function () {
-    if (this.pos + 4 > this.len) throw Y(this, 4);
-    var floatLE = z.float.readFloatLE(this.buf, this.pos);
-    return ((this.pos += 4), floatLE);
+  Reader.prototype.float = function () {
+    if (this.pos + 4 > this.len) throw indexOutOfRange(this, 4);
+    var value = util.float.readFloatLE(this.buf, this.pos);
+    this.pos += 4;
+    return value;
   };
-  U.prototype.double = function () {
-    if (this.pos + 8 > this.len) throw Y(this, 4);
-    var doubleLE = z.float.readDoubleLE(this.buf, this.pos);
-    return ((this.pos += 8), doubleLE);
+  Reader.prototype.double = function () {
+    if (this.pos + 8 > this.len) throw indexOutOfRange(this, 4);
+    var value = util.float.readDoubleLE(this.buf, this.pos);
+    this.pos += 8;
+    return value;
   };
-  U.prototype.bytes = function () {
-    var uint32 = this.uint32(),
-      pos = this.pos,
-      d = this.pos + uint32;
-    if (d > this.len) throw Y(this, uint32);
-    if (((this.pos += uint32), Array.isArray(this.buf))) return this.buf.slice(pos, d);
-    if (pos === d) {
-      var i = z.Buffer;
-      return i ? i.alloc(0) : new this.buf.constructor(0);
+  Reader.prototype.bytes = function () {
+    var length = this.uint32();
+    var start = this.pos;
+    var end = this.pos + length;
+    if (end > this.len) throw indexOutOfRange(this, length);
+    this.pos += length;
+    if (Array.isArray(this.buf)) return this.buf.slice(start, end);
+    if (start === end) {
+      var nativeBuffer = util.Buffer;
+      return nativeBuffer ? nativeBuffer.alloc(0) : new this.buf.constructor(0);
     }
-    return this._slice.call(this.buf, pos, d);
+    return this._slice.call(this.buf, start, end);
   };
-  U.prototype.string = function () {
+  Reader.prototype.string = function () {
     var bytes = this.bytes();
     return utf8.read(bytes, 0, bytes.length);
   };
-  U.prototype.skip = function (u) {
-    if (typeof u === "number") {
-      if (this.pos + u > this.len) throw Y(this, u);
-      this.pos += u;
+  Reader.prototype.skip = function (length) {
+    if (typeof length === "number") {
+      if (this.pos + length > this.len) throw indexOutOfRange(this, length);
+      this.pos += length;
     } else
-      do if (this.pos >= this.len) throw Y(this);
+      do if (this.pos >= this.len) throw indexOutOfRange(this);
       while (this.buf[this.pos++] & 128);
     return this;
   };
-  U.recursionLimit = z.recursionLimit;
-  U.prototype.skipType = function (l, u) {
-    if (u === void 0) u = 0;
-    if (u > U.recursionLimit) throw Error("maximum nesting depth exceeded");
-    switch (l) {
+  Reader.recursionLimit = util.recursionLimit;
+  Reader.prototype.skipType = function (wireType, depth) {
+    if (depth === undefined) depth = 0;
+    if (depth > Reader.recursionLimit) throw Error("maximum nesting depth exceeded");
+    switch (wireType) {
       case 0:
         this.skip();
         break;
@@ -162,37 +178,38 @@ var _Hr = x(function (Sc, Vr) {
         this.skip(this.uint32());
         break;
       case 3:
-        while ((l = this.uint32() & 7) !== 4) this.skipType(l, u + 1);
+        while ((wireType = this.uint32() & 7) !== 4) this.skipType(wireType, depth + 1);
         break;
       case 5:
         this.skip(4);
         break;
       default:
-        throw Error("invalid wire type " + l + " at offset " + this.pos);
+        throw Error("invalid wire type " + wireType + " at offset " + this.pos);
     }
     return this;
   };
-  U._configure = function (l) {
-    ((re = l), (U.create = Cr()), re._configure());
-    var u = z.Long ? "toLong" : "toNumber";
-    z.merge(U.prototype, {
+  Reader._configure = function (BufferReader_) {
+    BufferReader = BufferReader_;
+    Reader.create = create();
+    BufferReader._configure();
+    var fn = util.Long ? "toLong" : "toNumber";
+    util.merge(Reader.prototype, {
       int64: function () {
-        return ee.call(this)[u](!1);
+        return readLongVarint.call(this)[fn](false);
       },
       uint64: function () {
-        return ee.call(this)[u](!0);
+        return readLongVarint.call(this)[fn](true);
       },
       sint64: function () {
-        return ee.call(this).zzDecode()[u](!1);
+        return readLongVarint.call(this).zzDecode()[fn](false);
       },
       fixed64: function () {
-        return Dr.call(this)[u](!0);
+        return readFixed64.call(this)[fn](true);
       },
       sfixed64: function () {
-        return Dr.call(this)[u](!1);
+        return readFixed64.call(this)[fn](false);
       },
     });
   };
 });
-
-export { _Hr };
+export { require_reader };

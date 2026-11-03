@@ -6,299 +6,333 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { W1e } from "../../types/dist-cjs/index.js";
-import { bD } from "../../util-middleware/dist-cjs/index.js";
-import { Yns } from "../../middleware-serde/dist-cjs/index.js";
-import { Kg } from "../../protocol-http/dist-cjs/index.js";
-import { jRt } from "./submodules/protocols/index.js";
+import { require_types } from "../../types/dist-cjs/index.js";
+import { require_util_middleware } from "../../util-middleware/dist-cjs/index.js";
+import { require_middleware_serde } from "../../middleware-serde/dist-cjs/index.js";
+import { require_protocol_http } from "../../protocol-http/dist-cjs/index.js";
+import { require_protocols } from "./submodules/protocols/index.js";
 
 //@ chunk-83tv5s1x.js:2070-7981 cjs-fingerprint
-var EE = x(function (C) {
-  var f = W1e(),
-    M = bD(),
-    U = Yns(),
-    w = Kg(),
-    V = jRt(),
-    G = (e) => e[f.SMITHY_CONTEXT_KEY] || (e[f.SMITHY_CONTEXT_KEY] = {}),
-    Z = (e, r) => {
-      if (!r || r.length === 0) return e;
-      let t = [];
-      for (let i of r) for (let n of e) if (n.schemeId.split("#")[1] === i) t.push(n);
-      for (let i of e) if (!t.find(({ schemeId: schemeId }) => schemeId === i.schemeId)) t.push(i);
-      return t;
-    };
-  function Q(e) {
-    let r = new Map();
-    for (let t of e) r.set(t.schemeId, t);
-    return r;
+var require_core = x(function (cjsExports) {
+  var HttpApiKeyAuthLocation = require_types();
+  var getSmithyContext = require_util_middleware();
+  var U = require_middleware_serde();
+  var HttpRequest = require_protocol_http();
+  var V = require_protocols();
+  var getSmithyContext_2 = (e) =>
+    e[HttpApiKeyAuthLocation.SMITHY_CONTEXT_KEY] || (e[HttpApiKeyAuthLocation.SMITHY_CONTEXT_KEY] = {});
+  var Z = (candidateAuthOptions, authSchemePreference) => {
+    if (!authSchemePreference || authSchemePreference.length === 0) return candidateAuthOptions;
+    let preferredAuthOptions = [];
+    for (let preferredSchemeName of authSchemePreference)
+      for (let candidateAuthOption of candidateAuthOptions)
+        if (candidateAuthOption.schemeId.split("#")[1] === preferredSchemeName)
+          preferredAuthOptions.push(candidateAuthOption);
+    for (let candidateAuthOption of candidateAuthOptions)
+      if (!preferredAuthOptions.find(({ schemeId }) => schemeId === candidateAuthOption.schemeId))
+        preferredAuthOptions.push(candidateAuthOption);
+    return preferredAuthOptions;
+  };
+  function convertHttpAuthSchemesToMap(httpAuthSchemes) {
+    let map = new Map();
+    for (let scheme of httpAuthSchemes) map.set(scheme.schemeId, scheme);
+    return map;
   }
-  var y = (e, r) => (t, i) => async (n) => {
-      let httpAuthSchemeProvider = e.httpAuthSchemeProvider(
-          await r.httpAuthSchemeParametersProvider(e, i, n.input),
-        ),
-        s = e.authSchemePreference ? await e.authSchemePreference() : [],
-        c = Z(httpAuthSchemeProvider, s),
-        d = Q(e.httpAuthSchemes),
-        smithyContext = M.getSmithyContext(i),
-        p = [];
-      for (let u of c) {
-        let h = d.get(u.schemeId);
-        if (!h) {
-          p.push(`HttpAuthScheme \`${u.schemeId}\` was not enabled for this service.`);
-          continue;
-        }
-        let identityProvider = h.identityProvider(await r.identityProviderConfigProvider(e));
-        if (!identityProvider) {
-          p.push(`HttpAuthScheme \`${u.schemeId}\` did not have an IdentityProvider configured.`);
-          continue;
-        }
-        let { identityProperties: identityProperties = {}, signingProperties: signingProperties = {} } =
-          u.propertiesExtractor?.(e, i) || {};
-        ((u.identityProperties = Object.assign(u.identityProperties || {}, identityProperties)),
-          (u.signingProperties = Object.assign(u.signingProperties || {}, signingProperties)),
-          (smithyContext.selectedHttpAuthScheme = {
-            httpAuthOption: u,
-            identity: await identityProvider(u.identityProperties),
-            signer: h.signer,
-          }));
-        break;
+  var httpAuthSchemeMiddleware = (config, mwOptions) => (next, context) => async (args) => {
+    let options = config.httpAuthSchemeProvider(
+      await mwOptions.httpAuthSchemeParametersProvider(config, context, args.input),
+    );
+    let authSchemePreference = config.authSchemePreference ? await config.authSchemePreference() : [];
+    let resolvedOptions = Z(options, authSchemePreference);
+    let authSchemes = convertHttpAuthSchemesToMap(config.httpAuthSchemes);
+    let smithyContext = getSmithyContext.getSmithyContext(context);
+    let failureReasons = [];
+    for (let option of resolvedOptions) {
+      let scheme = authSchemes.get(option.schemeId);
+      if (!scheme) {
+        failureReasons.push(`HttpAuthScheme \`${option.schemeId}\` was not enabled for this service.`);
+        continue;
       }
-      if (!smithyContext.selectedHttpAuthScheme)
-        throw Error(
-          p.join(`
+      let identityProvider = scheme.identityProvider(await mwOptions.identityProviderConfigProvider(config));
+      if (!identityProvider) {
+        failureReasons.push(
+          `HttpAuthScheme \`${option.schemeId}\` did not have an IdentityProvider configured.`,
+        );
+        continue;
+      }
+      let { identityProperties = {}, signingProperties = {} } =
+        option.propertiesExtractor?.(config, context) || {};
+      option.identityProperties = Object.assign(option.identityProperties || {}, identityProperties);
+      option.signingProperties = Object.assign(option.signingProperties || {}, signingProperties);
+      smithyContext.selectedHttpAuthScheme = {
+        httpAuthOption: option,
+        identity: await identityProvider(option.identityProperties),
+        signer: scheme.signer,
+      };
+      break;
+    }
+    if (!smithyContext.selectedHttpAuthScheme)
+      throw Error(
+        failureReasons.join(`
 `),
-        );
-      return t(n);
+      );
+    return next(args);
+  };
+  var httpAuthSchemeEndpointRuleSetMiddlewareOptions = {
+    step: "serialize",
+    tags: ["HTTP_AUTH_SCHEME"],
+    name: "httpAuthSchemeMiddleware",
+    override: true,
+    relation: "before",
+    toMiddleware: "endpointV2Middleware",
+  };
+  var getHttpAuthSchemeEndpointRuleSetPlugin = (
+    config,
+    { httpAuthSchemeParametersProvider, identityProviderConfigProvider },
+  ) => ({
+    applyToStack: (clientStack) => {
+      clientStack.addRelativeTo(
+        httpAuthSchemeMiddleware(config, {
+          httpAuthSchemeParametersProvider,
+          identityProviderConfigProvider,
+        }),
+        httpAuthSchemeEndpointRuleSetMiddlewareOptions,
+      );
     },
-    P = {
-      step: "serialize",
-      tags: ["HTTP_AUTH_SCHEME"],
-      name: "httpAuthSchemeMiddleware",
-      override: !0,
-      relation: "before",
-      toMiddleware: "endpointV2Middleware",
+  });
+  var httpAuthSchemeMiddlewareOptions = {
+    step: "serialize",
+    tags: ["HTTP_AUTH_SCHEME"],
+    name: "httpAuthSchemeMiddleware",
+    override: true,
+    relation: "before",
+    toMiddleware: U.serializerMiddlewareOption.name,
+  };
+  var getHttpAuthSchemePlugin = (
+    config,
+    { httpAuthSchemeParametersProvider, identityProviderConfigProvider },
+  ) => ({
+    applyToStack: (clientStack) => {
+      clientStack.addRelativeTo(
+        httpAuthSchemeMiddleware(config, {
+          httpAuthSchemeParametersProvider,
+          identityProviderConfigProvider,
+        }),
+        httpAuthSchemeMiddlewareOptions,
+      );
     },
-    J = (
-      e,
-      {
-        httpAuthSchemeParametersProvider: httpAuthSchemeParametersProvider,
-        identityProviderConfigProvider: identityProviderConfigProvider,
-      },
-    ) => ({
-      applyToStack: (i) => {
-        i.addRelativeTo(
-          y(e, {
-            httpAuthSchemeParametersProvider: httpAuthSchemeParametersProvider,
-            identityProviderConfigProvider: identityProviderConfigProvider,
-          }),
-          P,
-        );
-      },
-    }),
-    E = {
-      step: "serialize",
-      tags: ["HTTP_AUTH_SCHEME"],
-      name: "httpAuthSchemeMiddleware",
-      override: !0,
-      relation: "before",
-      toMiddleware: U.serializerMiddlewareOption.name,
+  });
+  var defaultErrorHandler = (signingProperties) => (error) => {
+    throw error;
+  };
+  var defaultSuccessHandler = (httpResponse, signingProperties) => {};
+  var httpSigningMiddleware = (config) => (next, t) => async (args) => {
+    if (!HttpRequest.HttpRequest.isInstance(args.request)) return next(args);
+    let scheme = getSmithyContext.getSmithyContext(t).selectedHttpAuthScheme;
+    if (!scheme) throw Error("No HttpAuthScheme was selected: unable to sign request");
+    let {
+      httpAuthOption: { signingProperties = {} },
+      identity,
+      signer,
+    } = scheme;
+    let output = await next({
+      ...args,
+      request: await signer.sign(args.request, identity, signingProperties),
+    }).catch((signer.errorHandler || defaultErrorHandler)(signingProperties));
+    (signer.successHandler || defaultSuccessHandler)(output.response, signingProperties);
+    return output;
+  };
+  var httpSigningMiddlewareOptions = {
+    step: "finalizeRequest",
+    tags: ["HTTP_SIGNING"],
+    name: "httpSigningMiddleware",
+    aliases: ["apiKeyMiddleware", "tokenMiddleware", "awsAuthMiddleware"],
+    override: true,
+    relation: "after",
+    toMiddleware: "retryMiddleware",
+  };
+  var getHttpSigningPlugin = (config) => ({
+    applyToStack: (clientStack) => {
+      clientStack.addRelativeTo(httpSigningMiddleware(), httpSigningMiddlewareOptions);
     },
-    W = (
-      e,
-      {
-        httpAuthSchemeParametersProvider: httpAuthSchemeParametersProvider,
-        identityProviderConfigProvider: identityProviderConfigProvider,
-      },
-    ) => ({
-      applyToStack: (i) => {
-        i.addRelativeTo(
-          y(e, {
-            httpAuthSchemeParametersProvider: httpAuthSchemeParametersProvider,
-            identityProviderConfigProvider: identityProviderConfigProvider,
-          }),
-          E,
-        );
-      },
-    }),
-    ee = (e) => (r) => {
-      throw r;
-    },
-    te = (e, r) => {},
-    H = (e) => (r, t) => async (i) => {
-      if (!w.HttpRequest.isInstance(i.request)) return r(i);
-      let selectedHttpAuthScheme = M.getSmithyContext(t).selectedHttpAuthScheme;
-      if (!selectedHttpAuthScheme) throw Error("No HttpAuthScheme was selected: unable to sign request");
-      let {
-          httpAuthOption: { signingProperties: s = {} },
-          identity: identity,
-          signer: signer,
-        } = selectedHttpAuthScheme,
-        a = await r({ ...i, request: await signer.sign(i.request, identity, s) }).catch(
-          (signer.errorHandler || ee)(s),
-        );
-      return ((signer.successHandler || te)(a.response, s), a);
-    },
-    I = {
-      step: "finalizeRequest",
-      tags: ["HTTP_SIGNING"],
-      name: "httpSigningMiddleware",
-      aliases: ["apiKeyMiddleware", "tokenMiddleware", "awsAuthMiddleware"],
-      override: !0,
-      relation: "after",
-      toMiddleware: "retryMiddleware",
-    },
-    re = (e) => ({
-      applyToStack: (r) => {
-        r.addRelativeTo(H(), I);
-      },
-    }),
-    ie = (e) => {
-      if (typeof e === "function") return e;
-      let resolved = Promise.resolve(e);
-      return () => resolved;
-    },
-    ne = async (e, r, t, i = (o) => o, ...n) => {
-      let o = new e(t);
-      return ((o = i(o) ?? o), await r.send(o, ...n));
-    };
-  function se(e, r, t, i, n) {
-    return async function* (s, c, ...d) {
-      let a = c,
-        p = s.startingToken ?? a[t],
-        u = !0,
-        h;
-      while (u) {
-        if (((a[t] = p), n)) a[n] = a[n] ?? s.pageSize;
-        if (s.client instanceof e) h = await ne(r, s.client, c, s.withCommand, ...d);
-        else throw Error(`Invalid client, expected instance of ${e.name}`);
-        yield h;
-        let l = p;
-        ((p = oe(h, i)), (u = !!(p && (!s.stopOnSameToken || p !== l))));
+  });
+  var normalizeProvider = (input) => {
+    if (typeof input === "function") return input;
+    let promisified = Promise.resolve(input);
+    return () => promisified;
+  };
+  var makePagedClientRequest = async (CommandCtor, client, input, withCommand = (_) => _, ...args) => {
+    let command = new CommandCtor(input);
+    command = withCommand(command) ?? command;
+    return await client.send(command, ...args);
+  };
+  function createPaginator(ClientCtor, CommandCtor, inputTokenName, outputTokenName, pageSizeTokenName) {
+    return async function* (config, input, ...additionalArguments) {
+      let _input = input;
+      let token = config.startingToken ?? _input[inputTokenName];
+      let hasNext = true;
+      let page;
+      while (hasNext) {
+        _input[inputTokenName] = token;
+        if (pageSizeTokenName) _input[pageSizeTokenName] = _input[pageSizeTokenName] ?? config.pageSize;
+        if (config.client instanceof ClientCtor)
+          page = await makePagedClientRequest(
+            CommandCtor,
+            config.client,
+            input,
+            config.withCommand,
+            ...additionalArguments,
+          );
+        else throw Error(`Invalid client, expected instance of ${ClientCtor.name}`);
+        yield page;
+        let prevToken = token;
+        token = get(page, outputTokenName);
+        hasNext = !!(token && (!config.stopOnSameToken || token !== prevToken));
       }
       return;
     };
   }
-  var oe = (e, r) => {
-    let t = e,
-      parts = r.split(".");
-    for (let n of parts) {
-      if (!t || typeof t !== "object") return;
-      t = t[n];
+  var get = (fromObject, path) => {
+    let cursor = fromObject;
+    let pathComponents = path.split(".");
+    for (let step of pathComponents) {
+      if (!cursor || typeof cursor !== "object") return;
+      cursor = cursor[step];
     }
-    return t;
+    return cursor;
   };
-  function ae(e, r, t) {
-    if (!e.__smithy_context) e.__smithy_context = { features: {} };
-    else if (!e.__smithy_context.features) e.__smithy_context.features = {};
-    e.__smithy_context.features[r] = t;
+  function setFeature(context, feature, value) {
+    if (!context.__smithy_context)
+      context.__smithy_context = {
+        features: {},
+      };
+    else if (!context.__smithy_context.features) context.__smithy_context.features = {};
+    context.__smithy_context.features[feature] = value;
   }
-  class q {
+  class DefaultIdentityProviderConfig {
     authSchemes = new Map();
     constructor(e) {
-      for (let [r, t] of Object.entries(e)) if (t !== void 0) this.authSchemes.set(r, t);
+      for (let [key, value] of Object.entries(e)) if (value !== undefined) this.authSchemes.set(key, value);
     }
-    getIdentityProvider(e) {
-      return this.authSchemes.get(e);
+    getIdentityProvider(schemeId) {
+      return this.authSchemes.get(schemeId);
     }
   }
-  class R {
-    async sign(e, r, t) {
-      if (!t)
+  class HttpApiKeyAuthSigner {
+    async sign(httpRequest, identity, signingProperties) {
+      if (!signingProperties)
         throw Error(
           "request could not be signed with `apiKey` since the `name` and `in` signer properties are missing",
         );
-      if (!t.name)
+      if (!signingProperties.name)
         throw Error("request could not be signed with `apiKey` since the `name` signer property is missing");
-      if (!t.in)
+      if (!signingProperties.in)
         throw Error("request could not be signed with `apiKey` since the `in` signer property is missing");
-      if (!r.apiKey)
+      if (!identity.apiKey)
         throw Error("request could not be signed with `apiKey` since the `apiKey` is not defined");
-      let clone = w.HttpRequest.clone(e);
-      if (t.in === f.HttpApiKeyAuthLocation.QUERY) clone.query[t.name] = r.apiKey;
-      else if (t.in === f.HttpApiKeyAuthLocation.HEADER)
-        clone.headers[t.name] = t.scheme ? `${t.scheme} ${r.apiKey}` : r.apiKey;
+      let clonedRequest = HttpRequest.HttpRequest.clone(httpRequest);
+      if (signingProperties.in === HttpApiKeyAuthLocation.HttpApiKeyAuthLocation.QUERY)
+        clonedRequest.query[signingProperties.name] = identity.apiKey;
+      else if (signingProperties.in === HttpApiKeyAuthLocation.HttpApiKeyAuthLocation.HEADER)
+        clonedRequest.headers[signingProperties.name] = signingProperties.scheme
+          ? `${signingProperties.scheme} ${identity.apiKey}`
+          : identity.apiKey;
       else
         throw Error(
-          "request can only be signed with `apiKey` locations `query` or `header`, but found: `" + t.in + "`",
+          "request can only be signed with `apiKey` locations `query` or `header`, but found: `" +
+            signingProperties.in +
+            "`",
         );
-      return clone;
+      return clonedRequest;
     }
   }
-  class O {
-    async sign(e, r, t) {
-      let clone = w.HttpRequest.clone(e);
-      if (!r.token) throw Error("request could not be signed with `token` since the `token` is not defined");
-      return ((clone.headers.Authorization = `Bearer ${r.token}`), clone);
+  class HttpBearerAuthSigner {
+    async sign(httpRequest, identity, signingProperties) {
+      let clonedRequest = HttpRequest.HttpRequest.clone(httpRequest);
+      if (!identity.token)
+        throw Error("request could not be signed with `token` since the `token` is not defined");
+      clonedRequest.headers.Authorization = `Bearer ${identity.token}`;
+      return clonedRequest;
     }
   }
-  class _ {
-    async sign(e, r, t) {
-      return e;
+  class NoAuthSigner {
+    async sign(httpRequest, identity, signingProperties) {
+      return httpRequest;
     }
   }
-  var T = (e) =>
-      function (t) {
-        return z(t) && t.expiration.getTime() - Date.now() < e;
-      },
-    b = 300000,
-    de = T(b),
-    z = (e) => e.expiration !== void 0,
-    ce = (e, r, t) => {
-      if (e === void 0) return;
-      let i = typeof e !== "function" ? async () => Promise.resolve(e) : e,
-        n,
-        o,
-        s,
-        c = !1,
-        d = async (a) => {
-          if (!o) o = i(a);
-          try {
-            ((n = await o), (s = !0), (c = !1));
-          } finally {
-            o = void 0;
-          }
-          return n;
-        };
-      if (r === void 0)
-        return async (a) => {
-          if (!s || a?.forceRefresh) n = await d(a);
-          return n;
-        };
-      return async (a) => {
-        if (!s || a?.forceRefresh) n = await d(a);
-        if (c) return n;
-        if (!t(n)) return ((c = !0), n);
-        if (r(n)) return (await d(a), n);
-        return n;
-      };
+  var createIsIdentityExpiredFunction = (expirationMs) =>
+    function (identity) {
+      return (
+        doesIdentityRequireRefresh(identity) && identity.expiration.getTime() - Date.now() < expirationMs
+      );
     };
-  Object.defineProperty(C, "requestBuilder", {
-    enumerable: !0,
+  var EXPIRATION_MS = 300000;
+  var isIdentityExpired = createIsIdentityExpiredFunction(EXPIRATION_MS);
+  var doesIdentityRequireRefresh = (identity) => identity.expiration !== undefined;
+  var memoizeIdentityProvider = (provider, isExpired, requiresRefresh) => {
+    if (provider === undefined) return;
+    let normalizedProvider =
+      typeof provider !== "function" ? async () => Promise.resolve(provider) : provider;
+    let resolved;
+    let pending;
+    let hasResult;
+    let isConstant = false;
+    let coalesceProvider = async (options) => {
+      if (!pending) pending = normalizedProvider(options);
+      try {
+        resolved = await pending;
+        hasResult = true;
+        isConstant = false;
+      } finally {
+        pending = undefined;
+      }
+      return resolved;
+    };
+    if (isExpired === undefined)
+      return async (options) => {
+        if (!hasResult || options?.forceRefresh) resolved = await coalesceProvider(options);
+        return resolved;
+      };
+    return async (options) => {
+      if (!hasResult || options?.forceRefresh) resolved = await coalesceProvider(options);
+      if (isConstant) return resolved;
+      if (!requiresRefresh(resolved)) {
+        isConstant = true;
+        return resolved;
+      }
+      if (isExpired(resolved)) {
+        await coalesceProvider(options);
+        return resolved;
+      }
+      return resolved;
+    };
+  };
+  Object.defineProperty(cjsExports, "requestBuilder", {
+    enumerable: true,
     get: function () {
       return V.requestBuilder;
     },
   });
-  C.DefaultIdentityProviderConfig = q;
-  C.EXPIRATION_MS = b;
-  C.HttpApiKeyAuthSigner = R;
-  C.HttpBearerAuthSigner = O;
-  C.NoAuthSigner = _;
-  C.createIsIdentityExpiredFunction = T;
-  C.createPaginator = se;
-  C.doesIdentityRequireRefresh = z;
-  C.getHttpAuthSchemeEndpointRuleSetPlugin = J;
-  C.getHttpAuthSchemePlugin = W;
-  C.getHttpSigningPlugin = re;
-  C.getSmithyContext = G;
-  C.httpAuthSchemeEndpointRuleSetMiddlewareOptions = P;
-  C.httpAuthSchemeMiddleware = y;
-  C.httpAuthSchemeMiddlewareOptions = E;
-  C.httpSigningMiddleware = H;
-  C.httpSigningMiddlewareOptions = I;
-  C.isIdentityExpired = de;
-  C.memoizeIdentityProvider = ce;
-  C.normalizeProvider = ie;
-  C.setFeature = ae;
+  cjsExports.DefaultIdentityProviderConfig = DefaultIdentityProviderConfig;
+  cjsExports.EXPIRATION_MS = EXPIRATION_MS;
+  cjsExports.HttpApiKeyAuthSigner = HttpApiKeyAuthSigner;
+  cjsExports.HttpBearerAuthSigner = HttpBearerAuthSigner;
+  cjsExports.NoAuthSigner = NoAuthSigner;
+  cjsExports.createIsIdentityExpiredFunction = createIsIdentityExpiredFunction;
+  cjsExports.createPaginator = createPaginator;
+  cjsExports.doesIdentityRequireRefresh = doesIdentityRequireRefresh;
+  cjsExports.getHttpAuthSchemeEndpointRuleSetPlugin = getHttpAuthSchemeEndpointRuleSetPlugin;
+  cjsExports.getHttpAuthSchemePlugin = getHttpAuthSchemePlugin;
+  cjsExports.getHttpSigningPlugin = getHttpSigningPlugin;
+  cjsExports.getSmithyContext = getSmithyContext_2;
+  cjsExports.httpAuthSchemeEndpointRuleSetMiddlewareOptions = httpAuthSchemeEndpointRuleSetMiddlewareOptions;
+  cjsExports.httpAuthSchemeMiddleware = httpAuthSchemeMiddleware;
+  cjsExports.httpAuthSchemeMiddlewareOptions = httpAuthSchemeMiddlewareOptions;
+  cjsExports.httpSigningMiddleware = httpSigningMiddleware;
+  cjsExports.httpSigningMiddlewareOptions = httpSigningMiddlewareOptions;
+  cjsExports.isIdentityExpired = isIdentityExpired;
+  cjsExports.memoizeIdentityProvider = memoizeIdentityProvider;
+  cjsExports.normalizeProvider = normalizeProvider;
+  cjsExports.setFeature = setFeature;
 });
-
-export { EE };
+export { require_core };

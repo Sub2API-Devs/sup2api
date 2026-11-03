@@ -21,7 +21,10 @@ import { MEMO_CACHE_SENTINEL } from "../../../../runtime/bun-runtime.js";
 import { logEvent } from "../../../services/analytics/index.js";
 import { lit as lit_2 } from "../../../services/analytics/safeMetadata.js";
 import { handlePlanModeTransition } from "../../../bootstrap/state.js";
-import { e, r } from "../../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+} from "../../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Box } from "../../../ink/components/Text.js";
 import { ConfirmSelect } from "../../design-system/ConfirmSelect.js";
 import { PermissionDialog_2 } from "../PermissionDialog.js";
@@ -34,158 +37,202 @@ function selectToolPermissionContextMode_3(s) {
 function enterPlanChoiceToResult(h, x) {
   switch (h) {
     case "yes": {
-      if (x === null || !isConsentRow(x)) return { behavior: "deny" };
-      return { behavior: "allow", updatedInput: {}, permissionUpdates: x.applies };
+      if (x === null || !isConsentRow(x))
+        return {
+          behavior: "deny",
+        };
+      return {
+        behavior: "allow",
+        updatedInput: {},
+        permissionUpdates: x.applies,
+      };
     }
     case "no":
-      return { behavior: "deny" };
+      return {
+        behavior: "deny",
+      };
   }
 }
+//@ chunk-18hwfzwa.js:1344327-1346542 fingerprint = EnterPlanModePermissionRequest (0.487)
 /**
  * 进入计划模式确认：说明计划模式会做什么，允许/拒绝并记录 tengu_plan_enter。
  */
-//@ chunk-18hwfzwa.js:1344327-1346542 fingerprint = EnterPlanModePermissionRequest (0.487)
-function EnterPlanModePermissionRequest(t0) {
-  let $ = w(27),
-    { payload: payload, answer: answer, wouldTakeAnswer: wouldTakeAnswer } = t0,
-    ee = useInputRefusalWindow(),
-    { refusedWithin: refusedWithin, noteRefused: noteRefused, epoch: epoch } = useRefusalTracker(),
-    We;
-  if ($[0] !== ee || $[1] !== noteRefused || $[2] !== refusedWithin)
-    ((We = function ze() {
-      if (ee() || refusedWithin()) {
-        return (noteRefused(), !0);
+function EnterPlanModePermissionRequest(props) {
+  let $ = w(27);
+  let { payload, answer, wouldTakeAnswer } = props;
+  let inputRefusalWindow = useInputRefusalWindow();
+  let { refusedWithin, noteRefused, epoch } = useRefusalTracker();
+  let We;
+  if ($[0] !== inputRefusalWindow || $[1] !== noteRefused || $[2] !== refusedWithin) {
+    We = function ze() {
+      if (inputRefusalWindow() || refusedWithin()) {
+        noteRefused();
+        return true;
       }
-      return !1;
-    }),
-      ($[0] = ee),
-      ($[1] = noteRefused),
-      ($[2] = refusedWithin),
-      ($[3] = We));
-  else We = $[3];
-  let ze = We,
-    Xe = useMountTime(),
-    rt = settleKey(epoch),
-    toolPermissionContextMode = useAppState(selectToolPermissionContextMode_3),
-    At;
-  if ($[4] === MEMO_CACHE_SENTINEL) ((At = modeSwitchRow("plan")), ($[4] = At));
-  else At = $[4];
-  let It = At,
-    Ot;
+      return false;
+    };
+    $[0] = inputRefusalWindow;
+    $[1] = noteRefused;
+    $[2] = refusedWithin;
+    $[3] = We;
+  } else We = $[3];
+  let refuseInput = We;
+  let openedAt = useMountTime();
+  let rt = settleKey(epoch);
+  let toolPermissionContextMode = useAppState(selectToolPermissionContextMode_3);
+  let At;
+  if ($[4] === MEMO_CACHE_SENTINEL) {
+    At = modeSwitchRow("plan");
+    $[4] = At;
+  } else At = $[4];
+  let It = At;
+  let Ot;
   if (
     $[5] !== answer ||
-    $[6] !== ee ||
+    $[6] !== inputRefusalWindow ||
     $[7] !== noteRefused ||
     $[8] !== refusedWithin ||
     $[9] !== toolPermissionContextMode ||
     $[10] !== wouldTakeAnswer
-  )
-    ((Ot = (value) => {
-      if (ee() || refusedWithin()) {
+  ) {
+    Ot = (value) => {
+      if (inputRefusalWindow() || refusedWithin()) {
         noteRefused();
         return;
       }
       if (!wouldTakeAnswer()) {
         return;
       }
-      if (value === "yes" && It !== null)
-        (logEvent("tengu_plan_enter", { entryMethod: lit_2("tool") }),
-          handlePlanModeTransition(toolPermissionContextMode, "plan"));
+      if (value === "yes" && It !== null) {
+        logEvent("tengu_plan_enter", {
+          entryMethod: lit_2("tool"),
+        });
+        handlePlanModeTransition(toolPermissionContextMode, "plan");
+      }
       answer(enterPlanChoiceToResult(value, It));
-    }),
-      ($[5] = answer),
-      ($[6] = ee),
-      ($[7] = noteRefused),
-      ($[8] = refusedWithin),
-      ($[9] = toolPermissionContextMode),
-      ($[10] = wouldTakeAnswer),
-      ($[11] = Ot));
-  else Ot = $[11];
-  let Dt = Ot,
-    Lt;
-  if ($[12] === MEMO_CACHE_SENTINEL)
-    ((Lt = e(Text, {
+    };
+    $[5] = answer;
+    $[6] = inputRefusalWindow;
+    $[7] = noteRefused;
+    $[8] = refusedWithin;
+    $[9] = toolPermissionContextMode;
+    $[10] = wouldTakeAnswer;
+    $[11] = Ot;
+  } else Ot = $[11];
+  let Dt = Ot;
+  let t2;
+  if ($[12] === MEMO_CACHE_SENTINEL) {
+    t2 = jsxProd_default(Text, {
       children: "Claude wants to enter plan mode to explore and design an implementation approach.",
-    })),
-      ($[12] = Lt));
-  else Lt = $[12];
-  let oo;
-  if ($[13] === MEMO_CACHE_SENTINEL)
-    ((oo = r(Box, {
+    });
+    $[12] = t2;
+  } else t2 = $[12];
+  let t3;
+  if ($[13] === MEMO_CACHE_SENTINEL) {
+    t3 = jsxProd_default_2(Box, {
       marginTop: 1,
       flexDirection: "column",
       children: [
-        e(Text, { dimColor: !0, children: "In plan mode, Claude will:" }),
-        e(Text, { dimColor: !0, children: " \xB7 Explore the codebase thoroughly" }),
-        e(Text, { dimColor: !0, children: " \xB7 Identify existing patterns" }),
-        e(Text, { dimColor: !0, children: " \xB7 Design an implementation strategy" }),
-        e(Text, { dimColor: !0, children: " \xB7 Present a plan for your approval" }),
+        jsxProd_default(Text, {
+          dimColor: true,
+          children: "In plan mode, Claude will:",
+        }),
+        jsxProd_default(Text, {
+          dimColor: true,
+          children: " \xB7 Explore the codebase thoroughly",
+        }),
+        jsxProd_default(Text, {
+          dimColor: true,
+          children: " \xB7 Identify existing patterns",
+        }),
+        jsxProd_default(Text, {
+          dimColor: true,
+          children: " \xB7 Design an implementation strategy",
+        }),
+        jsxProd_default(Text, {
+          dimColor: true,
+          children: " \xB7 Present a plan for your approval",
+        }),
       ],
-    })),
-      ($[13] = oo));
-  else oo = $[13];
-  let Xt;
-  if ($[14] === MEMO_CACHE_SENTINEL)
-    ((Xt = e(Box, {
+    });
+    $[13] = t3;
+  } else t3 = $[13];
+  let t4;
+  if ($[14] === MEMO_CACHE_SENTINEL) {
+    t4 = jsxProd_default(Box, {
       marginTop: 1,
-      children: e(Text, {
-        dimColor: !0,
+      children: jsxProd_default(Text, {
+        dimColor: true,
         children: "No code changes will be made until you approve the plan.",
       }),
-    })),
-      ($[14] = Xt));
-  else Xt = $[14];
-  let io, so;
-  if ($[15] !== Dt) ((io = () => Dt("yes")), (so = () => Dt("no")), ($[15] = Dt), ($[16] = io), ($[17] = so));
-  else ((io = $[16]), (so = $[17]));
-  let po;
-  if ($[18] !== rt.remountKey || $[19] !== ze || $[20] !== Xe || $[21] !== io || $[22] !== so)
-    ((po = r(Box, {
+    });
+    $[14] = t4;
+  } else t4 = $[14];
+  let onConfirm;
+  let onCancel;
+  if ($[15] !== Dt) {
+    onConfirm = () => Dt("yes");
+    onCancel = () => Dt("no");
+    $[15] = Dt;
+    $[16] = onConfirm;
+    $[17] = onCancel;
+  } else {
+    onConfirm = $[16];
+    onCancel = $[17];
+  }
+  let children;
+  if (
+    $[18] !== rt.remountKey ||
+    $[19] !== refuseInput ||
+    $[20] !== openedAt ||
+    $[21] !== onConfirm ||
+    $[22] !== onCancel
+  ) {
+    children = jsxProd_default_2(Box, {
       flexDirection: "column",
       marginTop: 1,
       paddingX: 1,
       children: [
-        Lt,
-        oo,
-        Xt,
-        e(Box, {
+        t2,
+        t3,
+        t4,
+        jsxProd_default(Box, {
           marginTop: 1,
-          children: e(
+          children: jsxProd_default(
             ConfirmSelect,
             {
-              refuseInput: ze,
-              openedAt: Xe,
-              hideIndexes: !0,
+              refuseInput,
+              openedAt,
+              hideIndexes: true,
               confirmLabel: It !== null ? It.node : "Yes, enter plan mode",
               cancelLabel: "No, start implementing now",
-              onConfirm: io,
-              onCancel: so,
+              onConfirm,
+              onCancel,
             },
             rt.remountKey,
           ),
         }),
       ],
-    })),
-      ($[18] = rt.remountKey),
-      ($[19] = ze),
-      ($[20] = Xe),
-      ($[21] = io),
-      ($[22] = so),
-      ($[23] = po));
-  else po = $[23];
-  let ao;
-  if ($[24] !== payload.requestSource || $[25] !== po)
-    ((ao = e(PermissionDialog_2, {
+    });
+    $[18] = rt.remountKey;
+    $[19] = refuseInput;
+    $[20] = openedAt;
+    $[21] = onConfirm;
+    $[22] = onCancel;
+    $[23] = children;
+  } else children = $[23];
+  let t9;
+  if ($[24] !== payload.requestSource || $[25] !== children) {
+    t9 = jsxProd_default(PermissionDialog_2, {
       color: "planMode",
       title: "Enter plan mode?",
       requestSource: payload.requestSource,
-      children: po,
-    })),
-      ($[24] = payload.requestSource),
-      ($[25] = po),
-      ($[26] = ao));
-  else ao = $[26];
-  return ao;
+      children,
+    });
+    $[24] = payload.requestSource;
+    $[25] = children;
+    $[26] = t9;
+  } else t9 = $[26];
+  return t9;
 }
-
 export { EnterPlanModePermissionRequest };

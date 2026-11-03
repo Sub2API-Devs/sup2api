@@ -15,14 +15,14 @@ import { lastGrapheme } from "./intl.js";
 import { sleep } from "./sleep.js";
 
 //@ chunk-wphjdnre.js:375-386 placement
-var a = 1500;
+var EARLY_INPUT_REST_MS = 1500;
 //@ chunk-wphjdnre.js:386-492 placement
 class EarlyInputState {
   buffer = "";
   seeded = "";
-  capturing = !1;
+  capturing = false;
   readableHandler = null;
-  hasField = !1;
+  hasField = false;
   fieldKeyAt = 0;
   fieldClosedAt = null;
 }
@@ -32,42 +32,53 @@ var earlyInputSlot = new HostScoped(() => new EarlyInputState());
 function getEarlyInputState() {
   return earlyInputSlot.of(getRootSession().host);
 }
+//@ chunk-wphjdnre.js:550-987 placement = startCapturingEarlyInput (0.706)
 /**
  * 在 REPL 就绪前捕获早期键盘输入。
  */
-//@ chunk-wphjdnre.js:550-987 placement = startCapturingEarlyInput (0.706)
 function startCapturingEarlyInput() {
-  let e = getEarlyInputState();
-  if (!process.stdin.isTTY || e.capturing || eagerHasCliFlag("-p") || eagerHasCliFlag("--print")) return;
-  ((e.capturing = !0), (e.buffer = ""), (e.seeded = ""), (e.hasField = !1), (e.fieldKeyAt = 0));
+  let earlyInputState = getEarlyInputState();
+  if (
+    !process.stdin.isTTY ||
+    earlyInputState.capturing ||
+    eagerHasCliFlag("-p") ||
+    eagerHasCliFlag("--print")
+  )
+    return;
+  earlyInputState.capturing = true;
+  earlyInputState.buffer = "";
+  earlyInputState.seeded = "";
+  earlyInputState.hasField = false;
+  earlyInputState.fieldKeyAt = 0;
   try {
-    (process.stdin.setEncoding("utf8"),
-      process.stdin.setRawMode(!0),
-      process.stdin.ref(),
-      (e.readableHandler = () => {
-        let chunk = process.stdin.read();
-        while (chunk !== null) {
-          if (typeof chunk === "string") processChunk(chunk);
-          chunk = process.stdin.read();
-        }
-      }),
-      process.stdin.on("readable", e.readableHandler));
+    process.stdin.setEncoding("utf8");
+    process.stdin.setRawMode(true);
+    process.stdin.ref();
+    earlyInputState.readableHandler = () => {
+      let chunk = process.stdin.read();
+      while (chunk !== null) {
+        if (typeof chunk === "string") processChunk(chunk);
+        chunk = process.stdin.read();
+      }
+    };
+    process.stdin.on("readable", earlyInputState.readableHandler);
   } catch {
-    e.capturing = !1;
+    earlyInputState.capturing = false;
   }
 }
+//@ chunk-wphjdnre.js:987-1697 fingerprint = processChunk (0.797)
 /**
  * 处理早期输入字节：Ctrl+C 退出 130、Ctrl+D 停止、退格、回车与普通字符。
  */
-//@ chunk-wphjdnre.js:987-1697 fingerprint = processChunk (0.797)
 function processChunk(str) {
-  let t = getEarlyInputState(),
-    n = 0;
+  let earlyInputState = getEarlyInputState();
+  let n = 0;
   while (n < str.length) {
-    let char = str[n],
-      code = char.charCodeAt(0);
+    let char = str[n];
+    let code = char.charCodeAt(0);
     if (code === 3) {
-      (stopCapturingEarlyInput(), process.exit(130));
+      stopCapturingEarlyInput();
+      process.exit(130);
       return;
     }
     if (code === 4) {
@@ -75,9 +86,9 @@ function processChunk(str) {
       return;
     }
     if (code === 127 || code === 8) {
-      if (t.buffer.length > 0) {
-        let last = lastGrapheme(t.buffer);
-        t.buffer = t.buffer.slice(0, -(last.length || 1));
+      if (earlyInputState.buffer.length > 0) {
+        let last = lastGrapheme(earlyInputState.buffer);
+        earlyInputState.buffer = earlyInputState.buffer.slice(0, -(last.length || 1));
       }
       n++;
       continue;
@@ -112,65 +123,76 @@ function processChunk(str) {
       continue;
     }
     if (code === 13) {
-      ((t.buffer += `
-`),
-        n++);
+      earlyInputState.buffer += `
+`;
+      n++;
       continue;
     }
-    ((t.buffer += char), n++);
+    earlyInputState.buffer += char;
+    n++;
   }
 }
+//@ chunk-wphjdnre.js:1697-1862 placement = stopCapturingEarlyInput (0.741)
 /**
  * stopCapturingEarlyInput：移除 readable 监听。
  */
-//@ chunk-wphjdnre.js:1697-1862 placement = stopCapturingEarlyInput (0.741)
 function stopCapturingEarlyInput() {
-  let e = getEarlyInputState();
-  if (!e.capturing) return;
-  if (((e.capturing = !1), e.readableHandler))
-    (process.stdin.removeListener("readable", e.readableHandler), (e.readableHandler = null));
+  let earlyInputState = getEarlyInputState();
+  if (!earlyInputState.capturing) return;
+  earlyInputState.capturing = false;
+  if (earlyInputState.readableHandler) {
+    process.stdin.removeListener("readable", earlyInputState.readableHandler);
+    earlyInputState.readableHandler = null;
+  }
 }
+//@ chunk-wphjdnre.js:1862-2013 placement
 /**
  * consumeEarlyInput：取出并清空早期输入缓冲（REPL 作为初始输入）。
  */
-//@ chunk-wphjdnre.js:1862-2013 placement
 function consumeEarlyInput() {
   stopCapturingEarlyInput();
-  let e = getEarlyInputState(),
-    trimmed = e.buffer.trim();
-  if (((e.buffer = ""), (e.seeded = ""), e.hasField)) e.fieldClosedAt = Date.now();
-  return ((e.hasField = !1), (e.fieldKeyAt = 0), trimmed);
+  let earlyInputState = getEarlyInputState();
+  let trimmed = earlyInputState.buffer.trim();
+  earlyInputState.buffer = "";
+  earlyInputState.seeded = "";
+  if (earlyInputState.hasField) earlyInputState.fieldClosedAt = Date.now();
+  earlyInputState.hasField = false;
+  earlyInputState.fieldKeyAt = 0;
+  return trimmed;
 }
+//@ chunk-wphjdnre.js:2013-2062 placement
 /**
  * 早期输入缓冲是否非空。
  */
-//@ chunk-wphjdnre.js:2013-2062 placement
 function hasEarlyInput() {
   return getEarlyInputState().buffer.trim().length > 0;
 }
+//@ chunk-wphjdnre.js:2062-2110 placement
 /**
  * 预置早期输入（例如 --prefill）。
  */
-//@ chunk-wphjdnre.js:2062-2110 placement
 function seedEarlyInput(e) {
-  let t = getEarlyInputState();
-  ((t.buffer = e), (t.seeded = e));
+  let earlyInputState = getEarlyInputState();
+  earlyInputState.buffer = e;
+  earlyInputState.seeded = e;
 }
 //@ chunk-wphjdnre.js:2110-2165 placement
 function hasTypedEarlyInput() {
-  let { buffer: buffer, seeded: seeded } = getEarlyInputState();
+  let { buffer, seeded } = getEarlyInputState();
   return buffer !== seeded;
 }
 //@ chunk-wphjdnre.js:2165-2253 placement
 function openEarlyInputField() {
   stopCapturingEarlyInput();
-  let e = getEarlyInputState();
-  if (!e.hasField && hasTypedEarlyInput()) noteEarlyInputFieldKey();
-  return ((e.hasField = !0), e.buffer);
+  let earlyInputState = getEarlyInputState();
+  if (!earlyInputState.hasField && hasTypedEarlyInput()) noteEarlyInputFieldKey();
+  earlyInputState.hasField = true;
+  return earlyInputState.buffer;
 }
 //@ chunk-wphjdnre.js:2253-2288 placement
-function editEarlyInputField(e) {
-  ((getEarlyInputState().buffer = e), noteEarlyInputFieldKey());
+function editEarlyInputField(buffer) {
+  getEarlyInputState().buffer = buffer;
+  noteEarlyInputFieldKey();
 }
 //@ chunk-wphjdnre.js:2288-2329 placement
 function noteEarlyInputFieldKey() {
@@ -178,10 +200,12 @@ function noteEarlyInputFieldKey() {
 }
 //@ chunk-wphjdnre.js:2329-2441 placement
 function takeEarlyInputFieldText() {
-  let e = getEarlyInputState();
-  if (!e.hasField || !hasTypedEarlyInput()) return "";
-  let trimmed = e.buffer.trim();
-  return ((e.buffer = ""), (e.seeded = ""), trimmed);
+  let earlyInputState = getEarlyInputState();
+  if (!earlyInputState.hasField || !hasTypedEarlyInput()) return "";
+  let trimmed = earlyInputState.buffer.trim();
+  earlyInputState.buffer = "";
+  earlyInputState.seeded = "";
+  return trimmed;
 }
 //@ chunk-wphjdnre.js:2441-2476 placement
 function hasEarlyInputField() {
@@ -189,18 +213,18 @@ function hasEarlyInputField() {
 }
 //@ chunk-wphjdnre.js:2476-2546 placement
 function wasEarlyInputFieldOpened() {
-  let { hasField: hasField, fieldClosedAt: fieldClosedAt } = getEarlyInputState();
+  let { hasField, fieldClosedAt } = getEarlyInputState();
   return hasField || fieldClosedAt !== null;
 }
 //@ chunk-wphjdnre.js:2546-2619 placement
 function msSinceEarlyInputFieldClosed() {
-  let { fieldClosedAt: fieldClosedAt } = getEarlyInputState();
+  let { fieldClosedAt } = getEarlyInputState();
   return fieldClosedAt === null ? 1 / 0 : Date.now() - fieldClosedAt;
 }
 //@ chunk-wphjdnre.js:2619-2695 placement
 function msUntilEarlyInputFieldRests() {
   let e = Date.now() - getEarlyInputState().fieldKeyAt;
-  return e < 0 ? 0 : Math.max(0, a - e);
+  return e < 0 ? 0 : Math.max(0, EARLY_INPUT_REST_MS - e);
 }
 //@ chunk-wphjdnre.js:2695-2778 placement
 async function untilEarlyInputFieldRests(e) {
@@ -215,15 +239,14 @@ async function untilKeyboardRests() {
   for (;;) {
     flushInteractionTime();
     let e = Date.now() - getLastInteractionTime();
-    if (e >= a) return;
+    if (e >= EARLY_INPUT_REST_MS) return;
     if (e < 0) {
-      await sleep(a);
+      await sleep(EARLY_INPUT_REST_MS);
       return;
     }
-    await sleep(a - e);
+    await sleep(EARLY_INPUT_REST_MS - e);
   }
 }
-
 export {
   stopCapturingEarlyInput,
   takeEarlyInputFieldText,

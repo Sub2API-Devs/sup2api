@@ -10,11 +10,11 @@
  */
 import { logEvent } from "../../services/analytics/index.js";
 import { lit as lit_2, fromEnum } from "../../services/analytics/safeMetadata.js";
-import { ye } from "../../utils/startupMarks.js";
+import { sanitizeMarkName } from "../../utils/startupMarks.js";
 import { logOTelEvent } from "../../utils/telemetry/events.js";
-import { isCompactBoundaryMessage } from "../../services/projects/threadRows.js";
+import { isCompactBoundaryMessage as isCompactBoundaryMessage_2 } from "../../services/projects/threadRows.js";
 import { w } from "../../../vendor/react/compiler-runtime.js";
-import { y, R, P, j } from "../../../vendor/react/cjs/react.production.js";
+import { y, R, P, init_react_production } from "../../../vendor/react/cjs/react.production.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { useSurveyState } from "./useSurveyState.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
@@ -24,137 +24,146 @@ import { env } from "../../utils/env.js";
 
 //@ chunk-18hwfzwa.js:1081954-1082146 fingerprint = _temp (1)
 function logPostCompactSurveyAppeared(appearanceId) {
-  (logEvent("tengu_post_compact_survey_event", {
+  logEvent("tengu_post_compact_survey_event", {
     event_type: lit_2("appeared"),
-    appearance_id: ye(appearanceId),
-  }),
-    logOTelEvent("feedback_survey", {
-      event_type: "appeared",
-      appearance_id: appearanceId,
-      survey_type: "post_compact",
-    }));
+    appearance_id: sanitizeMarkName(appearanceId),
+  });
+  logOTelEvent("feedback_survey", {
+    event_type: "appeared",
+    appearance_id: appearanceId,
+    survey_type: "post_compact",
+  });
 }
 //@ chunk-18hwfzwa.js:1082146-1082370 fingerprint = _temp2 (1)
-function logPostCompactSurveyResponded(appearanceId_0, selected) {
-  (logEvent("tengu_post_compact_survey_event", {
+function logPostCompactSurveyResponded(appearanceId, selected) {
+  logEvent("tengu_post_compact_survey_event", {
     event_type: lit_2("responded"),
-    appearance_id: ye(appearanceId_0),
+    appearance_id: sanitizeMarkName(appearanceId),
     response: fromEnum(selected),
-  }),
-    logOTelEvent("feedback_survey", {
-      event_type: "responded",
-      appearance_id: appearanceId_0,
-      response: selected,
-      survey_type: "post_compact",
-    }));
+  });
+  logOTelEvent("feedback_survey", {
+    event_type: "responded",
+    appearance_id: appearanceId,
+    response: selected,
+    survey_type: "post_compact",
+  });
 }
 //@ chunk-18hwfzwa.js:1082370-1082564 layout = _temp (0.826)
 function logPostCompactSurveyAbandoned(appearanceId) {
-  (logEvent("tengu_post_compact_survey_event", {
+  logEvent("tengu_post_compact_survey_event", {
     event_type: lit_2("abandoned"),
-    appearance_id: ye(appearanceId),
-  }),
-    logOTelEvent("feedback_survey", {
-      event_type: "abandoned",
-      appearance_id: appearanceId,
-      survey_type: "post_compact",
-    }));
+    appearance_id: sanitizeMarkName(appearanceId),
+  });
+  logOTelEvent("feedback_survey", {
+    event_type: "abandoned",
+    appearance_id: appearanceId,
+    survey_type: "post_compact",
+  });
 }
 //@ chunk-18hwfzwa.js:1082564-1082595 file-last-pair
-function qSo(msg) {
-  return isCompactBoundaryMessage(msg);
+function isCompactBoundaryMessage(msg) {
+  return isCompactBoundaryMessage_2(msg);
 }
 //@ chunk-18hwfzwa.js:1082595-1082627 file-local
-function $So(msg_0) {
-  return msg_0.uuid;
+function messageUuidOf(msg) {
+  return msg.uuid;
 }
 //@ chunk-18hwfzwa.js:1082627-1082680 fingerprint = POST_COMPACT_SURVEY_GATE (1)
-var Nrt = 5000,
-  TENGU_POST_COMPACT_SURVEY = "tengu_post_compact_survey",
-  Frt = 0.2;
+var HIDE_THANKS_AFTER_MS = 5000;
+var TENGU_POST_COMPACT_SURVEY = "tengu_post_compact_survey";
+var POST_COMPACT_SURVEY_PROBABILITY = 0.2;
 //@ chunk-18hwfzwa.js:1082680-1082861 callgraph-fingerprint = hasMessageAfterBoundary (1)
 function hasMessageAfterBoundary(messages, boundaryUuid) {
   let boundaryIndex = messages.findIndex((msg) => msg.uuid === boundaryUuid);
-  if (boundaryIndex === -1) return !1;
-  for (let L = boundaryIndex + 1; L < messages.length; L++) {
-    let msg = messages[L];
-    if (msg && (msg.type === "user" || msg.type === "assistant")) return !0;
+  if (boundaryIndex === -1) return false;
+  for (let i = boundaryIndex + 1; i < messages.length; i++) {
+    let msg = messages[i];
+    if (msg && (msg.type === "user" || msg.type === "assistant")) return true;
   }
-  return !1;
+  return false;
 }
 //@ chunk-18hwfzwa.js:1082861-1084481 fingerprint = usePostCompactSurvey (0.665)
 function usePostCompactSurvey(messages, isLoading, t0, t1) {
-  let $ = w(26),
-    ee = t0 === void 0 ? !1 : t0,
-    Re;
-  if ($[0] !== t1) ((Re = t1 === void 0 ? {} : t1), ($[0] = t1), ($[1] = Re));
-  else Re = $[1];
-  let { enabled: t3 } = Re,
-    He = t3 === void 0 ? !0 : t3,
-    [We, ze] = y(null),
-    Xe;
-  if ($[2] === MEMO_CACHE_SENTINEL) ((Xe = new Set()), ($[2] = Xe));
-  else Xe = $[2];
-  let seenCompactBoundaries = R(Xe),
-    pendingCompactBoundaryUuid = R(null),
-    At = logPostCompactSurveyAppeared,
-    It = logPostCompactSurveyResponded,
-    Ot = logPostCompactSurveyAbandoned,
-    Et;
-  if ($[3] === MEMO_CACHE_SENTINEL)
-    ((Et = { hideThanksAfterMs: Nrt, onOpen: At, onSelect: It, onAbandon: Ot }), ($[3] = Et));
-  else Et = $[3];
-  let {
-      state: state,
-      lastResponse: lastResponse,
-      appearanceId: appearanceId,
-      open: open,
-      abandon: abandon,
-      handleSelect: handleSelect,
-      handleUndo: handleUndo,
-    } = useSurveyState(Et),
-    ao,
-    co;
-  if ($[4] !== He)
-    ((ao = () => {
-      if (!He) {
+  let $ = w(26);
+  let hasActivePrompt = t0 === undefined ? false : t0;
+  let t2;
+  if ($[0] !== t1) {
+    t2 = t1 === undefined ? {} : t1;
+    $[0] = t1;
+    $[1] = t2;
+  } else t2 = $[1];
+  let { enabled } = t2;
+  let enabled_2 = enabled === undefined ? true : enabled;
+  let [gateEnabled, setGateEnabled] = y(null);
+  let t4;
+  if ($[2] === MEMO_CACHE_SENTINEL) {
+    t4 = new Set();
+    $[2] = t4;
+  } else t4 = $[2];
+  let seenCompactBoundaries = R(t4);
+  let pendingCompactBoundaryUuid = R(null);
+  let onOpen = logPostCompactSurveyAppeared;
+  let onSelect = logPostCompactSurveyResponded;
+  let onAbandon = logPostCompactSurveyAbandoned;
+  let t5;
+  if ($[3] === MEMO_CACHE_SENTINEL) {
+    t5 = {
+      hideThanksAfterMs: HIDE_THANKS_AFTER_MS,
+      onOpen,
+      onSelect,
+      onAbandon,
+    };
+    $[3] = t5;
+  } else t5 = $[3];
+  let { state, lastResponse, appearanceId, open, abandon, handleSelect, handleUndo } = useSurveyState(t5);
+  let t6;
+  let t7;
+  if ($[4] !== enabled_2) {
+    t6 = () => {
+      if (!enabled_2) {
         return;
       }
-      ze(getFeatureValue_CACHED_MAY_BE_STALE(TENGU_POST_COMPACT_SURVEY, !1));
-    }),
-      (co = [He]),
-      ($[4] = He),
-      ($[5] = ao),
-      ($[6] = co));
-  else ((ao = $[5]), (co = $[6]));
-  P(ao, co);
-  let bo;
-  if ($[7] !== messages) ((bo = new Set(messages.filter(qSo).map($So))), ($[7] = messages), ($[8] = bo));
-  else bo = $[8];
-  let Ao = bo,
-    Bo,
-    Ro;
+      setGateEnabled(getFeatureValue_CACHED_MAY_BE_STALE(TENGU_POST_COMPACT_SURVEY, false));
+    };
+    t7 = [enabled_2];
+    $[4] = enabled_2;
+    $[5] = t6;
+    $[6] = t7;
+  } else {
+    t6 = $[5];
+    t7 = $[6];
+  }
+  P(t6, t7);
+  let t8;
+  if ($[7] !== messages) {
+    t8 = new Set(messages.filter(isCompactBoundaryMessage).map(messageUuidOf));
+    $[7] = messages;
+    $[8] = t8;
+  } else t8 = $[8];
+  let currentCompactBoundaries = t8;
+  let t10;
+  let t9;
   if (
-    $[9] !== Ao ||
-    $[10] !== He ||
-    $[11] !== We ||
-    $[12] !== ee ||
+    $[9] !== currentCompactBoundaries ||
+    $[10] !== enabled_2 ||
+    $[11] !== gateEnabled ||
+    $[12] !== hasActivePrompt ||
     $[13] !== isLoading ||
     $[14] !== messages ||
     $[15] !== open ||
     $[16] !== state
-  )
-    ((Ro = () => {
-      if (!He) {
+  ) {
+    t9 = () => {
+      if (!enabled_2) {
         return;
       }
       if (state !== "closed" || isLoading) {
         return;
       }
-      if (ee) {
+      if (hasActivePrompt) {
         return;
       }
-      if (We !== !0) {
+      if (gateEnabled !== true) {
         return;
       }
       if (shouldSkipFeedbackSurvey()) {
@@ -166,31 +175,47 @@ function usePostCompactSurvey(messages, isLoading, t0, t1) {
       if (env.CLAUDE_CODE_DISABLE_FEEDBACK_SURVEY) {
         return;
       }
-      let newBoundaries = Array.from(Ao).filter((uuid) => !seenCompactBoundaries.current.has(uuid));
-      if (newBoundaries.length > 0)
-        ((seenCompactBoundaries.current = new Set(Ao)),
-          (pendingCompactBoundaryUuid.current = newBoundaries.at(-1)));
+      let newBoundaries = Array.from(currentCompactBoundaries).filter(
+        (uuid) => !seenCompactBoundaries.current.has(uuid),
+      );
+      if (newBoundaries.length > 0) {
+        seenCompactBoundaries.current = new Set(currentCompactBoundaries);
+        pendingCompactBoundaryUuid.current = newBoundaries.at(-1);
+      }
       if (
         pendingCompactBoundaryUuid.current !== null &&
         hasMessageAfterBoundary(messages, pendingCompactBoundaryUuid.current)
       ) {
-        if (((pendingCompactBoundaryUuid.current = null), Math.random() < Frt)) open();
+        pendingCompactBoundaryUuid.current = null;
+        if (Math.random() < POST_COMPACT_SURVEY_PROBABILITY) open();
       }
-    }),
-      (Bo = [He, Ao, state, isLoading, ee, We, messages, open]),
-      ($[9] = Ao),
-      ($[10] = He),
-      ($[11] = We),
-      ($[12] = ee),
-      ($[13] = isLoading),
-      ($[14] = messages),
-      ($[15] = open),
-      ($[16] = state),
-      ($[17] = Bo),
-      ($[18] = Ro));
-  else ((Bo = $[17]), (Ro = $[18]));
-  P(Ro, Bo);
-  let Wo;
+    };
+    t10 = [
+      enabled_2,
+      currentCompactBoundaries,
+      state,
+      isLoading,
+      hasActivePrompt,
+      gateEnabled,
+      messages,
+      open,
+    ];
+    $[9] = currentCompactBoundaries;
+    $[10] = enabled_2;
+    $[11] = gateEnabled;
+    $[12] = hasActivePrompt;
+    $[13] = isLoading;
+    $[14] = messages;
+    $[15] = open;
+    $[16] = state;
+    $[17] = t10;
+    $[18] = t9;
+  } else {
+    t10 = $[17];
+    t9 = $[18];
+  }
+  P(t9, t10);
+  let t11;
   if (
     $[19] !== abandon ||
     $[20] !== appearanceId ||
@@ -198,28 +223,27 @@ function usePostCompactSurvey(messages, isLoading, t0, t1) {
     $[22] !== handleUndo ||
     $[23] !== lastResponse ||
     $[24] !== state
-  )
-    ((Wo = {
-      state: state,
-      lastResponse: lastResponse,
-      appearanceId: appearanceId,
-      abandon: abandon,
-      handleSelect: handleSelect,
-      handleUndo: handleUndo,
-    }),
-      ($[19] = abandon),
-      ($[20] = appearanceId),
-      ($[21] = handleSelect),
-      ($[22] = handleUndo),
-      ($[23] = lastResponse),
-      ($[24] = state),
-      ($[25] = Wo));
-  else Wo = $[25];
-  return Wo;
+  ) {
+    t11 = {
+      state,
+      lastResponse,
+      appearanceId,
+      abandon,
+      handleSelect,
+      handleUndo,
+    };
+    $[19] = abandon;
+    $[20] = appearanceId;
+    $[21] = handleSelect;
+    $[22] = handleUndo;
+    $[23] = lastResponse;
+    $[24] = state;
+    $[25] = t11;
+  } else t11 = $[25];
+  return t11;
 }
 //@ chunk-18hwfzwa.js:1084481-1084485 placement
-j();
+init_react_production();
 //@ chunk-18hwfzwa.js:1084485-1084489 placement
-j();
-
+init_react_production();
 export { usePostCompactSurvey };

@@ -1,5 +1,8 @@
 /**
  * ink/termio/imagePlaceholders.ts
+ *
+ * 2.1.316 新增：终端图片占位格的编码/解码（U+2800 加行列与 id 的附加符号）。
+ *
  * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
  * new in 2.1.316 (2.1.88 has no file at this path)
  * pieces: chunk-bzr73sfg.js (3)
@@ -18,12 +21,12 @@ import {
 function diacritic(index) {
   return String.fromCodePoint(COMBINING_MARK_CODES[index]);
 }
+//@ chunk-bzr73sfg.js:266288-266411 placement = GUTTER_MAP (0.563)
 /**
  * 把 {id,row,column} 编码成一个占位字素：U+2800 + 行、列、id 高中低三位的附加符号。
  */
-//@ chunk-bzr73sfg.js:266288-266411 placement = GUTTER_MAP (0.563)
 function encodeImagePlaceholder(cell) {
-  let { id: id, row: row, column: column } = cell;
+  let { id, row, column } = cell;
   return (
     PLACEHOLDER_CHAR +
     diacritic(row) +
@@ -33,22 +36,26 @@ function encodeImagePlaceholder(cell) {
     diacritic(id % DIACRITIC_COUNT)
   );
 }
+//@ chunk-bzr73sfg.js:266411-266577 placement
 /**
  * 生成 rows×columns 的占位字素网格文本（每行一串占位字符），放进 Ink 文本里占住图片的位置。
  */
-//@ chunk-bzr73sfg.js:266411-266577 placement
 function buildImagePlaceholderGrid(id, columns, rows) {
-  (assertImageInt(id, MAX_ITERM_IMAGE_ID - 1),
-    assertImageInt(columns, MAX_PLACEHOLDER_INDEX),
-    assertImageInt(rows, MAX_PLACEHOLDER_INDEX));
+  assertImageInt(id, MAX_ITERM_IMAGE_ID - 1);
+  assertImageInt(columns, MAX_PLACEHOLDER_INDEX);
+  assertImageInt(rows, MAX_PLACEHOLDER_INDEX);
   let m = [];
-  for (let p = 0; p < rows; p++) {
+  for (let idx = 0; idx < rows; idx++) {
     let g = "";
-    for (let E = 0; E < columns; E++) g += encodeImagePlaceholder({ id: id, row: p, column: E });
+    for (let idx_2 = 0; idx_2 < columns; idx_2++)
+      g += encodeImagePlaceholder({
+        id,
+        row: idx,
+        column: idx_2,
+      });
     m.push(g);
   }
   return m.join(`
 `);
 }
-
 export { buildImagePlaceholderGrid };

@@ -16,34 +16,43 @@ import { getGlobalConfig, saveGlobalConfig } from "../utils/config.js";
 import { logEvent } from "../services/analytics/index.js";
 import { fromEnum } from "../services/analytics/safeMetadata.js";
 
+//@ chunk-cjydagjy.js:8852-9439 placement
 /**
  * 迁移：把 userSettings.model 里的 claude-fable-5 改为 fable 别名（保留 [1m]）。
  */
-//@ chunk-cjydagjy.js:8852-9439 placement
 async function migrateFable5ToFableAlias(e) {
-  if (!isFirstPartyApiBackend()) return !0;
-  let r = getSettingsForSourceForUpkeep("userSettings")?.model;
-  if (r !== "claude-fable-5" && r !== "claude-fable-5[1m]") return !0;
-  let endsWith = r.endsWith("[1m]"),
-    { error: error } = await updateSettingsForSource(
-      "userSettings",
-      { model: endsWith ? "fable[1m]" : "fable" },
-      void 0,
+  if (!isFirstPartyApiBackend()) return true;
+  let model = getSettingsForSourceForUpkeep("userSettings")?.model;
+  if (model !== "claude-fable-5" && model !== "claude-fable-5[1m]") return true;
+  let n = model.endsWith("[1m]");
+  let { error } = await updateSettingsForSource(
+    "userSettings",
+    {
+      model: n ? "fable[1m]" : "fable",
+    },
+    undefined,
+    e,
+  );
+  if (error) {
+    logForDebugging(`Failed to migrate Fable 5 model setting: ${error}`, {
+      level: "error",
+    });
+    logFeatureBad("migration_fable5_to_fable_alias", "migration_fable5_write_failed");
+    return false;
+  }
+  if (getGlobalConfig().numStartups > 1)
+    saveGlobalConfig(
+      (y) => ({
+        ...y,
+        fable5ToFableAliasMigrationTimestamp: Date.now(),
+      }),
       e,
     );
-  if (error)
-    return (
-      logForDebugging(`Failed to migrate Fable 5 model setting: ${error}`, { level: "error" }),
-      logFeatureBad("migration_fable5_to_fable_alias", "migration_fable5_write_failed"),
-      !1
-    );
-  if (getGlobalConfig().numStartups > 1)
-    saveGlobalConfig((y) => ({ ...y, fable5ToFableAliasMigrationTimestamp: Date.now() }), e);
-  return (
-    logEvent("tengu_fable5_to_fable_alias_migration", { from_model: fromEnum(r), has_1m: endsWith }),
-    logFeatureOk("migration_fable5_to_fable_alias"),
-    !0
-  );
+  logEvent("tengu_fable5_to_fable_alias_migration", {
+    from_model: fromEnum(model),
+    has_1m: n,
+  });
+  logFeatureOk("migration_fable5_to_fable_alias");
+  return true;
 }
-
 export { migrateFable5ToFableAlias };

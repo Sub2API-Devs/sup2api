@@ -8,33 +8,35 @@
 import { g, p } from "../../webapi/lib/buffer_utils.js";
 import { A } from "../../node/esm/lib/invalid_key_input.js";
 import { m } from "./is_key_like.js";
-import { J } from "../../node/esm/lib/crypto_key.js";
-import { q } from "../../webapi/lib/signing.js";
+import { checkEncCryptoKey } from "../../node/esm/lib/crypto_key.js";
+import { checkKeyLength_2 } from "../../webapi/lib/signing.js";
 import { te } from "../../webapi/lib/key_management.js";
 import { ee } from "../../webapi/lib/content_encryption.js";
 
 //@ chunk-2tyrgda4.js:12890-12904 esm-layout
 var He = () => {};
 //@ chunk-2tyrgda4.js:12904-13748 esm-fingerprint
-var vt = async (e, t, r) => {
-    if (!g(t)) throw TypeError(A(t, ...m));
-    if ((J(t, e, "encrypt", "wrapKey"), q(e, t), t.usages.includes("encrypt")))
-      return new Uint8Array(await p.subtle.encrypt(te(e), t, r));
-    if (t.usages.includes("wrapKey")) {
-      let importKey = await p.subtle.importKey("raw", r, ...ee);
-      return new Uint8Array(await p.subtle.wrapKey("raw", importKey, t, te(e)));
-    }
-    throw TypeError('RSA-OAEP key "usages" must include "encrypt" or "wrapKey" for this operation');
-  },
-  Pt = async (e, t, r) => {
-    if (!g(t)) throw TypeError(A(t, ...m));
-    if ((J(t, e, "decrypt", "unwrapKey"), q(e, t), t.usages.includes("decrypt")))
-      return new Uint8Array(await p.subtle.decrypt(te(e), t, r));
-    if (t.usages.includes("unwrapKey")) {
-      let unwrapKey = await p.subtle.unwrapKey("raw", r, t, te(e), ...ee);
-      return new Uint8Array(await p.subtle.exportKey("raw", unwrapKey));
-    }
-    throw TypeError('RSA-OAEP key "usages" must include "decrypt" or "unwrapKey" for this operation');
-  };
-
-export { He, Pt, vt };
+var encrypt_2 = async (alg, key, cek) => {
+  if (!g(key)) throw TypeError(A(key, ...m));
+  checkEncCryptoKey(key, alg, "encrypt", "wrapKey");
+  checkKeyLength_2(alg, key);
+  if (key.usages.includes("encrypt")) return new Uint8Array(await p.subtle.encrypt(te(alg), key, cek));
+  if (key.usages.includes("wrapKey")) {
+    let cryptoKeyCek = await p.subtle.importKey("raw", cek, ...ee);
+    return new Uint8Array(await p.subtle.wrapKey("raw", cryptoKeyCek, key, te(alg)));
+  }
+  throw TypeError('RSA-OAEP key "usages" must include "encrypt" or "wrapKey" for this operation');
+};
+var decrypt_2 = async (alg, key, encryptedKey) => {
+  if (!g(key)) throw TypeError(A(key, ...m));
+  checkEncCryptoKey(key, alg, "decrypt", "unwrapKey");
+  checkKeyLength_2(alg, key);
+  if (key.usages.includes("decrypt"))
+    return new Uint8Array(await p.subtle.decrypt(te(alg), key, encryptedKey));
+  if (key.usages.includes("unwrapKey")) {
+    let cryptoKeyCek = await p.subtle.unwrapKey("raw", encryptedKey, key, te(alg), ...ee);
+    return new Uint8Array(await p.subtle.exportKey("raw", cryptoKeyCek));
+  }
+  throw TypeError('RSA-OAEP key "usages" must include "decrypt" or "unwrapKey" for this operation');
+};
+export { He, decrypt_2, encrypt_2 };

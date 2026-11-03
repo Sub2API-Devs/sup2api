@@ -5,25 +5,24 @@
  * pieces: chunk-mrx6y2r5.js (2)
  * attribution: esm-fingerprint 2
  */
-import { Xo } from "../util/wrapAbortSignal.js";
+import { wrapAbortSignalLike } from "../util/wrapAbortSignal.js";
 
 //@ chunk-mrx6y2r5.js:61768-61803 esm-fingerprint
-var WRAPABORTSIGNALLIKEPOLICY = "wrapAbortSignalLikePolicy";
+var wrapAbortSignalLikePolicyName = "wrapAbortSignalLikePolicy";
 //@ chunk-mrx6y2r5.js:61803-62009 esm-fingerprint
-function pd() {
+function wrapAbortSignalLikePolicy() {
   return {
-    name: WRAPABORTSIGNALLIKEPOLICY,
-    sendRequest: async (e, t) => {
-      if (!e.abortSignal) return t(e);
-      let { abortSignal: abortSignal, cleanup: cleanup } = Xo(e.abortSignal);
-      e.abortSignal = abortSignal;
+    name: wrapAbortSignalLikePolicyName,
+    sendRequest: async (request, next) => {
+      if (!request.abortSignal) return next(request);
+      let { abortSignal, cleanup } = wrapAbortSignalLike(request.abortSignal);
+      request.abortSignal = abortSignal;
       try {
-        return await t(e);
+        return await next(request);
       } finally {
-        cleanup === null || cleanup === void 0 || cleanup();
+        if (!(cleanup === null || cleanup === undefined)) cleanup();
       }
     },
   };
 }
-
-export { pd };
+export { wrapAbortSignalLikePolicy };

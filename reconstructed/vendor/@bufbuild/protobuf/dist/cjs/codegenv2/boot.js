@@ -6,31 +6,34 @@
  * attribution: cjs-require-graph 1
  */
 import { x } from "../../../../../../runtime/bun-runtime.js";
-import { r_ } from "./restore-json-names.js";
-import { qg } from "../registry.js";
+import { require_restore_json_names } from "./restore-json-names.js";
+import { require_registry } from "../registry.js";
 
 //@ chunk-fq0cr76a.js:375937-378224 cjs-require-graph
-var d_ = x(function (gD) {
-  Object.defineProperty(gD, "__esModule", { value: !0 });
-  gD.boot = U7;
-  gD.bootFileDescriptorProto = pD;
-  var dD = r_(),
-    fD = qg();
-  function U7(e) {
-    let n = pD(e);
-    return (
-      n.messageType.forEach(dD.restoreJsonNames),
-      fD
-        .createFileRegistry(n, () => {
-          return;
-        })
-        .getFile(n.name)
-    );
+var require_boot = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.boot = boot;
+  cjsExports.bootFileDescriptorProto = bootFileDescriptorProto;
+  var restore_json_names_js_1 = require_restore_json_names();
+  var registry_js_1 = require_registry();
+  function boot(boot) {
+    let root = bootFileDescriptorProto(boot);
+    root.messageType.forEach(restore_json_names_js_1.restoreJsonNames);
+    return registry_js_1
+      .createFileRegistry(root, () => {
+        return;
+      })
+      .getFile(root.name);
   }
-  function pD(e) {
-    let create = Object.create({ syntax: "", edition: 0 });
+  function bootFileDescriptorProto(init) {
+    let proto = Object.create({
+      syntax: "",
+      edition: 0,
+    });
     return Object.assign(
-      create,
+      proto,
       Object.assign(
         Object.assign(
           {
@@ -42,100 +45,156 @@ var d_ = x(function (gD) {
             service: [],
             extension: [],
           },
-          e,
+          init,
         ),
-        { messageType: e.messageType.map(hD), enumType: e.enumType.map(mD) },
+        {
+          messageType: init.messageType.map(bootDescriptorProto),
+          enumType: init.enumType.map(bootEnumDescriptorProto),
+        },
       ),
     );
   }
-  function hD(e) {
-    var n, r, s, h, y, b, S, w;
-    let create = Object.create({ visibility: 0 });
-    return Object.assign(create, {
+  function bootDescriptorProto(init) {
+    var _a;
+    var _b;
+    var _c;
+    var _d;
+    var _e;
+    var _f;
+    var _g;
+    var _h;
+    let proto = Object.create({
+      visibility: 0,
+    });
+    return Object.assign(proto, {
       $typeName: "google.protobuf.DescriptorProto",
-      name: e.name,
+      name: init.name,
       field:
-        (r = (n = e.field) === null || n === void 0 ? void 0 : n.map(F7)) !== null && r !== void 0 ? r : [],
+        (_b =
+          (_a = init.field) === null || _a === undefined ? undefined : _a.map(bootFieldDescriptorProto)) !==
+          null && _b !== undefined
+          ? _b
+          : [],
       extension: [],
       nestedType:
-        (h = (s = e.nestedType) === null || s === void 0 ? void 0 : s.map(hD)) !== null && h !== void 0
-          ? h
+        (_d =
+          (_c = init.nestedType) === null || _c === undefined ? undefined : _c.map(bootDescriptorProto)) !==
+          null && _d !== undefined
+          ? _d
           : [],
       enumType:
-        (b = (y = e.enumType) === null || y === void 0 ? void 0 : y.map(mD)) !== null && b !== void 0
-          ? b
+        (_f =
+          (_e = init.enumType) === null || _e === undefined ? undefined : _e.map(bootEnumDescriptorProto)) !==
+          null && _f !== undefined
+          ? _f
           : [],
       extensionRange:
-        (w =
-          (S = e.extensionRange) === null || S === void 0
-            ? void 0
-            : S.map((D) =>
-                Object.assign({ $typeName: "google.protobuf.DescriptorProto.ExtensionRange" }, D),
-              )) !== null && w !== void 0
-          ? w
+        (_h =
+          (_g = init.extensionRange) === null || _g === undefined
+            ? undefined
+            : _g.map((e) =>
+                Object.assign(
+                  {
+                    $typeName: "google.protobuf.DescriptorProto.ExtensionRange",
+                  },
+                  e,
+                ),
+              )) !== null && _h !== undefined
+          ? _h
           : [],
       oneofDecl: [],
       reservedRange: [],
       reservedName: [],
     });
   }
-  function F7(e) {
-    let create = Object.create({
+  function bootFieldDescriptorProto(init) {
+    let proto = Object.create({
       label: 1,
       typeName: "",
       extendee: "",
       defaultValue: "",
       oneofIndex: 0,
       jsonName: "",
-      proto3Optional: !1,
+      proto3Optional: false,
     });
     return Object.assign(
-      create,
-      Object.assign(Object.assign({ $typeName: "google.protobuf.FieldDescriptorProto" }, e), {
-        options: e.options ? M7(e.options) : void 0,
-      }),
+      proto,
+      Object.assign(
+        Object.assign(
+          {
+            $typeName: "google.protobuf.FieldDescriptorProto",
+          },
+          init,
+        ),
+        {
+          options: init.options ? bootFieldOptions(init.options) : undefined,
+        },
+      ),
     );
   }
-  function M7(e) {
-    var n, r, s;
-    let create = Object.create({
+  function bootFieldOptions(init) {
+    var _a;
+    var _b;
+    var _c;
+    let proto = Object.create({
       ctype: 0,
-      packed: !1,
+      packed: false,
       jstype: 0,
-      lazy: !1,
-      unverifiedLazy: !1,
-      deprecated: !1,
-      weak: !1,
-      debugRedact: !1,
+      lazy: false,
+      unverifiedLazy: false,
+      deprecated: false,
+      weak: false,
+      debugRedact: false,
       retention: 0,
     });
     return Object.assign(
-      create,
-      Object.assign(Object.assign({ $typeName: "google.protobuf.FieldOptions" }, e), {
-        targets: (n = e.targets) !== null && n !== void 0 ? n : [],
-        editionDefaults:
-          (s =
-            (r = e.editionDefaults) === null || r === void 0
-              ? void 0
-              : r.map((y) =>
-                  Object.assign({ $typeName: "google.protobuf.FieldOptions.EditionDefault" }, y),
-                )) !== null && s !== void 0
-            ? s
-            : [],
-        uninterpretedOption: [],
-      }),
+      proto,
+      Object.assign(
+        Object.assign(
+          {
+            $typeName: "google.protobuf.FieldOptions",
+          },
+          init,
+        ),
+        {
+          targets: (_a = init.targets) !== null && _a !== undefined ? _a : [],
+          editionDefaults:
+            (_c =
+              (_b = init.editionDefaults) === null || _b === undefined
+                ? undefined
+                : _b.map((e) =>
+                    Object.assign(
+                      {
+                        $typeName: "google.protobuf.FieldOptions.EditionDefault",
+                      },
+                      e,
+                    ),
+                  )) !== null && _c !== undefined
+              ? _c
+              : [],
+          uninterpretedOption: [],
+        },
+      ),
     );
   }
-  function mD(e) {
-    let create = Object.create({ visibility: 0 });
-    return Object.assign(create, {
+  function bootEnumDescriptorProto(init) {
+    let proto = Object.create({
+      visibility: 0,
+    });
+    return Object.assign(proto, {
       $typeName: "google.protobuf.EnumDescriptorProto",
-      name: e.name,
+      name: init.name,
       reservedName: [],
       reservedRange: [],
-      value: e.value.map((r) => Object.assign({ $typeName: "google.protobuf.EnumValueDescriptorProto" }, r)),
+      value: init.value.map((e) =>
+        Object.assign(
+          {
+            $typeName: "google.protobuf.EnumValueDescriptorProto",
+          },
+          e,
+        ),
+      ),
     });
   }
 });
-
-export { d_ };
+export { require_boot };

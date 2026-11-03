@@ -7,14 +7,13 @@
  */
 
 //@ chunk-fq0cr76a.js:718785-718956 esm-fingerprint
-function zee(e) {
-  return e
-    .map((n) => {
-      if (n === "") return "''";
-      if (/^[A-Za-z0-9_./:@+,-][A-Za-z0-9_./:=@+,-]*$/.test(n)) return n;
-      return "'" + n.replace(/'/g, `'"'"'`) + "'";
+function quote(args) {
+  return args
+    .map((arg) => {
+      if (arg === "") return "''";
+      if (/^[A-Za-z0-9_./:@+,-][A-Za-z0-9_./:=@+,-]*$/.test(arg)) return arg;
+      return "'" + arg.replace(/'/g, `'"'"'`) + "'";
     })
     .join(" ");
 }
-
-export { zee };
+export { quote };

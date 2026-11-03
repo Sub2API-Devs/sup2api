@@ -8,9 +8,13 @@
  * pieces: chunk-a42q40ze.js (1)
  * attribution: fingerprint 1
  */
-
 //@ chunk-a42q40ze.js:191-288 fingerprint = OFFICIAL_MARKETPLACE_SOURCE (0.804)
-var Epe = { source: "github", repo: "anthropics/claude-plugins-official" },
-  CLAUDE_PLUGINS_OFFICIAL = "claude-plugins-official";
-
-export { CLAUDE_PLUGINS_OFFICIAL, Epe };
+/**
+ * OFFICIAL_MARKETPLACE_SOURCE：官方市场的 GitHub 来源。
+ */
+var OFFICIAL_MARKETPLACE_SOURCE = {
+  source: "github",
+  repo: "anthropics/claude-plugins-official",
+};
+var CLAUDE_PLUGINS_OFFICIAL = "claude-plugins-official";
+export { CLAUDE_PLUGINS_OFFICIAL, OFFICIAL_MARKETPLACE_SOURCE };

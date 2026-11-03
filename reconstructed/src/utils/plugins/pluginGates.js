@@ -15,32 +15,49 @@ import {
 import { env } from "../env.js";
 
 //@ chunk-3a43jh83.js:264-342 placement
-function jF() {
-  return getFeatureValue_CACHED_MAY_BE_STALE("tengu_lantern_prism", !1) || env.CLAUDE_CODE_LANTERN_PRISM;
+/**
+ * lanternPrismEnabled：插件 lantern prism 开关。
+ */
+function lanternPrismEnabled() {
+  return getFeatureValue_CACHED_MAY_BE_STALE("tengu_lantern_prism", false) || env.CLAUDE_CODE_LANTERN_PRISM;
 }
 //@ chunk-3a43jh83.js:342-404 placement
-function QE() {
-  return Q4o() || getFeatureValue_SESSION_PINNED("tengu_spicy_blossom", !1) === !0;
+/**
+ * isPluginDirectoryModeOn：插件目录模式开启。
+ */
+function isPluginDirectoryModeOn() {
+  return encapsulatedPebbleEnabled() || getFeatureValue_SESSION_PINNED("tengu_spicy_blossom", false) === true;
 }
 //@ chunk-3a43jh83.js:404-466 placement
-function Q4o() {
-  return getFeatureValue_SESSION_PINNED("tengu_encapsulated_pebble", !0) !== !1;
+/**
+ * encapsulatedPebbleEnabled：插件开关（默认开）。
+ */
+function encapsulatedPebbleEnabled() {
+  return getFeatureValue_SESSION_PINNED("tengu_encapsulated_pebble", true) !== false;
 }
 //@ chunk-3a43jh83.js:466-520 placement
-function J_n() {
-  return !getFeatureValue_CACHED_MAY_BE_STALE("tengu_sharded_snowflake", !1);
+/**
+ * shardedSnowflakeOff：插件开关（默认关时返回 true）。
+ */
+function shardedSnowflakeOff() {
+  return !getFeatureValue_CACHED_MAY_BE_STALE("tengu_sharded_snowflake", false);
 }
 //@ chunk-3a43jh83.js:520-1196 placement
 function describePluginEvalAvailability() {
-  if (J_n())
+  if (shardedSnowflakeOff())
     return {
-      enabled: !0,
+      enabled: true,
       text: "`claude plugin eval` is available in this session (generally available; no enablement setting is needed on any client, including Bedrock/Vertex/Foundry, LLM gateways, telemetry-disabled clients and CI runners).",
     };
   return {
-    enabled: !1,
+    enabled: false,
     text: '`claude plugin eval` is generally available but switched OFF for this session by a server-side kill switch: it exists but prints "currently unavailable" here. If the user asks about it, say that plainly rather than that it does not exist; there is no setting or variable that turns it back on, and `claude update` plus a fresh session picks the command up again once the switch is lifted.',
   };
 }
-
-export { QE, jF, J_n, describePluginEvalAvailability, Q4o };
+export {
+  isPluginDirectoryModeOn,
+  lanternPrismEnabled,
+  shardedSnowflakeOff,
+  describePluginEvalAvailability,
+  encapsulatedPebbleEnabled,
+};

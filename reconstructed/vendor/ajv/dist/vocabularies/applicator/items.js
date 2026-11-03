@@ -6,52 +6,64 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../runtime/bun-runtime.js";
-import { uh } from "../../compile/codegen/index.js";
-import { ew } from "../../compile/util.js";
-import { Q } from "../code.js";
+import { require_codegen_2 } from "../../compile/codegen/index.js";
+import { require_util_2 } from "../../compile/util.js";
+import { require_code_2 } from "../code.js";
 
 //@ chunk-s82q9s4x.js:93166-94228 cjs-fingerprint
-var Ir = x(function (oi) {
-  Object.defineProperty(oi, "__esModule", { value: !0 });
-  oi.validateTuple = void 0;
-  var zt = uh(),
-    Ne = ew(),
-    si = Q(),
-    rp = {
-      keyword: "items",
-      type: "array",
-      schemaType: ["object", "array", "boolean"],
-      before: "uniqueItems",
-      code(e) {
-        let { schema: schema, it: it } = e;
-        if (Array.isArray(schema)) return ni(e, "additionalItems", schema);
-        if (((it.items = !0), Ne.alwaysValidSchema(it, schema))) return;
-        e.ok(si.validateArray(e));
-      },
-    };
-  function ni(e, t, r = e.schema) {
-    let { gen: gen, parentSchema: parentSchema, data: o, keyword: keyword, it: it } = e;
-    if ((l(parentSchema), it.opts.unevaluated && r.length && it.items !== !0))
-      it.items = Ne.mergeEvaluated.items(gen, r.length, it.items);
-    let c = gen.name("valid"),
-      u = gen.const("len", zt._`${o}.length`);
-    r.forEach((f, b) => {
-      if (Ne.alwaysValidSchema(it, f)) return;
-      (gen.if(zt._`${u} > ${b}`, () => e.subschema({ keyword: keyword, schemaProp: b, dataProp: b }, c)),
-        e.ok(c));
+var require_items = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.validateTuple = undefined;
+  var codegen_1 = require_codegen_2();
+  var util_1 = require_util_2();
+  var code_1 = require_code_2();
+  var def = {
+    keyword: "items",
+    type: "array",
+    schemaType: ["object", "array", "boolean"],
+    before: "uniqueItems",
+    code(cxt) {
+      let { schema, it } = cxt;
+      if (Array.isArray(schema)) return validateTuple(cxt, "additionalItems", schema);
+      it.items = true;
+      if (util_1.alwaysValidSchema(it, schema)) return;
+      cxt.ok(code_1.validateArray(cxt));
+    },
+  };
+  function validateTuple(cxt, extraItems, schArr = cxt.schema) {
+    let { gen, parentSchema, data, keyword, it } = cxt;
+    checkStrictTuple(parentSchema);
+    if (it.opts.unevaluated && schArr.length && it.items !== true)
+      it.items = util_1.mergeEvaluated.items(gen, schArr.length, it.items);
+    let valid = gen.name("valid");
+    let len = gen.const("len", codegen_1._`${data}.length`);
+    schArr.forEach((sch, i) => {
+      if (util_1.alwaysValidSchema(it, sch)) return;
+      gen.if(codegen_1._`${len} > ${i}`, () =>
+        cxt.subschema(
+          {
+            keyword,
+            schemaProp: i,
+            dataProp: i,
+          },
+          valid,
+        ),
+      );
+      cxt.ok(valid);
     });
-    function l(f) {
-      let { opts: opts, errSchemaPath: errSchemaPath } = it,
-        h = r.length,
-        p = h === f.minItems && (h === f.maxItems || f[t] === !1);
-      if (opts.strictTuples && !p) {
-        let y = `"${keyword}" is ${h}-tuple, but minItems or maxItems/${t} are not specified or different at path "${errSchemaPath}"`;
-        Ne.checkStrictMode(it, y, opts.strictTuples);
+    function checkStrictTuple(sch) {
+      let { opts, errSchemaPath } = it;
+      let l = schArr.length;
+      let fullTuple = l === sch.minItems && (l === sch.maxItems || sch[extraItems] === false);
+      if (opts.strictTuples && !fullTuple) {
+        let msg = `"${keyword}" is ${l}-tuple, but minItems or maxItems/${extraItems} are not specified or different at path "${errSchemaPath}"`;
+        util_1.checkStrictMode(it, msg, opts.strictTuples);
       }
     }
   }
-  oi.validateTuple = ni;
-  oi.default = rp;
+  cjsExports.validateTuple = validateTuple;
+  cjsExports.default = def;
 });
-
-export { Ir };
+export { require_items };

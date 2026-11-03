@@ -8,38 +8,87 @@
 import { x } from "../../../../../../runtime/bun-runtime.js";
 
 //@ chunk-1r4fv9mg.js:7539-8621 cjs-fingerprint
-var Re = x(function (qr, Mt) {
-  Mt.exports = {
+var require_applicator = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = {
     $schema: "https://json-schema.org/draft/2020-12/schema",
     $id: "https://json-schema.org/draft/2020-12/meta/applicator",
-    $vocabulary: { "https://json-schema.org/draft/2020-12/vocab/applicator": !0 },
+    $vocabulary: {
+      "https://json-schema.org/draft/2020-12/vocab/applicator": true,
+    },
     $dynamicAnchor: "meta",
     title: "Applicator vocabulary meta-schema",
     type: ["object", "boolean"],
     properties: {
-      prefixItems: { $ref: "#/$defs/schemaArray" },
-      items: { $dynamicRef: "#meta" },
-      contains: { $dynamicRef: "#meta" },
-      additionalProperties: { $dynamicRef: "#meta" },
-      properties: { type: "object", additionalProperties: { $dynamicRef: "#meta" }, default: {} },
-      patternProperties: {
+      prefixItems: {
+        $ref: "#/$defs/schemaArray",
+      },
+      items: {
+        $dynamicRef: "#meta",
+      },
+      contains: {
+        $dynamicRef: "#meta",
+      },
+      additionalProperties: {
+        $dynamicRef: "#meta",
+      },
+      properties: {
         type: "object",
-        additionalProperties: { $dynamicRef: "#meta" },
-        propertyNames: { format: "regex" },
+        additionalProperties: {
+          $dynamicRef: "#meta",
+        },
         default: {},
       },
-      dependentSchemas: { type: "object", additionalProperties: { $dynamicRef: "#meta" }, default: {} },
-      propertyNames: { $dynamicRef: "#meta" },
-      if: { $dynamicRef: "#meta" },
-      then: { $dynamicRef: "#meta" },
-      else: { $dynamicRef: "#meta" },
-      allOf: { $ref: "#/$defs/schemaArray" },
-      anyOf: { $ref: "#/$defs/schemaArray" },
-      oneOf: { $ref: "#/$defs/schemaArray" },
-      not: { $dynamicRef: "#meta" },
+      patternProperties: {
+        type: "object",
+        additionalProperties: {
+          $dynamicRef: "#meta",
+        },
+        propertyNames: {
+          format: "regex",
+        },
+        default: {},
+      },
+      dependentSchemas: {
+        type: "object",
+        additionalProperties: {
+          $dynamicRef: "#meta",
+        },
+        default: {},
+      },
+      propertyNames: {
+        $dynamicRef: "#meta",
+      },
+      if: {
+        $dynamicRef: "#meta",
+      },
+      then: {
+        $dynamicRef: "#meta",
+      },
+      else: {
+        $dynamicRef: "#meta",
+      },
+      allOf: {
+        $ref: "#/$defs/schemaArray",
+      },
+      anyOf: {
+        $ref: "#/$defs/schemaArray",
+      },
+      oneOf: {
+        $ref: "#/$defs/schemaArray",
+      },
+      not: {
+        $dynamicRef: "#meta",
+      },
     },
-    $defs: { schemaArray: { type: "array", minItems: 1, items: { $dynamicRef: "#meta" } } },
+    $defs: {
+      schemaArray: {
+        type: "array",
+        minItems: 1,
+        items: {
+          $dynamicRef: "#meta",
+        },
+      },
+    },
   };
 });
-
-export { Re };
+export { require_applicator };

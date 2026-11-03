@@ -6,27 +6,26 @@
  * attribution: placement 6
  */
 import { dV } from "./_root.js";
-import { o } from "./_getRawTag.js";
+import { getRawTag_default } from "./_getRawTag.js";
 
 //@ chunk-a16kyqj3.js:614-650 placement
-var S = Object.prototype,
-  toString_2 = S.toString;
+var S = Object.prototype;
+var toString = S.toString;
 //@ chunk-a16kyqj3.js:650-681 placement
 function s(t) {
-  return toString_2.call(t);
+  return toString.call(t);
 }
 //@ chunk-a16kyqj3.js:681-689 placement
 var n = s;
 //@ chunk-a16kyqj3.js:689-761 placement
-var y = "[object Null]",
-  O = "[object Undefined]",
-  a = dV ? dV.toStringTag : void 0;
+var y = "[object Null]";
+var undefinedTag = "[object Undefined]";
+var symToStringTag_2 = dV ? dV.toStringTag : undefined;
 //@ chunk-a16kyqj3.js:761-843 placement
-function v(t) {
-  if (t == null) return t === void 0 ? O : y;
-  return a && a in Object(t) ? o(t) : n(t);
+function v(value) {
+  if (value == null) return value === undefined ? undefinedTag : y;
+  return symToStringTag_2 && symToStringTag_2 in Object(value) ? getRawTag_default(value) : n(value);
 }
 //@ chunk-a16kyqj3.js:843-853 placement
 var yre = v;
-
 export { yre };

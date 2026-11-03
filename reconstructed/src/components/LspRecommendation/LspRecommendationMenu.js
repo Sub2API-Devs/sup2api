@@ -10,77 +10,86 @@
  */
 import { w } from "../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
-import { e } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text } from "../../ink/components/Text.js";
 import { DesktopUpsellStartup } from "../DesktopUpsell/DesktopUpsellStartup.js";
 
 //@ chunk-18hwfzwa.js:1194526-1195547 fingerprint = LspRecommendationMenu (0.429)
-function LspRecommendationMenu(h) {
-  let $ = w(10),
-    {
-      pluginName: pluginName,
-      pluginDescription: pluginDescription,
-      marketplaceName: marketplaceName,
-      fileExtension: fileExtension,
-      onResponse: onResponse,
-    } = h,
-    Be;
-  if ($[0] === MEMO_CACHE_SENTINEL)
-    ((Be = e(Text, {
-      dimColor: !0,
+function LspRecommendationMenu(props) {
+  let $ = w(10);
+  let { pluginName, pluginDescription, marketplaceName, fileExtension, onResponse } = props;
+  let intro;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    intro = jsxProd_default(Text, {
+      dimColor: true,
       children: "LSP provides code intelligence like go-to-definition and error checking",
-    })),
-      ($[0] = Be));
-  else Be = $[0];
-  let He;
-  if ($[1] !== fileExtension)
-    ((He = {
+    });
+    $[0] = intro;
+  } else intro = $[0];
+  let extraIdentityRow;
+  if ($[1] !== fileExtension) {
+    extraIdentityRow = {
       label: "Triggered by:",
       value: fileExtension,
       fallback: "(unnamed extension)",
       suffix: " files",
-    }),
-      ($[1] = fileExtension),
-      ($[2] = He));
-  else He = $[2];
-  let We;
-  if ($[3] === MEMO_CACHE_SENTINEL)
-    ((We = [
-      { label: e(Text, { children: "Yes, install" }), value: "yes" },
-      { label: "No, not now", value: "no" },
-      { label: e(Text, { children: "Never for this plugin" }), value: "never" },
-      { label: "Disable all LSP recommendations", value: "disable" },
-    ]),
-      ($[3] = We));
-  else We = $[3];
+    };
+    $[1] = fileExtension;
+    $[2] = extraIdentityRow;
+  } else extraIdentityRow = $[2];
+  let options;
+  if ($[3] === MEMO_CACHE_SENTINEL) {
+    options = [
+      {
+        label: jsxProd_default(Text, {
+          children: "Yes, install",
+        }),
+        value: "yes",
+      },
+      {
+        label: "No, not now",
+        value: "no",
+      },
+      {
+        label: jsxProd_default(Text, {
+          children: "Never for this plugin",
+        }),
+        value: "never",
+      },
+      {
+        label: "Disable all LSP recommendations",
+        value: "disable",
+      },
+    ];
+    $[3] = options;
+  } else options = $[3];
   let ze;
   if (
     $[4] !== marketplaceName ||
     $[5] !== onResponse ||
     $[6] !== pluginDescription ||
     $[7] !== pluginName ||
-    $[8] !== He
-  )
-    ((ze = e(DesktopUpsellStartup, {
+    $[8] !== extraIdentityRow
+  ) {
+    ze = jsxProd_default(DesktopUpsellStartup, {
       title: "LSP plugin recommendation",
-      intro: Be,
-      pluginName: pluginName,
-      pluginDescription: pluginDescription,
-      marketplaceName: marketplaceName,
-      extraIdentityRow: He,
+      intro,
+      pluginName,
+      pluginDescription,
+      marketplaceName,
+      extraIdentityRow,
       question: "Would you like to install this LSP plugin?",
-      options: We,
+      options,
       unansweredResponse: "timeout",
-      onResponse: onResponse,
-    })),
-      ($[4] = marketplaceName),
-      ($[5] = onResponse),
-      ($[6] = pluginDescription),
-      ($[7] = pluginName),
-      ($[8] = He),
-      ($[9] = ze));
-  else ze = $[9];
+      onResponse,
+    });
+    $[4] = marketplaceName;
+    $[5] = onResponse;
+    $[6] = pluginDescription;
+    $[7] = pluginName;
+    $[8] = extraIdentityRow;
+    $[9] = ze;
+  } else ze = $[9];
   return ze;
 }
-
 export { LspRecommendationMenu };

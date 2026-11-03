@@ -8,10 +8,9 @@
 import { x } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-spjgqa4y.js:229-357 cjs-require-graph
-var Ue = x(function (gl, At) {
-  At.exports = function () {
+var require_can_promise = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = function () {
     return typeof Promise === "function" && Promise.prototype && Promise.prototype.then;
   };
 });
-
-export { Ue };
+export { require_can_promise };

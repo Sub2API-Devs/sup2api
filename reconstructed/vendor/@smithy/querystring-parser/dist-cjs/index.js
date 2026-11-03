@@ -8,20 +8,21 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-k057sjda.js:226-515 cjs-fingerprint
-var a = x(function (u) {
-  function c(t) {
-    let r = {};
-    if (((t = t.replace(/^\?/, "")), t))
-      for (let n of t.split("&")) {
-        let [e, s = null] = n.split("=");
-        if (((e = decodeURIComponent(e)), s)) s = decodeURIComponent(s);
-        if (!(e in r)) r[e] = s;
-        else if (Array.isArray(r[e])) r[e].push(s);
-        else r[e] = [r[e], s];
+var require_querystring_parser = x(function (cjsExports) {
+  function parseQueryString(querystring) {
+    let query = {};
+    querystring = querystring.replace(/^\?/, "");
+    if (querystring)
+      for (let pair of querystring.split("&")) {
+        let [key, value = null] = pair.split("=");
+        key = decodeURIComponent(key);
+        if (value) value = decodeURIComponent(value);
+        if (!(key in query)) query[key] = value;
+        else if (Array.isArray(query[key])) query[key].push(value);
+        else query[key] = [query[key], value];
       }
-    return r;
+    return query;
   }
-  u.parseQueryString = c;
+  cjsExports.parseQueryString = parseQueryString;
 });
-
-export { a };
+export { require_querystring_parser };

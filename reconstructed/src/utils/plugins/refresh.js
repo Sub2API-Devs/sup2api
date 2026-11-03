@@ -12,7 +12,7 @@ import { isBareMode } from "../envUtils.js";
 import { isChannelPluginAllowed } from "../../services/mcp/channelAllowlist.js";
 import { getSyncedPluginReloadDebt, getOriginalCwd } from "../../bootstrap/state.js";
 import { getPluginRegistry } from "./pluginLoadState.js";
-import { J_ } from "./marketplaceNames.js";
+import { marketplaceNameAnswerState } from "./marketplaceNames.js";
 import { logError } from "../log.js";
 import { logForDebugging } from "../debug.js";
 import { markKeychainCacheStale } from "../secureStorage/macOsKeychainHelpers.js";
@@ -24,8 +24,8 @@ import {
   loadAllPlugins,
   releaseSyncedDirsNotIn,
 } from "./pluginLoader.js";
-import { ic, clearPluginDerivedState } from "./cacheUtils.js";
-import { vYs } from "./orphanedPluginFilter.js";
+import { refreshPluginCaches, clearPluginDerivedState } from "./cacheUtils.js";
+import { clearOrphanedGlobExclusions } from "./orphanedPluginFilter.js";
 import { pruneRemovedPluginHooks, loadPluginHooks } from "./loadPluginHooks.js";
 import { invalidateShellSnapshotIfPluginBinsChanged } from "../Shell.js";
 import { SandboxManager } from "../sandbox/sandbox-adapter.js";
@@ -36,151 +36,175 @@ import { loadPluginLspServers, findLspExtensionConflicts } from "./lspPluginInte
 import { reinitializeLspServerManager } from "../../services/lsp/manager.js";
 import { errorMessage } from "../errors.js";
 import { getHostState } from "../hostEnvironment.js";
-import { Jz } from "./pluginsChangedSignal.js";
+import { skillsChangedSignal } from "./pluginsChangedSignal.js";
 import { count } from "../collections.js";
 
 //@ chunk-4q6mp9e8.js:1153-1189 placement
-function zye() {
-  return isBareMode() ? isChannelPluginAllowed : void 0;
+/**
+ * bareModePluginAllow：裸模式下的通配插件放行函数。
+ */
+function bareModePluginAllow() {
+  return isBareMode() ? isChannelPluginAllowed : undefined;
 }
 //@ chunk-4q6mp9e8.js:1189-1276 placement
-var T = (n) =>
-  Object.entries(n ?? {})
-    .filter(([, e]) => e.pluginSource !== void 0)
-    .map(([e]) => e);
+/**
+ * pluginIdsWithSource：有 pluginSource 的插件 id。
+ */
+var pluginIdsWithSource = (dynamicMcpConfig) =>
+  Object.entries(dynamicMcpConfig ?? {})
+    .filter(([, value]) => value.pluginSource !== undefined)
+    .map(([key]) => key);
 //@ chunk-4q6mp9e8.js:1276-1309 placement
-async function pDr(n, e) {
+/**
+ * noReloadPlugins：已裁掉的插件重载（返回 0）。
+ */
+async function noReloadPlugins(enabled, e) {
   return 0;
 }
+//@ chunk-4q6mp9e8.js:1309-3503 fingerprint = refreshActivePlugins (0.701)
 /**
  * /reload-plugins 与安装后刷新：清空插件相关缓存、重新加载插件（完整或 cacheOnly）、刷新命令/代理/输出样式/MCP/LSP、重新注册 hooks，汇总各组件数量与错误供界面展示。
  */
-//@ chunk-4q6mp9e8.js:1309-3503 fingerprint = refreshActivePlugins (0.701)
-async function refreshActivePlugins(n, e, u, y = {}) {
-  let f = y.applyStagedInstalls ?? !0,
-    m = getSyncedPluginReloadDebt(),
-    { changesLanded: changesLanded, holdsSet: holdsSet } = m;
+async function refreshActivePlugins(n, storageV5, credentials, y = {}) {
+  let applyStagedInstalls = y.applyStagedInstalls ?? true;
+  let syncedPluginReloadDebt = getSyncedPluginReloadDebt();
+  let { changesLanded, holdsSet } = syncedPluginReloadDebt;
   using h = {
     [Symbol.dispose]: () => {
-      m.endHoldSetBefore(holdsSet);
+      syncedPluginReloadDebt.endHoldSetBefore(holdsSet);
     },
   };
-  let organizationAsk = getPluginRegistry().organizationAsk,
-    k = f && J_() !== "unanswered" ? organizationAsk.heldReresolve : null;
-  if (k) ((organizationAsk.heldReresolve = null), await k().catch(logError));
-  if ((logForDebugging("refreshActivePlugins: clearing all plugin caches"), f))
-    (markKeychainCacheStale(), clearInstalledPluginsCache());
+  let organizationAsk = getPluginRegistry().organizationAsk;
+  let heldReresolve =
+    applyStagedInstalls && marketplaceNameAnswerState() !== "unanswered"
+      ? organizationAsk.heldReresolve
+      : null;
+  if (heldReresolve) {
+    organizationAsk.heldReresolve = null;
+    await heldReresolve().catch(logError);
+  }
+  logForDebugging("refreshActivePlugins: clearing all plugin caches");
+  if (applyStagedInstalls) {
+    markKeychainCacheStale();
+    clearInstalledPluginsCache();
+  }
   let o =
     env.CLAUDE_CODE_CCR_ONE_PLUGIN_LOAD_PER_RELOAD &&
     !env.CLAUDE_CODE_SYNC_PLUGIN_INSTALL &&
     !hasMarketplaceBackedPlugins() &&
     getPluginRegistry().pluginLoadsRunning === 0;
-  if ((ic(e, u, o ? "caller" : "clear"), f)) vYs();
-  if (o) pruneRemovedPluginHooks(e, u).catch(logError);
+  refreshPluginCaches(storageV5, credentials, o ? "caller" : "clear");
+  if (applyStagedInstalls) clearOrphanedGlobExclusions();
+  if (o) pruneRemovedPluginHooks(storageV5, credentials).catch(logError);
   let A;
   if (o) {
-    let r = loadAllPluginsCacheOnly(e, u),
-      c = await r.catch((E) => {
-        logError(E);
-        return;
-      });
-    if (getPluginRegistry().pluginLoadCacheOnly === r && !hasMarketplaceBackedPlugins()) A = c;
+    let allPluginsCacheOnly = loadAllPluginsCacheOnly(storageV5, credentials);
+    let c = await allPluginsCacheOnly.catch((error) => {
+      logError(error);
+      return;
+    });
+    if (getPluginRegistry().pluginLoadCacheOnly === allPluginsCacheOnly && !hasMarketplaceBackedPlugins())
+      A = c;
   }
-  ((A ??= await loadAllPlugins(e, u)), clearPluginDerivedState());
+  A ??= await loadAllPlugins(storageV5, credentials);
+  clearPluginDerivedState();
   let pluginLoadCacheOnly = getPluginRegistry().pluginLoadCacheOnly;
-  (await invalidateShellSnapshotIfPluginBinsChanged(e), SandboxManager.refreshConfig());
-  let [b, C, _] = await Promise.all([
-      getPluginCommands(e),
-      loadPluginSkills(e),
-      getAgentDefinitionsWithOverrides(getOriginalCwd(), e),
-    ]),
-    { enabled: enabled, disabled: disabled, errors: errors, warnings: warnings } = A,
-    P = [],
-    I = [],
-    [z, H] = await Promise.all([
-      Promise.all(
-        enabled.map(async (r) => {
-          let c = await extractMcpServersFromPlugins(r, P, e, { warnings: I });
-          return c ? Object.keys(c).length : 0;
-        }),
-      ),
-      Promise.all(
-        enabled.map(async (r) => {
-          if (r.lspServers) return Object.keys(r.lspServers).length;
-          let c = await loadPluginLspServers(r, P, e);
-          if (c) r.lspServers = c;
-          return c ? Object.keys(c).length : 0;
-        }),
-      ),
-    ]),
-    mcp_count = z.reduce((sum, c) => sum + c, 0),
-    lsp_count = H.reduce((sum, c) => sum + c, 0);
-  await pDr(enabled, P);
-  let v = [...warnings, ...I, ...findLspExtensionConflicts(enabled)],
-    L = [...errors, ...P];
-  (n.applyRefresh({
-    enabled: enabled,
-    disabled: disabled,
-    commands: b,
-    errors: L,
-    warnings: v,
-    agentDefinitions: _,
-  }),
-    reinitializeLspServerManager(e, u));
-  let j = !1;
-  try {
-    await loadPluginHooks(e, u);
-  } catch (error) {
-    ((j = !0),
-      logError(error),
-      logForDebugging(`refreshActivePlugins: loadPluginHooks failed: ${errorMessage(error)}`));
-  }
-  if (!j) (await releaseSyncedDirsNotIn(enabled, e).catch(logError), m.reloaded(changesLanded));
-  let hook_count = enabled.reduce((sum, c) => {
-      if (!c.hooksConfig) return sum;
-      return (
-        sum +
-        Object.values(c.hooksConfig).reduce(
-          (E, matchers) => E + (matchers?.reduce((J, W) => J + W.hooks.length, 0) ?? 0),
-          0,
-        )
-      );
-    }, 0),
-    N = getHostState();
-  N.isAnnouncingFreshLoad =
-    pluginLoadCacheOnly !== void 0 && getPluginRegistry().pluginLoadCacheOnly === pluginLoadCacheOnly;
-  try {
-    Jz.emit();
-  } finally {
-    N.isAnnouncingFreshLoad = !1;
-  }
-  return (
-    logForDebugging(
-      `refreshActivePlugins: ${enabled.length} enabled, ${b.length} commands, ${C.length} skills, ${_.allAgents.length} agents, ${hook_count} hooks, ${mcp_count} MCP, ${lsp_count} LSP`,
+  await invalidateShellSnapshotIfPluginBinsChanged(storageV5);
+  SandboxManager.refreshConfig();
+  let [pluginCommands, pluginSkills, agentDefinitionsWithOverrides] = await Promise.all([
+    getPluginCommands(storageV5),
+    loadPluginSkills(storageV5),
+    getAgentDefinitionsWithOverrides(getOriginalCwd(), storageV5),
+  ]);
+  let { enabled, disabled, errors, warnings } = A;
+  let P = [];
+  let I = [];
+  let [mcpCounts, lspCounts] = await Promise.all([
+    Promise.all(
+      enabled.map(async (r) => {
+        let servers = await extractMcpServersFromPlugins(r, P, storageV5, {
+          warnings: I,
+        });
+        return servers ? Object.keys(servers).length : 0;
+      }),
     ),
-    {
-      enabled_count: count(enabled, (r) => r.isBuiltin !== !0),
-      disabled_count: count(disabled, (r) => r.isBuiltin !== !0),
-      command_count: b.length,
-      skill_count: C.length,
-      agent_count: _.allAgents.length,
-      hook_count: hook_count,
-      mcp_count: mcp_count,
-      lsp_count: lsp_count,
-      error_count: L.length + (j ? 1 : 0),
-      errors: L,
-      warnings: v,
-      agentDefinitions: _,
-      pluginCommands: b,
-    }
+    Promise.all(
+      enabled.map(async (r) => {
+        if (r.lspServers) return Object.keys(r.lspServers).length;
+        let servers = await loadPluginLspServers(r, P, storageV5);
+        if (servers) r.lspServers = servers;
+        return servers ? Object.keys(servers).length : 0;
+      }),
+    ),
+  ]);
+  let mcp_count = mcpCounts.reduce((sum, n) => sum + n, 0);
+  let lsp_count = lspCounts.reduce((sum, n) => sum + n, 0);
+  await noReloadPlugins(enabled, P);
+  let warnings_2 = [...warnings, ...I, ...findLspExtensionConflicts(enabled)];
+  let L = [...errors, ...P];
+  n.applyRefresh({
+    enabled,
+    disabled,
+    commands: pluginCommands,
+    errors: L,
+    warnings: warnings_2,
+    agentDefinitions: agentDefinitionsWithOverrides,
+  });
+  reinitializeLspServerManager(storageV5, credentials);
+  let hook_load_failed = false;
+  try {
+    await loadPluginHooks(storageV5, credentials);
+  } catch (e) {
+    hook_load_failed = true;
+    logError(e);
+    logForDebugging(`refreshActivePlugins: loadPluginHooks failed: ${errorMessage(e)}`);
+  }
+  if (!hook_load_failed) {
+    await releaseSyncedDirsNotIn(enabled, storageV5).catch(logError);
+    syncedPluginReloadDebt.reloaded(changesLanded);
+  }
+  let hook_count = enabled.reduce((sum, c) => {
+    if (!c.hooksConfig) return sum;
+    return (
+      sum +
+      Object.values(c.hooksConfig).reduce(
+        (acc, matchers) => acc + (matchers?.reduce((acc, m) => acc + m.hooks.length, 0) ?? 0),
+        0,
+      )
+    );
+  }, 0);
+  let hostState = getHostState();
+  hostState.isAnnouncingFreshLoad =
+    pluginLoadCacheOnly !== undefined && getPluginRegistry().pluginLoadCacheOnly === pluginLoadCacheOnly;
+  try {
+    skillsChangedSignal.emit();
+  } finally {
+    hostState.isAnnouncingFreshLoad = false;
+  }
+  logForDebugging(
+    `refreshActivePlugins: ${enabled.length} enabled, ${pluginCommands.length} commands, ${pluginSkills.length} skills, ${agentDefinitionsWithOverrides.allAgents.length} agents, ${hook_count} hooks, ${mcp_count} MCP, ${lsp_count} LSP`,
   );
+  return {
+    enabled_count: count(enabled, (r) => r.isBuiltin !== true),
+    disabled_count: count(disabled, (r) => r.isBuiltin !== true),
+    command_count: pluginCommands.length,
+    skill_count: pluginSkills.length,
+    agent_count: agentDefinitionsWithOverrides.allAgents.length,
+    hook_count,
+    mcp_count,
+    lsp_count,
+    error_count: L.length + (hook_load_failed ? 1 : 0),
+    errors: L,
+    warnings: warnings_2,
+    agentDefinitions: agentDefinitionsWithOverrides,
+    pluginCommands,
+  };
 }
+//@ chunk-7nse75qx.js:453-519 fingerprint = mergePluginErrors (1)
 /**
  * 名字是否属于插件/LSP 管理器来源（lsp-manager 或 plugin: 前缀）。
  */
-//@ chunk-7nse75qx.js:453-519 fingerprint = mergePluginErrors (1)
 function mergePluginErrors(e) {
   return e === "lsp-manager" || e.startsWith("plugin:");
 }
-
-export { refreshActivePlugins, pDr, zye, T, mergePluginErrors };
+export { refreshActivePlugins, noReloadPlugins, bareModePluginAllow, pluginIdsWithSource, mergePluginErrors };

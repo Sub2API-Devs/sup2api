@@ -10,300 +10,374 @@ import { qs } from "../../src/index.js";
 import { oo } from "../../google/protobuf/descriptor.json.js";
 
 //@ chunk-pwh5dx3n.js:156548-168464 cjs-fingerprint
-var uh = x(function (I, ch) {
-  var Ne = qs();
-  ch.exports = I = Ne.descriptor = Ne.Root.fromJSON(oo()).lookup(".google.protobuf");
-  var {
-      Namespace: Namespace,
-      Root: Root,
-      Enum: Enum,
-      Type: Type,
-      Field: Field,
-      MapField: MapField,
-      OneOf: OneOf,
-      Service: Service,
-      Method: Method,
-    } = Ne,
-    patterns = Ne.util.patterns,
-    { numberRe: numberRe, typeRefRe: typeRefRe } = patterns;
-  Root.fromDescriptor = function (t) {
-    if (typeof t.length === "number") t = I.FileDescriptorSet.decode(t);
-    var r = new Root();
-    if (t.file) {
-      var i, s;
-      for (var n = 0, a; n < t.file.length; ++n) {
-        if (((s = r), (i = t.file[n]).package && i.package.length)) s = r.define(i.package);
-        var o = TT(i);
-        if (i.name && i.name.length) r.files.push((s.filename = i.name));
-        if (i.messageType)
-          for (a = 0; a < i.messageType.length; ++a) s.add(Type.fromDescriptor(i.messageType[a], o));
-        if (i.enumType) for (a = 0; a < i.enumType.length; ++a) s.add(Enum.fromDescriptor(i.enumType[a], o));
-        if (i.extension)
-          for (a = 0; a < i.extension.length; ++a) s.add(Field.fromDescriptor(i.extension[a], o));
-        if (i.service) for (a = 0; a < i.service.length; ++a) s.add(Service.fromDescriptor(i.service[a], o));
-        var l = jr(i.options, I.FileOptions);
-        if (l) {
-          var keys = Object.keys(l);
-          for (a = 0; a < keys.length; ++a) s.setOption(keys[a], l[keys[a]]);
+var uh = x(function (cjsExports, cjsModule) {
+  var $protobuf = qs();
+  cjsModule.exports =
+    cjsExports =
+    $protobuf.descriptor =
+      $protobuf.Root.fromJSON(oo()).lookup(".google.protobuf");
+  var { Namespace, Root, Enum, Type, Field, MapField, OneOf, Service, Method } = $protobuf;
+  var patterns = $protobuf.util.patterns;
+  var { numberRe, typeRefRe } = patterns;
+  Root.fromDescriptor = function (descriptor) {
+    if (typeof descriptor.length === "number") descriptor = cjsExports.FileDescriptorSet.decode(descriptor);
+    var root = new Root();
+    if (descriptor.file) {
+      var fileDescriptor;
+      var filePackage;
+      for (var j = 0, i; j < descriptor.file.length; ++j) {
+        filePackage = root;
+        if ((fileDescriptor = descriptor.file[j]).package && fileDescriptor.package.length)
+          filePackage = root.define(fileDescriptor.package);
+        var edition = editionFromDescriptor(fileDescriptor);
+        if (fileDescriptor.name && fileDescriptor.name.length)
+          root.files.push((filePackage.filename = fileDescriptor.name));
+        if (fileDescriptor.messageType)
+          for (i = 0; i < fileDescriptor.messageType.length; ++i)
+            filePackage.add(Type.fromDescriptor(fileDescriptor.messageType[i], edition));
+        if (fileDescriptor.enumType)
+          for (i = 0; i < fileDescriptor.enumType.length; ++i)
+            filePackage.add(Enum.fromDescriptor(fileDescriptor.enumType[i], edition));
+        if (fileDescriptor.extension)
+          for (i = 0; i < fileDescriptor.extension.length; ++i)
+            filePackage.add(Field.fromDescriptor(fileDescriptor.extension[i], edition));
+        if (fileDescriptor.service)
+          for (i = 0; i < fileDescriptor.service.length; ++i)
+            filePackage.add(Service.fromDescriptor(fileDescriptor.service[i], edition));
+        var opts = fromDescriptorOptions(fileDescriptor.options, cjsExports.FileOptions);
+        if (opts) {
+          var ks = Object.keys(opts);
+          for (i = 0; i < ks.length; ++i) filePackage.setOption(ks[i], opts[ks[i]]);
         }
       }
     }
-    return r.resolveAll();
+    return root.resolveAll();
   };
-  Root.prototype.toDescriptor = function (t) {
-    var create = I.FileDescriptorSet.create();
-    return (nh(this, create.file, t), create);
+  Root.prototype.toDescriptor = function (edition) {
+    var set = cjsExports.FileDescriptorSet.create();
+    Root_toDescriptorRecursive(this, set.file, edition);
+    return set;
   };
-  function nh(e, t, r) {
-    var create = I.FileDescriptorProto.create({
-      name: e.filename || (e.fullName.substring(1).replace(/\./g, "_") || "root") + ".proto",
+  function Root_toDescriptorRecursive(ns, files, edition) {
+    var file = cjsExports.FileDescriptorProto.create({
+      name: ns.filename || (ns.fullName.substring(1).replace(/\./g, "_") || "root") + ".proto",
     });
-    if ((RT(r, create), !(e instanceof Root))) create.package = e.fullName.substring(1);
-    for (var s = 0, n; s < e.nestedArray.length; ++s)
-      if ((n = e._nestedArray[s]) instanceof Type) create.messageType.push(n.toDescriptor(r));
-      else if (n instanceof Enum) create.enumType.push(n.toDescriptor());
-      else if (n instanceof Field) create.extension.push(n.toDescriptor(r));
-      else if (n instanceof Service) create.service.push(n.toDescriptor());
-      else if (n instanceof Namespace) nh(n, t, r);
-    if (
-      ((create.options = Gr(e.options, I.FileOptions)),
-      create.messageType.length + create.enumType.length + create.extension.length + create.service.length)
-    )
-      t.push(create);
+    editionToDescriptor(edition, file);
+    if (!(ns instanceof Root)) file.package = ns.fullName.substring(1);
+    for (var i = 0, nested; i < ns.nestedArray.length; ++i)
+      if ((nested = ns._nestedArray[i]) instanceof Type) file.messageType.push(nested.toDescriptor(edition));
+      else if (nested instanceof Enum) file.enumType.push(nested.toDescriptor());
+      else if (nested instanceof Field) file.extension.push(nested.toDescriptor(edition));
+      else if (nested instanceof Service) file.service.push(nested.toDescriptor());
+      else if (nested instanceof Namespace) Root_toDescriptorRecursive(nested, files, edition);
+    file.options = toDescriptorOptions(ns.options, cjsExports.FileOptions);
+    if (file.messageType.length + file.enumType.length + file.extension.length + file.service.length)
+      files.push(file);
   }
-  var gT = 0;
-  Type.fromDescriptor = function (t, r, i) {
-    if (typeof t.length === "number") t = I.DescriptorProto.decode(t);
-    var s = new Type(t.name.length ? t.name : "Type" + gT++, jr(t.options, I.MessageOptions)),
-      n;
-    if (!i) s._edition = r;
-    if (t.oneofDecl) for (n = 0; n < t.oneofDecl.length; ++n) s.add(OneOf.fromDescriptor(t.oneofDecl[n]));
-    if (t.field)
-      for (n = 0; n < t.field.length; ++n) {
-        var fromDescriptor = Field.fromDescriptor(t.field[n], r, !0);
-        if ((s.add(fromDescriptor), t.field[n].hasOwnProperty("oneofIndex")))
-          s.oneofsArray[t.field[n].oneofIndex].add(fromDescriptor);
+  var unnamedMessageIndex = 0;
+  Type.fromDescriptor = function (descriptor, edition, nested) {
+    if (typeof descriptor.length === "number") descriptor = cjsExports.DescriptorProto.decode(descriptor);
+    var type = new Type(
+      descriptor.name.length ? descriptor.name : "Type" + unnamedMessageIndex++,
+      fromDescriptorOptions(descriptor.options, cjsExports.MessageOptions),
+    );
+    var i;
+    if (!nested) type._edition = edition;
+    if (descriptor.oneofDecl)
+      for (i = 0; i < descriptor.oneofDecl.length; ++i)
+        type.add(OneOf.fromDescriptor(descriptor.oneofDecl[i]));
+    if (descriptor.field)
+      for (i = 0; i < descriptor.field.length; ++i) {
+        var field = Field.fromDescriptor(descriptor.field[i], edition, true);
+        type.add(field);
+        if (descriptor.field[i].hasOwnProperty("oneofIndex"))
+          type.oneofsArray[descriptor.field[i].oneofIndex].add(field);
       }
-    if (t.extension)
-      for (n = 0; n < t.extension.length; ++n) s.add(Field.fromDescriptor(t.extension[n], r, !0));
-    if (t.nestedType) {
-      for (n = 0; n < t.nestedType.length; ++n)
-        if (
-          (s.add(Type.fromDescriptor(t.nestedType[n], r, !0)),
-          t.nestedType[n].options && t.nestedType[n].options.mapEntry)
-        )
-          s.setOption("map_entry", !0);
+    if (descriptor.extension)
+      for (i = 0; i < descriptor.extension.length; ++i)
+        type.add(Field.fromDescriptor(descriptor.extension[i], edition, true));
+    if (descriptor.nestedType) {
+      for (i = 0; i < descriptor.nestedType.length; ++i) {
+        type.add(Type.fromDescriptor(descriptor.nestedType[i], edition, true));
+        if (descriptor.nestedType[i].options && descriptor.nestedType[i].options.mapEntry)
+          type.setOption("map_entry", true);
+      }
     }
-    if (t.enumType) for (n = 0; n < t.enumType.length; ++n) s.add(Enum.fromDescriptor(t.enumType[n], r, !0));
-    if (t.extensionRange && t.extensionRange.length) {
-      s.extensions = [];
-      for (n = 0; n < t.extensionRange.length; ++n)
-        s.extensions.push([t.extensionRange[n].start, t.extensionRange[n].end]);
+    if (descriptor.enumType)
+      for (i = 0; i < descriptor.enumType.length; ++i)
+        type.add(Enum.fromDescriptor(descriptor.enumType[i], edition, true));
+    if (descriptor.extensionRange && descriptor.extensionRange.length) {
+      type.extensions = [];
+      for (i = 0; i < descriptor.extensionRange.length; ++i)
+        type.extensions.push([descriptor.extensionRange[i].start, descriptor.extensionRange[i].end]);
     }
-    if ((t.reservedRange && t.reservedRange.length) || (t.reservedName && t.reservedName.length)) {
-      if (((s.reserved = []), t.reservedRange))
-        for (n = 0; n < t.reservedRange.length; ++n)
-          s.reserved.push([t.reservedRange[n].start, t.reservedRange[n].end]);
-      if (t.reservedName) for (n = 0; n < t.reservedName.length; ++n) s.reserved.push(t.reservedName[n]);
+    if (
+      (descriptor.reservedRange && descriptor.reservedRange.length) ||
+      (descriptor.reservedName && descriptor.reservedName.length)
+    ) {
+      type.reserved = [];
+      if (descriptor.reservedRange)
+        for (i = 0; i < descriptor.reservedRange.length; ++i)
+          type.reserved.push([descriptor.reservedRange[i].start, descriptor.reservedRange[i].end]);
+      if (descriptor.reservedName)
+        for (i = 0; i < descriptor.reservedName.length; ++i) type.reserved.push(descriptor.reservedName[i]);
     }
-    return s;
+    return type;
   };
-  Type.prototype.toDescriptor = function (t) {
-    var create = I.DescriptorProto.create({ name: this.name }),
-      i;
+  Type.prototype.toDescriptor = function (edition) {
+    var descriptor = cjsExports.DescriptorProto.create({
+      name: this.name,
+    });
+    var i;
     for (i = 0; i < this.fieldsArray.length; ++i) {
-      var s;
-      if (
-        (create.field.push((s = this._fieldsArray[i].toDescriptor(t))),
-        this._fieldsArray[i] instanceof MapField)
-      ) {
-        var n = lo(this._fieldsArray[i].keyType, this._fieldsArray[i].resolvedKeyType, !1),
-          a = lo(this._fieldsArray[i].type, this._fieldsArray[i].resolvedType, !1),
-          o =
-            a === 11 || a === 14
-              ? (this._fieldsArray[i].resolvedType && lh(this.parent, this._fieldsArray[i].resolvedType)) ||
-                this._fieldsArray[i].type
-              : void 0;
-        create.nestedType.push(
-          I.DescriptorProto.create({
-            name: s.typeName,
+      var fieldDescriptor;
+      descriptor.field.push((fieldDescriptor = this._fieldsArray[i].toDescriptor(edition)));
+      if (this._fieldsArray[i] instanceof MapField) {
+        var keyType = toDescriptorType(
+          this._fieldsArray[i].keyType,
+          this._fieldsArray[i].resolvedKeyType,
+          false,
+        );
+        var valueType = toDescriptorType(this._fieldsArray[i].type, this._fieldsArray[i].resolvedType, false);
+        var valueTypeName =
+          valueType === 11 || valueType === 14
+            ? (this._fieldsArray[i].resolvedType &&
+                shortname(this.parent, this._fieldsArray[i].resolvedType)) ||
+              this._fieldsArray[i].type
+            : undefined;
+        descriptor.nestedType.push(
+          cjsExports.DescriptorProto.create({
+            name: fieldDescriptor.typeName,
             field: [
-              I.FieldDescriptorProto.create({ name: "key", number: 1, label: 1, type: n }),
-              I.FieldDescriptorProto.create({ name: "value", number: 2, label: 1, type: a, typeName: o }),
+              cjsExports.FieldDescriptorProto.create({
+                name: "key",
+                number: 1,
+                label: 1,
+                type: keyType,
+              }),
+              cjsExports.FieldDescriptorProto.create({
+                name: "value",
+                number: 2,
+                label: 1,
+                type: valueType,
+                typeName: valueTypeName,
+              }),
             ],
-            options: I.MessageOptions.create({ mapEntry: !0 }),
+            options: cjsExports.MessageOptions.create({
+              mapEntry: true,
+            }),
           }),
         );
       }
     }
-    for (i = 0; i < this.oneofsArray.length; ++i) create.oneofDecl.push(this._oneofsArray[i].toDescriptor());
+    for (i = 0; i < this.oneofsArray.length; ++i)
+      descriptor.oneofDecl.push(this._oneofsArray[i].toDescriptor());
     for (i = 0; i < this.nestedArray.length; ++i)
-      if (this._nestedArray[i] instanceof Field) create.field.push(this._nestedArray[i].toDescriptor(t));
+      if (this._nestedArray[i] instanceof Field)
+        descriptor.field.push(this._nestedArray[i].toDescriptor(edition));
       else if (this._nestedArray[i] instanceof Type)
-        create.nestedType.push(this._nestedArray[i].toDescriptor(t));
+        descriptor.nestedType.push(this._nestedArray[i].toDescriptor(edition));
       else if (this._nestedArray[i] instanceof Enum)
-        create.enumType.push(this._nestedArray[i].toDescriptor());
+        descriptor.enumType.push(this._nestedArray[i].toDescriptor());
     if (this.extensions)
       for (i = 0; i < this.extensions.length; ++i)
-        create.extensionRange.push(
-          I.DescriptorProto.ExtensionRange.create({
+        descriptor.extensionRange.push(
+          cjsExports.DescriptorProto.ExtensionRange.create({
             start: this.extensions[i][0],
             end: this.extensions[i][1],
           }),
         );
     if (this.reserved)
       for (i = 0; i < this.reserved.length; ++i)
-        if (typeof this.reserved[i] === "string") create.reservedName.push(this.reserved[i]);
+        if (typeof this.reserved[i] === "string") descriptor.reservedName.push(this.reserved[i]);
         else
-          create.reservedRange.push(
-            I.DescriptorProto.ReservedRange.create({ start: this.reserved[i][0], end: this.reserved[i][1] }),
+          descriptor.reservedRange.push(
+            cjsExports.DescriptorProto.ReservedRange.create({
+              start: this.reserved[i][0],
+              end: this.reserved[i][1],
+            }),
           );
-    return ((create.options = Gr(this.options, I.MessageOptions)), create);
+    descriptor.options = toDescriptorOptions(this.options, cjsExports.MessageOptions);
+    return descriptor;
   };
-  Field.fromDescriptor = function (t, r, i) {
-    if (typeof t.length === "number") t = I.DescriptorProto.decode(t);
-    if (typeof t.number !== "number") throw Error("missing field id");
-    var typeName = t.typeName,
-      n;
+  Field.fromDescriptor = function (descriptor, edition, nested) {
+    if (typeof descriptor.length === "number") descriptor = cjsExports.DescriptorProto.decode(descriptor);
+    if (typeof descriptor.number !== "number") throw Error("missing field id");
+    var typeName = descriptor.typeName;
+    var fieldType;
     if (typeName != null && typeName !== "") {
       if (typeof typeName !== "string" || !typeRefRe.test(typeName))
         throw Error("illegal type name: " + typeName);
-      n = typeName;
-    } else n = ST(t.type);
-    var a;
-    switch (t.label) {
+      fieldType = typeName;
+    } else fieldType = fromDescriptorType(descriptor.type);
+    var fieldRule;
+    switch (descriptor.label) {
       case 1:
-        a = void 0;
+        fieldRule = undefined;
         break;
       case 2:
-        a = "required";
+        fieldRule = "required";
         break;
       case 3:
-        a = "repeated";
+        fieldRule = "repeated";
         break;
       default:
-        throw Error("illegal label: " + t.label);
+        throw Error("illegal label: " + descriptor.label);
     }
-    var extendee = t.extendee;
+    var extendee = descriptor.extendee;
     if (extendee != null && extendee !== "") {
       if (typeof extendee !== "string" || !typeRefRe.test(extendee))
         throw Error("illegal type name: " + extendee);
-    } else extendee = void 0;
-    var l = new Field(t.name.length ? t.name : "field" + t.number, t.number, n, a, extendee);
-    if (!i) l._edition = r;
-    if (((l.options = jr(t.options, I.FieldOptions)), t.proto3_optional)) l.options.proto3_optional = !0;
-    if (t.defaultValue && t.defaultValue.length) {
-      var defaultValue = t.defaultValue;
+    } else extendee = undefined;
+    var field = new Field(
+      descriptor.name.length ? descriptor.name : "field" + descriptor.number,
+      descriptor.number,
+      fieldType,
+      fieldRule,
+      extendee,
+    );
+    if (!nested) field._edition = edition;
+    field.options = fromDescriptorOptions(descriptor.options, cjsExports.FieldOptions);
+    if (descriptor.proto3_optional) field.options.proto3_optional = true;
+    if (descriptor.defaultValue && descriptor.defaultValue.length) {
+      var defaultValue = descriptor.defaultValue;
       switch (defaultValue) {
         case "true":
         case "TRUE":
-          defaultValue = !0;
+          defaultValue = true;
           break;
         case "false":
         case "FALSE":
-          defaultValue = !1;
+          defaultValue = false;
           break;
         default:
           var match = numberRe.exec(defaultValue);
           if (match) defaultValue = parseInt(defaultValue);
           break;
       }
-      l.setOption("default", defaultValue);
+      field.setOption("default", defaultValue);
     }
-    if (CT(t.type)) {
-      if (r === "proto3") {
-        if (t.options && !t.options.packed) l.setOption("packed", !1);
-      } else if ((!r || r === "proto2") && t.options && t.options.packed) l.setOption("packed", !0);
+    if (packableDescriptorType(descriptor.type)) {
+      if (edition === "proto3") {
+        if (descriptor.options && !descriptor.options.packed) field.setOption("packed", false);
+      } else if ((!edition || edition === "proto2") && descriptor.options && descriptor.options.packed)
+        field.setOption("packed", true);
     }
-    return l;
+    return field;
   };
-  Field.prototype.toDescriptor = function (t) {
-    var create = I.FieldDescriptorProto.create({ name: this.name, number: this.id });
-    if (this.map) ((create.type = 11), (create.typeName = Ne.util.ucFirst(this.name)), (create.label = 3));
-    else {
-      switch ((create.type = lo(this.type, this.resolve().resolvedType, this.delimited))) {
+  Field.prototype.toDescriptor = function (edition) {
+    var descriptor = cjsExports.FieldDescriptorProto.create({
+      name: this.name,
+      number: this.id,
+    });
+    if (this.map) {
+      descriptor.type = 11;
+      descriptor.typeName = $protobuf.util.ucFirst(this.name);
+      descriptor.label = 3;
+    } else {
+      switch ((descriptor.type = toDescriptorType(this.type, this.resolve().resolvedType, this.delimited))) {
         case 10:
         case 11:
         case 14:
-          create.typeName = this.resolvedType ? lh(this.parent, this.resolvedType) : this.type;
+          descriptor.typeName = this.resolvedType ? shortname(this.parent, this.resolvedType) : this.type;
           break;
       }
-      if (this.rule === "repeated") create.label = 3;
-      else if (this.required && t === "proto2") create.label = 2;
-      else create.label = 1;
+      if (this.rule === "repeated") descriptor.label = 3;
+      else if (this.required && edition === "proto2") descriptor.label = 2;
+      else descriptor.label = 1;
     }
-    if (
-      ((create.extendee = this.extensionField ? this.extensionField.parent.fullName : this.extend),
-      this.partOf && this.parent instanceof Type)
-    ) {
-      if ((create.oneofIndex = this.parent.oneofsArray.indexOf(this.partOf)) < 0)
+    descriptor.extendee = this.extensionField ? this.extensionField.parent.fullName : this.extend;
+    if (this.partOf && this.parent instanceof Type) {
+      if ((descriptor.oneofIndex = this.parent.oneofsArray.indexOf(this.partOf)) < 0)
         throw Error("missing oneof");
     }
     if (this.options) {
-      if (((create.options = Gr(this.options, I.FieldOptions)), this.options.default != null))
-        create.defaultValue = String(this.options.default);
-      if (this.options.proto3_optional) create.proto3_optional = !0;
+      descriptor.options = toDescriptorOptions(this.options, cjsExports.FieldOptions);
+      if (this.options.default != null) descriptor.defaultValue = String(this.options.default);
+      if (this.options.proto3_optional) descriptor.proto3_optional = true;
     }
-    if (t === "proto3") {
-      if (!this.packed) (create.options || (create.options = I.FieldOptions.create())).packed = !1;
-    } else if ((!t || t === "proto2") && this.packed)
-      (create.options || (create.options = I.FieldOptions.create())).packed = !0;
-    return create;
+    if (edition === "proto3") {
+      if (!this.packed)
+        (descriptor.options || (descriptor.options = cjsExports.FieldOptions.create())).packed = false;
+    } else if ((!edition || edition === "proto2") && this.packed)
+      (descriptor.options || (descriptor.options = cjsExports.FieldOptions.create())).packed = true;
+    return descriptor;
   };
-  var mT = 0;
-  Enum.fromDescriptor = function (t, r, i) {
-    if (typeof t.length === "number") t = I.EnumDescriptorProto.decode(t);
-    var s = {};
-    if (t.value)
-      for (var n = 0; n < t.value.length; ++n) {
-        var a = t.value[n].name,
-          o = t.value[n].number || 0;
-        s[a && a.length ? a : "NAME" + o] = o;
+  var unnamedEnumIndex = 0;
+  Enum.fromDescriptor = function (descriptor, edition, nested) {
+    if (typeof descriptor.length === "number") descriptor = cjsExports.EnumDescriptorProto.decode(descriptor);
+    var values = {};
+    if (descriptor.value)
+      for (var i = 0; i < descriptor.value.length; ++i) {
+        var name = descriptor.value[i].name;
+        var value = descriptor.value[i].number || 0;
+        values[name && name.length ? name : "NAME" + value] = value;
       }
-    var l = new Enum(t.name && t.name.length ? t.name : "Enum" + mT++, s, jr(t.options, I.EnumOptions));
-    if (!i) l._edition = r;
-    return l;
+    var enm = new Enum(
+      descriptor.name && descriptor.name.length ? descriptor.name : "Enum" + unnamedEnumIndex++,
+      values,
+      fromDescriptorOptions(descriptor.options, cjsExports.EnumOptions),
+    );
+    if (!nested) enm._edition = edition;
+    return enm;
   };
   Enum.prototype.toDescriptor = function () {
-    var t = [];
-    for (var r = 0, keys = Object.keys(this.values); r < keys.length; ++r)
-      t.push(I.EnumValueDescriptorProto.create({ name: keys[r], number: this.values[keys[r]] }));
-    return I.EnumDescriptorProto.create({
+    var values = [];
+    for (var i_2 = 0, ks = Object.keys(this.values); i_2 < ks.length; ++i_2)
+      values.push(
+        cjsExports.EnumValueDescriptorProto.create({
+          name: ks[i_2],
+          number: this.values[ks[i_2]],
+        }),
+      );
+    return cjsExports.EnumDescriptorProto.create({
       name: this.name,
-      value: t,
-      options: Gr(this.options, I.EnumOptions),
+      value: values,
+      options: toDescriptorOptions(this.options, cjsExports.EnumOptions),
     });
   };
-  var vT = 0;
-  OneOf.fromDescriptor = function (t) {
-    if (typeof t.length === "number") t = I.OneofDescriptorProto.decode(t);
-    return new OneOf(t.name && t.name.length ? t.name : "oneof" + vT++);
+  var unnamedOneofIndex = 0;
+  OneOf.fromDescriptor = function (descriptor) {
+    if (typeof descriptor.length === "number")
+      descriptor = cjsExports.OneofDescriptorProto.decode(descriptor);
+    return new OneOf(
+      descriptor.name && descriptor.name.length ? descriptor.name : "oneof" + unnamedOneofIndex++,
+    );
   };
   OneOf.prototype.toDescriptor = function () {
-    return I.OneofDescriptorProto.create({ name: this.name });
-  };
-  var yT = 0;
-  Service.fromDescriptor = function (t, r, i) {
-    if (typeof t.length === "number") t = I.ServiceDescriptorProto.decode(t);
-    var s = new Service(t.name && t.name.length ? t.name : "Service" + yT++, jr(t.options, I.ServiceOptions));
-    if (!i) s._edition = r;
-    if (t.method) for (var n = 0; n < t.method.length; ++n) s.add(Method.fromDescriptor(t.method[n]));
-    return s;
-  };
-  Service.prototype.toDescriptor = function () {
-    var t = [];
-    for (var r = 0; r < this.methodsArray.length; ++r) t.push(this._methodsArray[r].toDescriptor());
-    return I.ServiceDescriptorProto.create({
+    return cjsExports.OneofDescriptorProto.create({
       name: this.name,
-      method: t,
-      options: Gr(this.options, I.ServiceOptions),
     });
   };
-  var _T = 0;
-  Method.fromDescriptor = function (t) {
-    if (typeof t.length === "number") t = I.MethodDescriptorProto.decode(t);
-    var inputType = t.inputType,
-      outputType = t.outputType;
+  var unnamedServiceIndex = 0;
+  Service.fromDescriptor = function (descriptor, edition, nested) {
+    if (typeof descriptor.length === "number")
+      descriptor = cjsExports.ServiceDescriptorProto.decode(descriptor);
+    var service = new Service(
+      descriptor.name && descriptor.name.length ? descriptor.name : "Service" + unnamedServiceIndex++,
+      fromDescriptorOptions(descriptor.options, cjsExports.ServiceOptions),
+    );
+    if (!nested) service._edition = edition;
+    if (descriptor.method)
+      for (var i = 0; i < descriptor.method.length; ++i)
+        service.add(Method.fromDescriptor(descriptor.method[i]));
+    return service;
+  };
+  Service.prototype.toDescriptor = function () {
+    var methods = [];
+    for (var i = 0; i < this.methodsArray.length; ++i) methods.push(this._methodsArray[i].toDescriptor());
+    return cjsExports.ServiceDescriptorProto.create({
+      name: this.name,
+      method: methods,
+      options: toDescriptorOptions(this.options, cjsExports.ServiceOptions),
+    });
+  };
+  var unnamedMethodIndex = 0;
+  Method.fromDescriptor = function (descriptor) {
+    if (typeof descriptor.length === "number")
+      descriptor = cjsExports.MethodDescriptorProto.decode(descriptor);
+    var inputType = descriptor.inputType;
+    var outputType = descriptor.outputType;
     if (inputType != null && inputType !== "") {
       if (typeof inputType !== "string" || !typeRefRe.test(inputType))
         throw Error("illegal type name: " + inputType);
@@ -313,27 +387,27 @@ var uh = x(function (I, ch) {
         throw Error("illegal type name: " + outputType);
     }
     return new Method(
-      t.name && t.name.length ? t.name : "Method" + _T++,
+      descriptor.name && descriptor.name.length ? descriptor.name : "Method" + unnamedMethodIndex++,
       "rpc",
       inputType,
       outputType,
-      Boolean(t.clientStreaming),
-      Boolean(t.serverStreaming),
-      jr(t.options, I.MethodOptions),
+      Boolean(descriptor.clientStreaming),
+      Boolean(descriptor.serverStreaming),
+      fromDescriptorOptions(descriptor.options, cjsExports.MethodOptions),
     );
   };
   Method.prototype.toDescriptor = function () {
-    return I.MethodDescriptorProto.create({
+    return cjsExports.MethodDescriptorProto.create({
       name: this.name,
       inputType: this.resolvedRequestType ? this.resolvedRequestType.fullName : this.requestType,
       outputType: this.resolvedResponseType ? this.resolvedResponseType.fullName : this.responseType,
       clientStreaming: this.requestStream,
       serverStreaming: this.responseStream,
-      options: Gr(this.options, I.MethodOptions),
+      options: toDescriptorOptions(this.options, cjsExports.MethodOptions),
     });
   };
-  function ST(e) {
-    switch (e) {
+  function fromDescriptorType(type) {
+    switch (type) {
       case 1:
         return "double";
       case 2:
@@ -365,10 +439,10 @@ var uh = x(function (I, ch) {
       case 18:
         return "sint64";
     }
-    throw Error("illegal type: " + e);
+    throw Error("illegal type: " + type);
   }
-  function CT(e) {
-    switch (e) {
+  function packableDescriptorType(type) {
+    switch (type) {
       case 1:
       case 2:
       case 3:
@@ -383,12 +457,12 @@ var uh = x(function (I, ch) {
       case 16:
       case 17:
       case 18:
-        return !0;
+        return true;
     }
-    return !1;
+    return false;
   }
-  function lo(e, t, r) {
-    switch (e) {
+  function toDescriptorType(type, resolvedType, delimited) {
+    switch (type) {
       case "double":
         return 1;
       case "float":
@@ -420,90 +494,91 @@ var uh = x(function (I, ch) {
       case "sint64":
         return 18;
     }
-    if (t instanceof Enum) return 14;
-    if (t instanceof Type) return r ? 10 : 11;
-    throw Error("illegal type: " + e);
+    if (resolvedType instanceof Enum) return 14;
+    if (resolvedType instanceof Type) return delimited ? 10 : 11;
+    throw Error("illegal type: " + type);
   }
-  function ah(e, t) {
-    var r = {};
-    for (var i = 0, s, n; i < t.fieldsArray.length; ++i) {
-      if ((n = (s = t._fieldsArray[i]).name) === "uninterpretedOption") continue;
-      if (!Object.prototype.hasOwnProperty.call(e, n)) continue;
-      var a = ET(n);
-      if (s.resolvedType instanceof Type) r[a] = ah(e[n], s.resolvedType);
-      else if (s.resolvedType instanceof Enum) r[a] = s.resolvedType.valuesById[e[n]];
-      else r[a] = e[n];
+  function fromDescriptorOptionsRecursive(obj, type) {
+    var val = {};
+    for (var i = 0, field, key; i < type.fieldsArray.length; ++i) {
+      if ((key = (field = type._fieldsArray[i]).name) === "uninterpretedOption") continue;
+      if (!Object.prototype.hasOwnProperty.call(obj, key)) continue;
+      var newKey = underScore(key);
+      if (field.resolvedType instanceof Type)
+        val[newKey] = fromDescriptorOptionsRecursive(obj[key], field.resolvedType);
+      else if (field.resolvedType instanceof Enum) val[newKey] = field.resolvedType.valuesById[obj[key]];
+      else val[newKey] = obj[key];
     }
-    return r;
+    return val;
   }
-  function jr(e, t) {
-    if (!e) return;
-    return ah(t.toObject(e), t);
+  function fromDescriptorOptions(options, type) {
+    if (!options) return;
+    return fromDescriptorOptionsRecursive(type.toObject(options), type);
   }
-  function oh(e, t) {
-    var r = {},
-      keys = Object.keys(e);
-    for (var s = 0; s < keys.length; ++s) {
-      var n = keys[s],
-        camelCase = Ne.util.camelCase(n);
-      if (!Object.prototype.hasOwnProperty.call(t.fields, camelCase)) continue;
-      var o = t.fields[camelCase];
-      if (o.resolvedType instanceof Type) r[camelCase] = oh(e[n], o.resolvedType);
-      else r[camelCase] = e[n];
-      if (o.repeated && !Array.isArray(r[camelCase])) r[camelCase] = [r[camelCase]];
+  function toDescriptorOptionsRecursive(obj, type) {
+    var val = {};
+    var keys = Object.keys(obj);
+    for (var i = 0; i < keys.length; ++i) {
+      var key = keys[i];
+      var newKey = $protobuf.util.camelCase(key);
+      if (!Object.prototype.hasOwnProperty.call(type.fields, newKey)) continue;
+      var field = type.fields[newKey];
+      if (field.resolvedType instanceof Type)
+        val[newKey] = toDescriptorOptionsRecursive(obj[key], field.resolvedType);
+      else val[newKey] = obj[key];
+      if (field.repeated && !Array.isArray(val[newKey])) val[newKey] = [val[newKey]];
     }
-    return r;
+    return val;
   }
-  function Gr(e, t) {
-    if (!e) return;
-    return t.fromObject(oh(e, t));
+  function toDescriptorOptions(options, type) {
+    if (!options) return;
+    return type.fromObject(toDescriptorOptionsRecursive(options, type));
   }
-  function lh(e, t) {
-    var parts = e.fullName.split("."),
-      parts_2 = t.fullName.split("."),
-      s = 0,
-      n = 0,
-      a = parts_2.length - 1;
-    if (!(e instanceof Root) && t instanceof Namespace)
-      while (s < parts.length && n < a && parts[s] === parts_2[n]) {
-        var lookup = t.lookup(parts[s++], !0);
-        if (lookup !== null && lookup !== t) break;
-        ++n;
+  function shortname(from, to) {
+    var fromPath = from.fullName.split(".");
+    var toPath = to.fullName.split(".");
+    var i = 0;
+    var j = 0;
+    var k = toPath.length - 1;
+    if (!(from instanceof Root) && to instanceof Namespace)
+      while (i < fromPath.length && j < k && fromPath[i] === toPath[j]) {
+        var other = to.lookup(fromPath[i++], true);
+        if (other !== null && other !== to) break;
+        ++j;
       }
-    else for (; s < parts.length && n < a && parts[s] === parts_2[n]; ++s, ++n);
-    return parts_2.slice(n).join(".");
+    else for (; i < fromPath.length && j < k && fromPath[i] === toPath[j]; ++i, ++j);
+    return toPath.slice(j).join(".");
   }
-  function ET(e) {
+  function underScore(str) {
     return (
-      e.substring(0, 1) +
-      e.substring(1).replace(/([A-Z])(?=[a-z]|$)/g, function (t, r) {
-        return "_" + r.toLowerCase();
+      str.substring(0, 1) +
+      str.substring(1).replace(/([A-Z])(?=[a-z]|$)/g, function ($0, $1) {
+        return "_" + $1.toLowerCase();
       })
     );
   }
-  function TT(e) {
-    if (e.syntax === "editions")
-      switch (e.edition) {
-        case I.Edition.EDITION_2023:
+  function editionFromDescriptor(fileDescriptor) {
+    if (fileDescriptor.syntax === "editions")
+      switch (fileDescriptor.edition) {
+        case cjsExports.Edition.EDITION_2023:
           return "2023";
         default:
-          throw Error("Unsupported edition " + e.edition);
+          throw Error("Unsupported edition " + fileDescriptor.edition);
       }
-    if (e.syntax === "proto3") return "proto3";
+    if (fileDescriptor.syntax === "proto3") return "proto3";
     return "proto2";
   }
-  function RT(e, t) {
-    if (!e) return;
-    if (e === "proto2" || e === "proto3") t.syntax = e;
+  function editionToDescriptor(edition, fileDescriptor) {
+    if (!edition) return;
+    if (edition === "proto2" || edition === "proto3") fileDescriptor.syntax = edition;
     else
-      switch (((t.syntax = "editions"), e)) {
+      switch (((fileDescriptor.syntax = "editions"), edition)) {
         case "2023":
-          t.edition = I.Edition.EDITION_2023;
+          fileDescriptor.edition = cjsExports.Edition.EDITION_2023;
           break;
         default:
-          throw Error("Unsupported edition " + e);
+          throw Error("Unsupported edition " + edition);
       }
   }
 });
-
 export { uh };

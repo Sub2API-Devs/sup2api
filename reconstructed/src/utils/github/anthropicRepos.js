@@ -11,23 +11,31 @@
 import { isGithubDotCom } from "../git/githubUrl.js";
 
 //@ chunk-j7n8n7rc.js:227-285 placement
-var ANTHROPICS = "anthropics",
-  ANTHROPIC = "anthropic",
-  G = `github.com/${ANTHROPICS}/${ANTHROPIC}`;
+var ANTHROPICS = "anthropics";
+var ANTHROPIC = "anthropic";
+var ANTHROPIC_REPO_SLUG = `github.com/${ANTHROPICS}/${ANTHROPIC}`;
 //@ chunk-j7n8n7rc.js:285-352 placement
-var regExp = new RegExp(`${ANTHROPICS}[^]*${ANTHROPIC}`),
-  regExp_2 = new RegExp(`^${ANTHROPIC}(?:\\.git)*$`);
+var regExp = new RegExp(`${ANTHROPICS}[^]*${ANTHROPIC}`);
+var regExp_2 = new RegExp(`^${ANTHROPIC}(?:\\.git)*$`);
 //@ chunk-j7n8n7rc.js:352-377 placement
-function Lcr(o) {
-  return !1;
+/**
+ * 判断文本是否指向 Anthropic 仓库（此构建恒为 false）。
+ */
+function isAnthropicRepoText(o) {
+  return false;
 }
 //@ chunk-j7n8n7rc.js:377-399 placement
-function Ayi() {
+/**
+ * 空实现（Anthropic 仓库提示的占位）。
+ */
+function noopAnthropicRepoHint() {
   return;
 }
 //@ chunk-j7n8n7rc.js:399-486 placement
-function Hcr(o) {
+/**
+ * 判断远程仓库是否为 github.com/anthropics/anthropic。
+ */
+function isAnthropicRepo(o) {
   return isGithubDotCom(o.host) && o.owner.toLowerCase() === ANTHROPICS && o.name.toLowerCase() === ANTHROPIC;
 }
-
-export { Hcr, Ayi, Lcr };
+export { isAnthropicRepo, noopAnthropicRepoHint, isAnthropicRepoText };

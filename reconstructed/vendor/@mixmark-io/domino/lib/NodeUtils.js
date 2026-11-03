@@ -6,46 +6,54 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { ee } from "./utils.js";
+import { require_utils } from "./utils.js";
 
 //@ chunk-vwj6ccer.js:12056-14225 cjs-fingerprint
-var Qa = x(function (od, Ki) {
-  Ki.exports = {
-    serializeOne: ll,
-    ɵescapeMatchingClosingTag: zi,
-    ɵescapeClosingCommentTag: Wi,
-    ɵescapeProcessingInstructionContent: Xi,
+var require_NodeUtils = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = {
+    serializeOne,
+    ɵescapeMatchingClosingTag: escapeMatchingClosingTag,
+    ɵescapeClosingCommentTag: escapeClosingCommentTag,
+    ɵescapeProcessingInstructionContent: escapeProcessingInstructionContent,
   };
-  var Gi = ee(),
-    NAMESPACE = Gi.NAMESPACE,
-    Ui = { STYLE: !0, SCRIPT: !0, XMP: !0, IFRAME: !0, NOEMBED: !0, NOFRAMES: !0, PLAINTEXT: !0 },
-    nl = {
-      area: !0,
-      base: !0,
-      basefont: !0,
-      bgsound: !0,
-      br: !0,
-      col: !0,
-      embed: !0,
-      frame: !0,
-      hr: !0,
-      img: !0,
-      input: !0,
-      keygen: !0,
-      link: !0,
-      meta: !0,
-      param: !0,
-      source: !0,
-      track: !0,
-      wbr: !0,
-    },
-    il = {},
-    Vi = /[&<>\u00A0]/g,
-    ji = /[&"<>\u00A0]/g;
-  function sl(e) {
-    if (!Vi.test(e)) return e;
-    return e.replace(Vi, (t) => {
-      switch (t) {
+  var utils = require_utils();
+  var NAMESPACE = utils.NAMESPACE;
+  var hasRawContent = {
+    STYLE: true,
+    SCRIPT: true,
+    XMP: true,
+    IFRAME: true,
+    NOEMBED: true,
+    NOFRAMES: true,
+    PLAINTEXT: true,
+  };
+  var emptyElements = {
+    area: true,
+    base: true,
+    basefont: true,
+    bgsound: true,
+    br: true,
+    col: true,
+    embed: true,
+    frame: true,
+    hr: true,
+    img: true,
+    input: true,
+    keygen: true,
+    link: true,
+    meta: true,
+    param: true,
+    source: true,
+    track: true,
+    wbr: true,
+  };
+  var extraNewLine = {};
+  var ESCAPE_REGEXP = /[&<>\u00A0]/g;
+  var ESCAPE_ATTR_REGEXP = /[&"<>\u00A0]/g;
+  function sl(s) {
+    if (!ESCAPE_REGEXP.test(s)) return s;
+    return s.replace(ESCAPE_REGEXP, (c) => {
+      switch (c) {
         case "&":
           return "&amp;";
         case "<":
@@ -57,10 +65,10 @@ var Qa = x(function (od, Ki) {
       }
     });
   }
-  function cl(e) {
-    if (!ji.test(e)) return e;
-    return e.replace(ji, (t) => {
-      switch (t) {
+  function escapeAttr(s) {
+    if (!ESCAPE_ATTR_REGEXP.test(s)) return s;
+    return s.replace(ESCAPE_ATTR_REGEXP, (c) => {
+      switch (c) {
         case "<":
           return "&lt;";
         case ">":
@@ -74,85 +82,86 @@ var Qa = x(function (od, Ki) {
       }
     });
   }
-  function ol(e) {
-    var namespaceURI = e.namespaceURI;
-    if (!namespaceURI) return e.localName;
-    if (namespaceURI === NAMESPACE.XML) return "xml:" + e.localName;
-    if (namespaceURI === NAMESPACE.XLINK) return "xlink:" + e.localName;
-    if (namespaceURI === NAMESPACE.XMLNS)
-      if (e.localName === "xmlns") return "xmlns";
-      else return "xmlns:" + e.localName;
-    return e.name;
+  function attrname(a) {
+    var ns = a.namespaceURI;
+    if (!ns) return a.localName;
+    if (ns === NAMESPACE.XML) return "xml:" + a.localName;
+    if (ns === NAMESPACE.XLINK) return "xlink:" + a.localName;
+    if (ns === NAMESPACE.XMLNS)
+      if (a.localName === "xmlns") return "xmlns";
+      else return "xmlns:" + a.localName;
+    return a.name;
   }
-  function zi(e, t) {
-    let r = "</" + t;
-    if (!e.toLowerCase().includes(r)) return e;
-    let a = [...e],
-      matchAll = e.matchAll(new RegExp(r, "ig"));
-    for (let c of matchAll) a[c.index] = "&lt;";
-    return a.join("");
+  function escapeMatchingClosingTag(rawText, parentTag) {
+    let parentClosingTag = "</" + parentTag;
+    if (!rawText.toLowerCase().includes(parentClosingTag)) return rawText;
+    let result = [...rawText];
+    let matches = rawText.matchAll(new RegExp(parentClosingTag, "ig"));
+    for (let match of matches) result[match.index] = "&lt;";
+    return result.join("");
   }
-  var ul = /--!?>/;
-  function Wi(e) {
-    if (!ul.test(e)) return e;
-    return e.replace(/(--\!?)>/g, "$1&gt;");
+  var CLOSING_COMMENT_REGEXP = /--!?>/;
+  function escapeClosingCommentTag(rawContent) {
+    if (!CLOSING_COMMENT_REGEXP.test(rawContent)) return rawContent;
+    return rawContent.replace(/(--\!?)>/g, "$1&gt;");
   }
-  function Xi(e) {
-    return e.includes(">") ? e.replaceAll(">", "&gt;") : e;
+  function escapeProcessingInstructionContent(rawContent) {
+    return rawContent.includes(">") ? rawContent.replaceAll(">", "&gt;") : rawContent;
   }
-  function ll(e, t) {
-    var r = "";
-    switch (e.nodeType) {
+  function serializeOne(kid, parent) {
+    var s_2 = "";
+    switch (kid.nodeType) {
       case 1:
-        var namespaceURI = e.namespaceURI,
-          s = namespaceURI === NAMESPACE.HTML,
-          c =
-            s || namespaceURI === NAMESPACE.SVG || namespaceURI === NAMESPACE.MATHML
-              ? e.localName
-              : e.tagName;
-        r += "<" + c;
-        for (var d = 0, _numattrs = e._numattrs; d < _numattrs; d++) {
-          var _attr = e._attr(d);
-          if (((r += " " + ol(_attr)), _attr.value !== void 0)) r += '="' + cl(_attr.value) + '"';
+        var ns = kid.namespaceURI;
+        var html = ns === NAMESPACE.HTML;
+        var tagname = html || ns === NAMESPACE.SVG || ns === NAMESPACE.MATHML ? kid.localName : kid.tagName;
+        s_2 += "<" + tagname;
+        for (var j = 0, k = kid._numattrs; j < k; j++) {
+          var a = kid._attr(j);
+          s_2 += " " + attrname(a);
+          if (a.value !== undefined) s_2 += '="' + escapeAttr(a.value) + '"';
         }
-        if (((r += ">"), !(s && nl[c]))) {
-          var serialize = e.serialize();
-          if (Ui[c.toUpperCase()]) serialize = zi(serialize, c);
+        s_2 += ">";
+        if (!(html && emptyElements[tagname])) {
+          var ss = kid.serialize();
+          if (hasRawContent[tagname.toUpperCase()]) ss = escapeMatchingClosingTag(ss, tagname);
           if (
-            s &&
-            il[c] &&
-            serialize.charAt(0) ===
+            html &&
+            extraNewLine[tagname] &&
+            ss.charAt(0) ===
               `
 `
           )
-            r += `
+            s_2 += `
 `;
-          ((r += serialize), (r += "</" + c + ">"));
+          s_2 += ss;
+          s_2 += "</" + tagname + ">";
         }
         break;
       case 3:
       case 4:
-        var T;
-        if (t.nodeType === 1 && t.namespaceURI === NAMESPACE.HTML) T = t.tagName;
-        else T = "";
-        if (Ui[T] || (T === "NOSCRIPT" && t.ownerDocument._scripting_enabled)) r += e.data;
-        else r += sl(e.data);
+        var parenttag;
+        if (parent.nodeType === 1 && parent.namespaceURI === NAMESPACE.HTML) parenttag = parent.tagName;
+        else parenttag = "";
+        if (hasRawContent[parenttag] || (parenttag === "NOSCRIPT" && parent.ownerDocument._scripting_enabled))
+          s_2 += kid.data;
+        else s_2 += sl(kid.data);
         break;
       case 8:
-        r += "<!--" + Wi(e.data) + "-->";
+        s_2 += "<!--" + escapeClosingCommentTag(kid.data) + "-->";
         break;
       case 7:
-        let ne = Xi(e.data);
-        r += "<?" + e.target + " " + ne + "?>";
+        let content = escapeProcessingInstructionContent(kid.data);
+        s_2 += "<?" + kid.target + " " + content + "?>";
         break;
       case 10:
-        ((r += "<!DOCTYPE " + e.name), (r += ">"));
+        s_2 += "<!DOCTYPE " + kid.name;
+        s_2 += ">";
         break;
       default:
-        Gi.InvalidStateError();
+        utils.InvalidStateError();
     }
-    return r;
+    return s_2;
   }
 });
-
-export { Qa };
+export { require_NodeUtils };

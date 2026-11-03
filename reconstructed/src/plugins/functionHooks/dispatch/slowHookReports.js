@@ -8,42 +8,47 @@
  * pieces: chunk-4121qate.js (5)
  * attribution: placement 5
  */
-import { ge } from "../../../utils/identity.js";
-import { pd } from "../../../utils/hooks/functionHookMatchers.js";
+import { identity } from "../../../utils/identity.js";
+import { matcherLog } from "../../../utils/hooks/functionHookMatchers.js";
 import { AntSlowLogger } from "../../../utils/slowOperations.js";
 
 //@ chunk-4121qate.js:71776-71787 placement
 var SLOW_PLUGIN_HOOK_WINDOW_MS = 1e4;
 //@ chunk-4121qate.js:71787-71883 placement
 function createSlowHookReportMap() {
-  return ge(new Map(), (e) => {
+  return identity(new Map(), (e) => {
     for (let o of e.values()) clearTimeout(o.timer);
     e.clear();
   });
 }
 //@ chunk-4121qate.js:71883-71895 placement
-var slowHookReports = createSlowHookReportMap();
+var slowHookReports_2 = createSlowHookReportMap();
 //@ chunk-4121qate.js:71895-71907 placement
-var SLOW_HOOK_REPORT_INTERVAL_MS = 1000;
+var SLOW_HOOK_REPORT_INTERVAL_MS_2 = 1000;
 //@ chunk-4121qate.js:72078-72399 placement
 function reportPluginHookWithoutNext(e) {
-  let { plugin: plugin, tier: tier, event: event, ms: ms } = e,
-    i = `${event} ${plugin}`,
-    p = slowHookReports.get(i),
-    f = `${plugin} (${tier}) answered ${event} without next()`;
-  if (p !== void 0) {
-    ((p.count += 1), (p.lastMs = ms));
+  let { plugin, tier, event, ms } = e;
+  let i = `${event} ${plugin}`;
+  let p = slowHookReports_2.get(i);
+  let f = `${plugin} (${tier}) answered ${event} without next()`;
+  if (p !== undefined) {
+    p.count += 1;
+    p.lastMs = ms;
     return;
   }
-  pd().log(`${f} in ${ms.toFixed(1)}ms; nothing beneath it ran for this dispatch`);
-  let a = setTimeout(AntSlowLogger, SLOW_PLUGIN_HOOK_WINDOW_MS, i, f);
-  (a.unref(), slowHookReports.set(i, { count: 0, lastMs: ms, timer: a }));
+  matcherLog().log(`${f} in ${ms.toFixed(1)}ms; nothing beneath it ran for this dispatch`);
+  let timer = setTimeout(AntSlowLogger, SLOW_PLUGIN_HOOK_WINDOW_MS, i, f);
+  timer.unref();
+  slowHookReports_2.set(i, {
+    count: 0,
+    lastMs: ms,
+    timer,
+  });
 }
-
 export {
-  SLOW_HOOK_REPORT_INTERVAL_MS,
+  SLOW_HOOK_REPORT_INTERVAL_MS_2,
   createSlowHookReportMap,
   reportPluginHookWithoutNext,
-  slowHookReports,
+  slowHookReports_2,
   SLOW_PLUGIN_HOOK_WINDOW_MS,
 };

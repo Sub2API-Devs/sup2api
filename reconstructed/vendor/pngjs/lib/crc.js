@@ -8,32 +8,32 @@
 import { x } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-spjgqa4y.js:26646-27104 cjs-fingerprint
-var dt = x(function (Vl, Yr) {
-  var ht = [];
+var require_crc = x(function (cjsExports, cjsModule) {
+  var crcTable = [];
   (function () {
-    for (let t = 0; t < 256; t++) {
-      let e = t;
-      for (let r = 0; r < 8; r++)
-        if (e & 1) e = 3988292384 ^ (e >>> 1);
-        else e = e >>> 1;
-      ht[t] = e;
+    for (let i = 0; i < 256; i++) {
+      let currentCrc = i;
+      for (let j = 0; j < 8; j++)
+        if (currentCrc & 1) currentCrc = 3988292384 ^ (currentCrc >>> 1);
+        else currentCrc = currentCrc >>> 1;
+      crcTable[i] = currentCrc;
     }
   })();
-  var ct = (Yr.exports = function () {
+  var CrcCalculator = (cjsModule.exports = function () {
     this._crc = -1;
   });
-  ct.prototype.write = function (t) {
-    for (let e = 0; e < t.length; e++) this._crc = ht[(this._crc ^ t[e]) & 255] ^ (this._crc >>> 8);
-    return !0;
+  CrcCalculator.prototype.write = function (data) {
+    for (let i = 0; i < data.length; i++)
+      this._crc = crcTable[(this._crc ^ data[i]) & 255] ^ (this._crc >>> 8);
+    return true;
   };
-  ct.prototype.crc32 = function () {
+  CrcCalculator.prototype.crc32 = function () {
     return this._crc ^ -1;
   };
-  ct.crc32 = function (t) {
-    let e = -1;
-    for (let r = 0; r < t.length; r++) e = ht[(e ^ t[r]) & 255] ^ (e >>> 8);
-    return e ^ -1;
+  CrcCalculator.crc32 = function (buf) {
+    let crc = -1;
+    for (let i = 0; i < buf.length; i++) crc = crcTable[(crc ^ buf[i]) & 255] ^ (crc >>> 8);
+    return crc ^ -1;
   };
 });
-
-export { dt };
+export { require_crc };

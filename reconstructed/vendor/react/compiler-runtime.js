@@ -5,15 +5,14 @@
  * pieces: chunk-s89ma3n1.js (3)
  * attribution: placement 3
  */
-import { j, Nbn } from "./cjs/react.production.js";
+import { init_react_production, addTransitionType } from "./cjs/react.production.js";
 
 //@ chunk-s89ma3n1.js:230-234 placement
-j();
+init_react_production();
 //@ chunk-s89ma3n1.js:234-244 placement
-var e = Nbn;
+var e = addTransitionType;
 //@ chunk-s89ma3n1.js:244-290 placement
 var w = function (_) {
   return e.H.useMemoCache(_);
 };
-
 export { w };

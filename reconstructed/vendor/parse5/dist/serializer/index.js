@@ -6,10 +6,10 @@
  * attribution: esm-fingerprint 1, esm-layout 1
  */
 import { c } from "../../lib/common/html.js";
-import { re } from "../parser/index.js";
+import { Parser } from "../parser/index.js";
 
 //@ chunk-6ja29j2n.js:179577-179730 esm-fingerprint
-var _s = new Set([
+var VOID_ELEMENTS = new Set([
   c.AREA,
   c.BASE,
   c.BASEFONT,
@@ -30,6 +30,6 @@ var _s = new Set([
   c.WBR,
 ]);
 //@ chunk-6ja29j2n.js:179730-179769 esm-layout
-function parse(e, t) {
-  return re.parse(e, t);
+function parse(node, options) {
+  return Parser.parse(node, options);
 }

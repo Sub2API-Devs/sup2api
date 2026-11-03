@@ -41,33 +41,33 @@ import {
   DEFAULT_AGENTS_MD_MODE,
   MAIN_THREAD,
   AGENTS_MD_MODES,
-  E$s,
+  CLAUDE_MD_RESET_EVENTS,
   resolveIncludePath,
   flattenProjectInstructionParts,
   findInsertIndex,
-  iGn,
+  isPathUnder,
   isClaudeMdAtDir,
-  mAo,
-  v$s,
+  isSamePathEntry,
+  isProjectLocalMcpSource,
   isMcpServerFromProjectOrLocalSettings_2,
-  k$s,
-  T$s,
-  gAo,
-  VTe,
+  instructionModeLabel,
+  resolveAgentsMdMode,
+  formatInstructionFile,
+  toPosixPathTrimmed,
   excludeDirs,
   instructionFileDir,
   dedupeInstructionFiles,
-  hAo,
+  appendInstructionParts,
   insertAgentsMdFiles,
 } from "./agentsMdFiles.js";
 import { isMcpServerFromProjectOrLocalSettings } from "../../../services/mcp/headersHelper.js";
 import { registerBuiltinPlugin, builtinHooksModuleRef } from "../../builtinPlugins.js";
 import { getFeatureValue_SESSION_PINNED } from "../../../services/analytics/growthbook.js";
 
+//@ chunk-8jbcmznm.js:3605-4106 placement
 /**
  * agentsMd 插件的扫描清单：订阅的钩子、调用的 API、读取的环境变量。
  */
-//@ chunk-8jbcmznm.js:3605-4106 placement
 var AGENTS_MD_MANIFEST = x(function (Oo, pe) {
   pe.exports = {
     scan: {
@@ -117,8 +117,8 @@ Ar(indexNamespace, {
   PLUGIN_NAME: () => AGENTS_MD_PLUGIN_NAME,
   USER_CONFIG: () => USER_CONFIG,
   default: () => indexNamespace,
-  isAvailable: () => pAo,
-  isOnByDefault: () => fAo,
+  isAvailable: () => isAgentsMdPluginAvailable,
+  isOnByDefault: () => AGENTS_MD_ON_BY_DEFAULT,
   registerPlugin: () => registerPlugin,
 });
 //@ chunk-8jbcmznm.js:4264-4273 placement
@@ -136,7 +136,7 @@ Ar(indexNamespace2, {
   MODE_EVENT: () => MODE_EVENT,
   NESTED_EVENT: () => NESTED_EVENT,
   PENDING_STAGES: () => PENDING_STAGES,
-  RESET_COMMANDS: () => E$s,
+  RESET_COMMANDS: () => CLAUDE_MD_RESET_EVENTS,
   RIDING: () => RIDING,
   WALK_FAILED_REASON: () => WALK_FAILED_REASON,
   absoluteOf: () => resolveIncludePath,
@@ -145,22 +145,22 @@ Ar(indexNamespace2, {
   filesOf: () => flattenProjectInstructionParts,
   holdPending: () => holdPending,
   insertionIndex: () => findInsertIndex,
-  isBelow: () => iGn,
+  isBelow: () => isPathUnder,
   isClaudeFileOnWalk: () => isClaudeMdAtDir,
-  isFileAt: () => mAo,
-  isKeptWithoutInstructions: () => v$s,
+  isFileAt: () => isSamePathEntry,
+  isKeptWithoutInstructions: () => isProjectLocalMcpSource,
   isProjectOwn: () => isMcpServerFromProjectOrLocalSettings_2,
   isSwitchedOn: () => isSwitchedOn,
-  legacyModeOf: () => k$s,
+  legacyModeOf: () => instructionModeLabel,
   loadCountsOf: () => loadCountsOf,
   loadMarkOf: () => loadMarkOf,
   loadRowOf: () => loadRowOf,
   modeChoiceOf: () => modeChoiceOf,
-  modeOf: () => T$s,
+  modeOf: () => resolveAgentsMdMode,
   modeRowOf: () => modeRowOf,
-  nestedFrame: () => gAo,
+  nestedFrame: () => formatInstructionFile,
   nestedRowOf: () => nestedRowOf,
-  normalSpellingOf: () => VTe,
+  normalSpellingOf: () => toPosixPathTrimmed,
   outsideClaudeDirs: () => excludeDirs,
   projectDirOf: () => instructionFileDir,
   quietly: () => quietly,
@@ -172,7 +172,7 @@ Ar(indexNamespace2, {
   touchedOf: () => touchedOf,
   unseenFiles: () => dedupeInstructionFiles,
   walkOf: () => walkOf,
-  withFrames: () => hAo,
+  withFrames: () => appendInstructionParts,
   withProjectFiles: () => insertAgentsMdFiles,
 });
 //@ chunk-8jbcmznm.js:11777-12387 placement
@@ -181,7 +181,7 @@ var USER_CONFIG = {
     type: "string",
     title: "Project instructions",
     description: `"claude-md": CLAUDE.md only, loaded by the engine as today. "claude-md-or-agents-md" (default): a project with no CLAUDE.md of its own gets its AGENTS.md files instead, loaded exactly where and how CLAUDE.md would be. "claude-md-and-agents-md": AGENTS.md files are loaded beside CLAUDE.md (a file CLAUDE.md already imports or links to is not loaded twice). "managed-only": the project's and your own instruction files are dropped; the organization's managed CLAUDE.md and memory stay.`,
-    required: !1,
+    required: false,
     default: DEFAULT_AGENTS_MD_MODE,
     options: [...AGENTS_MD_MODES],
   },
@@ -191,29 +191,38 @@ var registerPlugin = () =>
   registerBuiltinPlugin({
     name: AGENTS_MD_PLUGIN_NAME,
     description: PLUGIN_DESCRIPTION,
-    isAvailable: pAo,
+    isAvailable: isAgentsMdPluginAvailable,
     hooksModule: builtinHooksModuleRef(import.meta.dir, indexNamespace2, () => AGENTS_MD_MANIFEST()),
     userConfig: USER_CONFIG,
   });
 //@ chunk-16jhn3ak.js:227-238 placement
-var fAo = !0;
+/**
+ * 默认开启
+ */
+var AGENTS_MD_ON_BY_DEFAULT = true;
 //@ chunk-16jhn3ak.js:238-280 placement
-var pAo = () => getFeatureValue_SESSION_PINNED("tengu_agents_md_mod", fAo);
+/**
+ * 读取 tengu_agents_md_mod 决定 agentsMd 插件是否可用，默认开启。
+ */
+var isAgentsMdPluginAvailable = () =>
+  getFeatureValue_SESSION_PINNED("tengu_agents_md_mod", AGENTS_MD_ON_BY_DEFAULT);
+//@ chunk-16jhn3ak.js:280-310 placement
 /**
  * 内置插件 cc-plugin-agents-md 的名字。
  */
-//@ chunk-16jhn3ak.js:280-310 placement
 var AGENTS_MD_PLUGIN_NAME = "cc-plugin-agents-md";
+//@ chunk-16jhn3ak.js:310-441 placement
 /**
  * 沿 parent 链找到最顶层的引用文件路径（防环）。
  */
-//@ chunk-16jhn3ak.js:310-441 placement
 function rootIncludeAncestor(t, o) {
-  let e = new Set([t.path]),
-    { path: path, parent: parent } = t;
-  while (parent !== void 0 && !e.has(parent))
-    (e.add(parent), (path = parent), (parent = o.get(parent)?.parent));
+  let e = new Set([t.path]);
+  let { path, parent } = t;
+  while (parent !== undefined && !e.has(parent)) {
+    e.add(parent);
+    path = parent;
+    parent = o.get(parent)?.parent;
+  }
   return path;
 }
-
 export { rootIncludeAncestor, AGENTS_MD_PLUGIN_NAME };

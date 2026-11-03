@@ -10,218 +10,305 @@
  */
 import {
   logEaselError,
-  Iu,
-  He,
-  vu,
-  Wu,
-  bu,
-  Mu,
+  SATURDAY_DAY_INDEX,
+  MS_PER_DAY,
+  ISO_WEEK_OFFSET_DAYS,
+  DAYS_PER_WEEK_TICKS,
+  MIN_WEEKS_SPANNED,
+  FALLBACK_POSITION_RATIO,
   EASEL_PROMPT_HINT,
-  Ps,
-  Eu,
-  ks,
-  We,
-  Pu,
-  ku,
-  zu,
-  Ds,
-  Qo,
-  Uu,
+  SECONDS_FIELD_INDEX,
+  TICK_OVERHANG_STEPS,
+  HALF_DIVISOR,
+  DAY_FIELD_INDEX,
+  MIN_DECIMALS_TICKS,
+  MAX_LABEL_RATIO,
+  ALLOW_ZONED_TIME,
+  YEAR_FIELD_INDEX,
+  MONTH_FIELD_INDEX,
+  TIME_PART_PAD_WIDTH,
 } from "./easelMessages.js";
 
 //@ chunk-3s7ydtfd.js:11293-11336 placement = parseISOString (1)
 var parseISOString = (s) => Date.UTC(s[0] ?? 0, ...s.slice(1));
 //@ chunk-3s7ydtfd.js:11336-11412 placement
-function $e(e, t) {
-  let uTCDay = new Date(parseISOString(logEaselError(e, t))).getUTCDay();
-  return uTCDay === 0 || uTCDay === Iu;
+/**
+ * 周末或周首日
+ */
+function isWeekendOrFirst(e, zone) {
+  let utcDay = new Date(parseISOString(logEaselError(e, zone))).getUTCDay();
+  return utcDay === 0 || utcDay === SATURDAY_DAY_INDEX;
 }
 //@ chunk-3s7ydtfd.js:11412-11459 placement
-var tr = (e, t) => Math.floor((parseISOString(logEaselError(e, t)) / He + vu) / Wu);
+/**
+ * 周序号
+ */
+var weekIndex = (e, t) =>
+  Math.floor((parseISOString(logEaselError(e, t)) / MS_PER_DAY + ISO_WEEK_OFFSET_DAYS) / DAYS_PER_WEEK_TICKS);
 //@ chunk-3s7ydtfd.js:11459-11532 placement
-var Bs = (e, t) => tr(e.at(-1) ?? 0, t) - tr(e[0] ?? 0, t) >= bu && !e.some((o) => $e(o, t));
+/**
+ * 跨周但无周末点
+ */
+var spansWeeksWithoutWeekend = (e, t) =>
+  weekIndex(e.at(-1) ?? 0, t) - weekIndex(e[0] ?? 0, t) >= MIN_WEEKS_SPANNED &&
+  !e.some((o) => isWeekendOrFirst(o, t));
 //@ chunk-3s7ydtfd.js:11532-11605 placement
-var js = (e) => (t) => (e.untilMs > e.fromMs ? (t - e.fromMs) / (e.untilMs - e.fromMs) : Mu);
+/**
+ * 时间在区间的相对位置
+ */
+var positionRatio = (axisSpan) => (t) =>
+  axisSpan.untilMs > axisSpan.fromMs
+    ? (t - axisSpan.fromMs) / (axisSpan.untilMs - axisSpan.fromMs)
+    : FALLBACK_POSITION_RATIO;
 //@ chunk-3s7ydtfd.js:11605-11805 placement
 var TIME_TICK_STEPS = (e, t) => (o) => {
-  let r = t.get(o) ?? e.periodStarts.findLastIndex((p) => p <= o),
-    s = e.periodStarts[r] ?? e.axisSpan.fromMs;
+  let r = t.get(o) ?? e.periodStarts.findLastIndex((periodStart) => periodStart <= o);
+  let s = e.periodStarts[r] ?? e.axisSpan.fromMs;
   return (r + (o - s) / ((e.periodStarts[r + 1] ?? e.axisSpan.untilMs) - s)) / e.periodStarts.length;
 };
+//@ chunk-3s7ydtfd.js:11805-11914 placement
 /**
  * 按周期起点或时间跨度确定刻度步长。
  */
-//@ chunk-3s7ydtfd.js:11805-11914 placement
-function tickStepsFor(e) {
-  return e.periodStarts.length > 0
-    ? TIME_TICK_STEPS(e, new Map(e.periodStarts.map((periodStart, r) => [periodStart, r])))
-    : js(e.axisSpan);
+function tickStepsFor(timeline) {
+  return timeline.periodStarts.length > 0
+    ? TIME_TICK_STEPS(timeline, new Map(timeline.periodStarts.map((periodStart, r) => [periodStart, r])))
+    : positionRatio(timeline.axisSpan);
 }
 //@ chunk-3s7ydtfd.js:11914-11937 placement
-var Ws = [0, 0, 1, 0, 0, 0, 0];
+/**
+ * 日期字段全零模板
+ */
+var DATE_FIELD_ZEROES = [0, 0, 1, 0, 0, 0, 0];
 //@ chunk-3s7ydtfd.js:11937-11983 placement
-var Hs = (e) => (t) => e.some((o) => o >= t.fieldIndex);
+/**
+ * 字段序号过滤器
+ */
+var ranksChangingFields = (e) => (t) => e.some((o) => o >= t.fieldIndex);
+//@ chunk-3s7ydtfd.js:11983-12107 placement
 /**
  * 默认时间步长（按时间字段的变化选单位）。
  */
-//@ chunk-3s7ydtfd.js:11983-12107 placement
-var defaultTimeStep = (e, t) => ({
+var defaultTimeStep = (times, zone) => ({
   unit:
-    EASEL_PROMPT_HINT.findLast(Hs(e.map((o) => logEaselError(o, t).findLastIndex((r, s) => r !== Ws[s])))) ??
-    EASEL_PROMPT_HINT[Ps],
+    EASEL_PROMPT_HINT.findLast(
+      ranksChangingFields(
+        times.map((o) => logEaselError(o, zone).findLastIndex((r, s) => r !== DATE_FIELD_ZEROES[s])),
+      ),
+    ) ?? EASEL_PROMPT_HINT[SECONDS_FIELD_INDEX],
   count: 1,
-  skipsWeekends: !1,
+  skipsWeekends: false,
 });
 //@ chunk-3s7ydtfd.js:12107-12175 placement
 var parts = "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec".split(" ");
 //@ chunk-3s7ydtfd.js:12175-12223 placement
-var wt = (e, t) => (t.zone === "UTC" ? 0 : parseISOString(logEaselError(e, t.zone)) - e);
+/**
+ * 时区偏移量
+ */
+var zoneOffsetMs = (e, t) => (t.zone === "UTC" ? 0 : parseISOString(logEaselError(e, t.zone)) - e);
 //@ chunk-3s7ydtfd.js:12223-12315 placement
-function or(e, t) {
-  let o = parseISOString(e),
-    r = o - wt(o - He, t),
-    s = o - wt(r, t);
-  return s + wt(s, t) === o ? s : Math.max(r, s);
+/**
+ * 把 UTC 时间换算到当地
+ */
+function localizeTimestamp(e, t) {
+  let isoString = parseISOString(e);
+  let r = isoString - zoneOffsetMs(isoString - MS_PER_DAY, t);
+  let s = isoString - zoneOffsetMs(r, t);
+  return s + zoneOffsetMs(s, t) === isoString ? s : Math.max(r, s);
 }
+//@ chunk-3s7ydtfd.js:12315-12491 placement
 /**
  * 按步长从起点生成直到结束时间的各周期起点。
  */
-//@ chunk-3s7ydtfd.js:12315-12491 placement
 function periodStarts(e) {
-  let { start: start, step: step } = e,
-    { fieldIndex: fieldIndex } = step.unit,
-    s = [],
-    p = start[fieldIndex] ?? 0,
-    m = or(start, e);
+  let { start, step } = e;
+  let { fieldIndex } = step.unit;
+  let s = [];
+  let p = start[fieldIndex] ?? 0;
+  let m = localizeTimestamp(start, e);
   while (m <= e.untilMs) {
     if (m > (s.at(-1) ?? -1 / 0)) s.push(m);
-    ((p += step.count), (m = or(start.with(fieldIndex, p), e)));
+    p += step.count;
+    m = localizeTimestamp(start.with(fieldIndex, p), e);
   }
   return s;
 }
 //@ chunk-3s7ydtfd.js:12491-12517 placement
-var Gs = (e) => (t) => e.has(t);
+/**
+ * 集合包含判断
+ */
+var hasInSet = (e) => (t) => e.has(t);
 //@ chunk-3s7ydtfd.js:12517-12554 placement
-var ae = (e) => e.unit.typicalMs * e.count;
+/**
+ * 步长覆盖的毫秒数
+ */
+var stepSpan = (e) => e.unit.typicalMs * e.count;
 //@ chunk-3s7ydtfd.js:12554-12643 placement
-var Xs = (e, t) => ({
+/**
+ * 刻度起点与终点
+ */
+var tickContext = (e, t) => ({
   start: logEaselError(t.fromMs, t.zone),
   step: e,
-  untilMs: t.untilMs + Eu * ae(e),
+  untilMs: t.untilMs + TICK_OVERHANG_STEPS * stepSpan(e),
   zone: t.zone,
 });
+//@ chunk-3s7ydtfd.js:12643-12813 placement
 /**
  * 用某步长生成时间网格，所有读数都落在网格上才返回。
  */
-//@ chunk-3s7ydtfd.js:12643-12813 placement
-function tryTimeGrid(e, t, o) {
-  let r = periodStarts(Xs(t, o));
-  if (!e.every(Gs(new Set(r)))) return null;
+function tryTimeGrid(e, timeStep, o) {
+  let r = periodStarts(tickContext(timeStep, o));
+  if (!e.every(hasInSet(new Set(r)))) return null;
   let filtered = r.filter((m) => m <= o.untilMs);
-  return { step: t, periodStarts: filtered, endMs: r[filtered.length] ?? o.untilMs };
+  return {
+    step: timeStep,
+    periodStarts: filtered,
+    endMs: r[filtered.length] ?? o.untilMs,
+  };
 }
 //@ chunk-3s7ydtfd.js:12813-12850 placement
-var zs = (e, t) => (e < He ? ["UTC"] : ["UTC", t]);
+/**
+ * 跨度小于一天只用 UTC
+ */
+var zonesFor = (e, zone) => (e < MS_PER_DAY ? ["UTC"] : ["UTC", zone]);
 //@ chunk-3s7ydtfd.js:12850-12903 placement
-var Ys = (e, t) => (o) => e[o.fieldIndex] !== t[o.fieldIndex];
+/**
+ * 该字段不同
+ */
+var differsAtField = (e, t) => (o) => e[o.fieldIndex] !== t[o.fieldIndex];
 //@ chunk-3s7ydtfd.js:12903-12949 placement
-var Js = (e, t, o) => ({ fromMs: e, untilMs: t, zone: o });
+/**
+ * 构造时间范围
+ */
+var timeRange = (fromMs, untilMs, zone) => ({
+  fromMs,
+  untilMs,
+  zone,
+});
 //@ chunk-3s7ydtfd.js:12949-13012 placement
-var Vs = (e) => e.toSorted((t, o) => t - o)[Math.floor(e.length / ks)] ?? 0;
+/**
+ * 中位数
+ */
+var medianValue = (e) => e.toSorted((t, o) => t - o)[Math.floor(e.length / HALF_DIVISOR)] ?? 0;
+//@ chunk-3s7ydtfd.js:13012-13144 placement
 /**
  * 由单位与跨度生成步长（按天时可跳过周末）。
  */
-//@ chunk-3s7ydtfd.js:13012-13144 placement
 function makeTimeStep(e, t, o) {
-  let max = Math.max(1, Math.round(t / e.typicalMs)),
-    s = o && e.fieldIndex === We && max === 1;
-  return { unit: e, count: max, skipsWeekends: s };
+  let max = Math.max(1, Math.round(t / e.typicalMs));
+  let skipsWeekends = o && e.fieldIndex === DAY_FIELD_INDEX && max === 1;
+  return {
+    unit: e,
+    count: max,
+    skipsWeekends,
+  };
 }
 //@ chunk-3s7ydtfd.js:13144-13573 placement
 function formatTimeTick(e, t, o) {
-  let { zone: zone } = t,
-    s = e[0],
-    at = e.at(-1);
-  if (!(s !== void 0 && at !== void 0 && e.length >= Pu)) return null;
-  let mapped = e.slice(1).map((x, l) => x - (e[l] ?? x)),
-    a = Vs(mapped);
-  if ((at - s) / a > e.length * ku) return null;
-  let i = e[mapped.indexOf(a)] ?? s;
-  for (let x of zs(a, zone)) {
-    let last = EASEL_PROMPT_HINT.findLast(Ys(logEaselError(i, x), logEaselError(i + a, x)));
+  let { zone } = t;
+  let fromMs = e[0];
+  let untilMs = e.at(-1);
+  if (!(fromMs !== undefined && untilMs !== undefined && e.length >= MIN_DECIMALS_TICKS)) return null;
+  let mapped = e.slice(1).map((x, l) => x - (e[l] ?? x));
+  let a = medianValue(mapped);
+  if ((untilMs - fromMs) / a > e.length * MAX_LABEL_RATIO) return null;
+  let i = e[mapped.indexOf(a)] ?? fromMs;
+  for (let x of zonesFor(a, zone)) {
+    let last = EASEL_PROMPT_HINT.findLast(differsAtField(logEaselError(i, x), logEaselError(i + a, x)));
     if (!last) return null;
-    let u = makeTimeStep(last, a, o),
-      d = tryTimeGrid(e, u, Js(s, at, x));
+    let timeStep = makeTimeStep(last, a, o);
+    let d = tryTimeGrid(e, timeStep, timeRange(fromMs, untilMs, x));
     if (d)
       return {
         ...d,
-        periodStarts: d.periodStarts.filter((periodStart) => !(u.skipsWeekends && $e(periodStart, zone))),
+        periodStarts: d.periodStarts.filter(
+          (periodStart) => !(timeStep.skipsWeekends && isWeekendOrFirst(periodStart, zone)),
+        ),
       };
   }
   return null;
 }
 //@ chunk-3s7ydtfd.js:13573-13601 placement
-var Qs = (e) => (t, o) => t !== e[o];
+/**
+ * 某字段变化
+ */
+var fieldChanged = (e) => (t, o) => t !== e[o];
+//@ chunk-3s7ydtfd.js:13601-13780 placement
 /**
  * 刻度标签上下文：时区与公共前缀字段。
  */
-//@ chunk-3s7ydtfd.js:13601-13780 placement
 function tickLabelContext(e, t) {
-  let dataSpan = e.dataSpan,
-    r = logEaselError(dataSpan.fromMs, dataSpan.zone),
-    index = r.findIndex(Qs(logEaselError(dataSpan.untilMs, dataSpan.zone)));
+  let dataSpan = e.dataSpan;
+  let r = logEaselError(dataSpan.fromMs, dataSpan.zone);
+  let index = r.findIndex(fieldChanged(logEaselError(dataSpan.untilMs, dataSpan.zone)));
   return {
     zone: dataSpan.zone,
-    areTicks: !zu,
+    areTicks: !ALLOW_ZONED_TIME,
     fieldsBefore: logEaselError(t, dataSpan.zone).slice(0, index === -1 ? r.length : index),
   };
 }
 //@ chunk-3s7ydtfd.js:13780-14217 placement
 function pickTickStep(e, t, o) {
-  let { fieldIndex: fieldIndex } = t.unit,
-    s = [],
-    fieldsBefore = o.fieldsBefore;
+  let { fieldIndex } = t.unit;
+  let s = [];
+  let fieldsBefore = o.fieldsBefore;
   for (let m of e) {
-    let n = logEaselError(m, o.zone),
-      [a, f, i, x, l, u] = n,
-      d = a !== fieldsBefore[Ds],
-      c = fieldIndex >= Qo && (fieldIndex <= We || d || f !== fieldsBefore[Qo] || i !== fieldsBefore[We]),
-      g = fieldIndex === Ds || d,
-      T = fieldIndex > We && !(o.areTicks && c && x === 0 && l === 0 && u === 0),
-      L = [];
+    let n = logEaselError(m, o.zone);
+    let [a, f, i, x, l, u] = n;
+    let d = a !== fieldsBefore[YEAR_FIELD_INDEX];
+    let c =
+      fieldIndex >= MONTH_FIELD_INDEX &&
+      (fieldIndex <= DAY_FIELD_INDEX ||
+        d ||
+        f !== fieldsBefore[MONTH_FIELD_INDEX] ||
+        i !== fieldsBefore[DAY_FIELD_INDEX]);
+    let g = fieldIndex === YEAR_FIELD_INDEX || d;
+    let T = fieldIndex > DAY_FIELD_INDEX && !(o.areTicks && c && x === 0 && l === 0 && u === 0);
+    let L = [];
     if (c) {
-      let _ = fieldIndex === Qo;
+      let _ = fieldIndex === MONTH_FIELD_INDEX;
       L.push(_ ? `${parts[f]}` : `${parts[f]} ${i}`);
     }
     if (g) L.push(String(a));
     if (T) {
-      let _ = fieldIndex === Ps;
-      L.push((_ ? [x, l, u] : [x, l]).map((w) => String(w).padStart(Uu, "0")).join(":"));
+      let _ = fieldIndex === SECONDS_FIELD_INDEX;
+      L.push((_ ? [x, l, u] : [x, l]).map((w) => String(w).padStart(TIME_PART_PAD_WIDTH, "0")).join(":"));
     }
-    (s.push(L.join(" ")), (fieldsBefore = n));
+    s.push(L.join(" "));
+    fieldsBefore = n;
   }
   return s;
 }
 //@ chunk-3s7ydtfd.js:14217-14266 placement
-var tp = (e, t) => pickTickStep([t], e.precision, tickLabelContext(e, t))[0] ?? "";
+/**
+ * 某时刻的刻度文本
+ */
+var tickTextAt = (e, ms) => pickTickStep([ms], e.precision, tickLabelContext(e, ms))[0] ?? "";
 //@ chunk-3s7ydtfd.js:14266-14316 placement
-var op = (e, t) => ({ unit: e, count: t, skipsWeekends: !1 });
+/**
+ * 构造步长对象
+ */
+var tickStep = (unit, count) => ({
+  unit,
+  count,
+  skipsWeekends: false,
+});
 //@ chunk-3s7ydtfd.js:14316-14396 placement
-var toSorted = EASEL_PROMPT_HINT.flatMap((e) => e.counts.map((count) => op(e, count))).toSorted(
-  (e, t) => ae(e) - ae(t),
+var rp = EASEL_PROMPT_HINT.flatMap((e) => e.counts.map((count) => tickStep(e, count))).toSorted(
+  (e, t) => stepSpan(e) - stepSpan(t),
 );
-
 export {
   pickTickStep,
-  toSorted,
-  ae,
+  rp,
+  stepSpan,
   periodStarts,
-  $e,
+  isWeekendOrFirst,
   parts,
   parseISOString,
-  Bs,
+  spansWeeksWithoutWeekend,
   formatTimeTick,
   defaultTimeStep,
-  tp,
+  tickTextAt,
   tickStepsFor,
 };

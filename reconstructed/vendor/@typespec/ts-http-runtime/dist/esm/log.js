@@ -8,6 +8,5 @@
 import { Uo } from "../../../../@azure/logger/dist/esm/index.js";
 
 //@ chunk-mrx6y2r5.js:37903-37932 esm-fingerprint
-var Ve = Uo("ts-http-runtime");
-
-export { Ve };
+var logger_2 = Uo("ts-http-runtime");
+export { logger_2 };

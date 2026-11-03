@@ -5,24 +5,29 @@
  * pieces: chunk-hwmsct5x.js (1)
  * attribution: esm-fingerprint 1
  */
-import { Y } from "../../../core/resource.mjs";
+import { APIResource } from "../../../core/resource.mjs";
 import { I } from "../../../internal/utils/path.mjs";
-import { Be } from "../../../core/pagination.mjs";
+import { Page } from "../../../core/pagination.mjs";
 
 //@ chunk-hwmsct5x.js:120284-120666 esm-fingerprint
-class no extends Y {
-  create(e, n) {
-    return this._client.post("/v1/organizations/invites?beta=true", { body: e, ...n });
+class Invites extends APIResource {
+  create(body, options) {
+    return this._client.post("/v1/organizations/invites?beta=true", {
+      body,
+      ...options,
+    });
   }
-  retrieve(e, n) {
-    return this._client.get(I`/v1/organizations/invites/${e}?beta=true`, n);
+  retrieve(inviteID, options) {
+    return this._client.get(I`/v1/organizations/invites/${inviteID}?beta=true`, options);
   }
-  list(e = {}, n) {
-    return this._client.getAPIList("/v1/organizations/invites?beta=true", Be, { query: e, ...n });
+  list(query = {}, options) {
+    return this._client.getAPIList("/v1/organizations/invites?beta=true", Page, {
+      query,
+      ...options,
+    });
   }
-  delete(e, n) {
-    return this._client.delete(I`/v1/organizations/invites/${e}?beta=true`, n);
+  delete(inviteID, options) {
+    return this._client.delete(I`/v1/organizations/invites/${inviteID}?beta=true`, options);
   }
 }
-
-export { no };
+export { Invites };

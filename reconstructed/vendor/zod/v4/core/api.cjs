@@ -6,926 +6,1155 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { ep } from "./checks.cjs";
-import { Ju } from "./registries.cjs";
-import { Bl } from "./schemas.cjs";
-import { Ee } from "./util.cjs";
+import { require_checks } from "./checks.cjs";
+import { require_registries } from "./registries.cjs";
+import { require_schemas } from "./schemas.cjs";
+import { require_util } from "./util.cjs";
 
 //@ chunk-1ny7cxrt.js:541070-556551 cjs-fingerprint
-var NC = x(function (W) {
-  var dJ =
-      (W && W.__createBinding) ||
-      (Object.create
-        ? function (e, t, n, o) {
-            if (o === void 0) o = n;
-            var ownPropertyDescriptor = Object.getOwnPropertyDescriptor(t, n);
-            if (
-              !ownPropertyDescriptor ||
-              ("get" in ownPropertyDescriptor
-                ? !t.__esModule
-                : ownPropertyDescriptor.writable || ownPropertyDescriptor.configurable)
-            )
-              ownPropertyDescriptor = {
-                enumerable: !0,
-                get: function () {
-                  return t[n];
-                },
-              };
-            Object.defineProperty(e, o, ownPropertyDescriptor);
-          }
-        : function (e, t, n, o) {
-            if (o === void 0) o = n;
-            e[o] = t[n];
-          }),
-    fJ =
-      (W && W.__setModuleDefault) ||
-      (Object.create
-        ? function (e, t) {
-            Object.defineProperty(e, "default", { enumerable: !0, value: t });
-          }
-        : function (e, t) {
-            e.default = t;
-          }),
-    Oh =
-      (W && W.__importStar) ||
-      function (e) {
-        if (e && e.__esModule) return e;
-        var t = {};
-        if (e != null) {
-          for (var key in e)
-            if (key !== "default" && Object.prototype.hasOwnProperty.call(e, key)) dJ(t, e, key);
+var require_api = x(function (cjsExports) {
+  var __createBinding =
+    (cjsExports && cjsExports.__createBinding) ||
+    (Object.create
+      ? function (o_2, m, k, k2) {
+          if (k2 === undefined) k2 = k;
+          var desc = Object.getOwnPropertyDescriptor(m, k);
+          if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable))
+            desc = {
+              enumerable: true,
+              get: function () {
+                return m[k];
+              },
+            };
+          Object.defineProperty(o_2, k2, desc);
         }
-        return (fJ(t, e), t);
-      };
-  Object.defineProperty(W, "__esModule", { value: !0 });
-  W.TimePrecision = void 0;
-  W._string = pJ;
-  W._coercedString = hJ;
-  W._email = mJ;
-  W._guid = gJ;
-  W._uuid = yJ;
-  W._uuidv4 = _J;
-  W._uuidv6 = bJ;
-  W._uuidv7 = vJ;
-  W._url = wJ;
-  W._emoji = OJ;
-  W._nanoid = SJ;
-  W._cuid = kJ;
-  W._cuid2 = EJ;
-  W._ulid = PJ;
-  W._xid = AJ;
-  W._ksuid = IJ;
-  W._ipv4 = CJ;
-  W._ipv6 = TJ;
-  W._mac = $J;
-  W._cidrv4 = RJ;
-  W._cidrv6 = DJ;
-  W._base64 = MJ;
-  W._base64url = jJ;
-  W._e164 = xJ;
-  W._creditCard = LJ;
-  W._iban = NJ;
-  W._jwt = UJ;
-  W._isoDateTime = zJ;
-  W._isoDate = FJ;
-  W._isoTime = BJ;
-  W._isoDuration = HJ;
-  W._number = KJ;
-  W._coercedNumber = ZJ;
-  W._int = VJ;
-  W._float32 = qJ;
-  W._float64 = GJ;
-  W._int32 = WJ;
-  W._uint32 = YJ;
-  W._boolean = JJ;
-  W._coercedBoolean = XJ;
-  W._bigint = QJ;
-  W._coercedBigint = e9;
-  W._int64 = t9;
-  W._uint64 = n9;
-  W._symbol = r9;
-  W._undefined = i9;
-  W._null = o9;
-  W._any = s9;
-  W._unknown = a9;
-  W._never = l9;
-  W._void = c9;
-  W._date = u9;
-  W._coercedDate = d9;
-  W._nan = f9;
-  W._lt = jC;
-  W._lte = Xu;
-  W._max = Xu;
-  W._lte = Xu;
-  W._max = Xu;
-  W._gt = xC;
-  W._gte = Qu;
-  W._min = Qu;
-  W._gte = Qu;
-  W._min = Qu;
-  W._positive = p9;
-  W._negative = h9;
-  W._nonpositive = m9;
-  W._nonnegative = g9;
-  W._multipleOf = y9;
-  W._maxSize = _9;
-  W._minSize = b9;
-  W._size = v9;
-  W._maxLength = w9;
-  W._minLength = O9;
-  W._length = S9;
-  W._regex = k9;
-  W._lowercase = E9;
-  W._uppercase = P9;
-  W._includes = A9;
-  W._startsWith = I9;
-  W._endsWith = C9;
-  W._property = T9;
-  W._properties = $9;
-  W._mime = R9;
-  W._overwrite = Jl;
-  W._normalize = D9;
-  W._trim = M9;
-  W._toLowerCase = j9;
-  W._toUpperCase = x9;
-  W._slugify = L9;
-  W._array = N9;
-  W._union = U9;
-  W._xor = z9;
-  W._discriminatedUnion = F9;
-  W._intersection = B9;
-  W._tuple = H9;
-  W._record = K9;
-  W._map = Z9;
-  W._set = V9;
-  W._enum = q9;
-  W._nativeEnum = G9;
-  W._literal = W9;
-  W._file = Y9;
-  W._transform = J9;
-  W._optional = X9;
-  W._nullable = Q9;
-  W._default = e8;
-  W._nonoptional = t8;
-  W._success = n8;
-  W._catch = r8;
-  W._pipe = i8;
-  W._readonly = o8;
-  W._templateLiteral = s8;
-  W._lazy = a8;
-  W._promise = l8;
-  W._custom = c8;
-  W._refine = u8;
-  W._superRefine = d8;
-  W._check = LC;
-  W.describe = f8;
-  W.meta = p8;
-  W._stringbool = h8;
-  W._stringFormat = m8;
-  var En = Oh(ep()),
-    wh = Oh(Ju()),
-    vh = Oh(Bl()),
-    ue = Oh(Ee());
-  function pJ(e, t) {
-    return new e({ type: "string", ...ue.normalizeParams(t) });
+      : function (o_2, m, k, k2) {
+          if (k2 === undefined) k2 = k;
+          o_2[k2] = m[k];
+        });
+  var __setModuleDefault =
+    (cjsExports && cjsExports.__setModuleDefault) ||
+    (Object.create
+      ? function (o, v) {
+          Object.defineProperty(o, "default", {
+            enumerable: true,
+            value: v,
+          });
+        }
+      : function (o, v) {
+          o.default = v;
+        });
+  var __importStar =
+    (cjsExports && cjsExports.__importStar) ||
+    function (mod) {
+      if (mod && mod.__esModule) return mod;
+      var result = {};
+      if (mod != null) {
+        for (var k in mod)
+          if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k))
+            __createBinding(result, mod, k);
+      }
+      __setModuleDefault(result, mod);
+      return result;
+    };
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.TimePrecision = undefined;
+  cjsExports._string = _string;
+  cjsExports._coercedString = _coercedString;
+  cjsExports._email = _email;
+  cjsExports._guid = _guid;
+  cjsExports._uuid = _uuid;
+  cjsExports._uuidv4 = _uuidv4;
+  cjsExports._uuidv6 = _uuidv6;
+  cjsExports._uuidv7 = _uuidv7;
+  cjsExports._url = _url;
+  cjsExports._emoji = _emoji;
+  cjsExports._nanoid = _nanoid;
+  cjsExports._cuid = _cuid;
+  cjsExports._cuid2 = _cuid2;
+  cjsExports._ulid = _ulid;
+  cjsExports._xid = _xid;
+  cjsExports._ksuid = _ksuid;
+  cjsExports._ipv4 = _ipv4;
+  cjsExports._ipv6 = _ipv6;
+  cjsExports._mac = _mac;
+  cjsExports._cidrv4 = _cidrv4;
+  cjsExports._cidrv6 = _cidrv6;
+  cjsExports._base64 = _base64;
+  cjsExports._base64url = _base64url;
+  cjsExports._e164 = _e164;
+  cjsExports._creditCard = _creditCard;
+  cjsExports._iban = _iban;
+  cjsExports._jwt = _jwt;
+  cjsExports._isoDateTime = _isoDateTime;
+  cjsExports._isoDate = _isoDate;
+  cjsExports._isoTime = _isoTime;
+  cjsExports._isoDuration = _isoDuration;
+  cjsExports._number = _number;
+  cjsExports._coercedNumber = _coercedNumber;
+  cjsExports._int = _int;
+  cjsExports._float32 = _float32;
+  cjsExports._float64 = _float64;
+  cjsExports._int32 = _int32;
+  cjsExports._uint32 = _uint32;
+  cjsExports._boolean = _boolean;
+  cjsExports._coercedBoolean = _coercedBoolean;
+  cjsExports._bigint = _bigint;
+  cjsExports._coercedBigint = _coercedBigint;
+  cjsExports._int64 = _int64;
+  cjsExports._uint64 = _uint64;
+  cjsExports._symbol = _symbol;
+  cjsExports._undefined = _undefined;
+  cjsExports._null = _null;
+  cjsExports._any = _any;
+  cjsExports._unknown = _unknown;
+  cjsExports._never = _never;
+  cjsExports._void = _void;
+  cjsExports._date = _date;
+  cjsExports._coercedDate = _coercedDate;
+  cjsExports._nan = _nan;
+  cjsExports._lt = _lt;
+  cjsExports._lte = _lte;
+  cjsExports._max = _lte;
+  cjsExports._lte = _lte;
+  cjsExports._max = _lte;
+  cjsExports._gt = _gt;
+  cjsExports._gte = _gte;
+  cjsExports._min = _gte;
+  cjsExports._gte = _gte;
+  cjsExports._min = _gte;
+  cjsExports._positive = _positive;
+  cjsExports._negative = _negative;
+  cjsExports._nonpositive = _nonpositive;
+  cjsExports._nonnegative = _nonnegative;
+  cjsExports._multipleOf = _multipleOf;
+  cjsExports._maxSize = _maxSize;
+  cjsExports._minSize = _minSize;
+  cjsExports._size = _size;
+  cjsExports._maxLength = _maxLength;
+  cjsExports._minLength = _minLength;
+  cjsExports._length = _length;
+  cjsExports._regex = _regex;
+  cjsExports._lowercase = _lowercase;
+  cjsExports._uppercase = _uppercase;
+  cjsExports._includes = _includes;
+  cjsExports._startsWith = _startsWith;
+  cjsExports._endsWith = _endsWith;
+  cjsExports._property = _property;
+  cjsExports._properties = _properties;
+  cjsExports._mime = _mime;
+  cjsExports._overwrite = _overwrite;
+  cjsExports._normalize = _normalize;
+  cjsExports._trim = _trim;
+  cjsExports._toLowerCase = _toLowerCase;
+  cjsExports._toUpperCase = _toUpperCase;
+  cjsExports._slugify = _slugify;
+  cjsExports._array = _array;
+  cjsExports._union = _union;
+  cjsExports._xor = _xor;
+  cjsExports._discriminatedUnion = _discriminatedUnion;
+  cjsExports._intersection = _intersection;
+  cjsExports._tuple = _tuple;
+  cjsExports._record = _record;
+  cjsExports._map = _map;
+  cjsExports._set = _set;
+  cjsExports._enum = _enum;
+  cjsExports._nativeEnum = _nativeEnum;
+  cjsExports._literal = _literal;
+  cjsExports._file = _file;
+  cjsExports._transform = _transform;
+  cjsExports._optional = _optional;
+  cjsExports._nullable = _nullable;
+  cjsExports._default = _default;
+  cjsExports._nonoptional = _nonoptional;
+  cjsExports._success = _success;
+  cjsExports._catch = _catch;
+  cjsExports._pipe = _pipe;
+  cjsExports._readonly = _readonly;
+  cjsExports._templateLiteral = _templateLiteral;
+  cjsExports._lazy = _lazy;
+  cjsExports._promise = _promise;
+  cjsExports._custom = _custom;
+  cjsExports._refine = _refine;
+  cjsExports._superRefine = _superRefine;
+  cjsExports._check = _check;
+  cjsExports.describe = describe;
+  cjsExports.meta = meta;
+  cjsExports._stringbool = _stringbool;
+  cjsExports._stringFormat = _stringFormat;
+  var checks = __importStar(require_checks());
+  var registries = __importStar(require_registries());
+  var schemas = __importStar(require_schemas());
+  var util = __importStar(require_util());
+  function _string(Class, params) {
+    return new Class({
+      type: "string",
+      ...util.normalizeParams(params),
+    });
   }
-  function hJ(e, t) {
-    return new e({ type: "string", coerce: !0, ...ue.normalizeParams(t) });
+  function _coercedString(Class, params) {
+    return new Class({
+      type: "string",
+      coerce: true,
+      ...util.normalizeParams(params),
+    });
   }
-  function mJ(e, t) {
-    return new e({
+  function _email(Class, params) {
+    return new Class({
       type: "string",
       format: "email",
       check: "string_format",
-      abort: !1,
-      ...ue.normalizeParams(t),
+      abort: false,
+      ...util.normalizeParams(params),
     });
   }
-  function gJ(e, t) {
-    return new e({
+  function _guid(Class, params) {
+    return new Class({
       type: "string",
       format: "guid",
       check: "string_format",
-      abort: !1,
-      ...ue.normalizeParams(t),
+      abort: false,
+      ...util.normalizeParams(params),
     });
   }
-  function yJ(e, t) {
-    return new e({
+  function _uuid(Class, params) {
+    return new Class({
       type: "string",
       format: "uuid",
       check: "string_format",
-      abort: !1,
-      ...ue.normalizeParams(t),
+      abort: false,
+      ...util.normalizeParams(params),
     });
   }
-  function _J(e, t) {
-    return new e({
+  function _uuidv4(Class, params) {
+    return new Class({
       type: "string",
       format: "uuid",
       check: "string_format",
-      abort: !1,
+      abort: false,
       version: "v4",
-      ...ue.normalizeParams(t),
+      ...util.normalizeParams(params),
     });
   }
-  function bJ(e, t) {
-    return new e({
+  function _uuidv6(Class, params) {
+    return new Class({
       type: "string",
       format: "uuid",
       check: "string_format",
-      abort: !1,
+      abort: false,
       version: "v6",
-      ...ue.normalizeParams(t),
+      ...util.normalizeParams(params),
     });
   }
-  function vJ(e, t) {
-    return new e({
+  function _uuidv7(Class, params) {
+    return new Class({
       type: "string",
       format: "uuid",
       check: "string_format",
-      abort: !1,
+      abort: false,
       version: "v7",
-      ...ue.normalizeParams(t),
+      ...util.normalizeParams(params),
     });
   }
-  function wJ(e, t) {
-    return new e({
+  function _url(Class, params) {
+    return new Class({
       type: "string",
       format: "url",
       check: "string_format",
-      abort: !1,
-      ...ue.normalizeParams(t),
+      abort: false,
+      ...util.normalizeParams(params),
     });
   }
-  function OJ(e, t) {
-    return new e({
+  function _emoji(Class, params) {
+    return new Class({
       type: "string",
       format: "emoji",
       check: "string_format",
-      abort: !1,
-      ...ue.normalizeParams(t),
+      abort: false,
+      ...util.normalizeParams(params),
     });
   }
-  function SJ(e, t) {
-    return new e({
+  function _nanoid(Class, params) {
+    return new Class({
       type: "string",
       format: "nanoid",
       check: "string_format",
-      abort: !1,
-      ...ue.normalizeParams(t),
+      abort: false,
+      ...util.normalizeParams(params),
     });
   }
-  function kJ(e, t) {
-    return new e({
+  function _cuid(Class, params) {
+    return new Class({
       type: "string",
       format: "cuid",
       check: "string_format",
-      abort: !1,
-      ...ue.normalizeParams(t),
+      abort: false,
+      ...util.normalizeParams(params),
     });
   }
-  function EJ(e, t) {
-    return new e({
+  function _cuid2(Class, params) {
+    return new Class({
       type: "string",
       format: "cuid2",
       check: "string_format",
-      abort: !1,
-      ...ue.normalizeParams(t),
+      abort: false,
+      ...util.normalizeParams(params),
     });
   }
-  function PJ(e, t) {
-    return new e({
+  function _ulid(Class, params) {
+    return new Class({
       type: "string",
       format: "ulid",
       check: "string_format",
-      abort: !1,
-      ...ue.normalizeParams(t),
+      abort: false,
+      ...util.normalizeParams(params),
     });
   }
-  function AJ(e, t) {
-    return new e({
+  function _xid(Class, params) {
+    return new Class({
       type: "string",
       format: "xid",
       check: "string_format",
-      abort: !1,
-      ...ue.normalizeParams(t),
+      abort: false,
+      ...util.normalizeParams(params),
     });
   }
-  function IJ(e, t) {
-    return new e({
+  function _ksuid(Class, params) {
+    return new Class({
       type: "string",
       format: "ksuid",
       check: "string_format",
-      abort: !1,
-      ...ue.normalizeParams(t),
+      abort: false,
+      ...util.normalizeParams(params),
     });
   }
-  function CJ(e, t) {
-    return new e({
+  function _ipv4(Class, params) {
+    return new Class({
       type: "string",
       format: "ipv4",
       check: "string_format",
-      abort: !1,
-      ...ue.normalizeParams(t),
+      abort: false,
+      ...util.normalizeParams(params),
     });
   }
-  function TJ(e, t) {
-    return new e({
+  function _ipv6(Class, params) {
+    return new Class({
       type: "string",
       format: "ipv6",
       check: "string_format",
-      abort: !1,
-      ...ue.normalizeParams(t),
+      abort: false,
+      ...util.normalizeParams(params),
     });
   }
-  function $J(e, t) {
-    return new e({
+  function _mac(Class, params) {
+    return new Class({
       type: "string",
       format: "mac",
       check: "string_format",
-      abort: !1,
-      ...ue.normalizeParams(t),
+      abort: false,
+      ...util.normalizeParams(params),
     });
   }
-  function RJ(e, t) {
-    return new e({
+  function _cidrv4(Class, params) {
+    return new Class({
       type: "string",
       format: "cidrv4",
       check: "string_format",
-      abort: !1,
-      ...ue.normalizeParams(t),
+      abort: false,
+      ...util.normalizeParams(params),
     });
   }
-  function DJ(e, t) {
-    return new e({
+  function _cidrv6(Class, params) {
+    return new Class({
       type: "string",
       format: "cidrv6",
       check: "string_format",
-      abort: !1,
-      ...ue.normalizeParams(t),
+      abort: false,
+      ...util.normalizeParams(params),
     });
   }
-  function MJ(e, t) {
-    return new e({
+  function _base64(Class, params) {
+    return new Class({
       type: "string",
       format: "base64",
       check: "string_format",
-      abort: !1,
-      ...ue.normalizeParams(t),
+      abort: false,
+      ...util.normalizeParams(params),
     });
   }
-  function jJ(e, t) {
-    return new e({
+  function _base64url(Class, params) {
+    return new Class({
       type: "string",
       format: "base64url",
       check: "string_format",
-      abort: !1,
-      ...ue.normalizeParams(t),
+      abort: false,
+      ...util.normalizeParams(params),
     });
   }
-  function xJ(e, t) {
-    return new e({
+  function _e164(Class, params) {
+    return new Class({
       type: "string",
       format: "e164",
       check: "string_format",
-      abort: !1,
-      ...ue.normalizeParams(t),
+      abort: false,
+      ...util.normalizeParams(params),
     });
   }
-  function LJ(e, t) {
-    return new e({
+  function _creditCard(Class, params) {
+    return new Class({
       type: "string",
       format: "credit_card",
       check: "string_format",
-      abort: !1,
-      ...ue.normalizeParams(t),
+      abort: false,
+      ...util.normalizeParams(params),
     });
   }
-  function NJ(e, t) {
-    return new e({
+  function _iban(Class, params) {
+    return new Class({
       type: "string",
       format: "iban",
       check: "string_format",
-      abort: !1,
-      ...ue.normalizeParams(t),
+      abort: false,
+      ...util.normalizeParams(params),
     });
   }
-  function UJ(e, t) {
-    return new e({
+  function _jwt(Class, params) {
+    return new Class({
       type: "string",
       format: "jwt",
       check: "string_format",
-      abort: !1,
-      ...ue.normalizeParams(t),
+      abort: false,
+      ...util.normalizeParams(params),
     });
   }
-  W.TimePrecision = { Any: null, Minute: -1, Second: 0, Millisecond: 3, Microsecond: 6 };
-  function zJ(e, t) {
-    return new e({
+  cjsExports.TimePrecision = {
+    Any: null,
+    Minute: -1,
+    Second: 0,
+    Millisecond: 3,
+    Microsecond: 6,
+  };
+  function _isoDateTime(Class, params) {
+    return new Class({
       type: "string",
       format: "datetime",
       check: "string_format",
-      offset: !1,
-      local: !1,
+      offset: false,
+      local: false,
       precision: null,
-      ...ue.normalizeParams(t),
+      ...util.normalizeParams(params),
     });
   }
-  function FJ(e, t) {
-    return new e({ type: "string", format: "date", check: "string_format", ...ue.normalizeParams(t) });
+  function _isoDate(Class, params) {
+    return new Class({
+      type: "string",
+      format: "date",
+      check: "string_format",
+      ...util.normalizeParams(params),
+    });
   }
-  function BJ(e, t) {
-    return new e({
+  function _isoTime(Class, params) {
+    return new Class({
       type: "string",
       format: "time",
       check: "string_format",
       precision: null,
-      ...ue.normalizeParams(t),
+      ...util.normalizeParams(params),
     });
   }
-  function HJ(e, t) {
-    return new e({ type: "string", format: "duration", check: "string_format", ...ue.normalizeParams(t) });
+  function _isoDuration(Class, params) {
+    return new Class({
+      type: "string",
+      format: "duration",
+      check: "string_format",
+      ...util.normalizeParams(params),
+    });
   }
-  function KJ(e, t) {
-    return new e({ type: "number", checks: [], ...ue.normalizeParams(t) });
+  function _number(Class, params) {
+    return new Class({
+      type: "number",
+      checks: [],
+      ...util.normalizeParams(params),
+    });
   }
-  function ZJ(e, t) {
-    return new e({ type: "number", coerce: !0, checks: [], ...ue.normalizeParams(t) });
+  function _coercedNumber(Class, params) {
+    return new Class({
+      type: "number",
+      coerce: true,
+      checks: [],
+      ...util.normalizeParams(params),
+    });
   }
-  function VJ(e, t) {
-    return new e({
+  function _int(Class, params) {
+    return new Class({
       type: "number",
       check: "number_format",
-      abort: !1,
+      abort: false,
       format: "safeint",
-      ...ue.normalizeParams(t),
+      ...util.normalizeParams(params),
     });
   }
-  function qJ(e, t) {
-    return new e({
+  function _float32(Class, params) {
+    return new Class({
       type: "number",
       check: "number_format",
-      abort: !1,
+      abort: false,
       format: "float32",
-      ...ue.normalizeParams(t),
+      ...util.normalizeParams(params),
     });
   }
-  function GJ(e, t) {
-    return new e({
+  function _float64(Class, params) {
+    return new Class({
       type: "number",
       check: "number_format",
-      abort: !1,
+      abort: false,
       format: "float64",
-      ...ue.normalizeParams(t),
+      ...util.normalizeParams(params),
     });
   }
-  function WJ(e, t) {
-    return new e({
+  function _int32(Class, params) {
+    return new Class({
       type: "number",
       check: "number_format",
-      abort: !1,
+      abort: false,
       format: "int32",
-      ...ue.normalizeParams(t),
+      ...util.normalizeParams(params),
     });
   }
-  function YJ(e, t) {
-    return new e({
+  function _uint32(Class, params) {
+    return new Class({
       type: "number",
       check: "number_format",
-      abort: !1,
+      abort: false,
       format: "uint32",
-      ...ue.normalizeParams(t),
+      ...util.normalizeParams(params),
     });
   }
-  function JJ(e, t) {
-    return new e({ type: "boolean", ...ue.normalizeParams(t) });
+  function _boolean(Class, params) {
+    return new Class({
+      type: "boolean",
+      ...util.normalizeParams(params),
+    });
   }
-  function XJ(e, t) {
-    return new e({ type: "boolean", coerce: !0, ...ue.normalizeParams(t) });
+  function _coercedBoolean(Class, params) {
+    return new Class({
+      type: "boolean",
+      coerce: true,
+      ...util.normalizeParams(params),
+    });
   }
-  function QJ(e, t) {
-    return new e({ type: "bigint", ...ue.normalizeParams(t) });
+  function _bigint(Class, params) {
+    return new Class({
+      type: "bigint",
+      ...util.normalizeParams(params),
+    });
   }
-  function e9(e, t) {
-    return new e({ type: "bigint", coerce: !0, ...ue.normalizeParams(t) });
+  function _coercedBigint(Class, params) {
+    return new Class({
+      type: "bigint",
+      coerce: true,
+      ...util.normalizeParams(params),
+    });
   }
-  function t9(e, t) {
-    return new e({
+  function _int64(Class, params) {
+    return new Class({
       type: "bigint",
       check: "bigint_format",
-      abort: !1,
+      abort: false,
       format: "int64",
-      ...ue.normalizeParams(t),
+      ...util.normalizeParams(params),
     });
   }
-  function n9(e, t) {
-    return new e({
+  function _uint64(Class, params) {
+    return new Class({
       type: "bigint",
       check: "bigint_format",
-      abort: !1,
+      abort: false,
       format: "uint64",
-      ...ue.normalizeParams(t),
+      ...util.normalizeParams(params),
     });
   }
-  function r9(e, t) {
-    return new e({ type: "symbol", ...ue.normalizeParams(t) });
+  function _symbol(Class, params) {
+    return new Class({
+      type: "symbol",
+      ...util.normalizeParams(params),
+    });
   }
-  function i9(e, t) {
-    return new e({ type: "undefined", ...ue.normalizeParams(t) });
+  function _undefined(Class, params) {
+    return new Class({
+      type: "undefined",
+      ...util.normalizeParams(params),
+    });
   }
-  function o9(e, t) {
-    return new e({ type: "null", ...ue.normalizeParams(t) });
+  function _null(Class, params) {
+    return new Class({
+      type: "null",
+      ...util.normalizeParams(params),
+    });
   }
-  function s9(e) {
-    return new e({ type: "any" });
+  function _any(Class) {
+    return new Class({
+      type: "any",
+    });
   }
-  function a9(e) {
-    return new e({ type: "unknown" });
+  function _unknown(Class) {
+    return new Class({
+      type: "unknown",
+    });
   }
-  function l9(e, t) {
-    return new e({ type: "never", ...ue.normalizeParams(t) });
+  function _never(Class, params) {
+    return new Class({
+      type: "never",
+      ...util.normalizeParams(params),
+    });
   }
-  function c9(e, t) {
-    return new e({ type: "void", ...ue.normalizeParams(t) });
+  function _void(Class, params) {
+    return new Class({
+      type: "void",
+      ...util.normalizeParams(params),
+    });
   }
-  function u9(e, t) {
-    return new e({ type: "date", ...ue.normalizeParams(t) });
+  function _date(Class, params) {
+    return new Class({
+      type: "date",
+      ...util.normalizeParams(params),
+    });
   }
-  function d9(e, t) {
-    return new e({ type: "date", coerce: !0, ...ue.normalizeParams(t) });
+  function _coercedDate(Class, params) {
+    return new Class({
+      type: "date",
+      coerce: true,
+      ...util.normalizeParams(params),
+    });
   }
-  function f9(e, t) {
-    return new e({ type: "nan", ...ue.normalizeParams(t) });
+  function _nan(Class, params) {
+    return new Class({
+      type: "nan",
+      ...util.normalizeParams(params),
+    });
   }
-  function jC(e, t) {
-    return new En.$ZodCheckLessThan({
+  function _lt(value, params) {
+    return new checks.$ZodCheckLessThan({
       check: "less_than",
-      ...ue.normalizeParams(t),
-      value: e,
-      inclusive: !1,
+      ...util.normalizeParams(params),
+      value,
+      inclusive: false,
     });
   }
-  function Xu(e, t) {
-    return new En.$ZodCheckLessThan({
+  function _lte(value, params) {
+    return new checks.$ZodCheckLessThan({
       check: "less_than",
-      ...ue.normalizeParams(t),
-      value: e,
-      inclusive: !0,
+      ...util.normalizeParams(params),
+      value,
+      inclusive: true,
     });
   }
-  function xC(e, t) {
-    return new En.$ZodCheckGreaterThan({
+  function _gt(value, params) {
+    return new checks.$ZodCheckGreaterThan({
       check: "greater_than",
-      ...ue.normalizeParams(t),
-      value: e,
-      inclusive: !1,
+      ...util.normalizeParams(params),
+      value,
+      inclusive: false,
     });
   }
-  function Qu(e, t) {
-    return new En.$ZodCheckGreaterThan({
+  function _gte(value, params) {
+    return new checks.$ZodCheckGreaterThan({
       check: "greater_than",
-      ...ue.normalizeParams(t),
-      value: e,
-      inclusive: !0,
+      ...util.normalizeParams(params),
+      value,
+      inclusive: true,
     });
   }
-  function p9(e) {
-    return xC(0, e);
+  function _positive(params) {
+    return _gt(0, params);
   }
-  function h9(e) {
-    return jC(0, e);
+  function _negative(params) {
+    return _lt(0, params);
   }
-  function m9(e) {
-    return Xu(0, e);
+  function _nonpositive(params) {
+    return _lte(0, params);
   }
-  function g9(e) {
-    return Qu(0, e);
+  function _nonnegative(params) {
+    return _gte(0, params);
   }
-  function y9(e, t) {
-    return new En.$ZodCheckMultipleOf({ check: "multiple_of", ...ue.normalizeParams(t), value: e });
+  function _multipleOf(value, params) {
+    return new checks.$ZodCheckMultipleOf({
+      check: "multiple_of",
+      ...util.normalizeParams(params),
+      value,
+    });
   }
-  function _9(e, t) {
-    return new En.$ZodCheckMaxSize({ check: "max_size", ...ue.normalizeParams(t), maximum: e });
+  function _maxSize(maximum, params) {
+    return new checks.$ZodCheckMaxSize({
+      check: "max_size",
+      ...util.normalizeParams(params),
+      maximum,
+    });
   }
-  function b9(e, t) {
-    return new En.$ZodCheckMinSize({ check: "min_size", ...ue.normalizeParams(t), minimum: e });
+  function _minSize(minimum, params) {
+    return new checks.$ZodCheckMinSize({
+      check: "min_size",
+      ...util.normalizeParams(params),
+      minimum,
+    });
   }
-  function v9(e, t) {
-    return new En.$ZodCheckSizeEquals({ check: "size_equals", ...ue.normalizeParams(t), size: e });
+  function _size(size, params) {
+    return new checks.$ZodCheckSizeEquals({
+      check: "size_equals",
+      ...util.normalizeParams(params),
+      size,
+    });
   }
-  function w9(e, t) {
-    return new En.$ZodCheckMaxLength({ check: "max_length", ...ue.normalizeParams(t), maximum: e });
+  function _maxLength(maximum, params) {
+    return new checks.$ZodCheckMaxLength({
+      check: "max_length",
+      ...util.normalizeParams(params),
+      maximum,
+    });
   }
-  function O9(e, t) {
-    return new En.$ZodCheckMinLength({ check: "min_length", ...ue.normalizeParams(t), minimum: e });
+  function _minLength(minimum, params) {
+    return new checks.$ZodCheckMinLength({
+      check: "min_length",
+      ...util.normalizeParams(params),
+      minimum,
+    });
   }
-  function S9(e, t) {
-    return new En.$ZodCheckLengthEquals({ check: "length_equals", ...ue.normalizeParams(t), length: e });
+  function _length(length, params) {
+    return new checks.$ZodCheckLengthEquals({
+      check: "length_equals",
+      ...util.normalizeParams(params),
+      length,
+    });
   }
-  function k9(e, t) {
-    return new En.$ZodCheckRegex({
+  function _regex(pattern, params) {
+    return new checks.$ZodCheckRegex({
       check: "string_format",
       format: "regex",
-      ...ue.normalizeParams(t),
-      pattern: e,
+      ...util.normalizeParams(params),
+      pattern,
     });
   }
-  function E9(e) {
-    return new En.$ZodCheckLowerCase({
+  function _lowercase(params) {
+    return new checks.$ZodCheckLowerCase({
       check: "string_format",
       format: "lowercase",
-      ...ue.normalizeParams(e),
+      ...util.normalizeParams(params),
     });
   }
-  function P9(e) {
-    return new En.$ZodCheckUpperCase({
+  function _uppercase(params) {
+    return new checks.$ZodCheckUpperCase({
       check: "string_format",
       format: "uppercase",
-      ...ue.normalizeParams(e),
+      ...util.normalizeParams(params),
     });
   }
-  function A9(e, t) {
-    return new En.$ZodCheckIncludes({
+  function _includes(includes, params) {
+    return new checks.$ZodCheckIncludes({
       check: "string_format",
       format: "includes",
-      ...ue.normalizeParams(t),
-      includes: e,
+      ...util.normalizeParams(params),
+      includes,
     });
   }
-  function I9(e, t) {
-    return new En.$ZodCheckStartsWith({
+  function _startsWith(prefix, params) {
+    return new checks.$ZodCheckStartsWith({
       check: "string_format",
       format: "starts_with",
-      ...ue.normalizeParams(t),
-      prefix: e,
+      ...util.normalizeParams(params),
+      prefix,
     });
   }
-  function C9(e, t) {
-    return new En.$ZodCheckEndsWith({
+  function _endsWith(suffix, params) {
+    return new checks.$ZodCheckEndsWith({
       check: "string_format",
       format: "ends_with",
-      ...ue.normalizeParams(t),
-      suffix: e,
+      ...util.normalizeParams(params),
+      suffix,
     });
   }
-  function T9(e, t, n) {
-    return new En.$ZodCheckProperty({ check: "property", property: e, schema: t, ...ue.normalizeParams(n) });
+  function _property(property, schema, params) {
+    return new checks.$ZodCheckProperty({
+      check: "property",
+      property,
+      schema,
+      ...util.normalizeParams(params),
+    });
   }
-  function $9(e, t, n) {
-    return new e({ type: "properties", check: "properties", shape: t, ...ue.normalizeParams(n) });
+  function _properties(Class, shape, params) {
+    return new Class({
+      type: "properties",
+      check: "properties",
+      shape,
+      ...util.normalizeParams(params),
+    });
   }
-  function R9(e, t) {
-    return new En.$ZodCheckMimeType({ check: "mime_type", mime: e, ...ue.normalizeParams(t) });
+  function _mime(types, params) {
+    return new checks.$ZodCheckMimeType({
+      check: "mime_type",
+      mime: types,
+      ...util.normalizeParams(params),
+    });
   }
-  function Jl(e) {
-    return new En.$ZodCheckOverwrite({ check: "overwrite", tx: e });
+  function _overwrite(tx) {
+    return new checks.$ZodCheckOverwrite({
+      check: "overwrite",
+      tx,
+    });
   }
-  function D9(e) {
-    return Jl((t) => t.normalize(e));
+  function _normalize(form) {
+    return _overwrite((input) => input.normalize(form));
   }
-  function M9() {
-    return Jl((e) => e.trim());
+  function _trim() {
+    return _overwrite((input) => input.trim());
   }
-  function j9() {
-    return Jl((e) => e.toLowerCase());
+  function _toLowerCase() {
+    return _overwrite((input) => input.toLowerCase());
   }
-  function x9() {
-    return Jl((e) => e.toUpperCase());
+  function _toUpperCase() {
+    return _overwrite((input) => input.toUpperCase());
   }
-  function L9() {
-    return Jl((e) => ue.slugify(e));
+  function _slugify() {
+    return _overwrite((input) => util.slugify(input));
   }
-  function N9(e, t, n) {
-    return new e({ type: "array", element: t, ...ue.normalizeParams(n) });
+  function _array(Class, element, params) {
+    return new Class({
+      type: "array",
+      element,
+      ...util.normalizeParams(params),
+    });
   }
-  function U9(e, t, n) {
-    return new e({ type: "union", options: t, ...ue.normalizeParams(n) });
+  function _union(Class, options, params) {
+    return new Class({
+      type: "union",
+      options,
+      ...util.normalizeParams(params),
+    });
   }
-  function z9(e, t, n) {
-    return new e({ type: "union", options: t, inclusive: !1, ...ue.normalizeParams(n) });
+  function _xor(Class, options, params) {
+    return new Class({
+      type: "union",
+      options,
+      inclusive: false,
+      ...util.normalizeParams(params),
+    });
   }
-  function F9(e, t, n, o) {
-    return new e({ type: "union", options: n, discriminator: t, ...ue.normalizeParams(o) });
+  function _discriminatedUnion(Class, discriminator, options, params) {
+    return new Class({
+      type: "union",
+      options,
+      discriminator,
+      ...util.normalizeParams(params),
+    });
   }
-  function B9(e, t, n) {
-    return new e({ type: "intersection", left: t, right: n });
+  function _intersection(Class, left, right) {
+    return new Class({
+      type: "intersection",
+      left,
+      right,
+    });
   }
-  function H9(e, t, n, o) {
-    let r = n instanceof vh.$ZodType,
-      s = r ? o : n;
-    return new e({ type: "tuple", items: t, rest: r ? n : null, ...ue.normalizeParams(s) });
+  function _tuple(Class, items, _paramsOrRest, _params) {
+    let hasRest = _paramsOrRest instanceof schemas.$ZodType;
+    let params = hasRest ? _params : _paramsOrRest;
+    return new Class({
+      type: "tuple",
+      items,
+      rest: hasRest ? _paramsOrRest : null,
+      ...util.normalizeParams(params),
+    });
   }
-  function K9(e, t, n, o) {
-    return new e({ type: "record", keyType: t, valueType: n, ...ue.normalizeParams(o) });
+  function _record(Class, keyType, valueType, params) {
+    return new Class({
+      type: "record",
+      keyType,
+      valueType,
+      ...util.normalizeParams(params),
+    });
   }
-  function Z9(e, t, n, o) {
-    return new e({ type: "map", keyType: t, valueType: n, ...ue.normalizeParams(o) });
+  function _map(Class, keyType, valueType, params) {
+    return new Class({
+      type: "map",
+      keyType,
+      valueType,
+      ...util.normalizeParams(params),
+    });
   }
-  function V9(e, t, n) {
-    return new e({ type: "set", valueType: t, ...ue.normalizeParams(n) });
+  function _set(Class, valueType, params) {
+    return new Class({
+      type: "set",
+      valueType,
+      ...util.normalizeParams(params),
+    });
   }
-  function q9(e, t, n) {
-    let o = Array.isArray(t) ? Object.fromEntries(t.map((r) => [r, r])) : t;
-    return new e({ type: "enum", entries: o, ...ue.normalizeParams(n) });
+  function _enum(Class, values, params) {
+    let entries = Array.isArray(values) ? Object.fromEntries(values.map((v) => [v, v])) : values;
+    return new Class({
+      type: "enum",
+      entries,
+      ...util.normalizeParams(params),
+    });
   }
-  function G9(e, t, n) {
-    return new e({ type: "enum", entries: t, ...ue.normalizeParams(n) });
+  function _nativeEnum(Class, entries, params) {
+    return new Class({
+      type: "enum",
+      entries,
+      ...util.normalizeParams(params),
+    });
   }
-  function W9(e, t, n) {
-    return new e({ type: "literal", values: Array.isArray(t) ? t : [t], ...ue.normalizeParams(n) });
+  function _literal(Class, value, params) {
+    return new Class({
+      type: "literal",
+      values: Array.isArray(value) ? value : [value],
+      ...util.normalizeParams(params),
+    });
   }
-  function Y9(e, t) {
-    return new e({ type: "file", ...ue.normalizeParams(t) });
+  function _file(Class, params) {
+    return new Class({
+      type: "file",
+      ...util.normalizeParams(params),
+    });
   }
-  function J9(e, t) {
-    return new e({ type: "transform", transform: t });
+  function _transform(Class, fn) {
+    return new Class({
+      type: "transform",
+      transform: fn,
+    });
   }
-  function X9(e, t) {
-    return new e({ type: "optional", innerType: t });
+  function _optional(Class, innerType) {
+    return new Class({
+      type: "optional",
+      innerType,
+    });
   }
-  function Q9(e, t) {
-    return new e({ type: "nullable", innerType: t });
+  function _nullable(Class, innerType) {
+    return new Class({
+      type: "nullable",
+      innerType,
+    });
   }
-  function e8(e, t, n) {
-    return new e({
+  function _default(Class, innerType, defaultValue) {
+    return new Class({
       type: "default",
-      innerType: t,
+      innerType,
       get defaultValue() {
-        return typeof n === "function" ? n() : ue.shallowClone(n);
+        return typeof defaultValue === "function" ? defaultValue() : util.shallowClone(defaultValue);
       },
     });
   }
-  function t8(e, t, n) {
-    return new e({ type: "nonoptional", innerType: t, ...ue.normalizeParams(n) });
-  }
-  function n8(e, t) {
-    return new e({ type: "success", innerType: t });
-  }
-  function r8(e, t, n) {
-    return new e({
-      type: "catch",
-      innerType: t,
-      catchValue: typeof n === "function" ? n : ue.constantCatch(n),
+  function _nonoptional(Class, innerType, params) {
+    return new Class({
+      type: "nonoptional",
+      innerType,
+      ...util.normalizeParams(params),
     });
   }
-  function i8(e, t, n) {
-    return new e({ type: "pipe", in: t, out: n });
+  function _success(Class, innerType) {
+    return new Class({
+      type: "success",
+      innerType,
+    });
   }
-  function o8(e, t) {
-    return new e({ type: "readonly", innerType: t });
+  function _catch(Class, innerType, catchValue) {
+    return new Class({
+      type: "catch",
+      innerType,
+      catchValue: typeof catchValue === "function" ? catchValue : util.constantCatch(catchValue),
+    });
   }
-  function s8(e, t, n) {
-    return new e({ type: "template_literal", parts: t, ...ue.normalizeParams(n) });
+  function _pipe(Class, in_, out) {
+    return new Class({
+      type: "pipe",
+      in: in_,
+      out,
+    });
   }
-  function a8(e, t) {
-    return new e({ type: "lazy", getter: t });
+  function _readonly(Class, innerType) {
+    return new Class({
+      type: "readonly",
+      innerType,
+    });
   }
-  function l8(e, t) {
-    return new e({ type: "promise", innerType: t });
+  function _templateLiteral(Class, parts, params) {
+    return new Class({
+      type: "template_literal",
+      parts,
+      ...util.normalizeParams(params),
+    });
   }
-  function c8(e, t, n) {
-    let normalizeParams = ue.normalizeParams(n);
-    return (
-      normalizeParams.abort ?? (normalizeParams.abort = !0),
-      new e({ type: "custom", check: "custom", fn: t, ...normalizeParams })
-    );
+  function _lazy(Class, getter) {
+    return new Class({
+      type: "lazy",
+      getter,
+    });
   }
-  function u8(e, t, n) {
-    return new e({ type: "custom", check: "custom", fn: t, ...ue.normalizeParams(n) });
+  function _promise(Class, innerType) {
+    return new Class({
+      type: "promise",
+      innerType,
+    });
   }
-  function d8(e, t) {
-    let n = LC(
-      (o) => (
-        (o.addIssue = (r) => {
-          if (typeof r === "string") o.issues.push(ue.issue(r, o.value, n._zod.def));
-          else {
-            let s = r;
-            if (s.fatal) s.continue = !1;
-            if ((s.code ?? (s.code = "custom"), !("input" in s))) s.input = o.value;
-            (s.inst ?? (s.inst = n),
-              s.continue ?? (s.continue = !n._zod.def.abort),
-              o.issues.push(ue.issue(s)));
-          }
-        }),
-        e(o.value, o)
-      ),
-      t,
-    );
-    return n;
+  function _custom(Class, fn, _params) {
+    let norm = util.normalizeParams(_params);
+    norm.abort ?? (norm.abort = true);
+    return new Class({
+      type: "custom",
+      check: "custom",
+      fn,
+      ...norm,
+    });
   }
-  function LC(e, t) {
-    let n = new En.$ZodCheck({ check: "custom", ...ue.normalizeParams(t) });
-    return ((n._zod.check = e), n);
+  function _refine(Class, fn, n) {
+    return new Class({
+      type: "custom",
+      check: "custom",
+      fn,
+      ...util.normalizeParams(n),
+    });
   }
-  function f8(e) {
-    let t = new En.$ZodCheck({ check: "describe" });
-    return (
-      (t._zod.onattach = [
-        (n) => {
-          let o = wh.globalRegistry.get(n) ?? {};
-          wh.globalRegistry.add(n, { ...o, description: e });
-        },
-      ]),
-      (t._zod.check = () => {}),
-      t
-    );
-  }
-  function p8(e) {
-    let t = new En.$ZodCheck({ check: "meta" });
-    return (
-      (t._zod.onattach = [
-        (n) => {
-          let o = wh.globalRegistry.get(n) ?? {};
-          wh.globalRegistry.add(n, { ...o, ...e });
-        },
-      ]),
-      (t._zod.check = () => {}),
-      t
-    );
-  }
-  function h8(e, t) {
-    let normalizeParams = ue.normalizeParams(t),
-      o = normalizeParams.truthy ?? ["true", "1", "yes", "on", "y", "enabled"],
-      r = normalizeParams.falsy ?? ["false", "0", "no", "off", "n", "disabled"];
-    if (normalizeParams.case !== "sensitive")
-      ((o = o.map((y) => (typeof y === "string" ? y.toLowerCase() : y))),
-        (r = r.map((y) => (typeof y === "string" ? y.toLowerCase() : y))));
-    let s = new Set(o),
-      a = new Set(r),
-      l = e.Codec ?? vh.$ZodCodec,
-      c = e.Boolean ?? vh.$ZodBoolean,
-      f = new (e.String ?? vh.$ZodString)({ type: "string", error: normalizeParams.error }),
-      h = new c({ type: "boolean", error: normalizeParams.error }),
-      m = new l({
-        type: "pipe",
-        in: f,
-        out: h,
-        transform: (y, b) => {
-          let w = y;
-          if (normalizeParams.case !== "sensitive") w = w.toLowerCase();
-          if (s.has(w)) return !0;
-          else if (a.has(w)) return !1;
-          else
-            return (
-              b.issues.push({
-                code: "invalid_value",
-                expected: "stringbool",
-                values: [...s, ...a],
-                input: b.value,
-                inst: m,
-                continue: !1,
-              }),
-              {}
-            );
-        },
-        reverseTransform: (y, b) => {
-          if (y === !0) return o[0] || "true";
-          else return r[0] || "false";
-        },
-        error: normalizeParams.error,
-      });
-    return (
-      (m._zod.bag.truthy = o),
-      (m._zod.bag.falsy = r),
-      (m._zod.bag.case = normalizeParams.case ?? "insensitive"),
-      m
-    );
-  }
-  function m8(e, t, n, o = {}) {
-    let normalizeParams = ue.normalizeParams(o),
-      s = {
-        check: "string_format",
-        type: "string",
-        format: t,
-        fn: typeof n === "function" ? n : (l) => n.test(l),
-        ...normalizeParams,
+  function _superRefine(fn, params) {
+    let ch = _check((payload) => {
+      payload.addIssue = (issue) => {
+        if (typeof issue === "string") payload.issues.push(util.issue(issue, payload.value, ch._zod.def));
+        else {
+          let _issue = issue;
+          if (_issue.fatal) _issue.continue = false;
+          _issue.code ?? (_issue.code = "custom");
+          if (!("input" in _issue)) _issue.input = payload.value;
+          _issue.inst ?? (_issue.inst = ch);
+          _issue.continue ?? (_issue.continue = !ch._zod.def.abort);
+          payload.issues.push(util.issue(_issue));
+        }
       };
-    if (n instanceof RegExp) s.pattern = n;
-    return new e(s);
+      return fn(payload.value, payload);
+    }, params);
+    return ch;
+  }
+  function _check(fn, params) {
+    let ch = new checks.$ZodCheck({
+      check: "custom",
+      ...util.normalizeParams(params),
+    });
+    ch._zod.check = fn;
+    return ch;
+  }
+  function describe(description) {
+    let ch = new checks.$ZodCheck({
+      check: "describe",
+    });
+    ch._zod.onattach = [
+      (inst) => {
+        let existing = registries.globalRegistry.get(inst) ?? {};
+        registries.globalRegistry.add(inst, {
+          ...existing,
+          description,
+        });
+      },
+    ];
+    ch._zod.check = () => {};
+    return ch;
+  }
+  function meta(metadata) {
+    let ch = new checks.$ZodCheck({
+      check: "meta",
+    });
+    ch._zod.onattach = [
+      (inst) => {
+        let existing = registries.globalRegistry.get(inst) ?? {};
+        registries.globalRegistry.add(inst, {
+          ...existing,
+          ...metadata,
+        });
+      },
+    ];
+    ch._zod.check = () => {};
+    return ch;
+  }
+  function _stringbool(Classes, _params) {
+    let params = util.normalizeParams(_params);
+    let truthyArray = params.truthy ?? ["true", "1", "yes", "on", "y", "enabled"];
+    let falsyArray = params.falsy ?? ["false", "0", "no", "off", "n", "disabled"];
+    if (params.case !== "sensitive") {
+      truthyArray = truthyArray.map((v) => (typeof v === "string" ? v.toLowerCase() : v));
+      falsyArray = falsyArray.map((v) => (typeof v === "string" ? v.toLowerCase() : v));
+    }
+    let truthySet = new Set(truthyArray);
+    let falsySet = new Set(falsyArray);
+    let _Codec = Classes.Codec ?? schemas.$ZodCodec;
+    let _Boolean = Classes.Boolean ?? schemas.$ZodBoolean;
+    let f = new (Classes.String ?? schemas.$ZodString)({
+      type: "string",
+      error: params.error,
+    });
+    let booleanSchema = new _Boolean({
+      type: "boolean",
+      error: params.error,
+    });
+    let codec = new _Codec({
+      type: "pipe",
+      in: f,
+      out: booleanSchema,
+      transform: (input, payload) => {
+        let data = input;
+        if (params.case !== "sensitive") data = data.toLowerCase();
+        if (truthySet.has(data)) return true;
+        else if (falsySet.has(data)) return false;
+        else {
+          payload.issues.push({
+            code: "invalid_value",
+            expected: "stringbool",
+            values: [...truthySet, ...falsySet],
+            input: payload.value,
+            inst: codec,
+            continue: false,
+          });
+          return {};
+        }
+      },
+      reverseTransform: (input, _payload) => {
+        if (input === true) return truthyArray[0] || "true";
+        else return falsyArray[0] || "false";
+      },
+      error: params.error,
+    });
+    codec._zod.bag.truthy = truthyArray;
+    codec._zod.bag.falsy = falsyArray;
+    codec._zod.bag.case = params.case ?? "insensitive";
+    return codec;
+  }
+  function _stringFormat(Class, format, fnOrRegex, _params = {}) {
+    let params = util.normalizeParams(_params);
+    let def = {
+      check: "string_format",
+      type: "string",
+      format,
+      fn: typeof fnOrRegex === "function" ? fnOrRegex : (val) => fnOrRegex.test(val),
+      ...params,
+    };
+    if (fnOrRegex instanceof RegExp) def.pattern = fnOrRegex;
+    return new Class(def);
   }
   (function () {
-    var ownPropertyNames = Object.getOwnPropertyNames(W);
-    for (var t = 0; t < ownPropertyNames.length; t++) {
-      var ownPropertyDescriptor = Object.getOwnPropertyDescriptor(W, ownPropertyNames[t]);
-      if (!ownPropertyDescriptor || !ownPropertyDescriptor.get || !ownPropertyDescriptor.configurable)
-        continue;
-      var o;
+    var keys = Object.getOwnPropertyNames(cjsExports);
+    for (var i = 0; i < keys.length; i++) {
+      var desc = Object.getOwnPropertyDescriptor(cjsExports, keys[i]);
+      if (!desc || !desc.get || !desc.configurable) continue;
+      var value;
       try {
-        o = ownPropertyDescriptor.get();
-      } catch (error) {
+        value = desc.get();
+      } catch (e) {
         continue;
       }
-      if (o === void 0) continue;
-      Object.defineProperty(W, ownPropertyNames[t], {
-        value: o,
-        writable: !1,
-        enumerable: ownPropertyDescriptor.enumerable,
-        configurable: !1,
+      if (value === undefined) continue;
+      Object.defineProperty(cjsExports, keys[i], {
+        value,
+        writable: false,
+        enumerable: desc.enumerable,
+        configurable: false,
       });
     }
-    Object.freeze(W);
+    Object.freeze(cjsExports);
   })();
 });
-
-export { NC };
+export { require_api };

@@ -8,20 +8,27 @@
  * pieces: chunk-e6aww6q8.js (9)
  * attribution: placement 9
  */
-import { EN } from "../../services/mcp/mcpClientCapabilities.js";
-import { lp } from "./surfaceBinding.js";
+import { moduleStore } from "../../services/mcp/mcpClientCapabilities.js";
+import { currentSurfaceBinding } from "./surfaceBinding.js";
 import { normalizeNameForMCP } from "../../services/mcp/normalization.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 
 //@ chunk-e6aww6q8.js:55650-55739 placement
-function Y3(e) {
-  let serverKey = EN.serverKey(e);
-  if ((EN.forget(e), serverKey !== void 0)) lp()?.removeMcpServer(serverKey);
+/**
+ * 忘掉并移除某 MCP 服务器
+ */
+function forgetMcpServerFor(e) {
+  let n = moduleStore.serverKey(e);
+  moduleStore.forget(e);
+  if (n !== undefined) currentSurfaceBinding()?.removeMcpServer(n);
 }
 //@ chunk-e6aww6q8.js:55739-55775 placement = getMcpPrefix (1)
-var buildRawMcpToolName = (e, n) => `mcp__${normalizeNameForMCP(e)}__${n}`;
+var buildRawMcpToolName = (serverName, name) => `mcp__${normalizeNameForMCP(serverName)}__${name}`;
 //@ chunk-e6aww6q8.js:55775-55833 placement
-function Oyt() {
+/**
+ * 简单可变槽
+ */
+function createSlot() {
   let e;
   return {
     set: (n) => {
@@ -31,30 +38,49 @@ function Oyt() {
   };
 }
 //@ chunk-e6aww6q8.js:55833-55847 placement
-var mle = Oyt();
+/**
+ * 工具调用槽
+ */
+var toolCallSlot = createSlot();
 //@ chunk-e6aww6q8.js:55847-55873 placement
-var Hto = (e) => {
-  mle.set(e);
+/**
+ * 设置当前工具调用
+ */
+var setCurrentToolCall = (pluginToolsServerHost) => {
+  toolCallSlot.set(pluginToolsServerHost);
 };
 //@ chunk-e6aww6q8.js:55873-55893 placement
-var Iyt = mle.current;
+/**
+ * 当前工具调用
+ */
+var currentToolCall = toolCallSlot.current;
 //@ chunk-e6aww6q8.js:55893-55991 placement
-function XLe(e, n) {
-  let serverKey = EN.serverKey(e);
-  return serverKey !== void 0 && EN.list(e).some((s) => buildRawMcpToolName(serverKey, s.name) === n);
+/**
+ * 工具是否属于某服务器
+ */
+function isToolFromServer(e, tool) {
+  let r = moduleStore.serverKey(e);
+  return r !== undefined && moduleStore.list(e).some((s) => buildRawMcpToolName(r, s.name) === tool);
 }
 //@ chunk-e6aww6q8.js:55991-56007 placement
-var list = EN.list;
+var list = moduleStore.list;
+//@ chunk-e6aww6q8.js:56007-56202 placement
 /**
  * 若插件登记的工具已原样出现在会话工具中，返回其 mcp__服务器__工具 全名。
  */
-//@ chunk-e6aww6q8.js:56007-56202 placement
 function registeredMcpToolName(e, n, r) {
-  let found = EN.list(r).find((L) => L.name === n.name),
-    serverKey = EN.serverKey(r);
-  if (found === void 0 || serverKey === void 0 || jsonStringify(found) !== jsonStringify(n)) return;
-  let S = buildRawMcpToolName(serverKey, n.name);
-  return e.tools().some((L) => L.name === S) ? S : void 0;
+  let found = moduleStore.list(r).find((L) => L.name === n.name);
+  let h = moduleStore.serverKey(r);
+  if (found === undefined || h === undefined || jsonStringify(found) !== jsonStringify(n)) return;
+  let rawMcpToolName = buildRawMcpToolName(h, n.name);
+  return e.tools().some((L) => L.name === rawMcpToolName) ? rawMcpToolName : undefined;
 }
-
-export { Y3, XLe, list, registeredMcpToolName, Iyt, buildRawMcpToolName, Hto };
+export {
+  forgetMcpServerFor,
+  isToolFromServer,
+  list,
+  registeredMcpToolName,
+  currentToolCall,
+  buildRawMcpToolName,
+  setCurrentToolCall,
+};

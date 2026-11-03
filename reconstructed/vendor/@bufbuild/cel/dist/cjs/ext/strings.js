@@ -6,114 +6,117 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../../runtime/bun-runtime.js";
-import { li } from "../../../../protobuf/dist/commonjs/index.js";
-import { Os } from "../../../../../@anthropic-ai/bedrock-sdk/core/error.js";
-import { Ei } from "../type.js";
-import { $o } from "../list.js";
-import { Aa } from "../map.js";
-import { Bi } from "../uint.js";
-import { ba } from "../../../../protobuf/dist/commonjs/reflect/index.js";
-import { Tc } from "../func.js";
+import { require_protobuf } from "../../../../protobuf/dist/commonjs/index.js";
+import { require_error_4 } from "../../../../../@anthropic-ai/bedrock-sdk/core/error.js";
+import { require_type } from "../type.js";
+import { require_list } from "../list.js";
+import { require_map } from "../map.js";
+import { require_uint } from "../uint.js";
+import { require_reflect_2 } from "../../../../protobuf/dist/commonjs/reflect/index.js";
+import { require_func } from "../func.js";
 
 //@ chunk-fq0cr76a.js:631450-638468 cjs-fingerprint
-var aM = x(function (oM) {
-  Object.defineProperty(oM, "__esModule", { value: !0 });
-  var g0 = li(),
-    Gl = Os(),
-    Hl = Ei(),
-    Bd = $o(),
-    QF = Aa(),
-    zo = Bi(),
-    y0 = ba(),
-    Gn = Tc();
-  function vae(e) {
-    let n = Number(e);
-    if (n < 0 || n > this.length) throw Ld(n, this.length);
-    return this.charAt(n);
+var require_strings = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  var protobuf_1 = require_protobuf();
+  var wkt_1 = require_error_4();
+  var type_js_1 = require_type();
+  var list_js_1 = require_list();
+  var map_js_1 = require_map();
+  var uint_js_1 = require_uint();
+  var reflect_1 = require_reflect_2();
+  var func_js_1 = require_func();
+  function charAt(index) {
+    let i = Number(index);
+    if (i < 0 || i > this.length) throw indexOutOfBounds(i, this.length);
+    return this.charAt(i);
   }
-  function GF(e, n) {
-    if (n === void 0) return BigInt(this.indexOf(e));
-    let r = Number(n);
-    if (r < 0 || r >= this.length) throw Ld(r, this.length);
-    return BigInt(this.indexOf(e, r));
+  function indexOf(substr, startN) {
+    if (startN === undefined) return BigInt(this.indexOf(substr));
+    let start = Number(startN);
+    if (start < 0 || start >= this.length) throw indexOutOfBounds(start, this.length);
+    return BigInt(this.indexOf(substr, start));
   }
-  function HF(e, n) {
-    if (n === void 0) return BigInt(this.lastIndexOf(e));
-    let r = Number(n);
-    if (r < 0 || r >= this.length) throw Ld(r, this.length);
-    return BigInt(this.lastIndexOf(e, r));
+  function lastIndexOf(substr, startN) {
+    if (startN === undefined) return BigInt(this.lastIndexOf(substr));
+    let start = Number(startN);
+    if (start < 0 || start >= this.length) throw indexOutOfBounds(start, this.length);
+    return BigInt(this.lastIndexOf(substr, start));
   }
-  function wae() {
-    let e = "";
-    for (let n = 0; n < this.length; n++) {
-      let code = this.charCodeAt(n);
-      if (code >= 65 && code <= 90) e += String.fromCharCode(code + 32);
-      else e += this.charAt(n);
+  function lowerAscii() {
+    let result = "";
+    for (let i = 0; i < this.length; i++) {
+      let code = this.charCodeAt(i);
+      if (code >= 65 && code <= 90) result += String.fromCharCode(code + 32);
+      else result += this.charAt(i);
     }
-    return e;
+    return result;
   }
-  function Tae() {
-    let e = "";
-    for (let n = 0; n < this.length; n++) {
-      let code = this.charCodeAt(n);
-      if (code >= 97 && code <= 122) e += String.fromCharCode(code - 32);
-      else e += this.charAt(n);
+  function upperAscii() {
+    let result = "";
+    for (let i = 0; i < this.length; i++) {
+      let c = this.charCodeAt(i);
+      if (c >= 97 && c <= 122) result += String.fromCharCode(c - 32);
+      else result += this.charAt(i);
     }
-    return e;
+    return result;
   }
-  function KF(e, n, r) {
-    let s = r === void 0 ? this.length : Number(r),
-      h = this,
-      y = 0,
-      b = s,
-      index = h.indexOf(e, y);
-    while (b > 0 && index !== -1)
-      ((h = h.substring(0, index) + n + h.substring(index + e.length)),
-        (y = index + n.length),
-        b--,
-        (index = h.indexOf(e, y)));
-    return h;
-  }
-  function jF(e, n) {
-    let r = n === void 0 ? void 0 : Number(n);
-    if (r === 1) return Bd.celList([this]);
-    return Bd.celList(this.split(e, r));
-  }
-  function YF(e, n) {
-    if (n === void 0) {
-      let h = Number(e);
-      if (h < 0 || h > this.length) throw Ld(h, this.length);
-      return this.substring(h);
+  function replace(substr, repl, num) {
+    let count = num === undefined ? this.length : Number(num);
+    let result = this;
+    let offset = 0;
+    let remaining = count;
+    let index = result.indexOf(substr, offset);
+    while (remaining > 0 && index !== -1) {
+      result = result.substring(0, index) + repl + result.substring(index + substr.length);
+      offset = index + repl.length;
+      remaining--;
+      index = result.indexOf(substr, offset);
     }
-    let r = Number(e),
-      s = Number(n);
-    if (r < 0 || r > this.length) throw Ld(r, this.length);
-    if (s < 0 || s > this.length) throw Ld(s, this.length);
-    if (r > s) throw Ys("substring", "start > end");
-    return this.substring(r, s);
+    return result;
   }
-  var ZF = new Set([
+  function split(sep, num) {
+    let count = num === undefined ? undefined : Number(num);
+    if (count === 1) return list_js_1.celList([this]);
+    return list_js_1.celList(this.split(sep, count));
+  }
+  function substring(start, end) {
+    if (end === undefined) {
+      let i = Number(start);
+      if (i < 0 || i > this.length) throw indexOutOfBounds(i, this.length);
+      return this.substring(i);
+    }
+    let i = Number(start);
+    let j = Number(end);
+    if (i < 0 || i > this.length) throw indexOutOfBounds(i, this.length);
+    if (j < 0 || j > this.length) throw indexOutOfBounds(j, this.length);
+    if (i > j) throw invalidArgument("substring", "start > end");
+    return this.substring(i, j);
+  }
+  var WHITE_SPACE = new Set([
     32, 9, 10, 11, 12, 13, 133, 160, 5760, 8192, 8193, 8194, 8195, 8196, 8197, 8198, 8199, 8200, 8201, 8202,
     8232, 8233, 8239, 8287, 12288,
   ]);
-  function Aae() {
-    let e = 0,
-      n = this.length - 1;
-    while (e < this.length && ZF.has(this.charCodeAt(e))) e++;
-    while (n > e && ZF.has(this.charCodeAt(n))) n--;
-    return this.substring(e, n + 1);
+  function trim() {
+    let start = 0;
+    let end = this.length - 1;
+    while (start < this.length && WHITE_SPACE.has(this.charCodeAt(start))) start++;
+    while (end > start && WHITE_SPACE.has(this.charCodeAt(end))) end--;
+    return this.substring(start, end + 1);
   }
-  function zF(e = "") {
-    let n = "";
-    for (let r = 0; r < this.size; r++) {
-      let s = this.get(r);
-      if (typeof s !== "string") throw Ys("join", "list contains non-string value");
-      if (r > 0) n += e;
-      n += s;
+  function join(sep = "") {
+    let result = "";
+    for (let i = 0; i < this.size; i++) {
+      let item = this.get(i);
+      if (typeof item !== "string") throw invalidArgument("join", "list contains non-string value");
+      if (i > 0) result += sep;
+      result += item;
     }
-    return n;
+    return result;
   }
-  var Cae = new Map([
+  var QUOTE_MAP = new Map([
     [0, "\\0"],
     [7, "\\a"],
     [8, "\\b"],
@@ -125,244 +128,260 @@ var aM = x(function (oM) {
     [34, '\\"'],
     [92, "\\\\"],
   ]);
-  function Rae(e) {
-    let n = '"';
-    for (let r = 0; r < e.length; r++) {
-      let code = e.charCodeAt(r);
-      n += Cae.get(code) ?? e.charAt(r);
+  function quote(str) {
+    let result = '"';
+    for (let i = 0; i < str.length; i++) {
+      let c = str.charCodeAt(i);
+      result += QUOTE_MAP.get(c) ?? str.charAt(i);
     }
-    return ((n += '"'), n);
+    result += '"';
+    return result;
   }
-  function eM(e) {
-    switch (e) {
+  function formatFloatString(val) {
+    switch (val) {
       case "Infinity":
       case "-Infinity":
       case "NaN":
-        return e;
+        return val;
       default:
-        throw Ys("format", "invalid floating point value");
+        throw invalidArgument("format", "invalid floating point value");
     }
   }
-  function tM(e, n) {
-    switch (!0) {
-      case typeof e === "number":
-        if (!Number.isFinite(e) || n === void 0) return e.toString();
+  function formatFloating(val, precision) {
+    switch (true) {
+      case typeof val === "number":
+        if (!Number.isFinite(val) || precision === undefined) return val.toString();
         return new Intl.NumberFormat("en-US", {
-          maximumFractionDigits: n,
-          minimumFractionDigits: n,
+          maximumFractionDigits: precision,
+          minimumFractionDigits: precision,
           notation: "standard",
           roundingMode: "halfEven",
-          useGrouping: !1,
-        }).format(e);
-      case typeof e === "string":
-        return eM(e);
+          useGrouping: false,
+        }).format(val);
+      case typeof val === "string":
+        return formatFloatString(val);
       default:
-        throw Ys("format", "fixed-point clause can only be used on doubles");
+        throw invalidArgument("format", "fixed-point clause can only be used on doubles");
     }
   }
-  function Iae(e, n) {
-    switch (!0) {
-      case typeof e === "number":
-        if (!Number.isFinite(e)) return e.toString();
-        let toExponential = e.toExponential(n),
-          index = toExponential.lastIndexOf("+");
-        if (index === toExponential.length - 2)
-          toExponential = `${toExponential.substring(0, index + 1)}0${toExponential.substring(index + 1)}`;
-        return toExponential;
-      case typeof e === "string":
-        return eM(e);
+  function formatExponent(val, precision) {
+    switch (true) {
+      case typeof val === "number":
+        if (!Number.isFinite(val)) return val.toString();
+        let str = val.toExponential(precision);
+        let plusIdx = str.lastIndexOf("+");
+        if (plusIdx === str.length - 2)
+          str = `${str.substring(0, plusIdx + 1)}0${str.substring(plusIdx + 1)}`;
+        return str;
+      case typeof val === "string":
+        return formatFloatString(val);
       default:
-        throw Ys("format", "scientific clause can only be used on doubles");
+        throw invalidArgument("format", "scientific clause can only be used on doubles");
     }
   }
-  function Nae(e) {
-    switch (!0) {
-      case typeof e === "boolean":
-        return e ? "1" : "0";
-      case typeof e === "bigint":
-        return e.toString(2);
-      case zo.isCelUint(e):
-        return e.value.toString(2);
+  function formatBinary(val) {
+    switch (true) {
+      case typeof val === "boolean":
+        return val ? "1" : "0";
+      case typeof val === "bigint":
+        return val.toString(2);
+      case uint_js_1.isCelUint(val):
+        return val.value.toString(2);
       default:
-        throw Ys("format", "only integers and bools can be formatted as binary");
+        throw invalidArgument("format", "only integers and bools can be formatted as binary");
     }
   }
-  function kae(e) {
-    switch (!0) {
-      case typeof e === "bigint":
-        return e.toString(8);
-      case zo.isCelUint(e):
-        return e.value.toString(8);
+  function formatOctal(val) {
+    switch (true) {
+      case typeof val === "bigint":
+        return val.toString(8);
+      case uint_js_1.isCelUint(val):
+        return val.value.toString(8);
       default:
-        throw Ys("format", "invalid integer value");
+        throw invalidArgument("format", "invalid integer value");
     }
   }
-  function nM(e) {
-    switch (!0) {
-      case typeof e === "bigint":
-        return e.toString(10);
-      case zo.isCelUint(e):
-        return e.value.toString(10);
-      case typeof e === "number" && !Number.isFinite(e):
-        return e.toString();
+  function formatDecimal(val) {
+    switch (true) {
+      case typeof val === "bigint":
+        return val.toString(10);
+      case uint_js_1.isCelUint(val):
+        return val.value.toString(10);
+      case typeof val === "number" && !Number.isFinite(val):
+        return val.toString();
       default:
-        throw Ys("format", "invalid integer value");
+        throw invalidArgument("format", "invalid integer value");
     }
   }
-  function XF(e) {
-    let n = "";
-    for (let r = 0; r < e.length; r++) n += e[r].toString(16).padStart(2, "0");
-    return n;
+  function formatHexBytes(val) {
+    let result = "";
+    for (let i = 0; i < val.length; i++) result += val[i].toString(16).padStart(2, "0");
+    return result;
   }
-  function rM(e) {
-    switch (!0) {
-      case typeof e === "bigint":
-        return e.toString(16);
-      case zo.isCelUint(e):
-        return e.value.toString(16);
-      case typeof e === "string":
-        return XF(new TextEncoder().encode(e));
-      case e instanceof Uint8Array:
-        return XF(e);
+  function formatHex(val) {
+    switch (true) {
+      case typeof val === "bigint":
+        return val.toString(16);
+      case uint_js_1.isCelUint(val):
+        return val.value.toString(16);
+      case typeof val === "string":
+        return formatHexBytes(new TextEncoder().encode(val));
+      case val instanceof Uint8Array:
+        return formatHexBytes(val);
       default:
-        throw Ys("format", "only integers, byte buffers, and strings can be formatted as hex");
+        throw invalidArgument("format", "only integers, byte buffers, and strings can be formatted as hex");
     }
   }
-  function Dae(e) {
-    let n = rM(e);
-    if (typeof n !== "string") return n;
-    return n.toUpperCase();
+  function formatHeX(val) {
+    let result = formatHex(val);
+    if (typeof result !== "string") return result;
+    return result.toUpperCase();
   }
-  function Oae(e) {
-    let n = "[";
-    for (let r = 0; r < e.size; r++) {
-      if (r > 0) n += ", ";
-      n += b0(e.get(r));
+  function formatList(val) {
+    let result = "[";
+    for (let i = 0; i < val.size; i++) {
+      if (i > 0) result += ", ";
+      result += formatString(val.get(i));
     }
-    return ((n += "]"), n);
+    result += "]";
+    return result;
   }
-  function Pae(e) {
-    let n = Array(e.size),
-      r = 0;
-    for (let [y, b] of e) ((n[r] = [b0(y), b0(b)]), r++);
-    let s = "{",
-      h = "";
-    for (let [y, b] of n.sort((S, w) => S[0].localeCompare(w[0]))) ((s += h + y + ": " + b), (h = ", "));
-    return ((s += "}"), s);
+  function formatMap(val) {
+    let formatted = Array(val.size);
+    let i = 0;
+    for (let [key, value] of val) {
+      formatted[i] = [formatString(key), formatString(value)];
+      i++;
+    }
+    let result = "{";
+    let delim = "";
+    for (let [key, value] of formatted.sort((a, b) => a[0].localeCompare(b[0]))) {
+      result += delim + key + ": " + value;
+      delim = ", ";
+    }
+    result += "}";
+    return result;
   }
-  function b0(e) {
-    switch (typeof e) {
+  function formatString(val) {
+    switch (typeof val) {
       case "boolean":
-        return e ? "true" : "false";
+        return val ? "true" : "false";
       case "bigint":
-        return nM(e);
+        return formatDecimal(val);
       case "number":
-        return tM(e, void 0);
+        return formatFloating(val, undefined);
       case "string":
-        return e;
+        return val;
       case "object":
-        switch (!0) {
-          case e === null:
+        switch (true) {
+          case val === null:
             return "null";
-          case Hl.isCelType(e):
-            return e.name;
-          case zo.isCelUint(e):
-            return e.value.toString();
-          case y0.isReflectMessage(e, Gl.TimestampSchema):
-            return g0.toJson(Gl.TimestampSchema, e.message);
-          case y0.isReflectMessage(e, Gl.DurationSchema):
-            return g0.toJson(Gl.DurationSchema, e.message);
-          case e instanceof Uint8Array:
-            return new TextDecoder().decode(e);
-          case Bd.isCelList(e):
-            return Oae(e);
-          case QF.isCelMap(e):
-            return Pae(e);
+          case type_js_1.isCelType(val):
+            return val.name;
+          case uint_js_1.isCelUint(val):
+            return val.value.toString();
+          case reflect_1.isReflectMessage(val, wkt_1.TimestampSchema):
+            return protobuf_1.toJson(wkt_1.TimestampSchema, val.message);
+          case reflect_1.isReflectMessage(val, wkt_1.DurationSchema):
+            return protobuf_1.toJson(wkt_1.DurationSchema, val.message);
+          case val instanceof Uint8Array:
+            return new TextDecoder().decode(val);
+          case list_js_1.isCelList(val):
+            return formatList(val);
+          case map_js_1.isCelMap(val):
+            return formatMap(val);
         }
     }
-    throw Ys("format", "invalid string value");
+    throw invalidArgument("format", "invalid string value");
   }
-  function Lae(e) {
-    let n = "",
-      r = 0,
-      s = 0;
-    while (r < this.length) {
-      if (this.charAt(r) !== "%") {
-        ((n += this.charAt(r)), r++);
+  function format(args) {
+    let result = "";
+    let i = 0;
+    let j = 0;
+    while (i < this.length) {
+      if (this.charAt(i) !== "%") {
+        result += this.charAt(i);
+        i++;
         continue;
       }
-      if (r + 1 >= this.length) throw Ys("format", "invalid format string");
-      let charAt = this.charAt(r + 1);
-      if (((r += 2), charAt === "%")) {
-        n += "%";
+      if (i + 1 >= this.length) throw invalidArgument("format", "invalid format string");
+      let c = this.charAt(i + 1);
+      i += 2;
+      if (c === "%") {
+        result += "%";
         continue;
       }
-      let y = 6;
-      if (charAt === ".") {
-        y = 0;
-        while (r < this.length && this.charAt(r) >= "0" && this.charAt(r) <= "9")
-          ((y = y * 10 + Number(this.charAt(r))), r++);
-        if (r >= this.length) throw Ys("format", "invalid format string");
-        ((charAt = this.charAt(r)), r++);
+      let precision = 6;
+      if (c === ".") {
+        precision = 0;
+        while (i < this.length && this.charAt(i) >= "0" && this.charAt(i) <= "9") {
+          precision = precision * 10 + Number(this.charAt(i));
+          i++;
+        }
+        if (i >= this.length) throw invalidArgument("format", "invalid format string");
+        c = this.charAt(i);
+        i++;
       }
-      let b = e.get(s++);
-      if (b === void 0) throw Ys("format", "too few arguments for format string");
-      n += Bae(charAt, b, y);
+      let val = args.get(j++);
+      if (val === undefined) throw invalidArgument("format", "too few arguments for format string");
+      result += formatPlaceholder(c, val, precision);
     }
-    if (s < e.size) throw Ys("format", "too many arguments for format string");
-    return n;
+    if (j < args.size) throw invalidArgument("format", "too many arguments for format string");
+    return result;
   }
-  function Bae(e, n, r) {
-    switch (e) {
+  function formatPlaceholder(c, val, precision) {
+    switch (c) {
       case "e":
-        return Iae(n, r);
+        return formatExponent(val, precision);
       case "f":
-        return tM(n, r);
+        return formatFloating(val, precision);
       case "b":
-        return Nae(n);
+        return formatBinary(val);
       case "d":
-        return nM(n);
+        return formatDecimal(val);
       case "s":
-        return b0(n);
+        return formatString(val);
       case "x":
-        return rM(n);
+        return formatHex(val);
       case "X":
-        return Dae(n);
+        return formatHeX(val);
       case "o":
-        return kae(n);
+        return formatOctal(val);
       default:
-        throw Ys("format", `could not parse formatting clause: unrecognized formatting clause: ${e}`);
+        throw invalidArgument(
+          "format",
+          `could not parse formatting clause: unrecognized formatting clause: ${c}`,
+        );
     }
   }
-  function Ys(e, n) {
-    return Error(`invalid argument to function ${e}: ${n}`);
+  function invalidArgument(func, issue) {
+    return Error(`invalid argument to function ${func}: ${issue}`);
   }
-  function Ld(e, n) {
-    return Error(`index ${e} out of bounds [0, ${n})`);
+  function indexOutOfBounds(index, length) {
+    return Error(`index ${index} out of bounds [0, ${length})`);
   }
-  var { STRING: STRING, INT: INT, DYN: DYN } = Hl.CelScalar,
-    listType = Hl.listType(DYN),
-    listType_2 = Hl.listType(DYN);
-  oM.default = [
-    Gn.celFunc("strings.quote", [STRING], STRING, Rae),
-    Gn.celMethod("charAt", STRING, [INT], STRING, vae),
-    Gn.celMethod("indexOf", STRING, [STRING], INT, GF),
-    Gn.celMethod("indexOf", STRING, [STRING, INT], INT, GF),
-    Gn.celMethod("lastIndexOf", STRING, [STRING], INT, HF),
-    Gn.celMethod("lastIndexOf", STRING, [STRING, INT], INT, HF),
-    Gn.celMethod("lowerAscii", STRING, [], STRING, wae),
-    Gn.celMethod("upperAscii", STRING, [], STRING, Tae),
-    Gn.celMethod("replace", STRING, [STRING, STRING], STRING, KF),
-    Gn.celMethod("replace", STRING, [STRING, STRING, INT], STRING, KF),
-    Gn.celMethod("split", STRING, [STRING], listType_2, jF),
-    Gn.celMethod("split", STRING, [STRING, INT], listType_2, jF),
-    Gn.celMethod("substring", STRING, [INT], STRING, YF),
-    Gn.celMethod("substring", STRING, [INT, INT], STRING, YF),
-    Gn.celMethod("trim", STRING, [], STRING, Aae),
-    Gn.celMethod("join", listType_2, [], STRING, zF),
-    Gn.celMethod("join", listType_2, [STRING], STRING, zF),
-    Gn.celMethod("format", STRING, [listType], STRING, Lae),
+  var { STRING, INT, DYN } = type_js_1.CelScalar;
+  var LIST_DYN = type_js_1.listType(DYN);
+  var LIST_STRING = type_js_1.listType(DYN);
+  cjsExports.default = [
+    func_js_1.celFunc("strings.quote", [STRING], STRING, quote),
+    func_js_1.celMethod("charAt", STRING, [INT], STRING, charAt),
+    func_js_1.celMethod("indexOf", STRING, [STRING], INT, indexOf),
+    func_js_1.celMethod("indexOf", STRING, [STRING, INT], INT, indexOf),
+    func_js_1.celMethod("lastIndexOf", STRING, [STRING], INT, lastIndexOf),
+    func_js_1.celMethod("lastIndexOf", STRING, [STRING, INT], INT, lastIndexOf),
+    func_js_1.celMethod("lowerAscii", STRING, [], STRING, lowerAscii),
+    func_js_1.celMethod("upperAscii", STRING, [], STRING, upperAscii),
+    func_js_1.celMethod("replace", STRING, [STRING, STRING], STRING, replace),
+    func_js_1.celMethod("replace", STRING, [STRING, STRING, INT], STRING, replace),
+    func_js_1.celMethod("split", STRING, [STRING], LIST_STRING, split),
+    func_js_1.celMethod("split", STRING, [STRING, INT], LIST_STRING, split),
+    func_js_1.celMethod("substring", STRING, [INT], STRING, substring),
+    func_js_1.celMethod("substring", STRING, [INT, INT], STRING, substring),
+    func_js_1.celMethod("trim", STRING, [], STRING, trim),
+    func_js_1.celMethod("join", LIST_STRING, [], STRING, join),
+    func_js_1.celMethod("join", LIST_STRING, [STRING], STRING, join),
+    func_js_1.celMethod("format", STRING, [LIST_DYN], STRING, format),
   ];
 });
-
-export { aM };
+export { require_strings };

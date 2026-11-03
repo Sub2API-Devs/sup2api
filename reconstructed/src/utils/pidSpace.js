@@ -8,19 +8,19 @@
  * pieces: chunk-g4mgfvqt.js (5)
  * attribution: placement 5
  */
-import { hostname, hostname as hostname_2 } from "os";
-import { readFile, readFile as readFile_2, readlink } from "fs/promises";
+import { hostname } from "os";
+import { readFile, readlink } from "fs/promises";
 import { readlinkSync } from "fs";
-import { ge } from "./identity.js";
+import { identity } from "./identity.js";
 import { getPlatform } from "./platform.js";
 
 //@ chunk-g4mgfvqt.js:1454-1712 placement
-async function computePidDomain(n) {
-  if (n === "windows") return `linux:${hostname().toLowerCase()}`;
-  if (n !== "linux" && n !== "wsl") return "linux";
+async function computePidDomain(platform) {
+  if (platform === "windows") return `linux:${hostname().toLowerCase()}`;
+  if (platform !== "linux" && platform !== "wsl") return "linux";
   let [t, e] = await Promise.all([
     readFile("/etc/machine-id", "utf8").then(
-      (r) => r.trim(),
+      (file) => file.trim(),
       () => "",
     ),
     readlink("/proc/self/ns/pid").catch(() => ""),
@@ -28,14 +28,14 @@ async function computePidDomain(n) {
   return `linux:${t}:${e}`;
 }
 //@ chunk-g4mgfvqt.js:1776-1833 placement
-class i {
+class PidSpaceInfo {
   pidSpace = null;
-  pidDomain = void 0;
+  pidDomain = undefined;
   uidsCollapse = null;
 }
 //@ chunk-g4mgfvqt.js:1833-1877 placement
-var processIdentity = ge(new i(), (n) => {
-  n.pidDomain = void 0;
+var processIdentity = identity(new PidSpaceInfo(), (n) => {
+  n.pidDomain = undefined;
 });
 //@ chunk-g4mgfvqt.js:1877-2024 placement
 function ownPidSpace() {
@@ -46,18 +46,16 @@ function ownPidSpace() {
     } catch {
       n = "";
     }
-    processIdentity.pidSpace = `${hostname_2()}${n === "" ? "" : "#" + n}`;
+    processIdentity.pidSpace = `${hostname()}${n === "" ? "" : "#" + n}`;
   }
   return processIdentity.pidSpace;
 }
 //@ chunk-g4mgfvqt.js:2024-2138 placement
 function ownPidDomain() {
-  return (
-    (processIdentity.pidDomain ??= (async () => computePidDomain(getPlatform()))().catch((n) => {
-      throw ((processIdentity.pidDomain = void 0), n);
-    })),
-    processIdentity.pidDomain
-  );
+  processIdentity.pidDomain ??= (async () => computePidDomain(getPlatform()))().catch((error) => {
+    processIdentity.pidDomain = undefined;
+    throw error;
+  });
+  return processIdentity.pidDomain;
 }
-
 export { ownPidSpace, ownPidDomain, processIdentity };

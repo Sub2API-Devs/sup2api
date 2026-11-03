@@ -9,198 +9,223 @@
  * attribution: placement 16
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, o, U, M, A } from "../../../vendor/zod/v4/classic/schemas.js";
+import { u, string, _enum, M, array } from "../../../vendor/zod/v4/classic/schemas.js";
 import { HEARTHBOT } from "../mcp/ccrMetaMcp.js";
-import { Zl } from "../mcp/cliOwnedClients.js";
+import { isCliOwnedConfig } from "../mcp/cliOwnedClients.js";
 import { isCcrUrlWithoutCredentials } from "../mcp/ccrMcpUrls.js";
 
+//@ chunk-aepeg2w5.js:597533-597971 placement
 /**
  * 提取消息的中继回合标记（Slack 人工、项目用户、邮件发件人等）。
  */
-//@ chunk-aepeg2w5.js:597533-597971 placement
-function relayTurnFlags(e) {
+function relayTurnFlags(message) {
   let n = {};
-  if (e.verifiedSlackHumanTurn === !0) n.verifiedSlackHumanTurn = !0;
-  if (e.projectsUserTurn === !0) n.projectsUserTurn = !0;
-  if (e.emailSenderTurn !== void 0) n.emailSenderTurn = e.emailSenderTurn;
-  if (e.hearthRelayMessageIds !== void 0) n.hearthRelayMessageIds = e.hearthRelayMessageIds;
-  if (e.hearthRelayRows !== void 0) n.hearthRelayRows = e.hearthRelayRows;
-  if (e.hearthRelayThreadTs !== void 0) n.hearthRelayThreadTs = e.hearthRelayThreadTs;
+  if (message.verifiedSlackHumanTurn === true) n.verifiedSlackHumanTurn = true;
+  if (message.projectsUserTurn === true) n.projectsUserTurn = true;
+  if (message.emailSenderTurn !== undefined) n.emailSenderTurn = message.emailSenderTurn;
+  if (message.hearthRelayMessageIds !== undefined) n.hearthRelayMessageIds = message.hearthRelayMessageIds;
+  if (message.hearthRelayRows !== undefined) n.hearthRelayRows = message.hearthRelayRows;
+  if (message.hearthRelayThreadTs !== undefined) n.hearthRelayThreadTs = message.hearthRelayThreadTs;
   return n;
 }
 //@ chunk-aepeg2w5.js:597971-598023 placement
-var Jvi = new Set(["projects-relay", "session-inbox"]);
+/**
+ * 属于中继来源的种类名（projects-relay、session-inbox）。
+ */
+var RELAY_SOURCE_KINDS = new Set(["projects-relay", "session-inbox"]);
 //@ chunk-aepeg2w5.js:598023-598121 placement
-function qno(e, n, r) {
+/**
+ * 给指定 uuid 的用户消息打上中继回合标记。
+ */
+function attachRelayTurnFlags(e, n, r) {
   let s = relayTurnFlags(r);
   for (let h of e) if (h.type === "user" && h.uuid === n) Object.assign(h, s);
 }
 //@ chunk-aepeg2w5.js:598121-598192 placement
-var ANTHROPIC_HEARTH_ROWS = "anthropic/hearth.rows",
-  F6e = /^cmsg_[A-Za-z0-9_-]{1,128}$/,
-  fC = 8;
+/**
+ * 中继消息 id 的格式与批量上限。
+ */
+var ANTHROPIC_HEARTH_ROWS = "anthropic/hearth.rows";
+var RELAY_MESSAGE_ID_REGEX = /^cmsg_[A-Za-z0-9_-]{1,128}$/;
+var MAX_RELAY_MESSAGE_IDS = 8;
+//@ chunk-aepeg2w5.js:598192-598406 placement
 /**
  * 解析 relay_message_ids。
  */
-//@ chunk-aepeg2w5.js:598192-598406 placement
 function parseRelayMessageIds(e) {
-  let relay_message_ids = e.relay_message_ids;
-  if (!Array.isArray(relay_message_ids) || relay_message_ids.length === 0 || relay_message_ids.length > fC)
+  let relayMessageIds = e.relay_message_ids;
+  if (
+    !Array.isArray(relayMessageIds) ||
+    relayMessageIds.length === 0 ||
+    relayMessageIds.length > MAX_RELAY_MESSAGE_IDS
+  )
     return;
-  let r = [],
-    s = new Set();
-  for (let h of relay_message_ids) {
-    if (typeof h !== "string" || !F6e.test(h) || s.has(h)) return;
-    (s.add(h), r.push(h));
+  let r = [];
+  let s = new Set();
+  for (let relayMessageId of relayMessageIds) {
+    if (
+      typeof relayMessageId !== "string" ||
+      !RELAY_MESSAGE_ID_REGEX.test(relayMessageId) ||
+      s.has(relayMessageId)
+    )
+      return;
+    s.add(relayMessageId);
+    r.push(relayMessageId);
   }
   return r;
 }
+//@ chunk-aepeg2w5.js:598406-598811 placement
 /**
  * 中继消息行 schema（作者类型、角色等）。
  */
-//@ chunk-aepeg2w5.js:598406-598811 placement
 var RelayRowSchema = DoctorLazy(() =>
   u({
-    id: o().regex(F6e),
-    in_reply_to: o().regex(F6e).optional(),
-    attached_by: U(["server"])
-      .optional()
-      .catch(void 0),
-    author_kind: U(["owner", "member", "agent", "system"]),
-    author_id: o(),
+    id: string().regex(RELAY_MESSAGE_ID_REGEX),
+    in_reply_to: string().regex(RELAY_MESSAGE_ID_REGEX).optional(),
+    attached_by: _enum(["server"]).optional().catch(undefined),
+    author_kind: _enum(["owner", "member", "agent", "system"]),
+    author_id: string(),
     author_live: M().optional(),
-    author_role: o().optional(),
-    where: U(["timeline", "thread"]),
-    thread_ts: o().optional(),
-    written_at: o(),
-    edited_at: o().optional(),
+    author_role: string().optional(),
+    where: _enum(["timeline", "thread"]),
+    thread_ts: string().optional(),
+    written_at: string(),
+    edited_at: string().optional(),
     within_window: M().optional(),
     truncated: M().optional(),
-    text: o(),
+    text: string(),
   }),
 );
+//@ chunk-aepeg2w5.js:598811-599005 placement
 /**
  * 中继作者是否为在场的人（owner/member）。
  */
-//@ chunk-aepeg2w5.js:598811-599005 placement
 function isHumanRelayAuthor(e) {
-  if (e.author_role === "former_member") return !1;
+  if (e.author_role === "former_member") return false;
   switch (e.author_kind) {
     case "owner":
-      return e.author_live !== !1;
+      return e.author_live !== false;
     case "member":
-      return e.author_live === !0;
+      return e.author_live === true;
     case "agent":
     case "system":
-      return !1;
+      return false;
   }
 }
 //@ chunk-aepeg2w5.js:599005-599043 placement
-var uW = DoctorLazy(() => A(RelayRowSchema()).min(1).max(fC));
+var relayRowsSchema = DoctorLazy(() => array(RelayRowSchema()).min(1).max(MAX_RELAY_MESSAGE_IDS));
+//@ chunk-aepeg2w5.js:599043-599221 placement
 /**
  * 解析消息的 relay_rows：id 必须在给定集合内且不重复，否则返回 undefined。
  */
-//@ chunk-aepeg2w5.js:599043-599221 placement
-function parseRelayRows(e, n) {
-  let safeParse = uW().safeParse(e.relay_rows);
-  if (!safeParse.success) return;
-  let s = new Set(n),
-    h = new Set();
-  for (let { id: id } of safeParse.data) {
+function parseRelayRows(e, relayMessageIds) {
+  let r = relayRowsSchema().safeParse(e.relay_rows);
+  if (!r.success) return;
+  let s = new Set(relayMessageIds);
+  let h = new Set();
+  for (let { id } of r.data) {
     if (!s.has(id) || h.has(id)) return;
     h.add(id);
   }
-  return safeParse.data;
+  return r.data;
 }
 //@ chunk-aepeg2w5.js:599221-599310 placement
-function Eis(e) {
-  let relay_thread_ts = e.relay_thread_ts;
-  return typeof relay_thread_ts === "string" && F6e.test(relay_thread_ts) ? relay_thread_ts : void 0;
+/**
+ * 取合法的中继线程时间戳，非法返回 undefined。
+ */
+function relayThreadTsOf(e) {
+  let relayThreadTs = e.relay_thread_ts;
+  return typeof relayThreadTs === "string" && RELAY_MESSAGE_ID_REGEX.test(relayThreadTs)
+    ? relayThreadTs
+    : undefined;
 }
 //@ chunk-aepeg2w5.js:599310-599346 placement
-var lW = '<relay from="coordinator" ';
+var COORDINATOR_RELAY_PREFIX = '<relay from="coordinator" ';
+//@ chunk-aepeg2w5.js:599346-599519 placement
 /**
  * 是否为中继注入的提示。
  */
-//@ chunk-aepeg2w5.js:599346-599519 placement
 function isRelayPrompt(e) {
-  let n = e.message?.content;
+  let content = e.message?.content;
   return (
-    e.isSynthetic === !0 &&
-    e.shouldQuery !== !1 &&
-    e.relay_message_ids === void 0 &&
-    Eis(e) !== void 0 &&
-    typeof n === "string" &&
-    n.startsWith(lW)
+    e.isSynthetic === true &&
+    e.shouldQuery !== false &&
+    e.relay_message_ids === undefined &&
+    relayThreadTsOf(e) !== undefined &&
+    typeof content === "string" &&
+    content.startsWith(COORDINATOR_RELAY_PREFIX)
   );
 }
+//@ chunk-aepeg2w5.js:599519-599645 placement
 /**
  * 为消息设置 Hearth 中继元数据（消息 id、行、线程 ts）。
  */
-//@ chunk-aepeg2w5.js:599519-599645 placement
-function setHearthRelayMetadata(e, n, { messageIds: messageIds, rows: rows, threadTs: threadTs }) {
-  qno(e, n, { hearthRelayMessageIds: messageIds, hearthRelayRows: rows, hearthRelayThreadTs: threadTs });
+function setHearthRelayMetadata(e, turnId, { messageIds, rows, threadTs }) {
+  attachRelayTurnFlags(e, turnId, {
+    hearthRelayMessageIds: messageIds,
+    hearthRelayRows: rows,
+    hearthRelayThreadTs: threadTs,
+  });
 }
+//@ chunk-aepeg2w5.js:599645-599792 placement
 /**
  * 判断 MCP 服务器是否为 Hearthbot 中继（动态作用域、不带凭据的 CCR URL）。
  */
-//@ chunk-aepeg2w5.js:599645-599792 placement
 function isHearthbotRelayServer(e) {
   return (
     e.name === HEARTHBOT &&
     e.config.scope === "dynamic" &&
-    !Zl(e.config) &&
+    !isCliOwnedConfig(e.config) &&
     "url" in e.config &&
     typeof e.config.url === "string" &&
     isCcrUrlWithoutCredentials(e.config.url)
   );
 }
+//@ chunk-aepeg2w5.js:599792-599832 placement
 /**
  * 是否有中继来源。
  */
-//@ chunk-aepeg2w5.js:599792-599832 placement
 function hasRelaySource(e) {
   return (e ?? []).some(isHearthbotRelayServer);
 }
+//@ chunk-aepeg2w5.js:599832-600042 placement
 /**
  * 中继来源类型名（mcp_send_message、slack、teams、hearth 等）。
  */
-//@ chunk-aepeg2w5.js:599832-600042 placement
-var RELAY_SOURCE_KINDS = "mcp_send_message",
-  SLACK_BOT = "slack_bot",
-  HEARTH_AGENT = "hearth_agent",
-  SLACK_HUMAN = "slack_human",
-  TEAMS_HUMAN = "teams_human",
-  OWNER_RELAY = "owner_relay",
-  HEARTH_HUMAN = "hearth_human",
-  AMB_HUMAN = "amb_human",
-  DISCORD_HUMAN = "discord_human",
-  SLACK_OWNER_PING = "slack_owner_ping",
-  WEB_HUMAN = "web_human";
-
+var RELAY_SOURCE_KINDS_2 = "mcp_send_message";
+var SLACK_BOT = "slack_bot";
+var HEARTH_AGENT = "hearth_agent";
+var SLACK_HUMAN = "slack_human";
+var TEAMS_HUMAN = "teams_human";
+var OWNER_RELAY = "owner_relay";
+var HEARTH_HUMAN = "hearth_human";
+var AMB_HUMAN = "amb_human";
+var DISCORD_HUMAN = "discord_human";
+var SLACK_OWNER_PING = "slack_owner_ping";
+var WEB_HUMAN = "web_human";
 export {
   isHearthbotRelayServer,
   HEARTH_AGENT,
   setHearthRelayMetadata,
   relayTurnFlags,
-  RELAY_SOURCE_KINDS,
+  RELAY_SOURCE_KINDS_2,
   isHumanRelayAuthor,
   SLACK_BOT,
   RelayRowSchema,
   hasRelaySource,
   OWNER_RELAY,
   HEARTH_HUMAN,
-  qno,
+  attachRelayTurnFlags,
   WEB_HUMAN,
-  Jvi,
+  RELAY_SOURCE_KINDS,
   SLACK_HUMAN,
   TEAMS_HUMAN,
   AMB_HUMAN,
   DISCORD_HUMAN,
   SLACK_OWNER_PING,
-  F6e,
+  RELAY_MESSAGE_ID_REGEX,
   ANTHROPIC_HEARTH_ROWS,
-  Eis,
+  relayThreadTsOf,
   parseRelayMessageIds,
   isRelayPrompt,
   parseRelayRows,

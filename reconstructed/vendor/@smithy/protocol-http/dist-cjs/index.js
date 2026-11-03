@@ -6,69 +6,74 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { W1e } from "../../types/dist-cjs/index.js";
+import { require_types } from "../../types/dist-cjs/index.js";
 
 //@ chunk-hq88884p.js:2578-4952 cjs-fingerprint
-var Kg = x(function (Ir) {
-  var Or = W1e(),
-    Pr = (e) => ({
-      setHttpHandler(r) {
-        e.httpHandler = r;
-      },
-      httpHandler() {
-        return e.httpHandler;
-      },
-      updateHttpClientConfig(r, n) {
-        e.httpHandler?.updateHttpClientConfig(r, n);
-      },
-      httpHandlerConfigs() {
-        return e.httpHandler.httpHandlerConfigs();
-      },
-    }),
-    kr = (e) => ({ httpHandler: e.httpHandler() });
-  class et {
+var require_protocol_http = x(function (cjsExports) {
+  var types = require_types();
+  var getHttpHandlerExtensionConfiguration = (runtimeConfig) => ({
+    setHttpHandler(handler) {
+      runtimeConfig.httpHandler = handler;
+    },
+    httpHandler() {
+      return runtimeConfig.httpHandler;
+    },
+    updateHttpClientConfig(key, value) {
+      runtimeConfig.httpHandler?.updateHttpClientConfig(key, value);
+    },
+    httpHandlerConfigs() {
+      return runtimeConfig.httpHandler.httpHandlerConfigs();
+    },
+  });
+  var resolveHttpHandlerRuntimeConfig = (httpHandlerExtensionConfiguration) => ({
+    httpHandler: httpHandlerExtensionConfiguration.httpHandler(),
+  });
+  class Field {
     name;
     kind;
     values;
-    constructor({ name: e, kind: r = Or.FieldPosition.HEADER, values: n = [] }) {
-      ((this.name = e), (this.kind = r), (this.values = n));
+    constructor({ name, kind = types.FieldPosition.HEADER, values = [] }) {
+      this.name = name;
+      this.kind = kind;
+      this.values = values;
     }
-    add(e) {
-      this.values.push(e);
+    add(value) {
+      this.values.push(value);
     }
-    set(e) {
-      this.values = e;
+    set(values) {
+      this.values = values;
     }
-    remove(e) {
-      this.values = this.values.filter((r) => r !== e);
+    remove(value) {
+      this.values = this.values.filter((v) => v !== value);
     }
     toString() {
-      return this.values.map((e) => (e.includes(",") || e.includes(" ") ? `"${e}"` : e)).join(", ");
+      return this.values.map((v) => (v.includes(",") || v.includes(" ") ? `"${v}"` : v)).join(", ");
     }
     get() {
       return this.values;
     }
   }
-  class tt {
+  class Fields {
     entries = {};
     encoding;
-    constructor({ fields: e = [], encoding: r = "utf-8" }) {
-      (e.forEach(this.setField.bind(this)), (this.encoding = r));
+    constructor({ fields = [], encoding = "utf-8" }) {
+      fields.forEach(this.setField.bind(this));
+      this.encoding = encoding;
     }
-    setField(e) {
-      this.entries[e.name.toLowerCase()] = e;
+    setField(field) {
+      this.entries[field.name.toLowerCase()] = field;
     }
-    getField(e) {
-      return this.entries[e.toLowerCase()];
+    getField(name) {
+      return this.entries[name.toLowerCase()];
     }
-    removeField(e) {
-      delete this.entries[e.toLowerCase()];
+    removeField(name) {
+      delete this.entries[name.toLowerCase()];
     }
-    getByType(e) {
-      return Object.values(this.entries).filter((r) => r.kind === e);
+    getByType(kind) {
+      return Object.values(this.entries).filter((field) => field.kind === kind);
     }
   }
-  class ue {
+  class HttpRequest {
     method;
     protocol;
     hostname;
@@ -80,77 +85,84 @@ var Kg = x(function (Ir) {
     password;
     fragment;
     body;
-    constructor(e) {
-      ((this.method = e.method || "GET"),
-        (this.hostname = e.hostname || "localhost"),
-        (this.port = e.port),
-        (this.query = e.query || {}),
-        (this.headers = e.headers || {}),
-        (this.body = e.body),
-        (this.protocol = e.protocol
-          ? e.protocol.slice(-1) !== ":"
-            ? `${e.protocol}:`
-            : e.protocol
-          : "https:"),
-        (this.path = e.path ? (e.path.charAt(0) !== "/" ? `/${e.path}` : e.path) : "/"),
-        (this.username = e.username),
-        (this.password = e.password),
-        (this.fragment = e.fragment));
+    constructor(options) {
+      this.method = options.method || "GET";
+      this.hostname = options.hostname || "localhost";
+      this.port = options.port;
+      this.query = options.query || {};
+      this.headers = options.headers || {};
+      this.body = options.body;
+      this.protocol = options.protocol
+        ? options.protocol.slice(-1) !== ":"
+          ? `${options.protocol}:`
+          : options.protocol
+        : "https:";
+      this.path = options.path ? (options.path.charAt(0) !== "/" ? `/${options.path}` : options.path) : "/";
+      this.username = options.username;
+      this.password = options.password;
+      this.fragment = options.fragment;
     }
-    static clone(e) {
-      let r = new ue({ ...e, headers: { ...e.headers } });
-      if (r.query) r.query = Dr(r.query);
-      return r;
+    static clone(request) {
+      let cloned = new HttpRequest({
+        ...request,
+        headers: {
+          ...request.headers,
+        },
+      });
+      if (cloned.query) cloned.query = cloneQuery(cloned.query);
+      return cloned;
     }
-    static isInstance(e) {
-      if (!e) return !1;
-      let r = e;
+    static isInstance(request) {
+      if (!request) return false;
+      let req = request;
       return (
-        "method" in r &&
-        "protocol" in r &&
-        "hostname" in r &&
-        "path" in r &&
-        typeof r.query === "object" &&
-        typeof r.headers === "object"
+        "method" in req &&
+        "protocol" in req &&
+        "hostname" in req &&
+        "path" in req &&
+        typeof req.query === "object" &&
+        typeof req.headers === "object"
       );
     }
     clone() {
-      return ue.clone(this);
+      return HttpRequest.clone(this);
     }
   }
-  function Dr(e) {
-    return Object.keys(e).reduce((r, n) => {
-      let o = e[n];
-      return { ...r, [n]: Array.isArray(o) ? [...o] : o };
+  function cloneQuery(query) {
+    return Object.keys(query).reduce((carry, paramName) => {
+      let param = query[paramName];
+      return {
+        ...carry,
+        [paramName]: Array.isArray(param) ? [...param] : param,
+      };
     }, {});
   }
-  class nt {
+  class HttpResponse {
     statusCode;
     reason;
     headers;
     body;
-    constructor(e) {
-      ((this.statusCode = e.statusCode),
-        (this.reason = e.reason),
-        (this.headers = e.headers || {}),
-        (this.body = e.body));
+    constructor(options) {
+      this.statusCode = options.statusCode;
+      this.reason = options.reason;
+      this.headers = options.headers || {};
+      this.body = options.body;
     }
-    static isInstance(e) {
-      if (!e) return !1;
-      let r = e;
-      return typeof r.statusCode === "number" && typeof r.headers === "object";
+    static isInstance(response) {
+      if (!response) return false;
+      let resp = response;
+      return typeof resp.statusCode === "number" && typeof resp.headers === "object";
     }
   }
-  function Hr(e) {
-    return /^[a-z0-9][a-z0-9\.\-]*[a-z0-9]$/.test(e);
+  function isValidHostname(hostname) {
+    return /^[a-z0-9][a-z0-9\.\-]*[a-z0-9]$/.test(hostname);
   }
-  Ir.Field = et;
-  Ir.Fields = tt;
-  Ir.HttpRequest = ue;
-  Ir.HttpResponse = nt;
-  Ir.getHttpHandlerExtensionConfiguration = Pr;
-  Ir.isValidHostname = Hr;
-  Ir.resolveHttpHandlerRuntimeConfig = kr;
+  cjsExports.Field = Field;
+  cjsExports.Fields = Fields;
+  cjsExports.HttpRequest = HttpRequest;
+  cjsExports.HttpResponse = HttpResponse;
+  cjsExports.getHttpHandlerExtensionConfiguration = getHttpHandlerExtensionConfiguration;
+  cjsExports.isValidHostname = isValidHostname;
+  cjsExports.resolveHttpHandlerRuntimeConfig = resolveHttpHandlerRuntimeConfig;
 });
-
-export { Kg };
+export { require_protocol_http };

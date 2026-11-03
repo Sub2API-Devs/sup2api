@@ -19,39 +19,38 @@ import {
   findSeedMarketplaceLocation,
   loadKnownMarketplacesSafe,
   validateReservedMarketplaceEntry,
-  Dse,
+  isImpersonatingOfficialMarketplace,
 } from "./marketplaceManager.js";
 import { omitPluginDirectoryEntries } from "./officialMarketplaceNames.js";
 
 //@ chunk-qna1q0cq.js:661-878 fingerprint = readZipCacheKnownMarketplaces (1)
 async function readZipCacheKnownMarketplaces() {
   try {
-    let content = await readFile(getZipCacheKnownMarketplacesPath(), "utf-8"),
-      parsed = KnownMarketplacesFileSchema().safeParse(jsonParse(content));
-    if (!parsed.success)
-      return (
-        logForDebugging(`Invalid known_marketplaces.json in zip cache: ${parsed.error.message}`, {
-          level: "error",
-        }),
-        {}
-      );
+    let content = await readFile(getZipCacheKnownMarketplacesPath(), "utf-8");
+    let parsed = KnownMarketplacesFileSchema().safeParse(jsonParse(content));
+    if (!parsed.success) {
+      logForDebugging(`Invalid known_marketplaces.json in zip cache: ${parsed.error.message}`, {
+        level: "error",
+      });
+      return {};
+    }
     return parsed.data;
   } catch {
     return {};
   }
 }
 //@ chunk-qna1q0cq.js:878-927 layout
-async function S(n) {
-  await writeFileEnsuringDir(getZipCacheKnownMarketplacesPath(), jsonStringify(n, null, 2));
+async function writeZipCacheKnownMarketplaces(data) {
+  await writeFileEnsuringDir(getZipCacheKnownMarketplacesPath(), jsonStringify(data, null, 2));
 }
 //@ chunk-qna1q0cq.js:927-1038 layout
-async function syncMarketplaceJsonToZipCache(n, e) {
-  let s = getZipCacheDirOverride();
-  if (!s) return;
-  let r = await readMarketplaceJsonContent(e);
-  if (r !== null) {
-    let o = findSeedMarketplaceLocation(n);
-    await writeFileEnsuringDir(join(s, o), r);
+async function syncMarketplaceJsonToZipCache(marketplaceName, installLocation) {
+  let zipCachePath = getZipCacheDirOverride();
+  if (!zipCachePath) return;
+  let content = await readMarketplaceJsonContent(installLocation);
+  if (content !== null) {
+    let relPath = findSeedMarketplaceLocation(marketplaceName);
+    await writeFileEnsuringDir(join(zipCachePath, relPath), content);
   }
 }
 //@ chunk-qna1q0cq.js:1038-1197 fingerprint = readMarketplaceJsonContent (1)
@@ -63,28 +62,29 @@ async function readMarketplaceJsonContent(dir) {
     } catch {}
   return null;
 }
+//@ chunk-qna1q0cq.js:1197-1505 fingerprint = syncMarketplacesToZipCache (0.908)
 /**
  * zip 缓存模式下把已知市场的 marketplace.json 同步到 zip 缓存目录。
  */
-//@ chunk-qna1q0cq.js:1197-1505 fingerprint = syncMarketplacesToZipCache (0.908)
 async function syncMarketplacesToZipCache(n) {
-  let e = await loadKnownMarketplacesSafe(n),
-    filtered = Object.entries(omitPluginDirectoryEntries(e)).filter(
-      ([i, c]) => validateReservedMarketplaceEntry(i, c) === null && !Dse(i, c),
-    );
-  for (let [i, c] of filtered) {
+  let knownMarketplaces = await loadKnownMarketplacesSafe(n);
+  let filtered = Object.entries(omitPluginDirectoryEntries(knownMarketplaces)).filter(
+    ([key, value]) =>
+      validateReservedMarketplaceEntry(key, value) === null &&
+      !isImpersonatingOfficialMarketplace(key, value),
+  );
+  for (let [marketplaceName, c] of filtered) {
     if (!c.installLocation) continue;
     try {
-      await syncMarketplaceJsonToZipCache(i, c.installLocation);
+      await syncMarketplaceJsonToZipCache(marketplaceName, c.installLocation);
     } catch (error) {
-      logForDebugging(`Failed to save marketplace JSON for ${i}: ${error}`);
+      logForDebugging(`Failed to save marketplace JSON for ${marketplaceName}: ${error}`);
     }
   }
   let mergedKnownMarketplaces = {
     ...(await readZipCacheKnownMarketplaces()),
     ...Object.fromEntries(filtered),
   };
-  await S(mergedKnownMarketplaces);
+  await writeZipCacheKnownMarketplaces(mergedKnownMarketplaces);
 }
-
 export { syncMarketplacesToZipCache };

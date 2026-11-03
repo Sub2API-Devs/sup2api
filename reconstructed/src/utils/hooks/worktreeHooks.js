@@ -13,15 +13,14 @@ import { getHooksForEvent } from "../hooks.js";
 
 //@ chunk-s61vbvea.js:429611-429663 placement
 function hasWorktreeCreateHook() {
-  return ib("WorktreeCreate").length > 0;
+  return hooksForEventFiltered("WorktreeCreate").length > 0;
 }
 //@ chunk-s61vbvea.js:429663-429715 placement
 function hasWorktreeRemoveHook() {
-  return ib("WorktreeRemove").length > 0;
+  return hooksForEventFiltered("WorktreeRemove").length > 0;
 }
 //@ chunk-s61vbvea.js:429715-429755 placement
-function ib(e) {
+function hooksForEventFiltered(e) {
   return filterHooksByManagedHold([...getHooksForEvent(e)], e);
 }
-
 export { hasWorktreeRemoveHook, hasWorktreeCreateHook };

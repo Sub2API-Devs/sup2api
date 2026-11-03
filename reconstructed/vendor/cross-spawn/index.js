@@ -6,29 +6,30 @@
  * attribution: cjs-fingerprint 1
  */
 import { x, importMetaRequire } from "../../runtime/bun-runtime.js";
-import { Lt } from "./lib/parse.js";
-import { Dt } from "./lib/enoent.js";
+import { require_parse } from "./lib/parse.js";
+import { require_enoent } from "./lib/enoent.js";
 
 //@ chunk-m4p5zn6n.js:6175-6576 cjs-fingerprint
-var WSr = x(function (Ei, F) {
-  var te = importMetaRequire("child_process"),
-    be = Lt(),
-    L = Dt();
-  function Ut(e, n, r) {
-    let o = be(e, n, r),
-      child = te.spawn(o.command, o.args, o.options);
-    return (L.hookChildProcess(child, o), child);
+var require_cross_spawn = x(function (cjsExports, cjsModule) {
+  var cp = importMetaRequire("child_process");
+  var parse = require_parse();
+  var enoent = require_enoent();
+  function spawn(command, args, options) {
+    let parsed = parse(command, args, options);
+    let spawned = cp.spawn(parsed.command, parsed.args, parsed.options);
+    enoent.hookChildProcess(spawned, parsed);
+    return spawned;
   }
-  function xr(e, n, r) {
-    let o = be(e, n, r),
-      spawnSync = te.spawnSync(o.command, o.args, o.options);
-    return ((spawnSync.error = spawnSync.error || L.verifyENOENTSync(spawnSync.status, o)), spawnSync);
+  function spawnSync(command, args, options) {
+    let parsed = parse(command, args, options);
+    let result = cp.spawnSync(parsed.command, parsed.args, parsed.options);
+    result.error = result.error || enoent.verifyENOENTSync(result.status, parsed);
+    return result;
   }
-  F.exports = Ut;
-  F.exports.spawn = Ut;
-  F.exports.sync = xr;
-  F.exports._parse = be;
-  F.exports._enoent = L;
+  cjsModule.exports = spawn;
+  cjsModule.exports.spawn = spawn;
+  cjsModule.exports.sync = spawnSync;
+  cjsModule.exports._parse = parse;
+  cjsModule.exports._enoent = enoent;
 });
-
-export { WSr };
+export { require_cross_spawn };

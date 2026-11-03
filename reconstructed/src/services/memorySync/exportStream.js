@@ -11,40 +11,53 @@
 import { StringDecoder } from "string_decoder";
 import { yieldToEventLoop } from "../../native-ts/file-index/index.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { kt, o, T, E } from "../../../vendor/zod/v4/classic/schemas.js";
-import { WEn } from "../orgMemory/storeErrors.js";
+import { looseObject, string, literal, E } from "../../../vendor/zod/v4/classic/schemas.js";
+import { memoryIdSchema } from "../orgMemory/storeErrors.js";
 import { withTimeout } from "../../utils/sleep.js";
 import { jsonParseRaw } from "../../utils/slowOperations.js";
 
 //@ chunk-s61vbvea.js:91861-91872 placement
-var Rv = 200;
+/**
+ * 执行器定期让出事件循环的时间预算（200 毫秒）。
+ */
+var DEFAULT_YIELD_BUDGET_MS = 200;
+//@ chunk-s61vbvea.js:91872-92370 placement
 /**
  * 创建并发受限且定期让出事件循环的执行器：runBounded 限制并发数，maybeYield 超过时间预算时让出。
  */
-//@ chunk-s61vbvea.js:91872-92370 placement
 function createYieldingRunner(e = {}) {
-  let n = e.yieldBudgetMs ?? Rv,
-    maxConcurrent = e.maxConcurrent,
-    startTime = performance.now();
+  let yieldBudgetMs = e.yieldBudgetMs ?? DEFAULT_YIELD_BUDGET_MS;
+  let maxConcurrent = e.maxConcurrent;
+  let startTime = performance.now();
   async function h() {
-    if (performance.now() - startTime <= n) return;
-    (await yieldToEventLoop(), (startTime = performance.now()));
+    if (performance.now() - startTime <= yieldBudgetMs) return;
+    await yieldToEventLoop();
+    startTime = performance.now();
   }
-  let y = 0,
-    S = [],
-    w = 0;
+  let y = 0;
+  let S = [];
+  let w = 0;
   function R() {
-    if (maxConcurrent === void 0 || y < maxConcurrent) return (y++, Promise.resolve());
-    return new Promise((j) => {
+    if (maxConcurrent === undefined || y < maxConcurrent) {
+      y++;
+      return Promise.resolve();
+    }
+    return new Promise((resolve) => {
       S.push(() => {
-        (y++, j());
+        y++;
+        resolve();
       });
     });
   }
   function x() {
-    if ((y--, w >= S.length)) return;
+    y--;
+    if (w >= S.length) return;
     let j = S[w];
-    if ((w++, w === S.length)) ((S.length = 0), (w = 0));
+    w++;
+    if (w === S.length) {
+      S.length = 0;
+      w = 0;
+    }
     j();
   }
   async function P(j) {
@@ -55,24 +68,39 @@ function createYieldingRunner(e = {}) {
     } finally {
       x();
     }
-    return (await h(), G);
+    await h();
+    return G;
   }
-  return { maybeYield: h, runBounded: P };
+  return {
+    maybeYield: h,
+    runBounded: P,
+  };
 }
 //@ chunk-s61vbvea.js:92370-92634 placement
-var EXPORT_IDLE_TIMEOUT_MS = 60000,
-  EXPORT_TOTAL_TIMEOUT_MS = 300000,
-  exportLineTypeSchema = DoctorLazy(() => kt({ type: o() })),
-  exportMemoryLineSchema = DoctorLazy(() =>
-    kt({ type: T("memory"), id: WEn(), path: o(), content: o(), content_sha256: o(), updated_at: o() }),
-  ),
-  exportCompleteLineSchema = DoctorLazy(() =>
-    kt({
-      type: T("complete"),
-      memory_count: E().int().nonnegative(),
-      error_count: E().int().nonnegative().optional(),
-    }),
-  );
+var EXPORT_IDLE_TIMEOUT_MS = 60000;
+var EXPORT_TOTAL_TIMEOUT_MS = 300000;
+var exportLineTypeSchema = DoctorLazy(() =>
+  looseObject({
+    type: string(),
+  }),
+);
+var exportMemoryLineSchema = DoctorLazy(() =>
+  looseObject({
+    type: literal("memory"),
+    id: memoryIdSchema(),
+    path: string(),
+    content: string(),
+    content_sha256: string(),
+    updated_at: string(),
+  }),
+);
+var exportCompleteLineSchema = DoctorLazy(() =>
+  looseObject({
+    type: literal("complete"),
+    memory_count: E().int().nonnegative(),
+    error_count: E().int().nonnegative().optional(),
+  }),
+);
 //@ chunk-s61vbvea.js:92634-92742 placement
 class LineTooLongError extends Error {
   constructor(e) {
@@ -87,24 +115,30 @@ class TooManyLinesError extends Error {
     this.name = "TooManyLinesError";
   }
 }
+//@ chunk-s61vbvea.js:92858-93629 placement
 /**
  * 逐行读取记忆导出 NDJSON 流，带总时限与停滞检测
  */
-//@ chunk-s61vbvea.js:92858-93629 placement
-async function* readExportStreamLines(e, n, r = EXPORT_IDLE_TIMEOUT_MS, s, h = EXPORT_TOTAL_TIMEOUT_MS) {
-  let y = new StringDecoder("utf8"),
-    S = "",
-    w = 0,
-    R = Date.now() + h,
-    x = e.stream[Symbol.asyncIterator]();
+async function* readExportStreamLines(
+  source,
+  maxLineLength,
+  stallTimeoutMs = EXPORT_IDLE_TIMEOUT_MS,
+  s,
+  deadlineMs = EXPORT_TOTAL_TIMEOUT_MS,
+) {
+  let y = new StringDecoder("utf8");
+  let S = "";
+  let w = 0;
+  let R = Date.now() + deadlineMs;
+  let x = source.stream[Symbol.asyncIterator]();
   try {
-    while (!0) {
+    while (true) {
       let P = R - Date.now();
       if (P <= 0) throw Error("export stream exceeded its overall deadline");
       let j = await withTimeout(
         x.next(),
-        Math.min(r, P),
-        P < r ? "export stream exceeded its overall deadline" : "export stream stalled",
+        Math.min(stallTimeoutMs, P),
+        P < stallTimeoutMs ? "export stream exceeded its overall deadline" : "export stream stalled",
       );
       if (j.done) break;
       let G = j.value;
@@ -115,45 +149,51 @@ async function* readExportStreamLines(e, n, r = EXPORT_IDLE_TIMEOUT_MS, s, h = E
 `)) >= 0
       ) {
         let sliced = S.slice(0, L);
-        if (((S = S.slice(L + 1)), s !== void 0 && ++w > s)) throw new TooManyLinesError();
+        S = S.slice(L + 1);
+        if (s !== undefined && ++w > s) throw new TooManyLinesError();
         if (sliced.endsWith("\r")) sliced = sliced.slice(0, -1);
-        if (sliced.length > n) throw new LineTooLongError(n);
+        if (sliced.length > maxLineLength) throw new LineTooLongError(maxLineLength);
         if (sliced !== "") yield sliced;
       }
-      if (S.length > n) throw new LineTooLongError(n);
+      if (S.length > maxLineLength) throw new LineTooLongError(maxLineLength);
     }
-    if (((S += y.end()), S !== "" && S !== "\r")) {
-      if (s !== void 0 && ++w > s) throw new TooManyLinesError();
+    S += y.end();
+    if (S !== "" && S !== "\r") {
+      if (s !== undefined && ++w > s) throw new TooManyLinesError();
       yield S.endsWith("\r") ? S.slice(0, -1) : S;
     }
   } finally {
-    (e.destroy(),
-      x.return?.().catch(() => {
-        return;
-      }));
+    source.destroy();
+    x.return?.().catch(() => {
+      return;
+    });
   }
 }
 //@ chunk-s61vbvea.js:93629-95181 placement
 async function pullStoreExport({
-  source: source,
-  handleMemory: handleMemory,
-  maxConcurrentWrites: maxConcurrentWrites,
-  maxLineLength: maxLineLength,
-  stallTimeoutMs: stallTimeoutMs = EXPORT_IDLE_TIMEOUT_MS,
-  deadlineMs: deadlineMs = EXPORT_TOTAL_TIMEOUT_MS,
-  maxLines: maxLines,
+  source,
+  handleMemory,
+  maxConcurrentWrites,
+  maxLineLength,
+  stallTimeoutMs = EXPORT_IDLE_TIMEOUT_MS,
+  deadlineMs = EXPORT_TOTAL_TIMEOUT_MS,
+  maxLines,
 }) {
-  let w = new Set(),
-    R,
-    x = 0,
-    P = 0,
-    j = null,
-    G = createYieldingRunner();
+  let w = new Set();
+  let R;
+  let x = 0;
+  let P = 0;
+  let j = null;
+  let yieldingRunner = createYieldingRunner();
   async function L() {
     await Promise.all(w);
   }
-  async function q(Q) {
-    return (await L(), { ok: !1, reason: Q });
+  async function q(reason) {
+    await L();
+    return {
+      ok: false,
+      reason,
+    };
   }
   try {
     for await (let Q of readExportStreamLines(source, maxLineLength, stallTimeoutMs, maxLines, deadlineMs)) {
@@ -164,31 +204,31 @@ async function pullStoreExport({
       } catch {
         return await q("parse_failed");
       }
-      let safeParse = exportLineTypeSchema().safeParse(Z);
-      if (!safeParse.success) return await q("parse_failed");
-      switch (safeParse.data.type) {
+      let ee = exportLineTypeSchema().safeParse(Z);
+      if (!ee.success) return await q("parse_failed");
+      switch (ee.data.type) {
         case "store":
           break;
         case "memory": {
-          let safeParse = exportMemoryLineSchema().safeParse(Z);
-          if (!safeParse.success) return await q("parse_failed");
+          let ae = exportMemoryLineSchema().safeParse(Z);
+          if (!ae.success) return await q("parse_failed");
           x++;
           while (w.size >= maxConcurrentWrites) await Promise.race(w);
-          if (R !== void 0) return await q("write_failed");
+          if (R !== undefined) return await q("write_failed");
           let se = {
-              path: safeParse.data.path,
-              content: safeParse.data.content,
-              contentSha256: safeParse.data.content_sha256,
-              memoryId: safeParse.data.id,
-              updatedAt: safeParse.data.updated_at,
-            },
-            re = handleMemory(se)
-              .catch((he) => {
-                R ??= he;
-              })
-              .finally(() => {
-                w.delete(re);
-              });
+            path: ae.data.path,
+            content: ae.data.content,
+            contentSha256: ae.data.content_sha256,
+            memoryId: ae.data.id,
+            updatedAt: ae.data.updated_at,
+          };
+          let re = handleMemory(se)
+            .catch((error) => {
+              R ??= error;
+            })
+            .finally(() => {
+              w.delete(re);
+            });
           w.add(re);
           break;
         }
@@ -196,51 +236,91 @@ async function pullStoreExport({
           P++;
           break;
         case "complete": {
-          let safeParse = exportCompleteLineSchema().safeParse(Z);
-          if (!safeParse.success) return await q("parse_failed");
-          j = { memoryCount: safeParse.data.memory_count, errorCount: safeParse.data.error_count ?? 0 };
+          let ae = exportCompleteLineSchema().safeParse(Z);
+          if (!ae.success) return await q("parse_failed");
+          j = {
+            memoryCount: ae.data.memory_count,
+            errorCount: ae.data.error_count ?? 0,
+          };
           break;
         }
         default:
           break;
       }
-      await G.maybeYield();
+      await yieldingRunner.maybeYield();
     }
   } catch (error) {
-    if ((await L(), error instanceof LineTooLongError)) return { ok: !1, reason: "oversized_line" };
-    if (error instanceof TooManyLinesError) return { ok: !1, reason: "too_many_entries" };
-    return { ok: !1, reason: "stream_error" };
+    await L();
+    if (error instanceof LineTooLongError)
+      return {
+        ok: false,
+        reason: "oversized_line",
+      };
+    if (error instanceof TooManyLinesError)
+      return {
+        ok: false,
+        reason: "too_many_entries",
+      };
+    return {
+      ok: false,
+      reason: "stream_error",
+    };
   }
-  if ((await L(), R !== void 0)) return { ok: !1, reason: "write_failed" };
-  if (j === null) return { ok: !1, reason: "stream_truncated" };
-  if (j.memoryCount !== x) return { ok: !1, reason: "count_mismatch" };
-  if (j.errorCount > 0 || P > 0) return { ok: !1, reason: "decrypt_errors" };
-  return { ok: !0, memoryLines: x };
+  await L();
+  if (R !== undefined)
+    return {
+      ok: false,
+      reason: "write_failed",
+    };
+  if (j === null)
+    return {
+      ok: false,
+      reason: "stream_truncated",
+    };
+  if (j.memoryCount !== x)
+    return {
+      ok: false,
+      reason: "count_mismatch",
+    };
+  if (j.errorCount > 0 || P > 0)
+    return {
+      ok: false,
+      reason: "decrypt_errors",
+    };
+  return {
+    ok: true,
+    memoryLines: x,
+  };
 }
 //@ chunk-s61vbvea.js:95181-95361 placement
-var exportStoreLineSchema = DoctorLazy(() => kt({ type: T("store"), view: o().optional() })),
-  exportMemoryRefLineSchema = DoctorLazy(() =>
-    kt({
-      type: T("memory"),
-      id: WEn(),
-      path: o(),
-      content_sha256: o(),
-      content_size_bytes: E().int().nonnegative().optional(),
-    }),
-  );
+var exportStoreLineSchema = DoctorLazy(() =>
+  looseObject({
+    type: literal("store"),
+    view: string().optional(),
+  }),
+);
+var exportMemoryRefLineSchema = DoctorLazy(() =>
+  looseObject({
+    type: literal("memory"),
+    id: memoryIdSchema(),
+    path: string(),
+    content_sha256: string(),
+    content_size_bytes: E().int().nonnegative().optional(),
+  }),
+);
 //@ chunk-s61vbvea.js:95361-96918 placement
 async function pullStoreView({
-  source: source,
-  maxLineLength: maxLineLength,
-  maxEntries: maxEntries,
-  stallTimeoutMs: stallTimeoutMs = EXPORT_IDLE_TIMEOUT_MS,
-  deadlineMs: deadlineMs = EXPORT_TOTAL_TIMEOUT_MS,
+  source,
+  maxLineLength,
+  maxEntries,
+  stallTimeoutMs = EXPORT_IDLE_TIMEOUT_MS,
+  deadlineMs = EXPORT_TOTAL_TIMEOUT_MS,
 }) {
-  let y = [],
-    S = !1,
-    w = 0,
-    R = null,
-    x = createYieldingRunner();
+  let y = [];
+  let S = false;
+  let w = 0;
+  let R = null;
+  let yieldingRunner = createYieldingRunner();
   try {
     for await (let P of readExportStreamLines(
       source,
@@ -249,62 +329,137 @@ async function pullStoreView({
       maxEntries * 2 + 2,
       deadlineMs,
     )) {
-      if (R !== null) return { ok: !1, reason: "parse_failed" };
+      if (R !== null)
+        return {
+          ok: false,
+          reason: "parse_failed",
+        };
       let j;
       try {
         j = jsonParseRaw(P);
       } catch {
-        return { ok: !1, reason: "parse_failed" };
+        return {
+          ok: false,
+          reason: "parse_failed",
+        };
       }
-      let safeParse = exportLineTypeSchema().safeParse(j);
-      if (!safeParse.success) return { ok: !1, reason: "parse_failed" };
-      switch (safeParse.data.type) {
+      let G = exportLineTypeSchema().safeParse(j);
+      if (!G.success)
+        return {
+          ok: false,
+          reason: "parse_failed",
+        };
+      switch (G.data.type) {
         case "store": {
-          if (S) return { ok: !1, reason: "parse_failed" };
-          let safeParse = exportStoreLineSchema().safeParse(j);
-          if (!safeParse.success) return { ok: !1, reason: "parse_failed" };
-          if (safeParse.data.view !== "basic") return { ok: !1, reason: "view_not_honored" };
-          S = !0;
+          if (S)
+            return {
+              ok: false,
+              reason: "parse_failed",
+            };
+          let L = exportStoreLineSchema().safeParse(j);
+          if (!L.success)
+            return {
+              ok: false,
+              reason: "parse_failed",
+            };
+          if (L.data.view !== "basic")
+            return {
+              ok: false,
+              reason: "view_not_honored",
+            };
+          S = true;
           break;
         }
         case "memory": {
-          if (!S) return { ok: !1, reason: "view_not_honored" };
-          let safeParse = exportMemoryRefLineSchema().safeParse(j);
-          if (!safeParse.success) return { ok: !1, reason: "parse_failed" };
-          if (y.length >= maxEntries) return { ok: !1, reason: "too_many_entries" };
+          if (!S)
+            return {
+              ok: false,
+              reason: "view_not_honored",
+            };
+          let L = exportMemoryRefLineSchema().safeParse(j);
+          if (!L.success)
+            return {
+              ok: false,
+              reason: "parse_failed",
+            };
+          if (y.length >= maxEntries)
+            return {
+              ok: false,
+              reason: "too_many_entries",
+            };
           y.push({
-            id: safeParse.data.id,
-            path: safeParse.data.path,
-            sha256: safeParse.data.content_sha256,
-            sizeBytes: safeParse.data.content_size_bytes,
+            id: L.data.id,
+            path: L.data.path,
+            sha256: L.data.content_sha256,
+            sizeBytes: L.data.content_size_bytes,
           });
           break;
         }
         case "memory_error":
-          if (!S) return { ok: !1, reason: "view_not_honored" };
+          if (!S)
+            return {
+              ok: false,
+              reason: "view_not_honored",
+            };
           w++;
           break;
         case "complete": {
-          if (!S) return { ok: !1, reason: "parse_failed" };
-          let safeParse = exportCompleteLineSchema().safeParse(j);
-          if (!safeParse.success) return { ok: !1, reason: "parse_failed" };
-          R = { memoryCount: safeParse.data.memory_count, errorCount: safeParse.data.error_count ?? 0 };
+          if (!S)
+            return {
+              ok: false,
+              reason: "parse_failed",
+            };
+          let L = exportCompleteLineSchema().safeParse(j);
+          if (!L.success)
+            return {
+              ok: false,
+              reason: "parse_failed",
+            };
+          R = {
+            memoryCount: L.data.memory_count,
+            errorCount: L.data.error_count ?? 0,
+          };
           break;
         }
         default:
           break;
       }
-      await x.maybeYield();
+      await yieldingRunner.maybeYield();
     }
   } catch (error) {
-    if (error instanceof LineTooLongError) return { ok: !1, reason: "oversized_line" };
-    if (error instanceof TooManyLinesError) return { ok: !1, reason: "too_many_entries" };
-    return { ok: !1, reason: "stream_error" };
+    if (error instanceof LineTooLongError)
+      return {
+        ok: false,
+        reason: "oversized_line",
+      };
+    if (error instanceof TooManyLinesError)
+      return {
+        ok: false,
+        reason: "too_many_entries",
+      };
+    return {
+      ok: false,
+      reason: "stream_error",
+    };
   }
-  if (R === null) return { ok: !1, reason: "stream_truncated" };
-  if (R.memoryCount !== y.length) return { ok: !1, reason: "count_mismatch" };
-  if (R.errorCount > 0 || w > 0) return { ok: !1, reason: "decrypt_errors" };
-  return { ok: !0, entries: y };
+  if (R === null)
+    return {
+      ok: false,
+      reason: "stream_truncated",
+    };
+  if (R.memoryCount !== y.length)
+    return {
+      ok: false,
+      reason: "count_mismatch",
+    };
+  if (R.errorCount > 0 || w > 0)
+    return {
+      ok: false,
+      reason: "decrypt_errors",
+    };
+  return {
+    ok: true,
+    entries: y,
+  };
 }
-
 export { createYieldingRunner, pullStoreView, pullStoreExport };

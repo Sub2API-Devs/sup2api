@@ -10,42 +10,42 @@
  */
 import { sanitizeSessionTitle } from "../stringUtils.js";
 import { isInternalHuskTitle } from "../../services/cloudSessions/ccrSessionList.js";
-import { Xer, Jer } from "./remoteTaskLabels.js";
+import { BACKGROUND_TASK_TITLE, REMOTE_TASK_TITLE } from "./remoteTaskLabels.js";
 
 //@ chunk-1r7cdak2.js:305-317 placement
-var f = 30000;
+var SERVICE_NAME_POLL_MS = 30000;
 //@ chunk-1r7cdak2.js:317-397 placement
-function serviceSessionName(i) {
-  let n = sanitizeSessionTitle(i ?? "");
-  if (!n || isInternalHuskTitle(n) || n === Xer || n === Jer) return;
+function serviceSessionName(title) {
+  let n = sanitizeSessionTitle(title ?? "");
+  if (!n || isInternalHuskTitle(n) || n === BACKGROUND_TASK_TITLE || n === REMOTE_TASK_TITLE) return;
   return n;
 }
+//@ chunk-1r7cdak2.js:397-714 placement
 /**
  * 远程会话改名后跟随服务端会话标题，用于 useRemoteSession 显示。
  */
-//@ chunk-1r7cdak2.js:397-714 placement
-function followServiceSessionName(i, n, r, a) {
-  let abortController = new AbortController(),
-    s,
-    d = (t) => {
-      if (abortController.signal.aborted || t === void 0 || t === s) return;
-      ((s = t), a(t));
-    };
-  if ((n?.then(d, () => {}), r === void 0)) return () => abortController.abort();
-  let o = () => {},
-    u = () => {
-      r(abortController.signal)
-        .then(d, () => {})
-        .finally(() => {
-          if (!abortController.signal.aborted) o = i.setTimeout(u, f);
-        });
-    };
-  return (
-    (o = i.setTimeout(u, f)),
-    () => {
-      (abortController.abort(), o());
-    }
-  );
+function followServiceSessionName(clock, serviceName, r, a) {
+  let abortController = new AbortController();
+  let s;
+  let d = (t) => {
+    if (abortController.signal.aborted || t === undefined || t === s) return;
+    s = t;
+    a(t);
+  };
+  serviceName?.then(d, () => {});
+  if (r === undefined) return () => abortController.abort();
+  let o = () => {};
+  let u = () => {
+    r(abortController.signal)
+      .then(d, () => {})
+      .finally(() => {
+        if (!abortController.signal.aborted) o = clock.setTimeout(u, SERVICE_NAME_POLL_MS);
+      });
+  };
+  o = clock.setTimeout(u, SERVICE_NAME_POLL_MS);
+  return () => {
+    abortController.abort();
+    o();
+  };
 }
-
 export { serviceSessionName, followServiceSessionName };

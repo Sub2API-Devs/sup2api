@@ -6,63 +6,64 @@
  * attribution: esm-layout 4, esm-fingerprint 4
  */
 import { Xa } from "../../../../../../runtime/bun-runtime.js";
-import { W, ue, mr } from "../../../webapi/lib/buffer_utils.js";
+import { init_buffer_utils, ue, mr } from "../../../webapi/lib/buffer_utils.js";
 import { l, le } from "../../../browser/runtime/base64url.js";
 
 //@ chunk-2tyrgda4.js:389-416 esm-layout
-var Ie = Xa(() => {
-  W();
+var init_buffer_utils_2 = Xa(() => {
+  init_buffer_utils();
   ue = mr;
 });
 //@ chunk-2tyrgda4.js:416-545 esm-fingerprint
-function _(...e) {
-  let reduced = e.reduce((n, { length: a }) => n + a, 0),
-    uint8Array = new Uint8Array(reduced),
-    o = 0;
-  return (
-    e.forEach((n) => {
-      (uint8Array.set(n, o), (o += n.length));
-    }),
-    uint8Array
-  );
+function concat(...buffers) {
+  let size = buffers.reduce((acc, { length }) => acc + length, 0);
+  let buf = new Uint8Array(size);
+  let i = 0;
+  buffers.forEach((buffer) => {
+    buf.set(buffer, i);
+    i += buffer.length;
+  });
+  return buf;
 }
 //@ chunk-2tyrgda4.js:545-606 esm-fingerprint
-function ft(e, t) {
-  return _(l.encode(e), new Uint8Array([0]), t);
+function p2s(alg, p2sInput) {
+  return concat(l.encode(alg), new Uint8Array([0]), p2sInput);
 }
 //@ chunk-2tyrgda4.js:606-745 esm-fingerprint
-function Re(e, t, r) {
-  if (t < 0 || t >= le) throw RangeError(`value must be >= 0 and <= ${le - 1}. Received ${t}`);
-  e.set([t >>> 24, t >>> 16, t >>> 8, t & 255], r);
+function writeUInt32BE(buf, value, offset) {
+  if (value < 0 || value >= le) throw RangeError(`value must be >= 0 and <= ${le - 1}. Received ${value}`);
+  buf.set([value >>> 24, value >>> 16, value >>> 8, value & 255], offset);
 }
 //@ chunk-2tyrgda4.js:745-839 esm-layout
-function he(e) {
-  let floored = Math.floor(e / le),
-    r = e % le,
-    uint8Array = new Uint8Array(8);
-  return (Re(uint8Array, floored, 0), Re(uint8Array, r, 4), uint8Array);
+function he(value) {
+  let floored = Math.floor(value / le);
+  let low = value % le;
+  let buf = new Uint8Array(8);
+  writeUInt32BE(buf, floored, 0);
+  writeUInt32BE(buf, low, 4);
+  return buf;
 }
 //@ chunk-2tyrgda4.js:839-895 esm-layout
-function ye(e) {
-  let uint8Array = new Uint8Array(4);
-  return (Re(uint8Array, e), uint8Array);
+function uint32be(value) {
+  let buf = new Uint8Array(4);
+  writeUInt32BE(buf, value);
+  return buf;
 }
 //@ chunk-2tyrgda4.js:895-935 esm-layout
-function we(e) {
-  return _(ye(e.length), e);
+function lengthAndInput(input) {
+  return concat(uint32be(input.length), input);
 }
 //@ chunk-2tyrgda4.js:935-1175 esm-fingerprint
-async function mt(e, t, r) {
-  let ceil = Math.ceil((t >> 3) / 32),
-    uint8Array = new Uint8Array(ceil * 32);
-  for (let a = 0; a < ceil; a++) {
-    let uint8Array_2 = new Uint8Array(4 + e.length + r.length);
-    (uint8Array_2.set(ye(a + 1)),
-      uint8Array_2.set(e, 4),
-      uint8Array_2.set(r, 4 + e.length),
-      uint8Array.set(await ue("sha256", uint8Array_2), a * 32));
+async function concatKdf(secret, bits, value) {
+  let iterations = Math.ceil((bits >> 3) / 32);
+  let res = new Uint8Array(iterations * 32);
+  for (let iter = 0; iter < iterations; iter++) {
+    let buf = new Uint8Array(4 + secret.length + value.length);
+    buf.set(uint32be(iter + 1));
+    buf.set(secret, 4);
+    buf.set(value, 4 + secret.length);
+    res.set(await ue("sha256", buf), iter * 32);
   }
-  return uint8Array.slice(0, t >> 3);
+  return res.slice(0, bits >> 3);
 }
-
-export { Ie, _, he, we, ye, mt, ft };
+export { init_buffer_utils_2, concat, he, lengthAndInput, uint32be, concatKdf, p2s };

@@ -19,169 +19,208 @@ import { w } from "../../vendor/react/compiler-runtime.js";
 import { y, P } from "../../vendor/react/cjs/react.production.js";
 import { useTimeout } from "../ink/hooks/useTerminalHooks.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
-import { r, e } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default_2,
+  jsxProd_default,
+} from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Box, Text } from "../ink/components/Text.js";
 import { Spinner } from "../components/Spinner.js";
 
 //@ chunk-p8fze0jh.js:16221-16276 callgraph-fingerprint = _temp (0.39)
 function exitPreflightFailed() {
-  (setBgExitCause("preflight_endpoint"), process.exit(1));
+  setBgExitCause("preflight_endpoint");
+  process.exit(1);
 }
 //@ chunk-p8fze0jh.js:16276-16287 layout
 var PREFLIGHT_TIMEOUT_MS = 1e4;
+//@ chunk-p8fze0jh.js:16287-17402 fingerprint = checkEndpoints (0.823)
 /**
  * 启动预检：用 10 秒超时请求 <BASE_API_URL>/api/hello 与 <TOKEN_URL 源>/v1/oauth/hello（走代理设置），返回第一个失败的错误说明。
  */
-//@ chunk-p8fze0jh.js:16287-17402 fingerprint = checkEndpoints (0.823)
 async function checkEndpoints() {
   try {
     await getProxyAuthFromHelper();
-    let oauthConfig = getOauthConfig(),
-      tokenUrl = new URL(oauthConfig.TOKEN_URL),
-      endpoints = [`${oauthConfig.BASE_API_URL}/api/hello`, `${tokenUrl.origin}/v1/oauth/hello`],
-      checkEndpoint = async (url) => {
-        let hostname = new URL(url).hostname,
-          u = getProxyFetchOptions({ url: url }),
-          C = u.proxy !== void 0;
-        try {
-          let d = await fetch(url, {
-            headers: { "User-Agent": getUserAgent() },
-            signal: AbortSignal.timeout(PREFLIGHT_TIMEOUT_MS),
-            ...u,
-          });
-          if ((d.body?.cancel().catch(() => {}), d.status !== 200))
-            return {
-              success: !1,
-              error: `Failed to connect to ${hostname}: Status ${d.status}`,
-              usedProxy: C,
-            };
-          return { success: !0 };
-        } catch (error) {
-          if (error instanceof Error && error.name === "TimeoutError")
-            return {
-              success: !1,
-              error: `Connection to ${hostname} timed out after ${PREFLIGHT_TIMEOUT_MS / 1000} seconds`,
-              usedProxy: C,
-            };
-          let sslHint = getSSLErrorHint(error);
+    let oauthConfig = getOauthConfig();
+    let tokenUrl = new URL(oauthConfig.TOKEN_URL);
+    let endpoints = [`${oauthConfig.BASE_API_URL}/api/hello`, `${tokenUrl.origin}/v1/oauth/hello`];
+    let checkEndpoint = async (url) => {
+      let hostname = new URL(url).hostname;
+      let proxyFetchOptions = getProxyFetchOptions({
+        url,
+      });
+      let usedProxy = proxyFetchOptions.proxy !== undefined;
+      try {
+        let response = await fetch(url, {
+          headers: {
+            "User-Agent": getUserAgent(),
+          },
+          signal: AbortSignal.timeout(PREFLIGHT_TIMEOUT_MS),
+          ...proxyFetchOptions,
+        });
+        response.body?.cancel().catch(() => {});
+        if (response.status !== 200)
           return {
-            success: !1,
-            error: `Failed to connect to ${hostname}: ${error instanceof Error ? error.code || error.message : String(error)}`,
-            sslHint: sslHint ?? void 0,
-            usedProxy: C,
+            success: false,
+            error: `Failed to connect to ${hostname}: Status ${response.status}`,
+            usedProxy,
           };
-        }
-      },
-      failedResult = (await Promise.all(endpoints.map(checkEndpoint))).find((result) => !result.success);
+        return {
+          success: true,
+        };
+      } catch (error) {
+        if (error instanceof Error && error.name === "TimeoutError")
+          return {
+            success: false,
+            error: `Connection to ${hostname} timed out after ${PREFLIGHT_TIMEOUT_MS / 1000} seconds`,
+            usedProxy,
+          };
+        let sslHint = getSSLErrorHint(error);
+        return {
+          success: false,
+          error: `Failed to connect to ${hostname}: ${error instanceof Error ? error.code || error.message : String(error)}`,
+          sslHint: sslHint ?? undefined,
+          usedProxy,
+        };
+      }
+    };
+    let failedResult = (await Promise.all(endpoints.map(checkEndpoint))).find((result) => !result.success);
     if (failedResult)
       logEvent("tengu_preflight_check_failed", {
-        isConnectivityError: !1,
+        isConnectivityError: false,
         hasErrorMessage: !!failedResult.error,
         isSSLError: !!failedResult.sslHint,
       });
-    return failedResult || { success: !0 };
-  } catch (error) {
     return (
-      logError(error),
-      logEvent("tengu_preflight_check_failed", { isConnectivityError: !0 }),
-      {
-        success: !1,
-        error: `Connectivity check error: ${error instanceof Error ? error.code || error.message : String(error)}`,
+      failedResult || {
+        success: true,
       }
     );
+  } catch (error) {
+    logError(error);
+    logEvent("tengu_preflight_check_failed", {
+      isConnectivityError: true,
+    });
+    return {
+      success: false,
+      error: `Connectivity check error: ${error instanceof Error ? error.code || error.message : String(error)}`,
+    };
   }
 }
+//@ chunk-p8fze0jh.js:17402-19010 fingerprint = PreflightStep (0.303)
 /**
  * 首次运行的连通性检查界面：显示 Checking connectivity...，失败时提示 Unable to connect to Anthropic services 并退出。
  */
-//@ chunk-p8fze0jh.js:17402-19010 fingerprint = PreflightStep (0.303)
-function PreflightStep(t0) {
-  let u = w(14),
-    { onSuccess: onSuccess } = t0,
-    [t, x] = y(null),
-    [h, p] = y(!0),
-    c = getProxyUrlWithSource()?.source,
-    showSpinner = useTimeout(1000) && h,
-    C,
-    d;
-  if (u[0] === MEMO_CACHE_SENTINEL)
-    ((C = () => {
-      let run = async function I() {
+function PreflightStep(props) {
+  let $ = w(14);
+  let { onSuccess } = props;
+  let [result, setResult] = y(null);
+  let [isChecking, setIsChecking] = y(true);
+  let source = getProxyUrlWithSource()?.source;
+  let showSpinner = useTimeout(1000) && isChecking;
+  let t1;
+  let t2;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    t1 = () => {
+      let run = async function run() {
         let checkResult = await checkEndpoints();
-        (x(checkResult), p(!1));
+        setResult(checkResult);
+        setIsChecking(false);
       };
       run();
-    }),
-      (d = []),
-      (u[0] = C),
-      (u[1] = d));
-  else ((C = u[0]), (d = u[1]));
-  P(C, d);
+    };
+    t2 = [];
+    $[0] = t1;
+    $[1] = t2;
+  } else {
+    t1 = $[0];
+    t2 = $[1];
+  }
+  P(t1, t2);
   let W;
-  if (u[2] !== onSuccess || u[3] !== t?.success)
-    ((W = () => {
-      if (t?.success) onSuccess();
-    }),
-      (u[2] = onSuccess),
-      (u[3] = t?.success),
-      (u[4] = W));
-  else W = u[4];
+  if ($[2] !== onSuccess || $[3] !== result?.success) {
+    W = () => {
+      if (result?.success) onSuccess();
+    };
+    $[2] = onSuccess;
+    $[3] = result?.success;
+    $[4] = W;
+  } else W = $[4];
   let N;
-  if (u[5] !== onSuccess || u[6] !== t) ((N = [t, onSuccess]), (u[5] = onSuccess), (u[6] = t), (u[7] = N));
-  else N = u[7];
-  (P(W, N), useTimeout(exitPreflightFailed, t && !t.success ? 100 : null));
-  let A;
-  if (u[8] !== h || u[9] !== t || u[10] !== showSpinner)
-    ((A =
-      h && showSpinner
-        ? r(Box, {
+  if ($[5] !== onSuccess || $[6] !== result) {
+    N = [result, onSuccess];
+    $[5] = onSuccess;
+    $[6] = result;
+    $[7] = N;
+  } else N = $[7];
+  P(W, N);
+  useTimeout(exitPreflightFailed, result && !result.success ? 100 : null);
+  let children;
+  if ($[8] !== isChecking || $[9] !== result || $[10] !== showSpinner) {
+    children =
+      isChecking && showSpinner
+        ? jsxProd_default_2(Box, {
             paddingLeft: 1,
-            children: [e(Spinner, {}), e(Text, { children: "Checking connectivity..." })],
+            children: [
+              jsxProd_default(Spinner, {}),
+              jsxProd_default(Text, {
+                children: "Checking connectivity...",
+              }),
+            ],
           })
-        : !t?.success &&
-          !h &&
-          r(Box, {
+        : !result?.success &&
+          !isChecking &&
+          jsxProd_default_2(Box, {
             flexDirection: "column",
             gap: 1,
             children: [
-              e(Text, { color: "error", children: "Unable to connect to Anthropic services" }),
-              e(Text, { color: "error", children: t?.error }),
-              t?.sslHint
-                ? r(Box, {
+              jsxProd_default(Text, {
+                color: "error",
+                children: "Unable to connect to Anthropic services",
+              }),
+              jsxProd_default(Text, {
+                color: "error",
+                children: result?.error,
+              }),
+              result?.sslHint
+                ? jsxProd_default_2(Box, {
                     flexDirection: "column",
                     gap: 1,
                     children: [
-                      e(Text, { children: t.sslHint }),
-                      e(Text, {
+                      jsxProd_default(Text, {
+                        children: result.sslHint,
+                      }),
+                      jsxProd_default(Text, {
                         color: "suggestion",
                         children: "See https://code.claude.com/docs/en/network-config",
                       }),
                     ],
                   })
-                : r(Box, {
+                : jsxProd_default_2(Box, {
                     flexDirection: "column",
                     gap: 1,
                     children: [
-                      c && t?.usedProxy
-                        ? r(Text, {
+                      source && result?.usedProxy
+                        ? jsxProd_default_2(Text, {
                             children: [
                               "A proxy is configured via ",
-                              c,
+                              source,
                               ". Check that it allows connections to the host above.",
                               " ",
-                              e(Text, {
+                              jsxProd_default(Text, {
                                 color: "suggestion",
                                 children: "See https://code.claude.com/docs/en/network-config",
                               }),
                             ],
                           })
                         : null,
-                      e(Text, { children: "Please check your internet connection and network settings." }),
-                      r(Text, {
+                      jsxProd_default(Text, {
+                        children: "Please check your internet connection and network settings.",
+                      }),
+                      jsxProd_default_2(Text, {
                         children: [
                           "Note: Claude Code might not be available in your country. Check supported countries at",
                           " ",
-                          e(Text, {
+                          jsxProd_default(Text, {
                             color: "suggestion",
                             children: "https://anthropic.com/supported-countries",
                           }),
@@ -190,19 +229,23 @@ function PreflightStep(t0) {
                     ],
                   }),
             ],
-          })),
-      (u[8] = h),
-      (u[9] = t),
-      (u[10] = showSpinner),
-      (u[11] = A));
-  else A = u[11];
-  let G;
-  if (u[12] !== A)
-    ((G = e(Box, { flexDirection: "column", gap: 1, paddingLeft: 1, children: A })),
-      (u[12] = A),
-      (u[13] = G));
-  else G = u[13];
-  return G;
+          });
+    $[8] = isChecking;
+    $[9] = result;
+    $[10] = showSpinner;
+    $[11] = children;
+  } else children = $[11];
+  let t6;
+  if ($[12] !== children) {
+    t6 = jsxProd_default(Box, {
+      flexDirection: "column",
+      gap: 1,
+      paddingLeft: 1,
+      children,
+    });
+    $[12] = children;
+    $[13] = t6;
+  } else t6 = $[13];
+  return t6;
 }
-
 export { PreflightStep };

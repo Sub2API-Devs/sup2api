@@ -8,22 +8,27 @@
  * pieces: chunk-0wdgqhcf.js (1), chunk-p5akk6be.js (1)
  * attribution: fingerprint 2
  */
-import { ro, regExp_3, regExp, regExp_2, lo } from "../services/artifacts/artifactPeople.js";
+import {
+  MAX_WARNING_TEXT_CHARS,
+  AMPERSAND_FORMS_RE,
+  ANGLE_OPEN_VARIANTS_RE,
+  ANGLE_CLOSE_VARIANTS_RE,
+  TRAILING_AMPERSAND_RE,
+} from "../services/artifacts/artifactPeople.js";
 import { sweepAskCopy } from "../tools/ArtifactTool/artifactUrls.js";
 import { truncateToLength } from "./stringUtils.js";
 import { escapeXml_2 } from "./confusables.js";
 
 //@ chunk-0wdgqhcf.js:12338-12464 fingerprint = escapeXml (1)
-function escapeXml(e, t = ro) {
+function escapeXml(e, t = MAX_WARNING_TEXT_CHARS) {
   let replaced = (sweepAskCopy(e) ?? "")
-    .replace(regExp_3, "&amp;")
-    .replace(regExp, "&lt;")
-    .replace(regExp_2, "&gt;");
-  return truncateToLength(replaced, t).replace(lo, "");
+    .replace(AMPERSAND_FORMS_RE, "&amp;")
+    .replace(ANGLE_OPEN_VARIANTS_RE, "&lt;")
+    .replace(ANGLE_CLOSE_VARIANTS_RE, "&gt;");
+  return truncateToLength(replaced, t).replace(TRAILING_AMPERSAND_RE, "");
 }
 //@ chunk-p5akk6be.js:24090-24168 fingerprint = escapeXmlAttr (1)
 function escapeXmlAttr(s) {
   return escapeXml_2(s).replaceAll('"', "&quot;").replaceAll("'", "&apos;");
 }
-
 export { escapeXmlAttr, escapeXml };

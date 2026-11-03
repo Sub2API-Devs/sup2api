@@ -6,75 +6,71 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../../runtime/bun-runtime.js";
-import { op } from "../../cjs/reflect/error.js";
-import { Ec } from "../../cjs/reflect/names.js";
-import { Ux } from "../../cjs/reflect/nested-types.js";
-import { Po } from "../../cjs/reflect/reflect.js";
-import { Ik } from "./reflect-types.js";
-import { El } from "./scalar.js";
-import { Dk } from "./path.js";
-import { Uu } from "../../cjs/reflect/guard.js";
+import { require_error_2 } from "../../cjs/reflect/error.js";
+import { require_names } from "../../cjs/reflect/names.js";
+import { require_nested_types } from "../../cjs/reflect/nested-types.js";
+import { require_reflect } from "../../cjs/reflect/reflect.js";
+import { require_reflect_types } from "./reflect-types.js";
+import { require_scalar } from "./scalar.js";
+import { require_path } from "./path.js";
+import { require_guard } from "../../cjs/reflect/guard.js";
 
 //@ chunk-fq0cr76a.js:358179-359141 cjs-fingerprint
-var ba = x(function (os) {
-  var VY =
-      (os && os.__createBinding) ||
-      (Object.create
-        ? function (e, n, r, s) {
-            if (s === void 0) s = r;
-            var ownPropertyDescriptor = Object.getOwnPropertyDescriptor(n, r);
-            if (
-              !ownPropertyDescriptor ||
-              ("get" in ownPropertyDescriptor
-                ? !n.__esModule
-                : ownPropertyDescriptor.writable || ownPropertyDescriptor.configurable)
-            )
-              ownPropertyDescriptor = {
-                enumerable: !0,
-                get: function () {
-                  return n[r];
-                },
-              };
-            Object.defineProperty(e, s, ownPropertyDescriptor);
-          }
-        : function (e, n, r, s) {
-            if (s === void 0) s = r;
-            e[s] = n[r];
-          }),
-    _c =
-      (os && os.__exportStar) ||
-      function (e, n) {
-        for (var key in e)
-          if (key !== "default" && !Object.prototype.hasOwnProperty.call(n, key)) VY(n, e, key);
-      };
-  Object.defineProperty(os, "__esModule", { value: !0 });
-  os.isReflectMessage = os.isReflectMap = os.isReflectList = void 0;
-  _c(op(), os);
-  _c(Ec(), os);
-  _c(Ux(), os);
-  _c(Po(), os);
-  _c(Ik(), os);
-  _c(El(), os);
-  _c(Dk(), os);
-  var Qx = Uu();
-  Object.defineProperty(os, "isReflectList", {
-    enumerable: !0,
+var require_reflect_2 = x(function (cjsExports) {
+  var __createBinding =
+    (cjsExports && cjsExports.__createBinding) ||
+    (Object.create
+      ? function (o, m, k, k2) {
+          if (k2 === undefined) k2 = k;
+          var desc = Object.getOwnPropertyDescriptor(m, k);
+          if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable))
+            desc = {
+              enumerable: true,
+              get: function () {
+                return m[k];
+              },
+            };
+          Object.defineProperty(o, k2, desc);
+        }
+      : function (o, m, k, k2) {
+          if (k2 === undefined) k2 = k;
+          o[k2] = m[k];
+        });
+  var __exportStar =
+    (cjsExports && cjsExports.__exportStar) ||
+    function (m, n) {
+      for (var p in m)
+        if (p !== "default" && !Object.prototype.hasOwnProperty.call(n, p)) __createBinding(n, m, p);
+    };
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.isReflectMessage = cjsExports.isReflectMap = cjsExports.isReflectList = undefined;
+  __exportStar(require_error_2(), cjsExports);
+  __exportStar(require_names(), cjsExports);
+  __exportStar(require_nested_types(), cjsExports);
+  __exportStar(require_reflect(), cjsExports);
+  __exportStar(require_reflect_types(), cjsExports);
+  __exportStar(require_scalar(), cjsExports);
+  __exportStar(require_path(), cjsExports);
+  var guard_js_1 = require_guard();
+  Object.defineProperty(cjsExports, "isReflectList", {
+    enumerable: true,
     get: function () {
-      return Qx.isReflectList;
+      return guard_js_1.isReflectList;
     },
   });
-  Object.defineProperty(os, "isReflectMap", {
-    enumerable: !0,
+  Object.defineProperty(cjsExports, "isReflectMap", {
+    enumerable: true,
     get: function () {
-      return Qx.isReflectMap;
+      return guard_js_1.isReflectMap;
     },
   });
-  Object.defineProperty(os, "isReflectMessage", {
-    enumerable: !0,
+  Object.defineProperty(cjsExports, "isReflectMessage", {
+    enumerable: true,
     get: function () {
-      return Qx.isReflectMessage;
+      return guard_js_1.isReflectMessage;
     },
   });
 });
-
-export { ba };
+export { require_reflect_2 };

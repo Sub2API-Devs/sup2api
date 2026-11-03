@@ -11,25 +11,33 @@
 
 //@ chunk-wy2s2mmv.js:191-287 placement
 function getDefaultWebBrowserState() {
-  return { view: void 0, logs: [], unreadErrors: 0, unreadWarnings: 0, cleanupRegistered: !1 };
+  return {
+    view: undefined,
+    logs: [],
+    unreadErrors: 0,
+    unreadWarnings: 0,
+    cleanupRegistered: false,
+  };
 }
+//@ chunk-wy2s2mmv.js:287-483 placement
 /**
  * AppState 的 webBrowser 片段。
  */
-//@ chunk-wy2s2mmv.js:287-483 placement
-function makeSetWebBrowserSlice(n) {
+function makeSetWebBrowserSlice(setAppState) {
   return (o) =>
-    n((e) => {
+    setAppState((e) => {
       let r = {
-          webBrowser: e.webBrowser,
-          bagelActive: e.bagelActive,
-          bagelUrl: e.bagelUrl,
-          bagelPanelVisible: e.bagelPanelVisible,
-        },
-        t = o(r);
+        webBrowser: e.webBrowser,
+        bagelActive: e.bagelActive,
+        bagelUrl: e.bagelUrl,
+        bagelPanelVisible: e.bagelPanelVisible,
+      };
+      let t = o(r);
       if (t === r) return e;
-      return { ...e, ...t };
+      return {
+        ...e,
+        ...t,
+      };
     });
 }
-
 export { getDefaultWebBrowserState, makeSetWebBrowserSlice };

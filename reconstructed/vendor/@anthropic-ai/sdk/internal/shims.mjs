@@ -7,53 +7,60 @@
  */
 
 //@ chunk-hwmsct5x.js:17807-18018 esm-fingerprint
-function Kl() {
-  if (typeof fetch < "u") return fetch;
+function getDefaultFetch() {
+  if (typeof fetch !== "undefined") return fetch;
   throw Error(
     "`fetch` is not defined as a global; Either pass `fetch` to the client, `new Anthropic({ fetch })` or polyfill the global, `globalThis.fetch = fetch`",
   );
 }
 //@ chunk-hwmsct5x.js:18018-18238 esm-fingerprint
-function Bi(...e) {
+function makeReadableStream(...args) {
   let n = globalThis.ReadableStream;
-  if (typeof n > "u")
+  if (typeof n === "undefined")
     throw Error(
       "`ReadableStream` is not defined as a global; You will need to polyfill it, `globalThis.ReadableStream = ReadableStream`",
     );
-  return new n(...e);
+  return new n(...args);
 }
 //@ chunk-hwmsct5x.js:18238-18473 esm-fingerprint
-function $o(e) {
-  let n = Symbol.asyncIterator in e ? e[Symbol.asyncIterator]() : e[Symbol.iterator]();
-  return Bi({
+function ReadableStreamFrom(iterable) {
+  let iter =
+    Symbol.asyncIterator in iterable ? iterable[Symbol.asyncIterator]() : iterable[Symbol.iterator]();
+  return makeReadableStream({
     start() {},
-    async pull(r) {
-      let { done: s, value: h } = await n.next();
-      if (s) r.close();
-      else r.enqueue(h);
+    async pull(controller) {
+      let { done, value } = await iter.next();
+      if (done) controller.close();
+      else controller.enqueue(value);
     },
     async cancel() {
-      await n.return?.();
+      await iter.return?.();
     },
   });
 }
 //@ chunk-hwmsct5x.js:18473-18786 esm-fingerprint
-function rr(e) {
-  if (e[Symbol.asyncIterator]) return e;
-  let reader = e.getReader();
+function ReadableStreamToAsyncIterable(stream) {
+  if (stream[Symbol.asyncIterator]) return stream;
+  let reader = stream.getReader();
   return {
     async next() {
       try {
-        let read = await reader.read();
-        if (read?.done) reader.releaseLock();
-        return read;
-      } catch (error) {
-        throw (reader.releaseLock(), error);
+        let result = await reader.read();
+        if (result?.done) reader.releaseLock();
+        return result;
+      } catch (e) {
+        reader.releaseLock();
+        throw e;
       }
     },
     async return() {
-      let cancel = reader.cancel();
-      return (reader.releaseLock(), await cancel, { done: !0, value: void 0 });
+      let cancelPromise = reader.cancel();
+      reader.releaseLock();
+      await cancelPromise;
+      return {
+        done: true,
+        value: undefined,
+      };
     },
     [Symbol.asyncIterator]() {
       return this;
@@ -61,15 +68,21 @@ function rr(e) {
   };
 }
 //@ chunk-hwmsct5x.js:18786-18982 esm-fingerprint
-async function Vl(e) {
-  if (e === null || typeof e !== "object") return;
-  if (e[Symbol.asyncIterator]) {
-    await e[Symbol.asyncIterator]().return?.();
+async function CancelReadableStream(stream) {
+  if (stream === null || typeof stream !== "object") return;
+  if (stream[Symbol.asyncIterator]) {
+    await stream[Symbol.asyncIterator]().return?.();
     return;
   }
-  let reader = e.getReader(),
-    cancel = reader.cancel();
-  (reader.releaseLock(), await cancel);
+  let reader = stream.getReader();
+  let cancelPromise = reader.cancel();
+  reader.releaseLock();
+  await cancelPromise;
 }
-
-export { rr, Bi, $o, Kl, Vl };
+export {
+  ReadableStreamToAsyncIterable,
+  makeReadableStream,
+  ReadableStreamFrom,
+  getDefaultFetch,
+  CancelReadableStream,
+};

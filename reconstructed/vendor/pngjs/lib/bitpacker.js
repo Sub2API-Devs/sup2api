@@ -6,95 +6,121 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { se } from "./constants.js";
+import { require_constants } from "./constants.js";
 
 //@ chunk-spjgqa4y.js:37285-39166 cjs-fingerprint
-var jr = x(function (Ql, Wr) {
-  var T = se();
-  Wr.exports = function (t, e, r, n) {
-    let i = [T.COLORTYPE_COLOR_ALPHA, T.COLORTYPE_ALPHA].indexOf(n.colorType) !== -1;
-    if (n.colorType === n.inputColorType) {
-      let _ = (function () {
-        let arrayBuffer = new ArrayBuffer(2);
-        return (new DataView(arrayBuffer).setInt16(0, 256, !0), new Int16Array(arrayBuffer)[0] !== 256);
+var require_bitpacker = x(function (cjsExports, cjsModule) {
+  var constants = require_constants();
+  cjsModule.exports = function (dataIn, width, height, options) {
+    let outHasAlpha =
+      [constants.COLORTYPE_COLOR_ALPHA, constants.COLORTYPE_ALPHA].indexOf(options.colorType) !== -1;
+    if (options.colorType === options.inputColorType) {
+      let bigEndian = (function () {
+        let buffer = new ArrayBuffer(2);
+        new DataView(buffer).setInt16(0, 256, true);
+        return new Int16Array(buffer)[0] !== 256;
       })();
-      if (n.bitDepth === 8 || (n.bitDepth === 16 && _)) return t;
+      if (options.bitDepth === 8 || (options.bitDepth === 16 && bigEndian)) return dataIn;
     }
-    let o = n.bitDepth !== 16 ? t : new Uint16Array(t.buffer),
-      s = 255,
-      l = T.COLORTYPE_TO_BPP_MAP[n.inputColorType];
-    if (l === 4 && !n.inputHasAlpha) l = 3;
-    let u = T.COLORTYPE_TO_BPP_MAP[n.colorType];
-    if (n.bitDepth === 16) ((s = 65535), (u *= 2));
-    let alloc = Buffer.alloc(e * r * u),
-      a = 0,
-      h = 0,
-      c = n.bgColor || {};
-    if (c.red === void 0) c.red = s;
-    if (c.green === void 0) c.green = s;
-    if (c.blue === void 0) c.blue = s;
-    function p() {
-      let _,
-        w,
-        m,
-        E = s;
-      switch (n.inputColorType) {
-        case T.COLORTYPE_COLOR_ALPHA:
-          ((E = o[a + 3]), (_ = o[a]), (w = o[a + 1]), (m = o[a + 2]));
+    let data = options.bitDepth !== 16 ? dataIn : new Uint16Array(dataIn.buffer);
+    let maxValue = 255;
+    let inBpp = constants.COLORTYPE_TO_BPP_MAP[options.inputColorType];
+    if (inBpp === 4 && !options.inputHasAlpha) inBpp = 3;
+    let outBpp = constants.COLORTYPE_TO_BPP_MAP[options.colorType];
+    if (options.bitDepth === 16) {
+      maxValue = 65535;
+      outBpp *= 2;
+    }
+    let outData = Buffer.alloc(width * height * outBpp);
+    let inIndex = 0;
+    let outIndex = 0;
+    let bgColor = options.bgColor || {};
+    if (bgColor.red === undefined) bgColor.red = maxValue;
+    if (bgColor.green === undefined) bgColor.green = maxValue;
+    if (bgColor.blue === undefined) bgColor.blue = maxValue;
+    function getRGBA() {
+      let red;
+      let green;
+      let blue;
+      let alpha = maxValue;
+      switch (options.inputColorType) {
+        case constants.COLORTYPE_COLOR_ALPHA:
+          alpha = data[inIndex + 3];
+          red = data[inIndex];
+          green = data[inIndex + 1];
+          blue = data[inIndex + 2];
           break;
-        case T.COLORTYPE_COLOR:
-          ((_ = o[a]), (w = o[a + 1]), (m = o[a + 2]));
+        case constants.COLORTYPE_COLOR:
+          red = data[inIndex];
+          green = data[inIndex + 1];
+          blue = data[inIndex + 2];
           break;
-        case T.COLORTYPE_ALPHA:
-          ((E = o[a + 1]), (_ = o[a]), (w = _), (m = _));
+        case constants.COLORTYPE_ALPHA:
+          alpha = data[inIndex + 1];
+          red = data[inIndex];
+          green = red;
+          blue = red;
           break;
-        case T.COLORTYPE_GRAYSCALE:
-          ((_ = o[a]), (w = _), (m = _));
+        case constants.COLORTYPE_GRAYSCALE:
+          red = data[inIndex];
+          green = red;
+          blue = red;
           break;
         default:
-          throw Error("input color type:" + n.inputColorType + " is not supported at present");
+          throw Error("input color type:" + options.inputColorType + " is not supported at present");
       }
-      if (n.inputHasAlpha) {
-        if (!i)
-          ((E /= s),
-            (_ = Math.min(Math.max(Math.round((1 - E) * c.red + E * _), 0), s)),
-            (w = Math.min(Math.max(Math.round((1 - E) * c.green + E * w), 0), s)),
-            (m = Math.min(Math.max(Math.round((1 - E) * c.blue + E * m), 0), s)));
+      if (options.inputHasAlpha) {
+        if (!outHasAlpha) {
+          alpha /= maxValue;
+          red = Math.min(Math.max(Math.round((1 - alpha) * bgColor.red + alpha * red), 0), maxValue);
+          green = Math.min(Math.max(Math.round((1 - alpha) * bgColor.green + alpha * green), 0), maxValue);
+          blue = Math.min(Math.max(Math.round((1 - alpha) * bgColor.blue + alpha * blue), 0), maxValue);
+        }
       }
-      return { red: _, green: w, blue: m, alpha: E };
+      return {
+        red,
+        green,
+        blue,
+        alpha,
+      };
     }
-    for (let _ = 0; _ < r; _++)
-      for (let w = 0; w < e; w++) {
-        let m = p(o, a);
-        switch (n.colorType) {
-          case T.COLORTYPE_COLOR_ALPHA:
-          case T.COLORTYPE_COLOR:
-            if (n.bitDepth === 8) {
-              if (((alloc[h] = m.red), (alloc[h + 1] = m.green), (alloc[h + 2] = m.blue), i))
-                alloc[h + 3] = m.alpha;
-            } else if (
-              (alloc.writeUInt16BE(m.red, h),
-              alloc.writeUInt16BE(m.green, h + 2),
-              alloc.writeUInt16BE(m.blue, h + 4),
-              i)
-            )
-              alloc.writeUInt16BE(m.alpha, h + 6);
+    for (let y = 0; y < height; y++)
+      for (let x = 0; x < width; x++) {
+        let rgba = getRGBA(data, inIndex);
+        switch (options.colorType) {
+          case constants.COLORTYPE_COLOR_ALPHA:
+          case constants.COLORTYPE_COLOR:
+            if (options.bitDepth === 8) {
+              outData[outIndex] = rgba.red;
+              outData[outIndex + 1] = rgba.green;
+              outData[outIndex + 2] = rgba.blue;
+              if (outHasAlpha) outData[outIndex + 3] = rgba.alpha;
+            } else {
+              outData.writeUInt16BE(rgba.red, outIndex);
+              outData.writeUInt16BE(rgba.green, outIndex + 2);
+              outData.writeUInt16BE(rgba.blue, outIndex + 4);
+              if (outHasAlpha) outData.writeUInt16BE(rgba.alpha, outIndex + 6);
+            }
             break;
-          case T.COLORTYPE_ALPHA:
-          case T.COLORTYPE_GRAYSCALE: {
-            let E = (m.red + m.green + m.blue) / 3;
-            if (n.bitDepth === 8) {
-              if (((alloc[h] = E), i)) alloc[h + 1] = m.alpha;
-            } else if ((alloc.writeUInt16BE(E, h), i)) alloc.writeUInt16BE(m.alpha, h + 2);
+          case constants.COLORTYPE_ALPHA:
+          case constants.COLORTYPE_GRAYSCALE: {
+            let grayscale = (rgba.red + rgba.green + rgba.blue) / 3;
+            if (options.bitDepth === 8) {
+              outData[outIndex] = grayscale;
+              if (outHasAlpha) outData[outIndex + 1] = rgba.alpha;
+            } else {
+              outData.writeUInt16BE(grayscale, outIndex);
+              if (outHasAlpha) outData.writeUInt16BE(rgba.alpha, outIndex + 2);
+            }
             break;
           }
           default:
-            throw Error("unrecognised color Type " + n.colorType);
+            throw Error("unrecognised color Type " + options.colorType);
         }
-        ((a += l), (h += u));
+        inIndex += inBpp;
+        outIndex += outBpp;
       }
-    return alloc;
+    return outData;
   };
 });
-
-export { jr };
+export { require_bitpacker };

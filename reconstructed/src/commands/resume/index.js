@@ -9,39 +9,38 @@
  * attribution: affinity 1, fingerprint 1
  */
 import { getIsRemoteMode } from "../../bootstrap/state.js";
-import { Jn } from "../../remote/remoteMode.js";
+import { getRemoteCaps } from "../../remote/remoteMode.js";
 import { isCommandEnabled } from "../../commands.js";
 
+//@ chunk-e6aww6q8.js:1734080-1734104 affinity
 /**
  * isResumeEnabled：恒 true。
  */
-//@ chunk-e6aww6q8.js:1734080-1734104 affinity
 function isResumeEnabled() {
-  return !0;
+  return true;
 }
+//@ chunk-e6aww6q8.js:1734104-1734426 fingerprint = resume (0.868)
 /**
  * /resume 命令对象（local-jsx）；描述：{return"Resume a previous conversation"}；别名 ["continue"]；isEnabled: L9o；isHidden: {if(!On())return!1;let e=Jn();if(!Ud(this)||e?.sessionId===void 0||e.viewerOnly)return!0;return!1}；实现 chunk-74n7apcd.js 的 De。
  */
-//@ chunk-e6aww6q8.js:1734104-1734426 fingerprint = resume (0.868)
 var resumeCommandDefinition = {
-    type: "local-jsx",
-    name: "resume",
-    get description() {
-      return "Resume a previous conversation";
-    },
-    aliases: ["continue"],
-    get argumentHint() {
-      return "[conversation id or search term]";
-    },
-    isEnabled: isResumeEnabled,
-    ...{},
-    get isHidden() {
-      if (!getIsRemoteMode()) return !1;
-      let e = Jn();
-      if (!isCommandEnabled(this) || e?.sessionId === void 0 || e.viewerOnly) return !0;
-      return !1;
-    },
+  type: "local-jsx",
+  name: "resume",
+  get description() {
+    return "Resume a previous conversation";
   },
-  resumeCommand = resumeCommandDefinition;
-
+  aliases: ["continue"],
+  get argumentHint() {
+    return "[conversation id or search term]";
+  },
+  isEnabled: isResumeEnabled,
+  ...{},
+  get isHidden() {
+    if (!getIsRemoteMode()) return false;
+    let remoteCaps = getRemoteCaps();
+    if (!isCommandEnabled(this) || remoteCaps?.sessionId === undefined || remoteCaps.viewerOnly) return true;
+    return false;
+  },
+};
+var resumeCommand = resumeCommandDefinition;
 export { resumeCommand };

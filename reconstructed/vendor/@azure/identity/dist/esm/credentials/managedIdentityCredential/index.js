@@ -5,179 +5,234 @@
  * pieces: chunk-mrx6y2r5.js (3)
  * attribution: esm-fingerprint 3
  */
-import { z, he, q } from "../../util/logging.js";
-import { Qr } from "../../client/identityClient.js";
-import { Yf } from "./imdsRetryPolicy.js";
-import { wt } from "../../../../../msal-node/lib/msal-node.cjs";
-import { _s, Is } from "../../msal/utils.js";
-import { Lo } from "../../../../../logger/dist/esm/index.js";
-import { R, vc, AuthenticationRequiredError } from "../../../index.js";
-import { Ud, eo } from "./utils.js";
-import { Z } from "../../util/tracing.js";
-import { Wf } from "./imdsMsi.js";
+import { credentialLogger, formatSuccess, formatError } from "../../util/logging.js";
+import { IdentityClient } from "../../client/identityClient.js";
+import { imdsRetryPolicy } from "./imdsRetryPolicy.js";
+import { ManagedIdentityApplication } from "../../../../../msal-node/lib/msal-node.cjs";
+import { getMSALLogLevel, Is } from "../../msal/utils.js";
+import { getLogLevel } from "../../../../../logger/dist/esm/index.js";
+import { CredentialUnavailableError, vc, AuthenticationRequiredError } from "../../../index.js";
+import { serviceFabricErrorMessage, mapScopesToResource } from "./utils.js";
+import { tracingClient } from "../../util/tracing.js";
+import { imdsMsi } from "./imdsMsi.js";
 
 //@ chunk-mrx6y2r5.js:306645-306683 esm-fingerprint
-var Fe = z("ManagedIdentityCredential");
+var logger_6 = credentialLogger("ManagedIdentityCredential");
 //@ chunk-mrx6y2r5.js:306683-311239 esm-fingerprint
-class Ln {
-  constructor(e, t) {
-    var r, n;
-    this.msiRetryConfig = { maxRetries: 5, startDelayInMs: 800, intervalIncrement: 2 };
-    let o;
-    if (typeof e === "string") ((this.clientId = e), (o = t !== null && t !== void 0 ? t : {}));
-    else
-      ((this.clientId = e === null || e === void 0 ? void 0 : e.clientId),
-        (o = e !== null && e !== void 0 ? e : {}));
-    ((this.resourceId = o === null || o === void 0 ? void 0 : o.resourceId),
-      (this.objectId = o === null || o === void 0 ? void 0 : o.objectId));
-    let filtered = [
-      { key: "clientId", value: this.clientId },
-      { key: "resourceId", value: this.resourceId },
-      { key: "objectId", value: this.objectId },
-    ].filter((a) => a.value);
-    if (filtered.length > 1)
+class ManagedIdentityCredential {
+  constructor(clientIdOrOptions, options) {
+    var _a;
+    var _b;
+    this.msiRetryConfig = {
+      maxRetries: 5,
+      startDelayInMs: 800,
+      intervalIncrement: 2,
+    };
+    let _options;
+    if (typeof clientIdOrOptions === "string") {
+      this.clientId = clientIdOrOptions;
+      _options = options !== null && options !== undefined ? options : {};
+    } else {
+      this.clientId =
+        clientIdOrOptions === null || clientIdOrOptions === undefined
+          ? undefined
+          : clientIdOrOptions.clientId;
+      _options = clientIdOrOptions !== null && clientIdOrOptions !== undefined ? clientIdOrOptions : {};
+    }
+    this.resourceId = _options === null || _options === undefined ? undefined : _options.resourceId;
+    this.objectId = _options === null || _options === undefined ? undefined : _options.objectId;
+    let providedIds = [
+      {
+        key: "clientId",
+        value: this.clientId,
+      },
+      {
+        key: "resourceId",
+        value: this.resourceId,
+      },
+      {
+        key: "objectId",
+        value: this.objectId,
+      },
+    ].filter((id) => id.value);
+    if (providedIds.length > 1)
       throw Error(
-        `ManagedIdentityCredential: only one of 'clientId', 'resourceId', or 'objectId' can be provided. Received values: ${JSON.stringify({ clientId: this.clientId, resourceId: this.resourceId, objectId: this.objectId })}`,
-      );
-    if (
-      ((o.allowInsecureConnection = !0),
-      ((r = o.retryOptions) === null || r === void 0 ? void 0 : r.maxRetries) !== void 0)
-    )
-      this.msiRetryConfig.maxRetries = o.retryOptions.maxRetries;
-    ((this.identityClient = new Qr(
-      Object.assign(Object.assign({}, o), {
-        additionalPolicies: [{ policy: Yf(this.msiRetryConfig), position: "perCall" }],
-      }),
-    )),
-      (this.managedIdentityApp = new wt({
-        managedIdentityIdParams: {
-          userAssignedClientId: this.clientId,
-          userAssignedResourceId: this.resourceId,
-          userAssignedObjectId: this.objectId,
-        },
-        system: {
-          disableInternalRetries: !0,
-          networkClient: this.identityClient,
-          loggerOptions: {
-            logLevel: _s(Lo()),
-            piiLoggingEnabled:
-              (n = o.loggingOptions) === null || n === void 0 ? void 0 : n.enableUnsafeSupportLogging,
-            loggerCallback: Is(Fe),
+        `ManagedIdentityCredential: only one of 'clientId', 'resourceId', or 'objectId' can be provided. Received values: ${JSON.stringify(
+          {
+            clientId: this.clientId,
+            resourceId: this.resourceId,
+            objectId: this.objectId,
           },
+        )}`,
+      );
+    _options.allowInsecureConnection = true;
+    if (((_a = _options.retryOptions) === null || _a === undefined ? undefined : _a.maxRetries) !== undefined)
+      this.msiRetryConfig.maxRetries = _options.retryOptions.maxRetries;
+    this.identityClient = new IdentityClient(
+      Object.assign(Object.assign({}, _options), {
+        additionalPolicies: [
+          {
+            policy: imdsRetryPolicy(this.msiRetryConfig),
+            position: "perCall",
+          },
+        ],
+      }),
+    );
+    this.managedIdentityApp = new ManagedIdentityApplication({
+      managedIdentityIdParams: {
+        userAssignedClientId: this.clientId,
+        userAssignedResourceId: this.resourceId,
+        userAssignedObjectId: this.objectId,
+      },
+      system: {
+        disableInternalRetries: true,
+        networkClient: this.identityClient,
+        loggerOptions: {
+          logLevel: getMSALLogLevel(getLogLevel()),
+          piiLoggingEnabled:
+            (_b = _options.loggingOptions) === null || _b === undefined
+              ? undefined
+              : _b.enableUnsafeSupportLogging,
+          loggerCallback: Is(logger_6),
         },
-      })),
-      (this.isAvailableIdentityClient = new Qr(
-        Object.assign(Object.assign({}, o), { retryOptions: { maxRetries: 0 } }),
-      )));
+      },
+    });
+    this.isAvailableIdentityClient = new IdentityClient(
+      Object.assign(Object.assign({}, _options), {
+        retryOptions: {
+          maxRetries: 0,
+        },
+      }),
+    );
     let managedIdentitySource = this.managedIdentityApp.getManagedIdentitySource();
     if (managedIdentitySource === "CloudShell") {
-      if (this.clientId || this.resourceId || this.objectId)
-        throw (
-          Fe.warning(
-            `CloudShell MSI detected with user-provided IDs - throwing. Received values: ${JSON.stringify({ clientId: this.clientId, resourceId: this.resourceId, objectId: this.objectId })}.`,
-          ),
-          new R(
-            "ManagedIdentityCredential: Specifying a user-assigned managed identity is not supported for CloudShell at runtime. When using Managed Identity in CloudShell, omit the clientId, resourceId, and objectId parameters.",
-          )
+      if (this.clientId || this.resourceId || this.objectId) {
+        logger_6.warning(
+          `CloudShell MSI detected with user-provided IDs - throwing. Received values: ${JSON.stringify({
+            clientId: this.clientId,
+            resourceId: this.resourceId,
+            objectId: this.objectId,
+          })}.`,
         );
+        throw new CredentialUnavailableError(
+          "ManagedIdentityCredential: Specifying a user-assigned managed identity is not supported for CloudShell at runtime. When using Managed Identity in CloudShell, omit the clientId, resourceId, and objectId parameters.",
+        );
+      }
     }
     if (managedIdentitySource === "ServiceFabric") {
-      if (this.clientId || this.resourceId || this.objectId)
-        throw (
-          Fe.warning(
-            `Service Fabric detected with user-provided IDs - throwing. Received values: ${JSON.stringify({ clientId: this.clientId, resourceId: this.resourceId, objectId: this.objectId })}.`,
-          ),
-          new R(`ManagedIdentityCredential: ${Ud}`)
+      if (this.clientId || this.resourceId || this.objectId) {
+        logger_6.warning(
+          `Service Fabric detected with user-provided IDs - throwing. Received values: ${JSON.stringify({
+            clientId: this.clientId,
+            resourceId: this.resourceId,
+            objectId: this.objectId,
+          })}.`,
         );
+        throw new CredentialUnavailableError(`ManagedIdentityCredential: ${serviceFabricErrorMessage}`);
+      }
     }
-    if ((Fe.info(`Using ${managedIdentitySource} managed identity.`), filtered.length === 1)) {
-      let { key: key, value: c } = filtered[0];
-      Fe.info(`${managedIdentitySource} with ${key}: ${c}`);
+    logger_6.info(`Using ${managedIdentitySource} managed identity.`);
+    if (providedIds.length === 1) {
+      let { key, value } = providedIds[0];
+      logger_6.info(`${managedIdentitySource} with ${key}: ${value}`);
     }
   }
-  async getToken(e, t = {}) {
-    Fe.getToken.info("Using the MSAL provider for Managed Identity.");
-    let r = eo(e);
-    if (!r)
-      throw new R(
-        `ManagedIdentityCredential: Multiple scopes are not supported. Scopes: ${JSON.stringify(e)}`,
+  async getToken(scopes, options = {}) {
+    logger_6.getToken.info("Using the MSAL provider for Managed Identity.");
+    let resource = mapScopesToResource(scopes);
+    if (!resource)
+      throw new CredentialUnavailableError(
+        `ManagedIdentityCredential: Multiple scopes are not supported. Scopes: ${JSON.stringify(scopes)}`,
       );
-    return Z.withSpan("ManagedIdentityCredential.getToken", t, async () => {
-      var n;
+    return tracingClient.withSpan("ManagedIdentityCredential.getToken", options, async () => {
+      var _a;
       try {
-        let isAvailable = await vc.isAvailable(this.clientId),
-          managedIdentitySource = this.managedIdentityApp.getManagedIdentitySource(),
-          s = managedIdentitySource === "DefaultToImds" || managedIdentitySource === "Imds";
-        if ((Fe.getToken.info(`MSAL Identity source: ${managedIdentitySource}`), isAvailable)) {
-          Fe.getToken.info("Using the token exchange managed identity.");
-          let token = await vc.getToken({
-            scopes: e,
+        let isTokenExchangeMsi = await vc.isAvailable(this.clientId);
+        let identitySource = this.managedIdentityApp.getManagedIdentitySource();
+        let isImdsMsi = identitySource === "DefaultToImds" || identitySource === "Imds";
+        logger_6.getToken.info(`MSAL Identity source: ${identitySource}`);
+        if (isTokenExchangeMsi) {
+          logger_6.getToken.info("Using the token exchange managed identity.");
+          let result = await vc.getToken({
+            scopes,
             clientId: this.clientId,
             identityClient: this.identityClient,
             retryConfig: this.msiRetryConfig,
             resourceId: this.resourceId,
           });
-          if (token === null)
-            throw new R(
+          if (result === null)
+            throw new CredentialUnavailableError(
               "Attempted to use the token exchange managed identity, but received a null response.",
             );
-          return token;
-        } else if (s) {
+          return result;
+        } else if (isImdsMsi) {
+          logger_6.getToken.info("Using the IMDS endpoint to probe for availability.");
           if (
-            (Fe.getToken.info("Using the IMDS endpoint to probe for availability."),
-            !(await Wf.isAvailable({
-              scopes: e,
+            !(await imdsMsi.isAvailable({
+              scopes,
               clientId: this.clientId,
-              getTokenOptions: t,
+              getTokenOptions: options,
               identityClient: this.isAvailableIdentityClient,
               resourceId: this.resourceId,
-            })))
+            }))
           )
-            throw new R("Attempted to use the IMDS endpoint, but it is not available.");
+            throw new CredentialUnavailableError(
+              "Attempted to use the IMDS endpoint, but it is not available.",
+            );
         }
-        Fe.getToken.info("Calling into MSAL for managed identity token.");
-        let acquireToken = await this.managedIdentityApp.acquireToken({ resource: r });
-        return (
-          this.ensureValidMsalToken(e, acquireToken, t),
-          Fe.getToken.info(he(e)),
-          {
-            expiresOnTimestamp: acquireToken.expiresOn.getTime(),
-            token: acquireToken.accessToken,
-            refreshAfterTimestamp:
-              (n = acquireToken.refreshOn) === null || n === void 0 ? void 0 : n.getTime(),
-            tokenType: "Bearer",
-          }
-        );
-      } catch (error) {
-        if ((Fe.getToken.error(q(e, error)), error.name === "AuthenticationRequiredError")) throw error;
-        if (lC(error))
-          throw new R(`ManagedIdentityCredential: Network unreachable. Message: ${error.message}`, {
-            cause: error,
-          });
-        throw new R(`ManagedIdentityCredential: Authentication failed. Message ${error.message}`, {
-          cause: error,
+        logger_6.getToken.info("Calling into MSAL for managed identity token.");
+        let token = await this.managedIdentityApp.acquireToken({
+          resource,
         });
+        this.ensureValidMsalToken(scopes, token, options);
+        logger_6.getToken.info(formatSuccess(scopes));
+        return {
+          expiresOnTimestamp: token.expiresOn.getTime(),
+          token: token.accessToken,
+          refreshAfterTimestamp:
+            (_a = token.refreshOn) === null || _a === undefined ? undefined : _a.getTime(),
+          tokenType: "Bearer",
+        };
+      } catch (err) {
+        logger_6.getToken.error(formatError(scopes, err));
+        if (err.name === "AuthenticationRequiredError") throw err;
+        if (isNetworkError(err))
+          throw new CredentialUnavailableError(
+            `ManagedIdentityCredential: Network unreachable. Message: ${err.message}`,
+            {
+              cause: err,
+            },
+          );
+        throw new CredentialUnavailableError(
+          `ManagedIdentityCredential: Authentication failed. Message ${err.message}`,
+          {
+            cause: err,
+          },
+        );
       }
     });
   }
-  ensureValidMsalToken(e, t, r) {
-    let n = (o) => (
-      Fe.getToken.info(o),
-      new AuthenticationRequiredError({ scopes: Array.isArray(e) ? e : [e], getTokenOptions: r, message: o })
-    );
-    if (!t) throw n("No response.");
-    if (!t.expiresOn) throw n('Response had no "expiresOn" property.');
-    if (!t.accessToken) throw n('Response had no "accessToken" property.');
+  ensureValidMsalToken(scopes, msalToken, getTokenOptions) {
+    let createError = (message) => {
+      logger_6.getToken.info(message);
+      return new AuthenticationRequiredError({
+        scopes: Array.isArray(scopes) ? scopes : [scopes],
+        getTokenOptions,
+        message,
+      });
+    };
+    if (!msalToken) throw createError("No response.");
+    if (!msalToken.expiresOn) throw createError('Response had no "expiresOn" property.');
+    if (!msalToken.accessToken) throw createError('Response had no "accessToken" property.');
   }
 }
 //@ chunk-mrx6y2r5.js:311239-311448 esm-fingerprint
-function lC(e) {
-  if (e.errorCode === "network_error") return !0;
-  if (e.code === "ENETUNREACH" || e.code === "EHOSTUNREACH") return !0;
-  if (e.statusCode === 403 || e.code === 403) {
-    if (e.message.includes("unreachable")) return !0;
+function isNetworkError(err) {
+  if (err.errorCode === "network_error") return true;
+  if (err.code === "ENETUNREACH" || err.code === "EHOSTUNREACH") return true;
+  if (err.statusCode === 403 || err.code === 403) {
+    if (err.message.includes("unreachable")) return true;
   }
-  return !1;
+  return false;
 }
-
-export { Ln };
+export { ManagedIdentityCredential };

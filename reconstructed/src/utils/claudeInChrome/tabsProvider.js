@@ -10,21 +10,26 @@
  */
 
 //@ chunk-cxfkxaw3.js:191-202 placement
-var r = null;
+/**
+ * 外部注入的标签页提供者函数。
+ */
+var providedTabsProvider = null;
 //@ chunk-cxfkxaw3.js:202-222 placement
-function s2s(e) {
-  r = e;
+/**
+ * 设置外部注入的标签页提供者。
+ */
+function setProvidedTabsProvider(e) {
+  providedTabsProvider = e;
 }
+//@ chunk-cxfkxaw3.js:222-377 placement
 /**
  * 从外部注入的标签页提供者获取标签页列表（只保留有数字 tabId 与字符串 url 的项）。
  */
-//@ chunk-cxfkxaw3.js:222-377 placement
 async function listProvidedTabs() {
-  if (r === null) return;
-  let e = await r();
+  if (providedTabsProvider === null) return;
+  let e = await providedTabsProvider();
   return Array.isArray(e)
     ? e.filter((n) => typeof n?.tabId === "number" && typeof n?.url === "string")
-    : void 0;
+    : undefined;
 }
-
-export { s2s, listProvidedTabs };
+export { setProvidedTabsProvider, listProvidedTabs };

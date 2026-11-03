@@ -8,18 +8,20 @@
 import { x, importMetaRequire } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-a1ttyqdw.js:1293-1663 cjs-fingerprint
-var V = x(function (K) {
-  Object.defineProperty(K, "__esModule", { value: !0 });
-  K.readFile = K.fileIntercept = K.filePromises = void 0;
-  var M = importMetaRequire("fs/promises");
-  K.filePromises = {};
-  K.fileIntercept = {};
-  var te = (e, t) => {
-    if (K.fileIntercept[e] !== void 0) return K.fileIntercept[e];
-    if (!K.filePromises[e] || t?.ignoreCache) K.filePromises[e] = M.readFile(e, "utf8");
-    return K.filePromises[e];
+var require_readFile = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.readFile = cjsExports.fileIntercept = cjsExports.filePromises = undefined;
+  var promises_1 = importMetaRequire("fs/promises");
+  cjsExports.filePromises = {};
+  cjsExports.fileIntercept = {};
+  var readFile = (path, options) => {
+    if (cjsExports.fileIntercept[path] !== undefined) return cjsExports.fileIntercept[path];
+    if (!cjsExports.filePromises[path] || options?.ignoreCache)
+      cjsExports.filePromises[path] = promises_1.readFile(path, "utf8");
+    return cjsExports.filePromises[path];
   };
-  K.readFile = te;
+  cjsExports.readFile = readFile;
 });
-
-export { V };
+export { require_readFile };

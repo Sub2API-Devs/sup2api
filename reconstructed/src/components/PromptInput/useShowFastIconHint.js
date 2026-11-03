@@ -8,31 +8,30 @@
  * pieces: chunk-18hwfzwa.js (3)
  * attribution: placement 3
  */
-import { j, y, P } from "../../../vendor/react/cjs/react.production.js";
+import { init_react_production, y, P } from "../../../vendor/react/cjs/react.production.js";
 import { useClock } from "../../ink/components/ClockContext.js";
-import { Ipt } from "../PackageManagerAutoUpdater.js";
+import { packageManagerAutoUpdaterSlot } from "../PackageManagerAutoUpdater.js";
 import { useHost } from "../../context/session.js";
 
 //@ chunk-18hwfzwa.js:922094-922098 placement
-j();
+init_react_production();
 //@ chunk-18hwfzwa.js:922098-922111 placement
-var Rao = 5000;
+var FAST_ICON_HINT_MS = 5000;
 //@ chunk-18hwfzwa.js:922111-922318 placement
 function useShowFastIconHint(showFastIcon) {
-  let [x, D] = y(!1),
-    L = useClock(),
-    of = Ipt.of(useHost());
-  return (
-    P(() => {
-      if (of.fastIconHintShown || !showFastIcon) return;
-      (of.markFastIconHintShown(), D(!0));
-      let ke = L.setTimeout(() => D(!1), Rao);
-      return () => {
-        (ke(), D(!1));
-      };
-    }, [showFastIcon, L, of]),
-    x
-  );
+  let [showHint, setShowHint] = y(false);
+  let clock = useClock();
+  let ee = packageManagerAutoUpdaterSlot.of(useHost());
+  P(() => {
+    if (ee.fastIconHintShown || !showFastIcon) return;
+    ee.markFastIconHintShown();
+    setShowHint(true);
+    let timer = clock.setTimeout(() => setShowHint(false), FAST_ICON_HINT_MS);
+    return () => {
+      timer();
+      setShowHint(false);
+    };
+  }, [showFastIcon, clock, ee]);
+  return showHint;
 }
-
 export { useShowFastIconHint };

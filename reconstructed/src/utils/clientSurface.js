@@ -27,5 +27,4 @@ function detectClientSurface() {
             ? "vscode"
             : null;
 }
-
 export { detectClientSurface };

@@ -6,32 +6,33 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../runtime/bun-runtime.js";
-import { uh } from "../../compile/codegen/index.js";
-import { ew } from "../../compile/util.js";
-import { Lkn } from "../../runtime/equal.js";
+import { require_codegen_2 } from "../../compile/codegen/index.js";
+import { require_util_2 } from "../../compile/util.js";
+import { require_equal } from "../../runtime/equal.js";
 
 //@ chunk-s82q9s4x.js:90404-90833 cjs-fingerprint
-var Bo = x(function (Wo) {
-  Object.defineProperty(Wo, "__esModule", { value: !0 });
-  var Ye = uh(),
-    Jo = ew(),
-    If = Lkn(),
-    Tf = {
-      message: "must be equal to constant",
-      params: ({ schemaCode: schemaCode }) => Ye._`{allowedValue: ${schemaCode}}`,
+var require_const = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  var codegen_1 = require_codegen_2();
+  var util_1 = require_util_2();
+  var equal_1 = require_equal();
+  var error = {
+    message: "must be equal to constant",
+    params: ({ schemaCode }) => codegen_1._`{allowedValue: ${schemaCode}}`,
+  };
+  var def = {
+    keyword: "const",
+    $data: true,
+    error,
+    code(cxt) {
+      let { gen, data, $data, schemaCode, schema } = cxt;
+      if ($data || (schema && typeof schema == "object"))
+        cxt.fail$data(codegen_1._`!${util_1.useFunc(gen, equal_1.default)}(${data}, ${schemaCode})`);
+      else cxt.fail(codegen_1._`${schema} !== ${data}`);
     },
-    Cf = {
-      keyword: "const",
-      $data: !0,
-      error: Tf,
-      code(e) {
-        let { gen: gen, data: r, $data: $data, schemaCode: schemaCode, schema: schema } = e;
-        if ($data || (schema && typeof schema == "object"))
-          e.fail$data(Ye._`!${Jo.useFunc(gen, If.default)}(${r}, ${schemaCode})`);
-        else e.fail(Ye._`${schema} !== ${r}`);
-      },
-    };
-  Wo.default = Cf;
+  };
+  cjsExports.default = def;
 });
-
-export { Bo };
+export { require_const };

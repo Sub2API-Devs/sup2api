@@ -8,13 +8,16 @@
  * pieces: chunk-0e8j1zzj.js (1), chunk-18hwfzwa.js (1), chunk-66jn0ssz.js (2)
  * attribution: callgraph-fingerprint 1, fingerprint 2, file-last-pair 1
  */
-import { BAi } from "../../utils/peerMessageHeaders.js";
+import { isValidHeaderValue } from "../../utils/peerMessageHeaders.js";
 import { sanitizeTeammateLabel } from "../../utils/swarm/teammateIds.js";
 import { plural } from "../../utils/stringUtils.js";
 import { PEER_MESSAGE_DROP_REASONS } from "../../utils/udsMessaging/peerGuard.js";
-import { e, r } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text } from "../../ink/components/Text.js";
-import { CONSENT_ROW_LIMITS, consentRowLabel, Cpt } from "./consentRows.js";
+import { CONSENT_ROW_LIMITS, consentRowLabel, MAX_CONSENT_SUGGESTION_WIDTH } from "./consentRows.js";
 import { formatPermissionRule } from "../../utils/permissions/disallowedToolsFlag.js";
 import { uniqueLabels } from "../../utils/permissions/approvalPayloadSerialization.js";
 import { uniq } from "../../utils/collections.js";
@@ -23,40 +26,66 @@ import { bunStringWidth } from "../../ink/stringWidth.js";
 //@ chunk-66jn0ssz.js:3487-3592 file-last-pair
 function commandListDisplay(commands) {
   return {
-    from: BAi(commands.from) ? commands.from : "(unrenderable sender address)",
+    from: isValidHeaderValue(commands.from) ? commands.from : "(unrenderable sender address)",
     name: commands.name ? sanitizeTeammateLabel(commands.name) : "",
   };
 }
 //@ chunk-66jn0ssz.js:3592-3810 fingerprint = commandListDisplayTruncated (0.389)
 function commandListDisplayTruncated(commands) {
-  let { from: from } = commandListDisplay(commands),
-    { name: r } = commandListDisplay(commands),
-    s = r ? `@${r} (${from})` : from,
-    d =
-      commands.suppressed > 0
-        ? ` (+${commands.suppressed} similar ${plural(commands.suppressed, "drop")} suppressed)`
-        : "";
+  let { from } = commandListDisplay(commands);
+  let { name: r } = commandListDisplay(commands);
+  let s = r ? `@${r} (${from})` : from;
+  let d =
+    commands.suppressed > 0
+      ? ` (+${commands.suppressed} similar ${plural(commands.suppressed, "drop")} suppressed)`
+      : "";
   return `Dropped a peer message from ${s}: ${PEER_MESSAGE_DROP_REASONS[commands.reason]}.${d}`;
 }
 //@ chunk-0e8j1zzj.js:4945-5290 callgraph-fingerprint = formatPathList (0.257)
 function formatPathList(paths) {
   if (paths.length === 0) return "";
-  if (paths.length === 1) return e(Text, { bold: !0, children: paths[0] });
+  if (paths.length === 1)
+    return jsxProd_default(Text, {
+      bold: true,
+      children: paths[0],
+    });
   if (paths.length === 2)
-    return r(Text, {
+    return jsxProd_default_2(Text, {
       children: [
-        e(Text, { bold: !0, children: paths[0] }),
+        jsxProd_default(Text, {
+          bold: true,
+          children: paths[0],
+        }),
         " and ",
-        e(Text, { bold: !0, children: paths[1] }),
+        jsxProd_default(Text, {
+          bold: true,
+          children: paths[1],
+        }),
       ],
     });
-  return r(Text, {
+  return jsxProd_default_2(Text, {
     children: [
-      paths
-        .slice(0, -1)
-        .map((t, d) => r(Text, { children: [e(Text, { bold: !0, children: t }), ",", " "] }, d)),
+      paths.slice(0, -1).map((children, d) =>
+        jsxProd_default_2(
+          Text,
+          {
+            children: [
+              jsxProd_default(Text, {
+                bold: true,
+                children,
+              }),
+              ",",
+              " ",
+            ],
+          },
+          d,
+        ),
+      ),
       "and ",
-      e(Text, { bold: !0, children: paths.at(-1) }),
+      jsxProd_default(Text, {
+        bold: true,
+        children: paths.at(-1),
+      }),
     ],
   });
 }
@@ -66,19 +95,25 @@ function generateShellSuggestionsLabel(h) {
   if (allRules.length === 0 || allRules.length > CONSENT_ROW_LIMITS) return null;
   let D;
   try {
-    D = allRules.map((ee) =>
+    D = allRules.map((rule) =>
       formatPermissionRule(
-        ee.ruleContent === void 0
-          ? { toolName: ee.toolName }
-          : { toolName: ee.toolName, ruleContent: ee.ruleContent },
+        rule.ruleContent === undefined
+          ? {
+              toolName: rule.toolName,
+            }
+          : {
+              toolName: rule.toolName,
+              ruleContent: rule.ruleContent,
+            },
       ),
     );
   } catch {
     return null;
   }
   let L = uniqueLabels(uniq(D), (ee) => consentRowLabel(ee));
-  if (bunStringWidth(L.join(" and ")) > Cpt) return null;
-  return r(Text, { children: ["Yes, and don't ask again for ", formatPathList(L)] });
+  if (bunStringWidth(L.join(" and ")) > MAX_CONSENT_SUGGESTION_WIDTH) return null;
+  return jsxProd_default_2(Text, {
+    children: ["Yes, and don't ask again for ", formatPathList(L)],
+  });
 }
-
 export { formatPathList, commandListDisplayTruncated, generateShellSuggestionsLabel, commandListDisplay };

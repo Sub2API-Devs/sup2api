@@ -6,264 +6,354 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../runtime/bun-runtime.js";
-import { li } from "../../../protobuf/dist/commonjs/index.js";
-import { Bi } from "./uint.js";
-import { wa } from "./value.js";
-import { ld } from "./eval.js";
-import { ba } from "../../../protobuf/dist/commonjs/reflect/index.js";
-import { $o } from "./list.js";
-import { Aa } from "./map.js";
-import { Os, hy } from "../../../../@anthropic-ai/bedrock-sdk/core/error.js";
-import { Ei } from "./type.js";
+import { require_protobuf } from "../../../protobuf/dist/commonjs/index.js";
+import { require_uint } from "./uint.js";
+import { require_value } from "./value.js";
+import { require_eval } from "./eval.js";
+import { require_reflect_2 } from "../../../protobuf/dist/commonjs/reflect/index.js";
+import { require_list } from "./list.js";
+import { require_map } from "./map.js";
+import { require_error_4, require_error_5 } from "../../../../@anthropic-ai/bedrock-sdk/core/error.js";
+import { require_type } from "./type.js";
 
 //@ chunk-fq0cr76a.js:611599-617423 cjs-fingerprint
-var fF = x(function (dF) {
-  Object.defineProperty(dF, "__esModule", { value: !0 });
-  dF.celObject = sae;
-  var tn = li(),
-    Id = Bi(),
-    oF = wa(),
-    aF = ld(),
-    $r = ba(),
-    Vl = $o(),
-    Wl = Aa(),
-    pt = Os(),
-    lF = hy(),
-    cF = Ei(),
-    Rd = hy();
-  function sae(e, n) {
-    let msgDesc = aF.getMsgDesc(e),
-      reflect = $r.reflect(msgDesc);
-    for (let [h, y] of n.entries()) {
-      let found = msgDesc.fields.find((field) => field.name === h);
-      if (found === void 0) throw Error(`Unknown field ${h} for ${e}`);
-      iae(reflect, found, y);
+var require_object = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.celObject = celObject;
+  var protobuf_1 = require_protobuf();
+  var uint_js_1 = require_uint();
+  var value_js_1 = require_value();
+  var eval_js_1 = require_eval();
+  var reflect_1 = require_reflect_2();
+  var list_js_1 = require_list();
+  var map_js_1 = require_map();
+  var wkt_1 = require_error_4();
+  var wire_1 = require_error_5();
+  var type_js_1 = require_type();
+  var wire_2 = require_error_5();
+  function celObject(typeName, fields) {
+    let desc = eval_js_1.getMsgDesc(typeName);
+    let msg = reflect_1.reflect(desc);
+    for (let [k, v] of fields.entries()) {
+      let field = desc.fields.find((f) => f.name === k);
+      if (field === undefined) throw Error(`Unknown field ${k} for ${typeName}`);
+      setMsgField(msg, field, v);
     }
-    return oF.reflectMsgToCel(reflect);
+    return value_js_1.reflectMsgToCel(msg);
   }
-  function iae(e, n, r) {
-    switch (n.fieldKind) {
+  function setMsgField(msg, field, v) {
+    switch (field.fieldKind) {
       case "list":
-        if (!Vl.isCelList(r)) throw pi(n, "list", r);
-        let reflectList = $r.reflectList(n, void 0, !1);
-        (oae(reflectList, r), e.set(n, reflectList));
+        if (!list_js_1.isCelList(v)) throw unexpectedTypeError(field, "list", v);
+        let list = reflect_1.reflectList(field, undefined, false);
+        copyList(list, v);
+        msg.set(field, list);
         return;
       case "map":
-        if (!Wl.isCelMap(r)) throw pi(n, "map", r);
-        let reflectMap = $r.reflectMap(n, void 0, !1);
-        (aae(reflectMap, r), e.set(n, reflectMap));
+        if (!map_js_1.isCelMap(v)) throw unexpectedTypeError(field, "map", v);
+        let map = reflect_1.reflectMap(field, undefined, false);
+        copyMap(map, v);
+        msg.set(field, map);
         return;
       case "enum":
-        e.set(n, cv(n, r));
+        msg.set(field, enumFromCel(field, v));
         return;
       case "message":
-        let y = uv(n, r);
-        if (y !== null) e.set(n, y);
+        let msgVal = msgFromCel(field, v);
+        if (msgVal !== null) msg.set(field, msgVal);
         return;
     }
-    e.set(n, Cp(n, n.scalar, r));
+    msg.set(field, scalarFromCel(field, field.scalar, v));
   }
-  function oae(e, n) {
-    let field = e.field();
-    for (let s of n)
+  function copyList(list, cList) {
+    let field = list.field();
+    for (let v of cList)
       switch (field.listKind) {
         case "enum":
-          e.add(cv(field, s));
+          list.add(enumFromCel(field, v));
           break;
         case "message":
-          e.add(uv(field, s));
+          list.add(msgFromCel(field, v));
           break;
         case "scalar":
-          e.add(Cp(field, field.scalar, s));
+          list.add(scalarFromCel(field, field.scalar, v));
           break;
       }
   }
-  function aae(e, n) {
-    let field = e.field();
-    for (let [s, h] of n.entries()) {
-      let y = Cp(field, field.mapKey, s);
+  function copyMap(map, cMap) {
+    let field = map.field();
+    for (let [k, v] of cMap.entries()) {
+      let key = scalarFromCel(field, field.mapKey, k);
       switch (field.mapKind) {
         case "enum":
-          e.set(y, cv(field, h));
+          map.set(key, enumFromCel(field, v));
           break;
         case "scalar":
-          e.set(y, Cp(field, field.scalar, h));
+          map.set(key, scalarFromCel(field, field.scalar, v));
           break;
         case "message":
-          e.set(y, uv(field, h));
+          map.set(key, msgFromCel(field, v));
           break;
       }
     }
   }
-  function cv(e, n) {
-    if (typeof n !== "bigint") throw pi(e, "int", n);
-    return uF(n);
+  function enumFromCel(field, v) {
+    if (typeof v !== "bigint") throw unexpectedTypeError(field, "int", v);
+    return intToInt32(v);
   }
-  function uv(e, n) {
-    switch (e.message.typeName) {
-      case pt.AnySchema.typeName:
-        if ($r.isReflectMessage(n, pt.AnySchema)) return n;
-        return $r.reflect(pt.AnySchema, lae(n));
-      case pt.ValueSchema.typeName:
-        return $r.reflect(pt.ValueSchema, dv(n));
-      case pt.StructSchema.typeName:
-        if (!Wl.isCelMap(n)) throw pi(e, "map", n);
-        return $r.reflect(pt.StructSchema, pv(n));
-      case pt.ListValueSchema.typeName:
-        if (!Vl.isCelList(n)) throw pi(e, "list", n);
-        return $r.reflect(pt.ListValueSchema, fv(n));
+  function msgFromCel(field, v) {
+    switch (field.message.typeName) {
+      case wkt_1.AnySchema.typeName:
+        if (reflect_1.isReflectMessage(v, wkt_1.AnySchema)) return v;
+        return reflect_1.reflect(wkt_1.AnySchema, anyFromCel(v));
+      case wkt_1.ValueSchema.typeName:
+        return reflect_1.reflect(wkt_1.ValueSchema, valueFromCel(v));
+      case wkt_1.StructSchema.typeName:
+        if (!map_js_1.isCelMap(v)) throw unexpectedTypeError(field, "map", v);
+        return reflect_1.reflect(wkt_1.StructSchema, structFromCel(v));
+      case wkt_1.ListValueSchema.typeName:
+        if (!list_js_1.isCelList(v)) throw unexpectedTypeError(field, "list", v);
+        return reflect_1.reflect(wkt_1.ListValueSchema, listValueFromCel(v));
     }
-    if (n === null) return null;
-    if (pt.isWrapperDesc(e.message)) {
-      let reflect = $r.reflect(e.message, void 0, !1);
-      return (
-        reflect.set(e.message.fields[0], Cp(e.message.fields[0], e.message.fields[0].scalar, n)),
-        reflect
+    if (v === null) return null;
+    if (wkt_1.isWrapperDesc(field.message)) {
+      let msg = reflect_1.reflect(field.message, undefined, false);
+      msg.set(
+        field.message.fields[0],
+        scalarFromCel(field.message.fields[0], field.message.fields[0].scalar, v),
       );
+      return msg;
     }
-    if (!$r.isReflectMessage(n, e.message)) throw pi(e, e.message.typeName, n);
-    return n;
+    if (!reflect_1.isReflectMessage(v, field.message))
+      throw unexpectedTypeError(field, field.message.typeName, v);
+    return v;
   }
-  function lae(e) {
-    switch (typeof e) {
+  function anyFromCel(v) {
+    switch (typeof v) {
       case "string":
-        return pt.anyPack(pt.StringValueSchema, tn.create(pt.StringValueSchema, { value: e }));
+        return wkt_1.anyPack(
+          wkt_1.StringValueSchema,
+          protobuf_1.create(wkt_1.StringValueSchema, {
+            value: v,
+          }),
+        );
       case "boolean":
-        return pt.anyPack(pt.BoolValueSchema, tn.create(pt.BoolValueSchema, { value: e }));
+        return wkt_1.anyPack(
+          wkt_1.BoolValueSchema,
+          protobuf_1.create(wkt_1.BoolValueSchema, {
+            value: v,
+          }),
+        );
       case "bigint":
-        return pt.anyPack(pt.Int64ValueSchema, tn.create(pt.Int64ValueSchema, { value: e }));
+        return wkt_1.anyPack(
+          wkt_1.Int64ValueSchema,
+          protobuf_1.create(wkt_1.Int64ValueSchema, {
+            value: v,
+          }),
+        );
       case "number":
-        return pt.anyPack(pt.DoubleValueSchema, tn.create(pt.DoubleValueSchema, { value: e }));
+        return wkt_1.anyPack(
+          wkt_1.DoubleValueSchema,
+          protobuf_1.create(wkt_1.DoubleValueSchema, {
+            value: v,
+          }),
+        );
       default:
-        switch (!0) {
-          case e instanceof Uint8Array:
-            return pt.anyPack(pt.BytesValueSchema, tn.create(pt.BytesValueSchema, { value: e }));
-          case e == null:
-            return pt.anyPack(
-              pt.ValueSchema,
-              tn.create(pt.ValueSchema, { kind: { case: "nullValue", value: pt.NullValue.NULL_VALUE } }),
+        switch (true) {
+          case v instanceof Uint8Array:
+            return wkt_1.anyPack(
+              wkt_1.BytesValueSchema,
+              protobuf_1.create(wkt_1.BytesValueSchema, {
+                value: v,
+              }),
             );
-          case Vl.isCelList(e):
-            return pt.anyPack(pt.ListValueSchema, fv(e));
-          case Wl.isCelMap(e):
-            return pt.anyPack(pt.StructSchema, pv(e));
-          case Id.isCelUint(e):
-            return pt.anyPack(pt.UInt64ValueSchema, tn.create(pt.UInt64ValueSchema, { value: e.value }));
-          case $r.isReflectMessage(e):
-            return pt.anyPack(e.desc, e.message);
+          case v == null:
+            return wkt_1.anyPack(
+              wkt_1.ValueSchema,
+              protobuf_1.create(wkt_1.ValueSchema, {
+                kind: {
+                  case: "nullValue",
+                  value: wkt_1.NullValue.NULL_VALUE,
+                },
+              }),
+            );
+          case list_js_1.isCelList(v):
+            return wkt_1.anyPack(wkt_1.ListValueSchema, listValueFromCel(v));
+          case map_js_1.isCelMap(v):
+            return wkt_1.anyPack(wkt_1.StructSchema, structFromCel(v));
+          case uint_js_1.isCelUint(v):
+            return wkt_1.anyPack(
+              wkt_1.UInt64ValueSchema,
+              protobuf_1.create(wkt_1.UInt64ValueSchema, {
+                value: v.value,
+              }),
+            );
+          case reflect_1.isReflectMessage(v):
+            return wkt_1.anyPack(v.desc, v.message);
           default:
-            throw Error(`type cannot be converted ${pt.AnySchema}`);
+            throw Error(`type cannot be converted ${wkt_1.AnySchema}`);
         }
     }
   }
-  function dv(e) {
-    let create = tn.create(pt.ValueSchema);
-    switch (typeof e) {
+  function valueFromCel(v) {
+    let value = protobuf_1.create(wkt_1.ValueSchema);
+    switch (typeof v) {
       case "string":
-        create.kind = { case: "stringValue", value: e };
+        value.kind = {
+          case: "stringValue",
+          value: v,
+        };
         break;
       case "boolean":
-        create.kind = { case: "boolValue", value: e };
+        value.kind = {
+          case: "boolValue",
+          value: v,
+        };
         break;
       case "bigint":
-        if (e > BigInt(Number.MAX_SAFE_INTEGER) || e < BigInt(Number.MIN_SAFE_INTEGER))
-          create.kind = { case: "stringValue", value: e.toString() };
-        else create.kind = { case: "numberValue", value: Number(e) };
+        if (v > BigInt(Number.MAX_SAFE_INTEGER) || v < BigInt(Number.MIN_SAFE_INTEGER))
+          value.kind = {
+            case: "stringValue",
+            value: v.toString(),
+          };
+        else
+          value.kind = {
+            case: "numberValue",
+            value: Number(v),
+          };
         break;
       case "number":
-        if (Number.isNaN(e)) create.kind = { case: "stringValue", value: "NaN" };
-        else if (e === Number.POSITIVE_INFINITY) create.kind = { case: "stringValue", value: "Infinity" };
-        else if (e === Number.NEGATIVE_INFINITY) create.kind = { case: "stringValue", value: "-Infinity" };
-        else create.kind = { case: "numberValue", value: Number(e) };
+        if (Number.isNaN(v))
+          value.kind = {
+            case: "stringValue",
+            value: "NaN",
+          };
+        else if (v === Number.POSITIVE_INFINITY)
+          value.kind = {
+            case: "stringValue",
+            value: "Infinity",
+          };
+        else if (v === Number.NEGATIVE_INFINITY)
+          value.kind = {
+            case: "stringValue",
+            value: "-Infinity",
+          };
+        else
+          value.kind = {
+            case: "numberValue",
+            value: Number(v),
+          };
         break;
       default:
-        switch (!0) {
-          case e instanceof Uint8Array:
-            create.kind = { case: "stringValue", value: lF.base64Encode(e) };
+        switch (true) {
+          case v instanceof Uint8Array:
+            value.kind = {
+              case: "stringValue",
+              value: wire_1.base64Encode(v),
+            };
             break;
-          case e == null:
-            create.kind = { case: "nullValue", value: pt.NullValue.NULL_VALUE };
+          case v == null:
+            value.kind = {
+              case: "nullValue",
+              value: wkt_1.NullValue.NULL_VALUE,
+            };
             break;
-          case Vl.isCelList(e):
-            create.kind = { case: "listValue", value: fv(e) };
+          case list_js_1.isCelList(v):
+            value.kind = {
+              case: "listValue",
+              value: listValueFromCel(v),
+            };
             break;
-          case Wl.isCelMap(e):
-            create.kind = { case: "structValue", value: pv(e) };
+          case map_js_1.isCelMap(v):
+            value.kind = {
+              case: "structValue",
+              value: structFromCel(v),
+            };
             break;
-          case Id.isCelUint(e):
-            if (e.value > BigInt(Number.MAX_SAFE_INTEGER))
-              create.kind = { case: "stringValue", value: e.value.toString() };
-            else create.kind = { case: "numberValue", value: Number(e.value) };
+          case uint_js_1.isCelUint(v):
+            if (v.value > BigInt(Number.MAX_SAFE_INTEGER))
+              value.kind = {
+                case: "stringValue",
+                value: v.value.toString(),
+              };
+            else
+              value.kind = {
+                case: "numberValue",
+                value: Number(v.value),
+              };
             break;
-          case $r.isReflectMessage(e):
-            return tn.fromJson(pt.ValueSchema, tn.toJson(e.desc, e.message));
+          case reflect_1.isReflectMessage(v):
+            return protobuf_1.fromJson(wkt_1.ValueSchema, protobuf_1.toJson(v.desc, v.message));
           default:
-            throw Error(`type cannot be converted ${pt.ValueSchema}`);
+            throw Error(`type cannot be converted ${wkt_1.ValueSchema}`);
         }
     }
-    return create;
+    return value;
   }
-  function fv(e) {
-    let create = tn.create(pt.ListValueSchema);
-    for (let r of e) create.values.push(dv(r));
-    return create;
+  function listValueFromCel(list) {
+    let listValue = protobuf_1.create(wkt_1.ListValueSchema);
+    for (let v of list) listValue.values.push(valueFromCel(v));
+    return listValue;
   }
-  function pv(e) {
-    let create = tn.create(pt.StructSchema);
-    for (let [r, s] of e.entries()) {
-      if (typeof r !== "string")
-        throw Error(`Invalid key type: ${typeof r} for google.protobuf.Struct, expected string`);
-      create.fields[r] = dv(s);
+  function structFromCel(map) {
+    let struct = protobuf_1.create(wkt_1.StructSchema);
+    for (let [k, v] of map.entries()) {
+      if (typeof k !== "string")
+        throw Error(`Invalid key type: ${typeof k} for google.protobuf.Struct, expected string`);
+      struct.fields[k] = valueFromCel(v);
     }
-    return create;
+    return struct;
   }
-  function Cp(e, n, r) {
-    if (Id.isCelUint(r)) r = r.value;
-    switch (n) {
-      case tn.ScalarType.UINT32:
-      case tn.ScalarType.FIXED32:
-        if (typeof r !== "bigint") throw pi(e, "int", r);
-        return cae(r);
-      case tn.ScalarType.INT32:
-      case tn.ScalarType.SINT32:
-      case tn.ScalarType.SFIXED32:
-        if (typeof r !== "bigint") throw pi(e, "int", r);
-        return uF(r);
-      case tn.ScalarType.UINT64:
-      case tn.ScalarType.FIXED64:
-      case tn.ScalarType.INT64:
-      case tn.ScalarType.SINT64:
-      case tn.ScalarType.SFIXED64:
-        if (typeof r !== "bigint") throw pi(e, "int", r);
-        return r;
-      case tn.ScalarType.FLOAT:
-        if (typeof r !== "number") throw pi(e, "double", r);
-        return Math.fround(r);
-      case tn.ScalarType.DOUBLE:
-        if (typeof r !== "number") throw pi(e, "double", r);
-        return r;
-      case tn.ScalarType.STRING:
-        if (typeof r !== "string") throw pi(e, "string", r);
-        return r;
-      case tn.ScalarType.BOOL:
-        if (typeof r !== "boolean") throw pi(e, "bool", r);
-        return r;
-      case tn.ScalarType.BYTES:
-        if (!(r instanceof Uint8Array)) throw pi(e, "bytes", r);
-        return r;
+  function scalarFromCel(field, type, v) {
+    if (uint_js_1.isCelUint(v)) v = v.value;
+    switch (type) {
+      case protobuf_1.ScalarType.UINT32:
+      case protobuf_1.ScalarType.FIXED32:
+        if (typeof v !== "bigint") throw unexpectedTypeError(field, "int", v);
+        return intToUint32(v);
+      case protobuf_1.ScalarType.INT32:
+      case protobuf_1.ScalarType.SINT32:
+      case protobuf_1.ScalarType.SFIXED32:
+        if (typeof v !== "bigint") throw unexpectedTypeError(field, "int", v);
+        return intToInt32(v);
+      case protobuf_1.ScalarType.UINT64:
+      case protobuf_1.ScalarType.FIXED64:
+      case protobuf_1.ScalarType.INT64:
+      case protobuf_1.ScalarType.SINT64:
+      case protobuf_1.ScalarType.SFIXED64:
+        if (typeof v !== "bigint") throw unexpectedTypeError(field, "int", v);
+        return v;
+      case protobuf_1.ScalarType.FLOAT:
+        if (typeof v !== "number") throw unexpectedTypeError(field, "double", v);
+        return Math.fround(v);
+      case protobuf_1.ScalarType.DOUBLE:
+        if (typeof v !== "number") throw unexpectedTypeError(field, "double", v);
+        return v;
+      case protobuf_1.ScalarType.STRING:
+        if (typeof v !== "string") throw unexpectedTypeError(field, "string", v);
+        return v;
+      case protobuf_1.ScalarType.BOOL:
+        if (typeof v !== "boolean") throw unexpectedTypeError(field, "bool", v);
+        return v;
+      case protobuf_1.ScalarType.BYTES:
+        if (!(v instanceof Uint8Array)) throw unexpectedTypeError(field, "bytes", v);
+        return v;
     }
   }
-  function pi(e, n, r) {
-    return Error(`Expected ${n} but got ${cF.celType(r)} for ${e.parent}.${e.name}`);
+  function unexpectedTypeError(field, expected, actValue) {
+    return Error(
+      `Expected ${expected} but got ${type_js_1.celType(actValue)} for ${field.parent}.${field.name}`,
+    );
   }
-  function uF(e) {
-    if (e < Rd.INT32_MIN || e > Rd.INT32_MAX) throw Error("int32 out of range");
-    return Number(e);
+  function intToInt32(v) {
+    if (v < wire_2.INT32_MIN || v > wire_2.INT32_MAX) throw Error("int32 out of range");
+    return Number(v);
   }
-  function cae(e) {
-    if (e < 0 || e > Rd.UINT32_MAX) throw Error("uint32 out of range");
-    return Number(e);
+  function intToUint32(v) {
+    if (v < 0 || v > wire_2.UINT32_MAX) throw Error("uint32 out of range");
+    return Number(v);
   }
 });
-
-export { fF };
+export { require_object };

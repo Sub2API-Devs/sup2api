@@ -8,117 +8,165 @@
  * pieces: chunk-apw2zhyn.js (16)
  * attribution: placement 16
  */
-import { ge } from "../../utils/identity.js";
+import { identity } from "../../utils/identity.js";
 import { getHostAgentPolicy } from "../../utils/hostAgentPolicy.js";
 import { isBackgroundTasksDisabled } from "./AgentTool.js";
 import { isInProcessTeammate } from "../../utils/teammate.js";
 import { env } from "../../utils/env.js";
 import { isBareMode } from "../../utils/envUtils.js";
 
+//@ chunk-apw2zhyn.js:370-968 placement
 /**
  * 后台 Bash 通知状态（回复结束后停止等）及相关提示文案。
  */
-//@ chunk-apw2zhyn.js:370-968 placement
-var backgroundBashNoticeState = ge(
-    { work: null, text: null, stopsAfterReply: !1, sentBashTextStops: null },
-    (e) => {
-      ((e.work = null), (e.text = null), (e.stopsAfterReply = !1), (e.sentBashTextStops = null));
-    },
-  ),
-  BACKGROUND_COMMAND_STOP_NOTICE =
-    "In this session, once your reply ends and until the user writes again, you may not be told when a background command ends, and a few minutes later the command is likely stopped along with every other process left running here; run in the foreground, with a long enough `timeout`, any command that must finish and can finish within the foreground maximum, and otherwise tell the user it will likely be stopped a few minutes after your reply.";
+var backgroundBashNoticeState = identity(
+  {
+    work: null,
+    text: null,
+    stopsAfterReply: false,
+    sentBashTextStops: null,
+  },
+  (e) => {
+    e.work = null;
+    e.text = null;
+    e.stopsAfterReply = false;
+    e.sentBashTextStops = null;
+  },
+);
+var BACKGROUND_COMMAND_STOP_NOTICE =
+  "In this session, once your reply ends and until the user writes again, you may not be told when a background command ends, and a few minutes later the command is likely stopped along with every other process left running here; run in the foreground, with a long enough `timeout`, any command that must finish and can finish within the foreground maximum, and otherwise tell the user it will likely be stopped a few minutes after your reply.";
 //@ chunk-apw2zhyn.js:968-993 placement
-function R_i(e) {
-  backgroundBashNoticeState.work = e;
+/**
+ * 设置后台 bash 通知的工作探测函数。
+ */
+function setBackgroundBashWorkProbe(work) {
+  backgroundBashNoticeState.work = work;
 }
 //@ chunk-apw2zhyn.js:993-1030 placement
-function S7r() {
-  return backgroundBashNoticeState.work?.() ?? !1;
+/**
+ * 探测当前是否有后台 bash 工作。
+ */
+function hasBackgroundBashWork() {
+  return backgroundBashNoticeState.work?.() ?? false;
 }
 //@ chunk-apw2zhyn.js:1030-1076 placement
-function x_i(e) {
-  ((backgroundBashNoticeState.text = e), (backgroundBashNoticeState.stopsAfterReply = !1));
+/**
+ * 设置后台 bash 停止探测函数并清除已判定标记。
+ */
+function setBackgroundBashStopProbe(text) {
+  backgroundBashNoticeState.text = text;
+  backgroundBashNoticeState.stopsAfterReply = false;
 }
 //@ chunk-apw2zhyn.js:1076-1175 placement
-function T_() {
-  if (!backgroundBashNoticeState.stopsAfterReply && backgroundBashNoticeState.text?.() === !0)
-    backgroundBashNoticeState.stopsAfterReply = !0;
+/**
+ * 判断回复后后台 bash 是否会被停止（结果缓存）。
+ */
+function hasBackgroundBashStopAfterReply() {
+  if (!backgroundBashNoticeState.stopsAfterReply && backgroundBashNoticeState.text?.() === true)
+    backgroundBashNoticeState.stopsAfterReply = true;
   return backgroundBashNoticeState.stopsAfterReply;
 }
 //@ chunk-apw2zhyn.js:1175-1268 placement
-function Mts(e) {
-  if (e !== void 0)
+/**
+ * 记录已发送的后台停止提示。
+ */
+function noteBackgroundStopNoticeSent(e) {
+  if (e !== undefined)
     backgroundBashNoticeState.sentBashTextStops =
-      (backgroundBashNoticeState.sentBashTextStops ?? !0) && e.includes(BACKGROUND_COMMAND_STOP_NOTICE);
+      (backgroundBashNoticeState.sentBashTextStops ?? true) && e.includes(BACKGROUND_COMMAND_STOP_NOTICE);
 }
 //@ chunk-apw2zhyn.js:1268-1315 placement
-function P_i() {
-  return backgroundBashNoticeState.sentBashTextStops === !0;
+/**
+ * 是否已发送过后台停止提示。
+ */
+function stopNoticeWasSent() {
+  return backgroundBashNoticeState.sentBashTextStops === true;
 }
 //@ chunk-apw2zhyn.js:1315-1372 placement
-function uf() {
+/**
+ * 宿主策略或全局开关是否禁用后台任务。
+ */
+function isBackgroundTasksOff() {
   return getHostAgentPolicy().backgroundTasksDisabled || isBackgroundTasksDisabled();
 }
 //@ chunk-apw2zhyn.js:1439-1502 placement
-function _5e() {
-  return getHostAgentPolicy().backgroundShellsKeptElsewhere || T_();
+/**
+ * 后台 shell 是否在别处保留（或回复后会被停止）。
+ */
+function backgroundShellsKeptElsewhere() {
+  return getHostAgentPolicy().backgroundShellsKeptElsewhere || hasBackgroundBashStopAfterReply();
 }
 //@ chunk-apw2zhyn.js:1502-1544 placement
-function b5e() {
-  return T_() && !isBackgroundAgentLaunchDisabled() && !isInProcessTeammate();
+/**
+ * 是否可启动后台代理（且不是 in-process 队友）。
+ */
+function canLaunchBackgroundAgent() {
+  return hasBackgroundBashStopAfterReply() && !isBackgroundAgentLaunchDisabled() && !isInProcessTeammate();
 }
 //@ chunk-apw2zhyn.js:1544-1644 placement
 function isBackgroundShellDisabled() {
-  let e = getHostAgentPolicy();
-  return (e.backgroundTasksDisabled && !e.backgroundShellsKeptElsewhere) || isBackgroundTasksDisabled();
+  let hostAgentPolicy = getHostAgentPolicy();
+  return (
+    (hostAgentPolicy.backgroundTasksDisabled && !hostAgentPolicy.backgroundShellsKeptElsewhere) ||
+    isBackgroundTasksDisabled()
+  );
 }
 //@ chunk-apw2zhyn.js:1644-1815 placement
 function isBackgroundAgentLaunchDisabled() {
-  let e = getHostAgentPolicy();
+  let hostAgentPolicy = getHostAgentPolicy();
   return (
-    (e.backgroundTasksDisabled && e.backgroundLaunchRule === void 0) ||
-    e.backgroundAgentLaunchDisabled ||
+    (hostAgentPolicy.backgroundTasksDisabled && hostAgentPolicy.backgroundLaunchRule === undefined) ||
+    hostAgentPolicy.backgroundAgentLaunchDisabled ||
     env.CLAUDE_CODE_DISABLE_BACKGROUND_TASKS ||
     isBareMode()
   );
 }
 //@ chunk-apw2zhyn.js:1815-1877 placement
-function C4() {
-  return uf() || getHostAgentPolicy().backgroundAgentLaunchDisabled;
+/**
+ * 前台代理转后台是否被禁用。
+ */
+function isForegroundAgentMoveOff() {
+  return isBackgroundTasksOff() || getHostAgentPolicy().backgroundAgentLaunchDisabled;
 }
 //@ chunk-apw2zhyn.js:1877-2035 placement
 function isForegroundAgentMoveDisabled() {
-  let e = getHostAgentPolicy();
-  if (!e.foregroundAgentMovesAdmitted) return C4();
-  return e.backgroundAgentLaunchDisabled || env.CLAUDE_CODE_DISABLE_BACKGROUND_TASKS || isBareMode();
+  let hostAgentPolicy = getHostAgentPolicy();
+  if (!hostAgentPolicy.foregroundAgentMovesAdmitted) return isForegroundAgentMoveOff();
+  return (
+    hostAgentPolicy.backgroundAgentLaunchDisabled || env.CLAUDE_CODE_DISABLE_BACKGROUND_TASKS || isBareMode()
+  );
 }
 //@ chunk-apw2zhyn.js:2035-2138 placement
 function isBackgroundLaunchOptIn() {
-  let e = getHostAgentPolicy();
+  let hostAgentPolicy = getHostAgentPolicy();
   return (
-    e.backgroundLaunchRule !== void 0 && !e.backgroundLaunchByDefault && !isBackgroundAgentLaunchDisabled()
+    hostAgentPolicy.backgroundLaunchRule !== undefined &&
+    !hostAgentPolicy.backgroundLaunchByDefault &&
+    !isBackgroundAgentLaunchDisabled()
   );
 }
 //@ chunk-apw2zhyn.js:2138-2199 placement
-function VTn() {
+/**
+ * 是否默认后台启动且允许启动。
+ */
+function isBackgroundLaunchByDefault() {
   return getHostAgentPolicy().backgroundLaunchByDefault && !isBackgroundAgentLaunchDisabled();
 }
-
 export {
-  C4,
+  isForegroundAgentMoveOff,
   isBackgroundAgentLaunchDisabled,
-  VTn,
+  isBackgroundLaunchByDefault,
   isForegroundAgentMoveDisabled,
-  uf,
-  R_i,
-  x_i,
-  Mts,
-  T_,
-  S7r,
+  isBackgroundTasksOff,
+  setBackgroundBashWorkProbe,
+  setBackgroundBashStopProbe,
+  noteBackgroundStopNoticeSent,
+  hasBackgroundBashStopAfterReply,
+  hasBackgroundBashWork,
   isBackgroundShellDisabled,
   isBackgroundLaunchOptIn,
-  b5e,
-  _5e,
+  canLaunchBackgroundAgent,
+  backgroundShellsKeptElsewhere,
   BACKGROUND_COMMAND_STOP_NOTICE,
-  P_i,
+  stopNoticeWasSent,
 };

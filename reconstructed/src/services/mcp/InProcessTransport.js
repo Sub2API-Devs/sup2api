@@ -9,40 +9,45 @@
  * attribution: fingerprint 1, facade-exports 1
  */
 
+//@ chunk-rzwvw294.js:191-534 fingerprint = InProcessTransport (1)
 /**
  * 进程内 MCP 传输：一对互为 peer 的传输，send 用 queueMicrotask 把消息投给对端 onmessage；close 同时关闭对端。
  */
-//@ chunk-rzwvw294.js:191-534 fingerprint = InProcessTransport (1)
 class InProcessTransport {
   peer;
-  closed = !1;
+  closed = false;
   onclose;
   onerror;
   onmessage;
-  _setPeer(e) {
-    this.peer = e;
+  _setPeer(peer) {
+    this.peer = peer;
   }
   async start() {}
-  async send(e) {
+  async send(message) {
     if (this.closed) throw Error("Transport is closed");
     queueMicrotask(() => {
-      this.peer?.onmessage?.(e);
+      this.peer?.onmessage?.(message);
     });
   }
   async close() {
     if (this.closed) return;
-    if (((this.closed = !0), this.onclose?.(), this.peer && !this.peer.closed))
-      ((this.peer.closed = !0), this.peer.onclose?.());
+    this.closed = true;
+    this.onclose?.();
+    if (this.peer && !this.peer.closed) {
+      this.peer.closed = true;
+      this.peer.onclose?.();
+    }
   }
 }
+//@ chunk-rzwvw294.js:534-610 facade-exports = createLinkedTransportPair (1)
 /**
  * createLinkedTransportPair：创建并互相绑定两个 InProcessTransport，返回 [clientSide, serverSide]，用于 Chrome/Computer Use 等进程内 MCP 服务器。
  */
-//@ chunk-rzwvw294.js:534-610 facade-exports = createLinkedTransportPair (1)
 function createLinkedTransportPair() {
-  let e = new InProcessTransport(),
-    s = new InProcessTransport();
-  return (e._setPeer(s), s._setPeer(e), [e, s]);
+  let e = new InProcessTransport();
+  let s = new InProcessTransport();
+  e._setPeer(s);
+  s._setPeer(e);
+  return [e, s];
 }
-
 export { createLinkedTransportPair };

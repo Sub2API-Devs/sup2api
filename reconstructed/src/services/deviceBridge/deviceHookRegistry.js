@@ -10,53 +10,68 @@
  */
 import { logForDebugging } from "../../utils/debug.js";
 import { toError } from "../../utils/errors.js";
-import { ec } from "../../utils/timerDelayClamp.js";
+import { MAX_TIMER_DELAY_MS } from "../../utils/timerDelayClamp.js";
 
 //@ chunk-phgcpy6c.js:661-669 placement
-var y = 2;
+/**
+ * 记录设备 hook 名样本时的次数上限（2）。
+ */
+var MAX_NAME_SAMPLES = 2;
 //@ chunk-phgcpy6c.js:669-1818 placement
 function createDeviceHookRegistry(i) {
-  let e = null,
-    l = null,
-    a = 0,
-    r = !1,
-    s = null,
-    d = 0,
-    p = [],
-    m = () => {
-      (l?.clear(), (l = null));
-    },
-    v = () => {
-      if ((m(), e === null)) return;
-      let n = e;
-      l = i.setTimer(
-        () => {
-          if (((l = null), e !== n)) return;
-          if (i.now() < n.leaseExpiresAt) {
-            v();
-            return;
+  let e = null;
+  let l = null;
+  let a = 0;
+  let r = false;
+  let s = null;
+  let d = 0;
+  let p = [];
+  let m = () => {
+    l?.clear();
+    l = null;
+  };
+  let v = () => {
+    m();
+    if (e === null) return;
+    let n = e;
+    l = i.setTimer(
+      () => {
+        l = null;
+        if (e !== n) return;
+        if (i.now() < n.leaseExpiresAt) {
+          v();
+          return;
+        }
+        let o = {
+          ...n,
+          entries: [],
+        };
+        e = o.templates.length === 0 ? null : o;
+        for (let u of [...(i.onLeaseExpired ? [i.onLeaseExpired] : []), ...p])
+          try {
+            u(o);
+          } catch (error) {
+            logForDebugging(
+              `[deviceHooks] lease-expiry listener threw: ${toError(error).stack ?? String(error)}`,
+              {
+                level: "error",
+              },
+            );
           }
-          let o = { ...n, entries: [] };
-          e = o.templates.length === 0 ? null : o;
-          for (let u of [...(i.onLeaseExpired ? [i.onLeaseExpired] : []), ...p])
-            try {
-              u(o);
-            } catch (error) {
-              logForDebugging(
-                `[deviceHooks] lease-expiry listener threw: ${toError(error).stack ?? String(error)}`,
-                { level: "error" },
-              );
-            }
-        },
-        Math.min(ec, Math.max(0, n.leaseExpiresAt - i.now())),
-      );
-    };
+      },
+      Math.min(MAX_TIMER_DELAY_MS, Math.max(0, n.leaseExpiresAt - i.now())),
+    );
+  };
   return {
     current: () => e,
     generation: () => d,
     recordMiss(n, o) {
-      if (e === null || e.instanceId !== n || o !== d) return !1;
-      if (((a += 1), !r && a >= y)) ((r = !0), (s = i.now()));
+      if (e === null || e.instanceId !== n || o !== d) return false;
+      a += 1;
+      if (!r && a >= MAX_NAME_SAMPLES) {
+        r = true;
+        s = i.now();
+      }
       return r;
     },
     recordHit(n) {
@@ -65,18 +80,41 @@ function createDeviceHookRegistry(i) {
     isAway: (n) => e !== null && e.instanceId === n && r,
     awaySince: (n) => (e !== null && e.instanceId === n && r ? s : null),
     replaceOwner(n) {
-      let o = e !== null && e.instanceId !== n.instanceId ? e.instanceId : void 0,
-        u = e !== null && o === void 0,
-        c = u && r ? s : null;
-      if (((e = n), !u || c !== null)) ((a = 0), (r = !1), (s = null));
-      return ((d += 1), v(), { ...(o !== void 0 && { replaced: o }), ...(c !== null && { awaySince: c }) });
+      let instanceId = e !== null && e.instanceId !== n.instanceId ? e.instanceId : undefined;
+      let u = e !== null && instanceId === undefined;
+      let c = u && r ? s : null;
+      e = n;
+      if (!u || c !== null) {
+        a = 0;
+        r = false;
+        s = null;
+      }
+      d += 1;
+      v();
+      return {
+        ...(instanceId !== undefined && {
+          replaced: instanceId,
+        }),
+        ...(c !== null && {
+          awaySince: c,
+        }),
+      };
     },
     removeOwner(n) {
-      if (e === null || e.instanceId !== n) return !1;
-      return ((e = null), (a = 0), (r = !1), (s = null), m(), !0);
+      if (e === null || e.instanceId !== n) return false;
+      e = null;
+      a = 0;
+      r = false;
+      s = null;
+      m();
+      return true;
     },
     clear() {
-      ((e = null), (a = 0), (r = !1), (s = null), m());
+      e = null;
+      a = 0;
+      r = false;
+      s = null;
+      m();
     },
     onLeaseExpired(n) {
       p.push(n);
@@ -85,6 +123,9 @@ function createDeviceHookRegistry(i) {
 }
 //@ chunk-phgcpy6c.js:1818-1901 placement
 function productionRegistryTimer(i, e) {
-  let l = setTimeout(i, e);
-  return (l.unref(), { clear: () => clearTimeout(l) });
+  let timer = setTimeout(i, e);
+  timer.unref();
+  return {
+    clear: () => clearTimeout(timer),
+  };
 }

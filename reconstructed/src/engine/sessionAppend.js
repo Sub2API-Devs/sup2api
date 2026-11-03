@@ -14,21 +14,24 @@ import { safeDeepEqual } from "../plugins/functionHooks/apiDispatch.js";
 import { logForDebugging } from "../utils/debug.js";
 
 //@ chunk-1nk4j4sn.js:15092-15461 placement
-var appendCoreOf = (e, o, r) => ({
+var appendCoreOf = (e, row, r) => ({
   name: "core",
-  isCore: !0,
+  isCore: true,
   budgetMs: 0,
   run: async (n) => {
-    let p = rowWithContent(o, n.message),
-      i = e.fills || o.type === "assistant" ? mergeMessageInPlace(o, p) : p,
-      a = summarizeMessageForExport(i);
-    if (p === o && !safeDeepEqual(n.message.content, a.content))
+    let p = rowWithContent(row, n.message);
+    let message = e.fills || row.type === "assistant" ? mergeMessageInPlace(row, p) : p;
+    let a = summarizeMessageForExport(message);
+    if (p === row && !safeDeepEqual(n.message.content, a.content))
       logForDebugging(
-        `session.append: a rewrite of row ${o.uuid} is not kept: what it changed is pinned, rendered per request or carries media`,
+        `session.append: a rewrite of row ${row.uuid} is not kept: what it changed is pinned, rendered per request or carries media`,
       );
-    if (!e.fills) e.keep([i]);
-    return (r(i), { message: a, uuid: o.uuid });
+    if (!e.fills) e.keep([message]);
+    r(message);
+    return {
+      message: a,
+      uuid: row.uuid,
+    };
   },
 });
-
 export { appendCoreOf };

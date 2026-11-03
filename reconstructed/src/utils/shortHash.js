@@ -12,14 +12,19 @@ import { fromSanitizer_SANITIZER_OUTPUT_ONLY } from "../services/analytics/safeM
 import { computeContentHash } from "./commitAttribution.js";
 
 //@ chunk-smzk8psk.js:263-307 placement
-function gn(r) {
+/**
+ * 内容哈希取前 12 位十六进制，作为短哈希。
+ */
+function shortHash(r) {
   return fromSanitizer_SANITIZER_OUTPUT_ONLY(computeContentHash(r).slice(0, 12));
 }
 //@ chunk-smzk8psk.js:307-330 placement
-var t = /^[0-9a-f]{12}$/;
+var SHORT_HASH_RE = /^[0-9a-f]{12}$/;
 //@ chunk-smzk8psk.js:330-376 placement
-function kXt(r) {
-  return t.test(r) ? fromSanitizer_SANITIZER_OUTPUT_ONLY(r) : void 0;
+/**
+ * 校验并规范化已有的 12 位短哈希，非法返回 undefined。
+ */
+function normalizeShortHash(r) {
+  return SHORT_HASH_RE.test(r) ? fromSanitizer_SANITIZER_OUTPUT_ONLY(r) : undefined;
 }
-
-export { gn, kXt };
+export { shortHash, normalizeShortHash };

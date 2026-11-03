@@ -9,9 +9,12 @@
  * attribution: placement 2
  */
 import __cc_resource_0 from "../../../../assets/docs.mjs-0d218ce7.txt.zst" with { type: "file" };
-import { Et } from "../../../utils/embeddedAssets.js";
+import { readEmbeddedTextSync } from "../../../utils/embeddedAssets.js";
 
 //@ chunk-sc0k3q3c.js:307-329 placement
-var a = __cc_resource_0;
+var docsPath = __cc_resource_0;
 //@ chunk-sc0k3q3c.js:329-361 placement
-var t = Et(a, import.meta.dirname);
+/**
+ * docs 技能附带的脚本资源文本。
+ */
+var docs = readEmbeddedTextSync(docsPath, import.meta.dirname);

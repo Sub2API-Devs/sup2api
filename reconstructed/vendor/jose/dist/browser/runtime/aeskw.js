@@ -6,33 +6,36 @@
  * attribution: esm-fingerprint 3
  */
 import { g, p } from "../../webapi/lib/buffer_utils.js";
-import { J } from "../../node/esm/lib/crypto_key.js";
+import { checkEncCryptoKey } from "../../node/esm/lib/crypto_key.js";
 import { A } from "../../node/esm/lib/invalid_key_input.js";
 import { m } from "./is_key_like.js";
 import { ee } from "../../webapi/lib/content_encryption.js";
 
 //@ chunk-2tyrgda4.js:9952-10069 esm-fingerprint
-function At(e, t) {
-  if (e.algorithm.length !== parseInt(t.slice(1, 4), 10)) throw TypeError(`Invalid key size for alg: ${t}`);
+function checkKeySize(key, alg) {
+  if (key.algorithm.length !== parseInt(alg.slice(1, 4), 10))
+    throw TypeError(`Invalid key size for alg: ${alg}`);
 }
 //@ chunk-2tyrgda4.js:10069-10232 esm-fingerprint
-function gt(e, t, r) {
-  if (g(e)) return (J(e, t, r), e);
-  if (e instanceof Uint8Array) return p.subtle.importKey("raw", e, "AES-KW", !0, [r]);
-  throw TypeError(A(e, ...m, "Uint8Array"));
+function getCryptoKey(key, alg, usage) {
+  if (g(key)) {
+    checkEncCryptoKey(key, alg, usage);
+    return key;
+  }
+  if (key instanceof Uint8Array) return p.subtle.importKey("raw", key, "AES-KW", true, [usage]);
+  throw TypeError(A(key, ...m, "Uint8Array"));
 }
 //@ chunk-2tyrgda4.js:10232-10578 esm-fingerprint
-var ne = async (e, t, r) => {
-    let o = await gt(t, e, "wrapKey");
-    At(o, e);
-    let importKey = await p.subtle.importKey("raw", r, ...ee);
-    return new Uint8Array(await p.subtle.wrapKey("raw", importKey, o, "AES-KW"));
-  },
-  ae = async (e, t, r) => {
-    let o = await gt(t, e, "unwrapKey");
-    At(o, e);
-    let unwrapKey = await p.subtle.unwrapKey("raw", r, o, "AES-KW", ...ee);
-    return new Uint8Array(await p.subtle.exportKey("raw", unwrapKey));
-  };
-
-export { ne, ae };
+var wrap = async (alg, key, cek) => {
+  let cryptoKey = await getCryptoKey(key, alg, "wrapKey");
+  checkKeySize(cryptoKey, alg);
+  let cryptoKeyCek = await p.subtle.importKey("raw", cek, ...ee);
+  return new Uint8Array(await p.subtle.wrapKey("raw", cryptoKeyCek, cryptoKey, "AES-KW"));
+};
+var unwrap = async (alg, key, encryptedKey) => {
+  let cryptoKey = await getCryptoKey(key, alg, "unwrapKey");
+  checkKeySize(cryptoKey, alg);
+  let cryptoKeyCek = await p.subtle.unwrapKey("raw", encryptedKey, cryptoKey, "AES-KW", ...ee);
+  return new Uint8Array(await p.subtle.exportKey("raw", cryptoKeyCek));
+};
+export { wrap, unwrap };

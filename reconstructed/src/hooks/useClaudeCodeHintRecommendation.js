@@ -12,7 +12,7 @@ import { w } from "../../vendor/react/compiler-runtime.js";
 import { useSession } from "../context/session.js";
 import { yt, P } from "../../vendor/react/cjs/react.production.js";
 import { useNotifications } from "../context/notifications.js";
-import { Me } from "../components/design-system/ThemeProvider.js";
+import { useTheme_2 } from "../components/design-system/ThemeProvider.js";
 import {
   maybeRecordPluginHint,
   resolvePluginHint,
@@ -20,7 +20,7 @@ import {
   disableHintRecommendations,
 } from "../utils/plugins/hintRecommendation.js";
 import { logForDebugging } from "../utils/debug.js";
-import { HXe } from "../screens/replDialogState.js";
+import { PLUGIN_HINT_DIALOG } from "../screens/replDialogState.js";
 import { logEvent } from "../services/analytics/index.js";
 import { parsePluginIdentifier } from "../utils/plugins/pluginIdentifier.js";
 import { fromEnum } from "../services/analytics/safeMetadata.js";
@@ -28,79 +28,86 @@ import { installPluginAndNotify } from "./usePluginRecommendationBase.js";
 import { installPluginFromMarketplace } from "../utils/plugins/pluginInstallationHelpers.js";
 
 //@ chunk-18hwfzwa.js:1806264-1807723 fingerprint = useClaudeCodeHintRecommendation (0.695)
-function useClaudeCodeHintRecommendation(h, x) {
-  let $ = w(11),
-    { pendingHint: pendingHint } = useSession(),
-    L = yt(pendingHint.subscribe, pendingHint.getSnapshot),
-    { addNotification: addNotification } = useNotifications(),
-    { storageV5: storageV5 } = Me(),
-    Be,
-    He;
-  if ($[0] !== pendingHint)
-    ((Be = () => {
+function useClaudeCodeHintRecommendation(requestDialog, recommendationGate) {
+  let $ = w(11);
+  let { pendingHint } = useSession();
+  let hint = yt(pendingHint.subscribe, pendingHint.getSnapshot);
+  let { addNotification } = useNotifications();
+  let { storageV5 } = useTheme_2();
+  let Be;
+  let He;
+  if ($[0] !== pendingHint) {
+    Be = () => {
       let ze = () => {
         for (const We of pendingHint.takeSubmitted()) maybeRecordPluginHint(We, pendingHint);
       };
-      return (ze(), pendingHint.subscribeSubmitted(ze));
-    }),
-      (He = [pendingHint]),
-      ($[0] = pendingHint),
-      ($[1] = Be),
-      ($[2] = He));
-  else ((Be = $[1]), (He = $[2]));
+      ze();
+      return pendingHint.subscribeSubmitted(ze);
+    };
+    He = [pendingHint];
+    $[0] = pendingHint;
+    $[1] = Be;
+    $[2] = He;
+  } else {
+    Be = $[1];
+    He = $[2];
+  }
   P(Be, He);
-  let Xe, rt;
+  let Xe;
+  let rt;
   if (
     $[3] !== addNotification ||
-    $[4] !== x ||
+    $[4] !== recommendationGate ||
     $[5] !== pendingHint ||
-    $[6] !== L ||
-    $[7] !== h ||
+    $[6] !== hint ||
+    $[7] !== requestDialog ||
     $[8] !== storageV5
-  )
-    ((Xe = () => {
-      if (!L) {
+  ) {
+    Xe = () => {
+      if (!hint) {
         return;
       }
-      x("hint", async () => {
+      recommendationGate("hint", async () => {
         if (pendingHint.shownThisSession) {
           pendingHint.dismiss();
           return;
         }
-        let kt = await resolvePluginHint(L, storageV5);
-        if (kt)
+        let pluginHint = await resolvePluginHint(hint, storageV5);
+        if (pluginHint)
           logForDebugging(
-            `[useClaudeCodeHintRecommendation] surfacing ${kt.pluginId} from ${kt.sourceCommand}`,
+            `[useClaudeCodeHintRecommendation] surfacing ${pluginHint.pluginId} from ${pluginHint.sourceCommand}`,
           );
-        if (pendingHint.pending === L) pendingHint.dismiss();
-        if (!kt) {
+        if (pendingHint.pending === hint) pendingHint.dismiss();
+        if (!pluginHint) {
           return;
         }
-        let At = await h(
-          HXe,
+        let At = await requestDialog(
+          PLUGIN_HINT_DIALOG,
           {
-            pluginName: kt.pluginName,
-            pluginDescription: kt.pluginDescription,
-            marketplaceName: kt.marketplaceName,
-            sourceCommand: kt.sourceCommand,
+            pluginName: pluginHint.pluginName,
+            pluginDescription: pluginHint.pluginDescription,
+            marketplaceName: pluginHint.marketplaceName,
+            sourceCommand: pluginHint.sourceCommand,
           },
-          { place: "under" },
+          {
+            place: "under",
+          },
         );
         if (At === "cancelled") {
           return;
         }
         oo: switch (
           (pendingHint.markShown(),
-          markHintPluginShown(kt.pluginId, storageV5),
+          markHintPluginShown(pluginHint.pluginId, storageV5),
           logEvent("tengu_plugin_hint_response", {
-            _PROTO_plugin_name: parsePluginIdentifier(kt.pluginId).name,
-            _PROTO_marketplace_name: kt.marketplaceName,
+            _PROTO_plugin_name: parsePluginIdentifier(pluginHint.pluginId).name,
+            _PROTO_marketplace_name: pluginHint.marketplaceName,
             response: fromEnum(At),
           }),
           At)
         ) {
           case "yes": {
-            let { pluginId: pluginId, pluginName: pluginName, marketplaceName: marketplaceName } = kt;
+            let { pluginId, pluginName, marketplaceName } = pluginHint;
             installPluginAndNotify(
               pluginId,
               pluginName,
@@ -108,12 +115,12 @@ function useClaudeCodeHintRecommendation(h, x) {
               addNotification,
               async (pluginData) => {
                 let result = await installPluginFromMarketplace({
-                  pluginId: pluginId,
+                  pluginId,
                   entry: pluginData.entry,
-                  marketplaceName: marketplaceName,
+                  marketplaceName,
                   scope: "user",
                   trigger: "hint",
-                  storageV5: storageV5,
+                  storageV5,
                 });
                 if (!result.success) {
                   throw result.refusal ?? Error(result.error);
@@ -130,18 +137,20 @@ function useClaudeCodeHintRecommendation(h, x) {
           case "no":
         }
       });
-    }),
-      (rt = [L, pendingHint, x, h, addNotification, storageV5]),
-      ($[3] = addNotification),
-      ($[4] = x),
-      ($[5] = pendingHint),
-      ($[6] = L),
-      ($[7] = h),
-      ($[8] = storageV5),
-      ($[9] = Xe),
-      ($[10] = rt));
-  else ((Xe = $[9]), (rt = $[10]));
+    };
+    rt = [hint, pendingHint, recommendationGate, requestDialog, addNotification, storageV5];
+    $[3] = addNotification;
+    $[4] = recommendationGate;
+    $[5] = pendingHint;
+    $[6] = hint;
+    $[7] = requestDialog;
+    $[8] = storageV5;
+    $[9] = Xe;
+    $[10] = rt;
+  } else {
+    Xe = $[9];
+    rt = $[10];
+  }
   P(Xe, rt);
 }
-
 export { useClaudeCodeHintRecommendation };

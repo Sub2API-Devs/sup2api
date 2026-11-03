@@ -8,29 +8,36 @@
  * pieces: chunk-tmxcy2qw.js (7)
  * attribution: placement 7
  */
-
 //@ chunk-tmxcy2qw.js:191-199 placement
-var r, a;
+var cachedHookTemplates;
+var cachedHookTemplatesSource;
 //@ chunk-tmxcy2qw.js:199-278 placement
-function n() {
-  if (r !== void 0 && a === "external") return r;
-  return ((a = "external"), (r = []), r);
+function externalHookTemplates() {
+  if (cachedHookTemplates !== undefined && cachedHookTemplatesSource === "external")
+    return cachedHookTemplates;
+  cachedHookTemplatesSource = "external";
+  cachedHookTemplates = [];
+  return cachedHookTemplates;
 }
 //@ chunk-tmxcy2qw.js:278-319 placement
 function hookTemplateIds() {
-  return n().map((e) => e.id);
+  return externalHookTemplates().map((e) => e.id);
 }
 //@ chunk-tmxcy2qw.js:319-438 placement
 function findTemplateByDigest(e) {
-  for (let t of n()) {
+  for (let t of externalHookTemplates()) {
     let found = t.digests.find((digest) => digest.sha256 === e);
-    if (found) return { template: t, label: found.label };
+    if (found)
+      return {
+        template: t,
+        label: found.label,
+      };
   }
   return;
 }
 //@ chunk-tmxcy2qw.js:438-485 placement
 function getHookTemplate(e) {
-  return n().find((t) => t.id === e);
+  return externalHookTemplates().find((t) => t.id === e);
 }
 //@ chunk-tmxcy2qw.js:485-531 placement
 function isPreToolUseTemplate(e) {
@@ -38,7 +45,6 @@ function isPreToolUseTemplate(e) {
 }
 //@ chunk-tmxcy2qw.js:531-555 placement
 function alwaysTrue() {
-  return !0;
+  return true;
 }
-
 export { isPreToolUseTemplate, alwaysTrue, getHookTemplate, findTemplateByDigest, hookTemplateIds };

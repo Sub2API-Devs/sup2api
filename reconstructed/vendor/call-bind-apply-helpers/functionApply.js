@@ -8,8 +8,7 @@
 import { x } from "../../runtime/bun-runtime.js";
 
 //@ chunk-h6b7mazd.js:10996-11059 cjs-require-graph
-var sr = x(function (lp, Do) {
-  Do.exports = Function.prototype.apply;
+var require_functionApply = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = Function.prototype.apply;
 });
-
-export { sr };
+export { require_functionApply };

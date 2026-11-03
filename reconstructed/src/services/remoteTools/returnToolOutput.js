@@ -11,7 +11,7 @@
 import { createHash } from "crypto";
 import { isPlainObject } from "../../utils/objectUtils.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { A, E, o, zodStrictObject } from "../../../vendor/zod/v4/classic/schemas.js";
+import { array, E, string, zodStrictObject } from "../../../vendor/zod/v4/classic/schemas.js";
 import { BASH_TOOL_NAME } from "../../tools/BashTool/toolName.js";
 import { FILE_READ_TOOL_NAME } from "../../tools/FileReadTool/constants.js";
 import { FILE_EDIT_TOOL_NAME } from "../../tools/FileEditTool/constants.js";
@@ -23,99 +23,139 @@ import { formatPermissionRule } from "../../utils/permissions/disallowedToolsFla
 import { jsonStringify } from "../../utils/slowOperations.js";
 
 //@ chunk-rqh5c9eg.js:563-620 placement
-var ANTHROPIC_RETURNTOOLOUTPUT = "anthropic/returnToolOutput",
-  jvr = [2],
-  OTs = 4194304;
+/**
+ * 支持的回传输出版本与最大字节数。
+ */
+var ANTHROPIC_RETURNTOOLOUTPUT = "anthropic/returnToolOutput";
+var SUPPORTED_RETURN_OUTPUT_VERSIONS = [2];
+var MAX_RETURNED_OUTPUT_BYTES = 4194304;
 //@ chunk-rqh5c9eg.js:620-644 placement
-function Gfo() {
-  return !0;
+/**
+ * 判断对端是否支持 return tool output。
+ */
+function isReturnOutputSupported() {
+  return true;
 }
 //@ chunk-rqh5c9eg.js:644-705 placement
-function r0n(e) {
-  return isPlainObject(e) && e.tool_host_interface !== void 0;
+/**
+ * 判断工具宿主是否声明了该接口。
+ */
+function hasToolHostInterface(e) {
+  return isPlainObject(e) && e.tool_host_interface !== undefined;
 }
 //@ chunk-rqh5c9eg.js:705-714 placement
-var d = 64;
+var MAX_PROTOCOL_VERSIONS = 64;
 //@ chunk-rqh5c9eg.js:714-926 placement
-var MAX_DENY_RULES = 1024,
-  MAX_DENY_RULE_LENGTH = 1024,
-  MAX_DENY_RULES_TOTAL = 65536,
-  VERSIONS_SCHEMA = DoctorLazy(() => A(E().int()).max(d)),
-  DENY_RULES_SCHEMA = DoctorLazy(() =>
-    A(o().min(1).max(MAX_DENY_RULE_LENGTH))
-      .max(MAX_DENY_RULES)
-      .refine((e) => e.reduce((n, t) => n + t.length, 0) <= MAX_DENY_RULES_TOTAL),
-  ),
-  RETURN_OUTPUT_REQUEST_SCHEMA = DoctorLazy(() =>
-    zodStrictObject({ versions: VERSIONS_SCHEMA(), deny_rules_digest: o().regex(/^[0-9a-f]{64}$/) }),
-  );
+var MAX_DENY_RULES = 1024;
+var MAX_DENY_RULE_LENGTH = 1024;
+var MAX_DENY_RULES_TOTAL = 65536;
+var VERSIONS_SCHEMA = DoctorLazy(() => array(E().int()).max(MAX_PROTOCOL_VERSIONS));
+var DENY_RULES_SCHEMA = DoctorLazy(() =>
+  array(string().min(1).max(MAX_DENY_RULE_LENGTH))
+    .max(MAX_DENY_RULES)
+    .refine((e) => e.reduce((acc, t) => acc + t.length, 0) <= MAX_DENY_RULES_TOTAL),
+);
+var RETURN_OUTPUT_REQUEST_SCHEMA = DoctorLazy(() =>
+  zodStrictObject({
+    versions: VERSIONS_SCHEMA(),
+    deny_rules_digest: string().regex(/^[0-9a-f]{64}$/),
+  }),
+);
+//@ chunk-rqh5c9eg.js:926-1263 placement
 /**
  * 解析请求中的"返回工具输出"字段：缺省、格式错误、无共同版本或已请求（附拒绝规则摘要）。
  */
-//@ chunk-rqh5c9eg.js:926-1263 placement
-function parseReturnOutputRequest(e) {
-  let n = s(e)?.[ANTHROPIC_RETURNTOOLOUTPUT];
-  if (n === void 0) return { kind: "absent" };
-  let safeParse = VERSIONS_SCHEMA().safeParse(s(n)?.versions);
-  if (!safeParse.success) return { kind: "malformed" };
-  if (m(safeParse.data).length === 0) return { kind: "no_shared_version", versions: safeParse.data };
-  let safeParse_2 = RETURN_OUTPUT_REQUEST_SCHEMA().safeParse(n);
-  return safeParse_2.success
-    ? { kind: "requested", denyRulesDigest: safeParse_2.data.deny_rules_digest }
-    : { kind: "malformed" };
+function parseReturnOutputRequest(meta) {
+  let n = asPlainObject(meta)?.[ANTHROPIC_RETURNTOOLOUTPUT];
+  if (n === undefined)
+    return {
+      kind: "absent",
+    };
+  let t = VERSIONS_SCHEMA().safeParse(asPlainObject(n)?.versions);
+  if (!t.success)
+    return {
+      kind: "malformed",
+    };
+  if (sharedVersions(t.data).length === 0)
+    return {
+      kind: "no_shared_version",
+      versions: t.data,
+    };
+  let r = RETURN_OUTPUT_REQUEST_SCHEMA().safeParse(n);
+  return r.success
+    ? {
+        kind: "requested",
+        denyRulesDigest: r.data.deny_rules_digest,
+      }
+    : {
+        kind: "malformed",
+      };
 }
 //@ chunk-rqh5c9eg.js:1263-1315 placement
-function m(e) {
-  return jvr.filter((n) => e.includes(n));
+function sharedVersions(e) {
+  return SUPPORTED_RETURN_OUTPUT_VERSIONS.filter((n) => e.includes(n));
 }
 //@ chunk-rqh5c9eg.js:1315-1409 placement
-var O = {
-    [BASH_TOOL_NAME]: [FILE_READ_TOOL_NAME, FILE_EDIT_TOOL_NAME],
-    [FILE_EDIT_TOOL_NAME]: [FILE_READ_TOOL_NAME],
-    [FILE_WRITE_TOOL_NAME]: [FILE_EDIT_TOOL_NAME, FILE_READ_TOOL_NAME],
-    [NOTEBOOK_EDIT_TOOL_NAME]: [FILE_EDIT_TOOL_NAME, FILE_READ_TOOL_NAME],
-  },
-  T = uniq([BASH_TOOL_NAME, ...Object.values(O).flat()]);
+var TOOL_PREREQUISITES = {
+  [BASH_TOOL_NAME]: [FILE_READ_TOOL_NAME, FILE_EDIT_TOOL_NAME],
+  [FILE_EDIT_TOOL_NAME]: [FILE_READ_TOOL_NAME],
+  [FILE_WRITE_TOOL_NAME]: [FILE_EDIT_TOOL_NAME, FILE_READ_TOOL_NAME],
+  [NOTEBOOK_EDIT_TOOL_NAME]: [FILE_EDIT_TOOL_NAME, FILE_READ_TOOL_NAME],
+};
+var PREREQUISITE_TOOL_NAMES = uniq([BASH_TOOL_NAME, ...Object.values(TOOL_PREREQUISITES).flat()]);
+//@ chunk-rqh5c9eg.js:1409-1528 placement
 /**
  * 从权限规则字符串中挑出带内容的 Bash 类规则，去重排序后返回。
  */
-//@ chunk-rqh5c9eg.js:1409-1528 placement
-function bashDenyRuleStrings(e) {
+function bashDenyRuleStrings(denyRules) {
   return uniq(
-    e
+    denyRules
       .map(permissionRuleValueFromString)
       .filter(
-        ({ toolName: toolName, ruleContent: ruleContent }) => ruleContent !== void 0 && T.includes(toolName),
+        ({ toolName, ruleContent }) =>
+          ruleContent !== undefined && PREREQUISITE_TOOL_NAMES.includes(toolName),
       )
       .map(formatPermissionRule),
   ).toSorted();
 }
 //@ chunk-rqh5c9eg.js:1528-1576 placement
-function Kfo(e) {
-  return DENY_RULES_SCHEMA().safeParse(e).success;
+/**
+ * 校验拒绝规则列表符合 schema（条数、单条长度与总长上限）。
+ */
+function validateDenyRules(denyRules) {
+  return DENY_RULES_SCHEMA().safeParse(denyRules).success;
 }
 //@ chunk-rqh5c9eg.js:1576-1638 placement
-function DTs(e) {
-  return createHash("sha256").update(jsonStringify(e)).digest("hex");
+/**
+ * 对回传请求结构做 sha256 摘要，用于校验拒绝规则。
+ */
+function hashJsonSha256(denyRules) {
+  return createHash("sha256").update(jsonStringify(denyRules)).digest("hex");
 }
 //@ chunk-rqh5c9eg.js:1638-1731 placement
-function LTs({ tools: tools, denyRules: denyRules }) {
-  return { versions: [...jvr], tools: [...tools], deny_rules: bashDenyRuleStrings(denyRules) };
+/**
+ * 由工具表与拒绝规则生成回传请求的结构（版本、工具、bash 拒绝规则摘要）。
+ */
+function buildReturnToolOutputPayload({ tools, denyRules }) {
+  return {
+    versions: [...SUPPORTED_RETURN_OUTPUT_VERSIONS],
+    tools: [...tools],
+    deny_rules: bashDenyRuleStrings(denyRules),
+  };
 }
 //@ chunk-rqh5c9eg.js:1731-1767 placement
-function s(e) {
-  return isPlainObject(e) ? e : void 0;
+function asPlainObject(e) {
+  return isPlainObject(e) ? e : undefined;
 }
-
 export {
   ANTHROPIC_RETURNTOOLOUTPUT,
-  Kfo,
-  Gfo,
-  r0n,
-  LTs,
+  validateDenyRules,
+  isReturnOutputSupported,
+  hasToolHostInterface,
+  buildReturnToolOutputPayload,
   parseReturnOutputRequest,
-  jvr,
-  DTs,
-  OTs,
+  SUPPORTED_RETURN_OUTPUT_VERSIONS,
+  hashJsonSha256,
+  MAX_RETURNED_OUTPUT_BYTES,
   bashDenyRuleStrings,
 };

@@ -6,44 +6,44 @@
  * attribution: esm-layout 2, esm-fingerprint 1
  */
 import { Xa } from "../../../../../../runtime/bun-runtime.js";
-import { er, tr } from "../lib/secs.js";
-import { F, E, Te } from "../../../webapi/lib/content_encryption.js";
-import { st } from "../../../webapi/lib/jwt_claims_set.js";
-import { v, l } from "../../../browser/runtime/base64url.js";
-import { pt } from "./produce.js";
-import { ve } from "../jws/compact/sign.js";
+import { er, init_secs } from "../lib/secs.js";
+import { F, init_content_encryption_2, Te } from "../../../webapi/lib/content_encryption.js";
+import { init_jwt_claims_set } from "../../../webapi/lib/jwt_claims_set.js";
+import { init_base64url, l } from "../../../browser/runtime/base64url.js";
+import { ProduceJWT } from "./produce.js";
+import { CompactSign } from "../jws/compact/sign.js";
 
 //@ chunk-2tyrgda4.js:40328-40359 esm-layout
-var rr = Xa(() => {
+var init_sign_3 = Xa(() => {
   er();
   F();
-  tr();
+  init_secs();
 });
 //@ chunk-2tyrgda4.js:40359-40366 esm-layout
 var or;
 //@ chunk-2tyrgda4.js:40366-40828 esm-fingerprint
-var nr = Xa(() => {
-  st();
-  E();
-  v();
-  rr();
-  or = class or extends pt {
-    setProtectedHeader(e) {
-      return ((this._protectedHeader = e), this);
+var init_sign_4 = Xa(() => {
+  init_jwt_claims_set();
+  init_content_encryption_2();
+  init_base64url();
+  init_sign_3();
+  or = class or extends ProduceJWT {
+    setProtectedHeader(protectedHeader) {
+      this._protectedHeader = protectedHeader;
+      return this;
     }
-    async sign(e, t) {
-      var r;
-      let o = new ve(l.encode(JSON.stringify(this._payload)));
+    async sign(key, options) {
+      var _a;
+      let sig = new CompactSign(l.encode(JSON.stringify(this._payload)));
+      sig.setProtectedHeader(this._protectedHeader);
       if (
-        (o.setProtectedHeader(this._protectedHeader),
-        Array.isArray((r = this._protectedHeader) === null || r === void 0 ? void 0 : r.crit) &&
-          this._protectedHeader.crit.includes("b64") &&
-          this._protectedHeader.b64 === !1)
+        Array.isArray((_a = this._protectedHeader) === null || _a === undefined ? undefined : _a.crit) &&
+        this._protectedHeader.crit.includes("b64") &&
+        this._protectedHeader.b64 === false
       )
         throw new Te("JWTs MUST NOT use unencoded payload");
-      return o.sign(e, t);
+      return sig.sign(key, options);
     }
   };
 });
-
-export { nr };
+export { init_sign_4 };

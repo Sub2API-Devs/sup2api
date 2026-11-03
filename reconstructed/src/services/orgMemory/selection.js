@@ -9,123 +9,156 @@
  * attribution: placement 13
  */
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../analytics/growthbook.js";
-import { getOrgMemoryAccountKey, isOrgMemoryWritesEnabledForAccount, J4e } from "./orgMemoryDecision.js";
+import {
+  getOrgMemoryAccountKey,
+  isOrgMemoryWritesEnabledForAccount,
+  isEligibleDecisionSurface,
+} from "./orgMemoryDecision.js";
 import { getCurrentProjectConfig, saveCurrentProjectConfig } from "../../utils/config.js";
 import { logFeatureSad } from "../analytics/featureTelemetry.js";
 
 //@ chunk-82kqcve8.js:38209-38309 placement
 function isOrgMemoryDiscoveryEnabled() {
-  if (!getFeatureValue_CACHED_MAY_BE_STALE("tengu_haze_glass", !1)) return !1;
+  if (!getFeatureValue_CACHED_MAY_BE_STALE("tengu_haze_glass", false)) return false;
   return !process.env.CLAUDE_MEMORY_STORES?.trim();
 }
 //@ chunk-82kqcve8.js:38309-38336 placement
-function Jpe() {
+/**
+ * 取当前的选择账号键。
+ */
+function selectionAccountKey() {
   return getOrgMemoryAccountKey();
 }
 //@ chunk-82kqcve8.js:38336-38380 placement
-function Ct(e) {
-  return e.startsWith("cagt_");
+/**
+ * 判断 id 是否为 silo（cagt_ 前缀）。
+ */
+function isSiloId(selection) {
+  return selection.startsWith("cagt_");
 }
 //@ chunk-82kqcve8.js:38380-38424 placement
-function kr(e) {
+/**
+ * 判断 id 是否为分组（sgrp_ 前缀）。
+ */
+function isGroupingId(e) {
   return e.startsWith("sgrp_");
 }
 //@ chunk-82kqcve8.js:38424-38528 placement
 function classifySelectionKind(e) {
   if (e === null) return "none";
-  if (yPe(e)) return "public_projects";
-  return Ct(e) ? "silo" : "project";
+  if (isPublicProjects(e)) return "public_projects";
+  return isSiloId(e) ? "silo" : "project";
 }
 //@ chunk-82kqcve8.js:38528-38576 placement
-var PUBLIC_PROJECTS = "public_projects",
-  sJo = "__explicit_off__";
+/**
+ * 显式关闭选择的特殊值。
+ */
+var PUBLIC_PROJECTS = "public_projects";
+var EXPLICIT_OFF_SELECTION = "__explicit_off__";
 //@ chunk-82kqcve8.js:38576-38606 placement
-function qs(e) {
-  return e === sJo;
+/**
+ * 判断选择是否被显式关闭。
+ */
+function isExplicitOff(e) {
+  return e === EXPLICIT_OFF_SELECTION;
 }
 //@ chunk-82kqcve8.js:38606-38636 placement
-function yPe(e) {
+/**
+ * 判断选择是否为公共项目。
+ */
+function isPublicProjects(e) {
   return e === PUBLIC_PROJECTS;
 }
 //@ chunk-82kqcve8.js:38636-38668 placement
-var Hu = /^[A-Za-z0-9_-]{1,128}$/;
+/**
+ * 选择 id 的合法格式正则。
+ */
+var SELECTION_ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
+//@ chunk-82kqcve8.js:38668-38851 placement
 /**
  * 读取项目配置里保存的组织记忆选择：账号不匹配或格式无效时返回 null。
  */
-//@ chunk-82kqcve8.js:38668-38851 placement
 function readSavedSelection() {
-  let e = getCurrentProjectConfig();
-  if (e.orgMemorySelectionAccount === void 0 || e.orgMemorySelectionAccount !== Jpe()) return null;
-  let n = e.orgMemorySelection ?? null;
-  return n !== null && Hu.test(n) ? n : null;
+  let currentProjectConfig = getCurrentProjectConfig();
+  if (
+    currentProjectConfig.orgMemorySelectionAccount === undefined ||
+    currentProjectConfig.orgMemorySelectionAccount !== selectionAccountKey()
+  )
+    return null;
+  let orgMemorySelection = currentProjectConfig.orgMemorySelection ?? null;
+  return orgMemorySelection !== null && SELECTION_ID_RE.test(orgMemorySelection) ? orgMemorySelection : null;
 }
+//@ chunk-82kqcve8.js:38851-38957 placement
 /**
  * 取生效的组织记忆选择：已失效的返回 null，可用的直接返回，否则视条件返回保存值或 null。
  */
-//@ chunk-82kqcve8.js:38851-38957 placement
 function getEffectiveSelection() {
-  let e = readSavedSelection();
-  if (e !== null && qs(e)) return null;
-  if (e !== null && yPe(e)) return e;
-  return isOrgMemoryDiscoveryEnabled() ? e : null;
+  let savedSelection = readSavedSelection();
+  if (savedSelection !== null && isExplicitOff(savedSelection)) return null;
+  if (savedSelection !== null && isPublicProjects(savedSelection)) return savedSelection;
+  return isOrgMemoryDiscoveryEnabled() ? savedSelection : null;
 }
 //@ chunk-82kqcve8.js:38957-39605 placement
-function saveOrgMemorySelection(e, n) {
-  let r = Jpe();
+function saveOrgMemorySelection(e, storageV5) {
+  let r = selectionAccountKey();
   if (e !== null && r === null) return "refused";
-  if (e !== null && !qs(e) && isOrgMemoryWritesEnabledForAccount() && !J4e()) return "refused_arms_writes";
+  if (e !== null && !isExplicitOff(e) && isOrgMemoryWritesEnabledForAccount() && !isEligibleDecisionSurface())
+    return "refused_arms_writes";
   if (e === null) {
-    let s = getCurrentProjectConfig();
-    if (s.orgMemorySelection === void 0) return "noop";
-    if (s.orgMemorySelectionAccount !== r) return "noop";
+    let currentProjectConfig = getCurrentProjectConfig();
+    if (currentProjectConfig.orgMemorySelection === undefined) return "noop";
+    if (currentProjectConfig.orgMemorySelectionAccount !== r) return "noop";
   } else {
-    let s = getCurrentProjectConfig();
-    if (s.orgMemorySelection === e && s.orgMemorySelectionAccount === r) return "noop";
+    let currentProjectConfig = getCurrentProjectConfig();
+    if (currentProjectConfig.orgMemorySelection === e && currentProjectConfig.orgMemorySelectionAccount === r)
+      return "noop";
   }
-  return (
-    saveCurrentProjectConfig((s) => {
-      if (
-        (s.orgMemorySelection ?? null) === e &&
-        (s.orgMemorySelectionAccount ?? void 0) === (e !== null ? (r ?? void 0) : void 0)
-      )
-        return s;
-      if (e === null && s.orgMemorySelectionAccount !== r) return s;
-      return {
-        ...s,
-        orgMemorySelection: e ?? void 0,
-        orgMemorySelectionAccount: e !== null ? (r ?? void 0) : void 0,
-      };
-    }, n),
-    e !== null ? "saved" : "cleared"
-  );
+  saveCurrentProjectConfig((s) => {
+    if (
+      (s.orgMemorySelection ?? null) === e &&
+      (s.orgMemorySelectionAccount ?? undefined) === (e !== null ? (r ?? undefined) : undefined)
+    )
+      return s;
+    if (e === null && s.orgMemorySelectionAccount !== r) return s;
+    return {
+      ...s,
+      orgMemorySelection: e ?? undefined,
+      orgMemorySelectionAccount: e !== null ? (r ?? undefined) : undefined,
+    };
+  }, storageV5);
+  return e !== null ? "saved" : "cleared";
 }
+//@ chunk-82kqcve8.js:39605-39889 placement
 /**
  * 当保存的组织记忆选择仍对应当前账号时清除它，并记 org_memory_picker selection_dropped。
  */
-//@ chunk-82kqcve8.js:39605-39889 placement
-function dropSavedSelection(e, n) {
-  let r = Jpe(),
-    s = getCurrentProjectConfig();
-  if (s.orgMemorySelection !== e || s.orgMemorySelectionAccount !== r) return;
-  (logFeatureSad("org_memory_picker", "selection_dropped"),
-    saveCurrentProjectConfig(
-      (h) =>
-        h.orgMemorySelection === e && h.orgMemorySelectionAccount === r
-          ? { ...h, orgMemorySelection: void 0, orgMemorySelectionAccount: void 0 }
-          : h,
-      n,
-    ));
+function dropSavedSelection(e, storageV5) {
+  let r = selectionAccountKey();
+  let currentProjectConfig = getCurrentProjectConfig();
+  if (currentProjectConfig.orgMemorySelection !== e || currentProjectConfig.orgMemorySelectionAccount !== r)
+    return;
+  logFeatureSad("org_memory_picker", "selection_dropped");
+  saveCurrentProjectConfig(
+    (h) =>
+      h.orgMemorySelection === e && h.orgMemorySelectionAccount === r
+        ? {
+            ...h,
+            orgMemorySelection: undefined,
+            orgMemorySelectionAccount: undefined,
+          }
+        : h,
+    storageV5,
+  );
 }
-
 export {
   getEffectiveSelection,
-  yPe,
-  sJo,
+  isPublicProjects,
+  EXPLICIT_OFF_SELECTION,
   saveOrgMemorySelection,
-  Ct,
+  isSiloId,
   dropSavedSelection,
-  kr,
-  Jpe,
+  isGroupingId,
+  selectionAccountKey,
   classifySelectionKind,
   isOrgMemoryDiscoveryEnabled,
   readSavedSelection,

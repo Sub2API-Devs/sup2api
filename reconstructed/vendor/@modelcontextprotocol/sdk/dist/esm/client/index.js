@@ -5,7 +5,7 @@
  * pieces: chunk-z1n5m6nf.js (3)
  * attribution: esm-fingerprint 3
  */
-import { Wsn } from "../shared/protocol.js";
+import { Protocol } from "../shared/protocol.js";
 import { Gsn, vGn } from "../../cjs/validation/ajv-provider.js";
 import {
   ToolListChangedNotificationSchema,
@@ -33,106 +33,120 @@ import {
   ListToolsResultSchema,
   ListChangedOptionsBaseSchema,
 } from "../types.js";
-import { Zt } from "../experimental/tasks/client.js";
-import { J$t, $Qe, q7 } from "../server/zod-compat.js";
-import { kGn, TGn } from "../experimental/tasks/helpers.js";
+import { ExperimentalClientTasks } from "../experimental/tasks/client.js";
+import { J$t, isZ4Schema, objectFromShape } from "../server/zod-compat.js";
+import {
+  assertToolsCallTaskCapability,
+  assertClientRequestTaskCapability,
+} from "../experimental/tasks/helpers.js";
 
 //@ chunk-z1n5m6nf.js:17770-18235 esm-fingerprint
-function $t(e, r) {
-  if (!e || r === null || typeof r !== "object") return;
-  if (e.type === "object" && e.properties && typeof e.properties === "object") {
-    let n = r,
-      properties = e.properties;
-    for (let h of Object.keys(properties)) {
-      let y = properties[h];
-      if (n[h] === void 0 && Object.prototype.hasOwnProperty.call(y, "default")) n[h] = y.default;
-      if (n[h] !== void 0) $t(y, n[h]);
+function applyElicitationDefaults(schema, data) {
+  if (!schema || data === null || typeof data !== "object") return;
+  if (schema.type === "object" && schema.properties && typeof schema.properties === "object") {
+    let obj = data;
+    let props = schema.properties;
+    for (let key of Object.keys(props)) {
+      let propSchema = props[key];
+      if (obj[key] === undefined && Object.prototype.hasOwnProperty.call(propSchema, "default"))
+        obj[key] = propSchema.default;
+      if (obj[key] !== undefined) applyElicitationDefaults(propSchema, obj[key]);
     }
   }
-  if (Array.isArray(e.anyOf)) {
-    for (let n of e.anyOf) if (typeof n !== "boolean") $t(n, r);
+  if (Array.isArray(schema.anyOf)) {
+    for (let sub of schema.anyOf) if (typeof sub !== "boolean") applyElicitationDefaults(sub, data);
   }
-  if (Array.isArray(e.oneOf)) {
-    for (let n of e.oneOf) if (typeof n !== "boolean") $t(n, r);
+  if (Array.isArray(schema.oneOf)) {
+    for (let sub of schema.oneOf) if (typeof sub !== "boolean") applyElicitationDefaults(sub, data);
   }
 }
 //@ chunk-z1n5m6nf.js:18235-18395 esm-fingerprint
-function Nr(e) {
-  if (!e) return { supportsFormMode: !1, supportsUrlMode: !1 };
-  let r = e.form !== void 0,
-    n = e.url !== void 0;
-  return { supportsFormMode: r || (!r && !n), supportsUrlMode: n };
+function getSupportedElicitationModes(capabilities) {
+  if (!capabilities)
+    return {
+      supportsFormMode: false,
+      supportsUrlMode: false,
+    };
+  let hasFormCapability = capabilities.form !== undefined;
+  let n = capabilities.url !== undefined;
+  return {
+    supportsFormMode: hasFormCapability || (!hasFormCapability && !n),
+    supportsUrlMode: n,
+  };
 }
 //@ chunk-z1n5m6nf.js:18395-28313 esm-fingerprint
-class Bt extends Wsn {
-  constructor(e, r) {
-    super(r);
-    if (
-      ((this._clientInfo = e),
-      (this._cachedToolOutputValidators = new Map()),
-      (this._cachedKnownTaskTools = new Set()),
-      (this._cachedRequiredTaskTools = new Set()),
-      (this._listChangedDebounceTimers = new Map()),
-      (this._capabilities = r?.capabilities ?? {}),
-      (this._jsonSchemaValidator = r?.jsonSchemaValidator ?? new Gsn()),
-      r?.listChanged)
-    )
-      this._pendingListChangedConfig = r.listChanged;
+class Client extends Protocol {
+  constructor(_clientInfo, options) {
+    super(options);
+    this._clientInfo = _clientInfo;
+    this._cachedToolOutputValidators = new Map();
+    this._cachedKnownTaskTools = new Set();
+    this._cachedRequiredTaskTools = new Set();
+    this._listChangedDebounceTimers = new Map();
+    this._capabilities = options?.capabilities ?? {};
+    this._jsonSchemaValidator = options?.jsonSchemaValidator ?? new Gsn();
+    if (options?.listChanged) this._pendingListChangedConfig = options.listChanged;
   }
-  _setupListChangedHandlers(e) {
-    if (e.tools && this._serverCapabilities?.tools?.listChanged)
+  _setupListChangedHandlers(config) {
+    if (config.tools && this._serverCapabilities?.tools?.listChanged)
       this._setupListChangedHandler(
         "tools",
         ToolListChangedNotificationSchema,
-        e.tools,
+        config.tools,
         async () => (await this.listTools()).tools,
       );
-    if (e.prompts && this._serverCapabilities?.prompts?.listChanged)
+    if (config.prompts && this._serverCapabilities?.prompts?.listChanged)
       this._setupListChangedHandler(
         "prompts",
         PromptListChangedNotificationSchema,
-        e.prompts,
+        config.prompts,
         async () => (await this.listPrompts()).prompts,
       );
-    if (e.resources && this._serverCapabilities?.resources?.listChanged)
+    if (config.resources && this._serverCapabilities?.resources?.listChanged)
       this._setupListChangedHandler(
         "resources",
         ResourceListChangedNotificationSchema,
-        e.resources,
+        config.resources,
         async () => (await this.listResources()).resources,
       );
   }
   get experimental() {
-    if (!this._experimental) this._experimental = { tasks: new Zt(this) };
+    if (!this._experimental)
+      this._experimental = {
+        tasks: new ExperimentalClientTasks(this),
+      };
     return this._experimental;
   }
-  registerCapabilities(e) {
+  registerCapabilities(capabilities) {
     if (this.transport) throw Error("Cannot register capabilities after connecting to transport");
-    this._capabilities = vGn(this._capabilities, e);
+    this._capabilities = vGn(this._capabilities, capabilities);
   }
-  setRequestHandler(e, r) {
-    let s = J$t(e)?.method;
-    if (!s) throw Error("Schema is missing a method literal");
-    let h;
-    if ($Qe(s)) {
-      let S = s;
-      h = S._zod?.def?.value ?? S.value;
+  setRequestHandler(requestSchema, handler) {
+    let methodSchema = J$t(requestSchema)?.method;
+    if (!methodSchema) throw Error("Schema is missing a method literal");
+    let methodValue;
+    if (isZ4Schema(methodSchema)) {
+      let v4Schema = methodSchema;
+      methodValue = v4Schema._zod?.def?.value ?? v4Schema.value;
     } else {
-      let S = s;
-      h = S._def?.value ?? S.value;
+      let v3Schema = methodSchema;
+      methodValue = v3Schema._def?.value ?? v3Schema.value;
     }
-    if (typeof h !== "string") throw Error("Schema method literal must be a string");
-    let y = h;
-    if (y === "elicitation/create") {
-      let S = async (T, M) => {
-        let w = q7(ElicitRequestSchema, T);
-        if (!w.success) {
-          let G = w.error instanceof Error ? w.error.message : String(w.error);
-          throw new McpError(ErrorCode.InvalidParams, `Invalid elicitation request: ${G}`);
+    if (typeof methodValue !== "string") throw Error("Schema method literal must be a string");
+    let method = methodValue;
+    if (method === "elicitation/create") {
+      let wrappedHandler = async (request, extra) => {
+        let validatedRequest = objectFromShape(ElicitRequestSchema, request);
+        if (!validatedRequest.success) {
+          let errorMessage =
+            validatedRequest.error instanceof Error
+              ? validatedRequest.error.message
+              : String(validatedRequest.error);
+          throw new McpError(ErrorCode.InvalidParams, `Invalid elicitation request: ${errorMessage}`);
         }
-        let { params: params } = w.data;
+        let { params } = validatedRequest.data;
         params.mode = params.mode ?? "form";
-        let { supportsFormMode: supportsFormMode, supportsUrlMode: supportsUrlMode } = Nr(
+        let { supportsFormMode, supportsUrlMode } = getSupportedElicitationModes(
           this._capabilities.elicitation,
         );
         if (params.mode === "form" && !supportsFormMode)
@@ -145,71 +159,91 @@ class Bt extends Wsn {
             ErrorCode.InvalidParams,
             "Client does not support URL-mode elicitation requests",
           );
-        let resolved = await Promise.resolve(r(T, M));
+        let result = await Promise.resolve(handler(request, extra));
         if (params.task) {
-          let G = q7(CreateTaskResultSchema, resolved);
-          if (!G.success) {
-            let q = G.error instanceof Error ? G.error.message : String(G.error);
-            throw new McpError(ErrorCode.InvalidParams, `Invalid task creation result: ${q}`);
+          let taskValidationResult = objectFromShape(CreateTaskResultSchema, result);
+          if (!taskValidationResult.success) {
+            let errorMessage =
+              taskValidationResult.error instanceof Error
+                ? taskValidationResult.error.message
+                : String(taskValidationResult.error);
+            throw new McpError(ErrorCode.InvalidParams, `Invalid task creation result: ${errorMessage}`);
           }
-          return G.data;
+          return taskValidationResult.data;
         }
-        let U = q7(ElicitResultSchema, resolved);
-        if (!U.success) {
-          let G = U.error instanceof Error ? U.error.message : String(U.error);
-          throw new McpError(ErrorCode.InvalidParams, `Invalid elicitation result: ${G}`);
+        let validationResult = objectFromShape(ElicitResultSchema, result);
+        if (!validationResult.success) {
+          let errorMessage =
+            validationResult.error instanceof Error
+              ? validationResult.error.message
+              : String(validationResult.error);
+          throw new McpError(ErrorCode.InvalidParams, `Invalid elicitation result: ${errorMessage}`);
         }
-        let re = U.data,
-          he = params.mode === "form" ? params.requestedSchema : void 0;
-        if (params.mode === "form" && re.action === "accept" && re.content && he) {
+        let validatedResult = validationResult.data;
+        let requestedSchema = params.mode === "form" ? params.requestedSchema : undefined;
+        if (
+          params.mode === "form" &&
+          validatedResult.action === "accept" &&
+          validatedResult.content &&
+          requestedSchema
+        ) {
           if (this._capabilities.elicitation?.form?.applyDefaults)
             try {
-              $t(he, re.content);
+              applyElicitationDefaults(requestedSchema, validatedResult.content);
             } catch {}
         }
-        return re;
+        return validatedResult;
       };
-      return super.setRequestHandler(e, S);
+      return super.setRequestHandler(requestSchema, wrappedHandler);
     }
-    if (y === "sampling/createMessage") {
-      let S = async (T, M) => {
-        let w = q7(CreateMessageRequestSchema, T);
-        if (!w.success) {
-          let re = w.error instanceof Error ? w.error.message : String(w.error);
-          throw new McpError(ErrorCode.InvalidParams, `Invalid sampling request: ${re}`);
+    if (method === "sampling/createMessage") {
+      let wrappedHandler = async (request, extra) => {
+        let validatedRequest = objectFromShape(CreateMessageRequestSchema, request);
+        if (!validatedRequest.success) {
+          let errorMessage =
+            validatedRequest.error instanceof Error
+              ? validatedRequest.error.message
+              : String(validatedRequest.error);
+          throw new McpError(ErrorCode.InvalidParams, `Invalid sampling request: ${errorMessage}`);
         }
-        let { params: params } = w.data,
-          resolved = await Promise.resolve(r(T, M));
+        let { params } = validatedRequest.data;
+        let result = await Promise.resolve(handler(request, extra));
         if (params.task) {
-          let re = q7(CreateTaskResultSchema, resolved);
-          if (!re.success) {
-            let he = re.error instanceof Error ? re.error.message : String(re.error);
-            throw new McpError(ErrorCode.InvalidParams, `Invalid task creation result: ${he}`);
+          let taskValidationResult = objectFromShape(CreateTaskResultSchema, result);
+          if (!taskValidationResult.success) {
+            let errorMessage =
+              taskValidationResult.error instanceof Error
+                ? taskValidationResult.error.message
+                : String(taskValidationResult.error);
+            throw new McpError(ErrorCode.InvalidParams, `Invalid task creation result: ${errorMessage}`);
           }
-          return re.data;
+          return taskValidationResult.data;
         }
         let H =
-            params.tools || params.toolChoice
-              ? CreateMessageResultWithToolsSchema
-              : CreateMessageResultSchema,
-          U = q7(H, resolved);
-        if (!U.success) {
-          let re = U.error instanceof Error ? U.error.message : String(U.error);
-          throw new McpError(ErrorCode.InvalidParams, `Invalid sampling result: ${re}`);
+          params.tools || params.toolChoice ? CreateMessageResultWithToolsSchema : CreateMessageResultSchema;
+        let validationResult = objectFromShape(H, result);
+        if (!validationResult.success) {
+          let errorMessage =
+            validationResult.error instanceof Error
+              ? validationResult.error.message
+              : String(validationResult.error);
+          throw new McpError(ErrorCode.InvalidParams, `Invalid sampling result: ${errorMessage}`);
         }
-        return U.data;
+        return validationResult.data;
       };
-      return super.setRequestHandler(e, S);
+      return super.setRequestHandler(requestSchema, wrappedHandler);
     }
-    return super.setRequestHandler(e, r);
+    return super.setRequestHandler(requestSchema, handler);
   }
-  assertCapability(e, r) {
-    if (!this._serverCapabilities?.[e]) throw Error(`Server does not support ${e} (required for ${r})`);
+  assertCapability(capability, method) {
+    if (!this._serverCapabilities?.[capability])
+      throw Error(`Server does not support ${capability} (required for ${method})`);
   }
-  async connect(e, r) {
-    if ((await super.connect(e), e.sessionId !== void 0)) return;
+  async connect(transport, options) {
+    await super.connect(transport);
+    if (transport.sessionId !== undefined) return;
     try {
-      let request = await this.request(
+      let result = await this.request(
         {
           method: "initialize",
           params: {
@@ -219,26 +253,25 @@ class Bt extends Wsn {
           },
         },
         InitializeResultSchema,
-        r,
+        options,
       );
-      if (request === void 0) throw Error(`Server sent invalid initialize result: ${request}`);
-      if (!SUPPORTED_PROTOCOL_VERSIONS.includes(request.protocolVersion))
-        throw Error(`Server's protocol version is not supported: ${request.protocolVersion}`);
-      if (
-        ((this._serverCapabilities = request.capabilities),
-        (this._serverVersion = request.serverInfo),
-        e.setProtocolVersion)
-      )
-        e.setProtocolVersion(request.protocolVersion);
-      if (
-        ((this._instructions = request.instructions),
-        await this.notification({ method: "notifications/initialized" }),
-        this._pendingListChangedConfig)
-      )
-        (this._setupListChangedHandlers(this._pendingListChangedConfig),
-          (this._pendingListChangedConfig = void 0));
+      if (result === undefined) throw Error(`Server sent invalid initialize result: ${result}`);
+      if (!SUPPORTED_PROTOCOL_VERSIONS.includes(result.protocolVersion))
+        throw Error(`Server's protocol version is not supported: ${result.protocolVersion}`);
+      this._serverCapabilities = result.capabilities;
+      this._serverVersion = result.serverInfo;
+      if (transport.setProtocolVersion) transport.setProtocolVersion(result.protocolVersion);
+      this._instructions = result.instructions;
+      await this.notification({
+        method: "notifications/initialized",
+      });
+      if (this._pendingListChangedConfig) {
+        this._setupListChangedHandlers(this._pendingListChangedConfig);
+        this._pendingListChangedConfig = undefined;
+      }
     } catch (error) {
-      throw (this.close(), error);
+      this.close();
+      throw error;
     }
   }
   getServerCapabilities() {
@@ -250,16 +283,16 @@ class Bt extends Wsn {
   getInstructions() {
     return this._instructions;
   }
-  assertCapabilityForMethod(e) {
-    switch (e) {
+  assertCapabilityForMethod(method) {
+    switch (method) {
       case "logging/setLevel":
         if (!this._serverCapabilities?.logging)
-          throw Error(`Server does not support logging (required for ${e})`);
+          throw Error(`Server does not support logging (required for ${method})`);
         break;
       case "prompts/get":
       case "prompts/list":
         if (!this._serverCapabilities?.prompts)
-          throw Error(`Server does not support prompts (required for ${e})`);
+          throw Error(`Server does not support prompts (required for ${method})`);
         break;
       case "resources/list":
       case "resources/templates/list":
@@ -267,18 +300,18 @@ class Bt extends Wsn {
       case "resources/subscribe":
       case "resources/unsubscribe":
         if (!this._serverCapabilities?.resources)
-          throw Error(`Server does not support resources (required for ${e})`);
-        if (e === "resources/subscribe" && !this._serverCapabilities.resources.subscribe)
-          throw Error(`Server does not support resource subscriptions (required for ${e})`);
+          throw Error(`Server does not support resources (required for ${method})`);
+        if (method === "resources/subscribe" && !this._serverCapabilities.resources.subscribe)
+          throw Error(`Server does not support resource subscriptions (required for ${method})`);
         break;
       case "tools/call":
       case "tools/list":
         if (!this._serverCapabilities?.tools)
-          throw Error(`Server does not support tools (required for ${e})`);
+          throw Error(`Server does not support tools (required for ${method})`);
         break;
       case "completion/complete":
         if (!this._serverCapabilities?.completions)
-          throw Error(`Server does not support completions (required for ${e})`);
+          throw Error(`Server does not support completions (required for ${method})`);
         break;
       case "initialize":
         break;
@@ -286,11 +319,11 @@ class Bt extends Wsn {
         break;
     }
   }
-  assertNotificationCapability(e) {
-    switch (e) {
+  assertNotificationCapability(method) {
+    switch (method) {
       case "notifications/roots/list_changed":
         if (!this._capabilities.roots?.listChanged)
-          throw Error(`Client does not support roots list changed notifications (required for ${e})`);
+          throw Error(`Client does not support roots list changed notifications (required for ${method})`);
         break;
       case "notifications/initialized":
         break;
@@ -300,94 +333,168 @@ class Bt extends Wsn {
         break;
     }
   }
-  assertRequestHandlerCapability(e) {
+  assertRequestHandlerCapability(method) {
     if (!this._capabilities) return;
-    switch (e) {
+    switch (method) {
       case "sampling/createMessage":
         if (!this._capabilities.sampling)
-          throw Error(`Client does not support sampling capability (required for ${e})`);
+          throw Error(`Client does not support sampling capability (required for ${method})`);
         break;
       case "elicitation/create":
         if (!this._capabilities.elicitation)
-          throw Error(`Client does not support elicitation capability (required for ${e})`);
+          throw Error(`Client does not support elicitation capability (required for ${method})`);
         break;
       case "roots/list":
         if (!this._capabilities.roots)
-          throw Error(`Client does not support roots capability (required for ${e})`);
+          throw Error(`Client does not support roots capability (required for ${method})`);
         break;
       case "tasks/get":
       case "tasks/list":
       case "tasks/result":
       case "tasks/cancel":
         if (!this._capabilities.tasks)
-          throw Error(`Client does not support tasks capability (required for ${e})`);
+          throw Error(`Client does not support tasks capability (required for ${method})`);
         break;
       case "ping":
         break;
     }
   }
-  assertTaskCapability(e) {
-    kGn(this._serverCapabilities?.tasks?.requests, e, "Server");
+  assertTaskCapability(method) {
+    assertToolsCallTaskCapability(this._serverCapabilities?.tasks?.requests, method, "Server");
   }
-  assertTaskHandlerCapability(e) {
+  assertTaskHandlerCapability(method) {
     if (!this._capabilities) return;
-    TGn(this._capabilities.tasks?.requests, e, "Client");
+    assertClientRequestTaskCapability(this._capabilities.tasks?.requests, method, "Client");
   }
-  async ping(e) {
-    return this.request({ method: "ping" }, EmptyResultSchema, e);
-  }
-  async complete(e, r) {
-    return this.request({ method: "completion/complete", params: e }, CompleteResultSchema, r);
-  }
-  async setLoggingLevel(e, r) {
-    return this.request({ method: "logging/setLevel", params: { level: e } }, EmptyResultSchema, r);
-  }
-  async getPrompt(e, r) {
-    return this.request({ method: "prompts/get", params: e }, GetPromptResultSchema, r);
-  }
-  async listPrompts(e, r) {
-    return this.request({ method: "prompts/list", params: e }, ListPromptsResultSchema, r);
-  }
-  async listResources(e, r) {
-    return this.request({ method: "resources/list", params: e }, ListResourcesResultSchema, r);
-  }
-  async listResourceTemplates(e, r) {
+  async ping(options) {
     return this.request(
-      { method: "resources/templates/list", params: e },
-      ListResourceTemplatesResultSchema,
-      r,
+      {
+        method: "ping",
+      },
+      EmptyResultSchema,
+      options,
     );
   }
-  async readResource(e, r) {
-    return this.request({ method: "resources/read", params: e }, ReadResourceResultSchema, r);
+  async complete(params, options) {
+    return this.request(
+      {
+        method: "completion/complete",
+        params,
+      },
+      CompleteResultSchema,
+      options,
+    );
   }
-  async subscribeResource(e, r) {
-    return this.request({ method: "resources/subscribe", params: e }, EmptyResultSchema, r);
+  async setLoggingLevel(level, options) {
+    return this.request(
+      {
+        method: "logging/setLevel",
+        params: {
+          level,
+        },
+      },
+      EmptyResultSchema,
+      options,
+    );
   }
-  async unsubscribeResource(e, r) {
-    return this.request({ method: "resources/unsubscribe", params: e }, EmptyResultSchema, r);
+  async getPrompt(params, options) {
+    return this.request(
+      {
+        method: "prompts/get",
+        params,
+      },
+      GetPromptResultSchema,
+      options,
+    );
   }
-  async callTool(e, r = CallToolResultSchema, n) {
-    if (this.isToolTaskRequired(e.name))
+  async listPrompts(params, options) {
+    return this.request(
+      {
+        method: "prompts/list",
+        params,
+      },
+      ListPromptsResultSchema,
+      options,
+    );
+  }
+  async listResources(params, options) {
+    return this.request(
+      {
+        method: "resources/list",
+        params,
+      },
+      ListResourcesResultSchema,
+      options,
+    );
+  }
+  async listResourceTemplates(params, options) {
+    return this.request(
+      {
+        method: "resources/templates/list",
+        params,
+      },
+      ListResourceTemplatesResultSchema,
+      options,
+    );
+  }
+  async readResource(params, options) {
+    return this.request(
+      {
+        method: "resources/read",
+        params,
+      },
+      ReadResourceResultSchema,
+      options,
+    );
+  }
+  async subscribeResource(params, options) {
+    return this.request(
+      {
+        method: "resources/subscribe",
+        params,
+      },
+      EmptyResultSchema,
+      options,
+    );
+  }
+  async unsubscribeResource(params, options) {
+    return this.request(
+      {
+        method: "resources/unsubscribe",
+        params,
+      },
+      EmptyResultSchema,
+      options,
+    );
+  }
+  async callTool(params, resultSchema = CallToolResultSchema, options) {
+    if (this.isToolTaskRequired(params.name))
       throw new McpError(
         ErrorCode.InvalidRequest,
-        `Tool "${e.name}" requires task-based execution. Use client.experimental.tasks.callToolStream() instead.`,
+        `Tool "${params.name}" requires task-based execution. Use client.experimental.tasks.callToolStream() instead.`,
       );
-    let request = await this.request({ method: "tools/call", params: e }, r, n),
-      toolOutputValidator = this.getToolOutputValidator(e.name);
-    if (toolOutputValidator) {
-      if (!request.structuredContent && !request.isError)
+    let result = await this.request(
+      {
+        method: "tools/call",
+        params,
+      },
+      resultSchema,
+      options,
+    );
+    let validator = this.getToolOutputValidator(params.name);
+    if (validator) {
+      if (!result.structuredContent && !result.isError)
         throw new McpError(
           ErrorCode.InvalidRequest,
-          `Tool ${e.name} has an output schema but did not return structured content`,
+          `Tool ${params.name} has an output schema but did not return structured content`,
         );
-      if (request.structuredContent)
+      if (result.structuredContent)
         try {
-          let y = toolOutputValidator(request.structuredContent);
-          if (!y.valid)
+          let validationResult = validator(result.structuredContent);
+          if (!validationResult.valid)
             throw new McpError(
               ErrorCode.InvalidParams,
-              `Structured content does not match the tool's output schema: ${y.errorMessage}`,
+              `Structured content does not match the tool's output schema: ${validationResult.errorMessage}`,
             );
         } catch (error) {
           if (error instanceof McpError) throw error;
@@ -397,69 +504,79 @@ class Bt extends Wsn {
           );
         }
     }
-    return request;
+    return result;
   }
-  isToolTask(e) {
-    if (!this._serverCapabilities?.tasks?.requests?.tools?.call) return !1;
-    return this._cachedKnownTaskTools.has(e);
+  isToolTask(toolName) {
+    if (!this._serverCapabilities?.tasks?.requests?.tools?.call) return false;
+    return this._cachedKnownTaskTools.has(toolName);
   }
-  isToolTaskRequired(e) {
-    return this._cachedRequiredTaskTools.has(e);
+  isToolTaskRequired(toolName) {
+    return this._cachedRequiredTaskTools.has(toolName);
   }
-  cacheToolMetadata(e) {
-    (this._cachedToolOutputValidators.clear(),
-      this._cachedKnownTaskTools.clear(),
-      this._cachedRequiredTaskTools.clear());
-    for (let r of e) {
-      if (r.outputSchema) {
-        let validator = this._jsonSchemaValidator.getValidator(r.outputSchema);
-        this._cachedToolOutputValidators.set(r.name, validator);
+  cacheToolMetadata(tools) {
+    this._cachedToolOutputValidators.clear();
+    this._cachedKnownTaskTools.clear();
+    this._cachedRequiredTaskTools.clear();
+    for (let tool of tools) {
+      if (tool.outputSchema) {
+        let toolValidator = this._jsonSchemaValidator.getValidator(tool.outputSchema);
+        this._cachedToolOutputValidators.set(tool.name, toolValidator);
       }
-      let n = r.execution?.taskSupport;
-      if (n === "required" || n === "optional") this._cachedKnownTaskTools.add(r.name);
-      if (n === "required") this._cachedRequiredTaskTools.add(r.name);
+      let taskSupport = tool.execution?.taskSupport;
+      if (taskSupport === "required" || taskSupport === "optional") this._cachedKnownTaskTools.add(tool.name);
+      if (taskSupport === "required") this._cachedRequiredTaskTools.add(tool.name);
     }
   }
-  getToolOutputValidator(e) {
-    return this._cachedToolOutputValidators.get(e);
+  getToolOutputValidator(toolName) {
+    return this._cachedToolOutputValidators.get(toolName);
   }
-  async listTools(e, r) {
-    let request = await this.request({ method: "tools/list", params: e }, ListToolsResultSchema, r);
-    return (this.cacheToolMetadata(request.tools), request);
-  }
-  _setupListChangedHandler(e, r, n, s) {
-    let safeParse = ListChangedOptionsBaseSchema.safeParse(n);
-    if (!safeParse.success) throw Error(`Invalid ${e} listChanged options: ${safeParse.error.message}`);
-    if (typeof n.onChanged !== "function")
-      throw Error(`Invalid ${e} listChanged options: onChanged must be a function`);
-    let { autoRefresh: autoRefresh, debounceMs: debounceMs } = safeParse.data,
-      { onChanged: onChanged } = n,
-      M = async () => {
-        if (!autoRefresh) {
-          onChanged(null, null);
-          return;
-        }
-        try {
-          let R = await s();
-          onChanged(null, R);
-        } catch (error) {
-          let E = error instanceof Error ? error : Error(String(error));
-          onChanged(E, null);
-        }
+  async listTools(params, options) {
+    let result = await this.request(
+      {
+        method: "tools/list",
+        params,
       },
-      w = () => {
-        if (debounceMs) {
-          let R = this._listChangedDebounceTimers.get(e);
-          if (R) clearTimeout(R);
-          let E = setTimeout(M, debounceMs);
-          this._listChangedDebounceTimers.set(e, E);
-        } else M();
-      };
-    this.setNotificationHandler(r, w);
+      ListToolsResultSchema,
+      options,
+    );
+    this.cacheToolMetadata(result.tools);
+    return result;
+  }
+  _setupListChangedHandler(listType, notificationSchema, options, fetcher) {
+    let parseResult = ListChangedOptionsBaseSchema.safeParse(options);
+    if (!parseResult.success)
+      throw Error(`Invalid ${listType} listChanged options: ${parseResult.error.message}`);
+    if (typeof options.onChanged !== "function")
+      throw Error(`Invalid ${listType} listChanged options: onChanged must be a function`);
+    let { autoRefresh, debounceMs } = parseResult.data;
+    let { onChanged } = options;
+    let refresh = async () => {
+      if (!autoRefresh) {
+        onChanged(null, null);
+        return;
+      }
+      try {
+        let items = await fetcher();
+        onChanged(null, items);
+      } catch (e) {
+        let error = e instanceof Error ? e : Error(String(e));
+        onChanged(error, null);
+      }
+    };
+    let handler = () => {
+      if (debounceMs) {
+        let existingTimer = this._listChangedDebounceTimers.get(listType);
+        if (existingTimer) clearTimeout(existingTimer);
+        let timer = setTimeout(refresh, debounceMs);
+        this._listChangedDebounceTimers.set(listType, timer);
+      } else refresh();
+    };
+    this.setNotificationHandler(notificationSchema, handler);
   }
   async sendRootsListChanged() {
-    return this.notification({ method: "notifications/roots/list_changed" });
+    return this.notification({
+      method: "notifications/roots/list_changed",
+    });
   }
 }
-
-export { Bt };
+export { Client };

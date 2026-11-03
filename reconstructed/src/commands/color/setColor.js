@@ -20,57 +20,65 @@ import { getBridgeTokenOverride, getBridgeBaseUrlOverride } from "../../bridge/b
 
 //@ chunk-p7w1d1hp.js:607-682 placement
 async function call(onDone, context, args) {
-  return (onDone(await performSetColor(args, context), { display: "system" }), null);
+  onDone(await performSetColor(args, context), {
+    display: "system",
+  });
+  return null;
 }
+//@ chunk-p7w1d1hp.js:682-1404 placement = call (0.7)
 /**
  * 设置会话颜色并同步到桥接会话。
  */
-//@ chunk-p7w1d1hp.js:682-1404 placement = call (0.7)
-async function performSetColor(n, e) {
+async function performSetColor(n, context) {
   if (isTeammate())
     return "Cannot set color: This session is a teammate. Teammate colors are assigned by the team leader.";
-  let o = n?.trim() ?? "",
-    t = o === "" ? AGENT_COLOR_NAMES[Math.floor(Math.random() * AGENT_COLOR_NAMES.length)] : o.toLowerCase(),
-    included = RESET_ALIASES.includes(t);
+  let o = n?.trim() ?? "";
+  let t =
+    o === "" ? AGENT_COLOR_NAMES[Math.floor(Math.random() * AGENT_COLOR_NAMES.length)] : o.toLowerCase();
+  let included = RESET_ALIASES.includes(t);
   if (!included && !AGENT_COLOR_NAMES.includes(t)) {
     let colorList = AGENT_COLOR_NAMES.join(", ");
     return `Invalid color "${t}". Available colors: ${colorList}, default`;
   }
-  let sessionId = getSessionId(),
-    fullPath = getTranscriptPath(),
-    i = included ? "default" : t,
-    l = included ? void 0 : t;
-  (await saveAgentColor(sessionId, i, fullPath, e.storageV5),
-    e.setAppState((prev) => updateStandaloneAgentContext(prev, { color: l })));
-  let appState = e.getAppState(),
-    g = appState.agent
-      ? appState.agentDefinitions.activeAgents.find((prev) => prev.agentType === appState.agent)
-      : void 0;
-  return (
-    syncJobColor(
-      getOwnJobShortId(),
-      getEffectiveAgentColor({ userOverride: l, agentDefinitionColor: g?.color }),
-      e.storageV5,
-    ),
-    syncBridgeSessionColor(i, e.credentials),
-    included ? "Session color reset to default" : `Session color set to: ${t}`
+  let sessionId = getSessionId();
+  let fullPath = getTranscriptPath();
+  let agentColor = included ? "default" : t;
+  let l = included ? undefined : t;
+  await saveAgentColor(sessionId, agentColor, fullPath, context.storageV5);
+  context.setAppState((prev) =>
+    updateStandaloneAgentContext(prev, {
+      color: l,
+    }),
   );
+  let appState = context.getAppState();
+  let g = appState.agent
+    ? appState.agentDefinitions.activeAgents.find((prev) => prev.agentType === appState.agent)
+    : undefined;
+  syncJobColor(
+    getOwnJobShortId(),
+    getEffectiveAgentColor({
+      userOverride: l,
+      agentDefinitionColor: g?.color,
+    }),
+    context.storageV5,
+  );
+  syncBridgeSessionColor(agentColor, context.credentials);
+  return included ? "Session color reset to default" : `Session color set to: ${t}`;
 }
+//@ chunk-p7w1d1hp.js:1404-1626 placement
 /**
  * 把会话颜色同步到桥接会话标签
  */
-//@ chunk-p7w1d1hp.js:1404-1626 placement
-function syncBridgeSessionColor(n, e) {
-  let o = getReplBridgeHandle()?.bridgeSessionId;
-  if (!o) return;
-  let t = getBridgeTokenOverride();
-  import("./chunk-3eyvtwsv.js").then(({ updateBridgeSessionColorTag: updateBridgeSessionColorTag }) =>
-    updateBridgeSessionColorTag(o, n, AGENT_COLOR_NAMES, {
+function syncBridgeSessionColor(n, credentials) {
+  let bridgeSessionId = getReplBridgeHandle()?.bridgeSessionId;
+  if (!bridgeSessionId) return;
+  let bridgeTokenOverride = getBridgeTokenOverride();
+  import("./chunk-3eyvtwsv.js").then(({ updateBridgeSessionColorTag }) =>
+    updateBridgeSessionColorTag(bridgeSessionId, n, AGENT_COLOR_NAMES, {
       baseUrl: getBridgeBaseUrlOverride(),
-      getAccessToken: t ? () => t : void 0,
-      credentials: e,
+      getAccessToken: bridgeTokenOverride ? () => bridgeTokenOverride : undefined,
+      credentials,
     }).catch(() => {}),
   );
 }
-
 export { performSetColor };

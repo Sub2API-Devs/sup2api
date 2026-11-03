@@ -7,24 +7,23 @@
  */
 import { Kn } from "../../../../../@typespec/ts-http-runtime/dist/esm/util/delay.js";
 import { tr } from "../../../../../@typespec/ts-http-runtime/dist/esm/util/error.js";
-import { Gr } from "../../../../../@typespec/ts-http-runtime/dist/esm/util/checkEnvironment.js";
+import { isNodeLike } from "../../../../../@typespec/ts-http-runtime/dist/esm/util/checkEnvironment.js";
 
 //@ chunk-mrx6y2r5.js:56876-56908 esm-layout
-function Xl(e, t) {
-  return Kn(e, t);
+function Xl(retryCount, config) {
+  return Kn(retryCount, config);
 }
 //@ chunk-mrx6y2r5.js:56908-56936 esm-layout
 function Wo(e) {
   return tr(e);
 }
 //@ chunk-mrx6y2r5.js:56936-56952 esm-layout
-var Qo = Gr,
-  Yn = Gr;
+var isNodeLike_default = isNodeLike;
+var isNodeLike_default_2 = isNodeLike;
 //@ chunk-mrx6y2r5.js:56952-56980 esm-fingerprint
-var Zl = Symbol("rawContent");
+var rawContent = Symbol("rawContent");
 //@ chunk-mrx6y2r5.js:56980-57028 esm-layout
-function pa(e) {
-  return typeof e[Zl] === "function";
+function isNodeReadableStream(x) {
+  return typeof x[rawContent] === "function";
 }
-
-export { pa, Zl, Wo, Yn, Qo, Xl };
+export { isNodeReadableStream, rawContent, Wo, isNodeLike_default_2, isNodeLike_default, Xl };

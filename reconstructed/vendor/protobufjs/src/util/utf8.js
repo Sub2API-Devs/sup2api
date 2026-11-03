@@ -8,59 +8,72 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-798ashq9.js:24520-25666 cjs-fingerprint
-var xr = x(function (Or) {
-  var Gt = Or,
-    Jt = "\uFFFD";
-  Gt.length = function (u) {
-    var f = 0,
-      d = 0;
-    for (var i = 0; i < u.length; ++i)
-      if (((d = u.charCodeAt(i)), d < 128)) f += 1;
-      else if (d < 2048) f += 2;
-      else if ((d & 64512) === 55296 && (u.charCodeAt(i + 1) & 64512) === 56320) (++i, (f += 4));
-      else f += 3;
-    return f;
+var require_utf8 = x(function (cjsExports) {
+  var utf8 = cjsExports;
+  var replacementChar = "\uFFFD";
+  utf8.length = function (string) {
+    var len = 0;
+    var c = 0;
+    for (var i = 0; i < string.length; ++i) {
+      c = string.charCodeAt(i);
+      if (c < 128) len += 1;
+      else if (c < 2048) len += 2;
+      else if ((c & 64512) === 55296 && (string.charCodeAt(i + 1) & 64512) === 56320) {
+        ++i;
+        len += 4;
+      } else len += 3;
+    }
+    return len;
   };
-  Gt.read = function (u, f, d) {
-    if (d - f < 1) return "";
-    var i = "";
-    for (var o = f; o < d;) {
-      var e = u[o++];
-      if (e <= 127) i += String.fromCharCode(e);
-      else if (e >= 192 && e < 224) {
-        var t = ((e & 31) << 6) | (u[o++] & 63);
-        i += t >= 128 ? String.fromCharCode(t) : Jt;
-      } else if (e >= 224 && e < 240) {
-        var r = ((e & 15) << 12) | ((u[o++] & 63) << 6) | (u[o++] & 63);
-        i += r >= 2048 ? String.fromCharCode(r) : Jt;
-      } else if (e >= 240) {
-        var n = ((e & 7) << 18) | ((u[o++] & 63) << 12) | ((u[o++] & 63) << 6) | (u[o++] & 63);
-        if (n < 65536 || n > 1114111) i += Jt;
-        else
-          ((n -= 65536),
-            (i += String.fromCharCode(55296 + (n >> 10))),
-            (i += String.fromCharCode(56320 + (n & 1023))));
+  utf8.read = function (buffer, start, end) {
+    if (end - start < 1) return "";
+    var str = "";
+    for (var i = start; i < end;) {
+      var t_2 = buffer[i++];
+      if (t_2 <= 127) str += String.fromCharCode(t_2);
+      else if (t_2 >= 192 && t_2 < 224) {
+        var c2 = ((t_2 & 31) << 6) | (buffer[i++] & 63);
+        str += c2 >= 128 ? String.fromCharCode(c2) : replacementChar;
+      } else if (t_2 >= 224 && t_2 < 240) {
+        var c3 = ((t_2 & 15) << 12) | ((buffer[i++] & 63) << 6) | (buffer[i++] & 63);
+        str += c3 >= 2048 ? String.fromCharCode(c3) : replacementChar;
+      } else if (t_2 >= 240) {
+        var t2 =
+          ((t_2 & 7) << 18) | ((buffer[i++] & 63) << 12) | ((buffer[i++] & 63) << 6) | (buffer[i++] & 63);
+        if (t2 < 65536 || t2 > 1114111) str += replacementChar;
+        else {
+          t2 -= 65536;
+          str += String.fromCharCode(55296 + (t2 >> 10));
+          str += String.fromCharCode(56320 + (t2 & 1023));
+        }
       }
     }
-    return i;
+    return str;
   };
-  Gt.write = function (u, f, d) {
-    var i = d,
-      o,
-      e;
-    for (var t = 0; t < u.length; ++t)
-      if (((o = u.charCodeAt(t)), o < 128)) f[d++] = o;
-      else if (o < 2048) ((f[d++] = (o >> 6) | 192), (f[d++] = (o & 63) | 128));
-      else if ((o & 64512) === 55296 && ((e = u.charCodeAt(t + 1)) & 64512) === 56320)
-        ((o = 65536 + ((o & 1023) << 10) + (e & 1023)),
-          ++t,
-          (f[d++] = (o >> 18) | 240),
-          (f[d++] = ((o >> 12) & 63) | 128),
-          (f[d++] = ((o >> 6) & 63) | 128),
-          (f[d++] = (o & 63) | 128));
-      else ((f[d++] = (o >> 12) | 224), (f[d++] = ((o >> 6) & 63) | 128), (f[d++] = (o & 63) | 128));
-    return d - i;
+  utf8.write = function (string, buffer, offset) {
+    var start = offset;
+    var c1;
+    var c2;
+    for (var i = 0; i < string.length; ++i) {
+      c1 = string.charCodeAt(i);
+      if (c1 < 128) buffer[offset++] = c1;
+      else if (c1 < 2048) {
+        buffer[offset++] = (c1 >> 6) | 192;
+        buffer[offset++] = (c1 & 63) | 128;
+      } else if ((c1 & 64512) === 55296 && ((c2 = string.charCodeAt(i + 1)) & 64512) === 56320) {
+        c1 = 65536 + ((c1 & 1023) << 10) + (c2 & 1023);
+        ++i;
+        buffer[offset++] = (c1 >> 18) | 240;
+        buffer[offset++] = ((c1 >> 12) & 63) | 128;
+        buffer[offset++] = ((c1 >> 6) & 63) | 128;
+        buffer[offset++] = (c1 & 63) | 128;
+      } else {
+        buffer[offset++] = (c1 >> 12) | 224;
+        buffer[offset++] = ((c1 >> 6) & 63) | 128;
+        buffer[offset++] = (c1 & 63) | 128;
+      }
+    }
+    return offset - start;
   };
 });
-
-export { xr };
+export { require_utf8 };

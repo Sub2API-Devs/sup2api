@@ -34,16 +34,19 @@ import {
 } from "./clawdCooking.js";
 import { registerBuiltinPlugin, builtinHooksModuleRef } from "../../builtinPlugins.js";
 
+//@ chunk-sc72x544.js:3476-3691 placement
 /**
  * modsGuide 插件扫描清单。
  */
-//@ chunk-sc72x544.js:3476-3691 placement
 var MODS_GUIDE_MANIFEST = x(function (ai, kt) {
   kt.exports = {
     scan: {
       hooks: ["ui.render"],
       calls: ["clock.every", "clock.now", "env.get", "settings.read", "ui.blit", "ui.resolve"],
-      env: { reads: ["FORCE_COLOR", "NO_COLOR", "TERM"], writes: [] },
+      env: {
+        reads: ["FORCE_COLOR", "NO_COLOR", "TERM"],
+        writes: [],
+      },
     },
     files: {},
   };
@@ -65,15 +68,21 @@ function register(i) {
   let r = new Map();
   i(
     "ui.render",
-    { component: "AskUserQuestion", requestId: ENGINE_ASK_ID, props: { metadataSource: "mod_hot_reload" } },
+    {
+      component: "AskUserQuestion",
+      requestId: ENGINE_ASK_ID,
+      props: {
+        metadataSource: "mod_hot_reload",
+      },
+    },
     async (t, e, f) => {
       let o = await f(e);
       if (!(e.component === "AskUserQuestion" && isExplained(e.props.questions))) return o;
-      let l = (await t.settings.read()).prefersReducedMotion === !0;
+      let l = (await t.settings.read()).prefersReducedMotion === true;
       if (e.surface !== "terminal") return remoteGuide(t.ui.resolve(e), o, l);
-      let a = e.viewport?.columns ?? UNMEASURED_COLUMNS,
-        p = e.viewport?.rows ?? PANEL_ROWS_MIN,
-        c = a >= SCENE_COLUMNS + CARD_INSET && p >= PANEL_ROWS_MIN;
+      let columns = e.viewport?.columns ?? UNMEASURED_COLUMNS;
+      let rows = e.viewport?.rows ?? PANEL_ROWS_MIN;
+      let c = columns >= SCENE_COLUMNS + CARD_INSET && rows >= PANEL_ROWS_MIN;
       if (
         isPlainTerminal({
           noColor: await t.env.get("NO_COLOR"),
@@ -83,19 +92,26 @@ function register(i) {
         !c
       )
         return o;
-      let S = l || a < MOVING_COLUMNS_MIN,
-        requestId = e.requestId,
-        now = await t.clock.now();
-      if (!S && (r.get(requestId) ?? 0) <= now)
-        (r.set(requestId, now + RUN_MS_MAX),
-          playScene(
-            {
-              paint: async (v) =>
-                (await t.ui.blit({ requestId: requestId, key: SCENE_KEY, cells: v })).deny === void 0,
-              ended: () => r.delete(requestId),
-            },
-            (v, It) => t.clock.every(v, It),
-          ));
+      let S = l || columns < MOVING_COLUMNS_MIN;
+      let requestId = e.requestId;
+      let K = await t.clock.now();
+      if (!S && (r.get(requestId) ?? 0) <= K) {
+        r.set(requestId, K + RUN_MS_MAX);
+        playScene(
+          {
+            paint: async (cells) =>
+              (
+                await t.ui.blit({
+                  requestId,
+                  key: SCENE_KEY,
+                  cells,
+                })
+              ).deny === undefined,
+            ended: () => r.delete(requestId),
+          },
+          (v, It) => t.clock.every(v, It),
+        );
+      }
       return terminalGuide(t.ui.resolve(e), o, cellsOf(frameOf(0)));
     },
   );
@@ -105,8 +121,7 @@ var registerPlugin = () =>
   registerBuiltinPlugin({
     name: PLUGIN_NAME,
     description: PLUGIN_DESCRIPTION,
-    isAvailable: isAvailable,
+    isAvailable,
     hooksModule: builtinHooksModuleRef(import.meta.dir, clawdCookingNamespace, () => MODS_GUIDE_MANIFEST()),
   });
-
 export { register };

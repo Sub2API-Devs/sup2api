@@ -5,48 +5,49 @@
  * pieces: chunk-a8ee6x44.js (1)
  * attribution: cjs-require-graph 1
  */
-import { x as x_2 } from "../../../../../../../runtime/bun-runtime.js";
+import { x } from "../../../../../../../runtime/bun-runtime.js";
 
 //@ chunk-a8ee6x44.js:9866-10562 cjs-require-graph
-var It = x_2(function (xt) {
-  Object.defineProperty(xt, "__esModule", { value: !0 });
-  xt.resolveHttpAuthRuntimeConfig = xt.getHttpAuthExtensionConfiguration = void 0;
-  var qo = (e) => {
+var require_httpAuthExtensionConfiguration = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.resolveHttpAuthRuntimeConfig = cjsExports.getHttpAuthExtensionConfiguration = undefined;
+  var getHttpAuthExtensionConfiguration = (e) => {
     let {
-      httpAuthSchemes: httpAuthSchemes,
-      httpAuthSchemeProvider: httpAuthSchemeProvider,
-      credentials: credentials,
+      httpAuthSchemes: _httpAuthSchemes,
+      httpAuthSchemeProvider: _httpAuthSchemeProvider,
+      credentials: _credentials,
     } = e;
     return {
-      setHttpAuthScheme(r) {
-        let index = httpAuthSchemes.findIndex((l) => l.schemeId === r.schemeId);
-        if (index === -1) httpAuthSchemes.push(r);
-        else httpAuthSchemes.splice(index, 1, r);
+      setHttpAuthScheme(httpAuthScheme) {
+        let index = _httpAuthSchemes.findIndex((scheme) => scheme.schemeId === httpAuthScheme.schemeId);
+        if (index === -1) _httpAuthSchemes.push(httpAuthScheme);
+        else _httpAuthSchemes.splice(index, 1, httpAuthScheme);
       },
       httpAuthSchemes() {
-        return httpAuthSchemes;
+        return _httpAuthSchemes;
       },
-      setHttpAuthSchemeProvider(r) {
-        httpAuthSchemeProvider = r;
+      setHttpAuthSchemeProvider(httpAuthSchemeProvider) {
+        _httpAuthSchemeProvider = httpAuthSchemeProvider;
       },
       httpAuthSchemeProvider() {
-        return httpAuthSchemeProvider;
+        return _httpAuthSchemeProvider;
       },
-      setCredentials(r) {
-        credentials = r;
+      setCredentials(credentials) {
+        _credentials = credentials;
       },
       credentials() {
-        return credentials;
+        return _credentials;
       },
     };
   };
-  xt.getHttpAuthExtensionConfiguration = qo;
-  var ko = (e) => ({
-    httpAuthSchemes: e.httpAuthSchemes(),
-    httpAuthSchemeProvider: e.httpAuthSchemeProvider(),
-    credentials: e.credentials(),
+  cjsExports.getHttpAuthExtensionConfiguration = getHttpAuthExtensionConfiguration;
+  var resolveHttpAuthRuntimeConfig = (config) => ({
+    httpAuthSchemes: config.httpAuthSchemes(),
+    httpAuthSchemeProvider: config.httpAuthSchemeProvider(),
+    credentials: config.credentials(),
   });
-  xt.resolveHttpAuthRuntimeConfig = ko;
+  cjsExports.resolveHttpAuthRuntimeConfig = resolveHttpAuthRuntimeConfig;
 });
-
-export { It };
+export { require_httpAuthExtensionConfiguration };

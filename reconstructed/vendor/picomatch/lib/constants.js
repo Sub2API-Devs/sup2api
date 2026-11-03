@@ -8,68 +8,73 @@
 import { x } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-fq0cr76a.js:295542-298160 cjs-fingerprint
-var tp = x(function (Vge, YI) {
-  var jI = {
-      DOT_LITERAL: "\\.",
-      PLUS_LITERAL: "\\+",
-      QMARK_LITERAL: "\\?",
-      SLASH_LITERAL: "\\/",
-      ONE_CHAR: "(?=.)",
-      QMARK: "[^/]",
-      END_ANCHOR: "(?:\\/|$)",
-      DOTS_SLASH: "\\.{1,2}(?:\\/|$)",
-      NO_DOT: "(?!\\.)",
-      NO_DOTS: "(?!(?:^|\\/)\\.{1,2}(?:\\/|$))",
-      NO_DOT_SLASH: "(?!\\.{0,1}(?:\\/|$))",
-      NO_DOTS_SLASH: "(?!\\.{1,2}(?:\\/|$))",
-      QMARK_NO_DOT: "[^.\\/]",
-      STAR: "[^/]*?",
-      START_ANCHOR: "(?:^|\\/)",
-      SEP: "/",
-    },
-    ZK = {
-      ...jI,
-      SLASH_LITERAL: "[\\\\/]",
-      QMARK: "[^\\\\/]",
-      STAR: "[^\\\\/]*?",
-      DOTS_SLASH: "\\.{1,2}(?:[\\\\/]|$)",
-      NO_DOT: "(?!\\.)",
-      NO_DOTS: "(?!(?:^|[\\\\/])\\.{1,2}(?:[\\\\/]|$))",
-      NO_DOT_SLASH: "(?!\\.{0,1}(?:[\\\\/]|$))",
-      NO_DOTS_SLASH: "(?!\\.{1,2}(?:[\\\\/]|$))",
-      QMARK_NO_DOT: "[^.\\\\/]",
-      START_ANCHOR: "(?:^|[\\\\/])",
-      END_ANCHOR: "(?:[\\\\/]|$)",
-      SEP: "\\",
-    },
-    zK = {
-      __proto__: null,
-      alnum: "a-zA-Z0-9",
-      alpha: "a-zA-Z",
-      ascii: "\\x00-\\x7F",
-      blank: " \\t",
-      cntrl: "\\x00-\\x1F\\x7F",
-      digit: "0-9",
-      graph: "\\x21-\\x7E",
-      lower: "a-z",
-      print: "\\x20-\\x7E ",
-      punct: "\\-!\"#$%&'()\\*+,./:;<=>?@[\\]^_`{|}~",
-      space: " \\t\\r\\n\\v\\f",
-      upper: "A-Z",
-      word: "A-Za-z0-9_",
-      xdigit: "A-Fa-f0-9",
-    };
-  YI.exports = {
+var require_constants = x(function (cjsExports, cjsModule) {
+  var POSIX_CHARS = {
+    DOT_LITERAL: "\\.",
+    PLUS_LITERAL: "\\+",
+    QMARK_LITERAL: "\\?",
+    SLASH_LITERAL: "\\/",
+    ONE_CHAR: "(?=.)",
+    QMARK: "[^/]",
+    END_ANCHOR: "(?:\\/|$)",
+    DOTS_SLASH: "\\.{1,2}(?:\\/|$)",
+    NO_DOT: "(?!\\.)",
+    NO_DOTS: "(?!(?:^|\\/)\\.{1,2}(?:\\/|$))",
+    NO_DOT_SLASH: "(?!\\.{0,1}(?:\\/|$))",
+    NO_DOTS_SLASH: "(?!\\.{1,2}(?:\\/|$))",
+    QMARK_NO_DOT: "[^.\\/]",
+    STAR: "[^/]*?",
+    START_ANCHOR: "(?:^|\\/)",
+    SEP: "/",
+  };
+  var WINDOWS_CHARS = {
+    ...POSIX_CHARS,
+    SLASH_LITERAL: "[\\\\/]",
+    QMARK: "[^\\\\/]",
+    STAR: "[^\\\\/]*?",
+    DOTS_SLASH: "\\.{1,2}(?:[\\\\/]|$)",
+    NO_DOT: "(?!\\.)",
+    NO_DOTS: "(?!(?:^|[\\\\/])\\.{1,2}(?:[\\\\/]|$))",
+    NO_DOT_SLASH: "(?!\\.{0,1}(?:[\\\\/]|$))",
+    NO_DOTS_SLASH: "(?!\\.{1,2}(?:[\\\\/]|$))",
+    QMARK_NO_DOT: "[^.\\\\/]",
+    START_ANCHOR: "(?:^|[\\\\/])",
+    END_ANCHOR: "(?:[\\\\/]|$)",
+    SEP: "\\",
+  };
+  var POSIX_REGEX_SOURCE = {
+    __proto__: null,
+    alnum: "a-zA-Z0-9",
+    alpha: "a-zA-Z",
+    ascii: "\\x00-\\x7F",
+    blank: " \\t",
+    cntrl: "\\x00-\\x1F\\x7F",
+    digit: "0-9",
+    graph: "\\x21-\\x7E",
+    lower: "a-z",
+    print: "\\x20-\\x7E ",
+    punct: "\\-!\"#$%&'()\\*+,./:;<=>?@[\\]^_`{|}~",
+    space: " \\t\\r\\n\\v\\f",
+    upper: "A-Z",
+    word: "A-Za-z0-9_",
+    xdigit: "A-Fa-f0-9",
+  };
+  cjsModule.exports = {
     DEFAULT_MAX_EXTGLOB_RECURSION: 0,
     MAX_LENGTH: 65536,
-    POSIX_REGEX_SOURCE: zK,
+    POSIX_REGEX_SOURCE,
     REGEX_BACKSLASH: /\\(?![*+?^${}(|)[\]])/g,
     REGEX_NON_SPECIAL_CHARS: /^[^@![\].,$*+?^{}()|\\/]+/,
     REGEX_SPECIAL_CHARS: /[-*+?.^${}(|)[\]]/,
     REGEX_SPECIAL_CHARS_BACKREF: /(\\?)((\W)(\3*))/g,
     REGEX_SPECIAL_CHARS_GLOBAL: /([-*+?.^${}(|)[\]])/g,
     REGEX_REMOVE_BACKSLASH: /(?:\[.*?[^\\]\]|\\(?=.))/g,
-    REPLACEMENTS: { __proto__: null, "***": "*", "**/**": "**", "**/**/**": "**" },
+    REPLACEMENTS: {
+      __proto__: null,
+      "***": "*",
+      "**/**": "**",
+      "**/**/**": "**",
+    },
     CHAR_0: 48,
     CHAR_9: 57,
     CHAR_UPPERCASE_A: 65,
@@ -113,19 +118,38 @@ var tp = x(function (Vge, YI) {
     CHAR_UNDERSCORE: 95,
     CHAR_VERTICAL_LINE: 124,
     CHAR_ZERO_WIDTH_NOBREAK_SPACE: 65279,
-    extglobChars(e) {
+    extglobChars(chars) {
       return {
-        "!": { type: "negate", open: "(?:(?!(?:", close: `))${e.STAR})` },
-        "?": { type: "qmark", open: "(?:", close: ")?" },
-        "+": { type: "plus", open: "(?:", close: ")+" },
-        "*": { type: "star", open: "(?:", close: ")*" },
-        "@": { type: "at", open: "(?:", close: ")" },
+        "!": {
+          type: "negate",
+          open: "(?:(?!(?:",
+          close: `))${chars.STAR})`,
+        },
+        "?": {
+          type: "qmark",
+          open: "(?:",
+          close: ")?",
+        },
+        "+": {
+          type: "plus",
+          open: "(?:",
+          close: ")+",
+        },
+        "*": {
+          type: "star",
+          open: "(?:",
+          close: ")*",
+        },
+        "@": {
+          type: "at",
+          open: "(?:",
+          close: ")",
+        },
       };
     },
-    globChars(e) {
-      return e === !0 ? ZK : jI;
+    globChars(win32) {
+      return win32 === true ? WINDOWS_CHARS : POSIX_CHARS;
     },
   };
 });
-
-export { tp };
+export { require_constants };

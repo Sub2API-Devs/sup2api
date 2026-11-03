@@ -8,15 +8,18 @@
  * pieces: chunk-y6fv30yg.js (2)
  * attribution: placement 1, callgraph-fingerprint 1
  */
-import { join, join as join_2 } from "path";
+import { join } from "path";
 import { homedir } from "os";
-import { j, y } from "../../../../../vendor/react/cjs/react.production.js";
+import { init_react_production, y } from "../../../../../vendor/react/cjs/react.production.js";
 import { w } from "../../../../../vendor/react/compiler-runtime.js";
 import { useWizard } from "../../../wizard/useWizard.js";
 import { MEMO_CACHE_SENTINEL } from "../../../../../runtime/bun-runtime.js";
 import { useKeybinding } from "../../../../keybindings/useKeybinding.js";
-import { VERTEX_WIZARD_STEPS } from "../../../vertexSetup/VertexSetupWizard.js";
-import { r, e } from "../../../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { VERTEX_WIZARD_STEPS_2 } from "../../../vertexSetup/VertexSetupWizard.js";
+import {
+  jsxProd_default_2,
+  jsxProd_default,
+} from "../../../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Byline } from "../../../design-system/Byline.js";
 import { KeyboardShortcutHint } from "../../../design-system/KeyboardShortcutHint.js";
 import { ConfigurableShortcutHint } from "../../../ConfigurableShortcutHint.js";
@@ -26,107 +29,129 @@ import { ErrorText } from "../../../ErrorText.js";
 import { WizardDialogLayout } from "../../../wizard/WizardDialogLayout.js";
 
 //@ chunk-y6fv30yg.js:15626-15630 placement
-j();
+init_react_production();
 //@ chunk-y6fv30yg.js:15689-17115 callgraph-fingerprint = PromptStep (0.516)
 function PromptStep() {
-  let $ = w(17),
-    {
-      goBack: goBack,
-      goToStep: goToStep,
-      updateWizardData: updateWizardData,
-      wizardData: wizardData,
-    } = useWizard(),
-    [t, h] = y(wizardData.keyFile ?? ""),
-    [p, f] = y(t.length),
-    [u, k] = y(null),
-    _;
-  if ($[0] === MEMO_CACHE_SENTINEL) ((_ = { context: "Settings" }), ($[0] = _));
-  else _ = $[0];
-  useKeybinding("confirm:no", goBack, _);
+  let $ = w(17);
+  let { goBack, goToStep, updateWizardData, wizardData } = useWizard();
+  let [systemPrompt, setSystemPrompt] = y(wizardData.keyFile ?? "");
+  let [cursorOffset, setCursorOffset] = y(systemPrompt.length);
+  let [error, setError] = y(null);
+  let t0;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    t0 = {
+      context: "Settings",
+    };
+    $[0] = t0;
+  } else t0 = $[0];
+  useKeybinding("confirm:no", goBack, t0);
   let A;
-  if ($[1] !== goToStep || $[2] !== updateWizardData || $[3] !== t)
-    ((A = () => {
-      let trimmedPrompt = t.trim();
+  if ($[1] !== goToStep || $[2] !== updateWizardData || $[3] !== systemPrompt) {
+    A = () => {
+      let trimmedPrompt = systemPrompt.trim();
       if (!trimmedPrompt) {
-        k("Path is required");
+        setError("Path is required");
         return;
       }
-      k(null);
-      let D =
+      setError(null);
+      let keyFile =
         trimmedPrompt === "~" || trimmedPrompt.startsWith("~/")
-          ? join_2(homedir(), trimmedPrompt.slice(1))
+          ? join(homedir(), trimmedPrompt.slice(1))
           : trimmedPrompt;
-      (updateWizardData({ keyFile: D }), goToStep(VERTEX_WIZARD_STEPS.PROJECT));
-    }),
-      ($[1] = goToStep),
-      ($[2] = updateWizardData),
-      ($[3] = t),
-      ($[4] = A));
-  else A = $[4];
-  let x = A,
-    T;
-  if ($[5] === MEMO_CACHE_SENTINEL)
-    ((T = r(Byline, {
+      updateWizardData({
+        keyFile,
+      });
+      goToStep(VERTEX_WIZARD_STEPS_2.PROJECT);
+    };
+    $[1] = goToStep;
+    $[2] = updateWizardData;
+    $[3] = systemPrompt;
+    $[4] = A;
+  } else A = $[4];
+  let handleSubmit = A;
+  let footerText;
+  if ($[5] === MEMO_CACHE_SENTINEL) {
+    footerText = jsxProd_default_2(Byline, {
       children: [
-        e(KeyboardShortcutHint, { chord: "enter", action: "continue" }),
-        e(ConfigurableShortcutHint, {
+        jsxProd_default(KeyboardShortcutHint, {
+          chord: "enter",
+          action: "continue",
+        }),
+        jsxProd_default(ConfigurableShortcutHint, {
           action: "confirm:no",
           context: "Settings",
           fallback: "Esc",
           description: "go back",
         }),
       ],
-    })),
-      ($[5] = T));
-  else T = $[5];
-  let C, E;
-  if ($[6] === MEMO_CACHE_SENTINEL)
-    ((C = e(Text, { children: "Path to the service account JSON key file." })),
-      (E = e(Text, {
-        dimColor: !0,
-        children:
-          "Download one from the GCP console under IAM \u2192 Service Accounts \u2192 Keys \u2192 Add key.",
-      })),
-      ($[6] = C),
-      ($[7] = E));
-  else ((C = $[6]), (E = $[7]));
-  let v;
-  if ($[8] !== p || $[9] !== x || $[10] !== t)
-    ((v = e(Box, {
+    });
+    $[5] = footerText;
+  } else footerText = $[5];
+  let t5;
+  let t6;
+  if ($[6] === MEMO_CACHE_SENTINEL) {
+    t5 = jsxProd_default(Text, {
+      children: "Path to the service account JSON key file.",
+    });
+    t6 = jsxProd_default(Text, {
+      dimColor: true,
+      children:
+        "Download one from the GCP console under IAM \u2192 Service Accounts \u2192 Keys \u2192 Add key.",
+    });
+    $[6] = t5;
+    $[7] = t6;
+  } else {
+    t5 = $[6];
+    t6 = $[7];
+  }
+  let t7;
+  if ($[8] !== cursorOffset || $[9] !== handleSubmit || $[10] !== systemPrompt) {
+    t7 = jsxProd_default(Box, {
       marginTop: 1,
-      children: e(TextInput, {
-        value: t,
-        onChange: h,
-        onSubmit: x,
+      children: jsxProd_default(TextInput, {
+        value: systemPrompt,
+        onChange: setSystemPrompt,
+        onSubmit: handleSubmit,
         placeholder: "~/keys/my-project-vertex.json",
         columns: 60,
-        cursorOffset: p,
-        onChangeCursorOffset: f,
-        focus: !0,
-        showCursor: !0,
+        cursorOffset,
+        onChangeCursorOffset: setCursorOffset,
+        focus: true,
+        showCursor: true,
       }),
-    })),
-      ($[8] = p),
-      ($[9] = x),
-      ($[10] = t),
-      ($[11] = v));
-  else v = $[11];
-  let b;
-  if ($[12] !== u)
-    ((b = u && e(Box, { marginTop: 1, children: e(ErrorText, { error: u }) })), ($[12] = u), ($[13] = b));
-  else b = $[13];
-  let W;
-  if ($[14] !== v || $[15] !== b)
-    ((W = e(WizardDialogLayout, {
+    });
+    $[8] = cursorOffset;
+    $[9] = handleSubmit;
+    $[10] = systemPrompt;
+    $[11] = t7;
+  } else t7 = $[11];
+  let t8;
+  if ($[12] !== error) {
+    t8 =
+      error &&
+      jsxProd_default(Box, {
+        marginTop: 1,
+        children: jsxProd_default(ErrorText, {
+          error,
+        }),
+      });
+    $[12] = error;
+    $[13] = t8;
+  } else t8 = $[13];
+  let t9;
+  if ($[14] !== t7 || $[15] !== t8) {
+    t9 = jsxProd_default(WizardDialogLayout, {
       subtitle: "Service account key",
-      footerText: T,
-      children: r(Box, { flexDirection: "column", children: [C, E, v, b] }),
-    })),
-      ($[14] = v),
-      ($[15] = b),
-      ($[16] = W));
-  else W = $[16];
-  return W;
+      footerText,
+      children: jsxProd_default_2(Box, {
+        flexDirection: "column",
+        children: [t5, t6, t7, t8],
+      }),
+    });
+    $[14] = t7;
+    $[15] = t8;
+    $[16] = t9;
+  } else t9 = $[16];
+  return t9;
 }
-
 export { PromptStep };

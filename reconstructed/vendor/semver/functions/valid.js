@@ -6,16 +6,15 @@
  * attribution: cjs-require-graph 1
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { ze } from "./parse.js";
+import { require_parse } from "./parse.js";
 
 //@ chunk-bwbq4xvm.js:10304-10407 cjs-require-graph
-var Si = x(function (J$, Ei) {
-  var fv = ze(),
-    bv = (e, s) => {
-      let n = fv(e, s);
-      return n ? n.version : null;
-    };
-  Ei.exports = bv;
+var require_valid_2 = x(function (cjsExports, cjsModule) {
+  var parse = require_parse();
+  var valid = (version, options) => {
+    let v = parse(version, options);
+    return v ? v.version : null;
+  };
+  cjsModule.exports = valid;
 });
-
-export { Si };
+export { require_valid_2 };

@@ -15,15 +15,15 @@ import { CACHE_PATHS, getCwdSafe } from "./cachePaths.js";
 import { logFirstInternalError } from "./telemetry/thirdPartyEventRecords.js";
 import { trackError } from "../services/errorTracking/errorTracking.js";
 import { errorStackOrMessage } from "./errors.js";
-import { Dt } from "../../vendor/axios/dist/esm/axios.js";
+import { axios_default } from "../../vendor/axios/dist/esm/axios.js";
 import { logForDebugging, debugLogTakesLevel } from "./debug.js";
 import { redactSecrets } from "../services/teamMemorySync/secretScanner.js";
 import { getSessionId, onPendingLoopWakeupChange } from "../bootstrap/state.js";
 import { env } from "./env.js";
-import { mn } from "./remoteEnvironment.js";
+import { isRemoteManagedEnvironment } from "./remoteEnvironment.js";
 import { BatchedLogWriter } from "./batchedLogWriter.js";
 import { storageNameSpellings } from "./storage/storageSpaces.js";
-import { o } from "../../vendor/zod/v4/classic/schemas.js";
+import { string } from "../../vendor/zod/v4/classic/schemas.js";
 import { isActingAsBgJob, getBgJobDir } from "./concurrentSessions.js";
 import { isShuttingDown } from "./gracefulShutdown.js";
 import { registerCleanup } from "./cleanupRegistry.js";
@@ -31,83 +31,96 @@ import { writePendingWakeup } from "./scheduledWakeup.js";
 
 //@ chunk-k7fgdyw5.js:667-695 callgraph-witnessed = DATE (0)
 var getTodayLogDate = io(() => dateToFilename(new Date()));
+//@ chunk-k7fgdyw5.js:695-744 layout = getErrorsPath (1)
 /**
  * 错误日志文件 <缓存目录 claude-cli>/errors/<YYYY-MM-DD>.jsonl。
  */
-//@ chunk-k7fgdyw5.js:695-744 layout = getErrorsPath (1)
 function getErrorLogFilePath() {
   return join(CACHE_PATHS.errors(), getTodayLogDate() + ".jsonl");
 }
+//@ chunk-k7fgdyw5.js:744-796 fingerprint = getMCPLogsPath (1)
 /**
  * MCP 日志文件 <缓存目录>/mcp-logs-<server>/<日期>.jsonl。
  */
-//@ chunk-k7fgdyw5.js:744-796 fingerprint = getMCPLogsPath (1)
 function getMCPLogsPath(serverName) {
   return join(CACHE_PATHS.mcpLogs(serverName), getTodayLogDate() + ".jsonl");
 }
 //@ chunk-k7fgdyw5.js:1738-1763 sole-consumer
-function v(e, r, o) {
+function logErrorSinkNoop(e, errorLogFilePath, o) {
   return;
 }
 //@ chunk-k7fgdyw5.js:1763-2016 affinity = extractErrorDetail (1)
 function extractErrorMessage(data) {
   if (typeof data === "string") return data;
   if (data && typeof data === "object") {
-    let r = data;
-    if (typeof r.message === "string") return r.message;
-    if (typeof r.error === "object" && r.error && "message" in r.error && typeof r.error.message === "string")
-      return r.error.message;
+    let data_2 = data;
+    if (typeof data_2.message === "string") return data_2.message;
+    if (
+      typeof data_2.error === "object" &&
+      data_2.error &&
+      "message" in data_2.error &&
+      typeof data_2.error.message === "string"
+    )
+      return data_2.error.message;
   }
   return;
 }
+//@ chunk-k7fgdyw5.js:2016-2343 fingerprint = logErrorImpl (0.949)
 /**
  * 错误日志 sink：调试日志记一行 error，并把 {error} 追加到 <缓存目录>/errors/<日期>.jsonl。
  */
-//@ chunk-k7fgdyw5.js:2016-2343 fingerprint = logErrorImpl (0.949)
-function logErrorImpl(e, r) {
-  (logFirstInternalError(r), trackError(r));
-  let o = errorStackOrMessage(r),
-    context = "";
-  if (Dt.isAxiosError(r) && r.config?.url) {
-    let parts = [`url=${r.config.url}`];
-    if (r.response?.status !== void 0) parts.push(`status=${r.response.status}`);
-    let serverMessage = extractErrorMessage(r.response?.data);
+function logErrorImpl(e, error) {
+  logFirstInternalError(error);
+  trackError(error);
+  let errorStr = errorStackOrMessage(error);
+  let context = "";
+  if (axios_default.isAxiosError(error) && error.config?.url) {
+    let parts = [`url=${error.config.url}`];
+    if (error.response?.status !== undefined) parts.push(`status=${error.response.status}`);
+    let serverMessage = extractErrorMessage(error.response?.data);
     if (serverMessage) parts.push(`body=${serverMessage}`);
     context = `[${parts.join(",")}] `;
   }
-  (logForDebugging(`${r.name}: ${context}${o}`, { level: "error" }),
-    v(e, getErrorLogFilePath(), { error: `${context}${o}` }));
+  logForDebugging(`${error.name}: ${context}${errorStr}`, {
+    level: "error",
+  });
+  logErrorSinkNoop(e, getErrorLogFilePath(), {
+    error: `${context}${errorStr}`,
+  });
 }
 //@ chunk-k7fgdyw5.js:2343-2553 callgraph-witnessed = logMCPErrorImpl (0.738)
-function logMCPErrorImpl(e, r, o) {
-  logForDebugging(`MCP server "${r}" ${o}`, { level: "error" });
-  let logFile = getMCPLogsPath(r),
-    errorStr = o instanceof Error ? errorStackOrMessage(o) : String(o),
-    errorInfo = {
-      error: redactSecrets(errorStr),
-      timestamp: new Date().toISOString(),
-      sessionId: getSessionId(),
-      cwd: getCwdSafe(),
-    };
+function logMCPErrorImpl(e, serverName, error) {
+  logForDebugging(`MCP server "${serverName}" ${error}`, {
+    level: "error",
+  });
+  let logFile = getMCPLogsPath(serverName);
+  let errorStr = error instanceof Error ? errorStackOrMessage(error) : String(error);
+  let errorInfo = {
+    error: redactSecrets(errorStr),
+    timestamp: new Date().toISOString(),
+    sessionId: getSessionId(),
+    cwd: getCwdSafe(),
+  };
   e.writerFor(logFile).write(errorInfo);
 }
+//@ chunk-k7fgdyw5.js:2553-2623 layout
 /**
  * CLAUDE_CODE_SKIP_MCP_DEBUG_LOG_FILES 为真时不写 MCP 调试日志文件。
  */
-//@ chunk-k7fgdyw5.js:2553-2623 layout
 function shouldSkipMcpDebugLogFiles() {
-  return env.CLAUDE_CODE_SKIP_MCP_DEBUG_LOG_FILES === !0 && mn();
+  return env.CLAUDE_CODE_SKIP_MCP_DEBUG_LOG_FILES === true && isRemoteManagedEnvironment();
 }
 //@ chunk-k7fgdyw5.js:2623-2794 fingerprint = logMCPDebugImpl (0.859)
-function logMCPDebugImpl(e, r, o) {
-  if ((logForDebugging(`MCP server "${r}": ${o}`), shouldSkipMcpDebugLogFiles())) return;
-  let logFile = getMCPLogsPath(r),
-    debugInfo = {
-      debug: redactSecrets(o),
-      timestamp: new Date().toISOString(),
-      sessionId: getSessionId(),
-      cwd: getCwdSafe(),
-    };
+function logMCPDebugImpl(e, serverName, o) {
+  logForDebugging(`MCP server "${serverName}": ${o}`);
+  if (shouldSkipMcpDebugLogFiles()) return;
+  let logFile = getMCPLogsPath(serverName);
+  let debugInfo = {
+    debug: redactSecrets(o),
+    timestamp: new Date().toISOString(),
+    sessionId: getSessionId(),
+    cwd: getCwdSafe(),
+  };
   e.writerFor(logFile).write(debugInfo);
 }
 //@ chunk-k7fgdyw5.js:2794-2970 facade-exports
@@ -120,14 +133,14 @@ function initializeErrorLogSink() {
       : `Error log sink initialized; ${droppedBeforeSink} events logged before it attached were dropped`,
   );
 }
+//@ chunk-k7fgdyw5.js:2970-3106 fingerprint = initializeErrorLogSink (0.586)
 /**
  * 创建错误日志 sink：logError / logMCPError / logMCPDebug（MCP 写 <缓存目录>/mcp-logs-<server>/<日期>.jsonl）。
  */
-//@ chunk-k7fgdyw5.js:2970-3106 fingerprint = initializeErrorLogSink (0.586)
 function initializeErrorLogSink_2(e) {
   return {
-    logError: (r) => logErrorImpl(e, r),
-    logMCPError: (r, o) => logMCPErrorImpl(e, r, o),
+    logError: (error) => logErrorImpl(e, error),
+    logMCPError: (r, error) => logMCPErrorImpl(e, r, error),
     logMCPDebug: (r, o) => logMCPDebugImpl(e, r, o),
     keepsMCPDebug: () => !shouldSkipMcpDebugLogFiles() || debugLogTakesLevel("debug"),
   };
@@ -148,12 +161,12 @@ class SerialWriteQueue {
   #n = (i) => {
     try {
       if (!isActingAsBgJob()) return;
-      let r = getBgJobDir();
-      if (r === void 0) return;
-      if (i !== void 0 && isShuttingDown()) return;
+      let bgJobDir = getBgJobDir();
+      if (bgJobDir === undefined) return;
+      if (i !== undefined && isShuttingDown()) return;
       this.#e ??= registerCleanup(() => this.#o);
       let e = ++this.#r;
-      this.#o = this.#o.then(() => (e === this.#r ? writePendingWakeup(r, i) : void 0));
+      this.#o = this.#o.then(() => (e === this.#r ? writePendingWakeup(bgJobDir, i) : undefined));
     } catch (error) {
       logError(error);
     }
@@ -162,14 +175,16 @@ class SerialWriteQueue {
     return this.#o;
   }
   dispose() {
-    (this.#i(), this.#o.then(() => this.#e?.()));
+    this.#i();
+    this.#o.then(() => this.#e?.());
   }
 }
 //@ chunk-7t4fmt2f.js:2483-2597 fingerprint = _clearLogWritersForTesting (0.685)
-function setDisposableInterval(e, r, n = {}) {
-  let o = setInterval(e, r);
-  if (n.unref) o.unref?.();
-  return { [Symbol.dispose]: () => clearInterval(o) };
+function setDisposableInterval(e, intervalMs, options = {}) {
+  let interval = setInterval(e, intervalMs);
+  if (options.unref) interval.unref?.();
+  return {
+    [Symbol.dispose]: () => clearInterval(interval),
+  };
 }
-
 export { SerialWriteQueue, setDisposableInterval, initializeErrorLogSink, hasJsonlFiles };

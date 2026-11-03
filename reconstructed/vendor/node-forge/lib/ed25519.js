@@ -6,887 +6,991 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { Tn } from "./forge.js";
-import { Ef } from "./jsbn.js";
-import { Ci } from "./random.js";
-import { $S } from "./sha512.js";
-import { Zn } from "./util.js";
-import { KA } from "./asn1-validator.js";
+import { require_forge } from "./forge.js";
+import { require_jsbn } from "./jsbn.js";
+import { require_random } from "./random.js";
+import { require_sha512 } from "./sha512.js";
+import { require_util } from "./util.js";
+import { require_asn1_validator } from "./asn1-validator.js";
 
 //@ chunk-fq0cr76a.js:260717-274277 cjs-fingerprint
-var sC = x(function ($fe, rC) {
-  var ws = Tn();
-  Ef();
-  Ci();
-  $S();
-  Zn();
-  var zA = KA(),
-    { publicKeyValidator: publicKeyValidator, privateKeyValidator: privateKeyValidator } = zA;
-  if (typeof WS > "u") WS = ws.jsbn.BigInteger;
-  var WS,
-    ByteBuffer = ws.util.ByteBuffer,
-    ti = typeof Buffer > "u" ? Uint8Array : Buffer;
-  ws.pki = ws.pki || {};
-  rC.exports = ws.pki.ed25519 = ws.ed25519 = ws.ed25519 || {};
-  var ed25519 = ws.ed25519;
+var require_ed25519 = x(function (cjsExports, cjsModule) {
+  var forge = require_forge();
+  require_jsbn();
+  require_random();
+  require_sha512();
+  require_util();
+  var zA = require_asn1_validator();
+  var { publicKeyValidator, privateKeyValidator } = zA;
+  if (typeof BigInteger === "undefined") BigInteger = forge.jsbn.BigInteger;
+  var BigInteger;
+  var ByteBuffer = forge.util.ByteBuffer;
+  var NativeBuffer = typeof Buffer === "undefined" ? Uint8Array : Buffer;
+  forge.pki = forge.pki || {};
+  cjsModule.exports = forge.pki.ed25519 = forge.ed25519 = forge.ed25519 || {};
+  var ed25519 = forge.ed25519;
   ed25519.constants = {};
   ed25519.constants.PUBLIC_KEY_BYTE_LENGTH = 32;
   ed25519.constants.PRIVATE_KEY_BYTE_LENGTH = 64;
   ed25519.constants.SEED_BYTE_LENGTH = 32;
   ed25519.constants.SIGN_BYTE_LENGTH = 64;
   ed25519.constants.HASH_BYTE_LENGTH = 64;
-  ed25519.generateKeyPair = function (e) {
-    e = e || {};
-    var seed = e.seed;
-    if (seed === void 0) seed = ws.random.getBytesSync(ed25519.constants.SEED_BYTE_LENGTH);
+  ed25519.generateKeyPair = function (options) {
+    options = options || {};
+    var seed = options.seed;
+    if (seed === undefined) seed = forge.random.getBytesSync(ed25519.constants.SEED_BYTE_LENGTH);
     else if (typeof seed === "string") {
       if (seed.length !== ed25519.constants.SEED_BYTE_LENGTH)
         throw TypeError('"seed" must be ' + ed25519.constants.SEED_BYTE_LENGTH + " bytes in length.");
     } else if (!(seed instanceof Uint8Array))
       throw TypeError('"seed" must be a node.js Buffer, Uint8Array, or a binary string.');
-    seed = pa({ message: seed, encoding: "binary" });
-    var r = new ti(ed25519.constants.PUBLIC_KEY_BYTE_LENGTH),
-      s = new ti(ed25519.constants.PRIVATE_KEY_BYTE_LENGTH);
-    for (var h = 0; h < 32; ++h) s[h] = seed[h];
-    return (O6(r, s), { publicKey: r, privateKey: s });
+    seed = messageToNativeBuffer({
+      message: seed,
+      encoding: "binary",
+    });
+    var pk = new NativeBuffer(ed25519.constants.PUBLIC_KEY_BYTE_LENGTH);
+    var sk = new NativeBuffer(ed25519.constants.PRIVATE_KEY_BYTE_LENGTH);
+    for (var i = 0; i < 32; ++i) sk[i] = seed[i];
+    crypto_sign_keypair(pk, sk);
+    return {
+      publicKey: pk,
+      privateKey: sk,
+    };
   };
-  ed25519.privateKeyFromAsn1 = function (e) {
-    var n = {},
-      r = [],
-      validate = ws.asn1.validate(e, privateKeyValidator, n, r);
-    if (!validate) {
-      var h = Error("Invalid Key.");
-      throw ((h.errors = r), h);
+  ed25519.privateKeyFromAsn1 = function (obj) {
+    var capture = {};
+    var errors = [];
+    var valid = forge.asn1.validate(obj, privateKeyValidator, capture, errors);
+    if (!valid) {
+      var error = Error("Invalid Key.");
+      error.errors = errors;
+      throw error;
     }
-    var derToOid = ws.asn1.derToOid(n.privateKeyOid),
-      EdDSA25519 = ws.oids.EdDSA25519;
-    if (derToOid !== EdDSA25519)
-      throw Error('Invalid OID "' + derToOid + '"; OID must be "' + EdDSA25519 + '".');
-    var privateKey = n.privateKey,
-      w = pa({ message: ws.asn1.fromDer(privateKey).value, encoding: "binary" });
-    return { privateKeyBytes: w };
+    var oid = forge.asn1.derToOid(capture.privateKeyOid);
+    var ed25519Oid = forge.oids.EdDSA25519;
+    if (oid !== ed25519Oid) throw Error('Invalid OID "' + oid + '"; OID must be "' + ed25519Oid + '".');
+    var privateKey = capture.privateKey;
+    var privateKeyBytes = messageToNativeBuffer({
+      message: forge.asn1.fromDer(privateKey).value,
+      encoding: "binary",
+    });
+    return {
+      privateKeyBytes,
+    };
   };
-  ed25519.publicKeyFromAsn1 = function (e) {
-    var n = {},
-      r = [],
-      validate = ws.asn1.validate(e, publicKeyValidator, n, r);
-    if (!validate) {
-      var h = Error("Invalid Key.");
-      throw ((h.errors = r), h);
+  ed25519.publicKeyFromAsn1 = function (obj) {
+    var capture = {};
+    var errors = [];
+    var valid = forge.asn1.validate(obj, publicKeyValidator, capture, errors);
+    if (!valid) {
+      var error = Error("Invalid Key.");
+      error.errors = errors;
+      throw error;
     }
-    var derToOid = ws.asn1.derToOid(n.publicKeyOid),
-      EdDSA25519 = ws.oids.EdDSA25519;
-    if (derToOid !== EdDSA25519)
-      throw Error('Invalid OID "' + derToOid + '"; OID must be "' + EdDSA25519 + '".');
-    var ed25519PublicKey = n.ed25519PublicKey;
-    if (ed25519PublicKey.length !== ed25519.constants.PUBLIC_KEY_BYTE_LENGTH)
+    var oid = forge.asn1.derToOid(capture.publicKeyOid);
+    var ed25519Oid = forge.oids.EdDSA25519;
+    if (oid !== ed25519Oid) throw Error('Invalid OID "' + oid + '"; OID must be "' + ed25519Oid + '".');
+    var publicKeyBytes = capture.ed25519PublicKey;
+    if (publicKeyBytes.length !== ed25519.constants.PUBLIC_KEY_BYTE_LENGTH)
       throw Error("Key length is invalid.");
-    return pa({ message: ed25519PublicKey, encoding: "binary" });
+    return messageToNativeBuffer({
+      message: publicKeyBytes,
+      encoding: "binary",
+    });
   };
-  ed25519.publicKeyFromPrivateKey = function (e) {
-    e = e || {};
-    var n = pa({ message: e.privateKey, encoding: "binary" });
-    if (n.length !== ed25519.constants.PRIVATE_KEY_BYTE_LENGTH)
+  ed25519.publicKeyFromPrivateKey = function (options) {
+    options = options || {};
+    var privateKey = messageToNativeBuffer({
+      message: options.privateKey,
+      encoding: "binary",
+    });
+    if (privateKey.length !== ed25519.constants.PRIVATE_KEY_BYTE_LENGTH)
       throw TypeError(
         '"options.privateKey" must have a byte length of ' + ed25519.constants.PRIVATE_KEY_BYTE_LENGTH,
       );
-    var r = new ti(ed25519.constants.PUBLIC_KEY_BYTE_LENGTH);
-    for (var s = 0; s < r.length; ++s) r[s] = n[32 + s];
-    return r;
+    var pk = new NativeBuffer(ed25519.constants.PUBLIC_KEY_BYTE_LENGTH);
+    for (var i = 0; i < pk.length; ++i) pk[i] = privateKey[32 + i];
+    return pk;
   };
-  ed25519.sign = function (e) {
-    e = e || {};
-    var n = pa(e),
-      r = pa({ message: e.privateKey, encoding: "binary" });
-    if (r.length === ed25519.constants.SEED_BYTE_LENGTH) {
-      var generateKeyPair = ed25519.generateKeyPair({ seed: r });
-      r = generateKeyPair.privateKey;
-    } else if (r.length !== ed25519.constants.PRIVATE_KEY_BYTE_LENGTH)
+  ed25519.sign = function (options) {
+    options = options || {};
+    var msg = messageToNativeBuffer(options);
+    var privateKey = messageToNativeBuffer({
+      message: options.privateKey,
+      encoding: "binary",
+    });
+    if (privateKey.length === ed25519.constants.SEED_BYTE_LENGTH) {
+      var keyPair = ed25519.generateKeyPair({
+        seed: privateKey,
+      });
+      privateKey = keyPair.privateKey;
+    } else if (privateKey.length !== ed25519.constants.PRIVATE_KEY_BYTE_LENGTH)
       throw TypeError(
         '"options.privateKey" must have a byte length of ' +
           ed25519.constants.SEED_BYTE_LENGTH +
           " or " +
           ed25519.constants.PRIVATE_KEY_BYTE_LENGTH,
       );
-    var h = new ti(ed25519.constants.SIGN_BYTE_LENGTH + n.length);
-    P6(h, n, n.length, r);
-    var y = new ti(ed25519.constants.SIGN_BYTE_LENGTH);
-    for (var b = 0; b < y.length; ++b) y[b] = h[b];
-    return y;
+    var signedMsg = new NativeBuffer(ed25519.constants.SIGN_BYTE_LENGTH + msg.length);
+    crypto_sign(signedMsg, msg, msg.length, privateKey);
+    var sig = new NativeBuffer(ed25519.constants.SIGN_BYTE_LENGTH);
+    for (var i = 0; i < sig.length; ++i) sig[i] = signedMsg[i];
+    return sig;
   };
-  ed25519.verify = function (e) {
-    e = e || {};
-    var n = pa(e);
-    if (e.signature === void 0)
+  ed25519.verify = function (options) {
+    options = options || {};
+    var msg = messageToNativeBuffer(options);
+    if (options.signature === undefined)
       throw TypeError(
         '"options.signature" must be a node.js Buffer, a Uint8Array, a forge ByteBuffer, or a binary string.',
       );
-    var r = pa({ message: e.signature, encoding: "binary" });
-    if (r.length !== ed25519.constants.SIGN_BYTE_LENGTH)
+    var sig = messageToNativeBuffer({
+      message: options.signature,
+      encoding: "binary",
+    });
+    if (sig.length !== ed25519.constants.SIGN_BYTE_LENGTH)
       throw TypeError('"options.signature" must have a byte length of ' + ed25519.constants.SIGN_BYTE_LENGTH);
-    var s = pa({ message: e.publicKey, encoding: "binary" });
-    if (s.length !== ed25519.constants.PUBLIC_KEY_BYTE_LENGTH)
+    var publicKey = messageToNativeBuffer({
+      message: options.publicKey,
+      encoding: "binary",
+    });
+    if (publicKey.length !== ed25519.constants.PUBLIC_KEY_BYTE_LENGTH)
       throw TypeError(
         '"options.publicKey" must have a byte length of ' + ed25519.constants.PUBLIC_KEY_BYTE_LENGTH,
       );
-    var h = new ti(ed25519.constants.SIGN_BYTE_LENGTH + n.length),
-      y = new ti(ed25519.constants.SIGN_BYTE_LENGTH + n.length),
-      b;
-    for (b = 0; b < ed25519.constants.SIGN_BYTE_LENGTH; ++b) h[b] = r[b];
-    for (b = 0; b < n.length; ++b) h[b + ed25519.constants.SIGN_BYTE_LENGTH] = n[b];
-    return L6(y, h, h.length, s) >= 0;
+    var sm = new NativeBuffer(ed25519.constants.SIGN_BYTE_LENGTH + msg.length);
+    var m = new NativeBuffer(ed25519.constants.SIGN_BYTE_LENGTH + msg.length);
+    var i;
+    for (i = 0; i < ed25519.constants.SIGN_BYTE_LENGTH; ++i) sm[i] = sig[i];
+    for (i = 0; i < msg.length; ++i) sm[i + ed25519.constants.SIGN_BYTE_LENGTH] = msg[i];
+    return crypto_sign_open(m, sm, sm.length, publicKey) >= 0;
   };
-  function pa(e) {
-    var message = e.message;
-    if (message instanceof Uint8Array || message instanceof ti) return message;
-    var encoding = e.encoding;
-    if (message === void 0)
-      if (e.md) ((message = e.md.digest().getBytes()), (encoding = "binary"));
-      else throw TypeError('"options.message" or "options.md" not specified.');
+  function messageToNativeBuffer(options) {
+    var message = options.message;
+    if (message instanceof Uint8Array || message instanceof NativeBuffer) return message;
+    var encoding = options.encoding;
+    if (message === undefined)
+      if (options.md) {
+        message = options.md.digest().getBytes();
+        encoding = "binary";
+      } else throw TypeError('"options.message" or "options.md" not specified.');
     if (typeof message === "string" && !encoding)
       throw TypeError('"options.encoding" must be "binary" or "utf8".');
     if (typeof message === "string") {
-      if (typeof Buffer < "u") return Buffer.from(message, encoding);
+      if (typeof Buffer !== "undefined") return Buffer.from(message, encoding);
       message = new ByteBuffer(message, encoding);
     } else if (!(message instanceof ByteBuffer))
       throw TypeError(
         '"options.message" must be a node.js Buffer, a Uint8Array, a forge ByteBuffer, or a string with "options.encoding" specifying its encoding.',
       );
-    var s = new ti(message.length());
-    for (var h = 0; h < s.length; ++h) s[h] = message.at(h);
-    return s;
+    var buffer = new NativeBuffer(message.length());
+    for (var i = 0; i < buffer.length; ++i) buffer[i] = message.at(i);
+    return buffer;
   }
-  var HS = un(),
-    dm = un([1]),
-    N6 = un([
-      30883, 4953, 19914, 30187, 55467, 16705, 2637, 112, 59544, 30585, 16505, 36039, 65139, 11119, 27886,
-      20995,
-    ]),
-    k6 = un([
-      61785, 9906, 39828, 60374, 45398, 33411, 5274, 224, 53552, 61171, 33010, 6542, 64743, 22239, 55772,
-      9222,
-    ]),
-    qA = un([
-      54554, 36645, 11616, 51542, 42930, 38181, 51040, 26924, 56412, 64982, 57905, 49316, 21502, 52590, 14035,
-      8553,
-    ]),
-    jA = un([
-      26200, 26214, 26214, 26214, 26214, 26214, 26214, 26214, 26214, 26214, 26214, 26214, 26214, 26214, 26214,
-      26214,
-    ]),
-    float64Array = new Float64Array([
-      237, 211, 245, 92, 26, 99, 18, 88, 214, 156, 247, 162, 222, 249, 222, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-      0, 0, 0, 0, 0, 16,
-    ]),
-    D6 = un([
-      41136, 18958, 6951, 50414, 58488, 44335, 6150, 12099, 55207, 15867, 153, 11085, 57099, 20417, 9344,
-      11139,
-    ]);
-  function Cf(e, n) {
-    var create = ws.md.sha512.create(),
-      s = new ByteBuffer(e);
-    create.update(s.getBytes(n), "binary");
-    var bytes = create.digest().getBytes();
-    if (typeof Buffer < "u") return Buffer.from(bytes, "binary");
-    var y = new ti(ed25519.constants.HASH_BYTE_LENGTH);
-    for (var b = 0; b < 64; ++b) y[b] = bytes.charCodeAt(b);
-    return y;
+  var gf0 = gf();
+  var gf1 = gf([1]);
+  var D = gf([
+    30883, 4953, 19914, 30187, 55467, 16705, 2637, 112, 59544, 30585, 16505, 36039, 65139, 11119, 27886,
+    20995,
+  ]);
+  var D2 = gf([
+    61785, 9906, 39828, 60374, 45398, 33411, 5274, 224, 53552, 61171, 33010, 6542, 64743, 22239, 55772, 9222,
+  ]);
+  var X = gf([
+    54554, 36645, 11616, 51542, 42930, 38181, 51040, 26924, 56412, 64982, 57905, 49316, 21502, 52590, 14035,
+    8553,
+  ]);
+  var Y = gf([
+    26200, 26214, 26214, 26214, 26214, 26214, 26214, 26214, 26214, 26214, 26214, 26214, 26214, 26214, 26214,
+    26214,
+  ]);
+  var L = new Float64Array([
+    237, 211, 245, 92, 26, 99, 18, 88, 214, 156, 247, 162, 222, 249, 222, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 16,
+  ]);
+  var I = gf([
+    41136, 18958, 6951, 50414, 58488, 44335, 6150, 12099, 55207, 15867, 153, 11085, 57099, 20417, 9344, 11139,
+  ]);
+  function sha512(msg, msgLen) {
+    var md = forge.md.sha512.create();
+    var buffer = new ByteBuffer(msg);
+    md.update(buffer.getBytes(msgLen), "binary");
+    var hash = md.digest().getBytes();
+    if (typeof Buffer !== "undefined") return Buffer.from(hash, "binary");
+    var out = new NativeBuffer(ed25519.constants.HASH_BYTE_LENGTH);
+    for (var i = 0; i < 64; ++i) out[i] = hash.charCodeAt(i);
+    return out;
   }
-  function O6(e, n) {
-    var r = [un(), un(), un(), un()],
-      s,
-      h = Cf(n, 32);
-    ((h[0] &= 248), (h[31] &= 127), (h[31] |= 64), YS(r, h), jS(e, r));
-    for (s = 0; s < 32; ++s) n[s + 32] = e[s];
+  function crypto_sign_keypair(pk, sk) {
+    var p = [gf(), gf(), gf(), gf()];
+    var i;
+    var d = sha512(sk, 32);
+    d[0] &= 248;
+    d[31] &= 127;
+    d[31] |= 64;
+    scalarbase(p, d);
+    pack(pk, p);
+    for (i = 0; i < 32; ++i) sk[i + 32] = pk[i];
     return 0;
   }
-  function P6(e, n, r, s) {
-    var h,
-      y,
-      float64Array = new Float64Array(64),
-      S = [un(), un(), un(), un()],
-      w = Cf(s, 32);
-    ((w[0] &= 248), (w[31] &= 127), (w[31] |= 64));
-    var R = r + 64;
-    for (h = 0; h < r; ++h) e[64 + h] = n[h];
-    for (h = 0; h < 32; ++h) e[32 + h] = w[32 + h];
-    var D = Cf(e.subarray(32), r + 32);
-    (KS(D), YS(S, D), jS(e, S));
-    for (h = 32; h < 64; ++h) e[h] = s[h];
-    var O = Cf(e, r + 64);
-    KS(O);
-    for (h = 32; h < 64; ++h) float64Array[h] = 0;
-    for (h = 0; h < 32; ++h) float64Array[h] = D[h];
-    for (h = 0; h < 32; ++h) for (y = 0; y < 32; y++) float64Array[h + y] += O[h] * w[y];
-    return (XA(e.subarray(32), float64Array), R);
+  function crypto_sign(sm, m, n, sk) {
+    var i;
+    var j;
+    var x = new Float64Array(64);
+    var p = [gf(), gf(), gf(), gf()];
+    var d = sha512(sk, 32);
+    d[0] &= 248;
+    d[31] &= 127;
+    d[31] |= 64;
+    var smlen = n + 64;
+    for (i = 0; i < n; ++i) sm[64 + i] = m[i];
+    for (i = 0; i < 32; ++i) sm[32 + i] = d[32 + i];
+    var r = sha512(sm.subarray(32), n + 32);
+    reduce(r);
+    scalarbase(p, r);
+    pack(sm, p);
+    for (i = 32; i < 64; ++i) sm[i] = sk[i];
+    var h = sha512(sm, n + 64);
+    reduce(h);
+    for (i = 32; i < 64; ++i) x[i] = 0;
+    for (i = 0; i < 32; ++i) x[i] = r[i];
+    for (i = 0; i < 32; ++i) for (j = 0; j < 32; j++) x[i + j] += h[i] * d[j];
+    modL(sm.subarray(32), x);
+    return smlen;
   }
-  function L6(e, n, r, s) {
-    var h,
-      y,
-      b = new ti(32),
-      S = [un(), un(), un(), un()],
-      w = [un(), un(), un(), un()];
-    if (((y = -1), r < 64)) return -1;
-    if (U6(w, s)) return -1;
-    if (!B6(n, 32)) return -1;
-    for (h = 0; h < r; ++h) e[h] = n[h];
-    for (h = 0; h < 32; ++h) e[h + 32] = s[h];
-    var R = Cf(e, r);
-    if ((KS(R), tC(S, w, R), YS(w, n.subarray(32)), qS(S, w), jS(b, S), (r -= 64), JA(n, 0, b, 0))) {
-      for (h = 0; h < r; ++h) e[h] = 0;
+  function crypto_sign_open(m, sm, n, pk) {
+    var i;
+    var mlen;
+    var t = new NativeBuffer(32);
+    var p = [gf(), gf(), gf(), gf()];
+    var q = [gf(), gf(), gf(), gf()];
+    mlen = -1;
+    if (n < 64) return -1;
+    if (unpackneg(q, pk)) return -1;
+    if (!_isCanonicalSignatureScalar(sm, 32)) return -1;
+    for (i = 0; i < n; ++i) m[i] = sm[i];
+    for (i = 0; i < 32; ++i) m[i + 32] = pk[i];
+    var h = sha512(m, n);
+    reduce(h);
+    scalarmult(p, q, h);
+    scalarbase(q, sm.subarray(32));
+    add(p, q);
+    pack(t, p);
+    n -= 64;
+    if (crypto_verify_32(sm, 0, t, 0)) {
+      for (i = 0; i < n; ++i) m[i] = 0;
       return -1;
     }
-    for (h = 0; h < r; ++h) e[h] = n[h + 64];
-    return ((y = r), y);
+    for (i = 0; i < n; ++i) m[i] = sm[i + 64];
+    mlen = n;
+    return mlen;
   }
-  function B6(e, n) {
-    var r;
-    for (r = 31; r >= 0; --r) {
-      if (e[n + r] < float64Array[r]) return !0;
-      if (e[n + r] > float64Array[r]) return !1;
+  function _isCanonicalSignatureScalar(bytes, offset) {
+    var i;
+    for (i = 31; i >= 0; --i) {
+      if (bytes[offset + i] < L[i]) return true;
+      if (bytes[offset + i] > L[i]) return false;
     }
-    return !1;
+    return false;
   }
-  function XA(e, n) {
-    var r, s, h, y;
-    for (s = 63; s >= 32; --s) {
-      r = 0;
-      for (h = s - 32, y = s - 12; h < y; ++h)
-        ((n[h] += r - 16 * n[s] * float64Array[h - (s - 32)]), (r = (n[h] + 128) >> 8), (n[h] -= r * 256));
-      ((n[h] += r), (n[s] = 0));
+  function modL(r_2, x) {
+    var carry;
+    var i;
+    var j;
+    var k;
+    for (i = 63; i >= 32; --i) {
+      carry = 0;
+      for (j = i - 32, k = i - 12; j < k; ++j) {
+        x[j] += carry - 16 * x[i] * L[j - (i - 32)];
+        carry = (x[j] + 128) >> 8;
+        x[j] -= carry * 256;
+      }
+      x[j] += carry;
+      x[i] = 0;
     }
-    r = 0;
-    for (h = 0; h < 32; ++h) ((n[h] += r - (n[31] >> 4) * float64Array[h]), (r = n[h] >> 8), (n[h] &= 255));
-    for (h = 0; h < 32; ++h) n[h] -= r * float64Array[h];
-    for (s = 0; s < 32; ++s) ((n[s + 1] += n[s] >> 8), (e[s] = n[s] & 255));
-  }
-  function KS(e) {
-    var float64Array = new Float64Array(64);
-    for (var r = 0; r < 64; ++r) ((float64Array[r] = e[r]), (e[r] = 0));
-    XA(e, float64Array);
-  }
-  function qS(e, n) {
-    var r = un(),
-      s = un(),
-      h = un(),
-      y = un(),
-      b = un(),
-      S = un(),
-      w = un(),
-      R = un(),
-      D = un();
-    (mu(r, e[1], e[0]),
-      mu(D, n[1], n[0]),
-      br(r, r, D),
-      hu(s, e[0], e[1]),
-      hu(D, n[0], n[1]),
-      br(s, s, D),
-      br(h, e[3], n[3]),
-      br(h, h, k6),
-      br(y, e[2], n[2]),
-      hu(y, y, y),
-      mu(b, s, r),
-      mu(S, y, h),
-      hu(w, y, h),
-      hu(R, s, r),
-      br(e[0], b, S),
-      br(e[1], R, w),
-      br(e[2], w, S),
-      br(e[3], b, R));
-  }
-  function YA(e, n, r) {
-    for (var s = 0; s < 4; ++s) nC(e[s], n[s], r);
-  }
-  function jS(e, n) {
-    var r = un(),
-      s = un(),
-      h = un();
-    (V6(h, n[2]), br(r, n[0], h), br(s, n[1], h), fm(e, s), (e[31] ^= eC(r) << 7));
-  }
-  function fm(e, n) {
-    var r,
-      s,
-      h,
-      y = un(),
-      b = un();
-    for (r = 0; r < 16; ++r) b[r] = n[r];
-    (VS(b), VS(b), VS(b));
-    for (s = 0; s < 2; ++s) {
-      y[0] = b[0] - 65517;
-      for (r = 1; r < 15; ++r) ((y[r] = b[r] - 65535 - ((y[r - 1] >> 16) & 1)), (y[r - 1] &= 65535));
-      ((y[15] = b[15] - 32767 - ((y[14] >> 16) & 1)),
-        (h = (y[15] >> 16) & 1),
-        (y[14] &= 65535),
-        nC(b, y, 1 - h));
+    carry = 0;
+    for (j = 0; j < 32; ++j) {
+      x[j] += carry - (x[31] >> 4) * L[j];
+      carry = x[j] >> 8;
+      x[j] &= 255;
     }
-    for (r = 0; r < 16; r++) ((e[2 * r] = b[r] & 255), (e[2 * r + 1] = b[r] >> 8));
+    for (j = 0; j < 32; ++j) x[j] -= carry * L[j];
+    for (i = 0; i < 32; ++i) {
+      x[i + 1] += x[i] >> 8;
+      r_2[i] = x[i] & 255;
+    }
   }
-  function U6(e, n) {
-    var r = un(),
-      s = un(),
-      h = un(),
-      y = un(),
-      b = un(),
-      S = un(),
-      w = un();
-    if (
-      (il(e[2], dm),
-      F6(e[1], n),
-      dc(h, e[1]),
-      br(y, h, N6),
-      mu(h, h, e[2]),
-      hu(y, e[2], y),
-      dc(b, y),
-      dc(S, b),
-      br(w, S, b),
-      br(r, w, h),
-      br(r, r, y),
-      M6(r, r),
-      br(r, r, h),
-      br(r, r, y),
-      br(r, r, y),
-      br(e[0], r, y),
-      dc(s, e[0]),
-      br(s, s, y),
-      ZA(s, h))
-    )
-      br(e[0], e[0], D6);
-    if ((dc(s, e[0]), br(s, s, y), ZA(s, h))) return -1;
-    if (eC(e[0]) === n[31] >> 7) mu(e[0], HS, e[0]);
-    return (br(e[3], e[0], e[1]), 0);
+  function reduce(r_2) {
+    var x = new Float64Array(64);
+    for (var i = 0; i < 64; ++i) {
+      x[i] = r_2[i];
+      r_2[i] = 0;
+    }
+    modL(r_2, x);
   }
-  function F6(e, n) {
-    var r;
-    for (r = 0; r < 16; ++r) e[r] = n[2 * r] + (n[2 * r + 1] << 8);
-    e[15] &= 32767;
+  function add(p, q) {
+    var a = gf();
+    var b_2 = gf();
+    var c = gf();
+    var d = gf();
+    var e = gf();
+    var f = gf();
+    var g = gf();
+    var h = gf();
+    var t = gf();
+    Z(a, p[1], p[0]);
+    Z(t, q[1], q[0]);
+    M(a, a, t);
+    A(b_2, p[0], p[1]);
+    A(t, q[0], q[1]);
+    M(b_2, b_2, t);
+    M(c, p[3], q[3]);
+    M(c, c, D2);
+    M(d, p[2], q[2]);
+    A(d, d, d);
+    Z(e, b_2, a);
+    Z(f, d, c);
+    A(g, d, c);
+    A(h, b_2, a);
+    M(p[0], e, f);
+    M(p[1], h, g);
+    M(p[2], g, f);
+    M(p[3], e, h);
   }
-  function M6(e, n) {
-    var r = un(),
-      s;
-    for (s = 0; s < 16; ++s) r[s] = n[s];
-    for (s = 250; s >= 0; --s) if ((dc(r, r), s !== 1)) br(r, r, n);
-    for (s = 0; s < 16; ++s) e[s] = r[s];
+  function cswap(p, q, b) {
+    for (var i = 0; i < 4; ++i) sel25519(p[i], q[i], b);
   }
-  function ZA(e, n) {
-    var r = new ti(32),
-      s = new ti(32);
-    return (fm(r, e), fm(s, n), JA(r, 0, s, 0));
+  function pack(r_2, p) {
+    var tx = gf();
+    var ty = gf();
+    var zi = gf();
+    inv25519(zi, p[2]);
+    M(tx, p[0], zi);
+    M(ty, p[1], zi);
+    pack25519(r_2, ty);
+    r_2[31] ^= par25519(tx) << 7;
   }
-  function JA(e, n, r, s) {
-    return $6(e, n, r, s, 32);
+  function pack25519(o, n) {
+    var i;
+    var j;
+    var b_2;
+    var m = gf();
+    var t = gf();
+    for (i = 0; i < 16; ++i) t[i] = n[i];
+    car25519(t);
+    car25519(t);
+    car25519(t);
+    for (j = 0; j < 2; ++j) {
+      m[0] = t[0] - 65517;
+      for (i = 1; i < 15; ++i) {
+        m[i] = t[i] - 65535 - ((m[i - 1] >> 16) & 1);
+        m[i - 1] &= 65535;
+      }
+      m[15] = t[15] - 32767 - ((m[14] >> 16) & 1);
+      b_2 = (m[15] >> 16) & 1;
+      m[14] &= 65535;
+      sel25519(t, m, 1 - b_2);
+    }
+    for (i = 0; i < 16; i++) {
+      o[2 * i] = t[i] & 255;
+      o[2 * i + 1] = t[i] >> 8;
+    }
   }
-  function $6(e, n, r, s, h) {
-    var y,
-      b = 0;
-    for (y = 0; y < h; ++y) b |= e[n + y] ^ r[s + y];
-    return (1 & ((b - 1) >>> 8)) - 1;
+  function unpackneg(r_2, p) {
+    var t = gf();
+    var chk = gf();
+    var num = gf();
+    var den = gf();
+    var den2 = gf();
+    var den4 = gf();
+    var den6 = gf();
+    set25519(r_2[2], gf1);
+    unpack25519(r_2[1], p);
+    S(num, r_2[1]);
+    M(den, num, D);
+    Z(num, num, r_2[2]);
+    A(den, r_2[2], den);
+    S(den2, den);
+    S(den4, den2);
+    M(den6, den4, den2);
+    M(t, den6, num);
+    M(t, t, den);
+    pow2523(t, t);
+    M(t, t, num);
+    M(t, t, den);
+    M(t, t, den);
+    M(r_2[0], t, den);
+    S(chk, r_2[0]);
+    M(chk, chk, den);
+    if (neq25519(chk, num)) M(r_2[0], r_2[0], I);
+    S(chk, r_2[0]);
+    M(chk, chk, den);
+    if (neq25519(chk, num)) return -1;
+    if (par25519(r_2[0]) === p[31] >> 7) Z(r_2[0], gf0, r_2[0]);
+    M(r_2[3], r_2[0], r_2[1]);
+    return 0;
   }
-  function eC(e) {
-    var n = new ti(32);
-    return (fm(n, e), n[0] & 1);
+  function unpack25519(o, n) {
+    var i;
+    for (i = 0; i < 16; ++i) o[i] = n[2 * i] + (n[2 * i + 1] << 8);
+    o[15] &= 32767;
   }
-  function tC(e, n, r) {
-    var s, h;
-    (il(e[0], HS), il(e[1], dm), il(e[2], dm), il(e[3], HS));
-    for (h = 255; h >= 0; --h)
-      ((s = (r[(h / 8) | 0] >> (h & 7)) & 1), YA(e, n, s), qS(n, e), qS(e, e), YA(e, n, s));
+  function pow2523(o, i) {
+    var c = gf();
+    var a;
+    for (a = 0; a < 16; ++a) c[a] = i[a];
+    for (a = 250; a >= 0; --a) {
+      S(c, c);
+      if (a !== 1) M(c, c, i);
+    }
+    for (a = 0; a < 16; ++a) o[a] = c[a];
   }
-  function YS(e, n) {
-    var r = [un(), un(), un(), un()];
-    (il(r[0], qA), il(r[1], jA), il(r[2], dm), br(r[3], qA, jA), tC(e, r, n));
+  function neq25519(a, b) {
+    var c = new NativeBuffer(32);
+    var d = new NativeBuffer(32);
+    pack25519(c, a);
+    pack25519(d, b);
+    return crypto_verify_32(c, 0, d, 0);
   }
-  function il(e, n) {
-    var r;
-    for (r = 0; r < 16; r++) e[r] = n[r] | 0;
+  function crypto_verify_32(x, xi, y, yi) {
+    return vn(x, xi, y, yi, 32);
   }
-  function V6(e, n) {
-    var r = un(),
-      s;
-    for (s = 0; s < 16; ++s) r[s] = n[s];
-    for (s = 253; s >= 0; --s) if ((dc(r, r), s !== 2 && s !== 4)) br(r, r, n);
-    for (s = 0; s < 16; ++s) e[s] = r[s];
+  function vn(x, xi, y_2, yi, n) {
+    var i;
+    var d = 0;
+    for (i = 0; i < n; ++i) d |= x[xi + i] ^ y_2[yi + i];
+    return (1 & ((d - 1) >>> 8)) - 1;
   }
-  function VS(e) {
-    var n,
-      r,
-      s = 1;
-    for (n = 0; n < 16; ++n) ((r = e[n] + s + 65535), (s = Math.floor(r / 65536)), (e[n] = r - s * 65536));
-    e[0] += s - 1 + 37 * (s - 1);
+  function par25519(a) {
+    var d = new NativeBuffer(32);
+    pack25519(d, a);
+    return d[0] & 1;
   }
-  function nC(e, n, r) {
-    var s,
-      h = ~(r - 1);
-    for (var y = 0; y < 16; ++y) ((s = h & (e[y] ^ n[y])), (e[y] ^= s), (n[y] ^= s));
+  function scalarmult(p, q, s_2) {
+    var b;
+    var i;
+    set25519(p[0], gf0);
+    set25519(p[1], gf1);
+    set25519(p[2], gf1);
+    set25519(p[3], gf0);
+    for (i = 255; i >= 0; --i) {
+      b = (s_2[(i / 8) | 0] >> (i & 7)) & 1;
+      cswap(p, q, b);
+      add(q, p);
+      add(p, p);
+      cswap(p, q, b);
+    }
   }
-  function un(e) {
-    var n,
-      float64Array = new Float64Array(16);
-    if (e) for (n = 0; n < e.length; ++n) float64Array[n] = e[n];
+  function scalarbase(p, s) {
+    var q = [gf(), gf(), gf(), gf()];
+    set25519(q[0], X);
+    set25519(q[1], Y);
+    set25519(q[2], gf1);
+    M(q[3], X, Y);
+    scalarmult(p, q, s);
+  }
+  function set25519(r_2, a) {
+    var i;
+    for (i = 0; i < 16; i++) r_2[i] = a[i] | 0;
+  }
+  function inv25519(o, i) {
+    var c = gf();
+    var a;
+    for (a = 0; a < 16; ++a) c[a] = i[a];
+    for (a = 253; a >= 0; --a) {
+      S(c, c);
+      if (a !== 2 && a !== 4) M(c, c, i);
+    }
+    for (a = 0; a < 16; ++a) o[a] = c[a];
+  }
+  function car25519(o) {
+    var i;
+    var v;
+    var c = 1;
+    for (i = 0; i < 16; ++i) {
+      v = o[i] + c + 65535;
+      c = Math.floor(v / 65536);
+      o[i] = v - c * 65536;
+    }
+    o[0] += c - 1 + 37 * (c - 1);
+  }
+  function sel25519(p, q, b) {
+    var t;
+    var c = ~(b - 1);
+    for (var i = 0; i < 16; ++i) {
+      t = c & (p[i] ^ q[i]);
+      p[i] ^= t;
+      q[i] ^= t;
+    }
+  }
+  function gf(init) {
+    var i;
+    var float64Array = new Float64Array(16);
+    if (init) for (i = 0; i < init.length; ++i) float64Array[i] = init[i];
     return float64Array;
   }
-  function hu(e, n, r) {
-    for (var s = 0; s < 16; ++s) e[s] = n[s] + r[s];
+  function A(o, a, b) {
+    for (var i = 0; i < 16; ++i) o[i] = a[i] + b[i];
   }
-  function mu(e, n, r) {
-    for (var s = 0; s < 16; ++s) e[s] = n[s] - r[s];
+  function Z(o, a, b) {
+    for (var i = 0; i < 16; ++i) o[i] = a[i] - b[i];
   }
-  function dc(e, n) {
-    br(e, n, n);
+  function S(o, a) {
+    M(o, a, a);
   }
-  function br(e, n, r) {
-    var s,
-      h,
-      y = 0,
-      b = 0,
-      S = 0,
-      w = 0,
-      R = 0,
-      D = 0,
-      O = 0,
-      L = 0,
-      V = 0,
-      K = 0,
-      q = 0,
-      Z = 0,
-      J = 0,
-      ie = 0,
-      ae = 0,
-      Se = 0,
-      ue = 0,
-      me = 0,
-      Ne = 0,
-      Ce = 0,
-      Ie = 0,
-      he = 0,
-      ft = 0,
-      rt = 0,
-      ut = 0,
-      we = 0,
-      Ae = 0,
-      dt = 0,
-      Me = 0,
-      Ft = 0,
-      xn = 0,
-      mt = r[0],
-      Mt = r[1],
-      mn = r[2],
-      Nt = r[3],
-      Wt = r[4],
-      gt = r[5],
-      jt = r[6],
-      Rn = r[7],
-      Xe = r[8],
-      nn = r[9],
-      Je = r[10],
-      vt = r[11],
-      Lt = r[12],
-      ln = r[13],
-      Zt = r[14],
-      kn = r[15];
-    ((s = n[0]),
-      (y += s * mt),
-      (b += s * Mt),
-      (S += s * mn),
-      (w += s * Nt),
-      (R += s * Wt),
-      (D += s * gt),
-      (O += s * jt),
-      (L += s * Rn),
-      (V += s * Xe),
-      (K += s * nn),
-      (q += s * Je),
-      (Z += s * vt),
-      (J += s * Lt),
-      (ie += s * ln),
-      (ae += s * Zt),
-      (Se += s * kn),
-      (s = n[1]),
-      (b += s * mt),
-      (S += s * Mt),
-      (w += s * mn),
-      (R += s * Nt),
-      (D += s * Wt),
-      (O += s * gt),
-      (L += s * jt),
-      (V += s * Rn),
-      (K += s * Xe),
-      (q += s * nn),
-      (Z += s * Je),
-      (J += s * vt),
-      (ie += s * Lt),
-      (ae += s * ln),
-      (Se += s * Zt),
-      (ue += s * kn),
-      (s = n[2]),
-      (S += s * mt),
-      (w += s * Mt),
-      (R += s * mn),
-      (D += s * Nt),
-      (O += s * Wt),
-      (L += s * gt),
-      (V += s * jt),
-      (K += s * Rn),
-      (q += s * Xe),
-      (Z += s * nn),
-      (J += s * Je),
-      (ie += s * vt),
-      (ae += s * Lt),
-      (Se += s * ln),
-      (ue += s * Zt),
-      (me += s * kn),
-      (s = n[3]),
-      (w += s * mt),
-      (R += s * Mt),
-      (D += s * mn),
-      (O += s * Nt),
-      (L += s * Wt),
-      (V += s * gt),
-      (K += s * jt),
-      (q += s * Rn),
-      (Z += s * Xe),
-      (J += s * nn),
-      (ie += s * Je),
-      (ae += s * vt),
-      (Se += s * Lt),
-      (ue += s * ln),
-      (me += s * Zt),
-      (Ne += s * kn),
-      (s = n[4]),
-      (R += s * mt),
-      (D += s * Mt),
-      (O += s * mn),
-      (L += s * Nt),
-      (V += s * Wt),
-      (K += s * gt),
-      (q += s * jt),
-      (Z += s * Rn),
-      (J += s * Xe),
-      (ie += s * nn),
-      (ae += s * Je),
-      (Se += s * vt),
-      (ue += s * Lt),
-      (me += s * ln),
-      (Ne += s * Zt),
-      (Ce += s * kn),
-      (s = n[5]),
-      (D += s * mt),
-      (O += s * Mt),
-      (L += s * mn),
-      (V += s * Nt),
-      (K += s * Wt),
-      (q += s * gt),
-      (Z += s * jt),
-      (J += s * Rn),
-      (ie += s * Xe),
-      (ae += s * nn),
-      (Se += s * Je),
-      (ue += s * vt),
-      (me += s * Lt),
-      (Ne += s * ln),
-      (Ce += s * Zt),
-      (Ie += s * kn),
-      (s = n[6]),
-      (O += s * mt),
-      (L += s * Mt),
-      (V += s * mn),
-      (K += s * Nt),
-      (q += s * Wt),
-      (Z += s * gt),
-      (J += s * jt),
-      (ie += s * Rn),
-      (ae += s * Xe),
-      (Se += s * nn),
-      (ue += s * Je),
-      (me += s * vt),
-      (Ne += s * Lt),
-      (Ce += s * ln),
-      (Ie += s * Zt),
-      (he += s * kn),
-      (s = n[7]),
-      (L += s * mt),
-      (V += s * Mt),
-      (K += s * mn),
-      (q += s * Nt),
-      (Z += s * Wt),
-      (J += s * gt),
-      (ie += s * jt),
-      (ae += s * Rn),
-      (Se += s * Xe),
-      (ue += s * nn),
-      (me += s * Je),
-      (Ne += s * vt),
-      (Ce += s * Lt),
-      (Ie += s * ln),
-      (he += s * Zt),
-      (ft += s * kn),
-      (s = n[8]),
-      (V += s * mt),
-      (K += s * Mt),
-      (q += s * mn),
-      (Z += s * Nt),
-      (J += s * Wt),
-      (ie += s * gt),
-      (ae += s * jt),
-      (Se += s * Rn),
-      (ue += s * Xe),
-      (me += s * nn),
-      (Ne += s * Je),
-      (Ce += s * vt),
-      (Ie += s * Lt),
-      (he += s * ln),
-      (ft += s * Zt),
-      (rt += s * kn),
-      (s = n[9]),
-      (K += s * mt),
-      (q += s * Mt),
-      (Z += s * mn),
-      (J += s * Nt),
-      (ie += s * Wt),
-      (ae += s * gt),
-      (Se += s * jt),
-      (ue += s * Rn),
-      (me += s * Xe),
-      (Ne += s * nn),
-      (Ce += s * Je),
-      (Ie += s * vt),
-      (he += s * Lt),
-      (ft += s * ln),
-      (rt += s * Zt),
-      (ut += s * kn),
-      (s = n[10]),
-      (q += s * mt),
-      (Z += s * Mt),
-      (J += s * mn),
-      (ie += s * Nt),
-      (ae += s * Wt),
-      (Se += s * gt),
-      (ue += s * jt),
-      (me += s * Rn),
-      (Ne += s * Xe),
-      (Ce += s * nn),
-      (Ie += s * Je),
-      (he += s * vt),
-      (ft += s * Lt),
-      (rt += s * ln),
-      (ut += s * Zt),
-      (we += s * kn),
-      (s = n[11]),
-      (Z += s * mt),
-      (J += s * Mt),
-      (ie += s * mn),
-      (ae += s * Nt),
-      (Se += s * Wt),
-      (ue += s * gt),
-      (me += s * jt),
-      (Ne += s * Rn),
-      (Ce += s * Xe),
-      (Ie += s * nn),
-      (he += s * Je),
-      (ft += s * vt),
-      (rt += s * Lt),
-      (ut += s * ln),
-      (we += s * Zt),
-      (Ae += s * kn),
-      (s = n[12]),
-      (J += s * mt),
-      (ie += s * Mt),
-      (ae += s * mn),
-      (Se += s * Nt),
-      (ue += s * Wt),
-      (me += s * gt),
-      (Ne += s * jt),
-      (Ce += s * Rn),
-      (Ie += s * Xe),
-      (he += s * nn),
-      (ft += s * Je),
-      (rt += s * vt),
-      (ut += s * Lt),
-      (we += s * ln),
-      (Ae += s * Zt),
-      (dt += s * kn),
-      (s = n[13]),
-      (ie += s * mt),
-      (ae += s * Mt),
-      (Se += s * mn),
-      (ue += s * Nt),
-      (me += s * Wt),
-      (Ne += s * gt),
-      (Ce += s * jt),
-      (Ie += s * Rn),
-      (he += s * Xe),
-      (ft += s * nn),
-      (rt += s * Je),
-      (ut += s * vt),
-      (we += s * Lt),
-      (Ae += s * ln),
-      (dt += s * Zt),
-      (Me += s * kn),
-      (s = n[14]),
-      (ae += s * mt),
-      (Se += s * Mt),
-      (ue += s * mn),
-      (me += s * Nt),
-      (Ne += s * Wt),
-      (Ce += s * gt),
-      (Ie += s * jt),
-      (he += s * Rn),
-      (ft += s * Xe),
-      (rt += s * nn),
-      (ut += s * Je),
-      (we += s * vt),
-      (Ae += s * Lt),
-      (dt += s * ln),
-      (Me += s * Zt),
-      (Ft += s * kn),
-      (s = n[15]),
-      (Se += s * mt),
-      (ue += s * Mt),
-      (me += s * mn),
-      (Ne += s * Nt),
-      (Ce += s * Wt),
-      (Ie += s * gt),
-      (he += s * jt),
-      (ft += s * Rn),
-      (rt += s * Xe),
-      (ut += s * nn),
-      (we += s * Je),
-      (Ae += s * vt),
-      (dt += s * Lt),
-      (Me += s * ln),
-      (Ft += s * Zt),
-      (xn += s * kn),
-      (y += 38 * ue),
-      (b += 38 * me),
-      (S += 38 * Ne),
-      (w += 38 * Ce),
-      (R += 38 * Ie),
-      (D += 38 * he),
-      (O += 38 * ft),
-      (L += 38 * rt),
-      (V += 38 * ut),
-      (K += 38 * we),
-      (q += 38 * Ae),
-      (Z += 38 * dt),
-      (J += 38 * Me),
-      (ie += 38 * Ft),
-      (ae += 38 * xn),
-      (h = 1),
-      (s = y + h + 65535),
-      (h = Math.floor(s / 65536)),
-      (y = s - h * 65536),
-      (s = b + h + 65535),
-      (h = Math.floor(s / 65536)),
-      (b = s - h * 65536),
-      (s = S + h + 65535),
-      (h = Math.floor(s / 65536)),
-      (S = s - h * 65536),
-      (s = w + h + 65535),
-      (h = Math.floor(s / 65536)),
-      (w = s - h * 65536),
-      (s = R + h + 65535),
-      (h = Math.floor(s / 65536)),
-      (R = s - h * 65536),
-      (s = D + h + 65535),
-      (h = Math.floor(s / 65536)),
-      (D = s - h * 65536),
-      (s = O + h + 65535),
-      (h = Math.floor(s / 65536)),
-      (O = s - h * 65536),
-      (s = L + h + 65535),
-      (h = Math.floor(s / 65536)),
-      (L = s - h * 65536),
-      (s = V + h + 65535),
-      (h = Math.floor(s / 65536)),
-      (V = s - h * 65536),
-      (s = K + h + 65535),
-      (h = Math.floor(s / 65536)),
-      (K = s - h * 65536),
-      (s = q + h + 65535),
-      (h = Math.floor(s / 65536)),
-      (q = s - h * 65536),
-      (s = Z + h + 65535),
-      (h = Math.floor(s / 65536)),
-      (Z = s - h * 65536),
-      (s = J + h + 65535),
-      (h = Math.floor(s / 65536)),
-      (J = s - h * 65536),
-      (s = ie + h + 65535),
-      (h = Math.floor(s / 65536)),
-      (ie = s - h * 65536),
-      (s = ae + h + 65535),
-      (h = Math.floor(s / 65536)),
-      (ae = s - h * 65536),
-      (s = Se + h + 65535),
-      (h = Math.floor(s / 65536)),
-      (Se = s - h * 65536),
-      (y += h - 1 + 37 * (h - 1)),
-      (h = 1),
-      (s = y + h + 65535),
-      (h = Math.floor(s / 65536)),
-      (y = s - h * 65536),
-      (s = b + h + 65535),
-      (h = Math.floor(s / 65536)),
-      (b = s - h * 65536),
-      (s = S + h + 65535),
-      (h = Math.floor(s / 65536)),
-      (S = s - h * 65536),
-      (s = w + h + 65535),
-      (h = Math.floor(s / 65536)),
-      (w = s - h * 65536),
-      (s = R + h + 65535),
-      (h = Math.floor(s / 65536)),
-      (R = s - h * 65536),
-      (s = D + h + 65535),
-      (h = Math.floor(s / 65536)),
-      (D = s - h * 65536),
-      (s = O + h + 65535),
-      (h = Math.floor(s / 65536)),
-      (O = s - h * 65536),
-      (s = L + h + 65535),
-      (h = Math.floor(s / 65536)),
-      (L = s - h * 65536),
-      (s = V + h + 65535),
-      (h = Math.floor(s / 65536)),
-      (V = s - h * 65536),
-      (s = K + h + 65535),
-      (h = Math.floor(s / 65536)),
-      (K = s - h * 65536),
-      (s = q + h + 65535),
-      (h = Math.floor(s / 65536)),
-      (q = s - h * 65536),
-      (s = Z + h + 65535),
-      (h = Math.floor(s / 65536)),
-      (Z = s - h * 65536),
-      (s = J + h + 65535),
-      (h = Math.floor(s / 65536)),
-      (J = s - h * 65536),
-      (s = ie + h + 65535),
-      (h = Math.floor(s / 65536)),
-      (ie = s - h * 65536),
-      (s = ae + h + 65535),
-      (h = Math.floor(s / 65536)),
-      (ae = s - h * 65536),
-      (s = Se + h + 65535),
-      (h = Math.floor(s / 65536)),
-      (Se = s - h * 65536),
-      (y += h - 1 + 37 * (h - 1)),
-      (e[0] = y),
-      (e[1] = b),
-      (e[2] = S),
-      (e[3] = w),
-      (e[4] = R),
-      (e[5] = D),
-      (e[6] = O),
-      (e[7] = L),
-      (e[8] = V),
-      (e[9] = K),
-      (e[10] = q),
-      (e[11] = Z),
-      (e[12] = J),
-      (e[13] = ie),
-      (e[14] = ae),
-      (e[15] = Se));
+  function M(o, a, b_2) {
+    var v;
+    var c;
+    var t0 = 0;
+    var t1 = 0;
+    var t2 = 0;
+    var t3 = 0;
+    var t4 = 0;
+    var t5 = 0;
+    var t6 = 0;
+    var t7 = 0;
+    var t8 = 0;
+    var t9 = 0;
+    var t10 = 0;
+    var t11 = 0;
+    var t12 = 0;
+    var t13 = 0;
+    var t14 = 0;
+    var t15 = 0;
+    var t16 = 0;
+    var t17 = 0;
+    var t18 = 0;
+    var t19 = 0;
+    var t20 = 0;
+    var t21 = 0;
+    var t22 = 0;
+    var t23 = 0;
+    var t24 = 0;
+    var t25 = 0;
+    var t26 = 0;
+    var t27 = 0;
+    var t28 = 0;
+    var t29 = 0;
+    var t30 = 0;
+    var b0 = b_2[0];
+    var b1 = b_2[1];
+    var b2 = b_2[2];
+    var b3 = b_2[3];
+    var b4 = b_2[4];
+    var b5 = b_2[5];
+    var b6 = b_2[6];
+    var b7 = b_2[7];
+    var b8 = b_2[8];
+    var b9 = b_2[9];
+    var b10 = b_2[10];
+    var b11 = b_2[11];
+    var b12 = b_2[12];
+    var b13 = b_2[13];
+    var b14 = b_2[14];
+    var b15 = b_2[15];
+    v = a[0];
+    t0 += v * b0;
+    t1 += v * b1;
+    t2 += v * b2;
+    t3 += v * b3;
+    t4 += v * b4;
+    t5 += v * b5;
+    t6 += v * b6;
+    t7 += v * b7;
+    t8 += v * b8;
+    t9 += v * b9;
+    t10 += v * b10;
+    t11 += v * b11;
+    t12 += v * b12;
+    t13 += v * b13;
+    t14 += v * b14;
+    t15 += v * b15;
+    v = a[1];
+    t1 += v * b0;
+    t2 += v * b1;
+    t3 += v * b2;
+    t4 += v * b3;
+    t5 += v * b4;
+    t6 += v * b5;
+    t7 += v * b6;
+    t8 += v * b7;
+    t9 += v * b8;
+    t10 += v * b9;
+    t11 += v * b10;
+    t12 += v * b11;
+    t13 += v * b12;
+    t14 += v * b13;
+    t15 += v * b14;
+    t16 += v * b15;
+    v = a[2];
+    t2 += v * b0;
+    t3 += v * b1;
+    t4 += v * b2;
+    t5 += v * b3;
+    t6 += v * b4;
+    t7 += v * b5;
+    t8 += v * b6;
+    t9 += v * b7;
+    t10 += v * b8;
+    t11 += v * b9;
+    t12 += v * b10;
+    t13 += v * b11;
+    t14 += v * b12;
+    t15 += v * b13;
+    t16 += v * b14;
+    t17 += v * b15;
+    v = a[3];
+    t3 += v * b0;
+    t4 += v * b1;
+    t5 += v * b2;
+    t6 += v * b3;
+    t7 += v * b4;
+    t8 += v * b5;
+    t9 += v * b6;
+    t10 += v * b7;
+    t11 += v * b8;
+    t12 += v * b9;
+    t13 += v * b10;
+    t14 += v * b11;
+    t15 += v * b12;
+    t16 += v * b13;
+    t17 += v * b14;
+    t18 += v * b15;
+    v = a[4];
+    t4 += v * b0;
+    t5 += v * b1;
+    t6 += v * b2;
+    t7 += v * b3;
+    t8 += v * b4;
+    t9 += v * b5;
+    t10 += v * b6;
+    t11 += v * b7;
+    t12 += v * b8;
+    t13 += v * b9;
+    t14 += v * b10;
+    t15 += v * b11;
+    t16 += v * b12;
+    t17 += v * b13;
+    t18 += v * b14;
+    t19 += v * b15;
+    v = a[5];
+    t5 += v * b0;
+    t6 += v * b1;
+    t7 += v * b2;
+    t8 += v * b3;
+    t9 += v * b4;
+    t10 += v * b5;
+    t11 += v * b6;
+    t12 += v * b7;
+    t13 += v * b8;
+    t14 += v * b9;
+    t15 += v * b10;
+    t16 += v * b11;
+    t17 += v * b12;
+    t18 += v * b13;
+    t19 += v * b14;
+    t20 += v * b15;
+    v = a[6];
+    t6 += v * b0;
+    t7 += v * b1;
+    t8 += v * b2;
+    t9 += v * b3;
+    t10 += v * b4;
+    t11 += v * b5;
+    t12 += v * b6;
+    t13 += v * b7;
+    t14 += v * b8;
+    t15 += v * b9;
+    t16 += v * b10;
+    t17 += v * b11;
+    t18 += v * b12;
+    t19 += v * b13;
+    t20 += v * b14;
+    t21 += v * b15;
+    v = a[7];
+    t7 += v * b0;
+    t8 += v * b1;
+    t9 += v * b2;
+    t10 += v * b3;
+    t11 += v * b4;
+    t12 += v * b5;
+    t13 += v * b6;
+    t14 += v * b7;
+    t15 += v * b8;
+    t16 += v * b9;
+    t17 += v * b10;
+    t18 += v * b11;
+    t19 += v * b12;
+    t20 += v * b13;
+    t21 += v * b14;
+    t22 += v * b15;
+    v = a[8];
+    t8 += v * b0;
+    t9 += v * b1;
+    t10 += v * b2;
+    t11 += v * b3;
+    t12 += v * b4;
+    t13 += v * b5;
+    t14 += v * b6;
+    t15 += v * b7;
+    t16 += v * b8;
+    t17 += v * b9;
+    t18 += v * b10;
+    t19 += v * b11;
+    t20 += v * b12;
+    t21 += v * b13;
+    t22 += v * b14;
+    t23 += v * b15;
+    v = a[9];
+    t9 += v * b0;
+    t10 += v * b1;
+    t11 += v * b2;
+    t12 += v * b3;
+    t13 += v * b4;
+    t14 += v * b5;
+    t15 += v * b6;
+    t16 += v * b7;
+    t17 += v * b8;
+    t18 += v * b9;
+    t19 += v * b10;
+    t20 += v * b11;
+    t21 += v * b12;
+    t22 += v * b13;
+    t23 += v * b14;
+    t24 += v * b15;
+    v = a[10];
+    t10 += v * b0;
+    t11 += v * b1;
+    t12 += v * b2;
+    t13 += v * b3;
+    t14 += v * b4;
+    t15 += v * b5;
+    t16 += v * b6;
+    t17 += v * b7;
+    t18 += v * b8;
+    t19 += v * b9;
+    t20 += v * b10;
+    t21 += v * b11;
+    t22 += v * b12;
+    t23 += v * b13;
+    t24 += v * b14;
+    t25 += v * b15;
+    v = a[11];
+    t11 += v * b0;
+    t12 += v * b1;
+    t13 += v * b2;
+    t14 += v * b3;
+    t15 += v * b4;
+    t16 += v * b5;
+    t17 += v * b6;
+    t18 += v * b7;
+    t19 += v * b8;
+    t20 += v * b9;
+    t21 += v * b10;
+    t22 += v * b11;
+    t23 += v * b12;
+    t24 += v * b13;
+    t25 += v * b14;
+    t26 += v * b15;
+    v = a[12];
+    t12 += v * b0;
+    t13 += v * b1;
+    t14 += v * b2;
+    t15 += v * b3;
+    t16 += v * b4;
+    t17 += v * b5;
+    t18 += v * b6;
+    t19 += v * b7;
+    t20 += v * b8;
+    t21 += v * b9;
+    t22 += v * b10;
+    t23 += v * b11;
+    t24 += v * b12;
+    t25 += v * b13;
+    t26 += v * b14;
+    t27 += v * b15;
+    v = a[13];
+    t13 += v * b0;
+    t14 += v * b1;
+    t15 += v * b2;
+    t16 += v * b3;
+    t17 += v * b4;
+    t18 += v * b5;
+    t19 += v * b6;
+    t20 += v * b7;
+    t21 += v * b8;
+    t22 += v * b9;
+    t23 += v * b10;
+    t24 += v * b11;
+    t25 += v * b12;
+    t26 += v * b13;
+    t27 += v * b14;
+    t28 += v * b15;
+    v = a[14];
+    t14 += v * b0;
+    t15 += v * b1;
+    t16 += v * b2;
+    t17 += v * b3;
+    t18 += v * b4;
+    t19 += v * b5;
+    t20 += v * b6;
+    t21 += v * b7;
+    t22 += v * b8;
+    t23 += v * b9;
+    t24 += v * b10;
+    t25 += v * b11;
+    t26 += v * b12;
+    t27 += v * b13;
+    t28 += v * b14;
+    t29 += v * b15;
+    v = a[15];
+    t15 += v * b0;
+    t16 += v * b1;
+    t17 += v * b2;
+    t18 += v * b3;
+    t19 += v * b4;
+    t20 += v * b5;
+    t21 += v * b6;
+    t22 += v * b7;
+    t23 += v * b8;
+    t24 += v * b9;
+    t25 += v * b10;
+    t26 += v * b11;
+    t27 += v * b12;
+    t28 += v * b13;
+    t29 += v * b14;
+    t30 += v * b15;
+    t0 += 38 * t16;
+    t1 += 38 * t17;
+    t2 += 38 * t18;
+    t3 += 38 * t19;
+    t4 += 38 * t20;
+    t5 += 38 * t21;
+    t6 += 38 * t22;
+    t7 += 38 * t23;
+    t8 += 38 * t24;
+    t9 += 38 * t25;
+    t10 += 38 * t26;
+    t11 += 38 * t27;
+    t12 += 38 * t28;
+    t13 += 38 * t29;
+    t14 += 38 * t30;
+    c = 1;
+    v = t0 + c + 65535;
+    c = Math.floor(v / 65536);
+    t0 = v - c * 65536;
+    v = t1 + c + 65535;
+    c = Math.floor(v / 65536);
+    t1 = v - c * 65536;
+    v = t2 + c + 65535;
+    c = Math.floor(v / 65536);
+    t2 = v - c * 65536;
+    v = t3 + c + 65535;
+    c = Math.floor(v / 65536);
+    t3 = v - c * 65536;
+    v = t4 + c + 65535;
+    c = Math.floor(v / 65536);
+    t4 = v - c * 65536;
+    v = t5 + c + 65535;
+    c = Math.floor(v / 65536);
+    t5 = v - c * 65536;
+    v = t6 + c + 65535;
+    c = Math.floor(v / 65536);
+    t6 = v - c * 65536;
+    v = t7 + c + 65535;
+    c = Math.floor(v / 65536);
+    t7 = v - c * 65536;
+    v = t8 + c + 65535;
+    c = Math.floor(v / 65536);
+    t8 = v - c * 65536;
+    v = t9 + c + 65535;
+    c = Math.floor(v / 65536);
+    t9 = v - c * 65536;
+    v = t10 + c + 65535;
+    c = Math.floor(v / 65536);
+    t10 = v - c * 65536;
+    v = t11 + c + 65535;
+    c = Math.floor(v / 65536);
+    t11 = v - c * 65536;
+    v = t12 + c + 65535;
+    c = Math.floor(v / 65536);
+    t12 = v - c * 65536;
+    v = t13 + c + 65535;
+    c = Math.floor(v / 65536);
+    t13 = v - c * 65536;
+    v = t14 + c + 65535;
+    c = Math.floor(v / 65536);
+    t14 = v - c * 65536;
+    v = t15 + c + 65535;
+    c = Math.floor(v / 65536);
+    t15 = v - c * 65536;
+    t0 += c - 1 + 37 * (c - 1);
+    c = 1;
+    v = t0 + c + 65535;
+    c = Math.floor(v / 65536);
+    t0 = v - c * 65536;
+    v = t1 + c + 65535;
+    c = Math.floor(v / 65536);
+    t1 = v - c * 65536;
+    v = t2 + c + 65535;
+    c = Math.floor(v / 65536);
+    t2 = v - c * 65536;
+    v = t3 + c + 65535;
+    c = Math.floor(v / 65536);
+    t3 = v - c * 65536;
+    v = t4 + c + 65535;
+    c = Math.floor(v / 65536);
+    t4 = v - c * 65536;
+    v = t5 + c + 65535;
+    c = Math.floor(v / 65536);
+    t5 = v - c * 65536;
+    v = t6 + c + 65535;
+    c = Math.floor(v / 65536);
+    t6 = v - c * 65536;
+    v = t7 + c + 65535;
+    c = Math.floor(v / 65536);
+    t7 = v - c * 65536;
+    v = t8 + c + 65535;
+    c = Math.floor(v / 65536);
+    t8 = v - c * 65536;
+    v = t9 + c + 65535;
+    c = Math.floor(v / 65536);
+    t9 = v - c * 65536;
+    v = t10 + c + 65535;
+    c = Math.floor(v / 65536);
+    t10 = v - c * 65536;
+    v = t11 + c + 65535;
+    c = Math.floor(v / 65536);
+    t11 = v - c * 65536;
+    v = t12 + c + 65535;
+    c = Math.floor(v / 65536);
+    t12 = v - c * 65536;
+    v = t13 + c + 65535;
+    c = Math.floor(v / 65536);
+    t13 = v - c * 65536;
+    v = t14 + c + 65535;
+    c = Math.floor(v / 65536);
+    t14 = v - c * 65536;
+    v = t15 + c + 65535;
+    c = Math.floor(v / 65536);
+    t15 = v - c * 65536;
+    t0 += c - 1 + 37 * (c - 1);
+    o[0] = t0;
+    o[1] = t1;
+    o[2] = t2;
+    o[3] = t3;
+    o[4] = t4;
+    o[5] = t5;
+    o[6] = t6;
+    o[7] = t7;
+    o[8] = t8;
+    o[9] = t9;
+    o[10] = t10;
+    o[11] = t11;
+    o[12] = t12;
+    o[13] = t13;
+    o[14] = t14;
+    o[15] = t15;
   }
 });
-
-export { sC };
+export { require_ed25519 };

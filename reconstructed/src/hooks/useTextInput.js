@@ -13,12 +13,12 @@ import { logError } from "../utils/log.js";
 import { TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS } from "../utils/errors.js";
 import { HostScoped } from "../utils/hostScoped.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../services/analytics/growthbook.js";
-import { lon, oQe } from "../utils/attachStamp.js";
+import { isAttachSettled, getAttachStampMs } from "../utils/attachStamp.js";
 import { logEvent } from "../services/analytics/index.js";
 import { lit } from "../services/analytics/safeMetadata.js";
 import { logForDebugging } from "../utils/debug.js";
 import {
-  cqo,
+  shiftSpans,
   buildVirtualTextLayout,
   draftToDisplayOffset,
   offsetDecorations,
@@ -27,66 +27,67 @@ import { Cursor } from "../utils/Cursor.js";
 import { announce } from "../utils/accessibility/screenReader.js";
 import { env } from "../utils/env.js";
 import { useIsFullscreen } from "../ink/renderModeContext.js";
-import { useKillRing, egt, nextYankPop } from "../utils/killRing.js";
+import { useKillRing, topOfKillRing, nextYankPop } from "../utils/killRing.js";
 import { Q, y, R } from "../../vendor/react/cjs/react.production.js";
 import { useNotifications } from "../context/notifications.js";
-import { Me } from "../components/design-system/ThemeProvider.js";
+import { useTheme_2 } from "../components/design-system/ThemeProvider.js";
 import { useDoublePress } from "../keybindings/useActionHandlers.js";
-import { Do } from "../utils/git/gitSafeEnv.js";
+import { pickByHelper } from "../utils/git/gitSafeEnv.js";
 import {
   prependModeCharacterToInput,
   isBashModeChar,
   getModeFromInput,
 } from "../components/PromptInput/inputModes.js";
-import { ySe } from "../history.js";
+import { addHistoryEntry } from "../history.js";
 import { markBackslashReturnUsed } from "../commands/terminalSetup/terminalSetup.js";
 
+//@ chunk-7p2hc4jn.js:38712-38960 placement
 /**
  * 文本换行行与原文不能完全拼合、回退到硬换行时，每进程只记录一次错误。
  */
-//@ chunk-7p2hc4jn.js:38712-38960 placement
-function logWrapFallbackOnce(e, r) {
+function logWrapFallbackOnce(columns, r) {
   if (!claimOnce().claim("measured_text_wrap_fallback")) return;
   logError(
     new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `Wrapped rows do not tile the text (columns=${e}, length=${r}); fell back to plain hard wrapping`,
+      `Wrapped rows do not tile the text (columns=${columns}, length=${r}); fell back to plain hard wrapping`,
       "Wrapped rows do not tile the text; fell back to plain hard wrapping",
     ),
   );
 }
 //@ chunk-7p2hc4jn.js:38960-39072 placement
 class OnceFlag {
-  prewarmed = !1;
+  prewarmed = false;
   claim() {
-    if (this.prewarmed) return !1;
-    return ((this.prewarmed = !0), !0);
+    if (this.prewarmed) return false;
+    this.prewarmed = true;
+    return true;
   }
   reset() {
-    this.prewarmed = !1;
+    this.prewarmed = false;
   }
 }
 //@ chunk-7p2hc4jn.js:39072-39097 placement
-var Dn = new HostScoped(() => new OnceFlag());
+var textInputStoreSlot = new HostScoped(() => new OnceFlag());
 //@ chunk-7p2hc4jn.js:39097-39112 placement
-function Kt() {}
+function noopTextInput() {}
 //@ chunk-7p2hc4jn.js:39112-39136 placement
-function jt(e) {
-  return !1;
+function returnFalseTextInput(e) {
+  return false;
 }
+//@ chunk-7p2hc4jn.js:39136-39264 placement
 /**
  * 左方向键手势的常量：武装窗口毫秒数、两段提示文字、吸收窗口与人手节奏间隔。
  */
-//@ chunk-7p2hc4jn.js:39136-39264 placement
-var LEFT_ARROW_ARM_WINDOW_MS = 3000,
-  LEFT_ARROW_BACK_HINT = "Press \u2190 again to go back to agents",
-  LEFT_ARROW_DETACH_HINT = "Ambiguous \u2190, press again to detach",
-  LEFT_ARROW_ABSORB_MS = 1000,
-  HUMAN_CADENCE_MS = 150,
-  ATTACH_CONFIRM_MIN_MS = 150;
+var LEFT_ARROW_ARM_WINDOW_MS = 3000;
+var LEFT_ARROW_BACK_HINT = "Press \u2190 again to go back to agents";
+var LEFT_ARROW_DETACH_HINT = "Ambiguous \u2190, press again to detach";
+var LEFT_ARROW_ABSORB_MS = 1000;
+var HUMAN_CADENCE_MS = 150;
+var ATTACH_CONFIRM_MIN_MS = 150;
+//@ chunk-7p2hc4jn.js:39264-39402 placement
 /**
  * 新建左方向键手势状态：编辑清空时间、武装时间、吸收锚点、上次有效按键时间、attach 确认武装时间、是否已记过吸收日志。
  */
-//@ chunk-7p2hc4jn.js:39264-39402 placement
 function createLeftArrowGestureState() {
   return {
     editedEmptyAtMs: 0,
@@ -94,22 +95,22 @@ function createLeftArrowGestureState() {
     absorbAnchorMs: 0,
     lastQualifiedLeftPressMs: 0,
     attachConfirmArmedAtMs: 0,
-    absorbLogged: !1,
+    absorbLogged: false,
   };
 }
+//@ chunk-7p2hc4jn.js:39402-40028 placement
 /**
  * 决定一次左方向键（返回代理列表/脱离会话）该怎么处理：reject（不是单独按键）、fire（执行）、arm（刚清空输入，先提示再按一次）、absorb（人手节奏的连按被吞掉）、attach-arm/attach-absorb（attach 模式下的确认）。
  */
-//@ chunk-7p2hc4jn.js:39402-40028 placement
 function decideLeftArrowGesture(
   state,
   nowMs,
   isSoloKey,
-  guardEnabled = getFeatureValue_CACHED_MAY_BE_STALE("tengu_left_arrow_editing_guard", !0),
-  isAttached = lon(nowMs),
-  sinceMs = oQe(),
+  guardEnabled = getFeatureValue_CACHED_MAY_BE_STALE("tengu_left_arrow_editing_guard", true),
+  isAttached = isAttachSettled(nowMs),
+  sinceMs = getAttachStampMs(),
 ) {
-  if (isSoloKey !== !0) return "reject";
+  if (isSoloKey !== true) return "reject";
   let isRecent = (x) => x !== 0 && x >= sinceMs;
   if (isAttached) {
     if (isRecent(state.absorbAnchorMs) && nowMs - state.absorbAnchorMs < LEFT_ARROW_ABSORB_MS)
@@ -125,22 +126,25 @@ function decideLeftArrowGesture(
   if (isRecent(state.absorbAnchorMs) && nowMs - state.absorbAnchorMs < LEFT_ARROW_ABSORB_MS) return "absorb";
   return isRecent(state.editedEmptyAtMs) && nowMs - state.editedEmptyAtMs < 2000 ? "arm" : "fire";
 }
+//@ chunk-7p2hc4jn.js:40028-40522 placement
 /**
  * 按 decideLeftArrowGesture 的结果更新手势状态（武装、吸收锚点、上次按键时间等）。
  */
-//@ chunk-7p2hc4jn.js:40028-40522 placement
 function applyLeftArrowGesture(e, r, n) {
   switch (r) {
     case "fire":
       if (e.armedAtMs !== 0) e.editedEmptyAtMs = 0;
-      ((e.armedAtMs = 0),
-        (e.attachConfirmArmedAtMs = 0),
-        (e.absorbAnchorMs = n),
-        (e.lastQualifiedLeftPressMs = n),
-        (e.absorbLogged = !1));
+      e.armedAtMs = 0;
+      e.attachConfirmArmedAtMs = 0;
+      e.absorbAnchorMs = n;
+      e.lastQualifiedLeftPressMs = n;
+      e.absorbLogged = false;
       return;
     case "arm":
-      ((e.armedAtMs = n), (e.absorbAnchorMs = n), (e.lastQualifiedLeftPressMs = n), (e.absorbLogged = !1));
+      e.armedAtMs = n;
+      e.absorbAnchorMs = n;
+      e.lastQualifiedLeftPressMs = n;
+      e.absorbLogged = false;
       return;
     case "absorb":
       if (n - e.lastQualifiedLeftPressMs < HUMAN_CADENCE_MS) e.absorbAnchorMs = n;
@@ -155,85 +159,102 @@ function applyLeftArrowGesture(e, r, n) {
       return;
   }
 }
+//@ chunk-7p2hc4jn.js:40522-41484 placement
 /**
  * 为被拦下的左方向键手势打点 tengu_left_arrow_blocked（原因：editing-quiet、attach-quiet、not-solo、absorb 等）并写调试日志；吸收日志每个锚点只记一次。
  */
-//@ chunk-7p2hc4jn.js:40522-41484 placement
 function logLeftArrowGesture(decision, nowMs, state) {
-  let s = nowMs - oQe();
+  let s = nowMs - getAttachStampMs();
   switch (decision) {
     case "fire":
       return;
     case "arm":
-      logEvent("tengu_left_arrow_blocked", { reason: lit("editing-quiet") });
+      logEvent("tengu_left_arrow_blocked", {
+        reason: lit("editing-quiet"),
+      });
       return;
     case "attach-arm":
-      (logEvent("tengu_left_arrow_blocked", { reason: lit("attach-quiet-hint"), ms_since_stamp: s }),
-        logForDebugging(`leftArrowGesture: attach-quiet hint armed (ms_since_stamp=${s})`, {
-          level: "debug",
-        }));
+      logEvent("tengu_left_arrow_blocked", {
+        reason: lit("attach-quiet-hint"),
+        ms_since_stamp: s,
+      });
+      logForDebugging(`leftArrowGesture: attach-quiet hint armed (ms_since_stamp=${s})`, {
+        level: "debug",
+      });
       return;
     case "attach-absorb":
-      (logEvent("tengu_left_arrow_blocked", { reason: lit("attach-quiet"), ms_since_stamp: s }),
-        logForDebugging(`leftArrowGesture: attach-quiet silent absorb (ms_since_stamp=${s})`, {
-          level: "debug",
-        }));
+      logEvent("tengu_left_arrow_blocked", {
+        reason: lit("attach-quiet"),
+        ms_since_stamp: s,
+      });
+      logForDebugging(`leftArrowGesture: attach-quiet silent absorb (ms_since_stamp=${s})`, {
+        level: "debug",
+      });
       return;
     case "reject":
       if (claimOnce().claim("left_arrow_not_solo_reject"))
-        logEvent("tengu_left_arrow_blocked", { reason: lit("not-solo") });
+        logEvent("tengu_left_arrow_blocked", {
+          reason: lit("not-solo"),
+        });
       return;
     case "absorb":
       if (state.absorbAnchorMs === nowMs || state.absorbLogged) return;
-      state.absorbLogged = !0;
+      state.absorbLogged = true;
       let o = nowMs - state.absorbAnchorMs;
-      (logEvent("tengu_left_arrow_blocked", { reason: lit("absorb"), ms_since_press: o }),
-        logForDebugging(
-          `leftArrowGesture: human-cadence press absorbed, too soon after the last \u2190 that fired or showed the hint (ms_since_press=${o})`,
-          { level: "debug" },
-        ));
+      logEvent("tengu_left_arrow_blocked", {
+        reason: lit("absorb"),
+        ms_since_press: o,
+      });
+      logForDebugging(
+        `leftArrowGesture: human-cadence press absorbed, too soon after the last \u2190 that fired or showed the hint (ms_since_press=${o})`,
+        {
+          level: "debug",
+        },
+      );
       return;
   }
 }
 //@ chunk-7p2hc4jn.js:41484-41592 placement = setCwdState (1)
-var rangesBefore = (e, r) => e.filter((n) => n.start < r),
-  isNfcStable = (e, r) => e.normalize("NFC") === e && r.text.normalize("NFC") === r.text;
+var rangesBefore = (e, r) => e.filter((n) => n.start < r);
+var isNfcStable = (e, virtualTextLayout) =>
+  e.normalize("NFC") === e && virtualTextLayout.text.normalize("NFC") === virtualTextLayout.text;
+//@ chunk-7p2hc4jn.js:41592-41920 placement
 /**
  * 按方向移动光标，跳过与当前偏移相同或（上下移动时）不在目标行的位置，直到找到一个实际不同的光标位置；到边界时原地不动。
  */
-//@ chunk-7p2hc4jn.js:41592-41920 placement
 function moveCursorToDistinctRow(e, r, n) {
-  let s = n === "up" || n === "down",
-    cursorOver = e.cursorOver(r);
+  let s = n === "up" || n === "down";
+  let o = e.cursorOver(r);
   for (;;) {
-    let u = cursorOver[n]();
-    if (u.equals(cursorOver)) return r;
-    let line = u.getPosition().line,
-      h = cqo(e.text, u.offset),
-      found = (s ? [h, r.measuredText.nextOffset(h), r.measuredText.prevOffset(h)] : [h]).find(
-        (T) => T !== r.offset && (!s || e.rowOf(T) === line),
-      );
-    if (found !== void 0) return new Cursor(r.measuredText, found);
-    cursorOver = u;
+    let u = o[n]();
+    if (u.equals(o)) return r;
+    let line = u.getPosition().line;
+    let h = shiftSpans(e.text, u.offset);
+    let found = (s ? [h, r.measuredText.nextOffset(h), r.measuredText.prevOffset(h)] : [h]).find(
+      (T) => T !== r.offset && (!s || e.rowOf(T) === line),
+    );
+    if (found !== undefined) return new Cursor(r.measuredText, found);
+    o = u;
   }
 }
+//@ chunk-7p2hc4jn.js:41920-42358 placement
 /**
  * 把带占位文本（如折叠粘贴）的缓冲区展开成显示文本并测量换行，返回显示/缓冲区偏移换算与按行移动光标的辅助函数；NFC 不稳定时返回 undefined。
  */
-//@ chunk-7p2hc4jn.js:41920-42358 placement
-function buildDisplayTextMapping({ buffer: buffer, texts: texts, columns: columns, side: side }) {
+function buildDisplayTextMapping({ buffer, texts, columns, side }) {
   if (texts.length === 0) return;
-  let o = buildVirtualTextLayout(buffer, texts);
-  if (!isNfcStable(buffer, o)) return;
-  let { measuredText: measuredText } = Cursor.fromText(o.text, columns),
-    d = (x) => new Cursor(measuredText, draftToDisplayOffset(o, x.offset, side)),
-    h = (x) => measuredText.getPositionFromOffset(draftToDisplayOffset(o, x, side)).line;
+  let virtualTextLayout = buildVirtualTextLayout(buffer, texts);
+  if (!isNfcStable(buffer, virtualTextLayout)) return;
+  let { measuredText } = Cursor.fromText(virtualTextLayout.text, columns);
+  let cursorOver = (x) => new Cursor(measuredText, draftToDisplayOffset(virtualTextLayout, x.offset, side));
+  let rowOf = (x) =>
+    measuredText.getPositionFromOffset(draftToDisplayOffset(virtualTextLayout, x, side)).line;
   return {
-    text: o,
-    cursorOver: d,
-    rowOf: h,
+    text: virtualTextLayout,
+    cursorOver,
+    rowOf,
     lastRow: () => {
-      let x = draftToDisplayOffset(o, buffer.length, "before");
+      let x = draftToDisplayOffset(virtualTextLayout, buffer.length, "before");
       return measuredText.getPositionFromOffset(
         buffer.endsWith(`
 `)
@@ -241,25 +262,46 @@ function buildDisplayTextMapping({ buffer: buffer, texts: texts, columns: column
           : measuredText.prevOffset(x),
       ).line;
     },
-    rowMoved: (x, T) => moveCursorToDistinctRow({ text: o, cursorOver: d, rowOf: h }, x, T),
+    rowMoved: (x, T) =>
+      moveCursorToDistinctRow(
+        {
+          text: virtualTextLayout,
+          cursorOver,
+          rowOf,
+        },
+        x,
+        T,
+      ),
   };
 }
+//@ chunk-7p2hc4jn.js:42358-42598 placement
 /**
  * 为输入缓冲区建立光标：有显示映射时光标落在显示文本上，并给出把显示偏移换回缓冲区偏移的函数；否则直接用缓冲区。
  */
-//@ chunk-7p2hc4jn.js:42358-42598 placement
-function createDisplayCursor({ buffer: buffer, offset: offset, texts: texts, columns: columns, side: side }) {
-  let fromText = Cursor.fromText(buffer, columns, offset),
-    d = buildDisplayTextMapping({ buffer: buffer, texts: texts, columns: columns, side: side });
-  if (d === void 0) return { cursor: fromText, bufferOffset: (h) => h };
-  return { cursor: d.cursorOver(fromText), bufferOffset: (h) => cqo(d.text, h) };
+function createDisplayCursor({ buffer, offset, texts, columns, side }) {
+  let u = Cursor.fromText(buffer, columns, offset);
+  let displayTextMapping = buildDisplayTextMapping({
+    buffer,
+    texts,
+    columns,
+    side,
+  });
+  if (displayTextMapping === undefined)
+    return {
+      cursor: u,
+      bufferOffset: (h) => h,
+    };
+  return {
+    cursor: displayTextMapping.cursorOver(u),
+    bufferOffset: (h) => shiftSpans(displayTextMapping.text, h),
+  };
 }
 //@ chunk-7p2hc4jn.js:42598-42612 placement
-var Ar = () => {};
+var noopTextInputCallback = () => {};
 //@ chunk-7p2hc4jn.js:42612-42791 placement
-function announceDeletion(e, r) {
+function announceDeletion(e, mask) {
   if (e === "") return;
-  if (r !== "") {
+  if (mask !== "") {
     announce("deleted");
     return;
   }
@@ -302,108 +344,122 @@ var IGNORED_KEY_NAMES = new Set([
   "f12",
 ]);
 //@ chunk-7p2hc4jn.js:42926-42991 placement
-function Vnn() {
-  return env.terminal === "Apple_Terminal" && jt("shift");
+/**
+ * 函数 needsShiftWorkaround（Apple Terminal 需要 shift 兼容）；位于「文本输入核心 hook：按键映射到 Cursor 编辑操作（移动/删除/kill/yank/换行）、历史上下、双击 Esc 清空、Ctrl-C 处理、提交」模块。
+ */
+function needsShiftWorkaround() {
+  return env.terminal === "Apple_Terminal" && returnFalseTextInput("shift");
 }
 //@ chunk-7p2hc4jn.js:42991-43067 file-local
 function mapInput(input_map) {
   let map = new Map(input_map);
   return function (input) {
-    return (map.get(input) ?? Ar)(input);
+    return (map.get(input) ?? noopTextInputCallback)(input);
   };
 }
+//@ chunk-7p2hc4jn.js:43067-50977 fingerprint = useTextInput (0.462)
 /**
  * 文本输入核心：把按键映射为 Cursor 操作（ctrl+a/e/b/f/h/d/k/u/w/y、alt+b/f/d、方向键、home/end、换行 \⏎/shift+⏎），上下键在多行内移动或触发历史；Esc 双击清空（escape-again-to-clear），Ctrl-C 清空或退出提示；Apple Terminal 特判；返回 onInput、渲染文本与光标位置。
  */
-//@ chunk-7p2hc4jn.js:43067-50977 fingerprint = useTextInput (0.462)
 function useTextInput({
   value: e,
-  onChange: onChange,
-  onSubmit: onSubmit,
-  onExit: onExit,
-  onExitMessage: onExitMessage,
-  onEscapeMessage: onEscapeMessage,
-  historyOnClear: historyOnClear = !0,
-  onLeftArrowOnEmpty: onLeftArrowOnEmpty,
-  leftArrowConfirmHint: leftArrowConfirmHint,
-  onHistoryUp: onHistoryUp,
-  onHistoryDown: onHistoryDown,
-  onHistoryReset: onHistoryReset,
-  mask: mask = "",
-  maskWhole: maskWhole = !1,
-  multiline: multiline = !1,
-  disableBackslashReturn: disableBackslashReturn = !1,
-  clearOnSubmit: clearOnSubmit = !0,
-  disableCtrlCClear: disableCtrlCClear = !1,
-  cursorChar: cursorChar,
-  preserveTrailingWhitespace: preserveTrailingWhitespace = !1,
-  invert: invert,
-  columns: columns,
-  leadingPill: leadingPill,
-  onImagePaste: onImagePaste,
-  disableCursorMovementForUpDownKeys: disableCursorMovementForUpDownKeys = !1,
-  disableEscapeDoublePress: disableEscapeDoublePress = !1,
-  maxVisibleLines: maxVisibleLines,
-  externalOffset: externalOffset,
-  onOffsetChange: onOffsetChange,
-  inputFilter: inputFilter,
-  getPastedContents: getPastedContents,
-  getInputMode: getInputMode,
-  inlineGhostText: inlineGhostText,
-  dim: dim,
-  virtualTexts: virtualTexts,
-  isCursorOnCharacter: isCursorOnCharacter = !1,
-  editRelay: editRelay,
-  commitEdit: commitEdit,
-  selectionAnchor: selectionAnchor,
-  selectionLinewise: selectionLinewise = !1,
+  onChange,
+  onSubmit,
+  onExit,
+  onExitMessage,
+  onEscapeMessage,
+  historyOnClear = true,
+  onLeftArrowOnEmpty,
+  leftArrowConfirmHint,
+  onHistoryUp,
+  onHistoryDown,
+  onHistoryReset,
+  mask = "",
+  maskWhole = false,
+  multiline = false,
+  disableBackslashReturn = false,
+  clearOnSubmit = true,
+  disableCtrlCClear = false,
+  cursorChar,
+  preserveTrailingWhitespace = false,
+  invert,
+  columns,
+  leadingPill,
+  onImagePaste: _onImagePaste,
+  disableCursorMovementForUpDownKeys = false,
+  disableEscapeDoublePress = false,
+  maxVisibleLines,
+  externalOffset,
+  onOffsetChange,
+  inputFilter,
+  getPastedContents,
+  getInputMode,
+  inlineGhostText,
+  dim,
+  virtualTexts,
+  isCursorOnCharacter = false,
+  editRelay,
+  commitEdit,
+  selectionAnchor,
+  selectionLinewise = false,
 }) {
-  let ke = useIsFullscreen(),
-    Ee = useKillRing();
-  if (env.terminal === "Apple_Terminal") Kt();
-  let He = externalOffset,
-    Ge = onOffsetChange,
-    N = leadingPill?.text ?? "",
-    cursor = Cursor.fromText(N + e, columns, N.length + He),
-    wt =
-      inlineGhostText && dim && inlineGhostText.insertPosition === He
-        ? { text: inlineGhostText.text, dim: dim }
-        : void 0,
-    xt = wt !== void 0 && He >= e.length,
-    rt = Q(
-      () =>
-        virtualTexts === void 0 || virtualTexts.length === 0 || e === "" || mask !== ""
-          ? void 0
-          : buildDisplayTextMapping({
-              buffer: N + e,
-              texts: offsetDecorations(xt ? rangesBefore(virtualTexts, e.length) : virtualTexts, N.length),
-              columns: columns,
-              side: isCursorOnCharacter ? "after" : "before",
-            }),
-      [virtualTexts, e, mask, N, xt, columns, isCursorOnCharacter],
-    ),
-    nt = !1,
-    st,
-    Ke = !1;
+  let isFullscreen = useIsFullscreen();
+  let killRing = useKillRing();
+  if (env.terminal === "Apple_Terminal") noopTextInput();
+  let He = externalOffset;
+  let Ge = onOffsetChange;
+  let text = leadingPill?.text ?? "";
+  let cursor = Cursor.fromText(text + e, columns, text.length + He);
+  let wt =
+    inlineGhostText && dim && inlineGhostText.insertPosition === He
+      ? {
+          text: inlineGhostText.text,
+          dim,
+        }
+      : undefined;
+  let xt = wt !== undefined && He >= e.length;
+  let rt = Q(
+    () =>
+      virtualTexts === undefined || virtualTexts.length === 0 || e === "" || mask !== ""
+        ? undefined
+        : buildDisplayTextMapping({
+            buffer: text + e,
+            texts: offsetDecorations(xt ? rangesBefore(virtualTexts, e.length) : virtualTexts, text.length),
+            columns,
+            side: isCursorOnCharacter ? "after" : "before",
+          }),
+    [virtualTexts, e, mask, text, xt, columns, isCursorOnCharacter],
+  );
+  let nt = false;
+  let st;
+  let Ke = false;
   function Oe(c) {
     return inputFilter && st ? inputFilter(c, st) : c;
   }
-  let { addNotification: addNotification, removeNotification: removeNotification } = useNotifications(),
-    { storageV5: storageV5 } = Me(),
-    [be] = y(createLeftArrowGestureState),
-    Ue = "left-arrow-again-for-agents",
-    Ve = R({ key: "Ctrl-C", pending: !1 }),
-    handleCtrlC = useDoublePress(
-      (show) => {
-        ((Ve.current.pending = show), onExitMessage?.(show, Ve.current.key));
-      },
-      () => onExit?.(),
-      () => {
-        if (!disableCtrlCClear && e) (onChange(""), Ge(0), onHistoryReset?.());
-      },
-    );
-  function yt(c) {
-    if (!Ve.current.pending) Ve.current.key = c;
+  let { addNotification, removeNotification } = useNotifications();
+  let { storageV5 } = useTheme_2();
+  let [state] = y(createLeftArrowGestureState);
+  let Ue = "left-arrow-again-for-agents";
+  let Ve = R({
+    key: "Ctrl-C",
+    pending: false,
+  });
+  let handleCtrlC = useDoublePress(
+    (show) => {
+      Ve.current.pending = show;
+      onExitMessage?.(show, Ve.current.key);
+    },
+    () => onExit?.(),
+    () => {
+      if (!disableCtrlCClear && e) {
+        onChange("");
+        Ge(0);
+        onHistoryReset?.();
+      }
+    },
+  );
+  function yt(key) {
+    if (!Ve.current.pending) Ve.current.key = key;
     handleCtrlC();
   }
   let handleEscape = useDoublePress(
@@ -424,44 +480,69 @@ function useTextInput({
       });
     },
     () => {
-      if ((onEscapeMessage?.(!1), removeNotification("escape-again-to-clear"), e)) {
+      onEscapeMessage?.(false);
+      removeNotification("escape-again-to-clear");
+      if (e) {
         if (historyOnClear && mask === "" && e.trim() !== "") {
           let c = getPastedContents
-              ? Do(getPastedContents(), (show) => show.type === "text" && show.unavailable === !0)
-              : void 0,
-            O = getInputMode?.(),
-            L = O !== void 0 ? prependModeCharacterToInput(e, O) : e,
-            ne = c ? { display: L, pastedContents: c } : L;
-          if (O !== void 0) ySe(ne, storageV5, { submitMode: O });
-          else ySe(ne, storageV5);
+            ? pickByHelper(getPastedContents(), (show) => show.type === "text" && show.unavailable === true)
+            : undefined;
+          let O = getInputMode?.();
+          let L = O !== undefined ? prependModeCharacterToInput(e, O) : e;
+          let ne = c
+            ? {
+                display: L,
+                pastedContents: c,
+              }
+            : L;
+          if (O !== undefined)
+            addHistoryEntry(ne, storageV5, {
+              submitMode: O,
+            });
+          else addHistoryEntry(ne, storageV5);
         }
-        (onChange(""), Ge(0), onHistoryReset?.());
+        onChange("");
+        Ge(0);
+        onHistoryReset?.();
       }
     },
   );
   function handleCtrlD() {
-    if (cursor.text === N && e === "") return (yt("Ctrl-D"), cursor);
+    if (cursor.text === text && e === "") {
+      yt("Ctrl-D");
+      return cursor;
+    }
     return cursor.del();
   }
   function killToLineEnd() {
-    if (N !== "" && cursor.offset === N.length) return Cursor.fromText(cursor.text.slice(N.length), columns);
+    if (text !== "" && cursor.offset === text.length)
+      return Cursor.fromText(cursor.text.slice(text.length), columns);
     return cursor.backspace();
   }
-  function _e(c, O) {
-    let L = c.startsWith(N) ? c.slice(N.length) : c;
-    return (
-      Ee.dispatch(mask === "" ? { type: "kill", text: L, direction: O } : { type: "interrupt" }),
-      announceDeletion(L, mask),
-      L
+  function _e(killed, direction) {
+    let L = killed.startsWith(text) ? killed.slice(text.length) : killed;
+    killRing.dispatch(
+      mask === ""
+        ? {
+            type: "kill",
+            text: L,
+            direction,
+          }
+        : {
+            type: "interrupt",
+          },
     );
+    announceDeletion(L, mask);
+    return L;
   }
-  function ut() {
-    let { cursor: cursor_2, killed: killed } = cursor.deleteToLineEnd(we("endOfLine"));
-    return (_e(killed, "append"), cursor_2);
+  function killToLineEnd_2() {
+    let { cursor: newCursor, killed } = cursor.deleteToLineEnd(we("endOfLine"));
+    _e(killed, "append");
+    return newCursor;
   }
   function St() {
-    let { cursor: cursor_2, killed: killed } = cursor.deleteToLineStart(we("startOfLine")),
-      L = _e(killed, "prepend");
+    let { cursor: newCursor, killed } = cursor.deleteToLineStart(we("startOfLine"));
+    let L = _e(killed, "prepend");
     if (mask === "" && L.length >= 3)
       addNotification({
         key: "kill-paste-hint",
@@ -471,108 +552,143 @@ function useTextInput({
         priority: "immediate",
         timeoutMs: 5000,
       });
-    return cursor_2;
+    return newCursor;
   }
   function Qt() {
-    let { cursor: cursor_2, killed: killed } = cursor.killWord();
-    return (_e(killed, "append"), cursor_2);
+    let { cursor: cursor_2, killed } = cursor.killWord();
+    _e(killed, "append");
+    return cursor_2;
   }
   function killToLineStart() {
-    let { cursor: cursor_2, killed: killed } = cursor.backwardKillWord();
-    return (_e(killed, "prepend"), cursor_2);
+    let { cursor: cursor_2, killed } = cursor.backwardKillWord();
+    _e(killed, "prepend");
+    return cursor_2;
   }
   function killWordBefore() {
-    let { cursor: cursor_2, killed: killed } = cursor.deleteWORDBefore();
-    return (_e(killed, "prepend"), cursor_2);
+    let { cursor: cursor_2, killed } = cursor.deleteWORDBefore();
+    _e(killed, "prepend");
+    return cursor_2;
   }
   function yank() {
-    let c = Oe(egt(Ee.state));
-    if (c.length > 0) {
-      let O = cursor.offset - N.length,
-        newCursor = cursor.insert(c);
-      return (Ee.dispatch({ type: "yank", start: O, length: c.length }), newCursor);
+    let text_2 = Oe(topOfKillRing(killRing.state));
+    if (text_2.length > 0) {
+      let start = cursor.offset - text.length;
+      let newCursor = cursor.insert(text_2);
+      killRing.dispatch({
+        type: "yank",
+        start,
+        length: text_2.length,
+      });
+      return newCursor;
     }
     return cursor;
   }
   function handleYankPop() {
-    let c = nextYankPop(Ee.state);
-    if (!c) return cursor;
-    let { text: text, length: length } = c,
-      ne = N.length + c.start,
-      me = Oe(text);
-    Ee.dispatch({ type: "yankPop" });
-    let before = cursor.text.slice(0, ne),
-      after = cursor.text.slice(ne + length),
-      fr = before + me + after,
-      dr = ne + me.length;
-    return (Ee.dispatch({ type: "updateYankLength", length: me.length }), Cursor.fromText(fr, columns, dr));
+    let popResult = nextYankPop(killRing.state);
+    if (!popResult) return cursor;
+    let { text: text_2, length } = popResult;
+    let start = text.length + popResult.start;
+    let text_3 = Oe(text_2);
+    killRing.dispatch({
+      type: "yankPop",
+    });
+    let before = cursor.text.slice(0, start);
+    let after = cursor.text.slice(start + length);
+    let newText = before + text_3 + after;
+    let newOffset = start + text_3.length;
+    killRing.dispatch({
+      type: "updateYankLength",
+      length: text_3.length,
+    });
+    return Cursor.fromText(newText, columns, newOffset);
   }
   let handleCtrl = mapInput([
-      ["a", () => cursor.startOfLogicalLine()],
-      ["b", () => cursor.left()],
-      ["c", () => (yt("Ctrl-C"), cursor)],
-      ["d", handleCtrlD],
-      ["e", () => cursor.endOfLogicalLine()],
-      ["f", () => cursor.right()],
-      ["h", killToLineEnd],
-      ["k", ut],
-      ["n", () => downOrHistoryDown()],
-      ["p", () => upOrHistoryUp()],
-      ["u", St],
-      ["w", killWordBefore],
-      ["y", yank],
-    ]),
-    handleMeta = mapInput([
-      ["b", () => cursor.backwardWord()],
-      ["f", () => cursor.forwardWord()],
-      ["d", Qt],
-      ["y", handleYankPop],
-    ]);
-  function handleEnter({ meta: meta, shift: O }) {
-    if (multiline && !disableBackslashReturn && cursor.offset > 0 && cursor.text[cursor.offset - 1] === "\\")
-      return (
-        markBackslashReturnUsed(storageV5),
-        cursor.backspace().insert(
-          Oe(`
+    ["a", () => cursor.startOfLogicalLine()],
+    ["b", () => cursor.left()],
+    [
+      "c",
+      () => {
+        yt("Ctrl-C");
+        return cursor;
+      },
+    ],
+    ["d", handleCtrlD],
+    ["e", () => cursor.endOfLogicalLine()],
+    ["f", () => cursor.right()],
+    ["h", killToLineEnd],
+    ["k", killToLineEnd_2],
+    ["n", () => downOrHistoryDown()],
+    ["p", () => upOrHistoryUp()],
+    ["u", St],
+    ["w", killWordBefore],
+    ["y", yank],
+  ]);
+  let handleMeta = mapInput([
+    ["b", () => cursor.backwardWord()],
+    ["f", () => cursor.forwardWord()],
+    ["d", Qt],
+    ["y", handleYankPop],
+  ]);
+  function handleEnter({ meta, shift: O }) {
+    if (
+      multiline &&
+      !disableBackslashReturn &&
+      cursor.offset > 0 &&
+      cursor.text[cursor.offset - 1] === "\\"
+    ) {
+      markBackslashReturnUsed(storageV5);
+      return cursor.backspace().insert(
+        Oe(`
 `),
-        )
       );
+    }
     if (meta || O)
       return cursor.insert(
         Oe(`
 `),
       );
-    if (Vnn())
+    if (needsShiftWorkaround())
       return cursor.insert(
         Oe(`
 `),
       );
-    if (onSubmit) (onSubmit(cursor.text.slice(N.length)), (nt = !0));
+    if (onSubmit) {
+      onSubmit(cursor.text.slice(text.length));
+      nt = true;
+    }
     return cursor;
   }
   function Ye() {
-    be.editedEmptyAtMs = Date.now();
+    state.editedEmptyAtMs = Date.now();
   }
   function Et() {
-    if (be.armedAtMs === 0) return;
-    ((be.armedAtMs = 0), removeNotification(Ue));
+    if (state.armedAtMs === 0) return;
+    state.armedAtMs = 0;
+    removeNotification(Ue);
   }
   function ze() {
-    return rt !== void 0 && cursor.text === rt.text.draft ? rt : void 0;
+    return rt !== undefined && cursor.text === rt.text.draft ? rt : undefined;
   }
   function we(key) {
     return ze()?.rowMoved(cursor, key) ?? cursor[key]();
   }
   function upOrHistoryUp() {
-    if (disableCursorMovementForUpDownKeys) return (Ye(), onHistoryUp?.(), cursor);
+    if (disableCursorMovementForUpDownKeys) {
+      Ye();
+      onHistoryUp?.();
+      return cursor;
+    }
     let c = ze();
     if (
       onHistoryUp &&
       (c
-        ? c.rowOf(cursor.offset) <= c.rowOf(N.length)
-        : cursor.getPosition().line <= cursor.measuredText.getPositionFromOffset(N.length).line)
-    )
-      return (Ye(), onHistoryUp(), cursor);
+        ? c.rowOf(cursor.offset) <= c.rowOf(text.length)
+        : cursor.getPosition().line <= cursor.measuredText.getPositionFromOffset(text.length).line)
+    ) {
+      Ye();
+      onHistoryUp();
+      return cursor;
+    }
     let O = we("up");
     if (!O.equals(cursor)) return O;
     if (multiline) {
@@ -582,17 +698,24 @@ function useTextInput({
     return cursor;
   }
   function downOrHistoryDown() {
-    if (disableCursorMovementForUpDownKeys) return (Ye(), onHistoryDown?.(), cursor);
+    if (disableCursorMovementForUpDownKeys) {
+      Ye();
+      onHistoryDown?.();
+      return cursor;
+    }
     let c = ze();
     if (
       onHistoryDown &&
       (c
         ? c.rowOf(cursor.offset) >= c.lastRow()
         : cursor.getPosition().line >= cursor.measuredText.lineCount - 1)
-    )
-      return (Ye(), onHistoryDown(), cursor);
-    let O = we("down");
-    if (!O.equals(cursor)) return O;
+    ) {
+      Ye();
+      onHistoryDown();
+      return cursor;
+    }
+    let cursorDown = we("down");
+    if (!cursorDown.equals(cursor)) return cursorDown;
     if (multiline) {
       let cursorDownLogical = cursor.downLogicalLine();
       if (!cursorDownLogical.equals(cursor)) return cursorDownLogical;
@@ -600,11 +723,11 @@ function useTextInput({
     return cursor;
   }
   function mapKey(key) {
-    if (key.ctrl && (key.key === "k" || key.key === "u" || key.key === "w")) return !0;
-    if (key.meta && !key.ctrl && key.key === "d") return !0;
-    if (key.key === "backspace" && (key.meta || key.superKey || key.ctrl)) return !0;
-    if (key.key === "delete" && (key.meta || key.superKey)) return !0;
-    return !1;
+    if (key.ctrl && (key.key === "k" || key.key === "u" || key.key === "w")) return true;
+    if (key.meta && !key.ctrl && key.key === "d") return true;
+    if (key.key === "backspace" && (key.meta || key.superKey || key.ctrl)) return true;
+    if (key.key === "delete" && (key.meta || key.superKey)) return true;
+    return false;
   }
   function lr(input) {
     return (input.ctrl || input.meta) && input.key === "y";
@@ -613,41 +736,42 @@ function useTextInput({
     switch (key.name) {
       case "escape":
         if (disableEscapeDoublePress) return;
-        return (handleEscape(), cursor);
+        handleEscape();
+        return cursor;
       case "left":
         if (key.superKey) return we("startOfLine");
         if (key.ctrl || key.meta || key.fn) return cursor.backwardWord();
-        if (onLeftArrowOnEmpty && !key.shift && cursor.text === N) {
-          let now = Date.now(),
-            ne = decideLeftArrowGesture(be, now, key.soloKeypress),
-            me = be.armedAtMs === 0 ? void 0 : now - be.absorbAnchorMs;
-          switch ((applyLeftArrowGesture(be, ne, now), logLeftArrowGesture(ne, now, be), ne)) {
+        if (onLeftArrowOnEmpty && !key.shift && cursor.text === text) {
+          let now = Date.now();
+          let decision = decideLeftArrowGesture(state, now, key.soloKeypress);
+          let me = state.armedAtMs === 0 ? undefined : now - state.absorbAnchorMs;
+          switch (
+            (applyLeftArrowGesture(state, decision, now), logLeftArrowGesture(decision, now, state), decision)
+          ) {
             case "fire":
-              return (removeNotification(Ue), onLeftArrowOnEmpty(me), cursor);
+              removeNotification(Ue);
+              onLeftArrowOnEmpty(me);
+              return cursor;
             case "arm":
-              return (
-                addNotification({
-                  key: Ue,
-                  kind: "feedback",
-                  text: leftArrowConfirmHint ?? "Press \u2190 again",
-                  priority: "immediate",
-                  timeoutMs: LEFT_ARROW_ARM_WINDOW_MS,
-                }),
-                cursor
-              );
+              addNotification({
+                key: Ue,
+                kind: "feedback",
+                text: leftArrowConfirmHint ?? "Press \u2190 again",
+                priority: "immediate",
+                timeoutMs: LEFT_ARROW_ARM_WINDOW_MS,
+              });
+              return cursor;
             case "absorb":
               return cursor;
             case "attach-arm":
-              return (
-                addNotification({
-                  key: Ue,
-                  kind: "feedback",
-                  text: LEFT_ARROW_DETACH_HINT,
-                  priority: "immediate",
-                  timeoutMs: LEFT_ARROW_ARM_WINDOW_MS,
-                }),
-                cursor
-              );
+              addNotification({
+                key: Ue,
+                kind: "feedback",
+                text: LEFT_ARROW_DETACH_HINT,
+                priority: "immediate",
+                timeoutMs: LEFT_ARROW_ARM_WINDOW_MS,
+              });
+              return cursor;
             case "attach-absorb":
               return cursor;
             case "reject":
@@ -670,8 +794,8 @@ function useTextInput({
         if (key.meta || key.ctrl) return killToLineStart();
         return killToLineEnd();
       case "delete":
-        if (key.superKey) return ut();
-        if (key.meta) return ut();
+        if (key.superKey) return killToLineEnd_2();
+        if (key.meta) return killToLineEnd_2();
         return cursor.del();
       case "home":
         if (key.ctrl) return;
@@ -680,10 +804,10 @@ function useTextInput({
         if (key.ctrl) return;
         return we("endOfLine");
       case "pagedown":
-        if (ke || key.ctrl) return;
+        if (isFullscreen || key.ctrl) return;
         return we("endOfLine");
       case "pageup":
-        if (ke || key.ctrl) return;
+        if (isFullscreen || key.ctrl) return;
         return we("startOfLine");
       case "return":
         if (key.ctrl) return;
@@ -706,50 +830,77 @@ function useTextInput({
     if (IGNORED_KEY_NAMES.has(key.name)) return;
     if (input.length === 0) return;
     if (
-      getInputMode !== void 0 &&
-      cursor.offset === N.length &&
+      getInputMode !== undefined &&
+      cursor.offset === text.length &&
       isBashModeChar(input) &&
       getInputMode() !== getModeFromInput(input)
-    )
-      return ((Ke = !0), cursor.insert(input).left());
+    ) {
+      Ke = true;
+      return cursor.insert(input).left();
+    }
     return cursor.insert(input);
   }
-  function cr(c) {
-    ((st = c), (Ke = !1));
-    let O = inputFilter ? inputFilter(c.key, c) : c.key;
-    if (O === "" && c.key !== "") {
-      c.preventDefault();
+  function cr(event) {
+    st = event;
+    Ke = false;
+    let O = inputFilter ? inputFilter(event.key, event) : event.key;
+    if (O === "" && event.key !== "") {
+      event.preventDefault();
       return;
     }
-    if (!mapKey(c) && !lr(c)) Ee.dispatch({ type: "interrupt" });
-    if (!(c.name === "left" && !c.ctrl && !c.meta && !c.fn && !c.superKey && !c.shift)) Et();
-    let L = isKillKey(c, O);
-    if (L === void 0) return;
-    if ((c.preventDefault(), !cursor.equals(L))) {
-      let startsWith = L.text.startsWith(N);
-      if (startsWith && L.offset < N.length) L = new Cursor(L.measuredText, N.length);
-      let sliced = cursor.text.slice(N.length),
-        Ae = startsWith ? L.text.slice(N.length) : L.text,
-        qe = L.offset - (startsWith ? N.length : 0);
-      if (sliced !== "" && Ae === "") be.editedEmptyAtMs = Date.now();
+    if (!mapKey(event) && !lr(event))
+      killRing.dispatch({
+        type: "interrupt",
+      });
+    if (!(
+      event.name === "left" &&
+      !event.ctrl &&
+      !event.meta &&
+      !event.fn &&
+      !event.superKey &&
+      !event.shift
+    ))
+      Et();
+    let L = isKillKey(event, O);
+    if (L === undefined) return;
+    event.preventDefault();
+    if (!cursor.equals(L)) {
+      let ne = L.text.startsWith(text);
+      if (ne && L.offset < text.length) L = new Cursor(L.measuredText, text.length);
+      let sliced = cursor.text.slice(text.length);
+      let Ae = ne ? L.text.slice(text.length) : L.text;
+      let qe = L.offset - (ne ? text.length : 0);
+      if (sliced !== "" && Ae === "") state.editedEmptyAtMs = Date.now();
       if (sliced !== Ae)
-        if (commitEdit !== void 0 && !Ke) commitEdit(() => onChange(Ae));
+        if (commitEdit !== undefined && !Ke) commitEdit(() => onChange(Ae));
         else onChange(Ae);
-      if ((Ge(qe), editRelay?.isRecording() === !0 && !Ke))
+      Ge(qe);
+      if (editRelay?.isRecording() === true && !Ke)
         editRelay.record({
-          before: { text: sliced, cursor: Math.max(0, cursor.offset - N.length) },
-          after: { text: Ae, cursor: qe },
-          key: c,
+          before: {
+            text: sliced,
+            cursor: Math.max(0, cursor.offset - text.length),
+          },
+          after: {
+            text: Ae,
+            cursor: qe,
+          },
+          key: event,
         });
-      if (((cursor = L), !startsWith)) ((N = ""), leadingPill?.onDelete());
+      cursor = L;
+      if (!ne) {
+        text = "";
+        leadingPill?.onDelete();
+      }
     }
     if (nt) {
-      if (((nt = !1), clearOnSubmit)) cursor = Cursor.fromText(N, columns, N.length);
+      nt = false;
+      if (clearOnSubmit) cursor = Cursor.fromText(text, columns, text.length);
     }
   }
-  let Ce = ze(),
-    ve = Ce?.cursorOver(cursor) ?? cursor,
-    cursorPos = ve.getPosition();
+  let Ce = ze();
+  let ve = Ce?.cursorOver(cursor) ?? cursor;
+  let cursorPos = ve.getPosition();
   return {
     handleKeyDown: cr,
     renderedValue: ve.render(
@@ -758,11 +909,11 @@ function useTextInput({
       invert,
       wt,
       maxVisibleLines,
-      selectionAnchor === void 0 || selectionAnchor === null
-        ? void 0
+      selectionAnchor === undefined || selectionAnchor === null
+        ? undefined
         : Ce
-          ? draftToDisplayOffset(Ce.text, N.length + selectionAnchor, "after")
-          : N.length + selectionAnchor,
+          ? draftToDisplayOffset(Ce.text, text.length + selectionAnchor, "after")
+          : text.length + selectionAnchor,
       selectionLinewise,
       preserveTrailingWhitespace,
       Ce?.text.spans,
@@ -773,21 +924,23 @@ function useTextInput({
     cursorLine: cursorPos.line - ve.getViewportStartLine(maxVisibleLines),
     cursorColumn: cursorPos.column,
     renderedRowStartOffsets: ve.getRenderedRowStartOffsets(maxVisibleLines),
-    shown: Ce && { text: Ce.text, cursorOffset: ve.offset },
+    shown: Ce && {
+      text: Ce.text,
+      cursorOffset: ve.offset,
+    },
     noteKeystrokeEmptied: () => {
-      be.editedEmptyAtMs = Date.now();
+      state.editedEmptyAtMs = Date.now();
     },
     disarmLeftArrowConfirm: Et,
   };
 }
-
 export {
   HUMAN_CADENCE_MS,
   LEFT_ARROW_BACK_HINT,
   isNfcStable,
   rangesBefore,
   createDisplayCursor,
-  Vnn,
+  needsShiftWorkaround,
   logWrapFallbackOnce,
   useTextInput,
   createLeftArrowGestureState,

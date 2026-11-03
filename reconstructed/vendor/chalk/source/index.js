@@ -5,159 +5,202 @@
  * pieces: chunk-4ymxyb4g.js (14)
  * attribution: esm-layout 5, esm-fingerprint 9
  */
-import { M, h } from "./vendor/supports-color/index.js";
+import { supportsColor_default, h } from "./vendor/supports-color/index.js";
 
 //@ chunk-4ymxyb4g.js:4788-4951 esm-layout
-function S(e, r, t) {
-  let index = e.indexOf(r);
+function S(e, close, open) {
+  let index = e.indexOf(close);
   if (index === -1) return e;
-  let n = r.length,
-    a = 0,
-    c = "";
-  do ((c += e.slice(a, index) + r + t), (a = index + n), (index = e.indexOf(r, a)));
-  while (index !== -1);
-  return ((c += e.slice(a)), c);
+  let n = close.length;
+  let a = 0;
+  let c = "";
+  do {
+    c += e.slice(a, index) + close + open;
+    a = index + n;
+    index = e.indexOf(close, a);
+  } while (index !== -1);
+  c += e.slice(a);
+  return c;
 }
 //@ chunk-4ymxyb4g.js:4951-5109 esm-layout
-function L(e, r, t, o) {
-  let n = 0,
-    a = "";
+function L(e, closeAll, openAll, lfIndex) {
+  let n = 0;
+  let a = "";
   do {
-    let c = e[o - 1] === "\r";
-    ((a +=
-      e.slice(n, c ? o - 1 : o) +
-      r +
+    let c = e[lfIndex - 1] === "\r";
+    a +=
+      e.slice(n, c ? lfIndex - 1 : lfIndex) +
+      closeAll +
       (c
         ? `\r
 `
         : `
 `) +
-      t),
-      (n = o + 1),
-      (o = e.indexOf(
-        `
+      openAll;
+    n = lfIndex + 1;
+    lfIndex = e.indexOf(
+      `
 `,
-        n,
-      )));
-  } while (o !== -1);
-  return ((a += e.slice(n)), a);
+      n,
+    );
+  } while (lfIndex !== -1);
+  a += e.slice(n);
+  return a;
 }
 //@ chunk-4ymxyb4g.js:5109-5455 esm-fingerprint
-var { stdout: stdout, stderr: stderr } = M,
-  R = Symbol("GENERATOR"),
-  m = Symbol("STYLER"),
-  d = Symbol("IS_EMPTY"),
-  k = ["ansi", "ansi", "ansi256", "ansi16m"],
-  create = Object.create(null),
-  H = (e, r = {}) => {
-    if (r.level && !(Number.isInteger(r.level) && r.level >= 0 && r.level <= 3))
-      throw Error("The `level` option should be an integer from 0 to 3");
-    let t = stdout ? stdout.level : 0;
-    e.level = r.level === void 0 ? t : r.level;
-  };
+var { stdout: stdoutColor, stderr: stderrColor } = supportsColor_default;
+var GENERATOR = Symbol("GENERATOR");
+var STYLER = Symbol("STYLER");
+var IS_EMPTY = Symbol("IS_EMPTY");
+var levelMapping = ["ansi", "ansi", "ansi256", "ansi16m"];
+var styles = Object.create(null);
+var H = (chalk, options = {}) => {
+  if (options.level && !(Number.isInteger(options.level) && options.level >= 0 && options.level <= 3))
+    throw Error("The `level` option should be an integer from 0 to 3");
+  let level = stdoutColor ? stdoutColor.level : 0;
+  chalk.level = options.level === undefined ? level : options.level;
+};
 //@ chunk-4ymxyb4g.js:5455-5493 esm-layout
-class xoo {
-  constructor(e) {
-    return w(e);
+class Chalk {
+  constructor(options) {
+    return chalkFactory(options);
   }
 }
 //@ chunk-4ymxyb4g.js:5493-5585 esm-fingerprint
-var w = (e) => {
-  let r = (...t) => t.join(" ");
-  return (H(r, e), Object.setPrototypeOf(r, g.prototype), r);
+var chalkFactory = (options) => {
+  let chalk = (...strings) => strings.join(" ");
+  H(chalk, options);
+  Object.setPrototypeOf(chalk, createChalk.prototype);
+  return chalk;
 };
 //@ chunk-4ymxyb4g.js:5585-5611 esm-layout
-function g(e) {
-  return w(e);
+function createChalk(options) {
+  return chalkFactory(options);
 }
 //@ chunk-4ymxyb4g.js:5611-5665 esm-fingerprint
-Object.setPrototypeOf(g.prototype, Function.prototype);
+Object.setPrototypeOf(createChalk.prototype, Function.prototype);
 //@ chunk-4ymxyb4g.js:5665-5809 esm-fingerprint
-for (let [e, r] of Object.entries(h))
-  create[e] = {
+for (let [styleName, style] of Object.entries(h))
+  styles[styleName] = {
     get() {
-      let t = C(this, y(r.open, r.close, this[m]), this[d]);
-      return (Object.defineProperty(this, e, { value: t }), t);
+      let builder = createBuilder(this, createStyler(style.open, style.close, this[STYLER]), this[IS_EMPTY]);
+      Object.defineProperty(this, styleName, {
+        value: builder,
+      });
+      return builder;
     },
   };
 //@ chunk-4ymxyb4g.js:5809-5910 esm-fingerprint
-create.visible = {
+styles.visible = {
   get() {
-    let e = C(this, this[m], !0);
-    return (Object.defineProperty(this, "visible", { value: e }), e);
+    let builder = createBuilder(this, this[STYLER], true);
+    Object.defineProperty(this, "visible", {
+      value: builder,
+    });
+    return builder;
   },
 };
 //@ chunk-4ymxyb4g.js:5910-6184 esm-fingerprint
-var T = (e, r, t, ...o) => {
-    if (e === "rgb") {
-      if (r === "ansi16m") return h[t].ansi16m(...o);
-      if (r === "ansi256") return h[t].ansi256(h.rgbToAnsi256(...o));
-      return h[t].ansi(h.rgbToAnsi(...o));
-    }
-    if (e === "hex") return T("rgb", r, t, ...h.hexToRgb(...o));
-    return h[t][e](...o);
-  },
-  J = ["rgb", "hex", "ansi256"];
+var getModelAnsi = (model, level, type, ...arguments_) => {
+  if (model === "rgb") {
+    if (level === "ansi16m") return h[type].ansi16m(...arguments_);
+    if (level === "ansi256") return h[type].ansi256(h.rgbToAnsi256(...arguments_));
+    return h[type].ansi(h.rgbToAnsi(...arguments_));
+  }
+  if (model === "hex") return getModelAnsi("rgb", level, type, ...h.hexToRgb(...arguments_));
+  return h[type][model](...arguments_);
+};
+var usedModels = ["rgb", "hex", "ansi256"];
 //@ chunk-4ymxyb4g.js:6184-6513 esm-fingerprint
-for (let e of J) {
-  create[e] = {
+for (let model of usedModels) {
+  styles[model] = {
     get() {
-      let { level: level } = this;
-      return function (...o) {
-        let n = y(T(e, k[level], "color", ...o), h.color.close, this[m]);
-        return C(this, n, this[d]);
+      let { level } = this;
+      return function (...arguments_) {
+        let styler = createStyler(
+          getModelAnsi(model, levelMapping[level], "color", ...arguments_),
+          h.color.close,
+          this[STYLER],
+        );
+        return createBuilder(this, styler, this[IS_EMPTY]);
       };
     },
   };
-  let r = "bg" + e[0].toUpperCase() + e.slice(1);
-  create[r] = {
+  let r = "bg" + model[0].toUpperCase() + model.slice(1);
+  styles[r] = {
     get() {
-      let { level: level } = this;
-      return function (...o) {
-        let n = y(T(e, k[level], "bgColor", ...o), h.bgColor.close, this[m]);
-        return C(this, n, this[d]);
+      let { level } = this;
+      return function (...arguments_) {
+        let styler = createStyler(
+          getModelAnsi(model, levelMapping[level], "bgColor", ...arguments_),
+          h.bgColor.close,
+          this[STYLER],
+        );
+        return createBuilder(this, styler, this[IS_EMPTY]);
       };
     },
   };
 }
 //@ chunk-4ymxyb4g.js:6513-7121 esm-fingerprint
-var defineProperties = Object.defineProperties(() => {}, {
-    ...create,
-    level: {
-      enumerable: !0,
-      get() {
-        return this[R].level;
-      },
-      set(e) {
-        this[R].level = e;
-      },
+var proto = Object.defineProperties(() => {}, {
+  ...styles,
+  level: {
+    enumerable: true,
+    get() {
+      return this[GENERATOR].level;
     },
-  }),
-  y = (e, r, t) => {
-    let o, n;
-    if (t === void 0) ((o = e), (n = r));
-    else ((o = t.openAll + e), (n = r + t.closeAll));
-    return { open: e, close: r, openAll: o, closeAll: n, parent: t };
+    set(level) {
+      this[GENERATOR].level = level;
+    },
   },
-  C = (e, r, t) => {
-    let o = (...n) => Q(o, n.length === 1 ? "" + n[0] : n.join(" "));
-    return (Object.setPrototypeOf(o, defineProperties), (o[R] = e), (o[m] = r), (o[d] = t), o);
-  },
-  Q = (e, r) => {
-    if (e.level <= 0 || !r) return e[d] ? "" : r;
-    let t = e[m];
-    if (t === void 0) return r;
-    let { openAll: openAll, closeAll: closeAll } = t;
-    if (r.includes("\x1B")) while (t !== void 0) ((r = S(r, t.close, t.open)), (t = t.parent));
-    let index = r.indexOf(`
-`);
-    if (index !== -1) r = L(r, closeAll, openAll, index);
-    return openAll + r + closeAll;
+});
+var createStyler = (open, close, parent) => {
+  let openAll;
+  let closeAll;
+  if (parent === undefined) {
+    openAll = open;
+    closeAll = close;
+  } else {
+    openAll = parent.openAll + open;
+    closeAll = close + parent.closeAll;
+  }
+  return {
+    open,
+    close,
+    openAll,
+    closeAll,
+    parent,
   };
+};
+var createBuilder = (e, _styler, _isEmpty) => {
+  let builder = (...arguments_) =>
+    applyStyle(builder, arguments_.length === 1 ? "" + arguments_[0] : arguments_.join(" "));
+  Object.setPrototypeOf(builder, proto);
+  builder[GENERATOR] = e;
+  builder[STYLER] = _styler;
+  builder[IS_EMPTY] = _isEmpty;
+  return builder;
+};
+var applyStyle = (e, string) => {
+  if (e.level <= 0 || !string) return e[IS_EMPTY] ? "" : string;
+  let styler = e[STYLER];
+  if (styler === undefined) return string;
+  let { openAll, closeAll } = styler;
+  if (string.includes("\x1B"))
+    while (styler !== undefined) {
+      string = S(string, styler.close, styler.open);
+      styler = styler.parent;
+    }
+  let lfIndex = string.indexOf(`
+`);
+  if (lfIndex !== -1) string = L(string, closeAll, openAll, lfIndex);
+  return openAll + string + closeAll;
+};
 //@ chunk-4ymxyb4g.js:7121-7160 esm-fingerprint
-Object.defineProperties(g.prototype, create);
+Object.defineProperties(createChalk.prototype, styles);
 //@ chunk-4ymxyb4g.js:7160-7196 esm-layout
-var Z = g(),
-  Re = g({ level: stderr ? stderr.level : 0 });
-
-export { Z, xoo };
+var Z = createChalk();
+var chalkStderr = createChalk({
+  level: stderrColor ? stderrColor.level : 0,
+});
+export { Z, Chalk };

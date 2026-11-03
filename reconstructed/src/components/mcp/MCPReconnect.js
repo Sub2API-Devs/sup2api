@@ -10,194 +10,258 @@
  */
 import { w } from "../../../vendor/react/compiler-runtime.js";
 import { sanitizeTelemetryString } from "../../utils/sanitization.js";
-import { useTheme, Me } from "../design-system/ThemeProvider.js";
-import { Cr, useAppStateSession } from "../../state/AppState.js";
+import { useTheme, useTheme_2 } from "../design-system/ThemeProvider.js";
+import { useAppStoreDirect, useAppStateSession } from "../../state/AppState.js";
 import { useMcpReconnect } from "../../services/mcp/MCPConnectionManager.js";
 import { useHost } from "../../context/session.js";
 import { y, P } from "../../../vendor/react/cjs/react.production.js";
-import { uo, sanitizeErrorDetail, normalizeMcpServerName } from "../../services/api/deferredToolsState.js";
+import {
+  normalizeServerNameShort,
+  sanitizeErrorDetail,
+  normalizeMcpServerName,
+} from "../../services/api/deferredToolsState.js";
 import { toggleStateOf, disabledEnableInMcpText } from "../../services/mcp/mcpToggleMessages.js";
 import { isUnattendedBgSession } from "../../utils/concurrentSessions.js";
 import { parkCommandForAttacher } from "../../services/mcp/mcpReconnectPark.js";
-import { c6 } from "../fleet/sessionAttention.js";
+import { truncateAttentionText } from "../fleet/sessionAttention.js";
 import { WireSafeControlError } from "../../utils/errors.js";
 import { redactMcpErrorDetail } from "../../services/mcp/mcpServerOrigin.js";
 import { isBridgeOrTransport } from "../../cli/transportState.js";
 import { logForDebugging } from "../../utils/debug.js";
-import { r, e } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default_2,
+  jsxProd_default,
+} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Box } from "../../ink/components/Text.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { WorkerBadge } from "../permissions/WorkerBadge.js";
 import { color } from "../design-system/color.js";
-import { re } from "../../../vendor/@inquirer/figures/dist/esm/index.js";
+import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/index.js";
 
 //@ chunk-cpqpnzp4.js:37997-40831 fingerprint = MCPReconnect (0.613)
-function MCPReconnect(t0) {
-  let $ = w(30),
-    { serverName: serverName, onComplete: onComplete } = t0,
-    v;
-  if ($[0] !== onComplete)
-    ((v = (m, ...k) => {
+function MCPReconnect(props) {
+  let $ = w(30);
+  let { serverName, onComplete } = props;
+  let v;
+  if ($[0] !== onComplete) {
+    v = (m, ...k) => {
       let f = k;
       return onComplete(typeof m === "string" ? sanitizeTelemetryString(m) : m, ...f);
-    }),
-      ($[0] = onComplete),
-      ($[1] = v));
-  else v = $[1];
-  let b = v,
-    [N] = useTheme(),
-    store = Cr(),
-    reconnectMcpServer = useMcpReconnect(),
-    { storageV5: storageV5 } = Me(),
-    ne = useHost(),
-    Y = useAppStateSession(),
-    [K, L] = y(!0),
-    [T, X] = y(null),
-    k,
-    z;
+    };
+    $[0] = onComplete;
+    $[1] = v;
+  } else v = $[1];
+  let b = v;
+  let [theme] = useTheme();
+  let store = useAppStoreDirect();
+  let reconnectMcpServer = useMcpReconnect();
+  let { storageV5 } = useTheme_2();
+  let host = useHost();
+  let appStateSession = useAppStateSession();
+  let [isReconnecting, setIsReconnecting] = y(true);
+  let [error, setError] = y(null);
+  let k;
+  let t2;
   if (
-    $[2] !== Y ||
-    $[3] !== ne ||
+    $[2] !== appStateSession ||
+    $[3] !== host ||
     $[4] !== b ||
     $[5] !== reconnectMcpServer ||
     $[6] !== serverName ||
     $[7] !== storageV5 ||
     $[8] !== store
-  )
-    ((k = () => {
-      let attemptReconnect = async function Ne() {
+  ) {
+    k = () => {
+      let attemptReconnect = async function attemptReconnect() {
         try {
           let server = store.getState().mcp.clients.find((client) => client.name === serverName);
           if (!server) {
-            (X(`MCP server "${uo(serverName)}" not found`),
-              L(!1),
-              b(`MCP server "${uo(serverName)}" not found`));
+            setError(`MCP server "${normalizeServerNameShort(serverName)}" not found`);
+            setIsReconnecting(false);
+            b(`MCP server "${normalizeServerNameShort(serverName)}" not found`);
             return;
           }
           if (toggleStateOf(server) === "disabled") {
             let ke = disabledEnableInMcpText(serverName);
-            (X(ke), L(!1), b(ke));
+            setError(ke);
+            setIsReconnecting(false);
+            b(ke);
             return;
           }
           let result = await reconnectMcpServer(serverName);
           Pe: switch (result.client.type) {
             case "connected": {
-              (L(!1), b(`Successfully reconnected to ${uo(serverName)}`));
+              setIsReconnecting(false);
+              b(`Successfully reconnected to ${normalizeServerNameShort(serverName)}`);
               break Pe;
             }
             case "needs-auth": {
-              if ((X(`${uo(serverName)} requires authentication`), L(!1), isUnattendedBgSession())) {
+              setError(`${normalizeServerNameShort(serverName)} requires authentication`);
+              setIsReconnecting(false);
+              if (isUnattendedBgSession()) {
                 let xe = await parkCommandForAttacher(
-                  ne,
-                  c6(`authenticate ${uo(serverName)} \u2014 open this session and run /mcp`),
+                  host,
+                  truncateAttentionText(
+                    `authenticate ${normalizeServerNameShort(serverName)} \u2014 open this session and run /mcp`,
+                  ),
                   "MCP authentication needed",
                   storageV5,
                 );
                 b(
-                  `${uo(serverName)} requires authentication. Open this session and run /mcp to authenticate.` +
+                  `${normalizeServerNameShort(serverName)} requires authentication. Open this session and run /mcp to authenticate.` +
                     (xe ? ' It now shows "needs input" in agent view.' : ""),
                 );
-              } else b(`${uo(serverName)} requires authentication. Use /mcp to authenticate.`);
+              } else
+                b(
+                  `${normalizeServerNameShort(serverName)} requires authentication. Use /mcp to authenticate.`,
+                );
               break Pe;
             }
             case "cached":
             case "pending":
             case "failed":
             case "disabled": {
-              (X(`Failed to reconnect to ${uo(serverName)}`),
-                L(!1),
-                b(`Failed to reconnect to ${uo(serverName)}`));
+              setError(`Failed to reconnect to ${normalizeServerNameShort(serverName)}`);
+              setIsReconnecting(false);
+              b(`Failed to reconnect to ${normalizeServerNameShort(serverName)}`);
               break Pe;
             }
             default: {
               result.client;
             }
           }
-        } catch (t3) {
-          let te = t3;
-          let Ie = te instanceof Error ? te.message : String(te);
-          let B = store.getState().mcp.clients.find((client) => client.name === serverName)?.config;
+        } catch (error) {
+          let err = error;
+          let Ie = err instanceof Error ? err.message : String(err);
+          let config = store.getState().mcp.clients.find((client) => client.name === serverName)?.config;
           let x =
-            te instanceof WireSafeControlError
+            err instanceof WireSafeControlError
               ? Ie
-              : B
-                ? redactMcpErrorDetail(serverName, B, Ie)
+              : config
+                ? redactMcpErrorDetail(serverName, config, Ie)
                 : "[error detail unavailable: server configuration could not be located]";
-          if ((X(sanitizeErrorDetail(x)), L(!1), te instanceof WireSafeControlError))
-            b(normalizeMcpServerName(x));
-          else if (isBridgeOrTransport(Y))
-            (logForDebugging(`mcp reconnect (typed) error for ${sanitizeTelemetryString(serverName)}: ${x}`, {
+          setError(sanitizeErrorDetail(x));
+          setIsReconnecting(false);
+          if (err instanceof WireSafeControlError) b(normalizeMcpServerName(x));
+          else if (isBridgeOrTransport(appStateSession)) {
+            logForDebugging(`mcp reconnect (typed) error for ${sanitizeTelemetryString(serverName)}: ${x}`, {
               level: "error",
-            }),
-              b(`Error reconnecting to ${uo(serverName)} (detail withheld on this connection).`));
-          else b(`Error: ${normalizeMcpServerName(x)}`);
+            });
+            b(
+              `Error reconnecting to ${normalizeServerNameShort(serverName)} (detail withheld on this connection).`,
+            );
+          } else b(`Error: ${normalizeMcpServerName(x)}`);
         }
       };
       attemptReconnect();
-    }),
-      (z = [serverName, reconnectMcpServer, store, b, storageV5, ne, Y]),
-      ($[2] = Y),
-      ($[3] = ne),
-      ($[4] = b),
-      ($[5] = reconnectMcpServer),
-      ($[6] = serverName),
-      ($[7] = storageV5),
-      ($[8] = store),
-      ($[9] = k),
-      ($[10] = z));
-  else ((k = $[9]), (z = $[10]));
-  if ((P(k, z), K)) {
-    let J;
-    if ($[11] !== serverName)
-      ((J = r(Text, {
-        color: "text",
-        children: ["Reconnecting to ", e(Text, { bold: !0, children: serverName })],
-      })),
-        ($[11] = serverName),
-        ($[12] = J));
-    else J = $[12];
-    let de;
-    if ($[13] === MEMO_CACHE_SENTINEL)
-      ((de = e(WorkerBadge, { message: "Establishing connection to MCP server" })), ($[13] = de));
-    else de = $[13];
-    let D;
-    if ($[14] !== J)
-      ((D = r(Box, { flexDirection: "column", gap: 1, padding: 1, children: [J, de] })),
-        ($[14] = J),
-        ($[15] = D));
-    else D = $[15];
-    return D;
+    };
+    t2 = [serverName, reconnectMcpServer, store, b, storageV5, host, appStateSession];
+    $[2] = appStateSession;
+    $[3] = host;
+    $[4] = b;
+    $[5] = reconnectMcpServer;
+    $[6] = serverName;
+    $[7] = storageV5;
+    $[8] = store;
+    $[9] = k;
+    $[10] = t2;
+  } else {
+    k = $[9];
+    t2 = $[10];
   }
-  if (T) {
-    let J;
-    if ($[16] !== N) ((J = color("error", N)(re.cross)), ($[16] = N), ($[17] = J));
-    else J = $[17];
-    let de;
-    if ($[18] !== J) ((de = r(Text, { children: [J, " "] })), ($[18] = J), ($[19] = de));
-    else de = $[19];
-    let D;
-    if ($[20] !== serverName)
-      ((D = r(Text, { color: "error", children: ["Failed to reconnect to ", serverName] })),
-        ($[20] = serverName),
-        ($[21] = D));
-    else D = $[21];
-    let V;
-    if ($[22] !== de || $[23] !== D)
-      ((V = r(Box, { children: [de, D] })), ($[22] = de), ($[23] = D), ($[24] = V));
-    else V = $[24];
-    let ue;
-    if ($[25] !== T) ((ue = r(Text, { dimColor: !0, children: ["Error: ", T] })), ($[25] = T), ($[26] = ue));
-    else ue = $[26];
-    let be;
-    if ($[27] !== V || $[28] !== ue)
-      ((be = r(Box, { flexDirection: "column", gap: 1, padding: 1, children: [V, ue] })),
-        ($[27] = V),
-        ($[28] = ue),
-        ($[29] = be));
-    else be = $[29];
-    return be;
+  P(k, t2);
+  if (isReconnecting) {
+    let t3;
+    if ($[11] !== serverName) {
+      t3 = jsxProd_default_2(Text, {
+        color: "text",
+        children: [
+          "Reconnecting to ",
+          jsxProd_default(Text, {
+            bold: true,
+            children: serverName,
+          }),
+        ],
+      });
+      $[11] = serverName;
+      $[12] = t3;
+    } else t3 = $[12];
+    let t4;
+    if ($[13] === MEMO_CACHE_SENTINEL) {
+      t4 = jsxProd_default(WorkerBadge, {
+        message: "Establishing connection to MCP server",
+      });
+      $[13] = t4;
+    } else t4 = $[13];
+    let t5;
+    if ($[14] !== t3) {
+      t5 = jsxProd_default_2(Box, {
+        flexDirection: "column",
+        gap: 1,
+        padding: 1,
+        children: [t3, t4],
+      });
+      $[14] = t3;
+      $[15] = t5;
+    } else t5 = $[15];
+    return t5;
+  }
+  if (error) {
+    let t3;
+    if ($[16] !== theme) {
+      t3 = color("error", theme)(figures_default.cross);
+      $[16] = theme;
+      $[17] = t3;
+    } else t3 = $[17];
+    let t4;
+    if ($[18] !== t3) {
+      t4 = jsxProd_default_2(Text, {
+        children: [t3, " "],
+      });
+      $[18] = t3;
+      $[19] = t4;
+    } else t4 = $[19];
+    let t5;
+    if ($[20] !== serverName) {
+      t5 = jsxProd_default_2(Text, {
+        color: "error",
+        children: ["Failed to reconnect to ", serverName],
+      });
+      $[20] = serverName;
+      $[21] = t5;
+    } else t5 = $[21];
+    let t6;
+    if ($[22] !== t4 || $[23] !== t5) {
+      t6 = jsxProd_default_2(Box, {
+        children: [t4, t5],
+      });
+      $[22] = t4;
+      $[23] = t5;
+      $[24] = t6;
+    } else t6 = $[24];
+    let t7;
+    if ($[25] !== error) {
+      t7 = jsxProd_default_2(Text, {
+        dimColor: true,
+        children: ["Error: ", error],
+      });
+      $[25] = error;
+      $[26] = t7;
+    } else t7 = $[26];
+    let t8;
+    if ($[27] !== t6 || $[28] !== t7) {
+      t8 = jsxProd_default_2(Box, {
+        flexDirection: "column",
+        gap: 1,
+        padding: 1,
+        children: [t6, t7],
+      });
+      $[27] = t6;
+      $[28] = t7;
+      $[29] = t8;
+    } else t8 = $[29];
+    return t8;
   }
   return null;
 }
-
 export { MCPReconnect };

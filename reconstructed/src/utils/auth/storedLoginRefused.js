@@ -9,7 +9,7 @@
  * attribution: placement 5
  */
 import { isDiskless, isOauthTokenFromBgSnapshot } from "../../bootstrap/state.js";
-import { getPolicySlots, F3t, Sto } from "../model/allowedProviders.js";
+import { getPolicySlots, isHttpsEndpoint, settleRemotePolicy } from "../model/allowedProviders.js";
 import {
   helperTierOf,
   isConfirmedHelperHeld,
@@ -17,7 +17,7 @@ import {
   getRemoteHelperGap,
 } from "../../services/remoteManagedSettings/remoteSettingsCache.js";
 import { getPolicySettingsOrigin } from "../settings/settings.js";
-import { Kdt } from "../settings/policyHelper/helperRemote.js";
+import { armedFromUserWritableBase } from "../settings/policyHelper/helperRemote.js";
 import { routesOffAnthropicApiWith } from "../model/providers.js";
 import { getEnvCaseInsensitive } from "../plugins/securityDefaultPlugin.js";
 import { env } from "../env.js";
@@ -38,43 +38,47 @@ import {
 import { logError } from "../log.js";
 import { raceWithAbortSignal } from "../sleep.js";
 
+//@ chunk-gkzv6xmy.js:608-1405 placement
 /**
  * 存储的登录是否被拒用（例如设置了 helper 或 base URL）。
  */
-//@ chunk-gkzv6xmy.js:608-1405 placement
-function isStoredLoginRefused(e, r = !1, d = !1) {
-  let s = !0;
+function isStoredLoginRefused(e, r = false, d = false) {
+  let s = true;
   try {
-    if (isDiskless()) return !1;
-    let { machine: machine, slot: slot } = getPolicySlots(),
-      a = helperTierOf(machine);
+    if (isDiskless()) return false;
+    let { machine, slot } = getPolicySlots();
+    let a = helperTierOf(machine);
     s = a !== null;
     let R =
-        a === null &&
-        ((getPolicySettingsOrigin() === "helper" && !Kdt()) ||
-          (isConfirmedHelperHeld() && (e !== void 0 || helperTierOf(slot ?? null) === null))),
-      u = a ?? (R ? null : getRemoteHelperTier());
-    if (((s = u !== null), u === null)) return !1;
-    let m = u.env ?? {},
-      g = routesOffAnthropicApiWith((A) =>
-        A === "ANTHROPIC_BASE_URL" ? void 0 : getEnvCaseInsensitive(m, A),
-      ),
-      o = e ?? env.ANTHROPIC_BASE_URL,
-      t = o && !F3t(o) ? o : baseUrlOverride(slot?.env ?? {}, d) || (g ? void 0 : baseUrlOverride(m, d) || o);
-    if (t ? F3t(t) : !g) return !1;
-    let p = getOauthConfig(),
-      f = URL.parse(p.BASE_API_URL)?.origin;
+      a === null &&
+      ((getPolicySettingsOrigin() === "helper" && !armedFromUserWritableBase()) ||
+        (isConfirmedHelperHeld() && (e !== undefined || helperTierOf(slot ?? null) === null)));
+    let u = a ?? (R ? null : getRemoteHelperTier());
+    s = u !== null;
+    if (u === null) return false;
+    let env_2 = u.env ?? {};
+    let g = routesOffAnthropicApiWith((A) =>
+      A === "ANTHROPIC_BASE_URL" ? undefined : getEnvCaseInsensitive(env_2, A),
+    );
+    let o = e ?? env.ANTHROPIC_BASE_URL;
+    let t =
+      o && !isHttpsEndpoint(o)
+        ? o
+        : baseUrlOverride(slot?.env ?? {}, d) || (g ? undefined : baseUrlOverride(env_2, d) || o);
+    if (t ? isHttpsEndpoint(t) : !g) return false;
+    let oauthConfig = getOauthConfig();
+    let origin = URL.parse(oauthConfig.BASE_API_URL)?.origin;
     if (
-      p.OAUTH_FILE_SUFFIX !== "-local-oauth" &&
-      f &&
-      f !== "null" &&
+      oauthConfig.OAUTH_FILE_SUFFIX !== "-local-oauth" &&
+      origin &&
+      origin !== "null" &&
       t &&
       t === o &&
-      URL.parse(t)?.origin === f
+      URL.parse(t)?.origin === origin
     )
-      return !1;
-    let { source: source } = getAuthTokenSource(),
-      E = source === "CLAUDE_CODE_OAUTH_TOKEN" && getClaudeAIOAuthTokenOrigin() !== "env";
+      return false;
+    let { source } = getAuthTokenSource();
+    let E = source === "CLAUDE_CODE_OAUTH_TOKEN" && getClaudeAIOAuthTokenOrigin() !== "env";
     if (
       (!r &&
         !E &&
@@ -86,10 +90,12 @@ function isStoredLoginRefused(e, r = !1, d = !1) {
       isManagedOAuthContext() ||
       isHostManagedProviderAuth()
     )
-      return !1;
-    return (computeRemoteSettingsEligibility(), getSessionHybridOrganizationUuid() === null);
+      return false;
+    computeRemoteSettingsEligibility();
+    return getSessionHybridOrganizationUuid() === null;
   } catch {
-    return (logError(Error("Stored login check failed")), s);
+    logError(Error("Stored login check failed"));
+    return s;
   }
 }
 //@ chunk-gkzv6xmy.js:1405-1549 placement
@@ -97,27 +103,28 @@ function storedLoginRefusalReason() {
   try {
     return helperTierOf(getPolicySlots().machine) === null ? (getRemoteHelperGap() ?? "admin") : "admin";
   } catch {
-    return (logError(Error("Stored login refusal reason failed")), "admin");
+    logError(Error("Stored login refusal reason failed"));
+    return "admin";
   }
 }
 //@ chunk-gkzv6xmy.js:1549-1664 placement
-async function awaitStoredLoginSettle(e) {
+async function awaitStoredLoginSettle(signal) {
   try {
-    await raceWithAbortSignal(Sto(), e, () => Error("Stored login settle aborted"));
+    await raceWithAbortSignal(settleRemotePolicy(), signal, () => Error("Stored login settle aborted"));
   } catch (error) {
-    if (!e.aborted) throw error;
+    if (!signal.aborted) throw error;
   }
 }
 //@ chunk-gkzv6xmy.js:1664-1885 placement
 async function settleStoredLoginRefusal(e) {
   try {
-    let r = e?.url ?? (e?.isFilesDial ? getOauthConfig().BASE_API_URL : void 0);
+    let r = e?.url ?? (e?.isFilesDial ? getOauthConfig().BASE_API_URL : undefined);
     if (
-      isStoredLoginRefused(r, !0, e?.isFilesDial ?? !1) &&
+      isStoredLoginRefused(r, true, e?.isFilesDial ?? false) &&
       !isRemoteManagedSettingsVerified() &&
-      (e !== void 0 || isClaudeAISubscriber())
+      (e !== undefined || isClaudeAISubscriber())
     )
-      await (e?.signal ? awaitStoredLoginSettle(e.signal) : Sto());
+      await (e?.signal ? awaitStoredLoginSettle(e.signal) : settleRemotePolicy());
   } catch {
     logError(Error("Stored login settle failed"));
   }
@@ -126,8 +133,7 @@ async function settleStoredLoginRefusal(e) {
 function baseUrlOverride(e, r) {
   return (
     getEnvCaseInsensitive(e, "ANTHROPIC_BASE_URL")?.trim() ||
-    (r ? getEnvCaseInsensitive(e, "CLAUDE_CODE_API_BASE_URL")?.trim() : void 0)
+    (r ? getEnvCaseInsensitive(e, "CLAUDE_CODE_API_BASE_URL")?.trim() : undefined)
   );
 }
-
 export { settleStoredLoginRefusal, isStoredLoginRefused, storedLoginRefusalReason };

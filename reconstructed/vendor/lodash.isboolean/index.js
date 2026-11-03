@@ -8,17 +8,18 @@
 import { x } from "../../runtime/bun-runtime.js";
 
 //@ chunk-mrx6y2r5.js:13288-13495 cjs-fingerprint
-var af = x(function (lL, sf) {
-  var pT = "[object Boolean]",
-    gT = Object.prototype,
-    toString = gT.toString;
-  function TT(e) {
-    return e === !0 || e === !1 || (ET(e) && toString.call(e) == pT);
+var require_lodash_isboolean = x(function (cjsExports, cjsModule) {
+  var boolTag = "[object Boolean]";
+  var objectProto = Object.prototype;
+  var objectToString = objectProto.toString;
+  function isBoolean(value) {
+    return (
+      value === true || value === false || (isObjectLike(value) && objectToString.call(value) == boolTag)
+    );
   }
-  function ET(e) {
-    return !!e && typeof e == "object";
+  function isObjectLike(value) {
+    return !!value && typeof value == "object";
   }
-  sf.exports = TT;
+  cjsModule.exports = isBoolean;
 });
-
-export { af };
+export { require_lodash_isboolean };

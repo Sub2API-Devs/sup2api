@@ -5,67 +5,82 @@
  * pieces: chunk-hwmsct5x.js (1)
  * attribution: esm-fingerprint 1
  */
-import { Y } from "../../../core/resource.mjs";
+import { APIResource } from "../../../core/resource.mjs";
 import { I } from "../../../internal/utils/path.mjs";
-import { T } from "../../../internal/headers.mjs";
-import { ee } from "../../../core/pagination.mjs";
+import { buildHeaders } from "../../../internal/headers.mjs";
+import { TokenPage } from "../../../core/pagination.mjs";
 
 //@ chunk-hwmsct5x.js:138134-139265 esm-fingerprint
-class _o extends Y {
-  create(e, n, r) {
-    let { betas: betas, workspace_id: workspace_id, ...y } = n;
-    return this._client.post(I`/v1/tunnels/${e}/certificates?beta=true`, {
-      body: y,
-      ...r,
-      headers: T([
+class Certificates extends APIResource {
+  create(tunnelID, params, options) {
+    let { betas, workspace_id, ...body } = params;
+    return this._client.post(I`/v1/tunnels/${tunnelID}/certificates?beta=true`, {
+      body,
+      ...options,
+      headers: buildHeaders([
         {
           "anthropic-beta": [...(betas ?? []), "mcp-tunnels-2026-06-22"].toString(),
-          ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0),
+          ...(workspace_id != null
+            ? {
+                "anthropic-workspace-id": workspace_id,
+              }
+            : undefined),
         },
-        r?.headers,
+        options?.headers,
       ]),
     });
   }
-  retrieve(e, n, r) {
-    let { tunnel_id: tunnel_id, betas: betas, workspace_id: workspace_id } = n;
-    return this._client.get(I`/v1/tunnels/${tunnel_id}/certificates/${e}?beta=true`, {
-      ...r,
-      headers: T([
+  retrieve(certificateID, params, options) {
+    let { tunnel_id, betas, workspace_id } = params;
+    return this._client.get(I`/v1/tunnels/${tunnel_id}/certificates/${certificateID}?beta=true`, {
+      ...options,
+      headers: buildHeaders([
         {
           "anthropic-beta": [...(betas ?? []), "mcp-tunnels-2026-06-22"].toString(),
-          ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0),
+          ...(workspace_id != null
+            ? {
+                "anthropic-workspace-id": workspace_id,
+              }
+            : undefined),
         },
-        r?.headers,
+        options?.headers,
       ]),
     });
   }
-  list(e, n = {}, r) {
-    let { betas: betas, workspace_id: workspace_id, ...y } = n ?? {};
-    return this._client.getAPIList(I`/v1/tunnels/${e}/certificates?beta=true`, ee, {
-      query: y,
-      ...r,
-      headers: T([
+  list(tunnelID, params = {}, options) {
+    let { betas, workspace_id, ...query } = params ?? {};
+    return this._client.getAPIList(I`/v1/tunnels/${tunnelID}/certificates?beta=true`, TokenPage, {
+      query,
+      ...options,
+      headers: buildHeaders([
         {
           "anthropic-beta": [...(betas ?? []), "mcp-tunnels-2026-06-22"].toString(),
-          ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0),
+          ...(workspace_id != null
+            ? {
+                "anthropic-workspace-id": workspace_id,
+              }
+            : undefined),
         },
-        r?.headers,
+        options?.headers,
       ]),
     });
   }
-  archive(e, n, r) {
-    let { tunnel_id: tunnel_id, betas: betas, workspace_id: workspace_id } = n;
-    return this._client.post(I`/v1/tunnels/${tunnel_id}/certificates/${e}/archive?beta=true`, {
-      ...r,
-      headers: T([
+  archive(certificateID, params, options) {
+    let { tunnel_id, betas, workspace_id } = params;
+    return this._client.post(I`/v1/tunnels/${tunnel_id}/certificates/${certificateID}/archive?beta=true`, {
+      ...options,
+      headers: buildHeaders([
         {
           "anthropic-beta": [...(betas ?? []), "mcp-tunnels-2026-06-22"].toString(),
-          ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0),
+          ...(workspace_id != null
+            ? {
+                "anthropic-workspace-id": workspace_id,
+              }
+            : undefined),
         },
-        r?.headers,
+        options?.headers,
       ]),
     });
   }
 }
-
-export { _o };
+export { Certificates };

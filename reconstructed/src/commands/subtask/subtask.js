@@ -11,27 +11,33 @@
 import { spawnForkFromDirective } from "../../tools/AgentTool/forkDirective.js";
 import { evaluateAskingNoHost } from "../../utils/permissions/permissions.js";
 import { isCoordinatorMode_2 } from "../../coordinator/coordinatorMode.js";
-import { YO } from "../../utils/permissions/autoModeRulesPrompt.js";
+import { CIRCLE_MARK_GLYPH } from "../../utils/permissions/autoModeRulesPrompt.js";
 
+//@ chunk-3vqj3nc0.js:12628-12720 placement
 /**
  * /subtask 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
  */
-//@ chunk-3vqj3nc0.js:12628-12720 placement
-var l = async (onDone, context, args) => (
-  onDone((await startSubtask(args, context)) ?? "Usage: /subtask \\<task\\>", { display: "system" }),
-  null
-);
+var subtaskCommandCall = async (onDone, context, args) => {
+  onDone((await startSubtask(args, context)) ?? "Usage: /subtask \\<task\\>", {
+    display: "system",
+  });
+  return null;
+};
+//@ chunk-3vqj3nc0.js:12720-13022 placement
 /**
  * 启动一个子任务：参数为空返回 null，协调者会话中不可用时返回提示文字。
  */
-//@ chunk-3vqj3nc0.js:12720-13022 placement
-async function startSubtask(a, t) {
-  let trimmed = a.trim();
-  if (!trimmed) return null;
-  let r = await spawnForkFromDirective(trimmed, t, t.canUseTool ?? evaluateAskingNoHost);
-  if (!r)
+async function startSubtask(a, toolUseContext) {
+  let directive = a.trim();
+  if (!directive) return null;
+  let forkFromDirective = await spawnForkFromDirective(
+    directive,
+    toolUseContext,
+    toolUseContext.canUseTool ?? evaluateAskingNoHost,
+  );
+  if (!forkFromDirective)
     return isCoordinatorMode_2()
       ? "Subtasks are not available in coordinator sessions. Use /branch instead."
       : "Cannot start a subtask before the first conversation turn";
-  return `${YO} forked ${r.name} (${r.agentId.slice(-4)})`;
+  return `${CIRCLE_MARK_GLYPH} forked ${forkFromDirective.name} (${forkFromDirective.agentId.slice(-4)})`;
 }

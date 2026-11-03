@@ -11,25 +11,26 @@
 
 //@ chunk-g3pbeen0.js:191-466 placement
 class ReannounceRequester {
-  #e = void 0;
-  #n = !1;
+  #e = undefined;
+  #n = false;
   provide(e) {
     this.#e = e;
   }
   canAsk() {
-    return this.#e !== void 0;
+    return this.#e !== undefined;
   }
-  askOnce({ workerEpoch: e, deadlineMs: n }) {
-    if (this.#e === void 0 || this.#n) return !1;
-    return (
-      (this.#n = !0),
-      this.#e(
-        { subtype: "remote_tools_reannounce", worker_epoch: e, deadline_ms: n },
-        AbortSignal.timeout(n),
-      ),
-      !0
+  askOnce({ workerEpoch, deadlineMs }) {
+    if (this.#e === undefined || this.#n) return false;
+    this.#n = true;
+    this.#e(
+      {
+        subtype: "remote_tools_reannounce",
+        worker_epoch: workerEpoch,
+        deadline_ms: deadlineMs,
+      },
+      AbortSignal.timeout(deadlineMs),
     );
+    return true;
   }
 }
-
 export { ReannounceRequester };

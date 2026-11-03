@@ -10,11 +10,14 @@
  */
 import { performRename } from "../commands/rename/rename.js";
 
+//@ chunk-5h69ret3.js:11876-11959 placement
 /**
  * /rename 的 local call(args, context, invokedName) 实现入口（由命令对象 load() 返回）。
  */
-//@ chunk-5h69ret3.js:11876-11959 placement
-async function o(args, context) {
-  let { message: message } = await performRename(args, context, !1);
-  return { type: "text", value: message };
+async function runRenameCommand(args, context) {
+  let { message } = await performRename(args, context, false);
+  return {
+    type: "text",
+    value: message,
+  };
 }

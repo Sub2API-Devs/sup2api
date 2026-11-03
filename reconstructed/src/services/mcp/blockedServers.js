@@ -11,10 +11,23 @@
 import { wi } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 
 //@ chunk-1s0bgm1n.js:227-315 placement
-var _No = { delete_asset: "ask", delete_artifact: "ask", read_shared_artifact: "blocked", ...{} };
+/**
+ * 运维类 MCP 工具的默认处置（删除问询、读取共享 artifact 拒绝）。
+ */
+var BLOCKED_TOOL_POLICY = {
+  delete_asset: "ask",
+  delete_artifact: "ask",
+  read_shared_artifact: "blocked",
+  ...{},
+};
 //@ chunk-1s0bgm1n.js:315-381 placement
-function l6n(e) {
-  return { ...e, ...wi(_No, (s, r) => e?.[r] === "blocked") };
+/**
+ * 把默认处置合并进工具的权限设置。
+ */
+function applyBlockedToolPolicy(toolPermissions) {
+  return {
+    ...toolPermissions,
+    ...wi(BLOCKED_TOOL_POLICY, (s, r) => toolPermissions?.[r] === "blocked"),
+  };
 }
-
-export { l6n, _No };
+export { applyBlockedToolPolicy, BLOCKED_TOOL_POLICY };

@@ -8,152 +8,261 @@
 import { x } from "../../../../../../../runtime/bun-runtime.js";
 
 //@ chunk-ddzww9ex.js:1796-3961 cjs-fingerprint
-var ae = x(function (se) {
-  Object.defineProperty(se, "__esModule", { value: !0 });
-  se.ruleSet = void 0;
-  var re = "required",
-    d = "fn",
-    u = "argv",
-    y = "ref",
-    V = !0,
-    B = "isSet",
-    P = "booleanEquals",
-    m = "error",
-    I = "endpoint",
-    g = "tree",
-    U = "PartitionResult",
-    N = "getAttr",
-    Y = { [re]: !1, type: "string" },
-    W = { [re]: !0, default: !1, type: "boolean" },
-    J = { [y]: "Endpoint" },
-    oe = { [d]: P, [u]: [{ [y]: "UseFIPS" }, !0] },
-    ne = { [d]: P, [u]: [{ [y]: "UseDualStack" }, !0] },
-    p = {},
-    X = { [d]: N, [u]: [{ [y]: U }, "supportsFIPS"] },
-    ie = { [y]: U },
-    Q = { [d]: P, [u]: [!0, { [d]: N, [u]: [ie, "supportsDualStack"] }] },
-    Z = [oe],
-    ee = [ne],
-    te = [{ [y]: "Region" }],
-    _t = {
-      version: "1.0",
-      parameters: { Region: Y, UseDualStack: W, UseFIPS: W, Endpoint: Y },
-      rules: [
-        {
-          conditions: [{ [d]: B, [u]: [J] }],
-          rules: [
-            {
-              conditions: Z,
-              error: "Invalid Configuration: FIPS and custom endpoint are not supported",
-              type: m,
+var require_ruleset = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.ruleSet = undefined;
+  var u_2 = "required";
+  var v = "fn";
+  var w = "argv";
+  var x = "ref";
+  var a = true;
+  var b = "isSet";
+  var c = "booleanEquals";
+  var d = "error";
+  var e = "endpoint";
+  var f = "tree";
+  var g = "PartitionResult";
+  var h = "getAttr";
+  var i = {
+    [u_2]: false,
+    type: "string",
+  };
+  var j = {
+    [u_2]: true,
+    default: false,
+    type: "boolean",
+  };
+  var k = {
+    [x]: "Endpoint",
+  };
+  var l = {
+    [v]: c,
+    [w]: [
+      {
+        [x]: "UseFIPS",
+      },
+      true,
+    ],
+  };
+  var m = {
+    [v]: c,
+    [w]: [
+      {
+        [x]: "UseDualStack",
+      },
+      true,
+    ],
+  };
+  var n = {};
+  var o = {
+    [v]: h,
+    [w]: [
+      {
+        [x]: g,
+      },
+      "supportsFIPS",
+    ],
+  };
+  var p = {
+    [x]: g,
+  };
+  var q = {
+    [v]: c,
+    [w]: [
+      true,
+      {
+        [v]: h,
+        [w]: [p, "supportsDualStack"],
+      },
+    ],
+  };
+  var r = [l];
+  var s = [m];
+  var t = [
+    {
+      [x]: "Region",
+    },
+  ];
+  var _data = {
+    version: "1.0",
+    parameters: {
+      Region: i,
+      UseDualStack: j,
+      UseFIPS: j,
+      Endpoint: i,
+    },
+    rules: [
+      {
+        conditions: [
+          {
+            [v]: b,
+            [w]: [k],
+          },
+        ],
+        rules: [
+          {
+            conditions: r,
+            error: "Invalid Configuration: FIPS and custom endpoint are not supported",
+            type: d,
+          },
+          {
+            conditions: s,
+            error: "Invalid Configuration: Dualstack and custom endpoint are not supported",
+            type: d,
+          },
+          {
+            endpoint: {
+              url: k,
+              properties: n,
+              headers: n,
             },
-            {
-              conditions: ee,
-              error: "Invalid Configuration: Dualstack and custom endpoint are not supported",
-              type: m,
-            },
-            { endpoint: { url: J, properties: p, headers: p }, type: I },
-          ],
-          type: g,
-        },
-        {
-          conditions: [{ [d]: B, [u]: te }],
-          rules: [
-            {
-              conditions: [{ [d]: "aws.partition", [u]: te, assign: U }],
-              rules: [
-                {
-                  conditions: [oe, ne],
-                  rules: [
-                    {
-                      conditions: [{ [d]: P, [u]: [V, X] }, Q],
-                      rules: [
-                        {
-                          endpoint: {
-                            url: "https://oidc-fips.{Region}.{PartitionResult#dualStackDnsSuffix}",
-                            properties: p,
-                            headers: p,
-                          },
-                          type: I,
+            type: e,
+          },
+        ],
+        type: f,
+      },
+      {
+        conditions: [
+          {
+            [v]: b,
+            [w]: t,
+          },
+        ],
+        rules: [
+          {
+            conditions: [
+              {
+                [v]: "aws.partition",
+                [w]: t,
+                assign: g,
+              },
+            ],
+            rules: [
+              {
+                conditions: [l, m],
+                rules: [
+                  {
+                    conditions: [
+                      {
+                        [v]: c,
+                        [w]: [a, o],
+                      },
+                      q,
+                    ],
+                    rules: [
+                      {
+                        endpoint: {
+                          url: "https://oidc-fips.{Region}.{PartitionResult#dualStackDnsSuffix}",
+                          properties: n,
+                          headers: n,
                         },
-                      ],
-                      type: g,
-                    },
-                    {
-                      error:
-                        "FIPS and DualStack are enabled, but this partition does not support one or both",
-                      type: m,
-                    },
-                  ],
-                  type: g,
-                },
-                {
-                  conditions: Z,
-                  rules: [
-                    {
-                      conditions: [{ [d]: P, [u]: [X, V] }],
-                      rules: [
-                        {
-                          conditions: [
-                            { [d]: "stringEquals", [u]: [{ [d]: N, [u]: [ie, "name"] }, "aws-us-gov"] },
-                          ],
-                          endpoint: { url: "https://oidc.{Region}.amazonaws.com", properties: p, headers: p },
-                          type: I,
-                        },
-                        {
-                          endpoint: {
-                            url: "https://oidc-fips.{Region}.{PartitionResult#dnsSuffix}",
-                            properties: p,
-                            headers: p,
-                          },
-                          type: I,
-                        },
-                      ],
-                      type: g,
-                    },
-                    { error: "FIPS is enabled but this partition does not support FIPS", type: m },
-                  ],
-                  type: g,
-                },
-                {
-                  conditions: ee,
-                  rules: [
-                    {
-                      conditions: [Q],
-                      rules: [
-                        {
-                          endpoint: {
-                            url: "https://oidc.{Region}.{PartitionResult#dualStackDnsSuffix}",
-                            properties: p,
-                            headers: p,
-                          },
-                          type: I,
-                        },
-                      ],
-                      type: g,
-                    },
-                    { error: "DualStack is enabled but this partition does not support DualStack", type: m },
-                  ],
-                  type: g,
-                },
-                {
-                  endpoint: {
-                    url: "https://oidc.{Region}.{PartitionResult#dnsSuffix}",
-                    properties: p,
-                    headers: p,
+                        type: e,
+                      },
+                    ],
+                    type: f,
                   },
-                  type: I,
+                  {
+                    error: "FIPS and DualStack are enabled, but this partition does not support one or both",
+                    type: d,
+                  },
+                ],
+                type: f,
+              },
+              {
+                conditions: r,
+                rules: [
+                  {
+                    conditions: [
+                      {
+                        [v]: c,
+                        [w]: [o, a],
+                      },
+                    ],
+                    rules: [
+                      {
+                        conditions: [
+                          {
+                            [v]: "stringEquals",
+                            [w]: [
+                              {
+                                [v]: h,
+                                [w]: [p, "name"],
+                              },
+                              "aws-us-gov",
+                            ],
+                          },
+                        ],
+                        endpoint: {
+                          url: "https://oidc.{Region}.amazonaws.com",
+                          properties: n,
+                          headers: n,
+                        },
+                        type: e,
+                      },
+                      {
+                        endpoint: {
+                          url: "https://oidc-fips.{Region}.{PartitionResult#dnsSuffix}",
+                          properties: n,
+                          headers: n,
+                        },
+                        type: e,
+                      },
+                    ],
+                    type: f,
+                  },
+                  {
+                    error: "FIPS is enabled but this partition does not support FIPS",
+                    type: d,
+                  },
+                ],
+                type: f,
+              },
+              {
+                conditions: s,
+                rules: [
+                  {
+                    conditions: [q],
+                    rules: [
+                      {
+                        endpoint: {
+                          url: "https://oidc.{Region}.{PartitionResult#dualStackDnsSuffix}",
+                          properties: n,
+                          headers: n,
+                        },
+                        type: e,
+                      },
+                    ],
+                    type: f,
+                  },
+                  {
+                    error: "DualStack is enabled but this partition does not support DualStack",
+                    type: d,
+                  },
+                ],
+                type: f,
+              },
+              {
+                endpoint: {
+                  url: "https://oidc.{Region}.{PartitionResult#dnsSuffix}",
+                  properties: n,
+                  headers: n,
                 },
-              ],
-              type: g,
-            },
-          ],
-          type: g,
-        },
-        { error: "Invalid Configuration: Missing Region", type: m },
-      ],
-    };
-  se.ruleSet = _t;
+                type: e,
+              },
+            ],
+            type: f,
+          },
+        ],
+        type: f,
+      },
+      {
+        error: "Invalid Configuration: Missing Region",
+        type: d,
+      },
+    ],
+  };
+  cjsExports.ruleSet = _data;
 });
-
-export { ae };
+export { require_ruleset };

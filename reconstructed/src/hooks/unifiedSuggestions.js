@@ -8,29 +8,25 @@
  * pieces: chunk-18hwfzwa.js (5)
  * attribution: fingerprint 3, layout 1, file-last-pair 1
  */
-import {
-  basename,
-  basename as basename_2,
-  basename as basename_3,
-  basename as basename_4,
-  basename as basename_5,
-  basename as basename_6,
-  basename as basename_7,
-} from "path";
-import { pue } from "../utils/suggestions/mcpTemplateCompletion.js";
+import { basename } from "path";
+import { atMentionReplacement } from "../utils/suggestions/mcpTemplateCompletion.js";
 import { truncateToWidth } from "../utils/format.js";
 import { getAgentColor } from "../tools/AgentTool/agentColorManager.js";
 import { logError } from "../utils/log.js";
 import { generateFileSuggestions } from "./fileSuggestions.js";
 import { isMcpAppResource } from "../services/mcp/toolNameLimits.js";
-import { qce } from "../utils/suggestions/uriTemplate.js";
-import { gve } from "../../vendor/fuse.js/dist/fuse.mjs";
+import { literalPrefixBeforeBrace } from "../utils/suggestions/uriTemplate.js";
+import { Fuse } from "../../vendor/fuse.js/dist/fuse.mjs";
 
 //@ chunk-18hwfzwa.js:611275-611822 fingerprint = createSuggestionFromSource (0.772)
 function createSuggestionFromSource(source) {
   switch (source.type) {
     case "file":
-      return { id: `file-${source.path}`, displayText: source.displayText, description: source.description };
+      return {
+        id: `file-${source.path}`,
+        displayText: source.displayText,
+        description: source.description,
+      };
     case "mcp_resource":
       return {
         id: `mcp-resource-${source.server}__${source.uri}`,
@@ -42,7 +38,10 @@ function createSuggestionFromSource(source) {
         id: `mcp-template::${source.server}__${source.uriTemplate}`,
         displayText: source.displayText,
         description: source.description,
-        metadata: { replacement: pue(source.displayText, !0), partial: !0 },
+        metadata: {
+          replacement: atMentionReplacement(source.displayText, true),
+          partial: true,
+        },
       };
     case "agent":
       return {
@@ -54,14 +53,14 @@ function createSuggestionFromSource(source) {
   }
 }
 //@ chunk-18hwfzwa.js:611822-611839 layout
-var uW = 15,
-  LQt = 60;
+var MAX_UNIFIED_SUGGESTIONS = 15;
+var MAX_DESCRIPTION_WIDTH = 60;
 //@ chunk-18hwfzwa.js:611839-611871 file-last-pair
 function truncateDescription(description) {
-  return truncateToWidth(description, LQt);
+  return truncateToWidth(description, MAX_DESCRIPTION_WIDTH);
 }
 //@ chunk-18hwfzwa.js:611871-612236 fingerprint = generateAgentSuggestions (1)
-function generateAgentSuggestions(agents, query, showOnEmpty = !1) {
+function generateAgentSuggestions(agents, query, showOnEmpty = false) {
   if (!query && !showOnEmpty) return [];
   try {
     let agentSources = agents.map((agent) => ({
@@ -79,90 +78,117 @@ function generateAgentSuggestions(agents, query, showOnEmpty = !1) {
         agent.displayText.toLowerCase().includes(queryLower),
     );
   } catch (error) {
-    return (logError(error), []);
+    logError(error);
+    return [];
   }
 }
+//@ chunk-18hwfzwa.js:612236-613736 fingerprint = generateUnifiedSuggestions (0.807)
 /**
  * 统一 @ 建议：并行收集文件、MCP 资源/资源模板、agent 建议，转换成统一建议项并截断描述。
  */
-//@ chunk-18hwfzwa.js:612236-613736 fingerprint = generateUnifiedSuggestions (0.807)
 async function generateUnifiedSuggestions(
   query,
   mcpResources,
-  {
-    mcpResources: mcpResources_2,
-    agents: agents,
-    showOnEmpty: showOnEmpty = !1,
-    mcpResourceTemplates: mcpResourceTemplates = {},
-  },
+  { mcpResources: mcpResources_2, agents, showOnEmpty = false, mcpResourceTemplates = {} },
   showOnEmpty_2,
 ) {
   if (!mcpResources && !showOnEmpty) return [];
-  let [Be, He] = await Promise.all([
-      generateFileSuggestions(query, mcpResources, showOnEmpty, showOnEmpty_2),
-      Promise.resolve(generateAgentSuggestions(agents, mcpResources, showOnEmpty)),
-    ]),
-    fileSources = Be.map((suggestion) => ({
-      type: "file",
-      displayText: suggestion.displayText,
-      description: suggestion.description,
-      path: suggestion.displayText,
-      filename: basename_3(suggestion.displayText),
-      score: suggestion.metadata?.score,
-    })),
-    mcpSources = Object.values(mcpResources_2)
-      .flat()
-      .filter((resource) => !isMcpAppResource(resource))
-      .map((At) => ({
-        type: "mcp_resource",
-        displayText: `${At.server}:${At.uri}`,
-        description: truncateDescription(At.description || At.name || At.uri),
-        server: At.server,
-        uri: At.uri,
-        name: At.name || At.uri,
-      })),
-    mapped = Object.values(mcpResourceTemplates)
-      .flat()
-      .filter((At) => !isMcpAppResource({ uri: At.uriTemplate, mimeType: At.mimeType }))
-      .map((At) => ({
-        type: "mcp_resource_template",
-        displayText: `${At.server}:${qce(At.uriTemplate)}`,
-        description: truncateDescription(At.description || At.name || At.uriTemplate),
-        server: At.server,
-        uriTemplate: At.uriTemplate,
-        name: At.name || At.uriTemplate,
-      }));
+  let [fileSuggestions, He] = await Promise.all([
+    generateFileSuggestions(query, mcpResources, showOnEmpty, showOnEmpty_2),
+    Promise.resolve(generateAgentSuggestions(agents, mcpResources, showOnEmpty)),
+  ]);
+  let fileSources = fileSuggestions.map((suggestion) => ({
+    type: "file",
+    displayText: suggestion.displayText,
+    description: suggestion.description,
+    path: suggestion.displayText,
+    filename: basename(suggestion.displayText),
+    score: suggestion.metadata?.score,
+  }));
+  let mcpSources = Object.values(mcpResources_2)
+    .flat()
+    .filter((resource) => !isMcpAppResource(resource))
+    .map((resource) => ({
+      type: "mcp_resource",
+      displayText: `${resource.server}:${resource.uri}`,
+      description: truncateDescription(resource.description || resource.name || resource.uri),
+      server: resource.server,
+      uri: resource.uri,
+      name: resource.name || resource.uri,
+    }));
+  let mapped = Object.values(mcpResourceTemplates)
+    .flat()
+    .filter(
+      (At) =>
+        !isMcpAppResource({
+          uri: At.uriTemplate,
+          mimeType: At.mimeType,
+        }),
+    )
+    .map((resource) => ({
+      type: "mcp_resource_template",
+      displayText: `${resource.server}:${literalPrefixBeforeBrace(resource.uriTemplate)}`,
+      description: truncateDescription(resource.description || resource.name || resource.uriTemplate),
+      server: resource.server,
+      uriTemplate: resource.uriTemplate,
+      name: resource.name || resource.uriTemplate,
+    }));
   if (!mcpResources)
-    return [...fileSources, ...mcpSources, ...mapped, ...He].slice(0, uW).map(createSuggestionFromSource);
-  let allSources = [...mcpSources, ...mapped, ...He],
-    scoredResults = [];
+    return [...fileSources, ...mcpSources, ...mapped, ...He]
+      .slice(0, MAX_UNIFIED_SUGGESTIONS)
+      .map(createSuggestionFromSource);
+  let nonFileSources = [...mcpSources, ...mapped, ...He];
+  let scoredResults = [];
   for (let fileSource of fileSources)
-    scoredResults.push({ source: fileSource, score: fileSource.score ?? 0.5 });
-  if (allSources.length > 0) {
-    let fuseResults = new gve(allSources, {
-      includeScore: !0,
+    scoredResults.push({
+      source: fileSource,
+      score: fileSource.score ?? 0.5,
+    });
+  if (nonFileSources.length > 0) {
+    let fuseResults = new Fuse(nonFileSources, {
+      includeScore: true,
       threshold: 0.6,
       keys: [
-        { name: "displayText", weight: 2 },
-        { name: "name", weight: 3 },
-        { name: "server", weight: 1 },
-        { name: "description", weight: 1 },
-        { name: "agentType", weight: 3 },
-        { name: "uriTemplate", weight: 2 },
+        {
+          name: "displayText",
+          weight: 2,
+        },
+        {
+          name: "name",
+          weight: 3,
+        },
+        {
+          name: "server",
+          weight: 1,
+        },
+        {
+          name: "description",
+          weight: 1,
+        },
+        {
+          name: "agentType",
+          weight: 3,
+        },
+        {
+          name: "uriTemplate",
+          weight: 2,
+        },
       ],
-    }).search(mcpResources, { limit: uW });
+    }).search(mcpResources, {
+      limit: MAX_UNIFIED_SUGGESTIONS,
+    });
     for (let result of fuseResults) {
       let Et = result.item.type === "mcp_resource" ? 0.15 : 0;
-      scoredResults.push({ source: result.item, score: (result.score ?? 0.5) + Et });
+      scoredResults.push({
+        source: result.item,
+        score: (result.score ?? 0.5) + Et,
+      });
     }
   }
-  return (
-    scoredResults.sort((At, It) => At.score - It.score),
-    scoredResults
-      .slice(0, uW)
-      .map((At) => At.source)
-      .map(createSuggestionFromSource)
-  );
+  scoredResults.sort((At, It) => At.score - It.score);
+  return scoredResults
+    .slice(0, MAX_UNIFIED_SUGGESTIONS)
+    .map((scoredResult) => scoredResult.source)
+    .map(createSuggestionFromSource);
 }
-
-export { generateUnifiedSuggestions, uW, truncateDescription };
+export { generateUnifiedSuggestions, MAX_UNIFIED_SUGGESTIONS, truncateDescription };

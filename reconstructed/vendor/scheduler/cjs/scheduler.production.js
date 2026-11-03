@@ -9,280 +9,363 @@ import { Wi } from "./scheduler-unstable_post_task.development.js";
 import { Xa } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-bzr73sfg.js:3596-3717 esm-layout
-function id(n, u) {
-  var f = n.length;
-  n.push(u);
-  e: for (; 0 < f;) {
-    var m = (f - 1) >>> 1,
-      p = n[m];
-    if (0 < $a(p, u)) ((n[m] = u), (n[f] = p), (f = m));
-    else break e;
+function push(heap, node) {
+  var index = heap.length;
+  heap.push(node);
+  e: for (; 0 < index;) {
+    var parentIndex = (index - 1) >>> 1;
+    var parent = heap[parentIndex];
+    if (0 < compare(parent, node)) {
+      heap[parentIndex] = node;
+      heap[index] = parent;
+      index = parentIndex;
+    } else break e;
   }
 }
 //@ chunk-bzr73sfg.js:3717-3762 esm-layout
-function oi(n) {
-  return n.length === 0 ? null : n[0];
+function peek(heap) {
+  return heap.length === 0 ? null : heap[0];
 }
 //@ chunk-bzr73sfg.js:3762-4050 esm-layout
-function is(n) {
-  if (n.length === 0) return null;
-  var u = n[0],
-    f = n.pop();
-  if (f !== u) {
-    n[0] = f;
-    e: for (var m = 0, p = n.length, g = p >>> 1; m < g;) {
-      var E = 2 * (m + 1) - 1,
-        T = n[E],
-        A = E + 1,
-        D = n[A];
-      if (0 > $a(T, f))
-        A < p && 0 > $a(D, T) ? ((n[m] = D), (n[A] = f), (m = A)) : ((n[m] = T), (n[E] = f), (m = E));
-      else if (A < p && 0 > $a(D, f)) ((n[m] = D), (n[A] = f), (m = A));
-      else break e;
+function pop(heap) {
+  if (heap.length === 0) return null;
+  var first = heap[0];
+  var last = heap.pop();
+  if (last !== first) {
+    heap[0] = last;
+    e: for (var index = 0, length = heap.length, halfLength = length >>> 1; index < halfLength;) {
+      var leftIndex = 2 * (index + 1) - 1;
+      var left = heap[leftIndex];
+      var rightIndex = leftIndex + 1;
+      var right = heap[rightIndex];
+      if (0 > compare(left, last)) {
+        if (rightIndex < length && 0 > compare(right, left)) {
+          heap[index] = right;
+          heap[rightIndex] = last;
+          index = rightIndex;
+        } else {
+          heap[index] = left;
+          heap[leftIndex] = last;
+          index = leftIndex;
+        }
+      } else if (rightIndex < length && 0 > compare(right, last)) {
+        heap[index] = right;
+        heap[rightIndex] = last;
+        index = rightIndex;
+      } else break e;
     }
   }
-  return u;
+  return first;
 }
 //@ chunk-bzr73sfg.js:4050-4122 esm-fingerprint
-function $a(n, u) {
-  var f = n.sortIndex - u.sortIndex;
-  return f !== 0 ? f : n.id - u.id;
+function compare(a, b) {
+  var diff = a.sortIndex - b.sortIndex;
+  return diff !== 0 ? diff : a.id - b.id;
 }
 //@ chunk-bzr73sfg.js:4122-4282 esm-fingerprint
-function ts(n) {
-  for (var u = oi(Ki); u !== null;) {
-    if (u.callback === null) is(Ki);
-    else if (u.startTime <= n) (is(Ki), (u.sortIndex = u.expirationTime), id(Ci, u));
-    else break;
-    u = oi(Ki);
+function advanceTimers(currentTime) {
+  for (var timer = peek(timerQueue); timer !== null;) {
+    if (timer.callback === null) pop(timerQueue);
+    else if (timer.startTime <= currentTime) {
+      pop(timerQueue);
+      timer.sortIndex = timer.expirationTime;
+      push(taskQueue, timer);
+    } else break;
+    timer = peek(timerQueue);
   }
 }
 //@ chunk-bzr73sfg.js:4282-4406 esm-fingerprint
-function ud(n) {
-  if (((pl = !1), ts(n), !ml))
-    if (oi(Ci) !== null) ((ml = !0), po || ((po = !0), mo()));
-    else {
-      var u = oi(Ki);
-      u !== null && cd(ud, u.startTime - n);
+function handleTimeout(currentTime) {
+  isHostTimeoutScheduled = false;
+  advanceTimers(currentTime);
+  if (!isHostCallbackScheduled)
+    if (peek(taskQueue) !== null) {
+      isHostCallbackScheduled = true;
+      if (!isMessageLoopRunning) {
+        isMessageLoopRunning = true;
+        schedulePerformWorkUntilDeadline();
+      }
+    } else {
+      var firstTimer = peek(timerQueue);
+      if (firstTimer !== null) requestHostTimeout(handleTimeout, firstTimer.startTime - currentTime);
     }
 }
 //@ chunk-bzr73sfg.js:4406-4463 esm-fingerprint
-function Ny() {
-  return sd ? !0 : Wi.unstable_now() - wy < Ay ? !1 : !0;
+function shouldYieldToHost() {
+  return needsPaint ? true : Wi.unstable_now() - startTime < frameInterval ? false : true;
 }
 //@ chunk-bzr73sfg.js:4463-5029 esm-fingerprint
-function nd() {
-  if (((sd = !1), po)) {
-    var unstable_now = Wi.unstable_now();
-    wy = unstable_now;
-    var u = !0;
+function performWorkUntilDeadline() {
+  needsPaint = false;
+  if (isMessageLoopRunning) {
+    var currentTime = Wi.unstable_now();
+    startTime = currentTime;
+    var hasMoreWork = true;
     try {
       e: {
-        ((ml = !1), pl && ((pl = !1), Ty(yl), (yl = -1)), (ld = !0));
-        var f = Kt;
+        isHostCallbackScheduled = false;
+        if (isHostTimeoutScheduled) {
+          isHostTimeoutScheduled = false;
+          localClearTimeout(taskTimeoutID);
+          taskTimeoutID = -1;
+        }
+        isPerformingWork = true;
+        var previousPriorityLevel = currentPriorityLevel;
         try {
           t: {
-            ts(unstable_now);
-            for (On = oi(Ci); On !== null && !(On.expirationTime > unstable_now && Ny());) {
-              var callback = On.callback;
+            advanceTimers(currentTime);
+            for (
+              currentTask = peek(taskQueue);
+              currentTask !== null && !(currentTask.expirationTime > currentTime && shouldYieldToHost());
+            ) {
+              var callback = currentTask.callback;
               if (typeof callback === "function") {
-                ((On.callback = null), (Kt = On.priorityLevel));
-                var p = callback(On.expirationTime <= unstable_now);
-                if (((unstable_now = Wi.unstable_now()), typeof p === "function")) {
-                  ((On.callback = p), ts(unstable_now), (u = !0));
+                currentTask.callback = null;
+                currentPriorityLevel = currentTask.priorityLevel;
+                var continuationCallback = callback(currentTask.expirationTime <= currentTime);
+                currentTime = Wi.unstable_now();
+                if (typeof continuationCallback === "function") {
+                  currentTask.callback = continuationCallback;
+                  advanceTimers(currentTime);
+                  hasMoreWork = true;
                   break t;
                 }
-                (On === oi(Ci) && is(Ci), ts(unstable_now));
-              } else is(Ci);
-              On = oi(Ci);
+                if (currentTask === peek(taskQueue)) pop(taskQueue);
+                advanceTimers(currentTime);
+              } else pop(taskQueue);
+              currentTask = peek(taskQueue);
             }
-            if (On !== null) u = !0;
+            if (currentTask !== null) hasMoreWork = true;
             else {
-              var g = oi(Ki);
-              (g !== null && cd(ud, g.startTime - unstable_now), (u = !1));
+              var firstTimer = peek(timerQueue);
+              if (firstTimer !== null) requestHostTimeout(handleTimeout, firstTimer.startTime - currentTime);
+              hasMoreWork = false;
             }
           }
           break e;
         } finally {
-          ((On = null), (Kt = f), (ld = !1));
+          currentTask = null;
+          currentPriorityLevel = previousPriorityLevel;
+          isPerformingWork = false;
         }
-        u = void 0;
+        hasMoreWork = undefined;
       }
     } finally {
-      u ? mo() : (po = !1);
+      if (hasMoreWork) schedulePerformWorkUntilDeadline();
+      else isMessageLoopRunning = false;
     }
   }
 }
 //@ chunk-bzr73sfg.js:5029-5088 esm-fingerprint
-function cd(n, u) {
-  yl = My(function () {
-    n(Wi.unstable_now());
+function requestHostTimeout(handleTimeout, u) {
+  taskTimeoutID = localSetTimeout(function () {
+    handleTimeout(Wi.unstable_now());
   }, u);
 }
 //@ chunk-bzr73sfg.js:5088-6328 esm-layout
-var Yn = void 0,
-  rd,
-  es,
-  od,
-  Ci,
-  Ki,
-  Dx = 1,
-  On = null,
-  Kt = 3,
-  ld = !1,
-  ml = !1,
-  pl = !1,
-  sd = !1,
-  My,
-  Ty,
-  Ry,
-  po = !1,
-  yl = -1,
-  Ay = 5,
-  wy = -1,
-  mo,
-  ns,
-  ad,
-  rs = 5,
-  os = 1,
-  Dy = 4,
-  gl = 3,
-  _y = null,
-  ls = 2,
-  as = function (n) {
-    n.callback = null;
-  },
-  Oy = function (n) {
-    0 > n || 125 < n
-      ? console.error(
-          "forceFrameRate takes a positive int between 0 and 125, forcing frame rates higher than 125 fps is not supported",
-        )
-      : (Ay = 0 < n ? Math.floor(1000 / n) : 5);
-  },
-  Hy = function () {
-    return Kt;
-  },
-  Ly = function (n) {
-    switch (Kt) {
-      case 1:
-      case 2:
-      case 3:
-        var u = 3;
-        break;
-      default:
-        u = Kt;
-    }
-    var f = Kt;
-    Kt = u;
-    try {
-      return n();
-    } finally {
-      Kt = f;
-    }
-  },
-  ss = function () {
-    sd = !0;
-  },
-  Py = function (n, u) {
-    switch (n) {
-      case 1:
-      case 2:
-      case 3:
-      case 4:
-      case 5:
-        break;
-      default:
-        n = 3;
-    }
-    var f = Kt;
-    Kt = n;
-    try {
-      return u();
-    } finally {
-      Kt = f;
-    }
-  },
-  bl = function (n, u, f) {
-    var unstable_now = Wi.unstable_now();
-    switch (
-      (typeof f === "object" && f !== null
-        ? ((f = f.delay), (f = typeof f === "number" && 0 < f ? unstable_now + f : unstable_now))
-        : (f = unstable_now),
-      n)
-    ) {
-      case 1:
-        var p = -1;
-        break;
-      case 2:
-        p = 250;
-        break;
-      case 5:
-        p = 1073741823;
-        break;
-      case 4:
-        p = 1e4;
-        break;
-      default:
-        p = 5000;
-    }
-    return (
-      (p = f + p),
-      (n = { id: Dx++, callback: u, priorityLevel: n, startTime: f, expirationTime: p, sortIndex: -1 }),
-      f > unstable_now
-        ? ((n.sortIndex = f),
-          id(Ki, n),
-          oi(Ci) === null && n === oi(Ki) && (pl ? (Ty(yl), (yl = -1)) : (pl = !0), cd(ud, f - unstable_now)))
-        : ((n.sortIndex = p), id(Ci, n), ml || ld || ((ml = !0), po || ((po = !0), mo()))),
-      n
+var Yn = undefined;
+var localPerformance;
+var localDate;
+var initialTime;
+var taskQueue;
+var timerQueue;
+var taskIdCounter = 1;
+var currentTask = null;
+var currentPriorityLevel = 3;
+var isPerformingWork = false;
+var isHostCallbackScheduled = false;
+var isHostTimeoutScheduled = false;
+var needsPaint = false;
+var localSetTimeout;
+var localClearTimeout;
+var localSetImmediate;
+var isMessageLoopRunning = false;
+var taskTimeoutID = -1;
+var frameInterval = 5;
+var startTime = -1;
+var schedulePerformWorkUntilDeadline;
+var ns;
+var ad;
+var rs = 5;
+var os = 1;
+var Dy = 4;
+var gl = 3;
+var _y = null;
+var ls = 2;
+var as = function (task) {
+  task.callback = null;
+};
+var Oy = function (fps) {
+  if (0 > fps || 125 < fps)
+    console.error(
+      "forceFrameRate takes a positive int between 0 and 125, forcing frame rates higher than 125 fps is not supported",
     );
-  },
-  us,
-  By = function (n) {
-    var u = Kt;
-    return function () {
-      var f = Kt;
-      Kt = u;
-      try {
-        return n.apply(this, arguments);
-      } finally {
-        Kt = f;
-      }
-    };
+  else frameInterval = 0 < fps ? Math.floor(1000 / fps) : 5;
+};
+var Hy = function () {
+  return currentPriorityLevel;
+};
+var Ly = function (eventHandler) {
+  switch (currentPriorityLevel) {
+    case 1:
+    case 2:
+    case 3:
+      var priorityLevel = 3;
+      break;
+    default:
+      priorityLevel = currentPriorityLevel;
+  }
+  var previousPriorityLevel = currentPriorityLevel;
+  currentPriorityLevel = priorityLevel;
+  try {
+    return eventHandler();
+  } finally {
+    currentPriorityLevel = previousPriorityLevel;
+  }
+};
+var ss = function () {
+  needsPaint = true;
+};
+var Py = function (priorityLevel, eventHandler) {
+  switch (priorityLevel) {
+    case 1:
+    case 2:
+    case 3:
+    case 4:
+    case 5:
+      break;
+    default:
+      priorityLevel = 3;
+  }
+  var previousPriorityLevel = currentPriorityLevel;
+  currentPriorityLevel = priorityLevel;
+  try {
+    return eventHandler();
+  } finally {
+    currentPriorityLevel = previousPriorityLevel;
+  }
+};
+var bl = function (priorityLevel, callback, options) {
+  var currentTime = Wi.unstable_now();
+  switch (
+    (typeof options === "object" && options !== null
+      ? ((options = options.delay),
+        (options = typeof options === "number" && 0 < options ? currentTime + options : currentTime))
+      : (options = currentTime),
+    priorityLevel)
+  ) {
+    case 1:
+      var timeout = -1;
+      break;
+    case 2:
+      timeout = 250;
+      break;
+    case 5:
+      timeout = 1073741823;
+      break;
+    case 4:
+      timeout = 1e4;
+      break;
+    default:
+      timeout = 5000;
+  }
+  timeout = options + timeout;
+  priorityLevel = {
+    id: taskIdCounter++,
+    callback,
+    priorityLevel,
+    startTime: options,
+    expirationTime: timeout,
+    sortIndex: -1,
   };
+  if (options > currentTime) {
+    priorityLevel.sortIndex = options;
+    push(timerQueue, priorityLevel);
+    if (peek(taskQueue) === null && priorityLevel === peek(timerQueue)) {
+      if (isHostTimeoutScheduled) {
+        localClearTimeout(taskTimeoutID);
+        taskTimeoutID = -1;
+      } else isHostTimeoutScheduled = true;
+      requestHostTimeout(handleTimeout, options - currentTime);
+    }
+  } else {
+    priorityLevel.sortIndex = timeout;
+    push(taskQueue, priorityLevel);
+    if (!(isHostCallbackScheduled || isPerformingWork)) {
+      isHostCallbackScheduled = true;
+      if (!isMessageLoopRunning) {
+        isMessageLoopRunning = true;
+        schedulePerformWorkUntilDeadline();
+      }
+    }
+  }
+  return priorityLevel;
+};
+var shouldYieldToHost_default;
+var By = function (callback) {
+  var parentPriorityLevel = currentPriorityLevel;
+  return function () {
+    var f = currentPriorityLevel;
+    currentPriorityLevel = parentPriorityLevel;
+    try {
+      return callback.apply(this, arguments);
+    } finally {
+      currentPriorityLevel = f;
+    }
+  };
+};
 //@ chunk-bzr73sfg.js:6328-6890 esm-fingerprint
-var ky = Xa(() => {
-  if (typeof performance === "object" && typeof performance.now === "function")
-    ((rd = performance),
-      (Yn = function () {
-        return rd.now();
-      }));
-  else
-    ((es = Date),
-      (od = es.now()),
-      (Yn = function () {
-        return es.now() - od;
-      }));
-  ((Ci = []),
-    (Ki = []),
-    (My = typeof setTimeout === "function" ? setTimeout : null),
-    (Ty = typeof clearTimeout === "function" ? clearTimeout : null),
-    (Ry = typeof setImmediate < "u" ? setImmediate : null));
-  if (typeof Ry === "function")
-    mo = function () {
-      Ry(nd);
+var init_scheduler_production = Xa(() => {
+  if (typeof performance === "object" && typeof performance.now === "function") {
+    localPerformance = performance;
+    Yn = function () {
+      return localPerformance.now();
     };
-  else if (typeof MessageChannel < "u")
-    ((ns = new MessageChannel()),
-      (ad = ns.port2),
-      (ns.port1.onmessage = nd),
-      (mo = function () {
-        ad.postMessage(null);
-      }));
-  else
-    mo = function () {
-      My(nd, 0);
+  } else {
+    localDate = Date;
+    initialTime = localDate.now();
+    Yn = function () {
+      return localDate.now() - initialTime;
     };
-  us = Ny;
+  }
+  taskQueue = [];
+  timerQueue = [];
+  localSetTimeout = typeof setTimeout === "function" ? setTimeout : null;
+  localClearTimeout = typeof clearTimeout === "function" ? clearTimeout : null;
+  localSetImmediate = typeof setImmediate !== "undefined" ? setImmediate : null;
+  if (typeof localSetImmediate === "function")
+    schedulePerformWorkUntilDeadline = function () {
+      localSetImmediate(performWorkUntilDeadline);
+    };
+  else if (typeof MessageChannel !== "undefined") {
+    ns = new MessageChannel();
+    ad = ns.port2;
+    ns.port1.onmessage = performWorkUntilDeadline;
+    schedulePerformWorkUntilDeadline = function () {
+      ad.postMessage(null);
+    };
+  } else
+    schedulePerformWorkUntilDeadline = function () {
+      localSetTimeout(performWorkUntilDeadline, 0);
+    };
+  shouldYieldToHost_default = shouldYieldToHost;
 });
-
-export { Yn, rs, os, Dy, gl, _y, ls, as, Oy, Hy, Ly, ss, Py, bl, us, By, ky };
+export {
+  Yn,
+  rs,
+  os,
+  Dy,
+  gl,
+  _y,
+  ls,
+  as,
+  Oy,
+  Hy,
+  Ly,
+  ss,
+  Py,
+  bl,
+  shouldYieldToHost_default,
+  By,
+  init_scheduler_production,
+};

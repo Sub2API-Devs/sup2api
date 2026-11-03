@@ -13,23 +13,30 @@ import { sequential } from "../utils/sequential.js";
 
 //@ chunk-81qqq1aq.js:6714-7027 fingerprint = renderPlaceholder (0.952)
 function renderPlaceholder({
-  placeholder: placeholder,
-  value: h,
-  showCursor: showCursor,
-  focus: focus,
-  terminalFocus: terminalFocus = !0,
-  invert: invert = inverseText,
-  hidePlaceholderText: hidePlaceholderText = !1,
+  placeholder,
+  value,
+  showCursor,
+  focus,
+  terminalFocus = true,
+  invert = inverseText,
+  hidePlaceholderText = false,
 }) {
-  let o = void 0;
+  let renderedPlaceholder = undefined;
   if (placeholder) {
-    if (hidePlaceholderText) o = showCursor && focus && terminalFocus ? invert(" ") : "";
-    else if (((o = sequential.dim(placeholder)), showCursor && focus && terminalFocus))
-      o =
-        placeholder.length > 0 ? invert(placeholder[0]) + sequential.dim(placeholder.slice(1)) : invert(" ");
+    if (hidePlaceholderText) renderedPlaceholder = showCursor && focus && terminalFocus ? invert(" ") : "";
+    else {
+      renderedPlaceholder = sequential.dim(placeholder);
+      if (showCursor && focus && terminalFocus)
+        renderedPlaceholder =
+          placeholder.length > 0
+            ? invert(placeholder[0]) + sequential.dim(placeholder.slice(1))
+            : invert(" ");
+    }
   }
-  let showPlaceholder = h.length === 0 && Boolean(placeholder);
-  return { renderedPlaceholder: o, showPlaceholder: showPlaceholder };
+  let showPlaceholder = value.length === 0 && Boolean(placeholder);
+  return {
+    renderedPlaceholder,
+    showPlaceholder,
+  };
 }
-
 export { renderPlaceholder };

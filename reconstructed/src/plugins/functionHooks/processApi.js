@@ -8,67 +8,7 @@
  * pieces: chunk-e6aww6q8.js (17)
  * attribution: placement 17
  */
-import {
-  resolve as resolve_2,
-  resolve as resolve_3,
-  resolve as resolve_4,
-  resolve as resolve_5,
-  resolve as resolve_6,
-  resolve as resolve_7,
-  resolve as resolve_8,
-  resolve as resolve_9,
-  resolve as resolve_10,
-  resolve as resolve_11,
-  resolve as resolve_12,
-  resolve as resolve_13,
-  resolve as resolve_14,
-  resolve as resolve_15,
-  resolve as resolve_16,
-  resolve as resolve_17,
-  resolve as resolve_18,
-  resolve as resolve_19,
-  resolve as resolve_20,
-  resolve as resolve_21,
-  resolve as resolve_22,
-  resolve as resolve_23,
-  resolve as resolve_24,
-  resolve as resolve_25,
-  resolve as resolve_26,
-  resolve as resolve_27,
-  resolve as resolve_28,
-  resolve as resolve_29,
-  resolve as resolve_30,
-  resolve as resolve_31,
-  resolve as resolve_32,
-  resolve as resolve_33,
-  resolve as resolve_34,
-  resolve as resolve_35,
-  resolve as resolve_36,
-  resolve as resolve_37,
-  resolve as resolve_38,
-  resolve as resolve_39,
-  resolve as resolve_40,
-  resolve as resolve_41,
-  resolve as resolve_42,
-  resolve as resolve_43,
-  resolve as resolve_44,
-  resolve as resolve_45,
-  resolve as resolve_46,
-  resolve as resolve_47,
-  resolve as resolve_48,
-  resolve as resolve_49,
-  resolve as resolve_50,
-  resolve as resolve_51,
-  resolve as resolve_52,
-  resolve as resolve_53,
-  resolve as resolve_54,
-  resolve as resolve_55,
-  resolve as resolve_56,
-  resolve as resolve_57,
-  resolve as resolve_58,
-  resolve as resolve_59,
-  resolve as resolve_60,
-} from "path";
+import { resolve as resolve_2 } from "path";
 import {
   killIfUnchanged,
   killProcessGroup as killProcessGroup_2,
@@ -81,101 +21,132 @@ import { buildSafeGitInvocation } from "../../utils/git/gitSafeInvocation.js";
 import { safeSpawn } from "../../utils/safeSpawn.js";
 import { getErrnoCode, errorMessage } from "../../utils/errors.js";
 import { getCwd } from "../../utils/cwd.js";
-import { Ntr } from "./panes.js";
+import { MAX_PROCESS_TIMEOUT_MS } from "./panes.js";
 import { createTimeoutController } from "./httpApi.js";
-import { ZPe } from "./modelApi.js";
+import { prefixedErrorCtor } from "./modelApi.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { HooksError } from "./hooksErrors.js";
 import { registerCleanup } from "../../utils/cleanupRegistry.js";
-import { G3 } from "./surfaceBinding.js";
+import { surfaceComposer } from "./surfaceBinding.js";
 
+//@ chunk-e6aww6q8.js:3986460-3986929 placement
 /**
  * 收集子进程输出流至多 n 字节，结束时返回 {text, isTruncated}。
  */
-//@ chunk-e6aww6q8.js:3986460-3986929 placement
 function collectStreamCapped(e, n) {
-  if (!(e !== null && e !== void 0)) return Promise.resolve({ text: "", isTruncated: !1 });
-  return new Promise((s) => {
-    let h = [],
-      y = 0,
-      S = !1;
+  if (!(e !== null && e !== undefined))
+    return Promise.resolve({
+      text: "",
+      isTruncated: false,
+    });
+  return new Promise((resolve) => {
+    let h = [];
+    let y = 0;
+    let S = false;
     function w(G) {
-      let q = n - y,
-        Z = G.byteLength > q;
-      if (Z) S = !0;
+      let q = n - y;
+      let Z = G.byteLength > q;
+      if (Z) S = true;
       if (q <= 0) return;
       let Se = Z ? G.subarray(0, q) : G;
-      (h.push(Se), (y += Se.byteLength));
+      h.push(Se);
+      y += Se.byteLength;
     }
     function L() {
       e?.off("data", w);
       let buffer = Buffer.concat(h);
-      s({
-        text: S ? new TextDecoder().decode(buffer, { stream: !0 }) : buffer.toString("utf8"),
+      resolve({
+        text: S
+          ? new TextDecoder().decode(buffer, {
+              stream: true,
+            })
+          : buffer.toString("utf8"),
         isTruncated: S,
       });
     }
-    (e?.on("data", w), e?.once("end", L), e?.once("error", L), e?.once("close", L));
+    e?.on("data", w);
+    e?.once("end", L);
+    e?.once("error", L);
+    e?.once("close", L);
   });
 }
 //@ chunk-e6aww6q8.js:3986929-3986973 placement
-function oMe(e) {
+/**
+ * 销毁所有流
+ */
+function destroyStreams(e) {
   for (let n of e) n?.destroy();
 }
 //@ chunk-e6aww6q8.js:3986973-3986985 placement
-var T0n = 500;
+/**
+ * 500
+ */
+var KILL_GRACE_POLL_MS = 500;
 //@ chunk-e6aww6q8.js:3986985-3986998 placement
-var v0n = 2000;
+/**
+ * 2000
+ */
+var DEFAULT_KILL_GRACE_MS = 2000;
 //@ chunk-e6aww6q8.js:3986998-3987046 placement = killCaffeinate (0.805)
-function killCaffeinate(e, n, r) {
-  (killIfUnchanged(e, "SIGKILL"), oMe(n), r());
+function killCaffeinate(e, streams, r) {
+  killIfUnchanged(e, "SIGKILL");
+  destroyStreams(streams);
+  r();
 }
+//@ chunk-e6aww6q8.js:3987046-3987372 placement
 /**
  * 结束插件子进程：对进程组发 SIGTERM，等待宽限期或关闭事件后强制清理剩余进程与流。
  */
-//@ chunk-e6aww6q8.js:3987046-3987372 placement
-function terminateProcessTree(e, { streams: streams, done: r, graceMs: graceMs = v0n }) {
-  let { pid: pid } = e;
-  if (pid === void 0 || e.exitCode !== null || e.signalCode !== null) {
-    oMe(streams);
+function terminateProcessTree(e, { streams, done: r, graceMs = DEFAULT_KILL_GRACE_MS }) {
+  let { pid } = e;
+  if (pid === undefined || e.exitCode !== null || e.signalCode !== null) {
+    destroyStreams(streams);
     return;
   }
-  let promise = new Promise((w) => {
-    e.once("close", () => w());
+  let promise = new Promise((resolve) => {
+    e.once("close", () => resolve());
   });
   return killProcessGroup_2(pid, "SIGTERM")
     .then((w) => processStartTokens([pid, ...w]))
     .then(async (w) => {
-      let L = sleep(graceMs, void 0, { unref: !0 });
-      (await (w.size <= 1 ? Promise.race([L, promise]) : L), killCaffeinate(w, streams, r));
+      let L = sleep(graceMs, undefined, {
+        unref: true,
+      });
+      await (w.size <= 1 ? Promise.race([L, promise]) : L);
+      killCaffeinate(w, streams, r);
     });
 }
 //@ chunk-e6aww6q8.js:3987372-3987388 placement
-var uat = 4194304;
+/**
+ * 4194304
+ */
+var MAX_COLLECTED_OUTPUT_BYTES = 4194304;
 //@ chunk-e6aww6q8.js:3987421-3987445 placement
-var cat = "$.process.run";
+/**
+ * "$.process.run"
+ */
+var PROCESS_RUN_LABEL = "$.process.run";
 //@ chunk-e6aww6q8.js:3987445-3987459 placement
-var R0n = 30000;
+/**
+ * 30000
+ */
+var DEFAULT_PROCESS_TIMEOUT_MS = 30000;
+//@ chunk-e6aww6q8.js:3987459-3987715 placement
 /**
  * 以插件身份启动子进程：合并环境变量（检查 Bun 选项）、git 命令走安全调用，放入插件 cgroup，stdout/stderr 管道。
  */
-//@ chunk-e6aww6q8.js:3987459-3987715 placement
-function spawnPluginProcess({
-  command: command,
-  args: args,
-  cwd: cwd,
-  env: env,
-  hasInput: hasInput,
-  pluginId: pluginId,
-}) {
-  let S = subprocessEnv(),
-    w = { ...S, ...env };
+function spawnPluginProcess({ command, args, cwd, env, hasInput, pluginId }) {
+  let S = subprocessEnv();
+  let w = {
+    ...S,
+    ...env,
+  };
   checkPluginBunOptions(pluginId, w, S);
-  let L = buildSafeGitInvocation(command, args, w);
-  return safeSpawn(command, L?.args ?? args, {
-    cwd: cwd,
-    env: L?.env ?? w,
-    extendEnv: !1,
+  let safeGitInvocation = buildSafeGitInvocation(command, args, w);
+  return safeSpawn(command, safeGitInvocation?.args ?? args, {
+    cwd,
+    env: safeGitInvocation?.env ?? w,
+    extendEnv: false,
     stdin: hasInput ? "pipe" : "ignore",
     stdout: "pipe",
     stderr: "pipe",
@@ -183,201 +154,264 @@ function spawnPluginProcess({
   });
 }
 //@ chunk-e6aww6q8.js:3987715-3987803 placement
-function cMe(e) {
-  let n = getErrnoCode(e),
-    r = errorMessage(e);
-  return `failed to start: ${n === void 0 ? r : `${n}: ${r}`}`;
+/**
+ * 启动失败说明
+ */
+function spawnFailureText(e) {
+  let errnoCode = getErrnoCode(e);
+  let r = errorMessage(e);
+  return `failed to start: ${errnoCode === undefined ? r : `${errnoCode}: ${r}`}`;
 }
+//@ chunk-e6aww6q8.js:3987803-3989180 placement
 /**
  * 插件 $.process.spawn：启动长期子进程并转发事件。
  */
-//@ chunk-e6aww6q8.js:3987803-3989180 placement
-async function processSpawnForPlugin({ argv: argv, init: init }, r, { signal: s, cwd: h, pluginId: y } = {}) {
-  let [S = "", ...w] = argv,
-    L = h ?? getCwd(),
-    G = init?.cwd === void 0 ? L : resolve_42(L, init.cwd),
-    min = Math.min(init?.timeoutMs ?? R0n, Ntr),
-    Z = `${cat} (${r})`,
-    Se = createTimeoutController(s, min),
-    now = Date.now(),
-    we = ZPe(r, cat, S),
-    Ee = !1,
-    Ae = () => {
-      return;
-    },
-    promise = new Promise((Me) => {
-      Ae = () => Me(void 0);
-    });
+async function processSpawnForPlugin({ argv, init }, r, { signal: s, cwd: h, pluginId: y } = {}) {
+  let [S = "", ...w] = argv;
+  let L = h ?? getCwd();
+  let G = init?.cwd === undefined ? L : resolve_2(L, init.cwd);
+  let min = Math.min(init?.timeoutMs ?? DEFAULT_PROCESS_TIMEOUT_MS, MAX_PROCESS_TIMEOUT_MS);
+  let Z = `${PROCESS_RUN_LABEL} (${r})`;
+  let timeoutController = createTimeoutController(s, min);
+  let now = Date.now();
+  let we = prefixedErrorCtor(r, PROCESS_RUN_LABEL, S);
+  let Ee = false;
+  let done = () => {
+    return;
+  };
+  let promise = new Promise((resolve) => {
+    done = () => resolve(undefined);
+  });
   try {
     let lt = function () {
-        if (terminateProcessTree(Me, { streams: We, done: Ae }) !== void 0) Ee = !0;
-      },
-      Me = spawnPluginProcess({
-        command: S,
-        args: w,
-        cwd: G,
-        env: init?.env,
-        hasInput: init?.stdin !== void 0,
-        pluginId: y,
-      }),
-      We = [Me.stdout, Me.stderr];
-    logForDebugging(`${Z}: ${S} with ${w.length} args in ${G} (pid ${Me.pid ?? "?"})`);
-    let promise_2 = new Promise((gt, At) => {
-      (Me.once("error", At), Me.once("close", (It) => gt(It ?? 1)));
+      if (
+        terminateProcessTree(pluginProcess, {
+          streams,
+          done,
+        }) !== undefined
+      )
+        Ee = true;
+    };
+    let pluginProcess = spawnPluginProcess({
+      command: S,
+      args: w,
+      cwd: G,
+      env: init?.env,
+      hasInput: init?.stdin !== undefined,
+      pluginId: y,
     });
-    if (
-      (promise_2.catch(() => {}),
-      Se.controller.signal.addEventListener("abort", lt, { once: !0 }),
-      Se.controller.signal.aborted)
-    )
-      lt();
-    if (init?.stdin !== void 0 && Me.stdin !== null)
-      (Me.stdin.once("error", () => {}), Me.stdin.end(init.stdin));
+    let streams = [pluginProcess.stdout, pluginProcess.stderr];
+    logForDebugging(`${Z}: ${S} with ${w.length} args in ${G} (pid ${pluginProcess.pid ?? "?"})`);
+    let promise_2 = new Promise((resolve, reject) => {
+      pluginProcess.once("error", reject);
+      pluginProcess.once("close", (It) => resolve(It ?? 1));
+    });
+    promise_2.catch(() => {});
+    timeoutController.controller.signal.addEventListener("abort", lt, {
+      once: true,
+    });
+    if (timeoutController.controller.signal.aborted) lt();
+    if (init?.stdin !== undefined && pluginProcess.stdin !== null) {
+      pluginProcess.stdin.once("error", () => {});
+      pluginProcess.stdin.end(init.stdin);
+    }
     let winner = await Promise.race([
-        Promise.all([collectStreamCapped(Me.stdout, uat), collectStreamCapped(Me.stderr, uat), promise_2]),
-        promise,
+      Promise.all([
+        collectStreamCapped(pluginProcess.stdout, MAX_COLLECTED_OUTPUT_BYTES),
+        collectStreamCapped(pluginProcess.stderr, MAX_COLLECTED_OUTPUT_BYTES),
+        promise_2,
       ]),
-      nt = winner === void 0 || Ee;
-    if (nt && Se.timedOut()) throw we(`aborted: still running after ${min}ms`);
+      promise,
+    ]);
+    let nt = winner === undefined || Ee;
+    if (nt && timeoutController.timedOut()) throw we(`aborted: still running after ${min}ms`);
     if (nt) throw we("aborted");
     let [pt, Et, yt] = winner;
-    return (
-      logForDebugging(
-        `${Z}: ${S} exited ${yt} in ${Date.now() - now}ms, ${pt.text.length} + ${Et.text.length} chars`,
-      ),
-      {
-        exitCode: yt,
-        stdout: pt.text,
-        stderr: Et.text,
-        isStdoutTruncated: pt.isTruncated,
-        isStderrTruncated: Et.isTruncated,
-      }
+    logForDebugging(
+      `${Z}: ${S} exited ${yt} in ${Date.now() - now}ms, ${pt.text.length} + ${Et.text.length} chars`,
     );
+    return {
+      exitCode: yt,
+      stdout: pt.text,
+      stderr: Et.text,
+      isStdoutTruncated: pt.isTruncated,
+      isStderrTruncated: Et.isTruncated,
+    };
   } catch (error) {
     if (error instanceof HooksError) throw error;
-    let We = cMe(error);
-    throw (logForDebugging(`${Z}: ${S} ${We}`, { level: "warn" }), we(We));
+    let failureText = spawnFailureText(error);
+    logForDebugging(`${Z}: ${S} ${failureText}`, {
+      level: "warn",
+    });
+    throw we(failureText);
   } finally {
-    Se.release();
+    timeoutController.release();
   }
 }
 //@ chunk-e6aww6q8.js:3989213-3989229 placement
-var fat = 1048576;
+/**
+ * 1048576
+ */
+var MAX_SPAWN_OUTPUT_BYTES = 1048576;
 //@ chunk-e6aww6q8.js:3989229-3989255 placement
-var pat = "$.process.spawn";
+/**
+ * "$.process.spawn"
+ */
+var PROCESS_SPAWN_LABEL = "$.process.spawn";
+//@ chunk-e6aww6q8.js:3989255-3991045 placement
 /**
  * 插件 $.process.run：运行子进程并收集输出，支持中止。
  */
-//@ chunk-e6aww6q8.js:3989255-3991045 placement
-async function* processRunForPlugin(
-  { argv: argv, cwd: cwd, env: env, input: input },
-  h,
-  { signal: y, cwd: S, pluginId: w } = {},
-) {
-  let [L = "", ...G] = argv,
-    q = S ?? getCwd(),
-    Z = cwd === void 0 ? q : resolve_43(q, cwd),
-    Se = `${pat} (${h})`,
-    now = Date.now(),
-    we = ZPe(h, pat, L),
-    Ee = [],
-    Ae = 0,
-    Ie = !1,
-    Me = 0,
-    We;
+async function* processRunForPlugin({ argv, cwd, env, input }, h, { signal: y, cwd: S, pluginId: w } = {}) {
+  let [L = "", ...G] = argv;
+  let q = S ?? getCwd();
+  let Z = cwd === undefined ? q : resolve_2(q, cwd);
+  let Se = `${PROCESS_SPAWN_LABEL} (${h})`;
+  let now = Date.now();
+  let we = prefixedErrorCtor(h, PROCESS_SPAWN_LABEL, L);
+  let Ee = [];
+  let Ae = 0;
+  let Ie = false;
+  let Me = 0;
+  let We;
   function ze(qt) {
-    (Ee.push(qt), We?.());
+    Ee.push(qt);
+    We?.();
   }
   function lt(qt) {
-    let Zt = cMe(qt);
-    return (logForDebugging(`${Se}: ${L} ${Zt}`, { level: "warn" }), we(Zt));
+    let failureText = spawnFailureText(qt);
+    logForDebugging(`${Se}: ${L} ${failureText}`, {
+      level: "warn",
+    });
+    return we(failureText);
   }
-  if (y?.aborted === !0) throw we("aborted");
+  if (y?.aborted === true) throw we("aborted");
   let Je;
   try {
     Je = spawnPluginProcess({
       command: L,
       args: G,
       cwd: Z,
-      env: env,
-      hasInput: input !== void 0,
+      env,
+      hasInput: input !== undefined,
       pluginId: w,
     });
   } catch (error) {
     throw lt(error);
   }
-  let nt = [Je.stdout, Je.stderr],
-    pt,
-    Et = !1;
-  function yt(qt) {
-    if (!Et) ((Et = !0), (pt = terminateProcessTree(Je, { streams: nt, done: () => {}, graceMs: qt })));
+  let nt = [Je.stdout, Je.stderr];
+  let pt;
+  let Et = false;
+  function yt(graceMs) {
+    if (!Et) {
+      Et = true;
+      pt = terminateProcessTree(Je, {
+        streams: nt,
+        done: () => {},
+        graceMs,
+      });
+    }
     return pt;
   }
   let gt = registerCleanup(async () => {
-    await yt(T0n);
+    await yt(KILL_GRACE_POLL_MS);
   });
   logForDebugging(`${Se}: ${L} with ${G.length} args in ${Z} (pid ${Je.pid ?? "?"})`);
   function At(qt) {
     Ie = !qt;
-    for (let Zt of nt) qt ? Zt?.resume() : Zt?.pause();
+    for (let Zt of nt)
+      if (qt) Zt?.resume();
+      else Zt?.pause();
   }
-  function It(qt, Zt) {
-    (qt?.setEncoding("utf8"),
-      qt?.on("data", (rn) => {
-        if (rn === "") return;
-        if (((Ae += rn.length), ze({ stream: Zt, text: rn }), Ae > fat && !Ie)) At(!1);
-      }),
-      qt?.once("error", () => {}));
+  function It(qt, stream) {
+    qt?.setEncoding("utf8");
+    qt?.on("data", (rn) => {
+      if (rn === "") return;
+      Ae += rn.length;
+      ze({
+        stream,
+        text: rn,
+      });
+      if (Ae > MAX_SPAWN_OUTPUT_BYTES && !Ie) At(false);
+    });
+    qt?.once("error", () => {});
   }
-  (It(Je.stdout, "stdout"),
-    It(Je.stderr, "stderr"),
-    Je.once("error", (qt) => ze({ failed: lt(qt) })),
-    Je.once("close", (qt, Zt) => ze({ ended: { code: qt, signal: Zt } })));
+  It(Je.stdout, "stdout");
+  It(Je.stderr, "stderr");
+  Je.once("error", (qt) =>
+    ze({
+      failed: lt(qt),
+    }),
+  );
+  Je.once("close", (code, signal) =>
+    ze({
+      ended: {
+        code,
+        signal,
+      },
+    }),
+  );
   function Yt() {
-    let qt = !Et && yt() !== void 0;
-    if (((Ee.length = 0), ze({ failed: we("aborted") }), qt))
-      logForDebugging(`${Se}: ${L} stopped: the op was aborted`);
+    let qt = !Et && yt() !== undefined;
+    Ee.length = 0;
+    ze({
+      failed: we("aborted"),
+    });
+    if (qt) logForDebugging(`${Se}: ${L} stopped: the op was aborted`);
   }
-  if ((y?.addEventListener("abort", Yt, { once: !0 }), input !== void 0 && Je.stdin !== null))
-    (Je.stdin.once("error", () => {}), Je.stdin.end(input));
+  y?.addEventListener("abort", Yt, {
+    once: true,
+  });
+  if (input !== undefined && Je.stdin !== null) {
+    Je.stdin.once("error", () => {});
+    Je.stdin.end(input);
+  }
   try {
-    while (!0) {
+    while (true) {
       let qt = Ee.shift();
-      if (qt === void 0) {
-        (await new Promise((Zt) => {
-          We = Zt;
-        }),
-          (We = void 0));
+      if (qt === undefined) {
+        await new Promise((resolve) => {
+          We = resolve;
+        });
+        We = undefined;
         continue;
       }
       if ("failed" in qt) throw qt.failed;
       if ("ended" in qt) {
-        let { ended: ended } = qt;
-        return (
-          logForDebugging(
-            `${Se}: ${L} ended (${ended.code ?? ended.signal}) in ${Date.now() - now}ms, ${Me} chunks`,
-          ),
-          ended
+        let { ended } = qt;
+        logForDebugging(
+          `${Se}: ${L} ended (${ended.code ?? ended.signal}) in ${Date.now() - now}ms, ${Me} chunks`,
         );
+        return ended;
       }
-      if (((Ae -= qt.text.length), (Me += 1), Ie && Ae <= fat)) At(!0);
+      Ae -= qt.text.length;
+      Me += 1;
+      if (Ie && Ae <= MAX_SPAWN_OUTPUT_BYTES) At(true);
       yield qt;
     }
   } finally {
-    if ((y?.removeEventListener("abort", Yt), gt(), !Et && yt() !== void 0))
+    y?.removeEventListener("abort", Yt);
+    gt();
+    if (!Et && yt() !== undefined)
       logForDebugging(`${Se}: ${L} stopped after ${Date.now() - now}ms: the stream was let go`);
   }
 }
 //@ chunk-e6aww6q8.js:3991045-3991103 placement
-var x9r = (e, n) => e.decorations.length === 0 || n?.text === e.text;
+/**
+ * 装饰段未变或文本相同
+ */
+var decorationsUnchanged = (e, promptBoxForPlugin) =>
+  e.decorations.length === 0 || promptBoxForPlugin?.text === e.text;
+//@ chunk-e6aww6q8.js:3991103-3991212 placement
 /**
  * $.prompt.paint：在当前绑定的输入框上绘制装饰段，无输入框时返回 {isPainted: false}。
  */
-//@ chunk-e6aww6q8.js:3991103-3991212 placement
-async function promptPaintOp(e, n) {
-  let r = G3();
-  if (r === void 0) return { isPainted: !1 };
-  return r.paint(n, e.decorations, e.text);
+async function promptPaintOp(e, plugin) {
+  let r = surfaceComposer();
+  if (r === undefined)
+    return {
+      isPainted: false,
+    };
+  return r.paint(plugin, e.decorations, e.text);
 }
-
-export { x9r, promptPaintOp, processSpawnForPlugin, processRunForPlugin };
+export { decorationsUnchanged, promptPaintOp, processSpawnForPlugin, processRunForPlugin };

@@ -8,41 +8,43 @@
 import { x, importMetaRequire } from "../../runtime/bun-runtime.js";
 
 //@ chunk-82d8c88w.js:229-1109 cjs-fingerprint
-var d = x(function (V, W) {
-  /*! safe-buffer. MIT License. Feross Aboukhadijeh <https://feross.org/opensource> */ var A =
-      importMetaRequire("buffer"),
-    p = A.Buffer;
-  function U(e, r) {
-    for (var key in e) r[key] = e[key];
+var require_safe_buffer = x(function (cjsExports, cjsModule) {
+  /*! safe-buffer. MIT License. Feross Aboukhadijeh <https://feross.org/opensource> */
+  var buffer = importMetaRequire("buffer");
+  var p = buffer.Buffer;
+  function copyProps(src, dst) {
+    for (var key in src) dst[key] = src[key];
   }
-  if (p.from && p.alloc && p.allocUnsafe && p.allocUnsafeSlow) W.exports = A;
-  else (U(A, V), (V.Buffer = y));
-  function y(e, r, t) {
-    return p(e, r, t);
+  if (p.from && p.alloc && p.allocUnsafe && p.allocUnsafeSlow) cjsModule.exports = buffer;
+  else {
+    copyProps(buffer, cjsExports);
+    cjsExports.Buffer = SafeBuffer;
   }
-  y.prototype = Object.create(p.prototype);
-  U(p, y);
-  y.from = function (e, r, t) {
-    if (typeof e === "number") throw TypeError("Argument must not be a number");
-    return p(e, r, t);
+  function SafeBuffer(arg, encodingOrOffset, length) {
+    return p(arg, encodingOrOffset, length);
+  }
+  SafeBuffer.prototype = Object.create(p.prototype);
+  copyProps(p, SafeBuffer);
+  SafeBuffer.from = function (arg, encodingOrOffset, length) {
+    if (typeof arg === "number") throw TypeError("Argument must not be a number");
+    return p(arg, encodingOrOffset, length);
   };
-  y.alloc = function (e, r, t) {
-    if (typeof e !== "number") throw TypeError("Argument must be a number");
-    var n = p(e);
-    if (r !== void 0)
-      if (typeof t === "string") n.fill(r, t);
-      else n.fill(r);
-    else n.fill(0);
-    return n;
+  SafeBuffer.alloc = function (size, fill, encoding) {
+    if (typeof size !== "number") throw TypeError("Argument must be a number");
+    var buf = p(size);
+    if (fill !== undefined) {
+      if (typeof encoding === "string") buf.fill(fill, encoding);
+      else buf.fill(fill);
+    } else buf.fill(0);
+    return buf;
   };
-  y.allocUnsafe = function (e) {
-    if (typeof e !== "number") throw TypeError("Argument must be a number");
-    return p(e);
+  SafeBuffer.allocUnsafe = function (size) {
+    if (typeof size !== "number") throw TypeError("Argument must be a number");
+    return p(size);
   };
-  y.allocUnsafeSlow = function (e) {
-    if (typeof e !== "number") throw TypeError("Argument must be a number");
-    return A.SlowBuffer(e);
+  SafeBuffer.allocUnsafeSlow = function (size) {
+    if (typeof size !== "number") throw TypeError("Argument must be a number");
+    return buffer.SlowBuffer(size);
   };
 });
-
-export { d };
+export { require_safe_buffer };

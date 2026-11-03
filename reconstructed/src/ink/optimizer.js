@@ -9,13 +9,13 @@
  * attribution: fingerprint 1
  */
 
+//@ chunk-bzr73sfg.js:275127-275860 fingerprint = optimize (1)
 /**
  * Patch 列表窥孔优化：去掉空输出/零移动/空样式，合并相邻 cursorMove、styleStr，相邻 cursorTo 与光标显隐只留最后一个，重复超链接去掉。
  */
-//@ chunk-bzr73sfg.js:275127-275860 fingerprint = optimize (1)
 function optimize(diff) {
-  let result = [],
-    len = 0;
+  let result = [];
+  let len = 0;
   for (let patch of diff) {
     let type = patch.type;
     if (type === "stdout") {
@@ -28,22 +28,32 @@ function optimize(diff) {
       if (patch.str === "") continue;
     }
     if (len > 0) {
-      let g = len - 1,
-        last = result[g],
-        lastType = last.type;
+      let lastIdx = len - 1;
+      let last = result[lastIdx];
+      let lastType = last.type;
       if (type === "cursorMove" && lastType === "cursorMove") {
-        let A = last.x + patch.x,
-          D = last.y + patch.y;
-        if (A === 0 && D === 0) (result.pop(), len--);
-        else result[g] = { type: "cursorMove", x: A, y: D };
+        let A = last.x + patch.x;
+        let D = last.y + patch.y;
+        if (A === 0 && D === 0) {
+          result.pop();
+          len--;
+        } else
+          result[lastIdx] = {
+            type: "cursorMove",
+            x: A,
+            y: D,
+          };
         continue;
       }
       if (type === "cursorTo" && lastType === "cursorTo") {
-        result[g] = patch;
+        result[lastIdx] = patch;
         continue;
       }
       if (type === "styleStr" && lastType === "styleStr") {
-        result[g] = { type: "styleStr", str: last.str + patch.str };
+        result[lastIdx] = {
+          type: "styleStr",
+          str: last.str + patch.str,
+        };
         continue;
       }
       if (type === "hyperlink" && lastType === "hyperlink" && patch.uri === last.uri) continue;
@@ -51,13 +61,13 @@ function optimize(diff) {
         (type === "cursorShow" || type === "cursorHide") &&
         (lastType === "cursorShow" || lastType === "cursorHide")
       ) {
-        result[g] = patch;
+        result[lastIdx] = patch;
         continue;
       }
     }
-    (result.push(patch), len++);
+    result.push(patch);
+    len++;
   }
   return result;
 }
-
 export { optimize };

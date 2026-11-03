@@ -7,10 +7,9 @@
  */
 
 //@ chunk-hwmsct5x.js:90744-90862 esm-fingerprint
-var Cs = {
+var MODEL_NONSTREAMING_TOKENS = {
   "claude-opus-4@20250514": 8192,
   "anthropic.claude-opus-4-1-20250805-v1:0": 8192,
   "claude-opus-4-1@20250805": 8192,
 };
-
-export { Cs };
+export { MODEL_NONSTREAMING_TOKENS };

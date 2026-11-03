@@ -19,10 +19,10 @@ import { getSessionId } from "../../bootstrap/state.js";
 import { STORAGE_SPACES } from "../../utils/storage/storageSpaces.js";
 import { getSettingsFilePathForSource } from "../../utils/settings/settings.js";
 import { CLAUDE_CODE_GUIDE } from "../../constants/prompts.js";
-import { Fye } from "../../services/daemon/paths.js";
+import { daemonLogPath } from "../../services/daemon/paths.js";
 import { daemonLockPath, daemonLockStateKey } from "../../utils/daemon/daemonLock.js";
 import { daemonStatusPath, daemonStatusKey } from "../../daemon/daemonStatus.js";
-import { Q6 } from "../../utils/sandbox/userNamespace.js";
+import { daemonRosterFile } from "../../utils/sandbox/userNamespace.js";
 import { getJobsDir } from "../../services/daemon/jobState.js";
 import { formatStorageError } from "../../utils/storage/storageErrors.js";
 import { tailFile } from "../../utils/fsOperations.js";
@@ -30,13 +30,16 @@ import { isENOENT, errorMessage } from "../../utils/errors.js";
 import { formatFileSize } from "../../utils/format.js";
 
 //@ chunk-hantmvxa.js:102064-102091 affinity
-var DEBUG_TAIL_LINES = 20,
-  xo = 65536,
-  Io = 8192;
+/**
+ * 读取调试日志的字节上限。
+ */
+var DEBUG_TAIL_LINES = 20;
+var MAX_DEBUG_LOG_BYTES = 65536;
+var MAX_DEBUG_SETTINGS_CHARS = 8192;
+//@ chunk-hantmvxa.js:102091-103906 fingerprint = registerDebugSkill (0.766)
 /**
  * 注册 /debug 内置 skill：打开本会话调试日志，读取最近的 debug 日志与设置信息拼成诊断提示词；只能用户调用（disableModelInvocation）。
  */
-//@ chunk-hantmvxa.js:102091-103906 fingerprint = registerDebugSkill (0.766)
 function registerDebugSkill() {
   registerBundledSkill({
     name: "debug",
@@ -44,22 +47,25 @@ function registerDebugSkill() {
     description: "Enable debug logging for this session and help diagnose issues",
     allowedTools: ["Read", "Grep", "Glob"],
     argumentHint: "[issue description]",
-    disableModelInvocation: !0,
-    userInvocable: !0,
-    async getPromptForCommand(e, n) {
-      let wasAlreadyLogging = enableDebugLogging(),
-        debugLogPath = getDebugLogPath();
+    disableModelInvocation: true,
+    userInvocable: true,
+    async getPromptForCommand(args, n) {
+      let wasAlreadyLogging = enableDebugLogging();
+      let debugLogPath = getDebugLogPath();
       await flushDebugLogs();
-      let h = getSessionId(),
-        [y, w] = await Promise.all([
-          readLogTailSection(
-            debugLogPath,
-            n.storageV5 && isDefaultDebugLogPath(debugLogPath, h)
-              ? { backend: n.storageV5, key: STORAGE_SPACES.log(h, "debug") }
-              : void 0,
-          ),
-          buildDaemonDebugSection(n.storageV5),
-        ]);
+      let sessionId = getSessionId();
+      let [logTailSection, daemonDebugSection] = await Promise.all([
+        readLogTailSection(
+          debugLogPath,
+          n.storageV5 && isDefaultDebugLogPath(debugLogPath, sessionId)
+            ? {
+                backend: n.storageV5,
+                key: STORAGE_SPACES.log(sessionId, "debug"),
+              }
+            : undefined,
+        ),
+        buildDaemonDebugSection(n.storageV5),
+      ]);
       return [
         {
           type: "text",
@@ -81,15 +87,15 @@ Tell the user that debug logging is now active at \`${debugLogPath}\`, ask them 
 
 The debug log for the current session is at: \`${debugLogPath}\`
 
-${y}
+${logTailSection}
 
 For additional context, grep for [ERROR] and [WARN] lines across the full file.
 
-${w}
+${daemonDebugSection}
 
 ## Issue Description
 
-${e || "The user did not describe a specific issue. Read the debug log and summarize any errors, warnings, or notable issues."}
+${args || "The user did not describe a specific issue. Read the debug log and summarize any errors, warnings, or notable issues."}
 
 ## Settings
 
@@ -111,18 +117,36 @@ Remember that settings are in:
     },
   });
 }
+//@ chunk-hantmvxa.js:103906-104808 placement
 /**
  * 为内置 debug 技能生成 "## Daemon" 段：读取后台守护进程的 lock、status 文件与日志尾部；都不存在时说明守护进程未运行并给出日志路径。
  */
-//@ chunk-hantmvxa.js:103906-104808 placement
 async function buildDaemonDebugSection(backend) {
-  let n = Fye(),
-    [s, r, h] = await Promise.all([
-      readDaemonStateFile(daemonLockPath(), backend && { backend: backend, key: daemonLockStateKey() }),
-      readDaemonStateFile(daemonStatusPath(), backend && { backend: backend, key: daemonStatusKey() }),
-      readLogTailSection(n, backend && { backend: backend, key: STORAGE_SPACES.state("daemon-log") }),
-    ]);
-  if (s === null && r === null)
+  let n = daemonLogPath();
+  let [daemonStateFile, daemonStateFile_2, logTailSection] = await Promise.all([
+    readDaemonStateFile(
+      daemonLockPath(),
+      backend && {
+        backend,
+        key: daemonLockStateKey(),
+      },
+    ),
+    readDaemonStateFile(
+      daemonStatusPath(),
+      backend && {
+        backend,
+        key: daemonStatusKey(),
+      },
+    ),
+    readLogTailSection(
+      n,
+      backend && {
+        backend,
+        key: STORAGE_SPACES.state("daemon-log"),
+      },
+    ),
+  ]);
+  if (daemonStateFile === null && daemonStateFile_2 === null)
     return `## Daemon
 
 No daemon lock or status file found \u2014 the background daemon does not appear to be running. If the issue involves background sessions or \`claude agents\`, the daemon log (if any) is at \`${n}\`.`;
@@ -132,35 +156,43 @@ The background daemon manages \`& <prompt>\` jobs and \`claude agents\`. If the 
 
 ### daemon.lock
 \`\`\`json
-${s ?? "(missing)"}
+${daemonStateFile ?? "(missing)"}
 \`\`\`
 
 ### daemon.status.json
 \`\`\`json
-${r ?? "(missing)"}
+${daemonStateFile_2 ?? "(missing)"}
 \`\`\`
 
 ### Daemon log (\`${n}\`)
-${h}
+${logTailSection}
 
 Other daemon state on disk (Read if relevant \u2014 roster contains user prompts and env vars):
-- \`${Q6()}\` \u2014 live worker roster
+- \`${daemonRosterFile()}\` \u2014 live worker roster
 - \`${getJobsDir()}/<short>/state.json\` \u2014 per-job state`;
 }
+//@ chunk-hantmvxa.js:104808-105223 placement
 /**
  * 读取调试日志末尾若干行（经存储后端或本地文件），失败时返回说明文字。
  */
-//@ chunk-hantmvxa.js:104808-105223 placement
 async function readLogTailSection(e, n) {
   if (n) {
-    let read = await n.backend.read([{ key: n.key, tail: xo }]);
-    if (!read.ok) return `Failed to read last ${DEBUG_TAIL_LINES} lines: ${formatStorageError(read.error)}`;
-    let r = read.value.items[0];
+    let s = await n.backend.read([
+      {
+        key: n.key,
+        tail: MAX_DEBUG_LOG_BYTES,
+      },
+    ]);
+    if (!s.ok) return `Failed to read last ${DEBUG_TAIL_LINES} lines: ${formatStorageError(s.error)}`;
+    let r = s.value.items[0];
     if (!r.found) return "No log file exists yet.";
-    return formatLogTail({ content: Buffer.from(r.value).toString("utf8"), bytesTotal: r.totalBytes });
+    return formatLogTail({
+      content: Buffer.from(r.value).toString("utf8"),
+      bytesTotal: r.totalBytes,
+    });
   }
   try {
-    return formatLogTail(await tailFile(e, xo));
+    return formatLogTail(await tailFile(e, MAX_DEBUG_LOG_BYTES));
   } catch (error) {
     return isENOENT(error)
       ? "No log file exists yet."
@@ -168,7 +200,7 @@ async function readLogTailSection(e, n) {
   }
 }
 //@ chunk-hantmvxa.js:105223-105370 placement
-function formatLogTail({ content: content, bytesTotal: bytesTotal }) {
+function formatLogTail({ content, bytesTotal }) {
   let joined = content
     .split(
       `
@@ -184,23 +216,27 @@ function formatLogTail({ content: content, bytesTotal: bytesTotal }) {
 ${joined}
 \`\`\``;
 }
+//@ chunk-hantmvxa.js:105370-105673 placement
 /**
  * 读取守护进程状态文件内容，失败时返回错误说明，不存在时返回 null。
  */
-//@ chunk-hantmvxa.js:105370-105673 placement
 async function readDaemonStateFile(e, n) {
   if (n) {
-    let read = await n.backend.read([{ key: n.key, tail: Io }]);
-    if (!read.ok) return `(read error: ${formatStorageError(read.error)})`;
-    let r = read.value.items[0];
+    let s = await n.backend.read([
+      {
+        key: n.key,
+        tail: MAX_DEBUG_SETTINGS_CHARS,
+      },
+    ]);
+    if (!s.ok) return `(read error: ${formatStorageError(s.error)})`;
+    let r = s.value.items[0];
     if (!r.found) return null;
     return Buffer.from(r.value).toString("utf8");
   }
   try {
-    return (await tailFile(e, Io)).content;
+    return (await tailFile(e, MAX_DEBUG_SETTINGS_CHARS)).content;
   } catch (error) {
     return isENOENT(error) ? null : `(read error: ${errorMessage(error)})`;
   }
 }
-
 export { registerDebugSkill };

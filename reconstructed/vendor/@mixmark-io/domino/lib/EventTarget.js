@@ -6,177 +6,189 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { Lt } from "./Event.js";
-import { Xa } from "./MouseEvent.js";
-import { ee } from "./utils.js";
+import { require_Event } from "./Event.js";
+import { require_MouseEvent } from "./MouseEvent.js";
+import { require_utils } from "./utils.js";
 
 //@ chunk-vwj6ccer.js:7704-11263 cjs-fingerprint
-var Ka = x(function (sd, Bi) {
-  var vt = Lt(),
-    rl = Xa(),
-    al = ee();
-  Bi.exports = Fi;
+var require_EventTarget = x(function (cjsExports, cjsModule) {
+  var vt = require_Event();
+  var MouseEvent = require_MouseEvent();
+  var utils = require_utils();
+  cjsModule.exports = Fi;
   function Fi() {}
   Fi.prototype = {
-    addEventListener: function (t, r, a) {
-      if (!r) return;
-      if (a === void 0) a = !1;
+    addEventListener: function (type, listener, capture) {
+      if (!listener) return;
+      if (capture === undefined) capture = false;
       if (!this._listeners) this._listeners = Object.create(null);
-      if (!this._listeners[t]) this._listeners[t] = [];
-      var s = this._listeners[t];
-      for (var c = 0, d = s.length; c < d; c++) {
-        var g = s[c];
-        if (g.listener === r && g.capture === a) return;
+      if (!this._listeners[type]) this._listeners[type] = [];
+      var list = this._listeners[type];
+      for (var i = 0, n = list.length; i < n; i++) {
+        var l = list[i];
+        if (l.listener === listener && l.capture === capture) return;
       }
-      var m = { listener: r, capture: a };
-      if (typeof r === "function") m.f = r;
-      s.push(m);
+      var obj = {
+        listener,
+        capture,
+      };
+      if (typeof listener === "function") obj.f = listener;
+      list.push(obj);
     },
-    removeEventListener: function (t, r, a) {
-      if (a === void 0) a = !1;
+    removeEventListener: function (type, listener, capture) {
+      if (capture === undefined) capture = false;
       if (this._listeners) {
-        var s = this._listeners[t];
-        if (s)
-          for (var c = 0, d = s.length; c < d; c++) {
-            var g = s[c];
-            if (g.listener === r && g.capture === a) {
-              if (s.length === 1) this._listeners[t] = void 0;
-              else s.splice(c, 1);
+        var list = this._listeners[type];
+        if (list)
+          for (var i = 0, n = list.length; i < n; i++) {
+            var l = list[i];
+            if (l.listener === listener && l.capture === capture) {
+              if (list.length === 1) this._listeners[type] = undefined;
+              else list.splice(i, 1);
               return;
             }
           }
       }
     },
-    dispatchEvent: function (t) {
-      return this._dispatchEvent(t, !1);
+    dispatchEvent: function (event) {
+      return this._dispatchEvent(event, false);
     },
-    _dispatchEvent: function (t, r) {
-      if (typeof r !== "boolean") r = !1;
-      function a(v, T) {
-        var { type: ne, eventPhase: eventPhase } = T;
-        if (((T.currentTarget = v), eventPhase !== vt.CAPTURING_PHASE && v._handlers && v._handlers[ne])) {
-          var l = v._handlers[ne],
-            be;
-          if (typeof l === "function") be = l.call(T.currentTarget, T);
+    _dispatchEvent: function (event, trusted) {
+      if (typeof trusted !== "boolean") trusted = false;
+      function invoke(target, event) {
+        var { type, eventPhase: phase } = event;
+        event.currentTarget = target;
+        if (phase !== vt.CAPTURING_PHASE && target._handlers && target._handlers[type]) {
+          var handler = target._handlers[type];
+          var rv;
+          if (typeof handler === "function") rv = handler.call(event.currentTarget, event);
           else {
-            var handleEvent = l.handleEvent;
-            if (typeof handleEvent !== "function")
+            var f = handler.handleEvent;
+            if (typeof f !== "function")
               throw TypeError("handleEvent property of event handler object isnot a function.");
-            be = handleEvent.call(l, T);
+            rv = f.call(handler, event);
           }
-          switch (T.type) {
+          switch (event.type) {
             case "mouseover":
-              if (be === !0) T.preventDefault();
+              if (rv === true) event.preventDefault();
               break;
             case "beforeunload":
             default:
-              if (be === !1) T.preventDefault();
+              if (rv === false) event.preventDefault();
               break;
           }
         }
-        var O = v._listeners && v._listeners[ne];
-        if (!O) return;
-        O = O.slice();
-        for (var Ye = 0, H = O.length; Ye < H; Ye++) {
-          if (T._immediatePropagationStopped) return;
-          var ie = O[Ye];
-          if (
-            (eventPhase === vt.CAPTURING_PHASE && !ie.capture) ||
-            (eventPhase === vt.BUBBLING_PHASE && ie.capture)
-          )
+        var list = target._listeners && target._listeners[type];
+        if (!list) return;
+        list = list.slice();
+        for (var i = 0, n = list.length; i < n; i++) {
+          if (event._immediatePropagationStopped) return;
+          var l = list[i];
+          if ((phase === vt.CAPTURING_PHASE && !l.capture) || (phase === vt.BUBBLING_PHASE && l.capture))
             continue;
-          if (ie.f) ie.f.call(T.currentTarget, T);
+          if (l.f) l.f.call(event.currentTarget, event);
           else {
-            var handleEvent_2 = ie.listener.handleEvent;
-            if (typeof handleEvent_2 !== "function")
+            var fn = l.listener.handleEvent;
+            if (typeof fn !== "function")
               throw TypeError("handleEvent property of event listener object is not a function.");
-            handleEvent_2.call(ie.listener, T);
+            fn.call(l.listener, event);
           }
         }
       }
-      if (!t._initialized || t._dispatching) al.InvalidStateError();
-      ((t.isTrusted = r), (t._dispatching = !0), (t.target = this));
-      var s = [];
-      for (var parentNode = this.parentNode; parentNode; parentNode = parentNode.parentNode)
-        s.push(parentNode);
-      t.eventPhase = vt.CAPTURING_PHASE;
-      for (var d = s.length - 1; d >= 0; d--) if ((a(s[d], t), t._propagationStopped)) break;
-      if (!t._propagationStopped) ((t.eventPhase = vt.AT_TARGET), a(this, t));
-      if (t.bubbles && !t._propagationStopped) {
-        t.eventPhase = vt.BUBBLING_PHASE;
-        for (var g = 0, m = s.length; g < m; g++) if ((a(s[g], t), t._propagationStopped)) break;
+      if (!event._initialized || event._dispatching) utils.InvalidStateError();
+      event.isTrusted = trusted;
+      event._dispatching = true;
+      event.target = this;
+      var ancestors = [];
+      for (var n = this.parentNode; n; n = n.parentNode) ancestors.push(n);
+      event.eventPhase = vt.CAPTURING_PHASE;
+      for (var i = ancestors.length - 1; i >= 0; i--) {
+        invoke(ancestors[i], event);
+        if (event._propagationStopped) break;
       }
-      if (
-        ((t._dispatching = !1),
-        (t.eventPhase = vt.AT_TARGET),
-        (t.currentTarget = null),
-        r && !t.defaultPrevented && t instanceof rl)
-      )
-        switch (t.type) {
+      if (!event._propagationStopped) {
+        event.eventPhase = vt.AT_TARGET;
+        invoke(this, event);
+      }
+      if (event.bubbles && !event._propagationStopped) {
+        event.eventPhase = vt.BUBBLING_PHASE;
+        for (var ii = 0, nn = ancestors.length; ii < nn; ii++) {
+          invoke(ancestors[ii], event);
+          if (event._propagationStopped) break;
+        }
+      }
+      event._dispatching = false;
+      event.eventPhase = vt.AT_TARGET;
+      event.currentTarget = null;
+      if (trusted && !event.defaultPrevented && event instanceof MouseEvent)
+        switch (event.type) {
           case "mousedown":
-            this._armed = { x: t.clientX, y: t.clientY, t: t.timeStamp };
+            this._armed = {
+              x: event.clientX,
+              y: event.clientY,
+              t: event.timeStamp,
+            };
             break;
           case "mouseout":
           case "mouseover":
             this._armed = null;
             break;
           case "mouseup":
-            if (this._isClick(t)) this._doClick(t);
+            if (this._isClick(event)) this._doClick(event);
             this._armed = null;
             break;
         }
-      return !t.defaultPrevented;
+      return !event.defaultPrevented;
     },
-    _isClick: function (e) {
+    _isClick: function (event) {
       return (
         this._armed !== null &&
-        e.type === "mouseup" &&
-        e.isTrusted &&
-        e.button === 0 &&
-        e.timeStamp - this._armed.t < 1000 &&
-        Math.abs(e.clientX - this._armed.x) < 10 &&
-        Math.abs(e.clientY - this._armed.Y) < 10
+        event.type === "mouseup" &&
+        event.isTrusted &&
+        event.button === 0 &&
+        event.timeStamp - this._armed.t < 1000 &&
+        Math.abs(event.clientX - this._armed.x) < 10 &&
+        Math.abs(event.clientY - this._armed.Y) < 10
       );
     },
-    _doClick: function (e) {
+    _doClick: function (event) {
       if (this._click_in_progress) return;
-      this._click_in_progress = !0;
-      var t = this;
-      while (t && !t._post_click_activation_steps) t = t.parentNode;
-      if (t && t._pre_click_activation_steps) t._pre_click_activation_steps();
-      var event = this.ownerDocument.createEvent("MouseEvent");
-      event.initMouseEvent(
+      this._click_in_progress = true;
+      var activated = this;
+      while (activated && !activated._post_click_activation_steps) activated = activated.parentNode;
+      if (activated && activated._pre_click_activation_steps) activated._pre_click_activation_steps();
+      var click = this.ownerDocument.createEvent("MouseEvent");
+      click.initMouseEvent(
         "click",
-        !0,
-        !0,
+        true,
+        true,
         this.ownerDocument.defaultView,
         1,
-        e.screenX,
-        e.screenY,
-        e.clientX,
-        e.clientY,
-        e.ctrlKey,
-        e.altKey,
-        e.shiftKey,
-        e.metaKey,
-        e.button,
+        event.screenX,
+        event.screenY,
+        event.clientX,
+        event.clientY,
+        event.ctrlKey,
+        event.altKey,
+        event.shiftKey,
+        event.metaKey,
+        event.button,
         null,
       );
-      var _dispatchEvent = this._dispatchEvent(event, !0);
-      if (t) {
-        if (_dispatchEvent) {
-          if (t._post_click_activation_steps) t._post_click_activation_steps(event);
-        } else if (t._cancelled_activation_steps) t._cancelled_activation_steps();
+      var result = this._dispatchEvent(click, true);
+      if (activated) {
+        if (result) {
+          if (activated._post_click_activation_steps) activated._post_click_activation_steps(click);
+        } else if (activated._cancelled_activation_steps) activated._cancelled_activation_steps();
       }
     },
-    _setEventHandler: function (t, r) {
+    _setEventHandler: function (type, handler) {
       if (!this._handlers) this._handlers = Object.create(null);
-      this._handlers[t] = r;
+      this._handlers[type] = handler;
     },
-    _getEventHandler: function (t) {
-      return (this._handlers && this._handlers[t]) || null;
+    _getEventHandler: function (type) {
+      return (this._handlers && this._handlers[type]) || null;
     },
   };
 });
-
-export { Ka };
+export { require_EventTarget };

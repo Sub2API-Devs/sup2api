@@ -13,16 +13,15 @@ import { getGlobalConfig } from "../../utils/config.js";
 
 //@ chunk-ag5x7vhf.js:70176-70439 fingerprint = MIGRATIONS (0.54)
 function MIGRATIONS() {
-  if (getMainLoopModelOverride() !== void 0) return !1;
-  let m = getGlobalConfig(),
-    h = [
-      m.sonnet45To46MigrationTimestamp,
-      m.fable5ToFableAliasMigrationTimestamp,
-      m.legacyOpusMigrationTimestamp,
-      m.opusProMigrationTimestamp,
-    ],
-    x = Date.now() - process.uptime() * 1000;
-  return h.some((T) => T !== void 0 && T >= x - 3000);
+  if (getMainLoopModelOverride() !== undefined) return false;
+  let globalConfig = getGlobalConfig();
+  let h = [
+    globalConfig.sonnet45To46MigrationTimestamp,
+    globalConfig.fable5ToFableAliasMigrationTimestamp,
+    globalConfig.legacyOpusMigrationTimestamp,
+    globalConfig.opusProMigrationTimestamp,
+  ];
+  let x = Date.now() - process.uptime() * 1000;
+  return h.some((T) => T !== undefined && T >= x - 3000);
 }
-
 export { MIGRATIONS };

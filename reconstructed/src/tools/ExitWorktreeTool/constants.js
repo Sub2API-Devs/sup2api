@@ -9,10 +9,9 @@
  * attribution: fingerprint 1
  */
 
+//@ chunk-hg2zbde4.js:12944-12967 fingerprint = EXIT_WORKTREE_TOOL_NAME (1)
 /**
  * ExitWorktree 工具名常量。
  */
-//@ chunk-hg2zbde4.js:12944-12967 fingerprint = EXIT_WORKTREE_TOOL_NAME (1)
 var EXIT_WORKTREE_TOOL_NAME = "ExitWorktree";
-
 export { EXIT_WORKTREE_TOOL_NAME };

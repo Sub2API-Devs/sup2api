@@ -15,9 +15,9 @@ import {
 } from "../../utils/queuedCommandDisplay.js";
 import { mainAgentId } from "../../bootstrap/state.js";
 import { isTaggedSystemUserText } from "../messages/UserTextMessage.js";
-import { isNonHumanQueuedCommand, Up } from "../../utils/messageQueueManager.js";
+import { isNonHumanQueuedCommand, isRefillableInput } from "../../utils/messageQueueManager.js";
 import {
-  ose,
+  peerOrObserverFrom,
   isNonHumanQueuedOrigin,
   QueuedCommandRow,
   hasAbortedSignal,
@@ -37,11 +37,14 @@ import { w } from "../../../vendor/react/compiler-runtime.js";
 import { useCommandQueue } from "../Messages.js";
 import { useStoreSelector } from "../../hooks/useStoreSelector.js";
 import { useAppState } from "../../state/AppState.js";
-import { UEt } from "../Spinner/TeammateSpinnerTree.js";
+import { selectIsViewingAgentTask } from "../Spinner/TeammateSpinnerTree.js";
 import { shouldShowNotice } from "../SlashCommandLink.js";
 import { isFullscreenEnvEnabled } from "../../utils/fullscreen.js";
 import { collapseExcessTaskNotifications } from "../../tasks/RemoteAgentTask/RemoteAgentTask.js";
-import { r, e } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default_2,
+  jsxProd_default,
+} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { QueuedMessageProvider } from "../../context/QueuedMessageContext.js";
 import { agentProgressSelector } from "../../tools/AgentTool/UI.js";
 import { EMPTY_LOOKUPS, createUserMessage, normalizeMessages } from "../../utils/messages.js";
@@ -72,34 +75,34 @@ function selectToolPermissionContextMode2(Dt) {
   return Dt.toolPermissionContext.mode;
 }
 //@ chunk-18hwfzwa.js:121190-121237 placement = _temp2 (1)
-function JEt(s_0) {
+function selectHasViewedAgentTask(s_0) {
   return !!s_0.viewingAgentTaskId;
 }
 //@ chunk-18hwfzwa.js:121237-121288 placement
-var YFe = new Set(),
-  $re = 3,
-  Vre = 256,
-  WIt = 50,
-  s0e = 16,
-  ese = 32;
+var EMPTY_TOOL_USE_IDS = new Set();
+var MAX_REPLY_ROWS = 3;
+var MIN_CHARS_PER_BLOCK = 256;
+var MAX_PREVIEW_BLOCKS = 50;
+var COMMAND_ROW_INDENT = 16;
+var COMMAND_ROW_PADDING = 32;
 //@ chunk-18hwfzwa.js:121288-121809 placement
 function queuedCommandOriginLabel(h) {
-  let x = h[0]?.origin,
-    D = h.at(-1)?.origin;
+  let origin = h[0]?.origin;
+  let origin_2 = h.at(-1)?.origin;
   if (
-    x?.kind === "task-notification" &&
-    x.source === "artifact-auto-react" &&
-    x.displayName !== void 0 &&
+    origin?.kind === "task-notification" &&
+    origin.source === "artifact-auto-react" &&
+    origin.displayName !== undefined &&
     h.every(
       (L) =>
         L.origin?.kind === "task-notification" &&
         L.origin.source === "artifact-auto-react" &&
         L.origin.coalesced?.family === "auto-replied" &&
-        L.origin.slug === x.slug,
+        L.origin.slug === origin.slug,
     )
   ) {
     let L = h.length;
-    return `+${L} more auto-reply ${L === 1 ? "notice" : "notices"} on Artifact: ${D?.kind === "task-notification" && D.displayName !== void 0 ? D.displayName : x.displayName}`;
+    return `+${L} more auto-reply ${L === 1 ? "notice" : "notices"} on Artifact: ${origin_2?.kind === "task-notification" && origin_2.displayName !== undefined ? origin_2.displayName : origin.displayName}`;
   }
   return `+${h.length} more tasks completed`;
 }
@@ -130,171 +133,206 @@ function isTaskNotificationCommand(queuedCommands) {
   );
 }
 //@ chunk-18hwfzwa.js:122160-122371 placement
-function humanQueuedCommands(h) {
-  return h.filter((x) => {
-    if (!isNonHumanQueuedCommand(x)) return !1;
-    if (typeof x.value !== "string") return !0;
-    if (isTaskNotificationCommand(x)) return !1;
+function humanQueuedCommands(commandQueue) {
+  return commandQueue.filter((x) => {
+    if (!isNonHumanQueuedCommand(x)) return false;
+    if (typeof x.value !== "string") return true;
+    if (isTaskNotificationCommand(x)) return false;
     return !(
-      ose(x.origin) !== void 0 &&
+      peerOrObserverFrom(x.origin) !== undefined &&
       parseFrameForDisplay(IdleNotificationMessageSchema(), x.value) !== null &&
-      capRawFrameTextForDisplay(x.value, ose(x.origin)) === x.value
+      capRawFrameTextForDisplay(x.value, peerOrObserverFrom(x.origin)) === x.value
     );
   });
 }
 //@ chunk-18hwfzwa.js:122727-124299 placement
-function QueuedCommandsList(h) {
-  let $ = w(23),
-    { turn: turn, promptMounted: promptMounted } = h,
-    L = useCommandQueue(),
-    ee = useStoreSelector(turn, selectAbortController),
-    ke = useAppState(UEt),
-    Re = useAppState(selectQueueEditIndex),
-    Be = useAppState(selectVerbose_3),
-    He = shouldShowNotice(Be),
-    ze;
-  if ($[0] !== He) ((ze = He && isFullscreenEnvEnabled()), ($[0] = He), ($[1] = ze));
-  else ze = $[1];
-  let Xe = ze,
-    rt = useAppState(selectToolPermissionContextMode_4),
-    kt;
-  if ($[2] !== Xe || $[3] !== L) {
+function QueuedCommandsList(props) {
+  let $ = w(23);
+  let { turn, promptMounted } = props;
+  let commandQueue = useCommandQueue();
+  let storeSelector = useStoreSelector(turn, selectAbortController);
+  let appState = useAppState(selectIsViewingAgentTask);
+  let appState_2 = useAppState(selectQueueEditIndex);
+  let appState_3 = useAppState(selectVerbose_3);
+  let He = shouldShowNotice(appState_3);
+  let ze;
+  if ($[0] !== He) {
+    ze = He && isFullscreenEnvEnabled();
+    $[0] = He;
+    $[1] = ze;
+  } else ze = $[1];
+  let dedupe = ze;
+  let appState_4 = useAppState(selectToolPermissionContextMode_4);
+  let kt;
+  if ($[2] !== dedupe || $[3] !== commandQueue) {
     At: {
-      if (L.length === 0) {
+      if (commandQueue.length === 0) {
         kt = null;
         break At;
       }
-      let It = collapseExcessTaskNotifications(humanQueuedCommands(L), Xe);
+      let It = collapseExcessTaskNotifications(humanQueuedCommands(commandQueue), dedupe);
       if (It.length === 0) {
         kt = null;
         break At;
       }
       kt = PromptInputQueuedCommandsImpl(It);
     }
-    (($[2] = Xe), ($[3] = L), ($[4] = kt));
+    $[2] = dedupe;
+    $[3] = commandQueue;
+    $[4] = kt;
   } else kt = $[4];
-  let Ot = kt,
-    Et;
+  let Ot = kt;
+  let Et;
   Dt: {
-    if (Re === null || Ot === null) {
-      Et = void 0;
+    if (appState_2 === null || Ot === null) {
+      Et = undefined;
       break Dt;
     }
     let Lt;
-    if ($[5] !== L) ((Lt = L.filter(Up)), ($[5] = L), ($[6] = Lt));
-    else Lt = $[6];
-    let oo = Lt[Re];
+    if ($[5] !== commandQueue) {
+      Lt = commandQueue.filter(isRefillableInput);
+      $[5] = commandQueue;
+      $[6] = Lt;
+    } else Lt = $[6];
+    let oo = Lt[appState_2];
     let Xt;
-    if ($[7] !== oo || $[8] !== Ot)
-      ((Xt = Ot.some((io) => io.command === oo) ? oo : void 0), ($[7] = oo), ($[8] = Ot), ($[9] = Xt));
-    else Xt = $[9];
+    if ($[7] !== oo || $[8] !== Ot) {
+      Xt = Ot.some((io) => io.command === oo) ? oo : undefined;
+      $[7] = oo;
+      $[8] = Ot;
+      $[9] = Xt;
+    } else Xt = $[9];
     Et = Xt;
   }
   let so = Et;
-  if (ke || Ot === null) {
+  if (appState || Ot === null) {
     return null;
   }
-  let po = so !== void 0,
-    Lt;
-  if ($[10] !== so || $[11] !== He || $[12] !== Ot || $[13] !== po)
-    ((Lt = Ot.map((Xt, ao) => {
-      let { message: message, command: command } = Xt;
-      return r(
+  let po = so !== undefined;
+  let Lt;
+  if ($[10] !== so || $[11] !== He || $[12] !== Ot || $[13] !== po) {
+    Lt = Ot.map((Xt, ao) => {
+      let { message, command } = Xt;
+      return jsxProd_default_2(
         QueuedMessageProvider,
         {
           isFirst: ao === 0,
           noticeSystemLines: He,
-          selectionHighlight: po ? (command === so ? "on" : "off") : void 0,
+          selectionHighlight: po ? (command === so ? "on" : "off") : undefined,
           children: [
-            e(agentProgressSelector, {
-              message: message,
+            jsxProd_default(agentProgressSelector, {
+              message,
               lookups: EMPTY_LOOKUPS,
-              addMargin: ao === 0 || Up(command),
+              addMargin: ao === 0 || isRefillableInput(command),
               tools: [],
               commands: [],
-              verbose: !1,
-              inProgressToolUseIDs: YFe,
+              verbose: false,
+              inProgressToolUseIDs: EMPTY_TOOL_USE_IDS,
               progressMessagesForMessage: [],
-              shouldAnimate: !1,
-              shouldShowDot: !1,
-              isTranscriptMode: !1,
-              isStatic: !0,
+              shouldAnimate: false,
+              shouldShowDot: false,
+              isTranscriptMode: false,
+              isStatic: true,
             }),
-            command.ideSelection !== void 0 &&
+            command.ideSelection !== undefined &&
               !isNonHumanQueuedOrigin(command) &&
               Ot[ao + 1]?.command !== command &&
-              e(QueuedCommandRow, { command: command }),
+              jsxProd_default(QueuedCommandRow, {
+                command,
+              }),
           ],
         },
         ao,
       );
-    })),
-      ($[10] = so),
-      ($[11] = He),
-      ($[12] = Ot),
-      ($[13] = po),
-      ($[14] = Lt));
-  else Lt = $[14];
+    });
+    $[10] = so;
+    $[11] = He;
+    $[12] = Ot;
+    $[13] = po;
+    $[14] = Lt;
+  } else Lt = $[14];
   let Xt;
-  if ($[15] !== rt || $[16] !== promptMounted || $[17] !== L || $[18] !== ee)
-    ((Xt = promptMounted && hasAbortedSignal(L, ee, rt) && e(SendNowButton, { marginTop: 0 })),
-      ($[15] = rt),
-      ($[16] = promptMounted),
-      ($[17] = L),
-      ($[18] = ee),
-      ($[19] = Xt));
-  else Xt = $[19];
+  if ($[15] !== appState_4 || $[16] !== promptMounted || $[17] !== commandQueue || $[18] !== storeSelector) {
+    Xt =
+      promptMounted &&
+      hasAbortedSignal(commandQueue, storeSelector, appState_4) &&
+      jsxProd_default(SendNowButton, {
+        marginTop: 0,
+      });
+    $[15] = appState_4;
+    $[16] = promptMounted;
+    $[17] = commandQueue;
+    $[18] = storeSelector;
+    $[19] = Xt;
+  } else Xt = $[19];
   let Ao;
-  if ($[20] !== Lt || $[21] !== Xt)
-    ((Ao = r(Box, { flexDirection: "column", children: [Lt, Xt] })),
-      ($[20] = Lt),
-      ($[21] = Xt),
-      ($[22] = Ao));
-  else Ao = $[22];
+  if ($[20] !== Lt || $[21] !== Xt) {
+    Ao = jsxProd_default_2(Box, {
+      flexDirection: "column",
+      children: [Lt, Xt],
+    });
+    $[20] = Lt;
+    $[21] = Xt;
+    $[22] = Ao;
+  } else Ao = $[22];
   return Ao;
 }
+//@ chunk-18hwfzwa.js:124299-125411 fingerprint = PromptInputQueuedCommandsImpl (0.313)
 /**
  * 排队命令预览：把 queuedCommands 的文本/图片内容截断显示在输入框上方（图片块显示占位）。
  */
-//@ chunk-18hwfzwa.js:124299-125411 fingerprint = PromptInputQueuedCommandsImpl (0.313)
 function PromptInputQueuedCommandsImpl(h, x = IDLE_FRAME_TOTAL_RECEIVE_BOUND) {
   return h
     .map((D) => {
       let L = D.value;
       if (isNonHumanQueuedOrigin(D)) {
-        let viewingAgent = ose(D.origin);
+        let viewingAgent = peerOrObserverFrom(D.origin);
         if (typeof L === "string") L = framePreviewText(L, viewingAgent, x);
         else if (Array.isArray(L)) {
-          let ke = [],
-            Re = x;
+          let ke = [];
+          let Re = x;
           for (let He of L) {
-            if (Re <= 0 || ke.length >= WIt) break;
+            if (Re <= 0 || ke.length >= MAX_PREVIEW_BLOCKS) break;
             if (He.type === "text") {
-              let We = framePreviewText(He.text, viewingAgent, Re),
-                Xe =
-                  Object.keys(He).some((s_0) => s_0 !== "type" && s_0 !== "text") &&
-                  !We.includes(FRAME_SANITIZED_FOR_DISPLAY_MARKER)
-                    ? `${We}
+              let We = framePreviewText(He.text, viewingAgent, Re);
+              let Xe =
+                Object.keys(He).some((s_0) => s_0 !== "type" && s_0 !== "text") &&
+                !We.includes(FRAME_SANITIZED_FOR_DISPLAY_MARKER)
+                  ? `${We}
 ${FRAME_SANITIZED_FOR_DISPLAY_MARKER}`
-                    : We;
-              (ke.push({ type: "text", text: Xe }), (Re -= Math.max(Xe.length, Vre)));
-            } else if (He.type === "image")
-              (ke.push({ type: "text", text: "[image block not shown in preview]" }),
-                (Re -= Math.max(34, Vre)));
-            else {
-              let messages = capStrippedFrameField(typeof He.type === "string" ? He.type : "unknown", ese),
-                ze = null;
+                  : We;
+              ke.push({
+                type: "text",
+                text: Xe,
+              });
+              Re -= Math.max(Xe.length, MIN_CHARS_PER_BLOCK);
+            } else if (He.type === "image") {
+              ke.push({
+                type: "text",
+                text: "[image block not shown in preview]",
+              });
+              Re -= Math.max(34, MIN_CHARS_PER_BLOCK);
+            } else {
+              let messages = capStrippedFrameField(
+                typeof He.type === "string" ? He.type : "unknown",
+                COMMAND_ROW_PADDING,
+              );
+              let ze = null;
               try {
-                ze = renderContentBlockPreview(He, Re, !0);
+                ze = renderContentBlockPreview(He, Re, true);
               } catch {
                 ze = null;
               }
               let Xe =
                 ze !== null
-                  ? framePreviewText(`[${messages}] ${ze}`, viewingAgent, Re, !0)
+                  ? framePreviewText(`[${messages}] ${ze}`, viewingAgent, Re, true)
                   : `[${messages} block not shown in preview]
 ${FRAME_SANITIZED_FOR_DISPLAY_MARKER}`;
-              (ke.push({ type: "text", text: Xe }), (Re -= Math.max(Xe.length, Vre)));
+              ke.push({
+                type: "text",
+                text: Xe,
+              });
+              Re -= Math.max(Xe.length, MIN_CHARS_PER_BLOCK);
             }
           }
           let Be = L.length - ke.length;
@@ -308,23 +346,31 @@ ${FRAME_SANITIZED_FOR_DISPLAY_MARKER}`;
         }
       }
       if (D.mode === "bash" && typeof L === "string") L = `<bash-input>${L}</bash-input>`;
-      return { command: D, userMessage: createUserMessage({ content: L, origin: D.origin }) };
+      return {
+        command: D,
+        userMessage: createUserMessage({
+          content: L,
+          origin: D.origin,
+        }),
+      };
     })
-    .flatMap(({ command: command, userMessage: userMessage }) =>
-      normalizeMessages([userMessage]).map((cmd) => ({ message: cmd, command: command })),
+    .flatMap(({ command, userMessage }) =>
+      normalizeMessages([userMessage]).map((cmd) => ({
+        message: cmd,
+        command,
+      })),
     );
 }
-
 export {
   summarizeQueuedCommand,
-  $re,
+  MAX_REPLY_ROWS,
   queuedCommandOriginLabel,
   QueuedCommandsList,
   selectAbortController2,
   selectToolPermissionContextMode2,
-  JEt,
-  s0e,
-  ese,
+  selectHasViewedAgentTask,
+  COMMAND_ROW_INDENT,
+  COMMAND_ROW_PADDING,
   humanQueuedCommands,
   PromptInputQueuedCommandsImpl,
   isTaskNotificationCommand,

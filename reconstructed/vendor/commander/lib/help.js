@@ -6,212 +6,234 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { H } from "./argument.js";
+import { require_argument } from "./argument.js";
 
 //@ chunk-b7dyevzy.js:1889-6481 cjs-fingerprint
-var k = x(function (lt) {
-  var { humanReadableArgName: humanReadableArgName } = H();
-  class F {
+var require_help = x(function (cjsExports) {
+  var { humanReadableArgName } = require_argument();
+  class Help {
     constructor() {
-      ((this.helpWidth = void 0),
-        (this.sortSubcommands = !1),
-        (this.sortOptions = !1),
-        (this.showGlobalOptions = !1));
+      this.helpWidth = undefined;
+      this.sortSubcommands = false;
+      this.sortOptions = false;
+      this.showGlobalOptions = false;
     }
-    visibleCommands(t) {
-      let filtered = t.commands.filter((command) => !command._hidden),
-        _getHelpCommand = t._getHelpCommand();
-      if (_getHelpCommand && !_getHelpCommand._hidden) filtered.push(_getHelpCommand);
-      if (this.sortSubcommands) filtered.sort((n, s) => n.name().localeCompare(s.name()));
-      return filtered;
+    visibleCommands(cmd) {
+      let visibleCommands = cmd.commands.filter((cmd) => !cmd._hidden);
+      let helpCommand = cmd._getHelpCommand();
+      if (helpCommand && !helpCommand._hidden) visibleCommands.push(helpCommand);
+      if (this.sortSubcommands) visibleCommands.sort((a, b) => a.name().localeCompare(b.name()));
+      return visibleCommands;
     }
-    compareOptions(t, e) {
-      let i = (n) => (n.short ? n.short.replace(/^-/, "") : n.long.replace(/^--/, ""));
-      return i(t).localeCompare(i(e));
+    compareOptions(a, b) {
+      let getSortKey = (option) =>
+        option.short ? option.short.replace(/^-/, "") : option.long.replace(/^--/, "");
+      return getSortKey(a).localeCompare(getSortKey(b));
     }
-    visibleOptions(t) {
-      let filtered = t.options.filter((option) => !option.hidden),
-        _getHelpOption = t._getHelpOption();
-      if (_getHelpOption && !_getHelpOption.hidden) {
-        let n = _getHelpOption.short && t._findOption(_getHelpOption.short),
-          s = _getHelpOption.long && t._findOption(_getHelpOption.long);
-        if (!n && !s) filtered.push(_getHelpOption);
-        else if (_getHelpOption.long && !s)
-          filtered.push(t.createOption(_getHelpOption.long, _getHelpOption.description));
-        else if (_getHelpOption.short && !n)
-          filtered.push(t.createOption(_getHelpOption.short, _getHelpOption.description));
+    visibleOptions(cmd) {
+      let visibleOptions = cmd.options.filter((option) => !option.hidden);
+      let helpOption = cmd._getHelpOption();
+      if (helpOption && !helpOption.hidden) {
+        let removeShort = helpOption.short && cmd._findOption(helpOption.short);
+        let removeLong = helpOption.long && cmd._findOption(helpOption.long);
+        if (!removeShort && !removeLong) visibleOptions.push(helpOption);
+        else if (helpOption.long && !removeLong)
+          visibleOptions.push(cmd.createOption(helpOption.long, helpOption.description));
+        else if (helpOption.short && !removeShort)
+          visibleOptions.push(cmd.createOption(helpOption.short, helpOption.description));
       }
-      if (this.sortOptions) filtered.sort(this.compareOptions);
-      return filtered;
+      if (this.sortOptions) visibleOptions.sort(this.compareOptions);
+      return visibleOptions;
     }
-    visibleGlobalOptions(t) {
+    visibleGlobalOptions(cmd) {
       if (!this.showGlobalOptions) return [];
-      let e = [];
-      for (let parent = t.parent; parent; parent = parent.parent) {
-        let filtered = parent.options.filter((option) => !option.hidden);
-        e.push(...filtered);
+      let globalOptions = [];
+      for (let ancestorCmd = cmd.parent; ancestorCmd; ancestorCmd = ancestorCmd.parent) {
+        let visibleOptions = ancestorCmd.options.filter((option) => !option.hidden);
+        globalOptions.push(...visibleOptions);
       }
-      if (this.sortOptions) e.sort(this.compareOptions);
-      return e;
+      if (this.sortOptions) globalOptions.sort(this.compareOptions);
+      return globalOptions;
     }
-    visibleArguments(t) {
-      if (t._argsDescription)
-        t.registeredArguments.forEach((registeredArgument) => {
-          registeredArgument.description =
-            registeredArgument.description || t._argsDescription[registeredArgument.name()] || "";
+    visibleArguments(cmd) {
+      if (cmd._argsDescription)
+        cmd.registeredArguments.forEach((argument) => {
+          argument.description = argument.description || cmd._argsDescription[argument.name()] || "";
         });
-      if (t.registeredArguments.find((registeredArgument) => registeredArgument.description))
-        return t.registeredArguments;
+      if (cmd.registeredArguments.find((argument) => argument.description)) return cmd.registeredArguments;
       return [];
     }
-    subcommandTerm(t) {
-      let joined = t.registeredArguments
-        .map((registeredArgument) => humanReadableArgName(registeredArgument))
-        .join(" ");
+    subcommandTerm(cmd) {
+      let args = cmd.registeredArguments.map((arg) => humanReadableArgName(arg)).join(" ");
       return (
-        t._name +
-        (t._aliases[0] ? "|" + t._aliases[0] : "") +
-        (t.options.length ? " [options]" : "") +
-        (joined ? " " + joined : "")
+        cmd._name +
+        (cmd._aliases[0] ? "|" + cmd._aliases[0] : "") +
+        (cmd.options.length ? " [options]" : "") +
+        (args ? " " + args : "")
       );
     }
-    optionTerm(t) {
-      return t.flags;
+    optionTerm(option) {
+      return option.flags;
     }
-    argumentTerm(t) {
-      return t.name();
+    argumentTerm(argument) {
+      return argument.name();
     }
-    longestSubcommandTermLength(t, e) {
-      return e.visibleCommands(t).reduce((i, n) => Math.max(i, e.subcommandTerm(n).length), 0);
+    longestSubcommandTermLength(cmd, helper) {
+      return helper
+        .visibleCommands(cmd)
+        .reduce((max, command) => Math.max(max, helper.subcommandTerm(command).length), 0);
     }
-    longestOptionTermLength(t, e) {
-      return e.visibleOptions(t).reduce((i, n) => Math.max(i, e.optionTerm(n).length), 0);
+    longestOptionTermLength(cmd, helper) {
+      return helper
+        .visibleOptions(cmd)
+        .reduce((max, option) => Math.max(max, helper.optionTerm(option).length), 0);
     }
-    longestGlobalOptionTermLength(t, e) {
-      return e.visibleGlobalOptions(t).reduce((i, n) => Math.max(i, e.optionTerm(n).length), 0);
+    longestGlobalOptionTermLength(cmd, helper) {
+      return helper
+        .visibleGlobalOptions(cmd)
+        .reduce((max, option) => Math.max(max, helper.optionTerm(option).length), 0);
     }
-    longestArgumentTermLength(t, e) {
-      return e.visibleArguments(t).reduce((i, n) => Math.max(i, e.argumentTerm(n).length), 0);
+    longestArgumentTermLength(cmd, helper) {
+      return helper
+        .visibleArguments(cmd)
+        .reduce((max, argument) => Math.max(max, helper.argumentTerm(argument).length), 0);
     }
-    commandUsage(t) {
-      let _name = t._name;
-      if (t._aliases[0]) _name = _name + "|" + t._aliases[0];
-      let i = "";
-      for (let parent = t.parent; parent; parent = parent.parent) i = parent.name() + " " + i;
-      return i + _name + " " + t.usage();
+    commandUsage(cmd) {
+      let cmdName = cmd._name;
+      if (cmd._aliases[0]) cmdName = cmdName + "|" + cmd._aliases[0];
+      let ancestorCmdNames = "";
+      for (let ancestorCmd = cmd.parent; ancestorCmd; ancestorCmd = ancestorCmd.parent)
+        ancestorCmdNames = ancestorCmd.name() + " " + ancestorCmdNames;
+      return ancestorCmdNames + cmdName + " " + cmd.usage();
     }
-    commandDescription(t) {
-      return t.description();
+    commandDescription(cmd) {
+      return cmd.description();
     }
-    subcommandDescription(t) {
-      return t.summary() || t.description();
+    subcommandDescription(cmd) {
+      return cmd.summary() || cmd.description();
     }
-    optionDescription(t) {
-      let e = [];
-      if (t.argChoices)
-        e.push(`choices: ${t.argChoices.map((argChoice) => JSON.stringify(argChoice)).join(", ")}`);
-      if (t.defaultValue !== void 0) {
-        if (t.required || t.optional || (t.isBoolean() && typeof t.defaultValue === "boolean"))
-          e.push(`default: ${t.defaultValueDescription || JSON.stringify(t.defaultValue)}`);
+    optionDescription(option) {
+      let extraInfo = [];
+      if (option.argChoices)
+        extraInfo.push(`choices: ${option.argChoices.map((choice) => JSON.stringify(choice)).join(", ")}`);
+      if (option.defaultValue !== undefined) {
+        if (
+          option.required ||
+          option.optional ||
+          (option.isBoolean() && typeof option.defaultValue === "boolean")
+        )
+          extraInfo.push(`default: ${option.defaultValueDescription || JSON.stringify(option.defaultValue)}`);
       }
-      if (t.presetArg !== void 0 && t.optional) e.push(`preset: ${JSON.stringify(t.presetArg)}`);
-      if (t.envVar !== void 0) e.push(`env: ${t.envVar}`);
-      if (e.length > 0) return `${t.description} (${e.join(", ")})`;
-      return t.description;
+      if (option.presetArg !== undefined && option.optional)
+        extraInfo.push(`preset: ${JSON.stringify(option.presetArg)}`);
+      if (option.envVar !== undefined) extraInfo.push(`env: ${option.envVar}`);
+      if (extraInfo.length > 0) return `${option.description} (${extraInfo.join(", ")})`;
+      return option.description;
     }
-    argumentDescription(t) {
-      let e = [];
-      if (t.argChoices)
-        e.push(`choices: ${t.argChoices.map((argChoice) => JSON.stringify(argChoice)).join(", ")}`);
-      if (t.defaultValue !== void 0)
-        e.push(`default: ${t.defaultValueDescription || JSON.stringify(t.defaultValue)}`);
-      if (e.length > 0) {
-        let i = `(${e.join(", ")})`;
-        if (t.description) return `${t.description} ${i}`;
-        return i;
+    argumentDescription(argument) {
+      let extraInfo = [];
+      if (argument.argChoices)
+        extraInfo.push(`choices: ${argument.argChoices.map((choice) => JSON.stringify(choice)).join(", ")}`);
+      if (argument.defaultValue !== undefined)
+        extraInfo.push(
+          `default: ${argument.defaultValueDescription || JSON.stringify(argument.defaultValue)}`,
+        );
+      if (extraInfo.length > 0) {
+        let extraDescripton = `(${extraInfo.join(", ")})`;
+        if (argument.description) return `${argument.description} ${extraDescripton}`;
+        return extraDescripton;
       }
-      return t.description;
+      return argument.description;
     }
-    formatHelp(t, e) {
-      let padWidth = e.padWidth(t, e),
-        n = e.helpWidth || 80,
-        s = 2,
-        r = 2;
-      function a(p, O) {
-        if (O) {
-          let S = `${p.padEnd(padWidth + 2)}${O}`;
-          return e.wrap(S, n - 2, padWidth + 2);
+    formatHelp(cmd, helper) {
+      let termWidth = helper.padWidth(cmd, helper);
+      let helpWidth = helper.helpWidth || 80;
+      let itemIndentWidth = 2;
+      let itemSeparatorWidth = 2;
+      function formatItem(term, description) {
+        if (description) {
+          let fullText = `${term.padEnd(termWidth + 2)}${description}`;
+          return helper.wrap(fullText, helpWidth - 2, termWidth + 2);
         }
-        return p;
+        return term;
       }
-      function o(p) {
-        return p
+      function formatList(textArray) {
+        return textArray
           .join(
             `
 `,
           )
           .replace(/^/gm, " ".repeat(2));
       }
-      let h = [`Usage: ${e.commandUsage(t)}`, ""],
-        commandDescription = e.commandDescription(t);
-      if (commandDescription.length > 0) h = h.concat([e.wrap(commandDescription, n, 0), ""]);
-      let mapped = e.visibleArguments(t).map((p) => a(e.argumentTerm(p), e.argumentDescription(p)));
-      if (mapped.length > 0) h = h.concat(["Arguments:", o(mapped), ""]);
-      let mapped_2 = e.visibleOptions(t).map((p) => a(e.optionTerm(p), e.optionDescription(p)));
-      if (mapped_2.length > 0) h = h.concat(["Options:", o(mapped_2), ""]);
+      let output = [`Usage: ${helper.commandUsage(cmd)}`, ""];
+      let commandDescription = helper.commandDescription(cmd);
+      if (commandDescription.length > 0)
+        output = output.concat([helper.wrap(commandDescription, helpWidth, 0), ""]);
+      let argumentList = helper
+        .visibleArguments(cmd)
+        .map((argument) => formatItem(helper.argumentTerm(argument), helper.argumentDescription(argument)));
+      if (argumentList.length > 0) output = output.concat(["Arguments:", formatList(argumentList), ""]);
+      let optionList = helper
+        .visibleOptions(cmd)
+        .map((option) => formatItem(helper.optionTerm(option), helper.optionDescription(option)));
+      if (optionList.length > 0) output = output.concat(["Options:", formatList(optionList), ""]);
       if (this.showGlobalOptions) {
-        let mapped = e.visibleGlobalOptions(t).map((O) => a(e.optionTerm(O), e.optionDescription(O)));
-        if (mapped.length > 0) h = h.concat(["Global Options:", o(mapped), ""]);
+        let globalOptionList = helper
+          .visibleGlobalOptions(cmd)
+          .map((option) => formatItem(helper.optionTerm(option), helper.optionDescription(option)));
+        if (globalOptionList.length > 0)
+          output = output.concat(["Global Options:", formatList(globalOptionList), ""]);
       }
-      let mapped_3 = e.visibleCommands(t).map((p) => a(e.subcommandTerm(p), e.subcommandDescription(p)));
-      if (mapped_3.length > 0) h = h.concat(["Commands:", o(mapped_3), ""]);
-      return h.join(`
+      let commandList = helper
+        .visibleCommands(cmd)
+        .map((cmd) => formatItem(helper.subcommandTerm(cmd), helper.subcommandDescription(cmd)));
+      if (commandList.length > 0) output = output.concat(["Commands:", formatList(commandList), ""]);
+      return output.join(`
 `);
     }
-    padWidth(t, e) {
+    padWidth(cmd, helper) {
       return Math.max(
-        e.longestOptionTermLength(t, e),
-        e.longestGlobalOptionTermLength(t, e),
-        e.longestSubcommandTermLength(t, e),
-        e.longestArgumentTermLength(t, e),
+        helper.longestOptionTermLength(cmd, helper),
+        helper.longestGlobalOptionTermLength(cmd, helper),
+        helper.longestSubcommandTermLength(cmd, helper),
+        helper.longestArgumentTermLength(cmd, helper),
       );
     }
-    wrap(t, e, i, n = 40) {
-      let regExp = new RegExp(`[\\n][${" \\f\\t\\v\xA0\u1680\u2000-\u200A\u202F\u205F\u3000\uFEFF"}]+`);
-      if (t.match(regExp)) return t;
-      let a = e - i;
-      if (a < n) return t;
-      let sliced = t.slice(0, i),
-        replaced = t.slice(i).replace(
-          `\r
+    wrap(str, width, indent, minColumnWidth = 40) {
+      let manualIndent = new RegExp(`[\\n][${" \\f\\t\\v\xA0\u1680\u2000-\u200A\u202F\u205F\u3000\uFEFF"}]+`);
+      if (str.match(manualIndent)) return str;
+      let columnWidth = width - indent;
+      if (columnWidth < minColumnWidth) return str;
+      let leadingStr = str.slice(0, indent);
+      let columnText = str.slice(indent).replace(
+        `\r
 `,
-          `
+        `
 `,
-        ),
-        repeat = " ".repeat(i),
-        d = `\\s${"\u200B"}`,
-        regExp_2 = new RegExp(
-          `
-|.{1,${a - 1}}([${d}]|$)|[^${d}]+?([${d}]|$)`,
-          "g",
-        ),
-        p = replaced.match(regExp_2) || [];
+      );
+      let indentString = " ".repeat(indent);
+      let breaks = `\\s${"\u200B"}`;
+      let regex = new RegExp(
+        `
+|.{1,${columnWidth - 1}}([${breaks}]|$)|[^${breaks}]+?([${breaks}]|$)`,
+        "g",
+      );
+      let lines = columnText.match(regex) || [];
       return (
-        sliced +
-        p.map((O, S) => {
+        leadingStr +
+        lines.map((line, i) => {
           if (
-            O ===
+            line ===
             `
 `
           )
             return "";
-          return (S > 0 ? repeat : "") + O.trimEnd();
+          return (i > 0 ? indentString : "") + line.trimEnd();
         }).join(`
 `)
       );
     }
   }
-  lt.Help = F;
+  cjsExports.Help = Help;
 });
-
-export { k };
+export { require_help };

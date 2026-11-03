@@ -17,7 +17,7 @@ import {
 } from "../../utils/settings/settings.js";
 import { getPluginAffectingSettingsSnapshot } from "../../utils/plugins/loadPluginHooks.js";
 import { TRUSTED_SETTING_SOURCES as TRUSTED_SETTING_SOURCES_2 } from "../../utils/plugins/pluginConfigSources.js";
-import { _Ot } from "../../utils/settings/permissionRuleCarveOut.js";
+import { normalizeCarveOutFlag } from "../../utils/settings/permissionRuleCarveOut.js";
 import { commandPluginSourcesDisabledBySettings } from "../../utils/plugins/marketplacePolicy.js";
 import {
   resolveManagedPluginOrder,
@@ -36,48 +36,57 @@ import { isEnvTruthy } from "../../utils/envUtils.js";
 import { env } from "../../utils/env.js";
 
 //@ chunk-e6aww6q8.js:4118038-4118103 placement
-var ST = (e) => Object.fromEntries(Object.entries(e ?? {}).toSorted());
+/**
+ * 按键排序的条目
+ */
+var sortedEntries = (e) => Object.fromEntries(Object.entries(e ?? {}).toSorted());
+//@ chunk-e6aww6q8.js:4118103-4118220 placement
 /**
  * 读取某设置来源里与插件有关的部分（enabledPlugins、pluginConfigs，键排序）。
  */
-//@ chunk-e6aww6q8.js:4118103-4118220 placement
 function readSourcePluginSettings(e) {
-  let n = getSettingsForSource(e);
-  return { source: e, enabledPlugins: ST(n?.enabledPlugins), pluginConfigs: ST(n?.pluginConfigs) };
+  let settingsForSource = getSettingsForSource(e);
+  return {
+    source: e,
+    enabledPlugins: sortedEntries(settingsForSource?.enabledPlugins),
+    pluginConfigs: sortedEntries(settingsForSource?.pluginConfigs),
+  };
 }
+//@ chunk-e6aww6q8.js:4118220-4118555 placement
 /**
  * 读取管理员策略中与插件来源有关的部分（额外/严格已知市场）以及插件影响设置快照中的启用与命名。
  */
-//@ chunk-e6aww6q8.js:4118220-4118555 placement
 function readAdminPluginPolicy() {
-  let e = getAdminAuthoredPolicySettings(),
-    { enables: enables, names: names } = getPluginAffectingSettingsSnapshot();
+  let adminAuthoredPolicySettings = getAdminAuthoredPolicySettings();
+  let { enables, names } = getPluginAffectingSettingsSnapshot();
   return {
-    extraKnownMarketplaces: ST(e?.extraKnownMarketplaces),
-    strictKnownMarketplaces: allowListEntriesThatVouch(e?.strictKnownMarketplaces) ?? null,
+    extraKnownMarketplaces: sortedEntries(adminAuthoredPolicySettings?.extraKnownMarketplaces),
+    strictKnownMarketplaces:
+      allowListEntriesThatVouch(adminAuthoredPolicySettings?.strictKnownMarketplaces) ?? null,
     seat: {
-      enabledPlugins: ST(enables?.enabledPlugins),
-      extraKnownMarketplaces: ST(names?.extraKnownMarketplaces),
+      enabledPlugins: sortedEntries(enables?.enabledPlugins),
+      extraKnownMarketplaces: sortedEntries(names?.extraKnownMarketplaces),
       strictKnownMarketplaces: allowListEntriesThatVouch(names?.strictKnownMarketplaces) ?? null,
     },
   };
 }
 //@ chunk-e6aww6q8.js:4118555-4119194 placement
 function readManagedHooksPolicy() {
-  let e = getSettings_DEPRECATED(),
-    n = getSettingsForSource("policySettings"),
-    r = n?.disableCommandPluginSources;
+  let settings_DEPRECATED = getSettings_DEPRECATED();
+  let settingsForSource = getSettingsForSource("policySettings");
+  let disableCommandPluginSources = settingsForSource?.disableCommandPluginSources;
   return {
-    enabledPlugins: ST(e.enabledPlugins),
-    pluginConfigs: ST(e.pluginConfigs),
+    enabledPlugins: sortedEntries(settings_DEPRECATED.enabledPlugins),
+    pluginConfigs: sortedEntries(settings_DEPRECATED.pluginConfigs),
     trusted: TRUSTED_SETTING_SOURCES_2.map(readSourcePluginSettings),
-    extraKnownMarketplaces: ST(e.extraKnownMarketplaces),
-    strictKnownMarketplaces: n?.strictKnownMarketplaces ?? null,
-    blockedMarketplaces: n?.blockedMarketplaces ?? null,
+    extraKnownMarketplaces: sortedEntries(settings_DEPRECATED.extraKnownMarketplaces),
+    strictKnownMarketplaces: settingsForSource?.strictKnownMarketplaces ?? null,
+    blockedMarketplaces: settingsForSource?.blockedMarketplaces ?? null,
     vouching: readAdminPluginPolicy(),
-    disableSideloadFlags: n?.disableSideloadFlags === !0,
-    disablePluginDirectory: _Ot(n?.disablePluginDirectory) ?? null,
-    disableCommandPluginSources: r === void 0 ? null : r === !0,
+    disableSideloadFlags: settingsForSource?.disableSideloadFlags === true,
+    disablePluginDirectory: normalizeCarveOutFlag(settingsForSource?.disablePluginDirectory) ?? null,
+    disableCommandPluginSources:
+      disableCommandPluginSources === undefined ? null : disableCommandPluginSources === true,
     commandSourcesDisabled: commandPluginSourcesDisabledBySettings(),
     tierOrder: resolveManagedPluginOrder(),
     policyOnlyBits: getPolicyOnlyBuiltinPluginNames(),
@@ -87,42 +96,71 @@ function readManagedHooksPolicy() {
   };
 }
 //@ chunk-e6aww6q8.js:4119194-4119214 placement
-var k6 = () => jsonStringify(readManagedHooksPolicy());
+/**
+ * 托管钩子策略快照
+ */
+var managedHooksPolicyStamp = () => jsonStringify(readManagedHooksPolicy());
 //@ chunk-e6aww6q8.js:4119214-4119268 placement
-var ojn = (e) => e.readUnder === void 0 || e.readUnder === k6();
+/**
+ * 策略快照是否仍然一致
+ */
+var isPolicyStampCurrent = (e) => e.readUnder === undefined || e.readUnder === managedHooksPolicyStamp();
 //@ chunk-e6aww6q8.js:4119268-4119278 placement
-var rjn = 2;
+/**
+ * 2
+ */
+var POLICY_REREAD_TRIES = 2;
 //@ chunk-e6aww6q8.js:4119278-4119374 placement
-async function tdt(e, n = rjn) {
-  let read = await e.read();
-  return ojn(read) || n === 0 ? read : tdt(await rereadPluginSettings(e, read), n - 1);
+/**
+ * 读到策略稳定为止
+ */
+async function readStablePolicy(e, n = POLICY_REREAD_TRIES) {
+  let r = await e.read();
+  return isPolicyStampCurrent(r) || n === 0 ? r : readStablePolicy(await rereadPluginSettings(e, r), n - 1);
 }
 //@ chunk-e6aww6q8.js:4119374-4119384 placement
-var T6 = "";
+/**
+ * 空串
+ */
+var EMPTY_POLICY_STAMP = "";
+//@ chunk-e6aww6q8.js:4119384-4119561 placement
 /**
  * 生成当前托管钩子策略的序列化快照，用于判断读取插件后策略是否变化；失败时返回空串（强制重读）。
  */
-//@ chunk-e6aww6q8.js:4119384-4119561 placement
-function managedHooksPolicyStamp() {
+function managedHooksPolicyStamp_2() {
   try {
-    return k6();
+    return managedHooksPolicyStamp();
   } catch (error) {
-    return (
-      logForDebugging(
-        `the settings a read of the plugins began under could not be spelled, so a hooks pass reads again: ${errorMessage(error)}`,
-        { level: "error" },
-      ),
-      T6
+    logForDebugging(
+      `the settings a read of the plugins began under could not be spelled, so a hooks pass reads again: ${errorMessage(error)}`,
+      {
+        level: "error",
+      },
     );
+    return EMPTY_POLICY_STAMP;
   }
 }
 //@ chunk-e6aww6q8.js:4159877-4159947 placement
-function JKe() {
-  return isEnvTruthy(!1) || Boolean(env.IS_DEMO) || Boolean(env.CLAUBBIT);
+/**
+ * 演示或 claubbet 环境
+ */
+function isDemoOrClaubbet() {
+  return isEnvTruthy(false) || Boolean(env.IS_DEMO) || Boolean(env.CLAUBBIT);
 }
 //@ chunk-e6aww6q8.js:4159947-4159986 placement
-function ems(e) {
-  return (getSettingsWithErrors_2(), e.computed);
+/**
+ * 取合并后设置
+ */
+function computedSettings(hookedMerge) {
+  getSettingsWithErrors_2();
+  return hookedMerge.computed;
 }
-
-export { JKe, managedHooksPolicyStamp, T6, tdt, k6, ems, ST };
+export {
+  isDemoOrClaubbet,
+  managedHooksPolicyStamp_2,
+  EMPTY_POLICY_STAMP,
+  readStablePolicy,
+  managedHooksPolicyStamp,
+  computedSettings,
+  sortedEntries,
+};

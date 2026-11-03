@@ -8,59 +8,57 @@
 import { x } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-spjgqa4y.js:34044-34825 cjs-fingerprint
-var _t = x(function (jl, zr) {
-  function Ho(t, e, r, n, i) {
-    let o = 0;
-    for (let s = 0; s < n; s++)
-      for (let l = 0; l < r; l++) {
-        let u = i[t[o]];
-        if (!u) throw Error("index " + t[o] + " not in palette");
-        for (let f = 0; f < 4; f++) e[o + f] = u[f];
-        o += 4;
+var require_format_normaliser = x(function (cjsExports, cjsModule) {
+  function dePalette(indata, outdata, width, height, palette) {
+    let pxPos = 0;
+    for (let y = 0; y < height; y++)
+      for (let x = 0; x < width; x++) {
+        let color = palette[indata[pxPos]];
+        if (!color) throw Error("index " + indata[pxPos] + " not in palette");
+        for (let i = 0; i < 4; i++) outdata[pxPos + i] = color[i];
+        pxPos += 4;
       }
   }
-  function zo(t, e, r, n, i) {
-    let o = 0;
-    for (let s = 0; s < n; s++)
-      for (let l = 0; l < r; l++) {
-        let u = !1;
-        if (i.length === 1) {
-          if (i[0] === t[o]) u = !0;
-        } else if (i[0] === t[o] && i[1] === t[o + 1] && i[2] === t[o + 2]) u = !0;
-        if (u) for (let f = 0; f < 4; f++) e[o + f] = 0;
-        o += 4;
+  function replaceTransparentColor(indata, outdata, width, height, transColor) {
+    let pxPos = 0;
+    for (let y = 0; y < height; y++)
+      for (let x = 0; x < width; x++) {
+        let makeTrans = false;
+        if (transColor.length === 1) {
+          if (transColor[0] === indata[pxPos]) makeTrans = true;
+        } else if (
+          transColor[0] === indata[pxPos] &&
+          transColor[1] === indata[pxPos + 1] &&
+          transColor[2] === indata[pxPos + 2]
+        )
+          makeTrans = true;
+        if (makeTrans) for (let i = 0; i < 4; i++) outdata[pxPos + i] = 0;
+        pxPos += 4;
       }
   }
-  function Go(t, e, r, n, i) {
-    let o = 255,
-      s = Math.pow(2, i) - 1,
-      l = 0;
-    for (let u = 0; u < n; u++)
-      for (let f = 0; f < r; f++) {
-        for (let a = 0; a < 4; a++) e[l + a] = Math.floor((t[l + a] * o) / s + 0.5);
-        l += 4;
+  function scaleDepth(indata, outdata, width, height, depth) {
+    let maxOutSample = 255;
+    let maxInSample = Math.pow(2, depth) - 1;
+    let pxPos = 0;
+    for (let y = 0; y < height; y++)
+      for (let x = 0; x < width; x++) {
+        for (let i = 0; i < 4; i++)
+          outdata[pxPos + i] = Math.floor((indata[pxPos + i] * maxOutSample) / maxInSample + 0.5);
+        pxPos += 4;
       }
   }
-  zr.exports = function (t, e) {
-    let {
-        depth: depth,
-        width: width,
-        height: height,
-        colorType: colorType,
-        transColor: transColor,
-        palette: palette,
-      } = e,
-      u = t;
-    if (colorType === 3) Ho(t, u, width, height, palette);
+  cjsModule.exports = function (indata, e) {
+    let { depth, width, height, colorType, transColor, palette } = e;
+    let outdata = indata;
+    if (colorType === 3) dePalette(indata, outdata, width, height, palette);
     else {
-      if (transColor) zo(t, u, width, height, transColor);
+      if (transColor) replaceTransparentColor(indata, outdata, width, height, transColor);
       if (depth !== 8) {
-        if (depth === 16) u = Buffer.alloc(width * height * 4);
-        Go(t, u, width, height, depth);
+        if (depth === 16) outdata = Buffer.alloc(width * height * 4);
+        scaleDepth(indata, outdata, width, height, depth);
       }
     }
-    return u;
+    return outdata;
   };
 });
-
-export { _t };
+export { require_format_normaliser };

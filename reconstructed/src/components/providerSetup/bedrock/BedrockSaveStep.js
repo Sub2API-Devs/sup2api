@@ -8,11 +8,14 @@
  * pieces: chunk-sx9xc5ee.js (10)
  * attribution: placement 10
  */
-import { j, y, R } from "../../../../vendor/react/cjs/react.production.js";
-import { r, e } from "../../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { init_react_production, y, R } from "../../../../vendor/react/cjs/react.production.js";
+import {
+  jsxProd_default_2,
+  jsxProd_default,
+} from "../../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Box } from "../../../ink/components/Text.js";
 import { w } from "../../../../vendor/react/compiler-runtime.js";
-import { Me } from "../../design-system/ThemeProvider.js";
+import { useTheme_2 } from "../../design-system/ThemeProvider.js";
 import { useWizard } from "../../wizard/useWizard.js";
 import { MEMO_CACHE_SENTINEL, Re } from "../../../../runtime/bun-runtime.js";
 import { tildify } from "../../../utils/path.js";
@@ -23,9 +26,9 @@ import { StatusIcon } from "../../design-system/StatusIcon.js";
 import { ErrorText } from "../../ErrorText.js";
 import { ConfirmSelect } from "../../design-system/ConfirmSelect.js";
 import { WizardDialogLayout } from "../../wizard/WizardDialogLayout.js";
-import { nke } from "../../../../vendor/@smithy/fetch-http-handler/dist-cjs/index.js";
+import { require_fetch_http_handler } from "../../../../vendor/@smithy/fetch-http-handler/dist-cjs/index.js";
 import { bedrockRegionGroup, withBedrockRegionPrefix } from "../../../utils/model/bedrock.js";
-import { No } from "../../../utils/model/modelCatalog.js";
+import { catalogEntriesByFirstPartyId } from "../../../utils/model/modelCatalog.js";
 import {
   DEFAULT_3P_SONNET_KEY,
   DEFAULT_BEDROCK_OPUS_KEY,
@@ -39,95 +42,113 @@ import { AWS_CHAIN_RESOLVE_REQUEST_TIMEOUT_MS } from "../../../utils/auth.js";
 import { withTimeout } from "../../../utils/sleep.js";
 
 //@ chunk-sx9xc5ee.js:5151-5155 placement
-j();
+init_react_production();
 //@ chunk-sx9xc5ee.js:5155-5191 placement
-function Xr(U) {
-  return U[1] !== void 0;
+function hasProfileSelection(U) {
+  return U[1] !== undefined;
 }
 //@ chunk-sx9xc5ee.js:5191-5346 placement
 function EnvVarRow(o) {
   let [H, F] = o;
-  return r(
+  return jsxProd_default_2(
     Text,
     {
       children: [
         "  ",
-        e(Text, { color: "suggestion", children: H }),
+        jsxProd_default(Text, {
+          color: "suggestion",
+          children: H,
+        }),
         " =",
         " ",
-        Ie.has(H) ? e(Text, { dimColor: !0, children: "(hidden)" }) : F,
+        SENSITIVE_BEDROCK_ENV_KEYS.has(H)
+          ? jsxProd_default(Text, {
+              dimColor: true,
+              children: "(hidden)",
+            })
+          : F,
       ],
     },
     H,
   );
 }
 //@ chunk-sx9xc5ee.js:5346-6425 placement
-function bedrockEnvFromWizard(o) {
+function bedrockEnvFromWizard(wizardData) {
   let d = {
     CLAUDE_CODE_USE_BEDROCK: "1",
-    CLAUDE_CODE_USE_VERTEX: void 0,
-    CLAUDE_CODE_USE_FOUNDRY: void 0,
-    CLAUDE_CODE_USE_ANTHROPIC_AWS: void 0,
-    CLAUDE_CODE_USE_ANTHROPIC_GOOGLE_CLOUD: void 0,
-    AWS_REGION: o.region,
-    AWS_PROFILE: void 0,
-    AWS_BEARER_TOKEN_BEDROCK: void 0,
-    AWS_ACCESS_KEY_ID: void 0,
-    AWS_SECRET_ACCESS_KEY: void 0,
-    AWS_SESSION_TOKEN: void 0,
-    ANTHROPIC_DEFAULT_SONNET_MODEL: void 0,
-    ANTHROPIC_DEFAULT_OPUS_MODEL: void 0,
-    ANTHROPIC_DEFAULT_HAIKU_MODEL: void 0,
-    ANTHROPIC_DEFAULT_FABLE_MODEL: void 0,
-    ANTHROPIC_SMALL_FAST_MODEL: void 0,
+    CLAUDE_CODE_USE_VERTEX: undefined,
+    CLAUDE_CODE_USE_FOUNDRY: undefined,
+    CLAUDE_CODE_USE_ANTHROPIC_AWS: undefined,
+    CLAUDE_CODE_USE_ANTHROPIC_GOOGLE_CLOUD: undefined,
+    AWS_REGION: wizardData.region,
+    AWS_PROFILE: undefined,
+    AWS_BEARER_TOKEN_BEDROCK: undefined,
+    AWS_ACCESS_KEY_ID: undefined,
+    AWS_SECRET_ACCESS_KEY: undefined,
+    AWS_SESSION_TOKEN: undefined,
+    ANTHROPIC_DEFAULT_SONNET_MODEL: undefined,
+    ANTHROPIC_DEFAULT_OPUS_MODEL: undefined,
+    ANTHROPIC_DEFAULT_HAIKU_MODEL: undefined,
+    ANTHROPIC_DEFAULT_FABLE_MODEL: undefined,
+    ANTHROPIC_SMALL_FAST_MODEL: undefined,
   };
-  switch (o.authMethod) {
+  switch (wizardData.authMethod) {
     case "profile":
-      d.AWS_PROFILE = o.awsProfile;
+      d.AWS_PROFILE = wizardData.awsProfile;
       break;
     case "bearer":
-      d.AWS_BEARER_TOKEN_BEDROCK = o.bearerToken;
+      d.AWS_BEARER_TOKEN_BEDROCK = wizardData.bearerToken;
       break;
     case "accessKey":
-      if (
-        ((d.AWS_ACCESS_KEY_ID = o.accessKeyId), (d.AWS_SECRET_ACCESS_KEY = o.secretAccessKey), o.sessionToken)
-      )
-        d.AWS_SESSION_TOKEN = o.sessionToken;
+      d.AWS_ACCESS_KEY_ID = wizardData.accessKeyId;
+      d.AWS_SECRET_ACCESS_KEY = wizardData.secretAccessKey;
+      if (wizardData.sessionToken) d.AWS_SESSION_TOKEN = wizardData.sessionToken;
       break;
     case "environment":
-    case void 0:
+    case undefined:
       break;
   }
-  if (o.pinSonnet) d.ANTHROPIC_DEFAULT_SONNET_MODEL = o.pinSonnet;
-  if (o.pinOpus) d.ANTHROPIC_DEFAULT_OPUS_MODEL = o.pinOpus;
-  if (o.pinFable) d.ANTHROPIC_DEFAULT_FABLE_MODEL = o.pinFable;
-  if (o.pinHaiku) d.ANTHROPIC_DEFAULT_HAIKU_MODEL = o.pinHaiku;
+  if (wizardData.pinSonnet) d.ANTHROPIC_DEFAULT_SONNET_MODEL = wizardData.pinSonnet;
+  if (wizardData.pinOpus) d.ANTHROPIC_DEFAULT_OPUS_MODEL = wizardData.pinOpus;
+  if (wizardData.pinFable) d.ANTHROPIC_DEFAULT_FABLE_MODEL = wizardData.pinFable;
+  if (wizardData.pinHaiku) d.ANTHROPIC_DEFAULT_HAIKU_MODEL = wizardData.pinHaiku;
   return d;
 }
 //@ chunk-sx9xc5ee.js:6425-6514 placement
-var Ie = new Set(["AWS_BEARER_TOKEN_BEDROCK", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN"]);
+var SENSITIVE_BEDROCK_ENV_KEYS = new Set([
+  "AWS_BEARER_TOKEN_BEDROCK",
+  "AWS_SECRET_ACCESS_KEY",
+  "AWS_SESSION_TOKEN",
+]);
 //@ chunk-sx9xc5ee.js:6514-8606 placement
-function BedrockSaveStep(o) {
-  let $ = w(31),
-    { onComplete: onComplete } = o,
-    { storageV5: storageV5 } = Me(),
-    { goBack: goBack, wizardData: wizardData } = useWizard(),
-    [m, g] = y(null),
-    u;
-  if ($[0] === MEMO_CACHE_SENTINEL)
-    ((u = tildify(getSettingsFilePathForSource("userSettings") ?? "~/.claude/settings.json")), ($[0] = u));
-  else u = $[0];
-  let B = u,
-    p;
-  if ($[1] !== wizardData) ((p = bedrockEnvFromWizard(wizardData)), ($[1] = wizardData), ($[2] = p));
-  else p = $[2];
-  let A = p,
-    E;
-  if ($[3] !== A) ((E = Object.entries(A).filter(Xr)), ($[3] = A), ($[4] = E));
-  else E = $[4];
-  let k = E,
-    f = R(!1),
-    C;
+function BedrockSaveStep(props) {
+  let $ = w(31);
+  let { onComplete } = props;
+  let { storageV5 } = useTheme_2();
+  let { goBack, wizardData } = useWizard();
+  let [m, g] = y(null);
+  let u;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    u = tildify(getSettingsFilePathForSource("userSettings") ?? "~/.claude/settings.json");
+    $[0] = u;
+  } else u = $[0];
+  let B = u;
+  let p;
+  if ($[1] !== wizardData) {
+    p = bedrockEnvFromWizard(wizardData);
+    $[1] = wizardData;
+    $[2] = p;
+  } else p = $[2];
+  let A = p;
+  let E;
+  if ($[3] !== A) {
+    E = Object.entries(A).filter(hasProfileSelection);
+    $[3] = A;
+    $[4] = E;
+  } else E = $[4];
+  let k = E;
+  let f = R(false);
+  let C;
   if (
     $[5] !== A ||
     $[6] !== onComplete ||
@@ -139,106 +160,142 @@ function BedrockSaveStep(o) {
     $[12] !== wizardData.pinOpus ||
     $[13] !== wizardData.pinSonnet ||
     $[14] !== wizardData.verifiedIdentity
-  )
-    ((C = async () => {
+  ) {
+    C = async () => {
       if (f.current) {
         return;
       }
-      f.current = !0;
-      let { error: error } = await updateSettingsForSource("userSettings", { env: A }, void 0, storageV5);
+      f.current = true;
+      let { error } = await updateSettingsForSource(
+        "userSettings",
+        {
+          env: A,
+        },
+        undefined,
+        storageV5,
+      );
       if (error) {
-        ((f.current = !1), g(error.message));
+        f.current = false;
+        g(error.message);
         return;
       }
-      (logEvent("tengu_bedrock_setup_complete", {
+      logEvent("tengu_bedrock_setup_complete", {
         auth_method: fromEnumOpt(wizardData.authMethod),
         pinned_models: Boolean(
           wizardData.pinSonnet || wizardData.pinOpus || wizardData.pinFable || wizardData.pinHaiku,
         ),
         verified: Boolean(wizardData.verifiedIdentity),
-      }),
-        onComplete(
-          `Bedrock configuration saved to ${B}.${wizardData.authMethod === "profile" ? ` When your SSO session expires (typically 8 hours), run \`aws sso login --profile ${wizardData.awsProfile}\` \u2014 Claude Code picks up refreshed credentials automatically.` : ""}`,
-        ));
-    }),
-      ($[5] = A),
-      ($[6] = onComplete),
-      ($[7] = storageV5),
-      ($[8] = wizardData.authMethod),
-      ($[9] = wizardData.awsProfile),
-      ($[10] = wizardData.pinFable),
-      ($[11] = wizardData.pinHaiku),
-      ($[12] = wizardData.pinOpus),
-      ($[13] = wizardData.pinSonnet),
-      ($[14] = wizardData.verifiedIdentity),
-      ($[15] = C));
-  else C = $[15];
-  let T = C,
-    _;
-  if ($[16] === MEMO_CACHE_SENTINEL)
-    ((_ = r(Text, { children: ["These will be written to ", B, " under env:"] })), ($[16] = _));
-  else _ = $[16];
+      });
+      onComplete(
+        `Bedrock configuration saved to ${B}.${wizardData.authMethod === "profile" ? ` When your SSO session expires (typically 8 hours), run \`aws sso login --profile ${wizardData.awsProfile}\` \u2014 Claude Code picks up refreshed credentials automatically.` : ""}`,
+      );
+    };
+    $[5] = A;
+    $[6] = onComplete;
+    $[7] = storageV5;
+    $[8] = wizardData.authMethod;
+    $[9] = wizardData.awsProfile;
+    $[10] = wizardData.pinFable;
+    $[11] = wizardData.pinHaiku;
+    $[12] = wizardData.pinOpus;
+    $[13] = wizardData.pinSonnet;
+    $[14] = wizardData.verifiedIdentity;
+    $[15] = C;
+  } else C = $[15];
+  let onConfirm = C;
+  let _;
+  if ($[16] === MEMO_CACHE_SENTINEL) {
+    _ = jsxProd_default_2(Text, {
+      children: ["These will be written to ", B, " under env:"],
+    });
+    $[16] = _;
+  } else _ = $[16];
   let D;
-  if ($[17] !== k)
-    ((D = e(Box, { flexDirection: "column", children: k.map(EnvVarRow) })), ($[17] = k), ($[18] = D));
-  else D = $[18];
+  if ($[17] !== k) {
+    D = jsxProd_default(Box, {
+      flexDirection: "column",
+      children: k.map(EnvVarRow),
+    });
+    $[17] = k;
+    $[18] = D;
+  } else D = $[18];
   let W;
-  if ($[19] !== wizardData.verifiedIdentity)
-    ((W =
+  if ($[19] !== wizardData.verifiedIdentity) {
+    W =
       wizardData.verifiedIdentity &&
-      r(Text, {
-        dimColor: !0,
+      jsxProd_default_2(Text, {
+        dimColor: true,
         children: [
-          e(StatusIcon, { status: "success", withSpace: !0 }),
+          jsxProd_default(StatusIcon, {
+            status: "success",
+            withSpace: true,
+          }),
           "Verified as ",
           wizardData.verifiedIdentity,
         ],
-      })),
-      ($[19] = wizardData.verifiedIdentity),
-      ($[20] = W));
-  else W = $[20];
+      });
+    $[19] = wizardData.verifiedIdentity;
+    $[20] = W;
+  } else W = $[20];
   let G;
-  if ($[21] !== m) ((G = e(ErrorText, { error: m })), ($[21] = m), ($[22] = G));
-  else G = $[22];
+  if ($[21] !== m) {
+    G = jsxProd_default(ErrorText, {
+      error: m,
+    });
+    $[21] = m;
+    $[22] = G;
+  } else G = $[22];
   let X;
-  if ($[23] !== goBack || $[24] !== T)
-    ((X = e(ConfirmSelect, { confirmLabel: "Save", cancelLabel: "Cancel", onConfirm: T, onCancel: goBack })),
-      ($[23] = goBack),
-      ($[24] = T),
-      ($[25] = X));
-  else X = $[25];
+  if ($[23] !== goBack || $[24] !== onConfirm) {
+    X = jsxProd_default(ConfirmSelect, {
+      confirmLabel: "Save",
+      cancelLabel: "Cancel",
+      onConfirm,
+      onCancel: goBack,
+    });
+    $[23] = goBack;
+    $[24] = onConfirm;
+    $[25] = X;
+  } else X = $[25];
   let _e;
-  if ($[26] !== D || $[27] !== W || $[28] !== G || $[29] !== X)
-    ((_e = e(WizardDialogLayout, {
+  if ($[26] !== D || $[27] !== W || $[28] !== G || $[29] !== X) {
+    _e = jsxProd_default(WizardDialogLayout, {
       subtitle: "Confirm and save",
-      children: r(Box, { flexDirection: "column", gap: 1, children: [_, D, W, G, X] }),
-    })),
-      ($[26] = D),
-      ($[27] = W),
-      ($[28] = G),
-      ($[29] = X),
-      ($[30] = _e));
-  else _e = $[30];
+      children: jsxProd_default_2(Box, {
+        flexDirection: "column",
+        gap: 1,
+        children: [_, D, W, G, X],
+      }),
+    });
+    $[26] = D;
+    $[27] = W;
+    $[28] = G;
+    $[29] = X;
+    $[30] = _e;
+  } else _e = $[30];
   return _e;
 }
 //@ chunk-sx9xc5ee.js:8606-8625 placement
-var Ke = Re(nke(), 1);
+var bedrockVerificationSignal = Re(require_fetch_http_handler(), 1);
 //@ chunk-sx9xc5ee.js:8625-8670 placement
-var Q = "Bedrock setup verification timed out";
+var BEDROCK_VERIFY_TIMEOUT_TEXT = "Bedrock setup verification timed out";
+//@ chunk-sx9xc5ee.js:8670-8980 placement
 /**
  * 按 Bedrock 区域组为 sonnet/opus/haiku 各档生成匹配用的第一方模型 id 与带区域前缀的 Bedrock 回退 id；默认模型配置缺少 bedrock id 时抛错。
  */
-//@ chunk-sx9xc5ee.js:8670-8980 placement
-function bedrockModelDefaults(o) {
-  let d = bedrockRegionGroup(o),
-    c = (l) => {
-      let bedrock = No[l].bedrock;
-      if (bedrock === null)
-        throw Error(
-          "A DEFAULT_3P_*_KEY points at a model config with bedrock: null \u2014 Bedrock setup has no fallback id for that tier",
-        );
-      return { needle: No[l].firstParty, fallback: withBedrockRegionPrefix(bedrock, d) };
+function bedrockModelDefaults(region) {
+  let d = bedrockRegionGroup(region);
+  let c = (l) => {
+    let bedrock = catalogEntriesByFirstPartyId[l].bedrock;
+    if (bedrock === null)
+      throw Error(
+        "A DEFAULT_3P_*_KEY points at a model config with bedrock: null \u2014 Bedrock setup has no fallback id for that tier",
+      );
+    return {
+      needle: catalogEntriesByFirstPartyId[l].firstParty,
+      fallback: withBedrockRegionPrefix(bedrock, d),
     };
+  };
   return {
     sonnet: c(DEFAULT_3P_SONNET_KEY),
     opus: c(DEFAULT_BEDROCK_OPUS_KEY),
@@ -247,45 +304,66 @@ function bedrockModelDefaults(o) {
   };
 }
 //@ chunk-sx9xc5ee.js:8980-9790 placement
-async function verifyBedrockAccess(o) {
-  if (o.authMethod === "bearer") return bedrockApiKeyTestResult(o);
-  let d = getAwsChainResolveTimeoutMs();
+async function verifyBedrockAccess(wizardData) {
+  if (wizardData.authMethod === "bearer") return bedrockApiKeyTestResult(wizardData);
+  let awsChainResolveTimeoutMs = getAwsChainResolveTimeoutMs();
   try {
-    let c = await bedrockCredentialProvider(o),
-      t = {
-        ...(await getAWSClientProxyConfig({
-          url: `https://bedrock.${o.region}.amazonaws.com`,
-          region: o.region,
-          requestTimeoutMs: AWS_CHAIN_RESOLVE_REQUEST_TIMEOUT_MS,
-        })),
-        region: o.region,
-        ...(c && { credentials: c }),
-      },
-      { STSClient: STSClient, GetCallerIdentityCommand: GetCallerIdentityCommand } =
-        await import("./chunk-heg39xxp.js"),
-      h = await withTimeout(new STSClient(t).send(new GetCallerIdentityCommand({})), d, Q),
-      u = h.Arn ?? h.UserId ?? "(unknown)",
-      { BedrockClient: BedrockClient, ListInferenceProfilesCommand: ListInferenceProfilesCommand } =
-        await import("./chunk-0dmzgg46.js"),
-      A = new BedrockClient(t),
-      E = [],
-      k;
+    let c = await bedrockCredentialProvider(wizardData);
+    let t = {
+      ...(await getAWSClientProxyConfig({
+        url: `https://bedrock.${wizardData.region}.amazonaws.com`,
+        region: wizardData.region,
+        requestTimeoutMs: AWS_CHAIN_RESOLVE_REQUEST_TIMEOUT_MS,
+      })),
+      region: wizardData.region,
+      ...(c && {
+        credentials: c,
+      }),
+    };
+    let { STSClient, GetCallerIdentityCommand } = await import("./chunk-heg39xxp.js");
+    let h = await withTimeout(
+      new STSClient(t).send(new GetCallerIdentityCommand({})),
+      awsChainResolveTimeoutMs,
+      BEDROCK_VERIFY_TIMEOUT_TEXT,
+    );
+    let identity = h.Arn ?? h.UserId ?? "(unknown)";
+    let { BedrockClient, ListInferenceProfilesCommand } = await import("./chunk-0dmzgg46.js");
+    let A = new BedrockClient(t);
+    let E = [];
+    let k;
     do {
       let f = await withTimeout(
         A.send(
-          new ListInferenceProfilesCommand({ ...(k && { nextToken: k }), typeEquals: "SYSTEM_DEFINED" }),
+          new ListInferenceProfilesCommand({
+            ...(k && {
+              nextToken: k,
+            }),
+            typeEquals: "SYSTEM_DEFINED",
+          }),
         ),
-        d,
-        Q,
+        awsChainResolveTimeoutMs,
+        BEDROCK_VERIFY_TIMEOUT_TEXT,
       );
       for (let C of f.inferenceProfileSummaries ?? [])
         if (C.inferenceProfileId?.includes("anthropic")) E.push(C.inferenceProfileId);
       k = f.nextToken;
     } while (k);
-    return { status: "ok", identity: u, profiles: E };
+    return {
+      status: "ok",
+      identity,
+      profiles: E,
+    };
   } catch (error) {
-    return { status: "error", ...describeAwsError(error, o, d) };
+    return {
+      status: "error",
+      ...describeAwsError(error, wizardData, awsChainResolveTimeoutMs),
+    };
   }
 }
-
-export { Q, bedrockModelDefaults, Ke, verifyBedrockAccess, BedrockSaveStep };
+export {
+  BEDROCK_VERIFY_TIMEOUT_TEXT,
+  bedrockModelDefaults,
+  bedrockVerificationSignal,
+  verifyBedrockAccess,
+  BedrockSaveStep,
+};

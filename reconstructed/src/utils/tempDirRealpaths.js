@@ -8,55 +8,68 @@
  * pieces: chunk-g54kbxqw.js (5)
  * attribution: placement 5
  */
-import { sep as sep_2, join as join_2, join as join_3, join as join_4 } from "path";
+import { sep as sep_2, join as join_2 } from "path";
 import { getSessionPathsCache } from "./sessionPathsCache.js";
 import { isDiskless, getOriginalCwd } from "../bootstrap/state.js";
 import { claudeTempDir, childProcessTmpDir } from "./tempDir.js";
 import { getFsImplementation, findIntermediateUncJunction, NodeFsOperations } from "./fsOperations.js";
 import { sanitizePath } from "./sessionStoragePortable.js";
-import { ai, yl } from "./networkPaths.js";
+import { isNonWslUncPath, isNetworkMountRoot } from "./networkPaths.js";
 
+//@ chunk-g54kbxqw.js:46174-46353 placement
 /**
  * 取 Claude 临时目录的真实路径（带分隔符结尾），有盘时缓存。
  */
-//@ chunk-g54kbxqw.js:46174-46353 placement
 function getClaudeTempDirRealpath() {
-  let e = getSessionPathsCache();
-  if (e.claudeTempDir !== void 0 && !isDiskless()) return e.claudeTempDir;
-  let n = claudeTempDir(),
-    s = getFsImplementation(),
-    r = n;
+  let sessionPathsCache = getSessionPathsCache();
+  if (sessionPathsCache.claudeTempDir !== undefined && !isDiskless()) return sessionPathsCache.claudeTempDir;
+  let n = claudeTempDir();
+  let fsImplementation = getFsImplementation();
+  let r = n;
   try {
-    r = s.realpathSync(n);
+    r = fsImplementation.realpathSync(n);
   } catch {}
-  return ((e.claudeTempDir = r + sep_2), e.claudeTempDir);
+  sessionPathsCache.claudeTempDir = r + sep_2;
+  return sessionPathsCache.claudeTempDir;
 }
+//@ chunk-g54kbxqw.js:46353-46554 placement
 /**
  * 取子进程临时目录的真实路径（带分隔符结尾），有盘时缓存。
  */
-//@ chunk-g54kbxqw.js:46353-46554 placement
 function getChildProcessTmpDirRealpath() {
-  let e = getSessionPathsCache();
-  if (e.childProcessTmpDir !== void 0 && !isDiskless()) return e.childProcessTmpDir;
-  let n = childProcessTmpDir(),
-    s = getFsImplementation(),
-    r = n;
+  let sessionPathsCache = getSessionPathsCache();
+  if (sessionPathsCache.childProcessTmpDir !== undefined && !isDiskless())
+    return sessionPathsCache.childProcessTmpDir;
+  let n = childProcessTmpDir();
+  let fsImplementation = getFsImplementation();
+  let r = n;
   try {
-    r = s.realpathSync(n);
+    r = fsImplementation.realpathSync(n);
   } catch {}
-  return ((e.childProcessTmpDir = r + sep_2), e.childProcessTmpDir);
+  sessionPathsCache.childProcessTmpDir = r + sep_2;
+  return sessionPathsCache.childProcessTmpDir;
 }
 //@ chunk-g54kbxqw.js:46554-46585 placement
-function Sx() {
-  return nkn(getOriginalCwd());
+/**
+ * 会话临时目录的真实路径。
+ */
+function sessionTempDirRealpath() {
+  return taskRootUnderTemp(getOriginalCwd());
 }
 //@ chunk-g54kbxqw.js:46585-46626 placement
-function nkn(e) {
-  return join_3(getClaudeTempDirRealpath(), sanitizePath(e)) + sep_2;
+/**
+ * 临时目录下按路径分目录的任务输出根。
+ */
+function taskRootUnderTemp(e) {
+  return join_2(getClaudeTempDirRealpath(), sanitizePath(e)) + sep_2;
 }
 //@ chunk-g54kbxqw.js:46626-46742 placement = normalizeFilePath (1)
 function normalizeFilePath(filePath) {
-  if (ai(filePath) || yl(filePath) || findIntermediateUncJunction(NodeFsOperations, filePath) !== void 0)
+  if (
+    isNonWslUncPath(filePath) ||
+    isNetworkMountRoot(filePath) ||
+    findIntermediateUncJunction(NodeFsOperations, filePath) !== undefined
+  )
     return filePath;
   let fs = getFsImplementation();
   try {
@@ -65,5 +78,10 @@ function normalizeFilePath(filePath) {
     return filePath;
   }
 }
-
-export { Sx, getClaudeTempDirRealpath, nkn, normalizeFilePath, getChildProcessTmpDirRealpath };
+export {
+  sessionTempDirRealpath,
+  getClaudeTempDirRealpath,
+  taskRootUnderTemp,
+  normalizeFilePath,
+  getChildProcessTmpDirRealpath,
+};

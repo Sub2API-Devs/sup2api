@@ -9,24 +9,26 @@
  * attribution: fingerprint 3, sole-consumer 1
  */
 import { getGraphemeSegmenter } from "../utils/intl.js";
-import { RS } from "../utils/sanitization.js";
+import { INVISIBLE_CHAR_CLASS_SOURCE } from "../utils/sanitization.js";
 
+//@ chunk-gfseh2w1.js:191-220 fingerprint = BUN_STRING_WIDTH_OPTS (1)
 /**
  * Bun.stringWidth 选项：东亚歧义宽度按窄。
  */
-//@ chunk-gfseh2w1.js:191-220 fingerprint = BUN_STRING_WIDTH_OPTS (1)
-var BUN_STRING_WIDTH_OPTS = { ambiguousIsNarrow: !0 };
+var BUN_STRING_WIDTH_OPTS = {
+  ambiguousIsNarrow: true,
+};
+//@ chunk-gfseh2w1.js:220-263 fingerprint = bunStringWidth (0.617)
 /**
  * 字符串显示宽度：Bun.stringWidth（歧义宽度按窄）。
  */
-//@ chunk-gfseh2w1.js:220-263 fingerprint = bunStringWidth (0.617)
-function bunStringWidth(t) {
-  return Bun.stringWidth(t, BUN_STRING_WIDTH_OPTS);
+function bunStringWidth(str) {
+  return Bun.stringWidth(str, BUN_STRING_WIDTH_OPTS);
 }
+//@ chunk-t0gq9gyw.js:5412-5691 fingerprint = stringWidthJavaScript (0.677)
 /**
  * 找出文本里会被渲染成零宽的字符（不可见格式符、零宽字素等），返回其码点；没有返回 undefined。
  */
-//@ chunk-t0gq9gyw.js:5412-5691 fingerprint = stringWidthJavaScript (0.677)
 function findZeroWidthCodePoint(text) {
   let match = INVISIBLE_CHAR_RE.exec(text);
   if (match !== null) return match[0].codePointAt(0);
@@ -42,8 +44,7 @@ function findZeroWidthCodePoint(text) {
   return;
 }
 //@ chunk-t0gq9gyw.js:5691-5782 sole-consumer
-var INVISIBLE_CHAR_RE = new RegExp(`(?![\\t\\n\\r])[${RS}]`, "u"),
-  CONTROL_WHITESPACE_RE = /^[\t\n\r]+$/,
-  PRINTABLE_ASCII_RE = /^[\t\n\r\x20-\x7e]*$/;
-
+var INVISIBLE_CHAR_RE = new RegExp(`(?![\\t\\n\\r])[${INVISIBLE_CHAR_CLASS_SOURCE}]`, "u");
+var CONTROL_WHITESPACE_RE = /^[\t\n\r]+$/;
+var PRINTABLE_ASCII_RE = /^[\t\n\r\x20-\x7e]*$/;
 export { bunStringWidth, findZeroWidthCodePoint };

@@ -8,8 +8,7 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-1ny7cxrt.js:23683-23735 cjs-fingerprint
-var wf = x(function ($F, aS) {
-  $F.keystores = new WeakMap();
+var require_weak_cache = x(function (cjsExports, cjsModule) {
+  cjsExports.keystores = new WeakMap();
 });
-
-export { wf };
+export { require_weak_cache };

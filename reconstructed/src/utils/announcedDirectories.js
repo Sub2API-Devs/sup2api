@@ -13,10 +13,10 @@ import { HostScoped } from "./hostScoped.js";
 import { getRootSession, getOriginalCwdOrNull, getProjectRootOrNull } from "../bootstrap/state.js";
 import { getFsImplementation } from "./fsOperations.js";
 
+//@ chunk-x4mkkqwd.js:338-752 placement
 /**
  * 已宣告目录集合：保存排序去重后的附加工作目录，记录曾宣告过的所有目录，可重置。
  */
-//@ chunk-x4mkkqwd.js:338-752 placement
 class AnnouncedDirectories {
   directories = [];
   announced = new Set();
@@ -24,10 +24,16 @@ class AnnouncedDirectories {
     return this.directories;
   }
   publish(o) {
-    let sorted = uniq([...o.additionalWorkingDirectories.values()].map((e) => e.path)).sort(),
-      directories = this.directories;
-    if (directories.length === sorted.length && directories.every((e, s) => e === sorted[s])) return !1;
-    return ((this.directories = sorted), !0);
+    let sorted = uniq(
+      [...o.additionalWorkingDirectories.values()].map(
+        (additionalWorkingDirectory) => additionalWorkingDirectory.path,
+      ),
+    ).sort();
+    let directories = this.directories;
+    if (directories.length === sorted.length && directories.every((directory, s) => directory === sorted[s]))
+      return false;
+    this.directories = sorted;
+    return true;
   }
   noteAnnounced(o) {
     for (let t of o) this.announced.add(t);
@@ -36,43 +42,61 @@ class AnnouncedDirectories {
     return [...this.announced];
   }
   reset() {
-    ((this.directories = []), this.announced.clear());
+    this.directories = [];
+    this.announced.clear();
   }
 }
 //@ chunk-x4mkkqwd.js:752-775 placement
-var d = new HostScoped(() => new AnnouncedDirectories());
+/**
+ * 按宿主隔离的“已宣告目录”状态。
+ */
+var announcedDirsByHost = new HostScoped(() => new AnnouncedDirectories());
 //@ chunk-x4mkkqwd.js:775-810 placement
-function r() {
-  return d.of(getRootSession().host);
+/**
+ * 取出当前宿主的已宣告目录状态。
+ */
+function getAnnouncedDirs() {
+  return announcedDirsByHost.of(getRootSession().host);
 }
+//@ chunk-x4mkkqwd.js:810-939 placement
 /**
  * 记录原始 cwd、项目根、其他目录与当前附加目录为已宣告，并返回当前附加目录列表。
  */
-//@ chunk-x4mkkqwd.js:810-939 placement
 function getAnnouncedDirectories() {
-  let o = r(),
-    t = getOriginalCwdOrNull(),
-    n = getProjectRootOrNull();
-  return (
-    o.noteAnnounced([...(t === null ? [] : [t]), ...(n === null ? [] : [n]), ...c(), ...o.get()]),
-    o.get()
-  );
+  let announcedDirs = getAnnouncedDirs();
+  let originalCwdOrNull = getOriginalCwdOrNull();
+  let projectRootOrNull = getProjectRootOrNull();
+  announcedDirs.noteAnnounced([
+    ...(originalCwdOrNull === null ? [] : [originalCwdOrNull]),
+    ...(projectRootOrNull === null ? [] : [projectRootOrNull]),
+    ...currentCwdList(),
+    ...announcedDirs.get(),
+  ]);
+  return announcedDirs.get();
 }
 //@ chunk-x4mkkqwd.js:939-981 placement
-function szs() {
-  return r().everAnnounced();
+/**
+ * 是否已经宣告过目录（用于避免重复宣告）。
+ */
+function hasAnnouncedDirs() {
+  return getAnnouncedDirs().everAnnounced();
 }
 //@ chunk-x4mkkqwd.js:981-1019 placement
-function P4n(o) {
-  return r().publish(o);
+/**
+ * 发布当前附加目录列表。
+ */
+function publishAnnouncedDirs(toolPermissionContext) {
+  return getAnnouncedDirs().publish(toolPermissionContext);
 }
 //@ chunk-x4mkkqwd.js:1019-1071 placement
-function c() {
+/**
+ * 返回当前工作目录（取不到时为空数组）。
+ */
+function currentCwdList() {
   try {
     return [getFsImplementation().cwd()];
   } catch {
     return [];
   }
 }
-
-export { getAnnouncedDirectories, P4n, szs };
+export { getAnnouncedDirectories, publishAnnouncedDirs, hasAnnouncedDirs };

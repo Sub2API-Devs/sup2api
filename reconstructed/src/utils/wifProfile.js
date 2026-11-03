@@ -10,11 +10,11 @@
  */
 import { join, resolve, sep, isAbsolute, parse, relative, dirname, basename } from "path";
 import { realpathSync, lstatSync, readFileSync } from "fs";
-import { rp } from "../../vendor/@anthropic-ai/sdk/lib/credentials/types.mjs";
+import { WorkloadIdentityError } from "../../vendor/@anthropic-ai/sdk/lib/credentials/types.mjs";
 import { HostScoped } from "./hostScoped.js";
 import { getRootSession, isDiskless } from "../bootstrap/state.js";
 import { DoctorLazy } from "../cli/handlers/util.js";
-import { u, o } from "../../vendor/zod/v4/classic/schemas.js";
+import { u, string } from "../../vendor/zod/v4/classic/schemas.js";
 import { env } from "./env.js";
 import { jsonParse } from "./slowOperations.js";
 import { logForDebugging } from "./debug.js";
@@ -27,61 +27,91 @@ import { storageErrorCode } from "./storage/storageErrors.js";
 //@ chunk-640x3zn9.js:6485-6608 placement
 function isWIFUserOAuthDeadError(e) {
   return (
-    e instanceof rp && e.statusCode === null && e.message.includes("has expired and no refresh is available")
+    e instanceof WorkloadIdentityError &&
+    e.statusCode === null &&
+    e.message.includes("has expired and no refresh is available")
   );
 }
 //@ chunk-640x3zn9.js:6608-6676 placement
-var de = ["ANTHROPIC_FEDERATION_RULE_ID", "ANTHROPIC_ORGANIZATION_ID"];
+var WIF_ENV_QUAD_VARS = ["ANTHROPIC_FEDERATION_RULE_ID", "ANTHROPIC_ORGANIZATION_ID"];
 //@ chunk-640x3zn9.js:6676-6895 placement
 class WifProfileCache {
-  precedenceSource = { filled: !1 };
-  authType = { filled: !1 };
-  profileBaseUrl = { filled: !1 };
-  accountInfo = { filled: !1 };
-  federationIdentity = { filled: !1 };
-  profileStoreDenyPaths = { filled: !1 };
-  settingsBearerRejected = !1;
-  primedFiles = void 0;
+  precedenceSource = {
+    filled: false,
+  };
+  authType = {
+    filled: false,
+  };
+  profileBaseUrl = {
+    filled: false,
+  };
+  accountInfo = {
+    filled: false,
+  };
+  federationIdentity = {
+    filled: false,
+  };
+  profileStoreDenyPaths = {
+    filled: false,
+  };
+  settingsBearerRejected = false;
+  primedFiles = undefined;
 }
 //@ chunk-640x3zn9.js:6895-6918 placement
-var g = new HostScoped(() => new WifProfileCache());
+var wifProfileCacheByHost = new HostScoped(() => new WifProfileCache());
 //@ chunk-640x3zn9.js:6918-7073 placement
 function getWIFPrecedenceSource() {
-  let of = g.of(getRootSession().host);
-  if (of.precedenceSource.filled) return of.precedenceSource.value;
-  let n = computeWIFPrecedenceSource();
-  return ((of.precedenceSource = { filled: !0, value: n }), n);
+  let e = wifProfileCacheByHost.of(getRootSession().host);
+  if (e.precedenceSource.filled) return e.precedenceSource.value;
+  let wifPrecedenceSource = computeWIFPrecedenceSource();
+  e.precedenceSource = {
+    filled: true,
+    value: wifPrecedenceSource,
+  };
+  return wifPrecedenceSource;
 }
 //@ chunk-640x3zn9.js:7073-7353 placement
 function computeWIFPrecedenceSource() {
-  let e = resolveConfigDir(),
-    n = G();
+  let configDir = resolveConfigDir();
+  let n = activeProfileNameFromEnv();
   if (n) {
-    if (e === null) return null;
-    let r = profileAuthType(e, n);
+    if (configDir === null) return null;
+    let r = profileAuthType(configDir, n);
     return r === "oidc_federation" || r === "user_oauth" ? "profile-explicit" : null;
   }
-  if (J()) return "env-quad";
-  if (e !== null) {
-    let r = profileAuthType(e, resolveImplicitProfileName(e));
+  if (hasEnvQuad()) return "env-quad";
+  if (configDir !== null) {
+    let r = profileAuthType(configDir, resolveImplicitProfileName(configDir));
     if (r === "oidc_federation" || r === "user_oauth") return "profile-implicit";
   }
   return null;
 }
 //@ chunk-640x3zn9.js:7353-7575 placement
 function clearWIFPrecedenceCache() {
-  let of = g.of(getRootSession().host);
-  ((of.precedenceSource = { filled: !1 }),
-    (of.authType = { filled: !1 }),
-    (of.profileBaseUrl = { filled: !1 }),
-    (of.federationIdentity = { filled: !1 }),
-    (of.profileStoreDenyPaths = { filled: !1 }),
-    (of.settingsBearerRejected = !1),
-    clearWIFAccountInfoCache());
+  let e = wifProfileCacheByHost.of(getRootSession().host);
+  e.precedenceSource = {
+    filled: false,
+  };
+  e.authType = {
+    filled: false,
+  };
+  e.profileBaseUrl = {
+    filled: false,
+  };
+  e.federationIdentity = {
+    filled: false,
+  };
+  e.profileStoreDenyPaths = {
+    filled: false,
+  };
+  e.settingsBearerRejected = false;
+  clearWIFAccountInfoCache();
 }
 //@ chunk-640x3zn9.js:7575-7629 placement
 function clearWIFAccountInfoCache() {
-  g.of(getRootSession().host).accountInfo = { filled: !1 };
+  wifProfileCacheByHost.of(getRootSession().host).accountInfo = {
+    filled: false,
+  };
 }
 //@ chunk-640x3zn9.js:7629-7663 placement
 function isWIFActive() {
@@ -89,23 +119,27 @@ function isWIFActive() {
 }
 //@ chunk-640x3zn9.js:7663-7795 placement
 function getWIFAuthType() {
-  let of = g.of(getRootSession().host);
-  if (of.authType.filled) return of.authType.value;
-  let n = computeWIFAuthType();
-  return ((of.authType = { filled: !0, value: n }), n);
+  let e = wifProfileCacheByHost.of(getRootSession().host);
+  if (e.authType.filled) return e.authType.value;
+  let wifAuthType = computeWIFAuthType();
+  e.authType = {
+    filled: true,
+    value: wifAuthType,
+  };
+  return wifAuthType;
 }
 //@ chunk-640x3zn9.js:7795-8069 placement
 function computeWIFAuthType() {
-  let e = getWIFPrecedenceSource();
-  if (e === null) return null;
-  if (e === "env-quad") return "oidc_federation";
-  let n = resolveConfigDir();
-  if (n === null) return null;
+  let wifPrecedenceSource = getWIFPrecedenceSource();
+  if (wifPrecedenceSource === null) return null;
+  if (wifPrecedenceSource === "env-quad") return "oidc_federation";
+  let configDir = resolveConfigDir();
+  if (configDir === null) return null;
   let r =
-      e === "profile-explicit"
-        ? (process.env.ANTHROPIC_PROFILE?.trim() ?? "default")
-        : resolveImplicitProfileName(n),
-    s = profileAuthType(n, r);
+    wifPrecedenceSource === "profile-explicit"
+      ? (process.env.ANTHROPIC_PROFILE?.trim() ?? "default")
+      : resolveImplicitProfileName(configDir);
+  let s = profileAuthType(configDir, r);
   return s === "oidc_federation" || s === "user_oauth" ? s : null;
 }
 //@ chunk-640x3zn9.js:8069-8139 placement
@@ -114,29 +148,33 @@ function wouldWIFProfileYieldToClaudeAILogin() {
 }
 //@ chunk-640x3zn9.js:8139-8279 placement
 function getWIFAccountInfo() {
-  let of = g.of(getRootSession().host);
-  if (of.accountInfo.filled) return of.accountInfo.value;
-  let n = computeWIFAccountInfo();
-  return ((of.accountInfo = { filled: !0, value: n }), n);
+  let e = wifProfileCacheByHost.of(getRootSession().host);
+  if (e.accountInfo.filled) return e.accountInfo.value;
+  let wifAccountInfo = computeWIFAccountInfo();
+  e.accountInfo = {
+    filled: true,
+    value: wifAccountInfo,
+  };
+  return wifAccountInfo;
 }
 //@ chunk-640x3zn9.js:8279-8470 placement
 function computeWIFAccountInfo() {
-  let e = getWIFPrecedenceSource();
-  if (e === null || e === "env-quad") return;
-  let n = resolveConfigDir();
-  if (n === null) return;
+  let wifPrecedenceSource = getWIFPrecedenceSource();
+  if (wifPrecedenceSource === null || wifPrecedenceSource === "env-quad") return;
+  let configDir = resolveConfigDir();
+  if (configDir === null) return;
   let r =
-    e === "profile-explicit"
+    wifPrecedenceSource === "profile-explicit"
       ? (process.env.ANTHROPIC_PROFILE?.trim() ?? "default")
-      : resolveImplicitProfileName(n);
-  return readWIFAccountInfo(n, r);
+      : resolveImplicitProfileName(configDir);
+  return readWIFAccountInfo(configDir, r);
 }
 //@ chunk-640x3zn9.js:8470-8730 placement
-function readWIFAccountInfo(e, n) {
-  let r = readProfileFile(credentialsPathFor(e, n));
-  if (r === null) return;
+function readWIFAccountInfo(configDir, n) {
+  let profileFile = readProfileFile(credentialsPathFor(configDir, n));
+  if (profileFile === null) return;
   try {
-    let parsed = JSON.parse(r);
+    let parsed = JSON.parse(profileFile);
     return {
       organizationUuid: parsed.organization_uuid,
       organizationName: parsed.organization_name,
@@ -150,52 +188,56 @@ function readWIFAccountInfo(e, n) {
 }
 //@ chunk-640x3zn9.js:8730-9258 placement
 function getWIFStatusLine() {
-  let e = getWIFPrecedenceSource();
-  if (e === "env-quad") {
-    let n = process.env.ANTHROPIC_WORKSPACE_ID?.trim();
-    return `env-quad \xB7 org ${w(process.env.ANTHROPIC_ORGANIZATION_ID ?? "")} \xB7 rule ${w(process.env.ANTHROPIC_FEDERATION_RULE_ID ?? "")}${n ? ` \xB7 ws ${n.startsWith("wrkspc_") ? w(n) : n}` : ""}`;
+  let wifPrecedenceSource = getWIFPrecedenceSource();
+  if (wifPrecedenceSource === "env-quad") {
+    let trimmed = process.env.ANTHROPIC_WORKSPACE_ID?.trim();
+    return `env-quad \xB7 org ${tailOfId(process.env.ANTHROPIC_ORGANIZATION_ID ?? "")} \xB7 rule ${tailOfId(process.env.ANTHROPIC_FEDERATION_RULE_ID ?? "")}${trimmed ? ` \xB7 ws ${trimmed.startsWith("wrkspc_") ? tailOfId(trimmed) : trimmed}` : ""}`;
   }
-  if (e === "profile-explicit" || e === "profile-implicit") {
-    let n = resolveConfigDir(),
-      r =
-        n === null
-          ? "default"
-          : e === "profile-explicit"
-            ? (process.env.ANTHROPIC_PROFILE?.trim() ?? "default")
-            : resolveImplicitProfileName(n);
+  if (wifPrecedenceSource === "profile-explicit" || wifPrecedenceSource === "profile-implicit") {
+    let configDir = resolveConfigDir();
+    let r =
+      configDir === null
+        ? "default"
+        : wifPrecedenceSource === "profile-explicit"
+          ? (process.env.ANTHROPIC_PROFILE?.trim() ?? "default")
+          : resolveImplicitProfileName(configDir);
     return `credentials-file \xB7 ${getWIFAuthType() ?? "unknown"} \xB7 profile ${r}`;
   }
   return "inactive";
 }
 //@ chunk-640x3zn9.js:9258-9316 placement
-function w(e) {
+function tailOfId(e) {
   return e.length <= 6 ? e : `\u2026${e.slice(-6)}`;
 }
 //@ chunk-640x3zn9.js:9316-9466 placement
 function getWIFProfileBaseUrl() {
-  let of = g.of(getRootSession().host);
-  if (of.profileBaseUrl.filled) return of.profileBaseUrl.value;
-  let n = computeWIFProfileBaseUrl();
-  return ((of.profileBaseUrl = { filled: !0, value: n }), n);
+  let e = wifProfileCacheByHost.of(getRootSession().host);
+  if (e.profileBaseUrl.filled) return e.profileBaseUrl.value;
+  let wifProfileBaseUrl = computeWIFProfileBaseUrl();
+  e.profileBaseUrl = {
+    filled: true,
+    value: wifProfileBaseUrl,
+  };
+  return wifProfileBaseUrl;
 }
+//@ chunk-640x3zn9.js:9466-9810 placement
 /**
  * 读取当前 WIF profile 配置中的 base_url。
  */
-//@ chunk-640x3zn9.js:9466-9810 placement
 function computeWIFProfileBaseUrl() {
-  let e = getWIFPrecedenceSource();
-  if (e === null || e === "env-quad") return;
-  let n = resolveConfigDir();
-  if (n === null) return;
+  let wifPrecedenceSource = getWIFPrecedenceSource();
+  if (wifPrecedenceSource === null || wifPrecedenceSource === "env-quad") return;
+  let configDir = resolveConfigDir();
+  if (configDir === null) return;
   try {
     let r =
-        e === "profile-explicit"
-          ? (process.env.ANTHROPIC_PROFILE?.trim() ?? "default")
-          : resolveImplicitProfileName(n),
-      s = readProfileFile(join(n, "configs", `${r}.json`));
-    if (s === null) return;
-    let parsed = JSON.parse(s);
-    return typeof parsed.base_url === "string" && parsed.base_url.trim() ? parsed.base_url.trim() : void 0;
+      wifPrecedenceSource === "profile-explicit"
+        ? (process.env.ANTHROPIC_PROFILE?.trim() ?? "default")
+        : resolveImplicitProfileName(configDir);
+    let profileFile = readProfileFile(join(configDir, "configs", `${r}.json`));
+    if (profileFile === null) return;
+    let parsed = JSON.parse(profileFile);
+    return typeof parsed.base_url === "string" && parsed.base_url.trim() ? parsed.base_url.trim() : undefined;
   } catch {
     return;
   }
@@ -203,22 +245,31 @@ function computeWIFProfileBaseUrl() {
 //@ chunk-640x3zn9.js:9810-9989 placement
 var wifProfileConfigSchema = DoctorLazy(() =>
   u({
-    organization_id: o().optional(),
-    workspace_id: o().optional(),
-    authentication: u({ type: o().optional(), federation_rule_id: o().optional() }).loose().optional(),
+    organization_id: string().optional(),
+    workspace_id: string().optional(),
+    authentication: u({
+      type: string().optional(),
+      federation_rule_id: string().optional(),
+    })
+      .loose()
+      .optional(),
   }).loose(),
 );
 //@ chunk-640x3zn9.js:9989-10151 placement
 function getWIFFederationIdentity() {
-  let of = g.of(getRootSession().host);
-  if (of.federationIdentity.filled) return of.federationIdentity.value;
-  let n = computeWIFFederationIdentity();
-  return ((of.federationIdentity = { filled: !0, value: n }), n);
+  let e = wifProfileCacheByHost.of(getRootSession().host);
+  if (e.federationIdentity.filled) return e.federationIdentity.value;
+  let wifFederationIdentity = computeWIFFederationIdentity();
+  e.federationIdentity = {
+    filled: true,
+    value: wifFederationIdentity,
+  };
+  return wifFederationIdentity;
 }
+//@ chunk-640x3zn9.js:10151-10699 placement
 /**
  * 计算 WIF 联邦身份（组织 id、联邦规则 id、工作区 id）：来自环境变量四件套或当前 profile 的 oidc_federation 配置。
  */
-//@ chunk-640x3zn9.js:10151-10699 placement
 function computeWIFFederationIdentity() {
   let source = getWIFPrecedenceSource();
   if (source === null) return;
@@ -231,79 +282,109 @@ function computeWIFFederationIdentity() {
   let configDir = resolveConfigDir();
   if (configDir === null) return;
   try {
-    let r = readProfileFile(join(configDir, "configs", `${resolveLiveProfileName(configDir)}.json`));
-    if (r === null) return;
-    let safeParse = wifProfileConfigSchema().safeParse(jsonParse(r));
-    if (!safeParse.success || safeParse.data.authentication?.type !== "oidc_federation") return;
+    let profileFile = readProfileFile(
+      join(configDir, "configs", `${resolveLiveProfileName(configDir)}.json`),
+    );
+    if (profileFile === null) return;
+    let s = wifProfileConfigSchema().safeParse(jsonParse(profileFile));
+    if (!s.success || s.data.authentication?.type !== "oidc_federation") return;
     return federationIdentityOf({
-      organizationId: safeParse.data.organization_id,
-      federationRuleId: safeParse.data.authentication.federation_rule_id,
-      workspaceId: safeParse.data.workspace_id,
+      organizationId: s.data.organization_id,
+      federationRuleId: s.data.authentication.federation_rule_id,
+      workspaceId: s.data.workspace_id,
     });
   } catch {
     return;
   }
 }
 //@ chunk-640x3zn9.js:10699-10907 placement
-function federationIdentityOf({
-  organizationId: organizationId,
-  federationRuleId: federationRuleId,
-  workspaceId: workspaceId,
-}) {
-  let s = organizationId?.trim(),
-    c = federationRuleId?.trim();
-  if (!s || !c) return;
-  let a = workspaceId?.trim() || void 0;
-  return { organizationId: s, federationRuleId: c, ...(a !== void 0 && { workspaceId: a }) };
+function federationIdentityOf({ organizationId, federationRuleId, workspaceId }) {
+  let trimmed = organizationId?.trim();
+  let trimmed_2 = federationRuleId?.trim();
+  if (!trimmed || !trimmed_2) return;
+  let a = workspaceId?.trim() || undefined;
+  return {
+    organizationId: trimmed,
+    federationRuleId: trimmed_2,
+    ...(a !== undefined && {
+      workspaceId: a,
+    }),
+  };
 }
 //@ chunk-640x3zn9.js:10907-10967 placement
 function isWIFSettingsBearerRejected() {
-  return g.of(getRootSession().host).settingsBearerRejected;
+  return wifProfileCacheByHost.of(getRootSession().host).settingsBearerRejected;
 }
 //@ chunk-640x3zn9.js:10967-11023 placement
-function setWIFSettingsBearerRejected(e) {
-  g.of(getRootSession().host).settingsBearerRejected = e;
+function setWIFSettingsBearerRejected(settingsBearerRejected) {
+  wifProfileCacheByHost.of(getRootSession().host).settingsBearerRejected = settingsBearerRejected;
 }
 //@ chunk-640x3zn9.js:11023-11077 placement
-var Oe = ["configs", "credentials"],
-  Ae = ["active_config"];
+var PROFILE_STORE_DENY_DIRS = ["configs", "credentials"];
+var PROFILE_STORE_DENY_FILES = ["active_config"];
 //@ chunk-640x3zn9.js:11077-11271 placement
 function getWIFProfileStoreDenyPaths() {
-  let of = g.of(getRootSession().host);
-  if (of.profileStoreDenyPaths.filled) return of.profileStoreDenyPaths.value;
-  let { value: n, complete: complete } = computeProfileStoreDenyPaths();
-  if (complete) of.profileStoreDenyPaths = { filled: !0, value: n };
+  let e = wifProfileCacheByHost.of(getRootSession().host);
+  if (e.profileStoreDenyPaths.filled) return e.profileStoreDenyPaths.value;
+  let { value: n, complete } = computeProfileStoreDenyPaths();
+  if (complete)
+    e.profileStoreDenyPaths = {
+      filled: true,
+      value: n,
+    };
   return n;
 }
+//@ chunk-640x3zn9.js:11271-11810 placement
 /**
  * 计算沙箱应拒读的 WIF profile 存储路径：配置目录（若包含当前目录则只拒其中的凭据子目录与文件）以及当前 profile 的凭据文件。
  */
-//@ chunk-640x3zn9.js:11271-11810 placement
 function computeProfileStoreDenyPaths() {
   let configDir = resolveConfigDir();
-  if (configDir === null) return { value: null, complete: !0 };
-  let denied = { dirs: [configDir], files: [] };
+  if (configDir === null)
+    return {
+      value: null,
+      complete: true,
+    };
+  let denied = {
+    dirs: [configDir],
+    files: [],
+  };
   try {
     let r = resolve(configDir);
     denied = isRootOrContainsCwd(r)
-      ? { dirs: Oe.map((a) => join(r, a)), files: Ae.map((a) => join(r, a)) }
-      : { dirs: [r], files: [] };
-    let filtered = we(configDir, resolveLiveProfileName(configDir)).filter(
+      ? {
+          dirs: PROFILE_STORE_DENY_DIRS.map((a) => join(r, a)),
+          files: PROFILE_STORE_DENY_FILES.map((a) => join(r, a)),
+        }
+      : {
+          dirs: [r],
+          files: [],
+        };
+    let filtered = credentialsRealpaths(configDir, resolveLiveProfileName(configDir)).filter(
       (a) =>
         !denied.dirs.some((dir) => a === dir || a.startsWith(dir + sep)) &&
         !denied.files.includes(a) &&
         !isRootOrContainsCwd(a) &&
-        !Fe(a),
+        !isDirectorySync(a),
     );
-    return { value: { dirs: denied.dirs, files: [...denied.files, ...filtered] }, complete: !0 };
+    return {
+      value: {
+        dirs: denied.dirs,
+        files: [...denied.files, ...filtered],
+      },
+      complete: true,
+    };
   } catch (error) {
-    return (
-      logForDebugging(
-        `WIF profile store: could not resolve the active profile's credentials path (${errorMessage(error)}); denying the store root only`,
-        { level: "warn" },
-      ),
-      { value: denied, complete: !1 }
+    logForDebugging(
+      `WIF profile store: could not resolve the active profile's credentials path (${errorMessage(error)}); denying the store root only`,
+      {
+        level: "warn",
+      },
     );
+    return {
+      value: denied,
+      complete: false,
+    };
   }
 }
 //@ chunk-640x3zn9.js:11810-11918 placement
@@ -313,46 +394,46 @@ function credentialsPathOrNull(e, n) {
   return typeof r === "string" ? r : null;
 }
 //@ chunk-640x3zn9.js:11918-12017 placement
-function we(e, n) {
-  let r = credentialsPathOrNull(e, n);
+function credentialsRealpaths(configDir, liveProfileName) {
+  let r = credentialsPathOrNull(configDir, liveProfileName);
   if (r === null || !r.trim()) return [];
-  return uniq(isAbsolute(r) ? [resolve(r)] : [resolve(e, r), resolve(r)]);
+  return uniq(isAbsolute(r) ? [resolve(r)] : [resolve(configDir, r), resolve(r)]);
 }
 //@ chunk-640x3zn9.js:12017-12091 placement
 function isLoadableProfileName(e) {
   return !!e && /^[A-Za-z0-9_.-]+$/.test(e) && e !== "." && e !== "..";
 }
 //@ chunk-640x3zn9.js:12091-12157 placement
-function resolveImplicitProfileName(e) {
-  return readProfileFile(join(e, "active_config"))?.trim() || "default";
+function resolveImplicitProfileName(configDir) {
+  return readProfileFile(join(configDir, "active_config"))?.trim() || "default";
 }
 //@ chunk-640x3zn9.js:12157-12226 placement
-function resolveLiveProfileName(e) {
-  return process.env.ANTHROPIC_PROFILE?.trim() || resolveImplicitProfileName(e);
+function resolveLiveProfileName(configDir) {
+  return process.env.ANTHROPIC_PROFILE?.trim() || resolveImplicitProfileName(configDir);
 }
 //@ chunk-640x3zn9.js:12226-12448 placement
-function profileAuthType(e, n) {
-  let r = readProfileFile(join(e, "configs", `${n}.json`));
-  if (r === null) return null;
+function profileAuthType(configDir, n) {
+  let profileFile = readProfileFile(join(configDir, "configs", `${n}.json`));
+  if (profileFile === null) return null;
   let s;
   try {
-    s = JSON.parse(r);
+    s = JSON.parse(profileFile);
   } catch {
     return null;
   }
   let c = s?.authentication?.type ?? null;
   if (c === "user_oauth") {
-    if (!readProfileFile(credentialsPathFor(e, n, s))?.trim()) return null;
+    if (!readProfileFile(credentialsPathFor(configDir, n, s))?.trim()) return null;
   }
   return c;
 }
 //@ chunk-640x3zn9.js:12448-12632 placement
 function credentialsPathFor(e, n, r) {
-  if (r === void 0) {
-    let s = readProfileFile(join(e, "configs", `${n}.json`));
-    if (s !== null)
+  if (r === undefined) {
+    let profileFile = readProfileFile(join(e, "configs", `${n}.json`));
+    if (profileFile !== null)
       try {
-        r = JSON.parse(s);
+        r = JSON.parse(profileFile);
       } catch {}
   }
   return r?.authentication?.credentials_path ?? join(e, "credentials", `${n}.json`);
@@ -364,34 +445,47 @@ function resolveConfigDir() {
 //@ chunk-640x3zn9.js:12668-12948 placement
 function configDirLocation() {
   if (isDiskless()) return null;
-  let env = process.env,
-    n = env.ANTHROPIC_CONFIG_DIR?.trim();
-  if (n) return { dir: n, space: "userNamed" };
-  let r = env.XDG_CONFIG_HOME?.trim();
-  if (r) return { dir: join(r, "anthropic"), space: "home" };
-  let s = env.HOME?.trim();
-  return s ? { dir: join(s, ".config", "anthropic"), space: "home" } : null;
+  let env = process.env;
+  let trimmed = env.ANTHROPIC_CONFIG_DIR?.trim();
+  if (trimmed)
+    return {
+      dir: trimmed,
+      space: "userNamed",
+    };
+  let trimmed_2 = env.XDG_CONFIG_HOME?.trim();
+  if (trimmed_2)
+    return {
+      dir: join(trimmed_2, "anthropic"),
+      space: "home",
+    };
+  let trimmed_3 = env.HOME?.trim();
+  return trimmed_3
+    ? {
+        dir: join(trimmed_3, ".config", "anthropic"),
+        space: "home",
+      }
+    : null;
 }
 //@ chunk-640x3zn9.js:12948-13006 placement
-function G() {
+function activeProfileNameFromEnv() {
   return process.env.ANTHROPIC_PROFILE?.trim();
 }
 //@ chunk-640x3zn9.js:13006-13064 placement
-function J() {
-  return de.every((e) => process.env[e]?.trim());
+function hasEnvQuad() {
+  return WIF_ENV_QUAD_VARS.every((e) => process.env[e]?.trim());
 }
 //@ chunk-640x3zn9.js:13064-13189 placement
 function isRootOrContainsCwd(e) {
   let n = canonicalLowerPath(e);
-  if (n === parse(n).root) return !0;
-  let r = relative(n, canonicalLowerPath(getFsImplementation().cwd())),
-    s = r.split(sep)[0];
+  if (n === parse(n).root) return true;
+  let r = relative(n, canonicalLowerPath(getFsImplementation().cwd()));
+  let s = r.split(sep)[0];
   return r === "" || (s !== ".." && !isAbsolute(r));
 }
 //@ chunk-640x3zn9.js:13189-13345 placement
 function canonicalLowerPath(e) {
-  let n = resolve(e),
-    r = "";
+  let n = resolve(e);
+  let r = "";
   for (;;)
     try {
       n = join(realpathSync.native(n), r);
@@ -402,22 +496,23 @@ function canonicalLowerPath(e) {
         n = join(n, r);
         break;
       }
-      ((r = r ? join(basename(n), r) : basename(n)), (n = s));
+      r = r ? join(basename(n), r) : basename(n);
+      n = s;
     }
   return n.toLowerCase();
 }
 //@ chunk-640x3zn9.js:13345-13407 placement
-function Fe(e) {
+function isDirectorySync(e) {
   try {
     return lstatSync(e).isDirectory();
   } catch {
-    return !1;
+    return false;
   }
 }
 //@ chunk-640x3zn9.js:13407-13571 placement
 function readProfileFile(e) {
-  let primedFiles = g.of(getRootSession().host).primedFiles;
-  if (primedFiles !== void 0 && primedFiles.has(e)) return primedFiles.get(e) ?? null;
+  let primedFiles = wifProfileCacheByHost.of(getRootSession().host).primedFiles;
+  if (primedFiles !== undefined && primedFiles.has(e)) return primedFiles.get(e) ?? null;
   try {
     return readFileSync(e, "utf-8");
   } catch (error) {
@@ -427,44 +522,46 @@ function readProfileFile(e) {
 }
 //@ chunk-640x3zn9.js:13571-14239 placement
 async function primeWIFProfileFiles(e) {
-  let of = g.of(getRootSession().host),
-    r = configDirLocation();
-  if (of.precedenceSource.filled || r === null) return;
-  let { dir: dir, space: space } = r,
-    a = new Map(),
-    l = async (_) => {
-      let I;
-      try {
-        I = await e.hostFiles.readText(PathSpace[space](_));
-      } catch (error) {
-        return (
-          logForDebugging(
-            `WIF profile read-ahead: the storage backend threw reading ${_}: ${errorMessage(error)}`,
-            { level: "warn" },
-          ),
-          null
-        );
-      }
-      if (I.ok) {
-        let A = I.value.found ? I.value.value : null;
-        return (a.set(_, A), A);
-      }
-      if (isFsInaccessibleCode(storageErrorCode(I.error))) a.set(_, null);
+  let n = wifProfileCacheByHost.of(getRootSession().host);
+  let r = configDirLocation();
+  if (n.precedenceSource.filled || r === null) return;
+  let { dir, space } = r;
+  let a = new Map();
+  let l = async (_) => {
+    let I;
+    try {
+      I = await e.hostFiles.readText(PathSpace[space](_));
+    } catch (error) {
+      logForDebugging(
+        `WIF profile read-ahead: the storage backend threw reading ${_}: ${errorMessage(error)}`,
+        {
+          level: "warn",
+        },
+      );
       return null;
-    },
-    h = G();
-  if (!h && J()) return;
+    }
+    if (I.ok) {
+      let A = I.value.found ? I.value.value : null;
+      a.set(_, A);
+      return A;
+    }
+    if (isFsInaccessibleCode(storageErrorCode(I.error))) a.set(_, null);
+    return null;
+  };
+  let h = activeProfileNameFromEnv();
+  if (!h && hasEnvQuad()) return;
   let Y = h || (await l(join(dir, "active_config")))?.trim() || "default";
-  (await l(join(dir, "configs", `${Y}.json`)), (of.primedFiles = a));
+  await l(join(dir, "configs", `${Y}.json`));
+  n.primedFiles = a;
   try {
-    (getWIFPrecedenceSource(), getWIFAuthType());
+    getWIFPrecedenceSource();
+    getWIFAuthType();
   } catch (error) {
     logForDebugging(`WIF profile read-ahead: left to the first reader: ${errorMessage(error)}`);
   } finally {
-    of.primedFiles = void 0;
+    n.primedFiles = undefined;
   }
 }
-
 export {
   getWIFStatusLine,
   getWIFAccountInfo,

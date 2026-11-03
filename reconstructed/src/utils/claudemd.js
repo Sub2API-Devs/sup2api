@@ -10,547 +10,31 @@
  */
 import {
   isAbsolute,
-  isAbsolute as isAbsolute_2,
-  isAbsolute as isAbsolute_3,
-  isAbsolute as isAbsolute_4,
-  isAbsolute as isAbsolute_5,
-  isAbsolute as isAbsolute_6,
-  isAbsolute as isAbsolute_7,
-  isAbsolute as isAbsolute_8,
-  isAbsolute as isAbsolute_9,
-  isAbsolute as isAbsolute_10,
-  isAbsolute as isAbsolute_11,
-  isAbsolute as isAbsolute_12,
-  isAbsolute as isAbsolute_13,
-  isAbsolute as isAbsolute_14,
-  isAbsolute as isAbsolute_15,
-  isAbsolute as isAbsolute_16,
-  isAbsolute as isAbsolute_17,
-  isAbsolute as isAbsolute_18,
-  isAbsolute as isAbsolute_19,
-  isAbsolute as isAbsolute_20,
-  isAbsolute as isAbsolute_21,
-  isAbsolute as isAbsolute_22,
-  isAbsolute as isAbsolute_23,
-  isAbsolute as isAbsolute_24,
-  isAbsolute as isAbsolute_25,
-  isAbsolute as isAbsolute_26,
-  isAbsolute as isAbsolute_27,
-  isAbsolute as isAbsolute_28,
-  isAbsolute as isAbsolute_29,
-  isAbsolute as isAbsolute_30,
-  isAbsolute as isAbsolute_31,
-  isAbsolute as isAbsolute_32,
-  isAbsolute as isAbsolute_33,
-  isAbsolute as isAbsolute_34,
-  isAbsolute as isAbsolute_35,
-  isAbsolute as isAbsolute_36,
-  isAbsolute as isAbsolute_37,
-  isAbsolute as isAbsolute_38,
-  isAbsolute as isAbsolute_39,
-  isAbsolute as isAbsolute_40,
-  isAbsolute as isAbsolute_42,
-  isAbsolute as isAbsolute_43,
-  isAbsolute as isAbsolute_44,
-  isAbsolute as isAbsolute_45,
-  isAbsolute as isAbsolute_46,
-  isAbsolute as isAbsolute_47,
-  isAbsolute as isAbsolute_48,
-  isAbsolute as isAbsolute_49,
-  isAbsolute as isAbsolute_50,
-  isAbsolute as isAbsolute_51,
-  isAbsolute as isAbsolute_52,
-  isAbsolute as isAbsolute_53,
-  isAbsolute as isAbsolute_54,
-  isAbsolute as isAbsolute_55,
-  isAbsolute as isAbsolute_56,
-  isAbsolute as isAbsolute_57,
   join,
-  join as join_2,
-  join as join_3,
-  join as join_4,
-  join as join_5,
-  join as join_6,
-  join as join_7,
-  join as join_8,
-  join as join_9,
-  join as join_10,
-  join as join_11,
-  join as join_12,
-  join as join_13,
-  join as join_14,
-  join as join_15,
-  join as join_16,
-  join as join_17,
-  join as join_18,
-  join as join_19,
-  join as join_20,
-  join as join_21,
-  join as join_22,
-  join as join_23,
-  join as join_24,
-  join as join_25,
-  join as join_26,
-  join as join_27,
-  join as join_28,
-  join as join_29,
-  join as join_30,
-  join as join_31,
-  join as join_32,
-  join as join_33,
-  join as join_34,
-  join as join_35,
-  join as join_36,
-  join as join_37,
-  join as join_38,
-  join as join_40,
-  join as join_41,
-  join as join_42,
-  join as join_43,
-  join as join_44,
-  join as join_45,
-  join as join_46,
-  join as join_47,
-  join as join_48,
-  join as join_49,
-  join as join_50,
-  join as join_51,
-  join as join_52,
-  join as join_53,
-  join as join_54,
-  join as join_55,
-  join as join_56,
-  join as join_57,
-  join as join_58,
-  join as join_59,
-  join as join_60,
-  join as join_61,
-  join as join_62,
-  join as join_63,
-  join as join_64,
-  join as join_65,
-  join as join_66,
-  join as join_67,
-  join as join_68,
-  join as join_69,
-  join as join_70,
-  join as join_71,
-  join as join_72,
-  join as join_73,
-  join as join_74,
-  join as join_75,
-  join as join_76,
-  join as join_77,
-  join as join_78,
-  join as join_79,
-  join as join_80,
-  join as join_81,
-  join as join_82,
-  join as join_84,
-  join as join_85,
-  join as join_86,
-  join as join_87,
-  join as join_88,
-  join as join_89,
-  join as join_90,
-  join as join_91,
-  join as join_92,
-  join as join_93,
-  join as join_94,
-  join as join_95,
-  join as join_96,
-  join as join_97,
-  join as join_98,
-  join as join_99,
-  join as join_100,
-  join as join_101,
-  join as join_102,
-  join as join_103,
-  join as join_104,
-  join as join_105,
-  join as join_106,
-  join as join_107,
-  join as join_108,
-  join as join_109,
-  join as join_110,
-  join as join_111,
-  join as join_112,
-  join as join_113,
-  join as join_114,
-  join as join_115,
-  join as join_116,
-  join as join_117,
-  join as join_118,
-  join as join_119,
-  join as join_120,
-  join as join_121,
-  join as join_122,
-  join as join_123,
-  join as join_124,
-  join as join_125,
-  join as join_126,
-  join as join_127,
-  join as join_128,
-  join as join_129,
   sep,
-  sep as sep_2,
-  sep as sep_3,
-  sep as sep_4,
-  sep as sep_5,
-  sep as sep_6,
-  sep as sep_7,
-  sep as sep_8,
-  sep as sep_9,
-  sep as sep_10,
-  sep as sep_11,
-  sep as sep_12,
-  sep as sep_13,
-  sep as sep_14,
-  sep as sep_15,
-  sep as sep_16,
-  sep as sep_17,
-  sep as sep_18,
-  sep as sep_19,
-  sep as sep_20,
-  sep as sep_21,
-  sep as sep_22,
-  sep as sep_23,
-  sep as sep_24,
-  sep as sep_25,
-  sep as sep_26,
-  sep as sep_27,
-  sep as sep_28,
-  sep as sep_29,
-  sep as sep_30,
-  sep as sep_31,
-  sep as sep_32,
-  sep as sep_33,
-  sep as sep_34,
-  sep as sep_35,
-  sep as sep_36,
-  sep as sep_37,
-  sep as sep_38,
-  sep as sep_39,
-  sep as sep_40,
-  sep as sep_41,
-  sep as sep_42,
-  sep as sep_43,
-  sep as sep_44,
-  sep as sep_45,
-  sep as sep_46,
-  sep as sep_47,
-  sep as sep_48,
-  sep as sep_49,
-  sep as sep_50,
-  sep as sep_51,
-  sep as sep_52,
-  sep as sep_53,
-  sep as sep_54,
-  sep as sep_55,
-  sep as sep_56,
-  sep as sep_57,
-  sep as sep_58,
-  sep as sep_59,
-  sep as sep_60,
-  sep as sep_61,
-  sep as sep_62,
-  sep as sep_63,
-  sep as sep_64,
-  sep as sep_65,
-  sep as sep_66,
-  sep as sep_67,
-  sep as sep_68,
-  sep as sep_69,
-  sep as sep_70,
-  sep as sep_71,
-  sep as sep_72,
-  sep as sep_73,
   basename,
-  basename as basename_2,
-  basename as basename_3,
-  basename as basename_4,
-  basename as basename_5,
-  basename as basename_6,
-  basename as basename_7,
-  basename as basename_8,
-  basename as basename_9,
-  basename as basename_10,
-  basename as basename_11,
-  basename as basename_12,
-  basename as basename_13,
-  basename as basename_14,
-  basename as basename_15,
-  basename as basename_16,
-  basename as basename_17,
-  basename as basename_18,
-  basename as basename_19,
-  basename as basename_20,
-  basename as basename_21,
-  basename as basename_22,
-  basename as basename_23,
-  basename as basename_24,
-  basename as basename_25,
-  basename as basename_26,
-  basename as basename_27,
-  basename as basename_28,
-  basename as basename_29,
-  basename as basename_30,
-  basename as basename_31,
-  basename as basename_32,
-  basename as basename_33,
-  basename as basename_34,
-  basename as basename_35,
-  basename as basename_36,
-  basename as basename_37,
-  basename as basename_38,
-  basename as basename_39,
-  basename as basename_40,
-  basename as basename_41,
-  basename as basename_42,
-  basename as basename_43,
-  basename as basename_45,
-  basename as basename_46,
-  basename as basename_47,
-  basename as basename_48,
-  basename as basename_49,
-  basename as basename_50,
-  basename as basename_51,
-  basename as basename_52,
-  basename as basename_53,
-  basename as basename_54,
-  basename as basename_55,
-  basename as basename_56,
-  basename as basename_57,
-  basename as basename_58,
-  basename as basename_59,
-  basename as basename_60,
-  basename as basename_61,
-  basename as basename_62,
-  basename as basename_63,
-  basename as basename_64,
-  basename as basename_65,
-  basename as basename_66,
-  basename as basename_67,
-  basename as basename_68,
   extname,
-  extname as extname_2,
-  extname as extname_3,
-  extname as extname_4,
   dirname,
-  dirname as dirname_2,
-  dirname as dirname_3,
-  dirname as dirname_4,
-  dirname as dirname_5,
-  dirname as dirname_6,
-  dirname as dirname_7,
-  dirname as dirname_8,
-  dirname as dirname_9,
-  dirname as dirname_10,
-  dirname as dirname_11,
-  dirname as dirname_12,
-  dirname as dirname_13,
-  dirname as dirname_14,
-  dirname as dirname_15,
-  dirname as dirname_16,
-  dirname as dirname_17,
-  dirname as dirname_18,
-  dirname as dirname_19,
-  dirname as dirname_20,
-  dirname as dirname_21,
-  dirname as dirname_22,
-  dirname as dirname_23,
-  dirname as dirname_24,
-  dirname as dirname_25,
-  dirname as dirname_26,
-  dirname as dirname_27,
-  dirname as dirname_28,
-  dirname as dirname_29,
-  dirname as dirname_30,
-  dirname as dirname_31,
-  dirname as dirname_32,
-  dirname as dirname_33,
-  dirname as dirname_34,
-  dirname as dirname_35,
-  dirname as dirname_36,
-  dirname as dirname_37,
-  dirname as dirname_38,
-  dirname as dirname_39,
-  dirname as dirname_40,
-  dirname as dirname_41,
-  dirname as dirname_42,
-  dirname as dirname_43,
-  dirname as dirname_44,
-  dirname as dirname_45,
-  dirname as dirname_46,
-  dirname as dirname_47,
-  dirname as dirname_48,
-  dirname as dirname_49,
-  dirname as dirname_50,
-  dirname as dirname_51,
-  dirname as dirname_52,
-  dirname as dirname_53,
-  dirname as dirname_54,
-  dirname as dirname_55,
-  dirname as dirname_56,
-  dirname as dirname_57,
-  dirname as dirname_58,
-  dirname as dirname_59,
-  dirname as dirname_60,
-  dirname as dirname_61,
-  dirname as dirname_62,
-  dirname as dirname_63,
-  dirname as dirname_64,
-  dirname as dirname_65,
-  dirname as dirname_66,
-  dirname as dirname_67,
-  dirname as dirname_68,
-  dirname as dirname_69,
-  dirname as dirname_70,
-  dirname as dirname_71,
-  dirname as dirname_72,
-  dirname as dirname_73,
-  dirname as dirname_74,
-  dirname as dirname_75,
-  dirname as dirname_76,
-  dirname as dirname_77,
   relative,
-  relative as relative_2,
-  relative as relative_3,
-  relative as relative_4,
-  relative as relative_5,
-  relative as relative_6,
-  relative as relative_7,
-  relative as relative_8,
-  relative as relative_9,
-  relative as relative_10,
-  relative as relative_11,
-  relative as relative_12,
-  relative as relative_13,
-  relative as relative_14,
-  relative as relative_15,
-  relative as relative_16,
-  relative as relative_17,
-  relative as relative_18,
-  relative as relative_19,
-  relative as relative_20,
-  relative as relative_21,
-  relative as relative_22,
-  relative as relative_23,
-  relative as relative_24,
-  relative as relative_25,
-  relative as relative_26,
-  relative as relative_27,
-  relative as relative_28,
-  relative as relative_29,
-  relative as relative_30,
-  relative as relative_31,
-  relative as relative_32,
-  relative as relative_33,
-  relative as relative_34,
-  relative as relative_35,
-  relative as relative_36,
-  relative as relative_37,
-  relative as relative_38,
-  relative as relative_39,
-  relative as relative_40,
-  relative as relative_41,
-  relative as relative_42,
-  relative as relative_43,
-  relative as relative_44,
-  relative as relative_45,
-  relative as relative_46,
-  relative as relative_47,
-  relative as relative_48,
   resolve as resolve_2,
-  resolve as resolve_3,
-  resolve as resolve_4,
-  resolve as resolve_5,
-  resolve as resolve_6,
-  resolve as resolve_7,
-  resolve as resolve_8,
-  resolve as resolve_9,
-  resolve as resolve_10,
-  resolve as resolve_11,
-  resolve as resolve_12,
-  resolve as resolve_13,
-  resolve as resolve_14,
-  resolve as resolve_15,
-  resolve as resolve_16,
-  resolve as resolve_17,
-  resolve as resolve_18,
-  resolve as resolve_19,
-  resolve as resolve_20,
-  resolve as resolve_21,
-  resolve as resolve_22,
-  resolve as resolve_23,
-  resolve as resolve_24,
-  resolve as resolve_25,
-  resolve as resolve_26,
-  resolve as resolve_27,
-  resolve as resolve_28,
-  resolve as resolve_29,
-  resolve as resolve_30,
-  resolve as resolve_31,
-  resolve as resolve_32,
-  resolve as resolve_33,
-  resolve as resolve_34,
-  resolve as resolve_35,
-  resolve as resolve_36,
-  resolve as resolve_37,
-  resolve as resolve_38,
-  resolve as resolve_39,
-  resolve as resolve_40,
-  resolve as resolve_41,
-  resolve as resolve_42,
-  resolve as resolve_43,
-  resolve as resolve_44,
-  resolve as resolve_45,
-  resolve as resolve_46,
-  resolve as resolve_47,
-  resolve as resolve_48,
-  resolve as resolve_49,
-  resolve as resolve_50,
-  resolve as resolve_51,
-  resolve as resolve_52,
-  resolve as resolve_53,
-  resolve as resolve_54,
-  resolve as resolve_55,
-  resolve as resolve_56,
-  resolve as resolve_57,
-  resolve as resolve_58,
-  resolve as resolve_59,
-  resolve as resolve_60,
   parse,
-  parse as parse_2,
-  parse as parse_3,
-  parse as parse_4,
-  parse as parse_5,
-  parse as parse_6,
-  parse as parse_7,
-  parse as parse_8,
-  parse as parse_9,
-  parse as parse_10,
-  parse as parse_11,
-  parse as parse_12,
-  parse as parse_13,
-  parse as parse_14,
 } from "path";
 import { Re } from "../../runtime/bun-runtime.js";
-import { Vpe } from "../../vendor/ignore/index.js";
-import { fSe, f2 } from "../../vendor/marked/lib/marked.esm.js";
-import { hqt } from "../../vendor/picomatch/index.js";
+import { require_ignore } from "../../vendor/ignore/index.js";
+import { _Tokenizer, _Lexer } from "../../vendor/marked/lib/marked.esm.js";
+import { require_picomatch_2 } from "../../vendor/picomatch/index.js";
 import { backfillState, backfillMemoryIndex } from "../memdir/memoryIndex.js";
 import {
   nfcLowerPath,
   indexLinkedMemoryPaths,
-  SM,
+  MAX_TRACKED_INSTRUCTION_PATHS,
   logWithheldInstructionFiles,
   restrictedInstructionReaders,
-  Q_,
-  yHo,
-  ICe,
-  P5t,
-  NKe,
+  isInstructionReadRestricted,
+  repoInstructionReaders,
+  claudeMdAccessTrackerSlot,
+  instructionFilesInDir,
+  INSTRUCTION_FILE_NAMES,
 } from "./instructionFileAccess.js";
 import { mergePersistedDenyRules } from "./permissions/permissions.js";
 import { isSettingSourceEnabled } from "./settings/constants.js";
@@ -568,15 +52,15 @@ import {
 import { SessionRootSlot } from "../bootstrap/sessionSlices.js";
 import { getEmptyToolPermissionContext } from "../Tool.js";
 import { isRestrictedReadBlocked } from "./claudeInChrome/fileUpload.js";
-import { Lus } from "./settings/policyHelper/policyHelper.js";
-import { getMainLoopModel, rlt } from "./model/model.js";
+import { POLICY_HELPER_TAG } from "./settings/policyHelper/policyHelper.js";
+import { getMainLoopModel, CONTEXT_WINDOW_THRESHOLD } from "./model/model.js";
 import { getContextWindow } from "./model/configs.js";
 import { bytesPerTokenForModel } from "./model/modelDisplay.js";
 import { pathInWorkingPath } from "./permissions/filesystem.js";
 import { parseFrontmatter } from "./frontmatterParser.js";
 import { unwrapResults } from "./suggestions/slackChannelSuggestions.js";
 import { logForDebugging } from "./debug.js";
-import { Fae, truncateEntrypointContent } from "../memdir/memdir.js";
+import { sanitizeMemoryText, truncateEntrypointContent } from "../memdir/memdir.js";
 import {
   getAutoMemEntrypoint,
   getAutoMemPath,
@@ -610,87 +94,103 @@ import { expandPath } from "./path.js";
 import {
   isUnderNetworkDirCached,
   isWslUncPath,
-  Ya,
-  tP,
+  isNetworkMountPath,
+  neverOtherHostMount,
   isNetDir,
-  isNetworkMountRoot,
-  AV,
+  isNetworkMountRoot_2,
+  isNetworkishPath,
 } from "./networkPaths.js";
 import { getInitialSettings_2, getSettingsForSource } from "./settings/settings.js";
 import { normalizePathForCompare } from "./file.js";
 import { getDevicePathRefusal } from "../tools/FileReadTool/FileReadTool.js";
-import { isManagedFolderWritable, W1, L5e } from "../plugins/functionHooks/sites/promptContextSites.js";
+import {
+  isManagedFolderWritable,
+  managedFolderCondition,
+  formatMemoryInstruction,
+} from "../plugins/functionHooks/sites/promptContextSites.js";
 import { isValidKeySegment, STORAGE_SPACES } from "./storage/storageSpaces.js";
 import { env } from "./env.js";
 import { PathSpace } from "./resultError.js";
 import { isStorageV5Enabled } from "./hoverRest.js";
 import { findGitRoot, findCanonicalGitRoot } from "./git.js";
-import { Qn, gb, isMacSpecialPath } from "./pathClassification.js";
+import { isUncOrDevicePath, isDevicePrefixPath, isMacSpecialPath } from "./pathClassification.js";
 import { getSessionEntrypoint } from "./sessionShape.js";
-import { wt } from "../remote/remoteMode.js";
+import { isRemoteSessionAvailable } from "../remote/remoteMode.js";
 import { logForDiagnosticsNoPII } from "./diagLogs.js";
 import { getManagedFilePath } from "./settings/managedPath.js";
-import { zyr } from "./settings/policyHelper/helperRemote.js";
+import { remoteClaudeMd } from "./settings/policyHelper/helperRemote.js";
 import { count } from "./collections.js";
 import { hasInstructionsLoadedHook, executeInstructionsLoadedHooks } from "./hooks.js";
 import { isInstructionsMemoryType } from "../entrypoints/sdk/coreSchemas.js";
-import { rSt } from "./commandPredicates.js";
+import { notifySetupGuideLoaded } from "./commandPredicates.js";
 import { clearMemoryFilesCache } from "../components/Message.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../services/analytics/growthbook.js";
 import { shouldIncludeMemoryFile } from "./attachments.js";
-import { xst } from "./ignorePatterns.js";
+import { filterUsableIgnorePatterns } from "./ignorePatterns.js";
 import { isClaudeMdLoadingDisabled } from "./settings/customizationDisabled.js";
 
 //@ chunk-e6aww6q8.js:1310416-1310436 placement
-var h3t = Re(Vpe(), 1);
+/**
+ * 惰性加载的 minimatch 模块（用于规则 glob 匹配）。
+ */
+var minimatchModule = Re(require_ignore(), 1);
 //@ chunk-e6aww6q8.js:1310436-1310627 placement
-var SETEXT_UNDERLINE_RE = /^ {0,3}(?:=+|-+) *$/,
-  C0o = /^ {0,3}(?:=+|-+) *$/m,
-  A0o =
-    /^(?:\s*$|(?:[*+-]|\d{1,9}[.)]) |(?: {4}| {0,3}\t)| {0,3}(?:`{3,}|~{3,})| {0,3}>| {0,3}#{1,6}| {0,3}<[^\n>]+>$|.*[\u2028\u2029])/;
+/**
+ * 多行模式匹配 Setext 下划线。
+ */
+var SETEXT_UNDERLINE_RE = /^ {0,3}(?:=+|-+) *$/;
+var SETEXT_UNDERLINE_MULTILINE_RE = /^ {0,3}(?:=+|-+) *$/m;
+var MARKDOWN_BLOCK_START_RE =
+  /^(?:\s*$|(?:[*+-]|\d{1,9}[.)]) |(?: {4}| {0,3}\t)| {0,3}(?:`{3,}|~{3,})| {0,3}>| {0,3}#{1,6}| {0,3}<[^\n>]+>$|.*[\u2028\u2029])/;
 //@ chunk-e6aww6q8.js:1310627-1310801 placement
-class ClaudeMdTokenizer extends fSe {
+class ClaudeMdTokenizer extends _Tokenizer {
   lexed = [];
   lheading(e) {
-    let at = this.lexed.at(-1);
-    return at !== void 0 &&
-      !at.inReach.has(e.length) &&
-      (at.text.at(-e.length - 1) ??
+    let last = this.lexed.at(-1);
+    return last !== undefined &&
+      !last.inReach.has(e.length) &&
+      (last.text.at(-e.length - 1) ??
         `
 `) ===
         `
 `
-      ? void 0
+      ? undefined
       : super.lheading(e);
   }
 }
 //@ chunk-e6aww6q8.js:1310801-1311190 placement
-class ClaudeMdLexer extends f2 {
+class ClaudeMdLexer extends _Lexer {
   #e;
   constructor() {
     let e = new ClaudeMdTokenizer();
-    super({ gfm: !1, tokenizer: e });
+    super({
+      gfm: false,
+      tokenizer: e,
+    });
     this.#e = e;
   }
-  blockTokens(e, n = [], r = !1) {
-    let s = new Set(),
-      h = C0o.test(e) ? e.length : -1,
-      y = !1;
+  blockTokens(e, n = [], r = false) {
+    let s = new Set();
+    let h = SETEXT_UNDERLINE_MULTILINE_RE.test(e) ? e.length : -1;
+    let y = false;
     while (h >= 0) {
       let S =
-          h === 0
-            ? 0
-            : e.lastIndexOf(
-                `
+        h === 0
+          ? 0
+          : e.lastIndexOf(
+              `
 `,
-                h - 1,
-              ) + 1,
-        sliced = e.slice(S, h);
-      (y && s.add(e.length - S),
-        (y = SETEXT_UNDERLINE_RE.test(sliced) || (y && !A0o.test(sliced))),
-        (h = S - 1));
+              h - 1,
+            ) + 1;
+      let sliced = e.slice(S, h);
+      if (y) s.add(e.length - S);
+      y = SETEXT_UNDERLINE_RE.test(sliced) || (y && !MARKDOWN_BLOCK_START_RE.test(sliced));
+      h = S - 1;
     }
-    this.#e.lexed.push({ text: e, inReach: s });
+    this.#e.lexed.push({
+      text: e,
+      inReach: s,
+    });
     try {
       return super.blockTokens(e, n, r);
     } finally {
@@ -698,135 +198,172 @@ class ClaudeMdLexer extends f2 {
     }
   }
 }
+//@ chunk-e6aww6q8.js:1311190-1311230 layout
 /**
  * 用定制 marked 词法器（gfm 关闭）把 markdown 切成 token，供 HTML 注释剥离与 @include 提取使用。
  */
-//@ chunk-e6aww6q8.js:1311190-1311230 layout
 function lexMarkdown(e) {
   return new ClaudeMdLexer().lex(e);
 }
+//@ chunk-e6aww6q8.js:1311230-1311318 fingerprint = stripHtmlComments (0.722)
 /**
  * 去掉 markdown 中的 HTML 注释（不进入代码块）。
  */
-//@ chunk-e6aww6q8.js:1311230-1311318 fingerprint = stripHtmlComments (0.722)
 function stripHtmlComments(content) {
-  if (!content.includes("<!--")) return { content: content, stripped: !1 };
+  if (!content.includes("<!--"))
+    return {
+      content,
+      stripped: false,
+    };
   return stripHtmlCommentsFromTokens(lexMarkdown(content));
 }
 //@ chunk-e6aww6q8.js:1311318-1311578 fingerprint = stripHtmlCommentsFromTokens (1)
 function stripHtmlCommentsFromTokens(tokens) {
-  let result = "",
-    r = !1,
-    commentSpan = /<!--[\s\S]*?-->/g;
+  let result = "";
+  let stripped = false;
+  let commentSpan = /<!--[\s\S]*?-->/g;
   for (let token of tokens) {
     if (token.type === "html") {
       let trimmed = token.raw.trimStart();
       if (trimmed.startsWith("<!--") && trimmed.includes("-->")) {
         let residue = token.raw.replace(commentSpan, "");
-        if (((r = !0), residue.trim().length > 0)) result += residue;
+        stripped = true;
+        if (residue.trim().length > 0) result += residue;
         continue;
       }
     }
     result += token.raw;
   }
-  return { content: result, stripped: r };
+  return {
+    content: result,
+    stripped,
+  };
 }
 //@ chunk-e6aww6q8.js:1311578-1311598 placement
-var k3t = Re(hqt(), 1);
+/**
+ * 惰性加载的 picomatch 模块。
+ */
+var picomatchModule = Re(require_picomatch_2(), 1);
 //@ chunk-e6aww6q8.js:1311919-1311938 placement
-var x0o = 0.8,
-  HQ = 0.7;
+/**
+ * 记忆文件占上下文窗口的预警比例（0.8）。
+ */
+var MEMORY_SIZE_WARN_RATIO = 0.8;
+var MEMORY_SIZE_SOFT_RATIO = 0.7;
 //@ chunk-e6aww6q8.js:1316725-1316940 placement
-function ensureMemoryIndexBackfill(e, n) {
-  let of = backfillState.of(e),
-    s = of.get(n);
+function ensureMemoryIndexBackfill(host, autoMemPath) {
+  let r = backfillState.of(host);
+  let s = r.get(autoMemPath);
   if (s) return s;
-  let h,
-    S = new Promise((w) => (h = w)).then(() =>
-      backfillMemoryIndex(
-        n,
-        () => {
-          if (of.get(n) === S) of.delete(n);
-        },
-        () => {
-          if (of.get(n) === S) of.set(n, Promise.resolve(!1));
-        },
-      ),
-    );
-  return (of.set(n, S), h(), S);
+  let h;
+  let S = new Promise((resolve) => (h = resolve)).then(() =>
+    backfillMemoryIndex(
+      autoMemPath,
+      () => {
+        if (r.get(autoMemPath) === S) r.delete(autoMemPath);
+      },
+      () => {
+        if (r.get(autoMemPath) === S) r.set(autoMemPath, Promise.resolve(false));
+      },
+    ),
+  );
+  r.set(autoMemPath, S);
+  h();
+  return S;
 }
 //@ chunk-e6aww6q8.js:1317030-1317127 placement
-var h_e = 2000,
-  q0o = /\]\(([^()\n]+?\.md)\)/gi,
-  b5t = { resolved: !1, read: !1, written: !1, injection: "none" };
+/**
+ * 记忆文件路径跟踪的上限（2000）。
+ */
+var MAX_TRACKED_MEMORY_PATHS = 2000;
+var MD_LINK_RE = /\]\(([^()\n]+?\.md)\)/gi;
+var EMPTY_ACCESS_STATE = {
+  resolved: false,
+  read: false,
+  written: false,
+  injection: "none",
+};
+//@ chunk-e6aww6q8.js:1317127-1318890 placement
 /**
  * 跟踪本会话中 CLAUDE.md 等指令文件的读写情况。
  */
-//@ chunk-e6aww6q8.js:1317127-1318890 placement
 class ClaudeMdAccessTracker {
   memoryContext = null;
   surfacedKeys = new Set();
   accessedKeys = new Map();
   recordContextBuild(e) {
-    let { memoryDir: memoryDir } = e;
+    let { memoryDir } = e;
     this.memoryContext = {
-      memoryDir: memoryDir === null ? null : { path: memoryDir, key: nfcLowerPath(memoryDir) },
-      bodyKeys: new Set(e.injectedBodyPaths.slice(0, h_e).map(nfcLowerPath)),
+      memoryDir:
+        memoryDir === null
+          ? null
+          : {
+              path: memoryDir,
+              key: nfcLowerPath(memoryDir),
+            },
+      bodyKeys: new Set(e.injectedBodyPaths.slice(0, MAX_TRACKED_MEMORY_PATHS).map(nfcLowerPath)),
       listedKeys: new Set(
         memoryDir === null
           ? []
           : e.indexContents
               .flatMap((indexContent) => indexLinkedMemoryPaths(indexContent, memoryDir))
-              .slice(0, h_e)
+              .slice(0, MAX_TRACKED_MEMORY_PATHS)
               .map(nfcLowerPath),
       ),
     };
   }
   recordSurfaced(e) {
     for (let n of e) {
-      if (this.surfacedKeys.size >= h_e) return;
+      if (this.surfacedKeys.size >= MAX_TRACKED_MEMORY_PATHS) return;
       this.surfacedKeys.add(nfcLowerPath(n));
     }
   }
   recordAccess(e, n) {
-    let r = nfcLowerPath(e),
-      s = this.accessedKeys.get(r);
-    if (s === void 0 && this.accessedKeys.size >= h_e) return;
+    let r = nfcLowerPath(e);
+    let s = this.accessedKeys.get(r);
+    if (s === undefined && this.accessedKeys.size >= MAX_TRACKED_MEMORY_PATHS) return;
     let h = n === "read" ? "read" : "written";
-    this.accessedKeys.set(r, s === void 0 || s === h ? h : "read_written");
+    this.accessedKeys.set(r, s === undefined || s === h ? h : "read_written");
   }
   priorAccess(e) {
     return this.accessedKeys.get(nfcLowerPath(e)) ?? "none";
   }
   injection(e) {
-    let injectionForKey = this.injectionForKey(nfcLowerPath(e));
-    return this.memoryContext === null && injectionForKey === "none" ? "unknown" : injectionForKey;
+    let n = this.injectionForKey(nfcLowerPath(e));
+    return this.memoryContext === null && n === "none" ? "unknown" : n;
   }
   citedStatus(e) {
-    let memoryContext = this.memoryContext,
-      r = memoryContext?.memoryDir ?? null,
-      trimmed = e.trim();
-    if (memoryContext === null || r === null || trimmed === "" || trimmed.split(/[\\/]/).includes(".."))
-      return b5t;
-    let h = /\.md$/i.test(trimmed) ? trimmed : `${trimmed}.md`,
-      y = nfcLowerPath(isAbsolute_24(h) ? h : join_54(r.path, h)),
-      S = r.key + sep_32;
-    if (!y.startsWith(S)) return b5t;
-    let statusForKey = this.statusForKey(y);
-    if (statusForKey.resolved || /[\\/]/.test(trimmed)) return statusForKey;
-    let L = basename_25(y),
-      G = new Set(
-        [
-          ...memoryContext.bodyKeys,
-          ...memoryContext.listedKeys,
-          ...this.surfacedKeys,
-          ...this.accessedKeys.keys(),
-        ].filter((q) => q.startsWith(S) && basename_25(q) === L),
-      );
-    return G.size === 1 ? this.statusForKey([...G][0]) : statusForKey;
+    let memoryContext = this.memoryContext;
+    let memoryDir = memoryContext?.memoryDir ?? null;
+    let trimmed = e.trim();
+    if (
+      memoryContext === null ||
+      memoryDir === null ||
+      trimmed === "" ||
+      trimmed.split(/[\\/]/).includes("..")
+    )
+      return EMPTY_ACCESS_STATE;
+    let h = /\.md$/i.test(trimmed) ? trimmed : `${trimmed}.md`;
+    let y = nfcLowerPath(isAbsolute(h) ? h : join(memoryDir.path, h));
+    let S = memoryDir.key + sep;
+    if (!y.startsWith(S)) return EMPTY_ACCESS_STATE;
+    let w = this.statusForKey(y);
+    if (w.resolved || /[\\/]/.test(trimmed)) return w;
+    let L = basename(y);
+    let G = new Set(
+      [
+        ...memoryContext.bodyKeys,
+        ...memoryContext.listedKeys,
+        ...this.surfacedKeys,
+        ...this.accessedKeys.keys(),
+      ].filter((q) => q.startsWith(S) && basename(q) === L),
+    );
+    return G.size === 1 ? this.statusForKey([...G][0]) : w;
   }
   reset() {
-    ((this.memoryContext = null), this.surfacedKeys.clear(), this.accessedKeys.clear());
+    this.memoryContext = null;
+    this.surfacedKeys.clear();
+    this.accessedKeys.clear();
   }
   injectionForKey(e) {
     return this.memoryContext?.bodyKeys.has(e)
@@ -838,63 +375,83 @@ class ClaudeMdAccessTracker {
           : "none";
   }
   statusForKey(e) {
-    let n = this.accessedKeys.get(e) ?? "none",
-      injectionForKey = this.injectionForKey(e);
+    let n = this.accessedKeys.get(e) ?? "none";
+    let r = this.injectionForKey(e);
     return {
-      resolved: n !== "none" || injectionForKey !== "none",
+      resolved: n !== "none" || r !== "none",
       read: n === "read" || n === "read_written",
       written: n === "written" || n === "read_written",
-      injection: injectionForKey,
+      injection: r,
     };
   }
 }
 //@ chunk-e6aww6q8.js:1330061-1330105 placement
-var s$i = (e) => mergePersistedDenyRules({ ...e, alwaysDenyRules: {} });
+/**
+ * 去掉 alwaysDenyRules 后合并持久化拒绝规则。
+ */
+var withNoDenyRules = (toolPermissionContext) =>
+  mergePersistedDenyRules({
+    ...toolPermissionContext,
+    alwaysDenyRules: {},
+  });
+//@ chunk-e6aww6q8.js:1330105-1330211 placement
 /**
  * 判断某设置来源的指令文件是否可读（来源已启用，或工作区限制下仍保留指令文件）。
  */
-//@ chunk-e6aww6q8.js:1330105-1330211 placement
 function isInstructionSourceEnabled(e) {
-  if (isSettingSourceEnabled(e)) return !0;
-  let n = getWorkspaceRestriction();
-  return n !== null && n.sparesInstructionFiles && getAllowedSettingSourcesAsConfigured().includes(e);
+  if (isSettingSourceEnabled(e)) return true;
+  let workspaceRestriction = getWorkspaceRestriction();
+  return (
+    workspaceRestriction !== null &&
+    workspaceRestriction.sparesInstructionFiles &&
+    getAllowedSettingSourcesAsConfigured().includes(e)
+  );
 }
+//@ chunk-e6aww6q8.js:1330211-1330311 placement = _temp8 (1)
 /**
  * 判断本地设置来源是否可读（已启用或工作区限制允许）。
  */
-//@ chunk-e6aww6q8.js:1330211-1330311 placement = _temp8 (1)
 function isLocalSettingsReadable() {
-  if (isSettingSourceEnabled("localSettings")) return !0;
+  if (isSettingSourceEnabled("localSettings")) return true;
   return (
     getWorkspaceRestriction() !== null && getAllowedSettingSourcesAsConfigured().includes("localSettings")
   );
 }
+//@ chunk-e6aww6q8.js:1330311-1330519 placement
 /**
  * CLAUDE.md 加载的会话状态（加载/迁移缓存、下次加载原因、钩子开关等）与附加状态。
  */
-//@ chunk-e6aww6q8.js:1330311-1330519 placement
-var claudeMdSessionState = new SessionRootSlot(() => ({
-    memo: { loads: new Map(), moves: new Map() },
-    nextEagerLoadReason: "session_start",
-    shouldFireHook: !0,
-    walkEpoch: 0,
-    hasLoggedInitialLoad: !1,
-    judgedBy: void 0,
-    reportsSetupGuides: !0,
-  })),
-  claudeMdExtraState = new SessionRootSlot(() => ({}));
+var claudeMdSessionState_2 = new SessionRootSlot(() => ({
+  memo: {
+    loads: new Map(),
+    moves: new Map(),
+  },
+  nextEagerLoadReason: "session_start",
+  shouldFireHook: true,
+  walkEpoch: 0,
+  hasLoggedInitialLoad: false,
+  judgedBy: undefined,
+  reportsSetupGuides: true,
+}));
+var claudeMdExtraState = new SessionRootSlot(() => ({}));
 //@ chunk-e6aww6q8.js:1330519-1330551 placement
-function NA(e) {
-  return claudeMdSessionState.of(e);
+/**
+ * 取某会话的 CLAUDE.md 装载状态。
+ */
+function claudeMdSessionState(e) {
+  return claudeMdSessionState_2.of(e);
 }
 //@ chunk-e6aww6q8.js:1330551-1330586 placement
-function VGt(e, n) {
-  NA(e).judgedBy = n;
+/**
+ * 记录 CLAUDE.md 判定的来源。
+ */
+function setClaudeMdJudgedBy(e, judgedBy) {
+  claudeMdSessionState(e).judgedBy = judgedBy;
 }
+//@ chunk-e6aww6q8.js:1330586-1330804 placement
 /**
  * 创建"被扣留路径"跟踪器：判断路径是否应扣留，并列出已扣留与已加载的路径。
  */
-//@ chunk-e6aww6q8.js:1330586-1330804 placement
 function createHeldPathTracker(e) {
   let n = new Map();
   return {
@@ -903,24 +460,33 @@ function createHeldPathTracker(e) {
     }),
     withheld: () =>
       Array.from(n)
-        .flatMap(([r, s]) => (s === void 0 ? [] : [{ path: r, why: s }]))
-        .slice(0, SM),
-    loaded: () => Array.from(n).flatMap(([r, s]) => (s === void 0 ? [r] : [])),
+        .flatMap(([r, s]) =>
+          s === undefined
+            ? []
+            : [
+                {
+                  path: r,
+                  why: s,
+                },
+              ],
+        )
+        .slice(0, MAX_TRACKED_INSTRUCTION_PATHS),
+    loaded: () => Array.from(n).flatMap(([r, s]) => (s === undefined ? [r] : [])),
   };
 }
+//@ chunk-e6aww6q8.js:1330804-1330943 placement
 /**
  * 开始工作目录迁移时的扣留跟踪，keep 时记录被扣留的指令文件。
  */
-//@ chunk-e6aww6q8.js:1330804-1330943 placement
 function beginCwdRelocationHold(e) {
-  let { memo: memo } = NA(e),
-    r = getOriginalCwdOrNull(),
-    s = createHeldPathTracker(e);
+  let { memo } = claudeMdSessionState(e);
+  let originalCwdOrNull = getOriginalCwdOrNull();
+  let heldPathTracker = createHeldPathTracker(e);
   return {
-    held: s.held,
+    held: heldPathTracker.held,
     keep: () => {
-      if (r !== null) memo.moves.set(r, s.withheld());
-      logWithheldInstructionFiles(e, s.withheld());
+      if (originalCwdOrNull !== null) memo.moves.set(originalCwdOrNull, heldPathTracker.withheld());
+      logWithheldInstructionFiles(e, heldPathTracker.withheld());
     },
   };
 }
@@ -928,50 +494,82 @@ function beginCwdRelocationHold(e) {
 function buildHeldOutsideChecker(e, n) {
   let r = mergePersistedDenyRules(
     e.engineStore.current?.getState().toolPermissionContext ??
-      NA(e).judgedBy ??
+      claudeMdSessionState(e).judgedBy ??
       getEmptyToolPermissionContext(),
   );
   if (getOriginalCwdOrNull() === null)
-    return restrictedInstructionReaders({ context: r, folders: getAdditionalClaudeMdDirs() }, n);
-  return Q_(r) ? yHo({ context: r, isHeldOutside: isRestrictedReadBlocked }, n) : void 0;
+    return restrictedInstructionReaders(
+      {
+        context: r,
+        folders: getAdditionalClaudeMdDirs(),
+      },
+      n,
+    );
+  return isInstructionReadRestricted(r)
+    ? repoInstructionReaders(
+        {
+          context: r,
+          isHeldOutside: isRestrictedReadBlocked,
+        },
+        n,
+      )
+    : undefined;
 }
+//@ chunk-e6aww6q8.js:1331160-1331351 placement
 /**
  * 列出当前工作目录下被扣留的指令文件（去重）。
  */
-//@ chunk-e6aww6q8.js:1331160-1331351 placement
-function getWithheldInstructionFiles(e) {
-  let { memo: memo } = NA(e),
-    r = getOriginalCwdOrNull(),
-    s = memo.loads.get(!1)?.settled,
-    h = new Set();
-  return (s?.root === r ? s.withheld : [])
-    .concat(r === null ? [] : (memo.moves.get(r) ?? []))
-    .filter(({ path: path }) => !h.has(path) && h.add(path));
+function getWithheldInstructionFiles(session) {
+  let { memo } = claudeMdSessionState(session);
+  let originalCwdOrNull = getOriginalCwdOrNull();
+  let settled = memo.loads.get(false)?.settled;
+  let h = new Set();
+  return (settled?.root === originalCwdOrNull ? settled.withheld : [])
+    .concat(originalCwdOrNull === null ? [] : (memo.moves.get(originalCwdOrNull) ?? []))
+    .filter(({ path }) => !h.has(path) && h.add(path));
 }
 //@ chunk-e6aww6q8.js:1331351-1331380 placement
-var T3t = "<managed-settings>";
+/**
+ * 托管设置在记忆文件列表里的虚拟路径标签。
+ */
+var MANAGED_SETTINGS_LABEL = "<managed-settings>";
 //@ chunk-e6aww6q8.js:1331380-1331420 placement
-function oEt(e) {
-  return e === Lus || e === T3t;
+/**
+ * 判断路径是否为托管设置或虚拟路径。
+ */
+function isManagedOrVirtualPath(path) {
+  return path === POLICY_HELPER_TAG || path === MANAGED_SETTINGS_LABEL;
 }
 //@ chunk-e6aww6q8.js:1331420-1331454 placement
-var DHo = 0.05,
-  Uq = 4194304,
-  LHo = 40000;
+/**
+ * 单个记忆文件占模型上下文窗口的比例（0.05）。
+ */
+var MEMORY_CONTEXT_RATIO = 0.05;
+var MAX_MEMORY_FILE_READ_BYTES = 4194304;
+var MIN_MEMORY_FILE_CHARS = 40000;
+//@ chunk-e6aww6q8.js:1331454-1331569 placement
 /**
  * 按模型上下文窗口计算单个记忆文件的最大字符数。
  */
-//@ chunk-e6aww6q8.js:1331454-1331569 placement
-function getMaxMemoryFileChars(e = getMainLoopModel()) {
-  let n = getContextWindow(e, getSdkBetas()),
-    r = Number.isFinite(n) && n > 0 ? n : rlt;
-  return Math.max(LHo, Math.round(r * DHo * bytesPerTokenForModel(e)));
+function getMaxMemoryFileChars(mainLoopModel = getMainLoopModel()) {
+  let contextWindow = getContextWindow(mainLoopModel, getSdkBetas());
+  let r = Number.isFinite(contextWindow) && contextWindow > 0 ? contextWindow : CONTEXT_WINDOW_THRESHOLD;
+  return Math.max(
+    MIN_MEMORY_FILE_CHARS,
+    Math.round(r * MEMORY_CONTEXT_RATIO * bytesPerTokenForModel(mainLoopModel)),
+  );
 }
 //@ chunk-e6aww6q8.js:1331569-1331584 placement
-var NHo = 120000;
+/**
+ * 记忆文件字符数的绝对下限（120000）。
+ */
+var ABSOLUTE_MAX_MEMORY_FILE_CHARS = 120000;
 //@ chunk-e6aww6q8.js:1331584-1331628 placement
-function FHo(e) {
-  return Math.max(NHo, getMaxMemoryFileChars(e));
+/**
+ * 取记忆文件字符上限（不低于绝对下限）。
+ */
+function maxMemoryFileChars(e) {
+  return Math.max(ABSOLUTE_MAX_MEMORY_FILE_CHARS, getMaxMemoryFileChars(e));
 }
 //@ chunk-e6aww6q8.js:1331628-1332435 fingerprint = TEXT_FILE_EXTENSIONS (1)
 var TEXT_FILE_EXTENSIONS = new Set([
@@ -1084,90 +682,106 @@ var TEXT_FILE_EXTENSIONS = new Set([
   ".patch",
 ]);
 //@ chunk-e6aww6q8.js:1332435-1332468 layout
-function isWithinOriginalCwd(e) {
-  return pathInWorkingPath(e, getOriginalCwd());
+function isWithinOriginalCwd(path) {
+  return pathInWorkingPath(path, getOriginalCwd());
 }
+//@ chunk-e6aww6q8.js:1332468-1332720 fingerprint = parseFrontmatterPaths (1)
 /**
  * 从 frontmatter 读 paths: glob 列表（去掉结尾 /**，全是 ** 视为无条件），返回正文和 paths。
  */
-//@ chunk-e6aww6q8.js:1332468-1332720 fingerprint = parseFrontmatterPaths (1)
 function parseFrontmatterPaths(rawContent) {
-  let { frontmatter: frontmatter, content: content } = parseFrontmatter(rawContent);
-  if (!frontmatter.paths) return { content: content };
+  let { frontmatter, content } = parseFrontmatter(rawContent);
+  if (!frontmatter.paths)
+    return {
+      content,
+    };
   let patterns = unwrapResults(frontmatter.paths)
     .map((pattern) => (pattern.endsWith("/**") ? pattern.slice(0, -3) : pattern))
     .filter((h) => h.length > 0);
-  if (patterns.length === 0 || patterns.every((h) => h === "**")) return { content: content };
-  return { content: content, paths: patterns };
+  if (patterns.length === 0 || patterns.every((pattern) => pattern === "**"))
+    return {
+      content,
+    };
+  return {
+    content,
+    paths: patterns,
+  };
 }
+//@ chunk-e6aww6q8.js:1332720-1333193 fingerprint = parseMemoryFileContent (0.919)
 /**
  * 解析记忆文件内容：非文本扩展名跳过；剥离 frontmatter（paths: 作为条件规则 glob）；去 HTML 注释；提取 @include 路径；AutoMem 类型按 200 行/25000 字节截断。
  */
-//@ chunk-e6aww6q8.js:1332720-1333193 fingerprint = parseMemoryFileContent (0.919)
 function parseMemoryFileContent(rawContent, filePath, type, includeBasePath) {
   let ext = extname(filePath).toLowerCase();
-  if (ext && !TEXT_FILE_EXTENSIONS.has(ext))
-    return (
-      logForDebugging(`Skipping non-text file in @include: ${filePath}`),
-      { info: null, includePaths: [] }
-    );
-  let { content: withoutFrontmatter, paths: paths } = parseFrontmatterPaths(rawContent),
-    hasComment = withoutFrontmatter.includes("<!--"),
-    L = includeBasePath !== void 0 && withoutFrontmatter.includes("@"),
-    G = hasComment || L ? lexMarkdown(withoutFrontmatter) : void 0,
-    q = hasComment && G ? stripHtmlCommentsFromTokens(G).content : withoutFrontmatter,
-    Z = G && includeBasePath !== void 0 ? extractIncludePathsFromTokens(G, includeBasePath) : [],
-    finalContent = q;
-  if (type === "AutoMem") finalContent = Fae(truncateEntrypointContent(q).content);
+  if (ext && !TEXT_FILE_EXTENSIONS.has(ext)) {
+    logForDebugging(`Skipping non-text file in @include: ${filePath}`);
+    return {
+      info: null,
+      includePaths: [],
+    };
+  }
+  let { content: withoutFrontmatter, paths } = parseFrontmatterPaths(rawContent);
+  let hasComment = withoutFrontmatter.includes("<!--");
+  let L = includeBasePath !== undefined && withoutFrontmatter.includes("@");
+  let tokens = hasComment || L ? lexMarkdown(withoutFrontmatter) : undefined;
+  let strippedContent =
+    hasComment && tokens ? stripHtmlCommentsFromTokens(tokens).content : withoutFrontmatter;
+  let includePaths =
+    tokens && includeBasePath !== undefined ? extractIncludePathsFromTokens(tokens, includeBasePath) : [];
+  let finalContent = strippedContent;
+  if (type === "AutoMem")
+    finalContent = sanitizeMemoryText(truncateEntrypointContent(strippedContent).content);
   let contentDiffersFromDisk = finalContent !== rawContent;
   return {
     info: {
       path: filePath,
-      type: type,
+      type,
       content: finalContent,
       globs: paths,
-      contentDiffersFromDisk: contentDiffersFromDisk,
-      rawContent: contentDiffersFromDisk ? rawContent : void 0,
+      contentDiffersFromDisk,
+      rawContent: contentDiffersFromDisk ? rawContent : undefined,
     },
-    includePaths: Z,
+    includePaths,
   };
 }
 //@ chunk-e6aww6q8.js:1333193-1333275 fingerprint = processMemoryFile (0.418)
-function processMemoryFile(e, n, r) {
-  if (!e.includes("@")) return [];
-  return parseMemoryFileContent(e, n, r, n).includePaths;
+function processMemoryFile(rawContent, n, type) {
+  if (!rawContent.includes("@")) return [];
+  return parseMemoryFileContent(rawContent, n, type, n).includePaths;
 }
 //@ chunk-e6aww6q8.js:1333275-1333395 layout
-function buildInjectedAutoMemFile(e) {
-  let { content: content } = truncateEntrypointContent(e);
+function buildInjectedAutoMemFile(coworkMemoryIndexContent) {
+  let { content } = truncateEntrypointContent(coworkMemoryIndexContent);
   return {
     path: getAutoMemEntrypoint(),
     type: "AutoMem",
-    content: content,
-    contentDiffersFromDisk: !0,
-    rawContent: e,
+    content,
+    contentDiffersFromDisk: true,
+    rawContent: coworkMemoryIndexContent,
   };
 }
+//@ chunk-e6aww6q8.js:1333395-1333464 layout
 /**
  * CLAUDE_COWORK_MEMORY_INDEX_CONTENT：由宿主直接提供的 MEMORY.md 内容。
  */
-//@ chunk-e6aww6q8.js:1333395-1333464 layout
 function getCoworkMemoryIndexContent() {
   return process.env.CLAUDE_COWORK_MEMORY_INDEX_CONTENT;
 }
 //@ chunk-e6aww6q8.js:1333464-1333594 layout
-function isAutoMemPathWithinAutoMemDir(e) {
-  if (!isReadBlockOn()) return !0;
-  let mapped = getPathsForPermissionCheck(getAutoMemPath()).map((r) => (r.endsWith(sep_30) ? r : r + sep_30));
-  return getPathsForPermissionCheck(e).every((r) => mapped.some((s) => isAutoMemPathSafeForCarveout(r, s)));
+function isAutoMemPathWithinAutoMemDir(autoMemEntrypoint) {
+  if (!isReadBlockOn()) return true;
+  let mapped = getPathsForPermissionCheck(getAutoMemPath()).map((r) => (r.endsWith(sep) ? r : r + sep));
+  return getPathsForPermissionCheck(autoMemEntrypoint).every((r) =>
+    mapped.some((s) => isAutoMemPathSafeForCarveout(r, s)),
+  );
 }
 //@ chunk-e6aww6q8.js:1333594-1333685 layout
 class ClaudeMdLoadState {
-  memoryReadEacces = !1;
-  memoryReadFailed = !1;
-  skip = !1;
-  rulesWalk = !1;
-  announcedFileCut = !1;
+  memoryReadEacces = false;
+  memoryReadFailed = false;
+  skip = false;
+  rulesWalk = false;
+  announcedFileCut = false;
 }
 //@ chunk-e6aww6q8.js:1333685-1333712 layout
 var claudeMdLoadStateByHost = new HostScoped(() => new ClaudeMdLoadState());
@@ -1177,26 +791,29 @@ function getClaudeMdLoadState() {
 }
 //@ chunk-e6aww6q8.js:1333751-1333862 layout
 function reportSkippedSpecialMemoryFile() {
-  let e = getClaudeMdLoadState();
-  if (!e.skip) ((e.skip = !0), logFeatureSad("context_claude_md_load", "file_skipped_special_or_oversize"));
+  let claudeMdLoadState = getClaudeMdLoadState();
+  if (!claudeMdLoadState.skip) {
+    claudeMdLoadState.skip = true;
+    logFeatureSad("context_claude_md_load", "file_skipped_special_or_oversize");
+  }
 }
 //@ chunk-e6aww6q8.js:1333862-1333924 layout
 function countConfigDirMentions(e) {
-  let n = getClaudeConfigDirOrNull();
-  return n !== null && e.includes(n) ? 1 : 0;
+  let claudeConfigDirOrNull = getClaudeConfigDirOrNull();
+  return claudeConfigDirOrNull !== null && e.includes(claudeConfigDirOrNull) ? 1 : 0;
 }
 //@ chunk-e6aww6q8.js:1333924-1333961 layout
 function getUserRulesDirOrNull() {
   return isDiskless() ? null : getUserClaudeRulesDir();
 }
 //@ chunk-e6aww6q8.js:1333961-1333991 layout
-function handleMemoryFileReadErrno(e, n) {
-  handleMemoryFileReadError(getErrnoCode(e), n);
+function handleMemoryFileReadErrno(error, filePath) {
+  handleMemoryFileReadError(getErrnoCode(error), filePath);
 }
+//@ chunk-e6aww6q8.js:1333991-1334363 fingerprint = handleMemoryFileReadError (0.616)
 /**
  * 记忆文件读取错误处理：ENOENT/EISDIR/ENOTDIR 静默，EACCES 记录并打标。
  */
-//@ chunk-e6aww6q8.js:1333991-1334363 fingerprint = handleMemoryFileReadError (0.616)
 function handleMemoryFileReadError(error, filePath) {
   if (error === "ENOENT" || error === "EISDIR" || error === "ENOTDIR") return;
   if (error === "EACCES")
@@ -1204,86 +821,140 @@ function handleMemoryFileReadError(error, filePath) {
       is_access_error: 1,
       has_home_dir: countConfigDirMentions(filePath),
     });
-  let r = getClaudeMdLoadState();
+  let claudeMdLoadState = getClaudeMdLoadState();
   if (error === "EACCES") {
-    if (!r.memoryReadEacces)
-      ((r.memoryReadEacces = !0), logFeatureSad("context_claude_md_load", "read_eacces"));
-  } else if (!r.memoryReadFailed)
-    ((r.memoryReadFailed = !0), logFeatureSad("context_claude_md_load", "read_failed"));
+    if (!claudeMdLoadState.memoryReadEacces) {
+      claudeMdLoadState.memoryReadEacces = true;
+      logFeatureSad("context_claude_md_load", "read_eacces");
+    }
+  } else if (!claudeMdLoadState.memoryReadFailed) {
+    claudeMdLoadState.memoryReadFailed = true;
+    logFeatureSad("context_claude_md_load", "read_failed");
+  }
 }
 //@ chunk-e6aww6q8.js:1334363-1334902 layout
-async function readMemoryFileFromStorage({ backend: backend, key: key }) {
-  let read = await backend.read([{ key: key, offset: 0, length: Uq + 1 }]);
-  if (!read.ok) {
-    let y = read.error.code === "InvalidArgument" ? void 0 : read.error.telemetryCode;
-    if (y === "ENXIO" || y === "EFBIG") return { kind: "skipped", isDirectory: !1 };
-    if (y === "EISDIR") return { kind: "skipped", isDirectory: !0 };
-    return { kind: "error", code: y };
+async function readMemoryFileFromStorage({ backend, key }) {
+  let r = await backend.read([
+    {
+      key,
+      offset: 0,
+      length: MAX_MEMORY_FILE_READ_BYTES + 1,
+    },
+  ]);
+  if (!r.ok) {
+    let telemetryCode = r.error.code === "InvalidArgument" ? undefined : r.error.telemetryCode;
+    if (telemetryCode === "ENXIO" || telemetryCode === "EFBIG")
+      return {
+        kind: "skipped",
+        isDirectory: false,
+      };
+    if (telemetryCode === "EISDIR")
+      return {
+        kind: "skipped",
+        isDirectory: true,
+      };
+    return {
+      kind: "error",
+      code: telemetryCode,
+    };
   }
-  let s = read.value.items[0];
-  if (!s.found) return { kind: "absent" };
-  if (s.totalBytes > Uq) return { kind: "skipped", isDirectory: !1 };
+  let s = r.value.items[0];
+  if (!s.found)
+    return {
+      kind: "absent",
+    };
+  if (s.totalBytes > MAX_MEMORY_FILE_READ_BYTES)
+    return {
+      kind: "skipped",
+      isDirectory: false,
+    };
   let h = s.value;
-  return { kind: "content", content: Buffer.from(h.buffer, h.byteOffset, h.byteLength).toString("utf8") };
+  return {
+    kind: "content",
+    content: Buffer.from(h.buffer, h.byteOffset, h.byteLength).toString("utf8"),
+  };
 }
+//@ chunk-e6aww6q8.js:1334902-1335528 callgraph-witnessed = safelyReadMemoryFileAsync (0.249)
 /**
  * 安全读取记忆文件（storage v5 或 fs），区分 absent/error/skipped/content，ENOENT 等静默，EACCES 记录一次。
  */
-//@ chunk-e6aww6q8.js:1334902-1335528 callgraph-witnessed = safelyReadMemoryFileAsync (0.249)
-async function safelyReadMemoryFileAsync(e, n, r, s, h) {
+async function safelyReadMemoryFileAsync(filePath, type, includeBasePath, s, h) {
   try {
-    let y,
-      S = !1;
+    let rawContent;
+    let S = false;
     if (h) {
-      let w = await h(e, Uq);
-      return w === void 0 ? { info: null, includePaths: [] } : parseMemoryFileContent(w, e, n, r);
+      let rawContent = await h(filePath, MAX_MEMORY_FILE_READ_BYTES);
+      return rawContent === undefined
+        ? {
+            info: null,
+            includePaths: [],
+          }
+        : parseMemoryFileContent(rawContent, filePath, type, includeBasePath);
     }
     if (s) {
-      let w = await readMemoryFileFromStorage(s);
-      switch (w.kind) {
+      let memoryFileFromStorage = await readMemoryFileFromStorage(s);
+      switch (memoryFileFromStorage.kind) {
         case "absent":
-          return { info: null, includePaths: [] };
+          return {
+            info: null,
+            includePaths: [],
+          };
         case "error":
-          return (handleMemoryFileReadError(w.code, e), { info: null, includePaths: [] });
+          handleMemoryFileReadError(memoryFileFromStorage.code, filePath);
+          return {
+            info: null,
+            includePaths: [],
+          };
         case "skipped":
-          ((S = w.isDirectory), (y = null));
+          S = memoryFileFromStorage.isDirectory;
+          rawContent = null;
           break;
         case "content":
-          y = w.content;
+          rawContent = memoryFileFromStorage.content;
           break;
       }
     } else {
       let fs = getFsImplementation();
-      y = await readSmallFileChecked(fs, e, Uq, (L) => {
+      rawContent = await readSmallFileChecked(fs, filePath, MAX_MEMORY_FILE_READ_BYTES, (L) => {
         S = L.isDirectory();
       });
     }
-    if (y === null) {
-      if ((logForDebugging(`[CLAUDE.md] skipping ${e}: not a regular file or exceeds ${Uq} byte limit`), !S))
-        reportSkippedSpecialMemoryFile();
-      return { info: null, includePaths: [] };
+    if (rawContent === null) {
+      logForDebugging(
+        `[CLAUDE.md] skipping ${filePath}: not a regular file or exceeds ${MAX_MEMORY_FILE_READ_BYTES} byte limit`,
+      );
+      if (!S) reportSkippedSpecialMemoryFile();
+      return {
+        info: null,
+        includePaths: [],
+      };
     }
-    return parseMemoryFileContent(y, e, n, r);
+    return parseMemoryFileContent(rawContent, filePath, type, includeBasePath);
   } catch (error) {
-    return (handleMemoryFileReadErrno(error, e), { info: null, includePaths: [] });
+    handleMemoryFileReadErrno(error, filePath);
+    return {
+      info: null,
+      includePaths: [],
+    };
   }
 }
+//@ chunk-e6aww6q8.js:1335528-1336300 fingerprint = extractIncludePathsFromTokens (1)
 /**
  * 在 markdown token 中查找 @path 引用（跳过 code/codespan，HTML 注释外的残留文本仍扫描）；接受 ./、~/、绝对路径和普通相对名，去掉 #片段，按文件所在目录解析为绝对路径。
  */
-//@ chunk-e6aww6q8.js:1335528-1336300 fingerprint = extractIncludePathsFromTokens (1)
 function extractIncludePathsFromTokens(tokens, basePath) {
   let absolutePaths = new Set();
   function extractPathsFromText(textContent) {
-    let includeRegex = /(?:^|\s)@((?:[^\s\\]|\\ )+)/g,
-      match;
+    let includeRegex = /(?:^|\s)@((?:[^\s\\]|\\ )+)/g;
+    let match;
     while ((match = includeRegex.exec(textContent)) !== null) {
       let path = match[1];
       if (!path) continue;
       let hashIndex = path.indexOf("#");
       if (hashIndex !== -1) path = path.substring(0, hashIndex);
       if (!path) continue;
-      if (((path = path.replaceAll("\\ ", " ")), path)) {
+      path = path.replaceAll("\\ ", " ");
+      if (path) {
         if (
           !isSpecialOrUnsafePath(path) &&
           (path.startsWith("./") ||
@@ -1291,7 +962,7 @@ function extractIncludePathsFromTokens(tokens, basePath) {
             (path.startsWith("/") && path !== "/") ||
             (!path.startsWith("@") && !path.match(/^[#%^&*()]+/) && path.match(/^[a-zA-Z0-9._-]/)))
         ) {
-          let resolvedPath = expandPath(path, dirname_31(basePath));
+          let resolvedPath = expandPath(path, dirname(basePath));
           absolutePaths.add(resolvedPath);
         }
       }
@@ -1301,11 +972,11 @@ function extractIncludePathsFromTokens(tokens, basePath) {
     for (let element of elements) {
       if (element.type === "code" || element.type === "codespan") continue;
       if (element.type === "html") {
-        let w = element.raw || "",
-          trimmed = w.trimStart();
+        let raw = element.raw || "";
+        let trimmed = raw.trimStart();
         if (trimmed.startsWith("<!--") && trimmed.includes("-->")) {
-          let commentSpan = /<!--[\s\S]*?-->/g,
-            residue = w.replace(commentSpan, "");
+          let commentSpan = /<!--[\s\S]*?-->/g;
+          let residue = raw.replace(commentSpan, "");
           if (residue.trim().length > 0) extractPathsFromText(residue);
         }
         continue;
@@ -1315,28 +986,31 @@ function extractIncludePathsFromTokens(tokens, basePath) {
       if (element.items) processElements(element.items);
     }
   }
-  return (processElements(tokens), [...absolutePaths]);
+  processElements(tokens);
+  return [...absolutePaths];
 }
+//@ chunk-e6aww6q8.js:1336300-1336310 layout
 /**
  * @include 最大递归深度 5。
  */
-//@ chunk-e6aww6q8.js:1336300-1336310 layout
 var MAX_INCLUDE_DEPTH = 5;
 //@ chunk-e6aww6q8.js:1336310-1336402 layout
 function isNonCanonicalSymlink(e, n) {
-  if (!n.isSymlink || n.isCanonical) return !1;
+  if (!n.isSymlink || n.isCanonical) return false;
   return !(n.resolvedPath === e && isUnderNetworkDirCached(e));
 }
+//@ chunk-e6aww6q8.js:1336402-1336660 fingerprint = isClaudeMdExcluded (0.933)
 /**
  * 按设置 claudeMdExcludes（picomatch，dot:true）构建排除匹配器，只作用于 User/Project/Local 类型。
  */
-//@ chunk-e6aww6q8.js:1336402-1336660 fingerprint = isClaudeMdExcluded (0.933)
 function isClaudeMdExcluded() {
   let patterns = getInitialSettings_2().claudeMdExcludes;
-  if (!patterns || patterns.length === 0) return () => !1;
+  if (!patterns || patterns.length === 0) return () => false;
   let expandedPatterns = isDuplicatePath_2(getFsImplementation(), patterns).filter((s) => s.length > 0);
-  if (expandedPatterns.length === 0) return () => !1;
-  let r = k3t.default(expandedPatterns, { dot: !0 });
+  if (expandedPatterns.length === 0) return () => false;
+  let r = picomatchModule.default(expandedPatterns, {
+    dot: true,
+  });
   return (s, h) => (h === "User" || h === "Project" || h === "Local") && r(s.replaceAll("\\", "/"));
 }
 //@ chunk-e6aww6q8.js:1336660-1336711 affinity
@@ -1344,46 +1018,48 @@ function createClaudeMdExcludeMatcher() {
   let e;
   return (n, r) => (e ??= isClaudeMdExcluded())(n, r);
 }
+//@ chunk-e6aww6q8.js:1336711-1336804 affinity
 /**
  * User/Project/Local 类型文件是否被 claudeMdExcludes 排除（托管与 AutoMem 不受影响）。
  */
-//@ chunk-e6aww6q8.js:1336711-1336804 affinity
 function isExcludedByClaudeMdExcludes(e, n, r) {
-  if (n !== "User" && n !== "Project" && n !== "Local") return !1;
+  if (n !== "User" && n !== "Project" && n !== "Local") return false;
   return (r ?? isClaudeMdExcluded())(e, n);
 }
 //@ chunk-e6aww6q8.js:1336804-1337160 affinity
-function applyClaudeMdExcludesToInjected(e, n = createClaudeMdExcludeMatcher()) {
+function applyClaudeMdExcludesToInjected(e, claudeMdExcludeMatcher = createClaudeMdExcludeMatcher()) {
   let r = new Map();
   for (let y of e) r.set(y.path, y);
-  let s = new Map(),
-    h = [];
+  let s = new Map();
+  let h = [];
   for (let y of e) {
-    let S = [],
-      w = new Set(),
-      L = y,
-      G = !1;
+    let S = [];
+    let w = new Set();
+    let L = y;
+    let G = false;
     while (L) {
       let q = s.get(L.path);
-      if (q !== void 0) {
+      if (q !== undefined) {
         G = q;
         break;
       }
-      if (w.has(L.path) || n(L.path, L.type)) {
-        G = !0;
+      if (w.has(L.path) || claudeMdExcludeMatcher(L.path, L.type)) {
+        G = true;
         break;
       }
-      (w.add(L.path), S.push(L.path), (L = L.parent === void 0 ? void 0 : r.get(L.parent)));
+      w.add(L.path);
+      S.push(L.path);
+      L = L.parent === undefined ? undefined : r.get(L.parent);
     }
     for (let q of S) s.set(q, G);
     if (!G) h.push(y);
   }
   return h;
 }
+//@ chunk-e6aww6q8.js:1337480-1337589 affinity
 /**
  * 记忆文件准入检查：已处理过、include 深度达到 5、被 claudeMdExcludes 排除或为特殊路径时返回 undefined，否则返回规范化路径。
  */
-//@ chunk-e6aww6q8.js:1337480-1337589 affinity
 function checkMemoryFileAdmissible(e, n, r, s, h) {
   let y = normalizePathForCompare(e);
   if (r.has(y) || s >= MAX_INCLUDE_DEPTH) return;
@@ -1391,160 +1067,187 @@ function checkMemoryFileAdmissible(e, n, r, s, h) {
   if (isSpecialOrUnsafePath(e)) return;
   return y;
 }
+//@ chunk-e6aww6q8.js:1337589-1338550 callgraph-fingerprint = isInstructionsMemoryType (0.28)
 /**
  * 读取一个指令文件并递归展开其中的 @include：检查排除、深度（最多 5 层）、设备/特殊路径与符号链接；外部（cwd 外）include 需 hasClaudeMdExternalIncludesApproved；User 类型拒绝顶层符号链接与多硬链接文件。返回该文件及其 include 的列表。
  */
-//@ chunk-e6aww6q8.js:1337589-1338550 callgraph-fingerprint = isInstructionsMemoryType (0.28)
-async function isInstructionsMemoryType_3(e, n, r, s, h = 0, y, S, w, L) {
-  let G = checkMemoryFileAdmissible(e, n, r, h, w);
-  if (G === void 0) return [];
-  let q = s && (n !== "User" || allowsUserExternalIncludes()),
-    Z = safeResolvePath(getFsImplementation(), e),
-    { resolvedPath: resolvedPath, isSymlink: isSymlink } = Z;
+async function isInstructionsMemoryType_3(e, n, processedPaths, s, h = 0, parent, S, w, L) {
+  let G = checkMemoryFileAdmissible(e, n, processedPaths, h, w);
+  if (G === undefined) return [];
+  let q = s && (n !== "User" || allowsUserExternalIncludes());
+  let Z = safeResolvePath(getFsImplementation(), e);
+  let { resolvedPath, isSymlink } = Z;
   if (isSpecialOrUnsafePath(resolvedPath) || isNonCanonicalSymlink(e, Z)) return [];
-  if (getDevicePathRefusal(e, { spellings: isSymlink ? [e, resolvedPath] : [e], unresolved: !1 }) !== void 0)
-    return (
-      logForDebugging(`[CLAUDE.md] skipping ${e}: it names a device or process file`),
-      reportSkippedSpecialMemoryFile(),
-      []
-    );
+  if (
+    getDevicePathRefusal(e, {
+      spellings: isSymlink ? [e, resolvedPath] : [e],
+      unresolved: false,
+    }) !== undefined
+  ) {
+    logForDebugging(`[CLAUDE.md] skipping ${e}: it names a device or process file`);
+    reportSkippedSpecialMemoryFile();
+    return [];
+  }
   if (h > 0 && !q && !isWithinOriginalCwd(resolvedPath)) return [];
   if (n === "User" && !q)
     try {
       let stats = await getFsImplementation().lstat(e);
       if ((h === 0 && stats.isSymbolicLink()) || ((stats.nlink ?? 1) > 1 && stats.isFile())) return [];
     } catch {}
-  let we = isSymlink ? normalizePathForCompare(resolvedPath) : void 0;
-  if (we !== void 0 && r.has(we)) return [];
-  r.add(G);
+  let we = isSymlink ? normalizePathForCompare(resolvedPath) : undefined;
+  if (we !== undefined && processedPaths.has(we)) return [];
+  processedPaths.add(G);
   let Ee = L && (await safelyReadMemoryFileAsync(e, n, resolvedPath, S, L));
   if (Ee && !Ee.info) return [];
-  if (we !== void 0) r.add(we);
-  let { info: info, includePaths: includePaths } =
+  if (we !== undefined) processedPaths.add(we);
+  let { info: memoryFile, includePaths: resolvedIncludePaths } =
     Ee || (await safelyReadMemoryFileAsync(e, n, resolvedPath, S));
-  if (!info || !info.content.trim()) return [];
-  if (y) info.parent = y;
-  if (n === "Managed" && isManagedFolderWritable(e)) info.unverified = !0;
-  let Me = [];
-  Me.push(info);
-  for (let We of includePaths) {
-    if (!isWithinOriginalCwd(We) && !q) continue;
-    let lt = await isInstructionsMemoryType_3(We, n, r, s, h + 1, e, void 0, w, L);
-    for (let Je of info.unverified ? lt : []) Je.unverified = !0;
-    Me.push(...lt);
+  if (!memoryFile || !memoryFile.content.trim()) return [];
+  if (parent) memoryFile.parent = parent;
+  if (n === "Managed" && isManagedFolderWritable(e)) memoryFile.unverified = true;
+  let result = [];
+  result.push(memoryFile);
+  for (let resolvedIncludePath of resolvedIncludePaths) {
+    if (!isWithinOriginalCwd(resolvedIncludePath) && !q) continue;
+    let lt = await isInstructionsMemoryType_3(
+      resolvedIncludePath,
+      n,
+      processedPaths,
+      s,
+      h + 1,
+      e,
+      undefined,
+      w,
+      L,
+    );
+    for (let Je of memoryFile.unverified ? lt : []) Je.unverified = true;
+    result.push(...lt);
   }
-  return Me;
+  return result;
 }
+//@ chunk-e6aww6q8.js:1338550-1340876 fingerprint = processMdRules (0.587)
 /**
  * 遍历 .claude/rules 目录（递归、防环、跟随安全的符号链接）读取 *.md 规则；conditionalRule 控制只取带 paths: 的条件规则还是无条件规则。
  */
-//@ chunk-e6aww6q8.js:1338550-1340876 fingerprint = processMdRules (0.587)
 async function processMdRules({
-  rulesDir: rulesDir,
+  rulesDir,
   type: n,
-  processedPaths: processedPaths,
-  includeExternal: includeExternal,
-  conditionalRule: conditionalRule,
-  visitedDirs: visitedDirs = new Set(),
-  storageV5: storageV5,
-  v5Descent: v5Descent,
-  discoveredDir: discoveredDir,
-  linkedFrom: linkedFrom,
-  excludeMatcher: excludeMatcher,
-  held: held,
+  processedPaths,
+  includeExternal,
+  conditionalRule,
+  visitedDirs = new Set(),
+  storageV5,
+  v5Descent,
+  discoveredDir,
+  linkedFrom,
+  excludeMatcher,
+  held,
 }) {
   if (visitedDirs.has(rulesDir)) return [];
   try {
-    let fs = getFsImplementation(),
-      ke = safeResolvePath(fs, rulesDir),
-      { resolvedPath: resolvedPath, isSymlink: isSymlink, isCanonical: isCanonical } = ke;
+    let fs = getFsImplementation();
+    let ke = safeResolvePath(fs, rulesDir);
+    let { resolvedPath, isSymlink, isCanonical } = ke;
     if (isSpecialOrUnsafePath(resolvedPath) || isNonCanonicalSymlink(rulesDir, ke)) return [];
-    if ((visitedDirs.add(rulesDir), isSymlink)) visitedDirs.add(resolvedPath);
-    let Ie = includeExternal && (n !== "User" || allowsUserExternalIncludes()),
-      Me = getUserRulesDirOrNull(),
-      We = n !== "User" && (Me === null || !pathInWorkingPath(discoveredDir ?? rulesDir, Me)),
-      ze = !Ie || (linkedFrom === void 0 && We && isCanonical && isSymlink),
-      lt =
-        ze &&
-        (await listRulesDirEntries(fs, rulesDir, n, storageV5, v5Descent)) &&
-        !isWithinOriginalCwd(resolvedPath),
-      Je =
-        ze &&
-        !lt &&
-        n === "Project" &&
-        We &&
-        isSymlink &&
-        !isWithinOriginalCwd(resolvedPath) &&
-        isWithinWorkspaceOrAddDirs(dirname_31(dirname_31(rulesDir))) &&
-        (await listRulesDirEntries(fs, dirname_31(rulesDir), n, storageV5, void 0));
+    visitedDirs.add(rulesDir);
+    if (isSymlink) visitedDirs.add(resolvedPath);
+    let Ie = includeExternal && (n !== "User" || allowsUserExternalIncludes());
+    let userRulesDirOrNull = getUserRulesDirOrNull();
+    let We =
+      n !== "User" &&
+      (userRulesDirOrNull === null || !pathInWorkingPath(discoveredDir ?? rulesDir, userRulesDirOrNull));
+    let ze = !Ie || (linkedFrom === undefined && We && isCanonical && isSymlink);
+    let lt =
+      ze &&
+      (await listRulesDirEntries(fs, rulesDir, n, storageV5, v5Descent)) &&
+      !isWithinOriginalCwd(resolvedPath);
+    let Je =
+      ze &&
+      !lt &&
+      n === "Project" &&
+      We &&
+      isSymlink &&
+      !isWithinOriginalCwd(resolvedPath) &&
+      isWithinWorkspaceOrAddDirs(dirname(dirname(rulesDir))) &&
+      (await listRulesDirEntries(fs, dirname(rulesDir), n, storageV5, undefined));
     if (
       !Ie &&
       (lt || (Je && (conditionalRule || !getCurrentProjectConfig().hasClaudeMdExternalIncludesApproved)))
     )
       return [];
-    let nt = linkedFrom ?? (lt ? rulesDir : Je ? dirname_31(rulesDir) : void 0),
-      pt = isCanonical ? resolvedPath : void 0,
-      Et =
-        !isCanonical || isSymlink
-          ? void 0
-          : (v5Descent ??
-            (storageV5 !== void 0 && n === "User" && rulesDir === getUserClaudeRulesDir()
-              ? { backend: storageV5, relPath: [] }
-              : void 0)),
-      result = [],
-      entries;
+    let nt = linkedFrom ?? (lt ? rulesDir : Je ? dirname(rulesDir) : undefined);
+    let pt = isCanonical ? resolvedPath : undefined;
+    let Et =
+      !isCanonical || isSymlink
+        ? undefined
+        : (v5Descent ??
+          (storageV5 !== undefined && n === "User" && rulesDir === getUserClaudeRulesDir()
+            ? {
+                backend: storageV5,
+                relPath: [],
+              }
+            : undefined));
+    let result = [];
+    let entries;
     try {
       entries = await fs.readdir(resolvedPath);
-    } catch (error) {
-      let code = getErrnoCode(error);
+    } catch (e) {
+      let code = getErrnoCode(e);
       if (code === "ENOENT" || code === "EACCES" || code === "ENOTDIR") return [];
-      throw error;
+      throw e;
     }
     for (let entry of entries) {
-      let entryPath = join_52(rulesDir, entry.name),
-        Yt = safeResolvePath(fs, entryPath),
-        { resolvedPath: resolvedPath, isSymlink: isSymlink, isCanonical: isCanonical } = Yt,
-        pn = join_52(discoveredDir ?? rulesDir, entry.name);
+      let entryPath = join(rulesDir, entry.name);
+      let Yt = safeResolvePath(fs, entryPath);
+      let { resolvedPath, isSymlink, isCanonical } = Yt;
+      let pn = join(discoveredDir ?? rulesDir, entry.name);
       if (pn !== resolvedPath && isExcludedByClaudeMdExcludes(pn, n, excludeMatcher)) continue;
       if (isSpecialOrUnsafePath(resolvedPath) || isNonCanonicalSymlink(entryPath, Yt)) continue;
-      let no = isSymlink ? await statRulesEntry(fs, resolvedPath, n, storageV5) : null,
-        hn = no ? no.isDirectory() : entry.isDirectory(),
-        ho = no ? no.isFile() : entry.isFile(),
-        yn =
-          Et !== void 0 &&
-          !isSymlink &&
-          isCanonical &&
-          isValidKeySegment(entry.name) &&
-          resolvedPath === join_52(getUserClaudeRulesDir(), ...Et.relPath, entry.name)
-            ? [...Et.relPath, entry.name]
-            : void 0,
-        Kn = pt !== void 0 && resolvedPath !== join_52(pt, entry.name) && !isWithinOriginalCwd(resolvedPath),
-        Xn = nt ?? (Kn && We ? pn : void 0);
-      if (hn) {
+      let stats = isSymlink ? await statRulesEntry(fs, resolvedPath, n, storageV5) : null;
+      let isDirectory = stats ? stats.isDirectory() : entry.isDirectory();
+      let isFile = stats ? stats.isFile() : entry.isFile();
+      let yn =
+        Et !== undefined &&
+        !isSymlink &&
+        isCanonical &&
+        isValidKeySegment(entry.name) &&
+        resolvedPath === join(getUserClaudeRulesDir(), ...Et.relPath, entry.name)
+          ? [...Et.relPath, entry.name]
+          : undefined;
+      let Kn =
+        pt !== undefined && resolvedPath !== join(pt, entry.name) && !isWithinOriginalCwd(resolvedPath);
+      let Xn = nt ?? (Kn && We ? pn : undefined);
+      if (isDirectory) {
         if (Kn && !Ie) continue;
         result.push(
           ...(await processMdRules({
             rulesDir: resolvedPath,
             type: n,
-            processedPaths: processedPaths,
-            includeExternal: includeExternal,
-            conditionalRule: conditionalRule,
-            visitedDirs: visitedDirs,
-            storageV5: storageV5,
-            v5Descent: Et && yn ? { backend: Et.backend, relPath: yn } : void 0,
-            discoveredDir: pn !== resolvedPath ? pn : void 0,
+            processedPaths,
+            includeExternal,
+            conditionalRule,
+            visitedDirs,
+            storageV5,
+            v5Descent:
+              Et && yn
+                ? {
+                    backend: Et.backend,
+                    relPath: yn,
+                  }
+                : undefined,
+            discoveredDir: pn !== resolvedPath ? pn : undefined,
             linkedFrom: Xn,
-            excludeMatcher: excludeMatcher,
-            held: held,
+            excludeMatcher,
+            held,
           })),
         );
-      } else if (ho && entry.name.endsWith(".md")) {
+      } else if (isFile && entry.name.endsWith(".md")) {
         if (Kn && !Ie) continue;
         if (
           held &&
           pn !== resolvedPath &&
           !processedPaths.has(normalizePathForCompare(resolvedPath)) &&
-          (await held(pn, Uq)) === void 0
+          (await held(pn, MAX_MEMORY_FILE_READ_BYTES)) === undefined
         )
           continue;
         let fo = await isInstructionsMemoryType_3(
@@ -1553,15 +1256,21 @@ async function processMdRules({
           processedPaths,
           includeExternal,
           0,
-          void 0,
-          Et && yn ? { backend: Et.backend, key: STORAGE_SPACES.userConfigDir("rules", yn) } : void 0,
+          undefined,
+          Et && yn
+            ? {
+                backend: Et.backend,
+                key: STORAGE_SPACES.userConfigDir("rules", yn),
+              }
+            : undefined,
           excludeMatcher,
           held,
         );
-        if (n === "Managed" && isManagedFolderWritable(pn)) for (let bo of fo) bo.unverified = !0;
+        if (n === "Managed" && isManagedFolderWritable(pn)) for (let bo of fo) bo.unverified = true;
         let [To] = fo;
         if (To) {
-          if (((To.isRule = !0), Xn !== void 0)) To.linkedFrom = Xn;
+          To.isRule = true;
+          if (Xn !== undefined) To.linkedFrom = Xn;
         }
         result.push(...fo.filter((bo) => (conditionalRule ? bo.globs : !bo.globs)));
       }
@@ -1573,21 +1282,24 @@ async function processMdRules({
         is_access_error: 1,
         has_home_dir: countConfigDirMentions(rulesDir),
       });
-    let ke = getClaudeMdLoadState();
-    if (!ke.rulesWalk) ((ke.rulesWalk = !0), logFeatureSad("context_claude_md_load", "rules_walk_failed"));
+    let claudeMdLoadState = getClaudeMdLoadState();
+    if (!claudeMdLoadState.rulesWalk) {
+      claudeMdLoadState.rulesWalk = true;
+      logFeatureSad("context_claude_md_load", "rules_walk_failed");
+    }
     return [];
   }
 }
 //@ chunk-e6aww6q8.js:1340876-1340960 layout
 function isWithinWorkspaceOrAddDirs(e) {
-  if (pathInWorkingPath(getOriginalCwd(), e)) return !0;
+  if (pathInWorkingPath(getOriginalCwd(), e)) return true;
   let n = normalizePathForCompare(e);
   return getAdditionalClaudeMdDirs().some((r) => normalizePathForCompare(r) === n);
 }
+//@ chunk-e6aww6q8.js:1340960-1341047 layout
 /**
  * 返回需要加载 CLAUDE.md 的额外目录（--add-dir），需开关 CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD 或对应设置。
  */
-//@ chunk-e6aww6q8.js:1340960-1341047 layout
 function getAdditionalClaudeMdDirs() {
   return (getClaudeMdAdditionalDirectoriesAsked() ??
     isEnvTruthy(env.CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD))
@@ -1599,138 +1311,176 @@ function hostFileScopeForMemoryType(e, n) {
   return e === "Managed" ? PathSpace.system(n) : e === "User" ? PathSpace.home(n) : PathSpace.workspace(n);
 }
 //@ chunk-e6aww6q8.js:1341137-1341805 layout
-async function listRulesDirEntries(e, n, r, s, h) {
-  if (isStorageV5Enabled() && s !== void 0) {
+async function listRulesDirEntries(e, n, r, storageV5, h) {
+  if (isStorageV5Enabled() && storageV5 !== undefined) {
     let y =
-      r === "User" && (h !== void 0 || n === getUserClaudeRulesDir())
-        ? await s
-            .scopeKind({ namespace: "userConfigDir", dir: "rules", ...(h && { relPath: h.relPath }) })
+      r === "User" && (h !== undefined || n === getUserClaudeRulesDir())
+        ? await storageV5
+            .scopeKind({
+              namespace: "userConfigDir",
+              dir: "rules",
+              ...(h && {
+                relPath: h.relPath,
+              }),
+            })
             .catch(() => {
               return;
             })
-        : await s.hostFiles.stat(hostFileScopeForMemoryType(r, n), { follow: !1 }).catch(() => {
-            return;
-          });
+        : await storageV5.hostFiles
+            .stat(hostFileScopeForMemoryType(r, n), {
+              follow: false,
+            })
+            .catch(() => {
+              return;
+            });
     if (y?.ok) return y.value.kind === "link";
-    let S = y !== void 0 && y.error.code === "Failed" ? y.error.telemetryCode : void 0;
-    if (errnoShapedCode(S) !== void 0 || /^ERR_[A-Z0-9_]+$/.test(S ?? "")) return !1;
+    let telemetryCode = y !== undefined && y.error.code === "Failed" ? y.error.telemetryCode : undefined;
+    if (errnoShapedCode(telemetryCode) !== undefined || /^ERR_[A-Z0-9_]+$/.test(telemetryCode ?? ""))
+      return false;
     logForDebugging(
-      `claudemd: the storage backend could not say whether the ${r} rules folder (or its .claude parent) is a symlink (${S ?? y?.error.code ?? "no answer"}) \u2014 checking directly`,
+      `claudemd: the storage backend could not say whether the ${r} rules folder (or its .claude parent) is a symlink (${telemetryCode ?? y?.error.code ?? "no answer"}) \u2014 checking directly`,
     );
   }
   try {
     return (await e.lstat(n)).isSymbolicLink();
   } catch {
-    return !1;
+    return false;
   }
 }
 //@ chunk-e6aww6q8.js:1341805-1342542 layout
-async function statRulesEntry(e, n, r, s) {
-  if (isStorageV5Enabled() && s !== void 0) {
-    let h = await s.hostFiles.stat(hostFileScopeForMemoryType(r, n)).catch(() => {
+async function statRulesEntry(e, resolvedPath, r, storageV5) {
+  if (isStorageV5Enabled() && storageV5 !== undefined) {
+    let h = await storageV5.hostFiles.stat(hostFileScopeForMemoryType(r, resolvedPath)).catch(() => {
       return;
     });
     if (h?.ok) {
-      let { kind: kind } = h.value;
+      let { kind } = h.value;
       if (kind === "absent")
         throw Object.assign(Error("ENOENT: rules entry target is gone"), {
           code: "ENOENT",
           syscall: "stat",
-          path: n,
+          path: resolvedPath,
         });
-      return { isDirectory: () => kind === "directory", isFile: () => kind === "file" };
+      return {
+        isDirectory: () => kind === "directory",
+        isFile: () => kind === "file",
+      };
     }
-    let y = h !== void 0 && h.error.code === "Failed" ? h.error.telemetryCode : void 0;
-    if (errnoShapedCode(y) !== void 0 || /^ERR_[A-Z0-9_]+$/.test(y ?? ""))
-      throw h !== void 0 && h.error.code === "Failed" && h.error.cause instanceof Error
+    let telemetryCode = h !== undefined && h.error.code === "Failed" ? h.error.telemetryCode : undefined;
+    if (errnoShapedCode(telemetryCode) !== undefined || /^ERR_[A-Z0-9_]+$/.test(telemetryCode ?? ""))
+      throw h !== undefined && h.error.code === "Failed" && h.error.cause instanceof Error
         ? h.error.cause
-        : Object.assign(Error("rules entry stat failed"), { code: y });
+        : Object.assign(Error("rules entry stat failed"), {
+            code: telemetryCode,
+          });
     logForDebugging(
-      `claudemd: the storage backend could not type a linked ${r} rules entry (${y ?? h?.error.code ?? "no answer"}) \u2014 checking directly`,
+      `claudemd: the storage backend could not type a linked ${r} rules entry (${telemetryCode ?? h?.error.code ?? "no answer"}) \u2014 checking directly`,
     );
   }
-  return e.stat(n);
+  return e.stat(resolvedPath);
 }
+//@ chunk-e6aww6q8.js:1342542-1342665 layout
 /**
  * cwd 位于 git worktree 时返回 worktree 根与主仓库根，用于跳过主仓库中位于 worktree 之外的层。
  */
-//@ chunk-e6aww6q8.js:1342542-1342665 layout
-function getWorktreeRoots(e) {
-  let n = findGitRoot(e),
-    r = findCanonicalGitRoot(e);
-  return n !== null &&
-    r !== null &&
-    normalizePathForCompare(n) !== normalizePathForCompare(r) &&
-    pathInWorkingPath(n, r)
-    ? { worktreeRoot: n, mainRepoRoot: r }
+function getWorktreeRoots(originalCwd) {
+  let gitRoot = findGitRoot(originalCwd);
+  let canonicalGitRoot = findCanonicalGitRoot(originalCwd);
+  return gitRoot !== null &&
+    canonicalGitRoot !== null &&
+    normalizePathForCompare(gitRoot) !== normalizePathForCompare(canonicalGitRoot) &&
+    pathInWorkingPath(gitRoot, canonicalGitRoot)
+    ? {
+        worktreeRoot: gitRoot,
+        mainRepoRoot: canonicalGitRoot,
+      }
     : null;
 }
 //@ chunk-e6aww6q8.js:1342665-1342744 layout
-function isInMainRepoOutsideWorktree(e, n) {
-  return n !== null && pathInWorkingPath(e, n.mainRepoRoot) && !pathInWorkingPath(e, n.worktreeRoot);
-}
-//@ chunk-e6aww6q8.js:1342744-1342822 layout
-function isSpecialOrUnsafePath(e) {
+function isInMainRepoOutsideWorktree(e, worktreeRoots) {
   return (
-    (Qn(e) && !isWslUncPath(e)) ||
-    Ya(e) ||
-    tP(e) ||
-    isNetDir(e) ||
-    isNetworkMountRoot(e) ||
-    gb(e) ||
-    isMacSpecialPath(e)
+    worktreeRoots !== null &&
+    pathInWorkingPath(e, worktreeRoots.mainRepoRoot) &&
+    !pathInWorkingPath(e, worktreeRoots.worktreeRoot)
   );
 }
+//@ chunk-e6aww6q8.js:1342744-1342822 layout
+function isSpecialOrUnsafePath(resolvedPath) {
+  return (
+    (isUncOrDevicePath(resolvedPath) && !isWslUncPath(resolvedPath)) ||
+    isNetworkMountPath(resolvedPath) ||
+    neverOtherHostMount(resolvedPath) ||
+    isNetDir(resolvedPath) ||
+    isNetworkMountRoot_2(resolvedPath) ||
+    isDevicePrefixPath(resolvedPath) ||
+    isMacSpecialPath(resolvedPath)
+  );
+}
+//@ chunk-e6aww6q8.js:1342822-1343028 layout
 /**
  * 检查目录下是否有 AGENTS.md（仅用于统计 agents_md_count，316 不加载 AGENTS.md 内容）。
  */
-//@ chunk-e6aww6q8.js:1342822-1343028 layout
-async function hasAgentsMd(e) {
-  let n = join_52(e, "AGENTS.md");
-  if (isSpecialOrUnsafePath(n)) return !1;
+async function hasAgentsMd(dir) {
+  let n = join(dir, "AGENTS.md");
+  if (isSpecialOrUnsafePath(n)) return false;
   try {
-    let r = getFsImplementation(),
-      s = safeResolvePath(r, n);
-    if (isSpecialOrUnsafePath(s.resolvedPath) || isNonCanonicalSymlink(n, s)) return !1;
-    let stats = await r.lstat(n);
+    let fsImplementation = getFsImplementation();
+    let s = safeResolvePath(fsImplementation, n);
+    if (isSpecialOrUnsafePath(s.resolvedPath) || isNonCanonicalSymlink(n, s)) return false;
+    let stats = await fsImplementation.lstat(n);
     return stats.isFile() || stats.isSymbolicLink();
   } catch {
-    return !1;
+    return false;
   }
 }
 //@ chunk-e6aww6q8.js:1343028-1343071 layout
 function allowsUserExternalIncludes() {
   return getSessionEntrypoint() !== "local-agent";
 }
+//@ chunk-e6aww6q8.js:1343071-1343365 layout
 /**
  * 按宿主缓存 getMemoryFiles 的结果 promise（键为是否 forced），hold 改变时整体失效。
  */
-//@ chunk-e6aww6q8.js:1343071-1343365 layout
-function getMemoryFilesCached(e, n = !1, r, s) {
-  let h = NA(e),
-    y = W1();
-  if ((h.memo.hold ?? y) !== y) h.memo = { loads: new Map(), moves: new Map() };
+function getMemoryFilesCached(session, n = false, storageV5, credentials) {
+  let h = claudeMdSessionState(session);
+  let y = managedFolderCondition();
+  if ((h.memo.hold ?? y) !== y)
+    h.memo = {
+      loads: new Map(),
+      moves: new Map(),
+    };
   h.memo.hold = y;
   let S = h.memo.loads.get(n);
   if (S) return S.files;
   let L = {
-    files: getMemoryFiles(e.root, h, ICe.of(e), n, r, s).then((G) => ((L.settled = G), G.loaded)),
-    settled: void 0,
+    files: getMemoryFiles(
+      session.root,
+      h,
+      claudeMdAccessTrackerSlot.of(session),
+      n,
+      storageV5,
+      credentials,
+    ).then((memoryFiles) => {
+      L.settled = memoryFiles;
+      return memoryFiles.loaded;
+    }),
+    settled: undefined,
   };
-  return (h.memo.loads.set(n, L), L.files);
+  h.memo.loads.set(n, L);
+  return L.files;
 }
 //@ chunk-e6aww6q8.js:1343365-1343673 layout
-function findSymlinkedMemoryPaths(e, n) {
+function findSymlinkedMemoryPaths(originalCwd, n) {
   let r = new Set();
-  for (let { base: base, path: path } of n) {
-    if (isNetworkMountRoot(base)) continue;
-    let y = relative_19(base, path),
-      parts = y.split(sep_30);
-    if (isAbsolute_23(y) || parts.some((L) => L === ".." || L === "" || L === ".")) continue;
+  for (let { base, path } of n) {
+    if (isNetworkMountRoot_2(base)) continue;
+    let y = relative(base, path);
+    let parts = y.split(sep);
+    if (isAbsolute(y) || parts.some((L) => L === ".." || L === "" || L === ".")) continue;
     let w = base;
     for (let [L, G] of parts.entries()) {
-      w = join_52(w, G);
-      let q = classifyRulesPath(e, w);
+      w = join(w, G);
+      let q = classifyRulesPath(originalCwd, w);
       if (q === "absent") {
         r.add(path);
         break;
@@ -1741,226 +1491,270 @@ function findSymlinkedMemoryPaths(e, n) {
   return r;
 }
 //@ chunk-e6aww6q8.js:1343673-1343920 file-local
-function resolveExcludePatterns(e, n) {
-  if (!isAbsolute_23(n) || n !== resolve_20(n) || isUnsafeClaudeMdDir(n)) return !1;
+function resolveExcludePatterns(originalCwd, n) {
+  if (!isAbsolute(n) || n !== resolve_2(n) || isUnsafeClaudeMdDir(n)) return false;
   if (
-    findIntermediateUncJunction(e, n, { unreadableAncestry: "unverified", surfaceNetworkRaw: !0 }) !== void 0
+    findIntermediateUncJunction(originalCwd, n, {
+      unreadableAncestry: "unverified",
+      surfaceNetworkRaw: true,
+    }) !== undefined
   )
-    return !1;
+    return false;
   let r = n;
   try {
-    r = e.realpathSync(n);
+    r = originalCwd.realpathSync(n);
   } catch (error) {
     let dirToResolve = getErrnoCode(error);
-    if (dirToResolve !== "ENOENT" && dirToResolve !== "ENOTDIR") return !1;
+    if (dirToResolve !== "ENOENT" && dirToResolve !== "ENOTDIR") return false;
   }
   return !isUnsafeClaudeMdDir(r);
 }
 //@ chunk-e6aww6q8.js:1343920-1344001 layout
 function isUnsafeClaudeMdDir(e) {
-  let n = join_52(e, "CLAUDE.md");
-  return Qn(e) || AV(e) || Qn(n) || AV(n) || isNetworkMountRoot(e);
+  let n = join(e, "CLAUDE.md");
+  return (
+    isUncOrDevicePath(e) ||
+    isNetworkishPath(e) ||
+    isUncOrDevicePath(n) ||
+    isNetworkishPath(n) ||
+    isNetworkMountRoot_2(e)
+  );
 }
 //@ chunk-e6aww6q8.js:1344001-1344211 layout
 function classifyRulesPath(e, n) {
-  if (Qn(n) || AV(n)) return "other";
+  if (isUncOrDevicePath(n) || isNetworkishPath(n)) return "other";
   try {
-    let lstatSync = e.lstatSync(n);
-    return lstatSync.isDirectory() && !lstatSync.isSymbolicLink() ? "directory" : "other";
+    let r = e.lstatSync(n);
+    return r.isDirectory() && !r.isSymbolicLink() ? "directory" : "other";
   } catch (error) {
-    let s = getErrnoCode(error);
-    return s === "ENOENT" || s === "ENOTDIR" ? "absent" : "other";
+    let errnoCode = getErrnoCode(error);
+    return errnoCode === "ENOENT" || errnoCode === "ENOTDIR" ? "absent" : "other";
   }
 }
 //@ chunk-e6aww6q8.js:1344211-1344286 file-local
-function getAllMemoryFilePaths(e, n, r, s) {
-  let h = checkMemoryFileAdmissible(e, n, r, 0, s);
-  if (h !== void 0) r.add(h);
+function getAllMemoryFilePaths(e, n, processedPaths, claudeMdExcludeMatcher) {
+  let h = checkMemoryFileAdmissible(e, n, processedPaths, 0, claudeMdExcludeMatcher);
+  if (h !== undefined) processedPaths.add(h);
   return [];
 }
+//@ chunk-e6aww6q8.js:1344286-1349223 fingerprint = getMemoryFiles (0.756)
 /**
  * 发现并读取全部指令记忆文件：托管 CLAUDE.md→托管 claudeMd 设置→托管 .claude/rules→用户 <配置目录>/CLAUDE.md 与 rules→从文件系统根到 cwd 每层的 CLAUDE.md、.claude/CLAUDE.md、.claude/rules/*.md、CLAUDE.local.md→--add-dir 目录（需 CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD）→自动记忆 MEMORY.md。按 claudeMdExcludes 排除，首次加载打 tengu_claudemd__initial_load 并触发 InstructionsLoaded hook。
  */
-//@ chunk-e6aww6q8.js:1344286-1349223 fingerprint = getMemoryFiles (0.756)
-async function getMemoryFiles(e, n, r, s, h, y) {
-  if (wt()) {
+async function getMemoryFiles(root, n, r, s, h, y) {
+  if (isRemoteSessionAvailable()) {
     if (!s) recordMemoryContextBuild(r, []);
-    return { loaded: [], withheld: [], root: getOriginalCwdOrNull() };
+    return {
+      loaded: [],
+      withheld: [],
+      root: getOriginalCwdOrNull(),
+    };
   }
   let startTime = Date.now();
   if (!s) n.walkEpoch++;
-  let walkEpoch = n.walkEpoch,
-    L = () => n.walkEpoch !== walkEpoch;
+  let walkEpoch = n.walkEpoch;
+  let L = () => n.walkEpoch !== walkEpoch;
   logForDiagnosticsNoPII("info", "memory_files_started");
-  let G = [],
-    processedPaths = new Set(),
-    config = getCurrentProjectConfig(),
-    Se = s || config.hasClaudeMdExternalIncludesApproved || !1,
-    ke = createClaudeMdExcludeMatcher(),
-    we = getManagedFilePath(),
-    managedClaudeMd = getMemoryPath("Managed"),
-    managedClaudeRulesDir = getManagedClaudeRulesDir(),
-    Ie = isSettingSourceEnabled("userSettings") ? getClaudeConfigDirOrNull() : null,
-    Me =
-      Ie === null
-        ? null
-        : { configHome: Ie, claudeMd: getMemoryPath("User"), rulesDir: getUserClaudeRulesDir() },
-    We = isInstructionSourceEnabled("projectSettings"),
-    ze = isInstructionSourceEnabled("localSettings"),
-    lt = (We || ze) && !isDiskless() ? getOriginalCwd() : void 0,
-    userClaudeRulesDir = getOriginalCwdOrNull(),
-    nt = lt === void 0 ? null : getWorktreeRoots(lt),
-    pt = [];
-  for (let un = lt; un !== void 0 && un !== parse_5(un).root; un = dirname_31(un)) pt.unshift(un);
+  let G = [];
+  let processedPaths = new Set();
+  let config = getCurrentProjectConfig();
+  let Se = s || config.hasClaudeMdExternalIncludesApproved || false;
+  let claudeMdExcludeMatcher = createClaudeMdExcludeMatcher();
+  let managedFilePath = getManagedFilePath();
+  let managedClaudeMd = getMemoryPath("Managed");
+  let managedClaudeRulesDir = getManagedClaudeRulesDir();
+  let Ie = isSettingSourceEnabled("userSettings") ? getClaudeConfigDirOrNull() : null;
+  let Me =
+    Ie === null
+      ? null
+      : {
+          configHome: Ie,
+          claudeMd: getMemoryPath("User"),
+          rulesDir: getUserClaudeRulesDir(),
+        };
+  let We = isInstructionSourceEnabled("projectSettings");
+  let ze = isInstructionSourceEnabled("localSettings");
+  let lt = (We || ze) && !isDiskless() ? getOriginalCwd() : undefined;
+  let userClaudeRulesDir = getOriginalCwdOrNull();
+  let nt = lt === undefined ? null : getWorktreeRoots(lt);
+  let pt = [];
+  for (let un = lt; un !== undefined && un !== parse(un).root; un = dirname(un)) pt.unshift(un);
   let mapped = pt.map((un) => {
-      let ao = isInMainRepoOutsideWorktree(un, nt),
-        $o = We && !ao,
-        yo = join_52(un, "CLAUDE.local.md");
-      return {
-        dir: un,
-        project: $o,
-        projectFiles: $o
-          ? [join_52(un, "CLAUDE.md"), join_52(un, ".claude", "CLAUDE.md"), ...P5t(un)].filter(
-              (Ho) => !ke(Ho, "Project"),
-            )
-          : [],
-        rulesDir: $o ? join_52(un, ".claude", "rules") : void 0,
-        localFile: ze && !ke(yo, "Local") ? yo : void 0,
-      };
-    }),
-    originalCwd = getFsImplementation(),
-    gt = isDiskless(),
-    At = !gt && resolveExcludePatterns(originalCwd, we),
-    It = Me !== null && h === void 0 && resolveExcludePatterns(originalCwd, Me.configHome),
-    Yt = mapped.findLast(
-      ({ projectFiles: projectFiles, rulesDir: rulesDir, localFile: localFile }) =>
-        projectFiles.length > 0 || rulesDir !== void 0 || localFile !== void 0,
-    )?.dir,
-    qt = h === void 0 && Yt !== void 0 && resolveExcludePatterns(originalCwd, Yt),
-    Zt = findSymlinkedMemoryPaths(originalCwd, [
-      ...(At
-        ? [
-            { base: we, path: managedClaudeMd },
-            { base: we, path: managedClaudeRulesDir },
-          ]
-        : []),
-      ...(It
-        ? [
-            ...(ke(Me.claudeMd, "User") ? [] : [{ base: Me.configHome, path: Me.claudeMd }]),
-            { base: Me.configHome, path: Me.rulesDir },
-          ]
-        : []),
-      ...(qt
-        ? mapped.flatMap(
-            ({ dir: dir, projectFiles: projectFiles, rulesDir: rulesDir, localFile: localFile }) =>
-              [...projectFiles, rulesDir, localFile]
-                .filter((Ho) => Ho !== void 0)
-                .map((Ho) => ({ base: dir, path: Ho })),
+    let ao = isInMainRepoOutsideWorktree(un, nt);
+    let $o = We && !ao;
+    let yo = join(un, "CLAUDE.local.md");
+    return {
+      dir: un,
+      project: $o,
+      projectFiles: $o
+        ? [join(un, "CLAUDE.md"), join(un, ".claude", "CLAUDE.md"), ...instructionFilesInDir(un)].filter(
+            (Ho) => !claudeMdExcludeMatcher(Ho, "Project"),
           )
-        : []),
-    ]),
-    rn = gt ? new Set([...Zt, managedClaudeMd, managedClaudeRulesDir]) : Zt,
-    gitRoot = createHeldPathTracker(e),
-    { held: held } = gitRoot,
-    hn = async (un, ao, $o) =>
-      rn.has(un)
-        ? getAllMemoryFilePaths(un, ao, processedPaths, ke)
-        : isInstructionsMemoryType_3(un, ao, processedPaths, Se, 0, void 0, void 0, ke, $o);
+        : [],
+      rulesDir: $o ? join(un, ".claude", "rules") : undefined,
+      localFile: ze && !claudeMdExcludeMatcher(yo, "Local") ? yo : undefined,
+    };
+  });
+  let originalCwd = getFsImplementation();
+  let gt = isDiskless();
+  let At = !gt && resolveExcludePatterns(originalCwd, managedFilePath);
+  let It = Me !== null && h === undefined && resolveExcludePatterns(originalCwd, Me.configHome);
+  let dir = mapped.findLast(
+    ({ projectFiles, rulesDir, localFile }) =>
+      projectFiles.length > 0 || rulesDir !== undefined || localFile !== undefined,
+  )?.dir;
+  let qt = h === undefined && dir !== undefined && resolveExcludePatterns(originalCwd, dir);
+  let symlinkedMemoryPaths = findSymlinkedMemoryPaths(originalCwd, [
+    ...(At
+      ? [
+          {
+            base: managedFilePath,
+            path: managedClaudeMd,
+          },
+          {
+            base: managedFilePath,
+            path: managedClaudeRulesDir,
+          },
+        ]
+      : []),
+    ...(It
+      ? [
+          ...(claudeMdExcludeMatcher(Me.claudeMd, "User")
+            ? []
+            : [
+                {
+                  base: Me.configHome,
+                  path: Me.claudeMd,
+                },
+              ]),
+          {
+            base: Me.configHome,
+            path: Me.rulesDir,
+          },
+        ]
+      : []),
+    ...(qt
+      ? mapped.flatMap(({ dir, projectFiles, rulesDir, localFile }) =>
+          [...projectFiles, rulesDir, localFile]
+            .filter((Ho) => Ho !== undefined)
+            .map((path) => ({
+              base: dir,
+              path,
+            })),
+        )
+      : []),
+  ]);
+  let rn = gt
+    ? new Set([...symlinkedMemoryPaths, managedClaudeMd, managedClaudeRulesDir])
+    : symlinkedMemoryPaths;
+  let gitRoot = createHeldPathTracker(root);
+  let { held } = gitRoot;
+  let hn = async (un, ao, $o) =>
+    rn.has(un)
+      ? getAllMemoryFilePaths(un, ao, processedPaths, claudeMdExcludeMatcher)
+      : isInstructionsMemoryType_3(
+          un,
+          ao,
+          processedPaths,
+          Se,
+          0,
+          undefined,
+          undefined,
+          claudeMdExcludeMatcher,
+          $o,
+        );
   G.push(...(await hn(managedClaudeMd, "Managed")));
-  let ho = zyr();
+  let ho = remoteClaudeMd();
   if (ho)
     G.push({
-      path: Lus,
+      path: POLICY_HELPER_TAG,
       type: "Managed",
       content: ho,
       globs: [],
-      contentDiffersFromDisk: !0,
+      contentDiffersFromDisk: true,
       rawContent: ho,
     });
-  let yn = getSettingsForSource("policySettings")?.claudeMd;
-  if (yn)
+  let claudeMd = getSettingsForSource("policySettings")?.claudeMd;
+  if (claudeMd)
     G.push({
-      path: T3t,
+      path: MANAGED_SETTINGS_LABEL,
       type: "Managed",
-      content: yn,
+      content: claudeMd,
       globs: [],
-      contentDiffersFromDisk: !0,
-      rawContent: yn,
+      contentDiffersFromDisk: true,
+      rawContent: claudeMd,
     });
   if (!rn.has(managedClaudeRulesDir))
     G.push(
       ...(await processMdRules({
         rulesDir: managedClaudeRulesDir,
         type: "Managed",
-        processedPaths: processedPaths,
+        processedPaths,
         includeExternal: Se,
-        conditionalRule: !1,
+        conditionalRule: false,
         storageV5: h,
-        excludeMatcher: ke,
+        excludeMatcher: claudeMdExcludeMatcher,
       })),
     );
   if (Me !== null) {
-    let { claudeMd: claudeMd, rulesDir: rulesDir } = Me;
-    if (
-      (G.push(
-        ...(rn.has(claudeMd)
-          ? getAllMemoryFilePaths(claudeMd, "User", processedPaths, ke)
-          : await isInstructionsMemoryType_3(
-              claudeMd,
-              "User",
-              processedPaths,
-              !0,
-              0,
-              void 0,
-              h !== void 0 ? { backend: h, key: STORAGE_SPACES.state("user-memory") } : void 0,
-              ke,
-            )),
-      ),
-      !rn.has(rulesDir))
-    )
+    let { claudeMd, rulesDir } = Me;
+    G.push(
+      ...(rn.has(claudeMd)
+        ? getAllMemoryFilePaths(claudeMd, "User", processedPaths, claudeMdExcludeMatcher)
+        : await isInstructionsMemoryType_3(
+            claudeMd,
+            "User",
+            processedPaths,
+            true,
+            0,
+            undefined,
+            h !== undefined
+              ? {
+                  backend: h,
+                  key: STORAGE_SPACES.state("user-memory"),
+                }
+              : undefined,
+            claudeMdExcludeMatcher,
+          )),
+    );
+    if (!rn.has(rulesDir))
       G.push(
         ...(await processMdRules({
-          rulesDir: rulesDir,
+          rulesDir,
           type: "User",
-          processedPaths: processedPaths,
-          includeExternal: !0,
-          conditionalRule: !1,
+          processedPaths,
+          includeExternal: true,
+          conditionalRule: false,
           storageV5: h,
-          excludeMatcher: ke,
+          excludeMatcher: claudeMdExcludeMatcher,
         })),
       );
   }
-  let Kn = We && qt,
-    Xn = [];
-  for (let {
-    dir: dir,
-    project: project,
-    projectFiles: projectFiles,
-    rulesDir: rulesDir,
-    localFile: localFile,
-  } of mapped) {
+  let Kn = We && qt;
+  let Xn = [];
+  for (let { dir, project, projectFiles, rulesDir, localFile } of mapped) {
     if (project && Kn && !n.hasLoggedInitialLoad) Xn.push(hasAgentsMd(dir));
     let rr = dir === lt ? held?.within : held?.above(dir);
-    for (let br of projectFiles) G.push(...(await hn(br, "Project", rr)));
-    if (rulesDir !== void 0 && !rn.has(rulesDir))
+    for (let dotClaudePath of projectFiles) G.push(...(await hn(dotClaudePath, "Project", rr)));
+    if (rulesDir !== undefined && !rn.has(rulesDir))
       G.push(
         ...(await processMdRules({
-          rulesDir: rulesDir,
+          rulesDir,
           type: "Project",
-          processedPaths: processedPaths,
+          processedPaths,
           includeExternal: Se,
-          conditionalRule: !1,
+          conditionalRule: false,
           storageV5: h,
-          excludeMatcher: ke,
+          excludeMatcher: claudeMdExcludeMatcher,
           held: rr,
         })),
       );
-    if (localFile !== void 0) G.push(...(await hn(localFile, "Local", rr)));
+    if (localFile !== undefined) G.push(...(await hn(localFile, "Local", rr)));
   }
-  let fo = claudeMdExtraState.peek(e)?.read;
-  if (fo) G.push(...applyClaudeMdExcludesToInjected(await fo(), ke));
+  let read = claudeMdExtraState.peek(root)?.read;
+  if (read) G.push(...applyClaudeMdExcludesToInjected(await read(), claudeMdExcludeMatcher));
   for (let dir of getAdditionalClaudeMdDirs()) {
-    let projectPath = join_52(dir, "CLAUDE.md");
+    let projectPath = join(dir, "CLAUDE.md");
     G.push(
       ...(await isInstructionsMemoryType_3(
         projectPath,
@@ -1968,13 +1762,13 @@ async function getMemoryFiles(e, n, r, s, h, y) {
         processedPaths,
         Se,
         0,
-        void 0,
-        void 0,
-        ke,
+        undefined,
+        undefined,
+        claudeMdExcludeMatcher,
         held?.within,
       )),
     );
-    let dotClaudePath = join_52(dir, ".claude", "CLAUDE.md");
+    let dotClaudePath = join(dir, ".claude", "CLAUDE.md");
     G.push(
       ...(await isInstructionsMemoryType_3(
         dotClaudePath,
@@ -1982,29 +1776,27 @@ async function getMemoryFiles(e, n, r, s, h, y) {
         processedPaths,
         Se,
         0,
-        void 0,
-        void 0,
-        ke,
+        undefined,
+        undefined,
+        claudeMdExcludeMatcher,
         held?.within,
       )),
     );
-    let rulesDir = join_52(dir, ".claude", "rules");
-    if (
-      (G.push(
-        ...(await processMdRules({
-          rulesDir: rulesDir,
-          type: "Project",
-          processedPaths: processedPaths,
-          includeExternal: Se,
-          conditionalRule: !1,
-          storageV5: h,
-          excludeMatcher: ke,
-          held: held?.within,
-        })),
-      ),
-      isInstructionSourceEnabled("localSettings"))
-    ) {
-      let localPath = join_52(dir, "CLAUDE.local.md");
+    let rulesDir = join(dir, ".claude", "rules");
+    G.push(
+      ...(await processMdRules({
+        rulesDir,
+        type: "Project",
+        processedPaths,
+        includeExternal: Se,
+        conditionalRule: false,
+        storageV5: h,
+        excludeMatcher: claudeMdExcludeMatcher,
+        held: held?.within,
+      })),
+    );
+    if (isInstructionSourceEnabled("localSettings")) {
+      let localPath = join(dir, "CLAUDE.local.md");
       G.push(
         ...(await isInstructionsMemoryType_3(
           localPath,
@@ -2012,9 +1804,9 @@ async function getMemoryFiles(e, n, r, s, h, y) {
           processedPaths,
           Se,
           0,
-          void 0,
-          void 0,
-          ke,
+          undefined,
+          undefined,
+          claudeMdExcludeMatcher,
           held?.within,
         )),
       );
@@ -2022,46 +1814,53 @@ async function getMemoryFiles(e, n, r, s, h, y) {
   }
   if (isAutoMemoryEnabled() && !isAutoMemReadFenced()) {
     await getAutoMemPathState().warmCanonicalWcRoot();
-    let additionalDirs = isAutoMemReadFenced(),
-      ao = getCoworkMemoryIndexContent();
-    if (!additionalDirs && ao !== "") {
-      let $o = getAutoMemEntrypoint(),
-        yo = getAutoMemPath(),
-        Ho = ao === void 0 && isAutoMemPathWithinAutoMemDir($o),
-        rr = async (Hr) => (Hr ? (await safelyReadMemoryFileAsync($o, "AutoMem")).info : null),
-        br = ao !== void 0 ? buildInjectedAutoMemFile(ao) : await rr(Ho);
+    let additionalDirs = isAutoMemReadFenced();
+    let coworkMemoryIndexContent = getCoworkMemoryIndexContent();
+    if (!additionalDirs && coworkMemoryIndexContent !== "") {
+      let autoMemEntrypoint = getAutoMemEntrypoint();
+      let autoMemPath = getAutoMemPath();
+      let Ho = coworkMemoryIndexContent === undefined && isAutoMemPathWithinAutoMemDir(autoMemEntrypoint);
+      let rr = async (Hr) =>
+        Hr ? (await safelyReadMemoryFileAsync(autoMemEntrypoint, "AutoMem")).info : null;
+      let br =
+        coworkMemoryIndexContent !== undefined
+          ? buildInjectedAutoMemFile(coworkMemoryIndexContent)
+          : await rr(Ho);
       if (
         br === null &&
-        ao === void 0 &&
+        coworkMemoryIndexContent === undefined &&
         !s &&
         !isMemoryRecallEnabled() &&
         !env.CLAUDE_CODE_REMOTE &&
         Ho &&
-        (await ensureMemoryIndexBackfill(e.host, yo))
+        (await ensureMemoryIndexBackfill(root.host, autoMemPath))
       )
-        br = await rr(isAutoMemPathWithinAutoMemDir($o));
+        br = await rr(isAutoMemPathWithinAutoMemDir(autoMemEntrypoint));
       if (br) {
         let normalizedPath = normalizePathForCompare(br.path);
-        if (!processedPaths.has(normalizedPath)) (processedPaths.add(normalizedPath), G.push(br));
+        if (!processedPaths.has(normalizedPath)) {
+          processedPaths.add(normalizedPath);
+          G.push(br);
+        }
       }
     }
   }
-  let To = Date.now() - startTime,
-    results = await Promise.all(Xn),
-    vn = L();
+  let durationMs = Date.now() - startTime;
+  let results = await Promise.all(Xn);
+  let vn = L();
   if (!s && !vn) recordMemoryContextBuild(r, G);
   let totalContentLength = G.reduce((sum, ao) => sum + ao.content.length, 0);
   logForDiagnosticsNoPII("info", "memory_files_completed", {
-    duration_ms: To,
+    duration_ms: durationMs,
     file_count: G.length,
     total_content_length: totalContentLength,
   });
   let typeCounts = {};
   for (let un of G) typeCounts[un.type] = (typeCounts[un.type] ?? 0) + 1;
   if (!s && !n.hasLoggedInitialLoad && !vn) {
-    n.hasLoggedInitialLoad = !0;
-    let un = Kn ? count(results, Boolean) : void 0,
-      ao = ZHo(G);
+    n.hasLoggedInitialLoad = true;
+    let agentsMdCount = Kn ? count(results, Boolean) : undefined;
+    let ao = memoryFileSizeSummary(G);
     logEvent("tengu_claudemd__initial_load", {
       file_count: G.length,
       total_content_length: totalContentLength,
@@ -2072,19 +1871,19 @@ async function getMemoryFiles(e, n, r, s, h, y) {
       local_count: typeCounts.Local ?? 0,
       managed_count: typeCounts.Managed ?? 0,
       automem_count: typeCounts.AutoMem ?? 0,
-      agents_md_count: un,
+      agents_md_count: agentsMdCount,
       ...{},
-      duration_ms: To,
+      duration_ms: durationMs,
     });
   }
   if (!s && !vn) {
-    let un = consumeNextEagerLoadReason(n);
-    if (un !== void 0 && hasInstructionsLoadedHook())
+    let eagerLoadReason = consumeNextEagerLoadReason(n);
+    if (eagerLoadReason !== undefined && hasInstructionsLoadedHook())
       for (let file of G) {
         if (!isInstructionsMemoryType(file.type)) continue;
-        if (oEt(file.path)) continue;
-        let $o = file.parent ? "include" : un;
-        executeInstructionsLoadedHooks(e, file.path, file.type, $o, {
+        if (isManagedOrVirtualPath(file.path)) continue;
+        let loadReason = file.parent ? "include" : eagerLoadReason;
+        executeInstructionsLoadedHooks(root, file.path, file.type, loadReason, {
           globs: file.globs,
           parentFilePath: file.parent,
           storageV5: h,
@@ -2092,111 +1891,157 @@ async function getMemoryFiles(e, n, r, s, h, y) {
         });
       }
     for (let ao of n.reportsSetupGuides ? G : [])
-      if (isInstructionsMemoryType(ao.type)) rSt(ao.content, "claudemd", y, h, void 0);
+      if (isInstructionsMemoryType(ao.type)) notifySetupGuideLoaded(ao.content, "claudemd", y, h, undefined);
   }
-  let withheld = gitRoot.withheld();
-  if (!s && !vn) logWithheldInstructionFiles(e, withheld);
-  return { loaded: G, withheld: withheld, root: userClaudeRulesDir };
+  let ko = gitRoot.withheld();
+  if (!s && !vn) logWithheldInstructionFiles(root, ko);
+  return {
+    loaded: G,
+    withheld: ko,
+    root: userClaudeRulesDir,
+  };
 }
 //@ chunk-e6aww6q8.js:1349300-1349439 callgraph-fingerprint = consumeNextEagerLoadReason (0.605)
 function consumeNextEagerLoadReason(e) {
   if (!e.shouldFireHook) return;
-  e.shouldFireHook = !1;
+  e.shouldFireHook = false;
   let nextEagerLoadReason = e.nextEagerLoadReason;
-  return ((e.nextEagerLoadReason = "session_start"), nextEagerLoadReason);
+  e.nextEagerLoadReason = "session_start";
+  return nextEagerLoadReason;
 }
 //@ chunk-e6aww6q8.js:1349495-1349518 placement
 function clearMemoryFilesCacheForHost() {
   clearMemoryFilesCache(getRootSession());
 }
+//@ chunk-e6aww6q8.js:1349518-1349628 file-local
 /**
  * 重置记忆文件缓存并记录下一次加载原因（默认 session_start），供 InstructionsLoaded hook。
  */
-//@ chunk-e6aww6q8.js:1349518-1349628 file-local
-function resetGetMemoryFilesCache(e, n = "session_start") {
-  let r = NA(e);
-  ((r.nextEagerLoadReason = n), (r.shouldFireHook = !0), r.walkEpoch++, clearMemoryFilesCache(e));
+function resetGetMemoryFilesCache(e, nextEagerLoadReason = "session_start") {
+  let r = claudeMdSessionState(e);
+  r.nextEagerLoadReason = nextEagerLoadReason;
+  r.shouldFireHook = true;
+  r.walkEpoch++;
+  clearMemoryFilesCache(e);
 }
 //@ chunk-e6aww6q8.js:1349628-1349671 fingerprint = nextEagerLoadReason (1)
-function nextEagerLoadReason(e = "session_start") {
-  resetGetMemoryFilesCache(getRootSession(), e);
+function nextEagerLoadReason(nextEagerLoadReason = "session_start") {
+  resetGetMemoryFilesCache(getRootSession(), nextEagerLoadReason);
 }
 //@ chunk-e6aww6q8.js:1349671-1349717 placement
-function Z8s(e) {
-  NA(e).hasLoggedInitialLoad = !1;
+/**
+ * 重置“首次加载已记录”标记。
+ */
+function resetInitialLoadLogged(e) {
+  claudeMdSessionState(e).hasLoggedInitialLoad = false;
 }
 //@ chunk-e6aww6q8.js:1349717-1349763 placement
-function e9s(e) {
-  NA(e).hasLoggedInitialLoad = !0;
+/**
+ * 标记“首次加载已记录”。
+ */
+function markInitialLoadLogged(session) {
+  claudeMdSessionState(session).hasLoggedInitialLoad = true;
 }
 //@ chunk-e6aww6q8.js:1349763-1349807 placement
-function t9s(e) {
-  NA(e).reportsSetupGuides = !1;
+/**
+ * 关闭安装向导的上报。
+ */
+function disableSetupGuideReports(session) {
+  claudeMdSessionState(session).reportsSetupGuides = false;
 }
 //@ chunk-e6aww6q8.js:1349807-1349903 placement
 function getLargeMemoryFiles(files) {
-  let n = getMaxMemoryFileChars();
-  return files.filter((r) => !oEt(r.path) && isInstructionsMemoryType(r.type) && r.content.length > n);
+  let maxMemoryFileChars = getMaxMemoryFileChars();
+  return files.filter(
+    (file) =>
+      !isManagedOrVirtualPath(file.path) &&
+      isInstructionsMemoryType(file.type) &&
+      file.content.length > maxMemoryFileChars,
+  );
 }
 //@ chunk-e6aww6q8.js:1349903-1349972 placement
-function aYe(e) {
-  return L_e(e).filter((n) => !oEt(n.path) && isInstructionsMemoryType(n.type));
+/**
+ * 过滤出指令类（非托管）的记忆文件。
+ */
+function instructionMemoryFiles(e) {
+  return includedMemoryFiles(e).filter(
+    (n) => !isManagedOrVirtualPath(n.path) && isInstructionsMemoryType(n.type),
+  );
 }
 //@ chunk-e6aww6q8.js:1349972-1350121 placement
 function summarizeMemoryFileSizes(e) {
-  let n = 0,
-    r = 0;
-  for (let s of e) ((n += s.content.length), (r = Math.max(r, s.content.length)));
-  return { fileCount: e.length, totalChars: n, largestChars: r };
+  let totalChars = 0;
+  let r = 0;
+  for (let s of e) {
+    totalChars += s.content.length;
+    r = Math.max(r, s.content.length);
+  }
+  return {
+    fileCount: e.length,
+    totalChars,
+    largestChars: r,
+  };
 }
 //@ chunk-e6aww6q8.js:1350121-1350156 placement
-function ZHo(e) {
-  return summarizeMemoryFileSizes(aYe(e));
+/**
+ * 汇总记忆文件的大小。
+ */
+function memoryFileSizeSummary(e) {
+  return summarizeMemoryFileSizes(instructionMemoryFiles(e));
 }
 //@ chunk-e6aww6q8.js:1350156-1350323 placement
 function getMemoryFileLimits(e, n) {
-  let r = getMaxMemoryFileChars(n),
-    s = FHo(n),
-    h = summarizeMemoryFileSizes(e);
+  let maxMemoryFileChars_2 = getMaxMemoryFileChars(n);
+  let s = maxMemoryFileChars(n);
+  let h = summarizeMemoryFileSizes(e);
   return {
-    limitChars: r,
+    limitChars: maxMemoryFileChars_2,
     totalLimitChars: s,
     ...h,
-    filesOverLimit: count(e, (y) => y.content.length > r),
+    filesOverLimit: count(e, (y) => y.content.length > maxMemoryFileChars_2),
     totalOverLimit: h.totalChars > s,
   };
 }
 //@ chunk-e6aww6q8.js:1350323-1350362 placement
-function n9s(e, n) {
-  return getMemoryFileLimits(aYe(e), n);
+/**
+ * 计算记忆文件的大小上限统计。
+ */
+function memoryFileLimits(e, n) {
+  return getMemoryFileLimits(instructionMemoryFiles(e), n);
 }
+//@ chunk-e6aww6q8.js:1350362-1350609 placement
 /**
  * 记忆文件总量超过上限时返回统计与最大的三个文件，否则 null。
  */
-//@ chunk-e6aww6q8.js:1350362-1350609 placement
-function getOversizedMemoryWarning(e) {
-  let n = aYe(e),
-    r = getMemoryFileLimits(n, void 0);
+function getOversizedMemoryWarning(memoryFiles) {
+  let n = instructionMemoryFiles(memoryFiles);
+  let memoryFileLimits = getMemoryFileLimits(n, undefined);
   if (
-    n.reduce((y, S) => (S.content.length > r.limitChars ? y : y + S.content.length), 0) <= r.totalLimitChars
+    n.reduce(
+      (acc, S) => (S.content.length > memoryFileLimits.limitChars ? acc : acc + S.content.length),
+      0,
+    ) <= memoryFileLimits.totalLimitChars
   )
     return null;
-  let sliced = n.toSorted((y, S) => S.content.length - y.content.length).slice(0, 3);
-  return { summary: r, largest: sliced };
+  let largest = n.toSorted((y, S) => S.content.length - y.content.length).slice(0, 3);
+  return {
+    summary: memoryFileLimits,
+    largest,
+  };
 }
+//@ chunk-e6aww6q8.js:1350685-1350851 placement
 /**
  * 判断记忆文件是否注入上下文（自动记忆开启召回时、项目文件被开关关闭时或内容为空时不注入）。
  */
-//@ chunk-e6aww6q8.js:1350685-1350851 placement
 function shouldInjectMemoryFile(e) {
-  if (e.type === "AutoMem" && isMemoryRecallEnabled()) return !1;
+  if (e.type === "AutoMem" && isMemoryRecallEnabled()) return false;
   if (
     (e.type === "Project" || e.type === "Local") &&
-    getFeatureValue_CACHED_MAY_BE_STALE("tengu_paper_halyard", !1)
+    getFeatureValue_CACHED_MAY_BE_STALE("tengu_paper_halyard", false)
   )
-    return !1;
-  if (!e.content) return !1;
-  return !0;
+    return false;
+  if (!e.content) return false;
+  return true;
 }
 //@ chunk-e6aww6q8.js:1350851-1351029 placement
 function recordMemoryContextBuild(e, n) {
@@ -2208,114 +2053,192 @@ function recordMemoryContextBuild(e, n) {
   });
 }
 //@ chunk-e6aww6q8.js:1351029-1351058 placement
-var r9s = (e, n) => L5e(L_e(e, n));
+/**
+ * 记忆文件超限时的预警（统计与最大三个文件）。
+ */
+var oversizedMemoryWarning = (e, n) => formatMemoryInstruction(includedMemoryFiles(e, n));
 //@ chunk-e6aww6q8.js:1351058-1351122 placement
-function L_e(e, n) {
+/**
+ * 过滤出应包含且在指定类型内的记忆文件。
+ */
+function includedMemoryFiles(e, n) {
   return e.filter((r) => (!n || n(r.type)) && shouldIncludeMemoryFile(r));
 }
+//@ chunk-e6aww6q8.js:1351244-1351476 fingerprint = getManagedAndUserConditionalRules (0.896)
 /**
  * 取托管与用户 rules 中的条件规则（带 paths: frontmatter）。
  */
-//@ chunk-e6aww6q8.js:1351244-1351476 fingerprint = getManagedAndUserConditionalRules (0.896)
-async function getManagedAndUserConditionalRules(e, n, r) {
+async function getManagedAndUserConditionalRules(targetPath, processedPaths, r) {
   if (env.CLAUDE_CODE_DISABLE_CLAUDE_MDS) return [];
   let result = [];
   if (!isDiskless())
-    result.push(...(await processConditionedMdRules(e, getManagedClaudeRulesDir(), "Managed", n, !1, r)));
+    result.push(
+      ...(await processConditionedMdRules(
+        targetPath,
+        getManagedClaudeRulesDir(),
+        "Managed",
+        processedPaths,
+        false,
+        r,
+      )),
+    );
   let h = isSettingSourceEnabled("userSettings") ? getUserRulesDirOrNull() : null;
-  if (h !== null) result.push(...(await processConditionedMdRules(e, h, "User", n, !0, r)));
+  if (h !== null)
+    result.push(...(await processConditionedMdRules(targetPath, h, "User", processedPaths, true, r)));
   return result;
 }
+//@ chunk-e6aww6q8.js:1351476-1352178 fingerprint = getMemoryFilesForNestedDirectory (0.919)
 /**
  * 访问嵌套目录（cwd 以下）时补加载该目录的 CLAUDE.md、.claude/CLAUDE.md、CLAUDE.local.md 与 rules；CLAUDE_CODE_DISABLE_CLAUDE_MDS 或 diskless 时为空。
  */
-//@ chunk-e6aww6q8.js:1351476-1352178 fingerprint = getMemoryFilesForNestedDirectory (0.919)
-async function getMemoryFilesForNestedDirectory(e, n, r, { skipProject: s = !1, held: h } = {}) {
+async function getMemoryFilesForNestedDirectory(
+  dir,
+  targetPath,
+  processedPaths,
+  { skipProject: s = false, held: h } = {},
+) {
   if (env.CLAUDE_CODE_DISABLE_CLAUDE_MDS) return [];
   if (isDiskless()) return [];
-  let result = [],
-    S = isInstructionSourceEnabled("projectSettings") && !s;
+  let result = [];
+  let S = isInstructionSourceEnabled("projectSettings") && !s;
   if (S) {
-    let projectPath = join_52(e, "CLAUDE.md");
+    let projectPath = join(dir, "CLAUDE.md");
     result.push(
-      ...(await isInstructionsMemoryType_3(projectPath, "Project", r, !1, 0, void 0, void 0, void 0, h)),
+      ...(await isInstructionsMemoryType_3(
+        projectPath,
+        "Project",
+        processedPaths,
+        false,
+        0,
+        undefined,
+        undefined,
+        undefined,
+        h,
+      )),
     );
-    let dotClaudePath = join_52(e, ".claude", "CLAUDE.md");
+    let dotClaudePath = join(dir, ".claude", "CLAUDE.md");
     result.push(
-      ...(await isInstructionsMemoryType_3(dotClaudePath, "Project", r, !1, 0, void 0, void 0, void 0, h)),
+      ...(await isInstructionsMemoryType_3(
+        dotClaudePath,
+        "Project",
+        processedPaths,
+        false,
+        0,
+        undefined,
+        undefined,
+        undefined,
+        h,
+      )),
     );
   }
   if (isInstructionSourceEnabled("localSettings")) {
-    let localPath = join_52(e, "CLAUDE.local.md");
+    let localPath = join(dir, "CLAUDE.local.md");
     result.push(
-      ...(await isInstructionsMemoryType_3(localPath, "Local", r, !1, 0, void 0, void 0, void 0, h)),
+      ...(await isInstructionsMemoryType_3(
+        localPath,
+        "Local",
+        processedPaths,
+        false,
+        0,
+        undefined,
+        undefined,
+        undefined,
+        h,
+      )),
     );
   }
   if (S) {
-    let rulesDir = join_52(e, ".claude", "rules"),
-      unconditionalProcessedPaths = new Set(r);
-    (result.push(
+    let rulesDir = join(dir, ".claude", "rules");
+    let unconditionalProcessedPaths = new Set(processedPaths);
+    result.push(
       ...(await processMdRules({
-        rulesDir: rulesDir,
+        rulesDir,
         type: "Project",
         processedPaths: unconditionalProcessedPaths,
-        includeExternal: !1,
-        conditionalRule: !1,
+        includeExternal: false,
+        conditionalRule: false,
         held: h,
       })),
-    ),
-      result.push(...(await processConditionedMdRules(n, rulesDir, "Project", r, !1, void 0, h))));
-    for (let path of unconditionalProcessedPaths) r.add(path);
+    );
+    result.push(
+      ...(await processConditionedMdRules(
+        targetPath,
+        rulesDir,
+        "Project",
+        processedPaths,
+        false,
+        undefined,
+        h,
+      )),
+    );
+    for (let path of unconditionalProcessedPaths) processedPaths.add(path);
   }
   return result;
 }
 //@ chunk-e6aww6q8.js:1352178-1352361 fingerprint = getConditionalRulesForCwdLevelDirectory (0.799)
-async function getConditionalRulesForCwdLevelDirectory(e, n, r, s) {
+async function getConditionalRulesForCwdLevelDirectory(dir, targetPath, processedPaths, s) {
   if (env.CLAUDE_CODE_DISABLE_CLAUDE_MDS || !isInstructionSourceEnabled("projectSettings")) return [];
   if (isDiskless()) return [];
-  let rulesDir = join_52(e, ".claude", "rules");
-  return processConditionedMdRules(n, rulesDir, "Project", r, !1, void 0, s);
+  let rulesDir = join(dir, ".claude", "rules");
+  return processConditionedMdRules(targetPath, rulesDir, "Project", processedPaths, false, undefined, s);
 }
+//@ chunk-e6aww6q8.js:1352361-1352863 fingerprint = processConditionedMdRules (0.808)
 /**
  * 按目标文件路径匹配条件规则的 paths glob，命中则加载（claudemd_rule_globs）。
  */
-//@ chunk-e6aww6q8.js:1352361-1352863 fingerprint = processConditionedMdRules (0.808)
-async function processConditionedMdRules(e, n, r, s, h, y, S) {
+async function processConditionedMdRules(
+  targetPath,
+  n,
+  type,
+  processedPaths,
+  includeExternal,
+  storageV5,
+  held,
+) {
   let conditionedRuleMdFiles = await processMdRules({
-      rulesDir: n,
-      type: r,
-      processedPaths: s,
-      includeExternal: h,
-      conditionalRule: !0,
-      storageV5: y,
-      held: S,
-    }),
-    L = r === "Project" ? dirname_31(dirname_31(n)) : getOriginalCwd(),
-    G = isAbsolute_23(e) ? relative_19(L, e) : e;
-  if (isAbsolute_23(e) && (!G || G.startsWith("..") || isAbsolute_23(G))) {
-    let q = dirname_31(e),
-      Z = safeResolvePath(getFsImplementation(), q),
-      resolvedPath = Z.resolvedPath;
+    rulesDir: n,
+    type,
+    processedPaths,
+    includeExternal,
+    conditionalRule: true,
+    storageV5,
+    held,
+  });
+  let L = type === "Project" ? dirname(dirname(n)) : getOriginalCwd();
+  let G = isAbsolute(targetPath) ? relative(L, targetPath) : targetPath;
+  if (isAbsolute(targetPath) && (!G || G.startsWith("..") || isAbsolute(G))) {
+    let q = dirname(targetPath);
+    let Z = safeResolvePath(getFsImplementation(), q);
+    let resolvedPath = Z.resolvedPath;
     if (resolvedPath !== q && !isNonCanonicalSymlink(q, Z))
-      G = relative_19(L, join_52(resolvedPath, basename_23(e)));
+      G = relative(L, join(resolvedPath, basename(targetPath)));
   }
-  return conditionedRuleMdFiles.filter((q) => {
-    if (!q.globs || q.globs.length === 0) return !1;
-    if (!G || G.startsWith("..") || isAbsolute_23(G)) return !1;
-    return h3t.default().add(xst(q.globs, "claudemd_rule_globs")).ignores(G);
+  return conditionedRuleMdFiles.filter((file) => {
+    if (!file.globs || file.globs.length === 0) return false;
+    if (!G || G.startsWith("..") || isAbsolute(G)) return false;
+    return minimatchModule
+      .default()
+      .add(filterUsableIgnorePatterns(file.globs, "claudemd_rule_globs"))
+      .ignores(G);
   });
 }
+//@ chunk-e6aww6q8.js:1352863-1353090 fingerprint = getExternalClaudeMdIncludes (0.793)
 /**
  * 从已加载文件中挑出 cwd 外的 include（parent 存在且非 User 类型），用于提示用户审批。
  */
-//@ chunk-e6aww6q8.js:1352863-1353090 fingerprint = getExternalClaudeMdIncludes (0.793)
 function getExternalClaudeMdIncludes(files) {
   let externals = [];
   for (let file of files) {
     if (file.type !== "User" && file.parent && !isWithinOriginalCwd(file.path))
-      externals.push({ path: file.path, parent: file.parent });
-    if (file.type !== "User" && file.linkedFrom !== void 0 && !isWithinOriginalCwd(file.path))
-      externals.push({ path: file.path, parent: file.linkedFrom });
+      externals.push({
+        path: file.path,
+        parent: file.parent,
+      });
+    if (file.type !== "User" && file.linkedFrom !== undefined && !isWithinOriginalCwd(file.path))
+      externals.push({
+        path: file.path,
+        parent: file.linkedFrom,
+      });
   }
   return externals;
 }
@@ -2324,41 +2247,51 @@ function hasExternalClaudeMdIncludes(files) {
   return getExternalClaudeMdIncludes(files).length > 0;
 }
 //@ chunk-e6aww6q8.js:1353286-1353294 placement
-var W3t;
+/**
+ * 可替换的 Markdown 词法分析器实现。
+ */
+var markdownLexerOverride;
 //@ chunk-e6aww6q8.js:1353294-1353316 placement
-function q3t(e) {
-  W3t = e;
+/**
+ * 注册 Markdown 词法分析器。
+ */
+function setMarkdownLexer(getUserContextInstructionFiles) {
+  markdownLexerOverride = getUserContextInstructionFiles;
 }
 //@ chunk-e6aww6q8.js:1353316-1353381 placement
-function K3t(e, n, r) {
-  return W3t?.(e, n, r) ?? Promise.resolve(void 0);
+/**
+ * 调用注册的 Markdown 词法分析器（未注册时返回空的 Promise）。
+ */
+function lexMarkdownWith(session, n, r) {
+  return markdownLexerOverride?.(session, n, r) ?? Promise.resolve(undefined);
 }
+//@ chunk-e6aww6q8.js:3155916-3156204 fingerprint = isMemoryFilePath (0.962)
 /**
  * 判断路径是否为指令文件（CLAUDE.md、CLAUDE.local.md 或 .claude/rules/*.md），返回其所属项目目录。
  */
-//@ chunk-e6aww6q8.js:3155916-3156204 fingerprint = isMemoryFilePath (0.962)
 function isMemoryFilePath(filePath) {
-  let name = basename_46(filePath),
-    r,
-    index = filePath.indexOf(`${sep_48}.claude${sep_48}rules${sep_48}`);
-  if (index >= 0) r = name.endsWith(".md") ? filePath.slice(0, index) : void 0;
-  else if (name === "CLAUDE.md" || name === "CLAUDE.local.md" || NKe.includes(name)) {
-    if (((r = dirname_47(filePath)), name === "CLAUDE.md" && basename_46(r) === ".claude")) r = dirname_47(r);
+  let name = basename(filePath);
+  let r;
+  let index = filePath.indexOf(`${sep}.claude${sep}rules${sep}`);
+  if (index >= 0) r = name.endsWith(".md") ? filePath.slice(0, index) : undefined;
+  else if (name === "CLAUDE.md" || name === "CLAUDE.local.md" || INSTRUCTION_FILE_NAMES.includes(name)) {
+    r = dirname(filePath);
+    if (name === "CLAUDE.md" && basename(r) === ".claude") r = dirname(r);
   }
-  return r !== void 0 && r !== parse_9(r).root ? r : void 0;
+  return r !== undefined && r !== parse(r).root ? r : undefined;
 }
+//@ chunk-4121qate.js:104278-104481 fingerprint = MEMORY_INSTRUCTION_PROMPT (1)
 /**
  * 注入 CLAUDE.md 内容前的固定前言（These instructions OVERRIDE any default behavior）。
  */
-//@ chunk-4121qate.js:104278-104481 fingerprint = MEMORY_INSTRUCTION_PROMPT (1)
 var MEMORY_INSTRUCTION_PROMPT =
   "Codebase and user instructions are shown below. Be sure to adhere to these instructions. IMPORTANT: These instructions OVERRIDE any default behavior and you MUST follow them exactly as written.";
+//@ chunk-4121qate.js:104481-104870 fingerprint = getClaudeMds (0.745)
 /**
  * 记忆类型 → 系统提示里文件标题后的说明（project instructions / user's private global instructions 等）。
  */
-//@ chunk-4121qate.js:104481-104870 fingerprint = getClaudeMds (0.745)
-function getClaudeMds(e) {
-  switch (e) {
+function getClaudeMds(type) {
+  switch (type) {
     case "Project":
       return " (project instructions, checked into the codebase)";
     case "Local":
@@ -2371,26 +2304,31 @@ function getClaudeMds(e) {
       return " (user's private global instructions for all projects)";
   }
 }
+//@ chunk-cjydagjy.js:15359-15659 callgraph-fingerprint = shouldShowClaudeMdExternalIncludesWarning (0.207)
 /**
  * 列出托管 CLAUDE.md/rules 中引用了外部文件的 include，供外部引用审批对话框使用。
  */
-//@ chunk-cjydagjy.js:15359-15659 callgraph-fingerprint = shouldShowClaudeMdExternalIncludesWarning (0.207)
 async function shouldShowClaudeMdExternalIncludesWarning() {
-  if (isClaudeMdLoadingDisabled() || wt() || isDiskless()) return [];
-  let e = new Set(),
-    r = getCurrentProjectConfig().hasClaudeMdExternalIncludesApproved || !1;
+  if (isClaudeMdLoadingDisabled() || isRemoteSessionAvailable() || isDiskless()) return [];
+  let e = new Set();
+  let hasClaudeMdExternalIncludesApproved =
+    getCurrentProjectConfig().hasClaudeMdExternalIncludesApproved || false;
   return [
-    ...(await isInstructionsMemoryType_3(getMemoryPath("Managed"), "Managed", e, r)),
+    ...(await isInstructionsMemoryType_3(
+      getMemoryPath("Managed"),
+      "Managed",
+      e,
+      hasClaudeMdExternalIncludesApproved,
+    )),
     ...(await processMdRules({
       rulesDir: getManagedClaudeRulesDir(),
       type: "Managed",
       processedPaths: e,
-      includeExternal: r,
-      conditionalRule: !1,
+      includeExternal: hasClaudeMdExternalIncludesApproved,
+      conditionalRule: false,
     })),
   ].map((s) => [s.path, s.content, s.unverified]);
 }
-
 export {
   getMemoryFilesCached,
   getLargeMemoryFiles,
@@ -2400,48 +2338,48 @@ export {
   clearMemoryFilesCacheForHost,
   isLocalSettingsReadable,
   shouldShowClaudeMdExternalIncludesWarning,
-  oEt,
+  isManagedOrVirtualPath,
   shouldInjectMemoryFile,
-  VGt,
+  setClaudeMdJudgedBy,
   getWorktreeRoots,
   beginCwdRelocationHold,
   getMemoryFilesForNestedDirectory,
   isInMainRepoOutsideWorktree,
-  r9s,
+  oversizedMemoryWarning,
   resetGetMemoryFilesCache,
-  Z8s,
+  resetInitialLoadLogged,
   getExternalClaudeMdIncludes,
   getClaudeMds,
   MEMORY_INSTRUCTION_PROMPT,
   hasExternalClaudeMdIncludes,
-  s$i,
+  withNoDenyRules,
   isInstructionsMemoryType_3,
   MAX_INCLUDE_DEPTH,
   processMdRules,
-  NA,
+  claudeMdSessionState,
   isSpecialOrUnsafePath,
   isNonCanonicalSymlink,
   lexMarkdown,
   claudeMdExtraState,
   getAdditionalClaudeMdDirs,
-  K3t,
+  lexMarkdownWith,
   getManagedAndUserConditionalRules,
   getConditionalRulesForCwdLevelDirectory,
   applyClaudeMdExcludesToInjected,
-  HQ,
-  x0o,
+  MEMORY_SIZE_SOFT_RATIO,
+  MEMORY_SIZE_WARN_RATIO,
   ClaudeMdAccessTracker,
-  q0o,
-  q3t,
-  L_e,
+  MD_LINK_RE,
+  setMarkdownLexer,
+  includedMemoryFiles,
   stripHtmlComments,
   nextEagerLoadReason,
   isMemoryFilePath,
   isInstructionSourceEnabled,
   createHeldPathTracker,
   claudeMdLoadStateByHost,
-  n9s,
+  memoryFileLimits,
   processMemoryFile,
-  t9s,
-  e9s,
+  disableSetupGuideReports,
+  markInitialLoadLogged,
 };

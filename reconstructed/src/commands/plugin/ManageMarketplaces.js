@@ -15,15 +15,15 @@ import {
   isOfficialMarketplaceName_2,
   removedMarketplaceMessage,
   blockedPluginsNotice,
-  ubr,
+  marketplaceEntryGoneText,
   formatPluginDirectoryBlockedMessage,
-  EPi,
+  officialMarketplaceBlockedText,
   OFFICIAL_MARKETPLACE_NAME,
   isPluginDirectorySource,
 } from "../../utils/plugins/officialMarketplaceNames.js";
-import { Me } from "../../components/design-system/ThemeProvider.js";
+import { useTheme_2 } from "../../components/design-system/ThemeProvider.js";
 import { useActivePlugins } from "../../state/AppState.js";
-import { y, R, P, Q, j } from "../../../vendor/react/cjs/react.production.js";
+import { y, R, P, Q, init_react_production } from "../../../vendor/react/cjs/react.production.js";
 import { useClock } from "../../ink/components/ClockContext.js";
 import {
   loadKnownMarketplacesWithDeclared,
@@ -48,27 +48,27 @@ import {
   readClaudeAiMarketplaceRegistry,
   formatGitSourceSpec,
   addClaudeAiMarketplace,
-  hBr,
+  listedAsSuffix,
   formatMarketplaceScopeLabel,
-  Qbt,
+  noCliNameLabel,
   formatClaudeAiMarketplaceLabel,
 } from "../../utils/plugins/claudeAiMarketplaces.js";
 import { count } from "../../utils/collections.js";
 import { listReservedNameRefusals } from "../../utils/plugins/marketplaceSources.js";
-import { QE } from "../../utils/plugins/pluginGates.js";
+import { isPluginDirectoryModeOn } from "../../utils/plugins/pluginGates.js";
 import { quotedPrintable, printableMessage, printableName } from "../../utils/printableName.js";
 import { logEvent } from "../../services/analytics/index.js";
-import { r$e } from "../../utils/telemetry/pluginTelemetry.js";
+import { marketplaceForTelemetry } from "../../utils/telemetry/pluginTelemetry.js";
 import { isOfficialMarketplaceName_3, findPluginName } from "../../utils/plugins/pluginIdentifier.js";
-import { ic } from "../../utils/plugins/cacheUtils.js";
+import { refreshPluginCaches } from "../../utils/plugins/cacheUtils.js";
 import {
   stripInvisibleKeepEmoji,
   stripInvisibleKeepNewlines,
 } from "../../utils/settings/marketplaceSettingsAliases.js";
-import { re } from "../../../vendor/@inquirer/figures/dist/esm/index.js";
+import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/index.js";
 import { pluginDirectoryPolicyBlockHint } from "../../utils/plugins/marketplacePolicy.js";
 import { updateSettingsForSourceWithTransform } from "../../utils/settings/settings.js";
-import { Bd } from "../../utils/plugins/commandSource.js";
+import { CommandSourceError } from "../../utils/plugins/commandSource.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { errorMessage } from "../../utils/errors.js";
 import {
@@ -82,7 +82,11 @@ import {
 } from "../../utils/plugins/marketplaceErrors.js";
 import { isSafeCliArg, runCommandHint } from "../../utils/worktreeResumeHint.js";
 import { plural } from "../../utils/stringUtils.js";
-import { r, e, Fragment } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default_2,
+  jsxProd_default,
+  Fragment,
+} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Box } from "../../ink/components/Text.js";
 import { shouldSkipPluginAutoupdate } from "../../utils/config.js";
 import { logDirectoryToggle } from "../../utils/plugins/pluginDirectoryTelemetry.js";
@@ -96,620 +100,824 @@ import { FocusColumn } from "../../components/design-system/FocusColumn.js";
 import { ErrorText } from "../../components/ErrorText.js";
 import { BulletRow } from "../../components/design-system/BulletRow.js";
 import { PluginActionSelect } from "./pluginDetailsHelpers.js";
-import { dgn, getMarketplaceAutoUpdate } from "../../utils/plugins/marketplaceAutoUpdate.js";
+import {
+  AUTOUPDATE_SETTING_SOURCES_TEXT,
+  getMarketplaceAutoUpdate,
+} from "../../utils/plugins/marketplaceAutoUpdate.js";
 import { w } from "../../../vendor/react/compiler-runtime.js";
 import { KeyboardShortcutHint } from "../../components/design-system/KeyboardShortcutHint.js";
-import { kk } from "../../utils/plugins/commandSourceErrors.js";
+import { commandSourceSession } from "../../utils/plugins/commandSourceErrors.js";
 import { isMarketplaceAutoUpdate, ANTHROPIC_PLUGIN_DIRECTORY } from "../../utils/plugins/schemas.js";
 
 //@ chunk-vrb44rx7.js:103318-103453 placement
 var BUILTIN_MARKETPLACE_OFF_NOTICE = `${OFFICIAL_MARKETPLACE_DISPLAY} is off. Plugins you installed from it stay installed and keep updating. Turn it back on in /plugin \u2192 Marketplaces.`;
 //@ chunk-vrb44rx7.js:103453-122462 fingerprint = ManageMarketplaces (0.48)
 function ManageMarketplaces({
-  setViewState: setViewState,
-  error: error,
-  setError: setError,
-  setResult: setResult,
-  exitState: exitState,
-  onManageComplete: onManageComplete,
-  targetMarketplace: targetMarketplace,
-  action: action,
+  setViewState,
+  error,
+  setError,
+  setResult,
+  exitState,
+  onManageComplete,
+  targetMarketplace,
+  action,
 }) {
-  let { storageV5: storageV5, credentials: credentials } = Me(),
-    K = useActivePlugins(),
-    [V, B] = y([]),
-    [_, J] = y([]),
-    [pe, fe] = y({ available: [], hosted: [], browseOnly: [] }),
-    [me, ne] = y(null),
-    hasAttemptedAutoAction = R(null),
-    [W, Oe] = y(!0),
-    [rt, et] = y(0),
-    [je, ae] = y(!1),
-    [Se, kt] = y(null),
-    [Tt, Ke] = y(null),
-    [Et, He] = y(null),
-    [ct, Ct] = y("list"),
-    [oe, ft] = y(null),
-    [at, Ot] = y("browse"),
-    an = R(!1),
-    Yt = useClock(),
-    _e = R(void 0),
-    qe = R(!0),
-    vt = R(!1);
-  (P(
+  let { storageV5, credentials } = useTheme_2();
+  let activePlugins = useActivePlugins();
+  let [marketplaceStates, setMarketplaceStates] = y([]);
+  let [_, J] = y([]);
+  let [pe, fe] = y({
+    available: [],
+    hosted: [],
+    browseOnly: [],
+  });
+  let [prev, ne] = y(null);
+  let hasAttemptedAutoAction = R(null);
+  let [loading, setLoading] = y(true);
+  let [selectedIndex, setSelectedIndex] = y(0);
+  let [je, ae] = y(false);
+  let [processError, setProcessError] = y(null);
+  let [successMessage, setSuccessMessage] = y(null);
+  let [progressMessage, setProgressMessage] = y(null);
+  let [internalView, setInternalView] = y("list");
+  let [selectedMarketplace, setSelectedMarketplace] = y(null);
+  let [detailsMenuIndex, setDetailsMenuIndex] = y("browse");
+  let an = R(false);
+  let clock = useClock();
+  let _e = R(undefined);
+  let qe = R(true);
+  let vt = R(false);
+  P(
     () => () => {
-      ((qe.current = !1), _e.current?.());
+      qe.current = false;
+      _e.current?.();
     },
     [],
-  ),
-    P(() => {
-      async function loadMarketplaces() {
-        try {
-          let Te = await loadKnownMarketplacesWithDeclared(storageV5),
-            { enabled: enabled, disabled: disabled } = await loadAllPlugins(storageV5, credentials),
-            allPlugins = [...enabled, ...disabled];
-          J(Object.keys(getInstalledPlugins().plugins));
-          let { marketplaces: marketplaces, failures: failures } = await loadMarketplacesWithErrors(
-              Te,
-              storageV5,
-            ),
-            Ce = await listClaudeAiMarketplaces(credentials).catch(() => null);
-          ((hasAttemptedAutoAction.current = Ce),
-            fe({ ...filterUnaddedClaudeAiMarketplaces(Ce, Te), browseOnly: Ce?.browseOnly ?? [] }));
-          let Ve = await withOfficialMarketplaceRow(
-            buildMarketplaceRows(marketplaces, failures, allPlugins, await readClaudeAiMarketplaceRegistry()),
-            Te,
-          );
-          B(Ve);
-          let successCount = count(marketplaces, (Jt) => Jt.data !== null),
-            errorResult = formatMarketplaceLoadingErrors(failures, successCount);
-          if (errorResult)
-            if (
-              errorResult.type === "warning" ||
-              (targetMarketplace !== void 0 && action !== "remove" && action !== "update")
-            )
-              kt(errorResult.message);
-            else throw Error(errorResult.message);
-          if (targetMarketplace && !an.current && !error) {
-            an.current = !0;
-            let Jt =
-                action === "remove" && isOfficialMarketplaceSpelling(targetMarketplace)
-                  ? listReservedNameRefusals(Te).filter(({ name: xt }) =>
-                      isOfficialMarketplaceName_2(targetMarketplace)
-                        ? isOfficialMarketplaceName_2(xt)
-                        : xt === targetMarketplace,
-                    )
-                  : [],
-              targetIndex = Ve.findIndex(
-                (xt) =>
-                  xt.name === targetMarketplace ||
-                  (xt.builtIn !== void 0 && isOfficialMarketplaceName_2(targetMarketplace)),
-              );
-            if (Jt.length > 0) {
-              let xt = await removeMarketplaceWithReservedSiblings(
-                  targetMarketplace,
-                  void 0,
-                  storageV5,
-                  credentials,
-                  { onlyIgnoredNameEntries: !0 },
-                ),
-                _t = [],
-                Mt = !1;
-              if (xt.kind === "ignored-plugin-directory-name-entry-removed") {
-                Mt = xt.removedNames.length > 0;
-                for (let removedName of xt.removedNames)
-                  _t.push(removedMarketplaceMessage(removedName, QE()));
-                let hn = blockedPluginsNotice(xt.disabledPluginIds, xt.disabledReason);
-                if (hn !== null) _t.push(hn);
-                if ((K.removeErrorsOf(xt.removedPluginIds), !Mt)) _t.push(ubr(targetMarketplace));
-              } else if (xt.kind === "removed")
-                ((Mt = !0),
-                  _t.push(`Removed marketplace "${quotedPrintable(targetMarketplace)}"`),
-                  K.removeErrorsOf(xt.removedPluginIds));
-              if (Mt)
-                logEvent("tengu_marketplace_removed", {
-                  marketplace_name: r$e(targetMarketplace),
-                  _PROTO_marketplace_name: targetMarketplace,
-                  is_official_marketplace: isOfficialMarketplaceName_3(targetMarketplace),
-                });
-              (ic(storageV5, credentials),
-                setResult(stripInvisibleKeepEmoji(`${re.tick} ${_t.join(" ")}`)),
-                await onManageComplete(),
-                setViewState({ type: "menu" }));
-            } else if (targetIndex >= 0) {
-              let xt = Ve[targetIndex];
-              if (xt?.builtIn === "blocked" && action !== void 0 && action !== "confirm-remove") {
-                et(targetIndex + 1);
-                {
-                  let _t = pluginDirectoryPolicyBlockHint();
-                  if (action === "remove") kt(formatPluginDirectoryBlockedMessage(_t));
-                  else kt(EPi(_t));
-                }
-              } else if (xt?.builtIn === "blocked") {
-                let _t = `@${OFFICIAL_MARKETPLACE_NAME}`,
-                  found = Object.keys(getInstalledPlugins().plugins).find((hn) => hn.endsWith(_t));
-                if (found) {
-                  setViewState({
-                    type: "manage-plugins",
-                    targetPlugin: found.slice(0, -_t.length),
-                    targetMarketplace: OFFICIAL_MARKETPLACE_NAME,
-                  });
-                  return;
-                }
-                et(targetIndex + 1);
-              } else if (action === "confirm-remove" && xt)
-                (et(targetIndex + 1), ft(xt), _e.current?.(), Ct(xt.builtIn ? "details" : "confirm-remove"));
-              else if (action === "remove" && xt?.builtIn) (et(targetIndex + 1), buildDetailsMenuOptions(!1));
-              else if (action) {
-                et(targetIndex + 1);
-                let mapped = Ve.map((Mt, hn) =>
-                  hn === targetIndex
-                    ? { ...Mt, pendingUpdate: action === "update", pendingRemove: action === "remove" }
-                    : Mt,
-                );
-                (B(mapped), applyChanges(mapped));
-              } else if (xt) (et(targetIndex + 1), ft(xt), _e.current?.(), Ct("details"));
-            } else setError(`Marketplace not found: ${targetMarketplace}`);
-          }
-        } catch (err) {
-          let Ue = printableMessage(err);
-          (setError(Ue), kt(Ue));
-        } finally {
-          Oe(!1);
-        }
-      }
-      loadMarketplaces();
-    }, [targetMarketplace, action, error]));
-  let hasPendingChanges = () => V.some((state) => state.pendingUpdate || state.pendingRemove),
-    getPendingCounts = () => {
-      let updateCount = count(V, (Ue) => Ue.pendingUpdate),
-        removeCount = count(V, (Ue) => Ue.pendingRemove);
-      return { updateCount: updateCount, removeCount: removeCount };
-    },
-    applyChanges = async (states) => {
-      if (vt.current) return;
-      vt.current = !0;
-      let Te = states || V,
-        Ue = ct === "details";
-      (ae(!0), kt(null), Ke(null), He(null));
+  );
+  P(() => {
+    async function loadMarketplaces() {
       try {
-        let dt = 0,
-          Dt = 0,
-          wt = null,
-          We = [],
-          Ce = [],
-          refreshedMarketplaces = new Set();
-        for (let state of Te) {
-          if (state.pendingRemove) {
-            if (state.installedPlugins.length > 0)
-              await updateSettingsForSourceWithTransform(
-                "userSettings",
-                (de) => {
-                  let newEnabledPlugins = { ...de?.enabledPlugins };
-                  for (let plugin of state.installedPlugins) {
-                    let pluginId = formatPluginId(plugin.name, state.name);
-                    newEnabledPlugins[pluginId] = !1;
-                  }
-                  return { enabledPlugins: newEnabledPlugins };
-                },
-                void 0,
-                storageV5,
-              );
-            let At = await removeMarketplaceWithReservedSiblings(state.name, void 0, storageV5, credentials);
-            if ((Dt++, At.kind !== "plugin-directory-built-in")) K.removeErrorsOf(At.removedPluginIds);
-            if (At.kind === "ignored-plugin-directory-name-entry-removed") {
-              let de = blockedPluginsNotice(At.disabledPluginIds, At.disabledReason);
-              wt = de === null ? null : stripInvisibleKeepEmoji(de);
+        let knownMarketplaces = await loadKnownMarketplacesWithDeclared(storageV5);
+        let { enabled, disabled } = await loadAllPlugins(storageV5, credentials);
+        let allPlugins = [...enabled, ...disabled];
+        J(Object.keys(getInstalledPlugins().plugins));
+        let { marketplaces, failures } = await loadMarketplacesWithErrors(knownMarketplaces, storageV5);
+        let Ce = await listClaudeAiMarketplaces(credentials).catch(() => null);
+        hasAttemptedAutoAction.current = Ce;
+        fe({
+          ...filterUnaddedClaudeAiMarketplaces(Ce, knownMarketplaces),
+          browseOnly: Ce?.browseOnly ?? [],
+        });
+        let Ve = await withOfficialMarketplaceRow(
+          buildMarketplaceRows(marketplaces, failures, allPlugins, await readClaudeAiMarketplaceRegistry()),
+          knownMarketplaces,
+        );
+        setMarketplaceStates(Ve);
+        let successCount = count(marketplaces, (m) => m.data !== null);
+        let errorResult = formatMarketplaceLoadingErrors(failures, successCount);
+        if (errorResult)
+          if (
+            errorResult.type === "warning" ||
+            (targetMarketplace !== undefined && action !== "remove" && action !== "update")
+          )
+            setProcessError(errorResult.message);
+          else throw Error(errorResult.message);
+        if (targetMarketplace && !an.current && !error) {
+          an.current = true;
+          let Jt =
+            action === "remove" && isOfficialMarketplaceSpelling(targetMarketplace)
+              ? listReservedNameRefusals(knownMarketplaces).filter(({ name: xt }) =>
+                  isOfficialMarketplaceName_2(targetMarketplace)
+                    ? isOfficialMarketplaceName_2(xt)
+                    : xt === targetMarketplace,
+                )
+              : [];
+          let targetIndex = Ve.findIndex(
+            (xt) =>
+              xt.name === targetMarketplace ||
+              (xt.builtIn !== undefined && isOfficialMarketplaceName_2(targetMarketplace)),
+          );
+          if (Jt.length > 0) {
+            let xt = await removeMarketplaceWithReservedSiblings(
+              targetMarketplace,
+              undefined,
+              storageV5,
+              credentials,
+              {
+                onlyIgnoredNameEntries: true,
+              },
+            );
+            let _t = [];
+            let Mt = false;
+            if (xt.kind === "ignored-plugin-directory-name-entry-removed") {
+              Mt = xt.removedNames.length > 0;
+              for (let removedName of xt.removedNames)
+                _t.push(removedMarketplaceMessage(removedName, isPluginDirectoryModeOn()));
+              let hn = blockedPluginsNotice(xt.disabledPluginIds, xt.disabledReason);
+              if (hn !== null) _t.push(hn);
+              activePlugins.removeErrorsOf(xt.removedPluginIds);
+              if (!Mt) _t.push(marketplaceEntryGoneText(targetMarketplace));
+            } else if (xt.kind === "removed") {
+              Mt = true;
+              _t.push(`Removed marketplace "${quotedPrintable(targetMarketplace)}"`);
+              activePlugins.removeErrorsOf(xt.removedPluginIds);
             }
-            logEvent("tengu_marketplace_removed", {
-              marketplace_name: r$e(state.name),
-              _PROTO_marketplace_name: state.name,
-              is_official_marketplace: isOfficialMarketplaceName_3(state.name),
-              plugins_uninstalled: state.installedPlugins.length,
+            if (Mt)
+              logEvent("tengu_marketplace_removed", {
+                marketplace_name: marketplaceForTelemetry(targetMarketplace),
+                _PROTO_marketplace_name: targetMarketplace,
+                is_official_marketplace: isOfficialMarketplaceName_3(targetMarketplace),
+              });
+            refreshPluginCaches(storageV5, credentials);
+            setResult(stripInvisibleKeepEmoji(`${figures_default.tick} ${_t.join(" ")}`));
+            await onManageComplete();
+            setViewState({
+              type: "menu",
+            });
+          } else if (targetIndex >= 0) {
+            let xt = Ve[targetIndex];
+            if (xt?.builtIn === "blocked" && action !== undefined && action !== "confirm-remove") {
+              setSelectedIndex(targetIndex + 1);
+              {
+                let _t = pluginDirectoryPolicyBlockHint();
+                if (action === "remove") setProcessError(formatPluginDirectoryBlockedMessage(_t));
+                else setProcessError(officialMarketplaceBlockedText(_t));
+              }
+            } else if (xt?.builtIn === "blocked") {
+              let _t = `@${OFFICIAL_MARKETPLACE_NAME}`;
+              let found = Object.keys(getInstalledPlugins().plugins).find((key) => key.endsWith(_t));
+              if (found) {
+                setViewState({
+                  type: "manage-plugins",
+                  targetPlugin: found.slice(0, -_t.length),
+                  targetMarketplace: OFFICIAL_MARKETPLACE_NAME,
+                });
+                return;
+              }
+              setSelectedIndex(targetIndex + 1);
+            } else if (action === "confirm-remove" && xt) {
+              setSelectedIndex(targetIndex + 1);
+              setSelectedMarketplace(xt);
+              _e.current?.();
+              setInternalView(xt.builtIn ? "details" : "confirm-remove");
+            } else if (action === "remove" && xt?.builtIn) {
+              setSelectedIndex(targetIndex + 1);
+              buildDetailsMenuOptions(false);
+            } else if (action) {
+              setSelectedIndex(targetIndex + 1);
+              let states = Ve.map((state, idx) =>
+                idx === targetIndex
+                  ? {
+                      ...state,
+                      pendingUpdate: action === "update",
+                      pendingRemove: action === "remove",
+                    }
+                  : state,
+              );
+              setMarketplaceStates(states);
+              applyChanges(states);
+            } else if (xt) {
+              setSelectedIndex(targetIndex + 1);
+              setSelectedMarketplace(xt);
+              _e.current?.();
+              setInternalView("details");
+            }
+          } else setError(`Marketplace not found: ${targetMarketplace}`);
+        }
+      } catch (err) {
+        let Ue = printableMessage(err);
+        setError(Ue);
+        setProcessError(Ue);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadMarketplaces();
+  }, [targetMarketplace, action, error]);
+  let hasPendingChanges = () => marketplaceStates.some((state) => state.pendingUpdate || state.pendingRemove);
+  let getPendingCounts = () => {
+    let updateCount = count(marketplaceStates, (Ue) => Ue.pendingUpdate);
+    let removeCount = count(marketplaceStates, (Ue) => Ue.pendingRemove);
+    return {
+      updateCount,
+      removeCount,
+    };
+  };
+  let applyChanges = async (states) => {
+    if (vt.current) return;
+    vt.current = true;
+    let statesToProcess = states || marketplaceStates;
+    let wasInDetailsView = internalView === "details";
+    ae(true);
+    setProcessError(null);
+    setSuccessMessage(null);
+    setProgressMessage(null);
+    try {
+      let dt = 0;
+      let removedCount = 0;
+      let wt = null;
+      let We = [];
+      let Ce = [];
+      let refreshedMarketplaces = new Set();
+      for (let state of statesToProcess) {
+        if (state.pendingRemove) {
+          if (state.installedPlugins.length > 0)
+            await updateSettingsForSourceWithTransform(
+              "userSettings",
+              (de) => {
+                let newEnabledPlugins = {
+                  ...de?.enabledPlugins,
+                };
+                for (let plugin of state.installedPlugins) {
+                  let pluginId = formatPluginId(plugin.name, state.name);
+                  newEnabledPlugins[pluginId] = false;
+                }
+                return {
+                  enabledPlugins: newEnabledPlugins,
+                };
+              },
+              undefined,
+              storageV5,
+            );
+          let At = await removeMarketplaceWithReservedSiblings(state.name, undefined, storageV5, credentials);
+          removedCount++;
+          if (At.kind !== "plugin-directory-built-in") activePlugins.removeErrorsOf(At.removedPluginIds);
+          if (At.kind === "ignored-plugin-directory-name-entry-removed") {
+            let de = blockedPluginsNotice(At.disabledPluginIds, At.disabledReason);
+            wt = de === null ? null : stripInvisibleKeepEmoji(de);
+          }
+          logEvent("tengu_marketplace_removed", {
+            marketplace_name: marketplaceForTelemetry(state.name),
+            _PROTO_marketplace_name: state.name,
+            is_official_marketplace: isOfficialMarketplaceName_3(state.name),
+            plugins_uninstalled: state.installedPlugins.length,
+          });
+          continue;
+        }
+        if (state.pendingUpdate) {
+          try {
+            await refreshMarketplaceDeduped(state.name, storageV5, (message) => {
+              setProgressMessage(message);
+            });
+          } catch (error) {
+            if (error instanceof CommandSourceError) {
+              We.push(state.name);
+              logForDebugging(
+                `Marketplace ${state.name} not updated (managed policy): ${errorMessage(error)}`,
+              );
+              continue;
+            }
+            Ce.push(state.name);
+            logForDebugging(`Marketplace ${state.name} could not be refreshed: ${errorMessage(error)}`, {
+              level: "warn",
             });
             continue;
           }
-          if (state.pendingUpdate) {
-            try {
-              await refreshMarketplaceDeduped(state.name, storageV5, (message) => {
-                He(message);
-              });
-            } catch (error) {
-              if (error instanceof Bd) {
-                (We.push(state.name),
-                  logForDebugging(
-                    `Marketplace ${state.name} not updated (managed policy): ${errorMessage(error)}`,
-                  ));
-                continue;
-              }
-              (Ce.push(state.name),
-                logForDebugging(`Marketplace ${state.name} could not be refreshed: ${errorMessage(error)}`, {
-                  level: "warn",
-                }));
-              continue;
-            }
-            (dt++,
-              refreshedMarketplaces.add(state.name.toLowerCase()),
-              logEvent("tengu_marketplace_updated", {
-                marketplace_name: r$e(state.name),
-                _PROTO_marketplace_name: state.name,
-                is_official_marketplace: isOfficialMarketplaceName_3(state.name),
-              }));
-          }
+          dt++;
+          refreshedMarketplaces.add(state.name.toLowerCase());
+          logEvent("tengu_marketplace_updated", {
+            marketplace_name: marketplaceForTelemetry(state.name),
+            _PROTO_marketplace_name: state.name,
+            is_official_marketplace: isOfficialMarketplaceName_3(state.name),
+          });
         }
-        let ke = 0,
-          ht = 0,
-          Jt = 0,
-          qt = 0,
-          xt = 0,
-          _t = [],
-          Mt = [];
-        if (refreshedMarketplaces.size > 0) {
-          let {
-            updated: updated,
-            blocked: blocked,
-            updateFailedCount: updateFailedCount,
-            commandSourceSkipped: commandSourceSkipped,
-          } = await updatePluginsInMarketplaces(
-            refreshedMarketplaces,
-            new Set(),
-            { skipCommandSources: !0 },
-            storageV5,
-          );
-          ((ke = updated.length),
-            (Mt = commandSourceSkipped),
-            (ht = count(blocked, (mt) => mt.type === "autoupdate-deferred-entry-helper")),
-            (Jt = count(blocked, (mt) => mt.type === "autoupdate-disabled-by-policy")),
-            (qt = count(blocked, (mt) => mt.type === "autoupdate-blocked-by-pinner")),
-            (xt = updateFailedCount));
-          let filtered = blocked.filter(
-            (mt) =>
-              mt.type !== "autoupdate-deferred-entry-helper" &&
-              mt.type !== "autoupdate-disabled-by-policy" &&
-              mt.type !== "autoupdate-blocked-by-pinner",
-          );
-          if (filtered.length > 0 || updated.length > 0)
-            notifyPluginsAutoUpdated(updated, filtered, [], { announce: !1 });
-          _t = filtered.flatMap((mt) => ("plugin" in mt && typeof mt.plugin === "string" ? [mt.plugin] : []));
-        }
-        if ((ic(storageV5, credentials), await onManageComplete(), !qe.current)) return;
-        let updatedPluginIds = await loadKnownMarketplacesWithDeclared(storageV5),
-          { enabled: enabled, disabled: disabled } = await loadAllPlugins(storageV5, credentials);
-        if (!qe.current) return;
-        let allPlugins = [...enabled, ...disabled],
-          { marketplaces: marketplaces, failures: failures } = await loadMarketplacesWithErrors(
-            updatedPluginIds,
-            storageV5,
-          );
-        if (!qe.current) return;
-        fe((ze) => ({
-          ...ze,
-          ...filterUnaddedClaudeAiMarketplaces(hasAttemptedAutoAction.current, updatedPluginIds),
-        }));
-        let An = await withOfficialMarketplaceRow(
-          buildMarketplaceRows(marketplaces, failures, allPlugins, await readClaudeAiMarketplaceRegistry()),
-          updatedPluginIds,
-        );
-        if ((B(An), et((plugin) => Math.min(plugin, An.length)), Ue && oe)) {
-          let updatedMarketplace = An.find((At) => At.name === oe.name);
-          if (updatedMarketplace) ft(updatedMarketplace);
-        }
-        let Bn = [],
-          Tn = Ue ? displayMarketplaceName : escapedDisplayText;
-        if (dt > 0 || We.length > 0 || Ce.length > 0 || qt > 0 || xt > 0)
-          Bn.push(
-            formatMarketplaceUpdateSummary({
-              updatedCount: dt,
-              updatedPluginCount: ke,
-              deferredPluginCount: ht,
-              policyBlockedPluginCount: Jt,
-              policyRefusedMarketplaces: We.map((ze) => Tn(ze)),
-              failedMarketplaces: Ce.map((ze) => Tn(ze)),
-              pinnedPluginCount: qt,
-              failedPluginCount: xt,
-              failedPluginNames: _t.map((ze) => Tn(ze)),
-            }),
-          );
-        if (Mt.length > 0) {
-          let ze = Mt.length,
-            At = ze > 1,
-            de = Mt.find(isSafeCliArg) ?? "",
-            successMsg = `${At ? "(and the others) " : ""}to review (add --scope for a project/local install)`,
-            Ne = `review and update ${At ? "each" : "it"} individually from the command line`;
-          Bn.push(
-            `${ze} command-sourced ${plural(ze, "plugin")} not updated here \u2014 ${runCommandHint("plugin update", de, { tail: successMsg, fallback: Ne })}`,
-          );
-        }
-        if (Dt > 0) Bn.push(`Removed ${Dt} ${plural(Dt, "marketplace")}`);
-        if (Bn.length > 0) {
-          let At = `${marketplaceUpdateIcon({ failedCount: Ce.length + xt, updatedCount: dt + Dt, policyRefusedCount: We.length }) ?? re.warning} ${Bn.join(", ")}`,
-            de = wt === null ? At : `${wt} ${At}`;
-          if (Ue) Ke(de);
-          else {
-            if (!qe.current) return;
-            (setResult(de),
-              _e.current?.(),
-              (_e.current = Yt.setTimeout(() => setViewState({ type: "menu" }), 2000)));
-          }
-        } else if (!Ue) {
-          if (!qe.current) return;
-          setViewState({ type: "menu" });
-        }
-      } catch (err) {
-        let errorMsg = printableMessage(err);
-        if (!qe.current) return;
-        (kt(errorMsg), setError(errorMsg));
-      } finally {
-        if (((vt.current = !1), qe.current)) (ae(!1), He(null));
       }
-    },
-    confirmRemove = async () => {
-      if (!oe) return;
-      let newStates = V.map((state) => (state.name === oe.name ? { ...state, pendingRemove: !0 } : state));
-      (B(newStates), await applyChanges(newStates));
-    },
-    yt = Q(() => {
-      if (!oe) return [];
-      if (oe.builtIn === "off") return [{ label: "Turn on", value: "turn-on" }];
-      let le = [
-        { label: `Browse plugins (${oe.pluginCount ?? 0})`, value: "browse" },
+      let updatedPluginCount = 0;
+      let deferredPluginCount = 0;
+      let policyBlockedPluginCount = 0;
+      let qt = 0;
+      let xt = 0;
+      let _t = [];
+      let Mt = [];
+      if (refreshedMarketplaces.size > 0) {
+        let { updated, blocked, updateFailedCount, commandSourceSkipped } = await updatePluginsInMarketplaces(
+          refreshedMarketplaces,
+          new Set(),
+          {
+            skipCommandSources: true,
+          },
+          storageV5,
+        );
+        updatedPluginCount = updated.length;
+        Mt = commandSourceSkipped;
+        deferredPluginCount = count(blocked, (mt) => mt.type === "autoupdate-deferred-entry-helper");
+        policyBlockedPluginCount = count(blocked, (mt) => mt.type === "autoupdate-disabled-by-policy");
+        qt = count(blocked, (mt) => mt.type === "autoupdate-blocked-by-pinner");
+        xt = updateFailedCount;
+        let filtered = blocked.filter(
+          (mt) =>
+            mt.type !== "autoupdate-deferred-entry-helper" &&
+            mt.type !== "autoupdate-disabled-by-policy" &&
+            mt.type !== "autoupdate-blocked-by-pinner",
+        );
+        if (filtered.length > 0 || updated.length > 0)
+          notifyPluginsAutoUpdated(updated, filtered, [], {
+            announce: false,
+          });
+        _t = filtered.flatMap((mt) => ("plugin" in mt && typeof mt.plugin === "string" ? [mt.plugin] : []));
+      }
+      refreshPluginCaches(storageV5, credentials);
+      await onManageComplete();
+      if (!qe.current) return;
+      let updatedPluginIds = await loadKnownMarketplacesWithDeclared(storageV5);
+      let { enabled, disabled } = await loadAllPlugins(storageV5, credentials);
+      if (!qe.current) return;
+      let allPlugins = [...enabled, ...disabled];
+      let { marketplaces, failures } = await loadMarketplacesWithErrors(updatedPluginIds, storageV5);
+      if (!qe.current) return;
+      fe((plugin) => ({
+        ...plugin,
+        ...filterUnaddedClaudeAiMarketplaces(hasAttemptedAutoAction.current, updatedPluginIds),
+      }));
+      let An = await withOfficialMarketplaceRow(
+        buildMarketplaceRows(marketplaces, failures, allPlugins, await readClaudeAiMarketplaceRegistry()),
+        updatedPluginIds,
+      );
+      setMarketplaceStates(An);
+      setSelectedIndex((plugin) => Math.min(plugin, An.length));
+      if (wasInDetailsView && selectedMarketplace) {
+        let updatedMarketplace = An.find((At) => At.name === selectedMarketplace.name);
+        if (updatedMarketplace) setSelectedMarketplace(updatedMarketplace);
+      }
+      let Bn = [];
+      let Tn = wasInDetailsView ? displayMarketplaceName : escapedDisplayText;
+      if (dt > 0 || We.length > 0 || Ce.length > 0 || qt > 0 || xt > 0)
+        Bn.push(
+          formatMarketplaceUpdateSummary({
+            updatedCount: dt,
+            updatedPluginCount,
+            deferredPluginCount,
+            policyBlockedPluginCount,
+            policyRefusedMarketplaces: We.map((ze) => Tn(ze)),
+            failedMarketplaces: Ce.map((ze) => Tn(ze)),
+            pinnedPluginCount: qt,
+            failedPluginCount: xt,
+            failedPluginNames: _t.map((ze) => Tn(ze)),
+          }),
+        );
+      if (Mt.length > 0) {
+        let ze = Mt.length;
+        let At = ze > 1;
+        let de = Mt.find(isSafeCliArg) ?? "";
+        let successMsg = `${At ? "(and the others) " : ""}to review (add --scope for a project/local install)`;
+        let fallback = `review and update ${At ? "each" : "it"} individually from the command line`;
+        Bn.push(
+          `${ze} command-sourced ${plural(ze, "plugin")} not updated here \u2014 ${runCommandHint(
+            "plugin update",
+            de,
+            {
+              tail: successMsg,
+              fallback,
+            },
+          )}`,
+        );
+      }
+      if (removedCount > 0) Bn.push(`Removed ${removedCount} ${plural(removedCount, "marketplace")}`);
+      if (Bn.length > 0) {
+        let At = `${
+          marketplaceUpdateIcon({
+            failedCount: Ce.length + xt,
+            updatedCount: dt + removedCount,
+            policyRefusedCount: We.length,
+          }) ?? figures_default.warning
+        } ${Bn.join(", ")}`;
+        let de = wt === null ? At : `${wt} ${At}`;
+        if (wasInDetailsView) setSuccessMessage(de);
+        else {
+          if (!qe.current) return;
+          setResult(de);
+          _e.current?.();
+          _e.current = clock.setTimeout(
+            () =>
+              setViewState({
+                type: "menu",
+              }),
+            2000,
+          );
+        }
+      } else if (!wasInDetailsView) {
+        if (!qe.current) return;
+        setViewState({
+          type: "menu",
+        });
+      }
+    } catch (err) {
+      let errorMsg = printableMessage(err);
+      if (!qe.current) return;
+      setProcessError(errorMsg);
+      setError(errorMsg);
+    } finally {
+      vt.current = false;
+      if (qe.current) {
+        ae(false);
+        setProgressMessage(null);
+      }
+    }
+  };
+  let confirmRemove = async () => {
+    if (!selectedMarketplace) return;
+    let newStates = marketplaceStates.map((state) =>
+      state.name === selectedMarketplace.name
+        ? {
+            ...state,
+            pendingRemove: true,
+          }
+        : state,
+    );
+    setMarketplaceStates(newStates);
+    await applyChanges(newStates);
+  };
+  let options = Q(() => {
+    if (!selectedMarketplace) return [];
+    if (selectedMarketplace.builtIn === "off")
+      return [
         {
-          label: oe.lastUpdated
-            ? r(Text, {
-                children: [
-                  "Update marketplace",
-                  e(Text, {
-                    dimColor: !0,
-                    children: ` (last updated ${new Date(oe.lastUpdated).toLocaleDateString()})`,
-                  }),
-                ],
-              })
-            : "Update marketplace",
-          value: "update",
+          label: "Turn on",
+          value: "turn-on",
         },
       ];
-      if (oe.builtIn === "on")
-        return (
-          le.push({
-            label: r(Text, {
+    let options = [
+      {
+        label: `Browse plugins (${selectedMarketplace.pluginCount ?? 0})`,
+        value: "browse",
+      },
+      {
+        label: selectedMarketplace.lastUpdated
+          ? jsxProd_default_2(Text, {
               children: [
-                "Turn off",
-                e(Text, { dimColor: !0, children: " (plugins installed from it stay installed)" }),
+                "Update marketplace",
+                jsxProd_default(Text, {
+                  dimColor: true,
+                  children: ` (last updated ${new Date(selectedMarketplace.lastUpdated).toLocaleDateString()})`,
+                }),
               ],
+            })
+          : "Update marketplace",
+        value: "update",
+      },
+    ];
+    if (selectedMarketplace.builtIn === "on") {
+      options.push({
+        label: jsxProd_default_2(Text, {
+          children: [
+            "Turn off",
+            jsxProd_default(Text, {
+              dimColor: true,
+              children: " (plugins installed from it stay installed)",
             }),
-            value: "turn-off",
-          }),
-          le
-        );
-      if (!shouldSkipPluginAutoupdate())
-        le.push({
-          label: oe.autoUpdate ? "Disable auto-update" : "Enable auto-update",
-          value: "toggle-auto-update",
-        });
-      return (le.push({ label: "Remove marketplace", value: "remove" }), le);
-    }, [oe]),
-    Ut = R(!1),
-    buildDetailsMenuOptions = async (marketplace) => {
-      if (Ut.current) return;
-      Ut.current = !0;
+          ],
+        }),
+        value: "turn-off",
+      });
+      return options;
+    }
+    if (!shouldSkipPluginAutoupdate())
+      options.push({
+        label: selectedMarketplace.autoUpdate ? "Disable auto-update" : "Enable auto-update",
+        value: "toggle-auto-update",
+      });
+    options.push({
+      label: "Remove marketplace",
+      value: "remove",
+    });
+    return options;
+  }, [selectedMarketplace]);
+  let Ut = R(false);
+  let buildDetailsMenuOptions = async (marketplace) => {
+    if (Ut.current) return;
+    Ut.current = true;
+    try {
+      let pluginDirectoryState = await getPluginDirectoryState();
       try {
-        let Te = await getPluginDirectoryState();
-        try {
-          await setPluginDirectoryEnabled(marketplace);
-        } catch (error) {
-          if (Te !== "unavailable")
-            logDirectoryToggle({
-              enabled: marketplace,
-              surface: "ui",
-              failure: Te === "blocked" ? "blocked_by_organization" : "settings_write_failed",
-            });
-          throw error;
-        }
-        if ((Te === "on") !== marketplace) logDirectoryToggle({ enabled: marketplace, surface: "ui" });
-        (ic(storageV5, credentials),
-          setResult(
-            marketplace
-              ? `${OFFICIAL_MARKETPLACE_DISPLAY} is on. Its plugins are back in /plugin \u2192 Discover.`
-              : BUILTIN_MARKETPLACE_OFF_NOTICE,
-          ),
-          await onManageComplete(),
-          setViewState({ type: "menu" }));
+        await setPluginDirectoryEnabled(marketplace);
       } catch (error) {
-        kt(printableName(errorMessage(error), 300));
+        if (pluginDirectoryState !== "unavailable")
+          logDirectoryToggle({
+            enabled: marketplace,
+            surface: "ui",
+            failure: pluginDirectoryState === "blocked" ? "blocked_by_organization" : "settings_write_failed",
+          });
+        throw error;
       }
-      Ut.current = !1;
-    },
-    handleToggleAutoUpdate = async (marketplace) => {
-      let newAutoUpdate = !marketplace.autoUpdate;
-      try {
-        (await setMarketplaceAutoUpdate(marketplace.name, newAutoUpdate, storageV5),
-          B((prev) =>
-            prev.map((state) =>
-              state.name === marketplace.name ? { ...state, autoUpdate: newAutoUpdate } : state,
-            ),
-          ),
-          ft((prev) => (prev ? { ...prev, autoUpdate: newAutoUpdate } : prev)));
-      } catch (err) {
-        kt(printableMessage(err));
-      }
-    };
-  (useKeybinding(
+      if ((pluginDirectoryState === "on") !== marketplace)
+        logDirectoryToggle({
+          enabled: marketplace,
+          surface: "ui",
+        });
+      refreshPluginCaches(storageV5, credentials);
+      setResult(
+        marketplace
+          ? `${OFFICIAL_MARKETPLACE_DISPLAY} is on. Its plugins are back in /plugin \u2192 Discover.`
+          : BUILTIN_MARKETPLACE_OFF_NOTICE,
+      );
+      await onManageComplete();
+      setViewState({
+        type: "menu",
+      });
+    } catch (error) {
+      setProcessError(printableName(errorMessage(error), 300));
+    }
+    Ut.current = false;
+  };
+  let handleToggleAutoUpdate = async (marketplace) => {
+    let newAutoUpdate = !marketplace.autoUpdate;
+    try {
+      await setMarketplaceAutoUpdate(marketplace.name, newAutoUpdate, storageV5);
+      setMarketplaceStates((prev) =>
+        prev.map((state) =>
+          state.name === marketplace.name
+            ? {
+                ...state,
+                autoUpdate: newAutoUpdate,
+              }
+            : state,
+        ),
+      );
+      setSelectedMarketplace((prev) =>
+        prev
+          ? {
+              ...prev,
+              autoUpdate: newAutoUpdate,
+            }
+          : prev,
+      );
+    } catch (err) {
+      setProcessError(printableMessage(err));
+    }
+  };
+  useKeybinding(
     "confirm:no",
     () => {
-      (_e.current?.(), Ct("list"), Ot("browse"));
+      _e.current?.();
+      setInternalView("list");
+      setDetailsMenuIndex("browse");
     },
     {
       context: "Confirmation",
-      isActive: !je && (ct === "details" || ct === "confirm-remove" || ct === "confirm-add-claudeai"),
+      isActive:
+        !je &&
+        (internalView === "details" ||
+          internalView === "confirm-remove" ||
+          internalView === "confirm-add-claudeai"),
     },
-  ),
-    useKeybinding(
-      "confirm:no",
-      () => {
-        (_e.current?.(),
-          B((prev) => prev.map((state) => ({ ...state, pendingUpdate: !1, pendingRemove: !1 }))),
-          et(0));
+  );
+  useKeybinding(
+    "confirm:no",
+    () => {
+      _e.current?.();
+      setMarketplaceStates((prev) =>
+        prev.map((state) => ({
+          ...state,
+          pendingUpdate: false,
+          pendingRemove: false,
+        })),
+      );
+      setSelectedIndex(0);
+    },
+    {
+      context: "Confirmation",
+      isActive: !je && internalView === "list" && hasPendingChanges(),
+    },
+  );
+  useKeybinding(
+    "confirm:no",
+    () => {
+      setViewState({
+        type: "menu",
+      });
+    },
+    {
+      context: "Confirmation",
+      isActive: !je && internalView === "list" && !hasPendingChanges(),
+    },
+  );
+  MessageActionsKeybindings(
+    {
+      "select:previous": () => setSelectedIndex((prev) => Math.max(0, prev - 1)),
+      "select:next": () => {
+        let totalItems = marketplaceStates.length + pe.available.length + pe.hosted.length + 1;
+        setSelectedIndex((prev) => Math.min(totalItems - 1, prev + 1));
       },
-      { context: "Confirmation", isActive: !je && ct === "list" && hasPendingChanges() },
-    ),
-    useKeybinding(
-      "confirm:no",
-      () => {
-        setViewState({ type: "menu" });
-      },
-      { context: "Confirmation", isActive: !je && ct === "list" && !hasPendingChanges() },
-    ),
-    MessageActionsKeybindings(
-      {
-        "select:previous": () => et((prev) => Math.max(0, prev - 1)),
-        "select:next": () => {
-          let le = V.length + pe.available.length + pe.hosted.length + 1;
-          et((prev) => Math.min(le - 1, prev + 1));
-        },
-        "select:accept": () => {
-          _e.current?.();
-          let le = rt - 1,
-            Te = pe.available[le - V.length],
-            Ue = pe.hosted[le - V.length - pe.available.length];
-          if (rt === 0) setViewState({ type: "add-marketplace" });
-          else if (hasPendingChanges()) applyChanges();
-          else if (Te)
-            setViewState({
-              type: "add-marketplace",
-              claudeAiListing: { name: Te.name, source: formatGitSourceSpec(Te.source) },
-            });
-          else if (Ue) (ne(Ue), kt(null), Ct("confirm-add-claudeai"));
-          else {
-            let dt = V[le];
-            if (dt && dt.builtIn !== "blocked")
-              (ft(dt), Ct("details"), Ot(dt.builtIn === "off" ? "turn-on" : "browse"));
+      "select:accept": () => {
+        _e.current?.();
+        let le = selectedIndex - 1;
+        let Te = pe.available[le - marketplaceStates.length];
+        let Ue = pe.hosted[le - marketplaceStates.length - pe.available.length];
+        if (selectedIndex === 0)
+          setViewState({
+            type: "add-marketplace",
+          });
+        else if (hasPendingChanges()) applyChanges();
+        else if (Te)
+          setViewState({
+            type: "add-marketplace",
+            claudeAiListing: {
+              name: Te.name,
+              source: formatGitSourceSpec(Te.source),
+            },
+          });
+        else if (Ue) {
+          ne(Ue);
+          setProcessError(null);
+          setInternalView("confirm-add-claudeai");
+        } else {
+          let marketplace = marketplaceStates[le];
+          if (marketplace && marketplace.builtIn !== "blocked") {
+            setSelectedMarketplace(marketplace);
+            setInternalView("details");
+            setDetailsMenuIndex(marketplace.builtIn === "off" ? "turn-on" : "browse");
           }
-        },
+        }
       },
-      { context: "Select", isActive: !je && ct === "list" },
-    ));
+    },
+    {
+      context: "Select",
+      isActive: !je && internalView === "list",
+    },
+  );
   function mn(input) {
     if (input.ctrl || input.meta || je) return;
-    let Te = rt - 1,
-      Ue = V[Te]?.builtIn;
-    if (Ue === "blocked") return;
-    if (Ue !== void 0 && /^[udUD]$/.test(input.key)) {
-      let dt = V[Te];
-      if (dt && (Ue === "off" || input.key === "d" || input.key === "D")) {
-        (input.preventDefault(),
-          _e.current?.(),
-          ft(dt),
-          Ct("details"),
-          Ot(Ue === "off" ? "turn-on" : "turn-off"));
+    let marketplaceIndex = selectedIndex - 1;
+    let builtIn = marketplaceStates[marketplaceIndex]?.builtIn;
+    if (builtIn === "blocked") return;
+    if (builtIn !== undefined && /^[udUD]$/.test(input.key)) {
+      let dt = marketplaceStates[marketplaceIndex];
+      if (dt && (builtIn === "off" || input.key === "d" || input.key === "D")) {
+        input.preventDefault();
+        _e.current?.();
+        setSelectedMarketplace(dt);
+        setInternalView("details");
+        setDetailsMenuIndex(builtIn === "off" ? "turn-on" : "turn-off");
         return;
       }
     }
-    if ((input.key === "u" || input.key === "U") && Te >= 0)
-      (input.preventDefault(),
-        _e.current?.(),
-        B((prev) =>
-          prev.map((state, idx) =>
-            idx === Te
-              ? {
-                  ...state,
-                  pendingUpdate: !state.pendingUpdate,
-                  pendingRemove: state.pendingUpdate ? state.pendingRemove : !1,
-                }
-              : state,
-          ),
-        ));
-    else if ((input.key === "d" || input.key === "D") && Te >= 0) {
-      let dt = V[Te];
-      if (dt) (input.preventDefault(), ft(dt), _e.current?.(), Ct("confirm-remove"));
+    if ((input.key === "u" || input.key === "U") && marketplaceIndex >= 0) {
+      input.preventDefault();
+      _e.current?.();
+      setMarketplaceStates((prev) =>
+        prev.map((state, idx) =>
+          idx === marketplaceIndex
+            ? {
+                ...state,
+                pendingUpdate: !state.pendingUpdate,
+                pendingRemove: state.pendingUpdate ? state.pendingRemove : false,
+              }
+            : state,
+        ),
+      );
+    } else if ((input.key === "d" || input.key === "D") && marketplaceIndex >= 0) {
+      let marketplace = marketplaceStates[marketplaceIndex];
+      if (marketplace) {
+        input.preventDefault();
+        setSelectedMarketplace(marketplace);
+        _e.current?.();
+        setInternalView("confirm-remove");
+      }
     }
   }
-  let xn = (prev) => {
-    if ((_e.current?.(), !oe)) return;
+  let onSelect = (prev) => {
+    _e.current?.();
+    if (!selectedMarketplace) return;
     switch (prev) {
       case "browse":
-        setViewState({ type: "browse-marketplace", targetMarketplace: oe.name });
+        setViewState({
+          type: "browse-marketplace",
+          targetMarketplace: selectedMarketplace.name,
+        });
         return;
       case "update": {
-        let mapped = V.map((Ue) => (Ue.name === oe.name ? { ...Ue, pendingUpdate: !0 } : Ue));
-        (B(mapped), applyChanges(mapped));
+        let newStates = marketplaceStates.map((state) =>
+          state.name === selectedMarketplace.name
+            ? {
+                ...state,
+                pendingUpdate: true,
+              }
+            : state,
+        );
+        setMarketplaceStates(newStates);
+        applyChanges(newStates);
         return;
       }
       case "toggle-auto-update":
-        handleToggleAutoUpdate(oe);
+        handleToggleAutoUpdate(selectedMarketplace);
         return;
       case "remove":
-        Ct("confirm-remove");
+        setInternalView("confirm-remove");
         return;
       case "turn-on":
       case "turn-off":
         buildDetailsMenuOptions(prev === "turn-on");
     }
   };
-  function Ln(le) {
-    if (le.ctrl || le.meta || je) return;
-    if (le.key === "y" || le.key === "Y") (le.preventDefault(), _e.current?.(), confirmRemove());
-    else if (le.key === "n" || le.key === "N") (le.preventDefault(), _e.current?.(), Ct("list"), ft(null));
+  function Ln(event) {
+    if (event.ctrl || event.meta || je) return;
+    if (event.key === "y" || event.key === "Y") {
+      event.preventDefault();
+      _e.current?.();
+      confirmRemove();
+    } else if (event.key === "n" || event.key === "N") {
+      event.preventDefault();
+      _e.current?.();
+      setInternalView("list");
+      setSelectedMarketplace(null);
+    }
   }
-  function Mn(le) {
-    if (le.ctrl || le.meta || je) return;
-    if ((le.key === "y" || le.key === "Y") && me) (le.preventDefault(), fn(me));
-    else if (le.key === "n" || le.key === "N") (le.preventDefault(), Ct("list"), ne(null));
+  function Mn(input) {
+    if (input.ctrl || input.meta || je) return;
+    if ((input.key === "y" || input.key === "Y") && prev) {
+      input.preventDefault();
+      fn(prev);
+    } else if (input.key === "n" || input.key === "N") {
+      input.preventDefault();
+      setInternalView("list");
+      ne(null);
+    }
   }
   async function fn(prev) {
-    (ae(!0), kt(null));
+    ae(true);
+    setProcessError(null);
     try {
       let { name: Te } = await addClaudeAiMarketplace(prev, {
         configured: await loadKnownMarketplacesWithDeclared(storageV5),
-        credentials: credentials,
+        credentials,
       });
-      if (
-        (logEvent("tengu_marketplace_added", { source_type: lit("claudeai") }),
-        ic(storageV5, credentials),
-        await onManageComplete(),
-        !qe.current)
-      )
-        return;
-      (ne(null), setViewState({ type: "browse-marketplace", targetMarketplace: Te }));
+      logEvent("tengu_marketplace_added", {
+        source_type: lit("claudeai"),
+      });
+      refreshPluginCaches(storageV5, credentials);
+      await onManageComplete();
+      if (!qe.current) return;
+      ne(null);
+      setViewState({
+        type: "browse-marketplace",
+        targetMarketplace: Te,
+      });
     } catch (error) {
-      if (qe.current) kt(printableMessage(error));
+      if (qe.current) setProcessError(printableMessage(error));
     } finally {
-      if (qe.current) ae(!1);
+      if (qe.current) ae(false);
     }
   }
-  if (W) return e(Text, { children: "Loading marketplaces\u2026" });
-  if (V.length === 0 && pe.available.length === 0 && pe.hosted.length === 0 && pe.browseOnly.length === 0)
-    return r(Box, {
+  if (loading)
+    return jsxProd_default(Text, {
+      children: "Loading marketplaces\u2026",
+    });
+  if (
+    marketplaceStates.length === 0 &&
+    pe.available.length === 0 &&
+    pe.hosted.length === 0 &&
+    pe.browseOnly.length === 0
+  )
+    return jsxProd_default_2(Box, {
       flexDirection: "column",
       children: [
-        e(Box, { marginBottom: 1, children: e(Text, { bold: !0, children: "Manage marketplaces" }) }),
-        r(TwoColumnRow, {
-          active: !0,
+        jsxProd_default(Box, {
+          marginBottom: 1,
+          children: jsxProd_default(Text, {
+            bold: true,
+            children: "Manage marketplaces",
+          }),
+        }),
+        jsxProd_default_2(TwoColumnRow, {
+          active: true,
           flexDirection: "row",
           gap: 1,
           children: [
-            r(Text, {
+            jsxProd_default_2(Text, {
               color: "suggestion",
-              children: [r(Text, { "aria-hidden": !0, children: [re.pointer, " "] }), "+"],
+              children: [
+                jsxProd_default_2(Text, {
+                  "aria-hidden": true,
+                  children: [figures_default.pointer, " "],
+                }),
+                "+",
+              ],
             }),
-            e(Text, { bold: !0, color: "suggestion", children: "Add Marketplace" }),
+            jsxProd_default(Text, {
+              bold: true,
+              color: "suggestion",
+              children: "Add Marketplace",
+            }),
           ],
         }),
-        e(Box, {
+        jsxProd_default(Box, {
           marginTop: 1,
-          children: e(Text, {
-            dimColor: !0,
-            italic: !0,
+          children: jsxProd_default(Text, {
+            dimColor: true,
+            italic: true,
             children: exitState.pending
-              ? r(Fragment, { children: ["Press ", exitState.keyName, " again to go back"] })
-              : r(Byline, {
+              ? jsxProd_default_2(Fragment, {
+                  children: ["Press ", exitState.keyName, " again to go back"],
+                })
+              : jsxProd_default_2(Byline, {
                   children: [
-                    e(ConfigurableShortcutHint, {
+                    jsxProd_default(ConfigurableShortcutHint, {
                       action: "select:accept",
                       context: "Select",
                       fallback: "Enter",
                       description: "select",
                     }),
-                    e(ConfigurableShortcutHint, {
+                    jsxProd_default(ConfigurableShortcutHint, {
                       action: "confirm:no",
                       context: "Confirmation",
                       fallback: "Esc",
@@ -721,52 +929,74 @@ function ManageMarketplaces({
         }),
       ],
     });
-  if (ct === "confirm-add-claudeai" && me)
-    return r(FocusColumn, {
+  if (internalView === "confirm-add-claudeai" && prev)
+    return jsxProd_default_2(FocusColumn, {
       onKeyDown: Mn,
       children: [
-        r(Text, { bold: !0, children: ["Add marketplace ", stripInvisibleKeepEmoji(me.name), "?"] }),
-        me.displayName !== me.name &&
-          r(Text, {
-            dimColor: !0,
-            children: [stripInvisibleKeepEmoji(hBr(me.name, me.displayName) ?? ""), " ", "on claude.ai"],
+        jsxProd_default_2(Text, {
+          bold: true,
+          children: ["Add marketplace ", stripInvisibleKeepEmoji(prev.name), "?"],
+        }),
+        prev.displayName !== prev.name &&
+          jsxProd_default_2(Text, {
+            dimColor: true,
+            children: [
+              stripInvisibleKeepEmoji(listedAsSuffix(prev.name, prev.displayName) ?? ""),
+              " ",
+              "on claude.ai",
+            ],
           }),
-        r(Box, {
+        jsxProd_default_2(Box, {
           flexDirection: "column",
           marginTop: 1,
           children: [
-            r(Text, {
-              dimColor: !0,
-              children: ["Install its plugins with ", "<plugin>", "@", stripInvisibleKeepEmoji(me.name)],
+            jsxProd_default_2(Text, {
+              dimColor: true,
+              children: ["Install its plugins with ", "<plugin>", "@", stripInvisibleKeepEmoji(prev.name)],
             }),
-            r(Text, {
-              dimColor: !0,
+            jsxProd_default_2(Text, {
+              dimColor: true,
               children: [
                 "Hosted on claude.ai for",
                 " ",
-                me.scope === "org"
+                prev.scope === "org"
                   ? "your organization"
-                  : me.scope === "account"
+                  : prev.scope === "account"
                     ? "you (your uploads)"
                     : "your account",
                 ". Its plugins install from claude.ai.",
               ],
             }),
             je &&
-              e(Box, {
+              jsxProd_default(Box, {
                 marginTop: 1,
-                children: e(Text, { color: "claude", children: "Adding marketplace\u2026" }),
+                children: jsxProd_default(Text, {
+                  color: "claude",
+                  children: "Adding marketplace\u2026",
+                }),
               }),
-            Se && e(Box, { marginTop: 1, children: e(ErrorText, { error: stripInvisibleKeepNewlines(Se) }) }),
-            !je &&
-              e(Box, {
+            processError &&
+              jsxProd_default(Box, {
                 marginTop: 1,
-                children: r(Text, {
+                children: jsxProd_default(ErrorText, {
+                  error: stripInvisibleKeepNewlines(processError),
+                }),
+              }),
+            !je &&
+              jsxProd_default(Box, {
+                marginTop: 1,
+                children: jsxProd_default_2(Text, {
                   children: [
                     "Press ",
-                    e(Text, { bold: !0, children: "y" }),
+                    jsxProd_default(Text, {
+                      bold: true,
+                      children: "y",
+                    }),
                     " to add or ",
-                    e(Text, { bold: !0, children: "n" }),
+                    jsxProd_default(Text, {
+                      bold: true,
+                      children: "n",
+                    }),
                     " to cancel",
                   ],
                 }),
@@ -775,38 +1005,51 @@ function ManageMarketplaces({
         }),
       ],
     });
-  if (ct === "confirm-remove" && oe) {
-    let le = `@${oe.name}`,
-      filtered = _.filter((state) => state.endsWith(le)),
-      Ue = new Map(filtered.map((input) => [input, input.slice(0, -le.length)])),
-      dt = [];
-    for (let installedPlugin of oe.installedPlugins) {
-      let Ce = findPluginName(filtered, installedPlugin.source);
-      if (Ce === void 0) dt.push({ id: installedPlugin.source, name: installedPlugin.name });
-      else Ue.set(Ce, installedPlugin.name);
+  if (internalView === "confirm-remove" && selectedMarketplace) {
+    let le = `@${selectedMarketplace.name}`;
+    let filtered = _.filter((state) => state.endsWith(le));
+    let Ue = new Map(filtered.map((input) => [input, input.slice(0, -le.length)]));
+    let dt = [];
+    for (let installedPlugin of selectedMarketplace.installedPlugins) {
+      let pluginName = findPluginName(filtered, installedPlugin.source);
+      if (pluginName === undefined)
+        dt.push({
+          id: installedPlugin.source,
+          name: installedPlugin.name,
+        });
+      else Ue.set(pluginName, installedPlugin.name);
     }
-    let Dt = [...[...Ue].map(([We, Ce]) => ({ id: We, name: Ce })), ...dt],
-      wt = Dt.length;
-    return r(FocusColumn, {
+    let Dt = [
+      ...[...Ue].map(([We, Ce]) => ({
+        id: We,
+        name: Ce,
+      })),
+      ...dt,
+    ];
+    let wt = Dt.length;
+    return jsxProd_default_2(FocusColumn, {
       onKeyDown: Ln,
       children: [
-        r(Text, {
-          bold: !0,
+        jsxProd_default_2(Text, {
+          bold: true,
           color: "warning",
           children: [
             "Remove marketplace",
             " ",
-            e(Text, { italic: !0, children: stripInvisibleKeepEmoji(getMarketplaceDisplayName(oe)) }),
+            jsxProd_default(Text, {
+              italic: true,
+              children: stripInvisibleKeepEmoji(getMarketplaceDisplayName(selectedMarketplace)),
+            }),
             "?",
           ],
         }),
-        r(Box, {
+        jsxProd_default_2(Box, {
           flexDirection: "column",
           children: [
             wt > 0 &&
-              e(Box, {
+              jsxProd_default(Box, {
                 marginTop: 1,
-                children: r(Text, {
+                children: jsxProd_default_2(Text, {
                   color: "warning",
                   children: [
                     "This will also uninstall ",
@@ -818,26 +1061,37 @@ function ManageMarketplaces({
                 }),
               }),
             wt > 0 &&
-              e(Box, {
+              jsxProd_default(Box, {
                 flexDirection: "column",
                 marginTop: 1,
                 marginLeft: 2,
                 children: Dt.map((plugin) =>
-                  e(
+                  jsxProd_default(
                     BulletRow,
-                    { children: e(Text, { dimColor: !0, children: stripInvisibleKeepEmoji(plugin.name) }) },
+                    {
+                      children: jsxProd_default(Text, {
+                        dimColor: true,
+                        children: stripInvisibleKeepEmoji(plugin.name),
+                      }),
+                    },
                     plugin.id,
                   ),
                 ),
               }),
-            e(Box, {
+            jsxProd_default(Box, {
               marginTop: 1,
-              children: r(Text, {
+              children: jsxProd_default_2(Text, {
                 children: [
                   "Press ",
-                  e(Text, { bold: !0, children: "y" }),
+                  jsxProd_default(Text, {
+                    bold: true,
+                    children: "y",
+                  }),
                   " to confirm or ",
-                  e(Text, { bold: !0, children: "n" }),
+                  jsxProd_default(Text, {
+                    bold: true,
+                    children: "n",
+                  }),
                   " to cancel",
                 ],
               }),
@@ -847,59 +1101,72 @@ function ManageMarketplaces({
       ],
     });
   }
-  if (ct === "details" && oe) {
-    let le = oe.pendingUpdate || je;
-    return r(Box, {
+  if (internalView === "details" && selectedMarketplace) {
+    let isUpdating = selectedMarketplace.pendingUpdate || je;
+    return jsxProd_default_2(Box, {
       flexDirection: "column",
       children: [
-        e(Text, { bold: !0, children: stripInvisibleKeepEmoji(getMarketplaceDisplayName(oe)) }),
-        e(Text, { dimColor: !0, children: stripInvisibleKeepEmoji(oe.source) }),
-        oe.note !== void 0 && e(Text, { color: "warning", children: stripInvisibleKeepEmoji(oe.note) }),
-        e(Box, {
+        jsxProd_default(Text, {
+          bold: true,
+          children: stripInvisibleKeepEmoji(getMarketplaceDisplayName(selectedMarketplace)),
+        }),
+        jsxProd_default(Text, {
+          dimColor: true,
+          children: stripInvisibleKeepEmoji(selectedMarketplace.source),
+        }),
+        selectedMarketplace.note !== undefined &&
+          jsxProd_default(Text, {
+            color: "warning",
+            children: stripInvisibleKeepEmoji(selectedMarketplace.note),
+          }),
+        jsxProd_default(Box, {
           marginTop: 1,
           children:
-            oe.builtIn === "off"
-              ? r(Text, {
+            selectedMarketplace.builtIn === "off"
+              ? jsxProd_default_2(Text, {
                   children: [
                     "Plugins listed by the ",
                     OFFICIAL_MARKETPLACE_DISPLAY,
                     ", installed at their listed commit. Turn it on to see them in Discover.",
                   ],
                 })
-              : r(Text, {
+              : jsxProd_default_2(Text, {
                   children: [
-                    oe.pluginCount || 0,
+                    selectedMarketplace.pluginCount || 0,
                     " available",
                     " ",
-                    plural(oe.pluginCount || 0, "plugin"),
-                    oe.allHiddenByPolicy
-                      ? r(Text, {
-                          dimColor: !0,
+                    plural(selectedMarketplace.pluginCount || 0, "plugin"),
+                    selectedMarketplace.allHiddenByPolicy
+                      ? jsxProd_default_2(Text, {
+                          dimColor: true,
                           children: [" ", "\xB7 hidden by your organization's policy"],
                         })
                       : null,
                   ],
                 }),
         }),
-        oe.installedPlugins.length > 0 &&
-          r(Box, {
+        selectedMarketplace.installedPlugins.length > 0 &&
+          jsxProd_default_2(Box, {
             flexDirection: "column",
             marginTop: 1,
             children: [
-              r(Text, { bold: !0, children: ["Installed plugins (", oe.installedPlugins.length, "):"] }),
-              e(Box, {
+              jsxProd_default_2(Text, {
+                bold: true,
+                children: ["Installed plugins (", selectedMarketplace.installedPlugins.length, "):"],
+              }),
+              jsxProd_default(Box, {
                 flexDirection: "column",
                 marginLeft: 1,
-                children: oe.installedPlugins.map((plugin) =>
-                  r(
+                children: selectedMarketplace.installedPlugins.map((plugin) =>
+                  jsxProd_default_2(
                     BulletRow,
                     {
                       children: [
                         stripInvisibleKeepEmoji(plugin.name),
                         `
 `,
-                        e(Text, {
-                          dimColor: !0,
+                        jsxProd_default(Text, {
+                          dimColor: true,
                           children: stripInvisibleKeepNewlines(plugin.manifest.description ?? ""),
                         }),
                       ],
@@ -910,71 +1177,91 @@ function ManageMarketplaces({
               }),
             ],
           }),
-        le &&
-          r(Box, {
+        isUpdating &&
+          jsxProd_default_2(Box, {
             marginTop: 1,
             flexDirection: "column",
             children: [
-              e(Text, { color: "claude", children: "Updating marketplace\u2026" }),
-              Et && e(Text, { dimColor: !0, children: stripInvisibleKeepEmoji(Et) }),
+              jsxProd_default(Text, {
+                color: "claude",
+                children: "Updating marketplace\u2026",
+              }),
+              progressMessage &&
+                jsxProd_default(Text, {
+                  dimColor: true,
+                  children: stripInvisibleKeepEmoji(progressMessage),
+                }),
             ],
           }),
-        !le &&
-          Tt &&
-          e(Box, {
+        !isUpdating &&
+          successMessage &&
+          jsxProd_default(Box, {
             marginTop: 1,
-            children: e(Text, { color: "claude", children: stripInvisibleKeepEmoji(Tt) }),
-          }),
-        !le &&
-          Se &&
-          e(Box, { marginTop: 1, children: e(ErrorText, { error: stripInvisibleKeepNewlines(Se) }) }),
-        !le &&
-          e(Box, {
-            flexDirection: "column",
-            marginTop: 1,
-            children: e(PluginActionSelect, {
-              options: yt,
-              onSelect: xn,
-              defaultFocusValue: at,
-              onFocus: Ot,
+            children: jsxProd_default(Text, {
+              color: "claude",
+              children: stripInvisibleKeepEmoji(successMessage),
             }),
           }),
-        !le &&
-          !shouldSkipPluginAutoupdate() &&
-          oe.autoUpdate &&
-          e(Box, {
+        !isUpdating &&
+          processError &&
+          jsxProd_default(Box, {
             marginTop: 1,
-            children: e(Text, {
-              dimColor: !0,
+            children: jsxProd_default(ErrorText, {
+              error: stripInvisibleKeepNewlines(processError),
+            }),
+          }),
+        !isUpdating &&
+          jsxProd_default(Box, {
+            flexDirection: "column",
+            marginTop: 1,
+            children: jsxProd_default(PluginActionSelect, {
+              options,
+              onSelect,
+              defaultFocusValue: detailsMenuIndex,
+              onFocus: setDetailsMenuIndex,
+            }),
+          }),
+        !isUpdating &&
+          !shouldSkipPluginAutoupdate() &&
+          selectedMarketplace.autoUpdate &&
+          jsxProd_default(Box, {
+            marginTop: 1,
+            children: jsxProd_default(Text, {
+              dimColor: true,
               children:
                 "Auto-update enabled. Claude Code will automatically update this marketplace and its installed plugins.",
             }),
           }),
-        oe.builtIn === "on" && oe.autoUpdateDeclaredOff && !le && !shouldSkipPluginAutoupdate()
-          ? e(Box, {
+        selectedMarketplace.builtIn === "on" &&
+        selectedMarketplace.autoUpdateDeclaredOff &&
+        !isUpdating &&
+        !shouldSkipPluginAutoupdate()
+          ? jsxProd_default(Box, {
               marginTop: 1,
-              children: e(Text, {
-                dimColor: !0,
-                children: `Auto-update is off: in extraKnownMarketplaces, the entry "${OFFICIAL_MARKETPLACE_NAME}" sets autoUpdate to false. Claude Code reads that entry only from ${dgn}.`,
+              children: jsxProd_default(Text, {
+                dimColor: true,
+                children: `Auto-update is off: in extraKnownMarketplaces, the entry "${OFFICIAL_MARKETPLACE_NAME}" sets autoUpdate to false. Claude Code reads that entry only from ${AUTOUPDATE_SETTING_SOURCES_TEXT}.`,
               }),
             })
           : null,
-        e(Box, {
+        jsxProd_default(Box, {
           marginTop: 1,
-          children: e(Text, {
-            dimColor: !0,
-            italic: !0,
-            children: le
-              ? e(Fragment, { children: "Please wait\u2026" })
-              : r(Byline, {
+          children: jsxProd_default(Text, {
+            dimColor: true,
+            italic: true,
+            children: isUpdating
+              ? jsxProd_default(Fragment, {
+                  children: "Please wait\u2026",
+                })
+              : jsxProd_default_2(Byline, {
                   children: [
-                    e(ConfigurableShortcutHint, {
+                    jsxProd_default(ConfigurableShortcutHint, {
                       action: "select:accept",
                       context: "Select",
                       fallback: "Enter",
                       description: "select",
                     }),
-                    e(ConfigurableShortcutHint, {
+                    jsxProd_default(ConfigurableShortcutHint, {
                       action: "confirm:no",
                       context: "Confirmation",
                       fallback: "Esc",
@@ -987,98 +1274,137 @@ function ManageMarketplaces({
       ],
     });
   }
-  let { updateCount: updateCount, removeCount: removeCount } = getPendingCounts();
-  return r(FocusColumn, {
+  let { updateCount, removeCount } = getPendingCounts();
+  return jsxProd_default_2(FocusColumn, {
     onKeyDown: mn,
     children: [
-      e(Box, { marginBottom: 1, children: e(Text, { bold: !0, children: "Manage marketplaces" }) }),
-      r(TwoColumnRow, {
-        active: rt === 0,
+      jsxProd_default(Box, {
+        marginBottom: 1,
+        children: jsxProd_default(Text, {
+          bold: true,
+          children: "Manage marketplaces",
+        }),
+      }),
+      jsxProd_default_2(TwoColumnRow, {
+        active: selectedIndex === 0,
         flexDirection: "row",
         gap: 1,
         marginBottom: 1,
         children: [
-          r(Text, {
-            color: rt === 0 ? "suggestion" : void 0,
-            children: [r(Text, { "aria-hidden": !0, children: [rt === 0 ? re.pointer : " ", " "] }), "+"],
+          jsxProd_default_2(Text, {
+            color: selectedIndex === 0 ? "suggestion" : undefined,
+            children: [
+              jsxProd_default_2(Text, {
+                "aria-hidden": true,
+                children: [selectedIndex === 0 ? figures_default.pointer : " ", " "],
+              }),
+              "+",
+            ],
           }),
-          e(Text, { bold: !0, color: rt === 0 ? "suggestion" : void 0, children: "Add Marketplace" }),
+          jsxProd_default(Text, {
+            bold: true,
+            color: selectedIndex === 0 ? "suggestion" : undefined,
+            children: "Add Marketplace",
+          }),
         ],
       }),
-      r(Box, {
+      jsxProd_default_2(Box, {
         flexDirection: "column",
         children: [
-          V.map((option, idx) => {
-            let Ue = idx + 1 === rt,
-              dt = [];
-            if (option.pendingUpdate) dt.push("UPDATE");
-            if (option.pendingRemove) dt.push("REMOVE");
-            return r(
+          marketplaceStates.map((state, idx) => {
+            let isSelected = idx + 1 === selectedIndex;
+            let indicators = [];
+            if (state.pendingUpdate) indicators.push("UPDATE");
+            if (state.pendingRemove) indicators.push("REMOVE");
+            return jsxProd_default_2(
               TwoColumnRow,
               {
-                active: Ue,
+                active: isSelected,
                 flexDirection: "row",
                 gap: 1,
                 marginBottom: 1,
                 children: [
-                  r(Text, {
-                    color: Ue ? "suggestion" : void 0,
+                  jsxProd_default_2(Text, {
+                    color: isSelected ? "suggestion" : undefined,
                     children: [
-                      r(Text, { "aria-hidden": !0, children: [Ue ? re.pointer : " ", " "] }),
-                      option.pendingRemove
-                        ? re.cross
-                        : option.builtIn === "off"
-                          ? re.radioOff
-                          : option.builtIn === "blocked"
-                            ? re.cross
-                            : re.bullet,
+                      jsxProd_default_2(Text, {
+                        "aria-hidden": true,
+                        children: [isSelected ? figures_default.pointer : " ", " "],
+                      }),
+                      state.pendingRemove
+                        ? figures_default.cross
+                        : state.builtIn === "off"
+                          ? figures_default.radioOff
+                          : state.builtIn === "blocked"
+                            ? figures_default.cross
+                            : figures_default.bullet,
                     ],
                   }),
-                  r(Box, {
+                  jsxProd_default_2(Box, {
                     flexDirection: "column",
                     flexGrow: 1,
                     children: [
-                      r(Box, {
+                      jsxProd_default_2(Box, {
                         flexDirection: "row",
                         gap: 1,
                         children: [
-                          r(Text, {
-                            bold: !0,
-                            strikethrough: option.pendingRemove,
-                            dimColor: option.pendingRemove,
+                          jsxProd_default_2(Text, {
+                            bold: true,
+                            strikethrough: state.pendingRemove,
+                            dimColor: state.pendingRemove,
                             children: [
-                              option.name === "claude-plugins-official" &&
-                                e(Text, { color: "claude", children: "\u273B " }),
-                              stripInvisibleKeepEmoji(getMarketplaceDisplayName(option)),
-                              option.name === "claude-plugins-official" &&
-                                e(Text, { color: "claude", children: " \u273B" }),
+                              state.name === "claude-plugins-official" &&
+                                jsxProd_default(Text, {
+                                  color: "claude",
+                                  children: "\u273B ",
+                                }),
+                              stripInvisibleKeepEmoji(getMarketplaceDisplayName(state)),
+                              state.name === "claude-plugins-official" &&
+                                jsxProd_default(Text, {
+                                  color: "claude",
+                                  children: " \u273B",
+                                }),
                             ],
                           }),
-                          dt.length > 0 && r(Text, { color: "warning", children: ["[", dt.join(", "), "]"] }),
+                          indicators.length > 0 &&
+                            jsxProd_default_2(Text, {
+                              color: "warning",
+                              children: ["[", indicators.join(", "), "]"],
+                            }),
                         ],
                       }),
-                      e(Text, { dimColor: !0, children: stripInvisibleKeepEmoji(option.source) }),
-                      option.note !== void 0 &&
-                        e(Text, { color: "warning", children: stripInvisibleKeepEmoji(option.note) }),
-                      r(Text, {
-                        dimColor: !0,
+                      jsxProd_default(Text, {
+                        dimColor: true,
+                        children: stripInvisibleKeepEmoji(state.source),
+                      }),
+                      state.note !== undefined &&
+                        jsxProd_default(Text, {
+                          color: "warning",
+                          children: stripInvisibleKeepEmoji(state.note),
+                        }),
+                      jsxProd_default_2(Text, {
+                        dimColor: true,
                         children: [
-                          option.pluginCount !== void 0 &&
-                            r(Fragment, { children: [option.pluginCount, " available"] }),
-                          option.allHiddenByPolicy
-                            ? e(Fragment, { children: " \xB7 hidden by your organization's policy" })
-                            : null,
-                          option.installedPlugins.length > 0 &&
-                            r(Fragment, {
-                              children: [" \u2022 ", option.installedPlugins.length, " installed"],
+                          state.pluginCount !== undefined &&
+                            jsxProd_default_2(Fragment, {
+                              children: [state.pluginCount, " available"],
                             }),
-                          option.lastUpdated &&
-                            r(Fragment, {
+                          state.allHiddenByPolicy
+                            ? jsxProd_default(Fragment, {
+                                children: " \xB7 hidden by your organization's policy",
+                              })
+                            : null,
+                          state.installedPlugins.length > 0 &&
+                            jsxProd_default_2(Fragment, {
+                              children: [" \u2022 ", state.installedPlugins.length, " installed"],
+                            }),
+                          state.lastUpdated &&
+                            jsxProd_default_2(Fragment, {
                               children: [
                                 " ",
                                 "\u2022 Updated",
                                 " ",
-                                new Date(option.lastUpdated).toLocaleDateString(),
+                                new Date(state.lastUpdated).toLocaleDateString(),
                               ],
                             }),
                         ],
@@ -1087,12 +1413,12 @@ function ManageMarketplaces({
                   }),
                 ],
               },
-              option.name,
+              state.name,
             );
           }),
           pe.available.map((le, Te) => {
-            let Ue = V.length + Te + 1 === rt;
-            return r(
+            let Ue = marketplaceStates.length + Te + 1 === selectedIndex;
+            return jsxProd_default_2(
               TwoColumnRow,
               {
                 active: Ue,
@@ -1100,20 +1426,26 @@ function ManageMarketplaces({
                 gap: 1,
                 marginBottom: 1,
                 children: [
-                  r(Text, {
-                    color: Ue ? "suggestion" : void 0,
-                    children: [r(Text, { "aria-hidden": !0, children: [Ue ? re.pointer : " ", " "] }), "+"],
+                  jsxProd_default_2(Text, {
+                    color: Ue ? "suggestion" : undefined,
+                    children: [
+                      jsxProd_default_2(Text, {
+                        "aria-hidden": true,
+                        children: [Ue ? figures_default.pointer : " ", " "],
+                      }),
+                      "+",
+                    ],
                   }),
-                  r(Box, {
+                  jsxProd_default_2(Box, {
                     flexDirection: "column",
                     flexGrow: 1,
                     children: [
-                      e(Text, {
-                        bold: !0,
+                      jsxProd_default(Text, {
+                        bold: true,
                         children: stripInvisibleKeepEmoji(displayMarketplaceName(le.name)),
                       }),
-                      r(Text, {
-                        dimColor: !0,
+                      jsxProd_default_2(Text, {
+                        dimColor: true,
                         children: [
                           stripInvisibleKeepEmoji(formatGitSourceSpec(le.source)),
                           ` \xB7 available from claude.ai${le.scope ? ` (${le.scope})` : ""}`,
@@ -1128,8 +1460,8 @@ function ManageMarketplaces({
             );
           }),
           pe.hosted.map((state, idx) => {
-            let Ue = V.length + pe.available.length + idx + 1 === rt;
-            return r(
+            let Ue = marketplaceStates.length + pe.available.length + idx + 1 === selectedIndex;
+            return jsxProd_default_2(
               TwoColumnRow,
               {
                 active: Ue,
@@ -1137,21 +1469,30 @@ function ManageMarketplaces({
                 gap: 1,
                 marginBottom: 1,
                 children: [
-                  r(Text, {
-                    color: Ue ? "suggestion" : void 0,
-                    children: [r(Text, { "aria-hidden": !0, children: [Ue ? re.pointer : " ", " "] }), "+"],
+                  jsxProd_default_2(Text, {
+                    color: Ue ? "suggestion" : undefined,
+                    children: [
+                      jsxProd_default_2(Text, {
+                        "aria-hidden": true,
+                        children: [Ue ? figures_default.pointer : " ", " "],
+                      }),
+                      "+",
+                    ],
                   }),
-                  r(Box, {
+                  jsxProd_default_2(Box, {
                     flexDirection: "column",
                     flexGrow: 1,
                     children: [
-                      e(Text, { bold: !0, children: stripInvisibleKeepEmoji(state.name) }),
-                      r(Text, {
-                        dimColor: !0,
+                      jsxProd_default(Text, {
+                        bold: true,
+                        children: stripInvisibleKeepEmoji(state.name),
+                      }),
+                      jsxProd_default_2(Text, {
+                        dimColor: true,
                         children: [
                           `hosted on claude.ai (${formatMarketplaceScopeLabel(state.scope)})`,
                           state.displayName !== state.name &&
-                            ` \xB7 ${stripInvisibleKeepEmoji(hBr(state.name, state.displayName) ?? "")}`,
+                            ` \xB7 ${stripInvisibleKeepEmoji(listedAsSuffix(state.name, state.displayName) ?? "")}`,
                           !hasPendingChanges() && " \xB7 Enter to add",
                         ],
                       }),
@@ -1163,14 +1504,14 @@ function ManageMarketplaces({
             );
           }),
           pe.browseOnly.map((le) =>
-            e(
+            jsxProd_default(
               Box,
               {
                 marginBottom: 1,
                 paddingLeft: 4,
-                children: r(Text, {
-                  dimColor: !0,
-                  children: [stripInvisibleKeepEmoji(Qbt(le)), " ", "\xB7 browse on claude.ai"],
+                children: jsxProd_default_2(Text, {
+                  dimColor: true,
+                  children: [stripInvisibleKeepEmoji(noCliNameLabel(le)), " ", "\xB7 browse on claude.ai"],
                 }),
               },
               `claudeai-browse:${le.name}`,
@@ -1179,17 +1520,20 @@ function ManageMarketplaces({
         ],
       }),
       hasPendingChanges() &&
-        r(Box, {
+        jsxProd_default_2(Box, {
           marginTop: 1,
           flexDirection: "column",
           children: [
-            r(Text, {
+            jsxProd_default_2(Text, {
               children: [
-                e(Text, { bold: !0, children: "Pending changes:" }),
+                jsxProd_default(Text, {
+                  bold: true,
+                  children: "Pending changes:",
+                }),
                 " ",
-                e(Text, {
-                  dimColor: !0,
-                  children: e(ConfigurableShortcutHint, {
+                jsxProd_default(Text, {
+                  dimColor: true,
+                  children: jsxProd_default(ConfigurableShortcutHint, {
                     action: "select:accept",
                     context: "Select",
                     fallback: "Enter",
@@ -1199,143 +1543,158 @@ function ManageMarketplaces({
               ],
             }),
             updateCount > 0 &&
-              r(BulletRow, { children: ["Update ", updateCount, " ", plural(updateCount, "marketplace")] }),
+              jsxProd_default_2(BulletRow, {
+                children: ["Update ", updateCount, " ", plural(updateCount, "marketplace")],
+              }),
             removeCount > 0 &&
-              r(BulletRow, {
+              jsxProd_default_2(BulletRow, {
                 color: "warning",
                 children: ["Remove ", removeCount, " ", plural(removeCount, "marketplace")],
               }),
           ],
         }),
       je &&
-        e(Box, {
+        jsxProd_default(Box, {
           marginTop: 1,
-          children: e(Text, { color: "claude", children: "Processing changes\u2026" }),
+          children: jsxProd_default(Text, {
+            color: "claude",
+            children: "Processing changes\u2026",
+          }),
         }),
-      Se && e(Box, { marginTop: 1, children: e(ErrorText, { error: stripInvisibleKeepNewlines(Se) }) }),
-      e(ManageMarketplacesKeyHints, {
-        exitState: exitState,
+      processError &&
+        jsxProd_default(Box, {
+          marginTop: 1,
+          children: jsxProd_default(ErrorText, {
+            error: stripInvisibleKeepNewlines(processError),
+          }),
+        }),
+      jsxProd_default(ManageMarketplacesKeyHints, {
+        exitState,
         hasPendingActions: hasPendingChanges(),
-        isOnInertRow: V[rt - 1]?.builtIn === "blocked",
-        builtInRow: V[rt - 1]?.builtIn,
+        isOnInertRow: marketplaceStates[selectedIndex - 1]?.builtIn === "blocked",
+        builtInRow: marketplaceStates[selectedIndex - 1]?.builtIn,
       }),
     ],
   });
 }
 //@ chunk-vrb44rx7.js:122462-123736 fingerprint = ManageMarketplacesKeyHints (0.783)
-function ManageMarketplacesKeyHints(t0) {
-  let T = w(23),
-    {
-      exitState: exitState,
-      hasPendingActions: hasPendingActions,
-      isOnInertRow: isOnInertRow,
-      builtInRow: builtInRow,
-    } = t0;
+function ManageMarketplacesKeyHints(props) {
+  let $ = w(23);
+  let { exitState, hasPendingActions, isOnInertRow, builtInRow } = props;
   if (exitState.pending) {
-    let D;
-    if (T[0] !== exitState.keyName)
-      ((D = e(Box, {
+    let t1;
+    if ($[0] !== exitState.keyName) {
+      t1 = jsxProd_default(Box, {
         marginTop: 1,
-        children: r(Text, {
-          dimColor: !0,
-          italic: !0,
+        children: jsxProd_default_2(Text, {
+          dimColor: true,
+          italic: true,
           children: ["Press ", exitState.keyName, " again to go back"],
         }),
-      })),
-        (T[0] = exitState.keyName),
-        (T[1] = D));
-    else D = T[1];
-    return D;
+      });
+      $[0] = exitState.keyName;
+      $[1] = t1;
+    } else t1 = $[1];
+    return t1;
   }
-  let D;
-  if (T[2] !== hasPendingActions)
-    ((D =
+  let t1;
+  if ($[2] !== hasPendingActions) {
+    t1 =
       hasPendingActions &&
-      e(ConfigurableShortcutHint, {
+      jsxProd_default(ConfigurableShortcutHint, {
         action: "select:accept",
         context: "Select",
         fallback: "Enter",
         description: "apply changes",
-      })),
-      (T[2] = hasPendingActions),
-      (T[3] = D));
-  else D = T[3];
-  let U;
-  if (T[4] !== hasPendingActions || T[5] !== isOnInertRow)
-    ((U =
+      });
+    $[2] = hasPendingActions;
+    $[3] = t1;
+  } else t1 = $[3];
+  let t2;
+  if ($[4] !== hasPendingActions || $[5] !== isOnInertRow) {
+    t2 =
       !hasPendingActions &&
       !isOnInertRow &&
-      e(ConfigurableShortcutHint, {
+      jsxProd_default(ConfigurableShortcutHint, {
         action: "select:accept",
         context: "Select",
         fallback: "Enter",
         description: "select",
-      })),
-      (T[4] = hasPendingActions),
-      (T[5] = isOnInertRow),
-      (T[6] = U));
-  else U = T[6];
-  let L;
-  if (T[7] !== builtInRow || T[8] !== hasPendingActions || T[9] !== isOnInertRow)
-    ((L =
+      });
+    $[4] = hasPendingActions;
+    $[5] = isOnInertRow;
+    $[6] = t2;
+  } else t2 = $[6];
+  let t3;
+  if ($[7] !== builtInRow || $[8] !== hasPendingActions || $[9] !== isOnInertRow) {
+    t3 =
       !hasPendingActions &&
       !isOnInertRow &&
       builtInRow !== "off" &&
-      e(KeyboardShortcutHint, { chord: "u", action: "update" })),
-      (T[7] = builtInRow),
-      (T[8] = hasPendingActions),
-      (T[9] = isOnInertRow),
-      (T[10] = L));
-  else L = T[10];
-  let A;
-  if (T[11] !== builtInRow || T[12] !== hasPendingActions || T[13] !== isOnInertRow)
-    ((A =
+      jsxProd_default(KeyboardShortcutHint, {
+        chord: "u",
+        action: "update",
+      });
+    $[7] = builtInRow;
+    $[8] = hasPendingActions;
+    $[9] = isOnInertRow;
+    $[10] = t3;
+  } else t3 = $[10];
+  let t4;
+  if ($[11] !== builtInRow || $[12] !== hasPendingActions || $[13] !== isOnInertRow) {
+    t4 =
       !hasPendingActions &&
       !isOnInertRow &&
-      e(KeyboardShortcutHint, {
+      jsxProd_default(KeyboardShortcutHint, {
         chord: "d",
         action: builtInRow === "on" ? "turn off" : builtInRow === "off" ? "turn on" : "remove",
-      })),
-      (T[11] = builtInRow),
-      (T[12] = hasPendingActions),
-      (T[13] = isOnInertRow),
-      (T[14] = A));
-  else A = T[14];
-  const t5 = hasPendingActions ? "cancel" : "go back";
-  let V;
-  if (T[15] !== t5)
-    ((V = e(ConfigurableShortcutHint, {
+      });
+    $[11] = builtInRow;
+    $[12] = hasPendingActions;
+    $[13] = isOnInertRow;
+    $[14] = t4;
+  } else t4 = $[14];
+  const description = hasPendingActions ? "cancel" : "go back";
+  let t6;
+  if ($[15] !== description) {
+    t6 = jsxProd_default(ConfigurableShortcutHint, {
       action: "confirm:no",
       context: "Confirmation",
       fallback: "Esc",
-      description: t5,
-    })),
-      (T[15] = t5),
-      (T[16] = V));
-  else V = T[16];
-  let B;
-  if (T[17] !== D || T[18] !== U || T[19] !== L || T[20] !== A || T[21] !== V)
-    ((B = e(Box, {
+      description,
+    });
+    $[15] = description;
+    $[16] = t6;
+  } else t6 = $[16];
+  let t7;
+  if ($[17] !== t1 || $[18] !== t2 || $[19] !== t3 || $[20] !== t4 || $[21] !== t6) {
+    t7 = jsxProd_default(Box, {
       marginTop: 1,
-      children: e(Text, { dimColor: !0, italic: !0, children: r(Byline, { children: [D, U, L, A, V] }) }),
-    })),
-      (T[17] = D),
-      (T[18] = U),
-      (T[19] = L),
-      (T[20] = A),
-      (T[21] = V),
-      (T[22] = B));
-  else B = T[22];
-  return B;
+      children: jsxProd_default(Text, {
+        dimColor: true,
+        italic: true,
+        children: jsxProd_default_2(Byline, {
+          children: [t1, t2, t3, t4, t6],
+        }),
+      }),
+    });
+    $[17] = t1;
+    $[18] = t2;
+    $[19] = t3;
+    $[20] = t4;
+    $[21] = t6;
+    $[22] = t7;
+  } else t7 = $[22];
+  return t7;
 }
 //@ chunk-vrb44rx7.js:123736-123791 layout
 function getMarketplaceDisplayName(i) {
-  return i.builtIn !== void 0 ? OFFICIAL_MARKETPLACE_DISPLAY : displayMarketplaceName(i.name);
+  return i.builtIn !== undefined ? OFFICIAL_MARKETPLACE_DISPLAY : displayMarketplaceName(i.name);
 }
+//@ chunk-vrb44rx7.js:123791-124310 layout
 /**
  * 按官方市场可用状态（unavailable/blocked/off/on）在市场列表前插入或修正内置官方市场行：被组织屏蔽或关闭时插入占位行；已添加时标记 builtIn 并在插件全被策略隐藏时加标志。
  */
-//@ chunk-vrb44rx7.js:123791-124310 layout
 async function withOfficialMarketplaceRow(marketplaces, knownMarketplaces) {
   {
     let officialStatus = await getPluginDirectoryState();
@@ -1355,11 +1714,18 @@ async function withOfficialMarketplaceRow(marketplaces, knownMarketplaces) {
           ];
     if (C) {
       if (!isPluginDirectorySource(C.source)) return marketplaces;
-      let x = kk().catalogEntryNames?.size ?? 0;
-      return marketplaces.map((T) =>
-        T.name === OFFICIAL_MARKETPLACE_NAME
-          ? { ...T, builtIn: "on", ...(T.pluginCount === 0 && x > 0 && { allHiddenByPolicy: !0 }) }
-          : T,
+      let size = commandSourceSession().catalogEntryNames?.size ?? 0;
+      return marketplaces.map((marketplace) =>
+        marketplace.name === OFFICIAL_MARKETPLACE_NAME
+          ? {
+              ...marketplace,
+              builtIn: "on",
+              ...(marketplace.pluginCount === 0 &&
+                size > 0 && {
+                  allHiddenByPolicy: true,
+                }),
+            }
+          : marketplace,
       );
     }
     return officialStatus === "off"
@@ -1377,22 +1743,22 @@ async function withOfficialMarketplaceRow(marketplaces, knownMarketplaces) {
   return marketplaces;
 }
 //@ chunk-vrb44rx7.js:124310-125186 placement
-function buildMarketplaceRows(i, h, k, C) {
-  let x = getDeclaredMarketplaces();
-  return i
-    .map(({ name: D, config: config, data: L }) => {
-      let filtered = k.filter((_) => _.source.endsWith(`@${D}`)),
-        K = getMarketplaceSourceDisplay(config.source),
-        V;
+function buildMarketplaceRows(marketplaces, failures, allPlugins, claudeAiMarketplaceRegistry) {
+  let declaredMarketplaces = getDeclaredMarketplaces();
+  return marketplaces
+    .map(({ name: D, config, data: L }) => {
+      let filtered = allPlugins.filter((_) => _.source.endsWith(`@${D}`));
+      let source = getMarketplaceSourceDisplay(config.source);
+      let V;
       if (config.source.source === "claudeai") {
-        K = formatClaudeAiMarketplaceLabel(C[D]);
+        source = formatClaudeAiMarketplaceLabel(claudeAiMarketplaceRegistry[D]);
         let _ =
           L === null
             ? 0
             : count(filtered, (J) => {
                 let found = L.plugins.find((plugin) => plugin.name === J.name);
                 return (
-                  found !== void 0 &&
+                  found !== undefined &&
                   typeof found.source === "object" &&
                   found.source.source === "claudeai" &&
                   found.source.version !== "" &&
@@ -1400,23 +1766,27 @@ function buildMarketplaceRows(i, h, k, C) {
                 );
               });
         V =
-          h.find((J) => J.name === D)?.error ??
+          failures.find((J) => J.name === D)?.error ??
           (_ > 0
             ? `${_} plugin ${plural(_, "update")} available \xB7 update the marketplace to apply`
-            : void 0);
+            : undefined);
       }
-      let B = getMarketplaceAutoUpdate(D, x);
+      let marketplaceAutoUpdate = getMarketplaceAutoUpdate(D, declaredMarketplaces);
       return {
         name: D,
-        source: K,
-        ...(V !== void 0 && { note: V }),
+        source,
+        ...(V !== undefined && {
+          note: V,
+        }),
         lastUpdated: config.lastUpdated,
         pluginCount: L?.plugins.length,
         installedPlugins: filtered,
-        pendingUpdate: !1,
-        pendingRemove: !1,
-        autoUpdate: isMarketplaceAutoUpdate(D, config, B),
-        ...(B === !1 && { autoUpdateDeclaredOff: !0 }),
+        pendingUpdate: false,
+        pendingRemove: false,
+        autoUpdate: isMarketplaceAutoUpdate(D, config, marketplaceAutoUpdate),
+        ...(marketplaceAutoUpdate === false && {
+          autoUpdateDeclaredOff: true,
+        }),
       };
     })
     .sort((D, U) => {
@@ -1426,8 +1796,7 @@ function buildMarketplaceRows(i, h, k, C) {
     });
 }
 //@ chunk-vrb44rx7.js:125186-125190 placement
-j();
+init_react_production();
 //@ chunk-vrb44rx7.js:125190-125194 placement
-j();
-
+init_react_production();
 export { ManageMarketplaces };

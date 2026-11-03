@@ -7,14 +7,13 @@
  */
 
 //@ chunk-z0q4jgnc.js:454-478 placement
-var Gr = Object.prototype;
+var objectProto = Object.prototype;
 //@ chunk-z0q4jgnc.js:478-569 placement
-function isPrototype(r) {
-  var t = r && r.constructor,
-    e = (typeof t == "function" && t.prototype) || Gr;
-  return r === e;
+function isPrototype(value) {
+  var Ctor = value && value.constructor;
+  var proto = (typeof Ctor == "function" && Ctor.prototype) || objectProto;
+  return value === proto;
 }
 //@ chunk-z0q4jgnc.js:569-580 placement
-var X8e = isPrototype;
-
-export { X8e };
+var isPrototype_default = isPrototype;
+export { isPrototype_default };

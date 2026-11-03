@@ -8,22 +8,27 @@
  * pieces: chunk-6vnxsn99.js (9)
  * attribution: placement 9
  */
-import { sep, sep as sep_2, sep as sep_3, sep as sep_4 } from "path";
+import { sep } from "path";
 import { jsonParse } from "../slowOperations.js";
 import { logForDebugging } from "../debug.js";
 import { errorMessage } from "../errors.js";
 import { isDisklessProcess } from "../../bootstrap/state.js";
-import { ao } from "../../bridge/bridgeHostState.js";
+import { bridgeHostState } from "../../bridge/bridgeHostState.js";
 import { env } from "../env.js";
-import { gl } from "../cwd.js";
-import { op, kMt, rQt, resolveNetworkShareCached } from "../remoteEnvironment.js";
+import { getCwdOrNull } from "../cwd.js";
+import {
+  isByocEnvironment,
+  initialCwdKey,
+  isLocalAbsolutePath,
+  resolveNetworkShareCached,
+} from "../remoteEnvironment.js";
 import {
   linkChainIsUnsafeToFollow,
   addWatchedRepo,
   onRepoBranchChange,
   getCachedBranchForRepo,
 } from "./gitFilesystem.js";
-import { e9 } from "../permissions/protectedDirs.js";
+import { realpathCacheEntry } from "../permissions/protectedDirs.js";
 import { En } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 
 //@ chunk-6vnxsn99.js:1838-2082 placement
@@ -33,46 +38,51 @@ function parseEnvMap(e) {
   try {
     let r = jsonParse(e);
     if (r && typeof r === "object") {
-      for (let [o, s] of Object.entries(r)) if (typeof s === "string") n.set(o, s);
+      for (let [key, value] of Object.entries(r)) if (typeof value === "string") n.set(key, value);
     }
   } catch (error) {
-    logForDebugging(`[repo-checkouts] Failed to parse env map: ${errorMessage(error)}`, { level: "error" });
+    logForDebugging(`[repo-checkouts] Failed to parse env map: ${errorMessage(error)}`, {
+      level: "error",
+    });
   }
   return n;
 }
+//@ chunk-6vnxsn99.js:2082-2366 placement
 /**
  * 读取会话声明的多仓库检出（CLAUDE_CODE_REPO_CHECKOUTS，JSON 名称→绝对路径），过滤非绝对路径并缓存。
  */
-//@ chunk-6vnxsn99.js:2082-2366 placement
 function getRepoCheckouts() {
   if (isDisklessProcess()) return new Map();
-  let repoCheckouts = ao().repoCheckouts;
+  let repoCheckouts = bridgeHostState().repoCheckouts;
   if (repoCheckouts.checkouts) return repoCheckouts.checkouts;
   let CLAUDE_CODE_REPO_CHECKOUTS = env.CLAUDE_CODE_REPO_CHECKOUTS;
   if (!CLAUDE_CODE_REPO_CHECKOUTS) {
-    let r = gl();
-    return ((repoCheckouts.checkouts = new Map(r === null ? [] : [["", r]])), repoCheckouts.checkouts);
+    let cwdOrNull = getCwdOrNull();
+    repoCheckouts.checkouts = new Map(cwdOrNull === null ? [] : [["", cwdOrNull]]);
+    return repoCheckouts.checkouts;
   }
-  if (((repoCheckouts.checkouts = parseEnvMap(CLAUDE_CODE_REPO_CHECKOUTS)), op()))
-    repoCheckouts.checkouts = filterAbsoluteCheckouts(repoCheckouts.checkouts);
+  repoCheckouts.checkouts = parseEnvMap(CLAUDE_CODE_REPO_CHECKOUTS);
+  if (isByocEnvironment()) repoCheckouts.checkouts = filterAbsoluteCheckouts(repoCheckouts.checkouts);
   return repoCheckouts.checkouts;
 }
 //@ chunk-6vnxsn99.js:2366-2497 placement
 function resolveCheckoutPath(e) {
-  if (!op()) return e;
-  let n = kMt();
-  if (!rQt(e, n) || linkChainIsUnsafeToFollow(e, n)) return null;
-  let r = e9(e);
-  return r !== null && rQt(r, resolveNetworkShareCached(n)) ? r : null;
+  if (!isByocEnvironment()) return e;
+  let n = initialCwdKey();
+  if (!isLocalAbsolutePath(e, n) || linkChainIsUnsafeToFollow(e, n)) return null;
+  let r = realpathCacheEntry(e);
+  return r !== null && isLocalAbsolutePath(r, resolveNetworkShareCached(n)) ? r : null;
 }
 //@ chunk-6vnxsn99.js:2497-2727 placement
-function filterAbsoluteCheckouts(e) {
-  let n = kMt(),
-    r = new Map([...e].filter(([, o]) => rQt(o, n)));
-  if (r.size < e.size)
+function filterAbsoluteCheckouts(checkouts) {
+  let n = initialCwdKey();
+  let r = new Map([...checkouts].filter(([, o]) => isLocalAbsolutePath(o, n)));
+  if (r.size < checkouts.size)
     logForDebugging(
-      `[repo-checkouts] ignored ${e.size - r.size} declared checkout(s) whose path is not absolute or lies on another host`,
-      { level: "warn" },
+      `[repo-checkouts] ignored ${checkouts.size - r.size} declared checkout(s) whose path is not absolute or lies on another host`,
+      {
+        level: "warn",
+      },
     );
   return r;
 }
@@ -82,9 +92,10 @@ function getDeclaredRepoCheckouts() {
 }
 //@ chunk-6vnxsn99.js:2792-2920 placement
 function getRepoBaseRefs() {
-  let repoCheckouts = ao().repoCheckouts;
+  let repoCheckouts = bridgeHostState().repoCheckouts;
   if (repoCheckouts.baseRefs) return repoCheckouts.baseRefs;
-  return ((repoCheckouts.baseRefs = parseEnvMap(env.CLAUDE_CODE_BASE_REFS)), repoCheckouts.baseRefs);
+  repoCheckouts.baseRefs = parseEnvMap(env.CLAUDE_CODE_BASE_REFS);
+  return repoCheckouts.baseRefs;
 }
 //@ chunk-6vnxsn99.js:2920-3002 placement
 function checkoutNameForPath(e) {
@@ -92,30 +103,32 @@ function checkoutNameForPath(e) {
   return;
 }
 //@ chunk-6vnxsn99.js:3002-3142 placement
-async function watchRepoCheckouts(e) {
-  ao().repoCheckouts.onMetadataChanged = e;
+async function watchRepoCheckouts(onMetadataChanged) {
+  bridgeHostState().repoCheckouts.onMetadataChanged = onMetadataChanged;
   for (let [, n] of getRepoCheckouts()) {
-    let r = resolveCheckoutPath(n);
-    if (r !== null) await addWatchedRepo(r);
+    let checkoutPath = resolveCheckoutPath(n);
+    if (checkoutPath !== null) await addWatchedRepo(checkoutPath);
   }
   onRepoBranchChange(() => void refreshCheckoutMetadata());
 }
 //@ chunk-6vnxsn99.js:3142-3428 placement
 async function refreshCheckoutMetadata() {
-  let e = getRepoCheckouts();
-  if (e.size === 0) return;
+  let repoCheckouts = getRepoCheckouts();
+  if (repoCheckouts.size === 0) return;
   let n = {};
-  for (let [o, s] of e) {
-    let a = resolveCheckoutPath(s);
-    if (a === null) continue;
-    let u = await getCachedBranchForRepo(a);
-    if (u !== void 0) n[o] = u;
+  for (let [o, s] of repoCheckouts) {
+    let checkoutPath = resolveCheckoutPath(s);
+    if (checkoutPath === null) continue;
+    let cachedBranchForRepo = await getCachedBranchForRepo(checkoutPath);
+    if (cachedBranchForRepo !== undefined) n[o] = cachedBranchForRepo;
   }
-  let repoCheckouts = ao().repoCheckouts;
-  if (En(n, repoCheckouts.lastEmittedBranches)) return;
-  ((repoCheckouts.lastEmittedBranches = n), repoCheckouts.onMetadataChanged?.({ current_branches: n }));
+  let repoCheckouts_2 = bridgeHostState().repoCheckouts;
+  if (En(n, repoCheckouts_2.lastEmittedBranches)) return;
+  repoCheckouts_2.lastEmittedBranches = n;
+  repoCheckouts_2.onMetadataChanged?.({
+    current_branches: n,
+  });
 }
-
 export {
   refreshCheckoutMetadata,
   checkoutNameForPath,

@@ -5,99 +5,117 @@
  * pieces: chunk-mrx6y2r5.js (3)
  * attribution: esm-fingerprint 3
  */
-import { Md } from "./log.js";
-import { Od, xd } from "./urlHelpers.js";
+import { logger_3 } from "./log.js";
+import { Od, getRequestUrl } from "./urlHelpers.js";
 import { je } from "../../../core-rest-pipeline/dist/esm/policies/retryPolicy.js";
-import { ft } from "./operationHelpers.js";
-import { kd, Aa } from "../index.js";
-import { Pd } from "./pipeline.js";
+import { getOperationRequestInfo } from "./operationHelpers.js";
+import { kd, flattenResponse } from "../index.js";
+import { createClientPipeline } from "./pipeline.js";
 
 //@ chunk-mrx6y2r5.js:79655-81677 esm-fingerprint
-class ti {
-  constructor(e = {}) {
-    var t, r;
-    if (
-      ((this._requestContentType = e.requestContentType),
-      (this._endpoint = (t = e.endpoint) !== null && t !== void 0 ? t : e.baseUri),
-      e.baseUri)
-    )
-      Md.warning("The baseUri option for SDK Clients has been deprecated, please use endpoint instead.");
-    if (
-      ((this._allowInsecureConnection = e.allowInsecureConnection),
-      (this._httpClient = e.httpClient || Od()),
-      (this.pipeline = e.pipeline || ug(e)),
-      (r = e.additionalPolicies) === null || r === void 0 ? void 0 : r.length)
-    )
-      for (let { policy: policy, position: position } of e.additionalPolicies) {
-        let i = position === "perRetry" ? "Sign" : void 0;
-        this.pipeline.addPolicy(policy, { afterPhase: i });
+class ServiceClient {
+  constructor(options = {}) {
+    var _a;
+    var _b;
+    this._requestContentType = options.requestContentType;
+    this._endpoint = (_a = options.endpoint) !== null && _a !== undefined ? _a : options.baseUri;
+    if (options.baseUri)
+      logger_3.warning(
+        "The baseUri option for SDK Clients has been deprecated, please use endpoint instead.",
+      );
+    this._allowInsecureConnection = options.allowInsecureConnection;
+    this._httpClient = options.httpClient || Od();
+    this.pipeline = options.pipeline || createDefaultPipeline(options);
+    if ((_b = options.additionalPolicies) === null || _b === undefined ? undefined : _b.length)
+      for (let { policy, position } of options.additionalPolicies) {
+        let afterPhase = position === "perRetry" ? "Sign" : undefined;
+        this.pipeline.addPolicy(policy, {
+          afterPhase,
+        });
       }
   }
-  async sendRequest(e) {
-    return this.pipeline.sendRequest(this._httpClient, e);
+  async sendRequest(request) {
+    return this.pipeline.sendRequest(this._httpClient, request);
   }
-  async sendOperationRequest(e, t) {
-    let r = t.baseUrl || this._endpoint;
-    if (!r)
+  async sendOperationRequest(operationArguments, operationSpec) {
+    let endpoint = operationSpec.baseUrl || this._endpoint;
+    if (!endpoint)
       throw Error(
         "If operationSpec.baseUrl is not specified, then the ServiceClient must have a endpoint string property that contains the base URL to use.",
       );
-    let n = xd(r, t, e, this),
-      o = je({ url: n });
-    o.method = t.httpMethod;
-    let i = ft(o);
-    ((i.operationSpec = t), (i.operationArguments = e));
-    let s = t.contentType || this._requestContentType;
-    if (s && t.requestBody) o.headers.set("Content-Type", s);
-    let options = e.options;
+    let url = getRequestUrl(endpoint, operationSpec, operationArguments, this);
+    let request = je({
+      url,
+    });
+    request.method = operationSpec.httpMethod;
+    let operationInfo = getOperationRequestInfo(request);
+    operationInfo.operationSpec = operationSpec;
+    operationInfo.operationArguments = operationArguments;
+    let contentType = operationSpec.contentType || this._requestContentType;
+    if (contentType && operationSpec.requestBody) request.headers.set("Content-Type", contentType);
+    let options = operationArguments.options;
     if (options) {
       let requestOptions = options.requestOptions;
       if (requestOptions) {
-        if (requestOptions.timeout) o.timeout = requestOptions.timeout;
-        if (requestOptions.onUploadProgress) o.onUploadProgress = requestOptions.onUploadProgress;
-        if (requestOptions.onDownloadProgress) o.onDownloadProgress = requestOptions.onDownloadProgress;
-        if (requestOptions.shouldDeserialize !== void 0)
-          i.shouldDeserialize = requestOptions.shouldDeserialize;
-        if (requestOptions.allowInsecureConnection) o.allowInsecureConnection = !0;
+        if (requestOptions.timeout) request.timeout = requestOptions.timeout;
+        if (requestOptions.onUploadProgress) request.onUploadProgress = requestOptions.onUploadProgress;
+        if (requestOptions.onDownloadProgress) request.onDownloadProgress = requestOptions.onDownloadProgress;
+        if (requestOptions.shouldDeserialize !== undefined)
+          operationInfo.shouldDeserialize = requestOptions.shouldDeserialize;
+        if (requestOptions.allowInsecureConnection) request.allowInsecureConnection = true;
       }
-      if (options.abortSignal) o.abortSignal = options.abortSignal;
-      if (options.tracingOptions) o.tracingOptions = options.tracingOptions;
+      if (options.abortSignal) request.abortSignal = options.abortSignal;
+      if (options.tracingOptions) request.tracingOptions = options.tracingOptions;
     }
-    if (this._allowInsecureConnection) o.allowInsecureConnection = !0;
-    if (o.streamResponseStatusCodes === void 0) o.streamResponseStatusCodes = kd(t);
+    if (this._allowInsecureConnection) request.allowInsecureConnection = true;
+    if (request.streamResponseStatusCodes === undefined)
+      request.streamResponseStatusCodes = kd(operationSpec);
     try {
-      let sendRequest = await this.sendRequest(o),
-        l = Aa(sendRequest, t.responses[sendRequest.status]);
-      if (options === null || options === void 0 ? void 0 : options.onResponse)
-        options.onResponse(sendRequest, l);
-      return l;
+      let rawResponse = await this.sendRequest(request);
+      let flatResponse = flattenResponse(rawResponse, operationSpec.responses[rawResponse.status]);
+      if (options === null || options === undefined ? undefined : options.onResponse)
+        options.onResponse(rawResponse, flatResponse);
+      return flatResponse;
     } catch (error) {
-      if (typeof error === "object" && (error === null || error === void 0 ? void 0 : error.response)) {
-        let response = error.response,
-          d = Aa(response, t.responses[error.statusCode] || t.responses.default);
-        if (((error.details = d), options === null || options === void 0 ? void 0 : options.onResponse))
-          options.onResponse(response, d, error);
+      if (typeof error === "object" && (error === null || error === undefined ? undefined : error.response)) {
+        let rawResponse = error.response;
+        let flatResponse = flattenResponse(
+          rawResponse,
+          operationSpec.responses[error.statusCode] || operationSpec.responses.default,
+        );
+        error.details = flatResponse;
+        if (options === null || options === undefined ? undefined : options.onResponse)
+          options.onResponse(rawResponse, flatResponse, error);
       }
       throw error;
     }
   }
 }
 //@ chunk-mrx6y2r5.js:81677-81842 esm-fingerprint
-function ug(e) {
-  let t = hg(e),
-    r = e.credential && t ? { credentialScopes: t, credential: e.credential } : void 0;
-  return Pd(Object.assign(Object.assign({}, e), { credentialOptions: r }));
+function createDefaultPipeline(options) {
+  let credentialScopes = getCredentialScopes(options);
+  let credentialOptions =
+    options.credential && credentialScopes
+      ? {
+          credentialScopes,
+          credential: options.credential,
+        }
+      : undefined;
+  return createClientPipeline(
+    Object.assign(Object.assign({}, options), {
+      credentialOptions,
+    }),
+  );
 }
 //@ chunk-mrx6y2r5.js:81842-82206 esm-fingerprint
-function hg(e) {
-  if (e.credentialScopes) return e.credentialScopes;
-  if (e.endpoint) return `${e.endpoint}/.default`;
-  if (e.baseUri) return `${e.baseUri}/.default`;
-  if (e.credential && !e.credentialScopes)
+function getCredentialScopes(options) {
+  if (options.credentialScopes) return options.credentialScopes;
+  if (options.endpoint) return `${options.endpoint}/.default`;
+  if (options.baseUri) return `${options.baseUri}/.default`;
+  if (options.credential && !options.credentialScopes)
     throw Error(
       "When using credentials, the ServiceClientOptions must contain either a endpoint or a credentialScopes. Unable to create a bearerTokenAuthenticationPolicy",
     );
   return;
 }
-
-export { ti };
+export { ServiceClient };

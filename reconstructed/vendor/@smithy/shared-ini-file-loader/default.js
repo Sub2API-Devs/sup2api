@@ -5,7 +5,7 @@
  * pieces: chunk-72ngr4xp.js (1)
  * attribution: placement 1
  */
-import { hU } from "./dist-cjs/index.js";
+import { require_shared_ini_file_loader } from "./dist-cjs/index.js";
 
 //@ chunk-72ngr4xp.js:227-247 placement
-export default hU();
+export default require_shared_ini_file_loader();

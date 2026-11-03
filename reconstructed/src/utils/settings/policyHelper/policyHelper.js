@@ -9,33 +9,33 @@
  * attribution: placement 24
  */
 import { DoctorLazy } from "../../../cli/handlers/util.js";
-import { kt, oe, o } from "../../../../vendor/zod/v4/classic/schemas.js";
-import { is, or } from "../commandSyncNames.js";
+import { looseObject, unknown, string } from "../../../../vendor/zod/v4/classic/schemas.js";
+import { commandSyncNameState, invalidateCommandNames } from "../commandSyncNames.js";
 import { isStorageV5Enabled } from "../../hoverRest.js";
 import { createSignal } from "../../signal.js";
 import { logError } from "../../log.js";
 import {
-  eio,
+  applyRemotePolicyMidSession,
   retryRemoteHelper,
   matchingRemoteHelperConfig,
-  Os,
+  resetRemoteHelperState,
   retireOsAdminPass,
-  et,
+  retireReason,
   retireIfShadowedByRemote,
   selectPerOsHelper,
   runRemoteArmedHelper,
-  qe,
+  RemoteHelperError,
 } from "./helperRemote.js";
 import { runPolicyHelperWithRetry } from "./helperExec.js";
 import { logForDebugging } from "../../debug.js";
 import {
   warnPolicyHelperRefresh,
-  wt,
-  Qe,
-  Ht,
-  hr,
+  mergesOutputBehavior,
+  withholdUnverifiedCacheKeys,
+  clearHelperRefreshWarning,
+  clearRemotePayloadWarnings,
   clearSelectionWarnings,
-  Rr,
+  NO_PLATFORM_ENTRY_TEXT,
   hasPolicyHelperConfig,
   remotePolicySnapshot,
   applyStaticPayloadChoice,
@@ -49,153 +49,182 @@ import {
   getEligibilityMemo,
 } from "../../../services/remoteManagedSettings/remoteSettingsState.js";
 import { MAX_HELPER_MS, SUPPORTED_PLATFORMS } from "../types.js";
-import { aV } from "../../memoize.js";
+import { retainCacheKey } from "../../memoize.js";
 import { fromEnum } from "../../../services/analytics/safeMetadata.js";
-import { ql } from "../../stringUtils.js";
+import { cleanForDisplay } from "../../stringUtils.js";
 import { getRemoteManagedSettingsSyncFromCache } from "../../../services/remoteManagedSettings/remoteSettingsCache.js";
-import { One } from "../managedPluginTiers.js";
+import { mdmResult } from "../managedPluginTiers.js";
 import { platformSettingsChain } from "../marketplaceSettingsAliases.js";
 import { parseHelperSetting, asciiOnly } from "../otelEndpointValidation.js";
 
 //@ chunk-q8cqcff6.js:57614-57742 placement
-var HELPER_TIMEOUT_MS = 1e4,
-  MAX_HELPER_OUTPUT_BYTES = 1048576,
-  HELPER_OUTPUT_SCHEMA = DoctorLazy(() =>
-    kt({ managedSettings: oe().optional(), claudeMd: o().optional(), appendSystemPrompt: o().optional() }),
-  );
+var HELPER_TIMEOUT_MS = 1e4;
+var MAX_HELPER_OUTPUT_BYTES = 1048576;
+var HELPER_OUTPUT_SCHEMA = DoctorLazy(() =>
+  looseObject({
+    managedSettings: unknown().optional(),
+    claudeMd: string().optional(),
+    appendSystemPrompt: string().optional(),
+  }),
+);
 //@ chunk-q8cqcff6.js:57742-57787 placement
-function Ye(e) {
-  return { message: e, remote: null };
+function helperRefusal(message) {
+  return {
+    message,
+    remote: null,
+  };
 }
 //@ chunk-q8cqcff6.js:57787-57812 placement
-var Lus = "<policyHelper>";
+/**
+ * POLICY_HELPER_TAG：policyHelper 的错误标签。
+ */
+var POLICY_HELPER_TAG = "<policyHelper>";
 //@ chunk-q8cqcff6.js:57812-57899 placement
-function Ee() {
-  let e = is();
-  if (isStorageV5Enabled() && e.primer !== void 0) e.invalidatePolicyLayer();
-  else or();
+/**
+ * invalidatePolicyLayer：使策略层失效。
+ */
+function invalidatePolicyLayer() {
+  let e = commandSyncNameState();
+  if (isStorageV5Enabled() && e.primer !== undefined) e.invalidatePolicyLayer();
+  else invalidateCommandNames();
 }
+//@ chunk-q8cqcff6.js:57899-62660 placement
 /**
  * policyHelper 运行器：按 OS 选择助手、刷新、失败时由静态设置载荷兜底
  */
-//@ chunk-q8cqcff6.js:57899-62660 placement
 class PolicyHelperRunner {
   state = null;
   selectionWarnings = [];
-  initializeAttempted = !1;
-  structuralRefusalLogged = !1;
-  noEntrySadLogged = !1;
+  initializeAttempted = false;
+  structuralRefusalLogged = false;
+  noEntrySadLogged = false;
   defaultFallback = null;
   payloadRefusalError = null;
   refreshTimer = null;
-  refreshInFlight = !1;
-  midSessionArmingEnabled = !1;
+  refreshInFlight = false;
+  midSessionArmingEnabled = false;
   osAdminArming = null;
   undeliveredRefusal = null;
-  startsNoSession = !1;
+  startsNoSession = false;
   decidedOrigin = null;
   pendingStats = new Map();
   remoteArmGeneration = 0;
   osAdminRetireGeneration = 0;
-  stoppedAsking = !1;
+  stoppedAsking = false;
   remoteArmingConfig = null;
   remoteFailedConfig = null;
   lastFailure = null;
   selectedEntry = null;
   restartFrom = null;
-  releaseLatchWhenTickSettles = !1;
+  releaseLatchWhenTickSettles = false;
   readRemotePayload = null;
-  armedFromUserWritableBase = !1;
+  armedFromUserWritableBase = false;
   retiredHelperPaths = new Set();
   remoteDecision = null;
   refreshed = createSignal();
   passesInFlight = 0;
   passSettled = createSignal();
   claimInitialize() {
-    if (this.initializeAttempted) return !1;
-    return ((this.initializeAttempted = !0), !0);
+    if (this.initializeAttempted) return false;
+    this.initializeAttempted = true;
+    return true;
   }
   apply(e) {
-    if (((this.state = e), (this.remoteFailedConfig = null), (this.lastFailure = null), Ee(), e.config))
-      this.startRefreshTimer(e.config, e.fromPerOs, e.armedFromRemote);
+    this.state = e;
+    this.remoteFailedConfig = null;
+    this.lastFailure = null;
+    invalidatePolicyLayer();
+    if (e.config) this.startRefreshTimer(e.config, e.fromPerOs, e.armedFromRemote);
     else this.stopRefreshTimer();
   }
   retireState() {
-    let e = this.state?.config?.path;
-    if (e !== void 0) this.retiredHelperPaths.add(e);
-    ((this.state = null), (this.lastFailure = null), (this.selectedEntry = null));
+    let path = this.state?.config?.path;
+    if (path !== undefined) this.retiredHelperPaths.add(path);
+    this.state = null;
+    this.lastFailure = null;
+    this.selectedEntry = null;
   }
   reset() {
-    (this.remoteArmGeneration++,
-      (this.remoteArmingConfig = null),
-      (this.armedFromUserWritableBase = !1),
-      (this.remoteDecision = null),
-      (this.state = null),
-      this.retiredHelperPaths.clear(),
-      (this.selectionWarnings = []),
-      (this.initializeAttempted = !1),
-      (this.structuralRefusalLogged = !1),
-      (this.noEntrySadLogged = !1),
-      (this.defaultFallback = null),
-      (this.payloadRefusalError = null),
-      (this.refreshInFlight = !1),
-      (this.midSessionArmingEnabled = !1),
-      (this.osAdminArming = null),
-      (this.undeliveredRefusal = null),
-      (this.restartFrom = null),
-      (this.stoppedAsking = !1),
-      (this.decidedOrigin = null),
-      (this.remoteFailedConfig = null),
-      (this.lastFailure = null),
-      (this.selectedEntry = null),
-      (this.releaseLatchWhenTickSettles = !1),
-      (this.readRemotePayload = null),
-      this.stopRefreshTimer(),
-      Ee());
+    this.remoteArmGeneration++;
+    this.remoteArmingConfig = null;
+    this.armedFromUserWritableBase = false;
+    this.remoteDecision = null;
+    this.state = null;
+    this.retiredHelperPaths.clear();
+    this.selectionWarnings = [];
+    this.initializeAttempted = false;
+    this.structuralRefusalLogged = false;
+    this.noEntrySadLogged = false;
+    this.defaultFallback = null;
+    this.payloadRefusalError = null;
+    this.refreshInFlight = false;
+    this.midSessionArmingEnabled = false;
+    this.osAdminArming = null;
+    this.undeliveredRefusal = null;
+    this.restartFrom = null;
+    this.stoppedAsking = false;
+    this.decidedOrigin = null;
+    this.remoteFailedConfig = null;
+    this.lastFailure = null;
+    this.selectedEntry = null;
+    this.releaseLatchWhenTickSettles = false;
+    this.readRemotePayload = null;
+    this.stopRefreshTimer();
+    invalidatePolicyLayer();
   }
   announceTierChange() {
-    Ee();
+    invalidatePolicyLayer();
     try {
-      (is().changed.emit("policySettings"), this.refreshed.emit());
+      commandSyncNameState().changed.emit("policySettings");
+      this.refreshed.emit();
     } catch (error) {
       logError(error);
     }
   }
   stopRefreshTimer() {
-    if (this.refreshTimer) (clearInterval(this.refreshTimer), (this.refreshTimer = null));
+    if (this.refreshTimer) {
+      clearInterval(this.refreshTimer);
+      this.refreshTimer = null;
+    }
   }
-  holdRemoteFailure({ config: e, fromPerOs: n }, r) {
-    if (((this.remoteFailedConfig = e), !r)) return;
-    if (e.path !== void 0) this.retiredHelperPaths.add(e.path);
-    this.startRefreshTimer(e, n, !0);
+  holdRemoteFailure({ config, fromPerOs }, r) {
+    this.remoteFailedConfig = config;
+    if (!r) return;
+    if (config.path !== undefined) this.retiredHelperPaths.add(config.path);
+    this.startRefreshTimer(config, fromPerOs, true);
   }
   retireRemoteFailure() {
     if (this.remoteFailedConfig === null) return;
-    ((this.remoteFailedConfig = null),
-      (this.lastFailure = null),
-      (this.selectedEntry = null),
-      this.stopRefreshTimer(),
-      this.releaseLatch());
+    this.remoteFailedConfig = null;
+    this.lastFailure = null;
+    this.selectedEntry = null;
+    this.stopRefreshTimer();
+    this.releaseLatch();
   }
   releaseLatch() {
-    if (this.refreshInFlight) this.releaseLatchWhenTickSettles = !0;
-    else this.initializeAttempted = !1;
+    if (this.refreshInFlight) this.releaseLatchWhenTickSettles = true;
+    else this.initializeAttempted = false;
   }
   settleRefreshExec() {
-    if (((this.refreshInFlight = !1), this.releaseLatchWhenTickSettles))
-      ((this.releaseLatchWhenTickSettles = !1), this.releaseLatchAfterTornDownExec());
+    this.refreshInFlight = false;
+    if (this.releaseLatchWhenTickSettles) {
+      this.releaseLatchWhenTickSettles = false;
+      this.releaseLatchAfterTornDownExec();
+    }
   }
   releaseLatchAfterTornDownExec() {
-    if (((this.initializeAttempted = !1), this.readRemotePayload !== null)) eio(this.readRemotePayload);
+    this.initializeAttempted = false;
+    if (this.readRemotePayload !== null) applyRemotePolicyMidSession(this.readRemotePayload);
   }
   startRefreshTimer(e, n, r) {
     this.stopRefreshTimer();
-    let s = e.refreshIntervalMs ?? 0;
-    if (s <= 0) return;
-    ((this.refreshTimer = setInterval(
+    let refreshIntervalMs = e.refreshIntervalMs ?? 0;
+    if (refreshIntervalMs <= 0) return;
+    this.refreshTimer = setInterval(
       (S, E, h) => {
         if (this.refreshInFlight) return;
-        if (((this.refreshInFlight = !0), h && this.state === null)) {
+        this.refreshInFlight = true;
+        if (h && this.state === null) {
           retryRemoteHelper(S, E).finally(() => this.settleRefreshExec());
           return;
         }
@@ -208,174 +237,215 @@ class PolicyHelperRunner {
               if (this.defaultFallback) {
                 let T = `the static ${this.defaultFallback.sourceField} settings payload governs`;
                 if (this.state.serving === "default") {
-                  if (
-                    (logForDebugging(
-                      `policyHelper refresh: helper still failing (${P.error}); the static default settings payload continues to govern`,
-                      { level: "debug" },
-                    ),
-                    warnPolicyHelperRefresh(P.error, T, E),
-                    this.lastFailure !== P.code)
-                  )
-                    ((this.lastFailure = P.code), this.announceTierChange());
+                  logForDebugging(
+                    `policyHelper refresh: helper still failing (${P.error}); the static default settings payload continues to govern`,
+                    {
+                      level: "debug",
+                    },
+                  );
+                  warnPolicyHelperRefresh(P.error, T, E);
+                  if (this.lastFailure !== P.code) {
+                    this.lastFailure = P.code;
+                    this.announceTierChange();
+                  }
                   return;
                 }
-                (logForDebugging(
+                logForDebugging(
                   `policyHelper refresh failed (${P.error}); applying the static ${this.defaultFallback.sourceField} settings payload`,
-                  { level: "warn" },
-                ),
-                  warnPolicyHelperRefresh(P.error, T, E),
-                  logFeatureSad("settings_policy_helpers_per_os", "refresh_fell_back_to_default"),
-                  (this.state.serving = "default"),
-                  (this.lastFailure = P.code),
-                  (this.state.mergesOutput = wt(O, this.defaultFallback)),
-                  (this.state.output = {
-                    managedSettings: Qe(this.defaultFallback.settings, h, isRemoteManagedSettingsVerified()),
-                  }),
-                  (this.state.warnings = this.defaultFallback.warnings),
-                  this.announceTierChange());
+                  {
+                    level: "warn",
+                  },
+                );
+                warnPolicyHelperRefresh(P.error, T, E);
+                logFeatureSad("settings_policy_helpers_per_os", "refresh_fell_back_to_default");
+                this.state.serving = "default";
+                this.lastFailure = P.code;
+                this.state.mergesOutput = mergesOutputBehavior(O, this.defaultFallback);
+                this.state.output = {
+                  managedSettings: withholdUnverifiedCacheKeys(
+                    this.defaultFallback.settings,
+                    h,
+                    isRemoteManagedSettingsVerified(),
+                  ),
+                };
+                this.state.warnings = this.defaultFallback.warnings;
+                this.announceTierChange();
                 return;
               }
-              if (
-                (logForDebugging(`policyHelper refresh failed (retaining current policy): ${P.error}`, {
-                  level: "warn",
-                }),
-                warnPolicyHelperRefresh(P.error, "the last successful helper output still governs", E),
-                logFeatureSad("settings_policy_helper", "refresh_failed", { attempts: P.attempts }),
-                this.lastFailure !== P.code)
-              )
-                ((this.lastFailure = P.code), this.announceTierChange());
+              logForDebugging(`policyHelper refresh failed (retaining current policy): ${P.error}`, {
+                level: "warn",
+              });
+              warnPolicyHelperRefresh(P.error, "the last successful helper output still governs", E);
+              logFeatureSad("settings_policy_helper", "refresh_failed", {
+                attempts: P.attempts,
+              });
+              if (this.lastFailure !== P.code) {
+                this.lastFailure = P.code;
+                this.announceTierChange();
+              }
               return;
             }
-            if ((Ht(), this.state.serving === "default"))
-              (logForDebugging(
+            clearHelperRefreshWarning();
+            if (this.state.serving === "default") {
+              logForDebugging(
                 "policyHelper refresh: helper recovered; its output replaces the static default settings payload",
-                { level: "info" },
-              ),
-                logFeatureOk("settings_policy_helpers_per_os"));
-            ((this.state.serving = "helper"),
-              (this.lastFailure = null),
-              (this.state.mergesOutput = O.outputBehavior === "merge"),
-              (this.state.output = P.output),
-              (this.state.warnings = P.warnings),
-              this.announceTierChange());
+                {
+                  level: "info",
+                },
+              );
+              logFeatureOk("settings_policy_helpers_per_os");
+            }
+            this.state.serving = "helper";
+            this.lastFailure = null;
+            this.state.mergesOutput = O.outputBehavior === "merge";
+            this.state.output = P.output;
+            this.state.warnings = P.warnings;
+            this.announceTierChange();
           })
-          .catch((P) => {
-            logError(P);
+          .catch((error) => {
+            logError(error);
           })
           .finally(() => this.settleRefreshExec());
       },
-      Math.min(s, MAX_HELPER_MS),
+      Math.min(refreshIntervalMs, MAX_HELPER_MS),
       e,
       n,
       r,
-    )),
-      this.refreshTimer.unref?.());
+    );
+    this.refreshTimer.unref?.();
   }
 }
 //@ chunk-q8cqcff6.js:62660-62743 placement
-var R = new PolicyHelperRunner(),
-  rd = aV({ clear: Os }),
-  refreshed = R.refreshed,
-  dr = new Set(["plist", "hklm", "file"]);
+/**
+ * policyHelperRunner：policyHelper 单例运行器；policyHelperRunnerAlias：运行器的应答缓存；FILE_POLICY_TIERS：文件类策略层级（同一声明共 3 个绑定）。
+ */
+var policyHelperRunner = new PolicyHelperRunner();
+var policyHelperRunnerAlias = retainCacheKey({
+  clear: resetRemoteHelperState,
+});
+var refreshed = policyHelperRunner.refreshed;
+var FILE_POLICY_TIERS = new Set(["plist", "hklm", "file"]);
+//@ chunk-q8cqcff6.js:62743-62988 placement
 /**
  * 运行一次 policyHelper pass：先交付尚未送达的拒绝；pass 拒绝时，远程来源且命令不启动会话则只告警放行，否则记遥测并返回拒绝信息。
  */
-//@ chunk-q8cqcff6.js:62743-62988 placement
-async function runPolicyHelperPass(e, n, r) {
-  let undeliveredRefusal = R.undeliveredRefusal;
-  if (undeliveredRefusal !== null) return ((R.undeliveredRefusal = null), undeliveredRefusal);
-  let S = await runPassWithRestarts(e, n, r);
+async function runPolicyHelperPass(basePolicySettings, n, policyHelperSourceLoadErrors) {
+  let undeliveredRefusal = policyHelperRunner.undeliveredRefusal;
+  if (undeliveredRefusal !== null) {
+    policyHelperRunner.undeliveredRefusal = null;
+    return undeliveredRefusal;
+  }
+  let S = await runPassWithRestarts(basePolicySettings, n, policyHelperSourceLoadErrors);
   if (S === null) return null;
   if (S.remote) {
-    if (R.startsNoSession) return (warnRefuseNotEnforced(S.message, S.remote), null);
+    if (policyHelperRunner.startsNoSession) {
+      warnRefuseNotEnforced(S.message, S.remote);
+      return null;
+    }
     logRemoteRefusal(S.remote);
   }
   return S.message;
 }
 //@ chunk-q8cqcff6.js:62988-63024 placement
-function BRi() {
-  R.startsNoSession = !0;
+/**
+ * markStartsNoSession：标记本次不启动会话。
+ */
+function markStartsNoSession() {
+  policyHelperRunner.startsNoSession = true;
 }
+//@ chunk-q8cqcff6.js:63024-63405 placement
 /**
  * 远程 policyHelper 要求拒绝但当前命令不启动会话时：记日志、给出状态提示并记遥测，命令继续执行。
  */
-//@ chunk-q8cqcff6.js:63024-63405 placement
-function warnRefuseNotEnforced(e, n) {
-  (logForDebugging(
-    `policyHelper: ${e} (reached in a command that starts no session; it proceeds without the helper)`,
-    { level: "error" },
-  ),
-    warnRemoteHelperSkipped(
-      'onFailure is "refuse", but this command starts no Claude Code session, so it proceeds without the helper; sessions will not start until the helper succeeds',
-      n.tuple,
-    ),
-    logFeatureSad("settings_policy_helpers_per_os", "remote_refuse_not_enforced_no_session"));
+function warnRefuseNotEnforced(message, remote) {
+  logForDebugging(
+    `policyHelper: ${message} (reached in a command that starts no session; it proceeds without the helper)`,
+    {
+      level: "error",
+    },
+  );
+  warnRemoteHelperSkipped(
+    'onFailure is "refuse", but this command starts no Claude Code session, so it proceeds without the helper; sessions will not start until the helper succeeds',
+    remote.tuple,
+  );
+  logFeatureSad("settings_policy_helpers_per_os", "remote_refuse_not_enforced_no_session");
 }
 //@ chunk-q8cqcff6.js:63405-63550 placement
-function logRemoteRefusal(e) {
+function logRemoteRefusal(remote) {
   logFeatureBad(
     "settings_policy_helpers_per_os",
-    e.code,
-    e.helperFailureReason === void 0 ? void 0 : { helper_failure_reason: fromEnum(e.helperFailureReason) },
+    remote.code,
+    remote.helperFailureReason === undefined
+      ? undefined
+      : {
+          helper_failure_reason: fromEnum(remote.helperFailureReason),
+        },
   );
 }
+//@ chunk-q8cqcff6.js:63550-63679 placement
 /**
  * 找出与 policyHelpers 相关的启动致命错误。
  */
-//@ chunk-q8cqcff6.js:63550-63679 placement
 function findFatalPolicyHelperError(e) {
   return e.find(
     (n) =>
       n.startupFatal && (n.path === "" || n.path === "policyHelpers" || n.path.startsWith("policyHelpers.")),
   );
 }
+//@ chunk-q8cqcff6.js:63679-63866 placement
 /**
  * 判断 policyHelper 导致的退出原因：helper 失败或策略无效。
  */
-//@ chunk-q8cqcff6.js:63679-63866 placement
-function policyHelperExitReason(e) {
-  let n = findFatalPolicyHelperError(e);
-  if (n)
-    return SUPPORTED_PLATFORMS.some((r) => n.path === `policyHelpers.${r}`)
+function policyHelperExitReason(policyHelperSourceLoadErrors) {
+  let fatalPolicyHelperError = findFatalPolicyHelperError(policyHelperSourceLoadErrors);
+  if (fatalPolicyHelperError)
+    return SUPPORTED_PLATFORMS.some((r) => fatalPolicyHelperError.path === `policyHelpers.${r}`)
       ? "helper_failed"
       : "policy_invalid";
-  return R.payloadRefusalError !== null ? "policy_invalid" : "helper_failed";
+  return policyHelperRunner.payloadRefusalError !== null ? "policy_invalid" : "helper_failed";
 }
+//@ chunk-q8cqcff6.js:63866-64211 placement
 /**
  * 执行 policyHelper 入口解析，期间若有重启请求则退役当前 pass 并按新基础设置重跑；结束时清理残留重启请求、递减进行中计数并发出完成信号。
  */
-//@ chunk-q8cqcff6.js:63866-64211 placement
 async function runPassWithRestarts(e, n, r) {
-  R.passesInFlight++;
+  policyHelperRunner.passesInFlight++;
   try {
-    let s = await resolvePolicyHelperEntry(e, n, r);
-    for (let restartFrom = R.restartFrom; restartFrom !== null; restartFrom = R.restartFrom) {
-      (retireOsAdminPass(et()), (R.restartFrom = null));
+    let policyHelperEntry = await resolvePolicyHelperEntry(e, n, r);
+    for (
+      let restartFrom = policyHelperRunner.restartFrom;
+      restartFrom !== null;
+      restartFrom = policyHelperRunner.restartFrom
+    ) {
+      retireOsAdminPass(retireReason());
+      policyHelperRunner.restartFrom = null;
       let E = restartFrom();
-      (retireIfShadowedByRemote(E.origin),
-        (s = await resolvePolicyHelperEntry(E.settings, E.origin, E.loadErrors)));
+      retireIfShadowedByRemote(E.origin);
+      policyHelperEntry = await resolvePolicyHelperEntry(E.settings, E.origin, E.loadErrors);
     }
-    return s;
+    return policyHelperEntry;
   } finally {
-    if (R.restartFrom !== null)
+    if (policyHelperRunner.restartFrom !== null)
       try {
-        (retireOsAdminPass(et()), (R.restartFrom = null));
+        retireOsAdminPass(retireReason());
+        policyHelperRunner.restartFrom = null;
       } catch (error) {
         logError(error);
       }
-    (R.passesInFlight--, R.passSettled.emit());
+    policyHelperRunner.passesInFlight--;
+    policyHelperRunner.passSettled.emit();
   }
 }
+//@ chunk-q8cqcff6.js:64211-68750 placement
 /**
  * 解析 policyHelpers 设置项（按 OS、结构校验、审批状态）
  */
-//@ chunk-q8cqcff6.js:64211-68750 placement
 async function resolvePolicyHelperEntry(e, n, r) {
-  let s = findFatalPolicyHelperError(r);
-  if (s) {
-    if (!R.structuralRefusalLogged) {
-      R.structuralRefusalLogged = !0;
-      let path = s.path;
+  let fatalPolicyHelperError = findFatalPolicyHelperError(r);
+  if (fatalPolicyHelperError) {
+    if (!policyHelperRunner.structuralRefusalLogged) {
+      policyHelperRunner.structuralRefusalLogged = true;
+      let path = fatalPolicyHelperError.path;
       logFeatureBad(
         "settings_policy_helpers_per_os",
         path === ""
@@ -387,257 +457,282 @@ async function resolvePolicyHelperEntry(e, n, r) {
               : "entry_invalid",
       );
     }
-    return Ye(`${s.file === void 0 ? "managed settings" : ql(s.file)}: ${s.message}`);
+    return helperRefusal(
+      `${fatalPolicyHelperError.file === undefined ? "managed settings" : cleanForDisplay(fatalPolicyHelperError.file)}: ${fatalPolicyHelperError.message}`,
+    );
   }
-  if (R.payloadRefusalError !== null) return Ye(R.payloadRefusalError);
-  if (!R.claimInitialize()) return null;
-  ((R.decidedOrigin = n),
-    hr(),
-    (R.remoteDecision = null),
-    (R.selectedEntry = null),
-    clearSelectionWarnings(Rr),
-    clearSelectionWarnings(SKIPPED_ENTRY_PREFIX));
-  let S = e?.policyHelpers,
-    E = n === "remote" && hasPolicyHelperConfig(e),
-    h = E ? remotePolicySnapshot(e) : null,
-    y = h?.tuple,
-    P = E ? void 0 : e?.policyHelper;
-  if (!S && !P) {
-    if (getEligibilityMemo() === !0 && !getRemoteManagedSettingsSyncFromCache())
+  if (policyHelperRunner.payloadRefusalError !== null)
+    return helperRefusal(policyHelperRunner.payloadRefusalError);
+  if (!policyHelperRunner.claimInitialize()) return null;
+  policyHelperRunner.decidedOrigin = n;
+  clearRemotePayloadWarnings();
+  policyHelperRunner.remoteDecision = null;
+  policyHelperRunner.selectedEntry = null;
+  clearSelectionWarnings(NO_PLATFORM_ENTRY_TEXT);
+  clearSelectionWarnings(SKIPPED_ENTRY_PREFIX);
+  let policyHelpers = e?.policyHelpers;
+  let E = n === "remote" && hasPolicyHelperConfig(e);
+  let h = E ? remotePolicySnapshot(e) : null;
+  let tuple = h?.tuple;
+  let policyHelper = E ? undefined : e?.policyHelper;
+  if (!policyHelpers && !policyHelper) {
+    if (getEligibilityMemo() === true && !getRemoteManagedSettingsSyncFromCache())
       logForDebugging(
         "policyHelper: no helper configuration present at helper-pass time (remote managed settings eligible, no payload in cache); a payload landing later arms one only through a fetch cycle after preAction",
-        { level: "debug" },
+        {
+          level: "debug",
+        },
       );
-    return ((R.initializeAttempted = !1), null);
-  }
-  if (h) {
-    if (((R.remoteDecision = h), !h.verified && y !== void 0))
-      return (
-        (R.initializeAttempted = !1),
-        warnRemoteHelperSkipped("remote settings not verified this session", y),
-        null
-      );
-  } else if (n === "remote" && S)
-    return (
-      logForDebugging(
-        "remote policyHelpers names no helper and carries no static payload for this platform",
-        { level: "debug" },
-      ),
-      (R.initializeAttempted = !1),
-      null
-    );
-  else if (n === null || !dr.has(n)) {
-    if (
-      (logForDebugging(`policyHelper ignored: delivered via non-admin source '${n ?? "unknown"}'`, {
-        level: "warn",
-      }),
-      n === "remote")
-    )
-      R.initializeAttempted = !1;
+    policyHelperRunner.initializeAttempted = false;
     return null;
   }
-  R.armedFromUserWritableBase = n === "plist" && One().userWritable === !0;
-  let O = S ? platformSettingsChain() : null,
-    T = null;
-  if (h) applyStaticPayloadChoice(h);
-  else T = applyDefaultPayloads(S, O?.chain ?? []);
-  if (T) return ((R.payloadRefusalError = T), Ye(T));
-  let v = selectPerOsHelper(S, P, O, E);
-  if (!v) return ((R.initializeAttempted = !1), null);
-  if (
-    ((R.selectedEntry =
-      v.kind === "helper"
-        ? { key: v.entryKey, config: v.config }
-        : {
-            key:
-              SUPPORTED_PLATFORMS.find(
-                (L) => v.fallback.sourceField === `policyHelpers.${L}.defaultSettings`,
-              ) ?? "default",
-            config: null,
-          }),
-    v.kind === "default")
-  ) {
-    if (h && !h.payloadServable) {
-      if (
-        ((R.initializeAttempted = !1),
-        warnRemoteHelperSkipped(
-          h.verified
-            ? `${v.fallback.sourceField} carries settings not yet approved in the managed-settings dialog; it is not applied until they are`
-            : `${v.fallback.sourceField} carries settings the managed-settings dialog lists and remote settings are not verified this session; it is not applied until they are`,
-          void 0,
-        ),
-        h.verified)
-      )
-        logFeatureSad("settings_policy_helpers_per_os", "remote_consent_missing");
+  if (h) {
+    policyHelperRunner.remoteDecision = h;
+    if (!h.verified && tuple !== undefined) {
+      policyHelperRunner.initializeAttempted = false;
+      warnRemoteHelperSkipped("remote settings not verified this session", tuple);
       return null;
     }
-    return (
-      logFeatureSad("settings_policy_helpers_per_os", "fell_back_to_default"),
-      logForDebugging(
-        `policyHelper: no policyHelpers helper entry for platform "${O?.platform ?? "unknown"}"; applying the static ${v.fallback.sourceField} settings payload`,
-        { level: "info" },
-      ),
-      applyStaticPayload(null, v.fallback.mergesOutput, E),
-      null
-    );
+  } else if (n === "remote" && policyHelpers) {
+    logForDebugging("remote policyHelpers names no helper and carries no static payload for this platform", {
+      level: "debug",
+    });
+    policyHelperRunner.initializeAttempted = false;
+    return null;
+  } else if (n === null || !FILE_POLICY_TIERS.has(n)) {
+    logForDebugging(`policyHelper ignored: delivered via non-admin source '${n ?? "unknown"}'`, {
+      level: "warn",
+    });
+    if (n === "remote") policyHelperRunner.initializeAttempted = false;
+    return null;
   }
-  let defaultFallback = R.defaultFallback,
-    x = _r(v.fromPerOs ? v.config : null, E);
-  if (h && !h.helperMayExec) {
-    if (defaultFallback && h.payloadServable)
-      return (
-        applyStaticPayload(null, wt(v.config, defaultFallback), !0),
-        warnRemoteHelperSkipped(
-          `not yet approved in the managed-settings dialog; the static ${defaultFallback.sourceField} settings payload governs until it is`,
-          y,
-        ),
-        logFeatureSad("settings_policy_helpers_per_os", "remote_consent_missing"),
-        null
-      );
-    if (
-      ((R.initializeAttempted = !1),
+  policyHelperRunner.armedFromUserWritableBase = n === "plist" && mdmResult().userWritable === true;
+  let O = policyHelpers ? platformSettingsChain() : null;
+  let message = null;
+  if (h) applyStaticPayloadChoice(h);
+  else message = applyDefaultPayloads(policyHelpers, O?.chain ?? []);
+  if (message) {
+    policyHelperRunner.payloadRefusalError = message;
+    return helperRefusal(message);
+  }
+  let perOsHelper = selectPerOsHelper(policyHelpers, policyHelper, O, E);
+  if (!perOsHelper) {
+    policyHelperRunner.initializeAttempted = false;
+    return null;
+  }
+  policyHelperRunner.selectedEntry =
+    perOsHelper.kind === "helper"
+      ? {
+          key: perOsHelper.entryKey,
+          config: perOsHelper.config,
+        }
+      : {
+          key:
+            SUPPORTED_PLATFORMS.find(
+              (L) => perOsHelper.fallback.sourceField === `policyHelpers.${L}.defaultSettings`,
+            ) ?? "default",
+          config: null,
+        };
+  if (perOsHelper.kind === "default") {
+    if (h && !h.payloadServable) {
+      policyHelperRunner.initializeAttempted = false;
       warnRemoteHelperSkipped(
-        defaultFallback
-          ? `not yet approved in the managed-settings dialog, and neither are settings the static ${defaultFallback.sourceField} payload carries; nothing from the entry applies until they are`
-          : "not yet approved in the managed-settings dialog",
-        y,
-      ),
-      x)
-    )
+        h.verified
+          ? `${perOsHelper.fallback.sourceField} carries settings not yet approved in the managed-settings dialog; it is not applied until they are`
+          : `${perOsHelper.fallback.sourceField} carries settings the managed-settings dialog lists and remote settings are not verified this session; it is not applied until they are`,
+        undefined,
+      );
+      if (h.verified) logFeatureSad("settings_policy_helpers_per_os", "remote_consent_missing");
+      return null;
+    }
+    logFeatureSad("settings_policy_helpers_per_os", "fell_back_to_default");
+    logForDebugging(
+      `policyHelper: no policyHelpers helper entry for platform "${O?.platform ?? "unknown"}"; applying the static ${perOsHelper.fallback.sourceField} settings payload`,
+      {
+        level: "info",
+      },
+    );
+    applyStaticPayload(null, perOsHelper.fallback.mergesOutput, E);
+    return null;
+  }
+  let defaultFallback = policyHelperRunner.defaultFallback;
+  let x = helperFailureBlocks(perOsHelper.fromPerOs ? perOsHelper.config : null, E);
+  if (h && !h.helperMayExec) {
+    if (defaultFallback && h.payloadServable) {
+      applyStaticPayload(null, mergesOutputBehavior(perOsHelper.config, defaultFallback), true);
+      warnRemoteHelperSkipped(
+        `not yet approved in the managed-settings dialog; the static ${defaultFallback.sourceField} settings payload governs until it is`,
+        tuple,
+      );
+      logFeatureSad("settings_policy_helpers_per_os", "remote_consent_missing");
+      return null;
+    }
+    policyHelperRunner.initializeAttempted = false;
+    warnRemoteHelperSkipped(
+      defaultFallback
+        ? `not yet approved in the managed-settings dialog, and neither are settings the static ${defaultFallback.sourceField} payload carries; nothing from the entry applies until they are`
+        : "not yet approved in the managed-settings dialog",
+      tuple,
+    );
+    if (x)
       return {
-        message: `Claude Code cannot start: your organization's remote managed settings require the policy helper ${mr(y)} to succeed (onFailure "refuse"), and it cannot run until those settings are approved in the managed-settings dialog. Contact your administrator.`,
-        remote: { code: "remote_refused_on_failure", helperFailureReason: void 0, tuple: y },
+        message: `Claude Code cannot start: your organization's remote managed settings require the policy helper ${helperSettingName(tuple)} to succeed (onFailure "refuse"), and it cannot run until those settings are approved in the managed-settings dialog. Contact your administrator.`,
+        remote: {
+          code: "remote_refused_on_failure",
+          helperFailureReason: undefined,
+          tuple,
+        },
       };
-    return (logFeatureSad("settings_policy_helpers_per_os", "remote_consent_missing"), null);
+    logFeatureSad("settings_policy_helpers_per_os", "remote_consent_missing");
+    return null;
   }
   try {
-    if (v.fromPerOs) {
+    if (perOsHelper.fromPerOs) {
       if (
-        (await runRemoteArmedHelper(v, {
+        (await runRemoteArmedHelper(perOsHelper, {
           armedFromRemote: E,
           suppressExecEvents: E || defaultFallback !== null,
         })) === "applied"
       )
         logFeatureOk("settings_policy_helpers_per_os");
-    } else await runRemoteArmedHelper(v);
+    } else await runRemoteArmedHelper(perOsHelper);
   } catch (error) {
-    let defaultFallback = R.defaultFallback,
-      q = E ? (R.remoteDecision?.helperRefusesOnFailure ?? x) : x;
-    if (v.fromPerOs && !defaultFallback)
-      if (!(error instanceof qe)) logFeatureBad("settings_policy_helpers_per_os", "error");
+    let defaultFallback = policyHelperRunner.defaultFallback;
+    let q = E ? (policyHelperRunner.remoteDecision?.helperRefusesOnFailure ?? x) : x;
+    if (perOsHelper.fromPerOs && !defaultFallback)
+      if (!(error instanceof RemoteHelperError)) logFeatureBad("settings_policy_helpers_per_os", "error");
       else if (E && q);
       else if (!E && !x)
         logFeatureBad("settings_policy_helpers_per_os", "continued_on_failure", {
           helper_failure_reason: fromEnum(error.code),
         });
       else logFeatureBad("settings_policy_helpers_per_os", error.code);
-    if (error instanceof qe) {
-      if (defaultFallback)
-        return (
-          logForDebugging(
-            `${error.message}; applying the static ${defaultFallback.sourceField} settings payload instead`,
-            { level: "warn" },
-          ),
-          logFeatureSad("settings_policy_helpers_per_os", "fell_back_to_default_on_failure"),
-          applyStaticPayload(error.code === "bad_path" ? null : v, wt(v.config, defaultFallback), E),
-          (R.lastFailure = error.code),
-          null
+    if (error instanceof RemoteHelperError) {
+      if (defaultFallback) {
+        logForDebugging(
+          `${error.message}; applying the static ${defaultFallback.sourceField} settings payload instead`,
+          {
+            level: "warn",
+          },
         );
-      if (((R.lastFailure = error.code), E))
-        return (
-          warnRemoteHelperSkipped(error.message, y),
-          R.holdRemoteFailure(v, error.code !== "bad_path"),
-          q ? remoteRefusalResult(error, y) : null
+        logFeatureSad("settings_policy_helpers_per_os", "fell_back_to_default_on_failure");
+        applyStaticPayload(
+          error.code === "bad_path" ? null : perOsHelper,
+          mergesOutputBehavior(perOsHelper.config, defaultFallback),
+          E,
         );
-      if (!x) return (ms(error.message), null);
-      return Ye(error.message);
+        policyHelperRunner.lastFailure = error.code;
+        return null;
+      }
+      policyHelperRunner.lastFailure = error.code;
+      if (E) {
+        warnRemoteHelperSkipped(error.message, tuple);
+        policyHelperRunner.holdRemoteFailure(perOsHelper, error.code !== "bad_path");
+        return q ? remoteRefusalResult(error, tuple) : null;
+      }
+      if (!x) {
+        warningWithSkippedPrefix(error.message);
+        return null;
+      }
+      return helperRefusal(error.message);
     }
     throw error;
   }
   return null;
 }
 //@ chunk-q8cqcff6.js:68750-68819 placement
-function _r(e, n) {
-  let r = e?.onFailure;
-  return r == null ? !n : r !== "continue";
+/**
+ * helperFailureBlocks：按 onFailure 判断是否阻塞。
+ */
+function helperFailureBlocks(e, n) {
+  let onFailure = e?.onFailure;
+  return onFailure == null ? !n : onFailure !== "continue";
 }
+//@ chunk-q8cqcff6.js:68819-69144 placement
 /**
  * 构造远程托管设置要求 helper 成功（onFailure refuse）但 helper 失败时的启动拒绝信息与遥测字段。
  */
-//@ chunk-q8cqcff6.js:68819-69144 placement
-function remoteRefusalResult(e, n) {
+function remoteRefusalResult(error, tuple) {
   return {
-    message: `Claude Code cannot start: your organization's remote managed settings require the policy helper ${mr(n)} to succeed (onFailure "refuse"), and it failed [${e.code}] \u2014 ${e.message}. Contact your administrator.`,
-    remote: { code: "remote_refused_on_failure", helperFailureReason: e.code, tuple: n },
+    message: `Claude Code cannot start: your organization's remote managed settings require the policy helper ${helperSettingName(tuple)} to succeed (onFailure "refuse"), and it failed [${error.code}] \u2014 ${error.message}. Contact your administrator.`,
+    remote: {
+      code: "remote_refused_on_failure",
+      helperFailureReason: error.code,
+      tuple,
+    },
   };
 }
 //@ chunk-q8cqcff6.js:69144-69209 placement
-function mr(e) {
-  return (e === void 0 ? void 0 : parseHelperSetting(e)) ?? "it configures";
+function helperSettingName(e) {
+  return (e === undefined ? undefined : parseHelperSetting(e)) ?? "it configures";
 }
 //@ chunk-q8cqcff6.js:69209-69326 placement
-var SKIPPED_ENTRY_PREFIX = 'policyHelpers entry skipped (onFailure "continue"): ',
-  STARTED_WITHOUT_HELPER_SUFFIX = "; Claude Code started without the helper's output";
+var SKIPPED_ENTRY_PREFIX = 'policyHelpers entry skipped (onFailure "continue"): ';
+var STARTED_WITHOUT_HELPER_SUFFIX = "; Claude Code started without the helper's output";
 //@ chunk-q8cqcff6.js:69326-69423 placement
-function ms(e) {
-  let n = nt(
-    asciiOnly(e.replace(/\s+/gu, " ")),
+function warningWithSkippedPrefix(message) {
+  let n = truncateWarning(
+    asciiOnly(message.replace(/\s+/gu, " ")),
     MAX_WARNING_CHARS - SKIPPED_ENTRY_PREFIX.length - STARTED_WITHOUT_HELPER_SUFFIX.length,
   );
   addSelectionWarning(`${SKIPPED_ENTRY_PREFIX}${n}${STARTED_WITHOUT_HELPER_SUFFIX}`);
 }
 //@ chunk-q8cqcff6.js:69423-69540 placement
-var REMOTE_ENTRY_NOT_RUN_PREFIX = "remote policyHelpers entry not run: ",
-  REMOTE_PAYLOAD_NOT_APPLIED_PREFIX = "remote policyHelpers static settings payload not applied: ",
-  MAX_WARNING_CHARS = 512;
+var REMOTE_ENTRY_NOT_RUN_PREFIX = "remote policyHelpers entry not run: ";
+var REMOTE_PAYLOAD_NOT_APPLIED_PREFIX = "remote policyHelpers static settings payload not applied: ";
+var MAX_WARNING_CHARS = 512;
 //@ chunk-q8cqcff6.js:69540-69606 placement
-function nt(e, n = MAX_WARNING_CHARS) {
+/**
+ * truncateWarning：截断警告文本。
+ */
+function truncateWarning(e, n = MAX_WARNING_CHARS) {
   return e.length > n ? `${e.slice(0, n - 1)}\u2026` : e;
 }
 //@ chunk-q8cqcff6.js:69606-69747 placement
-function warnRemoteHelperSkipped(e, n) {
-  let r = asciiOnly(e.replace(/\s+/gu, " ")),
-    s = n === void 0 ? void 0 : parseHelperSetting(n),
-    S = nt(
-      n === void 0
-        ? `${REMOTE_PAYLOAD_NOT_APPLIED_PREFIX}${r}`
-        : `${REMOTE_ENTRY_NOT_RUN_PREFIX}${s ? `${s}: ` : ""}${r}`,
-    );
+function warnRemoteHelperSkipped(e, tuple) {
+  let r = asciiOnly(e.replace(/\s+/gu, " "));
+  let s = tuple === undefined ? undefined : parseHelperSetting(tuple);
+  let S = truncateWarning(
+    tuple === undefined
+      ? `${REMOTE_PAYLOAD_NOT_APPLIED_PREFIX}${r}`
+      : `${REMOTE_ENTRY_NOT_RUN_PREFIX}${s ? `${s}: ` : ""}${r}`,
+  );
   addSelectionWarning(S);
 }
 //@ chunk-q8cqcff6.js:69747-69811 placement
-var Ft = "remote policyHelpers static settings payload skipped: ";
+/**
+ * REMOTE_HELPER_PAYLOAD_SKIPPED_PREFIX：远程 helper 载荷被跳过的前缀。
+ */
+var REMOTE_HELPER_PAYLOAD_SKIPPED_PREFIX = "remote policyHelpers static settings payload skipped: ";
 //@ chunk-q8cqcff6.js:69811-69996 placement
-function warnInvalidStaticPayload(e, n, r) {
-  if (
-    (addSelectionWarning(
-      nt(`${Ft}${e} is not a valid static settings payload (${asciiOnly(n.replace(/\s+/gu, " "))})`),
+function warnInvalidStaticPayload(field, error, verified) {
+  addSelectionWarning(
+    truncateWarning(
+      `${REMOTE_HELPER_PAYLOAD_SKIPPED_PREFIX}${field} is not a valid static settings payload (${asciiOnly(error.replace(/\s+/gu, " "))})`,
     ),
-    r)
-  )
-    logFeatureSad("settings_policy_helpers_per_os", "remote_default_payload_invalid");
+  );
+  if (verified) logFeatureSad("settings_policy_helpers_per_os", "remote_default_payload_invalid");
 }
-
 export {
   runPolicyHelperPass,
   policyHelperExitReason,
-  BRi,
+  markStartsNoSession,
   refreshed,
-  Lus,
+  POLICY_HELPER_TAG,
   findFatalPolicyHelperError,
   HELPER_TIMEOUT_MS,
-  R,
+  policyHelperRunner,
   MAX_HELPER_OUTPUT_BYTES,
   HELPER_OUTPUT_SCHEMA,
-  Ee,
-  Ft,
+  invalidatePolicyLayer,
+  REMOTE_HELPER_PAYLOAD_SKIPPED_PREFIX,
   REMOTE_ENTRY_NOT_RUN_PREFIX,
   REMOTE_PAYLOAD_NOT_APPLIED_PREFIX,
-  nt,
+  truncateWarning,
   MAX_WARNING_CHARS,
   warnInvalidStaticPayload,
-  _r,
-  dr,
+  helperFailureBlocks,
+  FILE_POLICY_TIERS,
   runPassWithRestarts,
   warnRefuseNotEnforced,
   logRemoteRefusal,

@@ -6,22 +6,25 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { vu } from "./base64url.js";
+import { require_base64url } from "./base64url.js";
 
 //@ chunk-1ny7cxrt.js:7617-8029 cjs-fingerprint
-var PO = x(function (Tve, EO) {
-  var cf = vu();
-  EO.exports = (e) => {
-    if (typeof e !== "string" || !e) throw TypeError("JWT must be a string");
-    let { 0: t, 1: n, 2: o, length: r } = e.split(".");
-    if (r === 5) throw TypeError("encrypted JWTs cannot be decoded");
-    if (r !== 3) throw Error("JWTs must have three components");
+var require_decode_jwt = x(function (cjsExports, cjsModule) {
+  var base64url = require_base64url();
+  cjsModule.exports = (token) => {
+    if (typeof token !== "string" || !token) throw TypeError("JWT must be a string");
+    let { 0: header, 1: payload, 2: signature, length } = token.split(".");
+    if (length === 5) throw TypeError("encrypted JWTs cannot be decoded");
+    if (length !== 3) throw Error("JWTs must have three components");
     try {
-      return { header: JSON.parse(cf.decode(t)), payload: JSON.parse(cf.decode(n)), signature: o };
-    } catch (error) {
+      return {
+        header: JSON.parse(base64url.decode(header)),
+        payload: JSON.parse(base64url.decode(payload)),
+        signature,
+      };
+    } catch (err) {
       throw Error("JWT is malformed");
     }
   };
 });
-
-export { PO };
+export { require_decode_jwt };

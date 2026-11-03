@@ -12,7 +12,18 @@ import { isFoundingScriptRow, WorkflowScriptRun, STOP_REASONS } from "./scriptRu
 import { logFeatureOk } from "../../../services/analytics/featureTelemetry.js";
 import { fromEnum } from "../../../services/analytics/safeMetadata.js";
 import { DoctorLazy } from "../../../cli/handlers/util.js";
-import { u, U, E, M, A, oe, o, tc, Ir, T } from "../../../../vendor/zod/v4/classic/schemas.js";
+import {
+  u,
+  _enum,
+  E,
+  M,
+  array,
+  unknown,
+  string,
+  int,
+  discriminatedUnion,
+  literal,
+} from "../../../../vendor/zod/v4/classic/schemas.js";
 import { factSchema, HOST_SCOPE, ROW_STATUSES } from "./worldStore.js";
 
 //@ chunk-y1shfdfm.js:48333-48395 placement
@@ -21,7 +32,7 @@ function isAgentEvalRow(e) {
 }
 //@ chunk-y1shfdfm.js:48395-48484 placement
 function hasErrorField(e) {
-  return e !== null && typeof e === "object" && !Array.isArray(e) && e.error !== void 0;
+  return e !== null && typeof e === "object" && !Array.isArray(e) && e.error !== undefined;
 }
 //@ chunk-y1shfdfm.js:48484-48550 placement
 function finiteOrZero(e) {
@@ -34,59 +45,63 @@ class RunIndex {
 //@ chunk-y1shfdfm.js:48572-48912 placement
 function collectRunStatuses(e, r) {
   let n = new Map();
-  for (let row of e.rows) {
-    if (!isFoundingScriptRow(row) || row.status === "pending" || typeof row.fact.runId !== "string") continue;
-    let w = n.get(row.fact.runId);
-    if (w) w.push(row);
-    else n.set(row.fact.runId, [row]);
+  for (let i of e.rows) {
+    if (!isFoundingScriptRow(i) || i.status === "pending" || typeof i.fact.runId !== "string") continue;
+    let w = n.get(i.fact.runId);
+    if (w) w.push(i);
+    else n.set(i.fact.runId, [i]);
   }
   let s = 0;
   for (let [i, w] of n) {
     if (r.byId.has(i)) continue;
-    let at = w.at(-1);
-    (r.byId.set(
+    let last = w.at(-1);
+    r.byId.set(
       i,
       WorkflowScriptRun.lost(
         i,
         e,
-        at.addr,
+        last.addr,
         w.slice(0, -1).map((k) => k.addr),
       ),
-    ),
-      s++);
+    );
+    s++;
   }
   return s;
 }
 //@ chunk-y1shfdfm.js:48912-48926 placement
-var Lt = 600000;
+/**
+ * 运行索引记录的有效期（10 分钟）。
+ */
+var RUN_INDEX_TTL_MS = 600000;
 //@ chunk-y1shfdfm.js:48926-48950 placement
-class Jr {
+/**
+ * 按名字记录运行 id 与时间的小索引。
+ */
+class RunIndex_2 {
   byName = new Map();
 }
 //@ chunk-y1shfdfm.js:48950-49321 placement
-function resolveWorkflowRun({
-  toolState: toolState,
-  taskRegistry: taskRegistry,
-  name: n,
-  runId: runId,
-  now: now = Date.now(),
-}) {
-  if (n === void 0) return;
-  let byName = toolState.get(Jr).byName,
-    h = byName.get(n);
-  if ((byName.set(n, { runId: runId, at: now }), !h || now - h.at > Lt)) return;
+function resolveWorkflowRun({ toolState, taskRegistry, name: n, runId, now = Date.now() }) {
+  if (n === undefined) return;
+  let byName = toolState.get(RunIndex_2).byName;
+  let h = byName.get(n);
+  byName.set(n, {
+    runId,
+    at: now,
+  });
+  if (!h || now - h.at > RUN_INDEX_TTL_MS) return;
   let k = toolState.get(RunIndex).byId.get(h.runId);
   logFeatureOk("workflow_relaunch_soon", {
     name: fromEnum(n),
     seconds_since_prev: Math.round((now - h.at) / 1000),
     prev_state: fromEnum(k ? k.state() : workflowTaskStatus(taskRegistry, h.runId)),
-    prev_was_steered: k?.wasSteered ?? !1,
+    prev_was_steered: k?.wasSteered ?? false,
   });
 }
 //@ chunk-y1shfdfm.js:49321-49595 placement
-function workflowTaskStatus(e, r) {
-  for (let n of Object.values(e.all())) {
-    if (n.type !== "local_workflow" || n.workflowRunId !== r) continue;
+function workflowTaskStatus(taskRegistry, runId) {
+  for (let n of Object.values(taskRegistry.all())) {
+    if (n.type !== "local_workflow" || n.workflowRunId !== runId) continue;
     switch (n.status) {
       case "pending":
       case "running":
@@ -104,30 +119,42 @@ function workflowTaskStatus(e, r) {
 //@ chunk-y1shfdfm.js:49595-49920 placement
 function describeWorldOp(e) {
   if (typeof e.runId !== "string") return;
-  let r = e.put !== void 0 || typeof e.retract === "number" || e.read !== void 0;
+  let r = e.put !== undefined || typeof e.retract === "number" || e.read !== undefined;
   return {
     runId: e.runId,
-    ...(e.put !== void 0 && { put: e.put }),
-    ...(typeof e.retract === "number" && { retract: e.retract }),
-    ...(e.read !== void 0 && { read: e.read }),
-    ...(!r && typeof e.script === "string" && e.script !== "" && { script: e.script }),
+    ...(e.put !== undefined && {
+      put: e.put,
+    }),
+    ...(typeof e.retract === "number" && {
+      retract: e.retract,
+    }),
+    ...(e.read !== undefined && {
+      read: e.read,
+    }),
+    ...(!r &&
+      typeof e.script === "string" &&
+      e.script !== "" && {
+        script: e.script,
+      }),
   };
 }
 //@ chunk-y1shfdfm.js:49920-50288 placement
 var worldOpSchema = DoctorLazy(() =>
   u({
-    verb: U(["put", "retract", "read", "script"]),
+    verb: _enum(["put", "retract", "read", "script"]),
     addr: E().optional(),
     retracted: M().optional(),
-    rows: A(oe()).optional(),
+    rows: array(unknown()).optional(),
     rowsTotal: E().optional(),
     foreignArtifactContent: M().optional(),
-    error: o().optional(),
+    error: string().optional(),
     reopened: M(),
-    status: u({ pending: E() }),
+    status: u({
+      pending: E(),
+    }),
     killed: u({
       at: E(),
-      reason: U([...STOP_REASONS, "unknown"]).catch("unknown"),
+      reason: _enum([...STOP_REASONS, "unknown"]).catch("unknown"),
       rows: E(),
       pending: E(),
       rules: E(),
@@ -138,46 +165,53 @@ var worldOpSchema = DoctorLazy(() =>
 //@ chunk-y1shfdfm.js:50288-50488 placement
 function worldOpVerbs(e) {
   let r = [];
-  if (e.put !== void 0) r.push("put");
-  if (e.retract !== void 0) r.push("retract");
-  if (e.read !== void 0) r.push("read");
-  if (e.script !== void 0) r.push("script");
-  return r.length === 1 ? r[0] : void 0;
+  if (e.put !== undefined) r.push("put");
+  if (e.retract !== undefined) r.push("retract");
+  if (e.read !== undefined) r.push("read");
+  if (e.script !== undefined) r.push("script");
+  return r.length === 1 ? r[0] : undefined;
 }
 //@ chunk-y1shfdfm.js:50615-51018 placement
+/**
+ * world 日志行的 schema（地址、类型、事实、时间等）。
+ */
 var worldJournalLineSchema = DoctorLazy(() => {
-    let nonnegative = tc().nonnegative();
-    return Ir("k", [
-      u({
-        k: T("put"),
-        addr: nonnegative,
-        kind: U(["put", "eval", "sub"]),
-        fact: factSchema(),
-        by: o(),
-        in: tc().min(HOST_SCOPE),
-        at: E().finite(),
-        status: U(ROW_STATUSES),
-      }).refine((r) => r.in < r.addr, { message: "`in` must be ROOT or an earlier address" }),
-      u({
-        k: T("settled"),
-        addr: nonnegative,
-        status: U(["done", "failed"]),
-        value: oe().optional(),
-        error: o().optional(),
-      }),
-      u({ k: T("retracted"), addr: nonnegative }),
-    ]);
-  }),
-  WORLD_JSONL = "world.jsonl",
-  Kt = 4194304;
-
+  let addr = int().nonnegative();
+  return discriminatedUnion("k", [
+    u({
+      k: literal("put"),
+      addr,
+      kind: _enum(["put", "eval", "sub"]),
+      fact: factSchema(),
+      by: string(),
+      in: int().min(HOST_SCOPE),
+      at: E().finite(),
+      status: _enum(ROW_STATUSES),
+    }).refine((r) => r.in < r.addr, {
+      message: "`in` must be ROOT or an earlier address",
+    }),
+    u({
+      k: literal("settled"),
+      addr,
+      status: _enum(["done", "failed"]),
+      value: unknown().optional(),
+      error: string().optional(),
+    }),
+    u({
+      k: literal("retracted"),
+      addr,
+    }),
+  ]);
+});
+var WORLD_JSONL = "world.jsonl";
+var MAX_WORLD_JOURNAL_READ_BYTES = 4194304;
 export {
   finiteOrZero,
   hasErrorField,
   isAgentEvalRow,
   WORLD_JSONL,
   worldJournalLineSchema,
-  Kt,
+  MAX_WORLD_JOURNAL_READ_BYTES,
   collectRunStatuses,
   RunIndex,
   describeWorldOp,

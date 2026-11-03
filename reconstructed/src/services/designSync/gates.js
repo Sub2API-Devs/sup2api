@@ -15,21 +15,23 @@ import { getFeatureValue_CACHED_MAY_BE_STALE } from "../analytics/growthbook.js"
 
 //@ chunk-y6jvepgj.js:334-363 placement
 var TENGU_OMELETTE_FOUET = "tengu_omelette_fouet";
+//@ chunk-y6jvepgj.js:363-465 placement
 /**
  * 判断 Claude Design 同步是否可用（策略允许、非必要流量模式、第一方提供方、开关开启）。
  */
-//@ chunk-y6jvepgj.js:363-465 placement
 function isDesignSyncEnabled() {
-  if (!isPolicyAllowed("allow_design_sync")) return !1;
-  if (isEssentialTrafficOnly()) return !1;
-  if (!isFirstPartyProvider()) return !1;
-  return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_OMELETTE_FOUET, !1);
+  if (!isPolicyAllowed("allow_design_sync")) return false;
+  if (isEssentialTrafficOnly()) return false;
+  if (!isFirstPartyProvider()) return false;
+  return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_OMELETTE_FOUET, false);
 }
 //@ chunk-y6jvepgj.js:465-500 placement
 var TENGU_OMELETTE_GRANT_WATCH = "tengu_omelette_grant_watch";
 //@ chunk-y6jvepgj.js:500-530 placement
-function h$s() {
-  return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_OMELETTE_GRANT_WATCH, !1);
+/**
+ * 读 tengu_omlette_grant_watch（默认关）。
+ */
+function isDesignGrantWatchEnabled() {
+  return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_OMELETTE_GRANT_WATCH, false);
 }
-
-export { isDesignSyncEnabled, h$s };
+export { isDesignSyncEnabled, isDesignGrantWatchEnabled };

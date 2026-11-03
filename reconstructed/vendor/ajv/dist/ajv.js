@@ -6,114 +6,121 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { HQo } from "./core.js";
-import { na } from "./vocabularies/draft7.js";
-import { jQo } from "./vocabularies/discriminator/index.js";
-import { da } from "./refs/json-schema-draft-07.json.js";
-import { Bvn } from "./compile/validate/index.js";
-import { uh } from "./compile/codegen/index.js";
-import { elr } from "./runtime/validation_error.js";
-import { jvn } from "./compile/ref_error.js";
+import { require_core_2 } from "./core.js";
+import { require_draft7_2 } from "./vocabularies/draft7.js";
+import { require_discriminator } from "./vocabularies/discriminator/index.js";
+import { require_json_schema_draft_07 } from "./refs/json-schema-draft-07.json.js";
+import { require_validate_2 } from "./compile/validate/index.js";
+import { require_codegen_2 } from "./compile/codegen/index.js";
+import { require_validation_error_2 } from "./runtime/validation_error.js";
+import { require_ref_error_2 } from "./compile/ref_error.js";
 
 //@ chunk-s82q9s4x.js:113905-115579 cjs-fingerprint
-var nlr = x(function (W, Cr) {
-  Object.defineProperty(W, "__esModule", { value: !0 });
-  W.MissingRefError =
-    W.ValidationError =
-    W.CodeGen =
-    W.Name =
-    W.nil =
-    W.stringify =
-    W.str =
-    W._ =
-    W.KeywordCxt =
-    W.Ajv =
-      void 0;
-  var Sh = HQo(),
-    Ph = na(),
-    Nh = jQo(),
-    fa = da(),
-    kh = ["/properties"],
-    Qt = "http://json-schema.org/draft-07/schema";
-  class pt extends Sh.default {
+var require_ajv = x(function (cjsExports, cjsModule) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.MissingRefError =
+    cjsExports.ValidationError =
+    cjsExports.CodeGen =
+    cjsExports.Name =
+    cjsExports.nil =
+    cjsExports.stringify =
+    cjsExports.str =
+    cjsExports._ =
+    cjsExports.KeywordCxt =
+    cjsExports.Ajv =
+      undefined;
+  var core_1 = require_core_2();
+  var draft7_1 = require_draft7_2();
+  var discriminator_1 = require_discriminator();
+  var draft7MetaSchema = require_json_schema_draft_07();
+  var META_SUPPORT_DATA = ["/properties"];
+  var META_SCHEMA_ID = "http://json-schema.org/draft-07/schema";
+  class Ajv extends core_1.default {
     _addVocabularies() {
-      if (
-        (super._addVocabularies(), Ph.default.forEach((e) => this.addVocabulary(e)), this.opts.discriminator)
-      )
-        this.addKeyword(Nh.default);
+      super._addVocabularies();
+      draft7_1.default.forEach((v) => this.addVocabulary(v));
+      if (this.opts.discriminator) this.addKeyword(discriminator_1.default);
     }
     _addDefaultMetaSchema() {
-      if ((super._addDefaultMetaSchema(), !this.opts.meta)) return;
-      let e = this.opts.$data ? this.$dataMetaSchema(fa, kh) : fa;
-      (this.addMetaSchema(e, Qt, !1), (this.refs["http://json-schema.org/schema"] = Qt));
+      super._addDefaultMetaSchema();
+      if (!this.opts.meta) return;
+      let metaSchema = this.opts.$data
+        ? this.$dataMetaSchema(draft7MetaSchema, META_SUPPORT_DATA)
+        : draft7MetaSchema;
+      this.addMetaSchema(metaSchema, META_SCHEMA_ID, false);
+      this.refs["http://json-schema.org/schema"] = META_SCHEMA_ID;
     }
     defaultMeta() {
-      return (this.opts.defaultMeta = super.defaultMeta() || (this.getSchema(Qt) ? Qt : void 0));
+      return (this.opts.defaultMeta =
+        super.defaultMeta() || (this.getSchema(META_SCHEMA_ID) ? META_SCHEMA_ID : undefined));
     }
   }
-  W.Ajv = pt;
-  Cr.exports = W = pt;
-  Cr.exports.Ajv = pt;
-  Object.defineProperty(W, "__esModule", { value: !0 });
-  W.default = pt;
-  var qh = Bvn();
-  Object.defineProperty(W, "KeywordCxt", {
-    enumerable: !0,
+  cjsExports.Ajv = Ajv;
+  cjsModule.exports = cjsExports = Ajv;
+  cjsModule.exports.Ajv = Ajv;
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.default = Ajv;
+  var validate_1 = require_validate_2();
+  Object.defineProperty(cjsExports, "KeywordCxt", {
+    enumerable: true,
     get: function () {
-      return qh.KeywordCxt;
+      return validate_1.KeywordCxt;
     },
   });
-  var st = uh();
-  Object.defineProperty(W, "_", {
-    enumerable: !0,
+  var codegen_1 = require_codegen_2();
+  Object.defineProperty(cjsExports, "_", {
+    enumerable: true,
     get: function () {
-      return st._;
+      return codegen_1._;
     },
   });
-  Object.defineProperty(W, "str", {
-    enumerable: !0,
+  Object.defineProperty(cjsExports, "str", {
+    enumerable: true,
     get: function () {
-      return st.str;
+      return codegen_1.str;
     },
   });
-  Object.defineProperty(W, "stringify", {
-    enumerable: !0,
+  Object.defineProperty(cjsExports, "stringify", {
+    enumerable: true,
     get: function () {
-      return st.stringify;
+      return codegen_1.stringify;
     },
   });
-  Object.defineProperty(W, "nil", {
-    enumerable: !0,
+  Object.defineProperty(cjsExports, "nil", {
+    enumerable: true,
     get: function () {
-      return st.nil;
+      return codegen_1.nil;
     },
   });
-  Object.defineProperty(W, "Name", {
-    enumerable: !0,
+  Object.defineProperty(cjsExports, "Name", {
+    enumerable: true,
     get: function () {
-      return st.Name;
+      return codegen_1.Name;
     },
   });
-  Object.defineProperty(W, "CodeGen", {
-    enumerable: !0,
+  Object.defineProperty(cjsExports, "CodeGen", {
+    enumerable: true,
     get: function () {
-      return st.CodeGen;
+      return codegen_1.CodeGen;
     },
   });
-  var Oh = elr();
-  Object.defineProperty(W, "ValidationError", {
-    enumerable: !0,
+  var validation_error_1 = require_validation_error_2();
+  Object.defineProperty(cjsExports, "ValidationError", {
+    enumerable: true,
     get: function () {
-      return Oh.default;
+      return validation_error_1.default;
     },
   });
-  var jh = jvn();
-  Object.defineProperty(W, "MissingRefError", {
-    enumerable: !0,
+  var ref_error_1 = require_ref_error_2();
+  Object.defineProperty(cjsExports, "MissingRefError", {
+    enumerable: true,
     get: function () {
-      return jh.default;
+      return ref_error_1.default;
     },
   });
 });
-
-export { nlr };
+export { require_ajv };

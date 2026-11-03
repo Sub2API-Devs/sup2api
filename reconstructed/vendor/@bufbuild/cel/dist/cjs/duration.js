@@ -6,57 +6,66 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../runtime/bun-runtime.js";
-import { Os } from "../../../../@anthropic-ai/bedrock-sdk/core/error.js";
-import { li } from "../../../protobuf/dist/commonjs/index.js";
+import { require_error_4 } from "../../../../@anthropic-ai/bedrock-sdk/core/error.js";
+import { require_protobuf } from "../../../protobuf/dist/commonjs/index.js";
 
 //@ chunk-fq0cr76a.js:480792-481955 cjs-fingerprint
-var L_ = x(function (sB) {
-  Object.defineProperty(sB, "__esModule", { value: !0 });
-  sB.createDuration = P_;
-  sB.parseDuration = Dee;
-  var tB = Os(),
-    nB = li(),
-    O_ = 1000000000n,
-    Iee = 9223372036854775807n,
-    Nee = -9223372036854775808n;
-  function P_(e = 0n, n = 0n) {
-    let r = e * O_ + BigInt(n);
-    if (r > Iee || r < Nee) throw Error("duration out of range");
-    return nB.create(tB.DurationSchema, { seconds: r / O_, nanos: Number(r % O_) });
+var require_duration = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.createDuration = createDuration;
+  cjsExports.parseDuration = parseDuration;
+  var wkt_1 = require_error_4();
+  var protobuf_1 = require_protobuf();
+  var ONE_SECOND = 1000000000n;
+  var MAX_DURATION_NANOS = 9223372036854775807n;
+  var MIN_DURATION_NANOS = -9223372036854775808n;
+  function createDuration(seconds = 0n, ns = 0n) {
+    let fullNanos = seconds * ONE_SECOND + BigInt(ns);
+    if (fullNanos > MAX_DURATION_NANOS || fullNanos < MIN_DURATION_NANOS)
+      throw Error("duration out of range");
+    return protobuf_1.create(wkt_1.DurationSchema, {
+      seconds: fullNanos / ONE_SECOND,
+      nanos: Number(fullNanos % ONE_SECOND),
+    });
   }
-  var JL = 128,
-    freeze = Object.freeze({
-      ns: 1n,
-      us: 1000n,
-      µs: 1000n,
-      ms: 1000n * 1000n,
-      s: 1000n * 1000n * 1000n,
-      m: 1000n * 1000n * 1000n * 60n,
-      h: 1000n * 1000n * 1000n * 60n * 60n,
-    }),
-    QL = /^\d+/,
-    regExp = new RegExp(`^(${Object.keys(freeze).join("|")})`);
-  function Dee(e) {
-    if (e.length > JL) throw eB(`duration string exceeds ${JL} characters`);
-    if (/^[-+]?0$/.test(e)) return P_();
-    let [n, r] = /^[+-]/.test(e) ? [e[0] === "+" ? 1n : -1n, e.slice(1)] : [1n, e],
-      s = 0n,
-      h = r;
-    while (h.length > 0) {
-      let y = QL.exec(h)?.[0];
-      if (((h = h.slice(y?.length ?? 0)), h[0] === ".")) h = h.slice(1);
-      let b = QL.exec(h)?.[0];
-      h = h.slice(b?.length ?? 0);
-      let S = regExp.exec(h)?.[0];
-      if (((h = h.slice(S?.length ?? 0)), (y ?? b) === void 0 || S === void 0)) throw eB("invalid syntax");
-      let w = freeze[S];
-      ((s += BigInt(y ?? 0) * w), (s += (BigInt(b ?? 0) * w) / 10n ** BigInt(b?.length ?? 0)));
+  var DURATION_STRING_LENGTH_LIMIT = 128;
+  var UNITS = Object.freeze({
+    ns: 1n,
+    us: 1000n,
+    µs: 1000n,
+    ms: 1000n * 1000n,
+    s: 1000n * 1000n * 1000n,
+    m: 1000n * 1000n * 1000n * 60n,
+    h: 1000n * 1000n * 1000n * 60n * 60n,
+  });
+  var INT_REGEXP = /^\d+/;
+  var UNIT_REGEXP = new RegExp(`^(${Object.keys(UNITS).join("|")})`);
+  function parseDuration(str) {
+    if (str.length > DURATION_STRING_LENGTH_LIMIT)
+      throw badDurationStr(`duration string exceeds ${DURATION_STRING_LENGTH_LIMIT} characters`);
+    if (/^[-+]?0$/.test(str)) return createDuration();
+    let [sign, values] = /^[+-]/.test(str) ? [str[0] === "+" ? 1n : -1n, str.slice(1)] : [1n, str];
+    let fullNanos = 0n;
+    let remainder = values;
+    while (remainder.length > 0) {
+      let int = INT_REGEXP.exec(remainder)?.[0];
+      remainder = remainder.slice(int?.length ?? 0);
+      if (remainder[0] === ".") remainder = remainder.slice(1);
+      let fraction = INT_REGEXP.exec(remainder)?.[0];
+      remainder = remainder.slice(fraction?.length ?? 0);
+      let unit = UNIT_REGEXP.exec(remainder)?.[0];
+      remainder = remainder.slice(unit?.length ?? 0);
+      if ((int ?? fraction) === undefined || unit === undefined) throw badDurationStr("invalid syntax");
+      let factor = UNITS[unit];
+      fullNanos += BigInt(int ?? 0) * factor;
+      fullNanos += (BigInt(fraction ?? 0) * factor) / 10n ** BigInt(fraction?.length ?? 0);
     }
-    return P_(0n, n * s);
+    return createDuration(0n, sign * fullNanos);
   }
-  function eB(e) {
+  function badDurationStr(e) {
     return Error(`Failed to parse duration: ${e}`);
   }
 });
-
-export { L_ };
+export { require_duration };

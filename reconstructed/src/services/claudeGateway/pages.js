@@ -8,19 +8,14 @@
  * pieces: chunk-1ny7cxrt.js (6)
  * attribution: placement 6
  */
-import {
-  randomBytes,
-  randomBytes as randomBytes_2,
-  randomBytes as randomBytes_3,
-  randomBytes as randomBytes_4,
-} from "crypto";
+import { randomBytes } from "crypto";
 import { renderCallbackPage, brokenLinkSvg, checkmarkSvg } from "../oauth/callbackPage.js";
 import { xHe } from "../../../vendor/es-toolkit/dist/string/escape.mjs";
 
+//@ chunk-1ny7cxrt.js:1330688-1332239 placement
 /**
  * 设备登录页样式与字符画 logo。
  */
-//@ chunk-1ny7cxrt.js:1330688-1332239 placement
 var DEVICE_PAGE_CSS = `
 :root{--err:#a63244}
 @media (prefers-color-scheme:dark){:root{--err:#f08c99}}
@@ -35,19 +30,24 @@ button.go:hover{opacity:.85}
 button.deny{appearance:none;border:1px solid var(--line);width:100%;background:none;color:var(--ink);font:inherit;padding:12px 20px;border-radius:8px;cursor:pointer;margin-top:8px}
 button.deny:hover{background:var(--card);border-color:var(--ink2)}
 button.go:focus-visible,button.deny:focus-visible{outline:2px solid #2A78D6;outline-offset:2px}
-@media (max-width:520px){.code-input,.code-display{font-size:22px}}`,
-  CLAUDE_ASCII_LOGO = ` \u2590\u259B\u2588\u2588\u2588\u259B\u2588
+@media (max-width:520px){.code-input,.code-display{font-size:22px}}`;
+var CLAUDE_ASCII_LOGO = ` \u2590\u259B\u2588\u2588\u2588\u259B\u2588
 \u259D\u259C\u2588\u2588\u2588\u2588\u2588\u2588\u2580
  \u259D\u259D   \u259D\u259D`;
+//@ chunk-1ny7cxrt.js:1332239-1332711 placement
 /**
  * 渲染网关 HTML 页面（CSP、可选关闭标签脚本 nonce、禁止缓存）。
  */
-//@ chunk-1ny7cxrt.js:1332239-1332711 placement
 function htmlPageResponse(e, t) {
-  let n = t?.closeTab ? randomBytes_3(16).toString("base64url") : void 0,
-    o = t?.formAction ? `'self' ${t.formAction}` : "'self'";
+  let n = t?.closeTab ? randomBytes(16).toString("base64url") : undefined;
+  let o = t?.formAction ? `'self' ${t.formAction}` : "'self'";
   return new Response(
-    renderCallbackPage(e, { css: DEVICE_PAGE_CSS, closeTab: n !== void 0 && { nonce: n } }),
+    renderCallbackPage(e, {
+      css: DEVICE_PAGE_CSS,
+      closeTab: n !== undefined && {
+        nonce: n,
+      },
+    }),
     {
       headers: {
         "Content-Type": "text/html; charset=utf-8",
@@ -58,13 +58,13 @@ function htmlPageResponse(e, t) {
     },
   );
 }
+//@ chunk-1ny7cxrt.js:1332711-1333797 placement
 /**
  * 网关首页：版本、身份提供方与连接说明。
  */
-//@ chunk-1ny7cxrt.js:1332711-1333797 placement
 function gatewayIndexPage(e, t, n) {
-  let o = xHe(e),
-    r = t === null ? "(none \u2014 customer-routed inference only)" : xHe(new URL(t).hostname);
+  let o = xHe(e);
+  let r = t === null ? "(none \u2014 customer-routed inference only)" : xHe(new URL(t).hostname);
   return new Response(
     `<!doctype html>
 <html>
@@ -99,13 +99,13 @@ Version             ${xHe(n)}
     },
   );
 }
+//@ chunk-1ny7cxrt.js:1333797-1335062 placement
 /**
  * 设备码页面：预填时确认/拒绝，否则输入码。
  */
-//@ chunk-1ny7cxrt.js:1333797-1335062 placement
 function deviceCodePage(e) {
-  let { prefill: prefill, error: error, idpOrigin: idpOrigin } = e,
-    r = error ? `<p class="refused" id="e" role="alert">${xHe(error)}</p>` : "";
+  let { prefill, error, idpOrigin } = e;
+  let r = error ? `<p class="refused" id="e" role="alert">${xHe(error)}</p>` : "";
   if (prefill)
     return htmlPageResponse(
       `<h1>Approve sign-in?</h1>
@@ -116,7 +116,9 @@ function deviceCodePage(e) {
   <button class="go" type="submit">This matches my device \u2014 continue</button>
   <button class="deny" type="submit" formaction="/device/deny">Deny</button>
 ${r}</form>`,
-      { formAction: idpOrigin },
+      {
+        formAction: idpOrigin,
+      },
     );
   return htmlPageResponse(
     `<h1 id="h">Enter the code from your device.</h1>
@@ -125,13 +127,15 @@ ${r}</form>`,
   <input class="code-input" name="user_code" aria-labelledby="h"${error ? ' aria-describedby="e"' : ""} inputmode="latin" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" placeholder="XXXX-XXXX" maxlength="9" autofocus required>
   <button class="go" type="submit">Continue</button>
 ${r}</form>`,
-    { formAction: idpOrigin },
+    {
+      formAction: idpOrigin,
+    },
   );
 }
+//@ chunk-1ny7cxrt.js:1335062-1335588 placement
 /**
  * 拒绝登录后的页面（或未在等待批准）。
  */
-//@ chunk-1ny7cxrt.js:1335062-1335588 placement
 function deviceDeniedPage(e) {
   if (!e)
     return htmlPageResponse(`<h1>This sign-in isn&rsquo;t waiting for approval.</h1>
@@ -140,10 +144,10 @@ function deviceDeniedPage(e) {
 <h1>You stopped this sign-in.</h1>
 <p class="sub">No access was granted, and the code is no longer valid. If you didn&rsquo;t start this sign-in, tell your IT administrator. If you stopped your own sign-in by mistake, start it again from your device.</p>`);
 }
+//@ chunk-1ny7cxrt.js:1335588-1336032 placement
 /**
  * 登录完成或失败页面。
  */
-//@ chunk-1ny7cxrt.js:1335588-1336032 placement
 function signInResultPage(e) {
   if (e)
     return htmlPageResponse(`${brokenLinkSvg()}
@@ -154,8 +158,9 @@ function signInResultPage(e) {
     `${checkmarkSvg()}
 <h1>You&rsquo;re signed in.</h1>
 <p class="sub">Return to your device \u2014 it should connect within a few seconds. You can close this tab.</p>`,
-    { closeTab: !0 },
+    {
+      closeTab: true,
+    },
   );
 }
-
 export { gatewayIndexPage, deviceCodePage, deviceDeniedPage, signInResultPage };

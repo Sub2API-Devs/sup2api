@@ -6,78 +6,97 @@
  * attribution: cjs-require-graph 1
  */
 import { x } from "../../../../../../runtime/bun-runtime.js";
-import { xl } from "./unsafe.js";
+import { require_unsafe } from "./unsafe.js";
 
 //@ chunk-fq0cr76a.js:330751-332193 cjs-require-graph
-var Uu = x(function (GN) {
-  Object.defineProperty(GN, "__esModule", { value: !0 });
-  GN.isObject = ap;
-  GN.isOneofADT = Vj;
-  GN.isReflectList = Wj;
-  GN.isReflectMap = Gj;
-  GN.isReflectMessage = Hj;
-  var Bu = xl();
-  function ap(e) {
-    return e !== null && typeof e == "object" && !Array.isArray(e);
+var require_guard = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.isObject = isObject;
+  cjsExports.isOneofADT = isOneofADT;
+  cjsExports.isReflectList = isReflectList;
+  cjsExports.isReflectMap = isReflectMap;
+  cjsExports.isReflectMessage = isReflectMessage;
+  var unsafe_js_1 = require_unsafe();
+  function isObject(arg) {
+    return arg !== null && typeof arg == "object" && !Array.isArray(arg);
   }
-  function Vj(e) {
+  function isOneofADT(arg) {
     return (
-      e !== null &&
-      typeof e == "object" &&
-      "case" in e &&
-      ((typeof e.case == "string" && "value" in e && e.value != null) ||
-        (e.case === void 0 && (!("value" in e) || e.value === void 0)))
+      arg !== null &&
+      typeof arg == "object" &&
+      "case" in arg &&
+      ((typeof arg.case == "string" && "value" in arg && arg.value != null) ||
+        (arg.case === undefined && (!("value" in arg) || arg.value === undefined)))
     );
   }
-  function Wj(e, n) {
-    var r, s, h, y;
-    if (ap(e) && Bu.unsafeLocal in e && "add" in e && "field" in e && typeof e.field == "function") {
-      if (n !== void 0) {
-        let b = n,
-          field = e.field();
+  function isReflectList(arg, field) {
+    var _a;
+    var _b;
+    var _c;
+    var _d;
+    if (
+      isObject(arg) &&
+      unsafe_js_1.unsafeLocal in arg &&
+      "add" in arg &&
+      "field" in arg &&
+      typeof arg.field == "function"
+    ) {
+      if (field !== undefined) {
+        let a = field;
+        let b = arg.field();
         return (
-          b.listKind == field.listKind &&
-          b.scalar === field.scalar &&
-          ((r = b.message) === null || r === void 0 ? void 0 : r.typeName) ===
-            ((s = field.message) === null || s === void 0 ? void 0 : s.typeName) &&
-          ((h = b.enum) === null || h === void 0 ? void 0 : h.typeName) ===
-            ((y = field.enum) === null || y === void 0 ? void 0 : y.typeName)
+          a.listKind == b.listKind &&
+          a.scalar === b.scalar &&
+          ((_a = a.message) === null || _a === undefined ? undefined : _a.typeName) ===
+            ((_b = b.message) === null || _b === undefined ? undefined : _b.typeName) &&
+          ((_c = a.enum) === null || _c === undefined ? undefined : _c.typeName) ===
+            ((_d = b.enum) === null || _d === undefined ? undefined : _d.typeName)
         );
       }
-      return !0;
+      return true;
     }
-    return !1;
+    return false;
   }
-  function Gj(e, n) {
-    var r, s, h, y;
-    if (ap(e) && Bu.unsafeLocal in e && "has" in e && "field" in e && typeof e.field == "function") {
-      if (n !== void 0) {
-        let b = n,
-          field = e.field();
+  function isReflectMap(arg, field) {
+    var _a;
+    var _b;
+    var _c;
+    var _d;
+    if (
+      isObject(arg) &&
+      unsafe_js_1.unsafeLocal in arg &&
+      "has" in arg &&
+      "field" in arg &&
+      typeof arg.field == "function"
+    ) {
+      if (field !== undefined) {
+        let a = field;
+        let b = arg.field();
         return (
-          b.mapKey === field.mapKey &&
-          b.mapKind == field.mapKind &&
-          b.scalar === field.scalar &&
-          ((r = b.message) === null || r === void 0 ? void 0 : r.typeName) ===
-            ((s = field.message) === null || s === void 0 ? void 0 : s.typeName) &&
-          ((h = b.enum) === null || h === void 0 ? void 0 : h.typeName) ===
-            ((y = field.enum) === null || y === void 0 ? void 0 : y.typeName)
+          a.mapKey === b.mapKey &&
+          a.mapKind == b.mapKind &&
+          a.scalar === b.scalar &&
+          ((_a = a.message) === null || _a === undefined ? undefined : _a.typeName) ===
+            ((_b = b.message) === null || _b === undefined ? undefined : _b.typeName) &&
+          ((_c = a.enum) === null || _c === undefined ? undefined : _c.typeName) ===
+            ((_d = b.enum) === null || _d === undefined ? undefined : _d.typeName)
         );
       }
-      return !0;
+      return true;
     }
-    return !1;
+    return false;
   }
-  function Hj(e, n) {
+  function isReflectMessage(arg, messageDesc) {
     return (
-      ap(e) &&
-      Bu.unsafeLocal in e &&
-      "desc" in e &&
-      ap(e.desc) &&
-      e.desc.kind === "message" &&
-      (n === void 0 || e.desc.typeName == n.typeName)
+      isObject(arg) &&
+      unsafe_js_1.unsafeLocal in arg &&
+      "desc" in arg &&
+      isObject(arg.desc) &&
+      arg.desc.kind === "message" &&
+      (messageDesc === undefined || arg.desc.typeName == messageDesc.typeName)
     );
   }
 });
-
-export { Uu };
+export { require_guard };

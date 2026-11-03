@@ -12,7 +12,7 @@ import { getAuthTokenSource, isHostManagedProviderAuth, isFirstPartyManagedOAuth
 import { isOauthTokenFromBgSnapshot, getIsRemoteMode } from "../../bootstrap/state.js";
 import { isLocalAgentSession, isClaudecodeSession } from "../sessionShape.js";
 import { isDesktopNonClaudecode } from "../entrypointKinds.js";
-import { Jrt } from "../../services/plugins/accountSync/pluginsScopeGate.js";
+import { isFirstPartyClaudeAiSession } from "../../services/plugins/accountSync/pluginsScopeGate.js";
 import { env } from "../env.js";
 import { getAPIProvider } from "../model/providers.js";
 import { isBareMode } from "../envUtils.js";
@@ -21,40 +21,58 @@ import { isPolicyAllowed } from "../../services/policyLimits/policyEvidence.js";
 import { ALLOW_PLUGIN_PUBLISH_KEY } from "../../services/plugins/publish/publishGate.js";
 
 //@ chunk-381d7r01.js:569-610 placement
-var wAo = (o) => o.find((m) => m !== !1) || void 0;
+/**
+ * 取数组里第一个非 false 的值。
+ */
+var firstTruthy = (o) => o.find((m) => m !== false) || undefined;
 //@ chunk-381d7r01.js:610-726 placement
 function isEnvOauthTokenSource() {
-  let { source: source } = getAuthTokenSource();
+  let { source } = getAuthTokenSource();
   return source === "CLAUDE_CODE_OAUTH_TOKEN" || source === "CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR";
 }
 //@ chunk-381d7r01.js:726-785 placement
-var p = () =>
+/**
+ * 是否使用后台认证快照里的 OAuth 令牌。
+ */
+var hasBgSnapshotOauthToken = () =>
   getAuthTokenSource().source === "CCR_OAUTH_TOKEN_FILE" &&
   isOauthTokenFromBgSnapshot() &&
   isHostManagedProviderAuth();
 //@ chunk-381d7r01.js:785-826 placement
-var u = () =>
+/**
+ * 本机 agent 会话（非 claudecode）是否使用自身令牌。
+ */
+var usesLocalAgentOwnToken = () =>
   isLocalAgentSession() &&
   !isClaudecodeSession() &&
   isHostManagedProviderAuth() &&
-  (isEnvOauthTokenSource() || p());
+  (isEnvOauthTokenSource() || hasBgSnapshotOauthToken());
 //@ chunk-381d7r01.js:826-905 placement
-var lGn = () =>
+/**
+ * 桌面端（非 claudecode）自带 OAuth 令牌的会话判定。
+ */
+var isDesktopSessionWithOwnToken = () =>
   isFirstPartyManagedOAuthContext() &&
   !getIsRemoteMode() &&
-  ((isDesktopNonClaudecode() && getAuthTokenSource().source === "CLAUDE_CODE_OAUTH_TOKEN") || u());
+  ((isDesktopNonClaudecode() && getAuthTokenSource().source === "CLAUDE_CODE_OAUTH_TOKEN") ||
+    usesLocalAgentOwnToken());
 //@ chunk-381d7r01.js:905-928 placement
-var l = () => Jrt() || lGn();
+/**
+ * 聊天或桌面会话自带令牌的统一判定。
+ */
+var isChatSessionWithOwnToken = () => isFirstPartyClaudeAiSession() || isDesktopSessionWithOwnToken();
 //@ chunk-381d7r01.js:928-990 placement
-var A$s = () => (env.CLAUDE_CODE_REMOTE ? "cloud-session" : "signed-out");
+/**
+ * 云会话返回 “cloud-session”，否则 “signed-out”。
+ */
+var authUnavailableReasonByMode = () => (env.CLAUDE_CODE_REMOTE ? "cloud-session" : "signed-out");
 //@ chunk-381d7r01.js:990-1108 placement
 var getAuthUnavailableReason = () =>
-  wAo([
+  firstTruthy([
     getAPIProvider() !== "firstParty" && "third-party",
     isBareMode() && "bare",
     isEssentialTrafficOnly() && "traffic-off",
     !isPolicyAllowed(ALLOW_PLUGIN_PUBLISH_KEY) && "policy",
-    !l() && A$s(),
+    !isChatSessionWithOwnToken() && authUnavailableReasonByMode(),
   ]);
-
-export { wAo, lGn, A$s, getAuthUnavailableReason };
+export { firstTruthy, isDesktopSessionWithOwnToken, authUnavailableReasonByMode, getAuthUnavailableReason };

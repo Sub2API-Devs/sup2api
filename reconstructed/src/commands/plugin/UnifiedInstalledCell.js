@@ -9,15 +9,18 @@
  * attribution: placement 2, fingerprint 1
  */
 import { w } from "../../../vendor/react/compiler-runtime.js";
-import { yhe } from "../../services/mcp/normalization.js";
-import { e, r } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { CLAUDE_AI_NAME_PREFIX } from "../../services/mcp/normalization.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Box, Text } from "../../ink/components/Text.js";
-import { HEALTH_COLORS, Td, Cy } from "./pluginUsageStats.js";
-import { re } from "../../../vendor/@inquirer/figures/dist/esm/index.js";
+import { HEALTH_COLORS, INSTALLED_COLUMN_WIDTH, SKILL_STATE_GLYPHS } from "./pluginUsageStats.js";
+import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/index.js";
 import { ListItem } from "../../components/design-system/ListItem.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { ConfigurableShortcutHint } from "../../components/ConfigurableShortcutHint.js";
-import { i3 } from "../../utils/permissions/permissionRulePayload.js";
+import { isSyncedMarketplacePlugin } from "../../utils/permissions/permissionRulePayload.js";
 import { CLAUDE_AI_SYNC_LABEL } from "../../utils/settings/commandSyncNames.js";
 import { displayMarketplaceName } from "../../utils/plugins/pluginDisplayMetadata.js";
 import { isRequiredPlugin } from "../../utils/plugins/pluginIdentifier.js";
@@ -26,16 +29,10 @@ import { getPluginDisplayName } from "../../components/ManagedSettingsSecurityDi
 import { formatToolConnectionState } from "../../components/mcp/CapabilitiesSection.js";
 
 //@ chunk-vrb44rx7.js:142243-143655 placement
-function InstalledItemRow(i) {
-  let D = w(16),
-    {
-      item: item,
-      isSelected: isSelected,
-      health: health,
-      nameWidth: nameWidth,
-      statusHoisted: statusHoisted,
-    } = i,
-    U;
+function InstalledItemRow(props) {
+  let D = w(16);
+  let { item, isSelected, health, nameWidth, statusHoisted } = props;
+  let U;
   if (
     D[0] !== health ||
     D[1] !== isSelected ||
@@ -44,73 +41,103 @@ function InstalledItemRow(i) {
     D[4] !== statusHoisted
   ) {
     let L = UnifiedInstalledCell(item);
-    let A = isSelected ? "suggestion" : void 0;
-    let K = item.type === "mcp" && item.scope === "claudeai" && L.name.startsWith(yhe) ? yhe : "";
+    let color = isSelected ? "suggestion" : undefined;
+    let K =
+      item.type === "mcp" && item.scope === "claudeai" && L.name.startsWith(CLAUDE_AI_NAME_PREFIX)
+        ? CLAUDE_AI_NAME_PREFIX
+        : "";
     let V = !L.statusIsDefault && (!statusHoisted || isSelected);
-    const B = e(Box, {
+    const B = jsxProd_default(Box, {
       flexShrink: 0,
-      children: e(Text, { color: L.tone, "aria-label": V ? void 0 : L.statusLabel, children: L.glyph }),
+      children: jsxProd_default(Text, {
+        color: L.tone,
+        "aria-label": V ? undefined : L.statusLabel,
+        children: L.glyph,
+      }),
     });
     let _;
-    if (D[6] !== K || D[7] !== isSelected || D[8] !== A)
-      ((_ = K && e(Text, { color: A, dimColor: !isSelected, children: K })),
-        (D[6] = K),
-        (D[7] = isSelected),
-        (D[8] = A),
-        (D[9] = _));
-    else _ = D[9];
-    const J = e(Box, {
+    if (D[6] !== K || D[7] !== isSelected || D[8] !== color) {
+      _ =
+        K &&
+        jsxProd_default(Text, {
+          color,
+          dimColor: !isSelected,
+          children: K,
+        });
+      D[6] = K;
+      D[7] = isSelected;
+      D[8] = color;
+      D[9] = _;
+    } else _ = D[9];
+    const J = jsxProd_default(Box, {
       flexShrink: 1,
-      children: r(Text, {
+      children: jsxProd_default_2(Text, {
         wrap: "truncate-end",
         children: [
-          L.isChild && e(Text, { dimColor: !isSelected, children: "\u2514 " }),
+          L.isChild &&
+            jsxProd_default(Text, {
+              dimColor: !isSelected,
+              children: "\u2514 ",
+            }),
           _,
-          e(Text, { color: A, children: L.name.slice(K.length) }),
+          jsxProd_default(Text, {
+            color,
+            children: L.name.slice(K.length),
+          }),
         ],
       }),
     });
     let pe;
-    if (D[10] !== health)
-      ((pe =
+    if (D[10] !== health) {
+      pe =
         health &&
-        e(Box, {
+        jsxProd_default(Box, {
           flexShrink: 0,
-          children: r(Text, { color: HEALTH_COLORS[health], children: [" ", re.bullet] }),
-        })),
-        (D[10] = health),
-        (D[11] = pe));
-    else pe = D[11];
+          children: jsxProd_default_2(Text, {
+            color: HEALTH_COLORS[health],
+            children: [" ", figures_default.bullet],
+          }),
+        });
+      D[10] = health;
+      D[11] = pe;
+    } else pe = D[11];
     let fe;
-    if (D[12] !== nameWidth || D[13] !== J || D[14] !== pe)
-      ((fe = r(Box, { width: nameWidth, flexShrink: 0, children: [J, pe] })),
-        (D[12] = nameWidth),
-        (D[13] = J),
-        (D[14] = pe),
-        (D[15] = fe));
-    else fe = D[15];
-    U = r(ListItem, {
+    if (D[12] !== nameWidth || D[13] !== J || D[14] !== pe) {
+      fe = jsxProd_default_2(Box, {
+        width: nameWidth,
+        flexShrink: 0,
+        children: [J, pe],
+      });
+      D[12] = nameWidth;
+      D[13] = J;
+      D[14] = pe;
+      D[15] = fe;
+    } else fe = D[15];
+    U = jsxProd_default_2(ListItem, {
       isFocused: isSelected,
-      styled: !1,
+      styled: false,
       children: [
         B,
         fe,
-        e(Box, {
-          width: Td,
+        jsxProd_default(Box, {
+          width: INSTALLED_COLUMN_WIDTH,
           flexShrink: 0,
           marginLeft: 1,
-          children: e(Text, { dimColor: !0, children: L.typeLabel }),
+          children: jsxProd_default(Text, {
+            dimColor: true,
+            children: L.typeLabel,
+          }),
         }),
         (V || L.details.length > 0) &&
-          e(Box, {
+          jsxProd_default(Box, {
             marginLeft: 1,
             flexShrink: 1,
-            children: r(Text, {
+            children: jsxProd_default_2(Text, {
               wrap: "truncate-end",
               children: [
                 V && (L.statusHint ?? L.statusLabel),
                 L.details.map((detail, ne) =>
-                  r(
+                  jsxProd_default_2(
                     Text,
                     {
                       dimColor: !isSelected && !detail.tone,
@@ -125,155 +152,239 @@ function InstalledItemRow(i) {
           }),
       ],
     });
-    ((D[0] = health),
-      (D[1] = isSelected),
-      (D[2] = item),
-      (D[3] = nameWidth),
-      (D[4] = statusHoisted),
-      (D[5] = U));
+    D[0] = health;
+    D[1] = isSelected;
+    D[2] = item;
+    D[3] = nameWidth;
+    D[4] = statusHoisted;
+    D[5] = U;
   } else U = D[5];
   return U;
 }
+//@ chunk-vrb44rx7.js:143655-143808 placement
 /**
  * 渲染"Enter auth"快捷键提示（可配置键位 select:accept）。
  */
-//@ chunk-vrb44rx7.js:143655-143808 placement
 function AuthShortcutHint() {
-  let i = w(1),
-    h;
-  if (i[0] === MEMO_CACHE_SENTINEL)
-    ((h = e(ConfigurableShortcutHint, {
+  let i = w(1);
+  let h;
+  if (i[0] === MEMO_CACHE_SENTINEL) {
+    h = jsxProd_default(ConfigurableShortcutHint, {
       action: "select:accept",
       context: "Select",
       fallback: "Enter",
       description: "auth",
-    })),
-      (i[0] = h));
-  else h = i[0];
+    });
+    i[0] = h;
+  } else h = i[0];
   return h;
 }
 //@ chunk-vrb44rx7.js:143808-146689 fingerprint = UnifiedInstalledCell (0.475)
 function UnifiedInstalledCell(t0) {
   switch (t0.type) {
     case "plugin": {
-      let h = [{ text: i3(t0.id) ? CLAUDE_AI_SYNC_LABEL : displayMarketplaceName(t0.marketplace) }];
-      if (isRequiredPlugin(t0.id, t0.plugin.installationPreference)) h.push({ text: "required by your org" });
+      let h = [
+        {
+          text: isSyncedMarketplacePlugin(t0.id)
+            ? CLAUDE_AI_SYNC_LABEL
+            : displayMarketplaceName(t0.marketplace),
+        },
+      ];
+      if (isRequiredPlugin(t0.id, t0.plugin.installationPreference))
+        h.push({
+          text: "required by your org",
+        });
       if (t0.activity && t0.activity.skillCount > 0) {
-        if (
-          (h.push({ text: `${t0.activity.skillCount} ${plural(t0.activity.skillCount, "skill")}` }),
-          t0.activity.totalCount > 0)
-        )
-          h.push({ text: `${t0.activity.totalCount} ${plural(t0.activity.totalCount, "use")}` });
+        h.push({
+          text: `${t0.activity.skillCount} ${plural(t0.activity.skillCount, "skill")}`,
+        });
+        if (t0.activity.totalCount > 0)
+          h.push({
+            text: `${t0.activity.totalCount} ${plural(t0.activity.totalCount, "use")}`,
+          });
       }
-      if (t0.unusedDays !== void 0)
-        h.push({ text: `not used in ${t0.unusedDays} ${plural(t0.unusedDays, "day")}` });
-      let k = { name: getPluginDisplayName(t0), isChild: !1, typeLabel: "Plugin", details: h };
+      if (t0.unusedDays !== undefined)
+        h.push({
+          text: `not used in ${t0.unusedDays} ${plural(t0.unusedDays, "day")}`,
+        });
+      let k = {
+        name: getPluginDisplayName(t0),
+        isChild: false,
+        typeLabel: "Plugin",
+        details: h,
+      };
       if (t0.pendingToggle)
         return {
           ...k,
-          glyph: re.arrowRight,
+          glyph: figures_default.arrowRight,
           tone: "suggestion",
           statusLabel: t0.pendingToggle === "will-enable" ? "will enable" : "will disable",
-          statusIsDefault: !1,
+          statusIsDefault: false,
         };
       if (t0.errorCount > 0)
         return {
           ...k,
-          glyph: re.cross,
+          glyph: figures_default.cross,
           tone: "error",
           statusLabel: `${t0.errorCount} ${plural(t0.errorCount, "error")}`,
-          statusIsDefault: !1,
+          statusIsDefault: false,
         };
       if (!t0.isEnabled)
-        return { ...k, glyph: re.radioOff, tone: "inactive", statusLabel: "disabled", statusIsDefault: !1 };
-      return { ...k, glyph: re.tick, tone: "success", statusLabel: "enabled", statusIsDefault: !0 };
+        return {
+          ...k,
+          glyph: figures_default.radioOff,
+          tone: "inactive",
+          statusLabel: "disabled",
+          statusIsDefault: false,
+        };
+      return {
+        ...k,
+        glyph: figures_default.tick,
+        tone: "success",
+        statusLabel: "enabled",
+        statusIsDefault: true,
+      };
     }
     case "flagged-plugin":
       return {
         name: t0.name,
-        isChild: !1,
+        isChild: false,
         typeLabel: "Plugin",
-        glyph: re.warning,
+        glyph: figures_default.warning,
         tone: "warning",
         statusLabel: "removed",
-        statusIsDefault: !1,
-        details: [{ text: displayMarketplaceName(t0.marketplace) }],
+        statusIsDefault: false,
+        details: [
+          {
+            text: displayMarketplaceName(t0.marketplace),
+          },
+        ],
       };
     case "failed-plugin":
       return {
         name: t0.name,
-        isChild: !1,
+        isChild: false,
         typeLabel: "Plugin",
-        glyph: re.cross,
+        glyph: figures_default.cross,
         tone: "error",
         statusLabel: "failed to load",
-        statusIsDefault: !1,
+        statusIsDefault: false,
         details: [
-          { text: `${t0.errorCount} ${plural(t0.errorCount, "error")}` },
-          { text: displayMarketplaceName(t0.marketplace) },
+          {
+            text: `${t0.errorCount} ${plural(t0.errorCount, "error")}`,
+          },
+          {
+            text: displayMarketplaceName(t0.marketplace),
+          },
         ],
       };
     case "skill": {
-      let h = Cy[t0.override];
+      let h = SKILL_STATE_GLYPHS[t0.override];
       return {
         name: t0.name,
-        isChild: !1,
+        isChild: false,
         typeLabel: "Skill",
         glyph: h.glyph,
         tone: h.tone,
         statusLabel: `${t0.lockSource ? "\uD83D\uDD12 " : ""}${h.label}`,
         statusIsDefault: t0.override === "on" && !t0.lockSource,
         details: [
-          { text: t0.source },
-          { text: `~${t0.tokenEstimate} tok` },
+          {
+            text: t0.source,
+          },
+          {
+            text: `~${t0.tokenEstimate} tok`,
+          },
           t0.usage
             ? {
                 text: `${t0.usage.count}\xD7 ${t0.usage.daysSinceUse === 0 ? "today" : `${t0.usage.daysSinceUse}d`}`,
               }
-            : { text: "never used", tone: "warning" },
+            : {
+                text: "never used",
+                tone: "warning",
+              },
         ],
       };
     }
     case "mcp": {
-      let config = t0.client.config,
-        k = [];
-      if (config?.type === "claudeai-proxy" && config.scope === "claudeai" && config.enterpriseManaged === !0)
-        k.push({ text: "managed" });
-      if (t0.liftedFrom) k.push({ text: `from ${getPluginDisplayName(t0.liftedFrom)}` });
+      let config = t0.client.config;
+      let k = [];
+      if (
+        config?.type === "claudeai-proxy" &&
+        config.scope === "claudeai" &&
+        config.enterpriseManaged === true
+      )
+        k.push({
+          text: "managed",
+        });
+      if (t0.liftedFrom)
+        k.push({
+          text: `from ${getPluginDisplayName(t0.liftedFrom)}`,
+        });
       let C = {
         name: t0.name,
-        isChild: t0.indented === !0,
+        isChild: t0.indented === true,
         typeLabel: "MCP",
         details: k,
-        statusIsDefault: !1,
+        statusIsDefault: false,
       };
       if (t0.status === "cached" && t0.client.type === "cached") {
         let x = formatToolConnectionState(t0.client.cacheSavedAt);
-        return { ...C, glyph: x.glyph, tone: x.tone, statusLabel: x.statusText };
+        return {
+          ...C,
+          glyph: x.glyph,
+          tone: x.tone,
+          statusLabel: x.statusText,
+        };
       }
       switch (t0.status) {
         case "connected":
-          return { ...C, glyph: re.tick, tone: "success", statusLabel: "connected", statusIsDefault: !0 };
+          return {
+            ...C,
+            glyph: figures_default.tick,
+            tone: "success",
+            statusLabel: "connected",
+            statusIsDefault: true,
+          };
         case "disabled":
-          return { ...C, glyph: re.radioOff, tone: "inactive", statusLabel: "disabled" };
+          return {
+            ...C,
+            glyph: figures_default.radioOff,
+            tone: "inactive",
+            statusLabel: "disabled",
+          };
         case "pending":
-          return { ...C, glyph: re.radioOff, tone: "inactive", statusLabel: "connecting\u2026" };
+          return {
+            ...C,
+            glyph: figures_default.radioOff,
+            tone: "inactive",
+            statusLabel: "connecting\u2026",
+          };
         case "needs-auth":
           return {
             ...C,
-            glyph: re.warning,
+            glyph: figures_default.warning,
             tone: "warning",
             statusLabel: "needs sign-in",
-            statusHint: e(AuthShortcutHint, {}),
+            statusHint: jsxProd_default(AuthShortcutHint, {}),
           };
         case "unconfigured":
-          return { ...C, glyph: re.radioOff, tone: "inactive", statusLabel: "not configured" };
+          return {
+            ...C,
+            glyph: figures_default.radioOff,
+            tone: "inactive",
+            statusLabel: "not configured",
+          };
         case "cached":
         case "failed":
-          return { ...C, glyph: re.cross, tone: "error", statusLabel: "failed" };
+          return {
+            ...C,
+            glyph: figures_default.cross,
+            tone: "error",
+            statusLabel: "failed",
+          };
       }
     }
   }
 }
-
 export { AuthShortcutHint, InstalledItemRow };

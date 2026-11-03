@@ -8,31 +8,35 @@
 import { x } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-bwbq4xvm.js:13833-14215 cjs-fingerprint
-var il = x(function (S2, al) {
-  class ol {
+var require_lrucache = x(function (cjsExports, cjsModule) {
+  class LRUCache {
     constructor() {
-      ((this.max = 1000), (this.map = new Map()));
+      this.max = 1000;
+      this.map = new Map();
     }
-    get(e) {
-      let s = this.map.get(e);
-      if (s === void 0) return;
-      else return (this.map.delete(e), this.map.set(e, s), s);
+    get(key) {
+      let value = this.map.get(key);
+      if (value === undefined) return;
+      else {
+        this.map.delete(key);
+        this.map.set(key, value);
+        return value;
+      }
     }
-    delete(e) {
-      return this.map.delete(e);
+    delete(key) {
+      return this.map.delete(key);
     }
-    set(e, s) {
-      if (!this.delete(e) && s !== void 0) {
+    set(key, value) {
+      if (!this.delete(key) && value !== undefined) {
         if (this.map.size >= this.max) {
-          let r = this.map.keys().next().value;
-          this.delete(r);
+          let firstKey = this.map.keys().next().value;
+          this.delete(firstKey);
         }
-        this.map.set(e, s);
+        this.map.set(key, value);
       }
       return this;
     }
   }
-  al.exports = ol;
+  cjsModule.exports = LRUCache;
 });
-
-export { il };
+export { require_lrucache };

@@ -6,28 +6,25 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { Et } from "./sync-reader.js";
-import { ft } from "./filter-parse.js";
+import { require_sync_reader } from "./sync-reader.js";
+import { require_filter_parse } from "./filter-parse.js";
 
 //@ chunk-spjgqa4y.js:46188-46406 cjs-fingerprint
-var _n = x(function (cs) {
-  var as = Et(),
-    hs = ft();
-  cs.process = function (t, e) {
-    let r = [],
-      n = new as(t);
-    return (
-      new hs(e, {
-        read: n.read.bind(n),
-        write: function (o) {
-          r.push(o);
-        },
-        complete: function () {},
-      }).start(),
-      n.process(),
-      Buffer.concat(r)
-    );
+var require_filter_parse_sync = x(function (cjsExports) {
+  var SyncReader = require_sync_reader();
+  var Filter = require_filter_parse();
+  cjsExports.process = function (inBuffer, bitmapInfo) {
+    let outBuffers = [];
+    let reader = new SyncReader(inBuffer);
+    new Filter(bitmapInfo, {
+      read: reader.read.bind(reader),
+      write: function (bufferPart) {
+        outBuffers.push(bufferPart);
+      },
+      complete: function () {},
+    }).start();
+    reader.process();
+    return Buffer.concat(outBuffers);
   };
 });
-
-export { _n };
+export { require_filter_parse_sync };

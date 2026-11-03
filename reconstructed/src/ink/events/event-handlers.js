@@ -9,53 +9,72 @@
  * attribution: placement 1, fingerprint 1
  */
 
+//@ chunk-bzr73sfg.js:187497-187644 placement
 /**
  * 把 scrollTop 限制在可滚动范围内。
  */
-//@ chunk-bzr73sfg.js:187497-187644 placement
 function clampScrollTop(n) {
-  let u = n.scrollTop ?? 0;
-  if (n.scrollHeight === void 0) return u;
-  return Math.min(u, Math.max(0, n.scrollHeight - (n.scrollViewportHeight ?? 0)));
+  let scrollTop = n.scrollTop ?? 0;
+  if (n.scrollHeight === undefined) return scrollTop;
+  return Math.min(scrollTop, Math.max(0, n.scrollHeight - (n.scrollViewportHeight ?? 0)));
 }
+//@ chunk-bzr73sfg.js:187644-188315 fingerprint = HANDLER_FOR_EVENT (0.754)
 /**
  * 事件类型 → 冒泡/捕获处理器属性名；RAW_MODE_HANDLER_PROPS 是需要 stdin 原始模式的处理器（键盘、粘贴、滚轮），EVENT_HANDLER_PROPS 是 reconciler 当作事件处理器存进 _eventHandlers 的全部属性。
  */
-//@ chunk-bzr73sfg.js:187644-188315 fingerprint = HANDLER_FOR_EVENT (0.754)
 var HANDLER_FOR_EVENT = {
-    keydown: { bubble: "onKeyDown", capture: "onKeyDownCapture" },
-    focus: { bubble: "onFocus", capture: "onFocusCapture" },
-    blur: { bubble: "onBlur", capture: "onBlurCapture" },
-    paste: { bubble: "onPaste", capture: "onPasteCapture" },
-    wheel: { bubble: "onWheel", capture: "onWheelCapture" },
-    action: { bubble: "onAction", capture: "onActionCapture" },
-    click: { bubble: "onClick" },
+  keydown: {
+    bubble: "onKeyDown",
+    capture: "onKeyDownCapture",
   },
-  RAW_MODE_HANDLER_PROPS = new Set([
-    "onKeyDown",
-    "onKeyDownCapture",
-    "onPaste",
-    "onPasteCapture",
-    "onWheel",
-    "onWheelCapture",
-  ]),
-  EVENT_HANDLER_PROPS = new Set([
-    "onKeyDown",
-    "onKeyDownCapture",
-    "onFocus",
-    "onFocusCapture",
-    "onBlur",
-    "onBlurCapture",
-    "onPaste",
-    "onPasteCapture",
-    "onWheel",
-    "onWheelCapture",
-    "onAction",
-    "onActionCapture",
-    "onClick",
-    "onMouseEnter",
-    "onMouseLeave",
-    "onPointer",
-  ]);
-
+  focus: {
+    bubble: "onFocus",
+    capture: "onFocusCapture",
+  },
+  blur: {
+    bubble: "onBlur",
+    capture: "onBlurCapture",
+  },
+  paste: {
+    bubble: "onPaste",
+    capture: "onPasteCapture",
+  },
+  wheel: {
+    bubble: "onWheel",
+    capture: "onWheelCapture",
+  },
+  action: {
+    bubble: "onAction",
+    capture: "onActionCapture",
+  },
+  click: {
+    bubble: "onClick",
+  },
+};
+var RAW_MODE_HANDLER_PROPS = new Set([
+  "onKeyDown",
+  "onKeyDownCapture",
+  "onPaste",
+  "onPasteCapture",
+  "onWheel",
+  "onWheelCapture",
+]);
+var EVENT_HANDLER_PROPS = new Set([
+  "onKeyDown",
+  "onKeyDownCapture",
+  "onFocus",
+  "onFocusCapture",
+  "onBlur",
+  "onBlurCapture",
+  "onPaste",
+  "onPasteCapture",
+  "onWheel",
+  "onWheelCapture",
+  "onAction",
+  "onActionCapture",
+  "onClick",
+  "onMouseEnter",
+  "onMouseLeave",
+  "onPointer",
+]);
 export { clampScrollTop, HANDLER_FOR_EVENT, RAW_MODE_HANDLER_PROPS, EVENT_HANDLER_PROPS };

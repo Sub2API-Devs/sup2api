@@ -6,142 +6,151 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../runtime/bun-runtime.js";
-import { ba } from "../../../protobuf/dist/commonjs/reflect/index.js";
-import { Bi } from "./uint.js";
-import { li } from "../../../protobuf/dist/commonjs/index.js";
-import { Sp } from "./proto.js";
-import { wa } from "./value.js";
+import { require_reflect_2 } from "../../../protobuf/dist/commonjs/reflect/index.js";
+import { require_uint } from "./uint.js";
+import { require_protobuf } from "../../../protobuf/dist/commonjs/index.js";
+import { require_proto } from "./proto.js";
+import { require_value } from "./value.js";
 
 //@ chunk-fq0cr76a.js:475393-477725 cjs-fingerprint
-var Aa = x(function (FL) {
-  Object.defineProperty(FL, "__esModule", { value: !0 });
-  FL.EMPTY_MAP = void 0;
-  FL.celMap = LL;
-  FL.isCelMap = HQ;
-  var PL = ba(),
-    pd = Bi(),
-    ss = li(),
-    Ry = Sp(),
-    Mi = wa(),
-    N_ = Symbol.for("@bufbuild/cel/map");
-  function LL(e) {
-    if (PL.isReflectMap(e)) return new UL(e);
-    return new BL(e);
+var require_map = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.EMPTY_MAP = undefined;
+  cjsExports.celMap = celMap;
+  cjsExports.isCelMap = isCelMap;
+  var reflect_1 = require_reflect_2();
+  var uint_js_1 = require_uint();
+  var protobuf_1 = require_protobuf();
+  var proto_js_1 = require_proto();
+  var value_js_1 = require_value();
+  var privateSymbol = Symbol.for("@bufbuild/cel/map");
+  function celMap(mapOrReflectMap) {
+    if (reflect_1.isReflectMap(mapOrReflectMap)) return new ProtoMap(mapOrReflectMap);
+    return new NativeMap(mapOrReflectMap);
   }
-  function HQ(e) {
-    return typeof e === "object" && e !== null && N_ in e;
+  function isCelMap(v) {
+    return typeof v === "object" && v !== null && privateSymbol in v;
   }
-  class BL {
+  class NativeMap {
     _map;
-    [N_] = {};
-    constructor(e) {
-      this._map = e;
+    [privateSymbol] = {};
+    constructor(_map) {
+      this._map = _map;
     }
     get size() {
       return this._map.size;
     }
-    get(e) {
-      if (pd.isCelUint(e)) e = e.value;
-      if (typeof e === "number") {
-        if (!Number.isInteger(e)) return;
-        e = BigInt(e);
+    get(key) {
+      if (uint_js_1.isCelUint(key)) key = key.value;
+      if (typeof key === "number") {
+        if (!Number.isInteger(key)) return;
+        key = BigInt(key);
       }
-      let n = this._map.get(e);
-      if (n !== void 0) return Mi.toCel(n);
-      if (typeof e === "bigint")
-        for (let r of this._map.keys()) {
-          if (!pd.isCelUint(r)) continue;
-          if (r.value === e) return Mi.toCel(this._map.get(r));
+      let value = this._map.get(key);
+      if (value !== undefined) return value_js_1.toCel(value);
+      if (typeof key === "bigint")
+        for (let mapKey of this._map.keys()) {
+          if (!uint_js_1.isCelUint(mapKey)) continue;
+          if (mapKey.value === key) return value_js_1.toCel(this._map.get(mapKey));
         }
       return;
     }
-    has(e) {
-      return this.get(e) != null;
+    has(key) {
+      return this.get(key) != null;
     }
-    forEach(e, n) {
-      this._map.forEach((r, s, h) => e.call(n, Mi.toCel(r), s, this));
+    forEach(callback, thisArg) {
+      this._map.forEach((value, key, _) => callback.call(thisArg, value_js_1.toCel(value), key, this));
     }
     *entries() {
-      for (let [e, n] of this._map.entries()) yield [e, Mi.toCel(n)];
+      for (let [key, value] of this._map.entries()) yield [key, value_js_1.toCel(value)];
     }
     keys() {
       return this._map.keys();
     }
     *values() {
-      for (let e of this._map.values()) yield Mi.toCel(e);
+      for (let value of this._map.values()) yield value_js_1.toCel(value);
     }
     [Symbol.iterator]() {
       return this.entries();
     }
   }
-  class UL {
+  class ProtoMap {
     _map;
-    [N_] = {};
-    constructor(e) {
-      this._map = e;
+    [privateSymbol] = {};
+    constructor(_map) {
+      this._map = _map;
     }
     get size() {
       return this._map.size;
     }
-    get(e) {
-      let n = this._map.get(OL(this._map.field(), e));
-      if (n === void 0) return;
-      return Cy(this._map.field(), n);
+    get(key) {
+      let value = this._map.get(mapKeyFromCel(this._map.field(), key));
+      if (value === undefined) return;
+      return celFromMapValue(this._map.field(), value);
     }
-    has(e) {
-      return this._map.has(OL(this._map.field(), e));
+    has(key) {
+      return this._map.has(mapKeyFromCel(this._map.field(), key));
     }
-    forEach(e, n) {
-      this._map.forEach((r, s, h) => e.call(n, Cy(this._map.field(), r), I_(this._map.field(), s), this));
+    forEach(callback, thisArg) {
+      this._map.forEach((value, key, _) =>
+        callback.call(
+          thisArg,
+          celFromMapValue(this._map.field(), value),
+          celFromMapKey(this._map.field(), key),
+          this,
+        ),
+      );
     }
     *entries() {
-      for (let [e, n] of this._map.entries()) yield [I_(this._map.field(), e), Cy(this._map.field(), n)];
+      for (let [key, value] of this._map.entries())
+        yield [celFromMapKey(this._map.field(), key), celFromMapValue(this._map.field(), value)];
     }
     *keys() {
-      for (let e of this._map.keys()) yield I_(this._map.field(), e);
+      for (let key of this._map.keys()) yield celFromMapKey(this._map.field(), key);
     }
     *values() {
-      for (let e of this._map.keys()) yield Cy(this._map.field(), e);
+      for (let value of this._map.keys()) yield celFromMapValue(this._map.field(), value);
     }
     [Symbol.iterator]() {
       return this.entries();
     }
   }
-  function OL(e, n) {
-    if (pd.isCelUint(n)) n = n.value;
-    switch (e.mapKey) {
-      case ss.ScalarType.SINT32:
-      case ss.ScalarType.INT32:
-      case ss.ScalarType.FIXED32:
-      case ss.ScalarType.UINT32:
-      case ss.ScalarType.SFIXED32:
-        if (typeof n === "bigint") return Number(n);
-        return n;
-      case ss.ScalarType.SINT64:
-      case ss.ScalarType.INT64:
-      case ss.ScalarType.FIXED64:
-      case ss.ScalarType.UINT64:
-      case ss.ScalarType.SFIXED64:
-        if (n === "number" && Number.isInteger(n)) return BigInt(n);
-        return n;
+  function mapKeyFromCel(desc, v) {
+    if (uint_js_1.isCelUint(v)) v = v.value;
+    switch (desc.mapKey) {
+      case protobuf_1.ScalarType.SINT32:
+      case protobuf_1.ScalarType.INT32:
+      case protobuf_1.ScalarType.FIXED32:
+      case protobuf_1.ScalarType.UINT32:
+      case protobuf_1.ScalarType.SFIXED32:
+        if (typeof v === "bigint") return Number(v);
+        return v;
+      case protobuf_1.ScalarType.SINT64:
+      case protobuf_1.ScalarType.INT64:
+      case protobuf_1.ScalarType.FIXED64:
+      case protobuf_1.ScalarType.UINT64:
+      case protobuf_1.ScalarType.SFIXED64:
+        if (v === "number" && Number.isInteger(v)) return BigInt(v);
+        return v;
       default:
-        return n;
+        return v;
     }
   }
-  function I_(e, n) {
-    return Ry.celFromScalar(e.mapKey, n);
+  function celFromMapKey(desc, v) {
+    return proto_js_1.celFromScalar(desc.mapKey, v);
   }
-  function Cy(e, n) {
-    switch (e.mapKind) {
+  function celFromMapValue(desc, v) {
+    switch (desc.mapKind) {
       case "enum":
-        return BigInt(n);
+        return BigInt(v);
       case "message":
-        return Mi.reflectMsgToCel(n);
+        return value_js_1.reflectMsgToCel(v);
       case "scalar":
-        return Ry.celFromScalar(e.scalar, n);
+        return proto_js_1.celFromScalar(desc.scalar, v);
     }
   }
-  FL.EMPTY_MAP = LL(new Map());
+  cjsExports.EMPTY_MAP = celMap(new Map());
 });
-
-export { Aa };
+export { require_map };

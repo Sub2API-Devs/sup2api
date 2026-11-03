@@ -6,63 +6,77 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { Tn } from "./forge.js";
-import { bo } from "./md.js";
-import { Zn } from "./util.js";
+import { require_forge } from "./forge.js";
+import { require_md } from "./md.js";
+import { require_util } from "./util.js";
 
 //@ chunk-fq0cr76a.js:64701-65722 cjs-fingerprint
-var iu = x(function (hfe, wT) {
-  var ua = Tn();
-  bo();
-  Zn();
-  var h3 = (wT.exports = ua.hmac = ua.hmac || {});
-  h3.create = function () {
-    var e = null,
-      n = null,
-      r = null,
-      s = null,
-      h = {};
-    return (
-      (h.start = function (y, b) {
-        if (y !== null)
-          if (typeof y === "string")
-            if (((y = y.toLowerCase()), y in ua.md.algorithms)) n = ua.md.algorithms[y].create();
-            else throw Error('Unknown hash algorithm "' + y + '"');
-          else n = y;
-        if (b === null) b = e;
-        else {
-          if (typeof b === "string") b = ua.util.createBuffer(b);
-          else if (ua.util.isArray(b)) {
-            var at = b;
-            b = ua.util.createBuffer();
-            for (var w = 0; w < at.length; ++w) b.putByte(at[w]);
-          }
-          var R = b.length();
-          if (R > n.blockLength) (n.start(), n.update(b.bytes()), (b = n.digest()));
-          ((r = ua.util.createBuffer()), (s = ua.util.createBuffer()), (R = b.length()));
-          for (var w = 0; w < R; ++w) {
-            var at = b.at(w);
-            (r.putByte(54 ^ at), s.putByte(92 ^ at));
-          }
-          if (R < n.blockLength) {
-            var at = n.blockLength - R;
-            for (var w = 0; w < at; ++w) (r.putByte(54), s.putByte(92));
-          }
-          ((e = b), (r = r.bytes()), (s = s.bytes()));
+var require_hmac = x(function (cjsExports, cjsModule) {
+  var forge = require_forge();
+  require_md();
+  require_util();
+  var hmac = (cjsModule.exports = forge.hmac = forge.hmac || {});
+  hmac.create = function () {
+    var _key = null;
+    var _md = null;
+    var _ipadding = null;
+    var _opadding = null;
+    var ctx = {};
+    ctx.start = function (md, key) {
+      if (md !== null)
+        if (typeof md === "string") {
+          md = md.toLowerCase();
+          if (md in forge.md.algorithms) _md = forge.md.algorithms[md].create();
+          else throw Error('Unknown hash algorithm "' + md + '"');
+        } else _md = md;
+      if (key === null) key = _key;
+      else {
+        if (typeof key === "string") key = forge.util.createBuffer(key);
+        else if (forge.util.isArray(key)) {
+          var tmp = key;
+          key = forge.util.createBuffer();
+          for (var i = 0; i < tmp.length; ++i) key.putByte(tmp[i]);
         }
-        (n.start(), n.update(r));
-      }),
-      (h.update = function (y) {
-        n.update(y);
-      }),
-      (h.getMac = function () {
-        var bytes = n.digest().bytes();
-        return (n.start(), n.update(s), n.update(bytes), n.digest());
-      }),
-      (h.digest = h.getMac),
-      h
-    );
+        var keylen = key.length();
+        if (keylen > _md.blockLength) {
+          _md.start();
+          _md.update(key.bytes());
+          key = _md.digest();
+        }
+        _ipadding = forge.util.createBuffer();
+        _opadding = forge.util.createBuffer();
+        keylen = key.length();
+        for (var i = 0; i < keylen; ++i) {
+          var tmp = key.at(i);
+          _ipadding.putByte(54 ^ tmp);
+          _opadding.putByte(92 ^ tmp);
+        }
+        if (keylen < _md.blockLength) {
+          var tmp = _md.blockLength - keylen;
+          for (var i = 0; i < tmp; ++i) {
+            _ipadding.putByte(54);
+            _opadding.putByte(92);
+          }
+        }
+        _key = key;
+        _ipadding = _ipadding.bytes();
+        _opadding = _opadding.bytes();
+      }
+      _md.start();
+      _md.update(_ipadding);
+    };
+    ctx.update = function (bytes) {
+      _md.update(bytes);
+    };
+    ctx.getMac = function () {
+      var inner = _md.digest().bytes();
+      _md.start();
+      _md.update(_opadding);
+      _md.update(inner);
+      return _md.digest();
+    };
+    ctx.digest = ctx.getMac;
+    return ctx;
   };
 });
-
-export { iu };
+export { require_hmac };

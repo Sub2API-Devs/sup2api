@@ -6,48 +6,51 @@
  * attribution: cjs-fingerprint 1
  */
 import { x, importMetaRequire } from "../../../../runtime/bun-runtime.js";
-import { Et } from "./headStream.browser.js";
-import { B } from "./stream-type-check.js";
+import { require_headStream_browser } from "./headStream.browser.js";
+import { require_stream_type_check } from "./stream-type-check.js";
 
 //@ chunk-wjd9n4jx.js:7005-7747 cjs-fingerprint
-var Bt = x(function ($t) {
-  Object.defineProperty($t, "__esModule", { value: !0 });
-  $t.headStream = void 0;
-  var _t = importMetaRequire("stream"),
-    Mt = Et(),
-    Ct = B(),
-    Gr = (e, t) => {
-      if (Ct.isReadableStream(e)) return Mt.headStream(e, t);
-      return new Promise((r, s) => {
-        let n = new Ot();
-        ((n.limit = t),
-          e.pipe(n),
-          e.on("error", (i) => {
-            (n.end(), s(i));
-          }),
-          n.on("error", s),
-          n.on("finish", function () {
-            let uint8Array = new Uint8Array(Buffer.concat(this.buffers));
-            r(uint8Array);
-          }));
+var require_headStream = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.headStream = undefined;
+  var stream_1 = importMetaRequire("stream");
+  var headStream_browser_1 = require_headStream_browser();
+  var stream_type_check_1 = require_stream_type_check();
+  var headStream = (stream, bytes) => {
+    if (stream_type_check_1.isReadableStream(stream)) return headStream_browser_1.headStream(stream, bytes);
+    return new Promise((resolve, reject) => {
+      let collector = new Collector();
+      collector.limit = bytes;
+      stream.pipe(collector);
+      stream.on("error", (err) => {
+        collector.end();
+        reject(err);
       });
-    };
-  $t.headStream = Gr;
-  class Ot extends _t.Writable {
+      collector.on("error", reject);
+      collector.on("finish", function () {
+        let bytes = new Uint8Array(Buffer.concat(this.buffers));
+        resolve(bytes);
+      });
+    });
+  };
+  cjsExports.headStream = headStream;
+  class Collector extends stream_1.Writable {
     buffers = [];
     limit = 1 / 0;
     bytesBuffered = 0;
-    _write(e, t, r) {
-      if (
-        (this.buffers.push(e), (this.bytesBuffered += e.byteLength ?? 0), this.bytesBuffered >= this.limit)
-      ) {
-        let s = this.bytesBuffered - this.limit,
-          n = this.buffers[this.buffers.length - 1];
-        ((this.buffers[this.buffers.length - 1] = n.subarray(0, n.byteLength - s)), this.emit("finish"));
+    _write(chunk, encoding, callback) {
+      this.buffers.push(chunk);
+      this.bytesBuffered += chunk.byteLength ?? 0;
+      if (this.bytesBuffered >= this.limit) {
+        let excess = this.bytesBuffered - this.limit;
+        let tailBuffer = this.buffers[this.buffers.length - 1];
+        this.buffers[this.buffers.length - 1] = tailBuffer.subarray(0, tailBuffer.byteLength - excess);
+        this.emit("finish");
       }
-      r();
+      callback();
     }
   }
 });
-
-export { Bt };
+export { require_headStream };

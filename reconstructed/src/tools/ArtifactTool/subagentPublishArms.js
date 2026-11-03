@@ -13,7 +13,7 @@ import {
   makeMainObservedVersionReader,
 } from "../../services/artifacts/readObservation.js";
 import { getIsNonInteractiveSession } from "../../bootstrap/state.js";
-import { B9 } from "../../services/artifacts/comments/repliesConsent.js";
+import { isConsentUiKind } from "../../services/artifacts/comments/repliesConsent.js";
 import { getLiveState } from "../../services/liveReplica/liveReplica.js";
 import { logFeatureSad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 import { resolveVisibleSubagentId } from "../../tasks/LocalAgentTask/LocalAgentTask.js";
@@ -21,63 +21,81 @@ import { maybeSubscribeFrameLive } from "../../services/artifacts/frameLive.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
 
 //@ chunk-59vafc9k.js:485-494 placement
-var u = 32;
+/**
+ * 待处理子代理预备条目的上限。
+ */
+var PENDING_SUBAGENT_ARMS_MAX = 32;
 //@ chunk-59vafc9k.js:494-712 placement
 function subagentPublishAdopter(n) {
-  if (n.publishContext !== "subagent" || n.context.agentId === void 0 || n.context.teammateContext !== void 0)
+  if (
+    n.publishContext !== "subagent" ||
+    n.context.agentId === undefined ||
+    n.context.teammateContext !== undefined
+  )
     return null;
-  let { publishContext: publishContext } = derivePublishContextFrom({
-    agentId: void 0,
+  let { publishContext } = derivePublishContextFrom({
+    agentId: undefined,
     isNonInteractiveSession: getIsNonInteractiveSession(),
   });
-  return B9(publishContext) ? publishContext : null;
+  return isConsentUiKind(publishContext) ? publishContext : null;
 }
 //@ chunk-59vafc9k.js:712-1056 placement
-function stageSubagentPublishArm(n, e) {
-  let pendingSubagentArms = getLiveState().live.pendingSubagentArms,
-    s = pendingSubagentArms.get(n) ?? [],
-    index = s.findIndex((o) => o.slug === e.slug);
+function stageSubagentPublishArm(agentId, e) {
+  let pendingSubagentArms = getLiveState().live.pendingSubagentArms;
+  let s = pendingSubagentArms.get(agentId) ?? [];
+  let index = s.findIndex((o) => o.slug === e.slug);
   if (index === -1) s.push(e);
   else s[index] = e;
-  (pendingSubagentArms.delete(n), pendingSubagentArms.set(n, s));
+  pendingSubagentArms.delete(agentId);
+  pendingSubagentArms.set(agentId, s);
   let r = 0;
   for (let o of pendingSubagentArms.values()) r += o.length;
-  while (r > u) {
+  while (r > PENDING_SUBAGENT_ARMS_MAX) {
     let [o, a] = pendingSubagentArms.entries().next().value;
-    if ((a.shift(), a.length === 0)) pendingSubagentArms.delete(o);
-    (r--, logFeatureSad("artifact_live_subscribe", "subagent_arm_evicted"));
+    a.shift();
+    if (a.length === 0) pendingSubagentArms.delete(o);
+    r--;
+    logFeatureSad("artifact_live_subscribe", "subagent_arm_evicted");
   }
 }
 //@ chunk-59vafc9k.js:1056-1142 placement
-function l(n) {
-  let pendingSubagentArms = getLiveState().live.pendingSubagentArms,
-    t = pendingSubagentArms.get(n) ?? [];
-  return (pendingSubagentArms.delete(n), t);
+/**
+ * 取出并清空某键的待处理子代理预备条目。
+ */
+function takePendingSubagentArms(agentId) {
+  let pendingSubagentArms = getLiveState().live.pendingSubagentArms;
+  let t = pendingSubagentArms.get(agentId) ?? [];
+  pendingSubagentArms.delete(agentId);
+  return t;
 }
 //@ chunk-59vafc9k.js:1142-1152 placement
-var d = 256;
+/**
+ * 已完成子代理收养者记录的保留上限。
+ */
+var FINISHED_SUBAGENT_ADOPTERS_MAX = 256;
 //@ chunk-59vafc9k.js:1152-1277 placement
-function rememberSubagentAdopter(n) {
+function rememberSubagentAdopter(agentId) {
   let finishedSubagentAdopters = getLiveState().live.finishedSubagentAdopters;
-  (finishedSubagentAdopters.delete(n), finishedSubagentAdopters.add(n));
-  while (finishedSubagentAdopters.size > d)
+  finishedSubagentAdopters.delete(agentId);
+  finishedSubagentAdopters.add(agentId);
+  while (finishedSubagentAdopters.size > FINISHED_SUBAGENT_ADOPTERS_MAX)
     finishedSubagentAdopters.delete(finishedSubagentAdopters.values().next().value);
 }
+//@ chunk-59vafc9k.js:1277-2062 placement
 /**
  * 子代理发布 artifact 后，主会话接管其实时订阅（artifact_live_subscribe）。
  */
-//@ chunk-59vafc9k.js:1277-2062 placement
 function adoptSubagentPublishArms(n) {
-  let { agentId: agentId, context: context } = n;
+  let { agentId, context } = n;
   rememberSubagentAdopter(agentId);
-  let s = l(agentId);
+  let s = takePendingSubagentArms(agentId);
   if (s.length === 0) return;
-  let { publishContext: publishContext } = derivePublishContextFrom({
+  let { publishContext } = derivePublishContextFrom({
     agentId: context.agentId,
     agentType: context.agentContext?.agentType,
     isNonInteractiveSession: context.options.isNonInteractiveSession,
   });
-  if (publishContext === "subagent" && context.agentId !== void 0) {
+  if (publishContext === "subagent" && context.agentId !== undefined) {
     let o =
       resolveVisibleSubagentId(context.agentId, context.taskRegistry) === context.agentId ||
       !getLiveState().live.finishedSubagentAdopters.has(context.agentId);
@@ -86,22 +104,24 @@ function adoptSubagentPublishArms(n) {
       else logFeatureSad("artifact_live_subscribe", "subagent_arm_orphaned");
     return;
   }
-  if (!B9(publishContext)) return;
-  let r = { ...context, abortController: new AbortController() };
+  if (!isConsentUiKind(publishContext)) return;
+  let context_2 = {
+    ...context,
+    abortController: new AbortController(),
+  };
   for (let o of s)
     maybeSubscribeFrameLive({
       ...o,
-      publishContext: publishContext,
+      publishContext,
       getKnownVer: makeMainObservedVersionReader(context.getArtifactReadObservation, o.slug),
-      context: r,
-      adoptedPublish: !0,
-      announceArmlessEnd: !0,
+      context: context_2,
+      adoptedPublish: true,
+      announceArmlessEnd: true,
     }).catch(() => {});
   logFeatureOk("artifact_live_subscribe", {
-    subagent_publish_adopted: !0,
+    subagent_publish_adopted: true,
     count: s.length,
     publish_context: fromEnum(publishContext),
   });
 }
-
 export { subagentPublishAdopter, stageSubagentPublishArm };

@@ -15,52 +15,77 @@ import { CLAUDE_ARTIFACTS } from "../mcp/firstPartyServerIds.js";
 import { permissionRuleValueFromString } from "../../utils/permissions/permissionRuleParser.js";
 import { FILE_READ_TOOL_NAME } from "../../tools/FileReadTool/constants.js";
 import { getPlatform } from "../../utils/platform.js";
-import { B8 } from "../../utils/path.js";
+import { posixPathToWindowsPath } from "../../utils/path.js";
 
+//@ chunk-hvmwwjxr.js:462-551 placement = getTeammateCommand (1)
 /**
  * 再启动自身的 argv 前缀：[execPath, argv[1]?]。
  */
-//@ chunk-hvmwwjxr.js:462-551 placement = getTeammateCommand (1)
 function getSelfExecArgv() {
-  let r = [process.execPath],
-    o = process.argv[1];
+  let r = [process.execPath];
+  let o = process.argv[1];
   if (!isStandaloneExecutable() && o) r.push(o);
   return r;
 }
 //@ chunk-hvmwwjxr.js:551-757 placement
-var EVAL_ARTIFACTS_SERVER_FLAG = "--eval-artifacts-server",
-  Eun = ["publish_version", "edit_version", "publish_files", "create_from_type"],
-  dKs = ["guide", "get_artifact", "read_artifact", "list_artifacts", "list_files", "read_file", "list_types"];
+/**
+ * 评测用 Artifacts MCP 服务的参数：发布类与读取类工具名清单、路径通配符正则。
+ */
+var EVAL_ARTIFACTS_SERVER_FLAG = "--eval-artifacts-server";
+var PUBLISH_TOOL_NAMES = ["publish_version", "edit_version", "publish_files", "create_from_type"];
+var READ_TOOL_NAMES = [
+  "guide",
+  "get_artifact",
+  "read_artifact",
+  "list_artifacts",
+  "list_files",
+  "read_file",
+  "list_types",
+];
 //@ chunk-hvmwwjxr.js:757-801 placement
-function vun(r) {
+/**
+ * 导出函数 `mcpToolNames`：参数 r，返回 r.map((o) => buildMcpToolName(CLAUDE_ARTIFACTS, o))。
+ */
+function mcpToolNames(r) {
   return r.map((o) => buildMcpToolName(CLAUDE_ARTIFACTS, o));
 }
 //@ chunk-hvmwwjxr.js:801-816 placement
-var p = /[*?[{]/;
+var GLOB_CHARS_RE = /[*?[{]/;
+//@ chunk-hvmwwjxr.js:816-1154 placement
 /**
  * 求评测用 Artifacts MCP 服务可读的根目录：基础目录加上命令行 --allowedTools 里 Read(//绝对路径/**) 规则的路径（规范化、去尾斜杠，Windows 下转换）。
  */
-//@ chunk-hvmwwjxr.js:816-1154 placement
-function getEvalReadRoots(r, o) {
-  let flattened = (o.alwaysAllowRules.cliArg ?? []).flatMap((t) => {
-    let { toolName: toolName, ruleContent: ruleContent } = permissionRuleValueFromString(t);
-    return toolName === FILE_READ_TOOL_NAME && ruleContent?.startsWith("//") === !0
+function getEvalReadRoots(originalCwd, toolPermissionContext) {
+  let flattened = (toolPermissionContext.alwaysAllowRules.cliArg ?? []).flatMap((t) => {
+    let { toolName, ruleContent } = permissionRuleValueFromString(t);
+    return toolName === FILE_READ_TOOL_NAME && ruleContent?.startsWith("//") === true
       ? [ruleContent.slice(1).replace(/\/\*\*$/, "")]
       : [];
   });
   return [
-    r,
+    originalCwd,
     ...flattened
-      .filter((t) => !p.test(t))
+      .filter((t) => !GLOB_CHARS_RE.test(t))
       .map((t) => path.posix.normalize(t).replace(/\/+$/, ""))
       .filter((t) => t !== "" && t !== ".")
-      .map((t) => (getPlatform() === "windows" ? B8(t) : t)),
+      .map((t) => (getPlatform() === "windows" ? posixPathToWindowsPath(t) : t)),
   ];
 }
 //@ chunk-hvmwwjxr.js:1154-1266 placement = getServerCommandArray (0.769)
-function buildSelfStdioServerConfig(r, o) {
+function buildSelfStdioServerConfig(stubDir, evalReadRoots) {
   let [e = process.execPath, ...t] = getSelfExecArgv();
-  return { type: "stdio", command: e, args: [...t, EVAL_ARTIFACTS_SERVER_FLAG, r, ...o], env: {} };
+  return {
+    type: "stdio",
+    command: e,
+    args: [...t, EVAL_ARTIFACTS_SERVER_FLAG, stubDir, ...evalReadRoots],
+    env: {},
+  };
 }
-
-export { buildSelfStdioServerConfig, getEvalReadRoots, vun, Eun, dKs, getSelfExecArgv };
+export {
+  buildSelfStdioServerConfig,
+  getEvalReadRoots,
+  mcpToolNames,
+  PUBLISH_TOOL_NAMES,
+  READ_TOOL_NAMES,
+  getSelfExecArgv,
+};

@@ -17,23 +17,27 @@ import { lit } from "../analytics/safeMetadata.js";
 import { logError } from "../../utils/log.js";
 import { toError } from "../../utils/errors.js";
 
+//@ chunk-nyy5qxew.js:341-585 placement
 /**
  * 从主目录启动时，收集与 Windows 卷挂载相关的启动位置事实，用于遥测。
  */
-//@ chunk-nyy5qxew.js:341-585 placement
-function launchLocationFacts(e, o) {
+function launchLocationFacts(e, cwd) {
   if (e !== "launched_from_home") return {};
   try {
     return {
-      ...(refusedOnlyAsProfileOnMountWithoutDrive(o) && {
+      ...(refusedOnlyAsProfileOnMountWithoutDrive(cwd) && {
         only_refused_by: lit("windows_profile_on_mount_without_drive"),
       }),
-      ...(launchTouchesWindowsVolumeMountedTwice(o) && { on_volume_mounted_twice: !0 }),
-      ...(launchTouchesWindowsVolumeBesideUnreadMount(o) && { mount_source_unread: !0 }),
+      ...(launchTouchesWindowsVolumeMountedTwice(cwd) && {
+        on_volume_mounted_twice: true,
+      }),
+      ...(launchTouchesWindowsVolumeBesideUnreadMount(cwd) && {
+        mount_source_unread: true,
+      }),
     };
   } catch (error) {
-    return (logError(toError(error)), {});
+    logError(toError(error));
+    return {};
   }
 }
-
 export { launchLocationFacts };

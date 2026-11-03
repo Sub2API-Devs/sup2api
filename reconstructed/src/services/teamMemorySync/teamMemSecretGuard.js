@@ -8,21 +8,20 @@
  * pieces: chunk-a477qqne.js (1)
  * attribution: fingerprint 1
  */
-import { k7n } from "../memoryStore/memoryKeys.js";
+import { scanSecretsInVariants } from "../memoryStore/memoryKeys.js";
 import { uniq } from "../../utils/collections.js";
 
+//@ chunk-a477qqne.js:26963-27326 fingerprint = checkTeamMemSecrets (0.518)
 /**
  * 写团队/共享记忆前检查密钥，命中则拒绝（reason=secret），提示记忆存储不是放凭证的地方。
  */
-//@ chunk-a477qqne.js:26963-27326 fingerprint = checkTeamMemSecrets (0.518)
 function checkTeamMemSecrets(e) {
-  let matches = k7n(e);
+  let matches = scanSecretsInVariants(e);
   if (matches.length === 0) return null;
   return {
     outcome: "refused",
     reason: "secret",
-    message: `Content contains potential secrets (${uniq(matches.map((s) => s.label)).join(", ")}) and cannot be written to memory. Memory stores are never a place for credentials, and project stores are shared with every collaborator. Remove the sensitive content and try again.`,
+    message: `Content contains potential secrets (${uniq(matches.map((match) => match.label)).join(", ")}) and cannot be written to memory. Memory stores are never a place for credentials, and project stores are shared with every collaborator. Remove the sensitive content and try again.`,
   };
 }
-
 export { checkTeamMemSecrets };

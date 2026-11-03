@@ -24,12 +24,15 @@ function filesApiUnavailableReason(t) {
     return "egress_blocked";
   }
   if (hasComplianceTaint("zdr")) return "egress_blocked";
-  return isEssentialTrafficOnly() ? "essential_traffic" : void 0;
+  return isEssentialTrafficOnly() ? "essential_traffic" : undefined;
 }
 //@ chunk-ptefra21.js:589-611 placement
-var l = 100,
-  f = 900,
-  a = 300;
+/**
+ * 附件摘要的最大字符数（300）。
+ */
+var MAX_PATH_CHARS = 100;
+var MAX_LIST_CHARS = 900;
+var MAX_SUMMARY_CHARS = 300;
 //@ chunk-ptefra21.js:611-722 placement
 function escapeNonAscii(t) {
   return jsonStringify(t).replace(
@@ -40,32 +43,34 @@ function escapeNonAscii(t) {
 //@ chunk-ptefra21.js:722-895 placement
 function shortenPathForList(t) {
   let n = escapeNonAscii(t);
-  if (n.length <= a) return n;
-  let e = [...t],
-    r = e.length,
-    o = 5;
+  if (n.length <= MAX_SUMMARY_CHARS) return n;
+  let e = [...t];
+  let r = e.length;
+  let o = 5;
   while (r > 0) {
-    if (((o += escapeNonAscii(e[r - 1]).length - 2), o > a)) break;
+    o += escapeNonAscii(e[r - 1]).length - 2;
+    if (o > MAX_SUMMARY_CHARS) break;
     r--;
   }
   return escapeNonAscii(`...${e.slice(r).join("")}`);
 }
 //@ chunk-ptefra21.js:895-1183 placement
-function attachmentListText(t) {
-  let n = [],
-    e = 0;
-  for (let { path: path, name: s, size: size } of t) {
+function attachmentListText(files) {
+  let n = [];
+  let e = 0;
+  for (let { path, name: s, size } of files) {
     let i = `${shortenPathForList(path)}${basename(path) === s ? "" : `, the file ${shortenPathForList(s)}`} (${size} bytes)`;
-    if (((e += i.length + 2), e > f)) break;
+    e += i.length + 2;
+    if (e > MAX_LIST_CHARS) break;
     n.push(i);
   }
-  let r = t.length - n.length;
-  return `Attaches ${t.length} ${plural(t.length, "file")}: ${n.join("; ")}${r > 0 ? `; and ${r} more` : ""}`;
+  let r = files.length - n.length;
+  return `Attaches ${files.length} ${plural(files.length, "file")}: ${n.join("; ")}${r > 0 ? `; and ${r} more` : ""}`;
 }
 //@ chunk-ptefra21.js:1183-1373 placement
-function parseJsonPointer(t) {
-  if (t === "") return;
-  let joined = t
+function parseJsonPointer(instancePath) {
+  if (instancePath === "") return;
+  let joined = instancePath
     .slice(1)
     .split("/")
     .map((e) => e.replaceAll("~1", "/").replaceAll("~0", "~"))
@@ -75,9 +80,8 @@ function parseJsonPointer(t) {
 }
 //@ chunk-ptefra21.js:1373-1429 placement
 function truncatedEscaped(t) {
-  return escapeNonAscii(t.length > l ? `${truncateToLength(t, l)}...` : t);
+  return escapeNonAscii(t.length > MAX_PATH_CHARS ? `${truncateToLength(t, MAX_PATH_CHARS)}...` : t);
 }
-
 export {
   truncatedEscaped,
   parseJsonPointer,

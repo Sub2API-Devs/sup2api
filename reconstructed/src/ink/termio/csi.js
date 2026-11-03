@@ -11,15 +11,15 @@
 import { ESC, ESC_TYPE, SEP } from "./ansi.js";
 
 //@ chunk-wz6vk74d.js:544-685 fingerprint = CSI_RANGE (0.882)
-var CSI_PREFIX = ESC + String.fromCharCode(ESC_TYPE.CSI),
-  CSI_RANGE = {
-    PARAM_START: 48,
-    PARAM_END: 63,
-    INTERMEDIATE_START: 32,
-    INTERMEDIATE_END: 47,
-    FINAL_START: 64,
-    FINAL_END: 126,
-  };
+var CSI_PREFIX = ESC + String.fromCharCode(ESC_TYPE.CSI);
+var CSI_RANGE = {
+  PARAM_START: 48,
+  PARAM_END: 63,
+  INTERMEDIATE_START: 32,
+  INTERMEDIATE_END: 47,
+  FINAL_START: 64,
+  FINAL_END: 126,
+};
 //@ chunk-wz6vk74d.js:685-741 fingerprint = isCSIParam (1)
 function isCSIParam(byte) {
   return byte >= CSI_RANGE.PARAM_START && byte <= CSI_RANGE.PARAM_END;
@@ -32,63 +32,87 @@ function isCSIIntermediate(byte) {
 function isCSIFinal(byte) {
   return byte >= CSI_RANGE.FINAL_START && byte <= CSI_RANGE.FINAL_END;
 }
-/**
- * 生成 CSI 序列：无参数返回前缀；一个参数直接拼；多个参数时最后一个是终止字节，前面用 ; 连接。
- */
 //@ chunk-wz6vk74d.js:867-1008 callgraph-witnessed = csi (0)
-function csi(...t) {
-  if (t.length === 0) return CSI_PREFIX;
-  if (t.length === 1) return `${CSI_PREFIX}${t[0]}`;
-  let params = t.slice(0, -1),
-    at = t.at(-1);
-  return `${CSI_PREFIX}${params.join(SEP)}${at}`;
+/**
+ * 按参数拼接 CSI 控制序列（空参数返回前缀、单参数直接拼、多参数用分号连接）。
+ */
+function csi(...args) {
+  if (args.length === 0) return CSI_PREFIX;
+  if (args.length === 1) return `${CSI_PREFIX}${args[0]}`;
+  let params = args.slice(0, -1);
+  let final = args.at(-1);
+  return `${CSI_PREFIX}${params.join(SEP)}${final}`;
 }
 //@ chunk-wz6vk74d.js:1008-1536 fingerprint = CSI (0.785)
+/**
+ * CSI 终结字节表：光标移动、擦除（ED/EL/ECH）、滚动（SU/SD）、模式设置（SM/RM）、SGR、DSR、DECSCUSR、DECSTBM 等。
+ */
 var CSI = {
-    CUU: 65,
-    CUD: 66,
-    CUF: 67,
-    CUB: 68,
-    CNL: 69,
-    CPL: 70,
-    CHA: 71,
-    CUP: 72,
-    CHT: 73,
-    HPA: 96,
-    HPR: 97,
-    VPA: 100,
-    VPR: 101,
-    HVP: 102,
-    ED: 74,
-    EL: 75,
-    ECH: 88,
-    IL: 76,
-    DL: 77,
-    ICH: 64,
-    DCH: 80,
-    SU: 83,
-    SD: 84,
-    SM: 104,
-    RM: 108,
-    SGR: 109,
-    DSR: 110,
-    DECSCUSR: 113,
-    DECSTBM: 114,
-    SCOSC: 115,
-    SCORC: 117,
-    CBT: 90,
+  CUU: 65,
+  CUD: 66,
+  CUF: 67,
+  CUB: 68,
+  CNL: 69,
+  CPL: 70,
+  CHA: 71,
+  CUP: 72,
+  CHT: 73,
+  HPA: 96,
+  HPR: 97,
+  VPA: 100,
+  VPR: 101,
+  HVP: 102,
+  ED: 74,
+  EL: 75,
+  ECH: 88,
+  IL: 76,
+  DL: 77,
+  ICH: 64,
+  DCH: 80,
+  SU: 83,
+  SD: 84,
+  SM: 104,
+  RM: 108,
+  SGR: 109,
+  DSR: 110,
+  DECSCUSR: 113,
+  DECSTBM: 114,
+  SCOSC: 115,
+  SCORC: 117,
+  CBT: 90,
+};
+var ERASE_DISPLAY = ["toEnd", "toStart", "all", "scrollback"];
+var ERASE_LINE_REGION = ["toEnd", "toStart", "all"];
+var CURSOR_STYLES = [
+  {
+    style: "block",
+    blinking: true,
   },
-  ERASE_DISPLAY = ["toEnd", "toStart", "all", "scrollback"],
-  ERASE_LINE_REGION = ["toEnd", "toStart", "all"],
-  CURSOR_STYLES = [
-    { style: "block", blinking: !0 },
-    { style: "block", blinking: !0 },
-    { style: "block", blinking: !1 },
-    { style: "underline", blinking: !0 },
-    { style: "underline", blinking: !1 },
-    { style: "bar", blinking: !0 },
-    { style: "bar", blinking: !1 },
-  ];
+  {
+    style: "block",
+    blinking: true,
+  },
+  {
+    style: "block",
+    blinking: false,
+  },
+  {
+    style: "underline",
+    blinking: true,
+  },
+  {
+    style: "underline",
+    blinking: false,
+  },
+  {
+    style: "bar",
+    blinking: true,
+  },
+  {
+    style: "bar",
+    blinking: false,
+  },
+];
 //@ chunk-wz6vk74d.js:1536-1578 layout
 function cursorUp(n = 1) {
   return n === 0 ? "" : csi(n, "A");
@@ -119,30 +143,34 @@ function cursorPosition(row, col) {
 var CURSOR_HOME = csi("H");
 //@ chunk-wz6vk74d.js:1806-1916 layout
 function cursorMove(x, y) {
-  let n = "";
-  if (x < 0) n += cursorBack(-x);
-  else if (x > 0) n += cursorForward(x);
-  if (y < 0) n += cursorUp(-y);
-  else if (y > 0) n += cursorDown(y);
-  return n;
+  let result = "";
+  if (x < 0) result += cursorBack(-x);
+  else if (x > 0) result += cursorForward(x);
+  if (y < 0) result += cursorUp(-y);
+  else if (y > 0) result += cursorDown(y);
+  return result;
 }
 //@ chunk-wz6vk74d.js:1916-1946 layout
 function eraseToEndOfLine() {
   return csi("K");
 }
 //@ chunk-wz6vk74d.js:1946-1991 layout
-var ERASE_LINE = csi(2, "K"),
-  ERASE_SCREEN = csi(2, "J"),
-  ERASE_SCROLLBACK = csi(3, "J");
+var ERASE_LINE = csi(2, "K");
+var ERASE_SCREEN = csi(2, "J");
+var ERASE_SCROLLBACK = csi(3, "J");
+//@ chunk-wz6vk74d.js:1991-2093 layout
 /**
  * 从当前行向上擦除 n 行，光标停在最上一行行首。
  */
-//@ chunk-wz6vk74d.js:1991-2093 layout
 function eraseLines(n_2) {
   if (n_2 <= 0) return "";
-  let r = "";
-  for (let n = 0; n < n_2; n++) if (((r += ERASE_LINE), n < n_2 - 1)) r += cursorUp(1);
-  return ((r += CURSOR_LEFT), r);
+  let result = "";
+  for (let i = 0; i < n_2; i++) {
+    result += ERASE_LINE;
+    if (i < n_2 - 1) result += cursorUp(1);
+  }
+  result += CURSOR_LEFT;
+  return result;
 }
 //@ chunk-wz6vk74d.js:2093-2137 layout
 function scrollUp(n = 1) {
@@ -156,21 +184,20 @@ function scrollDown(n = 1) {
 function setScrollRegion(top, bottom) {
   return csi(top, bottom, "r");
 }
+//@ chunk-wz6vk74d.js:2218-2359 callgraph-fingerprint = PASTE_START (0.286)
 /**
  * 常用 CSI 常量：复位滚动区域、括号粘贴开始/结束标记、焦点进/出、kitty 键盘协议压栈（>5u：消歧+报告所有键为转义码；legacy >1u）与弹栈（<u）、modifyOtherKeys 开关（>4;2m / >4m）。
  */
-//@ chunk-wz6vk74d.js:2218-2359 callgraph-fingerprint = PASTE_START (0.286)
-var RESET_SCROLL_REGION = csi("r"),
-  PASTE_START = csi("200~"),
-  PASTE_END = csi("201~"),
-  FOCUS_IN = csi("I"),
-  FOCUS_OUT = csi("O"),
-  ENABLE_KITTY_KEYBOARD = csi(">5u"),
-  ENABLE_KITTY_KEYBOARD_LEGACY = csi(">1u"),
-  DISABLE_KITTY_KEYBOARD = csi("<u"),
-  ENABLE_MODIFY_OTHER_KEYS = csi(">4;2m"),
-  DISABLE_MODIFY_OTHER_KEYS = csi(">4m");
-
+var RESET_SCROLL_REGION = csi("r");
+var PASTE_START = csi("200~");
+var PASTE_END = csi("201~");
+var FOCUS_IN = csi("I");
+var FOCUS_OUT = csi("O");
+var ENABLE_KITTY_KEYBOARD = csi(">5u");
+var ENABLE_KITTY_KEYBOARD_LEGACY = csi(">1u");
+var DISABLE_KITTY_KEYBOARD = csi("<u");
+var ENABLE_MODIFY_OTHER_KEYS = csi(">4;2m");
+var DISABLE_MODIFY_OTHER_KEYS = csi(">4m");
 export {
   csi,
   DISABLE_KITTY_KEYBOARD,

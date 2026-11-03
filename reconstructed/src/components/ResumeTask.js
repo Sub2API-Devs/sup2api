@@ -16,7 +16,11 @@ import { detectCurrentRepository } from "../utils/detectRepository.js";
 import { logForDebugging } from "../utils/debug.js";
 import { fetchCodeSessionsFromSessionsAPI } from "../utils/teleport/api.js";
 import { useKeybinding } from "../keybindings/useKeybinding.js";
-import { e, r, Fragment } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+  Fragment,
+} from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { TeleportError } from "./TeleportError.js";
 import { Box, Text } from "../ink/components/Text.js";
 import { WorkerBadge } from "./permissions/WorkerBadge.js";
@@ -28,247 +32,290 @@ import { KeyboardShortcutHint } from "./design-system/KeyboardShortcutHint.js";
 import { ConfigurableShortcutHint } from "./ConfigurableShortcutHint.js";
 import { probeModelAccess } from "./ModelPinWizard.js";
 import { testBedrockRequest, isAwsTimeoutError } from "./providerSetup/bedrock/bedrockVerify.js";
-import { Q } from "./providerSetup/bedrock/BedrockSaveStep.js";
+import { BEDROCK_VERIFY_TIMEOUT_TEXT } from "./providerSetup/bedrock/BedrockSaveStep.js";
 
 //@ chunk-0bntfk7p.js:1975-2064 fingerprint = UPDATED_STRING (0.486)
-var UPDATED = "Updated",
-  ORIGIN = "Origin",
-  Ce = "Remote Control",
-  max = Math.max(ORIGIN.length, Ce.length),
-  O = "  ";
+var UPDATED = "Updated";
+var ORIGIN = "Origin";
+var REMOTE_CONTROL_LABEL = "Remote Control";
+var max = Math.max(ORIGIN.length, REMOTE_CONTROL_LABEL.length);
+var SPACE = "  ";
 //@ chunk-0bntfk7p.js:2064-5609 fingerprint = ResumeTask (0.71)
-function ResumeTask({
-  onSelect: onSelect,
-  onCancel: onCancel,
-  isEmbedded: isEmbedded = !1,
-  onSettingsReload: onSettingsReload,
-}) {
-  let { rows: rows, columns: columns } = useScrollViewportSize(useTerminalSize()),
-    [f, D] = y([]),
-    [T, k] = y(null),
-    [m, v] = y(!0),
-    [l, L] = y(null),
-    [M, G] = y(null),
-    [H, W] = y(!1),
-    [Y, z] = y(!1),
-    [F, U] = y(1),
-    escKey = useShortcutDisplay("confirm:no", "Confirmation", "Esc"),
-    loadSessions = ce(async () => {
-      try {
-        (v(!0), L(null));
-        let detectedRepo = await detectCurrentRepository();
-        (k(detectedRepo), logForDebugging(`Current repository: ${detectedRepo || "not detected"}`));
-        let codeSessions = await fetchCodeSessionsFromSessionsAPI(),
-          filteredSessions = codeSessions;
-        if (detectedRepo)
-          ((filteredSessions = codeSessions.filter((session) => {
-            if (!session.repo) return !1;
-            return `${session.repo.owner.login}/${session.repo.name}` === detectedRepo;
-          })),
-            logForDebugging(
-              `Filtered ${filteredSessions.length} sessions for repo ${detectedRepo} from ${codeSessions.length} total`,
-            ));
-        let sortedSessions = [...filteredSessions].sort((I, se) => {
-          let dateA = new Date(I.updated_at);
-          return new Date(se.updated_at).getTime() - dateA.getTime();
+function ResumeTask({ onSelect, onCancel, isEmbedded = false, onSettingsReload }) {
+  let { rows, columns } = useScrollViewportSize(useTerminalSize());
+  let [sessions, setSessions] = y([]);
+  let [currentRepo, setCurrentRepo] = y(null);
+  let [loading, setLoading] = y(true);
+  let [loadErrorType, setLoadErrorType] = y(null);
+  let [refusalMessage, G] = y(null);
+  let [retrying, setRetrying] = y(false);
+  let [hasCompletedTeleportErrorFlow, setHasCompletedTeleportErrorFlow] = y(false);
+  let [focusedIndex, setFocusedIndex] = y(1);
+  let escKey = useShortcutDisplay("confirm:no", "Confirmation", "Esc");
+  let loadSessions = ce(async () => {
+    try {
+      setLoading(true);
+      setLoadErrorType(null);
+      let detectedRepo = await detectCurrentRepository();
+      setCurrentRepo(detectedRepo);
+      logForDebugging(`Current repository: ${detectedRepo || "not detected"}`);
+      let codeSessions = await fetchCodeSessionsFromSessionsAPI();
+      let filteredSessions = codeSessions;
+      if (detectedRepo) {
+        filteredSessions = codeSessions.filter((session) => {
+          if (!session.repo) return false;
+          return `${session.repo.owner.login}/${session.repo.name}` === detectedRepo;
         });
-        D(sortedSessions);
-      } catch (err) {
-        let u = err instanceof Error ? err.message : String(err);
-        if (
-          (logForDebugging(`Error loading code sessions: ${u}`),
-          err instanceof Error && err.name === "CloudSessionAccessError")
-        )
-          (G(err.message), L("refused"));
-        else L(determineErrorType(u));
-      } finally {
-        (v(!1), W(!1));
+        logForDebugging(
+          `Filtered ${filteredSessions.length} sessions for repo ${detectedRepo} from ${codeSessions.length} total`,
+        );
       }
-    }, []),
-    handleRetry = () => {
-      (W(!0), loadSessions());
-    };
-  useKeybinding("confirm:no", onCancel, { context: "Confirmation" });
-  function g(o) {
-    if (o.ctrl && o.key === "c") {
-      (o.preventDefault(), onCancel());
+      let sortedSessions = [...filteredSessions].sort((I, se) => {
+        let dateA = new Date(I.updated_at);
+        return new Date(se.updated_at).getTime() - dateA.getTime();
+      });
+      setSessions(sortedSessions);
+    } catch (err) {
+      let errorMessage = err instanceof Error ? err.message : String(err);
+      logForDebugging(`Error loading code sessions: ${errorMessage}`);
+      if (err instanceof Error && err.name === "CloudSessionAccessError") {
+        G(err.message);
+        setLoadErrorType("refused");
+      } else setLoadErrorType(determineErrorType(errorMessage));
+    } finally {
+      setLoading(false);
+      setRetrying(false);
+    }
+  }, []);
+  let handleRetry = () => {
+    setRetrying(true);
+    loadSessions();
+  };
+  useKeybinding("confirm:no", onCancel, {
+    context: "Confirmation",
+  });
+  function g(event) {
+    if (event.ctrl && event.key === "c") {
+      event.preventDefault();
+      onCancel();
       return;
     }
-    if (o.ctrl && o.key === "r" && l) {
-      (o.preventDefault(), handleRetry());
+    if (event.ctrl && event.key === "r" && loadErrorType) {
+      event.preventDefault();
+      handleRetry();
       return;
     }
-    if (l !== null && o.key === "return") {
-      (o.preventDefault(), onCancel());
+    if (loadErrorType !== null && event.key === "return") {
+      event.preventDefault();
+      onCancel();
       return;
     }
   }
   let handleErrorComplete = ce(() => {
-    (z(!0), loadSessions());
-  }, [z, loadSessions]);
-  if (!Y)
-    return e(TeleportError, {
+    setHasCompletedTeleportErrorFlow(true);
+    loadSessions();
+  }, [setHasCompletedTeleportErrorFlow, loadSessions]);
+  if (!hasCompletedTeleportErrorFlow)
+    return jsxProd_default(TeleportError, {
       onComplete: handleErrorComplete,
-      onCancel: isEmbedded ? onCancel : void 0,
-      onSettingsReload: onSettingsReload,
+      onCancel: isEmbedded ? onCancel : undefined,
+      onSettingsReload,
     });
-  if (m)
-    return e(Box, {
+  if (loading)
+    return jsxProd_default(Box, {
       flexDirection: "column",
       padding: 1,
       tabIndex: 0,
-      autoFocus: !0,
+      autoFocus: true,
       onKeyDown: g,
-      children: e(WorkerBadge, {
+      children: jsxProd_default(WorkerBadge, {
         message: "Loading Claude Code sessions\u2026",
-        bold: !0,
-        subtitle: H ? "Retrying\u2026" : "Fetching your Claude Code sessions\u2026",
+        bold: true,
+        subtitle: retrying ? "Retrying\u2026" : "Fetching your Claude Code sessions\u2026",
       }),
     });
-  if (l)
-    return r(Box, {
+  if (loadErrorType)
+    return jsxProd_default_2(Box, {
       flexDirection: "column",
       padding: 1,
       tabIndex: 0,
-      autoFocus: !0,
+      autoFocus: true,
       onKeyDown: g,
       children: [
-        e(Text, { bold: !0, color: "error", children: "Error loading Claude Code sessions" }),
-        renderLoadFailure(l, M),
-        r(Text, {
-          dimColor: !0,
+        jsxProd_default(Text, {
+          bold: true,
+          color: "error",
+          children: "Error loading Claude Code sessions",
+        }),
+        renderLoadFailure(loadErrorType, refusalMessage),
+        jsxProd_default_2(Text, {
+          dimColor: true,
           children: [
             "Press ",
-            e(Text, { bold: !0, children: "Ctrl+R" }),
+            jsxProd_default(Text, {
+              bold: true,
+              children: "Ctrl+R",
+            }),
             " to retry \xB7 Press",
             " ",
-            e(Text, { bold: !0, children: escKey }),
+            jsxProd_default(Text, {
+              bold: true,
+              children: escKey,
+            }),
             " to cancel",
           ],
         }),
       ],
     });
-  if (f.length === 0)
-    return r(Box, {
+  if (sessions.length === 0)
+    return jsxProd_default_2(Box, {
       flexDirection: "column",
       padding: 1,
       tabIndex: 0,
-      autoFocus: !0,
+      autoFocus: true,
       onKeyDown: g,
       children: [
-        r(Text, {
-          bold: !0,
-          children: ["No Claude Code sessions found", T && r(Text, { children: [" for ", T] })],
+        jsxProd_default_2(Text, {
+          bold: true,
+          children: [
+            "No Claude Code sessions found",
+            currentRepo &&
+              jsxProd_default_2(Text, {
+                children: [" for ", currentRepo],
+              }),
+          ],
         }),
-        e(Box, {
+        jsxProd_default(Box, {
           marginTop: 1,
-          children: r(Text, {
-            dimColor: !0,
-            children: ["Press ", e(Text, { bold: !0, children: escKey }), " to cancel"],
+          children: jsxProd_default_2(Text, {
+            dimColor: true,
+            children: [
+              "Press ",
+              jsxProd_default(Text, {
+                bold: true,
+                children: escKey,
+              }),
+              " to cancel",
+            ],
           }),
         }),
       ],
     });
-  let sessionMetadata = f.map((session_0) => ({
-      ...session_0,
-      timeString: formatRelativeTime(new Date(session_0.updated_at)),
-    })),
-    maxTimeStringLength = Math.max(UPDATED.length, ...sessionMetadata.map((meta) => meta.timeString.length)),
-    any = f.some((o) => o.environment_kind === "bridge"),
-    he = any ? max + O.length : 0,
-    pe = String(f.length).length + 2,
-    Re = columns - 4 - pe - maxTimeStringLength - O.length - he,
-    options = sessionMetadata.map(
-      ({ timeString: timeString, title: title, id: id, environment_kind: environment_kind }) => {
-        let paddedTime = timeString.padEnd(maxTimeStringLength, " ");
-        return {
-          label: r(Fragment, {
-            children: [
-              paddedTime,
-              O,
-              any &&
-                r(Fragment, {
-                  children: [
-                    e(Text, {
-                      dimColor: !0,
-                      children: (environment_kind === "bridge" ? Ce : "").padEnd(max, " "),
-                    }),
-                    O,
-                  ],
+  let sessionMetadata = sessions.map((session) => ({
+    ...session,
+    timeString: formatRelativeTime(new Date(session.updated_at)),
+  }));
+  let maxTimeStringLength = Math.max(
+    UPDATED.length,
+    ...sessionMetadata.map((meta) => meta.timeString.length),
+  );
+  let any = sessions.some((session) => session.environment_kind === "bridge");
+  let he = any ? max + SPACE.length : 0;
+  let pe = String(sessions.length).length + 2;
+  let Re = columns - 4 - pe - maxTimeStringLength - SPACE.length - he;
+  let options = sessionMetadata.map(({ timeString, title, id, environment_kind: environmentKind }) => {
+    let paddedTime = timeString.padEnd(maxTimeStringLength, " ");
+    return {
+      label: jsxProd_default_2(Fragment, {
+        children: [
+          paddedTime,
+          SPACE,
+          any &&
+            jsxProd_default_2(Fragment, {
+              children: [
+                jsxProd_default(Text, {
+                  dimColor: true,
+                  children: (environmentKind === "bridge" ? REMOTE_CONTROL_LABEL : "").padEnd(max, " "),
                 }),
-              truncateToWidth(sanitizeSessionTitle(title).replace(/\s+/g, " ").trim(), Re),
-            ],
-          }),
-          value: id,
-        };
-      },
-    ),
-    layoutOverhead = 7,
-    maxVisibleOptions = Math.max(
-      1,
-      isEmbedded
-        ? Math.min(f.length, 5, rows - 6 - layoutOverhead)
-        : Math.min(f.length, rows - 1 - layoutOverhead),
-    ),
-    be = maxVisibleOptions + layoutOverhead,
-    we = f.length > maxVisibleOptions;
-  return r(Box, {
+                SPACE,
+              ],
+            }),
+          truncateToWidth(sanitizeSessionTitle(title).replace(/\s+/g, " ").trim(), Re),
+        ],
+      }),
+      value: id,
+    };
+  });
+  let layoutOverhead = 7;
+  let maxVisibleOptions = Math.max(
+    1,
+    isEmbedded
+      ? Math.min(sessions.length, 5, rows - 6 - layoutOverhead)
+      : Math.min(sessions.length, rows - 1 - layoutOverhead),
+  );
+  let maxHeight = maxVisibleOptions + layoutOverhead;
+  let showScrollPosition = sessions.length > maxVisibleOptions;
+  return jsxProd_default_2(Box, {
     flexDirection: "column",
     padding: 1,
-    height: be,
+    height: maxHeight,
     tabIndex: 0,
-    autoFocus: !0,
+    autoFocus: true,
     onKeyDown: g,
     children: [
-      r(Text, {
-        bold: !0,
+      jsxProd_default_2(Text, {
+        bold: true,
         children: [
           "Select a session to resume",
-          we && r(Text, { dimColor: !0, children: [" ", "(", F, " of ", f.length, ")"] }),
-          T && r(Text, { dimColor: !0, children: [" (", T, ")"] }),
+          showScrollPosition &&
+            jsxProd_default_2(Text, {
+              dimColor: true,
+              children: [" ", "(", focusedIndex, " of ", sessions.length, ")"],
+            }),
+          currentRepo &&
+            jsxProd_default_2(Text, {
+              dimColor: true,
+              children: [" (", currentRepo, ")"],
+            }),
           ":",
         ],
       }),
-      r(Box, {
+      jsxProd_default_2(Box, {
         flexDirection: "column",
         marginTop: 1,
         flexGrow: 1,
         children: [
-          e(Box, {
+          jsxProd_default(Box, {
             marginLeft: 2 + pe,
-            children: r(Text, {
-              bold: !0,
+            children: jsxProd_default_2(Text, {
+              bold: true,
               children: [
                 UPDATED.padEnd(maxTimeStringLength, " "),
-                O,
-                any && ORIGIN.padEnd(max, " ") + O,
+                SPACE,
+                any && ORIGIN.padEnd(max, " ") + SPACE,
                 "Session Title",
               ],
             }),
           }),
-          e(ModelSelector, {
+          jsxProd_default(ModelSelector, {
             visibleOptionCount: maxVisibleOptions,
-            options: options,
+            options,
             onChange: (value) => {
-              let session_1 = f.find((h) => h.id === value);
-              if (session_1) onSelect(session_1);
+              let session = sessions.find((session) => session.id === value);
+              if (session) onSelect(session);
             },
-            onFocus: (value_0) => {
-              let index = options.findIndex((h) => h.value === value_0);
-              if (index >= 0) U(index + 1);
+            onFocus: (value) => {
+              let index = options.findIndex((option) => option.value === value);
+              if (index >= 0) setFocusedIndex(index + 1);
             },
           }),
         ],
       }),
-      e(Box, {
+      jsxProd_default(Box, {
         flexDirection: "row",
-        children: e(Text, {
-          dimColor: !0,
-          children: r(Byline, {
+        children: jsxProd_default(Text, {
+          dimColor: true,
+          children: jsxProd_default_2(Byline, {
             children: [
-              e(KeyboardShortcutHint, { chord: ["up", "down"], action: "select" }),
-              e(KeyboardShortcutHint, { chord: "enter", action: "confirm" }),
-              e(ConfigurableShortcutHint, {
+              jsxProd_default(KeyboardShortcutHint, {
+                chord: ["up", "down"],
+                action: "select",
+              }),
+              jsxProd_default(KeyboardShortcutHint, {
+                chord: "enter",
+                action: "confirm",
+              }),
+              jsxProd_default(ConfigurableShortcutHint, {
                 action: "confirm:no",
                 context: "Confirmation",
                 fallback: "Esc",
@@ -306,51 +353,69 @@ function determineErrorType(errorMessage) {
     return "api";
   return "other";
 }
+//@ chunk-0bntfk7p.js:6050-6828 sole-consumer
 /**
  * 按失败类型（refused/network/auth/api/other）渲染加载远程会话失败的提示；auth 时提示 /login 选择订阅账号。
  */
-//@ chunk-0bntfk7p.js:6050-6828 sole-consumer
 function renderLoadFailure(failureKind, refusalMessage) {
   switch (failureKind) {
     case "refused":
-      return e(Box, {
+      return jsxProd_default(Box, {
         marginY: 1,
         flexDirection: "column",
-        children: e(Text, { dimColor: !0, children: refusalMessage }),
+        children: jsxProd_default(Text, {
+          dimColor: true,
+          children: refusalMessage,
+        }),
       });
     case "network":
-      return e(Box, {
+      return jsxProd_default(Box, {
         marginY: 1,
         flexDirection: "column",
-        children: e(Text, { dimColor: !0, children: "Check your internet connection" }),
+        children: jsxProd_default(Text, {
+          dimColor: true,
+          children: "Check your internet connection",
+        }),
       });
     case "auth":
-      return r(Box, {
+      return jsxProd_default_2(Box, {
         marginY: 1,
         flexDirection: "column",
         children: [
-          e(Text, { dimColor: !0, children: "Teleport requires a Claude account" }),
-          r(Text, {
-            dimColor: !0,
+          jsxProd_default(Text, {
+            dimColor: true,
+            children: "Teleport requires a Claude account",
+          }),
+          jsxProd_default_2(Text, {
+            dimColor: true,
             children: [
               "Run ",
-              e(Text, { bold: !0, children: "/login" }),
+              jsxProd_default(Text, {
+                bold: true,
+                children: "/login",
+              }),
               ' and select "Claude account with subscription"',
             ],
           }),
         ],
       });
     case "api":
-      return e(Box, {
+      return jsxProd_default(Box, {
         marginY: 1,
         flexDirection: "column",
-        children: e(Text, { dimColor: !0, children: "Sorry, Claude encountered an error" }),
+        children: jsxProd_default(Text, {
+          dimColor: true,
+          children: "Sorry, Claude encountered an error",
+        }),
       });
     case "other":
-      return e(Box, {
+      return jsxProd_default(Box, {
         marginY: 1,
         flexDirection: "row",
-        children: e(Text, { dimColor: !0, children: "Sorry, Claude Code encountered an error" }),
+        children: jsxProd_default(Text, {
+          dimColor: true,
+          children: "Sorry, Claude Code encountered an error",
+        }),
       });
   }
 }
@@ -359,8 +424,10 @@ async function renderErrorSpecificGuidance(o, d) {
   return probeModelAccess(
     () => testBedrockRequest(o),
     d,
-    (c) => (c instanceof Error && (c.message === Q || isAwsTimeoutError(c)) ? "network" : "auth"),
+    (c) =>
+      c instanceof Error && (c.message === BEDROCK_VERIFY_TIMEOUT_TEXT || isAwsTimeoutError(c))
+        ? "network"
+        : "auth",
   );
 }
-
 export { ResumeTask, renderErrorSpecificGuidance };

@@ -7,28 +7,27 @@
  */
 
 //@ chunk-e7naa6k8.js:1533-1720 esm-fingerprint
-var u = (e) => {
-  if (typeof globalThis.process < "u") return globalThis.process.env?.[e]?.trim() || void 0;
-  if (typeof globalThis.Deno < "u") return globalThis.Deno.env?.get?.(e)?.trim() || void 0;
+var readEnv = (env) => {
+  if (typeof globalThis.process !== "undefined") return globalThis.process.env?.[env]?.trim() || undefined;
+  if (typeof globalThis.Deno !== "undefined") return globalThis.Deno.env?.get?.(env)?.trim() || undefined;
   return;
 };
 //@ chunk-h87x8cg3.js:8101-8288 esm-fingerprint
-var f = (e) => {
-  if (typeof globalThis.process < "u") return globalThis.process.env?.[e]?.trim() || void 0;
-  if (typeof globalThis.Deno < "u") return globalThis.Deno.env?.get?.(e)?.trim() || void 0;
+var readEnv_2 = (env) => {
+  if (typeof globalThis.process !== "undefined") return globalThis.process.env?.[env]?.trim() || undefined;
+  if (typeof globalThis.Deno !== "undefined") return globalThis.Deno.env?.get?.(env)?.trim() || undefined;
   return;
 };
 //@ chunk-qhhcfyds.js:1788-1975 esm-fingerprint
-var f_qhhc = (e) => {
-  if (typeof globalThis.process < "u") return globalThis.process.env?.[e]?.trim() || void 0;
-  if (typeof globalThis.Deno < "u") return globalThis.Deno.env?.get?.(e)?.trim() || void 0;
+var readEnv_3 = (env) => {
+  if (typeof globalThis.process !== "undefined") return globalThis.process.env?.[env]?.trim() || undefined;
+  if (typeof globalThis.Deno !== "undefined") return globalThis.Deno.env?.get?.(env)?.trim() || undefined;
   return;
 };
 //@ chunk-xa96axyz.js:790-977 esm-fingerprint
-var l = (e) => {
-  if (typeof globalThis.process < "u") return globalThis.process.env?.[e]?.trim() || void 0;
-  if (typeof globalThis.Deno < "u") return globalThis.Deno.env?.get?.(e)?.trim() || void 0;
+var readEnv_4 = (env) => {
+  if (typeof globalThis.process !== "undefined") return globalThis.process.env?.[env]?.trim() || undefined;
+  if (typeof globalThis.Deno !== "undefined") return globalThis.Deno.env?.get?.(env)?.trim() || undefined;
   return;
 };
-
-export { u, f, f_qhhc, l };
+export { readEnv, readEnv_2, readEnv_3, readEnv_4 };

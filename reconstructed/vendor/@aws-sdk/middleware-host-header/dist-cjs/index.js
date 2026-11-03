@@ -6,76 +6,87 @@
  * attribution: cjs-fingerprint 1, cjs-require-graph 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { Kg } from "../../../@smithy/protocol-http/dist-cjs/index.js";
+import { require_protocol_http } from "../../../@smithy/protocol-http/dist-cjs/index.js";
 
 //@ chunk-edce4vxq.js:724-1420 cjs-fingerprint
-var Ome = x(function (oo) {
-  var so = Kg();
-  function no(e) {
-    return e;
+var require_middleware_host_header = x(function (cjsExports) {
+  var protocolHttp = require_protocol_http();
+  function resolveHostHeaderConfig(input) {
+    return input;
   }
-  var zr = (e) => (t) => async (r) => {
-      if (!so.HttpRequest.isInstance(r.request)) return t(r);
-      let { request: request } = r,
-        { handlerProtocol: handlerProtocol = "" } = e.requestHandler.metadata || {};
-      if (handlerProtocol.indexOf("h2") >= 0 && !request.headers[":authority"])
-        (delete request.headers.host,
-          (request.headers[":authority"] = request.hostname + (request.port ? ":" + request.port : "")));
-      else if (!request.headers.host) {
-        let hostname = request.hostname;
-        if (request.port != null) hostname += `:${request.port}`;
-        request.headers.host = hostname;
-      }
-      return t(r);
+  var hostHeaderMiddleware = (options) => (next) => async (args) => {
+    if (!protocolHttp.HttpRequest.isInstance(args.request)) return next(args);
+    let { request } = args;
+    let { handlerProtocol = "" } = options.requestHandler.metadata || {};
+    if (handlerProtocol.indexOf("h2") >= 0 && !request.headers[":authority"]) {
+      delete request.headers.host;
+      request.headers[":authority"] = request.hostname + (request.port ? ":" + request.port : "");
+    } else if (!request.headers.host) {
+      let host = request.hostname;
+      if (request.port != null) host += `:${request.port}`;
+      request.headers.host = host;
+    }
+    return next(args);
+  };
+  var hostHeaderMiddlewareOptions = {
+    name: "hostHeaderMiddleware",
+    step: "build",
+    priority: "low",
+    tags: ["HOST"],
+    override: true,
+  };
+  var getHostHeaderPlugin = (options) => ({
+    applyToStack: (clientStack) => {
+      clientStack.add(hostHeaderMiddleware(options), hostHeaderMiddlewareOptions);
     },
-    $r = { name: "hostHeaderMiddleware", step: "build", priority: "low", tags: ["HOST"], override: !0 },
-    io = (e) => ({
-      applyToStack: (t) => {
-        t.add(zr(e), $r);
-      },
-    });
-  oo.getHostHeaderPlugin = io;
-  oo.hostHeaderMiddleware = zr;
-  oo.hostHeaderMiddlewareOptions = $r;
-  oo.resolveHostHeaderConfig = no;
+  });
+  cjsExports.getHostHeaderPlugin = getHostHeaderPlugin;
+  cjsExports.hostHeaderMiddleware = hostHeaderMiddleware;
+  cjsExports.hostHeaderMiddlewareOptions = hostHeaderMiddlewareOptions;
+  cjsExports.resolveHostHeaderConfig = resolveHostHeaderConfig;
 });
 //@ chunk-edce4vxq.js:115054-115651 cjs-require-graph
-var Lme = x(function (nu) {
-  var ru = Kg(),
-    Zs = "content-length";
-  function en(e) {
+var require_middleware_host_header_2 = x(function (cjsExports) {
+  var protocolHttp = require_protocol_http();
+  var Zs = "content-length";
+  function en(bodyLengthChecker) {
     return (t) => async (r) => {
       let request = r.request;
-      if (ru.HttpRequest.isInstance(request)) {
-        let { body: body, headers: headers } = request;
+      if (protocolHttp.HttpRequest.isInstance(request)) {
+        let { body, headers } = request;
         if (
           body &&
           Object.keys(headers)
-            .map((c) => c.toLowerCase())
+            .map((key) => key.toLowerCase())
             .indexOf(Zs) === -1
         )
           try {
-            let c = e(body);
-            request.headers = { ...request.headers, [Zs]: String(c) };
+            let c = bodyLengthChecker(body);
+            request.headers = {
+              ...request.headers,
+              [Zs]: String(c),
+            };
           } catch (error) {}
       }
-      return t({ ...r, request: request });
+      return t({
+        ...r,
+        request,
+      });
     };
   }
   var tn = {
-      step: "build",
-      tags: ["SET_CONTENT_LENGTH", "CONTENT_LENGTH"],
-      name: "contentLengthMiddleware",
-      override: !0,
+    step: "build",
+    tags: ["SET_CONTENT_LENGTH", "CONTENT_LENGTH"],
+    name: "contentLengthMiddleware",
+    override: true,
+  };
+  var getContentLengthPlugin = (options) => ({
+    applyToStack: (clientStack) => {
+      clientStack.add(en(options.bodyLengthChecker), tn);
     },
-    su = (e) => ({
-      applyToStack: (t) => {
-        t.add(en(e.bodyLengthChecker), tn);
-      },
-    });
-  nu.contentLengthMiddleware = en;
-  nu.contentLengthMiddlewareOptions = tn;
-  nu.getContentLengthPlugin = su;
+  });
+  cjsExports.contentLengthMiddleware = en;
+  cjsExports.contentLengthMiddlewareOptions = tn;
+  cjsExports.getContentLengthPlugin = getContentLengthPlugin;
 });
-
-export { Ome, Lme };
+export { require_middleware_host_header, require_middleware_host_header_2 };

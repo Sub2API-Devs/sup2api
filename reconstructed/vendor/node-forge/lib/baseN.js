@@ -8,71 +8,90 @@
 import { x } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-fq0cr76a.js:3501-4980 cjs-fingerprint
-var aT = x(function (ofe, oT) {
-  var Zb = {};
-  oT.exports = Zb;
-  var iT = {};
-  Zb.encode = function (e, n, r) {
-    if (typeof n !== "string") throw TypeError('"alphabet" must be a string.');
-    if (r !== void 0 && typeof r !== "number") throw TypeError('"maxline" must be a number.');
-    var s = "";
-    if (!(e instanceof Uint8Array)) s = o3(e, n);
+var require_baseN = x(function (cjsExports, cjsModule) {
+  var api = {};
+  cjsModule.exports = api;
+  var _reverseAlphabets = {};
+  api.encode = function (input, alphabet, maxline) {
+    if (typeof alphabet !== "string") throw TypeError('"alphabet" must be a string.');
+    if (maxline !== undefined && typeof maxline !== "number") throw TypeError('"maxline" must be a number.');
+    var output = "";
+    if (!(input instanceof Uint8Array)) output = _encodeWithByteBuffer(input, alphabet);
     else {
-      var h = 0,
-        y = n.length,
-        charAt = n.charAt(0),
-        S = [0];
-      for (h = 0; h < e.length; ++h) {
-        for (var w = 0, R = e[h]; w < S.length; ++w) ((R += S[w] << 8), (S[w] = R % y), (R = (R / y) | 0));
-        while (R > 0) (S.push(R % y), (R = (R / y) | 0));
+      var i = 0;
+      var base = alphabet.length;
+      var first = alphabet.charAt(0);
+      var digits = [0];
+      for (i = 0; i < input.length; ++i) {
+        for (var j = 0, carry = input[i]; j < digits.length; ++j) {
+          carry += digits[j] << 8;
+          digits[j] = carry % base;
+          carry = (carry / base) | 0;
+        }
+        while (carry > 0) {
+          digits.push(carry % base);
+          carry = (carry / base) | 0;
+        }
       }
-      for (h = 0; e[h] === 0 && h < e.length - 1; ++h) s += charAt;
-      for (h = S.length - 1; h >= 0; --h) s += n[S[h]];
+      for (i = 0; input[i] === 0 && i < input.length - 1; ++i) output += first;
+      for (i = digits.length - 1; i >= 0; --i) output += alphabet[digits[i]];
     }
-    if (r) {
-      var regExp = new RegExp(".{1," + r + "}", "g");
-      s = s.match(regExp).join(`\r
+    if (maxline) {
+      var regex = new RegExp(".{1," + maxline + "}", "g");
+      output = output.match(regex).join(`\r
 `);
     }
-    return s;
+    return output;
   };
-  Zb.decode = function (e, n) {
-    if (typeof e !== "string") throw TypeError('"input" must be a string.');
-    if (typeof n !== "string") throw TypeError('"alphabet" must be a string.');
-    var r = iT[n];
-    if (!r) {
-      r = iT[n] = [];
-      for (var s = 0; s < n.length; ++s) r[n.charCodeAt(s)] = s;
+  api.decode = function (input, alphabet) {
+    if (typeof input !== "string") throw TypeError('"input" must be a string.');
+    if (typeof alphabet !== "string") throw TypeError('"alphabet" must be a string.');
+    var table = _reverseAlphabets[alphabet];
+    if (!table) {
+      table = _reverseAlphabets[alphabet] = [];
+      for (var i = 0; i < alphabet.length; ++i) table[alphabet.charCodeAt(i)] = i;
     }
-    e = e.replace(/\s/g, "");
-    var h = n.length,
-      charAt = n.charAt(0),
-      b = [0];
-    for (var s = 0; s < e.length; s++) {
-      var S = r[e.charCodeAt(s)];
-      if (S === void 0) return;
-      for (var w = 0, R = S; w < b.length; ++w) ((R += b[w] * h), (b[w] = R & 255), (R >>= 8));
-      while (R > 0) (b.push(R & 255), (R >>= 8));
+    input = input.replace(/\s/g, "");
+    var base = alphabet.length;
+    var first = alphabet.charAt(0);
+    var bytes = [0];
+    for (var i = 0; i < input.length; i++) {
+      var value = table[input.charCodeAt(i)];
+      if (value === undefined) return;
+      for (var j = 0, carry = value; j < bytes.length; ++j) {
+        carry += bytes[j] * base;
+        bytes[j] = carry & 255;
+        carry >>= 8;
+      }
+      while (carry > 0) {
+        bytes.push(carry & 255);
+        carry >>= 8;
+      }
     }
-    for (var D = 0; e[D] === charAt && D < e.length - 1; ++D) b.push(0);
-    if (typeof Buffer < "u") return Buffer.from(b.reverse());
-    return new Uint8Array(b.reverse());
+    for (var k = 0; input[k] === first && k < input.length - 1; ++k) bytes.push(0);
+    if (typeof Buffer !== "undefined") return Buffer.from(bytes.reverse());
+    return new Uint8Array(bytes.reverse());
   };
-  function o3(e, n) {
-    var r = 0,
-      s = n.length,
-      charAt = n.charAt(0),
-      y = [0];
-    for (r = 0; r < e.length(); ++r) {
-      for (var b = 0, at = e.at(r); b < y.length; ++b)
-        ((at += y[b] << 8), (y[b] = at % s), (at = (at / s) | 0));
-      while (at > 0) (y.push(at % s), (at = (at / s) | 0));
+  function _encodeWithByteBuffer(input, alphabet) {
+    var i = 0;
+    var base = alphabet.length;
+    var first = alphabet.charAt(0);
+    var digits = [0];
+    for (i = 0; i < input.length(); ++i) {
+      for (var j = 0, carry = input.at(i); j < digits.length; ++j) {
+        carry += digits[j] << 8;
+        digits[j] = carry % base;
+        carry = (carry / base) | 0;
+      }
+      while (carry > 0) {
+        digits.push(carry % base);
+        carry = (carry / base) | 0;
+      }
     }
-    var w = "";
-    for (r = 0; e.at(r) === 0 && r < e.length() - 1; ++r) w += charAt;
-    for (r = y.length - 1; r >= 0; --r) w += n[y[r]];
-    return w;
+    var output = "";
+    for (i = 0; input.at(i) === 0 && i < input.length() - 1; ++i) output += first;
+    for (i = digits.length - 1; i >= 0; --i) output += alphabet[digits[i]];
+    return output;
   }
 });
-
-export { aT };
+export { require_baseN };

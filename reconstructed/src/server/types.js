@@ -9,10 +9,16 @@
  * attribution: fingerprint 1
  */
 import { DoctorLazy } from "../cli/handlers/util.js";
-import { u, o } from "../../vendor/zod/v4/classic/schemas.js";
+import { u, string } from "../../vendor/zod/v4/classic/schemas.js";
 
+//@ chunk-shkzs7rp.js:32801-32870 fingerprint = connectResponseSchema (0.8)
 /**
  * connect 响应 {session_id, ws_url, work_dir?}。
  */
-//@ chunk-shkzs7rp.js:32801-32870 fingerprint = connectResponseSchema (0.8)
-var connectResponseSchema = DoctorLazy(() => u({ session_id: o(), ws_url: o(), work_dir: o().optional() }));
+var connectResponseSchema = DoctorLazy(() =>
+  u({
+    session_id: string(),
+    ws_url: string(),
+    work_dir: string().optional(),
+  }),
+);

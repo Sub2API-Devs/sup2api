@@ -13,29 +13,34 @@ import { env } from "../utils/env.js";
 import { writeToStdout } from "../utils/process.js";
 import { gracefulShutdown } from "../utils/gracefulShutdown.js";
 import { logEvent } from "../services/analytics/index.js";
-import { y9 } from "../utils/updateChannel.js";
-import { Pbt, N6n, getDoctorDiagnostic, _2e } from "../utils/doctorDiagnostic.js";
+import { autoUpdatesChannel } from "../utils/updateChannel.js";
+import {
+  getHomebrewCaskName,
+  detectHomebrew,
+  getDoctorDiagnostic,
+  getPackageManager,
+} from "../utils/doctorDiagnostic.js";
 import { logForDebugging } from "../utils/debug.js";
 import { sequential } from "../utils/sequential.js";
 import { getGlobalConfig, saveGlobalConfig } from "../utils/config.js";
 import {
-  Uun,
+  latestVersionFromSources,
   getLatestVersion,
   getVersionSkipReason,
   resolveMaxVersionConfig,
   isForceDowngradeActive,
   installGlobalPackage,
-  aet,
+  getUpdateRestoreFailure,
   updateApplyErrorKey,
 } from "../utils/autoUpdater.js";
-import { gte, lt_2, gt } from "../utils/semver.js";
+import { semverGt, lt_2 as lt, semverGte } from "../utils/semver.js";
 import { getInitialSettings_2, getSettingsForSource } from "../utils/settings/settings.js";
 import {
   getLatestVersion as getLatestVersion_2,
   ManifestSignatureError,
 } from "../utils/nativeInstaller/download.js";
 import { installLatest, removeInstalledSymlink } from "../utils/nativeInstaller/installer.js";
-import { $_o } from "../utils/completionCache.js";
+import { regenerateCompletionCache } from "../utils/completionCache.js";
 import { sanitizeVersion } from "../services/analytics/metadata.js";
 import { localInstallationExists, installOrUpdateClaudePackage } from "../utils/localInstaller.js";
 import { logFeatureBad } from "../services/analytics/featureTelemetry.js";
@@ -43,68 +48,88 @@ import { recordUpdateResult } from "../utils/nativeInstaller/updateResult.js";
 import { isServerVersionMismatch } from "../utils/daemon/daemonLock.js";
 import { bgSupervisorNounCap } from "../utils/fleetGates.js";
 
+//@ chunk-rkjj4sjx.js:12375-42648 fingerprint = update (0.63)
 /**
  * claude update：检查安装方式（native/npm-local/npm-global/package-manager/development），包管理器安装只提示命令（Homebrew/winget/apk…），原生安装走 installLatest，npm 安装走全局/本地 npm；处理多重安装与配置的 installMethod 不一致。
  */
-//@ chunk-rkjj4sjx.js:12375-42648 fingerprint = update (0.63)
 async function update(l) {
-  if (env.DISABLE_UPDATES)
-    (writeToStdout(`Updates are disabled by your administrator. Contact your IT team to get the latest version.
-`),
-      await gracefulShutdown(0));
-  (logEvent("tengu_update_check", {}),
-    writeToStdout(`Current version: ${{ ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues", PACKAGE_URL: "@anthropic-ai/claude-code", README_URL: "https://code.claude.com/docs/en/overview", VERSION: "2.1.316", FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues", BUILD_TIME: "2026-10-30T23:28:13Z", GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1", HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js", DD_SOURCEMAP_GROUP: "default" }.VERSION}
-`));
-  let y = y9(),
-    g = Pbt(),
-    s = g ? (g === "claude-code@latest" ? "latest" : "stable") : N6n() ? "stable" : y,
-    h = s === "rc" ? "slow" : s;
-  (writeToStdout(`Checking for updates to ${h} version...
-`),
-    logForDebugging("update: Starting update check"),
-    logForDebugging("update: Running diagnostic"));
-  let o = await getDoctorDiagnostic({ storageV5: l });
-  if (
-    (logForDebugging(`update: Installation type: ${o.installationType}`),
-    logForDebugging(`update: Config install method: ${o.configInstallMethod}`),
-    o.multipleInstallations.length > 1)
-  ) {
-    (writeToStdout(`
-`),
-      writeToStdout(
-        sequential.yellow("Warning: Multiple installations found") +
-          `
+  if (env.DISABLE_UPDATES) {
+    writeToStdout(`Updates are disabled by your administrator. Contact your IT team to get the latest version.
+`);
+    await gracefulShutdown(0);
+  }
+  logEvent("tengu_update_check", {});
+  writeToStdout(`Current version: ${
+    {
+      ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
+      PACKAGE_URL: "@anthropic-ai/claude-code",
+      README_URL: "https://code.claude.com/docs/en/overview",
+      VERSION: "2.1.316",
+      FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
+      BUILD_TIME: "2026-10-30T23:28:13Z",
+      GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+      HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
+      DD_SOURCEMAP_GROUP: "default",
+    }.VERSION
+  }
+`);
+  let y = autoUpdatesChannel();
+  let homebrewCaskName = getHomebrewCaskName();
+  let channelOrVersion = homebrewCaskName
+    ? homebrewCaskName === "claude-code@latest"
+      ? "latest"
+      : "stable"
+    : detectHomebrew()
+      ? "stable"
+      : y;
+  let h = channelOrVersion === "rc" ? "slow" : channelOrVersion;
+  writeToStdout(`Checking for updates to ${h} version...
+`);
+  logForDebugging("update: Starting update check");
+  logForDebugging("update: Running diagnostic");
+  let diagnostic = await getDoctorDiagnostic({
+    storageV5: l,
+  });
+  logForDebugging(`update: Installation type: ${diagnostic.installationType}`);
+  logForDebugging(`update: Config install method: ${diagnostic.configInstallMethod}`);
+  if (diagnostic.multipleInstallations.length > 1) {
+    writeToStdout(`
+`);
+    writeToStdout(
+      sequential.yellow("Warning: Multiple installations found") +
+        `
 `,
-      ));
-    for (let install of o.multipleInstallations) {
-      let n = o.installationType === install.type ? " (currently running)" : "";
-      writeToStdout(`- ${install.type} at ${install.path}${n}
+    );
+    for (let install of diagnostic.multipleInstallations) {
+      let current = diagnostic.installationType === install.type ? " (currently running)" : "";
+      writeToStdout(`- ${install.type} at ${install.path}${current}
 `);
     }
   }
-  if (o.warnings.length > 0) {
+  if (diagnostic.warnings.length > 0) {
     writeToStdout(`
 `);
-    for (let warning of o.warnings)
-      (logForDebugging(`update: Warning detected: ${warning.issue}`),
-        logForDebugging(`update: Showing warning: ${warning.issue}`),
-        writeToStdout(
-          sequential.yellow(`Warning: ${warning.issue}
+    for (let warning of diagnostic.warnings) {
+      logForDebugging(`update: Warning detected: ${warning.issue}`);
+      logForDebugging(`update: Showing warning: ${warning.issue}`);
+      writeToStdout(
+        sequential.yellow(`Warning: ${warning.issue}
 `),
-        ),
-        writeToStdout(
-          sequential.bold(`Fix: ${warning.fix.replaceAll("`", "")}
+      );
+      writeToStdout(
+        sequential.bold(`Fix: ${warning.fix.replaceAll("`", "")}
 `),
-        ));
+      );
+    }
   }
   let config = getGlobalConfig();
-  if (!config.installMethod && o.installationType !== "package-manager") {
-    (writeToStdout(`
-`),
-      writeToStdout(`Updating configuration to track installation method...
-`));
+  if (!config.installMethod && diagnostic.installationType !== "package-manager") {
+    writeToStdout(`
+`);
+    writeToStdout(`Updating configuration to track installation method...
+`);
     let detectedMethod = "unknown";
-    switch (o.installationType) {
+    switch (diagnostic.installationType) {
       case "npm-local":
         detectedMethod = "local";
         break;
@@ -117,42 +142,47 @@ async function update(l) {
       default:
         detectedMethod = "unknown";
     }
-    (saveGlobalConfig((current) => ({ ...current, installMethod: detectedMethod }), l),
-      writeToStdout(`Installation method set to: ${detectedMethod}
-`));
+    saveGlobalConfig(
+      (current) => ({
+        ...current,
+        installMethod: detectedMethod,
+      }),
+      l,
+    );
+    writeToStdout(`Installation method set to: ${detectedMethod}
+`);
   }
-  if (o.installationType === "development")
-    (writeToStdout(`
-`),
-      writeToStdout(
-        sequential.yellow("Warning: Cannot update development build") +
-          `
+  if (diagnostic.installationType === "development") {
+    writeToStdout(`
+`);
+    writeToStdout(
+      sequential.yellow("Warning: Cannot update development build") +
+        `
 `,
-      ),
-      await gracefulShutdown(1));
-  if (o.installationType === "package-manager") {
-    let packageManager = await _2e();
-    if (
-      (writeToStdout(`
-`),
-      packageManager === "homebrew")
-    ) {
+    );
+    await gracefulShutdown(1);
+  }
+  if (diagnostic.installationType === "package-manager") {
+    let packageManager = await getPackageManager();
+    writeToStdout(`
+`);
+    if (packageManager === "homebrew") {
       writeToStdout(`Claude is managed by Homebrew.
 `);
-      let n = `brew upgrade ${g ?? "claude-code"}`,
-        R = await Uun(g ?? "claude-code", s);
-      if (R === null)
-        (writeToStdout(`Could not check for updates (network check skipped or unavailable).
-`),
-          writeToStdout(`To update manually, run:
-`),
-          writeToStdout(
-            sequential.bold(`  ${n}`) +
-              `
+      let n = `brew upgrade ${homebrewCaskName ?? "claude-code"}`;
+      let R = await latestVersionFromSources(homebrewCaskName ?? "claude-code", channelOrVersion);
+      if (R === null) {
+        writeToStdout(`Could not check for updates (network check skipped or unavailable).
+`);
+        writeToStdout(`To update manually, run:
+`);
+        writeToStdout(
+          sequential.bold(`  ${n}`) +
+            `
 `,
-          ));
-      else if (
-        !gte(
+        );
+      } else if (
+        !semverGt(
           {
             ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
             PACKAGE_URL: "@anthropic-ai/claude-code",
@@ -166,51 +196,64 @@ async function update(l) {
           }.VERSION,
           R,
         )
-      )
-        (writeToStdout(`Update available: ${{ ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues", PACKAGE_URL: "@anthropic-ai/claude-code", README_URL: "https://code.claude.com/docs/en/overview", VERSION: "2.1.316", FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues", BUILD_TIME: "2026-10-30T23:28:13Z", GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1", HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js", DD_SOURCEMAP_GROUP: "default" }.VERSION} \u2192 ${R}
-`),
-          writeToStdout(`
-`),
-          writeToStdout(`To update, run:
-`),
-          writeToStdout(
-            sequential.bold(`  ${n}`) +
-              `
+      ) {
+        writeToStdout(`Update available: ${
+          {
+            ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
+            PACKAGE_URL: "@anthropic-ai/claude-code",
+            README_URL: "https://code.claude.com/docs/en/overview",
+            VERSION: "2.1.316",
+            FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
+            BUILD_TIME: "2026-10-30T23:28:13Z",
+            GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+            HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
+            DD_SOURCEMAP_GROUP: "default",
+          }.VERSION
+        } \u2192 ${R}
+`);
+        writeToStdout(`
+`);
+        writeToStdout(`To update, run:
+`);
+        writeToStdout(
+          sequential.bold(`  ${n}`) +
+            `
 `,
-          ));
-      else
+        );
+      } else
         writeToStdout(`Claude is up to date!
 `);
-      if (g !== "claude-code@latest")
-        (writeToStdout(`
+      if (homebrewCaskName !== "claude-code@latest") {
+        writeToStdout(`
+`);
+        writeToStdout(
+          sequential.dim(`Tip: For more frequent updates, use the claude-code@latest cask:
 `),
-          writeToStdout(
-            sequential.dim(`Tip: For more frequent updates, use the claude-code@latest cask:
-`),
-          ),
-          writeToStdout(
-            sequential.dim(
-              `  brew uninstall --cask ${g ?? "claude-code"} && brew install --cask claude-code@latest`,
-            ) +
-              `
+        );
+        writeToStdout(
+          sequential.dim(
+            `  brew uninstall --cask ${homebrewCaskName ?? "claude-code"} && brew install --cask claude-code@latest`,
+          ) +
+            `
 `,
-          ));
+        );
+      }
     } else if (packageManager === "winget") {
       writeToStdout(`Claude is managed by winget.
 `);
-      let latest = await getLatestVersion(s);
-      if (latest === null)
-        (writeToStdout(`Could not check for updates (npm lookup failed or returned an invalid response).
-`),
-          writeToStdout(`To update manually, run:
-`),
-          writeToStdout(
-            sequential.bold("  winget upgrade Anthropic.ClaudeCode") +
-              `
+      let latest = await getLatestVersion(channelOrVersion);
+      if (latest === null) {
+        writeToStdout(`Could not check for updates (npm lookup failed or returned an invalid response).
+`);
+        writeToStdout(`To update manually, run:
+`);
+        writeToStdout(
+          sequential.bold("  winget upgrade Anthropic.ClaudeCode") +
+            `
 `,
-          ));
-      else if (
-        !gte(
+        );
+      } else if (
+        !semverGt(
           {
             ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
             PACKAGE_URL: "@anthropic-ai/claude-code",
@@ -224,37 +267,49 @@ async function update(l) {
           }.VERSION,
           latest,
         )
-      )
-        (writeToStdout(`Update available: ${{ ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues", PACKAGE_URL: "@anthropic-ai/claude-code", README_URL: "https://code.claude.com/docs/en/overview", VERSION: "2.1.316", FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues", BUILD_TIME: "2026-10-30T23:28:13Z", GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1", HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js", DD_SOURCEMAP_GROUP: "default" }.VERSION} \u2192 ${latest}
-`),
-          writeToStdout(`
-`),
-          writeToStdout(`To update, run:
-`),
-          writeToStdout(
-            sequential.bold("  winget upgrade Anthropic.ClaudeCode") +
-              `
+      ) {
+        writeToStdout(`Update available: ${
+          {
+            ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
+            PACKAGE_URL: "@anthropic-ai/claude-code",
+            README_URL: "https://code.claude.com/docs/en/overview",
+            VERSION: "2.1.316",
+            FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
+            BUILD_TIME: "2026-10-30T23:28:13Z",
+            GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+            HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
+            DD_SOURCEMAP_GROUP: "default",
+          }.VERSION
+        } \u2192 ${latest}
+`);
+        writeToStdout(`
+`);
+        writeToStdout(`To update, run:
+`);
+        writeToStdout(
+          sequential.bold("  winget upgrade Anthropic.ClaudeCode") +
+            `
 `,
-          ));
-      else
+        );
+      } else
         writeToStdout(`Claude is up to date!
 `);
     } else if (packageManager === "apk") {
       writeToStdout(`Claude is managed by apk.
 `);
-      let latest = await getLatestVersion(s);
-      if (latest === null)
-        (writeToStdout(`Could not check for updates (npm lookup failed or returned an invalid response).
-`),
-          writeToStdout(`To update manually, run:
-`),
-          writeToStdout(
-            sequential.bold("  apk upgrade claude-code") +
-              `
+      let latest = await getLatestVersion(channelOrVersion);
+      if (latest === null) {
+        writeToStdout(`Could not check for updates (npm lookup failed or returned an invalid response).
+`);
+        writeToStdout(`To update manually, run:
+`);
+        writeToStdout(
+          sequential.bold("  apk upgrade claude-code") +
+            `
 `,
-          ));
-      else if (
-        !gte(
+        );
+      } else if (
+        !semverGt(
           {
             ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
             PACKAGE_URL: "@anthropic-ai/claude-code",
@@ -268,86 +323,120 @@ async function update(l) {
           }.VERSION,
           latest,
         )
-      )
-        (writeToStdout(`Update available: ${{ ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues", PACKAGE_URL: "@anthropic-ai/claude-code", README_URL: "https://code.claude.com/docs/en/overview", VERSION: "2.1.316", FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues", BUILD_TIME: "2026-10-30T23:28:13Z", GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1", HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js", DD_SOURCEMAP_GROUP: "default" }.VERSION} \u2192 ${latest}
-`),
-          writeToStdout(`
-`),
-          writeToStdout(`To update, run:
-`),
-          writeToStdout(
-            sequential.bold("  apk upgrade claude-code") +
-              `
+      ) {
+        writeToStdout(`Update available: ${
+          {
+            ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
+            PACKAGE_URL: "@anthropic-ai/claude-code",
+            README_URL: "https://code.claude.com/docs/en/overview",
+            VERSION: "2.1.316",
+            FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
+            BUILD_TIME: "2026-10-30T23:28:13Z",
+            GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+            HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
+            DD_SOURCEMAP_GROUP: "default",
+          }.VERSION
+        } \u2192 ${latest}
+`);
+        writeToStdout(`
+`);
+        writeToStdout(`To update, run:
+`);
+        writeToStdout(
+          sequential.bold("  apk upgrade claude-code") +
+            `
 `,
-          ));
-      else
+        );
+      } else
         writeToStdout(`Claude is up to date!
 `);
-    } else
-      (writeToStdout(`Claude is managed by a package manager.
-`),
-        writeToStdout(`Please use your package manager to update.
-`));
+    } else {
+      writeToStdout(`Claude is managed by a package manager.
+`);
+      writeToStdout(`Please use your package manager to update.
+`);
+    }
     await gracefulShutdown(0);
   }
   if (
     config.installMethod &&
-    o.configInstallMethod !== "not set" &&
-    o.installationType !== "package-manager"
+    diagnostic.configInstallMethod !== "not set" &&
+    diagnostic.installationType !== "package-manager"
   ) {
-    let { installationType: installationType, configInstallMethod: configInstallMethod } = o,
-      k =
-        {
-          "npm-local": "local",
-          "npm-global": "global",
-          native: "native",
-          development: "development",
-          unknown: "unknown",
-        }[installationType] || installationType;
-    if (k !== configInstallMethod && configInstallMethod !== "unknown")
-      (writeToStdout(`
-`),
-        writeToStdout(
-          sequential.yellow("Warning: Configuration mismatch") +
-            `
+    let { installationType: runningType, configInstallMethod: configExpects } = diagnostic;
+    let k =
+      {
+        "npm-local": "local",
+        "npm-global": "global",
+        native: "native",
+        development: "development",
+        unknown: "unknown",
+      }[runningType] || runningType;
+    if (k !== configExpects && configExpects !== "unknown") {
+      writeToStdout(`
+`);
+      writeToStdout(
+        sequential.yellow("Warning: Configuration mismatch") +
+          `
 `,
-        ),
-        writeToStdout(`Config expects: ${configInstallMethod} installation
-`),
-        writeToStdout(`Currently running: ${installationType}
-`),
-        writeToStdout(
-          sequential.yellow(`Updating the ${installationType} installation you are currently using`) +
-            `
+      );
+      writeToStdout(`Config expects: ${configExpects} installation
+`);
+      writeToStdout(`Currently running: ${runningType}
+`);
+      writeToStdout(
+        sequential.yellow(`Updating the ${runningType} installation you are currently using`) +
+          `
 `,
-        ),
-        saveGlobalConfig((current) => ({ ...current, installMethod: k }), l),
-        writeToStdout(`Config updated to reflect current installation method: ${k}
-`));
+      );
+      saveGlobalConfig(
+        (current) => ({
+          ...current,
+          installMethod: k,
+        }),
+        l,
+      );
+      writeToStdout(`Config updated to reflect current installation method: ${k}
+`);
+    }
   }
-  if (o.installationType === "native") {
+  if (diagnostic.installationType === "native") {
+    logForDebugging("update: Detected native installation, using native updater");
     if (
-      (logForDebugging("update: Detected native installation, using native updater"),
       getInitialSettings_2()?.minimumVersion ||
-        getSettingsForSource("policySettings")?.requiredMaximumVersion)
+      getSettingsForSource("policySettings")?.requiredMaximumVersion
     ) {
-      let e = await getLatestVersion_2(s).catch(() => null),
-        n = e ? getVersionSkipReason(e) : null;
-      if (e && n)
-        (writeToStdout(
+      let e = await getLatestVersion_2(channelOrVersion).catch(() => null);
+      let n = e ? getVersionSkipReason(e) : null;
+      if (e && n) {
+        writeToStdout(
           sequential.yellow(
-            `The ${h} channel is at ${e}, which is ${n}. Staying on ${{ ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues", PACKAGE_URL: "@anthropic-ai/claude-code", README_URL: "https://code.claude.com/docs/en/overview", VERSION: "2.1.316", FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues", BUILD_TIME: "2026-10-30T23:28:13Z", GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1", HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js", DD_SOURCEMAP_GROUP: "default" }.VERSION}.`,
+            `The ${h} channel is at ${e}, which is ${n}. Staying on ${
+              {
+                ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
+                PACKAGE_URL: "@anthropic-ai/claude-code",
+                README_URL: "https://code.claude.com/docs/en/overview",
+                VERSION: "2.1.316",
+                FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
+                BUILD_TIME: "2026-10-30T23:28:13Z",
+                GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+                HOOKS_WORKER_URL:
+                  import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
+                DD_SOURCEMAP_GROUP: "default",
+              }.VERSION
+            }.`,
           ) +
             `
 `,
-        ),
-          await gracefulShutdown(0));
+        );
+        await gracefulShutdown(0);
+      }
     }
-    getLatestVersion_2(s)
-      .then((e) => {
+    getLatestVersion_2(channelOrVersion)
+      .then((latestVersion) => {
         if (
-          !e ||
-          e ===
+          !latestVersion ||
+          latestVersion ===
             {
               ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
               PACKAGE_URL: "@anthropic-ai/claude-code",
@@ -362,8 +451,8 @@ async function update(l) {
         )
           return;
         writeToStdout(
-          lt_2(
-            e,
+          lt(
+            latestVersion,
             {
               ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
               PACKAGE_URL: "@anthropic-ai/claude-code",
@@ -376,30 +465,44 @@ async function update(l) {
               DD_SOURCEMAP_GROUP: "default",
             }.VERSION,
           )
-            ? `@${s} is at ${e} (older than ${{ ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues", PACKAGE_URL: "@anthropic-ai/claude-code", README_URL: "https://code.claude.com/docs/en/overview", VERSION: "2.1.316", FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues", BUILD_TIME: "2026-10-30T23:28:13Z", GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1", HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js", DD_SOURCEMAP_GROUP: "default" }.VERSION})...
+            ? `@${channelOrVersion} is at ${latestVersion} (older than ${
+                {
+                  ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
+                  PACKAGE_URL: "@anthropic-ai/claude-code",
+                  README_URL: "https://code.claude.com/docs/en/overview",
+                  VERSION: "2.1.316",
+                  FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
+                  BUILD_TIME: "2026-10-30T23:28:13Z",
+                  GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+                  HOOKS_WORKER_URL:
+                    import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
+                  DD_SOURCEMAP_GROUP: "default",
+                }.VERSION
+              })...
 `
-            : `Updating to ${e}...
+            : `Updating to ${latestVersion}...
 `,
         );
       })
       .catch(() => {});
     try {
-      let e = await installLatest(s, !1, l);
+      let e = await installLatest(channelOrVersion, false, l);
       if (e.lockFailed) {
-        let n = e.lockHolderPid ? ` (PID ${e.lockHolderPid})` : "";
-        (writeToStdout(
+        let pidInfo = e.lockHolderPid ? ` (PID ${e.lockHolderPid})` : "";
+        writeToStdout(
           sequential.yellow(
-            `Another Claude process${n} is currently running. Please try again in a moment.`,
+            `Another Claude process${pidInfo} is currently running. Please try again in a moment.`,
           ) +
             `
 `,
-        ),
-          await gracefulShutdown(0));
+        );
+        await gracefulShutdown(0);
       }
-      if (!e.latestVersion)
-        (process.stderr.write(`Failed to check for updates
-`),
-          await gracefulShutdown(1));
+      if (!e.latestVersion) {
+        process.stderr.write(`Failed to check for updates
+`);
+        await gracefulShutdown(1);
+      }
       if (
         e.wasUpdated &&
         e.latestVersion !==
@@ -414,20 +517,46 @@ async function update(l) {
             HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
             DD_SOURCEMAP_GROUP: "default",
           }.VERSION
-      )
-        (writeToStdout(
+      ) {
+        writeToStdout(
           sequential.green(
-            `Successfully updated from ${{ ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues", PACKAGE_URL: "@anthropic-ai/claude-code", README_URL: "https://code.claude.com/docs/en/overview", VERSION: "2.1.316", FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues", BUILD_TIME: "2026-10-30T23:28:13Z", GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1", HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js", DD_SOURCEMAP_GROUP: "default" }.VERSION} to version ${e.latestVersion}`,
+            `Successfully updated from ${
+              {
+                ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
+                PACKAGE_URL: "@anthropic-ai/claude-code",
+                README_URL: "https://code.claude.com/docs/en/overview",
+                VERSION: "2.1.316",
+                FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
+                BUILD_TIME: "2026-10-30T23:28:13Z",
+                GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+                HOOKS_WORKER_URL:
+                  import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
+                DD_SOURCEMAP_GROUP: "default",
+              }.VERSION
+            } to version ${e.latestVersion}`,
           ) +
             `
 `,
-        ),
-          await $_o(),
-          await noteSupervisorRestart(e.latestVersion, l));
-      else if (e.skippedUnverifiedRelease)
+        );
+        await regenerateCompletionCache();
+        await noteSupervisorRestart(e.latestVersion, l);
+      } else if (e.skippedUnverifiedRelease)
         writeToStdout(
           sequential.yellow(
-            `Update target ${e.latestVersion} (from @${s} or a server-side override) predates release-signature enforcement; staying on ${{ ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues", PACKAGE_URL: "@anthropic-ai/claude-code", README_URL: "https://code.claude.com/docs/en/overview", VERSION: "2.1.316", FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues", BUILD_TIME: "2026-10-30T23:28:13Z", GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1", HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js", DD_SOURCEMAP_GROUP: "default" }.VERSION}. Run \`claude install ${e.latestVersion}\` to switch to it explicitly.`,
+            `Update target ${e.latestVersion} (from @${channelOrVersion} or a server-side override) predates release-signature enforcement; staying on ${
+              {
+                ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
+                PACKAGE_URL: "@anthropic-ai/claude-code",
+                README_URL: "https://code.claude.com/docs/en/overview",
+                VERSION: "2.1.316",
+                FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
+                BUILD_TIME: "2026-10-30T23:28:13Z",
+                GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+                HOOKS_WORKER_URL:
+                  import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
+                DD_SOURCEMAP_GROUP: "default",
+              }.VERSION
+            }. Run \`claude install ${e.latestVersion}\` to switch to it explicitly.`,
           ) +
             `
 `,
@@ -435,54 +564,92 @@ async function update(l) {
       else
         writeToStdout(
           sequential.green(
-            `Claude Code is up to date (${{ ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues", PACKAGE_URL: "@anthropic-ai/claude-code", README_URL: "https://code.claude.com/docs/en/overview", VERSION: "2.1.316", FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues", BUILD_TIME: "2026-10-30T23:28:13Z", GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1", HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js", DD_SOURCEMAP_GROUP: "default" }.VERSION})`,
+            `Claude Code is up to date (${
+              {
+                ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
+                PACKAGE_URL: "@anthropic-ai/claude-code",
+                README_URL: "https://code.claude.com/docs/en/overview",
+                VERSION: "2.1.316",
+                FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
+                BUILD_TIME: "2026-10-30T23:28:13Z",
+                GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+                HOOKS_WORKER_URL:
+                  import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
+                DD_SOURCEMAP_GROUP: "default",
+              }.VERSION
+            })`,
           ) +
             `
 `,
         );
       await gracefulShutdown(0);
     } catch (error) {
-      (process.stderr.write(`Error: Failed to install native update
-`),
-        process.stderr.write(
-          (error instanceof ManifestSignatureError ? error.message : String(error)) +
-            `
+      process.stderr.write(`Error: Failed to install native update
+`);
+      process.stderr.write(
+        (error instanceof ManifestSignatureError ? error.message : String(error)) +
+          `
 `,
-        ),
-        process.stderr.write(`Try running "claude doctor" for diagnostics
-`),
-        await gracefulShutdown(1));
+      );
+      process.stderr.write(`Try running "claude doctor" for diagnostics
+`);
+      await gracefulShutdown(1);
     }
   }
   if (config.installMethod !== "native") await removeInstalledSymlink();
-  (logForDebugging("update: Checking npm registry for latest version"),
-    logForDebugging(
-      `update: Package URL: ${{ ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues", PACKAGE_URL: "@anthropic-ai/claude-code", README_URL: "https://code.claude.com/docs/en/overview", VERSION: "2.1.316", FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues", BUILD_TIME: "2026-10-30T23:28:13Z", GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1", HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js", DD_SOURCEMAP_GROUP: "default" }.PACKAGE_URL}`,
-    ));
-  let S = s === "stable" ? "stable" : "latest",
-    npmCommand = `npm view ${{ ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues", PACKAGE_URL: "@anthropic-ai/claude-code", README_URL: "https://code.claude.com/docs/en/overview", VERSION: "2.1.316", FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues", BUILD_TIME: "2026-10-30T23:28:13Z", GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1", HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js", DD_SOURCEMAP_GROUP: "default" }.PACKAGE_URL}@${S} version`;
+  logForDebugging("update: Checking npm registry for latest version");
+  logForDebugging(
+    `update: Package URL: ${
+      {
+        ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
+        PACKAGE_URL: "@anthropic-ai/claude-code",
+        README_URL: "https://code.claude.com/docs/en/overview",
+        VERSION: "2.1.316",
+        FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
+        BUILD_TIME: "2026-10-30T23:28:13Z",
+        GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+        HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
+        DD_SOURCEMAP_GROUP: "default",
+      }.PACKAGE_URL
+    }`,
+  );
+  let npmTag = channelOrVersion === "stable" ? "stable" : "latest";
+  let npmCommand = `npm view ${
+    {
+      ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
+      PACKAGE_URL: "@anthropic-ai/claude-code",
+      README_URL: "https://code.claude.com/docs/en/overview",
+      VERSION: "2.1.316",
+      FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
+      BUILD_TIME: "2026-10-30T23:28:13Z",
+      GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+      HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
+      DD_SOURCEMAP_GROUP: "default",
+    }.PACKAGE_URL
+  }@${npmTag} version`;
   logForDebugging(`update: Running: ${npmCommand}`);
-  let latestVersion = await getLatestVersion(s);
-  if ((logForDebugging(`update: Latest version from npm: ${latestVersion || "FAILED"}`), !latestVersion)) {
-    if (
-      (logForDebugging("update: Failed to get latest version from npm registry"),
-      process.stderr.write(
-        sequential.red("Failed to check for updates") +
-          `
+  let latestVersion = await getLatestVersion(channelOrVersion);
+  logForDebugging(`update: Latest version from npm: ${latestVersion || "FAILED"}`);
+  if (!latestVersion) {
+    logForDebugging("update: Failed to get latest version from npm registry");
+    process.stderr.write(
+      sequential.red("Failed to check for updates") +
+        `
 `,
-      ),
-      process.stderr.write(`Unable to fetch latest version from npm registry
-`),
-      process.stderr.write(`
-`),
-      process.stderr.write(`Possible causes:
-`),
-      process.stderr.write(`  \u2022 Network connectivity issues
-`),
-      process.stderr.write(`  \u2022 npm registry is unreachable
-`),
-      process.stderr.write(`  \u2022 Corporate proxy/firewall blocking npm
-`),
+    );
+    process.stderr.write(`Unable to fetch latest version from npm registry
+`);
+    process.stderr.write(`
+`);
+    process.stderr.write(`Possible causes:
+`);
+    process.stderr.write(`  \u2022 Network connectivity issues
+`);
+    process.stderr.write(`  \u2022 npm registry is unreachable
+`);
+    process.stderr.write(`  \u2022 Corporate proxy/firewall blocking npm
+`);
+    if (
       {
         ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
         PACKAGE_URL: "@anthropic-ai/claude-code",
@@ -494,29 +661,29 @@ async function update(l) {
         HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
         DD_SOURCEMAP_GROUP: "default",
       }.PACKAGE_URL &&
-        !{
-          ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
-          PACKAGE_URL: "@anthropic-ai/claude-code",
-          README_URL: "https://code.claude.com/docs/en/overview",
-          VERSION: "2.1.316",
-          FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-          BUILD_TIME: "2026-10-30T23:28:13Z",
-          GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
-          HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
-          DD_SOURCEMAP_GROUP: "default",
-        }.PACKAGE_URL.startsWith("@anthropic"))
+      !{
+        ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
+        PACKAGE_URL: "@anthropic-ai/claude-code",
+        README_URL: "https://code.claude.com/docs/en/overview",
+        VERSION: "2.1.316",
+        FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
+        BUILD_TIME: "2026-10-30T23:28:13Z",
+        GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+        HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
+        DD_SOURCEMAP_GROUP: "default",
+      }.PACKAGE_URL.startsWith("@anthropic")
     )
       process.stderr.write(`  \u2022 Internal/development build not published to npm
 `);
-    (process.stderr.write(`
-`),
-      process.stderr.write(`Try:
-`),
-      process.stderr.write(`  \u2022 Check your internet connection
-`),
-      process.stderr.write(`  \u2022 Run with --debug flag for more details
-`));
-    let e =
+    process.stderr.write(`
+`);
+    process.stderr.write(`Try:
+`);
+    process.stderr.write(`  \u2022 Check your internet connection
+`);
+    process.stderr.write(`  \u2022 Run with --debug flag for more details
+`);
+    let packageName =
       {
         ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
         PACKAGE_URL: "@anthropic-ai/claude-code",
@@ -528,16 +695,15 @@ async function update(l) {
         HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
         DD_SOURCEMAP_GROUP: "default",
       }.PACKAGE_URL || "@anthropic-ai/claude-code";
-    (process.stderr.write(`  \u2022 Manually check: npm view ${e} version
-`),
-      process.stderr.write(`  \u2022 Check if you need to login: npm whoami
-`),
-      await gracefulShutdown(1));
+    process.stderr.write(`  \u2022 Manually check: npm view ${packageName} version
+`);
+    process.stderr.write(`  \u2022 Check if you need to login: npm whoami
+`);
+    await gracefulShutdown(1);
   }
-  let { maxVersion: maxVersion, forceDowngradeEnabled: forceDowngradeEnabled } =
-      await resolveMaxVersionConfig(),
-    r = latestVersion,
-    C = !1;
+  let { maxVersion, forceDowngradeEnabled } = await resolveMaxVersionConfig();
+  let specificVersion = latestVersion;
+  let C = false;
   if (
     forceDowngradeEnabled &&
     maxVersion &&
@@ -556,80 +722,15 @@ async function update(l) {
       maxVersion,
       "auto_updater",
     )
-  )
-    ((r = maxVersion), (C = !0));
-  else if (maxVersion && latestVersion && gt(latestVersion, maxVersion))
-    (logForDebugging(
+  ) {
+    specificVersion = maxVersion;
+    C = true;
+  } else if (maxVersion && latestVersion && semverGte(latestVersion, maxVersion)) {
+    logForDebugging(
       `update: maxVersion ${maxVersion} is set, capping update from ${latestVersion} to ${maxVersion}`,
-    ),
-      (r = gt(
-        maxVersion,
-        {
-          ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
-          PACKAGE_URL: "@anthropic-ai/claude-code",
-          README_URL: "https://code.claude.com/docs/en/overview",
-          VERSION: "2.1.316",
-          FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-          BUILD_TIME: "2026-10-30T23:28:13Z",
-          GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
-          HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
-          DD_SOURCEMAP_GROUP: "default",
-        }.VERSION,
-      )
-        ? maxVersion
-        : {
-            ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
-            PACKAGE_URL: "@anthropic-ai/claude-code",
-            README_URL: "https://code.claude.com/docs/en/overview",
-            VERSION: "2.1.316",
-            FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-            BUILD_TIME: "2026-10-30T23:28:13Z",
-            GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
-            HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
-            DD_SOURCEMAP_GROUP: "default",
-          }.VERSION));
-  let v = r ? getVersionSkipReason(r) : null;
-  if (r && v) {
-    let e =
-      r === latestVersion
-        ? `The ${h} channel is at ${r}`
-        : `The update target is capped at ${r} by a server-side version policy`;
-    (writeToStdout(
-      sequential.yellow(
-        `${e}, which is ${v}. Staying on ${{ ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues", PACKAGE_URL: "@anthropic-ai/claude-code", README_URL: "https://code.claude.com/docs/en/overview", VERSION: "2.1.316", FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues", BUILD_TIME: "2026-10-30T23:28:13Z", GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1", HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js", DD_SOURCEMAP_GROUP: "default" }.VERSION}.`,
-      ) +
-        `
-`,
-    ),
-      await gracefulShutdown(0));
-  }
-  if (
-    r ===
-    {
-      ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
-      PACKAGE_URL: "@anthropic-ai/claude-code",
-      README_URL: "https://code.claude.com/docs/en/overview",
-      VERSION: "2.1.316",
-      FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-      BUILD_TIME: "2026-10-30T23:28:13Z",
-      GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
-      HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
-      DD_SOURCEMAP_GROUP: "default",
-    }.VERSION
-  )
-    (writeToStdout(
-      sequential.green(
-        `Claude Code is up to date (${{ ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues", PACKAGE_URL: "@anthropic-ai/claude-code", README_URL: "https://code.claude.com/docs/en/overview", VERSION: "2.1.316", FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues", BUILD_TIME: "2026-10-30T23:28:13Z", GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1", HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js", DD_SOURCEMAP_GROUP: "default" }.VERSION})`,
-      ) +
-        `
-`,
-    ),
-      await gracefulShutdown(0));
-  if (
-    !C &&
-    r &&
-    lt_2(
-      r,
+    );
+    specificVersion = semverGte(
+      maxVersion,
       {
         ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
         PACKAGE_URL: "@anthropic-ai/claude-code",
@@ -642,17 +743,122 @@ async function update(l) {
         DD_SOURCEMAP_GROUP: "default",
       }.VERSION,
     )
-  )
-    (writeToStdout(
+      ? maxVersion
+      : {
+          ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
+          PACKAGE_URL: "@anthropic-ai/claude-code",
+          README_URL: "https://code.claude.com/docs/en/overview",
+          VERSION: "2.1.316",
+          FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
+          BUILD_TIME: "2026-10-30T23:28:13Z",
+          GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+          HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
+          DD_SOURCEMAP_GROUP: "default",
+        }.VERSION;
+  }
+  let v = specificVersion ? getVersionSkipReason(specificVersion) : null;
+  if (specificVersion && v) {
+    let e =
+      specificVersion === latestVersion
+        ? `The ${h} channel is at ${specificVersion}`
+        : `The update target is capped at ${specificVersion} by a server-side version policy`;
+    writeToStdout(
       sequential.yellow(
-        `You're running ${{ ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues", PACKAGE_URL: "@anthropic-ai/claude-code", README_URL: "https://code.claude.com/docs/en/overview", VERSION: "2.1.316", FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues", BUILD_TIME: "2026-10-30T23:28:13Z", GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1", HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js", DD_SOURCEMAP_GROUP: "default" }.VERSION}, which is newer than the ${h} channel's ${r}. Skipping update. To switch back to the channel version, run claude install ${r}.`,
+        `${e}, which is ${v}. Staying on ${
+          {
+            ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
+            PACKAGE_URL: "@anthropic-ai/claude-code",
+            README_URL: "https://code.claude.com/docs/en/overview",
+            VERSION: "2.1.316",
+            FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
+            BUILD_TIME: "2026-10-30T23:28:13Z",
+            GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+            HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
+            DD_SOURCEMAP_GROUP: "default",
+          }.VERSION
+        }.`,
       ) +
         `
 `,
-    ),
-      await gracefulShutdown(0));
-  if (C)
-    (logEvent("tengu_auto_updater_forced_downgrade", {
+    );
+    await gracefulShutdown(0);
+  }
+  if (
+    specificVersion ===
+    {
+      ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
+      PACKAGE_URL: "@anthropic-ai/claude-code",
+      README_URL: "https://code.claude.com/docs/en/overview",
+      VERSION: "2.1.316",
+      FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
+      BUILD_TIME: "2026-10-30T23:28:13Z",
+      GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+      HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
+      DD_SOURCEMAP_GROUP: "default",
+    }.VERSION
+  ) {
+    writeToStdout(
+      sequential.green(
+        `Claude Code is up to date (${
+          {
+            ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
+            PACKAGE_URL: "@anthropic-ai/claude-code",
+            README_URL: "https://code.claude.com/docs/en/overview",
+            VERSION: "2.1.316",
+            FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
+            BUILD_TIME: "2026-10-30T23:28:13Z",
+            GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+            HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
+            DD_SOURCEMAP_GROUP: "default",
+          }.VERSION
+        })`,
+      ) +
+        `
+`,
+    );
+    await gracefulShutdown(0);
+  }
+  if (
+    !C &&
+    specificVersion &&
+    lt(
+      specificVersion,
+      {
+        ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
+        PACKAGE_URL: "@anthropic-ai/claude-code",
+        README_URL: "https://code.claude.com/docs/en/overview",
+        VERSION: "2.1.316",
+        FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
+        BUILD_TIME: "2026-10-30T23:28:13Z",
+        GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+        HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
+        DD_SOURCEMAP_GROUP: "default",
+      }.VERSION,
+    )
+  ) {
+    writeToStdout(
+      sequential.yellow(
+        `You're running ${
+          {
+            ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
+            PACKAGE_URL: "@anthropic-ai/claude-code",
+            README_URL: "https://code.claude.com/docs/en/overview",
+            VERSION: "2.1.316",
+            FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
+            BUILD_TIME: "2026-10-30T23:28:13Z",
+            GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+            HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
+            DD_SOURCEMAP_GROUP: "default",
+          }.VERSION
+        }, which is newer than the ${h} channel's ${specificVersion}. Skipping update. To switch back to the channel version, run claude install ${specificVersion}.`,
+      ) +
+        `
+`,
+    );
+    await gracefulShutdown(0);
+  }
+  if (C) {
+    logEvent("tengu_auto_updater_forced_downgrade", {
       from_version: sanitizeVersion(
         {
           ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
@@ -666,61 +872,90 @@ async function update(l) {
           DD_SOURCEMAP_GROUP: "default",
         }.VERSION,
       ),
-      to_version: sanitizeVersion(r),
-    }),
-      writeToStdout(
-        sequential.yellow(
-          `Downgrading to ${r} (current: ${{ ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues", PACKAGE_URL: "@anthropic-ai/claude-code", README_URL: "https://code.claude.com/docs/en/overview", VERSION: "2.1.316", FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues", BUILD_TIME: "2026-10-30T23:28:13Z", GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1", HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js", DD_SOURCEMAP_GROUP: "default" }.VERSION}) \u2014 required by a server-side version policy.`,
-        ) +
-          `
+      to_version: sanitizeVersion(specificVersion),
+    });
+    writeToStdout(
+      sequential.yellow(
+        `Downgrading to ${specificVersion} (current: ${
+          {
+            ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
+            PACKAGE_URL: "@anthropic-ai/claude-code",
+            README_URL: "https://code.claude.com/docs/en/overview",
+            VERSION: "2.1.316",
+            FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
+            BUILD_TIME: "2026-10-30T23:28:13Z",
+            GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+            HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
+            DD_SOURCEMAP_GROUP: "default",
+          }.VERSION
+        }) \u2014 required by a server-side version policy.`,
+      ) +
+        `
 `,
-      ));
-  else
-    writeToStdout(`New version available: ${r} (current: ${{ ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues", PACKAGE_URL: "@anthropic-ai/claude-code", README_URL: "https://code.claude.com/docs/en/overview", VERSION: "2.1.316", FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues", BUILD_TIME: "2026-10-30T23:28:13Z", GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1", HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js", DD_SOURCEMAP_GROUP: "default" }.VERSION})
+    );
+  } else
+    writeToStdout(`New version available: ${specificVersion} (current: ${
+      {
+        ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
+        PACKAGE_URL: "@anthropic-ai/claude-code",
+        README_URL: "https://code.claude.com/docs/en/overview",
+        VERSION: "2.1.316",
+        FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
+        BUILD_TIME: "2026-10-30T23:28:13Z",
+        GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+        HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
+        DD_SOURCEMAP_GROUP: "default",
+      }.VERSION
+    })
 `);
   writeToStdout(`Installing update...
 `);
-  let c = !1,
-    updateMethodName = "";
-  switch (o.installationType) {
+  let c = false;
+  let updateMethodName = "";
+  switch (diagnostic.installationType) {
     case "npm-local":
-      ((c = !0), (updateMethodName = "local"));
+      c = true;
+      updateMethodName = "local";
       break;
     case "npm-global":
-      ((c = !1), (updateMethodName = "global"));
+      c = false;
+      updateMethodName = "global";
       break;
     case "unknown": {
       let isLocal = await localInstallationExists();
-      ((c = isLocal),
-        (updateMethodName = isLocal ? "local" : "global"),
-        writeToStdout(
-          sequential.yellow("Warning: Could not determine installation type") +
-            `
+      c = isLocal;
+      updateMethodName = isLocal ? "local" : "global";
+      writeToStdout(
+        sequential.yellow("Warning: Could not determine installation type") +
+          `
 `,
-        ),
-        writeToStdout(`Attempting ${updateMethodName} update based on file detection...
-`));
+      );
+      writeToStdout(`Attempting ${updateMethodName} update based on file detection...
+`);
       break;
     }
     default:
-      (logFeatureBad("update_apply", "update_apply_unsupported_install_type"),
-        process.stderr.write(`Error: Cannot update ${o.installationType} installation
-`),
-        await gracefulShutdown(1));
+      logFeatureBad("update_apply", "update_apply_unsupported_install_type");
+      process.stderr.write(`Error: Cannot update ${diagnostic.installationType} installation
+`);
+      await gracefulShutdown(1);
   }
-  (writeToStdout(`Using ${updateMethodName} installation update method...
-`),
-    logForDebugging(`update: Update method determined: ${updateMethodName}`),
-    logForDebugging(`update: useLocalUpdate: ${c}`));
-  let p, w;
-  if (c)
-    (logForDebugging("update: Calling installOrUpdateClaudePackage() for local update"),
-      (p = await installOrUpdateClaudePackage(s, r, l)));
-  else
-    (logForDebugging("update: Calling installGlobalPackage() for global update"),
-      (w = await installGlobalPackage(r, l)),
-      (p = w.status));
-  if ((logForDebugging(`update: Installation status: ${p}`), p !== "in_progress"))
+  writeToStdout(`Using ${updateMethodName} installation update method...
+`);
+  logForDebugging(`update: Update method determined: ${updateMethodName}`);
+  logForDebugging(`update: useLocalUpdate: ${c}`);
+  let p;
+  let w;
+  if (c) {
+    logForDebugging("update: Calling installOrUpdateClaudePackage() for local update");
+    p = await installOrUpdateClaudePackage(channelOrVersion, specificVersion, l);
+  } else {
+    logForDebugging("update: Calling installGlobalPackage() for global update");
+    w = await installGlobalPackage(specificVersion, l);
+    p = w.status;
+  }
+  logForDebugging(`update: Installation status: ${p}`);
+  if (p !== "in_progress")
     await recordUpdateResult(
       {
         timestamp: new Date().toISOString(),
@@ -738,9 +973,9 @@ async function update(l) {
           HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
           DD_SOURCEMAP_GROUP: "default",
         }.VERSION,
-        version_to: r,
+        version_to: specificVersion,
         error_code:
-          p === "install_failed" && aet()
+          p === "install_failed" && getUpdateRestoreFailure()
             ? "update_apply_restore_failed"
             : updateApplyErrorKey(w?.failureHint),
       },
@@ -748,39 +983,75 @@ async function update(l) {
     );
   switch (p) {
     case "success":
-      (writeToStdout(
+      writeToStdout(
         sequential.green(
           C
-            ? `Successfully downgraded from ${{ ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues", PACKAGE_URL: "@anthropic-ai/claude-code", README_URL: "https://code.claude.com/docs/en/overview", VERSION: "2.1.316", FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues", BUILD_TIME: "2026-10-30T23:28:13Z", GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1", HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js", DD_SOURCEMAP_GROUP: "default" }.VERSION} to version ${r}`
-            : `Successfully updated from ${{ ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues", PACKAGE_URL: "@anthropic-ai/claude-code", README_URL: "https://code.claude.com/docs/en/overview", VERSION: "2.1.316", FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues", BUILD_TIME: "2026-10-30T23:28:13Z", GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1", HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js", DD_SOURCEMAP_GROUP: "default" }.VERSION} to version ${r}`,
+            ? `Successfully downgraded from ${
+                {
+                  ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
+                  PACKAGE_URL: "@anthropic-ai/claude-code",
+                  README_URL: "https://code.claude.com/docs/en/overview",
+                  VERSION: "2.1.316",
+                  FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
+                  BUILD_TIME: "2026-10-30T23:28:13Z",
+                  GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+                  HOOKS_WORKER_URL:
+                    import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
+                  DD_SOURCEMAP_GROUP: "default",
+                }.VERSION
+              } to version ${specificVersion}`
+            : `Successfully updated from ${
+                {
+                  ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
+                  PACKAGE_URL: "@anthropic-ai/claude-code",
+                  README_URL: "https://code.claude.com/docs/en/overview",
+                  VERSION: "2.1.316",
+                  FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
+                  BUILD_TIME: "2026-10-30T23:28:13Z",
+                  GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+                  HOOKS_WORKER_URL:
+                    import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
+                  DD_SOURCEMAP_GROUP: "default",
+                }.VERSION
+              } to version ${specificVersion}`,
         ) +
           `
 `,
-      ),
-        await $_o(),
-        await noteSupervisorRestart(r, l));
+      );
+      await regenerateCompletionCache();
+      await noteSupervisorRestart(specificVersion, l);
       break;
     case "no_permissions":
-      if (
-        (process.stderr.write(`Error: Insufficient permissions to install update
-`),
-        c)
-      )
-        (process.stderr.write(`Try manually updating with:
-`),
-          process.stderr
-            .write(`  cd ~/.claude/local && npm update ${{ ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues", PACKAGE_URL: "@anthropic-ai/claude-code", README_URL: "https://code.claude.com/docs/en/overview", VERSION: "2.1.316", FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues", BUILD_TIME: "2026-10-30T23:28:13Z", GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1", HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js", DD_SOURCEMAP_GROUP: "default" }.PACKAGE_URL}
-`));
-      else
-        (process.stderr.write(`Try running with sudo or fix npm permissions
-`),
-          process.stderr.write(`Or consider using native installation with: claude install
-`));
+      process.stderr.write(`Error: Insufficient permissions to install update
+`);
+      if (c) {
+        process.stderr.write(`Try manually updating with:
+`);
+        process.stderr.write(`  cd ~/.claude/local && npm update ${
+          {
+            ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
+            PACKAGE_URL: "@anthropic-ai/claude-code",
+            README_URL: "https://code.claude.com/docs/en/overview",
+            VERSION: "2.1.316",
+            FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
+            BUILD_TIME: "2026-10-30T23:28:13Z",
+            GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+            HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
+            DD_SOURCEMAP_GROUP: "default",
+          }.PACKAGE_URL
+        }
+`);
+      } else {
+        process.stderr.write(`Try running with sudo or fix npm permissions
+`);
+        process.stderr.write(`Or consider using native installation with: claude install
+`);
+      }
       await gracefulShutdown(1);
       break;
     case "install_failed": {
-      let e = aet();
-      if (!e && w?.failureHint) {
+      let updateRestoreFailure = getUpdateRestoreFailure();
+      if (!updateRestoreFailure && w?.failureHint) {
         switch (w.failureHint) {
           case "windows_running_exe_lock":
             process.stderr
@@ -789,7 +1060,20 @@ async function update(l) {
             break;
           case "native_binary_missing":
             process.stderr
-              .write(`Error: Update failed because the native binary for this platform was not downloaded. Run claude update again, or reinstall with: npm i -g ${{ ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues", PACKAGE_URL: "@anthropic-ai/claude-code", README_URL: "https://code.claude.com/docs/en/overview", VERSION: "2.1.316", FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues", BUILD_TIME: "2026-10-30T23:28:13Z", GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1", HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js", DD_SOURCEMAP_GROUP: "default" }.PACKAGE_URL}
+              .write(`Error: Update failed because the native binary for this platform was not downloaded. Run claude update again, or reinstall with: npm i -g ${
+              {
+                ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
+                PACKAGE_URL: "@anthropic-ai/claude-code",
+                README_URL: "https://code.claude.com/docs/en/overview",
+                VERSION: "2.1.316",
+                FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
+                BUILD_TIME: "2026-10-30T23:28:13Z",
+                GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+                HOOKS_WORKER_URL:
+                  import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
+                DD_SOURCEMAP_GROUP: "default",
+              }.PACKAGE_URL
+            }
 `);
             break;
           case "registry_session_refused":
@@ -800,47 +1084,92 @@ async function update(l) {
         await gracefulShutdown(1);
         break;
       }
-      if (
-        (process.stderr.write(`Error: Failed to install update
-`),
-        e)
-      )
-        if (e.preservedPath)
-          if (
-            (process.stderr
-              .write(`Your Claude Code executable could not be restored after the failed update. It was preserved at ${e.preservedPath}
-`),
-            dirname(e.preservedPath) === dirname(e.originalPath))
-          )
+      process.stderr.write(`Error: Failed to install update
+`);
+      if (updateRestoreFailure) {
+        if (updateRestoreFailure.preservedPath) {
+          process.stderr
+            .write(`Your Claude Code executable could not be restored after the failed update. It was preserved at ${updateRestoreFailure.preservedPath}
+`);
+          if (dirname(updateRestoreFailure.preservedPath) === dirname(updateRestoreFailure.originalPath))
             process.stderr
-              .write(`Rename it back to ${basename(e.originalPath)}, or reinstall with: npm i -g ${{ ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues", PACKAGE_URL: "@anthropic-ai/claude-code", README_URL: "https://code.claude.com/docs/en/overview", VERSION: "2.1.316", FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues", BUILD_TIME: "2026-10-30T23:28:13Z", GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1", HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js", DD_SOURCEMAP_GROUP: "default" }.PACKAGE_URL}
+              .write(`Rename it back to ${basename(updateRestoreFailure.originalPath)}, or reinstall with: npm i -g ${
+              {
+                ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
+                PACKAGE_URL: "@anthropic-ai/claude-code",
+                README_URL: "https://code.claude.com/docs/en/overview",
+                VERSION: "2.1.316",
+                FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
+                BUILD_TIME: "2026-10-30T23:28:13Z",
+                GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+                HOOKS_WORKER_URL:
+                  import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
+                DD_SOURCEMAP_GROUP: "default",
+              }.PACKAGE_URL
+            }
 `);
           else
             process.stderr
-              .write(`Copy it back to ${e.originalPath}, or reinstall with: npm i -g ${{ ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues", PACKAGE_URL: "@anthropic-ai/claude-code", README_URL: "https://code.claude.com/docs/en/overview", VERSION: "2.1.316", FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues", BUILD_TIME: "2026-10-30T23:28:13Z", GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1", HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js", DD_SOURCEMAP_GROUP: "default" }.PACKAGE_URL}
+              .write(`Copy it back to ${updateRestoreFailure.originalPath}, or reinstall with: npm i -g ${
+              {
+                ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
+                PACKAGE_URL: "@anthropic-ai/claude-code",
+                README_URL: "https://code.claude.com/docs/en/overview",
+                VERSION: "2.1.316",
+                FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
+                BUILD_TIME: "2026-10-30T23:28:13Z",
+                GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+                HOOKS_WORKER_URL:
+                  import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
+                DD_SOURCEMAP_GROUP: "default",
+              }.PACKAGE_URL
+            }
 `);
-        else
+        } else
           process.stderr
-            .write(`Your Claude Code executable could not be restored after the failed update and no preserved copy was found. Reinstall with: npm i -g ${{ ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues", PACKAGE_URL: "@anthropic-ai/claude-code", README_URL: "https://code.claude.com/docs/en/overview", VERSION: "2.1.316", FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues", BUILD_TIME: "2026-10-30T23:28:13Z", GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1", HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js", DD_SOURCEMAP_GROUP: "default" }.PACKAGE_URL}
+            .write(`Your Claude Code executable could not be restored after the failed update and no preserved copy was found. Reinstall with: npm i -g ${
+            {
+              ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
+              PACKAGE_URL: "@anthropic-ai/claude-code",
+              README_URL: "https://code.claude.com/docs/en/overview",
+              VERSION: "2.1.316",
+              FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
+              BUILD_TIME: "2026-10-30T23:28:13Z",
+              GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+              HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
+              DD_SOURCEMAP_GROUP: "default",
+            }.PACKAGE_URL
+          }
 `);
-      else if (c)
-        (process.stderr.write(`Try manually updating with:
-`),
-          process.stderr
-            .write(`  cd ~/.claude/local && npm update ${{ ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues", PACKAGE_URL: "@anthropic-ai/claude-code", README_URL: "https://code.claude.com/docs/en/overview", VERSION: "2.1.316", FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues", BUILD_TIME: "2026-10-30T23:28:13Z", GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1", HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js", DD_SOURCEMAP_GROUP: "default" }.PACKAGE_URL}
-`));
-      else
+      } else if (c) {
+        process.stderr.write(`Try manually updating with:
+`);
+        process.stderr.write(`  cd ~/.claude/local && npm update ${
+          {
+            ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
+            PACKAGE_URL: "@anthropic-ai/claude-code",
+            README_URL: "https://code.claude.com/docs/en/overview",
+            VERSION: "2.1.316",
+            FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
+            BUILD_TIME: "2026-10-30T23:28:13Z",
+            GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+            HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
+            DD_SOURCEMAP_GROUP: "default",
+          }.PACKAGE_URL
+        }
+`);
+      } else
         process.stderr.write(`Or consider using native installation with: claude install
 `);
       await gracefulShutdown(1);
       break;
     }
     case "in_progress":
-      (process.stderr.write(`Error: Another instance is currently performing an update
-`),
-        process.stderr.write(`Please wait and try again later
-`),
-        await gracefulShutdown(1));
+      process.stderr.write(`Error: Another instance is currently performing an update
+`);
+      process.stderr.write(`Please wait and try again later
+`);
+      await gracefulShutdown(1);
       break;
   }
   await gracefulShutdown(0);

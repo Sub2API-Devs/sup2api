@@ -10,33 +10,34 @@
  */
 import { getIsNonInteractiveSession } from "../../bootstrap/state.js";
 
+//@ chunk-e6aww6q8.js:1733646-1734080 fingerprint = rename (0.625)
 /**
  * /rename 命令对象（local-jsx）；描述：Rename the current conversation；别名 ["name"]；实现 chunk-wqa2f5xk.js 的 Hzi。
  */
-//@ chunk-e6aww6q8.js:1733646-1734080 fingerprint = rename (0.625)
 var renameCommandDefinition = {
-    type: "local-jsx",
-    name: "rename",
-    aliases: ["name"],
-    description: "Rename the current conversation",
-    immediate: !0,
-    argumentHint: "[name]",
-    requires: { ink: !0 },
-    load: () => import("./chunk-wqa2f5xk.js"),
+  type: "local-jsx",
+  name: "rename",
+  aliases: ["name"],
+  description: "Rename the current conversation",
+  immediate: true,
+  argumentHint: "[name]",
+  requires: {
+    ink: true,
   },
-  renameNonInteractiveCommand = {
-    type: "local",
-    name: "rename",
-    aliases: ["name"],
-    supportsNonInteractive: !0,
-    description: "Rename the current conversation",
-    argumentHint: "[name]",
-    isEnabled: () => getIsNonInteractiveSession(),
-    get isHidden() {
-      return !getIsNonInteractiveSession();
-    },
-    load: () => import("./chunk-5h69ret3.js"),
+  load: () => import("./chunk-wqa2f5xk.js"),
+};
+var renameNonInteractiveCommand = {
+  type: "local",
+  name: "rename",
+  aliases: ["name"],
+  supportsNonInteractive: true,
+  description: "Rename the current conversation",
+  argumentHint: "[name]",
+  isEnabled: () => getIsNonInteractiveSession(),
+  get isHidden() {
+    return !getIsNonInteractiveSession();
   },
-  renameCommand = renameCommandDefinition;
-
+  load: () => import("./chunk-5h69ret3.js"),
+};
+var renameCommand = renameCommandDefinition;
 export { renameCommand, renameNonInteractiveCommand };

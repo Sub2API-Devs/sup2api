@@ -6,59 +6,80 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../runtime/bun-runtime.js";
-import { uh } from "../../compile/codegen/index.js";
-import { ew } from "../../compile/util.js";
+import { require_codegen_2 } from "../../compile/codegen/index.js";
+import { require_util_2 } from "../../compile/util.js";
 
 //@ chunk-s82q9s4x.js:104592-105688 cjs-fingerprint
-var Ji = x(function (Gi) {
-  Object.defineProperty(Gi, "__esModule", { value: !0 });
-  var Re = uh(),
-    Jt = ew(),
-    Mp = {
-      message: ({ params: params }) => Re.str`must match "${params.ifClause}" schema`,
-      params: ({ params: params }) => Re._`{failingKeyword: ${params.ifClause}}`,
-    },
-    Ap = {
-      keyword: "if",
-      schemaType: ["object", "boolean"],
-      trackErrors: !0,
-      error: Mp,
-      code(e) {
-        let { gen: gen, parentSchema: parentSchema, it: it } = e;
-        if (parentSchema.then === void 0 && parentSchema.else === void 0)
-          Jt.checkStrictMode(it, '"if" without "then" and "else" is ignored');
-        let n = Hi(it, "then"),
-          o = Hi(it, "else");
-        if (!n && !o) return;
-        let i = gen.let("valid", !0),
-          a = gen.name("_valid");
-        if ((c(), e.reset(), n && o)) {
-          let l = gen.let("ifClause");
-          (e.setParams({ ifClause: l }), gen.if(a, u("then", l), u("else", l)));
-        } else if (n) gen.if(a, u("then"));
-        else gen.if(Re.not(a), u("else"));
-        e.pass(i, () => e.error(!0));
-        function c() {
-          let subschema = e.subschema(
-            { keyword: "if", compositeRule: !0, createErrors: !1, allErrors: !1 },
-            a,
+var require_if = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  var codegen_1 = require_codegen_2();
+  var util_1 = require_util_2();
+  var error = {
+    message: ({ params }) => codegen_1.str`must match "${params.ifClause}" schema`,
+    params: ({ params }) => codegen_1._`{failingKeyword: ${params.ifClause}}`,
+  };
+  var def = {
+    keyword: "if",
+    schemaType: ["object", "boolean"],
+    trackErrors: true,
+    error,
+    code(cxt) {
+      let { gen, parentSchema, it } = cxt;
+      if (parentSchema.then === undefined && parentSchema.else === undefined)
+        util_1.checkStrictMode(it, '"if" without "then" and "else" is ignored');
+      let hasThen = hasSchema(it, "then");
+      let hasElse = hasSchema(it, "else");
+      if (!hasThen && !hasElse) return;
+      let valid = gen.let("valid", true);
+      let schValid = gen.name("_valid");
+      validateIf();
+      cxt.reset();
+      if (hasThen && hasElse) {
+        let ifClause = gen.let("ifClause");
+        cxt.setParams({
+          ifClause,
+        });
+        gen.if(schValid, validateClause("then", ifClause), validateClause("else", ifClause));
+      } else if (hasThen) gen.if(schValid, validateClause("then"));
+      else gen.if(codegen_1.not(schValid), validateClause("else"));
+      cxt.pass(valid, () => cxt.error(true));
+      function validateIf() {
+        let schCxt = cxt.subschema(
+          {
+            keyword: "if",
+            compositeRule: true,
+            createErrors: false,
+            allErrors: false,
+          },
+          schValid,
+        );
+        cxt.mergeEvaluated(schCxt);
+      }
+      function validateClause(keyword, ifClause) {
+        return () => {
+          let schCxt = cxt.subschema(
+            {
+              keyword,
+            },
+            schValid,
           );
-          e.mergeEvaluated(subschema);
-        }
-        function u(l, f) {
-          return () => {
-            let subschema = e.subschema({ keyword: l }, a);
-            if ((gen.assign(i, a), e.mergeValidEvaluated(subschema, i), f)) gen.assign(f, Re._`${l}`);
-            else e.setParams({ ifClause: l });
-          };
-        }
-      },
-    };
-  function Hi(e, t) {
-    let r = e.schema[t];
-    return r !== void 0 && !Jt.alwaysValidSchema(e, r);
+          gen.assign(valid, schValid);
+          cxt.mergeValidEvaluated(schCxt, valid);
+          if (ifClause) gen.assign(ifClause, codegen_1._`${keyword}`);
+          else
+            cxt.setParams({
+              ifClause: keyword,
+            });
+        };
+      }
+    },
+  };
+  function hasSchema(it, keyword) {
+    let schema = it.schema[keyword];
+    return schema !== undefined && !util_1.alwaysValidSchema(it, schema);
   }
-  Gi.default = Ap;
+  cjsExports.default = def;
 });
-
-export { Ji };
+export { require_if };

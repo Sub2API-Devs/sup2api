@@ -5,21 +5,27 @@
  * pieces: chunk-5h78gfwc.js (1)
  * attribution: esm-fingerprint 1
  */
-import { ee, D } from "../lib/key.js";
-import { y } from "../util/base64url.js";
-import { U } from "../../node/esm/lib/invalid_key_input.js";
+import { isKeyObject, isCryptoKey } from "../lib/key.js";
+import { encode_2 } from "../util/base64url.js";
+import { message_3 } from "../../node/esm/lib/invalid_key_input.js";
 
 //@ chunk-5h78gfwc.js:23388-23811 esm-fingerprint
-async function Et(e) {
-  if (ee(e))
-    if (e.type === "secret") e = e.export();
-    else return e.export({ format: "jwk" });
-  if (e instanceof Uint8Array) return { kty: "oct", k: y(e) };
-  if (!D(e)) throw TypeError(U(e, "CryptoKey", "KeyObject", "Uint8Array"));
-  if (!e.extractable) throw TypeError("non-extractable CryptoKey cannot be exported as a JWK");
-  let { ext: ext, key_ops: key_ops, alg: alg, use: use, ...o } = await crypto.subtle.exportKey("jwk", e);
-  if (o.kty === "AKP") o.alg = alg;
-  return o;
+async function Et(key) {
+  if (isKeyObject(key))
+    if (key.type === "secret") key = key.export();
+    else
+      return key.export({
+        format: "jwk",
+      });
+  if (key instanceof Uint8Array)
+    return {
+      kty: "oct",
+      k: encode_2(key),
+    };
+  if (!isCryptoKey(key)) throw TypeError(message_3(key, "CryptoKey", "KeyObject", "Uint8Array"));
+  if (!key.extractable) throw TypeError("non-extractable CryptoKey cannot be exported as a JWK");
+  let { ext, key_ops, alg, use, ...jwk } = await crypto.subtle.exportKey("jwk", key);
+  if (jwk.kty === "AKP") jwk.alg = alg;
+  return jwk;
 }
-
 export { Et };

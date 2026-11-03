@@ -11,96 +11,106 @@
 import { containsAnyPlaceholder, startsWithAnyPlaceholder } from "../bash/ast.js";
 import { firstLineOf } from "../stringUtils.js";
 import { getPlatform } from "../platform.js";
-import { Qn } from "../pathClassification.js";
+import { isUncOrDevicePath } from "../pathClassification.js";
 import { readFlagWithOverride } from "../../services/analytics/flagOverrides.js";
-import { Qe } from "../../services/autoModeSetup/homeRepoScan.js";
+import { isValidRemotePathSegment } from "../../services/autoModeSetup/homeRepoScan.js";
 
+//@ chunk-82kqcve8.js:196286-196948 fingerprint = GIT_LOG_DISPLAY_FLAGS (0.352)
 /**
  * git 只读子命令共用的 flag 白名单片段（flag → 参数类型 none/string/number）。另含 %G / %(signature) 格式占位正则：会触发 gpg 验签（执行外部程序），所以格式串里出现即视为危险。
  */
-//@ chunk-82kqcve8.js:196286-196948 fingerprint = GIT_LOG_DISPLAY_FLAGS (0.352)
 var GIT_REF_SELECTION_FLAGS = {
-    "--all": "none",
-    "--branches": "none",
-    "--tags": "none",
-    "--remotes": "none",
-  },
-  GIT_DATE_FILTER_FLAGS = {
-    "--since": "string",
-    "--after": "string",
-    "--until": "string",
-    "--before": "string",
-  },
-  GIT_LOG_DISPLAY_FLAGS = {
-    "--oneline": "none",
-    "--graph": "none",
-    "--decorate": "none",
-    "--no-decorate": "none",
-    "--date": "string",
-    "--relative-date": "none",
-  },
-  GIT_COUNT_FLAGS = { "--max-count": "number", "-n": "number" },
-  GIT_STAT_FLAGS = {
-    "--stat": "none",
-    "--numstat": "none",
-    "--shortstat": "none",
-    "--name-only": "none",
-    "--name-status": "none",
-  },
-  GIT_COLOR_FLAGS = { "--color": "none", "--no-color": "none" },
-  GIT_PATCH_FLAGS = {
-    "--patch": "none",
-    "-p": "none",
-    "--no-patch": "none",
-    "--no-ext-diff": "none",
-    "-s": "none",
-  },
-  GIT_AUTHOR_FILTER_FLAGS = { "--author": "string", "--committer": "string", "--grep": "string" },
-  GIT_SIGNATURE_FORMAT_PATTERN = /%[-+ ]?G|%\(\*?signature/;
+  "--all": "none",
+  "--branches": "none",
+  "--tags": "none",
+  "--remotes": "none",
+};
+var GIT_DATE_FILTER_FLAGS = {
+  "--since": "string",
+  "--after": "string",
+  "--until": "string",
+  "--before": "string",
+};
+var GIT_LOG_DISPLAY_FLAGS = {
+  "--oneline": "none",
+  "--graph": "none",
+  "--decorate": "none",
+  "--no-decorate": "none",
+  "--date": "string",
+  "--relative-date": "none",
+};
+var GIT_COUNT_FLAGS = {
+  "--max-count": "number",
+  "-n": "number",
+};
+var GIT_STAT_FLAGS = {
+  "--stat": "none",
+  "--numstat": "none",
+  "--shortstat": "none",
+  "--name-only": "none",
+  "--name-status": "none",
+};
+var GIT_COLOR_FLAGS = {
+  "--color": "none",
+  "--no-color": "none",
+};
+var GIT_PATCH_FLAGS = {
+  "--patch": "none",
+  "-p": "none",
+  "--no-patch": "none",
+  "--no-ext-diff": "none",
+  "-s": "none",
+};
+var GIT_AUTHOR_FILTER_FLAGS = {
+  "--author": "string",
+  "--committer": "string",
+  "--grep": "string",
+};
+var GIT_SIGNATURE_FORMAT_PATTERN = /%[-+ ]?G|%\(\*?signature/;
 //@ chunk-82kqcve8.js:196948-196994 layout
 function mentionsSignature(e) {
   return e.includes("signature");
 }
 //@ chunk-82kqcve8.js:196994-197069 layout
 var BUILTIN_PRETTY_FORMATS = new Set(["oneline", "short", "medium", "full", "fuller", "email", "raw"]);
+//@ chunk-82kqcve8.js:197069-197210 layout
 /**
  * --format/--pretty 的值不是内置格式名（oneline/short/…）即视为自定义格式（含 %、format:、tformat:）。
  */
-//@ chunk-82kqcve8.js:197069-197210 layout
 function isCustomPrettyFormat(e) {
-  if (e === "") return !1;
-  if (e.includes("%")) return !1;
-  if (e.startsWith("format:") || e.startsWith("tformat:")) return !1;
+  if (e === "") return false;
+  if (e.includes("%")) return false;
+  if (e.startsWith("format:") || e.startsWith("tformat:")) return false;
   return !BUILTIN_PRETTY_FORMATS.has(e);
 }
+//@ chunk-82kqcve8.js:197210-197581 layout
 /**
  * git 参数里 --format/--pretty/--sort/--group 的值含 ~ 展开、占位符、签名格式或自定义 pretty 格式时返回 true。
  */
-//@ chunk-82kqcve8.js:197210-197581 layout
 function hasDangerousGitFormatArg(e) {
   let n = (r) =>
     hasTildeExpansion([r]) ||
     containsAnyPlaceholder(r) ||
     GIT_SIGNATURE_FORMAT_PATTERN.test(r) ||
     mentionsSignature(r);
-  for (let r = 0; r < e.length; r++) {
-    let s = e[r];
-    if (GIT_SIGNATURE_FORMAT_PATTERN.test(s)) return !0;
+  for (let j = 0; j < e.length; j++) {
+    let s = e[j];
+    if (GIT_SIGNATURE_FORMAT_PATTERN.test(s)) return true;
     for (let h of ["--format", "--pretty", "--sort", "--group"]) {
       let y;
-      if (s === h && r + 1 < e.length) y = e[r + 1];
+      if (s === h && j + 1 < e.length) y = e[j + 1];
       else if (s.startsWith(`${h}=`)) y = s.slice(h.length + 1);
-      if (y === void 0) continue;
-      if (n(y)) return !0;
-      if ((h === "--format" || h === "--pretty") && isCustomPrettyFormat(y)) return !0;
+      if (y === undefined) continue;
+      if (n(y)) return true;
+      if ((h === "--format" || h === "--pretty") && isCustomPrettyFormat(y)) return true;
     }
   }
-  return !1;
+  return false;
 }
+//@ chunk-82kqcve8.js:197581-208126 fingerprint = GIT_READ_ONLY_COMMANDS (0.995)
 /**
  * git 只读子命令白名单（git diff/log/show/status/blame/ls-files/rev-parse/branch/tag/worktree list 等 24 项）：每项 safeFlags + 可选 additionalCommandIsDangerousCallback（拦格式串、写操作参数）。
  */
-//@ chunk-82kqcve8.js:197581-208126 fingerprint = GIT_READ_ONLY_COMMANDS (0.995)
 var GIT_READ_ONLY_COMMANDS = {
   "git diff": {
     safeFlags: {
@@ -250,18 +260,22 @@ var GIT_READ_ONLY_COMMANDS = {
       ...GIT_COUNT_FLAGS,
       ...GIT_AUTHOR_FILTER_FLAGS,
     },
-    additionalCommandIsDangerousCallback: (e, n) => {
-      let r = new Set(["show", "list"]),
-        s = new Set(["expire", "delete", "exists", "drop", "write"]),
-        h = n[0];
-      if (h && !h.startsWith("-") && !r.has(h)) return !0;
-      for (let y of n) if (s.has(y)) return !0;
-      return !1;
+    additionalCommandIsDangerousCallback: (_rawCommand, args) => {
+      let r = new Set(["show", "list"]);
+      let DANGEROUS_SUBCOMMANDS = new Set(["expire", "delete", "exists", "drop", "write"]);
+      let h = args[0];
+      if (h && !h.startsWith("-") && !r.has(h)) return true;
+      for (let arg of args) if (DANGEROUS_SUBCOMMANDS.has(arg)) return true;
+      return false;
     },
   },
   "git stash list": {
-    safeFlags: { ...GIT_LOG_DISPLAY_FLAGS, ...GIT_REF_SELECTION_FLAGS, ...GIT_COUNT_FLAGS },
-    respectsDoubleDash: !1,
+    safeFlags: {
+      ...GIT_LOG_DISPLAY_FLAGS,
+      ...GIT_REF_SELECTION_FLAGS,
+      ...GIT_COUNT_FLAGS,
+    },
+    respectsDoubleDash: false,
   },
   "git ls-remote": {
     safeFlags: {
@@ -280,21 +294,21 @@ var GIT_READ_ONLY_COMMANDS = {
       "--sort": "string",
     },
     additionalCommandIsDangerousCallback: (e, n) => {
-      if (hasDangerousGitFormatArg(n)) return !0;
-      let r = !1;
-      for (let s = 0; s < n.length; s++) {
-        let h = n[s];
+      if (hasDangerousGitFormatArg(n)) return true;
+      let r = false;
+      for (let j = 0; j < n.length; j++) {
+        let h = n[j];
         if (!r && h === "--") {
-          r = !0;
+          r = true;
           continue;
         }
         if (!r && (!h || h.startsWith("-"))) {
-          if (h === "--sort") s++;
+          if (h === "--sort") j++;
           continue;
         }
-        return !0;
+        return true;
       }
-      return !1;
+      return false;
     },
   },
   "git status": {
@@ -349,7 +363,7 @@ var GIT_READ_ONLY_COMMANDS = {
       "-l": "none",
       "-t": "none",
     },
-    respectsDoubleDash: !1,
+    respectsDoubleDash: false,
   },
   "git ls-files": {
     safeFlags: {
@@ -410,20 +424,26 @@ var GIT_READ_ONLY_COMMANDS = {
     },
   },
   "git remote show": {
-    safeFlags: { "-n": "none" },
-    additionalCommandIsDangerousCallback: (e, n) => {
-      let index = n.indexOf("--"),
-        s = index === -1 ? n : n.slice(0, index),
-        h = index === -1 ? [] : n.slice(index + 1),
-        combined = s.filter((w) => w !== "-n").concat(h);
-      if (combined.length !== 1) return !0;
-      if (!s.includes("-n")) return !0;
+    safeFlags: {
+      "-n": "none",
+    },
+    additionalCommandIsDangerousCallback: (_rawCommand, n) => {
+      let index = n.indexOf("--");
+      let s = index === -1 ? n : n.slice(0, index);
+      let h = index === -1 ? [] : n.slice(index + 1);
+      let combined = s.filter((w) => w !== "-n").concat(h);
+      if (combined.length !== 1) return true;
+      if (!s.includes("-n")) return true;
       return !/^[a-zA-Z0-9_][a-zA-Z0-9_-]*$/.test(combined[0]);
     },
   },
   "git remote": {
-    safeFlags: { "-v": "none", "--verbose": "none" },
-    additionalCommandIsDangerousCallback: (e, n) => n.some((r) => r !== "-v" && r !== "--verbose"),
+    safeFlags: {
+      "-v": "none",
+      "--verbose": "none",
+    },
+    additionalCommandIsDangerousCallback: (_rawCommand, args) =>
+      args.some((arg) => arg !== "-v" && arg !== "--verbose"),
   },
   "git merge-base": {
     safeFlags: {
@@ -593,7 +613,12 @@ var GIT_READ_ONLY_COMMANDS = {
     },
   },
   "git worktree list": {
-    safeFlags: { "--porcelain": "none", "-v": "none", "--verbose": "none", "--expire": "string" },
+    safeFlags: {
+      "--porcelain": "none",
+      "-v": "none",
+      "--verbose": "none",
+      "--expire": "string",
+    },
   },
   "git tag": {
     safeFlags: {
@@ -612,50 +637,51 @@ var GIT_READ_ONLY_COMMANDS = {
       "-i": "none",
       "--ignore-case": "none",
     },
-    additionalCommandIsDangerousCallback: (e, n) => {
-      if (hasDangerousGitFormatArg(n)) return !0;
-      let r = new Set([
-          "--contains",
-          "--no-contains",
-          "--merged",
-          "--no-merged",
-          "--points-at",
-          "--sort",
-          "--format",
-          "-n",
-        ]),
-        s = 0,
-        h = !1,
-        y = !1;
-      while (s < n.length) {
-        let w = n[s];
-        if (!w) {
-          s++;
+    additionalCommandIsDangerousCallback: (_rawCommand, args) => {
+      if (hasDangerousGitFormatArg(args)) return true;
+      let flagsWithArgs = new Set([
+        "--contains",
+        "--no-contains",
+        "--merged",
+        "--no-merged",
+        "--points-at",
+        "--sort",
+        "--format",
+        "-n",
+      ]);
+      let i = 0;
+      let seenListFlag = false;
+      let seenDashDash = false;
+      while (i < args.length) {
+        let token = args[i];
+        if (!token) {
+          i++;
           continue;
         }
-        if (w === "--" && !y) {
-          ((y = !0), s++);
+        if (token === "--" && !seenDashDash) {
+          seenDashDash = true;
+          i++;
           continue;
         }
-        if (!y && w.startsWith("-")) {
-          if (w === "--list" || w === "-l") h = !0;
+        if (!seenDashDash && token.startsWith("-")) {
+          if (token === "--list" || token === "-l") seenListFlag = true;
           else if (
-            w[0] === "-" &&
-            w[1] !== "-" &&
-            w.length > 2 &&
-            !w.includes("=") &&
-            w.slice(1).includes("l")
+            token[0] === "-" &&
+            token[1] !== "-" &&
+            token.length > 2 &&
+            !token.includes("=") &&
+            token.slice(1).includes("l")
           )
-            h = !0;
-          if (w.includes("=")) s++;
-          else if (r.has(w)) s += 2;
-          else s++;
+            seenListFlag = true;
+          if (token.includes("=")) i++;
+          else if (flagsWithArgs.has(token)) i += 2;
+          else i++;
         } else {
-          if (!h) return !0;
-          s++;
+          if (!seenListFlag) return true;
+          i++;
         }
       }
-      return !1;
+      return false;
     },
   },
   "git branch": {
@@ -685,44 +711,53 @@ var GIT_READ_ONLY_COMMANDS = {
       "-i": "none",
       "--ignore-case": "none",
     },
-    additionalCommandIsDangerousCallback: (e, n) => {
-      if (hasDangerousGitFormatArg(n)) return !0;
-      let r = new Set(["--contains", "--no-contains", "--points-at", "--sort"]),
-        s = new Set(["--merged", "--no-merged"]),
-        h = 0,
-        y = "",
-        w = !1,
-        S = !1;
-      while (h < n.length) {
-        let R = n[h];
-        if (!R) {
-          h++;
+    additionalCommandIsDangerousCallback: (_rawCommand, args) => {
+      if (hasDangerousGitFormatArg(args)) return true;
+      let flagsWithArgs = new Set(["--contains", "--no-contains", "--points-at", "--sort"]);
+      let flagsWithOptionalArgs = new Set(["--merged", "--no-merged"]);
+      let i = 0;
+      let lastFlag = "";
+      let seenListFlag = false;
+      let seenDashDash = false;
+      while (i < args.length) {
+        let token = args[i];
+        if (!token) {
+          i++;
           continue;
         }
-        if (R === "--" && !S) {
-          ((S = !0), (y = ""), h++);
+        if (token === "--" && !seenDashDash) {
+          seenDashDash = true;
+          lastFlag = "";
+          i++;
           continue;
         }
-        if (!S && R.startsWith("-")) {
-          if (R === "--list" || R === "-l") w = !0;
+        if (!seenDashDash && token.startsWith("-")) {
+          if (token === "--list" || token === "-l") seenListFlag = true;
           else if (
-            R[0] === "-" &&
-            R[1] !== "-" &&
-            R.length > 2 &&
-            !R.includes("=") &&
-            R.slice(1).includes("l")
+            token[0] === "-" &&
+            token[1] !== "-" &&
+            token.length > 2 &&
+            !token.includes("=") &&
+            token.slice(1).includes("l")
           )
-            w = !0;
-          if (R.includes("=")) ((y = firstLineOf(R, "=")), h++);
-          else if (r.has(R)) ((y = R), (h += 2));
-          else ((y = R), h++);
+            seenListFlag = true;
+          if (token.includes("=")) {
+            lastFlag = firstLineOf(token, "=");
+            i++;
+          } else if (flagsWithArgs.has(token)) {
+            lastFlag = token;
+            i += 2;
+          } else {
+            lastFlag = token;
+            i++;
+          }
         } else {
-          let O = s.has(y);
-          if (!w && !O) return !0;
-          h++;
+          let lastFlagHasOptionalArg = flagsWithOptionalArgs.has(lastFlag);
+          if (!seenListFlag && !lastFlagHasOptionalArg) return true;
+          i++;
         }
       }
-      return !1;
+      return false;
     },
   },
 };
@@ -732,10 +767,10 @@ function hasTildeArg(e) {
 }
 //@ chunk-82kqcve8.js:208178-208199 layout
 var TILDE_EXPANSION_PATTERN = /(?:^|[=:])~/;
+//@ chunk-82kqcve8.js:208199-208280 layout
 /**
  * 参数里有会被 shell 展开的 ~（开头或 = / : 之后，或 ~ 与 { 同现）时返回 true。
  */
-//@ chunk-82kqcve8.js:208199-208280 layout
 function hasTildeExpansion(e) {
   return e.some((n) => TILDE_EXPANSION_PATTERN.test(n) || (n.includes("~") && n.includes("{")));
 }
@@ -745,401 +780,422 @@ var TILDE_USER_PATTERN = /^~(?!\/|$)/;
 function isTildeUserPath(pathOrCommand) {
   return TILDE_USER_PATTERN.test(pathOrCommand);
 }
+//@ chunk-82kqcve8.js:208334-208696 layout = ghIsDangerousCallback (1)
 /**
  * gh 只读命令的附加危险检查：参数含 ~、占位符、URL（://）、@ 或两个以上 '/'（可能指向其他主机/仓库）时视为危险。
  */
-//@ chunk-82kqcve8.js:208334-208696 layout = ghIsDangerousCallback (1)
 function ghIsDangerousCallback(_rawCommand, args) {
-  if (hasTildeArg(args)) return !0;
+  if (hasTildeArg(args)) return true;
   for (let token of args) {
     if (!token) continue;
     let value = token;
     if (token.startsWith("-")) {
       let eqIdx = token.indexOf("=");
       if (eqIdx === -1) continue;
-      if (((value = token.slice(eqIdx + 1)), !value)) continue;
+      value = token.slice(eqIdx + 1);
+      if (!value) continue;
     }
-    if (containsAnyPlaceholder(value)) return !0;
+    if (containsAnyPlaceholder(value)) return true;
     if (!value.includes("/") && !value.includes("://") && !value.includes("@")) continue;
-    if (value.includes("://")) return !0;
-    if (value.includes("@")) return !0;
-    if ((value.match(/\//g) || []).length >= 2) return !0;
+    if (value.includes("://")) return true;
+    if (value.includes("@")) return true;
+    if ((value.match(/\//g) || []).length >= 2) return true;
   }
-  return !1;
+  return false;
 }
+//@ chunk-82kqcve8.js:208696-215177 fingerprint = GH_READ_ONLY_COMMANDS (0.97)
 /**
  * gh 只读子命令白名单（pr/issue/repo/run/release/workflow/label/search 的 view/list/status 等）。
  */
-//@ chunk-82kqcve8.js:208696-215177 fingerprint = GH_READ_ONLY_COMMANDS (0.97)
 var GH_READ_ONLY_COMMANDS = {
-    "gh pr view": {
-      safeFlags: { "--json": "string", "--comments": "none", "--repo": "string", "-R": "string" },
-      additionalCommandIsDangerousCallback: ghIsDangerousCallback,
+  "gh pr view": {
+    safeFlags: {
+      "--json": "string",
+      "--comments": "none",
+      "--repo": "string",
+      "-R": "string",
     },
-    "gh pr list": {
-      safeFlags: {
-        "--state": "string",
-        "-s": "string",
-        "--author": "string",
-        "--assignee": "string",
-        "--label": "string",
-        "--limit": "number",
-        "-L": "number",
-        "--base": "string",
-        "--head": "string",
-        "--search": "string",
-        "--json": "string",
-        "--draft": "none",
-        "--app": "string",
-        "--repo": "string",
-        "-R": "string",
-      },
-      additionalCommandIsDangerousCallback: ghIsDangerousCallback,
+    additionalCommandIsDangerousCallback: ghIsDangerousCallback,
+  },
+  "gh pr list": {
+    safeFlags: {
+      "--state": "string",
+      "-s": "string",
+      "--author": "string",
+      "--assignee": "string",
+      "--label": "string",
+      "--limit": "number",
+      "-L": "number",
+      "--base": "string",
+      "--head": "string",
+      "--search": "string",
+      "--json": "string",
+      "--draft": "none",
+      "--app": "string",
+      "--repo": "string",
+      "-R": "string",
     },
-    "gh pr diff": {
-      safeFlags: {
-        "--color": "string",
-        "--name-only": "none",
-        "--patch": "none",
-        "--repo": "string",
-        "-R": "string",
-      },
-      additionalCommandIsDangerousCallback: ghIsDangerousCallback,
+    additionalCommandIsDangerousCallback: ghIsDangerousCallback,
+  },
+  "gh pr diff": {
+    safeFlags: {
+      "--color": "string",
+      "--name-only": "none",
+      "--patch": "none",
+      "--repo": "string",
+      "-R": "string",
     },
-    "gh pr checks": {
-      safeFlags: {
-        "--watch": "none",
-        "--required": "none",
-        "--fail-fast": "none",
-        "--json": "string",
-        "--interval": "number",
-        "--repo": "string",
-        "-R": "string",
-      },
-      additionalCommandIsDangerousCallback: ghIsDangerousCallback,
+    additionalCommandIsDangerousCallback: ghIsDangerousCallback,
+  },
+  "gh pr checks": {
+    safeFlags: {
+      "--watch": "none",
+      "--required": "none",
+      "--fail-fast": "none",
+      "--json": "string",
+      "--interval": "number",
+      "--repo": "string",
+      "-R": "string",
     },
-    "gh issue view": {
-      safeFlags: { "--json": "string", "--comments": "none", "--repo": "string", "-R": "string" },
-      additionalCommandIsDangerousCallback: ghIsDangerousCallback,
+    additionalCommandIsDangerousCallback: ghIsDangerousCallback,
+  },
+  "gh issue view": {
+    safeFlags: {
+      "--json": "string",
+      "--comments": "none",
+      "--repo": "string",
+      "-R": "string",
     },
-    "gh issue list": {
-      safeFlags: {
-        "--state": "string",
-        "-s": "string",
-        "--assignee": "string",
-        "--author": "string",
-        "--label": "string",
-        "--limit": "number",
-        "-L": "number",
-        "--milestone": "string",
-        "--search": "string",
-        "--json": "string",
-        "--app": "string",
-        "--repo": "string",
-        "-R": "string",
-      },
-      additionalCommandIsDangerousCallback: ghIsDangerousCallback,
+    additionalCommandIsDangerousCallback: ghIsDangerousCallback,
+  },
+  "gh issue list": {
+    safeFlags: {
+      "--state": "string",
+      "-s": "string",
+      "--assignee": "string",
+      "--author": "string",
+      "--label": "string",
+      "--limit": "number",
+      "-L": "number",
+      "--milestone": "string",
+      "--search": "string",
+      "--json": "string",
+      "--app": "string",
+      "--repo": "string",
+      "-R": "string",
     },
-    "gh repo view": {
-      safeFlags: { "--json": "string" },
-      additionalCommandIsDangerousCallback: ghIsDangerousCallback,
+    additionalCommandIsDangerousCallback: ghIsDangerousCallback,
+  },
+  "gh repo view": {
+    safeFlags: {
+      "--json": "string",
     },
-    "gh run list": {
-      safeFlags: {
-        "--branch": "string",
-        "-b": "string",
-        "--status": "string",
-        "-s": "string",
-        "--workflow": "string",
-        "-w": "string",
-        "--limit": "number",
-        "-L": "number",
-        "--json": "string",
-        "--repo": "string",
-        "-R": "string",
-        "--event": "string",
-        "-e": "string",
-        "--user": "string",
-        "-u": "string",
-        "--created": "string",
-        "--commit": "string",
-        "-c": "string",
-      },
-      additionalCommandIsDangerousCallback: ghIsDangerousCallback,
+    additionalCommandIsDangerousCallback: ghIsDangerousCallback,
+  },
+  "gh run list": {
+    safeFlags: {
+      "--branch": "string",
+      "-b": "string",
+      "--status": "string",
+      "-s": "string",
+      "--workflow": "string",
+      "-w": "string",
+      "--limit": "number",
+      "-L": "number",
+      "--json": "string",
+      "--repo": "string",
+      "-R": "string",
+      "--event": "string",
+      "-e": "string",
+      "--user": "string",
+      "-u": "string",
+      "--created": "string",
+      "--commit": "string",
+      "-c": "string",
     },
-    "gh run view": {
-      safeFlags: {
-        "--log": "none",
-        "--log-failed": "none",
-        "--exit-status": "none",
-        "--verbose": "none",
-        "-v": "none",
-        "--json": "string",
-        "--repo": "string",
-        "-R": "string",
-        "--job": "string",
-        "-j": "string",
-        "--attempt": "number",
-        "-a": "number",
-      },
-      additionalCommandIsDangerousCallback: ghIsDangerousCallback,
+    additionalCommandIsDangerousCallback: ghIsDangerousCallback,
+  },
+  "gh run view": {
+    safeFlags: {
+      "--log": "none",
+      "--log-failed": "none",
+      "--exit-status": "none",
+      "--verbose": "none",
+      "-v": "none",
+      "--json": "string",
+      "--repo": "string",
+      "-R": "string",
+      "--job": "string",
+      "-j": "string",
+      "--attempt": "number",
+      "-a": "number",
     },
-    "gh auth status": {
-      safeFlags: {
-        "--active": "none",
-        "-a": "none",
-        "--hostname": "string",
-        "-h": "string",
-        "--json": "string",
-      },
-      additionalCommandIsDangerousCallback: ghIsDangerousCallback,
+    additionalCommandIsDangerousCallback: ghIsDangerousCallback,
+  },
+  "gh auth status": {
+    safeFlags: {
+      "--active": "none",
+      "-a": "none",
+      "--hostname": "string",
+      "-h": "string",
+      "--json": "string",
     },
-    "gh pr status": {
-      safeFlags: {
-        "--conflict-status": "none",
-        "-c": "none",
-        "--json": "string",
-        "--repo": "string",
-        "-R": "string",
-      },
-      additionalCommandIsDangerousCallback: ghIsDangerousCallback,
+    additionalCommandIsDangerousCallback: ghIsDangerousCallback,
+  },
+  "gh pr status": {
+    safeFlags: {
+      "--conflict-status": "none",
+      "-c": "none",
+      "--json": "string",
+      "--repo": "string",
+      "-R": "string",
     },
-    "gh issue status": {
-      safeFlags: { "--json": "string", "--repo": "string", "-R": "string" },
-      additionalCommandIsDangerousCallback: ghIsDangerousCallback,
+    additionalCommandIsDangerousCallback: ghIsDangerousCallback,
+  },
+  "gh issue status": {
+    safeFlags: {
+      "--json": "string",
+      "--repo": "string",
+      "-R": "string",
     },
-    "gh release list": {
-      safeFlags: {
-        "--exclude-drafts": "none",
-        "--exclude-pre-releases": "none",
-        "--json": "string",
-        "--limit": "number",
-        "-L": "number",
-        "--order": "string",
-        "-O": "string",
-        "--repo": "string",
-        "-R": "string",
-      },
-      additionalCommandIsDangerousCallback: ghIsDangerousCallback,
+    additionalCommandIsDangerousCallback: ghIsDangerousCallback,
+  },
+  "gh release list": {
+    safeFlags: {
+      "--exclude-drafts": "none",
+      "--exclude-pre-releases": "none",
+      "--json": "string",
+      "--limit": "number",
+      "-L": "number",
+      "--order": "string",
+      "-O": "string",
+      "--repo": "string",
+      "-R": "string",
     },
-    "gh release view": {
-      safeFlags: { "--json": "string", "--repo": "string", "-R": "string" },
-      additionalCommandIsDangerousCallback: ghIsDangerousCallback,
+    additionalCommandIsDangerousCallback: ghIsDangerousCallback,
+  },
+  "gh release view": {
+    safeFlags: {
+      "--json": "string",
+      "--repo": "string",
+      "-R": "string",
     },
-    "gh workflow list": {
-      safeFlags: {
-        "--all": "none",
-        "-a": "none",
-        "--json": "string",
-        "--limit": "number",
-        "-L": "number",
-        "--repo": "string",
-        "-R": "string",
-      },
-      additionalCommandIsDangerousCallback: ghIsDangerousCallback,
+    additionalCommandIsDangerousCallback: ghIsDangerousCallback,
+  },
+  "gh workflow list": {
+    safeFlags: {
+      "--all": "none",
+      "-a": "none",
+      "--json": "string",
+      "--limit": "number",
+      "-L": "number",
+      "--repo": "string",
+      "-R": "string",
     },
-    "gh workflow view": {
-      safeFlags: {
-        "--ref": "string",
-        "-r": "string",
-        "--yaml": "none",
-        "-y": "none",
-        "--repo": "string",
-        "-R": "string",
-      },
-      additionalCommandIsDangerousCallback: ghIsDangerousCallback,
+    additionalCommandIsDangerousCallback: ghIsDangerousCallback,
+  },
+  "gh workflow view": {
+    safeFlags: {
+      "--ref": "string",
+      "-r": "string",
+      "--yaml": "none",
+      "-y": "none",
+      "--repo": "string",
+      "-R": "string",
     },
-    "gh label list": {
-      safeFlags: {
-        "--json": "string",
-        "--limit": "number",
-        "-L": "number",
-        "--order": "string",
-        "--search": "string",
-        "-S": "string",
-        "--sort": "string",
-        "--repo": "string",
-        "-R": "string",
-      },
-      additionalCommandIsDangerousCallback: ghIsDangerousCallback,
+    additionalCommandIsDangerousCallback: ghIsDangerousCallback,
+  },
+  "gh label list": {
+    safeFlags: {
+      "--json": "string",
+      "--limit": "number",
+      "-L": "number",
+      "--order": "string",
+      "--search": "string",
+      "-S": "string",
+      "--sort": "string",
+      "--repo": "string",
+      "-R": "string",
     },
-    "gh search repos": {
-      safeFlags: {
-        "--archived": "none",
-        "--created": "string",
-        "--followers": "string",
-        "--forks": "string",
-        "--good-first-issues": "string",
-        "--help-wanted-issues": "string",
-        "--include-forks": "string",
-        "--json": "string",
-        "--language": "string",
-        "--license": "string",
-        "--limit": "number",
-        "-L": "number",
-        "--match": "string",
-        "--number-topics": "string",
-        "--order": "string",
-        "--owner": "string",
-        "--size": "string",
-        "--sort": "string",
-        "--stars": "string",
-        "--topic": "string",
-        "--updated": "string",
-        "--visibility": "string",
-      },
-    },
-    "gh search issues": {
-      safeFlags: {
-        "--app": "string",
-        "--assignee": "string",
-        "--author": "string",
-        "--closed": "string",
-        "--commenter": "string",
-        "--comments": "string",
-        "--created": "string",
-        "--include-prs": "none",
-        "--interactions": "string",
-        "--involves": "string",
-        "--json": "string",
-        "--label": "string",
-        "--language": "string",
-        "--limit": "number",
-        "-L": "number",
-        "--locked": "none",
-        "--match": "string",
-        "--mentions": "string",
-        "--milestone": "string",
-        "--no-assignee": "none",
-        "--no-label": "none",
-        "--no-milestone": "none",
-        "--no-project": "none",
-        "--order": "string",
-        "--owner": "string",
-        "--project": "string",
-        "--reactions": "string",
-        "--repo": "string",
-        "-R": "string",
-        "--sort": "string",
-        "--state": "string",
-        "--team-mentions": "string",
-        "--updated": "string",
-        "--visibility": "string",
-      },
-    },
-    "gh search prs": {
-      safeFlags: {
-        "--app": "string",
-        "--assignee": "string",
-        "--author": "string",
-        "--base": "string",
-        "-B": "string",
-        "--checks": "string",
-        "--closed": "string",
-        "--commenter": "string",
-        "--comments": "string",
-        "--created": "string",
-        "--draft": "none",
-        "--head": "string",
-        "-H": "string",
-        "--interactions": "string",
-        "--involves": "string",
-        "--json": "string",
-        "--label": "string",
-        "--language": "string",
-        "--limit": "number",
-        "-L": "number",
-        "--locked": "none",
-        "--match": "string",
-        "--mentions": "string",
-        "--merged": "none",
-        "--merged-at": "string",
-        "--milestone": "string",
-        "--no-assignee": "none",
-        "--no-label": "none",
-        "--no-milestone": "none",
-        "--no-project": "none",
-        "--order": "string",
-        "--owner": "string",
-        "--project": "string",
-        "--reactions": "string",
-        "--repo": "string",
-        "-R": "string",
-        "--review": "string",
-        "--review-requested": "string",
-        "--reviewed-by": "string",
-        "--sort": "string",
-        "--state": "string",
-        "--team-mentions": "string",
-        "--updated": "string",
-        "--visibility": "string",
-      },
-    },
-    "gh search commits": {
-      safeFlags: {
-        "--author": "string",
-        "--author-date": "string",
-        "--author-email": "string",
-        "--author-name": "string",
-        "--committer": "string",
-        "--committer-date": "string",
-        "--committer-email": "string",
-        "--committer-name": "string",
-        "--hash": "string",
-        "--json": "string",
-        "--limit": "number",
-        "-L": "number",
-        "--merge": "none",
-        "--order": "string",
-        "--owner": "string",
-        "--parent": "string",
-        "--repo": "string",
-        "-R": "string",
-        "--sort": "string",
-        "--tree": "string",
-        "--visibility": "string",
-      },
-    },
-    "gh search code": {
-      safeFlags: {
-        "--extension": "string",
-        "--filename": "string",
-        "--json": "string",
-        "--language": "string",
-        "--limit": "number",
-        "-L": "number",
-        "--match": "string",
-        "--owner": "string",
-        "--repo": "string",
-        "-R": "string",
-        "--size": "string",
-      },
+    additionalCommandIsDangerousCallback: ghIsDangerousCallback,
+  },
+  "gh search repos": {
+    safeFlags: {
+      "--archived": "none",
+      "--created": "string",
+      "--followers": "string",
+      "--forks": "string",
+      "--good-first-issues": "string",
+      "--help-wanted-issues": "string",
+      "--include-forks": "string",
+      "--json": "string",
+      "--language": "string",
+      "--license": "string",
+      "--limit": "number",
+      "-L": "number",
+      "--match": "string",
+      "--number-topics": "string",
+      "--order": "string",
+      "--owner": "string",
+      "--size": "string",
+      "--sort": "string",
+      "--stars": "string",
+      "--topic": "string",
+      "--updated": "string",
+      "--visibility": "string",
     },
   },
-  DOCKER_DANGEROUS_FLAGS = [
-    "-H",
-    "-c",
-    "-r",
-    "--host",
-    "--context",
-    "--config",
-    "--tlscacert",
-    "--tlscert",
-    "--tlskey",
-    "--url",
-    "--connection",
-    "--identity",
-    "--remote",
-    "--module",
-    "--out",
-  ],
-  DOCKER_DANGEROUS_SHORT_FLAG_CHARS = new Set(
-    DOCKER_DANGEROUS_FLAGS.filter((e) => e.length === 2).map((e) => e[1]),
-  );
+  "gh search issues": {
+    safeFlags: {
+      "--app": "string",
+      "--assignee": "string",
+      "--author": "string",
+      "--closed": "string",
+      "--commenter": "string",
+      "--comments": "string",
+      "--created": "string",
+      "--include-prs": "none",
+      "--interactions": "string",
+      "--involves": "string",
+      "--json": "string",
+      "--label": "string",
+      "--language": "string",
+      "--limit": "number",
+      "-L": "number",
+      "--locked": "none",
+      "--match": "string",
+      "--mentions": "string",
+      "--milestone": "string",
+      "--no-assignee": "none",
+      "--no-label": "none",
+      "--no-milestone": "none",
+      "--no-project": "none",
+      "--order": "string",
+      "--owner": "string",
+      "--project": "string",
+      "--reactions": "string",
+      "--repo": "string",
+      "-R": "string",
+      "--sort": "string",
+      "--state": "string",
+      "--team-mentions": "string",
+      "--updated": "string",
+      "--visibility": "string",
+    },
+  },
+  "gh search prs": {
+    safeFlags: {
+      "--app": "string",
+      "--assignee": "string",
+      "--author": "string",
+      "--base": "string",
+      "-B": "string",
+      "--checks": "string",
+      "--closed": "string",
+      "--commenter": "string",
+      "--comments": "string",
+      "--created": "string",
+      "--draft": "none",
+      "--head": "string",
+      "-H": "string",
+      "--interactions": "string",
+      "--involves": "string",
+      "--json": "string",
+      "--label": "string",
+      "--language": "string",
+      "--limit": "number",
+      "-L": "number",
+      "--locked": "none",
+      "--match": "string",
+      "--mentions": "string",
+      "--merged": "none",
+      "--merged-at": "string",
+      "--milestone": "string",
+      "--no-assignee": "none",
+      "--no-label": "none",
+      "--no-milestone": "none",
+      "--no-project": "none",
+      "--order": "string",
+      "--owner": "string",
+      "--project": "string",
+      "--reactions": "string",
+      "--repo": "string",
+      "-R": "string",
+      "--review": "string",
+      "--review-requested": "string",
+      "--reviewed-by": "string",
+      "--sort": "string",
+      "--state": "string",
+      "--team-mentions": "string",
+      "--updated": "string",
+      "--visibility": "string",
+    },
+  },
+  "gh search commits": {
+    safeFlags: {
+      "--author": "string",
+      "--author-date": "string",
+      "--author-email": "string",
+      "--author-name": "string",
+      "--committer": "string",
+      "--committer-date": "string",
+      "--committer-email": "string",
+      "--committer-name": "string",
+      "--hash": "string",
+      "--json": "string",
+      "--limit": "number",
+      "-L": "number",
+      "--merge": "none",
+      "--order": "string",
+      "--owner": "string",
+      "--parent": "string",
+      "--repo": "string",
+      "-R": "string",
+      "--sort": "string",
+      "--tree": "string",
+      "--visibility": "string",
+    },
+  },
+  "gh search code": {
+    safeFlags: {
+      "--extension": "string",
+      "--filename": "string",
+      "--json": "string",
+      "--language": "string",
+      "--limit": "number",
+      "-L": "number",
+      "--match": "string",
+      "--owner": "string",
+      "--repo": "string",
+      "-R": "string",
+      "--size": "string",
+    },
+  },
+};
+var DOCKER_DANGEROUS_FLAGS = [
+  "-H",
+  "-c",
+  "-r",
+  "--host",
+  "--context",
+  "--config",
+  "--tlscacert",
+  "--tlscert",
+  "--tlskey",
+  "--url",
+  "--connection",
+  "--identity",
+  "--remote",
+  "--module",
+  "--out",
+];
+var DOCKER_DANGEROUS_SHORT_FLAG_CHARS = new Set(
+  DOCKER_DANGEROUS_FLAGS.filter((e) => e.length === 2).map((e) => e[1]),
+);
+//@ chunk-82kqcve8.js:215177-215424 layout
 /**
  * docker 参数含改连接目标/配置的 flag（-H/--host/--context/--config/--tls*\/--url/…，含组合短 flag）时返回 true。
  */
-//@ chunk-82kqcve8.js:215177-215424 layout
 function hasDockerDangerousFlag(e) {
   return e.some((n) => {
     if (
@@ -1147,163 +1203,175 @@ function hasDockerDangerousFlag(e) {
         (s) => n === s || n.startsWith(`${s}=`) || (s.length === 2 && n.length > 2 && n.startsWith(s)),
       )
     )
-      return !0;
+      return true;
     let r = n.match(/^-([A-Za-z]+)/)?.[1];
-    if (r !== void 0 && r.length >= 2) {
-      for (let s of r) if (DOCKER_DANGEROUS_SHORT_FLAG_CHARS.has(s)) return !0;
+    if (r !== undefined && r.length >= 2) {
+      for (let s of r) if (DOCKER_DANGEROUS_SHORT_FLAG_CHARS.has(s)) return true;
     }
-    return !1;
+    return false;
   });
 }
+//@ chunk-82kqcve8.js:215424-217047 fingerprint = RIPGREP_READ_ONLY_COMMANDS (0.876)
 /**
  * docker logs/inspect 与 rg 的只读 flag 白名单：每个 flag 标注值类型；docker 另有回调拦截改连接目标的 flag、~ 展开与危险参数。
  */
-//@ chunk-82kqcve8.js:215424-217047 fingerprint = RIPGREP_READ_ONLY_COMMANDS (0.876)
 var DOCKER_READ_ONLY_COMMANDS = {
-    "docker logs": {
-      safeFlags: {
-        "--follow": "none",
-        "-f": "none",
-        "--tail": "string",
-        "-n": "string",
-        "--timestamps": "none",
-        "-t": "none",
-        "--since": "string",
-        "--until": "string",
-        "--details": "none",
-      },
-      additionalCommandIsDangerousCallback: (e, n) =>
-        hasDockerDangerousFlag(n) || hasTildeExpansion(n) || n.some(containsAnyPlaceholder),
+  "docker logs": {
+    safeFlags: {
+      "--follow": "none",
+      "-f": "none",
+      "--tail": "string",
+      "-n": "string",
+      "--timestamps": "none",
+      "-t": "none",
+      "--since": "string",
+      "--until": "string",
+      "--details": "none",
     },
-    "docker inspect": {
-      safeFlags: { "--format": "string", "-f": "string", "--type": "string", "--size": "none", "-s": "none" },
-      additionalCommandIsDangerousCallback: (e, n) =>
-        hasDockerDangerousFlag(n) || hasTildeExpansion(n) || n.some(containsAnyPlaceholder),
+    additionalCommandIsDangerousCallback: (e, n) =>
+      hasDockerDangerousFlag(n) || hasTildeExpansion(n) || n.some(containsAnyPlaceholder),
+  },
+  "docker inspect": {
+    safeFlags: {
+      "--format": "string",
+      "-f": "string",
+      "--type": "string",
+      "--size": "none",
+      "-s": "none",
+    },
+    additionalCommandIsDangerousCallback: (e, n) =>
+      hasDockerDangerousFlag(n) || hasTildeExpansion(n) || n.some(containsAnyPlaceholder),
+  },
+};
+var RIPGREP_READ_ONLY_COMMANDS = {
+  rg: {
+    safeFlags: {
+      "-e": "string",
+      "--regexp": "string",
+      "-f": "string",
+      "-i": "none",
+      "--ignore-case": "none",
+      "-S": "none",
+      "--smart-case": "none",
+      "-F": "none",
+      "--fixed-strings": "none",
+      "-w": "none",
+      "--word-regexp": "none",
+      "-v": "none",
+      "--invert-match": "none",
+      "-c": "none",
+      "--count": "none",
+      "-l": "none",
+      "--files-with-matches": "none",
+      "--files-without-match": "none",
+      "-n": "none",
+      "--line-number": "none",
+      "-o": "none",
+      "--only-matching": "none",
+      "-A": "number",
+      "--after-context": "number",
+      "-B": "number",
+      "--before-context": "number",
+      "-C": "number",
+      "--context": "number",
+      "-H": "none",
+      "-h": "none",
+      "--heading": "none",
+      "--no-heading": "none",
+      "-q": "none",
+      "--quiet": "none",
+      "--column": "none",
+      "-g": "string",
+      "--glob": "string",
+      "-t": "string",
+      "--type": "string",
+      "-T": "string",
+      "--type-not": "string",
+      "--type-list": "none",
+      "--hidden": "none",
+      "--no-ignore": "none",
+      "-u": "none",
+      "-m": "number",
+      "--max-count": "number",
+      "-d": "number",
+      "--max-depth": "number",
+      "-a": "none",
+      "--text": "none",
+      "-L": "none",
+      "--follow": "none",
+      "--color": "string",
+      "--json": "none",
+      "--stats": "none",
+      "--help": "none",
+      "--version": "none",
+      "--debug": "none",
+      "--": "none",
     },
   },
-  RIPGREP_READ_ONLY_COMMANDS = {
-    rg: {
-      safeFlags: {
-        "-e": "string",
-        "--regexp": "string",
-        "-f": "string",
-        "-i": "none",
-        "--ignore-case": "none",
-        "-S": "none",
-        "--smart-case": "none",
-        "-F": "none",
-        "--fixed-strings": "none",
-        "-w": "none",
-        "--word-regexp": "none",
-        "-v": "none",
-        "--invert-match": "none",
-        "-c": "none",
-        "--count": "none",
-        "-l": "none",
-        "--files-with-matches": "none",
-        "--files-without-match": "none",
-        "-n": "none",
-        "--line-number": "none",
-        "-o": "none",
-        "--only-matching": "none",
-        "-A": "number",
-        "--after-context": "number",
-        "-B": "number",
-        "--before-context": "number",
-        "-C": "number",
-        "--context": "number",
-        "-H": "none",
-        "-h": "none",
-        "--heading": "none",
-        "--no-heading": "none",
-        "-q": "none",
-        "--quiet": "none",
-        "--column": "none",
-        "-g": "string",
-        "--glob": "string",
-        "-t": "string",
-        "--type": "string",
-        "-T": "string",
-        "--type-not": "string",
-        "--type-list": "none",
-        "--hidden": "none",
-        "--no-ignore": "none",
-        "-u": "none",
-        "-m": "number",
-        "--max-count": "number",
-        "-d": "number",
-        "--max-depth": "number",
-        "-a": "none",
-        "--text": "none",
-        "-L": "none",
-        "--follow": "none",
-        "--color": "string",
-        "--json": "none",
-        "--stats": "none",
-        "--help": "none",
-        "--version": "none",
-        "--debug": "none",
-        "--": "none",
-      },
-    },
-  },
-  DOCKER_BARE_READ_ONLY_COMMANDS = ["docker ps", "docker images"],
-  FLAG_WITH_INLINE_VALUE_PATTERN = /^--?[A-Za-z0-9][\w-]*=/,
-  WINDOWS_NT_DEVICE_PREFIX_PATTERN = /(?:^|[^A-Za-z0-9_])[\\/]\?\?(?:[\\/]|$)/;
+};
+var DOCKER_BARE_READ_ONLY_COMMANDS = ["docker ps", "docker images"];
+var FLAG_WITH_INLINE_VALUE_PATTERN = /^--?[A-Za-z0-9][\w-]*=/;
+var WINDOWS_NT_DEVICE_PREFIX_PATTERN = /(?:^|[^A-Za-z0-9_])[\\/]\?\?(?:[\\/]|$)/;
+//@ chunk-82kqcve8.js:217047-218015 layout
 /**
  * 仅 Windows：检测会触发 SMB/WebDAV 外连的 UNC 形式（\\server、//server、混合斜杠、@SSL@端口、DavWWWRoot、IPv4/IPv6 主机、\??\ 前缀）；isArgument 时还剥掉 flag 前缀与 `--x=` 再查。
  */
-//@ chunk-82kqcve8.js:217047-218015 layout
-function containsVulnerableUncPath(e, n = !1) {
-  if (getPlatform() !== "windows") return !1;
-  if (n && Qn(e)) return !0;
-  if (n && /^-[A-Za-z0-9]/.test(e)) {
-    let replaced = e.replace(/^(?:-[A-Za-z0-9]+)+/, "");
-    if (replaced.length > 0 && containsVulnerableUncPath(replaced, !0)) return !0;
+function containsVulnerableUncPath(pathOrCommand, n = false) {
+  if (getPlatform() !== "windows") return false;
+  if (n && isUncOrDevicePath(pathOrCommand)) return true;
+  if (n && /^-[A-Za-z0-9]/.test(pathOrCommand)) {
+    let replaced = pathOrCommand.replace(/^(?:-[A-Za-z0-9]+)+/, "");
+    if (replaced.length > 0 && containsVulnerableUncPath(replaced, true)) return true;
   }
-  if (n && FLAG_WITH_INLINE_VALUE_PATTERN.test(e)) {
-    let w = e;
+  if (n && FLAG_WITH_INLINE_VALUE_PATTERN.test(pathOrCommand)) {
+    let w = pathOrCommand;
     while (FLAG_WITH_INLINE_VALUE_PATTERN.test(w)) w = w.slice(w.indexOf("=") + 1);
-    if (w.length > 0 && containsVulnerableUncPath(w, !0)) return !0;
+    if (w.length > 0 && containsVulnerableUncPath(w, true)) return true;
   }
-  if (/\\\\[^ \t\r\n\f\v\\/]+(?:@(?:\d+|ssl))?(?:[\\/]|$|\s)/i.test(e)) return !0;
-  if (WINDOWS_NT_DEVICE_PREFIX_PATTERN.test(e)) return !0;
-  if (/(?<!:)\/\/[^ \t\r\n\f\v\\/]+(?:@(?:\d+|ssl))?(?:[\\/]|$|\s)/i.test(e)) return !0;
-  if ((n ? /(?<![:\w])\/\\{1,}[^ \t\r\n\f\v\\/]+[\\/]/ : /\/\\{2,}[^ \t\r\n\f\v\\/]/).test(e)) return !0;
-  if ((n ? /(?<![:\w])\\{1,}\/[^ \t\r\n\f\v\\/]+[\\/]/ : /\\{2,}\/[^ \t\r\n\f\v\\/]/).test(e)) return !0;
-  if (/@SSL@\d+/i.test(e) || /@\d+@SSL/i.test(e)) return !0;
-  if (/DavWWWRoot/i.test(e)) return !0;
+  if (/\\\\[^ \t\r\n\f\v\\/]+(?:@(?:\d+|ssl))?(?:[\\/]|$|\s)/i.test(pathOrCommand)) return true;
+  if (WINDOWS_NT_DEVICE_PREFIX_PATTERN.test(pathOrCommand)) return true;
+  if (/(?<!:)\/\/[^ \t\r\n\f\v\\/]+(?:@(?:\d+|ssl))?(?:[\\/]|$|\s)/i.test(pathOrCommand)) return true;
+  if ((n ? /(?<![:\w])\/\\{1,}[^ \t\r\n\f\v\\/]+[\\/]/ : /\/\\{2,}[^ \t\r\n\f\v\\/]/).test(pathOrCommand))
+    return true;
+  if ((n ? /(?<![:\w])\\{1,}\/[^ \t\r\n\f\v\\/]+[\\/]/ : /\\{2,}\/[^ \t\r\n\f\v\\/]/).test(pathOrCommand))
+    return true;
+  if (/@SSL@\d+/i.test(pathOrCommand) || /@\d+@SSL/i.test(pathOrCommand)) return true;
+  if (/DavWWWRoot/i.test(pathOrCommand)) return true;
   if (
-    /^\\\\(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})[\\/]/.test(e) ||
-    /^\/\/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})[\\/]/.test(e)
+    /^\\\\(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})[\\/]/.test(pathOrCommand) ||
+    /^\/\/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})[\\/]/.test(pathOrCommand)
   )
-    return !0;
-  if (/^\\\\(\[[\da-fA-F:]+\])[\\/]/.test(e) || /^\/\/(\[[\da-fA-F:]+\])[\\/]/.test(e)) return !0;
-  return !1;
+    return true;
+  if (
+    /^\\\\(\[[\da-fA-F:]+\])[\\/]/.test(pathOrCommand) ||
+    /^\/\/(\[[\da-fA-F:]+\])[\\/]/.test(pathOrCommand)
+  )
+    return true;
+  return false;
 }
 //@ chunk-82kqcve8.js:218015-218040 layout
 var FLAG_PATTERN = /^-[a-zA-Z0-9_-]/;
+//@ chunk-82kqcve8.js:218040-218105 layout
 /**
  * token 是否形如 flag：以 - 开头、长度大于 1 且符合 flag 正则。
  */
-//@ chunk-82kqcve8.js:218040-218105 layout
 function isFlagToken(e) {
   return e.startsWith("-") && e.length > 1 && FLAG_PATTERN.test(e);
 }
 //@ chunk-82kqcve8.js:218105-218134 layout
 var TENGU_AMBER_THIMBLE = "tengu_amber_thimble";
+//@ chunk-82kqcve8.js:218134-218339 fingerprint = validateFlagArgument (1)
 /**
  * 校验 flag 参数值是否符合类型：none 无值、number 纯数字、string 任意、char 单字符、{} / EOF 字面量。
  */
-//@ chunk-82kqcve8.js:218134-218339 fingerprint = validateFlagArgument (1)
 function validateFlagArgument(value, argType) {
   switch (argType) {
     case "none":
-      return !1;
+      return false;
     case "number":
       return /^\d+$/.test(value);
     case "string":
-      return !0;
+      return true;
     case "char":
       return value.length === 1;
     case "{}":
@@ -1311,60 +1379,71 @@ function validateFlagArgument(value, argType) {
     case "EOF":
       return value === "EOF";
     default:
-      return !1;
+      return false;
   }
 }
 //@ chunk-82kqcve8.js:218339-218382 layout
-var URL_SCHEME_SEPARATOR_PATTERN = /:[\\/]{2}/,
-  TENGU_JAUNTY_HONEY = "tengu_jaunty_honey";
+var URL_SCHEME_SEPARATOR_PATTERN = /:[\\/]{2}/;
+var TENGU_JAUNTY_HONEY = "tengu_jaunty_honey";
+//@ chunk-82kqcve8.js:218382-219856 fingerprint = validateFlags (0.839)
 /**
  * 按白名单逐个校验 token：未知 flag、需值却缺值、值以 - 开头、值类型不符一律 false；支持 `--`、组合短 flag（全为 none 型）、grep/rg 的 -A3 粘连数字、git 的 -<数字>、xargs 目标命令；Windows 上 git 参数含 :// 或占位符且 tengu_jaunty_honey 开时直接拒绝；tengu_amber_thimble 放宽 flag 识别。
  */
-//@ chunk-82kqcve8.js:218382-219856 fingerprint = validateFlags (0.839)
 function validateFlags(tokens, startIndex, config, options) {
-  let h = startIndex;
+  let i = startIndex;
   if (
     options?.commandName === "git" &&
     getPlatform() === "windows" &&
-    tokens.slice(startIndex).some((y) => URL_SCHEME_SEPARATOR_PATTERN.test(y) || containsAnyPlaceholder(y)) &&
-    readFlagWithOverride(TENGU_JAUNTY_HONEY, { safe: !0 })
+    tokens
+      .slice(startIndex)
+      .some((token) => URL_SCHEME_SEPARATOR_PATTERN.test(token) || containsAnyPlaceholder(token)) &&
+    readFlagWithOverride(TENGU_JAUNTY_HONEY, {
+      safe: true,
+    })
   )
-    return !1;
-  while (h < tokens.length) {
-    let y = tokens[h];
-    if (!y) {
-      h++;
+    return false;
+  while (i < tokens.length) {
+    let token = tokens[i];
+    if (!token) {
+      i++;
       continue;
     }
     if (
       options?.xargsTargetCommands &&
       options.commandName === "xargs" &&
-      (!y.startsWith("-") || y === "--")
+      (!token.startsWith("-") || token === "--")
     ) {
-      if (y === "--" && h + 1 < tokens.length) (h++, (y = tokens[h]));
-      if (y && options.xargsTargetCommands.includes(y)) break;
-      return !1;
+      if (token === "--" && i + 1 < tokens.length) {
+        i++;
+        token = tokens[i];
+      }
+      if (token && options.xargsTargetCommands.includes(token)) break;
+      return false;
     }
-    if (y === "--") {
-      if (config.respectsDoubleDash !== !1) {
-        h++;
+    if (token === "--") {
+      if (config.respectsDoubleDash !== false) {
+        i++;
         break;
       }
-      h++;
+      i++;
       continue;
     }
     if (
-      isFlagToken(y) ||
-      (y.startsWith("-") && y.length > 1 && readFlagWithOverride(TENGU_AMBER_THIMBLE, { safe: !0 }))
+      isFlagToken(token) ||
+      (token.startsWith("-") &&
+        token.length > 1 &&
+        readFlagWithOverride(TENGU_AMBER_THIMBLE, {
+          safe: true,
+        }))
     ) {
-      let hasEquals = y.includes("="),
-        [S, ...R] = y.split("="),
-        inlineValue = R.join("=");
-      if (!S) return !1;
-      let P = config.safeFlags[S];
-      if (!P) {
-        if (options?.commandName === "git" && S.match(/^-\d+$/)) {
-          h++;
+      let hasEquals = token.includes("=");
+      let [flag, ...valueParts] = token.split("=");
+      let inlineValue = valueParts.join("=");
+      if (!flag) return false;
+      let flagArgType = config.safeFlags[flag];
+      if (!flagArgType) {
+        if (options?.commandName === "git" && flag.match(/^-\d+$/)) {
+          i++;
           continue;
         }
         if (
@@ -1372,73 +1451,76 @@ function validateFlags(tokens, startIndex, config, options) {
             options?.commandName === "egrep" ||
             options?.commandName === "fgrep" ||
             options?.commandName === "rg") &&
-          S.startsWith("-") &&
-          !S.startsWith("--") &&
-          S.length > 2
+          flag.startsWith("-") &&
+          !flag.startsWith("--") &&
+          flag.length > 2
         ) {
-          let potentialFlag = S.substring(0, 2),
-            potentialValue = S.substring(2);
+          let potentialFlag = flag.substring(0, 2);
+          let potentialValue = flag.substring(2);
           if (config.safeFlags[potentialFlag] && /^\d+$/.test(potentialValue)) {
-            let G = config.safeFlags[potentialFlag];
-            if (G === "number" || G === "string")
-              if (validateFlagArgument(potentialValue, G)) {
-                h++;
+            let flagArgType = config.safeFlags[potentialFlag];
+            if (flagArgType === "number" || flagArgType === "string")
+              if (validateFlagArgument(potentialValue, flagArgType)) {
+                i++;
                 continue;
-              } else return !1;
+              } else return false;
           }
         }
-        if (S.startsWith("-") && !S.startsWith("--") && S.length > 2) {
-          for (let L = 1; L < S.length; L++) {
-            let singleFlag = "-" + S[L],
-              G = config.safeFlags[singleFlag];
-            if (!G) return !1;
-            if (G !== "none") return !1;
+        if (flag.startsWith("-") && !flag.startsWith("--") && flag.length > 2) {
+          for (let j_2 = 1; j_2 < flag.length; j_2++) {
+            let singleFlag = "-" + flag[j_2];
+            let flagType = config.safeFlags[singleFlag];
+            if (!flagType) return false;
+            if (flagType !== "none") return false;
           }
-          h++;
+          i++;
           continue;
-        } else return !1;
+        } else return false;
       }
-      if (P === "none") {
-        if (hasEquals) return !1;
-        h++;
+      if (flagArgType === "none") {
+        if (hasEquals) return false;
+        i++;
       } else {
         let argValue;
-        if (hasEquals) ((argValue = inlineValue), h++);
-        else {
-          if (h + 1 >= tokens.length || (tokens[h + 1] && isFlagToken(tokens[h + 1]))) return !1;
-          ((argValue = tokens[h + 1] || ""), (h += 2));
+        if (hasEquals) {
+          argValue = inlineValue;
+          i++;
+        } else {
+          if (i + 1 >= tokens.length || (tokens[i + 1] && isFlagToken(tokens[i + 1]))) return false;
+          argValue = tokens[i + 1] || "";
+          i += 2;
         }
-        if (startsWithAnyPlaceholder(argValue)) return !1;
-        if (P === "string" && argValue.startsWith("-"))
-          if (S === "--sort" && options?.commandName === "git" && argValue.match(/^-[a-zA-Z]/));
-          else return !1;
-        if (!validateFlagArgument(argValue, P)) return !1;
+        if (startsWithAnyPlaceholder(argValue)) return false;
+        if (flagArgType === "string" && argValue.startsWith("-"))
+          if (flag === "--sort" && options?.commandName === "git" && argValue.match(/^-[a-zA-Z]/));
+          else return false;
+        if (!validateFlagArgument(argValue, flagArgType)) return false;
       }
     } else {
-      if (containsAnyPlaceholder(y)) return !1;
-      h++;
+      if (containsAnyPlaceholder(token)) return false;
+      i++;
     }
   }
-  return !0;
+  return true;
 }
+//@ chunk-2a8yx6fc.js:24598-24834 fingerprint = ghIsDangerousCallback (1)
 /**
  * 从 git remote URL（scheme:// 或 scp 风格 host:path）取主机名，单字母主机（Windows 盘符）排除，主机名不合法返回 undefined。属于 auto mode 环境采集的 repo 信息，误归只读校验（旧版名 ghIsDangerousCallback 错配）。
  */
-//@ chunk-2a8yx6fc.js:24598-24834 fingerprint = ghIsDangerousCallback (1)
 function getRemoteHost(e) {
-  let index = e.indexOf("://"),
-    r;
+  let index = e.indexOf("://");
+  let r;
   if (index !== -1) {
-    let sliced = e.slice(index + 3),
-      index_2 = sliced.indexOf("/");
-    r = index_2 > 0 ? sliced.slice(0, index_2) : void 0;
+    let sliced = e.slice(index + 3);
+    let index_2 = sliced.indexOf("/");
+    r = index_2 > 0 ? sliced.slice(0, index_2) : undefined;
   } else {
     let index = e.indexOf(":");
-    if (((r = index > 0 ? e.slice(0, index) : void 0), r !== void 0 && r.length === 1)) r = void 0;
+    r = index > 0 ? e.slice(0, index) : undefined;
+    if (r !== undefined && r.length === 1) r = undefined;
   }
-  return r !== void 0 && Qe(r) ? r : void 0;
+  return r !== undefined && isValidRemotePathSegment(r) ? r : undefined;
 }
-
 export {
   containsVulnerableUncPath,
   getRemoteHost,

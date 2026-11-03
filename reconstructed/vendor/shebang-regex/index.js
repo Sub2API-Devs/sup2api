@@ -8,8 +8,7 @@
 import { x } from "../../runtime/bun-runtime.js";
 
 //@ chunk-m4p5zn6n.js:4874-4922 cjs-fingerprint
-var At = x(function (yi, Ot) {
-  Ot.exports = /^#!(.*)/;
+var require_shebang_regex = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = /^#!(.*)/;
 });
-
-export { At };
+export { require_shebang_regex };

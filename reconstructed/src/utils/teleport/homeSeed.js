@@ -11,5 +11,4 @@
 
 //@ chunk-w5z42609.js:191-220 placement
 var CCR_HOME_SEED_JSON = "ccr-home-seed.json";
-
 export { CCR_HOME_SEED_JSON };

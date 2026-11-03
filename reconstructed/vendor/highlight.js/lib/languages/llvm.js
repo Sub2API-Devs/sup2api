@@ -8,36 +8,79 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:258088-260823 cjs-fingerprint
-var Pr = x(function (WE, kr) {
-  function dp(e) {
-    let regex = e.regex,
-      n = /([-a-zA-Z$._][\w$.-]*)/,
-      a = { className: "type", begin: /\bi\d+(?=\s|\b)/ },
-      s = { className: "operator", relevance: 0, begin: /=/ },
-      o = { className: "punctuation", relevance: 0, begin: /,/ },
-      r = {
-        className: "number",
-        variants: [
-          { begin: /[su]?0[xX][KMLHR]?[a-fA-F0-9]+/ },
-          { begin: /[-+]?\d+(?:[.]\d+)?(?:[eE][-+]?\d+(?:[.]\d+)?)?/ },
-        ],
-        relevance: 0,
-      },
-      i = { className: "symbol", variants: [{ begin: /^\s*[a-z]+:/ }], relevance: 0 },
-      c = {
-        className: "variable",
-        variants: [{ begin: regex.concat(/%/, n) }, { begin: /%\d+/ }, { begin: /#\d+/ }],
-      },
-      l = {
-        className: "title",
-        variants: [
-          { begin: regex.concat(/@/, n) },
-          { begin: /@\d+/ },
-          { begin: regex.concat(/!/, n) },
-          { begin: regex.concat(/!\d+/, n) },
-          { begin: /!\d+/ },
-        ],
-      };
+var require_llvm = x(function (cjsExports, cjsModule) {
+  function llvm(hljs) {
+    let regex = hljs.regex;
+    let IDENT_RE = /([-a-zA-Z$._][\w$.-]*)/;
+    let TYPE = {
+      className: "type",
+      begin: /\bi\d+(?=\s|\b)/,
+    };
+    let OPERATOR = {
+      className: "operator",
+      relevance: 0,
+      begin: /=/,
+    };
+    let PUNCTUATION = {
+      className: "punctuation",
+      relevance: 0,
+      begin: /,/,
+    };
+    let NUMBER = {
+      className: "number",
+      variants: [
+        {
+          begin: /[su]?0[xX][KMLHR]?[a-fA-F0-9]+/,
+        },
+        {
+          begin: /[-+]?\d+(?:[.]\d+)?(?:[eE][-+]?\d+(?:[.]\d+)?)?/,
+        },
+      ],
+      relevance: 0,
+    };
+    let LABEL = {
+      className: "symbol",
+      variants: [
+        {
+          begin: /^\s*[a-z]+:/,
+        },
+      ],
+      relevance: 0,
+    };
+    let VARIABLE = {
+      className: "variable",
+      variants: [
+        {
+          begin: regex.concat(/%/, IDENT_RE),
+        },
+        {
+          begin: /%\d+/,
+        },
+        {
+          begin: /#\d+/,
+        },
+      ],
+    };
+    let FUNCTION = {
+      className: "title",
+      variants: [
+        {
+          begin: regex.concat(/@/, IDENT_RE),
+        },
+        {
+          begin: /@\d+/,
+        },
+        {
+          begin: regex.concat(/!/, IDENT_RE),
+        },
+        {
+          begin: regex.concat(/!\d+/, IDENT_RE),
+        },
+        {
+          begin: /!\d+/,
+        },
+      ],
+    };
     return {
       name: "LLVM IR",
       keywords: {
@@ -46,25 +89,31 @@ var Pr = x(function (WE, kr) {
         type: "void half bfloat float double fp128 x86_fp80 ppc_fp128 x86_amx x86_mmx ptr label token metadata opaque",
       },
       contains: [
-        a,
-        e.COMMENT(/;\s*$/, null, { relevance: 0 }),
-        e.COMMENT(/;/, /$/),
+        TYPE,
+        hljs.COMMENT(/;\s*$/, null, {
+          relevance: 0,
+        }),
+        hljs.COMMENT(/;/, /$/),
         {
           className: "string",
           begin: /"/,
           end: /"/,
-          contains: [{ className: "char.escape", match: /\\\d\d/ }],
+          contains: [
+            {
+              className: "char.escape",
+              match: /\\\d\d/,
+            },
+          ],
         },
-        l,
-        o,
-        s,
-        c,
-        i,
-        r,
+        FUNCTION,
+        PUNCTUATION,
+        OPERATOR,
+        VARIABLE,
+        LABEL,
+        NUMBER,
       ],
     };
   }
-  kr.exports = dp;
+  cjsModule.exports = llvm;
 });
-
-export { Pr };
+export { require_llvm };

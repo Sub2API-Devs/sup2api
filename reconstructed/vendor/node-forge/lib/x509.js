@@ -6,1497 +6,1685 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { Tn } from "./forge.js";
-import { Xa } from "./aes.js";
-import { Xi } from "./asn1.js";
-import { bf } from "./des.js";
-import { bo } from "./md.js";
-import { EA } from "./mgf.js";
-import { Ja } from "./oids.js";
-import { sc } from "./pem.js";
-import { sm } from "./pss.js";
-import { xf } from "./rsa.js";
-import { Zn } from "./util.js";
+import { require_forge } from "./forge.js";
+import { require_aes } from "./aes.js";
+import { require_asn1 } from "./asn1.js";
+import { require_des } from "./des.js";
+import { require_md } from "./md.js";
+import { require_mgf } from "./mgf.js";
+import { require_oids } from "./oids.js";
+import { require_pem } from "./pem.js";
+import { require_pss } from "./pss.js";
+import { require_rsa } from "./rsa.js";
+import { require_util } from "./util.js";
 
 //@ chunk-fq0cr76a.js:160833-198140 cjs-fingerprint
-var am = x(function (Ofe, AA) {
-  var en = Tn();
-  Xa();
-  Xi();
-  bf();
-  bo();
-  EA();
-  Ja();
-  sc();
-  sm();
-  xf();
-  Zn();
-  var asn1 = en.asn1,
-    ht = (AA.exports = en.pki = en.pki || {}),
-    oids = ht.oids,
-    jr = {};
-  jr.CN = oids.commonName;
-  jr.commonName = "CN";
-  jr.C = oids.countryName;
-  jr.countryName = "C";
-  jr.L = oids.localityName;
-  jr.localityName = "L";
-  jr.ST = oids.stateOrProvinceName;
-  jr.stateOrProvinceName = "ST";
-  jr.O = oids.organizationName;
-  jr.organizationName = "O";
-  jr.OU = oids.organizationalUnitName;
-  jr.organizationalUnitName = "OU";
-  jr.E = oids.emailAddress;
-  jr.emailAddress = "E";
-  var publicKeyValidator = en.pki.rsa.publicKeyValidator,
-    LG = {
-      name: "Certificate",
-      tagClass: asn1.Class.UNIVERSAL,
-      type: asn1.Type.SEQUENCE,
-      constructed: !0,
-      value: [
-        {
-          name: "Certificate.TBSCertificate",
-          tagClass: asn1.Class.UNIVERSAL,
-          type: asn1.Type.SEQUENCE,
-          constructed: !0,
-          captureAsn1: "tbsCertificate",
-          value: [
-            {
-              name: "Certificate.TBSCertificate.version",
-              tagClass: asn1.Class.CONTEXT_SPECIFIC,
-              type: 0,
-              constructed: !0,
-              optional: !0,
-              value: [
-                {
-                  name: "Certificate.TBSCertificate.version.integer",
-                  tagClass: asn1.Class.UNIVERSAL,
-                  type: asn1.Type.INTEGER,
-                  constructed: !1,
-                  capture: "certVersion",
-                },
-              ],
-            },
-            {
-              name: "Certificate.TBSCertificate.serialNumber",
-              tagClass: asn1.Class.UNIVERSAL,
-              type: asn1.Type.INTEGER,
-              constructed: !1,
-              capture: "certSerialNumber",
-            },
-            {
-              name: "Certificate.TBSCertificate.signature",
-              tagClass: asn1.Class.UNIVERSAL,
-              type: asn1.Type.SEQUENCE,
-              constructed: !0,
-              value: [
-                {
-                  name: "Certificate.TBSCertificate.signature.algorithm",
-                  tagClass: asn1.Class.UNIVERSAL,
-                  type: asn1.Type.OID,
-                  constructed: !1,
-                  capture: "certinfoSignatureOid",
-                },
-                {
-                  name: "Certificate.TBSCertificate.signature.parameters",
-                  tagClass: asn1.Class.UNIVERSAL,
-                  optional: !0,
-                  captureAsn1: "certinfoSignatureParams",
-                },
-              ],
-            },
-            {
-              name: "Certificate.TBSCertificate.issuer",
-              tagClass: asn1.Class.UNIVERSAL,
-              type: asn1.Type.SEQUENCE,
-              constructed: !0,
-              captureAsn1: "certIssuer",
-            },
-            {
-              name: "Certificate.TBSCertificate.validity",
-              tagClass: asn1.Class.UNIVERSAL,
-              type: asn1.Type.SEQUENCE,
-              constructed: !0,
-              value: [
-                {
-                  name: "Certificate.TBSCertificate.validity.notBefore (utc)",
-                  tagClass: asn1.Class.UNIVERSAL,
-                  type: asn1.Type.UTCTIME,
-                  constructed: !1,
-                  optional: !0,
-                  capture: "certValidity1UTCTime",
-                },
-                {
-                  name: "Certificate.TBSCertificate.validity.notBefore (generalized)",
-                  tagClass: asn1.Class.UNIVERSAL,
-                  type: asn1.Type.GENERALIZEDTIME,
-                  constructed: !1,
-                  optional: !0,
-                  capture: "certValidity2GeneralizedTime",
-                },
-                {
-                  name: "Certificate.TBSCertificate.validity.notAfter (utc)",
-                  tagClass: asn1.Class.UNIVERSAL,
-                  type: asn1.Type.UTCTIME,
-                  constructed: !1,
-                  optional: !0,
-                  capture: "certValidity3UTCTime",
-                },
-                {
-                  name: "Certificate.TBSCertificate.validity.notAfter (generalized)",
-                  tagClass: asn1.Class.UNIVERSAL,
-                  type: asn1.Type.GENERALIZEDTIME,
-                  constructed: !1,
-                  optional: !0,
-                  capture: "certValidity4GeneralizedTime",
-                },
-              ],
-            },
-            {
-              name: "Certificate.TBSCertificate.subject",
-              tagClass: asn1.Class.UNIVERSAL,
-              type: asn1.Type.SEQUENCE,
-              constructed: !0,
-              captureAsn1: "certSubject",
-            },
-            publicKeyValidator,
-            {
-              name: "Certificate.TBSCertificate.issuerUniqueID",
-              tagClass: asn1.Class.CONTEXT_SPECIFIC,
-              type: 1,
-              constructed: !0,
-              optional: !0,
-              value: [
-                {
-                  name: "Certificate.TBSCertificate.issuerUniqueID.id",
-                  tagClass: asn1.Class.UNIVERSAL,
-                  type: asn1.Type.BITSTRING,
-                  constructed: !1,
-                  captureBitStringValue: "certIssuerUniqueId",
-                },
-              ],
-            },
-            {
-              name: "Certificate.TBSCertificate.subjectUniqueID",
-              tagClass: asn1.Class.CONTEXT_SPECIFIC,
-              type: 2,
-              constructed: !0,
-              optional: !0,
-              value: [
-                {
-                  name: "Certificate.TBSCertificate.subjectUniqueID.id",
-                  tagClass: asn1.Class.UNIVERSAL,
-                  type: asn1.Type.BITSTRING,
-                  constructed: !1,
-                  captureBitStringValue: "certSubjectUniqueId",
-                },
-              ],
-            },
-            {
-              name: "Certificate.TBSCertificate.extensions",
-              tagClass: asn1.Class.CONTEXT_SPECIFIC,
-              type: 3,
-              constructed: !0,
-              captureAsn1: "certExtensions",
-              optional: !0,
-            },
-          ],
-        },
-        {
-          name: "Certificate.signatureAlgorithm",
-          tagClass: asn1.Class.UNIVERSAL,
-          type: asn1.Type.SEQUENCE,
-          constructed: !0,
-          value: [
-            {
-              name: "Certificate.signatureAlgorithm.algorithm",
-              tagClass: asn1.Class.UNIVERSAL,
-              type: asn1.Type.OID,
-              constructed: !1,
-              capture: "certSignatureOid",
-            },
-            {
-              name: "Certificate.TBSCertificate.signature.parameters",
-              tagClass: asn1.Class.UNIVERSAL,
-              optional: !0,
-              captureAsn1: "certSignatureParams",
-            },
-          ],
-        },
-        {
-          name: "Certificate.signatureValue",
-          tagClass: asn1.Class.UNIVERSAL,
-          type: asn1.Type.BITSTRING,
-          constructed: !1,
-          captureBitStringValue: "certSignature",
-        },
-      ],
-    },
-    BG = {
-      name: "rsapss",
-      tagClass: asn1.Class.UNIVERSAL,
-      type: asn1.Type.SEQUENCE,
-      constructed: !0,
-      value: [
-        {
-          name: "rsapss.hashAlgorithm",
-          tagClass: asn1.Class.CONTEXT_SPECIFIC,
-          type: 0,
-          constructed: !0,
-          value: [
-            {
-              name: "rsapss.hashAlgorithm.AlgorithmIdentifier",
-              tagClass: asn1.Class.UNIVERSAL,
-              type: asn1.Class.SEQUENCE,
-              constructed: !0,
-              optional: !0,
-              value: [
-                {
-                  name: "rsapss.hashAlgorithm.AlgorithmIdentifier.algorithm",
-                  tagClass: asn1.Class.UNIVERSAL,
-                  type: asn1.Type.OID,
-                  constructed: !1,
-                  capture: "hashOid",
-                },
-              ],
-            },
-          ],
-        },
-        {
-          name: "rsapss.maskGenAlgorithm",
-          tagClass: asn1.Class.CONTEXT_SPECIFIC,
-          type: 1,
-          constructed: !0,
-          value: [
-            {
-              name: "rsapss.maskGenAlgorithm.AlgorithmIdentifier",
-              tagClass: asn1.Class.UNIVERSAL,
-              type: asn1.Class.SEQUENCE,
-              constructed: !0,
-              optional: !0,
-              value: [
-                {
-                  name: "rsapss.maskGenAlgorithm.AlgorithmIdentifier.algorithm",
-                  tagClass: asn1.Class.UNIVERSAL,
-                  type: asn1.Type.OID,
-                  constructed: !1,
-                  capture: "maskGenOid",
-                },
-                {
-                  name: "rsapss.maskGenAlgorithm.AlgorithmIdentifier.params",
-                  tagClass: asn1.Class.UNIVERSAL,
-                  type: asn1.Type.SEQUENCE,
-                  constructed: !0,
-                  value: [
-                    {
-                      name: "rsapss.maskGenAlgorithm.AlgorithmIdentifier.params.algorithm",
-                      tagClass: asn1.Class.UNIVERSAL,
-                      type: asn1.Type.OID,
-                      constructed: !1,
-                      capture: "maskGenHashOid",
-                    },
-                  ],
-                },
-              ],
-            },
-          ],
-        },
-        {
-          name: "rsapss.saltLength",
-          tagClass: asn1.Class.CONTEXT_SPECIFIC,
-          type: 2,
-          optional: !0,
-          value: [
-            {
-              name: "rsapss.saltLength.saltLength",
-              tagClass: asn1.Class.UNIVERSAL,
-              type: asn1.Class.INTEGER,
-              constructed: !1,
-              capture: "saltLength",
-            },
-          ],
-        },
-        {
-          name: "rsapss.trailerField",
-          tagClass: asn1.Class.CONTEXT_SPECIFIC,
-          type: 3,
-          optional: !0,
-          value: [
-            {
-              name: "rsapss.trailer.trailer",
-              tagClass: asn1.Class.UNIVERSAL,
-              type: asn1.Class.INTEGER,
-              constructed: !1,
-              capture: "trailer",
-            },
-          ],
-        },
-      ],
-    },
-    UG = {
-      name: "CertificationRequestInfo",
-      tagClass: asn1.Class.UNIVERSAL,
-      type: asn1.Type.SEQUENCE,
-      constructed: !0,
-      captureAsn1: "certificationRequestInfo",
-      value: [
-        {
-          name: "CertificationRequestInfo.integer",
-          tagClass: asn1.Class.UNIVERSAL,
-          type: asn1.Type.INTEGER,
-          constructed: !1,
-          capture: "certificationRequestInfoVersion",
-        },
-        {
-          name: "CertificationRequestInfo.subject",
-          tagClass: asn1.Class.UNIVERSAL,
-          type: asn1.Type.SEQUENCE,
-          constructed: !0,
-          captureAsn1: "certificationRequestInfoSubject",
-        },
-        publicKeyValidator,
-        {
-          name: "CertificationRequestInfo.attributes",
-          tagClass: asn1.Class.CONTEXT_SPECIFIC,
-          type: 0,
-          constructed: !0,
-          optional: !0,
-          capture: "certificationRequestInfoAttributes",
-          value: [
-            {
-              name: "CertificationRequestInfo.attributes",
-              tagClass: asn1.Class.UNIVERSAL,
-              type: asn1.Type.SEQUENCE,
-              constructed: !0,
-              value: [
-                {
-                  name: "CertificationRequestInfo.attributes.type",
-                  tagClass: asn1.Class.UNIVERSAL,
-                  type: asn1.Type.OID,
-                  constructed: !1,
-                },
-                {
-                  name: "CertificationRequestInfo.attributes.value",
-                  tagClass: asn1.Class.UNIVERSAL,
-                  type: asn1.Type.SET,
-                  constructed: !0,
-                },
-              ],
-            },
-          ],
-        },
-      ],
-    },
-    FG = {
-      name: "CertificationRequest",
-      tagClass: asn1.Class.UNIVERSAL,
-      type: asn1.Type.SEQUENCE,
-      constructed: !0,
-      captureAsn1: "csr",
-      value: [
-        UG,
-        {
-          name: "CertificationRequest.signatureAlgorithm",
-          tagClass: asn1.Class.UNIVERSAL,
-          type: asn1.Type.SEQUENCE,
-          constructed: !0,
-          value: [
-            {
-              name: "CertificationRequest.signatureAlgorithm.algorithm",
-              tagClass: asn1.Class.UNIVERSAL,
-              type: asn1.Type.OID,
-              constructed: !1,
-              capture: "csrSignatureOid",
-            },
-            {
-              name: "CertificationRequest.signatureAlgorithm.parameters",
-              tagClass: asn1.Class.UNIVERSAL,
-              optional: !0,
-              captureAsn1: "csrSignatureParams",
-            },
-          ],
-        },
-        {
-          name: "CertificationRequest.signature",
-          tagClass: asn1.Class.UNIVERSAL,
-          type: asn1.Type.BITSTRING,
-          constructed: !1,
-          captureBitStringValue: "csrSignature",
-        },
-      ],
-    };
-  ht.RDNAttributesAsArray = function (e, n) {
-    var r = [],
-      s,
-      h,
-      y;
-    for (var b = 0; b < e.value.length; ++b) {
-      s = e.value[b];
-      for (var S = 0; S < s.value.length; ++S) {
-        if (
-          ((y = {}),
-          (h = s.value[S]),
-          (y.type = asn1.derToOid(h.value[0].value)),
-          (y.value = h.value[1].value),
-          (y.valueTagClass = h.value[1].type),
-          y.type in oids)
-        ) {
-          if (((y.name = oids[y.type]), y.name in jr)) y.shortName = jr[y.name];
+var require_x509 = x(function (cjsExports, cjsModule) {
+  var forge = require_forge();
+  require_aes();
+  require_asn1();
+  require_des();
+  require_md();
+  require_mgf();
+  require_oids();
+  require_pem();
+  require_pss();
+  require_rsa();
+  require_util();
+  var asn1 = forge.asn1;
+  var pki = (cjsModule.exports = forge.pki = forge.pki || {});
+  var oids = pki.oids;
+  var _shortNames = {};
+  _shortNames.CN = oids.commonName;
+  _shortNames.commonName = "CN";
+  _shortNames.C = oids.countryName;
+  _shortNames.countryName = "C";
+  _shortNames.L = oids.localityName;
+  _shortNames.localityName = "L";
+  _shortNames.ST = oids.stateOrProvinceName;
+  _shortNames.stateOrProvinceName = "ST";
+  _shortNames.O = oids.organizationName;
+  _shortNames.organizationName = "O";
+  _shortNames.OU = oids.organizationalUnitName;
+  _shortNames.organizationalUnitName = "OU";
+  _shortNames.E = oids.emailAddress;
+  _shortNames.emailAddress = "E";
+  var publicKeyValidator = forge.pki.rsa.publicKeyValidator;
+  var x509CertificateValidator = {
+    name: "Certificate",
+    tagClass: asn1.Class.UNIVERSAL,
+    type: asn1.Type.SEQUENCE,
+    constructed: true,
+    value: [
+      {
+        name: "Certificate.TBSCertificate",
+        tagClass: asn1.Class.UNIVERSAL,
+        type: asn1.Type.SEQUENCE,
+        constructed: true,
+        captureAsn1: "tbsCertificate",
+        value: [
+          {
+            name: "Certificate.TBSCertificate.version",
+            tagClass: asn1.Class.CONTEXT_SPECIFIC,
+            type: 0,
+            constructed: true,
+            optional: true,
+            value: [
+              {
+                name: "Certificate.TBSCertificate.version.integer",
+                tagClass: asn1.Class.UNIVERSAL,
+                type: asn1.Type.INTEGER,
+                constructed: false,
+                capture: "certVersion",
+              },
+            ],
+          },
+          {
+            name: "Certificate.TBSCertificate.serialNumber",
+            tagClass: asn1.Class.UNIVERSAL,
+            type: asn1.Type.INTEGER,
+            constructed: false,
+            capture: "certSerialNumber",
+          },
+          {
+            name: "Certificate.TBSCertificate.signature",
+            tagClass: asn1.Class.UNIVERSAL,
+            type: asn1.Type.SEQUENCE,
+            constructed: true,
+            value: [
+              {
+                name: "Certificate.TBSCertificate.signature.algorithm",
+                tagClass: asn1.Class.UNIVERSAL,
+                type: asn1.Type.OID,
+                constructed: false,
+                capture: "certinfoSignatureOid",
+              },
+              {
+                name: "Certificate.TBSCertificate.signature.parameters",
+                tagClass: asn1.Class.UNIVERSAL,
+                optional: true,
+                captureAsn1: "certinfoSignatureParams",
+              },
+            ],
+          },
+          {
+            name: "Certificate.TBSCertificate.issuer",
+            tagClass: asn1.Class.UNIVERSAL,
+            type: asn1.Type.SEQUENCE,
+            constructed: true,
+            captureAsn1: "certIssuer",
+          },
+          {
+            name: "Certificate.TBSCertificate.validity",
+            tagClass: asn1.Class.UNIVERSAL,
+            type: asn1.Type.SEQUENCE,
+            constructed: true,
+            value: [
+              {
+                name: "Certificate.TBSCertificate.validity.notBefore (utc)",
+                tagClass: asn1.Class.UNIVERSAL,
+                type: asn1.Type.UTCTIME,
+                constructed: false,
+                optional: true,
+                capture: "certValidity1UTCTime",
+              },
+              {
+                name: "Certificate.TBSCertificate.validity.notBefore (generalized)",
+                tagClass: asn1.Class.UNIVERSAL,
+                type: asn1.Type.GENERALIZEDTIME,
+                constructed: false,
+                optional: true,
+                capture: "certValidity2GeneralizedTime",
+              },
+              {
+                name: "Certificate.TBSCertificate.validity.notAfter (utc)",
+                tagClass: asn1.Class.UNIVERSAL,
+                type: asn1.Type.UTCTIME,
+                constructed: false,
+                optional: true,
+                capture: "certValidity3UTCTime",
+              },
+              {
+                name: "Certificate.TBSCertificate.validity.notAfter (generalized)",
+                tagClass: asn1.Class.UNIVERSAL,
+                type: asn1.Type.GENERALIZEDTIME,
+                constructed: false,
+                optional: true,
+                capture: "certValidity4GeneralizedTime",
+              },
+            ],
+          },
+          {
+            name: "Certificate.TBSCertificate.subject",
+            tagClass: asn1.Class.UNIVERSAL,
+            type: asn1.Type.SEQUENCE,
+            constructed: true,
+            captureAsn1: "certSubject",
+          },
+          publicKeyValidator,
+          {
+            name: "Certificate.TBSCertificate.issuerUniqueID",
+            tagClass: asn1.Class.CONTEXT_SPECIFIC,
+            type: 1,
+            constructed: true,
+            optional: true,
+            value: [
+              {
+                name: "Certificate.TBSCertificate.issuerUniqueID.id",
+                tagClass: asn1.Class.UNIVERSAL,
+                type: asn1.Type.BITSTRING,
+                constructed: false,
+                captureBitStringValue: "certIssuerUniqueId",
+              },
+            ],
+          },
+          {
+            name: "Certificate.TBSCertificate.subjectUniqueID",
+            tagClass: asn1.Class.CONTEXT_SPECIFIC,
+            type: 2,
+            constructed: true,
+            optional: true,
+            value: [
+              {
+                name: "Certificate.TBSCertificate.subjectUniqueID.id",
+                tagClass: asn1.Class.UNIVERSAL,
+                type: asn1.Type.BITSTRING,
+                constructed: false,
+                captureBitStringValue: "certSubjectUniqueId",
+              },
+            ],
+          },
+          {
+            name: "Certificate.TBSCertificate.extensions",
+            tagClass: asn1.Class.CONTEXT_SPECIFIC,
+            type: 3,
+            constructed: true,
+            captureAsn1: "certExtensions",
+            optional: true,
+          },
+        ],
+      },
+      {
+        name: "Certificate.signatureAlgorithm",
+        tagClass: asn1.Class.UNIVERSAL,
+        type: asn1.Type.SEQUENCE,
+        constructed: true,
+        value: [
+          {
+            name: "Certificate.signatureAlgorithm.algorithm",
+            tagClass: asn1.Class.UNIVERSAL,
+            type: asn1.Type.OID,
+            constructed: false,
+            capture: "certSignatureOid",
+          },
+          {
+            name: "Certificate.TBSCertificate.signature.parameters",
+            tagClass: asn1.Class.UNIVERSAL,
+            optional: true,
+            captureAsn1: "certSignatureParams",
+          },
+        ],
+      },
+      {
+        name: "Certificate.signatureValue",
+        tagClass: asn1.Class.UNIVERSAL,
+        type: asn1.Type.BITSTRING,
+        constructed: false,
+        captureBitStringValue: "certSignature",
+      },
+    ],
+  };
+  var rsassaPssParameterValidator = {
+    name: "rsapss",
+    tagClass: asn1.Class.UNIVERSAL,
+    type: asn1.Type.SEQUENCE,
+    constructed: true,
+    value: [
+      {
+        name: "rsapss.hashAlgorithm",
+        tagClass: asn1.Class.CONTEXT_SPECIFIC,
+        type: 0,
+        constructed: true,
+        value: [
+          {
+            name: "rsapss.hashAlgorithm.AlgorithmIdentifier",
+            tagClass: asn1.Class.UNIVERSAL,
+            type: asn1.Class.SEQUENCE,
+            constructed: true,
+            optional: true,
+            value: [
+              {
+                name: "rsapss.hashAlgorithm.AlgorithmIdentifier.algorithm",
+                tagClass: asn1.Class.UNIVERSAL,
+                type: asn1.Type.OID,
+                constructed: false,
+                capture: "hashOid",
+              },
+            ],
+          },
+        ],
+      },
+      {
+        name: "rsapss.maskGenAlgorithm",
+        tagClass: asn1.Class.CONTEXT_SPECIFIC,
+        type: 1,
+        constructed: true,
+        value: [
+          {
+            name: "rsapss.maskGenAlgorithm.AlgorithmIdentifier",
+            tagClass: asn1.Class.UNIVERSAL,
+            type: asn1.Class.SEQUENCE,
+            constructed: true,
+            optional: true,
+            value: [
+              {
+                name: "rsapss.maskGenAlgorithm.AlgorithmIdentifier.algorithm",
+                tagClass: asn1.Class.UNIVERSAL,
+                type: asn1.Type.OID,
+                constructed: false,
+                capture: "maskGenOid",
+              },
+              {
+                name: "rsapss.maskGenAlgorithm.AlgorithmIdentifier.params",
+                tagClass: asn1.Class.UNIVERSAL,
+                type: asn1.Type.SEQUENCE,
+                constructed: true,
+                value: [
+                  {
+                    name: "rsapss.maskGenAlgorithm.AlgorithmIdentifier.params.algorithm",
+                    tagClass: asn1.Class.UNIVERSAL,
+                    type: asn1.Type.OID,
+                    constructed: false,
+                    capture: "maskGenHashOid",
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+      {
+        name: "rsapss.saltLength",
+        tagClass: asn1.Class.CONTEXT_SPECIFIC,
+        type: 2,
+        optional: true,
+        value: [
+          {
+            name: "rsapss.saltLength.saltLength",
+            tagClass: asn1.Class.UNIVERSAL,
+            type: asn1.Class.INTEGER,
+            constructed: false,
+            capture: "saltLength",
+          },
+        ],
+      },
+      {
+        name: "rsapss.trailerField",
+        tagClass: asn1.Class.CONTEXT_SPECIFIC,
+        type: 3,
+        optional: true,
+        value: [
+          {
+            name: "rsapss.trailer.trailer",
+            tagClass: asn1.Class.UNIVERSAL,
+            type: asn1.Class.INTEGER,
+            constructed: false,
+            capture: "trailer",
+          },
+        ],
+      },
+    ],
+  };
+  var certificationRequestInfoValidator = {
+    name: "CertificationRequestInfo",
+    tagClass: asn1.Class.UNIVERSAL,
+    type: asn1.Type.SEQUENCE,
+    constructed: true,
+    captureAsn1: "certificationRequestInfo",
+    value: [
+      {
+        name: "CertificationRequestInfo.integer",
+        tagClass: asn1.Class.UNIVERSAL,
+        type: asn1.Type.INTEGER,
+        constructed: false,
+        capture: "certificationRequestInfoVersion",
+      },
+      {
+        name: "CertificationRequestInfo.subject",
+        tagClass: asn1.Class.UNIVERSAL,
+        type: asn1.Type.SEQUENCE,
+        constructed: true,
+        captureAsn1: "certificationRequestInfoSubject",
+      },
+      publicKeyValidator,
+      {
+        name: "CertificationRequestInfo.attributes",
+        tagClass: asn1.Class.CONTEXT_SPECIFIC,
+        type: 0,
+        constructed: true,
+        optional: true,
+        capture: "certificationRequestInfoAttributes",
+        value: [
+          {
+            name: "CertificationRequestInfo.attributes",
+            tagClass: asn1.Class.UNIVERSAL,
+            type: asn1.Type.SEQUENCE,
+            constructed: true,
+            value: [
+              {
+                name: "CertificationRequestInfo.attributes.type",
+                tagClass: asn1.Class.UNIVERSAL,
+                type: asn1.Type.OID,
+                constructed: false,
+              },
+              {
+                name: "CertificationRequestInfo.attributes.value",
+                tagClass: asn1.Class.UNIVERSAL,
+                type: asn1.Type.SET,
+                constructed: true,
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+  var certificationRequestValidator = {
+    name: "CertificationRequest",
+    tagClass: asn1.Class.UNIVERSAL,
+    type: asn1.Type.SEQUENCE,
+    constructed: true,
+    captureAsn1: "csr",
+    value: [
+      certificationRequestInfoValidator,
+      {
+        name: "CertificationRequest.signatureAlgorithm",
+        tagClass: asn1.Class.UNIVERSAL,
+        type: asn1.Type.SEQUENCE,
+        constructed: true,
+        value: [
+          {
+            name: "CertificationRequest.signatureAlgorithm.algorithm",
+            tagClass: asn1.Class.UNIVERSAL,
+            type: asn1.Type.OID,
+            constructed: false,
+            capture: "csrSignatureOid",
+          },
+          {
+            name: "CertificationRequest.signatureAlgorithm.parameters",
+            tagClass: asn1.Class.UNIVERSAL,
+            optional: true,
+            captureAsn1: "csrSignatureParams",
+          },
+        ],
+      },
+      {
+        name: "CertificationRequest.signature",
+        tagClass: asn1.Class.UNIVERSAL,
+        type: asn1.Type.BITSTRING,
+        constructed: false,
+        captureBitStringValue: "csrSignature",
+      },
+    ],
+  };
+  pki.RDNAttributesAsArray = function (rdn, md) {
+    var rval = [];
+    var set;
+    var attr;
+    var obj;
+    for (var si = 0; si < rdn.value.length; ++si) {
+      set = rdn.value[si];
+      for (var i = 0; i < set.value.length; ++i) {
+        obj = {};
+        attr = set.value[i];
+        obj.type = asn1.derToOid(attr.value[0].value);
+        obj.value = attr.value[1].value;
+        obj.valueTagClass = attr.value[1].type;
+        if (obj.type in oids) {
+          obj.name = oids[obj.type];
+          if (obj.name in _shortNames) obj.shortName = _shortNames[obj.name];
         }
-        if (n) (n.update(y.type), n.update(y.value));
-        r.push(y);
+        if (md) {
+          md.update(obj.type);
+          md.update(obj.value);
+        }
+        rval.push(obj);
       }
     }
-    return r;
+    return rval;
   };
-  ht.CRIAttributesAsArray = function (e) {
-    var n = [];
-    for (var r = 0; r < e.length; ++r) {
-      var s = e[r],
-        derToOid = asn1.derToOid(s.value[0].value),
-        y = s.value[1].value;
-      for (var b = 0; b < y.length; ++b) {
-        var S = {};
-        if (((S.type = derToOid), (S.value = y[b].value), (S.valueTagClass = y[b].type), S.type in oids)) {
-          if (((S.name = oids[S.type]), S.name in jr)) S.shortName = jr[S.name];
+  pki.CRIAttributesAsArray = function (attributes) {
+    var rval = [];
+    for (var si = 0; si < attributes.length; ++si) {
+      var seq = attributes[si];
+      var type = asn1.derToOid(seq.value[0].value);
+      var values = seq.value[1].value;
+      for (var vi = 0; vi < values.length; ++vi) {
+        var obj = {};
+        obj.type = type;
+        obj.value = values[vi].value;
+        obj.valueTagClass = values[vi].type;
+        if (obj.type in oids) {
+          obj.name = oids[obj.type];
+          if (obj.name in _shortNames) obj.shortName = _shortNames[obj.name];
         }
-        if (S.type === oids.extensionRequest) {
-          S.extensions = [];
-          for (var w = 0; w < S.value.length; ++w)
-            S.extensions.push(ht.certificateExtensionFromAsn1(S.value[w]));
+        if (obj.type === oids.extensionRequest) {
+          obj.extensions = [];
+          for (var ei = 0; ei < obj.value.length; ++ei)
+            obj.extensions.push(pki.certificateExtensionFromAsn1(obj.value[ei]));
         }
-        n.push(S);
+        rval.push(obj);
       }
     }
-    return n;
+    return rval;
   };
-  function tl(e, n) {
-    if (typeof n === "string") n = { shortName: n };
-    var r = null,
-      s;
-    for (var h = 0; r === null && h < e.attributes.length; ++h)
-      if (((s = e.attributes[h]), n.type && n.type === s.type)) r = s;
-      else if (n.name && n.name === s.name) r = s;
-      else if (n.shortName && n.shortName === s.shortName) r = s;
-    return r;
+  function _getAttribute(obj, options) {
+    if (typeof options === "string")
+      options = {
+        shortName: options,
+      };
+    var rval = null;
+    var attr;
+    for (var i = 0; rval === null && i < obj.attributes.length; ++i) {
+      attr = obj.attributes[i];
+      if (options.type && options.type === attr.type) rval = attr;
+      else if (options.name && options.name === attr.name) rval = attr;
+      else if (options.shortName && options.shortName === attr.shortName) rval = attr;
+    }
+    return rval;
   }
-  var im = function (e, n, r) {
-      var s = {};
-      if (e !== oids["RSASSA-PSS"]) return s;
-      if (r)
-        s = {
-          hash: { algorithmOid: oids.sha1 },
-          mgf: { algorithmOid: oids.mgf1, hash: { algorithmOid: oids.sha1 } },
-          saltLength: 20,
-        };
-      var h = {},
-        y = [];
-      if (!asn1.validate(n, BG, h, y)) {
-        var b = Error("Cannot read RSASSA-PSS parameter block.");
-        throw ((b.errors = y), b);
-      }
-      if (h.hashOid !== void 0) ((s.hash = s.hash || {}), (s.hash.algorithmOid = asn1.derToOid(h.hashOid)));
-      if (h.maskGenOid !== void 0)
-        ((s.mgf = s.mgf || {}),
-          (s.mgf.algorithmOid = asn1.derToOid(h.maskGenOid)),
-          (s.mgf.hash = s.mgf.hash || {}),
-          (s.mgf.hash.algorithmOid = asn1.derToOid(h.maskGenHashOid)));
-      if (h.saltLength !== void 0) s.saltLength = h.saltLength.charCodeAt(0);
-      return s;
-    },
-    om = function (e) {
-      switch (oids[e.signatureOid]) {
-        case "sha1WithRSAEncryption":
-        case "sha1WithRSASignature":
-          return en.md.sha1.create();
-        case "md5WithRSAEncryption":
-          return en.md.md5.create();
-        case "sha256WithRSAEncryption":
-          return en.md.sha256.create();
-        case "sha384WithRSAEncryption":
-          return en.md.sha384.create();
-        case "sha512WithRSAEncryption":
-          return en.md.sha512.create();
-        case "RSASSA-PSS":
-          return en.md.sha256.create();
-        default:
-          var n = Error("Could not compute " + e.type + " digest. Unknown signature OID.");
-          throw ((n.signatureOid = e.signatureOid), n);
-      }
-    },
-    wA = function (e) {
-      var certificate = e.certificate,
-        r;
-      switch (certificate.signatureOid) {
-        case oids.sha1WithRSAEncryption:
-        case oids.sha1WithRSASignature:
-          break;
-        case oids["RSASSA-PSS"]:
-          var s, h;
-          if (
-            ((s = oids[certificate.signatureParameters.mgf.hash.algorithmOid]),
-            s === void 0 || en.md[s] === void 0)
-          ) {
-            var y = Error("Unsupported MGF hash function.");
-            throw ((y.oid = certificate.signatureParameters.mgf.hash.algorithmOid), (y.name = s), y);
-          }
-          if (
-            ((h = oids[certificate.signatureParameters.mgf.algorithmOid]),
-            h === void 0 || en.mgf[h] === void 0)
-          ) {
-            var y = Error("Unsupported MGF function.");
-            throw ((y.oid = certificate.signatureParameters.mgf.algorithmOid), (y.name = h), y);
-          }
-          if (
-            ((h = en.mgf[h].create(en.md[s].create())),
-            (s = oids[certificate.signatureParameters.hash.algorithmOid]),
-            s === void 0 || en.md[s] === void 0)
-          ) {
-            var y = Error("Unsupported RSASSA-PSS hash function.");
-            throw ((y.oid = certificate.signatureParameters.hash.algorithmOid), (y.name = s), y);
-          }
-          r = en.pss.create(en.md[s].create(), h, certificate.signatureParameters.saltLength);
-          break;
-      }
-      return certificate.publicKey.verify(e.md.digest().getBytes(), e.signature, r);
-    };
-  ht.certificateFromPem = function (e, n, r) {
-    var s = en.pem.decode(e)[0];
-    if (s.type !== "CERTIFICATE" && s.type !== "X509 CERTIFICATE" && s.type !== "TRUSTED CERTIFICATE") {
-      var h = Error(
+  var _readSignatureParameters = function (oid, obj, fillDefaults) {
+    var params = {};
+    if (oid !== oids["RSASSA-PSS"]) return params;
+    if (fillDefaults)
+      params = {
+        hash: {
+          algorithmOid: oids.sha1,
+        },
+        mgf: {
+          algorithmOid: oids.mgf1,
+          hash: {
+            algorithmOid: oids.sha1,
+          },
+        },
+        saltLength: 20,
+      };
+    var capture = {};
+    var errors = [];
+    if (!asn1.validate(obj, rsassaPssParameterValidator, capture, errors)) {
+      var error = Error("Cannot read RSASSA-PSS parameter block.");
+      error.errors = errors;
+      throw error;
+    }
+    if (capture.hashOid !== undefined) {
+      params.hash = params.hash || {};
+      params.hash.algorithmOid = asn1.derToOid(capture.hashOid);
+    }
+    if (capture.maskGenOid !== undefined) {
+      params.mgf = params.mgf || {};
+      params.mgf.algorithmOid = asn1.derToOid(capture.maskGenOid);
+      params.mgf.hash = params.mgf.hash || {};
+      params.mgf.hash.algorithmOid = asn1.derToOid(capture.maskGenHashOid);
+    }
+    if (capture.saltLength !== undefined) params.saltLength = capture.saltLength.charCodeAt(0);
+    return params;
+  };
+  var _createSignatureDigest = function (options) {
+    switch (oids[options.signatureOid]) {
+      case "sha1WithRSAEncryption":
+      case "sha1WithRSASignature":
+        return forge.md.sha1.create();
+      case "md5WithRSAEncryption":
+        return forge.md.md5.create();
+      case "sha256WithRSAEncryption":
+        return forge.md.sha256.create();
+      case "sha384WithRSAEncryption":
+        return forge.md.sha384.create();
+      case "sha512WithRSAEncryption":
+        return forge.md.sha512.create();
+      case "RSASSA-PSS":
+        return forge.md.sha256.create();
+      default:
+        var error = Error("Could not compute " + options.type + " digest. Unknown signature OID.");
+        error.signatureOid = options.signatureOid;
+        throw error;
+    }
+  };
+  var _verifySignature = function (options) {
+    var cert = options.certificate;
+    var scheme;
+    switch (cert.signatureOid) {
+      case oids.sha1WithRSAEncryption:
+      case oids.sha1WithRSASignature:
+        break;
+      case oids["RSASSA-PSS"]:
+        var hash;
+        var mgf;
+        hash = oids[cert.signatureParameters.mgf.hash.algorithmOid];
+        if (hash === undefined || forge.md[hash] === undefined) {
+          var error = Error("Unsupported MGF hash function.");
+          error.oid = cert.signatureParameters.mgf.hash.algorithmOid;
+          error.name = hash;
+          throw error;
+        }
+        mgf = oids[cert.signatureParameters.mgf.algorithmOid];
+        if (mgf === undefined || forge.mgf[mgf] === undefined) {
+          var error = Error("Unsupported MGF function.");
+          error.oid = cert.signatureParameters.mgf.algorithmOid;
+          error.name = mgf;
+          throw error;
+        }
+        mgf = forge.mgf[mgf].create(forge.md[hash].create());
+        hash = oids[cert.signatureParameters.hash.algorithmOid];
+        if (hash === undefined || forge.md[hash] === undefined) {
+          var error = Error("Unsupported RSASSA-PSS hash function.");
+          error.oid = cert.signatureParameters.hash.algorithmOid;
+          error.name = hash;
+          throw error;
+        }
+        scheme = forge.pss.create(forge.md[hash].create(), mgf, cert.signatureParameters.saltLength);
+        break;
+    }
+    return cert.publicKey.verify(options.md.digest().getBytes(), options.signature, scheme);
+  };
+  pki.certificateFromPem = function (pem, computeHash, strict) {
+    var msg = forge.pem.decode(pem)[0];
+    if (msg.type !== "CERTIFICATE" && msg.type !== "X509 CERTIFICATE" && msg.type !== "TRUSTED CERTIFICATE") {
+      var error = Error(
         'Could not convert certificate from PEM; PEM header type is not "CERTIFICATE", "X509 CERTIFICATE", or "TRUSTED CERTIFICATE".',
       );
-      throw ((h.headerType = s.type), h);
+      error.headerType = msg.type;
+      throw error;
     }
-    if (s.procType && s.procType.type === "ENCRYPTED")
+    if (msg.procType && msg.procType.type === "ENCRYPTED")
       throw Error("Could not convert certificate from PEM; PEM is encrypted.");
-    var fromDer = asn1.fromDer(s.body, r);
-    return ht.certificateFromAsn1(fromDer, n);
+    var obj = asn1.fromDer(msg.body, strict);
+    return pki.certificateFromAsn1(obj, computeHash);
   };
-  ht.certificateToPem = function (e, n) {
-    var r = { type: "CERTIFICATE", body: asn1.toDer(ht.certificateToAsn1(e)).getBytes() };
-    return en.pem.encode(r, { maxline: n });
+  pki.certificateToPem = function (cert, maxline) {
+    var msg = {
+      type: "CERTIFICATE",
+      body: asn1.toDer(pki.certificateToAsn1(cert)).getBytes(),
+    };
+    return forge.pem.encode(msg, {
+      maxline,
+    });
   };
-  ht.publicKeyFromPem = function (e) {
-    var n = en.pem.decode(e)[0];
-    if (n.type !== "PUBLIC KEY" && n.type !== "RSA PUBLIC KEY") {
-      var r = Error(
+  pki.publicKeyFromPem = function (pem) {
+    var msg = forge.pem.decode(pem)[0];
+    if (msg.type !== "PUBLIC KEY" && msg.type !== "RSA PUBLIC KEY") {
+      var error = Error(
         'Could not convert public key from PEM; PEM header type is not "PUBLIC KEY" or "RSA PUBLIC KEY".',
       );
-      throw ((r.headerType = n.type), r);
+      error.headerType = msg.type;
+      throw error;
     }
-    if (n.procType && n.procType.type === "ENCRYPTED")
+    if (msg.procType && msg.procType.type === "ENCRYPTED")
       throw Error("Could not convert public key from PEM; PEM is encrypted.");
-    var fromDer = asn1.fromDer(n.body);
-    return ht.publicKeyFromAsn1(fromDer);
+    var obj = asn1.fromDer(msg.body);
+    return pki.publicKeyFromAsn1(obj);
   };
-  ht.publicKeyToPem = function (e, n) {
-    var r = { type: "PUBLIC KEY", body: asn1.toDer(ht.publicKeyToAsn1(e)).getBytes() };
-    return en.pem.encode(r, { maxline: n });
+  pki.publicKeyToPem = function (key, maxline) {
+    var msg = {
+      type: "PUBLIC KEY",
+      body: asn1.toDer(pki.publicKeyToAsn1(key)).getBytes(),
+    };
+    return forge.pem.encode(msg, {
+      maxline,
+    });
   };
-  ht.publicKeyToRSAPublicKeyPem = function (e, n) {
-    var r = { type: "RSA PUBLIC KEY", body: asn1.toDer(ht.publicKeyToRSAPublicKey(e)).getBytes() };
-    return en.pem.encode(r, { maxline: n });
+  pki.publicKeyToRSAPublicKeyPem = function (key, maxline) {
+    var msg = {
+      type: "RSA PUBLIC KEY",
+      body: asn1.toDer(pki.publicKeyToRSAPublicKey(key)).getBytes(),
+    };
+    return forge.pem.encode(msg, {
+      maxline,
+    });
   };
-  ht.getPublicKeyFingerprint = function (e, n) {
-    n = n || {};
-    var r = n.md || en.md.sha1.create(),
-      s = n.type || "RSAPublicKey",
-      h;
-    switch (s) {
+  pki.getPublicKeyFingerprint = function (key, options) {
+    options = options || {};
+    var md = options.md || forge.md.sha1.create();
+    var type = options.type || "RSAPublicKey";
+    var bytes;
+    switch (type) {
       case "RSAPublicKey":
-        h = asn1.toDer(ht.publicKeyToRSAPublicKey(e)).getBytes();
+        bytes = asn1.toDer(pki.publicKeyToRSAPublicKey(key)).getBytes();
         break;
       case "SubjectPublicKeyInfo":
-        h = asn1.toDer(ht.publicKeyToAsn1(e)).getBytes();
+        bytes = asn1.toDer(pki.publicKeyToAsn1(key)).getBytes();
         break;
       default:
-        throw Error('Unknown fingerprint type "' + n.type + '".');
+        throw Error('Unknown fingerprint type "' + options.type + '".');
     }
-    (r.start(), r.update(h));
-    var digest = r.digest();
-    if (n.encoding === "hex") {
-      var toHex = digest.toHex();
-      if (n.delimiter) return toHex.match(/.{2}/g).join(n.delimiter);
-      return toHex;
-    } else if (n.encoding === "binary") return digest.getBytes();
-    else if (n.encoding) throw Error('Unknown encoding "' + n.encoding + '".');
+    md.start();
+    md.update(bytes);
+    var digest = md.digest();
+    if (options.encoding === "hex") {
+      var hex = digest.toHex();
+      if (options.delimiter) return hex.match(/.{2}/g).join(options.delimiter);
+      return hex;
+    } else if (options.encoding === "binary") return digest.getBytes();
+    else if (options.encoding) throw Error('Unknown encoding "' + options.encoding + '".');
     return digest;
   };
-  ht.certificationRequestFromPem = function (e, n, r) {
-    var s = en.pem.decode(e)[0];
-    if (s.type !== "CERTIFICATE REQUEST") {
-      var h = Error(
+  pki.certificationRequestFromPem = function (pem, computeHash, strict) {
+    var msg = forge.pem.decode(pem)[0];
+    if (msg.type !== "CERTIFICATE REQUEST") {
+      var error = Error(
         'Could not convert certification request from PEM; PEM header type is not "CERTIFICATE REQUEST".',
       );
-      throw ((h.headerType = s.type), h);
+      error.headerType = msg.type;
+      throw error;
     }
-    if (s.procType && s.procType.type === "ENCRYPTED")
+    if (msg.procType && msg.procType.type === "ENCRYPTED")
       throw Error("Could not convert certification request from PEM; PEM is encrypted.");
-    var fromDer = asn1.fromDer(s.body, r);
-    return ht.certificationRequestFromAsn1(fromDer, n);
+    var obj = asn1.fromDer(msg.body, strict);
+    return pki.certificationRequestFromAsn1(obj, computeHash);
   };
-  ht.certificationRequestToPem = function (e, n) {
-    var r = { type: "CERTIFICATE REQUEST", body: asn1.toDer(ht.certificationRequestToAsn1(e)).getBytes() };
-    return en.pem.encode(r, { maxline: n });
+  pki.certificationRequestToPem = function (csr, maxline) {
+    var msg = {
+      type: "CERTIFICATE REQUEST",
+      body: asn1.toDer(pki.certificationRequestToAsn1(csr)).getBytes(),
+    };
+    return forge.pem.encode(msg, {
+      maxline,
+    });
   };
-  ht.createCertificate = function () {
-    var e = {};
-    return (
-      (e.version = 2),
-      (e.serialNumber = "00"),
-      (e.signatureOid = null),
-      (e.signature = null),
-      (e.siginfo = {}),
-      (e.siginfo.algorithmOid = null),
-      (e.validity = {}),
-      (e.validity.notBefore = new Date()),
-      (e.validity.notAfter = new Date()),
-      (e.issuer = {}),
-      (e.issuer.getField = function (n) {
-        return tl(e.issuer, n);
-      }),
-      (e.issuer.addField = function (n) {
-        (Ni([n]), e.issuer.attributes.push(n));
-      }),
-      (e.issuer.attributes = []),
-      (e.issuer.hash = null),
-      (e.subject = {}),
-      (e.subject.getField = function (n) {
-        return tl(e.subject, n);
-      }),
-      (e.subject.addField = function (n) {
-        (Ni([n]), e.subject.attributes.push(n));
-      }),
-      (e.subject.attributes = []),
-      (e.subject.hash = null),
-      (e.extensions = []),
-      (e.publicKey = null),
-      (e.md = null),
-      (e.setSubject = function (n, r) {
-        if ((Ni(n), (e.subject.attributes = n), delete e.subject.uniqueId, r)) e.subject.uniqueId = r;
-        e.subject.hash = null;
-      }),
-      (e.setIssuer = function (n, r) {
-        if ((Ni(n), (e.issuer.attributes = n), delete e.issuer.uniqueId, r)) e.issuer.uniqueId = r;
-        e.issuer.hash = null;
-      }),
-      (e.setExtensions = function (n) {
-        for (var r = 0; r < n.length; ++r) TA(n[r], { cert: e });
-        e.extensions = n;
-      }),
-      (e.getExtension = function (n) {
-        if (typeof n === "string") n = { name: n };
-        var r = null,
-          s;
-        for (var h = 0; r === null && h < e.extensions.length; ++h)
-          if (((s = e.extensions[h]), n.id && s.id === n.id)) r = s;
-          else if (n.name && s.name === n.name) r = s;
-        return r;
-      }),
-      (e.sign = function (n, r) {
-        e.md = r || en.md.sha1.create();
-        var s = oids[e.md.algorithm + "WithRSAEncryption"];
-        if (!s) {
-          var h = Error("Could not compute certificate digest. Unknown message digest algorithm OID.");
-          throw ((h.algorithm = e.md.algorithm), h);
+  pki.createCertificate = function () {
+    var cert = {};
+    cert.version = 2;
+    cert.serialNumber = "00";
+    cert.signatureOid = null;
+    cert.signature = null;
+    cert.siginfo = {};
+    cert.siginfo.algorithmOid = null;
+    cert.validity = {};
+    cert.validity.notBefore = new Date();
+    cert.validity.notAfter = new Date();
+    cert.issuer = {};
+    cert.issuer.getField = function (sn) {
+      return _getAttribute(cert.issuer, sn);
+    };
+    cert.issuer.addField = function (attr) {
+      _fillMissingFields([attr]);
+      cert.issuer.attributes.push(attr);
+    };
+    cert.issuer.attributes = [];
+    cert.issuer.hash = null;
+    cert.subject = {};
+    cert.subject.getField = function (sn) {
+      return _getAttribute(cert.subject, sn);
+    };
+    cert.subject.addField = function (attr) {
+      _fillMissingFields([attr]);
+      cert.subject.attributes.push(attr);
+    };
+    cert.subject.attributes = [];
+    cert.subject.hash = null;
+    cert.extensions = [];
+    cert.publicKey = null;
+    cert.md = null;
+    cert.setSubject = function (attrs, uniqueId) {
+      _fillMissingFields(attrs);
+      cert.subject.attributes = attrs;
+      delete cert.subject.uniqueId;
+      if (uniqueId) cert.subject.uniqueId = uniqueId;
+      cert.subject.hash = null;
+    };
+    cert.setIssuer = function (attrs, uniqueId) {
+      _fillMissingFields(attrs);
+      cert.issuer.attributes = attrs;
+      delete cert.issuer.uniqueId;
+      if (uniqueId) cert.issuer.uniqueId = uniqueId;
+      cert.issuer.hash = null;
+    };
+    cert.setExtensions = function (exts) {
+      for (var i = 0; i < exts.length; ++i)
+        _fillMissingExtensionFields(exts[i], {
+          cert,
+        });
+      cert.extensions = exts;
+    };
+    cert.getExtension = function (options) {
+      if (typeof options === "string")
+        options = {
+          name: options,
+        };
+      var rval = null;
+      var ext;
+      for (var i = 0; rval === null && i < cert.extensions.length; ++i) {
+        ext = cert.extensions[i];
+        if (options.id && ext.id === options.id) rval = ext;
+        else if (options.name && ext.name === options.name) rval = ext;
+      }
+      return rval;
+    };
+    cert.sign = function (key, md) {
+      cert.md = md || forge.md.sha1.create();
+      var algorithmOid = oids[cert.md.algorithm + "WithRSAEncryption"];
+      if (!algorithmOid) {
+        var error = Error("Could not compute certificate digest. Unknown message digest algorithm OID.");
+        error.algorithm = cert.md.algorithm;
+        throw error;
+      }
+      cert.signatureOid = cert.siginfo.algorithmOid = algorithmOid;
+      cert.tbsCertificate = pki.getTBSCertificate(cert);
+      var bytes = asn1.toDer(cert.tbsCertificate);
+      cert.md.update(bytes.getBytes());
+      cert.signature = key.sign(cert.md);
+    };
+    cert.verify = function (child) {
+      var rval = false;
+      if (!cert.issued(child)) {
+        var issuer = child.issuer;
+        var subject = cert.subject;
+        var error = Error(
+          "The parent certificate did not issue the given child certificate; the child certificate's issuer does not match the parent's subject.",
+        );
+        error.expectedIssuer = subject.attributes;
+        error.actualIssuer = issuer.attributes;
+        throw error;
+      }
+      var md = child.md;
+      if (md === null) {
+        md = _createSignatureDigest({
+          signatureOid: child.signatureOid,
+          type: "certificate",
+        });
+        var tbsCertificate = child.tbsCertificate || pki.getTBSCertificate(child);
+        var bytes = asn1.toDer(tbsCertificate);
+        md.update(bytes.getBytes());
+      }
+      if (md !== null)
+        rval = _verifySignature({
+          certificate: cert,
+          md,
+          signature: child.signature,
+        });
+      return rval;
+    };
+    cert.isIssuer = function (parent) {
+      var rval = false;
+      var i = cert.issuer;
+      var s = parent.subject;
+      if (i.hash && s.hash) rval = i.hash === s.hash;
+      else if (i.attributes.length === s.attributes.length) {
+        rval = true;
+        var iattr;
+        var sattr;
+        for (var n = 0; rval && n < i.attributes.length; ++n) {
+          iattr = i.attributes[n];
+          sattr = s.attributes[n];
+          if (iattr.type !== sattr.type || iattr.value !== sattr.value) rval = false;
         }
-        ((e.signatureOid = e.siginfo.algorithmOid = s), (e.tbsCertificate = ht.getTBSCertificate(e)));
-        var toDer = asn1.toDer(e.tbsCertificate);
-        (e.md.update(toDer.getBytes()), (e.signature = n.sign(e.md)));
-      }),
-      (e.verify = function (n) {
-        var r = !1;
-        if (!e.issued(n)) {
-          var issuer = n.issuer,
-            subject = e.subject,
-            y = Error(
-              "The parent certificate did not issue the given child certificate; the child certificate's issuer does not match the parent's subject.",
-            );
-          throw ((y.expectedIssuer = subject.attributes), (y.actualIssuer = issuer.attributes), y);
+      }
+      return rval;
+    };
+    cert.issued = function (child) {
+      return child.isIssuer(cert);
+    };
+    cert.generateSubjectKeyIdentifier = function () {
+      return pki.getPublicKeyFingerprint(cert.publicKey, {
+        type: "RSAPublicKey",
+      });
+    };
+    cert.verifySubjectKeyIdentifier = function () {
+      var oid = oids.subjectKeyIdentifier;
+      for (var i = 0; i < cert.extensions.length; ++i) {
+        var ext = cert.extensions[i];
+        if (ext.id === oid) {
+          var ski = cert.generateSubjectKeyIdentifier().getBytes();
+          return forge.util.hexToBytes(ext.subjectKeyIdentifier) === ski;
         }
-        var md = n.md;
-        if (md === null) {
-          md = om({ signatureOid: n.signatureOid, type: "certificate" });
-          var S = n.tbsCertificate || ht.getTBSCertificate(n),
-            toDer = asn1.toDer(S);
-          md.update(toDer.getBytes());
-        }
-        if (md !== null) r = wA({ certificate: e, md: md, signature: n.signature });
-        return r;
-      }),
-      (e.isIssuer = function (n) {
-        var r = !1,
-          issuer = e.issuer,
-          subject = n.subject;
-        if (issuer.hash && subject.hash) r = issuer.hash === subject.hash;
-        else if (issuer.attributes.length === subject.attributes.length) {
-          r = !0;
-          var y, b;
-          for (var S = 0; r && S < issuer.attributes.length; ++S)
-            if (
-              ((y = issuer.attributes[S]),
-              (b = subject.attributes[S]),
-              y.type !== b.type || y.value !== b.value)
-            )
-              r = !1;
-        }
-        return r;
-      }),
-      (e.issued = function (n) {
-        return n.isIssuer(e);
-      }),
-      (e.generateSubjectKeyIdentifier = function () {
-        return ht.getPublicKeyFingerprint(e.publicKey, { type: "RSAPublicKey" });
-      }),
-      (e.verifySubjectKeyIdentifier = function () {
-        var subjectKeyIdentifier = oids.subjectKeyIdentifier;
-        for (var r = 0; r < e.extensions.length; ++r) {
-          var s = e.extensions[r];
-          if (s.id === subjectKeyIdentifier) {
-            var bytes = e.generateSubjectKeyIdentifier().getBytes();
-            return en.util.hexToBytes(s.subjectKeyIdentifier) === bytes;
-          }
-        }
-        return !1;
-      }),
-      e
-    );
+      }
+      return false;
+    };
+    return cert;
   };
-  ht.certificateFromAsn1 = function (e, n) {
-    var r = {},
-      s = [];
-    if (!asn1.validate(e, LG, r, s)) {
-      var h = Error("Cannot read X.509 certificate. ASN.1 object is not an X509v3 Certificate.");
-      throw ((h.errors = s), h);
+  pki.certificateFromAsn1 = function (obj, computeHash) {
+    var capture = {};
+    var errors = [];
+    if (!asn1.validate(obj, x509CertificateValidator, capture, errors)) {
+      var error = Error("Cannot read X.509 certificate. ASN.1 object is not an X509v3 Certificate.");
+      error.errors = errors;
+      throw error;
     }
-    var derToOid = asn1.derToOid(r.publicKeyOid);
-    if (derToOid !== ht.oids.rsaEncryption) throw Error("Cannot read public key. OID is not RSA.");
-    var certificate = ht.createCertificate();
-    certificate.version = r.certVersion ? r.certVersion.charCodeAt(0) : 0;
-    var buffer = en.util.createBuffer(r.certSerialNumber);
-    ((certificate.serialNumber = buffer.toHex()),
-      (certificate.signatureOid = en.asn1.derToOid(r.certSignatureOid)),
-      (certificate.signatureParameters = im(certificate.signatureOid, r.certSignatureParams, !0)),
-      (certificate.siginfo.algorithmOid = en.asn1.derToOid(r.certinfoSignatureOid)),
-      (certificate.siginfo.parameters = im(certificate.siginfo.algorithmOid, r.certinfoSignatureParams, !1)),
-      (certificate.signature = r.certSignature));
-    var w = [];
-    if (r.certValidity1UTCTime !== void 0) w.push(asn1.utcTimeToDate(r.certValidity1UTCTime));
-    if (r.certValidity2GeneralizedTime !== void 0)
-      w.push(asn1.generalizedTimeToDate(r.certValidity2GeneralizedTime));
-    if (r.certValidity3UTCTime !== void 0) w.push(asn1.utcTimeToDate(r.certValidity3UTCTime));
-    if (r.certValidity4GeneralizedTime !== void 0)
-      w.push(asn1.generalizedTimeToDate(r.certValidity4GeneralizedTime));
-    if (w.length > 2)
+    var oid = asn1.derToOid(capture.publicKeyOid);
+    if (oid !== pki.oids.rsaEncryption) throw Error("Cannot read public key. OID is not RSA.");
+    var cert = pki.createCertificate();
+    cert.version = capture.certVersion ? capture.certVersion.charCodeAt(0) : 0;
+    var serial = forge.util.createBuffer(capture.certSerialNumber);
+    cert.serialNumber = serial.toHex();
+    cert.signatureOid = forge.asn1.derToOid(capture.certSignatureOid);
+    cert.signatureParameters = _readSignatureParameters(cert.signatureOid, capture.certSignatureParams, true);
+    cert.siginfo.algorithmOid = forge.asn1.derToOid(capture.certinfoSignatureOid);
+    cert.siginfo.parameters = _readSignatureParameters(
+      cert.siginfo.algorithmOid,
+      capture.certinfoSignatureParams,
+      false,
+    );
+    cert.signature = capture.certSignature;
+    var validity = [];
+    if (capture.certValidity1UTCTime !== undefined)
+      validity.push(asn1.utcTimeToDate(capture.certValidity1UTCTime));
+    if (capture.certValidity2GeneralizedTime !== undefined)
+      validity.push(asn1.generalizedTimeToDate(capture.certValidity2GeneralizedTime));
+    if (capture.certValidity3UTCTime !== undefined)
+      validity.push(asn1.utcTimeToDate(capture.certValidity3UTCTime));
+    if (capture.certValidity4GeneralizedTime !== undefined)
+      validity.push(asn1.generalizedTimeToDate(capture.certValidity4GeneralizedTime));
+    if (validity.length > 2)
       throw Error(
         "Cannot read notBefore/notAfter validity times; more than two times were provided in the certificate.",
       );
-    if (w.length < 2)
+    if (validity.length < 2)
       throw Error(
         "Cannot read notBefore/notAfter validity times; they were not provided as either UTCTime or GeneralizedTime.",
       );
-    if (
-      ((certificate.validity.notBefore = w[0]),
-      (certificate.validity.notAfter = w[1]),
-      (certificate.tbsCertificate = r.tbsCertificate),
-      n)
-    ) {
-      certificate.md = om({ signatureOid: certificate.signatureOid, type: "certificate" });
-      var toDer = asn1.toDer(certificate.tbsCertificate);
-      certificate.md.update(toDer.getBytes());
+    cert.validity.notBefore = validity[0];
+    cert.validity.notAfter = validity[1];
+    cert.tbsCertificate = capture.tbsCertificate;
+    if (computeHash) {
+      cert.md = _createSignatureDigest({
+        signatureOid: cert.signatureOid,
+        type: "certificate",
+      });
+      var bytes = asn1.toDer(cert.tbsCertificate);
+      cert.md.update(bytes.getBytes());
     }
-    var create = en.md.sha1.create(),
-      toDer_2 = asn1.toDer(r.certIssuer);
-    if (
-      (create.update(toDer_2.getBytes()),
-      (certificate.issuer.getField = function (K) {
-        return tl(certificate.issuer, K);
-      }),
-      (certificate.issuer.addField = function (K) {
-        (Ni([K]), certificate.issuer.attributes.push(K));
-      }),
-      (certificate.issuer.attributes = ht.RDNAttributesAsArray(r.certIssuer)),
-      r.certIssuerUniqueId)
-    )
-      certificate.issuer.uniqueId = r.certIssuerUniqueId;
-    certificate.issuer.hash = create.digest().toHex();
-    var create_2 = en.md.sha1.create(),
-      toDer_3 = asn1.toDer(r.certSubject);
-    if (
-      (create_2.update(toDer_3.getBytes()),
-      (certificate.subject.getField = function (K) {
-        return tl(certificate.subject, K);
-      }),
-      (certificate.subject.addField = function (K) {
-        (Ni([K]), certificate.subject.attributes.push(K));
-      }),
-      (certificate.subject.attributes = ht.RDNAttributesAsArray(r.certSubject)),
-      r.certSubjectUniqueId)
-    )
-      certificate.subject.uniqueId = r.certSubjectUniqueId;
-    if (((certificate.subject.hash = create_2.digest().toHex()), r.certExtensions))
-      certificate.extensions = ht.certificateExtensionsFromAsn1(r.certExtensions);
-    else certificate.extensions = [];
-    return ((certificate.publicKey = ht.publicKeyFromAsn1(r.subjectPublicKeyInfo)), certificate);
+    var imd = forge.md.sha1.create();
+    var ibytes = asn1.toDer(capture.certIssuer);
+    imd.update(ibytes.getBytes());
+    cert.issuer.getField = function (sn) {
+      return _getAttribute(cert.issuer, sn);
+    };
+    cert.issuer.addField = function (attr) {
+      _fillMissingFields([attr]);
+      cert.issuer.attributes.push(attr);
+    };
+    cert.issuer.attributes = pki.RDNAttributesAsArray(capture.certIssuer);
+    if (capture.certIssuerUniqueId) cert.issuer.uniqueId = capture.certIssuerUniqueId;
+    cert.issuer.hash = imd.digest().toHex();
+    var smd = forge.md.sha1.create();
+    var sbytes = asn1.toDer(capture.certSubject);
+    smd.update(sbytes.getBytes());
+    cert.subject.getField = function (sn) {
+      return _getAttribute(cert.subject, sn);
+    };
+    cert.subject.addField = function (attr) {
+      _fillMissingFields([attr]);
+      cert.subject.attributes.push(attr);
+    };
+    cert.subject.attributes = pki.RDNAttributesAsArray(capture.certSubject);
+    if (capture.certSubjectUniqueId) cert.subject.uniqueId = capture.certSubjectUniqueId;
+    cert.subject.hash = smd.digest().toHex();
+    if (capture.certExtensions) cert.extensions = pki.certificateExtensionsFromAsn1(capture.certExtensions);
+    else cert.extensions = [];
+    cert.publicKey = pki.publicKeyFromAsn1(capture.subjectPublicKeyInfo);
+    return cert;
   };
-  ht.certificateExtensionsFromAsn1 = function (e) {
-    var n = [];
-    for (var r = 0; r < e.value.length; ++r) {
-      var s = e.value[r];
-      for (var h = 0; h < s.value.length; ++h) n.push(ht.certificateExtensionFromAsn1(s.value[h]));
+  pki.certificateExtensionsFromAsn1 = function (exts) {
+    var rval = [];
+    for (var i = 0; i < exts.value.length; ++i) {
+      var extseq = exts.value[i];
+      for (var ei = 0; ei < extseq.value.length; ++ei)
+        rval.push(pki.certificateExtensionFromAsn1(extseq.value[ei]));
     }
-    return n;
+    return rval;
   };
-  ht.certificateExtensionFromAsn1 = function (e) {
-    var n = {};
-    if (((n.id = asn1.derToOid(e.value[0].value)), (n.critical = !1), e.value[1].type === asn1.Type.BOOLEAN))
-      ((n.critical = e.value[1].value.charCodeAt(0) !== 0), (n.value = e.value[2].value));
-    else n.value = e.value[1].value;
-    if (n.id in oids) {
-      if (((n.name = oids[n.id]), n.name === "keyUsage")) {
-        var fromDer = asn1.fromDer(n.value),
-          s = 0,
-          h = 0;
-        if (fromDer.value.length > 1)
-          ((s = fromDer.value.charCodeAt(1)),
-            (h = fromDer.value.length > 2 ? fromDer.value.charCodeAt(2) : 0));
-        ((n.digitalSignature = (s & 128) === 128),
-          (n.nonRepudiation = (s & 64) === 64),
-          (n.keyEncipherment = (s & 32) === 32),
-          (n.dataEncipherment = (s & 16) === 16),
-          (n.keyAgreement = (s & 8) === 8),
-          (n.keyCertSign = (s & 4) === 4),
-          (n.cRLSign = (s & 2) === 2),
-          (n.encipherOnly = (s & 1) === 1),
-          (n.decipherOnly = (h & 128) === 128));
-      } else if (n.name === "basicConstraints") {
-        var fromDer = asn1.fromDer(n.value);
-        if (fromDer.value.length > 0 && fromDer.value[0].type === asn1.Type.BOOLEAN)
-          n.cA = fromDer.value[0].value.charCodeAt(0) !== 0;
-        else n.cA = !1;
-        var y = null;
-        if (fromDer.value.length > 0 && fromDer.value[0].type === asn1.Type.INTEGER)
-          y = fromDer.value[0].value;
-        else if (fromDer.value.length > 1) y = fromDer.value[1].value;
-        if (y !== null) n.pathLenConstraint = asn1.derToInteger(y);
-      } else if (n.name === "extKeyUsage") {
-        var fromDer = asn1.fromDer(n.value);
-        for (var b = 0; b < fromDer.value.length; ++b) {
-          var derToOid = asn1.derToOid(fromDer.value[b].value);
-          if (derToOid in oids) n[oids[derToOid]] = !0;
-          else n[derToOid] = !0;
+  pki.certificateExtensionFromAsn1 = function (ext) {
+    var e = {};
+    e.id = asn1.derToOid(ext.value[0].value);
+    e.critical = false;
+    if (ext.value[1].type === asn1.Type.BOOLEAN) {
+      e.critical = ext.value[1].value.charCodeAt(0) !== 0;
+      e.value = ext.value[2].value;
+    } else e.value = ext.value[1].value;
+    if (e.id in oids) {
+      e.name = oids[e.id];
+      if (e.name === "keyUsage") {
+        var ev = asn1.fromDer(e.value);
+        var b2 = 0;
+        var b3 = 0;
+        if (ev.value.length > 1) {
+          b2 = ev.value.charCodeAt(1);
+          b3 = ev.value.length > 2 ? ev.value.charCodeAt(2) : 0;
         }
-      } else if (n.name === "nsCertType") {
-        var fromDer = asn1.fromDer(n.value),
-          s = 0;
-        if (fromDer.value.length > 1) s = fromDer.value.charCodeAt(1);
-        ((n.client = (s & 128) === 128),
-          (n.server = (s & 64) === 64),
-          (n.email = (s & 32) === 32),
-          (n.objsign = (s & 16) === 16),
-          (n.reserved = (s & 8) === 8),
-          (n.sslCA = (s & 4) === 4),
-          (n.emailCA = (s & 2) === 2),
-          (n.objCA = (s & 1) === 1));
-      } else if (n.name === "subjectAltName" || n.name === "issuerAltName") {
-        n.altNames = [];
-        var w,
-          fromDer = asn1.fromDer(n.value);
-        for (var R = 0; R < fromDer.value.length; ++R) {
-          w = fromDer.value[R];
-          var D = { type: w.type, value: w.value };
-          switch ((n.altNames.push(D), w.type)) {
+        e.digitalSignature = (b2 & 128) === 128;
+        e.nonRepudiation = (b2 & 64) === 64;
+        e.keyEncipherment = (b2 & 32) === 32;
+        e.dataEncipherment = (b2 & 16) === 16;
+        e.keyAgreement = (b2 & 8) === 8;
+        e.keyCertSign = (b2 & 4) === 4;
+        e.cRLSign = (b2 & 2) === 2;
+        e.encipherOnly = (b2 & 1) === 1;
+        e.decipherOnly = (b3 & 128) === 128;
+      } else if (e.name === "basicConstraints") {
+        var ev = asn1.fromDer(e.value);
+        if (ev.value.length > 0 && ev.value[0].type === asn1.Type.BOOLEAN)
+          e.cA = ev.value[0].value.charCodeAt(0) !== 0;
+        else e.cA = false;
+        var value = null;
+        if (ev.value.length > 0 && ev.value[0].type === asn1.Type.INTEGER) value = ev.value[0].value;
+        else if (ev.value.length > 1) value = ev.value[1].value;
+        if (value !== null) e.pathLenConstraint = asn1.derToInteger(value);
+      } else if (e.name === "extKeyUsage") {
+        var ev = asn1.fromDer(e.value);
+        for (var vi = 0; vi < ev.value.length; ++vi) {
+          var oid = asn1.derToOid(ev.value[vi].value);
+          if (oid in oids) e[oids[oid]] = true;
+          else e[oid] = true;
+        }
+      } else if (e.name === "nsCertType") {
+        var ev = asn1.fromDer(e.value);
+        var b2 = 0;
+        if (ev.value.length > 1) b2 = ev.value.charCodeAt(1);
+        e.client = (b2 & 128) === 128;
+        e.server = (b2 & 64) === 64;
+        e.email = (b2 & 32) === 32;
+        e.objsign = (b2 & 16) === 16;
+        e.reserved = (b2 & 8) === 8;
+        e.sslCA = (b2 & 4) === 4;
+        e.emailCA = (b2 & 2) === 2;
+        e.objCA = (b2 & 1) === 1;
+      } else if (e.name === "subjectAltName" || e.name === "issuerAltName") {
+        e.altNames = [];
+        var gn;
+        var ev = asn1.fromDer(e.value);
+        for (var n = 0; n < ev.value.length; ++n) {
+          gn = ev.value[n];
+          var altName = {
+            type: gn.type,
+            value: gn.value,
+          };
+          switch ((e.altNames.push(altName), gn.type)) {
             case 1:
             case 2:
             case 6:
               break;
             case 7:
-              D.ip = en.util.bytesToIP(w.value);
+              altName.ip = forge.util.bytesToIP(gn.value);
               break;
             case 8:
-              D.oid = asn1.derToOid(w.value);
+              altName.oid = asn1.derToOid(gn.value);
               break;
             default:
           }
         }
-      } else if (n.name === "subjectKeyIdentifier") {
-        var fromDer = asn1.fromDer(n.value);
-        n.subjectKeyIdentifier = en.util.bytesToHex(fromDer.value);
+      } else if (e.name === "subjectKeyIdentifier") {
+        var ev = asn1.fromDer(e.value);
+        e.subjectKeyIdentifier = forge.util.bytesToHex(ev.value);
       }
     }
-    return n;
+    return e;
   };
-  ht.certificationRequestFromAsn1 = function (e, n) {
-    var r = {},
-      s = [];
-    if (!asn1.validate(e, FG, r, s)) {
-      var h = Error(
+  pki.certificationRequestFromAsn1 = function (obj, computeHash) {
+    var capture = {};
+    var errors = [];
+    if (!asn1.validate(obj, certificationRequestValidator, capture, errors)) {
+      var error = Error(
         "Cannot read PKCS#10 certificate request. ASN.1 object is not a PKCS#10 CertificationRequest.",
       );
-      throw ((h.errors = s), h);
+      error.errors = errors;
+      throw error;
     }
-    var derToOid = asn1.derToOid(r.publicKeyOid);
-    if (derToOid !== ht.oids.rsaEncryption) throw Error("Cannot read public key. OID is not RSA.");
-    var certificationRequest = ht.createCertificationRequest();
-    if (
-      ((certificationRequest.version = r.csrVersion ? r.csrVersion.charCodeAt(0) : 0),
-      (certificationRequest.signatureOid = en.asn1.derToOid(r.csrSignatureOid)),
-      (certificationRequest.signatureParameters = im(
-        certificationRequest.signatureOid,
-        r.csrSignatureParams,
-        !0,
-      )),
-      (certificationRequest.siginfo.algorithmOid = en.asn1.derToOid(r.csrSignatureOid)),
-      (certificationRequest.siginfo.parameters = im(
-        certificationRequest.siginfo.algorithmOid,
-        r.csrSignatureParams,
-        !1,
-      )),
-      (certificationRequest.signature = r.csrSignature),
-      (certificationRequest.certificationRequestInfo = r.certificationRequestInfo),
-      n)
-    ) {
-      certificationRequest.md = om({
-        signatureOid: certificationRequest.signatureOid,
+    var oid = asn1.derToOid(capture.publicKeyOid);
+    if (oid !== pki.oids.rsaEncryption) throw Error("Cannot read public key. OID is not RSA.");
+    var csr = pki.createCertificationRequest();
+    csr.version = capture.csrVersion ? capture.csrVersion.charCodeAt(0) : 0;
+    csr.signatureOid = forge.asn1.derToOid(capture.csrSignatureOid);
+    csr.signatureParameters = _readSignatureParameters(csr.signatureOid, capture.csrSignatureParams, true);
+    csr.siginfo.algorithmOid = forge.asn1.derToOid(capture.csrSignatureOid);
+    csr.siginfo.parameters = _readSignatureParameters(
+      csr.siginfo.algorithmOid,
+      capture.csrSignatureParams,
+      false,
+    );
+    csr.signature = capture.csrSignature;
+    csr.certificationRequestInfo = capture.certificationRequestInfo;
+    if (computeHash) {
+      csr.md = _createSignatureDigest({
+        signatureOid: csr.signatureOid,
         type: "certification request",
       });
-      var toDer = asn1.toDer(certificationRequest.certificationRequestInfo);
-      certificationRequest.md.update(toDer.getBytes());
+      var bytes = asn1.toDer(csr.certificationRequestInfo);
+      csr.md.update(bytes.getBytes());
     }
-    var create = en.md.sha1.create();
-    return (
-      (certificationRequest.subject.getField = function (R) {
-        return tl(certificationRequest.subject, R);
-      }),
-      (certificationRequest.subject.addField = function (R) {
-        (Ni([R]), certificationRequest.subject.attributes.push(R));
-      }),
-      (certificationRequest.subject.attributes = ht.RDNAttributesAsArray(
-        r.certificationRequestInfoSubject,
-        create,
-      )),
-      (certificationRequest.subject.hash = create.digest().toHex()),
-      (certificationRequest.publicKey = ht.publicKeyFromAsn1(r.subjectPublicKeyInfo)),
-      (certificationRequest.getAttribute = function (R) {
-        return tl(certificationRequest, R);
-      }),
-      (certificationRequest.addAttribute = function (R) {
-        (Ni([R]), certificationRequest.attributes.push(R));
-      }),
-      (certificationRequest.attributes = ht.CRIAttributesAsArray(r.certificationRequestInfoAttributes || [])),
-      certificationRequest
-    );
+    var smd = forge.md.sha1.create();
+    csr.subject.getField = function (sn) {
+      return _getAttribute(csr.subject, sn);
+    };
+    csr.subject.addField = function (attr) {
+      _fillMissingFields([attr]);
+      csr.subject.attributes.push(attr);
+    };
+    csr.subject.attributes = pki.RDNAttributesAsArray(capture.certificationRequestInfoSubject, smd);
+    csr.subject.hash = smd.digest().toHex();
+    csr.publicKey = pki.publicKeyFromAsn1(capture.subjectPublicKeyInfo);
+    csr.getAttribute = function (sn) {
+      return _getAttribute(csr, sn);
+    };
+    csr.addAttribute = function (attr) {
+      _fillMissingFields([attr]);
+      csr.attributes.push(attr);
+    };
+    csr.attributes = pki.CRIAttributesAsArray(capture.certificationRequestInfoAttributes || []);
+    return csr;
   };
-  ht.createCertificationRequest = function () {
-    var e = {};
-    return (
-      (e.version = 0),
-      (e.signatureOid = null),
-      (e.signature = null),
-      (e.siginfo = {}),
-      (e.siginfo.algorithmOid = null),
-      (e.subject = {}),
-      (e.subject.getField = function (n) {
-        return tl(e.subject, n);
-      }),
-      (e.subject.addField = function (n) {
-        (Ni([n]), e.subject.attributes.push(n));
-      }),
-      (e.subject.attributes = []),
-      (e.subject.hash = null),
-      (e.publicKey = null),
-      (e.attributes = []),
-      (e.getAttribute = function (n) {
-        return tl(e, n);
-      }),
-      (e.addAttribute = function (n) {
-        (Ni([n]), e.attributes.push(n));
-      }),
-      (e.md = null),
-      (e.setSubject = function (n) {
-        (Ni(n), (e.subject.attributes = n), (e.subject.hash = null));
-      }),
-      (e.setAttributes = function (n) {
-        (Ni(n), (e.attributes = n));
-      }),
-      (e.sign = function (n, r) {
-        e.md = r || en.md.sha1.create();
-        var s = oids[e.md.algorithm + "WithRSAEncryption"];
-        if (!s) {
-          var h = Error(
-            "Could not compute certification request digest. Unknown message digest algorithm OID.",
-          );
-          throw ((h.algorithm = e.md.algorithm), h);
-        }
-        ((e.signatureOid = e.siginfo.algorithmOid = s),
-          (e.certificationRequestInfo = ht.getCertificationRequestInfo(e)));
-        var toDer = asn1.toDer(e.certificationRequestInfo);
-        (e.md.update(toDer.getBytes()), (e.signature = n.sign(e.md)));
-      }),
-      (e.verify = function () {
-        var n = !1,
-          md = e.md;
-        if (md === null) {
-          md = om({ signatureOid: e.signatureOid, type: "certification request" });
-          var s = e.certificationRequestInfo || ht.getCertificationRequestInfo(e),
-            toDer = asn1.toDer(s);
-          md.update(toDer.getBytes());
-        }
-        if (md !== null) n = wA({ certificate: e, md: md, signature: e.signature });
-        return n;
-      }),
-      e
-    );
-  };
-  function fu(e) {
-    var create = asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, !0, []),
-      r,
-      s,
-      attributes = e.attributes;
-    for (var y = 0; y < attributes.length; ++y) {
-      r = attributes[y];
-      var b = r.value,
-        PRINTABLESTRING = asn1.Type.PRINTABLESTRING;
-      if ("valueTagClass" in r) {
-        if (((PRINTABLESTRING = r.valueTagClass), PRINTABLESTRING === asn1.Type.UTF8))
-          b = en.util.encodeUtf8(b);
+  pki.createCertificationRequest = function () {
+    var csr = {};
+    csr.version = 0;
+    csr.signatureOid = null;
+    csr.signature = null;
+    csr.siginfo = {};
+    csr.siginfo.algorithmOid = null;
+    csr.subject = {};
+    csr.subject.getField = function (sn) {
+      return _getAttribute(csr.subject, sn);
+    };
+    csr.subject.addField = function (attr) {
+      _fillMissingFields([attr]);
+      csr.subject.attributes.push(attr);
+    };
+    csr.subject.attributes = [];
+    csr.subject.hash = null;
+    csr.publicKey = null;
+    csr.attributes = [];
+    csr.getAttribute = function (sn) {
+      return _getAttribute(csr, sn);
+    };
+    csr.addAttribute = function (attr) {
+      _fillMissingFields([attr]);
+      csr.attributes.push(attr);
+    };
+    csr.md = null;
+    csr.setSubject = function (attrs) {
+      _fillMissingFields(attrs);
+      csr.subject.attributes = attrs;
+      csr.subject.hash = null;
+    };
+    csr.setAttributes = function (attrs) {
+      _fillMissingFields(attrs);
+      csr.attributes = attrs;
+    };
+    csr.sign = function (key, md) {
+      csr.md = md || forge.md.sha1.create();
+      var algorithmOid = oids[csr.md.algorithm + "WithRSAEncryption"];
+      if (!algorithmOid) {
+        var error = Error(
+          "Could not compute certification request digest. Unknown message digest algorithm OID.",
+        );
+        error.algorithm = csr.md.algorithm;
+        throw error;
       }
-      ((s = asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SET, !0, [
-        asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, !0, [
-          asn1.create(asn1.Class.UNIVERSAL, asn1.Type.OID, !1, asn1.oidToDer(r.type).getBytes()),
-          asn1.create(asn1.Class.UNIVERSAL, PRINTABLESTRING, !1, b),
+      csr.signatureOid = csr.siginfo.algorithmOid = algorithmOid;
+      csr.certificationRequestInfo = pki.getCertificationRequestInfo(csr);
+      var bytes = asn1.toDer(csr.certificationRequestInfo);
+      csr.md.update(bytes.getBytes());
+      csr.signature = key.sign(csr.md);
+    };
+    csr.verify = function () {
+      var rval = false;
+      var md = csr.md;
+      if (md === null) {
+        md = _createSignatureDigest({
+          signatureOid: csr.signatureOid,
+          type: "certification request",
+        });
+        var cri = csr.certificationRequestInfo || pki.getCertificationRequestInfo(csr);
+        var bytes = asn1.toDer(cri);
+        md.update(bytes.getBytes());
+      }
+      if (md !== null)
+        rval = _verifySignature({
+          certificate: csr,
+          md,
+          signature: csr.signature,
+        });
+      return rval;
+    };
+    return csr;
+  };
+  function _dnToAsn1(obj) {
+    var rval = asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, true, []);
+    var attr;
+    var set;
+    var attrs = obj.attributes;
+    for (var i = 0; i < attrs.length; ++i) {
+      attr = attrs[i];
+      var value = attr.value;
+      var valueTagClass = asn1.Type.PRINTABLESTRING;
+      if ("valueTagClass" in attr) {
+        valueTagClass = attr.valueTagClass;
+        if (valueTagClass === asn1.Type.UTF8) value = forge.util.encodeUtf8(value);
+      }
+      set = asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SET, true, [
+        asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, true, [
+          asn1.create(asn1.Class.UNIVERSAL, asn1.Type.OID, false, asn1.oidToDer(attr.type).getBytes()),
+          asn1.create(asn1.Class.UNIVERSAL, valueTagClass, false, value),
         ]),
-      ])),
-        create.value.push(s));
+      ]);
+      rval.value.push(set);
     }
-    return create;
+    return rval;
   }
-  function Ni(e) {
-    var n;
-    for (var r = 0; r < e.length; ++r) {
-      if (((n = e[r]), typeof n.name > "u")) {
-        if (n.type && n.type in ht.oids) n.name = ht.oids[n.type];
-        else if (n.shortName && n.shortName in jr) n.name = ht.oids[jr[n.shortName]];
+  function _fillMissingFields(attrs) {
+    var attr;
+    for (var i = 0; i < attrs.length; ++i) {
+      attr = attrs[i];
+      if (typeof attr.name === "undefined") {
+        if (attr.type && attr.type in pki.oids) attr.name = pki.oids[attr.type];
+        else if (attr.shortName && attr.shortName in _shortNames)
+          attr.name = pki.oids[_shortNames[attr.shortName]];
       }
-      if (typeof n.type > "u")
-        if (n.name && n.name in ht.oids) n.type = ht.oids[n.name];
+      if (typeof attr.type === "undefined")
+        if (attr.name && attr.name in pki.oids) attr.type = pki.oids[attr.name];
         else {
-          var s = Error("Attribute type not specified.");
-          throw ((s.attribute = n), s);
+          var error = Error("Attribute type not specified.");
+          error.attribute = attr;
+          throw error;
         }
-      if (typeof n.shortName > "u") {
-        if (n.name && n.name in jr) n.shortName = jr[n.name];
+      if (typeof attr.shortName === "undefined") {
+        if (attr.name && attr.name in _shortNames) attr.shortName = _shortNames[attr.name];
       }
-      if (n.type === oids.extensionRequest) {
-        if (((n.valueConstructed = !0), (n.valueTagClass = asn1.Type.SEQUENCE), !n.value && n.extensions)) {
-          n.value = [];
-          for (var h = 0; h < n.extensions.length; ++h)
-            n.value.push(ht.certificateExtensionToAsn1(TA(n.extensions[h])));
+      if (attr.type === oids.extensionRequest) {
+        attr.valueConstructed = true;
+        attr.valueTagClass = asn1.Type.SEQUENCE;
+        if (!attr.value && attr.extensions) {
+          attr.value = [];
+          for (var ei = 0; ei < attr.extensions.length; ++ei)
+            attr.value.push(pki.certificateExtensionToAsn1(_fillMissingExtensionFields(attr.extensions[ei])));
         }
       }
-      if (typeof n.value > "u") {
-        var s = Error("Attribute value not specified.");
-        throw ((s.attribute = n), s);
+      if (typeof attr.value === "undefined") {
+        var error = Error("Attribute value not specified.");
+        error.attribute = attr;
+        throw error;
       }
     }
   }
-  function TA(e, n) {
-    if (((n = n || {}), typeof e.name > "u")) {
-      if (e.id && e.id in ht.oids) e.name = ht.oids[e.id];
+  function _fillMissingExtensionFields(e, options) {
+    options = options || {};
+    if (typeof e.name === "undefined") {
+      if (e.id && e.id in pki.oids) e.name = pki.oids[e.id];
     }
-    if (typeof e.id > "u")
-      if (e.name && e.name in ht.oids) e.id = ht.oids[e.name];
+    if (typeof e.id === "undefined")
+      if (e.name && e.name in pki.oids) e.id = pki.oids[e.name];
       else {
-        var r = Error("Extension ID not specified.");
-        throw ((r.extension = e), r);
+        var error = Error("Extension ID not specified.");
+        error.extension = e;
+        throw error;
       }
-    if (typeof e.value < "u") return e;
+    if (typeof e.value !== "undefined") return e;
     if (e.name === "keyUsage") {
-      var s = 0,
-        h = 0,
-        y = 0;
-      if (e.digitalSignature) ((h |= 128), (s = 7));
-      if (e.nonRepudiation) ((h |= 64), (s = 6));
-      if (e.keyEncipherment) ((h |= 32), (s = 5));
-      if (e.dataEncipherment) ((h |= 16), (s = 4));
-      if (e.keyAgreement) ((h |= 8), (s = 3));
-      if (e.keyCertSign) ((h |= 4), (s = 2));
-      if (e.cRLSign) ((h |= 2), (s = 1));
-      if (e.encipherOnly) ((h |= 1), (s = 0));
-      if (e.decipherOnly) ((y |= 128), (s = 7));
-      var fromCharCode = String.fromCharCode(s);
-      if (y !== 0) fromCharCode += String.fromCharCode(h) + String.fromCharCode(y);
-      else if (h !== 0) fromCharCode += String.fromCharCode(h);
-      e.value = asn1.create(asn1.Class.UNIVERSAL, asn1.Type.BITSTRING, !1, fromCharCode);
+      var unused = 0;
+      var b2 = 0;
+      var b3 = 0;
+      if (e.digitalSignature) {
+        b2 |= 128;
+        unused = 7;
+      }
+      if (e.nonRepudiation) {
+        b2 |= 64;
+        unused = 6;
+      }
+      if (e.keyEncipherment) {
+        b2 |= 32;
+        unused = 5;
+      }
+      if (e.dataEncipherment) {
+        b2 |= 16;
+        unused = 4;
+      }
+      if (e.keyAgreement) {
+        b2 |= 8;
+        unused = 3;
+      }
+      if (e.keyCertSign) {
+        b2 |= 4;
+        unused = 2;
+      }
+      if (e.cRLSign) {
+        b2 |= 2;
+        unused = 1;
+      }
+      if (e.encipherOnly) {
+        b2 |= 1;
+        unused = 0;
+      }
+      if (e.decipherOnly) {
+        b3 |= 128;
+        unused = 7;
+      }
+      var value = String.fromCharCode(unused);
+      if (b3 !== 0) value += String.fromCharCode(b2) + String.fromCharCode(b3);
+      else if (b2 !== 0) value += String.fromCharCode(b2);
+      e.value = asn1.create(asn1.Class.UNIVERSAL, asn1.Type.BITSTRING, false, value);
     } else if (e.name === "basicConstraints") {
-      if (((e.value = asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, !0, [])), e.cA))
+      e.value = asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, true, []);
+      if (e.cA)
         e.value.value.push(
-          asn1.create(asn1.Class.UNIVERSAL, asn1.Type.BOOLEAN, !1, String.fromCharCode(255)),
+          asn1.create(asn1.Class.UNIVERSAL, asn1.Type.BOOLEAN, false, String.fromCharCode(255)),
         );
       if ("pathLenConstraint" in e)
         e.value.value.push(
           asn1.create(
             asn1.Class.UNIVERSAL,
             asn1.Type.INTEGER,
-            !1,
+            false,
             asn1.integerToDer(e.pathLenConstraint).getBytes(),
           ),
         );
     } else if (e.name === "extKeyUsage") {
-      e.value = asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, !0, []);
-      var S = e.value.value;
+      e.value = asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, true, []);
+      var seq = e.value.value;
       for (var key in e) {
-        if (e[key] !== !0) continue;
+        if (e[key] !== true) continue;
         if (key in oids)
-          S.push(asn1.create(asn1.Class.UNIVERSAL, asn1.Type.OID, !1, asn1.oidToDer(oids[key]).getBytes()));
+          seq.push(
+            asn1.create(asn1.Class.UNIVERSAL, asn1.Type.OID, false, asn1.oidToDer(oids[key]).getBytes()),
+          );
         else if (key.indexOf(".") !== -1)
-          S.push(asn1.create(asn1.Class.UNIVERSAL, asn1.Type.OID, !1, asn1.oidToDer(key).getBytes()));
+          seq.push(asn1.create(asn1.Class.UNIVERSAL, asn1.Type.OID, false, asn1.oidToDer(key).getBytes()));
       }
     } else if (e.name === "nsCertType") {
-      var s = 0,
-        h = 0;
-      if (e.client) ((h |= 128), (s = 7));
-      if (e.server) ((h |= 64), (s = 6));
-      if (e.email) ((h |= 32), (s = 5));
-      if (e.objsign) ((h |= 16), (s = 4));
-      if (e.reserved) ((h |= 8), (s = 3));
-      if (e.sslCA) ((h |= 4), (s = 2));
-      if (e.emailCA) ((h |= 2), (s = 1));
-      if (e.objCA) ((h |= 1), (s = 0));
-      var fromCharCode = String.fromCharCode(s);
-      if (h !== 0) fromCharCode += String.fromCharCode(h);
-      e.value = asn1.create(asn1.Class.UNIVERSAL, asn1.Type.BITSTRING, !1, fromCharCode);
-    } else if (e.name === "subjectAltName" || e.name === "issuerAltName") {
-      e.value = asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, !0, []);
-      var R;
-      for (var D = 0; D < e.altNames.length; ++D) {
-        R = e.altNames[D];
-        var fromCharCode = R.value;
-        if (R.type === 7 && R.ip) {
-          if (((fromCharCode = en.util.bytesFromIP(R.ip)), fromCharCode === null)) {
-            var r = Error('Extension "ip" value is not a valid IPv4 or IPv6 address.');
-            throw ((r.extension = e), r);
-          }
-        } else if (R.type === 8)
-          if (R.oid) fromCharCode = asn1.oidToDer(asn1.oidToDer(R.oid));
-          else fromCharCode = asn1.oidToDer(fromCharCode);
-        e.value.value.push(asn1.create(asn1.Class.CONTEXT_SPECIFIC, R.type, !1, fromCharCode));
+      var unused = 0;
+      var b2 = 0;
+      if (e.client) {
+        b2 |= 128;
+        unused = 7;
       }
-    } else if (e.name === "nsComment" && n.cert) {
+      if (e.server) {
+        b2 |= 64;
+        unused = 6;
+      }
+      if (e.email) {
+        b2 |= 32;
+        unused = 5;
+      }
+      if (e.objsign) {
+        b2 |= 16;
+        unused = 4;
+      }
+      if (e.reserved) {
+        b2 |= 8;
+        unused = 3;
+      }
+      if (e.sslCA) {
+        b2 |= 4;
+        unused = 2;
+      }
+      if (e.emailCA) {
+        b2 |= 2;
+        unused = 1;
+      }
+      if (e.objCA) {
+        b2 |= 1;
+        unused = 0;
+      }
+      var value = String.fromCharCode(unused);
+      if (b2 !== 0) value += String.fromCharCode(b2);
+      e.value = asn1.create(asn1.Class.UNIVERSAL, asn1.Type.BITSTRING, false, value);
+    } else if (e.name === "subjectAltName" || e.name === "issuerAltName") {
+      e.value = asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, true, []);
+      var altName;
+      for (var n = 0; n < e.altNames.length; ++n) {
+        altName = e.altNames[n];
+        var value = altName.value;
+        if (altName.type === 7 && altName.ip) {
+          value = forge.util.bytesFromIP(altName.ip);
+          if (value === null) {
+            var error = Error('Extension "ip" value is not a valid IPv4 or IPv6 address.');
+            error.extension = e;
+            throw error;
+          }
+        } else if (altName.type === 8)
+          if (altName.oid) value = asn1.oidToDer(asn1.oidToDer(altName.oid));
+          else value = asn1.oidToDer(value);
+        e.value.value.push(asn1.create(asn1.Class.CONTEXT_SPECIFIC, altName.type, false, value));
+      }
+    } else if (e.name === "nsComment" && options.cert) {
       if (!/^[\x00-\x7F]*$/.test(e.comment) || e.comment.length < 1 || e.comment.length > 128)
         throw Error('Invalid "nsComment" content.');
-      e.value = asn1.create(asn1.Class.UNIVERSAL, asn1.Type.IA5STRING, !1, e.comment);
-    } else if (e.name === "subjectKeyIdentifier" && n.cert) {
-      var generateSubjectKeyIdentifier = n.cert.generateSubjectKeyIdentifier();
-      ((e.subjectKeyIdentifier = generateSubjectKeyIdentifier.toHex()),
-        (e.value = asn1.create(
-          asn1.Class.UNIVERSAL,
-          asn1.Type.OCTETSTRING,
-          !1,
-          generateSubjectKeyIdentifier.getBytes(),
-        )));
-    } else if (e.name === "authorityKeyIdentifier" && n.cert) {
-      e.value = asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, !0, []);
-      var S = e.value.value;
+      e.value = asn1.create(asn1.Class.UNIVERSAL, asn1.Type.IA5STRING, false, e.comment);
+    } else if (e.name === "subjectKeyIdentifier" && options.cert) {
+      var ski = options.cert.generateSubjectKeyIdentifier();
+      e.subjectKeyIdentifier = ski.toHex();
+      e.value = asn1.create(asn1.Class.UNIVERSAL, asn1.Type.OCTETSTRING, false, ski.getBytes());
+    } else if (e.name === "authorityKeyIdentifier" && options.cert) {
+      e.value = asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, true, []);
+      var seq = e.value.value;
       if (e.keyIdentifier) {
-        var L = e.keyIdentifier === !0 ? n.cert.generateSubjectKeyIdentifier().getBytes() : e.keyIdentifier;
-        S.push(asn1.create(asn1.Class.CONTEXT_SPECIFIC, 0, !1, L));
+        var keyIdentifier =
+          e.keyIdentifier === true ? options.cert.generateSubjectKeyIdentifier().getBytes() : e.keyIdentifier;
+        seq.push(asn1.create(asn1.Class.CONTEXT_SPECIFIC, 0, false, keyIdentifier));
       }
       if (e.authorityCertIssuer) {
-        var V = [
-          asn1.create(asn1.Class.CONTEXT_SPECIFIC, 4, !0, [
-            fu(e.authorityCertIssuer === !0 ? n.cert.issuer : e.authorityCertIssuer),
+        var authorityCertIssuer = [
+          asn1.create(asn1.Class.CONTEXT_SPECIFIC, 4, true, [
+            _dnToAsn1(e.authorityCertIssuer === true ? options.cert.issuer : e.authorityCertIssuer),
           ]),
         ];
-        S.push(asn1.create(asn1.Class.CONTEXT_SPECIFIC, 1, !0, V));
+        seq.push(asn1.create(asn1.Class.CONTEXT_SPECIFIC, 1, true, authorityCertIssuer));
       }
       if (e.serialNumber) {
-        var hexToBytes = en.util.hexToBytes(e.serialNumber === !0 ? n.cert.serialNumber : e.serialNumber);
-        S.push(asn1.create(asn1.Class.CONTEXT_SPECIFIC, 2, !1, hexToBytes));
+        var serialNumber = forge.util.hexToBytes(
+          e.serialNumber === true ? options.cert.serialNumber : e.serialNumber,
+        );
+        seq.push(asn1.create(asn1.Class.CONTEXT_SPECIFIC, 2, false, serialNumber));
       }
     } else if (e.name === "cRLDistributionPoints") {
-      e.value = asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, !0, []);
-      var S = e.value.value,
-        create = asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, !0, []),
-        create_2 = asn1.create(asn1.Class.CONTEXT_SPECIFIC, 0, !0, []),
-        R;
-      for (var D = 0; D < e.altNames.length; ++D) {
-        R = e.altNames[D];
-        var fromCharCode = R.value;
-        if (R.type === 7 && R.ip) {
-          if (((fromCharCode = en.util.bytesFromIP(R.ip)), fromCharCode === null)) {
-            var r = Error('Extension "ip" value is not a valid IPv4 or IPv6 address.');
-            throw ((r.extension = e), r);
+      e.value = asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, true, []);
+      var seq = e.value.value;
+      var subSeq = asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, true, []);
+      var fullNameGeneralNames = asn1.create(asn1.Class.CONTEXT_SPECIFIC, 0, true, []);
+      var altName;
+      for (var n = 0; n < e.altNames.length; ++n) {
+        altName = e.altNames[n];
+        var value = altName.value;
+        if (altName.type === 7 && altName.ip) {
+          value = forge.util.bytesFromIP(altName.ip);
+          if (value === null) {
+            var error = Error('Extension "ip" value is not a valid IPv4 or IPv6 address.');
+            error.extension = e;
+            throw error;
           }
-        } else if (R.type === 8)
-          if (R.oid) fromCharCode = asn1.oidToDer(asn1.oidToDer(R.oid));
-          else fromCharCode = asn1.oidToDer(fromCharCode);
-        create_2.value.push(asn1.create(asn1.Class.CONTEXT_SPECIFIC, R.type, !1, fromCharCode));
+        } else if (altName.type === 8)
+          if (altName.oid) value = asn1.oidToDer(asn1.oidToDer(altName.oid));
+          else value = asn1.oidToDer(value);
+        fullNameGeneralNames.value.push(asn1.create(asn1.Class.CONTEXT_SPECIFIC, altName.type, false, value));
       }
-      (create.value.push(asn1.create(asn1.Class.CONTEXT_SPECIFIC, 0, !0, [create_2])), S.push(create));
+      subSeq.value.push(asn1.create(asn1.Class.CONTEXT_SPECIFIC, 0, true, [fullNameGeneralNames]));
+      seq.push(subSeq);
     }
-    if (typeof e.value > "u") {
-      var r = Error("Extension value not specified.");
-      throw ((r.extension = e), r);
+    if (typeof e.value === "undefined") {
+      var error = Error("Extension value not specified.");
+      error.extension = e;
+      throw error;
     }
     return e;
   }
-  function CS(e, n) {
-    switch (e) {
+  function _signatureParametersToAsn1(oid, params) {
+    switch (oid) {
       case oids["RSASSA-PSS"]:
-        var r = [];
-        if (n.hash.algorithmOid !== void 0)
-          r.push(
-            asn1.create(asn1.Class.CONTEXT_SPECIFIC, 0, !0, [
-              asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, !0, [
+        var parts = [];
+        if (params.hash.algorithmOid !== undefined)
+          parts.push(
+            asn1.create(asn1.Class.CONTEXT_SPECIFIC, 0, true, [
+              asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, true, [
                 asn1.create(
                   asn1.Class.UNIVERSAL,
                   asn1.Type.OID,
-                  !1,
-                  asn1.oidToDer(n.hash.algorithmOid).getBytes(),
+                  false,
+                  asn1.oidToDer(params.hash.algorithmOid).getBytes(),
                 ),
-                asn1.create(asn1.Class.UNIVERSAL, asn1.Type.NULL, !1, ""),
+                asn1.create(asn1.Class.UNIVERSAL, asn1.Type.NULL, false, ""),
               ]),
             ]),
           );
-        if (n.mgf.algorithmOid !== void 0)
-          r.push(
-            asn1.create(asn1.Class.CONTEXT_SPECIFIC, 1, !0, [
-              asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, !0, [
+        if (params.mgf.algorithmOid !== undefined)
+          parts.push(
+            asn1.create(asn1.Class.CONTEXT_SPECIFIC, 1, true, [
+              asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, true, [
                 asn1.create(
                   asn1.Class.UNIVERSAL,
                   asn1.Type.OID,
-                  !1,
-                  asn1.oidToDer(n.mgf.algorithmOid).getBytes(),
+                  false,
+                  asn1.oidToDer(params.mgf.algorithmOid).getBytes(),
                 ),
-                asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, !0, [
+                asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, true, [
                   asn1.create(
                     asn1.Class.UNIVERSAL,
                     asn1.Type.OID,
-                    !1,
-                    asn1.oidToDer(n.mgf.hash.algorithmOid).getBytes(),
+                    false,
+                    asn1.oidToDer(params.mgf.hash.algorithmOid).getBytes(),
                   ),
-                  asn1.create(asn1.Class.UNIVERSAL, asn1.Type.NULL, !1, ""),
+                  asn1.create(asn1.Class.UNIVERSAL, asn1.Type.NULL, false, ""),
                 ]),
               ]),
             ]),
           );
-        if (n.saltLength !== void 0)
-          r.push(
-            asn1.create(asn1.Class.CONTEXT_SPECIFIC, 2, !0, [
+        if (params.saltLength !== undefined)
+          parts.push(
+            asn1.create(asn1.Class.CONTEXT_SPECIFIC, 2, true, [
               asn1.create(
                 asn1.Class.UNIVERSAL,
                 asn1.Type.INTEGER,
-                !1,
-                asn1.integerToDer(n.saltLength).getBytes(),
+                false,
+                asn1.integerToDer(params.saltLength).getBytes(),
               ),
             ]),
           );
-        return asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, !0, r);
+        return asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, true, parts);
       default:
-        return asn1.create(asn1.Class.UNIVERSAL, asn1.Type.NULL, !1, "");
+        return asn1.create(asn1.Class.UNIVERSAL, asn1.Type.NULL, false, "");
     }
   }
-  function MG(e) {
-    var create = asn1.create(asn1.Class.CONTEXT_SPECIFIC, 0, !0, []);
-    if (e.attributes.length === 0) return create;
-    var attributes = e.attributes;
-    for (var s = 0; s < attributes.length; ++s) {
-      var h = attributes[s],
-        y = h.value,
-        UTF8 = asn1.Type.UTF8;
-      if ("valueTagClass" in h) UTF8 = h.valueTagClass;
-      if (UTF8 === asn1.Type.UTF8) y = en.util.encodeUtf8(y);
-      var S = !1;
-      if ("valueConstructed" in h) S = h.valueConstructed;
-      var create_2 = asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, !0, [
-        asn1.create(asn1.Class.UNIVERSAL, asn1.Type.OID, !1, asn1.oidToDer(h.type).getBytes()),
-        asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SET, !0, [asn1.create(asn1.Class.UNIVERSAL, UTF8, S, y)]),
+  function _CRIAttributesToAsn1(csr) {
+    var rval = asn1.create(asn1.Class.CONTEXT_SPECIFIC, 0, true, []);
+    if (csr.attributes.length === 0) return rval;
+    var attrs = csr.attributes;
+    for (var i = 0; i < attrs.length; ++i) {
+      var attr = attrs[i];
+      var value = attr.value;
+      var valueTagClass = asn1.Type.UTF8;
+      if ("valueTagClass" in attr) valueTagClass = attr.valueTagClass;
+      if (valueTagClass === asn1.Type.UTF8) value = forge.util.encodeUtf8(value);
+      var valueConstructed = false;
+      if ("valueConstructed" in attr) valueConstructed = attr.valueConstructed;
+      var seq = asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, true, [
+        asn1.create(asn1.Class.UNIVERSAL, asn1.Type.OID, false, asn1.oidToDer(attr.type).getBytes()),
+        asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SET, true, [
+          asn1.create(asn1.Class.UNIVERSAL, valueTagClass, valueConstructed, value),
+        ]),
       ]);
-      create.value.push(create_2);
+      rval.value.push(seq);
     }
-    return create;
+    return rval;
   }
-  var date = new Date("1950-01-01T00:00:00Z"),
-    date_2 = new Date("2050-01-01T00:00:00Z");
-  function _A(e) {
-    if (e >= date && e < date_2)
-      return asn1.create(asn1.Class.UNIVERSAL, asn1.Type.UTCTIME, !1, asn1.dateToUtcTime(e));
+  var jan_1_1950 = new Date("1950-01-01T00:00:00Z");
+  var jan_1_2050 = new Date("2050-01-01T00:00:00Z");
+  function _dateToAsn1(date) {
+    if (date >= jan_1_1950 && date < jan_1_2050)
+      return asn1.create(asn1.Class.UNIVERSAL, asn1.Type.UTCTIME, false, asn1.dateToUtcTime(date));
     else
-      return asn1.create(asn1.Class.UNIVERSAL, asn1.Type.GENERALIZEDTIME, !1, asn1.dateToGeneralizedTime(e));
+      return asn1.create(
+        asn1.Class.UNIVERSAL,
+        asn1.Type.GENERALIZEDTIME,
+        false,
+        asn1.dateToGeneralizedTime(date),
+      );
   }
-  ht.getTBSCertificate = function (e) {
-    var n = _A(e.validity.notBefore),
-      r = _A(e.validity.notAfter),
-      create = asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, !0, [
-        asn1.create(asn1.Class.CONTEXT_SPECIFIC, 0, !0, [
-          asn1.create(asn1.Class.UNIVERSAL, asn1.Type.INTEGER, !1, asn1.integerToDer(e.version).getBytes()),
-        ]),
-        asn1.create(asn1.Class.UNIVERSAL, asn1.Type.INTEGER, !1, en.util.hexToBytes(e.serialNumber)),
-        asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, !0, [
-          asn1.create(
-            asn1.Class.UNIVERSAL,
-            asn1.Type.OID,
-            !1,
-            asn1.oidToDer(e.siginfo.algorithmOid).getBytes(),
-          ),
-          CS(e.siginfo.algorithmOid, e.siginfo.parameters),
-        ]),
-        fu(e.issuer),
-        asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, !0, [n, r]),
-        fu(e.subject),
-        ht.publicKeyToAsn1(e.publicKey),
-      ]);
-    if (e.issuer.uniqueId)
-      create.value.push(
-        asn1.create(asn1.Class.CONTEXT_SPECIFIC, 1, !0, [
+  pki.getTBSCertificate = function (cert) {
+    var notBefore = _dateToAsn1(cert.validity.notBefore);
+    var notAfter = _dateToAsn1(cert.validity.notAfter);
+    var tbs = asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, true, [
+      asn1.create(asn1.Class.CONTEXT_SPECIFIC, 0, true, [
+        asn1.create(
+          asn1.Class.UNIVERSAL,
+          asn1.Type.INTEGER,
+          false,
+          asn1.integerToDer(cert.version).getBytes(),
+        ),
+      ]),
+      asn1.create(asn1.Class.UNIVERSAL, asn1.Type.INTEGER, false, forge.util.hexToBytes(cert.serialNumber)),
+      asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, true, [
+        asn1.create(
+          asn1.Class.UNIVERSAL,
+          asn1.Type.OID,
+          false,
+          asn1.oidToDer(cert.siginfo.algorithmOid).getBytes(),
+        ),
+        _signatureParametersToAsn1(cert.siginfo.algorithmOid, cert.siginfo.parameters),
+      ]),
+      _dnToAsn1(cert.issuer),
+      asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, true, [notBefore, notAfter]),
+      _dnToAsn1(cert.subject),
+      pki.publicKeyToAsn1(cert.publicKey),
+    ]);
+    if (cert.issuer.uniqueId)
+      tbs.value.push(
+        asn1.create(asn1.Class.CONTEXT_SPECIFIC, 1, true, [
           asn1.create(
             asn1.Class.UNIVERSAL,
             asn1.Type.BITSTRING,
-            !1,
-            String.fromCharCode(0) + e.issuer.uniqueId,
+            false,
+            String.fromCharCode(0) + cert.issuer.uniqueId,
           ),
         ]),
       );
-    if (e.subject.uniqueId)
-      create.value.push(
-        asn1.create(asn1.Class.CONTEXT_SPECIFIC, 2, !0, [
+    if (cert.subject.uniqueId)
+      tbs.value.push(
+        asn1.create(asn1.Class.CONTEXT_SPECIFIC, 2, true, [
           asn1.create(
             asn1.Class.UNIVERSAL,
             asn1.Type.BITSTRING,
-            !1,
-            String.fromCharCode(0) + e.subject.uniqueId,
+            false,
+            String.fromCharCode(0) + cert.subject.uniqueId,
           ),
         ]),
       );
-    if (e.extensions.length > 0) create.value.push(ht.certificateExtensionsToAsn1(e.extensions));
-    return create;
+    if (cert.extensions.length > 0) tbs.value.push(pki.certificateExtensionsToAsn1(cert.extensions));
+    return tbs;
   };
-  ht.getCertificationRequestInfo = function (e) {
-    var create = asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, !0, [
-      asn1.create(asn1.Class.UNIVERSAL, asn1.Type.INTEGER, !1, asn1.integerToDer(e.version).getBytes()),
-      fu(e.subject),
-      ht.publicKeyToAsn1(e.publicKey),
-      MG(e),
+  pki.getCertificationRequestInfo = function (csr) {
+    var cri = asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, true, [
+      asn1.create(asn1.Class.UNIVERSAL, asn1.Type.INTEGER, false, asn1.integerToDer(csr.version).getBytes()),
+      _dnToAsn1(csr.subject),
+      pki.publicKeyToAsn1(csr.publicKey),
+      _CRIAttributesToAsn1(csr),
     ]);
-    return create;
+    return cri;
   };
-  ht.distinguishedNameToAsn1 = function (e) {
-    return fu(e);
+  pki.distinguishedNameToAsn1 = function (dn) {
+    return _dnToAsn1(dn);
   };
-  ht.certificateToAsn1 = function (e) {
-    var n = e.tbsCertificate || ht.getTBSCertificate(e);
-    return asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, !0, [
-      n,
-      asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, !0, [
-        asn1.create(asn1.Class.UNIVERSAL, asn1.Type.OID, !1, asn1.oidToDer(e.signatureOid).getBytes()),
-        CS(e.signatureOid, e.signatureParameters),
+  pki.certificateToAsn1 = function (cert) {
+    var tbsCertificate = cert.tbsCertificate || pki.getTBSCertificate(cert);
+    return asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, true, [
+      tbsCertificate,
+      asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, true, [
+        asn1.create(asn1.Class.UNIVERSAL, asn1.Type.OID, false, asn1.oidToDer(cert.signatureOid).getBytes()),
+        _signatureParametersToAsn1(cert.signatureOid, cert.signatureParameters),
       ]),
-      asn1.create(asn1.Class.UNIVERSAL, asn1.Type.BITSTRING, !1, String.fromCharCode(0) + e.signature),
+      asn1.create(asn1.Class.UNIVERSAL, asn1.Type.BITSTRING, false, String.fromCharCode(0) + cert.signature),
     ]);
   };
-  ht.certificateExtensionsToAsn1 = function (e) {
-    var create = asn1.create(asn1.Class.CONTEXT_SPECIFIC, 3, !0, []),
-      create_2 = asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, !0, []);
-    create.value.push(create_2);
-    for (var s = 0; s < e.length; ++s) create_2.value.push(ht.certificateExtensionToAsn1(e[s]));
-    return create;
+  pki.certificateExtensionsToAsn1 = function (exts) {
+    var rval = asn1.create(asn1.Class.CONTEXT_SPECIFIC, 3, true, []);
+    var seq = asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, true, []);
+    rval.value.push(seq);
+    for (var i = 0; i < exts.length; ++i) seq.value.push(pki.certificateExtensionToAsn1(exts[i]));
+    return rval;
   };
-  ht.certificateExtensionToAsn1 = function (e) {
-    var create = asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, !0, []);
-    if (
-      (create.value.push(
-        asn1.create(asn1.Class.UNIVERSAL, asn1.Type.OID, !1, asn1.oidToDer(e.id).getBytes()),
-      ),
-      e.critical)
-    )
-      create.value.push(asn1.create(asn1.Class.UNIVERSAL, asn1.Type.BOOLEAN, !1, String.fromCharCode(255)));
-    var r = e.value;
-    if (typeof e.value !== "string") r = asn1.toDer(r).getBytes();
-    return (create.value.push(asn1.create(asn1.Class.UNIVERSAL, asn1.Type.OCTETSTRING, !1, r)), create);
+  pki.certificateExtensionToAsn1 = function (ext) {
+    var extseq = asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, true, []);
+    extseq.value.push(
+      asn1.create(asn1.Class.UNIVERSAL, asn1.Type.OID, false, asn1.oidToDer(ext.id).getBytes()),
+    );
+    if (ext.critical)
+      extseq.value.push(
+        asn1.create(asn1.Class.UNIVERSAL, asn1.Type.BOOLEAN, false, String.fromCharCode(255)),
+      );
+    var value = ext.value;
+    if (typeof ext.value !== "string") value = asn1.toDer(value).getBytes();
+    extseq.value.push(asn1.create(asn1.Class.UNIVERSAL, asn1.Type.OCTETSTRING, false, value));
+    return extseq;
   };
-  ht.certificationRequestToAsn1 = function (e) {
-    var n = e.certificationRequestInfo || ht.getCertificationRequestInfo(e);
-    return asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, !0, [
-      n,
-      asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, !0, [
-        asn1.create(asn1.Class.UNIVERSAL, asn1.Type.OID, !1, asn1.oidToDer(e.signatureOid).getBytes()),
-        CS(e.signatureOid, e.signatureParameters),
+  pki.certificationRequestToAsn1 = function (csr) {
+    var cri = csr.certificationRequestInfo || pki.getCertificationRequestInfo(csr);
+    return asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, true, [
+      cri,
+      asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, true, [
+        asn1.create(asn1.Class.UNIVERSAL, asn1.Type.OID, false, asn1.oidToDer(csr.signatureOid).getBytes()),
+        _signatureParametersToAsn1(csr.signatureOid, csr.signatureParameters),
       ]),
-      asn1.create(asn1.Class.UNIVERSAL, asn1.Type.BITSTRING, !1, String.fromCharCode(0) + e.signature),
+      asn1.create(asn1.Class.UNIVERSAL, asn1.Type.BITSTRING, false, String.fromCharCode(0) + csr.signature),
     ]);
   };
-  ht.createCaStore = function (e) {
-    var n = { certs: {} };
-    ((n.getIssuer = function (b) {
-      var S = r(b.issuer);
-      return S;
-    }),
-      (n.addCertificate = function (b) {
-        if (typeof b === "string") b = en.pki.certificateFromPem(b);
-        if ((s(b.subject), !n.hasCertificate(b)))
-          if (b.subject.hash in n.certs) {
-            var S = n.certs[b.subject.hash];
-            if (!en.util.isArray(S)) S = [S];
-            (S.push(b), (n.certs[b.subject.hash] = S));
-          } else n.certs[b.subject.hash] = b;
-      }),
-      (n.hasCertificate = function (b) {
-        if (typeof b === "string") b = en.pki.certificateFromPem(b);
-        var S = r(b.subject);
-        if (!S) return !1;
-        if (!en.util.isArray(S)) S = [S];
-        var bytes = asn1.toDer(ht.certificateToAsn1(b)).getBytes();
-        for (var R = 0; R < S.length; ++R) {
-          var bytes_2 = asn1.toDer(ht.certificateToAsn1(S[R])).getBytes();
-          if (bytes === bytes_2) return !0;
+  pki.createCaStore = function (certs) {
+    var caStore = {
+      certs: {},
+    };
+    caStore.getIssuer = function (cert) {
+      var rval = getBySubject(cert.issuer);
+      return rval;
+    };
+    caStore.addCertificate = function (cert) {
+      if (typeof cert === "string") cert = forge.pki.certificateFromPem(cert);
+      ensureSubjectHasHash(cert.subject);
+      if (!caStore.hasCertificate(cert))
+        if (cert.subject.hash in caStore.certs) {
+          var tmp = caStore.certs[cert.subject.hash];
+          if (!forge.util.isArray(tmp)) tmp = [tmp];
+          tmp.push(cert);
+          caStore.certs[cert.subject.hash] = tmp;
+        } else caStore.certs[cert.subject.hash] = cert;
+    };
+    caStore.hasCertificate = function (cert) {
+      if (typeof cert === "string") cert = forge.pki.certificateFromPem(cert);
+      var match = getBySubject(cert.subject);
+      if (!match) return false;
+      if (!forge.util.isArray(match)) match = [match];
+      var der1 = asn1.toDer(pki.certificateToAsn1(cert)).getBytes();
+      for (var i = 0; i < match.length; ++i) {
+        var der2 = asn1.toDer(pki.certificateToAsn1(match[i])).getBytes();
+        if (der1 === der2) return true;
+      }
+      return false;
+    };
+    caStore.listAllCertificates = function () {
+      var certList = [];
+      for (var hash in caStore.certs)
+        if (caStore.certs.hasOwnProperty(hash)) {
+          var value = caStore.certs[hash];
+          if (!forge.util.isArray(value)) certList.push(value);
+          else for (var i = 0; i < value.length; ++i) certList.push(value[i]);
         }
-        return !1;
-      }),
-      (n.listAllCertificates = function () {
-        var b = [];
-        for (var key in n.certs)
-          if (n.certs.hasOwnProperty(key)) {
-            var w = n.certs[key];
-            if (!en.util.isArray(w)) b.push(w);
-            else for (var R = 0; R < w.length; ++R) b.push(w[R]);
-          }
-        return b;
-      }),
-      (n.removeCertificate = function (b) {
-        var S;
-        if (typeof b === "string") b = en.pki.certificateFromPem(b);
-        if ((s(b.subject), !n.hasCertificate(b))) return null;
-        var w = r(b.subject);
-        if (!en.util.isArray(w)) return ((S = n.certs[b.subject.hash]), delete n.certs[b.subject.hash], S);
-        var bytes = asn1.toDer(ht.certificateToAsn1(b)).getBytes();
-        for (var D = 0; D < w.length; ++D) {
-          var bytes_2 = asn1.toDer(ht.certificateToAsn1(w[D])).getBytes();
-          if (bytes === bytes_2) ((S = w[D]), w.splice(D, 1));
+      return certList;
+    };
+    caStore.removeCertificate = function (cert) {
+      var result;
+      if (typeof cert === "string") cert = forge.pki.certificateFromPem(cert);
+      ensureSubjectHasHash(cert.subject);
+      if (!caStore.hasCertificate(cert)) return null;
+      var match = getBySubject(cert.subject);
+      if (!forge.util.isArray(match)) {
+        result = caStore.certs[cert.subject.hash];
+        delete caStore.certs[cert.subject.hash];
+        return result;
+      }
+      var der1 = asn1.toDer(pki.certificateToAsn1(cert)).getBytes();
+      for (var i = 0; i < match.length; ++i) {
+        var der2 = asn1.toDer(pki.certificateToAsn1(match[i])).getBytes();
+        if (der1 === der2) {
+          result = match[i];
+          match.splice(i, 1);
         }
-        if (w.length === 0) delete n.certs[b.subject.hash];
-        return S;
-      }));
-    function r(b) {
-      return (s(b), n.certs[b.hash] || null);
+      }
+      if (match.length === 0) delete caStore.certs[cert.subject.hash];
+      return result;
+    };
+    function getBySubject(subject) {
+      ensureSubjectHasHash(subject);
+      return caStore.certs[subject.hash] || null;
     }
-    function s(b) {
-      if (!b.hash) {
-        var create = en.md.sha1.create();
-        ((b.attributes = ht.RDNAttributesAsArray(fu(b), create)), (b.hash = create.digest().toHex()));
+    function ensureSubjectHasHash(subject) {
+      if (!subject.hash) {
+        var md = forge.md.sha1.create();
+        subject.attributes = pki.RDNAttributesAsArray(_dnToAsn1(subject), md);
+        subject.hash = md.digest().toHex();
       }
     }
-    if (e)
-      for (var h = 0; h < e.length; ++h) {
-        var y = e[h];
-        n.addCertificate(y);
+    if (certs)
+      for (var i = 0; i < certs.length; ++i) {
+        var cert = certs[i];
+        caStore.addCertificate(cert);
       }
-    return n;
+    return caStore;
   };
-  ht.certificateError = {
+  pki.certificateError = {
     bad_certificate: "forge.pki.BadCertificate",
     unsupported_certificate: "forge.pki.UnsupportedCertificate",
     certificate_revoked: "forge.pki.CertificateRevoked",
@@ -1504,113 +1692,133 @@ var am = x(function (Ofe, AA) {
     certificate_unknown: "forge.pki.CertificateUnknown",
     unknown_ca: "forge.pki.UnknownCertificateAuthority",
   };
-  ht.verifyCertificateChain = function (e, n, r) {
-    if (typeof r === "function") r = { verify: r };
-    ((r = r || {}), (n = n.slice(0)));
-    var sliced = n.slice(0),
-      validityCheckDate = r.validityCheckDate;
-    if (typeof validityCheckDate > "u") validityCheckDate = new Date();
-    var y = !0,
-      b = null,
-      S = 0;
+  pki.verifyCertificateChain = function (caStore, chain, options) {
+    if (typeof options === "function")
+      options = {
+        verify: options,
+      };
+    options = options || {};
+    chain = chain.slice(0);
+    var certs = chain.slice(0);
+    var validityCheckDate = options.validityCheckDate;
+    if (typeof validityCheckDate === "undefined") validityCheckDate = new Date();
+    var first = true;
+    var error = null;
+    var depth = 0;
     do {
-      var w = n.shift(),
-        R = null,
-        D = !1;
+      var cert = chain.shift();
+      var parent = null;
+      var selfSigned = false;
       if (validityCheckDate) {
-        if (validityCheckDate < w.validity.notBefore || validityCheckDate > w.validity.notAfter)
-          b = {
+        if (validityCheckDate < cert.validity.notBefore || validityCheckDate > cert.validity.notAfter)
+          error = {
             message: "Certificate is not valid yet or has expired.",
-            error: ht.certificateError.certificate_expired,
-            notBefore: w.validity.notBefore,
-            notAfter: w.validity.notAfter,
+            error: pki.certificateError.certificate_expired,
+            notBefore: cert.validity.notBefore,
+            notAfter: cert.validity.notAfter,
             now: validityCheckDate,
           };
       }
-      if (b === null) {
-        if (((R = n[0] || e.getIssuer(w)), R === null)) {
-          if (w.isIssuer(w)) ((D = !0), (R = w));
-        }
-        if (R) {
-          var O = R;
-          if (!en.util.isArray(O)) O = [O];
-          var L = !1;
-          while (!L && O.length > 0) {
-            R = O.shift();
-            try {
-              L = R.verify(w);
-            } catch (error) {}
+      if (error === null) {
+        parent = chain[0] || caStore.getIssuer(cert);
+        if (parent === null) {
+          if (cert.isIssuer(cert)) {
+            selfSigned = true;
+            parent = cert;
           }
-          if (!L)
-            b = { message: "Certificate signature is invalid.", error: ht.certificateError.bad_certificate };
         }
-        if (b === null && (!R || D) && !e.hasCertificate(w))
-          b = { message: "Certificate is not trusted.", error: ht.certificateError.unknown_ca };
+        if (parent) {
+          var parents = parent;
+          if (!forge.util.isArray(parents)) parents = [parents];
+          var verified = false;
+          while (!verified && parents.length > 0) {
+            parent = parents.shift();
+            try {
+              verified = parent.verify(cert);
+            } catch (ex) {}
+          }
+          if (!verified)
+            error = {
+              message: "Certificate signature is invalid.",
+              error: pki.certificateError.bad_certificate,
+            };
+        }
+        if (error === null && (!parent || selfSigned) && !caStore.hasCertificate(cert))
+          error = {
+            message: "Certificate is not trusted.",
+            error: pki.certificateError.unknown_ca,
+          };
       }
-      if (b === null && R && !w.isIssuer(R))
-        b = { message: "Certificate issuer is invalid.", error: ht.certificateError.bad_certificate };
-      if (b === null) {
-        var V = { keyUsage: !0, basicConstraints: !0 };
-        for (var K = 0; b === null && K < w.extensions.length; ++K) {
-          var q = w.extensions[K];
-          if (q.critical && !(q.name in V))
-            b = {
+      if (error === null && parent && !cert.isIssuer(parent))
+        error = {
+          message: "Certificate issuer is invalid.",
+          error: pki.certificateError.bad_certificate,
+        };
+      if (error === null) {
+        var se = {
+          keyUsage: true,
+          basicConstraints: true,
+        };
+        for (var i = 0; error === null && i < cert.extensions.length; ++i) {
+          var ext = cert.extensions[i];
+          if (ext.critical && !(ext.name in se))
+            error = {
               message: "Certificate has an unsupported critical extension.",
-              error: ht.certificateError.unsupported_certificate,
+              error: pki.certificateError.unsupported_certificate,
             };
         }
       }
-      if (b === null && (!y || (n.length === 0 && (!R || D)))) {
-        var extension = w.getExtension("basicConstraints"),
-          extension_2 = w.getExtension("keyUsage");
-        if (extension_2 !== null) {
-          if (!extension_2.keyCertSign || extension === null)
-            b = {
+      if (error === null && (!first || (chain.length === 0 && (!parent || selfSigned)))) {
+        var bcExt = cert.getExtension("basicConstraints");
+        var keyUsageExt = cert.getExtension("keyUsage");
+        if (keyUsageExt !== null) {
+          if (!keyUsageExt.keyCertSign || bcExt === null)
+            error = {
               message:
                 "Certificate keyUsage or basicConstraints conflict or indicate that the certificate is not a CA. If the certificate is the only one in the chain or isn't the first then the certificate must be a valid CA.",
-              error: ht.certificateError.bad_certificate,
+              error: pki.certificateError.bad_certificate,
             };
         }
-        if (b === null && extension === null)
-          b = {
+        if (error === null && bcExt === null)
+          error = {
             message: "Certificate is missing basicConstraints extension and cannot be used as a CA.",
-            error: ht.certificateError.bad_certificate,
+            error: pki.certificateError.bad_certificate,
           };
-        if (b === null && extension !== null && !extension.cA)
-          b = {
+        if (error === null && bcExt !== null && !bcExt.cA)
+          error = {
             message: "Certificate basicConstraints indicates the certificate is not a CA.",
-            error: ht.certificateError.bad_certificate,
+            error: pki.certificateError.bad_certificate,
           };
-        if (b === null && extension_2 !== null && "pathLenConstraint" in extension) {
-          var ie = S - 1;
-          if (ie > extension.pathLenConstraint)
-            b = {
+        if (error === null && keyUsageExt !== null && "pathLenConstraint" in bcExt) {
+          var pathLen = depth - 1;
+          if (pathLen > bcExt.pathLenConstraint)
+            error = {
               message: "Certificate basicConstraints pathLenConstraint violated.",
-              error: ht.certificateError.bad_certificate,
+              error: pki.certificateError.bad_certificate,
             };
         }
       }
-      var ae = b === null ? !0 : b.error,
-        Se = r.verify ? r.verify(ae, S, sliced) : ae;
-      if (Se === !0) b = null;
+      var vfd = error === null ? true : error.error;
+      var ret = options.verify ? options.verify(vfd, depth, certs) : vfd;
+      if (ret === true) error = null;
       else {
-        if (ae === !0)
-          b = {
+        if (vfd === true)
+          error = {
             message: "The application rejected the certificate.",
-            error: ht.certificateError.bad_certificate,
+            error: pki.certificateError.bad_certificate,
           };
-        if (Se || Se === 0) {
-          if (typeof Se === "object" && !en.util.isArray(Se)) {
-            if (Se.message) b.message = Se.message;
-            if (Se.error) b.error = Se.error;
-          } else if (typeof Se === "string") b.error = Se;
+        if (ret || ret === 0) {
+          if (typeof ret === "object" && !forge.util.isArray(ret)) {
+            if (ret.message) error.message = ret.message;
+            if (ret.error) error.error = ret.error;
+          } else if (typeof ret === "string") error.error = ret;
         }
-        throw b;
+        throw error;
       }
-      ((y = !1), ++S);
-    } while (n.length > 0);
-    return !0;
+      first = false;
+      ++depth;
+    } while (chain.length > 0);
+    return true;
   };
 });
-
-export { am };
+export { require_x509 };

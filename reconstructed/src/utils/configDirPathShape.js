@@ -22,7 +22,11 @@ import { createEnvAccessor } from "./env/envRegistry.js";
 //@ chunk-3wek6r2k.js:68365-68416 placement
 function isUncachedPromptBoundary(e) {
   return (
-    e === SYSTEM_PROMPT_DYNAMIC_BOUNDARY || isCliSyspromptPrefix(e) || isUncachedSystemBlock({ text: e })
+    e === SYSTEM_PROMPT_DYNAMIC_BOUNDARY ||
+    isCliSyspromptPrefix(e) ||
+    isUncachedSystemBlock({
+      text: e,
+    })
   );
 }
 //@ chunk-3wek6r2k.js:68416-68474 placement
@@ -33,7 +37,7 @@ function joinCacheablePrompt(e) {
 }
 //@ chunk-3wek6r2k.js:68498-68886 placement
 function configDirPathShape(e, o = pathModule) {
-  if (e === void 0) return "unset";
+  if (e === undefined) return "unset";
   let trimmed = e.trim();
   if (trimmed === "") return "blank";
   let r = o.sep === "\\";
@@ -47,15 +51,19 @@ function configDirPathShape(e, o = pathModule) {
 //@ chunk-3wek6r2k.js:68886-69038 placement
 function configDirTelemetry() {
   if (isDiskless()) return {};
-  let e = getEnvCaseInsensitive(getPreSettingsEnvSnapshot(), "CLAUDE_CONFIG_DIR"),
-    o = getClaudeConfigHomeDir();
+  let envCaseInsensitive = getEnvCaseInsensitive(getPreSettingsEnvSnapshot(), "CLAUDE_CONFIG_DIR");
+  let claudeConfigHomeDir = getClaudeConfigHomeDir();
   return {
-    config_dir_kind: fromEnum(configDirPathShape(e)),
-    ...(o !== e && { config_dir_settings_kind: fromEnum(configDirPathShape(o)) }),
+    config_dir_kind: fromEnum(configDirPathShape(envCaseInsensitive)),
+    ...(claudeConfigHomeDir !== envCaseInsensitive && {
+      config_dir_settings_kind: fromEnum(configDirPathShape(claudeConfigHomeDir)),
+    }),
   };
 }
 //@ chunk-3wek6r2k.js:69038-69063 placement
-var Au = {},
-  x_ = createEnvAccessor(Au, null);
-
+/**
+ * 配置目录路径覆盖的空表。
+ */
+var emptyConfigDirOverrides = {};
+var configDirOverridesAccessor = createEnvAccessor(emptyConfigDirOverrides, null);
 export { configDirTelemetry, joinCacheablePrompt, isUncachedPromptBoundary };

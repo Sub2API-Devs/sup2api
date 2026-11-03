@@ -14,12 +14,17 @@ import { antEnv } from "../../env.js";
 import { logError } from "../../log.js";
 import { toError } from "../../errors.js";
 import { createKeyedQueue } from "../../promiseQueue.js";
-import { Lao, Nao, a$e, bTt } from "./schemas.js";
+import {
+  MAX_ARTIFACT_SLUG_LENGTH,
+  MAX_ARTIFACT_TEXT_LENGTH,
+  MAX_CONTEXT_ENTRY_LENGTH,
+  MAX_TOOL_USE_IDS,
+} from "./schemas.js";
 import { countCodePoints } from "../../stringUtils.js";
 import { parseClassifierRequest } from "../../messages/apiNormalization.js";
 import { uniq } from "../../collections.js";
 import { wireName } from "../../../services/mcp/serverIdentity.js";
-import { W_e } from "./clamp.js";
+import { jsonByteLength } from "./clamp.js";
 import { logEvent } from "../../../services/analytics/index.js";
 import { lit as lit_2 } from "../../../services/analytics/safeMetadata.js";
 import { logForDebugging } from "../../debug.js";
@@ -27,8 +32,13 @@ import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../../services/analytics
 import { TENGU_SNUG_WALL } from "../../../services/api/withRetry.js";
 
 //@ chunk-e6aww6q8.js:129356-129404 placement
-function Hbt(e) {
-  return JSON.stringify({ meta: e });
+/**
+ * metaJsonLine：生成 {meta} 的 JSON 行。
+ */
+function metaJsonLine(meta) {
+  return JSON.stringify({
+    meta,
+  });
 }
 //@ chunk-e6aww6q8.js:129404-129556 placement
 class ServerClassifierContextLines {
@@ -47,72 +57,92 @@ class ServerClassifierContextLines {
   }
 }
 //@ chunk-e6aww6q8.js:129556-129583 placement
-var Sao = new HostScoped(() => new ServerClassifierContextLines());
+var classifierContextLinesSlot = new HostScoped(() => new ServerClassifierContextLines());
 //@ chunk-e6aww6q8.js:129583-129622 placement
-function QFe() {
-  return Sao.of(getRootSession().host);
+function classifierContextLines() {
+  return classifierContextLinesSlot.of(getRootSession().host);
 }
 //@ chunk-e6aww6q8.js:129622-129658 placement
-function JFe(e, n) {
-  QFe().record(e, n);
+/**
+ * recordClassifierContext：记录分类器上下文中。
+ */
+function recordClassifierContext(e, n) {
+  classifierContextLines().record(e, n);
 }
 //@ chunk-e6aww6q8.js:129658-129690 placement
-function Fbt(e) {
-  QFe().forget(e);
+/**
+ * forgetClassifierContext：丢弃分类器上下文行。
+ */
+function forgetClassifierContext(toolUseId) {
+  classifierContextLines().forget(toolUseId);
 }
 //@ chunk-e6aww6q8.js:129690-129730 placement
-function c9(e) {
-  return QFe().linesFor(e);
+/**
+ * classifierContextLinesFor：取某请求的上下文行。
+ */
+function classifierContextLinesFor(e) {
+  return classifierContextLines().linesFor(e);
 }
 //@ chunk-e6aww6q8.js:129730-129764 placement
-function nTt() {
+function classifierOverlapEnabled() {
   return resolveClassifierOverlapFlag().value;
 }
 //@ chunk-e6aww6q8.js:129764-129900 placement
 function resolveClassifierOverlapFlag() {
   let CLAUDE_CODE_AUTO_MODE_CLASSIFIER_OVERLAP = antEnv.CLAUDE_CODE_AUTO_MODE_CLASSIFIER_OVERLAP;
-  if (CLAUDE_CODE_AUTO_MODE_CLASSIFIER_OVERLAP !== void 0)
-    return { value: CLAUDE_CODE_AUTO_MODE_CLASSIFIER_OVERLAP, src: "env" };
-  return { value: !1, src: "default" };
+  if (CLAUDE_CODE_AUTO_MODE_CLASSIFIER_OVERLAP !== undefined)
+    return {
+      value: CLAUDE_CODE_AUTO_MODE_CLASSIFIER_OVERLAP,
+      src: "env",
+    };
+  return {
+    value: false,
+    src: "default",
+  };
 }
 //@ chunk-e6aww6q8.js:129900-129910 placement
-var bao = 4;
+var MAX_QUEUED_CLASSIFIER_SLOTS = 4;
+//@ chunk-e6aww6q8.js:129910-130256 placement
 /**
  * 分类器结果提交的排队位：place 设定前序位置与放弃回调，runInTurn 等前序完成后执行并释放；未交接时 dispose 释放。
  */
-//@ chunk-e6aww6q8.js:129910-130256 placement
 class CommitTurnSlot {
   earlierPlaces;
   giveUpPlace;
-  handedOff = !1;
-  place(e, n) {
-    ((this.earlierPlaces = e), (this.giveUpPlace = n));
+  handedOff = false;
+  place(earlierPlaces, giveUpPlace) {
+    this.earlierPlaces = earlierPlaces;
+    this.giveUpPlace = giveUpPlace;
   }
   reached() {
     return this.earlierPlaces;
   }
   runInTurn(e) {
-    let earlierPlaces = this.earlierPlaces,
-      giveUpPlace = this.giveUpPlace;
-    if (earlierPlaces === void 0 || giveUpPlace === void 0) {
+    let earlierPlaces = this.earlierPlaces;
+    let giveUpPlace = this.giveUpPlace;
+    if (earlierPlaces === undefined || giveUpPlace === undefined) {
       e();
       return;
     }
-    ((this.handedOff = !0),
-      earlierPlaces.then(e).then(giveUpPlace, (s) => {
-        (giveUpPlace(), logError(toError(s)));
-      }));
+    this.handedOff = true;
+    earlierPlaces.then(e).then(giveUpPlace, (error) => {
+      giveUpPlace();
+      logError(toError(error));
+    });
   }
   [Symbol.dispose]() {
     if (!this.handedOff) this.giveUpPlace?.();
   }
 }
 //@ chunk-e6aww6q8.js:130256-130318 placement
-var wao = { transcriptStatePublished: () => {}, stageOneDone: () => {} };
+var CLASSIFIER_QUEUE_NOOP_HOOKS = {
+  transcriptStatePublished: () => {},
+  stageOneDone: () => {},
+};
+//@ chunk-e6aww6q8.js:130318-132869 placement
 /**
  * 分类器请求排队器：同一键默认串行；开启重叠时按"车道"并发，跟踪未发布、第一阶段中、已过第一阶段的请求，缓存前缀已热时允许有限并发，并记录已分类的调用 id。
  */
-//@ chunk-e6aww6q8.js:130318-132869 placement
 class ClassifierRequestQueue {
   serializer = createKeyedQueue();
   pending = new Map();
@@ -120,7 +150,7 @@ class ClassifierRequestQueue {
   classifiedCallIds = new Set();
   enqueue(key, run, telemetry, options) {
     let pendingCount = this.pending.get(key) ?? 0;
-    if (pendingCount === 0 && vao())
+    if (pendingCount === 0 && classifierOverlapEnabledSafe())
       this.lanes.set(key, {
         waiting: [],
         running: 0,
@@ -131,50 +161,66 @@ class ClassifierRequestQueue {
         commitLine: Promise.resolve(),
       });
     this.pending.set(key, pendingCount + 1);
-    let lane = this.lanes.get(key),
-      now = Date.now(),
-      result =
-        lane === void 0
-          ? this.serializer.run(
-              key,
-              () => (oTt(telemetry, { queueDepth: pendingCount, queueWaitMs: Date.now() - now }), run(wao)),
-            )
-          : this.runOverlapping(lane, run, telemetry, { queueDepth: pendingCount, enqueuedAt: now }, options);
-    return (
-      result
-        .then(
-          () => {
-            return;
-          },
-          () => {
-            return;
-          },
-        )
-        .then(() => {
-          let L = (this.pending.get(key) ?? 1) - 1;
-          if (L <= 0) {
-            if ((this.pending.delete(key), this.lanes.get(key) === lane)) this.lanes.delete(key);
-          } else this.pending.set(key, L);
-        }),
-      result
-    );
+    let lane = this.lanes.get(key);
+    let now = Date.now();
+    let result =
+      lane === undefined
+        ? this.serializer.run(key, () => {
+            callSafely(telemetry, {
+              queueDepth: pendingCount,
+              queueWaitMs: Date.now() - now,
+            });
+            return run(CLASSIFIER_QUEUE_NOOP_HOOKS);
+          })
+        : this.runOverlapping(
+            lane,
+            run,
+            telemetry,
+            {
+              queueDepth: pendingCount,
+              enqueuedAt: now,
+            },
+            options,
+          );
+    result
+      .then(
+        () => {
+          return;
+        },
+        () => {
+          return;
+        },
+      )
+      .then(() => {
+        let L = (this.pending.get(key) ?? 1) - 1;
+        if (L <= 0) {
+          this.pending.delete(key);
+          if (this.lanes.get(key) === lane) this.lanes.delete(key);
+        } else this.pending.set(key, L);
+      });
+    return result;
   }
   runOverlapping(e, n, r, s, h) {
-    let y = h?.cachePrefix ?? "",
-      promise = new Promise((q, Z) => {
-        e.waiting.push({ cachePrefix: y, start: () => this.startCall(e, y, n, r, s, q, Z) });
-      }),
-      commitLine = e.commitLine,
-      L = () => {},
-      promise_2 = new Promise((q) => {
-        L = q;
+    let cachePrefix = h?.cachePrefix ?? "";
+    let promise = new Promise((resolve, reject) => {
+      e.waiting.push({
+        cachePrefix,
+        start: () => this.startCall(e, cachePrefix, n, r, s, resolve, reject),
       });
-    if (((e.commitLine = commitLine.then(() => promise_2)), h?.commitTurn === void 0)) promise.then(L, L);
+    });
+    let commitLine = e.commitLine;
+    let L = () => {};
+    let promise_2 = new Promise((resolve) => {
+      L = resolve;
+    });
+    e.commitLine = commitLine.then(() => promise_2);
+    if (h?.commitTurn === undefined) promise.then(L, L);
     else h.commitTurn.place(commitLine, L);
-    return (this.startReadySoon(e), promise);
+    this.startReadySoon(e);
+    return promise;
   }
-  startCall(e, n, r, s, h, y, S) {
-    oTt(s, {
+  startCall(e, cachePrefix, r, s, h, y, S) {
+    callSafely(s, {
       queueDepth: h.queueDepth,
       queueWaitMs: Date.now() - h.enqueuedAt,
       overlap: {
@@ -183,10 +229,18 @@ class ClassifierRequestQueue {
         releasedByEscalation: e.pastStageOne > 0,
       },
     });
-    let w = { lane: e, cachePrefix: n, published: !1, inStageOne: !0, pastStageOne: !1 };
-    (e.running++, e.unpublished++, e.inStageOne++);
-    let promise = new Promise((q) =>
-      q(
+    let w = {
+      lane: e,
+      cachePrefix,
+      published: false,
+      inStageOne: true,
+      pastStageOne: false,
+    };
+    e.running++;
+    e.unpublished++;
+    e.inStageOne++;
+    let promise = new Promise((resolve) =>
+      resolve(
         r({
           transcriptStatePublished: () => this.reportPublished(w),
           stageOneDone: () => this.reportStageOneDone(w),
@@ -198,22 +252,35 @@ class ClassifierRequestQueue {
     promise.then(G, G);
   }
   reportPublished(e) {
-    (this.publish(e), this.startReadySoon(e.lane));
+    this.publish(e);
+    this.startReadySoon(e.lane);
   }
   reportStageOneDone(e) {
-    (this.leaveStageOne(e, !0), this.startReadySoon(e.lane));
+    this.leaveStageOne(e, true);
+    this.startReadySoon(e.lane);
   }
   settle(e) {
-    if ((this.leaveStageOne(e, !1), e.pastStageOne)) e.lane.pastStageOne--;
-    (e.lane.running--, this.startReady(e.lane));
+    this.leaveStageOne(e, false);
+    if (e.pastStageOne) e.lane.pastStageOne--;
+    e.lane.running--;
+    this.startReady(e.lane);
   }
   publish(e) {
-    if (!e.published) ((e.published = !0), e.lane.unpublished--);
+    if (!e.published) {
+      e.published = true;
+      e.lane.unpublished--;
+    }
   }
   leaveStageOne(e, n) {
-    if ((this.publish(e), e.inStageOne)) {
-      if (((e.inStageOne = !1), e.lane.inStageOne--, n))
-        ((e.pastStageOne = !0), e.lane.pastStageOne++, e.lane.warmPrefixes.add(e.cachePrefix));
+    this.publish(e);
+    if (e.inStageOne) {
+      e.inStageOne = false;
+      e.lane.inStageOne--;
+      if (n) {
+        e.pastStageOne = true;
+        e.lane.pastStageOne++;
+        e.lane.warmPrefixes.add(e.cachePrefix);
+      }
     }
   }
   startReadySoon(e) {
@@ -224,8 +291,10 @@ class ClassifierRequestQueue {
   }
   headMayStart(e) {
     let n = e.waiting[0];
-    if (n === void 0 || e.unpublished > 0) return !1;
-    return e.inStageOne === 0 || (e.warmPrefixes.has(n.cachePrefix) && e.inStageOne < bao);
+    if (n === undefined || e.unpublished > 0) return false;
+    return (
+      e.inStageOne === 0 || (e.warmPrefixes.has(n.cachePrefix) && e.inStageOne < MAX_QUEUED_CLASSIFIER_SLOTS)
+    );
   }
   recordClassifiedCall(e) {
     this.classifiedCallIds.add(e);
@@ -237,52 +306,67 @@ class ClassifierRequestQueue {
     return this.serializer.size + this.lanes.size;
   }
   reset() {
-    (this.serializer.clearForTest(),
-      this.pending.clear(),
-      this.lanes.clear(),
-      this.classifiedCallIds.clear());
+    this.serializer.clearForTest();
+    this.pending.clear();
+    this.lanes.clear();
+    this.classifiedCallIds.clear();
   }
 }
 //@ chunk-e6aww6q8.js:132869-132896 placement
-var Tao = new HostScoped(() => new ClassifierRequestQueue());
+var classifierRequestQueueSlot = new HostScoped(() => new ClassifierRequestQueue());
 //@ chunk-e6aww6q8.js:132896-132935 placement
-function ZFe() {
-  return Tao.of(getRootSession().host);
+function classifierRequestQueue() {
+  return classifierRequestQueueSlot.of(getRootSession().host);
 }
 //@ chunk-e6aww6q8.js:132935-132987 placement
-function o3n(e, n, r, s) {
-  return ZFe().enqueue(e, n, r, s);
+/**
+ * enqueueClassifierRequest：入队分类器请求。
+ */
+function enqueueClassifierRequest(e, n, r, s) {
+  return classifierRequestQueue().enqueue(e, n, r, s);
 }
 //@ chunk-e6aww6q8.js:132987-133033 placement
-function sTt(e) {
-  ZFe().recordClassifiedCall(e);
+/**
+ * recordClassifiedCall：记录已分类的工具调用。
+ */
+function recordClassifiedCall(id) {
+  classifierRequestQueue().recordClassifiedCall(id);
 }
 //@ chunk-e6aww6q8.js:133033-133090 placement
-function aue(e) {
-  return ZFe().isRecordedClassifiedCall(e);
+/**
+ * isClassifiedCall：该调用是否已分类。
+ */
+function isClassifiedCall(e) {
+  return classifierRequestQueue().isRecordedClassifiedCall(e);
 }
 //@ chunk-e6aww6q8.js:133090-133150 placement
-function vao() {
+function classifierOverlapEnabledSafe() {
   try {
-    return nTt();
+    return classifierOverlapEnabled();
   } catch (error) {
-    return (logError(toError(error)), !1);
+    logError(toError(error));
+    return false;
   }
 }
 //@ chunk-e6aww6q8.js:133150-133187 placement
-function oTt(e, n) {
+function callSafely(e, n) {
   try {
     e?.(n);
   } catch {}
 }
 //@ chunk-e6aww6q8.js:135297-135360 placement
-function w$o(e) {
-  return e.length <= Lao && e.every((n) => countCodePoints(n) <= Nao);
+/**
+ * fitsContextLimits：上下文行数与长度是否超限。
+ */
+function fitsContextLimits(e) {
+  return (
+    e.length <= MAX_ARTIFACT_SLUG_LENGTH && e.every((n) => countCodePoints(n) <= MAX_ARTIFACT_TEXT_LENGTH)
+  );
 }
+//@ chunk-e6aww6q8.js:143633-144004 placement
 /**
  * 记录在途的服务端分类请求上下文，结算后把每个工具调用 id 映射到对应的 {request, context}。
  */
-//@ chunk-e6aww6q8.js:143633-144004 placement
 class ClassifierRequestHistory {
   inFlight = new Map();
   judged = new Map();
@@ -291,9 +375,12 @@ class ClassifierRequestHistory {
   }
   settleRequest(e, n) {
     let r = this.inFlight.get(e);
-    if (r === void 0) return;
+    if (r === undefined) return;
     this.inFlight.delete(e);
-    let s = { request: e, context: r };
+    let s = {
+      request: e,
+      context: r,
+    };
     for (let h of n) this.judged.set(h, s);
   }
   forgetRequest(e) {
@@ -303,220 +390,286 @@ class ClassifierRequestHistory {
     return this.judged.get(e);
   }
   reset() {
-    (this.inFlight.clear(), this.judged.clear());
+    this.inFlight.clear();
+    this.judged.clear();
   }
 }
 //@ chunk-e6aww6q8.js:144004-144031 placement
-var Hao = new HostScoped(() => new ClassifierRequestHistory());
+var classifierHistorySlot = new HostScoped(() => new ClassifierRequestHistory());
 //@ chunk-e6aww6q8.js:144031-144070 placement
-function lue() {
-  return Hao.of(getRootSession().host);
+function classifierHistory() {
+  return classifierHistorySlot.of(getRootSession().host);
 }
 //@ chunk-e6aww6q8.js:144070-144113 placement
-function vTt(e, n) {
-  lue().recordRequest(e, n);
+/**
+ * recordClassifierRequest：记录分类请求。
+ */
+function recordClassifierRequest(key, n) {
+  classifierHistory().recordRequest(key, n);
 }
 //@ chunk-e6aww6q8.js:144113-144156 placement
-function ETt(e, n) {
-  lue().settleRequest(e, n);
+/**
+ * settleClassifierRequest：结算分类请求。
+ */
+function settleClassifierRequest(key, n) {
+  classifierHistory().settleRequest(key, n);
 }
 //@ chunk-e6aww6q8.js:144156-144195 placement
-function RTt(e) {
-  lue().forgetRequest(e);
+/**
+ * forgetClassifierRequest：丢弃分类请求。
+ */
+function forgetClassifierRequest(key) {
+  classifierHistory().forgetRequest(key);
 }
 //@ chunk-e6aww6q8.js:144195-144238 placement
-function CTt(e) {
-  return lue().historyFor(e);
+/**
+ * classifierHistoryFor：取某调用的历史。
+ */
+function classifierHistoryFor(toolUseId) {
+  return classifierHistory().historyFor(toolUseId);
 }
+//@ chunk-e6aww6q8.js:144238-144825 placement
 /**
  * 从用户消息的 serverClassifierContext 中收集先前请求的上下文，按请求分组并汇总对应的 tool_use_id（每组有上限）。
  */
-//@ chunk-e6aww6q8.js:144238-144825 placement
-function collectPriorServerContexts(e) {
-  let groups = [],
-    byRequest = new Map();
-  for (let s of e) {
+function collectPriorServerContexts(messages) {
+  let groups = [];
+  let byRequest = new Map();
+  for (let s of messages) {
     if (s.type !== "user") continue;
     let serverClassifierContext = s.serverClassifierContext;
-    if (serverClassifierContext === void 0) continue;
+    if (serverClassifierContext === undefined) continue;
     let content = s.message.content;
     if (!Array.isArray(content)) continue;
     let filtered = content.filter((q) => typeof q === "object" && q !== null && q.type === "tool_result");
     if (filtered.length !== 1) continue;
-    let tool_use_id = filtered[0].tool_use_id;
-    if (typeof tool_use_id !== "string" || tool_use_id.length > a$e) continue;
+    let toolUseId = filtered[0].tool_use_id;
+    if (typeof toolUseId !== "string" || toolUseId.length > MAX_CONTEXT_ENTRY_LENGTH) continue;
     let parsed = parseClassifierRequest(serverClassifierContext);
-    if (parsed === void 0) continue;
+    if (parsed === undefined) continue;
     let group = byRequest.get(parsed.request);
-    if (group === void 0)
-      ((group = { tool_use_ids: [], context: parsed.context }),
-        byRequest.set(parsed.request, group),
-        groups.push(group));
-    if (group.tool_use_ids.length < bTt && !group.tool_use_ids.includes(tool_use_id))
-      group.tool_use_ids.push(tool_use_id);
+    if (group === undefined) {
+      group = {
+        tool_use_ids: [],
+        context: parsed.context,
+      };
+      byRequest.set(parsed.request, group);
+      groups.push(group);
+    }
+    if (group.tool_use_ids.length < MAX_TOOL_USE_IDS && !group.tool_use_ids.includes(toolUseId))
+      group.tool_use_ids.push(toolUseId);
   }
   return groups;
 }
 //@ chunk-e6aww6q8.js:2512602-2512721 placement
-var SERVER_CONTEXT_FIELD_MAX_BYTES = 256000,
-  SERVER_CONTEXT_MAX_BYTES = 1040000,
-  TOOL_HOST_ATTACHED = "tool_host_attached",
-  STRUCTURED_OUTPUT_IS_HANDBACK = "structured_output_is_handback",
-  JUDGE_ONLY_TOOLS = "judge_only_tools",
-  MAX_JUDGE_ONLY_TOOL_NAME_LENGTH = 200;
+var SERVER_CONTEXT_FIELD_MAX_BYTES = 256000;
+var SERVER_CONTEXT_MAX_BYTES = 1040000;
+var TOOL_HOST_ATTACHED = "tool_host_attached";
+var STRUCTURED_OUTPUT_IS_HANDBACK = "structured_output_is_handback";
+var JUDGE_ONLY_TOOLS = "judge_only_tools";
+var MAX_JUDGE_ONLY_TOOL_NAME_LENGTH = 200;
 //@ chunk-e6aww6q8.js:2512721-2512906 placement
 function pickPriorTurnContext(e) {
   return {
     git_state: e.git_state,
-    ...(e.chrome_navigation !== void 0 && { chrome_navigation: e.chrome_navigation }),
-    ...(e.live_cwd !== void 0 && { live_cwd: e.live_cwd }),
+    ...(e.chrome_navigation !== undefined && {
+      chrome_navigation: e.chrome_navigation,
+    }),
+    ...(e.live_cwd !== undefined && {
+      live_cwd: e.live_cwd,
+    }),
     platform: e.platform,
   };
 }
+//@ chunk-e6aww6q8.js:2512906-2513380 placement
 /**
  * 组装服务端分类器请求上下文：judge-only 工具名规整排序（名字过长则放弃），加上上一轮、系统提醒与文本来源；超过大小上限时记 tengu_auto_mode_context_withheld 并放弃。
  */
-//@ chunk-e6aww6q8.js:2512906-2513380 placement
 function buildServerClassifierRequestContext({
-  autoModeServerContext: autoModeServerContext,
-  priorTurnContext: priorTurnContext,
-  systemReminders: systemReminders,
-  textProvenance: textProvenance,
+  autoModeServerContext,
+  priorTurnContext,
+  systemReminders,
+  textProvenance,
 }) {
   let h =
     autoModeServerContext.judgeOnlyTools &&
     uniq([...autoModeServerContext.judgeOnlyTools].map(wireName)).sort();
   if (h?.length === 0 || h?.some((w) => w.length > MAX_JUDGE_ONLY_TOOL_NAME_LENGTH)) return;
-  let y = buildServerClassifierContext(
+  let serverClassifierContext = buildServerClassifierContext(
     autoModeServerContext.context,
     autoModeServerContext.git,
     priorTurnContext ?? [],
     systemReminders ?? [],
     autoModeServerContext.artifacts,
-    autoModeServerContext.computerAttached === !0,
-    autoModeServerContext.structuredOutputIsHandback === !0,
+    autoModeServerContext.computerAttached === true,
+    autoModeServerContext.structuredOutputIsHandback === true,
     h,
   );
-  if (textProvenance !== void 0) y.text_provenance = textProvenance;
-  let S = W_e(y);
+  if (textProvenance !== undefined) serverClassifierContext.text_provenance = textProvenance;
+  let S = jsonByteLength(serverClassifierContext);
   if (S > SERVER_CONTEXT_MAX_BYTES) {
-    logEvent("tengu_auto_mode_context_withheld", { reason: lit_2("field_over_ceiling"), bytes: S });
+    logEvent("tengu_auto_mode_context_withheld", {
+      reason: lit_2("field_over_ceiling"),
+      bytes: S,
+    });
     return;
   }
-  return y;
+  return serverClassifierContext;
 }
+//@ chunk-e6aww6q8.js:2513380-2515571 placement
 /**
  * 构造发给服务端分类器的上下文（上一轮、浏览器标签、git 状态、系统提醒等）。
  */
-//@ chunk-e6aww6q8.js:2513380-2515571 placement
-function buildServerClassifierContext(e, n, r, s, h, y, S, w) {
-  let L = (Ie, Me, We, ze, lt, Je) => {
-      let chrome_navigation = e.chrome_navigation;
-      return {
-        v: 1,
-        ...e,
-        ...(chrome_navigation !== void 0 && {
-          chrome_navigation: Me
-            ? chrome_navigation
-            : { enabled: chrome_navigation.enabled, baselines: chrome_navigation.baselines },
-        }),
-        git_state: Ie,
-        ...(We.length > 0 && { prior_turn_context: We }),
-        ...(ze.length > 0 && { system_reminders: ze }),
-        ...(lt !== void 0 && { artifacts: lt }),
-        ...(Je.length > 0 && { shed: Je }),
-        ...(y && { [TOOL_HOST_ATTACHED]: !0 }),
-        ...(S && { [STRUCTURED_OUTPUT_IS_HANDBACK]: !0 }),
-        ...(w !== void 0 && { [JUDGE_ONLY_TOOLS]: w }),
-      };
-    },
-    G = n,
-    q = e.chrome_navigation?.tabs !== void 0,
-    Z = r,
-    Se = s,
-    ke = h,
-    we = [],
-    Ee = () => W_e(L(G, q, Z, Se, ke, we)) <= SERVER_CONTEXT_FIELD_MAX_BYTES;
+function buildServerClassifierContext(context, n, r, s, artifacts, y, S, w) {
+  let L = (gitState, Me, We, ze, lt, Je) => {
+    let chromeNavigation = context.chrome_navigation;
+    return {
+      v: 1,
+      ...context,
+      ...(chromeNavigation !== undefined && {
+        chrome_navigation: Me
+          ? chromeNavigation
+          : {
+              enabled: chromeNavigation.enabled,
+              baselines: chromeNavigation.baselines,
+            },
+      }),
+      git_state: gitState,
+      ...(We.length > 0 && {
+        prior_turn_context: We,
+      }),
+      ...(ze.length > 0 && {
+        system_reminders: ze,
+      }),
+      ...(lt !== undefined && {
+        artifacts: lt,
+      }),
+      ...(Je.length > 0 && {
+        shed: Je,
+      }),
+      ...(y && {
+        [TOOL_HOST_ATTACHED]: true,
+      }),
+      ...(S && {
+        [STRUCTURED_OUTPUT_IS_HANDBACK]: true,
+      }),
+      ...(w !== undefined && {
+        [JUDGE_ONLY_TOOLS]: w,
+      }),
+    };
+  };
+  let G = n;
+  let q = context.chrome_navigation?.tabs !== undefined;
+  let Z = r;
+  let Se = s;
+  let ke = artifacts;
+  let we = [];
+  let Ee = () => jsonByteLength(L(G, q, Z, Se, ke, we)) <= SERVER_CONTEXT_FIELD_MAX_BYTES;
   if (Ee()) return L(G, q, Z, Se, ke, we);
   if (Z.length > 0) {
     let Ie = Z.length;
     while (Ie > 0) {
-      if (((Ie = Math.floor(Ie / 2)), (Z = Ie > 0 ? r.slice(r.length - Ie) : []), Ie === 0))
-        we.push("prior_turn_context");
+      Ie = Math.floor(Ie / 2);
+      Z = Ie > 0 ? r.slice(r.length - Ie) : [];
+      if (Ie === 0) we.push("prior_turn_context");
       if (Ee()) return L(G, q, Z, Se, ke, we);
     }
   }
   if (q) {
-    if (((q = !1), we.push("chrome_navigation.tabs"), Ee())) return L(G, q, Z, Se, ke, we);
+    q = false;
+    we.push("chrome_navigation.tabs");
+    if (Ee()) return L(G, q, Z, Se, ke, we);
   }
   if (G.visibility !== null && G.visibility.visibility_cache.length > 0) {
-    if (
-      ((G = { ...G, visibility: { ...G.visibility, visibility_cache: [] }, truncated: !0 }),
-      we.push("git_state.visibility.visibility_cache"),
-      Ee())
-    )
-      return L(G, q, Z, Se, ke, we);
+    G = {
+      ...G,
+      visibility: {
+        ...G.visibility,
+        visibility_cache: [],
+      },
+      truncated: true,
+    };
+    we.push("git_state.visibility.visibility_cache");
+    if (Ee()) return L(G, q, Z, Se, ke, we);
   }
   if (G.visibility !== null && G.visibility.remotes.length > 0) {
-    if (
-      ((G = { ...G, visibility: { ...G.visibility, remotes: [] }, truncated: !0 }),
-      we.push("git_state.visibility.remotes"),
-      Ee())
-    )
-      return L(G, q, Z, Se, ke, we);
+    G = {
+      ...G,
+      visibility: {
+        ...G.visibility,
+        remotes: [],
+      },
+      truncated: true,
+    };
+    we.push("git_state.visibility.remotes");
+    if (Ee()) return L(G, q, Z, Se, ke, we);
   }
   if (G.status !== null && G.status.porcelain !== null) {
-    if (
-      ((G = { ...G, status: { ...G.status, porcelain: null, truncated: !1 }, truncated: !0 }),
-      we.push("git_state.status.porcelain"),
-      Ee())
-    )
-      return L(G, q, Z, Se, ke, we);
+    G = {
+      ...G,
+      status: {
+        ...G.status,
+        porcelain: null,
+        truncated: false,
+      },
+      truncated: true,
+    };
+    we.push("git_state.status.porcelain");
+    if (Ee()) return L(G, q, Z, Se, ke, we);
   }
   if (Se.length > 0) {
     let Ie = Se.length;
     while (Ie > 0) {
-      if (((Ie = Math.floor(Ie / 2)), (Se = Ie > 0 ? s.slice(s.length - Ie) : []), Ie === 0))
-        we.push("system_reminders");
+      Ie = Math.floor(Ie / 2);
+      Se = Ie > 0 ? s.slice(s.length - Ie) : [];
+      if (Ie === 0) we.push("system_reminders");
       if (Ee()) return L(G, q, Z, Se, ke, we);
     }
   }
-  if (ke !== void 0) ((ke = void 0), we.push("artifacts"));
+  if (ke !== undefined) {
+    ke = undefined;
+    we.push("artifacts");
+  }
   let Ae = L(G, q, Z, Se, ke, we);
-  if (W_e(Ae) > SERVER_CONTEXT_FIELD_MAX_BYTES)
-    (logForDebugging(
+  if (jsonByteLength(Ae) > SERVER_CONTEXT_FIELD_MAX_BYTES) {
+    logForDebugging(
       `[server-classifier] the permission rule lists alone exceed the auto-mode context budget (${SERVER_CONTEXT_FIELD_MAX_BYTES} bytes): every variable part (git state, repository visibility, Chrome tabs, prior-turn history, system-reminder ids, artifact state) was left out of this request's classifier context \u2014 trim the deny/ask rules or settings.autoMode entries`,
-      { level: "warn" },
-    ),
-      logEvent("tengu_auto_mode_context_static_over_budget", {
-        bytes: W_e(Ae),
-        deny_rules: e.rules.deny.length,
-        ask_rules: e.rules.ask.length,
-        auto_mode_entries: e.auto_mode.soft_deny.length + e.auto_mode.hard_deny.length,
-      }));
+      {
+        level: "warn",
+      },
+    );
+    logEvent("tengu_auto_mode_context_static_over_budget", {
+      bytes: jsonByteLength(Ae),
+      deny_rules: context.rules.deny.length,
+      ask_rules: context.rules.ask.length,
+      auto_mode_entries: context.auto_mode.soft_deny.length + context.auto_mode.hard_deny.length,
+    });
+  }
   return Ae;
 }
 //@ chunk-e6aww6q8.js:2515609-2515646 placement
-function tQe() {
-  return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_SNUG_WALL, !1) === !0;
+/**
+ * isSnugWallOn：开关 tengu_snug_wall。
+ */
+function isSnugWallOn() {
+  return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_SNUG_WALL, false) === true;
 }
-
 export {
-  c9,
-  aue,
-  CTt,
+  classifierContextLinesFor,
+  isClassifiedCall,
+  classifierHistoryFor,
   CommitTurnSlot,
-  o3n,
+  enqueueClassifierRequest,
   buildServerClassifierRequestContext,
   collectPriorServerContexts,
-  vTt,
+  recordClassifierRequest,
   pickPriorTurnContext,
-  Hbt,
-  JFe,
-  sTt,
-  Fbt,
-  w$o,
-  tQe,
-  ETt,
-  RTt,
+  metaJsonLine,
+  recordClassifierContext,
+  recordClassifiedCall,
+  forgetClassifierContext,
+  fitsContextLimits,
+  isSnugWallOn,
+  settleClassifierRequest,
+  forgetClassifierRequest,
 };

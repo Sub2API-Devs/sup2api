@@ -10,6 +10,12 @@
  */
 
 //@ chunk-bss4k1z9.js:13042-13092 fingerprint = PressEnterToContinue (0.571)
-var PressEnterToContinue = { bold: { bold: !0 }, code: { color: "permission" } };
-
+var PressEnterToContinue = {
+  bold: {
+    bold: true,
+  },
+  code: {
+    color: "permission",
+  },
+};
 export { PressEnterToContinue };

@@ -8,63 +8,86 @@
  * pieces: chunk-00qhwn8e.js (1), chunk-dcmhvw5a.js (1), chunk-p8fze0jh.js (2)
  * attribution: fingerprint 3, sole-consumer 1
  */
-import { qt, Se, Fy, dh } from "../../../vendor/react/cjs/react.production.js";
+import { qt, Se, Fy, isValidElement_default } from "../../../vendor/react/cjs/react.production.js";
 import { w } from "../../../vendor/react/compiler-runtime.js";
 import { OrderedListItem, OrderedListItemContext } from "./OrderedListItem.js";
-import { e } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Box } from "../../ink/components/Text.js";
 import { OrderedListWithItem } from "../CustomSelect/selectTable.js";
-import { hr } from "../../utils/invisibleChars.js";
+import { stripInvisibleChars } from "../../utils/invisibleChars.js";
 
 //@ chunk-p8fze0jh.js:19527-19549 sole-consumer
-var M = qt({ marker: "" });
+var orderedListMarker = qt({
+  marker: "",
+});
 //@ chunk-p8fze0jh.js:19549-20134 fingerprint = OrderedListComponent (0.858)
-function OrderedListComponent(t0) {
-  let $ = w(9),
-    { children: children } = t0,
-    { marker: parentMarker } = Se(M),
-    numberOfItems = 0;
+function OrderedListComponent(props) {
+  let $ = w(9);
+  let { children } = props;
+  let { marker: parentMarker } = Se(orderedListMarker);
+  let numberOfItems = 0;
   for (const child of Fy.toArray(children)) {
-    if (!dh(child) || child.type !== OrderedListItem) {
+    if (!isValidElement_default(child) || child.type !== OrderedListItem) {
       continue;
     }
     numberOfItems++;
   }
-  let maxMarkerWidth = String(numberOfItems).length,
-    k;
+  let maxMarkerWidth = String(numberOfItems).length;
+  let children_2;
   if ($[0] !== children || $[1] !== maxMarkerWidth || $[2] !== parentMarker) {
-    let u;
-    if ($[4] !== maxMarkerWidth || $[5] !== parentMarker)
-      ((u = (child_0, index) => {
-        if (!dh(child_0) || child_0.type !== OrderedListItem) {
-          return child_0;
+    let t2;
+    if ($[4] !== maxMarkerWidth || $[5] !== parentMarker) {
+      t2 = (child, index) => {
+        if (!isValidElement_default(child) || child.type !== OrderedListItem) {
+          return child;
         }
         let paddedMarker = `${String(index + 1).padStart(maxMarkerWidth)}.`;
         let marker = `${parentMarker}${paddedMarker}`;
-        return e(M.Provider, {
-          value: { marker: marker },
-          children: e(OrderedListItemContext.Provider, { value: { marker: marker }, children: child_0 }),
+        return jsxProd_default(orderedListMarker.Provider, {
+          value: {
+            marker,
+          },
+          children: jsxProd_default(OrderedListItemContext.Provider, {
+            value: {
+              marker,
+            },
+            children: child,
+          }),
         });
-      }),
-        ($[4] = maxMarkerWidth),
-        ($[5] = parentMarker),
-        ($[6] = u));
-    else u = $[6];
-    k = Fy.map(children, u);
-    (($[0] = children), ($[1] = maxMarkerWidth), ($[2] = parentMarker), ($[3] = k));
-  } else k = $[3];
-  let u;
-  if ($[7] !== k) ((u = e(Box, { flexDirection: "column", children: k })), ($[7] = k), ($[8] = u));
-  else u = $[8];
-  return u;
+      };
+      $[4] = maxMarkerWidth;
+      $[5] = parentMarker;
+      $[6] = t2;
+    } else t2 = $[6];
+    children_2 = Fy.map(children, t2);
+    $[0] = children;
+    $[1] = maxMarkerWidth;
+    $[2] = parentMarker;
+    $[3] = children_2;
+  } else children_2 = $[3];
+  let t2;
+  if ($[7] !== children_2) {
+    t2 = jsxProd_default(Box, {
+      flexDirection: "column",
+      children: children_2,
+    });
+    $[7] = children_2;
+    $[8] = t2;
+  } else t2 = $[8];
+  return t2;
 }
 //@ chunk-00qhwn8e.js:17541-17596 fingerprint
-function ls(v) {
-  return e(OrderedListWithItem.Item, { label: `/${hr(v)}` }, v);
+function renderSlashSkillItem(v) {
+  return jsxProd_default(
+    OrderedListWithItem.Item,
+    {
+      label: `/${stripInvisibleChars(v)}`,
+    },
+    v,
+  );
 }
 //@ chunk-dcmhvw5a.js:187858-187925 fingerprint = OrderedListContext (0.722)
 function OrderedListContext(e, n) {
   return Object.freeze(e.filter((r) => r.marker === n));
 }
-
-export { ls, OrderedListComponent, OrderedListContext };
+export { renderSlashSkillItem, OrderedListComponent, OrderedListContext };

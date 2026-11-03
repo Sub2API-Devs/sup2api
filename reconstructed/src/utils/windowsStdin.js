@@ -10,17 +10,20 @@
  */
 import { getPlatform } from "./platform.js";
 
+//@ chunk-j66yxmsq.js:226-359 placement
 /**
  * Windows 下切换一次原始模式以复位标准输入。
  */
-//@ chunk-j66yxmsq.js:226-359 placement
 function resetWindowsStdinMode() {
   if (getPlatform() !== "windows" || !process.stdin.isTTY) return;
   try {
-    (process.stdin.setRawMode(!0), process.stdin.setRawMode(!1));
+    process.stdin.setRawMode(true);
+    process.stdin.setRawMode(false);
   } catch {}
 }
 //@ chunk-j66yxmsq.js:359-376 placement
-function ozn(t) {}
-
-export { ozn, resetWindowsStdinMode };
+/**
+ * 空实现的 stdin 复位桩。
+ */
+function noopStdinReset(t) {}
+export { noopStdinReset, resetWindowsStdinMode };

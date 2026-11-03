@@ -6,30 +6,33 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { Jt } from "./polynomial.js";
+import { require_polynomial } from "./polynomial.js";
 
 //@ chunk-spjgqa4y.js:7479-7990 cjs-fingerprint
-var Zt = x(function (Il, Qt) {
-  var Le = Jt();
-  function He(t) {
-    if (((this.genPoly = void 0), (this.degree = t), this.degree)) this.initialize(this.degree);
+var require_reed_solomon_encoder = x(function (cjsExports, cjsModule) {
+  var Polynomial = require_polynomial();
+  function ReedSolomonEncoder(degree) {
+    this.genPoly = undefined;
+    this.degree = degree;
+    if (this.degree) this.initialize(this.degree);
   }
-  He.prototype.initialize = function (e) {
-    ((this.degree = e), (this.genPoly = Le.generateECPolynomial(this.degree)));
+  ReedSolomonEncoder.prototype.initialize = function (degree) {
+    this.degree = degree;
+    this.genPoly = Polynomial.generateECPolynomial(this.degree);
   };
-  He.prototype.encode = function (e) {
+  ReedSolomonEncoder.prototype.encode = function (data) {
     if (!this.genPoly) throw Error("Encoder not initialized");
-    let uint8Array = new Uint8Array(e.length + this.degree);
-    uint8Array.set(e);
-    let mod = Le.mod(uint8Array, this.genPoly),
-      i = this.degree - mod.length;
-    if (i > 0) {
-      let uint8Array = new Uint8Array(this.degree);
-      return (uint8Array.set(mod, i), uint8Array);
+    let paddedData = new Uint8Array(data.length + this.degree);
+    paddedData.set(data);
+    let remainder = Polynomial.mod(paddedData, this.genPoly);
+    let start = this.degree - remainder.length;
+    if (start > 0) {
+      let buff = new Uint8Array(this.degree);
+      buff.set(remainder, start);
+      return buff;
     }
-    return mod;
+    return remainder;
   };
-  Qt.exports = He;
+  cjsModule.exports = ReedSolomonEncoder;
 });
-
-export { Zt };
+export { require_reed_solomon_encoder };

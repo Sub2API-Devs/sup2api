@@ -6,56 +6,70 @@
  * attribution: cjs-fingerprint 1
  */
 import { x, importMetaRequire } from "../../../../runtime/bun-runtime.js";
-import { Ln } from "../../../pngjs/lib/png.js";
-import { we } from "./utils.js";
+import { require_png } from "../../../pngjs/lib/png.js";
+import { require_utils_2 } from "./utils.js";
 
 //@ chunk-spjgqa4y.js:52033-52922 cjs-fingerprint
-var Pn = x(function (Ee) {
-  var Sn = importMetaRequire("fs"),
-    PNG = Ln().PNG,
-    ue = we();
-  Ee.render = function (e, r) {
-    let options = ue.getOptions(r),
-      rendererOpts = options.rendererOpts,
-      imageWidth = ue.getImageWidth(e.modules.size, options);
-    ((rendererOpts.width = imageWidth), (rendererOpts.height = imageWidth));
-    let s = new PNG(rendererOpts);
-    return (ue.qrToImageData(s.data, e, options), s);
+var require_png_2 = x(function (cjsExports) {
+  var fs = importMetaRequire("fs");
+  var PNG = require_png().PNG;
+  var Utils = require_utils_2();
+  cjsExports.render = function (qrData, options) {
+    let opts = Utils.getOptions(options);
+    let pngOpts = opts.rendererOpts;
+    let size = Utils.getImageWidth(qrData.modules.size, opts);
+    pngOpts.width = size;
+    pngOpts.height = size;
+    let pngImage = new PNG(pngOpts);
+    Utils.qrToImageData(pngImage.data, qrData, opts);
+    return pngImage;
   };
-  Ee.renderToDataURL = function (e, r, n) {
-    if (typeof n > "u") ((n = r), (r = void 0));
-    Ee.renderToBuffer(e, r, function (i, o) {
-      if (i) n(i);
-      let s = "data:image/png;base64,";
-      ((s += o.toString("base64")), n(null, s));
+  cjsExports.renderToDataURL = function (qrData, options, cb) {
+    if (typeof cb === "undefined") {
+      cb = options;
+      options = undefined;
+    }
+    cjsExports.renderToBuffer(qrData, options, function (err, output) {
+      if (err) cb(err);
+      let url = "data:image/png;base64,";
+      url += output.toString("base64");
+      cb(null, url);
     });
   };
-  Ee.renderToBuffer = function (e, r, n) {
-    if (typeof n > "u") ((n = r), (r = void 0));
-    let render = Ee.render(e, r),
-      o = [];
-    (render.on("error", n),
-      render.on("data", function (s) {
-        o.push(s);
-      }),
-      render.on("end", function () {
-        n(null, Buffer.concat(o));
-      }),
-      render.pack());
+  cjsExports.renderToBuffer = function (qrData, options, cb) {
+    if (typeof cb === "undefined") {
+      cb = options;
+      options = undefined;
+    }
+    let png = cjsExports.render(qrData, options);
+    let buffer = [];
+    png.on("error", cb);
+    png.on("data", function (data) {
+      buffer.push(data);
+    });
+    png.on("end", function () {
+      cb(null, Buffer.concat(buffer));
+    });
+    png.pack();
   };
-  Ee.renderToFile = function (e, r, n, i) {
-    if (typeof i > "u") ((i = n), (n = void 0));
-    let o = !1,
-      s = (...u) => {
-        if (o) return;
-        ((o = !0), i.apply(null, u));
-      },
-      writeStream = Sn.createWriteStream(e);
-    (writeStream.on("error", s), writeStream.on("close", s), Ee.renderToFileStream(writeStream, r, n));
+  cjsExports.renderToFile = function (path, qrData, options, cb) {
+    if (typeof cb === "undefined") {
+      cb = options;
+      options = undefined;
+    }
+    let called = false;
+    let done = (...args) => {
+      if (called) return;
+      called = true;
+      cb.apply(null, args);
+    };
+    let stream = fs.createWriteStream(path);
+    stream.on("error", done);
+    stream.on("close", done);
+    cjsExports.renderToFileStream(stream, qrData, options);
   };
-  Ee.renderToFileStream = function (e, r, n) {
-    Ee.render(r, n).pack().pipe(e);
+  cjsExports.renderToFileStream = function (stream, qrData, n) {
+    cjsExports.render(qrData, n).pack().pipe(stream);
   };
 });
-
-export { Pn };
+export { require_png_2 };

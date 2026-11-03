@@ -14,42 +14,56 @@ import { parseIntLoose } from "./envUtils.js";
 import { logForDebugging } from "./debug.js";
 
 //@ chunk-q4qb1h08.js:1252-1382 placement
-function envEntryProblem(e, n) {
+function envEntryProblem_2(e, n) {
   return PROVIDER_ENV_VARS.test(e)
     ? "invalid-name"
     : typeof n !== "string"
       ? "non-string-value"
       : n.includes("\x00")
         ? "nul-in-value"
-        : void 0;
+        : undefined;
 }
+//@ chunk-q4qb1h08.js:1382-1550 placement
 /**
  * 环境变量条目被丢弃的原因文案：名称不合法、值不是字符串、值含 NUL 字符。
  */
-//@ chunk-q4qb1h08.js:1382-1550 placement
 var ENV_ENTRY_PROBLEM_TEXT = {
   "invalid-name": "it isn't a valid environment variable name",
   "non-string-value": "its value isn't a string",
   "nul-in-value": "its value contains a NUL character",
 };
+//@ chunk-q4qb1h08.js:1550-1814 placement
 /**
  * 过滤环境变量对象中不合法的条目，返回保留的部分与被丢弃的条目及原因。
  */
-//@ chunk-q4qb1h08.js:1550-1814 placement
 function filterInvalidEnvEntries(e) {
-  let entries = Object.entries(e),
-    flattened = entries.flatMap(([s, C]) => {
-      let _ = envEntryProblem(s, C);
-      return _ === void 0 ? [] : [{ name: s, problem: _ }];
-    });
-  if (flattened.length === 0) return { kept: e, dropped: flattened };
+  let entries = Object.entries(e);
+  let flattened = entries.flatMap(([s, C]) => {
+    let _ = envEntryProblem_2(s, C);
+    return _ === undefined
+      ? []
+      : [
+          {
+            name: s,
+            problem: _,
+          },
+        ];
+  });
+  if (flattened.length === 0)
+    return {
+      kept: e,
+      dropped: flattened,
+    };
   let E = new Set(flattened.map((s) => s.name));
-  return { kept: Object.fromEntries(entries.filter(([s]) => !E.has(s))), dropped: flattened };
+  return {
+    kept: Object.fromEntries(entries.filter(([s]) => !E.has(s))),
+    dropped: flattened,
+  };
 }
 //@ chunk-q4qb1h08.js:1814-1824 placement
-var X = 200;
+var MAX_DISPLAYED_ENV_CHARS = 200;
 //@ chunk-q4qb1h08.js:1824-1884 placement
-function Se(e) {
+function describeCharCount(e) {
   return e === 1 ? "1 character" : `${e} characters`;
 }
 //@ chunk-q4qb1h08.js:1884-2006 placement
@@ -58,53 +72,71 @@ function escapeForDisplay(e) {
     .slice(1, -1)
     .replace(/[^\x20-\x7e]/g, (n) => `\\u${n.charCodeAt(0).toString(16).padStart(4, "0")}`);
 }
+//@ chunk-q4qb1h08.js:2006-2194 placement
 /**
  * 生成环境变量条目的安全显示：转义并截断变量名，值不显示只给长度。
  */
-//@ chunk-q4qb1h08.js:2006-2194 placement
 function describeEnvEntryName(e) {
-  let index = e.indexOf("="),
-    r = index === -1 ? e : e.slice(0, index),
-    E = r.length > X,
-    s = `"${escapeForDisplay(E ? r.slice(0, X) : r)}"${E ? "\u2026" : ""}`;
-  return index === -1 ? s : `${s} (then '=' and ${Se(e.length - index - 1)}, not shown)`;
+  let index = e.indexOf("=");
+  let r = index === -1 ? e : e.slice(0, index);
+  let E = r.length > MAX_DISPLAYED_ENV_CHARS;
+  let s = `"${escapeForDisplay(E ? r.slice(0, MAX_DISPLAYED_ENV_CHARS) : r)}"${E ? "\u2026" : ""}`;
+  return index === -1 ? s : `${s} (then '=' and ${describeCharCount(e.length - index - 1)}, not shown)`;
 }
 //@ chunk-q4qb1h08.js:2194-2205 placement
-var z = null;
+var envEntryProblemCheck = null;
 //@ chunk-q4qb1h08.js:2205-2223 placement
-function J(e) {
-  z = e;
+/**
+ * 注册（或替换）环境项问题检查回调，供 envEntryProblem 调用。
+ */
+function setEnvEntryProblemCheck(isSettingsSourcedEnvValue) {
+  envEntryProblemCheck = isSettingsSourcedEnvValue;
 }
 //@ chunk-q4qb1h08.js:2223-2261 placement
-function e_i(e, n) {
-  return z?.(e, n) ?? !1;
+/**
+ * 用已注册的检查回调判断某个环境变量项是否有问题，未注册时返回 false。
+ */
+function envEntryProblem(e, n) {
+  return envEntryProblemCheck?.(e, n) ?? false;
 }
 //@ chunk-aepeg2w5.js:341893-342255 fingerprint = validateBoundedIntEnvVar (1)
 function validateBoundedIntEnvVar(name, value, defaultValue, upperLimit) {
-  if (!value) return { effective: defaultValue, status: "valid" };
-  let h = parseIntLoose(value);
-  if (isNaN(h) || h <= 0) {
+  if (!value)
+    return {
+      effective: defaultValue,
+      status: "valid",
+    };
+  let parsed = parseIntLoose(value);
+  if (isNaN(parsed) || parsed <= 0) {
     let result = {
       effective: defaultValue,
       status: "invalid",
       message: `Invalid value "${value}" (using default: ${defaultValue})`,
     };
-    return (logForDebugging(`${name} ${result.message}`), result);
+    logForDebugging(`${name} ${result.message}`);
+    return result;
   }
-  if (h > upperLimit) {
-    let result = { effective: upperLimit, status: "capped", message: `Capped from ${h} to ${upperLimit}` };
-    return (logForDebugging(`${name} ${result.message}`), result);
+  if (parsed > upperLimit) {
+    let result = {
+      effective: upperLimit,
+      status: "capped",
+      message: `Capped from ${parsed} to ${upperLimit}`,
+    };
+    logForDebugging(`${name} ${result.message}`);
+    return result;
   }
-  return { effective: h, status: "valid" };
+  return {
+    effective: parsed,
+    status: "valid",
+  };
 }
-
 export {
   validateBoundedIntEnvVar,
   escapeForDisplay,
-  e_i,
+  envEntryProblem,
   describeEnvEntryName,
   filterInvalidEnvEntries,
   ENV_ENTRY_PROBLEM_TEXT,
-  envEntryProblem,
-  J,
+  envEntryProblem_2,
+  setEnvEntryProblemCheck,
 };

@@ -9,30 +9,33 @@
  * attribution: fingerprint 1
  */
 import { w } from "../../../vendor/react/compiler-runtime.js";
-import { e, r } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Box, Text } from "../../ink/components/Text.js";
 
 //@ chunk-4v9zy7gn.js:29707-30650 fingerprint = CreatingStep (0.89)
-function CreatingStep(t0) {
-  let A = w(9),
-    {
-      currentWorkflowInstallStep: currentWorkflowInstallStep,
-      secretExists: secretExists,
-      useExistingSecret: useExistingSecret,
-      secretName: secretName,
-      skipWorkflow: t1,
-      selectedWorkflows: selectedWorkflows,
-    } = t0,
-    skipWorkflow = t1 === void 0 ? !1 : t1,
-    g;
+function CreatingStep(props) {
+  let $ = w(9);
+  let {
+    currentWorkflowInstallStep,
+    secretExists,
+    useExistingSecret,
+    secretName,
+    skipWorkflow,
+    selectedWorkflows,
+  } = props;
+  let skipWorkflow_2 = skipWorkflow === undefined ? false : skipWorkflow;
+  let t2;
   if (
-    A[0] !== secretExists ||
-    A[1] !== secretName ||
-    A[2] !== selectedWorkflows ||
-    A[3] !== skipWorkflow ||
-    A[4] !== useExistingSecret
-  )
-    ((g = skipWorkflow
+    $[0] !== secretExists ||
+    $[1] !== secretName ||
+    $[2] !== selectedWorkflows ||
+    $[3] !== skipWorkflow_2 ||
+    $[4] !== useExistingSecret
+  ) {
+    t2 = skipWorkflow_2
       ? [
           "Getting repository information",
           secretExists && useExistingSecret
@@ -47,28 +50,28 @@ function CreatingStep(t0) {
             ? "Using existing API key secret"
             : `Setting up ${secretName} secret`,
           "Opening pull request page",
-        ]),
-      (A[0] = secretExists),
-      (A[1] = secretName),
-      (A[2] = selectedWorkflows),
-      (A[3] = skipWorkflow),
-      (A[4] = useExistingSecret),
-      (A[5] = g));
-  else g = A[5];
-  let progressSteps = g,
-    k;
-  if (A[6] !== currentWorkflowInstallStep || A[7] !== progressSteps)
-    ((k = e(Box, {
+        ];
+    $[0] = secretExists;
+    $[1] = secretName;
+    $[2] = selectedWorkflows;
+    $[3] = skipWorkflow_2;
+    $[4] = useExistingSecret;
+    $[5] = t2;
+  } else t2 = $[5];
+  let progressSteps = t2;
+  let k;
+  if ($[6] !== currentWorkflowInstallStep || $[7] !== progressSteps) {
+    k = jsxProd_default(Box, {
       flexDirection: "column",
       children: progressSteps.map((stepText, index) => {
         let status = "pending";
         if (index < currentWorkflowInstallStep) status = "completed";
         else if (index === currentWorkflowInstallStep) status = "in-progress";
-        return e(
+        return jsxProd_default(
           Box,
           {
-            children: r(Text, {
-              color: status === "completed" ? "success" : status === "in-progress" ? "warning" : void 0,
+            children: jsxProd_default_2(Text, {
+              color: status === "completed" ? "success" : status === "in-progress" ? "warning" : undefined,
               children: [
                 status === "completed" ? "\u2713 " : "",
                 stepText,
@@ -79,12 +82,11 @@ function CreatingStep(t0) {
           index,
         );
       }),
-    })),
-      (A[6] = currentWorkflowInstallStep),
-      (A[7] = progressSteps),
-      (A[8] = k));
-  else k = A[8];
+    });
+    $[6] = currentWorkflowInstallStep;
+    $[7] = progressSteps;
+    $[8] = k;
+  } else k = $[8];
   return k;
 }
-
 export { CreatingStep };

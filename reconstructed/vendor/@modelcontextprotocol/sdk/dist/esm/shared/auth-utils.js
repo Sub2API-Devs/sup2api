@@ -7,21 +7,21 @@
  */
 
 //@ chunk-9z4e25ww.js:4730-4816 esm-fingerprint
-function J(e) {
-  let t = typeof e === "string" ? new URL(e) : new URL(e.href);
-  return ((t.hash = ""), t);
+function resourceUrlFromServerUrl(url) {
+  let resourceURL = typeof url === "string" ? new URL(url) : new URL(url.href);
+  resourceURL.hash = "";
+  return resourceURL;
 }
 //@ chunk-9z4e25ww.js:4816-5186 esm-fingerprint
-function Y({ requestedResource: requestedResource, configuredResource: configuredResource }) {
-  let r =
-      typeof requestedResource === "string" ? new URL(requestedResource) : new URL(requestedResource.href),
-    n =
-      typeof configuredResource === "string" ? new URL(configuredResource) : new URL(configuredResource.href);
-  if (r.origin !== n.origin) return !1;
-  if (r.pathname.length < n.pathname.length) return !1;
-  let a = r.pathname.endsWith("/") ? r.pathname : r.pathname + "/",
-    i = n.pathname.endsWith("/") ? n.pathname : n.pathname + "/";
-  return a.startsWith(i);
+function checkResourceAllowed({ requestedResource, configuredResource }) {
+  let requested =
+    typeof requestedResource === "string" ? new URL(requestedResource) : new URL(requestedResource.href);
+  let configured =
+    typeof configuredResource === "string" ? new URL(configuredResource) : new URL(configuredResource.href);
+  if (requested.origin !== configured.origin) return false;
+  if (requested.pathname.length < configured.pathname.length) return false;
+  let requestedPath = requested.pathname.endsWith("/") ? requested.pathname : requested.pathname + "/";
+  let configuredPath = configured.pathname.endsWith("/") ? configured.pathname : configured.pathname + "/";
+  return requestedPath.startsWith(configuredPath);
 }
-
-export { J, Y };
+export { resourceUrlFromServerUrl, checkResourceAllowed };

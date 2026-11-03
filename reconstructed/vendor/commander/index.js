@@ -6,46 +6,45 @@
  * attribution: cjs-fingerprint 2
  */
 import { x } from "../../runtime/bun-runtime.js";
-import { H } from "./lib/argument.js";
-import { B } from "./lib/command.js";
-import { b } from "./lib/error.js";
-import { k } from "./lib/help.js";
-import { D } from "./lib/option.js";
+import { require_argument } from "./lib/argument.js";
+import { require_command } from "./lib/command.js";
+import { require_error } from "./lib/error.js";
+import { require_help } from "./lib/help.js";
+import { require_option } from "./lib/option.js";
 
 //@ chunk-b7dyevzy.js:34778-35160 cjs-fingerprint
-var Y = x(function (kt) {
-  var { Argument: Argument } = H(),
-    { Command: Command } = B(),
-    { CommanderError: CommanderError, InvalidArgumentError: InvalidArgumentError } = b(),
-    { Help: Help } = k(),
-    { Option: Option } = D();
-  kt.program = new Command();
-  kt.createCommand = (t) => new Command(t);
-  kt.createOption = (t, e) => new Option(t, e);
-  kt.createArgument = (t, e) => new Argument(t, e);
-  kt.Command = Command;
-  kt.Option = Option;
-  kt.Argument = Argument;
-  kt.Help = Help;
-  kt.CommanderError = CommanderError;
-  kt.InvalidArgumentError = InvalidArgumentError;
-  kt.InvalidOptionArgumentError = InvalidArgumentError;
+var require_commander = x(function (cjsExports) {
+  var { Argument } = require_argument();
+  var { Command } = require_command();
+  var { CommanderError, InvalidArgumentError } = require_error();
+  var { Help } = require_help();
+  var { Option } = require_option();
+  cjsExports.program = new Command();
+  cjsExports.createCommand = (name) => new Command(name);
+  cjsExports.createOption = (flags, description) => new Option(flags, description);
+  cjsExports.createArgument = (name, description) => new Argument(name, description);
+  cjsExports.Command = Command;
+  cjsExports.Option = Option;
+  cjsExports.Argument = Argument;
+  cjsExports.Help = Help;
+  cjsExports.CommanderError = CommanderError;
+  cjsExports.InvalidArgumentError = InvalidArgumentError;
+  cjsExports.InvalidOptionArgumentError = InvalidArgumentError;
 });
 //@ chunk-b7dyevzy.js:35160-35561 cjs-fingerprint
-var Q = x(function (g, X) {
-  var m = Y();
-  g = X.exports = {};
-  g.program = new m.Command();
-  g.Argument = m.Argument;
-  g.Command = m.Command;
-  g.CommanderError = m.CommanderError;
-  g.Help = m.Help;
-  g.InvalidArgumentError = m.InvalidArgumentError;
-  g.InvalidOptionArgumentError = m.InvalidArgumentError;
-  g.Option = m.Option;
-  g.createCommand = (t) => new m.Command(t);
-  g.createOption = (t, e) => new m.Option(t, e);
-  g.createArgument = (t, e) => new m.Argument(t, e);
+var require_commander_2 = x(function (cjsExports, cjsModule) {
+  var m = require_commander();
+  cjsExports = cjsModule.exports = {};
+  cjsExports.program = new m.Command();
+  cjsExports.Argument = m.Argument;
+  cjsExports.Command = m.Command;
+  cjsExports.CommanderError = m.CommanderError;
+  cjsExports.Help = m.Help;
+  cjsExports.InvalidArgumentError = m.InvalidArgumentError;
+  cjsExports.InvalidOptionArgumentError = m.InvalidArgumentError;
+  cjsExports.Option = m.Option;
+  cjsExports.createCommand = (t) => new m.Command(t);
+  cjsExports.createOption = (t, e) => new m.Option(t, e);
+  cjsExports.createArgument = (t, e) => new m.Argument(t, e);
 });
-
-export { Q };
+export { require_commander_2 };

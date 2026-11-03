@@ -11,17 +11,25 @@
 import { isProactivityActive } from "../Tool.js";
 
 //@ chunk-kavwfxwg.js:227-264 placement
-function rDr(e) {
-  return isProactivityActive() ? e : void 0;
+/**
+ * proactivityLevelIfActive：主动性启用时返回等级。
+ */
+function proactivityLevelIfActive(proactivityLevel) {
+  return isProactivityActive() ? proactivityLevel : undefined;
 }
 //@ chunk-kavwfxwg.js:264-311 placement
-function jye(e) {
-  return rDr(e.proactivityLevel);
+/**
+ * promptProactivityLevel：提示词中的主动性等级。
+ */
+function promptProactivityLevel(e) {
+  return proactivityLevelIfActive(e.proactivityLevel);
 }
 //@ chunk-kavwfxwg.js:311-417 placement
-function resolveProactivityOptions(e, t) {
-  let i = rDr(t);
-  return { permissionMode: e ?? (i === void 0 ? void 0 : "default"), proactivityLevel: i };
+function resolveProactivityOptions(e, proactivityLevel) {
+  let i = proactivityLevelIfActive(proactivityLevel);
+  return {
+    permissionMode: e ?? (i === undefined ? undefined : "default"),
+    proactivityLevel: i,
+  };
 }
-
-export { resolveProactivityOptions, jye, rDr };
+export { resolveProactivityOptions, promptProactivityLevel, proactivityLevelIfActive };

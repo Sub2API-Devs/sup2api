@@ -8,101 +8,110 @@
 import { x } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-bmbhxpfm.js:11354-13629 cjs-fingerprint
-var Qe = x(function (tr, Ke) {
-  function q(e, r) {
-    if (typeof r === "boolean") r = { forever: r };
-    if (
-      ((this._originalTimeouts = JSON.parse(JSON.stringify(e))),
-      (this._timeouts = e),
-      (this._options = r || {}),
-      (this._maxRetryTime = (r && r.maxRetryTime) || 1 / 0),
-      (this._fn = null),
-      (this._errors = []),
-      (this._attempts = 1),
-      (this._operationTimeout = null),
-      (this._operationTimeoutCb = null),
-      (this._timeout = null),
-      (this._operationStart = null),
-      this._options.forever)
-    )
-      this._cachedTimeouts = this._timeouts.slice(0);
+var require_retry_operation = x(function (cjsExports, cjsModule) {
+  function RetryOperation(timeouts, options) {
+    if (typeof options === "boolean")
+      options = {
+        forever: options,
+      };
+    this._originalTimeouts = JSON.parse(JSON.stringify(timeouts));
+    this._timeouts = timeouts;
+    this._options = options || {};
+    this._maxRetryTime = (options && options.maxRetryTime) || 1 / 0;
+    this._fn = null;
+    this._errors = [];
+    this._attempts = 1;
+    this._operationTimeout = null;
+    this._operationTimeoutCb = null;
+    this._timeout = null;
+    this._operationStart = null;
+    if (this._options.forever) this._cachedTimeouts = this._timeouts.slice(0);
   }
-  Ke.exports = q;
-  q.prototype.reset = function () {
-    ((this._attempts = 1), (this._timeouts = this._originalTimeouts));
+  cjsModule.exports = RetryOperation;
+  RetryOperation.prototype.reset = function () {
+    this._attempts = 1;
+    this._timeouts = this._originalTimeouts;
   };
-  q.prototype.stop = function () {
+  RetryOperation.prototype.stop = function () {
     if (this._timeout) clearTimeout(this._timeout);
-    ((this._timeouts = []), (this._cachedTimeouts = null));
+    this._timeouts = [];
+    this._cachedTimeouts = null;
   };
-  q.prototype.retry = function (e) {
+  RetryOperation.prototype.retry = function (err) {
     if (this._timeout) clearTimeout(this._timeout);
-    if (!e) return !1;
-    var time = new Date().getTime();
-    if (e && time - this._operationStart >= this._maxRetryTime)
-      return (this._errors.unshift(Error("RetryOperation timeout occurred")), !1);
-    this._errors.push(e);
-    var n = this._timeouts.shift();
-    if (n === void 0)
-      if (this._cachedTimeouts)
-        (this._errors.splice(this._errors.length - 1, this._errors.length),
-          (this._timeouts = this._cachedTimeouts.slice(0)),
-          (n = this._timeouts.shift()));
-      else return !1;
-    var i = this,
-      u = setTimeout(function () {
-        if ((i._attempts++, i._operationTimeoutCb)) {
-          if (
-            ((i._timeout = setTimeout(function () {
-              i._operationTimeoutCb(i._attempts);
-            }, i._operationTimeout)),
-            i._options.unref)
-          )
-            i._timeout.unref();
-        }
-        i._fn(i._attempts);
-      }, n);
-    if (this._options.unref) u.unref();
-    return !0;
+    if (!err) return false;
+    var currentTime = new Date().getTime();
+    if (err && currentTime - this._operationStart >= this._maxRetryTime) {
+      this._errors.unshift(Error("RetryOperation timeout occurred"));
+      return false;
+    }
+    this._errors.push(err);
+    var timeout = this._timeouts.shift();
+    if (timeout === undefined)
+      if (this._cachedTimeouts) {
+        this._errors.splice(this._errors.length - 1, this._errors.length);
+        this._timeouts = this._cachedTimeouts.slice(0);
+        timeout = this._timeouts.shift();
+      } else return false;
+    var i = this;
+    var timer = setTimeout(function () {
+      i._attempts++;
+      if (i._operationTimeoutCb) {
+        i._timeout = setTimeout(function () {
+          i._operationTimeoutCb(i._attempts);
+        }, i._operationTimeout);
+        if (i._options.unref) i._timeout.unref();
+      }
+      i._fn(i._attempts);
+    }, timeout);
+    if (this._options.unref) timer.unref();
+    return true;
   };
-  q.prototype.attempt = function (e, r) {
-    if (((this._fn = e), r)) {
-      if (r.timeout) this._operationTimeout = r.timeout;
-      if (r.cb) this._operationTimeoutCb = r.cb;
+  RetryOperation.prototype.attempt = function (fn, timeoutOps) {
+    this._fn = fn;
+    if (timeoutOps) {
+      if (timeoutOps.timeout) this._operationTimeout = timeoutOps.timeout;
+      if (timeoutOps.cb) this._operationTimeoutCb = timeoutOps.cb;
     }
     var n = this;
     if (this._operationTimeoutCb)
       this._timeout = setTimeout(function () {
         n._operationTimeoutCb();
       }, n._operationTimeout);
-    ((this._operationStart = new Date().getTime()), this._fn(this._attempts));
+    this._operationStart = new Date().getTime();
+    this._fn(this._attempts);
   };
-  q.prototype.try = function (e) {
-    (console.log("Using RetryOperation.try() is deprecated"), this.attempt(e));
+  RetryOperation.prototype.try = function (fn) {
+    console.log("Using RetryOperation.try() is deprecated");
+    this.attempt(fn);
   };
-  q.prototype.start = function (e) {
-    (console.log("Using RetryOperation.start() is deprecated"), this.attempt(e));
+  RetryOperation.prototype.start = function (fn) {
+    console.log("Using RetryOperation.start() is deprecated");
+    this.attempt(fn);
   };
-  q.prototype.start = q.prototype.try;
-  q.prototype.errors = function () {
+  RetryOperation.prototype.start = RetryOperation.prototype.try;
+  RetryOperation.prototype.errors = function () {
     return this._errors;
   };
-  q.prototype.attempts = function () {
+  RetryOperation.prototype.attempts = function () {
     return this._attempts;
   };
-  q.prototype.mainError = function () {
+  RetryOperation.prototype.mainError = function () {
     if (this._errors.length === 0) return null;
-    var e = {},
-      r = null,
-      n = 0;
+    var counts = {};
+    var mainError = null;
+    var mainErrorCount = 0;
     for (var i = 0; i < this._errors.length; i++) {
-      var u = this._errors[i],
-        message = u.message,
-        h = (e[message] || 0) + 1;
-      if (((e[message] = h), h >= n)) ((r = u), (n = h));
+      var error = this._errors[i];
+      var message = error.message;
+      var count = (counts[message] || 0) + 1;
+      counts[message] = count;
+      if (count >= mainErrorCount) {
+        mainError = error;
+        mainErrorCount = count;
+      }
     }
-    return r;
+    return mainError;
   };
 });
-
-export { Qe };
+export { require_retry_operation };

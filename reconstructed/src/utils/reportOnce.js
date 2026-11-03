@@ -13,18 +13,22 @@ import { getRootSession } from "../bootstrap/state.js";
 import { logError } from "./log.js";
 
 //@ chunk-0g4sycr3.js:296-341 placement
-var s = new HostScoped(() => ({ alreadyReported: new Set() }));
+var reportOnceState = new HostScoped(() => ({
+  alreadyReported: new Set(),
+}));
+//@ chunk-0g4sycr3.js:341-466 placement
 /**
  * 同一事件在根会话中只上报一次（交给已注册的监听器），出错时只记录错误。
  */
-//@ chunk-0g4sycr3.js:341-466 placement
 function reportOnce(r) {
   try {
-    let of = s.of(getRootSession().host);
-    if (!of.alreadyReported.has(r)) (of.alreadyReported.add(r), of.listener?.(r));
+    let e = reportOnceState.of(getRootSession().host);
+    if (!e.alreadyReported.has(r)) {
+      e.alreadyReported.add(r);
+      e.listener?.(r);
+    }
   } catch (error) {
     logError(error);
   }
 }
-
 export { reportOnce };

@@ -7,570 +7,945 @@
  */
 import {
   hu,
-  Ue,
-  o,
+  union,
+  string,
   E,
-  kt,
+  looseObject,
   u,
-  T,
-  oe,
-  A,
-  U,
-  Lve,
+  literal,
+  unknown,
+  array,
+  _enum,
+  intersection,
   M,
-  pe,
-  Ka,
-  La,
+  record,
+  preprocess,
+  optional,
   zg,
-  Ir,
+  discriminatedUnion,
 } from "../../../../zod/v4/classic/schemas.js";
-import { t0 } from "../../../../../src/services/mcp/schemaParse.js";
+import { parseToolOutputSchema } from "../../../../../src/services/mcp/schemaParse.js";
 
 //@ chunk-x4hefdgz.js:305-1188 esm-fingerprint
-var LATEST_PROTOCOL_VERSION = "2025-11-25",
-  DEFAULT_NEGOTIATED_PROTOCOL_VERSION = "2025-03-26",
-  SUPPORTED_PROTOCOL_VERSIONS = [
-    LATEST_PROTOCOL_VERSION,
-    "2025-06-18",
-    "2025-03-26",
-    "2024-11-05",
-    "2024-10-07",
-  ],
-  RELATED_TASK_META_KEY = "io.modelcontextprotocol/related-task",
-  R = "2.0",
-  e = hu((t) => t !== null && (typeof t === "object" || typeof t === "function")),
-  _ = Ue([o(), E().int()]),
-  w = o(),
-  ee = kt({ ttl: E().optional(), pollInterval: E().optional() }),
-  F = u({ ttl: E().optional() }),
-  RelatedTaskMetadataSchema = u({ taskId: o() }),
-  y = kt({ progressToken: _.optional(), [RELATED_TASK_META_KEY]: RelatedTaskMetadataSchema.optional() }),
-  s = u({ _meta: y.optional() }),
-  extend = s.extend({ task: F.optional() }),
-  isTaskAugmentedRequestParams = (t) => extend.safeParse(t).success,
-  n = u({ method: o(), params: s.loose().optional() }),
-  i = u({ _meta: y.optional() }),
-  r = u({ method: o(), params: i.loose().optional() }),
-  a = kt({ _meta: y.optional() }),
-  f = Ue([o(), E().int()]),
-  strict = u({ jsonrpc: T(R), id: f, ...n.shape }).strict(),
-  isJSONRPCRequest = (t) => strict.safeParse(t).success,
-  strict_2 = u({ jsonrpc: T(R), ...r.shape }).strict(),
-  isJSONRPCNotification = (t) => strict_2.safeParse(t).success,
-  strict_3 = u({ jsonrpc: T(R), id: f, result: a }).strict(),
-  isJSONRPCResultResponse = (t) => strict_3.safeParse(t).success;
+var LATEST_PROTOCOL_VERSION = "2025-11-25";
+var DEFAULT_NEGOTIATED_PROTOCOL_VERSION = "2025-03-26";
+var SUPPORTED_PROTOCOL_VERSIONS = [
+  LATEST_PROTOCOL_VERSION,
+  "2025-06-18",
+  "2025-03-26",
+  "2024-11-05",
+  "2024-10-07",
+];
+var RELATED_TASK_META_KEY = "io.modelcontextprotocol/related-task";
+var JSONRPC_VERSION = "2.0";
+var AssertObjectSchema = hu((v) => v !== null && (typeof v === "object" || typeof v === "function"));
+var ProgressTokenSchema = union([string(), E().int()]);
+var CursorSchema = string();
+var TaskCreationParamsSchema = looseObject({
+  ttl: E().optional(),
+  pollInterval: E().optional(),
+});
+var TaskMetadataSchema = u({
+  ttl: E().optional(),
+});
+var RelatedTaskMetadataSchema = u({
+  taskId: string(),
+});
+var RequestMetaSchema = looseObject({
+  progressToken: ProgressTokenSchema.optional(),
+  [RELATED_TASK_META_KEY]: RelatedTaskMetadataSchema.optional(),
+});
+var BaseRequestParamsSchema = u({
+  _meta: RequestMetaSchema.optional(),
+});
+var TaskAugmentedRequestParamsSchema = BaseRequestParamsSchema.extend({
+  task: TaskMetadataSchema.optional(),
+});
+var isTaskAugmentedRequestParams = (value) => TaskAugmentedRequestParamsSchema.safeParse(value).success;
+var RequestSchema = u({
+  method: string(),
+  params: BaseRequestParamsSchema.loose().optional(),
+});
+var NotificationsParamsSchema = u({
+  _meta: RequestMetaSchema.optional(),
+});
+var NotificationSchema = u({
+  method: string(),
+  params: NotificationsParamsSchema.loose().optional(),
+});
+var ResultSchema = looseObject({
+  _meta: RequestMetaSchema.optional(),
+});
+var RequestIdSchema = union([string(), E().int()]);
+var JSONRPCRequestSchema = u({
+  jsonrpc: literal(JSONRPC_VERSION),
+  id: RequestIdSchema,
+  ...RequestSchema.shape,
+}).strict();
+var isJSONRPCRequest = (value) => JSONRPCRequestSchema.safeParse(value).success;
+var JSONRPCNotificationSchema = u({
+  jsonrpc: literal(JSONRPC_VERSION),
+  ...NotificationSchema.shape,
+}).strict();
+var isJSONRPCNotification = (value) => JSONRPCNotificationSchema.safeParse(value).success;
+var JSONRPCResultResponseSchema = u({
+  jsonrpc: literal(JSONRPC_VERSION),
+  id: RequestIdSchema,
+  result: ResultSchema,
+}).strict();
+var isJSONRPCResultResponse = (value) => JSONRPCResultResponseSchema.safeParse(value).success;
 //@ chunk-x4hefdgz.js:1188-1195 esm-layout
 var ErrorCode;
 //@ chunk-x4hefdgz.js:1195-1583 esm-fingerprint
-(function (t) {
-  ((t[(t.ConnectionClosed = -32000)] = "ConnectionClosed"),
-    (t[(t.RequestTimeout = -32001)] = "RequestTimeout"),
-    (t[(t.ParseError = -32700)] = "ParseError"),
-    (t[(t.InvalidRequest = -32600)] = "InvalidRequest"),
-    (t[(t.MethodNotFound = -32601)] = "MethodNotFound"),
-    (t[(t.InvalidParams = -32602)] = "InvalidParams"),
-    (t[(t.InternalError = -32603)] = "InternalError"),
-    (t[(t.UrlElicitationRequired = -32042)] = "UrlElicitationRequired"));
+(function (ErrorCode) {
+  ErrorCode[(ErrorCode.ConnectionClosed = -32000)] = "ConnectionClosed";
+  ErrorCode[(ErrorCode.RequestTimeout = -32001)] = "RequestTimeout";
+  ErrorCode[(ErrorCode.ParseError = -32700)] = "ParseError";
+  ErrorCode[(ErrorCode.InvalidRequest = -32600)] = "InvalidRequest";
+  ErrorCode[(ErrorCode.MethodNotFound = -32601)] = "MethodNotFound";
+  ErrorCode[(ErrorCode.InvalidParams = -32602)] = "InvalidParams";
+  ErrorCode[(ErrorCode.InternalError = -32603)] = "InternalError";
+  ErrorCode[(ErrorCode.UrlElicitationRequired = -32042)] = "UrlElicitationRequired";
 })(ErrorCode || (ErrorCode = {}));
 //@ chunk-x4hefdgz.js:1583-1691 esm-fingerprint
-var strict_4 = u({
-  jsonrpc: T(R),
-  id: f.optional(),
-  error: u({ code: E().int(), message: o(), data: oe().optional() }),
+var JSONRPCErrorResponseSchema = u({
+  jsonrpc: literal(JSONRPC_VERSION),
+  id: RequestIdSchema.optional(),
+  error: u({
+    code: E().int(),
+    message: string(),
+    data: unknown().optional(),
+  }),
 }).strict();
 //@ chunk-x4hefdgz.js:1691-1727 esm-fingerprint
-var isJSONRPCErrorResponse = (t) => strict_4.safeParse(t).success;
+var isJSONRPCErrorResponse = (value) => JSONRPCErrorResponseSchema.safeParse(value).success;
 //@ chunk-x4hefdgz.js:1727-11145 esm-layout
-var JSONRPCMessageSchema = Ue([strict, strict_2, strict_3, strict_4]),
-  ne = Ue([strict_3, strict_4]),
-  EmptyResultSchema = a.strict(),
-  extend_2 = i.extend({ requestId: f.optional(), reason: o().optional() }),
-  CancelledNotificationSchema = r.extend({ method: T("notifications/cancelled"), params: extend_2 }),
-  W = u({
-    src: o(),
-    mimeType: o().optional(),
-    sizes: A(o()).optional(),
-    theme: U(["light", "dark"]).optional(),
+var JSONRPCMessageSchema = union([
+  JSONRPCRequestSchema,
+  JSONRPCNotificationSchema,
+  JSONRPCResultResponseSchema,
+  JSONRPCErrorResponseSchema,
+]);
+var ne = union([JSONRPCResultResponseSchema, JSONRPCErrorResponseSchema]);
+var EmptyResultSchema = ResultSchema.strict();
+var CancelledNotificationParamsSchema = NotificationsParamsSchema.extend({
+  requestId: RequestIdSchema.optional(),
+  reason: string().optional(),
+});
+var CancelledNotificationSchema = NotificationSchema.extend({
+  method: literal("notifications/cancelled"),
+  params: CancelledNotificationParamsSchema,
+});
+var IconSchema = u({
+  src: string(),
+  mimeType: string().optional(),
+  sizes: array(string()).optional(),
+  theme: _enum(["light", "dark"]).optional(),
+});
+var IconsSchema = u({
+  icons: array(IconSchema).optional(),
+});
+var BaseMetadataSchema = u({
+  name: string(),
+  title: string().optional(),
+});
+var ImplementationSchema = BaseMetadataSchema.extend({
+  ...BaseMetadataSchema.shape,
+  ...IconsSchema.shape,
+  version: string(),
+  websiteUrl: string().optional(),
+  description: string().optional(),
+});
+var FormElicitationCapabilitySchema = intersection(
+  u({
+    applyDefaults: M().optional(),
   }),
-  d = u({ icons: A(W).optional() }),
-  l = u({ name: o(), title: o().optional() }),
-  ImplementationSchema = l.extend({
-    ...l.shape,
-    ...d.shape,
-    version: o(),
-    websiteUrl: o().optional(),
-    description: o().optional(),
-  }),
-  K = Lve(u({ applyDefaults: M().optional() }), pe(o(), oe())),
-  Y = Ka(
-    (t) => {
-      if (t && typeof t === "object" && !Array.isArray(t)) {
-        if (Object.keys(t).length === 0) return { form: {} };
-      }
-      return t;
-    },
-    Lve(u({ form: K.optional(), url: e.optional() }), pe(o(), oe()).optional()),
+  record(string(), unknown()),
+);
+var ElicitationCapabilitySchema = preprocess(
+  (value) => {
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      if (Object.keys(value).length === 0)
+        return {
+          form: {},
+        };
+    }
+    return value;
+  },
+  intersection(
+    u({
+      form: FormElicitationCapabilitySchema.optional(),
+      url: AssertObjectSchema.optional(),
+    }),
+    record(string(), unknown()).optional(),
   ),
-  Q = kt({
-    list: e.optional(),
-    cancel: e.optional(),
-    requests: kt({
-      sampling: kt({ createMessage: e.optional() }).optional(),
-      elicitation: kt({ create: e.optional() }).optional(),
+);
+var ClientTasksCapabilitySchema = looseObject({
+  list: AssertObjectSchema.optional(),
+  cancel: AssertObjectSchema.optional(),
+  requests: looseObject({
+    sampling: looseObject({
+      createMessage: AssertObjectSchema.optional(),
     }).optional(),
+    elicitation: looseObject({
+      create: AssertObjectSchema.optional(),
+    }).optional(),
+  }).optional(),
+});
+var ServerTasksCapabilitySchema = looseObject({
+  list: AssertObjectSchema.optional(),
+  cancel: AssertObjectSchema.optional(),
+  requests: looseObject({
+    tools: looseObject({
+      call: AssertObjectSchema.optional(),
+    }).optional(),
+  }).optional(),
+});
+var ClientCapabilitiesSchema = u({
+  experimental: record(string(), AssertObjectSchema).optional(),
+  sampling: u({
+    context: AssertObjectSchema.optional(),
+    tools: AssertObjectSchema.optional(),
+  }).optional(),
+  elicitation: ElicitationCapabilitySchema.optional(),
+  roots: u({
+    listChanged: M().optional(),
+  }).optional(),
+  tasks: ClientTasksCapabilitySchema.optional(),
+  extensions: record(string(), AssertObjectSchema).optional(),
+});
+var InitializeRequestParamsSchema = BaseRequestParamsSchema.extend({
+  protocolVersion: string(),
+  capabilities: ClientCapabilitiesSchema,
+  clientInfo: ImplementationSchema,
+});
+var InitializeRequestSchema = RequestSchema.extend({
+  method: literal("initialize"),
+  params: InitializeRequestParamsSchema,
+});
+var isInitializeRequest = (value) => InitializeRequestSchema.safeParse(value).success;
+var ServerCapabilitiesSchema = u({
+  experimental: record(string(), AssertObjectSchema).optional(),
+  logging: AssertObjectSchema.optional(),
+  completions: AssertObjectSchema.optional(),
+  prompts: u({
+    listChanged: M().optional(),
+  }).optional(),
+  resources: u({
+    subscribe: M().optional(),
+    listChanged: M().optional(),
+  }).optional(),
+  tools: u({
+    listChanged: M().optional(),
+  }).optional(),
+  tasks: ServerTasksCapabilitySchema.optional(),
+  extensions: record(string(), AssertObjectSchema).optional(),
+});
+var InitializeResultSchema = ResultSchema.extend({
+  protocolVersion: string(),
+  capabilities: ServerCapabilitiesSchema,
+  serverInfo: ImplementationSchema,
+  instructions: string().optional(),
+});
+var InitializedNotificationSchema = NotificationSchema.extend({
+  method: literal("notifications/initialized"),
+  params: NotificationsParamsSchema.optional(),
+});
+var isInitializedNotification = (value) => InitializedNotificationSchema.safeParse(value).success;
+var PingRequestSchema = RequestSchema.extend({
+  method: literal("ping"),
+  params: BaseRequestParamsSchema.optional(),
+});
+var ProgressSchema = u({
+  progress: E(),
+  total: optional(E()),
+  message: optional(string()),
+});
+var ProgressNotificationParamsSchema = u({
+  ...NotificationsParamsSchema.shape,
+  ...ProgressSchema.shape,
+  progressToken: ProgressTokenSchema,
+});
+var ProgressNotificationSchema = NotificationSchema.extend({
+  method: literal("notifications/progress"),
+  params: ProgressNotificationParamsSchema,
+});
+var PaginatedRequestParamsSchema = BaseRequestParamsSchema.extend({
+  cursor: CursorSchema.optional(),
+});
+var PaginatedRequestSchema = RequestSchema.extend({
+  params: PaginatedRequestParamsSchema.optional(),
+});
+var PaginatedResultSchema = ResultSchema.extend({
+  nextCursor: CursorSchema.optional(),
+});
+var TaskStatusSchema = _enum(["working", "input_required", "completed", "failed", "cancelled"]);
+var TaskSchema = u({
+  taskId: string(),
+  status: TaskStatusSchema,
+  ttl: union([E(), zg()]),
+  createdAt: string(),
+  lastUpdatedAt: string(),
+  pollInterval: optional(E()),
+  statusMessage: optional(string()),
+});
+var CreateTaskResultSchema = ResultSchema.extend({
+  task: TaskSchema,
+});
+var TaskStatusNotificationParamsSchema = NotificationsParamsSchema.merge(TaskSchema);
+var TaskStatusNotificationSchema = NotificationSchema.extend({
+  method: literal("notifications/tasks/status"),
+  params: TaskStatusNotificationParamsSchema,
+});
+var GetTaskRequestSchema = RequestSchema.extend({
+  method: literal("tasks/get"),
+  params: BaseRequestParamsSchema.extend({
+    taskId: string(),
   }),
-  X = kt({
-    list: e.optional(),
-    cancel: e.optional(),
-    requests: kt({ tools: kt({ call: e.optional() }).optional() }).optional(),
+});
+var GetTaskResultSchema = ResultSchema.merge(TaskSchema);
+var GetTaskPayloadRequestSchema = RequestSchema.extend({
+  method: literal("tasks/result"),
+  params: BaseRequestParamsSchema.extend({
+    taskId: string(),
   }),
-  Z = u({
-    experimental: pe(o(), e).optional(),
-    sampling: u({ context: e.optional(), tools: e.optional() }).optional(),
-    elicitation: Y.optional(),
-    roots: u({ listChanged: M().optional() }).optional(),
-    tasks: Q.optional(),
-    extensions: pe(o(), e).optional(),
+});
+var GetTaskPayloadResultSchema = ResultSchema.loose();
+var ListTasksRequestSchema = PaginatedRequestSchema.extend({
+  method: literal("tasks/list"),
+});
+var ListTasksResultSchema = PaginatedResultSchema.extend({
+  tasks: array(TaskSchema),
+});
+var CancelTaskRequestSchema = RequestSchema.extend({
+  method: literal("tasks/cancel"),
+  params: BaseRequestParamsSchema.extend({
+    taskId: string(),
   }),
-  extend_3 = s.extend({ protocolVersion: o(), capabilities: Z, clientInfo: ImplementationSchema }),
-  InitializeRequestSchema = n.extend({ method: T("initialize"), params: extend_3 }),
-  isInitializeRequest = (t) => InitializeRequestSchema.safeParse(t).success,
-  ServerCapabilitiesSchema = u({
-    experimental: pe(o(), e).optional(),
-    logging: e.optional(),
-    completions: e.optional(),
-    prompts: u({ listChanged: M().optional() }).optional(),
-    resources: u({ subscribe: M().optional(), listChanged: M().optional() }).optional(),
-    tools: u({ listChanged: M().optional() }).optional(),
-    tasks: X.optional(),
-    extensions: pe(o(), e).optional(),
+});
+var CancelTaskResultSchema = ResultSchema.merge(TaskSchema);
+var ResourceContentsSchema = u({
+  uri: string(),
+  mimeType: optional(string()),
+  _meta: record(string(), unknown()).optional(),
+});
+var TextResourceContentsSchema = ResourceContentsSchema.extend({
+  text: string(),
+});
+var Base64Schema = string().refine(
+  (val) => {
+    try {
+      atob(val);
+      return true;
+    } catch {
+      return false;
+    }
+  },
+  {
+    message: "Invalid Base64 string",
+  },
+);
+var BlobResourceContentsSchema = ResourceContentsSchema.extend({
+  blob: Base64Schema,
+});
+var RoleSchema = _enum(["user", "assistant"]);
+var AnnotationsSchema = u({
+  audience: array(RoleSchema).optional(),
+  priority: E().min(0).max(1).optional(),
+  lastModified: union([
+    parseToolOutputSchema({
+      offset: true,
+    }),
+    parseToolOutputSchema({
+      offset: true,
+      precision: -1,
+    }),
+  ]).optional(),
+});
+var ResourceSchema = u({
+  ...BaseMetadataSchema.shape,
+  ...IconsSchema.shape,
+  uri: string(),
+  description: optional(string()),
+  mimeType: optional(string()),
+  size: optional(E()),
+  annotations: AnnotationsSchema.optional(),
+  _meta: optional(looseObject({})),
+});
+var ResourceTemplateSchema = u({
+  ...BaseMetadataSchema.shape,
+  ...IconsSchema.shape,
+  uriTemplate: string(),
+  description: optional(string()),
+  mimeType: optional(string()),
+  annotations: AnnotationsSchema.optional(),
+  _meta: optional(looseObject({})),
+});
+var ListResourcesRequestSchema = PaginatedRequestSchema.extend({
+  method: literal("resources/list"),
+});
+var ListResourcesResultSchema = PaginatedResultSchema.extend({
+  resources: array(ResourceSchema),
+});
+var ListResourceTemplatesRequestSchema = PaginatedRequestSchema.extend({
+  method: literal("resources/templates/list"),
+});
+var ListResourceTemplatesResultSchema = PaginatedResultSchema.extend({
+  resourceTemplates: array(ResourceTemplateSchema),
+});
+var ResourceRequestParamsSchema = BaseRequestParamsSchema.extend({
+  uri: string(),
+});
+var ReadResourceRequestParamsSchema = ResourceRequestParamsSchema;
+var ReadResourceRequestSchema = RequestSchema.extend({
+  method: literal("resources/read"),
+  params: ReadResourceRequestParamsSchema,
+});
+var ReadResourceResultSchema = ResultSchema.extend({
+  contents: array(union([TextResourceContentsSchema, BlobResourceContentsSchema])),
+});
+var ResourceListChangedNotificationSchema = NotificationSchema.extend({
+  method: literal("notifications/resources/list_changed"),
+  params: NotificationsParamsSchema.optional(),
+});
+var SubscribeRequestParamsSchema = ResourceRequestParamsSchema;
+var SubscribeRequestSchema = RequestSchema.extend({
+  method: literal("resources/subscribe"),
+  params: SubscribeRequestParamsSchema,
+});
+var UnsubscribeRequestParamsSchema = ResourceRequestParamsSchema;
+var UnsubscribeRequestSchema = RequestSchema.extend({
+  method: literal("resources/unsubscribe"),
+  params: UnsubscribeRequestParamsSchema,
+});
+var ResourceUpdatedNotificationParamsSchema = NotificationsParamsSchema.extend({
+  uri: string(),
+});
+var ResourceUpdatedNotificationSchema = NotificationSchema.extend({
+  method: literal("notifications/resources/updated"),
+  params: ResourceUpdatedNotificationParamsSchema,
+});
+var ut = u({
+  name: string(),
+  description: optional(string()),
+  required: optional(M()),
+});
+var PromptSchema = u({
+  ...BaseMetadataSchema.shape,
+  ...IconsSchema.shape,
+  description: optional(string()),
+  arguments: optional(array(ut)),
+  _meta: optional(looseObject({})),
+});
+var ListPromptsRequestSchema = PaginatedRequestSchema.extend({
+  method: literal("prompts/list"),
+});
+var ListPromptsResultSchema = PaginatedResultSchema.extend({
+  prompts: array(PromptSchema),
+});
+var GetPromptRequestParamsSchema = BaseRequestParamsSchema.extend({
+  name: string(),
+  arguments: record(string(), string()).optional(),
+});
+var GetPromptRequestSchema = RequestSchema.extend({
+  method: literal("prompts/get"),
+  params: GetPromptRequestParamsSchema,
+});
+var TextContentSchema = u({
+  type: literal("text"),
+  text: string(),
+  annotations: AnnotationsSchema.optional(),
+  _meta: record(string(), unknown()).optional(),
+});
+var ImageContentSchema = u({
+  type: literal("image"),
+  data: Base64Schema,
+  mimeType: string(),
+  annotations: AnnotationsSchema.optional(),
+  _meta: record(string(), unknown()).optional(),
+});
+var AudioContentSchema = u({
+  type: literal("audio"),
+  data: Base64Schema,
+  mimeType: string(),
+  annotations: AnnotationsSchema.optional(),
+  _meta: record(string(), unknown()).optional(),
+});
+var xt = u({
+  type: literal("tool_use"),
+  name: string(),
+  id: string(),
+  input: record(string(), unknown()),
+  _meta: record(string(), unknown()).optional(),
+});
+var EmbeddedResourceSchema = u({
+  type: literal("resource"),
+  resource: union([TextResourceContentsSchema, BlobResourceContentsSchema]),
+  annotations: AnnotationsSchema.optional(),
+  _meta: record(string(), unknown()).optional(),
+});
+var ResourceLinkSchema = ResourceSchema.extend({
+  type: literal("resource_link"),
+});
+var ContentBlockSchema = union([
+  TextContentSchema,
+  ImageContentSchema,
+  AudioContentSchema,
+  ResourceLinkSchema,
+  EmbeddedResourceSchema,
+]);
+var PromptMessageSchema = u({
+  role: RoleSchema,
+  content: ContentBlockSchema,
+});
+var GetPromptResultSchema = ResultSchema.extend({
+  description: string().optional(),
+  messages: array(PromptMessageSchema),
+});
+var PromptListChangedNotificationSchema = NotificationSchema.extend({
+  method: literal("notifications/prompts/list_changed"),
+  params: NotificationsParamsSchema.optional(),
+});
+var ToolAnnotationsSchema = u({
+  title: string().optional(),
+  readOnlyHint: M().optional(),
+  destructiveHint: M().optional(),
+  idempotentHint: M().optional(),
+  openWorldHint: M().optional(),
+});
+var ToolExecutionSchema = u({
+  taskSupport: _enum(["required", "optional", "forbidden"]).optional(),
+});
+var ToolSchema = u({
+  ...BaseMetadataSchema.shape,
+  ...IconsSchema.shape,
+  description: string().optional(),
+  inputSchema: u({
+    type: literal("object"),
+    properties: record(string(), AssertObjectSchema).optional(),
+    required: array(string()).optional(),
+  }).catchall(unknown()),
+  outputSchema: u({
+    type: literal("object"),
+    properties: record(string(), AssertObjectSchema).optional(),
+    required: array(string()).optional(),
+  })
+    .catchall(unknown())
+    .optional(),
+  annotations: ToolAnnotationsSchema.optional(),
+  execution: ToolExecutionSchema.optional(),
+  _meta: record(string(), unknown()).optional(),
+});
+var ListToolsRequestSchema = PaginatedRequestSchema.extend({
+  method: literal("tools/list"),
+});
+var ListToolsResultSchema = PaginatedResultSchema.extend({
+  tools: array(ToolSchema),
+});
+var CallToolResultSchema = ResultSchema.extend({
+  content: array(ContentBlockSchema).default([]),
+  structuredContent: record(string(), unknown()).optional(),
+  isError: M().optional(),
+});
+var CompatibilityCallToolResultSchema = CallToolResultSchema.or(
+  ResultSchema.extend({
+    toolResult: unknown(),
   }),
-  InitializeResultSchema = a.extend({
-    protocolVersion: o(),
-    capabilities: ServerCapabilitiesSchema,
-    serverInfo: ImplementationSchema,
-    instructions: o().optional(),
-  }),
-  InitializedNotificationSchema = r.extend({ method: T("notifications/initialized"), params: i.optional() }),
-  isInitializedNotification = (t) => InitializedNotificationSchema.safeParse(t).success,
-  PingRequestSchema = n.extend({ method: T("ping"), params: s.optional() }),
-  et = u({ progress: E(), total: La(E()), message: La(o()) }),
-  ot = u({ ...i.shape, ...et.shape, progressToken: _ }),
-  ProgressNotificationSchema = r.extend({ method: T("notifications/progress"), params: ot }),
-  extend_4 = s.extend({ cursor: w.optional() }),
-  extend_5 = n.extend({ params: extend_4.optional() }),
-  extend_6 = a.extend({ nextCursor: w.optional() }),
-  at = U(["working", "input_required", "completed", "failed", "cancelled"]),
-  g = u({
-    taskId: o(),
-    status: at,
-    ttl: Ue([E(), zg()]),
-    createdAt: o(),
-    lastUpdatedAt: o(),
-    pollInterval: La(E()),
-    statusMessage: La(o()),
-  }),
-  CreateTaskResultSchema = a.extend({ task: g }),
-  merge = i.merge(g),
-  TaskStatusNotificationSchema = r.extend({ method: T("notifications/tasks/status"), params: merge }),
-  GetTaskRequestSchema = n.extend({ method: T("tasks/get"), params: s.extend({ taskId: o() }) }),
-  GetTaskResultSchema = a.merge(g),
-  GetTaskPayloadRequestSchema = n.extend({ method: T("tasks/result"), params: s.extend({ taskId: o() }) }),
-  loose = a.loose(),
-  ListTasksRequestSchema = extend_5.extend({ method: T("tasks/list") }),
-  ListTasksResultSchema = extend_6.extend({ tasks: A(g) }),
-  CancelTaskRequestSchema = n.extend({ method: T("tasks/cancel"), params: s.extend({ taskId: o() }) }),
-  CancelTaskResultSchema = a.merge(g),
-  B = u({ uri: o(), mimeType: La(o()), _meta: pe(o(), oe()).optional() }),
-  extend_7 = B.extend({ text: o() }),
-  refine = o().refine(
-    (t) => {
-      try {
-        return (atob(t), !0);
-      } catch {
-        return !1;
-      }
-    },
-    { message: "Invalid Base64 string" },
+);
+var CallToolRequestParamsSchema = TaskAugmentedRequestParamsSchema.extend({
+  name: string(),
+  arguments: record(string(), unknown()).optional(),
+});
+var CallToolRequestSchema = RequestSchema.extend({
+  method: literal("tools/call"),
+  params: CallToolRequestParamsSchema,
+});
+var ToolListChangedNotificationSchema = NotificationSchema.extend({
+  method: literal("notifications/tools/list_changed"),
+  params: NotificationsParamsSchema.optional(),
+});
+var ListChangedOptionsBaseSchema = u({
+  autoRefresh: M().default(true),
+  debounceMs: E().int().nonnegative().default(300),
+});
+var LoggingLevelSchema = _enum([
+  "debug",
+  "info",
+  "notice",
+  "warning",
+  "error",
+  "critical",
+  "alert",
+  "emergency",
+]);
+var SetLevelRequestParamsSchema = BaseRequestParamsSchema.extend({
+  level: LoggingLevelSchema,
+});
+var SetLevelRequestSchema = RequestSchema.extend({
+  method: literal("logging/setLevel"),
+  params: SetLevelRequestParamsSchema,
+});
+var LoggingMessageNotificationParamsSchema = NotificationsParamsSchema.extend({
+  level: LoggingLevelSchema,
+  logger: string().optional(),
+  data: unknown(),
+});
+var LoggingMessageNotificationSchema = NotificationSchema.extend({
+  method: literal("notifications/message"),
+  params: LoggingMessageNotificationParamsSchema,
+});
+var ModelHintSchema = u({
+  name: string().optional(),
+});
+var ModelPreferencesSchema = u({
+  hints: array(ModelHintSchema).optional(),
+  costPriority: E().min(0).max(1).optional(),
+  speedPriority: E().min(0).max(1).optional(),
+  intelligencePriority: E().min(0).max(1).optional(),
+});
+var ToolChoiceSchema = u({
+  mode: _enum(["auto", "required", "none"]).optional(),
+});
+var ToolResultContentSchema = u({
+  type: literal("tool_result"),
+  toolUseId: string().describe("The unique identifier for the corresponding tool call."),
+  content: array(ContentBlockSchema).default([]),
+  structuredContent: u({}).loose().optional(),
+  isError: M().optional(),
+  _meta: record(string(), unknown()).optional(),
+});
+var SamplingContentSchema = discriminatedUnion("type", [
+  TextContentSchema,
+  ImageContentSchema,
+  AudioContentSchema,
+]);
+var SamplingMessageContentBlockSchema = discriminatedUnion("type", [
+  TextContentSchema,
+  ImageContentSchema,
+  AudioContentSchema,
+  xt,
+  ToolResultContentSchema,
+]);
+var SamplingMessageSchema = u({
+  role: RoleSchema,
+  content: union([SamplingMessageContentBlockSchema, array(SamplingMessageContentBlockSchema)]),
+  _meta: record(string(), unknown()).optional(),
+});
+var CreateMessageRequestParamsSchema = TaskAugmentedRequestParamsSchema.extend({
+  messages: array(SamplingMessageSchema),
+  modelPreferences: ModelPreferencesSchema.optional(),
+  systemPrompt: string().optional(),
+  includeContext: _enum(["none", "thisServer", "allServers"]).optional(),
+  temperature: E().optional(),
+  maxTokens: E().int(),
+  stopSequences: array(string()).optional(),
+  metadata: AssertObjectSchema.optional(),
+  tools: array(ToolSchema).optional(),
+  toolChoice: ToolChoiceSchema.optional(),
+});
+var CreateMessageRequestSchema = RequestSchema.extend({
+  method: literal("sampling/createMessage"),
+  params: CreateMessageRequestParamsSchema,
+});
+var CreateMessageResultSchema = ResultSchema.extend({
+  model: string(),
+  stopReason: optional(_enum(["endTurn", "stopSequence", "maxTokens"]).or(string())),
+  role: RoleSchema,
+  content: SamplingContentSchema,
+});
+var CreateMessageResultWithToolsSchema = ResultSchema.extend({
+  model: string(),
+  stopReason: optional(_enum(["endTurn", "stopSequence", "maxTokens", "toolUse"]).or(string())),
+  role: RoleSchema,
+  content: union([SamplingMessageContentBlockSchema, array(SamplingMessageContentBlockSchema)]),
+});
+var BooleanSchemaSchema = u({
+  type: literal("boolean"),
+  title: string().optional(),
+  description: string().optional(),
+  default: M().optional(),
+});
+var StringSchemaSchema = u({
+  type: literal("string"),
+  title: string().optional(),
+  description: string().optional(),
+  minLength: E().optional(),
+  maxLength: E().optional(),
+  format: _enum(["email", "uri", "date", "date-time"]).optional(),
+  default: string().optional(),
+});
+var NumberSchemaSchema = u({
+  type: _enum(["number", "integer"]),
+  title: string().optional(),
+  description: string().optional(),
+  minimum: E().optional(),
+  maximum: E().optional(),
+  default: E().optional(),
+});
+var UntitledSingleSelectEnumSchemaSchema = u({
+  type: literal("string"),
+  title: string().optional(),
+  description: string().optional(),
+  enum: array(string()),
+  default: string().optional(),
+});
+var TitledSingleSelectEnumSchemaSchema = u({
+  type: literal("string"),
+  title: string().optional(),
+  description: string().optional(),
+  oneOf: array(
+    u({
+      const: string(),
+      title: string(),
+    }),
   ),
-  extend_8 = B.extend({ blob: refine }),
-  S = U(["user", "assistant"]),
-  p = u({
-    audience: A(S).optional(),
-    priority: E().min(0).max(1).optional(),
-    lastModified: Ue([t0({ offset: !0 }), t0({ offset: !0, precision: -1 })]).optional(),
+  default: string().optional(),
+});
+var LegacyTitledEnumSchemaSchema = u({
+  type: literal("string"),
+  title: string().optional(),
+  description: string().optional(),
+  enum: array(string()),
+  enumNames: array(string()).optional(),
+  default: string().optional(),
+});
+var SingleSelectEnumSchemaSchema = union([
+  UntitledSingleSelectEnumSchemaSchema,
+  TitledSingleSelectEnumSchemaSchema,
+]);
+var UntitledMultiSelectEnumSchemaSchema = u({
+  type: literal("array"),
+  title: string().optional(),
+  description: string().optional(),
+  minItems: E().optional(),
+  maxItems: E().optional(),
+  items: u({
+    type: literal("string"),
+    enum: array(string()),
   }),
-  ResourceSchema = u({
-    ...l.shape,
-    ...d.shape,
-    uri: o(),
-    description: La(o()),
-    mimeType: La(o()),
-    size: La(E()),
-    annotations: p.optional(),
-    _meta: La(kt({})),
+  default: array(string()).optional(),
+});
+var TitledMultiSelectEnumSchemaSchema = u({
+  type: literal("array"),
+  title: string().optional(),
+  description: string().optional(),
+  minItems: E().optional(),
+  maxItems: E().optional(),
+  items: u({
+    anyOf: array(
+      u({
+        const: string(),
+        title: string(),
+      }),
+    ),
   }),
-  ResourceTemplateSchema = u({
-    ...l.shape,
-    ...d.shape,
-    uriTemplate: o(),
-    description: La(o()),
-    mimeType: La(o()),
-    annotations: p.optional(),
-    _meta: La(kt({})),
+  default: array(string()).optional(),
+});
+var MultiSelectEnumSchemaSchema = union([
+  UntitledMultiSelectEnumSchemaSchema,
+  TitledMultiSelectEnumSchemaSchema,
+]);
+var EnumSchemaSchema = union([
+  LegacyTitledEnumSchemaSchema,
+  SingleSelectEnumSchemaSchema,
+  MultiSelectEnumSchemaSchema,
+]);
+var PrimitiveSchemaDefinitionSchema = union([
+  EnumSchemaSchema,
+  BooleanSchemaSchema,
+  StringSchemaSchema,
+  NumberSchemaSchema,
+]);
+var ElicitRequestFormParamsSchema = TaskAugmentedRequestParamsSchema.extend({
+  mode: literal("form").optional(),
+  message: string(),
+  requestedSchema: u({
+    type: literal("object"),
+    properties: record(string(), PrimitiveSchemaDefinitionSchema),
+    required: array(string()).optional(),
   }),
-  ListResourcesRequestSchema = extend_5.extend({ method: T("resources/list") }),
-  ListResourcesResultSchema = extend_6.extend({ resources: A(ResourceSchema) }),
-  ListResourceTemplatesRequestSchema = extend_5.extend({ method: T("resources/templates/list") }),
-  ListResourceTemplatesResultSchema = extend_6.extend({ resourceTemplates: A(ResourceTemplateSchema) }),
-  extend_9 = s.extend({ uri: o() }),
-  it = extend_9,
-  ReadResourceRequestSchema = n.extend({ method: T("resources/read"), params: it }),
-  ReadResourceResultSchema = a.extend({ contents: A(Ue([extend_7, extend_8])) }),
-  ResourceListChangedNotificationSchema = r.extend({
-    method: T("notifications/resources/list_changed"),
-    params: i.optional(),
-  }),
-  rt = extend_9,
-  extend_10 = n.extend({ method: T("resources/subscribe"), params: rt }),
-  lt = extend_9,
-  extend_11 = n.extend({ method: T("resources/unsubscribe"), params: lt }),
-  extend_12 = i.extend({ uri: o() }),
-  extend_13 = r.extend({ method: T("notifications/resources/updated"), params: extend_12 }),
-  ut = u({ name: o(), description: La(o()), required: La(M()) }),
-  PromptSchema = u({ ...l.shape, ...d.shape, description: La(o()), arguments: La(A(ut)), _meta: La(kt({})) }),
-  ListPromptsRequestSchema = extend_5.extend({ method: T("prompts/list") }),
-  ListPromptsResultSchema = extend_6.extend({ prompts: A(PromptSchema) }),
-  extend_14 = s.extend({ name: o(), arguments: pe(o(), o()).optional() }),
-  GetPromptRequestSchema = n.extend({ method: T("prompts/get"), params: extend_14 }),
-  C = u({ type: T("text"), text: o(), annotations: p.optional(), _meta: pe(o(), oe()).optional() }),
-  O = u({
-    type: T("image"),
-    data: refine,
-    mimeType: o(),
-    annotations: p.optional(),
-    _meta: pe(o(), oe()).optional(),
-  }),
-  N = u({
-    type: T("audio"),
-    data: refine,
-    mimeType: o(),
-    annotations: p.optional(),
-    _meta: pe(o(), oe()).optional(),
-  }),
-  xt = u({ type: T("tool_use"), name: o(), id: o(), input: pe(o(), oe()), _meta: pe(o(), oe()).optional() }),
-  ht = u({
-    type: T("resource"),
-    resource: Ue([extend_7, extend_8]),
-    annotations: p.optional(),
-    _meta: pe(o(), oe()).optional(),
-  }),
-  extend_15 = ResourceSchema.extend({ type: T("resource_link") }),
-  I = Ue([C, O, N, extend_15, ht]),
-  St = u({ role: S, content: I }),
-  GetPromptResultSchema = a.extend({ description: o().optional(), messages: A(St) }),
-  PromptListChangedNotificationSchema = r.extend({
-    method: T("notifications/prompts/list_changed"),
-    params: i.optional(),
-  }),
-  bt = u({
-    title: o().optional(),
-    readOnlyHint: M().optional(),
-    destructiveHint: M().optional(),
-    idempotentHint: M().optional(),
-    openWorldHint: M().optional(),
-  }),
-  Rt = u({ taskSupport: U(["required", "optional", "forbidden"]).optional() }),
-  ToolSchema = u({
-    ...l.shape,
-    ...d.shape,
-    description: o().optional(),
-    inputSchema: u({
-      type: T("object"),
-      properties: pe(o(), e).optional(),
-      required: A(o()).optional(),
-    }).catchall(oe()),
-    outputSchema: u({ type: T("object"), properties: pe(o(), e).optional(), required: A(o()).optional() })
-      .catchall(oe())
-      .optional(),
-    annotations: bt.optional(),
-    execution: Rt.optional(),
-    _meta: pe(o(), oe()).optional(),
-  }),
-  ListToolsRequestSchema = extend_5.extend({ method: T("tools/list") }),
-  ListToolsResultSchema = extend_6.extend({ tools: A(ToolSchema) }),
-  CallToolResultSchema = a.extend({
-    content: A(I).default([]),
-    structuredContent: pe(o(), oe()).optional(),
-    isError: M().optional(),
-  }),
-  CompatibilityCallToolResultSchema = CallToolResultSchema.or(a.extend({ toolResult: oe() })),
-  extend_16 = extend.extend({ name: o(), arguments: pe(o(), oe()).optional() }),
-  CallToolRequestSchema = n.extend({ method: T("tools/call"), params: extend_16 }),
-  ToolListChangedNotificationSchema = r.extend({
-    method: T("notifications/tools/list_changed"),
-    params: i.optional(),
-  }),
-  ListChangedOptionsBaseSchema = u({
-    autoRefresh: M().default(!0),
-    debounceMs: E().int().nonnegative().default(300),
-  }),
-  LoggingLevelSchema = U(["debug", "info", "notice", "warning", "error", "critical", "alert", "emergency"]),
-  extend_17 = s.extend({ level: LoggingLevelSchema }),
-  SetLevelRequestSchema = n.extend({ method: T("logging/setLevel"), params: extend_17 }),
-  extend_18 = i.extend({ level: LoggingLevelSchema, logger: o().optional(), data: oe() }),
-  extend_19 = r.extend({ method: T("notifications/message"), params: extend_18 }),
-  Tt = u({ name: o().optional() }),
-  qt = u({
-    hints: A(Tt).optional(),
-    costPriority: E().min(0).max(1).optional(),
-    speedPriority: E().min(0).max(1).optional(),
-    intelligencePriority: E().min(0).max(1).optional(),
-  }),
-  Ct = u({ mode: U(["auto", "required", "none"]).optional() }),
-  Ot = u({
-    type: T("tool_result"),
-    toolUseId: o().describe("The unique identifier for the corresponding tool call."),
-    content: A(I).default([]),
-    structuredContent: u({}).loose().optional(),
-    isError: M().optional(),
-    _meta: pe(o(), oe()).optional(),
-  }),
-  Nt = Ir("type", [C, O, N]),
-  b = Ir("type", [C, O, N, xt, Ot]),
-  It = u({ role: S, content: Ue([b, A(b)]), _meta: pe(o(), oe()).optional() }),
-  extend_20 = extend.extend({
-    messages: A(It),
-    modelPreferences: qt.optional(),
-    systemPrompt: o().optional(),
-    includeContext: U(["none", "thisServer", "allServers"]).optional(),
-    temperature: E().optional(),
-    maxTokens: E().int(),
-    stopSequences: A(o()).optional(),
-    metadata: e.optional(),
-    tools: A(ToolSchema).optional(),
-    toolChoice: Ct.optional(),
-  }),
-  CreateMessageRequestSchema = n.extend({ method: T("sampling/createMessage"), params: extend_20 }),
-  CreateMessageResultSchema = a.extend({
-    model: o(),
-    stopReason: La(U(["endTurn", "stopSequence", "maxTokens"]).or(o())),
-    role: S,
-    content: Nt,
-  }),
-  CreateMessageResultWithToolsSchema = a.extend({
-    model: o(),
-    stopReason: La(U(["endTurn", "stopSequence", "maxTokens", "toolUse"]).or(o())),
-    role: S,
-    content: Ue([b, A(b)]),
-  }),
-  Lt = u({ type: T("boolean"), title: o().optional(), description: o().optional(), default: M().optional() }),
-  _t = u({
-    type: T("string"),
-    title: o().optional(),
-    description: o().optional(),
-    minLength: E().optional(),
-    maxLength: E().optional(),
-    format: U(["email", "uri", "date", "date-time"]).optional(),
-    default: o().optional(),
-  }),
-  wt = u({
-    type: U(["number", "integer"]),
-    title: o().optional(),
-    description: o().optional(),
-    minimum: E().optional(),
-    maximum: E().optional(),
-    default: E().optional(),
-  }),
-  Mt = u({
-    type: T("string"),
-    title: o().optional(),
-    description: o().optional(),
-    enum: A(o()),
-    default: o().optional(),
-  }),
-  vt = u({
-    type: T("string"),
-    title: o().optional(),
-    description: o().optional(),
-    oneOf: A(u({ const: o(), title: o() })),
-    default: o().optional(),
-  }),
-  Ut = u({
-    type: T("string"),
-    title: o().optional(),
-    description: o().optional(),
-    enum: A(o()),
-    enumNames: A(o()).optional(),
-    default: o().optional(),
-  }),
-  At = Ue([Mt, vt]),
-  Jt = u({
-    type: T("array"),
-    title: o().optional(),
-    description: o().optional(),
-    minItems: E().optional(),
-    maxItems: E().optional(),
-    items: u({ type: T("string"), enum: A(o()) }),
-    default: A(o()).optional(),
-  }),
-  Bt = u({
-    type: T("array"),
-    title: o().optional(),
-    description: o().optional(),
-    minItems: E().optional(),
-    maxItems: E().optional(),
-    items: u({ anyOf: A(u({ const: o(), title: o() })) }),
-    default: A(o()).optional(),
-  }),
-  Gt = Ue([Jt, Bt]),
-  Dt = Ue([Ut, At, Gt]),
-  Vt = Ue([Dt, Lt, _t, wt]),
-  extend_21 = extend.extend({
-    mode: T("form").optional(),
-    message: o(),
-    requestedSchema: u({ type: T("object"), properties: pe(o(), Vt), required: A(o()).optional() }),
-  }),
-  ElicitRequestURLParamsSchema = extend.extend({
-    mode: T("url"),
-    message: o(),
-    elicitationId: o(),
-    url: o().url(),
-  }),
-  Ht = Ue([extend_21, ElicitRequestURLParamsSchema]),
-  ElicitRequestSchema = n.extend({ method: T("elicitation/create"), params: Ht }),
-  extend_22 = i.extend({ elicitationId: o() }),
-  ElicitationCompleteNotificationSchema = r.extend({
-    method: T("notifications/elicitation/complete"),
-    params: extend_22,
-  }),
-  ElicitResultSchema = a.extend({
-    action: U(["accept", "decline", "cancel"]),
-    content: Ka((t) => (t === null ? void 0 : t), pe(o(), Ue([o(), E(), M(), A(o())])).optional()),
-  }),
-  Wt = u({ type: T("ref/resource"), uri: o() });
+});
+var ElicitRequestURLParamsSchema = TaskAugmentedRequestParamsSchema.extend({
+  mode: literal("url"),
+  message: string(),
+  elicitationId: string(),
+  url: string().url(),
+});
+var ElicitRequestParamsSchema = union([ElicitRequestFormParamsSchema, ElicitRequestURLParamsSchema]);
+var ElicitRequestSchema = RequestSchema.extend({
+  method: literal("elicitation/create"),
+  params: ElicitRequestParamsSchema,
+});
+var ElicitationCompleteNotificationParamsSchema = NotificationsParamsSchema.extend({
+  elicitationId: string(),
+});
+var ElicitationCompleteNotificationSchema = NotificationSchema.extend({
+  method: literal("notifications/elicitation/complete"),
+  params: ElicitationCompleteNotificationParamsSchema,
+});
+var ElicitResultSchema = ResultSchema.extend({
+  action: _enum(["accept", "decline", "cancel"]),
+  content: preprocess(
+    (val) => (val === null ? undefined : val),
+    record(string(), union([string(), E(), M(), array(string())])).optional(),
+  ),
+});
+var ResourceTemplateReferenceSchema = u({
+  type: literal("ref/resource"),
+  uri: string(),
+});
 //@ chunk-x4hefdgz.js:11145-11366 esm-fingerprint
-var Kt = u({ type: T("ref/prompt"), name: o() }),
-  extend_23 = s.extend({
-    ref: Ue([Kt, Wt]),
-    argument: u({ name: o(), value: o() }),
-    context: u({ arguments: pe(o(), o()).optional() }).optional(),
+var PromptReferenceSchema = u({
+  type: literal("ref/prompt"),
+  name: string(),
+});
+var CompleteRequestParamsSchema = BaseRequestParamsSchema.extend({
+  ref: union([PromptReferenceSchema, ResourceTemplateReferenceSchema]),
+  argument: u({
+    name: string(),
+    value: string(),
   }),
-  CompleteRequestSchema = n.extend({ method: T("completion/complete"), params: extend_23 });
+  context: u({
+    arguments: record(string(), string()).optional(),
+  }).optional(),
+});
+var CompleteRequestSchema = RequestSchema.extend({
+  method: literal("completion/complete"),
+  params: CompleteRequestParamsSchema,
+});
 //@ chunk-x4hefdgz.js:11366-11498 esm-fingerprint
-function assertCompleteRequestPrompt(t) {
-  if (t.params.ref.type !== "ref/prompt")
-    throw TypeError(`Expected CompleteRequestPrompt, but got ${t.params.ref.type}`);
+function assertCompleteRequestPrompt(request) {
+  if (request.params.ref.type !== "ref/prompt")
+    throw TypeError(`Expected CompleteRequestPrompt, but got ${request.params.ref.type}`);
 }
 //@ chunk-x4hefdgz.js:11498-11642 esm-fingerprint
-function assertCompleteRequestResourceTemplate(t) {
-  if (t.params.ref.type !== "ref/resource")
-    throw TypeError(`Expected CompleteRequestResourceTemplate, but got ${t.params.ref.type}`);
+function assertCompleteRequestResourceTemplate(request) {
+  if (request.params.ref.type !== "ref/resource")
+    throw TypeError(`Expected CompleteRequestResourceTemplate, but got ${request.params.ref.type}`);
 }
 //@ chunk-x4hefdgz.js:11642-12281 esm-fingerprint
-var CompleteResultSchema = a.extend({
-    completion: kt({ values: A(o()).max(100), total: La(E().int()), hasMore: La(M()) }),
+var CompleteResultSchema = ResultSchema.extend({
+  completion: looseObject({
+    values: array(string()).max(100),
+    total: optional(E().int()),
+    hasMore: optional(M()),
   }),
-  Qt = u({ uri: o().startsWith("file://"), name: o().optional(), _meta: pe(o(), oe()).optional() }),
-  ListRootsRequestSchema = n.extend({ method: T("roots/list"), params: s.optional() }),
-  ListRootsResultSchema = a.extend({ roots: A(Qt) }),
-  extend_24 = r.extend({ method: T("notifications/roots/list_changed"), params: i.optional() }),
-  se = Ue([
-    PingRequestSchema,
-    InitializeRequestSchema,
-    CompleteRequestSchema,
-    SetLevelRequestSchema,
-    GetPromptRequestSchema,
-    ListPromptsRequestSchema,
-    ListResourcesRequestSchema,
-    ListResourceTemplatesRequestSchema,
-    ReadResourceRequestSchema,
-    extend_10,
-    extend_11,
-    CallToolRequestSchema,
-    ListToolsRequestSchema,
-    GetTaskRequestSchema,
-    GetTaskPayloadRequestSchema,
-    ListTasksRequestSchema,
-    CancelTaskRequestSchema,
-  ]),
-  ie = Ue([
-    CancelledNotificationSchema,
-    ProgressNotificationSchema,
-    InitializedNotificationSchema,
-    extend_24,
-    TaskStatusNotificationSchema,
-  ]),
-  re = Ue([
-    EmptyResultSchema,
-    CreateMessageResultSchema,
-    CreateMessageResultWithToolsSchema,
-    ElicitResultSchema,
-    ListRootsResultSchema,
-    GetTaskResultSchema,
-    ListTasksResultSchema,
-    CreateTaskResultSchema,
-  ]),
-  ce = Ue([
-    PingRequestSchema,
-    CreateMessageRequestSchema,
-    ElicitRequestSchema,
-    ListRootsRequestSchema,
-    GetTaskRequestSchema,
-    GetTaskPayloadRequestSchema,
-    ListTasksRequestSchema,
-    CancelTaskRequestSchema,
-  ]),
-  le = Ue([
-    CancelledNotificationSchema,
-    ProgressNotificationSchema,
-    extend_19,
-    extend_13,
-    ResourceListChangedNotificationSchema,
-    ToolListChangedNotificationSchema,
-    PromptListChangedNotificationSchema,
-    TaskStatusNotificationSchema,
-    ElicitationCompleteNotificationSchema,
-  ]),
-  me = Ue([
-    EmptyResultSchema,
-    InitializeResultSchema,
-    CompleteResultSchema,
-    GetPromptResultSchema,
-    ListPromptsResultSchema,
-    ListResourcesResultSchema,
-    ListResourceTemplatesResultSchema,
-    ReadResourceResultSchema,
-    CallToolResultSchema,
-    ListToolsResultSchema,
-    GetTaskResultSchema,
-    ListTasksResultSchema,
-    CreateTaskResultSchema,
-  ]);
+});
+var RootSchema = u({
+  uri: string().startsWith("file://"),
+  name: string().optional(),
+  _meta: record(string(), unknown()).optional(),
+});
+var ListRootsRequestSchema = RequestSchema.extend({
+  method: literal("roots/list"),
+  params: BaseRequestParamsSchema.optional(),
+});
+var ListRootsResultSchema = ResultSchema.extend({
+  roots: array(RootSchema),
+});
+var RootsListChangedNotificationSchema = NotificationSchema.extend({
+  method: literal("notifications/roots/list_changed"),
+  params: NotificationsParamsSchema.optional(),
+});
+var se = union([
+  PingRequestSchema,
+  InitializeRequestSchema,
+  CompleteRequestSchema,
+  SetLevelRequestSchema,
+  GetPromptRequestSchema,
+  ListPromptsRequestSchema,
+  ListResourcesRequestSchema,
+  ListResourceTemplatesRequestSchema,
+  ReadResourceRequestSchema,
+  SubscribeRequestSchema,
+  UnsubscribeRequestSchema,
+  CallToolRequestSchema,
+  ListToolsRequestSchema,
+  GetTaskRequestSchema,
+  GetTaskPayloadRequestSchema,
+  ListTasksRequestSchema,
+  CancelTaskRequestSchema,
+]);
+var ie = union([
+  CancelledNotificationSchema,
+  ProgressNotificationSchema,
+  InitializedNotificationSchema,
+  RootsListChangedNotificationSchema,
+  TaskStatusNotificationSchema,
+]);
+var re = union([
+  EmptyResultSchema,
+  CreateMessageResultSchema,
+  CreateMessageResultWithToolsSchema,
+  ElicitResultSchema,
+  ListRootsResultSchema,
+  GetTaskResultSchema,
+  ListTasksResultSchema,
+  CreateTaskResultSchema,
+]);
+var ce = union([
+  PingRequestSchema,
+  CreateMessageRequestSchema,
+  ElicitRequestSchema,
+  ListRootsRequestSchema,
+  GetTaskRequestSchema,
+  GetTaskPayloadRequestSchema,
+  ListTasksRequestSchema,
+  CancelTaskRequestSchema,
+]);
+var le = union([
+  CancelledNotificationSchema,
+  ProgressNotificationSchema,
+  LoggingMessageNotificationSchema,
+  ResourceUpdatedNotificationSchema,
+  ResourceListChangedNotificationSchema,
+  ToolListChangedNotificationSchema,
+  PromptListChangedNotificationSchema,
+  TaskStatusNotificationSchema,
+  ElicitationCompleteNotificationSchema,
+]);
+var me = union([
+  EmptyResultSchema,
+  InitializeResultSchema,
+  CompleteResultSchema,
+  GetPromptResultSchema,
+  ListPromptsResultSchema,
+  ListResourcesResultSchema,
+  ListResourceTemplatesResultSchema,
+  ReadResourceResultSchema,
+  CallToolResultSchema,
+  ListToolsResultSchema,
+  GetTaskResultSchema,
+  ListTasksResultSchema,
+  CreateTaskResultSchema,
+]);
 //@ chunk-x4hefdgz.js:12281-12538 esm-fingerprint
 class McpError extends Error {
-  constructor(t, c, m) {
-    super(`MCP error ${t}: ${c}`);
-    ((this.code = t), (this.data = m), (this.name = "McpError"));
+  constructor(code, message, data) {
+    super(`MCP error ${code}: ${message}`);
+    this.code = code;
+    this.data = data;
+    this.name = "McpError";
   }
-  static fromError(t, c, m) {
-    if (t === ErrorCode.UrlElicitationRequired && m) {
-      let L = m;
-      if (L.elicitations) return new V(L.elicitations, c);
+  static fromError(code, message, data) {
+    if (code === ErrorCode.UrlElicitationRequired && data) {
+      let errorData = data;
+      if (errorData.elicitations) return new UrlElicitationRequiredError(errorData.elicitations, message);
     }
-    return new McpError(t, c, m);
+    return new McpError(code, message, data);
   }
 }
 //@ chunk-x4hefdgz.js:12538-12728 esm-fingerprint
-class V extends McpError {
-  constructor(t, c = `URL elicitation${t.length > 1 ? "s" : ""} required`) {
-    super(ErrorCode.UrlElicitationRequired, c, { elicitations: t });
+class UrlElicitationRequiredError extends McpError {
+  constructor(elicitations, message = `URL elicitation${elicitations.length > 1 ? "s" : ""} required`) {
+    super(ErrorCode.UrlElicitationRequired, message, {
+      elicitations,
+    });
   }
   get elicitations() {
     return this.data?.elicitations ?? [];
   }
 }
-
 export {
   McpError,
   ErrorCode,

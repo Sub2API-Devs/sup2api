@@ -12,35 +12,41 @@ import { budgetedTokenizer } from "./htmlTokenizerBudget.js";
 import { RAWTEXT_MODES } from "../../../vendor/@mixmark-io/domino/lib/HTMLParser.js";
 
 //@ chunk-1c8ngz3c.js:260-299 placement
-var d = /<\/(?:body|html)[\t\n\f\r />]/i;
+var HTML_CLOSE_TAG_RE = /<\/(?:body|html)[\t\n\f\r />]/i;
 //@ chunk-1c8ngz3c.js:299-802 placement
 function runtimeBlockInsertionIndex(n) {
-  if (!d.test(n)) return n.length;
-  let e = -1,
-    o = () => {
-      e = -1;
+  if (!HTML_CLOSE_TAG_RE.test(n)) return n.length;
+  let e = -1;
+  let o = () => {
+    e = -1;
+  };
+  let r = () => {};
+  let { tokenizer, overBudget } = budgetedTokenizer(
+    {
+      sourceCodeLocationInfo: true,
     },
-    r = () => {},
-    { tokenizer: tokenizer, overBudget: overBudget } = budgetedTokenizer(
-      { sourceCodeLocationInfo: !0 },
-      {
-        onStartTag(t) {
-          let i = RAWTEXT_MODES.get(t.tagName);
-          if (i !== void 0) ((tokenizer.state = i), (tokenizer.lastStartTagName = t.tagName));
-          if (t.tagName !== "html") o();
-        },
-        onEndTag(t) {
-          if (t.tagName !== "body" && t.tagName !== "html") o();
-          else if (e < 0 && t.location) e = t.location.startOffset;
-        },
-        onComment: r,
-        onDoctype: r,
-        onCharacter: o,
-        onNullCharacter: o,
-        onWhitespaceCharacter: r,
-        onEof: r,
+    {
+      onStartTag(t) {
+        let i = RAWTEXT_MODES.get(t.tagName);
+        if (i !== undefined) {
+          tokenizer.state = i;
+          tokenizer.lastStartTagName = t.tagName;
+        }
+        if (t.tagName !== "html") o();
       },
-    );
-  if ((tokenizer.write(n, !0), overBudget())) return;
+      onEndTag(t) {
+        if (t.tagName !== "body" && t.tagName !== "html") o();
+        else if (e < 0 && t.location) e = t.location.startOffset;
+      },
+      onComment: r,
+      onDoctype: r,
+      onCharacter: o,
+      onNullCharacter: o,
+      onWhitespaceCharacter: r,
+      onEof: r,
+    },
+  );
+  tokenizer.write(n, true);
+  if (overBudget()) return;
   return e >= 0 ? e : n.length;
 }

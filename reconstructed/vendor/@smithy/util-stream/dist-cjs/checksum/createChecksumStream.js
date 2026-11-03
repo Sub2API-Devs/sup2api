@@ -6,22 +6,23 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../runtime/bun-runtime.js";
-import { B } from "../stream-type-check.js";
-import { me } from "./ChecksumStream.js";
-import { Ke } from "./createChecksumStream.browser.js";
+import { require_stream_type_check } from "../stream-type-check.js";
+import { require_ChecksumStream } from "./ChecksumStream.js";
+import { require_createChecksumStream_browser } from "./createChecksumStream.browser.js";
 
 //@ chunk-wjd9n4jx.js:2964-3243 cjs-fingerprint
-var st = x(function (rt) {
-  Object.defineProperty(rt, "__esModule", { value: !0 });
-  rt.createChecksumStream = qr;
-  var Xe = B(),
-    et = me(),
-    tt = Ke();
-  function qr(e) {
-    if (typeof ReadableStream === "function" && Xe.isReadableStream(e.source))
-      return tt.createChecksumStream(e);
-    return new et.ChecksumStream(e);
+var require_createChecksumStream = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.createChecksumStream = createChecksumStream;
+  var stream_type_check_1 = require_stream_type_check();
+  var ChecksumStream_1 = require_ChecksumStream();
+  var createChecksumStream_browser_1 = require_createChecksumStream_browser();
+  function createChecksumStream(init) {
+    if (typeof ReadableStream === "function" && stream_type_check_1.isReadableStream(init.source))
+      return createChecksumStream_browser_1.createChecksumStream(init);
+    return new ChecksumStream_1.ChecksumStream(init);
   }
 });
-
-export { st };
+export { require_createChecksumStream };

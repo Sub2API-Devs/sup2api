@@ -8,32 +8,32 @@
 import { x, importMetaRequire } from "../../runtime/bun-runtime.js";
 
 //@ chunk-m4p5zn6n.js:1221-1714 cjs-fingerprint
-var pt = x(function (li, ft) {
-  ft.exports = dt;
-  dt.sync = Vn;
-  var ct = importMetaRequire("fs");
-  function dt(e, n, r) {
-    ct.stat(e, function (o, s) {
-      r(o, o ? !1 : lt(s, n));
+var require_mode = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = isexe;
+  isexe.sync = sync;
+  var fs = importMetaRequire("fs");
+  function isexe(path, options, cb) {
+    fs.stat(path, function (er, stat) {
+      cb(er, er ? false : checkStat(stat, options));
     });
   }
-  function Vn(e, n) {
-    return lt(ct.statSync(e), n);
+  function sync(path, options) {
+    return checkStat(fs.statSync(path), options);
   }
-  function lt(e, n) {
-    return e.isFile() && Xn(e, n);
+  function checkStat(stat, options) {
+    return stat.isFile() && checkMode(stat, options);
   }
-  function Xn(e, n) {
-    var { mode: mode, uid: uid, gid: gid } = e,
-      u = n.uid !== void 0 ? n.uid : process.getuid && process.getuid(),
-      d = n.gid !== void 0 ? n.gid : process.getgid && process.getgid(),
-      l = parseInt("100", 8),
-      f = parseInt("010", 8),
-      p = parseInt("001", 8),
-      h = l | f,
-      S = mode & p || (mode & f && gid === d) || (mode & l && uid === u) || (mode & h && u === 0);
-    return S;
+  function checkMode(stat, options) {
+    var { mode: mod, uid, gid } = stat;
+    var myUid = options.uid !== undefined ? options.uid : process.getuid && process.getuid();
+    var myGid = options.gid !== undefined ? options.gid : process.getgid && process.getgid();
+    var u = parseInt("100", 8);
+    var g = parseInt("010", 8);
+    var o = parseInt("001", 8);
+    var ug = u | g;
+    var ret =
+      mod & o || (mod & g && gid === myGid) || (mod & u && uid === myUid) || (mod & ug && myUid === 0);
+    return ret;
   }
 });
-
-export { pt };
+export { require_mode };

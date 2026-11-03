@@ -6,18 +6,17 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../runtime/bun-runtime.js";
-import { Ro } from "./gOPD.js";
+import { require_gOPD } from "./gOPD.js";
 
 //@ chunk-h6b7mazd.js:8355-8451 cjs-fingerprint
-var tr = x(function (rp, wo) {
-  var St = Ro();
-  if (St)
+var require_gopd = x(function (cjsExports, cjsModule) {
+  var $gOPD = require_gOPD();
+  if ($gOPD)
     try {
-      St([], "length");
+      $gOPD([], "length");
     } catch (error) {
-      St = null;
+      $gOPD = null;
     }
-  wo.exports = St;
+  cjsModule.exports = $gOPD;
 });
-
-export { tr };
+export { require_gopd };

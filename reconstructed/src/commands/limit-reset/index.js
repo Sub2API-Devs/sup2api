@@ -13,88 +13,125 @@ import { isClaudeAISubscriber } from "../../utils/auth.js";
 
 //@ chunk-e6aww6q8.js:2043361-2043382 placement
 var LIMIT_RESET = "limit-reset";
+//@ chunk-e6aww6q8.js:2043382-2045061 placement
 /**
  * /limit-reset 的界面文案模板（额度种类、剩余、到期日、确认语句）。
  */
-//@ chunk-e6aww6q8.js:2043382-2045061 placement
-var LIMIT_RESET_TEXT = "tengu_cedar_ember",
-  Fh = {
-    label: "Use a {kind} ({left} left, until {date})",
-    noticeLine: `/${LIMIT_RESET} to use your {kind} \xB7 {left} left \xB7 use by {date}`,
-    noticeLineMany: `/${LIMIT_RESET} \xB7 {held} \xB7 first expires {date}`,
-    fableAtWeeklySuffix: "frees up only what Fable used this week",
-    chooseTitle: "Which reset do you want to use?",
-    keptChoiceLine: `Resets kept \xB7 run /${LIMIT_RESET} when you want one \xB7 first expires {deadline}`,
-    noKindLine: "No {kind} to use",
-    spentLine: "Reset used \xB7 {resets} left",
-    confirmTitle: "Use a {kind}?",
-    confirmBody: "Refills your {limits} now \xB7 {returns} \xB7 your weekly reset day stays {week}",
-    confirmDetail: "{kindResets} left \xB7 use by {deadline}",
-    confirmYes: "Yes, use my {kind}",
-    confirmNo: "No, keep it",
-    successLine: "{done} \xB7 your weekly reset day stays {week} \xB7 {kindResets} left",
-    keptLine: `{Kind} kept \xB7 run /${LIMIT_RESET} at a limit to use it \xB7 use by {deadline}`,
-    keptAnytimeLine: `{Kind} kept \xB7 run /${LIMIT_RESET} whenever you want to use it \xB7 use by {deadline}`,
-    unavailableLine: "Couldn't reset your limits \xB7 nothing was used \xB7 try again in a moment",
-    unconfirmedLine:
-      "Couldn't confirm the reset went through \xB7 if you're still at the limit in a moment, try again",
-    unconfirmedAnytimeLine: `Couldn't confirm the reset went through \xB7 check /usage in a moment \xB7 if your limits weren't refilled, run /${LIMIT_RESET} again`,
-    stillUnconfirmedLine:
-      "Still couldn't confirm your reset \xB7 nothing more was used \xB7 if your limits aren't refilled in a few minutes, contact support",
-    earlyLine: "You still have {percent}% of your {limit} left \u2014 use your {kind} anyway?",
-    earlyNoNumberLine: "You haven't reached a limit yet \u2014 use your {kind} anyway?",
-  };
+var LIMIT_RESET_TEXT = "tengu_cedar_ember";
+var CEDAR_EMBER_DEFAULT_TEXTS = {
+  label: "Use a {kind} ({left} left, until {date})",
+  noticeLine: `/${LIMIT_RESET} to use your {kind} \xB7 {left} left \xB7 use by {date}`,
+  noticeLineMany: `/${LIMIT_RESET} \xB7 {held} \xB7 first expires {date}`,
+  fableAtWeeklySuffix: "frees up only what Fable used this week",
+  chooseTitle: "Which reset do you want to use?",
+  keptChoiceLine: `Resets kept \xB7 run /${LIMIT_RESET} when you want one \xB7 first expires {deadline}`,
+  noKindLine: "No {kind} to use",
+  spentLine: "Reset used \xB7 {resets} left",
+  confirmTitle: "Use a {kind}?",
+  confirmBody: "Refills your {limits} now \xB7 {returns} \xB7 your weekly reset day stays {week}",
+  confirmDetail: "{kindResets} left \xB7 use by {deadline}",
+  confirmYes: "Yes, use my {kind}",
+  confirmNo: "No, keep it",
+  successLine: "{done} \xB7 your weekly reset day stays {week} \xB7 {kindResets} left",
+  keptLine: `{Kind} kept \xB7 run /${LIMIT_RESET} at a limit to use it \xB7 use by {deadline}`,
+  keptAnytimeLine: `{Kind} kept \xB7 run /${LIMIT_RESET} whenever you want to use it \xB7 use by {deadline}`,
+  unavailableLine: "Couldn't reset your limits \xB7 nothing was used \xB7 try again in a moment",
+  unconfirmedLine:
+    "Couldn't confirm the reset went through \xB7 if you're still at the limit in a moment, try again",
+  unconfirmedAnytimeLine: `Couldn't confirm the reset went through \xB7 check /usage in a moment \xB7 if your limits weren't refilled, run /${LIMIT_RESET} again`,
+  stillUnconfirmedLine:
+    "Still couldn't confirm your reset \xB7 nothing more was used \xB7 if your limits aren't refilled in a few minutes, contact support",
+  earlyLine: "You still have {percent}% of your {limit} left \u2014 use your {kind} anyway?",
+  earlyNoNumberLine: "You haven't reached a limit yet \u2014 use your {kind} anyway?",
+};
+//@ chunk-e6aww6q8.js:2045061-2045153 placement
 /**
  * getCedarEmberConfig：tengu_cedar_ember（额度重置的另一形态）。
  */
-//@ chunk-e6aww6q8.js:2045061-2045153 placement
 function getCedarEmberConfig() {
-  let e = getFeatureValue_CACHED_MAY_BE_STALE(LIMIT_RESET_TEXT, {});
-  return typeof e === "object" && e !== null && !Array.isArray(e) ? e : {};
+  let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE(LIMIT_RESET_TEXT, {});
+  return typeof featureValue_CACHED_MAY_BE_STALE === "object" &&
+    featureValue_CACHED_MAY_BE_STALE !== null &&
+    !Array.isArray(featureValue_CACHED_MAY_BE_STALE)
+    ? featureValue_CACHED_MAY_BE_STALE
+    : {};
 }
 //@ chunk-e6aww6q8.js:2045153-2045194 placement
 function isCedarEmberEnabled() {
-  return getCedarEmberConfig().enabled === !0;
+  return getCedarEmberConfig().enabled === true;
 }
 //@ chunk-e6aww6q8.js:2045194-2045280 placement
-function Stt() {
+/**
+ * 读取 cedarEmber 配置里的 version（非法时按 0）。
+ */
+function cedarEmberVersion() {
   let version = getCedarEmberConfig().version;
   return typeof version === "number" && Number.isFinite(version) ? version : 0;
 }
 //@ chunk-e6aww6q8.js:2045280-2045326 placement
-function X3s() {
-  return getCedarEmberConfig().autoContinue !== !1;
+/**
+ * cedarEmber 的 autoContinue 开关（缺省视为 true）。
+ */
+function cedarEmberAutoContinue() {
+  return getCedarEmberConfig().autoContinue !== false;
 }
 //@ chunk-e6aww6q8.js:2045326-2045389 placement
-function $h(e, n) {
+function stringOrDefault(e, n) {
   return typeof e === "string" && e.trim() !== "" ? e : n;
 }
 //@ chunk-e6aww6q8.js:2045389-2046524 placement
 function getCedarEmberCopy() {
-  let e = getCedarEmberConfig();
+  let cedarEmberConfig = getCedarEmberConfig();
   return {
-    label: $h(e.label, Fh.label),
-    noticeLine: $h(e.noticeLine, Fh.noticeLine),
-    noticeLineMany: $h(e.noticeLineMany, Fh.noticeLineMany),
-    fableAtWeeklySuffix: $h(e.fableAtWeeklySuffix, Fh.fableAtWeeklySuffix),
-    chooseTitle: $h(e.chooseTitle, Fh.chooseTitle),
-    keptChoiceLine: $h(e.keptChoiceLine, Fh.keptChoiceLine),
-    noKindLine: $h(e.noKindLine, Fh.noKindLine),
-    spentLine: $h(e.spentLine, Fh.spentLine),
-    confirmTitle: $h(e.confirmTitle, Fh.confirmTitle),
-    confirmBody: $h(e.confirmBody, Fh.confirmBody),
-    confirmDetail: $h(e.confirmDetail, Fh.confirmDetail),
-    confirmYes: $h(e.confirmYes, Fh.confirmYes),
-    confirmNo: $h(e.confirmNo, Fh.confirmNo),
-    successLine: $h(e.successLine, Fh.successLine),
-    keptLine: $h(e.keptLine, Fh.keptLine),
-    keptAnytimeLine: $h(e.keptAnytimeLine, Fh.keptAnytimeLine),
-    unavailableLine: $h(e.unavailableLine, Fh.unavailableLine),
-    unconfirmedLine: $h(e.unconfirmedLine, Fh.unconfirmedLine),
-    unconfirmedAnytimeLine: $h(e.unconfirmedAnytimeLine, Fh.unconfirmedAnytimeLine),
-    stillUnconfirmedLine: $h(e.stillUnconfirmedLine, Fh.stillUnconfirmedLine),
-    earlyLine: $h(e.earlyLine, Fh.earlyLine),
-    earlyNoNumberLine: $h(e.earlyNoNumberLine, Fh.earlyNoNumberLine),
+    label: stringOrDefault(cedarEmberConfig.label, CEDAR_EMBER_DEFAULT_TEXTS.label),
+    noticeLine: stringOrDefault(cedarEmberConfig.noticeLine, CEDAR_EMBER_DEFAULT_TEXTS.noticeLine),
+    noticeLineMany: stringOrDefault(
+      cedarEmberConfig.noticeLineMany,
+      CEDAR_EMBER_DEFAULT_TEXTS.noticeLineMany,
+    ),
+    fableAtWeeklySuffix: stringOrDefault(
+      cedarEmberConfig.fableAtWeeklySuffix,
+      CEDAR_EMBER_DEFAULT_TEXTS.fableAtWeeklySuffix,
+    ),
+    chooseTitle: stringOrDefault(cedarEmberConfig.chooseTitle, CEDAR_EMBER_DEFAULT_TEXTS.chooseTitle),
+    keptChoiceLine: stringOrDefault(
+      cedarEmberConfig.keptChoiceLine,
+      CEDAR_EMBER_DEFAULT_TEXTS.keptChoiceLine,
+    ),
+    noKindLine: stringOrDefault(cedarEmberConfig.noKindLine, CEDAR_EMBER_DEFAULT_TEXTS.noKindLine),
+    spentLine: stringOrDefault(cedarEmberConfig.spentLine, CEDAR_EMBER_DEFAULT_TEXTS.spentLine),
+    confirmTitle: stringOrDefault(cedarEmberConfig.confirmTitle, CEDAR_EMBER_DEFAULT_TEXTS.confirmTitle),
+    confirmBody: stringOrDefault(cedarEmberConfig.confirmBody, CEDAR_EMBER_DEFAULT_TEXTS.confirmBody),
+    confirmDetail: stringOrDefault(cedarEmberConfig.confirmDetail, CEDAR_EMBER_DEFAULT_TEXTS.confirmDetail),
+    confirmYes: stringOrDefault(cedarEmberConfig.confirmYes, CEDAR_EMBER_DEFAULT_TEXTS.confirmYes),
+    confirmNo: stringOrDefault(cedarEmberConfig.confirmNo, CEDAR_EMBER_DEFAULT_TEXTS.confirmNo),
+    successLine: stringOrDefault(cedarEmberConfig.successLine, CEDAR_EMBER_DEFAULT_TEXTS.successLine),
+    keptLine: stringOrDefault(cedarEmberConfig.keptLine, CEDAR_EMBER_DEFAULT_TEXTS.keptLine),
+    keptAnytimeLine: stringOrDefault(
+      cedarEmberConfig.keptAnytimeLine,
+      CEDAR_EMBER_DEFAULT_TEXTS.keptAnytimeLine,
+    ),
+    unavailableLine: stringOrDefault(
+      cedarEmberConfig.unavailableLine,
+      CEDAR_EMBER_DEFAULT_TEXTS.unavailableLine,
+    ),
+    unconfirmedLine: stringOrDefault(
+      cedarEmberConfig.unconfirmedLine,
+      CEDAR_EMBER_DEFAULT_TEXTS.unconfirmedLine,
+    ),
+    unconfirmedAnytimeLine: stringOrDefault(
+      cedarEmberConfig.unconfirmedAnytimeLine,
+      CEDAR_EMBER_DEFAULT_TEXTS.unconfirmedAnytimeLine,
+    ),
+    stillUnconfirmedLine: stringOrDefault(
+      cedarEmberConfig.stillUnconfirmedLine,
+      CEDAR_EMBER_DEFAULT_TEXTS.stillUnconfirmedLine,
+    ),
+    earlyLine: stringOrDefault(cedarEmberConfig.earlyLine, CEDAR_EMBER_DEFAULT_TEXTS.earlyLine),
+    earlyNoNumberLine: stringOrDefault(
+      cedarEmberConfig.earlyNoNumberLine,
+      CEDAR_EMBER_DEFAULT_TEXTS.earlyNoNumberLine,
+    ),
   };
 }
 //@ chunk-e6aww6q8.js:2046524-2046541 placement = SEP_WIDTH (1)
@@ -102,127 +139,142 @@ var SEP_WIDTH = " \xB7 ";
 //@ chunk-e6aww6q8.js:2046541-2047364 placement
 function formatLimitResetTemplate(e, n) {
   let r = {
-      "{kind}": n.kind,
-      "{Kind}": n.kind === void 0 ? void 0 : n.kind.charAt(0).toUpperCase() + n.kind.slice(1),
-      "{kindResets}": n.kindResets,
-      "{held}": n.held,
-      "{returns}": n.returns,
-      "{done}": n.done,
-      "{left}": n.left === void 0 ? void 0 : String(n.left),
-      "{resets}":
-        n.left === void 0
-          ? void 0
-          : n.left === 0
-            ? "no resets"
-            : n.left === 1
-              ? "1 reset"
-              : `${n.left} resets`,
-      "{date}": n.date,
-      "{deadline}": n.deadline,
-      "{week}": n.week,
-      "{limits}": n.limits,
-      "{percent}": n.percent === void 0 ? void 0 : String(n.percent),
-      "{limit}": n.limit,
-    },
-    filtered = Object.keys(r).filter((y) => r[y] === void 0 && e.includes(y)),
-    h = e;
+    "{kind}": n.kind,
+    "{Kind}": n.kind === undefined ? undefined : n.kind.charAt(0).toUpperCase() + n.kind.slice(1),
+    "{kindResets}": n.kindResets,
+    "{held}": n.held,
+    "{returns}": n.returns,
+    "{done}": n.done,
+    "{left}": n.left === undefined ? undefined : String(n.left),
+    "{resets}":
+      n.left === undefined
+        ? undefined
+        : n.left === 0
+          ? "no resets"
+          : n.left === 1
+            ? "1 reset"
+            : `${n.left} resets`,
+    "{date}": n.date,
+    "{deadline}": n.deadline,
+    "{week}": n.week,
+    "{limits}": n.limits,
+    "{percent}": n.percent === undefined ? undefined : String(n.percent),
+    "{limit}": n.limit,
+  };
+  let filtered = Object.keys(r).filter((key) => r[key] === undefined && e.includes(key));
+  let h = e;
   if (filtered.length > 0) {
     let filtered_2 = h.split(SEP_WIDTH).filter((S) => !filtered.some((w) => S.includes(w)));
     h = filtered_2.length > 0 ? filtered_2.join(SEP_WIDTH) : h.replace(/ \([^)]*\{[A-Za-z]+\}[^)]*\)/g, "");
     for (let S of filtered) h = h.replaceAll(S, "\u2026");
   }
-  for (let [y, S] of Object.entries(r)) if (S !== void 0) h = h.replaceAll(y, S);
+  for (let [key, value] of Object.entries(r)) if (value !== undefined) h = h.replaceAll(key, value);
   return h;
 }
 //@ chunk-e6aww6q8.js:2047364-2047768 placement
-var TENGU_NIFTY_LEMUR = "tengu_nifty_lemur",
-  yZ = {
-    label: "Reset your 5-hour limit now",
-    noticeLine: `/${LIMIT_RESET} to reset your 5-hour limit now \xB7 uses weekly limit \xB7 1/week`,
-    spentLine: "Weekly reset used \xB7 available again {date}",
-    successLine: "5-hour limit reset \xB7 next reset available {date} \xB7 your weekly limit still applies",
-    unavailableLine: "Couldn't reset your 5-hour limit right now \xB7 try again in a moment",
-  };
+/**
+ * 限额重置功能的默认界面文案（按钮、通知、成功/不可用等）。
+ */
+var TENGU_NIFTY_LEMUR = "tengu_nifty_lemur";
+var LIMIT_RESET_DEFAULT_TEXTS = {
+  label: "Reset your 5-hour limit now",
+  noticeLine: `/${LIMIT_RESET} to reset your 5-hour limit now \xB7 uses weekly limit \xB7 1/week`,
+  spentLine: "Weekly reset used \xB7 available again {date}",
+  successLine: "5-hour limit reset \xB7 next reset available {date} \xB7 your weekly limit still applies",
+  unavailableLine: "Couldn't reset your 5-hour limit right now \xB7 try again in a moment",
+};
+//@ chunk-e6aww6q8.js:2047768-2047860 placement
 /**
  * getLimitResetConfig：tengu_nifty_lemur。
  */
-//@ chunk-e6aww6q8.js:2047768-2047860 placement
 function getLimitResetConfig() {
-  let e = getFeatureValue_CACHED_MAY_BE_STALE(TENGU_NIFTY_LEMUR, {});
-  return typeof e === "object" && e !== null && !Array.isArray(e) ? e : {};
+  let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE(TENGU_NIFTY_LEMUR, {});
+  return typeof featureValue_CACHED_MAY_BE_STALE === "object" &&
+    featureValue_CACHED_MAY_BE_STALE !== null &&
+    !Array.isArray(featureValue_CACHED_MAY_BE_STALE)
+    ? featureValue_CACHED_MAY_BE_STALE
+    : {};
 }
 //@ chunk-e6aww6q8.js:2047860-2047901 placement
 function isLimitResetEnabled() {
-  return getLimitResetConfig().enabled === !0;
+  return getLimitResetConfig().enabled === true;
 }
 //@ chunk-e6aww6q8.js:2047901-2047987 placement
-function oJn() {
+/**
+ * 读取 limitReset 配置里的 version（非法时按 0）。
+ */
+function limitResetConfigVersion() {
   let version = getLimitResetConfig().version;
   return typeof version === "number" && Number.isFinite(version) ? version : 0;
 }
 //@ chunk-e6aww6q8.js:2047987-2048033 placement
-function J3s() {
-  return getLimitResetConfig().autoContinue !== !1;
+/**
+ * limitReset 的 autoContinue 开关（缺省视为 true）。
+ */
+function limitResetAutoContinue() {
+  return getLimitResetConfig().autoContinue !== false;
 }
 //@ chunk-e6aww6q8.js:2048033-2048096 placement
-function _Z(e, n) {
+function stringOrDefault_2(e, n) {
   return typeof e === "string" && e.trim() !== "" ? e : n;
 }
 //@ chunk-e6aww6q8.js:2048096-2048341 placement
 function getLimitResetCopy() {
-  let e = getLimitResetConfig();
+  let limitResetConfig = getLimitResetConfig();
   return {
-    label: _Z(e.label, yZ.label),
-    noticeLine: _Z(e.noticeLine, yZ.noticeLine),
-    spentLine: _Z(e.spentLine, yZ.spentLine),
-    successLine: _Z(e.successLine, yZ.successLine),
-    unavailableLine: _Z(e.unavailableLine, yZ.unavailableLine),
+    label: stringOrDefault_2(limitResetConfig.label, LIMIT_RESET_DEFAULT_TEXTS.label),
+    noticeLine: stringOrDefault_2(limitResetConfig.noticeLine, LIMIT_RESET_DEFAULT_TEXTS.noticeLine),
+    spentLine: stringOrDefault_2(limitResetConfig.spentLine, LIMIT_RESET_DEFAULT_TEXTS.spentLine),
+    successLine: stringOrDefault_2(limitResetConfig.successLine, LIMIT_RESET_DEFAULT_TEXTS.successLine),
+    unavailableLine: stringOrDefault_2(
+      limitResetConfig.unavailableLine,
+      LIMIT_RESET_DEFAULT_TEXTS.unavailableLine,
+    ),
   };
 }
+//@ chunk-e6aww6q8.js:2048341-2048560 placement
 /**
  * 填充文案中的 {date} 占位：有日期则替换；没有则删去含占位的分段，全部被删时改用 later。
  */
-//@ chunk-e6aww6q8.js:2048341-2048560 placement
 function fillDatePlaceholder(e, n) {
   if (!e.includes("{date}")) return e;
-  if (n !== void 0) return e.replaceAll("{date}", n);
+  if (n !== undefined) return e.replaceAll("{date}", n);
   let joined = e
     .split(" \xB7 ")
     .filter((s) => !s.includes("{date}"))
     .join(" \xB7 ");
   return joined !== "" ? joined : e.replaceAll("{date}", "later");
 }
+//@ chunk-e6aww6q8.js:2048560-2048898 placement
 /**
  * /limit-reset 命令对象（local-jsx）；描述：{return kse()?"Use an available limit reset and keep working":"Reset your 5-hour limit now and keep working; once a week, still counts towar；isEnabled: ()=>vt()&&(Tbe()||kse())；isHidden: true；实现 chunk-q8p98373.js 的 ge。
  */
-//@ chunk-e6aww6q8.js:2048560-2048898 placement
 var limitResetCommandDefinition = {
-    type: "local-jsx",
-    name: LIMIT_RESET,
-    get description() {
-      return isCedarEmberEnabled()
-        ? "Use an available limit reset and keep working"
-        : "Reset your 5-hour limit now and keep working; once a week, still counts toward your weekly limit";
-    },
-    get argumentHint() {
-      return isCedarEmberEnabled() ? "[fable|full|5-hour|weekly]" : void 0;
-    },
-    isEnabled: () => isClaudeAISubscriber() && (isLimitResetEnabled() || isCedarEmberEnabled()),
-    isHidden: !0,
+  type: "local-jsx",
+  name: LIMIT_RESET,
+  get description() {
+    return isCedarEmberEnabled()
+      ? "Use an available limit reset and keep working"
+      : "Reset your 5-hour limit now and keep working; once a week, still counts toward your weekly limit";
   },
-  limitResetCommand = limitResetCommandDefinition;
-
+  get argumentHint() {
+    return isCedarEmberEnabled() ? "[fable|full|5-hour|weekly]" : undefined;
+  },
+  isEnabled: () => isClaudeAISubscriber() && (isLimitResetEnabled() || isCedarEmberEnabled()),
+  isHidden: true,
+};
+var limitResetCommand = limitResetCommandDefinition;
 export {
   formatLimitResetTemplate,
   getCedarEmberCopy,
   getLimitResetCopy,
   limitResetCommand,
   isCedarEmberEnabled,
-  Stt,
+  cedarEmberVersion,
   LIMIT_RESET,
-  X3s,
+  cedarEmberAutoContinue,
   isLimitResetEnabled,
   fillDatePlaceholder,
-  oJn,
-  J3s,
+  limitResetConfigVersion,
+  limitResetAutoContinue,
 };

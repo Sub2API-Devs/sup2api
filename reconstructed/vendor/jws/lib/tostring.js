@@ -8,13 +8,12 @@
 import { x, importMetaRequire } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-82d8c88w.js:7580-7773 cjs-fingerprint
-var C = x(function (Lr, ve) {
+var require_tostring = x(function (cjsExports, cjsModule) {
   var ir = importMetaRequire("buffer").Buffer;
-  ve.exports = function (r) {
-    if (typeof r === "string") return r;
-    if (typeof r === "number" || ir.isBuffer(r)) return r.toString();
-    return JSON.stringify(r);
+  cjsModule.exports = function (obj) {
+    if (typeof obj === "string") return obj;
+    if (typeof obj === "number" || ir.isBuffer(obj)) return obj.toString();
+    return JSON.stringify(obj);
   };
 });
-
-export { C };
+export { require_tostring };

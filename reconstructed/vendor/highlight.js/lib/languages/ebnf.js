@@ -8,25 +8,41 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:125988-126377 cjs-fingerprint
-var zn = x(function (tE, $n) {
-  function Jl(e) {
-    let COMMENT = e.COMMENT(/\(\*/, /\*\)/),
-      n = { className: "attribute", begin: /^[ ]*[a-zA-Z]+([\s_-]+[a-zA-Z]+)*/ },
-      s = {
-        begin: /=/,
-        end: /[.;]/,
-        contains: [
-          COMMENT,
-          { className: "meta", begin: /\?.*\?/ },
-          {
-            className: "string",
-            variants: [e.APOS_STRING_MODE, e.QUOTE_STRING_MODE, { begin: "`", end: "`" }],
-          },
-        ],
-      };
-    return { name: "Extended Backus-Naur Form", illegal: /\S/, contains: [COMMENT, n, s] };
+var require_ebnf = x(function (cjsExports, cjsModule) {
+  function ebnf(hljs) {
+    let commentMode = hljs.COMMENT(/\(\*/, /\*\)/);
+    let nonTerminalMode = {
+      className: "attribute",
+      begin: /^[ ]*[a-zA-Z]+([\s_-]+[a-zA-Z]+)*/,
+    };
+    let s = {
+      begin: /=/,
+      end: /[.;]/,
+      contains: [
+        commentMode,
+        {
+          className: "meta",
+          begin: /\?.*\?/,
+        },
+        {
+          className: "string",
+          variants: [
+            hljs.APOS_STRING_MODE,
+            hljs.QUOTE_STRING_MODE,
+            {
+              begin: "`",
+              end: "`",
+            },
+          ],
+        },
+      ],
+    };
+    return {
+      name: "Extended Backus-Naur Form",
+      illegal: /\S/,
+      contains: [commentMode, nonTerminalMode, s],
+    };
   }
-  $n.exports = Jl;
+  cjsModule.exports = ebnf;
 });
-
-export { zn };
+export { require_ebnf };

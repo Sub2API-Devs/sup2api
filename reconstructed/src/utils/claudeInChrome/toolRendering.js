@@ -11,7 +11,10 @@
 import { count } from "../collections.js";
 import { shouldHideTasksFooter } from "../../components/tasks/taskStatusUtils.js";
 import { supportsHyperlinks } from "../../ink/supports-hyperlinks.js";
-import { r, e } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default_2,
+  jsxProd_default,
+} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Link } from "../../ink/components/Text.js";
 import { renderMcpToolResultMessage } from "../../tools/MCPTool/UI.js";
 import { MessageResponse } from "../../components/MessageResponse.js";
@@ -19,26 +22,29 @@ import { trackClaudeInChromeTabId } from "./common.js";
 import { truncateToWidth } from "../format.js";
 import { getClaudeInChromePermissionOverrides } from "./permissionOverrides.js";
 
+//@ chunk-ah34pb7m.js:12578-12634 placement
 /**
  * 统计可见任务数（排除进程内队友）。
  */
-//@ chunk-ah34pb7m.js:12578-12634 placement
 function countVisibleTasks(m, d) {
-  return count(Object.values(m), shouldHideTasksFooter) + bWe(d);
+  return count(Object.values(m), shouldHideTasksFooter) + countNonAmbientTasks(d);
 }
 //@ chunk-ah34pb7m.js:12634-12714 placement
-function bWe(m) {
-  return count(m, (d) => !d.ambient && d.taskType !== "in_process_teammate");
+/**
+ * 统计既不是 ambient 也不是进程内队友的任务数。
+ */
+function countNonAmbientTasks(remoteBackgroundTasks) {
+  return count(remoteBackgroundTasks, (d) => !d.ambient && d.taskType !== "in_process_teammate");
 }
+//@ chunk-ah34pb7m.js:12714-12751 fingerprint = CHROME_EXTENSION_FOCUS_TAB_URL_BASE (1)
 /**
  * 扩展聚焦标签页链接前缀 https://clau.de/chrome/tab/。
  */
-//@ chunk-ah34pb7m.js:12714-12751 fingerprint = CHROME_EXTENSION_FOCUS_TAB_URL_BASE (1)
 var CHROME_EXTENSION_FOCUS_TAB_URL_BASE = "https://clau.de/chrome/tab/";
+//@ chunk-ah34pb7m.js:12751-13077 fingerprint = renderChromeViewTabLink (0.801)
 /**
  * 终端支持超链接时，在工具行后显示 "[View Tab]" 链接（按输入里的 tabId）。
  */
-//@ chunk-ah34pb7m.js:12751-13077 fingerprint = renderChromeViewTabLink (0.801)
 function renderChromeViewTabLink(input) {
   if (!supportsHyperlinks()) return null;
   if (typeof input !== "object" || input === null || !("tabId" in input)) return null;
@@ -50,19 +56,28 @@ function renderChromeViewTabLink(input) {
         : NaN;
   if (isNaN(tabId)) return null;
   let linkUrl = `${CHROME_EXTENSION_FOCUS_TAB_URL_BASE}${tabId}`;
-  return r(Text, {
+  return jsxProd_default_2(Text, {
     children: [
       " ",
-      e(Link, { url: linkUrl, children: e(Text, { color: "subtle", children: "[View Tab]" }) }),
+      jsxProd_default(Link, {
+        url: linkUrl,
+        children: jsxProd_default(Text, {
+          color: "subtle",
+          children: "[View Tab]",
+        }),
+      }),
     ],
   });
 }
+//@ chunk-ah34pb7m.js:13077-14033 fingerprint = renderChromeToolResultMessage (1)
 /**
  * Chrome 工具结果的简短摘要（Navigation completed、Tab created、Page read…），verbose 时显示完整结果。
  */
-//@ chunk-ah34pb7m.js:13077-14033 fingerprint = renderChromeToolResultMessage (1)
 function renderChromeToolResultMessage(output, toolName, verbose) {
-  if (verbose) return renderMcpToolResultMessage(output, [], { verbose: verbose });
+  if (verbose)
+    return renderMcpToolResultMessage(output, [], {
+      verbose,
+    });
   let summary = null;
   switch (toolName) {
     case "navigate":
@@ -118,23 +133,29 @@ function renderChromeToolResultMessage(output, toolName, verbose) {
       break;
   }
   if (summary)
-    return e(MessageResponse, { height: 1, children: e(Text, { dimColor: !0, children: summary }) });
+    return jsxProd_default(MessageResponse, {
+      height: 1,
+      children: jsxProd_default(Text, {
+        dimColor: true,
+        children: summary,
+      }),
+    });
   return null;
 }
+//@ chunk-ah34pb7m.js:14033-14137 placement
 /**
  * 返回一个渲染函数：结果是对象时按给定格式渲染（verbose 透传），否则返回 null。
  */
-//@ chunk-ah34pb7m.js:14033-14137 placement
-function createObjectResultRenderer(m) {
-  return (d, c, { verbose: verbose }) => {
-    if (typeof d !== "object" || d === null) return null;
-    return renderChromeToolResultMessage(d, m, verbose);
+function createObjectResultRenderer(toolName) {
+  return (output, c, { verbose }) => {
+    if (typeof output !== "object" || output === null) return null;
+    return renderChromeToolResultMessage(output, toolName, verbose);
   };
 }
+//@ chunk-3k33hyyp.js:12061-13845 fingerprint = renderChromeToolUseMessage (1)
 /**
  * Chrome 工具调用行的副标题：navigate 显示主机名、computer 显示动作与坐标/ref、find 显示 pattern 等；同时记录 tabId。
  */
-//@ chunk-3k33hyyp.js:12061-13845 fingerprint = renderChromeToolUseMessage (1)
 function renderChromeToolUseMessage(input, toolName, verbose) {
   let tabId = input.tabId;
   if (typeof tabId === "number") trackClaudeInChromeTabId(tabId);
@@ -160,12 +181,12 @@ function renderChromeToolUseMessage(input, toolName, verbose) {
           action === "right_click" ||
           action === "double_click" ||
           action === "middle_click"
-        )
+        ) {
           if (typeof input.ref === "string") secondaryInfo.push(`${action} on ${input.ref}`);
           else if (Array.isArray(input.coordinate))
             secondaryInfo.push(`${action} at (${input.coordinate.join(", ")})`);
           else secondaryInfo.push(action);
-        else if (action === "type" && typeof input.text === "string")
+        } else if (action === "type" && typeof input.text === "string")
           secondaryInfo.push(`type "${truncateToWidth(input.text, 15)}"`);
         else if (action === "key" && typeof input.text === "string") secondaryInfo.push(`key ${input.text}`);
         else if (action === "scroll" && typeof input.scroll_direction === "string")
@@ -186,7 +207,7 @@ function renderChromeToolUseMessage(input, toolName, verbose) {
     case "read_console_messages":
       if (typeof input.pattern === "string")
         secondaryInfo.push(`pattern: ${truncateToWidth(input.pattern, 20)}`);
-      if (input.onlyErrors === !0) secondaryInfo.push("errors only");
+      if (input.onlyErrors === true) secondaryInfo.push("errors only");
       break;
     case "read_network_requests":
       if (typeof input.urlPattern === "string")
@@ -210,20 +231,19 @@ function renderChromeToolUseMessage(input, toolName, verbose) {
   }
   return secondaryInfo.join(", ") || null;
 }
+//@ chunk-3k33hyyp.js:13845-14000 fingerprint = getClaudeInChromeMCPToolOverrides (0.784)
 /**
  * 给 claude-in-chrome 的 MCP 工具覆盖显示名 "Claude in Chrome[tool]" 与渲染函数。
  */
-//@ chunk-3k33hyyp.js:13845-14000 fingerprint = getClaudeInChromeMCPToolOverrides (0.784)
 function getClaudeInChromeMCPToolOverrides(toolName) {
   return {
-    userFacingName(t) {
+    userFacingName(_input) {
       return `Claude in Chrome[${toolName.replace(/_mcp$/, "")}]`;
     },
-    renderToolUseMessage(t, { verbose: s }) {
-      return renderChromeToolUseMessage(t, toolName, s);
+    renderToolUseMessage(input, { verbose }) {
+      return renderChromeToolUseMessage(input, toolName, verbose);
     },
     ...getClaudeInChromePermissionOverrides(toolName),
   };
 }
-
-export { bWe, countVisibleTasks, createObjectResultRenderer, renderChromeViewTabLink };
+export { countNonAmbientTasks, countVisibleTasks, createObjectResultRenderer, renderChromeViewTabLink };

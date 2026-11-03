@@ -9,54 +9,58 @@
  * attribution: placement 23
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, o, Ue } from "../../../vendor/zod/v4/classic/schemas.js";
+import { u, string, union } from "../../../vendor/zod/v4/classic/schemas.js";
 import { safeParseJSON } from "../json.js";
-import { xme } from "../../bridge/codeSessionApi.js";
+import { isSnakeCaseReasonCode } from "../../bridge/codeSessionApi.js";
 import { truncateToLength } from "../stringUtils.js";
 import { printableName } from "../printableName.js";
 import { findProxyError } from "../proxy.js";
 import { logForDebugging } from "../debug.js";
 
+//@ chunk-0hrnrhfq.js:482-656 placement
 /**
  * 代理拒绝响应解析用的常量：读取正文的字节上限、截断保留长度、原因与代码的显示长度上限，以及 JSON 错误体的宽松 schema。
  */
-//@ chunk-0hrnrhfq.js:482-656 placement
-var MAX_BODY_BYTES = 8192,
-  TRUNCATE_MARGIN = 512,
-  MAX_REASON_LENGTH = 200,
-  MAX_CODE_LENGTH = 120,
-  ERROR_BODY_SCHEMA = DoctorLazy(() =>
-    u({
-      message: o()
-        .optional()
-        .catch(void 0),
-      error: Ue([o(), u({ message: o() })])
-        .optional()
-        .catch(void 0),
-      detail: o()
-        .optional()
-        .catch(void 0),
-    }),
-  );
+var MAX_BODY_BYTES = 8192;
+var TRUNCATE_MARGIN = 512;
+var MAX_REASON_LENGTH = 200;
+var MAX_CODE_LENGTH = 120;
+var ERROR_BODY_SCHEMA = DoctorLazy(() =>
+  u({
+    message: string().optional().catch(undefined),
+    error: union([
+      string(),
+      u({
+        message: string(),
+      }),
+    ])
+      .optional()
+      .catch(undefined),
+    detail: string().optional().catch(undefined),
+  }),
+);
 //@ chunk-0hrnrhfq.js:656-754 placement
-function Aae(n, e, r) {
-  let i = getMediaType(n);
+/**
+ * proxyDenialResult：构造代理拒绝结果。
+ */
+function proxyDenialResult(headers, body, redact) {
+  let mediaType = getMediaType(headers);
   return {
-    mediaType: i,
-    ...parseDenialBody(i, e, r),
-    proxyError: h(n, r),
-    requestId: getSafeRequestId(n, r),
+    mediaType,
+    ...parseDenialBody(mediaType, body, redact),
+    proxyError: proxyErrorMessage(headers, redact),
+    requestId: getSafeRequestId(headers, redact),
   };
 }
 //@ chunk-0hrnrhfq.js:754-843 placement
-function h(n, e) {
+function proxyErrorMessage(n, e) {
   let r = n?.["x-proxy-error"];
-  return typeof r === "string" ? toDisplayReason(g(r), e, MAX_CODE_LENGTH) : void 0;
+  return typeof r === "string" ? toDisplayReason(truncateBodyForDenial(r), e, MAX_CODE_LENGTH) : undefined;
 }
 //@ chunk-0hrnrhfq.js:843-967 placement
 function getSafeRequestId(n, e) {
   let r = n?.["x-request-id"];
-  return typeof r === "string" && /^[A-Za-z0-9._:-]{1,128}$/.test(r) && e(r) === r ? r : void 0;
+  return typeof r === "string" && /^[A-Za-z0-9._:-]{1,128}$/.test(r) && e(r) === r ? r : undefined;
 }
 //@ chunk-0hrnrhfq.js:967-1172 placement
 function getMediaType(n) {
@@ -68,108 +72,131 @@ function getMediaType(n) {
     .replace(/[A-Z]/g, (i) => i.toLowerCase());
 }
 //@ chunk-0hrnrhfq.js:1172-1206 placement
-var f = { reason: void 0, code: void 0 };
+var EMPTY_DENIAL = {
+  reason: undefined,
+  code: undefined,
+};
+//@ chunk-0hrnrhfq.js:1206-1585 placement
 /**
  * 解析代理拒绝响应正文：按内容类型处理 JSON（截断或含替换字符时放弃）、纯文本（作为原因）或已解析的对象，返回 reason 与 code。
  */
-//@ chunk-0hrnrhfq.js:1206-1585 placement
 function parseDenialBody(mediaType, body, redact) {
-  let isJson = mediaType === "application/json" || mediaType.endsWith("+json"),
-    decoded = typeof body === "string" ? g(body) : decodeBodyPrefix(body);
-  if (decoded !== void 0) {
-    let { text: text, truncated: truncated } = decoded;
-    if (text.includes("\uFFFD") || text.includes("\x00")) return f;
+  let isJson = mediaType === "application/json" || mediaType.endsWith("+json");
+  let decoded = typeof body === "string" ? truncateBodyForDenial(body) : decodeBodyPrefix(body);
+  if (decoded !== undefined) {
+    let { text, truncated } = decoded;
+    if (text.includes("\uFFFD") || text.includes("\x00")) return EMPTY_DENIAL;
     if (isJson || (mediaType === "" && text.trimStart().startsWith("{")))
-      return truncated ? f : readDenialFields(safeParseJSON(text, !1), redact);
+      return truncated ? EMPTY_DENIAL : readDenialFields(safeParseJSON(text, false), redact);
     return {
-      reason: mediaType === "text/plain" ? toDisplayReason(decoded, redact, MAX_REASON_LENGTH) : void 0,
-      code: void 0,
+      reason: mediaType === "text/plain" ? toDisplayReason(decoded, redact, MAX_REASON_LENGTH) : undefined,
+      code: undefined,
     };
   }
   if (body !== null && typeof body === "object") return readDenialFields(body, redact);
-  return f;
+  return EMPTY_DENIAL;
 }
 //@ chunk-0hrnrhfq.js:1585-1855 placement
-function readDenialFields(n, e) {
+function readDenialFields(n, redact) {
   let parsed = ERROR_BODY_SCHEMA().safeParse(n);
-  if (!parsed.success) return f;
-  let { message: message, error: error, detail: detail } = parsed.data,
-    errorMessage = typeof error === "string" ? error : error?.message,
-    firstText = [message, errorMessage, detail].find((x) => x !== void 0 && x.trim() !== "");
+  if (!parsed.success) return EMPTY_DENIAL;
+  let { message, error, detail } = parsed.data;
+  let errorMessage = typeof error === "string" ? error : error?.message;
+  let firstText = [message, errorMessage, detail].find((x) => x !== undefined && x.trim() !== "");
   return {
-    reason: firstText === void 0 ? void 0 : toDisplayReason(g(firstText), e, MAX_REASON_LENGTH),
-    code: typeof error === "string" && xme(error) ? error : void 0,
+    reason:
+      firstText === undefined
+        ? undefined
+        : toDisplayReason(truncateBodyForDenial(firstText), redact, MAX_REASON_LENGTH),
+    code: typeof error === "string" && isSnakeCaseReasonCode(error) ? error : undefined,
   };
 }
 //@ chunk-0hrnrhfq.js:1855-1959 placement
-function toDisplayReason({ text: text, truncated: truncated }, r, i) {
-  let s = r(text),
-    d = truncated ? truncateToLength(s, s.length - TRUNCATE_MARGIN) : s,
-    c = printableName(d, i);
-  return c === "" ? void 0 : c;
+function toDisplayReason({ text, truncated }, r, i) {
+  let s = r(text);
+  let d = truncated ? truncateToLength(s, s.length - TRUNCATE_MARGIN) : s;
+  let c = printableName(d, i);
+  return c === "" ? undefined : c;
 }
 //@ chunk-0hrnrhfq.js:1959-2015 placement
-function g(n) {
-  return { text: truncateToLength(n, MAX_BODY_BYTES), truncated: n.length > MAX_BODY_BYTES };
+function truncateBodyForDenial(n) {
+  return {
+    text: truncateToLength(n, MAX_BODY_BYTES),
+    truncated: n.length > MAX_BODY_BYTES,
+  };
 }
 //@ chunk-0hrnrhfq.js:2015-2297 placement
-function decodeBodyPrefix(n) {
+function decodeBodyPrefix(body) {
   let bytes;
-  if (n instanceof ArrayBuffer) bytes = new Uint8Array(n);
-  else if (ArrayBuffer.isView(n)) bytes = new Uint8Array(n.buffer, n.byteOffset, n.byteLength);
+  if (body instanceof ArrayBuffer) bytes = new Uint8Array(body);
+  else if (ArrayBuffer.isView(body)) bytes = new Uint8Array(body.buffer, body.byteOffset, body.byteLength);
   else return;
-  let isTruncated = bytes.byteLength > MAX_BODY_BYTES,
-    cutAt = isTruncated ? findUtf8Boundary(bytes, MAX_BODY_BYTES) : bytes.byteLength;
-  return { text: new TextDecoder("utf-8").decode(bytes.subarray(0, cutAt)), truncated: isTruncated };
+  let isTruncated = bytes.byteLength > MAX_BODY_BYTES;
+  let cutAt = isTruncated ? findUtf8Boundary(bytes, MAX_BODY_BYTES) : bytes.byteLength;
+  return {
+    text: new TextDecoder("utf-8").decode(bytes.subarray(0, cutAt)),
+    truncated: isTruncated,
+  };
 }
+//@ chunk-0hrnrhfq.js:2297-2452 placement
 /**
  * 在字节数组的给定截断点向前查找 UTF-8 字符边界：若截断点落在多字节字符中间，返回该字符起始位置。
  */
-//@ chunk-0hrnrhfq.js:2297-2452 placement
-function findUtf8Boundary(n, e) {
-  let r = e - 1,
-    i = 0;
-  while (r >= 0 && i < 3 && ((n[r] ?? 0) & 192) === 128) (r--, i++);
+function findUtf8Boundary(bytes, e) {
+  let r = e - 1;
+  let i = 0;
+  while (r >= 0 && i < 3 && ((bytes[r] ?? 0) & 192) === 128) {
+    r--;
+    i++;
+  }
   if (r < 0) return e;
-  let s = n[r] ?? 0,
-    d = s >= 240 ? 4 : s >= 224 ? 3 : s >= 192 ? 2 : 1;
+  let s = bytes[r] ?? 0;
+  let d = s >= 240 ? 4 : s >= 224 ? 3 : s >= 192 ? 2 : 1;
   return i + 1 < d ? r : e;
 }
 //@ chunk-0hrnrhfq.js:2452-2492 placement
-var X_PROXY_ERROR = "x-proxy-error",
-  X_DENY_REASON = "x-deny-reason";
+var X_PROXY_ERROR = "x-proxy-error";
+var X_DENY_REASON = "x-deny-reason";
 //@ chunk-0hrnrhfq.js:2492-2588 placement
-function iG(n, e) {
+/**
+ * isAllowlistBlockedResponse：403 且为白名单阻断。
+ */
+function isAllowlistBlockedResponse(n, headers) {
   return (
-    n === 403 && (e?.[X_PROXY_ERROR] === "blocked-by-allowlist" || e?.[X_DENY_REASON] === "host_not_allowed")
+    n === 403 &&
+    (headers?.[X_PROXY_ERROR] === "blocked-by-allowlist" || headers?.[X_DENY_REASON] === "host_not_allowed")
   );
 }
 //@ chunk-0hrnrhfq.js:2588-2665 placement
-function rat(n) {
-  let e = findProxyError(n);
-  return e !== void 0 && iG(e.connectStatus, e.headers);
+/**
+ * isBlockedByProxyAllowlist：响应显示被代理白名单阻断。
+ */
+function isBlockedByProxyAllowlist(error) {
+  let proxyError = findProxyError(error);
+  return proxyError !== undefined && isAllowlistBlockedResponse(proxyError.connectStatus, proxyError.headers);
 }
 //@ chunk-0hrnrhfq.js:2665-2900 placement
-function parseProxyDenial(n, e) {
-  if (n !== 403) return;
-  if (e.mediaType === "text/plain" && z(e.reason)) return "proxy_denied";
+function parseProxyDenial(status, e) {
+  if (status !== 403) return;
+  if (e.mediaType === "text/plain" && neverDenied(e.reason)) return "proxy_denied";
   if (e.code !== "content_scan_blocked") return;
   return e.reason?.endsWith("(fail closed)") ? "content_scan_transient" : "content_scan_permanent";
 }
 //@ chunk-0hrnrhfq.js:2900-2923 placement
-function z(n) {
-  return !1;
+function neverDenied(reason) {
+  return false;
 }
+//@ chunk-0hrnrhfq.js:2923-3116 placement
 /**
  * 对 403 响应解析沙箱代理拒绝原因并记调试日志，返回拒绝类型。
  */
-//@ chunk-0hrnrhfq.js:2923-3116 placement
-function logProxyDenial({ status: status, headers: headers, data: r, redact: redact, label: label }) {
+function logProxyDenial({ status, headers, data: r, redact, label }) {
   if (status !== 403) return;
-  let d = Aae(headers, r, redact),
-    c = parseProxyDenial(status, d);
-  if (c !== void 0) logForDebugging(`${label}: sandbox proxy denied, ${c} (${d.reason ?? "no reason"})`);
-  return c;
+  let d = proxyDenialResult(headers, r, redact);
+  let proxyDenial = parseProxyDenial(status, d);
+  if (proxyDenial !== undefined)
+    logForDebugging(`${label}: sandbox proxy denied, ${proxyDenial} (${d.reason ?? "no reason"})`);
+  return proxyDenial;
 }
 //@ chunk-0hrnrhfq.js:3116-3529 placement
 var ARTIFACT_PROXY_DENIAL_TEXTS = {
@@ -181,21 +208,39 @@ var ARTIFACT_PROXY_DENIAL_TEXTS = {
     "artifact content fetch blocked by the sandbox proxy's policy (HTTP 403); retrying will not help.",
 };
 //@ chunk-0hrnrhfq.js:3529-3596 placement
-function L_i(n) {
-  return n !== void 0 && n >= 400 && n < 500 && n !== 408 && n !== 429;
+/**
+ * isClientErrorStatus：4xx 但排除 408/429。
+ */
+function isClientErrorStatus(status) {
+  return status !== undefined && status >= 400 && status < 500 && status !== 408 && status !== 429;
 }
 //@ chunk-0hrnrhfq.js:3596-3688 placement
-function D(n, e, r) {
+function headerValueMatching(n, e, r) {
   let i = n?.[e];
-  return typeof i === "string" && i.length <= 64 && r.test(i) ? i : void 0;
+  return typeof i === "string" && i.length <= 64 && r.test(i) ? i : undefined;
 }
 //@ chunk-0hrnrhfq.js:3688-3734 placement
-function CRt(n) {
-  return D(n, X_PROXY_ERROR, /^[a-z0-9_-]+$/);
+/**
+ * proxyErrorCode：取 x-proxy-error 码。
+ */
+function proxyErrorCode(headers) {
+  return headerValueMatching(headers, X_PROXY_ERROR, /^[a-z0-9_-]+$/);
 }
 //@ chunk-0hrnrhfq.js:3734-3779 placement
-function Cae(n) {
-  return D(n, X_DENY_REASON, /^[a-z0-9_]+$/);
+/**
+ * proxyDenyReason：取 x-deny-reason。
+ */
+function proxyDenyReason(headers) {
+  return headerValueMatching(headers, X_DENY_REASON, /^[a-z0-9_]+$/);
 }
-
-export { logProxyDenial, iG, rat, Aae, Cae, CRt, ARTIFACT_PROXY_DENIAL_TEXTS, L_i, parseProxyDenial };
+export {
+  logProxyDenial,
+  isAllowlistBlockedResponse,
+  isBlockedByProxyAllowlist,
+  proxyDenialResult,
+  proxyDenyReason,
+  proxyErrorCode,
+  ARTIFACT_PROXY_DENIAL_TEXTS,
+  isClientErrorStatus,
+  parseProxyDenial,
+};

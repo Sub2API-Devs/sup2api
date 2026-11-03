@@ -9,85 +9,98 @@
  * attribution: placement 3
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { zodStrictObject, o, u, U, A, E, M } from "../../../vendor/zod/v4/classic/schemas.js";
+import { zodStrictObject, string, u, _enum, array, E, M } from "../../../vendor/zod/v4/classic/schemas.js";
 import { buildTool } from "../../services/tools/permissionCheckGuard.js";
 import { MEMORY_LIST_TOOL_NAME } from "./memoryToolNames.js";
 import {
   MEMORY_LIST_DESCRIPTION,
   joined,
-  URe,
-  w6,
-  BEt,
+  joinPrintable,
+  logMemoryToolSad,
+  logMemoryToolOk,
   validateMemoryPath,
-  $Js,
-  t2t,
-  r2t,
+  isValidMemoryDocumentKey,
+  logMemoryErrorResult,
+  memoryStoreNote,
 } from "./memoryWrite.js";
-import { _Pe } from "../../services/memorySync/availability.js";
+import { areMemoryToolsEnabled } from "../../services/memorySync/availability.js";
 import {
   checkMemoryToolsAllowed,
-  UEt,
-  iVr,
+  memoryUnavailableRemedy,
+  listMemoryStoreEntries,
   describeMemoryStores,
-  k2o,
-  v2o,
+  isProjectStoreConnecting,
+  PROJECT_STORE_CONNECTING_TEXT,
   resolveMemoryStore,
   checkAbsoluteMemoryPath,
 } from "../../services/memoryStore/memoryDocumentFs.js";
-import { Pk } from "../../services/orgMemory/storeApi.js";
+import { normalizePathPrefix } from "../../services/orgMemory/storeApi.js";
 import { MemoryNotFoundError } from "../../services/orgMemory/storeErrors.js";
 import { AbortError } from "../../utils/errors.js";
 
-/**
- * memory_list 工具 schema。
- */
 //@ chunk-kxyd0g16.js:63209-64072 placement
-var MemoryListInputSchema = 50,
-  Ps = DoctorLazy(() =>
-    zodStrictObject({
-      store: o()
-        .optional()
-        .describe(
-          "Id of the memory store to list. Omit to list the memory stores available in this session (id, description, writable or read-only, and the path of its index document).",
-        ),
-      path_prefix: o()
-        .optional()
-        .describe(
-          "Optional directory prefix to list only documents under it (e.g. /feedback/). Matching is directory-aligned (/x is the same as /x/). Omit to list the whole store.",
-        ),
-      cursor: o()
-        .optional()
-        .describe("Path of the last entry from a previous call. Returns entries after this path."),
-    }),
-  ),
-  zs = DoctorLazy(() =>
-    u({
-      outcome: U(["ok", "refused", "failed"]),
-      store_kind: U(["personal", "project"]).optional(),
-      entries: A(u({ path: o(), bytes: E().optional(), updatedAt: o().optional() })).optional(),
-      remaining: E().optional(),
-      stores: A(u({ id: o(), description: o(), writable: M(), index: o() })).optional(),
-      reason: o().optional(),
-      message: o().optional(),
-    }),
-  );
+/**
+ * MemoryList 的输入 schema。
+ */
+var MemoryListInputSchema = 50;
+var memoryListInputSchema = DoctorLazy(() =>
+  zodStrictObject({
+    store: string()
+      .optional()
+      .describe(
+        "Id of the memory store to list. Omit to list the memory stores available in this session (id, description, writable or read-only, and the path of its index document).",
+      ),
+    path_prefix: string()
+      .optional()
+      .describe(
+        "Optional directory prefix to list only documents under it (e.g. /feedback/). Matching is directory-aligned (/x is the same as /x/). Omit to list the whole store.",
+      ),
+    cursor: string()
+      .optional()
+      .describe("Path of the last entry from a previous call. Returns entries after this path."),
+  }),
+);
+var memoryListOutputSchema = DoctorLazy(() =>
+  u({
+    outcome: _enum(["ok", "refused", "failed"]),
+    store_kind: _enum(["personal", "project"]).optional(),
+    entries: array(
+      u({
+        path: string(),
+        bytes: E().optional(),
+        updatedAt: string().optional(),
+      }),
+    ).optional(),
+    remaining: E().optional(),
+    stores: array(
+      u({
+        id: string(),
+        description: string(),
+        writable: M(),
+        index: string(),
+      }),
+    ).optional(),
+    reason: string().optional(),
+    message: string().optional(),
+  }),
+);
 //@ chunk-kxyd0g16.js:64072-64302 placement
 function formatMemoryDocEntry(e) {
-  let r = e.bytes === void 0 ? "" : `${e.bytes} bytes`,
-    n = e.updatedAt?.match(/^\d{4}-\d{2}-\d{2}/)?.[0],
-    s = n === void 0 ? "" : `updated ${n}`,
-    joined = [r, s].filter(Boolean).join(", "),
-    json = JSON.stringify(e.path);
+  let r = e.bytes === undefined ? "" : `${e.bytes} bytes`;
+  let n = e.updatedAt?.match(/^\d{4}-\d{2}-\d{2}/)?.[0];
+  let s = n === undefined ? "" : `updated ${n}`;
+  let joined = [r, s].filter(Boolean).join(", ");
+  let json = JSON.stringify(e.path);
   return joined === "" ? json : `${json}  (${joined})`;
 }
+//@ chunk-kxyd0g16.js:64302-67217 placement
 /**
  * memory_list 工具：列出记忆存储及其文档。
  */
-//@ chunk-kxyd0g16.js:64302-67217 placement
 var MemoryListTool = buildTool({
   name: MEMORY_LIST_TOOL_NAME,
   searchHint: "list the memory stores and the documents in them",
-  shouldDefer: !1,
+  shouldDefer: false,
   backgrounding: "never",
   maxResultSizeChars: 1 / 0,
   async description() {
@@ -97,28 +110,28 @@ var MemoryListTool = buildTool({
     return joined;
   },
   get inputSchema() {
-    return Ps();
+    return memoryListInputSchema();
   },
   get outputSchema() {
-    return zs();
+    return memoryListOutputSchema();
   },
   userFacingName() {
     return MEMORY_LIST_TOOL_NAME;
   },
   isEnabled() {
-    return _Pe();
+    return areMemoryToolsEnabled();
   },
   isReadOnly() {
-    return !0;
+    return true;
   },
   isConcurrencySafe() {
-    return !0;
+    return true;
   },
   toAutoClassifierInput(e) {
     return `list ${e.store ?? "stores"} ${e.path_prefix ?? ""}`.trim();
   },
   renderToolUseMessage(e) {
-    return URe(e.store, e.path_prefix);
+    return joinPrintable(e.store, e.path_prefix);
   },
   extractSearchText() {
     return "";
@@ -128,81 +141,122 @@ var MemoryListTool = buildTool({
   },
   create() {
     return {
-      async call({ store: e, path_prefix: r, cursor: n }, { signal: s }) {
-        if (e === void 0) {
+      async call({ store, path_prefix: pathPrefix, cursor }, { signal }) {
+        if (store === undefined) {
           let y = checkMemoryToolsAllowed();
-          if (y)
-            return (
-              w6("stores", `refused_${y.reason}`),
-              { data: { outcome: "refused", reason: y.reason, message: y.message }, ...UEt(y) }
-            );
-          let k = iVr(),
-            w = describeMemoryStores(k),
-            S = k2o(k);
-          if (w.length === 0) w6("stores", S ? "stores_connecting" : "stores_none");
-          else BEt("stores", "none");
-          return { data: { outcome: "ok", stores: w, ...(S && { message: v2o }) } };
-        }
-        let f = resolveMemoryStore({ storeId: e });
-        if (f.outcome === "refused")
-          return (
-            w6("list", `refused_${f.reason}`),
-            { data: { outcome: "refused", reason: f.reason, message: f.message }, ...UEt(f) }
-          );
-        let { kind: kind } = f.served;
-        try {
-          let y = r === void 0 ? void 0 : Pk(r),
-            k =
-              r === void 0 || y === void 0
-                ? null
-                : (checkAbsoluteMemoryPath(r, f.served.promptIndex) ??
-                  validateMemoryPath(y, { trailingSlashAllowed: !0 }));
-          if (k)
-            return (
-              w6("list", `refused_${k.reason}`, kind),
-              { data: { outcome: "refused", reason: k.reason, message: k.message } }
-            );
-          let w = y === void 0 || y === "/" ? void 0 : y.endsWith("/") ? y : `${y}/`,
-            S = await f.backend.list(w, { signal: s }).catch((x) => {
-              if (x instanceof MemoryNotFoundError && x.kind === "store") return [];
-              throw x;
-            });
-          if (s.aborted) throw new AbortError();
-          let sorted = S.filter((x) => $Js(x.path)).sort((x, B) =>
-              x.path < B.path ? -1 : x.path > B.path ? 1 : 0,
-            ),
-            I = n === void 0 ? sorted : sorted.filter((x) => x.path > n),
-            sliced = I.slice(0, MemoryListInputSchema);
-          return (
-            BEt("list", kind),
-            {
+          if (y) {
+            logMemoryToolSad("stores", `refused_${y.reason}`);
+            return {
               data: {
-                outcome: "ok",
-                store_kind: kind,
-                entries: sliced.map((x) => ({ path: x.path, bytes: x.sizeBytes, updatedAt: x.updatedAt })),
-                remaining: I.length - sliced.length,
+                outcome: "refused",
+                reason: y.reason,
+                message: y.message,
               },
-            }
+              ...memoryUnavailableRemedy(y),
+            };
+          }
+          let k = listMemoryStoreEntries();
+          let w = describeMemoryStores(k);
+          let S = isProjectStoreConnecting(k);
+          if (w.length === 0) logMemoryToolSad("stores", S ? "stores_connecting" : "stores_none");
+          else logMemoryToolOk("stores", "none");
+          return {
+            data: {
+              outcome: "ok",
+              stores: w,
+              ...(S && {
+                message: PROJECT_STORE_CONNECTING_TEXT,
+              }),
+            },
+          };
+        }
+        let memoryStore = resolveMemoryStore({
+          storeId: store,
+        });
+        if (memoryStore.outcome === "refused") {
+          logMemoryToolSad("list", `refused_${memoryStore.reason}`);
+          return {
+            data: {
+              outcome: "refused",
+              reason: memoryStore.reason,
+              message: memoryStore.message,
+            },
+            ...memoryUnavailableRemedy(memoryStore),
+          };
+        }
+        let { kind } = memoryStore.served;
+        try {
+          let y = pathPrefix === undefined ? undefined : normalizePathPrefix(pathPrefix);
+          let k =
+            pathPrefix === undefined || y === undefined
+              ? null
+              : (checkAbsoluteMemoryPath(pathPrefix, memoryStore.served.promptIndex) ??
+                validateMemoryPath(y, {
+                  trailingSlashAllowed: true,
+                }));
+          if (k) {
+            logMemoryToolSad("list", `refused_${k.reason}`, kind);
+            return {
+              data: {
+                outcome: "refused",
+                reason: k.reason,
+                message: k.message,
+              },
+            };
+          }
+          let w = y === undefined || y === "/" ? undefined : y.endsWith("/") ? y : `${y}/`;
+          let S = await memoryStore.backend
+            .list(w, {
+              signal,
+            })
+            .catch((error) => {
+              if (error instanceof MemoryNotFoundError && error.kind === "store") return [];
+              throw error;
+            });
+          if (signal.aborted) throw new AbortError();
+          let sorted = S.filter((x) => isValidMemoryDocumentKey(x.path)).sort((x, B) =>
+            x.path < B.path ? -1 : x.path > B.path ? 1 : 0,
           );
+          let I = cursor === undefined ? sorted : sorted.filter((x) => x.path > cursor);
+          let sliced = I.slice(0, MemoryListInputSchema);
+          logMemoryToolOk("list", kind);
+          return {
+            data: {
+              outcome: "ok",
+              store_kind: kind,
+              entries: sliced.map((x) => ({
+                path: x.path,
+                bytes: x.sizeBytes,
+                updatedAt: x.updatedAt,
+              })),
+              remaining: I.length - sliced.length,
+            },
+          };
         } catch (error) {
-          if (s.aborted) throw new AbortError();
-          let k = t2t("list", error);
-          return { data: { outcome: "failed", reason: k.reason, message: k.message } };
+          if (signal.aborted) throw new AbortError();
+          let k = logMemoryErrorResult("list", error);
+          return {
+            data: {
+              outcome: "failed",
+              reason: k.reason,
+              message: k.message,
+            },
+          };
         }
       },
     };
   },
-  mapToolResultToToolResultBlockParam(e, r) {
+  mapToolResultToToolResultBlockParam(e, toolUseId) {
     if (e.outcome !== "ok")
       return {
-        tool_use_id: r,
+        tool_use_id: toolUseId,
         type: "tool_result",
-        is_error: !0,
+        is_error: true,
         content: e.message ?? `${MEMORY_LIST_TOOL_NAME} failed: ${e.reason}`,
       };
-    if (e.stores !== void 0)
+    if (e.stores !== undefined)
       return {
-        tool_use_id: r,
+        tool_use_id: toolUseId,
         type: "tool_result",
         content:
           e.stores.length === 0
@@ -213,29 +267,33 @@ ${e.stores.map(
     `${store.id}  (${store.description}, ${store.writable ? "writable" : "read-only"}, index ${store.index})`,
 ).join(`
 `)}${
-                e.message === void 0
+                e.message === undefined
                   ? ""
                   : `
 ${e.message}`
               }`,
       };
-    let n = e.entries ?? [];
-    if (n.length === 0) return { tool_use_id: r, type: "tool_result", content: "(empty)" };
-    let s = e.remaining ?? 0,
-      f =
-        s > 0
-          ? `
-\u2026 ${s} more \u2014 call again with cursor=${JSON.stringify(n.at(-1)?.path ?? "")} to continue.`
-          : "";
+    let entries = e.entries ?? [];
+    if (entries.length === 0)
+      return {
+        tool_use_id: toolUseId,
+        type: "tool_result",
+        content: "(empty)",
+      };
+    let remaining = e.remaining ?? 0;
+    let f =
+      remaining > 0
+        ? `
+\u2026 ${remaining} more \u2014 call again with cursor=${JSON.stringify(entries.at(-1)?.path ?? "")} to continue.`
+        : "";
     return {
-      tool_use_id: r,
+      tool_use_id: toolUseId,
       type: "tool_result",
-      content: `${r2t(e.store_kind)}
+      content: `${memoryStoreNote(e.store_kind)}
 
-${n.map(formatMemoryDocEntry).join(`
+${entries.map(formatMemoryDocEntry).join(`
 `)}${f}`,
     };
   },
 });
-
 export { MemoryListTool };

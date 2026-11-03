@@ -10,8 +10,11 @@
  */
 import { createExplanationPromise } from "../../../components/permissions/PermissionExplanation.js";
 import { isPlainObject, isSessionDenial, failedEnvelope } from "./callStatusQuery.js";
-import { BBn, noticeUnattestedServedCalls } from "../../../services/remoteTools/toolHostAttestation.js";
-import { iv, AJ, buildRemoteToolCallResult } from "../callResults.js";
+import {
+  unknownAttestationResult,
+  noticeUnattestedServedCalls,
+} from "../../../services/remoteTools/toolHostAttestation.js";
+import { byteLengthOf, clampToMaxPageSize, buildRemoteToolCallResult } from "../callResults.js";
 import {
   findServedTool,
   servedMcpWireArgs,
@@ -22,9 +25,9 @@ import {
   callFailureEnvelope,
   logServedCallTelemetry,
 } from "./serveCall.js";
-import { renameInputFields, RTe } from "../../../services/remoteTools/pathMapping.js";
+import { renameInputFields, DEFAULT_SERVING_POLICY } from "../../../services/remoteTools/pathMapping.js";
 import { truncateToLength } from "../../../utils/stringUtils.js";
-import { I1 } from "../../../utils/stripControlChars.js";
+import { stripControlChars } from "../../../utils/stripControlChars.js";
 import {
   sanitizeToolNameForAnalytics,
   getUnknownToolAnalyticsName,
@@ -38,7 +41,7 @@ import {
   protocolMismatchMessage,
   untrustedRepositoriesMessage,
   unattestedSenderMessage,
-  oMs,
+  toolNotServedMessage,
   mustUseForwarderMessage,
   notStartedUpMessage,
 } from "../../../services/remoteTools/hostRefusals.js";
@@ -50,419 +53,489 @@ import { logForDebugging } from "../../../utils/debug.js";
 import { errorMessage } from "../../../utils/errors.js";
 
 //@ chunk-ad2e1aj6.js:71537-71828 placement
-async function admitServedCall(e, n, s, h, r, i) {
-  let { request: request, toolInput: toolInput } = createExplanationPromise(isPlainObject(n) ? n : {}),
-    R = r === "bridge" ? BBn() : void 0;
-  return serveRemoteToolCall(e, toolInput, request, s, h, r, {
-    requestBytes: () => iv(n ?? {}),
-    ...(i !== void 0 && { trust: i }),
-    ...(R?.attestation !== void 0 && {
+async function admitServedCall(name, n, s, h, r, i) {
+  let { request, toolInput } = createExplanationPromise(isPlainObject(n) ? n : {});
+  let R = r === "bridge" ? unknownAttestationResult() : undefined;
+  return serveRemoteToolCall(name, toolInput, request, s, h, r, {
+    requestBytes: () => byteLengthOf(n ?? {}),
+    ...(i !== undefined && {
+      trust: i,
+    }),
+    ...(R?.attestation !== undefined && {
       attestation: R.attestation,
       unattested: R.heldBack,
       onHeldBack: () => noticeUnattestedServedCalls(h.onNotice),
     }),
   });
 }
+//@ chunk-ad2e1aj6.js:71828-79282 placement
 /**
  * 远程工具服务端处理一次调用：协议解析、准入、重试合并、权限判定、执行与结果整形。
  */
-//@ chunk-ad2e1aj6.js:71828-79282 placement
-async function serveRemoteToolCall(e, n, s, h, r, i, y = {}) {
-  let O = y.requestBytes ?? (() => iv({ toolInput: n, envelope: s.ok ? s.value : null })),
-    R = { name: r.targetName, working_dir: r.announcedDir ?? r.launchDir },
-    w = s.ok && s.kind === "call" ? s.value : void 0,
-    C = findServedTool(r, e),
-    P = servedMcpWireArgs(r, e),
-    x = renameInputFields(n, P),
-    Y = truncateToLength(I1(e), MAX_TELEMETRY_STRING),
-    F = {
-      arrivedOver: i,
-      workerEpoch: h.workerEpoch,
-      toolNameForAnalytics: C ? sanitizeToolNameForAnalytics(C.name) : getUnknownToolAnalyticsName(e),
-      isMcp: C?.isMcp ?? !1,
-      toolName: C?.name ?? e,
-      resolvedToolName: C?.name,
-      envelope: w,
-      callId: s.ok ? s.value.call_id : void 0,
-      envelopeStatus: s.ok ? "present" : s.why,
-      query: s.ok && s.kind === "outcome_query",
-      enteredRecord: !1,
-      answeredFromRecord: void 0,
-      joinedCallId: void 0,
-      fromPriorEpoch: !1,
-      inputFingerprint: void 0,
-      redeemsAskId: void 0,
-      sessionMode: w?.caller.permission_mode,
-      startedAt: Date.now(),
-      forceAsk: !1,
-      secondLeg: w?.approval !== void 0,
-      approvalAttested: !1,
-      approvalBasis: void 0,
-      deniedBySession: !1,
-      seatsFull: !1,
-      destinationDowngraded: !1,
-      askStillPending: !1,
-      truncated: !1,
-      staleLeg: void 0,
-      trust:
-        i === "relay"
-          ? {
-              approvalAttested: y.trust?.approvalAttested === !0,
-              modeDecidedByHost: y.trust?.modeDecidedByHost === !0,
-            }
-          : RTe,
-      ...(y.attestation !== void 0 && { attestation: y.attestation }),
-      ...(y.untrustedRepositories !== void 0 && { untrustedRepositories: y.untrustedRepositories }),
-      ...(y.modeStamp !== void 0 && { modeStamp: y.modeStamp }),
-      serverVerdict:
-        i !== "session" || !s.ok || s.kind !== "call" || s.serverVerdict === void 0
-          ? { kind: "absent" }
-          : y.modeStamp === "present"
-            ? s.serverVerdict
-            : { kind: "unmarked" },
-    },
-    D = (V, K, Se = {}) => {
-      if (F.secondLeg) F.askStillPending = !0;
-      return refusedEnvelope(R, F, V, K, Se);
-    },
-    L = h.sessionId !== void 0 || r.policy.admission === "none" ? callerKey(h) : void 0,
-    j = () => (L === void 0 ? void 0 : r.sessions.peek(L)),
-    M = w !== void 0 && w.approval === void 0 ? w.call_id : void 0,
-    Q = () => {
-      let V = w?.approval,
-        K = V === void 0 ? void 0 : j()?.pendingAsks.peek(V.ask_id);
-      return K?.callId === w?.call_id ? K : void 0;
-    },
-    ee = (V) => {
-      let K = w?.approval,
-        Se = j(),
-        ue = K !== void 0 && Se !== void 0 && Q() !== void 0;
-      if (ue)
-        withdrawAskedCall(Se, K.ask_id, {
+async function serveRemoteToolCall(e, n, request, h, r, i, y = {}) {
+  let O =
+    y.requestBytes ??
+    (() =>
+      byteLengthOf({
+        toolInput: n,
+        envelope: request.ok ? request.value : null,
+      }));
+  let R = {
+    name: r.targetName,
+    working_dir: r.announcedDir ?? r.launchDir,
+  };
+  let w = request.ok && request.kind === "call" ? request.value : undefined;
+  let servedTool = findServedTool(r, e);
+  let P = servedMcpWireArgs(r, e);
+  let x = renameInputFields(n, P);
+  let Y = truncateToLength(stripControlChars(e), MAX_TELEMETRY_STRING);
+  let F = {
+    arrivedOver: i,
+    workerEpoch: h.workerEpoch,
+    toolNameForAnalytics: servedTool
+      ? sanitizeToolNameForAnalytics(servedTool.name)
+      : getUnknownToolAnalyticsName(e),
+    isMcp: servedTool?.isMcp ?? false,
+    toolName: servedTool?.name ?? e,
+    resolvedToolName: servedTool?.name,
+    envelope: w,
+    callId: request.ok ? request.value.call_id : undefined,
+    envelopeStatus: request.ok ? "present" : request.why,
+    query: request.ok && request.kind === "outcome_query",
+    enteredRecord: false,
+    answeredFromRecord: undefined,
+    joinedCallId: undefined,
+    fromPriorEpoch: false,
+    inputFingerprint: undefined,
+    redeemsAskId: undefined,
+    sessionMode: w?.caller.permission_mode,
+    startedAt: Date.now(),
+    forceAsk: false,
+    secondLeg: w?.approval !== undefined,
+    approvalAttested: false,
+    approvalBasis: undefined,
+    deniedBySession: false,
+    seatsFull: false,
+    destinationDowngraded: false,
+    askStillPending: false,
+    truncated: false,
+    staleLeg: undefined,
+    trust:
+      i === "relay"
+        ? {
+            approvalAttested: y.trust?.approvalAttested === true,
+            modeDecidedByHost: y.trust?.modeDecidedByHost === true,
+          }
+        : DEFAULT_SERVING_POLICY,
+    ...(y.attestation !== undefined && {
+      attestation: y.attestation,
+    }),
+    ...(y.untrustedRepositories !== undefined && {
+      untrustedRepositories: y.untrustedRepositories,
+    }),
+    ...(y.modeStamp !== undefined && {
+      modeStamp: y.modeStamp,
+    }),
+    serverVerdict:
+      i !== "session" || !request.ok || request.kind !== "call" || request.serverVerdict === undefined
+        ? {
+            kind: "absent",
+          }
+        : y.modeStamp === "present"
+          ? request.serverVerdict
+          : {
+              kind: "unmarked",
+            },
+  };
+  let D = (V, K, Se = {}) => {
+    if (F.secondLeg) F.askStillPending = true;
+    return refusedEnvelope(R, F, V, K, Se);
+  };
+  let L = h.sessionId !== undefined || r.policy.admission === "none" ? callerKey(h) : undefined;
+  let j = () => (L === undefined ? undefined : r.sessions.peek(L));
+  let callId = w !== undefined && w.approval === undefined ? w.call_id : undefined;
+  let Q = () => {
+    let approval = w?.approval;
+    let K = approval === undefined ? undefined : j()?.pendingAsks.peek(approval.ask_id);
+    return K?.callId === w?.call_id ? K : undefined;
+  };
+  let ee = (stale) => {
+    let approval = w?.approval;
+    let Se = j();
+    let ue = approval !== undefined && Se !== undefined && Q() !== undefined;
+    if (ue)
+      withdrawAskedCall(Se, approval.ask_id, {
+        reason: "stale_answer",
+        message: withdrawnRequestMessage({
+          targetName: r.targetName,
           reason: "stale_answer",
-          message: withdrawnRequestMessage({ targetName: r.targetName, reason: "stale_answer" }),
-        });
-      return (
-        (F.staleLeg = V),
-        logRemoteTools(w?.call_id, "stale leg refused", {
-          leg: K === void 0 ? "call" : "answer",
-          age_ms: V.ageMs,
-          window_ms: V.windowMs,
-          ended_ask: ue,
         }),
-        refusedEnvelope(
-          R,
-          F,
-          "stale",
-          lateCallMessage({
-            targetName: r.targetName,
-            leg: K === void 0 ? "call" : "answer",
-            endedAsk: ue,
-            ageMs: V.ageMs,
-          }),
-          ue ? { reason: "stale_answer" } : {},
-        )
+      });
+    F.staleLeg = stale;
+    logRemoteTools(w?.call_id, "stale leg refused", {
+      leg: approval === undefined ? "call" : "answer",
+      age_ms: stale.ageMs,
+      window_ms: stale.windowMs,
+      ended_ask: ue,
+    });
+    return refusedEnvelope(
+      R,
+      F,
+      "stale",
+      lateCallMessage({
+        targetName: r.targetName,
+        leg: approval === undefined ? "call" : "answer",
+        endedAsk: ue,
+        ageMs: stale.ageMs,
+      }),
+      ue
+        ? {
+            reason: "stale_answer",
+          }
+        : {},
+    );
+  };
+  let q = await (async () => {
+    if (r.callLog !== undefined && !r.callLog.priorLoaded) await r.callLog.loadPrior();
+    if (O() > r.policy.limits.max_request_bytes)
+      return D(
+        "invalid_request",
+        `The call is larger than ${r.targetName} accepts (${r.policy.limits.max_request_bytes} bytes) \u2014 it was not run.`,
       );
-    },
-    q = await (async () => {
-      if (r.callLog !== void 0 && !r.callLog.priorLoaded) await r.callLog.loadPrior();
-      if (O() > r.policy.limits.max_request_bytes)
-        return D(
-          "invalid_request",
-          `The call is larger than ${r.targetName} accepts (${r.policy.limits.max_request_bytes} bytes) \u2014 it was not run.`,
-        );
-      if (!s.ok && s.why === "unsupported_protocol")
-        return D("unsupported_protocol", protocolMismatchMessage({ toolName: Y, targetName: r.targetName }));
-      if (!s.ok && s.why === "malformed") {
-        if (s.unlistedOp !== void 0)
-          r.callLog?.note({
-            t: "refused_request",
-            caller: callerKey(h),
-            what: "op",
-            length: s.unlistedOp.length,
-            name_hash: s.unlistedOp.hash,
-            variant_of_listed: s.unlistedOp.variantOfListed,
-          });
-        return D(
-          "invalid_request",
-          `The remote tool call envelope sent to ${r.targetName} was present but did not match protocol v${REMOTE_TOOL_PROTOCOL_VERSION} (for example a call id or expiry out of range) \u2014 the call was not run.`,
-        );
-      }
-      let V = (Z) =>
-        gateServedCall({
-          toolName: C?.name ?? Y,
-          ctx: h,
-          deps: r,
-          target: R,
-          facts: F,
-          refuse: D,
-          answer: Z,
+    if (!request.ok && request.why === "unsupported_protocol")
+      return D(
+        "unsupported_protocol",
+        protocolMismatchMessage({
+          toolName: Y,
+          targetName: r.targetName,
+        }),
+      );
+    if (!request.ok && request.why === "malformed") {
+      if (request.unlistedOp !== undefined)
+        r.callLog?.note({
+          t: "refused_request",
+          caller: callerKey(h),
+          what: "op",
+          length: request.unlistedOp.length,
+          name_hash: request.unlistedOp.hash,
+          variant_of_listed: request.unlistedOp.variantOfListed,
         });
-      if (y.unattested === !0)
-        return V(
-          () => (
-            y.onHeldBack?.(),
-            D(
-              "unattested_request",
-              y.untrustedRepositories !== void 0
-                ? untrustedRepositoriesMessage({ targetName: r.targetName, state: y.untrustedRepositories })
-                : unattestedSenderMessage({
-                    targetName: r.targetName,
-                    status: y.attestation?.status ?? "UNSPECIFIED",
-                    subtype: "remote_tool_call",
-                  }),
-            )
-          ),
+      return D(
+        "invalid_request",
+        `The remote tool call envelope sent to ${r.targetName} was present but did not match protocol v${REMOTE_TOOL_PROTOCOL_VERSION} (for example a call id or expiry out of range) \u2014 the call was not run.`,
+      );
+    }
+    let V = (answer) =>
+      gateServedCall({
+        toolName: servedTool?.name ?? Y,
+        ctx: h,
+        deps: r,
+        target: R,
+        facts: F,
+        refuse: D,
+        answer,
+      });
+    if (y.unattested === true)
+      return V(() => {
+        y.onHeldBack?.();
+        return D(
+          "unattested_request",
+          y.untrustedRepositories !== undefined
+            ? untrustedRepositoriesMessage({
+                targetName: r.targetName,
+                state: y.untrustedRepositories,
+              })
+            : unattestedSenderMessage({
+                targetName: r.targetName,
+                status: y.attestation?.status ?? "UNSPECIFIED",
+                subtype: "remote_tool_call",
+              }),
         );
-      if (y.stale !== void 0) {
-        let stale = y.stale;
-        return V(() => {
-          if (M !== void 0 && L !== void 0) {
-            let forCaller = r.sessions.forCaller(L),
-              ce = forCaller?.calls.lookup(M);
-            if (forCaller !== void 0 && ce !== void 0)
-              return joinKnownCall({
-                known: ce,
-                session: forCaller,
+      });
+    if (y.stale !== undefined) {
+      let stale = y.stale;
+      return V(() => {
+        if (callId !== undefined && L !== undefined) {
+          let X = r.sessions.forCaller(L);
+          let ce = X?.calls.lookup(callId);
+          if (X !== undefined && ce !== undefined)
+            return joinKnownCall({
+              known: ce,
+              session: X,
+              hostEpoch: r.sessions.epoch,
+              callId,
+              target: R,
+              facts: F,
+            });
+          if (X !== undefined) {
+            F.enteredRecord = X.calls.receive(
+              callId,
+              servedTool === undefined
+                ? undefined
+                : {
+                    retryKey: decidingInput(servedTool, x, X.cwd ?? r.launchDir),
+                    workerEpoch: h.workerEpoch,
+                    late: true,
+                  },
+            );
+            let ge = servedTool === undefined ? undefined : X.calls.retryOf(callId);
+            if (
+              servedTool !== undefined &&
+              ge !== undefined &&
+              ge.call.summary.state !== "asked" &&
+              ge.call.summary.state !== "received" &&
+              (ge.call.summary.state !== "running" || ge.call.summary.started === true) &&
+              !isServedReadOnly(servedTool, x, r)
+            ) {
+              F.staleLeg = stale;
+              return joinRetry({
+                session: X,
+                joined: {
+                  callId: ge.callId,
+                  call: X.calls.lookup(ge.callId) ?? ge.call,
+                },
                 hostEpoch: r.sessions.epoch,
-                callId: M,
+                callId,
                 target: R,
                 facts: F,
+                workerEpoch: h.workerEpoch,
               });
-            if (forCaller !== void 0) {
-              F.enteredRecord = forCaller.calls.receive(
-                M,
-                C === void 0
-                  ? void 0
-                  : {
-                      retryKey: decidingInput(C, x, forCaller.cwd ?? r.launchDir),
-                      workerEpoch: h.workerEpoch,
-                      late: !0,
-                    },
-              );
-              let ge = C === void 0 ? void 0 : forCaller.calls.retryOf(M);
-              if (
-                C !== void 0 &&
-                ge !== void 0 &&
-                ge.call.summary.state !== "asked" &&
-                ge.call.summary.state !== "received" &&
-                (ge.call.summary.state !== "running" || ge.call.summary.started === !0) &&
-                !isServedReadOnly(C, x, r)
-              )
-                return (
-                  (F.staleLeg = stale),
-                  joinRetry({
-                    session: forCaller,
-                    joined: { callId: ge.callId, call: forCaller.calls.lookup(ge.callId) ?? ge.call },
-                    hostEpoch: r.sessions.epoch,
-                    callId: M,
-                    target: R,
-                    facts: F,
-                    workerEpoch: h.workerEpoch,
-                  })
-                );
             }
           }
-          return ee(stale);
-        });
-      }
-      if (s.ok && s.kind === "outcome_query") {
-        let call_id = s.value.call_id,
-          X = await V(() =>
-            L === void 0
-              ? D("no_session", `${Y} refused: no server-asserted session.`)
-              : lookupCallerCall({
-                  sessions: r.sessions,
-                  callLog: r.callLog,
-                  callerKey: L,
-                  callId: call_id,
-                  target: R,
-                  facts: F,
-                }),
-          ),
-          ce =
-            X.envelope.outcome === "completed" && r.policy.backgroundShells?.enabled() === !0
-              ? await j()?.backgroundShells.statusOf(F.joinedCallId ?? call_id)
-              : void 0;
-        return ce === void 0 ? X : backgroundCommandStatusText(R, call_id, ce);
-      }
-      if (!C) {
-        let Z = () => D("not_served", oMs({ toolName: Y, targetName: r.targetName })),
-          X = j(),
-          ce = w?.call_id,
-          ge = X !== void 0 && ce !== void 0 ? X.calls.lookup(ce) : void 0;
-        if (X === void 0 || ce === void 0 || ge === void 0) return Z();
-        let _e = () =>
-          joinKnownCall({
-            known: X.calls.lookup(ce) ?? ge,
-            session: X,
-            hostEpoch: r.sessions.epoch,
-            callId: ce,
-            target: R,
-            facts: F,
-          });
-        if (w?.approval === void 0 || ge.summary.state !== "asked") return V(_e);
-        let we = ge.summary.askId !== void 0 ? X.pendingAsks.peek(ge.summary.askId) : void 0;
-        if (we === void 0 || we.callId !== ce || we.toolStillServed()) return Z();
-        return V(() => {
-          let te = Z();
-          return (
-            withdrawAskedCall(X, we.askId, {
-              reason: "tool_withdrawn",
-              message: withdrawnRequestMessage({ targetName: r.targetName, reason: "tool_withdrawn" }),
-              retain: te,
-            }),
-            (F.askStillPending = !1),
-            te
-          );
-        });
-      }
-      if (!s.ok && r.policy.requireEnvelope)
-        return D("invalid_request", mustUseForwarderMessage({ toolName: Y, targetName: r.targetName }));
-      if (r.readiness !== void 0 && !r.readiness.ready) {
-        if (
-          (await withDeadline(
-            r.readiness.whenReady(),
-            AJ(callDeadlineMs(r.policy.limits, w) - (Date.now() - F.startedAt)),
-          ),
-          !r.readiness.ready)
-        )
-          return (
-            logForDebugging(
-              `[remote-tools] ${Y} refused: this machine was still loading its hooks and settings when the call's deadline ran out`,
-              { level: "warn" },
-            ),
-            D("queue_full", notStartedUpMessage({ targetName: r.targetName }), { limit: "queue" })
-          );
-      }
-      let K = j();
-      if (M !== void 0 && K !== void 0) {
-        let lookup = K.calls.lookup(M);
-        if (lookup !== void 0)
-          return V(() =>
-            joinKnownCall({
-              known: K.calls.lookup(M) ?? lookup,
-              session: K,
-              hostEpoch: r.sessions.epoch,
-              callId: M,
-              target: R,
-              facts: F,
-            }),
-          );
-        F.enteredRecord = K.calls.receive(M, {
-          retryKey: decidingInput(C, x, K.cwd ?? r.launchDir),
-          workerEpoch: h.workerEpoch,
-        });
-        let retryOf = K.calls.retryOf(M),
-          directoryReset = K.directoryReset;
-        if (
-          retryOf === void 0 &&
-          F.enteredRecord &&
-          directoryReset !== void 0 &&
-          directoryReset.from !== K.cwd
-        ) {
-          K.calls.rekey(M, decidingInput(C, x, directoryReset.from));
-          let retryOf_2 = K.calls.retryOf(M);
-          if (retryOf_2 !== void 0 && retryOf_2.call.receivedAt < directoryReset.at) retryOf = retryOf_2;
-          else K.calls.rekey(M, decidingInput(C, x, K.cwd ?? r.launchDir));
         }
-        if (retryOf !== void 0 && retryOf.call.summary.state !== "asked" && !isServedReadOnly(C, x, r))
-          return V(() =>
-            joinRetry({
-              session: K,
-              joined: { callId: retryOf.callId, call: K.calls.lookup(retryOf.callId) ?? retryOf.call },
-              hostEpoch: r.sessions.epoch,
-              callId: M,
+        return ee(stale);
+      });
+    }
+    if (request.ok && request.kind === "outcome_query") {
+      let callId = request.value.call_id;
+      let X = await V(() =>
+        L === undefined
+          ? D("no_session", `${Y} refused: no server-asserted session.`)
+          : lookupCallerCall({
+              sessions: r.sessions,
+              callLog: r.callLog,
+              callerKey: L,
+              callId,
               target: R,
               facts: F,
-              workerEpoch: h.workerEpoch,
             }),
-          );
+      );
+      let ce =
+        X.envelope.outcome === "completed" && r.policy.backgroundShells?.enabled() === true
+          ? await j()?.backgroundShells.statusOf(F.joinedCallId ?? callId)
+          : undefined;
+      return ce === undefined ? X : backgroundCommandStatusText(R, callId, ce);
+    }
+    if (!servedTool) {
+      let Z = () =>
+        D(
+          "not_served",
+          toolNotServedMessage({
+            toolName: Y,
+            targetName: r.targetName,
+          }),
+        );
+      let X = j();
+      let callId = w?.call_id;
+      let ge = X !== undefined && callId !== undefined ? X.calls.lookup(callId) : undefined;
+      if (X === undefined || callId === undefined || ge === undefined) return Z();
+      let answer = () =>
+        joinKnownCall({
+          known: X.calls.lookup(callId) ?? ge,
+          session: X,
+          hostEpoch: r.sessions.epoch,
+          callId,
+          target: R,
+          facts: F,
+        });
+      if (w?.approval === undefined || ge.summary.state !== "asked") return V(answer);
+      let we = ge.summary.askId !== undefined ? X.pendingAsks.peek(ge.summary.askId) : undefined;
+      if (we === undefined || we.callId !== callId || we.toolStillServed()) return Z();
+      return V(() => {
+        let te = Z();
+        withdrawAskedCall(X, we.askId, {
+          reason: "tool_withdrawn",
+          message: withdrawnRequestMessage({
+            targetName: r.targetName,
+            reason: "tool_withdrawn",
+          }),
+          retain: te,
+        });
+        F.askStillPending = false;
+        return te;
+      });
+    }
+    if (!request.ok && r.policy.requireEnvelope)
+      return D(
+        "invalid_request",
+        mustUseForwarderMessage({
+          toolName: Y,
+          targetName: r.targetName,
+        }),
+      );
+    if (r.readiness !== undefined && !r.readiness.ready) {
+      await withDeadline(
+        r.readiness.whenReady(),
+        clampToMaxPageSize(callDeadlineMs(r.policy.limits, w) - (Date.now() - F.startedAt)),
+      );
+      if (!r.readiness.ready) {
+        logForDebugging(
+          `[remote-tools] ${Y} refused: this machine was still loading its hooks and settings when the call's deadline ran out`,
+          {
+            level: "warn",
+          },
+        );
+        return D(
+          "queue_full",
+          notStartedUpMessage({
+            targetName: r.targetName,
+          }),
+          {
+            limit: "queue",
+          },
+        );
       }
-      let Se = () =>
-          serveToolCall({ tool: C, toolInput: x, wireArguments: P, ctx: h, deps: r, target: R, facts: F }),
-        ue = w?.approval?.decision === "allow" ? Q() : void 0;
-      if (ue !== void 0) ((ue.redeemingLegs += 1), (F.redeemsAskId = ue.askId));
-      try {
-        if (r.policy.admission === "none")
-          return await Se().catch((ce) => callFailureEnvelope(ce, R, F, h.signal, {}));
-        if (!r.gate) return D("unbound", Po(Y, r.targetName));
-        let now = Date.now(),
-          X = createAdmissionOutcomes({
+    }
+    let K = j();
+    if (callId !== undefined && K !== undefined) {
+      let Z = K.calls.lookup(callId);
+      if (Z !== undefined)
+        return V(() =>
+          joinKnownCall({
+            known: K.calls.lookup(callId) ?? Z,
+            session: K,
+            hostEpoch: r.sessions.epoch,
+            callId,
             target: R,
             facts: F,
-            refuse: D,
-            ctx: h,
-            serve: () => ((F.postureWaitMs = Date.now() - now), Se()),
-          });
-        return await (w?.approval?.decision === "deny"
-          ? r.gate.admitWithoutSlot(C.name, h, X)
-          : r.gate.run(C.name, h, X));
-      } finally {
-        if (ue !== void 0) ((ue.redeemingLegs -= 1), (F.redeemsAskId = void 0));
+          }),
+        );
+      F.enteredRecord = K.calls.receive(callId, {
+        retryKey: decidingInput(servedTool, x, K.cwd ?? r.launchDir),
+        workerEpoch: h.workerEpoch,
+      });
+      let X = K.calls.retryOf(callId);
+      let directoryReset = K.directoryReset;
+      if (
+        X === undefined &&
+        F.enteredRecord &&
+        directoryReset !== undefined &&
+        directoryReset.from !== K.cwd
+      ) {
+        K.calls.rekey(callId, decidingInput(servedTool, x, directoryReset.from));
+        let ge = K.calls.retryOf(callId);
+        if (ge !== undefined && ge.call.receivedAt < directoryReset.at) X = ge;
+        else K.calls.rekey(callId, decidingInput(servedTool, x, K.cwd ?? r.launchDir));
       }
-    })().catch(
-      (V) => (
-        logForDebugging(`[remote-tools] serving ${Y} failed before admission: ${errorMessage(V)}`, {
-          level: "warn",
-        }),
-        D("invalid_request", `The call sent to ${r.targetName} could not be read \u2014 it was not run.`)
-      ),
-    ),
-    ae = j();
+      if (X !== undefined && X.call.summary.state !== "asked" && !isServedReadOnly(servedTool, x, r))
+        return V(() =>
+          joinRetry({
+            session: K,
+            joined: {
+              callId: X.callId,
+              call: K.calls.lookup(X.callId) ?? X.call,
+            },
+            hostEpoch: r.sessions.epoch,
+            callId,
+            target: R,
+            facts: F,
+            workerEpoch: h.workerEpoch,
+          }),
+        );
+    }
+    let Se = () =>
+      serveToolCall({
+        tool: servedTool,
+        toolInput: x,
+        wireArguments: P,
+        ctx: h,
+        deps: r,
+        target: R,
+        facts: F,
+      });
+    let ue = w?.approval?.decision === "allow" ? Q() : undefined;
+    if (ue !== undefined) {
+      ue.redeemingLegs += 1;
+      F.redeemsAskId = ue.askId;
+    }
+    try {
+      if (r.policy.admission === "none")
+        return await Se().catch((error) => callFailureEnvelope(error, R, F, h.signal, {}));
+      if (!r.gate) return D("unbound", refusalTargetNotAcceptingText(Y, r.targetName));
+      let now = Date.now();
+      let admissionOutcomes = createAdmissionOutcomes({
+        target: R,
+        facts: F,
+        refuse: D,
+        ctx: h,
+        serve: () => {
+          F.postureWaitMs = Date.now() - now;
+          return Se();
+        },
+      });
+      return await (w?.approval?.decision === "deny"
+        ? r.gate.admitWithoutSlot(servedTool.name, h, admissionOutcomes)
+        : r.gate.run(servedTool.name, h, admissionOutcomes));
+    } finally {
+      if (ue !== undefined) {
+        ue.redeemingLegs -= 1;
+        F.redeemsAskId = undefined;
+      }
+    }
+  })().catch((error) => {
+    logForDebugging(`[remote-tools] serving ${Y} failed before admission: ${errorMessage(error)}`, {
+      level: "warn",
+    });
+    return D("invalid_request", `The call sent to ${r.targetName} could not be read \u2014 it was not run.`);
+  });
+  let ae = j();
   if (
-    M !== void 0 &&
+    callId !== undefined &&
     F.enteredRecord &&
-    ae !== void 0 &&
-    F.answeredFromRecord === void 0 &&
-    ls(q) &&
-    ae.calls.lookup(M)?.result === void 0
+    ae !== undefined &&
+    F.answeredFromRecord === undefined &&
+    hasSettledOutcome(q) &&
+    ae.calls.lookup(callId)?.result === undefined
   )
-    ae.calls.settle(M, q, isSessionDenial(q));
-  return (logServedCallTelemetry(q.envelope, F, r, ae), buildRemoteToolCallResult(q));
+    ae.calls.settle(callId, q, isSessionDenial(q));
+  logServedCallTelemetry(q.envelope, F, r, ae);
+  return buildRemoteToolCallResult(q);
 }
 //@ chunk-ad2e1aj6.js:79282-79375 placement
-function ls(e) {
-  let { outcome: outcome } = e.envelope;
+function hasSettledOutcome(e) {
+  let { outcome } = e.envelope;
   return outcome === "completed" || outcome === "refused" || outcome === "failed";
 }
 //@ chunk-ad2e1aj6.js:79375-79680 placement
-function gateServedCall({
-  toolName: toolName,
-  ctx: ctx,
-  deps: deps,
-  target: target,
-  facts: facts,
-  refuse: refuse,
-  answer: answer,
-}) {
+function gateServedCall({ toolName, ctx, deps, target, facts, refuse, answer }) {
   if (deps.policy.admission === "none") return Promise.resolve(answer());
-  if (!deps.gate) return Promise.resolve(refuse("unbound", Po(toolName, deps.targetName)));
+  if (!deps.gate)
+    return Promise.resolve(refuse("unbound", refusalTargetNotAcceptingText(toolName, deps.targetName)));
   return deps.gate.admitWithoutSlot(
     toolName,
     ctx,
     createAdmissionOutcomes({
-      target: target,
-      facts: facts,
-      refuse: refuse,
-      ctx: ctx,
+      target,
+      facts,
+      refuse,
+      ctx,
       serve: () => Promise.resolve(answer()),
     }),
   );
 }
 //@ chunk-ad2e1aj6.js:79680-79889 placement
-function createAdmissionOutcomes({ target: target, facts: facts, refuse: refuse, ctx: ctx, serve: serve }) {
+function createAdmissionOutcomes({ target, facts, refuse, ctx, serve }) {
   return {
     refuse: (i, y) => refuse(admissionRefusalCode(i), y),
     fail: (i) => callFailureEnvelope(i, target, facts, ctx.signal, {}),
     cancelled: () =>
       failedEnvelope(target, facts, "cancelled", "The caller cancelled the call before it ran."),
-    serve: serve,
+    serve,
   };
 }
 //@ chunk-ad2e1aj6.js:79889-79987 placement
-function Po(e, n) {
-  return `${e} refused: ${n} is not accepting calls from cloud sessions right now.`;
+function refusalTargetNotAcceptingText(e, targetName) {
+  return `${e} refused: ${targetName} is not accepting calls from cloud sessions right now.`;
 }
 //@ chunk-ad2e1aj6.js:79987-80196 placement
 function admissionRefusalCode(e) {
@@ -478,5 +551,4 @@ function admissionRefusalCode(e) {
       return "sandbox_unavailable";
   }
 }
-
 export { serveRemoteToolCall, admitServedCall };

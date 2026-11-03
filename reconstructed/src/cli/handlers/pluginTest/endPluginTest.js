@@ -13,18 +13,25 @@ import { stopPeriodicGrowthBookRefresh } from "../../../services/analytics/growt
 import { waitForOAuthRefreshLocksReleased } from "../../../utils/auth.js";
 
 //@ chunk-2m7289t6.js:268-279 placement
-var Vwo = {};
+/**
+ * plugin test 结束模块的导出容器（挂 default 与 endPluginTest）。
+ */
+var PLUGIN_TEST_MODULE_EXPORTS = {};
 //@ chunk-2m7289t6.js:279-327 placement
-Ar(Vwo, { default: () => Vwo, endPluginTest: () => endPluginTest });
+Ar(PLUGIN_TEST_MODULE_EXPORTS, {
+  default: () => PLUGIN_TEST_MODULE_EXPORTS,
+  endPluginTest: () => endPluginTest,
+});
+//@ chunk-2m7289t6.js:327-476 placement
 /**
  * plugin test 结束时释放开关保持与登录。
  */
-//@ chunk-2m7289t6.js:327-476 placement
 async function endPluginTest(e) {
-  (stopPeriodicGrowthBookRefresh(),
-    await Promise.all([process.stdout, process.stderr].map((r) => new Promise((o) => r.write("", o)))),
-    await waitForOAuthRefreshLocksReleased(),
-    process.exit(e));
+  stopPeriodicGrowthBookRefresh();
+  await Promise.all(
+    [process.stdout, process.stderr].map((r) => new Promise((resolve) => r.write("", resolve))),
+  );
+  await waitForOAuthRefreshLocksReleased();
+  process.exit(e);
 }
-
 export { endPluginTest };

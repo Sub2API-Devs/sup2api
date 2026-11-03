@@ -5,27 +5,30 @@
  * pieces: chunk-hwmsct5x.js (1)
  * attribution: esm-fingerprint 1
  */
-import { Y } from "../../../core/resource.mjs";
+import { APIResource } from "../../../core/resource.mjs";
 import { I } from "../../../internal/utils/path.mjs";
-import { ee } from "../../../core/pagination.mjs";
-import { T } from "../../../internal/headers.mjs";
+import { TokenPage } from "../../../core/pagination.mjs";
+import { buildHeaders } from "../../../internal/headers.mjs";
 
 //@ chunk-hwmsct5x.js:53673-53975 esm-fingerprint
-class Or extends Y {
-  list(e, n = {}, r) {
-    let { betas: betas, workspace_id: workspace_id, ...y } = n ?? {};
-    return this._client.getAPIList(I`/v1/agents/${e}/versions?beta=true`, ee, {
-      query: y,
-      ...r,
-      headers: T([
+class Versions extends APIResource {
+  list(agentID, params = {}, options) {
+    let { betas, workspace_id, ...query } = params ?? {};
+    return this._client.getAPIList(I`/v1/agents/${agentID}/versions?beta=true`, TokenPage, {
+      query,
+      ...options,
+      headers: buildHeaders([
         {
           "anthropic-beta": [...(betas ?? []), "managed-agents-2026-04-01"].toString(),
-          ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0),
+          ...(workspace_id != null
+            ? {
+                "anthropic-workspace-id": workspace_id,
+              }
+            : undefined),
         },
-        r?.headers,
+        options?.headers,
       ]),
     });
   }
 }
-
-export { Or };
+export { Versions };

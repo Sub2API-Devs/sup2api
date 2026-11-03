@@ -5,80 +5,99 @@
  * pieces: chunk-hwmsct5x.js (1)
  * attribution: esm-fingerprint 1
  */
-import { Y } from "../../core/resource.mjs";
-import { T } from "../../internal/headers.mjs";
+import { APIResource } from "../../core/resource.mjs";
+import { buildHeaders } from "../../internal/headers.mjs";
 import { I } from "../../internal/utils/path.mjs";
-import { ee } from "../../core/pagination.mjs";
+import { TokenPage } from "../../core/pagination.mjs";
 
 //@ chunk-hwmsct5x.js:48117-49398 esm-fingerprint
-class br extends Y {
-  create(e, n) {
-    let { betas: betas, workspace_id: workspace_id, ...h } = e;
+class Dreams extends APIResource {
+  create(params, options) {
+    let { betas, workspace_id, ...body } = params;
     return this._client.post("/v1/dreams?beta=true", {
-      body: h,
-      ...n,
-      headers: T([
+      body,
+      ...options,
+      headers: buildHeaders([
         {
           "anthropic-beta": [...(betas ?? []), "dreaming-2026-04-21"].toString(),
-          ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0),
+          ...(workspace_id != null
+            ? {
+                "anthropic-workspace-id": workspace_id,
+              }
+            : undefined),
         },
-        n?.headers,
+        options?.headers,
       ]),
     });
   }
-  retrieve(e, n = {}, r) {
-    let { betas: betas, workspace_id: workspace_id } = n ?? {};
-    return this._client.get(I`/v1/dreams/${e}?beta=true`, {
-      ...r,
-      headers: T([
+  retrieve(dreamID, params = {}, options) {
+    let { betas, workspace_id } = params ?? {};
+    return this._client.get(I`/v1/dreams/${dreamID}?beta=true`, {
+      ...options,
+      headers: buildHeaders([
         {
           "anthropic-beta": [...(betas ?? []), "dreaming-2026-04-21"].toString(),
-          ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0),
+          ...(workspace_id != null
+            ? {
+                "anthropic-workspace-id": workspace_id,
+              }
+            : undefined),
         },
-        r?.headers,
+        options?.headers,
       ]),
     });
   }
-  list(e = {}, n) {
-    let { betas: betas, workspace_id: workspace_id, ...h } = e ?? {};
-    return this._client.getAPIList("/v1/dreams?beta=true", ee, {
-      query: h,
-      ...n,
-      headers: T([
+  list(params = {}, options) {
+    let { betas, workspace_id, ...query } = params ?? {};
+    return this._client.getAPIList("/v1/dreams?beta=true", TokenPage, {
+      query,
+      ...options,
+      headers: buildHeaders([
         {
           "anthropic-beta": [...(betas ?? []), "dreaming-2026-04-21"].toString(),
-          ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0),
+          ...(workspace_id != null
+            ? {
+                "anthropic-workspace-id": workspace_id,
+              }
+            : undefined),
         },
-        n?.headers,
+        options?.headers,
       ]),
     });
   }
-  archive(e, n = {}, r) {
-    let { betas: betas, workspace_id: workspace_id } = n ?? {};
-    return this._client.post(I`/v1/dreams/${e}/archive?beta=true`, {
-      ...r,
-      headers: T([
+  archive(dreamID, params = {}, options) {
+    let { betas, workspace_id } = params ?? {};
+    return this._client.post(I`/v1/dreams/${dreamID}/archive?beta=true`, {
+      ...options,
+      headers: buildHeaders([
         {
           "anthropic-beta": [...(betas ?? []), "dreaming-2026-04-21"].toString(),
-          ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0),
+          ...(workspace_id != null
+            ? {
+                "anthropic-workspace-id": workspace_id,
+              }
+            : undefined),
         },
-        r?.headers,
+        options?.headers,
       ]),
     });
   }
-  cancel(e, n = {}, r) {
-    let { betas: betas, workspace_id: workspace_id } = n ?? {};
-    return this._client.post(I`/v1/dreams/${e}/cancel?beta=true`, {
-      ...r,
-      headers: T([
+  cancel(dreamID, params = {}, options) {
+    let { betas, workspace_id } = params ?? {};
+    return this._client.post(I`/v1/dreams/${dreamID}/cancel?beta=true`, {
+      ...options,
+      headers: buildHeaders([
         {
           "anthropic-beta": [...(betas ?? []), "dreaming-2026-04-21"].toString(),
-          ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0),
+          ...(workspace_id != null
+            ? {
+                "anthropic-workspace-id": workspace_id,
+              }
+            : undefined),
         },
-        r?.headers,
+        options?.headers,
       ]),
     });
   }
 }
-
-export { br };
+export { Dreams };

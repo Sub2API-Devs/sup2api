@@ -11,43 +11,40 @@
 import { readMcpOAuthStore } from "./credentialStoreRead.js";
 import { getServerKey } from "./auth.js";
 
+//@ chunk-74e5eddx.js:230-1093 placement
 /**
  * 判断 MCP SDK 认证失败是否属于"动态客户端注册（DCR）被服务器拒绝"：仅限 dcr_failed/dcr_rejected 类，需已发现 OAuth 元数据，HTTP 4xx（除 408/429）或 invalid_client 类错误码时为真。
  */
-//@ chunk-74e5eddx.js:230-1093 placement
 async function isDcrRejection(error, serverName, config) {
   if (
     !(error instanceof Error) ||
     !error.message.startsWith("SDK auth failed: ") ||
     !(error.cause instanceof Error)
   )
-    return !1;
-  let { cause: cause } = error,
-    classifySdkAuthFailure = require("./chunk-asne9cp8.js")
-      .mcpAuthModule()
-      .classifySdkAuthFailure(error.message, cause);
-  if (classifySdkAuthFailure !== "dcr_failed" && classifySdkAuthFailure !== "dcr_rejected") return !1;
+    return false;
+  let { cause } = error;
+  let s = require("./chunk-asne9cp8.js").mcpAuthModule().classifySdkAuthFailure(error.message, cause);
+  if (s !== "dcr_failed" && s !== "dcr_rejected") return false;
   if (!("status" in cause) && !("errorCode" in cause))
     return cause.message === "Incompatible auth server: does not support dynamic client registration";
   if (!(
     (await readMcpOAuthStore())?.[getServerKey(serverName, config)]?.discoveryState?.oauthMetadataFound ??
-    config.oauth?.authServerMetadataUrl !== void 0
+    config.oauth?.authServerMetadataUrl !== undefined
   ))
-    return !1;
+    return false;
   let status =
     "status" in cause
       ? cause.status
       : Number(/^HTTP (\d{3}): Invalid OAuth error response: /.exec(cause.message)?.[1]);
   if (typeof status === "number" && Number.isFinite(status))
     return status >= 400 && status < 500 && status !== 408 && status !== 429;
-  switch ("errorCode" in cause ? cause.errorCode : void 0) {
+  switch ("errorCode" in cause ? cause.errorCode : undefined) {
     case "invalid_client_metadata":
     case "invalid_client":
     case "unauthorized_client":
-      return !0;
+      return true;
     default:
-      return !1;
+      return false;
   }
 }
-
 export { isDcrRejection };

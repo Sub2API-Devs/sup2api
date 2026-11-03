@@ -16,7 +16,8 @@ class SelfPostCounter {
   #n = 0;
   onCleared = null;
   notePost(t) {
-    (this.#t.set(t, (this.#t.get(t) ?? 0) + 1), this.#n++);
+    this.#t.set(t, (this.#t.get(t) ?? 0) + 1);
+    this.#n++;
   }
   forgetPost(t) {
     let n = this.#t.get(t) ?? 0;
@@ -34,7 +35,9 @@ class SelfPostCounter {
   }
   noteHumanTurn() {
     let t = this.#n > 0;
-    if ((this.#t.clear(), (this.#n = 0), t)) this.onCleared?.();
+    this.#t.clear();
+    this.#n = 0;
+    if (t) this.onCleared?.();
   }
   peersPostedTo() {
     return [...this.#t.keys()];
@@ -47,4 +50,4 @@ class SelfPostCounter {
   }
 }
 //@ chunk-0z70g9af.js:818-842 placement
-var r = new SessionRootSlot(() => new SelfPostCounter());
+var selfPostCounterBySessionRoot = new SessionRootSlot(() => new SelfPostCounter());

@@ -9,42 +9,52 @@
  * attribution: placement 10, fingerprint 3, file-local 1
  */
 import { DoctorLazy } from "../cli/handlers/util.js";
-import { u, o, pe, oe } from "../../vendor/zod/v4/classic/schemas.js";
+import { u, string, record, unknown } from "../../vendor/zod/v4/classic/schemas.js";
 import { AbortError as AbortError_2, ShellError } from "./errors.js";
 import { INTERRUPT_MESSAGE_FOR_TOOL_USE } from "./messages.js";
 import { truncateMiddle as truncateMiddle_2 } from "../memdir/memoryTool.js";
 import { MODEL_FACING_MESSAGE_KEY } from "../tools/ArtifactTool/publishEdits.js";
 import { truncateWithCount, plural } from "./stringUtils.js";
 
+//@ chunk-aepeg2w5.js:50738-50779 placement
 /**
  * 等待中且未结束。
  */
-//@ chunk-aepeg2w5.js:50738-50779 placement
-var isPendingNotOver = (e) => !e.isOver && e.isPending === !0;
+var isPendingNotOver = (e) => !e.isOver && e.isPending === true;
 //@ chunk-aepeg2w5.js:50779-50861 placement
-var LM = () => ({ isPending: void 0, hasHeld: !1, isOver: !1, over: Promise.withResolvers() });
+var createPendingFlagState = () => ({
+  isPending: undefined,
+  hasHeld: false,
+  isOver: false,
+  over: Promise.withResolvers(),
+});
 //@ chunk-aepeg2w5.js:51173-51223 placement
-var Yq = DoctorLazy(() => u({ root: o(), primary: o().nullish() }));
+var doctorHintSchema = DoctorLazy(() =>
+  u({
+    root: string(),
+    primary: string().nullish(),
+  }),
+);
 //@ chunk-aepeg2w5.js:51223-51256 placement
-async function eh(e) {
+async function noToolErrorText(e) {
   return null;
 }
 //@ chunk-aepeg2w5.js:51256-51283 placement
-var qq = DoctorLazy(() => pe(o(), oe()));
+var doctorTextSchema = DoctorLazy(() => record(string(), unknown()));
 //@ chunk-aepeg2w5.js:51283-51303 placement
-var Qs = /^[a-z]+-\d/;
+var VERSIONED_MODEL_RE = /^[a-z]+-\d/;
+//@ chunk-aepeg2w5.js:51303-51440 placement
 /**
  * 不区分大小写判断文本是否包含任一非空关键字。
  */
-//@ chunk-aepeg2w5.js:51303-51440 placement
 function includesAnyIgnoreCase(e, n) {
   let lower = e.toLowerCase();
-  for (let s of n) if (typeof s === "string" && s.length > 0 && lower.includes(s.toLowerCase())) return !0;
-  return !1;
+  for (let s of n) if (typeof s === "string" && s.length > 0 && lower.includes(s.toLowerCase())) return true;
+  return false;
 }
 //@ chunk-aepeg2w5.js:51477-51548 placement
-var UM = 1024,
-  HM = /\n\n\.\.\. \[(\d+) characters truncated\] \.\.\.\n\n/g;
+var MAX_ERROR_TEXT_CHARS = 1024;
+var TRUNCATION_MARKER_RE = /\n\n\.\.\. \[(\d+) characters truncated\] \.\.\.\n\n/g;
 //@ chunk-aepeg2w5.js:51548-51611 fingerprint = formatError (0.792)
 function formatError(error) {
   return `
@@ -54,45 +64,45 @@ function formatError(error) {
 `;
 }
 //@ chunk-e6aww6q8.js:998058-998077 placement
-var qzt = 20,
-  APo = 500;
+var MAX_ZOD_ERROR_PARTS = 20;
+var MAX_ZOD_MESSAGE_CHARS = 500;
+//@ chunk-e6aww6q8.js:998077-998547 placement
 /**
  * 把工具执行错误转成给模型的文本：中断错误用中断提示；普通错误拼接各部分输出（为空时说明无输出），按错误自带的字符上限做中间截断，并附截断说明。
  */
-//@ chunk-e6aww6q8.js:998077-998547 placement
-function formatToolErrorMessage(e) {
-  if (e instanceof AbortError_2) return e.message || INTERRUPT_MESSAGE_FOR_TOOL_USE;
-  if (!(e instanceof Error)) return String(e);
+function formatToolErrorMessage(error) {
+  if (error instanceof AbortError_2) return error.message || INTERRUPT_MESSAGE_FOR_TOOL_USE;
+  if (!(error instanceof Error)) return String(error);
   let fullText =
-      getErrorParts(e)
-        .filter(Boolean)
-        .join(
-          `
+    getErrorParts(error)
+      .filter(Boolean)
+      .join(
+        `
 `,
-        )
-        .trim() || "Command failed with no output",
-    maxChars =
-      "maxErrorChars" in e &&
-      typeof e.maxErrorChars === "number" &&
-      Number.isFinite(e.maxErrorChars) &&
-      e.maxErrorChars > 0
-        ? e.maxErrorChars
-        : void 0,
-    truncated = truncateMiddle_2(fullText, maxChars),
-    truncationNote =
-      "truncationNote" in e && typeof e.truncationNote === "string" && e.truncationNote.length > 0
-        ? e.truncationNote
-        : void 0;
-  return truncationNote !== void 0 && truncated !== fullText
+      )
+      .trim() || "Command failed with no output";
+  let maxChars =
+    "maxErrorChars" in error &&
+    typeof error.maxErrorChars === "number" &&
+    Number.isFinite(error.maxErrorChars) &&
+    error.maxErrorChars > 0
+      ? error.maxErrorChars
+      : undefined;
+  let truncated = truncateMiddle_2(fullText, maxChars);
+  let truncationNote =
+    "truncationNote" in error && typeof error.truncationNote === "string" && error.truncationNote.length > 0
+      ? error.truncationNote
+      : undefined;
+  return truncationNote !== undefined && truncated !== fullText
     ? `${truncated}
 
 ${truncationNote}`
     : truncated;
 }
+//@ chunk-e6aww6q8.js:998547-998799 fingerprint = getErrorParts (1)
 /**
  * 从工具错误中提取展示片段：Exit code、stderr、stdout。
  */
-//@ chunk-e6aww6q8.js:998547-998799 fingerprint = getErrorParts (1)
 function getErrorParts(error) {
   if (error instanceof ShellError)
     return [
@@ -115,43 +125,50 @@ function formatValidationPath(path) {
     return index === 0 ? segmentStr : `${String(acc)}.${segmentStr}`;
   }, "");
 }
+//@ chunk-e6aww6q8.js:998972-1000528 fingerprint = formatZodValidationError (0.792)
 /**
  * 把工具输入的 zod 校验错误格式化为给模型看的文字（缺参数、类型不符、多余参数）。
  */
-//@ chunk-e6aww6q8.js:998972-1000528 fingerprint = formatZodValidationError (0.792)
 function formatZodValidationError(toolName, error) {
   let missingParams = error.issues
-      .filter((err) => err.code === "invalid_type" && (err.message ?? "").includes("received undefined"))
-      .map((err) => formatValidationPath(err.path)),
-    unexpectedParams = error.issues
-      .filter((err) => err.code === "unrecognized_keys")
-      .flatMap((err) => err.keys.map((key) => formatValidationPath([...err.path, key]))),
-    typeMismatchParams = error.issues
-      .filter((err) => err.code === "invalid_type" && !(err.message ?? "").includes("received undefined"))
-      .map((err) => {
-        let typeErr = err,
-          receivedMatch = (err.message ?? "").match(/received (\w+)/),
-          Se = receivedMatch ? receivedMatch[1] : "unknown";
-        return { param: formatValidationPath(err.path), expected: typeErr.expected, received: Se };
-      }),
-    mapped = error.issues
-      .filter((issue) => issue.code === "custom" && issue.params?.[MODEL_FACING_MESSAGE_KEY] === !0)
-      .map((G) => G.message),
-    mapped_2 = error.issues
-      .filter(
-        (issue) =>
-          issue.code !== "invalid_type" &&
-          issue.code !== "unrecognized_keys" &&
-          !(issue.code === "custom" && issue.params?.[MODEL_FACING_MESSAGE_KEY] === !0),
-      )
-      .map((G) => {
-        let q = formatValidationPath(G.path),
-          Z = q === "" ? "The input" : `The parameter \`${q}\``,
-          Se = truncateWithCount((G.message ?? "").replace(/^Invalid input(?:: |$)/, ""), APo);
-        if (Se !== "") return `${Z} is invalid: ${Se}`;
-        return G.code === "invalid_union" ? `${Z} matches none of the accepted forms` : `${Z} is invalid`;
-      }),
-    errorParts = [];
+    .filter((err) => err.code === "invalid_type" && (err.message ?? "").includes("received undefined"))
+    .map((err) => formatValidationPath(err.path));
+  let unexpectedParams = error.issues
+    .filter((err) => err.code === "unrecognized_keys")
+    .flatMap((err) => err.keys.map((key) => formatValidationPath([...err.path, key])));
+  let typeMismatchParams = error.issues
+    .filter((err) => err.code === "invalid_type" && !(err.message ?? "").includes("received undefined"))
+    .map((err) => {
+      let typeErr = err;
+      let receivedMatch = (err.message ?? "").match(/received (\w+)/);
+      let received = receivedMatch ? receivedMatch[1] : "unknown";
+      return {
+        param: formatValidationPath(err.path),
+        expected: typeErr.expected,
+        received,
+      };
+    });
+  let errorContent = error.issues
+    .filter((issue) => issue.code === "custom" && issue.params?.[MODEL_FACING_MESSAGE_KEY] === true)
+    .map((issue) => issue.message);
+  let mapped = error.issues
+    .filter(
+      (issue) =>
+        issue.code !== "invalid_type" &&
+        issue.code !== "unrecognized_keys" &&
+        !(issue.code === "custom" && issue.params?.[MODEL_FACING_MESSAGE_KEY] === true),
+    )
+    .map((issue) => {
+      let q = formatValidationPath(issue.path);
+      let Z = q === "" ? "The input" : `The parameter \`${q}\``;
+      let Se = truncateWithCount(
+        (issue.message ?? "").replace(/^Invalid input(?:: |$)/, ""),
+        MAX_ZOD_MESSAGE_CHARS,
+      );
+      if (Se !== "") return `${Z} is invalid: ${Se}`;
+      return issue.code === "invalid_union" ? `${Z} matches none of the accepted forms` : `${Z} is invalid`;
+    });
+  let errorParts = [];
   if (missingParams.length > 0) {
     let missingParamErrors = missingParams.map((param) => `The required parameter \`${param}\` is missing`);
     errorParts.push(...missingParamErrors);
@@ -164,32 +181,29 @@ function formatZodValidationError(toolName, error) {
   }
   if (typeMismatchParams.length > 0) {
     let typeErrors = typeMismatchParams.map(
-      ({ param: param, expected: expected, received: received }) =>
+      ({ param, expected, received }) =>
         `The parameter \`${param}\` type is expected as \`${expected}\` but provided as \`${received}\``,
     );
     errorParts.push(...typeErrors);
   }
-  if (errorParts.length === 0 && mapped.length === 0) return error.message;
-  errorParts.push(...mapped_2.slice(0, qzt));
-  let L = mapped_2.length - qzt;
+  if (errorParts.length === 0 && errorContent.length === 0) return error.message;
+  errorParts.push(...mapped.slice(0, MAX_ZOD_ERROR_PARTS));
+  let L = mapped.length - MAX_ZOD_ERROR_PARTS;
   if (L > 0) errorParts.push(`(${L} more ${plural(L, "issue")} not listed)`);
-  return (
-    errorParts.push(...mapped),
-    `${toolName} failed due to the following ${errorParts.length > 1 ? "issues" : "issue"}:
+  errorParts.push(...errorContent);
+  return `${toolName} failed due to the following ${errorParts.length > 1 ? "issues" : "issue"}:
 ${errorParts.join(`
-`)}`
-  );
+`)}`;
 }
-
 export {
   includesAnyIgnoreCase,
   isPendingNotOver,
   getErrorParts,
-  UM,
-  HM,
+  MAX_ERROR_TEXT_CHARS,
+  TRUNCATION_MARKER_RE,
   formatError,
-  Qs,
-  LM,
+  VERSIONED_MODEL_RE,
+  createPendingFlagState,
   formatToolErrorMessage,
   formatZodValidationError,
 };

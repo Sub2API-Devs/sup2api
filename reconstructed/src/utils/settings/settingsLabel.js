@@ -12,11 +12,13 @@ import { getFlagSettingsExpectedContent, getFlagSettingsPath } from "../../boots
 import { INLINE_FLAG_SETTINGS_LABEL } from "./constants.js";
 
 //@ chunk-zg1bje4s.js:267-351 placement
-function Vyt(t) {
-  if (t === void 0) return "settings";
-  return getFlagSettingsExpectedContent() !== void 0 && t === getFlagSettingsPath()
+/**
+ * settingsSourceLabel：设置来源的展示标签。
+ */
+function settingsSourceLabel(t) {
+  if (t === undefined) return "settings";
+  return getFlagSettingsExpectedContent() !== undefined && t === getFlagSettingsPath()
     ? INLINE_FLAG_SETTINGS_LABEL
     : t;
 }
-
-export { Vyt };
+export { settingsSourceLabel };

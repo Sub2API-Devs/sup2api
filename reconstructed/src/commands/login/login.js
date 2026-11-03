@@ -16,24 +16,24 @@ import { logEvent } from "../../services/analytics/index.js";
 import { checkAutoModeInUse } from "../../utils/permissions/autoModeTransition.js";
 
 //@ chunk-tyg7f3ek.js:509827-510177 fingerprint = call (0.322)
-function call({
-  session: session,
-  source: source,
-  getAppState: getAppState,
-  setAppState: setAppState,
-  storageV5: storageV5,
-}) {
-  if ((applySettingsChange(session, source, setAppState, storageV5), isFastModeEnabled()))
-    refreshFastModeFromSettings(getAppState, setAppState, storageV5);
+function call({ session, source, getAppState, setAppState, storageV5 }) {
+  applySettingsChange(session, source, setAppState, storageV5);
+  if (isFastModeEnabled()) refreshFastModeFromSettings(getAppState, setAppState, storageV5);
   let advisorModel = getAppState().advisorModel;
   setAppState((success) => {
-    let w = readAdvisorModelSetting(success.settings);
-    return success.advisorModel === w ? success : { ...success, advisorModel: w };
+    let advisorModelSetting = readAdvisorModelSetting(success.settings);
+    return success.advisorModel === advisorModelSetting
+      ? success
+      : {
+          ...success,
+          advisorModel: advisorModelSetting,
+        };
   });
   let advisorModel_2 = getAppState().advisorModel;
   if (advisorModel !== advisorModel_2)
-    logEvent("tengu_advisor_settings_sync", { applied: advisorModel_2 !== void 0 });
+    logEvent("tengu_advisor_settings_sync", {
+      applied: advisorModel_2 !== undefined,
+    });
   return checkAutoModeInUse(getAppState().toolPermissionContext, setAppState, getAppState().fastMode);
 }
-
 export { call };

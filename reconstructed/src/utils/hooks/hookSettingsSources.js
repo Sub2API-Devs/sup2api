@@ -8,27 +8,7 @@
  * pieces: chunk-e6aww6q8.js (2)
  * attribution: placement 2
  */
-import {
-  isDeepStrictEqual,
-  isDeepStrictEqual as isDeepStrictEqual_2,
-  isDeepStrictEqual as isDeepStrictEqual_3,
-  isDeepStrictEqual as isDeepStrictEqual_4,
-  isDeepStrictEqual as isDeepStrictEqual_5,
-  isDeepStrictEqual as isDeepStrictEqual_6,
-  isDeepStrictEqual as isDeepStrictEqual_7,
-  isDeepStrictEqual as isDeepStrictEqual_8,
-  isDeepStrictEqual as isDeepStrictEqual_9,
-  isDeepStrictEqual as isDeepStrictEqual_10,
-  isDeepStrictEqual as isDeepStrictEqual_11,
-  isDeepStrictEqual as isDeepStrictEqual_12,
-  isDeepStrictEqual as isDeepStrictEqual_13,
-  isDeepStrictEqual as isDeepStrictEqual_14,
-  isDeepStrictEqual as isDeepStrictEqual_15,
-  isDeepStrictEqual as isDeepStrictEqual_16,
-  isDeepStrictEqual as isDeepStrictEqual_17,
-  isDeepStrictEqual as isDeepStrictEqual_18,
-  isDeepStrictEqual as isDeepStrictEqual_19,
-} from "util";
+import { isDeepStrictEqual } from "util";
 import { usesSessionAccessToken } from "../sessionAccessToken.js";
 import { env } from "../env.js";
 import { isSettingSourceEnabled } from "../settings/constants.js";
@@ -45,19 +25,22 @@ function sessionAccessTokenEnvForHooks(e) {
     isSettingSourceEnabled("localSettings")
   )
     return;
-  let n = getSessionIngressAuthToken();
-  return n ? { CLAUDE_CODE_SESSION_ACCESS_TOKEN: n } : void 0;
+  let sessionIngressAuthToken = getSessionIngressAuthToken();
+  return sessionIngressAuthToken
+    ? {
+        CLAUDE_CODE_SESSION_ACCESS_TOKEN: sessionIngressAuthToken,
+      }
+    : undefined;
 }
 //@ chunk-e6aww6q8.js:824577-824732 placement
-function isFlagSettingsSyncHook(e, n) {
+function isFlagSettingsSyncHook(hook, hookEvent) {
   return (
-    e.type === "command" &&
-    e.async !== !0 &&
-    e.asyncRewake !== !0 &&
-    (getSettingsForSource("flagSettings")?.hooks?.[n] ?? []).some((r) =>
-      r.hooks.some((hook) => isDeepStrictEqual_5(hook, e)),
+    hook.type === "command" &&
+    hook.async !== true &&
+    hook.asyncRewake !== true &&
+    (getSettingsForSource("flagSettings")?.hooks?.[hookEvent] ?? []).some((r) =>
+      r.hooks.some((hook_2) => isDeepStrictEqual(hook_2, hook)),
     )
   );
 }
-
 export { isFlagSettingsSyncHook, sessionAccessTokenEnvForHooks };

@@ -8,13 +8,18 @@
  * pieces: chunk-e6aww6q8.js (1)
  * attribution: fingerprint 1
  */
-
 //@ chunk-e6aww6q8.js:3037421-3037573 fingerprint = nohup (1)
+/**
+ * nohup 命令的补全 spec。
+ */
 var nohupSpec = {
-    name: "nohup",
-    description: "Run a command immune to hangups",
-    args: { name: "command", description: "Command to run with nohup", isCommand: !0 },
+  name: "nohup",
+  description: "Run a command immune to hangups",
+  args: {
+    name: "command",
+    description: "Command to run with nohup",
+    isCommand: true,
   },
-  Hbn = nohupSpec;
-
-export { Hbn };
+};
+var nohupSpec_2 = nohupSpec;
+export { nohupSpec_2 };

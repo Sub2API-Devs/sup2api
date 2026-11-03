@@ -6,73 +6,80 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { b } from "./error.js";
+import { require_error } from "./error.js";
 
 //@ chunk-b7dyevzy.js:707-1889 cjs-fingerprint
-var H = x(function (ot) {
-  var { InvalidArgumentError: InvalidArgumentError } = b();
-  class q {
-    constructor(t, e) {
+var require_argument = x(function (cjsExports) {
+  var { InvalidArgumentError } = require_error();
+  class Argument {
+    constructor(name, description) {
       switch (
-        ((this.description = e || ""),
-        (this.variadic = !1),
-        (this.parseArg = void 0),
-        (this.defaultValue = void 0),
-        (this.defaultValueDescription = void 0),
-        (this.argChoices = void 0),
-        t[0])
+        ((this.description = description || ""),
+        (this.variadic = false),
+        (this.parseArg = undefined),
+        (this.defaultValue = undefined),
+        (this.defaultValueDescription = undefined),
+        (this.argChoices = undefined),
+        name[0])
       ) {
         case "<":
-          ((this.required = !0), (this._name = t.slice(1, -1)));
+          this.required = true;
+          this._name = name.slice(1, -1);
           break;
         case "[":
-          ((this.required = !1), (this._name = t.slice(1, -1)));
+          this.required = false;
+          this._name = name.slice(1, -1);
           break;
         default:
-          ((this.required = !0), (this._name = t));
+          this.required = true;
+          this._name = name;
           break;
       }
-      if (this._name.length > 3 && this._name.slice(-3) === "...")
-        ((this.variadic = !0), (this._name = this._name.slice(0, -3)));
+      if (this._name.length > 3 && this._name.slice(-3) === "...") {
+        this.variadic = true;
+        this._name = this._name.slice(0, -3);
+      }
     }
     name() {
       return this._name;
     }
-    _concatValue(t, e) {
-      if (e === this.defaultValue || !Array.isArray(e)) return [t];
-      return e.concat(t);
+    _concatValue(value, previous) {
+      if (previous === this.defaultValue || !Array.isArray(previous)) return [value];
+      return previous.concat(value);
     }
-    default(t, e) {
-      return ((this.defaultValue = t), (this.defaultValueDescription = e), this);
+    default(value, description) {
+      this.defaultValue = value;
+      this.defaultValueDescription = description;
+      return this;
     }
-    argParser(t) {
-      return ((this.parseArg = t), this);
+    argParser(fn) {
+      this.parseArg = fn;
+      return this;
     }
-    choices(t) {
-      return (
-        (this.argChoices = t.slice()),
-        (this.parseArg = (e, i) => {
-          if (!this.argChoices.includes(e))
-            throw new InvalidArgumentError(`Allowed choices are ${this.argChoices.join(", ")}.`);
-          if (this.variadic) return this._concatValue(e, i);
-          return e;
-        }),
-        this
-      );
+    choices(values) {
+      this.argChoices = values.slice();
+      this.parseArg = (arg, previous) => {
+        if (!this.argChoices.includes(arg))
+          throw new InvalidArgumentError(`Allowed choices are ${this.argChoices.join(", ")}.`);
+        if (this.variadic) return this._concatValue(arg, previous);
+        return arg;
+      };
+      return this;
     }
     argRequired() {
-      return ((this.required = !0), this);
+      this.required = true;
+      return this;
     }
     argOptional() {
-      return ((this.required = !1), this);
+      this.required = false;
+      return this;
     }
   }
-  function rt(t) {
-    let e = t.name() + (t.variadic === !0 ? "..." : "");
-    return t.required ? "<" + e + ">" : "[" + e + "]";
+  function humanReadableArgName(arg) {
+    let nameOutput = arg.name() + (arg.variadic === true ? "..." : "");
+    return arg.required ? "<" + nameOutput + ">" : "[" + nameOutput + "]";
   }
-  ot.Argument = q;
-  ot.humanReadableArgName = rt;
+  cjsExports.Argument = Argument;
+  cjsExports.humanReadableArgName = humanReadableArgName;
 });
-
-export { H };
+export { require_argument };

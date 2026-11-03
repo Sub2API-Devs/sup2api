@@ -9,50 +9,59 @@
  * attribution: placement 4
  */
 import { Re } from "../../../runtime/bun-runtime.js";
-import { Ol } from "../../../vendor/@opentelemetry/api/build/src/index.js";
+import { require_api } from "../../../vendor/@opentelemetry/api/build/src/index.js";
 import { otelLogRecord, emitOrBufferOtelEvent } from "../../utils/telemetry/thirdPartyEventRecords.js";
 import { xr } from "../../../vendor/lodash-es/_inlinedHelpers.js";
-import { b_t, k_t } from "./skillPromptHooks.js";
+import { toArrayLike, safeDate } from "./skillPromptHooks.js";
 import { UI_ENV_SITE_RULES } from "./sites/siteRules.js";
-import { gh } from "./coreHandlers.js";
+import { makeCoreEvent } from "./coreHandlers.js";
 
 //@ chunk-e6aww6q8.js:77514-77532 placement
-var WX = Re(Ol(), 1);
+/**
+ * 发送器模块命名空间
+ */
+var senderModule = Re(require_api(), 1);
 //@ chunk-e6aww6q8.js:77532-77803 placement
 function toOtelLogRecord(e) {
-  let { span: span } = e,
-    r = span === void 0 || span === null;
+  let { span } = e;
+  let r = span === undefined || span === null;
   return otelLogRecord(
     e.event,
-    xr(e.attributes, (s) => (typeof s === "object" ? b_t(s) : s)),
-    k_t(e.loggedAt),
+    xr(e.attributes, (s) => (typeof s === "object" ? toArrayLike(s) : s)),
+    safeDate(e.loggedAt),
     r
-      ? WX.ROOT_CONTEXT
-      : WX.trace.setSpanContext(WX.ROOT_CONTEXT, {
+      ? senderModule.ROOT_CONTEXT
+      : senderModule.trace.setSpanContext(senderModule.ROOT_CONTEXT, {
           traceId: span.traceId,
           spanId: span.spanId,
           traceFlags: span.traceFlags,
-          isRemote: !1,
+          isRemote: false,
         }),
   );
 }
+//@ chunk-e6aww6q8.js:77803-77978 placement
 /**
  * telemetry.log 事件定义：核心把 to 为 collector 的条目作为 OTel 日志发出。
  */
-//@ chunk-e6aww6q8.js:77803-77978 placement
 var TELEMETRY_LOG_EVENT = {
   site: UI_ENV_SITE_RULES["telemetry.log"],
   core: {
     name: "core",
-    isCore: !0,
+    isCore: true,
     budgetMs: 0,
     run: async (e, n) => {
       if (e.to === "collector" && !n.signal.aborted) emitOrBufferOtelEvent(toOtelLogRecord(e), e.event);
-      return { value: void 0 };
+      return {
+        value: undefined,
+      };
     },
   },
 };
 //@ chunk-e6aww6q8.js:77978-78028 placement
-var Sde = gh("telemetry.mark", () => ({ value: void 0 }));
-
-export { TELEMETRY_LOG_EVENT, Sde };
+/**
+ * telemetry.mark 事件
+ */
+var TELEMETRY_MARK_EVENT = makeCoreEvent("telemetry.mark", () => ({
+  value: undefined,
+}));
+export { TELEMETRY_LOG_EVENT, TELEMETRY_MARK_EVENT };

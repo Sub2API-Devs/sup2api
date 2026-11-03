@@ -14,27 +14,25 @@ import { y, P } from "../../../vendor/react/cjs/react.production.js";
 import { maybeTruncateInput } from "./inputPaste.js";
 
 //@ chunk-18hwfzwa.js:877127-877167 affinity
-var TRUNCATE_EDIT_ATTRIBUTION = Object.freeze({ kind: "landing" });
+var TRUNCATE_EDIT_ATTRIBUTION = Object.freeze({
+  kind: "landing",
+});
 //@ chunk-18hwfzwa.js:877167-877453 fingerprint = useMaybeTruncateInput (0.694)
-function useMaybeTruncateInput(h, x) {
-  let value = useStoreSelector(h, selectDraftValue),
-    pastedContents = useStoreSelector(h, selectPastedContents),
-    [ee, ke] = y(!1);
-  (P(() => {
-    if (ee) return;
+function useMaybeTruncateInput(draft, x) {
+  let value = useStoreSelector(draft, selectDraftValue);
+  let pastedContents = useStoreSelector(draft, selectPastedContents);
+  let [hasAppliedTruncationToInput, setHasAppliedTruncationToInput] = y(false);
+  P(() => {
+    if (hasAppliedTruncationToInput) return;
     if (value.length <= 1e4) return;
-    let { newInput: newInput, newPastedContents: newPastedContents } = maybeTruncateInput(
-      value,
-      pastedContents,
-    );
-    (h.attribute(TRUNCATE_EDIT_ATTRIBUTION, () => h.setValue(newInput)),
-      h.setCursorOffset(x(newInput)),
-      h.setPastedContents(newPastedContents),
-      ke(!0));
-  }, [value, ee, pastedContents, h, x]),
-    P(() => {
-      if (value === "") ke(!1);
-    }, [value]));
+    let { newInput, newPastedContents } = maybeTruncateInput(value, pastedContents);
+    draft.attribute(TRUNCATE_EDIT_ATTRIBUTION, () => draft.setValue(newInput));
+    draft.setCursorOffset(x(newInput));
+    draft.setPastedContents(newPastedContents);
+    setHasAppliedTruncationToInput(true);
+  }, [value, hasAppliedTruncationToInput, pastedContents, draft, x]);
+  P(() => {
+    if (value === "") setHasAppliedTruncationToInput(false);
+  }, [value]);
 }
-
 export { useMaybeTruncateInput };

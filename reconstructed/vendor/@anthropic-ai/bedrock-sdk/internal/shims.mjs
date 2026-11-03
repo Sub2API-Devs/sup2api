@@ -7,51 +7,57 @@
  */
 
 //@ chunk-h87x8cg3.js:5935-6155 esm-fingerprint
-function Oe(...e) {
+function makeReadableStream(...args) {
   let t = globalThis.ReadableStream;
-  if (typeof t > "u")
+  if (typeof t === "undefined")
     throw Error(
       "`ReadableStream` is not defined as a global; You will need to polyfill it, `globalThis.ReadableStream = ReadableStream`",
     );
-  return new t(...e);
+  return new t(...args);
 }
 //@ chunk-h87x8cg3.js:6155-6389 esm-fingerprint
-function W(e) {
-  let t = Symbol.asyncIterator in e ? e[Symbol.asyncIterator]() : e[Symbol.iterator]();
-  return Oe({
+function ReadableStreamFrom(iterable) {
+  let iter =
+    Symbol.asyncIterator in iterable ? iterable[Symbol.asyncIterator]() : iterable[Symbol.iterator]();
+  return makeReadableStream({
     start() {},
-    async pull(r) {
-      let { done: n, value: s } = await t.next();
-      if (n) r.close();
-      else r.enqueue(s);
+    async pull(controller) {
+      let { done, value } = await iter.next();
+      if (done) controller.close();
+      else controller.enqueue(value);
     },
     async cancel() {
-      await t.return?.();
+      await iter.return?.();
     },
   });
 }
 //@ chunk-h87x8cg3.js:6389-6701 esm-fingerprint
-function z(e) {
-  if (e[Symbol.asyncIterator]) return e;
-  let reader = e.getReader();
+function ReadableStreamToAsyncIterable(stream) {
+  if (stream[Symbol.asyncIterator]) return stream;
+  let reader = stream.getReader();
   return {
     async next() {
       try {
-        let read = await reader.read();
-        if (read?.done) reader.releaseLock();
-        return read;
-      } catch (error) {
-        throw (reader.releaseLock(), error);
+        let result = await reader.read();
+        if (result?.done) reader.releaseLock();
+        return result;
+      } catch (e) {
+        reader.releaseLock();
+        throw e;
       }
     },
     async return() {
-      let cancel = reader.cancel();
-      return (reader.releaseLock(), await cancel, { done: !0, value: void 0 });
+      let cancelPromise = reader.cancel();
+      reader.releaseLock();
+      await cancelPromise;
+      return {
+        done: true,
+        value: undefined,
+      };
     },
     [Symbol.asyncIterator]() {
       return this;
     },
   };
 }
-
-export { z, W };
+export { ReadableStreamToAsyncIterable, ReadableStreamFrom };

@@ -5,19 +5,21 @@
  * pieces: chunk-hwmsct5x.js (1)
  * attribution: esm-fingerprint 1
  */
-import { Y } from "../../../../core/resource.mjs";
-import { ao } from "./issuers.mjs";
-import { zs } from "./rules/rules.mjs";
+import { APIResource } from "../../../../core/resource.mjs";
+import { Issuers } from "./issuers.mjs";
+import { Rules } from "./rules/rules.mjs";
 
 //@ chunk-hwmsct5x.js:124222-124391 esm-fingerprint
-var Gs = (() => {
-  class e extends Y {
+var Federation = (() => {
+  class Federation extends APIResource {
     constructor() {
       super(...arguments);
-      ((this.issuers = new ao(this._client)), (this.rules = new zs(this._client)));
+      this.issuers = new Issuers(this._client);
+      this.rules = new Rules(this._client);
     }
   }
-  return ((e.Issuers = ao), (e.Rules = zs), e);
+  Federation.Issuers = Issuers;
+  Federation.Rules = Rules;
+  return Federation;
 })();
-
-export { Gs };
+export { Federation };

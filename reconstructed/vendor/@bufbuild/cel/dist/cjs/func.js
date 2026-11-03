@@ -6,47 +6,49 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../runtime/bun-runtime.js";
-import { F_ } from "./equals.js";
-import { bl } from "./error.js";
-import { Ei } from "./type.js";
-import { wa } from "./value.js";
+import { require_equals_2 } from "./equals.js";
+import { require_error } from "./error.js";
+import { require_type } from "./type.js";
+import { require_value } from "./value.js";
 
 //@ chunk-fq0cr76a.js:483569-484761 cjs-fingerprint
-var Tc = x(function (SB) {
-  Object.defineProperty(SB, "__esModule", { value: !0 });
-  SB.celFunc = qee;
-  SB.celMethod = jee;
-  var pB = F_(),
-    hB = bl(),
-    By = Ei(),
-    mB = wa(),
-    Hee = Symbol.for("@bufbuild/cel/func");
-  function qee(e, n, r, s) {
-    return new gB(e, void 0, n, r, s);
+var require_func = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.celFunc = celFunc;
+  cjsExports.celMethod = celMethod;
+  var equals_js_1 = require_equals_2();
+  var error_js_1 = require_error();
+  var type_js_1 = require_type();
+  var value_js_1 = require_value();
+  var privateSymbol = Symbol.for("@bufbuild/cel/func");
+  function celFunc(name, args, result, impl) {
+    return new Func(name, undefined, args, result, impl);
   }
-  function jee(e, n, r, s, h) {
-    return new yB(e, n, r, s, h);
+  function celMethod(name, target, args, result, impl) {
+    return new Method(name, target, args, result, impl);
   }
-  class $_ {
+  class Callable {
     _name;
     _target;
     _args;
     _result;
     _impl;
     _id;
-    [Hee] = {};
-    constructor(e, n, r, s, h, y = "") {
-      ((this._name = e),
-        (this._target = n),
-        (this._args = r),
-        (this._result = s),
-        (this._impl = h),
-        (this._id = y));
+    [privateSymbol] = {};
+    constructor(_name, _target, _args, _result, _impl, _id = "") {
+      this._name = _name;
+      this._target = _target;
+      this._args = _args;
+      this._result = _result;
+      this._impl = _impl;
+      this._id = _id;
     }
     get id() {
       if (this._id === "") {
-        let e = this.target ? `${this.target.name}.` : "";
-        this._id = `${e}${this.name}(${this.arguments.map((argument) => argument.name).join(",")})`;
+        let qualifier = this.target ? `${this.target.name}.` : "";
+        this._id = `${qualifier}${this.name}(${this.arguments.map((p) => p.name).join(",")})`;
       }
       return this._id;
     }
@@ -62,31 +64,30 @@ var Tc = x(function (SB) {
     get result() {
       return this._result;
     }
-    call(e, n, r) {
-      if (r.length != this.arguments.length) return;
-      for (let s = 0; s < r.length; s++) if (!bB(r[s], this.arguments[s])) return;
+    call(id, target, args) {
+      if (args.length != this.arguments.length) return;
+      for (let i = 0; i < args.length; i++) if (!isSubtypeOf(args[i], this.arguments[i])) return;
       try {
-        return mB.toCel(this._impl.apply(n, r));
-      } catch (error) {
-        return hB.celError(error, e);
+        return value_js_1.toCel(this._impl.apply(target, args));
+      } catch (ex) {
+        return error_js_1.celError(ex, id);
       }
     }
   }
-  class gB extends $_ {
-    call(e, n, r) {
-      if (n !== void 0) return;
-      return super.call(e, void 0, r);
+  class Func extends Callable {
+    call(id, target, args) {
+      if (target !== undefined) return;
+      return super.call(id, undefined, args);
     }
   }
-  class yB extends $_ {
-    call(e, n, r) {
-      if (n === void 0 || !bB(n, this.target)) return;
-      return super.call(e, n, r);
+  class Method extends Callable {
+    call(id, target, args) {
+      if (target === undefined || !isSubtypeOf(target, this.target)) return;
+      return super.call(id, target, args);
     }
   }
-  function bB(e, n) {
-    return n === By.CelScalar.DYN || pB.equalsType(By.celType(e), n);
+  function isSubtypeOf(val, typ) {
+    return typ === type_js_1.CelScalar.DYN || equals_js_1.equalsType(type_js_1.celType(val), typ);
   }
 });
-
-export { Tc };
+export { require_func };

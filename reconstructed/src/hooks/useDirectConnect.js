@@ -14,20 +14,14 @@ import { gracefulShutdown } from "../utils/gracefulShutdown.js";
 import { useRemoteTransportCore } from "../remote/useRemoteTransportCore.js";
 
 //@ chunk-18hwfzwa.js:262843-263226 callgraph-fingerprint = useDirectConnect (0.173)
-function useDirectConnect({
-  config: config,
-  sink: sink,
-  requestDialog: requestDialog,
-  toolPermissionContext: toolPermissionContext,
-  tools: tools,
-}) {
+function useDirectConnect({ config, sink, requestDialog, toolPermissionContext, tools }) {
   let converted = Q(() => {
     if (!config) return;
     return {
       label: "directConnect",
       createManager: (prev) => new DirectConnectSessionManager(config, prev),
       onDisconnected: (queue) => {
-        (process.stderr.write(
+        process.stderr.write(
           queue
             ? `
 Server disconnected.
@@ -35,18 +29,17 @@ Server disconnected.
             : `
 Failed to connect to server at ${config.wsUrl}
 `,
-        ),
-          gracefulShutdown(1));
+        );
+        gracefulShutdown(1);
       },
     };
   }, [config]);
   return useRemoteTransportCore({
     adapter: converted,
-    sink: sink,
-    requestDialog: requestDialog,
-    toolPermissionContext: toolPermissionContext,
-    tools: tools,
+    sink,
+    requestDialog,
+    toolPermissionContext,
+    tools,
   });
 }
-
 export { useDirectConnect };

@@ -8,20 +8,31 @@
  * pieces: chunk-wy9dbk5f.js (4)
  * attribution: placement 4
  */
-import { isEmpty } from "../../../vendor/lodash-es/isEmpty.js";
+import { isEmpty_2 } from "../../../vendor/lodash-es/isEmpty.js";
 
 //@ chunk-wy9dbk5f.js:17708-17789 placement
-var nn = "[object Map]",
-  rn = "[object Set]",
-  sn = Object.prototype,
-  hasOwnProperty = sn.hasOwnProperty;
+/**
+ * Object.prototype 引用。
+ */
+var MAP_TAG = "[object Map]";
+var SET_TAG = "[object Set]";
+var objectProto = Object.prototype;
+var hasOwnProperty = objectProto.hasOwnProperty;
 //@ chunk-wy9dbk5f.js:18055-18065 placement
-var et = isEmpty;
+/**
+ * 判断值是否为空（lodash isEmpty）。
+ */
+var isEmpty = isEmpty_2;
 //@ chunk-wy9dbk5f.js:18065-18098 placement
-function un(e) {
-  return e === void 0;
+/**
+ * 判断值是否为 undefined。
+ */
+function isUndefined(e) {
+  return e === undefined;
 }
 //@ chunk-wy9dbk5f.js:18098-18108 placement
-var ot = un;
-
-export { nn, rn, hasOwnProperty, ot, et };
+/**
+ * un 的别名。
+ */
+var isUndefinedAlias = isUndefined;
+export { MAP_TAG, SET_TAG, hasOwnProperty, isUndefinedAlias, isEmpty };

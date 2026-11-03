@@ -9,28 +9,49 @@
  * attribution: placement 1
  */
 import { w } from "../../../vendor/react/compiler-runtime.js";
-import { e, r } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Box } from "../../ink/components/Text.js";
 
+//@ chunk-7ga9pgfv.js:300-616 placement
 /**
  * 标题组件：粗体标题加可选副标题。
  */
-//@ chunk-7ga9pgfv.js:300-616 placement
-function Title(p) {
-  let $ = w(7),
-    { children: children, subtitle: subtitle } = p,
-    o;
-  if ($[0] !== children) ((o = e(Text, { bold: !0, children: children })), ($[0] = children), ($[1] = o));
-  else o = $[1];
+function Title(props) {
+  let $ = w(7);
+  let { children, subtitle } = props;
+  let o;
+  if ($[0] !== children) {
+    o = jsxProd_default(Text, {
+      bold: true,
+      children,
+    });
+    $[0] = children;
+    $[1] = o;
+  } else o = $[1];
   let c;
-  if ($[2] !== subtitle)
-    ((c = subtitle && e(Text, { dimColor: !0, children: subtitle })), ($[2] = subtitle), ($[3] = c));
-  else c = $[3];
+  if ($[2] !== subtitle) {
+    c =
+      subtitle &&
+      jsxProd_default(Text, {
+        dimColor: true,
+        children: subtitle,
+      });
+    $[2] = subtitle;
+    $[3] = c;
+  } else c = $[3];
   let a;
-  if ($[4] !== o || $[5] !== c)
-    ((a = r(Box, { flexDirection: "column", children: [o, c] })), ($[4] = o), ($[5] = c), ($[6] = a));
-  else a = $[6];
+  if ($[4] !== o || $[5] !== c) {
+    a = jsxProd_default_2(Box, {
+      flexDirection: "column",
+      children: [o, c],
+    });
+    $[4] = o;
+    $[5] = c;
+    $[6] = a;
+  } else a = $[6];
   return a;
 }
-
 export { Title };

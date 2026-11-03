@@ -17,57 +17,60 @@ import {
   isCoworkWithRemote,
 } from "./sessionShape.js";
 import { isCcsTenant, getCcrDerivedSurface } from "../bootstrap/state.js";
-import { FDn } from "./remoteCoworkSources.js";
+import { REMOTE_COWORK_SOURCE_KINDS } from "./remoteCoworkSources.js";
 import { isEnvTruthy } from "./envUtils.js";
 
 //@ chunk-7dqf31r1.js:386-427 placement
 var HOST_SKILL_CATALOG_ENV = "CLAUDE_CODE_HOST_SKILL_CATALOG";
 //@ chunk-7dqf31r1.js:427-1224 placement
+/**
+ * 归为“无头宿主”的远程入口集合（remote、remote_cowork、claude-in-slack 等）。
+ */
 var ENTRYPOINT_KINDS = {
-    cli: !0,
-    mcp: !0,
-    "sdk-cli": !0,
-    "sdk-ts": !0,
-    "sdk-py": !0,
-    bench: !0,
-    "claude-vscode": !0,
-    "claude-code-github-action": !0,
-    "local-agent": !0,
-    local_agent: !0,
-    "claude-desktop": !0,
-    remote: !0,
-    remote_baku: !0,
-    remote_cowork: !0,
-    remote_trigger: !0,
-    remote_cowork_trigger: !0,
-    remote_desktop: !0,
-    remote_mobile: !0,
-    remote_projects: !0,
-    claude_in_slack: !0,
-    "claude-in-slack": !0,
-    "claude-in-teams": !0,
-    "claude-desktop-3p": !0,
-    "claude-security": !0,
-    "ssh-remote": !0,
-    "claude-coworker": !0,
-    "claude-coworker-terminal": !0,
-  },
-  hwr = new Set([
-    "remote",
-    "remote_baku",
-    "remote_cowork",
-    "remote_trigger",
-    "remote_cowork_trigger",
-    "remote_desktop",
-    "remote_mobile",
-    "remote_projects",
-    "claude_in_slack",
-    "claude-in-slack",
-    "claude-in-teams",
-  ]),
-  Fdo = new Set(["remote_trigger", "remote_cowork_trigger"]),
-  Udo = ["remote", "remote_desktop", "remote_mobile"],
-  CLI = "cli";
+  cli: true,
+  mcp: true,
+  "sdk-cli": true,
+  "sdk-ts": true,
+  "sdk-py": true,
+  bench: true,
+  "claude-vscode": true,
+  "claude-code-github-action": true,
+  "local-agent": true,
+  local_agent: true,
+  "claude-desktop": true,
+  remote: true,
+  remote_baku: true,
+  remote_cowork: true,
+  remote_trigger: true,
+  remote_cowork_trigger: true,
+  remote_desktop: true,
+  remote_mobile: true,
+  remote_projects: true,
+  claude_in_slack: true,
+  "claude-in-slack": true,
+  "claude-in-teams": true,
+  "claude-desktop-3p": true,
+  "claude-security": true,
+  "ssh-remote": true,
+  "claude-coworker": true,
+  "claude-coworker-terminal": true,
+};
+var HEADLESS_HOST_ENTRYPOINTS = new Set([
+  "remote",
+  "remote_baku",
+  "remote_cowork",
+  "remote_trigger",
+  "remote_cowork_trigger",
+  "remote_desktop",
+  "remote_mobile",
+  "remote_projects",
+  "claude_in_slack",
+  "claude-in-slack",
+  "claude-in-teams",
+]);
+var REMOTE_TRIGGER_ENTRYPOINTS_SET = new Set(["remote_trigger", "remote_cowork_trigger"]);
+var REMOTE_ENTRYPOINT_NAMES = ["remote", "remote_desktop", "remote_mobile"];
+var CLI_ENTRYPOINT = "cli";
 //@ chunk-7dqf31r1.js:1224-1287 placement
 function isCustomEntrypointName(e) {
   return /^(?!sdk)[a-z][a-z0-9_-]{0,31}$/.test(e);
@@ -78,9 +81,9 @@ function bridgeOwnerAccount() {
   return CLAUDE_CODE_BRIDGE_OWNER_ACCOUNT_UUID
     ? {
         accountUuid: CLAUDE_CODE_BRIDGE_OWNER_ACCOUNT_UUID,
-        organizationUuid: env.CLAUDE_CODE_BRIDGE_OWNER_ORG_UUID || void 0,
+        organizationUuid: env.CLAUDE_CODE_BRIDGE_OWNER_ORG_UUID || undefined,
       }
-    : void 0;
+    : undefined;
 }
 //@ chunk-7dqf31r1.js:1441-1475 placement
 var ENTRYPOINT_KIND_SET = new Set(Object.keys(ENTRYPOINT_KINDS));
@@ -94,7 +97,7 @@ function getEntrypointKind() {
 }
 //@ chunk-7dqf31r1.js:1558-1598 placement
 function validEntrypoint(e) {
-  return e && _(e) ? e : void 0;
+  return e && _(e) ? e : undefined;
 }
 //@ chunk-7dqf31r1.js:1598-1996 placement
 function entrypointSurfaceName() {
@@ -120,40 +123,53 @@ function entrypointSurfaceName() {
   }
 }
 //@ chunk-7dqf31r1.js:1996-2064 placement
-var r = new Set(["claude-desktop", "claude-desktop-3p", "local-agent"]);
+/**
+ * 视为宿主入口的入口名集合（claude-desktop、claude-desktop-3p、local-agent）。
+ */
+var HOST_ENTRYPOINTS = new Set(["claude-desktop", "claude-desktop-3p", "local-agent"]);
 //@ chunk-7dqf31r1.js:2064-2137 placement
 function isHostEntrypoint() {
   let CLAUDE_CODE_ENTRYPOINT = env.CLAUDE_CODE_ENTRYPOINT;
-  return CLAUDE_CODE_ENTRYPOINT !== void 0 && r.has(CLAUDE_CODE_ENTRYPOINT);
+  return CLAUDE_CODE_ENTRYPOINT !== undefined && HOST_ENTRYPOINTS.has(CLAUDE_CODE_ENTRYPOINT);
 }
 //@ chunk-7dqf31r1.js:2137-2271 placement
 function desktopEntrypointSetting() {
   let CLAUDE_CODE_ENTRYPOINT = env.CLAUDE_CODE_ENTRYPOINT;
   return CLAUDE_CODE_ENTRYPOINT === "claude-desktop" || CLAUDE_CODE_ENTRYPOINT === "local-agent"
     ? env.CLAUDE_CODE_DESKTOP_APP_VERSION
-    : void 0;
+    : undefined;
 }
 //@ chunk-7dqf31r1.js:2271-2322 placement
-var S = new Set(["claude-desktop-3p", "local-agent"]);
+/**
+ * 视为 SDK 入口的入口名集合（claude-desktop-3p、local-agent）。
+ */
+var SDK_ENTRYPOINTS = new Set(["claude-desktop-3p", "local-agent"]);
 //@ chunk-7dqf31r1.js:2322-2396 placement
 function isSdkEntrypoint() {
   let CLAUDE_CODE_ENTRYPOINT = env.CLAUDE_CODE_ENTRYPOINT;
-  return CLAUDE_CODE_ENTRYPOINT !== void 0 && S.has(CLAUDE_CODE_ENTRYPOINT);
+  return CLAUDE_CODE_ENTRYPOINT !== undefined && SDK_ENTRYPOINTS.has(CLAUDE_CODE_ENTRYPOINT);
 }
 //@ chunk-7dqf31r1.js:2396-2460 placement
 function isHostEntrypointName(e) {
-  return r.has(e === "local_agent" ? "local-agent" : e);
+  return HOST_ENTRYPOINTS.has(e === "local_agent" ? "local-agent" : e);
 }
 //@ chunk-7dqf31r1.js:2460-2549 placement
-function isIdeOrSdkEntrypoint(e) {
-  return e !== void 0 && (r.has(e) || e === "claude-vscode" || e.startsWith("sdk-"));
+function isIdeOrSdkEntrypoint(entrypoint) {
+  return (
+    entrypoint !== undefined &&
+    (HOST_ENTRYPOINTS.has(entrypoint) || entrypoint === "claude-vscode" || entrypoint.startsWith("sdk-"))
+  );
 }
 //@ chunk-7dqf31r1.js:2549-2605 placement
 var DESKTOP_ENTRYPOINTS = new Set(["claude-desktop", "claude-desktop-3p"]);
 //@ chunk-7dqf31r1.js:2605-2680 placement
 function isDesktopTopSession() {
-  let e = getSessionEntrypoint();
-  return e !== void 0 && DESKTOP_ENTRYPOINTS.has(e) && !sessionShape().childSession;
+  let sessionEntrypoint = getSessionEntrypoint();
+  return (
+    sessionEntrypoint !== undefined &&
+    DESKTOP_ENTRYPOINTS.has(sessionEntrypoint) &&
+    !sessionShape().childSession
+  );
 }
 //@ chunk-7dqf31r1.js:2680-2714 placement
 function isDesktopNonClaudecode() {
@@ -161,17 +177,17 @@ function isDesktopNonClaudecode() {
 }
 //@ chunk-7dqf31r1.js:2714-2738 placement
 function alwaysFalseEntry() {
-  return !1;
+  return false;
 }
 //@ chunk-7dqf31r1.js:2738-2792 placement
 function isHostSessionEntrypoint() {
-  let e = getSessionEntrypoint();
-  return e !== void 0 && r.has(e);
+  let sessionEntrypoint = getSessionEntrypoint();
+  return sessionEntrypoint !== undefined && HOST_ENTRYPOINTS.has(sessionEntrypoint);
 }
 //@ chunk-7dqf31r1.js:2792-2867 placement
 function isAgentSdkEntrypoint() {
   let CLAUDE_CODE_ENTRYPOINT = env.CLAUDE_CODE_ENTRYPOINT;
-  return CLAUDE_CODE_ENTRYPOINT !== void 0 && Fdo.has(CLAUDE_CODE_ENTRYPOINT);
+  return CLAUDE_CODE_ENTRYPOINT !== undefined && REMOTE_TRIGGER_ENTRYPOINTS_SET.has(CLAUDE_CODE_ENTRYPOINT);
 }
 //@ chunk-7dqf31r1.js:2867-3026 placement
 function isProviderManagedByHost() {
@@ -180,17 +196,21 @@ function isProviderManagedByHost() {
     return (
       env.CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST &&
       env.CLAUDE_CODE_USE_GATEWAY &&
-      ((CLAUDE_CODE_ENTRYPOINT !== void 0 && DESKTOP_ENTRYPOINTS.has(CLAUDE_CODE_ENTRYPOINT)) || c())
+      ((CLAUDE_CODE_ENTRYPOINT !== undefined && DESKTOP_ENTRYPOINTS.has(CLAUDE_CODE_ENTRYPOINT)) ||
+        hasHostGatewayLineage())
     );
   }
-  return !1;
+  return false;
 }
 //@ chunk-7dqf31r1.js:3026-3058 placement
 function isHostManagedProviderSession() {
-  return isProviderManagedByHost() && c();
+  return isProviderManagedByHost() && hasHostGatewayLineage();
 }
 //@ chunk-7dqf31r1.js:3058-3146 placement
-function c() {
+/**
+ * 是否为宿主网关谱系（设了谱系且有宿主凭据文件）。
+ */
+function hasHostGatewayLineage() {
   return env.CLAUDE_CODE_HOST_GATEWAY_LINEAGE && !!env.CLAUDE_CODE_HOST_CREDS_FILE;
 }
 //@ chunk-7dqf31r1.js:3146-3174 placement
@@ -204,21 +224,24 @@ function isCcsRemoteCowork() {
   return isCcsTenant() && getCcrDerivedSurface() === "remote_cowork";
 }
 //@ chunk-7dqf31r1.js:3289-3308 placement
-var s = new Set(FDn);
+/**
+ * Cowork 相关入口名集合（来自 remoteCoworkSources）。
+ */
+var COWORK_ENTRYPOINTS = new Set(REMOTE_COWORK_SOURCE_KINDS);
 //@ chunk-7dqf31r1.js:3308-3381 placement
 function isCoworkEntrypoint() {
   let CLAUDE_CODE_ENTRYPOINT = env.CLAUDE_CODE_ENTRYPOINT;
-  return CLAUDE_CODE_ENTRYPOINT !== void 0 && s.has(CLAUDE_CODE_ENTRYPOINT);
+  return CLAUDE_CODE_ENTRYPOINT !== undefined && COWORK_ENTRYPOINTS.has(CLAUDE_CODE_ENTRYPOINT);
 }
 //@ chunk-7dqf31r1.js:3381-3434 placement
 function isCoworkSession() {
-  let e = getSessionEntrypoint();
-  return e !== void 0 && s.has(e);
+  let sessionEntrypoint = getSessionEntrypoint();
+  return sessionEntrypoint !== undefined && COWORK_ENTRYPOINTS.has(sessionEntrypoint);
 }
 //@ chunk-7dqf31r1.js:3434-3500 placement
 function isCcsCoworkSurface() {
-  let e = isCcsTenant() ? getCcrDerivedSurface() : void 0;
-  return e !== void 0 && s.has(e);
+  let e = isCcsTenant() ? getCcrDerivedSurface() : undefined;
+  return e !== undefined && COWORK_ENTRYPOINTS.has(e);
 }
 //@ chunk-7dqf31r1.js:3500-3532 placement
 function isCoworkAny() {
@@ -243,14 +266,17 @@ function isClaudeAiChatRemote() {
 //@ chunk-7dqf31r1.js:3709-3782 placement
 function isChatHostEntrypoint() {
   let CLAUDE_CODE_ENTRYPOINT = env.CLAUDE_CODE_ENTRYPOINT;
-  return CLAUDE_CODE_ENTRYPOINT !== void 0 && E.has(CLAUDE_CODE_ENTRYPOINT);
+  return CLAUDE_CODE_ENTRYPOINT !== undefined && CHAT_HOST_ENTRYPOINTS.has(CLAUDE_CODE_ENTRYPOINT);
 }
 //@ chunk-7dqf31r1.js:3782-3835 placement
-var E = new Set(["claude_in_slack", "claude-in-slack"]);
+/**
+ * 聊天宿主入口（claude_in_slack、claude-in-slack）。
+ */
+var CHAT_HOST_ENTRYPOINTS = new Set(["claude_in_slack", "claude-in-slack"]);
 //@ chunk-7dqf31r1.js:3835-3889 placement
 function isChatHostSession() {
-  let e = getSessionEntrypoint();
-  return e !== void 0 && E.has(e);
+  let sessionEntrypoint = getSessionEntrypoint();
+  return sessionEntrypoint !== undefined && CHAT_HOST_ENTRYPOINTS.has(sessionEntrypoint);
 }
 //@ chunk-7dqf31r1.js:3889-3956 placement
 function isClaudeInTeams() {
@@ -263,7 +289,7 @@ function isChatOrTeams() {
 //@ chunk-7dqf31r1.js:3990-4066 placement
 function isHeadlessHostEntrypoint() {
   let CLAUDE_CODE_ENTRYPOINT = env.CLAUDE_CODE_ENTRYPOINT;
-  return CLAUDE_CODE_ENTRYPOINT !== void 0 && hwr.has(CLAUDE_CODE_ENTRYPOINT);
+  return CLAUDE_CODE_ENTRYPOINT !== undefined && HEADLESS_HOST_ENTRYPOINTS.has(CLAUDE_CODE_ENTRYPOINT);
 }
 //@ chunk-7dqf31r1.js:4066-4118 placement
 function isRemoteEntrypoint() {
@@ -271,7 +297,7 @@ function isRemoteEntrypoint() {
 }
 //@ chunk-7dqf31r1.js:4118-4170 placement
 function startsWithRemote(e) {
-  return e?.startsWith("remote") === !0;
+  return e?.startsWith("remote") === true;
 }
 //@ chunk-7dqf31r1.js:4369-4511 placement
 var REMOTE_TRIGGER_ENTRYPOINTS = new Set([
@@ -285,11 +311,10 @@ var REMOTE_TRIGGER_ENTRYPOINTS = new Set([
 ]);
 //@ chunk-7dqf31r1.js:4511-4635 placement
 function showSettingsHint() {
-  if (isEnvTruthy(env.CLAUDE_CODE_HIDE_SETTINGS_HINT)) return !1;
+  if (isEnvTruthy(env.CLAUDE_CODE_HIDE_SETTINGS_HINT)) return false;
   let CLAUDE_CODE_ENTRYPOINT = env.CLAUDE_CODE_ENTRYPOINT;
-  return CLAUDE_CODE_ENTRYPOINT === void 0 || !REMOTE_TRIGGER_ENTRYPOINTS.has(CLAUDE_CODE_ENTRYPOINT);
+  return CLAUDE_CODE_ENTRYPOINT === undefined || !REMOTE_TRIGGER_ENTRYPOINTS.has(CLAUDE_CODE_ENTRYPOINT);
 }
-
 export {
   validEntrypoint,
   getEntrypointKind,
@@ -311,7 +336,7 @@ export {
   isRemoteCowork,
   bridgeOwnerAccount,
   desktopEntrypointSetting,
-  Fdo,
+  REMOTE_TRIGGER_ENTRYPOINTS_SET,
   isHostEntrypointName,
   isCcsRemoteCowork,
   isChatHostEntrypoint,
@@ -319,7 +344,7 @@ export {
   isCcsCoworkSurface,
   isDesktopNonClaudecode,
   alwaysFalseEntry,
-  CLI,
+  CLI_ENTRYPOINT,
   isCustomEntrypointName,
   startsWithRemote,
   isCoworkEntrypoint,
@@ -327,13 +352,13 @@ export {
   DESKTOP_3P_ENTRYPOINT,
   isIdeOrSdkEntrypoint,
   isChatOrTeams,
-  s,
-  hwr,
+  COWORK_ENTRYPOINTS,
+  HEADLESS_HOST_ENTRYPOINTS,
   ENTRYPOINT_KINDS,
   DESKTOP_ENTRYPOINTS,
   entrypointSurfaceName,
   isChatHostSession,
   isLocalAgentOrCowork,
   ENTRYPOINT_KIND_SET,
-  Udo,
+  REMOTE_ENTRYPOINT_NAMES,
 };

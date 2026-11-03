@@ -8,13 +8,15 @@
  * pieces: chunk-44c3bx89.js (1)
  * attribution: placement 1
  */
-import { qrt } from "../../tools/PushNotificationTool/prompt.js";
+import { isKairosPushEnabled } from "../../tools/PushNotificationTool/prompt.js";
 import { isEssentialTrafficOnly } from "../../utils/privacyLevel.js";
 import { hasStoredOAuthToken } from "../../utils/auth.js";
 
 //@ chunk-44c3bx89.js:300-341 placement
-function Myt() {
-  return qrt() && !isEssentialTrafficOnly() && hasStoredOAuthToken();
+/**
+ * 函数 shouldShowConfigGate（多项条件同时满足）。
+ */
+function shouldShowConfigGate() {
+  return isKairosPushEnabled() && !isEssentialTrafficOnly() && hasStoredOAuthToken();
 }
-
-export { Myt };
+export { shouldShowConfigGate };

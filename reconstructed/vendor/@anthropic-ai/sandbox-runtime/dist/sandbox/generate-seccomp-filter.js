@@ -6,163 +6,165 @@
  * attribution: esm-layout 2, esm-fingerprint 8
  */
 import { execSync, exec } from "child_process";
-import {
-  join,
-  join as join_2,
-  join as join_3,
-  join as join_4,
-  join as join_5,
-  join as join_6,
-  join as join_7,
-  join as join_8,
-  join as join_9,
-  join as join_10,
-  join as join_11,
-  dirname,
-  dirname as dirname_2,
-  dirname as dirname_3,
-  dirname as dirname_4,
-  dirname as dirname_5,
-  dirname as dirname_6,
-  dirname as dirname_7,
-  dirname as dirname_8,
-} from "path";
-import {
-  homedir,
-  homedir as homedir_2,
-  homedir as homedir_3,
-  homedir as homedir_4,
-  homedir as homedir_5,
-} from "os";
-import {
-  fileURLToPath,
-  fileURLToPath as fileURLToPath_2,
-  fileURLToPath as fileURLToPath_3,
-  fileURLToPath as fileURLToPath_4,
-} from "url";
-import * as fsModule from "fs";
+import { join, dirname } from "path";
+import { homedir } from "os";
+import { fileURLToPath } from "url";
+import "fs";
 import * as fsModule_2 from "fs";
-import * as fsModule_3 from "fs";
-import * as fsModule_4 from "fs";
-import * as fsModule_5 from "fs";
-import * as fsModule_6 from "fs";
-import * as fsModule_7 from "fs";
-import { At } from "../utils/debug.js";
+import "fs";
+import "fs";
+import "fs";
+import "fs";
+import "fs";
+import { logForDebugging as logForDebugging_2 } from "../utils/debug.js";
 
 //@ chunk-fq0cr76a.js:720057-720113 esm-layout
-var sandboxRuntimeCache = new Map(),
-  ma = null,
-  Ff = null,
-  BR = "npm root -g",
-  UR = 5000;
+var sandboxRuntimeCache = new Map();
+var cachedGlobalNpmPaths = null;
+var pendingGlobalNpmPaths = null;
+var NPM_ROOT_COMMAND = "npm root -g";
+var NPM_ROOT_TIMEOUT_MS = 5000;
 //@ chunk-fq0cr76a.js:720113-720248 esm-fingerprint
 function getSandboxRuntimeCandidatesSync() {
-  if (ma) return ma;
-  let e;
+  if (cachedGlobalNpmPaths) return cachedGlobalNpmPaths;
+  let npmRoot;
   try {
-    e = execSync(BR, { encoding: "utf8", timeout: UR, stdio: ["pipe", "pipe", "ignore"] });
+    npmRoot = execSync(NPM_ROOT_COMMAND, {
+      encoding: "utf8",
+      timeout: NPM_ROOT_TIMEOUT_MS,
+      stdio: ["pipe", "pipe", "ignore"],
+    });
   } catch {}
-  return ((ma = sandboxRuntimeCandidatePaths(e)), ma);
+  cachedGlobalNpmPaths = sandboxRuntimeCandidatePaths(npmRoot);
+  return cachedGlobalNpmPaths;
 }
 //@ chunk-fq0cr76a.js:720248-720474 esm-fingerprint
 function getSandboxRuntimeCandidates() {
-  if (ma) return Promise.resolve(ma);
-  if (Ff) return Ff;
-  return (
-    (Ff = new Promise((e) => {
-      try {
-        exec(BR, { encoding: "utf8", timeout: UR }, (r, s) => e(r ? void 0 : s)).stdin?.end();
-      } catch {
-        e(void 0);
-      }
-    }).then((e) => (ma ?? (ma = sandboxRuntimeCandidatePaths(e)), (Ff = null), ma))),
-    Ff
-  );
+  if (cachedGlobalNpmPaths) return Promise.resolve(cachedGlobalNpmPaths);
+  if (pendingGlobalNpmPaths) return pendingGlobalNpmPaths;
+  pendingGlobalNpmPaths = new Promise((resolve) => {
+    try {
+      exec(
+        NPM_ROOT_COMMAND,
+        {
+          encoding: "utf8",
+          timeout: NPM_ROOT_TIMEOUT_MS,
+        },
+        (err, s) => resolve(err ? undefined : s),
+      ).stdin?.end();
+    } catch {
+      resolve(undefined);
+    }
+  }).then((npmRoot) => {
+    cachedGlobalNpmPaths ?? (cachedGlobalNpmPaths = sandboxRuntimeCandidatePaths(npmRoot));
+    pendingGlobalNpmPaths = null;
+    return cachedGlobalNpmPaths;
+  });
+  return pendingGlobalNpmPaths;
 }
 //@ chunk-fq0cr76a.js:720474-720951 esm-fingerprint
-function sandboxRuntimeCandidatePaths(e) {
-  let n = [],
-    r = e?.trim();
-  if (r) n.push(join_7(r, "@anthropic-ai", "sandbox-runtime"));
-  let s = homedir_2();
-  return (
-    n.push(
-      join_7("/usr", "lib", "node_modules", "@anthropic-ai", "sandbox-runtime"),
-      join_7("/usr", "local", "lib", "node_modules", "@anthropic-ai", "sandbox-runtime"),
-      join_7("/opt", "homebrew", "lib", "node_modules", "@anthropic-ai", "sandbox-runtime"),
-      join_7(s, ".npm", "lib", "node_modules", "@anthropic-ai", "sandbox-runtime"),
-      join_7(s, ".npm-global", "lib", "node_modules", "@anthropic-ai", "sandbox-runtime"),
-    ),
-    n
+function sandboxRuntimeCandidatePaths(npmRootOutput) {
+  let paths = [];
+  let npmRoot = npmRootOutput?.trim();
+  if (npmRoot) paths.push(join(npmRoot, "@anthropic-ai", "sandbox-runtime"));
+  let home = homedir();
+  paths.push(
+    join("/usr", "lib", "node_modules", "@anthropic-ai", "sandbox-runtime"),
+    join("/usr", "local", "lib", "node_modules", "@anthropic-ai", "sandbox-runtime"),
+    join("/opt", "homebrew", "lib", "node_modules", "@anthropic-ai", "sandbox-runtime"),
+    join(home, ".npm", "lib", "node_modules", "@anthropic-ai", "sandbox-runtime"),
+    join(home, ".npm-global", "lib", "node_modules", "@anthropic-ai", "sandbox-runtime"),
   );
+  return paths;
 }
 //@ chunk-fq0cr76a.js:720951-721408 esm-layout
-function PE() {
+function getVendorArchitecture() {
   switch ("x64") {
     case "x64":
       return "x64";
     case "arm64":
       return "arm64";
     case "ia32":
-      return (
-        At(
-          "[SeccompFilter] 32-bit x86 (ia32) is not currently supported due to missing socketcall() syscall blocking. The current seccomp filter only blocks socket(AF_UNIX, ...), but on 32-bit x86, socketcall() can be used to bypass this.",
-          { level: "error" },
-        ),
-        null
+      logForDebugging_2(
+        "[SeccompFilter] 32-bit x86 (ia32) is not currently supported due to missing socketcall() syscall blocking. The current seccomp filter only blocks socket(AF_UNIX, ...), but on 32-bit x86, socketcall() can be used to bypass this.",
+        {
+          level: "error",
+        },
       );
+      return null;
     default:
-      return (At("[SeccompFilter] Unsupported architecture: x64. Only x64 and arm64 are supported."), null);
+      logForDebugging_2("[SeccompFilter] Unsupported architecture: x64. Only x64 and arm64 are supported.");
+      return null;
   }
 }
 //@ chunk-fq0cr76a.js:721408-721555 esm-fingerprint
-function r8(e) {
-  let n = PE();
-  if (!n) return [];
-  let r = dirname_5(fileURLToPath_2(import.meta.url)),
-    s = join_7("vendor", "seccomp", n, e);
-  return [join_7(r, s), join_7(r, "..", "..", s), join_7(r, "..", s)];
+function getLocalSeccompPaths(filename) {
+  let arch = getVendorArchitecture();
+  if (!arch) return [];
+  let baseDir = dirname(fileURLToPath(import.meta.url));
+  let relativePath = join("vendor", "seccomp", arch, filename);
+  return [
+    join(baseDir, relativePath),
+    join(baseDir, "..", "..", relativePath),
+    join(baseDir, "..", relativePath),
+  ];
 }
 //@ chunk-fq0cr76a.js:721555-721670 esm-fingerprint
-function vor(e) {
-  let n = e ?? "";
-  if (sandboxRuntimeCache.has(n)) return sandboxRuntimeCache.get(n);
-  let r = MR(e),
-    s = r !== void 0 ? r : $R(getSandboxRuntimeCandidatesSync());
-  return (sandboxRuntimeCache.set(n, s), s);
+function vor(seccompBinaryPath) {
+  let cacheKey = seccompBinaryPath ?? "";
+  if (sandboxRuntimeCache.has(cacheKey)) return sandboxRuntimeCache.get(cacheKey);
+  let local = findLocalApplySeccompPath(seccompBinaryPath);
+  let result = local !== undefined ? local : findGlobalApplySeccompPath(getSandboxRuntimeCandidatesSync());
+  sandboxRuntimeCache.set(cacheKey, result);
+  return result;
 }
 //@ chunk-fq0cr76a.js:721670-721797 esm-fingerprint
-async function B6r(e) {
-  let n = e ?? "";
-  if (sandboxRuntimeCache.has(n)) return sandboxRuntimeCache.get(n);
-  let r = MR(e),
-    s = r !== void 0 ? r : $R(await getSandboxRuntimeCandidates());
-  return (sandboxRuntimeCache.set(n, s), s);
+async function B6r(seccompBinaryPath) {
+  let cacheKey = seccompBinaryPath ?? "";
+  if (sandboxRuntimeCache.has(cacheKey)) return sandboxRuntimeCache.get(cacheKey);
+  let local = findLocalApplySeccompPath(seccompBinaryPath);
+  let result = local !== undefined ? local : findGlobalApplySeccompPath(await getSandboxRuntimeCandidates());
+  sandboxRuntimeCache.set(cacheKey, result);
+  return result;
 }
 //@ chunk-fq0cr76a.js:721797-722314 esm-fingerprint
-function MR(e) {
-  if (e) {
-    if (fsModule_5.existsSync(e))
-      return (At(`[SeccompFilter] Using apply-seccomp binary from explicit path: ${e}`), e);
-    At(`[SeccompFilter] Explicit path provided but file not found: ${e}`);
+function findLocalApplySeccompPath(seccompBinaryPath) {
+  if (seccompBinaryPath) {
+    if (fsModule_2.existsSync(seccompBinaryPath)) {
+      logForDebugging_2(
+        `[SeccompFilter] Using apply-seccomp binary from explicit path: ${seccompBinaryPath}`,
+      );
+      return seccompBinaryPath;
+    }
+    logForDebugging_2(`[SeccompFilter] Explicit path provided but file not found: ${seccompBinaryPath}`);
   }
-  let n = PE();
-  if (!n) return (At("[SeccompFilter] Cannot find apply-seccomp binary: unsupported architecture x64"), null);
-  At(`[SeccompFilter] Looking for apply-seccomp binary for architecture: ${n}`);
-  for (let r of r8("apply-seccomp"))
-    if (fsModule_5.existsSync(r)) return (At(`[SeccompFilter] Found apply-seccomp binary: ${r} (${n})`), r);
+  let arch = getVendorArchitecture();
+  if (!arch) {
+    logForDebugging_2("[SeccompFilter] Cannot find apply-seccomp binary: unsupported architecture x64");
+    return null;
+  }
+  logForDebugging_2(`[SeccompFilter] Looking for apply-seccomp binary for architecture: ${arch}`);
+  for (let binaryPath of getLocalSeccompPaths("apply-seccomp"))
+    if (fsModule_2.existsSync(binaryPath)) {
+      logForDebugging_2(`[SeccompFilter] Found apply-seccomp binary: ${binaryPath} (${arch})`);
+      return binaryPath;
+    }
   return;
 }
 //@ chunk-fq0cr76a.js:722314-722629 esm-fingerprint
-function $R(e) {
-  let n = PE();
-  if (!n) return null;
-  for (let r of e) {
-    let s = join_7(r, "vendor", "seccomp", n, "apply-seccomp");
-    if (fsModule_5.existsSync(s))
-      return (At(`[SeccompFilter] Found apply-seccomp binary in global install: ${s} (${n})`), s);
+function findGlobalApplySeccompPath(globalBases) {
+  let arch = getVendorArchitecture();
+  if (!arch) return null;
+  for (let globalBase of globalBases) {
+    let binaryPath = join(globalBase, "vendor", "seccomp", arch, "apply-seccomp");
+    if (fsModule_2.existsSync(binaryPath)) {
+      logForDebugging_2(
+        `[SeccompFilter] Found apply-seccomp binary in global install: ${binaryPath} (${arch})`,
+      );
+      return binaryPath;
+    }
   }
-  return (At(`[SeccompFilter] apply-seccomp binary not found in any expected location (${n})`), null);
+  logForDebugging_2(`[SeccompFilter] apply-seccomp binary not found in any expected location (${arch})`);
+  return null;
 }
-
 export { B6r, getSandboxRuntimeCandidates, vor };

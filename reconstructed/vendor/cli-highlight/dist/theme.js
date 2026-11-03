@@ -61,5 +61,4 @@ function h(e) {
     t = t.slice(0, index);
   }
 }
-
 export { h };

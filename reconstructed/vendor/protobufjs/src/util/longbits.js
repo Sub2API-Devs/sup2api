@@ -6,77 +6,85 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { QGe } from "./minimal.js";
+import { require_minimal } from "./minimal.js";
 
 //@ chunk-798ashq9.js:25873-27725 cjs-fingerprint
-var Tr = x(function (vc, Nr) {
-  Nr.exports = k;
-  var mt = QGe();
-  function k(l, u) {
-    ((this.lo = l >>> 0), (this.hi = u >>> 0));
+var require_longbits = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = LongBits;
+  var util = require_minimal();
+  function LongBits(lo, hi) {
+    this.lo = lo >>> 0;
+    this.hi = hi >>> 0;
   }
-  var ct = (k.zero = new k(0, 0));
-  ct.toNumber = function () {
+  var zero = (LongBits.zero = new LongBits(0, 0));
+  zero.toNumber = function () {
     return 0;
   };
-  ct.zzEncode = ct.zzDecode = function () {
+  zero.zzEncode = zero.zzDecode = function () {
     return this;
   };
-  ct.length = function () {
+  zero.length = function () {
     return 1;
   };
-  var Hi = (k.zeroHash = "\x00\x00\x00\x00\x00\x00\x00\x00");
-  k.fromNumber = function (u) {
-    if (u === 0) return ct;
-    var f = u < 0;
-    if (f) u = -u;
-    var d = u >>> 0,
-      i = ((u - d) / 4294967296) >>> 0;
-    if (f) {
-      if (((i = ~i >>> 0), (d = ~d >>> 0), ++d > 4294967295)) {
-        if (((d = 0), ++i > 4294967295)) i = 0;
+  var zeroHash = (LongBits.zeroHash = "\x00\x00\x00\x00\x00\x00\x00\x00");
+  LongBits.fromNumber = function (value) {
+    if (value === 0) return zero;
+    var sign = value < 0;
+    if (sign) value = -value;
+    var lo = value >>> 0;
+    var hi = ((value - lo) / 4294967296) >>> 0;
+    if (sign) {
+      hi = ~hi >>> 0;
+      lo = ~lo >>> 0;
+      if (++lo > 4294967295) {
+        lo = 0;
+        if (++hi > 4294967295) hi = 0;
       }
     }
-    return new k(d, i);
+    return new LongBits(lo, hi);
   };
-  k.from = function (u) {
-    if (typeof u === "number") return k.fromNumber(u);
-    if (mt.isString(u))
-      if (mt.Long) u = mt.Long.fromString(u);
-      else return k.fromNumber(parseInt(u, 10));
-    return u.low || u.high ? new k(u.low >>> 0, u.high >>> 0) : ct;
+  LongBits.from = function (value) {
+    if (typeof value === "number") return LongBits.fromNumber(value);
+    if (util.isString(value))
+      if (util.Long) value = util.Long.fromString(value);
+      else return LongBits.fromNumber(parseInt(value, 10));
+    return value.low || value.high ? new LongBits(value.low >>> 0, value.high >>> 0) : zero;
   };
-  k.prototype.toNumber = function (u) {
-    if (!u && this.hi >>> 31) {
-      var f = (~this.lo + 1) >>> 0,
-        d = ~this.hi >>> 0;
-      if (!f) d = (d + 1) >>> 0;
-      return -(f + d * 4294967296);
+  LongBits.prototype.toNumber = function (unsigned) {
+    if (!unsigned && this.hi >>> 31) {
+      var lo = (~this.lo + 1) >>> 0;
+      var hi = ~this.hi >>> 0;
+      if (!lo) hi = (hi + 1) >>> 0;
+      return -(lo + hi * 4294967296);
     }
     return this.lo + this.hi * 4294967296;
   };
-  k.prototype.toLong = function (u) {
-    return mt.Long
-      ? new mt.Long(this.lo | 0, this.hi | 0, Boolean(u))
-      : { low: this.lo | 0, high: this.hi | 0, unsigned: Boolean(u) };
+  LongBits.prototype.toLong = function (unsigned) {
+    return util.Long
+      ? new util.Long(this.lo | 0, this.hi | 0, Boolean(unsigned))
+      : {
+          low: this.lo | 0,
+          high: this.hi | 0,
+          unsigned: Boolean(unsigned),
+        };
   };
   var charCodeAt = String.prototype.charCodeAt;
-  k.fromHash = function (u) {
-    if (u === Hi) return ct;
-    return new k(
-      (charCodeAt.call(u, 0) |
-        (charCodeAt.call(u, 1) << 8) |
-        (charCodeAt.call(u, 2) << 16) |
-        (charCodeAt.call(u, 3) << 24)) >>>
+  LongBits.fromHash = function (hash) {
+    if (hash === zeroHash) return zero;
+    return new LongBits(
+      (charCodeAt.call(hash, 0) |
+        (charCodeAt.call(hash, 1) << 8) |
+        (charCodeAt.call(hash, 2) << 16) |
+        (charCodeAt.call(hash, 3) << 24)) >>>
         0,
-      (charCodeAt.call(u, 4) |
-        (charCodeAt.call(u, 5) << 8) |
-        (charCodeAt.call(u, 6) << 16) |
-        (charCodeAt.call(u, 7) << 24)) >>>
+      (charCodeAt.call(hash, 4) |
+        (charCodeAt.call(hash, 5) << 8) |
+        (charCodeAt.call(hash, 6) << 16) |
+        (charCodeAt.call(hash, 7) << 24)) >>>
         0,
     );
   };
-  k.prototype.toHash = function () {
+  LongBits.prototype.toHash = function () {
     return String.fromCharCode(
       this.lo & 255,
       (this.lo >>> 8) & 255,
@@ -88,46 +96,41 @@ var Tr = x(function (vc, Nr) {
       this.hi >>> 24,
     );
   };
-  k.prototype.zzEncode = function () {
-    var u = this.hi >> 31;
-    return (
-      (this.hi = (((this.hi << 1) | (this.lo >>> 31)) ^ u) >>> 0),
-      (this.lo = ((this.lo << 1) ^ u) >>> 0),
-      this
-    );
+  LongBits.prototype.zzEncode = function () {
+    var mask = this.hi >> 31;
+    this.hi = (((this.hi << 1) | (this.lo >>> 31)) ^ mask) >>> 0;
+    this.lo = ((this.lo << 1) ^ mask) >>> 0;
+    return this;
   };
-  k.prototype.zzDecode = function () {
-    var u = -(this.lo & 1);
-    return (
-      (this.lo = (((this.lo >>> 1) | (this.hi << 31)) ^ u) >>> 0),
-      (this.hi = ((this.hi >>> 1) ^ u) >>> 0),
-      this
-    );
+  LongBits.prototype.zzDecode = function () {
+    var mask = -(this.lo & 1);
+    this.lo = (((this.lo >>> 1) | (this.hi << 31)) ^ mask) >>> 0;
+    this.hi = ((this.hi >>> 1) ^ mask) >>> 0;
+    return this;
   };
-  k.prototype.length = function () {
-    var lo = this.lo,
-      f = ((this.lo >>> 28) | (this.hi << 4)) >>> 0,
-      d = this.hi >>> 24;
-    return d === 0
-      ? f === 0
-        ? lo < 16384
-          ? lo < 128
+  LongBits.prototype.length = function () {
+    var part0 = this.lo;
+    var part1 = ((this.lo >>> 28) | (this.hi << 4)) >>> 0;
+    var part2 = this.hi >>> 24;
+    return part2 === 0
+      ? part1 === 0
+        ? part0 < 16384
+          ? part0 < 128
             ? 1
             : 2
-          : lo < 2097152
+          : part0 < 2097152
             ? 3
             : 4
-        : f < 16384
-          ? f < 128
+        : part1 < 16384
+          ? part1 < 128
             ? 5
             : 6
-          : f < 2097152
+          : part1 < 2097152
             ? 7
             : 8
-      : d < 128
+      : part2 < 128
         ? 9
         : 10;
   };
 });
-
-export { Tr };
+export { require_longbits };

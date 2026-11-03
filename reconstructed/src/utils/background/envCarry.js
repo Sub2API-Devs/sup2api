@@ -9,53 +9,81 @@
  * attribution: placement 18
  */
 import { createHash } from "crypto";
-import { ge } from "../identity.js";
+import { identity } from "../identity.js";
 import { HOST_SKILL_CATALOG_ENV } from "../entrypointKinds.js";
-import { HIt } from "../subprocessEnv.js";
-import { n8e } from "../managedEnvConstants.js";
-import { knt } from "../../cli/forwardedFlags.js";
-import { Do } from "../git/gitSafeEnv.js";
+import { BG_DISPATCHER_IDENTITY_ENV_VARS } from "../subprocessEnv.js";
+import { PROVIDER_ENDPOINT_COMPANION_VARS } from "../managedEnvConstants.js";
+import { BACKGROUND_ALLOWED_ENV_NAMES } from "../../cli/forwardedFlags.js";
+import { pickByHelper } from "../git/gitSafeEnv.js";
 
 //@ chunk-hnwmw0ks.js:447-525 placement
-var CLAUDE_BG_CARRIED_PROMPTS_SHA256 = "CLAUDE_BG_CARRIED_PROMPTS_SHA256",
-  fBn = 1,
-  O = ge(new Map(), (_) => _.clear());
+/**
+ * 携带提示词哈希的版本号（1）。
+ */
+var CLAUDE_BG_CARRIED_PROMPTS_SHA256 = "CLAUDE_BG_CARRIED_PROMPTS_SHA256";
+var MAX_CARRIED_PROMPTS_VARIANT = 1;
+var carriedPromptHashes = identity(new Map(), (_) => _.clear());
 //@ chunk-hnwmw0ks.js:525-584 placement
-function Lbo(_) {
+/**
+ * 计算字符串的 sha256 十六进制摘要。
+ */
+function sha256Hex(_) {
   return createHash("sha256").update(_).digest("hex");
 }
 //@ chunk-hnwmw0ks.js:584-618 placement
-function XIs(_, E) {
-  O.set(_, Lbo(E));
+/**
+ * 记录某会话路径携带的提示词哈希。
+ */
+function setCarriedPromptHash(_, E) {
+  carriedPromptHashes.set(_, sha256Hex(E));
 }
 //@ chunk-hnwmw0ks.js:618-686 placement
-function pBn(_, E) {
-  let C = O.get(_);
-  return C === void 0 ? E : { ...E, [CLAUDE_BG_CARRIED_PROMPTS_SHA256]: C };
+/**
+ * 给后台会话的环境变量对象附加提示词哈希。
+ */
+function attachCarriedPromptHash(_, bridgeReattachEnv) {
+  let C = carriedPromptHashes.get(_);
+  return C === undefined
+    ? bridgeReattachEnv
+    : {
+        ...bridgeReattachEnv,
+        [CLAUDE_BG_CARRIED_PROMPTS_SHA256]: C,
+      };
 }
 //@ chunk-hnwmw0ks.js:686-714 placement
-function mBn(_) {
-  O.delete(_);
+/**
+ * 删除某会话路径的提示词哈希记录。
+ */
+function dropCarriedPromptHash(_) {
+  carriedPromptHashes.delete(_);
 }
 //@ chunk-hnwmw0ks.js:714-784 placement
-var T = new Set(["claude-vscode", "claude-desktop", "claude-desktop-3p"]);
+/**
+ * 需要从后台会话环境里去掉的客户端入口名。
+ */
+var CLIENT_ENTRYPOINT_NAMES = new Set(["claude-vscode", "claude-desktop", "claude-desktop-3p"]);
 //@ chunk-hnwmw0ks.js:784-886 placement
 function stripInternalEntrypoint(_) {
   let CLAUDE_CODE_ENTRYPOINT = _.CLAUDE_CODE_ENTRYPOINT;
-  if (CLAUDE_CODE_ENTRYPOINT !== void 0 && T.has(CLAUDE_CODE_ENTRYPOINT)) delete _.CLAUDE_CODE_ENTRYPOINT;
+  if (CLAUDE_CODE_ENTRYPOINT !== undefined && CLIENT_ENTRYPOINT_NAMES.has(CLAUDE_CODE_ENTRYPOINT))
+    delete _.CLAUDE_CODE_ENTRYPOINT;
 }
 //@ chunk-hnwmw0ks.js:886-1003 placement
-var SAFE_MODE_ENV_VARS = ["CLAUDE_CODE_SAFE_MODE", "CLAUDE_CODE_SIMPLE", "CLAUDE_CODE_RESTRICTED"],
-  SAFE_MODE_ENV_KEYS = new Set(SAFE_MODE_ENV_VARS.map((_) => _.toUpperCase()));
+var SAFE_MODE_ENV_VARS = ["CLAUDE_CODE_SAFE_MODE", "CLAUDE_CODE_SIMPLE", "CLAUDE_CODE_RESTRICTED"];
+var SAFE_MODE_ENV_KEYS = new Set(SAFE_MODE_ENV_VARS.map((_) => _.toUpperCase()));
 //@ chunk-hnwmw0ks.js:1003-1085 placement
-function JIs(_) {
-  for (let E of Object.keys(_)) if (SAFE_MODE_ENV_KEYS.has(E.toUpperCase())) delete _[E];
+/**
+ * 删除安全模式相关的环境变量。
+ */
+function stripSafeModeEnvKeys(preSettingsEnvHonoringLiveDeletions) {
+  for (let key of Object.keys(preSettingsEnvHonoringLiveDeletions))
+    if (SAFE_MODE_ENV_KEYS.has(key.toUpperCase())) delete preSettingsEnvHonoringLiveDeletions[key];
 }
+//@ chunk-hnwmw0ks.js:1085-4720 placement
 /**
  * 后台会话需要携带的环境变量名单。
  */
-//@ chunk-hnwmw0ks.js:1085-4720 placement
-var BG_CARRIED_ENV_KEYS = [
+var BG_CARRIED_ENV_KEYS_2 = [
   ...SAFE_MODE_ENV_VARS,
   "CLAUDE_CODE_RESTRICT_PERSONAL_CONFIG",
   "CLAUDE_CODE_PERSONAL_CONFIG_FIX",
@@ -186,84 +214,103 @@ var BG_CARRIED_ENV_KEYS = [
   "FORCE_CODE_TERMINAL",
 ];
 //@ chunk-hnwmw0ks.js:4720-4802 placement
-function soe(_) {
-  for (let E of Object.keys(_)) if (COWORK_HOST_ENV_KEYS.has(E.toUpperCase())) delete _[E];
+/**
+ * 删除 cowork 宿主相关的环境变量。
+ */
+function stripCoworkHostEnvKeys(_) {
+  for (let key of Object.keys(_)) if (COWORK_HOST_ENV_KEYS.has(key.toUpperCase())) delete _[key];
 }
+//@ chunk-hnwmw0ks.js:4802-5270 placement
 /**
  * 沙箱标记、桥接重连等后台会话需要特殊处理的环境变量列表。
  */
-//@ chunk-hnwmw0ks.js:4802-5270 placement
-var SANDBOX_ENV_VARS = ["CLAUDE_CODE_SANDBOXED"],
-  SANDBOX_ENV_KEYS = new Set(SANDBOX_ENV_VARS),
-  BRIDGE_REATTACH_ENV_VARS = [
-    "CLAUDE_BRIDGE_REATTACH_SESSION",
-    "CLAUDE_BRIDGE_REATTACH_SEQ",
-    "CLAUDE_BRIDGE_REATTACH_GROUPING",
-    "CLAUDE_BRIDGE_REATTACH_OWNER_ACCT",
-    "CLAUDE_BRIDGE_REATTACH_OWNER_ORG",
-    "CLAUDE_BRIDGE_REATTACH_NO_BACKFILL",
-    "CLAUDE_BRIDGE_REATTACH_OUTBOUND_ONLY",
-  ],
-  BG_INTERNAL_ENV_KEYS = new Set([...BRIDGE_REATTACH_ENV_VARS, ...HIt, CLAUDE_BG_CARRIED_PROMPTS_SHA256]),
-  BG_CARRIED_INTERNAL_ENV_KEYS = new Set([...BG_INTERNAL_ENV_KEYS, "CLAUDE_BG_WORKSPACE_TRUSTED"]),
-  BG_SCRUBBED_ENV_VARS = [
-    ...HIt,
-    "CLAUDE_BG_WORKSPACE_TRUSTED",
-    CLAUDE_BG_CARRIED_PROMPTS_SHA256,
-    "CLAUDE_BRIDGE_REATTACH_SESSION",
-  ],
-  BG_SCRUBBED_ENV_KEYS = new Set(BG_SCRUBBED_ENV_VARS);
+var SANDBOX_ENV_VARS = ["CLAUDE_CODE_SANDBOXED"];
+var SANDBOX_ENV_KEYS = new Set(SANDBOX_ENV_VARS);
+var BRIDGE_REATTACH_ENV_VARS = [
+  "CLAUDE_BRIDGE_REATTACH_SESSION",
+  "CLAUDE_BRIDGE_REATTACH_SEQ",
+  "CLAUDE_BRIDGE_REATTACH_GROUPING",
+  "CLAUDE_BRIDGE_REATTACH_OWNER_ACCT",
+  "CLAUDE_BRIDGE_REATTACH_OWNER_ORG",
+  "CLAUDE_BRIDGE_REATTACH_NO_BACKFILL",
+  "CLAUDE_BRIDGE_REATTACH_OUTBOUND_ONLY",
+];
+var BG_INTERNAL_ENV_KEYS = new Set([
+  ...BRIDGE_REATTACH_ENV_VARS,
+  ...BG_DISPATCHER_IDENTITY_ENV_VARS,
+  CLAUDE_BG_CARRIED_PROMPTS_SHA256,
+]);
+var BG_CARRIED_INTERNAL_ENV_KEYS = new Set([...BG_INTERNAL_ENV_KEYS, "CLAUDE_BG_WORKSPACE_TRUSTED"]);
+var BG_SCRUBBED_ENV_VARS = [
+  ...BG_DISPATCHER_IDENTITY_ENV_VARS,
+  "CLAUDE_BG_WORKSPACE_TRUSTED",
+  CLAUDE_BG_CARRIED_PROMPTS_SHA256,
+  "CLAUDE_BRIDGE_REATTACH_SESSION",
+];
+var BG_SCRUBBED_ENV_KEYS = new Set(BG_SCRUBBED_ENV_VARS);
 //@ chunk-hnwmw0ks.js:5270-5352 placement
-function Z0t(_) {
-  for (let E of Object.keys(_)) if (BG_SCRUBBED_ENV_KEYS.has(E.toUpperCase())) delete _[E];
+/**
+ * 删除后台会话需要擦除的环境变量。
+ */
+function stripBgScrubbedEnvKeys(_) {
+  for (let key of Object.keys(_)) if (BG_SCRUBBED_ENV_KEYS.has(key.toUpperCase())) delete _[key];
 }
 //@ chunk-hnwmw0ks.js:5352-5478 placement
 function carrySandboxEnv(_, E) {
-  for (let C of Object.keys(_)) if (SANDBOX_ENV_KEYS.has(C.toUpperCase())) delete _[C];
+  for (let key of Object.keys(_)) if (SANDBOX_ENV_KEYS.has(key.toUpperCase())) delete _[key];
   for (let C of SANDBOX_ENV_VARS) {
     let A = E[C];
     if (A) _[C] = A;
   }
 }
-/**
- * 启动后台会话时透传的环境变量列表（PATH、额外请求体、auto 模式模型等）。
- */
 //@ chunk-hnwmw0ks.js:5478-6160 placement
+/**
+ * 后台会话需要携带的环境变量键集合。
+ */
 var BG_PASSTHROUGH_ENV_VARS = [
-    "PATH",
-    "CLAUDE_CODE_EXTRA_BODY",
-    "CLAUDE_CODE_AUTO_MODE_MODEL",
-    "CLAUDE_CODE_HOST_CREDS_FILE",
-    "CLAUDE_CODE_PERSONAL_CONFIG_FIX",
-    ...n8e,
-  ],
-  BG_CARRIED_ENV_ALLOWLIST = new Set([
-    ...knt,
-    ...BG_PASSTHROUGH_ENV_VARS,
-    "CLAUDE_CODE_DISABLE_PROACTIVITY",
-    "CLAUDE_CODE_RESTRICT_PERSONAL_CONFIG",
-    "CLAUDE_CODE_AUTO_MODE_SERVER",
-    "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS",
-    "CLAUDE_CODE_DISABLE_STRUCTURED_OUTPUTS",
-    "CLAUDE_CODE_DISABLE_FILE_MENTIONS",
-    "CLAUDE_CODE_AUTO_MODE_TIER",
-    "CLAUDE_BG_ISOLATION",
-    "CLAUDE_BG_SESSION_PERMISSION_RULES",
-    "CLAUDE_BG_MEMORY_TOGGLED_OFF",
-    "CLAUDE_BG_AUTO_MEMORY_OFF",
-    "CLAUDE_BG_GATEWAY_WITHHELD",
-    "CLAUDE_CODE_RESUME_SOURCE_ALIVE",
-    "CLAUDE_CODE_PLUGIN_DIRS",
-  ]),
-  ZIs = new Set([...BG_CARRIED_ENV_ALLOWLIST].filter((_) => !BG_PASSTHROUGH_ENV_VARS.includes(_)));
+  "PATH",
+  "CLAUDE_CODE_EXTRA_BODY",
+  "CLAUDE_CODE_AUTO_MODE_MODEL",
+  "CLAUDE_CODE_HOST_CREDS_FILE",
+  "CLAUDE_CODE_PERSONAL_CONFIG_FIX",
+  ...PROVIDER_ENDPOINT_COMPANION_VARS,
+];
+var BG_CARRIED_ENV_ALLOWLIST = new Set([
+  ...BACKGROUND_ALLOWED_ENV_NAMES,
+  ...BG_PASSTHROUGH_ENV_VARS,
+  "CLAUDE_CODE_DISABLE_PROACTIVITY",
+  "CLAUDE_CODE_RESTRICT_PERSONAL_CONFIG",
+  "CLAUDE_CODE_AUTO_MODE_SERVER",
+  "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS",
+  "CLAUDE_CODE_DISABLE_STRUCTURED_OUTPUTS",
+  "CLAUDE_CODE_DISABLE_FILE_MENTIONS",
+  "CLAUDE_CODE_AUTO_MODE_TIER",
+  "CLAUDE_BG_ISOLATION",
+  "CLAUDE_BG_SESSION_PERMISSION_RULES",
+  "CLAUDE_BG_MEMORY_TOGGLED_OFF",
+  "CLAUDE_BG_AUTO_MEMORY_OFF",
+  "CLAUDE_BG_GATEWAY_WITHHELD",
+  "CLAUDE_CODE_RESUME_SOURCE_ALIVE",
+  "CLAUDE_CODE_PLUGIN_DIRS",
+]);
+var BG_CARRIED_ENV_KEYS = new Set(
+  [...BG_CARRIED_ENV_ALLOWLIST].filter((_) => !BG_PASSTHROUGH_ENV_VARS.includes(_)),
+);
 //@ chunk-hnwmw0ks.js:6160-6207 placement
-function BJe(_, E) {
-  return Do(_, (C, A) => E.has(A));
+/**
+ * 只保留允许名单里的环境变量。
+ */
+function pickAllowedEnv(_, E) {
+  return pickByHelper(_, (C, A) => E.has(A));
 }
 //@ chunk-hnwmw0ks.js:6207-6298 placement
-function Nbo(_, E) {
-  if (E === void 0) return;
-  for (let [C, A] of Object.entries(E)) if (BG_CARRIED_INTERNAL_ENV_KEYS.has(C)) _[C] = A;
+/**
+ * 把需要原样携带的内部环境变量复制到目标环境。
+ */
+function copyCarriedInternalEnv(bgSessionEnv, E) {
+  if (E === undefined) return;
+  for (let [key, value] of Object.entries(E))
+    if (BG_CARRIED_INTERNAL_ENV_KEYS.has(key)) bgSessionEnv[key] = value;
 }
 //@ chunk-hnwmw0ks.js:6298-7745 placement
 var COWORK_HOST_ENV_KEYS = new Set([
@@ -308,25 +355,24 @@ var COWORK_HOST_ENV_KEYS = new Set([
   "CLAUDE_CODE_REMOTE_TOOLS_HOST_IDLE_RELEASE_MINUTES",
   "CLAUDE_RUNNER_UPDATE_BIN",
 ]);
-
 export {
-  XIs,
+  setCarriedPromptHash,
   CLAUDE_BG_CARRIED_PROMPTS_SHA256,
-  Lbo,
-  fBn,
-  pBn,
-  mBn,
-  BG_CARRIED_ENV_KEYS,
-  soe,
+  sha256Hex,
+  MAX_CARRIED_PROMPTS_VARIANT,
+  attachCarriedPromptHash,
+  dropCarriedPromptHash,
+  BG_CARRIED_ENV_KEYS_2,
+  stripCoworkHostEnvKeys,
   stripInternalEntrypoint,
-  Z0t,
+  stripBgScrubbedEnvKeys,
   carrySandboxEnv,
   SANDBOX_ENV_VARS,
-  Nbo,
-  BJe,
-  ZIs,
+  copyCarriedInternalEnv,
+  pickAllowedEnv,
+  BG_CARRIED_ENV_KEYS,
   BG_PASSTHROUGH_ENV_VARS,
   BG_INTERNAL_ENV_KEYS,
-  JIs,
+  stripSafeModeEnvKeys,
   BG_CARRIED_ENV_ALLOWLIST,
 };

@@ -10,28 +10,40 @@
  */
 
 //@ chunk-e6aww6q8.js:997563-997584 placement
-var H1t = "__artifact";
+/**
+ * 只有 Claude Code 能设置的保留键前缀。
+ */
+var RESERVED_ARTIFACT_KEY_PREFIX = "__artifact";
+//@ chunk-e6aww6q8.js:997584-997693 placement
 /**
  * 输入带有只有 Claude Code 才能设置的保留键、而工具本身不生成这些键时，拒绝该调用。
  */
-//@ chunk-e6aww6q8.js:997584-997693 placement
-function denyReservedArtifactKeys(e, n) {
-  if (!SWt(n)) return null;
+function denyReservedArtifactKeys(tool, n) {
+  if (!hasReservedArtifactKey(n)) return null;
   try {
-    if (e.mintsArtifactKeys?.() === !0) return null;
+    if (tool.mintsArtifactKeys?.() === true) return null;
   } catch {}
   return reservedKeyDenial();
 }
 //@ chunk-e6aww6q8.js:997693-997733 placement
-function G7(e) {
-  return SWt(e) ? reservedKeyDenial() : null;
+/**
+ * 输入含保留键时返回拒绝结果，否则 null。
+ */
+function reservedKeyDenialIfPresent(e) {
+  return hasReservedArtifactKey(e) ? reservedKeyDenial() : null;
 }
 //@ chunk-e6aww6q8.js:997733-997781 placement
-function SWt(e) {
-  return Object.keys(e).some(xGe);
+/**
+ * 判断输入是否包含保留键。
+ */
+function hasReservedArtifactKey(e) {
+  return Object.keys(e).some(isReservedArtifactKeyName);
 }
 //@ chunk-e6aww6q8.js:997781-997845 placement
-function xGe(e) {
+/**
+ * 判断键名是否以保留前缀开头（忽略大小写）。
+ */
+function isReservedArtifactKeyName(e) {
   return e.toLowerCase().startsWith("__artifact");
 }
 //@ chunk-e6aww6q8.js:997845-998058 placement
@@ -39,8 +51,16 @@ function reservedKeyDenial() {
   return {
     behavior: "deny",
     message: "Nothing was done. The arguments carry a key that only Claude Code sets.",
-    decisionReason: { type: "other", reason: "tool call carried a key only an artifact check mints" },
+    decisionReason: {
+      type: "other",
+      reason: "tool call carried a key only an artifact check mints",
+    },
   };
 }
-
-export { denyReservedArtifactKeys, SWt, xGe, G7, H1t };
+export {
+  denyReservedArtifactKeys,
+  hasReservedArtifactKey,
+  isReservedArtifactKeyName,
+  reservedKeyDenialIfPresent,
+  RESERVED_ARTIFACT_KEY_PREFIX,
+};

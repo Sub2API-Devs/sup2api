@@ -9,32 +9,32 @@
  * attribution: placement 6
  */
 import { MAX_DISPLAY_UNITS, hasVisibleText } from "../../permissions/approvalPayloadSerialization.js";
-import { Hxs } from "../../../cli/headlessCloud/cloudPlugins.js";
+import { emptyConsentState } from "../../../cli/headlessCloud/cloudPlugins.js";
 import { createSignal } from "../../signal.js";
 import { HostScoped } from "../../hostScoped.js";
 
 //@ chunk-mthxbav8.js:2800-2824 placement
-var mr = /^[0-9a-f]{64}$/;
+var SHA256_HEX_RE = /^[0-9a-f]{64}$/;
 //@ chunk-mthxbav8.js:2824-3075 placement
 function isShowableToolInput(e) {
-  let { description: description } = e,
-    input = e.input;
-  if (typeof input !== "object" || input === null) return !1;
-  let keys = Object.keys(input),
-    u = "content_digest" in input ? input.content_digest : void 0;
+  let { description } = e;
+  let input = e.input;
+  if (typeof input !== "object" || input === null) return false;
+  let keys = Object.keys(input);
+  let contentDigest = "content_digest" in input ? input.content_digest : undefined;
   return (
     typeof description === "string" &&
     description.length <= MAX_DISPLAY_UNITS &&
     hasVisibleText(description) &&
     keys.length === 1 &&
-    typeof u === "string" &&
-    mr.test(u)
+    typeof contentDigest === "string" &&
+    SHA256_HEX_RE.test(contentDigest)
   );
 }
 //@ chunk-mthxbav8.js:3075-3162 placement
 function deviceProofState(e, n) {
   if (!isShowableToolInput(e)) return "unshowable";
-  return n === !1 ? "proves_no_device" : void 0;
+  return n === false ? "proves_no_device" : undefined;
 }
 //@ chunk-mthxbav8.js:3162-3309 placement
 function createGenerationCounter() {
@@ -42,25 +42,31 @@ function createGenerationCounter() {
   return {
     known(n) {
       let max = Math.max(e.get(n) ?? 0, 1);
-      return (e.set(n, max), max);
+      e.set(n, max);
+      return max;
     },
     next(n) {
       let r = (e.get(n) ?? 0) + 1;
-      return (e.set(n, r), r);
+      e.set(n, r);
+      return r;
     },
   };
 }
 //@ chunk-mthxbav8.js:3309-3431 placement
 function createDeviceProofState() {
   return {
-    consentPin: Hxs(),
+    consentPin: emptyConsentState(),
     generations: createGenerationCounter(),
-    pointedToCommand: { shown: !1 },
+    pointedToCommand: {
+      shown: false,
+    },
     setAsideSessions: new Set(),
     decided: createSignal(),
   };
 }
 //@ chunk-mthxbav8.js:3431-3449 placement
-var kpt = new HostScoped(createDeviceProofState);
-
-export { deviceProofState, kpt };
+/**
+ * 宿主隔离的设备证明状态注册表。
+ */
+var deviceProofStateRegistry = new HostScoped(createDeviceProofState);
+export { deviceProofState, deviceProofStateRegistry };

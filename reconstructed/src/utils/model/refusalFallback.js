@@ -14,26 +14,28 @@ import { logEvent } from "../../services/analytics/index.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { classifyFallbackOrigin } from "../../services/api/refusalFallback.js";
 
+//@ chunk-jbv0t0w5.js:36947-37155 placement
 /**
  * 会话切换时重置拒答回退锁存并上报 tengu_refusal_fallback_latch_reset。
  */
-//@ chunk-jbv0t0w5.js:36947-37155 placement
-function resetRefusalFallbackOnSwitch(e) {
-  return onSessionSwitch((n, o, r) => {
-    if (!r) return;
-    (applyFastMode(r, e),
-      logEvent("tengu_refusal_fallback_latch_reset", {
-        source: fromEnum(o),
-        restored_to_explicit_override: r.restoredToExplicitOverride,
-        model_scope: fromEnum(classifyFallbackOrigin(r.fallbackModel)),
-      }));
+function resetRefusalFallbackOnSwitch(setAppState) {
+  return onSessionSwitch((n, o, enable) => {
+    if (!enable) return;
+    applyFastMode(enable, setAppState);
+    logEvent("tengu_refusal_fallback_latch_reset", {
+      source: fromEnum(o),
+      restored_to_explicit_override: enable.restoredToExplicitOverride,
+      model_scope: fromEnum(classifyFallbackOrigin(enable.fallbackModel)),
+    });
   });
 }
 //@ chunk-jbv0t0w5.js:37155-37202 placement
-function JPs(e) {
+/**
+ * 注册"切换会话时"的回调。
+ */
+function onSessionSwitchCallback(e) {
   return onSessionSwitch((n, o, r) => {
     if (r) e();
   });
 }
-
-export { resetRefusalFallbackOnSwitch, JPs };
+export { resetRefusalFallbackOnSwitch, onSessionSwitchCallback };

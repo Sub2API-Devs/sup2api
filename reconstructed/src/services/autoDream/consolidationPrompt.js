@@ -12,9 +12,12 @@ import { DIR_EXISTS_GUIDANCE, MEMORY_INDEX_FILENAME, MAX_ENTRYPOINT_LINES } from
 import { MEMORY_LIST_TOOL_NAME, MEMORY_READ, MEMORY_WRITE } from "../../tools/MemoryTool/memoryToolNames.js";
 
 //@ chunk-rsht1tdj.js:1348-3670 affinity
+/**
+ * dream 提示词里“把记忆与 CLAUDE.md 对照”的段落：记忆过时就删或改写，CLAUDE.md 过时只标注不修改，不算冲突就保留。
+ */
 var TEAM_MEMORY_DREAM_SECTION =
-    "## Team memory (`team/` subdirectory)\n\nThe `team/` subdirectory holds memories shared across everyone working in this repo. Other teammates' Claude sessions write here too \u2014 treat it differently from your personal files:\n\n- **Phase 1:** `ls team/` and skim it alongside your personal files. A teammate may have already captured something you'd otherwise duplicate.\n- **Phase 3:** Merge near-duplicates *within* `team/` the same way you would personal memories. If a personal memory restates a team memory, delete the personal one.\n- **Phase 4 \u2014 be conservative pruning `team/`:**\n  - DO delete or fix a team memory that is clearly contradicted by the current code, or that a newer team memory marks as superseded.\n  - DO NOT delete a team memory just because you don't recognize it or it isn't relevant to *your* recent sessions \u2014 a teammate may rely on it.\n  - When unsure, leave it. A stale team memory costs little; deleting a teammate's load-bearing note costs a lot.\n\nDo not promote personal memories into `team/` during a dream \u2014 that's a deliberate choice the user makes via `/remember`, not something to do reflexively.",
-  de = `### Reconcile memories against CLAUDE.md
+  "## Team memory (`team/` subdirectory)\n\nThe `team/` subdirectory holds memories shared across everyone working in this repo. Other teammates' Claude sessions write here too \u2014 treat it differently from your personal files:\n\n- **Phase 1:** `ls team/` and skim it alongside your personal files. A teammate may have already captured something you'd otherwise duplicate.\n- **Phase 3:** Merge near-duplicates *within* `team/` the same way you would personal memories. If a personal memory restates a team memory, delete the personal one.\n- **Phase 4 \u2014 be conservative pruning `team/`:**\n  - DO delete or fix a team memory that is clearly contradicted by the current code, or that a newer team memory marks as superseded.\n  - DO NOT delete a team memory just because you don't recognize it or it isn't relevant to *your* recent sessions \u2014 a teammate may rely on it.\n  - When unsure, leave it. A stale team memory costs little; deleting a teammate's load-bearing note costs a lot.\n\nDo not promote personal memories into `team/` during a dream \u2014 that's a deliberate choice the user makes via `/remember`, not something to do reflexively.";
+var CLAUDE_MD_DREAM_SECTION = `### Reconcile memories against CLAUDE.md
 
 Project CLAUDE.md instructions are loaded in your system prompt. For each memory that captures feedback or project conventions (the \`feedback\`/\`project\` types, where tagged), check whether it contradicts a CLAUDE.md instruction on the same topic:
 
@@ -23,19 +26,19 @@ Project CLAUDE.md instructions are loaded in your system prompt. For each memory
 - **Not a conflict** \u2014 the memory adds detail CLAUDE.md doesn't cover, or narrows a CLAUDE.md rule with a stated reason. Leave it.
 
 A \`feedback\` memory's "Why: the user corrected me" framing is not evidence it's newer than CLAUDE.md \u2014 CLAUDE.md may have been updated since.`;
+//@ chunk-rsht1tdj.js:3670-6613 fingerprint = buildConsolidationPrompt (0.585)
 /**
  * dream 整理提示：合并重复、删除过时、与 CLAUDE.md 对齐、可选团队记忆段。
  */
-//@ chunk-rsht1tdj.js:3670-6613 fingerprint = buildConsolidationPrompt (0.585)
-function buildConsolidationPrompt(e, r, o, y = !1, p = !1, s = !1) {
+function buildConsolidationPrompt(autoMemPath, transcriptDir, extra, y = false, p = false, s = false) {
   return `# Dream: Memory Consolidation
 
 You are performing a dream \u2014 a reflective pass over your memory files. Synthesize what you've learned recently into durable, well-organized memories so that future sessions can orient quickly.
 
-Memory directory: \`${e}\`
+Memory directory: \`${autoMemPath}\`
 ${DIR_EXISTS_GUIDANCE}
 
-Session transcripts: \`${r}\` (large JSONL files \u2014 grep narrowly, don't read whole files)
+Session transcripts: \`${transcriptDir}\` (large JSONL files \u2014 grep narrowly, don't read whole files)
 ${
   y
     ? `
@@ -58,7 +61,7 @@ Look for new information worth persisting. Sources in rough priority order:
 
 1. **Existing memories that drifted** \u2014 facts that contradict something you see in the codebase now
 2. **Transcript search** \u2014 if you need specific context (e.g., "what was the error message from yesterday's build failure?"), grep the JSONL transcripts for narrow terms:
-   \`grep -rn "<narrow term>" ${r}/ --include="*.jsonl" | tail -50\`
+   \`grep -rn "<narrow term>" ${transcriptDir}/ --include="*.jsonl" | tail -50\`
 
 Don't exhaustively read transcripts. Look only for things you already suspect matter.
 
@@ -80,19 +83,18 @@ Update \`${MEMORY_INDEX_FILENAME}\` so it stays under ${MAX_ENTRYPOINT_LINES} li
 - Add pointers to newly important memories
 - Resolve contradictions \u2014 if two files disagree, fix the wrong one
 
-${de}
+${CLAUDE_MD_DREAM_SECTION}
 
 ---
 
 Return a brief summary of what you consolidated, updated, or pruned. If nothing changed (memories are already tight), say so.${
-    o
+    extra
       ? `
 
 ## Additional context
 
-${o}`
+${extra}`
       : ""
   }`;
 }
-
 export { buildConsolidationPrompt };

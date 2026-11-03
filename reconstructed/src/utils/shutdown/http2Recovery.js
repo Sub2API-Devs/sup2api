@@ -12,18 +12,18 @@
 //@ chunk-e6aww6q8.js:244366-244427 placement
 var HTTP2_STREAM_CLOSED_PATTERN = /^Stream closed with error code NGHTTP2_[A-Z0-9_]+$/;
 //@ chunk-e6aww6q8.js:244427-244589 placement = shortErrorStack (0.824)
-var HTTP2_SESSION_CLOSED_RE = /^Session closed with error code \d+$/,
-  stackHasFrame = (e, n) =>
-    typeof e === "string" &&
-    e
-      .split(
-        `
+var HTTP2_SESSION_CLOSED_RE = /^Session closed with error code \d+$/;
+var stackHasFrame = (stack, n) =>
+  typeof stack === "string" &&
+  stack
+    .split(
+      `
 `,
-      )
-      .some((r) => {
-        let trimmed = r.trim();
-        return trimmed.startsWith("at ") && trimmed.includes(n);
-      });
+    )
+    .some((line) => {
+      let trimmed = line.trim();
+      return trimmed.startsWith("at ") && trimmed.includes(n);
+    });
 //@ chunk-e6aww6q8.js:244589-245076 placement
 function isHttp2TransportError(e) {
   try {
@@ -45,10 +45,9 @@ function isHttp2TransportError(e) {
         HTTP2_SESSION_CLOSED_RE.test(e.message) &&
         stackHasFrame(e.stack, "goaway (node:http2:")
       );
-    return !1;
+    return false;
   } catch {
-    return !1;
+    return false;
   }
 }
-
 export { isHttp2TransportError };

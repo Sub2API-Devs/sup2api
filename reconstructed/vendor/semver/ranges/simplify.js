@@ -6,37 +6,38 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { Rt } from "../functions/satisfies.js";
-import { Z } from "../functions/compare.js";
+import { require_satisfies } from "../functions/satisfies.js";
+import { require_compare } from "../functions/compare.js";
 
 //@ chunk-bwbq4xvm.js:24064-24544 cjs-fingerprint
-var Hl = x(function (P2, Gl) {
-  var nz = Rt(),
-    rz = Z();
-  Gl.exports = (e, s, n) => {
-    let r = [],
-      a = null,
-      l = null,
-      sorted = e.sort((w, z) => rz(w, z, n));
-    for (let w of sorted)
-      if (nz(w, s, n)) {
-        if (((l = w), !a)) a = w;
+var require_simplify = x(function (cjsExports, cjsModule) {
+  var satisfies = require_satisfies();
+  var compare = require_compare();
+  cjsModule.exports = (versions, range, options) => {
+    let set = [];
+    let first = null;
+    let prev = null;
+    let v = versions.sort((a, b) => compare(a, b, options));
+    for (let version of v)
+      if (satisfies(version, range, options)) {
+        prev = version;
+        if (!first) first = version;
       } else {
-        if (l) r.push([a, l]);
-        ((l = null), (a = null));
+        if (prev) set.push([first, prev]);
+        prev = null;
+        first = null;
       }
-    if (a) r.push([a, null]);
-    let h = [];
-    for (let [w, z] of r)
-      if (w === z) h.push(w);
-      else if (!z && w === sorted[0]) h.push("*");
-      else if (!z) h.push(`>=${w}`);
-      else if (w === sorted[0]) h.push(`<=${z}`);
-      else h.push(`${w} - ${z}`);
-    let joined = h.join(" || "),
-      f = typeof s.raw === "string" ? s.raw : String(s);
-    return joined.length < f.length ? joined : s;
+    if (first) set.push([first, null]);
+    let ranges = [];
+    for (let [min, max] of set)
+      if (min === max) ranges.push(min);
+      else if (!max && min === v[0]) ranges.push("*");
+      else if (!max) ranges.push(`>=${min}`);
+      else if (min === v[0]) ranges.push(`<=${max}`);
+      else ranges.push(`${min} - ${max}`);
+    let simplified = ranges.join(" || ");
+    let original = typeof range.raw === "string" ? range.raw : String(range);
+    return simplified.length < original.length ? simplified : range;
   };
 });
-
-export { Hl };
+export { require_simplify };

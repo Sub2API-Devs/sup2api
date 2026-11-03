@@ -11,8 +11,8 @@
 import {
   isInClaudeFolder,
   isInGlobalClaudeFolder,
-  Tht,
-  jLo,
+  FILE_RULE_UPDATE_TYPES,
+  FILE_FAMILY_TOOLTIP,
   buildReadRuleConsentLabel,
 } from "./permissionOptions.js";
 import {
@@ -31,86 +31,122 @@ import {
 import { generateSuggestions } from "../../../utils/permissions/filesystem.js";
 
 //@ chunk-18hwfzwa.js:1367850-1369049 callgraph-fingerprint = handleAcceptSession (0.255)
-function handleAcceptSession(h, x, D) {
-  let L = isInClaudeFolder(h),
-    ee = isInGlobalClaudeFolder(h);
-  if ((L || ee) && x !== "read") {
-    let rt = ee ? GLOBAL_CLAUDE_FOLDER_PERMISSION_PATTERN : CLAUDE_FOLDER_PERMISSION_PATTERN,
-      kt = parseConsentSuggestions(
-        [
-          {
-            type: "addRules",
-            rules: [{ toolName: FILE_EDIT_TOOL_NAME, ruleContent: rt }],
-            behavior: "allow",
-            destination: "session",
-          },
-        ],
+function handleAcceptSession(filePath, operationType, toolPermissionContext) {
+  let L = isInClaudeFolder(filePath);
+  let ee = isInGlobalClaudeFolder(filePath);
+  if ((L || ee) && operationType !== "read") {
+    let rt = ee ? GLOBAL_CLAUDE_FOLDER_PERMISSION_PATTERN : CLAUDE_FOLDER_PERMISSION_PATTERN;
+    let consentSuggestions = parseConsentSuggestions(
+      [
         {
-          displayedTypes: Tht,
-          renderLabel: (At) => {
-            let It = At.length === 1 ? At[0] : void 0;
-            if (
-              It === void 0 ||
-              It.type !== "addRules" ||
-              It.rules.length !== 1 ||
-              It.rules[0]?.toolName !== FILE_EDIT_TOOL_NAME ||
-              It.rules[0]?.ruleContent !== rt
-            )
-              return null;
-            return ee
-              ? "Yes, and allow Claude to edit files in its ~/.claude folder for this session"
-              : "Yes, and allow Claude to edit files in this project's .claude folder for this session";
-          },
+          type: "addRules",
+          rules: [
+            {
+              toolName: FILE_EDIT_TOOL_NAME,
+              ruleContent: rt,
+            },
+          ],
+          behavior: "allow",
+          destination: "session",
         },
-      );
-    return kt === null ? null : { row: kt, value: "yes-claude-folder" };
+      ],
+      {
+        displayedTypes: FILE_RULE_UPDATE_TYPES,
+        renderLabel: (At) => {
+          let It = At.length === 1 ? At[0] : undefined;
+          if (
+            It === undefined ||
+            It.type !== "addRules" ||
+            It.rules.length !== 1 ||
+            It.rules[0]?.toolName !== FILE_EDIT_TOOL_NAME ||
+            It.rules[0]?.ruleContent !== rt
+          )
+            return null;
+          return ee
+            ? "Yes, and allow Claude to edit files in its ~/.claude folder for this session"
+            : "Yes, and allow Claude to edit files in this project's .claude folder for this session";
+        },
+      },
+    );
+    return consentSuggestions === null
+      ? null
+      : {
+          row: consentSuggestions,
+          value: "yes-claude-folder",
+        };
   }
-  let ke = generateSuggestions(h, x, D),
-    Re = [],
-    found = ke.find((rt) => rt.type === "setMode");
+  let suggestions = generateSuggestions(filePath, operationType, toolPermissionContext);
+  let Re = [];
+  let found = suggestions.find((suggestion) => suggestion.type === "setMode");
   if (found?.type === "setMode" && found.mode === "acceptEdits") {
     let rt = modeSwitchRow("acceptEdits");
     if (rt !== null) Re.push(rt);
   }
-  let found_2 = ke.find((rt) => rt.type === "addDirectories");
+  let found_2 = suggestions.find((suggestion) => suggestion.type === "addDirectories");
   if (found_2?.type === "addDirectories") {
-    let rt = parseModeSuggestions(found_2.directories);
-    if (rt !== null) Re.push(rt);
+    let modeSuggestions = parseModeSuggestions(found_2.directories);
+    if (modeSuggestions !== null) Re.push(modeSuggestions);
   }
-  let filtered = ke.filter((rt) => rt.type === "addRules");
+  let filtered = suggestions.filter((suggestion) => suggestion.type === "addRules");
   if (filtered.length > 0) {
-    let rt = parseConsentSuggestions(filtered, {
-      displayedTypes: Tht,
-      labelPredicate: (kt) => ruleMatchesTool(kt, jLo),
+    let consentSuggestions = parseConsentSuggestions(filtered, {
+      displayedTypes: FILE_RULE_UPDATE_TYPES,
+      labelPredicate: (kt) => ruleMatchesTool(kt, FILE_FAMILY_TOOLTIP),
       renderLabel: buildReadRuleConsentLabel,
     });
-    if (rt !== null) Re.push(rt);
+    if (consentSuggestions !== null) Re.push(consentSuggestions);
   }
   let [ze, ...Xe] = Re;
-  if (ze === void 0) return null;
-  return { row: Xe.length === 0 ? ze : combineRows(ze, ...Xe), value: "yes-session" };
+  if (ze === undefined) return null;
+  return {
+    row: Xe.length === 0 ? ze : combineRows(ze, ...Xe),
+    value: "yes-session",
+  };
 }
 //@ chunk-18hwfzwa.js:1378346-1378871 fingerprint = PERMISSION_HANDLERS (0.396)
-function PERMISSION_HANDLERS(h, x, D) {
-  switch (h.type) {
+function PERMISSION_HANDLERS(option, payload, D) {
+  switch (option.type) {
     case "accept-once":
-      return { behavior: "allow", updatedInput: x.input, ...(D && { feedback: D }) };
+      return {
+        behavior: "allow",
+        updatedInput: payload.input,
+        ...(D && {
+          feedback: D,
+        }),
+      };
     case "accept-session": {
-      if (!isConsentRow(h.row)) return { behavior: "allow", updatedInput: x.input };
-      return { behavior: "allow", updatedInput: x.input, permissionUpdates: h.row.applies };
+      if (!isConsentRow(option.row))
+        return {
+          behavior: "allow",
+          updatedInput: payload.input,
+        };
+      return {
+        behavior: "allow",
+        updatedInput: payload.input,
+        permissionUpdates: option.row.applies,
+      };
     }
     case "reject":
-      return { behavior: "deny", ...(D && { feedback: D }) };
+      return {
+        behavior: "deny",
+        ...(D && {
+          feedback: D,
+        }),
+      };
     case "block-outside-reads":
-      return { behavior: "deny", blockOutsideReads: !0 };
+      return {
+        behavior: "deny",
+        blockOutsideReads: true,
+      };
     case "allow-outside-read-once":
       return {
         behavior: "allow",
-        updatedInput: x.input,
-        ...(D && { feedback: D }),
-        askAgainOutsideReads: !0,
+        updatedInput: payload.input,
+        ...(D && {
+          feedback: D,
+        }),
+        askAgainOutsideReads: true,
       };
   }
 }
-
 export { handleAcceptSession, PERMISSION_HANDLERS };

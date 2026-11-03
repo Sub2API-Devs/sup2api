@@ -8,11 +8,11 @@
  * pieces: chunk-18hwfzwa.js (3)
  * attribution: fingerprint 2, layout 1
  */
-import { extname, extname as extname_2 } from "path";
+import { extname } from "path";
 import { w } from "../../vendor/react/compiler-runtime.js";
 import { useAppState } from "../state/AppState.js";
 import { useNotifications } from "../context/notifications.js";
-import { Me } from "../components/design-system/ThemeProvider.js";
+import { useTheme_2 } from "../components/design-system/ThemeProvider.js";
 import { useHost } from "../context/session.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 import { R, P } from "../../vendor/react/cjs/react.production.js";
@@ -33,7 +33,7 @@ import { resolvePluginEntryPath, entryPathOrReason } from "../utils/plugins/loca
 import { TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS } from "../utils/errors.js";
 import { printableName } from "../utils/printableName.js";
 import { installPluginWithRecords } from "../utils/plugins/crossMarketplaceInstall.js";
-import { E$e } from "../utils/plugins/headersHelper.js";
+import { marketplaceSourceOfEntry } from "../utils/plugins/headersHelper.js";
 import { updateSettingsForSourceWithTransform } from "../utils/settings/settings.js";
 import { saveGlobalConfig } from "../utils/config.js";
 
@@ -41,22 +41,24 @@ import { saveGlobalConfig } from "../utils/config.js";
 function selectFileHistoryTrackedFiles(s) {
   return s.fileHistory.trackedFiles;
 }
+//@ chunk-18hwfzwa.js:1802669-1803844 layout
 /**
  * 文件历史里出现新的被跟踪文件时，查找匹配该扩展名的 LSP 插件，弹出推荐对话框；用户取消时把未检查的文件放回，接受/拒绝后本会话不再推荐。
  */
-//@ chunk-18hwfzwa.js:1802669-1803844 layout
 function useLspRecommendationWatcher(requestDialog, schedule) {
-  let $ = w(9),
-    trackedFiles = useAppState(selectFileHistoryTrackedFiles),
-    { addNotification: addNotification } = useNotifications(),
-    { storageV5: storageV5 } = Me(),
-    host = useHost(),
-    Be;
-  if ($[0] === MEMO_CACHE_SENTINEL) ((Be = new Set()), ($[0] = Be));
-  else Be = $[0];
-  let checkedFilesRef = R(Be),
-    We,
-    ze;
+  let $ = w(9);
+  let trackedFiles = useAppState(selectFileHistoryTrackedFiles);
+  let { addNotification } = useNotifications();
+  let { storageV5 } = useTheme_2();
+  let host = useHost();
+  let Be;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    Be = new Set();
+    $[0] = Be;
+  } else Be = $[0];
+  let checkedFilesRef = R(Be);
+  let We;
+  let ze;
   if (
     $[1] !== addNotification ||
     $[2] !== schedule ||
@@ -64,15 +66,18 @@ function useLspRecommendationWatcher(requestDialog, schedule) {
     $[4] !== requestDialog ||
     $[5] !== storageV5 ||
     $[6] !== trackedFiles
-  )
-    ((We = () => {
+  ) {
+    We = () => {
       schedule("lsp", async () => {
         if (hasShownLspRecommendationThisSession()) {
           return;
         }
         let Xe = [];
-        for (const rt of trackedFiles) {
-          if (!checkedFilesRef.current.has(rt)) (checkedFilesRef.current.add(rt), Xe.push(rt));
+        for (const file of trackedFiles) {
+          if (!checkedFilesRef.current.has(file)) {
+            checkedFilesRef.current.add(file);
+            Xe.push(file);
+          }
         }
         for (const [kt, At] of Xe.entries()) {
           try {
@@ -94,14 +99,16 @@ function useLspRecommendationWatcher(requestDialog, schedule) {
                   marketplaceName: Et.marketplaceName,
                   fileExtension: Et.fileExtension,
                 },
-                { place: "under" },
+                {
+                  place: "under",
+                },
               );
               if (Dt === "cancelled") {
                 for (const Lt of Xe.slice(kt)) checkedFilesRef.current.delete(Lt);
                 return;
               }
-              (setLspRecommendationShownThisSession(!0),
-                useLspPluginRecommendation(Et, Dt, addNotification, storageV5));
+              setLspRecommendationShownThisSession(true);
+              useLspPluginRecommendation(Et, Dt, addNotification, storageV5);
               return;
             }
           } catch (error) {
@@ -112,90 +119,102 @@ function useLspRecommendationWatcher(requestDialog, schedule) {
           }
         }
       });
-    }),
-      (ze = [trackedFiles, schedule, requestDialog, addNotification, storageV5, host]),
-      ($[1] = addNotification),
-      ($[2] = schedule),
-      ($[3] = host),
-      ($[4] = requestDialog),
-      ($[5] = storageV5),
-      ($[6] = trackedFiles),
-      ($[7] = We),
-      ($[8] = ze));
-  else ((We = $[7]), (ze = $[8]));
+    };
+    ze = [trackedFiles, schedule, requestDialog, addNotification, storageV5, host];
+    $[1] = addNotification;
+    $[2] = schedule;
+    $[3] = host;
+    $[4] = requestDialog;
+    $[5] = storageV5;
+    $[6] = trackedFiles;
+    $[7] = We;
+    $[8] = ze;
+  } else {
+    We = $[7];
+    ze = $[8];
+  }
   P(We, ze);
 }
 //@ chunk-18hwfzwa.js:1803844-1804920 fingerprint = useLspPluginRecommendation (0.614)
-function useLspPluginRecommendation({ pluginId: pluginId, pluginName: pluginName }, D, L, ee) {
+function useLspPluginRecommendation({ pluginId, pluginName }, D, addNotification, storageV5) {
   switch ((logForDebugging(`[useLspPluginRecommendation] User response: ${D} for ${pluginName}`), D)) {
     case "yes":
       installPluginAndNotify(
         pluginId,
         pluginName,
         "lsp-plugin",
-        L,
+        addNotification,
         async (ke) => {
           logForDebugging(`[useLspPluginRecommendation] Installing plugin: ${pluginId}`);
-          let matches = await loadKnownMarketplacesSafe(ee),
-            Be;
+          let matches = await loadKnownMarketplacesSafe(storageV5);
+          let Be;
           if (typeof ke.entry.source === "string") {
-            let He = await resolvePluginEntryPath(
-                pluginId,
-                ke.marketplaceInstallLocation,
-                ke.entry.source,
-                matches,
-                tryUnwrapTextPayload(),
-                ee,
-              ),
-              We = entryPathOrReason(He);
-            if (We.entryPath === void 0)
+            let pluginEntryPath = await resolvePluginEntryPath(
+              pluginId,
+              ke.marketplaceInstallLocation,
+              ke.entry.source,
+              matches,
+              tryUnwrapTextPayload(),
+              storageV5,
+            );
+            let We = entryPathOrReason(pluginEntryPath);
+            if (We.entryPath === undefined)
               throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
                 `Plugin ${printableName(pluginId, 120)}: ${We.reason}`,
                 "lsp plugin recommendation marketplace path refused",
               );
             Be = We.entryPath;
           }
-          (await installPluginWithRecords(
+          await installPluginWithRecords(
             pluginId,
             ke.entry,
             "user",
-            void 0,
+            undefined,
             Be,
-            void 0,
-            void 0,
+            undefined,
+            undefined,
             ke.marketplaceInstallLocation,
-            E$e(pluginId, matches),
-            void 0,
-            ee,
-            { explicitInstall: !1 },
-          ),
-            await updateSettingsForSourceWithTransform(
-              "userSettings",
-              (response) => ({ enabledPlugins: { ...response?.enabledPlugins, [pluginId]: !0 } }),
-              void 0,
-              ee,
-            ),
-            logForDebugging(`[useLspPluginRecommendation] Plugin installed: ${pluginId}`));
+            marketplaceSourceOfEntry(pluginId, matches),
+            undefined,
+            storageV5,
+            {
+              explicitInstall: false,
+            },
+          );
+          await updateSettingsForSourceWithTransform(
+            "userSettings",
+            (response) => ({
+              enabledPlugins: {
+                ...response?.enabledPlugins,
+                [pluginId]: true,
+              },
+            }),
+            undefined,
+            storageV5,
+          );
+          logForDebugging(`[useLspPluginRecommendation] Plugin installed: ${pluginId}`);
         },
-        ee,
+        storageV5,
       );
       break;
     case "no":
       break;
     case "timeout":
-      (logForDebugging("[useLspPluginRecommendation] Auto-dismissed unanswered, incrementing ignored count"),
-        incrementIgnoredCount(ee));
+      logForDebugging("[useLspPluginRecommendation] Auto-dismissed unanswered, incrementing ignored count");
+      incrementIgnoredCount(storageV5);
       break;
     case "never":
-      addToNeverSuggest(pluginId, ee);
+      addToNeverSuggest(pluginId, storageV5);
       break;
     case "disable":
       saveGlobalConfig((pluginData) => {
         if (pluginData.lspRecommendationDisabled) return pluginData;
-        return { ...pluginData, lspRecommendationDisabled: !0 };
-      }, ee);
+        return {
+          ...pluginData,
+          lspRecommendationDisabled: true,
+        };
+      }, storageV5);
       break;
   }
 }
-
 export { useLspRecommendationWatcher };

@@ -24,23 +24,32 @@ function collectNonProjectEnv() {
   );
 }
 //@ chunk-e4vyc04t.js:509-543 placement
-function cte() {
+/**
+ * effectiveEnvSnapshot：预设置环境与非项目环境合并后的快照。
+ */
+function effectiveEnvSnapshot() {
   return overlayEnvCaseInsensitive(getPreSettingsEnvSnapshot(), collectNonProjectEnv());
 }
 //@ chunk-e4vyc04t.js:543-727 placement
-function overlayEnvCaseInsensitive(s, n) {
-  let r = new Set(Object.keys(n).map((e) => e.toUpperCase())),
-    t = { ...s };
-  for (let e of Object.keys(t)) if (!(e in n) && r.has(e.toUpperCase())) delete t[e];
-  return Object.assign(t, n);
+function overlayEnvCaseInsensitive(preSettingsEnvSnapshot, nonProjectEnv) {
+  let r = new Set(Object.keys(nonProjectEnv).map((key) => key.toUpperCase()));
+  let t = {
+    ...preSettingsEnvSnapshot,
+  };
+  for (let key of Object.keys(t)) if (!(key in nonProjectEnv) && r.has(key.toUpperCase())) delete t[key];
+  return Object.assign(t, nonProjectEnv);
 }
 //@ chunk-e4vyc04t.js:727-906 placement
 function mergeEnvCaseInsensitive(...s) {
   let n = new Map();
-  for (let t of s) for (let [e, o] of Object.entries(t)) n.set(e.toUpperCase(), { key: e, value: o });
+  for (let t of s)
+    for (let [key, value] of Object.entries(t))
+      n.set(key.toUpperCase(), {
+        key,
+        value,
+      });
   let r = {};
-  for (let { key: key, value: e } of n.values()) r[key] = e;
+  for (let { key, value: e } of n.values()) r[key] = e;
   return r;
 }
-
-export { cte };
+export { effectiveEnvSnapshot };

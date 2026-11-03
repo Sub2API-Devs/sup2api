@@ -8,9 +8,9 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:117631-118155 cjs-fingerprint
-var yn = x(function (Wu, Cn) {
-  function zl(e) {
-    let regex = e.regex;
+var require_diff = x(function (cjsExports, cjsModule) {
+  function diff(hljs) {
+    let regex = hljs.regex;
     return {
       name: "Diff",
       aliases: ["patch"],
@@ -31,16 +31,29 @@ var yn = x(function (Wu, Cn) {
               begin: regex.either(/Index: /, /^index/, /={3,}/, /^-{3}/, /^\*{3} /, /^\+{3}/, /^diff --git/),
               end: /$/,
             },
-            { match: /^\*{15}$/ },
+            {
+              match: /^\*{15}$/,
+            },
           ],
         },
-        { className: "addition", begin: /^\+/, end: /$/ },
-        { className: "deletion", begin: /^-/, end: /$/ },
-        { className: "addition", begin: /^!/, end: /$/ },
+        {
+          className: "addition",
+          begin: /^\+/,
+          end: /$/,
+        },
+        {
+          className: "deletion",
+          begin: /^-/,
+          end: /$/,
+        },
+        {
+          className: "addition",
+          begin: /^!/,
+          end: /$/,
+        },
       ],
     };
   }
-  Cn.exports = zl;
+  cjsModule.exports = diff;
 });
-
-export { yn };
+export { require_diff };

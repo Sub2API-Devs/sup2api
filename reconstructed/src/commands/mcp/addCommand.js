@@ -28,8 +28,9 @@ import { claudeCommand } from "../../utils/worktreeResumeHint.js";
 import { errorMessage } from "../../utils/errors.js";
 
 //@ chunk-4vq0yytw.js:12058-16442 fingerprint = registerMcpAddCommand (0.821)
-function registerMcpAddCommand(v, p) {
-  v.command("add <name> <commandOrUrl> [args...]")
+function registerMcpAddCommand(mcp, p) {
+  mcp
+    .command("add <name> <commandOrUrl> [args...]")
     .description(
       `Add an MCP server to Claude Code.
 
@@ -70,108 +71,135 @@ Examples:
       ).hideHelp(!isXaaEnabled()),
     )
     .action(
-      p(async (s, e, t, o, r) => {
-        let n = t,
-          u = o;
+      p(async (s, e, t, o, options) => {
+        let actualCommand = t;
+        let actualArgs = o;
         if (!e)
           cliError(`Error: Server name is required.
 Usage: claude mcp add <name> <command> [args...]`);
-        else if (!n)
+        else if (!actualCommand)
           cliError(`Error: Command is required when server name is provided.
 Usage: claude mcp add <name> <command> [args...]`);
         try {
-          let scope = ensureConfigScope(r.scope),
-            transport = ensureTransport(r.transport);
-          if (r.xaa && !isXaaEnabled())
+          let scope = ensureConfigScope(options.scope);
+          let transport = ensureTransport(options.transport);
+          if (options.xaa && !isXaaEnabled())
             cliError("Error: --xaa requires CLAUDE_CODE_ENABLE_XAA=1 in your environment");
-          let xaa = Boolean(r.xaa);
+          let xaa = Boolean(options.xaa);
           if (xaa) {
             let missing = [];
-            if (!r.clientId) missing.push("--client-id");
-            if (!r.clientSecret) missing.push("--client-secret");
+            if (!options.clientId) missing.push("--client-id");
+            if (!options.clientSecret) missing.push("--client-secret");
             if (!getXaaIdpSettings()) missing.push("'claude mcp xaa setup' (settings.xaaIdp not configured)");
             if (missing.length) cliError(`Error: --xaa requires: ${missing.join(", ")}`);
           }
-          let transportExplicit = r.transport !== void 0,
-            looksLikeUrl =
-              n.startsWith("http://") ||
-              n.startsWith("https://") ||
-              n.startsWith("localhost") ||
-              n.endsWith("/sse") ||
-              n.endsWith("/mcp");
-          if (
-            (await logEventAsync("tengu_mcp_add", {
-              type: fromEnum(transport),
-              scope: fromEnum(scope),
-              source: lit("command"),
-              transport: fromEnum(transport),
-              transportExplicit: transportExplicit,
-              looksLikeUrl: looksLikeUrl,
-            }),
-            transport === "sse" || transport === "http")
-          ) {
+          let transportExplicit = options.transport !== undefined;
+          let looksLikeUrl =
+            actualCommand.startsWith("http://") ||
+            actualCommand.startsWith("https://") ||
+            actualCommand.startsWith("localhost") ||
+            actualCommand.endsWith("/sse") ||
+            actualCommand.endsWith("/mcp");
+          await logEventAsync("tengu_mcp_add", {
+            type: fromEnum(transport),
+            scope: fromEnum(scope),
+            source: lit("command"),
+            transport: fromEnum(transport),
+            transportExplicit,
+            looksLikeUrl,
+          });
+          if (transport === "sse" || transport === "http") {
             let m = transport === "sse" ? "SSE" : "HTTP";
-            if (!n) return cliErrorAfterAnalyticsFlush(`Error: URL is required for ${m} transport.`);
-            let w = r.header ? parseHeaders(r.header) : void 0,
-              h = r.callbackPort ? parseIntLoose(r.callbackPort) : void 0;
-            if (h !== void 0 && (!Number.isInteger(h) || h <= 0 || h > 65535))
+            if (!actualCommand)
+              return cliErrorAfterAnalyticsFlush(`Error: URL is required for ${m} transport.`);
+            let headers = options.header ? parseHeaders(options.header) : undefined;
+            let callbackPort = options.callbackPort ? parseIntLoose(options.callbackPort) : undefined;
+            if (
+              callbackPort !== undefined &&
+              (!Number.isInteger(callbackPort) || callbackPort <= 0 || callbackPort > 65535)
+            )
               return cliErrorAfterAnalyticsFlush("Error: --callback-port must be an integer in [1, 65535]");
-            let P =
-                r.clientId || h || xaa
-                  ? {
-                      ...(r.clientId && { clientId: r.clientId }),
-                      ...(h && { callbackPort: h }),
-                      ...(xaa && { xaa: !0 }),
-                    }
-                  : void 0,
-              { readClientSecret: readClientSecret, saveMcpClientSecret: saveMcpClientSecret } =
-                require("./chunk-asne9cp8.js").mcpAuthModule(),
-              k = r.clientSecret && r.clientId ? await readClientSecret() : void 0,
-              A =
-                transport === "sse"
-                  ? { type: "sse", url: n, headers: w, oauth: P }
-                  : { type: "http", url: n, headers: w, oauth: P };
-            if ((await addMcpConfig(e, A, scope, s), k)) {
-              let y = await saveMcpClientSecret(e, A, k);
+            let oauth =
+              options.clientId || callbackPort || xaa
+                ? {
+                    ...(options.clientId && {
+                      clientId: options.clientId,
+                    }),
+                    ...(callbackPort && {
+                      callbackPort,
+                    }),
+                    ...(xaa && {
+                      xaa: true,
+                    }),
+                  }
+                : undefined;
+            let { readClientSecret, saveMcpClientSecret } = require("./chunk-asne9cp8.js").mcpAuthModule();
+            let clientSecret =
+              options.clientSecret && options.clientId ? await readClientSecret() : undefined;
+            let serverConfig =
+              transport === "sse"
+                ? {
+                    type: "sse",
+                    url: actualCommand,
+                    headers,
+                    oauth,
+                  }
+                : {
+                    type: "http",
+                    url: actualCommand,
+                    headers,
+                    oauth,
+                  };
+            await addMcpConfig(e, serverConfig, scope, s);
+            if (clientSecret) {
+              let y = await saveMcpClientSecret(e, serverConfig, clientSecret);
               if (!y.success)
                 process.stderr
                   .write(`Server added, but the client secret could not be stored${y.warning ? ` (${y.warning})` : ""}. Re-run with --client-secret once secure storage is available.
 `);
             }
-            if (
-              (process.stdout
-                .write(`Added ${m} MCP server ${e} with URL: ${redactUrlsInText(n)} to ${scope} config
-`),
-              w)
-            )
-              process.stdout.write(`Headers: ${jsonStringify(redactSecrets_3(w), null, 2)}
+            process.stdout
+              .write(`Added ${m} MCP server ${e} with URL: ${redactUrlsInText(actualCommand)} to ${scope} config
+`);
+            if (headers)
+              process.stdout.write(`Headers: ${jsonStringify(redactSecrets_3(headers), null, 2)}
 `);
           } else {
-            if (r.clientId || r.clientSecret || r.callbackPort || r.xaa)
+            if (options.clientId || options.clientSecret || options.callbackPort || options.xaa)
               process.stderr
                 .write(`Warning: --client-id, --client-secret, --callback-port, and --xaa are only supported for HTTP/SSE transports and will be ignored for stdio.
 `);
-            let m = looksLikeUrl ? redactUrlsInText(n) : n;
+            let m = looksLikeUrl ? redactUrlsInText(actualCommand) : actualCommand;
             if (!transportExplicit && looksLikeUrl) {
               process.stderr.write(`
 Warning: The command "${m}" looks like a URL, but is being interpreted as a stdio server as --transport was not specified.
 `);
-              let h = claudeCommand("mcp add --transport http", e),
-                P = claudeCommand("mcp add --transport sse", e);
-              if (h && P)
-                (process.stderr.write(`If this is an HTTP server, use: ${h} ${m}
-`),
-                  process.stderr.write(`If this is an SSE server, use: ${P} ${m}
-`));
-              else
+              let h = claudeCommand("mcp add --transport http", e);
+              let P = claudeCommand("mcp add --transport sse", e);
+              if (h && P) {
+                process.stderr.write(`If this is an HTTP server, use: ${h} ${m}
+`);
+                process.stderr.write(`If this is an SSE server, use: ${P} ${m}
+`);
+              } else
                 process.stderr.write(`If this is a remote server, re-run with --transport http (or sse).
 `);
             }
-            let env = parseEnvVars(r.env);
-            (await addMcpConfig(e, { type: "stdio", command: n, args: u, env: env }, scope, s),
-              process.stdout
-                .write(`Added stdio MCP server ${e} with command: ${m} ${u.join(" ")} to ${scope} config
-`));
+            let env = parseEnvVars(options.env);
+            await addMcpConfig(
+              e,
+              {
+                type: "stdio",
+                command: actualCommand,
+                args: actualArgs,
+                env,
+              },
+              scope,
+              s,
+            );
+            process.stdout
+              .write(`Added stdio MCP server ${e} with command: ${m} ${actualArgs.join(" ")} to ${scope} config
+`);
           }
           return cliOkAfterAnalyticsFlush(`File modified: ${describeMcpConfigFilePath(scope)}`);
         } catch (error) {
@@ -180,5 +208,4 @@ Warning: The command "${m}" looks like a URL, but is being interpreted as a stdi
       }),
     );
 }
-
 export { registerMcpAddCommand };

@@ -8,7 +8,7 @@
  * pieces: chunk-08s5p3av.js (5)
  * attribution: file-local 1, layout 2, facade-exports 1, placement 1
  */
-import { join, join as join_2, relative, basename } from "path";
+import { join, relative, basename } from "path";
 import { rename, rmdir } from "fs/promises";
 import { SessionRootSlot } from "../bootstrap/sessionSlices.js";
 import { getProjectDir } from "./sessionStoragePortable.js";
@@ -16,79 +16,93 @@ import { getOriginalCwd, getSessionId } from "../bootstrap/state.js";
 import { getProjectKeyIfRepresentable, getProjectsDir } from "./sessionStorage.js";
 import { isStorageV5Enabled } from "./hoverRest.js";
 import { logForDebugging } from "./debug.js";
-import { PDi } from "./resultError.js";
+import { unwrapResult } from "./resultError.js";
 
 //@ chunk-08s5p3av.js:3102-3334 file-local
 class _resetRecordingStateForTesting {
   filePath = null;
-  key = void 0;
+  key = undefined;
   timestamp = 0;
   recorder = null;
-  failed = !1;
-  setFile(e, r, o) {
-    ((this.filePath = e), (this.key = o), (this.timestamp = r));
+  failed = false;
+  setFile(filePath, timestamp, key) {
+    this.filePath = filePath;
+    this.key = key;
+    this.timestamp = timestamp;
   }
-  setFilePath(e, r) {
-    ((this.filePath = e), (this.key = r));
+  setFilePath(filePath, key) {
+    this.filePath = filePath;
+    this.key = key;
   }
-  setRecorder(e) {
-    this.recorder = e;
+  setRecorder(recorder) {
+    this.recorder = recorder;
   }
   markFailed() {
-    this.failed = !0;
+    this.failed = true;
   }
 }
 //@ chunk-08s5p3av.js:3334-3424 layout
-function ye(e, r, o) {
-  return { namespace: "recording", projectKey: e, sessionId: r, stamp: String(o) };
+/**
+ * 录制文件的存储命名（namespace、项目键、会话 id 与时间戳）。
+ */
+function recordingKey(projectKey, sessionId, timestamp) {
+  return {
+    namespace: "recording",
+    projectKey,
+    sessionId,
+    stamp: String(timestamp),
+  };
 }
 //@ chunk-08s5p3av.js:3424-3449 layout
-var Se = new SessionRootSlot(() => new _resetRecordingStateForTesting());
+/**
+ * 按会话根保存的录制状态。
+ */
+var recordingStateByRoot = new SessionRootSlot(() => new _resetRecordingStateForTesting());
 //@ chunk-08s5p3av.js:3449-4215 facade-exports = renameRecordingForSession (0.754)
-async function renameRecordingForSession(e, r) {
-  let of = Se.of(e),
-    oldPath = of.filePath;
-  if (!oldPath || of.timestamp === 0) return;
-  let s = getProjectDir(getOriginalCwd()),
-    key = of.key,
-    d = getProjectKeyIfRepresentable(s);
-  if (isStorageV5Enabled() && r !== void 0 && key !== void 0 && d !== void 0) {
-    if (of.failed) return;
-    let w = getSessionId(),
-      g = join(s, w, `${of.timestamp}.cast`);
+async function renameRecordingForSession(session, storageV5) {
+  let o = recordingStateByRoot.of(session);
+  let oldPath = o.filePath;
+  if (!oldPath || o.timestamp === 0) return;
+  let projectDir = getProjectDir(getOriginalCwd());
+  let key = o.key;
+  let projectKey = getProjectKeyIfRepresentable(projectDir);
+  if (isStorageV5Enabled() && storageV5 !== undefined && key !== undefined && projectKey !== undefined) {
+    if (o.failed) return;
+    let sessionId = getSessionId();
+    let g = join(projectDir, sessionId, `${o.timestamp}.cast`);
     if (oldPath === g) return;
-    let h = ye(d, w, of.timestamp),
-      M = relative(s, oldPath),
-      projectDir = relative(s, g),
-      v = async () => {
-        if (of.failed) return;
-        try {
-          (await moveSessionRecording(r, key, h),
-            of.setFilePath(g, h),
-            logForDebugging(`[asciicast] Renamed recording: ${M} \u2192 ${projectDir}`));
-        } catch {
-          logForDebugging(`[asciicast] Failed to rename recording from ${M} to ${projectDir}`);
-        }
-      };
-    await (of.recorder?.park(v) ?? v());
+    let h = recordingKey(projectKey, sessionId, o.timestamp);
+    let M = relative(projectDir, oldPath);
+    let projectDir_2 = relative(projectDir, g);
+    let v = async () => {
+      if (o.failed) return;
+      try {
+        await moveSessionRecording(storageV5, key, h);
+        o.setFilePath(g, h);
+        logForDebugging(`[asciicast] Renamed recording: ${M} \u2192 ${projectDir_2}`);
+      } catch {
+        logForDebugging(`[asciicast] Failed to rename recording from ${M} to ${projectDir_2}`);
+      }
+    };
+    await (o.recorder?.park(v) ?? v());
     return;
   }
-  let newPath = join(s, `${getSessionId()}-${of.timestamp}.cast`);
+  let newPath = join(projectDir, `${getSessionId()}-${o.timestamp}.cast`);
   if (oldPath === newPath) return;
-  await of.recorder?.flush();
-  let oldName = basename(oldPath),
-    newName = basename(newPath);
+  await o.recorder?.flush();
+  let oldName = basename(oldPath);
+  let newName = basename(newPath);
   try {
-    (await rename(oldPath, newPath),
-      of.setFilePath(newPath),
-      logForDebugging(`[asciicast] Renamed recording: ${oldName} \u2192 ${newName}`));
+    await rename(oldPath, newPath);
+    o.setFilePath(newPath);
+    logForDebugging(`[asciicast] Renamed recording: ${oldName} \u2192 ${newName}`);
   } catch {
     logForDebugging(`[asciicast] Failed to rename recording from ${oldName} to ${newName}`);
   }
 }
 //@ chunk-08s5p3av.js:4215-4320 placement
-async function moveSessionRecording(e, r, o) {
-  (PDi(await e.move(r, o)), await rmdir(join(getProjectsDir(), r.projectKey, r.sessionId)).catch(() => {}));
+async function moveSessionRecording(e, key, o) {
+  unwrapResult(await e.move(key, o));
+  await rmdir(join(getProjectsDir(), key.projectKey, key.sessionId)).catch(() => {});
 }
-
 export { renameRecordingForSession };

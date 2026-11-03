@@ -8,89 +8,54 @@
  * pieces: chunk-e6aww6q8.js (4)
  * attribution: placement 4
  */
-import {
-  randomUUID,
-  randomUUID as randomUUID_2,
-  randomUUID as randomUUID_3,
-  randomUUID as randomUUID_4,
-  randomUUID as randomUUID_5,
-  randomUUID as randomUUID_6,
-  randomUUID as randomUUID_7,
-  randomUUID as randomUUID_8,
-  randomUUID as randomUUID_9,
-  randomUUID as randomUUID_10,
-  randomUUID as randomUUID_11,
-  randomUUID as randomUUID_12,
-  randomUUID as randomUUID_13,
-  randomUUID as randomUUID_14,
-  randomUUID as randomUUID_15,
-  randomUUID as randomUUID_16,
-  randomUUID as randomUUID_17,
-  randomUUID as randomUUID_18,
-  randomUUID as randomUUID_19,
-  randomUUID as randomUUID_20,
-  randomUUID as randomUUID_21,
-  randomUUID as randomUUID_22,
-  randomUUID as randomUUID_23,
-  randomUUID as randomUUID_24,
-  randomUUID as randomUUID_25,
-  randomUUID as randomUUID_26,
-  randomUUID as randomUUID_27,
-  randomUUID as randomUUID_28,
-  randomUUID as randomUUID_29,
-  randomUUID as randomUUID_30,
-  randomUUID as randomUUID_31,
-  randomUUID as randomUUID_32,
-  randomUUID as randomUUID_33,
-  randomUUID as randomUUID_34,
-  randomUUID as randomUUID_35,
-  randomUUID as randomUUID_36,
-  randomUUID as randomUUID_37,
-  randomUUID as randomUUID_38,
-  randomUUID as randomUUID_39,
-  randomUUID as randomUUID_40,
-  randomUUID as randomUUID_41,
-  randomUUID as randomUUID_42,
-  randomUUID as randomUUID_43,
-  randomUUID as randomUUID_44,
-  randomUUID as randomUUID_45,
-  randomUUID as randomUUID_46,
-  randomUUID as randomUUID_47,
-  randomUUID as randomUUID_48,
-  randomUUID as randomUUID_49,
-  randomUUID as randomUUID_50,
-} from "crypto";
-import { checkPlainObject, lEe, FORBIDDEN_OBJECT_KEYS } from "./sites/plainData.js";
+import { randomUUID } from "crypto";
+import { checkPlainObject, checkPlainData, FORBIDDEN_OBJECT_KEYS } from "./sites/plainData.js";
 import { HooksError } from "./hooksErrors.js";
 import { isPlainDataObject } from "../../utils/hooks/functionHookMatchers.js";
 
+//@ chunk-e6aww6q8.js:44192-44581 placement
 /**
  * 规整 skill.prompt 的事件负载：frontmatter 转纯数据，来源字段必须是字符串。
  */
-//@ chunk-e6aww6q8.js:44192-44581 placement
 function normalizeSkillPromptPayload(e) {
-  let n = checkPlainObject(e.frontmatter ?? {}),
-    r = e,
-    found = ["source", "pluginName", "path", "frontmatterProblem"].find(
-      (S) => r[S] !== void 0 && typeof r[S] !== "string",
-    ),
-    h = typeof n === "string" ? n : lEe(n),
-    y = found === void 0 ? h && `a frontmatter that ${h}` : `a ${found} that is no text`;
-  if (typeof n === "string" || y !== void 0) throw new HooksError(`$.skill.prompt: called with ${y}`);
-  return { ...e, frontmatter: n, source: e.source ?? "built-in" };
+  let n = checkPlainObject(e.frontmatter ?? {});
+  let r = e;
+  let found = ["source", "pluginName", "path", "frontmatterProblem"].find(
+    (S) => r[S] !== undefined && typeof r[S] !== "string",
+  );
+  let h = typeof n === "string" ? n : checkPlainData(n);
+  let y = found === undefined ? h && `a frontmatter that ${h}` : `a ${found} that is no text`;
+  if (typeof n === "string" || y !== undefined) throw new HooksError(`$.skill.prompt: called with ${y}`);
+  return {
+    ...e,
+    frontmatter: n,
+    source: e.source ?? "built-in",
+  };
 }
 //@ chunk-e6aww6q8.js:44581-44643 placement
-var rle = (e) => (e.to === "collector" ? e : { ...e, to: e.to ?? "anthropic" });
+/**
+ * to 默认 anthropic
+ */
+var defaultRoute = (e) =>
+  e.to === "collector"
+    ? e
+    : {
+        ...e,
+        to: e.to ?? "anthropic",
+      };
 //@ chunk-e6aww6q8.js:44643-45582 placement
 var EVENT_PAYLOAD_SHAPES = {
-  "tool.call": (e) => ({ ...e, tool_use_id: e.tool_use_id ?? `toolu_${randomUUID().replace(/-/g, "")}` }),
+  "tool.call": (e) => ({
+    ...e,
+    tool_use_id: e.tool_use_id ?? `toolu_${randomUUID().replace(/-/g, "")}`,
+  }),
   "tool.check": (e) => e,
   "tool.describe": (e) => e,
   "command.run": (e) => e,
   "command.describe": (e) => e,
   "config.set": (e) => e,
   "config.describe": (e) => e,
-  "telemetry.log": rle,
+  "telemetry.log": defaultRoute,
   "telemetry.mark": (e) => e,
   "prompt.submit": (e) => e,
   "prompt.fill": (e) => e,
@@ -130,19 +95,19 @@ function isPlainDataValue(e, n = new Map(), r = new Set()) {
   if (e instanceof Date) return Number.isFinite(e.getTime()) ? e.toISOString() : null;
   if (n.has(e)) return n.get(e) ?? null;
   if (!Array.isArray(e) && !isPlainDataObject(e)) return null;
-  n.set(e, void 0);
+  n.set(e, undefined);
   let s = Array.isArray(e)
     ? Array.from(e, (h) => isPlainDataValue(h, n, r))
     : Object.fromEntries(
         Object.keys(e)
-          .filter((h) => {
-            let included = FORBIDDEN_OBJECT_KEYS.includes(h);
-            if (included && h !== "__proto__") r.add(h);
+          .filter((key) => {
+            let included = FORBIDDEN_OBJECT_KEYS.includes(key);
+            if (included && key !== "__proto__") r.add(key);
             return !included;
           })
-          .map((h) => [h, isPlainDataValue(e[h], n, r)]),
+          .map((key) => [key, isPlainDataValue(e[key], n, r)]),
       );
-  return (n.set(e, s), s);
+  n.set(e, s);
+  return s;
 }
-
-export { isPlainDataValue, EVENT_PAYLOAD_SHAPES, rle };
+export { isPlainDataValue, EVENT_PAYLOAD_SHAPES, defaultRoute };

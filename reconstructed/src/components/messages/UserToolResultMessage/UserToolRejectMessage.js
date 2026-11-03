@@ -11,37 +11,29 @@
 import { w } from "../../../../vendor/react/compiler-runtime.js";
 import { useTerminalSize } from "../../../hooks/useTerminalSize.js";
 import { useTheme } from "../../design-system/ThemeProvider.js";
-import { rs } from "../../../state/AppState.js";
+import { useAppStateSlice } from "../../../state/AppState.js";
 import { EARLY_RETURN_SENTINEL, MEMO_CACHE_SENTINEL } from "../../../../runtime/bun-runtime.js";
 import { mcpRenderOverrideFor } from "../../Message.js";
-import { e } from "../../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { jsxProd_default } from "../../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { RejectedToolUseMessage } from "./RejectedToolUseMessage.js";
 import { safeParseToolInput, filterToolProgressMessages } from "../../../Tool.js";
 
 //@ chunk-ah34pb7m.js:217416-217470 affinity
-function mj(Y) {
+function selectActiveAgents_4_2(Y) {
   return Y.agentDefinitions.activeAgents;
 }
 //@ chunk-ah34pb7m.js:217470-218291 fingerprint = UserToolRejectMessage (0.451)
-function UserToolRejectMessage(t0) {
-  let $ = w(15),
-    {
-      input: input,
-      progressMessagesForMessage: progressMessagesForMessage,
-      isInterrupted: isInterrupted,
-      style: style,
-      tool: tool,
-      tools: tools,
-      verbose: verbose,
-      isTranscriptMode: isTranscriptMode,
-    } = t0,
-    { columns: columns } = useTerminalSize(),
-    [b] = useTheme(),
-    E = rs(mj),
-    L,
-    N;
+function UserToolRejectMessage(props) {
+  let $ = w(15);
+  let { input, progressMessagesForMessage, isInterrupted, style, tool, tools, verbose, isTranscriptMode } =
+    props;
+  let { columns } = useTerminalSize();
+  let [b] = useTheme();
+  let activeAgents = useAppStateSlice(selectActiveAgents_4_2);
+  let L;
+  let N;
   if (
-    $[0] !== E ||
+    $[0] !== activeAgents ||
     $[1] !== columns ||
     $[2] !== input ||
     $[3] !== isInterrupted ||
@@ -55,52 +47,58 @@ function UserToolRejectMessage(t0) {
   ) {
     N = EARLY_RETURN_SENTINEL;
     K: {
-      let W = tool ? mcpRenderOverrideFor(tool, "renderToolUseRejectedMessage") : void 0;
+      let W = tool ? mcpRenderOverrideFor(tool, "renderToolUseRejectedMessage") : undefined;
       if (!tool || !W) {
         let U;
-        if ($[13] === MEMO_CACHE_SENTINEL) ((U = e(RejectedToolUseMessage, {})), ($[13] = U));
-        else U = $[13];
+        if ($[13] === MEMO_CACHE_SENTINEL) {
+          U = jsxProd_default(RejectedToolUseMessage, {});
+          $[13] = U;
+        } else U = $[13];
         N = U;
         break K;
       }
       let V = safeParseToolInput(tool, input);
       if (!V.success) {
-        let U;
-        if ($[14] === MEMO_CACHE_SENTINEL) ((U = e(RejectedToolUseMessage, {})), ($[14] = U));
-        else U = $[14];
-        N = U;
+        let t4;
+        if ($[14] === MEMO_CACHE_SENTINEL) {
+          t4 = jsxProd_default(RejectedToolUseMessage, {});
+          $[14] = t4;
+        } else t4 = $[14];
+        N = t4;
         break K;
       }
       L =
         W(V.data, {
-          columns: columns,
+          columns,
           messages: [],
-          tools: tools,
-          verbose: verbose,
+          tools,
+          verbose,
           progressMessagesForMessage: filterToolProgressMessages(progressMessagesForMessage),
-          isInterrupted: isInterrupted,
-          style: style,
+          isInterrupted,
+          style,
           theme: b,
-          isTranscriptMode: isTranscriptMode,
-          activeAgents: E,
-        }) ?? e(RejectedToolUseMessage, {});
+          isTranscriptMode,
+          activeAgents,
+        }) ?? jsxProd_default(RejectedToolUseMessage, {});
     }
-    (($[0] = E),
-      ($[1] = columns),
-      ($[2] = input),
-      ($[3] = isInterrupted),
-      ($[4] = isTranscriptMode),
-      ($[5] = progressMessagesForMessage),
-      ($[6] = style),
-      ($[7] = b),
-      ($[8] = tool),
-      ($[9] = tools),
-      ($[10] = verbose),
-      ($[11] = L),
-      ($[12] = N));
-  } else ((L = $[11]), (N = $[12]));
+    $[0] = activeAgents;
+    $[1] = columns;
+    $[2] = input;
+    $[3] = isInterrupted;
+    $[4] = isTranscriptMode;
+    $[5] = progressMessagesForMessage;
+    $[6] = style;
+    $[7] = b;
+    $[8] = tool;
+    $[9] = tools;
+    $[10] = verbose;
+    $[11] = L;
+    $[12] = N;
+  } else {
+    L = $[11];
+    N = $[12];
+  }
   if (N !== EARLY_RETURN_SENTINEL) return N;
   return L;
 }
-
 export { UserToolRejectMessage };

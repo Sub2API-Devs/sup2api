@@ -8,20 +8,32 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:384148-384386 cjs-fingerprint
-var ds = x(function (xg, ls) {
-  function Qp(e) {
+var require_python_repl = x(function (cjsExports, cjsModule) {
+  function pythonRepl(hljs) {
     return {
       aliases: ["pycon"],
       contains: [
         {
           className: "meta.prompt",
-          starts: { end: / |$/, starts: { end: "$", subLanguage: "python" } },
-          variants: [{ begin: /^>>>(?=[ ]|$)/ }, { begin: /^\.\.\.(?=[ ]|$)/ }],
+          starts: {
+            end: / |$/,
+            starts: {
+              end: "$",
+              subLanguage: "python",
+            },
+          },
+          variants: [
+            {
+              begin: /^>>>(?=[ ]|$)/,
+            },
+            {
+              begin: /^\.\.\.(?=[ ]|$)/,
+            },
+          ],
         },
       ],
     };
   }
-  ls.exports = Qp;
+  cjsModule.exports = pythonRepl;
 });
-
-export { ds };
+export { require_python_repl };

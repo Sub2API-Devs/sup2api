@@ -27,354 +27,432 @@ import {
   CancelTaskResultSchema,
   TaskStatusNotificationSchema,
 } from "../types.js";
-import { T } from "../../cjs/experimental/tasks/interfaces.js";
-import { q7 } from "../server/zod-compat.js";
-import { R, z } from "../server/zod-json-schema-compat.js";
+import { isTerminal } from "../../cjs/experimental/tasks/interfaces.js";
+import { objectFromShape } from "../server/zod-compat.js";
+import { R, parseWithCompat } from "../server/zod-json-schema-compat.js";
 
 //@ chunk-zykv69v4.js:11497-11510 esm-fingerprint
-var ye = 60000;
+var DEFAULT_REQUEST_TIMEOUT_MSEC = 60000;
 //@ chunk-zykv69v4.js:11510-27504 esm-fingerprint
-class Wsn {
-  constructor(e) {
-    if (
-      ((this._options = e),
-      (this._requestMessageId = 0),
-      (this._requestHandlers = new Map()),
-      (this._requestHandlerAbortControllers = new Map()),
-      (this._notificationHandlers = new Map()),
-      (this._responseHandlers = new Map()),
-      (this._progressHandlers = new Map()),
-      (this._timeoutInfo = new Map()),
-      (this._pendingDebouncedNotifications = new Set()),
-      (this._taskProgressTokens = new Map()),
-      (this._requestResolvers = new Map()),
-      this.setNotificationHandler(CancelledNotificationSchema, (t) => {
-        this._oncancel(t);
-      }),
-      this.setNotificationHandler(ProgressNotificationSchema, (t) => {
-        this._onprogress(t);
-      }),
-      this.setRequestHandler(PingRequestSchema, (t) => ({})),
-      (this._taskStore = e?.taskStore),
-      (this._taskMessageQueue = e?.taskMessageQueue),
-      this._taskStore)
-    )
-      (this.setRequestHandler(GetTaskRequestSchema, async (t, r) => {
-        let task = await this._taskStore.getTask(t.params.taskId, r.sessionId);
+class Protocol {
+  constructor(_options) {
+    this._options = _options;
+    this._requestMessageId = 0;
+    this._requestHandlers = new Map();
+    this._requestHandlerAbortControllers = new Map();
+    this._notificationHandlers = new Map();
+    this._responseHandlers = new Map();
+    this._progressHandlers = new Map();
+    this._timeoutInfo = new Map();
+    this._pendingDebouncedNotifications = new Set();
+    this._taskProgressTokens = new Map();
+    this._requestResolvers = new Map();
+    this.setNotificationHandler(CancelledNotificationSchema, (notification) => {
+      this._oncancel(notification);
+    });
+    this.setNotificationHandler(ProgressNotificationSchema, (notification) => {
+      this._onprogress(notification);
+    });
+    this.setRequestHandler(PingRequestSchema, (_request) => ({}));
+    this._taskStore = _options?.taskStore;
+    this._taskMessageQueue = _options?.taskMessageQueue;
+    if (this._taskStore) {
+      this.setRequestHandler(GetTaskRequestSchema, async (request, extra) => {
+        let task = await this._taskStore.getTask(request.params.taskId, extra.sessionId);
         if (!task) throw new McpError(ErrorCode.InvalidParams, "Failed to retrieve task: Task not found");
-        return { ...task };
-      }),
-        this.setRequestHandler(GetTaskPayloadRequestSchema, async (t, r) => {
-          let a = async () => {
-            let taskId = t.params.taskId;
-            if (this._taskMessageQueue) {
-              let o;
-              while ((o = await this._taskMessageQueue.dequeue(taskId, r.sessionId))) {
-                if (o.type === "response" || o.type === "error") {
-                  let message = o.message,
-                    id = message.id,
-                    i = this._requestResolvers.get(id);
-                  if (i)
-                    if ((this._requestResolvers.delete(id), o.type === "response")) i(message);
-                    else {
-                      let c = message,
-                        d = new McpError(c.error.code, c.error.message, c.error.data);
-                      i(d);
-                    }
+        return {
+          ...task,
+        };
+      });
+      this.setRequestHandler(GetTaskPayloadRequestSchema, async (request, extra) => {
+        let handleTaskResult = async () => {
+          let taskId = request.params.taskId;
+          if (this._taskMessageQueue) {
+            let queuedMessage;
+            while ((queuedMessage = await this._taskMessageQueue.dequeue(taskId, extra.sessionId))) {
+              if (queuedMessage.type === "response" || queuedMessage.type === "error") {
+                let message = queuedMessage.message;
+                let requestId = message.id;
+                let resolver = this._requestResolvers.get(requestId);
+                if (resolver) {
+                  this._requestResolvers.delete(requestId);
+                  if (queuedMessage.type === "response") resolver(message);
                   else {
-                    let c = o.type === "response" ? "Response" : "Error";
-                    this._onerror(Error(`${c} handler missing for request ${id}`));
+                    let errorMessage = message;
+                    let error = new McpError(
+                      errorMessage.error.code,
+                      errorMessage.error.message,
+                      errorMessage.error.data,
+                    );
+                    resolver(error);
                   }
-                  continue;
+                } else {
+                  let messageType = queuedMessage.type === "response" ? "Response" : "Error";
+                  this._onerror(Error(`${messageType} handler missing for request ${requestId}`));
                 }
-                await this._transport?.send(o.message, { relatedRequestId: r.requestId });
+                continue;
               }
+              await this._transport?.send(queuedMessage.message, {
+                relatedRequestId: extra.requestId,
+              });
             }
-            let task = await this._taskStore.getTask(taskId, r.sessionId);
-            if (!task) throw new McpError(ErrorCode.InvalidParams, `Task not found: ${taskId}`);
-            if (!T(task.status)) return (await this._waitForTaskUpdate(taskId, r.signal), await a());
-            if (T(task.status)) {
-              let taskResult = await this._taskStore.getTaskResult(taskId, r.sessionId);
-              return (
-                this._clearTaskQueue(taskId),
-                { ...taskResult, _meta: { ...taskResult._meta, [RELATED_TASK_META_KEY]: { taskId: taskId } } }
-              );
-            }
-            return await a();
+          }
+          let task = await this._taskStore.getTask(taskId, extra.sessionId);
+          if (!task) throw new McpError(ErrorCode.InvalidParams, `Task not found: ${taskId}`);
+          if (!isTerminal(task.status)) {
+            await this._waitForTaskUpdate(taskId, extra.signal);
+            return await handleTaskResult();
+          }
+          if (isTerminal(task.status)) {
+            let result = await this._taskStore.getTaskResult(taskId, extra.sessionId);
+            this._clearTaskQueue(taskId);
+            return {
+              ...result,
+              _meta: {
+                ...result._meta,
+                [RELATED_TASK_META_KEY]: {
+                  taskId,
+                },
+              },
+            };
+          }
+          return await handleTaskResult();
+        };
+        return await handleTaskResult();
+      });
+      this.setRequestHandler(ListTasksRequestSchema, async (request, extra) => {
+        try {
+          let { tasks, nextCursor } = await this._taskStore.listTasks(
+            request.params?.cursor,
+            extra.sessionId,
+          );
+          return {
+            tasks,
+            nextCursor,
+            _meta: {},
           };
-          return await a();
-        }),
-        this.setRequestHandler(ListTasksRequestSchema, async (t, r) => {
-          try {
-            let { tasks: tasks, nextCursor: nextCursor } = await this._taskStore.listTasks(
-              t.params?.cursor,
-              r.sessionId,
-            );
-            return { tasks: tasks, nextCursor: nextCursor, _meta: {} };
-          } catch (error) {
+        } catch (error) {
+          throw new McpError(
+            ErrorCode.InvalidParams,
+            `Failed to list tasks: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
+      });
+      this.setRequestHandler(CancelTaskRequestSchema, async (request, extra) => {
+        try {
+          let task = await this._taskStore.getTask(request.params.taskId, extra.sessionId);
+          if (!task) throw new McpError(ErrorCode.InvalidParams, `Task not found: ${request.params.taskId}`);
+          if (isTerminal(task.status))
             throw new McpError(
               ErrorCode.InvalidParams,
-              `Failed to list tasks: ${error instanceof Error ? error.message : String(error)}`,
+              `Cannot cancel task in terminal status: ${task.status}`,
             );
-          }
-        }),
-        this.setRequestHandler(CancelTaskRequestSchema, async (t, r) => {
-          try {
-            let task = await this._taskStore.getTask(t.params.taskId, r.sessionId);
-            if (!task) throw new McpError(ErrorCode.InvalidParams, `Task not found: ${t.params.taskId}`);
-            if (T(task.status))
-              throw new McpError(
-                ErrorCode.InvalidParams,
-                `Cannot cancel task in terminal status: ${task.status}`,
-              );
-            (await this._taskStore.updateTaskStatus(
-              t.params.taskId,
-              "cancelled",
-              "Client cancelled task execution.",
-              r.sessionId,
-            ),
-              this._clearTaskQueue(t.params.taskId));
-            let task_2 = await this._taskStore.getTask(t.params.taskId, r.sessionId);
-            if (!task_2)
-              throw new McpError(
-                ErrorCode.InvalidParams,
-                `Task not found after cancellation: ${t.params.taskId}`,
-              );
-            return { _meta: {}, ...task_2 };
-          } catch (error) {
-            if (error instanceof McpError) throw error;
+          await this._taskStore.updateTaskStatus(
+            request.params.taskId,
+            "cancelled",
+            "Client cancelled task execution.",
+            extra.sessionId,
+          );
+          this._clearTaskQueue(request.params.taskId);
+          let cancelledTask = await this._taskStore.getTask(request.params.taskId, extra.sessionId);
+          if (!cancelledTask)
             throw new McpError(
-              ErrorCode.InvalidRequest,
-              `Failed to cancel task: ${error instanceof Error ? error.message : String(error)}`,
+              ErrorCode.InvalidParams,
+              `Task not found after cancellation: ${request.params.taskId}`,
             );
-          }
-        }));
+          return {
+            _meta: {},
+            ...cancelledTask,
+          };
+        } catch (error) {
+          if (error instanceof McpError) throw error;
+          throw new McpError(
+            ErrorCode.InvalidRequest,
+            `Failed to cancel task: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
+      });
+    }
   }
-  async _oncancel(e) {
-    if (!e.params.requestId) return;
-    this._requestHandlerAbortControllers.get(e.params.requestId)?.abort(e.params.reason);
+  async _oncancel(notification) {
+    if (!notification.params.requestId) return;
+    this._requestHandlerAbortControllers
+      .get(notification.params.requestId)
+      ?.abort(notification.params.reason);
   }
-  _setupTimeout(e, t, r, a, n = !1) {
-    this._timeoutInfo.set(e, {
-      timeoutId: setTimeout(a, t),
+  _setupTimeout(messageId, timeout, maxTotalTimeout, onTimeout, resetTimeoutOnProgress = false) {
+    this._timeoutInfo.set(messageId, {
+      timeoutId: setTimeout(onTimeout, timeout),
       startTime: Date.now(),
-      timeout: t,
-      maxTotalTimeout: r,
-      resetTimeoutOnProgress: n,
-      onTimeout: a,
+      timeout,
+      maxTotalTimeout,
+      resetTimeoutOnProgress,
+      onTimeout,
     });
   }
-  _resetTimeout(e) {
-    let t = this._timeoutInfo.get(e);
-    if (!t) return !1;
-    let r = Date.now() - t.startTime;
-    if (t.maxTotalTimeout && r >= t.maxTotalTimeout)
-      throw (
-        this._timeoutInfo.delete(e),
-        McpError.fromError(ErrorCode.RequestTimeout, "Maximum total timeout exceeded", {
-          maxTotalTimeout: t.maxTotalTimeout,
-          totalElapsed: r,
-        })
-      );
-    return (clearTimeout(t.timeoutId), (t.timeoutId = setTimeout(t.onTimeout, t.timeout)), !0);
+  _resetTimeout(messageId) {
+    let info = this._timeoutInfo.get(messageId);
+    if (!info) return false;
+    let totalElapsed = Date.now() - info.startTime;
+    if (info.maxTotalTimeout && totalElapsed >= info.maxTotalTimeout) {
+      this._timeoutInfo.delete(messageId);
+      throw McpError.fromError(ErrorCode.RequestTimeout, "Maximum total timeout exceeded", {
+        maxTotalTimeout: info.maxTotalTimeout,
+        totalElapsed,
+      });
+    }
+    clearTimeout(info.timeoutId);
+    info.timeoutId = setTimeout(info.onTimeout, info.timeout);
+    return true;
   }
-  _cleanupTimeout(e) {
-    let t = this._timeoutInfo.get(e);
-    if (t) (clearTimeout(t.timeoutId), this._timeoutInfo.delete(e));
+  _cleanupTimeout(messageId) {
+    let info = this._timeoutInfo.get(messageId);
+    if (info) {
+      clearTimeout(info.timeoutId);
+      this._timeoutInfo.delete(messageId);
+    }
   }
-  async connect(e) {
+  async connect(transport) {
     if (this._transport)
       throw Error(
         "Already connected to a transport. Call close() before connecting to a new transport, or use a separate Protocol instance per connection.",
       );
-    this._transport = e;
-    let t = this.transport?.onclose;
+    this._transport = transport;
+    let _onclose = this.transport?.onclose;
     this._transport.onclose = () => {
-      (t?.(), this._onclose());
+      _onclose?.();
+      this._onclose();
     };
-    let r = this.transport?.onerror;
-    this._transport.onerror = (n) => {
-      (r?.(n), this._onerror(n));
+    let _onerror = this.transport?.onerror;
+    this._transport.onerror = (error) => {
+      _onerror?.(error);
+      this._onerror(error);
     };
-    let a = this._transport?.onmessage;
-    ((this._transport.onmessage = (n, s) => {
-      if ((a?.(n, s), isJSONRPCResultResponse(n) || isJSONRPCErrorResponse(n))) this._onresponse(n);
-      else if (isJSONRPCRequest(n)) this._onrequest(n, s);
-      else if (isJSONRPCNotification(n)) this._onnotification(n);
-      else this._onerror(Error(`Unknown message type: ${JSON.stringify(n)}`));
-    }),
-      await this._transport.start());
+    let _onmessage = this._transport?.onmessage;
+    this._transport.onmessage = (message, extra) => {
+      _onmessage?.(message, extra);
+      if (isJSONRPCResultResponse(message) || isJSONRPCErrorResponse(message)) this._onresponse(message);
+      else if (isJSONRPCRequest(message)) this._onrequest(message, extra);
+      else if (isJSONRPCNotification(message)) this._onnotification(message);
+      else this._onerror(Error(`Unknown message type: ${JSON.stringify(message)}`));
+    };
+    await this._transport.start();
   }
   _onclose() {
-    let _responseHandlers = this._responseHandlers;
-    ((this._responseHandlers = new Map()),
-      this._progressHandlers.clear(),
-      this._taskProgressTokens.clear(),
-      this._pendingDebouncedNotifications.clear());
-    for (let r of this._timeoutInfo.values()) clearTimeout(r.timeoutId);
+    let responseHandlers = this._responseHandlers;
+    this._responseHandlers = new Map();
+    this._progressHandlers.clear();
+    this._taskProgressTokens.clear();
+    this._pendingDebouncedNotifications.clear();
+    for (let info of this._timeoutInfo.values()) clearTimeout(info.timeoutId);
     this._timeoutInfo.clear();
-    for (let r of this._requestHandlerAbortControllers.values()) r.abort();
+    for (let controller of this._requestHandlerAbortControllers.values()) controller.abort();
     this._requestHandlerAbortControllers.clear();
-    let fromError = McpError.fromError(ErrorCode.ConnectionClosed, "Connection closed");
-    ((this._transport = void 0), this.onclose?.());
-    for (let r of _responseHandlers.values()) r(fromError);
+    let error = McpError.fromError(ErrorCode.ConnectionClosed, "Connection closed");
+    this._transport = undefined;
+    this.onclose?.();
+    for (let handler of responseHandlers.values()) handler(error);
   }
-  _onerror(e) {
-    this.onerror?.(e);
+  _onerror(error) {
+    this.onerror?.(error);
   }
-  _onnotification(e) {
-    let t = this._notificationHandlers.get(e.method) ?? this.fallbackNotificationHandler;
-    if (t === void 0) return;
+  _onnotification(notification) {
+    let handler = this._notificationHandlers.get(notification.method) ?? this.fallbackNotificationHandler;
+    if (handler === undefined) return;
     Promise.resolve()
-      .then(() => t(e))
-      .catch((r) => this._onerror(Error(`Uncaught error in notification handler: ${r}`)));
+      .then(() => handler(notification))
+      .catch((error) => this._onerror(Error(`Uncaught error in notification handler: ${error}`)));
   }
-  _onrequest(e, t) {
-    let r = this._requestHandlers.get(e.method) ?? this.fallbackRequestHandler,
-      _transport = this._transport,
-      n = e.params?._meta?.[RELATED_TASK_META_KEY]?.taskId;
-    if (r === void 0) {
-      let i = {
+  _onrequest(request, extra) {
+    let handler = this._requestHandlers.get(request.method) ?? this.fallbackRequestHandler;
+    let capturedTransport = this._transport;
+    let relatedTaskId = request.params?._meta?.[RELATED_TASK_META_KEY]?.taskId;
+    if (handler === undefined) {
+      let errorResponse = {
         jsonrpc: "2.0",
-        id: e.id,
-        error: { code: ErrorCode.MethodNotFound, message: "Method not found" },
+        id: request.id,
+        error: {
+          code: ErrorCode.MethodNotFound,
+          message: "Method not found",
+        },
       };
-      if (n && this._taskMessageQueue)
+      if (relatedTaskId && this._taskMessageQueue)
         this._enqueueTaskMessage(
-          n,
-          { type: "error", message: i, timestamp: Date.now() },
-          _transport?.sessionId,
-        ).catch((c) => this._onerror(Error(`Failed to enqueue error response: ${c}`)));
-      else _transport?.send(i).catch((c) => this._onerror(Error(`Failed to send an error response: ${c}`)));
+          relatedTaskId,
+          {
+            type: "error",
+            message: errorResponse,
+            timestamp: Date.now(),
+          },
+          capturedTransport?.sessionId,
+        ).catch((error) => this._onerror(Error(`Failed to enqueue error response: ${error}`)));
+      else
+        capturedTransport
+          ?.send(errorResponse)
+          .catch((error) => this._onerror(Error(`Failed to send an error response: ${error}`)));
       return;
     }
     let abortController = new AbortController();
-    this._requestHandlerAbortControllers.set(e.id, abortController);
-    let o = isTaskAugmentedRequestParams(e.params) ? e.params.task : void 0,
-      u = this._taskStore ? this.requestTaskStore(e, _transport?.sessionId) : void 0,
-      p = {
-        signal: abortController.signal,
-        sessionId: _transport?.sessionId,
-        _meta: e.params?._meta,
-        sendNotification: async (i) => {
-          if (abortController.signal.aborted) return;
-          let c = { relatedRequestId: e.id };
-          if (n) c.relatedTask = { taskId: n };
-          await this.notification(i, c);
-        },
-        sendRequest: async (i, c, d) => {
-          if (abortController.signal.aborted)
-            throw new McpError(ErrorCode.ConnectionClosed, "Request was cancelled");
-          let f = { ...d, relatedRequestId: e.id };
-          if (n && !f.relatedTask) f.relatedTask = { taskId: n };
-          let m = f.relatedTask?.taskId ?? n;
-          if (m && u) await u.updateTaskStatus(m, "input_required");
-          return await this.request(i, c, f);
-        },
-        authInfo: t?.authInfo,
-        requestId: e.id,
-        requestInfo: t?.requestInfo,
-        taskId: n,
-        taskStore: u,
-        taskRequestedTtl: o?.ttl,
-        closeSSEStream: t?.closeSSEStream,
-        closeStandaloneSSEStream: t?.closeStandaloneSSEStream,
-      };
+    this._requestHandlerAbortControllers.set(request.id, abortController);
+    let taskCreationParams = isTaskAugmentedRequestParams(request.params) ? request.params.task : undefined;
+    let taskStore = this._taskStore
+      ? this.requestTaskStore(request, capturedTransport?.sessionId)
+      : undefined;
+    let fullExtra = {
+      signal: abortController.signal,
+      sessionId: capturedTransport?.sessionId,
+      _meta: request.params?._meta,
+      sendNotification: async (notification) => {
+        if (abortController.signal.aborted) return;
+        let notificationOptions = {
+          relatedRequestId: request.id,
+        };
+        if (relatedTaskId)
+          notificationOptions.relatedTask = {
+            taskId: relatedTaskId,
+          };
+        await this.notification(notification, notificationOptions);
+      },
+      sendRequest: async (r, resultSchema, options) => {
+        if (abortController.signal.aborted)
+          throw new McpError(ErrorCode.ConnectionClosed, "Request was cancelled");
+        let requestOptions = {
+          ...options,
+          relatedRequestId: request.id,
+        };
+        if (relatedTaskId && !requestOptions.relatedTask)
+          requestOptions.relatedTask = {
+            taskId: relatedTaskId,
+          };
+        let effectiveTaskId = requestOptions.relatedTask?.taskId ?? relatedTaskId;
+        if (effectiveTaskId && taskStore) await taskStore.updateTaskStatus(effectiveTaskId, "input_required");
+        return await this.request(r, resultSchema, requestOptions);
+      },
+      authInfo: extra?.authInfo,
+      requestId: request.id,
+      requestInfo: extra?.requestInfo,
+      taskId: relatedTaskId,
+      taskStore,
+      taskRequestedTtl: taskCreationParams?.ttl,
+      closeSSEStream: extra?.closeSSEStream,
+      closeStandaloneSSEStream: extra?.closeStandaloneSSEStream,
+    };
     Promise.resolve()
       .then(() => {
-        if (o) this.assertTaskHandlerCapability(e.method);
+        if (taskCreationParams) this.assertTaskHandlerCapability(request.method);
       })
-      .then(() => r(e, p))
+      .then(() => handler(request, fullExtra))
       .then(
-        async (i) => {
+        async (result) => {
           if (abortController.signal.aborted) return;
-          let c = { result: i, jsonrpc: "2.0", id: e.id };
-          if (n && this._taskMessageQueue)
-            await this._enqueueTaskMessage(
-              n,
-              { type: "response", message: c, timestamp: Date.now() },
-              _transport?.sessionId,
-            );
-          else await _transport?.send(c);
-        },
-        async (i) => {
-          if (abortController.signal.aborted) return;
-          let c = {
+          let response = {
+            result,
             jsonrpc: "2.0",
-            id: e.id,
+            id: request.id,
+          };
+          if (relatedTaskId && this._taskMessageQueue)
+            await this._enqueueTaskMessage(
+              relatedTaskId,
+              {
+                type: "response",
+                message: response,
+                timestamp: Date.now(),
+              },
+              capturedTransport?.sessionId,
+            );
+          else await capturedTransport?.send(response);
+        },
+        async (error) => {
+          if (abortController.signal.aborted) return;
+          let errorResponse = {
+            jsonrpc: "2.0",
+            id: request.id,
             error: {
-              code: Number.isSafeInteger(i.code) ? i.code : ErrorCode.InternalError,
-              message: i.message ?? "Internal error",
-              ...(i.data !== void 0 && { data: i.data }),
+              code: Number.isSafeInteger(error.code) ? error.code : ErrorCode.InternalError,
+              message: error.message ?? "Internal error",
+              ...(error.data !== undefined && {
+                data: error.data,
+              }),
             },
           };
-          if (n && this._taskMessageQueue)
+          if (relatedTaskId && this._taskMessageQueue)
             await this._enqueueTaskMessage(
-              n,
-              { type: "error", message: c, timestamp: Date.now() },
-              _transport?.sessionId,
+              relatedTaskId,
+              {
+                type: "error",
+                message: errorResponse,
+                timestamp: Date.now(),
+              },
+              capturedTransport?.sessionId,
             );
-          else await _transport?.send(c);
+          else await capturedTransport?.send(errorResponse);
         },
       )
-      .catch((i) => this._onerror(Error(`Failed to send response: ${i}`)))
+      .catch((error) => this._onerror(Error(`Failed to send response: ${error}`)))
       .finally(() => {
-        if (this._requestHandlerAbortControllers.get(e.id) === abortController)
-          this._requestHandlerAbortControllers.delete(e.id);
+        if (this._requestHandlerAbortControllers.get(request.id) === abortController)
+          this._requestHandlerAbortControllers.delete(request.id);
       });
   }
-  _onprogress(e) {
-    let { progressToken: progressToken, ...r } = e.params,
-      a = Number(progressToken),
-      n = this._progressHandlers.get(a);
-    if (!n) {
-      this._onerror(Error(`Received a progress notification for an unknown token: ${JSON.stringify(e)}`));
+  _onprogress(notification) {
+    let { progressToken, ...params } = notification.params;
+    let messageId = Number(progressToken);
+    let handler = this._progressHandlers.get(messageId);
+    if (!handler) {
+      this._onerror(
+        Error(`Received a progress notification for an unknown token: ${JSON.stringify(notification)}`),
+      );
       return;
     }
-    let s = this._responseHandlers.get(a),
-      o = this._timeoutInfo.get(a);
-    if (o && s && o.resetTimeoutOnProgress)
+    let responseHandler = this._responseHandlers.get(messageId);
+    let timeoutInfo = this._timeoutInfo.get(messageId);
+    if (timeoutInfo && responseHandler && timeoutInfo.resetTimeoutOnProgress)
       try {
-        this._resetTimeout(a);
+        this._resetTimeout(messageId);
       } catch (error) {
-        (this._responseHandlers.delete(a),
-          this._progressHandlers.delete(a),
-          this._cleanupTimeout(a),
-          s(error));
+        this._responseHandlers.delete(messageId);
+        this._progressHandlers.delete(messageId);
+        this._cleanupTimeout(messageId);
+        responseHandler(error);
         return;
       }
-    n(r);
+    handler(params);
   }
-  _onresponse(e) {
-    let t = Number(e.id),
-      r = this._requestResolvers.get(t);
-    if (r) {
-      if ((this._requestResolvers.delete(t), isJSONRPCResultResponse(e))) r(e);
+  _onresponse(response) {
+    let messageId = Number(response.id);
+    let resolver = this._requestResolvers.get(messageId);
+    if (resolver) {
+      this._requestResolvers.delete(messageId);
+      if (isJSONRPCResultResponse(response)) resolver(response);
       else {
-        let s = new McpError(e.error.code, e.error.message, e.error.data);
-        r(s);
+        let error = new McpError(response.error.code, response.error.message, response.error.data);
+        resolver(error);
       }
       return;
     }
-    let a = this._responseHandlers.get(t);
-    if (a === void 0) {
-      this._onerror(Error(`Received a response for an unknown message ID: ${JSON.stringify(e)}`));
+    let handler = this._responseHandlers.get(messageId);
+    if (handler === undefined) {
+      this._onerror(Error(`Received a response for an unknown message ID: ${JSON.stringify(response)}`));
       return;
     }
-    (this._responseHandlers.delete(t), this._cleanupTimeout(t));
-    let n = !1;
-    if (isJSONRPCResultResponse(e) && e.result && typeof e.result === "object") {
-      let s = e.result;
-      if (s.task && typeof s.task === "object") {
-        let task = s.task;
-        if (typeof task.taskId === "string") ((n = !0), this._taskProgressTokens.set(task.taskId, t));
+    this._responseHandlers.delete(messageId);
+    this._cleanupTimeout(messageId);
+    let isTaskResponse = false;
+    if (isJSONRPCResultResponse(response) && response.result && typeof response.result === "object") {
+      let result = response.result;
+      if (result.task && typeof result.task === "object") {
+        let task = result.task;
+        if (typeof task.taskId === "string") {
+          isTaskResponse = true;
+          this._taskProgressTokens.set(task.taskId, messageId);
+        }
       }
     }
-    if (!n) this._progressHandlers.delete(t);
-    if (isJSONRPCResultResponse(e)) a(e);
+    if (!isTaskResponse) this._progressHandlers.delete(messageId);
+    if (isJSONRPCResultResponse(response)) handler(response);
     else {
-      let fromError = McpError.fromError(e.error.code, e.error.message, e.error.data);
-      a(fromError);
+      let error = McpError.fromError(response.error.code, response.error.message, response.error.data);
+      handler(error);
     }
   }
   get transport() {
@@ -383,11 +461,14 @@ class Wsn {
   async close() {
     await this._transport?.close();
   }
-  async *requestStream(e, t, r) {
-    let { task: task } = r ?? {};
+  async *requestStream(request, resultSchema, options) {
+    let { task } = options ?? {};
     if (!task) {
       try {
-        yield { type: "result", result: await this.request(e, t, r) };
+        yield {
+          type: "result",
+          result: await this.request(request, resultSchema, options),
+        };
       } catch (error) {
         yield {
           type: "error",
@@ -396,28 +477,67 @@ class Wsn {
       }
       return;
     }
-    let n;
+    let taskId;
     try {
-      let request = await this.request(e, CreateTaskResultSchema, r);
-      if (request.task) ((n = request.task.taskId), yield { type: "taskCreated", task: request.task });
-      else throw new McpError(ErrorCode.InternalError, "Task creation did not return a task");
-      while (!0) {
-        let task = await this.getTask({ taskId: n }, r);
-        if ((yield { type: "taskStatus", task: task }, T(task.status))) {
+      let createResult = await this.request(request, CreateTaskResultSchema, options);
+      if (createResult.task) {
+        taskId = createResult.task.taskId;
+        yield {
+          type: "taskCreated",
+          task: createResult.task,
+        };
+      } else throw new McpError(ErrorCode.InternalError, "Task creation did not return a task");
+      while (true) {
+        let task = await this.getTask(
+          {
+            taskId,
+          },
+          options,
+        );
+        yield {
+          type: "taskStatus",
+          task,
+        };
+        if (isTerminal(task.status)) {
           if (task.status === "completed")
-            yield { type: "result", result: await this.getTaskResult({ taskId: n }, t, r) };
+            yield {
+              type: "result",
+              result: await this.getTaskResult(
+                {
+                  taskId,
+                },
+                resultSchema,
+                options,
+              ),
+            };
           else if (task.status === "failed")
-            yield { type: "error", error: new McpError(ErrorCode.InternalError, `Task ${n} failed`) };
+            yield {
+              type: "error",
+              error: new McpError(ErrorCode.InternalError, `Task ${taskId} failed`),
+            };
           else if (task.status === "cancelled")
-            yield { type: "error", error: new McpError(ErrorCode.InternalError, `Task ${n} was cancelled`) };
+            yield {
+              type: "error",
+              error: new McpError(ErrorCode.InternalError, `Task ${taskId} was cancelled`),
+            };
           return;
         }
         if (task.status === "input_required") {
-          yield { type: "result", result: await this.getTaskResult({ taskId: n }, t, r) };
+          yield {
+            type: "result",
+            result: await this.getTaskResult(
+              {
+                taskId,
+              },
+              resultSchema,
+              options,
+            ),
+          };
           return;
         }
-        let u = task.pollInterval ?? this._options?.defaultTaskPollInterval ?? 1000;
-        (await new Promise((p) => setTimeout(p, u)), r?.signal?.throwIfAborted());
+        let pollInterval = task.pollInterval ?? this._options?.defaultTaskPollInterval ?? 1000;
+        await new Promise((resolve) => setTimeout(resolve, pollInterval));
+        options?.signal?.throwIfAborted();
       }
     } catch (error) {
       yield {
@@ -426,285 +546,386 @@ class Wsn {
       };
     }
   }
-  request(e, t, r) {
-    let {
-      relatedRequestId: relatedRequestId,
-      resumptionToken: resumptionToken,
-      onresumptiontoken: onresumptiontoken,
-      task: task,
-      relatedTask: relatedTask,
-    } = r ?? {};
-    return new Promise((p, i) => {
-      let c = (g) => {
-        i(g);
+  request(request, resultSchema, options) {
+    let { relatedRequestId, resumptionToken, onresumptiontoken, task, relatedTask } = options ?? {};
+    return new Promise((resolve, reject) => {
+      let earlyReject = (error) => {
+        reject(error);
       };
       if (!this._transport) {
-        c(Error("Not connected"));
+        earlyReject(Error("Not connected"));
         return;
       }
-      if (this._options?.enforceStrictCapabilities === !0)
+      if (this._options?.enforceStrictCapabilities === true)
         try {
-          if ((this.assertCapabilityForMethod(e.method), task)) this.assertTaskCapability(e.method);
-        } catch (error) {
-          c(error);
+          this.assertCapabilityForMethod(request.method);
+          if (task) this.assertTaskCapability(request.method);
+        } catch (e) {
+          earlyReject(e);
           return;
         }
-      r?.signal?.throwIfAborted();
-      let d = this._requestMessageId++,
-        f = { ...e, jsonrpc: "2.0", id: d };
-      if (r?.onprogress)
-        (this._progressHandlers.set(d, r.onprogress),
-          (f.params = { ...e.params, _meta: { ...(e.params?._meta || {}), progressToken: d } }));
-      if (task) f.params = { ...f.params, task: task };
-      if (relatedTask)
-        f.params = {
-          ...f.params,
-          _meta: { ...(f.params?._meta || {}), [RELATED_TASK_META_KEY]: relatedTask },
-        };
-      let m = (g) => {
-        (this._responseHandlers.delete(d),
-          this._progressHandlers.delete(d),
-          this._cleanupTimeout(d),
-          this._transport
-            ?.send(
-              {
-                jsonrpc: "2.0",
-                method: "notifications/cancelled",
-                params: { requestId: d, reason: String(g) },
-              },
-              {
-                relatedRequestId: relatedRequestId,
-                resumptionToken: resumptionToken,
-                onresumptiontoken: onresumptiontoken,
-              },
-            )
-            .catch((D) => this._onerror(Error(`Failed to send cancellation: ${D}`))));
-        let _ = g instanceof McpError ? g : new McpError(ErrorCode.RequestTimeout, String(g));
-        i(_);
+      options?.signal?.throwIfAborted();
+      let messageId = this._requestMessageId++;
+      let jsonrpcRequest = {
+        ...request,
+        jsonrpc: "2.0",
+        id: messageId,
       };
-      (this._responseHandlers.set(d, (g) => {
-        if (r?.signal?.aborted) return;
-        if (g instanceof Error) return i(g);
-        try {
-          let _ = q7(t, g.result);
-          if (!_.success) i(_.error);
-          else p(_.data);
-        } catch (error) {
-          i(error);
-        }
-      }),
-        r?.signal?.addEventListener("abort", () => {
-          m(r?.signal?.reason);
-        }));
-      let A = r?.timeout ?? ye,
-        ce = () => m(McpError.fromError(ErrorCode.RequestTimeout, "Request timed out", { timeout: A }));
-      this._setupTimeout(d, A, r?.maxTotalTimeout, ce, r?.resetTimeoutOnProgress ?? !1);
-      let F = relatedTask?.taskId;
-      if (F) {
-        let g = (_) => {
-          let D = this._responseHandlers.get(d);
-          if (D) D(_);
-          else this._onerror(Error(`Response handler missing for side-channeled request ${d}`));
+      if (options?.onprogress) {
+        this._progressHandlers.set(messageId, options.onprogress);
+        jsonrpcRequest.params = {
+          ...request.params,
+          _meta: {
+            ...(request.params?._meta || {}),
+            progressToken: messageId,
+          },
         };
-        (this._requestResolvers.set(d, g),
-          this._enqueueTaskMessage(F, { type: "request", message: f, timestamp: Date.now() }).catch((_) => {
-            (this._cleanupTimeout(d), i(_));
-          }));
+      }
+      if (task)
+        jsonrpcRequest.params = {
+          ...jsonrpcRequest.params,
+          task,
+        };
+      if (relatedTask)
+        jsonrpcRequest.params = {
+          ...jsonrpcRequest.params,
+          _meta: {
+            ...(jsonrpcRequest.params?._meta || {}),
+            [RELATED_TASK_META_KEY]: relatedTask,
+          },
+        };
+      let cancel = (reason) => {
+        this._responseHandlers.delete(messageId);
+        this._progressHandlers.delete(messageId);
+        this._cleanupTimeout(messageId);
+        this._transport
+          ?.send(
+            {
+              jsonrpc: "2.0",
+              method: "notifications/cancelled",
+              params: {
+                requestId: messageId,
+                reason: String(reason),
+              },
+            },
+            {
+              relatedRequestId,
+              resumptionToken,
+              onresumptiontoken,
+            },
+          )
+          .catch((error) => this._onerror(Error(`Failed to send cancellation: ${error}`)));
+        let error =
+          reason instanceof McpError ? reason : new McpError(ErrorCode.RequestTimeout, String(reason));
+        reject(error);
+      };
+      this._responseHandlers.set(messageId, (response) => {
+        if (options?.signal?.aborted) return;
+        if (response instanceof Error) return reject(response);
+        try {
+          let parseResult = objectFromShape(resultSchema, response.result);
+          if (!parseResult.success) reject(parseResult.error);
+          else resolve(parseResult.data);
+        } catch (error) {
+          reject(error);
+        }
+      });
+      options?.signal?.addEventListener("abort", () => {
+        cancel(options?.signal?.reason);
+      });
+      let timeout = options?.timeout ?? DEFAULT_REQUEST_TIMEOUT_MSEC;
+      let timeoutHandler = () =>
+        cancel(
+          McpError.fromError(ErrorCode.RequestTimeout, "Request timed out", {
+            timeout,
+          }),
+        );
+      this._setupTimeout(
+        messageId,
+        timeout,
+        options?.maxTotalTimeout,
+        timeoutHandler,
+        options?.resetTimeoutOnProgress ?? false,
+      );
+      let relatedTaskId = relatedTask?.taskId;
+      if (relatedTaskId) {
+        let responseResolver = (response) => {
+          let handler = this._responseHandlers.get(messageId);
+          if (handler) handler(response);
+          else this._onerror(Error(`Response handler missing for side-channeled request ${messageId}`));
+        };
+        this._requestResolvers.set(messageId, responseResolver);
+        this._enqueueTaskMessage(relatedTaskId, {
+          type: "request",
+          message: jsonrpcRequest,
+          timestamp: Date.now(),
+        }).catch((error) => {
+          this._cleanupTimeout(messageId);
+          reject(error);
+        });
       } else
         this._transport
-          .send(f, {
-            relatedRequestId: relatedRequestId,
-            resumptionToken: resumptionToken,
-            onresumptiontoken: onresumptiontoken,
+          .send(jsonrpcRequest, {
+            relatedRequestId,
+            resumptionToken,
+            onresumptiontoken,
           })
-          .catch((g) => {
-            (this._cleanupTimeout(d), i(g));
+          .catch((error) => {
+            this._cleanupTimeout(messageId);
+            reject(error);
           });
     });
   }
-  async getTask(e, t) {
-    return this.request({ method: "tasks/get", params: e }, GetTaskResultSchema, t);
+  async getTask(params, options) {
+    return this.request(
+      {
+        method: "tasks/get",
+        params,
+      },
+      GetTaskResultSchema,
+      options,
+    );
   }
-  async getTaskResult(e, t, r) {
-    return this.request({ method: "tasks/result", params: e }, t, r);
+  async getTaskResult(params, resultSchema, options) {
+    return this.request(
+      {
+        method: "tasks/result",
+        params,
+      },
+      resultSchema,
+      options,
+    );
   }
-  async listTasks(e, t) {
-    return this.request({ method: "tasks/list", params: e }, ListTasksResultSchema, t);
+  async listTasks(params, options) {
+    return this.request(
+      {
+        method: "tasks/list",
+        params,
+      },
+      ListTasksResultSchema,
+      options,
+    );
   }
-  async cancelTask(e, t) {
-    return this.request({ method: "tasks/cancel", params: e }, CancelTaskResultSchema, t);
+  async cancelTask(params, options) {
+    return this.request(
+      {
+        method: "tasks/cancel",
+        params,
+      },
+      CancelTaskResultSchema,
+      options,
+    );
   }
-  async notification(e, t) {
+  async notification(notification, options) {
     if (!this._transport) throw Error("Not connected");
-    this.assertNotificationCapability(e.method);
-    let r = t?.relatedTask?.taskId;
-    if (r) {
-      let o = {
-        ...e,
+    this.assertNotificationCapability(notification.method);
+    let relatedTaskId = options?.relatedTask?.taskId;
+    if (relatedTaskId) {
+      let jsonrpcNotification = {
+        ...notification,
         jsonrpc: "2.0",
         params: {
-          ...e.params,
-          _meta: { ...(e.params?._meta || {}), [RELATED_TASK_META_KEY]: t.relatedTask },
+          ...notification.params,
+          _meta: {
+            ...(notification.params?._meta || {}),
+            [RELATED_TASK_META_KEY]: options.relatedTask,
+          },
         },
       };
-      await this._enqueueTaskMessage(r, { type: "notification", message: o, timestamp: Date.now() });
+      await this._enqueueTaskMessage(relatedTaskId, {
+        type: "notification",
+        message: jsonrpcNotification,
+        timestamp: Date.now(),
+      });
       return;
     }
     if (
-      (this._options?.debouncedNotificationMethods ?? []).includes(e.method) &&
-      !e.params &&
-      !t?.relatedRequestId &&
-      !t?.relatedTask
+      (this._options?.debouncedNotificationMethods ?? []).includes(notification.method) &&
+      !notification.params &&
+      !options?.relatedRequestId &&
+      !options?.relatedTask
     ) {
-      if (this._pendingDebouncedNotifications.has(e.method)) return;
-      (this._pendingDebouncedNotifications.add(e.method),
-        Promise.resolve().then(() => {
-          if ((this._pendingDebouncedNotifications.delete(e.method), !this._transport)) return;
-          let o = { ...e, jsonrpc: "2.0" };
-          if (t?.relatedTask)
-            o = {
-              ...o,
-              params: {
-                ...o.params,
-                _meta: { ...(o.params?._meta || {}), [RELATED_TASK_META_KEY]: t.relatedTask },
+      if (this._pendingDebouncedNotifications.has(notification.method)) return;
+      this._pendingDebouncedNotifications.add(notification.method);
+      Promise.resolve().then(() => {
+        this._pendingDebouncedNotifications.delete(notification.method);
+        if (!this._transport) return;
+        let jsonrpcNotification = {
+          ...notification,
+          jsonrpc: "2.0",
+        };
+        if (options?.relatedTask)
+          jsonrpcNotification = {
+            ...jsonrpcNotification,
+            params: {
+              ...jsonrpcNotification.params,
+              _meta: {
+                ...(jsonrpcNotification.params?._meta || {}),
+                [RELATED_TASK_META_KEY]: options.relatedTask,
               },
-            };
-          this._transport?.send(o, t).catch((u) => this._onerror(u));
-        }));
+            },
+          };
+        this._transport?.send(jsonrpcNotification, options).catch((error) => this._onerror(error));
+      });
       return;
     }
-    let s = { ...e, jsonrpc: "2.0" };
-    if (t?.relatedTask)
-      s = {
-        ...s,
+    let jsonrpcNotification = {
+      ...notification,
+      jsonrpc: "2.0",
+    };
+    if (options?.relatedTask)
+      jsonrpcNotification = {
+        ...jsonrpcNotification,
         params: {
-          ...s.params,
-          _meta: { ...(s.params?._meta || {}), [RELATED_TASK_META_KEY]: t.relatedTask },
+          ...jsonrpcNotification.params,
+          _meta: {
+            ...(jsonrpcNotification.params?._meta || {}),
+            [RELATED_TASK_META_KEY]: options.relatedTask,
+          },
         },
       };
-    await this._transport.send(s, t);
+    await this._transport.send(jsonrpcNotification, options);
   }
-  setRequestHandler(e, t) {
-    let r = R(e);
-    (this.assertRequestHandlerCapability(r),
-      this._requestHandlers.set(r, (a, n) => {
-        let s = z(e, a);
-        return Promise.resolve(t(s, n));
-      }));
-  }
-  removeRequestHandler(e) {
-    this._requestHandlers.delete(e);
-  }
-  assertCanSetRequestHandler(e) {
-    if (this._requestHandlers.has(e))
-      throw Error(`A request handler for ${e} already exists, which would be overridden`);
-  }
-  setNotificationHandler(e, t) {
-    let r = R(e);
-    this._notificationHandlers.set(r, (a) => {
-      let n = z(e, a);
-      return Promise.resolve(t(n));
+  setRequestHandler(requestSchema, handler) {
+    let method = R(requestSchema);
+    this.assertRequestHandlerCapability(method);
+    this._requestHandlers.set(method, (request, extra) => {
+      let parsed = parseWithCompat(requestSchema, request);
+      return Promise.resolve(handler(parsed, extra));
     });
   }
-  removeNotificationHandler(e) {
-    this._notificationHandlers.delete(e);
+  removeRequestHandler(method) {
+    this._requestHandlers.delete(method);
   }
-  _cleanupTaskProgressHandler(e) {
-    let t = this._taskProgressTokens.get(e);
-    if (t !== void 0) (this._progressHandlers.delete(t), this._taskProgressTokens.delete(e));
+  assertCanSetRequestHandler(method) {
+    if (this._requestHandlers.has(method))
+      throw Error(`A request handler for ${method} already exists, which would be overridden`);
   }
-  async _enqueueTaskMessage(e, t, r) {
+  setNotificationHandler(notificationSchema, handler) {
+    let method = R(notificationSchema);
+    this._notificationHandlers.set(method, (notification) => {
+      let parsed = parseWithCompat(notificationSchema, notification);
+      return Promise.resolve(handler(parsed));
+    });
+  }
+  removeNotificationHandler(method) {
+    this._notificationHandlers.delete(method);
+  }
+  _cleanupTaskProgressHandler(taskId) {
+    let progressToken = this._taskProgressTokens.get(taskId);
+    if (progressToken !== undefined) {
+      this._progressHandlers.delete(progressToken);
+      this._taskProgressTokens.delete(taskId);
+    }
+  }
+  async _enqueueTaskMessage(taskId, message, sessionId) {
     if (!this._taskStore || !this._taskMessageQueue)
       throw Error("Cannot enqueue task message: taskStore and taskMessageQueue are not configured");
-    let a = this._options?.maxTaskQueueSize;
-    await this._taskMessageQueue.enqueue(e, t, r, a);
+    let maxQueueSize = this._options?.maxTaskQueueSize;
+    await this._taskMessageQueue.enqueue(taskId, message, sessionId, maxQueueSize);
   }
-  async _clearTaskQueue(e, t) {
+  async _clearTaskQueue(taskId, sessionId) {
     if (this._taskMessageQueue) {
-      let dequeueAll = await this._taskMessageQueue.dequeueAll(e, t);
-      for (let a of dequeueAll)
-        if (a.type === "request" && isJSONRPCRequest(a.message)) {
-          let id = a.message.id,
-            s = this._requestResolvers.get(id);
-          if (s)
-            (s(new McpError(ErrorCode.InternalError, "Task cancelled or completed")),
-              this._requestResolvers.delete(id));
-          else this._onerror(Error(`Resolver missing for request ${id} during task ${e} cleanup`));
+      let messages = await this._taskMessageQueue.dequeueAll(taskId, sessionId);
+      for (let message of messages)
+        if (message.type === "request" && isJSONRPCRequest(message.message)) {
+          let requestId = message.message.id;
+          let resolver = this._requestResolvers.get(requestId);
+          if (resolver) {
+            resolver(new McpError(ErrorCode.InternalError, "Task cancelled or completed"));
+            this._requestResolvers.delete(requestId);
+          } else
+            this._onerror(Error(`Resolver missing for request ${requestId} during task ${taskId} cleanup`));
         }
     }
   }
-  async _waitForTaskUpdate(e, t) {
-    let r = this._options?.defaultTaskPollInterval ?? 1000;
+  async _waitForTaskUpdate(taskId, signal) {
+    let interval = this._options?.defaultTaskPollInterval ?? 1000;
     try {
-      let a = await this._taskStore?.getTask(e);
-      if (a?.pollInterval) r = a.pollInterval;
+      let task = await this._taskStore?.getTask(taskId);
+      if (task?.pollInterval) interval = task.pollInterval;
     } catch {}
-    return new Promise((a, n) => {
-      if (t.aborted) {
-        n(new McpError(ErrorCode.InvalidRequest, "Request cancelled"));
+    return new Promise((resolve, reject) => {
+      if (signal.aborted) {
+        reject(new McpError(ErrorCode.InvalidRequest, "Request cancelled"));
         return;
       }
-      let s = setTimeout(a, r);
-      t.addEventListener(
+      let timeoutId = setTimeout(resolve, interval);
+      signal.addEventListener(
         "abort",
         () => {
-          (clearTimeout(s), n(new McpError(ErrorCode.InvalidRequest, "Request cancelled")));
+          clearTimeout(timeoutId);
+          reject(new McpError(ErrorCode.InvalidRequest, "Request cancelled"));
         },
-        { once: !0 },
+        {
+          once: true,
+        },
       );
     });
   }
-  requestTaskStore(e, t) {
-    let _taskStore = this._taskStore;
-    if (!_taskStore) throw Error("No task store configured");
+  requestTaskStore(request, sessionId) {
+    let taskStore = this._taskStore;
+    if (!taskStore) throw Error("No task store configured");
     return {
-      createTask: async (a) => {
-        if (!e) throw Error("No request provided");
-        return await _taskStore.createTask(a, e.id, { method: e.method, params: e.params }, t);
+      createTask: async (taskParams) => {
+        if (!request) throw Error("No request provided");
+        return await taskStore.createTask(
+          taskParams,
+          request.id,
+          {
+            method: request.method,
+            params: request.params,
+          },
+          sessionId,
+        );
       },
-      getTask: async (a) => {
-        let task = await _taskStore.getTask(a, t);
+      getTask: async (taskId) => {
+        let task = await taskStore.getTask(taskId, sessionId);
         if (!task) throw new McpError(ErrorCode.InvalidParams, "Failed to retrieve task: Task not found");
         return task;
       },
-      storeTaskResult: async (a, n, s) => {
-        await _taskStore.storeTaskResult(a, n, s, t);
-        let task = await _taskStore.getTask(a, t);
+      storeTaskResult: async (taskId, status, result) => {
+        await taskStore.storeTaskResult(taskId, status, result, sessionId);
+        let task = await taskStore.getTask(taskId, sessionId);
         if (task) {
-          let parse = TaskStatusNotificationSchema.parse({
+          let notification = TaskStatusNotificationSchema.parse({
             method: "notifications/tasks/status",
             params: task,
           });
-          if ((await this.notification(parse), T(task.status))) this._cleanupTaskProgressHandler(a);
+          await this.notification(notification);
+          if (isTerminal(task.status)) this._cleanupTaskProgressHandler(taskId);
         }
       },
-      getTaskResult: (a) => _taskStore.getTaskResult(a, t),
-      updateTaskStatus: async (a, n, s) => {
-        let task = await _taskStore.getTask(a, t);
+      getTaskResult: (taskId) => taskStore.getTaskResult(taskId, sessionId),
+      updateTaskStatus: async (taskId, status, statusMessage) => {
+        let task = await taskStore.getTask(taskId, sessionId);
         if (!task)
-          throw new McpError(ErrorCode.InvalidParams, `Task "${a}" not found - it may have been cleaned up`);
-        if (T(task.status))
           throw new McpError(
             ErrorCode.InvalidParams,
-            `Cannot update task "${a}" from terminal status "${task.status}" to "${n}". Terminal states (completed, failed, cancelled) cannot transition to other states.`,
+            `Task "${taskId}" not found - it may have been cleaned up`,
           );
-        await _taskStore.updateTaskStatus(a, n, s, t);
-        let task_2 = await _taskStore.getTask(a, t);
-        if (task_2) {
-          let parse = TaskStatusNotificationSchema.parse({
+        if (isTerminal(task.status))
+          throw new McpError(
+            ErrorCode.InvalidParams,
+            `Cannot update task "${taskId}" from terminal status "${task.status}" to "${status}". Terminal states (completed, failed, cancelled) cannot transition to other states.`,
+          );
+        await taskStore.updateTaskStatus(taskId, status, statusMessage, sessionId);
+        let updatedTask = await taskStore.getTask(taskId, sessionId);
+        if (updatedTask) {
+          let notification = TaskStatusNotificationSchema.parse({
             method: "notifications/tasks/status",
-            params: task_2,
+            params: updatedTask,
           });
-          if ((await this.notification(parse), T(task_2.status))) this._cleanupTaskProgressHandler(a);
+          await this.notification(notification);
+          if (isTerminal(updatedTask.status)) this._cleanupTaskProgressHandler(taskId);
         }
       },
-      listTasks: (a) => _taskStore.listTasks(a, t),
+      listTasks: (cursor) => taskStore.listTasks(cursor, sessionId),
     };
   }
 }
 //@ chunk-zykv69v4.js:27504-27574 esm-fingerprint
-function L(e) {
-  return e !== null && typeof e === "object" && !Array.isArray(e);
+function isPlainObject(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
-
-export { Wsn, L };
+export { Protocol, isPlainObject };

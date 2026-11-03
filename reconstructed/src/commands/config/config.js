@@ -8,8 +8,11 @@
  * pieces: chunk-ak1qv1dp.js (3), chunk-q8cyy466.js (1)
  * attribution: placement 3, fingerprint 1
  */
-import { j, R, P } from "../../../vendor/react/cjs/react.production.js";
-import { e, r } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { init_react_production, R, P } from "../../../vendor/react/cjs/react.production.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Settings } from "../../components/Settings/Settings.js";
 import { COMMON_HELP_ARGS, COMMON_INFO_ARGS_ALIAS } from "../../constants/xml.js";
 import {
@@ -26,15 +29,15 @@ import { isVimModeEnabled } from "../../components/PromptInput/utils.js";
 import { Box, Text } from "../../ink/components/Text.js";
 
 //@ chunk-ak1qv1dp.js:17277-17281 placement
-j();
+init_react_production();
+//@ chunk-ak1qv1dp.js:17281-17856 placement
 /**
  * /config 命令：无参数时打开设置界面，有 key=value 时直接设置。
  */
-//@ chunk-ak1qv1dp.js:17281-17856 placement
 var call = async (onDone, context, args) => {
   let r = args?.trim() || "";
   if (!r)
-    return e(Settings, {
+    return jsxProd_default(Settings, {
       onClose: onDone,
       storageV5: context.storageV5,
       credentials: context.credentials,
@@ -48,59 +51,76 @@ var call = async (onDone, context, args) => {
     onDone(
       `Run /config to open settings, or /config key=value to set one directly.
 ${listConfigKeys(context)}`,
-      { display: "system" },
+      {
+        display: "system",
+      },
     );
     return;
   }
-  let a = parseConfigShorthand(r);
-  if (!a) {
+  let configShorthand = parseConfigShorthand(r);
+  if (!configShorthand) {
     onDone(`Expected key=value, got "${sanitizeTelemetryString(r)}". Run /config to open settings.`, {
       display: "system",
     });
     return;
   }
-  return e(ShowHelp, { pairs: a, caller: context, onDone: onDone });
+  return jsxProd_default(ShowHelp, {
+    pairs: configShorthand,
+    caller: context,
+    onDone,
+  });
 };
 //@ chunk-ak1qv1dp.js:17856-18207 placement = ShowHelp (0.383)
-function ShowHelp(t0) {
-  let C = w(6),
-    { pairs: pairs, caller: caller, onDone: onDone } = t0,
-    [, o] = useTheme(),
-    a = R(!1),
-    f,
-    u;
-  if (C[0] !== caller || C[1] !== onDone || C[2] !== pairs || C[3] !== o)
-    ((f = () => {
+function ShowHelp(props) {
+  let C = w(6);
+  let { pairs, caller, onDone } = props;
+  let [, o] = useTheme();
+  let a = R(false);
+  let f;
+  let u;
+  if (C[0] !== caller || C[1] !== onDone || C[2] !== pairs || C[3] !== o) {
+    f = () => {
       if (a.current) {
         return;
       }
-      ((a.current = !0),
-        applyConfigShorthand(pairs, caller, { setTheme: o }).then((h) =>
-          onDone(
-            h.map((S) => collapseShorthandResultOffBox(S, isBridgeOrTransport(caller.session))).join(`
+      a.current = true;
+      applyConfigShorthand(pairs, caller, {
+        setTheme: o,
+      }).then((h) =>
+        onDone(
+          h.map((S) => collapseShorthandResultOffBox(S, isBridgeOrTransport(caller.session))).join(`
 `),
-            { display: "system" },
-          ),
-        ));
-    }),
-      (u = [pairs, caller, onDone, o]),
-      (C[0] = caller),
-      (C[1] = onDone),
-      (C[2] = pairs),
-      (C[3] = o),
-      (C[4] = f),
-      (C[5] = u));
-  else ((f = C[4]), (u = C[5]));
-  return (P(f, u), null);
+          {
+            display: "system",
+          },
+        ),
+      );
+    };
+    u = [pairs, caller, onDone, o];
+    C[0] = caller;
+    C[1] = onDone;
+    C[2] = pairs;
+    C[3] = o;
+    C[4] = f;
+    C[5] = u;
+  } else {
+    f = C[4];
+    u = C[5];
+  }
+  P(f, u);
+  return null;
 }
 //@ chunk-q8cyy466.js:17324-17644 fingerprint = call (0.717)
 var call_2 = async (o, t, g, l) => {
   let i = isVimModeEnabled(l);
-  return r(Box, {
+  return jsxProd_default_2(Box, {
     flexDirection: "column",
     children: [
-      e(Text, { color: "suggestion", children: i }),
-      e(Settings, {
+      jsxProd_default(Text, {
+        color: "suggestion",
+        children: i,
+      }),
+      jsxProd_default(Settings, {
         onClose: () => o(i),
         storageV5: t.storageV5,
         credentials: t.credentials,

@@ -8,18 +8,17 @@
 import { x } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-h6b7mazd.js:5269-5492 cjs-fingerprint
-var On = x(function (Tl, An) {
-  An.exports = va;
-  function va(e) {
-    var t =
+var require_defer = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = defer;
+  function defer(fn) {
+    var nextTick =
       typeof setImmediate == "function"
         ? setImmediate
         : typeof process == "object" && typeof process.nextTick == "function"
           ? process.nextTick
           : null;
-    if (t) t(e);
-    else setTimeout(e, 0);
+    if (nextTick) nextTick(fn);
+    else setTimeout(fn, 0);
   }
 });
-
-export { On };
+export { require_defer };

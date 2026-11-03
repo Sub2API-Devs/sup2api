@@ -8,7 +8,7 @@
  * pieces: chunk-0ajrnwwf.js (6)
  * attribution: placement 6
  */
-import { jqo } from "../../utils/teleport/securityTier.js";
+import { isSecurityTierEnabled } from "../../utils/teleport/securityTier.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../analytics/growthbook.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { getAttestationFilterPolicy } from "../../bridge/trustedDevice.js";
@@ -18,32 +18,30 @@ import { SERVED_CALLS_UNATTESTED } from "../../remote/tools/toolHostsNotice.js";
 import { REMOTE_TOOLS_CONSENT_TEXT } from "../../remote/tools/consentText.js";
 import { errorMessage } from "../../utils/errors.js";
 
+//@ chunk-0ajrnwwf.js:418-625 placement
 /**
  * 读取工具宿主认证模式：关闭、观察或强制（读取开关失败时为观察）。
  */
-//@ chunk-0ajrnwwf.js:418-625 placement
 function attestationMode() {
-  if (!jqo()) return "off";
+  if (!isSecurityTierEnabled()) return "off";
   try {
-    return getFeatureValue_CACHED_MAY_BE_STALE("tengu_vast_tulip", !1) === !0 ? "enforce" : "observe";
+    return getFeatureValue_CACHED_MAY_BE_STALE("tengu_vast_tulip", false) === true ? "enforce" : "observe";
   } catch {
-    return (
-      logForDebugging("tool host attestation: reading tengu_vast_tulip threw; observing", { level: "warn" }),
-      "observe"
-    );
+    logForDebugging("tool host attestation: reading tengu_vast_tulip threw; observing", {
+      level: "warn",
+    });
+    return "observe";
   }
 }
 //@ chunk-0ajrnwwf.js:625-815 placement
 function attestationVerdict(e) {
-  let o = getAttestationFilterPolicy(),
-    {
-      status: status,
-      meetsLevel: meetsLevel,
-      configException: configException,
-    } = resolveEffectiveAttestation(e, o, { isCloudWorker: !1 });
+  let attestationFilterPolicy = getAttestationFilterPolicy();
+  let { status, meetsLevel, configException } = resolveEffectiveAttestation(e, attestationFilterPolicy, {
+    isCloudWorker: false,
+  });
   return {
-    status: status,
-    verdict: !o.enforce
+    status,
+    verdict: !attestationFilterPolicy.enforce
       ? "not_policed"
       : meetsLevel
         ? "pass"
@@ -53,32 +51,59 @@ function attestationVerdict(e) {
   };
 }
 //@ chunk-0ajrnwwf.js:815-889 placement
-function Cye(e) {
+/**
+ * 由宿主状态生成证明结论；证明模式为关闭时返回 undefined。
+ */
+function attestationFor(attestationStatus) {
   let o = attestationMode();
-  return o === "off" ? void 0 : { mode: o, ...attestationVerdict(normalizeAttestationStatus(e)) };
+  return o === "off"
+    ? undefined
+    : {
+        mode: o,
+        ...attestationVerdict(normalizeAttestationStatus(attestationStatus)),
+      };
 }
 //@ chunk-0ajrnwwf.js:889-959 placement
-function PTe(e) {
+/**
+ * 是否处于强制模式且证明等级低于下限（需要暂扣调用）。
+ */
+function isBelowFloorEnforced(e) {
   return e?.mode === "enforce" && e.verdict === "below_floor";
 }
 //@ chunk-0ajrnwwf.js:959-1037 placement
-function BBn() {
-  let e = Cye("UNSPECIFIED");
-  return { attestation: e, heldBack: PTe(e) };
+/**
+ * 以未知状态得出证明结果与是否需要暂扣。
+ */
+function unknownAttestationResult() {
+  let e = attestationFor("UNSPECIFIED");
+  return {
+    attestation: e,
+    heldBack: isBelowFloorEnforced(e),
+  };
 }
+//@ chunk-0ajrnwwf.js:1037-1200 placement
 /**
  * 向通知通道报告"有未经认证的远程调用"，通道抛错时只记日志。
  */
-//@ chunk-0ajrnwwf.js:1037-1200 placement
-function noticeUnattestedServedCalls(e) {
+function noticeUnattestedServedCalls(onNotice) {
   try {
-    e?.(SERVED_CALLS_UNATTESTED, REMOTE_TOOLS_CONSENT_TEXT["repository_trust.served_calls.unattested"]);
+    onNotice?.(
+      SERVED_CALLS_UNATTESTED,
+      REMOTE_TOOLS_CONSENT_TEXT["repository_trust.served_calls.unattested"],
+    );
   } catch (error) {
     logForDebugging(
       `[remote-tools] the notice sink threw on ${SERVED_CALLS_UNATTESTED}: ${errorMessage(error)}`,
-      { level: "error" },
+      {
+        level: "error",
+      },
     );
   }
 }
-
-export { Cye, PTe, attestationMode, BBn, noticeUnattestedServedCalls };
+export {
+  attestationFor,
+  isBelowFloorEnforced,
+  attestationMode,
+  unknownAttestationResult,
+  noticeUnattestedServedCalls,
+};

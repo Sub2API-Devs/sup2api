@@ -6,72 +6,74 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { Ve } from "./cancellation.js";
+import { require_cancellation } from "./cancellation.js";
 
 //@ chunk-t4ksmxzx.js:16783-17959 cjs-fingerprint
-var Ur = x(function (Fr) {
-  Object.defineProperty(Fr, "__esModule", { value: !0 });
-  Fr.SharedArrayReceiverStrategy = Fr.SharedArraySenderStrategy = void 0;
-  var Dr = Ve(),
-    Ie;
-  (function (e) {
-    ((e.Continue = 0), (e.Cancelled = 1));
-  })(Ie || (Ie = {}));
-  class Br {
+var require_sharedArrayCancellation = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.SharedArrayReceiverStrategy = cjsExports.SharedArraySenderStrategy = undefined;
+  var cancellation_1 = require_cancellation();
+  var CancellationState;
+  (function (CancellationState) {
+    CancellationState.Continue = 0;
+    CancellationState.Cancelled = 1;
+  })(CancellationState || (CancellationState = {}));
+  class SharedArraySenderStrategy {
     constructor() {
       this.buffers = new Map();
     }
-    enableCancellation(e) {
-      if (e.id === null) return;
-      let sharedArrayBuffer = new SharedArrayBuffer(4),
-        int32Array = new Int32Array(sharedArrayBuffer, 0, 1);
-      ((int32Array[0] = Ie.Continue),
-        this.buffers.set(e.id, sharedArrayBuffer),
-        (e.$cancellationData = sharedArrayBuffer));
+    enableCancellation(request) {
+      if (request.id === null) return;
+      let buffer = new SharedArrayBuffer(4);
+      let data = new Int32Array(buffer, 0, 1);
+      data[0] = CancellationState.Continue;
+      this.buffers.set(request.id, buffer);
+      request.$cancellationData = buffer;
     }
-    async sendCancellation(e, r) {
-      let n = this.buffers.get(r);
-      if (n === void 0) return;
-      let int32Array = new Int32Array(n, 0, 1);
-      Atomics.store(int32Array, 0, Ie.Cancelled);
+    async sendCancellation(_conn, id) {
+      let buffer = this.buffers.get(id);
+      if (buffer === undefined) return;
+      let data = new Int32Array(buffer, 0, 1);
+      Atomics.store(data, 0, CancellationState.Cancelled);
     }
-    cleanup(e) {
-      this.buffers.delete(e);
+    cleanup(id) {
+      this.buffers.delete(id);
     }
     dispose() {
       this.buffers.clear();
     }
   }
-  Fr.SharedArraySenderStrategy = Br;
-  class Ar {
-    constructor(e) {
-      this.data = new Int32Array(e, 0, 1);
+  cjsExports.SharedArraySenderStrategy = SharedArraySenderStrategy;
+  class SharedArrayBufferCancellationToken {
+    constructor(buffer) {
+      this.data = new Int32Array(buffer, 0, 1);
     }
     get isCancellationRequested() {
-      return Atomics.load(this.data, 0) === Ie.Cancelled;
+      return Atomics.load(this.data, 0) === CancellationState.Cancelled;
     }
     get onCancellationRequested() {
       throw Error("Cancellation over SharedArrayBuffer doesn't support cancellation events");
     }
   }
-  class zr {
-    constructor(e) {
-      this.token = new Ar(e);
+  class SharedArrayBufferCancellationTokenSource {
+    constructor(buffer) {
+      this.token = new SharedArrayBufferCancellationToken(buffer);
     }
     cancel() {}
     dispose() {}
   }
-  class Wr {
+  class SharedArrayReceiverStrategy {
     constructor() {
       this.kind = "request";
     }
-    createCancellationTokenSource(e) {
-      let $cancellationData = e.$cancellationData;
-      if ($cancellationData === void 0) return new Dr.CancellationTokenSource();
-      return new zr($cancellationData);
+    createCancellationTokenSource(request) {
+      let buffer = request.$cancellationData;
+      if (buffer === undefined) return new cancellation_1.CancellationTokenSource();
+      return new SharedArrayBufferCancellationTokenSource(buffer);
     }
   }
-  Fr.SharedArrayReceiverStrategy = Wr;
+  cjsExports.SharedArrayReceiverStrategy = SharedArrayReceiverStrategy;
 });
-
-export { Ur };
+export { require_sharedArrayCancellation };

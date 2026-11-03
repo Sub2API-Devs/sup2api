@@ -9,7 +9,7 @@
  * attribution: placement 11
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, o, A, T, oe } from "../../../vendor/zod/v4/classic/schemas.js";
+import { u, string, array, literal, unknown } from "../../../vendor/zod/v4/classic/schemas.js";
 import { normalizeGithubRepoSlug } from "./parseMarketplaceInput.js";
 import { isUnsafeRemoteUrl, isGithubDotCom, isHost } from "../git/githubUrl.js";
 import { isAnthropicsGithubRepo } from "./schemas.js";
@@ -23,98 +23,105 @@ import { truncateToLength } from "../stringUtils.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { logFeatureBad, logFeatureSad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 import { apiClient } from "../../services/routines/routinesApi.js";
-import { cgr } from "../telemetry/memorySummary.js";
+import { PLUGIN_DIRECTORY_API_PATH } from "../telemetry/memorySummary.js";
 import { parseRetryAfterMs } from "../../bridge/debugUtils.js";
 import { classifyAxiosError } from "../errors.js";
 import { logForDebugging } from "../debug.js";
 import { isPlainObject } from "../isPlainObject.js";
 import { logEvent } from "../../services/analytics/index.js";
 
+//@ chunk-snyt4d6y.js:759-1347 placement
 /**
  * 插件目录搜索的上限与 schema
  */
-//@ chunk-snyt4d6y.js:759-1347 placement
-var PLUGIN_DIRECTORY_LIMITS = 25,
-  PUBLIC = "public",
-  B = 3,
-  G = 200,
-  H = 8000,
-  Y = 3600000,
-  q = 8388608,
-  F = DoctorLazy(() =>
-    u({
-      id: o().min(1),
-      name: o().min(1),
-      summary: o()
-        .optional()
-        .catch(void 0),
-      description: o()
-        .optional()
-        .catch(void 0),
-      release: u({ version: o() })
-        .optional()
-        .catch(void 0),
-      publisher: u({ name: o() })
-        .optional()
-        .catch(void 0),
-      links: u({
-        documentation: o()
-          .optional()
-          .catch(void 0),
-      })
-        .optional()
-        .catch(void 0),
-      surfaces: A(o())
-        .optional()
-        .catch(void 0),
-      source: u({
-        type: T("directory"),
-        repository: u({ url: o().min(1), path: o().optional(), reviewed_commit: o().optional() }),
-      }),
-      checks: u({
-        review: u({
-          state: o(),
-          by: u({ type: o() })
-            .optional()
-            .catch(void 0),
-        }),
+var PLUGIN_DIRECTORY_LIMITS = 25;
+var PUBLIC = "public";
+var PLUGIN_DIRECTORY_MAX_RESULTS = 3;
+var PLUGIN_DIRECTORY_MAX_PAGES = 200;
+var MAX_DIRECTORY_QUERY_LENGTH = 8000;
+var DIRECTORY_SEARCH_CACHE_TTL_MS = 3600000;
+var MAX_DIRECTORY_RESPONSE_BYTES = 8388608;
+var directoryPageSchema = DoctorLazy(() =>
+  u({
+    id: string().min(1),
+    name: string().min(1),
+    summary: string().optional().catch(undefined),
+    description: string().optional().catch(undefined),
+    release: u({
+      version: string(),
+    })
+      .optional()
+      .catch(undefined),
+    publisher: u({
+      name: string(),
+    })
+      .optional()
+      .catch(undefined),
+    links: u({
+      documentation: string().optional().catch(undefined),
+    })
+      .optional()
+      .catch(undefined),
+    surfaces: array(string()).optional().catch(undefined),
+    source: u({
+      type: literal("directory"),
+      repository: u({
+        url: string().min(1),
+        path: string().optional(),
+        reviewed_commit: string().optional(),
       }),
     }),
-  );
+    checks: u({
+      review: u({
+        state: string(),
+        by: u({
+          type: string(),
+        })
+          .optional()
+          .catch(undefined),
+      }),
+    }),
+  }),
+);
 //@ chunk-snyt4d6y.js:1347-1395 placement
 function parseDirectoryListing(e) {
-  return F().safeParse(stripNullFields(e)).data;
+  return directoryPageSchema().safeParse(stripNullFields(e)).data;
 }
+//@ chunk-snyt4d6y.js:1395-1575 placement
 /**
  * 插件目录仓库地址是否允许
  */
-//@ chunk-snyt4d6y.js:1395-1575 placement
-function isAllowedDirectoryRepoUrl(e) {
-  if (normalizeGithubRepoSlug(e) !== null) return !0;
-  if (!e.startsWith("https://") || isUnsafeRemoteUrl(e)) return !1;
+function isAllowedDirectoryRepoUrl(url) {
+  if (normalizeGithubRepoSlug(url) !== null) return true;
+  if (!url.startsWith("https://") || isUnsafeRemoteUrl(url)) return false;
   let n;
   try {
-    n = new URL(e);
+    n = new URL(url);
   } catch {
-    return !1;
+    return false;
   }
   return !isGithubDotCom(n.hostname) && !isHost(n.hostname, "ssh.github.com");
 }
 //@ chunk-snyt4d6y.js:1575-1782 placement
-function isDirectoryListingReviewerMarked(e) {
-  let { state: state, by: by } = e.checks.review;
-  if (state !== "done") return !1;
+function isDirectoryListingReviewerMarked(listing) {
+  let { state, by } = listing.checks.review;
+  if (state !== "done") return false;
   switch (by?.type) {
     case "partner":
-      return isAllowedDirectoryRepoUrl(e.source.repository.url);
+      return isAllowedDirectoryRepoUrl(listing.source.repository.url);
     case "anthropic":
-      return isAnthropicsGithubRepo(e.source.repository.url);
+      return isAnthropicsGithubRepo(listing.source.repository.url);
     default:
-      return !1;
+      return false;
   }
 }
 //@ chunk-snyt4d6y.js:1782-1847 placement
-var V = DoctorLazy(() => u({ data: A(oe()).nullish(), next_page: o().nullish() }));
+var directoryPageWrapperSchema = DoctorLazy(() =>
+  u({
+    data: array(unknown()).nullish(),
+    next_page: string().nullish(),
+  }),
+);
 //@ chunk-snyt4d6y.js:1847-1918 placement
 function isPluginDirectoryAccessAllowed() {
   return isPolicyAllowed("allow_plugin_directory_search") && pluginDirectoryPolicyBlock() === null;
@@ -134,161 +141,191 @@ function pluginDirectoryUnavailableCause() {
   if (isPluginDirectoryAccessAllowed() || pluginDirectoryPolicyBlock() !== null) return null;
   return "policy-not-known";
 }
+//@ chunk-snyt4d6y.js:2223-5454 placement
 /**
  * 搜索插件目录，受组织策略 allow_plugin_directory_search 控制。
  */
-//@ chunk-snyt4d6y.js:2223-5454 placement
 async function searchPluginDirectory({
-  query: query,
-  pageToken: pageToken,
-  signal: signal,
-  pageSize: pageSize = PLUGIN_DIRECTORY_LIMITS,
-  include: include,
-  keepTokenWhenEmpty: keepTokenWhenEmpty = !1,
+  query,
+  pageToken,
+  signal,
+  pageSize = PLUGIN_DIRECTORY_LIMITS,
+  include,
+  keepTokenWhenEmpty = false,
 }) {
-  let M = truncateToLength(query.trim(), G),
-    l = M !== "",
-    d = pageToken !== void 0,
-    startTime = performance.now();
+  let M = truncateToLength(query.trim(), PLUGIN_DIRECTORY_MAX_PAGES);
+  let l = M !== "";
+  let d = pageToken !== undefined;
+  let startTime = performance.now();
   if (!isPolicyAllowed("allow_plugin_directory_search")) {
     let i = policyDenyKind("allow_plugin_directory_search");
-    return (
-      logDirectorySearch("unavailable", startTime, l, d, { cause: fromEnum("policy") }),
-      logFeatureBad(
-        "plugin_directory_search",
-        i === "org_denied"
-          ? "policy_denied"
-          : i === "unregistered"
-            ? "policy_mirror_unregistered"
-            : i === "route_missing"
-              ? "policy_route_missing"
-              : "policy_cache_miss",
-      ),
-      {
-        ok: !1,
-        reason: "unavailable",
-        cause: "policy",
-        message:
-          (i === "cache_miss" || i === "unregistered"
-            ? null
-            : policyDeniedReason("allow_plugin_directory_search", "it", "is")) ??
-          "your organization's policy could not be checked yet; try again in a moment",
-        blockedBy: i === "org_denied" || i === "latched" ? "policy_limit" : void 0,
-      }
+    logDirectorySearch("unavailable", startTime, l, d, {
+      cause: fromEnum("policy"),
+    });
+    logFeatureBad(
+      "plugin_directory_search",
+      i === "org_denied"
+        ? "policy_denied"
+        : i === "unregistered"
+          ? "policy_mirror_unregistered"
+          : i === "route_missing"
+            ? "policy_route_missing"
+            : "policy_cache_miss",
     );
+    return {
+      ok: false,
+      reason: "unavailable",
+      cause: "policy",
+      message:
+        (i === "cache_miss" || i === "unregistered"
+          ? null
+          : policyDeniedReason("allow_plugin_directory_search", "it", "is")) ??
+        "your organization's policy could not be checked yet; try again in a moment",
+      blockedBy: i === "org_denied" || i === "latched" ? "policy_limit" : undefined,
+    };
   }
   let C = pluginDirectoryPolicyBlock();
-  if (C !== null)
-    return (
-      logDirectorySearch("unavailable", startTime, l, d, { cause: fromEnum("policy") }),
-      {
-        ok: !1,
-        reason: "unavailable",
-        cause: "policy",
-        message: "it is blocked by your organization",
-        blockedBy: C,
-      }
-    );
-  let E = [],
-    v = 0,
-    S = 0,
-    b = pageToken;
+  if (C !== null) {
+    logDirectorySearch("unavailable", startTime, l, d, {
+      cause: fromEnum("policy"),
+    });
+    return {
+      ok: false,
+      reason: "unavailable",
+      cause: "policy",
+      message: "it is blocked by your organization",
+      blockedBy: C,
+    };
+  }
+  let E = [];
+  let v = 0;
+  let S = 0;
+  let b = pageToken;
   try {
     do {
-      let uRLSearchParams = new URLSearchParams({ limit: String(pageSize), visibility: PUBLIC });
-      if (include !== void 0) uRLSearchParams.set("include", include);
-      if (l) uRLSearchParams.set("q", M);
-      if (b !== void 0) uRLSearchParams.set("page", b);
-      let r = await apiClient.get(`${cgr}?${uRLSearchParams}`, {
-        auth: "none",
-        publicPluginDirectoryCatalog: !0,
-        timeout: H,
-        maxContentLength: q,
-        signal: signal,
-        validateStatus: () => !0,
+      let uRLSearchParams = new URLSearchParams({
+        limit: String(pageSize),
+        visibility: PUBLIC,
       });
-      if ((S++, !r.ok)) {
-        let y = r.reason === "essential-traffic-only",
-          R = y ? "essential-traffic-only" : "data-residency";
-        return (
-          logDirectorySearch("unavailable", startTime, l, d, { cause: fromEnum(R) }),
-          logFeatureSad("plugin_directory_search", y ? "essential_traffic_only" : "data_residency"),
-          { ok: !1, reason: "unavailable", cause: R }
-        );
+      if (include !== undefined) uRLSearchParams.set("include", include);
+      if (l) uRLSearchParams.set("q", M);
+      if (b !== undefined) uRLSearchParams.set("page", b);
+      let r = await apiClient.get(`${PLUGIN_DIRECTORY_API_PATH}?${uRLSearchParams}`, {
+        auth: "none",
+        publicPluginDirectoryCatalog: true,
+        timeout: MAX_DIRECTORY_QUERY_LENGTH,
+        maxContentLength: MAX_DIRECTORY_RESPONSE_BYTES,
+        signal,
+        validateStatus: () => true,
+      });
+      S++;
+      if (!r.ok) {
+        let y = r.reason === "essential-traffic-only";
+        let R = y ? "essential-traffic-only" : "data-residency";
+        logDirectorySearch("unavailable", startTime, l, d, {
+          cause: fromEnum(R),
+        });
+        logFeatureSad("plugin_directory_search", y ? "essential_traffic_only" : "data_residency");
+        return {
+          ok: false,
+          reason: "unavailable",
+          cause: R,
+        };
       }
-      if (r.status === 404)
-        return (
-          logDirectorySearch("not_served", startTime, l, d, { http_status: 404 }),
-          logFeatureSad("plugin_directory_search", "not_served"),
-          { ok: !1, reason: "not-served" }
-        );
+      if (r.status === 404) {
+        logDirectorySearch("not_served", startTime, l, d, {
+          http_status: 404,
+        });
+        logFeatureSad("plugin_directory_search", "not_served");
+        return {
+          ok: false,
+          reason: "not-served",
+        };
+      }
       if (r.status >= 400) {
-        (logDirectorySearch("failed", startTime, l, d, {
+        logDirectorySearch("failed", startTime, l, d, {
           error_kind: fromEnum("http"),
           http_status: r.status,
-        }),
-          logFeatureBad("plugin_directory_search", `http_${r.status}`));
+        });
+        logFeatureBad("plugin_directory_search", `http_${r.status}`);
         let y;
         if (r.status === 400 && d)
           y = "it could not continue this results page; search again to start from the first page";
         else if (r.status === 429 || r.status >= 500) y = "it is temporarily unavailable; try again shortly";
         else y = `the request failed (HTTP ${r.status})`;
-        let R = r.status === 429 || r.status === 503 ? r.response.headers["retry-after"] : void 0,
-          j = parseRetryAfterMs(typeof R === "string" ? R : void 0);
+        let R = r.status === 429 || r.status === 503 ? r.response.headers["retry-after"] : undefined;
+        let retryAfterMs = parseRetryAfterMs(typeof R === "string" ? R : undefined);
         return {
-          ok: !1,
+          ok: false,
           reason: "failed",
           message: y,
-          ...(j !== void 0 && { retryAfterMs: Math.min(j, Y) }),
+          ...(retryAfterMs !== undefined && {
+            retryAfterMs: Math.min(retryAfterMs, DIRECTORY_SEARCH_CACHE_TTL_MS),
+          }),
         };
       }
-      let safeParse = V().safeParse(r.data);
-      if (!safeParse.success)
-        return (
-          logDirectorySearch("failed", startTime, l, d, { error_kind: fromEnum("invalid_schema") }),
-          logFeatureBad("plugin_directory_search", "invalid_schema"),
-          { ok: !1, reason: "failed", message: "it returned a response Claude Code could not read" }
-        );
-      for (let y of safeParse.data.data ?? []) {
-        let R = parseDirectoryListing(y);
-        if (R) E.push(R);
+      let x = directoryPageWrapperSchema().safeParse(r.data);
+      if (!x.success) {
+        logDirectorySearch("failed", startTime, l, d, {
+          error_kind: fromEnum("invalid_schema"),
+        });
+        logFeatureBad("plugin_directory_search", "invalid_schema");
+        return {
+          ok: false,
+          reason: "failed",
+          message: "it returned a response Claude Code could not read",
+        };
+      }
+      for (let y of x.data.data ?? []) {
+        let directoryListing = parseDirectoryListing(y);
+        if (directoryListing) E.push(directoryListing);
         else v++;
       }
-      b = safeParse.data.next_page || void 0;
-    } while (E.length < pageSize && b !== void 0 && S < B);
-    let i = E.length === 0 && b !== void 0,
-      k = i && !keepTokenWhenEmpty;
-    if (k) b = void 0;
-    return (
-      logDirectorySearch("success", startTime, l, d, {
-        result_count: E.length,
-        skipped_count: v,
-        request_count: S,
-        has_more: b !== void 0,
-        chase_exhausted: i,
-      }),
-      logFeatureOk("plugin_directory_search"),
-      { ok: !0, page: { listings: E, nextPageToken: b, skippedRows: v, truncated: k || void 0 } }
-    );
+      b = x.data.next_page || undefined;
+    } while (E.length < pageSize && b !== undefined && S < PLUGIN_DIRECTORY_MAX_RESULTS);
+    let i = E.length === 0 && b !== undefined;
+    let k = i && !keepTokenWhenEmpty;
+    if (k) b = undefined;
+    logDirectorySearch("success", startTime, l, d, {
+      result_count: E.length,
+      skipped_count: v,
+      request_count: S,
+      has_more: b !== undefined,
+      chase_exhausted: i,
+    });
+    logFeatureOk("plugin_directory_search");
+    return {
+      ok: true,
+      page: {
+        listings: E,
+        nextPageToken: b,
+        skippedRows: v,
+        truncated: k || undefined,
+      },
+    };
   } catch (error) {
-    if (signal?.aborted) return { ok: !1, reason: "aborted" };
-    let { kind: kind, status: status, message: message } = classifyAxiosError(error);
-    return (
-      logForDebugging(`plugin directory search failed (${kind}${status ? ` ${status}` : ""}): ${message}`),
-      logDirectorySearch("failed", startTime, l, d, {
-        error_kind: fromEnum(kind),
-        ...(status !== void 0 && { http_status: status }),
+    if (signal?.aborted)
+      return {
+        ok: false,
+        reason: "aborted",
+      };
+    let { kind, status, message } = classifyAxiosError(error);
+    logForDebugging(`plugin directory search failed (${kind}${status ? ` ${status}` : ""}): ${message}`);
+    logDirectorySearch("failed", startTime, l, d, {
+      error_kind: fromEnum(kind),
+      ...(status !== undefined && {
+        http_status: status,
       }),
-      logFeatureBad("plugin_directory_search", kind),
-      {
-        ok: !1,
-        reason: "failed",
-        message:
-          status === void 0 && kind !== "other"
-            ? "it could not be reached; check your network connection"
-            : "the request failed",
-      }
-    );
+    });
+    logFeatureBad("plugin_directory_search", kind);
+    return {
+      ok: false,
+      reason: "failed",
+      message:
+        status === undefined && kind !== "other"
+          ? "it could not be reached; check your network connection"
+          : "the request failed",
+    };
   }
 }
 //@ chunk-snyt4d6y.js:5454-5595 placement
@@ -296,25 +333,24 @@ function stripNullFields(e) {
   if (Array.isArray(e)) return e.map(stripNullFields);
   if (isPlainObject(e)) {
     let n = {};
-    for (let [h, w] of Object.entries(e)) if (w !== null) n[h] = stripNullFields(w);
+    for (let [key, value] of Object.entries(e)) if (value !== null) n[key] = stripNullFields(value);
     return n;
   }
   return e;
 }
+//@ chunk-snyt4d6y.js:5595-5749 placement
 /**
  * 记录插件目录搜索遥测
  */
-//@ chunk-snyt4d6y.js:5595-5749 placement
-function logDirectorySearch(e, n, h, w, P = {}) {
+function logDirectorySearch(e, n, hasQuery, isContinuation, P = {}) {
   logEvent("tengu_plugin_directory_search", {
     outcome: fromEnum(e),
-    has_query: h,
-    is_continuation: w,
+    has_query: hasQuery,
+    is_continuation: isContinuation,
     duration_ms: Math.round(performance.now() - n),
     ...P,
   });
 }
-
 export {
   parseDirectoryListing,
   searchPluginDirectory,

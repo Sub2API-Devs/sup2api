@@ -9,112 +9,152 @@
  * attribution: facade-exports 1
  */
 import { w } from "../../vendor/react/compiler-runtime.js";
-import { Me } from "./design-system/ThemeProvider.js";
+import { useTheme_2 } from "./design-system/ThemeProvider.js";
 import { useIsFullPageNotice, NoticeAccent } from "./design-system/NoticeUnderScene.js";
 import { saveGlobalConfig, customApiKeyResponsesOf } from "../utils/config.js";
 import { emitCredentialChange } from "../utils/auth/credentialEpoch.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
-import { e, r } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+} from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Box } from "../ink/components/Text.js";
 import { ConfirmSelect } from "./design-system/ConfirmSelect.js";
 import { Dialog } from "./design-system/Dialog.js";
 
+//@ chunk-7hdssadt.js:493-1880 facade-exports = ApproveApiKey (0.444)
 /**
  * 询问是否使用环境中的 ANTHROPIC_API_KEY（推荐否时使用订阅登录），结果记入配置的已批准/已拒绝列表。
  */
-//@ chunk-7hdssadt.js:493-1880 facade-exports = ApproveApiKey (0.444)
-function ApproveApiKey(t0) {
-  let $ = w(20),
-    { customApiKeyTruncated: customApiKeyTruncated, onDone: onDone } = t0,
-    { storageV5: storageV5 } = Me(),
-    y = useIsFullPageNotice() ? 2 : 0,
-    C;
-  if ($[0] !== customApiKeyTruncated || $[1] !== onDone || $[2] !== storageV5)
-    ((C = function t(value) {
+function ApproveApiKey(props) {
+  let $ = w(20);
+  let { customApiKeyTruncated, onDone } = props;
+  let { storageV5 } = useTheme_2();
+  let paddingLeft = useIsFullPageNotice() ? 2 : 0;
+  let t1;
+  if ($[0] !== customApiKeyTruncated || $[1] !== onDone || $[2] !== storageV5) {
+    t1 = function onChange(value) {
       G: switch (value) {
         case "yes": {
-          (saveGlobalConfig((current_0) => {
-            let { approved: approved, rejected: rejected } = customApiKeyResponsesOf(current_0);
+          saveGlobalConfig((current) => {
+            let { approved, rejected } = customApiKeyResponsesOf(current);
             return {
-              ...current_0,
-              customApiKeyResponses: { approved: [...approved, customApiKeyTruncated], rejected: rejected },
+              ...current,
+              customApiKeyResponses: {
+                approved: [...approved, customApiKeyTruncated],
+                rejected,
+              },
             };
-          }, storageV5),
-            emitCredentialChange(),
-            onDone(!0));
+          }, storageV5);
+          emitCredentialChange();
+          onDone(true);
           break G;
         }
         case "no": {
-          (saveGlobalConfig((current) => {
-            let { approved: approved, rejected: rejected } = customApiKeyResponsesOf(current);
+          saveGlobalConfig((current) => {
+            let { approved, rejected } = customApiKeyResponsesOf(current);
             return {
               ...current,
-              customApiKeyResponses: { approved: approved, rejected: [...rejected, customApiKeyTruncated] },
+              customApiKeyResponses: {
+                approved,
+                rejected: [...rejected, customApiKeyTruncated],
+              },
             };
-          }, storageV5),
-            onDone(!1));
+          }, storageV5);
+          onDone(false);
         }
       }
-    }),
-      ($[0] = customApiKeyTruncated),
-      ($[1] = onDone),
-      ($[2] = storageV5),
-      ($[3] = C));
-  else C = $[3];
-  let onChange = C,
-    i;
-  if ($[4] !== onChange) ((i = () => onChange("no")), ($[4] = onChange), ($[5] = i));
-  else i = $[5];
-  let I;
-  if ($[6] === MEMO_CACHE_SENTINEL)
-    ((I = e(NoticeAccent, { bold: !0, children: "ANTHROPIC_API_KEY" })), ($[6] = I));
-  else I = $[6];
-  let u;
-  if ($[7] !== customApiKeyTruncated)
-    ((u = r(Text, { children: [I, r(Text, { children: [": sk-ant-...", customApiKeyTruncated] })] })),
-      ($[7] = customApiKeyTruncated),
-      ($[8] = u));
-  else u = $[8];
+    };
+    $[0] = customApiKeyTruncated;
+    $[1] = onDone;
+    $[2] = storageV5;
+    $[3] = t1;
+  } else t1 = $[3];
+  let onChange = t1;
+  let onCancel;
+  if ($[4] !== onChange) {
+    onCancel = () => onChange("no");
+    $[4] = onChange;
+    $[5] = onCancel;
+  } else onCancel = $[5];
+  let t3;
+  if ($[6] === MEMO_CACHE_SENTINEL) {
+    t3 = jsxProd_default(NoticeAccent, {
+      bold: true,
+      children: "ANTHROPIC_API_KEY",
+    });
+    $[6] = t3;
+  } else t3 = $[6];
+  let children;
+  if ($[7] !== customApiKeyTruncated) {
+    children = jsxProd_default_2(Text, {
+      children: [
+        t3,
+        jsxProd_default_2(Text, {
+          children: [": sk-ant-...", customApiKeyTruncated],
+        }),
+      ],
+    });
+    $[7] = customApiKeyTruncated;
+    $[8] = children;
+  } else children = $[8];
   let p;
-  if ($[9] !== y || $[10] !== u)
-    ((p = e(Box, { paddingLeft: y, children: u })), ($[9] = y), ($[10] = u), ($[11] = p));
-  else p = $[11];
+  if ($[9] !== paddingLeft || $[10] !== children) {
+    p = jsxProd_default(Box, {
+      paddingLeft,
+      children,
+    });
+    $[9] = paddingLeft;
+    $[10] = children;
+    $[11] = p;
+  } else p = $[11];
   let P;
-  if ($[12] === MEMO_CACHE_SENTINEL)
-    ((P = e(Text, { children: "Do you want to use this API key?" })), ($[12] = P));
-  else P = $[12];
-  let T;
-  if ($[13] === MEMO_CACHE_SENTINEL)
-    ((T = r(Text, { children: ["No (", e(NoticeAccent, { bold: !0, children: "recommended" }), ")"] })),
-      ($[13] = T));
-  else T = $[13];
-  let m;
-  if ($[14] !== onChange)
-    ((m = e(ConfirmSelect, {
-      hideIndexes: !0,
+  if ($[12] === MEMO_CACHE_SENTINEL) {
+    P = jsxProd_default(Text, {
+      children: "Do you want to use this API key?",
+    });
+    $[12] = P;
+  } else P = $[12];
+  let cancelLabel;
+  if ($[13] === MEMO_CACHE_SENTINEL) {
+    cancelLabel = jsxProd_default_2(Text, {
+      children: [
+        "No (",
+        jsxProd_default(NoticeAccent, {
+          bold: true,
+          children: "recommended",
+        }),
+        ")",
+      ],
+    });
+    $[13] = cancelLabel;
+  } else cancelLabel = $[13];
+  let t8;
+  if ($[14] !== onChange) {
+    t8 = jsxProd_default(ConfirmSelect, {
+      hideIndexes: true,
       focus: "cancel",
-      cancelLabel: T,
+      cancelLabel,
       onConfirm: () => onChange("yes"),
       onCancel: () => onChange("no"),
-    })),
-      ($[14] = onChange),
-      ($[15] = m));
-  else m = $[15];
-  let k;
-  if ($[16] !== i || $[17] !== p || $[18] !== m)
-    ((k = r(Dialog, {
+    });
+    $[14] = onChange;
+    $[15] = t8;
+  } else t8 = $[15];
+  let t9;
+  if ($[16] !== onCancel || $[17] !== p || $[18] !== t8) {
+    t9 = jsxProd_default_2(Dialog, {
       title: "Detected a custom API key in your environment",
       color: "warning",
-      onCancel: i,
-      exitOnCtrlCD: !0,
-      children: [p, P, m],
-    })),
-      ($[16] = i),
-      ($[17] = p),
-      ($[18] = m),
-      ($[19] = k));
-  else k = $[19];
-  return k;
+      onCancel,
+      exitOnCtrlCD: true,
+      children: [p, P, t8],
+    });
+    $[16] = onCancel;
+    $[17] = p;
+    $[18] = t8;
+    $[19] = t9;
+  } else t9 = $[19];
+  return t9;
 }
-
 export { ApproveApiKey };

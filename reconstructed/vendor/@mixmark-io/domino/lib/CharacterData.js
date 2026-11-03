@@ -6,59 +6,64 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { Nn } from "./Leaf.js";
-import { ee } from "./utils.js";
-import { ra } from "./ChildNode.js";
-import { mn } from "./NonDocumentTypeChildNode.js";
+import { require_Leaf } from "./Leaf.js";
+import { require_utils } from "./utils.js";
+import { require_ChildNode } from "./ChildNode.js";
+import { require_NonDocumentTypeChildNode } from "./NonDocumentTypeChildNode.js";
 
 //@ chunk-vwj6ccer.js:62721-63701 cjs-fingerprint
-var lr = x(function (yd, Vs) {
-  Vs.exports = ia;
-  var Us = Nn(),
-    Ps = ee(),
-    rx = ra(),
-    ax = mn();
-  function ia() {
-    Us.call(this);
+var require_CharacterData = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = CharacterData;
+  var Leaf = require_Leaf();
+  var utils = require_utils();
+  var ChildNode = require_ChildNode();
+  var NonDocumentTypeChildNode = require_NonDocumentTypeChildNode();
+  function CharacterData() {
+    Leaf.call(this);
   }
-  ia.prototype = Object.create(Us.prototype, {
+  CharacterData.prototype = Object.create(Leaf.prototype, {
     substringData: {
-      value: function (t, r) {
+      value: function (offset, count) {
         if (arguments.length < 2) throw TypeError("Not enough arguments");
-        if (((t = t >>> 0), (r = r >>> 0), t > this.data.length || t < 0 || r < 0)) Ps.IndexSizeError();
-        return this.data.substring(t, t + r);
+        offset = offset >>> 0;
+        count = count >>> 0;
+        if (offset > this.data.length || offset < 0 || count < 0) utils.IndexSizeError();
+        return this.data.substring(offset, offset + count);
       },
     },
     appendData: {
-      value: function (t) {
+      value: function (data) {
         if (arguments.length < 1) throw TypeError("Not enough arguments");
-        this.data += String(t);
+        this.data += String(data);
       },
     },
     insertData: {
-      value: function (t, r) {
-        return this.replaceData(t, 0, r);
+      value: function (offset, data) {
+        return this.replaceData(offset, 0, data);
       },
     },
     deleteData: {
-      value: function (t, r) {
-        return this.replaceData(t, r, "");
+      value: function (offset, count) {
+        return this.replaceData(offset, count, "");
       },
     },
     replaceData: {
-      value: function (t, r, a) {
-        var s = this.data,
-          c = s.length;
-        if (((t = t >>> 0), (r = r >>> 0), (a = String(a)), t > c || t < 0)) Ps.IndexSizeError();
-        if (t + r > c) r = c - t;
-        var substring = s.substring(0, t),
-          substring_2 = s.substring(t + r);
-        this.data = substring + a + substring_2;
+      value: function (offset, count, data) {
+        var curtext = this.data;
+        var len = curtext.length;
+        offset = offset >>> 0;
+        count = count >>> 0;
+        data = String(data);
+        if (offset > len || offset < 0) utils.IndexSizeError();
+        if (offset + count > len) count = len - offset;
+        var prefix = curtext.substring(0, offset);
+        var suffix = curtext.substring(offset + count);
+        this.data = prefix + data + suffix;
       },
     },
     isEqual: {
-      value: function (t) {
-        return this._data === t._data;
+      value: function (n) {
+        return this._data === n._data;
       },
     },
     length: {
@@ -67,8 +72,7 @@ var lr = x(function (yd, Vs) {
       },
     },
   });
-  Object.defineProperties(ia.prototype, rx);
-  Object.defineProperties(ia.prototype, ax);
+  Object.defineProperties(CharacterData.prototype, ChildNode);
+  Object.defineProperties(CharacterData.prototype, NonDocumentTypeChildNode);
 });
-
-export { lr };
+export { require_CharacterData };

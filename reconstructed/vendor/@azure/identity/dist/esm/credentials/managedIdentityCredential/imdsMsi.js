@@ -5,66 +5,81 @@
  * pieces: chunk-mrx6y2r5.js (3)
  * attribution: esm-fingerprint 3
  */
-import { z } from "../../util/logging.js";
-import { eo } from "./utils.js";
+import { credentialLogger } from "../../util/logging.js";
+import { mapScopesToResource } from "./utils.js";
 import { rr, je } from "../../../../../core-rest-pipeline/dist/esm/policies/retryPolicy.js";
-import { Z } from "../../util/tracing.js";
+import { tracingClient } from "../../util/tracing.js";
 import { Wo } from "../../../../../core-rest-pipeline/dist/esm/util/file.js";
 
 //@ chunk-mrx6y2r5.js:289108-289224 esm-fingerprint
-var vt = "ManagedIdentityCredential - IMDS",
-  Lr = z(vt),
-  HTTP_169_254_169_254 = "http://169.254.169.254",
-  nC = "/metadata/identity/oauth2/token";
+var msiName = "ManagedIdentityCredential - IMDS";
+var logger_5 = credentialLogger(msiName);
+var imdsHost = "http://169.254.169.254";
+var imdsEndpointPath = "/metadata/identity/oauth2/token";
 //@ chunk-mrx6y2r5.js:289224-289480 esm-fingerprint
-function oC(e) {
-  var t;
-  if (!eo(e)) throw Error(`${vt}: Multiple scopes are not supported.`);
-  let n = new URL(
-      nC,
-      (t = process.env.AZURE_POD_IDENTITY_AUTHORITY_HOST) !== null && t !== void 0 ? t : HTTP_169_254_169_254,
-    ),
-    o = { Accept: "application/json" };
-  return { url: `${n}`, method: "GET", headers: rr(o) };
+function prepareInvalidRequestOptions(scopes) {
+  var _a;
+  if (!mapScopesToResource(scopes)) throw Error(`${msiName}: Multiple scopes are not supported.`);
+  let url = new URL(
+    imdsEndpointPath,
+    (_a = process.env.AZURE_POD_IDENTITY_AUTHORITY_HOST) !== null && _a !== undefined ? _a : imdsHost,
+  );
+  let rawHeaders = {
+    Accept: "application/json",
+  };
+  return {
+    url: `${url}`,
+    method: "GET",
+    headers: rr(rawHeaders),
+  };
 }
 //@ chunk-mrx6y2r5.js:289480-290526 esm-fingerprint
-var Wf = {
+var imdsMsi = {
   name: "imdsMsi",
-  async isAvailable(e) {
-    let { scopes: scopes, identityClient: identityClient, getTokenOptions: getTokenOptions } = e,
-      o = eo(scopes);
-    if (!o) return (Lr.info(`${vt}: Unavailable. Multiple scopes are not supported.`), !1);
-    if (process.env.AZURE_POD_IDENTITY_AUTHORITY_HOST) return !0;
+  async isAvailable(options) {
+    let { scopes, identityClient, getTokenOptions } = options;
+    let resource = mapScopesToResource(scopes);
+    if (!resource) {
+      logger_5.info(`${msiName}: Unavailable. Multiple scopes are not supported.`);
+      return false;
+    }
+    if (process.env.AZURE_POD_IDENTITY_AUTHORITY_HOST) return true;
     if (!identityClient) throw Error("Missing IdentityClient");
-    let i = oC(o);
-    return Z.withSpan(
+    let requestOptions = prepareInvalidRequestOptions(resource);
+    return tracingClient.withSpan(
       "ManagedIdentityCredential-pingImdsEndpoint",
-      getTokenOptions !== null && getTokenOptions !== void 0 ? getTokenOptions : {},
-      async (s) => {
-        var a, c;
-        i.tracingOptions = s.tracingOptions;
-        let l = je(i);
-        ((l.timeout = ((a = s.requestOptions) === null || a === void 0 ? void 0 : a.timeout) || 1000),
-          (l.allowInsecureConnection = !0));
-        let d;
+      getTokenOptions !== null && getTokenOptions !== undefined ? getTokenOptions : {},
+      async (updatedOptions) => {
+        var _a;
+        var _b;
+        requestOptions.tracingOptions = updatedOptions.tracingOptions;
+        let request = je(requestOptions);
+        request.timeout =
+          ((_a = updatedOptions.requestOptions) === null || _a === undefined ? undefined : _a.timeout) ||
+          1000;
+        request.allowInsecureConnection = true;
+        let response;
         try {
-          (Lr.info(`${vt}: Pinging the Azure IMDS endpoint`), (d = await identityClient.sendRequest(l)));
-        } catch (error) {
-          if (Wo(error)) Lr.verbose(`${vt}: Caught error ${error.name}: ${error.message}`);
-          return (Lr.info(`${vt}: The Azure IMDS endpoint is unavailable`), !1);
+          logger_5.info(`${msiName}: Pinging the Azure IMDS endpoint`);
+          response = await identityClient.sendRequest(request);
+        } catch (err) {
+          if (Wo(err)) logger_5.verbose(`${msiName}: Caught error ${err.name}: ${err.message}`);
+          logger_5.info(`${msiName}: The Azure IMDS endpoint is unavailable`);
+          return false;
         }
-        if (d.status === 403) {
-          if ((c = d.bodyAsText) === null || c === void 0 ? void 0 : c.includes("unreachable"))
-            return (
-              Lr.info(`${vt}: The Azure IMDS endpoint is unavailable`),
-              Lr.info(`${vt}: ${d.bodyAsText}`),
-              !1
-            );
+        if (response.status === 403) {
+          if (
+            (_b = response.bodyAsText) === null || _b === undefined ? undefined : _b.includes("unreachable")
+          ) {
+            logger_5.info(`${msiName}: The Azure IMDS endpoint is unavailable`);
+            logger_5.info(`${msiName}: ${response.bodyAsText}`);
+            return false;
+          }
         }
-        return (Lr.info(`${vt}: The Azure IMDS endpoint is available`), !0);
+        logger_5.info(`${msiName}: The Azure IMDS endpoint is available`);
+        return true;
       },
     );
   },
 };
-
-export { Wf };
+export { imdsMsi };

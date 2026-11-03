@@ -21,8 +21,8 @@ var VIOLIN_WILLOW_FLAG = "tengu_violin_willow";
 //@ chunk-j61dm7j5.js:310-403 placement
 function getViolinWillowOwnAnswer() {
   try {
-    let { value: e, source: source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE(VIOLIN_WILLOW_FLAG, !1);
-    return isServedFeatureSource(source) ? e === !0 : void 0;
+    let { value: e, source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE(VIOLIN_WILLOW_FLAG, false);
+    return isServedFeatureSource(source) ? e === true : undefined;
   } catch {
     return;
   }
@@ -30,34 +30,33 @@ function getViolinWillowOwnAnswer() {
 //@ chunk-j61dm7j5.js:403-455 placement
 function isViolinWillowEnabledCached() {
   try {
-    return getFeatureValue_CACHED_MAY_BE_STALE(VIOLIN_WILLOW_FLAG, !1);
+    return getFeatureValue_CACHED_MAY_BE_STALE(VIOLIN_WILLOW_FLAG, false);
   } catch {
-    return !1;
+    return false;
   }
 }
 //@ chunk-j61dm7j5.js:455-495 placement
 function isCloudClientToolServingAnsweredOn() {
-  return isViolinWoodServedOn() && getViolinWillowOwnAnswer() === !0;
+  return isViolinWoodServedOn() && getViolinWillowOwnAnswer() === true;
 }
+//@ chunk-j61dm7j5.js:495-592 placement
 /**
  * 工具服务开关 tengu_violin_willow 是否明确为关。
  */
-//@ chunk-j61dm7j5.js:495-592 placement
-function getToolServingFlagAnsweredOff({ cloudClient: cloudClient }) {
+function getToolServingFlagAnsweredOff({ cloudClient }) {
   if (isViolinWoodServedOff()) return "tengu_violin_wood";
-  return cloudClient && getViolinWillowOwnAnswer() === !1 ? VIOLIN_WILLOW_FLAG : void 0;
+  return cloudClient && getViolinWillowOwnAnswer() === false ? VIOLIN_WILLOW_FLAG : undefined;
 }
 //@ chunk-j61dm7j5.js:592-688 placement
-async function isToolServingEnabled({ cloudClient: cloudClient }) {
+async function isToolServingEnabled({ cloudClient }) {
   try {
     return (
       (await isViolinWoodEnabled()) && (!cloudClient || (await checkGate_OWN_OFF_FIRST(VIOLIN_WILLOW_FLAG)))
     );
   } catch {
-    return !1;
+    return false;
   }
 }
-
 export {
   isViolinWillowEnabledCached,
   VIOLIN_WILLOW_FLAG,

@@ -8,33 +8,39 @@
  * pieces: chunk-5nte8cwj.js (1), chunk-dcmhvw5a.js (67)
  * attribution: fingerprint 8, placement 1, layout 59
  */
-import { win32, win32 as win32_2, posix, posix as posix_2 } from "path";
+import { win32, posix } from "path";
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import {
-  pe,
-  o,
+  record,
+  string,
   u,
-  A,
-  Ka,
-  U,
+  array,
+  preprocess,
+  _enum,
   M,
-  Ue,
+  union,
   E,
-  T,
-  oe,
+  literal,
+  unknown,
   QD,
   ilo,
   zg,
-  oSr,
-  sSr,
+  ZodOptional,
+  ZodPipe,
   B1e,
-  iA,
+  ZodType,
   hu,
 } from "../../../vendor/zod/v4/classic/schemas.js";
 import { Fgs } from "../../../vendor/zod/v4/classic/compat.js";
-import { Sc, rs } from "./permissionValidation.js";
+import { allowPermissionRuleSchema, permissionRuleSchema } from "./permissionValidation.js";
 import { normalizePermissionModeAlias, EXTERNAL_PERMISSION_MODES } from "../../types/permissions.js";
-import { ts, LOt, SPELLCHECK_PROGRAMS, pc, coerceBooleanString } from "../spellcheck.js";
+import {
+  buildPermissionModesForGroups,
+  enabledSettingsFeatureGroups,
+  SPELLCHECK_PROGRAMS,
+  buildSettingsShapeForGroups,
+  coerceBooleanString,
+} from "../spellcheck.js";
 import {
   MarketplaceSourceStrictSchema,
   PluginIdSchema,
@@ -46,13 +52,28 @@ import {
   hasGithubWildcard,
 } from "../plugins/schemas.js";
 import { count } from "../collections.js";
-import { uT, isMacSpecialPath } from "../pathClassification.js";
-import { yl } from "../networkPaths.js";
-import { ec } from "../timerDelayClamp.js";
+import { isDeviceNamespacePath, isMacSpecialPath } from "../pathClassification.js";
+import { isNetworkMountRoot } from "../networkPaths.js";
+import { MAX_TIMER_DELAY_MS } from "../timerDelayClamp.js";
 import { isWellFormedString, plural } from "../stringUtils.js";
-import { Kx, d0, OOn, Uct, P1e, EDITOR_MODES, NOTIFICATION_CHANNELS, BPi } from "../config.js";
+import {
+  TRANSPORT_LABELS,
+  GLOBAL_CONFIG_FIELD_KINDS,
+  CONFIG_BACKEND_LABELS,
+  AUTO_CONNECT_LABELS,
+  CONFIG_SOURCE_LABELS,
+  EDITOR_MODES,
+  NOTIFICATION_CHANNELS,
+  DISABLE_REASON_LABELS,
+} from "../config.js";
 import { env } from "../env.js";
-import { deferredOptional, Zr, API_PROVIDER_KINDS, qr, cn } from "../permissions/autoModeRulesPrompt.js";
+import {
+  deferredOptional,
+  isApiProviderKind,
+  API_PROVIDER_KINDS,
+  createDeferredOptional,
+  isAnthropicProviderId,
+} from "../permissions/autoModeRulesPrompt.js";
 import {
   isValidServerName,
   ManagedMcpServerSchema,
@@ -61,31 +82,49 @@ import {
 } from "../../services/mcp/types.js";
 import { SERVER_NAME_RULE_MESSAGE } from "../../schemas/hookEntryValidation.js";
 import { HooksSchema } from "../../schemas/hooks.js";
-import { m_r, V3e, Ht, $In, po, CredentialRuleSchema, uo } from "./settingsSourceTrust.js";
+import {
+  sandboxFilesystemSettingsSchema,
+  credentialRuleExtractSchema,
+  credentialRulePathSchema,
+  credentialRuleDecodeSchema,
+  credentialEnvRuleSchema,
+  CredentialRuleSchema,
+  credentialRuleModeSchema,
+} from "./settingsSourceTrust.js";
 import { CACHE_TTL_VALUES } from "../env/envRegistry.js";
 import { EFFORT_LEVELS } from "../effort.js";
 import { wi, xr } from "../../../vendor/lodash-es/_inlinedHelpers.js";
-import { MANAGED_RESTRICTION_KEYS, JOe } from "./managedRestrictionKeys.js";
+import { MANAGED_RESTRICTION_KEYS, asArray } from "./managedRestrictionKeys.js";
 import { isPlainObject as isPlainObject_2 } from "../isPlainObject.js";
-import { m, dDr } from "../desktopDeepLink.js";
-import { gte } from "../semver.js";
+import { semverModuleForDesktop, MIN_DESKTOP_VERSION } from "../desktopDeepLink.js";
+import { semverGt } from "../semver.js";
 
 //@ chunk-dcmhvw5a.js:222126-222212 placement
-var rJt = ["accept", "hold", "refuse"],
-  mct = ["off", "basic", "full"],
-  oE = DoctorLazy(() => pe(o(), Fgs()));
+/**
+ * POLICY_HELPER_ON_FAILURE：policyHelper 失败处理取值；POLICY_HELPER_LOG_LEVELS：policyHelper 日志级别取值；policyHelperScriptRefSchema：policyHelper 脚本引用 schema（同一声明共 3 个绑定）。
+ */
+var POLICY_HELPER_ON_FAILURE = ["accept", "hold", "refuse"];
+var POLICY_HELPER_LOG_LEVELS = ["off", "basic", "full"];
+var policyHelperScriptRefSchema = DoctorLazy(() => record(string(), Fgs()));
 //@ chunk-dcmhvw5a.js:222212-225428 fingerprint = PermissionsSchema (0.81)
 function PermissionsSchema(e) {
   return u({
-    allow: A(Sc()).optional().describe("List of permission rules for allowed operations"),
-    deny: A(rs()).optional().describe("List of permission rules for denied operations"),
-    ask: A(rs()).optional().describe("List of permission rules that should always prompt for confirmation"),
-    defaultMode: Ka(normalizePermissionModeAlias, U([...EXTERNAL_PERMISSION_MODES, ...ts(e)]))
+    allow: array(allowPermissionRuleSchema())
+      .optional()
+      .describe("List of permission rules for allowed operations"),
+    deny: array(permissionRuleSchema()).optional().describe("List of permission rules for denied operations"),
+    ask: array(permissionRuleSchema())
+      .optional()
+      .describe("List of permission rules that should always prompt for confirmation"),
+    defaultMode: preprocess(
+      normalizePermissionModeAlias,
+      _enum([...EXTERNAL_PERMISSION_MODES, ...buildPermissionModesForGroups(e)]),
+    )
       .optional()
       .describe(
         "Default permission mode when Claude Code needs access ('manual' is accepted as an alias for 'default')",
       ),
-    disableBypassPermissionsMode: U(["disable"])
+    disableBypassPermissionsMode: _enum(["disable"])
       .optional()
       .describe("Disable the ability to bypass permission prompts"),
     blockReadsOutsideWorkingDirectories: M()
@@ -98,288 +137,354 @@ function PermissionsSchema(e) {
       .describe(
         "Refuse file-tool writes (Write, Edit, NotebookEdit) outside the working directories in every permission mode; true in any settings source wins. No allow rule lifts it. Files that Claude Code keeps for the session are not refused: its plan files, scratchpad and background job folder, and the auto-memory of this project, unless a repository settings file points it elsewhere. Nothing runs them unless the model asks. Also refuses file-tool writes to Claude Code settings files, inside the working directories too, and takes EnterWorktree and ExitWorktree, which move the working directory, out of the tools on offer. Does not limit shell commands, MCP tools, the programs that hooks run, or the memory tools. Cloud sessions (Claude Code on the web), whose file tools run in a container that is itself the boundary, may not apply it.",
       ),
-    blockReadsExemptPaths: A(o().catch(""))
+    blockReadsExemptPaths: array(string().catch(""))
       .optional()
-      .catch(void 0)
+      .catch(undefined)
       .describe(
         'For the program that starts Claude Code: read only from --settings and from settings that program sends while the session runs; ignored in user, project, local and managed settings. Absolute paths, each a folder with all below it or one file, that blockReadsOutsideWorkingDirectories lets through beside the working directories. It allows nothing: an allow rule, the permission mode or the user still decides each read, as with that setting off, and a shell command that hands such a path to a program is still asked about unless a Read allow rule covers it. The paths do not become working directories, so blockWritesOutsideWorkingDirectories refuses writes to them, and they are not told to MCP servers or to the model. Each path counts as written: a link in it is not followed and a pattern is not expanded, so list every spelling that a read may arrive by. Ignored: an entry that starts with ~, has a ".." segment or has white space at either end (as written or once normalized), a relative or network path, and the root of a filesystem. Does not change what sandboxed commands may read (sandbox.filesystem.allowRead does).',
       ),
-    disableAutoMode: U(["disable"]).optional().describe("Disable auto mode"),
-    additionalDirectories: A(o())
+    disableAutoMode: _enum(["disable"]).optional().describe("Disable auto mode"),
+    additionalDirectories: array(string())
       .optional()
       .describe("Additional directories to include in the permission scope"),
   }).passthrough();
 }
 //@ chunk-dcmhvw5a.js:225428-230167 fingerprint = AllowedMcpServerEntrySchema (0.418)
-var PermissionsSettingsSchema = DoctorLazy(() => PermissionsSchema(LOt())),
-  rE = DoctorLazy(() =>
-    Ue([
-      o(),
-      u({})
-        .passthrough()
-        .describe(
-          '{ id: stable id (letters, digits, ".", "_", "-"; max 64), text: the tip (max 500 characters, one line), cooldownSessions?: sessions to wait before showing it again (default 0), priority?: tie-break weight among never-shown tips (default 0) }',
-        ),
-    ]),
-  ),
-  Ops = DoctorLazy(() =>
-    Ka(
-      (e) =>
-        Array.isArray(e)
-          ? e.filter((n) => typeof n === "string" || (!!n && typeof n === "object" && !Array.isArray(n)))
-          : [],
-      A(rE()),
-    ),
-  ),
-  cs = DoctorLazy(() =>
-    u({
-      source: MarketplaceSourceStrictSchema().describe("Where to fetch the marketplace from"),
-      installLocation: o()
-        .optional()
-        .describe("Local cache path where marketplace manifest is stored (auto-generated if not provided)"),
-      autoUpdate: M()
-        .optional()
-        .describe("Whether to automatically update this marketplace and its installed plugins on startup"),
-      pluginDigests: pe(o(), A(o()).catch([]))
-        .optional()
-        .catch(void 0)
-        .describe(
-          'Managed settings only: the plugins of this marketplace that an organization delivers with its own tier, by plugin name, each with the digests of its releases. A plugin also enabled and listed in prependPlugins or appendPlugins by managed settings the session vouches for loads its hooks module only from a folder that proves one of them, and is then seated in that tier; any other copy does not load. A digest is sha256- and the base64 SHA-256 of, for every regular file in the folder in UTF-16 code unit order of its path, not normalized, "f PATH" NUL BYTE-LENGTH NUL BYTES, with / in paths; .git, .in_use, .orphaned_at, .claude-plugin-link and .links_materialized at the root are left out. The plugin keeps its manifest at .claude-plugin/plugin.json and names one module in hooks/hooks.json. A string of any other form, or a list that is empty or of any other shape, matches no folder. A symbolic link, or a surface module, proves nothing. A proved plugin ships bundled with no install step: the digest covers the whole folder, node_modules included. A checkout whose line endings were converted proves nothing.',
-        ),
-    }),
-  ),
-  us = DoctorLazy(() => {
-    let e = () => E().min(0).max(1e4);
-    return u({ input: e(), output: e(), cacheRead: e(), cacheWrite: e() });
-  }),
-  ps = DoctorLazy(() => E().gt(0).lte(10).optional()),
-  gs = DoctorLazy(() =>
-    u({
-      model: o().describe(
-        'Model to select, taken verbatim: an alias ("opus"), an Anthropic model ID, or a provider-format ID (Vertex, Bedrock, gateway). Same values --model accepts.',
+/**
+ * tipEntrySchema：提示条目 schema；skillsSettingsSchema：技能设置 schema；agentsSettingsSchema：代理设置 schema（同一声明共 11 个绑定）。
+ */
+var PermissionsSettingsSchema = DoctorLazy(() => PermissionsSchema(enabledSettingsFeatureGroups()));
+var tipEntrySchema = DoctorLazy(() =>
+  union([
+    string(),
+    u({})
+      .passthrough()
+      .describe(
+        '{ id: stable id (letters, digits, ".", "_", "-"; max 64), text: the tip (max 500 characters, one line), cooldownSessions?: sessions to wait before showing it again (default 0), priority?: tie-break weight among never-shown tips (default 0) }',
       ),
-      label: o().optional().describe("Row title. Defaults to the model name."),
-      description: o().optional().describe("Row subtitle. Defaults to a generic description."),
-      behavesAs: o()
-        .optional()
-        .describe(
-          "For a model this version of Claude Code does not know: the ID of a model it does know " +
-            '(e.g. "claude-opus-4-8") whose client-side handling \u2014 prompt profile, capability and effort ' +
-            "defaults \u2014 applies to it. Changes neither the row's label nor the model ID sent. Without it, " +
-            "a model-catalog row for a model this version does not know is not offered until Claude Code is updated.",
-        ),
-    }),
+  ]),
+);
+var skillsSettingsSchema = DoctorLazy(() =>
+  preprocess(
+    (v) =>
+      Array.isArray(v)
+        ? v.filter((n) => typeof n === "string" || (!!n && typeof n === "object" && !Array.isArray(n)))
+        : [],
+    array(tipEntrySchema()),
   ),
-  Co = DoctorLazy(() =>
-    u({
-      serverName: o()
-        .regex(/^[a-zA-Z0-9_-]+$/, "Server name can only contain letters, numbers, hyphens, and underscores")
-        .optional()
-        .describe("Name of the MCP server that users are allowed to configure"),
-      serverCommand: A(o())
-        .min(1, "Server command must have at least one element (the command)")
-        .optional()
-        .describe("Command array [command, ...args] to match exactly for allowed stdio servers"),
-      serverUrl: o()
-        .optional()
-        .describe(
-          'URL pattern with wildcard support (e.g., "https://*.example.com/*") for allowed remote MCP servers',
-        ),
-    }).refine(
-      (e) =>
-        count([e.serverName !== void 0, e.serverCommand !== void 0, e.serverUrl !== void 0], Boolean) === 1,
-      { message: 'Entry must have exactly one of "serverName", "serverCommand", or "serverUrl"' },
+);
+var agentsSettingsSchema = DoctorLazy(() =>
+  u({
+    source: MarketplaceSourceStrictSchema().describe("Where to fetch the marketplace from"),
+    installLocation: string()
+      .optional()
+      .describe("Local cache path where marketplace manifest is stored (auto-generated if not provided)"),
+    autoUpdate: M()
+      .optional()
+      .describe("Whether to automatically update this marketplace and its installed plugins on startup"),
+    pluginDigests: record(string(), array(string()).catch([]))
+      .optional()
+      .catch(undefined)
+      .describe(
+        'Managed settings only: the plugins of this marketplace that an organization delivers with its own tier, by plugin name, each with the digests of its releases. A plugin also enabled and listed in prependPlugins or appendPlugins by managed settings the session vouches for loads its hooks module only from a folder that proves one of them, and is then seated in that tier; any other copy does not load. A digest is sha256- and the base64 SHA-256 of, for every regular file in the folder in UTF-16 code unit order of its path, not normalized, "f PATH" NUL BYTE-LENGTH NUL BYTES, with / in paths; .git, .in_use, .orphaned_at, .claude-plugin-link and .links_materialized at the root are left out. The plugin keeps its manifest at .claude-plugin/plugin.json and names one module in hooks/hooks.json. A string of any other form, or a list that is empty or of any other shape, matches no folder. A symbolic link, or a surface module, proves nothing. A proved plugin ships bundled with no install step: the digest covers the whole folder, node_modules included. A checkout whose line endings were converted proves nothing.',
+      ),
+  }),
+);
+var hooksSettingsSchema = DoctorLazy(() => {
+  let e = () => E().min(0).max(1e4);
+  return u({
+    input: e(),
+    output: e(),
+    cacheRead: e(),
+    cacheWrite: e(),
+  });
+});
+var mcpSettingsSchema = DoctorLazy(() => E().gt(0).lte(10).optional());
+var outputStylesSettingsSchema = DoctorLazy(() =>
+  u({
+    model: string().describe(
+      'Model to select, taken verbatim: an alias ("opus"), an Anthropic model ID, or a provider-format ID (Vertex, Bedrock, gateway). Same values --model accepts.',
     ),
+    label: string().optional().describe("Row title. Defaults to the model name."),
+    description: string().optional().describe("Row subtitle. Defaults to a generic description."),
+    behavesAs: string()
+      .optional()
+      .describe(
+        "For a model this version of Claude Code does not know: the ID of a model it does know " +
+          '(e.g. "claude-opus-4-8") whose client-side handling \u2014 prompt profile, capability and effort ' +
+          "defaults \u2014 applies to it. Changes neither the row's label nor the model ID sent. Without it, " +
+          "a model-catalog row for a model this version does not know is not offered until Claude Code is updated.",
+      ),
+  }),
+);
+var allowedMcpServersSchema = DoctorLazy(() =>
+  u({
+    serverName: string()
+      .regex(/^[a-zA-Z0-9_-]+$/, "Server name can only contain letters, numbers, hyphens, and underscores")
+      .optional()
+      .describe("Name of the MCP server that users are allowed to configure"),
+    serverCommand: array(string())
+      .min(1, "Server command must have at least one element (the command)")
+      .optional()
+      .describe("Command array [command, ...args] to match exactly for allowed stdio servers"),
+    serverUrl: string()
+      .optional()
+      .describe(
+        'URL pattern with wildcard support (e.g., "https://*.example.com/*") for allowed remote MCP servers',
+      ),
+  }).refine(
+    (e) =>
+      count(
+        [e.serverName !== undefined, e.serverCommand !== undefined, e.serverUrl !== undefined],
+        Boolean,
+      ) === 1,
+    {
+      message: 'Entry must have exactly one of "serverName", "serverCommand", or "serverUrl"',
+    },
   ),
-  wo = DoctorLazy(() =>
-    u({
-      serverName: o()
-        .min(1, "Server name must be non-empty")
-        .refine((e) => e.trim().length > 0, { message: "Server name must not be whitespace-only" })
-        .refine((e) => e === e.trim(), {
-          message:
-            "Server name has leading or trailing whitespace and will never match (names are compared verbatim)",
-        })
-        .optional()
-        .describe("Name of the MCP server that is explicitly blocked"),
-      serverCommand: A(o())
-        .min(1, "Server command must have at least one element (the command)")
-        .optional()
-        .describe("Command array [command, ...args] to match exactly for blocked stdio servers"),
-      serverUrl: o()
-        .optional()
-        .describe(
-          'URL pattern with wildcard support (e.g., "https://*.example.com/*") for blocked remote MCP servers',
-        ),
-    }).refine(
-      (e) =>
-        count([e.serverName !== void 0, e.serverCommand !== void 0, e.serverUrl !== void 0], Boolean) === 1,
-      { message: 'Entry must have exactly one of "serverName", "serverCommand", or "serverUrl"' },
-    ),
+);
+var deniedMcpServersSchema = DoctorLazy(() =>
+  u({
+    serverName: string()
+      .min(1, "Server name must be non-empty")
+      .refine((e) => e.trim().length > 0, {
+        message: "Server name must not be whitespace-only",
+      })
+      .refine((e) => e === e.trim(), {
+        message:
+          "Server name has leading or trailing whitespace and will never match (names are compared verbatim)",
+      })
+      .optional()
+      .describe("Name of the MCP server that is explicitly blocked"),
+    serverCommand: array(string())
+      .min(1, "Server command must have at least one element (the command)")
+      .optional()
+      .describe("Command array [command, ...args] to match exactly for blocked stdio servers"),
+    serverUrl: string()
+      .optional()
+      .describe(
+        'URL pattern with wildcard support (e.g., "https://*.example.com/*") for blocked remote MCP servers',
+      ),
+  }).refine(
+    (e) =>
+      count(
+        [e.serverName !== undefined, e.serverCommand !== undefined, e.serverUrl !== undefined],
+        Boolean,
+      ) === 1,
+    {
+      message: 'Entry must have exactly one of "serverName", "serverCommand", or "serverUrl"',
+    },
   ),
-  Lc = DoctorLazy(() => u({ marketplace: o(), plugin: o() })),
-  sE = DoctorLazy(() =>
-    Ka((e) => {
-      if (typeof e !== "string" || !PluginIdSchema().safeParse(e).success) return e;
-      let index = e.indexOf("@");
-      return { marketplace: e.slice(index + 1), plugin: e.slice(0, index) };
-    }, Lc()),
-  ),
-  iE = /[\x00-\x1f\x7f-\x9f\u2028\u2029]|\p{DI}/u;
+);
+var modelPricingSchema = DoctorLazy(() =>
+  u({
+    marketplace: string(),
+    plugin: string(),
+  }),
+);
+var sandboxSettingsSchema = DoctorLazy(() =>
+  preprocess((e) => {
+    if (typeof e !== "string" || !PluginIdSchema().safeParse(e).success) return e;
+    let index = e.indexOf("@");
+    return {
+      marketplace: e.slice(index + 1),
+      plugin: e.slice(0, index),
+    };
+  }, modelPricingSchema()),
+);
+var permissionsSettingsSchema = /[\x00-\x1f\x7f-\x9f\u2028\u2029]|\p{DI}/u;
 //@ chunk-dcmhvw5a.js:230167-230258 layout
-function Mps(e) {
+/**
+ * looksLikeUncPath：反斜杠形式像 UNC 路径。
+ */
+function looksLikeUncPath(e) {
   let replaced = e.replaceAll("/", "\\");
-  if (uT(replaced)) return !1;
+  if (isDeviceNamespacePath(replaced)) return false;
   return /^\\{2}[^\\]/.test(replaced);
 }
 //@ chunk-dcmhvw5a.js:230258-230332 layout
-function fOn(e) {
-  return yl(e) || /^\/network\/servers(\/|$)/i.test(e) || isMacSpecialPath(e);
+/**
+ * isNetworkOrMacSpecialPath：网络路径或 macOS 特殊路径。
+ */
+function isNetworkOrMacSpecialPath(e) {
+  return isNetworkMountRoot(e) || /^\/network\/servers(\/|$)/i.test(e) || isMacSpecialPath(e);
 }
 //@ chunk-dcmhvw5a.js:230332-230411 layout
-function Dps(e) {
+/**
+ * isKernelPseudoPath：/proc、/dev/fd 等内核伪路径。
+ */
+function isKernelPseudoPath(e) {
   return /^\/(proc|dev\/(fd|stdin|stdout|stderr))(\/|$)/i.test(e);
 }
+//@ chunk-dcmhvw5a.js:230411-231166 layout
 /**
  * 校验 helper 路径是规范形式：Windows 上不含 . / ..、双分隔符、尾随点或空格、盘符外的冒号、设备命名空间，按规则拒绝 UNC 与盘符相对路径；POSIX 上拒绝网络自动挂载根与 /proc、/dev/fd 等。
  */
-//@ chunk-dcmhvw5a.js:230411-231166 layout
 function isNormalizedHelperPath(path, platform, rules = {}) {
   if (platform === "win32") {
     let replaced = path.replaceAll("/", "\\");
-    if (uT(replaced)) return !1;
-    let isUnc = Mps(replaced);
-    if (rules.rejectUnc && isUnc) return !1;
+    if (isDeviceNamespacePath(replaced)) return false;
+    let isUnc = looksLikeUncPath(replaced);
+    if (rules.rejectUnc && isUnc) return false;
     if (rules.rejectDriveRelative) {
-      if (!/^[A-Za-z]:\\/.test(replaced) && !isUnc && /^(\\|[A-Za-z]:)/.test(replaced)) return !1;
+      if (!/^[A-Za-z]:\\/.test(replaced) && !isUnc && /^(\\|[A-Za-z]:)/.test(replaced)) return false;
     }
-    if (win32_2.normalize(replaced) !== replaced) return !1;
+    if (win32.normalize(replaced) !== replaced) return false;
     let parts = replaced.split("\\");
-    if (parts.some((m) => m === "." || m === "..")) return !1;
+    if (parts.some((m) => m === "." || m === "..")) return false;
     if (parts.some((m, f) => /[. ]$/.test(m) || (m.includes(":") && !(f === 0 && /^[A-Za-z]:$/.test(m)))))
-      return !1;
+      return false;
     let g = replaced.startsWith("\\\\") ? replaced.slice(2) : replaced;
-    if (/\\{2}/.test(g)) return !1;
+    if (/\\{2}/.test(g)) return false;
     return !replaced.endsWith("\\") || /^([A-Za-z]:)?\\$/.test(replaced);
   }
-  if (rules.rejectNetworkRoot && fOn(path)) return !1;
-  if (rules.rejectMagicLinkRoot && Dps(path)) return !1;
-  if (posix_2.normalize(path) !== path) return !1;
-  if (path.split("/").some((s) => s === "." || s === "..")) return !1;
-  if (/\/{2}/.test(path)) return !1;
+  if (rules.rejectNetworkRoot && isNetworkOrMacSpecialPath(path)) return false;
+  if (rules.rejectMagicLinkRoot && isKernelPseudoPath(path)) return false;
+  if (posix.normalize(path) !== path) return false;
+  if (path.split("/").some((s) => s === "." || s === "..")) return false;
+  if (/\/{2}/.test(path)) return false;
   return !path.endsWith("/") || path === "/";
 }
 //@ chunk-dcmhvw5a.js:231166-231190 layout
-var Hps = /\.(exe|ps1)$/i;
+/**
+ * POLICY_HELPER_EXECUTABLE_RE：policyHelper 可执行文件后缀。
+ */
+var POLICY_HELPER_EXECUTABLE_RE = /\.(exe|ps1)$/i;
 //@ chunk-dcmhvw5a.js:231190-231230 layout
-function Nps(e) {
+/**
+ * isPowerShellScript：.ps1 脚本。
+ */
+function isPowerShellScript(e) {
   return /\.ps1$/i.test(e);
 }
 //@ chunk-dcmhvw5a.js:231230-231280 layout
-function $ps(e) {
-  return Nps(e) && /[[\]`*?]/.test(e);
+/**
+ * hasPowerShellGlobChars：.ps1 里含 glob 字符。
+ */
+function hasPowerShellGlobChars(e) {
+  return isPowerShellScript(e) && /[[\]`*?]/.test(e);
 }
+//@ chunk-dcmhvw5a.js:231280-231627 layout
 /**
  * policyHelper 条目 schema 的辅助：.ps1 通配字符提示、路径字段、null 视为缺省的包装、带上限的整数 schema、可为 null 的字段名。
  */
-//@ chunk-dcmhvw5a.js:231280-231627 layout
 var PS1_WILDCARD_MESSAGE =
-    'a .ps1 path must not contain "[", "]", "`", "*", or "?" on Windows (PowerShell resolves them as wildcard syntax)',
-  helperPathSchema = () => o().describe("Absolute path to the helper executable"),
-  nullableOptional = (e) => Ka((n) => (n === null ? void 0 : n), e.optional()).optional(),
-  MAX_HELPER_MS = ec,
-  clampedIntSchema = (e) =>
-    E()
-      .int()
-      .min(e)
-      .transform((n) => Math.min(n, MAX_HELPER_MS)),
-  NULLABLE_ENTRY_FIELDS = ["path", "script", "defaultSettings"];
+  'a .ps1 path must not contain "[", "]", "`", "*", or "?" on Windows (PowerShell resolves them as wildcard syntax)';
+var helperPathSchema = () => string().describe("Absolute path to the helper executable");
+var nullableOptional = (e) => preprocess((n) => (n === null ? undefined : n), e.optional()).optional();
+var MAX_HELPER_MS = MAX_TIMER_DELAY_MS;
+var clampedIntSchema = (e) =>
+  E()
+    .int()
+    .min(e)
+    .transform((n) => Math.min(n, MAX_HELPER_MS));
+var NULLABLE_ENTRY_FIELDS = ["path", "script", "defaultSettings"];
 //@ chunk-dcmhvw5a.js:231627-231780 layout
 function isAllNullEntry(e) {
-  if (!e || typeof e !== "object" || Array.isArray(e)) return !1;
+  if (!e || typeof e !== "object" || Array.isArray(e)) return false;
   let n = e;
   return (
     NULLABLE_ENTRY_FIELDS.some((r) => n[r] === null) &&
-    NULLABLE_ENTRY_FIELDS.every((r) => n[r] === null || n[r] === void 0)
+    NULLABLE_ENTRY_FIELDS.every((r) => n[r] === null || n[r] === undefined)
   );
 }
+//@ chunk-dcmhvw5a.js:231780-232632 layout
 /**
  * policyHelper 条目的基础结构（路径、超时、刷新间隔）与 outputBehavior 字段说明。
  */
-//@ chunk-dcmhvw5a.js:231780-232632 layout
-var MAX_QUOTED_NAME_CHARS = 64,
-  HELPER_BASE_SCHEMA = DoctorLazy(() =>
-    u({
-      path: helperPathSchema(),
-      timeoutMs: nullableOptional(clampedIntSchema(1000)),
-      refreshIntervalMs: nullableOptional(Ue([T(0), clampedIntSchema(60000)])),
-    }),
-  ),
-  outputBehaviorSchema = () =>
-    U(["replace", "merge"]).describe(
-      "How the helper's managedSettings compose with the settings of the source that delivered this entry: 'replace' (default) \u2014 the output is the policy; 'merge' \u2014 the output is deep-merged over that source's own settings the way merged managed sources compose (helper scalars win, arrays union, objects merge \u2014 except fallbackModel, forceLoginOrgUUID, gatewayInternalNetworks, sandbox.filesystem.allowRead, sandbox.credentials.awsPairs, sandbox.ripgrep and the restriction allowlists such as allowedMcpServers, allowedProviders, availableModels and allowedHttpHookUrls, which are the helper's whole value when it emits one; tighten a permission with a deny), so a failed helper costs only the delta",
-    );
+var MAX_QUOTED_NAME_CHARS = 64;
+var HELPER_BASE_SCHEMA = DoctorLazy(() =>
+  u({
+    path: helperPathSchema(),
+    timeoutMs: nullableOptional(clampedIntSchema(1000)),
+    refreshIntervalMs: nullableOptional(union([literal(0), clampedIntSchema(60000)])),
+  }),
+);
+var outputBehaviorSchema = () =>
+  _enum(["replace", "merge"]).describe(
+    "How the helper's managedSettings compose with the settings of the source that delivered this entry: 'replace' (default) \u2014 the output is the policy; 'merge' \u2014 the output is deep-merged over that source's own settings the way merged managed sources compose (helper scalars win, arrays union, objects merge \u2014 except fallbackModel, forceLoginOrgUUID, gatewayInternalNetworks, sandbox.filesystem.allowRead, sandbox.credentials.awsPairs, sandbox.ripgrep and the restriction allowlists such as allowedMcpServers, allowedProviders, availableModels and allowedHttpHookUrls, which are the helper's whole value when it emits one; tighten a permission with a deny), so a failed helper costs only the delta",
+  );
 //@ chunk-dcmhvw5a.js:232632-232683 layout
-function Hc(e) {
+function isPolicyHelperOnFailure(e) {
   return e === "continue" || e === "refuse";
 }
+//@ chunk-dcmhvw5a.js:232683-236920 layout
 /**
  * policyHelpers 条目各字段的 schema：onFailure（continue/refuse）、retries（上限 5）、interpreter（sh/pwsh）、内联 script 的约束，以及路径/脚本组合错误文本。
  */
-//@ chunk-dcmhvw5a.js:232683-236920 layout
 var onFailureSchema = () =>
-    Ka(
-      (e) => (e === void 0 || Hc(e) ? e : "refuse"),
-      U(["continue", "refuse"]).describe(
-        `What happens when this entry's helper fails at startup (bad path, missing file or interpreter, non-zero exit, timeout, oversize or invalid output) and no static settings payload (this entry's own, the linux entry's on WSL, or the map's "default") applies in its place: 'refuse' \u2014 Claude Code does not start, naming the failure; 'continue' \u2014 Claude Code starts without the helper's output, on the delivering source's own settings, with a /status notice. Default: 'refuse' when the entry comes from MDM or the managed settings file, 'continue' when it comes from remote managed settings. Any other value is treated as 'refuse', with a /status notice. The install and update commands start no session and are never refused over a remote entry: they report the refusal in /status. An entry whose other fields fail validation runs no helper; from MDM or the managed settings file, any value but 'continue' on it then refuses to start Claude Code until the entry is fixed, unless a static settings payload (the entry's own, kept when it validates, the linux entry's for a wsl one, or the map's "default") serves in its place. From remote, a non-interactive session runs the helper off settings verified this session without the interactive approval, so 'refuse' there too means the helper ran and failed; a launch whose remote settings could not be verified this session (offline, fetch failed) starts without the helper regardless; and a failure first reached after the session has started (settings verified or approved mid-session, which on a machine that only ever runs non-interactively is every launch) ends a session no person watches (non-interactive, a background session no client is attached to, or a teammate session) as the refused start would have, and leaves a watched interactive one (a terminal, with or without remote control, or an attached background session) running under a /status notice with its next start refused. Background refresh failures always keep the last good output whatever this says`,
-      ),
+  preprocess(
+    (e) => (e === undefined || isPolicyHelperOnFailure(e) ? e : "refuse"),
+    _enum(["continue", "refuse"]).describe(
+      `What happens when this entry's helper fails at startup (bad path, missing file or interpreter, non-zero exit, timeout, oversize or invalid output) and no static settings payload (this entry's own, the linux entry's on WSL, or the map's "default") applies in its place: 'refuse' \u2014 Claude Code does not start, naming the failure; 'continue' \u2014 Claude Code starts without the helper's output, on the delivering source's own settings, with a /status notice. Default: 'refuse' when the entry comes from MDM or the managed settings file, 'continue' when it comes from remote managed settings. Any other value is treated as 'refuse', with a /status notice. The install and update commands start no session and are never refused over a remote entry: they report the refusal in /status. An entry whose other fields fail validation runs no helper; from MDM or the managed settings file, any value but 'continue' on it then refuses to start Claude Code until the entry is fixed, unless a static settings payload (the entry's own, kept when it validates, the linux entry's for a wsl one, or the map's "default") serves in its place. From remote, a non-interactive session runs the helper off settings verified this session without the interactive approval, so 'refuse' there too means the helper ran and failed; a launch whose remote settings could not be verified this session (offline, fetch failed) starts without the helper regardless; and a failure first reached after the session has started (settings verified or approved mid-session, which on a machine that only ever runs non-interactively is every launch) ends a session no person watches (non-interactive, a background session no client is attached to, or a teammate session) as the refused start would have, and leaves a watched interactive one (a terminal, with or without remote control, or an attached background session) running under a /status notice with its next start refused. Background refresh failures always keep the last good output whatever this says`,
     ),
-  MAX_HELPER_RETRIES = 5,
-  retriesSchema = () =>
-    E()
-      .int()
-      .min(0)
-      .transform((e) => Math.min(e, MAX_HELPER_RETRIES))
-      .describe(
-        "How many more times to run this entry's helper when a run fails to execute \u2014 it could not be launched, exited non-zero, or was stopped at timeoutMs \u2014 before that counts as a failure (a non-negative integer; default 0, a single attempt; above 5 is treated as 5). Attempts are separated by a short randomized backoff (from 250 ms, doubling per attempt, at most 4 s each) and each attempt gets the full timeoutMs, so a start that waits on the helper can wait up to (retries + 1) \xD7 timeoutMs plus the backoff. Output the helper did produce and that was refused \u2014 oversized, not a JSON object, an invalid envelope, or settings that fail validation \u2014 is not retried, and neither is an invalid path. Applies alike at startup and on each background refresh; only once the attempts are used up do the entry's failure rules (a static settings payload in its place, onFailure, the refresh notice) apply, naming the last attempt's failure",
-      ),
-  interpreterSchema = (e) =>
-    (e === "windows"
-      ? T("pwsh", { message: "interpreter must be 'pwsh' on windows ('sh' is not supported there)" })
-      : T("sh", { message: "interpreter must be 'sh' on macos/linux/wsl" })
-    ).describe(
-      "Fixed interpreter for `script`: 'sh' (/bin/sh) on macos/linux/wsl entries; 'pwsh' (PowerShell at its fixed install locations, never PATH) on the windows entry",
-    ),
-  PATH_OR_SCRIPT_MESSAGE = "exactly one of path/script must be configured",
-  SCRIPT_NEEDS_INTERPRETER_MESSAGE = '"script" and "interpreter" must be configured together',
-  WINDOWS_SCRIPT_ASCII_MESSAGE =
-    "script must be ASCII-only on Windows (PowerShell decodes stdin with the console OEM code page); spell non-ASCII characters as escapes, e.g. [char]0x00E9",
-  scriptSchema = (e) =>
-    o({ message: "script must be a string" })
-      .min(1, { message: "script must not be empty" })
-      .max(65536, { message: "script must be at most 65536 characters" })
-      .refine((n) => !n.includes("\x00"), { message: "script must not contain NUL bytes" })
-      .refine((n) => isWellFormedString(n), { message: "script must be valid UTF-8 (no lone surrogates)" })
-      .refine((n) => e !== "windows" || !/[\u0080-\uffff]/.test(n), { message: WINDOWS_SCRIPT_ASCII_MESSAGE })
-      .describe(
-        "Inline helper script, delivered to the fixed interpreter over stdin (never written to disk)",
-      );
+  );
+var MAX_HELPER_RETRIES = 5;
+var retriesSchema = () =>
+  E()
+    .int()
+    .min(0)
+    .transform((e) => Math.min(e, MAX_HELPER_RETRIES))
+    .describe(
+      "How many more times to run this entry's helper when a run fails to execute \u2014 it could not be launched, exited non-zero, or was stopped at timeoutMs \u2014 before that counts as a failure (a non-negative integer; default 0, a single attempt; above 5 is treated as 5). Attempts are separated by a short randomized backoff (from 250 ms, doubling per attempt, at most 4 s each) and each attempt gets the full timeoutMs, so a start that waits on the helper can wait up to (retries + 1) \xD7 timeoutMs plus the backoff. Output the helper did produce and that was refused \u2014 oversized, not a JSON object, an invalid envelope, or settings that fail validation \u2014 is not retried, and neither is an invalid path. Applies alike at startup and on each background refresh; only once the attempts are used up do the entry's failure rules (a static settings payload in its place, onFailure, the refresh notice) apply, naming the last attempt's failure",
+    );
+var interpreterSchema = (e) =>
+  (e === "windows"
+    ? literal("pwsh", {
+        message: "interpreter must be 'pwsh' on windows ('sh' is not supported there)",
+      })
+    : literal("sh", {
+        message: "interpreter must be 'sh' on macos/linux/wsl",
+      })
+  ).describe(
+    "Fixed interpreter for `script`: 'sh' (/bin/sh) on macos/linux/wsl entries; 'pwsh' (PowerShell at its fixed install locations, never PATH) on the windows entry",
+  );
+var PATH_OR_SCRIPT_MESSAGE = "exactly one of path/script must be configured";
+var SCRIPT_NEEDS_INTERPRETER_MESSAGE = '"script" and "interpreter" must be configured together';
+var WINDOWS_SCRIPT_ASCII_MESSAGE =
+  "script must be ASCII-only on Windows (PowerShell decodes stdin with the console OEM code page); spell non-ASCII characters as escapes, e.g. [char]0x00E9";
+var scriptSchema = (e) =>
+  string({
+    message: "script must be a string",
+  })
+    .min(1, {
+      message: "script must not be empty",
+    })
+    .max(65536, {
+      message: "script must be at most 65536 characters",
+    })
+    .refine((n) => !n.includes("\x00"), {
+      message: "script must not contain NUL bytes",
+    })
+    .refine((n) => isWellFormedString(n), {
+      message: "script must be valid UTF-8 (no lone surrogates)",
+    })
+    .refine((n) => e !== "windows" || !/[\u0080-\uffff]/.test(n), {
+      message: WINDOWS_SCRIPT_ASCII_MESSAGE,
+    })
+    .describe("Inline helper script, delivered to the fixed interpreter over stdin (never written to disk)");
+//@ chunk-dcmhvw5a.js:236920-237074 layout
 /**
  * 校验内联 helper（script 与 interpreter），返回第一条错误或 null。
  */
-//@ chunk-dcmhvw5a.js:236920-237074 layout
 function validateInlineHelper(e, n) {
-  let safeParse = u({ script: scriptSchema(n), interpreter: interpreterSchema(n) }).safeParse(e);
-  return safeParse.success ? null : safeParse.error.issues[0]?.message || "invalid inline helper config";
+  let r = u({
+    script: scriptSchema(n),
+    interpreter: interpreterSchema(n),
+  }).safeParse(e);
+  return r.success ? null : r.error.issues[0]?.message || "invalid inline helper config";
 }
 //@ chunk-dcmhvw5a.js:237074-237115 layout = SUPPORTED_PLATFORMS (0.811)
 var SUPPORTED_PLATFORMS = ["macos", "linux", "windows", "wsl"];
 //@ chunk-dcmhvw5a.js:237115-237167 layout
-function ms(e) {
+/**
+ * platformSpellings：平台名的等价写法（wsl 兼容 linux）。
+ */
+function platformSpellings(e) {
   return e === "wsl" ? ["wsl", "linux"] : [e];
 }
 //@ chunk-dcmhvw5a.js:237167-237219 layout
-function pE(e) {
+function posixPlatformFamily(e) {
   return e === "windows" ? "win32" : "posix";
 }
 //@ chunk-dcmhvw5a.js:237219-237409 layout
@@ -392,27 +497,35 @@ function pathRulesForOs(e) {
     requireWin32ExecutableSuffix: e === "windows",
   };
 }
+//@ chunk-dcmhvw5a.js:237409-238532 layout
 /**
  * 按目标系统生成 helper 路径 schema：长度上限、无控制/不可见字符、绝对路径、Windows 须为 .exe/.ps1 且 .ps1 无通配字符，并须为规范形式。
  */
-//@ chunk-dcmhvw5a.js:237409-238532 layout
 function helperPathSchemaFor(os) {
-  let platform = pE(os),
-    rules = pathRulesForOs(os);
-  return o()
-    .max(1024, { message: "path must be at most 1024 characters" })
-    .refine((s) => !iE.test(s), {
+  let platform = posixPlatformFamily(os);
+  let rules = pathRulesForOs(os);
+  return string()
+    .max(1024, {
+      message: "path must be at most 1024 characters",
+    })
+    .refine((s) => !permissionsSettingsSchema.test(s), {
       message:
         "path must not contain control, line/paragraph-separator, or invisible (default-ignorable) characters",
     })
-    .refine((s) => (platform === "win32" ? win32_2 : posix_2).isAbsolute(s), {
+    .refine((s) => (platform === "win32" ? win32 : posix).isAbsolute(s), {
       message: "path must be absolute",
     })
-    .refine((s) => !(platform === "win32" && rules.requireWin32ExecutableSuffix) || Hps.test(s), {
-      message: "path must end in .exe or .ps1 on Windows",
+    .refine(
+      (s) =>
+        !(platform === "win32" && rules.requireWin32ExecutableSuffix) || POLICY_HELPER_EXECUTABLE_RE.test(s),
+      {
+        message: "path must end in .exe or .ps1 on Windows",
+      },
+    )
+    .refine((s) => platform !== "win32" || !hasPowerShellGlobChars(s), {
+      message: PS1_WILDCARD_MESSAGE,
     })
-    .refine((s) => platform !== "win32" || !$ps(s), { message: PS1_WILDCARD_MESSAGE })
-    .refine((s) => isNormalizedHelperPath(s, platform, rules), {
+    .refine((path) => isNormalizedHelperPath(path, platform, rules), {
       message:
         platform === "win32"
           ? 'path must be in normalized form: no "." or ".." segments, no doubled or trailing separators, no component ending in "." or a space, no ":" outside the drive letter, no device-namespace (\\\\?\\) prefix, no drive-relative (\\dir or C:name) or UNC (\\\\server\\share) form'
@@ -420,68 +533,70 @@ function helperPathSchemaFor(os) {
     })
     .describe("Absolute path to the helper executable");
 }
+//@ chunk-dcmhvw5a.js:238532-240013 layout
 /**
  * policyHelpers 静态载荷校验：不得含 policyHelper(s)、条目字段、helper 输出信封字段或平台键，并给出对应提示。
  */
-//@ chunk-dcmhvw5a.js:238532-240013 layout
-var POLICY_HELPER_KEYS = [...SUPPORTED_PLATFORMS, "default"],
-  HELPER_ENTRY_FIELDS = [
-    "path",
-    "script",
-    "interpreter",
-    "outputBehavior",
-    "onFailure",
-    "retries",
-    "timeoutMs",
-    "refreshIntervalMs",
-    "defaultSettings",
-  ],
-  HELPER_ENVELOPE_FIELDS = ["managedSettings", "appendSystemPrompt"],
-  STATIC_PAYLOAD_SCHEMA = DoctorLazy(() =>
-    pe(o(), oe()).superRefine((e, n) => {
-      for (let r of ["policyHelper", "policyHelpers"])
-        if (e[r] !== void 0 && e[r] !== null)
-          n.addIssue({
-            code: "custom",
-            message: `must not contain "${r}" \u2014 the default payload is applied as managed settings and cannot configure further policy helpers`,
-          });
-      for (let r of HELPER_ENTRY_FIELDS)
-        if (e[r] !== void 0 && e[r] !== null)
-          n.addIssue({
-            code: "custom",
-            message: `must not contain "${r}" \u2014 a static payload is a managed-settings object, not a policyHelpers entry; entry fields (${HELPER_ENTRY_FIELDS.join("/")}) belong on the per-OS entries (policyHelpers.${SUPPORTED_PLATFORMS.join("/")})`,
-          });
-      for (let r of HELPER_ENVELOPE_FIELDS)
-        if (e[r] !== void 0 && e[r] !== null)
-          n.addIssue({
-            code: "custom",
-            message: `must not contain "${r}" \u2014 a static payload is the managedSettings SUBTREE, not the helper's stdout envelope; paste the object your helper emits UNDER "managedSettings", not the envelope around it`,
-          });
-      for (let r of POLICY_HELPER_KEYS)
-        if (e[r] !== void 0 && e[r] !== null)
-          n.addIssue({
-            code: "custom",
-            message: `must not contain "${r}" \u2014 a static payload is the VALUE of a policyHelpers key (a managed-settings object), never another policyHelpers map; don't paste the map or its "${r}" line inside the slot`,
-          });
-    }),
-  ),
-  EMPTY_ENTRY_MESSAGE =
-    'Entry must carry "path" (a helper executable) or "script" + "interpreter" (an inline helper), and/or "defaultSettings" (a static settings payload)';
+var POLICY_HELPER_KEYS = [...SUPPORTED_PLATFORMS, "default"];
+var HELPER_ENTRY_FIELDS = [
+  "path",
+  "script",
+  "interpreter",
+  "outputBehavior",
+  "onFailure",
+  "retries",
+  "timeoutMs",
+  "refreshIntervalMs",
+  "defaultSettings",
+];
+var HELPER_ENVELOPE_FIELDS = ["managedSettings", "appendSystemPrompt"];
+var STATIC_PAYLOAD_SCHEMA = DoctorLazy(() =>
+  record(string(), unknown()).superRefine((e, n) => {
+    for (let r of ["policyHelper", "policyHelpers"])
+      if (e[r] !== undefined && e[r] !== null)
+        n.addIssue({
+          code: "custom",
+          message: `must not contain "${r}" \u2014 the default payload is applied as managed settings and cannot configure further policy helpers`,
+        });
+    for (let r of HELPER_ENTRY_FIELDS)
+      if (e[r] !== undefined && e[r] !== null)
+        n.addIssue({
+          code: "custom",
+          message: `must not contain "${r}" \u2014 a static payload is a managed-settings object, not a policyHelpers entry; entry fields (${HELPER_ENTRY_FIELDS.join("/")}) belong on the per-OS entries (policyHelpers.${SUPPORTED_PLATFORMS.join("/")})`,
+        });
+    for (let r of HELPER_ENVELOPE_FIELDS)
+      if (e[r] !== undefined && e[r] !== null)
+        n.addIssue({
+          code: "custom",
+          message: `must not contain "${r}" \u2014 a static payload is the managedSettings SUBTREE, not the helper's stdout envelope; paste the object your helper emits UNDER "managedSettings", not the envelope around it`,
+        });
+    for (let r of POLICY_HELPER_KEYS)
+      if (e[r] !== undefined && e[r] !== null)
+        n.addIssue({
+          code: "custom",
+          message: `must not contain "${r}" \u2014 a static payload is the VALUE of a policyHelpers key (a managed-settings object), never another policyHelpers map; don't paste the map or its "${r}" line inside the slot`,
+        });
+  }),
+);
+var EMPTY_ENTRY_MESSAGE =
+  'Entry must carry "path" (a helper executable) or "script" + "interpreter" (an inline helper), and/or "defaultSettings" (a static settings payload)';
 //@ chunk-dcmhvw5a.js:240013-240219 layout
 function entryShapeError(e) {
-  let { path: path, script: script, interpreter: interpreter, defaultSettings: defaultSettings } = e;
-  if (path !== void 0 && script !== void 0) return PATH_OR_SCRIPT_MESSAGE;
-  if ((script === void 0) !== (interpreter === void 0)) return SCRIPT_NEEDS_INTERPRETER_MESSAGE;
-  if (path === void 0 && script === void 0 && defaultSettings === void 0) return EMPTY_ENTRY_MESSAGE;
+  let { path, script, interpreter, defaultSettings } = e;
+  if (path !== undefined && script !== undefined) return PATH_OR_SCRIPT_MESSAGE;
+  if ((script === undefined) !== (interpreter === undefined)) return SCRIPT_NEEDS_INTERPRETER_MESSAGE;
+  if (path === undefined && script === undefined && defaultSettings === undefined) return EMPTY_ENTRY_MESSAGE;
   return null;
 }
+//@ chunk-dcmhvw5a.js:240219-240582 layout
 /**
  * 按平台构造 policyHelpers 条目 schema：path、script、interpreter、outputBehavior、onFailure、retries、defaultSettings，并检查 path/script/defaultSettings 的组合。
  */
-//@ chunk-dcmhvw5a.js:240219-240582 layout
 function policyHelperEntrySchema(e, n) {
   return HELPER_BASE_SCHEMA()
-    .omit({ path: !0 })
+    .omit({
+      path: true,
+    })
     .extend({
       path: nullableOptional(helperPathSchemaFor(e)),
       script: nullableOptional(scriptSchema(e)),
@@ -489,128 +604,136 @@ function policyHelperEntrySchema(e, n) {
       outputBehavior: nullableOptional(outputBehaviorSchema()),
       onFailure: nullableOptional(onFailureSchema()),
       retries: nullableOptional(retriesSchema()),
-      defaultSettings: Ka((r) => (r === null ? void 0 : r), n.optional()).optional(),
+      defaultSettings: preprocess((r) => (r === null ? undefined : r), n.optional()).optional(),
     })
     .check((r) => {
       if (r.issues.length > 0) return;
       let s = entryShapeError(r.value);
-      if (s !== null) r.issues.push({ code: "custom", message: s, input: r.value });
+      if (s !== null)
+        r.issues.push({
+          code: "custom",
+          message: s,
+          input: r.value,
+        });
     });
 }
 //@ chunk-dcmhvw5a.js:240582-240614 layout
-var MM = DoctorLazy(() => policyHelperEntrySchema("linux", STATIC_PAYLOAD_SCHEMA()));
+var linuxPolicyHelperSchema = DoctorLazy(() => policyHelperEntrySchema("linux", STATIC_PAYLOAD_SCHEMA()));
 //@ chunk-dcmhvw5a.js:240614-240672 layout
-function as(e, n = STATIC_PAYLOAD_SCHEMA()) {
+function policyHelperEntrySchemaFor(e, n = STATIC_PAYLOAD_SCHEMA()) {
   return e === "default" ? STATIC_PAYLOAD_SCHEMA() : policyHelperEntrySchema(e, n);
 }
 //@ chunk-dcmhvw5a.js:240672-240862 fingerprint = CUSTOMIZATION_SURFACES (0.945)
+/**
+ * skillOverridesSchema：技能覆盖 schema。
+ */
 var SkillOverridesSchema = DoctorLazy(() =>
-    u(
-      Object.fromEntries(
-        POLICY_HELPER_KEYS.map((e) => [
-          e,
-          Ka((n) => {
-            if (n === null) return;
-            if (e !== "default" && isAllNullEntry(n)) return;
-            return n;
-          }, as(e).optional()).optional(),
-        ]),
-      ),
+  u(
+    Object.fromEntries(
+      POLICY_HELPER_KEYS.map((e) => [
+        e,
+        preprocess((n) => {
+          if (n === null) return;
+          if (e !== "default" && isAllNullEntry(n)) return;
+          return n;
+        }, policyHelperEntrySchemaFor(e).optional()).optional(),
+      ]),
     ),
   ),
-  oJt = ["skills", "agents", "hooks", "mcp"];
+);
+var skillOverridesSchema = ["skills", "agents", "hooks", "mcp"];
 //@ chunk-dcmhvw5a.js:240862-241035 layout
 function filteredSurfacesSchema(e) {
-  return Ka(
+  return preprocess(
     (n) => {
       if (!Array.isArray(n)) return n;
-      let filtered = n.filter((s) => oJt.includes(s));
+      let filtered = n.filter((x) => skillOverridesSchema.includes(x));
       if (filtered.length < n.length) e?.(n.length - filtered.length);
       return filtered;
     },
-    Ue([M(), A(U(oJt))]),
+    union([M(), array(_enum(skillOverridesSchema))]),
   );
 }
 //@ chunk-dcmhvw5a.js:241035-241078 layout
-function $c() {
-  return Ue([A(o()), M(), QD()]);
+function triStateSchema() {
+  return union([array(string()), M(), QD()]);
 }
 //@ chunk-dcmhvw5a.js:241078-242189 layout
-var freeze = Object.freeze({ type: "invalid-entry-stripped" }),
-  yE = DoctorLazy(() =>
-    Ue([
-      u({
-        type: T("regex").describe(
-          'Config variant. This client understands "regex": matches turn output and builds a URL from named capture groups. Entries with other variants are preserved but skipped at runtime.',
+/**
+ * configVariantSchema：配置变体 schema；configVariantUnionSchema：配置变体联合 schema（同一声明共 2 个绑定）。
+ */
+var Ac = Object.freeze({
+  type: "invalid-entry-stripped",
+});
+var configVariantSchema = DoctorLazy(() =>
+  union([
+    u({
+      type: literal("regex").describe(
+        'Config variant. This client understands "regex": matches turn output and builds a URL from named capture groups. Entries with other variants are preserved but skipped at runtime.',
+      ),
+      pattern: string().describe("Regex matched against turn output (tool results and assistant text)"),
+      url: string().describe(
+        "Link target. {name} placeholders are filled from named regex capture groups, e.g. (?<id>...) -> {id}. Values are URL-encoded; the origin must be literal in the template. The scheme must be https, http, or a recognized editor or workspace deep-link scheme: vscode, vscode-insiders, cursor, windsurf, zed, jetbrains, idea, slack, linear, notion, figma.",
+      ),
+      label: string()
+        .optional()
+        .describe(
+          "Badge text. {name} placeholders filled from named capture groups; defaults to the full match.",
         ),
-        pattern: o().describe("Regex matched against turn output (tool results and assistant text)"),
-        url: o().describe(
-          "Link target. {name} placeholders are filled from named regex capture groups, e.g. (?<id>...) -> {id}. Values are URL-encoded; the origin must be literal in the template. The scheme must be https, http, or a recognized editor or workspace deep-link scheme: vscode, vscode-insiders, cursor, windsurf, zed, jetbrains, idea, slack, linear, notion, figma.",
-        ),
-        label: o()
-          .optional()
-          .describe(
-            "Badge text. {name} placeholders filled from named capture groups; defaults to the full match.",
-          ),
-      }).passthrough(),
-      u({
-        type: o().describe(
-          "Config variant discriminator for entries this client does not understand; the entry is preserved as-is and skipped at runtime.",
-        ),
-      }).passthrough(),
-    ]),
-  ),
-  kc = () =>
-    E()
-      .int()
-      .min(Kx)
-      .max(d0)
-      .optional()
-      .catch(void 0);
+    }).passthrough(),
+    u({
+      type: string().describe(
+        "Config variant discriminator for entries this client does not understand; the entry is preserved as-is and skipped at runtime.",
+      ),
+    }).passthrough(),
+  ]),
+);
+var configVariantUnionSchema = () =>
+  E().int().min(TRANSPORT_LABELS).max(GLOBAL_CONFIG_FIELD_KINDS).optional().catch(undefined);
+//@ chunk-dcmhvw5a.js:242189-314583 fingerprint = SettingsSchema (0.419)
 /**
  * settings.json 的完整 zod schema（约 187 个顶层键：认证 helper、env、permissions、hooks、model、sandbox、插件/市场、遥测相关等）。strictPolicyHelperKeys 时 policyHelper 键严格校验。
  */
-//@ chunk-dcmhvw5a.js:242189-314583 fingerprint = SettingsSchema (0.419)
-function SettingsSchema(e, { strictPolicyHelperKeys: n = !1 } = {}) {
+function SettingsSchema(e, { strictPolicyHelperKeys: n = false } = {}) {
   function r(a) {
-    return pe(o(), cs()).check((c) => {
-      for (let [g, m] of Object.entries(c.value))
-        if (m.source.source === "settings" && m.source.name !== g)
-          c.issues.push({
+    return record(string(), agentsSettingsSchema()).check((ctx) => {
+      for (let [key, entry] of Object.entries(ctx.value))
+        if (entry.source.source === "settings" && entry.source.name !== key)
+          ctx.issues.push({
             code: "custom",
-            input: m.source.name,
-            path: [g, "source", "name"],
-            message: `Settings-sourced marketplace name must match its ${a} key (got key "${g}" but source.name "${m.source.name}")`,
+            input: entry.source.name,
+            path: [key, "source", "name"],
+            message: `Settings-sourced marketplace name must match its ${a} key (got key "${key}" but source.name "${entry.source.name}")`,
           });
     });
   }
   let s = (a, c) =>
     n
-      ? Ka((ctx) => {
+      ? preprocess((ctx) => {
           if (ctx === null) return;
           return c ? c(ctx) : ctx;
         }, a)
-      : a.catch(void 0);
+      : a.catch(undefined);
   return {
-    $schema: () => o().optional().describe("JSON Schema reference for Claude Code settings"),
-    apiKeyHelper: () => o().optional().describe("Path to a script that outputs authentication values"),
+    $schema: () => string().optional().describe("JSON Schema reference for Claude Code settings"),
+    apiKeyHelper: () => string().optional().describe("Path to a script that outputs authentication values"),
     proxyAuthHelper: () =>
-      o().optional().describe("Shell command that outputs a Proxy-Authorization header value (EAP)"),
-    awsCredentialExport: () => o().optional().describe("Path to a script that exports AWS credentials"),
-    awsAuthRefresh: () => o().optional().describe("Path to a script that refreshes AWS authentication"),
+      string().optional().describe("Shell command that outputs a Proxy-Authorization header value (EAP)"),
+    awsCredentialExport: () => string().optional().describe("Path to a script that exports AWS credentials"),
+    awsAuthRefresh: () => string().optional().describe("Path to a script that refreshes AWS authentication"),
     gcpAuthRefresh: () =>
-      o()
+      string()
         .optional()
         .describe("Command to refresh GCP authentication (e.g., gcloud auth application-default login)"),
     processWrapper: () =>
-      o()
+      string()
         .optional()
         .describe(
           "Corporate launcher argv prefix for the background-agent supervisor, the sessions and workers it hosts, and the other covered background processes listed in the Claude Code corporate-launcher documentation. Equivalent to the CLAUDE_CODE_PROCESS_WRAPPER environment variable, which takes precedence when set. Honored from managed settings, a --settings/SDK-supplied settings file, and user settings, in that precedence order; project and local settings are ignored.",
         ),
     policyHelper: () =>
       s(HELPER_BASE_SCHEMA().optional(), (a) =>
-        a && typeof a === "object" && !Array.isArray(a) && a.path === null ? void 0 : a,
+        a && typeof a === "object" && !Array.isArray(a) && a.path === null ? undefined : a,
       ).describe(
         "Executable that computes managed settings at startup. Honored only from admin-controlled policy sources.",
       ),
@@ -621,8 +744,8 @@ function SettingsSchema(e, { strictPolicyHelperKeys: n = !1 } = {}) {
     ...(env.CLAUDE_CODE_ENABLE_XAA && {
       xaaIdp: () =>
         u({
-          issuer: o().url().describe("IdP issuer URL for OIDC discovery"),
-          clientId: o().describe("Claude Code's client_id registered at the IdP"),
+          issuer: string().url().describe("IdP issuer URL for OIDC discovery"),
+          clientId: string().describe("Claude Code's client_id registered at the IdP"),
           callbackPort: E()
             .int()
             .positive()
@@ -635,7 +758,10 @@ function SettingsSchema(e, { strictPolicyHelperKeys: n = !1 } = {}) {
           .describe("XAA (SEP-990) IdP connection. Configure once; all XAA-enabled MCP servers reuse this."),
     }),
     fileSuggestion: () =>
-      u({ type: T("command"), command: o() })
+      u({
+        type: literal("command"),
+        command: string(),
+      })
         .optional()
         .describe("Custom file suggestion configuration for @ mentions"),
     respectGitignore: () =>
@@ -663,7 +789,7 @@ function SettingsSchema(e, { strictPolicyHelperKeys: n = !1 } = {}) {
           .positive()
           .optional()
           .describe("Minutes of inactivity that count as a break and reset the timer (default 10)"),
-        message: o()
+        message: string()
           .optional()
           .describe("Custom reminder text. Leave unset for a rotating set of friendly nudges."),
       })
@@ -678,11 +804,11 @@ function SettingsSchema(e, { strictPolicyHelperKeys: n = !1 } = {}) {
           .describe(
             "Show a one-time nudge when you start or keep using the CLI inside your quiet-hours window (default false).",
           ),
-        start: o()
+        start: string()
           .regex(/^([01]?\d|2[0-3]):[0-5]\d$/, 'Expected 24-hour local time "HH:MM" (e.g. "22:00")')
           .optional()
           .describe('Start of the quiet-hours window, 24-hour local time "HH:MM".'),
-        end: o()
+        end: string()
           .regex(/^([01]?\d|2[0-3]):[0-5]\d$/, 'Expected 24-hour local time "HH:MM" (e.g. "07:00")')
           .optional()
           .describe(
@@ -743,15 +869,18 @@ function SettingsSchema(e, { strictPolicyHelperKeys: n = !1 } = {}) {
         .describe(
           "When set to true in either admin-only Windows source \u2014 the HKLM SOFTWARE/Policies/ClaudeCode registry key or C:/Program Files/ClaudeCode/managed-settings.json \u2014 WSL reads managed settings from the full Windows policy chain (HKLM, C:/Program Files/ClaudeCode via DrvFs, HKCU) in addition to /etc/claude-code. Windows sources take priority. The flag is also required in HKCU itself for HKCU policy to apply on WSL (double opt-in: admin enables the chain, user confirms HKCU). On native Windows the flag has no effect.",
         ),
-    env: () => deferredOptional(() => oE()).describe("Environment variables to set for Claude Code sessions"),
+    env: () =>
+      deferredOptional(() => policyHelperScriptRefSchema()).describe(
+        "Environment variables to set for Claude Code sessions",
+      ),
     attribution: () => {
-      let passthrough = u({
-        commit: o()
+      let a = u({
+        commit: string()
           .optional()
           .describe(
             "Attribution text for git commits, including any trailers. Empty string hides attribution.",
           ),
-        pr: o()
+        pr: string()
           .optional()
           .describe("Attribution text for pull request descriptions. Empty string hides attribution."),
         sessionUrl: M()
@@ -759,9 +888,9 @@ function SettingsSchema(e, { strictPolicyHelperKeys: n = !1 } = {}) {
           .describe(
             "Whether to append the claude.ai session link to commits and PRs created from web or Remote Control sessions (default: true). Set to false to omit the Claude-Session trailer and PR-body link.",
           ),
-        ...!1,
+        ...false,
       }).passthrough();
-      return Ue([M(), passthrough], {
+      return union([M(), a], {
         error: (c) => {
           let filtered = (c.errors ?? []).flat().filter((f) => f.path.length > 0);
           if (filtered.length > 0)
@@ -773,23 +902,29 @@ function SettingsSchema(e, { strictPolicyHelperKeys: n = !1 } = {}) {
       })
         .transform((c) => {
           if (typeof c !== "boolean") return c;
-          return c ? {} : { commit: "", pr: "", sessionUrl: !1 };
+          return c
+            ? {}
+            : {
+                commit: "",
+                pr: "",
+                sessionUrl: false,
+              };
         })
-        .pipe(passthrough)
+        .pipe(a)
         .optional()
         .describe(
           'Customize attribution text for commits and PRs. Each field defaults to the standard Claude Code attribution if not set. Set to false to hide all attribution, the same as { "commit": "", "pr": "", "sessionUrl": false }. Setting it to true is the same as leaving it out. Older Claude Code versions reject true or false here, so use the object form in settings files shared across versions.',
         );
     },
     attributionProject: () =>
-      o()
+      string()
         .optional()
         .describe(
           `The claude.ai Project this session names for your organization's usage reports: the Project's UUID, or its ID starting with "claude_proj_". An empty string names none and stops lower-precedence files from naming one; the organization default still applies. Sent only when Claude Code uses your claude.ai login, connects directly to the Anthropic API, is not in a cloud session, and CLAUDE_CODE_ATTRIBUTION_HEADER is not 0. CLAUDE_CODE_ATTRIBUTION_PROJECT takes precedence over it. Set in managed settings, it overrides people's own settings files. A project's .claude/settings.json and settings.local.json count only once the folder is trusted; for runs in a folder nobody has trusted, such as CI, use CLAUDE_CODE_ATTRIBUTION_PROJECT.`,
         ),
     attributionProjectPolicy: () =>
       u({
-        default: o()
+        default: string()
           .optional()
           .describe(
             'The Project used when neither CLAUDE_CODE_ATTRIBUTION_PROJECT nor attributionProject names one: its UUID, or its ID starting with "claude_proj_".',
@@ -805,8 +940,8 @@ function SettingsSchema(e, { strictPolicyHelperKeys: n = !1 } = {}) {
         .describe(
           "Deprecated: Use attribution instead. Whether to include Claude's co-authored by attribution in commits and PRs (defaults to true)",
         ),
-    ...!1,
-    ...!1,
+    ...false,
+    ...false,
     includeGitInstructions: () =>
       M()
         .optional()
@@ -815,15 +950,15 @@ function SettingsSchema(e, { strictPolicyHelperKeys: n = !1 } = {}) {
         ),
     permissions: () =>
       deferredOptional(() => PermissionsSchema(e)).describe("Tool usage permissions configuration"),
-    model: () => o().optional().describe("Override the default model used by Claude Code"),
+    model: () => string().optional().describe("Override the default model used by Claude Code"),
     fallbackModel: () =>
-      A(o())
+      array(string())
         .optional()
         .describe(
           'Fallback model(s) tried in order when the primary model is overloaded or unavailable. Each element accepts a model name or alias; "default" expands to the default model. CLI --fallback-model takes precedence.',
         ),
     availableModels: () =>
-      A(o())
+      array(string())
         .optional()
         .describe(
           'Allowlist of models that users can select. Accepts family aliases ("opus" allows any opus version), version prefixes ("opus-4-5" allows that version and any model ID that extends it, so "claude-opus-5" also allows "claude-opus-5-5"), and full model IDs. If undefined, all models are available. If empty array, only the default model is available. Typically set in managed settings by enterprise administrators.',
@@ -835,26 +970,26 @@ function SettingsSchema(e, { strictPolicyHelperKeys: n = !1 } = {}) {
           "When true and availableModels is a non-empty array, the Default model selection is also constrained: if the default model for the user tier is not in availableModels, Default resolves to the first allowed availableModels entry instead. Has no effect when availableModels is unset or an empty array. Typically set in managed settings by enterprise administrators.",
         ),
     availableModelsMatch: () =>
-      U(["prefix", "exact"])
+      _enum(["prefix", "exact"])
         .optional()
         .describe(
           'How availableModels entries match model IDs. "prefix" (the default) lets an entry also allow any model ID that extends it, so "claude-opus-5" allows "claude-opus-5-5". "exact" keeps that matching but stops a model ID entry from allowing other versions: "claude-opus-5" allows Opus 5 and its dated and -fast IDs, but not Opus 5.5 or a later release until it is listed, and a -latest ID needs a -latest entry. Family aliases ("opus") still allow the whole family; aliases whose model depends on the release or settings (best, opusplan, default) are ignored. With "exact" and a list that names at least one model, the Default option also uses only a listed model; if none can be used, Claude Code will not start. Haiku background models, and hooks and other helper requests that pick their own model, are not restricted (deniedModels covers them; allowManagedHooksOnly limits hooks). Read from managed settings only.',
         ),
     deniedModels: () =>
-      A(o())
+      array(string())
         .optional()
         .describe(
           'Models users cannot select, even when availableModels allows them. A family alias ("opus") blocks that family. A model ID blocks that version in every spelling: dates, -fast and provider prefixes are ignored, so "claude-opus-5-5" blocks every Opus 5.5 ID but not Opus 5. An ID with no minor version ("claude-opus-5") also blocks later minor versions, as it allows them in availableModels. Aliases whose model depends on the release or settings (best, opusplan, default) are ignored. The Default option steps down past a blocked model; if the Default has no allowed model to step down to, Claude Code will not start. Read from managed settings only.',
         ),
     modelOverrides: () =>
-      pe(o(), o())
+      record(string(), string())
         .optional()
         .describe(
           'Override mapping from Anthropic model ID (e.g. "claude-opus-4-6") to provider-specific model ID (e.g. a Bedrock inference profile ARN). Typically set in managed settings by enterprise administrators.',
         ),
     modelPicker: () =>
       u({
-        options: A(gs()).describe("Rows to show in the /model picker, in order."),
+        options: array(outputStylesSettingsSchema()).describe("Rows to show in the /model picker, in order."),
         replaceBuiltInOptions: M()
           .optional()
           .describe(
@@ -867,7 +1002,10 @@ function SettingsSchema(e, { strictPolicyHelperKeys: n = !1 } = {}) {
           "Curate the /model picker: an ordered list of models with your own labels, independent of the built-in lineup and of Claude Code releases. availableModels still applies to these rows. Honored from managed, --settings/SDK, and user settings only (not from a project checkout); the highest-precedence of those that defines modelPicker wins outright (no merging across sources). Typically set in managed settings by enterprise administrators.",
         ),
     modelPricing: () =>
-      u({ multiplier: ps(), overrides: pe(o(), us()).optional() })
+      u({
+        multiplier: mcpSettingsSchema(),
+        overrides: record(string(), hooksSettingsSchema()).optional(),
+      })
         .optional()
         .describe(
           "Price usage at your organization's contracted rates instead of list price. " +
@@ -883,11 +1021,13 @@ function SettingsSchema(e, { strictPolicyHelperKeys: n = !1 } = {}) {
             "or \u2014 when none of those sets it \u2014 when supplied by a host application that manages the model " +
             "provider; ignored in user, project, local and --settings sources.",
         ),
-    ...!1,
+    ...false,
     enableAllProjectMcpServers: () =>
       M().optional().describe("Whether to automatically approve all MCP servers in the project"),
-    enabledMcpjsonServers: () => A(o()).optional().describe("List of approved MCP servers from .mcp.json"),
-    disabledMcpjsonServers: () => A(o()).optional().describe("List of rejected MCP servers from .mcp.json"),
+    enabledMcpjsonServers: () =>
+      array(string()).optional().describe("List of approved MCP servers from .mcp.json"),
+    disabledMcpjsonServers: () =>
+      array(string()).optional().describe("List of rejected MCP servers from .mcp.json"),
     disableClaudeAiConnectors: () =>
       M()
         .optional()
@@ -895,7 +1035,7 @@ function SettingsSchema(e, { strictPolicyHelperKeys: n = !1 } = {}) {
           "When true in any settings source, claude.ai MCP cloud connectors are not auto-fetched or connected, and a claudeai-proxy server passed explicitly (e.g. via --mcp-config or the SDK mcpServers option) does not connect either. Any-source-true wins: a project can opt out, but a project-level false cannot override a user-level true.",
         ),
     skillOverrides: () =>
-      pe(o(), U(["on", "name-only", "user-invocable-only", "off"]))
+      record(string(), _enum(["on", "name-only", "user-invocable-only", "off"]))
         .optional()
         .describe(
           'Per-skill listing overrides keyed by skill name. "name-only" lists the skill without its description; "user-invocable-only" hides it from the model but keeps /name; "off" hides it from both. Absent = on.',
@@ -908,49 +1048,55 @@ function SettingsSchema(e, { strictPolicyHelperKeys: n = !1 } = {}) {
         ),
     managedMcpServers: () =>
       deferredOptional(() =>
-        pe(o().refine(isValidServerName, { error: SERVER_NAME_RULE_MESSAGE }), ManagedMcpServerSchema(), {
-          error: MANAGED_MCP_SERVERS_SHAPE_MESSAGE,
-        }),
+        record(
+          string().refine(isValidServerName, {
+            error: SERVER_NAME_RULE_MESSAGE,
+          }),
+          ManagedMcpServerSchema(),
+          {
+            error: MANAGED_MCP_SERVERS_SHAPE_MESSAGE,
+          },
+        ),
       ).describe(
         `MCP servers the organization provides to every user, keyed by server name, each with the .mcp.json entry shape; only "http" and "sse" servers are accepted (nothing that names a program to run, no \${VAR} references). Honored from managed settings only; users cannot remove them, deniedMcpServers still applies, and they need no allowedMcpServers entry. Not read in Claude Desktop's Code tab on a third-party deployment or in Cowork sessions, where Claude Desktop supplies and locks the session's MCP servers itself.`,
       ),
     allowedMcpServers: () =>
-      deferredOptional(() => A(Co())).describe(
+      deferredOptional(() => array(allowedMcpServersSchema())).describe(
         "Enterprise allowlist of the MCP servers users may use. Governs servers users add (user, project and local config, --mcp-config, agent frontmatter, plugins, claude.ai connectors); servers the organization itself delivers (managedMcpServers, and managed-mcp.json entries with no ${VAR} in their command, args, url or header values) are allowed without being listed; a managed-mcp.json entry with ${VAR} in any of those must match this list. If undefined, all servers are allowed. If empty array, users can use no servers of their own. Denylist takes precedence - if a server is on both lists, it is denied.",
       ),
     deniedMcpServers: () =>
-      deferredOptional(() => A(wo())).describe(
+      deferredOptional(() => array(deniedMcpServersSchema())).describe(
         "Enterprise denylist of MCP servers that are explicitly blocked. If a server is on the denylist, it will be blocked across all scopes including enterprise. Denylist takes precedence over allowlist - if a server is on both lists, it is denied.",
       ),
     hooks: () =>
       deferredOptional(() => HooksSchema()).describe("Custom commands to run before/after tool executions"),
     worktree: () =>
       u({
-        symlinkDirectories: A(o())
+        symlinkDirectories: array(string())
           .optional()
           .describe(
             'Directories to symlink from main repository to worktrees to avoid disk bloat. Must be explicitly configured - no directories are symlinked by default. Common examples: "node_modules", ".cache", ".bin"',
           ),
-        sparsePaths: A(o())
+        sparsePaths: array(string())
           .optional()
           .describe(
             "Directories to include when creating worktrees, via git sparse-checkout (cone mode). " +
               "Dramatically faster in large monorepos \u2014 only the listed paths are written to disk.",
           ),
-        baseRef: U(["fresh", "head"])
+        baseRef: _enum(["fresh", "head"])
           .optional()
           .describe(
             "Which ref new worktrees branch from. 'fresh' (default) branches from origin/<default-branch> for a clean tree. 'head' branches from your current local HEAD so unpushed commits and feature-branch state are present. Applies to --worktree, EnterWorktree, and agent isolation.",
           ),
-        bgIsolation: U(["worktree", "none"])
+        bgIsolation: _enum(["worktree", "none"])
           .optional()
-          .catch(void 0)
+          .catch(undefined)
           .describe(
             "Isolation mode for background sessions in this repo. 'worktree' (default) blocks Edit/Write in the main checkout until EnterWorktree is called. 'none' lets background jobs edit the working copy directly.",
           ),
-        location: o()
+        location: string()
           .optional()
-          .catch(void 0)
+          .catch(undefined)
           .describe(
             "Directory under which Claude Code Desktop creates the worktrees of SSH sessions that run on this machine (an absolute path or one starting with ~/), instead of <project>/.claude/worktrees. Read by the desktop app from the SSH host user settings; a location chosen in the desktop app's SSH connection settings takes precedence. The CLI (--worktree, EnterWorktree, agent isolation) does not read it yet.",
           ),
@@ -1002,7 +1148,7 @@ function SettingsSchema(e, { strictPolicyHelperKeys: n = !1 } = {}) {
           "Enable or disable the Workflows feature for this user. Unset = default by plan once the feature is available.",
         ),
     workflowSizeGuideline: () =>
-      U(["unrestricted", "small", "medium", "large"])
+      _enum(["unrestricted", "small", "medium", "large"])
         .optional()
         .describe(
           'Advisory size guideline for the dynamic workflows Claude writes: "small" aims for fewer than 5 agents, "medium" fewer than 10, "large" fewer than 50, and "unrestricted" sends no guideline. Unset defaults to "medium", or "small" on Pro plans. A value here \u2014 including from managed settings \u2014 takes precedence over the "Dynamic workflow size" choice in /config, and that /config row is hidden while a settings file provides the key. This is a guideline, not an enforced limit.',
@@ -1020,7 +1166,7 @@ function SettingsSchema(e, { strictPolicyHelperKeys: n = !1 } = {}) {
           "Disable inline shell execution in skills and custom slash commands from user, project, or plugin sources. Commands are replaced with a placeholder instead of being run.",
         ),
     defaultShell: () =>
-      U(["bash", "powershell"])
+      _enum(["bash", "powershell"])
         .optional()
         .describe(
           "Default shell for input-box ! commands. Defaults to 'bash' on all platforms (no Windows auto-flip).",
@@ -1036,7 +1182,7 @@ function SettingsSchema(e, { strictPolicyHelperKeys: n = !1 } = {}) {
         .int()
         .positive()
         .optional()
-        .catch(void 0)
+        .catch(undefined)
         .describe(
           "How many characters of a successful Bash or PowerShell command's output Claude receives inline (default 30000; values clamp to 4000-128000). Output past this is saved to a file and Claude receives a short preview plus the path. When set, this also replaces BASH_MAX_OUTPUT_LENGTH, which on its own only sizes the read-back window.",
         ),
@@ -1045,7 +1191,7 @@ function SettingsSchema(e, { strictPolicyHelperKeys: n = !1 } = {}) {
         .int()
         .positive()
         .optional()
-        .catch(void 0)
+        .catch(undefined)
         .describe(
           "Deprecated: no longer has any effect (the TaskOutput tool was removed). Read a background task's output file with the Read tool instead.",
         ),
@@ -1062,13 +1208,13 @@ function SettingsSchema(e, { strictPolicyHelperKeys: n = !1 } = {}) {
           "When true (and set in managed settings), only hooks from managed settings and from plugins that managed settings enable run. User, project, and local hooks and the hooks of plugins the user installed are ignored. Features built into Claude Code are not hooks in this sense and keep working.",
         ),
     allowedHttpHookUrls: () =>
-      A(o())
+      array(string())
         .optional()
         .describe(
           'Allowlist of URL patterns that HTTP hooks may target. Supports * as a wildcard (e.g. "https://hooks.example.com/*"). When set, HTTP hooks with non-matching URLs are blocked. If undefined, all URLs are allowed. If empty array, no HTTP hooks are allowed. Arrays merge across settings sources (same semantics as allowedMcpServers).',
         ),
     httpHookAllowedEnvVars: () =>
-      A(o())
+      array(string())
         .optional()
         .describe(
           "Allowlist of environment variable names HTTP hooks may interpolate into headers. When set, each hook's effective allowedEnvVars is the intersection with this list. If undefined, no restriction is applied. Arrays merge across settings sources (same semantics as allowedMcpServers).",
@@ -1102,7 +1248,7 @@ function SettingsSchema(e, { strictPolicyHelperKeys: n = !1 } = {}) {
     strictPluginOnlyCustomization: () =>
       filteredSurfacesSchema()
         .optional()
-        .catch(void 0)
+        .catch(undefined)
         .describe(
           'When set in managed settings, blocks non-plugin customization sources for the listed surfaces. Array form locks specific surfaces (e.g. ["skills", "hooks"]); `true` locks all four; `false` is an explicit no-op. Blocked: ~/.claude/{surface}/, .claude/{surface}/ (project), settings.json hooks, .mcp.json. NOT blocked: managed (policySettings) sources, plugin-provided customizations. ' +
             "Composes with strictKnownMarketplaces for end-to-end admin control \u2014 plugins gated by " +
@@ -1110,13 +1256,13 @@ function SettingsSchema(e, { strictPolicyHelperKeys: n = !1 } = {}) {
         ),
     statusLine: () =>
       u({
-        type: T("command"),
-        command: o(),
+        type: literal("command"),
+        command: string(),
         padding: E().optional(),
         refreshInterval: E()
           .min(1)
           .optional()
-          .catch(void 0)
+          .catch(undefined)
           .describe("Re-run the status line command every N seconds in addition to event-driven updates"),
         hideVimModeIndicator: M()
           .optional()
@@ -1127,42 +1273,45 @@ function SettingsSchema(e, { strictPolicyHelperKeys: n = !1 } = {}) {
         .optional()
         .describe("Custom status line display configuration"),
     prUrlTemplate: () =>
-      o()
+      string()
         .optional()
         .describe(
           'URL template for PR links in the footer link badges and inline messages. The detected git PR is rendered as the first footer-link badge. Placeholders: {host} {owner} {repo} {number} {url}. Example: "https://reviews.example.com/{owner}/{repo}/pull/{number}"',
         ),
     footerLinksRegexes: () =>
-      A(yE().catch(freeze))
-        .transform((a) => a.filter((c) => c !== freeze))
+      array(configVariantSchema().catch(Ac))
+        .transform((a) => a.filter((c) => c !== Ac))
         .optional()
-        .catch(void 0)
+        .catch(undefined)
         .describe(
           "Extra clickable footer badges that appear when a regex matches turn output (tool results and assistant responses). Read from user, flag, and managed settings only; ignored in project .claude/settings.json and local .claude/settings.local.json. At most 5 badges render; the oldest is displaced by newer matches and /clear removes them. Use to surface IDs printed by project CLIs as session links.",
         ),
     subagentStatusLine: () =>
-      u({ type: T("command"), command: o() })
+      u({
+        type: literal("command"),
+        command: string(),
+      })
         .optional()
         .describe(
           "Custom per-subagent status line shown in the agent panel; receives row context as JSON on stdin",
         ),
     enabledPlugins: () =>
-      pe(o(), $c())
+      record(string(), triStateSchema())
         .optional()
         .describe(
           'Enabled plugins using plugin-id@marketplace-id format. Example: { "formatter@anthropic-tools": true }. Also supports extended format with version constraints. Settings precedence is user < project < local < flag < policy, so to disable a plugin that project settings enable, set it to false in .claude/settings.local.json \u2014 setting false in ~/.claude/settings.json is overridden by the project.',
         ),
     prependPlugins: () =>
-      A(o())
+      array(string())
         .optional()
-        .catch(void 0)
+        .catch(undefined)
         .describe(
           "Managed plugins (plugin@marketplace ids that managed enabledPlugins sets true) whose hooks run first, outermost, in the listed order: the first id listed sees every event before any other plugin and every result after it. Managed plugins not listed here or in appendPlugins follow the listed ones; user, project and marketplace plugins come after those; then appendPlugins; then the built-in plugins. The bundled cc-plugin-sec-default@builtin seats itself outermost (on a machine with managed settings and for Team and Enterprise organizations) unless this list is set, in which case list it where it should sit or leave it out. Name it there as sec-default@builtin, the id every release reads, for as long as any machine in the organization may run a release from before its rename; a release that knows the new id reads either. Any other id that is not an enabled managed plugin is skipped; an id listed in both keys is prepended. Only honored from managed settings (or, on a machine with none, from user settings for your own plugins); ignored in project, local and --settings sources.",
         ),
     appendPlugins: () =>
-      A(o())
+      array(string())
         .optional()
-        .catch(void 0)
+        .catch(undefined)
         .describe(
           "Managed plugins (plugin@marketplace ids that managed enabledPlugins sets true) whose hooks run last among plugins, innermost, in the listed order: the last id listed sits just above the built-in plugins and sees each event as every other plugin left it. Only honored from managed settings (or, on a machine with none, from user settings for your own plugins); ignored in project, local and --settings sources.",
         ),
@@ -1177,19 +1326,19 @@ function SettingsSchema(e, { strictPolicyHelperKeys: n = !1 } = {}) {
           "with a warning. Claude Code may rewrite this key as extraKnownMarketplaces when it updates the file. Clients older than this alias ignore it, so prefer extraKnownMarketplaces while older Claude Code versions still share the same settings.",
       ),
     strictKnownMarketplaces: () =>
-      deferredOptional(() => A(MarketplaceSourceSchemaLazy())).describe(
+      deferredOptional(() => array(MarketplaceSourceSchemaLazy())).describe(
         'Enterprise strict list of allowed marketplace sources. When set in managed settings, ONLY these sources can be added as marketplaces. Entries match exactly, except that a github entry may use the owner-wildcard form {"source":"github","repo":"owner/*"} to allow every repository under that owner. The check happens BEFORE downloading, so blocked sources never touch the filesystem. ' +
           "Note: this is a policy gate only \u2014 it does NOT register marketplaces. " +
           "To pre-register allowed marketplaces for users, also set extraKnownMarketplaces.",
       ),
     allowedMarketplaces: () =>
-      deferredOptional(() => A(MarketplaceSourceSchemaLazy())).describe(
+      deferredOptional(() => array(MarketplaceSourceSchemaLazy())).describe(
         "Alias for strictKnownMarketplaces (managed settings only): this key is read exactly as if it " +
           "were spelled strictKnownMarketplaces. Do not set both in one file \u2014 if both appear, this key " +
           "is ignored with a warning. Clients older than this alias ignore it, so keep using strictKnownMarketplaces when the allowlist must also bind older Claude Code versions.",
       ),
     blockedMarketplaces: () =>
-      deferredOptional(() => A(MarketplacePolicySourceSchema())).describe(
+      deferredOptional(() => array(MarketplacePolicySourceSchema())).describe(
         'Enterprise blocklist of marketplace sources. When set in managed settings, these sources are blocked from being added as marketplaces. Entries match exactly, except that a github entry may use the owner-wildcard form {"source":"github","repo":"owner/*"} to block every repository under that owner. The check happens BEFORE downloading, so blocked sources never touch the filesystem.',
       ),
     disableCommandPluginSources: () =>
@@ -1200,7 +1349,7 @@ function SettingsSchema(e, { strictPolicyHelperKeys: n = !1 } = {}) {
             "Unset: follows allowManagedHooksOnly \u2014 an org that restricts hook execution to managed " +
             "settings gets command sources disabled too. Only honored from managed settings.",
         ),
-    ...!1,
+    ...false,
     disableSideloadFlags: () =>
       M()
         .optional()
@@ -1208,36 +1357,38 @@ function SettingsSchema(e, { strictPolicyHelperKeys: n = !1 } = {}) {
           "When true (and set in managed settings), rejects the --plugin-dir, --plugin-url, --agents, and non-sdk --mcp-config CLI flags at startup. Closes the CLI-flag bypass of strictKnownMarketplaces. Pair with allowedMcpServers for per-server MCP control; this setting does not gate other MCP entry points (SDK setMcpServers, claude mcp add, .mcp.json). Also blocks surfaces that spawn the CLI with these flags internally (see settings documentation). Only honored from managed settings; ignored in user/project/local settings.",
         ),
     pluginSuggestionMarketplaces: () =>
-      A(o())
+      array(string())
         .optional()
         .describe(
           "Marketplace names whose plugins may surface as contextual install suggestions (relevance-based tips). No marketplace-declared suggestions surface without this allowlist; the built-in first-party frontend-design tip is unaffected. Only honored when set in managed settings (policy scope); the key is ignored in user, project, and local settings. A name only takes effect when the marketplace is registered on the machine AND its registered source is also declared in managed settings, either as the extraKnownMarketplaces entry for that name or as an entry of strictKnownMarketplaces. A marketplace registered from a different source under an allowlisted name is ignored. The official marketplace is exempt from the source requirement: allowlisting its name alone suffices, since that name can only register from the official Anthropic source.",
         ),
     forceLoginMethod: () =>
-      U(["claudeai", "console", "gateway"])
+      _enum(["claudeai", "console", "gateway"])
         .optional()
-        .catch(void 0)
+        .catch(undefined)
         .describe(
           'Force a specific login method: "claudeai" for Claude Pro/Max, "console" for Console billing, "gateway" for the Cloud gateway OIDC device flow',
         ),
     forceLoginGatewayUrl: () =>
-      o()
+      string()
         .min(1)
         .optional()
-        .catch(void 0)
+        .catch(undefined)
         .describe(
           'Cloud gateway URL to pre-fill during login, alongside forceLoginMethod: "gateway". Honored from admin-controlled managed settings (MDM / managed-settings.json / policy helper) and, on a machine with none of those, from your own user settings; ignored in project, local, flag, and remote-delivered settings.',
         ),
     gatewayInternalNetworks: () =>
-      A(o())
+      array(string())
         .optional()
-        .catch([eao])
-        .meta({ default: void 0 })
+        .catch([UNREADABLE_SETTING_MARKER])
+        .meta({
+          default: undefined,
+        })
         .describe(
           "IPv4 CIDR blocks (at most 4, each /8 to /32, not overlapping) your Cloud gateway sits in: the public block your organization numbers its internal network from, which lets /login reach a gateway there. A block must lie entirely outside private space, where /login accepts a gateway without this key. /login accepts a gateway inside a listed block over a direct connection only, and only when this machine's own address on that connection is inside the same block, so /login must happen from a machine whose own address is inside the block (not through a proxy, VPN pool, container or NAT segment outside it). A bar against copied settings files, not proof of location. Honored only from admin-controlled managed settings (MDM / managed-settings.json / policy helper); ignored in user, project, and remote-delivered settings.",
         ),
     parentSettingsBehavior: () =>
-      U(["first-wins", "merge"])
+      _enum(["first-wins", "merge"])
         .optional()
         .describe(
           `Controls whether the SDK parent tier (Options.managedSettings / --managed-settings) layers under this admin tier. "first-wins" (the default, except in a gateway session Claude Desktop's Code ` +
@@ -1245,7 +1396,7 @@ function SettingsSchema(e, { strictPolicyHelperKeys: n = !1 } = {}) {
             `are the only policy source. "merge": parent's restrictive-only-filtered settings union under the admin winner. Has no effect when no admin tier exists (parent applies as the sole policy tier, still filtered restrictive-only).`,
         ),
     managedSourcesBehavior: () =>
-      U(["first-wins", "merge"])
+      _enum(["first-wins", "merge"])
         .optional()
         .describe(
           'Controls how the managed settings sources compose. "first-wins" (default): the highest-priority source present (server-managed > MDM (managed plist / HKLM) > managed-settings.json) is the managed tier alone. "merge": every present source deep-merges with fixed ' +
@@ -1256,15 +1407,18 @@ function SettingsSchema(e, { strictPolicyHelperKeys: n = !1 } = {}) {
             "arrays union, except fallbackModel, the restriction allowlists allowedMcpServers, allowedProviders, availableModels, strictKnownMarketplaces and allowedChannelPlugins, and sandbox.credentials.awsPairs and sandbox.ripgrep (the highest source that sets one owns it whole), modelOverrides (the whole map of the highest source that sets it, dropped when that source sits below the one that sets availableModels), managedMcpServers (server names union; a name set by two sources takes the higher source's whole entry), and the keys taken from the highest source only: the auth pins forceLoginOrgUUID, forceLoginMethod, forceLoginGatewayUrl and gatewayInternalNetworks, the credential helpers apiKeyHelper, awsAuthRefresh, awsCredentialExport, gcpAuthRefresh, otelHeadersHelper and proxyAuthHelper, modelPicker, permissions.defaultMode, parentSettingsBehavior and the policyHelper configuration (env keeps its own per-key union). In both modes, a forceLoginOrgUUID, or a forceLoginMethod of claudeai or console, that this machine's own MDM policy or managed settings file sets applies ahead of server-managed settings. Honored only from the highest-priority source present; enable it only when every lower source is admin-controlled, since lower sources then contribute entries such as permissions.allow. HKCU and --managed-settings never take part in the merge.",
         ),
     forceLoginOrgUUID: () =>
-      Ue([o(), A(o())])
+      union([string(), array(string())])
         .optional()
         .describe(
           "Organization UUID to require for OAuth login. Accepts a single UUID string or an array of UUIDs (any one is permitted). When set in managed settings, login fails if the authenticated account does not belong to a listed organization.",
         ),
     allowedProviders: () =>
-      Ka((a) => (Array.isArray(a) ? a.filter(Zr) : a), A(U(API_PROVIDER_KINDS)))
+      preprocess(
+        (a) => (Array.isArray(a) ? a.filter(isApiProviderKind) : a),
+        array(_enum(API_PROVIDER_KINDS)),
+      )
         .optional()
-        .catch(void 0)
+        .catch(undefined)
         .describe(
           `Managed settings only (managed-settings.json, MDM, or server-managed). The API providers Claude Code may use on this machine: "anthropic" (the Anthropic API on Anthropic's own host, via a claude.ai or Console sign-in or an API key; pair it with forceLoginMethod / forceLoginOrgUUID to require a sign-in), "bedrock", "vertex", "foundry", "anthropicAws", "mantle" (each meaning that provider's own service: its regional, FIPS, private-endpoint and sovereign-cloud hosts), "customEndpoint" (the ` +
             "Anthropic API or a cloud provider's API sent to some other host \u2014 ANTHROPIC_BASE_URL, that " +
@@ -1276,22 +1430,23 @@ function SettingsSchema(e, { strictPolicyHelperKeys: n = !1 } = {}) {
             "an API key, or a first launch before the fetch lands \u2014 all conditions the user controls. " +
             `Versions that predate this setting ignore it; pair it with a minimum-version policy on a mixed fleet. 'claude auth status' reports the Anthropic API as apiProvider "firstParty".`,
         ),
-    ...!1,
+    ...false,
     forceRemoteSettingsRefresh: () =>
       M()
         .optional()
         .describe(
           "When set in managed settings, the CLI blocks startup until remote managed settings are freshly fetched, and exits if the fetch fails",
         ),
-    otelHeadersHelper: () => o().optional().describe("Path to a script that outputs OpenTelemetry headers"),
-    outputStyle: () => o().optional().describe("Controls the output style for assistant responses"),
+    otelHeadersHelper: () =>
+      string().optional().describe("Path to a script that outputs OpenTelemetry headers"),
+    outputStyle: () => string().optional().describe("Controls the output style for assistant responses"),
     viewMode: () =>
-      U(["default", "verbose", "focus"])
+      _enum(["default", "verbose", "focus"])
         .optional()
-        .catch(void 0)
+        .catch(undefined)
         .describe("Default transcript view mode on startup"),
     language: () =>
-      o()
+      string()
         .optional()
         .describe(
           'Preferred language for Claude responses and voice dictation (e.g., "japanese", "spanish")',
@@ -1302,8 +1457,8 @@ function SettingsSchema(e, { strictPolicyHelperKeys: n = !1 } = {}) {
         .describe(
           "Skip the WebFetch blocklist check for enterprise environments with restrictive security policies",
         ),
-    sandbox: () => deferredOptional(() => m_r()),
-    ...!1,
+    sandbox: () => deferredOptional(() => sandboxFilesystemSettingsSchema()),
+    ...false,
     feedbackSurveyRate: () =>
       E()
         .min(0)
@@ -1313,38 +1468,39 @@ function SettingsSchema(e, { strictPolicyHelperKeys: n = !1 } = {}) {
           "Probability (0\u20131) that the session quality survey appears when eligible. 0.05 is a reasonable starting point.",
         ),
     feedbackDrafts: () =>
-      U(["notify", "quiet", "off"])
+      _enum(["notify", "quiet", "off"])
         .optional()
         .describe(
           'Model-drafted feedback (the SendFeedback tool). "notify" (default) shows a one-line notice when a draft is queued; "quiet" shows only the footer counter; "off" disables the tool entirely so drafts are never queued.',
         ),
     spinnerTipsEnabled: () => M().optional().describe("Whether to show tips in the spinner"),
     spinnerVerbs: () =>
-      u({ mode: U(["append", "replace"]), verbs: A(o()) })
+      u({
+        mode: _enum(["append", "replace"]),
+        verbs: array(string()),
+      })
         .optional()
         .describe(
           'Customize spinner verbs. mode: "append" adds verbs to defaults, "replace" uses only your verbs.',
         ),
     spinnerTipsOverride: () =>
       u({
-        excludeDefault: M()
+        excludeDefault: M().optional().catch(undefined),
+        tips: skillsSettingsSchema().optional(),
+        tipsFile: string()
           .optional()
-          .catch(void 0),
-        tips: Ops().optional(),
-        tipsFile: o()
-          .optional()
-          .catch(void 0)
+          .catch(undefined)
           .describe(
             "Absolute or ~/ local path to a JSON file holding an array of tips (same shapes as `tips`); honored from user, --settings and on-disk managed settings only. Read once per CLI process (restart to pick up edits).",
           ),
-        label: o()
+        label: string()
           .optional()
-          .catch(void 0)
+          .catch(undefined)
           .describe('Prefix shown before your tips in the spinner (default "Tip")'),
       })
         .passthrough()
         .optional()
-        .catch(void 0)
+        .catch(undefined)
         .describe(
           "Add your organization's own tips to the spinner tip rotation. tips: strings or {id, text, cooldownSessions?, priority?} objects; tipsFile: a JSON file of the same; label: prefix shown before your tips; excludeDefault: if true, only show your tips (default: false).",
         ),
@@ -1355,7 +1511,7 @@ function SettingsSchema(e, { strictPolicyHelperKeys: n = !1 } = {}) {
         .int()
         .min(40)
         .optional()
-        .catch(void 0)
+        .catch(undefined)
         .describe(
           "Maximum width, in terminal columns, of the prose in Claude's responses (paragraphs, headings, lists, blockquotes). In a wider terminal the prose wraps at this width while tables and code blocks keep the full width; only the display wraps, the response text itself gains no line breaks. Minimum 40. Unset (the default) uses the full terminal width.",
         ),
@@ -1363,30 +1519,30 @@ function SettingsSchema(e, { strictPolicyHelperKeys: n = !1 } = {}) {
       u({
         enabled: M()
           .optional()
-          .catch(void 0)
+          .catch(undefined)
           .describe("Turn on spell checking of the prompt input (default: false)"),
-        checker: o()
+        checker: string()
           .optional()
-          .catch(void 0)
+          .catch(undefined)
           .describe(
             `Which spell checker to run: ${SPELLCHECK_PROGRAMS.map((a) => `"${a}"`).join(", ")}, or "auto" (default) for the first of those found on PATH`,
           ),
-        language: o()
+        language: string()
           .optional()
-          .catch(void 0)
+          .catch(undefined)
           .describe(
             `Dictionary to use, passed to the checker as-is (aspell --lang, hunspell -d, ispell -d), e.g. "en_GB"; names are checker-specific (letters, digits and _ - . , only). Default: the checker's own default`,
           ),
-        color: o()
+        color: string()
           .optional()
-          .catch(void 0)
+          .catch(undefined)
           .describe(
             `Color of misspelled words (they are also underlined): a terminal color name such as "red" or "magenta", "#rrggbb", "rgb(r,g,b)", "ansi256(n)" or "ansi:<name>". Default: the theme's error color`,
           ),
       })
         .passthrough()
         .optional()
-        .catch(void 0)
+        .catch(undefined)
         .describe(
           `Underline misspelled words in the prompt input as you type, using an installed ${SPELLCHECK_PROGRAMS.slice(0, -1).join(", ")} or ${SPELLCHECK_PROGRAMS.at(-1)} (off unless "enabled" is true; does nothing if none is installed). Read from user, flag and managed settings only (the whole block from the highest-precedence of those applies); ignored in project .claude/settings.json and .claude/settings.local.json.`,
         ),
@@ -1397,16 +1553,16 @@ function SettingsSchema(e, { strictPolicyHelperKeys: n = !1 } = {}) {
           "Whether /rename updates the terminal tab title (defaults to true). Set to false to keep auto-generated topic titles.",
         ),
     promptCacheTtl: () =>
-      U(CACHE_TTL_VALUES)
+      _enum(CACHE_TTL_VALUES)
         .optional()
-        .catch(void 0)
+        .catch(undefined)
         .describe(
           'Prompt cache TTL for the main conversation (interactive, -p and SDK turns, plus the helpers that run inline with it): "5m" or "1h". Unset = automatic: 1 hour on a Claude subscription within its usage limits, 5 minutes on an API key, Bedrock, Vertex or Foundry. 1-hour cache writes are billed at a higher rate; the cache stays warm across longer breaks. The CLAUDE_CODE_PROMPT_CACHE_TTL environment variable takes precedence.',
         ),
     subagentPromptCacheTtl: () =>
-      U(CACHE_TTL_VALUES)
+      _enum(CACHE_TTL_VALUES)
         .optional()
-        .catch(void 0)
+        .catch(undefined)
         .describe(
           "Prompt cache TTL for everything outside the main conversation \u2014 subagents, workflows, background and helper requests: " +
             '"5m" or "1h". Unset = automatic (5 minutes unless ENABLE_PROMPT_CACHING_1H=1). The CLAUDE_CODE_SUBAGENT_PROMPT_CACHE_TTL environment variable takes precedence.',
@@ -1418,60 +1574,60 @@ function SettingsSchema(e, { strictPolicyHelperKeys: n = !1 } = {}) {
           "When false, thinking is disabled. When absent or true, thinking is enabled automatically for supported models.",
         ),
     effortLevel: () =>
-      U(["low", "medium", "high", "xhigh"])
+      _enum(["low", "medium", "high", "xhigh"])
         .optional()
-        .catch(void 0)
+        .catch(undefined)
         .describe("Persisted effort level for supported models."),
     maxEffortLevel: () =>
-      U(EFFORT_LEVELS)
+      _enum(EFFORT_LEVELS)
         .optional()
-        .catch(void 0)
+        .catch(undefined)
         .describe(
           "Maximum effort level. Anything above it (an /effort or /model pick, --effort, CLAUDE_CODE_EFFORT_LEVEL, a model default) is clamped to it, on every provider including Bedrock, Vertex and Foundry. Combines with an organization's per-model effort cap by taking the lower of the two; across settings files the lowest value wins, and modelSettings.<model>.maxEffortLevel replaces it per model. Enforced client-side: an effort supplied through CLAUDE_CODE_EXTRA_BODY is not clamped.",
         ),
     modelSettings: () =>
-      Ka(
+      preprocess(
         (a) =>
           typeof a === "object" && a !== null && !Array.isArray(a)
             ? wi(a, (c, g) => Object.hasOwn(Object.prototype, g))
             : a,
-        pe(
-          o(),
+        record(
+          string(),
           u({
-            effortLevel: U(["low", "medium", "high", "xhigh"])
+            effortLevel: _enum(["low", "medium", "high", "xhigh"])
               .optional()
-              .catch(void 0)
+              .catch(undefined)
               .describe("Persisted effort level for this model."),
-            maxEffortLevel: U(EFFORT_LEVELS)
+            maxEffortLevel: _enum(EFFORT_LEVELS)
               .optional()
-              .catch(void 0)
+              .catch(undefined)
               .describe(
                 'Maximum effort level for this model. Within one settings file it replaces the top-level maxEffortLevel for the model ("max" exempts it); across settings files the lowest applicable value wins. Keyed like effortLevel: the canonical model name also matches its dated, [1m], Bedrock and Vertex spellings.',
               ),
-            autoCompactWindow: Ue([T("auto"), kc()]).describe(
+            autoCompactWindow: union([literal("auto"), configVariantUnionSchema()]).describe(
               'Auto-compact window for this model, in tokens (100000 to 1000000), or "auto" for the window tuned for the model. Within one settings file it replaces the top-level autoCompactWindow for the model. /autocompact saves here. The canonical model name as key also matches its dated, [1m], Bedrock and Vertex spellings.',
             ),
           })
             .passthrough()
             .optional()
-            .catch(void 0),
+            .catch(undefined),
         ),
       )
         .optional()
-        .catch(void 0)
+        .catch(undefined)
         .describe("Per-model settings keyed by canonical model name."),
     ultracode: () =>
       M()
         .optional()
-        .catch(void 0)
+        .catch(undefined)
         .describe(
           "Enable ultracode for the session: standing dynamic-workflow orchestration at any effort level. " +
             "Session-scoped \u2014 typically provided via --settings or the apply_flag_settings control request; " +
             "interactive toggles never persist it. Requires workflows to be enabled and a model that supports ultracode.",
         ),
-    autoCompactWindow: () => kc().describe("Auto-compact window size"),
-    ...!1,
-    advisorModel: () => o().optional().describe("Advisor model for the server-side advisor tool."),
+    autoCompactWindow: () => configVariantUnionSchema().describe("Auto-compact window size"),
+    ...false,
+    advisorModel: () => string().optional().describe("Advisor model for the server-side advisor tool."),
     fastMode: () =>
       M().optional().describe("When true, fast mode is enabled. When absent or false, fast mode is off."),
     fastModePerSessionOptIn: () =>
@@ -1509,50 +1665,50 @@ function SettingsSchema(e, { strictPolicyHelperKeys: n = !1 } = {}) {
         .optional()
         .describe('When true, the plan-approval dialog offers a "clear context" option. Defaults to false.'),
     askUserQuestionTimeout: () =>
-      U(["60s", "5m", "10m", "never"])
+      _enum(["60s", "5m", "10m", "never"])
         .optional()
-        .catch(void 0)
+        .catch(undefined)
         .describe(
           "Idle time before Claude's questions auto-continue with any answers " +
             "selected so far. Defaults to never \u2014 auto-continue only runs " +
             "when explicitly set to 60s/5m/10m.",
         ),
     dialogExpiry: () =>
-      U(["60s", "5m", "10m", "never"])
+      _enum(["60s", "5m", "10m", "never"])
         .optional()
-        .catch(void 0)
+        .catch(undefined)
         .describe(
           'Max time a permission/user dialog forwarded to a remote client stays parked awaiting an answer, and how long a HELD cross-session message awaits approval, before either resolves to its safe no-action default (cancelled / dropped-with-denial). Defaults to 5m to match the long-standing remote-dialog deadline; "never" disables the deadline. Local-only permission prompts (no remote client) are unaffected. The CLAUDE_CODE_USER_DIALOG_TIMEOUT_MS env var, when set, overrides this. Read from trusted sources only (never a checked-in repo settings file).',
         ),
     agent: () =>
-      o()
+      string()
         .optional()
         .describe(
           "Name of an agent (built-in or custom) to use for the main thread. Applies the agent's system prompt, tool restrictions, and model.",
         ),
     modelProposedGoals: () =>
-      U(OOn)
+      _enum(CONFIG_BACKEND_LABELS)
         .optional()
-        .catch(void 0)
+        .catch(undefined)
         .describe(
           "@internal Controls the ProposeGoal tool (model-proposed session goals). 'auto' (the default when absent) lets the model choose per proposal whether to ask for approval via its ask_user parameter; 'alwaysAsk' routes every model-proposed goal through the approval dialog; 'disabled' turns the tool off. A typed /goal is unaffected. Consent-affecting, so it is read " +
             "from trusted sources only (user/policy/flag) \u2014 " +
             "workspace-resident project and local settings are ignored.",
         ),
     companyAnnouncements: () =>
-      A(o())
+      array(string())
         .optional()
         .describe(
           "Company announcements to display at startup (one will be randomly selected if multiple are provided)",
         ),
     pluginConfigs: () =>
-      pe(
-        o(),
+      record(
+        string(),
         u({
-          mcpServers: pe(o(), pe(o(), Ue([o(), E(), M(), A(o())])))
+          mcpServers: record(string(), record(string(), union([string(), E(), M(), array(string())])))
             .optional()
             .describe("User configuration values for MCP servers keyed by server name"),
-          options: pe(o(), Ue([o(), E(), M(), A(o())]))
+          options: record(string(), union([string(), E(), M(), array(string())]))
             .optional()
             .describe(
               "Non-sensitive option values from plugin manifest userConfig, keyed by option name. Sensitive values go to secure storage instead.",
@@ -1564,46 +1720,50 @@ function SettingsSchema(e, { strictPolicyHelperKeys: n = !1 } = {}) {
           "Per-plugin configuration including MCP server user configs, keyed by plugin ID (plugin@marketplace format)",
         ),
     remote: () =>
-      u({ defaultEnvironmentId: o().optional().describe("Default environment ID to use for cloud sessions") })
+      u({
+        defaultEnvironmentId: string()
+          .optional()
+          .describe("Default environment ID to use for cloud sessions"),
+      })
         .optional()
         .describe("Cloud session configuration"),
     autoUpdatesChannel: () =>
-      U(["latest", "stable", "rc"])
+      _enum(["latest", "stable", "rc"])
         .optional()
         .describe("Release channel for auto-updates (latest or stable)"),
     minimumVersion: () =>
-      o()
+      string()
         .optional()
         .describe("Minimum version to stay on - prevents downgrades when switching to stable channel"),
     requiredMinimumVersion: () =>
-      o()
+      string()
         .optional()
         .describe(
           "Minimum Claude Code version required to start. If the running version is older, Claude Code exits at startup with instructions to update. Only enforced from managed (policy) settings.",
         ),
     requiredMaximumVersion: () =>
-      o()
+      string()
         .optional()
         .describe(
           "Maximum Claude Code version allowed to start. If the running version is newer, Claude Code exits at startup with instructions to install an approved version. Only enforced from managed (policy) settings.",
         ),
     plansDirectory: () =>
-      o()
+      string()
         .optional()
         .describe(
           "Custom directory for plan files, relative to project root. If not set, defaults to ~/.claude/plans/",
         ),
     tui: () =>
-      U(["default", "fullscreen"])
+      _enum(["default", "fullscreen"])
         .optional()
         .describe(
           'Terminal UI renderer. "fullscreen" uses the flicker-free alt-screen renderer with virtualized scrollback (equivalent to CLAUDE_CODE_NO_FLICKER=1). "default" uses the classic main-screen renderer.',
         ),
-    ...!1,
+    ...false,
     voice: () =>
       u({
         enabled: M().optional(),
-        mode: U(["hold", "tap"])
+        mode: _enum(["hold", "tap"])
           .optional()
           .describe("'hold' (default): hold to talk. 'tap': tap to start, tap to stop+submit."),
         autoSubmit: M()
@@ -1619,7 +1779,7 @@ function SettingsSchema(e, { strictPolicyHelperKeys: n = !1 } = {}) {
           "Managed-org opt-in for channel notifications (MCP servers with the claude/channel capability pushing inbound messages). claude.ai Teams/Enterprise: default off. Console: default on unless managed settings exist. Set true to allow; users then select servers via --channels.",
         ),
     allowedChannelPlugins: () =>
-      A(Lc())
+      array(modelPricingSchema())
         .optional()
         .describe(
           "Managed-org allowlist of channel plugins. When set, " +
@@ -1631,13 +1791,13 @@ function SettingsSchema(e, { strictPolicyHelperKeys: n = !1 } = {}) {
         .optional()
         .describe("Reduce or disable animations for accessibility (spinner shimmer, flash effects, etc.)"),
     timeFormat: () =>
-      Ue([U(Uct), o()])
+      union([_enum(AUTO_CONNECT_LABELS), string()])
         .optional()
         .describe(
           'Clock format for times shown in the UI: "auto" (default, follows the locale), "12-hour", "24-hour", "24-hour-utc" ("18:05Z"), or a strftime pattern such as "%H:%M" (any value containing "%"; other values read as "auto"). A pattern replaces the time everywhere; message timestamps show only the pattern, so include %Y-%m-%d for the date. /config offers the presets; a pattern is set here.',
         ),
     timeZone: () =>
-      o()
+      string()
         .optional()
         .describe(
           'IANA time zone for times shown in the UI, e.g. "UTC" or "Europe/Dublin". Default: the system time zone. An unknown name falls back to the system time zone.',
@@ -1649,7 +1809,7 @@ function SettingsSchema(e, { strictPolicyHelperKeys: n = !1 } = {}) {
           "@internal When true, Claude keeps working until the PR is ready for you to merge, a cron/Monitor is armed to resume later, or it hands you a self-contained next step.",
         ),
     totalTokensReminder: () =>
-      U(["off", "infinite", "fixed", "countdown", "padded-countdown"])
+      _enum(["off", "infinite", "fixed", "countdown", "padded-countdown"])
         .optional()
         .describe(
           "@internal Emit a <total_tokens>N tokens left</total_tokens> block in the system prompt, after each tool result, and (when totalTokensReminderAfterUserTurn is on) after each regular user prompt. 'infinite' uses the literal value Infinite, 'fixed' uses 5000000, 'countdown' uses the live remaining context-window tokens, 'padded-countdown' counts down from totalTokensReminderBudget (re-anchoring to the full budget on each regular user prompt when totalTokensReminderAfterUserTurn " +
@@ -1677,12 +1837,12 @@ function SettingsSchema(e, { strictPolicyHelperKeys: n = !1 } = {}) {
           "Enable auto-memory for this project. When false, Claude will not read from or write to the auto-memory directory.",
         ),
     autoMemoryDirectory: () =>
-      o()
+      string()
         .optional()
         .describe(
           "Custom directory path for auto-memory storage. Supports ~/ prefix for home directory expansion. Ignored if set in projectSettings (checked-in .claude/settings.json) for security. When unset, defaults to ~/.claude/projects/<sanitized-cwd>/memory/.",
         ),
-    ...!1,
+    ...false,
     autoDreamEnabled: () =>
       M()
         .optional()
@@ -1703,7 +1863,7 @@ function SettingsSchema(e, { strictPolicyHelperKeys: n = !1 } = {}) {
         .describe(
           "@internal Whether the user has accepted the multi-agent workflow usage warning. Until set, auto permission mode prompts before running a workflow.",
         ),
-    disableAutoMode: () => U(["disable"]).optional().describe("Disable auto mode"),
+    disableAutoMode: () => _enum(["disable"]).optional().describe("Disable auto mode"),
     remoteTools: () =>
       u({
         allowUnattendedServing: M()
@@ -1715,18 +1875,18 @@ function SettingsSchema(e, { strictPolicyHelperKeys: n = !1 } = {}) {
         .optional()
         .describe("@internal How this computer serves tool calls to cloud sessions"),
     sshConfigs: () =>
-      A(
+      array(
         u({
-          id: o().describe(
+          id: string().describe(
             "Unique identifier for this SSH config. Used to match configs across settings sources.",
           ),
-          name: o().describe("Display name for the SSH connection"),
-          sshHost: o().describe(
+          name: string().describe("Display name for the SSH connection"),
+          sshHost: string().describe(
             'SSH host in format "user@hostname" or "hostname", or a host alias from ~/.ssh/config',
           ),
           sshPort: E().int().optional().describe("SSH port (default: 22)"),
-          sshIdentityFile: o().optional().describe("Path to SSH identity file (private key)"),
-          startDirectory: o()
+          sshIdentityFile: string().optional().describe("Path to SSH identity file (private key)"),
+          startDirectory: string()
             .optional()
             .describe(
               "Default working directory on the remote host. Supports tilde expansion (e.g. ~/projects). If not specified, defaults to the remote user home directory. Can be overridden by the [dir] positional argument in `claude ssh <config> [dir]`.",
@@ -1738,65 +1898,61 @@ function SettingsSchema(e, { strictPolicyHelperKeys: n = !1 } = {}) {
           "SSH connection configurations for remote environments. Typically set in managed settings by enterprise administrators to pre-configure SSH connections for team members.",
         ),
     sshHostCommands: () =>
-      oe()
-        .meta({ type: "array" })
+      unknown()
+        .meta({
+          type: "array",
+        })
         .optional()
         .describe(
           "SSH connections in Claude Desktop on macOS and Linux whose host comes from a command. A list of entries, each with `id`, `name` and `command`, and optionally `sshIdentityFile` and `startDirectory`. When you ask Desktop to create or replace an entry's host, it runs `command` on this computer: a program name or absolute path, followed by plain arguments. There is no shell, so quotes, pipes, variables and a leading `~` do not work. The command must print only the host on standard output: `host` or `user@host` on one line, or a JSON object with `sshHost` and, optionally, `sshPort` and `startDirectory`. Desktop reads this key only from user settings and from this computer's managed settings. Claude Code itself does not use it.",
         ),
     claudeMd: () =>
-      o()
+      string()
         .optional()
         .describe(
           "CLAUDE.md-style instructions injected as organization-managed memory. Only honored from managed/policy settings.",
         ),
     claudeMdExcludes: () =>
-      A(o())
+      array(string())
         .optional()
         .describe(
           'Glob patterns or absolute paths of CLAUDE.md files to exclude from loading. Patterns are matched against absolute file paths using picomatch. Only applies to User, Project, and Local memory types (Managed/policy files cannot be excluded). Examples: "/home/user/monorepo/CLAUDE.md", "**/code/CLAUDE.md", "**/some-dir/.claude/rules/**"',
         ),
     pluginTrustMessage: () =>
-      o()
+      string()
         .optional()
         .describe(
           'Custom message to append to the plugin trust warning shown before installation. Only read from policy settings (managed-settings.json / MDM). Useful for enterprise administrators to add organization-specific context (e.g., "All plugins from our internal marketplace are vetted and approved.").',
         ),
     theme: () =>
-      Ue([
-        U(P1e),
-        o()
+      union([
+        _enum(CONFIG_SOURCE_LABELS),
+        string()
           .startsWith("custom:")
           .transform((a) => a),
       ])
         .optional()
-        .catch(void 0)
+        .catch(undefined)
         .describe("Color theme for the UI"),
     editorMode: () =>
-      U(EDITOR_MODES)
-        .optional()
-        .catch(void 0)
-        .describe("Key binding mode for the prompt input"),
+      _enum(EDITOR_MODES).optional().catch(undefined).describe("Key binding mode for the prompt input"),
     keybindingFlavor: () =>
-      U(["classic", "readline"])
+      _enum(["classic", "readline"])
         .optional()
-        .catch(void 0)
+        .catch(undefined)
         .describe(
           "Deprecated: no longer has any effect. The prompt's word-editing keys always follow Bash (readline) conventions.",
         ),
     vimInsertModeRemaps: () =>
-      pe(o(), oe())
+      record(string(), unknown())
         .optional()
-        .catch(void 0)
+        .catch(undefined)
         .describe(
           'Vim INSERT-mode key-sequence remaps, e.g. {"jj": "<Esc>"}. Each key is exactly two printable characters typed in sequence; "<Esc>" (return to NORMAL mode) is the only supported target. Applies when editorMode is "vim".',
         ),
     verbose: () => M().optional().describe("Show full tool output instead of truncated summaries"),
     preferredNotifChannel: () =>
-      U(NOTIFICATION_CHANNELS)
-        .optional()
-        .catch(void 0)
-        .describe("Preferred OS notification channel"),
+      _enum(NOTIFICATION_CHANNELS).optional().catch(undefined).describe("Preferred OS notification channel"),
     autoCompactEnabled: () =>
       M().optional().describe("Automatically compact conversation when context fills"),
     precomputeCompactionEnabled: () =>
@@ -1835,17 +1991,17 @@ function SettingsSchema(e, { strictPolicyHelperKeys: n = !1 } = {}) {
       M().optional().describe("Emit OSC 9;4 progress sequences during long operations"),
     todoFeatureEnabled: () => M().optional().describe("Enable the todo / task tracking panel"),
     teammateMode: () =>
-      U(BPi)
+      _enum(DISABLE_REASON_LABELS)
         .optional()
-        .catch(void 0)
+        .catch(undefined)
         .describe("How spawned teammates execute (tmux, iterm2, in-process, auto)"),
     remoteControlAtStartup: () =>
       M().optional().describe("Start Remote Control bridge automatically each session"),
     remoteControl: () =>
       u({
-        shareHostProfile: U(mct)
+        shareHostProfile: _enum(POLICY_HELPER_LOG_LEVELS)
           .optional()
-          .catch(void 0)
+          .catch(undefined)
           .describe(
             "@internal What a Remote Control environment reports about this machine when it registers: 'off' reports nothing, 'basic' the OS, architecture and detected developer tools, 'full' also the names of MCP servers configured on this machine (never a repository's .mcp.json). When unset, the level comes from the feature rollout, which may be any of the three. Managed, --settings and user settings choose the level (the most restrictive wins); project and local settings can only lower it, never raise it. Read when Remote Control starts; lowering it later applies from the next registration, raising it from the next start.",
           ),
@@ -1859,15 +2015,15 @@ function SettingsSchema(e, { strictPolicyHelperKeys: n = !1 } = {}) {
           "Require explicit approval before SendMessage can reach a peer session on another machine via Remote Control",
         ),
     daemonColdStart: () =>
-      U(["transient", "ask"])
+      _enum(["transient", "ask"])
         .optional()
         .describe(
           "When no background service is running: 'transient' spawns one for this login session; 'ask' offers to install it persistently",
         ),
     crossSessionInbound: () =>
-      U(rJt)
+      _enum(POLICY_HELPER_ON_FAILURE)
         .optional()
-        .catch(void 0)
+        .catch(undefined)
         .describe(
           "Inbound cross-session peer messages (SendMessage from your other sessions): 'accept' delivers them, 'hold' parks them for your review without letting Claude act, 'refuse' opts this session out. An explicit value always wins. Unset (mode parity): a message auto-delivers only when the sending session's permission-mode class matches yours (bypass\u2194bypass or prompting\u2194prompting); a mismatched sender's message is held for your approval; a sender that asserts no class is held only while this session bypasses permission prompts.",
         ),
@@ -1877,7 +2033,7 @@ function SettingsSchema(e, { strictPolicyHelperKeys: n = !1 } = {}) {
       M().optional().describe("Push to mobile when a permission prompt or question is waiting"),
     agentPushNotifEnabled: () =>
       M().optional().describe("Allow Claude to push proactive mobile notifications"),
-    ...xr(pc(e), (a) => () => a),
+    ...xr(buildSettingsShapeForGroups(e), (a) => () => a),
   };
 }
 //@ chunk-dcmhvw5a.js:314583-314643 layout
@@ -1886,32 +2042,42 @@ function buildWholeSettingsSchema(e, n = {}) {
   return new PerKeyLazySchema(r).whole();
 }
 //@ chunk-dcmhvw5a.js:314643-314724 layout
-var settingsSchemaWarnedKeys = new Set(),
-  bE = new Set(),
-  At = DoctorLazy(() => new PerKeyLazySchema(SettingsSchema(LOt()), settingsSchemaWarnedKeys)),
-  Zio = DoctorLazy(() => At().whole());
+/**
+ * warnedSettingsKeys：已警告过的设置键；perKeySettingsSchema：逐键惰性的设置 schema；wholeSettingsSchema：整份设置 schema（同一声明共 3 个绑定）。
+ */
+var settingsSchemaWarnedKeys = new Set();
+var warnedSettingsKeys = new Set();
+var perKeySettingsSchema = DoctorLazy(
+  () => new PerKeyLazySchema(SettingsSchema(enabledSettingsFeatureGroups()), settingsSchemaWarnedKeys),
+);
+var wholeSettingsSchema = DoctorLazy(() => perKeySettingsSchema().whole());
 //@ chunk-dcmhvw5a.js:314724-314767 layout
 function getSettingsSchemaForDocument(e) {
-  return At().forDocument(e);
+  return perKeySettingsSchema().forDocument(e);
 }
 //@ chunk-dcmhvw5a.js:314767-314818 layout
-function getStrippingSettingsSchema(e) {
-  return At().forDocument(e, "strip");
+function getStrippingSettingsSchema(settings) {
+  return perKeySettingsSchema().forDocument(settings, "strip");
 }
 //@ chunk-dcmhvw5a.js:314818-314853 layout
-function fPi(e) {
-  return At().has(e);
+/**
+ * isWarnedSettingsKey：该键出现过警告。
+ */
+function isWarnedSettingsKey(e) {
+  return perKeySettingsSchema().has(e);
 }
 //@ chunk-dcmhvw5a.js:314853-314889 layout
 function getSettingsFieldSchema(e) {
-  return At().field(e);
+  return perKeySettingsSchema().field(e);
 }
 //@ chunk-dcmhvw5a.js:314889-314949 layout
-var freeze_2 = Object.freeze({ serverName: "invalid-entry-stripped" });
+var Oc = Object.freeze({
+  serverName: "invalid-entry-stripped",
+});
+//@ chunk-dcmhvw5a.js:314949-315264 layout
 /**
  * 递归取 zod 问题列表中第一条有意义的消息（展开 union 分支），带路径前缀。
  */
-//@ chunk-dcmhvw5a.js:314949-315264 layout
 function firstIssueMessage(e) {
   for (let n of e) {
     let r = n.path.length > 0 ? `${n.path.map(String).join(".")}: ` : "";
@@ -1927,29 +2093,38 @@ function firstIssueMessage(e) {
   return null;
 }
 //@ chunk-dcmhvw5a.js:315264-315752 layout
-var RESTRICTIVE_TOP_LEVEL_SETTINGS = DoctorLazy(() => {
-    let e = At();
-    return MANAGED_RESTRICTION_KEYS().flatMap(({ path: path, restrictive: restrictive }) => {
-      if (
-        path.length !== 1 ||
-        path[0] === "strictPluginOnlyCustomization" ||
-        path[0] === "disableAllHooks" ||
-        (typeof restrictive !== "boolean" && typeof restrictive !== "string")
-      )
-        return [];
-      let s = path[0],
-        field = e.field(s);
-      if (field === void 0 || field instanceof ilo) return [];
-      return [{ key: s, restrictive: restrictive, field: field }];
-    });
-  }),
-  Ao = DoctorLazy(() => [
-    "strictKnownMarketplaces",
-    "blockedMarketplaces",
-    "strictPluginOnlyCustomization",
-    ...RESTRICTIVE_TOP_LEVEL_SETTINGS().map((e) => e.key),
-  ]),
-  mt = ["managedSourcesBehavior", "wslInheritsWindowsSettings"];
+/**
+ * RESTRICTIVE_TOP_LEVEL_SETTINGS：受限的顶层设置键（同一声明共 2 个绑定）。
+ */
+var RESTRICTIVE_TOP_LEVEL_SETTINGS_2 = DoctorLazy(() => {
+  let e = perKeySettingsSchema();
+  return MANAGED_RESTRICTION_KEYS().flatMap(({ path, restrictive }) => {
+    if (
+      path.length !== 1 ||
+      path[0] === "strictPluginOnlyCustomization" ||
+      path[0] === "disableAllHooks" ||
+      (typeof restrictive !== "boolean" && typeof restrictive !== "string")
+    )
+      return [];
+    let s = path[0];
+    let a = e.field(s);
+    if (a === undefined || a instanceof ilo) return [];
+    return [
+      {
+        key: s,
+        restrictive,
+        field: a,
+      },
+    ];
+  });
+});
+var RESTRICTIVE_TOP_LEVEL_SETTINGS = DoctorLazy(() => [
+  "strictKnownMarketplaces",
+  "blockedMarketplaces",
+  "strictPluginOnlyCustomization",
+  ...RESTRICTIVE_TOP_LEVEL_SETTINGS_2().map((e) => e.key),
+]);
+var restrictiveTopLevelSettings = ["managedSourcesBehavior", "wslInheritsWindowsSettings"];
 //@ chunk-dcmhvw5a.js:315752-315807 layout
 function isDeepEmptyObject(e) {
   return isPlainObject_2(e) && Object.values(e).every(isDeepEmptyObject);
@@ -1957,9 +2132,9 @@ function isDeepEmptyObject(e) {
 //@ chunk-dcmhvw5a.js:315807-315964 layout
 function readWslInheritFlag(e) {
   let wslInheritsWindowsSettings = e.wslInheritsWindowsSettings;
-  if (wslInheritsWindowsSettings === void 0 || wslInheritsWindowsSettings === null) return "disarmed";
+  if (wslInheritsWindowsSettings === undefined || wslInheritsWindowsSettings === null) return "disarmed";
   let r = coerceBooleanString(wslInheritsWindowsSettings);
-  return r === !0 ? "armed" : r === !1 ? "disarmed" : "unreadable";
+  return r === true ? "armed" : r === false ? "disarmed" : "unreadable";
 }
 //@ chunk-dcmhvw5a.js:315964-316661 layout
 function getUnenforceableMarketplaceReason(e) {
@@ -1970,42 +2145,46 @@ function getUnenforceableMarketplaceReason(e) {
     return 'github: an owner wildcard must be exactly "<owner>/*"; the entry cannot be enforced';
   if (e.source === "git" && hasGithubWildcard(e.url))
     return 'git: wildcards are only supported in github-form entries, as "<owner>/*"; the entry cannot be enforced';
-  if ((e.source === "github" || e.source === "git") && e.ref !== void 0 && e.ref.includes("*"))
+  if ((e.source === "github" || e.source === "git") && e.ref !== undefined && e.ref.includes("*"))
     return `${e.source}: ref contains "*", which git does not allow in ref names; the entry cannot be enforced`;
   return null;
 }
+//@ chunk-dcmhvw5a.js:316661-317476 layout
 /**
  * 宽容解析插件市场列表：逐项校验，无效或不可执行的条目忽略并报告（blockedMarketplaces 中不可执行的保留），全部无效时额外提示。
  */
-//@ chunk-dcmhvw5a.js:316661-317476 layout
 function tolerantMarketplaceList(key, report) {
-  return Ue([
+  return union([
     zg().transform(() => {
       return;
     }),
-    A(oe()).transform((r) => {
+    array(unknown()).transform((r) => {
       let valid = [];
       for (let [a, c] of r.entries()) {
-        let safeParse = (
+        let g = (
           key === "blockedMarketplaces" ? MarketplacePolicySourceSchema() : MarketplaceSourceSchemaLazy()
         ).safeParse(c);
-        if (safeParse.success) {
-          let m = getUnenforceableMarketplaceReason(safeParse.data);
-          if (m !== null) {
-            if (key === "blockedMarketplaces")
-              (report({
+        if (g.success) {
+          let unenforceableMarketplaceReason = getUnenforceableMarketplaceReason(g.data);
+          if (unenforceableMarketplaceReason !== null) {
+            if (key === "blockedMarketplaces") {
+              report({
                 path: `${key}[${a}]`,
-                message: `Unenforceable entry was kept: ${m}; it can never match a marketplace source, but marketplace restrictions stay active`,
-              }),
-                valid.push(safeParse.data));
-            else report({ path: `${key}[${a}]`, message: `Invalid entry was ignored: ${m}` });
+                message: `Unenforceable entry was kept: ${unenforceableMarketplaceReason}; it can never match a marketplace source, but marketplace restrictions stay active`,
+              });
+              valid.push(g.data);
+            } else
+              report({
+                path: `${key}[${a}]`,
+                message: `Invalid entry was ignored: ${unenforceableMarketplaceReason}`,
+              });
             continue;
           }
-          valid.push(safeParse.data);
+          valid.push(g.data);
         } else
           report({
             path: `${key}[${a}]`,
-            message: `Invalid entry was ignored: ${firstIssueMessage(safeParse.error.issues) ?? "failed validation"}`,
+            message: `Invalid entry was ignored: ${firstIssueMessage(g.error.issues) ?? "failed validation"}`,
           });
       }
       if (key === "blockedMarketplaces" && r.length > 0 && valid.length === 0)
@@ -2020,48 +2199,56 @@ function tolerantMarketplaceList(key, report) {
 }
 //@ chunk-dcmhvw5a.js:317476-317674 layout
 function tolerantArray(e, n, r) {
-  return A(
-    n.catch(
-      (s) => (
-        r({
-          path: `${e}[]`,
-          message: `Invalid entry was ignored: ${s.issues[0]?.message ?? "failed validation"}`,
-        }),
-        freeze_2
-      ),
-    ),
+  return array(
+    n.catch((error) => {
+      r({
+        path: `${e}[]`,
+        message: `Invalid entry was ignored: ${error.issues[0]?.message ?? "failed validation"}`,
+      });
+      return Oc;
+    }),
   )
-    .transform((s) => s.filter((a) => a !== freeze_2))
+    .transform((s) => s.filter((a) => a !== Oc))
     .optional();
 }
 //@ chunk-dcmhvw5a.js:317674-317697 layout
-var eao = "(unreadable)";
+/**
+ * UNREADABLE_SETTING_MARKER：设置不可读的占位文本。
+ */
+var UNREADABLE_SETTING_MARKER = "(unreadable)";
+//@ chunk-dcmhvw5a.js:317697-318444 layout
 /**
  * 宽容解析白名单数组：无效条目忽略并报告，全部无效或整体无效时按空白名单执行并提示。
  */
-//@ chunk-dcmhvw5a.js:317697-318444 layout
 function tolerantAllowlist(key, entrySchema, report, emptyMeaning, entryNotice, options) {
-  return A(oe())
+  return array(unknown())
     .transform((g) => {
       let valid = [];
       for (let [f, h] of g.entries()) {
-        let safeParse = entrySchema.safeParse(h);
-        if (safeParse.success) {
-          valid.push(safeParse.data);
-          let b = entryNotice?.(h, safeParse.data);
-          if (b !== void 0) report({ path: `${key}[${f}]`, message: b, statusOnly: !0 });
+        let y = entrySchema.safeParse(h);
+        if (y.success) {
+          valid.push(y.data);
+          let b = entryNotice?.(h, y.data);
+          if (b !== undefined)
+            report({
+              path: `${key}[${f}]`,
+              message: b,
+              statusOnly: true,
+            });
         } else {
-          let b = safeParse.error.issues[0],
-            S =
-              b === void 0
-                ? "failed validation"
-                : b.path.length
-                  ? `${b.path.join(".")}: ${b.message}`
-                  : b.message;
+          let b = y.error.issues[0];
+          let S =
+            b === undefined
+              ? "failed validation"
+              : b.path.length
+                ? `${b.path.join(".")}: ${b.message}`
+                : b.message;
           report({
             path: `${key}[${f}]`,
             message: `Invalid entry was ignored: ${S}`,
-            ...(options?.invalidEntryIsStatusOnly && { statusOnly: !0 }),
+            ...(options?.invalidEntryIsStatusOnly && {
+              statusOnly: true,
+            }),
           });
         }
       }
@@ -2073,199 +2260,227 @@ function tolerantAllowlist(key, entrySchema, report, emptyMeaning, entryNotice, 
       return valid;
     })
     .optional()
-    .catch(
-      () => (
-        report({
-          path: key,
-          message: `"${key}" was present but invalid; enforcing an empty allowlist (${emptyMeaning}) until it is fixed.`,
-        }),
-        []
-      ),
-    );
+    .catch(() => {
+      report({
+        path: key,
+        message: `"${key}" was present but invalid; enforcing an empty allowlist (${emptyMeaning}) until it is fixed.`,
+      });
+      return [];
+    });
 }
 //@ chunk-dcmhvw5a.js:318444-319177 layout
+/**
+ * RESTRICTIVE_NESTED_SETTINGS：受限的嵌套设置键；restrictiveNestedSettingsMap：受限嵌套设置映射（同一声明共 3 个绑定）。
+ */
 var RESTRICTIVE_NESTED_SETTING_VALUES = DoctorLazy(
-    () =>
-      new Map(
-        MANAGED_RESTRICTION_KEYS().flatMap(({ path: path, restrictive: restrictive }) =>
-          path.length > 1 ? [[path.join("."), JOe(restrictive)[0]]] : [],
-        ),
+  () =>
+    new Map(
+      MANAGED_RESTRICTION_KEYS().flatMap(({ path, restrictive }) =>
+        path.length > 1 ? [[path.join("."), asArray(restrictive)[0]]] : [],
       ),
-  ),
-  Bt = ["soft_deny", "hard_deny", "deny"],
-  EE = new Map([
-    [
-      "permissions",
-      { restrictions: ["deny", "ask"], grants: ["allow", "additionalDirectories", "defaultMode"] },
-    ],
-    ["autoMode", { restrictions: Bt, grants: ["allow", "environment"], withholdOnEntryDrop: !0 }],
-    [
-      "sandbox.network",
-      { restrictions: ["deniedDomains"], grants: ["allowedDomains"], withholdOnEntryDrop: !0 },
-    ],
-    [
-      "sandbox.filesystem",
-      {
-        restrictions: ["denyWrite", "denyRead"],
-        grants: ["allowWrite", "allowRead"],
-        withholdOnEntryDrop: !0,
+    ),
+);
+var RESTRICTIVE_NESTED_SETTINGS = ["soft_deny", "hard_deny", "deny"];
+var restrictiveNestedSettings = new Map([
+  [
+    "permissions",
+    {
+      restrictions: ["deny", "ask"],
+      grants: ["allow", "additionalDirectories", "defaultMode"],
+    },
+  ],
+  [
+    "autoMode",
+    {
+      restrictions: RESTRICTIVE_NESTED_SETTINGS,
+      grants: ["allow", "environment"],
+      withholdOnEntryDrop: true,
+    },
+  ],
+  [
+    "sandbox.network",
+    {
+      restrictions: ["deniedDomains"],
+      grants: ["allowedDomains"],
+      withholdOnEntryDrop: true,
+    },
+  ],
+  [
+    "sandbox.filesystem",
+    {
+      restrictions: ["denyWrite", "denyRead"],
+      grants: ["allowWrite", "allowRead"],
+      withholdOnEntryDrop: true,
+    },
+  ],
+]);
+var restrictiveNestedSettingsMap = new Map([
+  [
+    "permissions.defaultMode",
+    {
+      read: (e) => {
+        let n = normalizePermissionModeAlias(e);
+        return [
+          ...EXTERNAL_PERMISSION_MODES,
+          ...buildPermissionModesForGroups(enabledSettingsFeatureGroups()),
+        ].find((r) => r === n);
       },
-    ],
-  ]),
-  Oo = new Map([
-    [
-      "permissions.defaultMode",
-      {
-        read: (e) => {
-          let n = normalizePermissionModeAlias(e);
-          return [...EXTERNAL_PERMISSION_MODES, ...ts(LOt())].find((r) => r === n);
-        },
-        inert: new Set(["default", "dontAsk", "plan"]),
-        floor: "default",
-      },
-    ],
-  ]);
+      inert: new Set(["default", "dontAsk", "plan"]),
+      floor: "default",
+    },
+  ],
+]);
+//@ chunk-dcmhvw5a.js:319177-319962 layout
 /**
  * 同一设置块中的限制项不可读或被裁剪时，暂扣该块的授予项（删除或降为下限值）并报告原因，返回被降级的键。
  */
-//@ chunk-dcmhvw5a.js:319177-319962 layout
 function withholdGrants(path, block, restrictionState, report) {
-  let withheld = [],
-    spec = EE.get(path);
-  if (spec === void 0) return withheld;
+  let withheld = [];
+  let spec = restrictiveNestedSettings.get(path);
+  if (spec === undefined) return withheld;
   let flattened = spec.restrictions.flatMap((restriction) => {
     switch (restrictionState(restriction)) {
       case "unreadable":
         return [`"${restriction}"`];
       case "trimmed":
         return spec.withholdOnEntryDrop ? [`an entry of "${restriction}"`] : [];
-      case void 0:
+      case undefined:
         return [];
     }
   });
   if (flattened.length === 0) return withheld;
   let joined = flattened.join(" and ");
   for (let grant of spec.grants) {
-    let h = Oo.get(`${path}.${grant}`),
-      y = h === void 0 ? block[grant] : h.read(block[grant]);
-    if (y === void 0 || h?.inert.has(y) === !0) continue;
-    if (h === void 0) delete block[grant];
-    else ((block[grant] = h.floor), withheld.push(grant));
+    let h = restrictiveNestedSettingsMap.get(`${path}.${grant}`);
+    let y = h === undefined ? block[grant] : h.read(block[grant]);
+    if (y === undefined || h?.inert.has(y) === true) continue;
+    if (h === undefined) delete block[grant];
+    else {
+      block[grant] = h.floor;
+      withheld.push(grant);
+    }
     report({
       path: `${path}.${grant}`,
       message:
-        h === void 0
+        h === undefined
           ? `"${grant}" was withheld because ${joined} in the same block could not be read; it takes effect again once that is fixed.`
           : `"${grant}" was withheld because ${joined} in the same block could not be read; treating it as ${formatValueForMessage(h.floor)} until that is fixed.`,
-      ...(h !== void 0 && { substituted: !0 }),
+      ...(h !== undefined && {
+        substituted: true,
+      }),
     });
   }
   return withheld;
 }
 //@ chunk-dcmhvw5a.js:319962-320045 layout
 function hasRestrictiveNestedPath(e) {
-  for (let n of RESTRICTIVE_NESTED_SETTING_VALUES().keys()) if (n.startsWith(`${e}.`)) return !0;
-  return !1;
+  for (let key of RESTRICTIVE_NESTED_SETTING_VALUES().keys()) if (key.startsWith(`${e}.`)) return true;
+  return false;
 }
 //@ chunk-dcmhvw5a.js:320045-320139 layout
-function To(e) {
+/**
+ * isRestrictiveNestedPath：路径属于受限嵌套设置。
+ */
+function isRestrictiveNestedPath(e) {
   return e !== "sandbox.credentials" && !e.startsWith("sandbox.credentials.") && hasRestrictiveNestedPath(e);
 }
 //@ chunk-dcmhvw5a.js:320139-320289 layout
 function unwrapObjectSchema(e) {
   let n = e;
-  while (n instanceof oSr || n instanceof qr || n instanceof sSr) n = n instanceof sSr ? n.out : n.unwrap();
-  return n instanceof B1e ? n : void 0;
+  while (n instanceof ZodOptional || n instanceof createDeferredOptional || n instanceof ZodPipe)
+    n = n instanceof ZodPipe ? n.out : n.unwrap();
+  return n instanceof B1e ? n : undefined;
 }
 //@ chunk-dcmhvw5a.js:320289-320337 layout
-var vc = new Set(["remoteTools", "remoteControl"]);
+var REMOTE_OWNED_SETTING_PATHS = new Set(["remoteTools", "remoteControl"]);
 //@ chunk-dcmhvw5a.js:320337-320401 layout
-function Wc(e, n) {
+function isObjectInSet(e, n) {
   return typeof n === "object" && n !== null && e.has(n);
 }
 //@ chunk-dcmhvw5a.js:320401-320606 layout
 function restrictiveSkeleton(e, n, r) {
   let s = {};
-  for (let [a, c] of Object.entries(n.shape)) {
-    let g = `${e}.${a}`;
+  for (let [key, value] of Object.entries(n.shape)) {
+    let g = `${e}.${key}`;
     if (r?.has(g)) continue;
-    let m = RESTRICTIVE_NESTED_SETTING_VALUES().get(g),
-      f = unwrapObjectSchema(c);
-    if (m !== void 0) s[a] = m;
-    else if (f !== void 0 && hasRestrictiveNestedPath(g)) s[a] = restrictiveSkeleton(g, f, r);
+    let m = RESTRICTIVE_NESTED_SETTING_VALUES().get(g);
+    let f = unwrapObjectSchema(value);
+    if (m !== undefined) s[key] = m;
+    else if (f !== undefined && hasRestrictiveNestedPath(g)) s[key] = restrictiveSkeleton(g, f, r);
   }
   return s;
 }
 //@ chunk-dcmhvw5a.js:320606-320749 layout
-function nullRemovalNotice(e, n) {
+function nullRemovalNotice(path, n) {
   return {
-    path: e,
+    path,
     message: `"${n}" was null, which is read as key removal; this source does not set it.`,
-    statusOnly: !0,
-    removal: !0,
+    statusOnly: true,
+    removal: true,
   };
 }
 //@ chunk-dcmhvw5a.js:320749-320810 layout
 function formatValueForMessage(e) {
   return typeof e === "string" ? `"${e}"` : String(e);
 }
+//@ chunk-dcmhvw5a.js:320810-321243 layout
 /**
  * 把单个 zod 问题描述为简短文字（自定义消息、期望类型或可选值），按路径加前缀或标为嵌套值。
  */
-//@ chunk-dcmhvw5a.js:320810-321243 layout
-function describeIssue(e, n = 0) {
+function describeIssue(issue, n = 0) {
   let r =
-      e === void 0 || e.input === void 0
-        ? "failed validation"
-        : e.code === "custom" && e.message !== void 0
-          ? e.message
-          : "expected" in e && typeof e.expected === "string"
-            ? `expected ${e.expected}`
-            : "values" in e && Array.isArray(e.values)
-              ? `expected ${e.values.map(formatValueForMessage).join(" or ")}`
-              : "failed validation",
-    sliced = (e?.path ?? []).slice(n);
+    issue === undefined || issue.input === undefined
+      ? "failed validation"
+      : issue.code === "custom" && issue.message !== undefined
+        ? issue.message
+        : "expected" in issue && typeof issue.expected === "string"
+          ? `expected ${issue.expected}`
+          : "values" in issue && Array.isArray(issue.values)
+            ? `expected ${issue.values.map(formatValueForMessage).join(" or ")}`
+            : "failed validation";
+  let sliced = (issue?.path ?? []).slice(n);
   if (sliced.length === 0) return r;
   return sliced.every((a) => typeof a === "number") ? `${sliced.join(".")}: ${r}` : `nested value: ${r}`;
 }
 //@ chunk-dcmhvw5a.js:321243-321285 layout
-function Yc(e) {
-  return e === !1 || e === "false";
+function isFalsyBooleanString(e) {
+  return e === false || e === "false";
 }
 //@ chunk-dcmhvw5a.js:321285-321417 layout
 function isRestrictiveDisable(e, n) {
-  if (n === null) return !0;
+  if (n === null) return true;
   return (
     (e.includes(".")
       ? RESTRICTIVE_NESTED_SETTING_VALUES().get(e)
-      : RESTRICTIVE_TOP_LEVEL_SETTINGS().find((s) => s.key === e)?.restrictive) === "disable" && Yc(n)
+      : RESTRICTIVE_TOP_LEVEL_SETTINGS_2().find((s) => s.key === e)?.restrictive) === "disable" &&
+    isFalsyBooleanString(n)
   );
 }
+//@ chunk-dcmhvw5a.js:321417-321927 layout
 /**
  * 为限制性设置加入宽容预处理：布尔键接受字符串形式并提示，取值只有 disable 的键遇到 false 视为缺省并提示。
  */
-//@ chunk-dcmhvw5a.js:321417-321927 layout
 function coerceRestrictiveValue(path, restrictive, schema, report) {
   let sliced = path.slice(path.lastIndexOf(".") + 1);
   if (typeof restrictive === "boolean")
-    return Ka((c) => {
+    return preprocess((c) => {
       let g = coerceBooleanString(c);
       if (g !== c)
         report({
-          path: path,
+          path,
           message: `"${sliced}" holds the string "${String(g)}" where a boolean belongs; reading it as ${String(g)}. Write it without quotes.`,
-          statusOnly: !0,
+          statusOnly: true,
         });
       return g;
     }, schema);
   if (restrictive === "disable")
-    return Ka((c) => {
-      if (Yc(c)) {
+    return preprocess((c) => {
+      if (isFalsyBooleanString(c)) {
         report({
-          path: path,
+          path,
           message: `"${sliced}" was set to false; reading it as absent (the key's only value is "disable"). Remove the key instead.`,
-          statusOnly: !0,
-          removal: !0,
+          statusOnly: true,
+          removal: true,
         });
         return;
       }
@@ -2273,150 +2488,163 @@ function coerceRestrictiveValue(path, restrictive, schema, report) {
     }, schema);
   return schema;
 }
+//@ chunk-dcmhvw5a.js:321927-323189 layout
 /**
  * 宽容解析单个设置字段：无效时优先替换为限制性值或下限值，数组则剔除无效条目后保留其余，否则忽略并报告，同时记录被替换/裁剪/忽略的键。
  */
-//@ chunk-dcmhvw5a.js:321927-323189 layout
 function tolerantField(path, schema, report, substitutedKeys, ignoredKeys, trimmedKeys, neverSubstitute) {
-  let sliced = path.slice(path.lastIndexOf(".") + 1),
-    restrictiveValue = RESTRICTIVE_NESTED_SETTING_VALUES().get(path),
-    substituteValue = neverSubstitute ? void 0 : restrictiveValue,
-    floorSpec = Oo.get(path),
-    innerSchema = schema instanceof ilo ? schema.unwrap() : void 0,
-    fieldSchema = innerSchema instanceof iA ? innerSchema : schema;
-  return coerceRestrictiveValue(path, restrictiveValue, fieldSchema, report).catch((w) => {
-    if (substituteValue !== void 0)
-      return (
-        report({
-          path: path,
-          message: `"${sliced}" was present but invalid (${describeIssue(w.issues[0])}); treating it as ${formatValueForMessage(substituteValue)}, its restrictive value, until it is fixed.`,
-          substituted: !0,
-        }),
-        substitutedKeys.add(sliced),
-        substituteValue
-      );
-    if (floorSpec !== void 0)
-      return (
-        report({
-          path: path,
-          message: `"${sliced}" was present but invalid (${describeIssue(w.issues[0])}); treating it as ${formatValueForMessage(floorSpec.floor)} until it is fixed.`,
-          substituted: !0,
-        }),
-        substitutedKeys.add(sliced),
-        floorSpec.floor
-      );
+  let sliced = path.slice(path.lastIndexOf(".") + 1);
+  let restrictiveValue = RESTRICTIVE_NESTED_SETTING_VALUES().get(path);
+  let substituteValue = neverSubstitute ? undefined : restrictiveValue;
+  let floorSpec = restrictiveNestedSettingsMap.get(path);
+  let innerSchema = schema instanceof ilo ? schema.unwrap() : undefined;
+  let fieldSchema = innerSchema instanceof ZodType ? innerSchema : schema;
+  return coerceRestrictiveValue(path, restrictiveValue, fieldSchema, report).catch((error) => {
+    if (substituteValue !== undefined) {
+      report({
+        path,
+        message: `"${sliced}" was present but invalid (${describeIssue(error.issues[0])}); treating it as ${formatValueForMessage(substituteValue)}, its restrictive value, until it is fixed.`,
+        substituted: true,
+      });
+      substitutedKeys.add(sliced);
+      return substituteValue;
+    }
+    if (floorSpec !== undefined) {
+      report({
+        path,
+        message: `"${sliced}" was present but invalid (${describeIssue(error.issues[0])}); treating it as ${formatValueForMessage(floorSpec.floor)} until it is fixed.`,
+        substituted: true,
+      });
+      substitutedKeys.add(sliced);
+      return floorSpec.floor;
+    }
     if (fieldSchema.safeParse([]).success) {
-      let L = w.value;
+      let L = error.value;
       if (Array.isArray(L)) {
         let v = new Map();
-        for (let issue of w.issues) {
+        for (let issue of error.issues) {
           let K = issue.path?.[0];
           if (typeof K === "number" && !v.has(K)) v.set(K, describeIssue(issue, 1));
         }
-        let safeParse = fieldSchema.safeParse(L.filter((x, K) => !v.has(K)));
-        if (v.size > 0 && v.size < L.length && safeParse.success) {
+        let j = fieldSchema.safeParse(L.filter((x, K) => !v.has(K)));
+        if (v.size > 0 && v.size < L.length && j.success) {
           for (let [x, K] of v)
             report({
               path: `${path}[${x}]`,
               message: `Invalid entry was ignored (${K}); it cannot take effect until it is fixed.`,
             });
-          return (trimmedKeys.add(sliced), safeParse.data);
+          trimmedKeys.add(sliced);
+          return j.data;
         }
       }
     }
-    (report({
-      path: path,
+    report({
+      path,
       message:
-        restrictiveValue === void 0
-          ? `"${sliced}" was present but invalid (${describeIssue(w.issues[0])}) and was ignored; it cannot take effect until it is fixed.`
-          : `"${sliced}" was present but invalid (${describeIssue(w.issues[0])}) and was ignored, not treated as ${formatValueForMessage(restrictiveValue)}; it cannot take effect until it is fixed.`,
-    }),
-      ignoredKeys.add(sliced));
+        restrictiveValue === undefined
+          ? `"${sliced}" was present but invalid (${describeIssue(error.issues[0])}) and was ignored; it cannot take effect until it is fixed.`
+          : `"${sliced}" was present but invalid (${describeIssue(error.issues[0])}) and was ignored, not treated as ${formatValueForMessage(restrictiveValue)}; it cannot take effect until it is fixed.`,
+    });
+    ignoredKeys.add(sliced);
     return;
   });
 }
+//@ chunk-dcmhvw5a.js:323189-324702 layout
 /**
  * 宽容解析设置对象：各字段用宽容规则，不是对象时用限制性骨架代替并报告；null 视为删除；限制项不可读时暂扣同块授予项；结果为空或全部为合成值时据此处理。
  */
-//@ chunk-dcmhvw5a.js:323189-324702 layout
 function tolerantObjectSchema(path, schema, report, options = {}) {
-  let sliced = path.slice(path.lastIndexOf(".") + 1),
-    substitutedKeys = new Set(),
-    unreadableKeys = new Set(),
-    trimmedKeys = new Set(),
-    fieldSchemas = {};
-  for (let [b, S] of Object.entries(schema.shape)) {
-    let C = `${path}.${b}`,
-      w = unwrapObjectSchema(S);
-    fieldSchemas[b] =
-      options.override?.[C] ??
-      (w !== void 0 && hasRestrictiveNestedPath(C)
-        ? tolerantObjectSchema(C, w, report, { ...options, strictField: S })
+  let sliced = path.slice(path.lastIndexOf(".") + 1);
+  let substitutedKeys = new Set();
+  let unreadableKeys = new Set();
+  let trimmedKeys = new Set();
+  let fieldSchemas = {};
+  for (let [key, value] of Object.entries(schema.shape)) {
+    let path_2 = `${path}.${key}`;
+    let schema = unwrapObjectSchema(value);
+    fieldSchemas[key] =
+      options.override?.[path_2] ??
+      (schema !== undefined && hasRestrictiveNestedPath(path_2)
+        ? tolerantObjectSchema(path_2, schema, report, {
+            ...options,
+            strictField: value,
+          })
         : tolerantField(
-            C,
-            S,
+            path_2,
+            value,
             report,
             substitutedKeys,
             unreadableKeys,
             trimmedKeys,
-            options.neverSubstitute?.has(C) === !0,
+            options.neverSubstitute?.has(path_2) === true,
           ));
   }
-  let h = new Set([...(options.skeletonExclude ?? []), ...(options.neverSubstitute ?? [])]),
-    safeExtend = schema.safeExtend(fieldSchemas);
-  return oe()
+  let h = new Set([...(options.skeletonExclude ?? []), ...(options.neverSubstitute ?? [])]);
+  let y = schema.safeExtend(fieldSchemas);
+  return unknown()
     .transform((b) => {
       if (b === null) {
         report(nullRemovalNotice(path, sliced));
         return;
       }
-      (substitutedKeys.clear(), unreadableKeys.clear(), trimmedKeys.clear());
+      substitutedKeys.clear();
+      unreadableKeys.clear();
+      trimmedKeys.clear();
       let S =
-          isPlainObject_2(b) || options.strictField === void 0 ? void 0 : options.strictField.safeParse(b),
-        C = S?.success === !0 && isPlainObject_2(S.data) ? S.data : b,
-        w = isPlainObject_2(C) ? safeExtend.safeParse(wi(C, (x) => x === null || x === void 0)) : void 0;
-      if (!isPlainObject_2(C) || w?.success !== !0) {
-        let x = restrictiveSkeleton(path, schema, h),
-          keys = Object.keys(x);
-        if (
-          (report({
-            path: path,
-            message:
-              keys.length > 0
-                ? `"${sliced}" was present but not an object; treating its locks as their restrictive values (${keys.join(", ")}) until it is fixed.`
-                : `"${sliced}" was present but not an object and was ignored; it cannot take effect until it is fixed.`,
-            ...(keys.length > 0 && { substituted: !0 }),
+        isPlainObject_2(b) || options.strictField === undefined
+          ? undefined
+          : options.strictField.safeParse(b);
+      let C = S?.success === true && isPlainObject_2(S.data) ? S.data : b;
+      let w = isPlainObject_2(C) ? y.safeParse(wi(C, (x) => x === null || x === undefined)) : undefined;
+      if (!isPlainObject_2(C) || w?.success !== true) {
+        let x = restrictiveSkeleton(path, schema, h);
+        let keys = Object.keys(x);
+        report({
+          path,
+          message:
+            keys.length > 0
+              ? `"${sliced}" was present but not an object; treating its locks as their restrictive values (${keys.join(", ")}) until it is fixed.`
+              : `"${sliced}" was present but not an object and was ignored; it cannot take effect until it is fixed.`,
+          ...(keys.length > 0 && {
+            substituted: true,
           }),
-          keys.length === 0)
-        )
-          return;
-        if (!vc.has(path)) options.synthesized?.add(x);
+        });
+        if (keys.length === 0) return;
+        if (!REMOTE_OWNED_SETTING_PATHS.has(path)) options.synthesized?.add(x);
         return x;
       }
-      for (let [x, K] of Object.entries(C)) {
-        let q = `${path}.${x}`;
-        if (K === null && (RESTRICTIVE_NESTED_SETTING_VALUES().has(q) || hasRestrictiveNestedPath(q)))
-          report(nullRemovalNotice(q, x));
+      for (let [key, value] of Object.entries(C)) {
+        let path_2 = `${path}.${key}`;
+        if (
+          value === null &&
+          (RESTRICTIVE_NESTED_SETTING_VALUES().has(path_2) || hasRestrictiveNestedPath(path_2))
+        )
+          report(nullRemovalNotice(path_2, key));
       }
-      let L = { ...w.data };
+      let block = {
+        ...w.data,
+      };
       for (let x of withholdGrants(
         path,
-        L,
-        (K) => (unreadableKeys.has(K) ? "unreadable" : trimmedKeys.has(K) ? "trimmed" : void 0),
+        block,
+        (K) => (unreadableKeys.has(K) ? "unreadable" : trimmedKeys.has(K) ? "trimmed" : undefined),
         report,
       ))
         substitutedKeys.add(x);
-      let v = wi(L, (x) => x === void 0);
+      let v = wi(block, (x) => x === undefined);
       if (Object.keys(v).length === 0)
-        return Object.entries(C).some(([x, K]) => K !== void 0 && Object.hasOwn(schema.shape, x))
-          ? void 0
+        return Object.entries(C).some(
+          ([key, value]) => value !== undefined && Object.hasOwn(schema.shape, key),
+        )
+          ? undefined
           : v;
       let synthesized = options.synthesized;
       if (
-        synthesized !== void 0 &&
-        !vc.has(path) &&
+        synthesized !== undefined &&
+        !REMOTE_OWNED_SETTING_PATHS.has(path) &&
         Object.entries(v).every(
-          ([x, K]) => substitutedKeys.has(x) || Wc(synthesized, K) || isDeepEmptyObject(K),
+          ([key, value]) =>
+            substitutedKeys.has(key) || isObjectInSet(synthesized, value) || isDeepEmptyObject(value),
         )
       )
         synthesized.add(v);
@@ -2424,705 +2652,729 @@ function tolerantObjectSchema(path, schema, report, options = {}) {
     })
     .optional();
 }
+//@ chunk-dcmhvw5a.js:324702-348175 layout
 /**
  * 托管设置的宽容 schema：逐字段校验，无效值按该字段的限制性取值处理而不是整份失效，并收集警告。
  */
-//@ chunk-dcmhvw5a.js:324702-348175 layout
-function buildPolicyTolerantSettingsSchema(e, n, r) {
-  let s = At(),
-    a = (P) => bE.has(P) || s.carries(r, P),
-    c = (P) => {
-      let field = s.field(P);
-      if (!field) throw Error("policyTolerantSettingsSchema: not a settings field of this build");
-      return field;
-    },
-    g = new Map(),
-    m = (P, R) => {
-      g.set(P, R);
-    };
+function buildPolicyTolerantSettingsSchema(report, n, r) {
+  let s = perKeySettingsSchema();
+  let a = (P) => warnedSettingsKeys.has(P) || s.carries(r, P);
+  let c = (key) => {
+    let R = s.field(key);
+    if (!R) throw Error("policyTolerantSettingsSchema: not a settings field of this build");
+    return R;
+  };
+  let g = new Map();
+  let m = (key, R) => {
+    g.set(key, R);
+  };
   for (let P of ["prependPlugins", "appendPlugins"])
     if (s.has(P))
       m(P, () =>
-        A(o())
+        array(string())
           .optional()
-          .catch((R) => {
-            e({
+          .catch((error) => {
+            report({
               path: P,
-              message: `${R.issues[0]?.message ?? "Failed schema validation"}. This field was ignored; read as unset.`,
+              message: `${error.issues[0]?.message ?? "Failed schema validation"}. This field was ignored; read as unset.`,
             });
             return;
           }),
       );
-  (m("wslInheritsWindowsSettings", () =>
-    Ue([
+  m("wslInheritsWindowsSettings", () =>
+    union([
       zg().transform(() => {
         return;
       }),
-      Ka((P) => {
+      preprocess((P) => {
         let R = coerceBooleanString(P);
         if (R !== P)
-          e({
+          report({
             path: "wslInheritsWindowsSettings",
             message: `"wslInheritsWindowsSettings" holds the string "${String(R)}" where a boolean belongs; reading it as ${String(R)}. Write it without quotes.`,
-            statusOnly: !0,
+            statusOnly: true,
           });
         return R;
       }, c("wslInheritsWindowsSettings")),
     ])
       .optional()
       .catch(() => {
-        e({
+        report({
           path: "wslInheritsWindowsSettings",
           message: `"wslInheritsWindowsSettings" was present but invalid (it takes true or false), so this source's WSL opt-in cannot be read until it is fixed. WSL fails it closed: in an administrator source it arms the Windows policy chain with no user-writable source (/etc/claude-code, HKCU) read beneath it; in HKCU it leaves HKCU unapplied.`,
         });
         return;
       }),
-  ),
-    m("strictKnownMarketplaces", () =>
-      tolerantMarketplaceList("strictKnownMarketplaces", e).catch(
-        () => (
-          e({
-            path: "strictKnownMarketplaces",
-            message:
-              '"strictKnownMarketplaces" was present but invalid; enforcing an empty allowlist (no marketplaces admitted) until it is fixed.',
+  );
+  m("strictKnownMarketplaces", () =>
+    tolerantMarketplaceList("strictKnownMarketplaces", report).catch(() => {
+      report({
+        path: "strictKnownMarketplaces",
+        message:
+          '"strictKnownMarketplaces" was present but invalid; enforcing an empty allowlist (no marketplaces admitted) until it is fixed.',
+      });
+      return [];
+    }),
+  );
+  m("blockedMarketplaces", () =>
+    tolerantMarketplaceList("blockedMarketplaces", report).catch(() => {
+      report({
+        path: "blockedMarketplaces",
+        message:
+          '"blockedMarketplaces" was present but invalid and was dropped; its entries cannot be enforced until it is fixed.',
+      });
+      return;
+    }),
+  );
+  m("allowedMcpServers", () =>
+    tolerantArray("allowedMcpServers", allowedMcpServersSchema(), report).catch(() => {
+      report({
+        path: "allowedMcpServers",
+        message:
+          '"allowedMcpServers" was present but invalid; enforcing an empty allowlist (no MCP servers admitted) until it is fixed.',
+      });
+      return [];
+    }),
+  );
+  m("deniedMcpServers", () =>
+    tolerantArray("deniedMcpServers", deniedMcpServersSchema(), report).catch(() => {
+      report({
+        path: "deniedMcpServers",
+        message:
+          '"deniedMcpServers" was present but invalid and was dropped; its entries cannot be enforced until it is fixed.',
+      });
+      return;
+    }),
+  );
+  m("managedMcpServers", () =>
+    unknown()
+      .transform((P) =>
+        parseManagedMcpServers(P, (R, N) =>
+          report({
+            path: R ? `managedMcpServers.${R}` : "managedMcpServers",
+            message: R ? `Managed MCP server was ignored: ${N}` : N,
+            statusOnly: true,
           }),
-          []
         ),
-      ),
-    ),
-    m("blockedMarketplaces", () =>
-      tolerantMarketplaceList("blockedMarketplaces", e).catch(() => {
-        e({
-          path: "blockedMarketplaces",
-          message:
-            '"blockedMarketplaces" was present but invalid and was dropped; its entries cannot be enforced until it is fixed.',
-        });
-        return;
-      }),
-    ),
-    m("allowedMcpServers", () =>
-      tolerantArray("allowedMcpServers", Co(), e).catch(
-        () => (
-          e({
-            path: "allowedMcpServers",
-            message:
-              '"allowedMcpServers" was present but invalid; enforcing an empty allowlist (no MCP servers admitted) until it is fixed.',
-          }),
-          []
-        ),
-      ),
-    ),
-    m("deniedMcpServers", () =>
-      tolerantArray("deniedMcpServers", wo(), e).catch(() => {
-        e({
-          path: "deniedMcpServers",
-          message:
-            '"deniedMcpServers" was present but invalid and was dropped; its entries cannot be enforced until it is fixed.',
-        });
-        return;
-      }),
-    ),
-    m("managedMcpServers", () =>
-      oe()
-        .transform((P) =>
-          parseManagedMcpServers(P, (R, N) =>
-            e({
-              path: R ? `managedMcpServers.${R}` : "managedMcpServers",
-              message: R ? `Managed MCP server was ignored: ${N}` : N,
-              statusOnly: !0,
-            }),
-          ),
-        )
-        .optional(),
-    ));
+      )
+      .optional(),
+  );
   let f = new Set();
-  for (let { key: key, restrictive: restrictive, field: field } of RESTRICTIVE_TOP_LEVEL_SETTINGS()) {
+  for (let { key, restrictive, field } of RESTRICTIVE_TOP_LEVEL_SETTINGS_2()) {
     let G = typeof restrictive === "string" ? `"${restrictive}"` : String(restrictive);
     m(key, () =>
-      Ue([
+      union([
         zg().transform(() => {
           return;
         }),
-        coerceRestrictiveValue(key, restrictive, field, e),
+        coerceRestrictiveValue(key, restrictive, field, report),
       ])
         .optional()
-        .catch(
-          () => (
-            e({
-              path: key,
-              message: `"${key}" was present but invalid; treating it as ${G} (its restrictive value) until it is fixed.`,
-              substituted: !0,
-            }),
-            f.add(key),
-            restrictive
-          ),
-        ),
+        .catch(() => {
+          report({
+            path: key,
+            message: `"${key}" was present but invalid; treating it as ${G} (its restrictive value) until it is fixed.`,
+            substituted: true,
+          });
+          f.add(key);
+          return restrictive;
+        }),
     );
   }
-  (m("strictPluginOnlyCustomization", () =>
-    Ue([
+  m("strictPluginOnlyCustomization", () =>
+    union([
       zg().transform(() => {
         return;
       }),
       filteredSurfacesSchema((P) =>
-        e({
+        report({
           path: "strictPluginOnlyCustomization",
-          message: `"strictPluginOnlyCustomization" lists ${P} ${plural(P, "entry", "entries")} this version does not recognize as a surface (known: ${oJt.join(", ")}); an unrecognized entry locks nothing, so check it for a typo.`,
-          statusOnly: !0,
+          message: `"strictPluginOnlyCustomization" lists ${P} ${plural(P, "entry", "entries")} this version does not recognize as a surface (known: ${skillOverridesSchema.join(", ")}); an unrecognized entry locks nothing, so check it for a typo.`,
+          statusOnly: true,
         }),
       ),
     ])
       .optional()
-      .catch(
-        () => (
-          e({
-            path: "strictPluginOnlyCustomization",
+      .catch(() => {
+        report({
+          path: "strictPluginOnlyCustomization",
+          message:
+            '"strictPluginOnlyCustomization" was present but invalid; treating it as true (skills, agents, hooks and MCP servers load from managed settings and plugins only) until it is fixed.',
+          substituted: true,
+        });
+        f.add("strictPluginOnlyCustomization");
+        return true;
+      }),
+  );
+  m("enabledPlugins", () => {
+    let P = triStateSchema();
+    return record(string(), unknown())
+      .transform((R) => {
+        let N = [];
+        let G = 0;
+        for (let [key, value] of Object.entries(R)) {
+          let ne = P.safeParse(value);
+          if (ne.success) {
+            N.push([key, ne.data]);
+            continue;
+          }
+          G++;
+          report({
+            path: PluginIdSchema().safeParse(key).success
+              ? `enabledPlugins.${key}`
+              : "enabledPlugins.<invalid id>",
             message:
-              '"strictPluginOnlyCustomization" was present but invalid; treating it as true (skills, agents, hooks and MCP servers load from managed settings and plugins only) until it is fixed.',
-            substituted: !0,
-          }),
-          f.add("strictPluginOnlyCustomization"),
-          !0
-        ),
-      ),
-  ),
-    m("enabledPlugins", () => {
-      let P = $c();
-      return pe(o(), oe())
-        .transform((R) => {
-          let N = [],
-            G = 0;
-          for (let [Q, se] of Object.entries(R)) {
-            let safeParse = P.safeParse(se);
-            if (safeParse.success) {
-              N.push([Q, safeParse.data]);
-              continue;
-            }
-            (G++,
-              e({
-                path: PluginIdSchema().safeParse(Q).success
-                  ? `enabledPlugins.${Q}`
-                  : "enabledPlugins.<invalid id>",
-                message:
-                  "Invalid entry was ignored: the value must be true, false, or a list of version constraints. This plugin is neither force-enabled nor blocked until it is fixed.",
-              }));
-          }
-          if (G > 0 && N.length === 0) {
-            e({
-              path: "enabledPlugins",
-              message:
-                'Every entry of "enabledPlugins" was invalid; no plugin is force-enabled or blocked by it until it is fixed.',
-            });
-            return;
-          }
-          return Object.fromEntries(N);
-        })
-        .optional()
-        .catch(() => {
-          e({
+              "Invalid entry was ignored: the value must be true, false, or a list of version constraints. This plugin is neither force-enabled nor blocked until it is fixed.",
+          });
+        }
+        if (G > 0 && N.length === 0) {
+          report({
             path: "enabledPlugins",
             message:
-              '"enabledPlugins" was present but invalid (not a map of plugin ids) and was ignored; no plugin is force-enabled or blocked by it until it is fixed.',
+              'Every entry of "enabledPlugins" was invalid; no plugin is force-enabled or blocked by it until it is fixed.',
           });
           return;
+        }
+        return Object.fromEntries(N);
+      })
+      .optional()
+      .catch(() => {
+        report({
+          path: "enabledPlugins",
+          message:
+            '"enabledPlugins" was present but invalid (not a map of plugin ids) and was ignored; no plugin is force-enabled or blocked by it until it is fixed.',
         });
-    }),
-    m("availableModels", () =>
-      A(oe())
-        .transform((P, R) => {
-          let N = [];
-          for (let G of P)
-            if (typeof G === "string") N.push(G);
-            else
-              e({
-                path: "availableModels",
-                message: `"availableModels" contained a non-string entry (${JSON.stringify(G)}); the entry was ignored.`,
-              });
-          return N;
-        })
-        .optional()
-        .catch(
-          () => (
-            e({
+        return;
+      });
+  });
+  m("availableModels", () =>
+    array(unknown())
+      .transform((P, R) => {
+        let N = [];
+        for (let G of P)
+          if (typeof G === "string") N.push(G);
+          else
+            report({
               path: "availableModels",
-              message:
-                '"availableModels" was present but invalid; enforcing an empty allowlist (only the default model is available) until it is fixed.',
-            }),
-            []
-          ),
-        ),
+              message: `"availableModels" contained a non-string entry (${JSON.stringify(G)}); the entry was ignored.`,
+            });
+        return N;
+      })
+      .optional()
+      .catch(() => {
+        report({
+          path: "availableModels",
+          message:
+            '"availableModels" was present but invalid; enforcing an empty allowlist (only the default model is available) until it is fixed.',
+        });
+        return [];
+      }),
+  );
+  m("deniedModels", () =>
+    array(unknown())
+      .transform((P) => {
+        let R = [];
+        for (let N of P)
+          if (typeof N === "string") R.push(N);
+          else
+            report({
+              path: "deniedModels",
+              message: `"deniedModels" contained a non-string entry (${N === null ? "null" : typeof N}); the entry was ignored.`,
+            });
+        return R;
+      })
+      .optional()
+      .catch(() => {
+        report({
+          path: "deniedModels",
+          message:
+            '"deniedModels" was present but is not a list of model names, so it was ignored and blocks no models until it is fixed.',
+        });
+        return;
+      }),
+  );
+  m("allowedHttpHookUrls", () =>
+    tolerantAllowlist("allowedHttpHookUrls", string(), report, "no HTTP hooks may run"),
+  );
+  m("httpHookAllowedEnvVars", () =>
+    tolerantAllowlist(
+      "httpHookAllowedEnvVars",
+      string(),
+      report,
+      "no environment variables may be interpolated into HTTP hook headers",
     ),
-    m("deniedModels", () =>
-      A(oe())
-        .transform((P) => {
-          let R = [];
-          for (let N of P)
-            if (typeof N === "string") R.push(N);
-            else
-              e({
-                path: "deniedModels",
-                message: `"deniedModels" contained a non-string entry (${N === null ? "null" : typeof N}); the entry was ignored.`,
-              });
-          return R;
-        })
-        .optional()
-        .catch(() => {
-          e({
-            path: "deniedModels",
-            message:
-              '"deniedModels" was present but is not a list of model names, so it was ignored and blocks no models until it is fixed.',
-          });
-          return;
-        }),
-    ),
-    m("allowedHttpHookUrls", () => tolerantAllowlist("allowedHttpHookUrls", o(), e, "no HTTP hooks may run")),
-    m("httpHookAllowedEnvVars", () =>
-      tolerantAllowlist(
-        "httpHookAllowedEnvVars",
-        o(),
-        e,
-        "no environment variables may be interpolated into HTTP hook headers",
-      ),
-    ),
-    m("allowedChannelPlugins", () =>
-      tolerantAllowlist("allowedChannelPlugins", sE(), e, "no channel plugins admitted", (P, R) =>
+  );
+  m("allowedChannelPlugins", () =>
+    tolerantAllowlist(
+      "allowedChannelPlugins",
+      sandboxSettingsSchema(),
+      report,
+      "no channel plugins admitted",
+      (P, R) =>
         typeof P === "string"
           ? `"allowedChannelPlugins" entry "${P}" was accepted; prefer the documented object form {"plugin": "${R.plugin}", "marketplace": "${R.marketplace}"}.`
-          : void 0,
-      ),
+          : undefined,
     ),
-    m("gatewayInternalNetworks", () =>
-      A(o())
-        .optional()
-        .catch(
-          () => (
-            e({
-              path: "gatewayInternalNetworks",
-              message:
-                '"gatewayInternalNetworks" was present but invalid; gateway sign-in governed by this source is refused until it is fixed.',
-            }),
-            [eao]
-          ),
-        ),
+  );
+  m("gatewayInternalNetworks", () =>
+    array(string())
+      .optional()
+      .catch(() => {
+        report({
+          path: "gatewayInternalNetworks",
+          message:
+            '"gatewayInternalNetworks" was present but invalid; gateway sign-in governed by this source is refused until it is fixed.',
+        });
+        return [UNREADABLE_SETTING_MARKER];
+      }),
+  );
+  m("forceLoginOrgUUID", () =>
+    c("forceLoginOrgUUID").catch(() => {
+      report({
+        path: "forceLoginOrgUUID",
+        message:
+          '"forceLoginOrgUUID" was present but invalid; no organization is permitted to log in until it is fixed.',
+      });
+      return [];
+    }),
+  );
+  m("allowedProviders", () =>
+    tolerantAllowlist(
+      "allowedProviders",
+      hu(isAnthropicProviderId, {
+        message: `not a known provider name (${API_PROVIDER_KINDS.join(", ")})`,
+      }),
+      report,
+      "no API provider may be used, so Claude Code will not start on this machine",
+      undefined,
+      {
+        invalidEntryIsStatusOnly: true,
+      },
     ),
-    m("forceLoginOrgUUID", () =>
-      c("forceLoginOrgUUID").catch(
-        () => (
-          e({
-            path: "forceLoginOrgUUID",
-            message:
-              '"forceLoginOrgUUID" was present but invalid; no organization is permitted to log in until it is fixed.',
-          }),
-          []
-        ),
-      ),
-    ),
-    m("allowedProviders", () =>
-      tolerantAllowlist(
-        "allowedProviders",
-        hu(cn, { message: `not a known provider name (${API_PROVIDER_KINDS.join(", ")})` }),
-        e,
-        "no API provider may be used, so Claude Code will not start on this machine",
-        void 0,
-        { invalidEntryIsStatusOnly: !0 },
-      ),
-    ));
-  let h = !1,
-    y = (P, R) => {
-      let safeParse = P.safeParse(R);
-      if (safeParse.success) return;
-      return safeParse.error.issues
-        .slice(0, 3)
-        .map((G) => (G.path.length ? `${G.path.join(".")}: ${G.message}` : G.message))
-        .join("; ");
-    },
-    b;
+  );
+  let h = false;
+  let y = (P, R) => {
+    let N = P.safeParse(R);
+    if (N.success) return;
+    return N.error.issues
+      .slice(0, 3)
+      .map((issue) => (issue.path.length ? `${issue.path.join(".")}: ${issue.message}` : issue.message))
+      .join("; ");
+  };
+  let b;
   m("policyHelper", () =>
-    Ka((P) => {
-      if (((h = !1), (b = P), P && typeof P === "object" && !Array.isArray(P))) {
+    preprocess((P) => {
+      h = false;
+      b = P;
+      if (P && typeof P === "object" && !Array.isArray(P)) {
         let R = P;
         for (let N of ["defaultSettings", "default", ...HELPER_ENVELOPE_FIELDS])
-          if (R[N] !== void 0 && R[N] !== null)
-            e({
+          if (R[N] !== undefined && R[N] !== null)
+            report({
               path: "policyHelper",
               message: `"${N}" on the singular policyHelper is ignored \u2014 static fallback payloads belong on the policyHelpers per-OS entries ("defaultSettings") or the map's "default" key. The intended fallback will NOT apply from here.`,
-              statusOnly: !0,
+              statusOnly: true,
             });
         for (let N of ["policyHelper", "policyHelpers"])
-          if (R[N] !== void 0 && R[N] !== null)
-            e({
+          if (R[N] !== undefined && R[N] !== null)
+            report({
               path: "policyHelper",
               message: `"${N}" inside the singular policyHelper is ignored \u2014 "policyHelper" and "policyHelpers" are TOP-LEVEL settings keys; nothing nests inside the singular entry. The nested config will NOT apply from here.`,
-              statusOnly: !0,
+              statusOnly: true,
             });
         for (let N of SUPPORTED_PLATFORMS)
-          if (R[N] !== void 0 && R[N] !== null)
-            e({
+          if (R[N] !== undefined && R[N] !== null)
+            report({
               path: "policyHelper",
               message: `"${N}" on the singular policyHelper is ignored \u2014 per-OS entries live on the policyHelpers MAP ("policyHelpers": {"${N}": ...}), not inside the singular key. The intended per-OS config will NOT apply from here.`,
-              statusOnly: !0,
+              statusOnly: true,
             });
-        if (R.claudeMd !== void 0 && R.claudeMd !== null)
-          e({
+        if (R.claudeMd !== undefined && R.claudeMd !== null)
+          report({
             path: "policyHelper",
             message: `"claudeMd" on the singular policyHelper is ignored \u2014 "claudeMd" is a managed-settings key: put it at the settings top level or inside a static payload, or emit it from the helper's stdout envelope. The intended instructions will NOT apply from here.`,
-            statusOnly: !0,
+            statusOnly: true,
           });
-        if (R.outputBehavior !== void 0 && R.outputBehavior !== null)
-          e({
+        if (R.outputBehavior !== undefined && R.outputBehavior !== null)
+          report({
             path: "policyHelper",
             message: `"outputBehavior" on the singular policyHelper is ignored \u2014 it is only honored on the policyHelpers per-OS entries (policyHelpers.${SUPPORTED_PLATFORMS.join("/")}); this helper's output REPLACES the policy tier whatever the value says.`,
-            statusOnly: !0,
+            statusOnly: true,
           });
-        if (R.onFailure !== void 0 && R.onFailure !== null)
-          e({
+        if (R.onFailure !== undefined && R.onFailure !== null)
+          report({
             path: "policyHelper",
             message: `"onFailure" on the singular policyHelper is ignored \u2014 it is only honored on the policyHelpers per-OS entries (policyHelpers.${SUPPORTED_PLATFORMS.join("/")}); a failure of this helper REFUSES to start Claude Code whatever the value says.`,
-            statusOnly: !0,
+            statusOnly: true,
           });
-        if (R.retries !== void 0 && R.retries !== null)
-          e({
+        if (R.retries !== undefined && R.retries !== null)
+          report({
             path: "policyHelper",
             message: `"retries" on the singular policyHelper is ignored \u2014 it is only honored on the policyHelpers per-OS entries (policyHelpers.${SUPPORTED_PLATFORMS.join("/")}); this helper is run ONCE per start or refresh, never re-run, whatever the value says.`,
-            statusOnly: !0,
+            statusOnly: true,
           });
-        if (R.path === null || R.path === void 0) h = !0;
+        if (R.path === null || R.path === undefined) h = true;
       }
-      return P === null ? void 0 : P;
-    }, HELPER_BASE_SCHEMA().optional()).catch((P) => {
-      e({
+      return P === null ? undefined : P;
+    }, HELPER_BASE_SCHEMA().optional()).catch((error) => {
+      report({
         path: "policyHelper",
-        message: `${P.issues[0]?.message ?? y(HELPER_BASE_SCHEMA(), b) ?? "Failed schema validation"}. This field was ignored.`,
-        ...(h && { statusOnly: !0 }),
+        message: `${error.issues[0]?.message ?? y(HELPER_BASE_SCHEMA(), b) ?? "Failed schema validation"}. This field was ignored.`,
+        ...(h && {
+          statusOnly: true,
+        }),
       });
       return;
     }),
   );
   let S = (P, R) => {
-      e({
-        path: P,
-        message: `"${P}" is not a valid static settings payload: ${R ?? "failed validation"}. When delivered from an OS-admin policy source (MDM or the managed settings file), Claude Code will not start until this is fixed.`,
-        startupFatal: !0,
-      });
-    },
-    C = [],
-    w = (P) => {
-      let R = !1,
-        N,
-        G = as(
-          P,
-          STATIC_PAYLOAD_SCHEMA()
-            .optional()
-            .catch((Q) => {
-              ((R = !0),
-                S(
-                  `policyHelpers.${P}.defaultSettings`,
-                  Q.issues[0]?.message ??
-                    y(
-                      STATIC_PAYLOAD_SCHEMA(),
-                      N && typeof N === "object" && !Array.isArray(N) ? N.defaultSettings : void 0,
-                    ),
-                ));
-              return;
-            }),
-        );
-      return Ka((Q) => {
-        if (((R = !1), (N = Q), P !== "default" && Q && typeof Q === "object" && !Array.isArray(Q))) {
-          let se = Q;
-          for (let de of [...HELPER_ENVELOPE_FIELDS, "claudeMd"])
-            if (se[de] !== void 0 && se[de] !== null)
-              e({
-                path: `policyHelpers.${P}`,
-                message: `"${de}" on the policyHelpers.${P} entry is ignored \u2014 helper output cannot be pre-seeded on an entry; a static fallback payload goes under this entry's "defaultSettings" (a managed-settings object). The intended content will NOT apply from here.`,
-                statusOnly: !0,
-              });
-          for (let de of ["policyHelper", "policyHelpers"])
-            if (se[de] !== void 0 && se[de] !== null)
-              e({
-                path: `policyHelpers.${P}`,
-                message: `"${de}" on the policyHelpers.${P} entry is ignored \u2014 "policyHelper" and "policyHelpers" are TOP-LEVEL settings keys; nothing nests inside an entry. The nested config will NOT apply from here.`,
-                statusOnly: !0,
-              });
-          for (let de of SUPPORTED_PLATFORMS)
-            if (se[de] !== void 0 && se[de] !== null)
-              e({
-                path: `policyHelpers.${P}`,
-                message: `"${de}" on the policyHelpers.${P} entry is ignored \u2014 per-OS entries are SIBLINGS on the policyHelpers map, not nested inside each other. The intended ${de} config will NOT apply from here.`,
-                statusOnly: !0,
-              });
-          if (se.default !== void 0 && se.default !== null)
-            e({
-              path: `policyHelpers.${P}`,
-              message: `"default" on the policyHelpers.${P} entry is ignored \u2014 the per-entry static payload field is spelled "defaultSettings"; "default" is the MAP's any-platform catch-all key (a sibling of the OS entries). The intended fallback will NOT apply from here.`,
-              statusOnly: !0,
-            });
-          let onFailure = se.onFailure;
-          if (onFailure !== void 0 && onFailure !== null && !Hc(onFailure)) {
-            let de;
-            if (typeof onFailure === "string") {
-              let replaced = onFailure.replace(/[^\x20-\x7e]/gu, "?");
-              de = JSON.stringify(
-                replaced.length > MAX_QUOTED_NAME_CHARS
-                  ? `${replaced.slice(0, MAX_QUOTED_NAME_CHARS - 1)}\u2026`
-                  : replaced,
-              );
-            } else if (typeof onFailure === "number" || typeof onFailure === "boolean")
-              de = String(onFailure);
-            else de = `a non-string value (${Array.isArray(onFailure) ? "array" : typeof onFailure})`;
-            e({
-              path: `policyHelpers.${P}.onFailure`,
-              message: `"onFailure": ${de} on the policyHelpers.${P} entry is not a recognized value ("continue" or "refuse"); it is treated as "refuse" \u2014 a startup failure of this entry's helper with no static payload in its place will not start Claude Code.`,
-              statusOnly: !0,
-            });
-          }
-          if (isAllNullEntry(Q)) return;
-        }
-        return Q === null ? void 0 : Q;
-      }, G.optional()).catch((Q) => {
-        if (P === "default") {
-          S("policyHelpers.default", Q.issues[0]?.message ?? y(STATIC_PAYLOAD_SCHEMA(), N));
+    report({
+      path: P,
+      message: `"${P}" is not a valid static settings payload: ${R ?? "failed validation"}. When delivered from an OS-admin policy source (MDM or the managed settings file), Claude Code will not start until this is fixed.`,
+      startupFatal: true,
+    });
+  };
+  let C = [];
+  let w = (P) => {
+    let R = false;
+    let N;
+    let G = policyHelperEntrySchemaFor(
+      P,
+      STATIC_PAYLOAD_SCHEMA()
+        .optional()
+        .catch((error) => {
+          R = true;
+          S(
+            `policyHelpers.${P}.defaultSettings`,
+            error.issues[0]?.message ??
+              y(
+                STATIC_PAYLOAD_SCHEMA(),
+                N && typeof N === "object" && !Array.isArray(N) ? N.defaultSettings : undefined,
+              ),
+          );
           return;
+        }),
+    );
+    return preprocess((Q) => {
+      R = false;
+      N = Q;
+      if (P !== "default" && Q && typeof Q === "object" && !Array.isArray(Q)) {
+        let se = Q;
+        for (let de of [...HELPER_ENVELOPE_FIELDS, "claudeMd"])
+          if (se[de] !== undefined && se[de] !== null)
+            report({
+              path: `policyHelpers.${P}`,
+              message: `"${de}" on the policyHelpers.${P} entry is ignored \u2014 helper output cannot be pre-seeded on an entry; a static fallback payload goes under this entry's "defaultSettings" (a managed-settings object). The intended content will NOT apply from here.`,
+              statusOnly: true,
+            });
+        for (let de of ["policyHelper", "policyHelpers"])
+          if (se[de] !== undefined && se[de] !== null)
+            report({
+              path: `policyHelpers.${P}`,
+              message: `"${de}" on the policyHelpers.${P} entry is ignored \u2014 "policyHelper" and "policyHelpers" are TOP-LEVEL settings keys; nothing nests inside an entry. The nested config will NOT apply from here.`,
+              statusOnly: true,
+            });
+        for (let de of SUPPORTED_PLATFORMS)
+          if (se[de] !== undefined && se[de] !== null)
+            report({
+              path: `policyHelpers.${P}`,
+              message: `"${de}" on the policyHelpers.${P} entry is ignored \u2014 per-OS entries are SIBLINGS on the policyHelpers map, not nested inside each other. The intended ${de} config will NOT apply from here.`,
+              statusOnly: true,
+            });
+        if (se.default !== undefined && se.default !== null)
+          report({
+            path: `policyHelpers.${P}`,
+            message: `"default" on the policyHelpers.${P} entry is ignored \u2014 the per-entry static payload field is spelled "defaultSettings"; "default" is the MAP's any-platform catch-all key (a sibling of the OS entries). The intended fallback will NOT apply from here.`,
+            statusOnly: true,
+          });
+        let onFailure = se.onFailure;
+        if (onFailure !== undefined && onFailure !== null && !isPolicyHelperOnFailure(onFailure)) {
+          let de;
+          if (typeof onFailure === "string") {
+            let replaced = onFailure.replace(/[^\x20-\x7e]/gu, "?");
+            de = JSON.stringify(
+              replaced.length > MAX_QUOTED_NAME_CHARS
+                ? `${replaced.slice(0, MAX_QUOTED_NAME_CHARS - 1)}\u2026`
+                : replaced,
+            );
+          } else if (typeof onFailure === "number" || typeof onFailure === "boolean") de = String(onFailure);
+          else de = `a non-string value (${Array.isArray(onFailure) ? "array" : typeof onFailure})`;
+          report({
+            path: `policyHelpers.${P}.onFailure`,
+            message: `"onFailure": ${de} on the policyHelpers.${P} entry is not a recognized value ("continue" or "refuse"); it is treated as "refuse" \u2014 a startup failure of this entry's helper with no static payload in its place will not start Claude Code.`,
+            statusOnly: true,
+          });
         }
-        if (R) return;
-        let se = y(as(P), N) ?? "failed validation",
-          ne = N,
-          de = ne && typeof ne === "object" && !Array.isArray(ne) ? ne : null,
-          Se = de?.onFailure,
-          xe = Se !== void 0 && Se !== null && Se !== "continue",
-          Ce = (Ae) => {
-            let Ye = `policyHelpers.${P}`;
-            if (xe) C.push({ entryKey: P, message: Ae });
-            else e({ path: Ye, message: Ae, statusOnly: !0 });
-          };
-        if (de) {
-          let defaultSettings = de.defaultSettings;
-          if (defaultSettings !== void 0 && defaultSettings !== null) {
-            let safeParse = STATIC_PAYLOAD_SCHEMA().safeParse(defaultSettings);
-            if (safeParse.success) {
-              let outputBehavior = de.outputBehavior,
-                Pe =
-                  outputBehavior === void 0 || outputBehavior === null
-                    ? null
-                    : outputBehaviorSchema().safeParse(outputBehavior);
-              if (Pe && !Pe.success) {
-                Ce(
-                  `Invalid entry was ignored: ${se}. Its "defaultSettings" static payload was NOT kept: "outputBehavior" is unrecognized, so whether the payload replaces or merges over this source's settings is unknown. No policy helper runs on ${P} from this entry.`,
-                );
-                return;
-              }
-              return (
-                e({
-                  path: `policyHelpers.${P}`,
-                  message: `Invalid entry: its helper fields were ignored (${se}), but its "defaultSettings" static payload was kept. No policy helper runs on ${P} from this entry.`,
-                  statusOnly: !0,
-                }),
-                { defaultSettings: safeParse.data, ...(Pe && { outputBehavior: Pe.data }) }
+        if (isAllNullEntry(Q)) return;
+      }
+      return Q === null ? undefined : Q;
+    }, G.optional()).catch((error) => {
+      if (P === "default") {
+        S("policyHelpers.default", error.issues[0]?.message ?? y(STATIC_PAYLOAD_SCHEMA(), N));
+        return;
+      }
+      if (R) return;
+      let se = y(policyHelperEntrySchemaFor(P), N) ?? "failed validation";
+      let ne = N;
+      let de = ne && typeof ne === "object" && !Array.isArray(ne) ? ne : null;
+      let onFailure = de?.onFailure;
+      let xe = onFailure !== undefined && onFailure !== null && onFailure !== "continue";
+      let Ce = (message) => {
+        let path = `policyHelpers.${P}`;
+        if (xe)
+          C.push({
+            entryKey: P,
+            message,
+          });
+        else
+          report({
+            path,
+            message,
+            statusOnly: true,
+          });
+      };
+      if (de) {
+        let defaultSettings = de.defaultSettings;
+        if (defaultSettings !== undefined && defaultSettings !== null) {
+          let Ye = STATIC_PAYLOAD_SCHEMA().safeParse(defaultSettings);
+          if (Ye.success) {
+            let outputBehavior = de.outputBehavior;
+            let Pe =
+              outputBehavior === undefined || outputBehavior === null
+                ? null
+                : outputBehaviorSchema().safeParse(outputBehavior);
+            if (Pe && !Pe.success) {
+              Ce(
+                `Invalid entry was ignored: ${se}. Its "defaultSettings" static payload was NOT kept: "outputBehavior" is unrecognized, so whether the payload replaces or merges over this source's settings is unknown. No policy helper runs on ${P} from this entry.`,
               );
+              return;
             }
+            report({
+              path: `policyHelpers.${P}`,
+              message: `Invalid entry: its helper fields were ignored (${se}), but its "defaultSettings" static payload was kept. No policy helper runs on ${P} from this entry.`,
+              statusOnly: true,
+            });
+            return {
+              defaultSettings: Ye.data,
+              ...(Pe && {
+                outputBehavior: Pe.data,
+              }),
+            };
           }
         }
-        Ce(`Invalid entry was ignored: ${se}. No policy helper runs on ${P} from this entry.`);
-        return;
-      });
-    };
+      }
+      Ce(`Invalid entry was ignored: ${se}. No policy helper runs on ${P} from this entry.`);
+      return;
+    });
+  };
   m("policyHelpers", () =>
-    Ka(
+    preprocess(
       (P) => {
-        if (((C = []), P && typeof P === "object" && !Array.isArray(P))) {
+        C = [];
+        if (P && typeof P === "object" && !Array.isArray(P)) {
           let R = P;
           for (let N of ["defaultSettings", ...HELPER_ENVELOPE_FIELDS, "claudeMd"])
-            if (R[N] !== void 0 && R[N] !== null)
-              e({
+            if (R[N] !== undefined && R[N] !== null)
+              report({
                 path: "policyHelpers",
                 message: `"${N}" directly on the policyHelpers map is ignored \u2014 static fallback payloads go on a per-OS entry's "defaultSettings" or the map's "default" key (a managed-settings object), and helper-output keys come from the helper's stdout. The intended content will NOT apply from here.`,
-                statusOnly: !0,
+                statusOnly: true,
               });
           for (let N of ["policyHelper", "policyHelpers"])
-            if (R[N] !== void 0 && R[N] !== null)
-              e({
+            if (R[N] !== undefined && R[N] !== null)
+              report({
                 path: "policyHelpers",
                 message: `"${N}" inside the policyHelpers map is ignored \u2014 "policyHelper" and "policyHelpers" are TOP-LEVEL settings keys; the map's keys are the per-OS entries and "default". The nested config will NOT apply from here.`,
-                statusOnly: !0,
+                statusOnly: true,
               });
           for (let N of HELPER_ENTRY_FIELDS.filter((G) => G !== "defaultSettings"))
-            if (R[N] !== void 0 && R[N] !== null) {
+            if (R[N] !== undefined && R[N] !== null) {
               let G =
                 N === "script" || N === "interpreter"
                   ? "; inline scripts are per-OS only (the singular policyHelper key takes a path)"
                   : N === "outputBehavior" || N === "onFailure" || N === "retries"
                     ? ""
                     : ", or on the singular policyHelper key";
-              e({
+              report({
                 path: "policyHelpers",
                 message: `"${N}" directly on the policyHelpers map is ignored \u2014 helper configs go on a per-OS entry (policyHelpers.${SUPPORTED_PLATFORMS.join("/")})${G}. No helper runs from this field here.`,
-                statusOnly: !0,
+                statusOnly: true,
               });
             }
         }
-        return P === null ? void 0 : P;
+        return P === null ? undefined : P;
       },
       u(Object.fromEntries(POLICY_HELPER_KEYS.map((P) => [P, w(P)])))
         .transform((P) => {
-          for (let R of Object.keys(P)) if (P[R] === void 0) delete P[R];
-          for (let { entryKey: entryKey, message: message } of C) {
-            let G = `policyHelpers.${entryKey}`,
-              found = ms(entryKey).find(
-                (ne) => P[ne]?.defaultSettings !== void 0 && P[ne]?.defaultSettings !== null,
-              ),
-              se = found !== void 0 ? `${found}.defaultSettings` : P.default !== void 0 ? "default" : null;
-            e(
+          for (let key of Object.keys(P)) if (P[key] === undefined) delete P[key];
+          for (let { entryKey, message } of C) {
+            let path = `policyHelpers.${entryKey}`;
+            let found = platformSpellings(entryKey).find(
+              (ne) => P[ne]?.defaultSettings !== undefined && P[ne]?.defaultSettings !== null,
+            );
+            let se =
+              found !== undefined ? `${found}.defaultSettings` : P.default !== undefined ? "default" : null;
+            report(
               se !== null
                 ? {
-                    path: G,
+                    path,
                     message: `${message} Its "onFailure" requires the helper; the "policyHelpers.${se}" static payload serves in its place.`,
-                    statusOnly: !0,
+                    statusOnly: true,
                   }
                 : {
-                    path: G,
+                    path,
                     message: `${message} Its "onFailure" requires the helper, so when delivered from an OS-admin policy source (MDM or the managed settings file), Claude Code will not start until this is fixed.`,
-                    startupFatal: !0,
+                    startupFatal: true,
                   },
             );
           }
-          return ((C = []), P);
+          C = [];
+          return P;
         })
         .optional()
-        .catch(
-          (P) => (
-            e({
-              path: "policyHelpers",
-              message: `"policyHelpers" could not be parsed: expected an object mapping OS keys (${SUPPORTED_PLATFORMS.join(", ")}) to helper entries, plus an optional "default" settings payload (${P.issues[0]?.message ?? "failed schema validation"}). When delivered from an OS-admin policy source (MDM or the managed settings file), Claude Code will not start until this is fixed.`,
-              startupFatal: !0,
-            }),
-            {}
-          ),
-        ),
+        .catch((error) => {
+          report({
+            path: "policyHelpers",
+            message: `"policyHelpers" could not be parsed: expected an object mapping OS keys (${SUPPORTED_PLATFORMS.join(", ")}) to helper entries, plus an optional "default" settings payload (${error.issues[0]?.message ?? "failed schema validation"}). When delivered from an OS-admin policy source (MDM or the managed settings file), Claude Code will not start until this is fixed.`,
+            startupFatal: true,
+          });
+          return {};
+        }),
     ),
   );
   let weakSet = new WeakSet();
   for (let key of s.keys) {
-    if (key === "sandbox" || !To(key)) continue;
+    if (key === "sandbox" || !isRestrictiveNestedPath(key)) continue;
     m(key, () => {
-      let R = c(key),
-        N = unwrapObjectSchema(R);
-      if (N === void 0)
-        return R.catch((G) => {
-          e({
+      let R = c(key);
+      let schema = unwrapObjectSchema(R);
+      if (schema === undefined)
+        return R.catch((error) => {
+          report({
             path: key,
-            message: `${G.issues[0]?.message ?? "Failed schema validation"}. This field was ignored.`,
+            message: `${error.issues[0]?.message ?? "Failed schema validation"}. This field was ignored.`,
           });
           return;
         });
-      return tolerantObjectSchema(key, N, e, { synthesized: weakSet, strictField: R });
+      return tolerantObjectSchema(key, schema, report, {
+        synthesized: weakSet,
+        strictField: R,
+      });
     });
   }
-  let freeze = Object.freeze({ mode: "deny" }),
-    freeze_2 = Object.freeze({ accessKeyIdVar: "_STRIPPED_", secretAccessKeyVar: "_STRIPPED_2_" }),
-    x = 0,
-    K = [],
-    q = new Set(),
-    ee = new Set(),
-    Z =
-      n === void 0
-        ? ""
-        : `${[...n]
-            .reduce((P, R) => Math.imul(P ^ R.charCodeAt(0), 16777619) >>> 0, 2166136261)
-            .toString(16)
-            .toUpperCase()
-            .padStart(8, "0")}_`,
-    ae = (P, R) => {
-      if (typeof P !== "object" || P === null) return;
-      let N = (fe) => R.some((qe) => qe.path?.includes(fe)),
-        G = (fe) => {
-          let qe = P[fe];
-          if (typeof qe === "string") return qe;
-          return N(fe) ? "" : void 0;
-        },
-        Q = G("accessKeyIdVar"),
-        se = G("secretAccessKeyVar"),
-        ne = G("sessionTokenVar"),
-        de = V3e;
-      if (![Q, se, ne].some((fe) => fe !== void 0 && de.includes(fe))) return;
-      let Se = (fe) => fe !== void 0 && Ht().safeParse(fe).success;
-      x += 1;
-      let xe = (fe) => `${$In}${fe}_${Z}${x}_`,
-        Ce = Se(Q) ? Q : xe("ACCESS_KEY_ID"),
-        Ae = Se(se) && se !== Ce ? se : xe("SECRET_ACCESS_KEY"),
-        Ye = ne === void 0 ? void 0 : Se(ne) && ne !== Ce && ne !== Ae ? ne : xe("SESSION_TOKEN"),
-        Je = (fe) => fe.startsWith($In);
-      if (!Je(Ce) && !Je(Ae)) {
-        let fe = de.includes(Ae) ? Ae : void 0;
-        if (((Ae = xe("SECRET_ACCESS_KEY")), fe !== void 0)) {
-          let qe = ae({ accessKeyIdVar: fe }, []);
-          if (qe !== void 0) K.push(qe);
-        }
+  let v = Object.freeze({
+    mode: "deny",
+  });
+  let j = Object.freeze({
+    accessKeyIdVar: "_STRIPPED_",
+    secretAccessKeyVar: "_STRIPPED_2_",
+  });
+  let x = 0;
+  let K = [];
+  let q = new Set();
+  let ee = new Set();
+  let Z =
+    n === undefined
+      ? ""
+      : `${[...n]
+          .reduce((acc, R) => Math.imul(acc ^ R.charCodeAt(0), 16777619) >>> 0, 2166136261)
+          .toString(16)
+          .toUpperCase()
+          .padStart(8, "0")}_`;
+  let ae = (P, R) => {
+    if (typeof P !== "object" || P === null) return;
+    let N = (fe) => R.some((qe) => qe.path?.includes(fe));
+    let G = (fe) => {
+      let qe = P[fe];
+      if (typeof qe === "string") return qe;
+      return N(fe) ? "" : undefined;
+    };
+    let Q = G("accessKeyIdVar");
+    let se = G("secretAccessKeyVar");
+    let ne = G("sessionTokenVar");
+    let de = credentialRuleExtractSchema;
+    if (![Q, se, ne].some((fe) => fe !== undefined && de.includes(fe))) return;
+    let Se = (fe) => fe !== undefined && credentialRulePathSchema().safeParse(fe).success;
+    x += 1;
+    let xe = (fe) => `${credentialRuleDecodeSchema}${fe}_${Z}${x}_`;
+    let Ce = Se(Q) ? Q : xe("ACCESS_KEY_ID");
+    let Ae = Se(se) && se !== Ce ? se : xe("SECRET_ACCESS_KEY");
+    let Ye = ne === undefined ? undefined : Se(ne) && ne !== Ce && ne !== Ae ? ne : xe("SESSION_TOKEN");
+    let Je = (fe) => fe.startsWith(credentialRuleDecodeSchema);
+    if (!Je(Ce) && !Je(Ae)) {
+      let fe = de.includes(Ae) ? Ae : undefined;
+      Ae = xe("SECRET_ACCESS_KEY");
+      if (fe !== undefined) {
+        let qe = ae(
+          {
+            accessKeyIdVar: fe,
+          },
+          [],
+        );
+        if (qe !== undefined) K.push(qe);
       }
-      let safeParse = po().safeParse({
-        accessKeyIdVar: Ce,
-        secretAccessKeyVar: Ae,
-        ...(Ye !== void 0 && { sessionTokenVar: Ye }),
-      });
-      return safeParse.success ? safeParse.data : void 0;
-    },
-    me = (P, R, N) =>
-      A(
-        R.catch((G) => {
-          let Q = N(G.value);
-          if (Q !== void 0)
-            return (
-              e({
-                path: `sandbox.credentials.${P}[]`,
-                message: `Invalid entry was degraded to mode "deny": ${G.issues[0]?.message ?? "failed validation"}. The credential stays blocked (not masked) until the entry is fixed.${P === "files" ? " Under sandbox.filesystem.disabled, file read-denies are not enforced." : ""}`,
-                substituted: !0,
-              }),
-              Q
-            );
-          return (
-            e({
-              path: `sandbox.credentials.${P}[]`,
-              message: `Invalid entry was ignored: ${G.issues[0]?.message ?? "failed validation"}. This credential is NOT protected until the entry is fixed.`,
-            }),
-            freeze
-          );
-        }),
-      )
-        .transform((G) => {
-          let filtered = G.filter((se) => se !== freeze);
-          if (G.length > 0 && filtered.length === 0) q.add(P);
-          return filtered;
-        })
-        .optional()
-        .catch((G) => {
-          if (typeof G.value === "object" && G.value !== null && !Array.isArray(G.value)) {
-            let safeParse = R.safeParse(G.value);
-            if (safeParse.success)
-              return (
-                e({
-                  path: `sandbox.credentials.${P}`,
-                  message: `"${P}" must be an array; a lone entry object was accepted as a one-element list. Wrap it in [ ] to silence this warning.`,
-                }),
-                [safeParse.data]
-              );
-            let se = N(G.value);
-            if (se !== void 0)
-              return (
-                e({
-                  path: `sandbox.credentials.${P}`,
-                  message: `"${P}" must be an array; its lone entry object was invalid and was degraded to mode "deny". The credential stays blocked (not masked) until it is fixed.`,
-                  substituted: !0,
-                }),
-                [se]
-              );
-          }
-          return (
-            e({
-              path: `sandbox.credentials.${P}`,
-              message: `${G.issues[0]?.message ?? "Invalid value"}. "${P}" was ignored; these credential entries are NOT protected until it is fixed.`,
-            }),
-            q.add(P),
-            []
-          );
+    }
+    let Pe = credentialEnvRuleSchema().safeParse({
+      accessKeyIdVar: Ce,
+      secretAccessKeyVar: Ae,
+      ...(Ye !== undefined && {
+        sessionTokenVar: Ye,
+      }),
+    });
+    return Pe.success ? Pe.data : undefined;
+  };
+  let me = (P, R, N) =>
+    array(
+      R.catch((error) => {
+        let Q = N(error.value);
+        if (Q !== undefined) {
+          report({
+            path: `sandbox.credentials.${P}[]`,
+            message: `Invalid entry was degraded to mode "deny": ${error.issues[0]?.message ?? "failed validation"}. The credential stays blocked (not masked) until the entry is fixed.${P === "files" ? " Under sandbox.filesystem.disabled, file read-denies are not enforced." : ""}`,
+            substituted: true,
+          });
+          return Q;
+        }
+        report({
+          path: `sandbox.credentials.${P}[]`,
+          message: `Invalid entry was ignored: ${error.issues[0]?.message ?? "failed validation"}. This credential is NOT protected until the entry is fixed.`,
         });
+        return v;
+      }),
+    )
+      .transform((G) => {
+        let filtered = G.filter((se) => se !== v);
+        if (G.length > 0 && filtered.length === 0) q.add(P);
+        return filtered;
+      })
+      .optional()
+      .catch((error) => {
+        if (typeof error.value === "object" && error.value !== null && !Array.isArray(error.value)) {
+          let Q = R.safeParse(error.value);
+          if (Q.success) {
+            report({
+              path: `sandbox.credentials.${P}`,
+              message: `"${P}" must be an array; a lone entry object was accepted as a one-element list. Wrap it in [ ] to silence this warning.`,
+            });
+            return [Q.data];
+          }
+          let se = N(error.value);
+          if (se !== undefined) {
+            report({
+              path: `sandbox.credentials.${P}`,
+              message: `"${P}" must be an array; its lone entry object was invalid and was degraded to mode "deny". The credential stays blocked (not masked) until it is fixed.`,
+              substituted: true,
+            });
+            return [se];
+          }
+        }
+        report({
+          path: `sandbox.credentials.${P}`,
+          message: `${error.issues[0]?.message ?? "Invalid value"}. "${P}" was ignored; these credential entries are NOT protected until it is fixed.`,
+        });
+        q.add(P);
+        return [];
+      });
   m("sandbox", () => {
     let P = u({
       files: me("files", CredentialRuleSchema(), (R) => {
@@ -3135,10 +3387,13 @@ function buildPolicyTolerantSettingsSchema(e, n, r) {
           typeof R.path !== "string"
         )
           return;
-        let safeParse = CredentialRuleSchema().safeParse({ path: R.path, mode: "deny" });
-        return safeParse.success ? safeParse.data : void 0;
+        let N = CredentialRuleSchema().safeParse({
+          path: R.path,
+          mode: "deny",
+        });
+        return N.success ? N.data : undefined;
       }),
-      envVars: me("envVars", uo(), (R) => {
+      envVars: me("envVars", credentialRuleModeSchema(), (R) => {
         if (
           typeof R !== "object" ||
           R === null ||
@@ -3148,154 +3403,176 @@ function buildPolicyTolerantSettingsSchema(e, n, r) {
           typeof R.name !== "string"
         )
           return;
-        let safeParse = uo().safeParse({ name: R.name, mode: "deny" });
-        return safeParse.success ? safeParse.data : void 0;
+        let N = credentialRuleModeSchema().safeParse({
+          name: R.name,
+          mode: "deny",
+        });
+        return N.success ? N.data : undefined;
       }),
       allowPlaintextInject: coerceRestrictiveValue(
         "sandbox.credentials.allowPlaintextInject",
         RESTRICTIVE_NESTED_SETTING_VALUES().get("sandbox.credentials.allowPlaintextInject"),
         M().optional(),
-        e,
-      ).catch(
-        (R) => (
-          e({
-            path: "sandbox.credentials.allowPlaintextInject",
-            message: `${R.issues[0]?.message ?? "Invalid value"}. "allowPlaintextInject" was degraded to an explicit false; plaintext credential injection stays disabled (lower-precedence values cannot enable it) until it is fixed.`,
-            substituted: !0,
-          }),
-          q.add("allowPlaintextInject"),
-          !1
-        ),
-      ),
-      awsPairs: A(
-        po().catch((R) => {
-          let N = ae(R.value, R.issues);
-          if (N !== void 0)
-            return (
-              e({
-                path: "sandbox.credentials.awsPairs[]",
-                message: `Invalid pair was degraded to a non-functional suppressor: ${R.issues[0]?.message ?? "failed validation"}. It keeps implicit AWS auto-pairing suppressed but re-signs nothing until it is fixed.`,
-                substituted: !0,
-              }),
-              N
-            );
-          return (
-            e({
+        report,
+      ).catch((error) => {
+        report({
+          path: "sandbox.credentials.allowPlaintextInject",
+          message: `${error.issues[0]?.message ?? "Invalid value"}. "allowPlaintextInject" was degraded to an explicit false; plaintext credential injection stays disabled (lower-precedence values cannot enable it) until it is fixed.`,
+          substituted: true,
+        });
+        q.add("allowPlaintextInject");
+        return false;
+      }),
+      awsPairs: array(
+        credentialEnvRuleSchema().catch((error) => {
+          let N = ae(error.value, error.issues);
+          if (N !== undefined) {
+            report({
               path: "sandbox.credentials.awsPairs[]",
-              message: `Invalid pair was ignored: ${R.issues[0]?.message ?? "failed validation"}. SigV4 re-signing stays unconfigured for this pair until it is fixed.`,
-            }),
-            freeze_2
-          );
+              message: `Invalid pair was degraded to a non-functional suppressor: ${error.issues[0]?.message ?? "failed validation"}. It keeps implicit AWS auto-pairing suppressed but re-signs nothing until it is fixed.`,
+              substituted: true,
+            });
+            return N;
+          }
+          report({
+            path: "sandbox.credentials.awsPairs[]",
+            message: `Invalid pair was ignored: ${error.issues[0]?.message ?? "failed validation"}. SigV4 re-signing stays unconfigured for this pair until it is fixed.`,
+          });
+          return j;
         }),
       )
         .transform((R) => {
-          let filtered = R.filter((G) => G !== freeze_2);
-          if (K.length > 0) (filtered.push(...K), (K.length = 0));
+          let filtered = R.filter((G) => G !== j);
+          if (K.length > 0) {
+            filtered.push(...K);
+            K.length = 0;
+          }
           if (R.length > 0 && filtered.length === 0) q.add("awsPairs");
           return filtered;
         })
         .optional()
-        .catch((R) => {
-          let N = typeof R.value === "object" && R.value !== null ? ae(R.value, []) : void 0,
-            G =
-              typeof R.value === "object" &&
-              R.value !== null &&
-              ("accessKeyIdVar" in R.value ||
-                "secretAccessKeyVar" in R.value ||
-                "sessionTokenVar" in R.value);
-          if (N === void 0 && G)
-            return (
-              (K.length = 0),
-              e({
-                path: "sandbox.credentials.awsPairs",
-                message: `${R.issues[0]?.message ?? "Invalid value"}. "awsPairs" must be an array; its lone pair-shaped entry claimed no conventional AWS name and was ignored. SigV4 re-signing stays unconfigured until it is fixed.`,
-              }),
-              q.add("awsPairs"),
-              []
-            );
-          let Q =
-            N !== void 0
-              ? [N]
-              : V3e.flatMap((se) => {
-                  let ne = ae({ accessKeyIdVar: se }, []);
-                  return ne !== void 0 ? [ne] : [];
-                });
-          if (K.length > 0) (Q.push(...K), (K.length = 0));
-          if (N === void 0) q.add("awsPairs");
-          return (
-            e({
+        .catch((error) => {
+          let N = typeof error.value === "object" && error.value !== null ? ae(error.value, []) : undefined;
+          let G =
+            typeof error.value === "object" &&
+            error.value !== null &&
+            ("accessKeyIdVar" in error.value ||
+              "secretAccessKeyVar" in error.value ||
+              "sessionTokenVar" in error.value);
+          if (N === undefined && G) {
+            K.length = 0;
+            report({
               path: "sandbox.credentials.awsPairs",
-              message: `${R.issues[0]?.message ?? "Invalid value"}. "awsPairs" was degraded to non-functional suppressor pair(s); implicit AWS auto-pairing stays suppressed but nothing re-signs until it is fixed.`,
-              substituted: !0,
-            }),
-            Q
-          );
+              message: `${error.issues[0]?.message ?? "Invalid value"}. "awsPairs" must be an array; its lone pair-shaped entry claimed no conventional AWS name and was ignored. SigV4 re-signing stays unconfigured until it is fixed.`,
+            });
+            q.add("awsPairs");
+            return [];
+          }
+          let Q =
+            N !== undefined
+              ? [N]
+              : credentialRuleExtractSchema.flatMap((accessKeyIdVar) => {
+                  let ne = ae(
+                    {
+                      accessKeyIdVar,
+                    },
+                    [],
+                  );
+                  return ne !== undefined ? [ne] : [];
+                });
+          if (K.length > 0) {
+            Q.push(...K);
+            K.length = 0;
+          }
+          if (N === undefined) q.add("awsPairs");
+          report({
+            path: "sandbox.credentials.awsPairs",
+            message: `${error.issues[0]?.message ?? "Invalid value"}. "awsPairs" was degraded to non-functional suppressor pair(s); implicit AWS auto-pairing stays suppressed but nothing re-signs until it is fixed.`,
+            substituted: true,
+          });
+          return Q;
         }),
       sigv4: u(
         Object.fromEntries(
           ["streaming", "presigned", "sigv4a"].map((R) => [
             R,
-            U(["deny", "passthrough"])
+            _enum(["deny", "passthrough"])
               .optional()
-              .catch(
-                (N) => (
-                  e({
-                    path: `sandbox.credentials.sigv4.${R}`,
-                    message: `${N.issues[0]?.message ?? "Invalid value"}. "${R}" was degraded to an explicit deny; this SigV4 request shape stays denied until it is fixed.`,
-                    substituted: !0,
-                  }),
-                  ee.add(R),
-                  "deny"
-                ),
-              ),
+              .catch((error) => {
+                report({
+                  path: `sandbox.credentials.sigv4.${R}`,
+                  message: `${error.issues[0]?.message ?? "Invalid value"}. "${R}" was degraded to an explicit deny; this SigV4 request shape stays denied until it is fixed.`,
+                  substituted: true,
+                });
+                ee.add(R);
+                return "deny";
+              }),
           ]),
         ),
       )
         .transform((R) => {
-          let filtered = Object.entries(R).filter(([, G]) => G !== void 0);
+          let filtered = Object.entries(R).filter(([, value]) => value !== undefined);
           if (filtered.length > 0 && filtered.every(([G]) => ee.has(G))) q.add("sigv4");
-          return (ee.clear(), R);
+          ee.clear();
+          return R;
         })
         .optional()
-        .catch(
-          (R) => (
-            e({
-              path: "sandbox.credentials.sigv4",
-              message: `${R.issues[0]?.message ?? "Invalid value"}. "sigv4" was degraded to an all-deny block (all shapes stay denied, and lower-precedence sigv4 values cannot take effect) until it is fixed.`,
-              substituted: !0,
-            }),
-            ee.clear(),
-            q.add("sigv4"),
-            { streaming: "deny", presigned: "deny", sigv4a: "deny" }
-          ),
-        ),
+        .catch((error) => {
+          report({
+            path: "sandbox.credentials.sigv4",
+            message: `${error.issues[0]?.message ?? "Invalid value"}. "sigv4" was degraded to an all-deny block (all shapes stay denied, and lower-precedence sigv4 values cannot take effect) until it is fixed.`,
+            substituted: true,
+          });
+          ee.clear();
+          q.add("sigv4");
+          return {
+            streaming: "deny",
+            presigned: "deny",
+            sigv4a: "deny",
+          };
+        }),
     })
       .transform((R) => {
-        let filtered = Object.entries(R).filter(([, G]) => G !== void 0);
+        let filtered = Object.entries(R).filter(([, value]) => value !== undefined);
         if (filtered.length > 0 && filtered.every(([G]) => q.has(G))) weakSet.add(R);
-        return (q.clear(), R);
+        q.clear();
+        return R;
       })
       .optional()
-      .catch((R) => {
-        e({
+      .catch((error) => {
+        report({
           path: "sandbox.credentials",
-          message: `${R.issues[0]?.message ?? "Failed schema validation"}. The credentials block was degraded to a fail-closed skeleton (all-deny sigv4, implicit AWS auto-pairing suppressed, no masking) until it is fixed.`,
-          substituted: !0,
+          message: `${error.issues[0]?.message ?? "Failed schema validation"}. The credentials block was degraded to a fail-closed skeleton (all-deny sigv4, implicit AWS auto-pairing suppressed, no masking) until it is fixed.`,
+          substituted: true,
         });
-        let flattened = V3e.flatMap((Q) => {
-          let se = ae({ accessKeyIdVar: Q }, []);
-          return se !== void 0 ? [se] : [];
+        let awsPairs = credentialRuleExtractSchema.flatMap((accessKeyIdVar) => {
+          let se = ae(
+            {
+              accessKeyIdVar,
+            },
+            [],
+          );
+          return se !== undefined ? [se] : [];
         });
-        ((K.length = 0), q.clear(), ee.clear());
+        K.length = 0;
+        q.clear();
+        ee.clear();
         let G = {
-          allowPlaintextInject: !1,
-          awsPairs: flattened,
-          sigv4: { streaming: "deny", presigned: "deny", sigv4a: "deny" },
+          allowPlaintextInject: false,
+          awsPairs,
+          sigv4: {
+            streaming: "deny",
+            presigned: "deny",
+            sigv4a: "deny",
+          },
         };
-        return (weakSet.add(G), G);
+        weakSet.add(G);
+        return G;
       });
-    return tolerantObjectSchema("sandbox", m_r(), e, {
-      override: { "sandbox.credentials": P },
+    return tolerantObjectSchema("sandbox", sandboxFilesystemSettingsSchema(), report, {
+      override: {
+        "sandbox.credentials": P,
+      },
       skeletonExclude: new Set(["sandbox.enabled"]),
       neverSubstitute: new Set(["sandbox.failIfUnavailable"]),
       synthesized: weakSet,
@@ -3307,10 +3584,10 @@ function buildPolicyTolerantSettingsSchema(e, n, r) {
     let R = g.get(key);
     he[key] = R
       ? R()
-      : c(key).catch((N) => {
-          e({
+      : c(key).catch((error) => {
+          report({
             path: key,
-            message: `${N.issues[0]?.message ?? "Failed schema validation"}. This field was ignored.`,
+            message: `${error.issues[0]?.message ?? "Failed schema validation"}. This field was ignored.`,
           });
           return;
         });
@@ -3322,85 +3599,90 @@ function buildPolicyTolerantSettingsSchema(e, n, r) {
       P.issues.push(...s.wrongDocumentIssues(P.value, he));
     })
     .transform((P) => {
-      for (let G of Object.keys(P)) if (P[G] === void 0) delete P[G];
-      let filtered = Object.keys(P).filter((G) => !mt.some((Q) => Q === G) && !isDeepEmptyObject(P[G])),
-        N = filtered.length > 0 && filtered.every((G) => f.has(G) || Wc(weakSet, P[G]));
-      if ((f.clear(), N))
+      for (let key of Object.keys(P)) if (P[key] === undefined) delete P[key];
+      let filtered = Object.keys(P).filter(
+        (key) =>
+          !restrictiveTopLevelSettings.some(
+            (restrictiveTopLevelSetting) => restrictiveTopLevelSetting === key,
+          ) && !isDeepEmptyObject(P[key]),
+      );
+      let N = filtered.length > 0 && filtered.every((G) => f.has(G) || isObjectInSet(weakSet, P[G]));
+      f.clear();
+      if (N)
         for (let G of filtered)
-          e({
+          report({
             path: G,
             message: `"${G}" holds nothing that could be applied as written and is this source's only policy content; its fail-closed reading binds (beside a lower managed settings source's policy, when one supplies it) until it is fixed.`,
-            statusOnly: !0,
-            onlySubstitutes: !0,
+            statusOnly: true,
+            onlySubstitutes: true,
           });
       return P;
     });
 }
 //@ chunk-dcmhvw5a.js:348175-348237 fingerprint = isMcpServerNameEntry (1)
 function isMcpServerNameEntry(entry) {
-  return "serverName" in entry && entry.serverName !== void 0;
+  return "serverName" in entry && entry.serverName !== undefined;
 }
 //@ chunk-dcmhvw5a.js:348237-348305 fingerprint = isMcpServerCommandEntry (1)
 function isMcpServerCommandEntry(entry) {
-  return "serverCommand" in entry && entry.serverCommand !== void 0;
+  return "serverCommand" in entry && entry.serverCommand !== undefined;
 }
 //@ chunk-dcmhvw5a.js:348305-348365 fingerprint = isMcpServerUrlEntry (1)
 function isMcpServerUrlEntry(entry) {
-  return "serverUrl" in entry && entry.serverUrl !== void 0;
+  return "serverUrl" in entry && entry.serverUrl !== undefined;
 }
 //@ chunk-5nte8cwj.js:1184-1251 fingerprint = EnvironmentVariablesSchema (0.544)
-function EnvironmentVariablesSchema(e) {
-  let coerce = m.coerce(e);
-  return coerce !== null && gte(coerce.version, dDr);
+function EnvironmentVariablesSchema(version) {
+  let n = semverModuleForDesktop.coerce(version);
+  return n !== null && semverGt(n.version, MIN_DESKTOP_VERSION);
 }
-
 export {
   isMcpServerUrlEntry,
   isMcpServerCommandEntry,
   isMcpServerNameEntry,
   getSettingsSchemaForDocument,
   buildWholeSettingsSchema,
-  mct,
+  POLICY_HELPER_LOG_LEVELS,
   getSettingsFieldSchema,
   getStrippingSettingsSchema,
   PermissionsSettingsSchema,
   EnvironmentVariablesSchema,
-  Ops,
-  eao,
-  Bt,
-  ms,
+  skillsSettingsSchema,
+  UNREADABLE_SETTING_MARKER,
+  isNetworkOrMacSpecialPath,
+  RESTRICTIVE_NESTED_SETTINGS,
+  platformSpellings,
   SUPPORTED_PLATFORMS,
-  oJt,
-  Zio,
+  skillOverridesSchema,
+  wholeSettingsSchema,
   withholdGrants,
-  Co,
-  wo,
-  Ao,
+  allowedMcpServersSchema,
+  deniedMcpServersSchema,
+  RESTRICTIVE_TOP_LEVEL_SETTINGS,
   getUnenforceableMarketplaceReason,
-  cs,
-  gs,
-  ps,
-  us,
-  rJt,
-  mt,
-  Oo,
+  agentsSettingsSchema,
+  outputStylesSettingsSchema,
+  mcpSettingsSchema,
+  hooksSettingsSchema,
+  POLICY_HELPER_ON_FAILURE,
+  restrictiveTopLevelSettings,
+  restrictiveNestedSettingsMap,
   buildPolicyTolerantSettingsSchema,
   isRestrictiveDisable,
-  To,
+  isRestrictiveNestedPath,
   readWslInheritFlag,
   isDeepEmptyObject,
-  fOn,
-  Nps,
+  isPowerShellScript,
   MAX_HELPER_RETRIES,
   MAX_HELPER_MS,
   PATH_OR_SCRIPT_MESSAGE,
   validateInlineHelper,
-  Hps,
-  $ps,
+  POLICY_HELPER_EXECUTABLE_RE,
+  hasPowerShellGlobChars,
   PS1_WILDCARD_MESSAGE,
-  Mps,
-  Dps,
+  looksLikeUncPath,
+  isKernelPseudoPath,
   isNormalizedHelperPath,
   STATIC_PAYLOAD_SCHEMA,
-  fPi,
+  isWarnedSettingsKey,
 };

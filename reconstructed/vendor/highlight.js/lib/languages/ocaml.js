@@ -8,8 +8,8 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:325653-326893 cjs-fingerprint
-var Oi = x(function (ug, Ri) {
-  function Dp(e) {
+var require_ocaml = x(function (cjsExports, cjsModule) {
+  function ocaml(hljs) {
     return {
       name: "OCaml",
       aliases: ["ml"],
@@ -23,25 +23,50 @@ var Oi = x(function (ug, Ri) {
       },
       illegal: /\/\/|>>/,
       contains: [
-        { className: "literal", begin: "\\[(\\|\\|)?\\]|\\(\\)", relevance: 0 },
-        e.COMMENT("\\(\\*", "\\*\\)", { contains: ["self"] }),
-        { className: "symbol", begin: "'[A-Za-z_](?!')[\\w']*" },
-        { className: "type", begin: "`[A-Z][\\w']*" },
-        { className: "type", begin: "\\b[A-Z][\\w']*", relevance: 0 },
-        { begin: "[a-z_]\\w*'[\\w']*", relevance: 0 },
-        e.inherit(e.APOS_STRING_MODE, { className: "string", relevance: 0 }),
-        e.inherit(e.QUOTE_STRING_MODE, { illegal: null }),
+        {
+          className: "literal",
+          begin: "\\[(\\|\\|)?\\]|\\(\\)",
+          relevance: 0,
+        },
+        hljs.COMMENT("\\(\\*", "\\*\\)", {
+          contains: ["self"],
+        }),
+        {
+          className: "symbol",
+          begin: "'[A-Za-z_](?!')[\\w']*",
+        },
+        {
+          className: "type",
+          begin: "`[A-Z][\\w']*",
+        },
+        {
+          className: "type",
+          begin: "\\b[A-Z][\\w']*",
+          relevance: 0,
+        },
+        {
+          begin: "[a-z_]\\w*'[\\w']*",
+          relevance: 0,
+        },
+        hljs.inherit(hljs.APOS_STRING_MODE, {
+          className: "string",
+          relevance: 0,
+        }),
+        hljs.inherit(hljs.QUOTE_STRING_MODE, {
+          illegal: null,
+        }),
         {
           className: "number",
           begin:
             "\\b(0[xX][a-fA-F0-9_]+[Lln]?|0[oO][0-7_]+[Lln]?|0[bB][01_]+[Lln]?|[0-9][0-9_]*([Lln]|(\\.[0-9_]*)?([eE][-+]?[0-9_]+)?)?)",
           relevance: 0,
         },
-        { begin: /->/ },
+        {
+          begin: /->/,
+        },
       ],
     };
   }
-  Ri.exports = Dp;
+  cjsModule.exports = ocaml;
 });
-
-export { Oi };
+export { require_ocaml };

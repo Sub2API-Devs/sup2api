@@ -9,12 +9,12 @@
  * attribution: fingerprint 1
  */
 
+//@ chunk-18hwfzwa.js:1209724-1209978 fingerprint = parseKey (0.636)
 /**
  * 按键是否产生文字输入：带 Ctrl/Meta/Super 或是回车、Esc、方向、Tab、翻页、Home/End、滚轮时为否。
  */
-//@ chunk-18hwfzwa.js:1209724-1209978 fingerprint = parseKey (0.636)
 function isTextInputKey(event) {
-  if (event.ctrl || event.meta || event.superKey) return !1;
+  if (event.ctrl || event.meta || event.superKey) return false;
   switch (event.key) {
     case "return":
     case "escape":
@@ -29,10 +29,9 @@ function isTextInputKey(event) {
     case "end":
     case "wheelup":
     case "wheeldown":
-      return !1;
+      return false;
     default:
-      return !0;
+      return true;
   }
 }
-
 export { isTextInputKey };

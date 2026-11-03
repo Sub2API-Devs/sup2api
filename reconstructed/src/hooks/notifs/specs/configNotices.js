@@ -24,71 +24,83 @@ var oauthExpiryWarningNoticeSpec = {
     return {
       key: "oauth-expiry-warning",
       segments: [
-        { text: `Your login expires in ${h.daysLeft} ${plural(h.daysLeft, "day")}`, color: "warning" },
-        { text: " \xB7 run /login to renew", dim: !0 },
+        {
+          text: `Your login expires in ${h.daysLeft} ${plural(h.daysLeft, "day")}`,
+          color: "warning",
+        },
+        {
+          text: " \xB7 run /login to renew",
+          dim: true,
+        },
       ],
       priority: "high",
       timeoutMs: 15000,
     };
   },
 };
+//@ chunk-18hwfzwa.js:1741068-1741644 placement
 /**
  * 启动通知"reserved-skill-names"：有技能/工作流因使用保留名而未加载时，提示怎样改名后重启，多个时附剩余数量。
  */
-//@ chunk-18hwfzwa.js:1741068-1741644 placement
-var RESERVED_SKILL_NAMES_TIMEOUT_MS = 15000,
-  reservedSkillNamesNoticeSpec = {
-    id: "reserved-skill-names",
-    compute: () => {
-      let refusedReservedSkillNames = getHostState().refusedReservedSkillNames(),
-        x = refusedReservedSkillNames[0];
-      if (x === void 0) return null;
-      let D = x.path ? getDisplayPath(x.path) : void 0,
-        L =
-          x.change === "frontmatter-name"
-            ? `edit the name: line in ${D ?? `"${x.name}"`}`
-            : x.change === "workflow-name"
-              ? `rename workflow "${x.name}"`
-              : `rename ${D ?? `"${x.name}"`}`,
-        ee = refusedReservedSkillNames.length > 1 ? ` \xB7 ${refusedReservedSkillNames.length - 1} more` : "";
-      return {
-        key: "reserved-skill-names",
-        kind: "warning",
-        segments: [
-          {
-            text: `Not loaded: ${L}, then restart \u2014 its name ${reservedNameReason(x.name)}`,
-            color: "warning",
-          },
-          ...(ee ? [{ text: ee, dim: !0 }] : []),
-        ],
-        priority: "high",
-        timeoutMs: RESERVED_SKILL_NAMES_TIMEOUT_MS,
-      };
-    },
-  };
+var RESERVED_SKILL_NAMES_TIMEOUT_MS = 15000;
+var reservedSkillNamesNoticeSpec = {
+  id: "reserved-skill-names",
+  compute: () => {
+    let h = getHostState().refusedReservedSkillNames();
+    let x = h[0];
+    if (x === undefined) return null;
+    let D = x.path ? getDisplayPath(x.path) : undefined;
+    let L =
+      x.change === "frontmatter-name"
+        ? `edit the name: line in ${D ?? `"${x.name}"`}`
+        : x.change === "workflow-name"
+          ? `rename workflow "${x.name}"`
+          : `rename ${D ?? `"${x.name}"`}`;
+    let ee = h.length > 1 ? ` \xB7 ${h.length - 1} more` : "";
+    return {
+      key: "reserved-skill-names",
+      kind: "warning",
+      segments: [
+        {
+          text: `Not loaded: ${L}, then restart \u2014 its name ${reservedNameReason(x.name)}`,
+          color: "warning",
+        },
+        ...(ee
+          ? [
+              {
+                text: ee,
+                dim: true,
+              },
+            ]
+          : []),
+      ],
+      priority: "high",
+      timeoutMs: RESERVED_SKILL_NAMES_TIMEOUT_MS,
+    };
+  },
+};
+//@ chunk-18hwfzwa.js:1741644-1742035 placement
 /**
  * 启动通知规格：有技能或命令名称因冲突被拒用时，提示用 --debug 查看并改名后重启（显示时长常量）。
  */
-//@ chunk-18hwfzwa.js:1741644-1742035 placement
-var NAMES_NOT_SHOWN_TIMEOUT_MS = 15000,
-  namesNotShownNoticeSpec = {
-    id: "names-not-shown",
-    compute: () => {
-      let size = getHostState().namesNotShown.size;
-      if (size === 0) return null;
-      return {
-        key: "names-not-shown",
-        kind: "warning",
-        segments: [
-          {
-            text: `${size === 1 ? "1 skill or command name" : `${size}${size === MAX_NAME_WARNINGS ? " or more" : ""} skill or command names`} refused: run with --debug to see which ([names]), rename, then restart \u2014 ${INVALID_NAME_MESSAGE}`,
-            color: "warning",
-          },
-        ],
-        priority: "high",
-        timeoutMs: NAMES_NOT_SHOWN_TIMEOUT_MS,
-      };
-    },
-  };
-
+var NAMES_NOT_SHOWN_TIMEOUT_MS = 15000;
+var namesNotShownNoticeSpec = {
+  id: "names-not-shown",
+  compute: () => {
+    let size = getHostState().namesNotShown.size;
+    if (size === 0) return null;
+    return {
+      key: "names-not-shown",
+      kind: "warning",
+      segments: [
+        {
+          text: `${size === 1 ? "1 skill or command name" : `${size}${size === MAX_NAME_WARNINGS ? " or more" : ""} skill or command names`} refused: run with --debug to see which ([names]), rename, then restart \u2014 ${INVALID_NAME_MESSAGE}`,
+          color: "warning",
+        },
+      ],
+      priority: "high",
+      timeoutMs: NAMES_NOT_SHOWN_TIMEOUT_MS,
+    };
+  },
+};
 export { oauthExpiryWarningNoticeSpec, reservedSkillNamesNoticeSpec, namesNotShownNoticeSpec };

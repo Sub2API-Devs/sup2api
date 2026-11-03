@@ -9,13 +9,12 @@
  * attribution: fingerprint 1
  */
 
+//@ chunk-1ny7cxrt.js:1347778-1347874 fingerprint = extractConversationContext (0.675)
 /**
  * 去掉非可打印 ASCII 字符并截断到 128 字符，用于错误提示里回显模型名。
  */
-//@ chunk-1ny7cxrt.js:1347778-1347874 fingerprint = extractConversationContext (0.675)
 function sanitizeModelIdForMessage(modelId) {
   let replaced = modelId.replace(/[^\x20-\x7e]/g, "");
   return replaced.length > 128 ? `${replaced.slice(0, 128)}...` : replaced;
 }
-
 export { sanitizeModelIdForMessage };

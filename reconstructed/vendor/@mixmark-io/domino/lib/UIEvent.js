@@ -6,23 +6,28 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { Lt } from "./Event.js";
+import { require_Event } from "./Event.js";
 
 //@ chunk-vwj6ccer.js:1261-1526 cjs-fingerprint
-var za = x(function (td, Ri) {
-  var Mi = Lt();
-  Ri.exports = Ga;
-  function Ga() {
-    (Mi.call(this), (this.view = null), (this.detail = 0));
+var require_UIEvent = x(function (cjsExports, cjsModule) {
+  var Mi = require_Event();
+  cjsModule.exports = UIEvent;
+  function UIEvent() {
+    Mi.call(this);
+    this.view = null;
+    this.detail = 0;
   }
-  Ga.prototype = Object.create(Mi.prototype, {
-    constructor: { value: Ga },
+  UIEvent.prototype = Object.create(Mi.prototype, {
+    constructor: {
+      value: UIEvent,
+    },
     initUIEvent: {
-      value: function (e, t, r, a, s) {
-        (this.initEvent(e, t, r), (this.view = a), (this.detail = s));
+      value: function (type, bubbles, cancelable, view, detail) {
+        this.initEvent(type, bubbles, cancelable);
+        this.view = view;
+        this.detail = detail;
       },
     },
   });
 });
-
-export { za };
+export { require_UIEvent };

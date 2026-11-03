@@ -8,9 +8,7 @@
  * pieces: chunk-tr8gk11f.js (1)
  * attribution: placement 1
  */
-
 //@ chunk-tr8gk11f.js:191-242 placement
-var END_CONVERSATION_TOOL_NAME = "EndConversation",
-  END_CONVERSATION_GB_FLAG = "tengu_umber_kestrel";
-
+var END_CONVERSATION_TOOL_NAME = "EndConversation";
+var END_CONVERSATION_GB_FLAG = "tengu_umber_kestrel";
 export { END_CONVERSATION_TOOL_NAME, END_CONVERSATION_GB_FLAG };

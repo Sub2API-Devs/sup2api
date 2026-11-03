@@ -11,59 +11,74 @@
 import { env } from "../../utils/env.js";
 
 //@ chunk-e6aww6q8.js:1762601-1762652 placement = default (1)
-var Uen = { isEnabled: () => !1, isHidden: !0, name: "stub" };
+var stubTerminalSetupCommand = {
+  isEnabled: () => false,
+  isHidden: true,
+  name: "stub",
+};
+//@ chunk-e6aww6q8.js:1762652-1763391 placement
 /**
  * NATIVE_SHIFT_ENTER_TERMINALS：ghostty/kitty/Warp/WezTerm/Windows Terminal。
  */
-//@ chunk-e6aww6q8.js:1762652-1763391 placement
 var NATIVE_SHIFT_ENTER_TERMINALS = {
-    ghostty: "Ghostty",
-    kitty: "Kitty",
-    WarpTerminal: "Warp",
-    WezTerm: "WezTerm",
-    "windows-terminal": "Windows Terminal",
+  ghostty: "Ghostty",
+  kitty: "Kitty",
+  WarpTerminal: "Warp",
+  WezTerm: "WezTerm",
+  "windows-terminal": "Windows Terminal",
+};
+var terminalSetupCommandDefinition = {
+  type: "local-jsx",
+  name: "terminal-setup",
+  get description() {
+    if (env.terminal === "Apple_Terminal")
+      return "Enable Option+Enter key binding for newlines and disable the audible bell (skipped in screen-reader mode)";
+    if (env.terminal !== null && Object.hasOwn(NATIVE_SHIFT_ENTER_TERMINALS, env.terminal))
+      return `Check terminal setup (Shift+Enter is natively supported in ${NATIVE_SHIFT_ENTER_TERMINALS[env.terminal]})`;
+    if (
+      env.__CFBundleIdentifier === "com.googlecode.iterm2" &&
+      (env.terminal === "iTerm.app" ||
+        env.terminal === "tmux" ||
+        env.terminal === "screen" ||
+        env.terminal === null)
+    )
+      return "Enable iTerm2 clipboard access for /copy";
+    return "Install Shift+Enter key binding for newlines";
   },
-  terminalSetupCommandDefinition = {
-    type: "local-jsx",
-    name: "terminal-setup",
-    get description() {
-      if (env.terminal === "Apple_Terminal")
-        return "Enable Option+Enter key binding for newlines and disable the audible bell (skipped in screen-reader mode)";
-      if (env.terminal !== null && Object.hasOwn(NATIVE_SHIFT_ENTER_TERMINALS, env.terminal))
-        return `Check terminal setup (Shift+Enter is natively supported in ${NATIVE_SHIFT_ENTER_TERMINALS[env.terminal]})`;
-      if (
-        env.__CFBundleIdentifier === "com.googlecode.iterm2" &&
-        (env.terminal === "iTerm.app" ||
-          env.terminal === "tmux" ||
-          env.terminal === "screen" ||
-          env.terminal === null)
-      )
-        return "Enable iTerm2 clipboard access for /copy";
-      return "Install Shift+Enter key binding for newlines";
-    },
-    requires: { ink: !0 },
+  requires: {
+    ink: true,
   },
-  terminalSetupCommand = terminalSetupCommandDefinition;
+};
+var terminalSetupCommand = terminalSetupCommandDefinition;
 //@ chunk-e6aww6q8.js:1763428-1763678 placement
 function waitForStoreValue(e, n, r) {
   if (e.getSnapshot() === n || r?.aborted) return Promise.resolve();
-  return new Promise((s) => {
+  return new Promise((resolve) => {
     let h = () => {
-        (subscribe(), r?.removeEventListener("abort", h), s());
-      },
-      subscribe = e.subscribe(() => {
-        if (e.getSnapshot() === n) h();
-      });
-    r?.addEventListener("abort", h, { once: !0 });
+      y();
+      r?.removeEventListener("abort", h);
+      resolve();
+    };
+    let y = e.subscribe(() => {
+      if (e.getSnapshot() === n) h();
+    });
+    r?.addEventListener("abort", h, {
+      once: true,
+    });
   });
 }
 //@ chunk-e6aww6q8.js:1763678-1763715 placement
-function lmn(e, n) {
-  return waitForStoreValue(e, !1, n);
+/**
+ * 等待 store 值变为 false。
+ */
+function waitForFalse(e, signal) {
+  return waitForStoreValue(e, false, signal);
 }
 //@ chunk-e6aww6q8.js:1763715-1763752 placement
-function o3s(e, n) {
-  return waitForStoreValue(e, !0, n);
+/**
+ * 等待 store 值变为 true。
+ */
+function waitForTrue(turnActivity, signal) {
+  return waitForStoreValue(turnActivity, true, signal);
 }
-
-export { lmn, o3s, Uen, terminalSetupCommand };
+export { waitForFalse, waitForTrue, stubTerminalSetupCommand, terminalSetupCommand };

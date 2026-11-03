@@ -11,15 +11,18 @@
 import { INODE_DIRECTORY } from "../../services/mcp/mcpCallConstants.js";
 
 //@ chunk-sfy7bm1n.js:5160-5989 placement
-var READ_MCP_RESOURCE_DIR_TOOL_NAME = "ReadMcpResourceDirTool",
-  Wui = `
+/**
+ * ReadMcpResourceDirTool 的简短描述。
+ */
+var READ_MCP_RESOURCE_DIR_TOOL_NAME = "ReadMcpResourceDirTool";
+var READ_MCP_RESOURCE_DIR_DESCRIPTION = `
 List the direct children of a directory resource on an MCP server.
 - server: The name of the MCP server to read from
 - uri: The URI of the directory resource
 
 Only usable against a server that has declared support for directory listing. The listing is not recursive.
-`,
-  Gui = `
+`;
+var READ_MCP_RESOURCE_DIR_PROMPT = `
 List the direct children of a directory resource on an MCP server (\`resources/directory/read\`).
 
 Parameters:
@@ -30,5 +33,4 @@ The listing is not recursive. Each entry carries its own \`uri\`; subdirectories
 
 Only usable against a server that has declared support for directory listing; other servers return an error.
 `;
-
-export { READ_MCP_RESOURCE_DIR_TOOL_NAME, Wui, Gui };
+export { READ_MCP_RESOURCE_DIR_TOOL_NAME, READ_MCP_RESOURCE_DIR_DESCRIPTION, READ_MCP_RESOURCE_DIR_PROMPT };

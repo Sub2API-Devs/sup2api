@@ -7,26 +7,25 @@
  */
 
 //@ chunk-bzr73sfg.js:144882-145026 esm-fingerprint
-var nx = (n) => {
-  let u = new Set();
-  do for (let f of Reflect.ownKeys(n)) u.add([n, f]);
-  while ((n = Reflect.getPrototypeOf(n)) && n !== Object.prototype);
-  return u;
+var getAllProperties = (object) => {
+  let properties = new Set();
+  do for (let key of Reflect.ownKeys(object)) properties.add([object, key]);
+  while ((object = Reflect.getPrototypeOf(object)) && object !== Object.prototype);
+  return properties;
 };
 //@ chunk-bzr73sfg.js:145026-145365 esm-fingerprint
-function kc(n, { include: u, exclude: f } = {}) {
-  let m = (p) => {
-    let g = (E) => (typeof E === "string" ? p === E : E.test(p));
-    if (u) return u.some(g);
-    if (f) return !f.some(g);
-    return !0;
+function autoBind(n, { include, exclude } = {}) {
+  let filter = (key) => {
+    let match = (pattern) => (typeof pattern === "string" ? key === pattern : pattern.test(key));
+    if (include) return include.some(match);
+    if (exclude) return !exclude.some(match);
+    return true;
   };
-  for (let [p, g] of nx(n.constructor.prototype)) {
-    if (g === "constructor" || !m(g)) continue;
-    let ownPropertyDescriptor = Reflect.getOwnPropertyDescriptor(p, g);
-    if (ownPropertyDescriptor && typeof ownPropertyDescriptor.value === "function") n[g] = n[g].bind(n);
+  for (let [object, key] of getAllProperties(n.constructor.prototype)) {
+    if (key === "constructor" || !filter(key)) continue;
+    let descriptor = Reflect.getOwnPropertyDescriptor(object, key);
+    if (descriptor && typeof descriptor.value === "function") n[key] = n[key].bind(n);
   }
   return n;
 }
-
-export { kc };
+export { autoBind };

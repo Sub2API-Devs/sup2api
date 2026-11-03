@@ -5,21 +5,22 @@
  * pieces: chunk-xa96axyz.js (3)
  * attribution: placement 3
  */
-
 //@ chunk-xa96axyz.js:977-1015 placement
-var d = (e) => ((d = Array.isArray), d(e)),
-  f = d;
+var isArray = (e) => {
+  isArray = Array.isArray;
+  return isArray(e);
+};
+var isArray_default = isArray;
 //@ chunk-xa96axyz.js:1015-1084 placement
-function b(e) {
-  return e != null && typeof e === "object" && !Array.isArray(e);
+function b(obj) {
+  return obj != null && typeof obj === "object" && !Array.isArray(obj);
 }
 //@ chunk-xa96axyz.js:1084-1139 placement
-var w = (e) => {
+var w = (text) => {
   try {
-    return JSON.parse(e);
-  } catch (error) {
+    return JSON.parse(text);
+  } catch (err) {
     return;
   }
 };
-
-export { f, w, b };
+export { isArray_default, w, b };

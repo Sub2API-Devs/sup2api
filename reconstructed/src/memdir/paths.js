@@ -8,24 +8,8 @@
  * pieces: chunk-4vzb3taj.js (1), chunk-aepeg2w5.js (41)
  * attribution: fingerprint 3, placement 34, file-local 1, callgraph-fingerprint 2, layout 1, callgraph-witnessed 1
  */
-import {
-  join,
-  join as join_2,
-  join as join_3,
-  join as join_4,
-  join as join_5,
-  join as join_6,
-  join as join_7,
-  join as join_8,
-  join as join_9,
-  join as join_10,
-  join as join_11,
-  sep,
-  sep as sep_2,
-  normalize,
-  isAbsolute,
-} from "path";
-import { homedir, homedir as homedir_2, homedir as homedir_3, homedir as homedir_4 } from "os";
+import { join, sep, normalize, isAbsolute } from "path";
+import { homedir } from "os";
 import {
   getMemoryToggledOff,
   getAutoMemoryOffThisSession,
@@ -49,7 +33,7 @@ import { env } from "../utils/env.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../services/analytics/growthbook.js";
 import { includesAnyIgnoreCase } from "../utils/toolErrors.js";
 import { getHostedPostTurnMemoryConfig } from "./memoryTool.js";
-import { hl } from "../utils/networkPaths.js";
+import { isUntouchableSpelling } from "../utils/networkPaths.js";
 import { isProjectScopeTrustAccepted } from "../utils/config.js";
 import { isSettingSourceEnabled, getEnabledSettingSources } from "../utils/settings/constants.js";
 import { io } from "../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
@@ -62,7 +46,7 @@ import { isSelfHostedRemoteEnvironment } from "../utils/remoteEnvironment.js";
 
 //@ chunk-aepeg2w5.js:59531-59574 placement
 function isAutoMemoryEnabled() {
-  if (isAutoMemoryHeldForSession()) return !1;
+  if (isAutoMemoryHeldForSession()) return false;
   return isAutoMemoryEnabledIgnoringPause();
 }
 //@ chunk-aepeg2w5.js:59574-59607 placement
@@ -73,18 +57,18 @@ function isAutoMemoryHeldForSession() {
 function isAutoMemoryEnabledIgnoringPause() {
   switch (getAutoMemoryState()) {
     case "off":
-      return !1;
+      return false;
     case "forced_on":
-      return !0;
+      return true;
     case "unset":
       break;
   }
-  if (isAutoMemoryDisabledForCurrentMainLoopModel()) return !1;
-  return _I();
+  if (isAutoMemoryDisabledForCurrentMainLoopModel()) return false;
+  return isAutoMemoryEnabledBySettings();
 }
 //@ chunk-aepeg2w5.js:59726-59762 placement
 function isAutoMemoryEnabledByExplicitSwitches() {
-  return getAutoMemoryDisabledReason() === void 0;
+  return getAutoMemoryDisabledReason() === undefined;
 }
 //@ chunk-aepeg2w5.js:59762-59944 placement
 function getAutoMemoryDisabledReason() {
@@ -93,25 +77,31 @@ function getAutoMemoryDisabledReason() {
       return "switch";
     case "forced_on":
       if (isAutoMemoryOffByEnvironment()) return "switch";
-      return ch() ? "policy_unreadable" : void 0;
+      return isAutoMemoryPolicyUnreadable() ? "policy_unreadable" : undefined;
     case "unset":
-      return ch() ? "policy_unreadable" : void 0;
+      return isAutoMemoryPolicyUnreadable() ? "policy_unreadable" : undefined;
   }
 }
 //@ chunk-aepeg2w5.js:59944-60037 placement
-function _I() {
-  let e = getInitialSettings_2();
-  if (e.autoMemoryEnabled !== void 0) return e.autoMemoryEnabled;
-  return !0;
+/**
+ * 设置里的自动记忆开关
+ */
+function isAutoMemoryEnabledBySettings() {
+  let initialSettings = getInitialSettings_2();
+  if (initialSettings.autoMemoryEnabled !== undefined) return initialSettings.autoMemoryEnabled;
+  return true;
 }
 //@ chunk-aepeg2w5.js:60037-60083 placement
-function ch() {
+/**
+ * 判断 autoMemoryEnabled 策略设置是否不可读（不可读时记忆功能按未决处理）。
+ */
+function isAutoMemoryPolicyUnreadable() {
   return policySettingUnreadable("autoMemoryEnabled");
 }
+//@ chunk-aepeg2w5.js:60083-60280 placement
 /**
  * 自动记忆总开关：--safe-mode、lk()、diskless、CLAUDE_CODE_DISABLE_AUTO_MEMORY=真 → off；该变量为假 → forced_on；SIMPLE/REMOTE 环境 → off；否则 unset（再看 autoMemoryEnabled 设置）。
  */
-//@ chunk-aepeg2w5.js:60083-60280 placement
 function getAutoMemoryState() {
   if (isSafeMode()) return "off";
   if (isRestrictedSession()) return "off";
@@ -121,12 +111,12 @@ function getAutoMemoryState() {
   if (isEnvDefinedFalsy(envClaudeCodeDisableAutoMemory)) return "forced_on";
   return isAutoMemoryOffByEnvironment() ? "off" : "unset";
 }
+//@ chunk-aepeg2w5.js:60280-60447 fingerprint = isAutoMemoryEnabled (0.611)
 /**
  * CLAUDE_CODE_SIMPLE，或 CLAUDE_CODE_REMOTE 且未给 REMOTE_MEMORY_DIR/cowork 覆盖时返回 true（这些环境默认关自动记忆）。
  */
-//@ chunk-aepeg2w5.js:60280-60447 fingerprint = isAutoMemoryEnabled (0.611)
 function isAutoMemoryOffByEnvironment() {
-  if (env.CLAUDE_CODE_SIMPLE) return !0;
+  if (env.CLAUDE_CODE_SIMPLE) return true;
   return (
     Boolean(env.CLAUDE_CODE_REMOTE) &&
     !process.env.CLAUDE_CODE_REMOTE_MEMORY_DIR &&
@@ -135,45 +125,46 @@ function isAutoMemoryOffByEnvironment() {
 }
 //@ chunk-aepeg2w5.js:60447-60495 placement
 function isIndexRecallEnabled() {
-  return getFeatureValue_CACHED_MAY_BE_STALE("tengu_mill_orange", !1);
+  return getFeatureValue_CACHED_MAY_BE_STALE("tengu_mill_orange", false);
 }
+//@ chunk-aepeg2w5.js:60495-60560 placement = filterInjectedMemoryFiles (0.724)
 /**
  * tengu_moth_copse 开启或设置了 CLAUDE_MEMORY_STORES 时，记忆文件由外部注入（不自己读 MEMORY.md）。
  */
-//@ chunk-aepeg2w5.js:60495-60560 placement = filterInjectedMemoryFiles (0.724)
 function isMemoryRecallEnabled() {
-  if (getFeatureValue_CACHED_MAY_BE_STALE("tengu_moth_copse", !1)) return !0;
+  if (getFeatureValue_CACHED_MAY_BE_STALE("tengu_moth_copse", false)) return true;
   return isStoreMountedRecall();
 }
+//@ chunk-aepeg2w5.js:60560-60624 placement
 /**
  * 是否设置了 CLAUDE_MEMORY_STORES（多 store 记忆同步）。
  */
-//@ chunk-aepeg2w5.js:60560-60624 placement
 function isStoreMountedRecall() {
   return !!process.env.CLAUDE_MEMORY_STORES?.trim();
 }
 //@ chunk-aepeg2w5.js:60624-60829 placement
 function isAutoMemoryDisabledForCurrentMainLoopModel() {
-  let e = getFeatureValue_CACHED_MAY_BE_STALE("tengu_sepia_cormorant", null);
-  if (!Array.isArray(e) || e.length === 0) return !1;
-  let n = getMainLoopModelOverride(),
-    r = n !== void 0 ? n : getInitialMainLoopModel();
-  if (typeof r !== "string" || !includesAnyIgnoreCase(r, e)) return !1;
-  return getFeatureValue_CACHED_MAY_BE_STALE("tengu_umber_petrel", !1);
+  let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE("tengu_sepia_cormorant", null);
+  if (!Array.isArray(featureValue_CACHED_MAY_BE_STALE) || featureValue_CACHED_MAY_BE_STALE.length === 0)
+    return false;
+  let mainLoopModelOverride = getMainLoopModelOverride();
+  let r = mainLoopModelOverride !== undefined ? mainLoopModelOverride : getInitialMainLoopModel();
+  if (typeof r !== "string" || !includesAnyIgnoreCase(r, featureValue_CACHED_MAY_BE_STALE)) return false;
+  return getFeatureValue_CACHED_MAY_BE_STALE("tengu_umber_petrel", false);
 }
+//@ chunk-aepeg2w5.js:60829-60952 placement = isExtractModeActive (1)
 /**
  * 是否走"提取"模式写记忆：有 hosted post-turn 配置，或 tengu_passport_quail 开且（交互式或 tengu_slate_thimble）。
  */
-//@ chunk-aepeg2w5.js:60829-60952 placement = isExtractModeActive (1)
 function isExtractModeActive() {
-  if (getHostedPostTurnMemoryConfig() !== null) return !0;
-  if (!getFeatureValue_CACHED_MAY_BE_STALE("tengu_passport_quail", !1)) return !1;
-  return !getIsNonInteractiveSession() || getFeatureValue_CACHED_MAY_BE_STALE("tengu_slate_thimble", !1);
+  if (getHostedPostTurnMemoryConfig() !== null) return true;
+  if (!getFeatureValue_CACHED_MAY_BE_STALE("tengu_passport_quail", false)) return false;
+  return !getIsNonInteractiveSession() || getFeatureValue_CACHED_MAY_BE_STALE("tengu_slate_thimble", false);
 }
+//@ chunk-aepeg2w5.js:60952-61073 placement = getMemoryBaseDir (1)
 /**
  * 记忆根目录：CLAUDE_CODE_REMOTE_MEMORY_DIR 或配置目录。
  */
-//@ chunk-aepeg2w5.js:60952-61073 placement = getMemoryBaseDir (1)
 function getMemoryBaseDir() {
   if (process.env.CLAUDE_CODE_REMOTE_MEMORY_DIR) return process.env.CLAUDE_CODE_REMOTE_MEMORY_DIR;
   return getClaudeConfigDir();
@@ -183,25 +174,25 @@ function getMemoryBaseDirOrNull() {
   return isDiskless() ? null : getMemoryBaseDir();
 }
 //@ chunk-aepeg2w5.js:61110-61141 file-local
-var AUTO_MEM_DIRNAME = "memory",
-  MEMORY_MD = "MEMORY.md";
+var AUTO_MEM_DIRNAME = "memory";
+var MEMORY_MD = "MEMORY.md";
+//@ chunk-aepeg2w5.js:61141-61213 placement
 /**
  * account 作用域个人记忆目录 <配置目录>/memory/personal/。
  */
-//@ chunk-aepeg2w5.js:61141-61213 placement
 function getAccountMemoryMirrorPath() {
-  return (join_2(getClaudeConfigDir(), "memory", "personal") + sep).normalize("NFC");
+  return (join(getClaudeConfigDir(), "memory", "personal") + sep).normalize("NFC");
 }
+//@ chunk-aepeg2w5.js:61213-61520 callgraph-fingerprint = validateMemoryPath (0.503)
 /**
  * 校验记忆目录路径（可展开 ~），拒绝相对路径、裸盘符、NUL 等，返回带结尾分隔符的 NFC 路径。
  */
-//@ chunk-aepeg2w5.js:61213-61520 callgraph-fingerprint = validateMemoryPath (0.503)
 function validateMemoryPath(raw, expandTilde) {
   if (!raw) return;
   let candidate = raw;
   if (expandTilde && (candidate.startsWith("~/") || candidate.startsWith("~\\"))) {
-    let rest = candidate.slice(2),
-      restNorm = normalize(rest || ".");
+    let rest = candidate.slice(2);
+    let restNorm = normalize(rest || ".");
     if (
       restNorm === "." ||
       restNorm === ".." ||
@@ -210,7 +201,7 @@ function validateMemoryPath(raw, expandTilde) {
       restNorm.startsWith("..\\")
     )
       return;
-    candidate = join_2(homedir_2(), rest);
+    candidate = join(homedir(), rest);
   }
   let normalized = normalize(candidate).replace(/[/\\]+$/, "");
   if (isDangerousMemoryRoot(normalized)) return;
@@ -218,26 +209,28 @@ function validateMemoryPath(raw, expandTilde) {
 }
 //@ chunk-aepeg2w5.js:61520-61611 placement
 function isDangerousMemoryRoot(e) {
-  return !isAbsolute(e) || e.length < 3 || /^[A-Za-z]:$/.test(e) || hl(e) || e.includes("\x00");
+  return (
+    !isAbsolute(e) || e.length < 3 || /^[A-Za-z]:$/.test(e) || isUntouchableSpelling(e) || e.includes("\x00")
+  );
 }
+//@ chunk-aepeg2w5.js:61611-61676 fingerprint = getAutoMemPathOverride (1)
 /**
  * CLAUDE_COWORK_MEMORY_PATH_OVERRIDE 指定的自动记忆目录（经 validateMemoryPath 校验）。
  */
-//@ chunk-aepeg2w5.js:61611-61676 fingerprint = getAutoMemPathOverride (1)
 function getAutoMemPathOverride() {
-  return validateMemoryPath(env.CLAUDE_COWORK_MEMORY_PATH_OVERRIDE, !1);
+  return validateMemoryPath(env.CLAUDE_COWORK_MEMORY_PATH_OVERRIDE, false);
 }
+//@ chunk-aepeg2w5.js:61676-61713 layout
 /**
  * 校验后的 autoMemoryDirectory 设置值。
  */
-//@ chunk-aepeg2w5.js:61676-61713 layout
 function getValidatedAutoMemDirSetting() {
-  return validateMemoryPath(getAutoMemPathSetting().dir, !0);
+  return validateMemoryPath(getAutoMemPathSetting().dir, true);
 }
+//@ chunk-aepeg2w5.js:61713-61964 callgraph-fingerprint = getAutoMemPathSetting (0.905)
 /**
  * 按 policy→flag→(信任后)local/project→user 顺序取第一个设置了 autoMemoryDirectory 的来源。
  */
-//@ chunk-aepeg2w5.js:61713-61964 callgraph-fingerprint = getAutoMemPathSetting (0.905)
 function getAutoMemPathSetting() {
   let n = [
     "policySettings",
@@ -247,10 +240,17 @@ function getAutoMemPathSetting() {
   ];
   for (let r of n) {
     if (!isSettingSourceEnabled(r)) continue;
-    let s = getSettingsForSource(r)?.autoMemoryDirectory;
-    if (s != null) return { dir: s, source: r };
+    let autoMemoryDirectory = getSettingsForSource(r)?.autoMemoryDirectory;
+    if (autoMemoryDirectory != null)
+      return {
+        dir: autoMemoryDirectory,
+        source: r,
+      };
   }
-  return { dir: void 0, source: void 0 };
+  return {
+    dir: undefined,
+    source: undefined,
+  };
 }
 //@ chunk-aepeg2w5.js:61964-62013 placement
 function getAutoMemPathSettingSource() {
@@ -258,38 +258,52 @@ function getAutoMemPathSettingSource() {
 }
 //@ chunk-aepeg2w5.js:62013-62049 placement
 function hasAutoMemPathOverride() {
-  return getAutoMemPathOverride() !== void 0;
+  return getAutoMemPathOverride() !== undefined;
 }
+//@ chunk-aepeg2w5.js:62049-63373 callgraph-witnessed = getAutoMemPath (0.243)
 /**
  * 自动记忆目录解析器：CLAUDE_COWORK_MEMORY_PATH_OVERRIDE → autoMemoryDirectory 设置 → <记忆根>/projects/<清洗后的工作副本/git 根/项目根>/memory/；结果按项目根、信任状态、设置来源 memo。
  */
-//@ chunk-aepeg2w5.js:62049-63373 callgraph-witnessed = getAutoMemPath (0.243)
 class AutoMemPathResolver {
   canonicalWcRoot;
   canonicalWcRootFor;
   wcWarmPromise;
   canonicalWcRootForProject(e) {
-    return this.canonicalWcRootFor === e ? this.canonicalWcRoot : void 0;
+    return this.canonicalWcRootFor === e ? this.canonicalWcRoot : undefined;
   }
   clearWcWarmLatch() {
-    ((this.canonicalWcRoot = void 0), (this.canonicalWcRootFor = void 0), (this.wcWarmPromise = void 0));
+    this.canonicalWcRoot = undefined;
+    this.canonicalWcRootFor = undefined;
+    this.wcWarmPromise = undefined;
   }
   resolveEntry = io(
     () => {
-      let e = getAutoMemPathOverride();
-      if (e) return { path: e, source: void 0 };
-      let n = getAutoMemPathSetting(),
-        r = validateMemoryPath(n.dir, !0);
-      if (r) return { path: r, source: n.source };
-      let s = getProjectRootOrNull();
-      if (s === null) return { path: null, source: void 0 };
-      let defaultKey = this.defaultKey(s),
-        y = getMemoryBaseDir(),
-        S = y === getClaudeConfigDir() ? getProjectKey(defaultKey.base) : sanitizePath(defaultKey.base);
+      let autoMemPathOverride = getAutoMemPathOverride();
+      if (autoMemPathOverride)
+        return {
+          path: autoMemPathOverride,
+          source: undefined,
+        };
+      let autoMemPathSetting = getAutoMemPathSetting();
+      let r = validateMemoryPath(autoMemPathSetting.dir, true);
+      if (r)
+        return {
+          path: r,
+          source: autoMemPathSetting.source,
+        };
+      let projectRootOrNull = getProjectRootOrNull();
+      if (projectRootOrNull === null)
+        return {
+          path: null,
+          source: undefined,
+        };
+      let h = this.defaultKey(projectRootOrNull);
+      let memoryBaseDir = getMemoryBaseDir();
+      let S = memoryBaseDir === getClaudeConfigDir() ? getProjectKey(h.base) : sanitizePath(h.base);
       return {
-        path: (join_2(y, "projects", S, AUTO_MEM_DIRNAME) + sep).normalize("NFC"),
-        source: void 0,
-        keyedBy: defaultKey,
+        path: (join(memoryBaseDir, "projects", S, AUTO_MEM_DIRNAME) + sep).normalize("NFC"),
+        source: undefined,
+        keyedBy: h,
       };
     },
     () => this.memoKey(),
@@ -302,21 +316,33 @@ class AutoMemPathResolver {
     return getProjectRootOrNull() === null;
   }
   memoKey() {
-    let e = getProjectRootOrNull(),
-      n = e === null ? null : this.canonicalWcRootForProject(e);
-    return `${e ?? ""}|${isProjectScopeTrustAccepted()}|${n ?? ""}|${getEnabledSettingSources().join(",")}`;
+    let projectRootOrNull = getProjectRootOrNull();
+    let n = projectRootOrNull === null ? null : this.canonicalWcRootForProject(projectRootOrNull);
+    return `${projectRootOrNull ?? ""}|${isProjectScopeTrustAccepted()}|${n ?? ""}|${getEnabledSettingSources().join(",")}`;
   }
   defaultKey(e) {
-    let canonicalWcRootForProject = this.canonicalWcRootForProject(e);
-    if (canonicalWcRootForProject != null) return { base: canonicalWcRootForProject, via: "working_copy" };
-    let r = findCanonicalGitRoot(e);
-    return r !== null ? { base: r, via: "git" } : { base: e, via: "project_root" };
+    let n = this.canonicalWcRootForProject(e);
+    if (n != null)
+      return {
+        base: n,
+        via: "working_copy",
+      };
+    let canonicalGitRoot = findCanonicalGitRoot(e);
+    return canonicalGitRoot !== null
+      ? {
+          base: canonicalGitRoot,
+          via: "git",
+        }
+      : {
+          base: e,
+          via: "project_root",
+        };
   }
   resolveOwnProjectDir = io(
     () => {
       if (getAutoMemPathOverride() ?? getValidatedAutoMemDirSetting()) return;
       if (getMemoryBaseDir() !== getClaudeConfigDir()) return;
-      return (join_2(getProjectDir(getOriginalCwd()), AUTO_MEM_DIRNAME) + sep).normalize("NFC");
+      return (join(getProjectDir(getOriginalCwd()), AUTO_MEM_DIRNAME) + sep).normalize("NFC");
     },
     () => `${getOriginalCwd()}|${isProjectScopeTrustAccepted()}`,
   );
@@ -324,23 +350,26 @@ class AutoMemPathResolver {
     return Promise.resolve();
   }
   reset() {
-    (this.resolve.cache.clear?.(),
-      this.resolveOwnProjectDir.cache.clear?.(),
-      this.resolveEntry.cache.clear?.(),
-      this.clearWcWarmLatch());
+    this.resolve.cache.clear?.();
+    this.resolveOwnProjectDir.cache.clear?.();
+    this.resolveEntry.cache.clear?.();
+    this.clearWcWarmLatch();
   }
 }
 //@ chunk-aepeg2w5.js:63373-63398 placement
 var autoMemPathResolverByHost = new HostScoped(() => new AutoMemPathResolver());
 //@ chunk-aepeg2w5.js:63398-63600 placement
 class NullAutoMemPathResolver extends AutoMemPathResolver {
-  resolveEntry = io(() => ({ path: null, source: void 0 }));
+  resolveEntry = io(() => ({
+    path: null,
+    source: undefined,
+  }));
   resolve = io(() => null);
   resolveOwnProjectDir = io(() => {
     return;
   });
   canLackAFolder() {
-    return !0;
+    return true;
   }
   warmCanonicalWcRoot() {
     return Promise.resolve();
@@ -354,8 +383,8 @@ function getAutoMemPathState() {
 }
 //@ chunk-aepeg2w5.js:63658-63730 placement
 function hasNoAutoMemPath() {
-  let e = getAutoMemPathState();
-  return e.canLackAFolder() && e.resolve() === null;
+  let autoMemPathState = getAutoMemPathState();
+  return autoMemPathState.canLackAFolder() && autoMemPathState.resolve() === null;
 }
 //@ chunk-aepeg2w5.js:63730-63767 placement
 function getAutoMemPathOrNull() {
@@ -368,29 +397,32 @@ function getAutoMemPath() {
   return resolved;
 }
 //@ chunk-aepeg2w5.js:63836-63845 placement
-var vI = 8;
+/**
+ * 8
+ */
+var SHORT_SESSION_ID_CHARS = 8;
 //@ chunk-aepeg2w5.js:63845-64035 placement
 function activeSessionLogExcluder(date) {
   let n;
   try {
-    n = (date ?? getSessionId()).slice(0, vI);
+    n = (date ?? getSessionId()).slice(0, SHORT_SESSION_ID_CHARS);
   } catch {
     return;
   }
   return (r) => {
-    if (!r.startsWith("logs/")) return !1;
+    if (!r.startsWith("logs/")) return false;
     let sliced = r.slice(r.lastIndexOf("/") + 1);
     return sliced === `${n}.md` || sliced.startsWith(`${n}-`);
   };
 }
 //@ chunk-aepeg2w5.js:64035-64068 placement
 function getAutoMemEntrypoint() {
-  return join_2(getAutoMemPath(), MEMORY_MD);
+  return join(getAutoMemPath(), MEMORY_MD);
 }
 //@ chunk-aepeg2w5.js:64068-64131 placement
 function isAutoMemPath(absolutePath) {
-  let n = getAutoMemPathOrNull();
-  return n !== null && normalize(absolutePath).startsWith(n);
+  let normalizedPath = getAutoMemPathOrNull();
+  return normalizedPath !== null && normalize(absolutePath).startsWith(normalizedPath);
 }
 //@ chunk-aepeg2w5.js:64131-64167 placement
 function mayBeAutoMemPath(e) {
@@ -400,22 +432,21 @@ function mayBeAutoMemPath(e) {
 var AUTO_MEM_WRITE_ALLOW_REASON = "auto memory files are allowed for writing";
 //@ chunk-aepeg2w5.js:64219-64366 placement
 function isAutoMemPathSafeForCarveout(e, n = getAutoMemPathOrNull()) {
-  if (n === null || !n.endsWith(sep) || isDangerousMemoryRoot(n.replace(/[/\\]+$/, ""))) return !1;
+  if (n === null || !n.endsWith(sep) || isDangerousMemoryRoot(n.replace(/[/\\]+$/, ""))) return false;
   let r = normalize(e);
-  if (!r.startsWith(n)) return !1;
+  if (!r.startsWith(n)) return false;
   return !isProtectedDirPath(r, n);
 }
 //@ chunk-aepeg2w5.js:64366-64460 placement
 function isOwnProjectAutoMemPathSafeForCarveout(e) {
   let ownProjectDir = getAutoMemPathState().resolveOwnProjectDir();
-  if (ownProjectDir === void 0) return !1;
+  if (ownProjectDir === undefined) return false;
   return isAutoMemPathSafeForCarveout(e, ownProjectDir) && isAutoMemoryEnabled();
 }
 //@ chunk-4vzb3taj.js:993-1052 fingerprint = AUTO_MEM_DIRNAME (1)
-function AUTO_MEM_DIRNAME_2(e) {
-  return isSelfHostedRemoteEnvironment() && e === void 0 ? ["memory"] : void 0;
+function AUTO_MEM_DIRNAME_2(appendSystemPromptHead) {
+  return isSelfHostedRemoteEnvironment() && appendSystemPromptHead === undefined ? ["memory"] : undefined;
 }
-
 export {
   isAutoMemoryEnabled,
   isIndexRecallEnabled,
@@ -438,9 +469,9 @@ export {
   getAutoMemPathState,
   getMemoryBaseDir,
   getAutoMemPathOrNull,
+  isDangerousMemoryRoot,
   isStoreMountedRecall,
   getAutoMemPathSettingSource,
   getAccountMemoryMirrorPath,
   activeSessionLogExcluder,
-  isDangerousMemoryRoot,
 };

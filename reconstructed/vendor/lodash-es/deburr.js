@@ -9,16 +9,16 @@ import { vde } from "./toString.js";
 import { s } from "./_deburrLetter.js";
 
 //@ chunk-8nhse09v.js:2893-3041 esm-fingerprint
-var j = /[\xc0-\xd6\xd8-\xf6\xf8-\xff\u0100-\u017f]/g,
-  H = "\\u0300-\\u036f",
-  B = "\\ufe20-\\ufe2f",
-  G = "\\u20d0-\\u20ff",
-  J = H + B + G,
-  V = "[" + J + "]",
-  Y = RegExp(V, "g");
+var j = /[\xc0-\xd6\xd8-\xf6\xf8-\xff\u0100-\u017f]/g;
+var rsComboMarksRange_2 = "\\u0300-\\u036f";
+var reComboHalfMarksRange_2 = "\\ufe20-\\ufe2f";
+var rsComboSymbolsRange_2 = "\\u20d0-\\u20ff";
+var rsComboRange_2 = rsComboMarksRange_2 + reComboHalfMarksRange_2 + rsComboSymbolsRange_2;
+var rsCombo = "[" + rsComboRange_2 + "]";
+var reComboMark = RegExp(rsCombo, "g");
 //@ chunk-8nhse09v.js:3041-3103 esm-layout
-function q(e) {
-  return ((e = vde(e)), e && e.replace(j, s).replace(Y, ""));
+function deburr(string) {
+  string = vde(string);
+  return string && string.replace(j, s).replace(reComboMark, "");
 }
-
-export { q };
+export { deburr };

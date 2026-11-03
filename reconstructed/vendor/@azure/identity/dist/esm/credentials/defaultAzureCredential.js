@@ -5,137 +5,200 @@
  * pieces: chunk-mrx6y2r5.js (9)
  * attribution: esm-fingerprint 8, esm-layout 1
  */
-import { z } from "../util/logging.js";
-import { Ln } from "./managedIdentityCredential/index.js";
-import { Fr, Pc, xc, Dc } from "../../index.js";
-import { bc } from "./azureCliCredential.js";
-import { Fc } from "./environmentCredential.js";
+import { credentialLogger } from "../util/logging.js";
+import { ManagedIdentityCredential } from "./managedIdentityCredential/index.js";
+import {
+  WorkloadIdentityCredential,
+  AzureDeveloperCliCredential,
+  AzurePowerShellCredential,
+  ChainedTokenCredential,
+} from "../../index.js";
+import { AzureCliCredential } from "./azureCliCredential.js";
+import { EnvironmentCredential } from "./environmentCredential.js";
 
 //@ chunk-mrx6y2r5.js:329226-329261 esm-fingerprint
-var $c = z("DefaultAzureCredential");
+var logger_10 = credentialLogger("DefaultAzureCredential");
 //@ chunk-mrx6y2r5.js:329261-330026 esm-fingerprint
-function IC(e = {}) {
-  var t, r, n, o;
-  ((t = e.retryOptions) !== null && t !== void 0) ||
-    (e.retryOptions = { maxRetries: 5, retryDelayInMs: 800 });
-  let i =
-      (r = e === null || e === void 0 ? void 0 : e.managedIdentityClientId) !== null && r !== void 0
-        ? r
-        : process.env.AZURE_CLIENT_ID,
-    s =
-      (n = e === null || e === void 0 ? void 0 : e.workloadIdentityClientId) !== null && n !== void 0 ? n : i,
-    a = e === null || e === void 0 ? void 0 : e.managedIdentityResourceId,
-    envAzureFederatedTokenFile = process.env.AZURE_FEDERATED_TOKEN_FILE,
-    l =
-      (o = e === null || e === void 0 ? void 0 : e.tenantId) !== null && o !== void 0
-        ? o
-        : process.env.AZURE_TENANT_ID;
-  if (a) {
-    let merged = Object.assign(Object.assign({}, e), { resourceId: a });
-    return new Ln(merged);
+function createDefaultManagedIdentityCredential(options = {}) {
+  var _a;
+  var _b;
+  var _c;
+  var _d;
+  if (!((_a = options.retryOptions) !== null && _a !== undefined))
+    options.retryOptions = {
+      maxRetries: 5,
+      retryDelayInMs: 800,
+    };
+  let managedIdentityClientId =
+    (_b = options === null || options === undefined ? undefined : options.managedIdentityClientId) !== null &&
+    _b !== undefined
+      ? _b
+      : process.env.AZURE_CLIENT_ID;
+  let workloadIdentityClientId =
+    (_c = options === null || options === undefined ? undefined : options.workloadIdentityClientId) !==
+      null && _c !== undefined
+      ? _c
+      : managedIdentityClientId;
+  let managedResourceId =
+    options === null || options === undefined ? undefined : options.managedIdentityResourceId;
+  let workloadFile = process.env.AZURE_FEDERATED_TOKEN_FILE;
+  let tenantId =
+    (_d = options === null || options === undefined ? undefined : options.tenantId) !== null &&
+    _d !== undefined
+      ? _d
+      : process.env.AZURE_TENANT_ID;
+  if (managedResourceId) {
+    let managedIdentityResourceIdOptions = Object.assign(Object.assign({}, options), {
+      resourceId: managedResourceId,
+    });
+    return new ManagedIdentityCredential(managedIdentityResourceIdOptions);
   }
-  if (envAzureFederatedTokenFile && s) {
-    let merged = Object.assign(Object.assign({}, e), { tenantId: l });
-    return new Ln(s, merged);
+  if (workloadFile && workloadIdentityClientId) {
+    let workloadIdentityCredentialOptions = Object.assign(Object.assign({}, options), {
+      tenantId,
+    });
+    return new ManagedIdentityCredential(workloadIdentityClientId, workloadIdentityCredentialOptions);
   }
-  if (i) {
-    let merged = Object.assign(Object.assign({}, e), { clientId: i });
-    return new Ln(merged);
+  if (managedIdentityClientId) {
+    let managedIdentityClientOptions = Object.assign(Object.assign({}, options), {
+      clientId: managedIdentityClientId,
+    });
+    return new ManagedIdentityCredential(managedIdentityClientOptions);
   }
-  return new Ln(e);
+  return new ManagedIdentityCredential(options);
 }
 //@ chunk-mrx6y2r5.js:330026-330584 esm-fingerprint
-function _C(e) {
-  var t, r, n;
-  let o =
-      (t = e === null || e === void 0 ? void 0 : e.managedIdentityClientId) !== null && t !== void 0
-        ? t
-        : process.env.AZURE_CLIENT_ID,
-    i =
-      (r = e === null || e === void 0 ? void 0 : e.workloadIdentityClientId) !== null && r !== void 0 ? r : o,
-    envAzureFederatedTokenFile = process.env.AZURE_FEDERATED_TOKEN_FILE,
-    a =
-      (n = e === null || e === void 0 ? void 0 : e.tenantId) !== null && n !== void 0
-        ? n
-        : process.env.AZURE_TENANT_ID;
-  if (envAzureFederatedTokenFile && i) {
-    let merged = Object.assign(Object.assign({}, e), {
-      tenantId: a,
-      clientId: i,
-      tokenFilePath: envAzureFederatedTokenFile,
+function createDefaultWorkloadIdentityCredential(options) {
+  var _a;
+  var _b;
+  var _c;
+  let managedIdentityClientId =
+    (_a = options === null || options === undefined ? undefined : options.managedIdentityClientId) !== null &&
+    _a !== undefined
+      ? _a
+      : process.env.AZURE_CLIENT_ID;
+  let workloadIdentityClientId =
+    (_b = options === null || options === undefined ? undefined : options.workloadIdentityClientId) !==
+      null && _b !== undefined
+      ? _b
+      : managedIdentityClientId;
+  let workloadFile = process.env.AZURE_FEDERATED_TOKEN_FILE;
+  let tenantId =
+    (_c = options === null || options === undefined ? undefined : options.tenantId) !== null &&
+    _c !== undefined
+      ? _c
+      : process.env.AZURE_TENANT_ID;
+  if (workloadFile && workloadIdentityClientId) {
+    let workloadIdentityCredentialOptions = Object.assign(Object.assign({}, options), {
+      tenantId,
+      clientId: workloadIdentityClientId,
+      tokenFilePath: workloadFile,
     });
-    return new Fr(merged);
+    return new WorkloadIdentityCredential(workloadIdentityCredentialOptions);
   }
-  if (a) {
-    let merged = Object.assign(Object.assign({}, e), { tenantId: a });
-    return new Fr(merged);
+  if (tenantId) {
+    let workloadIdentityClientTenantOptions = Object.assign(Object.assign({}, options), {
+      tenantId,
+    });
+    return new WorkloadIdentityCredential(workloadIdentityClientTenantOptions);
   }
-  return new Fr(e);
+  return new WorkloadIdentityCredential(options);
 }
 //@ chunk-mrx6y2r5.js:330584-330684 esm-fingerprint
-function SC(e = {}) {
-  let processTimeoutInMs = e.processTimeoutInMs;
-  return new Pc(Object.assign({ processTimeoutInMs: processTimeoutInMs }, e));
+function createDefaultAzureDeveloperCliCredential(options = {}) {
+  let processTimeoutInMs = options.processTimeoutInMs;
+  return new AzureDeveloperCliCredential(
+    Object.assign(
+      {
+        processTimeoutInMs,
+      },
+      options,
+    ),
+  );
 }
 //@ chunk-mrx6y2r5.js:330684-330784 esm-fingerprint
-function RC(e = {}) {
-  let processTimeoutInMs = e.processTimeoutInMs;
-  return new bc(Object.assign({ processTimeoutInMs: processTimeoutInMs }, e));
+function createDefaultAzureCliCredential(options = {}) {
+  let processTimeoutInMs = options.processTimeoutInMs;
+  return new AzureCliCredential(
+    Object.assign(
+      {
+        processTimeoutInMs,
+      },
+      options,
+    ),
+  );
 }
 //@ chunk-mrx6y2r5.js:330784-330884 esm-fingerprint
-function wC(e = {}) {
-  let processTimeoutInMs = e.processTimeoutInMs;
-  return new xc(Object.assign({ processTimeoutInMs: processTimeoutInMs }, e));
+function createDefaultAzurePowershellCredential(options = {}) {
+  let processTimeoutInMs = options.processTimeoutInMs;
+  return new AzurePowerShellCredential(
+    Object.assign(
+      {
+        processTimeoutInMs,
+      },
+      options,
+    ),
+  );
 }
 //@ chunk-mrx6y2r5.js:330884-330919 esm-layout
-function vC(e = {}) {
-  return new Fc(e);
+function createEnvironmentCredential(options = {}) {
+  return new EnvironmentCredential(options);
 }
 //@ chunk-mrx6y2r5.js:330919-331152 esm-fingerprint
-class lm {
-  constructor(e, t) {
-    ((this.credentialName = e), (this.credentialUnavailableErrorMessage = t));
+class UnavailableDefaultCredential {
+  constructor(credentialName, message) {
+    this.credentialName = credentialName;
+    this.credentialUnavailableErrorMessage = message;
   }
   getToken() {
-    return (
-      $c.getToken.info(`Skipping ${this.credentialName}, reason: ${this.credentialUnavailableErrorMessage}`),
-      Promise.resolve(null)
+    logger_10.getToken.info(
+      `Skipping ${this.credentialName}, reason: ${this.credentialUnavailableErrorMessage}`,
     );
+    return Promise.resolve(null);
   }
 }
 //@ chunk-mrx6y2r5.js:331152-331737 esm-fingerprint
-class dm extends Dc {
-  constructor(e) {
-    let t = process.env.AZURE_TOKEN_CREDENTIALS
-        ? process.env.AZURE_TOKEN_CREDENTIALS.trim().toLowerCase()
-        : void 0,
-      r = [RC, wC, SC],
-      n = [vC, _C, IC],
-      o = [];
-    if (t)
-      switch (t) {
+class DefaultAzureCredential extends ChainedTokenCredential {
+  constructor(options) {
+    let azureTokenCredentials = process.env.AZURE_TOKEN_CREDENTIALS
+      ? process.env.AZURE_TOKEN_CREDENTIALS.trim().toLowerCase()
+      : undefined;
+    let devCredentialFunctions = [
+      createDefaultAzureCliCredential,
+      createDefaultAzurePowershellCredential,
+      createDefaultAzureDeveloperCliCredential,
+    ];
+    let prodCredentialFunctions = [
+      createEnvironmentCredential,
+      createDefaultWorkloadIdentityCredential,
+      createDefaultManagedIdentityCredential,
+    ];
+    let credentialFunctions = [];
+    if (azureTokenCredentials)
+      switch (azureTokenCredentials) {
         case "dev":
-          o = r;
+          credentialFunctions = devCredentialFunctions;
           break;
         case "prod":
-          o = n;
+          credentialFunctions = prodCredentialFunctions;
           break;
         default: {
-          let s = `Invalid value for AZURE_TOKEN_CREDENTIALS = ${process.env.AZURE_TOKEN_CREDENTIALS}. Valid values are 'prod' or 'dev'.`;
-          throw ($c.warning(s), Error(s));
+          let errorMessage = `Invalid value for AZURE_TOKEN_CREDENTIALS = ${process.env.AZURE_TOKEN_CREDENTIALS}. Valid values are 'prod' or 'dev'.`;
+          logger_10.warning(errorMessage);
+          throw Error(errorMessage);
         }
       }
-    else o = [...n, ...r];
-    let mapped = o.map((s) => {
+    else credentialFunctions = [...prodCredentialFunctions, ...devCredentialFunctions];
+    let credentials = credentialFunctions.map((createCredentialFn) => {
       try {
-        return s(e);
-      } catch (error) {
-        return (
-          $c.warning(`Skipped ${s.name} because of an error creating the credential: ${error}`),
-          new lm(s.name, error.message)
+        return createCredentialFn(options);
+      } catch (err) {
+        logger_10.warning(
+          `Skipped ${createCredentialFn.name} because of an error creating the credential: ${err}`,
         );
+        return new UnavailableDefaultCredential(createCredentialFn.name, err.message);
       }
     });
-    super(...mapped);
+    super(...credentials);
   }
 }

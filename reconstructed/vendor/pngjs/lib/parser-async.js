@@ -6,108 +6,118 @@
  * attribution: cjs-fingerprint 1
  */
 import { x, importMetaRequire } from "../../../runtime/bun-runtime.js";
-import { st } from "./chunkstream.js";
-import { Fr } from "./filter-parse-async.js";
-import { pt } from "./parser.js";
-import { gt } from "./bitmapper.js";
-import { _t } from "./format-normaliser.js";
+import { require_chunkstream } from "./chunkstream.js";
+import { require_filter_parse_async } from "./filter-parse-async.js";
+import { require_parser } from "./parser.js";
+import { require_bitmapper } from "./bitmapper.js";
+import { require_format_normaliser } from "./format-normaliser.js";
 
 //@ chunk-spjgqa4y.js:34825-37285 cjs-fingerprint
-var Kr = x(function (Jl, Vr) {
-  var Gr = importMetaRequire("util"),
-    le = importMetaRequire("zlib"),
-    mt = st(),
-    vo = Fr(),
-    Vo = pt(),
-    vr = gt(),
-    Ko = _t(),
-    M = (Vr.exports = function (t) {
-      (mt.call(this),
-        (this._parser = new Vo(t, {
-          read: this.read.bind(this),
-          error: this._handleError.bind(this),
-          metadata: this._handleMetaData.bind(this),
-          gamma: this.emit.bind(this, "gamma"),
-          palette: this._handlePalette.bind(this),
-          transColor: this._handleTransColor.bind(this),
-          finished: this._finished.bind(this),
-          inflateData: this._inflateData.bind(this),
-          simpleTransparency: this._simpleTransparency.bind(this),
-          headersFinished: this._headersFinished.bind(this),
-        })),
-        (this._options = t),
-        (this.writable = !0),
-        this._parser.start());
+var require_parser_async = x(function (cjsExports, cjsModule) {
+  var util = importMetaRequire("util");
+  var zlib = importMetaRequire("zlib");
+  var ChunkStream = require_chunkstream();
+  var FilterAsync = require_filter_parse_async();
+  var Parser = require_parser();
+  var bitmapper = require_bitmapper();
+  var formatNormaliser = require_format_normaliser();
+  var ParserAsync = (cjsModule.exports = function (options) {
+    ChunkStream.call(this);
+    this._parser = new Parser(options, {
+      read: this.read.bind(this),
+      error: this._handleError.bind(this),
+      metadata: this._handleMetaData.bind(this),
+      gamma: this.emit.bind(this, "gamma"),
+      palette: this._handlePalette.bind(this),
+      transColor: this._handleTransColor.bind(this),
+      finished: this._finished.bind(this),
+      inflateData: this._inflateData.bind(this),
+      simpleTransparency: this._simpleTransparency.bind(this),
+      headersFinished: this._headersFinished.bind(this),
     });
-  Gr.inherits(M, mt);
-  M.prototype._handleError = function (t) {
-    if ((this.emit("error", t), (this.writable = !1), this.destroy(), this._inflate && this._inflate.destroy))
-      this._inflate.destroy();
-    if (this._filter) (this._filter.destroy(), this._filter.on("error", function () {}));
-    this.errord = !0;
+    this._options = options;
+    this.writable = true;
+    this._parser.start();
+  });
+  util.inherits(ParserAsync, ChunkStream);
+  ParserAsync.prototype._handleError = function (err) {
+    this.emit("error", err);
+    this.writable = false;
+    this.destroy();
+    if (this._inflate && this._inflate.destroy) this._inflate.destroy();
+    if (this._filter) {
+      this._filter.destroy();
+      this._filter.on("error", function () {});
+    }
+    this.errord = true;
   };
-  M.prototype._inflateData = function (t) {
+  ParserAsync.prototype._inflateData = function (data) {
     if (!this._inflate)
-      if (this._bitmapInfo.interlace)
-        ((this._inflate = le.createInflate()),
-          this._inflate.on("error", this.emit.bind(this, "error")),
-          this._filter.on("complete", this._complete.bind(this)),
-          this._inflate.pipe(this._filter));
-      else {
-        let r =
-            (((this._bitmapInfo.width * this._bitmapInfo.bpp * this._bitmapInfo.depth + 7) >> 3) + 1) *
-            this._bitmapInfo.height,
-          max = Math.max(r, le.Z_MIN_CHUNK);
-        this._inflate = le.createInflate({ chunkSize: max });
-        let i = r,
-          o = this.emit.bind(this, "error");
-        (this._inflate.on("error", function (l) {
-          if (!i) return;
-          o(l);
-        }),
-          this._filter.on("complete", this._complete.bind(this)));
-        let s = this._filter.write.bind(this._filter);
-        (this._inflate.on("data", function (l) {
-          if (!i) return;
-          if (l.length > i) l = l.slice(0, i);
-          ((i -= l.length), s(l));
-        }),
-          this._inflate.on("end", this._filter.end.bind(this._filter)));
+      if (this._bitmapInfo.interlace) {
+        this._inflate = zlib.createInflate();
+        this._inflate.on("error", this.emit.bind(this, "error"));
+        this._filter.on("complete", this._complete.bind(this));
+        this._inflate.pipe(this._filter);
+      } else {
+        let imageSize =
+          (((this._bitmapInfo.width * this._bitmapInfo.bpp * this._bitmapInfo.depth + 7) >> 3) + 1) *
+          this._bitmapInfo.height;
+        let chunkSize = Math.max(imageSize, zlib.Z_MIN_CHUNK);
+        this._inflate = zlib.createInflate({
+          chunkSize,
+        });
+        let leftToInflate = imageSize;
+        let emitError = this.emit.bind(this, "error");
+        this._inflate.on("error", function (err) {
+          if (!leftToInflate) return;
+          emitError(err);
+        });
+        this._filter.on("complete", this._complete.bind(this));
+        let filterWrite = this._filter.write.bind(this._filter);
+        this._inflate.on("data", function (chunk) {
+          if (!leftToInflate) return;
+          if (chunk.length > leftToInflate) chunk = chunk.slice(0, leftToInflate);
+          leftToInflate -= chunk.length;
+          filterWrite(chunk);
+        });
+        this._inflate.on("end", this._filter.end.bind(this._filter));
       }
-    this._inflate.write(t);
+    this._inflate.write(data);
   };
-  M.prototype._handleMetaData = function (t) {
-    ((this._metaData = t), (this._bitmapInfo = Object.create(t)), (this._filter = new vo(this._bitmapInfo)));
+  ParserAsync.prototype._handleMetaData = function (metaData) {
+    this._metaData = metaData;
+    this._bitmapInfo = Object.create(metaData);
+    this._filter = new FilterAsync(this._bitmapInfo);
   };
-  M.prototype._handleTransColor = function (t) {
-    this._bitmapInfo.transColor = t;
+  ParserAsync.prototype._handleTransColor = function (transColor) {
+    this._bitmapInfo.transColor = transColor;
   };
-  M.prototype._handlePalette = function (t) {
-    this._bitmapInfo.palette = t;
+  ParserAsync.prototype._handlePalette = function (palette) {
+    this._bitmapInfo.palette = palette;
   };
-  M.prototype._simpleTransparency = function () {
-    this._metaData.alpha = !0;
+  ParserAsync.prototype._simpleTransparency = function () {
+    this._metaData.alpha = true;
   };
-  M.prototype._headersFinished = function () {
+  ParserAsync.prototype._headersFinished = function () {
     this.emit("metadata", this._metaData);
   };
-  M.prototype._finished = function () {
+  ParserAsync.prototype._finished = function () {
     if (this.errord) return;
     if (!this._inflate) this.emit("error", "No Inflate block");
     else this._inflate.end();
   };
-  M.prototype._complete = function (t) {
+  ParserAsync.prototype._complete = function (filteredData) {
     if (this.errord) return;
-    let e;
+    let normalisedBitmapData;
     try {
-      let dataToBitMap = vr.dataToBitMap(t, this._bitmapInfo);
-      ((e = Ko(dataToBitMap, this._bitmapInfo)), (dataToBitMap = null));
-    } catch (error) {
-      this._handleError(error);
+      let bitmapData = bitmapper.dataToBitMap(filteredData, this._bitmapInfo);
+      normalisedBitmapData = formatNormaliser(bitmapData, this._bitmapInfo);
+      bitmapData = null;
+    } catch (ex) {
+      this._handleError(ex);
       return;
     }
-    this.emit("parsed", e);
+    this.emit("parsed", normalisedBitmapData);
   };
 });
-
-export { Kr };
+export { require_parser_async };

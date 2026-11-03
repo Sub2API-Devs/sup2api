@@ -13,27 +13,27 @@ import __cc_resource_1 from "../../../assets/example-plugins-9n8v6pe1.md" with {
 import __cc_resource_2 from "../../../assets/mcp-servers-chmkz450.md" with { type: "text" };
 import __cc_resource_3 from "../../../assets/search-strategies-4qam2bp6.md" with { type: "text" };
 import __cc_resource_4 from "../../../assets/SKILL-a71d0623.md.zst" with { type: "file" };
-import { Et } from "../../utils/embeddedAssets.js";
+import { readEmbeddedTextSync } from "../../utils/embeddedAssets.js";
 
 //@ chunk-3xrfrj7v.js:675-697 placement
-var e = __cc_resource_0;
+var componentSchemasPath = __cc_resource_0;
 //@ chunk-3xrfrj7v.js:697-729 placement
-var t = Et(e, import.meta.dirname);
+var referencesComponentSchemas = readEmbeddedTextSync(componentSchemasPath, import.meta.dirname);
 //@ chunk-3xrfrj7v.js:729-751 placement
-var n = __cc_resource_1;
+var referencesExamplePlugins = __cc_resource_1;
 //@ chunk-3xrfrj7v.js:751-773 placement
-var s = __cc_resource_2;
+var referencesMcpServers = __cc_resource_2;
 //@ chunk-3xrfrj7v.js:773-795 placement
-var o = __cc_resource_3;
+var referencesSearchStrategies = __cc_resource_3;
 //@ chunk-3xrfrj7v.js:795-817 placement
-var i = __cc_resource_4;
+var skillPath = __cc_resource_4;
 //@ chunk-3xrfrj7v.js:817-849 placement
-var r = Et(i, import.meta.dirname);
+var skill = readEmbeddedTextSync(skillPath, import.meta.dirname);
 //@ chunk-3xrfrj7v.js:849-997 placement
-var PLUGIN_DEV_SKILL_MD = r,
-  PLUGIN_DEV_REFERENCE_FILES = {
-    "references/component-schemas.md": t,
-    "references/example-plugins.md": n,
-    "references/mcp-servers.md": s,
-    "references/search-strategies.md": o,
-  };
+var PLUGIN_DEV_SKILL_MD = skill;
+var PLUGIN_DEV_REFERENCE_FILES = {
+  "references/component-schemas.md": referencesComponentSchemas,
+  "references/example-plugins.md": referencesExamplePlugins,
+  "references/mcp-servers.md": referencesMcpServers,
+  "references/search-strategies.md": referencesSearchStrategies,
+};

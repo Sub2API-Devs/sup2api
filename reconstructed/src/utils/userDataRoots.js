@@ -16,20 +16,25 @@ import { logForDiagnosticsNoPII } from "./diagLogs.js";
 import { logForDebugging } from "./debug.js";
 
 //@ chunk-82kqcve8.js:178347-178411 placement
-function S1(e, n) {
+/**
+ * 是否是第一方（console/云）远程会话。
+ */
+function isFirstPartyRemoteSession(e, n) {
   return Boolean(e) && (!n || n === "anthropic_cloud");
 }
 //@ chunk-82kqcve8.js:178411-178775 placement
 async function ensureUserDataRoot() {
-  if (!S1(env.CLAUDE_CODE_REMOTE_SESSION_ID, env.CLAUDE_CODE_ENVIRONMENT_KIND)) return;
+  if (!isFirstPartyRemoteSession(env.CLAUDE_CODE_REMOTE_SESSION_ID, env.CLAUDE_CODE_ENVIRONMENT_KIND)) return;
   try {
     let e = [getStageFileRoot(), getOutputsRoot()];
     await Promise.all(
       e.map((n) =>
-        fsPromisesModule.mkdir(n).catch((r) => {
-          let s = getErrnoCode(r);
-          if (s !== "EEXIST" && s !== "ENOENT")
-            logForDiagnosticsNoPII("warn", "user_data_roots_mkdir_failed", { code: s ?? "unknown" });
+        fsPromisesModule.mkdir(n).catch((error) => {
+          let errnoCode = getErrnoCode(error);
+          if (errnoCode !== "EEXIST" && errnoCode !== "ENOENT")
+            logForDiagnosticsNoPII("warn", "user_data_roots_mkdir_failed", {
+              code: errnoCode ?? "unknown",
+            });
         }),
       ),
     );
@@ -39,5 +44,4 @@ async function ensureUserDataRoot() {
     });
   }
 }
-
-export { S1, ensureUserDataRoot };
+export { isFirstPartyRemoteSession, ensureUserDataRoot };

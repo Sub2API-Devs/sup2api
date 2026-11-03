@@ -6,14 +6,22 @@
  * attribution: placement 1
  */
 import { toNumberExport } from "./toNumber.js";
-import { yE } from "../../src/utils/model/telemetryModelName.js";
+import { clampNumberAlias } from "../../src/utils/model/telemetryModelName.js";
 
 //@ chunk-aepeg2w5.js:342442-342580 placement
-function clampNumber(e, n, r) {
-  if (r === void 0) ((r = n), (n = void 0));
-  if (r !== void 0) ((r = toNumberExport(r)), (r = r === r ? r : 0));
-  if (n !== void 0) ((n = toNumberExport(n)), (n = n === n ? n : 0));
-  return yE(toNumberExport(e), n, r);
+function clampNumber_2(number, lower, upper) {
+  if (upper === undefined) {
+    upper = lower;
+    lower = undefined;
+  }
+  if (upper !== undefined) {
+    upper = toNumberExport(upper);
+    upper = upper === upper ? upper : 0;
+  }
+  if (lower !== undefined) {
+    lower = toNumberExport(lower);
+    lower = lower === lower ? lower : 0;
+  }
+  return clampNumberAlias(toNumberExport(number), lower, upper);
 }
-
-export { clampNumber };
+export { clampNumber_2 };

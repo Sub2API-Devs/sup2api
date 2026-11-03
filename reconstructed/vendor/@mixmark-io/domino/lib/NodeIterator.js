@@ -6,49 +6,56 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { hr } from "./NodeFilter.js";
-import { On } from "./NodeTraversal.js";
-import { ee } from "./utils.js";
+import { require_NodeFilter } from "./NodeFilter.js";
+import { require_NodeTraversal } from "./NodeTraversal.js";
+import { require_utils } from "./utils.js";
 
 //@ chunk-vwj6ccer.js:71450-73463 cjs-fingerprint
-var p0 = x(function (Md, h0) {
-  h0.exports = d0;
-  var Fn = hr(),
-    Bn = On(),
-    f0 = ee();
-  function dx(e, t, r) {
-    if (r) return Bn.next(e, t);
+var require_NodeIterator = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = NodeIterator;
+  var NodeFilter = require_NodeFilter();
+  var NodeTraversal = require_NodeTraversal();
+  var utils = require_utils();
+  function move(node, stayWithin, directionIsNext) {
+    if (directionIsNext) return NodeTraversal.next(node, stayWithin);
     else {
-      if (e === t) return null;
-      return Bn.previous(e, null);
+      if (node === stayWithin) return null;
+      return NodeTraversal.previous(node, null);
     }
   }
-  function l0(e, t) {
-    for (; t; t = t.parentNode) if (e === t) return !0;
-    return !1;
+  function isInclusiveAncestor(node, possibleChild) {
+    for (; possibleChild; possibleChild = possibleChild.parentNode) if (node === possibleChild) return true;
+    return false;
   }
-  function x0(e, t) {
-    var r, a;
-    ((r = e._referenceNode), (a = e._pointerBeforeReferenceNode));
-    while (!0) {
-      if (a === t) a = !a;
-      else if (((r = dx(r, e._root, t)), r === null)) return null;
-      var _internalFilter = e._internalFilter(r);
-      if (_internalFilter === Fn.FILTER_ACCEPT) break;
+  function traverse(ni, directionIsNext) {
+    var node;
+    var beforeNode;
+    node = ni._referenceNode;
+    beforeNode = ni._pointerBeforeReferenceNode;
+    while (true) {
+      if (beforeNode === directionIsNext) beforeNode = !beforeNode;
+      else {
+        node = move(node, ni._root, directionIsNext);
+        if (node === null) return null;
+      }
+      var result = ni._internalFilter(node);
+      if (result === NodeFilter.FILTER_ACCEPT) break;
     }
-    return ((e._referenceNode = r), (e._pointerBeforeReferenceNode = a), r);
+    ni._referenceNode = node;
+    ni._pointerBeforeReferenceNode = beforeNode;
+    return node;
   }
-  function d0(e, t, r) {
-    if (!e || !e.nodeType) f0.NotSupportedError();
-    ((this._root = e),
-      (this._referenceNode = e),
-      (this._pointerBeforeReferenceNode = !0),
-      (this._whatToShow = Number(t) || 0),
-      (this._filter = r || null),
-      (this._active = !1),
-      e.doc._attachNodeIterator(this));
+  function NodeIterator(root, whatToShow, filter) {
+    if (!root || !root.nodeType) utils.NotSupportedError();
+    this._root = root;
+    this._referenceNode = root;
+    this._pointerBeforeReferenceNode = true;
+    this._whatToShow = Number(whatToShow) || 0;
+    this._filter = filter || null;
+    this._active = false;
+    root.doc._attachNodeIterator(this);
   }
-  Object.defineProperties(d0.prototype, {
+  Object.defineProperties(NodeIterator.prototype, {
     root: {
       get: function () {
         return this._root;
@@ -75,56 +82,65 @@ var p0 = x(function (Md, h0) {
       },
     },
     _internalFilter: {
-      value: function (t) {
-        var r, a;
-        if (this._active) f0.InvalidStateError();
-        if (!((1 << (t.nodeType - 1)) & this._whatToShow)) return Fn.FILTER_SKIP;
-        if (((a = this._filter), a === null)) r = Fn.FILTER_ACCEPT;
+      value: function (node) {
+        var result;
+        var filter;
+        if (this._active) utils.InvalidStateError();
+        if (!((1 << (node.nodeType - 1)) & this._whatToShow)) return NodeFilter.FILTER_SKIP;
+        filter = this._filter;
+        if (filter === null) result = NodeFilter.FILTER_ACCEPT;
         else {
-          this._active = !0;
+          this._active = true;
           try {
-            if (typeof a === "function") r = a(t);
-            else r = a.acceptNode(t);
+            if (typeof filter === "function") result = filter(node);
+            else result = filter.acceptNode(node);
           } finally {
-            this._active = !1;
+            this._active = false;
           }
         }
-        return +r;
+        return +result;
       },
     },
     _preremove: {
-      value: function (t) {
-        if (l0(t, this._root)) return;
-        if (!l0(t, this._referenceNode)) return;
+      value: function (toBeRemovedNode) {
+        if (isInclusiveAncestor(toBeRemovedNode, this._root)) return;
+        if (!isInclusiveAncestor(toBeRemovedNode, this._referenceNode)) return;
         if (this._pointerBeforeReferenceNode) {
-          var r = t;
-          while (r.lastChild) r = r.lastChild;
-          if (((r = Bn.next(r, this.root)), r)) {
-            this._referenceNode = r;
+          var next = toBeRemovedNode;
+          while (next.lastChild) next = next.lastChild;
+          next = NodeTraversal.next(next, this.root);
+          if (next) {
+            this._referenceNode = next;
             return;
           }
-          this._pointerBeforeReferenceNode = !1;
+          this._pointerBeforeReferenceNode = false;
         }
-        if (t.previousSibling === null) this._referenceNode = t.parentNode;
+        if (toBeRemovedNode.previousSibling === null) this._referenceNode = toBeRemovedNode.parentNode;
         else {
-          this._referenceNode = t.previousSibling;
-          var a;
-          for (a = this._referenceNode.lastChild; a; a = this._referenceNode.lastChild)
-            this._referenceNode = a;
+          this._referenceNode = toBeRemovedNode.previousSibling;
+          var lastChild;
+          for (
+            lastChild = this._referenceNode.lastChild;
+            lastChild;
+            lastChild = this._referenceNode.lastChild
+          )
+            this._referenceNode = lastChild;
         }
       },
     },
     nextNode: {
       value: function () {
-        return x0(this, !0);
+        return traverse(this, true);
       },
     },
     previousNode: {
       value: function () {
-        return x0(this, !1);
+        return traverse(this, false);
       },
     },
-    detach: { value: function () {} },
+    detach: {
+      value: function () {},
+    },
     toString: {
       value: function () {
         return "[object NodeIterator]";
@@ -132,5 +148,4 @@ var p0 = x(function (Md, h0) {
     },
   });
 });
-
-export { p0 };
+export { require_NodeIterator };

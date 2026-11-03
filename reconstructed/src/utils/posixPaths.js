@@ -8,20 +8,32 @@
  * pieces: chunk-axmbhcjg.js (3)
  * attribution: placement 3
  */
-import { sep, sep as sep_2, sep as sep_3, win32, posix } from "path";
+import { sep, win32, posix } from "path";
 
 //@ chunk-axmbhcjg.js:8926-8997 placement = isSessionPlanFile (0.784)
-var MD_EXTENSION = ".md",
-  Fn = 50000,
-  platformPath = sep === win32.sep ? win32 : posix,
-  PATH_SEPARATOR_RE = sep === win32.sep ? /[\\/]+/ : /\/+/;
+/**
+ * MAX_POSIX_PATH_LENGTH：POSIX 路径长度上限。
+ */
+var MD_EXTENSION = ".md";
+var MAX_POSIX_PATH_LENGTH = 50000;
+var platformPath = sep === win32.sep ? win32 : posix;
+var PATH_SEPARATOR_RE = sep === win32.sep ? /[\\/]+/ : /\/+/;
 //@ chunk-axmbhcjg.js:8997-9070 placement = setCwdState (1)
 function toPosixNfcPath(e, n) {
   return (n === "/" ? e : e.split(n).join("/")).normalize("NFC");
 }
 //@ chunk-axmbhcjg.js:9070-9150 placement
-function j(e, n = platformPath) {
+/**
+ * isParentOrAbsolute：是 .. 或绝对路径。
+ */
+function isParentOrAbsolute(e, n = platformPath) {
   return e === ".." || e.startsWith(`..${n.sep}`) || n.isAbsolute(e);
 }
-
-export { platformPath, Fn, j, toPosixNfcPath, MD_EXTENSION, PATH_SEPARATOR_RE };
+export {
+  platformPath,
+  MAX_POSIX_PATH_LENGTH,
+  isParentOrAbsolute,
+  toPosixNfcPath,
+  MD_EXTENSION,
+  PATH_SEPARATOR_RE,
+};

@@ -22,7 +22,7 @@ import {
 } from "../../../constants/prompts.js";
 import { WEBFETCH } from "../../WebFetchTool/prompt.js";
 import { WEBSEARCH } from "../../WebSearchTool/prompt.js";
-import { describePluginEvalAvailability, jF } from "../../../utils/plugins/pluginGates.js";
+import { describePluginEvalAvailability, lanternPrismEnabled } from "../../../utils/plugins/pluginGates.js";
 import { loadBundledText } from "../../../utils/bundledText.js";
 import { isUsing3PServices } from "../../../utils/auth.js";
 import { isFeedbackAllowed } from "../../../commands/feedback/feedbackPolicy.js";
@@ -110,27 +110,39 @@ Complete the user's request by providing accurate, documentation-based guidance.
 }
 //@ chunk-e6aww6q8.js:2332456-2333149 layout
 function getPluginEvalReferenceSection() {
-  let e = describePluginEvalAvailability(),
-    n = jF()
-      ? "`/skill-doctor` is available in this session."
-      : "`/skill-doctor` is NOT available in this session. It is on by default in current releases; a session lacks it on an older release, or when this client does not receive feature settings (Bedrock/Vertex/Foundry, telemetry or non-essential traffic disabled, or a first launch that has not fetched them yet) and no administrator has switched it on. Describe it if asked and suggest updating or asking their administrator, but do not tell the user to run it here.",
-    r = loadBundledText(() => require("./chunk-ytrjx25w.js"));
+  let e = describePluginEvalAvailability();
+  let n = lanternPrismEnabled()
+    ? "`/skill-doctor` is available in this session."
+    : "`/skill-doctor` is NOT available in this session. It is on by default in current releases; a session lacks it on an older release, or when this client does not receive feature settings (Bedrock/Vertex/Foundry, telemetry or non-essential traffic disabled, or a first launch that has not fetched them yet) and no administrator has switched it on. Describe it if asked and suggest updating or asking their administrator, but do not tell the user to run it here.";
+  let bundledText = loadBundledText(() => require("./chunk-ytrjx25w.js"));
   return `# Plugin eval and /skill-doctor (embedded offline reference)
 
 In THIS session: ${e.text} ${n}
 
-${r}`;
+${bundledText}`;
 }
 //@ chunk-e6aww6q8.js:2333149-2333908 fingerprint = getFeedbackGuideline (0.404)
 function getFeedbackGuideline() {
   if (isUsing3PServices() || !isFeedbackAllowed())
-    return `- When you cannot find an answer or the feature doesn't exist, direct the user to ${{ ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues", PACKAGE_URL: "@anthropic-ai/claude-code", README_URL: "https://code.claude.com/docs/en/overview", VERSION: "2.1.316", FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues", BUILD_TIME: "2026-10-30T23:28:13Z", GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1", HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js", DD_SOURCEMAP_GROUP: "default" }.ISSUES_EXPLAINER}`;
+    return `- When you cannot find an answer or the feature doesn't exist, direct the user to ${
+      {
+        ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
+        PACKAGE_URL: "@anthropic-ai/claude-code",
+        README_URL: "https://code.claude.com/docs/en/overview",
+        VERSION: "2.1.316",
+        FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
+        BUILD_TIME: "2026-10-30T23:28:13Z",
+        GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+        HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
+        DD_SOURCEMAP_GROUP: "default",
+      }.ISSUES_EXPLAINER
+    }`;
   return "- When you cannot find an answer or the feature doesn't exist, direct the user to use /feedback to report a feature request or bug";
 }
+//@ chunk-e6aww6q8.js:2333908-2336389 fingerprint = CLAUDE_CODE_GUIDE_AGENT (0.869)
 /**
  * claude-code-guide 内建代理：model haiku、permissionMode dontAsk，工具 Glob/Grep/Read/WebFetch/WebSearch（嵌入搜索时 Bash/Read/WebFetch/WebSearch），系统提示词附带本项目自定义 skills 列表等。
  */
-//@ chunk-e6aww6q8.js:2333908-2336389 fingerprint = CLAUDE_CODE_GUIDE_AGENT (0.869)
 var CLAUDE_CODE_GUIDE_AGENT = {
   agentType: CLAUDE_CODE_GUIDE,
   whenToUse: `Use this agent when the user asks questions ("Can Claude...", "Does Claude...", "How do I...") about: (1) Claude Code (the CLI tool) - features, hooks, slash commands, MCP servers, settings, IDE integrations, keyboard shortcuts; (2) Claude Agent SDK - building custom agents; (3) Claude API (formerly Anthropic API) - Messages API for directly passing messages to Claude, Tool Runner (\`client.beta.messages.tool_runner\`) for running an agentic loop over your own tools, manual tool-use loops, Managed Agents for server-hosted agents with a managed sandbox, prompt caching, and general Anthropic SDK usage; (4) Claude Tag (Claude in Slack) - what it is, setting it up for a Slack workspace, \`/install-slack-app\`; (5) \`claude plugin eval\` (writing and running plugin eval suites, its JSON/report, sandbox, CI) and the \`/skill-doctor\` report. **IMPORTANT:** Before spawning a new agent, check if there is already a running or recently completed claude-code-guide agent that you can continue via ${SENDMESSAGE}.`,
@@ -143,53 +155,55 @@ var CLAUDE_CODE_GUIDE_AGENT = {
   baseDir: "built-in",
   model: "haiku",
   permissionMode: "dontAsk",
-  getSystemPrompt({ toolUseContext: e }) {
-    let commands = e.options.commands,
-      r = [],
-      filtered = Ji(commands, "name").filter((q) => q.type === "prompt");
-    if (filtered.length > 0) {
-      let joined = filtered.map((Z) => `- /${Z.name}: ${Z.description}`).join(`
+  getSystemPrompt({ toolUseContext }) {
+    let commands = toolUseContext.options.commands;
+    let contextSections = [];
+    let customCommands = Ji(commands, "name").filter((cmd) => cmd.type === "prompt");
+    if (customCommands.length > 0) {
+      let commandList = customCommands.map((cmd) => `- /${cmd.name}: ${cmd.description}`).join(`
 `);
-      r.push(`**Available custom skills in this project:**
-${joined}`);
+      contextSections.push(`**Available custom skills in this project:**
+${commandList}`);
     }
-    let filtered_2 = e.options.agentDefinitions.activeAgents.filter(
+    let customAgents = toolUseContext.options.agentDefinitions.activeAgents.filter(
       (activeAgent) => activeAgent.source !== "built-in",
     );
-    if (filtered_2.length > 0) {
-      let joined = filtered_2.map((Z) => `- ${Z.agentType}: ${Z.whenToUse}`).join(`
+    if (customAgents.length > 0) {
+      let agentList = customAgents.map(
+        (customAgent) => `- ${customAgent.agentType}: ${customAgent.whenToUse}`,
+      ).join(`
 `);
-      r.push(`**Available custom agents configured:**
-${joined}`);
+      contextSections.push(`**Available custom agents configured:**
+${agentList}`);
     }
-    let mcpClients = e.options.mcpClients;
+    let mcpClients = toolUseContext.options.mcpClients;
     if (mcpClients && mcpClients.length > 0) {
-      let joined = mcpClients.map((Z) => `- ${Z.name}`).join(`
+      let mcpList = mcpClients.map((client) => `- ${client.name}`).join(`
 `);
-      r.push(`**Configured MCP servers:**
-${joined}`);
+      contextSections.push(`**Configured MCP servers:**
+${mcpList}`);
     }
-    let filtered_3 = commands.filter((q) => q.type === "prompt" && q.source === "plugin");
-    if (filtered_3.length > 0) {
-      let joined = filtered_3.map((Z) => `- /${Z.name}: ${Z.description}`).join(`
+    let pluginCommands = commands.filter((cmd) => cmd.type === "prompt" && cmd.source === "plugin");
+    if (pluginCommands.length > 0) {
+      let pluginList = pluginCommands.map((cmd) => `- /${cmd.name}: ${cmd.description}`).join(`
 `);
-      r.push(`**Available plugin skills:**
-${joined}`);
+      contextSections.push(`**Available plugin skills:**
+${pluginList}`);
     }
-    let sorted = Object.keys(getSettings_DEPRECATED()).sort();
-    if (sorted.length > 0)
-      r.push(
-        `**Settings keys configured (values omitted):** ${sorted.join(", ")}. To see values, the user can run the in-session \`/config\` command or open \`~/.claude/settings.json\`.`,
+    let settings = Object.keys(getSettings_DEPRECATED()).sort();
+    if (settings.length > 0)
+      contextSections.push(
+        `**Settings keys configured (values omitted):** ${settings.join(", ")}. To see values, the user can run the in-session \`/config\` command or open \`~/.claude/settings.json\`.`,
       );
-    let L = getFeedbackGuideline(),
-      G = `${getClaudeCodeGuideBasePrompt()}
-${L}
+    let feedbackGuideline = getFeedbackGuideline();
+    let basePromptWithFeedback = `${getClaudeCodeGuideBasePrompt()}
+${feedbackGuideline}
 
 ---
 
 ${getPluginEvalReferenceSection()}`;
-    if (r.length > 0)
-      return `${G}
+    if (contextSections.length > 0)
+      return `${basePromptWithFeedback}
 
 ---
 
@@ -197,13 +211,12 @@ ${getPluginEvalReferenceSection()}`;
 
 The user has the following custom setup in their environment:
 
-${r.join(`
+${contextSections.join(`
 
 `)}
 
 When answering questions, consider these configured features and proactively suggest them when relevant.`;
-    return G;
+    return basePromptWithFeedback;
   },
 };
-
 export { CLAUDE_CODE_GUIDE_AGENT };

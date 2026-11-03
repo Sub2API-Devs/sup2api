@@ -22,26 +22,26 @@ import { getRootSession } from "../../bootstrap/state.js";
 
 //@ chunk-e6aww6q8.js:835740-835753 affinity
 var DEFAULT_PARSE_TIMEOUT_MS = 5000;
+//@ chunk-e6aww6q8.js:835753-835849 fingerprint = getParseTimeoutMs (1)
 /**
  * PowerShell 解析超时：CLAUDE_CODE_PWSH_PARSE_TIMEOUT_MS（>0）否则 5000ms。
  */
-//@ chunk-e6aww6q8.js:835753-835849 fingerprint = getParseTimeoutMs (1)
 function getParseTimeoutMs() {
   let env_2 = env.CLAUDE_CODE_PWSH_PARSE_TIMEOUT_MS;
-  if (env_2 !== void 0 && env_2 > 0) return env_2;
+  if (env_2 !== undefined && env_2 > 0) return env_2;
   return DEFAULT_PARSE_TIMEOUT_MS;
 }
 //@ chunk-e6aww6q8.js:835849-835867 layout
-var PARSE_ATTEMPTS = 2,
-  MAX_WALL_SLACK_MS = 1e4;
+var PARSE_ATTEMPTS = 2;
+var MAX_WALL_SLACK_MS = 1e4;
 //@ chunk-e6aww6q8.js:835867-835908 layout
-function getWallClockDeadlineMs(e) {
-  return e + Math.min(e, MAX_WALL_SLACK_MS);
+function getWallClockDeadlineMs(parseTimeoutMs) {
+  return parseTimeoutMs + Math.min(parseTimeoutMs, MAX_WALL_SLACK_MS);
 }
+//@ chunk-e6aww6q8.js:835908-846874 fingerprint = INVALID_RESULT_BASE (1)
 /**
  * pwsh 内执行的解析脚本：用 System.Management.Automation.Language.Parser 解析 stdin 里 base64 的命令，输出语句/命令元素/重定向/变量/安全模式（子表达式、脚本块、展开串、成员调用、splat、类型字面量、using、#requires、后台作业）的 JSON，再 base64 回传。
  */
-//@ chunk-e6aww6q8.js:835908-846874 fingerprint = INVALID_RESULT_BASE (1)
 var PARSE_SCRIPT_BODY = `
 function Write-Result($Json) {
     [System.Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($Json))
@@ -301,44 +301,54 @@ $output = @{
 }
 
 Write-Result ($output | ConvertTo-Json -Depth 10 -Compress)
-`,
-  MAX_PARSE_COMMAND_BYTES = 32767,
-  INVALID_RESULT_BASE = { valid: !1, statements: [], variables: [], hasStopParsing: !1 };
+`;
+var MAX_PARSE_COMMAND_BYTES = 32767;
+var INVALID_RESULT_BASE = {
+  valid: false,
+  statements: [],
+  variables: [],
+  hasStopParsing: false,
+};
+//@ chunk-e6aww6q8.js:846874-846957 fingerprint = makeInvalidResult (1)
 /**
  * 构造无效解析结果（valid:false，带 errorId 与原命令）。
  */
-//@ chunk-e6aww6q8.js:846874-846957 fingerprint = makeInvalidResult (1)
 function makeInvalidResult(command, message, errorId) {
   return {
     ...INVALID_RESULT_BASE,
-    errors: [{ message: message, errorId: errorId }],
+    errors: [
+      {
+        message,
+        errorId,
+      },
+    ],
     originalCommand: command,
   };
 }
+//@ chunk-e6aww6q8.js:846957-847019 layout
 /**
  * 把 Unicode 破折号（U+2013/2014/2015）换成 ASCII “-”；PowerShell 会把它们当参数前缀，校验前先归一。
  */
-//@ chunk-e6aww6q8.js:846957-847019 layout
-function normalizeUnicodeDashes(e) {
-  return e.replace(/[\u2013\u2014\u2015]/g, "-");
+function normalizeUnicodeDashes(text) {
+  return text.replace(/[\u2013\u2014\u2015]/g, "-");
 }
+//@ chunk-e6aww6q8.js:847019-847246 fingerprint = toUtf16LeBase64 (0.856)
 /**
  * 字符串转 UTF-16LE 再 base64（-EncodedCommand 格式）。
  */
-//@ chunk-e6aww6q8.js:847019-847246 fingerprint = toUtf16LeBase64 (0.856)
 function toUtf16LeBase64(text) {
-  if (typeof Buffer < "u") return Buffer.from(text, "utf16le").toString("base64");
+  if (typeof Buffer !== "undefined") return Buffer.from(text, "utf16le").toString("base64");
   let bytes = [];
-  for (let r = 0; r < text.length; r++) {
-    let code = text.charCodeAt(r);
+  for (let i = 0; i < text.length; i++) {
+    let code = text.charCodeAt(i);
     bytes.push(code & 255, (code >> 8) & 255);
   }
-  return btoa(bytes.map((r) => String.fromCharCode(r)).join(""));
+  return btoa(bytes.map((byte) => String.fromCharCode(byte)).join(""));
 }
+//@ chunk-e6aww6q8.js:847246-847392 callgraph-fingerprint = buildParseScript (0.182)
 /**
  * pwsh 参数（-NoProfile -NonInteractive -NoLogo -EncodedCommand <解析脚本>）与 stdin（命令的 base64）。
  */
-//@ chunk-e6aww6q8.js:847246-847392 callgraph-fingerprint = buildParseScript (0.182)
 function buildParseInvocation(command) {
   return {
     args: ["-NoProfile", "-NonInteractive", "-NoLogo", "-EncodedCommand", toUtf16LeBase64(PARSE_SCRIPT_BODY)],
@@ -347,7 +357,7 @@ function buildParseInvocation(command) {
 }
 //@ chunk-e6aww6q8.js:847392-847470 file-local
 function ensureArray(value) {
-  if (value === void 0 || value === null) return [];
+  if (value === undefined || value === null) return [];
   return Array.isArray(value) ? value : [value];
 }
 //@ chunk-e6aww6q8.js:847470-848233 fingerprint = mapStatementType (1)
@@ -414,100 +424,108 @@ function mapElementType(rawType, expressionType) {
       return "Other";
   }
 }
+//@ chunk-e6aww6q8.js:848828-848962 fingerprint = classifyCommandName (1)
 /**
  * 按名字形状粗分命令：动词-名词为 cmdlet，含 . \ / 为外部程序，否则 unknown。
  */
-//@ chunk-e6aww6q8.js:848828-848962 fingerprint = classifyCommandName (1)
 function classifyCommandName(name) {
   if (/^[A-Za-z]+-[A-Za-z][A-Za-z0-9_]*$/.test(name)) return "cmdlet";
   if (/[.\\/]/.test(name)) return "application";
   return "unknown";
 }
+//@ chunk-e6aww6q8.js:848962-849169 fingerprint = stripModulePrefix (1)
 /**
  * 去掉 cmdlet 的模块限定前缀（Module\Get-Item → Get-Item）；盘符路径、UNC、.\、..\ 开头的路径保持原样。
  */
-//@ chunk-e6aww6q8.js:848962-849169 fingerprint = stripModulePrefix (1)
 function stripModulePrefix(name) {
   let idx = name.lastIndexOf("\\");
   if (idx < 0) return name;
   if (/^[A-Za-z]:/.test(name) || name.startsWith("\\\\") || name.startsWith(".\\") || name.startsWith("..\\"))
     return name;
-  let substring = name.substring(idx + 1);
-  if (substring === "") return name;
-  return substring;
+  let r = name.substring(idx + 1);
+  if (r === "") return name;
+  return r;
 }
 //@ chunk-e6aww6q8.js:849169-850065 fingerprint = transformCommandAst (1)
 function transformCommandAst(raw) {
-  let cmdElements = ensureArray(raw.commandElements),
-    name = "",
-    s = [],
-    h = [],
-    y = [],
-    S = !1,
-    nameType = "unknown";
+  let cmdElements = ensureArray(raw.commandElements);
+  let name = "";
+  let args = [];
+  let elementTypes = [];
+  let children = [];
+  let hasChildren = false;
+  let nameType = "unknown";
   if (cmdElements.length > 0) {
-    let q = cmdElements[0],
-      rawName = (
-        (q.type === "StringConstantExpressionAst" || q.type === "ExpandableStringExpressionAst") &&
-        typeof q.value === "string"
-          ? q.value
-          : q.text
-      ).replace(/^['"]|['"]$/g, "");
+    let first = cmdElements[0];
+    let rawName = (
+      (first.type === "StringConstantExpressionAst" || first.type === "ExpandableStringExpressionAst") &&
+      typeof first.value === "string"
+        ? first.value
+        : first.text
+    ).replace(/^['"]|['"]$/g, "");
     if (/[\u0080-\uFFFF]/.test(rawName)) nameType = "application";
     else nameType = classifyCommandName(rawName);
-    ((name = normalizeUnicodeDashes(stripModulePrefix(rawName))),
-      h.push(mapElementType(q.type, q.expressionType)));
-    for (let we = 1; we < cmdElements.length; we++) {
-      let Ee = cmdElements[we],
-        Ae = Ee.type === "StringConstantExpressionAst" || Ee.type === "ExpandableStringExpressionAst";
-      (s.push(normalizeUnicodeDashes(Ae && Ee.value != null ? Ee.value : Ee.text)),
-        h.push(mapElementType(Ee.type, Ee.expressionType)));
+    name = normalizeUnicodeDashes(stripModulePrefix(rawName));
+    elementTypes.push(mapElementType(first.type, first.expressionType));
+    for (let i = 1; i < cmdElements.length; i++) {
+      let Ee = cmdElements[i];
+      let isStringLiteral =
+        Ee.type === "StringConstantExpressionAst" || Ee.type === "ExpandableStringExpressionAst";
+      args.push(normalizeUnicodeDashes(isStringLiteral && Ee.value != null ? Ee.value : Ee.text));
+      elementTypes.push(mapElementType(Ee.type, Ee.expressionType));
       let rawChildren = ensureArray(Ee.children);
-      if (rawChildren.length > 0)
-        ((S = !0),
-          y.push(
-            rawChildren.map((Me) => ({
-              type: mapElementType(Me.type),
-              text: normalizeUnicodeDashes(Me.text),
-            })),
-          ));
-      else y.push(void 0);
+      if (rawChildren.length > 0) {
+        hasChildren = true;
+        children.push(
+          rawChildren.map((rawChild) => ({
+            type: mapElementType(rawChild.type),
+            text: normalizeUnicodeDashes(rawChild.text),
+          })),
+        );
+      } else children.push(undefined);
     }
   }
   let result = {
-      name: name,
-      nameType: nameType,
-      elementType: "CommandAst",
-      args: s,
-      text: normalizeUnicodeDashes(raw.text),
-      elementTypes: h,
-      ...(S && { children: y }),
-    },
-    rawRedirs = ensureArray(raw.redirections);
+    name,
+    nameType,
+    elementType: "CommandAst",
+    args,
+    text: normalizeUnicodeDashes(raw.text),
+    elementTypes,
+    ...(hasChildren && {
+      children,
+    }),
+  };
+  let rawRedirs = ensureArray(raw.redirections);
   if (rawRedirs.length > 0) result.redirections = rawRedirs.map(transformRedirection);
   return result;
 }
 //@ chunk-e6aww6q8.js:850065-850291 fingerprint = transformExpressionElement (1)
 function transformExpressionElement(raw) {
-  let elementType = raw.type === "ParenExpressionAst" ? "ParenExpressionAst" : "CommandExpressionAst",
-    elementTypes = [mapElementType(raw.type, raw.expressionType)];
+  let elementType = raw.type === "ParenExpressionAst" ? "ParenExpressionAst" : "CommandExpressionAst";
+  let elementTypes = [mapElementType(raw.type, raw.expressionType)];
   return {
     name: normalizeUnicodeDashes(raw.text),
     nameType: "unknown",
-    elementType: elementType,
+    elementType,
     args: [],
     text: normalizeUnicodeDashes(raw.text),
-    elementTypes: elementTypes,
+    elementTypes,
   };
 }
 //@ chunk-e6aww6q8.js:850291-850662 fingerprint = transformRedirection (1)
 function transformRedirection(raw) {
-  if (raw.type === "MergingRedirectionAst") return { operator: "2>&1", target: "", isMerging: !0 };
-  let n = raw.append ?? !1,
-    r = raw.fromStream ?? "Output",
-    operator;
-  if (n)
-    switch (r) {
+  if (raw.type === "MergingRedirectionAst")
+    return {
+      operator: "2>&1",
+      target: "",
+      isMerging: true,
+    };
+  let append = raw.append ?? false;
+  let fromStream = raw.fromStream ?? "Output";
+  let operator;
+  if (append)
+    switch (fromStream) {
       case "Error":
         operator = "2>>";
         break;
@@ -519,7 +537,7 @@ function transformRedirection(raw) {
         break;
     }
   else
-    switch (r) {
+    switch (fromStream) {
       case "Error":
         operator = "2>";
         break;
@@ -530,88 +548,94 @@ function transformRedirection(raw) {
         operator = ">";
         break;
     }
-  return { operator: operator, target: raw.locationText ?? "", isMerging: !1 };
+  return {
+    operator,
+    target: raw.locationText ?? "",
+    isMerging: false,
+  };
 }
 //@ chunk-e6aww6q8.js:850662-851437 fingerprint = transformStatement (1)
 function transformStatement(raw) {
-  let statementType = mapStatementType(raw.type),
-    r = [],
-    s = [];
+  let statementType = mapStatementType(raw.type);
+  let commands = [];
+  let redirections = [];
   if (raw.elements) {
     for (let elem of ensureArray(raw.elements))
       if (elem.type === "CommandAst") {
-        r.push(transformCommandAst(elem));
-        for (let redir of ensureArray(elem.redirections)) s.push(transformRedirection(redir));
+        commands.push(transformCommandAst(elem));
+        for (let redir of ensureArray(elem.redirections)) redirections.push(transformRedirection(redir));
       } else {
-        r.push(transformExpressionElement(elem));
-        for (let redir of ensureArray(elem.redirections)) s.push(transformRedirection(redir));
+        commands.push(transformExpressionElement(elem));
+        for (let redir of ensureArray(elem.redirections)) redirections.push(transformRedirection(redir));
       }
-    let seen = new Set(s.map((L) => `${L.operator}\x00${L.target}`));
+    let seen = new Set(redirections.map((redirection) => `${redirection.operator}\x00${redirection.target}`));
     for (let redir of ensureArray(raw.redirections)) {
-      let G = transformRedirection(redir),
-        key = `${G.operator}\x00${G.target}`;
-      if (!seen.has(key)) (seen.add(key), s.push(G));
+      let G = transformRedirection(redir);
+      let key = `${G.operator}\x00${G.target}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        redirections.push(G);
+      }
     }
   } else {
-    r.push({
+    commands.push({
       name: normalizeUnicodeDashes(raw.text),
       nameType: "unknown",
       elementType: "CommandExpressionAst",
       args: [],
       text: normalizeUnicodeDashes(raw.text),
     });
-    for (let redir of ensureArray(raw.redirections)) s.push(transformRedirection(redir));
+    for (let redir of ensureArray(raw.redirections)) redirections.push(transformRedirection(redir));
   }
-  let nestedCommands,
-    rawNested = ensureArray(raw.nestedCommands);
+  let nestedCommands;
+  let rawNested = ensureArray(raw.nestedCommands);
   if (rawNested.length > 0) nestedCommands = rawNested.map(transformCommandAst);
   let result = {
-    statementType: statementType,
-    commands: r,
-    redirections: s,
+    statementType,
+    commands,
+    redirections,
     text: normalizeUnicodeDashes(raw.text),
-    nestedCommands: nestedCommands,
+    nestedCommands,
   };
   if (raw.securityPatterns) result.securityPatterns = raw.securityPatterns;
   return result;
 }
+//@ chunk-e6aww6q8.js:851437-851831 fingerprint = transformRawOutput (0.934)
 /**
  * 把 pwsh 输出的原始 JSON 规范成 ParsedPowerShellCommand（statements、variables、errors、typeLiterals、hasUsingStatements/hasScriptRequirements/hasBackgroundJob）。
  */
-//@ chunk-e6aww6q8.js:851437-851831 fingerprint = transformRawOutput (0.934)
 function transformRawOutput(raw) {
   let result = {
-      valid: raw.valid,
-      errors: ensureArray(raw.errors),
-      statements: ensureArray(raw.statements).map(transformStatement),
-      variables: ensureArray(raw.variables),
-      hasStopParsing: raw.hasStopParsing,
-      originalCommand: raw.originalCommand,
-    },
-    tl = ensureArray(raw.typeLiterals);
+    valid: raw.valid,
+    errors: ensureArray(raw.errors),
+    statements: ensureArray(raw.statements).map(transformStatement),
+    variables: ensureArray(raw.variables),
+    hasStopParsing: raw.hasStopParsing,
+    originalCommand: raw.originalCommand,
+  };
+  let tl = ensureArray(raw.typeLiterals);
   if (tl.length > 0) result.typeLiterals = tl;
-  if (raw.hasUsingStatements) result.hasUsingStatements = !0;
-  if (raw.hasScriptRequirements) result.hasScriptRequirements = !0;
-  if (raw.hasBackgroundJob) result.hasBackgroundJob = !0;
+  if (raw.hasUsingStatements) result.hasUsingStatements = true;
+  if (raw.hasScriptRequirements) result.hasScriptRequirements = true;
+  if (raw.hasBackgroundJob) result.hasBackgroundJob = true;
   return result;
 }
+//@ chunk-e6aww6q8.js:851831-853805 fingerprint = parsePowerShellCommandImpl (0.732)
 /**
  * 调 pwsh 解析一条 PowerShell 命令：超过 32767 字节、含 `u{…} 码点转义直接判无效；最多尝试 2 次（spawn 失败/超时/非零退出）；校验回传的 originalCommand 与输入一致，否则 InputMismatch。
  */
-//@ chunk-e6aww6q8.js:851831-853805 fingerprint = parsePowerShellCommandImpl (0.732)
 async function parsePowerShellCommandImpl(command) {
   let commandBytes = Buffer.byteLength(command, "utf8");
-  if (commandBytes > MAX_PARSE_COMMAND_BYTES)
-    return (
-      logForDebugging(
-        `PowerShell parser: command too long (${commandBytes} bytes, max ${MAX_PARSE_COMMAND_BYTES})`,
-      ),
-      makeInvalidResult(
-        command,
-        `Command too long for parsing (${commandBytes} bytes). Maximum supported length is ${MAX_PARSE_COMMAND_BYTES} bytes.`,
-        "CommandTooLong",
-      )
+  if (commandBytes > MAX_PARSE_COMMAND_BYTES) {
+    logForDebugging(
+      `PowerShell parser: command too long (${commandBytes} bytes, max ${MAX_PARSE_COMMAND_BYTES})`,
     );
+    return makeInvalidResult(
+      command,
+      `Command too long for parsing (${commandBytes} bytes). Maximum supported length is ${MAX_PARSE_COMMAND_BYTES} bytes.`,
+      "CommandTooLong",
+    );
+  }
   if (/`u\{[0-9A-Fa-f]/.test(command))
     return makeInvalidResult(
       command,
@@ -624,76 +648,80 @@ async function parsePowerShellCommandImpl(command) {
   try {
     s = buildParseInvocation(command);
   } catch (error) {
-    return (
-      logForDebugging(`PowerShell parser: could not encode the parse script: ${errorMessage(error)}`, {
-        level: "error",
-      }),
-      makeInvalidResult(command, "PowerShell parser could not be started", "EncodeError")
-    );
+    logForDebugging(`PowerShell parser: could not encode the parse script: ${errorMessage(error)}`, {
+      level: "error",
+    });
+    return makeInvalidResult(command, "PowerShell parser could not be started", "EncodeError");
   }
-  let h = getParseTimeoutMs(),
-    script = getWallClockDeadlineMs(h),
-    stdout = "",
-    stderr = "",
-    code = null,
-    G = !1,
-    q = null;
+  let parseTimeoutMs = getParseTimeoutMs();
+  let script = getWallClockDeadlineMs(parseTimeoutMs);
+  let stdout = "";
+  let stderr = "";
+  let code = null;
+  let G = false;
+  let q = null;
   for (let attempt = 0; attempt < PARSE_ATTEMPTS; attempt++) {
-    ((q = null), (G = !1));
+    q = null;
+    G = false;
     try {
       let ke = safeExecFile(pwshPath, s.args, {
-          input: s.input,
-          timeout: h,
-          reject: !1,
-          useToolMemoryCgroup: !1,
-        }),
-        we = await withDeadline(ke, script);
-      if (we === void 0) (ke.catch(() => {}), (G = !0), (code = 1));
-      else
-        ((stdout = we.stdout),
-          (stderr = we.stderr),
-          (G = we.timedOut),
-          (code = we.failed ? (we.exitCode ?? 1) : 0));
-    } catch (error) {
-      ((q = error instanceof Error ? error.message : String(error)), (code = null));
+        input: s.input,
+        timeout: parseTimeoutMs,
+        reject: false,
+        useToolMemoryCgroup: false,
+      });
+      let result = await withDeadline(ke, script);
+      if (result === undefined) {
+        ke.catch(() => {});
+        G = true;
+        code = 1;
+      } else {
+        stdout = result.stdout;
+        stderr = result.stderr;
+        G = result.timedOut;
+        code = result.failed ? (result.exitCode ?? 1) : 0;
+      }
+    } catch (e) {
+      q = e instanceof Error ? e.message : String(e);
+      code = null;
     }
     if (code === 0) break;
     logForDebugging(
-      `PowerShell parser: ${q ? `failed to spawn pwsh: ${q}` : G ? `pwsh timed out after ${h}ms` : `pwsh exited ${code}: ${stderr}`} (attempt ${attempt + 1})`,
+      `PowerShell parser: ${q ? `failed to spawn pwsh: ${q}` : G ? `pwsh timed out after ${parseTimeoutMs}ms` : `pwsh exited ${code}: ${stderr}`} (attempt ${attempt + 1})`,
     );
   }
   if (q) return makeInvalidResult(command, `Failed to spawn PowerShell: ${q}`, "PwshSpawnError");
-  if (G) return makeInvalidResult(command, `pwsh timed out after ${h}ms (2 attempts)`, "PwshTimeout");
-  if (code !== 0)
-    return (
-      logForDebugging(`PowerShell parser: pwsh exited with code ${code}, stderr: ${stderr}`),
-      makeInvalidResult(command, `pwsh exited with code ${code}: ${stderr}`, "PwshError")
-    );
+  if (G)
+    return makeInvalidResult(command, `pwsh timed out after ${parseTimeoutMs}ms (2 attempts)`, "PwshTimeout");
+  if (code !== 0) {
+    logForDebugging(`PowerShell parser: pwsh exited with code ${code}, stderr: ${stderr}`);
+    return makeInvalidResult(command, `pwsh exited with code ${code}: ${stderr}`, "PwshError");
+  }
   let trimmed = stdout.trim();
-  if (!trimmed)
-    return (
-      logForDebugging("PowerShell parser: empty stdout from pwsh"),
-      makeInvalidResult(command, "No output from PowerShell parser", "EmptyOutput")
-    );
+  if (!trimmed) {
+    logForDebugging("PowerShell parser: empty stdout from pwsh");
+    return makeInvalidResult(command, "No output from PowerShell parser", "EmptyOutput");
+  }
   try {
     let raw = jsonParse(Buffer.from(trimmed, "base64").toString("utf8"));
-    if (raw.originalCommand !== command)
-      return (
-        logForDebugging("PowerShell parser: pwsh did not parse the command it was sent"),
-        makeInvalidResult(command, "PowerShell parser did not receive the command intact", "InputMismatch")
+    if (raw.originalCommand !== command) {
+      logForDebugging("PowerShell parser: pwsh did not parse the command it was sent");
+      return makeInvalidResult(
+        command,
+        "PowerShell parser did not receive the command intact",
+        "InputMismatch",
       );
+    }
     return transformRawOutput(raw);
   } catch {
-    return (
-      logForDebugging(`PowerShell parser: invalid JSON output: ${trimmed.slice(0, 200)}`),
-      makeInvalidResult(command, "Invalid JSON from PowerShell parser", "InvalidJson")
-    );
+    logForDebugging(`PowerShell parser: invalid JSON output: ${trimmed.slice(0, 200)}`);
+    return makeInvalidResult(command, "Invalid JSON from PowerShell parser", "InvalidJson");
   }
 }
+//@ chunk-e6aww6q8.js:853805-853943 fingerprint = TRANSIENT_ERROR_IDS (0.769)
 /**
  * 暂时性错误 id（spawn 失败、超时、空输出、JSON 无效…）：这类结果不进缓存，下次重解析。
  */
-//@ chunk-e6aww6q8.js:853805-853943 fingerprint = TRANSIENT_ERROR_IDS (0.769)
 var TRANSIENT_ERROR_IDS = new Set([
   "PwshSpawnError",
   "PwshError",
@@ -704,30 +732,28 @@ var TRANSIENT_ERROR_IDS = new Set([
   "EncodeError",
   "UnexpectedError",
 ]);
+//@ chunk-e6aww6q8.js:853943-854273 fingerprint = parsePowerShellCommandCached (0.496)
 /**
  * 每宿主一个 LRU(256) 解析缓存；暂时性失败结果会从缓存删除。
  */
-//@ chunk-e6aww6q8.js:853943-854273 fingerprint = parsePowerShellCommandCached (0.496)
 class PowerShellParserCache {
   cached = memoizeWithLRU(
-    (e) => {
-      let n = parsePowerShellCommandImpl(e).catch((s) => {
-          try {
-            logError(s);
-          } catch {}
-          return makeInvalidResult(e, "PowerShell parser failed unexpectedly", "UnexpectedError");
-        }),
-        r = () => {
-          if (this.cached.cache.get(e) === n) this.cached.cache.delete(e);
-        };
-      return (
-        n.then((s) => {
-          if (!s.valid && TRANSIENT_ERROR_IDS.has(s.errors[0]?.errorId ?? "")) r();
-        }, r),
-        n
-      );
+    (command) => {
+      let promise = parsePowerShellCommandImpl(command).catch((error) => {
+        try {
+          logError(error);
+        } catch {}
+        return makeInvalidResult(command, "PowerShell parser failed unexpectedly", "UnexpectedError");
+      });
+      let r = () => {
+        if (this.cached.cache.get(command) === promise) this.cached.cache.delete(command);
+      };
+      promise.then((result) => {
+        if (!result.valid && TRANSIENT_ERROR_IDS.has(result.errors[0]?.errorId ?? "")) r();
+      }, r);
+      return promise;
     },
-    (e) => e,
+    (command) => command,
     256,
   );
   parse(e) {
@@ -736,17 +762,17 @@ class PowerShellParserCache {
 }
 //@ chunk-e6aww6q8.js:854273-854300 layout
 var POWERSHELL_PARSER_PER_HOST = new HostScoped(() => new PowerShellParserCache());
+//@ chunk-e6aww6q8.js:854300-854349 layout
 /**
  * 解析 PowerShell 命令（当前宿主的缓存解析器），供 PowerShell 工具的权限/只读/前缀分析使用。
  */
-//@ chunk-e6aww6q8.js:854300-854349 layout
-function parsePowerShellCommand(e) {
-  return POWERSHELL_PARSER_PER_HOST.of(getRootSession().host).parse(e);
+function parsePowerShellCommand(command) {
+  return POWERSHELL_PARSER_PER_HOST.of(getRootSession().host).parse(command);
 }
+//@ chunk-e6aww6q8.js:854349-856049 fingerprint = COMMON_ALIASES (0.984)
 /**
  * PowerShell 常用别名到规范 cmdlet 的映射（无原型对象）：ls/dir/gci→Get-ChildItem、cat/gc→Get-Content、rm/del→Remove-Item、iex→Invoke-Expression、iwr→Invoke-WebRequest 等。权限与只读判定按规范名比较，防止用别名绕过规则。
  */
-//@ chunk-e6aww6q8.js:854349-856049 fingerprint = COMMON_ALIASES (0.984)
 var COMMON_ALIASES = Object.assign(Object.create(null), {
   ls: "Get-ChildItem",
   dir: "Get-ChildItem",
@@ -836,10 +862,10 @@ var COMMON_ALIASES = Object.assign(Object.create(null), {
   epal: "Export-Alias",
   sls: "Select-String",
 });
+//@ chunk-e6aww6q8.js:856049-856242 fingerprint = getAllCommandNames (1)
 /**
  * 收集解析结果中所有语句的顶层命令与嵌套命令名（小写）。
  */
-//@ chunk-e6aww6q8.js:856049-856242 fingerprint = getAllCommandNames (1)
 function getAllCommandNames(parsed) {
   let names = [];
   for (let statement of parsed.statements) {
@@ -849,10 +875,10 @@ function getAllCommandNames(parsed) {
   }
   return names;
 }
+//@ chunk-e6aww6q8.js:856242-856396 layout = getAllCommandNames (1)
 /**
  * 收集解析结果中所有语句的顶层命令与嵌套命令对象（返回命令对象，不是名字）。
  */
-//@ chunk-e6aww6q8.js:856242-856396 layout = getAllCommandNames (1)
 function getAllCommands(parsed) {
   let names = [];
   for (let statement of parsed.statements) {
@@ -873,53 +899,53 @@ function getAllRedirections(parsed) {
   }
   return redirections;
 }
+//@ chunk-e6aww6q8.js:856603-856714 fingerprint = getVariablesByScope (1)
 /**
  * 按作用域前缀（如 env:、global:）过滤解析出的变量引用。
  */
-//@ chunk-e6aww6q8.js:856603-856714 fingerprint = getVariablesByScope (1)
 function getVariablesByScope(parsed, scope) {
   let prefix = scope.toLowerCase() + ":";
-  return parsed.variables.filter((variable) => variable.path.toLowerCase().startsWith(prefix));
+  return parsed.variables.filter((v) => v.path.toLowerCase().startsWith(prefix));
 }
+//@ chunk-e6aww6q8.js:856714-856917 callgraph-witnessed = hasCommandNamed (0)
 /**
  * 判断命令中是否出现指定命令：名字或别名任一方向经 COMMON_ALIASES 规范化后相等即算命中。
  */
-//@ chunk-e6aww6q8.js:856714-856917 callgraph-witnessed = hasCommandNamed (0)
 function hasCommandNamed(parsed, name) {
-  let lowerName = name.toLowerCase(),
-    canonicalFromAlias = COMMON_ALIASES[lowerName]?.toLowerCase();
+  let lowerName = name.toLowerCase();
+  let canonicalFromAlias = COMMON_ALIASES[lowerName]?.toLowerCase();
   for (let cmdName of getAllCommandNames(parsed)) {
-    if (cmdName === lowerName) return !0;
+    if (cmdName === lowerName) return true;
     let canonical = COMMON_ALIASES[cmdName]?.toLowerCase();
-    if (canonical === lowerName) return !0;
-    if (canonicalFromAlias && cmdName === canonicalFromAlias) return !0;
-    if (canonical && canonicalFromAlias && canonical === canonicalFromAlias) return !0;
+    if (canonical === lowerName) return true;
+    if (canonicalFromAlias && cmdName === canonicalFromAlias) return true;
+    if (canonical && canonicalFromAlias && canonical === canonicalFromAlias) return true;
   }
-  return !1;
+  return false;
 }
 //@ chunk-e6aww6q8.js:856917-856966 layout
 var PS_TOKENIZER_DASH_CHARS = new Set(["-", "\u2013", "\u2014", "\u2015"]);
+//@ chunk-e6aww6q8.js:856966-857053 fingerprint = isPowerShellParameter (1)
 /**
  * 判断参数是否是 PowerShell 形参：有 AST 元素类型时看是否为 Parameter，否则看首字符是否属于 PowerShell 认的破折号集合（含 Unicode 破折号）。
  */
-//@ chunk-e6aww6q8.js:856966-857053 fingerprint = isPowerShellParameter (1)
 function isPowerShellParameter(arg, elementType) {
-  if (elementType !== void 0) return elementType === "Parameter";
+  if (elementType !== undefined) return elementType === "Parameter";
   return arg.length > 0 && PS_TOKENIZER_DASH_CHARS.has(arg[0]);
 }
+//@ chunk-e6aww6q8.js:857053-857306 file-local
 /**
  * 判断命令是否带某参数的缩写（PowerShell 允许唯一前缀缩写）：去掉反引号续行与冒号值后，参数须以最短前缀开头且是完整参数名的前缀。
  */
-//@ chunk-e6aww6q8.js:857053-857306 file-local
 function commandHasArgAbbreviation(command, fullParam, minPrefix) {
-  let lowerFull = fullParam.toLowerCase(),
-    lowerMin = minPrefix.toLowerCase();
+  let lowerFull = fullParam.toLowerCase();
+  let lowerMin = minPrefix.toLowerCase();
   return command.args.some((arg) => {
-    let colonIndex = arg.indexOf(":", 1),
-      lower = (colonIndex > 0 ? arg.slice(0, colonIndex) : arg)
-        .replace(/`[\r\n]+\s*/g, "")
-        .replaceAll("`", "")
-        .toLowerCase();
+    let colonIndex = arg.indexOf(":", 1);
+    let lower = (colonIndex > 0 ? arg.slice(0, colonIndex) : arg)
+      .replace(/`[\r\n]+\s*/g, "")
+      .replaceAll("`", "")
+      .toLowerCase();
     return lower.startsWith(lowerMin) && lowerFull.startsWith(lower) && lower.length <= lowerFull.length;
   });
 }
@@ -927,33 +953,33 @@ function commandHasArgAbbreviation(command, fullParam, minPrefix) {
 function getPipelineSegments(parsed) {
   return parsed.statements;
 }
+//@ chunk-e6aww6q8.js:857342-857421 fingerprint = isNullRedirectionTarget (1)
 /**
  * 重定向目标是否为 $null / ${null}（丢弃输出，不算写文件）。
  */
-//@ chunk-e6aww6q8.js:857342-857421 fingerprint = isNullRedirectionTarget (1)
 function isNullRedirectionTarget(target) {
-  let lower = target.trim().toLowerCase();
-  return lower === "$null" || lower === "${null}";
+  let t = target.trim().toLowerCase();
+  return t === "$null" || t === "${null}";
 }
+//@ chunk-e6aww6q8.js:857421-857493 fingerprint = getFileRedirections (1)
 /**
  * 取真正写文件的重定向：排除流合并（2>&1）和指向 $null 的重定向。
  */
-//@ chunk-e6aww6q8.js:857421-857493 fingerprint = getFileRedirections (1)
 function getFileRedirections(parsed) {
   return getAllRedirections(parsed).filter((n) => !n.isMerging && !isNullRedirectionTarget(n.target));
 }
+//@ chunk-e6aww6q8.js:857493-858490 fingerprint = deriveSecurityFlags (1)
 /**
  * 汇总解析结果的安全标志：子表达式、脚本块、splat、可展开字符串、成员调用、赋值、--% 停止解析。
  */
-//@ chunk-e6aww6q8.js:857493-858490 fingerprint = deriveSecurityFlags (1)
 function deriveSecurityFlags(parsed) {
   let flags = {
-    hasSubExpressions: !1,
-    hasScriptBlocks: !1,
-    hasSplatting: !1,
-    hasExpandableStrings: !1,
-    hasMemberInvocations: !1,
-    hasAssignments: !1,
+    hasSubExpressions: false,
+    hasScriptBlocks: false,
+    hasSplatting: false,
+    hasExpandableStrings: false,
+    hasMemberInvocations: false,
+    hasAssignments: false,
     hasStopParsing: parsed.hasStopParsing,
   };
   function checkElements(cmd) {
@@ -961,46 +987,47 @@ function deriveSecurityFlags(parsed) {
     for (let et of cmd.elementTypes)
       switch (et) {
         case "ScriptBlock":
-          flags.hasScriptBlocks = !0;
+          flags.hasScriptBlocks = true;
           break;
         case "SubExpression":
-          flags.hasSubExpressions = !0;
+          flags.hasSubExpressions = true;
           break;
         case "ExpandableString":
-          flags.hasExpandableStrings = !0;
+          flags.hasExpandableStrings = true;
           break;
         case "MemberInvocation":
-          flags.hasMemberInvocations = !0;
+          flags.hasMemberInvocations = true;
           break;
       }
   }
   for (let stmt of parsed.statements) {
-    if (stmt.statementType === "AssignmentStatementAst") flags.hasAssignments = !0;
+    if (stmt.statementType === "AssignmentStatementAst") flags.hasAssignments = true;
     for (let cmd of stmt.commands) checkElements(cmd);
     if (stmt.nestedCommands) for (let cmd of stmt.nestedCommands) checkElements(cmd);
     if (stmt.securityPatterns) {
-      if (stmt.securityPatterns.hasMemberInvocations) flags.hasMemberInvocations = !0;
-      if (stmt.securityPatterns.hasSubExpressions) flags.hasSubExpressions = !0;
-      if (stmt.securityPatterns.hasExpandableStrings) flags.hasExpandableStrings = !0;
-      if (stmt.securityPatterns.hasScriptBlocks) flags.hasScriptBlocks = !0;
+      if (stmt.securityPatterns.hasMemberInvocations) flags.hasMemberInvocations = true;
+      if (stmt.securityPatterns.hasSubExpressions) flags.hasSubExpressions = true;
+      if (stmt.securityPatterns.hasExpandableStrings) flags.hasExpandableStrings = true;
+      if (stmt.securityPatterns.hasScriptBlocks) flags.hasScriptBlocks = true;
     }
   }
-  for (let variable of parsed.variables)
-    if (variable.isSplatted) {
-      flags.hasSplatting = !0;
+  for (let v of parsed.variables)
+    if (v.isSplatted) {
+      flags.hasSplatting = true;
       break;
     }
   return flags;
 }
+//@ chunk-e6aww6q8.js:1195521-1195635 fingerprint = DIRECTORY_CHANGE_ALIASES (1)
 /**
  * argv[0] 去掉路径后若是 cd/chdir/pushd/popd 则返回该名字，否则 undefined。是函数，不是旧版名所说的别名集合。
  */
-//@ chunk-e6aww6q8.js:1195521-1195635 fingerprint = DIRECTORY_CHANGE_ALIASES (1)
-function getDirectoryChangeBuiltin(e) {
-  let n = e[0]?.replace(/^.*[\\/]/, "");
-  return n === "cd" || n === "chdir" || n === "pushd" || n === "popd" ? n : void 0;
+function getDirectoryChangeBuiltin(argv) {
+  let replaced = argv[0]?.replace(/^.*[\\/]/, "");
+  return replaced === "cd" || replaced === "chdir" || replaced === "pushd" || replaced === "popd"
+    ? replaced
+    : undefined;
 }
-
 export {
   parsePowerShellCommand,
   getAllCommands,

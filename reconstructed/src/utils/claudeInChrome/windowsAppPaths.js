@@ -18,9 +18,12 @@ import { withDeadline } from "../sleep.js";
 import { getErrnoCode } from "../errors.js";
 
 //@ chunk-c1gz91xp.js:484-561 placement
-var w = "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\App Paths",
-  f = 1e4,
-  A = 5000;
+/**
+ * Windows 注册表里 App Paths 的键路径。
+ */
+var WINDOWS_APP_PATHS_KEY = "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\App Paths";
+var REG_QUERY_TIMEOUT_MS = 1e4;
+var APP_PATH_STAT_TIMEOUT_MS = 5000;
 //@ chunk-c1gz91xp.js:561-710 placement
 function windowsAppsDir() {
   if (!env.LOCALAPPDATA) return;
@@ -28,13 +31,16 @@ function windowsAppsDir() {
   return win32.normalize(`${replaced}\\Microsoft\\WindowsApps\\`).toLowerCase();
 }
 //@ chunk-c1gz91xp.js:710-773 placement
-function x2() {
+/**
+ * 返回 Windows 系统根目录（SYSTEMROOT 等）。
+ */
+function systemRootDir() {
   return env.SYSTEMROOT || env.SystemRoot || "C:\\Windows";
 }
 //@ chunk-c1gz91xp.js:773-992 placement
-function parseRegDefaultValue(e) {
-  for (let s of e.split(/\r?\n/)) {
-    let match = s.match(/^\s+.+?\s+REG_(?:EXPAND_)?SZ\s+(.+)$/i);
+function parseRegDefaultValue(stdout) {
+  for (let line of stdout.split(/\r?\n/)) {
+    let match = line.match(/^\s+.+?\s+REG_(?:EXPAND_)?SZ\s+(.+)$/i);
     if (match && match[1]) {
       let trimmed = match[1].trim();
       if (trimmed.length >= 2 && trimmed.startsWith('"') && trimmed.endsWith('"'))
@@ -45,38 +51,38 @@ function parseRegDefaultValue(e) {
   return null;
 }
 //@ chunk-c1gz91xp.js:992-1170 placement
-function expandWindowsEnvVars(e, s = process.env) {
+function expandWindowsEnvVars(regDefaultValue, s = process.env) {
   let o = new Map();
-  for (let [r, n] of Object.entries(s)) if (n !== void 0) o.set(r.toLowerCase(), n);
-  return e.replace(/%([^%]+)%/g, (r, n) => o.get(n.toLowerCase()) ?? r);
+  for (let [key, value] of Object.entries(s)) if (value !== undefined) o.set(key.toLowerCase(), value);
+  return regDefaultValue.replace(/%([^%]+)%/g, (r, n) => o.get(n.toLowerCase()) ?? r);
 }
+//@ chunk-c1gz91xp.js:1170-2474 placement
 /**
  * 通过 reg.exe 查询 HKCU/HKLM 的 App Paths 注册表项解析可执行文件路径：展开 %VAR%，要求完整路径且在时限内确认存在、不是目录（WindowsApps 下 stat 异常也接受）。
  */
-//@ chunk-c1gz91xp.js:1170-2474 placement
-async function resolveAppPathFromRegistry(exeName, statTimeoutMs = A) {
-  let o = x2(),
-    r = `${o}\\System32\\reg.exe`;
+async function resolveAppPathFromRegistry(exeName, statTimeoutMs = APP_PATH_STAT_TIMEOUT_MS) {
+  let o = systemRootDir();
+  let r = `${o}\\System32\\reg.exe`;
   for (let n of ["HKCU", "HKLM"]) {
-    let u = await execFileNoThrowWithCwd(r, ["query", `${n}\\${w}\\${exeName}`, "/ve"], {
-      timeout: f,
+    let u = await execFileNoThrowWithCwd(r, ["query", `${n}\\${WINDOWS_APP_PATHS_KEY}\\${exeName}`, "/ve"], {
+      timeout: REG_QUERY_TIMEOUT_MS,
       cwd: o,
     });
     if (u.code !== 0) {
-      if (u.exitCode === void 0)
+      if (u.exitCode === undefined)
         logForDebugging(
-          `[Claude in Chrome] ${n} App Paths query for ${exeName} did not run to completion: ${u.error ?? `killed at the ${f}ms bound, or reg.exe failed to spawn`}`,
+          `[Claude in Chrome] ${n} App Paths query for ${exeName} did not run to completion: ${u.error ?? `killed at the ${REG_QUERY_TIMEOUT_MS}ms bound, or reg.exe failed to spawn`}`,
         );
       continue;
     }
-    let p = parseRegDefaultValue(u.stdout);
-    if (!p) {
+    let regDefaultValue = parseRegDefaultValue(u.stdout);
+    if (!regDefaultValue) {
       logForDebugging(
         `[Claude in Chrome] ${n} App Paths value for ${exeName} had no parseable string default; skipping`,
       );
       continue;
     }
-    let c = expandWindowsEnvVars(p);
+    let c = expandWindowsEnvVars(regDefaultValue);
     if (!/^(?:[a-zA-Z]:[\\/]|\\\\)/.test(c)) {
       logForDebugging(
         `[Claude in Chrome] Skipping ${n} App Paths candidate for ${exeName}: not a fully qualified path`,
@@ -87,61 +93,75 @@ async function resolveAppPathFromRegistry(exeName, statTimeoutMs = A) {
       let d = lstat(c);
       d.catch(() => {});
       let a = await withDeadline(d, statTimeoutMs);
-      if (a === void 0) {
+      if (a === undefined) {
         logForDebugging(
           `[Claude in Chrome] Skipping ${n} App Paths candidate for ${exeName}: existence check exceeded ${statTimeoutMs}ms`,
         );
         continue;
       }
-      if (!a.isDirectory())
-        return (logForDebugging(`[Claude in Chrome] Resolved ${exeName} via ${n} App Paths`), c);
+      if (!a.isDirectory()) {
+        logForDebugging(`[Claude in Chrome] Resolved ${exeName} via ${n} App Paths`);
+        return c;
+      }
       logForDebugging(
         `[Claude in Chrome] Skipping ${n} App Paths candidate for ${exeName}: resolves to a directory`,
       );
     } catch (error) {
-      let a = getErrnoCode(error),
-        l = windowsAppsDir();
-      if (l !== void 0 && win32.normalize(c).toLowerCase().startsWith(l) && a !== "ENOENT" && a !== "ENOTDIR")
-        return (
-          logForDebugging(
-            `[Claude in Chrome] Resolved ${exeName} via ${n} App Paths (stat-odd: ${a ?? String(error)})`,
-          ),
-          c
+      let errnoCode = getErrnoCode(error);
+      let l = windowsAppsDir();
+      if (
+        l !== undefined &&
+        win32.normalize(c).toLowerCase().startsWith(l) &&
+        errnoCode !== "ENOENT" &&
+        errnoCode !== "ENOTDIR"
+      ) {
+        logForDebugging(
+          `[Claude in Chrome] Resolved ${exeName} via ${n} App Paths (stat-odd: ${errnoCode ?? String(error)})`,
         );
+        return c;
+      }
       logForDebugging(
-        `[Claude in Chrome] Skipping ${n} App Paths candidate for ${exeName}: ${a ?? String(error)}`,
+        `[Claude in Chrome] Skipping ${n} App Paths candidate for ${exeName}: ${errnoCode ?? String(error)}`,
       );
     }
   }
   return null;
 }
+//@ chunk-c1gz91xp.js:2474-2860 placement
 /**
  * 以分离方式启动 Windows 程序（工作目录为程序所在目录、不隐藏窗口、不等待）；spawn 成功返回 true，失败记录错误码并返回 false。
  */
-//@ chunk-c1gz91xp.js:2474-2860 placement
-function launchDetached(e, s) {
-  return new Promise((o) => {
+function launchDetached(exePath, s) {
+  return new Promise((resolve) => {
     let r;
     try {
-      r = spawn(e, s, { cwd: dirname(e), detached: !0, stdio: "ignore", windowsHide: !1 });
+      r = spawn(exePath, s, {
+        cwd: dirname(exePath),
+        detached: true,
+        stdio: "ignore",
+        windowsHide: false,
+      });
     } catch (error) {
-      (logForDebugging(
-        `[Claude in Chrome] Detached launch of ${e} failed: ${getErrnoCode(error) ?? String(error)}`,
-        { level: "error" },
-      ),
-        o(!1));
+      logForDebugging(
+        `[Claude in Chrome] Detached launch of ${exePath} failed: ${getErrnoCode(error) ?? String(error)}`,
+        {
+          level: "error",
+        },
+      );
+      resolve(false);
       return;
     }
-    (r.once("spawn", () => o(!0)),
-      r.once("error", (n) => {
-        (logForDebugging(
-          `[Claude in Chrome] Detached launch of ${e} failed: ${getErrnoCode(n) ?? n.message}`,
-          { level: "error" },
-        ),
-          o(!1));
-      }),
-      r.unref());
+    r.once("spawn", () => resolve(true));
+    r.once("error", (n) => {
+      logForDebugging(
+        `[Claude in Chrome] Detached launch of ${exePath} failed: ${getErrnoCode(n) ?? n.message}`,
+        {
+          level: "error",
+        },
+      );
+      resolve(false);
+    });
+    r.unref();
   });
 }
-
-export { x2, resolveAppPathFromRegistry, launchDetached };
+export { systemRootDir, resolveAppPathFromRegistry, launchDetached };

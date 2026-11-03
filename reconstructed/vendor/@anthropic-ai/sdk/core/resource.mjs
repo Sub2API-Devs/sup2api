@@ -7,10 +7,9 @@
  */
 
 //@ chunk-hwmsct5x.js:43184-43223 esm-fingerprint
-class Y {
-  constructor(e) {
-    this._client = e;
+class APIResource {
+  constructor(client) {
+    this._client = client;
   }
 }
-
-export { Y };
+export { APIResource };

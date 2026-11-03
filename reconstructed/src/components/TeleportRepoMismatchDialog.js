@@ -8,8 +8,12 @@
  * pieces: chunk-s1ks86z4.js (3)
  * attribution: sole-consumer 2, fingerprint 1
  */
-import { j, y } from "../../vendor/react/cjs/react.production.js";
-import { e, r, Fragment } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { init_react_production, y } from "../../vendor/react/cjs/react.production.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+  Fragment,
+} from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { OrderedListWithItem } from "./CustomSelect/selectTable.js";
 import { getDisplayPath } from "../utils/file.js";
 import { w } from "../../vendor/react/compiler-runtime.js";
@@ -20,105 +24,144 @@ import { Spinner } from "./Spinner.js";
 import { Dialog } from "./design-system/Dialog.js";
 
 //@ chunk-s1ks86z4.js:14448-14452 sole-consumer
-j();
+init_react_production();
 //@ chunk-s1ks86z4.js:14452-14500 sole-consumer
-function J(E) {
-  return e(OrderedListWithItem.Item, { label: getDisplayPath(E) }, E);
+function renderRepoItem(E) {
+  return jsxProd_default(
+    OrderedListWithItem.Item,
+    {
+      label: getDisplayPath(E),
+    },
+    E,
+  );
 }
 //@ chunk-s1ks86z4.js:14500-15718 fingerprint = TeleportRepoMismatchDialog (0.688)
-function TeleportRepoMismatchDialog(t0) {
-  let $ = w(15),
-    {
-      targetRepo: targetRepo,
-      initialPaths: initialPaths,
-      onSelectPath: onSelectPath,
-      onCancel: onCancel,
-      storageV5: storageV5,
-    } = t0,
-    [a, Q] = y(initialPaths),
-    [g, x] = y(null),
-    [f, M] = y(!1),
-    S;
-  if ($[0] !== a || $[1] !== onSelectPath || $[2] !== storageV5 || $[3] !== targetRepo)
-    ((S = async (value) => {
-      if ((M(!0), x(null), await validateRepoAtPath(value, targetRepo))) {
+function TeleportRepoMismatchDialog(props) {
+  let $ = w(15);
+  let { targetRepo, initialPaths, onSelectPath, onCancel, storageV5 } = props;
+  let [availablePaths, setAvailablePaths] = y(initialPaths);
+  let [errorMessage, setErrorMessage] = y(null);
+  let [validating, setValidating] = y(false);
+  let t1;
+  if ($[0] !== availablePaths || $[1] !== onSelectPath || $[2] !== storageV5 || $[3] !== targetRepo) {
+    t1 = async (value) => {
+      setValidating(true);
+      setErrorMessage(null);
+      if (await validateRepoAtPath(value, targetRepo)) {
         onSelectPath(value);
         return;
       }
       removePathFromRepo(targetRepo, value, storageV5);
-      let updatedPaths = a.filter((U) => U !== value);
-      (Q(updatedPaths),
-        M(!1),
-        x(`${getDisplayPath(value)} no longer contains the correct repository. Select another path.`));
-    }),
-      ($[0] = a),
-      ($[1] = onSelectPath),
-      ($[2] = storageV5),
-      ($[3] = targetRepo),
-      ($[4] = S));
-  else S = $[4];
-  let v = S,
-    d;
-  if ($[5] !== a || $[6] !== g || $[7] !== v || $[8] !== onCancel || $[9] !== targetRepo || $[10] !== f)
-    ((d =
-      a.length > 0
-        ? r(Fragment, {
+      let updatedPaths = availablePaths.filter((availablePath) => availablePath !== value);
+      setAvailablePaths(updatedPaths);
+      setValidating(false);
+      setErrorMessage(
+        `${getDisplayPath(value)} no longer contains the correct repository. Select another path.`,
+      );
+    };
+    $[0] = availablePaths;
+    $[1] = onSelectPath;
+    $[2] = storageV5;
+    $[3] = targetRepo;
+    $[4] = t1;
+  } else t1 = $[4];
+  let handleChange = t1;
+  let children;
+  if (
+    $[5] !== availablePaths ||
+    $[6] !== errorMessage ||
+    $[7] !== handleChange ||
+    $[8] !== onCancel ||
+    $[9] !== targetRepo ||
+    $[10] !== validating
+  ) {
+    children =
+      availablePaths.length > 0
+        ? jsxProd_default_2(Fragment, {
             children: [
-              r(Box, {
+              jsxProd_default_2(Box, {
                 flexDirection: "column",
                 gap: 1,
                 children: [
-                  e(ErrorText, { error: g }),
-                  r(Text, {
-                    children: ["Open Claude Code in ", e(Text, { bold: !0, children: targetRepo }), ":"],
+                  jsxProd_default(ErrorText, {
+                    error: errorMessage,
+                  }),
+                  jsxProd_default_2(Text, {
+                    children: [
+                      "Open Claude Code in ",
+                      jsxProd_default(Text, {
+                        bold: true,
+                        children: targetRepo,
+                      }),
+                      ":",
+                    ],
                   }),
                 ],
               }),
-              f
-                ? r(Box, {
-                    children: [e(Spinner, {}), e(Text, { children: " Validating repository\u2026" })],
+              validating
+                ? jsxProd_default_2(Box, {
+                    children: [
+                      jsxProd_default(Spinner, {}),
+                      jsxProd_default(Text, {
+                        children: " Validating repository\u2026",
+                      }),
+                    ],
                   })
-                : r(OrderedListWithItem, {
+                : jsxProd_default_2(OrderedListWithItem, {
                     onSelect: (value_0) => {
-                      let B = a[value_0];
-                      if (B === void 0) {
+                      let B = availablePaths[value_0];
+                      if (B === undefined) {
                         onCancel();
                         return;
                       }
-                      v(B);
+                      handleChange(B);
                     },
-                    children: [a.map(J), e(OrderedListWithItem.Item, { label: "Cancel" }, "cancel")],
+                    children: [
+                      availablePaths.map(renderRepoItem),
+                      jsxProd_default(
+                        OrderedListWithItem.Item,
+                        {
+                          label: "Cancel",
+                        },
+                        "cancel",
+                      ),
+                    ],
                   }),
             ],
           })
-        : r(Box, {
+        : jsxProd_default_2(Box, {
             flexDirection: "column",
             gap: 1,
             children: [
-              e(ErrorText, { error: g }),
-              r(Text, { dimColor: !0, children: ["Run claude --teleport from a checkout of ", targetRepo] }),
+              jsxProd_default(ErrorText, {
+                error: errorMessage,
+              }),
+              jsxProd_default_2(Text, {
+                dimColor: true,
+                children: ["Run claude --teleport from a checkout of ", targetRepo],
+              }),
             ],
-          })),
-      ($[5] = a),
-      ($[6] = g),
-      ($[7] = v),
-      ($[8] = onCancel),
-      ($[9] = targetRepo),
-      ($[10] = f),
-      ($[11] = d));
-  else d = $[11];
-  let D;
-  if ($[12] !== onCancel || $[13] !== d)
-    ((D = e(Dialog, {
+          });
+    $[5] = availablePaths;
+    $[6] = errorMessage;
+    $[7] = handleChange;
+    $[8] = onCancel;
+    $[9] = targetRepo;
+    $[10] = validating;
+    $[11] = children;
+  } else children = $[11];
+  let t4;
+  if ($[12] !== onCancel || $[13] !== children) {
+    t4 = jsxProd_default(Dialog, {
       title: "Teleport to Repo",
-      onCancel: onCancel,
-      exitOnCtrlCD: !0,
+      onCancel,
+      exitOnCtrlCD: true,
       color: "background",
-      children: d,
-    })),
-      ($[12] = onCancel),
-      ($[13] = d),
-      ($[14] = D));
-  else D = $[14];
-  return D;
+      children,
+    });
+    $[12] = onCancel;
+    $[13] = children;
+    $[14] = t4;
+  } else t4 = $[14];
+  return t4;
 }

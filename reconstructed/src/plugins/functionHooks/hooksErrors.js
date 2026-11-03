@@ -10,26 +10,29 @@
  */
 import { isPlainObject } from "../../utils/isPlainObject.js";
 
+//@ chunk-ga3g4pve.js:226-329 placement
 /**
  * AbortSignal 的中止原因文本（Error 取 message，无原因用默认）。
  */
-//@ chunk-ga3g4pve.js:226-329 placement
 function abortReasonText(r, o = "aborted") {
-  let { reason: reason } = r;
-  return reason instanceof Error ? reason.message : reason === void 0 ? o : String(reason);
+  let { reason } = r;
+  return reason instanceof Error ? reason.message : reason === undefined ? o : String(reason);
 }
 //@ chunk-ga3g4pve.js:329-379 placement
-var eBi = (r) => `the answer is not plain data: ${r}`;
+/**
+ * 答案不是纯数据
+ */
+var answerNotPlainData = (r) => `the answer is not plain data: ${r}`;
 //@ chunk-ga3g4pve.js:379-525 placement
 class HooksError extends Error {
   name = "HooksError";
   telemetryMessage = "function hooks error (message not reported: it may contain plugin details)";
   thrownName;
 }
+//@ chunk-ga3g4pve.js:525-670 placement
 /**
  * next() 的参数必须是普通对象，否则抛说明用法的 HooksError。
  */
-//@ chunk-ga3g4pve.js:525-670 placement
 function requireEventArgument(r, o) {
   if (!isPlainObject(r))
     throw new HooksError(
@@ -38,15 +41,18 @@ function requireEventArgument(r, o) {
   return r;
 }
 //@ chunk-ga3g4pve.js:670-768 placement
-function Aos(r) {
+/**
+ * 取错误的字符串 cause
+ */
+function causeString(r) {
   if (!(r instanceof Error)) return;
   let cause = r.cause;
-  return typeof cause === "string" ? cause : void 0;
+  return typeof cause === "string" ? cause : undefined;
 }
+//@ chunk-ga3g4pve.js:768-911 placement
 /**
  * 判断值是否像 AbortSignal（有 aborted 与事件监听方法）。
  */
-//@ chunk-ga3g4pve.js:768-911 placement
 var isAbortSignalLike = (r) =>
   typeof r === "object" &&
   r !== null &&
@@ -54,42 +60,84 @@ var isAbortSignalLike = (r) =>
   typeof r.addEventListener === "function" &&
   typeof r.removeEventListener === "function";
 //@ chunk-ga3g4pve.js:911-966 placement
-var A3t = (r) => `next() argument is not plain data: ${r}`;
+/**
+ * next() 参数不是纯数据
+ */
+var nextNotPlainData = (r) => `next() argument is not plain data: ${r}`;
 //@ chunk-ga3g4pve.js:966-1024 placement
-var Xeo = (r, o) => `${r}: arguments are not plain data: ${o}`;
+/**
+ * 参数不是纯数据
+ */
+var argsNotPlainData = (r, o) => `${r}: arguments are not plain data: ${o}`;
 //@ chunk-ga3g4pve.js:1024-1046 placement
-class fEe extends HooksError {}
+/**
+ * 纯数据校验错误类
+ */
+class PlainDataError extends HooksError {}
 //@ chunk-ga3g4pve.js:1046-1083 placement
-var BSi = (r) => r.reason instanceof fEe;
+/**
+ * 是否该类错误
+ */
+var isPlainDataError = (r) => r.reason instanceof PlainDataError;
 //@ chunk-ga3g4pve.js:1083-1126 placement
-var Cos = (r, o) => (o === !0 ? new fEe(r) : new HooksError(r));
+/**
+ * 按标志选错误类
+ */
+var makeHooksOrPlainError = (reason, isSettled) =>
+  isSettled === true ? new PlainDataError(reason) : new HooksError(reason);
 //@ chunk-ga3g4pve.js:1126-1181 placement
-var spr = (r) => (r.reason instanceof fEe ? { isSettled: !0 } : {});
+/**
+ * 已结算标记
+ */
+var settledIfPlainData = (signal) =>
+  signal.reason instanceof PlainDataError
+    ? {
+        isSettled: true,
+      }
+    : {};
 //@ chunk-ga3g4pve.js:1181-1231 placement
-var tBi = (r) => (r instanceof fEe ? new HooksError(r.message) : r);
+/**
+ * 转回 HooksError
+ */
+var unwrapPlainDataError = (r) => (r instanceof PlainDataError ? new HooksError(r.message) : r);
 //@ chunk-ga3g4pve.js:1231-1249 placement
 var weakMap = new WeakMap();
 //@ chunk-ga3g4pve.js:1249-1320 placement
-function ipr(r, o) {
+/**
+ * 用 WeakMap 打标
+ */
+function tagWeak(r, o) {
   if (typeof r === "object" && r !== null) weakMap.set(r, o);
   return r;
 }
 //@ chunk-ga3g4pve.js:1320-1379 placement
-var Ros = (r) => (typeof r === "object" && r !== null ? weakMap.get(r) : void 0);
+/**
+ * 读弱标记
+ */
+var readWeakTag = (r) => (typeof r === "object" && r !== null ? weakMap.get(r) : undefined);
 //@ chunk-ga3g4pve.js:1379-1446 placement
-class Jeo extends HooksError {
+/**
+ * 询问被拒错误类
+ */
+class AskRefusedError extends HooksError {
   asked;
-  constructor(r, o) {
+  constructor(r, asked) {
     super(r);
-    this.asked = o;
+    this.asked = asked;
   }
 }
 //@ chunk-ga3g4pve.js:1446-1464 placement
 var weakSet = new WeakSet();
 //@ chunk-ga3g4pve.js:1464-1517 placement
-var Qeo = (r) => typeof r === "object" && r !== null && weakSet.has(r);
+/**
+ * 是否在弱集合中
+ */
+var hasWeakSetTag = (r) => typeof r === "object" && r !== null && weakSet.has(r);
 //@ chunk-ga3g4pve.js:1517-1584 placement
-function apr(r) {
+/**
+ * 加入弱集合
+ */
+function addWeakSetTag(r) {
   if (typeof r === "object" && r !== null) weakSet.add(r);
   return r;
 }
@@ -98,52 +146,73 @@ function createWeakTagger() {
   let weakMap = new WeakMap();
   return {
     mark(o, t) {
-      if (typeof o === "object" && o !== null && t !== void 0) weakMap.set(o, t);
+      if (typeof o === "object" && o !== null && t !== undefined) weakMap.set(o, t);
       return o;
     },
     of(o) {
-      return typeof o === "object" && o !== null ? weakMap.get(o) : void 0;
+      return typeof o === "object" && o !== null ? weakMap.get(o) : undefined;
     },
   };
 }
 //@ chunk-ga3g4pve.js:1759-1769 placement
-var s = createWeakTagger();
+/**
+ * 弱标记器
+ */
+var weakTagger = createWeakTagger();
 //@ chunk-ga3g4pve.js:1769-1796 placement
-var _xt = (r, o) => s.mark(r, o);
+/**
+ * 打标
+ */
+var tagError = (error, o) => weakTagger.mark(error, o);
 //@ chunk-ga3g4pve.js:1796-1854 placement
-var SIe = (r) => new HooksError(`${r}: its environment was unloaded`);
+/**
+ * 环境已卸载错误
+ */
+var envUnloadedError = (pluginName) => new HooksError(`${pluginName}: its environment was unloaded`);
 //@ chunk-ga3g4pve.js:1854-1899 placement
-var lpr = (r, o, t) => ({ plugin: r, op: o, message: t });
+/**
+ * 标记载荷
+ */
+var tagPayload = (plugin, op, message) => ({
+  plugin,
+  op,
+  message,
+});
 //@ chunk-ga3g4pve.js:1899-1963 placement
-function nBi(r, o) {
-  let t = SIe(r);
-  return _xt(t, lpr(r, o, t.message));
+/**
+ * 带标记的卸载错误
+ */
+function envUnloadedTagged(plugin, o) {
+  let t = envUnloadedError(plugin);
+  return tagError(t, tagPayload(plugin, o, t.message));
 }
 //@ chunk-ga3g4pve.js:1963-1984 placement
-var dpr = (r) => s.of(r);
-
+/**
+ * 读标记
+ */
+var readTag = (r) => weakTagger.of(r);
 export {
   HooksError,
-  apr,
-  Qeo,
-  ipr,
+  addWeakSetTag,
+  hasWeakSetTag,
+  tagWeak,
   requireEventArgument,
   abortReasonText,
-  tBi,
-  Ros,
-  BSi,
-  fEe,
-  A3t,
-  _xt,
-  dpr,
+  unwrapPlainDataError,
+  readWeakTag,
+  isPlainDataError,
+  PlainDataError,
+  nextNotPlainData,
+  tagError,
+  readTag,
   isAbortSignalLike,
-  nBi,
-  SIe,
-  eBi,
-  Xeo,
-  lpr,
-  Aos,
-  Jeo,
-  Cos,
-  spr,
+  envUnloadedTagged,
+  envUnloadedError,
+  answerNotPlainData,
+  argsNotPlainData,
+  tagPayload,
+  causeString,
+  AskRefusedError,
+  makeHooksOrPlainError,
+  settledIfPlainData,
 };

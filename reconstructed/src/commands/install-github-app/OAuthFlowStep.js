@@ -8,7 +8,7 @@
  * pieces: chunk-4r7nqnx2.js (1), chunk-4v9zy7gn.js (3)
  * attribution: fingerprint 2, placement 1, layout 1
  */
-import { j, y, R, P, ce } from "../../../vendor/react/cjs/react.production.js";
+import { init_react_production, y, R, P, ce } from "../../../vendor/react/cjs/react.production.js";
 import { OAuthService } from "../../services/oauth/index.js";
 import { useCopyUrl, CopiedUrlHint, CopyUrlFallbackHint } from "../../components/CopyUrlHint.js";
 import { useClock } from "../../ink/components/ClockContext.js";
@@ -27,211 +27,289 @@ import {
 import { logForDebugging } from "../../utils/debug.js";
 import { errorTelemetryFields } from "../../utils/accessibility/screenReader.js";
 import { useTimeout } from "../../ink/hooks/useTerminalHooks.js";
-import { r, e } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default_2,
+  jsxProd_default,
+} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { FocusColumn } from "../../components/design-system/FocusColumn.js";
 import { Box, Text, Link } from "../../ink/components/Text.js";
 import { OAuthStatusPanel } from "./OptionalActionsSetupStep.js";
 
 //@ chunk-4v9zy7gn.js:34294-34298 placement
-j();
+init_react_production();
 //@ chunk-4v9zy7gn.js:34298-34338 layout = PASTE_HERE_MSG (1)
 var PASTE_HERE_MSG_2 = "Paste code here if prompted > ";
 //@ chunk-4v9zy7gn.js:34338-37793 fingerprint = OAuthFlowStep (0.659)
-function OAuthFlowStep({ onSuccess: onSuccess, onCancel: onCancel }) {
-  let [p, f] = y({ state: "starting" }),
-    [C] = y(() => new OAuthService()),
-    [u, o] = y(""),
-    [v, A] = y(0),
-    [g, _] = y(!1),
-    {
-      copiedVia: copiedVia,
-      copy: copy,
-      reset: reset,
-    } = useCopyUrl(p.state === "waiting_for_login" ? p.url : null),
-    T = useClock(),
-    timersRef = R(new Set()),
-    urlCopiedTimerRef = R(new AbortController());
+function OAuthFlowStep({ onSuccess, onCancel }) {
+  let [oauthStatus, setOAuthStatus] = y({
+    state: "starting",
+  });
+  let [oauthService] = y(() => new OAuthService());
+  let [pastedCode, setPastedCode] = y("");
+  let [v, A] = y(0);
+  let [showPastePrompt, setShowPastePrompt] = y(false);
+  let {
+    copiedVia,
+    copy: urlCopied,
+    reset,
+  } = useCopyUrl(oauthStatus.state === "waiting_for_login" ? oauthStatus.url : null);
+  let clock = useClock();
+  let timersRef = R(new Set());
+  let urlCopiedTimerRef = R(new AbortController());
   P(() => {
     let F = urlCopiedTimerRef.current;
     return () => F.abort();
   }, []);
-  let terminalSize = useTerminalSize(),
-    textInputColumns = Math.max(50, terminalSize.columns - PASTE_HERE_MSG_2.length - 4);
-  function handleKeyDown(F) {
-    if (p.state !== "error") return;
-    if ((F.preventDefault(), F.key === "return" && p.toRetry))
-      (o(""), A(0), f({ state: "about_to_retry", nextState: p.toRetry }));
-    else onCancel();
+  let terminalSize = useTerminalSize();
+  let textInputColumns = Math.max(50, terminalSize.columns - PASTE_HERE_MSG_2.length - 4);
+  function handleKeyDown(e) {
+    if (oauthStatus.state !== "error") return;
+    e.preventDefault();
+    if (e.key === "return" && oauthStatus.toRetry) {
+      setPastedCode("");
+      A(0);
+      setOAuthStatus({
+        state: "about_to_retry",
+        nextState: oauthStatus.toRetry,
+      });
+    } else onCancel();
   }
   async function handleSubmitCode(value, url) {
     if (!value.trim()) {
-      (o(""), A(0));
+      setPastedCode("");
+      A(0);
       return;
     }
     try {
-      let [D, Y] = value.split("#");
-      if (!D || !Y) {
-        f({
+      let [authorizationCode, state] = value.split("#");
+      if (!authorizationCode || !state) {
+        setOAuthStatus({
           state: "error",
           message: "Invalid code. Please make sure the full code was copied",
-          toRetry: { state: "waiting_for_login", url: url },
+          toRetry: {
+            state: "waiting_for_login",
+            url,
+          },
         });
         return;
       }
-      (logEvent("tengu_oauth_manual_entry", {}),
-        C.handleManualAuthCodeInput({ authorizationCode: D, state: Y }));
+      logEvent("tengu_oauth_manual_entry", {});
+      oauthService.handleManualAuthCodeInput({
+        authorizationCode,
+        state,
+      });
     } catch (err) {
-      (logError(err),
-        f({ state: "error", message: errorMessage(err), toRetry: { state: "waiting_for_login", url: url } }));
+      logError(err);
+      setOAuthStatus({
+        state: "error",
+        message: errorMessage(err),
+        toRetry: {
+          state: "waiting_for_login",
+          url,
+        },
+      });
     }
   }
   let startOAuth = ce(async () => {
-    (timersRef.current.forEach((timer) => timer()), timersRef.current.clear());
-    let F = validateForceLoginMethod(!0);
+    timersRef.current.forEach((timer) => timer());
+    timersRef.current.clear();
+    let F = validateForceLoginMethod(true);
     if (!F.valid) {
-      f({
+      setOAuthStatus({
         state: "error",
         message: `${F.message} This step creates a long-lived Claude.ai subscription token, which this policy does not permit \u2014 use an API key instead.`,
       });
       return;
     }
     try {
-      let result = await C.startOAuthFlow(
-        async (url_0) => {
-          if ((reset(), _(!1), f({ state: "waiting_for_login", url: url_0 }), isBrowserUnavailable())) _(!0);
-          else timersRef.current.add(T.setTimeout(() => _(!0), 3000));
+      let result = await oauthService.startOAuthFlow(
+        async (url) => {
+          reset();
+          setShowPastePrompt(false);
+          setOAuthStatus({
+            state: "waiting_for_login",
+            url,
+          });
+          if (isBrowserUnavailable()) setShowPastePrompt(true);
+          else timersRef.current.add(clock.setTimeout(() => setShowPastePrompt(true), 3000));
         },
-        { loginWithClaudeAi: !0, inferenceOnly: !0, expiresIn: LONG_LIVED_OAUTH_TOKEN_TTL_SECONDS },
+        {
+          loginWithClaudeAi: true,
+          inferenceOnly: true,
+          expiresIn: LONG_LIVED_OAUTH_TOKEN_TTL_SECONDS,
+        },
       );
-      f({ state: "processing" });
-      let D = await mintApiKeyIfAllowed({ accessToken: result.accessToken, minted: result });
+      setOAuthStatus({
+        state: "processing",
+      });
+      let D = await mintApiKeyIfAllowed({
+        accessToken: result.accessToken,
+        minted: result,
+      });
       if (!D.ok) throw new OrgConfigLoginRefusedError(D.message, D.evaluation);
       if (urlCopiedTimerRef.current.signal.aborted) {
         await describeWithheldMint(result, "withheld mint");
         return;
       }
       timersRef.current.add(
-        T.setTimeout(() => {
-          (f({ state: "success", token: result.accessToken }),
-            timersRef.current.add(T.setTimeout(() => onSuccess(result.accessToken), 1000)));
+        clock.setTimeout(() => {
+          setOAuthStatus({
+            state: "success",
+            token: result.accessToken,
+          });
+          timersRef.current.add(clock.setTimeout(() => onSuccess(result.accessToken), 1000));
         }, 100),
       );
     } catch (err_0) {
-      let D = errorMessage(err_0),
-        Y = err_0 instanceof OrgConfigLoginRefusedError && err_0.evaluation.decision.verdict === "refused";
-      (f({
+      let errorMessage_2 = errorMessage(err_0);
+      let Y = err_0 instanceof OrgConfigLoginRefusedError && err_0.evaluation.decision.verdict === "refused";
+      setOAuthStatus({
         state: "error",
-        message: D,
-        ...(err_0 instanceof OrgConfigLoginRefusedError && { verbatim: !0 }),
-        ...(!Y && { toRetry: { state: "starting" } }),
-      }),
-        logForDebugging(`OAuth flow failed in install-github-app: ${D}`, { level: "error" }),
-        logEvent("tengu_oauth_error", { ...errorTelemetryFields(err_0) }));
+        message: errorMessage_2,
+        ...(err_0 instanceof OrgConfigLoginRefusedError && {
+          verbatim: true,
+        }),
+        ...(!Y && {
+          toRetry: {
+            state: "starting",
+          },
+        }),
+      });
+      logForDebugging(`OAuth flow failed in install-github-app: ${errorMessage_2}`, {
+        level: "error",
+      });
+      logEvent("tengu_oauth_error", {
+        ...errorTelemetryFields(err_0),
+      });
     }
-  }, [T, C, onSuccess, reset]);
-  return (
-    P(() => {
-      if (p.state === "starting") startOAuth();
-    }, [p.state, startOAuth]),
-    useTimeout(
-      () => {
-        if (p.state === "about_to_retry") (_(p.nextState.state === "waiting_for_login"), f(p.nextState));
-      },
-      p.state === "about_to_retry" ? 500 : null,
-    ),
-    P(() => {
-      if (/^c+$/.test(u) && p.state === "waiting_for_login" && g) (o(""), copy(p.url));
-    }, [u, p, g, copy]),
-    P(() => {
-      let timers = timersRef.current;
-      return () => {
-        (C.cleanup(), timers.forEach((timer_2) => timer_2()), timers.clear());
-      };
-    }, [C]),
-    r(FocusColumn, {
-      gap: 1,
-      onKeyDown: handleKeyDown,
-      children: [
-        p.state === "starting" &&
-          r(Box, {
+  }, [clock, oauthService, onSuccess, reset]);
+  P(() => {
+    if (oauthStatus.state === "starting") startOAuth();
+  }, [oauthStatus.state, startOAuth]);
+  useTimeout(
+    () => {
+      if (oauthStatus.state === "about_to_retry") {
+        setShowPastePrompt(oauthStatus.nextState.state === "waiting_for_login");
+        setOAuthStatus(oauthStatus.nextState);
+      }
+    },
+    oauthStatus.state === "about_to_retry" ? 500 : null,
+  );
+  P(() => {
+    if (/^c+$/.test(pastedCode) && oauthStatus.state === "waiting_for_login" && showPastePrompt) {
+      setPastedCode("");
+      urlCopied(oauthStatus.url);
+    }
+  }, [pastedCode, oauthStatus, showPastePrompt, urlCopied]);
+  P(() => {
+    let timers = timersRef.current;
+    return () => {
+      oauthService.cleanup();
+      timers.forEach((timer) => timer());
+      timers.clear();
+    };
+  }, [oauthService]);
+  return jsxProd_default_2(FocusColumn, {
+    gap: 1,
+    onKeyDown: handleKeyDown,
+    children: [
+      oauthStatus.state === "starting" &&
+        jsxProd_default_2(Box, {
+          flexDirection: "column",
+          gap: 1,
+          paddingBottom: 1,
+          children: [
+            jsxProd_default(Text, {
+              bold: true,
+              children: "Create Authentication Token",
+            }),
+            jsxProd_default(Text, {
+              dimColor: true,
+              children: "Creating a long-lived token for GitHub Actions",
+            }),
+          ],
+        }),
+      oauthStatus.state !== "success" &&
+        oauthStatus.state !== "starting" &&
+        oauthStatus.state !== "processing" &&
+        jsxProd_default_2(
+          Box,
+          {
             flexDirection: "column",
             gap: 1,
             paddingBottom: 1,
             children: [
-              e(Text, { bold: !0, children: "Create Authentication Token" }),
-              e(Text, { dimColor: !0, children: "Creating a long-lived token for GitHub Actions" }),
+              jsxProd_default(Text, {
+                bold: true,
+                children: "Create Authentication Token",
+              }),
+              jsxProd_default(Text, {
+                dimColor: true,
+                children: "Creating a long-lived token for GitHub Actions",
+              }),
             ],
-          }),
-        p.state !== "success" &&
-          p.state !== "starting" &&
-          p.state !== "processing" &&
-          r(
-            Box,
-            {
-              flexDirection: "column",
-              gap: 1,
-              paddingBottom: 1,
-              children: [
-                e(Text, { bold: !0, children: "Create Authentication Token" }),
-                e(Text, { dimColor: !0, children: "Creating a long-lived token for GitHub Actions" }),
-              ],
-            },
-            "header",
-          ),
-        p.state === "waiting_for_login" &&
-          g &&
-          r(
-            Box,
-            {
-              flexDirection: "column",
-              gap: 1,
-              paddingBottom: 1,
-              children: [
-                r(Box, {
-                  flexDirection: "column",
-                  paddingX: 1,
-                  children: [
-                    r(Box, {
-                      children: [
-                        r(Text, {
-                          dimColor: !0,
-                          children: ["Browser didn't open? Use the url below to sign in", " "],
-                        }),
-                        e(CopiedUrlHint, { via: copiedVia }),
-                      ],
-                    }),
-                    e(CopyUrlFallbackHint, { via: copiedVia }),
-                  ],
+          },
+          "header",
+        ),
+      oauthStatus.state === "waiting_for_login" &&
+        showPastePrompt &&
+        jsxProd_default_2(
+          Box,
+          {
+            flexDirection: "column",
+            gap: 1,
+            paddingBottom: 1,
+            children: [
+              jsxProd_default_2(Box, {
+                flexDirection: "column",
+                paddingX: 1,
+                children: [
+                  jsxProd_default_2(Box, {
+                    children: [
+                      jsxProd_default_2(Text, {
+                        dimColor: true,
+                        children: ["Browser didn't open? Use the url below to sign in", " "],
+                      }),
+                      jsxProd_default(CopiedUrlHint, {
+                        via: copiedVia,
+                      }),
+                    ],
+                  }),
+                  jsxProd_default(CopyUrlFallbackHint, {
+                    via: copiedVia,
+                  }),
+                ],
+              }),
+              jsxProd_default(Link, {
+                url: oauthStatus.url,
+                assumeSupport: true,
+                children: jsxProd_default(Text, {
+                  dimColor: true,
+                  children: oauthStatus.url,
                 }),
-                e(Link, {
-                  url: p.url,
-                  assumeSupport: !0,
-                  children: e(Text, { dimColor: !0, children: p.url }),
-                }),
-              ],
-            },
-            "urlToCopy",
-          ),
-        e(Box, {
-          paddingLeft: 1,
-          flexDirection: "column",
-          gap: 1,
-          children: e(OAuthStatusPanel, {
-            oauthStatus: p,
-            showPastePrompt: g,
-            pastedCode: u,
-            setPastedCode: o,
-            cursorOffset: v,
-            setCursorOffset: A,
-            textInputColumns: textInputColumns,
-            onSubmitCode: handleSubmitCode,
-          }),
+              }),
+            ],
+          },
+          "urlToCopy",
+        ),
+      jsxProd_default(Box, {
+        paddingLeft: 1,
+        flexDirection: "column",
+        gap: 1,
+        children: jsxProd_default(OAuthStatusPanel, {
+          oauthStatus,
+          showPastePrompt,
+          pastedCode,
+          setPastedCode,
+          cursorOffset: v,
+          setCursorOffset: A,
+          textInputColumns,
+          onSubmitCode: handleSubmitCode,
         }),
-      ],
-    })
-  );
+      }),
+    ],
+  });
 }
 //@ chunk-4r7nqnx2.js:5057-5096 fingerprint = PASTE_HERE_MSG (1)
 var PASTE_HERE_MSG = "Paste code here if prompted > ";
-
 export { PASTE_HERE_MSG, PASTE_HERE_MSG_2, OAuthFlowStep };

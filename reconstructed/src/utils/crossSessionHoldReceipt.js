@@ -11,126 +11,143 @@
 import { createSystemMessage } from "./messages.js";
 import { mainAgentId } from "../bootstrap/state.js";
 import { setOnPeerMessageStatus } from "./udsMessaging.js";
-import { $ge } from "./peerMessageHeaders.js";
+import { isPeerAddress } from "./peerMessageHeaders.js";
 import { countByAlias } from "../../vendor/lodash-es/countBy.js";
 import { uniq } from "./collections.js";
 import { plural } from "./stringUtils.js";
 
 //@ chunk-eeckpj27.js:411-427 placement
-var S = 500,
-  h = 200;
+/**
+ * 回执通知的停留时长（500 毫秒）。
+ */
+var HOLD_RECEIPT_LINGER_MS = 500;
+var MAX_LISTED_RECEIPTS = 200;
+//@ chunk-eeckpj27.js:427-1592 placement
 /**
  * 跨会话消息被对方暂扣/拒绝/过期时给发送方的回执通知。
  */
-//@ chunk-eeckpj27.js:427-1592 placement
 function startCrossSessionHoldReceipt({
-  clock: clock,
-  transcript: transcript,
-  queue: queue,
-  wakesIdleSession: wakesIdleSession = () => !0,
-  hidesFoldedNotices: hidesFoldedNotices = !1,
+  clock,
+  transcript,
+  queue,
+  wakesIdleSession = () => true,
+  hidesFoldedNotices = false,
 }) {
   {
-    let n = m(),
-      l = () => {
-        let i = n;
-        n = m();
-        for (let a of ["held", "denied", "expired", "delivered", "refused"]) {
-          let d = i[a];
-          if (d.length === 0) continue;
-          let u = d.length;
-          (transcript.apply({
-            type: "append",
-            messages: [
-              createSystemMessage(
-                `Cross-session ${u === 1 ? "message" : `messages (${u})`} ${holdOutcomeLabel(a)}${describeRecipients(d)}. ${holdReasonExplanation(a)}`,
-                "warning",
-              ),
-            ],
-          }),
-            queue.enqueue({
-              mode: "prompt",
-              agentId: mainAgentId(),
-              value: holdReceiptNotice(a, u, holdReceiptSuffix(d)),
-              ...y(wakesIdleSession(), hidesFoldedNotices),
-              skipSlashCommands: !0,
-              isMeta: !0,
-            }));
-        }
-        if (i.dropped.length > 0) {
-          let flattened = i.dropped.flatMap((c) => c.sends),
-            d = flattened.length,
-            u = describeDropReasons(i.dropped.map((c) => c.dropReason));
-          (transcript.apply({
-            type: "append",
-            messages: [
-              createSystemMessage(
-                `Cross-session ${d === 1 ? "message was" : `messages (${d}) were`} dropped at the recipient session's inbox${describeRecipients(flattened)} and not delivered${u ? ` \u2014 ${u}` : ""}. Claude was told not to resend right away.`,
-                "warning",
-              ),
-            ],
-          }),
-            queue.enqueue({
-              mode: "prompt",
-              agentId: mainAgentId(),
-              value: droppedNotice(d, holdReceiptSuffix(flattened), u),
-              ...y(wakesIdleSession(), hidesFoldedNotices),
-              skipSlashCommands: !0,
-              isMeta: !0,
-            }));
-        }
-      },
-      p = null,
-      b = () => {
-        (p?.(),
-          (p = clock.setTimeout(() => {
-            ((p = null), l());
-          }, S)));
-      };
-    return (
-      setOnPeerMessageStatus((i) => {
-        if (i.status === "dropped") {
-          if (n.dropped.length < h) n.dropped.push(i);
-        } else if (n[i.status].length < h) n[i.status].push(i.sent);
-        b();
-      }),
-      () => {
-        (setOnPeerMessageStatus(null), p?.(), (p = null));
+    let n = emptyHoldReceiptCounts();
+    let l = () => {
+      let i = n;
+      n = emptyHoldReceiptCounts();
+      for (let a of ["held", "denied", "expired", "delivered", "refused"]) {
+        let d = i[a];
+        if (d.length === 0) continue;
+        let u = d.length;
+        transcript.apply({
+          type: "append",
+          messages: [
+            createSystemMessage(
+              `Cross-session ${u === 1 ? "message" : `messages (${u})`} ${holdOutcomeLabel(a)}${describeRecipients(d)}. ${holdReasonExplanation(a)}`,
+              "warning",
+            ),
+          ],
+        });
+        queue.enqueue({
+          mode: "prompt",
+          agentId: mainAgentId(),
+          value: holdReceiptNotice(a, u, holdReceiptSuffix(d)),
+          ...noticeDeliveryOptions(wakesIdleSession(), hidesFoldedNotices),
+          skipSlashCommands: true,
+          isMeta: true,
+        });
       }
-    );
+      if (i.dropped.length > 0) {
+        let flattened = i.dropped.flatMap((c) => c.sends);
+        let d = flattened.length;
+        let u = describeDropReasons(i.dropped.map((c) => c.dropReason));
+        transcript.apply({
+          type: "append",
+          messages: [
+            createSystemMessage(
+              `Cross-session ${d === 1 ? "message was" : `messages (${d}) were`} dropped at the recipient session's inbox${describeRecipients(flattened)} and not delivered${u ? ` \u2014 ${u}` : ""}. Claude was told not to resend right away.`,
+              "warning",
+            ),
+          ],
+        });
+        queue.enqueue({
+          mode: "prompt",
+          agentId: mainAgentId(),
+          value: droppedNotice(d, holdReceiptSuffix(flattened), u),
+          ...noticeDeliveryOptions(wakesIdleSession(), hidesFoldedNotices),
+          skipSlashCommands: true,
+          isMeta: true,
+        });
+      }
+    };
+    let p = null;
+    let b = () => {
+      p?.();
+      p = clock.setTimeout(() => {
+        p = null;
+        l();
+      }, HOLD_RECEIPT_LINGER_MS);
+    };
+    setOnPeerMessageStatus((i) => {
+      if (i.status === "dropped") {
+        if (n.dropped.length < MAX_LISTED_RECEIPTS) n.dropped.push(i);
+      } else if (n[i.status].length < MAX_LISTED_RECEIPTS) n[i.status].push(i.sent);
+      b();
+    });
+    return () => {
+      setOnPeerMessageStatus(null);
+      p?.();
+      p = null;
+    };
   }
   return () => {};
 }
 //@ chunk-eeckpj27.js:1592-1677 placement
-function m() {
-  return { held: [], denied: [], expired: [], delivered: [], refused: [], dropped: [] };
+/**
+ * 回执计数的初始结构（held/denied/expired/delivered/refused/dropped 各为空数组）。
+ */
+function emptyHoldReceiptCounts() {
+  return {
+    held: [],
+    denied: [],
+    expired: [],
+    delivered: [],
+    refused: [],
+    dropped: [],
+  };
 }
 //@ chunk-eeckpj27.js:1677-1716 placement
-function v(e) {
-  return $ge(e.to) ? e.to : "";
+/**
+ * 取消息的收件人地址（不是有效会话地址时返回空串）。
+ */
+function recipientAddress(e) {
+  return isPeerAddress(e.to) ? e.to : "";
 }
+//@ chunk-eeckpj27.js:1716-1994 placement
 /**
  * 收件人列表
  */
-//@ chunk-eeckpj27.js:1716-1994 placement
 function describeRecipients(e) {
   let s = new Map();
   for (let n of e) if (!s.get(n.to)?.handle) s.set(n.to, n);
-  let t = [...s.values()],
-    r = countByAlias(t, (n) => n.handle ?? ""),
-    o = recipientsLabel(
-      t.map((n) => {
-        let l = v(n);
-        if (!n.handle) return l;
-        return r[n.handle] === 1 || l === "" ? `@${n.handle}` : `@${n.handle} at ${l}`;
-      }),
-    );
+  let t = [...s.values()];
+  let r = countByAlias(t, (n) => n.handle ?? "");
+  let o = recipientsLabel(
+    t.map((n) => {
+      let l = recipientAddress(n);
+      if (!n.handle) return l;
+      return r[n.handle] === 1 || l === "" ? `@${n.handle}` : `@${n.handle} at ${l}`;
+    }),
+  );
   return o === "" ? "" : ` (${o})`;
 }
 //@ chunk-eeckpj27.js:1994-2094 placement
 function holdReceiptSuffix(e) {
-  let s = recipientsLabel(e.map(v));
-  return ` (${s === "" ? "" : `${s}; `}msg_id: ${C(
+  let s = recipientsLabel(e.map(recipientAddress));
+  return ` (${s === "" ? "" : `${s}; `}msg_id: ${joinLimited(
     e.map((t) => t.msgId),
     5,
   )})`;
@@ -138,16 +155,19 @@ function holdReceiptSuffix(e) {
 //@ chunk-eeckpj27.js:2094-2202 placement
 function recipientsLabel(e) {
   let s = uniq(e.filter((t) => t !== ""));
-  return s.length === 0 ? "" : `${plural(s.length, "recipient")}: ${C(s, 3)}`;
+  return s.length === 0 ? "" : `${plural(s.length, "recipient")}: ${joinLimited(s, 3)}`;
 }
 //@ chunk-eeckpj27.js:2202-2280 placement
-function C(e, s) {
+/**
+ * 用逗号连接列表，超出条数时追加 “, …”。
+ */
+function joinLimited(e, s) {
   return `${e.slice(0, s).join(", ")}${e.length > s ? ", \u2026" : ""}`;
 }
+//@ chunk-eeckpj27.js:2280-2507 placement
 /**
  * 暂扣结果标签
  */
-//@ chunk-eeckpj27.js:2280-2507 placement
 function holdOutcomeLabel(e) {
   switch (e) {
     case "held":
@@ -162,10 +182,10 @@ function holdOutcomeLabel(e) {
       return "refused";
   }
 }
+//@ chunk-eeckpj27.js:2507-3375 placement
 /**
  * 暂扣原因解释
  */
-//@ chunk-eeckpj27.js:2507-3375 placement
 function holdReasonExplanation(e) {
   switch (e) {
     case "held":
@@ -180,14 +200,14 @@ function holdReasonExplanation(e) {
       return "That session is not accepting cross-session messages (the feature is off there, or a setting or policy there refuses them); it was not delivered.";
   }
 }
+//@ chunk-eeckpj27.js:3375-5212 placement
 /**
  * 跨会话投递回执通知
  */
-//@ chunk-eeckpj27.js:3375-5212 placement
 function holdReceiptNotice(e, s, t) {
-  let r = s === 1 ? "Your message to another session" : `${s} of your messages to another session`,
-    o = s === 1 ? "was" : "were",
-    n = s === 1 ? "it" : "them";
+  let r = s === 1 ? "Your message to another session" : `${s} of your messages to another session`;
+  let o = s === 1 ? "was" : "were";
+  let n = s === 1 ? "it" : "them";
   switch (e) {
     case "held":
       return `[Cross-session delivery notice] ${r} ${o} held by that session${t}. NOT delivered: its Claude has not seen ${n}. Do not report ${n} as delivered, do not wait for a reply, and do not resend while held. The usual cause is that the two sessions run in different permission modes: a terminal session then asks its user to approve, but a Claude Desktop or non-interactive session cannot ask, so there the hold expires undelivered unless the modes come to match. A session can also be set to hold every message. Another notice follows on release, denial or expiry. Tell your user what is held and why, or choose another approach.`;
@@ -201,10 +221,10 @@ function holdReceiptNotice(e, s, t) {
       return `[Cross-session delivery notice] ${r} ${o} refused${t}: that session is not accepting cross-session messages (the feature is off there, or a setting or policy there refuses them). Not delivered to that session's Claude. Do not wait for a reply and do not resend; tell the user, or choose another approach.`;
   }
 }
+//@ chunk-eeckpj27.js:5212-5592 placement
 /**
  * 丢弃原因说明
  */
-//@ chunk-eeckpj27.js:5212-5592 placement
 function describeDropReasons(e) {
   return uniq(
     e.map((t) => {
@@ -218,7 +238,7 @@ function describeDropReasons(e) {
           return "a relay loop between sessions was cut";
         case "queue-full":
           return "its queue of undelivered peer messages was full";
-        case void 0:
+        case undefined:
           return "";
       }
     }),
@@ -226,16 +246,25 @@ function describeDropReasons(e) {
     .filter((t) => t !== "")
     .join("; ");
 }
+//@ chunk-eeckpj27.js:5592-5986 placement
 /**
  * 消息被丢弃的通知
  */
-//@ chunk-eeckpj27.js:5592-5986 placement
 function droppedNotice(e, s, t) {
   return `[Cross-session delivery notice] Do not resend now: ${e === 1 ? "one of your messages to another session was" : `${e} of your messages to another session were`} dropped at that session's inbox${s} and NOT delivered${t ? ` (${t})` : ""}. Treat them as unsent. If the content still matters, fold it into ONE later message after you have finished other work; never retry in a loop.`;
 }
 //@ chunk-eeckpj27.js:5986-6068 placement
-function y(e, s) {
-  return e ? { priority: s ? "next" : "later" } : { passive: !0, priority: "next" };
+/**
+ * 构造通知的投递选项（非主动通知则标为 passive 且优先）。
+ */
+function noticeDeliveryOptions(e, hidesFoldedNotices) {
+  return e
+    ? {
+        priority: hidesFoldedNotices ? "next" : "later",
+      }
+    : {
+        passive: true,
+        priority: "next",
+      };
 }
-
 export { startCrossSessionHoldReceipt };

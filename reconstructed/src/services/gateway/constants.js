@@ -9,36 +9,63 @@
  * attribution: placement 8
  */
 import { Re } from "../../../runtime/bun-runtime.js";
-import { nke } from "../../../vendor/@smithy/fetch-http-handler/dist-cjs/index.js";
-import { Da, Fa } from "../analytics/telemetryCredentialGuard.js";
+import { require_fetch_http_handler } from "../../../vendor/@smithy/fetch-http-handler/dist-cjs/index.js";
+import { credentialForEndpointHost, hostOfUrl } from "../analytics/telemetryCredentialGuard.js";
 import { getSettingsSyncEndpoint } from "../settingsSync/index.js";
 import { env } from "../../utils/env.js";
 
 //@ chunk-aepeg2w5.js:129220-129239 placement
-var sl = Re(nke(), 1);
+/**
+ * 懒加载的 @smithy/fetch-http-handler 模块。
+ */
+var smithyFetchHttpHandlerModule = Re(require_fetch_http_handler(), 1);
 //@ chunk-aepeg2w5.js:129452-129524 placement
-var R3t = "Cloud gateway session expired \u2014 run /login to reconnect.";
+/**
+ * 网关会话过期时提示重新 /login 的文案。
+ */
+var GATEWAY_SESSION_EXPIRED_MESSAGE = "Cloud gateway session expired \u2014 run /login to reconnect.";
 //@ chunk-aepeg2w5.js:129524-129537 placement
-var ky = 60000;
+/**
+ * 网关健康检查超时（60 秒）。
+ */
+var GATEWAY_HEALTH_TIMEOUT_MS = 60000;
 //@ chunk-aepeg2w5.js:129537-129564 placement
 var API_ANTHROPIC_COM = "api.anthropic.com";
 //@ chunk-aepeg2w5.js:129564-129618 placement
-function fD(e) {
-  let n = Tc();
-  return Da(n, e) && Da(pD(n), e);
+/**
+ * 地址是否同时属于网关 base URL 与设置同步端点的允许范围。
+ */
+function isGatewayUrlForBaseAndSync(e) {
+  let n = currentBaseUrl();
+  return credentialForEndpointHost(n, e) && credentialForEndpointHost(settingsSyncEndpoint(n), e);
 }
 //@ chunk-aepeg2w5.js:129618-129645 placement
-function pD(e) {
+/**
+ * 取设置同步端点。
+ */
+function settingsSyncEndpoint(e) {
   return getSettingsSyncEndpoint();
 }
 //@ chunk-aepeg2w5.js:129645-129725 placement
-function Tc() {
-  if (env.ANTHROPIC_BASE_URL) return Fa(env.ANTHROPIC_BASE_URL);
+/**
+ * 当前 API base URL（ANTHROPIC_BASE_URL 优先）。
+ */
+function currentBaseUrl() {
+  if (env.ANTHROPIC_BASE_URL) return hostOfUrl(env.ANTHROPIC_BASE_URL);
   return API_ANTHROPIC_COM;
 }
 //@ chunk-aepeg2w5.js:129725-129758 placement
-function Na(e) {
-  return Da(Tc(), e);
+/**
+ * 判断地址是否属于当前 base URL 范围。
+ */
+function isGatewayUrlAllowed(e) {
+  return credentialForEndpointHost(currentBaseUrl(), e);
 }
-
-export { Na, sl, R3t, ky, fD, Tc };
+export {
+  isGatewayUrlAllowed,
+  smithyFetchHttpHandlerModule,
+  GATEWAY_SESSION_EXPIRED_MESSAGE,
+  GATEWAY_HEALTH_TIMEOUT_MS,
+  isGatewayUrlForBaseAndSync,
+  currentBaseUrl,
+};

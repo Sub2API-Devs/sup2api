@@ -8,92 +8,92 @@
 import { x } from "../../runtime/bun-runtime.js";
 
 //@ chunk-h6b7mazd.js:27156-28648 cjs-fingerprint
-var ihs = x(function (Od, Us) {
-  var ze = 1000,
-    $e = ze * 60,
-    Ve = $e * 60,
-    Se = Ve * 24,
-    Uc = Se * 7,
-    qc = Se * 365.25;
-  Us.exports = function (e, t) {
-    t = t || {};
-    var r = typeof e;
-    if (r === "string" && e.length > 0) return Ic(e);
-    else if (r === "number" && isFinite(e)) return t.long ? jc(e) : kc(e);
-    throw Error("val is not a non-empty string or a valid number. val=" + JSON.stringify(e));
+var require_ms = x(function (cjsExports, cjsModule) {
+  var s = 1000;
+  var m = s * 60;
+  var h = m * 60;
+  var d = h * 24;
+  var w = d * 7;
+  var y = d * 365.25;
+  cjsModule.exports = function (val, options) {
+    options = options || {};
+    var type = typeof val;
+    if (type === "string" && val.length > 0) return parse(val);
+    else if (type === "number" && isFinite(val)) return options.long ? fmtLong(val) : fmtShort(val);
+    throw Error("val is not a non-empty string or a valid number. val=" + JSON.stringify(val));
   };
-  function Ic(e) {
-    if (((e = String(e)), e.length > 100)) return;
+  function parse(str) {
+    str = String(str);
+    if (str.length > 100) return;
     var match =
       /^(-?(?:\d+)?\.?\d+) *(milliseconds?|msecs?|ms|seconds?|secs?|s|minutes?|mins?|m|hours?|hrs?|h|days?|d|weeks?|w|years?|yrs?|y)?$/i.exec(
-        e,
+        str,
       );
     if (!match) return;
-    var r = parseFloat(match[1]),
-      lower = (match[2] || "ms").toLowerCase();
-    switch (lower) {
+    var n_2 = parseFloat(match[1]);
+    var type = (match[2] || "ms").toLowerCase();
+    switch (type) {
       case "years":
       case "year":
       case "yrs":
       case "yr":
       case "y":
-        return r * qc;
+        return n_2 * y;
       case "weeks":
       case "week":
       case "w":
-        return r * Uc;
+        return n_2 * w;
       case "days":
       case "day":
       case "d":
-        return r * Se;
+        return n_2 * d;
       case "hours":
       case "hour":
       case "hrs":
       case "hr":
       case "h":
-        return r * Ve;
+        return n_2 * h;
       case "minutes":
       case "minute":
       case "mins":
       case "min":
       case "m":
-        return r * $e;
+        return n_2 * m;
       case "seconds":
       case "second":
       case "secs":
       case "sec":
       case "s":
-        return r * ze;
+        return n_2 * s;
       case "milliseconds":
       case "millisecond":
       case "msecs":
       case "msec":
       case "ms":
-        return r;
+        return n_2;
       default:
         return;
     }
   }
-  function kc(e) {
-    var abs = Math.abs(e);
-    if (abs >= Se) return Math.round(e / Se) + "d";
-    if (abs >= Ve) return Math.round(e / Ve) + "h";
-    if (abs >= $e) return Math.round(e / $e) + "m";
-    if (abs >= ze) return Math.round(e / ze) + "s";
-    return e + "ms";
+  function fmtShort(ms) {
+    var msAbs = Math.abs(ms);
+    if (msAbs >= d) return Math.round(ms / d) + "d";
+    if (msAbs >= h) return Math.round(ms / h) + "h";
+    if (msAbs >= m) return Math.round(ms / m) + "m";
+    if (msAbs >= s) return Math.round(ms / s) + "s";
+    return ms + "ms";
   }
-  function jc(e) {
-    var abs = Math.abs(e);
-    if (abs >= Se) return Bt(e, abs, Se, "day");
-    if (abs >= Ve) return Bt(e, abs, Ve, "hour");
-    if (abs >= $e) return Bt(e, abs, $e, "minute");
-    if (abs >= ze) return Bt(e, abs, ze, "second");
-    return e + " ms";
+  function fmtLong(ms) {
+    var msAbs = Math.abs(ms);
+    if (msAbs >= d) return plural(ms, msAbs, d, "day");
+    if (msAbs >= h) return plural(ms, msAbs, h, "hour");
+    if (msAbs >= m) return plural(ms, msAbs, m, "minute");
+    if (msAbs >= s) return plural(ms, msAbs, s, "second");
+    return ms + " ms";
   }
-  function Bt(e, t, r, n) {
-    var o = t >= r * 1.5;
-    return Math.round(e / r) + " " + n + (o ? "s" : "");
+  function plural(ms, msAbs, n_2, name) {
+    var isPlural = msAbs >= n_2 * 1.5;
+    return Math.round(ms / n_2) + " " + name + (isPlural ? "s" : "");
   }
 });
-
-export { ihs };
+export { require_ms };

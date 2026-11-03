@@ -23,21 +23,21 @@ import { withDeadline } from "../sleep.js";
 //@ chunk-pc1rmcr2.js:4806-4888 placement
 function isAutoModeTransitionDue(e, r) {
   return (
-    (e.isAutoModeAvailable === !1 || Boolean(r) || isAntInternalFastModelId(getMainLoopModel())) &&
+    (e.isAutoModeAvailable === false || Boolean(r) || isAntInternalFastModelId(getMainLoopModel())) &&
     isAutoModeGateEnabled()
   );
 }
 //@ chunk-pc1rmcr2.js:4888-4931 placement
 function checkAutoModeTransition(e, r, o, d) {
-  return evaluateAutoModeGate(e, r, o, d, !1);
+  return evaluateAutoModeGate(e, r, o, d, false);
 }
 //@ chunk-pc1rmcr2.js:4931-4977 placement
-function checkAutoModeInUse(e, r, o) {
-  return evaluateAutoModeGate(e, r, o, void 0, !0);
+function checkAutoModeInUse(toolPermissionContext, r, fastMode) {
+  return evaluateAutoModeGate(toolPermissionContext, r, fastMode, undefined, true);
 }
 //@ chunk-pc1rmcr2.js:4977-5258 placement
-async function applyAutoModeTransition(e, r, o, d) {
-  switch (await checkAutoModeTransition(e, r, o, d)) {
+async function applyAutoModeTransition(toolPermissionContext, r, fastMode, d) {
+  switch (await checkAutoModeTransition(toolPermissionContext, r, fastMode, d)) {
     case "not-due":
     case "allowed":
       return;
@@ -45,56 +45,57 @@ async function applyAutoModeTransition(e, r, o, d) {
       return refuseAutoMode(getAutoModeUnavailableReason());
     case "unanswered":
       return {
-        ok: !1,
+        ok: false,
         error: "Cannot set permission mode to auto: auto mode availability is not known yet \xB7 ask again",
         code: "auto_mode_unavailable",
       };
   }
 }
+//@ chunk-pc1rmcr2.js:5258-5883 placement
 /**
  * 检查是否需要验证自动模式门控，并据此允许、拒绝或降级权限模式。
  */
-//@ chunk-pc1rmcr2.js:5258-5883 placement
 async function evaluateAutoModeGate(e, r, o, d, u) {
   if (!isAutoModeTransitionDue(e, o) || (u && isAutoModeInUse(e))) return "not-due";
   let c = verifyAutoModeGateAccess(e, o)
-    .then(
-      ({
-        updateContext: updateContext,
-        canEnterAuto: canEnterAuto,
-        refusedForSettingsAlone: refusedForSettingsAlone,
-      }) => {
-        let n = !1;
-        if (!refusedForSettingsAlone)
-          r((s) => {
-            let toolPermissionContext = s.toolPermissionContext;
-            if (!canEnterAuto) {
-              if (u && isAutoModeInUse(toolPermissionContext)) return s;
-              let h = updateContext(toolPermissionContext);
-              return h === toolPermissionContext ? s : { ...s, toolPermissionContext: h };
-            }
-            if (
-              ((n = Boolean(s.fastMode) && !o),
-              toolPermissionContext.isAutoModeAvailable !== !1 ||
-                !isAutoModeGateEnabled() ||
-                Boolean(s.fastMode) !== Boolean(o))
-            )
-              return s;
-            return {
-              ...s,
-              toolPermissionContext: {
-                ...toolPermissionContext,
-                isAutoModeAvailable: canEnterAuto,
-                canAutoClassifierRun: canEnterAuto,
-              },
-            };
-          });
-        if (!canEnterAuto) return "refused";
-        return n ? "unanswered" : "allowed";
-      },
-    )
-    .catch((f) => (logError(toError(f)), "unanswered"));
-  return (await (d === void 0 ? c : withDeadline(c, d))) ?? "unanswered";
+    .then(({ updateContext, canEnterAuto, refusedForSettingsAlone }) => {
+      let n = false;
+      if (!refusedForSettingsAlone)
+        r((s) => {
+          let toolPermissionContext = s.toolPermissionContext;
+          if (!canEnterAuto) {
+            if (u && isAutoModeInUse(toolPermissionContext)) return s;
+            let h = updateContext(toolPermissionContext);
+            return h === toolPermissionContext
+              ? s
+              : {
+                  ...s,
+                  toolPermissionContext: h,
+                };
+          }
+          n = Boolean(s.fastMode) && !o;
+          if (
+            toolPermissionContext.isAutoModeAvailable !== false ||
+            !isAutoModeGateEnabled() ||
+            Boolean(s.fastMode) !== Boolean(o)
+          )
+            return s;
+          return {
+            ...s,
+            toolPermissionContext: {
+              ...toolPermissionContext,
+              isAutoModeAvailable: canEnterAuto,
+              canAutoClassifierRun: canEnterAuto,
+            },
+          };
+        });
+      if (!canEnterAuto) return "refused";
+      return n ? "unanswered" : "allowed";
+    })
+    .catch((error) => {
+      logError(toError(error));
+      return "unanswered";
+    });
+  return (await (d === undefined ? c : withDeadline(c, d))) ?? "unanswered";
 }
-
 export { checkAutoModeTransition, isAutoModeTransitionDue, checkAutoModeInUse, applyAutoModeTransition };

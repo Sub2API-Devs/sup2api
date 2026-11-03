@@ -5,218 +5,284 @@
  * pieces: chunk-hwmsct5x.js (6)
  * attribution: esm-fingerprint 5, esm-layout 1
  */
-import { Ye } from "../utils/values.mjs";
-import { Ql, zi, isBufferLike, Wo } from "./utils.mjs";
-import { RFC3986, $i, qi } from "./formats.mjs";
+import { isArray } from "../utils/values.mjs";
+import { encode, zi, isBufferLike, has } from "./utils.mjs";
+import { default_format, default_formatter, formatters } from "./formats.mjs";
 
 //@ chunk-hwmsct5x.js:20512-21053 esm-fingerprint
-var tu = {
-    brackets(e) {
-      return String(e) + "[]";
-    },
-    comma: "comma",
-    indices(e, n) {
-      return String(e) + "[" + n + "]";
-    },
-    repeat(e) {
-      return String(e);
-    },
+var array_prefix_generators = {
+  brackets(prefix) {
+    return String(prefix) + "[]";
   },
-  nu = function (e, n) {
-    Array.prototype.push.apply(e, Ye(n) ? n : [n]);
+  comma: "comma",
+  indices(prefix, key) {
+    return String(prefix) + "[" + key + "]";
   },
-  eu,
-  Ne = {
-    addQueryPrefix: !1,
-    allowDots: !1,
-    allowEmptyArrays: !1,
-    arrayFormat: "indices",
-    charset: "utf-8",
-    charsetSentinel: !1,
-    delimiter: "&",
-    encode: !0,
-    encodeDotInKeys: !1,
-    encoder: Ql,
-    encodeValuesOnly: !1,
-    format: RFC3986,
-    formatter: $i,
-    indices: !1,
-    serializeDate(e) {
-      return (eu ?? (eu = Function.prototype.call.bind(Date.prototype.toISOString)))(e);
-    },
-    skipNulls: !1,
-    strictNullHandling: !1,
-  };
+  repeat(prefix) {
+    return String(prefix);
+  },
+};
+var push_to_array = function (arr, value_or_array) {
+  Array.prototype.push.apply(arr, isArray(value_or_array) ? value_or_array : [value_or_array]);
+};
+var toISOString;
+var defaults = {
+  addQueryPrefix: false,
+  allowDots: false,
+  allowEmptyArrays: false,
+  arrayFormat: "indices",
+  charset: "utf-8",
+  charsetSentinel: false,
+  delimiter: "&",
+  encode: true,
+  encodeDotInKeys: false,
+  encoder: encode,
+  encodeValuesOnly: false,
+  format: default_format,
+  formatter: default_formatter,
+  indices: false,
+  serializeDate(date) {
+    return (toISOString ?? (toISOString = Function.prototype.call.bind(Date.prototype.toISOString)))(date);
+  },
+  skipNulls: false,
+  strictNullHandling: false,
+};
 //@ chunk-hwmsct5x.js:21053-21180 esm-fingerprint
-function Ih(e) {
+function is_non_nullish_primitive(v) {
   return (
-    typeof e === "string" ||
-    typeof e === "number" ||
-    typeof e === "boolean" ||
-    typeof e === "symbol" ||
-    typeof e === "bigint"
+    typeof v === "string" ||
+    typeof v === "number" ||
+    typeof v === "boolean" ||
+    typeof v === "symbol" ||
+    typeof v === "bigint"
   );
 }
 //@ chunk-hwmsct5x.js:21180-21190 esm-layout
-var Yi = {};
+var sentinel = {};
 //@ chunk-hwmsct5x.js:21190-22490 esm-fingerprint
-function ru(e, n, r, s, h, y, w, S, E, R, L, O, M, P, H, j, z, G) {
-  let q = e,
-    J = G,
-    Z = 0,
-    Q = !1;
-  while ((J = J.get(Yi)) !== void 0 && !Q) {
-    let ie = J.get(e);
-    if (((Z += 1), typeof ie < "u"))
-      if (ie === Z) throw RangeError("Cyclic object value");
-      else Q = !0;
-    if (typeof J.get(Yi) > "u") Z = 0;
+function inner_stringify(
+  object,
+  prefix,
+  generateArrayPrefix,
+  commaRoundTrip,
+  allowEmptyArrays,
+  strictNullHandling,
+  skipNulls,
+  encodeDotInKeys,
+  encoder,
+  filter,
+  sort,
+  allowDots,
+  serializeDate,
+  format,
+  formatter,
+  encodeValuesOnly,
+  charset,
+  sideChannel,
+) {
+  let obj = object;
+  let tmp_sc = sideChannel;
+  let step = 0;
+  let find_flag = false;
+  while ((tmp_sc = tmp_sc.get(sentinel)) !== undefined && !find_flag) {
+    let pos = tmp_sc.get(object);
+    step += 1;
+    if (typeof pos !== "undefined")
+      if (pos === step) throw RangeError("Cyclic object value");
+      else find_flag = true;
+    if (typeof tmp_sc.get(sentinel) === "undefined") step = 0;
   }
-  if (typeof R === "function") q = R(n, q);
-  else if (q instanceof Date) q = M?.(q);
-  else if (r === "comma" && Ye(q))
-    q = zi(q, function (ie) {
-      if (ie instanceof Date) return M?.(ie);
-      return ie;
+  if (typeof filter === "function") obj = filter(prefix, obj);
+  else if (obj instanceof Date) obj = serializeDate?.(obj);
+  else if (generateArrayPrefix === "comma" && isArray(obj))
+    obj = zi(obj, function (value) {
+      if (value instanceof Date) return serializeDate?.(value);
+      return value;
     });
-  if (q === null) {
-    if (y) return E && !j ? E(n, Ne.encoder, z, "key", P) : n;
-    q = "";
+  if (obj === null) {
+    if (strictNullHandling)
+      return encoder && !encodeValuesOnly
+        ? encoder(prefix, defaults.encoder, charset, "key", format)
+        : prefix;
+    obj = "";
   }
-  if (Ih(q) || isBufferLike(q)) {
-    if (E) {
-      let ie = j ? n : E(n, Ne.encoder, z, "key", P);
-      return [H?.(ie) + "=" + H?.(E(q, Ne.encoder, z, "value", P))];
+  if (is_non_nullish_primitive(obj) || isBufferLike(obj)) {
+    if (encoder) {
+      let key_value = encodeValuesOnly ? prefix : encoder(prefix, defaults.encoder, charset, "key", format);
+      return [
+        formatter?.(key_value) + "=" + formatter?.(encoder(obj, defaults.encoder, charset, "value", format)),
+      ];
     }
-    return [H?.(n) + "=" + H?.(String(q))];
+    return [formatter?.(prefix) + "=" + formatter?.(String(obj))];
   }
-  let ne = [];
-  if (typeof q > "u") return ne;
-  let te;
-  if (r === "comma" && Ye(q)) {
-    if (j && E) q = zi(q, E);
-    te = [{ value: q.length > 0 ? q.join(",") || null : void 0 }];
-  } else if (Ye(R)) te = R;
+  let values = [];
+  if (typeof obj === "undefined") return values;
+  let obj_keys;
+  if (generateArrayPrefix === "comma" && isArray(obj)) {
+    if (encodeValuesOnly && encoder) obj = zi(obj, encoder);
+    obj_keys = [
+      {
+        value: obj.length > 0 ? obj.join(",") || null : undefined,
+      },
+    ];
+  } else if (isArray(filter)) obj_keys = filter;
   else {
-    let keys = Object.keys(q);
-    te = L ? keys.sort(L) : keys;
+    let keys = Object.keys(obj);
+    obj_keys = sort ? keys.sort(sort) : keys;
   }
-  let ae = S ? String(n).replace(/\./g, "%2E") : String(n),
-    oe = s && Ye(q) && q.length === 1 ? ae + "[]" : ae;
-  if (h && Ye(q) && q.length === 0) return oe + "[]";
-  for (let ie = 0; ie < te.length; ++ie) {
-    let Se = te[ie],
-      De = typeof Se === "object" && typeof Se.value < "u" ? Se.value : q[Se];
-    if (w && De === null) continue;
-    let se = O && S ? Se.replace(/\./g, "%2E") : Se,
-      bn = Ye(q) ? (typeof r === "function" ? r(oe, se) : oe) : oe + (O ? "." + se : "[" + se + "]");
-    G.set(e, Z);
-    let weakMap = new WeakMap();
-    (weakMap.set(Yi, G),
-      nu(
-        ne,
-        ru(De, bn, r, s, h, y, w, S, r === "comma" && j && Ye(q) ? null : E, R, L, O, M, P, H, j, z, weakMap),
-      ));
-  }
-  return ne;
-}
-//@ chunk-hwmsct5x.js:22490-24706 esm-fingerprint
-function Lh(e = Ne) {
-  if (typeof e.allowEmptyArrays < "u" && typeof e.allowEmptyArrays !== "boolean")
-    throw TypeError("`allowEmptyArrays` option can only be `true` or `false`, when provided");
-  if (typeof e.encodeDotInKeys < "u" && typeof e.encodeDotInKeys !== "boolean")
-    throw TypeError("`encodeDotInKeys` option can only be `true` or `false`, when provided");
-  if (e.encoder !== null && typeof e.encoder < "u" && typeof e.encoder !== "function")
-    throw TypeError("Encoder has to be a function.");
-  let n = e.charset || Ne.charset;
-  if (typeof e.charset < "u" && e.charset !== "utf-8" && e.charset !== "iso-8859-1")
-    throw TypeError("The charset option must be either utf-8, iso-8859-1, or undefined");
-  let r = RFC3986;
-  if (typeof e.format < "u") {
-    if (!Wo(qi, e.format)) throw TypeError("Unknown format option provided.");
-    r = e.format;
-  }
-  let s = qi[r],
-    filter = Ne.filter;
-  if (typeof e.filter === "function" || Ye(e.filter)) filter = e.filter;
-  let y;
-  if (e.arrayFormat && e.arrayFormat in tu) y = e.arrayFormat;
-  else if ("indices" in e) y = e.indices ? "indices" : "repeat";
-  else y = Ne.arrayFormat;
-  if ("commaRoundTrip" in e && typeof e.commaRoundTrip !== "boolean")
-    throw TypeError("`commaRoundTrip` must be a boolean, or absent");
-  let w = typeof e.allowDots > "u" ? (!!e.encodeDotInKeys === !0 ? !0 : Ne.allowDots) : !!e.allowDots;
-  return {
-    addQueryPrefix: typeof e.addQueryPrefix === "boolean" ? e.addQueryPrefix : Ne.addQueryPrefix,
-    allowDots: w,
-    allowEmptyArrays: typeof e.allowEmptyArrays === "boolean" ? !!e.allowEmptyArrays : Ne.allowEmptyArrays,
-    arrayFormat: y,
-    charset: n,
-    charsetSentinel: typeof e.charsetSentinel === "boolean" ? e.charsetSentinel : Ne.charsetSentinel,
-    commaRoundTrip: !!e.commaRoundTrip,
-    delimiter: typeof e.delimiter > "u" ? Ne.delimiter : e.delimiter,
-    encode: typeof e.encode === "boolean" ? e.encode : Ne.encode,
-    encodeDotInKeys: typeof e.encodeDotInKeys === "boolean" ? e.encodeDotInKeys : Ne.encodeDotInKeys,
-    encoder: typeof e.encoder === "function" ? e.encoder : Ne.encoder,
-    encodeValuesOnly: typeof e.encodeValuesOnly === "boolean" ? e.encodeValuesOnly : Ne.encodeValuesOnly,
-    filter: filter,
-    format: r,
-    formatter: s,
-    serializeDate: typeof e.serializeDate === "function" ? e.serializeDate : Ne.serializeDate,
-    skipNulls: typeof e.skipNulls === "boolean" ? e.skipNulls : Ne.skipNulls,
-    sort: typeof e.sort === "function" ? e.sort : null,
-    strictNullHandling:
-      typeof e.strictNullHandling === "boolean" ? e.strictNullHandling : Ne.strictNullHandling,
-  };
-}
-//@ chunk-hwmsct5x.js:24706-25478 esm-fingerprint
-function ou(e, n = {}) {
-  let r = e,
-    s = Lh(n),
-    h,
-    y;
-  if (typeof s.filter === "function") ((y = s.filter), (r = y("", r)));
-  else if (Ye(s.filter)) ((y = s.filter), (h = y));
-  let w = [];
-  if (typeof r !== "object" || r === null) return "";
-  let S = tu[s.arrayFormat],
-    E = S === "comma" && s.commaRoundTrip;
-  if (!h) h = Object.keys(r);
-  if (s.sort) h.sort(s.sort);
-  let weakMap = new WeakMap();
-  for (let M = 0; M < h.length; ++M) {
-    let P = h[M];
-    if (s.skipNulls && r[P] === null) continue;
-    nu(
-      w,
-      ru(
-        r[P],
-        P,
-        S,
-        E,
-        s.allowEmptyArrays,
-        s.strictNullHandling,
-        s.skipNulls,
-        s.encodeDotInKeys,
-        s.encode ? s.encoder : null,
-        s.filter,
-        s.sort,
-        s.allowDots,
-        s.serializeDate,
-        s.format,
-        s.formatter,
-        s.encodeValuesOnly,
-        s.charset,
-        weakMap,
+  let encoded_prefix = encodeDotInKeys ? String(prefix).replace(/\./g, "%2E") : String(prefix);
+  let adjusted_prefix =
+    commaRoundTrip && isArray(obj) && obj.length === 1 ? encoded_prefix + "[]" : encoded_prefix;
+  if (allowEmptyArrays && isArray(obj) && obj.length === 0) return adjusted_prefix + "[]";
+  for (let j = 0; j < obj_keys.length; ++j) {
+    let key = obj_keys[j];
+    let value = typeof key === "object" && typeof key.value !== "undefined" ? key.value : obj[key];
+    if (skipNulls && value === null) continue;
+    let encoded_key = allowDots && encodeDotInKeys ? key.replace(/\./g, "%2E") : key;
+    let key_prefix = isArray(obj)
+      ? typeof generateArrayPrefix === "function"
+        ? generateArrayPrefix(adjusted_prefix, encoded_key)
+        : adjusted_prefix
+      : adjusted_prefix + (allowDots ? "." + encoded_key : "[" + encoded_key + "]");
+    sideChannel.set(object, step);
+    let valueSideChannel = new WeakMap();
+    valueSideChannel.set(sentinel, sideChannel);
+    push_to_array(
+      values,
+      inner_stringify(
+        value,
+        key_prefix,
+        generateArrayPrefix,
+        commaRoundTrip,
+        allowEmptyArrays,
+        strictNullHandling,
+        skipNulls,
+        encodeDotInKeys,
+        generateArrayPrefix === "comma" && encodeValuesOnly && isArray(obj) ? null : encoder,
+        filter,
+        sort,
+        allowDots,
+        serializeDate,
+        format,
+        formatter,
+        encodeValuesOnly,
+        charset,
+        valueSideChannel,
       ),
     );
   }
-  let joined = w.join(s.delimiter),
-    O = s.addQueryPrefix === !0 ? "?" : "";
-  if (s.charsetSentinel)
-    if (s.charset === "iso-8859-1") O += "utf8=%26%2310003%3B&";
-    else O += "utf8=%E2%9C%93&";
-  return joined.length > 0 ? O + joined : "";
+  return values;
 }
-
-export { ou };
+//@ chunk-hwmsct5x.js:22490-24706 esm-fingerprint
+function normalize_stringify_options(opts = defaults) {
+  if (typeof opts.allowEmptyArrays !== "undefined" && typeof opts.allowEmptyArrays !== "boolean")
+    throw TypeError("`allowEmptyArrays` option can only be `true` or `false`, when provided");
+  if (typeof opts.encodeDotInKeys !== "undefined" && typeof opts.encodeDotInKeys !== "boolean")
+    throw TypeError("`encodeDotInKeys` option can only be `true` or `false`, when provided");
+  if (opts.encoder !== null && typeof opts.encoder !== "undefined" && typeof opts.encoder !== "function")
+    throw TypeError("Encoder has to be a function.");
+  let charset = opts.charset || defaults.charset;
+  if (typeof opts.charset !== "undefined" && opts.charset !== "utf-8" && opts.charset !== "iso-8859-1")
+    throw TypeError("The charset option must be either utf-8, iso-8859-1, or undefined");
+  let format = default_format;
+  if (typeof opts.format !== "undefined") {
+    if (!has(formatters, opts.format)) throw TypeError("Unknown format option provided.");
+    format = opts.format;
+  }
+  let formatter = formatters[format];
+  let filter = defaults.filter;
+  if (typeof opts.filter === "function" || isArray(opts.filter)) filter = opts.filter;
+  let arrayFormat;
+  if (opts.arrayFormat && opts.arrayFormat in array_prefix_generators) arrayFormat = opts.arrayFormat;
+  else if ("indices" in opts) arrayFormat = opts.indices ? "indices" : "repeat";
+  else arrayFormat = defaults.arrayFormat;
+  if ("commaRoundTrip" in opts && typeof opts.commaRoundTrip !== "boolean")
+    throw TypeError("`commaRoundTrip` must be a boolean, or absent");
+  let allowDots =
+    typeof opts.allowDots === "undefined"
+      ? !!opts.encodeDotInKeys === true
+        ? true
+        : defaults.allowDots
+      : !!opts.allowDots;
+  return {
+    addQueryPrefix: typeof opts.addQueryPrefix === "boolean" ? opts.addQueryPrefix : defaults.addQueryPrefix,
+    allowDots,
+    allowEmptyArrays:
+      typeof opts.allowEmptyArrays === "boolean" ? !!opts.allowEmptyArrays : defaults.allowEmptyArrays,
+    arrayFormat,
+    charset,
+    charsetSentinel:
+      typeof opts.charsetSentinel === "boolean" ? opts.charsetSentinel : defaults.charsetSentinel,
+    commaRoundTrip: !!opts.commaRoundTrip,
+    delimiter: typeof opts.delimiter === "undefined" ? defaults.delimiter : opts.delimiter,
+    encode: typeof opts.encode === "boolean" ? opts.encode : defaults.encode,
+    encodeDotInKeys:
+      typeof opts.encodeDotInKeys === "boolean" ? opts.encodeDotInKeys : defaults.encodeDotInKeys,
+    encoder: typeof opts.encoder === "function" ? opts.encoder : defaults.encoder,
+    encodeValuesOnly:
+      typeof opts.encodeValuesOnly === "boolean" ? opts.encodeValuesOnly : defaults.encodeValuesOnly,
+    filter,
+    format,
+    formatter,
+    serializeDate: typeof opts.serializeDate === "function" ? opts.serializeDate : defaults.serializeDate,
+    skipNulls: typeof opts.skipNulls === "boolean" ? opts.skipNulls : defaults.skipNulls,
+    sort: typeof opts.sort === "function" ? opts.sort : null,
+    strictNullHandling:
+      typeof opts.strictNullHandling === "boolean" ? opts.strictNullHandling : defaults.strictNullHandling,
+  };
+}
+//@ chunk-hwmsct5x.js:24706-25478 esm-fingerprint
+function stringify(object, opts = {}) {
+  let obj = object;
+  let options = normalize_stringify_options(opts);
+  let obj_keys;
+  let filter;
+  if (typeof options.filter === "function") {
+    filter = options.filter;
+    obj = filter("", obj);
+  } else if (isArray(options.filter)) {
+    filter = options.filter;
+    obj_keys = filter;
+  }
+  let keys = [];
+  if (typeof obj !== "object" || obj === null) return "";
+  let generateArrayPrefix = array_prefix_generators[options.arrayFormat];
+  let commaRoundTrip = generateArrayPrefix === "comma" && options.commaRoundTrip;
+  if (!obj_keys) obj_keys = Object.keys(obj);
+  if (options.sort) obj_keys.sort(options.sort);
+  let sideChannel = new WeakMap();
+  for (let i = 0; i < obj_keys.length; ++i) {
+    let key = obj_keys[i];
+    if (options.skipNulls && obj[key] === null) continue;
+    push_to_array(
+      keys,
+      inner_stringify(
+        obj[key],
+        key,
+        generateArrayPrefix,
+        commaRoundTrip,
+        options.allowEmptyArrays,
+        options.strictNullHandling,
+        options.skipNulls,
+        options.encodeDotInKeys,
+        options.encode ? options.encoder : null,
+        options.filter,
+        options.sort,
+        options.allowDots,
+        options.serializeDate,
+        options.format,
+        options.formatter,
+        options.encodeValuesOnly,
+        options.charset,
+        sideChannel,
+      ),
+    );
+  }
+  let joined = keys.join(options.delimiter);
+  let prefix = options.addQueryPrefix === true ? "?" : "";
+  if (options.charsetSentinel)
+    if (options.charset === "iso-8859-1") prefix += "utf8=%26%2310003%3B&";
+    else prefix += "utf8=%E2%9C%93&";
+  return joined.length > 0 ? prefix + joined : "";
+}
+export { stringify };

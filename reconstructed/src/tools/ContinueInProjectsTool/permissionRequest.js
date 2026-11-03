@@ -10,25 +10,23 @@
  */
 import { withHideWhile } from "../../components/dialogs/dialogRequests.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { Fh } from "../../utils/deepFreezePlainData.js";
+import { deepFreezeToolName } from "../../utils/deepFreezePlainData.js";
 
+//@ chunk-dkjq625a.js:298-638 placement
 /**
  * 发送到项目的权限对话框标题与对话框定义。
  */
-//@ chunk-dkjq625a.js:298-638 placement
-var CONTINUE_IN_PROJECTS_PROMPT_TITLE = "Claude wants to send this session\u2019s work to a Claude Project",
-  CONTINUE_IN_PROJECTS_PERMISSION_DIALOG = withHideWhile({
-    kind: "permission_continue_in_projects",
-    payload: DoctorLazy(() =>
-      Fh(
-        (e) =>
-          typeof e === "object" &&
-          e !== null &&
-          "requestId" in e &&
-          "toolName" in e &&
-          "permissionResult" in e,
-      ),
+var CONTINUE_IN_PROJECTS_PROMPT_TITLE = "Claude wants to send this session\u2019s work to a Claude Project";
+var CONTINUE_IN_PROJECTS_PERMISSION_DIALOG = withHideWhile({
+  kind: "permission_continue_in_projects",
+  payload: DoctorLazy(() =>
+    deepFreezeToolName(
+      (e) =>
+        typeof e === "object" && e !== null && "requestId" in e && "toolName" in e && "permissionResult" in e,
     ),
-    result: DoctorLazy(() => Fh((e) => typeof e === "object" && e !== null && "behavior" in e)),
-    default: { behavior: "cancelled" },
-  });
+  ),
+  result: DoctorLazy(() => deepFreezeToolName((e) => typeof e === "object" && e !== null && "behavior" in e)),
+  default: {
+    behavior: "cancelled",
+  },
+});

@@ -6,47 +6,46 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { QGe } from "./util/minimal.js";
+import { require_minimal as QGe } from "./util/minimal.js";
 
 //@ chunk-pwh5dx3n.js:90850-91572 cjs-fingerprint
-var Os = x(function (oA, md) {
-  md.exports = pt;
-  var dE = QGe();
-  function pt(e) {
-    if (e)
-      for (var keys = Object.keys(e), r = 0; r < keys.length; ++r) {
-        var i = keys[r];
-        if (i === "__proto__") continue;
-        this[i] = e[i];
+var Os = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = Message;
+  var util = QGe();
+  function Message(properties) {
+    if (properties)
+      for (var keys = Object.keys(properties), i_2 = 0; i_2 < keys.length; ++i_2) {
+        var key = keys[i_2];
+        if (key === "__proto__") continue;
+        this[key] = properties[key];
       }
   }
-  pt.create = function (t) {
-    return this.$type.create(t);
+  Message.create = function (properties) {
+    return this.$type.create(properties);
   };
-  pt.encode = function (t, r) {
-    return this.$type.encode(t, r);
+  Message.encode = function (message, writer) {
+    return this.$type.encode(message, writer);
   };
-  pt.encodeDelimited = function (t, r) {
-    return this.$type.encodeDelimited(t, r);
+  Message.encodeDelimited = function (message, writer) {
+    return this.$type.encodeDelimited(message, writer);
   };
-  pt.decode = function (t) {
-    return this.$type.decode(t);
+  Message.decode = function (reader) {
+    return this.$type.decode(reader);
   };
-  pt.decodeDelimited = function (t) {
-    return this.$type.decodeDelimited(t);
+  Message.decodeDelimited = function (reader) {
+    return this.$type.decodeDelimited(reader);
   };
-  pt.verify = function (t) {
-    return this.$type.verify(t);
+  Message.verify = function (message) {
+    return this.$type.verify(message);
   };
-  pt.fromObject = function (t) {
-    return this.$type.fromObject(t);
+  Message.fromObject = function (object) {
+    return this.$type.fromObject(object);
   };
-  pt.toObject = function (t, r) {
-    return this.$type.toObject(t, r);
+  Message.toObject = function (message, options) {
+    return this.$type.toObject(message, options);
   };
-  pt.prototype.toJSON = function () {
-    return this.$type.toObject(this, dE.toJSONOptions);
+  Message.prototype.toJSON = function () {
+    return this.$type.toObject(this, util.toJSONOptions);
   };
 });
-
 export { Os };

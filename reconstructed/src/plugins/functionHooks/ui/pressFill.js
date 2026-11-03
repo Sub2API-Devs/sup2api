@@ -8,70 +8,98 @@
  * pieces: chunk-s61vbvea.js (8)
  * attribution: placement 8
  */
-import {
-  AsyncLocalStorage,
-  AsyncLocalStorage as AsyncLocalStorage_2,
-  AsyncLocalStorage as AsyncLocalStorage_3,
-  AsyncLocalStorage as AsyncLocalStorage_4,
-} from "async_hooks";
-import {
-  isDeepStrictEqual,
-  isDeepStrictEqual as isDeepStrictEqual_2,
-  isDeepStrictEqual as isDeepStrictEqual_3,
-  isDeepStrictEqual as isDeepStrictEqual_4,
-} from "util";
+import { AsyncLocalStorage } from "async_hooks";
+import { isDeepStrictEqual } from "util";
 import { logFeatureOk, logFeatureSad } from "../../../services/analytics/featureTelemetry.js";
 
 //@ chunk-s61vbvea.js:598779-598875 placement
-function Pei(e, n, r) {
-  let s = n === void 0 ? void 0 : e.get(n);
-  return s?.environmentId === r ? s.press : void 0;
+/**
+ * 取某环境的按键
+ */
+function pressForEnv(keptPresses, pressing, environmentId) {
+  let s = pressing === undefined ? undefined : keptPresses.get(pressing);
+  return s?.environmentId === environmentId ? s.press : undefined;
 }
 //@ chunk-s61vbvea.js:598875-598945 placement
-function Iei(e, n) {
-  for (let [r, s] of e) if (s.environmentId === n) e.delete(r);
+/**
+ * 清掉某环境的按键记录
+ */
+function dropEnvPresses(keptPresses, n) {
+  for (let [r, s] of keptPresses) if (s.environmentId === n) keptPresses.delete(r);
 }
 //@ chunk-s61vbvea.js:598994-599009 placement
-var kKt = new AsyncLocalStorage_4();
+/**
+ * 按键上下文 ALS
+ */
+var pressContextStore = new AsyncLocalStorage();
+//@ chunk-s61vbvea.js:599009-599113 placement
 /**
  * 若在按键上下文中，记录某分发对应的按键（尚未作答）。
  */
-//@ chunk-s61vbvea.js:599009-599113 placement
-function notePressDispatch(e, n, r) {
-  let store = kKt.getStore();
-  if (store !== void 0) e.set(n, { environmentId: r, press: store, isAnswered: !1 });
+function notePressDispatch(keptPresses, n, environmentId) {
+  let s = pressContextStore.getStore();
+  if (s !== undefined)
+    keptPresses.set(n, {
+      environmentId,
+      press: s,
+      isAnswered: false,
+    });
 }
 //@ chunk-s61vbvea.js:599113-599170 placement
-function wE(e, n) {
-  return e?.clientId === n ? e.pressId : void 0;
+/**
+ * 取分发对应的按键 id
+ */
+function pressIdOf(e, n) {
+  return e?.clientId === n ? e.pressId : undefined;
 }
+//@ chunk-s61vbvea.js:599170-599406 placement
 /**
  * 标记某分发的按键已作答，并删除同环境中更早的已作答记录。
  */
-//@ chunk-s61vbvea.js:599170-599406 placement
-function markPressAnswered(e, n) {
-  let r = e.get(n);
-  if (r === void 0) return;
-  e.set(n, { ...r, isAnswered: !0 });
-  let mapped = [...e].filter(([, y]) => y.isAnswered && y.environmentId === r.environmentId).map(([y]) => y),
-    max = Math.max(...mapped);
-  for (let y of mapped.filter((S) => S < max)) e.delete(y);
+function markPressAnswered(keptPresses, n) {
+  let r = keptPresses.get(n);
+  if (r === undefined) return;
+  keptPresses.set(n, {
+    ...r,
+    isAnswered: true,
+  });
+  let mapped = [...keptPresses]
+    .filter(([, y]) => y.isAnswered && y.environmentId === r.environmentId)
+    .map(([y]) => y);
+  let max = Math.max(...mapped);
+  for (let y of mapped.filter((S) => S < max)) keptPresses.delete(y);
 }
+//@ chunk-s61vbvea.js:599406-599610 placement
 /**
  * （归属疑误：插件函数 hooks）取 press 填充并记录 plugin_function_hooks_press_fill 结果。
  */
-//@ chunk-s61vbvea.js:599406-599610 placement
-function logPressFill(e, n) {
-  let r = wE(e, n);
-  if (r !== void 0) logFeatureOk("plugin_function_hooks_press_fill");
-  if (e !== void 0 && r === void 0)
-    logFeatureSad("plugin_function_hooks_press_fill", e.clientId === void 0 ? "no_client" : "other_client");
+function logPressFill(answersPress, clientId) {
+  let r = pressIdOf(answersPress, clientId);
+  if (r !== undefined) logFeatureOk("plugin_function_hooks_press_fill");
+  if (answersPress !== undefined && r === undefined)
+    logFeatureSad(
+      "plugin_function_hooks_press_fill",
+      answersPress.clientId === undefined ? "no_client" : "other_client",
+    );
   return r;
 }
 //@ chunk-s61vbvea.js:599652-599735 placement
-var Qj = (e, n, r) => ({
-  ...r,
-  run: (s, ...h) => kKt.run(isDeepStrictEqual_3(s, n) ? e : void 0, () => r.run(s, ...h)),
+/**
+ * 包装按键上下文
+ */
+var withPressContext = (pagePress, uiPressEvent, pressHandler) => ({
+  ...pressHandler,
+  run: (s, ...h) =>
+    pressContextStore.run(isDeepStrictEqual(s, uiPressEvent) ? pagePress : undefined, () =>
+      pressHandler.run(s, ...h),
+    ),
 });
-
-export { Pei, logPressFill, Iei, notePressDispatch, kKt, markPressAnswered, Qj };
+export {
+  pressForEnv,
+  logPressFill,
+  dropEnvPresses,
+  notePressDispatch,
+  pressContextStore,
+  markPressAnswered,
+  withPressContext,
+};

@@ -6,84 +6,83 @@
  * attribution: esm-layout 5, esm-fingerprint 4
  */
 import { C } from "./impl/parser.js";
-import { ee, R } from "./impl/edit.js";
+import { ee, applyEdit } from "./impl/edit.js";
 
 //@ chunk-kndsyy4v.js:15523-15530 esm-layout
-var ne;
+var ScanError;
 //@ chunk-kndsyy4v.js:15530-15875 esm-fingerprint
-(function (e) {
-  ((e[(e.None = 0)] = "None"),
-    (e[(e.UnexpectedEndOfComment = 1)] = "UnexpectedEndOfComment"),
-    (e[(e.UnexpectedEndOfString = 2)] = "UnexpectedEndOfString"),
-    (e[(e.UnexpectedEndOfNumber = 3)] = "UnexpectedEndOfNumber"),
-    (e[(e.InvalidUnicode = 4)] = "InvalidUnicode"),
-    (e[(e.InvalidEscapeCharacter = 5)] = "InvalidEscapeCharacter"),
-    (e[(e.InvalidCharacter = 6)] = "InvalidCharacter"));
-})(ne || (ne = {}));
+(function (ScanError) {
+  ScanError[(ScanError.None = 0)] = "None";
+  ScanError[(ScanError.UnexpectedEndOfComment = 1)] = "UnexpectedEndOfComment";
+  ScanError[(ScanError.UnexpectedEndOfString = 2)] = "UnexpectedEndOfString";
+  ScanError[(ScanError.UnexpectedEndOfNumber = 3)] = "UnexpectedEndOfNumber";
+  ScanError[(ScanError.InvalidUnicode = 4)] = "InvalidUnicode";
+  ScanError[(ScanError.InvalidEscapeCharacter = 5)] = "InvalidEscapeCharacter";
+  ScanError[(ScanError.InvalidCharacter = 6)] = "InvalidCharacter";
+})(ScanError || (ScanError = {}));
 //@ chunk-kndsyy4v.js:15875-15882 esm-layout
-var te;
+var SyntaxKind;
 //@ chunk-kndsyy4v.js:15882-16523 esm-fingerprint
-(function (e) {
-  ((e[(e.OpenBraceToken = 1)] = "OpenBraceToken"),
-    (e[(e.CloseBraceToken = 2)] = "CloseBraceToken"),
-    (e[(e.OpenBracketToken = 3)] = "OpenBracketToken"),
-    (e[(e.CloseBracketToken = 4)] = "CloseBracketToken"),
-    (e[(e.CommaToken = 5)] = "CommaToken"),
-    (e[(e.ColonToken = 6)] = "ColonToken"),
-    (e[(e.NullKeyword = 7)] = "NullKeyword"),
-    (e[(e.TrueKeyword = 8)] = "TrueKeyword"),
-    (e[(e.FalseKeyword = 9)] = "FalseKeyword"),
-    (e[(e.StringLiteral = 10)] = "StringLiteral"),
-    (e[(e.NumericLiteral = 11)] = "NumericLiteral"),
-    (e[(e.LineCommentTrivia = 12)] = "LineCommentTrivia"),
-    (e[(e.BlockCommentTrivia = 13)] = "BlockCommentTrivia"),
-    (e[(e.LineBreakTrivia = 14)] = "LineBreakTrivia"),
-    (e[(e.Trivia = 15)] = "Trivia"),
-    (e[(e.Unknown = 16)] = "Unknown"),
-    (e[(e.EOF = 17)] = "EOF"));
-})(te || (te = {}));
+(function (SyntaxKind) {
+  SyntaxKind[(SyntaxKind.OpenBraceToken = 1)] = "OpenBraceToken";
+  SyntaxKind[(SyntaxKind.CloseBraceToken = 2)] = "CloseBraceToken";
+  SyntaxKind[(SyntaxKind.OpenBracketToken = 3)] = "OpenBracketToken";
+  SyntaxKind[(SyntaxKind.CloseBracketToken = 4)] = "CloseBracketToken";
+  SyntaxKind[(SyntaxKind.CommaToken = 5)] = "CommaToken";
+  SyntaxKind[(SyntaxKind.ColonToken = 6)] = "ColonToken";
+  SyntaxKind[(SyntaxKind.NullKeyword = 7)] = "NullKeyword";
+  SyntaxKind[(SyntaxKind.TrueKeyword = 8)] = "TrueKeyword";
+  SyntaxKind[(SyntaxKind.FalseKeyword = 9)] = "FalseKeyword";
+  SyntaxKind[(SyntaxKind.StringLiteral = 10)] = "StringLiteral";
+  SyntaxKind[(SyntaxKind.NumericLiteral = 11)] = "NumericLiteral";
+  SyntaxKind[(SyntaxKind.LineCommentTrivia = 12)] = "LineCommentTrivia";
+  SyntaxKind[(SyntaxKind.BlockCommentTrivia = 13)] = "BlockCommentTrivia";
+  SyntaxKind[(SyntaxKind.LineBreakTrivia = 14)] = "LineBreakTrivia";
+  SyntaxKind[(SyntaxKind.Trivia = 15)] = "Trivia";
+  SyntaxKind[(SyntaxKind.Unknown = 16)] = "Unknown";
+  SyntaxKind[(SyntaxKind.EOF = 17)] = "EOF";
+})(SyntaxKind || (SyntaxKind = {}));
 //@ chunk-kndsyy4v.js:16523-16533 esm-layout
 var b8e = C;
 //@ chunk-kndsyy4v.js:16533-16540 esm-layout
-var re;
+var ParseErrorCode;
 //@ chunk-kndsyy4v.js:16540-17313 esm-fingerprint
-(function (e) {
-  ((e[(e.InvalidSymbol = 1)] = "InvalidSymbol"),
-    (e[(e.InvalidNumberFormat = 2)] = "InvalidNumberFormat"),
-    (e[(e.PropertyNameExpected = 3)] = "PropertyNameExpected"),
-    (e[(e.ValueExpected = 4)] = "ValueExpected"),
-    (e[(e.ColonExpected = 5)] = "ColonExpected"),
-    (e[(e.CommaExpected = 6)] = "CommaExpected"),
-    (e[(e.CloseBraceExpected = 7)] = "CloseBraceExpected"),
-    (e[(e.CloseBracketExpected = 8)] = "CloseBracketExpected"),
-    (e[(e.EndOfFileExpected = 9)] = "EndOfFileExpected"),
-    (e[(e.InvalidCommentToken = 10)] = "InvalidCommentToken"),
-    (e[(e.UnexpectedEndOfComment = 11)] = "UnexpectedEndOfComment"),
-    (e[(e.UnexpectedEndOfString = 12)] = "UnexpectedEndOfString"),
-    (e[(e.UnexpectedEndOfNumber = 13)] = "UnexpectedEndOfNumber"),
-    (e[(e.InvalidUnicode = 14)] = "InvalidUnicode"),
-    (e[(e.InvalidEscapeCharacter = 15)] = "InvalidEscapeCharacter"),
-    (e[(e.InvalidCharacter = 16)] = "InvalidCharacter"));
-})(re || (re = {}));
+(function (ParseErrorCode) {
+  ParseErrorCode[(ParseErrorCode.InvalidSymbol = 1)] = "InvalidSymbol";
+  ParseErrorCode[(ParseErrorCode.InvalidNumberFormat = 2)] = "InvalidNumberFormat";
+  ParseErrorCode[(ParseErrorCode.PropertyNameExpected = 3)] = "PropertyNameExpected";
+  ParseErrorCode[(ParseErrorCode.ValueExpected = 4)] = "ValueExpected";
+  ParseErrorCode[(ParseErrorCode.ColonExpected = 5)] = "ColonExpected";
+  ParseErrorCode[(ParseErrorCode.CommaExpected = 6)] = "CommaExpected";
+  ParseErrorCode[(ParseErrorCode.CloseBraceExpected = 7)] = "CloseBraceExpected";
+  ParseErrorCode[(ParseErrorCode.CloseBracketExpected = 8)] = "CloseBracketExpected";
+  ParseErrorCode[(ParseErrorCode.EndOfFileExpected = 9)] = "EndOfFileExpected";
+  ParseErrorCode[(ParseErrorCode.InvalidCommentToken = 10)] = "InvalidCommentToken";
+  ParseErrorCode[(ParseErrorCode.UnexpectedEndOfComment = 11)] = "UnexpectedEndOfComment";
+  ParseErrorCode[(ParseErrorCode.UnexpectedEndOfString = 12)] = "UnexpectedEndOfString";
+  ParseErrorCode[(ParseErrorCode.UnexpectedEndOfNumber = 13)] = "UnexpectedEndOfNumber";
+  ParseErrorCode[(ParseErrorCode.InvalidUnicode = 14)] = "InvalidUnicode";
+  ParseErrorCode[(ParseErrorCode.InvalidEscapeCharacter = 15)] = "InvalidEscapeCharacter";
+  ParseErrorCode[(ParseErrorCode.InvalidCharacter = 16)] = "InvalidCharacter";
+})(ParseErrorCode || (ParseErrorCode = {}));
 //@ chunk-kndsyy4v.js:17313-17354 esm-layout
-function KOn(e, s, r, n) {
-  return ee(e, s, r, n);
+function KOn(text, s, r, options) {
+  return ee(text, s, r, options);
 }
 //@ chunk-kndsyy4v.js:17354-17614 esm-fingerprint
-function Wbr(e, s) {
-  let sorted = s.slice(0).sort((i, o) => {
-      let c = i.offset - o.offset;
-      if (c === 0) return i.length - o.length;
-      return c;
-    }),
-    n = e.length;
-  for (let i = sorted.length - 1; i >= 0; i--) {
-    let o = sorted[i];
-    if (o.offset + o.length <= n) e = R(e, o);
+function applyEdits(text, edits) {
+  let sortedEdits = edits.slice(0).sort((a, b) => {
+    let diff = a.offset - b.offset;
+    if (diff === 0) return a.length - b.length;
+    return diff;
+  });
+  let lastModifiedOffset = text.length;
+  for (let i = sortedEdits.length - 1; i >= 0; i--) {
+    let e = sortedEdits[i];
+    if (e.offset + e.length <= lastModifiedOffset) text = applyEdit(text, e);
     else throw Error("Overlapping edit");
-    n = o.offset;
+    lastModifiedOffset = e.offset;
   }
-  return e;
+  return text;
 }
-
-export { b8e, KOn, Wbr };
+export { b8e, KOn, applyEdits };

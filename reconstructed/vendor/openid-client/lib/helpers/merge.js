@@ -6,23 +6,22 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { wu } from "./is_plain_object.js";
+import { require_is_plain_object } from "./is_plain_object.js";
 
 //@ chunk-1ny7cxrt.js:27191-27454 cjs-fingerprint
-var mS = x(function (Gve, hS) {
-  var yy = wu();
-  function pS(e, ...t) {
-    for (let n of t) {
-      if (!yy(n)) continue;
-      for (let [o, r] of Object.entries(n)) {
-        if (o === "__proto__" || o === "constructor") continue;
-        if (yy(e[o]) && yy(r)) e[o] = pS(e[o], r);
-        else if (typeof r < "u") e[o] = r;
+var require_merge = x(function (cjsExports, cjsModule) {
+  var isPlainObject = require_is_plain_object();
+  function merge(target, ...sources) {
+    for (let source of sources) {
+      if (!isPlainObject(source)) continue;
+      for (let [key, value] of Object.entries(source)) {
+        if (key === "__proto__" || key === "constructor") continue;
+        if (isPlainObject(target[key]) && isPlainObject(value)) target[key] = merge(target[key], value);
+        else if (typeof value !== "undefined") target[key] = value;
       }
     }
-    return e;
+    return target;
   }
-  hS.exports = pS;
+  cjsModule.exports = merge;
 });
-
-export { mS };
+export { require_merge };

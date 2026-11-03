@@ -6,19 +6,20 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../runtime/bun-runtime.js";
-import { bXr } from "./dependencies.js";
+import { require_dependencies } from "./dependencies.js";
 
 //@ chunk-1r4fv9mg.js:2797-2999 cjs-fingerprint
-var me = x(function (de) {
-  Object.defineProperty(de, "__esModule", { value: !0 });
-  var ue = bXr(),
-    rt = {
-      keyword: "dependentSchemas",
-      type: "object",
-      schemaType: "object",
-      code: (e) => ue.validateSchemaDeps(e),
-    };
-  de.default = rt;
+var require_dependentSchemas = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  var dependencies_1 = require_dependencies();
+  var def = {
+    keyword: "dependentSchemas",
+    type: "object",
+    schemaType: "object",
+    code: (cxt) => dependencies_1.validateSchemaDeps(cxt),
+  };
+  cjsExports.default = def;
 });
-
-export { me };
+export { require_dependentSchemas };

@@ -11,23 +11,31 @@
 
 //@ chunk-x7pzr0ah.js:191-293 placement
 class ArtifactAvailabilityRegistry {
-  availability = () => !1;
-  register(i) {
-    this.availability = i;
+  availability = () => false;
+  register(availability) {
+    this.availability = availability;
   }
   isAvailable() {
     return this.availability();
   }
 }
 //@ chunk-x7pzr0ah.js:293-305 placement
-var a = new ArtifactAvailabilityRegistry();
+/**
+ * Artifact 可用性登记器全局实例：注册来源并聚合判断 artifact 功能是否可用。
+ */
+var artifactAvailabilityRegistry = new ArtifactAvailabilityRegistry();
 //@ chunk-x7pzr0ah.js:305-335 placement
-function jGs(i) {
-  a.register(i);
+/**
+ * 导出函数 `registerAvailabilitySource`：参数 i。
+ */
+function registerAvailabilitySource(artifactCommentsPromptGateOpen) {
+  artifactAvailabilityRegistry.register(artifactCommentsPromptGateOpen);
 }
 //@ chunk-x7pzr0ah.js:335-372 placement
-function Xb() {
-  return a.isAvailable();
+/**
+ * 导出函数 `isArtifactsAvailable`：返回 a.isAvailable(); } export { Xb, jGs }。
+ */
+function isArtifactsAvailable() {
+  return artifactAvailabilityRegistry.isAvailable();
 }
-
-export { Xb, jGs };
+export { isArtifactsAvailable, registerAvailabilitySource };

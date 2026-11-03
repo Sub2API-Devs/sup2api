@@ -13,6 +13,9 @@ import { mountFleetView } from "./FleetView.js";
 
 //@ chunk-ygxzcsa5.js:17373-17443 placement
 async function mountFleetViewWithComposerBack(e, o) {
-  let t = { ...o, host: o?.host ?? createFleetViewHost() };
+  let t = {
+    ...o,
+    host: o?.host ?? createFleetViewHost(),
+  };
   await mountFleetView(e, t);
 }

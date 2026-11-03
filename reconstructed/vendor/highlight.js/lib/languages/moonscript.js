@@ -8,57 +8,99 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:303563-305312 cjs-fingerprint
-var si = x(function (ig, ii) {
-  function Ap(e) {
-    let t = {
-        keyword:
-          "if then not for in while do return else elseif break continue switch and or unless when class extends super local import export from using",
-        literal: "true false nil",
-        built_in:
-          "_G _VERSION assert collectgarbage dofile error getfenv getmetatable ipairs load loadfile loadstring module next pairs pcall print rawequal rawget rawset require select setfenv setmetatable tonumber tostring type unpack xpcall coroutine debug io math os package string table",
-      },
-      n = "[A-Za-z$_][0-9A-Za-z$_]*",
-      a = { className: "subst", begin: /#\{/, end: /\}/, keywords: t },
-      s = [
-        e.inherit(e.C_NUMBER_MODE, { starts: { end: "(\\s*/)?", relevance: 0 } }),
-        {
-          className: "string",
-          variants: [
-            { begin: /'/, end: /'/, contains: [e.BACKSLASH_ESCAPE] },
-            { begin: /"/, end: /"/, contains: [e.BACKSLASH_ESCAPE, a] },
-          ],
+var require_moonscript = x(function (cjsExports, cjsModule) {
+  function moonscript(hljs) {
+    let KEYWORDS = {
+      keyword:
+        "if then not for in while do return else elseif break continue switch and or unless when class extends super local import export from using",
+      literal: "true false nil",
+      built_in:
+        "_G _VERSION assert collectgarbage dofile error getfenv getmetatable ipairs load loadfile loadstring module next pairs pcall print rawequal rawget rawset require select setfenv setmetatable tonumber tostring type unpack xpcall coroutine debug io math os package string table",
+    };
+    let JS_IDENT_RE = "[A-Za-z$_][0-9A-Za-z$_]*";
+    let SUBST = {
+      className: "subst",
+      begin: /#\{/,
+      end: /\}/,
+      keywords: KEYWORDS,
+    };
+    let EXPRESSIONS = [
+      hljs.inherit(hljs.C_NUMBER_MODE, {
+        starts: {
+          end: "(\\s*/)?",
+          relevance: 0,
         },
-        { className: "built_in", begin: "@__" + e.IDENT_RE },
-        { begin: "@" + e.IDENT_RE },
-        { begin: e.IDENT_RE + "\\\\" + e.IDENT_RE },
-      ];
-    a.contains = s;
-    let inherit = e.inherit(e.TITLE_MODE, { begin: "[A-Za-z$_][0-9A-Za-z$_]*" }),
-      r = "(\\(.*\\)\\s*)?\\B[-=]>",
-      i = {
-        className: "params",
-        begin: "\\([^\\(]",
-        returnBegin: !0,
-        contains: [{ begin: /\(/, end: /\)/, keywords: t, contains: ["self"].concat(s) }],
-      };
+      }),
+      {
+        className: "string",
+        variants: [
+          {
+            begin: /'/,
+            end: /'/,
+            contains: [hljs.BACKSLASH_ESCAPE],
+          },
+          {
+            begin: /"/,
+            end: /"/,
+            contains: [hljs.BACKSLASH_ESCAPE, SUBST],
+          },
+        ],
+      },
+      {
+        className: "built_in",
+        begin: "@__" + hljs.IDENT_RE,
+      },
+      {
+        begin: "@" + hljs.IDENT_RE,
+      },
+      {
+        begin: hljs.IDENT_RE + "\\\\" + hljs.IDENT_RE,
+      },
+    ];
+    SUBST.contains = EXPRESSIONS;
+    let TITLE = hljs.inherit(hljs.TITLE_MODE, {
+      begin: "[A-Za-z$_][0-9A-Za-z$_]*",
+    });
+    let POSSIBLE_PARAMS_RE = "(\\(.*\\)\\s*)?\\B[-=]>";
+    let PARAMS = {
+      className: "params",
+      begin: "\\([^\\(]",
+      returnBegin: true,
+      contains: [
+        {
+          begin: /\(/,
+          end: /\)/,
+          keywords: KEYWORDS,
+          contains: ["self"].concat(EXPRESSIONS),
+        },
+      ],
+    };
     return {
       name: "MoonScript",
       aliases: ["moon"],
-      keywords: t,
+      keywords: KEYWORDS,
       illegal: /\/\*/,
-      contains: s.concat([
-        e.COMMENT("--", "$"),
+      contains: EXPRESSIONS.concat([
+        hljs.COMMENT("--", "$"),
         {
           className: "function",
-          begin: "^\\s*[A-Za-z$_][0-9A-Za-z$_]*\\s*=\\s*" + r,
+          begin: "^\\s*[A-Za-z$_][0-9A-Za-z$_]*\\s*=\\s*" + POSSIBLE_PARAMS_RE,
           end: "[-=]>",
-          returnBegin: !0,
-          contains: [inherit, i],
+          returnBegin: true,
+          contains: [TITLE, PARAMS],
         },
         {
           begin: /[\(,:=]\s*/,
           relevance: 0,
-          contains: [{ className: "function", begin: r, end: "[-=]>", returnBegin: !0, contains: [i] }],
+          contains: [
+            {
+              className: "function",
+              begin: POSSIBLE_PARAMS_RE,
+              end: "[-=]>",
+              returnBegin: true,
+              contains: [PARAMS],
+            },
+          ],
         },
         {
           className: "class",
@@ -66,22 +108,26 @@ var si = x(function (ig, ii) {
           end: "$",
           illegal: /[:="\[\]]/,
           contains: [
-            { beginKeywords: "extends", endsWithParent: !0, illegal: /[:="\[\]]/, contains: [inherit] },
-            inherit,
+            {
+              beginKeywords: "extends",
+              endsWithParent: true,
+              illegal: /[:="\[\]]/,
+              contains: [TITLE],
+            },
+            TITLE,
           ],
         },
         {
           className: "name",
           begin: "[A-Za-z$_][0-9A-Za-z$_]*:",
           end: ":",
-          returnBegin: !0,
-          returnEnd: !0,
+          returnBegin: true,
+          returnEnd: true,
           relevance: 0,
         },
       ]),
     };
   }
-  ii.exports = Ap;
+  cjsModule.exports = moonscript;
 });
-
-export { si };
+export { require_moonscript };

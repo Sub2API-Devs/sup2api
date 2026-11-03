@@ -17,45 +17,63 @@ import { logEvent } from "../../services/analytics/index.js";
 import { fromEnumOpt, lit } from "../../services/analytics/safeMetadata.js";
 
 //@ chunk-2b4rzray.js:416-782 placement
-function shouldShowAutoDefaultNudge(u, { requireOnboarding: n = !0 } = {}) {
-  let o = getGlobalConfig();
+function shouldShowAutoDefaultNudge(toolPermissionContext, { requireOnboarding: n = true } = {}) {
+  let globalConfig = getGlobalConfig();
   if (
-    (n && !o.hasCompletedOnboarding) ||
-    o.hasSeenAutoDefaultNudge ||
-    !getFeatureValue_CACHED_MAY_BE_STALE("tengu_maple_pier", !0)
+    (n && !globalConfig.hasCompletedOnboarding) ||
+    globalConfig.hasSeenAutoDefaultNudge ||
+    !getFeatureValue_CACHED_MAY_BE_STALE("tengu_maple_pier", true)
   )
     return null;
-  let e = getSettingsForSource("userSettings")?.permissions?.defaultMode,
-    any = ["projectSettings", "localSettings", "flagSettings", "policySettings"].some(
-      (r) => getSettingsForSource(r)?.permissions?.defaultMode,
-    );
-  if (e && e !== "auto" && !any && canCycleToAuto(u)) return e;
+  let defaultMode = getSettingsForSource("userSettings")?.permissions?.defaultMode;
+  let any = ["projectSettings", "localSettings", "flagSettings", "policySettings"].some(
+    (r) => getSettingsForSource(r)?.permissions?.defaultMode,
+  );
+  if (defaultMode && defaultMode !== "auto" && !any && canCycleToAuto(toolPermissionContext))
+    return defaultMode;
   return null;
 }
+//@ chunk-2b4rzray.js:782-1298 placement = AutoModeOptInDialog (0.312)
 /**
  * auto 模式默认开启提示：accept 写 userSettings 为 auto，decline 保持；记录 tengu_auto_default_nudge_shown。
  */
-//@ chunk-2b4rzray.js:782-1298 placement = AutoModeOptInDialog (0.312)
-function handleAutoDefaultNudgeEventFromHost(u, n, o) {
+function handleAutoDefaultNudgeEventFromHost(serverName, message, storageV5) {
   if (getGlobalConfig().hasSeenAutoDefaultNudge) return;
-  let e = parsePermissionMode(n.current_mode);
-  if (u === "shown") {
-    logEvent("tengu_auto_default_nudge_shown", { current_mode: fromEnumOpt(e), surface: lit("ide") });
+  let permissionMode = parsePermissionMode(message.current_mode);
+  if (serverName === "shown") {
+    logEvent("tengu_auto_default_nudge_shown", {
+      current_mode: fromEnumOpt(permissionMode),
+      surface: lit("ide"),
+    });
     return;
   }
-  let t6 = n.choice === "accept" ? "accept" : "decline";
+  let t6 = message.choice === "accept" ? "accept" : "decline";
   if (t6 === "accept")
-    updateSettingsForSource("userSettings", { permissions: { defaultMode: "auto" } }, void 0, o);
-  (saveGlobalConfig(
-    (value_0) => (value_0.hasSeenAutoDefaultNudge ? value_0 : { ...value_0, hasSeenAutoDefaultNudge: !0 }),
-    o,
-  ),
-    logEvent("tengu_auto_default_nudge_resolved", {
-      choice: lit(t6),
-      outcome: t6 === "accept" ? lit("switched") : lit("declined"),
-      current_mode: fromEnumOpt(e),
-      surface: lit("ide"),
-    }));
+    updateSettingsForSource(
+      "userSettings",
+      {
+        permissions: {
+          defaultMode: "auto",
+        },
+      },
+      undefined,
+      storageV5,
+    );
+  saveGlobalConfig(
+    (value_0) =>
+      value_0.hasSeenAutoDefaultNudge
+        ? value_0
+        : {
+            ...value_0,
+            hasSeenAutoDefaultNudge: true,
+          },
+    storageV5,
+  );
+  logEvent("tengu_auto_default_nudge_resolved", {
+    choice: lit(t6),
+    outcome: t6 === "accept" ? lit("switched") : lit("declined"),
+    current_mode: fromEnumOpt(permissionMode),
+    surface: lit("ide"),
+  });
 }
-
 export { handleAutoDefaultNudgeEventFromHost, shouldShowAutoDefaultNudge };

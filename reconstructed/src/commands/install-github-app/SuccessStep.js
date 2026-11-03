@@ -10,133 +10,169 @@
  */
 import { w } from "../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
-import { r, e, Fragment } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default_2,
+  jsxProd_default,
+  Fragment,
+} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Box } from "../../ink/components/Text.js";
 import { StatusIcon } from "../../components/design-system/StatusIcon.js";
 
 //@ chunk-4v9zy7gn.js:40689-42521 callgraph-fingerprint = SuccessStep (0.235)
-function SuccessStep(t0) {
-  let A = w(19),
-    {
-      secretExists: secretExists,
-      useExistingSecret: useExistingSecret,
-      secretName: secretName,
-      skipWorkflow: t1,
-      appOnlyInstall: appOnlyInstall,
-    } = t0,
-    skipWorkflow = t1 === void 0 ? !1 : t1;
-  if (appOnlyInstall === void 0 ? !1 : appOnlyInstall) {
+function SuccessStep(props) {
+  let $ = w(19);
+  let { secretExists, useExistingSecret, secretName, skipWorkflow, appOnlyInstall } = props;
+  let skipWorkflow_2 = skipWorkflow === undefined ? false : skipWorkflow;
+  if (appOnlyInstall === undefined ? false : appOnlyInstall) {
     let g;
-    if (A[0] === MEMO_CACHE_SENTINEL)
-      ((g = r(Text, {
+    if ($[0] === MEMO_CACHE_SENTINEL) {
+      g = jsxProd_default_2(Text, {
         color: "success",
-        children: [e(StatusIcon, { status: "success", withSpace: !0 }), "GitHub App installed"],
-      })),
-        (A[0] = g));
-    else g = A[0];
+        children: [
+          jsxProd_default(StatusIcon, {
+            status: "success",
+            withSpace: true,
+          }),
+          "GitHub App installed",
+        ],
+      });
+      $[0] = g;
+    } else g = $[0];
     let _;
-    if (A[1] === MEMO_CACHE_SENTINEL)
-      ((_ = r(Box, {
+    if ($[1] === MEMO_CACHE_SENTINEL) {
+      _ = jsxProd_default_2(Box, {
         flexDirection: "column",
         children: [
           g,
-          e(Box, {
+          jsxProd_default(Box, {
             marginTop: 1,
-            children: e(Text, {
+            children: jsxProd_default(Text, {
               children: "Run /install-github-app again anytime to set up GitHub Actions workflows.",
             }),
           }),
         ],
-      })),
-        (A[1] = _));
-    else _ = A[1];
+      });
+      $[1] = _;
+    } else _ = $[1];
     return _;
   }
   let g;
-  if (A[2] !== skipWorkflow)
-    ((g =
-      !skipWorkflow &&
-      r(Text, {
+  if ($[2] !== skipWorkflow_2) {
+    g =
+      !skipWorkflow_2 &&
+      jsxProd_default_2(Text, {
         color: "success",
-        children: [e(StatusIcon, { status: "success", withSpace: !0 }), "GitHub Actions workflow created!"],
-      })),
-      (A[2] = skipWorkflow),
-      (A[3] = g));
-  else g = A[3];
-  let _;
-  if (A[4] !== secretExists || A[5] !== useExistingSecret)
-    ((_ =
+        children: [
+          jsxProd_default(StatusIcon, {
+            status: "success",
+            withSpace: true,
+          }),
+          "GitHub Actions workflow created!",
+        ],
+      });
+    $[2] = skipWorkflow_2;
+    $[3] = g;
+  } else g = $[3];
+  let t4;
+  if ($[4] !== secretExists || $[5] !== useExistingSecret) {
+    t4 =
       secretExists &&
       useExistingSecret &&
-      e(Box, {
+      jsxProd_default(Box, {
         marginTop: 1,
-        children: r(Text, {
+        children: jsxProd_default_2(Text, {
           color: "success",
           children: [
-            e(StatusIcon, { status: "success", withSpace: !0 }),
+            jsxProd_default(StatusIcon, {
+              status: "success",
+              withSpace: true,
+            }),
             "Using existing ANTHROPIC_API_KEY secret",
           ],
         }),
-      })),
-      (A[4] = secretExists),
-      (A[5] = useExistingSecret),
-      (A[6] = _));
-  else _ = A[6];
+      });
+    $[4] = secretExists;
+    $[5] = useExistingSecret;
+    $[6] = t4;
+  } else t4 = $[6];
   let k;
-  if (A[7] !== secretExists || A[8] !== secretName || A[9] !== useExistingSecret)
-    ((k =
+  if ($[7] !== secretExists || $[8] !== secretName || $[9] !== useExistingSecret) {
+    k =
       (!secretExists || !useExistingSecret) &&
-      e(Box, {
+      jsxProd_default(Box, {
         marginTop: 1,
-        children: r(Text, {
+        children: jsxProd_default_2(Text, {
           color: "success",
           children: [
-            e(StatusIcon, { status: "success", withSpace: !0 }),
+            jsxProd_default(StatusIcon, {
+              status: "success",
+              withSpace: true,
+            }),
             "API key saved as ",
             secretName,
             " secret",
           ],
         }),
-      })),
-      (A[7] = secretExists),
-      (A[8] = secretName),
-      (A[9] = useExistingSecret),
-      (A[10] = k));
-  else k = A[10];
+      });
+    $[7] = secretExists;
+    $[8] = secretName;
+    $[9] = useExistingSecret;
+    $[10] = k;
+  } else k = $[10];
   let E;
-  if (A[11] === MEMO_CACHE_SENTINEL)
-    ((E = e(Box, { marginTop: 1, children: e(Text, { children: "Next steps:" }) })), (A[11] = E));
-  else E = A[11];
+  if ($[11] === MEMO_CACHE_SENTINEL) {
+    E = jsxProd_default(Box, {
+      marginTop: 1,
+      children: jsxProd_default(Text, {
+        children: "Next steps:",
+      }),
+    });
+    $[11] = E;
+  } else E = $[11];
   let x;
-  if (A[12] !== skipWorkflow)
-    ((x = skipWorkflow
-      ? r(Fragment, {
+  if ($[12] !== skipWorkflow_2) {
+    x = skipWorkflow_2
+      ? jsxProd_default_2(Fragment, {
           children: [
-            e(Text, { children: "1. Install the Claude GitHub App if you haven't already" }),
-            e(Text, { children: "2. Your workflow file was kept unchanged" }),
-            e(Text, { children: "3. API key is configured and ready to use" }),
+            jsxProd_default(Text, {
+              children: "1. Install the Claude GitHub App if you haven't already",
+            }),
+            jsxProd_default(Text, {
+              children: "2. Your workflow file was kept unchanged",
+            }),
+            jsxProd_default(Text, {
+              children: "3. API key is configured and ready to use",
+            }),
           ],
         })
-      : r(Fragment, {
+      : jsxProd_default_2(Fragment, {
           children: [
-            e(Text, { children: "1. A pre-filled PR page has been created" }),
-            e(Text, { children: "2. Install the Claude GitHub App if you haven't already" }),
-            e(Text, { children: "3. Merge the PR to enable Claude PR assistance" }),
+            jsxProd_default(Text, {
+              children: "1. A pre-filled PR page has been created",
+            }),
+            jsxProd_default(Text, {
+              children: "2. Install the Claude GitHub App if you haven't already",
+            }),
+            jsxProd_default(Text, {
+              children: "3. Merge the PR to enable Claude PR assistance",
+            }),
           ],
-        })),
-      (A[12] = skipWorkflow),
-      (A[13] = x));
-  else x = A[13];
+        });
+    $[12] = skipWorkflow_2;
+    $[13] = x;
+  } else x = $[13];
   let T;
-  if (A[14] !== g || A[15] !== _ || A[16] !== k || A[17] !== x)
-    ((T = r(Box, { flexDirection: "column", children: [g, _, k, E, x] })),
-      (A[14] = g),
-      (A[15] = _),
-      (A[16] = k),
-      (A[17] = x),
-      (A[18] = T));
-  else T = A[18];
+  if ($[14] !== g || $[15] !== t4 || $[16] !== k || $[17] !== x) {
+    T = jsxProd_default_2(Box, {
+      flexDirection: "column",
+      children: [g, t4, k, E, x],
+    });
+    $[14] = g;
+    $[15] = t4;
+    $[16] = k;
+    $[17] = x;
+    $[18] = T;
+  } else T = $[18];
   return T;
 }
-
 export { SuccessStep };

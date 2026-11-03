@@ -12,50 +12,61 @@ import { getRuleBehaviorDescription } from "../permissions/PermissionResult.js";
 import { getCloudDeferUnsupportedMessage, getPreToolHookBlockingMessage } from "../hooks.js";
 
 //@ chunk-e6aww6q8.js:921230-922063 placement
-function resolveHookPermissionResult(e, n, r) {
-  let s = `Hook ${n} ${getRuleBehaviorDescription("deny")} this tool`,
-    h;
+function resolveHookPermissionResult(remoteCall, hookName, r) {
+  let s = `Hook ${hookName} ${getRuleBehaviorDescription("deny")} this tool`;
+  let h;
   switch (r.permissionBehavior) {
     case "deny":
       h = r.hookPermissionDecisionReason || s;
       break;
     case "defer":
-      if (e.strictestHookAnswer?.behavior !== "deny") h = getCloudDeferUnsupportedMessage(r.hookSource || n);
+      if (remoteCall.strictestHookAnswer?.behavior !== "deny")
+        h = getCloudDeferUnsupportedMessage(r.hookSource || hookName);
       break;
     case "ask":
-      if (e.strictestHookAnswer?.behavior !== "deny")
-        e.strictestHookAnswer = {
+      if (remoteCall.strictestHookAnswer?.behavior !== "deny")
+        remoteCall.strictestHookAnswer = {
           behavior: "ask",
           message:
-            r.hookPermissionDecisionReason || `Hook ${n} ${getRuleBehaviorDescription("ask")} this tool`,
+            r.hookPermissionDecisionReason ||
+            `Hook ${hookName} ${getRuleBehaviorDescription("ask")} this tool`,
           decisionReason: {
             type: "hook",
-            hookName: n,
+            hookName,
             hookSource: r.hookSource,
             reason: r.hookPermissionDecisionReason,
-            ...(r.heldForServedCall && { heldForServedCall: !0 }),
+            ...(r.heldForServedCall && {
+              heldForServedCall: true,
+            }),
           },
         };
       break;
     case "allow":
     case "passthrough":
-    case void 0:
+    case undefined:
       break;
     default:
-      (r.permissionBehavior, (h = s));
+      r.permissionBehavior;
+      h = s;
   }
-  if (r.blockingError !== void 0 && r.permissionBehavior !== "deny")
-    h = getPreToolHookBlockingMessage(n, r.blockingError);
-  if (h !== void 0)
-    e.strictestHookAnswer = {
+  if (r.blockingError !== undefined && r.permissionBehavior !== "deny")
+    h = getPreToolHookBlockingMessage(hookName, r.blockingError);
+  if (h !== undefined)
+    remoteCall.strictestHookAnswer = {
       behavior: "deny",
       message: h,
-      decisionReason: { type: "hook", hookName: n, reason: h },
+      decisionReason: {
+        type: "hook",
+        hookName,
+        reason: h,
+      },
     };
 }
 //@ chunk-e6aww6q8.js:922063-922105 placement
-function _1e(e, n) {
-  e.strictestHookAnswer = n;
+/**
+ * 记录最严格的钩子答复（用于权限判定）。
+ */
+function setStrictestHookAnswer(remoteCall, strictestHookAnswer) {
+  remoteCall.strictestHookAnswer = strictestHookAnswer;
 }
-
-export { resolveHookPermissionResult, _1e };
+export { resolveHookPermissionResult, setStrictestHookAnswer };

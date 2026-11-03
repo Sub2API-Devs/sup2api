@@ -8,48 +8,69 @@
  * pieces: chunk-9br8f9tm.js (2)
  * attribution: affinity 1, fingerprint 1
  */
-import { Dc } from "../../vendor/lru-cache/dist/esm/index.min.js";
+import { LRUCache } from "../../vendor/lru-cache/dist/esm/index.min.js";
 import { getFsImplementation } from "./fsOperations.js";
 import { assertReadableFile } from "./fileRead.js";
 import { detectFileEncoding } from "./file.js";
 
 //@ chunk-9br8f9tm.js:834-856 affinity
-var DEFAULT_MAX_CACHE_ENTRIES = 1000,
-  DEFAULT_MAX_CACHE_BYTES = 16777216;
+var DEFAULT_MAX_CACHE_ENTRIES = 1000;
+var DEFAULT_MAX_CACHE_BYTES = 16777216;
+//@ chunk-9br8f9tm.js:856-1515 fingerprint = FileReadCache (0.758)
 /**
  * 按 mtime 校验的文件内容 LRU 缓存（默认 1000 条、16MB）。
  */
-//@ chunk-9br8f9tm.js:856-1515 fingerprint = FileReadCache (0.758)
 class FileReadCache {
   cache;
-  constructor(e = DEFAULT_MAX_CACHE_ENTRIES, n = DEFAULT_MAX_CACHE_BYTES) {
-    this.cache = new Dc({ max: e, maxSize: n, sizeCalculation: (r) => Math.max(1, r.content.length) });
+  constructor(max = DEFAULT_MAX_CACHE_ENTRIES, maxSize = DEFAULT_MAX_CACHE_BYTES) {
+    this.cache = new LRUCache({
+      max,
+      maxSize,
+      sizeCalculation: (r) => Math.max(1, r.content.length),
+    });
   }
-  readFile(e) {
-    let n = getFsImplementation(),
-      r;
+  readFile(filePath) {
+    let fsImplementation = getFsImplementation();
+    let stats;
     try {
-      r = n.statSync(e);
+      stats = fsImplementation.statSync(filePath);
     } catch (error) {
-      throw (this.cache.delete(e), error);
+      this.cache.delete(filePath);
+      throw error;
     }
-    if (!r.isFile()) (this.cache.delete(e), assertReadableFile(r, e, void 0));
-    let s = this.cache.get(e);
-    if (s && s.mtime === r.mtimeMs) return { content: s.content, encoding: s.encoding };
-    let o = detectFileEncoding(e),
-      replaced = n.readFileSync(e, { encoding: o }).replaceAll(
+    if (!stats.isFile()) {
+      this.cache.delete(filePath);
+      assertReadableFile(stats, filePath, undefined);
+    }
+    let cachedData = this.cache.get(filePath);
+    if (cachedData && cachedData.mtime === stats.mtimeMs)
+      return {
+        content: cachedData.content,
+        encoding: cachedData.encoding,
+      };
+    let encoding = detectFileEncoding(filePath);
+    let content = fsImplementation
+      .readFileSync(filePath, {
+        encoding,
+      })
+      .replaceAll(
         `\r
 `,
         `
 `,
       );
-    return (
-      this.cache.set(e, { content: replaced, encoding: o, mtime: r.mtimeMs }),
-      { content: replaced, encoding: o }
-    );
+    this.cache.set(filePath, {
+      content,
+      encoding,
+      mtime: stats.mtimeMs,
+    });
+    return {
+      content,
+      encoding,
+    };
   }
-  invalidate(e) {
-    this.cache.delete(e);
+  invalidate(filePath) {
+    this.cache.delete(filePath);
   }
   getStats() {
     return {
@@ -59,5 +80,4 @@ class FileReadCache {
     };
   }
 }
-
 export { FileReadCache };

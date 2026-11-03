@@ -8,58 +8,7 @@
  * pieces: chunk-e6aww6q8.js (17)
  * attribution: placement 17
  */
-import {
-  randomUUID,
-  randomUUID as randomUUID_2,
-  randomUUID as randomUUID_3,
-  randomUUID as randomUUID_4,
-  randomUUID as randomUUID_5,
-  randomUUID as randomUUID_6,
-  randomUUID as randomUUID_7,
-  randomUUID as randomUUID_8,
-  randomUUID as randomUUID_9,
-  randomUUID as randomUUID_10,
-  randomUUID as randomUUID_11,
-  randomUUID as randomUUID_12,
-  randomUUID as randomUUID_13,
-  randomUUID as randomUUID_14,
-  randomUUID as randomUUID_15,
-  randomUUID as randomUUID_16,
-  randomUUID as randomUUID_17,
-  randomUUID as randomUUID_18,
-  randomUUID as randomUUID_19,
-  randomUUID as randomUUID_20,
-  randomUUID as randomUUID_21,
-  randomUUID as randomUUID_22,
-  randomUUID as randomUUID_23,
-  randomUUID as randomUUID_24,
-  randomUUID as randomUUID_25,
-  randomUUID as randomUUID_26,
-  randomUUID as randomUUID_27,
-  randomUUID as randomUUID_28,
-  randomUUID as randomUUID_29,
-  randomUUID as randomUUID_30,
-  randomUUID as randomUUID_31,
-  randomUUID as randomUUID_32,
-  randomUUID as randomUUID_33,
-  randomUUID as randomUUID_34,
-  randomUUID as randomUUID_35,
-  randomUUID as randomUUID_36,
-  randomUUID as randomUUID_37,
-  randomUUID as randomUUID_38,
-  randomUUID as randomUUID_39,
-  randomUUID as randomUUID_40,
-  randomUUID as randomUUID_41,
-  randomUUID as randomUUID_42,
-  randomUUID as randomUUID_43,
-  randomUUID as randomUUID_44,
-  randomUUID as randomUUID_45,
-  randomUUID as randomUUID_46,
-  randomUUID as randomUUID_47,
-  randomUUID as randomUUID_48,
-  randomUUID as randomUUID_49,
-  randomUUID as randomUUID_50,
-} from "crypto";
+import { randomUUID } from "crypto";
 import {
   TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
   AbortError as AbortError_2,
@@ -68,102 +17,117 @@ import { jsonStringify } from "../../utils/slowOperations.js";
 import { KeyedSemaphore } from "../../utils/keyedSemaphore.js";
 import { REJECT_MESSAGE } from "../../utils/messages.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
-import { isPlainObject as isPlainObject_4 } from "../../utils/isPlainObject.js";
+import { isPlainObject as isPlainObject_5 } from "../../utils/isPlainObject.js";
 import { isRecordableDenial } from "../../types/permissions.js";
 
 //@ chunk-e6aww6q8.js:2157803-2158492 placement
-var PROVENANCE_REQUIRED = "PROVENANCE_REQUIRED",
-  Cir = 2048,
-  Mir = {
-    denied: "web_fetch_provenance_denied",
-    timed_out: "web_fetch_provenance_timed_out",
-    expired_in_line: "web_fetch_provenance_expired_in_line",
-    quiet_spell: "web_fetch_provenance_quiet_spell",
-    suppressed_mode: "web_fetch_provenance_suppressed_mode",
-    suppressed_deny_rule: "web_fetch_provenance_suppressed_deny_rule",
-    suppressed_url_too_long: "web_fetch_provenance_suppressed_url_too_long",
-    no_prompt: "web_fetch_provenance_no_prompt",
-    retry_denied: "web_fetch_provenance_retry_denied",
-  },
-  iin =
-    "URL not in provenance set. web_fetch can only retrieve URLs that appeared in a user message or a prior web_fetch result. Ask the user to include the URL in a message first.";
+/**
+ * 记入拒绝记录的 URL 长度上限（2048）。
+ */
+var PROVENANCE_REQUIRED = "PROVENANCE_REQUIRED";
+var MAX_DENIAL_URL_CHARS = 2048;
+var PROVENANCE_OUTCOME_EVENTS = {
+  denied: "web_fetch_provenance_denied",
+  timed_out: "web_fetch_provenance_timed_out",
+  expired_in_line: "web_fetch_provenance_expired_in_line",
+  quiet_spell: "web_fetch_provenance_quiet_spell",
+  suppressed_mode: "web_fetch_provenance_suppressed_mode",
+  suppressed_deny_rule: "web_fetch_provenance_suppressed_deny_rule",
+  suppressed_url_too_long: "web_fetch_provenance_suppressed_url_too_long",
+  no_prompt: "web_fetch_provenance_no_prompt",
+  retry_denied: "web_fetch_provenance_retry_denied",
+};
+var PROVENANCE_REQUIRED_MESSAGE =
+  "URL not in provenance set. web_fetch can only retrieve URLs that appeared in a user message or a prior web_fetch result. Ask the user to include the URL in a message first.";
+//@ chunk-e6aww6q8.js:2158492-2158603 placement
 /**
  * 构造 URL 来源检查不通过时的遥测安全错误（PROVENANCE_REQUIRED），附带按结果映射的状态码。
  */
-//@ chunk-e6aww6q8.js:2158492-2158603 placement
 function provenanceRequiredError(e, n) {
   return new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-    jsonStringify({ error_type: PROVENANCE_REQUIRED, source: "target", message: n ?? iin }),
+    jsonStringify({
+      error_type: PROVENANCE_REQUIRED,
+      source: "target",
+      message: n ?? PROVENANCE_REQUIRED_MESSAGE,
+    }),
     "web-fetch-ccr-proxy",
-    Mir[e],
+    PROVENANCE_OUTCOME_EVENTS[e],
   );
 }
+//@ chunk-e6aww6q8.js:2158603-2158801 placement
 /**
  * 每会话的 URL 来源审批状态：请求计数、串行队列、上次是否无人答复及时间、已批准的 URL 与源。
  */
-//@ chunk-e6aww6q8.js:2158603-2158801 placement
 class UrlProvenanceState {
   count = 0;
   line = new KeyedSemaphore();
-  lastWentUnanswered = !1;
+  lastWentUnanswered = false;
   unansweredAt;
   answeredAt = 0;
   approvedUrls = new Set();
   approvedOrigins = new Set();
   forgetApprovals() {
-    (this.approvedUrls.clear(), this.approvedOrigins.clear());
+    this.approvedUrls.clear();
+    this.approvedOrigins.clear();
   }
 }
 //@ chunk-e6aww6q8.js:2158801-2159584 placement
-var describeUrlPermissionTimeout = "tengu_orderly_lantern",
-  ain = 300000,
-  Wir = 0.1,
-  zir =
-    "The permission request for this URL was not answered in time. Ask the user to approve the fetch or include the URL in a message, then try again.",
-  qir =
-    "The permission request for this URL was not answered in time and was withdrawn. Ask the user to include the URL in a message, or retry once they reply: a retry sends them a new permission request and waits for them again.",
-  Kir =
-    "The user did not answer an earlier permission request in time, so the request for this URL was not sent to them. Ask the user to include the URL in a message, or retry once they reply: a retry sends them a new permission request and waits for them again.",
-  O8e = "Do not retry. Continue without this page and report the blocked URL in your findings.";
+/**
+ * 等待 URL 权限答复的超时（5 分钟）。
+ */
+var describeUrlPermissionTimeout = "tengu_orderly_lantern";
+var URL_PROMPT_TIMEOUT_MS = 300000;
+var PROMPT_UP_BUDGET_RATIO = 0.1;
+var URL_TIMEOUT_MESSAGE =
+  "The permission request for this URL was not answered in time. Ask the user to approve the fetch or include the URL in a message, then try again.";
+var URL_TIMEOUT_WITHDRAWN_MESSAGE =
+  "The permission request for this URL was not answered in time and was withdrawn. Ask the user to include the URL in a message, or retry once they reply: a retry sends them a new permission request and waits for them again.";
+var URL_EXPIRED_MESSAGE =
+  "The user did not answer an earlier permission request in time, so the request for this URL was not sent to them. Ask the user to include the URL in a message, or retry once they reply: a retry sends them a new permission request and waits for them again.";
+var PROVENANCE_RETRY_HINT =
+  "Do not retry. Continue without this page and report the blocked URL in your findings.";
+//@ chunk-e6aww6q8.js:2159584-2160150 placement
 /**
  * 按来源审批结果（超时、因前一请求未答而未发出、被拒绝、其他）生成给模型的说明，提示不要重试、无法询问时跳过该页面并报告被拦的 URL。
  */
-//@ chunk-e6aww6q8.js:2159584-2160150 placement
 function provenanceDenialText(outcome, message, fallback) {
   switch (outcome) {
     case "timed_out":
-      return `The permission request for this URL was not answered in time. ${O8e}`;
+      return `The permission request for this URL was not answered in time. ${PROVENANCE_RETRY_HINT}`;
     case "expired_in_line":
     case "quiet_spell":
-      return `The user did not answer an earlier permission request in time, so the request for this URL was not sent to them. ${O8e}`;
+      return `The user did not answer an earlier permission request in time, so the request for this URL was not sent to them. ${PROVENANCE_RETRY_HINT}`;
     case "denied":
-      return message === void 0 || message === REJECT_MESSAGE
-        ? `The user doesn't want to proceed with this tool use. ${O8e}`
+      return message === undefined || message === REJECT_MESSAGE
+        ? `The user doesn't want to proceed with this tool use. ${PROVENANCE_RETRY_HINT}`
         : message;
     default:
-      return `${message ?? fallback ?? iin} Retries will fail. If you cannot ask the user (e.g. from a subagent), continue without this page and report the blocked URL in your findings.`;
+      return `${message ?? fallback ?? PROVENANCE_REQUIRED_MESSAGE} Retries will fail. If you cannot ask the user (e.g. from a subagent), continue without this page and report the blocked URL in your findings.`;
   }
 }
+//@ chunk-e6aww6q8.js:2160150-2161476 placement
 /**
  * WebFetch 的 URL 来源检查：判断是否需要用户批准。
  */
-//@ chunk-e6aww6q8.js:2160150-2161476 placement
 async function checkUrlProvenance(e) {
-  let { env: env, denial: denial } = e,
-    { line: line } = env.promptsUp,
-    h = approvalMatch(env.promptsUp, denial.url),
-    y = await suppressedAskReason(e);
-  if (y) return { outcome: y };
+  let { env, denial } = e;
+  let { line } = env.promptsUp;
+  let h = approvalMatch(env.promptsUp, denial.url);
+  let y = await suppressedAskReason(e);
+  if (y)
+    return {
+      outcome: y,
+    };
   env.refuseIfLetGo();
-  let S = getFeatureValue_CACHED_MAY_BE_STALE(describeUrlPermissionTimeout, !1) === !0,
-    { unansweredAt: unansweredAt } = env.promptsUp;
+  let S = getFeatureValue_CACHED_MAY_BE_STALE(describeUrlPermissionTimeout, false) === true;
+  let { unansweredAt } = env.promptsUp;
   if (
     e.fromSubagent &&
     !env.signal.aborted &&
-    unansweredAt !== void 0 &&
+    unansweredAt !== undefined &&
     env.personWroteAt() < unansweredAt &&
-    performance.now() - unansweredAt < (e.promptTimeoutMs ?? ain) &&
-    getFeatureValue_CACHED_MAY_BE_STALE("tengu_hushed_plover", !0)
+    performance.now() - unansweredAt < (e.promptTimeoutMs ?? URL_PROMPT_TIMEOUT_MS) &&
+    getFeatureValue_CACHED_MAY_BE_STALE("tengu_hushed_plover", true)
   )
     return {
       outcome: "quiet_spell",
@@ -172,45 +136,54 @@ async function checkUrlProvenance(e) {
         upAtEnd: env.promptsUp.count,
         queuedMs: 0,
         waitedMs: 0,
-        fetchedBeforeAsking: !1,
+        fetchedBeforeAsking: false,
         oneAtATime: S,
       },
     };
-  let startTime = performance.now(),
-    G = !1,
-    q = !1;
+  let startTime = performance.now();
+  let G = false;
+  let fetchedBeforeAsking = false;
   env.promptsUp.count++;
-  let Z = { counted: !0, oneAtATime: S },
-    Se;
+  let Z = {
+    counted: true,
+    oneAtATime: S,
+  };
+  let Se;
   try {
     for (;;) {
-      if (((G ||= S && line.wouldWait(PROVENANCE, 1)), S)) {
+      G ||= S && line.wouldWait(PROVENANCE, 1);
+      if (S) {
         let Ie = e.timing?.mark("approval");
-        if (((Se = await line.acquire(PROVENANCE, 1, env.signal).finally(Ie)), !Se || env.signal.aborted))
-          throw new AbortError_2();
+        Se = await line.acquire(PROVENANCE, 1, env.signal).finally(Ie);
+        if (!Se || env.signal.aborted) throw new AbortError_2();
       }
-      if (!G) return await askUrlProvenanceApproval(e, Z, 0, !1);
+      if (!G) return await askUrlProvenanceApproval(e, Z, 0, false);
       let ke = await suppressedAskReason(e);
-      if (ke) return { outcome: ke };
-      let rounded = Math.round(performance.now() - startTime),
-        Ee = approvalMatch(env.promptsUp, denial.url);
-      if (q || !((Ee.url && !h.url) || (Ee.origin && !h.origin)))
-        return await askUrlProvenanceApproval(e, Z, rounded, q);
-      ((q = !0), Se?.(), (Se = void 0));
+      if (ke)
+        return {
+          outcome: ke,
+        };
+      let rounded = Math.round(performance.now() - startTime);
+      let Ee = approvalMatch(env.promptsUp, denial.url);
+      if (fetchedBeforeAsking || !((Ee.url && !h.url) || (Ee.origin && !h.origin)))
+        return await askUrlProvenanceApproval(e, Z, rounded, fetchedBeforeAsking);
+      fetchedBeforeAsking = true;
+      Se?.();
+      Se = undefined;
       let Ae = denial;
       try {
         Ae = await e.refetch(denial.url);
       } catch (error) {
         if (error instanceof AbortError_2 || env.signal.aborted) throw error;
-        if (Yir(error))
+        if (isTargetProvenanceError(error))
           return {
             outcome: "fetch_failed_without_prompt",
-            error: error,
+            error,
             wait: queueTimingFields(env.promptsUp, rounded),
           };
       }
       if (env.signal.aborted) throw new AbortError_2();
-      if (!din(Ae))
+      if (!isProvenanceDenied(Ae))
         return {
           outcome: "served_without_prompt",
           refetched: Ae,
@@ -218,90 +191,121 @@ async function checkUrlProvenance(e) {
         };
     }
   } finally {
-    (lin(env.promptsUp, Z), Se?.());
+    releasePromptBudget(env.promptsUp, Z);
+    Se?.();
   }
 }
 //@ chunk-e6aww6q8.js:2161476-2161573 placement
-function lin(e, n) {
+/**
+ * 释放一次权限请求占用的预算，计数归零时清空已批准记录。
+ */
+function releasePromptBudget(promptsUp, n) {
   if (!n.counted) return;
-  if (((n.counted = !1), e.count--, e.count === 0)) e.forgetApprovals();
+  n.counted = false;
+  promptsUp.count--;
+  if (promptsUp.count === 0) promptsUp.forgetApprovals();
 }
 //@ chunk-e6aww6q8.js:2161573-2161594 placement
 var PROVENANCE = "provenance";
+//@ chunk-e6aww6q8.js:2161594-2161940 placement
 /**
  * 判断是否不应弹出 URL 来源审批：bypass/dontAsk 模式或应避免权限提示、URL 过长、命中 deny 规则时返回相应原因。
  */
-//@ chunk-e6aww6q8.js:2161594-2161940 placement
-async function suppressedAskReason({ denial: denial, prompt: prompt, env: env }) {
-  let permissions = env.permissions();
-  if (
-    permissions.mode === "bypassPermissions" ||
-    permissions.mode === "dontAsk" ||
-    permissions.shouldAvoidPermissionPrompts
-  )
+async function suppressedAskReason({ denial, prompt, env }) {
+  let s = env.permissions();
+  if (s.mode === "bypassPermissions" || s.mode === "dontAsk" || s.shouldAvoidPermissionPrompts)
     return "suppressed_mode";
-  if (Buffer.byteLength(denial.url, "utf8") > Cir) return "suppressed_url_too_long";
-  if ((await env.precheck({ url: denial.url, prompt: prompt }))?.behavior === "deny")
+  if (Buffer.byteLength(denial.url, "utf8") > MAX_DENIAL_URL_CHARS) return "suppressed_url_too_long";
+  if (
+    (
+      await env.precheck({
+        url: denial.url,
+        prompt,
+      })
+    )?.behavior === "deny"
+  )
     return "suppressed_deny_rule";
   return;
 }
 //@ chunk-e6aww6q8.js:2161940-2162063 placement
-function queueTimingFields(e, n) {
-  let r = e.count - 1;
-  return { upAtRaise: r, upAtEnd: r, queuedMs: n, waitedMs: 0, fetchedBeforeAsking: !0, oneAtATime: !0 };
+function queueTimingFields(promptsUp, queuedMs) {
+  let r = promptsUp.count - 1;
+  return {
+    upAtRaise: r,
+    upAtEnd: r,
+    queuedMs,
+    waitedMs: 0,
+    fetchedBeforeAsking: true,
+    oneAtATime: true,
+  };
 }
 //@ chunk-e6aww6q8.js:2162063-2162144 placement
-function D8e(e) {
-  let parse = URL.parse(e);
-  return parse?.protocol === "https:" ? parse.origin : void 0;
+/**
+ * 取出 URL 的 https origin。
+ */
+function httpsOriginOf(url) {
+  let n = URL.parse(url);
+  return n?.protocol === "https:" ? n.origin : undefined;
 }
 //@ chunk-e6aww6q8.js:2162144-2162253 placement
-function approvalMatch(e, n) {
-  let r = D8e(n);
-  return { url: e.approvedUrls.has(n), origin: r !== void 0 && e.approvedOrigins.has(r) };
+function approvalMatch(promptsUp, url) {
+  let r = httpsOriginOf(url);
+  return {
+    url: promptsUp.approvedUrls.has(url),
+    origin: r !== undefined && promptsUp.approvedOrigins.has(r),
+  };
 }
 //@ chunk-e6aww6q8.js:2162253-2162343 placement
-function Yir(e) {
+/**
+ * 判断错误是否为“抓取目标”类的遥测安全错误。
+ */
+function isTargetProvenanceError(error) {
   return (
-    e instanceof TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS &&
-    e.errorClass?.startsWith("web_fetch_target_") === !0
+    error instanceof TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS &&
+    error.errorClass?.startsWith("web_fetch_target_") === true
   );
 }
 //@ chunk-e6aww6q8.js:2162343-2162596 placement
-function addsAllowRules(e) {
-  let n = e.decisionReason?.type === "permissionPromptTool" ? e.decisionReason.toolResult : void 0,
-    r = isPlainObject_4(n) ? n.updatedPermissions : void 0;
+function addsAllowRules(decision) {
+  let toolResult =
+    decision.decisionReason?.type === "permissionPromptTool" ? decision.decisionReason.toolResult : undefined;
+  let updatedPermissions = isPlainObject_5(toolResult) ? toolResult.updatedPermissions : undefined;
   return (
-    Array.isArray(r) &&
-    r.some(
-      (s) =>
-        isPlainObject_4(s) && s.behavior === "allow" && (s.type === "addRules" || s.type === "replaceRules"),
+    Array.isArray(updatedPermissions) &&
+    updatedPermissions.some(
+      (updatedPermission) =>
+        isPlainObject_5(updatedPermission) &&
+        updatedPermission.behavior === "allow" &&
+        (updatedPermission.type === "addRules" || updatedPermission.type === "replaceRules"),
     )
   );
 }
 //@ chunk-e6aww6q8.js:2162596-2162691 placement
-function din(e) {
+/**
+ * 判断结果是否为来源被拒。
+ */
+function isProvenanceDenied(e) {
   return e !== null && typeof e === "object" && "type" in e && e.type === "provenance_denied";
 }
+//@ chunk-e6aww6q8.js:2162691-2164631 placement
 /**
  * 请求用户批准抓取某个 URL，支持逐个或一次性批准，处理超时与过期。
  */
-//@ chunk-e6aww6q8.js:2162691-2164631 placement
-async function askUrlProvenanceApproval(e, n, r, s) {
-  let { tool: tool, denial: denial, prompt: prompt, env: env } = e,
-    L = e.promptTimeoutMs ?? ain,
-    permissions = env.permissions(),
-    q = {},
-    Z = {
-      behavior: "ask",
-      message: `${tool.name} was denied by this session's URL provenance check. Approve to allow fetching this URL.`,
-      suggestions: e.suggestions,
-      provenancePromptLine: n.oneAtATime ? "one_at_a_time" : "all_at_once",
-      ...q,
-    },
-    Se = env.promptsUp.count - 1,
-    ke = env.promptsUp.lastWentUnanswered ? L - r : L;
-  if (ke < L * Wir)
+async function askUrlProvenanceApproval(e, n, r, fetchedBeforeAsking) {
+  let { tool, denial, prompt, env } = e;
+  let promptTimeoutMs = e.promptTimeoutMs ?? URL_PROMPT_TIMEOUT_MS;
+  let G = env.permissions();
+  let q = {};
+  let Z = {
+    behavior: "ask",
+    message: `${tool.name} was denied by this session's URL provenance check. Approve to allow fetching this URL.`,
+    suggestions: e.suggestions,
+    provenancePromptLine: n.oneAtATime ? "one_at_a_time" : "all_at_once",
+    ...q,
+  };
+  let Se = env.promptsUp.count - 1;
+  let ke = env.promptsUp.lastWentUnanswered ? promptTimeoutMs - r : promptTimeoutMs;
+  if (ke < promptTimeoutMs * PROMPT_UP_BUDGET_RATIO)
     return {
       outcome: "expired_in_line",
       wait: {
@@ -309,79 +313,121 @@ async function askUrlProvenanceApproval(e, n, r, s) {
         upAtEnd: Se,
         queuedMs: r,
         waitedMs: 0,
-        fetchedBeforeAsking: s,
+        fetchedBeforeAsking,
         oneAtATime: n.oneAtATime,
       },
     };
-  env.promptsUp.lastWentUnanswered = !1;
-  let we = env.withdrawsUnansweredAsk ? new AbortController() : void 0,
-    startTime = performance.now(),
-    ask = env.ask(
-      { url: denial.url, prompt: prompt },
-      { toolUseId: randomUUID_25(), forceDecision: Z, withdraw: we?.signal },
-    ),
-    Ie,
-    promise = new Promise((ze) => {
-      ((Ie = setTimeout((lt) => lt({ type: "timed_out" }), ke, ze)), Ie.unref?.());
-    }),
-    We = e.timing?.mark("approval");
+  env.promptsUp.lastWentUnanswered = false;
+  let we = env.withdrawsUnansweredAsk ? new AbortController() : undefined;
+  let startTime = performance.now();
+  let Ae = env.ask(
+    {
+      url: denial.url,
+      prompt,
+    },
+    {
+      toolUseId: randomUUID(),
+      forceDecision: Z,
+      withdraw: we?.signal,
+    },
+  );
+  let Ie;
+  let promise = new Promise((resolve) => {
+    Ie = setTimeout(
+      (lt) =>
+        lt({
+          type: "timed_out",
+        }),
+      ke,
+      resolve,
+    );
+    Ie.unref?.();
+  });
+  let We = e.timing?.mark("approval");
   try {
-    let winner = await Promise.race([ask.then((Je) => ({ type: "decision", decision: Je })), promise]);
+    let winner = await Promise.race([
+      Ae.then((decision) => ({
+        type: "decision",
+        decision,
+      })),
+      promise,
+    ]);
     if (winner.type === "decision" && winner.decision.behavior === "deny") env.promptsUp.forgetApprovals();
     if (
       winner.type === "decision" &&
       (winner.decision.behavior === "allow" || isRecordableDenial(winner.decision, Z))
-    )
-      ((env.promptsUp.unansweredAt = void 0), (env.promptsUp.answeredAt = performance.now()));
+    ) {
+      env.promptsUp.unansweredAt = undefined;
+      env.promptsUp.answeredAt = performance.now();
+    }
     if (env.signal.aborted) throw new AbortError_2();
-    let lt = {
+    let wait = {
       upAtRaise: Se,
       upAtEnd: env.promptsUp.count - 1,
       queuedMs: r,
       waitedMs: Math.round(performance.now() - startTime),
-      fetchedBeforeAsking: s,
+      fetchedBeforeAsking,
       oneAtATime: n.oneAtATime,
     };
     if (winner.type === "timed_out") {
-      if (
-        ((env.promptsUp.lastWentUnanswered = !0),
-        Math.max(env.promptsUp.answeredAt, env.personWroteAt()) < startTime)
-      )
+      env.promptsUp.lastWentUnanswered = true;
+      if (Math.max(env.promptsUp.answeredAt, env.personWroteAt()) < startTime)
         env.promptsUp.unansweredAt = performance.now();
-      return (ask.catch(() => {}), we?.abort(), { outcome: "timed_out", wait: lt });
+      Ae.catch(() => {});
+      we?.abort();
+      return {
+        outcome: "timed_out",
+        wait,
+      };
     }
     if (winner.decision.behavior === "allow") {
       env.promptsUp.approvedUrls.add(denial.url);
-      let Je = D8e(denial.url);
-      if (Je !== void 0 && addsAllowRules(winner.decision)) env.promptsUp.approvedOrigins.add(Je);
-      return { outcome: "approved", wait: lt };
+      let Je = httpsOriginOf(denial.url);
+      if (Je !== undefined && addsAllowRules(winner.decision)) env.promptsUp.approvedOrigins.add(Je);
+      return {
+        outcome: "approved",
+        wait,
+      };
     }
     return {
       outcome: isRecordableDenial(winner.decision, Z) ? "denied" : "no_prompt",
-      denialMessage: winner.decision.message || void 0,
-      wait: lt,
+      denialMessage: winner.decision.message || undefined,
+      wait,
     };
   } finally {
-    (We?.(), lin(env.promptsUp, n), clearTimeout(Ie));
+    We?.();
+    releasePromptBudget(env.promptsUp, n);
+    clearTimeout(Ie);
   }
 }
+//@ chunk-e6aww6q8.js:2164631-2165666 placement
 /**
  * 记录 URL 来源检查的结果。
  */
-//@ chunk-e6aww6q8.js:2164631-2165666 placement
 async function logUrlProvenanceOutcome(e) {
   let n = await checkUrlProvenance(e);
-  if (n.outcome === "served_without_prompt") return (e.onOutcome?.(n.outcome, n.wait), n.refetched);
-  if (n.outcome === "fetch_failed_without_prompt") throw (e.onOutcome?.(n.outcome, n.wait), n.error);
+  if (n.outcome === "served_without_prompt") {
+    e.onOutcome?.(n.outcome, n.wait);
+    return n.refetched;
+  }
+  if (n.outcome === "fetch_failed_without_prompt") {
+    e.onOutcome?.(n.outcome, n.wait);
+    throw n.error;
+  }
   if (n.outcome !== "approved") {
-    if ((e.onOutcome?.(n.outcome, n.wait), e.fromSubagent))
+    e.onOutcome?.(n.outcome, n.wait);
+    if (e.fromSubagent)
       throw provenanceRequiredError(
         n.outcome,
         provenanceDenialText(n.outcome, n.denialMessage, e.denial.errorMessage),
       );
-    if (n.outcome === "expired_in_line") throw provenanceRequiredError("expired_in_line", Kir);
+    if (n.outcome === "expired_in_line")
+      throw provenanceRequiredError("expired_in_line", URL_EXPIRED_MESSAGE);
     throw n.outcome === "timed_out"
-      ? provenanceRequiredError("timed_out", e.env.withdrawsUnansweredAsk ? qir : zir)
+      ? provenanceRequiredError(
+          "timed_out",
+          e.env.withdrawsUnansweredAsk ? URL_TIMEOUT_WITHDRAWN_MESSAGE : URL_TIMEOUT_MESSAGE,
+        )
       : provenanceRequiredError(n.outcome, n.denialMessage ?? e.denial.errorMessage);
   }
   let r;
@@ -389,21 +435,20 @@ async function logUrlProvenanceOutcome(e) {
     r = await e.refetch(e.denial.url);
   } catch (error) {
     if (error instanceof AbortError_2 || e.env.signal.aborted) throw error;
-    throw (e.onOutcome?.("retry_failed", n.wait), error);
+    e.onOutcome?.("retry_failed", n.wait);
+    throw error;
   }
-  if (din(r)) {
-    let s = D8e(e.denial.url);
-    if ((e.env.promptsUp.approvedUrls.delete(e.denial.url), s !== void 0))
-      e.env.promptsUp.approvedOrigins.delete(s);
-    throw (
-      e.onOutcome?.("retry_denied", n.wait),
-      provenanceRequiredError(
-        "retry_denied",
-        e.fromSubagent ? provenanceDenialText("retry_denied", void 0, r.errorMessage) : r.errorMessage,
-      )
+  if (isProvenanceDenied(r)) {
+    let s = httpsOriginOf(e.denial.url);
+    e.env.promptsUp.approvedUrls.delete(e.denial.url);
+    if (s !== undefined) e.env.promptsUp.approvedOrigins.delete(s);
+    e.onOutcome?.("retry_denied", n.wait);
+    throw provenanceRequiredError(
+      "retry_denied",
+      e.fromSubagent ? provenanceDenialText("retry_denied", undefined, r.errorMessage) : r.errorMessage,
     );
   }
-  return (e.onOutcome?.("approved", n.wait), r);
+  e.onOutcome?.("approved", n.wait);
+  return r;
 }
-
 export { PROVENANCE_REQUIRED, UrlProvenanceState, provenanceRequiredError, logUrlProvenanceOutcome };

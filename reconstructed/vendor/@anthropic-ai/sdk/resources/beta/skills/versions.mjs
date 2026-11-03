@@ -5,90 +5,129 @@
  * pieces: chunk-hwmsct5x.js (1)
  * attribution: esm-fingerprint 1
  */
-import { Y } from "../../../core/resource.mjs";
+import { APIResource } from "../../../core/resource.mjs";
 import { I } from "../../../internal/utils/path.mjs";
 import { ut } from "../../../internal/uploads.mjs";
-import { T } from "../../../internal/headers.mjs";
-import { ee } from "../../../core/pagination.mjs";
+import { buildHeaders } from "../../../internal/headers.mjs";
+import { TokenPage } from "../../../core/pagination.mjs";
 
 //@ chunk-hwmsct5x.js:135536-136978 esm-fingerprint
-class go extends Y {
-  create(e, n, r) {
-    let { betas: betas, workspace_id: workspace_id, ...y } = n;
+class Versions_2 extends APIResource {
+  create(skillID, params, options) {
+    let { betas, workspace_id, ...body } = params;
     return this._client.post(
-      I`/v1/skills/${e}/versions?beta=true`,
+      I`/v1/skills/${skillID}/versions?beta=true`,
       ut(
         {
-          body: y,
-          ...r,
-          headers: T([
+          body,
+          ...options,
+          headers: buildHeaders([
             {
-              ...(betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0),
-              ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0),
+              ...(betas?.toString() != null
+                ? {
+                    "anthropic-beta": betas?.toString(),
+                  }
+                : undefined),
+              ...(workspace_id != null
+                ? {
+                    "anthropic-workspace-id": workspace_id,
+                  }
+                : undefined),
             },
-            r?.headers,
+            options?.headers,
           ]),
         },
         this._client,
-        !1,
+        false,
       ),
     );
   }
-  retrieve(e, n, r) {
-    let { skill_id: skill_id, betas: betas, workspace_id: workspace_id } = n;
-    return this._client.get(I`/v1/skills/${skill_id}/versions/${e}?beta=true`, {
-      ...r,
-      headers: T([
+  retrieve(version, params, options) {
+    let { skill_id, betas, workspace_id } = params;
+    return this._client.get(I`/v1/skills/${skill_id}/versions/${version}?beta=true`, {
+      ...options,
+      headers: buildHeaders([
         {
-          ...(betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0),
-          ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0),
+          ...(betas?.toString() != null
+            ? {
+                "anthropic-beta": betas?.toString(),
+              }
+            : undefined),
+          ...(workspace_id != null
+            ? {
+                "anthropic-workspace-id": workspace_id,
+              }
+            : undefined),
         },
-        r?.headers,
+        options?.headers,
       ]),
     });
   }
-  list(e, n = {}, r) {
-    let { betas: betas, workspace_id: workspace_id, ...y } = n ?? {};
-    return this._client.getAPIList(I`/v1/skills/${e}/versions?beta=true`, ee, {
-      query: y,
-      ...r,
-      headers: T([
+  list(skillID, params = {}, options) {
+    let { betas, workspace_id, ...query } = params ?? {};
+    return this._client.getAPIList(I`/v1/skills/${skillID}/versions?beta=true`, TokenPage, {
+      query,
+      ...options,
+      headers: buildHeaders([
         {
-          ...(betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0),
-          ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0),
+          ...(betas?.toString() != null
+            ? {
+                "anthropic-beta": betas?.toString(),
+              }
+            : undefined),
+          ...(workspace_id != null
+            ? {
+                "anthropic-workspace-id": workspace_id,
+              }
+            : undefined),
         },
-        r?.headers,
+        options?.headers,
       ]),
     });
   }
-  delete(e, n, r) {
-    let { skill_id: skill_id, betas: betas, workspace_id: workspace_id } = n;
-    return this._client.delete(I`/v1/skills/${skill_id}/versions/${e}?beta=true`, {
-      ...r,
-      headers: T([
+  delete(version, params, options) {
+    let { skill_id, betas, workspace_id } = params;
+    return this._client.delete(I`/v1/skills/${skill_id}/versions/${version}?beta=true`, {
+      ...options,
+      headers: buildHeaders([
         {
-          ...(betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0),
-          ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0),
+          ...(betas?.toString() != null
+            ? {
+                "anthropic-beta": betas?.toString(),
+              }
+            : undefined),
+          ...(workspace_id != null
+            ? {
+                "anthropic-workspace-id": workspace_id,
+              }
+            : undefined),
         },
-        r?.headers,
+        options?.headers,
       ]),
     });
   }
-  download(e, n, r) {
-    let { skill_id: skill_id, betas: betas, workspace_id: workspace_id } = n;
-    return this._client.get(I`/v1/skills/${skill_id}/versions/${e}/content?beta=true`, {
-      ...r,
-      headers: T([
+  download(version, params, options) {
+    let { skill_id, betas, workspace_id } = params;
+    return this._client.get(I`/v1/skills/${skill_id}/versions/${version}/content?beta=true`, {
+      ...options,
+      headers: buildHeaders([
         {
           Accept: "application/binary",
-          ...(betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0),
-          ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0),
+          ...(betas?.toString() != null
+            ? {
+                "anthropic-beta": betas?.toString(),
+              }
+            : undefined),
+          ...(workspace_id != null
+            ? {
+                "anthropic-workspace-id": workspace_id,
+              }
+            : undefined),
         },
-        r?.headers,
+        options?.headers,
       ]),
-      __binaryResponse: !0,
+      __binaryResponse: true,
     });
   }
 }
-
-export { go };
+export { Versions_2 };

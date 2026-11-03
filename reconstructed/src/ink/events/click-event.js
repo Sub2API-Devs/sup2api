@@ -12,10 +12,10 @@ import { InkEvent } from "./event.js";
 import { NO_MOUSE_MODS } from "../components/ErrorBoundary.js";
 import { PointerEvent } from "./pointer-event.js";
 
+//@ chunk-bzr73sfg.js:172404-172812 placement
 /**
  * 鼠标事件基类（继承 TerminalEvent 的基础 Event）：屏幕坐标 col/row 与相对目标的 localCol/localRow、目标格是否空白、所在格的 OSC 8 链接、是否为窗口激活点击、修饰键；allowDefault()/dropAsStray()/endClickChain() 供处理器影响默认行为（选区、多击链）。
  */
-//@ chunk-bzr73sfg.js:172404-172812 placement
 class ClickEvent extends InkEvent {
   col;
   row;
@@ -25,47 +25,53 @@ class ClickEvent extends InkEvent {
   hyperlinkUrl;
   isWindowActivation;
   mods;
-  defaultAllowed = !1;
+  defaultAllowed = false;
   allowDefault() {
-    this.defaultAllowed = !0;
+    this.defaultAllowed = true;
   }
-  droppedAsStray = !1;
+  droppedAsStray = false;
   dropAsStray() {
-    this.droppedAsStray = !0;
+    this.droppedAsStray = true;
   }
-  endsClickChain = !1;
+  endsClickChain = false;
   endClickChain() {
-    this.endsClickChain = !0;
+    this.endsClickChain = true;
   }
-  constructor(col, row, cellIsBlank, hyperlinkUrl, isWindowActivation = !1, mods = NO_MOUSE_MODS) {
+  constructor(col, row, cellIsBlank, hyperlinkUrl, isWindowActivation = false, mods = NO_MOUSE_MODS) {
     super();
-    ((this.col = col),
-      (this.row = row),
-      (this.cellIsBlank = cellIsBlank),
-      (this.hyperlinkUrl = hyperlinkUrl),
-      (this.isWindowActivation = isWindowActivation),
-      (this.mods = mods));
+    this.col = col;
+    this.row = row;
+    this.cellIsBlank = cellIsBlank;
+    this.hyperlinkUrl = hyperlinkUrl;
+    this.isWindowActivation = isWindowActivation;
+    this.mods = mods;
   }
 }
+//@ chunk-bzr73sfg.js:258255-258541 fingerprint = ClickEvent (0.495)
 /**
  * 把指针事件派给节点的 onPointer，换算成节点内的局部坐标（含像素精度 fine）；节点已从树上摘下时只派发 up。
  */
-//@ chunk-bzr73sfg.js:258255-258541 fingerprint = ClickEvent (0.495)
 function dispatchPointer(node, event) {
-  let f = node._eventHandlers?.onPointer,
-    cachedLayout = node.cachedLayout;
-  if (!(f !== void 0 && cachedLayout !== void 0 && (node.parentNode !== void 0 || event.kind === "up")))
+  let onPointer = node._eventHandlers?.onPointer;
+  let cachedLayout = node.cachedLayout;
+  if (!(
+    onPointer !== undefined &&
+    cachedLayout !== undefined &&
+    (node.parentNode !== undefined || event.kind === "up")
+  ))
     return;
-  let floored = Math.floor(cachedLayout.x),
-    floored_2 = Math.floor(cachedLayout.y);
-  f(
+  let floored = Math.floor(cachedLayout.x);
+  let floored_2 = Math.floor(cachedLayout.y);
+  onPointer(
     new PointerEvent({
       ...event,
       localCol: event.col - floored,
       localRow: event.row - floored_2,
-      fine: event.fine && { col: event.fine.col - floored, row: event.fine.row - floored_2 },
+      fine: event.fine && {
+        col: event.fine.col - floored,
+        row: event.fine.row - floored_2,
+      },
     }),
   );
 }
-
 export { ClickEvent, dispatchPointer };

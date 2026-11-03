@@ -8,13 +8,15 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:122157-123534 cjs-fingerprint
-var Pn = x(function (Qu, kn) {
-  function Yl(e) {
-    let COMMENT = e.COMMENT(/^\s*@?rem\b/, /$/, { relevance: 10 });
+var require_dos = x(function (cjsExports, cjsModule) {
+  function dos(hljs) {
+    let COMMENT = hljs.COMMENT(/^\s*@?rem\b/, /$/, {
+      relevance: 10,
+    });
     return {
       name: "Batch file (DOS)",
       aliases: ["bat", "cmd"],
-      case_insensitive: !0,
+      case_insensitive: true,
       illegal: /\/\*/,
       keywords: {
         keyword: [
@@ -129,7 +131,10 @@ var Pn = x(function (Qu, kn) {
         ],
       },
       contains: [
-        { className: "variable", begin: /%%[^ ]|%[^ ]+?%|![^ ]+?!/ },
+        {
+          className: "variable",
+          begin: /%%[^ ]|%[^ ]+?%|![^ ]+?!/,
+        },
         {
           className: "function",
           begin: {
@@ -139,16 +144,21 @@ var Pn = x(function (Qu, kn) {
           }.begin,
           end: "goto:eof",
           contains: [
-            e.inherit(e.TITLE_MODE, { begin: "([_a-zA-Z]\\w*\\.)*([_a-zA-Z]\\w*:)?[_a-zA-Z]\\w*" }),
+            hljs.inherit(hljs.TITLE_MODE, {
+              begin: "([_a-zA-Z]\\w*\\.)*([_a-zA-Z]\\w*:)?[_a-zA-Z]\\w*",
+            }),
             COMMENT,
           ],
         },
-        { className: "number", begin: "\\b\\d+", relevance: 0 },
+        {
+          className: "number",
+          begin: "\\b\\d+",
+          relevance: 0,
+        },
         COMMENT,
       ],
     };
   }
-  kn.exports = Yl;
+  cjsModule.exports = dos;
 });
-
-export { Pn };
+export { require_dos };

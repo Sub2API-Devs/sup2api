@@ -6,44 +6,47 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../runtime/bun-runtime.js";
-import { Po } from "../cjs/reflect/reflect.js";
+import { require_reflect } from "../cjs/reflect/reflect.js";
 
 //@ chunk-fq0cr76a.js:465470-466118 cjs-fingerprint
-var tL = x(function (eL) {
-  Object.defineProperty(eL, "__esModule", { value: !0 });
-  eL.merge = rQ;
-  var vy = Po();
-  function rQ(e, n, r) {
-    QP(vy.reflect(e, n), vy.reflect(e, r));
+var require_merge = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.merge = merge;
+  var reflect_js_1 = require_reflect();
+  function merge(schema, target, source) {
+    reflectMerge(reflect_js_1.reflect(schema, target), reflect_js_1.reflect(schema, source));
   }
-  function QP(e, n) {
-    var r, s;
-    let $unknown = n.message.$unknown;
-    if ($unknown !== void 0 && $unknown.length > 0)
-      (((r = (s = e.message).$unknown) !== null && r !== void 0) || (s.$unknown = []),
-        e.message.$unknown.push(...$unknown));
-    for (let field of e.fields) {
-      if (!n.isSet(field)) continue;
-      switch (field.fieldKind) {
+  function reflectMerge(target, source) {
+    var _a;
+    var _b;
+    let sourceUnknown = source.message.$unknown;
+    if (sourceUnknown !== undefined && sourceUnknown.length > 0) {
+      if (!((_a = (_b = target.message).$unknown) !== null && _a !== undefined)) _b.$unknown = [];
+      target.message.$unknown.push(...sourceUnknown);
+    }
+    for (let f of target.fields) {
+      if (!source.isSet(f)) continue;
+      switch (f.fieldKind) {
         case "scalar":
         case "enum":
-          e.set(field, n.get(field));
+          target.set(f, source.get(f));
           break;
         case "message":
-          if (e.isSet(field)) QP(e.get(field), n.get(field));
-          else e.set(field, n.get(field));
+          if (target.isSet(f)) reflectMerge(target.get(f), source.get(f));
+          else target.set(f, source.get(f));
           break;
         case "list":
-          let b = e.get(field);
-          for (let w of n.get(field)) b.add(w);
+          let list = target.get(f);
+          for (let e of source.get(f)) list.add(e);
           break;
         case "map":
-          let S = e.get(field);
-          for (let [w, R] of n.get(field)) S.set(w, R);
+          let map = target.get(f);
+          for (let [k, v] of source.get(f)) map.set(k, v);
           break;
       }
     }
   }
 });
-
-export { tL };
+export { require_merge };

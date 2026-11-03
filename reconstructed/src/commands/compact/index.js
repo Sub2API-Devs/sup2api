@@ -10,20 +10,19 @@
  */
 import { isEnvTruthy } from "../../utils/envUtils.js";
 
+//@ chunk-e6aww6q8.js:779274-779592 fingerprint = compact (0.71)
 /**
  * /compact 命令对象（local）；描述：Free up context by summarizing the conversation so far；isEnabled: ()=>!Oe(process.env.DISABLE_COMPACT)；实现 chunk-vrrvwm85.js 的 se。
  */
-//@ chunk-e6aww6q8.js:779274-779592 fingerprint = compact (0.71)
 var compactCommandDefinition = {
-    type: "local",
-    name: "compact",
-    description: "Free up context by summarizing the conversation so far",
-    isEnabled: () => !isEnvTruthy(process.env.DISABLE_COMPACT),
-    supportsNonInteractive: !0,
-    argumentHint: "<optional custom summarization instructions>",
-    thinClientDispatch: "post-text",
-    load: () => import("./chunk-vrrvwm85.js"),
-  },
-  compactCommand = compactCommandDefinition;
-
+  type: "local",
+  name: "compact",
+  description: "Free up context by summarizing the conversation so far",
+  isEnabled: () => !isEnvTruthy(process.env.DISABLE_COMPACT),
+  supportsNonInteractive: true,
+  argumentHint: "<optional custom summarization instructions>",
+  thinClientDispatch: "post-text",
+  load: () => import("./chunk-vrrvwm85.js"),
+};
+var compactCommand = compactCommandDefinition;
 export { compactCommand };

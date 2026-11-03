@@ -8,204 +8,280 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:72201-75369 cjs-fingerprint
-var an = x(function (ku, nn) {
-  var fl = [
-      "as",
-      "in",
-      "of",
-      "if",
-      "for",
-      "while",
-      "finally",
-      "var",
-      "new",
-      "function",
-      "do",
-      "return",
-      "void",
-      "else",
-      "break",
-      "catch",
-      "instanceof",
-      "with",
-      "throw",
-      "case",
-      "default",
-      "try",
-      "switch",
-      "continue",
-      "typeof",
-      "delete",
-      "let",
-      "yield",
-      "const",
-      "class",
-      "debugger",
-      "async",
-      "await",
-      "static",
-      "import",
-      "from",
-      "export",
-      "extends",
-      "using",
-    ],
-    Tl = ["true", "false", "null", "undefined", "NaN", "Infinity"],
-    Nl = [
-      "Object",
-      "Function",
-      "Boolean",
-      "Symbol",
-      "Math",
-      "Date",
-      "Number",
-      "BigInt",
-      "String",
-      "RegExp",
-      "Array",
-      "Float32Array",
-      "Float64Array",
-      "Int8Array",
-      "Uint8Array",
-      "Uint8ClampedArray",
-      "Int16Array",
-      "Int32Array",
-      "Uint16Array",
-      "Uint32Array",
-      "BigInt64Array",
-      "BigUint64Array",
-      "Set",
-      "Map",
-      "WeakSet",
-      "WeakMap",
-      "ArrayBuffer",
-      "SharedArrayBuffer",
-      "Atomics",
-      "DataView",
-      "JSON",
-      "Promise",
-      "Generator",
-      "GeneratorFunction",
-      "AsyncFunction",
-      "Reflect",
-      "Proxy",
-      "Intl",
-      "WebAssembly",
-    ],
-    Sl = [
-      "Error",
-      "EvalError",
-      "InternalError",
-      "RangeError",
-      "ReferenceError",
-      "SyntaxError",
-      "TypeError",
-      "URIError",
-    ],
-    Al = [
-      "setInterval",
-      "setTimeout",
-      "clearInterval",
-      "clearTimeout",
-      "require",
-      "exports",
-      "eval",
-      "isFinite",
-      "isNaN",
-      "parseFloat",
-      "parseInt",
-      "decodeURI",
-      "decodeURIComponent",
-      "encodeURI",
-      "encodeURIComponent",
-      "escape",
-      "unescape",
-    ],
-    combined = [].concat(Al, Nl, Sl);
-  function Ol(e) {
-    let t = ["npm", "print"],
-      n = ["yes", "no", "on", "off"],
-      a = ["then", "unless", "until", "loop", "by", "when", "and", "or", "is", "isnt", "not"],
-      s = ["var", "const", "let", "function", "static"],
-      o = (E) => (u) => !E.includes(u),
-      r = { keyword: fl.concat(a).filter(o(s)), literal: Tl.concat(n), built_in: combined.concat(t) },
-      i = "[A-Za-z$_][0-9A-Za-z$_]*",
-      c = { className: "subst", begin: /#\{/, end: /\}/, keywords: r },
-      l = [
-        e.BINARY_NUMBER_MODE,
-        e.inherit(e.C_NUMBER_MODE, { starts: { end: "(\\s*/)?", relevance: 0 } }),
-        {
-          className: "string",
-          variants: [
-            { begin: /'''/, end: /'''/, contains: [e.BACKSLASH_ESCAPE] },
-            { begin: /'/, end: /'/, contains: [e.BACKSLASH_ESCAPE] },
-            { begin: /"""/, end: /"""/, contains: [e.BACKSLASH_ESCAPE, c] },
-            { begin: /"/, end: /"/, contains: [e.BACKSLASH_ESCAPE, c] },
-          ],
+var require_coffeescript = x(function (cjsExports, cjsModule) {
+  var KEYWORDS = [
+    "as",
+    "in",
+    "of",
+    "if",
+    "for",
+    "while",
+    "finally",
+    "var",
+    "new",
+    "function",
+    "do",
+    "return",
+    "void",
+    "else",
+    "break",
+    "catch",
+    "instanceof",
+    "with",
+    "throw",
+    "case",
+    "default",
+    "try",
+    "switch",
+    "continue",
+    "typeof",
+    "delete",
+    "let",
+    "yield",
+    "const",
+    "class",
+    "debugger",
+    "async",
+    "await",
+    "static",
+    "import",
+    "from",
+    "export",
+    "extends",
+    "using",
+  ];
+  var LITERALS = ["true", "false", "null", "undefined", "NaN", "Infinity"];
+  var TYPES = [
+    "Object",
+    "Function",
+    "Boolean",
+    "Symbol",
+    "Math",
+    "Date",
+    "Number",
+    "BigInt",
+    "String",
+    "RegExp",
+    "Array",
+    "Float32Array",
+    "Float64Array",
+    "Int8Array",
+    "Uint8Array",
+    "Uint8ClampedArray",
+    "Int16Array",
+    "Int32Array",
+    "Uint16Array",
+    "Uint32Array",
+    "BigInt64Array",
+    "BigUint64Array",
+    "Set",
+    "Map",
+    "WeakSet",
+    "WeakMap",
+    "ArrayBuffer",
+    "SharedArrayBuffer",
+    "Atomics",
+    "DataView",
+    "JSON",
+    "Promise",
+    "Generator",
+    "GeneratorFunction",
+    "AsyncFunction",
+    "Reflect",
+    "Proxy",
+    "Intl",
+    "WebAssembly",
+  ];
+  var ERROR_TYPES = [
+    "Error",
+    "EvalError",
+    "InternalError",
+    "RangeError",
+    "ReferenceError",
+    "SyntaxError",
+    "TypeError",
+    "URIError",
+  ];
+  var BUILT_IN_GLOBALS = [
+    "setInterval",
+    "setTimeout",
+    "clearInterval",
+    "clearTimeout",
+    "require",
+    "exports",
+    "eval",
+    "isFinite",
+    "isNaN",
+    "parseFloat",
+    "parseInt",
+    "decodeURI",
+    "decodeURIComponent",
+    "encodeURI",
+    "encodeURIComponent",
+    "escape",
+    "unescape",
+  ];
+  var BUILT_INS = [].concat(BUILT_IN_GLOBALS, TYPES, ERROR_TYPES);
+  function coffeescript(hljs) {
+    let COFFEE_BUILT_INS = ["npm", "print"];
+    let COFFEE_LITERALS = ["yes", "no", "on", "off"];
+    let COFFEE_KEYWORDS = ["then", "unless", "until", "loop", "by", "when", "and", "or", "is", "isnt", "not"];
+    let NOT_VALID_KEYWORDS = ["var", "const", "let", "function", "static"];
+    let excluding = (list) => (kw) => !list.includes(kw);
+    let KEYWORDS$1 = {
+      keyword: KEYWORDS.concat(COFFEE_KEYWORDS).filter(excluding(NOT_VALID_KEYWORDS)),
+      literal: LITERALS.concat(COFFEE_LITERALS),
+      built_in: BUILT_INS.concat(COFFEE_BUILT_INS),
+    };
+    let JS_IDENT_RE = "[A-Za-z$_][0-9A-Za-z$_]*";
+    let SUBST = {
+      className: "subst",
+      begin: /#\{/,
+      end: /\}/,
+      keywords: KEYWORDS$1,
+    };
+    let EXPRESSIONS = [
+      hljs.BINARY_NUMBER_MODE,
+      hljs.inherit(hljs.C_NUMBER_MODE, {
+        starts: {
+          end: "(\\s*/)?",
+          relevance: 0,
         },
-        {
-          className: "regexp",
-          variants: [
-            { begin: "///", end: "///", contains: [c, e.HASH_COMMENT_MODE] },
-            { begin: "//[gim]{0,3}(?=\\W)", relevance: 0 },
-            { begin: /\/(?![ *]).*?(?![\\]).\/[gim]{0,3}(?=\W)/ },
-          ],
-        },
-        { begin: "@[A-Za-z$_][0-9A-Za-z$_]*" },
-        {
-          subLanguage: "javascript",
-          excludeBegin: !0,
-          excludeEnd: !0,
-          variants: [
-            { begin: "```", end: "```" },
-            { begin: "`", end: "`" },
-          ],
-        },
-      ];
-    c.contains = l;
-    let inherit = e.inherit(e.TITLE_MODE, { begin: "[A-Za-z$_][0-9A-Za-z$_]*" }),
-      m = "(\\(.*\\)\\s*)?\\B[-=]>",
-      p = {
-        className: "params",
-        begin: "\\([^\\(]",
-        returnBegin: !0,
-        contains: [{ begin: /\(/, end: /\)/, keywords: r, contains: ["self"].concat(l) }],
-      },
-      _ = {
+      }),
+      {
+        className: "string",
         variants: [
-          { match: [/class\s+/, "[A-Za-z$_][0-9A-Za-z$_]*", /\s+extends\s+/, "[A-Za-z$_][0-9A-Za-z$_]*"] },
-          { match: [/class\s+/, "[A-Za-z$_][0-9A-Za-z$_]*"] },
+          {
+            begin: /'''/,
+            end: /'''/,
+            contains: [hljs.BACKSLASH_ESCAPE],
+          },
+          {
+            begin: /'/,
+            end: /'/,
+            contains: [hljs.BACKSLASH_ESCAPE],
+          },
+          {
+            begin: /"""/,
+            end: /"""/,
+            contains: [hljs.BACKSLASH_ESCAPE, SUBST],
+          },
+          {
+            begin: /"/,
+            end: /"/,
+            contains: [hljs.BACKSLASH_ESCAPE, SUBST],
+          },
         ],
-        scope: { 2: "title.class", 4: "title.class.inherited" },
-        keywords: r,
-      };
+      },
+      {
+        className: "regexp",
+        variants: [
+          {
+            begin: "///",
+            end: "///",
+            contains: [SUBST, hljs.HASH_COMMENT_MODE],
+          },
+          {
+            begin: "//[gim]{0,3}(?=\\W)",
+            relevance: 0,
+          },
+          {
+            begin: /\/(?![ *]).*?(?![\\]).\/[gim]{0,3}(?=\W)/,
+          },
+        ],
+      },
+      {
+        begin: "@[A-Za-z$_][0-9A-Za-z$_]*",
+      },
+      {
+        subLanguage: "javascript",
+        excludeBegin: true,
+        excludeEnd: true,
+        variants: [
+          {
+            begin: "```",
+            end: "```",
+          },
+          {
+            begin: "`",
+            end: "`",
+          },
+        ],
+      },
+    ];
+    SUBST.contains = EXPRESSIONS;
+    let TITLE = hljs.inherit(hljs.TITLE_MODE, {
+      begin: "[A-Za-z$_][0-9A-Za-z$_]*",
+    });
+    let POSSIBLE_PARAMS_RE = "(\\(.*\\)\\s*)?\\B[-=]>";
+    let PARAMS = {
+      className: "params",
+      begin: "\\([^\\(]",
+      returnBegin: true,
+      contains: [
+        {
+          begin: /\(/,
+          end: /\)/,
+          keywords: KEYWORDS$1,
+          contains: ["self"].concat(EXPRESSIONS),
+        },
+      ],
+    };
+    let CLASS_DEFINITION = {
+      variants: [
+        {
+          match: [/class\s+/, "[A-Za-z$_][0-9A-Za-z$_]*", /\s+extends\s+/, "[A-Za-z$_][0-9A-Za-z$_]*"],
+        },
+        {
+          match: [/class\s+/, "[A-Za-z$_][0-9A-Za-z$_]*"],
+        },
+      ],
+      scope: {
+        2: "title.class",
+        4: "title.class.inherited",
+      },
+      keywords: KEYWORDS$1,
+    };
     return {
       name: "CoffeeScript",
       aliases: ["coffee", "cson", "iced"],
-      keywords: r,
+      keywords: KEYWORDS$1,
       illegal: /\/\*/,
       contains: [
-        ...l,
-        e.COMMENT("###", "###"),
-        e.HASH_COMMENT_MODE,
+        ...EXPRESSIONS,
+        hljs.COMMENT("###", "###"),
+        hljs.HASH_COMMENT_MODE,
         {
           className: "function",
-          begin: "^\\s*[A-Za-z$_][0-9A-Za-z$_]*\\s*=\\s*" + m,
+          begin: "^\\s*[A-Za-z$_][0-9A-Za-z$_]*\\s*=\\s*" + POSSIBLE_PARAMS_RE,
           end: "[-=]>",
-          returnBegin: !0,
-          contains: [inherit, p],
+          returnBegin: true,
+          contains: [TITLE, PARAMS],
         },
         {
           begin: /[:\(,=]\s*/,
           relevance: 0,
-          contains: [{ className: "function", begin: m, end: "[-=]>", returnBegin: !0, contains: [p] }],
+          contains: [
+            {
+              className: "function",
+              begin: POSSIBLE_PARAMS_RE,
+              end: "[-=]>",
+              returnBegin: true,
+              contains: [PARAMS],
+            },
+          ],
         },
-        _,
-        { begin: "[A-Za-z$_][0-9A-Za-z$_]*:", end: ":", returnBegin: !0, returnEnd: !0, relevance: 0 },
+        CLASS_DEFINITION,
+        {
+          begin: "[A-Za-z$_][0-9A-Za-z$_]*:",
+          end: ":",
+          returnBegin: true,
+          returnEnd: true,
+          relevance: 0,
+        },
       ],
     };
   }
-  nn.exports = Ol;
+  cjsModule.exports = coffeescript;
 });
-
-export { an };
+export { require_coffeescript };

@@ -22,33 +22,42 @@ import {
 } from "../../utils/auth.js";
 import { heldMachinePinsSignIn, getRemoteSettingsPathOverride } from "./remoteSettingsState.js";
 import { machineAdminPinsSignInOrg } from "../../utils/settings/settings.js";
-import { ave } from "../../utils/settings/managedPluginTiers.js";
+import { hasMdmResult } from "../../utils/settings/managedPluginTiers.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { errorMessage } from "../../utils/errors.js";
 import { env } from "../../utils/env.js";
-import { isHermeticRemoteSession, _, S, getBridgeBaseUrl, T } from "../cloudSessions/eligibility.js";
+import {
+  isHermeticRemoteSession,
+  _,
+  getCachedLastLoadStatus,
+  getBridgeBaseUrl,
+  isRemoteSettingsEligibleForCredential,
+} from "../cloudSessions/eligibility.js";
 import { hasManagedSettings } from "../../utils/settings/managedRestrictionKeys.js";
 import { spareAuthIneligibility } from "../../entrypoints/warmSpare/claimCredentials.js";
-import { Gx } from "../../utils/managedEnvConstants.js";
-import { v$, getApiKeyFromFileDescriptor } from "../../utils/authFileDescriptor.js";
+import { PROVIDER_CREDENTIAL_ENV_VARS } from "../../utils/managedEnvConstants.js";
+import {
+  hasPossibleCredentialFromDescriptor,
+  getApiKeyFromFileDescriptor,
+} from "../../utils/authFileDescriptor.js";
 import { getCustomHeaders } from "../api/client.js";
 import { hasCustomAuthorizationHeader, hasCustomApiKeyHeader } from "../api/customHeaders.js";
 import { isChatOrTeams } from "../../utils/entrypointKinds.js";
-import { op, mn } from "../../utils/remoteEnvironment.js";
+import { isByocEnvironment, isRemoteManagedEnvironment } from "../../utils/remoteEnvironment.js";
 import { checkRemoteAgentEligibility } from "../../tasks/RemoteAgentTask/RemoteAgentTask.js";
 import { getAPIProvider, isFirstPartyAnthropicBaseUrl } from "../../utils/model/providers.js";
 import { getGatewayAuth, gatewayServesManagedSettings } from "../../bootstrap/state.js";
 import { resolveOrgConfigPlan } from "../policyLimits/index.js";
-import { ge } from "../../utils/identity.js";
+import { identity } from "../../utils/identity.js";
 
 //@ chunk-mdb2vxrz.js:6591-6686 placement = isBigQueryMetricsEnabled (1)
-function isBigQueryMetricsEnabled() {
-  if (!hasStoredOAuthToken()) return !1;
+function isBigQueryMetricsEnabled_2() {
+  if (!hasStoredOAuthToken()) return false;
   let subscriptionType = getStoredOAuthSubscriptionType();
   return (
     subscriptionType === "enterprise" ||
     subscriptionType === "team" ||
-    heldMachinePinsSignIn(machineAdminPinsSignInOrg, ave)
+    heldMachinePinsSignIn(machineAdminPinsSignInOrg, hasMdmResult)
   );
 }
 //@ chunk-mdb2vxrz.js:6686-6904 placement
@@ -56,48 +65,68 @@ function hasStoredClaudeAiLogin() {
   try {
     return hasStoredOAuthToken() && !isClaudeAIOAuthTokenHostInjected();
   } catch (error) {
-    return (
-      logForDebugging(
-        `Remote settings: could not read the claude.ai login (${errorMessage(error)}); treating it as the stored login, so this session's surface skip does not apply`,
-        { level: "warn" },
-      ),
-      !0
+    logForDebugging(
+      `Remote settings: could not read the claude.ai login (${errorMessage(error)}); treating it as the stored login, so this session's surface skip does not apply`,
+      {
+        level: "warn",
+      },
     );
+    return true;
   }
 }
 //@ chunk-mdb2vxrz.js:6904-7012 placement
 function isLocalAgentEntrypoint() {
   let CLAUDE_CODE_ENTRYPOINT = env.CLAUDE_CODE_ENTRYPOINT;
   return (
-    CLAUDE_CODE_ENTRYPOINT === "local-agent" || CLAUDE_CODE_ENTRYPOINT?.startsWith("claude-coworker") === !0
+    CLAUDE_CODE_ENTRYPOINT === "local-agent" || CLAUDE_CODE_ENTRYPOINT?.startsWith("claude-coworker") === true
   );
 }
 //@ chunk-mdb2vxrz.js:7012-7087 placement
-function a_i() {
+/**
+ * 判断是否应跳过存储登录面：hermetic 远程会话、托管设置下备用鉴权不合格、本地代理入口，或 chat/teams 的存储登录被取代。
+ */
+function isStoredLoginSurfaceShortcut() {
   return (
     isHermeticRemoteSession() ||
     (hasManagedSettings() && spareAuthIneligibility() !== null) ||
     isLocalAgentEntrypoint() ||
-    C("for_stored_login")
+    isStoredLoginSurfaceSuperseded("for_stored_login")
   );
 }
 //@ chunk-mdb2vxrz.js:7087-7128 placement
-var u = [...Gx, "ANTHROPIC_CUSTOM_HEADERS"];
+/**
+ * 判断存储登录面是否被跳过时要检查的环境变量清单（含自定义头）。
+ */
+var STORED_LOGIN_SURFACE_ENV_VARS = [...PROVIDER_CREDENTIAL_ENV_VARS, "ANTHROPIC_CUSTOM_HEADERS"];
+//@ chunk-mdb2vxrz.js:7128-7789 placement
 /**
  * 判断当前凭据来源是否跳过存储登录面（文件描述符令牌、自定义头等）。
  */
-//@ chunk-mdb2vxrz.js:7128-7789 placement
 function isStoredLoginSurfaceSkipped() {
   try {
-    if (isHostManagedProviderAuth()) return !0;
-    if (v$("CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR") || v$("CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR")) return !0;
-    let e = _(u),
-      n = S(u),
-      r = e && n ? new Map(u.map((o) => [o, [n(o), e(o)].flatMap((a) => (a?.trim() ? [a] : []))])) : null;
+    if (isHostManagedProviderAuth()) return true;
+    if (
+      hasPossibleCredentialFromDescriptor("CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR") ||
+      hasPossibleCredentialFromDescriptor("CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR")
+    )
+      return true;
+    let e = _(STORED_LOGIN_SURFACE_ENV_VARS);
+    let cachedLastLoadStatus = getCachedLastLoadStatus(STORED_LOGIN_SURFACE_ENV_VARS);
+    let r =
+      e && cachedLastLoadStatus
+        ? new Map(
+            STORED_LOGIN_SURFACE_ENV_VARS.map((o) => [
+              o,
+              [cachedLastLoadStatus(o), e(o)].flatMap((a) => (a?.trim() ? [a] : [])),
+            ]),
+          )
+        : null;
     return (
       (!isFirstPartyManagedOAuthContext() &&
         (getApiKeyFromFileDescriptor() !== null ||
-          (r ? Gx.some((o) => !!r.get(o)?.length) : !!env.ANTHROPIC_API_KEY || !!effectiveAuthTokenEnv()))) ||
+          (r
+            ? PROVIDER_CREDENTIAL_ENV_VARS.some((o) => !!r.get(o)?.length)
+            : !!env.ANTHROPIC_API_KEY || !!effectiveAuthTokenEnv()))) ||
       (r
         ? !!r
             .get("ANTHROPIC_CUSTOM_HEADERS")
@@ -108,39 +137,51 @@ function isStoredLoginSurfaceSkipped() {
       isClaudeAIOAuthTokenHostInjected()
     );
   } catch (error) {
-    return (
-      logForDebugging(
-        `Remote settings: could not read the host's credential (${errorMessage(error)}); keeping the surface's settings skip`,
-        { level: "warn" },
-      ),
-      !0
+    logForDebugging(
+      `Remote settings: could not read the host's credential (${errorMessage(error)}); keeping the surface's settings skip`,
+      {
+        level: "warn",
+      },
     );
+    return true;
   }
 }
 //@ chunk-mdb2vxrz.js:7789-7861 placement
-function C(e) {
+/**
+ * 判断 chat/teams 会话里存储登录面是否已不适用（远程 OAuth、已跳过登录面，或会话内没有存储登录）。
+ */
+function isStoredLoginSurfaceSuperseded(e) {
   return (
     isChatOrTeams() &&
-    !op() &&
-    (mn() || isStoredLoginSurfaceSkipped() || (e === "for_session" && !hasStoredClaudeAiLogin()))
+    !isByocEnvironment() &&
+    (isRemoteManagedEnvironment() ||
+      isStoredLoginSurfaceSkipped() ||
+      (e === "for_session" && !hasStoredClaudeAiLogin()))
   );
 }
+//@ chunk-mdb2vxrz.js:7861-8991 placement
 /**
  * 计算远程托管设置资格（hermetic、网关、第一方、自定义 base URL 等）。
  */
-//@ chunk-mdb2vxrz.js:7861-8991 placement
 function computeRemoteSettingsEligibilityUncached() {
-  if (getRemoteSettingsPathOverride()) return { eligible: !0 };
-  if (isHermeticRemoteSession()) return { eligible: !1, ineligibleReason: "hermetic_remote_session" };
+  if (getRemoteSettingsPathOverride())
+    return {
+      eligible: true,
+    };
+  if (isHermeticRemoteSession())
+    return {
+      eligible: false,
+      ineligibleReason: "hermetic_remote_session",
+    };
   if (hasManagedSettings()) return checkRemoteAgentEligibility();
   if (getAPIProvider() === "gateway") {
-    let o = getGatewayAuth(),
-      a = gatewayServesManagedSettings(o);
+    let gatewayAuth = getGatewayAuth();
+    let a = gatewayServesManagedSettings(gatewayAuth);
     return {
       eligible: a,
       ineligibleReason: a
-        ? void 0
-        : o?.hostVerdict !== void 0
+        ? undefined
+        : gatewayAuth?.hostVerdict !== undefined
           ? "host_gateway_not_accepted"
           : "unpinned_gateway",
     };
@@ -150,53 +191,110 @@ function computeRemoteSettingsEligibilityUncached() {
       ? "third_party_provider"
       : !isFirstPartyAnthropicBaseUrl()
         ? "custom_base_url"
-        : void 0;
-  if (e) return R(!1) ?? { eligible: !1, ineligibleReason: e };
-  if (isLocalAgentEntrypoint()) return { eligible: !1, ineligibleReason: "sandboxed_entrypoint" };
-  if (C("for_session")) return { eligible: !1, ineligibleReason: "claude_tag" };
-  let n = !1;
+        : undefined;
+  if (e)
+    return (
+      eligibilityOverride(false) ?? {
+        eligible: false,
+        ineligibleReason: e,
+      }
+    );
+  if (isLocalAgentEntrypoint())
+    return {
+      eligible: false,
+      ineligibleReason: "sandboxed_entrypoint",
+    };
+  if (isStoredLoginSurfaceSuperseded("for_session"))
+    return {
+      eligible: false,
+      ineligibleReason: "claude_tag",
+    };
+  let n = false;
   try {
     n = isProfileRemoteSettingsCredential();
   } catch (error) {
     logForDebugging(
       `Remote settings: could not read the profile store (${errorMessage(error)}); not treating this session as profile-authenticated`,
-      { level: "warn" },
+      {
+        level: "warn",
+      },
     );
   }
   if (n)
     return getBridgeBaseUrl()
-      ? { eligible: !0 }
-      : { eligible: !1, ineligibleReason: "profile_base_url_mismatch" };
-  if (T()) return { eligible: !0 };
+      ? {
+          eligible: true,
+        }
+      : {
+          eligible: false,
+          ineligibleReason: "profile_base_url_mismatch",
+        };
+  if (isRemoteSettingsEligibleForCredential())
+    return {
+      eligible: true,
+    };
   try {
-    let { key: key } = getAnthropicApiKeyWithSource({ skipRetrievingKeyFromApiKeyHelper: !0 });
-    if (key) return { eligible: !0 };
+    let { key } = getAnthropicApiKeyWithSource({
+      skipRetrievingKeyFromApiKeyHelper: true,
+    });
+    if (key)
+      return {
+        eligible: true,
+      };
   } catch {}
-  if (hostOrgSignInBearer() !== void 0) return { eligible: !0 };
-  let r = R(!0);
+  if (hostOrgSignInBearer() !== undefined)
+    return {
+      eligible: true,
+    };
+  let r = eligibilityOverride(true);
   if (r !== null) return r;
   if (
     hasStoredOAuthToken() &&
     resolveOrgConfigPlan(getStoredOAuthSubscriptionType(), getStoredOAuthTierVerifiedAt()) === null
   )
-    return { eligible: !0 };
-  return { eligible: !1, ineligibleReason: hasStoredOAuthToken() ? "unsupported_subscription" : "no_auth" };
+    return {
+      eligible: true,
+    };
+  return {
+    eligible: false,
+    ineligibleReason: hasStoredOAuthToken() ? "unsupported_subscription" : "no_auth",
+  };
 }
 //@ chunk-mdb2vxrz.js:8991-9019 placement
-function l_i(e = !0) {
-  return !1;
+/**
+ * 恒返回 false 的开关：BigQuery 指标是否启用（预留）。
+ */
+function isBigQueryMetricsEnabled(e = true) {
+  return false;
 }
 //@ chunk-mdb2vxrz.js:9019-9167 placement
-var storedLoginNoteState = ge({ isNoted: !1, hybridOrganizationUuid: null, hasReportedRefusal: !1 }, (e) => {
-  ((e.isNoted = !1), (e.hybridOrganizationUuid = null), (e.hasReportedRefusal = !1));
-});
+var storedLoginNoteState = identity(
+  {
+    isNoted: false,
+    hybridOrganizationUuid: null,
+    hasReportedRefusal: false,
+  },
+  (e) => {
+    e.isNoted = false;
+    e.hybridOrganizationUuid = null;
+    e.hasReportedRefusal = false;
+  },
+);
 //@ chunk-mdb2vxrz.js:9167-9189 placement
-function d_i() {
+/**
+ * 记录登录界面的存储位置（供后续提示）。
+ */
+function noteStoredLoginSurface() {
   return;
 }
 //@ chunk-mdb2vxrz.js:9189-9215 placement
-function R(e) {
+function eligibilityOverride(e) {
   return null;
 }
-
-export { l_i, isBigQueryMetricsEnabled, d_i, computeRemoteSettingsEligibilityUncached, a_i };
+export {
+  isBigQueryMetricsEnabled,
+  isBigQueryMetricsEnabled_2,
+  noteStoredLoginSurface,
+  computeRemoteSettingsEligibilityUncached,
+  isStoredLoginSurfaceShortcut,
+};

@@ -11,38 +11,38 @@
 import { isRemoteToolForwardingSwitchOn } from "./servingGates.js";
 import { logError } from "../../utils/log.js";
 import { toError } from "../../utils/errors.js";
-import { mei } from "../../utils/worktreeIsolation.js";
+import { registerIsolationRuntime } from "../../utils/worktreeIsolation.js";
 
+//@ chunk-0k89j1c1.js:334-580 placement
 /**
  * 启动时在满足远程工具服务开关时异步加载并注册工具宿主（tool hosts），失败只记日志。
  */
-//@ chunk-0k89j1c1.js:334-580 placement
 function registerToolHosts() {
-  let t,
-    o = !1,
-    r = () => {
-      if (isRemoteToolForwardingSwitchOn())
-        ((o = !0),
-          import("./chunk-dtv8x2hx.js")
-            .then(({ createRemoteToolHostsRuntime: createRemoteToolHostsRuntime }) => {
-              t = createRemoteToolHostsRuntime();
-            })
-            .catch((e) => {
-              (logError(toError(e)), (o = !1));
-            }));
+  let t;
+  let o = false;
+  let r = () => {
+    if (isRemoteToolForwardingSwitchOn()) {
+      o = true;
+      import("./chunk-dtv8x2hx.js")
+        .then(({ createRemoteToolHostsRuntime }) => {
+          t = createRemoteToolHostsRuntime();
+        })
+        .catch((error) => {
+          logError(toError(error));
+          o = false;
+        });
+    }
+  };
+  let i = undefined;
+  registerIsolationRuntime({
+    get remote() {
+      if (!o) r();
+      return t;
     },
-    i = void 0;
-  if (
-    (mei({
-      get remote() {
-        if (!o) r();
-        return t;
-      },
-      ...(i !== void 0 && { loopbackDev: i }),
+    ...(i !== undefined && {
+      loopbackDev: i,
     }),
-    isRemoteToolForwardingSwitchOn())
-  )
-    r();
+  });
+  if (isRemoteToolForwardingSwitchOn()) r();
 }
-
 export { registerToolHosts };

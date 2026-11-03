@@ -8,15 +8,19 @@
  * pieces: chunk-e6aww6q8.js (2)
  * attribution: placement 2
  */
-
 //@ chunk-e6aww6q8.js:85537-85601 placement
-var jNe = ["w25", "w50", "w100", "w200", "unlimited"],
-  UNLIMITED = "unlimited";
+/**
+ * 状态行宽度可选档位（w25…unlimited）。
+ */
+var STATUS_LINE_WIDTH_STEPS = ["w25", "w50", "w100", "w200", "unlimited"];
+var UNLIMITED = "unlimited";
 //@ chunk-e6aww6q8.js:85601-85695 placement
-function g$o(e, n) {
-  let index = jNe.indexOf(e),
-    max = Math.max(0, Math.min(jNe.length - 1, index + n));
-  return jNe[max];
+/**
+ * 在档位表中前后移动 n 档并返回结果。
+ */
+function stepStatusLineWidth(attentionBudget, n) {
+  let index = STATUS_LINE_WIDTH_STEPS.indexOf(attentionBudget);
+  let max = Math.max(0, Math.min(STATUS_LINE_WIDTH_STEPS.length - 1, index + n));
+  return STATUS_LINE_WIDTH_STEPS[max];
 }
-
-export { UNLIMITED, g$o };
+export { UNLIMITED, stepStatusLineWidth };

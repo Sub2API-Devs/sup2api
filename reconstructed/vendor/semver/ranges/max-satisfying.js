@@ -6,56 +6,57 @@
  * attribution: cjs-fingerprint 2
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { G } from "../classes/semver.js";
-import { ee } from "../classes/range.js";
+import { require_semver } from "../classes/semver.js";
+import { require_range } from "../classes/range.js";
 
 //@ chunk-bwbq4xvm.js:21935-22158 cjs-fingerprint
-var wl = x(function (R2, Tl) {
-  var xk = G(),
-    Dk = ee(),
-    Lk = (e, s, n) => {
-      let r = null,
-        a = null,
-        l = null;
-      try {
-        l = new Dk(s, n);
-      } catch (error) {
-        return null;
+var require_max_satisfying = x(function (cjsExports, cjsModule) {
+  var SemVer = require_semver();
+  var Range = require_range();
+  var maxSatisfying = (versions, range, options) => {
+    let max = null;
+    let maxSV = null;
+    let rangeObj = null;
+    try {
+      rangeObj = new Range(range, options);
+    } catch (er) {
+      return null;
+    }
+    versions.forEach((v) => {
+      if (rangeObj.test(v)) {
+        if (!max || maxSV.compare(v) === -1) {
+          max = v;
+          maxSV = new SemVer(max, options);
+        }
       }
-      return (
-        e.forEach((c) => {
-          if (l.test(c)) {
-            if (!r || a.compare(c) === -1) ((r = c), (a = new xk(r, n)));
-          }
-        }),
-        r
-      );
-    };
-  Tl.exports = Lk;
+    });
+    return max;
+  };
+  cjsModule.exports = maxSatisfying;
 });
 //@ chunk-bwbq4xvm.js:22158-22380 cjs-fingerprint
-var Al = x(function (v2, yl) {
-  var Uk = G(),
-    qk = ee(),
-    Vk = (e, s, n) => {
-      let r = null,
-        a = null,
-        l = null;
-      try {
-        l = new qk(s, n);
-      } catch (error) {
-        return null;
+var require_max_satisfying_2 = x(function (cjsExports, cjsModule) {
+  var SemVer = require_semver();
+  var Range = require_range();
+  var maxSatisfying = (versions, range, options) => {
+    let max = null;
+    let maxSV = null;
+    let rangeObj = null;
+    try {
+      rangeObj = new Range(range, options);
+    } catch (er) {
+      return null;
+    }
+    versions.forEach((v) => {
+      if (rangeObj.test(v)) {
+        if (!max || maxSV.compare(v) === 1) {
+          max = v;
+          maxSV = new SemVer(max, options);
+        }
       }
-      return (
-        e.forEach((c) => {
-          if (l.test(c)) {
-            if (!r || a.compare(c) === 1) ((r = c), (a = new Uk(r, n)));
-          }
-        }),
-        r
-      );
-    };
-  yl.exports = Vk;
+    });
+    return max;
+  };
+  cjsModule.exports = maxSatisfying;
 });
-
-export { wl, Al };
+export { require_max_satisfying, require_max_satisfying_2 };

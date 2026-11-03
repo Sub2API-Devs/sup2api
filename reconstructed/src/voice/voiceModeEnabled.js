@@ -12,16 +12,22 @@ import { isAnthropicAuthEnabled, hasStoredOAuthToken } from "../utils/auth.js";
 import { isPolicyAllowed } from "../services/policyLimits/policyEvidence.js";
 
 //@ chunk-s61vbvea.js:460923-460997 placement
-function Kti(e) {
-  return e.voice?.enabled !== void 0 || e.voiceEnabled !== void 0;
+/**
+ * 设置里是否出现 voice 相关字段。
+ */
+function hasVoiceSettings(initialSettings) {
+  return initialSettings.voice?.enabled !== undefined || initialSettings.voiceEnabled !== undefined;
 }
 //@ chunk-s61vbvea.js:460997-461062 placement
-function G4r() {
+/**
+ * 是否 Anthropic 登录且存有 OAuth 令牌。
+ */
+function hasAnthropicOAuthToken() {
   try {
-    if (!isAnthropicAuthEnabled()) return !1;
+    if (!isAnthropicAuthEnabled()) return false;
     return hasStoredOAuthToken();
   } catch {
-    return !1;
+    return false;
   }
 }
 //@ chunk-s61vbvea.js:461062-461107 placement
@@ -29,8 +35,10 @@ function isVoiceModeAllowed() {
   return isPolicyAllowed("allow_voice_mode");
 }
 //@ chunk-s61vbvea.js:461107-461142 placement
-function Vvt() {
-  return G4r() && isVoiceModeAllowed();
+/**
+ * 语音模式是否可用（登录 + 组织允许）。
+ */
+function isVoiceModeAvailable() {
+  return hasAnthropicOAuthToken() && isVoiceModeAllowed();
 }
-
-export { Vvt, Kti, G4r, isVoiceModeAllowed };
+export { isVoiceModeAvailable, hasVoiceSettings, hasAnthropicOAuthToken, isVoiceModeAllowed };

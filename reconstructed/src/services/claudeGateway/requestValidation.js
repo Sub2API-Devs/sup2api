@@ -9,10 +9,10 @@
  * attribution: placement 2
  */
 
+//@ chunk-1ny7cxrt.js:1341439-1341568 placement
 /**
  * 校验 model 字段时不深入的键（schema、示例等）。
  */
-//@ chunk-1ny7cxrt.js:1341439-1341568 placement
 var SKIPPED_SCHEMA_KEYS = new Set([
   "input",
   "input_schema",
@@ -23,11 +23,18 @@ var SKIPPED_SCHEMA_KEYS = new Set([
   "tags",
   "classifier_context",
 ]);
+//@ chunk-1ny7cxrt.js:1341568-1342433 placement
 /**
  * 递归检查请求中嵌套的 model 字段（深度≤1000、最多 100 个），返回第一个不允许的路径与原因。
  */
-//@ chunk-1ny7cxrt.js:1341568-1342433 placement
-function findDisallowedNestedModel(e, t, n = [], o = { fields: 0 }) {
+function findDisallowedNestedModel(
+  e,
+  t,
+  n = [],
+  o = {
+    fields: 0,
+  },
+) {
   if (n.length >= 1000)
     return {
       path: n.join("."),
@@ -43,9 +50,16 @@ function findDisallowedNestedModel(e, t, n = [], o = { fields: 0 }) {
           reason: "refused by this gateway: the request names more than 100 models in `model` fields",
         };
       let l = t(a);
-      if (l !== void 0) return { path: [...n, s].join("."), reason: l };
+      if (l !== undefined)
+        return {
+          path: [...n, s].join("."),
+          reason: l,
+        };
     } else if (s === "model" && n.length > 0 && (typeof a !== "object" || Array.isArray(a)))
-      return { path: [...n, s].join("."), reason: "refused by this gateway: `model` must be a string" };
+      return {
+        path: [...n, s].join("."),
+        reason: "refused by this gateway: `model` must be a string",
+      };
     else if (
       typeof a === "object" &&
       a !== null &&
@@ -53,10 +67,10 @@ function findDisallowedNestedModel(e, t, n = [], o = { fields: 0 }) {
       !(r && (s === "from" || s === "to"))
     ) {
       n.push(s);
-      let l = findDisallowedNestedModel(a, t, n, o);
-      if ((n.pop(), l)) return l;
+      let disallowedNestedModel = findDisallowedNestedModel(a, t, n, o);
+      n.pop();
+      if (disallowedNestedModel) return disallowedNestedModel;
     }
   return;
 }
-
 export { findDisallowedNestedModel };

@@ -6,64 +6,71 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { Qe } from "./retry_operation.js";
+import { require_retry_operation } from "./retry_operation.js";
 
 //@ chunk-bmbhxpfm.js:13629-14791 cjs-fingerprint
-var He = x(function (Ee) {
-  var gt = Qe();
-  Ee.operation = function (e) {
-    var timeouts = Ee.timeouts(e);
-    return new gt(timeouts, {
-      forever: e && e.forever,
-      unref: e && e.unref,
-      maxRetryTime: e && e.maxRetryTime,
+var require_retry = x(function (cjsExports) {
+  var RetryOperation = require_retry_operation();
+  cjsExports.operation = function (options) {
+    var timeouts = cjsExports.timeouts(options);
+    return new RetryOperation(timeouts, {
+      forever: options && options.forever,
+      unref: options && options.unref,
+      maxRetryTime: options && options.maxRetryTime,
     });
   };
-  Ee.timeouts = function (e) {
-    if (e instanceof Array) return [].concat(e);
-    var r = { retries: 10, factor: 2, minTimeout: 1000, maxTimeout: 1 / 0, randomize: !1 };
-    for (var key in e) r[key] = e[key];
-    if (r.minTimeout > r.maxTimeout) throw Error("minTimeout is greater than maxTimeout");
-    var i = [];
-    for (var u = 0; u < r.retries; u++) i.push(this.createTimeout(u, r));
-    if (e && e.forever && !i.length) i.push(this.createTimeout(u, r));
-    return (
-      i.sort(function (c, h) {
-        return c - h;
-      }),
-      i
-    );
+  cjsExports.timeouts = function (options) {
+    if (options instanceof Array) return [].concat(options);
+    var opts = {
+      retries: 10,
+      factor: 2,
+      minTimeout: 1000,
+      maxTimeout: 1 / 0,
+      randomize: false,
+    };
+    for (var key in options) opts[key] = options[key];
+    if (opts.minTimeout > opts.maxTimeout) throw Error("minTimeout is greater than maxTimeout");
+    var timeouts = [];
+    for (var i = 0; i < opts.retries; i++) timeouts.push(this.createTimeout(i, opts));
+    if (options && options.forever && !timeouts.length) timeouts.push(this.createTimeout(i, opts));
+    timeouts.sort(function (a, b) {
+      return a - b;
+    });
+    return timeouts;
   };
-  Ee.createTimeout = function (e, r) {
-    var n = r.randomize ? Math.random() + 1 : 1,
-      rounded = Math.round(n * r.minTimeout * Math.pow(r.factor, e));
-    return ((rounded = Math.min(rounded, r.maxTimeout)), rounded);
+  cjsExports.createTimeout = function (attempt, opts) {
+    var random = opts.randomize ? Math.random() + 1 : 1;
+    var timeout = Math.round(random * opts.minTimeout * Math.pow(opts.factor, attempt));
+    timeout = Math.min(timeout, opts.maxTimeout);
+    return timeout;
   };
-  Ee.wrap = function (e, r, n) {
-    if (r instanceof Array) ((n = r), (r = null));
-    if (!n) {
-      n = [];
-      for (var key in e) if (typeof e[key] === "function") n.push(key);
+  cjsExports.wrap = function (obj, options, methods) {
+    if (options instanceof Array) {
+      methods = options;
+      options = null;
     }
-    for (var u = 0; u < n.length; u++) {
-      var c = n[u],
-        h = e[c];
-      ((e[c] = function (E) {
-        var operation = Ee.operation(r),
-          o = Array.prototype.slice.call(arguments, 1),
-          p = o.pop();
-        (o.push(function (f) {
-          if (operation.retry(f)) return;
-          if (f) arguments[0] = operation.mainError();
-          p.apply(this, arguments);
-        }),
-          operation.attempt(function () {
-            E.apply(e, o);
-          }));
-      }.bind(e, h)),
-        (e[c].options = r));
+    if (!methods) {
+      methods = [];
+      for (var key in obj) if (typeof obj[key] === "function") methods.push(key);
+    }
+    for (var i = 0; i < methods.length; i++) {
+      var method = methods[i];
+      var original = obj[method];
+      obj[method] = function (original) {
+        var op = cjsExports.operation(options);
+        var args = Array.prototype.slice.call(arguments, 1);
+        var callback = args.pop();
+        args.push(function (err) {
+          if (op.retry(err)) return;
+          if (err) arguments[0] = op.mainError();
+          callback.apply(this, arguments);
+        });
+        op.attempt(function () {
+          original.apply(obj, args);
+        });
+      }.bind(obj, original);
+      obj[method].options = options;
     }
   };
 });
-
-export { He };
+export { require_retry };

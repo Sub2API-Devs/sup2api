@@ -5,109 +5,130 @@
  *
  * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
  * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-0sfjpx19.js (20)
- * attribution: placement 20
+ * pieces: chunk-0sfjpx19.js (20), chunk-e6aww6q8.js (1)
+ * attribution: placement 21
  */
-import { randomUUID, randomUUID as randomUUID_2, randomUUID as randomUUID_3 } from "crypto";
+import { randomUUID } from "crypto";
 import { open } from "fs/promises";
-import { So, dt, _s, LLt } from "./resumeMcpTasks.js";
+import {
+  isRealAssistantReply,
+  hasNonWhitespace,
+  RESUME_NOTIFICATION_MAX_AGE_MS,
+  BRIEF_TOOL_NAME_SET,
+} from "./resumeMcpTasks.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { errorMessage } from "../../utils/errors.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { fromEnum, fromEnumOpt } from "../../services/analytics/safeMetadata.js";
-import { ye } from "../../utils/startupMarks.js";
+import { sanitizeMarkName } from "../../utils/startupMarks.js";
 import { isAbortedTerminalReason } from "../../entrypoints/sdk/coreSchemas.js";
 import {
-  Cb,
+  stripMemoryTags as stripMemoryTags_2,
   measureMemoryTags,
   classifyCitedMemories,
   stripMemoryTagsFromBlocks,
   withCitationsDropped,
 } from "../../services/orgMemory/promptIndex.js";
-import { executeMessageDisplayHooks } from "./_new/executeMessageDisplayHooks.js";
-import { hasHookForEvent, hasSettingsHookForEvent } from "../../utils/hooks.js";
-import { FNi } from "../../plugins/functionHooks/toolCallHooks.js";
-import { ICe } from "../../utils/instructionFileAccess.js";
+import {
+  hasHookForEvent,
+  hasSettingsHookForEvent,
+  createBaseHookInput,
+  hookInputCwd,
+  executeHooks,
+} from "../../utils/hooks.js";
+import { isClassicEventAdmitted } from "../../plugins/functionHooks/toolCallHooks.js";
+import { claudeMdAccessTrackerSlot } from "../../utils/instructionFileAccess.js";
 import { upsertMessageByUuid, getContentText } from "../../utils/messages.js";
-import { Jue } from "../../plugins/functionHooks/eventCatalog.js";
+import { eventCallersWrapper2 } from "../../plugins/functionHooks/eventCatalog.js";
 import { isHumanOrUnset } from "../../utils/messageProvenance.js";
 import { setClassifierChecking } from "../../utils/classifierApprovals.js";
 import { resolvePromptEntryWaiters } from "../../utils/processUserInput/promptEntryWaiters.js";
-import { V_e } from "../../plugins/functionHooks/promptSubmit.js";
-import { ao } from "../../bridge/bridgeHostState.js";
+import { submitMarks } from "../../plugins/functionHooks/promptSubmit.js";
+import { bridgeHostState } from "../../bridge/bridgeHostState.js";
 import {
   isRemoteEgressSuppressedFor,
   pinSessionId,
   getTranscriptPathForSession,
 } from "../../utils/sessionStorage.js";
 import { getSessionId } from "../../bootstrap/state.js";
+import { TOOL_HOOK_EXECUTION_TIMEOUT_MS } from "../../utils/hooks/hookEvents.js";
 
 //@ chunk-0sfjpx19.js:79975-80163 placement = countToolCallsSince (1)
 function collectReadNotificationsToolUseIds(messages, sinceUuid) {
-  if (!So(messages)) return !1;
-  let { content: content } = messages.message;
-  if (typeof content === "string") return dt(content);
+  if (!isRealAssistantReply(messages)) return false;
+  let { content } = messages.message;
+  if (typeof content === "string") return hasNonWhitespace(content);
   return content.some(
     (block) =>
-      (block.type === "text" && dt(block.text)) ||
-      (block.type === "tool_use" && sinceUuid?.has(block.name) === !0),
+      (block.type === "text" && hasNonWhitespace(block.text)) ||
+      (block.type === "tool_use" && sinceUuid?.has(block.name) === true),
   );
 }
 //@ chunk-0sfjpx19.js:80163-80243 placement
-function ks(e) {
-  return e === "tool_use" || e === "server_tool_use" || e === "mcp_tool_use";
+function isToolUseBlockType(type) {
+  return type === "tool_use" || type === "server_tool_use" || type === "mcp_tool_use";
 }
+//@ chunk-0sfjpx19.js:80243-83013 placement
 /**
  * 记录查询链首段文本到达时间（tengu_turn_first_text），区分用户等待。
  */
-//@ chunk-0sfjpx19.js:80243-83013 placement
 function createFirstTextTimer({
-  queryChainId: queryChainId,
-  observesUserWait: observesUserWait,
-  promptTiming: promptTiming,
-  textToolNames: textToolNames,
-  now: now = () => performance.now(),
-  schedule: schedule = (_, b) => {
-    let k = setTimeout(_, b);
-    return (k.unref?.(), () => clearTimeout(k));
+  queryChainId,
+  observesUserWait,
+  promptTiming,
+  textToolNames,
+  now = () => performance.now(),
+  schedule = (_, b) => {
+    let timer = setTimeout(_, b);
+    timer.unref?.();
+    return () => clearTimeout(timer);
   },
 }) {
-  let _ = now(),
-    b,
-    k = !1,
-    w,
-    S = new Map(),
-    T = 0,
-    D = 0,
-    E,
-    N = !1,
-    G = [],
-    R = schedule(() => L("cap", void 0), _s);
+  let _ = now();
+  let b;
+  let k = false;
+  let w;
+  let S = new Map();
+  let T = 0;
+  let D = 0;
+  let E;
+  let N = false;
+  let G = [];
+  let R = schedule(() => L("cap", undefined), RESUME_NOTIFICATION_MAX_AGE_MS);
   function P(te, Q) {
     try {
       Q();
     } catch (error) {
-      logForDebugging(`tengu_turn_first_text: ${te} failed: ${errorMessage(error)}`, { level: "error" });
+      logForDebugging(`tengu_turn_first_text: ${te} failed: ${errorMessage(error)}`, {
+        level: "error",
+      });
     }
   }
   function U(te, Q) {
-    let ne = 0,
-      z = 0;
+    let ms = 0;
+    let count = 0;
     for (let V of G) {
       let j = Math.min(V.toMs ?? Q, Q) - Math.max(V.fromMs, te);
-      if (j > 0) ((ne += j), (z += 1));
+      if (j > 0) {
+        ms += j;
+        count += 1;
+      }
     }
-    return { ms: ne, count: z };
+    return {
+      ms,
+      count,
+    };
   }
   function L(te, Q) {
     if (N) return;
-    ((N = !0), R());
-    let ne = b ?? _,
-      z = E?.atMs ?? now(),
-      max = Math.max(0, Math.round(z - ne)),
-      j = U(ne, z),
-      pe = E && S.get(E.messageId),
-      me = pe?.toolCallsBefore ?? E?.toolCallsBefore ?? 0;
+    N = true;
+    R();
+    let ne = b ?? _;
+    let z = E?.atMs ?? now();
+    let max = Math.max(0, Math.round(z - ne));
+    let j = U(ne, z);
+    let pe = E && S.get(E.messageId);
+    let me = pe?.toolCallsBefore ?? E?.toolCallsBefore ?? 0;
     try {
       logEvent("tengu_turn_first_text", {
         first_text_wait_end: fromEnum(E ? "painted" : te),
@@ -116,19 +137,19 @@ function createFirstTextTimer({
           first_text_path: fromEnum(me > 0 ? "after_tool_use" : "direct"),
           requests_before_first_text: pe?.order ?? E.order,
           tool_calls_before_first_text: me,
-          first_text_assistant_message_id: ye(E.messageId),
-          first_text_request_id: ye(pe?.requestId),
+          first_text_assistant_message_id: sanitizeMarkName(E.messageId),
+          first_text_request_id: sanitizeMarkName(pe?.requestId),
           first_text_render_path: fromEnum(E.renderPath),
         }),
         ...(observesUserWait && {
           user_wait_before_first_text_ms: Math.min(Math.round(j.ms), max),
           user_waits_before_first_text: j.count,
         }),
-        queryChainId: ye(queryChainId),
-        terminal_reason: fromEnumOpt(E ? void 0 : Q),
+        queryChainId: sanitizeMarkName(queryChainId),
+        terminal_reason: fromEnumOpt(E ? undefined : Q),
         ...(promptTiming &&
           k &&
-          b !== void 0 && {
+          b !== undefined && {
             prompt_submit_to_send_ms: Math.max(0, Math.round(b - promptTiming.submittedAtMs)),
             prompt_queued_ms: Math.max(0, Math.round(promptTiming.dequeuedAtMs - promptTiming.submittedAtMs)),
           }),
@@ -140,35 +161,43 @@ function createFirstTextTimer({
     }
   }
   function oe(te) {
-    if (N || !So(te)) return;
-    let { message: message, requestId: requestId } = te,
-      z = S.get(message.id) ?? {};
+    if (N || !isRealAssistantReply(te)) return;
+    let { message, requestId } = te;
+    let z = S.get(message.id) ?? {};
+    S.set(message.id, z);
+    z.requestId ??= requestId ?? undefined;
     if (
-      (S.set(message.id, z),
-      (z.requestId ??= requestId ?? void 0),
-      z.order === void 0 &&
-        (typeof message.content === "string" ||
-          message.content.some((V) => V.type !== "thinking" && V.type !== "redacted_thinking")))
-    )
-      ((T += 1), (z.order = T));
+      z.order === undefined &&
+      (typeof message.content === "string" ||
+        message.content.some((V) => V.type !== "thinking" && V.type !== "redacted_thinking"))
+    ) {
+      T += 1;
+      z.order = T;
+    }
     if (typeof message.content === "string") z.toolCallsBefore ??= D;
     else
       for (let V of message.content)
-        if ((V.type === "text" && dt(V.text)) || (V.type === "tool_use" && textToolNames?.has(V.name) === !0))
+        if (
+          (V.type === "text" && hasNonWhitespace(V.text)) ||
+          (V.type === "tool_use" && textToolNames?.has(V.name) === true)
+        )
           z.toolCallsBefore ??= D;
-        else if (ks(V.type)) D += 1;
-    if (E !== void 0 && E.messageId === message.id) L("painted", void 0);
+        else if (isToolUseBlockType(V.type)) D += 1;
+    if (E !== undefined && E.messageId === message.id) L("painted", undefined);
   }
   return {
-    onStreamEvent({ event: te, requestSentAtMs: Q }) {
+    onStreamEvent({ event, requestSentAtMs }) {
       P("stream event", () => {
-        if (N || te.type !== "message_start") return;
-        if (b === void 0) ((b = Q ?? _), (k = Q !== void 0));
-        if (E !== void 0 && E.messageId !== te.message.id) {
-          L("painted", void 0);
+        if (N || event.type !== "message_start") return;
+        if (b === undefined) {
+          b = requestSentAtMs ?? _;
+          k = requestSentAtMs !== undefined;
+        }
+        if (E !== undefined && E.messageId !== event.message.id) {
+          L("painted", undefined);
           return;
         }
-        w = te.message.id;
+        w = event.message.id;
       });
     },
     onAssistantMessage(te) {
@@ -177,28 +206,29 @@ function createFirstTextTimer({
     setUserWaiting(te) {
       P("user wait", () => {
         if (N) return;
-        let at = G.at(-1);
-        if (te && (at === void 0 || at.toMs !== void 0)) G.push({ fromMs: now(), toMs: void 0 });
-        else if (!te && at !== void 0 && at.toMs === void 0) at.toMs = now();
+        let last = G.at(-1);
+        if (te && (last === undefined || last.toMs !== undefined))
+          G.push({
+            fromMs: now(),
+            toMs: undefined,
+          });
+        else if (!te && last !== undefined && last.toMs === undefined) last.toMs = now();
       });
     },
-    markFirstTextPainted(te, Q) {
+    markFirstTextPainted(renderPath, Q) {
       P("paint stamp", () => {
         if (N || E) return;
         let ne = Q ?? w;
-        if (ne === void 0) return;
+        if (ne === undefined) return;
         let z = S.get(ne);
-        if (
-          ((E = {
-            atMs: now(),
-            messageId: ne,
-            order: z?.order ?? T + 1,
-            toolCallsBefore: z?.toolCallsBefore ?? D,
-            renderPath: te,
-          }),
-          z)
-        )
-          L("painted", void 0);
+        E = {
+          atMs: now(),
+          messageId: ne,
+          order: z?.order ?? T + 1,
+          toolCallsBefore: z?.toolCallsBefore ?? D,
+          renderPath,
+        };
+        if (z) L("painted", undefined);
       });
     },
     end(te, Q = isAbortedTerminalReason(te)) {
@@ -206,47 +236,50 @@ function createFirstTextTimer({
     },
   };
 }
+//@ chunk-0sfjpx19.js:83013-83330 placement
 /**
  * 为一轮无头查询开始计时：生成查询链 id，创建首段文本计时器，并订阅会话的"等待用户决定"状态以暂停计时；dispose 时取消订阅。
  */
-//@ chunk-0sfjpx19.js:83013-83330 placement
-function startTurnTiming({ toolUseContext: toolUseContext, sessionState: sessionState }) {
+function startTurnTiming({ toolUseContext, sessionState }) {
   let r = randomUUID();
-  toolUseContext.queryTracking = { chainId: r, depth: -1 };
-  let s = createFirstTextTimer({
+  toolUseContext.queryTracking = {
+    chainId: r,
+    depth: -1,
+  };
+  let firstTextTimer = createFirstTextTimer({
     queryChainId: r,
-    observesUserWait: sessionState !== void 0,
-    textToolNames: LLt,
+    observesUserWait: sessionState !== undefined,
+    textToolNames: BRIEF_TOOL_NAME_SET,
   });
-  s.setUserWaiting(sessionState?.userDecisionPending ?? !1);
-  let h = sessionState?.userDecisionPendingChanged.subscribe((y) => s.setUserWaiting(y));
+  firstTextTimer.setUserWaiting(sessionState?.userDecisionPending ?? false);
+  let h = sessionState?.userDecisionPendingChanged.subscribe((y) => firstTextTimer.setUserWaiting(y));
   return {
-    ...s,
+    ...firstTextTimer,
     dispose() {
       h?.();
     },
   };
 }
 //@ chunk-0sfjpx19.js:83367-83400 placement
-var ws = 10,
-  Co = 1000 / ws,
-  vo = 3,
-  Ao = 1e4;
+var HOOK_MESSAGE_RATE_PER_SEC = 10;
+var HOOK_MESSAGE_MAX_PER_SEC = 1000 / HOOK_MESSAGE_RATE_PER_SEC;
+var MAX_CONCURRENT_HOOK_MESSAGES = 3;
+var HOOK_MESSAGE_TIMEOUT_MS = 1e4;
+//@ chunk-0sfjpx19.js:83400-86729 placement
 /**
  * 把钩子附件（非阻塞错误、取消等）转换为 SDK 输出消息。
  */
-//@ chunk-0sfjpx19.js:83400-86729 placement
 function collectHookAttachmentMessages({
-  session: session,
-  sessionHooks: sessionHooks,
-  onStreamingDisplay: onStreamingDisplay,
-  onStreamingRewrite: onStreamingRewrite,
-  onMessageDisplay: onMessageDisplay,
-  storageV5: storageV5,
-  credentials: credentials,
+  session,
+  sessionHooks,
+  onStreamingDisplay,
+  onStreamingRewrite,
+  onMessageDisplay,
+  storageV5,
+  credentials,
 }) {
-  let b = randomUUID_2(),
-    k = null;
+  let turnId = randomUUID();
+  let k = null;
   function w(R) {
     if (R.abandoned) return;
     if (R.isLive) {
@@ -259,88 +292,111 @@ function collectHookAttachmentMessages({
   function S(R) {
     if (!R.isRewritten) return;
     if (!R.done) {
-      onStreamingRewrite({ original: R.raw.slice(0, R.resolvedOffset), text: R.output });
+      onStreamingRewrite({
+        original: R.raw.slice(0, R.resolvedOffset),
+        text: R.output,
+      });
       return;
     }
-    if ((onMessageDisplay(R.apiMessageId, R.output + Cb(R.raw.slice(R.resolvedOffset))), !R.finalized))
-      (onStreamingRewrite(null), onStreamingDisplay(""));
+    onMessageDisplay(R.apiMessageId, R.output + stripMemoryTags_2(R.raw.slice(R.resolvedOffset)));
+    if (!R.finalized) {
+      onStreamingRewrite(null);
+      onStreamingDisplay("");
+    }
   }
-  function T(R, P, U, L, oe) {
+  function T(R, index, final, L, resolvedOffset) {
     R.inFlight++;
-    let now = Date.now(),
-      Q = (async () => {
-        let ne = L;
-        try {
-          for await (let z of executeMessageDisplayHooks(
-            session,
-            { turnId: R.turnId, messageId: R.messageId, index: P, final: U, delta: L },
-            sessionHooks,
-            R.abortController.signal,
-            Ao,
-            storageV5,
-            credentials,
-          )) {
-            if (
-              z.message?.type === "attachment" &&
-              (z.message.attachment.type === "hook_non_blocking_error" ||
-                z.message.attachment.type === "hook_cancelled")
-            )
-              R.stats.errorCount++;
-            if (z.displayContent !== void 0) ne = z.displayContent;
-          }
-        } catch (error) {
-          (R.stats.errorCount++,
-            logForDebugging(
-              `MessageDisplay hook flush ${P} failed; displaying original delta: ${error instanceof Error ? error.message : String(error)}`,
-              { level: "error" },
-            ));
-        } finally {
-          let z = Date.now() - now;
-          ((R.stats.totalDurationMs += z),
-            (R.stats.maxDurationMs = Math.max(R.stats.maxDurationMs, z)),
-            R.inFlight--,
-            D(R));
+    let now = Date.now();
+    let Q = (async () => {
+      let ne = L;
+      try {
+        for await (let z of executeMessageDisplayHooks(
+          session,
+          {
+            turnId: R.turnId,
+            messageId: R.messageId,
+            index,
+            final,
+            delta: L,
+          },
+          sessionHooks,
+          R.abortController.signal,
+          HOOK_MESSAGE_TIMEOUT_MS,
+          storageV5,
+          credentials,
+        )) {
+          if (
+            z.message?.type === "attachment" &&
+            (z.message.attachment.type === "hook_non_blocking_error" ||
+              z.message.attachment.type === "hook_cancelled")
+          )
+            R.stats.errorCount++;
+          if (z.displayContent !== undefined) ne = z.displayContent;
         }
-        return ne;
-      })();
+      } catch (error) {
+        R.stats.errorCount++;
+        logForDebugging(
+          `MessageDisplay hook flush ${index} failed; displaying original delta: ${error instanceof Error ? error.message : String(error)}`,
+          {
+            level: "error",
+          },
+        );
+      } finally {
+        let z = Date.now() - now;
+        R.stats.totalDurationMs += z;
+        R.stats.maxDurationMs = Math.max(R.stats.maxDurationMs, z);
+        R.inFlight--;
+        D(R);
+      }
+      return ne;
+    })();
     R.appendChain = R.appendChain.then(async () => {
       let ne = await Q;
-      ((R.output += ne), (R.resolvedOffset = oe), (R.isRewritten ||= ne !== L), w(R));
+      R.output += ne;
+      R.resolvedOffset = resolvedOffset;
+      R.isRewritten ||= ne !== L;
+      w(R);
     });
   }
   function D(R) {
     if (R.abandoned) return;
     if (R.finalized) {
-      if (!R.finalDispatched) E(R, !0);
-      else if (R.inFlight === 0 && !R.stats.summaryEmitted)
-        ((R.stats.summaryEmitted = !0),
-          logEvent("tengu_message_display_hooks", {
-            flushCount: R.index,
-            errorCount: R.stats.errorCount,
-            totalDurationMs: R.stats.totalDurationMs,
-            maxDurationMs: R.stats.maxDurationMs,
-          }));
+      if (!R.finalDispatched) E(R, true);
+      else if (R.inFlight === 0 && !R.stats.summaryEmitted) {
+        R.stats.summaryEmitted = true;
+        logEvent("tengu_message_display_hooks", {
+          flushCount: R.index,
+          errorCount: R.stats.errorCount,
+          totalDurationMs: R.stats.totalDurationMs,
+          maxDurationMs: R.stats.maxDurationMs,
+        });
+      }
       return;
     }
     N(R);
   }
-  function E(R, P) {
-    if (R.flushTimer !== null) (clearTimeout(R.flushTimer), (R.flushTimer = null));
-    if (R.inFlight >= vo) return;
-    let U = P
-        ? R.raw.length
-        : R.raw.lastIndexOf(`
-`) + 1,
-      sliced = R.raw.slice(R.flushedOffset, U);
-    if (!P && sliced === "") return;
-    if (P) R.finalDispatched = !0;
-    ((R.flushedOffset = U), (R.lastFlushAt = Date.now()));
+  function E(R, final) {
+    if (R.flushTimer !== null) {
+      clearTimeout(R.flushTimer);
+      R.flushTimer = null;
+    }
+    if (R.inFlight >= MAX_CONCURRENT_HOOK_MESSAGES) return;
+    let resolvedOffset = final
+      ? R.raw.length
+      : R.raw.lastIndexOf(`
+`) + 1;
+    let sliced = R.raw.slice(R.flushedOffset, resolvedOffset);
+    if (!final && sliced === "") return;
+    if (final) R.finalDispatched = true;
+    R.flushedOffset = resolvedOffset;
+    R.lastFlushAt = Date.now();
     let index = R.index;
-    (R.index++, T(R, index, P, Cb(sliced), U));
+    R.index++;
+    T(R, index, final, stripMemoryTags_2(sliced), resolvedOffset);
   }
   function N(R) {
     if (R.flushTimer !== null) return;
-    if (R.inFlight >= vo) return;
+    if (R.inFlight >= MAX_CONCURRENT_HOOK_MESSAGES) return;
     if (
       R.raw.lastIndexOf(`
 `) +
@@ -349,96 +405,119 @@ function collectHookAttachmentMessages({
     )
       return;
     let U = Date.now() - R.lastFlushAt;
-    if (U >= Co) {
-      E(R, !1);
+    if (U >= HOOK_MESSAGE_MAX_PER_SEC) {
+      E(R, false);
       return;
     }
     R.flushTimer = setTimeout(
       (L, oe) => {
-        if (((L.flushTimer = null), !L.finalized && !L.abandoned)) oe(L, !1);
+        L.flushTimer = null;
+        if (!L.finalized && !L.abandoned) oe(L, false);
       },
-      Co - U,
+      HOOK_MESSAGE_MAX_PER_SEC - U,
       R,
       E,
     );
   }
   function G(R) {
-    if (((R.abandoned = !0), R.flushTimer !== null)) (clearTimeout(R.flushTimer), (R.flushTimer = null));
+    R.abandoned = true;
+    if (R.flushTimer !== null) {
+      clearTimeout(R.flushTimer);
+      R.flushTimer = null;
+    }
     R.abortController.abort();
   }
   return {
     newTurn() {
       if (k && !k.finalized) G(k);
-      ((k = null), (b = randomUUID_2()));
+      k = null;
+      turnId = randomUUID();
     },
-    begin(R) {
+    begin(apiMessageId) {
       if (k && !k.finalized) G(k);
-      if ((onStreamingRewrite(null), !hasHookForEvent("MessageDisplay", sessionHooks, session.id))) {
-        ((k = null), onStreamingDisplay(null));
+      onStreamingRewrite(null);
+      if (!hasHookForEvent("MessageDisplay", sessionHooks, session.id)) {
+        k = null;
+        onStreamingDisplay(null);
         return;
       }
-      let P = !hasSettingsHookForEvent("MessageDisplay", sessionHooks, session.id) && !FNi("MessageDisplay");
-      ((k = {
-        apiMessageId: R,
-        messageId: randomUUID_2(),
-        turnId: b,
+      let P =
+        !hasSettingsHookForEvent("MessageDisplay", sessionHooks, session.id) &&
+        !isClassicEventAdmitted("MessageDisplay");
+      k = {
+        apiMessageId,
+        messageId: randomUUID(),
+        turnId,
         raw: "",
         flushedOffset: 0,
         index: 0,
         output: "",
         isLive: P,
         resolvedOffset: 0,
-        isRewritten: !1,
+        isRewritten: false,
         appendChain: Promise.resolve(),
         lastFlushAt: 0,
         flushTimer: null,
         inFlight: 0,
         abortController: new AbortController(),
-        finalized: !1,
-        finalDispatched: !1,
-        done: !1,
-        abandoned: !1,
-        stats: { totalDurationMs: 0, maxDurationMs: 0, errorCount: 0, summaryEmitted: !1 },
-      }),
-        onStreamingDisplay(P ? null : ""));
+        finalized: false,
+        finalDispatched: false,
+        done: false,
+        abandoned: false,
+        stats: {
+          totalDurationMs: 0,
+          maxDurationMs: 0,
+          errorCount: 0,
+          summaryEmitted: false,
+        },
+      };
+      onStreamingDisplay(P ? null : "");
     },
     delta(R) {
       if (k === null || k.finalized) return;
-      ((k.raw += R), N(k));
+      k.raw += R;
+      N(k);
     },
     entryLanded(R) {
-      stripMemoryTags(ICe.of(session), R, "repl");
+      stripMemoryTags(claudeMdAccessTrackerSlot.of(session), R, "repl");
       let P = k;
       if (P === null || P.apiMessageId !== R.message.id) return;
       if (P.raw === "" || !R.message.content.some((U) => U.type === "text")) return;
-      if (((P.done = !0), w(P), !P.isLive)) onStreamingDisplay("");
+      P.done = true;
+      w(P);
+      if (!P.isLive) onStreamingDisplay("");
     },
     finalize() {
       let R = k;
       if (R === null) return;
-      if (
-        ((R.finalized = !0),
-        (k = null),
-        onStreamingDisplay(null),
-        onStreamingRewrite(null),
-        R.raw === "" && R.index === 0)
-      )
-        return;
-      ((R.done = !0), E(R, !0), w(R));
+      R.finalized = true;
+      k = null;
+      onStreamingDisplay(null);
+      onStreamingRewrite(null);
+      if (R.raw === "" && R.index === 0) return;
+      R.done = true;
+      E(R, true);
+      w(R);
     },
   };
 }
+//@ chunk-0sfjpx19.js:86729-87619 placement
 /**
  * 去掉助手文本中的记忆标签（tengu_cc_memory_tag_stripped）。
  */
-//@ chunk-0sfjpx19.js:86729-87619 placement
 function stripMemoryTags(e, n, r) {
   for (let s of n.message.content) {
     let h =
       s.type === "text"
-        ? { name: "text", source: s.text }
+        ? {
+            name: "text",
+            source: s.text,
+          }
         : s.type === "thinking"
-          ? { name: "thinking", source: s.thinking }
+          ? {
+              name: "thinking",
+              source: s.thinking,
+            }
           : null;
     if (h === null) continue;
     let y = measureMemoryTags(h.source);
@@ -461,64 +540,85 @@ function stripMemoryTags(e, n, r) {
       cited_injected_body_count: _.injectedBody,
       cited_surfaced_count: _.surfaced,
       cited_listed_count: _.listed,
-      request_id: ye(n.requestId),
-      messageID: ye(n.message.id),
+      request_id: sanitizeMarkName(n.requestId),
+      messageID: sanitizeMarkName(n.message.id),
     });
   }
 }
+//@ chunk-0sfjpx19.js:87619-87926 placement
 /**
  * 清理 displayedMessageContent：只保留仍存在于消息列表中的助手消息 id 对应的条目，无变化时返回原状态。
  */
-//@ chunk-0sfjpx19.js:87619-87926 placement
-function pruneDisplayedContent(e, n) {
+function pruneDisplayedContent(e, snapshot) {
   if (Object.keys(e.displayedMessageContent).length === 0) return e;
   let r = new Set();
-  for (let y of n) if (y.type === "assistant") r.add(y.message.id);
-  let s = {},
-    h = !1;
-  for (let [y, _] of Object.entries(e.displayedMessageContent))
-    if (r.has(y)) s[y] = _;
-    else h = !0;
+  for (let y of snapshot) if (y.type === "assistant") r.add(y.message.id);
+  let s = {};
+  let h = false;
+  for (let [key, value] of Object.entries(e.displayedMessageContent))
+    if (r.has(key)) s[key] = value;
+    else h = true;
   if (!h) return e;
-  return { ...e, displayedMessageContent: s };
+  return {
+    ...e,
+    displayedMessageContent: s,
+  };
 }
+//@ chunk-0sfjpx19.js:87926-88741 placement
 /**
  * 对完成的消息运行 MessageDisplay 钩子，失败时输出原消息。
  */
-//@ chunk-0sfjpx19.js:87926-88741 placement
-async function runMessageDisplayHook(e, n, r, s, h, y, _) {
-  stripMemoryTags(ICe.of(e), n, "sdk");
-  let b = stripMemoryTagsFromBlocks(n.message.content),
-    k = b === n.message.content ? n : { ...n, message: { ...n.message, content: b } },
-    w = { message: k, hookOutputApplied: !1 };
-  if (!hasHookForEvent("MessageDisplay", s, e.id)) return w;
+async function runMessageDisplayHook(session, n, turnId, sessionHooks, signal, storageV5, credentials) {
+  stripMemoryTags(claudeMdAccessTrackerSlot.of(session), n, "sdk");
+  let b = stripMemoryTagsFromBlocks(n.message.content);
+  let k =
+    b === n.message.content
+      ? n
+      : {
+          ...n,
+          message: {
+            ...n.message,
+            content: b,
+          },
+        };
+  let w = {
+    message: k,
+    hookOutputApplied: false,
+  };
+  if (!hasHookForEvent("MessageDisplay", sessionHooks, session.id)) return w;
   let joined = k.message.content.map((E) => (E.type === "text" ? E.text : "")).join("");
   if (joined === "") return w;
   let T;
   try {
     for await (let E of executeMessageDisplayHooks(
-      e,
-      { turnId: r, messageId: randomUUID_2(), index: 0, final: !0, delta: joined },
-      s,
-      h,
-      Ao,
-      y,
-      _,
+      session,
+      {
+        turnId,
+        messageId: randomUUID(),
+        index: 0,
+        final: true,
+        delta: joined,
+      },
+      sessionHooks,
+      signal,
+      HOOK_MESSAGE_TIMEOUT_MS,
+      storageV5,
+      credentials,
     ))
-      if (E.displayContent !== void 0) T = E.displayContent;
+      if (E.displayContent !== undefined) T = E.displayContent;
   } catch (error) {
-    return (
-      logForDebugging(
-        `MessageDisplay hook failed for completed message; emitting original text: ${error instanceof Error ? error.message : String(error)}`,
-        { level: "error" },
-      ),
-      w
+    logForDebugging(
+      `MessageDisplay hook failed for completed message; emitting original text: ${error instanceof Error ? error.message : String(error)}`,
+      {
+        level: "error",
+      },
     );
+    return w;
   }
-  if (T === void 0) return w;
-  let D = !0;
+  if (T === undefined) return w;
+  let D = true;
   return {
-    hookOutputApplied: !0,
+    hookOutputApplied: true,
     message: {
       ...k,
       message: {
@@ -526,31 +626,48 @@ async function runMessageDisplayHook(e, n, r, s, h, y, _) {
         content: k.message.content.map((E) => {
           if (E.type !== "text") return E;
           let N = D ? T : "";
-          return ((D = !1), withCitationsDropped(E, N));
+          D = false;
+          return withCitationsDropped(E, N);
         }),
       },
     },
   };
 }
 //@ chunk-0sfjpx19.js:88741-88752 placement
-var Ss = 200;
+var MAX_PROGRESS_ROWS_REPLACED = 200;
 //@ chunk-0sfjpx19.js:88752-89280 placement
 function applyMessageListAppend(e, n) {
   switch (e.type) {
     case "append":
-      return { rows: e.messages, keep: (r) => n({ type: "append", messages: [...r] }) };
+      return {
+        rows: e.messages,
+        keep: (r) =>
+          n({
+            type: "append",
+            messages: [...r],
+          }),
+      };
     case "append-or-move-by-uuid":
       return {
         rows: [e.message],
         keep: (r) => {
-          for (let s of r) n({ type: "append-or-move-by-uuid", message: s });
+          for (let message of r)
+            n({
+              type: "append-or-move-by-uuid",
+              message,
+            });
         },
       };
     case "replace-by-uuid":
       return {
         rows: [e.message],
         keep: (r) => {
-          for (let s of r) n({ type: "replace-by-uuid", uuid: e.uuid, message: s });
+          for (let message of r)
+            n({
+              type: "replace-by-uuid",
+              uuid: e.uuid,
+              message,
+            });
         },
       };
     case "insert-after-uuid": {
@@ -558,7 +675,12 @@ function applyMessageListAppend(e, n) {
       return {
         rows: e.messages,
         keep: (s) => {
-          (n({ type: "insert-after-uuid", uuid: uuid, messages: [...s] }), (uuid = s.at(-1)?.uuid ?? uuid));
+          n({
+            type: "insert-after-uuid",
+            uuid,
+            messages: [...s],
+          });
+          uuid = s.at(-1)?.uuid ?? uuid;
         },
       };
     }
@@ -566,10 +688,10 @@ function applyMessageListAppend(e, n) {
       return;
   }
 }
+//@ chunk-0sfjpx19.js:89280-90278 placement
 /**
  * 按 append/replace-all/remove-by-uuid 等操作更新消息列表。
  */
-//@ chunk-0sfjpx19.js:89280-90278 placement
 function applyMessageListEdit(e, n) {
   switch (n.type) {
     case "append":
@@ -580,7 +702,8 @@ function applyMessageListEdit(e, n) {
       let index = e.findIndex((h) => h.uuid === n.uuid);
       if (index === -1) return e;
       let sliced = e.slice();
-      return (sliced.splice(index, 1), sliced);
+      sliced.splice(index, 1);
+      return sliced;
     }
     case "replace-by-uuid": {
       let index = e.findIndex((s) => s.uuid === n.uuid);
@@ -590,16 +713,17 @@ function applyMessageListEdit(e, n) {
       let index = e.findIndex((h) => h.uuid === n.uuid);
       if (index === -1 || n.messages.length === 0) return e;
       let sliced = e.slice();
-      return (sliced.splice(index + 1, 0, ...n.messages), sliced);
+      sliced.splice(index + 1, 0, ...n.messages);
+      return sliced;
     }
     case "replace-last-ephemeral-progress": {
-      let max = Math.max(0, e.length - Ss),
-        s = n.message.data;
-      for (let h = e.length - 1; h >= max; h--) {
-        let y = e[h];
+      let max = Math.max(0, e.length - MAX_PROGRESS_ROWS_REPLACED);
+      let s = n.message.data;
+      for (let j = e.length - 1; j >= max; j--) {
+        let y = e[j];
         if (y?.type !== "progress") break;
         let _ = y.data;
-        if (y.parentToolUseID === n.message.parentToolUseID && _.type === s.type) return e.with(h, n.message);
+        if (y.parentToolUseID === n.message.parentToolUseID && _.type === s.type) return e.with(j, n.message);
       }
       return [...e, n.message];
     }
@@ -613,23 +737,22 @@ function applyMessageListEdit(e, n) {
 }
 //@ chunk-0sfjpx19.js:90315-90814 placement
 function describeDroppedNotes(e) {
-  let resolved = Promise.resolve(),
-    r = 0,
-    s = 0,
-    h = -1;
+  let resolved = Promise.resolve();
+  let r = 0;
+  let s = 0;
+  let h = -1;
   return {
     enqueue(y, _) {
-      let b = r,
-        k = s;
+      let b = r;
+      let k = s;
       resolved = resolved
         .then(() => {
-          if (k <= h)
-            return (
-              logForDebugging(
-                `${y}: not dispatched, the tail was severed while it waited behind an event that never settled`,
-              ),
-              []
+          if (k <= h) {
+            logForDebugging(
+              `${y}: not dispatched, the tail was severed while it waited behind an event that never settled`,
             );
+            return [];
+          }
           return _();
         })
         .then((w) => {
@@ -642,86 +765,111 @@ function describeDroppedNotes(e) {
           }
           e(w);
         })
-        .catch((w) => logForDebugging(`${y} failed: ${errorMessage(w)}`));
+        .catch((error) => logForDebugging(`${y} failed: ${errorMessage(error)}`));
     },
     reset: () => {
       r += 1;
     },
     settled: () => resolved,
     sever: () => {
-      ((r += 1), (h = s), (s += 1), (resolved = Promise.resolve()));
+      r += 1;
+      h = s;
+      s += 1;
+      resolved = Promise.resolve();
     },
   };
 }
 //@ chunk-0sfjpx19.js:90814-90910 placement
-function GLi(e) {
+/**
+ * 创建回合流桥接：包装 describeDroppedNotes 提供 begin/enqueue/settled/sever。
+ */
+function createTurnStreamBridge(e) {
   let n = describeDroppedNotes(e);
-  return { begin: randomUUID_3, enqueue: n.enqueue, settled: n.settled, sever: n.sever };
+  return {
+    begin: randomUUID,
+    enqueue: n.enqueue,
+    settled: n.settled,
+    sever: n.sever,
+  };
 }
 //@ chunk-0sfjpx19.js:90910-91367 placement
 function buildTurnStartEvent(e) {
-  let { newMessages: newMessages, input: input, signal: signal, abort: abort } = e,
-    last = newMessages.findLast((D) => D.type === "user" && !D.isMeta),
-    _ = last && last.type === "user",
-    b = (_ ? getContentText(last.message.content) : null) ?? input ?? "",
-    begin = e.turnEvents.begin(),
-    withResolvers = Promise.withResolvers(),
-    S = Jue({ signal: signal });
+  let { newMessages, input, signal, abort } = e;
+  let last = newMessages.findLast((newMessage) => newMessage.type === "user" && !newMessage.isMeta);
+  let _ = last && last.type === "user";
+  let text = (_ ? getContentText(last.message.content) : null) ?? input ?? "";
+  let k = e.turnEvents.begin();
+  let deferred = Promise.withResolvers();
+  let S = eventCallersWrapper2({
+    signal,
+  });
   e.turnEvents.enqueue("turn.start", () =>
     S.turn
-      .start({ text: b, turnId: begin })
+      .start({
+        text,
+        turnId: k,
+      })
       .then(() => [])
-      .finally(withResolvers.resolve),
+      .finally(deferred.resolve),
   );
-  let T = _ === !0 && isHumanOrUnset(last.origin);
-  return (
-    setClassifierChecking({
-      turnId: begin,
-      abort: abort,
-      started: withResolvers.promise,
-      startedBy: T ? "person" : "automatic",
-    }),
-    resolvePromptEntryWaiters(newMessages),
-    begin
-  );
+  let T = _ === true && isHumanOrUnset(last.origin);
+  setClassifierChecking({
+    turnId: k,
+    abort,
+    started: deferred.promise,
+    startedBy: T ? "person" : "automatic",
+  });
+  resolvePromptEntryWaiters(newMessages);
+  return k;
 }
 //@ chunk-0sfjpx19.js:91367-91596 placement
-function abortTurnSignal(e, n) {
-  return (
-    V_e.prune(e.getCommandQueue()),
-    new Promise((r) => {
-      let s = () => V_e.isAnyAside() || e.peek((h) => V_e.has(h.uuid)) !== void 0;
-      if (s()) {
-        r();
-        return;
-      }
-      n.addEventListener(
-        "abort",
-        e.subscribe(() => {
-          if (s()) r();
-        }),
-        { once: !0 },
-      );
-    })
-  );
+function abortTurnSignal(messageQueue, signal) {
+  submitMarks.prune(messageQueue.getCommandQueue());
+  return new Promise((resolve) => {
+    let s = () => submitMarks.isAnyAside() || messageQueue.peek((h) => submitMarks.has(h.uuid)) !== undefined;
+    if (s()) {
+      resolve();
+      return;
+    }
+    signal.addEventListener(
+      "abort",
+      messageQueue.subscribe(() => {
+        if (s()) resolve();
+      }),
+      {
+        once: true,
+      },
+    );
+  });
 }
 //@ chunk-0sfjpx19.js:91596-91655 placement
-function sNn() {
-  ao().remoteEgressSuppressed = () => isRemoteEgressSuppressedFor(pinSessionId(getSessionId()));
+/**
+ * 安装远程出站抑制器：按当前会话 id 判断是否抑制远程出站。
+ */
+function installRemoteEgressSuppressor() {
+  bridgeHostState().remoteEgressSuppressed = () => isRemoteEgressSuppressedFor(pinSessionId(getSessionId()));
 }
 //@ chunk-0sfjpx19.js:91691-91738 placement
-var Ns = 8388608,
-  $s = '"artifact-comment-monitor"';
+var MAX_ARTIFACT_COMMENT_TRANSCRIPT_BYTES = 8388608;
+var ARTIFACT_COMMENT_MONITOR_NAME = '"artifact-comment-monitor"';
 //@ chunk-0sfjpx19.js:91738-91827 placement
-async function vAs(e) {
-  let n = getTranscriptPathForSession(e),
-    r = await fileSizeOrUndefined(n);
-  return r === void 0 ? void 0 : { path: n, size: r };
+/**
+ * 取会话轻量 transcript 的文件大小（文件不存在返回 undefined）。
+ */
+async function transcriptFileSize(sessionId) {
+  let transcriptPathForSession = getTranscriptPathForSession(sessionId);
+  let r = await fileSizeOrUndefined(transcriptPathForSession);
+  return r === undefined
+    ? undefined
+    : {
+        path: transcriptPathForSession,
+        size: r,
+      };
 }
 //@ chunk-0sfjpx19.js:91827-91945 placement
-async function fileSizeOrUndefined(e) {
+async function fileSizeOrUndefined(transcriptPathForSession) {
   try {
-    let n = await open(e, "r");
+    let n = await open(transcriptPathForSession, "r");
     try {
       return (await n.stat()).size;
     } finally {
@@ -731,17 +879,51 @@ async function fileSizeOrUndefined(e) {
     return;
   }
 }
-
+//@ chunk-e6aww6q8.js:3422713-3423077 placement
+/**
+ * 执行 MessageDisplay 钩子（316 新增）：输入 turn_id/message_id/index/final/delta，强制同步、关闭逐次遥测；钩子可返回 displayContent 替换屏幕显示。
+ */
+async function* executeMessageDisplayHooks(
+  e,
+  n,
+  sessionHooks,
+  signal,
+  timeoutMs = TOOL_HOOK_EXECUTION_TIMEOUT_MS,
+  storageV5,
+  credentials,
+) {
+  let hookInput = {
+    ...createBaseHookInput(e, hookInputCwd()),
+    hook_event_name: "MessageDisplay",
+    turn_id: n.turnId,
+    message_id: n.messageId,
+    index: n.index,
+    final: n.final,
+    delta: n.delta,
+  };
+  yield* executeHooks({
+    session: e,
+    hookInput,
+    toolUseID: `${n.messageId}-${n.index}`,
+    signal,
+    timeoutMs,
+    sessionHooks,
+    forceSyncExecution: true,
+    suppressPerInvocationTelemetry: true,
+    storageV5,
+    credentials,
+  });
+}
 export {
   describeDroppedNotes,
-  Ns,
-  $s,
+  MAX_ARTIFACT_COMMENT_TRANSCRIPT_BYTES,
+  ARTIFACT_COMMENT_MONITOR_NAME,
   applyMessageListAppend,
   applyMessageListEdit,
   pruneDisplayedContent,
-  sNn,
-  vAs,
-  GLi,
+  installRemoteEgressSuppressor,
+  transcriptFileSize,
+  createTurnStreamBridge,
   abortTurnSignal,
   startTurnTiming,
   buildTurnStartEvent,

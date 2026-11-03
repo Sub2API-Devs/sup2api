@@ -15,392 +15,419 @@ import { logError } from "../../../utils/log.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../../services/analytics/growthbook.js";
 
 //@ chunk-tr0s0d0k.js:42043-44632 placement
-var SERVED_SHELL_LIMITS = 16,
-  ds = /^[A-Za-z_][A-Za-z0-9_]*$/,
-  Kt = /^[A-Za-z0-9_./:@%+,-]+$/,
-  ls = /^[A-Za-z0-9_./:@%+,=-]+$/,
-  cs = new Set([
-    "",
-    " ",
-    "\t",
-    `
+/**
+ * shell 行解析限额：最多 16 段；变量名、路径、赋值字符集；重定向操作符；保留 bash/zsh 变量与前缀；会读取路径的命令集合。
+ */
+var SERVED_SHELL_LIMITS = 16;
+var SHELL_VARIABLE_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
+var SAFE_PATH_CHARS_RE = /^[A-Za-z0-9_./:@%+,-]+$/;
+var SAFE_ASSIGNMENT_CHARS_RE = /^[A-Za-z0-9_./:@%+,=-]+$/;
+var NON_ASSIGNMENT_NEXT_CHARS = new Set([
+  "",
+  " ",
+  "\t",
+  `
 `,
-    '"',
-    "/",
-    ".",
-    "-",
-    ",",
-    ";",
-    "&",
-    "|",
-    ">",
-    "<",
-  ]),
-  us = new Set([">", ">>", "<", ">&", "<&", "&>", "&>>", ">|"]),
-  fs = new Set([
-    "ifs",
-    "path",
-    "home",
-    "pwd",
-    "oldpwd",
-    "cdpath",
-    "env",
-    "prompt_command",
-    "ps1",
-    "ps2",
-    "ps3",
-    "ps4",
-    "random",
-    "srandom",
-    "seconds",
-    "lineno",
-    "uid",
-    "euid",
-    "gid",
-    "egid",
-    "ppid",
-    "shellopts",
-    "hostname",
-    "hosttype",
-    "ostype",
-    "machtype",
-    "groups",
-    "dirstack",
-    "pipestatus",
-    "reply",
-    "optind",
-    "optarg",
-    "opterr",
-    "shlvl",
-    "username",
-    "logname",
-    "user",
-    "shell",
-    "term",
-    "tmpdir",
-    "lang",
-    "columns",
-    "lines",
-    "epochseconds",
-    "epochrealtime",
-    "timeformat",
-    "timefmt",
-    "globignore",
-    "nullcmd",
-    "readnullcmd",
-    "errno",
-    "tty",
-    "argc",
-    "argv",
-    "argv0",
-    "cputype",
-    "vendor",
-    "posixly_correct",
-    "tmout",
-    "fcedit",
-    "fignore",
-    "execignore",
-    "inputrc",
-    "wordchars",
-    "stty",
-    "match",
-    "mbegin",
-    "mend",
-    "_",
-    "status",
-    "psvar",
-    "fpath",
-    "manpath",
-    "mailpath",
-    "module_path",
-    "watch",
-    "signals",
-    "histchars",
-    "options",
-    "commands",
-    "functions",
-    "aliases",
-    "galiases",
-    "saliases",
-    "parameters",
-    "modules",
-    "history",
-    "historywords",
-    "nameddirs",
-    "userdirs",
-    "builtins",
-    "reswords",
-    "widgets",
-    "keymaps",
-    "terminfo",
-    "termcap",
-    "langinfo",
-    "errnos",
-    "sysparams",
-    "mapfile",
-    "usergroups",
-    "patchars",
-    "epochtime",
-    "rprompt",
-    "rps1",
-    "keyboard_hack",
-    "mailcheck",
-    "null",
-    "bashpid",
-    "baud",
-    "dirstacksize",
-    "keytimeout",
-    "listmax",
-    "logcheck",
-    "period",
-    "reporttime",
-    "reportmemory",
-    "savehist",
-    "funcnest",
-    "ttyidle",
-    "try_block_error",
-    "try_block_interrupt",
-    "mail",
-    "sprompt",
-  ]),
-  ms = ["bash", "zsh", "ld_", "dyld_", "lc_", "comp", "hist", "prompt", "dis_", "func", "job", "zle"],
-  ps = new Set([
-    ...ZSH_MODULE_NAME_WRITERS,
-    "read",
-    "mapfile",
-    "readarray",
-    "getopts",
-    "printf",
-    "declare",
-    "typeset",
-    "local",
-    "export",
-    "readonly",
-    "unset",
-    "let",
-    "eval",
-    "source",
-    ".",
-    "set",
-    "shopt",
-    "setopt",
-    "unsetopt",
-    "emulate",
-    "exec",
-    "trap",
-    "alias",
-    "unalias",
-    "shift",
-    "wait",
-    "coproc",
-    "builtin",
-    "command",
-    "noglob",
-    "nocorrect",
-    "-",
-    "integer",
-    "float",
-    "vared",
-    "zparseopts",
-    "zstyle",
-    "zformat",
-    "zstat",
-    "strftime",
-    "print",
-    "sched",
-    "zmodload",
-    "autoload",
-    "pcre_match",
-    "pcre_compile",
-    "pcre_study",
-    "zselect",
-    "zgetattr",
-    "zsetattr",
-    "zsystem",
-    "ztie",
-    "zuntie",
-    "zcurses",
-    "enable",
-    "disable",
-    "hash",
-    "unhash",
-    "rehash",
-    "bind",
-    "bindkey",
-    "compgen",
-    "complete",
-    "compopt",
-    "fc",
-    "history",
-    "r",
-    "ulimit",
-    "limit",
-    "unlimit",
-    "unsetenv",
-    "setenv",
-    "getln",
-    "pushln",
-    "zregexparse",
-    "sysread",
-    "syswrite",
-    "sysopen",
-    "sysseek",
-    "zsocket",
-    "ztcp",
-    "zpty",
-    "zftp",
-    "zle",
-    "zcompile",
-    "functions",
-    "unfunction",
-    "private",
-    "nameref",
-    "stat",
-    "time",
-    "function",
-    "select",
-    "if",
-    "then",
-    "else",
-    "elif",
-    "fi",
-    "case",
-    "esac",
-    "for",
-    "while",
-    "until",
-    "do",
-    "done",
-    "in",
-    "repeat",
-    "foreach",
-    "end",
-    "always",
-    "nocasematch",
-    "exit",
-    "return",
-  ]);
+  '"',
+  "/",
+  ".",
+  "-",
+  ",",
+  ";",
+  "&",
+  "|",
+  ">",
+  "<",
+]);
+var REDIRECT_OPERATORS = new Set([">", ">>", "<", ">&", "<&", "&>", "&>>", ">|"]);
+var RESERVED_SHELL_VARIABLES = new Set([
+  "ifs",
+  "path",
+  "home",
+  "pwd",
+  "oldpwd",
+  "cdpath",
+  "env",
+  "prompt_command",
+  "ps1",
+  "ps2",
+  "ps3",
+  "ps4",
+  "random",
+  "srandom",
+  "seconds",
+  "lineno",
+  "uid",
+  "euid",
+  "gid",
+  "egid",
+  "ppid",
+  "shellopts",
+  "hostname",
+  "hosttype",
+  "ostype",
+  "machtype",
+  "groups",
+  "dirstack",
+  "pipestatus",
+  "reply",
+  "optind",
+  "optarg",
+  "opterr",
+  "shlvl",
+  "username",
+  "logname",
+  "user",
+  "shell",
+  "term",
+  "tmpdir",
+  "lang",
+  "columns",
+  "lines",
+  "epochseconds",
+  "epochrealtime",
+  "timeformat",
+  "timefmt",
+  "globignore",
+  "nullcmd",
+  "readnullcmd",
+  "errno",
+  "tty",
+  "argc",
+  "argv",
+  "argv0",
+  "cputype",
+  "vendor",
+  "posixly_correct",
+  "tmout",
+  "fcedit",
+  "fignore",
+  "execignore",
+  "inputrc",
+  "wordchars",
+  "stty",
+  "match",
+  "mbegin",
+  "mend",
+  "_",
+  "status",
+  "psvar",
+  "fpath",
+  "manpath",
+  "mailpath",
+  "module_path",
+  "watch",
+  "signals",
+  "histchars",
+  "options",
+  "commands",
+  "functions",
+  "aliases",
+  "galiases",
+  "saliases",
+  "parameters",
+  "modules",
+  "history",
+  "historywords",
+  "nameddirs",
+  "userdirs",
+  "builtins",
+  "reswords",
+  "widgets",
+  "keymaps",
+  "terminfo",
+  "termcap",
+  "langinfo",
+  "errnos",
+  "sysparams",
+  "mapfile",
+  "usergroups",
+  "patchars",
+  "epochtime",
+  "rprompt",
+  "rps1",
+  "keyboard_hack",
+  "mailcheck",
+  "null",
+  "bashpid",
+  "baud",
+  "dirstacksize",
+  "keytimeout",
+  "listmax",
+  "logcheck",
+  "period",
+  "reporttime",
+  "reportmemory",
+  "savehist",
+  "funcnest",
+  "ttyidle",
+  "try_block_error",
+  "try_block_interrupt",
+  "mail",
+  "sprompt",
+]);
+var RESERVED_SHELL_VARIABLE_PREFIXES = [
+  "bash",
+  "zsh",
+  "ld_",
+  "dyld_",
+  "lc_",
+  "comp",
+  "hist",
+  "prompt",
+  "dis_",
+  "func",
+  "job",
+  "zle",
+];
+var PATH_READ_COMMANDS = new Set([
+  ...ZSH_MODULE_NAME_WRITERS,
+  "read",
+  "mapfile",
+  "readarray",
+  "getopts",
+  "printf",
+  "declare",
+  "typeset",
+  "local",
+  "export",
+  "readonly",
+  "unset",
+  "let",
+  "eval",
+  "source",
+  ".",
+  "set",
+  "shopt",
+  "setopt",
+  "unsetopt",
+  "emulate",
+  "exec",
+  "trap",
+  "alias",
+  "unalias",
+  "shift",
+  "wait",
+  "coproc",
+  "builtin",
+  "command",
+  "noglob",
+  "nocorrect",
+  "-",
+  "integer",
+  "float",
+  "vared",
+  "zparseopts",
+  "zstyle",
+  "zformat",
+  "zstat",
+  "strftime",
+  "print",
+  "sched",
+  "zmodload",
+  "autoload",
+  "pcre_match",
+  "pcre_compile",
+  "pcre_study",
+  "zselect",
+  "zgetattr",
+  "zsetattr",
+  "zsystem",
+  "ztie",
+  "zuntie",
+  "zcurses",
+  "enable",
+  "disable",
+  "hash",
+  "unhash",
+  "rehash",
+  "bind",
+  "bindkey",
+  "compgen",
+  "complete",
+  "compopt",
+  "fc",
+  "history",
+  "r",
+  "ulimit",
+  "limit",
+  "unlimit",
+  "unsetenv",
+  "setenv",
+  "getln",
+  "pushln",
+  "zregexparse",
+  "sysread",
+  "syswrite",
+  "sysopen",
+  "sysseek",
+  "zsocket",
+  "ztcp",
+  "zpty",
+  "zftp",
+  "zle",
+  "zcompile",
+  "functions",
+  "unfunction",
+  "private",
+  "nameref",
+  "stat",
+  "time",
+  "function",
+  "select",
+  "if",
+  "then",
+  "else",
+  "elif",
+  "fi",
+  "case",
+  "esac",
+  "for",
+  "while",
+  "until",
+  "do",
+  "done",
+  "in",
+  "repeat",
+  "foreach",
+  "end",
+  "always",
+  "nocasematch",
+  "exit",
+  "return",
+]);
 //@ chunk-tr0s0d0k.js:44632-45067 placement
-async function parseServedShellLine(e) {
+async function parseServedShellLine(command) {
   try {
-    if (!/^[\t\n\x20-\x7e]*$/.test(e)) return;
-    let n = await parseCommandRaw(e);
-    if (n === null || n === PARSE_ABORTED) return;
-    let o = collectProgramVariables(n, e, !1);
-    if (o === void 0 || o.replacements.length === 0) return;
-    let r = "",
-      s = 0;
-    for (let replacement of o.replacements) {
+    if (!/^[\t\n\x20-\x7e]*$/.test(command)) return;
+    let commandRaw = await parseCommandRaw(command);
+    if (commandRaw === null || commandRaw === PARSE_ABORTED) return;
+    let programVariables = collectProgramVariables(commandRaw, command, false);
+    if (programVariables === undefined || programVariables.replacements.length === 0) return;
+    let r = "";
+    let s = 0;
+    for (let replacement of programVariables.replacements) {
       if (replacement.start < s) return;
-      ((r += e.slice(s, replacement.start) + replacement.value), (s = replacement.end));
+      r += command.slice(s, replacement.start) + replacement.value;
+      s = replacement.end;
     }
-    r += e.slice(s);
-    let d = await parseCommandRaw(r);
-    if (d === null || d === PARSE_ABORTED) return;
-    let u = collectProgramVariables(d, r, !0);
-    return u !== void 0 && u.skeleton === o.skeleton ? r : void 0;
+    r += command.slice(s);
+    let commandRaw_2 = await parseCommandRaw(r);
+    if (commandRaw_2 === null || commandRaw_2 === PARSE_ABORTED) return;
+    let programVariables_2 = collectProgramVariables(commandRaw_2, r, true);
+    return programVariables_2 !== undefined && programVariables_2.skeleton === programVariables.skeleton
+      ? r
+      : undefined;
   } catch (error) {
     if (!isAbortError(error)) logError(error);
     return;
   }
 }
 //@ chunk-tr0s0d0k.js:45067-46024 placement
-function collectProgramVariables(e, n, o) {
-  if (e.type !== "program") return;
-  let r = new Map(),
-    s = new Set(),
-    d = [],
-    u = "";
-  for (let [p, h] of e.children.entries()) {
+function collectProgramVariables(commandRaw, n, o) {
+  if (commandRaw.type !== "program") return;
+  let r = new Map();
+  let s = new Set();
+  let d = [];
+  let u = "";
+  for (let [p, h] of commandRaw.children.entries()) {
     if (h.type === ";" || h.type === "&") {
       u += h.type;
       continue;
     }
     if (h.type !== "variable_assignment") {
-      let A = readShellNode(h, n, r, d);
-      if (A === void 0) return;
-      u += A;
+      let shellNode = readShellNode(h, n, r, d);
+      if (shellNode === undefined) return;
+      u += shellNode;
       continue;
     }
     let [_, S, R] = h.children;
     if (
       h.children.length !== 3 ||
-      _ === void 0 ||
-      S === void 0 ||
-      R === void 0 ||
+      _ === undefined ||
+      S === undefined ||
+      R === undefined ||
       _.type !== "variable_name" ||
       S.type !== "=" ||
-      !ds.test(_.text) ||
+      !SHELL_VARIABLE_NAME_RE.test(_.text) ||
       s.has(_.text) ||
       s.size >= SERVED_SHELL_LIMITS ||
-      e.children[p + 1]?.type === "&"
+      commandRaw.children[p + 1]?.type === "&"
     )
       return;
     let lower = _.text.toLowerCase();
-    if (isAssignmentNameUnsafeForSandbox(_.text) || fs.has(lower) || ms.some((A) => lower.startsWith(A)))
+    if (
+      isAssignmentNameUnsafeForSandbox(_.text) ||
+      RESERVED_SHELL_VARIABLES.has(lower) ||
+      RESERVED_SHELL_VARIABLE_PREFIXES.some((A) => lower.startsWith(A))
+    )
       return;
-    let L = R.children[1],
-      V =
-        R.type === "word" || R.type === "number"
-          ? R.text
-          : R.type === "raw_string" && R.text.length > 2 && R.text.startsWith("'") && R.text.endsWith("'")
-            ? R.text.slice(1, -1)
-            : R.type === "string" &&
-                R.children.length === 3 &&
-                L !== void 0 &&
-                L.type === "string_content" &&
-                R.text === `"${L.text}"`
-              ? L.text
-              : void 0;
-    if (V === void 0 || !Kt.test(V)) return;
-    if ((s.add(_.text), !o)) r.set(_.text, V);
+    let L = R.children[1];
+    let V =
+      R.type === "word" || R.type === "number"
+        ? R.text
+        : R.type === "raw_string" && R.text.length > 2 && R.text.startsWith("'") && R.text.endsWith("'")
+          ? R.text.slice(1, -1)
+          : R.type === "string" &&
+              R.children.length === 3 &&
+              L !== undefined &&
+              L.type === "string_content" &&
+              R.text === `"${L.text}"`
+            ? L.text
+            : undefined;
+    if (V === undefined || !SAFE_PATH_CHARS_RE.test(V)) return;
+    s.add(_.text);
+    if (!o) r.set(_.text, V);
     u += "assignment";
   }
-  return { skeleton: u, replacements: d };
+  return {
+    skeleton: u,
+    replacements: d,
+  };
 }
 //@ chunk-tr0s0d0k.js:46024-47218 placement
 function readShellNode(e, n, o, r) {
   if (e.type === "list" || e.type === "pipeline") {
     let u = `${e.type}(`;
     for (let [p, h] of e.children.entries()) {
-      let _ = e.type === "list" ? ["&&", "||"] : ["|", "|&"],
-        S = p % 2 === 0 ? readShellNode(h, n, o, r) : _.includes(h.type) ? h.type : void 0;
-      if (S === void 0) return;
+      let _ = e.type === "list" ? ["&&", "||"] : ["|", "|&"];
+      let S = p % 2 === 0 ? readShellNode(h, n, o, r) : _.includes(h.type) ? h.type : undefined;
+      if (S === undefined) return;
       u += S;
     }
-    return e.children.length % 2 === 1 ? `${u})` : void 0;
+    return e.children.length % 2 === 1 ? `${u})` : undefined;
   }
   if (e.type !== "command" && e.type !== "redirected_statement") return;
-  let s = `${e.type}(`,
-    d = e.type === "redirected_statement";
+  let s = `${e.type}(`;
+  let d = e.type === "redirected_statement";
   for (let [u, p] of e.children.entries())
     if (p.type === "file_redirect") {
-      let at = p.children.at(-1),
-        at_2 = p.children.at(-2),
-        S = p.children.length === 3 ? p.children[0] : void 0;
+      let last = p.children.at(-1);
+      let _ = p.children.at(-2);
+      let S = p.children.length === 3 ? p.children[0] : undefined;
       if (
         u === 0 ||
-        at === void 0 ||
-        at_2 === void 0 ||
+        last === undefined ||
+        _ === undefined ||
         p.children.length > 3 ||
-        !us.has(at_2.type) ||
+        !REDIRECT_OPERATORS.has(_.type) ||
         (p.children.length === 3 && (S?.type !== "file_descriptor" || !/^[0-9]+$/.test(S.text))) ||
-        !isStaticWord(at, n, o, r)
+        !isStaticWord(last, n, o, r)
       )
         return;
-      s += `redirect(${S?.text ?? ""}${at_2.type})`;
+      s += `redirect(${S?.text ?? ""}${_.type})`;
     } else if (e.type === "redirected_statement") {
-      let h = u === 0 ? readShellNode(p, n, o, r) : void 0;
-      if (h === void 0) return;
+      let h = u === 0 ? readShellNode(p, n, o, r) : undefined;
+      if (h === undefined) return;
       s += h;
     } else if (p.type === "command_name") {
       let h = p.children[0];
-      if (d || h === void 0 || p.children.length !== 1) return;
-      d = !0;
+      if (d || h === undefined || p.children.length !== 1) return;
+      d = true;
       let _ = r.length;
       if (
         !(h.type === "word" || h.type === "number"
-          ? Kt.test(h.text) && (h.text.includes("/") || !ps.has(h.text))
+          ? SAFE_PATH_CHARS_RE.test(h.text) && (h.text.includes("/") || !PATH_READ_COMMANDS.has(h.text))
           : isStaticWord(h, n, o, r) && r.length > _)
       )
         return;
@@ -409,7 +436,7 @@ function readShellNode(e, n, o, r) {
       if (!d || !isStaticWord(p, n, o, r)) return;
       s += " word";
     }
-  return d ? `${s})` : void 0;
+  return d ? `${s})` : undefined;
 }
 //@ chunk-tr0s0d0k.js:47218-47933 placement
 function isStaticWord(e, n, o, r) {
@@ -417,64 +444,68 @@ function isStaticWord(e, n, o, r) {
     case "word":
     case "number":
     case "raw_string":
-      return !0;
+      return true;
     case "simple_expansion":
     case "expansion": {
-      let s = e.type === "expansion",
-        [d, u, p] = e.children,
-        h = u?.type === "variable_name" ? o.get(u.text) : void 0;
+      let s = e.type === "expansion";
+      let [d, u, p] = e.children;
+      let h = u?.type === "variable_name" ? o.get(u.text) : undefined;
       if (
-        h === void 0 ||
+        h === undefined ||
         e.children.length !== (s ? 3 : 2) ||
         d?.type !== (s ? "${" : "$") ||
         (s && p?.type !== "}") ||
-        (!s && !cs.has(n[e.endIndex] ?? ""))
+        (!s && !NON_ASSIGNMENT_NEXT_CHARS.has(n[e.endIndex] ?? ""))
       )
-        return !1;
-      return (r.push({ start: e.startIndex, end: e.endIndex, value: h }), !0);
+        return false;
+      r.push({
+        start: e.startIndex,
+        end: e.endIndex,
+        value: h,
+      });
+      return true;
     }
     case "string":
       return e.children.every(
-        (s) =>
-          s.type === '"' ||
-          s.type === "string_content" ||
-          ((s.type === "simple_expansion" || s.type === "expansion") && isStaticWord(s, n, o, r)),
+        (child) =>
+          child.type === '"' ||
+          child.type === "string_content" ||
+          ((child.type === "simple_expansion" || child.type === "expansion") && isStaticWord(child, n, o, r)),
       );
     case "concatenation":
-      return e.children.every((s) =>
-        s.type === "word" || s.type === "number"
-          ? ls.test(s.text)
-          : s.type !== "concatenation" && isStaticWord(s, n, o, r),
+      return e.children.every((child) =>
+        child.type === "word" || child.type === "number"
+          ? SAFE_ASSIGNMENT_CHARS_RE.test(child.text)
+          : child.type !== "concatenation" && isStaticWord(child, n, o, r),
       );
     default:
-      return !1;
+      return false;
   }
 }
 //@ chunk-tr0s0d0k.js:47933-48005 placement
 function isServedHairEnabled() {
   try {
-    return getFeatureValue_CACHED_MAY_BE_STALE("tengu_violin_hair", !1) === !0;
+    return getFeatureValue_CACHED_MAY_BE_STALE("tengu_violin_hair", false) === true;
   } catch {
-    return !1;
+    return false;
   }
 }
 //@ chunk-tr0s0d0k.js:48005-48080 placement
 function isServedFerruleEnabled() {
   try {
-    return getFeatureValue_CACHED_MAY_BE_STALE("tengu_violin_ferrule", !1) === !0;
+    return getFeatureValue_CACHED_MAY_BE_STALE("tengu_violin_ferrule", false) === true;
   } catch {
-    return !1;
+    return false;
   }
 }
 //@ chunk-tr0s0d0k.js:48167-48209 placement
-var SERVED_SHELL_READ_LIMITS = 2000,
-  vs = 112,
-  xe = Symbol("cut short");
-
+var SERVED_SHELL_READ_LIMITS = 2000;
+var MAX_PATH_PIECES = 112;
+var CUT_SHORT = Symbol("cut short");
 export {
   SERVED_SHELL_READ_LIMITS,
-  xe,
-  vs,
+  CUT_SHORT,
+  MAX_PATH_PIECES,
   parseServedShellLine,
   isServedHairEnabled,
   isServedFerruleEnabled,

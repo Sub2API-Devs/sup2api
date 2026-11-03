@@ -8,49 +8,62 @@
 import { Pt } from "../../../../logger/dist/esm/index.js";
 
 //@ chunk-mrx6y2r5.js:26851-26873 esm-fingerprint
-var $e = Pt("identity");
+var logger = Pt("identity");
 //@ chunk-mrx6y2r5.js:26873-27008 esm-fingerprint
-function Ho(e) {
-  return e.reduce(
-    (t, r) => {
-      if (process.env[r]) t.assigned.push(r);
-      else t.missing.push(r);
-      return t;
+function processEnvVars(supportedEnvVars) {
+  return supportedEnvVars.reduce(
+    (acc, envVariable) => {
+      if (process.env[envVariable]) acc.assigned.push(envVariable);
+      else acc.missing.push(envVariable);
+      return acc;
     },
-    { missing: [], assigned: [] },
+    {
+      missing: [],
+      assigned: [],
+    },
   );
 }
 //@ chunk-mrx6y2r5.js:27008-27084 esm-fingerprint
-function he(e) {
-  return `SUCCESS. Scopes: ${Array.isArray(e) ? e.join(", ") : e}.`;
+function formatSuccess(scope) {
+  return `SUCCESS. Scopes: ${Array.isArray(scope) ? scope.join(", ") : scope}.`;
 }
 //@ chunk-mrx6y2r5.js:27084-27269 esm-fingerprint
-function q(e, t) {
-  let r = "ERROR.";
-  if (e === null || e === void 0 ? void 0 : e.length) r += ` Scopes: ${Array.isArray(e) ? e.join(", ") : e}.`;
-  return `${r} Error message: ${typeof t === "string" ? t : t.message}.`;
+function formatError(scope, error) {
+  let message = "ERROR.";
+  if (scope === null || scope === undefined ? undefined : scope.length)
+    message += ` Scopes: ${Array.isArray(scope) ? scope.join(", ") : scope}.`;
+  return `${message} Error message: ${typeof error === "string" ? error : error.message}.`;
 }
 //@ chunk-mrx6y2r5.js:27269-27529 esm-fingerprint
-function sl(e, t, r = $e) {
-  let n = t ? `${t.fullTitle} ${e}` : e;
-  function o(c) {
-    r.info(`${n} =>`, c);
+function credentialLoggerInstance(title, parent, log = logger) {
+  let fullTitle = parent ? `${parent.fullTitle} ${title}` : title;
+  function info(message) {
+    log.info(`${fullTitle} =>`, message);
   }
-  function i(c) {
-    r.warning(`${n} =>`, c);
+  function warning(message) {
+    log.warning(`${fullTitle} =>`, message);
   }
-  function s(c) {
-    r.verbose(`${n} =>`, c);
+  function verbose(message) {
+    log.verbose(`${fullTitle} =>`, message);
   }
-  function a(c) {
-    r.error(`${n} =>`, c);
+  function error(message) {
+    log.error(`${fullTitle} =>`, message);
   }
-  return { title: e, fullTitle: n, info: o, warning: i, verbose: s, error: a };
+  return {
+    title,
+    fullTitle,
+    info,
+    warning,
+    verbose,
+    error,
+  };
 }
 //@ chunk-mrx6y2r5.js:27529-27655 esm-fingerprint
-function z(e, t = $e) {
-  let r = sl(e, void 0, t);
-  return Object.assign(Object.assign({}, r), { parent: t, getToken: sl("=> getToken()", r, t) });
+function credentialLogger(title, log = logger) {
+  let credLogger = credentialLoggerInstance(title, undefined, log);
+  return Object.assign(Object.assign({}, credLogger), {
+    parent: log,
+    getToken: credentialLoggerInstance("=> getToken()", credLogger, log),
+  });
 }
-
-export { q, z, Ho, he, $e };
+export { formatError, credentialLogger, processEnvVars, formatSuccess, logger };

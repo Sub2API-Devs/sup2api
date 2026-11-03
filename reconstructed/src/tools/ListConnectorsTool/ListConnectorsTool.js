@@ -9,73 +9,83 @@
  * attribution: placement 4
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { zodStrictObject, A, o, u, T } from "../../../vendor/zod/v4/classic/schemas.js";
+import { zodStrictObject, array, string, u, literal } from "../../../vendor/zod/v4/classic/schemas.js";
 import {
   connectorResultSchema,
-  PHs,
-  bLe,
+  listConnectorSuggestions,
+  isOptInRequired,
   markEnabledInChat,
   logConnectorFetchFailure,
   ConnectorRegistryUnavailableError,
 } from "../../services/mcp/connectorSuggestions.js";
 import { buildTool } from "../../services/tools/permissionCheckGuard.js";
 import { LIST_CONNECTORS_TOOL_NAME, DESCRIPTION, PROMPT } from "./prompt.js";
-import { gHe } from "../../utils/remoteSessionEnv.js";
+import { isRemoteFirstPartySession } from "../../utils/remoteSessionEnv.js";
 import { AbortError } from "../../utils/errors.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 
+//@ chunk-ry7vktx8.js:4604-4816 placement
 /**
  * ListConnectors 输入/输出 schema。
  */
-//@ chunk-ry7vktx8.js:4604-4816 placement
 var LIST_CONNECTORS_INPUT_SCHEMA = DoctorLazy(() =>
-    zodStrictObject({
-      keywords: A(o().min(1).max(64)).max(8).optional().describe("Optional filter; omit to list everything."),
-    }),
-  ),
-  LIST_CONNECTORS_OUTPUT_SCHEMA = DoctorLazy(() =>
-    u({ connectors: A(connectorResultSchema()), opt_in_required: T(!0).optional(), message: o().optional() }),
-  );
+  zodStrictObject({
+    keywords: array(string().min(1).max(64))
+      .max(8)
+      .optional()
+      .describe("Optional filter; omit to list everything."),
+  }),
+);
+var LIST_CONNECTORS_OUTPUT_SCHEMA = DoctorLazy(() =>
+  u({
+    connectors: array(connectorResultSchema()),
+    opt_in_required: literal(true).optional(),
+    message: string().optional(),
+  }),
+);
 //@ chunk-ry7vktx8.js:4816-4902 placement
-function a(e, t) {
+/**
+ * 判断名称或描述里是否含任意关键词（忽略大小写）。
+ */
+function matchesKeyword(e, t) {
   let lower = e.toLowerCase();
   return t.some((n) => lower.includes(n.toLowerCase()));
 }
+//@ chunk-ry7vktx8.js:4902-5070 placement
 /**
  * 按关键词过滤连接器（名称或描述）。
  */
-//@ chunk-ry7vktx8.js:4902-5070 placement
-function filterConnectors(e, t) {
-  if (!t?.length) return e;
+function filterConnectors(e, keywords) {
+  if (!keywords?.length) return e;
   return e.filter((r) => {
-    if (typeof r.name === "string" && a(r.name, t)) return !0;
+    if (typeof r.name === "string" && matchesKeyword(r.name, keywords)) return true;
     let description = r.description;
-    return typeof description === "string" && a(description, t);
+    return typeof description === "string" && matchesKeyword(description, keywords);
   });
 }
+//@ chunk-ry7vktx8.js:5070-5962 placement
 /**
  * 2.1.316 新增的 ListConnectors 工具：列出用户已安装的 MCP 连接器。
  */
-//@ chunk-ry7vktx8.js:5070-5962 placement
 var ListConnectorsTool = buildTool({
   name: LIST_CONNECTORS_TOOL_NAME,
   searchHint: "list the user's installed MCP connectors",
   backgrounding: "never",
   maxResultSizeChars: 300000,
   persistenceThresholdCeiling: 300000,
-  shouldDefer: !0,
+  shouldDefer: true,
   get inputSchema() {
     return LIST_CONNECTORS_INPUT_SCHEMA();
   },
   get outputSchema() {
     return LIST_CONNECTORS_OUTPUT_SCHEMA();
   },
-  isEnabled: gHe,
+  isEnabled: isRemoteFirstPartySession,
   isConcurrencySafe() {
-    return !0;
+    return true;
   },
   isReadOnly() {
-    return !0;
+    return true;
   },
   async description() {
     return DESCRIPTION;
@@ -83,30 +93,38 @@ var ListConnectorsTool = buildTool({
   async prompt() {
     return PROMPT;
   },
-  create({ credentials: e, mcpClients: t, session: r }) {
+  create({ credentials, mcpClients, session }) {
     return {
-      async call(n, { signal: i }) {
+      async call(n, { signal }) {
         try {
-          let s = await PHs(i, e);
-          if (bLe(s)) return { data: { connectors: [], ...s } };
-          let c = t(),
-            l = markEnabledInChat(s, c, r);
-          return { data: { connectors: filterConnectors(l, n.keywords) } };
+          let s = await listConnectorSuggestions(signal, credentials);
+          if (isOptInRequired(s))
+            return {
+              data: {
+                connectors: [],
+                ...s,
+              },
+            };
+          let c = mcpClients();
+          let l = markEnabledInChat(s, c, session);
+          return {
+            data: {
+              connectors: filterConnectors(l, n.keywords),
+            },
+          };
         } catch (error) {
-          if (i.aborted) throw new AbortError();
-          throw (
-            logConnectorFetchFailure("list", error),
-            new ConnectorRegistryUnavailableError(
-              "Connector registry is unavailable right now; please try again.",
-            )
+          if (signal.aborted) throw new AbortError();
+          logConnectorFetchFailure("list", error);
+          throw new ConnectorRegistryUnavailableError(
+            "Connector registry is unavailable right now; please try again.",
           );
         }
       },
     };
   },
-  mapToolResultToToolResultBlockParam(e, t) {
+  mapToolResultToToolResultBlockParam(e, toolUseId) {
     return {
-      tool_use_id: t,
+      tool_use_id: toolUseId,
       type: "tool_result",
       content: jsonStringify(e.opt_in_required ? e : e.connectors),
     };

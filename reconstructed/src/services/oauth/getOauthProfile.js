@@ -12,10 +12,10 @@ import { getGlobalConfig } from "../../utils/config.js";
 import { apiKeyForHost } from "../analytics/telemetryCredentialGuard.js";
 import { getAnthropicApiKey } from "../../utils/auth.js";
 import { getOauthConfig, OAUTH_BETA_HEADER } from "../../constants/oauth.js";
-import { Dt } from "../../../vendor/axios/dist/esm/axios.js";
+import { axios_default } from "../../../vendor/axios/dist/esm/axios.js";
 import { claudeCodeUserAgent } from "../../utils/http.js";
 import {
-  hn,
+  FAST_MODE_CHECK_HTTP_OPTIONS,
   parseOauthProfileResponse,
   classifyProfileFetchError,
   profileFetchErrorCode,
@@ -26,80 +26,104 @@ import { logForDebugging } from "../../utils/debug.js";
 import { logError } from "../../utils/log.js";
 import { isSessionsToken } from "./sessionsBearerHooks.js";
 
+//@ chunk-aepeg2w5.js:292428-292931 placement = getOauthProfileFromApiKey (0.622)
 /**
  * GET <BASE_API_URL>/api/claude_cli_profile（x-api-key + oauth beta），API key 用户取账户信息。
  */
-//@ chunk-aepeg2w5.js:292428-292931 placement = getOauthProfileFromApiKey (0.622)
 async function getOauthProfileFromApiKey() {
-  let accountUuid = getGlobalConfig().oauthAccount?.accountUuid,
-    r = apiKeyForHost(getAnthropicApiKey());
-  if (!accountUuid || !r) return;
+  let accountUuid = getGlobalConfig().oauthAccount?.accountUuid;
+  let apiKey = apiKeyForHost(getAnthropicApiKey());
+  if (!accountUuid || !apiKey) return;
   let endpoint = `${getOauthConfig().BASE_API_URL}/api/claude_cli_profile`;
   try {
-    let response = await Dt.get(endpoint, {
+    let response = await axios_default.get(endpoint, {
       headers: {
         "User-Agent": claudeCodeUserAgent(),
-        "x-api-key": r,
+        "x-api-key": apiKey,
         "anthropic-beta": OAUTH_BETA_HEADER,
         "Cache-Control": "no-cache",
       },
-      params: { account_uuid: accountUuid },
+      params: {
+        account_uuid: accountUuid,
+      },
       timeout: 1e4,
-      ...hn,
+      ...FAST_MODE_CHECK_HTTP_OPTIONS,
     });
     return parseOauthProfileResponse(response.data);
   } catch (error) {
-    if (isExpectedApiError(error))
-      (logFeatureSad("oauth_profile_fetch", `api_key_${classifyProfileFetchError(error)}`),
-        logForDebugging(`Failed to fetch oauth profile from API key: ${error}`, { level: "error" }));
-    else (logFeatureBad("oauth_profile_fetch", `api_key_${profileFetchErrorCode(error)}`), logError(error));
+    if (isExpectedApiError(error)) {
+      logFeatureSad("oauth_profile_fetch", `api_key_${classifyProfileFetchError(error)}`);
+      logForDebugging(`Failed to fetch oauth profile from API key: ${error}`, {
+        level: "error",
+      });
+    } else {
+      logFeatureBad("oauth_profile_fetch", `api_key_${profileFetchErrorCode(error)}`);
+      logError(error);
+    }
   }
 }
 //@ chunk-aepeg2w5.js:292931-293028 placement
-async function getOauthProfileWithOriginFromOauthToken(e) {
-  let n = await getOauthProfileFromOauthToken_2(e);
-  return n.ok ? { profile: n.profile, stamped: n.stamped } : void 0;
+async function getOauthProfileWithOriginFromOauthToken(accessToken) {
+  let oauthProfileFromOauthToken = await getOauthProfileFromOauthToken_2(accessToken);
+  return oauthProfileFromOauthToken.ok
+    ? {
+        profile: oauthProfileFromOauthToken.profile,
+        stamped: oauthProfileFromOauthToken.stamped,
+      }
+    : undefined;
 }
+//@ chunk-aepeg2w5.js:293028-293097 placement
 /**
  * GET <BASE_API_URL>/api/oauth/profile（Bearer），校验响应形状，失败分类 no_auth/rate_limited/timeout/network_error。
  */
-//@ chunk-aepeg2w5.js:293028-293097 placement
-async function getOauthProfileFromOauthToken(e) {
-  let n = await getOauthProfileFromOauthToken_2(e);
-  return n.ok ? n.profile : void 0;
+async function getOauthProfileFromOauthToken(accessToken) {
+  let oauthProfileFromOauthToken = await getOauthProfileFromOauthToken_2(accessToken);
+  return oauthProfileFromOauthToken.ok ? oauthProfileFromOauthToken.profile : undefined;
 }
 //@ chunk-aepeg2w5.js:293097-293799 fingerprint = getOauthProfileFromOauthToken (0.434)
 async function getOauthProfileFromOauthToken_2(accessToken) {
   let endpoint = `${getOauthConfig().BASE_API_URL}/api/oauth/profile`;
   try {
-    let response = await Dt.get(endpoint, {
-        headers: {
-          "User-Agent": claudeCodeUserAgent(),
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-          "Cache-Control": "no-cache",
-        },
-        timeout: 1e4,
-        ...hn,
-      }),
-      s = parseOauthProfileResponse(response.data);
-    if (s === void 0) return { ok: !1, why: "no_answer" };
+    let response = await axios_default.get(endpoint, {
+      headers: {
+        "User-Agent": claudeCodeUserAgent(),
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+        "Cache-Control": "no-cache",
+      },
+      timeout: 1e4,
+      ...FAST_MODE_CHECK_HTTP_OPTIONS,
+    });
+    let oauthProfileResponse = parseOauthProfileResponse(response.data);
+    if (oauthProfileResponse === undefined)
+      return {
+        ok: false,
+        why: "no_answer",
+      };
     let h =
       typeof response.headers?.get === "function"
         ? response.headers.get("request-id")
         : response.headers?.["request-id"];
-    return { ok: !0, profile: s, stamped: isSessionsToken(h) };
-  } catch (error) {
-    if (isExpectedApiError(error))
-      (logFeatureSad("oauth_profile_fetch", `token_${classifyProfileFetchError(error)}`),
-        logForDebugging(`Failed to fetch oauth profile from OAuth token: ${error}`, { level: "error" }));
-    else (logFeatureBad("oauth_profile_fetch", `token_${profileFetchErrorCode(error)}`), logError(error));
-    let { kind: kind, status: status } = classifyAxiosError(error);
     return {
-      ok: !1,
+      ok: true,
+      profile: oauthProfileResponse,
+      stamped: isSessionsToken(h),
+    };
+  } catch (error) {
+    if (isExpectedApiError(error)) {
+      logFeatureSad("oauth_profile_fetch", `token_${classifyProfileFetchError(error)}`);
+      logForDebugging(`Failed to fetch oauth profile from OAuth token: ${error}`, {
+        level: "error",
+      });
+    } else {
+      logFeatureBad("oauth_profile_fetch", `token_${profileFetchErrorCode(error)}`);
+      logError(error);
+    }
+    let { kind, status } = classifyAxiosError(error);
+    return {
+      ok: false,
       why: kind === "other" ? "fault" : isNonRetryableClientError(status) ? "refused" : "no_answer",
     };
   }
 }
-
 export { getOauthProfileFromOauthToken, getOauthProfileWithOriginFromOauthToken, getOauthProfileFromApiKey };

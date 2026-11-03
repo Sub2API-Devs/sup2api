@@ -9,41 +9,42 @@
 //@ chunk-2tyrgda4.js:6891-6904 esm-layout
 var L = () => {};
 //@ chunk-2tyrgda4.js:6904-7322 esm-fingerprint
-function wt(e, t, ...r) {
-  if (r.length > 2) {
-    let o = r.pop();
-    e += `one of type ${r.join(", ")}, or ${o}.`;
-  } else if (r.length === 2) e += `one of type ${r[0]} or ${r[1]}.`;
-  else e += `of type ${r[0]}.`;
-  if (t == null) e += ` Received ${t}`;
-  else if (typeof t === "function" && t.name) e += ` Received function ${t.name}`;
-  else if (typeof t === "object" && t != null) {
-    if (t.constructor && t.constructor.name) e += ` Received an instance of ${t.constructor.name}`;
+function message(msg, actual, ...types) {
+  if (types.length > 2) {
+    let last = types.pop();
+    msg += `one of type ${types.join(", ")}, or ${last}.`;
+  } else if (types.length === 2) msg += `one of type ${types[0]} or ${types[1]}.`;
+  else msg += `of type ${types[0]}.`;
+  if (actual == null) msg += ` Received ${actual}`;
+  else if (typeof actual === "function" && actual.name) msg += ` Received function ${actual.name}`;
+  else if (typeof actual === "object" && actual != null) {
+    if (actual.constructor && actual.constructor.name)
+      msg += ` Received an instance of ${actual.constructor.name}`;
   }
-  return e;
+  return msg;
 }
 //@ chunk-2tyrgda4.js:7322-7400 esm-fingerprint
-function Be(e, t, ...r) {
-  return wt(`Key for the ${e} algorithm must be `, t, ...r);
+function Be(e, actual, ...r) {
+  return message(`Key for the ${e} algorithm must be `, actual, ...r);
 }
 //@ chunk-2tyrgda4.js:7400-7442 esm-fingerprint
-var A = (e, ...t) => wt("Key must be ", e, ...t);
+var A = (actual, ...t) => message("Key must be ", actual, ...t);
 //@ chunk-5h78gfwc.js:4387-4811 esm-fingerprint
-function Le(e, t, ...r) {
-  if (((r = r.filter(Boolean)), r.length > 2)) {
-    let n = r.pop();
-    e += `one of type ${r.join(", ")}, or ${n}.`;
-  } else if (r.length === 2) e += `one of type ${r[0]} or ${r[1]}.`;
-  else e += `of type ${r[0]}.`;
-  if (t == null) e += ` Received ${t}`;
-  else if (typeof t === "function" && t.name) e += ` Received function ${t.name}`;
-  else if (typeof t === "object" && t != null) {
-    if (t.constructor?.name) e += ` Received an instance of ${t.constructor.name}`;
+function message_2(msg, actual, ...types) {
+  types = types.filter(Boolean);
+  if (types.length > 2) {
+    let last = types.pop();
+    msg += `one of type ${types.join(", ")}, or ${last}.`;
+  } else if (types.length === 2) msg += `one of type ${types[0]} or ${types[1]}.`;
+  else msg += `of type ${types[0]}.`;
+  if (actual == null) msg += ` Received ${actual}`;
+  else if (typeof actual === "function" && actual.name) msg += ` Received function ${actual.name}`;
+  else if (typeof actual === "object" && actual != null) {
+    if (actual.constructor?.name) msg += ` Received an instance of ${actual.constructor.name}`;
   }
-  return e;
+  return msg;
 }
 //@ chunk-5h78gfwc.js:4811-4917 esm-fingerprint
-var U = (e, ...t) => Le("Key must be ", e, ...t),
-  Pe = (e, t, ...r) => Le(`Key for the ${e} algorithm must be `, t, ...r);
-
-export { U, A, L, Be, Pe };
+var message_3 = (actual, ...types) => message_2("Key must be ", actual, ...types);
+var withAlg = (alg, actual, ...types) => message_2(`Key for the ${alg} algorithm must be `, actual, ...types);
+export { message_3, A, L, Be, withAlg };

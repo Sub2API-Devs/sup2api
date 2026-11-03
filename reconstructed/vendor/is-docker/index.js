@@ -5,25 +5,25 @@
  * pieces: chunk-20ppca50.js (3)
  * attribution: esm-layout 1, esm-fingerprint 2
  */
-import fs, { default as fs_2, default as fs_3 } from "fs";
+import fs from "fs";
 
 //@ chunk-20ppca50.js:572-578 esm-layout
 var h;
 //@ chunk-20ppca50.js:578-647 esm-fingerprint
-function G() {
+function hasDockerEnv() {
   try {
-    return (fs_3.statSync("/.dockerenv"), !0);
+    fs.statSync("/.dockerenv");
+    return true;
   } catch {
-    return !1;
+    return false;
   }
 }
 //@ chunk-20ppca50.js:647-749 esm-fingerprint
-function X() {
+function hasDockerCGroup() {
   try {
-    return fs_3.readFileSync("/proc/self/cgroup", "utf8").includes("docker");
+    return fs.readFileSync("/proc/self/cgroup", "utf8").includes("docker");
   } catch {
-    return !1;
+    return false;
   }
 }
-
-export { h, G, X };
+export { h, hasDockerEnv, hasDockerCGroup };

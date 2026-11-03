@@ -10,47 +10,58 @@
  */
 import { hostname } from "os";
 import { randomBytes } from "crypto";
-import { FCt } from "../../bridge/deviceRegistration.js";
+import { deviceSlugOrFallback } from "../../bridge/deviceRegistration.js";
 
 //@ chunk-3jcjkxmq.js:295-494 placement
-var DEVICE_INSTANCE_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/,
-  HOOK_EVENT_RE = /^[A-Za-z]{1,64}$/,
-  DEVICE_HOOK_ID_RE = /^([A-Za-z0-9][A-Za-z0-9._-]{0,63})\/([A-Za-z]{1,64})\/(\d{1,4})$/,
-  DEVICE_INSTANCE_RANDOM_BYTES = 8,
-  MAX_HOSTNAME_CHARS = 64,
-  MAX_HOOK_INDEX = 9999,
-  defaultDeviceIdDeps = { hostname: hostname, randomHex: (n) => randomBytes(n).toString("hex") };
+var DEVICE_INSTANCE_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+var HOOK_EVENT_RE = /^[A-Za-z]{1,64}$/;
+var DEVICE_HOOK_ID_RE = /^([A-Za-z0-9][A-Za-z0-9._-]{0,63})\/([A-Za-z]{1,64})\/(\d{1,4})$/;
+var DEVICE_INSTANCE_RANDOM_BYTES = 8;
+var MAX_HOSTNAME_CHARS = 64;
+var MAX_HOOK_INDEX = 9999;
+var defaultDeviceIdDeps = {
+  hostname,
+  randomHex: (n) => randomBytes(n).toString("hex"),
+};
 //@ chunk-3jcjkxmq.js:494-542 placement
-function XRs(n = defaultDeviceIdDeps) {
+/**
+ * 生成新的设备实例 id（dev-<随机十六进制>）。
+ */
+function newDeviceInstanceId(n = defaultDeviceIdDeps) {
   return `dev-${n.randomHex(DEVICE_INSTANCE_RANDOM_BYTES)}`;
 }
+//@ chunk-3jcjkxmq.js:542-610 placement
 /**
  * 取主机名首段（截断）。
  */
-//@ chunk-3jcjkxmq.js:542-610 placement
 function shortHostname(n = defaultDeviceIdDeps) {
   let [t = ""] = n.hostname().split(".");
-  return FCt(t, MAX_HOSTNAME_CHARS);
+  return deviceSlugOrFallback(t, MAX_HOSTNAME_CHARS);
 }
 //@ chunk-3jcjkxmq.js:610-773 placement
-function formatDeviceHookId(n, t, e) {
+function formatDeviceHookId(instanceId, event, e) {
   if (
-    !DEVICE_INSTANCE_RE.test(n) ||
-    !HOOK_EVENT_RE.test(t) ||
+    !DEVICE_INSTANCE_RE.test(instanceId) ||
+    !HOOK_EVENT_RE.test(event) ||
     !Number.isInteger(e) ||
     e < 0 ||
     e > MAX_HOOK_INDEX
   )
     throw Error("cannot form a device hook id from these inputs");
-  return `${n}/${t}/${e}`;
+  return `${instanceId}/${event}/${e}`;
 }
+//@ chunk-3jcjkxmq.js:773-867 placement
 /**
  * 解析设备 hook id（实例、事件、序号）。
  */
-//@ chunk-3jcjkxmq.js:773-867 placement
-function parseDeviceHookId(n) {
-  let match = DEVICE_HOOK_ID_RE.exec(n);
-  return match ? { instanceId: match[1], event: match[2], index: Number(match[3]) } : null;
+function parseDeviceHookId(callbackId) {
+  let match = DEVICE_HOOK_ID_RE.exec(callbackId);
+  return match
+    ? {
+        instanceId: match[1],
+        event: match[2],
+        index: Number(match[3]),
+      }
+    : null;
 }
-
-export { parseDeviceHookId, shortHostname, formatDeviceHookId, XRs };
+export { parseDeviceHookId, shortHostname, formatDeviceHookId, newDeviceInstanceId };

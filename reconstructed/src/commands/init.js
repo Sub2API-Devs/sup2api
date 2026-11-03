@@ -11,12 +11,12 @@
 import { isImportEnabled, IMPORT_OFFER_INSTRUCTIONS, useNewInitPrompt } from "./import/index.js";
 import { env } from "../utils/env.js";
 
+//@ chunk-e6aww6q8.js:1698787-1722860 fingerprint = command (0.671)
 /**
  * getOldInitPrompt：同旧版 OLD_INIT_PROMPT。
  */
-//@ chunk-e6aww6q8.js:1698787-1722860 fingerprint = command (0.671)
 var getOldInitPrompt =
-    () => `Please analyze this codebase and create a CLAUDE.md file, which will be given to future instances of Claude Code to operate in this repository.
+  () => `Please analyze this codebase and create a CLAUDE.md file, which will be given to future instances of Claude Code to operate in this repository.
 
 What to add:
 1. Commands that will be commonly used, such as how to build, lint, and run tests. Include the necessary commands to develop in this codebase, such as how to run a single test.
@@ -29,11 +29,11 @@ Usage notes:
 - Don't include generic development practices.
 - If there are Cursor rules (in .cursor/rules/ or .cursorrules) or Copilot rules (in .github/copilot-instructions.md), make sure to include the important parts.
 - If there is a README.md, make sure to include the important parts.${
-      isImportEnabled()
-        ? `
+    isImportEnabled()
+      ? `
 - If you find an OpenAI Codex config (~/.codex/config.toml or ./.codex/) or a Gemini CLI config (~/.gemini/settings.json or ./.gemini/ or a GEMINI.md), ${IMPORT_OFFER_INSTRUCTIONS}`
-        : ""
-    }
+      : ""
+  }
 - Do not make up information such as "Common Development Tasks", "Tips for Development", "Support and Documentation" unless this is expressly included in other files that you read.
 - Be sure to prefix the file with the following text:
 
@@ -41,9 +41,9 @@ Usage notes:
 # CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-\`\`\``,
-  getNewInitPrompt =
-    () => `Set up a minimal CLAUDE.md (and optionally skills and hooks) for this repo. CLAUDE.md is loaded into every Claude Code session, so it must be concise \u2014 only include what Claude would get wrong without it.
+\`\`\``;
+var getNewInitPrompt =
+  () => `Set up a minimal CLAUDE.md (and optionally skills and hooks) for this repo. CLAUDE.md is loaded into every Claude Code session, so it must be concise \u2014 only include what Claude would get wrong without it.
 
 ## Phase 0: Check for an existing CLAUDE.md
 
@@ -271,31 +271,35 @@ Recap what was set up \u2014 which files were written and the key points include
 Then tell the user that you'll be introducing a few more suggestions for optimizing their codebase and Claude Code setup based on what you found. Present these as a single, well-formatted to-do list where every item is relevant to this repo. Put the most impactful items first.
 
 When building the list, work through these checks and include only what applies:${
-      isImportEnabled()
-        ? `
+    isImportEnabled()
+      ? `
 - If Phase 2 found Codex or Gemini CLI config: ${IMPORT_OFFER_INSTRUCTIONS} Put this first \u2014 it saves re-entering config they already have.`
-        : ""
-    }
+      : ""
+  }
 - If frontend code was detected (React, Vue, Svelte, etc.): \`/plugin install frontend-design@claude-plugins-official\` gives Claude design principles and component patterns so it produces polished UI; \`/plugin install playwright@claude-plugins-official\` lets Claude launch a real browser, screenshot what it built, and fix visual bugs itself.
 - If you found gaps in Phase 7 (missing GitHub CLI, missing linting) and the user said no: list them here with a one-line reason why each helps.
 - If tests are missing or sparse: suggest setting up a test framework so Claude can verify its own changes.
 - To help you create skills and optimize existing skills using evals, Claude Code has an official skill-creator plugin you can install. Install it with \`/plugin install skill-creator@claude-plugins-official\`, then run \`/skill-creator <skill-name>\` to create new skills or refine any existing skill. (Always include this one.)
-- Browse official plugins with \`/plugin\` \u2014 these bundle skills, agents, hooks, and MCP servers that you may find helpful. You can also create your own custom plugins to share them with others. (Always include this one.)`,
-  initCommandDefinition = {
-    type: "prompt",
-    name: "init",
-    get description() {
-      return env.CLAUDE_CODE_NEW_INIT
-        ? "Initialize new CLAUDE.md file(s) and optional skills/hooks with codebase documentation"
-        : "Initialize a new CLAUDE.md file with codebase documentation";
-    },
-    contentLength: 0,
-    progressMessage: "analyzing your codebase",
-    source: "builtin",
-    async getPromptForCommand() {
-      return [{ type: "text", text: useNewInitPrompt() ? getNewInitPrompt() : getOldInitPrompt() }];
-    },
+- Browse official plugins with \`/plugin\` \u2014 these bundle skills, agents, hooks, and MCP servers that you may find helpful. You can also create your own custom plugins to share them with others. (Always include this one.)`;
+var initCommandDefinition = {
+  type: "prompt",
+  name: "init",
+  get description() {
+    return env.CLAUDE_CODE_NEW_INIT
+      ? "Initialize new CLAUDE.md file(s) and optional skills/hooks with codebase documentation"
+      : "Initialize a new CLAUDE.md file with codebase documentation";
   },
-  initCommand = initCommandDefinition;
-
+  contentLength: 0,
+  progressMessage: "analyzing your codebase",
+  source: "builtin",
+  async getPromptForCommand() {
+    return [
+      {
+        type: "text",
+        text: useNewInitPrompt() ? getNewInitPrompt() : getOldInitPrompt(),
+      },
+    ];
+  },
+};
+var initCommand = initCommandDefinition;
 export { initCommand };

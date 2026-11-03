@@ -9,11 +9,11 @@
  * attribution: placement 19
  */
 import { createHash } from "crypto";
-import { normalize, normalize as normalize_2, normalize as normalize_3 } from "path";
+import { normalize } from "path";
 import { FILE_UNEXPECTEDLY_MODIFIED_ERROR } from "../tools/FileEditTool/constants.js";
 import { countCharInString } from "./stringUtils.js";
-import { Dc } from "../../vendor/lru-cache/dist/esm/index.min.js";
-import { Z2 } from "../bridge/deviceRegistration.js";
+import { LRUCache } from "../../vendor/lru-cache/dist/esm/index.min.js";
+import { isRemoteToolsForwardEnabled } from "../bridge/deviceRegistration.js";
 
 //@ chunk-82kqcve8.js:77723-77831 placement
 function contentDigest(e) {
@@ -23,42 +23,53 @@ function contentDigest(e) {
   };
 }
 //@ chunk-82kqcve8.js:77831-77919 placement
-function aFe(e, n) {
-  return Buffer.byteLength(n, "utf8") === e.bytes && contentDigest(n).sha256 === e.sha256;
+/**
+ * matchesContentDigest：内容与记录的大小和 sha256 一致。
+ */
+function matchesContentDigest(readBaseline, n) {
+  return (
+    Buffer.byteLength(n, "utf8") === readBaseline.bytes && contentDigest(n).sha256 === readBaseline.sha256
+  );
 }
 //@ chunk-82kqcve8.js:77919-78043 placement
 var FILE_MODIFIED_SINCE_READ_ERROR =
   "File has been modified since read, either by the user or by a linter. Read it again before attempting to write it.";
 //@ chunk-82kqcve8.js:78043-78220 placement
 function REMOTE_FILE_MODIFIED_ERROR(e) {
-  return e === void 0
+  return e === undefined
     ? FILE_MODIFIED_SINCE_READ_ERROR
     : `File has been modified on ${e} since this session read it. Read it again there (Read with "_host": "${e}") before attempting to write it.`;
 }
+//@ chunk-82kqcve8.js:78220-78382 placement
 /**
  * 文件自读取后被修改的错误文案（远程主机时提示用 _host 在该主机重新读取）。
  */
-//@ chunk-82kqcve8.js:78220-78382 placement
-function fileModifiedErrorFor(e) {
-  return e === void 0
+function fileModifiedErrorFor(servedOn) {
+  return servedOn === undefined
     ? FILE_UNEXPECTEDLY_MODIFIED_ERROR
-    : `File content on ${e} has changed since this session read it. Read it again there (Read with "_host": "${e}"), then retry.`;
+    : `File content on ${servedOn} has changed since this session read it. Read it again there (Read with "_host": "${servedOn}"), then retry.`;
 }
 //@ chunk-82kqcve8.js:78382-78414 placement
-var ZC = 5000,
-  Om = 26214400,
-  Dm = 4096;
+/**
+ * READ_FILE_STATE_CACHE_SIZE：读文件状态缓存的最大条目数；MAX_READ_FILE_CACHE_BYTES：读文件状态缓存的字节上限；MAX_INLINE_READ_CONTENT_BYTES：缓存里保留内容的字节上限（同一声明共 3 个绑定）。
+ */
+var READ_FILE_STATE_CACHE_SIZE = 5000;
+var MAX_READ_FILE_CACHE_BYTES = 26214400;
+var MAX_INLINE_READ_CONTENT_BYTES = 4096;
 //@ chunk-82kqcve8.js:78414-78462 placement
-function p9r(e) {
+/**
+ * contentHashOf：用 Bun.hash 计算内容哈希。
+ */
+function contentHashOf(e) {
   return Bun.hash(e).toString(36);
 }
+//@ chunk-82kqcve8.js:78462-78602 placement
 /**
  * 判断读取记录是否覆盖了整个文件（从开头读且未达行数上限、非部分视图）。
  */
-//@ chunk-82kqcve8.js:78462-78602 placement
 function isFullFileView(e) {
-  if ((e.offset ?? 1) > 1 || e.isPartialView) return !1;
-  if (e.limit === void 0) return !0;
+  if ((e.offset ?? 1) > 1 || e.isPartialView) return false;
+  if (e.limit === undefined) return true;
   return (
     e.content !== "" &&
     countCharInString(
@@ -71,38 +82,50 @@ function isFullFileView(e) {
   );
 }
 //@ chunk-82kqcve8.js:78602-78672 placement
-function Gie(e) {
-  return e !== void 0 && isFullFileView(e) && !e.contentNotInModelContext;
+/**
+ * hasFullFileContent：读取记录含完整文件内容。
+ */
+function hasFullFileContent(e) {
+  return e !== undefined && isFullFileView(e) && !e.contentNotInModelContext;
 }
 //@ chunk-82kqcve8.js:78672-78766 placement
-function y1(e, n) {
-  if (e.contentHash !== void 0) return e.contentHash === p9r(n);
+/**
+ * matchesContentHash：内容哈希或原文与记录一致。
+ */
+function matchesContentHash(e, n) {
+  if (e.contentHash !== undefined) return e.contentHash === contentHashOf(n);
   return e.content === n;
 }
+//@ chunk-82kqcve8.js:78766-78867 placement
 /**
  * 判断当前文件内容是否与读取记录一致（来自转录的内容允许末尾多一个换行）。
  */
-//@ chunk-82kqcve8.js:78766-78867 placement
 function matchesReadContent(e, n) {
   return (
-    Ia(e, n) ||
-    (e.contentFromTranscript === !0 &&
+    matchesReadBaseline(e, n) ||
+    (e.contentFromTranscript === true &&
       n.endsWith(`
 `) &&
-      Ia(e, n.slice(0, -1)))
+      matchesReadBaseline(e, n.slice(0, -1)))
   );
 }
 //@ chunk-82kqcve8.js:78867-78945 placement
-function Ia(e, n) {
-  return e.readBaseline !== void 0 ? aFe(e.readBaseline, n) : y1(e, n);
+function matchesReadBaseline(e, n) {
+  return e.readBaseline !== undefined ? matchesContentDigest(e.readBaseline, n) : matchesContentHash(e, n);
 }
 //@ chunk-82kqcve8.js:78945-79004 placement
-function tv(e) {
+/**
+ * stripBom：去掉文件开头的 BOM。
+ */
+function stripBom(e) {
   return e.charCodeAt(0) === 65279 ? e.slice(1) : e;
 }
 //@ chunk-82kqcve8.js:79004-79054 placement
-function __(e) {
-  return tv(e).replaceAll(
+/**
+ * stripBomAndCarriageReturn：去掉 BOM 与裸回车。
+ */
+function stripBomAndCarriageReturn(e) {
+  return stripBom(e).replaceAll(
     `\r
 `,
     `
@@ -110,8 +133,11 @@ function __(e) {
   );
 }
 //@ chunk-82kqcve8.js:79054-79091 placement
-function Bir(e, n) {
-  return y1(e, __(n));
+/**
+ * matchesNormalizedContent：规范化后内容一致。
+ */
+function matchesNormalizedContent(e, n) {
+  return matchesContentHash(e, stripBomAndCarriageReturn(n));
 }
 //@ chunk-82kqcve8.js:79091-80746 placement
 class RemoteFileState {
@@ -119,66 +145,67 @@ class RemoteFileState {
   cache;
   everHeld = new Set();
   startOnly = new Set();
-  constructor(e, n, r = !1) {
-    this.keepsReadBaselines = r;
-    this.cache = new Dc({
-      max: e,
-      maxSize: n,
+  constructor(max, maxSize, keepsReadBaselines = false) {
+    this.keepsReadBaselines = keepsReadBaselines;
+    this.cache = new LRUCache({
+      max,
+      maxSize,
       sizeCalculation: (s) => Math.max(1, Buffer.byteLength(s.content)),
     });
   }
   get(e) {
-    return this.cache.get(normalize_3(e));
+    return this.cache.get(normalize(e));
   }
   markStartOnly(e) {
-    this.startOnly.add(normalize_3(e));
+    this.startOnly.add(normalize(e));
   }
   startOnlyPaths() {
     return [...this.startOnly];
   }
   holdsOnlyStartOf(e) {
-    let n = normalize_3(e);
-    return this.startOnly.has(n) && !Gie(this.cache.get(n));
+    let n = normalize(e);
+    return this.startOnly.has(n) && !hasFullFileContent(this.cache.get(n));
   }
   set(e, n) {
-    let r = normalize_3(e),
-      s = this.cache.get(r),
-      h = n.keepContent ?? s?.keepContent,
-      y = n.contentHash ?? p9r(n.content),
-      w = n.contentLength ?? n.content.length,
-      S = n.content !== "" || n.contentHash === void 0,
-      R = !(this.keepsReadBaselines || Z2())
-        ? void 0
-        : S && !n.contentFromTranscript && isFullFileView(n)
-          ? contentDigest(n.content)
-          : (n.readBaseline ?? (y === s?.contentHash ? s?.readBaseline : void 0)),
-      O = h && n.content === "" && y === s?.contentHash && s.content ? s.content : n.content,
-      P = h || Buffer.byteLength(O) <= Dm ? O : "";
-    return (
-      this.cache.set(r, {
-        ...n,
-        keepContent: h,
-        contentHash: y,
-        contentLength: w,
-        content: P,
-        readBaseline: R,
-      }),
-      this.remember(r),
-      this
-    );
+    let r = normalize(e);
+    let s = this.cache.get(r);
+    let keepContent = n.keepContent ?? s?.keepContent;
+    let y = n.contentHash ?? contentHashOf(n.content);
+    let contentLength = n.contentLength ?? n.content.length;
+    let S = n.content !== "" || n.contentHash === undefined;
+    let readBaseline = !(this.keepsReadBaselines || isRemoteToolsForwardEnabled())
+      ? undefined
+      : S && !n.contentFromTranscript && isFullFileView(n)
+        ? contentDigest(n.content)
+        : (n.readBaseline ?? (y === s?.contentHash ? s?.readBaseline : undefined));
+    let content =
+      keepContent && n.content === "" && y === s?.contentHash && s.content ? s.content : n.content;
+    let content_2 = keepContent || Buffer.byteLength(content) <= MAX_INLINE_READ_CONTENT_BYTES ? content : "";
+    this.cache.set(r, {
+      ...n,
+      keepContent,
+      contentHash: y,
+      contentLength,
+      content: content_2,
+      readBaseline,
+    });
+    this.remember(r);
+    return this;
   }
   remember(e) {
-    if ((this.everHeld.delete(e), this.everHeld.add(e), this.everHeld.size > this.cache.max))
+    this.everHeld.delete(e);
+    this.everHeld.add(e);
+    if (this.everHeld.size > this.cache.max)
       for (let n of this.everHeld) {
         this.everHeld.delete(n);
         break;
       }
   }
   has(e) {
-    return this.cache.has(normalize_3(e));
+    return this.cache.has(normalize(e));
   }
   delete(e) {
-    return this.cache.delete(normalize_3(e));
+    return this.cache.delete(normalize(e));
   }
   clear() {
     this.cache.clear();
@@ -213,32 +240,40 @@ class RemoteFileState {
   }
 }
 //@ chunk-82kqcve8.js:80746-80792 placement
-function nv(e, n = Om, r = !1) {
-  return new RemoteFileState(e, n, r);
+/**
+ * createRemoteFileState：创建远程文件读取状态。
+ */
+function createRemoteFileState(max, maxSize = MAX_READ_FILE_CACHE_BYTES, keepsReadBaselines = false) {
+  return new RemoteFileState(max, maxSize, keepsReadBaselines);
 }
 //@ chunk-82kqcve8.js:80792-80847 placement
-function jir(e) {
-  return Object.fromEntries(e.entries());
+/**
+ * remoteFileStateToObject：读文件状态转普通对象。
+ */
+function remoteFileStateToObject(readFileState) {
+  return Object.fromEntries(readFileState.entries());
 }
 //@ chunk-82kqcve8.js:80847-80891 placement
-function bAt(e) {
-  return Array.from(e.keys());
+/**
+ * remoteFileStateKeys：读文件状态的路径列表。
+ */
+function remoteFileStateKeys(readFileState) {
+  return Array.from(readFileState.keys());
 }
-
 export {
-  nv,
-  p9r,
-  __,
-  tv,
-  ZC,
-  y1,
+  createRemoteFileState,
+  contentHashOf,
+  stripBomAndCarriageReturn,
+  stripBom,
+  READ_FILE_STATE_CACHE_SIZE,
+  matchesContentHash,
   isFullFileView,
-  bAt,
-  Gie,
+  remoteFileStateKeys,
+  hasFullFileContent,
   matchesReadContent,
-  jir,
-  aFe,
+  remoteFileStateToObject,
+  matchesContentDigest,
   fileModifiedErrorFor,
   REMOTE_FILE_MODIFIED_ERROR,
-  Bir,
+  matchesNormalizedContent,
 };

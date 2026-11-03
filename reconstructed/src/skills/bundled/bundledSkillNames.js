@@ -8,30 +8,31 @@
  * pieces: chunk-0y0w50mr.js (3)
  * attribution: placement 3
  */
-
 //@ chunk-0y0w50mr.js:191-271 placement
-var ARTIFACT_DESIGN = "artifact-design",
-  ARTIFACT_DIAGRAMMING = "artifact-diagramming",
-  ARTIFACT_CAPABILITIES = "artifact-capabilities";
+var ARTIFACT_DESIGN = "artifact-design";
+var ARTIFACT_DIAGRAMMING = "artifact-diagramming";
+var ARTIFACT_CAPABILITIES = "artifact-capabilities";
 //@ chunk-0y0w50mr.js:271-489 placement
-var DATAVIZ = "dataviz",
-  DESIGN = "design",
-  DESIGN_SYNC = "design-sync",
-  CODE_REVIEW = "code-review",
-  VERIFY = "verify",
-  SIMPLIFY = "simplify",
-  COMMIT = "commit",
-  JSn = "pr",
-  COMMIT_PUSH_PR = "commit-push-pr",
-  COWORK_PLUGIN = "cowork-plugin",
-  EXPLAIN_USAGE = "explain-usage",
-  SETUP_CLAUDE = "setup-claude",
-  SECURITY_REVIEW = "security-review";
+/**
+ * 内置技能名常量表中的 pr 技能名。
+ */
+var DATAVIZ = "dataviz";
+var DESIGN = "design";
+var DESIGN_SYNC = "design-sync";
+var CODE_REVIEW = "code-review";
+var VERIFY = "verify";
+var SIMPLIFY = "simplify";
+var COMMIT = "commit";
+var PR_SKILL_NAME = "pr";
+var COMMIT_PUSH_PR = "commit-push-pr";
+var COWORK_PLUGIN = "cowork-plugin";
+var EXPLAIN_USAGE = "explain-usage";
+var SETUP_CLAUDE = "setup-claude";
+var SECURITY_REVIEW = "security-review";
 //@ chunk-0y0w50mr.js:489-543 placement
-var LOOP = "loop",
-  SCHEDULE = "schedule",
-  WORKFLOW_AUTHORING = "workflow-authoring";
-
+var LOOP = "loop";
+var SCHEDULE = "schedule";
+var WORKFLOW_AUTHORING = "workflow-authoring";
 export {
   WORKFLOW_AUTHORING,
   ARTIFACT_CAPABILITIES,
@@ -46,7 +47,7 @@ export {
   COMMIT,
   VERIFY,
   SIMPLIFY,
-  JSn,
+  PR_SKILL_NAME,
   COMMIT_PUSH_PR,
   SECURITY_REVIEW,
   DATAVIZ,

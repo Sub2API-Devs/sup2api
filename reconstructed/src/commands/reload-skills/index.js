@@ -8,19 +8,17 @@
  * pieces: chunk-e6aww6q8.js (1)
  * attribution: placement 1
  */
-
+//@ chunk-e6aww6q8.js:2030344-2030566 placement
 /**
  * /reload-skills 命令对象（local）；描述：Pick up skills added or changed on disk during this session；实现 chunk-9dc848ph.js 的 M。
  */
-//@ chunk-e6aww6q8.js:2030344-2030566 placement
 var reloadSkillsCommandDefinition = {
-    type: "local",
-    name: "reload-skills",
-    description: "Pick up skills added or changed on disk during this session",
-    supportsNonInteractive: !0,
-    thinClientDispatch: "post-text",
-    load: () => import("./chunk-9dc848ph.js"),
-  },
-  reloadSkillsCommand = reloadSkillsCommandDefinition;
-
+  type: "local",
+  name: "reload-skills",
+  description: "Pick up skills added or changed on disk during this session",
+  supportsNonInteractive: true,
+  thinClientDispatch: "post-text",
+  load: () => import("./chunk-9dc848ph.js"),
+};
+var reloadSkillsCommand = reloadSkillsCommandDefinition;
 export { reloadSkillsCommand };

@@ -10,54 +10,71 @@
  */
 import { resolve } from "path";
 import { open, realpath, stat } from "fs/promises";
-import { Wo, safeParseJSON } from "../utils/json.js";
+import { stripBom, safeParseJSON } from "../utils/json.js";
 import { nonblockingReadFlags } from "../utils/fsOperations.js";
 import { assertSingleLink, readFileHandleChecked } from "../utils/fileRead.js";
 import { getErrnoCode, errorMessage } from "../utils/errors.js";
 
 //@ chunk-r6sb8a4p.js:435-606 placement
 var AGENTS_FLAG_FILE_REQUIRES_PRINT =
-    "Error: --agents takes a JSON object, or a file path only with --print (-p). Pass the agents as inline JSON, or run with -p to read them from a file.",
-  s = 268435456;
+  "Error: --agents takes a JSON object, or a file path only with --print (-p). Pass the agents as inline JSON, or run with -p to read them from a file.";
+var MAX_AGENTS_FLAG_FILE_BYTES = 268435456;
 //@ chunk-r6sb8a4p.js:606-688 placement
 function looksLikeAgentsJson(t) {
-  let trimStart = Wo(t).trimStart();
-  return trimStart.startsWith("{") || safeParseJSON(trimStart, !1) !== null;
+  let e = stripBom(t).trimStart();
+  return e.startsWith("{") || safeParseJSON(e, false) !== null;
 }
+//@ chunk-r6sb8a4p.js:688-1532 placement
 /**
  * 安全读取 --agents 指定的 JSON 文件：拒绝多硬链接、读取期间被改动的文件，限制大小。
  */
-//@ chunk-r6sb8a4p.js:688-1532 placement
-async function readAgentsFlagFile(t) {
-  let e = resolve(t);
+async function readAgentsFlagFile(agents) {
+  let path = resolve(agents);
   try {
-    await using r = await open(e, nonblockingReadFlags());
-    let stats = await r.stat({ bigint: !0 });
-    assertSingleLink(stats, e);
-    let o = await realpath(e).catch(() => e),
-      n = await stat(o, { bigint: !0 });
+    await using r = await open(path, nonblockingReadFlags());
+    let stats = await r.stat({
+      bigint: true,
+    });
+    assertSingleLink(stats, path);
+    let o = await realpath(path).catch(() => path);
+    let n = await stat(o, {
+      bigint: true,
+    });
     if (n.dev !== stats.dev || n.ino !== stats.ino)
-      return { ok: !1, error: `Error: --agents file changed while it was read: ${e}` };
-    let { content: content } = await readFileHandleChecked(r, e, s);
-    return { ok: !0, json: content, filePath: e, realPath: o };
+      return {
+        ok: false,
+        error: `Error: --agents file changed while it was read: ${path}`,
+      };
+    let { content } = await readFileHandleChecked(r, path, MAX_AGENTS_FLAG_FILE_BYTES);
+    return {
+      ok: true,
+      json: content,
+      filePath: path,
+      realPath: o,
+    };
   } catch (error) {
     switch (getErrnoCode(error)) {
       case "ENOENT":
         return {
-          ok: !1,
-          error: `Error: --agents file not found: ${e} (a value that is not a JSON object is read as a file path)`,
+          ok: false,
+          error: `Error: --agents file not found: ${path} (a value that is not a JSON object is read as a file path)`,
         };
       case "ERR_FILE_TOO_LARGE":
-        return { ok: !1, error: `Error: --agents file is larger than ${s} bytes: ${e}` };
+        return {
+          ok: false,
+          error: `Error: --agents file is larger than ${MAX_AGENTS_FLAG_FILE_BYTES} bytes: ${path}`,
+        };
       case "ERR_MULTIPLE_LINKS":
         return {
-          ok: !1,
-          error: `Error: --agents file has more than one hard link: ${e} (its other names are not write-protected; pass a file with one name)`,
+          ok: false,
+          error: `Error: --agents file has more than one hard link: ${path} (its other names are not write-protected; pass a file with one name)`,
         };
       default:
-        return { ok: !1, error: `Error reading --agents file ${e}: ${errorMessage(error)}` };
+        return {
+          ok: false,
+          error: `Error reading --agents file ${path}: ${errorMessage(error)}`,
+        };
     }
   }
 }
-
 export { looksLikeAgentsJson, AGENTS_FLAG_FILE_REQUIRES_PRINT, readAgentsFlagFile };

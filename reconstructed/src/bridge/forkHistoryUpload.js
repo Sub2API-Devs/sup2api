@@ -12,9 +12,9 @@ import { randomUUID } from "crypto";
 import { sliceTailKeepingGroups } from "./remoteBridgeArchive.js";
 import { isEligibleBridgeMessage } from "./bridgeMessaging.js";
 import { createRemoteBridgeRedactor } from "./remoteBridgeSettle.js";
-import { HNo } from "./remoteBridgeCloseCodes.js";
+import { strayDropMode } from "./remoteBridgeCloseCodes.js";
 import { createMemoryServerVerifier } from "../services/mcp/memoryServerVerification.js";
-import { qHt } from "../utils/transcriptWithholding.js";
+import { hasRecordedTextForHost } from "../utils/transcriptWithholding.js";
 import { toSDKMessages } from "../utils/messages/mappers.js";
 import { DISPLAY_ONLY } from "./controlRequests.js";
 import { sendSessionHistoryEvents, prepareApiRequest, trustedDeviceHeaders } from "../utils/teleport/api.js";
@@ -27,39 +27,48 @@ import { getOauthConfig } from "../constants/oauth.js";
 import { isCcrV2SessionCrudEnabled } from "./bridgeGates.js";
 
 //@ chunk-vx1xamz5.js:716-726 placement
-var y = 200;
+var MAX_FORK_HISTORY_MESSAGES = 200;
+//@ chunk-vx1xamz5.js:726-1320 placement
 /**
  * Remote Control 分叉会话上传显示历史，失败时发通知并归档。
  */
-//@ chunk-vx1xamz5.js:726-1320 placement
-async function uploadForkDisplayHistory(o, r, e, i, s, u) {
-  let p = sliceTailKeepingGroups(r.filter(isEligibleBridgeMessage), y),
-    g = void 0,
-    a = createRemoteBridgeRedactor({
-      mode: HNo,
-      placeAccountMemoryTool: createMemoryServerVerifier(() => u),
-      accountMemoryInPlay: () => qHt(s),
-    });
-  a.note(r);
-  let flattened = a
-    .redact(toSDKMessages(a.withoutMemoryCallAttachments(p), void 0))
+async function uploadForkDisplayHistory(o, r, e, i, host, tools) {
+  let p = sliceTailKeepingGroups(r.filter(isEligibleBridgeMessage), MAX_FORK_HISTORY_MESSAGES);
+  let g = undefined;
+  let remoteBridgeRedactor = createRemoteBridgeRedactor({
+    mode: strayDropMode,
+    placeAccountMemoryTool: createMemoryServerVerifier(() => tools),
+    accountMemoryInPlay: () => hasRecordedTextForHost(host),
+  });
+  remoteBridgeRedactor.note(r);
+  let flattened = remoteBridgeRedactor
+    .redact(toSDKMessages(remoteBridgeRedactor.withoutMemoryCallAttachments(p), undefined))
     .flatMap((m) =>
-      typeof m.uuid === "string" ? [{ ...m, uuid: m.uuid, session_id: o, [DISPLAY_ONLY]: !0 }] : [],
+      typeof m.uuid === "string"
+        ? [
+            {
+              ...m,
+              uuid: m.uuid,
+              session_id: o,
+              [DISPLAY_ONLY]: true,
+            },
+          ]
+        : [],
     );
   if (flattened.length === 0) return null;
   let n = await sendSessionHistoryEvents(toInfraSessionId(o), flattened, e);
-  if (!n.ok || n.droppedEvents === flattened.length)
-    return (
-      logForDebugging(`[rc-fork] History upload to ${o} failed: ${n.ok ? "every event refused" : n.reason}`, {
-        level: "error",
-      }),
-      "history_upload_failed"
-    );
+  if (!n.ok || n.droppedEvents === flattened.length) {
+    logForDebugging(`[rc-fork] History upload to ${o} failed: ${n.ok ? "every event refused" : n.reason}`, {
+      level: "error",
+    });
+    return "history_upload_failed";
+  }
   if (n.droppedEvents > 0) logFeatureSad(i, "history_events_dropped");
   return null;
 }
 //@ chunk-vx1xamz5.js:1320-1408 placement
-var v = "This forked session could not be started. Fork the conversation again to retry.";
+var FORK_FAILED_NOTICE_TEXT =
+  "This forked session could not be started. Fork the conversation again to retry.";
 //@ chunk-vx1xamz5.js:1408-1785 placement
 async function postForkFailureNotice(o, r) {
   try {
@@ -69,11 +78,11 @@ async function postForkFailureNotice(o, r) {
         {
           type: "system",
           subtype: "informational",
-          content: v,
+          content: FORK_FAILED_NOTICE_TEXT,
           level: "warning",
           uuid: randomUUID(),
           session_id: o,
-          [DISPLAY_ONLY]: !0,
+          [DISPLAY_ONLY]: true,
         },
       ],
       r,
@@ -81,7 +90,9 @@ async function postForkFailureNotice(o, r) {
     if (!e.ok || e.droppedEvents > 0)
       logForDebugging(
         `[rc-fork] Could not post the failure notice to ${o}: ${e.ok ? "event refused" : e.reason}`,
-        { level: "warn" },
+        {
+          level: "warn",
+        },
       );
   } catch (error) {
     logForDebugging(`[rc-fork] Could not post the failure notice to ${o}: ${errorMessage(error)}`, {
@@ -89,25 +100,26 @@ async function postForkFailureNotice(o, r) {
     });
   }
 }
+//@ chunk-vx1xamz5.js:1785-2171 placement = fetchReferralRedemptions (0.233)
 /**
  * 远程控制分叉时尝试登记推荐兑换。
  */
-//@ chunk-vx1xamz5.js:1785-2171 placement = fetchReferralRedemptions (0.233)
 async function archiveAbandonedForkSession(o, r) {
   try {
-    let { accessToken: accessToken, orgUUID: orgUUID } = await prepareApiRequest(r),
-      s = await archiveCodeSession(getOauthConfig().BASE_API_URL, accessToken, o, 1e4, {
-        useV2: isCcrV2SessionCrudEnabled(),
-        orgUUID: orgUUID,
-        trustedDeviceToken: (await trustedDeviceHeaders())["X-Trusted-Device-Token"],
-      });
+    let { accessToken, orgUUID } = await prepareApiRequest(r);
+    let s = await archiveCodeSession(getOauthConfig().BASE_API_URL, accessToken, o, 1e4, {
+      useV2: isCcrV2SessionCrudEnabled(),
+      orgUUID,
+      trustedDeviceToken: (await trustedDeviceHeaders())["X-Trusted-Device-Token"],
+    });
     if (s !== 200 && s !== 409)
-      logForDebugging(`[rc-fork] Could not archive abandoned fork session ${o}: ${s}`, { level: "warn" });
+      logForDebugging(`[rc-fork] Could not archive abandoned fork session ${o}: ${s}`, {
+        level: "warn",
+      });
   } catch (error) {
     logForDebugging(`[rc-fork] Could not archive abandoned fork session ${o}: ${errorMessage(error)}`, {
       level: "warn",
     });
   }
 }
-
 export { uploadForkDisplayHistory, archiveAbandonedForkSession, postForkFailureNotice };

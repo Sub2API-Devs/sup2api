@@ -9,7 +9,7 @@
  * attribution: callgraph-fingerprint 1, facade-exports 4, placement 1
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { A, u, o } from "../../../vendor/zod/v4/classic/schemas.js";
+import { array, u, string } from "../../../vendor/zod/v4/classic/schemas.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../analytics/growthbook.js";
 import { isPolicyAllowed, policyDenyKind } from "../policyLimits/policyEvidence.js";
 import { parsePluginIdentifier_2, marketplaceOf } from "../../utils/plugins/pluginIdentifier.js";
@@ -17,54 +17,61 @@ import { INLINE_PLUGIN_MARKETPLACE } from "../../utils/telemetry/pluginTelemetry
 import { findChannelEntry, isPluginNamedByChannelEntry } from "./channelNotification.js";
 import { getAllowedChannels } from "../../bootstrap/state.js";
 
+//@ chunk-124m26t7.js:375-423 callgraph-fingerprint = ChannelAllowlistSchema (0.366)
 /**
  * ChannelAllowlistSchema：GrowthBook tengu_harbor_ledger 的形状 [{marketplace, plugin}]。
  */
-//@ chunk-124m26t7.js:375-423 callgraph-fingerprint = ChannelAllowlistSchema (0.366)
-var ChannelAllowlistSchema = DoctorLazy(() => A(u({ marketplace: o(), plugin: o() })));
+var ChannelAllowlistSchema = DoctorLazy(() =>
+  array(
+    u({
+      marketplace: string(),
+      plugin: string(),
+    }),
+  ),
+);
+//@ chunk-124m26t7.js:423-518 facade-exports = getChannelAllowlist (1)
 /**
  * getChannelAllowlist：读 GrowthBook tengu_harbor_ledger 并校验，失败返回空数组。
  */
-//@ chunk-124m26t7.js:423-518 facade-exports = getChannelAllowlist (1)
 function getChannelAllowlist() {
-  let raw = getFeatureValue_CACHED_MAY_BE_STALE("tengu_harbor_ledger", []),
-    parsed = ChannelAllowlistSchema().safeParse(raw);
+  let raw = getFeatureValue_CACHED_MAY_BE_STALE("tengu_harbor_ledger", []);
+  let parsed = ChannelAllowlistSchema().safeParse(raw);
   return parsed.success ? parsed.data : [];
 }
+//@ chunk-124m26t7.js:518-582 facade-exports = isChannelsEnabled (0.673)
 /**
  * isChannelsEnabled：dn("allow_channels") 且 GrowthBook tengu_harbor 为真。
  */
-//@ chunk-124m26t7.js:518-582 facade-exports = isChannelsEnabled (0.673)
 function isChannelsEnabled() {
-  return isPolicyAllowed("allow_channels") && getFeatureValue_CACHED_MAY_BE_STALE("tengu_harbor", !1);
+  return isPolicyAllowed("allow_channels") && getFeatureValue_CACHED_MAY_BE_STALE("tengu_harbor", false);
 }
+//@ chunk-124m26t7.js:582-713 facade-exports
 /**
  * 判断本会话 channel 功能是否关闭：GrowthBook `tengu_harbor` 未开则关闭；否则看组织下发的 `allow_channels`，有明确值（非 cache_miss/route_missing）即视为关闭。
  */
-//@ chunk-124m26t7.js:582-713 facade-exports
 function isChannelsOffForSession() {
-  if (!getFeatureValue_CACHED_MAY_BE_STALE("tengu_harbor", !1)) return !0;
+  if (!getFeatureValue_CACHED_MAY_BE_STALE("tengu_harbor", false)) return true;
   let e = policyDenyKind("allow_channels");
   return e !== null && e !== "cache_miss" && e !== "route_missing";
 }
+//@ chunk-124m26t7.js:713-847 facade-exports = getVersionedCachePathIn (0.472)
 /**
  * 在指定插件根目录下拼版本化缓存路径（cache/<marketplace>/<plugin>/<version>，名字经转义）。
  */
-//@ chunk-124m26t7.js:713-847 facade-exports = getVersionedCachePathIn (0.472)
-function isChannelAllowlisted(e) {
-  if (!e) return !1;
-  let { name: pluginName, marketplace: marketplace } = parsePluginIdentifier_2(e);
-  if (!marketplace) return !1;
+function isChannelAllowlisted(pluginSource) {
+  if (!pluginSource) return false;
+  let { name: pluginName, marketplace } = parsePluginIdentifier_2(pluginSource);
+  if (!marketplace) return false;
   return getChannelAllowlist().some((t) => t.plugin === pluginName && t.marketplace === marketplace);
 }
 //@ chunk-4q6mp9e8.js:987-1153 placement
 function isChannelPluginAllowed(n, e) {
-  if (e.pluginSource !== void 0 && marketplaceOf(e.pluginSource) === INLINE_PLUGIN_MARKETPLACE) return !0;
-  let u = findChannelEntry(n, getAllowedChannels());
-  if (u === void 0) return !1;
-  return u.kind === "server" || isPluginNamedByChannelEntry(e.pluginSource, u);
+  if (e.pluginSource !== undefined && marketplaceOf(e.pluginSource) === INLINE_PLUGIN_MARKETPLACE)
+    return true;
+  let channelEntry = findChannelEntry(n, getAllowedChannels());
+  if (channelEntry === undefined) return false;
+  return channelEntry.kind === "server" || isPluginNamedByChannelEntry(e.pluginSource, channelEntry);
 }
-
 export {
   getChannelAllowlist,
   isChannelsOffForSession,

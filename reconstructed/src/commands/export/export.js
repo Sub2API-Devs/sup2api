@@ -10,104 +10,115 @@
  */
 import { extname, dirname } from "path";
 import { mkdir, writeFile } from "fs/promises";
-import { j } from "../../../vendor/react/cjs/react.production.js";
+import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
 import { getCaps, getOriginalCwd } from "../../bootstrap/state.js";
 import { expandPath } from "../../utils/path.js";
 import { renderMessagesToPlainText } from "../../utils/exportRenderer.js";
 import { logFeatureOk, logFeatureBad } from "../../services/analytics/featureTelemetry.js";
-import { e } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { ExportDialog } from "../../components/ExportDialog.js";
-import { t7 } from "../../utils/messages/pluginPrompts.js";
+import { renderPluginPromptColon } from "../../utils/messages/pluginPrompts.js";
 import { getFirstLine } from "../../utils/stringUtils.js";
 import {
   getSubcommandPrefix,
   countSafeEnvPrefix,
   BARE_SHELL_PREFIXES,
 } from "../../tools/BashTool/bashPermissions.js";
-import { MH } from "../../utils/shell/specPrefix.js";
+import { noAdditionalDepthRule } from "../../utils/shell/specPrefix.js";
 
 //@ chunk-am3vy82s.js:18513-18517 placement
-j();
+init_react_production();
 //@ chunk-am3vy82s.js:18616-18716 placement
-function resolveExportPath(a) {
-  let o = extname(a) === "" ? `${a}.txt` : a,
-    l = getCaps().workspace === "remote" ? getOriginalCwd() : void 0;
+function resolveExportPath(agentType) {
+  let o = extname(agentType) === "" ? `${agentType}.txt` : agentType;
+  let l = getCaps().workspace === "remote" ? getOriginalCwd() : undefined;
   return expandPath(o, l);
 }
+//@ chunk-am3vy82s.js:18716-18832 placement = copySnapshotToLocal (0.77)
 /**
  * /export 命令：写出文件（flush）并返回路径。
  */
-//@ chunk-am3vy82s.js:18716-18832 placement = copySnapshotToLocal (0.77)
 async function writeExportFile(agentType, scope) {
   let snapshotMemDir = resolveExportPath(agentType);
-  return (
-    await mkdir(dirname(snapshotMemDir), { recursive: !0 }),
-    await writeFile(snapshotMemDir, scope, { encoding: "utf-8", flush: !0 }),
-    snapshotMemDir
-  );
+  await mkdir(dirname(snapshotMemDir), {
+    recursive: true,
+  });
+  await writeFile(snapshotMemDir, scope, {
+    encoding: "utf-8",
+    flush: true,
+  });
+  return snapshotMemDir;
 }
+//@ chunk-am3vy82s.js:21471-21916 fingerprint = call (0.574)
 /**
  * /export 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
  */
-//@ chunk-am3vy82s.js:21471-21916 fingerprint = call (0.574)
 async function call(onDone, context, args) {
-  let t = await renderMessagesToPlainText(context.session, context.messages, context.options.tools || [], {
+  let content = await renderMessagesToPlainText(
+    context.session,
+    context.messages,
+    context.options.tools || [],
+    {
       storageV5: context.storageV5,
-    }),
-    filename = args.trim();
+    },
+  );
+  let filename = args.trim();
   if (filename) {
     try {
-      let f = await writeExportFile(filename, t);
-      (logFeatureOk("export_file"), onDone(`Conversation exported to: ${f}`));
+      let f = await writeExportFile(filename, content);
+      logFeatureOk("export_file");
+      onDone(`Conversation exported to: ${f}`);
     } catch (error) {
-      (logFeatureBad("export_file", "write_failed"),
-        onDone(`Failed to export conversation: ${error instanceof Error ? error.message : "Unknown error"}`));
+      logFeatureBad("export_file", "write_failed");
+      onDone(`Failed to export conversation: ${error instanceof Error ? error.message : "Unknown error"}`);
     }
     return null;
   }
-  let p = getExportFilename(context.messages, new Date(), "shown");
-  return e(ExportDialog, {
-    content: t,
-    defaultFilename: p,
+  let defaultFilename = getExportFilename(context.messages, new Date(), "shown");
+  return jsxProd_default(ExportDialog, {
+    content,
+    defaultFilename,
     onDone: (result) => {
       onDone(result.message);
     },
   });
 }
+//@ chunk-x1p3yktn.js:263-373 affinity
 /**
  * getExportFilename：时间戳-首条提示.txt 或 conversation-时间戳.txt。
  */
-//@ chunk-x1p3yktn.js:263-373 affinity
-function getExportFilename(e, o = new Date(), n = "stored") {
-  let r = formatTimestamp(o),
-    t = sanitizeFilename(getFirstPromptSummary(e, n));
+function getExportFilename(messages, date = new Date(), n = "stored") {
+  let r = formatTimestamp(date);
+  let t = sanitizeFilename(getFirstPromptSummary(messages, n));
   return t ? `${r}-${t}.txt` : `conversation-${r}.txt`;
 }
 //@ chunk-x1p3yktn.js:373-645 fingerprint = formatTimestamp (1)
 function formatTimestamp(date) {
-  let year = date.getFullYear(),
-    month = String(date.getMonth() + 1).padStart(2, "0"),
-    day = String(date.getDate()).padStart(2, "0"),
-    hours = String(date.getHours()).padStart(2, "0"),
-    minutes = String(date.getMinutes()).padStart(2, "0"),
-    seconds = String(date.getSeconds()).padStart(2, "0");
+  let year = date.getFullYear();
+  let month = String(date.getMonth() + 1).padStart(2, "0");
+  let day = String(date.getDate()).padStart(2, "0");
+  let hours = String(date.getHours()).padStart(2, "0");
+  let minutes = String(date.getMinutes()).padStart(2, "0");
+  let seconds = String(date.getSeconds()).padStart(2, "0");
   return `${year}-${month}-${day}-${hours}${minutes}${seconds}`;
 }
+//@ chunk-x1p3yktn.js:645-1017 layout
 /**
  * 取首条用户消息（非伴随消息）的首行文本，超过 50 字符截断，可选按显示形式渲染。
  */
-//@ chunk-x1p3yktn.js:645-1017 layout
 function getFirstPromptSummary(e, o = "stored") {
-  let found = e.find((s) => s.type === "user" && s.turnCompanion !== !0);
+  let found = e.find((s) => s.type === "user" && s.turnCompanion !== true);
   if (!found || found.type !== "user") return "";
-  let r = found.message?.content,
-    t = "";
-  if (typeof r === "string") t = (o === "shown" ? t7(r, found.pluginPrompt) : r).trim();
-  else if (Array.isArray(r)) {
-    let last = r.findLast((i) => i.type === "text");
+  let content = found.message?.content;
+  let t = "";
+  if (typeof content === "string")
+    t = (o === "shown" ? renderPluginPromptColon(content, found.pluginPrompt) : content).trim();
+  else if (Array.isArray(content)) {
+    let last = content.findLast((i) => i.type === "text");
     if (last && "text" in last) t = last.text.trim();
   }
-  if (((t = getFirstLine(t)), t.length > 50)) t = t.substring(0, 49) + "\u2026";
+  t = getFirstLine(t);
+  if (t.length > 50) t = t.substring(0, 49) + "\u2026";
   return t;
 }
 //@ chunk-x1p3yktn.js:1017-1142 file-local
@@ -126,33 +137,27 @@ function extractFirstPrompt_2(messages) {
   if (index <= 0) return null;
   let trimmed = messages.substring(0, index).trim();
   if (!trimmed) return null;
-  let s = getSubcommandPrefix(trimmed);
-  if (s) return s;
-  let filtered = trimmed.split(/\s+/).filter(Boolean),
-    y = countSafeEnvPrefix(filtered);
+  let subcommandPrefix = getSubcommandPrefix(trimmed);
+  if (subcommandPrefix) return subcommandPrefix;
+  let filtered = trimmed.split(/\s+/).filter(Boolean);
+  let y = countSafeEnvPrefix(filtered);
   if (y === null) return null;
   if (y >= filtered.length) return null;
   if (BARE_SHELL_PREFIXES.has(filtered[y].split("/").pop())) return null;
-  if (MH(filtered[y], filtered[y + 1] ?? "") !== void 0) return null;
+  if (noAdditionalDepthRule(filtered[y], filtered[y + 1] ?? "") !== undefined) return null;
   return filtered.slice(y, y + 2).join(" ") || null;
 }
+//@ chunk-kr06rpgd.js:18073-18219 placement
 /**
  * 把会话渲染为纯文本（不含欢迎头），并给出默认导出文件名。
  */
-//@ chunk-kr06rpgd.js:18073-18219 placement
-async function exportConversationText({
-  session: session,
-  messages: messages,
-  tools: tools,
-  storageV5: storageV5,
-}) {
+async function exportConversationText({ session, messages, tools, storageV5 }) {
   return {
     text: await renderMessagesToPlainText(session, messages, tools, {
-      storageV5: storageV5,
-      welcomeHeader: !1,
+      storageV5,
+      welcomeHeader: false,
     }),
     default_filename: getExportFilename(messages),
   };
 }
-
 export { extractFirstPrompt_2, writeExportFile };

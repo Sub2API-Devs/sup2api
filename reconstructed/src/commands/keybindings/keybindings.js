@@ -25,39 +25,50 @@ import { getFsImplementation } from "../../utils/fsOperations.js";
 import { editFileInEditor } from "../../utils/promptEditor.js";
 import { isSafeMode, getSafeModeExitHint } from "../../utils/envUtils.js";
 
+//@ chunk-1nat7wre.js:4514-5347 fingerprint = call (0.623)
 /**
  * /keybindings 的 local call(args, context, invokedName) 实现入口（由命令对象 load() 返回）。
  */
-//@ chunk-1nat7wre.js:4514-5347 fingerprint = call (0.623)
 async function call(args, context) {
   if (!isKeybindingCustomizationEnabled())
-    return { type: "text", value: "Keybinding customization is disabled in this environment." };
-  let keybindingsPath = getKeybindingsPath(),
-    i = !1,
-    storageV5 = context.storageV5;
+    return {
+      type: "text",
+      value: "Keybinding customization is disabled in this environment.",
+    };
+  let keybindingsPath = getKeybindingsPath();
+  let i = false;
+  let storageV5 = context.storageV5;
   if (storageV5) {
-    let write = await storageV5.write(keybindingsStoreKey, generateKeybindingsTemplate(), {
-      precondition: { type: "ifAbsent" },
+    let o = await storageV5.write(keybindingsStoreKey, generateKeybindingsTemplate(), {
+      precondition: {
+        type: "ifAbsent",
+      },
     });
-    if (!write.ok)
-      if (write.error.code === "AlreadyExists") i = !0;
+    if (!o.ok)
+      if (o.error.code === "AlreadyExists") i = true;
       else
         throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          `keybindings template write failed: ${formatStorageError(write.error)}`,
+          `keybindings template write failed: ${formatStorageError(o.error)}`,
           "keybindings template write failed",
         );
   } else {
     await getFsImplementation().mkdir(dirname(keybindingsPath));
     try {
-      await writeFile(keybindingsPath, generateKeybindingsTemplate(), { encoding: "utf-8", flag: "wx" });
-    } catch (error) {
-      if (getErrnoCode(error) === "EEXIST") i = !0;
-      else throw error;
+      await writeFile(keybindingsPath, generateKeybindingsTemplate(), {
+        encoding: "utf-8",
+        flag: "wx",
+      });
+    } catch (e) {
+      if (getErrnoCode(e) === "EEXIST") i = true;
+      else throw e;
     }
   }
   let result = await editFileInEditor(keybindingsPath);
   if (result.error)
-    return { type: "text", value: `${i ? "Opened" : "Created"} ${keybindingsPath}. ${result.error}` };
+    return {
+      type: "text",
+      value: `${i ? "Opened" : "Created"} ${keybindingsPath}. ${result.error}`,
+    };
   let d = isSafeMode()
     ? ` (Safe mode: custom keybindings are disabled this session \u2014 changes take effect after you ${getSafeModeExitHint()}.)`
     : "";

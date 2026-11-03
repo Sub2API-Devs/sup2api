@@ -6,132 +6,133 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../runtime/bun-runtime.js";
-import { Bi } from "./uint.js";
-import { Aa } from "./map.js";
-import { $o } from "./list.js";
-import { ba } from "../../../protobuf/dist/commonjs/reflect/index.js";
-import { li } from "../../../protobuf/dist/commonjs/index.js";
-import { ld } from "./eval.js";
-import { Os } from "../../../../@anthropic-ai/bedrock-sdk/core/error.js";
-import { Ei } from "./type.js";
+import { require_uint } from "./uint.js";
+import { require_map } from "./map.js";
+import { require_list } from "./list.js";
+import { require_reflect_2 } from "../../../protobuf/dist/commonjs/reflect/index.js";
+import { require_protobuf } from "../../../protobuf/dist/commonjs/index.js";
+import { require_eval } from "./eval.js";
+import { require_error_4 } from "../../../../@anthropic-ai/bedrock-sdk/core/error.js";
+import { require_type } from "./type.js";
 
 //@ chunk-fq0cr76a.js:473203-475393 cjs-fingerprint
-var wa = x(function (DL) {
-  Object.defineProperty(DL, "__esModule", { value: !0 });
-  DL.toCel = OQ;
-  DL.unwrapAny = PQ;
-  DL.reflectMsgToCel = RL;
-  var ud = Bi(),
-    Pl = Aa(),
-    dd = $o(),
-    Fi = ba(),
-    Ll = li(),
-    fd = ld(),
-    ys = Os(),
-    CL = Ei();
-  function OQ(e) {
-    switch (typeof e) {
+var require_value = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.toCel = toCel;
+  cjsExports.unwrapAny = unwrapAny;
+  cjsExports.reflectMsgToCel = reflectMsgToCel;
+  var uint_js_1 = require_uint();
+  var map_js_1 = require_map();
+  var list_js_1 = require_list();
+  var reflect_1 = require_reflect_2();
+  var protobuf_1 = require_protobuf();
+  var eval_js_1 = require_eval();
+  var wkt_1 = require_error_4();
+  var type_js_1 = require_type();
+  function toCel(v) {
+    switch (typeof v) {
       case "bigint":
       case "boolean":
       case "number":
       case "string":
-        return e;
+        return v;
       case "object":
         break;
       default:
-        throw Error(`unsupported input ${typeof e}`);
+        throw Error(`unsupported input ${typeof v}`);
     }
-    switch (!0) {
-      case e === null:
-      case e instanceof Uint8Array:
-      case dd.isCelList(e):
-      case Pl.isCelMap(e):
-      case ud.isCelUint(e):
-      case CL.isCelType(e):
-        return e;
+    switch (true) {
+      case v === null:
+      case v instanceof Uint8Array:
+      case list_js_1.isCelList(v):
+      case map_js_1.isCelMap(v):
+      case uint_js_1.isCelUint(v):
+      case type_js_1.isCelType(v):
+        return v;
     }
-    if (BQ(e) || Fi.isReflectList(e)) return dd.celList(e);
-    if (UQ(e) || Fi.isReflectMap(e)) return Pl.celMap(e);
-    if (Ll.isMessage(e)) {
-      let n = R_(e);
-      if (n !== void 0) return n;
-      return Fi.reflect(fd.getMsgDesc(e.$typeName), e);
+    if (isArray(v) || reflect_1.isReflectList(v)) return list_js_1.celList(v);
+    if (isMap(v) || reflect_1.isReflectMap(v)) return map_js_1.celMap(v);
+    if (protobuf_1.isMessage(v)) {
+      let value = wktToCel(v);
+      if (value !== undefined) return value;
+      return reflect_1.reflect(eval_js_1.getMsgDesc(v.$typeName), v);
     }
-    if (Fi.isReflectMessage(e)) return RL(e);
-    if (e.constructor.name === "Object") return Pl.celMap(new Map(Object.entries(e)));
-    throw Error(`Unsupported input ${e}`);
+    if (reflect_1.isReflectMessage(v)) return reflectMsgToCel(v);
+    if (v.constructor.name === "Object") return map_js_1.celMap(new Map(Object.entries(v)));
+    throw Error(`Unsupported input ${v}`);
   }
-  function PQ(e) {
-    if (!LQ(e)) return e;
-    let anyUnpack = ys.anyUnpack(e.message, fd.getEvalContext().registry);
-    if (anyUnpack === void 0) throw Error(`invalid Any or ${e.message.typeUrl} not found in registry`);
-    let r = R_(anyUnpack);
-    if (r !== void 0) return r;
-    return Fi.reflect(fd.getMsgDesc(anyUnpack.$typeName), anyUnpack);
+  function unwrapAny(v) {
+    if (!isReflectAny(v)) return v;
+    let unpacked = wkt_1.anyUnpack(v.message, eval_js_1.getEvalContext().registry);
+    if (unpacked === undefined) throw Error(`invalid Any or ${v.message.typeUrl} not found in registry`);
+    let value = wktToCel(unpacked);
+    if (value !== undefined) return value;
+    return reflect_1.reflect(eval_js_1.getMsgDesc(unpacked.$typeName), unpacked);
   }
-  function RL(e) {
-    let n = R_(e.message);
-    if (n !== void 0) return n;
-    return e;
+  function reflectMsgToCel(v) {
+    let value = wktToCel(v.message);
+    if (value !== undefined) return value;
+    return v;
   }
-  function LQ(e) {
-    return Fi.isReflectMessage(e, ys.AnySchema);
+  function isReflectAny(v) {
+    return reflect_1.isReflectMessage(v, wkt_1.AnySchema);
   }
-  function BQ(e) {
-    return Array.isArray(e);
+  function isArray(v) {
+    return Array.isArray(v);
   }
-  function UQ(e) {
-    return e instanceof Map;
+  function isMap(v) {
+    return v instanceof Map;
   }
-  function R_(e) {
-    if (ys.isWrapper(e)) return FQ(e);
-    return MQ(e);
+  function wktToCel(msg) {
+    if (wkt_1.isWrapper(msg)) return unwrapWrapper(msg);
+    return jsonWrapperToCel(msg);
   }
-  function FQ(e) {
-    switch (e.$typeName) {
-      case ys.Int32ValueSchema.typeName:
-        return BigInt(e.value);
-      case ys.UInt32ValueSchema.typeName:
-        return ud.celUint(BigInt(e.value));
-      case ys.UInt64ValueSchema.typeName:
-        return ud.celUint(e.value);
+  function unwrapWrapper(v) {
+    switch (v.$typeName) {
+      case wkt_1.Int32ValueSchema.typeName:
+        return BigInt(v.value);
+      case wkt_1.UInt32ValueSchema.typeName:
+        return uint_js_1.celUint(BigInt(v.value));
+      case wkt_1.UInt64ValueSchema.typeName:
+        return uint_js_1.celUint(v.value);
     }
-    return e.value;
+    return v.value;
   }
-  function MQ(e) {
-    switch (!0) {
-      case Ll.isMessage(e, ys.StructSchema):
-        return IL(e);
-      case Ll.isMessage(e, ys.ValueSchema):
-        return NL(e);
-      case Ll.isMessage(e, ys.ListValueSchema):
-        return kL(e);
+  function jsonWrapperToCel(msg) {
+    switch (true) {
+      case protobuf_1.isMessage(msg, wkt_1.StructSchema):
+        return structToCel(msg);
+      case protobuf_1.isMessage(msg, wkt_1.ValueSchema):
+        return valueToCel(msg);
+      case protobuf_1.isMessage(msg, wkt_1.ListValueSchema):
+        return listValueToCel(msg);
     }
     return;
   }
-  function IL(e) {
-    let n = new Map();
-    for (let [r, s] of Object.entries(e.fields)) n.set(r, NL(s));
-    return Pl.celMap(n);
+  function structToCel(s_2) {
+    let map = new Map();
+    for (let [k, v] of Object.entries(s_2.fields)) map.set(k, valueToCel(v));
+    return map_js_1.celMap(map);
   }
-  function NL(e) {
-    switch (e.kind.case) {
+  function valueToCel(v) {
+    switch (v.kind.case) {
       case "boolValue":
       case "numberValue":
       case "stringValue":
-        return e.kind.value;
+        return v.kind.value;
       case "nullValue":
-      case void 0:
+      case undefined:
         return null;
       case "structValue":
-        return IL(e.kind.value);
+        return structToCel(v.kind.value);
       case "listValue":
-        return kL(e.kind.value);
+        return listValueToCel(v.kind.value);
     }
   }
-  function kL(e) {
-    return dd.celList(e.values);
+  function listValueToCel(l) {
+    return list_js_1.celList(l.values);
   }
 });
-
-export { wa };
+export { require_value };

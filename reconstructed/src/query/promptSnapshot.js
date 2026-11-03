@@ -17,7 +17,7 @@ import {
   isHostManagedProviderAuth,
   getStoredOauthAccountInfo,
 } from "../utils/auth.js";
-import { Vt } from "../utils/agentId.js";
+import { normalizeUuidOrNull } from "../utils/agentId.js";
 import { env } from "../utils/env.js";
 import { usableLauncherHostLoginToken } from "../utils/auth/launcherHostLogin.js";
 import { getOAuthTokenFromFileDescriptor } from "../utils/authFileDescriptor.js";
@@ -30,132 +30,171 @@ import { logFeatureOk, logFeatureSad } from "../services/analytics/featureTeleme
 import { createInformationalSystemMessage } from "../utils/messages.js";
 import { isHookDescribed, redescribeEpoch } from "../services/api/toolDescriptionCache.js";
 import { toError } from "../utils/errors.js";
-import { ge } from "../utils/identity.js";
+import { identity } from "../utils/identity.js";
 import {
-  t3n,
+  hashSystemPrompt,
   pickWireShape,
-  j_e,
+  snapshotIfEnabled,
   shouldSnapshotSystemPrompt,
-  e3n,
-  qun,
+  isRenderPointNewer,
+  isPromptSnapshotFeatureOn,
   snapshotToolEntries,
-  y$o,
-  met,
-  _$o,
+  dropSystemTurnsAnsweredBy,
+  promptSnapshotUnlessRenderPoint,
+  setModelRenderPoint,
   recordedDeferredTools,
 } from "../utils/contextAttachments/promptSnapshot.js";
 import { sectionAnswers } from "../plugins/functionHooks/promptComposition.js";
 import { asSystemPrompt } from "../utils/systemPromptType.js";
-import { resolveReminderFold, X1t } from "../utils/contextAttachments/threadState.js";
+import { resolveReminderFold, isThreadStateFeatureOn } from "../utils/contextAttachments/threadState.js";
 import { logEvent } from "../services/analytics/index.js";
 import { fromEnum } from "../services/analytics/safeMetadata.js";
 import { isFoamySpringEnabled } from "../services/analytics/growthbookGates.js";
 import { getEchoWireToolInputsState, isServerClassifierEnabled } from "../utils/wireToolInputEcho.js";
 import { TOOL_SEARCH_TOOL_NAME } from "../tools/ToolSearchTool/prompt.js";
-import { rGt } from "../utils/toolSearch.js";
+import { isToolSearchLockedOffByDefault } from "../utils/toolSearch.js";
 
 //@ chunk-ha3km179.js:129854-129924 placement
-function xxr(e, n) {
+/**
+ * 是否被放回
+ */
+function wasPutBackSafe(messageQueue, n) {
   try {
-    return e.wasPutBack(n);
+    return messageQueue.wasPutBack(n);
   } catch (error) {
-    return (logError(error), !1);
+    logError(error);
+    return false;
   }
 }
 //@ chunk-ha3km179.js:129924-129981 placement
-function yu(e) {
+/**
+ * 打开重新入队窗口
+ */
+function startRequeueWindowSafe(messageQueue) {
   try {
-    e.startRequeueWindow();
+    messageQueue.startRequeueWindow();
   } catch (error) {
     logError(error);
   }
 }
 //@ chunk-ha3km179.js:129981-130032 placement
-function oSo(e) {
+/**
+ * 标记已被取走
+ */
+function settleTakenSafe(messageQueue) {
   try {
-    e.settleTaken();
+    messageQueue.settleTaken();
   } catch (error) {
     logError(error);
   }
 }
+//@ chunk-ha3km179.js:130032-130465 placement
 /**
  * 切换组织后之前的思考内容不可用的说明文本。
  */
-//@ chunk-ha3km179.js:130032-130465 placement
 var CROSS_ORG_THINKING_NOTICE = `${FOREIGN_ORG_THINKING_NOTICE}
 Claude's earlier thinking was written while you were signed in to another organization, so Claude can't use it now. It isn't deleted: resume this session signed in to that organization to use it again. Claude's next responses may be slower and use more tokens because it has to reread this session and generate new thinking. See docs for more: https://platform.claude.com/docs/en/build-with-claude/preserved-thinking`;
+//@ chunk-ha3km179.js:130465-131326 placement
 /**
  * 检测跨组织的思考块并生成说明附件。
  */
-//@ chunk-ha3km179.js:130465-131326 placement
-function crossOrgThinkingAttachments(
-  e,
-  { querySource: querySource, mainThread: mainThread, model: model, stamp: stamp },
-) {
+function crossOrgThinkingAttachments(messagesForQuery, { querySource, mainThread, model, stamp }) {
   if (classifyQuerySource(querySource) === "auxiliary") return [];
   try {
     if (!isAnthropicAuthEnabled()) return [];
-    let y = Vt(
-        env.CLAUDE_CODE_OAUTH_TOKEN ||
-          usableLauncherHostLoginToken() !== null ||
-          (getOAuthTokenFromFileDescriptor() &&
-            (!isOauthTokenFromBgSnapshot() || isHostManagedProviderAuth()))
-          ? env.CLAUDE_CODE_ORGANIZATION_UUID
-          : getStoredOauthAccountInfo()?.organizationUuid,
-      )?.toLowerCase(),
-      S = e.findLast((T) => T.type === "attachment" && T.attachment?.type === "credential_org")?.attachment
-        .organizationUuid;
-    if (y === void 0 || y === S) return [];
-    let M = createAttachmentMessage_2({ type: "credential_org", organizationUuid: y }, stamp);
-    if (typeof S !== "string") return [M];
+    let lower = normalizeUuidOrNull(
+      env.CLAUDE_CODE_OAUTH_TOKEN ||
+        usableLauncherHostLoginToken() !== null ||
+        (getOAuthTokenFromFileDescriptor() && (!isOauthTokenFromBgSnapshot() || isHostManagedProviderAuth()))
+        ? env.CLAUDE_CODE_ORGANIZATION_UUID
+        : getStoredOauthAccountInfo()?.organizationUuid,
+    )?.toLowerCase();
+    let organizationUuid = messagesForQuery.findLast(
+      (T) => T.type === "attachment" && T.attachment?.type === "credential_org",
+    )?.attachment.organizationUuid;
+    if (lower === undefined || lower === organizationUuid) return [];
+    let attachmentMessage = createAttachmentMessage_2(
+      {
+        type: "credential_org",
+        organizationUuid: lower,
+      },
+      stamp,
+    );
+    if (typeof organizationUuid !== "string") return [attachmentMessage];
     let R =
       mainThread &&
-      e.some(
+      messagesForQuery.some(
         (T) =>
           T.type === "assistant" &&
           Array.isArray(T.message?.content) &&
           T.message.content.some((w) => w?.type === "thinking" || w?.type === "redacted_thinking"),
       ) &&
       isModelCapabilityEnabled("org_locked_thinking", getCanonicalName(model), model) &&
-      getFeatureValue_CACHED_MAY_BE_STALE("tengu_lexical_glade", !1);
-    return (
-      logFeatureOk("context_credential_org_change", { warned: R }),
-      R ? [M, createInformationalSystemMessage(CROSS_ORG_THINKING_NOTICE, "warning")] : [M]
-    );
+      getFeatureValue_CACHED_MAY_BE_STALE("tengu_lexical_glade", false);
+    logFeatureOk("context_credential_org_change", {
+      warned: R,
+    });
+    return R
+      ? [attachmentMessage, createInformationalSystemMessage(CROSS_ORG_THINKING_NOTICE, "warning")]
+      : [attachmentMessage];
   } catch (error) {
-    return (logError(error), logFeatureSad("context_credential_org_change", "record_failed"), []);
+    logError(error);
+    logFeatureSad("context_credential_org_change", "record_failed");
+    return [];
   }
 }
 //@ chunk-ha3km179.js:131368-131398 placement
-var _u = { epoch: 0, owed: new Set() };
+/**
+ * 无待发工具描述
+ */
+var EMPTY_TOOL_STANDING = {
+  epoch: 0,
+  owed: new Set(),
+};
+//@ chunk-ha3km179.js:131398-132074 placement
 /**
  * 跟踪工具描述的待发送状态。
  */
-//@ chunk-ha3km179.js:131398-132074 placement
 function createToolDescriptionStandings() {
-  let e = { standings: new WeakMap() };
+  let e = {
+    standings: new WeakMap(),
+  };
   function n(y, S) {
     try {
-      if (y === void 0 || y.toolDescriptions.size === 0) return S > 0 ? { names: _u.owed, epoch: S } : void 0;
-      let M = e.standings.get(y.record) ?? _u,
-        R = S > M.epoch;
+      if (y === undefined || y.toolDescriptions.size === 0)
+        return S > 0
+          ? {
+              names: EMPTY_TOOL_STANDING.owed,
+              epoch: S,
+            }
+          : undefined;
+      let M = e.standings.get(y.record) ?? EMPTY_TOOL_STANDING;
+      let R = S > M.epoch;
       if (!R && M.owed.size === 0) return;
       let filtered = [...y.toolDescriptions.keys()].filter(R ? isHookDescribed : (P) => M.owed.has(P));
-      return R || filtered.length > 0 ? { names: new Set(filtered), epoch: Math.max(S, M.epoch) } : void 0;
+      return R || filtered.length > 0
+        ? {
+            names: new Set(filtered),
+            epoch: Math.max(S, M.epoch),
+          }
+        : undefined;
     } catch (error) {
       logError(toError(error));
       return;
     }
   }
-  let r = (y, S, M) =>
-    void e.standings.set(y, { epoch: S.epoch, owed: new Set([...S.names].filter((R) => !M.has(R))) });
+  let noteRedescribed = (y, S, M) =>
+    void e.standings.set(y, {
+      epoch: S.epoch,
+      owed: new Set([...S.names].filter((R) => !M.has(R))),
+    });
   function s(y, S) {
     let M = e.standings.get(y);
-    if (M !== void 0) e.standings.set(S, M);
+    if (M !== undefined) e.standings.set(S, M);
   }
   return {
     redescribing: n,
-    noteRedescribed: r,
+    noteRedescribed,
     noteCopied: s,
     forgetStandings: () => {
       e.standings = new WeakMap();
@@ -163,42 +202,57 @@ function createToolDescriptionStandings() {
   };
 }
 //@ chunk-ha3km179.js:132074-132115 placement
-var qn = ge(createToolDescriptionStandings(), (e) => e.forgetStandings());
+/**
+ * 工具描述待发状态
+ */
+var toolDescriptionStandings = identity(createToolDescriptionStandings(), (e) => e.forgetStandings());
 //@ chunk-ha3km179.js:132115-132198 placement
-function Su(e) {
+/**
+ * 需要重新描述时的代次
+ */
+function redescribeEpochFor(options) {
   try {
-    return e.settingsHooksOff ? void 0 : redescribeEpoch();
+    return options.settingsHooksOff ? undefined : redescribeEpoch();
   } catch (error) {
     logError(toError(error));
     return;
   }
 }
 //@ chunk-ha3km179.js:132198-132208 placement
-var Ag = 16;
+/**
+ * 16
+ */
+var MAX_PROMPT_HASHES = 16;
+//@ chunk-ha3km179.js:132208-132818 placement
 /**
  * 记录最近的系统提示哈希（有上限）。
  */
-//@ chunk-ha3km179.js:132208-132818 placement
 function createSystemPromptHistory() {
   let e = new Map();
   function n(s, h) {
-    (e.delete(s), e.set(s, h));
-    for (let y of [...e.keys()].slice(0, -Ag)) e.delete(y);
+    e.delete(s);
+    e.set(s, h);
+    for (let key of [...e.keys()].slice(0, -MAX_PROMPT_HASHES)) e.delete(key);
   }
   function r(s, h, y) {
     try {
       let S = e.get(s.systemPromptHash);
-      if (y === void 0 || !y.isFresh) return;
-      if (S === void 0) {
+      if (y === undefined || !y.isFresh) return;
+      if (S === undefined) {
         n(s.systemPromptHash, y.answers);
         return;
       }
-      let M = changedSectionAnswers(S, y.answers),
-        R = diffPromptSections(s.systemPrompt, h, [...M.values()]);
-      if (R !== void 0 || S === "behind")
+      let M = changedSectionAnswers(S, y.answers);
+      let R = diffPromptSections(s.systemPrompt, h, [...M.values()]);
+      if (R !== undefined || S === "behind")
         n(
-          R === void 0 ? s.systemPromptHash : t3n(R),
-          resolveHeldAnswers({ held: S, answers: y.answers, owed: M, sent: R }),
+          R === undefined ? s.systemPromptHash : hashSystemPrompt(R),
+          resolveHeldAnswers({
+            held: S,
+            answers: y.answers,
+            owed: M,
+            sent: R,
+          }),
         );
       return R;
     } catch (error) {
@@ -209,112 +263,143 @@ function createSystemPromptHistory() {
   return {
     owedPrompt: r,
     noteRendered: (s, h) => {
-      if (h !== void 0) n(s, h.isFresh ? h.answers : "behind");
+      if (h !== undefined) n(s, h.isFresh ? h.answers : "behind");
     },
     notedCount: () => e.size,
     forgetStandings: () => e.clear(),
   };
 }
 //@ chunk-ha3km179.js:132818-132859 placement
-var hi = ge(createSystemPromptHistory(), (e) => e.forgetStandings());
+/**
+ * 系统提示哈希历史
+ */
+var systemPromptHistory = identity(createSystemPromptHistory(), (e) => e.forgetStandings());
 //@ chunk-ha3km179.js:132859-132999 placement
-function sectionAnswersSnapshot(e, n) {
+function sectionAnswersSnapshot(toolUseContext, promptRenderEpoch) {
   try {
-    return !e.options.settingsHooksOff && e.agentId === void 0
-      ? { isFresh: n === getSystemPromptSectionEpoch(), answers: sectionAnswers() }
-      : void 0;
+    return !toolUseContext.options.settingsHooksOff && toolUseContext.agentId === undefined
+      ? {
+          isFresh: promptRenderEpoch === getSystemPromptSectionEpoch(),
+          answers: sectionAnswers(),
+        }
+      : undefined;
   } catch (error) {
     logError(toError(error));
     return;
   }
 }
 //@ chunk-ha3km179.js:132999-133035 placement
-function Wr(e) {
+/**
+ * 空串转 null
+ */
+function nonEmptyOrNull(e) {
   return e === "" ? null : e;
 }
 //@ chunk-ha3km179.js:133035-133306 placement
-function changedSectionAnswers(e, n) {
+function changedSectionAnswers(e, answers) {
   return new Map(
-    [...n].flatMap(([r, s]) => {
-      let h = e === "behind" ? void 0 : e.get(r),
-        y = Wr(s.answer),
-        S = h === void 0 ? void 0 : Wr(h.answer),
-        M = h !== void 0 && S !== Wr(h.text),
-        R = y !== Wr(s.text);
+    [...answers].flatMap(([r, s]) => {
+      let h = e === "behind" ? undefined : e.get(r);
+      let y = nonEmptyOrNull(s.answer);
+      let S = h === undefined ? undefined : nonEmptyOrNull(h.answer);
+      let M = h !== undefined && S !== nonEmptyOrNull(h.text);
+      let R = y !== nonEmptyOrNull(s.text);
       return y !== S && (M || R) && (y !== null || typeof S === "string")
-        ? [[r, { before: S, after: y }]]
+        ? [
+            [
+              r,
+              {
+                before: S,
+                after: y,
+              },
+            ],
+          ]
         : [];
     }),
   );
 }
 //@ chunk-ha3km179.js:133306-133587 placement
-function resolveHeldAnswers({ held: held, answers: answers, owed: owed, sent: sent }) {
+function resolveHeldAnswers({ held, answers, owed, sent }) {
   return new Map(
     [...answers].flatMap(([h, y]) => {
-      let S = owed.get(h),
-        M = held === "behind" ? void 0 : held.get(h),
-        R = S?.after === null && sent?.includes(S.before ?? "") === !1,
-        T = typeof S?.after === "string" && sent?.includes(S.after) === !0,
-        w = R || T ? y : M;
-      return w === void 0 ? [] : [[h, w]];
+      let S = owed.get(h);
+      let M = held === "behind" ? undefined : held.get(h);
+      let R = S?.after === null && sent?.includes(S.before ?? "") === false;
+      let T = typeof S?.after === "string" && sent?.includes(S.after) === true;
+      let w = R || T ? y : M;
+      return w === undefined ? [] : [[h, w]];
     }),
   );
 }
+//@ chunk-ha3km179.js:133587-134155 placement
 /**
  * 比较两版提示段落的顺序与增删。
  */
-//@ chunk-ha3km179.js:133587-134155 placement
-function diffPromptSections(e, n, r) {
-  let s = indexParts(e),
-    h = indexParts(n),
-    filtered = e.filter((D) => D !== "" && s.counts.get(D) === 1 && h.counts.get(D) === 1),
-    mapped = filtered.map((D) => h.places.get(D) ?? -1),
-    all = mapped.every((D, L) => L === 0 || (mapped[L - 1] ?? D) < D),
-    flattened = r.flatMap(({ before: before, after: after }) => {
-      let z = typeof before === "string" && s.counts.get(before) === 1 && !h.counts.has(before);
-      return after === null && !z ? [] : [{ before: z || before === null ? before : void 0, after: after }];
-    }),
-    flattened_2 = [...filtered, void 0].flatMap((D, L) => {
-      let z = filtered[L - 1],
-        G = applyPromptSectionEdits(partsBetween(s, z, D), partsBetween(h, z, D), flattened);
-      return D === void 0 ? G : [...G, D];
-    }),
-    filtered_2 = flattened_2.filter((D) => D !== ""),
-    filtered_3 = e.filter((D) => D !== ""),
-    Q = filtered_2.length === filtered_3.length && filtered_2.every((D, L) => D === filtered_3[L]);
-  return !all || Q ? void 0 : asSystemPrompt(flattened_2);
+function diffPromptSections(systemPrompt, n, r) {
+  let s = indexParts(systemPrompt);
+  let h = indexParts(n);
+  let filtered = systemPrompt.filter((D) => D !== "" && s.counts.get(D) === 1 && h.counts.get(D) === 1);
+  let mapped = filtered.map((D) => h.places.get(D) ?? -1);
+  let all = mapped.every((D, L) => L === 0 || (mapped[L - 1] ?? D) < D);
+  let flattened = r.flatMap(({ before, after }) => {
+    let z = typeof before === "string" && s.counts.get(before) === 1 && !h.counts.has(before);
+    return after === null && !z
+      ? []
+      : [
+          {
+            before: z || before === null ? before : undefined,
+            after,
+          },
+        ];
+  });
+  let flattened_2 = [...filtered, undefined].flatMap((D, L) => {
+    let z = filtered[L - 1];
+    let G = applyPromptSectionEdits(partsBetween(s, z, D), partsBetween(h, z, D), flattened);
+    return D === undefined ? G : [...G, D];
+  });
+  let filtered_2 = flattened_2.filter((D) => D !== "");
+  let filtered_3 = systemPrompt.filter((D) => D !== "");
+  let Q = filtered_2.length === filtered_3.length && filtered_2.every((D, L) => D === filtered_3[L]);
+  return !all || Q ? undefined : asSystemPrompt(flattened_2);
 }
 //@ chunk-ha3km179.js:134155-134291 placement
 function indexParts(e) {
-  let n = new Map(),
-    r = new Map();
-  for (let [s, h] of e.entries()) (n.set(h, (n.get(h) ?? 0) + 1), r.set(h, s));
-  return { parts: e, counts: n, places: r };
+  let n = new Map();
+  let r = new Map();
+  for (let [s, h] of e.entries()) {
+    n.set(h, (n.get(h) ?? 0) + 1);
+    r.set(h, s);
+  }
+  return {
+    parts: e,
+    counts: n,
+    places: r,
+  };
 }
 //@ chunk-ha3km179.js:134291-134411 placement
 function partsBetween(e, n, r) {
   return e.parts.slice(
-    n === void 0 ? 0 : (e.places.get(n) ?? -1) + 1,
-    r === void 0 ? e.parts.length : e.places.get(r),
+    n === undefined ? 0 : (e.places.get(n) ?? -1) + 1,
+    r === undefined ? e.parts.length : e.places.get(r),
   );
 }
 //@ chunk-ha3km179.js:134411-134491 placement = formatSnippet (0.806)
 function formatSnippet(e, n, r) {
   return e.filter((s) => n.some((h) => h.after === s && h.before === r));
 }
+//@ chunk-ha3km179.js:134491-134854 placement = formatSnippet (0.806)
 /**
  * 应用提示段落编辑。
  */
-//@ chunk-ha3km179.js:134491-134854 placement = formatSnippet (0.806)
 function applyPromptSectionEdits(e, n, r) {
-  let filtered = n.filter((T) => T !== ""),
-    filtered_2 = r.filter((T) => T.after === null || filtered.includes(T.after)),
-    flattened = e.flatMap((T) => {
-      let found = filtered_2.find((P) => P.before === T);
-      return found === void 0 ? [T] : (found.after ?? []);
-    }),
-    filtered_3 = e.filter((T) => T !== "" && !filtered_2.some((w) => w.before === T)),
-    M = formatSnippet(filtered, filtered_2, void 0);
+  let filtered = n.filter((T) => T !== "");
+  let filtered_2 = r.filter((T) => T.after === null || filtered.includes(T.after));
+  let flattened = e.flatMap((T) => {
+    let found = filtered_2.find((P) => P.before === T);
+    return found === undefined ? [T] : (found.after ?? []);
+  });
+  let filtered_3 = e.filter((T) => T !== "" && !filtered_2.some((w) => w.before === T));
+  let M = formatSnippet(filtered, filtered_2, undefined);
   return filtered.every((T) => filtered_2.some((w) => w.after === T)) &&
     filtered_3.length === M.length &&
     (M.length > 0 || formatSnippet(filtered, filtered_2, null).length > 0)
@@ -322,18 +407,23 @@ function applyPromptSectionEdits(e, n, r) {
     : flattened;
 }
 //@ chunk-ha3km179.js:134854-134932 placement
-function hn({ options: options, querySource: querySource }) {
+/**
+ * 非 bareFork 且辅助查询以外的
+ */
+function isRedescribable({ options, querySource }) {
   return !options.bareFork && classifyQuerySource(querySource) !== "auxiliary";
 }
 //@ chunk-ha3km179.js:134932-135162 placement
-function recordReminderFold(e, n) {
-  let { fold: fold, cached: cached } = resolveReminderFold(n);
+function recordReminderFold(carriedForward, n) {
+  let { fold, cached } = resolveReminderFold(n);
   try {
     logEvent("tengu_reminder_fold_recorded", {
-      recorded: fold !== void 0,
-      ...(fold !== void 0 && { fold: fold }),
-      carriedForward: e,
-      inherited: n !== void 0,
+      recorded: fold !== undefined,
+      ...(fold !== undefined && {
+        fold,
+      }),
+      carriedForward,
+      inherited: n !== undefined,
       cached: cached.value,
       cachedSource: fromEnum(cached.source),
     });
@@ -343,43 +433,61 @@ function recordReminderFold(e, n) {
   return fold;
 }
 //@ chunk-ha3km179.js:135162-135257 placement
-var Ru = ["systemTurns", "toolChangeHeader", "inlineTools", "keptReminders", "toolResultSafeguards"];
+/**
+ * 线形相关字段
+ */
+var REQUEST_SHAPE_KEYS = [
+  "systemTurns",
+  "toolChangeHeader",
+  "inlineTools",
+  "keptReminders",
+  "toolResultSafeguards",
+];
+//@ chunk-ha3km179.js:135257-135920 placement
 /**
  * 应用请求线形（systemTurns、toolChangeHeader、inlineTools 等）。
  */
-//@ chunk-ha3km179.js:135257-135920 placement
-function applyWireShape(e, n) {
-  if (n === void 0 || !isFoamySpringEnabled()) return { wireShape: e, changed: !1 };
+function applyWireShape(wireShape, wireShape_2) {
+  if (wireShape_2 === undefined || !isFoamySpringEnabled())
+    return {
+      wireShape,
+      changed: false,
+    };
   let r = pickWireShape({
-      systemTurns: n.systemTurns ?? e.systemTurns,
-      toolChangeHeader: n.toolChangeHeader ?? e.toolChangeHeader,
-      inlineTools: n.inlineTools ?? e.inlineTools,
-      keptReminders: n.keptReminders ?? e.keptReminders,
-      toolResultSafeguards: n.toolResultSafeguards ?? e.toolResultSafeguards,
-      systemTurnsAnsweredBy: n.systemTurnsAnsweredBy ?? e.systemTurnsAnsweredBy,
-    }),
-    any = Ru.some((h) => r[h] !== e[h]);
+    systemTurns: wireShape_2.systemTurns ?? wireShape.systemTurns,
+    toolChangeHeader: wireShape_2.toolChangeHeader ?? wireShape.toolChangeHeader,
+    inlineTools: wireShape_2.inlineTools ?? wireShape.inlineTools,
+    keptReminders: wireShape_2.keptReminders ?? wireShape.keptReminders,
+    toolResultSafeguards: wireShape_2.toolResultSafeguards ?? wireShape.toolResultSafeguards,
+    systemTurnsAnsweredBy: wireShape_2.systemTurnsAnsweredBy ?? wireShape.systemTurnsAnsweredBy,
+  });
+  let any = REQUEST_SHAPE_KEYS.some((h) => r[h] !== wireShape[h]);
   if (any)
     try {
-      let { systemTurnsAnsweredBy: systemTurnsAnsweredBy, ...y } = r;
+      let { systemTurnsAnsweredBy, ...y } = r;
       logEvent("tengu_wire_shape_recorded", {
         ...y,
-        overwrote: Ru.some((S) => e[S] !== void 0 && r[S] !== e[S]),
+        overwrote: REQUEST_SHAPE_KEYS.some((S) => wireShape[S] !== undefined && r[S] !== wireShape[S]),
       });
     } catch (error) {
       logError(error);
     }
-  return { wireShape: r, changed: any || r.systemTurnsAnsweredBy !== e.systemTurnsAnsweredBy };
+  return {
+    wireShape: r,
+    changed: any || r.systemTurnsAnsweredBy !== wireShape.systemTurnsAnsweredBy,
+  };
 }
 //@ chunk-ha3km179.js:135920-136157 placement
-function recordWireToolInputEcho(e, n) {
-  let { echo: echo, cached: cached } = getEchoWireToolInputsState(n);
+function recordWireToolInputEcho(carriedForward, n) {
+  let { echo, cached } = getEchoWireToolInputsState(n);
   try {
     logEvent("tengu_wire_tool_input_echo_recorded", {
-      recorded: echo !== void 0,
-      ...(echo !== void 0 && { echo: echo }),
-      carriedForward: e,
-      inherited: n !== void 0,
+      recorded: echo !== undefined,
+      ...(echo !== undefined && {
+        echo,
+      }),
+      carriedForward,
+      inherited: n !== undefined,
       cached: cached.value,
       cachedSource: fromEnum(cached.source),
     });
@@ -389,88 +497,106 @@ function recordWireToolInputEcho(e, n) {
   return echo;
 }
 //@ chunk-ha3km179.js:136157-136294 placement
-function recordContextRendering(e, n) {
-  if (n === void 0) return;
+function recordContextRendering(carriedForward, contextRendering) {
+  if (contextRendering === undefined) return;
   try {
-    logEvent("tengu_context_rendering_recorded", { rendering: fromEnum(n), carriedForward: e });
+    logEvent("tengu_context_rendering_recorded", {
+      rendering: fromEnum(contextRendering),
+      carriedForward,
+    });
   } catch (error) {
     logError(error);
   }
-  return n;
+  return contextRendering;
 }
+//@ chunk-ha3km179.js:136294-136722 placement
 /**
  * 记录提示快照并处理复制关系。
  */
-//@ chunk-ha3km179.js:136294-136722 placement
-function recordPromptSnapshot(e, n, r) {
-  let s = resolvePromptSnapshot(e, n, r);
+function recordPromptSnapshot(messagesForQuery, systemPrompt, r) {
+  let promptSnapshot = resolvePromptSnapshot(messagesForQuery, systemPrompt, r);
   try {
-    let h = j_e(e, r.options);
-    if (h !== void 0 && s.record?.attachment.type === "prompt_snapshot")
-      qn.noteCopied(h.record, s.record.attachment);
-    if (s.source === "live_recorded" && s.snapshotHash && !s.rewritten)
-      hi.noteRendered(s.snapshotHash, r.turnSections);
-    let y = r.toolDescribeEpoch !== void 0 && hn(r) ? qn.redescribing(h, r.toolDescribeEpoch) : void 0;
-    return y === void 0 ? s : { ...s, redescribing: y };
+    let h = snapshotIfEnabled(messagesForQuery, r.options);
+    if (h !== undefined && promptSnapshot.record?.attachment.type === "prompt_snapshot")
+      toolDescriptionStandings.noteCopied(h.record, promptSnapshot.record.attachment);
+    if (promptSnapshot.source === "live_recorded" && promptSnapshot.snapshotHash && !promptSnapshot.rewritten)
+      systemPromptHistory.noteRendered(promptSnapshot.snapshotHash, r.turnSections);
+    let y =
+      r.toolDescribeEpoch !== undefined && isRedescribable(r)
+        ? toolDescriptionStandings.redescribing(h, r.toolDescribeEpoch)
+        : undefined;
+    return y === undefined
+      ? promptSnapshot
+      : {
+          ...promptSnapshot,
+          redescribing: y,
+        };
   } catch (error) {
-    return (logError(error), s);
+    logError(error);
+    return promptSnapshot;
   }
 }
+//@ chunk-ha3km179.js:136722-138963 placement
 /**
  * 计算本次请求的提示快照（实时/快照/继承来源）。
  */
-//@ chunk-ha3km179.js:136722-138963 placement
 function resolvePromptSnapshot(
   e,
   n,
   {
-    resumeActive: resumeActive,
-    stamp: stamp,
-    inheritedReminderFold: inheritedReminderFold,
-    inheritedWireShape: inheritedWireShape,
-    inheritedEchoWireToolInputs: inheritedEchoWireToolInputs,
-    contextRendering: contextRendering,
-    turnSections: turnSections,
+    resumeActive,
+    stamp,
+    inheritedReminderFold,
+    inheritedWireShape,
+    inheritedEchoWireToolInputs,
+    contextRendering,
+    turnSections,
     ...T
   },
 ) {
   let w = {
     systemPrompt: n,
-    toolDescriptions: void 0,
-    toolEntries: void 0,
-    toolServers: void 0,
-    recordedCliPrefix: void 0,
-    recordedWireShape: void 0,
-    record: void 0,
+    toolDescriptions: undefined,
+    toolEntries: undefined,
+    toolServers: undefined,
+    recordedCliPrefix: undefined,
+    recordedWireShape: undefined,
+    record: undefined,
     source: "live_unrecorded",
-    snapshotHash: void 0,
+    snapshotHash: undefined,
   };
   try {
     if (!shouldSnapshotSystemPrompt(T.options)) return w;
-    let P = j_e(e, T.options),
-      Q = P !== void 0 && e3n(e),
-      D =
-        P !== void 0 && !Q && !resumeActive && hn(T) && classifyQuerySource(T.querySource) === "main"
-          ? hi.owedPrompt(P, n, turnSections)
-          : void 0,
-      L = D !== void 0,
-      z = Q || L,
-      G = D ?? n;
-    if (P && (!z || resumeActive || !hn(T))) {
-      let Z = !z && !resumeActive && hn(T),
-        re =
-          Z && P.reminderFold === void 0 && X1t()
-            ? recordReminderFold(!0, inheritedReminderFold?.())
-            : void 0,
-        Re =
-          Z && P.echoWireToolInputs === void 0 && isServerClassifierEnabled()
-            ? recordWireToolInputEcho(!0, inheritedEchoWireToolInputs?.())
-            : void 0,
-        se =
-          Z && P.contextRendering === void 0 && qun() ? recordContextRendering(!0, contextRendering) : void 0,
-        Te = P.reminderFold ?? re,
-        U = P.echoWireToolInputs ?? Re,
-        nt = P.contextRendering ?? se;
+    let P = snapshotIfEnabled(e, T.options);
+    let Q = P !== undefined && isRenderPointNewer(e);
+    let D =
+      P !== undefined &&
+      !Q &&
+      !resumeActive &&
+      isRedescribable(T) &&
+      classifyQuerySource(T.querySource) === "main"
+        ? systemPromptHistory.owedPrompt(P, n, turnSections)
+        : undefined;
+    let L = D !== undefined;
+    let z = Q || L;
+    let G = D ?? n;
+    if (P && (!z || resumeActive || !isRedescribable(T))) {
+      let Z = !z && !resumeActive && isRedescribable(T);
+      let re =
+        Z && P.reminderFold === undefined && isThreadStateFeatureOn()
+          ? recordReminderFold(true, inheritedReminderFold?.())
+          : undefined;
+      let Re =
+        Z && P.echoWireToolInputs === undefined && isServerClassifierEnabled()
+          ? recordWireToolInputEcho(true, inheritedEchoWireToolInputs?.())
+          : undefined;
+      let se =
+        Z && P.contextRendering === undefined && isPromptSnapshotFeatureOn()
+          ? recordContextRendering(true, contextRendering)
+          : undefined;
+      let reminderFold = P.reminderFold ?? re;
+      let echoWireToolInputs = P.echoWireToolInputs ?? Re;
+      let contextRendering_2 = P.contextRendering ?? se;
       return {
         systemPrompt: P.systemPrompt,
         toolDescriptions: P.toolDescriptions,
@@ -479,35 +605,48 @@ function resolvePromptSnapshot(
         recordedCliPrefix: P.cliPrefix,
         recordedWireShape: P.wireShape,
         record:
-          re !== void 0 || Re !== void 0 || se !== void 0
+          re !== undefined || Re !== undefined || se !== undefined
             ? createAttachmentMessage_2(
                 {
                   type: "prompt_snapshot",
                   systemPrompt: [...P.systemPrompt],
-                  ...(P.toolDescriptions.size > 0 && { tools: snapshotToolEntries(P) }),
-                  ...(P.cliPrefix !== void 0 && { cliPrefix: P.cliPrefix }),
-                  ...(Te !== void 0 && { reminderFold: Te }),
+                  ...(P.toolDescriptions.size > 0 && {
+                    tools: snapshotToolEntries(P),
+                  }),
+                  ...(P.cliPrefix !== undefined && {
+                    cliPrefix: P.cliPrefix,
+                  }),
+                  ...(reminderFold !== undefined && {
+                    reminderFold,
+                  }),
                   ...pickWireShape(P.wireShape),
-                  ...(U !== void 0 && { echoWireToolInputs: U }),
-                  ...(nt !== void 0 && { contextRendering: nt }),
+                  ...(echoWireToolInputs !== undefined && {
+                    echoWireToolInputs,
+                  }),
+                  ...(contextRendering_2 !== undefined && {
+                    contextRendering: contextRendering_2,
+                  }),
                 },
                 stamp,
               )
-            : void 0,
+            : undefined,
         source: "from_snapshot",
         snapshotHash: P.systemPromptHash,
       };
     }
-    if (resumeActive || !hn(T)) return w;
+    if (resumeActive || !isRedescribable(T)) return w;
     let ee =
-        P?.reminderFold ?? (X1t() ? recordReminderFold(P !== void 0, inheritedReminderFold?.()) : void 0),
-      V = P?.wireShape ?? y$o(inheritedWireShape?.()),
-      fe =
-        P?.echoWireToolInputs ??
-        (isServerClassifierEnabled()
-          ? recordWireToolInputEcho(P !== void 0, inheritedEchoWireToolInputs?.())
-          : void 0),
-      ie = P?.contextRendering ?? (qun() ? recordContextRendering(P !== void 0, contextRendering) : void 0);
+      P?.reminderFold ??
+      (isThreadStateFeatureOn() ? recordReminderFold(P !== undefined, inheritedReminderFold?.()) : undefined);
+    let V = P?.wireShape ?? dropSystemTurnsAnsweredBy(inheritedWireShape?.());
+    let fe =
+      P?.echoWireToolInputs ??
+      (isServerClassifierEnabled()
+        ? recordWireToolInputEcho(P !== undefined, inheritedEchoWireToolInputs?.())
+        : undefined);
+    let ie =
+      P?.contextRendering ??
+      (isPromptSnapshotFeatureOn() ? recordContextRendering(P !== undefined, contextRendering) : undefined);
     return {
       systemPrompt: G,
       toolDescriptions: P?.toolDescriptions,
@@ -519,112 +658,158 @@ function resolvePromptSnapshot(
         {
           type: "prompt_snapshot",
           systemPrompt: [...G],
-          ...(P !== void 0 && P.toolDescriptions.size > 0 && { tools: snapshotToolEntries(P) }),
-          ...(P?.cliPrefix !== void 0 && { cliPrefix: P.cliPrefix }),
-          ...(ee !== void 0 && { reminderFold: ee }),
+          ...(P !== undefined &&
+            P.toolDescriptions.size > 0 && {
+              tools: snapshotToolEntries(P),
+            }),
+          ...(P?.cliPrefix !== undefined && {
+            cliPrefix: P.cliPrefix,
+          }),
+          ...(ee !== undefined && {
+            reminderFold: ee,
+          }),
           ...pickWireShape(V),
-          ...(fe !== void 0 && { echoWireToolInputs: fe }),
-          ...(ie !== void 0 && { contextRendering: ie }),
+          ...(fe !== undefined && {
+            echoWireToolInputs: fe,
+          }),
+          ...(ie !== undefined && {
+            contextRendering: ie,
+          }),
         },
         stamp,
       ),
       source: "live_recorded",
-      snapshotHash: t3n(G),
-      atRenderPoint: L || (Q && P !== void 0 && !isDeepStrictEqual([...G], [...P.systemPrompt])),
-      ...(L && { rewritten: L }),
+      snapshotHash: hashSystemPrompt(G),
+      atRenderPoint: L || (Q && P !== undefined && !isDeepStrictEqual([...G], [...P.systemPrompt])),
+      ...(L && {
+        rewritten: L,
+      }),
     };
   } catch (error) {
-    return (logError(error), w);
+    logError(error);
+    return w;
   }
 }
+//@ chunk-ha3km179.js:138963-140211 placement
 /**
  * 记录本回合发送的工具描述。
  */
-//@ chunk-ha3km179.js:138963-140211 placement
-function recordToolDescriptions(e, n, { head: head, stamp: stamp, handed: handed, ...y }) {
+function recordToolDescriptions(messagesForQuery, inlineToolsDeclared, { head, stamp, handed, ...y }) {
   try {
-    if (n === void 0 || !shouldSnapshotSystemPrompt(y.options) || !hn(y)) return;
-    let S = met(e, y.options);
+    if (inlineToolsDeclared === undefined || !shouldSnapshotSystemPrompt(y.options) || !isRedescribable(y))
+      return;
+    let S = promptSnapshotUnlessRenderPoint(messagesForQuery, y.options);
     if (!S) return;
-    let filtered = n.filter((G) => !S.toolDescriptions.has(G.name)),
-      R = new Map(
-        n.flatMap((G) =>
-          handed?.names.has(G.name) === !0 && S.toolDescriptions.get(G.name) !== G.description
-            ? [[G.name, G]]
-            : [],
-        ),
+    let filtered = inlineToolsDeclared.filter((G) => !S.toolDescriptions.has(G.name));
+    let R = new Map(
+      inlineToolsDeclared.flatMap((G) =>
+        handed?.names.has(G.name) === true && S.toolDescriptions.get(G.name) !== G.description
+          ? [[G.name, G]]
+          : [],
       ),
-      T = new Set(n.map((G) => G.name)),
-      w =
-        S.toolDescriptions.has(TOOL_SEARCH_TOOL_NAME) && !T.has(TOOL_SEARCH_TOOL_NAME) && rGt()
-          ? new Set([TOOL_SEARCH_TOOL_NAME])
-          : void 0,
-      P = S.cliPrefix ?? head?.cliPrefix,
-      Q = P !== S.cliPrefix,
-      { wireShape: wireShape, changed: changed } = applyWireShape(S.wireShape, head?.wireShape);
-    if (filtered.length === 0 && R.size === 0 && !Q && !changed && w === void 0) {
-      if (handed !== void 0) qn.noteRedescribed(S.record, handed, T);
+    );
+    let T = new Set(inlineToolsDeclared.map((G) => G.name));
+    let w =
+      S.toolDescriptions.has(TOOL_SEARCH_TOOL_NAME) &&
+      !T.has(TOOL_SEARCH_TOOL_NAME) &&
+      isToolSearchLockedOffByDefault()
+        ? new Set([TOOL_SEARCH_TOOL_NAME])
+        : undefined;
+    let cliPrefix = S.cliPrefix ?? head?.cliPrefix;
+    let Q = cliPrefix !== S.cliPrefix;
+    let { wireShape, changed } = applyWireShape(S.wireShape, head?.wireShape);
+    if (filtered.length === 0 && R.size === 0 && !Q && !changed && w === undefined) {
+      if (handed !== undefined) toolDescriptionStandings.noteRedescribed(S.record, handed, T);
       return;
     }
-    let z = createAttachmentMessage_2(
+    let attachmentMessage = createAttachmentMessage_2(
       {
         type: "prompt_snapshot",
         systemPrompt: [...S.systemPrompt],
         tools: [...snapshotToolEntries(S, w).map((G) => R.get(G.name) ?? G), ...filtered].map(
-          ({ name: G, description: description, schema: schema, server: server }) => ({
+          ({ name: G, description, schema, server }) => ({
             name: G,
-            description: description,
-            ...(schema && { schema: schema }),
-            ...(server !== void 0 && { server: server }),
+            description,
+            ...(schema && {
+              schema,
+            }),
+            ...(server !== undefined && {
+              server,
+            }),
           }),
         ),
-        ...(P !== void 0 && { cliPrefix: P }),
-        ...(S.reminderFold !== void 0 && { reminderFold: S.reminderFold }),
+        ...(cliPrefix !== undefined && {
+          cliPrefix,
+        }),
+        ...(S.reminderFold !== undefined && {
+          reminderFold: S.reminderFold,
+        }),
         ...wireShape,
-        ...(S.echoWireToolInputs !== void 0 && { echoWireToolInputs: S.echoWireToolInputs }),
-        ...(S.contextRendering !== void 0 && { contextRendering: S.contextRendering }),
+        ...(S.echoWireToolInputs !== undefined && {
+          echoWireToolInputs: S.echoWireToolInputs,
+        }),
+        ...(S.contextRendering !== undefined && {
+          contextRendering: S.contextRendering,
+        }),
       },
       stamp,
     );
-    if (z.attachment.type === "prompt_snapshot") {
-      if ((qn.noteCopied(S.record, z.attachment), handed !== void 0))
-        qn.noteRedescribed(z.attachment, handed, T);
+    if (attachmentMessage.attachment.type === "prompt_snapshot") {
+      toolDescriptionStandings.noteCopied(S.record, attachmentMessage.attachment);
+      if (handed !== undefined)
+        toolDescriptionStandings.noteRedescribed(attachmentMessage.attachment, handed, T);
     }
-    return z;
+    return attachmentMessage;
   } catch (error) {
     logError(error);
     return;
   }
 }
 //@ chunk-ha3km179.js:140211-140246 placement
-function ROs(e) {
-  return createAttachmentMessage_2(_$o(), e);
+/**
+ * 延迟加载工具附件
+ */
+function lazyToolAttachment(e) {
+  return createAttachmentMessage_2(setModelRenderPoint(), e);
 }
+//@ chunk-ha3km179.js:140246-140987 placement
 /**
  * 记录延迟加载的工具。
  */
-//@ chunk-ha3km179.js:140246-140987 placement
-function recordDeferredTools(e, n, { stamp: stamp, toolInputCopies: toolInputCopies, ...h }) {
+function recordDeferredTools(messagesForQuery, deferredToolsSent, { stamp, toolInputCopies, ...h }) {
   try {
-    if (!hn(h)) return;
-    if (n === void 0 && (toolInputCopies?.size ?? 0) === 0) return;
-    let y = recordedDeferredTools(e),
-      S = new Map();
-    for (let w of n?.entries ?? [])
+    if (!isRedescribable(h)) return;
+    if (deferredToolsSent === undefined && (toolInputCopies?.size ?? 0) === 0) return;
+    let y = recordedDeferredTools(messagesForQuery);
+    let S = new Map();
+    for (let w of deferredToolsSent?.entries ?? [])
       if (!S.has(w.name) && !isDeepStrictEqual(y.entries.get(w.name), w)) S.set(w.name, w);
-    let filtered = [...(n?.nameOnlyAnnouncements ?? [])].filter((w) => !y.nameOnlyAnnouncements.has(w)),
-      filtered_2 = [...(n?.strippedReferences ?? [])].filter((w) => !y.strippedReferences.has(w)),
-      mapped = [...(toolInputCopies ?? [])]
-        .filter(([w, P]) => y.toolInputCopies.get(w) !== P)
-        .map(([w, P]) => ({ id: w, copy: P }));
+    let filtered = [...(deferredToolsSent?.nameOnlyAnnouncements ?? [])].filter(
+      (w) => !y.nameOnlyAnnouncements.has(w),
+    );
+    let filtered_2 = [...(deferredToolsSent?.strippedReferences ?? [])].filter(
+      (w) => !y.strippedReferences.has(w),
+    );
+    let mapped = [...(toolInputCopies ?? [])]
+      .filter(([w, P]) => y.toolInputCopies.get(w) !== P)
+      .map(([w, P]) => ({
+        id: w,
+        copy: P,
+      }));
     if (S.size === 0 && filtered.length === 0 && filtered_2.length === 0 && mapped.length === 0) return;
     return createAttachmentMessage_2(
       {
         type: "deferred_tools_record",
         entries: [...S.values()],
-        ...(filtered.length > 0 && { nameOnlyAnnouncements: filtered }),
-        ...(filtered_2.length > 0 && { strippedReferences: filtered_2 }),
-        ...(mapped.length > 0 && { toolInputCopies: mapped }),
+        ...(filtered.length > 0 && {
+          nameOnlyAnnouncements: filtered,
+        }),
+        ...(filtered_2.length > 0 && {
+          strippedReferences: filtered_2,
+        }),
+        ...(mapped.length > 0 && {
+          toolInputCopies: mapped,
+        }),
       },
       stamp,
     );
@@ -633,14 +818,13 @@ function recordDeferredTools(e, n, { stamp: stamp, toolInputCopies: toolInputCop
     return;
   }
 }
-
 export {
-  ROs,
-  xxr,
-  oSo,
-  Su,
+  lazyToolAttachment,
+  wasPutBackSafe,
+  settleTakenSafe,
+  redescribeEpochFor,
   sectionAnswersSnapshot,
-  yu,
+  startRequeueWindowSafe,
   crossOrgThinkingAttachments,
   recordPromptSnapshot,
   recordDeferredTools,

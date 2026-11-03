@@ -8,11 +8,11 @@
 import Ro from "process";
 import { PassThrough } from "stream";
 import { Re } from "../../../../runtime/bun-runtime.js";
-import { WSr } from "../../../cross-spawn/index.js";
-import { iLo, SdkError, Ti, aLo } from "./src-D_zzAWoS.mjs";
+import { require_cross_spawn } from "../../../cross-spawn/index.js";
+import { ReadBuffer, SdkError, SdkErrorCode, serializeMessage } from "./src-D_zzAWoS.mjs";
 
 //@ chunk-8t8n4kdh.js:16826-16845 esm-layout
-var Hr = Re(WSr(), 1);
+var import_cross_spawn = Re(require_cross_spawn(), 1);
 //@ chunk-8t8n4kdh.js:16907-17140 esm-fingerprint
 var Zi =
   Ro.platform === "win32"
@@ -32,18 +32,18 @@ var Zi =
       ]
     : ["HOME", "LOGNAME", "PATH", "SHELL", "TERM", "USER"];
 //@ chunk-8t8n4kdh.js:17140-17266 esm-fingerprint
-function ko() {
-  let e = {};
-  for (let n of Zi) {
-    let r = Ro.env[n];
-    if (r === void 0) continue;
-    if (r.startsWith("()")) continue;
-    e[n] = r;
+function getDefaultEnvironment() {
+  let env = {};
+  for (let key of Zi) {
+    let value = Ro.env[key];
+    if (value === undefined) continue;
+    if (value.startsWith("()")) continue;
+    env[key] = value;
   }
-  return e;
+  return env;
 }
 //@ chunk-8t8n4kdh.js:17266-19845 esm-fingerprint
-var jr = class {
+var StdioClientTransport = class {
   _process;
   _readBuffer;
   _serverParams;
@@ -51,53 +51,56 @@ var jr = class {
   onclose;
   onerror;
   onmessage;
-  constructor(e) {
-    if (
-      ((this._serverParams = e),
-      (this._readBuffer = new iLo({ maxBufferSize: e.maxBufferSize })),
-      e.stderr === "pipe" || e.stderr === "overlapped")
-    )
-      this._stderrStream = new PassThrough();
+  constructor(server) {
+    this._serverParams = server;
+    this._readBuffer = new ReadBuffer({
+      maxBufferSize: server.maxBufferSize,
+    });
+    if (server.stderr === "pipe" || server.stderr === "overlapped") this._stderrStream = new PassThrough();
   }
   async start() {
     if (this._process)
       throw Error(
         "StdioClientTransport already started! If using Client class, note that connect() calls start() automatically.",
       );
-    return new Promise((e, n) => {
-      if (
-        ((this._process = Hr.default(this._serverParams.command, this._serverParams.args ?? [], {
-          env: { ...ko(), ...this._serverParams.env },
-          stdio: ["pipe", "pipe", this._serverParams.stderr ?? "inherit"],
-          shell: !1,
-          windowsHide: Ro.platform === "win32",
-          cwd: this._serverParams.cwd,
-        })),
-        this._process.on("error", (r) => {
-          (n(r), this.onerror?.(r));
-        }),
-        this._process.on("spawn", () => {
-          e();
-        }),
-        this._process.on("close", (r) => {
-          ((this._process = void 0), this.onclose?.());
-        }),
-        this._process.stdin?.on("error", (r) => {
-          this.onerror?.(r);
-        }),
-        this._process.stdout?.on("data", (r) => {
-          try {
-            (this._readBuffer.append(r), this.processReadBuffer());
-          } catch (error) {
-            (this.onerror?.(error), this.close().catch(() => {}));
-          }
-        }),
-        this._process.stdout?.on("error", (r) => {
-          this.onerror?.(r);
-        }),
-        this._stderrStream && this._process.stderr)
-      )
-        this._process.stderr.pipe(this._stderrStream);
+    return new Promise((resolve, reject) => {
+      this._process = import_cross_spawn.default(this._serverParams.command, this._serverParams.args ?? [], {
+        env: {
+          ...getDefaultEnvironment(),
+          ...this._serverParams.env,
+        },
+        stdio: ["pipe", "pipe", this._serverParams.stderr ?? "inherit"],
+        shell: false,
+        windowsHide: Ro.platform === "win32",
+        cwd: this._serverParams.cwd,
+      });
+      this._process.on("error", (error) => {
+        reject(error);
+        this.onerror?.(error);
+      });
+      this._process.on("spawn", () => {
+        resolve();
+      });
+      this._process.on("close", (_code) => {
+        this._process = undefined;
+        this.onclose?.();
+      });
+      this._process.stdin?.on("error", (error) => {
+        this.onerror?.(error);
+      });
+      this._process.stdout?.on("data", (chunk) => {
+        try {
+          this._readBuffer.append(chunk);
+          this.processReadBuffer();
+        } catch (error) {
+          this.onerror?.(error);
+          this.close().catch(() => {});
+        }
+      });
+      this._process.stdout?.on("error", (error) => {
+        this.onerror?.(error);
+      });
+      if (this._stderrStream && this._process.stderr) this._process.stderr.pipe(this._stderrStream);
     });
   }
   get stderr() {
@@ -108,7 +111,7 @@ var jr = class {
     return this._process?.pid ?? null;
   }
   processReadBuffer() {
-    while (!0)
+    while (true)
       try {
         let message = this._readBuffer.readMessage();
         if (message === null) break;
@@ -118,71 +121,67 @@ var jr = class {
       }
   }
   async _dispose() {
-    let _process = this._process;
-    if (((this._process = void 0), _process && _process.exitCode === null && _process.signalCode === null)) {
-      let promise = new Promise((r) => _process.once("exit", () => r()));
+    let proc = this._process;
+    this._process = undefined;
+    if (proc && proc.exitCode === null && proc.signalCode === null) {
+      let exited = new Promise((resolve) => proc.once("exit", () => resolve()));
       try {
-        _process.stdin?.end();
+        proc.stdin?.end();
       } catch {}
       try {
-        _process.kill("SIGTERM");
+        proc.kill("SIGTERM");
       } catch {}
-      if (
-        (await Promise.race([promise, new Promise((r) => setTimeout(r, 1000).unref())]),
-        _process.exitCode === null && _process.signalCode === null)
-      )
+      await Promise.race([exited, new Promise((resolve) => setTimeout(resolve, 1000).unref())]);
+      if (proc.exitCode === null && proc.signalCode === null)
         try {
-          _process.kill("SIGKILL");
+          proc.kill("SIGKILL");
         } catch {}
-      await promise;
+      await exited;
     }
     try {
-      _process?.stdout?.destroy();
+      proc?.stdout?.destroy();
     } catch {}
     try {
-      _process?.stdin?.destroy();
+      proc?.stdin?.destroy();
     } catch {}
     try {
-      _process?.stderr?.destroy();
+      proc?.stderr?.destroy();
     } catch {}
     this._readBuffer.clear();
   }
   async close() {
     if (this._process) {
-      let _process = this._process;
-      this._process = void 0;
-      let promise = new Promise((r) => {
-        _process.once("close", () => {
-          r();
+      let processToClose = this._process;
+      this._process = undefined;
+      let closePromise = new Promise((resolve) => {
+        processToClose.once("close", () => {
+          resolve();
         });
       });
       try {
-        _process.stdin?.end();
+        processToClose.stdin?.end();
       } catch {}
-      if (
-        (await Promise.race([promise, new Promise((r) => setTimeout(r, 2000).unref())]),
-        _process.exitCode === null)
-      ) {
+      await Promise.race([closePromise, new Promise((resolve) => setTimeout(resolve, 2000).unref())]);
+      if (processToClose.exitCode === null) {
         try {
-          _process.kill("SIGTERM");
+          processToClose.kill("SIGTERM");
         } catch {}
-        await Promise.race([promise, new Promise((r) => setTimeout(r, 2000).unref())]);
+        await Promise.race([closePromise, new Promise((resolve) => setTimeout(resolve, 2000).unref())]);
       }
-      if (_process.exitCode === null)
+      if (processToClose.exitCode === null)
         try {
-          _process.kill("SIGKILL");
+          processToClose.kill("SIGKILL");
         } catch {}
     }
     this._readBuffer.clear();
   }
-  send(e) {
-    return new Promise((n) => {
-      if (!this._process?.stdin) throw new SdkError(Ti.NotConnected, "Not connected");
-      let r = aLo(e);
-      if (this._process.stdin.write(r)) n();
-      else this._process.stdin.once("drain", n);
+  send(message) {
+    return new Promise((resolve) => {
+      if (!this._process?.stdin) throw new SdkError(SdkErrorCode.NotConnected, "Not connected");
+      let json = serializeMessage(message);
+      if (this._process.stdin.write(json)) resolve();
+      else this._process.stdin.once("drain", resolve);
     });
   }
 };
-
-export { ko, jr };
+export { getDefaultEnvironment, StdioClientTransport };

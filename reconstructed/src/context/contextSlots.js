@@ -8,15 +8,14 @@
  * pieces: chunk-jryts5sf.js (2)
  * attribution: placement 2
  */
-import { j, qt } from "../../vendor/react/cjs/react.production.js";
+import { init_react_production, qt } from "../../vendor/react/cjs/react.production.js";
 
 //@ chunk-jryts5sf.js:229-233 placement
-j();
+init_react_production();
+//@ chunk-jryts5sf.js:233-262 placement
 /**
  * 两个 React 上下文槽。
  */
-//@ chunk-jryts5sf.js:233-262 placement
-var ContextSlotA = qt(null),
-  u0t = qt(null);
-
-export { ContextSlotA, u0t };
+var ContextSlotA = qt(null);
+var contextSlot = qt(null);
+export { ContextSlotA, contextSlot };

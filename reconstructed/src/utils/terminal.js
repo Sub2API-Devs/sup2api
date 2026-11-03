@@ -12,33 +12,37 @@ import { bunStringWidth } from "../ink/stringWidth.js";
 import { sequential } from "./sequential.js";
 import { formatOverflowHint } from "./format.js";
 import { ctrlOToExpand } from "../components/CtrlOToExpand.js";
-import { Cy, Zu } from "../components/messages/SystemNoticeMessage.js";
+import {
+  HOOK_FEEDBACK_MAX_WIDTH,
+  HOOK_FEEDBACK_MAX_LINES,
+} from "../components/messages/SystemNoticeMessage.js";
 import { truncateToLength } from "./stringUtils.js";
 
 //@ chunk-bn7jsn5n.js:635-648 affinity
-var d = 3,
-  u = 10;
+var MAX_TRUNCATION_LINES = 3;
+var MIN_WRAP_WIDTH = 10;
 //@ chunk-bn7jsn5n.js:648-1006 fingerprint = wrapText (0.843)
 function wrapText(text, wrapWidth) {
-  let parts = text.split(`
-`),
-    wrappedLines = [];
-  for (let line of parts) {
+  let lines = text.split(`
+`);
+  let wrappedLines = [];
+  for (let line of lines) {
     let visibleWidth = bunStringWidth(line);
     if (visibleWidth <= wrapWidth) wrappedLines.push(line.trimEnd());
     else {
       let position = 0;
       while (position < visibleWidth) {
-        let sliceAnsi = Bun.sliceAnsi(line, position, position + wrapWidth);
-        (wrappedLines.push(sliceAnsi.trimEnd()), (position += wrapWidth));
+        let chunk = Bun.sliceAnsi(line, position, position + wrapWidth);
+        wrappedLines.push(chunk.trimEnd());
+        position += wrapWidth;
       }
     }
   }
-  let remainingLines = wrappedLines.length - d;
+  let remainingLines = wrappedLines.length - MAX_TRUNCATION_LINES;
   if (remainingLines === 1)
     return {
       aboveTheFold: wrappedLines
-        .slice(0, d + 1)
+        .slice(0, MAX_TRUNCATION_LINES + 1)
         .join(
           `
 `,
@@ -48,7 +52,7 @@ function wrapText(text, wrapWidth) {
     };
   return {
     aboveTheFold: wrappedLines
-      .slice(0, d)
+      .slice(0, MAX_TRUNCATION_LINES)
       .join(
         `
 `,
@@ -58,101 +62,108 @@ function wrapText(text, wrapWidth) {
   };
 }
 //@ chunk-bn7jsn5n.js:1006-1372 layout = wrapText (0.814)
-function wrapText_2(r, o, t = !1) {
-  let trimEnd = r.trimEnd();
-  if (!trimEnd) return "";
-  let max = Math.max(o - u, 10),
-    i = d * max * 4,
-    s = trimEnd.length > i,
-    a = s ? trimEnd.slice(0, i) : trimEnd,
-    { aboveTheFold: aboveTheFold, remainingLines: remainingLines } = wrapText(a, max),
-    m = remainingLines;
-  if (s) {
-    let position = 0,
-      f = -1;
+function wrapText_2(content, terminalWidth, suppressExpandHint = false) {
+  let trimmedContent = content.trimEnd();
+  if (!trimmedContent) return "";
+  let wrapWidth = Math.max(terminalWidth - MIN_WRAP_WIDTH, 10);
+  let maxChars = MAX_TRUNCATION_LINES * wrapWidth * 4;
+  let preTruncated = trimmedContent.length > maxChars;
+  let contentForWrapping = preTruncated ? trimmedContent.slice(0, maxChars) : trimmedContent;
+  let { aboveTheFold, remainingLines } = wrapText(contentForWrapping, wrapWidth);
+  let estimatedRemaining = remainingLines;
+  if (preTruncated) {
+    let position = 0;
+    let f = -1;
     for (;;) {
-      if (
-        ((f = trimEnd.indexOf(
-          `
+      f = trimmedContent.indexOf(
+        `
 `,
-          f + 1,
-        )),
-        f === -1)
-      )
-        break;
+        f + 1,
+      );
+      if (f === -1) break;
       position++;
     }
-    let max_2 = Math.max(position + 1, Math.ceil(trimEnd.length / max));
-    m = Math.max(remainingLines, max_2 - d);
+    let max = Math.max(position + 1, Math.ceil(trimmedContent.length / wrapWidth));
+    estimatedRemaining = Math.max(remainingLines, max - MAX_TRUNCATION_LINES);
   }
   return [
     aboveTheFold,
-    m > 0 ? sequential.dim(formatOverflowHint(m) + (t ? "" : ` ${ctrlOToExpand()}`)) : "",
+    estimatedRemaining > 0
+      ? sequential.dim(
+          formatOverflowHint(estimatedRemaining) + (suppressExpandHint ? "" : ` ${ctrlOToExpand()}`),
+        )
+      : "",
   ].filter(Boolean).join(`
 `);
 }
+//@ chunk-bn7jsn5n.js:1372-1778 placement
 /**
  * 文本按宽度换行后是否超过显示行数上限。
  */
-//@ chunk-bn7jsn5n.js:1372-1778 placement
-function exceedsLineLimit(r, o) {
-  if (typeof r !== "string") return !1;
-  let trimEnd = r.trimEnd(),
-    n = 0,
-    e = 0;
-  for (let l = 0; l <= d; l++) {
-    if (
-      ((n = trimEnd.indexOf(
-        `
+function exceedsLineLimit(r, columns) {
+  if (typeof r !== "string") return false;
+  let t = r.trimEnd();
+  let n = 0;
+  let e = 0;
+  for (let j = 0; j <= MAX_TRUNCATION_LINES; j++) {
+    n = t.indexOf(
+      `
 `,
-        n,
-      )),
-      n === -1)
-    )
-      break;
-    (e++, n++);
+      n,
+    );
+    if (n === -1) break;
+    e++;
+    n++;
   }
-  if (n !== -1 && n < trimEnd.length) return !0;
-  if (o === void 0) return !1;
-  let max = Math.max(o - u, 10),
-    s = d + 1,
-    a = d * max * 4;
-  if (trimEnd.length > a) return !0;
+  if (n !== -1 && n < t.length) return true;
+  if (columns === undefined) return false;
+  let max = Math.max(columns - MIN_WRAP_WIDTH, 10);
+  let s = MAX_TRUNCATION_LINES + 1;
+  let a = MAX_TRUNCATION_LINES * max * 4;
+  if (t.length > a) return true;
   if (e === 0) {
     let l = s * max;
-    if (trimEnd.length <= l) return !1;
-    return bunStringWidth(trimEnd) > l;
+    if (t.length <= l) return false;
+    return bunStringWidth(t) > l;
   }
   let c = 0;
-  for (let l of trimEnd.split(`
-`))
-    if (((c += Math.max(1, Math.ceil(bunStringWidth(l) / max))), c > s)) return !0;
-  return !1;
+  for (let line of t.split(`
+`)) {
+    c += Math.max(1, Math.ceil(bunStringWidth(line) / max));
+    if (c > s) return true;
+  }
+  return false;
 }
 //@ chunk-ah34pb7m.js:54284-54747 fingerprint = renderTruncatedContent (0.433)
-function renderTruncatedContent(m, { maxChars: d = Cy, maxLines: c = Zu + 1, preserveLayout: g = !1 } = {}) {
+function renderTruncatedContent(
+  m,
+  {
+    maxChars: d = HOOK_FEEDBACK_MAX_WIDTH,
+    maxLines: c = HOOK_FEEDBACK_MAX_LINES + 1,
+    preserveLayout: g = false,
+  } = {},
+) {
   let f;
   if (g) {
-    let parts = m.split(`
-`),
-      index = parts.findIndex((b) => b.trim() !== ""),
-      lastIndex = parts.findLastIndex((b) => b.trim() !== "");
-    f = index === -1 ? [] : parts.slice(index, lastIndex + 1).map((b) => b.trimEnd() || " ");
+    let lines = m.split(`
+`);
+    let index = lines.findIndex((line) => line.trim() !== "");
+    let lastIndex = lines.findLastIndex((line) => line.trim() !== "");
+    f = index === -1 ? [] : lines.slice(index, lastIndex + 1).map((line) => line.trimEnd() || " ");
   } else
     f = m
       .split(
         `
 `,
       )
-      .map((T) => T.trim())
+      .map((line) => line.trim())
       .filter((T) => T.length > 0);
   let mapped = f.slice(0, c).map((T) => {
-      let x = truncateToLength(T, d);
-      return x.length < T.length ? `${x}\u2026` : T;
-    }),
-    M = f.length - mapped.length;
+    let x = truncateToLength(T, d);
+    return x.length < T.length ? `${x}\u2026` : T;
+  });
+  let M = f.length - mapped.length;
   if (M > 0) mapped.push(`\u2026 +${M} more ${M === 1 ? "line" : "lines"}`);
   return mapped;
 }
-
 export { exceedsLineLimit, renderTruncatedContent, wrapText_2 };

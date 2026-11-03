@@ -9,11 +9,15 @@
  * attribution: placement 1
  */
 import { isFirstPartyMcpUrl } from "./auth.js";
-import { vF } from "./client.js";
+import { maxDescriptionLength } from "./client.js";
 
 //@ chunk-nm347593.js:263-344 placement
-function TB(r, t = !1) {
-  return (r.type === "http" || r.type === "sse") && isFirstPartyMcpUrl(r.url) ? 1 / 0 : vF(t);
+/**
+ * 一方 http/sse MCP 服务器不设超时（Infinity），其他按默认规则。
+ */
+function toolTimeoutForServer(config, t = false) {
+  return (config.type === "http" || config.type === "sse") && isFirstPartyMcpUrl(config.url)
+    ? 1 / 0
+    : maxDescriptionLength(t);
 }
-
-export { TB };
+export { toolTimeoutForServer };

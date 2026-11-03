@@ -21,23 +21,26 @@ import { HostScoped } from "../hostScoped.js";
 import { getRootSession } from "../../bootstrap/state.js";
 import { toError } from "../errors.js";
 
+//@ chunk-ha3km179.js:54310-54505 placement
 /**
  * 把小粘贴块展开后重建提交内容。
  */
-//@ chunk-ha3km179.js:54310-54505 placement
-function withExpandedPastes(e, n) {
-  let r = collapseSmallPastedBlocks(n),
-    s = {};
-  for (let h of Object.values(e.pastedContents)) {
-    let included = r.text.includes(formatImageRef(h.id));
-    if (h.type === "image" && included) s[h.id] = h;
+function withExpandedPastes(entry, n) {
+  let r = collapseSmallPastedBlocks(n);
+  let s = {};
+  for (let pastedContent of Object.values(entry.pastedContents)) {
+    let included = r.text.includes(formatImageRef(pastedContent.id));
+    if (pastedContent.type === "image" && included) s[pastedContent.id] = pastedContent;
   }
-  return logEntryToHistoryEntry(e, r.text, { ...s, ...r.pastedContents });
+  return logEntryToHistoryEntry(entry, r.text, {
+    ...s,
+    ...r.pastedContents,
+  });
 }
+//@ chunk-ha3km179.js:54505-54550 placement
 /**
  * 上报排队提交统计（异常吞掉）。
  */
-//@ chunk-ha3km179.js:54505-54550 placement
 function reportQueuedSubmissions(e, n) {
   try {
     reportQueuedSubmissionsUnsafe(e, n);
@@ -45,25 +48,28 @@ function reportQueuedSubmissions(e, n) {
     logError(error);
   }
 }
+//@ chunk-ha3km179.js:54550-55130 placement
 /**
  * 统计排队提交的类型与等待时间。
  */
-//@ chunk-ha3km179.js:54550-55130 placement
 function reportQueuedSubmissionsUnsafe(e, n) {
-  let filtered = e.filter((w) => w.pollEmptyDispatch !== !0);
+  let filtered = e.filter((w) => w.pollEmptyDispatch !== true);
   if (filtered.length === 0) return;
-  let now = Date.now(),
-    h = now,
-    y = 0,
-    S = 0,
-    M = 0,
-    R = 0,
-    T = 0;
+  let now = Date.now();
+  let h = now;
+  let y = 0;
+  let S = 0;
+  let M = 0;
+  let R = 0;
+  let monitorEventChars = 0;
   for (let w of filtered) {
     if (w.mode === "prompt") y++;
-    if (w.artifactCommentTurn !== void 0) M++;
-    if (w.monitorEvent !== void 0) (R++, (T += typeof w.value === "string" ? w.value.length : 0));
-    if (isProjectsRelay(w.origin) && w.hearthRelayMessageIds !== void 0) S++;
+    if (w.artifactCommentTurn !== undefined) M++;
+    if (w.monitorEvent !== undefined) {
+      R++;
+      monitorEventChars += typeof w.value === "string" ? w.value.length : 0;
+    }
+    if (isProjectsRelay(w.origin) && w.hearthRelayMessageIds !== undefined) S++;
     let P = w.timestamp ? Date.parse(w.timestamp) : Number.NaN;
     if (P < h) h = P;
   }
@@ -74,165 +80,237 @@ function reportQueuedSubmissionsUnsafe(e, n) {
     relay_count: S,
     artifact_comment_count: M,
     monitor_event_count: R,
-    monitor_event_chars: T,
+    monitor_event_chars: monitorEventChars,
     wait_ms: now - h,
   });
 }
 //@ chunk-ha3km179.js:55130-55162 placement
-function Xs(e) {
+function canonicalModelName(e) {
   return getCanonicalName(parseUserSpecifiedModel(e));
 }
 //@ chunk-ha3km179.js:55162-55416 placement
-function Il({
-  userModel: userModel,
-  permissionMode: permissionMode,
-  exceeds200kTokens: exceeds200kTokens,
-  automaticModels: automaticModels,
-}) {
-  let h = getRuntimeMainLoopModel({
-      permissionMode: permissionMode,
-      mainLoopModel: userModel,
-      exceeds200kTokens: exceeds200kTokens,
-    }),
-    y = Xs(h);
-  for (let M of automaticModels) if (M && Xs(M) === y) return {};
-  let S = getDefaultMainLoopModel();
-  return { isDefaultModel: Xs(S) === y, defaultModel: S };
+/**
+ * 判断当前主循环模型是否为自动模式模型或默认模型（用于回退提示）。
+ */
+function automaticModelFallbackInfo({ userModel, permissionMode, exceeds200kTokens, automaticModels }) {
+  let runtimeMainLoopModel = getRuntimeMainLoopModel({
+    permissionMode,
+    mainLoopModel: userModel,
+    exceeds200kTokens,
+  });
+  let y = canonicalModelName(runtimeMainLoopModel);
+  for (let automaticModel of automaticModels)
+    if (automaticModel && canonicalModelName(automaticModel) === y) return {};
+  let defaultMainLoopModel = getDefaultMainLoopModel();
+  return {
+    isDefaultModel: canonicalModelName(defaultMainLoopModel) === y,
+    defaultModel: defaultMainLoopModel,
+  };
 }
 //@ chunk-ha3km179.js:55416-55473 placement
-var Js = { inEpisode: !1, cursor: void 0, pendingNotice: void 0 };
+/**
+ * 初始的"拒绝回退"回合状态（未进入、无游标、无待发通知）。
+ */
+var INITIAL_REJECTION_EPISODE = {
+  inEpisode: false,
+  cursor: undefined,
+  pendingNotice: undefined,
+};
+//@ chunk-ha3km179.js:55473-56111 placement
 /**
  * 选择下一个模型回退阶段。
  */
-//@ chunk-ha3km179.js:55473-56111 placement
-function nextFallbackStage(e, n, r) {
-  let cursor = e.cursor;
-  if (cursor === void 0) return { armTarget: void 0, hop: void 0, state: e };
-  let firstReachableStage = r.firstReachableStage(cursor.remaining, (S) =>
-    r.resolveStage(S, n, cursor.triedModels),
+function nextFallbackStage(refusalCascadeState, attemptModel, refusalCascadeResolver) {
+  let cursor = refusalCascadeState.cursor;
+  if (cursor === undefined)
+    return {
+      armTarget: undefined,
+      hop: undefined,
+      state: refusalCascadeState,
+    };
+  let h = refusalCascadeResolver.firstReachableStage(cursor.remaining, (S) =>
+    refusalCascadeResolver.resolveStage(S, attemptModel, cursor.triedModels),
   );
-  r.logSkippedStages({
-    stages: firstReachableStage?.skippedStages ?? cursor.remaining,
+  refusalCascadeResolver.logSkippedStages({
+    stages: h?.skippedStages ?? cursor.remaining,
     chainLength: cursor.chainLength,
     firstStageIndex: cursor.chainLength - cursor.remaining.length + 1,
-    model: n,
-    armedFallbackModel: void 0,
+    model: attemptModel,
+    armedFallbackModel: undefined,
     apiRefusalCategory: cursor.triggerCategory,
     requestId: cursor.triggerRequestId,
   });
-  let y =
-    firstReachableStage !== void 0 && firstReachableStage.remainingChain.length > 0
-      ? { ...cursor, remaining: firstReachableStage.remainingChain, nextHopIndex: cursor.nextHopIndex + 1 }
-      : void 0;
+  let cursor_2 =
+    h !== undefined && h.remainingChain.length > 0
+      ? {
+          ...cursor,
+          remaining: h.remainingChain,
+          nextHopIndex: cursor.nextHopIndex + 1,
+        }
+      : undefined;
   return {
-    armTarget: firstReachableStage?.model,
-    hop: firstReachableStage === void 0 ? void 0 : { index: cursor.nextHopIndex, length: cursor.chainLength },
-    state: { ...e, cursor: y },
+    armTarget: h?.model,
+    hop:
+      h === undefined
+        ? undefined
+        : {
+            index: cursor.nextHopIndex,
+            length: cursor.chainLength,
+          },
+    state: {
+      ...refusalCascadeState,
+      cursor: cursor_2,
+    },
   };
 }
 //@ chunk-ha3km179.js:56111-56158 placement
-function Zs(e) {
+/**
+ * 判断该次路由是否为链式（fallback chain）。
+ */
+function isChainRouteMatch(e) {
   return e.routeMatched === "chain";
 }
+//@ chunk-ha3km179.js:56158-56727 placement
 /**
  * 记录模型回退尝试。
  */
-//@ chunk-ha3km179.js:56158-56727 placement
-function recordFallbackAttempt(e, n, r, s) {
-  if (Zs(n))
-    return e.cursor === void 0
-      ? { ...e, inEpisode: !0 }
+function recordFallbackAttempt(refusalCascadeState, event, switchModelsOnFlagSetting, canonicalModelKey) {
+  if (isChainRouteMatch(event))
+    return refusalCascadeState.cursor === undefined
+      ? {
+          ...refusalCascadeState,
+          inEpisode: true,
+        }
       : {
-          ...e,
-          inEpisode: !0,
+          ...refusalCascadeState,
+          inEpisode: true,
           cursor: {
-            ...e.cursor,
-            triedModels: [...e.cursor.triedModels, s(n.fallbackModel)],
-            triggerRequestId: n.requestId ?? void 0,
-            triggerCategory: n.apiRefusalCategory ?? void 0,
+            ...refusalCascadeState.cursor,
+            triedModels: [...refusalCascadeState.cursor.triedModels, canonicalModelKey(event.fallbackModel)],
+            triggerRequestId: event.requestId ?? undefined,
+            triggerCategory: event.apiRefusalCategory ?? undefined,
           },
         };
-  let h = r ? (n.remainingChain ?? []) : [],
-    y =
-      h.length > 0 && n.cascadeChainLength !== void 0
-        ? {
-            remaining: h,
-            chainLength: n.cascadeChainLength,
-            nextHopIndex: 2,
-            triedModels: [s(n.originalModel), s(n.fallbackModel)],
-            triggerRequestId: n.requestId ?? void 0,
-            triggerCategory: n.apiRefusalCategory ?? void 0,
-          }
-        : void 0;
-  return { ...e, inEpisode: !0, cursor: y };
+  let h = switchModelsOnFlagSetting ? (event.remainingChain ?? []) : [];
+  let cursor =
+    h.length > 0 && event.cascadeChainLength !== undefined
+      ? {
+          remaining: h,
+          chainLength: event.cascadeChainLength,
+          nextHopIndex: 2,
+          triedModels: [canonicalModelKey(event.originalModel), canonicalModelKey(event.fallbackModel)],
+          triggerRequestId: event.requestId ?? undefined,
+          triggerCategory: event.apiRefusalCategory ?? undefined,
+        }
+      : undefined;
+  return {
+    ...refusalCascadeState,
+    inEpisode: true,
+    cursor,
+  };
 }
+//@ chunk-ha3km179.js:56727-57286 placement
 /**
  * 记录回退通知（来源与服务模型）。
  */
-//@ chunk-ha3km179.js:56727-57286 placement
-function recordFallbackNotice(e, n) {
-  let pendingNotice = e.pendingNotice;
+function recordFallbackNotice(refusalCascadeState, n) {
+  let pendingNotice = refusalCascadeState.pendingNotice;
   return {
-    ...e,
+    ...refusalCascadeState,
     pendingNotice: {
       originModel: pendingNotice?.originModel ?? n.originModel,
       servingModel: n.servingModel,
       retractedMessageUuids: [
         ...(pendingNotice?.retractedMessageUuids ?? []),
-        ...(pendingNotice?.provisionalFlushUuid !== void 0 ? [pendingNotice.provisionalFlushUuid] : []),
+        ...(pendingNotice?.provisionalFlushUuid !== undefined ? [pendingNotice.provisionalFlushUuid] : []),
         ...n.retractedMessageUuids,
       ],
       refusedUserMessageUuid: pendingNotice?.refusedUserMessageUuid ?? n.refusedUserMessageUuid,
       apiRefusalCategory: pendingNotice ? pendingNotice.apiRefusalCategory : n.apiRefusalCategory,
-      sawCyberRefusal: pendingNotice?.sawCyberRefusal === !0 || n.apiRefusalCategory === "cyber",
+      sawCyberRefusal: pendingNotice?.sawCyberRefusal === true || n.apiRefusalCategory === "cyber",
       requestId: pendingNotice ? pendingNotice.requestId : n.requestId,
-      provisionalFlushUuid: void 0,
+      provisionalFlushUuid: undefined,
     },
   };
 }
 //@ chunk-ha3km179.js:57286-57476 placement
-function Ul(e, n) {
-  let pendingNotice = e.pendingNotice;
-  if (pendingNotice === void 0 || pendingNotice.provisionalFlushUuid !== void 0)
-    return { notice: void 0, state: e };
+/**
+ * 取待发通知并打上临时刷新 uuid（避免重复）。
+ */
+function takePendingNotice(refusalCascadeState, provisionalFlushUuid) {
+  let pendingNotice = refusalCascadeState.pendingNotice;
+  if (pendingNotice === undefined || pendingNotice.provisionalFlushUuid !== undefined)
+    return {
+      notice: undefined,
+      state: refusalCascadeState,
+    };
   return {
     notice: pendingNotice,
-    state: { ...e, pendingNotice: { ...pendingNotice, provisionalFlushUuid: n } },
+    state: {
+      ...refusalCascadeState,
+      pendingNotice: {
+        ...pendingNotice,
+        provisionalFlushUuid,
+      },
+    },
   };
 }
 //@ chunk-ha3km179.js:57476-57615 placement
-function takeFallbackNotice(e) {
-  let pendingNotice = e.pendingNotice;
+function takeFallbackNotice(refusalCascadeState) {
+  let pendingNotice = refusalCascadeState.pendingNotice;
   return {
     notice:
-      pendingNotice !== void 0 && pendingNotice.provisionalFlushUuid === void 0 ? pendingNotice : void 0,
-    state: { ...e, pendingNotice: void 0 },
+      pendingNotice !== undefined && pendingNotice.provisionalFlushUuid === undefined
+        ? pendingNotice
+        : undefined,
+    state: {
+      ...refusalCascadeState,
+      pendingNotice: undefined,
+    },
   };
 }
 //@ chunk-ha3km179.js:57615-57664 placement
-function Nl(e) {
-  return { ...e, pendingNotice: void 0 };
+/**
+ * 清空待发通知。
+ */
+function clearPendingNotice(refusalCascadeState) {
+  return {
+    ...refusalCascadeState,
+    pendingNotice: undefined,
+  };
 }
 //@ chunk-ha3km179.js:57664-57688 placement
-function ql() {
-  return Js;
+/**
+ * 返回初始的拒绝回退状态。
+ */
+function initialRejectionEpisode() {
+  return INITIAL_REJECTION_EPISODE;
 }
 //@ chunk-ha3km179.js:57688-57717 placement
-function ti(e, n) {
-  return e >= n;
+/**
+ * 判断 e 是否不小于 n。
+ */
+function atLeast(refusalFallbacksUsed, n) {
+  return refusalFallbacksUsed >= n;
 }
 //@ chunk-ha3km179.js:57717-57767 placement
-class Bl {
+class PostSamplingHookRegistry {
   hooks = [];
   register(e) {
     this.hooks.push(e);
   }
 }
 //@ chunk-ha3km179.js:57767-57792 placement
-var Lr = new HostScoped(() => new Bl());
+/**
+ * 宿主隔离的 post-sampling 钩子注册表。
+ */
+var postSamplingHookRegistry = new HostScoped(() => new PostSamplingHookRegistry());
 //@ chunk-ha3km179.js:57792-57836 placement
-function xBn(e) {
-  Lr.of(getRootSession().host).register(e);
+/**
+ * 把 post-sampling 钩子注册到当前宿主的注册表。
+ */
+function registerPostSamplingHook(e) {
+  postSamplingHookRegistry.of(getRootSession().host).register(e);
 }
 //@ chunk-ha3km179.js:57836-58036 fingerprint = executePostSamplingHooks (0.923)
 async function executePostSamplingHooks(
@@ -244,36 +322,35 @@ async function executePostSamplingHooks(
   querySource,
 ) {
   let context = {
-    messages: messages,
-    systemPrompt: systemPrompt,
-    userContext: userContext,
-    systemContext: systemContext,
-    toolUseContext: toolUseContext,
-    querySource: querySource,
+    messages,
+    systemPrompt,
+    userContext,
+    systemContext,
+    toolUseContext,
+    querySource,
   };
-  for (let hook of Lr.of(toolUseContext.session.host).hooks)
+  for (let hook of postSamplingHookRegistry.of(toolUseContext.session.host).hooks)
     try {
       await hook(context);
     } catch (error) {
       logError(toError(error));
     }
 }
-
 export {
   withExpandedPastes,
-  xBn,
+  registerPostSamplingHook,
   reportQueuedSubmissions,
-  Il,
-  Js,
-  Ul,
+  automaticModelFallbackInfo,
+  INITIAL_REJECTION_EPISODE,
+  takePendingNotice,
   takeFallbackNotice,
   nextFallbackStage,
-  ti,
-  Zs,
+  atLeast,
+  isChainRouteMatch,
   recordFallbackAttempt,
-  Nl,
+  clearPendingNotice,
   recordFallbackNotice,
-  ql,
+  initialRejectionEpisode,
   executePostSamplingHooks,
-  Lr,
+  postSamplingHookRegistry,
 };

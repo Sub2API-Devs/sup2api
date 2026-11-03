@@ -8,185 +8,198 @@
  * pieces: chunk-aepeg2w5.js (27)
  * attribution: placement 27
  */
-import { pE } from "../../utils/auth/cloudAuthRefreshLock.js";
+import { refreshLockEnvReader } from "../../utils/auth/cloudAuthRefreshLock.js";
 import { env } from "../../utils/env.js";
 import { REVALIDATE_IN_FULL_AFTER_MS } from "../policyLimits/index.js";
 
 //@ chunk-aepeg2w5.js:340580-340594 placement
-var rp = new pE();
+var gateReaderSlot = new refreshLockEnvReader();
 //@ chunk-aepeg2w5.js:340594-340631 placement
-function mE(e) {
-  return rp.register(e);
+function registerMainGateReader(getFeatureValue_CACHED_MAY_BE_STALE) {
+  return gateReaderSlot.register(getFeatureValue_CACHED_MAY_BE_STALE);
 }
+//@ chunk-aepeg2w5.js:340631-340678 placement
 /**
  * 开关读取函数组（tengu_foamy_spring 等，带默认值）。
  */
-//@ chunk-aepeg2w5.js:340631-340678 placement
 function isFoamySpringEnabled() {
-  return Zos("tengu_foamy_spring");
+  return readGateTrueByDefault("tengu_foamy_spring");
 }
 //@ chunk-aepeg2w5.js:340678-340764 placement
-function gE(e) {
-  let reader = rp.reader;
-  if (!reader) return !1;
+function readGateFalseByDefault(e) {
+  let reader = gateReaderSlot.reader;
+  if (!reader) return false;
   try {
-    return reader(e, !1) === !0;
+    return reader(e, false) === true;
   } catch {
-    return !1;
+    return false;
   }
 }
 //@ chunk-aepeg2w5.js:340764-340851 placement
-function Zos(e) {
-  let reader = rp.reader;
-  if (!reader) return !0;
+/**
+ * 导出函数 `readGateTrueByDefault`：参数 e，返回 !0; try { return reader(e, !0) !== !1; } catch { return !0; }。
+ */
+function readGateTrueByDefault(e) {
+  let reader = gateReaderSlot.reader;
+  if (!reader) return true;
   try {
-    return reader(e, !0) !== !1;
+    return reader(e, true) !== false;
   } catch {
-    return !0;
+    return true;
   }
 }
 //@ chunk-aepeg2w5.js:340851-340879 placement
 var TENGU_BRISK_MEADOW = "tengu_brisk_meadow";
+//@ chunk-aepeg2w5.js:340879-340985 placement
 /**
  * 内联工具的前提：开关开启、非 CCR 会话配置、未被环境变量关闭。
  */
-//@ chunk-aepeg2w5.js:340879-340985 placement
 function isInlineToolsAllowed() {
-  if (!isFoamySpringEnabled()) return !1;
-  if (env.CCR_SESSION_PROFILE) return !1;
-  return env.CLAUDE_CODE_INLINE_TOOLS !== !1;
+  if (!isFoamySpringEnabled()) return false;
+  if (env.CCR_SESSION_PROFILE) return false;
+  return env.CLAUDE_CODE_INLINE_TOOLS !== false;
 }
+//@ chunk-aepeg2w5.js:340985-341106 placement
 /**
  * 内联工具是否开启（环境变量优先，否则读 GrowthBook）。
  */
-//@ chunk-aepeg2w5.js:340985-341106 placement
 function isInlineToolsEnabled() {
-  if (!isInlineToolsAllowed()) return !1;
-  if (env.CLAUDE_CODE_INLINE_TOOLS !== void 0) return env.CLAUDE_CODE_INLINE_TOOLS;
-  return gE(TENGU_BRISK_MEADOW);
+  if (!isInlineToolsAllowed()) return false;
+  if (env.CLAUDE_CODE_INLINE_TOOLS !== undefined) return env.CLAUDE_CODE_INLINE_TOOLS;
+  return readGateFalseByDefault(TENGU_BRISK_MEADOW);
 }
 //@ chunk-aepeg2w5.js:341106-341133 placement
-function Kpr() {
+/**
+ * 导出函数 `isFoamySpringGateOn`：返回 isFoamySpringEnabled()。
+ */
+function isFoamySpringGateOn() {
   return isFoamySpringEnabled();
 }
 //@ chunk-aepeg2w5.js:341133-341145 placement
-var _E = null;
+var cachedGateValue = null;
 //@ chunk-aepeg2w5.js:341145-341166 placement
-function Uwi(e) {
-  _E = e;
+/**
+ * 导出函数 `setCachedGateValue`：参数 e。
+ */
+function setCachedGateValue(usesPerTurnEffort) {
+  cachedGateValue = usesPerTurnEffort;
 }
+//@ chunk-aepeg2w5.js:627052-627116 placement
 /**
  * 未过期时返回值。
  */
-//@ chunk-aepeg2w5.js:627052-627116 placement
 function keepIfFresh(e, n) {
-  return e !== void 0 && n !== void 0 && n < REVALIDATE_IN_FULL_AFTER_MS ? e : void 0;
+  return e !== undefined && n !== undefined && n < REVALIDATE_IN_FULL_AFTER_MS ? e : undefined;
 }
 //@ chunk-aepeg2w5.js:627116-627142 placement
 var TENGU_WARM_MOCHI = "tengu_warm_mochi";
 //@ chunk-aepeg2w5.js:627142-627217 placement
-class KC {
+class GateReaderSlot {
   reader = null;
-  register(e) {
-    let reader = this.reader;
-    return ((this.reader = e), reader);
+  register(reader) {
+    let reader_2 = this.reader;
+    this.reader = reader;
+    return reader_2;
   }
 }
 //@ chunk-aepeg2w5.js:627217-627231 placement
-var GC = new KC();
+var gateReaderA = new GateReaderSlot();
 //@ chunk-aepeg2w5.js:627231-627268 placement
-function $C(e) {
-  return GC.register(e);
+function registerWarmMochiGateReader(getFeatureValue_CACHED_MAY_BE_STALE) {
+  return gateReaderA.register(getFeatureValue_CACHED_MAY_BE_STALE);
 }
+//@ chunk-aepeg2w5.js:627268-627373 placement
 /**
  * 读 tengu_warm_mochi 开关（读取失败默认开启）。
  */
-//@ chunk-aepeg2w5.js:627268-627373 placement
 function isSideMessagesEnabled() {
-  if (!isFoamySpringEnabled()) return !1;
-  let reader = GC.reader;
-  if (!reader) return !0;
+  if (!isFoamySpringEnabled()) return false;
+  let reader = gateReaderA.reader;
+  if (!reader) return true;
   try {
-    return reader(TENGU_WARM_MOCHI, !0) !== !1;
+    return reader(TENGU_WARM_MOCHI, true) !== false;
   } catch {
-    return !0;
+    return true;
   }
 }
 //@ chunk-aepeg2w5.js:627373-627448 placement
-class WC {
+class GateReaderSlotB {
   reader = null;
-  register(e) {
-    let reader = this.reader;
-    return ((this.reader = e), reader);
+  register(reader) {
+    let reader_2 = this.reader;
+    this.reader = reader;
+    return reader_2;
   }
 }
 //@ chunk-aepeg2w5.js:627448-627462 placement
-var jm = new WC();
+var gateReaderB = new GateReaderSlotB();
 //@ chunk-aepeg2w5.js:627462-627499 placement
-function zC(e) {
-  return jm.register(e);
+function registerRosyElephantGateReader(e) {
+  return gateReaderB.register(e);
 }
+//@ chunk-aepeg2w5.js:627499-627659 placement
 /**
  * tengu_dapper_dusk 开关（只认正常下发的值）。
  */
-//@ chunk-aepeg2w5.js:627499-627659 placement
 function isConnectTimeMcpBlockEnabled() {
-  let reader = jm.reader;
-  if (!reader) return !1;
+  let reader = gateReaderB.reader;
+  if (!reader) return false;
   try {
-    let { value: n, source: source, defaultHost: defaultHost } = reader("tengu_dapper_dusk", !1);
-    return n === !0 && source === "payload" && defaultHost;
+    let { value: n, source, defaultHost } = reader("tengu_dapper_dusk", false);
+    return n === true && source === "payload" && defaultHost;
   } catch {
-    return !1;
+    return false;
   }
 }
 //@ chunk-aepeg2w5.js:627659-627688 placement
 var TENGU_ROSY_ELEPHANT = "tengu_rosy_elephant";
 //@ chunk-aepeg2w5.js:627688-627759 placement
-function Vm() {
+function isRosyElephantEnabled() {
   try {
-    return jm.reader?.(TENGU_ROSY_ELEPHANT, !1).value === !0;
+    return gateReaderB.reader?.(TENGU_ROSY_ELEPHANT, false).value === true;
   } catch {
-    return !1;
+    return false;
   }
 }
 //@ chunk-aepeg2w5.js:627759-627779 placement
-class jC {
+class VerdictHolder {
   judge = null;
 }
 //@ chunk-aepeg2w5.js:627779-627793 placement
-var VC = new jC();
+var verdictHolder = new VerdictHolder();
 //@ chunk-aepeg2w5.js:627793-627820 placement
-function wki(e) {
-  VC.judge = e;
+/**
+ * 导出函数 `setVerdictJudge`：参数 e。
+ */
+function setVerdictJudge(judge) {
+  verdictHolder.judge = judge;
 }
+//@ chunk-aepeg2w5.js:627820-627885 placement
 /**
  * 调用已注册的开关判定器（异常视为 false）。
  */
-//@ chunk-aepeg2w5.js:627820-627885 placement
-function judgeGate(e, n) {
+function judgeGate(e, config) {
   try {
-    return VC.judge?.(e, n) ?? !1;
+    return verdictHolder.judge?.(e, config) ?? false;
   } catch {
-    return !1;
+    return false;
   }
 }
-
 export {
   isFoamySpringEnabled,
   isConnectTimeMcpBlockEnabled,
-  wki,
+  setVerdictJudge,
   isSideMessagesEnabled,
-  Zos,
+  readGateTrueByDefault,
   judgeGate,
-  Vm,
+  isRosyElephantEnabled,
   keepIfFresh,
-  Kpr,
+  isFoamySpringGateOn,
   isInlineToolsEnabled,
-  _E,
-  mE,
-  $C,
-  zC,
+  cachedGateValue,
+  registerMainGateReader,
+  registerWarmMochiGateReader,
+  registerRosyElephantGateReader,
   isInlineToolsAllowed,
-  Uwi,
+  setCachedGateValue,
 };

@@ -9,13 +9,13 @@
  * attribution: placement 9
  */
 import { Ar } from "../../runtime/bun-runtime.js";
-import { j, Q, Oo, P } from "../../vendor/react/cjs/react.production.js";
+import { init_react_production, Q, Oo, P } from "../../vendor/react/cjs/react.production.js";
 import { chordToString, parseChord } from "../keybindings/parser.js";
-import { CC } from "../utils/kbCohesionFixes.js";
+import { isKbCohesionFixesOn } from "../utils/kbCohesionFixes.js";
 import { useShortcutDisplay } from "../keybindings/useShortcutDisplay.js";
 import { useKeybindingContext } from "../keybindings/KeybindingContext.js";
 import { env } from "../utils/env.js";
-import { e } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { jsxProd_default } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Box, Text } from "../ink/components/Text.js";
 import { w } from "../../vendor/react/compiler-runtime.js";
 import { actionKeysNamespace } from "./pluginUi/render/actionKeys.js";
@@ -29,57 +29,61 @@ Ar(ToolProgressHintNamespace, {
   default: () => ToolProgressHintNamespace,
 });
 //@ chunk-s06523pk.js:1063-1067 placement
-j();
+init_react_production();
 //@ chunk-s06523pk.js:1067-1138 placement
-var g = "ctrl+b",
-  B = "ctrl+x ctrl+b",
-  _ = new Set([g, B].map((a) => chordToString(parseChord(a))));
+var PROGRESS_HINT_KEY = "ctrl+b";
+var PROGRESS_HINT_CHORD = "ctrl+x ctrl+b";
+var _ = new Set([PROGRESS_HINT_KEY, PROGRESS_HINT_CHORD].map((a) => chordToString(parseChord(a))));
+//@ chunk-s06523pk.js:1138-1324 placement = LEGACY_AGENT_TOOL_NAME (0.566)
 /**
  * 检测键位绑定中 Task 上下文的 task:background 是否被改动/冲突（与 Agent 工具名无关，切分误归）。
  */
-//@ chunk-s06523pk.js:1138-1324 placement = LEGACY_AGENT_TOOL_NAME (0.566)
-function hasTaskBackgroundKeybindingConflict(a) {
-  for (let o of a) {
+function hasTaskBackgroundKeybindingConflict(bindings) {
+  for (let o of bindings) {
     if (o.context !== "Task") continue;
     let m = chordToString(o.chord);
     if (o.action === "task:background") {
-      if (!_.has(m)) return !0;
-    } else if (o.action === null && _.has(m)) return !0;
+      if (!_.has(m)) return true;
+    } else if (o.action === null && _.has(m)) return true;
   }
-  return !1;
+  return false;
 }
+//@ chunk-s06523pk.js:1324-1757 placement
 /**
  * 注册 task:background 快捷键处理器，并显示把当前任务转入后台的按键提示；与其他绑定冲突或不在活动状态时不显示。
  */
-//@ chunk-s06523pk.js:1324-1757 placement
-function BackgroundTaskHint({ handler: handler, isActive: isActive }) {
-  let m = CC(),
-    l = useShortcutDisplay("task:background", "Task", g),
-    d = useKeybindingContext(),
-    c = d?.bindings,
-    t = Q(() => (c ? hasTaskBackgroundKeybindingConflict(c) : !1), [c]),
-    u = Oo(handler),
-    p = !(m && !t);
+function BackgroundTaskHint({ handler, isActive }) {
+  let m = isKbCohesionFixesOn();
+  let shortcutDisplay = useShortcutDisplay("task:background", "Task", PROGRESS_HINT_KEY);
+  let keybindingContext = useKeybindingContext();
+  let bindings = keybindingContext?.bindings;
+  let t = Q(() => (bindings ? hasTaskBackgroundKeybindingConflict(bindings) : false), [bindings]);
+  let u = Oo(handler);
+  let p = !(m && !t);
   P(() => {
-    if (!d || !isActive) return;
-    return d.registerHandler({
+    if (!keybindingContext || !isActive) return;
+    return keybindingContext.registerHandler({
       action: "task:background",
       context: "Task",
       handler: () => u(),
       singleKey: p,
     });
-  }, [d, isActive, p]);
-  let f = t ? l : B,
-    x =
-      l === ""
-        ? ""
-        : env.terminal === "tmux"
-          ? f
-              .split(" ")
-              .map((k) => (k === g ? `${g} ${g}` : k))
-              .join(" ")
-          : f;
-  return { cohesionFixes: m, gateOnShortcut: x, resolvedShortcut: l };
+  }, [keybindingContext, isActive, p]);
+  let f = t ? shortcutDisplay : PROGRESS_HINT_CHORD;
+  let gateOnShortcut =
+    shortcutDisplay === ""
+      ? ""
+      : env.terminal === "tmux"
+        ? f
+            .split(" ")
+            .map((k) => (k === PROGRESS_HINT_KEY ? `${PROGRESS_HINT_KEY} ${PROGRESS_HINT_KEY}` : k))
+            .join(" ")
+        : f;
+  return {
+    cohesionFixes: m,
+    gateOnShortcut,
+    resolvedShortcut: shortcutDisplay,
+  };
 }
 //@ chunk-s06523pk.js:1757-1765 placement
 var PILL_INDENT_COLUMNS = 5;
@@ -87,32 +91,41 @@ var PILL_INDENT_COLUMNS = 5;
 function ToolProgressHintRow(t) {
   return t.props.hint === ""
     ? null
-    : e(Box, {
+    : jsxProd_default(Box, {
         paddingLeft: PILL_INDENT_COLUMNS,
-        children: e(Text, { dimColor: !0, children: t.props.hint }),
+        children: jsxProd_default(Text, {
+          dimColor: true,
+          children: t.props.hint,
+        }),
       });
 }
 //@ chunk-s06523pk.js:1880-2147 placement
-var ToolProgressHint = (a) => {
-  let l = w(4),
-    { toolUseId: toolUseId, hint: hint } = a,
-    d,
-    c;
-  if (l[0] !== hint || l[1] !== toolUseId)
-    ((d = () => ({
+var ToolProgressHint = (props) => {
+  let l = w(4);
+  let { toolUseId, hint } = props;
+  let d;
+  let c;
+  if (l[0] !== hint || l[1] !== toolUseId) {
+    d = () => ({
       requestId: toolUseId,
-      props: { tool_use_id: toolUseId, kind: "background_hint", hint: hint },
-    })),
-      (c = [toolUseId, hint]),
-      (l[0] = hint),
-      (l[1] = toolUseId),
-      (l[2] = d),
-      (l[3] = c));
-  else ((d = l[2]), (c = l[3]));
+      props: {
+        tool_use_id: toolUseId,
+        kind: "background_hint",
+        hint,
+      },
+    });
+    c = [toolUseId, hint];
+    l[0] = hint;
+    l[1] = toolUseId;
+    l[2] = d;
+    l[3] = c;
+  } else {
+    d = l[2];
+    c = l[3];
+  }
   return actionKeysNamespace.useRenderHook(
     actionKeysNamespace.useRenderInput("ToolProgress", d, c),
     ToolProgressHintRow,
   );
 };
-
 export { BackgroundTaskHint, ToolProgressHintNamespace };

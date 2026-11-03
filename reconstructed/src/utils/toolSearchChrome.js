@@ -16,38 +16,38 @@ import { logForDebugging } from "./debug.js";
 
 //@ chunk-mp7v59a0.js:613-627 placement
 var TOOL_SEARCH_FORCE_VALUE = "force";
+//@ chunk-mp7v59a0.js:627-949 placement
 /**
  * isToolSearchForceOverride：HIPAA 或非 firstParty 时为假；ENABLE_TOOL_SEARCH（含管理员层环境）为 "force"，或托管策略 hostToolSearchEnv 为 force 且未关闭实验 beta、未用 auto:≥100/假值阻止时为真。
  */
-//@ chunk-mp7v59a0.js:627-949 placement
 function isToolSearchForceOverride() {
   try {
-    if (isHipaaOrg()) return !1;
-    if (getAPIProvider() !== "firstParty") return !1;
-    let e = getAdminTierEnvValue("ENABLE_TOOL_SEARCH");
-    if (e === TOOL_SEARCH_FORCE_VALUE) return !0;
-    if (getHostManagedToolSearchEnv() !== TOOL_SEARCH_FORCE_VALUE) return !1;
-    if (isEnvTruthy(getAdminTierEnvValue("CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS"))) return !1;
-    return e === void 0 || !isToolSearchEnvBlockingForce(e);
+    if (isHipaaOrg()) return false;
+    if (getAPIProvider() !== "firstParty") return false;
+    let adminTierEnvValue = getAdminTierEnvValue("ENABLE_TOOL_SEARCH");
+    if (adminTierEnvValue === TOOL_SEARCH_FORCE_VALUE) return true;
+    if (getHostManagedToolSearchEnv() !== TOOL_SEARCH_FORCE_VALUE) return false;
+    if (isEnvTruthy(getAdminTierEnvValue("CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS"))) return false;
+    return adminTierEnvValue === undefined || !isToolSearchEnvBlockingForce(adminTierEnvValue);
   } catch (error) {
-    return (
-      logForDebugging(`isToolSearchForceOverride: settings read failed: ${error}`, { level: "error" }),
-      !1
-    );
+    logForDebugging(`isToolSearchForceOverride: settings read failed: ${error}`, {
+      level: "error",
+    });
+    return false;
   }
 }
 //@ chunk-mp7v59a0.js:949-1047 placement = isAutoToolSearchMode (0.787)
 function isToolSearchEnvBlockingForce(value) {
   if (value.startsWith("auto:")) {
-    let o = parseIntLoose(value.slice(5));
-    return !isNaN(o) && o >= 100;
+    let intLoose = parseIntLoose(value.slice(5));
+    return !isNaN(intLoose) && intLoose >= 100;
   }
   return isEnvDefinedFalsy(value);
 }
+//@ chunk-mp7v59a0.js:1047-1082 placement
 /**
  * 实验 beta 关闭或 HIPAA 下（且非 force）工具搜索整体关闭；同时不发 DeferredToolPlaceholder。
  */
-//@ chunk-mp7v59a0.js:1047-1082 placement
 function isToolSearchDisabledByBetas() {
   return areExperimentalBetasDisabled() && !isToolSearchForceOverride();
 }
@@ -64,23 +64,23 @@ function addBrowserBatchToChromeSelect(e) {
     CHROME_SELECT_QUERY_WITH_BATCH,
   );
 }
+//@ chunk-mp7v59a0.js:1671-6643 placement
 /**
  * Claude in Chrome 浏览器自动化的提示词（含先用 ToolSearch 加载 mcp__claude-in-chrome__* 工具）。
  */
-//@ chunk-mp7v59a0.js:1671-6643 placement
 var CHROME_TASK_TOOLS_HINT =
-    "Add task-specific tools to the same call when the task obviously needs them: read_console_messages / read_network_requests for debugging, form_input for forms, gif_creator for recordings, javascript_tool for page scripting.",
-  CHROME_PROMPT_HEADER = `# Claude in Chrome browser automation
+  "Add task-specific tools to the same call when the task obviously needs them: read_console_messages / read_network_requests for debugging, form_input for forms, gif_creator for recordings, javascript_tool for page scripting.";
+var CHROME_PROMPT_HEADER = `# Claude in Chrome browser automation
 
-You have access to browser automation tools (mcp__claude-in-chrome__*) for interacting with web pages in Chrome. Follow these guidelines for effective browser automation.`,
-  CHROME_DEFERRED_LOADING_SECTION = `## Loading deferred tools
+You have access to browser automation tools (mcp__claude-in-chrome__*) for interacting with web pages in Chrome. Follow these guidelines for effective browser automation.`;
+var CHROME_DEFERRED_LOADING_SECTION = `## Loading deferred tools
 
 If the mcp__claude-in-chrome__* tools are deferred (must be loaded via ToolSearch before use), load every tool you expect to need in ONE ToolSearch call \u2014 the select query accepts a comma-separated list \u2014 never one call per tool. Start with the core set:
 
 ${'ToolSearch with query "select:mcp__claude-in-chrome__tabs_context_mcp,mcp__claude-in-chrome__navigate,mcp__claude-in-chrome__computer,mcp__claude-in-chrome__read_page,mcp__claude-in-chrome__tabs_create_mcp,mcp__claude-in-chrome__tabs_close_mcp"'}
 
-${CHROME_TASK_TOOLS_HINT}`,
-  CHROME_GUIDELINES_SECTION = `## GIF recording
+${CHROME_TASK_TOOLS_HINT}`;
+var CHROME_GUIDELINES_SECTION = `## GIF recording
 
 When performing multi-step browser interactions that the user may want to review or share, use mcp__claude-in-chrome__gif_creator to record them.
 
@@ -121,45 +121,44 @@ Never reuse tab IDs from a previous/other session. Follow these guidelines:
 1. Only reuse an existing tab if the user explicitly asks to work with it
 2. Otherwise, create a new tab with mcp__claude-in-chrome__tabs_create_mcp
 3. If a tool returns an error indicating the tab doesn't exist or is invalid, call tabs_context_mcp to get fresh tab IDs
-4. When a tab is closed by the user or a navigation error occurs, call tabs_context_mcp to see what tabs are available`,
-  CHROME_PROMPT_WITH_TOOL_SEARCH = `${CHROME_PROMPT_HEADER}
+4. When a tab is closed by the user or a navigation error occurs, call tabs_context_mcp to see what tabs are available`;
+var CHROME_PROMPT_WITH_TOOL_SEARCH = `${CHROME_PROMPT_HEADER}
 
 ${CHROME_DEFERRED_LOADING_SECTION}
 
-${CHROME_GUIDELINES_SECTION}`,
-  CHROME_PROMPT_WITHOUT_TOOL_SEARCH = `${CHROME_PROMPT_HEADER}
+${CHROME_GUIDELINES_SECTION}`;
+var CHROME_PROMPT_WITHOUT_TOOL_SEARCH = `${CHROME_PROMPT_HEADER}
 
-${CHROME_GUIDELINES_SECTION}`,
-  CHROME_TOOL_SEARCH_REMINDER = `**IMPORTANT: If the Chrome browser tools are deferred (must be loaded via ToolSearch before use), load them with ToolSearch before calling them, and batch every tool you expect to need into ONE ToolSearch call (the select query accepts a comma-separated list). Do NOT load tools one at a time; each separate ToolSearch call wastes a full round-trip.**
+${CHROME_GUIDELINES_SECTION}`;
+var CHROME_TOOL_SEARCH_REMINDER = `**IMPORTANT: If the Chrome browser tools are deferred (must be loaded via ToolSearch before use), load them with ToolSearch before calling them, and batch every tool you expect to need into ONE ToolSearch call (the select query accepts a comma-separated list). Do NOT load tools one at a time; each separate ToolSearch call wastes a full round-trip.**
 
 Start a browser task whose tools are not yet loaded with a single call loading the core set:
 
 ToolSearch with query "select:mcp__claude-in-chrome__tabs_context_mcp,mcp__claude-in-chrome__navigate,mcp__claude-in-chrome__computer,mcp__claude-in-chrome__read_page,mcp__claude-in-chrome__tabs_create_mcp,mcp__claude-in-chrome__tabs_close_mcp"
 
 ${CHROME_TASK_TOOLS_HINT} Only issue a second ToolSearch if the task later needs a tool you did not anticipate.`;
+//@ chunk-mp7v59a0.js:6643-6672 placement
 /**
  * Claude in Chrome 的系统提示词片段：工具搜索开启时带"一次 ToolSearch 批量加载"段落。
  */
-//@ chunk-mp7v59a0.js:6643-6672 placement
 function getChromeSystemPrompt(e) {
   return e ? CHROME_PROMPT_WITH_TOOL_SEARCH : CHROME_PROMPT_WITHOUT_TOOL_SEARCH;
 }
 //@ chunk-mp7v59a0.js:6672-6956 placement
 function isModelVersionAtLeast(model, minVersions) {
-  let match = /^claude-([a-z]+)-(\d+(?:-\d+)*)$/.exec(model),
-    n = match?.[1],
-    l = match?.[2];
-  if (!n || !l) return !1;
+  let match = /^claude-([a-z]+)-(\d+(?:-\d+)*)$/.exec(model);
+  let n = match?.[1];
+  let l = match?.[2];
+  if (!n || !l) return false;
   let a = minVersions.find(([s]) => s === n)?.[1];
-  if (!a) return !1;
+  if (!a) return false;
   let mapped = l.split("-").map(Number);
-  for (let s = 0; s < Math.max(mapped.length, a.length); s++) {
-    let u = (mapped[s] ?? 0) - (a[s] ?? 0);
+  for (let j = 0; j < Math.max(mapped.length, a.length); j++) {
+    let u = (mapped[j] ?? 0) - (a[j] ?? 0);
     if (u !== 0) return u > 0;
   }
-  return !0;
+  return true;
 }
-
 export {
   isToolSearchForceOverride,
   isToolSearchDisabledByBetas,

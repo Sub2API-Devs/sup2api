@@ -8,23 +8,34 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:139720-140381 cjs-fingerprint
-var sa = x(function (lE, ia) {
-  function sd(e) {
-    let t = { className: "string", begin: /'(.|\\[xXuU][a-zA-Z0-9]+)'/ },
-      n = { className: "string", variants: [{ begin: '"', end: '"' }] },
-      s = {
-        className: "function",
-        beginKeywords: "def",
-        end: /[:={\[(\n;]/,
-        excludeEnd: !0,
-        contains: [
-          {
-            className: "title",
-            relevance: 0,
-            begin: /[^0-9\n\t "'(),.`{}\[\]:;][^\n\t "'(),.`{}\[\]:;]+|[^0-9\n\t "'(),.`{}\[\]:;=]/,
-          },
-        ],
-      };
+var require_flix = x(function (cjsExports, cjsModule) {
+  function flix(hljs) {
+    let CHAR = {
+      className: "string",
+      begin: /'(.|\\[xXuU][a-zA-Z0-9]+)'/,
+    };
+    let STRING = {
+      className: "string",
+      variants: [
+        {
+          begin: '"',
+          end: '"',
+        },
+      ],
+    };
+    let s = {
+      className: "function",
+      beginKeywords: "def",
+      end: /[:={\[(\n;]/,
+      excludeEnd: true,
+      contains: [
+        {
+          className: "title",
+          relevance: 0,
+          begin: /[^0-9\n\t "'(),.`{}\[\]:;][^\n\t "'(),.`{}\[\]:;]+|[^0-9\n\t "'(),.`{}\[\]:;=]/,
+        },
+      ],
+    };
     return {
       name: "Flix",
       keywords: {
@@ -51,13 +62,13 @@ var sa = x(function (lE, ia) {
         ],
         literal: ["true", "false"],
       },
-      contains: [e.C_LINE_COMMENT_MODE, e.C_BLOCK_COMMENT_MODE, t, n, s, e.C_NUMBER_MODE],
+      contains: [hljs.C_LINE_COMMENT_MODE, hljs.C_BLOCK_COMMENT_MODE, CHAR, STRING, s, hljs.C_NUMBER_MODE],
     };
   }
-  ia.exports = sd;
+  cjsModule.exports = flix;
 });
 //@ chunk-egr0twnb.js:168007-176324 cjs-fingerprint
-var Sa = x(function (gE, Na) {
+var require_flix_2 = x(function (cjsExports, cjsModule) {
   function Ed(e) {
     return {
       name: "GLSL",
@@ -74,11 +85,14 @@ var Sa = x(function (gE, Na) {
         e.C_LINE_COMMENT_MODE,
         e.C_BLOCK_COMMENT_MODE,
         e.C_NUMBER_MODE,
-        { className: "meta", begin: "#", end: "$" },
+        {
+          className: "meta",
+          begin: "#",
+          end: "$",
+        },
       ],
     };
   }
-  Na.exports = Ed;
+  cjsModule.exports = Ed;
 });
-
-export { sa, Sa };
+export { require_flix, require_flix_2 };

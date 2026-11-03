@@ -9,33 +9,38 @@
  * attribution: placement 5
  */
 import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
-import { kCt } from "../../components/permissions/hooks.js";
+import { recordToolUseDecision } from "../../components/permissions/hooks.js";
 
 //@ chunk-cp2ytehj.js:264-304 placement
-var t = new SessionRootSlot(() => ({ byToolUse: new Map() }));
+/**
+ * 按会话根保存的“工具调用 → 文件授权”表。
+ */
+var fileGrantsByToolUse = new SessionRootSlot(() => ({
+  byToolUse: new Map(),
+}));
 //@ chunk-cp2ytehj.js:304-375 placement
-function keepFileGrants(n, e, i) {
-  (t.of(n).byToolUse.set(e, i),
-    kCt(n, e, () => {
-      dropFileGrants(n, e);
-    }));
+function keepFileGrants(session, toolUseId, fileInputUpload) {
+  fileGrantsByToolUse.of(session).byToolUse.set(toolUseId, fileInputUpload);
+  recordToolUseDecision(session, toolUseId, () => {
+    dropFileGrants(session, toolUseId);
+  });
 }
 //@ chunk-cp2ytehj.js:375-424 placement
 function dropFileGrants(n, e) {
-  t.peek(n)?.byToolUse.delete(e);
+  fileGrantsByToolUse.peek(n)?.byToolUse.delete(e);
 }
 //@ chunk-cp2ytehj.js:424-494 placement
 function hasFileGrants(n, e) {
-  return e !== void 0 && t.peek(n)?.byToolUse.has(e) === !0;
+  return e !== undefined && fileGrantsByToolUse.peek(n)?.byToolUse.has(e) === true;
 }
+//@ chunk-cp2ytehj.js:494-585 placement
 /**
  * 取出并清空 MCP 文件授权。
  */
-//@ chunk-cp2ytehj.js:494-585 placement
-function takeFileGrants(n, e) {
-  if (e === void 0) return;
-  let i = t.peek(n)?.byToolUse.get(e);
-  return (dropFileGrants(n, e), i);
+function takeFileGrants(session, toolUseId) {
+  if (toolUseId === undefined) return;
+  let i = fileGrantsByToolUse.peek(session)?.byToolUse.get(toolUseId);
+  dropFileGrants(session, toolUseId);
+  return i;
 }
-
 export { takeFileGrants, keepFileGrants, dropFileGrants };

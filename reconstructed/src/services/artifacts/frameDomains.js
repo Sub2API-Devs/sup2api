@@ -16,48 +16,53 @@ import { frameRelayActive, relayDeclined } from "./frameRelay.js";
 import { ARTIFACT_MOUNT } from "./artifactMount.js";
 import { isCoworkEntrypoint } from "../../utils/entrypointKinds.js";
 
+//@ chunk-f6553xe3.js:414-769 placement
 /**
  * Cowork 云会话里允许直接读取 artifact 的说明：网络访问由 claude.ai 的"Allow network egress"设置决定，需加入给定域名。
  */
-//@ chunk-f6553xe3.js:414-769 placement
 function describeCoworkEgress(e) {
   return `This cloud session's network access follows the "Allow network egress" setting for Cowork in claude.ai, not an environment allowlist. To allow direct artifact reads here, an organization admin (or the user, on an individual plan) can turn that setting on and either allow all domains or add ${e} to its additional allowed domains.`;
 }
 //@ chunk-f6553xe3.js:769-871 placement
 class ReaderAvailabilityRegistry {
-  availability = () => !1;
-  register(e) {
-    this.availability = e;
+  availability = () => false;
+  register(availability) {
+    this.availability = availability;
   }
   isAvailable() {
     return this.availability();
   }
 }
 //@ chunk-f6553xe3.js:871-885 placement
-var VFr = new ReaderAvailabilityRegistry();
+/**
+ * artifact 读取方式可用性登记器：注册来源并说明 Artifact 工具/WebFetch 两种读法。
+ */
+var readerAvailabilityRegistry = new ReaderAvailabilityRegistry();
 //@ chunk-f6553xe3.js:885-917 placement
-function oKs(e) {
-  VFr.register(e);
+/**
+ * 导出函数 `registerReaderAvailability`：参数 e。
+ */
+function registerReaderAvailability(e) {
+  readerAvailabilityRegistry.register(e);
 }
+//@ chunk-f6553xe3.js:917-1025 placement
 /**
  * 给出读取 artifact 链接的方法说明：Artifact 工具可用时用其 read 动作，否则用 WebFetch。
  */
-//@ chunk-f6553xe3.js:917-1025 placement
 function describeArtifactReadMethod() {
-  return VFr.isAvailable()
+  return readerAvailabilityRegistry.isAvailable()
     ? `read it with the ${ARTIFACT_TOOL_NAME} tool (action: "read", url)`
     : `${WEBFETCH} the url`;
 }
 //@ chunk-f6553xe3.js:1025-2145 placement
 function describeFrameDomains() {
-  let e = describeArtifactReadMethod(),
-    o = claudeAiEnvironment(),
-    i =
-      getLiveState().contentHostEgressDenied.has(o) &&
-      !(frameRelayActive() && !relayDeclined(ARTIFACT_MOUNT)),
-    t = o === "staging" ? "*.frame.staging.claudeusercontent.com" : "*.frame.claudeusercontent.com";
+  let readRemedy = describeArtifactReadMethod();
+  let o = claudeAiEnvironment();
+  let i =
+    getLiveState().contentHostEgressDenied.has(o) && !(frameRelayActive() && !relayDeclined(ARTIFACT_MOUNT));
+  let t = o === "staging" ? "*.frame.staging.claudeusercontent.com" : "*.frame.claudeusercontent.com";
   return {
-    readRemedy: e,
+    readRemedy,
     forceAdvisory:
       " force:true discards that newer version \u2014 someone's save from the page itself, or another session's publish \u2014 so use it only when the user explicitly asks to overwrite.",
     contentReadsBlocked: i
@@ -67,5 +72,10 @@ function describeFrameDomains() {
       : null,
   };
 }
-
-export { VFr, describeFrameDomains, describeArtifactReadMethod, oKs, describeCoworkEgress };
+export {
+  readerAvailabilityRegistry,
+  describeFrameDomains,
+  describeArtifactReadMethod,
+  registerReaderAvailability,
+  describeCoworkEgress,
+};

@@ -7,18 +7,23 @@
  */
 
 //@ chunk-2cw52qnf.js:512-796 esm-fingerprint
-function R(r) {
-  if (r.inputSchema.type !== "object")
-    throw Error(`JSON schema for tool "${r.name}" must be an object, but got ${r.inputSchema.type}`);
+function betaTool(options) {
+  if (options.inputSchema.type !== "object")
+    throw Error(
+      `JSON schema for tool "${options.name}" must be an object, but got ${options.inputSchema.type}`,
+    );
   return {
     type: "custom",
-    name: r.name,
-    input_schema: r.inputSchema,
-    description: r.description,
-    run: r.run,
-    parse: (e) => e,
-    ...(r.close ? { close: r.close } : {}),
+    name: options.name,
+    input_schema: options.inputSchema,
+    description: options.description,
+    run: options.run,
+    parse: (content) => content,
+    ...(options.close
+      ? {
+          close: options.close,
+        }
+      : {}),
   };
 }
-
-export { R };
+export { betaTool };

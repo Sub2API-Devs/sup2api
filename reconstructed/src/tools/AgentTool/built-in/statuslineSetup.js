@@ -11,10 +11,10 @@
 import { getPlatform } from "../../../utils/platform.js";
 import { getGitBashPathCached } from "../../../utils/windowsPaths.js";
 
+//@ chunk-e6aww6q8.js:2338270-2338653 sole-consumer
 /**
  * Windows 且使用 Git Bash 时，返回 statusline 命令中路径写法的补充说明。
  */
-//@ chunk-e6aww6q8.js:2338270-2338653 sole-consumer
 function windowsStatuslinePathNote() {
   if (getPlatform() !== "windows" || getGitBashPathCached() === null) return "";
   return `
@@ -24,12 +24,12 @@ function windowsStatuslinePathNote() {
    backslashes as escape characters and the path will not resolve.
 `;
 }
+//@ chunk-e6aww6q8.js:2338653-2351964 fingerprint = STATUSLINE_SETUP_AGENT (1)
 /**
  * statusline-setup 内建代理：工具 Read/Edit，model sonnet，color orange。
  */
-//@ chunk-e6aww6q8.js:2338653-2351964 fingerprint = STATUSLINE_SETUP_AGENT (1)
 var STATUSLINE_SETUP_SYSTEM_PROMPT =
-    () => `You are a status line setup agent for Claude Code. Your job is to create or update the statusLine command in the user's Claude Code settings.
+  () => `You are a status line setup agent for Claude Code. Your job is to create or update the statusLine command in the user's Claude Code settings.
 
 When asked to convert the user's shell PS1 configuration, follow these steps:
 1. Read the user's shell configuration files in this order of preference:
@@ -217,16 +217,15 @@ Guidelines:
 - If the script includes git commands, they should skip optional locks
 - IMPORTANT: At the end of your response, inform the parent agent that this "statusline-setup" agent must be used for further status line changes.
   Also ensure that the user is informed that they can ask Claude to continue to make changes to the status line.
-`,
-  STATUSLINE_SETUP_AGENT = {
-    agentType: "statusline-setup",
-    whenToUse: "Use this agent to configure the user's Claude Code status line setting.",
-    tools: ["Read", "Edit"],
-    source: "built-in",
-    baseDir: "built-in",
-    model: "sonnet",
-    color: "orange",
-    getSystemPrompt: () => STATUSLINE_SETUP_SYSTEM_PROMPT(),
-  };
-
+`;
+var STATUSLINE_SETUP_AGENT = {
+  agentType: "statusline-setup",
+  whenToUse: "Use this agent to configure the user's Claude Code status line setting.",
+  tools: ["Read", "Edit"],
+  source: "built-in",
+  baseDir: "built-in",
+  model: "sonnet",
+  color: "orange",
+  getSystemPrompt: () => STATUSLINE_SETUP_SYSTEM_PROMPT(),
+};
 export { STATUSLINE_SETUP_AGENT };

@@ -6,51 +6,63 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../runtime/bun-runtime.js";
-import { Bvn } from "../../compile/validate/index.js";
-import { Q } from "../code.js";
-import { ew } from "../../compile/util.js";
-import { Tr } from "./additionalProperties.js";
+import { require_validate_2 } from "../../compile/validate/index.js";
+import { require_code_2 } from "../code.js";
+import { require_util_2 } from "../../compile/util.js";
+import { require_additionalProperties } from "./additionalProperties.js";
 
 //@ chunk-s82q9s4x.js:100498-101484 cjs-fingerprint
-var ji = x(function (Oi) {
-  Object.defineProperty(Oi, "__esModule", { value: !0 });
-  var qi = Bvn(),
-    Ft = Q(),
-    tt = ew(),
-    ki = Tr(),
-    Ep = {
-      keyword: "properties",
-      type: "object",
-      schemaType: "object",
-      code(e) {
-        let { gen: gen, schema: schema, parentSchema: parentSchema, data: n, it: it } = e;
-        if (it.opts.removeAdditional === "all" && parentSchema.additionalProperties === void 0)
-          ki.default.code(new qi.KeywordCxt(it, ki.default, "additionalProperties"));
-        let allSchemaProperties = Ft.allSchemaProperties(schema);
-        for (let f of allSchemaProperties) it.definedProperties.add(f);
-        if (it.opts.unevaluated && allSchemaProperties.length && it.props !== !0)
-          it.props = tt.mergeEvaluated.props(gen, tt.toHash(allSchemaProperties), it.props);
-        let filtered = allSchemaProperties.filter((f) => !tt.alwaysValidSchema(it, schema[f]));
-        if (filtered.length === 0) return;
-        let c = gen.name("valid");
-        for (let f of filtered) {
-          if (u(f)) l(f);
-          else {
-            if ((gen.if(Ft.propertyInData(gen, n, f, it.opts.ownProperties)), l(f), !it.allErrors))
-              gen.else().var(c, !0);
-            gen.endIf();
-          }
-          (e.it.definedProperties.add(f), e.ok(c));
+var require_properties = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  var validate_1 = require_validate_2();
+  var code_1 = require_code_2();
+  var util_1 = require_util_2();
+  var additionalProperties_1 = require_additionalProperties();
+  var def = {
+    keyword: "properties",
+    type: "object",
+    schemaType: "object",
+    code(cxt) {
+      let { gen, schema, parentSchema, data, it } = cxt;
+      if (it.opts.removeAdditional === "all" && parentSchema.additionalProperties === undefined)
+        additionalProperties_1.default.code(
+          new validate_1.KeywordCxt(it, additionalProperties_1.default, "additionalProperties"),
+        );
+      let allProps = code_1.allSchemaProperties(schema);
+      for (let prop of allProps) it.definedProperties.add(prop);
+      if (it.opts.unevaluated && allProps.length && it.props !== true)
+        it.props = util_1.mergeEvaluated.props(gen, util_1.toHash(allProps), it.props);
+      let properties = allProps.filter((p) => !util_1.alwaysValidSchema(it, schema[p]));
+      if (properties.length === 0) return;
+      let valid = gen.name("valid");
+      for (let prop of properties) {
+        if (hasDefault(prop)) applyPropertySchema(prop);
+        else {
+          gen.if(code_1.propertyInData(gen, data, prop, it.opts.ownProperties));
+          applyPropertySchema(prop);
+          if (!it.allErrors) gen.else().var(valid, true);
+          gen.endIf();
         }
-        function u(f) {
-          return it.opts.useDefaults && !it.compositeRule && schema[f].default !== void 0;
-        }
-        function l(f) {
-          e.subschema({ keyword: "properties", schemaProp: f, dataProp: f }, c);
-        }
-      },
-    };
-  Oi.default = Ep;
+        cxt.it.definedProperties.add(prop);
+        cxt.ok(valid);
+      }
+      function hasDefault(prop) {
+        return it.opts.useDefaults && !it.compositeRule && schema[prop].default !== undefined;
+      }
+      function applyPropertySchema(prop) {
+        cxt.subschema(
+          {
+            keyword: "properties",
+            schemaProp: prop,
+            dataProp: prop,
+          },
+          valid,
+        );
+      }
+    },
+  };
+  cjsExports.default = def;
 });
-
-export { ji };
+export { require_properties };

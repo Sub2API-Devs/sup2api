@@ -9,13 +9,13 @@
  * attribution: placement 1
  */
 import { listAllPeers, buildSubagentExtras, formatForUser } from "../../utils/peerSessions/listAgents.js";
-import { WL } from "../../tools/SendMessageTool/selfTarget.js";
+import { isTeammateOrSubagentContext } from "../../tools/SendMessageTool/selfTarget.js";
 import { isBridgeOrTransport } from "../../cli/transportState.js";
 
+//@ chunk-kq21a1r9.js:4004-4404 placement
 /**
  * /list-agents 命令：列出可发消息的子代理、队友与其他 Claude 会话。
  */
-//@ chunk-kq21a1r9.js:4004-4404 placement
 var call = async (args, context) => {
   let [
     {
@@ -27,14 +27,14 @@ var call = async (args, context) => {
       messagingDisabled: o,
       listTruncated: t,
     },
-    m,
+    subagentExtras,
   ] = await Promise.all([
-    listAllPeers(context.session, void 0, context.credentials),
-    buildSubagentExtras(context, WL(context)),
+    listAllPeers(context.session, undefined, context.credentials),
+    buildSubagentExtras(context, isTeammateOrSubagentContext(context)),
   ]);
   return {
     type: "text",
-    value: formatForUser(a, m, {
+    value: formatForUser(a, subagentExtras, {
       bridgeWalkFailed: e,
       cloudListFailed: l,
       localListFailed: r,

@@ -5,37 +5,48 @@
  * pieces: chunk-0dmzgg46.js (1)
  * attribution: esm-fingerprint 1
  */
-import { g, ie, ce, le, _e, ue, P } from "./index.js";
-import { ae } from "./endpoint/endpointResolver.js";
-import { w } from "./auth/httpAuthSchemeProvider.js";
+import {
+  import_credential_provider_web_identity,
+  import_core_6,
+  import_core_7,
+  import_client_2,
+  import_protocols,
+  import_url_parser,
+  import_util_utf8,
+} from "./index.js";
+import { defaultEndpointResolver } from "./endpoint/endpointResolver.js";
+import { defaultBedrockHttpAuthSchemeProvider } from "./auth/httpAuthSchemeProvider.js";
 
 //@ chunk-0dmzgg46.js:8001-8876 esm-fingerprint
-var de = (e) => ({
+var getRuntimeConfig = (config) => ({
   apiVersion: "2023-04-20",
-  base64Decoder: e?.base64Decoder ?? g.fromBase64,
-  base64Encoder: e?.base64Encoder ?? g.toBase64,
-  disableHostPrefix: e?.disableHostPrefix ?? !1,
-  endpointProvider: e?.endpointProvider ?? ae,
-  extensions: e?.extensions ?? [],
-  httpAuthSchemeProvider: e?.httpAuthSchemeProvider ?? w,
-  httpAuthSchemes: e?.httpAuthSchemes ?? [
+  base64Decoder: config?.base64Decoder ?? import_credential_provider_web_identity.fromBase64,
+  base64Encoder: config?.base64Encoder ?? import_credential_provider_web_identity.toBase64,
+  disableHostPrefix: config?.disableHostPrefix ?? false,
+  endpointProvider: config?.endpointProvider ?? defaultEndpointResolver,
+  extensions: config?.extensions ?? [],
+  httpAuthSchemeProvider: config?.httpAuthSchemeProvider ?? defaultBedrockHttpAuthSchemeProvider,
+  httpAuthSchemes: config?.httpAuthSchemes ?? [
     {
       schemeId: "aws.auth#sigv4",
-      identityProvider: (o) => o.getIdentityProvider("aws.auth#sigv4"),
-      signer: new ie.AwsSdkSigV4Signer(),
+      identityProvider: (ipc) => ipc.getIdentityProvider("aws.auth#sigv4"),
+      signer: new import_core_6.AwsSdkSigV4Signer(),
     },
     {
       schemeId: "smithy.api#httpBearerAuth",
-      identityProvider: (o) => o.getIdentityProvider("smithy.api#httpBearerAuth"),
-      signer: new ce.HttpBearerAuthSigner(),
+      identityProvider: (ipc) => ipc.getIdentityProvider("smithy.api#httpBearerAuth"),
+      signer: new import_core_7.HttpBearerAuthSigner(),
     },
   ],
-  logger: e?.logger ?? new le.NoOpLogger(),
-  protocol: e?.protocol ?? new _e.AwsRestJsonProtocol({ defaultNamespace: "com.amazonaws.bedrock" }),
-  serviceId: e?.serviceId ?? "Bedrock",
-  urlParser: e?.urlParser ?? ue.parseUrl,
-  utf8Decoder: e?.utf8Decoder ?? P.fromUtf8,
-  utf8Encoder: e?.utf8Encoder ?? P.toUtf8,
+  logger: config?.logger ?? new import_client_2.NoOpLogger(),
+  protocol:
+    config?.protocol ??
+    new import_protocols.AwsRestJsonProtocol({
+      defaultNamespace: "com.amazonaws.bedrock",
+    }),
+  serviceId: config?.serviceId ?? "Bedrock",
+  urlParser: config?.urlParser ?? import_url_parser.parseUrl,
+  utf8Decoder: config?.utf8Decoder ?? import_util_utf8.fromUtf8,
+  utf8Encoder: config?.utf8Encoder ?? import_util_utf8.toUtf8,
 });
-
-export { de };
+export { getRuntimeConfig };

@@ -8,13 +8,14 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-wjd9n4jx.js:10211-10385 cjs-fingerprint
-var Qt = x(function (Vt) {
-  Object.defineProperty(Vt, "__esModule", { value: !0 });
-  Vt.splitStream = Kr;
-  async function Kr(e) {
-    if (typeof e.stream === "function") e = e.stream();
-    return e.tee();
+var require_splitStream_browser = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.splitStream = splitStream;
+  async function splitStream(stream) {
+    if (typeof stream.stream === "function") stream = stream.stream();
+    return stream.tee();
   }
 });
-
-export { Qt };
+export { require_splitStream_browser };

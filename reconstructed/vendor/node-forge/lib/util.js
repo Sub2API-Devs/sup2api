@@ -6,1047 +6,1221 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { Tn } from "./forge.js";
-import { aT } from "./baseN.js";
+import { require_forge } from "./forge.js";
+import { require_baseN } from "./baseN.js";
 
 //@ chunk-fq0cr76a.js:4980-28471 cjs-fingerprint
-var Zn = x(function (afe, pT) {
-  var lT = Tn(),
-    cT = aT(),
-    Te = (pT.exports = lT.util = lT.util || {});
+var require_util = x(function (cjsExports, cjsModule) {
+  var forge = require_forge();
+  var baseN = require_baseN();
+  var util = (cjsModule.exports = forge.util = forge.util || {});
   (function () {
-    if (typeof process < "u" && process.nextTick) {
-      if (((Te.nextTick = process.nextTick), typeof setImmediate === "function"))
-        Te.setImmediate = setImmediate;
-      else Te.setImmediate = Te.nextTick;
+    if (typeof process !== "undefined" && process.nextTick) {
+      util.nextTick = process.nextTick;
+      if (typeof setImmediate === "function") util.setImmediate = setImmediate;
+      else util.setImmediate = util.nextTick;
       return;
     }
     if (typeof setImmediate === "function") {
-      ((Te.setImmediate = function () {
-        return setImmediate.apply(void 0, arguments);
-      }),
-        (Te.nextTick = function (S) {
-          return setImmediate(S);
-        }));
+      util.setImmediate = function () {
+        return setImmediate.apply(undefined, arguments);
+      };
+      util.nextTick = function (callback) {
+        return setImmediate(callback);
+      };
       return;
     }
-    if (
-      ((Te.setImmediate = function (S) {
-        setTimeout(S, 0);
-      }),
-      typeof window < "u" && typeof window.postMessage === "function")
-    ) {
-      let S = function (w) {
-        if (w.source === window && w.data === e) {
-          w.stopPropagation();
-          var sliced = n.slice();
-          ((n.length = 0),
-            sliced.forEach(function (D) {
-              D();
-            }));
+    util.setImmediate = function (callback) {
+      setTimeout(callback, 0);
+    };
+    if (typeof window !== "undefined" && typeof window.postMessage === "function") {
+      let S = function (event) {
+        if (event.source === window && event.data === msg) {
+          event.stopPropagation();
+          var sliced = callbacks.slice();
+          callbacks.length = 0;
+          sliced.forEach(function (D) {
+            D();
+          });
         }
       };
-      var b = S,
-        e = "forge.setImmediate",
-        n = [];
-      ((Te.setImmediate = function (w) {
-        if ((n.push(w), n.length === 1)) window.postMessage(e, "*");
-      }),
-        window.addEventListener("message", S, !0));
+      var b = S;
+      var msg = "forge.setImmediate";
+      var callbacks = [];
+      util.setImmediate = function (callback) {
+        callbacks.push(callback);
+        if (callbacks.length === 1) window.postMessage(msg, "*");
+      };
+      window.addEventListener("message", S, true);
     }
-    if (typeof MutationObserver < "u") {
-      var now = Date.now(),
-        s = !0,
-        element = document.createElement("div"),
-        n = [];
+    if (typeof MutationObserver !== "undefined") {
+      var now = Date.now();
+      var attr = true;
+      var div = document.createElement("div");
+      var callbacks = [];
       new MutationObserver(function () {
-        var sliced = n.slice();
-        ((n.length = 0),
-          sliced.forEach(function (R) {
-            R();
-          }));
-      }).observe(element, { attributes: !0 });
-      var y = Te.setImmediate;
-      Te.setImmediate = function (w) {
-        if (Date.now() - now > 15) ((now = Date.now()), y(w));
-        else if ((n.push(w), n.length === 1)) element.setAttribute("a", (s = !s));
+        var copy = callbacks.slice();
+        callbacks.length = 0;
+        copy.forEach(function (callback) {
+          callback();
+        });
+      }).observe(div, {
+        attributes: true,
+      });
+      var oldSetImmediate = util.setImmediate;
+      util.setImmediate = function (callback) {
+        if (Date.now() - now > 15) {
+          now = Date.now();
+          oldSetImmediate(callback);
+        } else {
+          callbacks.push(callback);
+          if (callbacks.length === 1) div.setAttribute("a", (attr = !attr));
+        }
       };
     }
-    Te.nextTick = Te.setImmediate;
+    util.nextTick = util.setImmediate;
   })();
-  Te.isNodejs = typeof process < "u" && process.versions && process.versions.node;
-  Te.globalScope = (function () {
-    if (Te.isNodejs) return global;
-    return typeof self > "u" ? window : self;
+  util.isNodejs = typeof process !== "undefined" && process.versions && process.versions.node;
+  util.globalScope = (function () {
+    if (util.isNodejs) return global;
+    return typeof self === "undefined" ? window : self;
   })();
-  Te.isArray =
+  util.isArray =
     Array.isArray ||
-    function (e) {
-      return Object.prototype.toString.call(e) === "[object Array]";
+    function (x) {
+      return Object.prototype.toString.call(x) === "[object Array]";
     };
-  Te.isArrayBuffer = function (e) {
-    return typeof ArrayBuffer < "u" && e instanceof ArrayBuffer;
+  util.isArrayBuffer = function (x) {
+    return typeof ArrayBuffer !== "undefined" && x instanceof ArrayBuffer;
   };
-  Te.isArrayBufferView = function (e) {
-    return e && Te.isArrayBuffer(e.buffer) && e.byteLength !== void 0;
+  util.isArrayBufferView = function (x) {
+    return x && util.isArrayBuffer(x.buffer) && x.byteLength !== undefined;
   };
-  function hf(e) {
-    if (!(e === 8 || e === 16 || e === 24 || e === 32))
-      throw Error("Only 8, 16, 24, or 32 bits supported: " + e);
+  function _checkBitsParam(n) {
+    if (!(n === 8 || n === 16 || n === 24 || n === 32))
+      throw Error("Only 8, 16, 24, or 32 bits supported: " + n);
   }
-  Te.ByteBuffer = zb;
-  function zb(e) {
-    if (((this.data = ""), (this.read = 0), typeof e === "string")) this.data = e;
-    else if (Te.isArrayBuffer(e) || Te.isArrayBufferView(e))
-      if (typeof Buffer < "u" && e instanceof Buffer) this.data = e.toString("binary");
+  util.ByteBuffer = ByteStringBuffer;
+  function ByteStringBuffer(b) {
+    this.data = "";
+    this.read = 0;
+    if (typeof b === "string") this.data = b;
+    else if (util.isArrayBuffer(b) || util.isArrayBufferView(b)) {
+      if (typeof Buffer !== "undefined" && b instanceof Buffer) this.data = b.toString("binary");
       else {
-        var uint8Array = new Uint8Array(e);
+        var arr = new Uint8Array(b);
         try {
-          this.data = String.fromCharCode.apply(null, uint8Array);
-        } catch (error) {
-          for (var r = 0; r < uint8Array.length; ++r) this.putByte(uint8Array[r]);
+          this.data = String.fromCharCode.apply(null, arr);
+        } catch (e) {
+          for (var i = 0; i < arr.length; ++i) this.putByte(arr[i]);
         }
       }
-    else if (
-      e instanceof zb ||
-      (typeof e === "object" && typeof e.data === "string" && typeof e.read === "number")
-    )
-      ((this.data = e.data), (this.read = e.read));
+    } else if (
+      b instanceof ByteStringBuffer ||
+      (typeof b === "object" && typeof b.data === "string" && typeof b.read === "number")
+    ) {
+      this.data = b.data;
+      this.read = b.read;
+    }
     this._constructedStringLength = 0;
   }
-  Te.ByteStringBuffer = zb;
-  var a3 = 4096;
-  Te.ByteStringBuffer.prototype._optimizeConstructedString = function (e) {
-    if (((this._constructedStringLength += e), this._constructedStringLength > a3))
-      (this.data.substr(0, 1), (this._constructedStringLength = 0));
+  util.ByteStringBuffer = ByteStringBuffer;
+  var _MAX_CONSTRUCTED_STRING_LENGTH = 4096;
+  util.ByteStringBuffer.prototype._optimizeConstructedString = function (x) {
+    this._constructedStringLength += x;
+    if (this._constructedStringLength > _MAX_CONSTRUCTED_STRING_LENGTH) {
+      this.data.substr(0, 1);
+      this._constructedStringLength = 0;
+    }
   };
-  Te.ByteStringBuffer.prototype.length = function () {
+  util.ByteStringBuffer.prototype.length = function () {
     return this.data.length - this.read;
   };
-  Te.ByteStringBuffer.prototype.isEmpty = function () {
+  util.ByteStringBuffer.prototype.isEmpty = function () {
     return this.length() <= 0;
   };
-  Te.ByteStringBuffer.prototype.putByte = function (e) {
-    return this.putBytes(String.fromCharCode(e));
+  util.ByteStringBuffer.prototype.putByte = function (b) {
+    return this.putBytes(String.fromCharCode(b));
   };
-  Te.ByteStringBuffer.prototype.fillWithByte = function (e, n) {
-    e = String.fromCharCode(e);
-    var r = this.data;
+  util.ByteStringBuffer.prototype.fillWithByte = function (b, n) {
+    b = String.fromCharCode(b);
+    var d = this.data;
     while (n > 0) {
-      if (n & 1) r += e;
-      if (((n >>>= 1), n > 0)) e += e;
+      if (n & 1) d += b;
+      n >>>= 1;
+      if (n > 0) b += b;
     }
-    return ((this.data = r), this._optimizeConstructedString(n), this);
+    this.data = d;
+    this._optimizeConstructedString(n);
+    return this;
   };
-  Te.ByteStringBuffer.prototype.putBytes = function (e) {
-    return ((this.data += e), this._optimizeConstructedString(e.length), this);
+  util.ByteStringBuffer.prototype.putBytes = function (bytes) {
+    this.data += bytes;
+    this._optimizeConstructedString(bytes.length);
+    return this;
   };
-  Te.ByteStringBuffer.prototype.putString = function (e) {
-    return this.putBytes(Te.encodeUtf8(e));
+  util.ByteStringBuffer.prototype.putString = function (str) {
+    return this.putBytes(util.encodeUtf8(str));
   };
-  Te.ByteStringBuffer.prototype.putInt16 = function (e) {
-    return this.putBytes(String.fromCharCode((e >> 8) & 255) + String.fromCharCode(e & 255));
+  util.ByteStringBuffer.prototype.putInt16 = function (i) {
+    return this.putBytes(String.fromCharCode((i >> 8) & 255) + String.fromCharCode(i & 255));
   };
-  Te.ByteStringBuffer.prototype.putInt24 = function (e) {
+  util.ByteStringBuffer.prototype.putInt24 = function (i) {
     return this.putBytes(
-      String.fromCharCode((e >> 16) & 255) +
-        String.fromCharCode((e >> 8) & 255) +
-        String.fromCharCode(e & 255),
+      String.fromCharCode((i >> 16) & 255) +
+        String.fromCharCode((i >> 8) & 255) +
+        String.fromCharCode(i & 255),
     );
   };
-  Te.ByteStringBuffer.prototype.putInt32 = function (e) {
+  util.ByteStringBuffer.prototype.putInt32 = function (i) {
     return this.putBytes(
-      String.fromCharCode((e >> 24) & 255) +
-        String.fromCharCode((e >> 16) & 255) +
-        String.fromCharCode((e >> 8) & 255) +
-        String.fromCharCode(e & 255),
+      String.fromCharCode((i >> 24) & 255) +
+        String.fromCharCode((i >> 16) & 255) +
+        String.fromCharCode((i >> 8) & 255) +
+        String.fromCharCode(i & 255),
     );
   };
-  Te.ByteStringBuffer.prototype.putInt16Le = function (e) {
-    return this.putBytes(String.fromCharCode(e & 255) + String.fromCharCode((e >> 8) & 255));
+  util.ByteStringBuffer.prototype.putInt16Le = function (i) {
+    return this.putBytes(String.fromCharCode(i & 255) + String.fromCharCode((i >> 8) & 255));
   };
-  Te.ByteStringBuffer.prototype.putInt24Le = function (e) {
+  util.ByteStringBuffer.prototype.putInt24Le = function (i) {
     return this.putBytes(
-      String.fromCharCode(e & 255) +
-        String.fromCharCode((e >> 8) & 255) +
-        String.fromCharCode((e >> 16) & 255),
+      String.fromCharCode(i & 255) +
+        String.fromCharCode((i >> 8) & 255) +
+        String.fromCharCode((i >> 16) & 255),
     );
   };
-  Te.ByteStringBuffer.prototype.putInt32Le = function (e) {
+  util.ByteStringBuffer.prototype.putInt32Le = function (i) {
     return this.putBytes(
-      String.fromCharCode(e & 255) +
-        String.fromCharCode((e >> 8) & 255) +
-        String.fromCharCode((e >> 16) & 255) +
-        String.fromCharCode((e >> 24) & 255),
+      String.fromCharCode(i & 255) +
+        String.fromCharCode((i >> 8) & 255) +
+        String.fromCharCode((i >> 16) & 255) +
+        String.fromCharCode((i >> 24) & 255),
     );
   };
-  Te.ByteStringBuffer.prototype.putInt = function (e, n) {
-    hf(n);
-    var r = "";
-    do ((n -= 8), (r += String.fromCharCode((e >> n) & 255)));
-    while (n > 0);
-    return this.putBytes(r);
+  util.ByteStringBuffer.prototype.putInt = function (i, n) {
+    _checkBitsParam(n);
+    var bytes = "";
+    do {
+      n -= 8;
+      bytes += String.fromCharCode((i >> n) & 255);
+    } while (n > 0);
+    return this.putBytes(bytes);
   };
-  Te.ByteStringBuffer.prototype.putSignedInt = function (e, n) {
-    if (e < 0) e += 2 << (n - 1);
-    return this.putInt(e, n);
+  util.ByteStringBuffer.prototype.putSignedInt = function (i, n) {
+    if (i < 0) i += 2 << (n - 1);
+    return this.putInt(i, n);
   };
-  Te.ByteStringBuffer.prototype.putBuffer = function (e) {
-    return this.putBytes(e.getBytes());
+  util.ByteStringBuffer.prototype.putBuffer = function (buffer) {
+    return this.putBytes(buffer.getBytes());
   };
-  Te.ByteStringBuffer.prototype.getByte = function () {
+  util.ByteStringBuffer.prototype.getByte = function () {
     return this.data.charCodeAt(this.read++);
   };
-  Te.ByteStringBuffer.prototype.getInt16 = function () {
-    var e = (this.data.charCodeAt(this.read) << 8) ^ this.data.charCodeAt(this.read + 1);
-    return ((this.read += 2), e);
+  util.ByteStringBuffer.prototype.getInt16 = function () {
+    var rval = (this.data.charCodeAt(this.read) << 8) ^ this.data.charCodeAt(this.read + 1);
+    this.read += 2;
+    return rval;
   };
-  Te.ByteStringBuffer.prototype.getInt24 = function () {
-    var e =
+  util.ByteStringBuffer.prototype.getInt24 = function () {
+    var rval =
       (this.data.charCodeAt(this.read) << 16) ^
       (this.data.charCodeAt(this.read + 1) << 8) ^
       this.data.charCodeAt(this.read + 2);
-    return ((this.read += 3), e);
+    this.read += 3;
+    return rval;
   };
-  Te.ByteStringBuffer.prototype.getInt32 = function () {
-    var e =
+  util.ByteStringBuffer.prototype.getInt32 = function () {
+    var rval =
       (this.data.charCodeAt(this.read) << 24) ^
       (this.data.charCodeAt(this.read + 1) << 16) ^
       (this.data.charCodeAt(this.read + 2) << 8) ^
       this.data.charCodeAt(this.read + 3);
-    return ((this.read += 4), e);
+    this.read += 4;
+    return rval;
   };
-  Te.ByteStringBuffer.prototype.getInt16Le = function () {
-    var e = this.data.charCodeAt(this.read) ^ (this.data.charCodeAt(this.read + 1) << 8);
-    return ((this.read += 2), e);
+  util.ByteStringBuffer.prototype.getInt16Le = function () {
+    var rval = this.data.charCodeAt(this.read) ^ (this.data.charCodeAt(this.read + 1) << 8);
+    this.read += 2;
+    return rval;
   };
-  Te.ByteStringBuffer.prototype.getInt24Le = function () {
-    var e =
+  util.ByteStringBuffer.prototype.getInt24Le = function () {
+    var rval =
       this.data.charCodeAt(this.read) ^
       (this.data.charCodeAt(this.read + 1) << 8) ^
       (this.data.charCodeAt(this.read + 2) << 16);
-    return ((this.read += 3), e);
+    this.read += 3;
+    return rval;
   };
-  Te.ByteStringBuffer.prototype.getInt32Le = function () {
-    var e =
+  util.ByteStringBuffer.prototype.getInt32Le = function () {
+    var rval =
       this.data.charCodeAt(this.read) ^
       (this.data.charCodeAt(this.read + 1) << 8) ^
       (this.data.charCodeAt(this.read + 2) << 16) ^
       (this.data.charCodeAt(this.read + 3) << 24);
-    return ((this.read += 4), e);
+    this.read += 4;
+    return rval;
   };
-  Te.ByteStringBuffer.prototype.getInt = function (e) {
-    hf(e);
-    var n = 0;
-    do ((n = (n << 8) + this.data.charCodeAt(this.read++)), (e -= 8));
-    while (e > 0);
-    return n;
+  util.ByteStringBuffer.prototype.getInt = function (n_2) {
+    _checkBitsParam(n_2);
+    var rval = 0;
+    do {
+      rval = (rval << 8) + this.data.charCodeAt(this.read++);
+      n_2 -= 8;
+    } while (n_2 > 0);
+    return rval;
   };
-  Te.ByteStringBuffer.prototype.getSignedInt = function (e) {
-    var int = this.getInt(e),
-      r = 2 << (e - 2);
-    if (int >= r) int -= r << 1;
-    return int;
+  util.ByteStringBuffer.prototype.getSignedInt = function (n_2) {
+    var x = this.getInt(n_2);
+    var max = 2 << (n_2 - 2);
+    if (x >= max) x -= max << 1;
+    return x;
   };
-  Te.ByteStringBuffer.prototype.getBytes = function (e) {
-    var n;
-    if (e)
-      ((e = Math.min(this.length(), e)), (n = this.data.slice(this.read, this.read + e)), (this.read += e));
-    else if (e === 0) n = "";
-    else ((n = this.read === 0 ? this.data : this.data.slice(this.read)), this.clear());
-    return n;
+  util.ByteStringBuffer.prototype.getBytes = function (count) {
+    var rval;
+    if (count) {
+      count = Math.min(this.length(), count);
+      rval = this.data.slice(this.read, this.read + count);
+      this.read += count;
+    } else if (count === 0) rval = "";
+    else {
+      rval = this.read === 0 ? this.data : this.data.slice(this.read);
+      this.clear();
+    }
+    return rval;
   };
-  Te.ByteStringBuffer.prototype.bytes = function (e) {
-    return typeof e > "u" ? this.data.slice(this.read) : this.data.slice(this.read, this.read + e);
+  util.ByteStringBuffer.prototype.bytes = function (count) {
+    return typeof count === "undefined"
+      ? this.data.slice(this.read)
+      : this.data.slice(this.read, this.read + count);
   };
-  Te.ByteStringBuffer.prototype.at = function (e) {
-    return this.data.charCodeAt(this.read + e);
+  util.ByteStringBuffer.prototype.at = function (i) {
+    return this.data.charCodeAt(this.read + i);
   };
-  Te.ByteStringBuffer.prototype.setAt = function (e, n) {
-    return (
-      (this.data =
-        this.data.substr(0, this.read + e) + String.fromCharCode(n) + this.data.substr(this.read + e + 1)),
-      this
-    );
+  util.ByteStringBuffer.prototype.setAt = function (i, b) {
+    this.data =
+      this.data.substr(0, this.read + i) + String.fromCharCode(b) + this.data.substr(this.read + i + 1);
+    return this;
   };
-  Te.ByteStringBuffer.prototype.last = function () {
+  util.ByteStringBuffer.prototype.last = function () {
     return this.data.charCodeAt(this.data.length - 1);
   };
-  Te.ByteStringBuffer.prototype.copy = function () {
-    var buffer = Te.createBuffer(this.data);
-    return ((buffer.read = this.read), buffer);
+  util.ByteStringBuffer.prototype.copy = function () {
+    var c = util.createBuffer(this.data);
+    c.read = this.read;
+    return c;
   };
-  Te.ByteStringBuffer.prototype.compact = function () {
-    if (this.read > 0) ((this.data = this.data.slice(this.read)), (this.read = 0));
+  util.ByteStringBuffer.prototype.compact = function () {
+    if (this.read > 0) {
+      this.data = this.data.slice(this.read);
+      this.read = 0;
+    }
     return this;
   };
-  Te.ByteStringBuffer.prototype.clear = function () {
-    return ((this.data = ""), (this.read = 0), this);
+  util.ByteStringBuffer.prototype.clear = function () {
+    this.data = "";
+    this.read = 0;
+    return this;
   };
-  Te.ByteStringBuffer.prototype.truncate = function (e) {
-    var max = Math.max(0, this.length() - e);
-    return ((this.data = this.data.substr(this.read, max)), (this.read = 0), this);
+  util.ByteStringBuffer.prototype.truncate = function (count) {
+    var len = Math.max(0, this.length() - count);
+    this.data = this.data.substr(this.read, len);
+    this.read = 0;
+    return this;
   };
-  Te.ByteStringBuffer.prototype.toHex = function () {
-    var e = "";
-    for (var read = this.read; read < this.data.length; ++read) {
-      var code = this.data.charCodeAt(read);
-      if (code < 16) e += "0";
-      e += code.toString(16);
+  util.ByteStringBuffer.prototype.toHex = function () {
+    var rval = "";
+    for (var i = this.read; i < this.data.length; ++i) {
+      var b = this.data.charCodeAt(i);
+      if (b < 16) rval += "0";
+      rval += b.toString(16);
     }
-    return e;
+    return rval;
   };
-  Te.ByteStringBuffer.prototype.toString = function () {
-    return Te.decodeUtf8(this.bytes());
+  util.ByteStringBuffer.prototype.toString = function () {
+    return util.decodeUtf8(this.bytes());
   };
-  function l3(e, n) {
-    ((n = n || {}), (this.read = n.readOffset || 0), (this.growSize = n.growSize || 1024));
-    var isArrayBuffer = Te.isArrayBuffer(e),
-      isArrayBufferView = Te.isArrayBufferView(e);
+  function DataBuffer(b, options) {
+    options = options || {};
+    this.read = options.readOffset || 0;
+    this.growSize = options.growSize || 1024;
+    var isArrayBuffer = util.isArrayBuffer(b);
+    var isArrayBufferView = util.isArrayBufferView(b);
     if (isArrayBuffer || isArrayBufferView) {
-      if (isArrayBuffer) this.data = new DataView(e);
-      else this.data = new DataView(e.buffer, e.byteOffset, e.byteLength);
-      this.write = "writeOffset" in n ? n.writeOffset : this.data.byteLength;
+      if (isArrayBuffer) this.data = new DataView(b);
+      else this.data = new DataView(b.buffer, b.byteOffset, b.byteLength);
+      this.write = "writeOffset" in options ? options.writeOffset : this.data.byteLength;
       return;
     }
-    if (((this.data = new DataView(new ArrayBuffer(0))), (this.write = 0), e !== null && e !== void 0))
-      this.putBytes(e);
-    if ("writeOffset" in n) this.write = n.writeOffset;
+    this.data = new DataView(new ArrayBuffer(0));
+    this.write = 0;
+    if (b !== null && b !== undefined) this.putBytes(b);
+    if ("writeOffset" in options) this.write = options.writeOffset;
   }
-  Te.DataBuffer = l3;
-  Te.DataBuffer.prototype.length = function () {
+  util.DataBuffer = DataBuffer;
+  util.DataBuffer.prototype.length = function () {
     return this.write - this.read;
   };
-  Te.DataBuffer.prototype.isEmpty = function () {
+  util.DataBuffer.prototype.isEmpty = function () {
     return this.length() <= 0;
   };
-  Te.DataBuffer.prototype.accommodate = function (e, n) {
-    if (this.length() >= e) return this;
-    n = Math.max(n || this.growSize, e);
-    var uint8Array = new Uint8Array(this.data.buffer, this.data.byteOffset, this.data.byteLength),
-      uint8Array_2 = new Uint8Array(this.length() + n);
-    return (uint8Array_2.set(uint8Array), (this.data = new DataView(uint8Array_2.buffer)), this);
-  };
-  Te.DataBuffer.prototype.putByte = function (e) {
-    return (this.accommodate(1), this.data.setUint8(this.write++, e), this);
-  };
-  Te.DataBuffer.prototype.fillWithByte = function (e, n) {
-    this.accommodate(n);
-    for (var r = 0; r < n; ++r) this.data.setUint8(e);
+  util.DataBuffer.prototype.accommodate = function (amount, growSize) {
+    if (this.length() >= amount) return this;
+    growSize = Math.max(growSize || this.growSize, amount);
+    var src = new Uint8Array(this.data.buffer, this.data.byteOffset, this.data.byteLength);
+    var dst = new Uint8Array(this.length() + growSize);
+    dst.set(src);
+    this.data = new DataView(dst.buffer);
     return this;
   };
-  Te.DataBuffer.prototype.putBytes = function (e, n) {
-    if (Te.isArrayBufferView(e)) {
-      var uint8Array = new Uint8Array(e.buffer, e.byteOffset, e.byteLength),
-        s = uint8Array.byteLength - uint8Array.byteOffset;
-      this.accommodate(s);
-      var uint8Array_2 = new Uint8Array(this.data.buffer, this.write);
-      return (uint8Array_2.set(uint8Array), (this.write += s), this);
+  util.DataBuffer.prototype.putByte = function (b) {
+    this.accommodate(1);
+    this.data.setUint8(this.write++, b);
+    return this;
+  };
+  util.DataBuffer.prototype.fillWithByte = function (b, n) {
+    this.accommodate(n);
+    for (var i = 0; i < n; ++i) this.data.setUint8(b);
+    return this;
+  };
+  util.DataBuffer.prototype.putBytes = function (bytes, encoding) {
+    if (util.isArrayBufferView(bytes)) {
+      var src = new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+      var len = src.byteLength - src.byteOffset;
+      this.accommodate(len);
+      var dst = new Uint8Array(this.data.buffer, this.write);
+      dst.set(src);
+      this.write += len;
+      return this;
     }
-    if (Te.isArrayBuffer(e)) {
-      var uint8Array = new Uint8Array(e);
-      this.accommodate(uint8Array.byteLength);
-      var uint8Array_2 = new Uint8Array(this.data.buffer);
-      return (uint8Array_2.set(uint8Array, this.write), (this.write += uint8Array.byteLength), this);
+    if (util.isArrayBuffer(bytes)) {
+      var src = new Uint8Array(bytes);
+      this.accommodate(src.byteLength);
+      var dst = new Uint8Array(this.data.buffer);
+      dst.set(src, this.write);
+      this.write += src.byteLength;
+      return this;
     }
     if (
-      e instanceof Te.DataBuffer ||
-      (typeof e === "object" &&
-        typeof e.read === "number" &&
-        typeof e.write === "number" &&
-        Te.isArrayBufferView(e.data))
+      bytes instanceof util.DataBuffer ||
+      (typeof bytes === "object" &&
+        typeof bytes.read === "number" &&
+        typeof bytes.write === "number" &&
+        util.isArrayBufferView(bytes.data))
     ) {
-      var uint8Array = new Uint8Array(e.data.byteLength, e.read, e.length());
-      this.accommodate(uint8Array.byteLength);
-      var uint8Array_2 = new Uint8Array(e.data.byteLength, this.write);
-      return (uint8Array_2.set(uint8Array), (this.write += uint8Array.byteLength), this);
+      var src = new Uint8Array(bytes.data.byteLength, bytes.read, bytes.length());
+      this.accommodate(src.byteLength);
+      var dst = new Uint8Array(bytes.data.byteLength, this.write);
+      dst.set(src);
+      this.write += src.byteLength;
+      return this;
     }
-    if (e instanceof Te.ByteStringBuffer) ((e = e.data), (n = "binary"));
-    if (((n = n || "binary"), typeof e === "string")) {
-      var y;
-      if (n === "hex")
-        return (
-          this.accommodate(Math.ceil(e.length / 2)),
-          (y = new Uint8Array(this.data.buffer, this.write)),
-          (this.write += Te.binary.hex.decode(e, y, this.write)),
-          this
-        );
-      if (n === "base64")
-        return (
-          this.accommodate(Math.ceil(e.length / 4) * 3),
-          (y = new Uint8Array(this.data.buffer, this.write)),
-          (this.write += Te.binary.base64.decode(e, y, this.write)),
-          this
-        );
-      if (n === "utf8") ((e = Te.encodeUtf8(e)), (n = "binary"));
-      if (n === "binary" || n === "raw")
-        return (
-          this.accommodate(e.length),
-          (y = new Uint8Array(this.data.buffer, this.write)),
-          (this.write += Te.binary.raw.decode(y)),
-          this
-        );
-      if (n === "utf16")
-        return (
-          this.accommodate(e.length * 2),
-          (y = new Uint16Array(this.data.buffer, this.write)),
-          (this.write += Te.text.utf16.encode(y)),
-          this
-        );
-      throw Error("Invalid encoding: " + n);
+    if (bytes instanceof util.ByteStringBuffer) {
+      bytes = bytes.data;
+      encoding = "binary";
     }
-    throw Error("Invalid parameter: " + e);
+    encoding = encoding || "binary";
+    if (typeof bytes === "string") {
+      var view;
+      if (encoding === "hex") {
+        this.accommodate(Math.ceil(bytes.length / 2));
+        view = new Uint8Array(this.data.buffer, this.write);
+        this.write += util.binary.hex.decode(bytes, view, this.write);
+        return this;
+      }
+      if (encoding === "base64") {
+        this.accommodate(Math.ceil(bytes.length / 4) * 3);
+        view = new Uint8Array(this.data.buffer, this.write);
+        this.write += util.binary.base64.decode(bytes, view, this.write);
+        return this;
+      }
+      if (encoding === "utf8") {
+        bytes = util.encodeUtf8(bytes);
+        encoding = "binary";
+      }
+      if (encoding === "binary" || encoding === "raw") {
+        this.accommodate(bytes.length);
+        view = new Uint8Array(this.data.buffer, this.write);
+        this.write += util.binary.raw.decode(view);
+        return this;
+      }
+      if (encoding === "utf16") {
+        this.accommodate(bytes.length * 2);
+        view = new Uint16Array(this.data.buffer, this.write);
+        this.write += util.text.utf16.encode(view);
+        return this;
+      }
+      throw Error("Invalid encoding: " + encoding);
+    }
+    throw Error("Invalid parameter: " + bytes);
   };
-  Te.DataBuffer.prototype.putBuffer = function (e) {
-    return (this.putBytes(e), e.clear(), this);
-  };
-  Te.DataBuffer.prototype.putString = function (e) {
-    return this.putBytes(e, "utf16");
-  };
-  Te.DataBuffer.prototype.putInt16 = function (e) {
-    return (this.accommodate(2), this.data.setInt16(this.write, e), (this.write += 2), this);
-  };
-  Te.DataBuffer.prototype.putInt24 = function (e) {
-    return (
-      this.accommodate(3),
-      this.data.setInt16(this.write, (e >> 8) & 65535),
-      this.data.setInt8(this.write, (e >> 16) & 255),
-      (this.write += 3),
-      this
-    );
-  };
-  Te.DataBuffer.prototype.putInt32 = function (e) {
-    return (this.accommodate(4), this.data.setInt32(this.write, e), (this.write += 4), this);
-  };
-  Te.DataBuffer.prototype.putInt16Le = function (e) {
-    return (this.accommodate(2), this.data.setInt16(this.write, e, !0), (this.write += 2), this);
-  };
-  Te.DataBuffer.prototype.putInt24Le = function (e) {
-    return (
-      this.accommodate(3),
-      this.data.setInt8(this.write, (e >> 16) & 255),
-      this.data.setInt16(this.write, (e >> 8) & 65535, !0),
-      (this.write += 3),
-      this
-    );
-  };
-  Te.DataBuffer.prototype.putInt32Le = function (e) {
-    return (this.accommodate(4), this.data.setInt32(this.write, e, !0), (this.write += 4), this);
-  };
-  Te.DataBuffer.prototype.putInt = function (e, n) {
-    (hf(n), this.accommodate(n / 8));
-    do ((n -= 8), this.data.setInt8(this.write++, (e >> n) & 255));
-    while (n > 0);
+  util.DataBuffer.prototype.putBuffer = function (buffer) {
+    this.putBytes(buffer);
+    buffer.clear();
     return this;
   };
-  Te.DataBuffer.prototype.putSignedInt = function (e, n) {
-    if ((hf(n), this.accommodate(n / 8), e < 0)) e += 2 << (n - 1);
-    return this.putInt(e, n);
+  util.DataBuffer.prototype.putString = function (str) {
+    return this.putBytes(str, "utf16");
   };
-  Te.DataBuffer.prototype.getByte = function () {
+  util.DataBuffer.prototype.putInt16 = function (i) {
+    this.accommodate(2);
+    this.data.setInt16(this.write, i);
+    this.write += 2;
+    return this;
+  };
+  util.DataBuffer.prototype.putInt24 = function (i) {
+    this.accommodate(3);
+    this.data.setInt16(this.write, (i >> 8) & 65535);
+    this.data.setInt8(this.write, (i >> 16) & 255);
+    this.write += 3;
+    return this;
+  };
+  util.DataBuffer.prototype.putInt32 = function (i) {
+    this.accommodate(4);
+    this.data.setInt32(this.write, i);
+    this.write += 4;
+    return this;
+  };
+  util.DataBuffer.prototype.putInt16Le = function (i) {
+    this.accommodate(2);
+    this.data.setInt16(this.write, i, true);
+    this.write += 2;
+    return this;
+  };
+  util.DataBuffer.prototype.putInt24Le = function (i) {
+    this.accommodate(3);
+    this.data.setInt8(this.write, (i >> 16) & 255);
+    this.data.setInt16(this.write, (i >> 8) & 65535, true);
+    this.write += 3;
+    return this;
+  };
+  util.DataBuffer.prototype.putInt32Le = function (i) {
+    this.accommodate(4);
+    this.data.setInt32(this.write, i, true);
+    this.write += 4;
+    return this;
+  };
+  util.DataBuffer.prototype.putInt = function (i, n) {
+    _checkBitsParam(n);
+    this.accommodate(n / 8);
+    do {
+      n -= 8;
+      this.data.setInt8(this.write++, (i >> n) & 255);
+    } while (n > 0);
+    return this;
+  };
+  util.DataBuffer.prototype.putSignedInt = function (i, n) {
+    _checkBitsParam(n);
+    this.accommodate(n / 8);
+    if (i < 0) i += 2 << (n - 1);
+    return this.putInt(i, n);
+  };
+  util.DataBuffer.prototype.getByte = function () {
     return this.data.getInt8(this.read++);
   };
-  Te.DataBuffer.prototype.getInt16 = function () {
-    var int16 = this.data.getInt16(this.read);
-    return ((this.read += 2), int16);
+  util.DataBuffer.prototype.getInt16 = function () {
+    var rval = this.data.getInt16(this.read);
+    this.read += 2;
+    return rval;
   };
-  Te.DataBuffer.prototype.getInt24 = function () {
-    var e = (this.data.getInt16(this.read) << 8) ^ this.data.getInt8(this.read + 2);
-    return ((this.read += 3), e);
+  util.DataBuffer.prototype.getInt24 = function () {
+    var rval = (this.data.getInt16(this.read) << 8) ^ this.data.getInt8(this.read + 2);
+    this.read += 3;
+    return rval;
   };
-  Te.DataBuffer.prototype.getInt32 = function () {
-    var int32 = this.data.getInt32(this.read);
-    return ((this.read += 4), int32);
+  util.DataBuffer.prototype.getInt32 = function () {
+    var rval = this.data.getInt32(this.read);
+    this.read += 4;
+    return rval;
   };
-  Te.DataBuffer.prototype.getInt16Le = function () {
-    var int16 = this.data.getInt16(this.read, !0);
-    return ((this.read += 2), int16);
+  util.DataBuffer.prototype.getInt16Le = function () {
+    var rval = this.data.getInt16(this.read, true);
+    this.read += 2;
+    return rval;
   };
-  Te.DataBuffer.prototype.getInt24Le = function () {
-    var e = this.data.getInt8(this.read) ^ (this.data.getInt16(this.read + 1, !0) << 8);
-    return ((this.read += 3), e);
+  util.DataBuffer.prototype.getInt24Le = function () {
+    var rval = this.data.getInt8(this.read) ^ (this.data.getInt16(this.read + 1, true) << 8);
+    this.read += 3;
+    return rval;
   };
-  Te.DataBuffer.prototype.getInt32Le = function () {
-    var int32 = this.data.getInt32(this.read, !0);
-    return ((this.read += 4), int32);
+  util.DataBuffer.prototype.getInt32Le = function () {
+    var rval = this.data.getInt32(this.read, true);
+    this.read += 4;
+    return rval;
   };
-  Te.DataBuffer.prototype.getInt = function (e) {
-    hf(e);
-    var n = 0;
-    do ((n = (n << 8) + this.data.getInt8(this.read++)), (e -= 8));
-    while (e > 0);
-    return n;
+  util.DataBuffer.prototype.getInt = function (n_2) {
+    _checkBitsParam(n_2);
+    var rval = 0;
+    do {
+      rval = (rval << 8) + this.data.getInt8(this.read++);
+      n_2 -= 8;
+    } while (n_2 > 0);
+    return rval;
   };
-  Te.DataBuffer.prototype.getSignedInt = function (e) {
-    var int = this.getInt(e),
-      r = 2 << (e - 2);
-    if (int >= r) int -= r << 1;
-    return int;
+  util.DataBuffer.prototype.getSignedInt = function (n_2) {
+    var x = this.getInt(n_2);
+    var max = 2 << (n_2 - 2);
+    if (x >= max) x -= max << 1;
+    return x;
   };
-  Te.DataBuffer.prototype.getBytes = function (e) {
-    var n;
-    if (e)
-      ((e = Math.min(this.length(), e)), (n = this.data.slice(this.read, this.read + e)), (this.read += e));
-    else if (e === 0) n = "";
-    else ((n = this.read === 0 ? this.data : this.data.slice(this.read)), this.clear());
-    return n;
+  util.DataBuffer.prototype.getBytes = function (count) {
+    var rval;
+    if (count) {
+      count = Math.min(this.length(), count);
+      rval = this.data.slice(this.read, this.read + count);
+      this.read += count;
+    } else if (count === 0) rval = "";
+    else {
+      rval = this.read === 0 ? this.data : this.data.slice(this.read);
+      this.clear();
+    }
+    return rval;
   };
-  Te.DataBuffer.prototype.bytes = function (e) {
-    return typeof e > "u" ? this.data.slice(this.read) : this.data.slice(this.read, this.read + e);
+  util.DataBuffer.prototype.bytes = function (count) {
+    return typeof count === "undefined"
+      ? this.data.slice(this.read)
+      : this.data.slice(this.read, this.read + count);
   };
-  Te.DataBuffer.prototype.at = function (e) {
-    return this.data.getUint8(this.read + e);
+  util.DataBuffer.prototype.at = function (i) {
+    return this.data.getUint8(this.read + i);
   };
-  Te.DataBuffer.prototype.setAt = function (e, n) {
-    return (this.data.setUint8(e, n), this);
+  util.DataBuffer.prototype.setAt = function (i, b) {
+    this.data.setUint8(i, b);
+    return this;
   };
-  Te.DataBuffer.prototype.last = function () {
+  util.DataBuffer.prototype.last = function () {
     return this.data.getUint8(this.write - 1);
   };
-  Te.DataBuffer.prototype.copy = function () {
-    return new Te.DataBuffer(this);
+  util.DataBuffer.prototype.copy = function () {
+    return new util.DataBuffer(this);
   };
-  Te.DataBuffer.prototype.compact = function () {
+  util.DataBuffer.prototype.compact = function () {
     if (this.read > 0) {
-      var uint8Array = new Uint8Array(this.data.buffer, this.read),
-        uint8Array_2 = new Uint8Array(uint8Array.byteLength);
-      (uint8Array_2.set(uint8Array),
-        (this.data = new DataView(uint8Array_2)),
-        (this.write -= this.read),
-        (this.read = 0));
+      var src = new Uint8Array(this.data.buffer, this.read);
+      var dst = new Uint8Array(src.byteLength);
+      dst.set(src);
+      this.data = new DataView(dst);
+      this.write -= this.read;
+      this.read = 0;
     }
     return this;
   };
-  Te.DataBuffer.prototype.clear = function () {
-    return ((this.data = new DataView(new ArrayBuffer(0))), (this.read = this.write = 0), this);
+  util.DataBuffer.prototype.clear = function () {
+    this.data = new DataView(new ArrayBuffer(0));
+    this.read = this.write = 0;
+    return this;
   };
-  Te.DataBuffer.prototype.truncate = function (e) {
-    return (
-      (this.write = Math.max(0, this.length() - e)),
-      (this.read = Math.min(this.read, this.write)),
-      this
-    );
+  util.DataBuffer.prototype.truncate = function (count) {
+    this.write = Math.max(0, this.length() - count);
+    this.read = Math.min(this.read, this.write);
+    return this;
   };
-  Te.DataBuffer.prototype.toHex = function () {
-    var e = "";
-    for (var read = this.read; read < this.data.byteLength; ++read) {
-      var uint8 = this.data.getUint8(read);
-      if (uint8 < 16) e += "0";
-      e += uint8.toString(16);
+  util.DataBuffer.prototype.toHex = function () {
+    var rval = "";
+    for (var i = this.read; i < this.data.byteLength; ++i) {
+      var b = this.data.getUint8(i);
+      if (b < 16) rval += "0";
+      rval += b.toString(16);
     }
-    return e;
+    return rval;
   };
-  Te.DataBuffer.prototype.toString = function (e) {
-    var uint8Array = new Uint8Array(this.data, this.read, this.length());
-    if (((e = e || "utf8"), e === "binary" || e === "raw")) return Te.binary.raw.encode(uint8Array);
-    if (e === "hex") return Te.binary.hex.encode(uint8Array);
-    if (e === "base64") return Te.binary.base64.encode(uint8Array);
-    if (e === "utf8") return Te.text.utf8.decode(uint8Array);
-    if (e === "utf16") return Te.text.utf16.decode(uint8Array);
-    throw Error("Invalid encoding: " + e);
+  util.DataBuffer.prototype.toString = function (encoding) {
+    var view = new Uint8Array(this.data, this.read, this.length());
+    encoding = encoding || "utf8";
+    if (encoding === "binary" || encoding === "raw") return util.binary.raw.encode(view);
+    if (encoding === "hex") return util.binary.hex.encode(view);
+    if (encoding === "base64") return util.binary.base64.encode(view);
+    if (encoding === "utf8") return util.text.utf8.decode(view);
+    if (encoding === "utf16") return util.text.utf16.decode(view);
+    throw Error("Invalid encoding: " + encoding);
   };
-  Te.createBuffer = function (e, n) {
-    if (((n = n || "raw"), e !== void 0 && n === "utf8")) e = Te.encodeUtf8(e);
-    return new Te.ByteBuffer(e);
+  util.createBuffer = function (input, encoding) {
+    encoding = encoding || "raw";
+    if (input !== undefined && encoding === "utf8") input = util.encodeUtf8(input);
+    return new util.ByteBuffer(input);
   };
-  Te.fillString = function (e, n) {
-    var r = "";
+  util.fillString = function (c, n) {
+    var s = "";
     while (n > 0) {
-      if (n & 1) r += e;
-      if (((n >>>= 1), n > 0)) e += e;
+      if (n & 1) s += c;
+      n >>>= 1;
+      if (n > 0) c += c;
     }
-    return r;
+    return s;
   };
-  Te.xorBytes = function (e, n, r) {
-    var s = "",
-      h = "",
-      y = "",
-      b = 0,
-      S = 0;
-    for (; r > 0; --r, ++b) {
-      if (((h = e.charCodeAt(b) ^ n.charCodeAt(b)), S >= 10)) ((s += y), (y = ""), (S = 0));
-      ((y += String.fromCharCode(h)), ++S);
+  util.xorBytes = function (s1, s2, n) {
+    var s3 = "";
+    var b_2 = "";
+    var t = "";
+    var i = 0;
+    var c = 0;
+    for (; n > 0; --n, ++i) {
+      b_2 = s1.charCodeAt(i) ^ s2.charCodeAt(i);
+      if (c >= 10) {
+        s3 += t;
+        t = "";
+        c = 0;
+      }
+      t += String.fromCharCode(b_2);
+      ++c;
     }
-    return ((s += y), s);
+    s3 += t;
+    return s3;
   };
-  Te.hexToBytes = function (e) {
-    var n = "",
-      r = 0;
-    if (e.length & !0) ((r = 1), (n += String.fromCharCode(parseInt(e[0], 16))));
-    for (; r < e.length; r += 2) n += String.fromCharCode(parseInt(e.substr(r, 2), 16));
-    return n;
+  util.hexToBytes = function (hex) {
+    var rval = "";
+    var i = 0;
+    if (hex.length & true) {
+      i = 1;
+      rval += String.fromCharCode(parseInt(hex[0], 16));
+    }
+    for (; i < hex.length; i += 2) rval += String.fromCharCode(parseInt(hex.substr(i, 2), 16));
+    return rval;
   };
-  Te.bytesToHex = function (e) {
-    return Te.createBuffer(e).toHex();
+  util.bytesToHex = function (bytes) {
+    return util.createBuffer(bytes).toHex();
   };
-  Te.int32ToBytes = function (e) {
+  util.int32ToBytes = function (i) {
     return (
-      String.fromCharCode((e >> 24) & 255) +
-      String.fromCharCode((e >> 16) & 255) +
-      String.fromCharCode((e >> 8) & 255) +
-      String.fromCharCode(e & 255)
+      String.fromCharCode((i >> 24) & 255) +
+      String.fromCharCode((i >> 16) & 255) +
+      String.fromCharCode((i >> 8) & 255) +
+      String.fromCharCode(i & 255)
     );
   };
-  var Za = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=",
-    za = [
-      62, -1, -1, -1, 63, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, -1, -1, -1, 64, -1, -1, -1, 0, 1, 2, 3, 4,
-      5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, -1, -1, -1, -1, -1, -1,
-      26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51,
-    ],
-    fT = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
-  Te.encode64 = function (e, n) {
-    var r = "",
-      s = "",
-      h,
-      y,
-      b,
-      S = 0;
-    while (S < e.length) {
-      if (
-        ((h = e.charCodeAt(S++)),
-        (y = e.charCodeAt(S++)),
-        (b = e.charCodeAt(S++)),
-        (r += Za.charAt(h >> 2)),
-        (r += Za.charAt(((h & 3) << 4) | (y >> 4))),
-        isNaN(y))
-      )
-        r += "==";
-      else ((r += Za.charAt(((y & 15) << 2) | (b >> 6))), (r += isNaN(b) ? "=" : Za.charAt(b & 63)));
-      if (n && r.length > n)
-        ((s +=
-          r.substr(0, n) +
+  var _base64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
+  var _base64Idx = [
+    62, -1, -1, -1, 63, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, -1, -1, -1, 64, -1, -1, -1, 0, 1, 2, 3, 4, 5,
+    6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, -1, -1, -1, -1, -1, -1, 26,
+    27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51,
+  ];
+  var _base58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+  util.encode64 = function (input, maxline) {
+    var line = "";
+    var output = "";
+    var chr1;
+    var chr2;
+    var chr3;
+    var i = 0;
+    while (i < input.length) {
+      chr1 = input.charCodeAt(i++);
+      chr2 = input.charCodeAt(i++);
+      chr3 = input.charCodeAt(i++);
+      line += _base64.charAt(chr1 >> 2);
+      line += _base64.charAt(((chr1 & 3) << 4) | (chr2 >> 4));
+      if (isNaN(chr2)) line += "==";
+      else {
+        line += _base64.charAt(((chr2 & 15) << 2) | (chr3 >> 6));
+        line += isNaN(chr3) ? "=" : _base64.charAt(chr3 & 63);
+      }
+      if (maxline && line.length > maxline) {
+        output +=
+          line.substr(0, maxline) +
           `\r
-`),
-          (r = r.substr(n)));
-    }
-    return ((s += r), s);
-  };
-  Te.decode64 = function (e) {
-    e = e.replace(/[^A-Za-z0-9\+\/\=]/g, "");
-    var n = "",
-      r,
-      s,
-      h,
-      y,
-      b = 0;
-    while (b < e.length)
-      if (
-        ((r = za[e.charCodeAt(b++) - 43]),
-        (s = za[e.charCodeAt(b++) - 43]),
-        (h = za[e.charCodeAt(b++) - 43]),
-        (y = za[e.charCodeAt(b++) - 43]),
-        (n += String.fromCharCode((r << 2) | (s >> 4))),
-        h !== 64)
-      ) {
-        if (((n += String.fromCharCode(((s & 15) << 4) | (h >> 2))), y !== 64))
-          n += String.fromCharCode(((h & 3) << 6) | y);
+`;
+        line = line.substr(maxline);
       }
-    return n;
+    }
+    output += line;
+    return output;
   };
-  Te.encodeUtf8 = function (e) {
-    return unescape(encodeURIComponent(e));
+  util.decode64 = function (input) {
+    input = input.replace(/[^A-Za-z0-9\+\/\=]/g, "");
+    var output = "";
+    var enc1;
+    var enc2;
+    var enc3;
+    var enc4;
+    var i = 0;
+    while (i < input.length) {
+      enc1 = _base64Idx[input.charCodeAt(i++) - 43];
+      enc2 = _base64Idx[input.charCodeAt(i++) - 43];
+      enc3 = _base64Idx[input.charCodeAt(i++) - 43];
+      enc4 = _base64Idx[input.charCodeAt(i++) - 43];
+      output += String.fromCharCode((enc1 << 2) | (enc2 >> 4));
+      if (enc3 !== 64) {
+        output += String.fromCharCode(((enc2 & 15) << 4) | (enc3 >> 2));
+        if (enc4 !== 64) output += String.fromCharCode(((enc3 & 3) << 6) | enc4);
+      }
+    }
+    return output;
   };
-  Te.decodeUtf8 = function (e) {
-    return decodeURIComponent(escape(e));
+  util.encodeUtf8 = function (str) {
+    return unescape(encodeURIComponent(str));
   };
-  Te.binary = { raw: {}, hex: {}, base64: {}, base58: {}, baseN: { encode: cT.encode, decode: cT.decode } };
-  Te.binary.raw.encode = function (e) {
-    return String.fromCharCode.apply(null, e);
+  util.decodeUtf8 = function (str) {
+    return decodeURIComponent(escape(str));
   };
-  Te.binary.raw.decode = function (e, n, r) {
-    var s = n;
-    if (!s) s = new Uint8Array(e.length);
-    r = r || 0;
-    var h = r;
-    for (var y = 0; y < e.length; ++y) s[h++] = e.charCodeAt(y);
-    return n ? h - r : s;
+  util.binary = {
+    raw: {},
+    hex: {},
+    base64: {},
+    base58: {},
+    baseN: {
+      encode: baseN.encode,
+      decode: baseN.decode,
+    },
   };
-  Te.binary.hex.encode = Te.bytesToHex;
-  Te.binary.hex.decode = function (e, n, r) {
-    var s = n;
-    if (!s) s = new Uint8Array(Math.ceil(e.length / 2));
-    r = r || 0;
-    var h = 0,
-      y = r;
-    if (e.length & 1) ((h = 1), (s[y++] = parseInt(e[0], 16)));
-    for (; h < e.length; h += 2) s[y++] = parseInt(e.substr(h, 2), 16);
-    return n ? y - r : s;
+  util.binary.raw.encode = function (bytes) {
+    return String.fromCharCode.apply(null, bytes);
   };
-  Te.binary.base64.encode = function (e, n) {
-    var r = "",
-      s = "",
-      h,
-      y,
-      b,
-      S = 0;
-    while (S < e.byteLength) {
-      if (
-        ((h = e[S++]),
-        (y = e[S++]),
-        (b = e[S++]),
-        (r += Za.charAt(h >> 2)),
-        (r += Za.charAt(((h & 3) << 4) | (y >> 4))),
-        isNaN(y))
-      )
-        r += "==";
-      else ((r += Za.charAt(((y & 15) << 2) | (b >> 6))), (r += isNaN(b) ? "=" : Za.charAt(b & 63)));
-      if (n && r.length > n)
-        ((s +=
-          r.substr(0, n) +
+  util.binary.raw.decode = function (str, output, offset) {
+    var out = output;
+    if (!out) out = new Uint8Array(str.length);
+    offset = offset || 0;
+    var j = offset;
+    for (var i = 0; i < str.length; ++i) out[j++] = str.charCodeAt(i);
+    return output ? j - offset : out;
+  };
+  util.binary.hex.encode = util.bytesToHex;
+  util.binary.hex.decode = function (hex, output, offset) {
+    var out = output;
+    if (!out) out = new Uint8Array(Math.ceil(hex.length / 2));
+    offset = offset || 0;
+    var i = 0;
+    var j = offset;
+    if (hex.length & 1) {
+      i = 1;
+      out[j++] = parseInt(hex[0], 16);
+    }
+    for (; i < hex.length; i += 2) out[j++] = parseInt(hex.substr(i, 2), 16);
+    return output ? j - offset : out;
+  };
+  util.binary.base64.encode = function (input, maxline) {
+    var line = "";
+    var output = "";
+    var chr1;
+    var chr2;
+    var chr3;
+    var i = 0;
+    while (i < input.byteLength) {
+      chr1 = input[i++];
+      chr2 = input[i++];
+      chr3 = input[i++];
+      line += _base64.charAt(chr1 >> 2);
+      line += _base64.charAt(((chr1 & 3) << 4) | (chr2 >> 4));
+      if (isNaN(chr2)) line += "==";
+      else {
+        line += _base64.charAt(((chr2 & 15) << 2) | (chr3 >> 6));
+        line += isNaN(chr3) ? "=" : _base64.charAt(chr3 & 63);
+      }
+      if (maxline && line.length > maxline) {
+        output +=
+          line.substr(0, maxline) +
           `\r
-`),
-          (r = r.substr(n)));
+`;
+        line = line.substr(maxline);
+      }
     }
-    return ((s += r), s);
+    output += line;
+    return output;
   };
-  Te.binary.base64.decode = function (e, n, r) {
-    var s = n;
-    if (!s) s = new Uint8Array(Math.ceil(e.length / 4) * 3);
-    ((e = e.replace(/[^A-Za-z0-9\+\/\=]/g, "")), (r = r || 0));
-    var h,
-      y,
-      b,
-      S,
-      w = 0,
-      R = r;
-    while (w < e.length)
-      if (
-        ((h = za[e.charCodeAt(w++) - 43]),
-        (y = za[e.charCodeAt(w++) - 43]),
-        (b = za[e.charCodeAt(w++) - 43]),
-        (S = za[e.charCodeAt(w++) - 43]),
-        (s[R++] = (h << 2) | (y >> 4)),
-        b !== 64)
-      ) {
-        if (((s[R++] = ((y & 15) << 4) | (b >> 2)), S !== 64)) s[R++] = ((b & 3) << 6) | S;
+  util.binary.base64.decode = function (input, output, offset) {
+    var out = output;
+    if (!out) out = new Uint8Array(Math.ceil(input.length / 4) * 3);
+    input = input.replace(/[^A-Za-z0-9\+\/\=]/g, "");
+    offset = offset || 0;
+    var enc1;
+    var enc2;
+    var enc3;
+    var enc4;
+    var i = 0;
+    var j = offset;
+    while (i < input.length) {
+      enc1 = _base64Idx[input.charCodeAt(i++) - 43];
+      enc2 = _base64Idx[input.charCodeAt(i++) - 43];
+      enc3 = _base64Idx[input.charCodeAt(i++) - 43];
+      enc4 = _base64Idx[input.charCodeAt(i++) - 43];
+      out[j++] = (enc1 << 2) | (enc2 >> 4);
+      if (enc3 !== 64) {
+        out[j++] = ((enc2 & 15) << 4) | (enc3 >> 2);
+        if (enc4 !== 64) out[j++] = ((enc3 & 3) << 6) | enc4;
       }
-    return n ? R - r : s.subarray(0, R);
-  };
-  Te.binary.base58.encode = function (e, n) {
-    return Te.binary.baseN.encode(e, fT, n);
-  };
-  Te.binary.base58.decode = function (e, n) {
-    return Te.binary.baseN.decode(e, fT, n);
-  };
-  Te.text = { utf8: {}, utf16: {} };
-  Te.text.utf8.encode = function (e, n, r) {
-    e = Te.encodeUtf8(e);
-    var s = n;
-    if (!s) s = new Uint8Array(e.length);
-    r = r || 0;
-    var h = r;
-    for (var y = 0; y < e.length; ++y) s[h++] = e.charCodeAt(y);
-    return n ? h - r : s;
-  };
-  Te.text.utf8.decode = function (e) {
-    return Te.decodeUtf8(String.fromCharCode.apply(null, e));
-  };
-  Te.text.utf16.encode = function (e, n, r) {
-    var s = n;
-    if (!s) s = new Uint8Array(e.length * 2);
-    var uint16Array = new Uint16Array(s.buffer);
-    r = r || 0;
-    var y = r,
-      b = r;
-    for (var S = 0; S < e.length; ++S) ((uint16Array[b++] = e.charCodeAt(S)), (y += 2));
-    return n ? y - r : s;
-  };
-  Te.text.utf16.decode = function (e) {
-    return String.fromCharCode.apply(null, new Uint16Array(e.buffer));
-  };
-  Te.deflate = function (e, n, r) {
-    if (((n = Te.decode64(e.deflate(Te.encode64(n)).rval)), r)) {
-      var s = 2,
-        code = n.charCodeAt(1);
-      if (code & 32) s = 6;
-      n = n.substring(s, n.length - 4);
     }
-    return n;
+    return output ? j - offset : out.subarray(0, j);
   };
-  Te.inflate = function (e, n, r) {
-    var rval = e.inflate(Te.encode64(n)).rval;
-    return rval === null ? null : Te.decode64(rval);
+  util.binary.base58.encode = function (input, maxline) {
+    return util.binary.baseN.encode(input, _base58, maxline);
   };
-  var Xb = function (e, n, r) {
-      if (!e) throw Error("WebStorage not available.");
-      var s;
-      if (r === null) s = e.removeItem(n);
-      else ((r = Te.encode64(JSON.stringify(r))), (s = e.setItem(n, r)));
-      if (typeof s < "u" && s.rval !== !0) {
-        var h = Error(s.error.message);
-        throw ((h.id = s.error.id), (h.name = s.error.name), h);
-      }
-    },
-    Jb = function (e, n) {
-      if (!e) throw Error("WebStorage not available.");
-      var item = e.getItem(n);
-      if (e.init)
-        if (item.rval === null) {
-          if (item.error) {
-            var s = Error(item.error.message);
-            throw ((s.id = item.error.id), (s.name = item.error.name), s);
-          }
-          item = null;
-        } else item = item.rval;
-      if (item !== null) item = JSON.parse(Te.decode64(item));
-      return item;
-    },
-    c3 = function (e, n, r, s) {
-      var h = Jb(e, n);
-      if (h === null) h = {};
-      ((h[r] = s), Xb(e, n, h));
-    },
-    u3 = function (e, n, r) {
-      var s = Jb(e, n);
-      if (s !== null) s = r in s ? s[r] : null;
-      return s;
-    },
-    d3 = function (e, n, r) {
-      var s = Jb(e, n);
-      if (s !== null && r in s) {
-        delete s[r];
-        var h = !0;
-        for (var key in s) {
-          h = !1;
-          break;
+  util.binary.base58.decode = function (input, maxline) {
+    return util.binary.baseN.decode(input, _base58, maxline);
+  };
+  util.text = {
+    utf8: {},
+    utf16: {},
+  };
+  util.text.utf8.encode = function (str, output, offset) {
+    str = util.encodeUtf8(str);
+    var out = output;
+    if (!out) out = new Uint8Array(str.length);
+    offset = offset || 0;
+    var j = offset;
+    for (var i = 0; i < str.length; ++i) out[j++] = str.charCodeAt(i);
+    return output ? j - offset : out;
+  };
+  util.text.utf8.decode = function (bytes) {
+    return util.decodeUtf8(String.fromCharCode.apply(null, bytes));
+  };
+  util.text.utf16.encode = function (str, output, offset) {
+    var out = output;
+    if (!out) out = new Uint8Array(str.length * 2);
+    var view = new Uint16Array(out.buffer);
+    offset = offset || 0;
+    var j = offset;
+    var k = offset;
+    for (var i = 0; i < str.length; ++i) {
+      view[k++] = str.charCodeAt(i);
+      j += 2;
+    }
+    return output ? j - offset : out;
+  };
+  util.text.utf16.decode = function (bytes) {
+    return String.fromCharCode.apply(null, new Uint16Array(bytes.buffer));
+  };
+  util.deflate = function (api, bytes, raw) {
+    bytes = util.decode64(api.deflate(util.encode64(bytes)).rval);
+    if (raw) {
+      var start = 2;
+      var flg = bytes.charCodeAt(1);
+      if (flg & 32) start = 6;
+      bytes = bytes.substring(start, bytes.length - 4);
+    }
+    return bytes;
+  };
+  util.inflate = function (api, bytes, raw) {
+    var rval = api.inflate(util.encode64(bytes)).rval;
+    return rval === null ? null : util.decode64(rval);
+  };
+  var _setStorageObject = function (api, id, obj) {
+    if (!api) throw Error("WebStorage not available.");
+    var rval;
+    if (obj === null) rval = api.removeItem(id);
+    else {
+      obj = util.encode64(JSON.stringify(obj));
+      rval = api.setItem(id, obj);
+    }
+    if (typeof rval !== "undefined" && rval.rval !== true) {
+      var error = Error(rval.error.message);
+      error.id = rval.error.id;
+      error.name = rval.error.name;
+      throw error;
+    }
+  };
+  var _getStorageObject = function (api, id) {
+    if (!api) throw Error("WebStorage not available.");
+    var rval = api.getItem(id);
+    if (api.init)
+      if (rval.rval === null) {
+        if (rval.error) {
+          var error = Error(rval.error.message);
+          error.id = rval.error.id;
+          error.name = rval.error.name;
+          throw error;
         }
-        if (h) s = null;
-        Xb(e, n, s);
+        rval = null;
+      } else rval = rval.rval;
+    if (rval !== null) rval = JSON.parse(util.decode64(rval));
+    return rval;
+  };
+  var _setItem = function (api, id, key, data) {
+    var obj = _getStorageObject(api, id);
+    if (obj === null) obj = {};
+    obj[key] = data;
+    _setStorageObject(api, id, obj);
+  };
+  var _getItem = function (api, id, key) {
+    var rval = _getStorageObject(api, id);
+    if (rval !== null) rval = key in rval ? rval[key] : null;
+    return rval;
+  };
+  var _removeItem = function (api, id, key) {
+    var obj = _getStorageObject(api, id);
+    if (obj !== null && key in obj) {
+      delete obj[key];
+      var empty = true;
+      for (var prop in obj) {
+        empty = false;
+        break;
       }
-    },
-    f3 = function (e, n) {
-      Xb(e, n, null);
-    },
-    Mh = function (e, n, r) {
-      var s = null;
-      if (typeof r > "u") r = ["web", "flash"];
-      var h,
-        y = !1,
-        b = null;
-      for (var key in r) {
-        h = r[key];
-        try {
-          if (h === "flash" || h === "both") {
-            if (n[0] === null) throw Error("Flash local storage not available.");
-            ((s = e.apply(this, n)), (y = h === "flash"));
-          }
-          if (h === "web" || h === "both") ((n[0] = localStorage), (s = e.apply(this, n)), (y = !0));
-        } catch (error) {
-          b = error;
+      if (empty) obj = null;
+      _setStorageObject(api, id, obj);
+    }
+  };
+  var _clearItems = function (api, id) {
+    _setStorageObject(api, id, null);
+  };
+  var _callStorageFunction = function (func, args, location) {
+    var rval = null;
+    if (typeof location === "undefined") location = ["web", "flash"];
+    var type;
+    var done = false;
+    var exception = null;
+    for (var idx in location) {
+      type = location[idx];
+      try {
+        if (type === "flash" || type === "both") {
+          if (args[0] === null) throw Error("Flash local storage not available.");
+          rval = func.apply(this, args);
+          done = type === "flash";
         }
-        if (y) break;
+        if (type === "web" || type === "both") {
+          args[0] = localStorage;
+          rval = func.apply(this, args);
+          done = true;
+        }
+      } catch (ex) {
+        exception = ex;
       }
-      if (!y) throw b;
-      return s;
-    };
-  Te.setItem = function (e, n, r, s, h) {
-    Mh(c3, arguments, h);
+      if (done) break;
+    }
+    if (!done) throw exception;
+    return rval;
   };
-  Te.getItem = function (e, n, r, s) {
-    return Mh(u3, arguments, s);
+  util.setItem = function (api, id, key, data, location) {
+    _callStorageFunction(_setItem, arguments, location);
   };
-  Te.removeItem = function (e, n, r, s) {
-    Mh(d3, arguments, s);
+  util.getItem = function (api, id, key, location) {
+    return _callStorageFunction(_getItem, arguments, location);
   };
-  Te.clearItems = function (e, n, r) {
-    Mh(f3, arguments, r);
+  util.removeItem = function (api, id, key, location) {
+    _callStorageFunction(_removeItem, arguments, location);
   };
-  Te.isEmpty = function (e) {
-    for (var key in e) if (e.hasOwnProperty(key)) return !1;
-    return !0;
+  util.clearItems = function (api, id, location) {
+    _callStorageFunction(_clearItems, arguments, location);
   };
-  Te.format = function (e) {
-    var n = /%./g,
-      r,
-      s,
-      h = 0,
-      y = [],
-      b = 0;
-    while ((r = n.exec(e))) {
-      if (((s = e.substring(b, n.lastIndex - 2)), s.length > 0)) y.push(s);
-      b = n.lastIndex;
-      var S = r[0][1];
-      switch (S) {
+  util.isEmpty = function (obj) {
+    for (var prop in obj) if (obj.hasOwnProperty(prop)) return false;
+    return true;
+  };
+  util.format = function (format) {
+    var re = /%./g;
+    var match;
+    var part;
+    var argi = 0;
+    var parts = [];
+    var last = 0;
+    while ((match = re.exec(format))) {
+      part = format.substring(last, re.lastIndex - 2);
+      if (part.length > 0) parts.push(part);
+      last = re.lastIndex;
+      var code = match[0][1];
+      switch (code) {
         case "s":
         case "o":
-          if (h < arguments.length) y.push(arguments[h++ + 1]);
-          else y.push("<?>");
+          if (argi < arguments.length) parts.push(arguments[argi++ + 1]);
+          else parts.push("<?>");
           break;
         case "%":
-          y.push("%");
+          parts.push("%");
           break;
         default:
-          y.push("<%" + S + "?>");
+          parts.push("<%" + code + "?>");
       }
     }
-    return (y.push(e.substring(b)), y.join(""));
+    parts.push(format.substring(last));
+    return parts.join("");
   };
-  Te.formatNumber = function (e, n, r, s) {
-    var h = e,
-      y = isNaN((n = Math.abs(n))) ? 2 : n,
-      b = r === void 0 ? "," : r,
-      S = s === void 0 ? "." : s,
-      w = h < 0 ? "-" : "",
-      R = parseInt((h = Math.abs(+h || 0).toFixed(y)), 10) + "",
-      D = R.length > 3 ? R.length % 3 : 0;
+  util.formatNumber = function (number, decimals, dec_point, thousands_sep) {
+    var n = number;
+    var c = isNaN((decimals = Math.abs(decimals))) ? 2 : decimals;
+    var d = dec_point === undefined ? "," : dec_point;
+    var t = thousands_sep === undefined ? "." : thousands_sep;
+    var s = n < 0 ? "-" : "";
+    var i = parseInt((n = Math.abs(+n || 0).toFixed(c)), 10) + "";
+    var j = i.length > 3 ? i.length % 3 : 0;
     return (
-      w +
-      (D ? R.substr(0, D) + S : "") +
-      R.substr(D).replace(/(\d{3})(?=\d)/g, "$1" + S) +
-      (y
-        ? b +
-          Math.abs(h - R)
-            .toFixed(y)
+      s +
+      (j ? i.substr(0, j) + t : "") +
+      i.substr(j).replace(/(\d{3})(?=\d)/g, "$1" + t) +
+      (c
+        ? d +
+          Math.abs(n - i)
+            .toFixed(c)
             .slice(2)
         : "")
     );
   };
-  Te.formatSize = function (e) {
-    if (e >= 1073741824) e = Te.formatNumber(e / 1073741824, 2, ".", "") + " GiB";
-    else if (e >= 1048576) e = Te.formatNumber(e / 1048576, 2, ".", "") + " MiB";
-    else if (e >= 1024) e = Te.formatNumber(e / 1024, 0) + " KiB";
-    else e = Te.formatNumber(e, 0) + " bytes";
-    return e;
+  util.formatSize = function (size) {
+    if (size >= 1073741824) size = util.formatNumber(size / 1073741824, 2, ".", "") + " GiB";
+    else if (size >= 1048576) size = util.formatNumber(size / 1048576, 2, ".", "") + " MiB";
+    else if (size >= 1024) size = util.formatNumber(size / 1024, 0) + " KiB";
+    else size = util.formatNumber(size, 0) + " bytes";
+    return size;
   };
-  Te.bytesFromIP = function (e) {
-    if (e.indexOf(".") !== -1) return Te.bytesFromIPv4(e);
-    if (e.indexOf(":") !== -1) return Te.bytesFromIPv6(e);
+  util.bytesFromIP = function (ip) {
+    if (ip.indexOf(".") !== -1) return util.bytesFromIPv4(ip);
+    if (ip.indexOf(":") !== -1) return util.bytesFromIPv6(ip);
     return null;
   };
-  Te.bytesFromIPv4 = function (e) {
-    if (((e = e.split(".")), e.length !== 4)) return null;
-    var buffer = Te.createBuffer();
-    for (var r = 0; r < e.length; ++r) {
-      var s = parseInt(e[r], 10);
-      if (isNaN(s)) return null;
-      buffer.putByte(s);
+  util.bytesFromIPv4 = function (ip) {
+    ip = ip.split(".");
+    if (ip.length !== 4) return null;
+    var b = util.createBuffer();
+    for (var i = 0; i < ip.length; ++i) {
+      var num = parseInt(ip[i], 10);
+      if (isNaN(num)) return null;
+      b.putByte(num);
     }
-    return buffer.getBytes();
+    return b.getBytes();
   };
-  Te.bytesFromIPv6 = function (e) {
-    var n = 0;
-    e = e.split(":").filter(function (b) {
-      if (b.length === 0) ++n;
-      return !0;
+  util.bytesFromIPv6 = function (ip) {
+    var blanks = 0;
+    ip = ip.split(":").filter(function (e) {
+      if (e.length === 0) ++blanks;
+      return true;
     });
-    var r = (8 - e.length + n) * 2,
-      buffer = Te.createBuffer();
-    for (var h = 0; h < 8; ++h) {
-      if (!e[h] || e[h].length === 0) {
-        (buffer.fillWithByte(0, r), (r = 0));
+    var zeros = (8 - ip.length + blanks) * 2;
+    var b = util.createBuffer();
+    for (var i = 0; i < 8; ++i) {
+      if (!ip[i] || ip[i].length === 0) {
+        b.fillWithByte(0, zeros);
+        zeros = 0;
         continue;
       }
-      var hexToBytes = Te.hexToBytes(e[h]);
-      if (hexToBytes.length < 2) buffer.putByte(0);
-      buffer.putBytes(hexToBytes);
+      var bytes = util.hexToBytes(ip[i]);
+      if (bytes.length < 2) b.putByte(0);
+      b.putBytes(bytes);
     }
-    return buffer.getBytes();
+    return b.getBytes();
   };
-  Te.bytesToIP = function (e) {
-    if (e.length === 4) return Te.bytesToIPv4(e);
-    if (e.length === 16) return Te.bytesToIPv6(e);
+  util.bytesToIP = function (bytes) {
+    if (bytes.length === 4) return util.bytesToIPv4(bytes);
+    if (bytes.length === 16) return util.bytesToIPv6(bytes);
     return null;
   };
-  Te.bytesToIPv4 = function (e) {
-    if (e.length !== 4) return null;
-    var n = [];
-    for (var r = 0; r < e.length; ++r) n.push(e.charCodeAt(r));
-    return n.join(".");
+  util.bytesToIPv4 = function (bytes) {
+    if (bytes.length !== 4) return null;
+    var ip = [];
+    for (var i = 0; i < bytes.length; ++i) ip.push(bytes.charCodeAt(i));
+    return ip.join(".");
   };
-  Te.bytesToIPv6 = function (e) {
-    if (e.length !== 16) return null;
-    var n = [],
-      r = [],
-      s = 0;
-    for (var h = 0; h < e.length; h += 2) {
-      var bytesToHex = Te.bytesToHex(e[h] + e[h + 1]);
-      while (bytesToHex[0] === "0" && bytesToHex !== "0") bytesToHex = bytesToHex.substr(1);
-      if (bytesToHex === "0") {
-        var b = r[r.length - 1],
-          S = n.length;
-        if (!b || S !== b.end + 1) r.push({ start: S, end: S });
-        else if (((b.end = S), b.end - b.start > r[s].end - r[s].start)) s = r.length - 1;
+  util.bytesToIPv6 = function (bytes) {
+    if (bytes.length !== 16) return null;
+    var ip = [];
+    var zeroGroups = [];
+    var zeroMaxGroup = 0;
+    for (var i = 0; i < bytes.length; i += 2) {
+      var hex = util.bytesToHex(bytes[i] + bytes[i + 1]);
+      while (hex[0] === "0" && hex !== "0") hex = hex.substr(1);
+      if (hex === "0") {
+        var last = zeroGroups[zeroGroups.length - 1];
+        var idx = ip.length;
+        if (!last || idx !== last.end + 1)
+          zeroGroups.push({
+            start: idx,
+            end: idx,
+          });
+        else {
+          last.end = idx;
+          if (last.end - last.start > zeroGroups[zeroMaxGroup].end - zeroGroups[zeroMaxGroup].start)
+            zeroMaxGroup = zeroGroups.length - 1;
+        }
       }
-      n.push(bytesToHex);
+      ip.push(hex);
     }
-    if (r.length > 0) {
-      var w = r[s];
-      if (w.end - w.start > 0) {
-        if ((n.splice(w.start, w.end - w.start + 1, ""), w.start === 0)) n.unshift("");
-        if (w.end === 7) n.push("");
+    if (zeroGroups.length > 0) {
+      var group = zeroGroups[zeroMaxGroup];
+      if (group.end - group.start > 0) {
+        ip.splice(group.start, group.end - group.start + 1, "");
+        if (group.start === 0) ip.unshift("");
+        if (group.end === 7) ip.push("");
       }
     }
-    return n.join(":");
+    return ip.join(":");
   };
-  Te.estimateCores = function (e, n) {
-    if (typeof e === "function") ((n = e), (e = {}));
-    if (((e = e || {}), "cores" in Te && !e.update)) return n(null, Te.cores);
-    if (typeof navigator < "u" && "hardwareConcurrency" in navigator && navigator.hardwareConcurrency > 0)
-      return ((Te.cores = navigator.hardwareConcurrency), n(null, Te.cores));
-    if (typeof Worker > "u") return ((Te.cores = 1), n(null, Te.cores));
-    if (typeof Blob > "u") return ((Te.cores = 2), n(null, Te.cores));
-    var objectURL = URL.createObjectURL(
+  util.estimateCores = function (options, callback) {
+    if (typeof options === "function") {
+      callback = options;
+      options = {};
+    }
+    options = options || {};
+    if ("cores" in util && !options.update) return callback(null, util.cores);
+    if (
+      typeof navigator !== "undefined" &&
+      "hardwareConcurrency" in navigator &&
+      navigator.hardwareConcurrency > 0
+    ) {
+      util.cores = navigator.hardwareConcurrency;
+      return callback(null, util.cores);
+    }
+    if (typeof Worker === "undefined") {
+      util.cores = 1;
+      return callback(null, util.cores);
+    }
+    if (typeof Blob === "undefined") {
+      util.cores = 2;
+      return callback(null, util.cores);
+    }
+    var blobUrl = URL.createObjectURL(
       new Blob(
         [
           "(",
           function () {
-            self.addEventListener("message", function (b) {
-              var now = Date.now(),
-                w = now + 4;
-              while (Date.now() < w);
-              self.postMessage({ st: now, et: w });
+            self.addEventListener("message", function (e) {
+              var st = Date.now();
+              var et = st + 4;
+              while (Date.now() < et);
+              self.postMessage({
+                st,
+                et,
+              });
             });
           }.toString(),
           ")()",
         ],
-        { type: "application/javascript" },
+        {
+          type: "application/javascript",
+        },
       ),
     );
-    s([], 5, 16);
-    function s(b, S, w) {
-      if (S === 0) {
-        var floored = Math.floor(
-          b.reduce(function (D, O) {
-            return D + O;
-          }, 0) / b.length,
+    sample([], 5, 16);
+    function sample(max, samples, numWorkers) {
+      if (samples === 0) {
+        var avg = Math.floor(
+          max.reduce(function (avg, x) {
+            return avg + x;
+          }, 0) / max.length,
         );
-        return ((Te.cores = Math.max(1, floored)), URL.revokeObjectURL(objectURL), n(null, Te.cores));
+        util.cores = Math.max(1, avg);
+        URL.revokeObjectURL(blobUrl);
+        return callback(null, util.cores);
       }
-      h(w, function (D, O) {
-        (b.push(y(w, O)), s(b, S - 1, w));
+      map(numWorkers, function (err, results) {
+        max.push(reduce(numWorkers, results));
+        sample(max, samples - 1, numWorkers);
       });
     }
-    function h(b, S) {
-      var w = [],
-        R = [];
-      for (var D = 0; D < b; ++D) {
-        var worker = new Worker(objectURL);
-        (worker.addEventListener("message", function (L) {
-          if ((R.push(L.data), R.length === b)) {
-            for (var V = 0; V < b; ++V) w[V].terminate();
-            S(null, R);
+    function map(numWorkers, callback) {
+      var workers = [];
+      var results = [];
+      for (var i = 0; i < numWorkers; ++i) {
+        var worker = new Worker(blobUrl);
+        worker.addEventListener("message", function (e) {
+          results.push(e.data);
+          if (results.length === numWorkers) {
+            for (var i = 0; i < numWorkers; ++i) workers[i].terminate();
+            callback(null, results);
           }
-        }),
-          w.push(worker));
+        });
+        workers.push(worker);
       }
-      for (var D = 0; D < b; ++D) w[D].postMessage(D);
+      for (var i = 0; i < numWorkers; ++i) workers[i].postMessage(i);
     }
-    function y(b, S) {
-      var w = [];
-      for (var R = 0; R < b; ++R) {
-        var D = S[R],
-          O = (w[R] = []);
-        for (var L = 0; L < b; ++L) {
-          if (R === L) continue;
-          var V = S[L];
-          if ((D.st > V.st && D.st < V.et) || (V.st > D.st && V.st < D.et)) O.push(L);
+    function reduce(numWorkers, results) {
+      var overlaps = [];
+      for (var n = 0; n < numWorkers; ++n) {
+        var r1 = results[n];
+        var overlap = (overlaps[n] = []);
+        for (var i = 0; i < numWorkers; ++i) {
+          if (n === i) continue;
+          var r2 = results[i];
+          if ((r1.st > r2.st && r1.st < r2.et) || (r2.st > r1.st && r2.st < r1.et)) overlap.push(i);
         }
       }
-      return w.reduce(function (K, q) {
-        return Math.max(K, q.length);
+      return overlaps.reduce(function (max, overlap) {
+        return Math.max(max, overlap.length);
       }, 0);
     }
   };
 });
-
-export { Zn };
+export { require_util };

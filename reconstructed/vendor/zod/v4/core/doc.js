@@ -7,44 +7,51 @@
  */
 
 //@ chunk-7vp249v4.js:13742-14365 esm-fingerprint
-class je {
-  constructor(e = [], t = {}) {
-    ((this.content = []), (this.indent = 0), (this.args = e), (this.closed = t));
+class Doc {
+  constructor(args = [], closed = {}) {
+    this.content = [];
+    this.indent = 0;
+    this.args = args;
+    this.closed = closed;
   }
-  indented(e) {
+  indented(fn) {
     this.indent += 1;
     try {
-      e(this);
+      fn(this);
     } finally {
       this.indent -= 1;
     }
   }
-  write(e) {
-    if (typeof e === "function") {
-      (e(this, { execution: "sync" }), e(this, { execution: "async" }));
+  write(arg) {
+    if (typeof arg === "function") {
+      arg(this, {
+        execution: "sync",
+      });
+      arg(this, {
+        execution: "async",
+      });
       return;
     }
-    let filtered = e
-        .split(
-          `
+    let lines = arg
+      .split(
+        `
 `,
-        )
-        .filter((s) => s),
-      min = Math.min(...filtered.map((s) => s.length - s.trimStart().length)),
-      mapped = filtered.map((s) => s.slice(min)).map((s) => " ".repeat(this.indent * 2) + s);
-    for (let s of mapped) this.content.push(s);
+      )
+      .filter((x) => x);
+    let minIndent = Math.min(...lines.map((x) => x.length - x.trimStart().length));
+    let dedented = lines.map((x) => x.slice(minIndent)).map((x) => " ".repeat(this.indent * 2) + x);
+    for (let line of dedented) this.content.push(line);
   }
   compile() {
-    let e = Function,
-      t = this?.content ?? [""];
-    return new e(
+    let F = Function;
+    let content = this?.content ?? [""];
+    return new F(
       ...Object.keys(this.closed),
       `return function (${this.args.join(", ")}) {
-${t.join(`
+${content.join(`
 `)}
 };`,
     )(...Object.values(this.closed));
   }
 }
-
-export { je };
+export { Doc };

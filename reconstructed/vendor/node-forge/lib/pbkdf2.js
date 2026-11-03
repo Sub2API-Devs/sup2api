@@ -6,108 +6,114 @@
  * attribution: cjs-fingerprint 1
  */
 import { x, importMetaRequire } from "../../../runtime/bun-runtime.js";
-import { Tn } from "./forge.js";
-import { iu } from "./hmac.js";
-import { bo } from "./md.js";
-import { Zn } from "./util.js";
+import { require_forge } from "./forge.js";
+import { require_hmac } from "./hmac.js";
+import { require_md } from "./md.js";
+import { require_util } from "./util.js";
 
 //@ chunk-fq0cr76a.js:79887-81621 cjs-fingerprint
-var Xh = x(function (bfe, OT) {
-  var Ws = Tn();
-  iu();
-  bo();
-  Zn();
-  var A3 = (Ws.pkcs5 = Ws.pkcs5 || {}),
-    da;
-  if (Ws.util.isNodejs && !Ws.options.usePureJavaScript) da = importMetaRequire("crypto");
-  OT.exports =
-    Ws.pbkdf2 =
-    A3.pbkdf2 =
-      function (e, n, r, s, h, y) {
-        if (typeof h === "function") ((y = h), (h = null));
+var require_pbkdf2 = x(function (cjsExports, cjsModule) {
+  var forge = require_forge();
+  require_hmac();
+  require_md();
+  require_util();
+  var pkcs5 = (forge.pkcs5 = forge.pkcs5 || {});
+  var da;
+  if (forge.util.isNodejs && !forge.options.usePureJavaScript) da = importMetaRequire("crypto");
+  cjsModule.exports =
+    forge.pbkdf2 =
+    pkcs5.pbkdf2 =
+      function (p, s_2, c, dkLen, md, callback) {
+        if (typeof md === "function") {
+          callback = md;
+          md = null;
+        }
         if (
-          Ws.util.isNodejs &&
-          !Ws.options.usePureJavaScript &&
+          forge.util.isNodejs &&
+          !forge.options.usePureJavaScript &&
           da.pbkdf2 &&
-          (h === null || typeof h !== "object") &&
-          (da.pbkdf2Sync.length > 4 || !h || h === "sha1")
+          (md === null || typeof md !== "object") &&
+          (da.pbkdf2Sync.length > 4 || !md || md === "sha1")
         ) {
-          if (typeof h !== "string") h = "sha1";
-          if (((e = Buffer.from(e, "binary")), (n = Buffer.from(n, "binary")), !y)) {
-            if (da.pbkdf2Sync.length === 4) return da.pbkdf2Sync(e, n, r, s).toString("binary");
-            return da.pbkdf2Sync(e, n, r, s, h).toString("binary");
+          if (typeof md !== "string") md = "sha1";
+          p = Buffer.from(p, "binary");
+          s_2 = Buffer.from(s_2, "binary");
+          if (!callback) {
+            if (da.pbkdf2Sync.length === 4) return da.pbkdf2Sync(p, s_2, c, dkLen).toString("binary");
+            return da.pbkdf2Sync(p, s_2, c, dkLen, md).toString("binary");
           }
           if (da.pbkdf2Sync.length === 4)
-            return da.pbkdf2(e, n, r, s, function (ae, Se) {
-              if (ae) return y(ae);
-              y(null, Se.toString("binary"));
+            return da.pbkdf2(p, s_2, c, dkLen, function (err, key) {
+              if (err) return callback(err);
+              callback(null, key.toString("binary"));
             });
-          return da.pbkdf2(e, n, r, s, h, function (ae, Se) {
-            if (ae) return y(ae);
-            y(null, Se.toString("binary"));
+          return da.pbkdf2(p, s_2, c, dkLen, md, function (err, key) {
+            if (err) return callback(err);
+            callback(null, key.toString("binary"));
           });
         }
-        if (typeof h > "u" || h === null) h = "sha1";
-        if (typeof h === "string") {
-          if (!(h in Ws.md.algorithms)) throw Error("Unknown hash algorithm: " + h);
-          h = Ws.md[h].create();
+        if (typeof md === "undefined" || md === null) md = "sha1";
+        if (typeof md === "string") {
+          if (!(md in forge.md.algorithms)) throw Error("Unknown hash algorithm: " + md);
+          md = forge.md[md].create();
         }
-        var digestLength = h.digestLength;
-        if (s > 4294967295 * digestLength) {
-          var S = Error("Derived key is too long.");
-          if (y) return y(S);
-          throw S;
+        var hLen = md.digestLength;
+        if (dkLen > 4294967295 * hLen) {
+          var err = Error("Derived key is too long.");
+          if (callback) return callback(err);
+          throw err;
         }
-        var ceil = Math.ceil(s / digestLength),
-          R = s - (ceil - 1) * digestLength,
-          create = Ws.hmac.create();
-        create.start(h, e);
-        var O = "",
-          L,
-          V,
-          K;
-        if (!y) {
-          for (var q = 1; q <= ceil; ++q) {
-            (create.start(null, null),
-              create.update(n),
-              create.update(Ws.util.int32ToBytes(q)),
-              (L = K = create.digest().getBytes()));
-            for (var Z = 2; Z <= r; ++Z)
-              (create.start(null, null),
-                create.update(K),
-                (V = create.digest().getBytes()),
-                (L = Ws.util.xorBytes(L, V, digestLength)),
-                (K = V));
-            O += q < ceil ? L : L.substr(0, R);
+        var len = Math.ceil(dkLen / hLen);
+        var r = dkLen - (len - 1) * hLen;
+        var prf = forge.hmac.create();
+        prf.start(md, p);
+        var dk = "";
+        var xor;
+        var u_c;
+        var u_c1;
+        if (!callback) {
+          for (var i = 1; i <= len; ++i) {
+            prf.start(null, null);
+            prf.update(s_2);
+            prf.update(forge.util.int32ToBytes(i));
+            xor = u_c1 = prf.digest().getBytes();
+            for (var j = 2; j <= c; ++j) {
+              prf.start(null, null);
+              prf.update(u_c1);
+              u_c = prf.digest().getBytes();
+              xor = forge.util.xorBytes(xor, u_c, hLen);
+              u_c1 = u_c;
+            }
+            dk += i < len ? xor : xor.substr(0, r);
           }
-          return O;
+          return dk;
         }
-        var q = 1,
-          Z;
-        function J() {
-          if (q > ceil) return y(null, O);
-          (create.start(null, null),
-            create.update(n),
-            create.update(Ws.util.int32ToBytes(q)),
-            (L = K = create.digest().getBytes()),
-            (Z = 2),
-            ie());
+        var i = 1;
+        var j;
+        function outer() {
+          if (i > len) return callback(null, dk);
+          prf.start(null, null);
+          prf.update(s_2);
+          prf.update(forge.util.int32ToBytes(i));
+          xor = u_c1 = prf.digest().getBytes();
+          j = 2;
+          inner();
         }
-        function ie() {
-          if (Z <= r)
-            return (
-              create.start(null, null),
-              create.update(K),
-              (V = create.digest().getBytes()),
-              (L = Ws.util.xorBytes(L, V, digestLength)),
-              (K = V),
-              ++Z,
-              Ws.util.setImmediate(ie)
-            );
-          ((O += q < ceil ? L : L.substr(0, R)), ++q, J());
+        function inner() {
+          if (j <= c) {
+            prf.start(null, null);
+            prf.update(u_c1);
+            u_c = prf.digest().getBytes();
+            xor = forge.util.xorBytes(xor, u_c, hLen);
+            u_c1 = u_c;
+            ++j;
+            return forge.util.setImmediate(inner);
+          }
+          dk += i < len ? xor : xor.substr(0, r);
+          ++i;
+          outer();
         }
-        J();
+        outer();
       };
 });
-
-export { Xh };
+export { require_pbkdf2 };

@@ -9,55 +9,61 @@
  * attribution: placement 3
  */
 import { isHipaaFeatureError } from "./errors.js";
-import { xxi } from "../../utils/settings/settingsSourceTrust.js";
-import { Gts } from "./errorUtils.js";
+import { isHumbleFlurryOn } from "../../utils/settings/settingsSourceTrust.js";
+import { runIdleTask } from "./errorUtils.js";
 import { logError } from "../../utils/log.js";
 import { hasComplianceTaint } from "../policyLimits/complianceTaints.js";
 import { raceWithAbortSignal } from "../../utils/sleep.js";
-import { Lf } from "../../../vendor/@anthropic-ai/sdk/core/error.mjs";
+import { APIUserAbortError } from "../../../vendor/@anthropic-ai/sdk/core/error.mjs";
 import { logFeatureBad, logFeatureOk } from "../analytics/featureTelemetry.js";
 import { logForDebugging } from "../../utils/debug.js";
 
 //@ chunk-e6aww6q8.js:963936-963973 placement
-function U7(e) {
-  return isHipaaFeatureError(e) && !xxi();
+function isRegimeRefusal(e) {
+  return isHipaaFeatureError(e) && !isHumbleFlurryOn();
 }
 //@ chunk-e6aww6q8.js:963973-964013 placement
-function XUt(e) {
-  if (U7(e)) Gts().catch(logError);
+function recoverRegimeRefusalIfNeeded(error) {
+  if (isRegimeRefusal(error)) runIdleTask().catch(logError);
 }
+//@ chunk-e6aww6q8.js:964013-964617 placement
 /**
  * 受监管使用制度（如 HIPAA）拒绝后，按制度重建请求并重发。
  */
-//@ chunk-e6aww6q8.js:964013-964617 placement
-async function* recoverRegimeRefusal(e, n, r) {
-  let s = hasComplianceTaint("hipaa"),
-    h = yield* r(e);
-  if (h === void 0) return;
-  let y,
-    S = !1;
+async function* recoverRegimeRefusal(tools, signal, r) {
+  let s = hasComplianceTaint("hipaa");
+  let h = yield* r(tools);
+  if (h === undefined) return;
+  let y;
+  let S = false;
   try {
-    await raceWithAbortSignal(Gts(), n, () => new Lf());
-    let filtered = e.filter((G) => G.isEnabled());
-    if (hasComplianceTaint("hipaa") && (!s || filtered.length < e.length)) y = filtered;
+    await raceWithAbortSignal(runIdleTask(), signal, () => new APIUserAbortError());
+    let filtered = tools.filter((G) => G.isEnabled());
+    if (hasComplianceTaint("hipaa") && (!s || filtered.length < tools.length)) y = filtered;
   } catch (error) {
-    if (!n.aborted) ((S = !0), logError(error));
+    if (!signal.aborted) {
+      S = true;
+      logError(error);
+    }
   }
-  if (n.aborted) return;
-  if (y === void 0) {
-    (logFeatureBad("api_regime_refusal_recovery", S ? "decision_failed" : "nothing_to_rebuild"), yield h);
+  if (signal.aborted) return;
+  if (y === undefined) {
+    logFeatureBad("api_regime_refusal_recovery", S ? "decision_failed" : "nothing_to_rebuild");
+    yield h;
     return;
   }
   logForDebugging(
     "[regime-refusal] resending the refused request, rebuilt under the organization policy now loaded",
-    { level: "warn" },
+    {
+      level: "warn",
+    },
   );
   let w = yield* r(y);
-  if (w === void 0) {
+  if (w === undefined) {
     logFeatureOk("api_regime_refusal_recovery");
     return;
   }
-  (logFeatureBad("api_regime_refusal_recovery", "refused_again"), yield w);
+  logFeatureBad("api_regime_refusal_recovery", "refused_again");
+  yield w;
 }
-
-export { recoverRegimeRefusal, U7, XUt };
+export { recoverRegimeRefusal, isRegimeRefusal, recoverRegimeRefusalIfNeeded };

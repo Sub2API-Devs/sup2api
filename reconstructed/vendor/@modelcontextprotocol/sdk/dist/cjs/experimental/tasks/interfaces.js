@@ -7,8 +7,7 @@
  */
 
 //@ chunk-zykv69v4.js:11023-11091 esm-fingerprint
-function T(e) {
-  return e === "completed" || e === "failed" || e === "cancelled";
+function isTerminal(status) {
+  return status === "completed" || status === "failed" || status === "cancelled";
 }
-
-export { T };
+export { isTerminal };

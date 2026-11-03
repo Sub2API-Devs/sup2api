@@ -5,116 +5,150 @@
  * pieces: chunk-hwmsct5x.js (4)
  * attribution: esm-layout 1, esm-fingerprint 3
  */
-import { Kn, ke } from "../internal/tslib.mjs";
-import { pr } from "./error.mjs";
-import { Jo } from "./api-promise.mjs";
+import { __classPrivateFieldSet, __classPrivateFieldGet } from "../internal/tslib.mjs";
+import { AnthropicError } from "./error.mjs";
+import { APIPromise } from "./api-promise.mjs";
 import { Xo } from "../internal/parse.mjs";
-import { nr } from "../internal/utils/values.mjs";
+import { maybeObj } from "../internal/utils/values.mjs";
 
 //@ chunk-hwmsct5x.js:37300-38193 esm-layout
-var Qo,
-  Ji = (() => {
-    class e {
-      constructor(n, r, s, h) {
-        (Qo.set(this, void 0),
-          Kn(this, Qo, n, "f"),
-          (this.options = h),
-          (this.response = r),
-          (this.body = s));
-      }
-      hasNextPage() {
-        if (!this.getPaginatedItems().length) return !1;
-        return this.nextPageRequestOptions() != null;
-      }
-      async getNextPage() {
-        let nextPageRequestOptions = this.nextPageRequestOptions();
-        if (!nextPageRequestOptions)
-          throw new pr(
-            "No next page expected; please check `.hasNextPage()` before calling `.getNextPage()`.",
-          );
-        return await ke(this, Qo, "f").requestAPIList(this.constructor, nextPageRequestOptions);
-      }
-      async *iterPages() {
-        let n = this;
-        yield n;
-        while (n.hasNextPage()) ((n = await n.getNextPage()), yield n);
-      }
-      async *[((Qo = new WeakMap()), Symbol.asyncIterator)]() {
-        for await (let n of this.iterPages()) for (let r of n.getPaginatedItems()) yield r;
+var _AbstractPage_client;
+var AbstractPage = (() => {
+  class AbstractPage {
+    constructor(client, response, body, options) {
+      _AbstractPage_client.set(this, undefined);
+      __classPrivateFieldSet(this, _AbstractPage_client, client, "f");
+      this.options = options;
+      this.response = response;
+      this.body = body;
+    }
+    hasNextPage() {
+      if (!this.getPaginatedItems().length) return false;
+      return this.nextPageRequestOptions() != null;
+    }
+    async getNextPage() {
+      let nextOptions = this.nextPageRequestOptions();
+      if (!nextOptions)
+        throw new AnthropicError(
+          "No next page expected; please check `.hasNextPage()` before calling `.getNextPage()`.",
+        );
+      return await __classPrivateFieldGet(this, _AbstractPage_client, "f").requestAPIList(
+        this.constructor,
+        nextOptions,
+      );
+    }
+    async *iterPages() {
+      let page = this;
+      yield page;
+      while (page.hasNextPage()) {
+        page = await page.getNextPage();
+        yield page;
       }
     }
-    return e;
-  })(),
-  yu = (() => {
-    class e extends Jo {
-      constructor(n, r, s) {
-        super(n, r, async (h, y) => new s(h, y.response, await Xo(h, y), y.options));
-      }
-      async *[Symbol.asyncIterator]() {
-        let n = await this;
-        for await (let r of n) yield r;
-      }
+    async *[((_AbstractPage_client = new WeakMap()), Symbol.asyncIterator)]() {
+      for await (let page of this.iterPages()) for (let item of page.getPaginatedItems()) yield item;
     }
-    return e;
-  })();
+  }
+  return AbstractPage;
+})();
+var PagePromise = (() => {
+  class PagePromise extends APIPromise {
+    constructor(client, request, Page) {
+      super(
+        client,
+        request,
+        async (client, props) => new Page(client, props.response, await Xo(client, props), props.options),
+      );
+    }
+    async *[Symbol.asyncIterator]() {
+      let page = await this;
+      for await (let item of page) yield item;
+    }
+  }
+  return PagePromise;
+})();
 //@ chunk-hwmsct5x.js:38193-38746 esm-fingerprint
-class Be extends Ji {
-  constructor(e, n, r, s) {
-    super(e, n, r, s);
-    ((this.data = r.data || []),
-      (this.has_more = r.has_more || !1),
-      (this.first_id = r.first_id || null),
-      (this.last_id = r.last_id || null));
+class Page extends AbstractPage {
+  constructor(client, response, body, options) {
+    super(client, response, body, options);
+    this.data = body.data || [];
+    this.has_more = body.has_more || false;
+    this.first_id = body.first_id || null;
+    this.last_id = body.last_id || null;
   }
   getPaginatedItems() {
     return this.data ?? [];
   }
   hasNextPage() {
-    if (this.has_more === !1) return !1;
+    if (this.has_more === false) return false;
     return super.hasNextPage();
   }
   nextPageRequestOptions() {
     if (this.options.query?.before_id) {
       let first_id = this.first_id;
       if (!first_id) return null;
-      return { ...this.options, query: { ...nr(this.options.query), before_id: first_id } };
+      return {
+        ...this.options,
+        query: {
+          ...maybeObj(this.options.query),
+          before_id: first_id,
+        },
+      };
     }
-    let last_id = this.last_id;
-    if (!last_id) return null;
-    return { ...this.options, query: { ...nr(this.options.query), after_id: last_id } };
+    let cursor = this.last_id;
+    if (!cursor) return null;
+    return {
+      ...this.options,
+      query: {
+        ...maybeObj(this.options.query),
+        after_id: cursor,
+      },
+    };
   }
 }
 //@ chunk-hwmsct5x.js:38746-39027 esm-fingerprint
-class ee extends Ji {
-  constructor(e, n, r, s) {
-    super(e, n, r, s);
-    ((this.data = r.data || []), (this.next_page = r.next_page || null));
+class TokenPage extends AbstractPage {
+  constructor(client, response, body, options) {
+    super(client, response, body, options);
+    this.data = body.data || [];
+    this.next_page = body.next_page || null;
   }
   getPaginatedItems() {
     return this.data ?? [];
   }
   nextPageRequestOptions() {
-    let next_page = this.next_page;
-    if (!next_page) return null;
-    return { ...this.options, query: { ...nr(this.options.query), page: next_page } };
+    let cursor = this.next_page;
+    if (!cursor) return null;
+    return {
+      ...this.options,
+      query: {
+        ...maybeObj(this.options.query),
+        page: cursor,
+      },
+    };
   }
 }
 //@ chunk-hwmsct5x.js:39027-39341 esm-fingerprint
-class Qi extends Ji {
-  constructor(e, n, r, s) {
-    super(e, n, r, s);
-    ((this.data = r.data || []),
-      (this.next_page = r.next_page || null),
-      (this.prev_page = r.prev_page || null));
+class BidirectionalPageCursor extends AbstractPage {
+  constructor(client, response, body, options) {
+    super(client, response, body, options);
+    this.data = body.data || [];
+    this.next_page = body.next_page || null;
+    this.prev_page = body.prev_page || null;
   }
   getPaginatedItems() {
     return this.data ?? [];
   }
   nextPageRequestOptions() {
-    let next_page = this.next_page;
-    if (!next_page) return null;
-    return { ...this.options, query: { ...nr(this.options.query), page: next_page } };
+    let cursor = this.next_page;
+    if (!cursor) return null;
+    return {
+      ...this.options,
+      query: {
+        ...maybeObj(this.options.query),
+        page: cursor,
+      },
+    };
   }
 }
-
-export { ee, Be, Qi, yu };
+export { TokenPage, Page, BidirectionalPageCursor, PagePromise };

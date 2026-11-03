@@ -6,17 +6,17 @@
  * attribution: placement 2
  */
 
+//@ chunk-rbe666af.js:376-1750 placement
 /**
  * p-map 默认导出（第三方）：限制并发的异步 map
  */
-//@ chunk-rbe666af.js:376-1750 placement
 async function pMap(
   e,
   t,
-  { concurrency: n = Number.POSITIVE_INFINITY, stopOnError: r = !0, signal: s } = {},
+  { concurrency: n = Number.POSITIVE_INFINITY, stopOnError: r = true, signal: s } = {},
 ) {
-  return new Promise((i, o) => {
-    if (e[Symbol.iterator] === void 0 && e[Symbol.asyncIterator] === void 0)
+  return new Promise((resolve, reject) => {
+    if (e[Symbol.iterator] === undefined && e[Symbol.asyncIterator] === undefined)
       throw TypeError(
         `Expected \`input\` to be either an \`Iterable\` or \`AsyncIterable\`, got (${typeof e})`,
       );
@@ -25,42 +25,51 @@ async function pMap(
       throw TypeError(
         `Expected \`concurrency\` to be an integer from 1 and up or \`Infinity\`, got \`${n}\` (${typeof n})`,
       );
-    let a = [],
-      d = [],
-      c = new Map(),
-      u = !1,
-      y = !1,
-      S = !1,
-      g = 0,
-      l = 0,
-      R = e[Symbol.iterator] === void 0 ? e[Symbol.asyncIterator]() : e[Symbol.iterator](),
-      h = () => {
-        f(s.reason);
-      },
-      p = () => {
-        s?.removeEventListener("abort", h);
-      },
-      _ = (m) => {
-        (i(m), p());
-      },
-      f = (m) => {
-        ((u = !0), (y = !0), o(m), p());
-      };
+    let a = [];
+    let d = [];
+    let c = new Map();
+    let u = false;
+    let y = false;
+    let S = false;
+    let g = 0;
+    let l = 0;
+    let R = e[Symbol.iterator] === undefined ? e[Symbol.asyncIterator]() : e[Symbol.iterator]();
+    let h = () => {
+      f(s.reason);
+    };
+    let p = () => {
+      s?.removeEventListener("abort", h);
+    };
+    let _ = (m) => {
+      resolve(m);
+      p();
+    };
+    let f = (m) => {
+      u = true;
+      y = true;
+      reject(m);
+      p();
+    };
     if (s) {
       if (s.aborted) f(s.reason);
-      s.addEventListener("abort", h, { once: !0 });
+      s.addEventListener("abort", h, {
+        once: true,
+      });
     }
     let w = async () => {
       if (y) return;
-      let m = await R.next(),
-        b = l;
-      if ((l++, m.done)) {
-        if (((S = !0), g === 0 && !y)) {
+      let m = await R.next();
+      let b = l;
+      l++;
+      if (m.done) {
+        S = true;
+        if (g === 0 && !y) {
           if (!r && d.length > 0) {
             f(AggregateError(d));
             return;
           }
-          if (((y = !0), c.size === 0)) {
+          y = true;
+          if (c.size === 0) {
             _(a);
             return;
           }
@@ -73,29 +82,32 @@ async function pMap(
         }
         return;
       }
-      (g++,
-        (async () => {
-          try {
-            let C = await m.value;
-            if (y) return;
-            let E = await t(C, b);
-            if (E === call) c.set(b, E);
-            ((a[b] = E), g--, await w());
-          } catch (error) {
-            if (r) f(error);
-            else {
-              (d.push(error), g--);
-              try {
-                await w();
-              } catch (error) {
-                f(error);
-              }
+      g++;
+      (async () => {
+        try {
+          let C = await m.value;
+          if (y) return;
+          let E = await t(C, b);
+          if (E === call) c.set(b, E);
+          a[b] = E;
+          g--;
+          await w();
+        } catch (error) {
+          if (r) f(error);
+          else {
+            d.push(error);
+            g--;
+            try {
+              await w();
+            } catch (error) {
+              f(error);
             }
           }
-        })());
+        }
+      })();
     };
     (async () => {
-      for (let m = 0; m < n; m++) {
+      for (let idx = 0; idx < n; idx++) {
         try {
           await w();
         } catch (error) {
@@ -109,5 +121,4 @@ async function pMap(
 }
 //@ chunk-rbe666af.js:1750-1771 placement = call (0.709)
 var call = Symbol("skip");
-
 export { pMap };

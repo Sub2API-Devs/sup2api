@@ -6,152 +6,170 @@
  * attribution: esm-layout 1, esm-fingerprint 7
  */
 import { textDecoder, textEncoder } from "./buffer_utils.js";
-import { b } from "./type_checks.js";
-import { O, z5, j } from "../../node/esm/util/errors.js";
+import { isObject } from "./type_checks.js";
+import { JWTInvalid, JWTClaimValidationFailed, JWTExpired } from "../../node/esm/util/errors.js";
 import { Xa } from "../../../../../runtime/bun-runtime.js";
-import { jt } from "../../node/esm/jws/compact/sign.js";
+import { init_sign_2 } from "../../node/esm/jws/compact/sign.js";
 
 //@ chunk-5h78gfwc.js:40204-40424 esm-fingerprint
-var L = (e) => Math.floor(e.getTime() / 1000),
-  Dt = 60,
-  Ut = Dt * 60,
-  De = Ut * 24,
-  pr = De * 7,
-  dr = De * 365.25,
-  fr =
-    /^(\+|\-)? ?(\d+|\d+\.\d+) ?(seconds?|secs?|s|minutes?|mins?|m|hours?|hrs?|h|days?|d|weeks?|w|years?|yrs?|y)(?: (ago|from now))?$/i;
+var epoch = (date) => Math.floor(date.getTime() / 1000);
+var minute = 60;
+var hour = minute * 60;
+var day = hour * 24;
+var week = day * 7;
+var year = day * 365.25;
+var REGEX =
+  /^(\+|\-)? ?(\d+|\d+\.\d+) ?(seconds?|secs?|s|minutes?|mins?|m|hours?|hrs?|h|days?|d|weeks?|w|years?|yrs?|y)(?: (ago|from now))?$/i;
 //@ chunk-5h78gfwc.js:40424-40999 esm-fingerprint
-function pe(e) {
-  let match = fr.exec(e);
-  if (!match || (match[4] && match[1])) throw TypeError("Invalid time period format");
-  let r = parseFloat(match[2]),
-    lower = match[3].toLowerCase(),
-    i;
-  switch (lower) {
+function secs(str) {
+  let matched = REGEX.exec(str);
+  if (!matched || (matched[4] && matched[1])) throw TypeError("Invalid time period format");
+  let value = parseFloat(matched[2]);
+  let unit = matched[3].toLowerCase();
+  let numericDate;
+  switch (unit) {
     case "sec":
     case "secs":
     case "second":
     case "seconds":
     case "s":
-      i = Math.round(r);
+      numericDate = Math.round(value);
       break;
     case "minute":
     case "minutes":
     case "min":
     case "mins":
     case "m":
-      i = Math.round(r * Dt);
+      numericDate = Math.round(value * minute);
       break;
     case "hour":
     case "hours":
     case "hr":
     case "hrs":
     case "h":
-      i = Math.round(r * Ut);
+      numericDate = Math.round(value * hour);
       break;
     case "day":
     case "days":
     case "d":
-      i = Math.round(r * De);
+      numericDate = Math.round(value * day);
       break;
     case "week":
     case "weeks":
     case "w":
-      i = Math.round(r * pr);
+      numericDate = Math.round(value * week);
       break;
     default:
-      i = Math.round(r * dr);
+      numericDate = Math.round(value * year);
       break;
   }
-  if (match[1] === "-" || match[4] === "ago") return -i;
-  return i;
+  if (matched[1] === "-" || matched[4] === "ago") return -numericDate;
+  return numericDate;
 }
 //@ chunk-5h78gfwc.js:40999-41085 esm-fingerprint
-function F(e, t) {
-  if (!Number.isFinite(t)) throw TypeError(`Invalid ${e} input`);
-  return t;
+function validateInput(label, input) {
+  if (!Number.isFinite(input)) throw TypeError(`Invalid ${label} input`);
+  return input;
 }
 //@ chunk-5h78gfwc.js:41085-41315 esm-fingerprint
-var Rt = (e) => {
-    if (e.includes("/")) return e.toLowerCase();
-    return `application/${e.toLowerCase()}`;
-  },
-  ur = (e, t) => {
-    if (typeof e === "string") return t.includes(e);
-    if (Array.isArray(e)) return t.some(Set.prototype.has.bind(new Set(e)));
-    return !1;
-  };
+var normalizeTyp = (value) => {
+  if (value.includes("/")) return value.toLowerCase();
+  return `application/${value.toLowerCase()}`;
+};
+var checkAudiencePresence = (audPayload, audOption) => {
+  if (typeof audPayload === "string") return audOption.includes(audPayload);
+  if (Array.isArray(audPayload)) return audOption.some(Set.prototype.has.bind(new Set(audPayload)));
+  return false;
+};
 //@ chunk-5h78gfwc.js:41315-43218 esm-fingerprint
-function Ae(e, t, r = {}) {
-  let n;
+function validateClaimsSet(protectedHeader, encodedPayload, options = {}) {
+  let payload;
   try {
-    n = JSON.parse(textDecoder.decode(t));
+    payload = JSON.parse(textDecoder.decode(encodedPayload));
   } catch {}
-  if (!b(n)) throw new O("JWT Claims Set must be a top-level JSON object");
-  let { typ: typ } = r;
-  if (typ && (typeof e.typ !== "string" || Rt(e.typ) !== Rt(typ)))
-    throw new z5('unexpected "typ" JWT header value', n, "typ", "check_failed");
-  let {
-      requiredClaims: requiredClaims = [],
-      issuer: issuer,
-      subject: subject,
-      audience: audience,
-      maxTokenAge: maxTokenAge,
-    } = r,
-    u = [...requiredClaims];
-  if (maxTokenAge !== void 0) u.push("iat");
-  if (audience !== void 0) u.push("aud");
-  if (subject !== void 0) u.push("sub");
-  if (issuer !== void 0) u.push("iss");
-  for (let S of new Set(u.reverse()))
-    if (!(S in n)) throw new z5(`missing required "${S}" claim`, n, S, "missing");
-  if (issuer && !(Array.isArray(issuer) ? issuer : [issuer]).includes(n.iss))
-    throw new z5('unexpected "iss" claim value', n, "iss", "check_failed");
-  if (subject && n.sub !== subject) throw new z5('unexpected "sub" claim value', n, "sub", "check_failed");
-  if (audience && !ur(n.aud, typeof audience === "string" ? [audience] : audience))
-    throw new z5('unexpected "aud" claim value', n, "aud", "check_failed");
-  let m;
-  switch (typeof r.clockTolerance) {
+  if (!isObject(payload)) throw new JWTInvalid("JWT Claims Set must be a top-level JSON object");
+  let { typ } = options;
+  if (
+    typ &&
+    (typeof protectedHeader.typ !== "string" || normalizeTyp(protectedHeader.typ) !== normalizeTyp(typ))
+  )
+    throw new JWTClaimValidationFailed('unexpected "typ" JWT header value', payload, "typ", "check_failed");
+  let { requiredClaims = [], issuer, subject, audience, maxTokenAge } = options;
+  let presenceCheck = [...requiredClaims];
+  if (maxTokenAge !== undefined) presenceCheck.push("iat");
+  if (audience !== undefined) presenceCheck.push("aud");
+  if (subject !== undefined) presenceCheck.push("sub");
+  if (issuer !== undefined) presenceCheck.push("iss");
+  for (let claim of new Set(presenceCheck.reverse()))
+    if (!(claim in payload))
+      throw new JWTClaimValidationFailed(`missing required "${claim}" claim`, payload, claim, "missing");
+  if (issuer && !(Array.isArray(issuer) ? issuer : [issuer]).includes(payload.iss))
+    throw new JWTClaimValidationFailed('unexpected "iss" claim value', payload, "iss", "check_failed");
+  if (subject && payload.sub !== subject)
+    throw new JWTClaimValidationFailed('unexpected "sub" claim value', payload, "sub", "check_failed");
+  if (audience && !checkAudiencePresence(payload.aud, typeof audience === "string" ? [audience] : audience))
+    throw new JWTClaimValidationFailed('unexpected "aud" claim value', payload, "aud", "check_failed");
+  let tolerance;
+  switch (typeof options.clockTolerance) {
     case "string":
-      m = pe(r.clockTolerance);
+      tolerance = secs(options.clockTolerance);
       break;
     case "number":
-      m = r.clockTolerance;
+      tolerance = options.clockTolerance;
       break;
     case "undefined":
-      m = 0;
+      tolerance = 0;
       break;
     default:
       throw TypeError("Invalid clockTolerance option type");
   }
-  let { currentDate: currentDate } = r,
-    K = L(currentDate || new Date());
-  if ((n.iat !== void 0 || maxTokenAge) && typeof n.iat !== "number")
-    throw new z5('"iat" claim must be a number', n, "iat", "invalid");
-  if (n.nbf !== void 0) {
-    if (typeof n.nbf !== "number") throw new z5('"nbf" claim must be a number', n, "nbf", "invalid");
-    if (n.nbf > K + m) throw new z5('"nbf" claim timestamp check failed', n, "nbf", "check_failed");
+  let { currentDate } = options;
+  let now = epoch(currentDate || new Date());
+  if ((payload.iat !== undefined || maxTokenAge) && typeof payload.iat !== "number")
+    throw new JWTClaimValidationFailed('"iat" claim must be a number', payload, "iat", "invalid");
+  if (payload.nbf !== undefined) {
+    if (typeof payload.nbf !== "number")
+      throw new JWTClaimValidationFailed('"nbf" claim must be a number', payload, "nbf", "invalid");
+    if (payload.nbf > now + tolerance)
+      throw new JWTClaimValidationFailed(
+        '"nbf" claim timestamp check failed',
+        payload,
+        "nbf",
+        "check_failed",
+      );
   }
-  if (n.exp !== void 0) {
-    if (typeof n.exp !== "number") throw new z5('"exp" claim must be a number', n, "exp", "invalid");
-    if (n.exp <= K - m) throw new j('"exp" claim timestamp check failed', n, "exp", "check_failed");
+  if (payload.exp !== undefined) {
+    if (typeof payload.exp !== "number")
+      throw new JWTClaimValidationFailed('"exp" claim must be a number', payload, "exp", "invalid");
+    if (payload.exp <= now - tolerance)
+      throw new JWTExpired('"exp" claim timestamp check failed', payload, "exp", "check_failed");
   }
   if (maxTokenAge) {
-    let S = K - n.iat,
-      l = typeof maxTokenAge === "number" ? maxTokenAge : pe(maxTokenAge);
-    if (S - m > l)
-      throw new j('"iat" claim timestamp check failed (too far in the past)', n, "iat", "check_failed");
-    if (S < 0 - m)
-      throw new z5('"iat" claim timestamp check failed (it should be in the past)', n, "iat", "check_failed");
+    let age = now - payload.iat;
+    let max = typeof maxTokenAge === "number" ? maxTokenAge : secs(maxTokenAge);
+    if (age - tolerance > max)
+      throw new JWTExpired(
+        '"iat" claim timestamp check failed (too far in the past)',
+        payload,
+        "iat",
+        "check_failed",
+      );
+    if (age < 0 - tolerance)
+      throw new JWTClaimValidationFailed(
+        '"iat" claim timestamp check failed (it should be in the past)',
+        payload,
+        "iat",
+        "check_failed",
+      );
   }
-  return n;
+  return payload;
 }
 //@ chunk-5h78gfwc.js:43218-44123 esm-fingerprint
 class de {
   #e;
-  constructor(e) {
-    if (!b(e)) throw TypeError("JWT Claims Set MUST be an object");
-    this.#e = structuredClone(e);
+  constructor(payload) {
+    if (!isObject(payload)) throw TypeError("JWT Claims Set MUST be an object");
+    this.#e = structuredClone(payload);
   }
   data() {
     return textEncoder.encode(JSON.stringify(this.#e));
@@ -159,46 +177,46 @@ class de {
   get iss() {
     return this.#e.iss;
   }
-  set iss(e) {
-    this.#e.iss = e;
+  set iss(value) {
+    this.#e.iss = value;
   }
   get sub() {
     return this.#e.sub;
   }
-  set sub(e) {
-    this.#e.sub = e;
+  set sub(value) {
+    this.#e.sub = value;
   }
   get aud() {
     return this.#e.aud;
   }
-  set aud(e) {
-    this.#e.aud = e;
+  set aud(value) {
+    this.#e.aud = value;
   }
-  set jti(e) {
-    this.#e.jti = e;
+  set jti(value) {
+    this.#e.jti = value;
   }
-  set nbf(e) {
-    if (typeof e === "number") this.#e.nbf = F("setNotBefore", e);
-    else if (e instanceof Date) this.#e.nbf = F("setNotBefore", L(e));
-    else this.#e.nbf = L(new Date()) + pe(e);
+  set nbf(value) {
+    if (typeof value === "number") this.#e.nbf = validateInput("setNotBefore", value);
+    else if (value instanceof Date) this.#e.nbf = validateInput("setNotBefore", epoch(value));
+    else this.#e.nbf = epoch(new Date()) + secs(value);
   }
-  set exp(e) {
-    if (typeof e === "number") this.#e.exp = F("setExpirationTime", e);
-    else if (e instanceof Date) this.#e.exp = F("setExpirationTime", L(e));
-    else this.#e.exp = L(new Date()) + pe(e);
+  set exp(value) {
+    if (typeof value === "number") this.#e.exp = validateInput("setExpirationTime", value);
+    else if (value instanceof Date) this.#e.exp = validateInput("setExpirationTime", epoch(value));
+    else this.#e.exp = epoch(new Date()) + secs(value);
   }
-  set iat(e) {
-    if (e === void 0) this.#e.iat = L(new Date());
-    else if (e instanceof Date) this.#e.iat = F("setIssuedAt", L(e));
-    else if (typeof e === "string") this.#e.iat = F("setIssuedAt", L(new Date()) + pe(e));
-    else this.#e.iat = F("setIssuedAt", e);
+  set iat(value) {
+    if (value === undefined) this.#e.iat = epoch(new Date());
+    else if (value instanceof Date) this.#e.iat = validateInput("setIssuedAt", epoch(value));
+    else if (typeof value === "string")
+      this.#e.iat = validateInput("setIssuedAt", epoch(new Date()) + secs(value));
+    else this.#e.iat = validateInput("setIssuedAt", value);
   }
 }
 //@ chunk-2tyrgda4.js:38804-38826 esm-layout
-var st = Xa(() => {
-  jt();
+var init_jwt_claims_set = Xa(() => {
+  init_sign_2();
 });
 //@ chunk-2tyrgda4.js:38826-38867 esm-fingerprint
-var Pe = (e) => Math.floor(e.getTime() / 1000);
-
-export { Pe, st, Ae, de };
+var epoch_2 = (date) => Math.floor(date.getTime() / 1000);
+export { epoch_2, init_jwt_claims_set, validateClaimsSet, de };

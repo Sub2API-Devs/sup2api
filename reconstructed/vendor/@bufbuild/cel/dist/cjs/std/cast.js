@@ -6,110 +6,112 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../../runtime/bun-runtime.js";
-import { li } from "../../../../protobuf/dist/commonjs/index.js";
-import { Os } from "../../../../../@anthropic-ai/bedrock-sdk/core/error.js";
-import { H_ } from "./math.js";
-import { Ei } from "../type.js";
-import { L_ } from "../duration.js";
-import { Tc } from "../func.js";
-import { ld } from "../eval.js";
+import { require_protobuf } from "../../../../protobuf/dist/commonjs/index.js";
+import { require_error_4 } from "../../../../../@anthropic-ai/bedrock-sdk/core/error.js";
+import { require_math } from "./math.js";
+import { require_type } from "../type.js";
+import { require_duration } from "../duration.js";
+import { require_func } from "../func.js";
+import { require_eval } from "../eval.js";
 
 //@ chunk-fq0cr76a.js:487762-490216 cjs-fingerprint
-var kB = x(function (NB) {
-  Object.defineProperty(NB, "__esModule", { value: !0 });
-  var Ho = li(),
-    Wo = Os(),
-    Bs = H_(),
-    ar = Ei(),
-    RB = L_(),
-    Pt = Tc(),
-    IB = ld(),
-    textEncoder = new TextEncoder(),
-    textDecoder = new TextDecoder(void 0, { fatal: !0 });
-  function ote(e) {
-    switch (e) {
+var require_cast = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  var protobuf_1 = require_protobuf();
+  var wkt_1 = require_error_4();
+  var math_js_1 = require_math();
+  var type_js_1 = require_type();
+  var duration_js_1 = require_duration();
+  var func_js_1 = require_func();
+  var eval_js_1 = require_eval();
+  var encoder = new TextEncoder();
+  var decoder = new TextDecoder(undefined, {
+    fatal: true,
+  });
+  function stringToBool(x) {
+    switch (x) {
       case "true":
       case "True":
       case "TRUE":
       case "t":
       case "1":
-        return !0;
+        return true;
       case "false":
       case "False":
       case "FALSE":
       case "f":
       case "0":
-        return !1;
+        return false;
     }
-    throw Error(`Unable to convert string '${e}' to bool`);
+    throw Error(`Unable to convert string '${x}' to bool`);
   }
-  function ate(e) {
+  function bytesToString(x) {
     try {
-      return textDecoder.decode(e);
-    } catch (error) {
-      throw Error(`Failed to decode bytes as string: ${error}`);
+      return decoder.decode(x);
+    } catch (e) {
+      throw Error(`Failed to decode bytes as string: ${e}`);
     }
   }
-  function lte(e) {
+  function stringToTimestamp(x) {
     try {
-      return Ho.fromJson(Wo.TimestampSchema, e);
-    } catch (error) {
-      throw Error(`Failed to parse timestamp: ${error}`);
+      return protobuf_1.fromJson(wkt_1.TimestampSchema, x);
+    } catch (e) {
+      throw Error(`Failed to parse timestamp: ${e}`);
     }
   }
-  function cte(e) {
-    if (Ho.isMessage(e)) return ar.objectType(IB.getMsgDesc(e.$typeName));
-    return ar.celType(e);
+  function toType(x) {
+    if (protobuf_1.isMessage(x)) return type_js_1.objectType(eval_js_1.getMsgDesc(x.$typeName));
+    return type_js_1.celType(x);
   }
-  function Ca(e) {
-    return e;
+  function identity(x) {
+    return x;
   }
-  var {
-    BOOL: BOOL,
-    BYTES: BYTES,
-    DOUBLE: DOUBLE,
-    DYN: DYN,
-    INT: INT,
-    STRING: STRING,
-    TYPE: TYPE,
-    UINT: UINT,
-  } = ar.CelScalar;
-  NB.default = [
-    Pt.celFunc("int", [INT], INT, Ca),
-    Pt.celFunc("int", [UINT], INT, (e) => Bs.safeInt(e.value)),
-    Pt.celFunc("int", [DOUBLE], INT, Bs.safeInt),
-    Pt.celFunc("int", [STRING], INT, Bs.safeInt),
-    Pt.celFunc("int", [ar.TIMESTAMP], INT, (e) => Bs.safeInt(e.message.seconds)),
-    Pt.celFunc("int", [ar.DURATION], INT, (e) => Bs.safeInt(e.message.seconds)),
-    Pt.celFunc("uint", [UINT], UINT, Ca),
-    Pt.celFunc("uint", [INT], UINT, Bs.safeUint),
-    Pt.celFunc("uint", [DOUBLE], UINT, Bs.safeUint),
-    Pt.celFunc("uint", [STRING], UINT, Bs.safeUint),
-    Pt.celFunc("double", [DOUBLE], DOUBLE, Ca),
-    Pt.celFunc("double", [INT], DOUBLE, (e) => Number(e)),
-    Pt.celFunc("double", [UINT], DOUBLE, (e) => Number(e.value)),
-    Pt.celFunc("double", [STRING], DOUBLE, (e) => Number(e)),
-    Pt.celFunc("bool", [BOOL], BOOL, Ca),
-    Pt.celFunc("bool", [STRING], BOOL, ote),
-    Pt.celFunc("bytes", [BYTES], BYTES, Ca),
-    Pt.celFunc("bytes", [STRING], BYTES, (e) => textEncoder.encode(e)),
-    Pt.celFunc("string", [STRING], STRING, Ca),
-    Pt.celFunc("string", [BOOL], STRING, (e) => e.toString()),
-    Pt.celFunc("string", [INT], STRING, (e) => e.toString()),
-    Pt.celFunc("string", [UINT], STRING, (e) => e.value.toString()),
-    Pt.celFunc("string", [DOUBLE], STRING, (e) => e.toString()),
-    Pt.celFunc("string", [BYTES], STRING, ate),
-    Pt.celFunc("string", [ar.TIMESTAMP], STRING, (e) => Ho.toJson(Wo.TimestampSchema, e.message)),
-    Pt.celFunc("string", [ar.DURATION], STRING, (e) => Ho.toJson(Wo.DurationSchema, e.message)),
-    Pt.celFunc("timestamp", [ar.TIMESTAMP], ar.TIMESTAMP, Ca),
-    Pt.celFunc("timestamp", [STRING], ar.TIMESTAMP, lte),
-    Pt.celFunc("timestamp", [INT], ar.TIMESTAMP, (e) => Wo.timestampFromMs(Number(e))),
-    Pt.celFunc("duration", [ar.DURATION], ar.DURATION, Ca),
-    Pt.celFunc("duration", [STRING], ar.DURATION, RB.parseDuration),
-    Pt.celFunc("duration", [INT], ar.DURATION, (e) => Ho.create(Wo.DurationSchema, { seconds: e })),
-    Pt.celFunc("type", [DYN], TYPE, cte),
-    Pt.celFunc("dyn", [DYN], DYN, Ca),
+  var { BOOL, BYTES, DOUBLE, DYN, INT, STRING, TYPE, UINT } = type_js_1.CelScalar;
+  cjsExports.default = [
+    func_js_1.celFunc("int", [INT], INT, identity),
+    func_js_1.celFunc("int", [UINT], INT, (x) => math_js_1.safeInt(x.value)),
+    func_js_1.celFunc("int", [DOUBLE], INT, math_js_1.safeInt),
+    func_js_1.celFunc("int", [STRING], INT, math_js_1.safeInt),
+    func_js_1.celFunc("int", [type_js_1.TIMESTAMP], INT, (x) => math_js_1.safeInt(x.message.seconds)),
+    func_js_1.celFunc("int", [type_js_1.DURATION], INT, (x) => math_js_1.safeInt(x.message.seconds)),
+    func_js_1.celFunc("uint", [UINT], UINT, identity),
+    func_js_1.celFunc("uint", [INT], UINT, math_js_1.safeUint),
+    func_js_1.celFunc("uint", [DOUBLE], UINT, math_js_1.safeUint),
+    func_js_1.celFunc("uint", [STRING], UINT, math_js_1.safeUint),
+    func_js_1.celFunc("double", [DOUBLE], DOUBLE, identity),
+    func_js_1.celFunc("double", [INT], DOUBLE, (x) => Number(x)),
+    func_js_1.celFunc("double", [UINT], DOUBLE, (x) => Number(x.value)),
+    func_js_1.celFunc("double", [STRING], DOUBLE, (x) => Number(x)),
+    func_js_1.celFunc("bool", [BOOL], BOOL, identity),
+    func_js_1.celFunc("bool", [STRING], BOOL, stringToBool),
+    func_js_1.celFunc("bytes", [BYTES], BYTES, identity),
+    func_js_1.celFunc("bytes", [STRING], BYTES, (x) => encoder.encode(x)),
+    func_js_1.celFunc("string", [STRING], STRING, identity),
+    func_js_1.celFunc("string", [BOOL], STRING, (x) => x.toString()),
+    func_js_1.celFunc("string", [INT], STRING, (x) => x.toString()),
+    func_js_1.celFunc("string", [UINT], STRING, (x) => x.value.toString()),
+    func_js_1.celFunc("string", [DOUBLE], STRING, (x) => x.toString()),
+    func_js_1.celFunc("string", [BYTES], STRING, bytesToString),
+    func_js_1.celFunc("string", [type_js_1.TIMESTAMP], STRING, (x) =>
+      protobuf_1.toJson(wkt_1.TimestampSchema, x.message),
+    ),
+    func_js_1.celFunc("string", [type_js_1.DURATION], STRING, (x) =>
+      protobuf_1.toJson(wkt_1.DurationSchema, x.message),
+    ),
+    func_js_1.celFunc("timestamp", [type_js_1.TIMESTAMP], type_js_1.TIMESTAMP, identity),
+    func_js_1.celFunc("timestamp", [STRING], type_js_1.TIMESTAMP, stringToTimestamp),
+    func_js_1.celFunc("timestamp", [INT], type_js_1.TIMESTAMP, (x) => wkt_1.timestampFromMs(Number(x))),
+    func_js_1.celFunc("duration", [type_js_1.DURATION], type_js_1.DURATION, identity),
+    func_js_1.celFunc("duration", [STRING], type_js_1.DURATION, duration_js_1.parseDuration),
+    func_js_1.celFunc("duration", [INT], type_js_1.DURATION, (x) =>
+      protobuf_1.create(wkt_1.DurationSchema, {
+        seconds: x,
+      }),
+    ),
+    func_js_1.celFunc("type", [DYN], TYPE, toType),
+    func_js_1.celFunc("dyn", [DYN], DYN, identity),
   ];
 });
-
-export { kB };
+export { require_cast };

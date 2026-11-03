@@ -9,10 +9,9 @@
  * attribution: fingerprint 1
  */
 
+//@ chunk-b56wj4av.js:7546-7564 fingerprint = TASK_LIST_TOOL_NAME (1)
 /**
  * "TaskList"。
  */
-//@ chunk-b56wj4av.js:7546-7564 fingerprint = TASK_LIST_TOOL_NAME (1)
 var TASK_LIST_TOOL_NAME = "TaskList";
-
 export { TASK_LIST_TOOL_NAME };

@@ -13,31 +13,33 @@ import { feedbackUnavailableReason, orgFeedbackRefusalMessage } from "./submitFe
 import { isConsumerSubscriber } from "../../utils/auth.js";
 import { postFeedbackSubmission } from "./feedbackBundle.js";
 
+//@ chunk-25hrjv6b.js:11873-12660 placement
 /**
  * SDK 提交满意度反馈（可附带对话，仅 Pro/Max）。
  */
-//@ chunk-25hrjv6b.js:11873-12660 placement
-async function submitSurveyFeedbackForSdk({
-  request: request,
-  messages: messages,
-  storageV5: storageV5,
-  host: host,
-  credentials: credentials,
-}) {
-  let safeParse = SDKSubmitSurveyFeedbackSubmitSurveyFeedbackMessageSchema().safeParse({
+async function submitSurveyFeedbackForSdk({ request, messages, storageV5, host, credentials }) {
+  let r = SDKSubmitSurveyFeedbackSubmitSurveyFeedbackMessageSchema().safeParse({
     ...request,
     subtype: "submit_survey_feedback",
   });
-  if (!safeParse.success) return { feedback_id: null, unavailable_reason: "Malformed request." };
-  let s = safeParse.data,
-    a =
-      feedbackUnavailableReason() ??
-      (isConsumerSubscriber()
-        ? null
-        : "Only Pro and Max plans can send the conversation with a rating. Nothing was sent.");
-  if (a) return { feedback_id: null, unavailable_reason: a };
+  if (!r.success)
+    return {
+      feedback_id: null,
+      unavailable_reason: "Malformed request.",
+    };
+  let s = r.data;
+  let a =
+    feedbackUnavailableReason() ??
+    (isConsumerSubscriber()
+      ? null
+      : "Only Pro and Max plans can send the conversation with a rating. Nothing was sent.");
+  if (a)
+    return {
+      feedback_id: null,
+      unavailable_reason: a,
+    };
   let e = await postFeedbackSubmission({
-    messages: messages,
+    messages,
     description: s.description,
     surface: s.surface ?? "sdk",
     surveyFeedbackSource: {
@@ -46,12 +48,14 @@ async function submitSurveyFeedbackForSdk({
       surveyType: s.survey_type,
       setAt: Date.now(),
     },
-    storageV5: storageV5,
-    host: host,
-    credentials: credentials,
+    storageV5,
+    host,
+    credentials,
   });
   return e.success
-    ? { feedback_id: e.feedbackId }
+    ? {
+        feedback_id: e.feedbackId,
+      }
     : {
         feedback_id: null,
         is_zdr_org: e.isZdrOrg,

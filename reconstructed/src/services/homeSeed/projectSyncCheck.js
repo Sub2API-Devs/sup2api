@@ -9,42 +9,64 @@
  * attribution: placement 1
  */
 import { logSelfHostedRunnerPlan, SELF_HOSTED_RUNNER_PLAN, planHomeSeed } from "./planHomeSeed.js";
-import { oN } from "../../utils/teleport/homeSettingsMode.js";
+import { isLaunchConsentBlocked } from "../../utils/teleport/homeSettingsMode.js";
 import { runHomeSeed } from "./runHomeSeed.js";
 
 //@ chunk-h33znphj.js:12377-13062 placement
 function createProjectSyncCheck({
-  sessionId: sessionId,
-  boundDeviceUuid: boundDeviceUuid,
-  isOnSelfHostedRunner: isOnSelfHostedRunner,
-  storageV5: storageV5,
-  credentials: credentials,
-  signal: signal,
+  sessionId,
+  boundDeviceUuid,
+  isOnSelfHostedRunner,
+  storageV5,
+  credentials,
+  signal,
   ...e
 }) {
-  let { launchConsent: launchConsent } = e,
-    S = Promise.all([boundDeviceUuid, isOnSelfHostedRunner]).then(
-      async ([a, c]) => {
-        if (a === void 0) return { kind: "none", reason: "unbound" };
-        if (c) return (logSelfHostedRunnerPlan(), SELF_HOSTED_RUNNER_PLAN);
-        if (!("isProjectSynced" in e ? await e.isProjectSynced : !oN(launchConsent)))
-          return { kind: "none", reason: "no_project_files" };
-        return signal.aborted
-          ? { kind: "none", reason: "aborted" }
-          : planHomeSeed({ signal: signal, storageV5: storageV5, launchConsent: launchConsent });
-      },
-      () => ({ kind: "none", reason: "unbound" }),
-    );
+  let { launchConsent } = e;
+  let plan = Promise.all([boundDeviceUuid, isOnSelfHostedRunner]).then(
+    async ([a, c]) => {
+      if (a === undefined)
+        return {
+          kind: "none",
+          reason: "unbound",
+        };
+      if (c) {
+        logSelfHostedRunnerPlan();
+        return SELF_HOSTED_RUNNER_PLAN;
+      }
+      if (!("isProjectSynced" in e ? await e.isProjectSynced : !isLaunchConsentBlocked(launchConsent)))
+        return {
+          kind: "none",
+          reason: "no_project_files",
+        };
+      return signal.aborted
+        ? {
+            kind: "none",
+            reason: "aborted",
+          }
+        : planHomeSeed({
+            signal,
+            storageV5,
+            launchConsent,
+          });
+    },
+    () => ({
+      kind: "none",
+      reason: "unbound",
+    }),
+  );
   return runHomeSeed({
-    sessionId: sessionId,
-    plan: S,
-    bound: !0,
-    boundDeviceUuid: boundDeviceUuid,
+    sessionId,
+    plan,
+    bound: true,
+    boundDeviceUuid,
     trigger: "attach",
-    signal: signal,
-    credentials: credentials,
-    storageV5: storageV5,
-    launchConsent: launchConsent,
-    ...("isProjectStillSynced" in e && { isProjectStillSynced: e.isProjectStillSynced }),
+    signal,
+    credentials,
+    storageV5,
+    launchConsent,
+    ...("isProjectStillSynced" in e && {
+      isProjectStillSynced: e.isProjectStillSynced,
+    }),
   });
 }

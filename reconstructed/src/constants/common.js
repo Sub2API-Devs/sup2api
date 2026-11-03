@@ -9,12 +9,14 @@
  * attribution: fingerprint 1
  */
 
+//@ chunk-d0k42hx1.js:1326-1413 fingerprint = getLocalMonthYear (0.92)
 /**
  * 当前本地日期的 "Month YYYY"（en-US）。
  */
-//@ chunk-d0k42hx1.js:1326-1413 fingerprint = getLocalMonthYear (0.92)
 function getLocalMonthYear() {
-  return new Date().toLocaleString("en-US", { month: "long", year: "numeric" });
+  return new Date().toLocaleString("en-US", {
+    month: "long",
+    year: "numeric",
+  });
 }
-
 export { getLocalMonthYear };

@@ -10,32 +10,46 @@
  */
 
 //@ chunk-1qbn4d6a.js:191-284 placement
-var qbn = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}\p{Default_Ignorable_Code_Point}\u2800]|(?!\u0020)\p{Zs}/u;
+/**
+ * 含隐藏/控制/不可忽略字符的路径模式。
+ */
+var UNSAFE_PATH_GLYPH_RE =
+  /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}\p{Default_Ignorable_Code_Point}\u2800]|(?!\u0020)\p{Zs}/u;
 //@ chunk-1qbn4d6a.js:284-319 placement
 function hasUnsafePathGlyphs(n) {
-  return qbn.test(n);
+  return UNSAFE_PATH_GLYPH_RE.test(n);
 }
 //@ chunk-1qbn4d6a.js:319-335 placement
-var o = /\p{Cs}/u;
+var SURROGATE_RE = /\p{Cs}/u;
 //@ chunk-1qbn4d6a.js:335-376 placement
-function Lee(n) {
-  return hasUnsafePathGlyphs(n) || o.test(n);
+/**
+ * 文本是否含不安全路径字符或代理项。
+ */
+function hasUnsafePathGlyphsOrSurrogate(n) {
+  return hasUnsafePathGlyphs(n) || SURROGATE_RE.test(n);
 }
+//@ chunk-1qbn4d6a.js:376-501 placement
 /**
  * 含隐藏/控制字符时以说明代替原文。
  */
-//@ chunk-1qbn4d6a.js:376-501 placement
 function hideUnsafeText(n, t) {
-  return n.split(/\r?\n/).some(Lee)
+  return n.split(/\r?\n/).some(hasUnsafePathGlyphsOrSurrogate)
     ? `${t} is not shown here because it holds hidden or control characters`
     : n;
 }
+//@ chunk-1qbn4d6a.js:501-602 placement
 /**
  * 含隐藏/控制字符的路径以说明代替。
  */
-//@ chunk-1qbn4d6a.js:501-602 placement
-function hideUnsafePath(n) {
-  return Lee(n) ? "a path not shown here because it holds hidden or control characters" : n;
+function hideUnsafePath(worktreePath) {
+  return hasUnsafePathGlyphsOrSurrogate(worktreePath)
+    ? "a path not shown here because it holds hidden or control characters"
+    : worktreePath;
 }
-
-export { Lee, qbn, hasUnsafePathGlyphs, hideUnsafePath, hideUnsafeText };
+export {
+  hasUnsafePathGlyphsOrSurrogate,
+  UNSAFE_PATH_GLYPH_RE,
+  hasUnsafePathGlyphs,
+  hideUnsafePath,
+  hideUnsafeText,
+};

@@ -8,26 +8,28 @@
 import v from "process";
 import os from "os";
 import tty from "tty";
-import { U } from "../ansi-styles/index.js";
+import { assembleStyles } from "../ansi-styles/index.js";
 
 //@ chunk-4ymxyb4g.js:2723-2737 esm-layout
-var D = U(),
-  h = D;
+var D = assembleStyles();
+var h = D;
 //@ chunk-4ymxyb4g.js:2797-2970 esm-fingerprint
-function f(e, r = globalThis.Deno ? globalThis.Deno.args : v.argv) {
-  let t = e.startsWith("-") ? "" : e.length === 1 ? "-" : "--",
-    index = r.indexOf(t + e),
-    index_2 = r.indexOf("--");
-  return index !== -1 && (index_2 === -1 || index < index_2);
+function hasFlag(flag, argv = globalThis.Deno ? globalThis.Deno.args : v.argv) {
+  let prefix = flag.startsWith("-") ? "" : flag.length === 1 ? "-" : "--";
+  let position = argv.indexOf(prefix + flag);
+  let terminatorPosition = argv.indexOf("--");
+  return position !== -1 && (terminatorPosition === -1 || position < terminatorPosition);
 }
 //@ chunk-4ymxyb4g.js:2970-2985 esm-layout
-var { env: env } = v,
-  O;
+var { env } = v;
+var flagForceColor;
 //@ chunk-4ymxyb4g.js:2985-3130 esm-fingerprint
-if (f("no-color") || f("no-colors") || f("color=false") || f("color=never")) O = 0;
-else if (f("color") || f("colors") || f("color=true") || f("color=always")) O = 1;
+if (hasFlag("no-color") || hasFlag("no-colors") || hasFlag("color=false") || hasFlag("color=never"))
+  flagForceColor = 0;
+else if (hasFlag("color") || hasFlag("colors") || hasFlag("color=true") || hasFlag("color=always"))
+  flagForceColor = 1;
 //@ chunk-4ymxyb4g.js:3130-3317 esm-fingerprint
-function K() {
+function envForceColor() {
   if ("FORCE_COLOR" in env) {
     if (env.FORCE_COLOR === "true") return 1;
     if (env.FORCE_COLOR === "false") return 0;
@@ -35,37 +37,43 @@ function K() {
   }
 }
 //@ chunk-4ymxyb4g.js:3317-3401 esm-fingerprint
-function W(e) {
-  if (e === 0) return !1;
-  return { level: e, hasBasic: !0, has256: e >= 2, has16m: e >= 3 };
+function translateLevel(level) {
+  if (level === 0) return false;
+  return {
+    level,
+    hasBasic: true,
+    has256: level >= 2,
+    has16m: level >= 3,
+  };
 }
 //@ chunk-4ymxyb4g.js:3401-4644 esm-fingerprint
-function X(e, { streamIsTTY: r, sniffFlags: t = !0 } = {}) {
-  let o = K();
-  if (o !== void 0) O = o;
-  let n = t ? O : o;
-  if (n === 0) return 0;
-  if (t) {
-    if (f("color=16m") || f("color=full") || f("color=truecolor")) return 3;
-    if (f("color=256")) return 2;
+function _supportsColor(haveStream, { streamIsTTY, sniffFlags = true } = {}) {
+  let noFlagForceColor = envForceColor();
+  if (noFlagForceColor !== undefined) flagForceColor = noFlagForceColor;
+  let forceColor = sniffFlags ? flagForceColor : noFlagForceColor;
+  if (forceColor === 0) return 0;
+  if (sniffFlags) {
+    if (hasFlag("color=16m") || hasFlag("color=full") || hasFlag("color=truecolor")) return 3;
+    if (hasFlag("color=256")) return 2;
   }
   if ("TF_BUILD" in env && "AGENT_NAME" in env) return 1;
-  if (e && !r && n === void 0) return 0;
-  let a = n || 0;
-  if (env.TERM === "dumb") return a;
+  if (haveStream && !streamIsTTY && forceColor === undefined) return 0;
+  let min = forceColor || 0;
+  if (env.TERM === "dumb") return min;
   if (v.platform === "win32") {
-    let parts = os.release().split(".");
-    if (Number(parts[0]) >= 10 && Number(parts[2]) >= 10586) return Number(parts[2]) >= 14931 ? 3 : 2;
+    let osRelease = os.release().split(".");
+    if (Number(osRelease[0]) >= 10 && Number(osRelease[2]) >= 10586)
+      return Number(osRelease[2]) >= 14931 ? 3 : 2;
     return 1;
   }
   if ("CI" in env) {
-    if (["GITHUB_ACTIONS", "GITEA_ACTIONS", "CIRCLECI"].some((c) => c in env)) return 3;
+    if (["GITHUB_ACTIONS", "GITEA_ACTIONS", "CIRCLECI"].some((key) => key in env)) return 3;
     if (
-      ["TRAVIS", "APPVEYOR", "GITLAB_CI", "BUILDKITE", "DRONE"].some((c) => c in env) ||
+      ["TRAVIS", "APPVEYOR", "GITLAB_CI", "BUILDKITE", "DRONE"].some((sign) => sign in env) ||
       env.CI_NAME === "codeship"
     )
       return 1;
-    return a;
+    return min;
   }
   if ("TEAMCITY_VERSION" in env) return /^(9\.(0*[1-9]\d*)\.|\d{2,}\.)/.test(env.TEAMCITY_VERSION) ? 1 : 0;
   if (env.COLORTERM === "truecolor") return 3;
@@ -73,10 +81,10 @@ function X(e, { streamIsTTY: r, sniffFlags: t = !0 } = {}) {
   if (env.TERM === "xterm-ghostty") return 3;
   if (env.TERM === "wezterm") return 3;
   if ("TERM_PROGRAM" in env) {
-    let int = Number.parseInt((env.TERM_PROGRAM_VERSION || "").split(".")[0], 10);
+    let version = Number.parseInt((env.TERM_PROGRAM_VERSION || "").split(".")[0], 10);
     switch (env.TERM_PROGRAM) {
       case "iTerm.app":
-        return int >= 3 ? 3 : 2;
+        return version >= 3 ? 3 : 2;
       case "Apple_Terminal":
         return 2;
     }
@@ -84,15 +92,24 @@ function X(e, { streamIsTTY: r, sniffFlags: t = !0 } = {}) {
   if (/-256(color)?$/i.test(env.TERM)) return 2;
   if (/^screen|^xterm|^vt100|^vt220|^rxvt|color|ansi|cygwin|linux/i.test(env.TERM)) return 1;
   if ("COLORTERM" in env) return 1;
-  return a;
+  return min;
 }
 //@ chunk-4ymxyb4g.js:4644-4716 esm-fingerprint
-function F(e, r = {}) {
-  let t = X(e, { streamIsTTY: e && e.isTTY, ...r });
-  return W(t);
+function createSupportsColor(stream, options = {}) {
+  let level = _supportsColor(stream, {
+    streamIsTTY: stream && stream.isTTY,
+    ...options,
+  });
+  return translateLevel(level);
 }
 //@ chunk-4ymxyb4g.js:4716-4788 esm-fingerprint
-var z = { stdout: F({ isTTY: tty.isatty(1) }), stderr: F({ isTTY: tty.isatty(2) }) },
-  M = z;
-
-export { M, h };
+var supportsColor = {
+  stdout: createSupportsColor({
+    isTTY: tty.isatty(1),
+  }),
+  stderr: createSupportsColor({
+    isTTY: tty.isatty(2),
+  }),
+};
+var supportsColor_default = supportsColor;
+export { supportsColor_default, h };

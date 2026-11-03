@@ -15,36 +15,36 @@ import { getPlatform } from "../platform.js";
 import { getGitBashPathCached } from "../windowsPaths.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import { getIsInteractive, getPendingConversationEditKinds, getRootSession } from "../../bootstrap/state.js";
-import { mn } from "../remoteEnvironment.js";
+import { isRemoteManagedEnvironment } from "../remoteEnvironment.js";
 import { HostScoped } from "../hostScoped.js";
 import { createStore } from "../../state/store.js";
 
 //@ chunk-g54kbxqw.js:145685-145700 placement
 var SHELL_TOOL_NAMES = [BASH_TOOL_NAME, POWERSHELL_TOOL_NAME];
+//@ chunk-g54kbxqw.js:145700-145869 fingerprint = isPowerShellToolEnabled (0.301)
 /**
  * PowerShell 工具是否启用：非 Windows 只在 CLAUDE_CODE_USE_POWERSHELL_TOOL 为真时开；Windows 上 env 显式设置优先，否则没有 Git Bash 时默认开，再否则看 GrowthBook tengu_cobalt_ridge。
  */
-//@ chunk-g54kbxqw.js:145700-145869 fingerprint = isPowerShellToolEnabled (0.301)
 function isPowerShellToolEnabled() {
   let CLAUDE_CODE_USE_POWERSHELL_TOOL = env.CLAUDE_CODE_USE_POWERSHELL_TOOL;
-  if (getPlatform() !== "windows") return CLAUDE_CODE_USE_POWERSHELL_TOOL === !0;
-  if (CLAUDE_CODE_USE_POWERSHELL_TOOL !== void 0) return CLAUDE_CODE_USE_POWERSHELL_TOOL;
-  if (getGitBashPathCached() === null) return !0;
-  return getFeatureValue_CACHED_MAY_BE_STALE("tengu_cobalt_ridge", !1);
+  if (getPlatform() !== "windows") return CLAUDE_CODE_USE_POWERSHELL_TOOL === true;
+  if (CLAUDE_CODE_USE_POWERSHELL_TOOL !== undefined) return CLAUDE_CODE_USE_POWERSHELL_TOOL;
+  if (getGitBashPathCached() === null) return true;
+  return getFeatureValue_CACHED_MAY_BE_STALE("tengu_cobalt_ridge", false);
 }
 //@ chunk-g54kbxqw.js:145869-145931 placement
 function isBashAvailable() {
-  if (getPlatform() !== "windows") return !0;
+  if (getPlatform() !== "windows") return true;
   return getGitBashPathCached() !== null;
 }
 //@ chunk-g54kbxqw.js:145931-146008 placement
-function shouldUseShellTool(e, n) {
+function shouldUseShellTool(e, hasSpendCap) {
   return (
     getIsInteractive() ||
     e ||
-    n ||
-    !mn() ||
-    getFeatureValue_CACHED_MAY_BE_STALE("tengu_wiggly_locket", !1) !== !0
+    hasSpendCap ||
+    !isRemoteManagedEnvironment() ||
+    getFeatureValue_CACHED_MAY_BE_STALE("tengu_wiggly_locket", false) !== true
   );
 }
 //@ chunk-g54kbxqw.js:146008-146274 placement
@@ -62,18 +62,18 @@ function notePendingConversationEdit(e) {
 }
 //@ chunk-g54kbxqw.js:146349-146431 placement
 function takePendingConversationEdits() {
-  let e = getPendingConversationEditKinds();
-  if (e.size === 0) return [];
-  let n = [...e];
-  return (e.clear(), n);
+  let pendingConversationEditKinds = getPendingConversationEditKinds();
+  if (pendingConversationEditKinds.size === 0) return [];
+  let n = [...pendingConversationEditKinds];
+  pendingConversationEditKinds.clear();
+  return n;
 }
 //@ chunk-g54kbxqw.js:146431-146456 placement
-var vl = new HostScoped(() => createStore(!1));
+var microCompactFlagStoreByHost = new HostScoped(() => createStore(false));
 //@ chunk-g54kbxqw.js:146456-146493 placement
 function microCompactFlagStore() {
-  return vl.of(getRootSession().host);
+  return microCompactFlagStoreByHost.of(getRootSession().host);
 }
-
 export {
   isBashAvailable,
   isPowerShellToolEnabled,

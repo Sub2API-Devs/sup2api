@@ -36,19 +36,27 @@ import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/gr
 import { gracefulShutdown } from "../../utils/gracefulShutdown.js";
 
 //@ chunk-xv2m2k8x.js:12045-14681 placement
-async function agentsCommandHandler(e, f = {}, o, h) {
+async function agentsCommandHandler(e, f = {}, o, credentials) {
   if (e.json) {
-    if ((await ensureFleetGateHydrated({ kickGrowthBook: !1 }), !isAgentsFleetEnabled())) {
-      fleetGateRejected("claude agents --json", void 0);
+    await ensureFleetGateHydrated({
+      kickGrowthBook: false,
+    });
+    if (!isAgentsFleetEnabled()) {
+      fleetGateRejected("claude agents --json", undefined);
       return;
     }
-    let { printAgentsJson: printAgentsJson } = await import("./chunk-p7xejzdb.js");
-    (await printAgentsJson(e.cwd, e.all === !0, o), cliOk());
+    let { printAgentsJson } = await import("./chunk-p7xejzdb.js");
+    await printAgentsJson(e.cwd, e.all === true, o);
+    cliOk();
   }
   if (process.stdout.isTTY) {
-    if ((await ensureFleetGateHydrated(), isAgentsFleetEnabled())) {
-      let l = consumeAgentViewRelaunchMarker();
-      logEvent("tengu_fleetview", { viaCommander: !0, relaunch: l });
+    await ensureFleetGateHydrated();
+    if (isAgentsFleetEnabled()) {
+      let relaunch = consumeAgentViewRelaunchMarker();
+      logEvent("tengu_fleetview", {
+        viaCommander: true,
+        relaunch,
+      });
       let s = {
         ...parseEarlyArgs(process.argv.slice(2)).config,
         settings: eagerParseCliFlag("--settings"),
@@ -57,11 +65,17 @@ async function agentsCommandHandler(e, f = {}, o, h) {
       };
       s.restricted ||= isRestrictedMode();
       let c = mergePluginDirs(s.pluginDir, withoutPluginDirs(pluginDirsFromEnv(), s.pluginDirNoMcp));
-      if (c.length > 0 || s.pluginDirNoMcp.length > 0)
-        (setInlinePlugins(c),
-          setInlinePluginsNoMcp(s.pluginDirNoMcp),
-          clearPluginCache("claude agents --plugin-dir (commander action)"));
-      setCliSessionConfigCarried(cliCarriesSessionConfig({ ...f, ...s }));
+      if (c.length > 0 || s.pluginDirNoMcp.length > 0) {
+        setInlinePlugins(c);
+        setInlinePluginsNoMcp(s.pluginDirNoMcp);
+        clearPluginCache("claude agents --plugin-dir (commander action)");
+      }
+      setCliSessionConfigCarried(
+        cliCarriesSessionConfig({
+          ...f,
+          ...s,
+        }),
+      );
       let [
         { mountFleetViewWithComposerBack: w },
         { applyFleetViewHostWindowsEnv: S },
@@ -75,45 +89,45 @@ async function agentsCommandHandler(e, f = {}, o, h) {
       ]);
       S();
       let u = () =>
-          void import("./chunk-5kp2513a.js").then((t) =>
-            t.startBackgroundHousekeeping(getRootSession().host, o),
-          ),
-        g = getFeatureValue_CACHED_MAY_BE_STALE("tengu_noble_wozniak", !0);
-      if (!g) u();
-      let m = e.dangerouslySkipPermissions ? "bypassPermissions" : e.permissionMode,
-        p = {
-          permissionMode: m ?? e.inheritPermissionMode,
-          ...(!m && e.inheritPermissionMode && { permissionModeInherited: !0 }),
-          model: e.model,
-          effort: e.effort,
-          agent: e.agent,
-          allowBypass: e.allowDangerouslySkipPermissions,
-        },
-        {
-          refuseBypassUnderRoot: refuseBypassUnderRoot,
-          applyBypassPolicyGate: applyBypassPolicyGate,
-          ensureAgentsBypassConsent: ensureAgentsBypassConsent,
-        } = await import("./chunk-k88gsmtn.js");
+        void import("./chunk-5kp2513a.js").then((t) =>
+          t.startBackgroundHousekeeping(getRootSession().host, o),
+        );
+      let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE("tengu_noble_wozniak", true);
+      if (!featureValue_CACHED_MAY_BE_STALE) u();
+      let permissionMode = e.dangerouslySkipPermissions ? "bypassPermissions" : e.permissionMode;
+      let p = {
+        permissionMode: permissionMode ?? e.inheritPermissionMode,
+        ...(!permissionMode &&
+          e.inheritPermissionMode && {
+            permissionModeInherited: true,
+          }),
+        model: e.model,
+        effort: e.effort,
+        agent: e.agent,
+        allowBypass: e.allowDangerouslySkipPermissions,
+      };
+      let { refuseBypassUnderRoot, applyBypassPolicyGate, ensureAgentsBypassConsent } =
+        await import("./chunk-k88gsmtn.js");
       refuseBypassUnderRoot(p);
-      let d = applyBypassPolicyGate(p),
-        r = await C(y(!1)),
-        { ensureAgentsWorkspaceTrust: ensureAgentsWorkspaceTrust, agentsTrustDecision: agentsTrustDecision } =
-          await import("./chunk-pn8x1715.js");
-      (await ensureAgentsWorkspaceTrust(r, agentsTrustDecision(), o), setSessionStartType("agents_view"));
-      let { checkHasTrustDialogAccepted: checkHasTrustDialogAccepted } = await import("./chunk-eesswvbz.js");
+      let d = applyBypassPolicyGate(p);
+      let r = await C(y(false));
+      let { ensureAgentsWorkspaceTrust, agentsTrustDecision } = await import("./chunk-pn8x1715.js");
+      await ensureAgentsWorkspaceTrust(r, agentsTrustDecision(), o);
+      setSessionStartType("agents_view");
+      let { checkHasTrustDialogAccepted } = await import("./chunk-eesswvbz.js");
       if (checkHasTrustDialogAccepted()) {
-        if (g) u();
+        if (featureValue_CACHED_MAY_BE_STALE) u();
         let [{ applyConfigEnvironmentVariables: t }, { initializeTelemetryAfterTrust: i }] =
           await Promise.all([import("./chunk-q6kb333n.js"), import("./chunk-4a9xkd77.js")]);
-        (t(), i(o));
+        t();
+        i(o);
       }
       await ensureAgentsBypassConsent(r, d, o);
-      let { orgConfigGateFlagCouldArm: orgConfigGateFlagCouldArm } = await import("./chunk-bbtp62nj.js");
+      let { orgConfigGateFlagCouldArm } = await import("./chunk-bbtp62nj.js");
       if (orgConfigGateFlagCouldArm()) {
-        let { enforceOrgConfigGateAtStartup: enforceOrgConfigGateAtStartup } =
-          await import("./chunk-np0e9bed.js");
+        let { enforceOrgConfigGateAtStartup } = await import("./chunk-np0e9bed.js");
         await enforceOrgConfigGateAtStartup({
-          interactive: !0,
+          interactive: true,
           showBlockedScreen: () =>
             import("./chunk-6bvzpeaf.js").then(
               (i) => i.showOrgConfigBlockedScreen,
@@ -122,7 +136,7 @@ async function agentsCommandHandler(e, f = {}, o, h) {
               },
             ),
           printMessage: async (i) => {
-            let { endInkWithError: endInkWithError } = await import("./chunk-pz8vz2wa.js");
+            let { endInkWithError } = await import("./chunk-pz8vz2wa.js");
             await endInkWithError(r, i);
           },
         });
@@ -133,16 +147,19 @@ async function agentsCommandHandler(e, f = {}, o, h) {
         dispatchDefaults: d,
         entryChannel: isListReturnRelaunch() ? "list_return" : "cli_agents",
         storageV5: o,
-        credentials: h,
+        credentials,
       };
-      (await w(r, M), await gracefulShutdown(0, "other", { suppressResumeHint: !0 }));
+      await w(r, M);
+      await gracefulShutdown(0, "other", {
+        suppressResumeHint: true,
+      });
       return;
     }
   }
   fleetGateRejected(
     "claude agents",
     process.stdout.isTTY
-      ? void 0
+      ? undefined
       : "requires an interactive terminal (stdout is not a TTY) \u2014 use 'claude agents --json' for a machine-readable listing",
   );
 }

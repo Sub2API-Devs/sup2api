@@ -8,98 +8,129 @@
 import { Y5e } from "../diff/line.js";
 
 //@ chunk-7vb8p3zb.js:9181-10494 esm-fingerprint
-function P3(n, e, t, i, l, r, s) {
-  let o;
-  if (!s) o = {};
-  else if (typeof s === "function") o = { callback: s };
-  else o = s;
-  if (typeof o.context > "u") o.context = 4;
-  let context = o.context;
-  if (o.newlineIsToken)
+function P3(oldFileName, newFileName, oldStr, newStr, oldHeader, newHeader, options) {
+  let optionsObj;
+  if (!options) optionsObj = {};
+  else if (typeof options === "function")
+    optionsObj = {
+      callback: options,
+    };
+  else optionsObj = options;
+  if (typeof optionsObj.context === "undefined") optionsObj.context = 4;
+  let context = optionsObj.context;
+  if (optionsObj.newlineIsToken)
     throw Error(
       "newlineIsToken may not be used with patch-generation functions, only with diffing functions",
     );
-  if (!o.callback) return u(Y5e(t, i, o));
+  if (!optionsObj.callback) return diffLinesResultToPatch(Y5e(oldStr, newStr, optionsObj));
   else {
-    let { callback: callback } = o;
+    let { callback } = optionsObj;
     Y5e(
-      t,
-      i,
-      Object.assign(Object.assign({}, o), {
-        callback: (c) => {
-          let a = u(c);
-          callback(a);
+      oldStr,
+      newStr,
+      Object.assign(Object.assign({}, optionsObj), {
+        callback: (diff) => {
+          let patch = diffLinesResultToPatch(diff);
+          callback(patch);
         },
       }),
     );
   }
-  function u(h) {
-    if (!h) return;
-    h.push({ value: "", lines: [] });
-    function c(p) {
-      return p.map(function (m) {
-        return " " + m;
+  function diffLinesResultToPatch(diff) {
+    if (!diff) return;
+    diff.push({
+      value: "",
+      lines: [],
+    });
+    function contextLines(lines) {
+      return lines.map(function (entry) {
+        return " " + entry;
       });
     }
-    let a = [],
-      g = 0,
-      w = 0,
-      P = [],
-      C = 1,
-      d = 1;
-    for (let p = 0; p < h.length; p++) {
-      let m = h[p],
-        x = m.lines || Z(m.value);
-      if (((m.lines = x), m.added || m.removed)) {
-        if (!g) {
-          let v = h[p - 1];
-          if (((g = C), (w = d), v))
-            ((P = context > 0 ? c(v.lines.slice(-context)) : []), (g -= P.length), (w -= P.length));
-        }
-        for (let v of x) P.push((m.added ? "+" : "-") + v);
-        if (m.added) d += x.length;
-        else C += x.length;
-      } else {
-        if (g)
-          if (x.length <= context * 2 && p < h.length - 2) for (let v of c(x)) P.push(v);
-          else {
-            let min = Math.min(x.length, context);
-            for (let D of c(x.slice(0, min))) P.push(D);
-            let S = { oldStart: g, oldLines: C - g + min, newStart: w, newLines: d - w + min, lines: P };
-            (a.push(S), (g = 0), (w = 0), (P = []));
+    let hunks = [];
+    let oldRangeStart = 0;
+    let newRangeStart = 0;
+    let curRange = [];
+    let oldLine = 1;
+    let newLine = 1;
+    for (let i = 0; i < diff.length; i++) {
+      let current = diff[i];
+      let lines = current.lines || splitLines(current.value);
+      current.lines = lines;
+      if (current.added || current.removed) {
+        if (!oldRangeStart) {
+          let prev = diff[i - 1];
+          oldRangeStart = oldLine;
+          newRangeStart = newLine;
+          if (prev) {
+            curRange = context > 0 ? contextLines(prev.lines.slice(-context)) : [];
+            oldRangeStart -= curRange.length;
+            newRangeStart -= curRange.length;
           }
-        ((C += x.length), (d += x.length));
+        }
+        for (let line of lines) curRange.push((current.added ? "+" : "-") + line);
+        if (current.added) newLine += lines.length;
+        else oldLine += lines.length;
+      } else {
+        if (oldRangeStart)
+          if (lines.length <= context * 2 && i < diff.length - 2)
+            for (let line of contextLines(lines)) curRange.push(line);
+          else {
+            let contextSize = Math.min(lines.length, context);
+            for (let line of contextLines(lines.slice(0, contextSize))) curRange.push(line);
+            let hunk = {
+              oldStart: oldRangeStart,
+              oldLines: oldLine - oldRangeStart + contextSize,
+              newStart: newRangeStart,
+              newLines: newLine - newRangeStart + contextSize,
+              lines: curRange,
+            };
+            hunks.push(hunk);
+            oldRangeStart = 0;
+            newRangeStart = 0;
+            curRange = [];
+          }
+        oldLine += lines.length;
+        newLine += lines.length;
       }
     }
-    for (let p of a)
-      for (let m = 0; m < p.lines.length; m++)
+    for (let hunk of hunks)
+      for (let i = 0; i < hunk.lines.length; i++)
         if (
-          p.lines[m].endsWith(`
+          hunk.lines[i].endsWith(`
 `)
         )
-          p.lines[m] = p.lines[m].slice(0, -1);
-        else (p.lines.splice(m + 1, 0, "\\ No newline at end of file"), m++);
-    return { oldFileName: n, newFileName: e, oldHeader: l, newHeader: r, hunks: a };
+          hunk.lines[i] = hunk.lines[i].slice(0, -1);
+        else {
+          hunk.lines.splice(i + 1, 0, "\\ No newline at end of file");
+          i++;
+        }
+    return {
+      oldFileName,
+      newFileName,
+      oldHeader,
+      newHeader,
+      hunks,
+    };
   }
 }
 //@ chunk-7vb8p3zb.js:10494-10616 esm-fingerprint
-function Z(n) {
-  let endsWith = n.endsWith(`
-`),
-    mapped = n
-      .split(
+function splitLines(text) {
+  let hasTrailingNl = text.endsWith(`
+`);
+  let result = text
+    .split(
+      `
+`,
+    )
+    .map(
+      (line) =>
+        line +
         `
 `,
-      )
-      .map(
-        (i) =>
-          i +
-          `
-`,
-      );
-  if (endsWith) mapped.pop();
-  else mapped.push(mapped.pop().slice(0, -1));
-  return mapped;
+    );
+  if (hasTrailingNl) result.pop();
+  else result.push(result.pop().slice(0, -1));
+  return result;
 }
-
 export { P3 };

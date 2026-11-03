@@ -5,50 +5,71 @@
  * pieces: chunk-hwmsct5x.js (4)
  * attribution: esm-fingerprint 4
  */
-import { pr } from "../core/error.mjs";
+import { AnthropicError } from "../core/error.mjs";
 
 //@ chunk-hwmsct5x.js:146814-146861 esm-fingerprint
-function yd(e) {
-  return e?.output_config?.format;
+function getOutputFormat_2(params) {
+  return params?.output_config?.format;
 }
 //@ chunk-hwmsct5x.js:146861-147106 esm-fingerprint
-function La(e, n, r) {
-  let s = yd(n);
-  if (!n || !("parse" in (s ?? {})))
+function maybeParseMessage(message, params, opts) {
+  let outputFormat = getOutputFormat_2(params);
+  if (!params || !("parse" in (outputFormat ?? {})))
     return {
-      ...e,
-      content: e.content.map((h) => {
-        if (h.type === "text")
-          return Object.defineProperty({ ...h }, "parsed_output", { value: null, enumerable: !1 });
-        return h;
+      ...message,
+      content: message.content.map((block) => {
+        if (block.type === "text")
+          return Object.defineProperty(
+            {
+              ...block,
+            },
+            "parsed_output",
+            {
+              value: null,
+              enumerable: false,
+            },
+          );
+        return block;
       }),
       parsed_output: null,
     };
-  return Fa(e, n, r);
+  return parseMessage(message, params, opts);
 }
 //@ chunk-hwmsct5x.js:147106-147340 esm-fingerprint
-function Fa(e, n, r) {
-  let s = null,
-    mapped = e.content.map((y) => {
-      if (y.type === "text") {
-        let w = Fg(n, y.text);
-        if (s === null) s = w;
-        return Object.defineProperty({ ...y }, "parsed_output", { value: w, enumerable: !1 });
-      }
-      return y;
-    });
-  return { ...e, content: mapped, parsed_output: s };
+function parseMessage(message, params, opts) {
+  let firstParsedOutput = null;
+  let content = message.content.map((block) => {
+    if (block.type === "text") {
+      let parsedOutput = parseOutputFormat(params, block.text);
+      if (firstParsedOutput === null) firstParsedOutput = parsedOutput;
+      return Object.defineProperty(
+        {
+          ...block,
+        },
+        "parsed_output",
+        {
+          value: parsedOutput,
+          enumerable: false,
+        },
+      );
+    }
+    return block;
+  });
+  return {
+    ...message,
+    content,
+    parsed_output: firstParsedOutput,
+  };
 }
 //@ chunk-hwmsct5x.js:147340-147532 esm-fingerprint
-function Fg(e, n) {
-  let r = yd(e);
-  if (r?.type !== "json_schema") return null;
+function parseOutputFormat(params, content) {
+  let outputFormat = getOutputFormat_2(params);
+  if (outputFormat?.type !== "json_schema") return null;
   try {
-    if ("parse" in r) return r.parse(n);
-    return JSON.parse(n);
+    if ("parse" in outputFormat) return outputFormat.parse(content);
+    return JSON.parse(content);
   } catch (error) {
-    throw new pr(`Failed to parse structured output: ${error}`);
+    throw new AnthropicError(`Failed to parse structured output: ${error}`);
   }
 }
-
-export { La, Fa };
+export { maybeParseMessage, parseMessage };

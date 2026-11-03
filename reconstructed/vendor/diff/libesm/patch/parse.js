@@ -7,87 +7,99 @@
  */
 
 //@ chunk-7vb8p3zb.js:7440-9181 esm-fingerprint
-function ros(n) {
-  let parts = n.split(/\n/),
-    t = [],
-    i = 0;
-  function l() {
-    let o = {};
-    t.push(o);
-    while (i < parts.length) {
-      let f = parts[i];
-      if (/^(---|\+\+\+|@@)\s/.test(f)) break;
-      let match = /^(?:Index:|diff(?: -r \w+)+)\s+/.exec(f);
-      if (match) o.index = f.substring(match[0].length).trim();
+function parsePatch(uniDiff) {
+  let diffstr = uniDiff.split(/\n/);
+  let list = [];
+  let i = 0;
+  function parseIndex() {
+    let index = {};
+    list.push(index);
+    while (i < diffstr.length) {
+      let line = diffstr[i];
+      if (/^(---|\+\+\+|@@)\s/.test(line)) break;
+      let headerMatch = /^(?:Index:|diff(?: -r \w+)+)\s+/.exec(line);
+      if (headerMatch) index.index = line.substring(headerMatch[0].length).trim();
       i++;
     }
-    (r(o), r(o), (o.hunks = []));
-    while (i < parts.length) {
-      let f = parts[i];
+    parseFileHeader(index);
+    parseFileHeader(index);
+    index.hunks = [];
+    while (i < diffstr.length) {
+      let line = diffstr[i];
       if (
         /^(Index:\s|diff\s|---\s|\+\+\+\s|===================================================================)/.test(
-          f,
+          line,
         )
       )
         break;
-      else if (/^@@/.test(f)) o.hunks.push(s());
-      else if (f) throw Error("Unknown line " + (i + 1) + " " + JSON.stringify(f));
+      else if (/^@@/.test(line)) index.hunks.push(parseHunk());
+      else if (line) throw Error("Unknown line " + (i + 1) + " " + JSON.stringify(line));
       else i++;
     }
   }
-  function r(o) {
-    let match = /^(---|\+\+\+)\s+/.exec(parts[i]);
-    if (match) {
-      let u = match[1],
-        parts_2 = parts[i].substring(3).trim().split("\t", 2),
-        trimmed = (parts_2[1] || "").trim(),
-        replaced = parts_2[0].replace(/\\\\/g, "\\");
-      if (replaced.startsWith('"') && replaced.endsWith('"'))
-        replaced = replaced.substr(1, replaced.length - 2);
-      if (u === "---") ((o.oldFileName = replaced), (o.oldHeader = trimmed));
-      else ((o.newFileName = replaced), (o.newHeader = trimmed));
+  function parseFileHeader(index) {
+    let fileHeaderMatch = /^(---|\+\+\+)\s+/.exec(diffstr[i]);
+    if (fileHeaderMatch) {
+      let prefix = fileHeaderMatch[1];
+      let data = diffstr[i].substring(3).trim().split("\t", 2);
+      let header = (data[1] || "").trim();
+      let fileName = data[0].replace(/\\\\/g, "\\");
+      if (fileName.startsWith('"') && fileName.endsWith('"'))
+        fileName = fileName.substr(1, fileName.length - 2);
+      if (prefix === "---") {
+        index.oldFileName = fileName;
+        index.oldHeader = header;
+      } else {
+        index.newFileName = fileName;
+        index.newHeader = header;
+      }
       i++;
     }
   }
-  function s() {
-    var o;
-    let f = i,
-      u = parts[i++],
-      parts_2 = u.split(/@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/),
-      c = {
-        oldStart: +parts_2[1],
-        oldLines: typeof parts_2[2] > "u" ? 1 : +parts_2[2],
-        newStart: +parts_2[3],
-        newLines: typeof parts_2[4] > "u" ? 1 : +parts_2[4],
-        lines: [],
-      };
-    if (c.oldLines === 0) c.oldStart += 1;
-    if (c.newLines === 0) c.newStart += 1;
-    let a = 0,
-      g = 0;
+  function parseHunk() {
+    var _a;
+    let chunkHeaderIndex = i;
+    let chunkHeaderLine = diffstr[i++];
+    let chunkHeader = chunkHeaderLine.split(/@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/);
+    let hunk = {
+      oldStart: +chunkHeader[1],
+      oldLines: typeof chunkHeader[2] === "undefined" ? 1 : +chunkHeader[2],
+      newStart: +chunkHeader[3],
+      newLines: typeof chunkHeader[4] === "undefined" ? 1 : +chunkHeader[4],
+      lines: [],
+    };
+    if (hunk.oldLines === 0) hunk.oldStart += 1;
+    if (hunk.newLines === 0) hunk.newStart += 1;
+    let addCount = 0;
+    let removeCount = 0;
     for (
       ;
-      i < parts.length &&
-      (g < c.oldLines ||
-        a < c.newLines ||
-        ((o = parts[i]) === null || o === void 0 ? void 0 : o.startsWith("\\")));
+      i < diffstr.length &&
+      (removeCount < hunk.oldLines ||
+        addCount < hunk.newLines ||
+        ((_a = diffstr[i]) === null || _a === undefined ? undefined : _a.startsWith("\\")));
       i++
     ) {
-      let w = parts[i].length == 0 && i != parts.length - 1 ? " " : parts[i][0];
-      if (w === "+" || w === "-" || w === " " || w === "\\") {
-        if ((c.lines.push(parts[i]), w === "+")) a++;
-        else if (w === "-") g++;
-        else if (w === " ") (a++, g++);
-      } else throw Error(`Hunk at line ${f + 1} contained invalid line ${parts[i]}`);
+      let operation = diffstr[i].length == 0 && i != diffstr.length - 1 ? " " : diffstr[i][0];
+      if (operation === "+" || operation === "-" || operation === " " || operation === "\\") {
+        hunk.lines.push(diffstr[i]);
+        if (operation === "+") addCount++;
+        else if (operation === "-") removeCount++;
+        else if (operation === " ") {
+          addCount++;
+          removeCount++;
+        }
+      } else throw Error(`Hunk at line ${chunkHeaderIndex + 1} contained invalid line ${diffstr[i]}`);
     }
-    if (!a && c.newLines === 1) c.newLines = 0;
-    if (!g && c.oldLines === 1) c.oldLines = 0;
-    if (a !== c.newLines) throw Error("Added line count did not match for hunk at line " + (f + 1));
-    if (g !== c.oldLines) throw Error("Removed line count did not match for hunk at line " + (f + 1));
-    return c;
+    if (!addCount && hunk.newLines === 1) hunk.newLines = 0;
+    if (!removeCount && hunk.oldLines === 1) hunk.oldLines = 0;
+    if (addCount !== hunk.newLines)
+      throw Error("Added line count did not match for hunk at line " + (chunkHeaderIndex + 1));
+    if (removeCount !== hunk.oldLines)
+      throw Error("Removed line count did not match for hunk at line " + (chunkHeaderIndex + 1));
+    return hunk;
   }
-  while (i < parts.length) l();
-  return t;
+  while (i < diffstr.length) parseIndex();
+  return list;
 }
-
-export { ros };
+export { parsePatch };

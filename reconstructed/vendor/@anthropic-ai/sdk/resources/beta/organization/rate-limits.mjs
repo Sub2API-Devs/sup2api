@@ -5,14 +5,16 @@
  * pieces: chunk-hwmsct5x.js (1)
  * attribution: esm-fingerprint 1
  */
-import { Y } from "../../../core/resource.mjs";
-import { ee } from "../../../core/pagination.mjs";
+import { APIResource } from "../../../core/resource.mjs";
+import { TokenPage } from "../../../core/pagination.mjs";
 
 //@ chunk-hwmsct5x.js:120666-120791 esm-fingerprint
-class so extends Y {
-  list(e = {}, n) {
-    return this._client.getAPIList("/v1/organizations/rate_limits?beta=true", ee, { query: e, ...n });
+class RateLimits extends APIResource {
+  list(query = {}, options) {
+    return this._client.getAPIList("/v1/organizations/rate_limits?beta=true", TokenPage, {
+      query,
+      ...options,
+    });
   }
 }
-
-export { so };
+export { RateLimits };

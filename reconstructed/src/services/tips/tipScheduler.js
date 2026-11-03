@@ -17,54 +17,50 @@ import { fromEnum } from "../analytics/safeMetadata.js";
 import { HostScoped } from "../../utils/hostScoped.js";
 import { getRootSession } from "../../bootstrap/state.js";
 import { excludesDefaultTips } from "./spinnerTipsOverride.js";
-import { Soe, _1s, recordTipShown } from "./tipIds.js";
+import { tipLifetimeShownCount, pluginSuggestionShownCount, recordTipShown } from "./tipIds.js";
 import { logFeatureOk } from "../analytics/featureTelemetry.js";
 import { getTipTelemetryId } from "./orgTips.js";
 
+//@ chunk-s8af6efx.js:1293-1540 fingerprint = selectTipWithLongestTimeSinceShown (0.848)
 /**
  * 在候选提示中选“距上次显示经过会话数最多”的那条，平局按 priority 高者。
  */
-//@ chunk-s8af6efx.js:1293-1540 fingerprint = selectTipWithLongestTimeSinceShown (0.848)
 function selectTipWithLongestTimeSinceShown(availableTips) {
   if (availableTips.length === 0) return;
   if (availableTips.length === 1) return availableTips[0];
   let tipsWithSessions = availableTips.map((tip) => ({
-    tip: tip,
+    tip,
     sessions: getSessionsSinceTipShown(tip.id),
   }));
-  return (
-    tipsWithSessions.sort((t, n) => {
-      if (t.sessions !== n.sessions) return n.sessions - t.sessions;
-      return (n.tip.priority ?? 0) - (t.tip.priority ?? 0);
-    }),
-    tipsWithSessions[0]?.tip
-  );
+  tipsWithSessions.sort((t, n) => {
+    if (t.sessions !== n.sessions) return n.sessions - t.sessions;
+    return (n.tip.priority ?? 0) - (t.tip.priority ?? 0);
+  });
+  return tipsWithSessions[0]?.tip;
 }
+//@ chunk-s8af6efx.js:1540-1708 fingerprint = getTipToShowOnSpinner (0.399)
 /**
  * spinner 上要显示的提示：spinnerTipsEnabled 为 false 时不显示；否则取 getRelevantTips 的结果按最久未显示挑一条。
  */
-//@ chunk-s8af6efx.js:1540-1708 fingerprint = getTipToShowOnSpinner (0.399)
 async function getTipToShowOnSpinner(context) {
-  if (getSettings_DEPRECATED().spinnerTipsEnabled === !1) return;
-  let { getRelevantTips: getRelevantTips } = await import("./chunk-4t8fx0s8.js"),
-    tips = await getRelevantTips(context);
+  if (getSettings_DEPRECATED().spinnerTipsEnabled === false) return;
+  let { getRelevantTips } = await import("./chunk-4t8fx0s8.js");
+  let tips = await getRelevantTips(context);
   if (tips.length === 0) return;
   return selectTipWithLongestTimeSinceShown(tips);
 }
+//@ chunk-s8af6efx.js:1708-1918 layout
 /**
  * 安全获取提示内容：content() 抛错时把提示记入 failedTipIds（本会话不再尝试）并返回空串。
  */
-//@ chunk-s8af6efx.js:1708-1918 layout
-async function getTipContentSafe(e, i) {
+async function getTipContentSafe(tipToShowOnSpinner, i) {
   try {
-    return await e.content(i);
+    return await tipToShowOnSpinner.content(i);
   } catch (error) {
-    let { tipSessionCaches: tipSessionCaches } = await import("./chunk-4t8fx0s8.js");
-    return (
-      tipSessionCaches.of(i.session.host).failedTipIds.add(e.id),
-      logError(withTelemetryMessage(toError(error), "tip content threw")),
-      ""
-    );
+    let { tipSessionCaches } = await import("./chunk-4t8fx0s8.js");
+    tipSessionCaches.of(i.session.host).failedTipIds.add(tipToShowOnSpinner.id);
+    logError(withTelemetryMessage(toError(error), "tip content threw"));
+    return "";
   }
 }
 //@ chunk-s8af6efx.js:1918-1926 layout
@@ -74,15 +70,15 @@ class LegacyPluginTipCountProbe {
   fired = new Set();
   fire(e, i) {
     if (e <= 0) return;
-    let t = e > i ? "true" : "false",
-      n = e >= TIP_MIN_SESSIONS && i < TIP_MIN_SESSIONS ? "true" : "false",
-      r = `${t}|${n}`;
+    let t = e > i ? "true" : "false";
+    let n = e >= TIP_MIN_SESSIONS && i < TIP_MIN_SESSIONS ? "true" : "false";
+    let r = `${t}|${n}`;
     if (this.fired.has(r)) return;
-    (this.fired.add(r),
-      logEvent("tengu_dead_probe_legacy_plugin_tip_counts", {
-        changes_max: fromEnum(t),
-        changes_outcome: fromEnum(n),
-      }));
+    this.fired.add(r);
+    logEvent("tengu_dead_probe_legacy_plugin_tip_counts", {
+      changes_max: fromEnum(t),
+      changes_outcome: fromEnum(n),
+    });
   }
 }
 //@ chunk-s8af6efx.js:2173-2196 layout
@@ -91,42 +87,41 @@ var legacyPluginTipProbeByHost = new HostScoped(() => new LegacyPluginTipCountPr
 function getLegacyPluginTipProbe() {
   return legacyPluginTipProbeByHost.of(getRootSession().host);
 }
+//@ chunk-s8af6efx.js:2231-2727 layout
 /**
  * 市场插件推荐提示：跳过已失败、显示次数达上限或仍在冷却（cooldownSessions）的提示，再按相关性筛选并挑最久未显示者。
  */
-//@ chunk-s8af6efx.js:2231-2727 layout
 async function getMarketplacePluginTipToShow(e) {
-  if (getSettings_DEPRECATED().spinnerTipsEnabled === !1) return;
-  let { isTipRelevantSafe: isTipRelevantSafe, tipSessionCaches: tipSessionCaches } =
-      await import("./chunk-4t8fx0s8.js"),
-    of = tipSessionCaches.of(e.session.host);
+  if (getSettings_DEPRECATED().spinnerTipsEnabled === false) return;
+  let { isTipRelevantSafe, tipSessionCaches } = await import("./chunk-4t8fx0s8.js");
+  let n = tipSessionCaches.of(e.session.host);
   if (excludesDefaultTips()) return;
-  let marketplacePluginTips = await of.getMarketplacePluginTips(e.storageV5);
+  let marketplacePluginTips = await n.getMarketplacePluginTips(e.storageV5);
   if (marketplacePluginTips.length === 0) return;
-  let p = [];
+  let availableTips = [];
   for (let o of marketplacePluginTips) {
     if (!o.pluginId) continue;
-    if (of.failedTipIds.has(o.id)) continue;
-    let d = Soe(o.id),
-      f = _1s(o.pluginId);
-    if ((getLegacyPluginTipProbe().fire(f, d), Math.max(d, f) >= TIP_MIN_SESSIONS)) continue;
+    if (n.failedTipIds.has(o.id)) continue;
+    let d = tipLifetimeShownCount(o.id);
+    let f = pluginSuggestionShownCount(o.pluginId);
+    getLegacyPluginTipProbe().fire(f, d);
+    if (Math.max(d, f) >= TIP_MIN_SESSIONS) continue;
     if (getSessionsSinceTipShown(o.id) < o.cooldownSessions) continue;
-    if (await isTipRelevantSafe(o, e)) p.push(o);
+    if (await isTipRelevantSafe(o, e)) availableTips.push(o);
   }
-  return selectTipWithLongestTimeSinceShown(p);
+  return selectTipWithLongestTimeSinceShown(availableTips);
 }
+//@ chunk-s8af6efx.js:2727-2935 fingerprint = recordShownTip (0.479)
 /**
  * 记录某提示已显示（写 tipsHistory[id]=numStartups），并打 tengu_tip_shown（surface：spinner/startup）。
  */
-//@ chunk-s8af6efx.js:2727-2935 fingerprint = recordShownTip (0.479)
-function recordShownTip(e, i = "spinner", t) {
-  (recordTipShown(e.id, t, e.advertisedCommand),
-    logFeatureOk(i === "startup" ? "tips_startup_show" : "tips_spinner_show"),
-    logEvent("tengu_tip_shown", {
-      tipIdLength: getTipTelemetryId(e),
-      cooldownSessions: e.cooldownSessions,
-      surface: fromEnum(i),
-    }));
+function recordShownTip(tip, i = "spinner", storageV5) {
+  recordTipShown(tip.id, storageV5, tip.advertisedCommand);
+  logFeatureOk(i === "startup" ? "tips_startup_show" : "tips_spinner_show");
+  logEvent("tengu_tip_shown", {
+    tipIdLength: getTipTelemetryId(tip),
+    cooldownSessions: tip.cooldownSessions,
+    surface: fromEnum(i),
+  });
 }
-
 export { recordShownTip, getTipToShowOnSpinner, getTipContentSafe, getMarketplacePluginTipToShow };

@@ -10,24 +10,35 @@
  */
 import { resolve, dirname, sep, basename } from "path";
 import { homedir } from "os";
-import { Rke } from "../fsJunctions.js";
-import { Qn } from "../pathClassification.js";
+import { realpathNativeLongSync } from "../fsJunctions.js";
+import { isUncOrDevicePath } from "../pathClassification.js";
 
 //@ chunk-aat7wt0p.js:12312-12352 placement
-function e9(t) {
-  return Rke(t).real ?? null;
+/**
+ * realpathCacheEntry：realpath 缓存条目。
+ */
+function realpathCacheEntry(t) {
+  return realpathNativeLongSync(t).real ?? null;
 }
 //@ chunk-aat7wt0p.js:12352-12608 placement
 function classifyProtectedDir(t, n) {
-  let lower = resolve(n).toLowerCase(),
-    lower_2 = dirname(resolve(t)).toLowerCase();
-  if (lower_2 === lower || it(lower_2, lower) || isInWindowsAppsAliasDir(lower_2, lower, "lexical"))
-    return !0;
-  let o = e9(n)?.toLowerCase();
-  if (o == null) return !1;
-  let i = e9(dirname(resolve(t)))?.toLowerCase();
-  if (i == null) return !0;
-  return i === o || it(i, o) || isInWindowsAppsAliasDir(i, o, "canonical");
+  let lower = resolve(n).toLowerCase();
+  let lower_2 = dirname(resolve(t)).toLowerCase();
+  if (
+    lower_2 === lower ||
+    isUnderDependencyDir(lower_2, lower) ||
+    isInWindowsAppsAliasDir(lower_2, lower, "lexical")
+  )
+    return true;
+  let lower_3 = realpathCacheEntry(n)?.toLowerCase();
+  if (lower_3 == null) return false;
+  let lower_4 = realpathCacheEntry(dirname(resolve(t)))?.toLowerCase();
+  if (lower_4 == null) return true;
+  return (
+    lower_4 === lower_3 ||
+    isUnderDependencyDir(lower_4, lower_3) ||
+    isInWindowsAppsAliasDir(lower_4, lower_3, "canonical")
+  );
 }
 //@ chunk-aat7wt0p.js:12608-12723 placement
 var DEPENDENCY_DIR_NAMES = new Set([
@@ -43,23 +54,23 @@ var DEPENDENCY_DIR_NAMES = new Set([
   "__pypackages__",
 ]);
 //@ chunk-aat7wt0p.js:12723-12813 placement
-function it(t, n) {
-  if (!t.startsWith(L(n) + sep)) return !1;
+function isUnderDependencyDir(t, n) {
+  if (!t.startsWith(stripTrailingSep(n) + sep)) return false;
   return t.split(sep).some((e) => DEPENDENCY_DIR_NAMES.has(e));
 }
 //@ chunk-aat7wt0p.js:12813-12864 placement
-function L(t) {
+function stripTrailingSep(t) {
   return t.endsWith(sep) ? t.slice(0, -1) : t;
 }
 //@ chunk-aat7wt0p.js:12864-12870 placement
-var H;
+var windowsAppsAliasCache;
+//@ chunk-aat7wt0p.js:12870-13242 placement
 /**
  * 判断路径是否在 WindowsApps 应用执行别名目录下（lexical 模式只做字面比较，否则解析真实路径并缓存）。
  */
-//@ chunk-aat7wt0p.js:12870-13242 placement
 function isInWindowsAppsAliasDir(t, n, e) {
-  let r = homedir(),
-    trimmed = (process.env.LOCALAPPDATA ?? "").trim();
+  let r = homedir();
+  let trimmed = (process.env.LOCALAPPDATA ?? "").trim();
   if (e === "lexical")
     return isUnderAliasDir(
       getWindowsAppsDirs(r, trimmed, (a) => resolve(a).toLowerCase()),
@@ -67,39 +78,46 @@ function isInWindowsAppsAliasDir(t, n, e) {
       n,
     );
   let i = r + "\x00" + trimmed;
-  if (H?.key === i) return isUnderAliasDir(H.aliasDirs, t, n);
-  let s = !0,
-    u = getWindowsAppsDirs(r, trimmed, (a) => {
-      if (!Dt(a)) return resolve(a).toLowerCase();
-      let l = e9(a)?.toLowerCase();
-      if (l == null) return ((s = !1), resolve(a).toLowerCase());
-      return l;
-    });
-  if (s) H = { key: i, aliasDirs: u };
-  return isUnderAliasDir(u, t, n);
+  if (windowsAppsAliasCache?.key === i) return isUnderAliasDir(windowsAppsAliasCache.aliasDirs, t, n);
+  let s = true;
+  let windowsAppsDirs = getWindowsAppsDirs(r, trimmed, (a) => {
+    if (!isPosixAbsoluteLocal(a)) return resolve(a).toLowerCase();
+    let lower = realpathCacheEntry(a)?.toLowerCase();
+    if (lower == null) {
+      s = false;
+      return resolve(a).toLowerCase();
+    }
+    return lower;
+  });
+  if (s)
+    windowsAppsAliasCache = {
+      key: i,
+      aliasDirs: windowsAppsDirs,
+    };
+  return isUnderAliasDir(windowsAppsDirs, t, n);
 }
 //@ chunk-aat7wt0p.js:13242-13442 placement
 function getWindowsAppsDirs(t, n, e) {
   let r = [];
-  if (t) r.push(L(e(t)) + sep + ["appdata", "local", "microsoft", "windowsapps"].join(sep));
+  if (t) r.push(stripTrailingSep(e(t)) + sep + ["appdata", "local", "microsoft", "windowsapps"].join(sep));
   if (n) {
-    let o = L(e(n)) + sep + ["microsoft", "windowsapps"].join(sep);
+    let o = stripTrailingSep(e(n)) + sep + ["microsoft", "windowsapps"].join(sep);
     if (!r.includes(o)) r.push(o);
   }
   return r;
 }
 //@ chunk-aat7wt0p.js:13442-13490 placement
-function Dt(t) {
-  return t.startsWith("/") && !Qn(t);
+function isPosixAbsoluteLocal(t) {
+  return t.startsWith("/") && !isUncOrDevicePath(t);
 }
 //@ chunk-aat7wt0p.js:13490-13621 placement
 function isUnderAliasDir(t, n, e) {
-  let r = L(e);
+  let r = stripTrailingSep(e);
   for (let o of t) {
     if (!(o === r || o.startsWith(r + sep))) continue;
-    if (n === o || n.startsWith(o + sep)) return !0;
+    if (n === o || n.startsWith(o + sep)) return true;
   }
-  return !1;
+  return false;
 }
 //@ chunk-aat7wt0p.js:13621-13793 placement
 var SYSTEM_ROOT_SUBDIRS = [
@@ -126,21 +144,22 @@ function isSystemVolumePath(t) {
   if (
     parts.length < 5 ||
     parts[0] !== "" ||
-    y(parts[1] ?? "") !== "system" ||
-    y(parts[2] ?? "") !== "volumes" ||
-    y(parts[3] ?? "") !== "data"
+    foldCasePair(parts[1] ?? "") !== "system" ||
+    foldCasePair(parts[2] ?? "") !== "volumes" ||
+    foldCasePair(parts[3] ?? "") !== "data"
   )
     return t;
   let sliced = parts.slice(4);
   for (let r of SYSTEM_ROOT_SUBDIRS) {
     let parts = r.split("/");
     if (sliced.length < parts.length) continue;
-    if (parts.every((i, s) => y(sliced[s] ?? "") === y(i))) return "/" + sliced.join("/");
+    if (parts.every((i, s) => foldCasePair(sliced[s] ?? "") === foldCasePair(i)))
+      return "/" + sliced.join("/");
   }
   return t;
 }
 //@ chunk-aat7wt0p.js:14084-14135 placement
-function y(t) {
+function foldCasePair(t) {
   return t.toUpperCase().toLowerCase();
 }
 //@ chunk-aat7wt0p.js:14135-14220 placement = isDangerousFilePathToAutoEdit (1)
@@ -149,5 +168,4 @@ function getRepoRootForWorktreePath(path) {
     ? dirname(dirname(dirname(path)))
     : null;
 }
-
-export { isSystemVolumePath, e9, getRepoRootForWorktreePath, classifyProtectedDir };
+export { isSystemVolumePath, realpathCacheEntry, getRepoRootForWorktreePath, classifyProtectedDir };

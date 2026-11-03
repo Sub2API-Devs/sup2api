@@ -19,14 +19,14 @@ import {
   toolResultsDir,
 } from "../../../utils/toolResultStorage.js";
 import { runToolUse, hasTypeField } from "../../../services/tools/toolExecution.js";
-import { QOs, xTe } from "../../../tools/shared/textSearchTools.js";
+import { shellToolOrDefault, isShellToolName } from "../../../tools/shared/textSearchTools.js";
 import { spillServedOutput, unreadableSpillNote } from "./outputSpill.js";
 import { isPlainObject } from "./callStatusQuery.js";
-import { iv, toRemoteToolContentBlocks } from "../callResults.js";
+import { byteLengthOf, toRemoteToolContentBlocks } from "../callResults.js";
 import { REMOTE_TOOL_PROTOCOL_VERSION } from "../protocolConstants.js";
 import { xr } from "../../../../vendor/lodash-es/_inlinedHelpers.js";
-import { Elr, HXr, NPe } from "../protocolSchemas.js";
-import { Do } from "../../../utils/git/gitSafeEnv.js";
+import { KEPT_RESULT_FIELDS_BY_TOOL, MAX_ACCEPT_NOTES, MAX_MESSAGE_CHARS } from "../protocolSchemas.js";
+import { pickByHelper } from "../../../utils/git/gitSafeEnv.js";
 import { POWERSHELL_TOOL_NAME } from "../../../tools/PowerShellTool/toolName.js";
 import { GREP_TOOL_NAME } from "../../../tools/GrepTool/prompt.js";
 import { GLOB_TOOL_NAME } from "../../../tools/GlobTool/prompt.js";
@@ -35,34 +35,48 @@ import { formatFileSize } from "../../../utils/format.js";
 import { truncateToLength } from "../../../utils/stringUtils.js";
 
 //@ chunk-ad2e1aj6.js:22511-22525 placement
-var Lr = 262144;
+var MAX_STRUCTURED_RESULT_BYTES = 262144;
 //@ chunk-ad2e1aj6.js:22525-22792 placement
-function resultSizeLimitsFor(e) {
-  switch (e) {
+function resultSizeLimitsFor(arrivedOver) {
+  switch (arrivedOver) {
     case "session":
     case "relay":
-      return { imageBase64Bytes: 1572864, documentBase64Bytes: 3380000 };
+      return {
+        imageBase64Bytes: 1572864,
+        documentBase64Bytes: 3380000,
+      };
     case "bridge":
     case "direct":
-      return { imageBase64Bytes: 1048576, documentBase64Bytes: 0 };
+      return {
+        imageBase64Bytes: 1048576,
+        documentBase64Bytes: 0,
+      };
     default: {
-      let n = e;
-      return { imageBase64Bytes: 1048576, documentBase64Bytes: 0 };
+      let n = arrivedOver;
+      return {
+        imageBase64Bytes: 1048576,
+        documentBase64Bytes: 0,
+      };
     }
   }
 }
 //@ chunk-ad2e1aj6.js:22792-22812 placement
-var Mr = 5000,
-  Hr = 8000;
+var RESULT_NOTE_MAX_CHARS = 5000;
+var MAX_INLINE_OUTPUT_BYTES = 8000;
 //@ chunk-ad2e1aj6.js:22812-23112 placement
-function cancelledToolResult(e, n) {
+function cancelledToolResult(toolUseId, content) {
   return {
-    result: { type: "tool_result", tool_use_id: e, content: n, is_error: !0 },
-    settledBeforeStop: !0,
-    denialKind: void 0,
-    denialRecorded: !1,
-    output: void 0,
-    ranToEnd: !1,
+    result: {
+      type: "tool_result",
+      tool_use_id: toolUseId,
+      content,
+      is_error: true,
+    },
+    settledBeforeStop: true,
+    denialKind: undefined,
+    denialRecorded: false,
+    output: undefined,
+    ranToEnd: false,
     extra: [],
     hookExtra: [],
     notes: [],
@@ -70,49 +84,57 @@ function cancelledToolResult(e, n) {
     gateHookErrors: 0,
     localSpillPaths: [],
     localSpillDirs: [],
-    servedShellToolName: void 0,
+    servedShellToolName: undefined,
   };
 }
+//@ chunk-ad2e1aj6.js:23112-24784 placement
 /**
  * 在本机执行被云会话调用的工具（构造 assistant 消息、写工具结果文件、收集进度）。
  */
-//@ chunk-ad2e1aj6.js:23112-24784 placement
 async function runServedTool(e) {
-  let n = createAssistantMessage({ content: [e.toolUse] }),
-    s = getOriginalCwd_2(e.context.session),
-    h = [getToolResultFilePath(s, e.toolUse.id, !1), getToolResultFilePath(s, e.toolUse.id, !0)],
-    r = [s, toolResultsDir()],
-    i = [],
-    y = [],
-    O = [],
-    R = 0,
-    w = 0,
-    C,
-    P = !1,
-    x,
-    Y = !1,
-    F,
-    D = !1;
+  let assistantMessage = createAssistantMessage({
+    content: [e.toolUse],
+  });
+  let originalCwd = getOriginalCwd_2(e.context.session);
+  let h = [
+    getToolResultFilePath(originalCwd, e.toolUse.id, false),
+    getToolResultFilePath(originalCwd, e.toolUse.id, true),
+  ];
+  let localSpillDirs = [originalCwd, toolResultsDir()];
+  let i = [];
+  let y = [];
+  let O = [];
+  let R = 0;
+  let w = 0;
+  let result;
+  let settledBeforeStop = false;
+  let denialKind;
+  let denialRecorded = false;
+  let F;
+  let ranToEnd = false;
   for await (let L of runToolUse(
     e.toolUse,
-    n,
+    assistantMessage,
     e.canUseTool,
     {
       ...e.context,
       onPermissionDenial: () => {
-        Y = !0;
+        denialRecorded = true;
       },
     },
     () => new Date().toISOString(),
   )) {
     if (hasTypeField(L)) continue;
-    let { message: message } = L;
+    let { message } = L;
     if (message.type === "progress") {
       if (
         message.parentToolUseID === e.toolUse.id &&
         (message.data.type === "bash_progress" || message.data.type === "powershell_progress")
       )
-        e.onShellProgress?.(message.data, { localSpillPaths: h, localSpillDirs: r });
+        e.onShellProgress?.(message.data, {
+          localSpillPaths: h,
+          localSpillDirs,
+        });
       continue;
     }
     if (message.type === "attachment") {
@@ -131,101 +153,116 @@ async function runServedTool(e) {
       )
         w++;
       if (message.attachment.type === "hook_system_message") {
-        if (message.attachment.heldForServedCall === !0) (O.push(message.attachment.content), R++);
+        if (message.attachment.heldForServedCall === true) {
+          O.push(message.attachment.content);
+          R++;
+        }
         continue;
       }
       for (let M of normalizeAttachmentOrEmpty(message.attachment)) {
-        let Q = gt(M.message.content);
-        (y.push(...Q),
-          O.push(
-            ...Q.flatMap((ee) => {
-              let q = toTextBlock(ee)?.text;
-              return q === void 0 ? [] : [unwrapSystemReminder(q)];
-            }),
-          ));
+        let contentBlocks = toContentBlocks(M.message.content);
+        y.push(...contentBlocks);
+        O.push(
+          ...contentBlocks.flatMap((contentBlock) => {
+            let text = toTextBlock(contentBlock)?.text;
+            return text === undefined ? [] : [unwrapSystemReminder(text)];
+          }),
+        );
       }
       continue;
     }
     if (message.type !== "user") continue;
-    for (let M of gt(message.message.content))
+    for (let M of toContentBlocks(message.message.content))
       if (M.type === "tool_result" && M.tool_use_id === e.toolUse.id) {
-        ((C = M),
-          (P = !e.stopSignal.aborted),
-          (x = message.toolDenialKind),
-          (D = didToolRunToCompletion(message.toolUseResult, M)),
-          (F = pickReportedToolResultFields(e.toolUse.name, message.toolUseResult)));
-        let Q = readPersistedOutputPath(F);
-        if (Q !== void 0) h.push(Q);
+        result = M;
+        settledBeforeStop = !e.stopSignal.aborted;
+        denialKind = message.toolDenialKind;
+        ranToEnd = didToolRunToCompletion(message.toolUseResult, M);
+        F = pickReportedToolResultFields(e.toolUse.name, message.toolUseResult);
+        let persistedOutputPath = readPersistedOutputPath(F);
+        if (persistedOutputPath !== undefined) h.push(persistedOutputPath);
       } else i.push(M);
   }
   return {
-    result: C,
-    settledBeforeStop: P,
-    denialKind: x,
-    denialRecorded: Y,
+    result,
+    settledBeforeStop,
+    denialKind,
+    denialRecorded,
     output: F,
-    ranToEnd: D,
+    ranToEnd,
     extra: i,
     hookExtra: y,
     notes: O,
     heldHookNotes: R,
     gateHookErrors: w,
     localSpillPaths: h,
-    localSpillDirs: r,
-    servedShellToolName: QOs(e.toolUse.name, e.servedShellToolName),
+    localSpillDirs,
+    servedShellToolName: shellToolOrDefault(e.toolUse.name, e.servedShellToolName),
   };
 }
 //@ chunk-ad2e1aj6.js:24784-26012 placement
 function shapeServedResult(e) {
-  let { run: run } = e,
-    s = {
-      targetName: e.targetName,
-      shellToolName: run.servedShellToolName,
-      localSpillPaths: run.localSpillPaths,
-      localSpillDirs: run.localSpillDirs,
-      maxImageBytes: e.budget.imageBase64Bytes,
-    },
-    h = splitContentAndDocuments(
-      [...gt(run.result.content), ...run.extra],
-      e.targetName,
-      e.budget.documentBase64Bytes,
-    ),
-    r = xTe(e.toolName) ? run.output : void 0,
-    i = spillServedOutput({ content: h.content, output: r, ...s }),
-    filtered = h.documents.filter((x) =>
-      isSameTextBlock(typeof i.content === "string" ? void 0 : i.content[x.at], h.content[x.at]),
-    ),
-    O =
-      run.hookExtra.length === 0
-        ? i
-        : spillServedOutput({
-            content: splitContentAndDocuments(
-              [...gt(run.result.content), ...run.extra, ...run.hookExtra],
-              e.targetName,
-              e.budget.documentBase64Bytes,
-            ).content,
-            output: void 0,
-            ...s,
-          }),
-    R = r === void 0 ? mapStringsDeep(run.output, unreadableSpillNote(s)) : i.output,
-    w = isPlainObject(R) && iv(R) <= Lr ? R : void 0,
-    C =
-      h.dropped ||
-      filtered.length < h.documents.length ||
-      i.truncated ||
-      O.truncated ||
-      (isPlainObject(i.output) && w === void 0);
+  let { run } = e;
+  let s = {
+    targetName: e.targetName,
+    shellToolName: run.servedShellToolName,
+    localSpillPaths: run.localSpillPaths,
+    localSpillDirs: run.localSpillDirs,
+    maxImageBytes: e.budget.imageBase64Bytes,
+  };
+  let h = splitContentAndDocuments(
+    [...toContentBlocks(run.result.content), ...run.extra],
+    e.targetName,
+    e.budget.documentBase64Bytes,
+  );
+  let output = isShellToolName(e.toolName) ? run.output : undefined;
+  let i = spillServedOutput({
+    content: h.content,
+    output,
+    ...s,
+  });
+  let filtered = h.documents.filter((x) =>
+    isSameTextBlock(typeof i.content === "string" ? undefined : i.content[x.at], h.content[x.at]),
+  );
+  let O =
+    run.hookExtra.length === 0
+      ? i
+      : spillServedOutput({
+          content: splitContentAndDocuments(
+            [...toContentBlocks(run.result.content), ...run.extra, ...run.hookExtra],
+            e.targetName,
+            e.budget.documentBase64Bytes,
+          ).content,
+          output: undefined,
+          ...s,
+        });
+  let R = output === undefined ? mapStringsDeep(run.output, unreadableSpillNote(s)) : i.output;
+  let w = isPlainObject(R) && byteLengthOf(R) <= MAX_STRUCTURED_RESULT_BYTES ? R : undefined;
+  let C =
+    h.dropped ||
+    filtered.length < h.documents.length ||
+    i.truncated ||
+    O.truncated ||
+    (isPlainObject(i.output) && w === undefined);
   return {
     envelope: {
       v: REMOTE_TOOL_PROTOCOL_VERSION,
       outcome: "completed",
-      ...(e.callId !== void 0 && { call_id: e.callId }),
+      ...(e.callId !== undefined && {
+        call_id: e.callId,
+      }),
       target: e.target,
-      is_error: run.result.is_error === !0,
+      is_error: run.result.is_error === true,
       content: toRemoteToolContentBlocks(i.content),
-      ...(filtered.length > 0 && { documents: filtered }),
-      ...(w !== void 0 && { output: w }),
-      ...(C && { truncated: !0 }),
+      ...(filtered.length > 0 && {
+        documents: filtered,
+      }),
+      ...(w !== undefined && {
+        output: w,
+      }),
+      ...(C && {
+        truncated: true,
+      }),
       disposition: servedDisposition(e.permissionOutcome, run),
       ...buildResultNotes(run.notes, {
         targetName: e.targetName,
@@ -242,17 +279,27 @@ function shapeServedResult(e) {
 function readPersistedOutputPath(e) {
   if (typeof e !== "object" || e === null) return;
   let n = Reflect.get(e, "persistedOutputPath");
-  return typeof n === "string" && n.length > 0 ? n : void 0;
+  return typeof n === "string" && n.length > 0 ? n : undefined;
 }
 //@ chunk-ad2e1aj6.js:26158-26294 placement
-function didToolRunToCompletion(e, n) {
-  let s = typeof e === "object" && e !== null ? Reflect.get(e, "interrupted") : void 0;
-  return typeof s === "boolean" ? !s : n.is_error !== !0;
+function didToolRunToCompletion(toolUseResult, n) {
+  let s =
+    typeof toolUseResult === "object" && toolUseResult !== null
+      ? Reflect.get(toolUseResult, "interrupted")
+      : undefined;
+  return typeof s === "boolean" ? !s : n.is_error !== true;
 }
 //@ chunk-ad2e1aj6.js:26294-26392 placement
-function gt(e) {
-  if (e === void 0 || e === "") return [];
-  return typeof e === "string" ? [{ type: "text", text: e }] : e;
+function toContentBlocks(content) {
+  if (content === undefined || content === "") return [];
+  return typeof content === "string"
+    ? [
+        {
+          type: "text",
+          text: content,
+        },
+      ]
+    : content;
 }
 //@ chunk-ad2e1aj6.js:26392-26536 placement
 function mapStringsDeep(e, n) {
@@ -262,53 +309,67 @@ function mapStringsDeep(e, n) {
   return e;
 }
 //@ chunk-ad2e1aj6.js:26536-26669 placement
-function pickReportedToolResultFields(e, n) {
-  let s = Elr.get(e);
-  if (s === void 0 || n === void 0) return;
-  if (xTe(e)) return n;
-  if (!isPlainObject(n)) return;
-  return Do(n, (h, r) => s.has(r));
+function pickReportedToolResultFields(name, toolUseResult) {
+  let s = KEPT_RESULT_FIELDS_BY_TOOL.get(name);
+  if (s === undefined || toolUseResult === undefined) return;
+  if (isShellToolName(name)) return toolUseResult;
+  if (!isPlainObject(toolUseResult)) return;
+  return pickByHelper(toolUseResult, (h, r) => s.has(r));
 }
 //@ chunk-ad2e1aj6.js:26669-27041 placement
-function readFurtherHint(e) {
+function readFurtherHint(servedShellToolName) {
   let n =
-    e === void 0
+    servedShellToolName === undefined
       ? ""
-      : e === POWERSHELL_TOOL_NAME
-        ? `, else Select-String through ${e} there`
-        : `, else grep through ${e} there`;
+      : servedShellToolName === POWERSHELL_TOOL_NAME
+        ? `, else Select-String through ${servedShellToolName} there`
+        : `, else grep through ${servedShellToolName} there`;
   return `(on that machine: read further with offset/limit and the same machine argument; to search it there, ${GREP_TOOL_NAME} with that argument if this session's ${GREP_TOOL_NAME} accepts one${n} \u2014 without the argument ${GREP_TOOL_NAME} and ${GLOB_TOOL_NAME} search only this session's own files)`;
 }
 //@ chunk-ad2e1aj6.js:27041-27926 placement
-function splitContentAndDocuments(e, n, s) {
+function splitContentAndDocuments(e, targetName, documentRemaining) {
   return e.reduce(
-    (h, r) => {
+    (acc, r) => {
       let i = toTextBlock(r) ?? imageBlockOf(r);
-      if (i !== void 0) return (h.content.push(i), h);
+      if (i !== undefined) {
+        acc.content.push(i);
+        return acc;
+      }
       let y = documentBlockOf(r);
-      if (y !== void 0 && h.documents.length < n7o && y.data.length <= h.documentRemaining)
-        return (
-          h.documents.push({ at: h.content.length, ...y }),
-          h.content.push({
-            type: "text",
-            text: `${vlr}${n}, ${formatFileSize(Math.floor((y.data.length * 3) / 4))}, came with this result but this session's Claude Code could not take it from another machine \u2014 an older version, most likely; read it by pages instead)`,
-          }),
-          { ...h, documentRemaining: h.documentRemaining - y.data.length }
-        );
-      return (
-        h.content.push({
+      if (y !== undefined && acc.documents.length < n7o && y.data.length <= acc.documentRemaining) {
+        acc.documents.push({
+          at: acc.content.length,
+          ...y,
+        });
+        acc.content.push({
           type: "text",
-          text:
-            r.type === "image"
-              ? `(an image referenced by URL was omitted on ${n})`
-              : y !== void 0
-                ? `(a PDF read on ${n} could not be returned with this result \u2014 read it by pages instead)`
-                : `(a ${String(r.type)} block was omitted on ${n})`,
-        }),
-        { ...h, dropped: !0 }
-      );
+          text: `${vlr}${targetName}, ${formatFileSize(Math.floor((y.data.length * 3) / 4))}, came with this result but this session's Claude Code could not take it from another machine \u2014 an older version, most likely; read it by pages instead)`,
+        });
+        return {
+          ...acc,
+          documentRemaining: acc.documentRemaining - y.data.length,
+        };
+      }
+      acc.content.push({
+        type: "text",
+        text:
+          r.type === "image"
+            ? `(an image referenced by URL was omitted on ${targetName})`
+            : y !== undefined
+              ? `(a PDF read on ${targetName} could not be returned with this result \u2014 read it by pages instead)`
+              : `(a ${String(r.type)} block was omitted on ${targetName})`,
+      });
+      return {
+        ...acc,
+        dropped: true,
+      };
     },
-    { content: [], documents: [], dropped: !1, documentRemaining: s },
+    {
+      content: [],
+      documents: [],
+      dropped: false,
+      documentRemaining,
+    },
   );
 }
 //@ chunk-ad2e1aj6.js:27926-28028 placement
@@ -324,43 +385,58 @@ function documentBlockOf(e) {
   return Reflect.get(n, "type") === "base64" &&
     Reflect.get(n, "media_type") === "application/pdf" &&
     typeof s === "string"
-    ? { media_type: "application/pdf", data: s }
-    : void 0;
+    ? {
+        media_type: "application/pdf",
+        data: s,
+      }
+    : undefined;
 }
 //@ chunk-ad2e1aj6.js:28326-28441 placement
 function toTextBlock(e) {
   let n = Reflect.get(e, "text");
-  return e.type === "text" && typeof n === "string" ? { type: "text", text: n } : void 0;
+  return e.type === "text" && typeof n === "string"
+    ? {
+        type: "text",
+        text: n,
+      }
+    : undefined;
 }
 //@ chunk-ad2e1aj6.js:28441-28813 placement
 function imageBlockOf(e) {
   if (e.type !== "image") return;
   let n = Reflect.get(e, "source");
   if (typeof n !== "object" || n === null) return;
-  let s = Reflect.get(n, "type"),
-    h = Reflect.get(n, "media_type"),
-    r = Reflect.get(n, "data");
+  let s = Reflect.get(n, "type");
+  let h = Reflect.get(n, "media_type");
+  let r = Reflect.get(n, "data");
   return s === "base64" &&
     typeof r === "string" &&
     (h === "image/jpeg" || h === "image/png" || h === "image/gif" || h === "image/webp")
-    ? { type: "image", source: { type: "base64", media_type: h, data: r } }
-    : void 0;
+    ? {
+        type: "image",
+        source: {
+          type: "base64",
+          media_type: h,
+          data: r,
+        },
+      }
+    : undefined;
 }
 //@ chunk-ad2e1aj6.js:28813-29072 placement
-function servedDisposition(e, n) {
-  if (e !== void 0) {
-    if (e.kind === "allowed") return "ran";
-    return e.kind === "stopped" ? "ask_expired" : e.kind;
+function servedDisposition(permissionOutcome, run) {
+  if (permissionOutcome !== undefined) {
+    if (permissionOutcome.kind === "allowed") return "ran";
+    return permissionOutcome.kind === "stopped" ? "ask_expired" : permissionOutcome.kind;
   }
-  if (n.denialKind !== void 0) return "hook_blocked";
-  if (n.result?.is_error !== !0) return "ran";
-  return n.denialRecorded ? "denied_by_rule" : "validation_failed";
+  if (run.denialKind !== undefined) return "hook_blocked";
+  if (run.result?.is_error !== true) return "ran";
+  return run.denialRecorded ? "denied_by_rule" : "validation_failed";
 }
 //@ chunk-ad2e1aj6.js:29072-29235 placement
-function resultNotes(e, n) {
+function resultNotes(e, targetName) {
   return (
     buildResultNotes(e.notes, {
-      targetName: n,
+      targetName,
       shellToolName: e.servedShellToolName,
       localSpillPaths: e.localSpillPaths,
       localSpillDirs: e.localSpillDirs,
@@ -368,15 +444,26 @@ function resultNotes(e, n) {
   );
 }
 //@ chunk-ad2e1aj6.js:29235-29436 placement
-function buildResultNotes(e, n) {
-  if (e.length === 0) return {};
+function buildResultNotes(notes, n) {
+  if (notes.length === 0) return {};
   return {
-    notes: e.slice(0, HXr).map((h) => {
-      let r = spillServedOutput({ content: h, output: void 0, maxInlineBytes: Hr, ...n }),
-        i = typeof r.content === "string" ? r.content : h;
-      return truncateToLength(i, NPe);
+    notes: notes.slice(0, MAX_ACCEPT_NOTES).map((h) => {
+      let r = spillServedOutput({
+        content: h,
+        output: undefined,
+        maxInlineBytes: MAX_INLINE_OUTPUT_BYTES,
+        ...n,
+      });
+      let i = typeof r.content === "string" ? r.content : h;
+      return truncateToLength(i, MAX_MESSAGE_CHARS);
     }),
   };
 }
-
-export { cancelledToolResult, Mr, resultNotes, shapeServedResult, resultSizeLimitsFor, runServedTool };
+export {
+  cancelledToolResult,
+  RESULT_NOTE_MAX_CHARS,
+  resultNotes,
+  shapeServedResult,
+  resultSizeLimitsFor,
+  runServedTool,
+};

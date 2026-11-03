@@ -8,36 +8,38 @@
 import { x } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-bmbhxpfm.js:17126-17645 cjs-fingerprint
-var Je = x(function (Lt, Fe) {
-  var Le = Symbol();
-  function kt(e, r, n) {
-    let i = r[Le];
-    if (i)
-      return r.stat(e, (c, h) => {
-        if (c) return n(c);
-        n(null, h.mtime, i);
+var require_mtime_precision = x(function (cjsExports, cjsModule) {
+  var cacheSymbol = Symbol();
+  function probe(file, fs, callback) {
+    let cachedPrecision = fs[cacheSymbol];
+    if (cachedPrecision)
+      return fs.stat(file, (err, stat) => {
+        if (err) return callback(err);
+        callback(null, stat.mtime, cachedPrecision);
       });
-    let date = new Date(Math.ceil(Date.now() / 1000) * 1000 + 5);
-    r.utimes(e, date, date, (c) => {
-      if (c) return n(c);
-      r.stat(e, (h, m) => {
-        if (h) return n(h);
-        let E = m.mtime.getTime() % 1000 === 0 ? "s" : "ms";
-        if (!(Le in r))
+    let mtime = new Date(Math.ceil(Date.now() / 1000) * 1000 + 5);
+    fs.utimes(file, mtime, mtime, (err) => {
+      if (err) return callback(err);
+      fs.stat(file, (err, stat) => {
+        if (err) return callback(err);
+        let precision = stat.mtime.getTime() % 1000 === 0 ? "s" : "ms";
+        if (!(cacheSymbol in fs))
           try {
-            Object.defineProperty(r, Le, { value: E, configurable: !0 });
+            Object.defineProperty(fs, cacheSymbol, {
+              value: precision,
+              configurable: true,
+            });
           } catch {}
-        n(null, m.mtime, E);
+        callback(null, stat.mtime, precision);
       });
     });
   }
-  function It(e) {
+  function getMtime(precision) {
     let now = Date.now();
-    if (e === "s") now = Math.ceil(now / 1000) * 1000;
+    if (precision === "s") now = Math.ceil(now / 1000) * 1000;
     return new Date(now);
   }
-  Lt.probe = kt;
-  Lt.getMtime = It;
+  cjsExports.probe = probe;
+  cjsExports.getMtime = getMtime;
 });
-
-export { Je };
+export { require_mtime_precision };

@@ -6,107 +6,112 @@
  * attribution: esm-fingerprint 6, esm-layout 2
  */
 import { Bn } from "../pipelineRequest.js";
-import { hasStreamMethod, rt, Pl } from "../util/concat.js";
+import { hasStreamMethod, rt, concat } from "../util/concat.js";
 
 //@ chunk-mrx6y2r5.js:50855-50906 esm-fingerprint
-function Ym() {
+function generateBoundary() {
   return `----AzSDKFormBoundary${Bn()}`;
 }
 //@ chunk-mrx6y2r5.js:50906-50975 esm-layout
-function Wm(e) {
-  let t = "";
-  for (let [r, n] of e)
-    t += `${r}: ${n}\r
+function encodeHeaders(headers) {
+  let result = "";
+  for (let [key, value] of headers)
+    result += `${key}: ${value}\r
 `;
-  return t;
+  return result;
 }
 //@ chunk-mrx6y2r5.js:50975-51096 esm-fingerprint
-function Qm(e) {
-  if (e instanceof Uint8Array) return e.byteLength;
-  else if (hasStreamMethod(e)) return e.size === -1 ? void 0 : e.size;
+function getLength(source) {
+  if (source instanceof Uint8Array) return source.byteLength;
+  else if (hasStreamMethod(source)) return source.size === -1 ? undefined : source.size;
   else return;
 }
 //@ chunk-mrx6y2r5.js:51096-51187 esm-layout
-function Jm(e) {
-  let t = 0;
-  for (let r of e) {
-    let n = Qm(r);
-    if (n === void 0) return;
-    else t += n;
+function getTotalLength(sources) {
+  let total = 0;
+  for (let source of sources) {
+    let partLength = getLength(source);
+    if (partLength === undefined) return;
+    else total += partLength;
   }
-  return t;
+  return total;
 }
 //@ chunk-mrx6y2r5.js:51187-51444 esm-fingerprint
-async function Xm(e, t, r) {
-  let n = [
-      rt(`--${r}`, "utf-8"),
-      ...t.flatMap((i) => [
-        rt(
-          `\r
-`,
-          "utf-8",
-        ),
-        rt(Wm(i.headers), "utf-8"),
-        rt(
-          `\r
-`,
-          "utf-8",
-        ),
-        i.body,
-        rt(
-          `\r
---${r}`,
-          "utf-8",
-        ),
-      ]),
+async function buildRequestBody(request, parts, boundary) {
+  let sources = [
+    rt(`--${boundary}`, "utf-8"),
+    ...parts.flatMap((part) => [
       rt(
-        `--\r
-\r
+        `\r
 `,
         "utf-8",
       ),
-    ],
-    o = Jm(n);
-  if (o) e.headers.set("Content-Length", o);
-  e.body = await Pl(n);
+      rt(encodeHeaders(part.headers), "utf-8"),
+      rt(
+        `\r
+`,
+        "utf-8",
+      ),
+      part.body,
+      rt(
+        `\r
+--${boundary}`,
+        "utf-8",
+      ),
+    ]),
+    rt(
+      `--\r
+\r
+`,
+      "utf-8",
+    ),
+  ];
+  let contentLength = getTotalLength(sources);
+  if (contentLength) request.headers.set("Content-Length", contentLength);
+  request.body = await concat(sources);
 }
 //@ chunk-mrx6y2r5.js:51444-51563 esm-fingerprint
-var MULTIPARTPOLICY = "multipartPolicy",
-  Zm = 70,
-  ep = new Set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'()+,-./:=?");
+var multipartPolicyName = "multipartPolicy";
+var maxBoundaryLength = 70;
+var validBoundaryCharacters = new Set(
+  "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'()+,-./:=?",
+);
 //@ chunk-mrx6y2r5.js:51563-51782 esm-fingerprint
-function tp(e) {
-  if (e.length > Zm) throw Error(`Multipart boundary "${e}" exceeds maximum length of 70 characters`);
-  if (Array.from(e).some((t) => !ep.has(t)))
-    throw Error(`Multipart boundary "${e}" contains invalid characters`);
+function assertValidBoundary(boundary) {
+  if (boundary.length > maxBoundaryLength)
+    throw Error(`Multipart boundary "${boundary}" exceeds maximum length of 70 characters`);
+  if (Array.from(boundary).some((x) => !validBoundaryCharacters.has(x)))
+    throw Error(`Multipart boundary "${boundary}" contains invalid characters`);
 }
 //@ chunk-mrx6y2r5.js:51782-52525 esm-fingerprint
-function ca() {
+function multipartPolicy() {
   return {
-    name: MULTIPARTPOLICY,
-    async sendRequest(e, t) {
-      var r;
-      if (!e.multipartBody) return t(e);
-      if (e.body) throw Error("multipartBody and regular body cannot be set at the same time");
-      let boundary = e.multipartBody.boundary,
-        o = (r = e.headers.get("Content-Type")) !== null && r !== void 0 ? r : "multipart/mixed",
-        match = o.match(/^(multipart\/[^ ;]+)(?:; *boundary=(.+))?$/);
-      if (!match) throw Error(`Got multipart request body, but content-type header was not multipart: ${o}`);
-      let [, s, a] = match;
-      if (a && boundary && a !== boundary)
+    name: multipartPolicyName,
+    async sendRequest(request, next) {
+      var _a;
+      if (!request.multipartBody) return next(request);
+      if (request.body) throw Error("multipartBody and regular body cannot be set at the same time");
+      let boundary = request.multipartBody.boundary;
+      let contentTypeHeader =
+        (_a = request.headers.get("Content-Type")) !== null && _a !== undefined ? _a : "multipart/mixed";
+      let parsedHeader = contentTypeHeader.match(/^(multipart\/[^ ;]+)(?:; *boundary=(.+))?$/);
+      if (!parsedHeader)
         throw Error(
-          `Multipart boundary was specified as ${a} in the header, but got ${boundary} in the request body`,
+          `Got multipart request body, but content-type header was not multipart: ${contentTypeHeader}`,
         );
-      if (((boundary !== null && boundary !== void 0) || (boundary = a), boundary)) tp(boundary);
-      else boundary = Ym();
-      return (
-        e.headers.set("Content-Type", `${s}; boundary=${boundary}`),
-        await Xm(e, e.multipartBody.parts, boundary),
-        (e.multipartBody = void 0),
-        t(e)
-      );
+      let [, contentType, parsedBoundary] = parsedHeader;
+      if (parsedBoundary && boundary && parsedBoundary !== boundary)
+        throw Error(
+          `Multipart boundary was specified as ${parsedBoundary} in the header, but got ${boundary} in the request body`,
+        );
+      if (!(boundary !== null && boundary !== undefined)) boundary = parsedBoundary;
+      if (boundary) assertValidBoundary(boundary);
+      else boundary = generateBoundary();
+      request.headers.set("Content-Type", `${contentType}; boundary=${boundary}`);
+      await buildRequestBody(request, request.multipartBody.parts, boundary);
+      request.multipartBody = undefined;
+      return next(request);
     },
   };
 }
-
-export { MULTIPARTPOLICY, ca };
+export { multipartPolicyName, multipartPolicy };

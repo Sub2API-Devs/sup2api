@@ -6,77 +6,87 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { N0 } from "./style_parser.js";
+import { require_style_parser } from "./style_parser.js";
 
 //@ chunk-vwj6ccer.js:77213-79901 cjs-fingerprint
-var oa = x(function (Hd, D0) {
-  var { parse: parse } = N0();
-  D0.exports = function (e) {
-    let t = new C0(e);
+var require_CSSStyleDeclaration = x(function (cjsExports, cjsModule) {
+  var { parse } = require_style_parser();
+  cjsModule.exports = function (elt) {
+    let t = new CSSStyleDeclaration(elt);
     return new Proxy(t, {
-      get: function (a, s) {
-        return s in a ? a[s] : a.getPropertyValue(w0(s));
+      get: function (target, property) {
+        return property in target ? target[property] : target.getPropertyValue(dasherizeProperty(property));
       },
-      has: function (a, s) {
-        return !0;
+      has: function (target, key) {
+        return true;
       },
-      set: function (a, s, c) {
-        if (s in a) a[s] = c;
-        else a.setProperty(w0(s), c ?? void 0);
-        return !0;
+      set: function (target, property, value) {
+        if (property in target) target[property] = value;
+        else target.setProperty(dasherizeProperty(property), value ?? undefined);
+        return true;
       },
     });
   };
-  function w0(e) {
-    return e.replace(/([a-z])([A-Z])/g, "$1-$2").toLowerCase();
+  function dasherizeProperty(property) {
+    return property.replace(/([a-z])([A-Z])/g, "$1-$2").toLowerCase();
   }
-  function C0(e) {
-    this._element = e;
+  function CSSStyleDeclaration(elt) {
+    this._element = elt;
   }
-  var S0 = "!important";
-  function A0(e) {
-    let t = { property: {}, priority: {} };
-    if (!e) return t;
-    let r = parse(e);
-    if (r.length < 2) return t;
-    for (let a = 0; a < r.length; a += 2) {
-      let s = r[a],
-        c = r[a + 1];
-      if (c.endsWith(S0)) ((t.priority[s] = "important"), (c = c.slice(0, -S0.length).trim()));
-      t.property[s] = c;
+  var IMPORTANT_BANG = "!important";
+  function parseStyles(value) {
+    let result = {
+      property: {},
+      priority: {},
+    };
+    if (!value) return result;
+    let styleValues = parse(value);
+    if (styleValues.length < 2) return result;
+    for (let i = 0; i < styleValues.length; i += 2) {
+      let name = styleValues[i];
+      let value = styleValues[i + 1];
+      if (value.endsWith(IMPORTANT_BANG)) {
+        result.priority[name] = "important";
+        value = value.slice(0, -IMPORTANT_BANG.length).trim();
+      }
+      result.property[name] = value;
     }
-    return t;
+    return result;
   }
-  var Bt = {};
-  C0.prototype = Object.create(Object.prototype, {
+  var NO_CHANGE = {};
+  CSSStyleDeclaration.prototype = Object.create(Object.prototype, {
     _parsed: {
       get: function () {
         if (!this._parsedStyles || this.cssText !== this._lastParsedText) {
-          var cssText = this.cssText;
-          ((this._parsedStyles = A0(cssText)), (this._lastParsedText = cssText), delete this._names);
+          var text = this.cssText;
+          this._parsedStyles = parseStyles(text);
+          this._lastParsedText = text;
+          delete this._names;
         }
         return this._parsedStyles;
       },
     },
     _serialize: {
       value: function () {
-        var _parsed = this._parsed,
-          t = "";
-        for (var key in _parsed.property) {
-          if (t) t += " ";
-          if (((t += key + ": " + _parsed.property[key]), _parsed.priority[key]))
-            t += " !" + _parsed.priority[key];
-          t += ";";
+        var styles = this._parsed;
+        var s = "";
+        for (var name in styles.property) {
+          if (s) s += " ";
+          s += name + ": " + styles.property[name];
+          if (styles.priority[name]) s += " !" + styles.priority[name];
+          s += ";";
         }
-        ((this.cssText = t), (this._lastParsedText = t), delete this._names);
+        this.cssText = s;
+        this._lastParsedText = s;
+        delete this._names;
       },
     },
     cssText: {
       get: function () {
         return this._element.getAttribute("style");
       },
-      set: function (e) {
-        this._element.setAttribute("style", e);
+      set: function (value) {
+        this._element.setAttribute("style", value);
       },
     },
     length: {
@@ -86,68 +96,76 @@ var oa = x(function (Hd, D0) {
       },
     },
     item: {
-      value: function (e) {
+      value: function (n) {
         if (!this._names) this._names = Object.getOwnPropertyNames(this._parsed.property);
-        return this._names[e];
+        return this._names[n];
       },
     },
     getPropertyValue: {
-      value: function (e) {
-        return ((e = e.toLowerCase()), this._parsed.property[e] || "");
+      value: function (property) {
+        property = property.toLowerCase();
+        return this._parsed.property[property] || "";
       },
     },
     getPropertyPriority: {
-      value: function (e) {
-        return ((e = e.toLowerCase()), this._parsed.priority[e] || "");
+      value: function (property) {
+        property = property.toLowerCase();
+        return this._parsed.priority[property] || "";
       },
     },
     setProperty: {
-      value: function (e, t, r) {
-        if (((e = e.toLowerCase()), t === null || t === void 0)) t = "";
-        if (r === null || r === void 0) r = "";
-        if (t !== Bt) t = "" + t;
-        if (((t = t.trim()), t === "")) {
-          this.removeProperty(e);
+      value: function (property, value, priority) {
+        property = property.toLowerCase();
+        if (value === null || value === undefined) value = "";
+        if (priority === null || priority === undefined) priority = "";
+        if (value !== NO_CHANGE) value = "" + value;
+        value = value.trim();
+        if (value === "") {
+          this.removeProperty(property);
           return;
         }
-        if (r !== "" && r !== Bt && !/^important$/i.test(r)) return;
-        var _parsed = this._parsed;
-        if (t === Bt) {
-          if (!_parsed.property[e]) return;
-          if (r !== "") _parsed.priority[e] = "important";
-          else delete _parsed.priority[e];
+        if (priority !== "" && priority !== NO_CHANGE && !/^important$/i.test(priority)) return;
+        var styles = this._parsed;
+        if (value === NO_CHANGE) {
+          if (!styles.property[property]) return;
+          if (priority !== "") styles.priority[property] = "important";
+          else delete styles.priority[property];
         } else {
-          if (t.indexOf(";") !== -1) return;
-          var s = A0(e + ":" + t);
-          if (Object.getOwnPropertyNames(s.property).length === 0) return;
-          if (Object.getOwnPropertyNames(s.priority).length !== 0) return;
-          for (var key in s.property)
-            if (((_parsed.property[key] = s.property[key]), r === Bt)) continue;
-            else if (r !== "") _parsed.priority[key] = "important";
-            else if (_parsed.priority[key]) delete _parsed.priority[key];
+          if (value.indexOf(";") !== -1) return;
+          var newprops = parseStyles(property + ":" + value);
+          if (Object.getOwnPropertyNames(newprops.property).length === 0) return;
+          if (Object.getOwnPropertyNames(newprops.priority).length !== 0) return;
+          for (var p in newprops.property) {
+            styles.property[p] = newprops.property[p];
+            if (priority === NO_CHANGE) continue;
+            else if (priority !== "") styles.priority[p] = "important";
+            else if (styles.priority[p]) delete styles.priority[p];
+          }
         }
         this._serialize();
       },
     },
     setPropertyValue: {
-      value: function (e, t) {
-        return this.setProperty(e, t, Bt);
+      value: function (property, value) {
+        return this.setProperty(property, value, NO_CHANGE);
       },
     },
     setPropertyPriority: {
-      value: function (e, t) {
-        return this.setProperty(e, Bt, t);
+      value: function (property, priority) {
+        return this.setProperty(property, NO_CHANGE, priority);
       },
     },
     removeProperty: {
-      value: function (e) {
-        e = e.toLowerCase();
-        var _parsed = this._parsed;
-        if (e in _parsed.property)
-          (delete _parsed.property[e], delete _parsed.priority[e], this._serialize());
+      value: function (property) {
+        property = property.toLowerCase();
+        var styles = this._parsed;
+        if (property in styles.property) {
+          delete styles.property[property];
+          delete styles.priority[property];
+          this._serialize();
+        }
       },
     },
   });
 });
-
-export { oa };
+export { require_CSSStyleDeclaration };

@@ -9,16 +9,19 @@
  * attribution: fingerprint 2
  */
 import { w } from "../../../vendor/react/compiler-runtime.js";
-import { e, r } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { ConfigurableShortcutHint } from "../../components/ConfigurableShortcutHint.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { Text, Box } from "../../ink/components/Text.js";
 import { Byline } from "../../components/design-system/Byline.js";
-import { Me } from "../../components/design-system/ThemeProvider.js";
+import { useTheme_2 } from "../../components/design-system/ThemeProvider.js";
 import { y, ce, P, Q } from "../../../vendor/react/cjs/react.production.js";
 import { useStoreSelector } from "../../hooks/useStoreSelector.js";
 import {
-  ii,
+  errorOf,
   describeMarketplaceEntryRisks,
   usePinnedConsentRecord,
   describeInstallScopeRisks,
@@ -32,182 +35,208 @@ import { MessageActionsKeybindings } from "../../components/messageActions.js";
 import { logDirectoryListingViewed } from "../../utils/plugins/pluginDirectoryTelemetry.js";
 
 //@ chunk-vrb44rx7.js:59155-60011 fingerprint = DiscoverPluginsKeyHint (0.753)
-function DiscoverPluginsKeyHint(t0) {
-  let x = w(12),
-    { hasSelection: hasSelection, canToggle: canToggle, canView: canView } = t0,
-    T;
-  if (x[0] !== hasSelection)
-    ((T =
+function DiscoverPluginsKeyHint(props) {
+  let $ = w(12);
+  let { hasSelection, canToggle, canView } = props;
+  let T;
+  if ($[0] !== hasSelection) {
+    T =
       hasSelection &&
-      e(ConfigurableShortcutHint, {
+      jsxProd_default(ConfigurableShortcutHint, {
         action: "plugin:install",
         context: "Plugin",
         fallback: "i",
         description: "install",
-        bold: !0,
-      })),
-      (x[0] = hasSelection),
-      (x[1] = T));
-  else T = x[1];
-  let D;
-  if (x[2] === MEMO_CACHE_SENTINEL) ((D = e(Text, { children: "Type to search" })), (x[2] = D));
-  else D = x[2];
+        bold: true,
+      });
+    $[0] = hasSelection;
+    $[1] = T;
+  } else T = $[1];
+  let t2;
+  if ($[2] === MEMO_CACHE_SENTINEL) {
+    t2 = jsxProd_default(Text, {
+      children: "Type to search",
+    });
+    $[2] = t2;
+  } else t2 = $[2];
   let U;
-  if (x[3] !== canToggle)
-    ((U =
+  if ($[3] !== canToggle) {
+    U =
       canToggle &&
-      e(ConfigurableShortcutHint, {
+      jsxProd_default(ConfigurableShortcutHint, {
         action: "plugin:toggle",
         context: "Plugin",
         fallback: "Space",
         description: "toggle",
-      })),
-      (x[3] = canToggle),
-      (x[4] = U));
-  else U = x[4];
+      });
+    $[3] = canToggle;
+    $[4] = U;
+  } else U = $[4];
   let L;
-  if (x[5] !== canView)
-    ((L =
+  if ($[5] !== canView) {
+    L =
       canView &&
-      e(ConfigurableShortcutHint, {
+      jsxProd_default(ConfigurableShortcutHint, {
         action: "select:accept",
         context: "Select",
         fallback: "Enter",
         description: "view",
-      })),
-      (x[5] = canView),
-      (x[6] = L));
-  else L = x[6];
+      });
+    $[5] = canView;
+    $[6] = L;
+  } else L = $[6];
   let A;
-  if (x[7] === MEMO_CACHE_SENTINEL)
-    ((A = e(ConfigurableShortcutHint, {
+  if ($[7] === MEMO_CACHE_SENTINEL) {
+    A = jsxProd_default(ConfigurableShortcutHint, {
       action: "confirm:no",
       context: "Settings",
       fallback: "Esc",
       description: "go back",
-    })),
-      (x[7] = A));
-  else A = x[7];
-  let K;
-  if (x[8] !== T || x[9] !== U || x[10] !== L)
-    ((K = e(Box, {
+    });
+    $[7] = A;
+  } else A = $[7];
+  let t6;
+  if ($[8] !== T || $[9] !== U || $[10] !== L) {
+    t6 = jsxProd_default(Box, {
       marginTop: 1,
-      children: e(Text, { dimColor: !0, italic: !0, children: r(Byline, { children: [T, D, U, L, A] }) }),
-    })),
-      (x[8] = T),
-      (x[9] = U),
-      (x[10] = L),
-      (x[11] = K));
-  else K = x[11];
-  return K;
+      children: jsxProd_default(Text, {
+        dimColor: true,
+        italic: true,
+        children: jsxProd_default_2(Byline, {
+          children: [T, t2, U, L, A],
+        }),
+      }),
+    });
+    $[8] = T;
+    $[9] = U;
+    $[10] = L;
+    $[11] = t6;
+  } else t6 = $[11];
+  return t6;
 }
 //@ chunk-vrb44rx7.js:71007-74454 fingerprint = DiscoverPlugins (0.392)
 function DiscoverPlugins({
-  screen: screen,
-  surface: surface,
-  initialViewState: initialViewState,
-  availablePlugins: availablePlugins,
-  loading: loading,
-  searchMarketplaceName: searchMarketplaceName,
-  marketplaceFilter: marketplaceFilter = null,
-  onInstallComplete: onInstallComplete,
-  onSearchModeChange: onSearchModeChange,
+  screen,
+  surface,
+  initialViewState,
+  availablePlugins,
+  loading,
+  searchMarketplaceName,
+  marketplaceFilter = null,
+  onInstallComplete,
+  onSearchModeChange,
 }) {
-  let { storageV5: storageV5 } = Me(),
-    [K, V] = y(initialViewState),
-    [B, _] = y(null),
-    setIsSearchMode = ce((active) => {
-      (_(active), V("plugin-details"));
-    }, []),
-    pe = ce(() => {
-      (V("plugin-list"), _(null));
-    }, []),
-    fe = K === "plugin-list",
-    me = fe && !loading,
-    ne = useStoreSelector(screen, ii),
-    [he, W] = y(!1),
-    Oe = () => W(!1),
-    {
-      query: searchQuery,
-      setQuery: setSearchQuery,
-      cursorOffset: searchCursorOffset,
-      setCursorOffset: setCursorOffset,
-      handleKeyDown: handleKeyDown,
-      handlePaste: handlePaste,
-    } = useSearchInput({ isActive: fe && he && !loading, onExit: Oe, onExitUp: Oe }),
-    Tt = he && searchQuery !== "";
-  (P(() => {
+  let { storageV5 } = useTheme_2();
+  let [K, V] = y(initialViewState);
+  let [B, _] = y(null);
+  let setIsSearchMode = ce((active) => {
+    _(active);
+    V("plugin-details");
+  }, []);
+  let closeDetails = ce(() => {
+    V("plugin-list");
+    _(null);
+  }, []);
+  let fe = K === "plugin-list";
+  let me = fe && !loading;
+  let storeSelector = useStoreSelector(screen, errorOf);
+  let [he, W] = y(false);
+  let Oe = () => W(false);
+  let {
+    query: searchQuery,
+    setQuery: setSearchQuery,
+    cursorOffset: searchCursorOffset,
+    setCursorOffset,
+    handleKeyDown,
+    handlePaste,
+  } = useSearchInput({
+    isActive: fe && he && !loading,
+    onExit: Oe,
+    onExitUp: Oe,
+  });
+  let Tt = he && searchQuery !== "";
+  P(() => {
     onSearchModeChange(Tt);
-  }, [Tt, onSearchModeChange]),
-    P(() => () => onSearchModeChange(!1), [onSearchModeChange]));
-  let isTerminalFocused = useTerminalFocus(),
-    filteredPlugins = Q(() => {
-      let yt =
-        marketplaceFilter === null
-          ? availablePlugins
-          : availablePlugins.filter((on) => isInMarketplace(on, marketplaceFilter));
-      if (!searchQuery) return yt;
-      let lowerQuery = searchQuery.toLowerCase();
-      return yt.filter(
-        (plugin) =>
-          plugin.entry.name.toLowerCase().includes(lowerQuery) ||
-          plugin.entry.displayName?.toLowerCase().includes(lowerQuery) ||
-          plugin.entry.description?.toLowerCase().includes(lowerQuery) ||
-          installCountEntries(plugin).some((rn) => rn.name.toLowerCase().includes(lowerQuery)) ||
-          (searchMarketplaceName && marketplaceNamesOf(plugin).toLowerCase().includes(lowerQuery)) ||
-          (searchMarketplaceName && plugin.marketplaceName.toLowerCase().includes(lowerQuery)) ||
-          (searchMarketplaceName &&
-            (plugin.alsoListedIn ?? []).some((rn) => rn.toLowerCase().includes(lowerQuery))),
-      );
-    }, [availablePlugins, searchQuery, searchMarketplaceName, marketplaceFilter]),
-    [He, ct] = y(0),
-    [Ct, oe] = y(new Set()),
-    [ft, at] = y(new Set()),
-    Ot = usePagination({ totalItems: filteredPlugins.length, selectedIndex: He });
+  }, [Tt, onSearchModeChange]);
+  P(() => () => onSearchModeChange(false), [onSearchModeChange]);
+  let isTerminalFocused = useTerminalFocus();
+  let filteredPlugins = Q(() => {
+    let yt =
+      marketplaceFilter === null
+        ? availablePlugins
+        : availablePlugins.filter((availablePlugin) => isInMarketplace(availablePlugin, marketplaceFilter));
+    if (!searchQuery) return yt;
+    let lowerQuery = searchQuery.toLowerCase();
+    return yt.filter(
+      (plugin) =>
+        plugin.entry.name.toLowerCase().includes(lowerQuery) ||
+        plugin.entry.displayName?.toLowerCase().includes(lowerQuery) ||
+        plugin.entry.description?.toLowerCase().includes(lowerQuery) ||
+        installCountEntries(plugin).some((rn) => rn.name.toLowerCase().includes(lowerQuery)) ||
+        (searchMarketplaceName && marketplaceNamesOf(plugin).toLowerCase().includes(lowerQuery)) ||
+        (searchMarketplaceName && plugin.marketplaceName.toLowerCase().includes(lowerQuery)) ||
+        (searchMarketplaceName &&
+          (plugin.alsoListedIn ?? []).some((rn) => rn.toLowerCase().includes(lowerQuery))),
+    );
+  }, [availablePlugins, searchQuery, searchMarketplaceName, marketplaceFilter]);
+  let [He, ct] = y(0);
+  let [Ct, oe] = y(new Set());
+  let [ft, at] = y(new Set());
+  let pagination = usePagination({
+    totalItems: filteredPlugins.length,
+    selectedIndex: He,
+  });
   P(() => {
     ct(0);
   }, [searchQuery, marketplaceFilter]);
-  let [an, Yt] = y(!1),
-    [_e, qe] = y(null),
-    installSelectedPlugins = () =>
-      describeMarketplaceEntryRisks({
-        selectedForInstall: Ct,
-        availablePlugins: availablePlugins,
-        setInstallingPlugins: at,
-        setSelectedForInstall: oe,
-        setResult: screen.setResult,
-        setError: screen.setResult,
-        setParentViewState: screen.setViewState,
-        onInstallComplete: onInstallComplete,
-        surface: surface,
-        storageV5: storageV5,
-      }),
-    Lt = usePinnedConsentRecord(B),
-    nn = (yt, Ut = "user") =>
-      describeInstallScopeRisks({
-        plugin: yt,
-        scope: Ut,
-        consentedEntryHelper: Lt.pinned(),
-        setIsInstalling: Yt,
-        setInstallError: qe,
-        setViewState: V,
-        setResult: screen.setResult,
-        setParentViewState: screen.setViewState,
-        onInstallComplete: onInstallComplete,
-        surface: surface,
-        storageV5: storageV5,
-      });
+  let [an, Yt] = y(false);
+  let [_e, qe] = y(null);
+  let installSelectedPlugins = () =>
+    describeMarketplaceEntryRisks({
+      selectedForInstall: Ct,
+      availablePlugins,
+      setInstallingPlugins: at,
+      setSelectedForInstall: oe,
+      setResult: screen.setResult,
+      setError: screen.setResult,
+      setParentViewState: screen.setViewState,
+      onInstallComplete,
+      surface,
+      storageV5,
+    });
+  let pinnedConsentRecord = usePinnedConsentRecord(B);
+  let installPlugin = (plugin, scope = "user") =>
+    describeInstallScopeRisks({
+      plugin,
+      scope,
+      consentedEntryHelper: pinnedConsentRecord.pinned(),
+      setIsInstalling: Yt,
+      setInstallError: qe,
+      setViewState: V,
+      setResult: screen.setResult,
+      setParentViewState: screen.setViewState,
+      onInstallComplete,
+      surface,
+      storageV5,
+    });
   P(() => {
-    if (ne) screen.setResult(ne);
-  }, [ne, screen]);
+    if (storeSelector) screen.setResult(storeSelector);
+  }, [storeSelector, screen]);
   function $t(p_1) {
     if (he) {
       handleKeyDown(p_1);
       return;
     }
     if (p_1.ctrl || p_1.meta || loading) return;
-    if (p_1.key === "/") (p_1.preventDefault(), W(!0), setSearchQuery(""));
-    else if (p_1.key.length === 1 && p_1.key !== " ") (p_1.preventDefault(), W(!0), setSearchQuery(p_1.key));
+    if (p_1.key === "/") {
+      p_1.preventDefault();
+      W(true);
+      setSearchQuery("");
+    } else if (p_1.key.length === 1 && p_1.key !== " ") {
+      p_1.preventDefault();
+      W(true);
+      setSearchQuery(p_1.key);
+    }
   }
   function ln(p_2) {
     if (he) {
@@ -217,97 +246,107 @@ function DiscoverPlugins({
     if (loading) return;
     let trimmed = (p_2.text.split(/\r\n|\r|\n/, 2)[0] ?? "").trim();
     if (!trimmed) return;
-    (p_2.preventDefault(), W(!0), setSearchQuery(trimmed));
+    p_2.preventDefault();
+    W(true);
+    setSearchQuery(trimmed);
   }
-  return (
-    MessageActionsKeybindings(
-      {
-        "select:previous": () => {
-          if (He === 0) {
-            if (!loading && availablePlugins.length > 0) W(!0);
-          } else Ot.handleSelectionChange(He - 1, ct);
-        },
-        "select:next": () => {
-          if (He < filteredPlugins.length - 1) Ot.handleSelectionChange(He + 1, ct);
-        },
-        "select:accept": () => {
-          if (He < filteredPlugins.length) {
-            let yt = filteredPlugins[He];
-            if (yt)
-              if (yt.isInstalled)
-                screen.setViewState({
-                  type: "manage-plugins",
-                  targetPlugin: yt.entry.name,
-                  targetMarketplace: yt.marketplaceName,
-                });
-              else
-                (setIsSearchMode(yt),
-                  qe(null),
-                  logDirectoryListingViewed({ pluginId: yt.pluginId, surface: surface, resultIndex: He }));
-          }
-        },
-      },
-      { context: "Select", isActive: me && !he },
-    ),
-    MessageActionsKeybindings(
-      {
-        "plugin:toggle": () => {
-          if (He < filteredPlugins.length) {
-            let yt = filteredPlugins[He];
-            if (yt && !yt.isInstalled) {
-              let newSelection = new Set(Ct);
-              if (newSelection.has(yt.pluginId)) newSelection.delete(yt.pluginId);
-              else newSelection.add(yt.pluginId);
-              oe(newSelection);
-            }
-          }
-        },
-        "plugin:install": () => {
-          if (Ct.size === 0) return !1;
-          if (ft.size > 0) return;
-          installSelectedPlugins();
-        },
-      },
-      { context: "Plugin", isActive: me && !he },
-    ),
+  MessageActionsKeybindings(
     {
-      viewState: K,
-      setViewState: V,
-      selectedPlugin: B,
-      openDetails: setIsSearchMode,
-      closeDetails: pe,
-      recordEntryHelperShown: Lt.record,
-      isSearchMode: he,
-      setIsSearchMode: W,
-      searchQuery: searchQuery,
-      setSearchQuery: setSearchQuery,
-      searchBoxProps: {
-        query: searchQuery,
-        isFocused: he,
-        isTerminalFocused: isTerminalFocused,
-        cursorOffset: searchCursorOffset,
-        onCursorOffsetChange: setCursorOffset,
-        onFocus: () => W(!0),
+      "select:previous": () => {
+        if (He === 0) {
+          if (!loading && availablePlugins.length > 0) W(true);
+        } else pagination.handleSelectionChange(He - 1, ct);
       },
-      keyHintProps: {
-        hasSelection: Ct.size > 0,
-        canToggle: He < filteredPlugins.length && !filteredPlugins[He]?.isInstalled,
-        canView: He < filteredPlugins.length,
+      "select:next": () => {
+        if (He < filteredPlugins.length - 1) pagination.handleSelectionChange(He + 1, ct);
       },
-      filteredPlugins: filteredPlugins,
-      selectedIndex: He,
-      setSelectedIndex: ct,
-      selectedForInstall: Ct,
-      setSelectedForInstall: oe,
-      installingPlugins: ft,
-      pagination: Ot,
-      installPlugin: nn,
-      isInstalling: an,
-      installError: _e,
-      handleListKeyDown: $t,
-      handleListPaste: ln,
-    }
+      "select:accept": () => {
+        if (He < filteredPlugins.length) {
+          let plugin = filteredPlugins[He];
+          if (plugin)
+            if (plugin.isInstalled)
+              screen.setViewState({
+                type: "manage-plugins",
+                targetPlugin: plugin.entry.name,
+                targetMarketplace: plugin.marketplaceName,
+              });
+            else {
+              setIsSearchMode(plugin);
+              qe(null);
+              logDirectoryListingViewed({
+                pluginId: plugin.pluginId,
+                surface,
+                resultIndex: He,
+              });
+            }
+        }
+      },
+    },
+    {
+      context: "Select",
+      isActive: me && !he,
+    },
   );
+  MessageActionsKeybindings(
+    {
+      "plugin:toggle": () => {
+        if (He < filteredPlugins.length) {
+          let plugin = filteredPlugins[He];
+          if (plugin && !plugin.isInstalled) {
+            let newSelection = new Set(Ct);
+            if (newSelection.has(plugin.pluginId)) newSelection.delete(plugin.pluginId);
+            else newSelection.add(plugin.pluginId);
+            oe(newSelection);
+          }
+        }
+      },
+      "plugin:install": () => {
+        if (Ct.size === 0) return false;
+        if (ft.size > 0) return;
+        installSelectedPlugins();
+      },
+    },
+    {
+      context: "Plugin",
+      isActive: me && !he,
+    },
+  );
+  return {
+    viewState: K,
+    setViewState: V,
+    selectedPlugin: B,
+    openDetails: setIsSearchMode,
+    closeDetails,
+    recordEntryHelperShown: pinnedConsentRecord.record,
+    isSearchMode: he,
+    setIsSearchMode: W,
+    searchQuery,
+    setSearchQuery,
+    searchBoxProps: {
+      query: searchQuery,
+      isFocused: he,
+      isTerminalFocused,
+      cursorOffset: searchCursorOffset,
+      onCursorOffsetChange: setCursorOffset,
+      onFocus: () => W(true),
+    },
+    keyHintProps: {
+      hasSelection: Ct.size > 0,
+      canToggle: He < filteredPlugins.length && !filteredPlugins[He]?.isInstalled,
+      canView: He < filteredPlugins.length,
+    },
+    filteredPlugins,
+    selectedIndex: He,
+    setSelectedIndex: ct,
+    selectedForInstall: Ct,
+    setSelectedForInstall: oe,
+    installingPlugins: ft,
+    pagination,
+    installPlugin,
+    isInstalling: an,
+    installError: _e,
+    handleListKeyDown: $t,
+    handleListPaste: ln,
+  };
 }
-
 export { DiscoverPlugins, DiscoverPluginsKeyHint };

@@ -8,25 +8,36 @@
  * pieces: chunk-e6aww6q8.js (1)
  * attribution: fingerprint 1
  */
-
 //@ chunk-e6aww6q8.js:3039711-3040109 fingerprint = srun (1)
+/**
+ * srun 命令的补全 spec。
+ */
 var srunSpec = {
-    name: "srun",
-    description: "Run a command on SLURM cluster nodes",
-    options: [
-      {
-        name: ["-n", "--ntasks"],
-        description: "Number of tasks",
-        args: { name: "count", description: "Number of tasks to run" },
+  name: "srun",
+  description: "Run a command on SLURM cluster nodes",
+  options: [
+    {
+      name: ["-n", "--ntasks"],
+      description: "Number of tasks",
+      args: {
+        name: "count",
+        description: "Number of tasks to run",
       },
-      {
-        name: ["-N", "--nodes"],
-        description: "Number of nodes",
-        args: { name: "count", description: "Number of nodes to allocate" },
+    },
+    {
+      name: ["-N", "--nodes"],
+      description: "Number of nodes",
+      args: {
+        name: "count",
+        description: "Number of nodes to allocate",
       },
-    ],
-    args: { name: "command", description: "Command to run on the cluster", isCommand: !0 },
+    },
+  ],
+  args: {
+    name: "command",
+    description: "Command to run on the cluster",
+    isCommand: true,
   },
-  jbn = srunSpec;
-
-export { jbn };
+};
+var srunSpec_2 = srunSpec;
+export { srunSpec_2 };

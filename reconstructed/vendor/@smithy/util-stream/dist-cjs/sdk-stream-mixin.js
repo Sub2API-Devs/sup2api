@@ -6,50 +6,55 @@
  * attribution: cjs-fingerprint 1
  */
 import { x, importMetaRequire } from "../../../../runtime/bun-runtime.js";
-import { E$ } from "../../node-http-handler/dist-cjs/index.js";
-import { UQt } from "../../util-buffer-from/dist-cjs/index.js";
-import { Ut } from "./sdk-stream-mixin.browser.js";
+import { require_node_http_handler } from "../../node-http-handler/dist-cjs/index.js";
+import { require_util_buffer_from } from "../../util-buffer-from/dist-cjs/index.js";
+import { require_sdk_stream_mixin_browser } from "./sdk-stream-mixin.browser.js";
 
 //@ chunk-wjd9n4jx.js:9158-10211 cjs-fingerprint
-var Wt = x(function (vt) {
-  Object.defineProperty(vt, "__esModule", { value: !0 });
-  vt.sdkStreamMixin = void 0;
-  var kt = E$(),
-    Ft = UQt(),
-    z = importMetaRequire("stream"),
-    Ht = Ut(),
-    Lt = "The stream has already been transformed.",
-    Zr = (e) => {
-      if (!(e instanceof z.Readable))
-        try {
-          return Ht.sdkStreamMixin(e);
-        } catch (error) {
-          let n = e?.__proto__?.constructor?.name || e;
-          throw Error(`Unexpected stream implementation, expect Stream.Readable instance, got ${n}`);
-        }
-      let t = !1,
-        r = async () => {
-          if (t) throw Error(Lt);
-          return ((t = !0), await kt.streamCollector(e));
-        };
-      return Object.assign(e, {
-        transformToByteArray: r,
-        transformToString: async (s) => {
-          let n = await r();
-          if (s === void 0 || Buffer.isEncoding(s))
-            return Ft.fromArrayBuffer(n.buffer, n.byteOffset, n.byteLength).toString(s);
-          else return new TextDecoder(s).decode(n);
-        },
-        transformToWebStream: () => {
-          if (t) throw Error(Lt);
-          if (e.readableFlowing !== null) throw Error("The stream has been consumed by other callbacks.");
-          if (typeof z.Readable.toWeb !== "function")
-            throw Error("Readable.toWeb() is not supported. Please ensure a polyfill is available.");
-          return ((t = !0), z.Readable.toWeb(e));
-        },
-      });
+var require_sdk_stream_mixin = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.sdkStreamMixin = undefined;
+  var node_http_handler_1 = require_node_http_handler();
+  var util_buffer_from_1 = require_util_buffer_from();
+  var stream_1 = importMetaRequire("stream");
+  var sdk_stream_mixin_browser_1 = require_sdk_stream_mixin_browser();
+  var ERR_MSG_STREAM_HAS_BEEN_TRANSFORMED = "The stream has already been transformed.";
+  var sdkStreamMixin = (stream) => {
+    if (!(stream instanceof stream_1.Readable))
+      try {
+        return sdk_stream_mixin_browser_1.sdkStreamMixin(stream);
+      } catch (e) {
+        let name = stream?.__proto__?.constructor?.name || stream;
+        throw Error(`Unexpected stream implementation, expect Stream.Readable instance, got ${name}`);
+      }
+    let transformed = false;
+    let transformToByteArray = async () => {
+      if (transformed) throw Error(ERR_MSG_STREAM_HAS_BEEN_TRANSFORMED);
+      transformed = true;
+      return await node_http_handler_1.streamCollector(stream);
     };
-  vt.sdkStreamMixin = Zr;
+    return Object.assign(stream, {
+      transformToByteArray,
+      transformToString: async (encoding) => {
+        let buf = await transformToByteArray();
+        if (encoding === undefined || Buffer.isEncoding(encoding))
+          return util_buffer_from_1
+            .fromArrayBuffer(buf.buffer, buf.byteOffset, buf.byteLength)
+            .toString(encoding);
+        else return new TextDecoder(encoding).decode(buf);
+      },
+      transformToWebStream: () => {
+        if (transformed) throw Error(ERR_MSG_STREAM_HAS_BEEN_TRANSFORMED);
+        if (stream.readableFlowing !== null) throw Error("The stream has been consumed by other callbacks.");
+        if (typeof stream_1.Readable.toWeb !== "function")
+          throw Error("Readable.toWeb() is not supported. Please ensure a polyfill is available.");
+        transformed = true;
+        return stream_1.Readable.toWeb(stream);
+      },
+    });
+  };
+  cjsExports.sdkStreamMixin = sdkStreamMixin;
 });
-
-export { Wt };
+export { require_sdk_stream_mixin };

@@ -10,30 +10,33 @@
  */
 
 //@ chunk-q62qy39y.js:191-202 placement
-var bjn = 50;
+/**
+ * 事件循环延迟采样间隔（毫秒）。
+ */
+var LAG_SAMPLE_INTERVAL_MS = 50;
+//@ chunk-q62qy39y.js:202-436 placement
 /**
  * 启动事件循环延迟监测：定时器检查实际触发时间与预期的差，可取出并重置最大延迟，停止时返回最终最大值。
  */
-//@ chunk-q62qy39y.js:202-436 placement
 function startEventLoopLagMonitor(o) {
-  let r = performance.now() + o,
-    e = 0,
-    n = setInterval(() => {
-      let startTime = performance.now();
-      ((e = Math.max(e, startTime - r)), (r = startTime + o));
-    }, o);
-  return (
-    n.unref(),
-    {
-      takeMaxMs() {
-        let t = e;
-        return ((e = 0), t);
-      },
-      stop() {
-        return (clearInterval(n), Math.max(e, performance.now() - r));
-      },
-    }
-  );
+  let r = performance.now() + o;
+  let e = 0;
+  let interval = setInterval(() => {
+    let startTime = performance.now();
+    e = Math.max(e, startTime - r);
+    r = startTime + o;
+  }, o);
+  interval.unref();
+  return {
+    takeMaxMs() {
+      let t = e;
+      e = 0;
+      return t;
+    },
+    stop() {
+      clearInterval(interval);
+      return Math.max(e, performance.now() - r);
+    },
+  };
 }
-
-export { startEventLoopLagMonitor, bjn };
+export { startEventLoopLagMonitor, LAG_SAMPLE_INTERVAL_MS };

@@ -17,26 +17,36 @@ import { getStickyBetas } from "../../bootstrap/state.js";
 import { mainAgentContext } from "../../utils/agentContext.js";
 import { getEmptyToolPermissionContext } from "../../Tool.js";
 
+//@ chunk-eavynfj6.js:25822-26912 fingerprint = generateAgent (0.37)
 /**
  * 根据用户描述调用模型生成子代理配置（identifier、whenToUse、systemPrompt），支持中止与超时。
  */
-//@ chunk-eavynfj6.js:25822-26912 fingerprint = generateAgent (0.37)
 async function generateAgent(userPrompt, model, existingIdentifiers, abortSignal) {
-  let abortController = new AbortController(),
-    signal = abortSignal.context.abortController.signal,
-    s = () => abortController.abort();
-  if (signal.aborted) return { kind: "canceled" };
-  signal.addEventListener("abort", s, { once: !0 });
-  let l = !1,
-    messagesWithContext = setTimeout(
-      () => {
-        ((l = !0), abortController.abort());
-      },
-      Math.max(0, existingIdentifiers),
-    );
+  let abortController = new AbortController();
+  let signal = abortSignal.context.abortController.signal;
+  let s = () => abortController.abort();
+  if (signal.aborted)
+    return {
+      kind: "canceled",
+    };
+  signal.addEventListener("abort", s, {
+    once: true,
+  });
+  let l = false;
+  let messagesWithContext = setTimeout(
+    () => {
+      l = true;
+      abortController.abort();
+    },
+    Math.max(0, existingIdentifiers),
+  );
   try {
     let response = await queryModelWithoutStreaming({
-      messages: [createUserMessage({ content: model })],
+      messages: [
+        createUserMessage({
+          content: model,
+        }),
+      ],
       systemPrompt: asSystemPrompt([userPrompt]),
       thinkingConfig: abortSignal.thinkingConfig,
       tools: [],
@@ -47,9 +57,9 @@ async function generateAgent(userPrompt, model, existingIdentifiers, abortSignal
         requestClass: abortSignal.sideCallClass,
         isNonInteractiveSession: abortSignal.context.options.isNonInteractiveSession,
         agents: [],
-        hasAppendSystemPrompt: !1,
+        hasAppendSystemPrompt: false,
         mcpTools: [],
-        enablePromptCaching: !1,
+        enablePromptCaching: false,
         hookEffortValue: MEDIUM,
         stickyBetas: forkStickyBetaLatches(getStickyBetas()),
         agentContext: mainAgentContext(),
@@ -58,9 +68,18 @@ async function generateAgent(userPrompt, model, existingIdentifiers, abortSignal
         },
       },
     });
-    if (signal.aborted) return { kind: "canceled" };
-    if (l) return { kind: "timeout" };
-    if (response.isApiErrorMessage) return { kind: "error" };
+    if (signal.aborted)
+      return {
+        kind: "canceled",
+      };
+    if (l)
+      return {
+        kind: "timeout",
+      };
+    if (response.isApiErrorMessage)
+      return {
+        kind: "error",
+      };
     return {
       kind: "ok",
       text: response.message.content.flatMap((block) => (block.type === "text" ? [block.text] : [])).join(""),
@@ -68,10 +87,20 @@ async function generateAgent(userPrompt, model, existingIdentifiers, abortSignal
       messageId: response.message.id,
     };
   } catch {
-    return signal.aborted ? { kind: "canceled" } : l ? { kind: "timeout" } : { kind: "error" };
+    return signal.aborted
+      ? {
+          kind: "canceled",
+        }
+      : l
+        ? {
+            kind: "timeout",
+          }
+        : {
+            kind: "error",
+          };
   } finally {
-    (clearTimeout(messagesWithContext), signal.removeEventListener("abort", s));
+    clearTimeout(messagesWithContext);
+    signal.removeEventListener("abort", s);
   }
 }
-
 export { generateAgent };

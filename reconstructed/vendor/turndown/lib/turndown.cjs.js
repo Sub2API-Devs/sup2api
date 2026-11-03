@@ -5,38 +5,38 @@
  * pieces: chunk-vwj6ccer.js (60)
  * attribution: esm-layout 13, esm-fingerprint 47
  */
-import { Bc } from "../../@mixmark-io/domino/lib/index.js";
+import { require_domino } from "../../@mixmark-io/domino/lib/index.js";
 
 //@ chunk-vwj6ccer.js:237838-237965 esm-layout
-function kf(e) {
-  for (var t = 1; t < arguments.length; t++) {
-    var r = arguments[t];
-    for (var key in r) if (r.hasOwnProperty(key)) e[key] = r[key];
+function extend(destination) {
+  for (var i = 1; i < arguments.length; i++) {
+    var source = arguments[i];
+    for (var key in source) if (source.hasOwnProperty(key)) destination[key] = source[key];
   }
-  return e;
+  return destination;
 }
 //@ chunk-vwj6ccer.js:237965-238008 esm-layout
-function ui(e, t) {
-  return Array(t + 1).join(e);
+function repeat(character, count) {
+  return Array(count + 1).join(character);
 }
 //@ chunk-vwj6ccer.js:238008-238051 esm-fingerprint
-function Lf(e) {
-  return e.replace(/^\n*/, "");
+function trimLeadingNewlines(string) {
+  return string.replace(/^\n*/, "");
 }
 //@ chunk-vwj6ccer.js:238051-238133 esm-fingerprint
-function Mf(e) {
-  var t = e.length;
+function trimTrailingNewlines(string) {
+  var indexEnd = string.length;
   while (
-    t > 0 &&
-    e[t - 1] ===
+    indexEnd > 0 &&
+    string[indexEnd - 1] ===
       `
 `
   )
-    t--;
-  return e.substring(0, t);
+    indexEnd--;
+  return string.substring(0, indexEnd);
 }
 //@ chunk-vwj6ccer.js:238133-238506 esm-fingerprint
-var Rf = [
+var blockElements = [
   "ADDRESS",
   "ARTICLE",
   "ASIDE",
@@ -88,11 +88,11 @@ var Rf = [
   "UL",
 ];
 //@ chunk-vwj6ccer.js:238506-238537 esm-layout
-function li(e) {
-  return xi(e, Rf);
+function isBlock(node) {
+  return is(node, blockElements);
 }
 //@ chunk-vwj6ccer.js:238537-238662 esm-fingerprint
-var Vc = [
+var voidElements = [
   "AREA",
   "BASE",
   "BR",
@@ -111,50 +111,62 @@ var Vc = [
   "WBR",
 ];
 //@ chunk-vwj6ccer.js:238662-238693 esm-layout
-function jc(e) {
-  return xi(e, Vc);
+function isVoid(node) {
+  return is(node, voidElements);
 }
 //@ chunk-vwj6ccer.js:238693-238724 esm-layout
-function If(e) {
-  return zc(e, Vc);
+function hasVoid(node) {
+  return has(node, voidElements);
 }
 //@ chunk-vwj6ccer.js:238724-238813 esm-fingerprint
-var Gc = ["A", "TABLE", "THEAD", "TBODY", "TFOOT", "TH", "TD", "IFRAME", "SCRIPT", "AUDIO", "VIDEO"];
+var meaningfulWhenBlankElements = [
+  "A",
+  "TABLE",
+  "THEAD",
+  "TBODY",
+  "TFOOT",
+  "TH",
+  "TD",
+  "IFRAME",
+  "SCRIPT",
+  "AUDIO",
+  "VIDEO",
+];
 //@ chunk-vwj6ccer.js:238813-238844 esm-layout
-function Of(e) {
-  return xi(e, Gc);
+function isMeaningfulWhenBlank(node) {
+  return is(node, meaningfulWhenBlankElements);
 }
 //@ chunk-vwj6ccer.js:238844-238875 esm-layout
-function qf(e) {
-  return zc(e, Gc);
+function hasMeaningfulWhenBlank(node) {
+  return has(node, meaningfulWhenBlankElements);
 }
 //@ chunk-vwj6ccer.js:238875-238924 esm-fingerprint
-function xi(e, t) {
-  return t.indexOf(e.nodeName) >= 0;
+function is(node, tagNames) {
+  return tagNames.indexOf(node.nodeName) >= 0;
 }
 //@ chunk-vwj6ccer.js:238924-239033 esm-fingerprint
-function zc(e, t) {
+function has(node, tagNames) {
   return (
-    e.getElementsByTagName &&
-    t.some(function (r) {
-      return e.getElementsByTagName(r).length;
+    node.getElementsByTagName &&
+    tagNames.some(function (tagName) {
+      return node.getElementsByTagName(tagName).length;
     })
   );
 }
+//@ chunk-vwj6ccer.js:239033-239043 esm-layout
 /**
  * （第三方 turndown 的 commonmark 规则：段落、标题、列表、代码块、链接、图片等 HTML→Markdown 转换，切分错误）
  */
-//@ chunk-vwj6ccer.js:239033-239043 esm-layout
 var rules = {};
 //@ chunk-vwj6ccer.js:239043-239112 esm-fingerprint
 rules.paragraph = {
   filter: "p",
-  replacement: function (e) {
+  replacement: function (content) {
     return (
       `
 
 ` +
-      e +
+      content +
       `
 
 `
@@ -164,9 +176,9 @@ rules.paragraph = {
 //@ chunk-vwj6ccer.js:239112-239184 esm-fingerprint
 rules.lineBreak = {
   filter: "br",
-  replacement: function (e, t, r) {
+  replacement: function (content, node, options) {
     return (
-      r.br +
+      options.br +
       `
 `
     );
@@ -175,18 +187,18 @@ rules.lineBreak = {
 //@ chunk-vwj6ccer.js:239184-239429 esm-fingerprint
 rules.heading = {
   filter: ["h1", "h2", "h3", "h4", "h5", "h6"],
-  replacement: function (e, t, r) {
-    var a = Number(t.nodeName.charAt(1));
-    if (r.headingStyle === "setext" && a < 3) {
-      var s = ui(a === 1 ? "=" : "-", e.length);
+  replacement: function (content, node, options) {
+    var hLevel = Number(node.nodeName.charAt(1));
+    if (options.headingStyle === "setext" && hLevel < 3) {
+      var underline = repeat(hLevel === 1 ? "=" : "-", content.length);
       return (
         `
 
 ` +
-        e +
+        content +
         `
 ` +
-        s +
+        underline +
         `
 
 `
@@ -196,9 +208,9 @@ rules.heading = {
         `
 
 ` +
-        ui("#", a) +
+        repeat("#", hLevel) +
         " " +
-        e +
+        content +
         `
 
 `
@@ -208,15 +220,15 @@ rules.heading = {
 //@ chunk-vwj6ccer.js:239429-239562 esm-fingerprint
 rules.blockquote = {
   filter: "blockquote",
-  replacement: function (e) {
+  replacement: function (content) {
+    content = content.replace(/^\n+|\n+$/g, "");
+    content = content.replace(/^/gm, "> ");
     return (
-      (e = e.replace(/^\n+|\n+$/g, "")),
-      (e = e.replace(/^/gm, "> ")),
       `
 
 ` +
-        e +
-        `
+      content +
+      `
 
 `
     );
@@ -225,19 +237,19 @@ rules.blockquote = {
 //@ chunk-vwj6ccer.js:239562-239717 esm-fingerprint
 rules.list = {
   filter: ["ul", "ol"],
-  replacement: function (e, t) {
-    var parentNode = t.parentNode;
-    if (parentNode.nodeName === "LI" && parentNode.lastElementChild === t)
+  replacement: function (content, node) {
+    var parent = node.parentNode;
+    if (parent.nodeName === "LI" && parent.lastElementChild === node)
       return (
         `
-` + e
+` + content
       );
     else
       return (
         `
 
 ` +
-        e +
+        content +
         `
 
 `
@@ -247,8 +259,8 @@ rules.list = {
 //@ chunk-vwj6ccer.js:239717-240060 esm-fingerprint
 rules.listItem = {
   filter: "li",
-  replacement: function (e, t, r) {
-    e = e
+  replacement: function (content, node, options) {
+    content = content
       .replace(/^\n+/, "")
       .replace(
         /\n+$/,
@@ -260,17 +272,17 @@ rules.listItem = {
         `
     `,
       );
-    var a = r.bulletListMarker + "   ",
-      parentNode = t.parentNode;
-    if (parentNode.nodeName === "OL") {
-      var attribute = parentNode.getAttribute("start"),
-        d = Array.prototype.indexOf.call(parentNode.children, t);
-      a = (attribute ? Number(attribute) + d : d + 1) + ".  ";
+    var prefix = options.bulletListMarker + "   ";
+    var parent = node.parentNode;
+    if (parent.nodeName === "OL") {
+      var start = parent.getAttribute("start");
+      var index = Array.prototype.indexOf.call(parent.children, node);
+      prefix = (start ? Number(start) + index : index + 1) + ".  ";
     }
     return (
-      a +
-      e +
-      (t.nextSibling && !/\n$/.test(e)
+      prefix +
+      content +
+      (node.nextSibling && !/\n$/.test(content)
         ? `
 `
         : "")
@@ -279,20 +291,20 @@ rules.listItem = {
 };
 //@ chunk-vwj6ccer.js:240060-240305 esm-fingerprint
 rules.indentedCodeBlock = {
-  filter: function (e, t) {
+  filter: function (node, options) {
     return (
-      t.codeBlockStyle === "indented" &&
-      e.nodeName === "PRE" &&
-      e.firstChild &&
-      e.firstChild.nodeName === "CODE"
+      options.codeBlockStyle === "indented" &&
+      node.nodeName === "PRE" &&
+      node.firstChild &&
+      node.firstChild.nodeName === "CODE"
     );
   },
-  replacement: function (e, t, r) {
+  replacement: function (content, node, options) {
     return (
       `
 
     ` +
-      t.firstChild.textContent.replace(
+      node.firstChild.textContent.replace(
         /\n/g,
         `
     `,
@@ -305,36 +317,37 @@ rules.indentedCodeBlock = {
 };
 //@ chunk-vwj6ccer.js:240305-240768 esm-fingerprint
 rules.fencedCodeBlock = {
-  filter: function (e, t) {
+  filter: function (node, options) {
     return (
-      t.codeBlockStyle === "fenced" &&
-      e.nodeName === "PRE" &&
-      e.firstChild &&
-      e.firstChild.nodeName === "CODE"
+      options.codeBlockStyle === "fenced" &&
+      node.nodeName === "PRE" &&
+      node.firstChild &&
+      node.firstChild.nodeName === "CODE"
     );
   },
-  replacement: function (e, t, r) {
-    var a = t.firstChild.getAttribute("class") || "",
-      s = (a.match(/language-(\S+)/) || [null, ""])[1],
-      textContent = t.firstChild.textContent,
-      charAt = r.fence.charAt(0),
-      g = 3,
-      regExp = new RegExp("^" + charAt + "{3,}", "gm"),
-      v;
-    while ((v = regExp.exec(textContent))) if (v[0].length >= g) g = v[0].length + 1;
-    var T = ui(charAt, g);
+  replacement: function (content, node, options) {
+    var className = node.firstChild.getAttribute("class") || "";
+    var language = (className.match(/language-(\S+)/) || [null, ""])[1];
+    var code = node.firstChild.textContent;
+    var fenceChar = options.fence.charAt(0);
+    var fenceSize = 3;
+    var fenceInCodeRegex = new RegExp("^" + fenceChar + "{3,}", "gm");
+    var match;
+    while ((match = fenceInCodeRegex.exec(code)))
+      if (match[0].length >= fenceSize) fenceSize = match[0].length + 1;
+    var fence = repeat(fenceChar, fenceSize);
     return (
       `
 
 ` +
-      T +
-      s +
+      fence +
+      language +
       `
 ` +
-      textContent.replace(/\n$/, "") +
+      code.replace(/\n$/, "") +
       `
 ` +
-      T +
+      fence +
       `
 
 `
@@ -344,12 +357,12 @@ rules.fencedCodeBlock = {
 //@ chunk-vwj6ccer.js:240768-240850 esm-fingerprint
 rules.horizontalRule = {
   filter: "hr",
-  replacement: function (e, t, r) {
+  replacement: function (content, node, options) {
     return (
       `
 
 ` +
-      r.hr +
+      options.hr +
       `
 
 `
@@ -358,45 +371,50 @@ rules.horizontalRule = {
 };
 //@ chunk-vwj6ccer.js:240850-241150 esm-fingerprint
 rules.inlineLink = {
-  filter: function (e, t) {
-    return t.linkStyle === "inlined" && e.nodeName === "A" && e.getAttribute("href");
+  filter: function (node, options) {
+    return options.linkStyle === "inlined" && node.nodeName === "A" && node.getAttribute("href");
   },
-  replacement: function (e, t) {
-    var attribute = t.getAttribute("href");
-    if (attribute) attribute = attribute.replace(/([()])/g, "\\$1");
-    var a = cleanAttribute(t.getAttribute("title"));
-    if (a) a = ' "' + a.replace(/"/g, '\\"') + '"';
-    return "[" + e + "](" + attribute + a + ")";
+  replacement: function (content, node) {
+    var href = node.getAttribute("href");
+    if (href) href = href.replace(/([()])/g, "\\$1");
+    var title = cleanAttribute(node.getAttribute("title"));
+    if (title) title = ' "' + title.replace(/"/g, '\\"') + '"';
+    return "[" + content + "](" + href + title + ")";
   },
 };
 //@ chunk-vwj6ccer.js:241150-241759 esm-fingerprint
 rules.referenceLink = {
-  filter: function (e, t) {
-    return t.linkStyle === "referenced" && e.nodeName === "A" && e.getAttribute("href");
+  filter: function (node, options) {
+    return options.linkStyle === "referenced" && node.nodeName === "A" && node.getAttribute("href");
   },
-  replacement: function (e, t, r) {
-    var attribute = t.getAttribute("href"),
-      s = cleanAttribute(t.getAttribute("title"));
-    if (s) s = ' "' + s + '"';
-    var c, d;
-    switch (r.linkReferenceStyle) {
+  replacement: function (content, node, options) {
+    var href = node.getAttribute("href");
+    var title = cleanAttribute(node.getAttribute("title"));
+    if (title) title = ' "' + title + '"';
+    var replacement;
+    var reference;
+    switch (options.linkReferenceStyle) {
       case "collapsed":
-        ((c = "[" + e + "][]"), (d = "[" + e + "]: " + attribute + s));
+        replacement = "[" + content + "][]";
+        reference = "[" + content + "]: " + href + title;
         break;
       case "shortcut":
-        ((c = "[" + e + "]"), (d = "[" + e + "]: " + attribute + s));
+        replacement = "[" + content + "]";
+        reference = "[" + content + "]: " + href + title;
         break;
       default:
-        var g = this.references.length + 1;
-        ((c = "[" + e + "][" + g + "]"), (d = "[" + g + "]: " + attribute + s));
+        var id = this.references.length + 1;
+        replacement = "[" + content + "][" + id + "]";
+        reference = "[" + id + "]: " + href + title;
     }
-    return (this.references.push(d), c);
+    this.references.push(reference);
+    return replacement;
   },
   references: [],
-  append: function (e) {
-    var t = "";
-    if (this.references.length)
-      ((t =
+  append: function (options) {
+    var references = "";
+    if (this.references.length) {
+      references =
         `
 
 ` +
@@ -404,59 +422,60 @@ rules.referenceLink = {
 `) +
         `
 
-`),
-        (this.references = []));
-    return t;
+`;
+      this.references = [];
+    }
+    return references;
   },
 };
 //@ chunk-vwj6ccer.js:241759-241879 esm-fingerprint
 rules.emphasis = {
   filter: ["em", "i"],
-  replacement: function (e, t, r) {
-    if (!e.trim()) return "";
-    return r.emDelimiter + e + r.emDelimiter;
+  replacement: function (content, node, options) {
+    if (!content.trim()) return "";
+    return options.emDelimiter + content + options.emDelimiter;
   },
 };
 //@ chunk-vwj6ccer.js:241879-242009 esm-fingerprint
 rules.strong = {
   filter: ["strong", "b"],
-  replacement: function (e, t, r) {
-    if (!e.trim()) return "";
-    return r.strongDelimiter + e + r.strongDelimiter;
+  replacement: function (content, node, options) {
+    if (!content.trim()) return "";
+    return options.strongDelimiter + content + options.strongDelimiter;
   },
 };
 //@ chunk-vwj6ccer.js:242009-242334 esm-fingerprint
 rules.code = {
-  filter: function (e) {
-    var t = e.previousSibling || e.nextSibling,
-      r = e.parentNode.nodeName === "PRE" && !t;
-    return e.nodeName === "CODE" && !r;
+  filter: function (node) {
+    var hasSiblings = node.previousSibling || node.nextSibling;
+    var isCodeBlock = node.parentNode.nodeName === "PRE" && !hasSiblings;
+    return node.nodeName === "CODE" && !isCodeBlock;
   },
-  replacement: function (e) {
-    if (!e) return "";
-    e = e.replace(/\r?\n|\r/g, " ");
-    var t = /^`|^ .*?[^ ].* $|`$/.test(e) ? " " : "",
-      r = "`",
-      a = e.match(/`+/gm) || [];
-    while (a.indexOf(r) !== -1) r = r + "`";
-    return r + t + e + t + r;
+  replacement: function (content) {
+    if (!content) return "";
+    content = content.replace(/\r?\n|\r/g, " ");
+    var extraSpace = /^`|^ .*?[^ ].* $|`$/.test(content) ? " " : "";
+    var delimiter = "`";
+    var matches = content.match(/`+/gm) || [];
+    while (matches.indexOf(delimiter) !== -1) delimiter = delimiter + "`";
+    return delimiter + extraSpace + content + extraSpace + delimiter;
   },
 };
 //@ chunk-vwj6ccer.js:242334-242525 esm-fingerprint
 rules.image = {
   filter: "img",
-  replacement: function (e, t) {
-    var r = cleanAttribute(t.getAttribute("alt")),
-      a = t.getAttribute("src") || "",
-      s = cleanAttribute(t.getAttribute("title")),
-      c = s ? ' "' + s + '"' : "";
-    return a ? "![" + r + "](" + a + c + ")" : "";
+  replacement: function (content, node) {
+    var alt = cleanAttribute(node.getAttribute("alt"));
+    var src = node.getAttribute("src") || "";
+    var title = cleanAttribute(node.getAttribute("title"));
+    var titlePart = title ? ' "' + title + '"' : "";
+    return src ? "![" + alt + "](" + src + titlePart + ")" : "";
   },
 };
 //@ chunk-vwj6ccer.js:242525-242580 esm-fingerprint
-function cleanAttribute(e) {
-  return e
-    ? e.replace(
+function cleanAttribute(attribute) {
+  return attribute
+    ? attribute.replace(
         /(\n+\s*)+/g,
         `
 `,
@@ -464,229 +483,268 @@ function cleanAttribute(e) {
     : "";
 }
 //@ chunk-vwj6ccer.js:242580-242842 esm-fingerprint
-function Wc(e) {
-  ((this.options = e),
-    (this._keep = []),
-    (this._remove = []),
-    (this.blankRule = { replacement: e.blankReplacement }),
-    (this.keepReplacement = e.keepReplacement),
-    (this.defaultRule = { replacement: e.defaultReplacement }),
-    (this.array = []));
-  for (var key in e.rules) this.array.push(e.rules[key]);
+function Rules(options) {
+  this.options = options;
+  this._keep = [];
+  this._remove = [];
+  this.blankRule = {
+    replacement: options.blankReplacement,
+  };
+  this.keepReplacement = options.keepReplacement;
+  this.defaultRule = {
+    replacement: options.defaultReplacement,
+  };
+  this.array = [];
+  for (var key in options.rules) this.array.push(options.rules[key]);
 }
 //@ chunk-vwj6ccer.js:242842-243362 esm-fingerprint
-Wc.prototype = {
-  add: function (e, t) {
-    this.array.unshift(t);
+Rules.prototype = {
+  add: function (key, rule) {
+    this.array.unshift(rule);
   },
-  keep: function (e) {
-    this._keep.unshift({ filter: e, replacement: this.keepReplacement });
+  keep: function (filter) {
+    this._keep.unshift({
+      filter,
+      replacement: this.keepReplacement,
+    });
   },
-  remove: function (e) {
+  remove: function (filter) {
     this._remove.unshift({
-      filter: e,
+      filter,
       replacement: function () {
         return "";
       },
     });
   },
-  forNode: function (e) {
-    if (e.isBlank) return this.blankRule;
-    var t;
-    if ((t = si(this.array, e, this.options))) return t;
-    if ((t = si(this._keep, e, this.options))) return t;
-    if ((t = si(this._remove, e, this.options))) return t;
+  forNode: function (node) {
+    if (node.isBlank) return this.blankRule;
+    var rule;
+    if ((rule = findRule(this.array, node, this.options))) return rule;
+    if ((rule = findRule(this._keep, node, this.options))) return rule;
+    if ((rule = findRule(this._remove, node, this.options))) return rule;
     return this.defaultRule;
   },
-  forEach: function (e) {
-    for (var t = 0; t < this.array.length; t++) e(this.array[t], t);
+  forEach: function (fn) {
+    for (var i = 0; i < this.array.length; i++) fn(this.array[i], i);
   },
 };
 //@ chunk-vwj6ccer.js:243362-243449 esm-layout
-function si(e, t, r) {
-  for (var a = 0; a < e.length; a++) {
-    var s = e[a];
-    if (Hf(s, t, r)) return s;
+function findRule(rules, node, options) {
+  for (var i = 0; i < rules.length; i++) {
+    var rule = rules[i];
+    if (filterValue(rule, node, options)) return rule;
   }
   return;
 }
 //@ chunk-vwj6ccer.js:243449-243756 esm-fingerprint
-function Hf(e, t, r) {
-  var filter = e.filter;
+function filterValue(rule, node, options) {
+  var filter = rule.filter;
   if (typeof filter === "string") {
-    if (filter === t.nodeName.toLowerCase()) return !0;
+    if (filter === node.nodeName.toLowerCase()) return true;
   } else if (Array.isArray(filter)) {
-    if (filter.indexOf(t.nodeName.toLowerCase()) > -1) return !0;
+    if (filter.indexOf(node.nodeName.toLowerCase()) > -1) return true;
   } else if (typeof filter === "function") {
-    if (filter.call(e, t, r)) return !0;
+    if (filter.call(rule, node, options)) return true;
   } else throw TypeError("`filter` needs to be a string, array, or function");
 }
 //@ chunk-vwj6ccer.js:243756-244353 esm-fingerprint
 function collapseWhitespace(e) {
-  var { element: element, isBlock: isBlock, isVoid: isVoid } = e,
-    s =
-      e.isPre ||
-      function (ne) {
-        return ne.nodeName === "PRE";
-      };
-  if (!element.firstChild || s(element)) return;
-  var c = null,
-    d = !1,
-    g = null,
-    m = nextNode(g, element, s);
-  while (m !== element) {
-    if (m.nodeType === 3 || m.nodeType === 4) {
-      var replaced = m.data.replace(/[ \r\n\t]+/g, " ");
-      if ((!c || / $/.test(c.data)) && !d && replaced[0] === " ") replaced = replaced.substr(1);
-      if (!replaced) {
-        m = removeNode(m);
+  var { element, isBlock, isVoid } = e;
+  var isPre =
+    e.isPre ||
+    function (node) {
+      return node.nodeName === "PRE";
+    };
+  if (!element.firstChild || isPre(element)) return;
+  var prevText = null;
+  var keepLeadingWs = false;
+  var prev = null;
+  var node = nextNode_2(prev, element, isPre);
+  while (node !== element) {
+    if (node.nodeType === 3 || node.nodeType === 4) {
+      var text = node.data.replace(/[ \r\n\t]+/g, " ");
+      if ((!prevText || / $/.test(prevText.data)) && !keepLeadingWs && text[0] === " ") text = text.substr(1);
+      if (!text) {
+        node = removeNode(node);
         continue;
       }
-      ((m.data = replaced), (c = m));
-    } else if (m.nodeType === 1) {
-      if (isBlock(m) || m.nodeName === "BR") {
-        if (c) c.data = c.data.replace(/ $/, "");
-        ((c = null), (d = !1));
-      } else if (isVoid(m) || s(m)) ((c = null), (d = !0));
-      else if (c) d = !1;
+      node.data = text;
+      prevText = node;
+    } else if (node.nodeType === 1) {
+      if (isBlock(node) || node.nodeName === "BR") {
+        if (prevText) prevText.data = prevText.data.replace(/ $/, "");
+        prevText = null;
+        keepLeadingWs = false;
+      } else if (isVoid(node) || isPre(node)) {
+        prevText = null;
+        keepLeadingWs = true;
+      } else if (prevText) keepLeadingWs = false;
     } else {
-      m = removeNode(m);
+      node = removeNode(node);
       continue;
     }
-    var T = nextNode(g, m, s);
-    ((g = m), (m = T));
+    var nextNode = nextNode_2(prev, node, isPre);
+    prev = node;
+    node = nextNode;
   }
-  if (c) {
-    if (((c.data = c.data.replace(/ $/, "")), !c.data)) removeNode(c);
+  if (prevText) {
+    prevText.data = prevText.data.replace(/ $/, "");
+    if (!prevText.data) removeNode(prevText);
   }
 }
 //@ chunk-vwj6ccer.js:244353-244439 esm-fingerprint
-function removeNode(e) {
-  var t = e.nextSibling || e.parentNode;
-  return (e.parentNode.removeChild(e), t);
+function removeNode(node) {
+  var next = node.nextSibling || node.parentNode;
+  node.parentNode.removeChild(node);
+  return next;
 }
 //@ chunk-vwj6ccer.js:244439-244571 esm-fingerprint
-function nextNode(e, t, r) {
-  if ((e && e.parentNode === t) || r(t)) return t.nextSibling || t.parentNode;
-  return t.firstChild || t.nextSibling || t.parentNode;
+function nextNode_2(prev, current, isPre) {
+  if ((prev && prev.parentNode === current) || isPre(current))
+    return current.nextSibling || current.parentNode;
+  return current.firstChild || current.nextSibling || current.parentNode;
 }
 //@ chunk-vwj6ccer.js:244571-244606 esm-layout
-var Xc = typeof window < "u" ? window : {};
+var root = typeof window !== "undefined" ? window : {};
 //@ chunk-vwj6ccer.js:244606-244715 esm-fingerprint
-function Bf() {
-  var DOMParser = Xc.DOMParser,
-    t = !1;
+function canParseHTMLNatively() {
+  var Parser = root.DOMParser;
+  var canParse = false;
   try {
-    if (new DOMParser().parseFromString("", "text/html")) t = !0;
-  } catch (error) {}
-  return t;
+    if (new Parser().parseFromString("", "text/html")) canParse = true;
+  } catch (e) {}
+  return canParse;
 }
 //@ chunk-vwj6ccer.js:244715-244837 esm-fingerprint
-function Pf() {
-  var e = function () {};
+function createHTMLParser() {
+  var Parser = function () {};
   {
-    var t = Bc();
-    e.prototype.parseFromString = function (r) {
-      return t.createDocument(r);
+    var domino = require_domino();
+    Parser.prototype.parseFromString = function (string) {
+      return domino.createDocument(string);
     };
   }
-  return e;
+  return Parser;
 }
 //@ chunk-vwj6ccer.js:244837-244867 esm-fingerprint
-var Uf = Bf() ? Xc.DOMParser : Pf();
+var HTMLParser = canParseHTMLNatively() ? root.DOMParser : createHTMLParser();
 //@ chunk-vwj6ccer.js:244867-245144 esm-fingerprint
-function Vf(e, t) {
-  var r;
-  if (typeof e === "string") {
-    var fromString = jf().parseFromString(
-      '<x-turndown id="turndown-root">' + e + "</x-turndown>",
+function RootNode(input, options) {
+  var root;
+  if (typeof input === "string") {
+    var doc = htmlParser().parseFromString(
+      '<x-turndown id="turndown-root">' + input + "</x-turndown>",
       "text/html",
     );
-    r = fromString.getElementById("turndown-root");
-  } else r = e.cloneNode(!0);
-  return (
-    collapseWhitespace({ element: r, isBlock: li, isVoid: jc, isPre: t.preformattedCode ? Gf : null }),
-    r
-  );
+    root = doc.getElementById("turndown-root");
+  } else root = input.cloneNode(true);
+  collapseWhitespace({
+    element: root,
+    isBlock,
+    isVoid,
+    isPre: options.preformattedCode ? isPreOrCode : null,
+  });
+  return root;
 }
 //@ chunk-vwj6ccer.js:245144-245151 esm-layout
-var oi;
+var _htmlParser;
 //@ chunk-vwj6ccer.js:245151-245189 esm-layout
-function jf() {
-  return ((oi = oi || new Uf()), oi);
+function htmlParser() {
+  _htmlParser = _htmlParser || new HTMLParser();
+  return _htmlParser;
 }
 //@ chunk-vwj6ccer.js:245189-245251 esm-fingerprint
-function Gf(e) {
-  return e.nodeName === "PRE" || e.nodeName === "CODE";
+function isPreOrCode(node) {
+  return node.nodeName === "PRE" || node.nodeName === "CODE";
 }
 //@ chunk-vwj6ccer.js:245251-245388 esm-fingerprint
-function zf(e, t) {
-  return (
-    (e.isBlock = li(e)),
-    (e.isCode = e.nodeName === "CODE" || e.parentNode.isCode),
-    (e.isBlank = Wf(e)),
-    (e.flankingWhitespace = Xf(e, t)),
-    e
-  );
+function Node(node, options) {
+  node.isBlock = isBlock(node);
+  node.isCode = node.nodeName === "CODE" || node.parentNode.isCode;
+  node.isBlank = isBlank(node);
+  node.flankingWhitespace = flankingWhitespace(node, options);
+  return node;
 }
 //@ chunk-vwj6ccer.js:245388-245470 esm-fingerprint
-function Wf(e) {
-  return !jc(e) && !Of(e) && /^\s*$/i.test(e.textContent) && !If(e) && !qf(e);
+function isBlank(node) {
+  return (
+    !isVoid(node) &&
+    !isMeaningfulWhenBlank(node) &&
+    /^\s*$/i.test(node.textContent) &&
+    !hasVoid(node) &&
+    !hasMeaningfulWhenBlank(node)
+  );
 }
 //@ chunk-vwj6ccer.js:245470-245759 esm-fingerprint
-function Xf(e, t) {
-  if (e.isBlock || (t.preformattedCode && e.isCode)) return { leading: "", trailing: "" };
-  var r = Kf(e.textContent);
-  if (r.leadingAscii && Uc("left", e, t)) r.leading = r.leadingNonAscii;
-  if (r.trailingAscii && Uc("right", e, t)) r.trailing = r.trailingNonAscii;
-  return { leading: r.leading, trailing: r.trailing };
+function flankingWhitespace(node, options) {
+  if (node.isBlock || (options.preformattedCode && node.isCode))
+    return {
+      leading: "",
+      trailing: "",
+    };
+  var edges = edgeWhitespace(node.textContent);
+  if (edges.leadingAscii && isFlankedByWhitespace("left", node, options))
+    edges.leading = edges.leadingNonAscii;
+  if (edges.trailingAscii && isFlankedByWhitespace("right", node, options))
+    edges.trailing = edges.trailingNonAscii;
+  return {
+    leading: edges.leading,
+    trailing: edges.trailing,
+  };
 }
 //@ chunk-vwj6ccer.js:245759-245968 esm-fingerprint
-function Kf(e) {
-  var match = e.match(/^(([ \t\r\n]*)(\s*))(?:(?=\S)[\s\S]*\S)?((\s*?)([ \t\r\n]*))$/);
+function edgeWhitespace(string) {
+  var m = string.match(/^(([ \t\r\n]*)(\s*))(?:(?=\S)[\s\S]*\S)?((\s*?)([ \t\r\n]*))$/);
   return {
-    leading: match[1],
-    leadingAscii: match[2],
-    leadingNonAscii: match[3],
-    trailing: match[4],
-    trailingNonAscii: match[5],
-    trailingAscii: match[6],
+    leading: m[1],
+    leadingAscii: m[2],
+    leadingNonAscii: m[3],
+    trailing: m[4],
+    trailingNonAscii: m[5],
+    trailingAscii: m[6],
   };
 }
 //@ chunk-vwj6ccer.js:245968-246229 esm-fingerprint
-function Uc(e, t, r) {
-  var a, s, c;
-  if (e === "left") ((a = t.previousSibling), (s = / $/));
-  else ((a = t.nextSibling), (s = /^ /));
-  if (a) {
-    if (a.nodeType === 3) c = s.test(a.nodeValue);
-    else if (r.preformattedCode && a.nodeName === "CODE") c = !1;
-    else if (a.nodeType === 1 && !li(a)) c = s.test(a.textContent);
+function isFlankedByWhitespace(side, node, options) {
+  var sibling;
+  var regExp;
+  var isFlanked;
+  if (side === "left") {
+    sibling = node.previousSibling;
+    regExp = / $/;
+  } else {
+    sibling = node.nextSibling;
+    regExp = /^ /;
   }
-  return c;
+  if (sibling) {
+    if (sibling.nodeType === 3) isFlanked = regExp.test(sibling.nodeValue);
+    else if (options.preformattedCode && sibling.nodeName === "CODE") isFlanked = false;
+    else if (sibling.nodeType === 1 && !isBlock(sibling)) isFlanked = regExp.test(sibling.textContent);
+  }
+  return isFlanked;
 }
 //@ chunk-vwj6ccer.js:246229-246476 esm-fingerprint
-var reduce = Array.prototype.reduce,
-  Qf = [
-    [/\\/g, "\\\\"],
-    [/\*/g, "\\*"],
-    [/^-/g, "\\-"],
-    [/^\+ /g, "\\+ "],
-    [/^(=+)/g, "\\$1"],
-    [/^(#{1,6}) /g, "\\$1 "],
-    [/`/g, "\\`"],
-    [/^~~~/g, "\\~~~"],
-    [/\[/g, "\\["],
-    [/\]/g, "\\]"],
-    [/^>/g, "\\>"],
-    [/_/g, "\\_"],
-    [/^(\d+)\. /g, "$1\\. "],
-  ];
+var reduce = Array.prototype.reduce;
+var escapes = [
+  [/\\/g, "\\\\"],
+  [/\*/g, "\\*"],
+  [/^-/g, "\\-"],
+  [/^\+ /g, "\\+ "],
+  [/^(=+)/g, "\\$1"],
+  [/^(#{1,6}) /g, "\\$1 "],
+  [/`/g, "\\`"],
+  [/^~~~/g, "\\~~~"],
+  [/\[/g, "\\["],
+  [/\]/g, "\\]"],
+  [/^>/g, "\\>"],
+  [/_/g, "\\_"],
+  [/^(\d+)\. /g, "$1\\. "],
+];
 //@ chunk-vwj6ccer.js:246476-247013 esm-fingerprint
-function wa(e) {
-  if (!(this instanceof wa)) return new wa(e);
-  var t = {
-    rules: rules,
+function TurndownService(options) {
+  if (!(this instanceof TurndownService)) return new TurndownService(options);
+  var defaults = {
+    rules,
     headingStyle: "setext",
     hr: "* * *",
     bulletListMarker: "*",
@@ -697,117 +755,121 @@ function wa(e) {
     linkStyle: "inlined",
     linkReferenceStyle: "full",
     br: "  ",
-    preformattedCode: !1,
-    blankReplacement: function (r, a) {
-      return a.isBlock
+    preformattedCode: false,
+    blankReplacement: function (content, node) {
+      return node.isBlock
         ? `
 
 `
         : "";
     },
-    keepReplacement: function (r, a) {
-      return a.isBlock
+    keepReplacement: function (content, node) {
+      return node.isBlock
         ? `
 
 ` +
-            a.outerHTML +
+            node.outerHTML +
             `
 
 `
-        : a.outerHTML;
+        : node.outerHTML;
     },
-    defaultReplacement: function (r, a) {
-      return a.isBlock
+    defaultReplacement: function (content, node) {
+      return node.isBlock
         ? `
 
 ` +
-            r +
+            content +
             `
 
 `
-        : r;
+        : content;
     },
   };
-  ((this.options = kf({}, t, e)), (this.rules = new Wc(this.options)));
+  this.options = extend({}, defaults, options);
+  this.rules = new Rules(this.options);
 }
 //@ chunk-vwj6ccer.js:247013-247666 esm-fingerprint
-wa.prototype = {
-  turndown: function (e) {
-    if (!Jf(e)) throw TypeError(e + " is not a string, or an element/document/fragment node.");
-    if (e === "") return "";
-    var t = Kc.call(this, new Vf(e, this.options));
-    return $f.call(this, t);
+TurndownService.prototype = {
+  turndown: function (input) {
+    if (!canConvert(input))
+      throw TypeError(input + " is not a string, or an element/document/fragment node.");
+    if (input === "") return "";
+    var output = Kc.call(this, new RootNode(input, this.options));
+    return postProcess.call(this, output);
   },
-  use: function (e) {
-    if (Array.isArray(e)) for (var t = 0; t < e.length; t++) this.use(e[t]);
-    else if (typeof e === "function") e(this);
+  use: function (plugin) {
+    if (Array.isArray(plugin)) for (var i = 0; i < plugin.length; i++) this.use(plugin[i]);
+    else if (typeof plugin === "function") plugin(this);
     else throw TypeError("plugin must be a Function or an Array of Functions");
     return this;
   },
-  addRule: function (e, t) {
-    return (this.rules.add(e, t), this);
+  addRule: function (key, rule) {
+    this.rules.add(key, rule);
+    return this;
   },
-  keep: function (e) {
-    return (this.rules.keep(e), this);
+  keep: function (filter) {
+    this.rules.keep(filter);
+    return this;
   },
-  remove: function (e) {
-    return (this.rules.remove(e), this);
+  remove: function (filter) {
+    this.rules.remove(filter);
+    return this;
   },
-  escape: function (e) {
-    return Qf.reduce(function (t, r) {
-      return t.replace(r[0], r[1]);
-    }, e);
+  escape: function (string) {
+    return escapes.reduce(function (accumulator, r) {
+      return accumulator.replace(r[0], r[1]);
+    }, string);
   },
 };
 //@ chunk-vwj6ccer.js:247666-247886 esm-fingerprint
-function Kc(e) {
+function Kc(parentNode) {
   var t = this;
   return reduce.call(
-    e.childNodes,
-    function (r, a) {
-      a = new zf(a, t.options);
-      var s = "";
-      if (a.nodeType === 3) s = a.isCode ? a.nodeValue : t.escape(a.nodeValue);
-      else if (a.nodeType === 1) s = Zf.call(t, a);
-      return Yc(r, s);
+    parentNode.childNodes,
+    function (output, node) {
+      node = new Node(node, t.options);
+      var replacement = "";
+      if (node.nodeType === 3) replacement = node.isCode ? node.nodeValue : t.escape(node.nodeValue);
+      else if (node.nodeType === 1) replacement = replacementForNode.call(t, node);
+      return join(output, replacement);
     },
     "",
   );
 }
 //@ chunk-vwj6ccer.js:247886-248066 esm-fingerprint
-function $f(e) {
+function postProcess(output) {
   var t = this;
-  return (
-    this.rules.forEach(function (rule) {
-      if (typeof rule.append === "function") e = Yc(e, rule.append(t.options));
-    }),
-    e.replace(/^[\t\r\n]+/, "").replace(/[\t\r\n\s]+$/, "")
-  );
+  this.rules.forEach(function (rule) {
+    if (typeof rule.append === "function") output = join(output, rule.append(t.options));
+  });
+  return output.replace(/^[\t\r\n]+/, "").replace(/[\t\r\n\s]+$/, "");
 }
 //@ chunk-vwj6ccer.js:248066-248246 esm-fingerprint
-function Zf(e) {
-  var forNode = this.rules.forNode(e),
-    r = Kc.call(this, e),
-    flankingWhitespace = e.flankingWhitespace;
-  if (flankingWhitespace.leading || flankingWhitespace.trailing) r = r.trim();
-  return flankingWhitespace.leading + forNode.replacement(r, e, this.options) + flankingWhitespace.trailing;
+function replacementForNode(node) {
+  var rule = this.rules.forNode(node);
+  var content = Kc.call(this, node);
+  var whitespace = node.flankingWhitespace;
+  if (whitespace.leading || whitespace.trailing) content = content.trim();
+  return whitespace.leading + rule.replacement(content, node, this.options) + whitespace.trailing;
 }
 //@ chunk-vwj6ccer.js:248246-248366 esm-fingerprint
-function Yc(e, t) {
-  var r = Mf(e),
-    a = Lf(t),
-    max = Math.max(e.length - r.length, t.length - a.length),
-    substring = `
+function join(output, replacement) {
+  var s1 = trimTrailingNewlines(output);
+  var s2 = trimLeadingNewlines(replacement);
+  var nls = Math.max(output.length - s1.length, replacement.length - s2.length);
+  var separator = `
 
-`.substring(0, max);
-  return r + substring + a;
+`.substring(0, nls);
+  return s1 + separator + s2;
 }
 //@ chunk-vwj6ccer.js:248366-248482 esm-fingerprint
-function Jf(e) {
+function canConvert(input) {
   return (
-    e != null &&
-    (typeof e === "string" || (e.nodeType && (e.nodeType === 1 || e.nodeType === 9 || e.nodeType === 11)))
+    input != null &&
+    (typeof input === "string" ||
+      (input.nodeType && (input.nodeType === 1 || input.nodeType === 9 || input.nodeType === 11)))
   );
 }
 //@ chunk-vwj6ccer.js:248482-248492 esm-layout
-var ah = wa;
+var TurndownService_default = TurndownService;

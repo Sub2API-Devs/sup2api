@@ -11,14 +11,14 @@
 import { parseIntLoose } from "./envUtils.js";
 
 //@ chunk-4khf94hy.js:227-249 affinity
-var DEFAULT_TIMEOUT_MS = 120000,
-  s = 600000;
+var DEFAULT_TIMEOUT_MS = 120000;
+var MAX_BASH_TIMEOUT_MS = 600000;
 //@ chunk-4khf94hy.js:249-363 fingerprint = getDefaultBashTimeoutMs (1)
 function getDefaultBashTimeoutMs(env = process.env) {
   let envValue = env.BASH_DEFAULT_TIMEOUT_MS;
   if (envValue) {
-    let t = parseIntLoose(envValue);
-    if (!isNaN(t) && t > 0) return t;
+    let parsed = parseIntLoose(envValue);
+    if (!isNaN(parsed) && parsed > 0) return parsed;
   }
   return DEFAULT_TIMEOUT_MS;
 }
@@ -26,43 +26,63 @@ function getDefaultBashTimeoutMs(env = process.env) {
 function getMaxBashTimeoutMs(env = process.env) {
   let envValue = env.BASH_MAX_TIMEOUT_MS;
   if (envValue) {
-    let t = parseIntLoose(envValue);
-    if (!isNaN(t) && t > 0) return Math.max(t, getDefaultBashTimeoutMs(env));
+    let parsed = parseIntLoose(envValue);
+    if (!isNaN(parsed) && parsed > 0) return Math.max(parsed, getDefaultBashTimeoutMs(env));
   }
-  return Math.max(s, getDefaultBashTimeoutMs(env));
+  return Math.max(MAX_BASH_TIMEOUT_MS, getDefaultBashTimeoutMs(env));
 }
 //@ chunk-4khf94hy.js:507-535 placement
-var Ssi = 1800000,
-  _5r = 7200000;
+/**
+ * 后台任务默认与最大超时（30 分钟 / 2 小时）。
+ */
+var DEFAULT_BACKGROUND_TIMEOUT_MS = 1800000;
+var MAX_BACKGROUND_TIMEOUT_MS = 7200000;
 //@ chunk-4khf94hy.js:535-597 placement
-function wsi(n) {
-  return Math.min(Math.max(n, getMaxBashTimeoutMs()), 2147483647);
+/**
+ * 把毫秒数夹到 [Bash 最大超时, 2^31-1]。
+ */
+function clampToMaxTimerDelay(backgroundLimitFlag) {
+  return Math.min(Math.max(backgroundLimitFlag, getMaxBashTimeoutMs()), 2147483647);
 }
 //@ chunk-4khf94hy.js:597-641 placement
-function Esi(n, e) {
-  return Math.max(n, getDefaultBashTimeoutMs(e));
+/**
+ * 取请求值与默认 Bash 超时中的较大者。
+ */
+function atLeastDefaultTimeout(backgroundLimitFlag, env) {
+  return Math.max(backgroundLimitFlag, getDefaultBashTimeoutMs(env));
 }
 //@ chunk-4khf94hy.js:641-691 placement
-function EVt(n, e) {
-  return n !== void 0 && n > 0 ? e : void 0;
+/**
+ * 仅当请求超时为正数时才返回它。
+ */
+function timeoutWhenPositive(timeout, maxTimeoutMs) {
+  return timeout !== undefined && timeout > 0 ? maxTimeoutMs : undefined;
 }
 //@ chunk-4khf94hy.js:691-702 placement
-var i = 2000;
+var MIN_SHELL_TIMEOUT_MS = 2000;
+//@ chunk-4khf94hy.js:702-939 placement
 /**
  * 计算可自动转后台的 shell 命令的实际超时：主代理用环境变量，子代理用上限，取请求值与该值（不低于最小值）的较小者。
  */
-//@ chunk-4khf94hy.js:702-939 placement
 function effectiveShellTimeoutMs({
-  requestedTimeoutMs: requestedTimeoutMs,
-  isMainAgent: isMainAgent,
-  canAutoBackground: canAutoBackground,
-  subagentCapMs: subagentCapMs = 0,
-  env: env = process.env,
+  requestedTimeoutMs,
+  isMainAgent,
+  canAutoBackground,
+  subagentCapMs = 0,
+  env = process.env,
 }) {
   if (!canAutoBackground) return requestedTimeoutMs;
   let r = isMainAgent ? parseIntLoose(env.CLAUDE_CODE_AUTO_BACKGROUND_TIMEOUT_MS) : subagentCapMs;
   if (isNaN(r) || r <= 0) return requestedTimeoutMs;
-  return Math.min(requestedTimeoutMs, Math.max(r, i));
+  return Math.min(requestedTimeoutMs, Math.max(r, MIN_SHELL_TIMEOUT_MS));
 }
-
-export { getMaxBashTimeoutMs, effectiveShellTimeoutMs, EVt, getDefaultBashTimeoutMs, Esi, Ssi, wsi, _5r };
+export {
+  getMaxBashTimeoutMs,
+  effectiveShellTimeoutMs,
+  timeoutWhenPositive,
+  getDefaultBashTimeoutMs,
+  atLeastDefaultTimeout,
+  DEFAULT_BACKGROUND_TIMEOUT_MS,
+  clampToMaxTimerDelay,
+  MAX_BACKGROUND_TIMEOUT_MS,
+};

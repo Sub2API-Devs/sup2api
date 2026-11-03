@@ -15,40 +15,57 @@ import { logEvent } from "../services/analytics/index.js";
 import { fromEnum } from "../services/analytics/safeMetadata.js";
 
 //@ chunk-18hwfzwa.js:782963-783029 affinity
-var e9t = 1610612736,
-  t9t = 2684354560,
-  bN = { normal: 0, high: 1, critical: 2 };
+var MEMORY_HIGH_HEAP_BYTES = 1610612736;
+var MEMORY_CRITICAL_HEAP_BYTES = 2684354560;
+var MEMORY_LEVEL_RANK = {
+  normal: 0,
+  high: 1,
+  critical: 2,
+};
 //@ chunk-18hwfzwa.js:783029-783611 fingerprint = useMemoryUsage (0.634)
-function useMemoryUsage(h = "high", x = !0) {
-  let [D, L] = y(null),
-    ee = R("normal");
-  return (
-    useInterval(() => {
-      let ke, Re;
-      try {
-        ({ heapUsed: ke, rss: Re } = process.memoryUsage());
-      } catch (error) {
-        logForDebugging(
-          `[useMemoryUsage] process.memoryUsage() failed: ${error instanceof Error ? error.message : String(error)}`,
-          { level: "error" },
-        );
-        return;
-      }
-      let status = ke >= t9t ? "critical" : ke >= e9t ? "high" : "normal";
-      if (x && bN[status] >= bN[h] && bN[status] > bN[ee.current])
-        (logEvent("tengu_memory_threshold_crossed", {
-          rss_mb: Math.round(Re / 1024 / 1024),
-          heap_used_mb: Math.round(ke / 1024 / 1024),
-          status: fromEnum(status),
-        }),
-          (ee.current = status));
-      L((prev) => {
-        if (bN[status] < bN[h]) return prev === null ? prev : null;
-        return { heapUsed: ke, status: status };
+function useMemoryUsage(h = "high", x = true) {
+  let [memoryUsage, setMemoryUsage] = y(null);
+  let statusRef = R("normal");
+  useInterval(() => {
+    let heapUsed;
+    let Re;
+    try {
+      ({ heapUsed, rss: Re } = process.memoryUsage());
+    } catch (error) {
+      logForDebugging(
+        `[useMemoryUsage] process.memoryUsage() failed: ${error instanceof Error ? error.message : String(error)}`,
+        {
+          level: "error",
+        },
+      );
+      return;
+    }
+    let status =
+      heapUsed >= MEMORY_CRITICAL_HEAP_BYTES
+        ? "critical"
+        : heapUsed >= MEMORY_HIGH_HEAP_BYTES
+          ? "high"
+          : "normal";
+    if (
+      x &&
+      MEMORY_LEVEL_RANK[status] >= MEMORY_LEVEL_RANK[h] &&
+      MEMORY_LEVEL_RANK[status] > MEMORY_LEVEL_RANK[statusRef.current]
+    ) {
+      logEvent("tengu_memory_threshold_crossed", {
+        rss_mb: Math.round(Re / 1024 / 1024),
+        heap_used_mb: Math.round(heapUsed / 1024 / 1024),
+        status: fromEnum(status),
       });
-    }, 1e4),
-    D
-  );
+      statusRef.current = status;
+    }
+    setMemoryUsage((prev) => {
+      if (MEMORY_LEVEL_RANK[status] < MEMORY_LEVEL_RANK[h]) return prev === null ? prev : null;
+      return {
+        heapUsed,
+        status,
+      };
+    });
+  }, 1e4);
+  return memoryUsage;
 }
-
 export { useMemoryUsage };

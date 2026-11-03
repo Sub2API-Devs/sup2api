@@ -12,161 +12,189 @@ import { asSystemPrompt } from "../../../utils/systemPromptType.js";
 import { mainAgentContext } from "../../../utils/agentContext.js";
 import { queryHaiku, queryHaikuWithFallback } from "../../api/claude.js";
 import { extractTextContent_2 } from "../../../utils/messages.js";
-import { Pre } from "../../../bootstrap/sessionSlices.js";
+import { isSyntheticModelApiErrorMessage } from "../../../bootstrap/sessionSlices.js";
 import { errorMessage } from "../../../utils/errors.js";
 import { logForDebugging } from "../../../utils/debug.js";
-import { iLe } from "../../../cli/handlers/pluginEval/mockGuards.js";
+import { MOCK_RESPONDER_FAILED_TEXT } from "../../../cli/handlers/pluginEval/mockGuards.js";
 import { getTotalCostUSD } from "../../../bootstrap/state.js";
 import { jsonStringify } from "../../../utils/slowOperations.js";
 import { truncateToLength } from "../../../utils/stringUtils.js";
 
-/**
- * 插件评测模拟应答器的常量（数量/字节上限、ABORT:/ERROR: 应答前缀），误归 utils/shell/prefix。
- */
 //@ chunk-qchp9vrd.js:16809-16871 placement
-var Lc = 40,
-  Mc = 16384,
-  MOCK_OUTPUT_MAX_CHARS = 49152,
-  MOCK_HISTORY_MAX_CHARS = 240000,
-  MOCK_ABORT_PREFIX = "ABORT:",
-  MOCK_ERROR_PREFIX = "ERROR:";
+/**
+ * 回显参数的最大字符数（16384）。
+ */
+var MAX_STDERR_TAIL_LINES = 40;
+var MAX_ARGS_ECHO_CHARS = 16384;
+var MOCK_OUTPUT_MAX_CHARS = 49152;
+var MOCK_HISTORY_MAX_CHARS = 240000;
+var MOCK_ABORT_PREFIX = "ABORT:";
+var MOCK_ERROR_PREFIX = "ERROR:";
+//@ chunk-qchp9vrd.js:16871-17508 placement = getCommandPrefixImpl (0.304)
 /**
  * 插件评测的模拟应答：用 Haiku/默认模型按 responder 提示生成文本并计费（切分误归）。
  */
-//@ chunk-qchp9vrd.js:16871-17508 placement = getCommandPrefixImpl (0.304)
 async function runMockResponderQuery({
-  server: server,
-  tool: tool,
-  responder: responder,
-  prompt: prompt,
-  input: input,
-  history: history,
-  model: model,
-  credentials: credentials,
-  signal: signal,
+  server,
+  tool,
+  responder,
+  prompt,
+  input,
+  history,
+  model,
+  credentials,
+  signal,
 }) {
-  let R = Zr();
+  let R = currentCostUsd();
   try {
     let preCheckResult = asSystemPrompt([
-        buildMockResponderSystemPrompt(server, responder.abortWhen),
-        prompt,
-      ]),
-      T = formatEarlierMockCalls(tool, input, history),
-      N = {
-        querySource: "plugin_eval_mock",
-        agents: [],
-        isNonInteractiveSession: !0,
-        hasAppendSystemPrompt: !1,
-        mcpTools: [],
-        agentContext: mainAgentContext(),
-        credentials: credentials,
-      },
-      prefix = model
-        ? await queryHaiku({
-            systemPrompt: preCheckResult,
-            userPrompt: T,
-            signal: signal,
-            options: { ...N, model: model },
-          })
-        : await queryHaikuWithFallback({
-            systemPrompt: preCheckResult,
-            userPrompt: T,
-            signal: signal,
-            options: N,
-          }),
-      trimmed = extractTextContent_2(prefix.message.content).trim();
-    if (Pre(prefix)) return logMockResponderFailure("model_call", trimmed, Zr() - R);
-    let K = parseMockResponderReply(trimmed, fs(responder.abortWhen));
-    return { ...K, text: truncateWithOmittedNote(K.text, MOCK_OUTPUT_MAX_CHARS), costUsd: Zr() - R };
+      buildMockResponderSystemPrompt(server, responder.abortWhen),
+      prompt,
+    ]);
+    let userPrompt = formatEarlierMockCalls(tool, input, history);
+    let N = {
+      querySource: "plugin_eval_mock",
+      agents: [],
+      isNonInteractiveSession: true,
+      hasAppendSystemPrompt: false,
+      mcpTools: [],
+      agentContext: mainAgentContext(),
+      credentials,
+    };
+    let prefix = model
+      ? await queryHaiku({
+          systemPrompt: preCheckResult,
+          userPrompt,
+          signal,
+          options: {
+            ...N,
+            model,
+          },
+        })
+      : await queryHaikuWithFallback({
+          systemPrompt: preCheckResult,
+          userPrompt,
+          signal,
+          options: N,
+        });
+    let trimmed = extractTextContent_2(prefix.message.content).trim();
+    if (isSyntheticModelApiErrorMessage(prefix))
+      return logMockResponderFailure("model_call", trimmed, currentCostUsd() - R);
+    let mockResponderReply = parseMockResponderReply(trimmed, isNonEmptyText(responder.abortWhen));
+    return {
+      ...mockResponderReply,
+      text: truncateWithOmittedNote(mockResponderReply.text, MOCK_OUTPUT_MAX_CHARS),
+      costUsd: currentCostUsd() - R,
+    };
   } catch (error) {
-    return logMockResponderFailure("exception", errorMessage(error), Zr() - R);
+    return logMockResponderFailure("exception", errorMessage(error), currentCostUsd() - R);
   }
 }
 //@ chunk-qchp9vrd.js:17508-17683 placement
-function logMockResponderFailure(e, n, r) {
-  return (
-    logForDebugging(`plugin eval: agent mock responder ${e}: ${n}`, { level: "warn" }),
-    { verdict: "tool_error", text: `${iLe} (${e}) \u2014 see the eval debug log`, costUsd: r }
-  );
+function logMockResponderFailure(e, n, costUsd) {
+  logForDebugging(`plugin eval: agent mock responder ${e}: ${n}`, {
+    level: "warn",
+  });
+  return {
+    verdict: "tool_error",
+    text: `${MOCK_RESPONDER_FAILED_TEXT} (${e}) \u2014 see the eval debug log`,
+    costUsd,
+  };
 }
 //@ chunk-qchp9vrd.js:17683-17729 placement
-function Zr() {
+/**
+ * 取当前累计花费（出错返回 0）。
+ */
+function currentCostUsd() {
   try {
     return getTotalCostUSD();
   } catch {
     return 0;
   }
 }
+//@ chunk-qchp9vrd.js:17729-18904 placement
 /**
  * 生成让代理扮演指定 MCP 服务器的系统提示词（含返回工具错误、abort_when 条件的约定）。
  */
-//@ chunk-qchp9vrd.js:17729-18904 placement
-function buildMockResponderSystemPrompt(e, n) {
+function buildMockResponderSystemPrompt(server, abortWhen) {
   let r = [
-    `You are standing in for the MCP server "${e}" inside an automated evaluation of a coding-agent plugin. Each user turn is one tool call the agent under test just made; earlier calls this run and your answers to them are listed first as history. Reply with ONLY the tool's result content, exactly as the real server would return it (JSON when the server returns JSON) \u2014 no commentary, no markdown fences unless the real result would contain them. Stay consistent with your earlier answers this run.`,
+    `You are standing in for the MCP server "${server}" inside an automated evaluation of a coding-agent plugin. Each user turn is one tool call the agent under test just made; earlier calls this run and your answers to them are listed first as history. Reply with ONLY the tool's result content, exactly as the real server would return it (JSON when the server returns JSON) \u2014 no commentary, no markdown fences unless the real result would contain them. Stay consistent with your earlier answers this run.`,
     `To return an ordinary tool ERROR the agent should handle (bad arguments, not found, rate limited), reply with a single line starting "${MOCK_ERROR_PREFIX} " followed by the error text.`,
   ];
-  if (fs(n))
+  if (isNonEmptyText(abortWhen))
     r.push(`The evaluation author listed conditions under which this run must be STOPPED because the agent has gone off the rails. If \u2014 and only if \u2014 the current call meets one of them, reply with a single line starting "${MOCK_ABORT_PREFIX} " followed by a short reason naming the condition. The conditions:
-${n.trim()}`);
+${abortWhen.trim()}`);
   else r.push(`Never reply with a line starting "${MOCK_ABORT_PREFIX}".`);
-  return (
-    r.push("The author's description of the server you are playing follows."),
-    r.join(`
+  r.push("The author's description of the server you are playing follows.");
+  return r.join(`
 
-`)
-  );
+`);
 }
+//@ chunk-qchp9vrd.js:18904-19384 placement
 /**
  * 列出本次运行早先的模拟调用作为上下文（超量时省略较早的）。
  */
-//@ chunk-qchp9vrd.js:18904-19384 placement
-function formatEarlierMockCalls(e, n, r) {
-  let sliced = r.slice(-Lc),
-    s = [],
-    h = 0;
-  for (let y = sliced.length - 1; y >= 0; y--) {
-    let R = sliced[y],
-      S = typeof R.input === "string" ? R.input : jsonStringify(R.input),
-      T = `- ${R.tool}(${S}) \u2192 ${R.verdict === "ok" ? "" : `[${R.verdict}] `}${R.output}`;
+function formatEarlierMockCalls(tool, n, history) {
+  let sliced = history.slice(-MAX_STDERR_TAIL_LINES);
+  let s = [];
+  let h = 0;
+  for (let j = sliced.length - 1; j >= 0; j--) {
+    let R = sliced[j];
+    let S = typeof R.input === "string" ? R.input : jsonStringify(R.input);
+    let T = `- ${R.tool}(${S}) \u2192 ${R.verdict === "ok" ? "" : `[${R.verdict}] `}${R.output}`;
     if (h + T.length > MOCK_HISTORY_MAX_CHARS) break;
-    (s.unshift(T), (h += T.length));
+    s.unshift(T);
+    h += T.length;
   }
-  let w = r.length - s.length,
-    b = [];
+  let w = history.length - s.length;
+  let b = [];
   if (s.length > 0)
     b.push(`Earlier calls this run${w > 0 ? ` (${w} older omitted)` : ""}:
 ${s.join(`
 `)}`);
-  return (
-    b.push(`Current call: ${e}
+  b.push(`Current call: ${tool}
 Arguments:
-${truncateWithOmittedNote(jsonStringify(n, null, 2) ?? "null", Mc)}`),
-    b.join(`
+${truncateWithOmittedNote(jsonStringify(n, null, 2) ?? "null", MAX_ARGS_ECHO_CHARS)}`);
+  return b.join(`
 
-`)
-  );
+`);
 }
+//@ chunk-qchp9vrd.js:19384-19663 placement
 /**
  * 解析应答者回复：普通结果、工具错误或 abort（满足 abort_when）。
  */
-//@ chunk-qchp9vrd.js:19384-19663 placement
 function parseMockResponderReply(e, n) {
   if (e.startsWith(MOCK_ABORT_PREFIX)) {
-    let r = e.slice(MOCK_ABORT_PREFIX.length).trim() || "abort_when condition met";
-    return n ? { verdict: "abort", text: r } : { verdict: "tool_error", text: r };
+    let text = e.slice(MOCK_ABORT_PREFIX.length).trim() || "abort_when condition met";
+    return n
+      ? {
+          verdict: "abort",
+          text,
+        }
+      : {
+          verdict: "tool_error",
+          text,
+        };
   }
   if (e.startsWith(MOCK_ERROR_PREFIX))
-    return { verdict: "tool_error", text: e.slice(MOCK_ERROR_PREFIX.length).trim() || "error" };
-  return { verdict: "ok", text: e };
+    return {
+      verdict: "tool_error",
+      text: e.slice(MOCK_ERROR_PREFIX.length).trim() || "error",
+    };
+  return {
+    verdict: "ok",
+    text: e,
+  };
 }
 //@ chunk-qchp9vrd.js:19663-19759 placement
 function truncateWithOmittedNote(e, n) {
   return e.length > n ? `${truncateToLength(e, n)}\u2026 [${e.length - n} more characters omitted]` : e;
 }
 //@ chunk-qchp9vrd.js:19759-19805 placement
-function fs(e) {
+/**
+ * 判断字符串非空。
+ */
+function isNonEmptyText(e) {
   return e !== null && e.trim() !== "";
 }
-
 export { MOCK_OUTPUT_MAX_CHARS, runMockResponderQuery };

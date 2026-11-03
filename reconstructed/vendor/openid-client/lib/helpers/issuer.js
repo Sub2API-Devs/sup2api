@@ -6,92 +6,108 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { AS } from "../../../object-hash/index.js";
-import { yf } from "../../../lru-cache/index.js";
-import { Ki } from "../errors.js";
-import { uf } from "./assert.js";
-import { gy } from "./keystore.js";
-import { wf } from "./weak_cache.js";
-import { pf } from "./process_response.js";
-import { Ol } from "./request.js";
+import { require_object_hash } from "../../../object-hash/index.js";
+import { require_lru_cache } from "../../../lru-cache/index.js";
+import { require_errors } from "../errors.js";
+import { require_assert } from "./assert.js";
+import { require_keystore } from "./keystore.js";
+import { require_weak_cache } from "./weak_cache.js";
+import { require_process_response } from "./process_response.js";
+import { require_request } from "./request.js";
 
 //@ chunk-1ny7cxrt.js:37631-38946 cjs-fingerprint
-var ky = x(function (JF, Sy) {
-  var VF = AS(),
-    qF = yf(),
-    { RPError: RPError } = Ki(),
-    { assertIssuerConfiguration: assertIssuerConfiguration } = uf(),
-    TS = gy(),
-    { keystores: keystores } = wf(),
-    WF = pf(),
-    $S = Ol(),
-    weakMap = new WeakMap(),
-    weakMap_2 = new WeakMap(),
-    RS = (e) => {
-      if (!weakMap_2.has(e)) weakMap_2.set(e, new qF({ max: 100 }));
-      return weakMap_2.get(e);
-    };
-  async function DS(e = !1) {
-    assertIssuerConfiguration(this, "jwks_uri");
-    let t = keystores.get(this),
-      n = RS(this);
-    if (e || !t) {
-      if (weakMap.has(this)) return weakMap.get(this);
-      return (
-        n.reset(),
-        weakMap.set(
-          this,
-          (async () => {
-            let o = await $S
-                .call(this, {
-                  method: "GET",
-                  responseType: "json",
-                  url: this.jwks_uri,
-                  headers: { Accept: "application/json, application/jwk-set+json" },
-                })
-                .finally(() => {
-                  weakMap.delete(this);
-                }),
-              r = WF(o),
-              fromJWKS = TS.fromJWKS(r, { onlyPublic: !0 });
-            return (n.set("throttle", !0, 60000), keystores.set(this, fromJWKS), fromJWKS);
-          })(),
-        ),
-        weakMap.get(this)
+var require_issuer_2 = x(function (cjsExports, cjsModule) {
+  var objectHash = require_object_hash();
+  var LRU = require_lru_cache();
+  var { RPError } = require_errors();
+  var { assertIssuerConfiguration } = require_assert();
+  var KeyStore = require_keystore();
+  var { keystores } = require_weak_cache();
+  var processResponse = require_process_response();
+  var request = require_request();
+  var inFlight = new WeakMap();
+  var caches = new WeakMap();
+  var lrus = (ctx) => {
+    if (!caches.has(ctx))
+      caches.set(
+        ctx,
+        new LRU({
+          max: 100,
+        }),
       );
+    return caches.get(ctx);
+  };
+  async function getKeyStore(reload = false) {
+    assertIssuerConfiguration(this, "jwks_uri");
+    let keystore = keystores.get(this);
+    let cache = lrus(this);
+    if (reload || !keystore) {
+      if (inFlight.has(this)) return inFlight.get(this);
+      cache.reset();
+      inFlight.set(
+        this,
+        (async () => {
+          let response = await request
+            .call(this, {
+              method: "GET",
+              responseType: "json",
+              url: this.jwks_uri,
+              headers: {
+                Accept: "application/json, application/jwk-set+json",
+              },
+            })
+            .finally(() => {
+              inFlight.delete(this);
+            });
+          let jwks = processResponse(response);
+          let joseKeyStore = KeyStore.fromJWKS(jwks, {
+            onlyPublic: true,
+          });
+          cache.set("throttle", true, 60000);
+          keystores.set(this, joseKeyStore);
+          return joseKeyStore;
+        })(),
+      );
+      return inFlight.get(this);
     }
-    return t;
+    return keystore;
   }
-  async function YF({ kid: kid, kty: kty, alg: alg, use: use }, { allowMulti: r = !1 } = {}) {
-    let s = RS(this),
-      a = { kid: kid, kty: kty, alg: alg, use: use },
-      l = VF(a, {
-        algorithm: "sha256",
-        ignoreUnknown: !0,
-        unorderedArrays: !0,
-        unorderedSets: !0,
-        respectType: !1,
-      }),
-      c = s.get(l) || s.get("throttle"),
-      u = await DS.call(this, !c),
-      all = u.all(a);
-    if ((delete a.use, all.length === 0))
+  async function queryKeyStore({ kid, kty, alg, use }, { allowMulti = false } = {}) {
+    let cache = lrus(this);
+    let def = {
+      kid,
+      kty,
+      alg,
+      use,
+    };
+    let defHash = objectHash(def, {
+      algorithm: "sha256",
+      ignoreUnknown: true,
+      unorderedArrays: true,
+      unorderedSets: true,
+      respectType: false,
+    });
+    let freshJwksUri = cache.get(defHash) || cache.get("throttle");
+    let keystore = await getKeyStore.call(this, !freshJwksUri);
+    let keys = keystore.all(def);
+    delete def.use;
+    if (keys.length === 0)
       throw new RPError({
-        printf: ["no valid key found in issuer's jwks_uri for key parameters %j", a],
-        jwks: u,
+        printf: ["no valid key found in issuer's jwks_uri for key parameters %j", def],
+        jwks: keystore,
       });
-    if (!r && all.length > 1 && !kid)
+    if (!allowMulti && keys.length > 1 && !kid)
       throw new RPError({
         printf: [
           "multiple matching keys found in issuer's jwks_uri for key parameters %j, kid must be provided in this case",
-          a,
+          def,
         ],
-        jwks: u,
+        jwks: keystore,
       });
-    return (s.set(l, !0), all);
+    cache.set(defHash, true);
+    return keys;
   }
-  JF.queryKeyStore = YF;
-  JF.keystore = DS;
+  cjsExports.queryKeyStore = queryKeyStore;
+  cjsExports.keystore = getKeyStore;
 });
-
-export { ky };
+export { require_issuer_2 };

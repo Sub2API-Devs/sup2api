@@ -10,10 +10,15 @@
  */
 
 //@ chunk-s3dfv2tr.js:191-226 placement
-var lor = /^[A-Za-z0-9_.:-]{1,128}$/;
+/**
+ * SAFE_IDENTIFIER_RE：安全标识符格式。
+ */
+var SAFE_IDENTIFIER_RE = /^[A-Za-z0-9_.:-]{1,128}$/;
 //@ chunk-s3dfv2tr.js:226-290 placement
-function kN(n) {
-  return typeof n === "string" && lor.test(n) ? n : void 0;
+/**
+ * safeIdentifierOrUndefined：安全标识符或 undefined。
+ */
+function safeIdentifierOrUndefined(n) {
+  return typeof n === "string" && SAFE_IDENTIFIER_RE.test(n) ? n : undefined;
 }
-
-export { kN, lor };
+export { safeIdentifierOrUndefined, SAFE_IDENTIFIER_RE };

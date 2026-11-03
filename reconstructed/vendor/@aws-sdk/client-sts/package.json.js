@@ -27,7 +27,7 @@ var Y = {
   main: "./dist-cjs/index.js",
   types: "./dist-types/index.d.ts",
   module: "./dist-es/index.js",
-  sideEffects: !1,
+  sideEffects: false,
   dependencies: {
     "@aws-crypto/sha256-browser": "5.2.0",
     "@aws-crypto/sha256-js": "5.2.0",
@@ -77,13 +77,26 @@ var Y = {
     rimraf: "3.0.2",
     typescript: "~5.8.3",
   },
-  engines: { node: ">=18.0.0" },
-  typesVersions: { "<4.0": { "dist-types/*": ["dist-types/ts3.4/*"] } },
+  engines: {
+    node: ">=18.0.0",
+  },
+  typesVersions: {
+    "<4.0": {
+      "dist-types/*": ["dist-types/ts3.4/*"],
+    },
+  },
   files: ["dist-*/**"],
-  author: { name: "AWS SDK for JavaScript Team", url: "https://aws.amazon.com/javascript/" },
+  author: {
+    name: "AWS SDK for JavaScript Team",
+    url: "https://aws.amazon.com/javascript/",
+  },
   license: "Apache-2.0",
-  browser: { "./dist-es/runtimeConfig": "./dist-es/runtimeConfig.browser" },
-  "react-native": { "./dist-es/runtimeConfig": "./dist-es/runtimeConfig.native" },
+  browser: {
+    "./dist-es/runtimeConfig": "./dist-es/runtimeConfig.browser",
+  },
+  "react-native": {
+    "./dist-es/runtimeConfig": "./dist-es/runtimeConfig.native",
+  },
   homepage: "https://github.com/aws/aws-sdk-js-v3/tree/main/clients/client-sts",
   repository: {
     type: "git",
@@ -91,5 +104,4 @@ var Y = {
     directory: "clients/client-sts",
   },
 };
-
 export { Y };

@@ -8,13 +8,15 @@
 import { x } from "../../runtime/bun-runtime.js";
 
 //@ chunk-na3pph4p.js:61969-64137 cjs-fingerprint
-var ei = x(function (zd, Ku) {
-  Ku.exports = {
+var require_package_2 = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = {
     name: "google-auth-library",
     version: "10.6.2",
     author: "Google Inc.",
     description: "Google APIs Authentication Client Library for Node.js",
-    engines: { node: ">=18" },
+    engines: {
+      node: ">=18",
+    },
     main: "./build/src/index.js",
     types: "./build/src/index.d.ts",
     repository: {
@@ -92,5 +94,4 @@ var ei = x(function (zd, Ku) {
       "https://github.com/googleapis/google-cloud-node-core/tree/main/packages/google-auth-library-nodejs",
   };
 });
-
-export { ei };
+export { require_package_2 };

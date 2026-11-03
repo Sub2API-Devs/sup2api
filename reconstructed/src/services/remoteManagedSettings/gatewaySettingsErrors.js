@@ -21,8 +21,8 @@ import {
   initializeRemoteManagedSettingsLoadingPromise,
 } from "./loader.js";
 import { resetRemoteSettingsSyncCache } from "../cloudSessions/eligibility.js";
-import { or } from "../../utils/settings/commandSyncNames.js";
-import { R3t } from "../gateway/constants.js";
+import { invalidateCommandNames } from "../../utils/settings/commandSyncNames.js";
+import { GATEWAY_SESSION_EXPIRED_MESSAGE } from "../gateway/constants.js";
 import {
   getBasePolicySettings,
   isAdminPolicyOrigin,
@@ -46,79 +46,82 @@ import { validateLoginIdentity } from "../../cli/startup/launcherHostLogin.js";
 import { logError } from "../../utils/log.js";
 import { TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS, toError } from "../../utils/errors.js";
 
+//@ chunk-cjydagjy.js:69366-69431 placement
 /**
  * preAction 中调用的迁移入口：先 migrateEnableAllProjectMcpServersToSettings，再 runMigrations，再异步迁移（不等待）。
  */
-//@ chunk-cjydagjy.js:69366-69431 placement
 async function runAllMigrations(e) {
-  (await migrateEnableAllProjectMcpServersToSettings(),
-    await runMigrations(e),
-    migrateChangelogFromConfig(e).catch(() => {}));
+  await migrateEnableAllProjectMcpServersToSettings();
+  await runMigrations(e);
+  migrateChangelogFromConfig(e).catch(() => {});
 }
 //@ chunk-cjydagjy.js:69431-69510 placement
-function asStringArray(e) {
-  return Array.isArray(e) && e.every((r) => typeof r === "string") ? e : [];
+function asStringArray(optionValue) {
+  return Array.isArray(optionValue) && optionValue.every((r) => typeof r === "string") ? optionValue : [];
 }
 //@ chunk-cjydagjy.js:69510-69599 placement
 function parseNumberOption(e) {
-  let r = parseNumberWithSeparators(e);
-  if (Number.isNaN(r)) throw new InvalidArgumentError("must be a number");
-  return r;
+  let numberWithSeparators = parseNumberWithSeparators(e);
+  if (Number.isNaN(numberWithSeparators)) throw new InvalidArgumentError("must be a number");
+  return numberWithSeparators;
 }
 //@ chunk-cjydagjy.js:69599-69675 placement
 function continueSignedOutAfterGatewayEnd() {
-  (setGatewayAuth(null),
-    stopBackgroundPolling(),
-    resetRemoteSettingsSyncCache(),
-    or(),
-    clearRemoteManagedSettingsPrefetch(),
-    process.stderr.write(
-      R3t +
-        `
+  setGatewayAuth(null);
+  stopBackgroundPolling();
+  resetRemoteSettingsSyncCache();
+  invalidateCommandNames();
+  clearRemoteManagedSettingsPrefetch();
+  process.stderr.write(
+    GATEWAY_SESSION_EXPIRED_MESSAGE +
+      `
 `,
-    ));
+  );
 }
 //@ chunk-cjydagjy.js:69675-69796 placement
 function needsPolicyHelperVerdict() {
-  if (!getGatewayAuth()?.hostVerdict) return !1;
-  let e = getBasePolicySettings();
+  if (!getGatewayAuth()?.hostVerdict) return false;
+  let basePolicySettings = getBasePolicySettings();
   return (
     isAdminPolicyOrigin(getBasePolicySettingsOrigin()) &&
-    (e?.policyHelpers != null || e?.policyHelper != null)
+    (basePolicySettings?.policyHelpers != null || basePolicySettings?.policyHelper != null)
   );
 }
+//@ chunk-cjydagjy.js:69796-71446 placement
 /**
  * 网关托管设置加载失败时的处理（401 结束会话、403 等）。
  */
-//@ chunk-cjydagjy.js:69796-71446 placement
 function gatewaySettingsFailure() {
-  let e = getGatewayAuth()?.url ?? "",
-    r = isArtifactMountMode(),
-    n = getLastLoadStatus(),
-    s = n?.state === "failed" || n?.state === "stale_cache" ? n.failure : void 0,
-    S = s?.errorKind;
-  if (S === "http_401")
+  let url = getGatewayAuth()?.url ?? "";
+  let r = isArtifactMountMode();
+  let lastLoadStatus = getLastLoadStatus();
+  let failure =
+    lastLoadStatus?.state === "failed" || lastLoadStatus?.state === "stale_cache"
+      ? lastLoadStatus.failure
+      : undefined;
+  let errorKind = failure?.errorKind;
+  if (errorKind === "http_401")
     return {
-      endedSession: !0,
-      forbidden: !1,
-      exitMessage: `Cloud gateway ${e} no longer accepts this session. ${r ? "Run `claude` in a terminal where this session runs, then sign in again with /login." : "Start `claude` and sign in again with /login."}`,
-      gatewayUrl: e,
+      endedSession: true,
+      forbidden: false,
+      exitMessage: `Cloud gateway ${url} no longer accepts this session. ${r ? "Run `claude` in a terminal where this session runs, then sign in again with /login." : "Start `claude` and sign in again with /login."}`,
+      gatewayUrl: url,
       reason: "gateway_signin_required",
     };
-  if (S === "http_403")
+  if (errorKind === "http_403")
     return {
-      endedSession: !1,
-      forbidden: !0,
-      exitMessage: `Cloud gateway ${e} refused managed settings for this account (403): Claude Code may not be enabled for your organization. ${r ? "Contact your admin. To use a different account, run `claude auth logout` in a terminal where this session runs, then start `claude` and sign in with /login." : "Contact your administrator; to sign in with a different account, run `claude auth logout` first, then start `claude` and sign in."}`,
-      gatewayUrl: e,
+      endedSession: false,
+      forbidden: true,
+      exitMessage: `Cloud gateway ${url} refused managed settings for this account (403): Claude Code may not be enabled for your organization. ${r ? "Contact your admin. To use a different account, run `claude auth logout` in a terminal where this session runs, then start `claude` and sign in with /login." : "Contact your administrator; to sign in with a different account, run `claude auth logout` first, then start `claude` and sign in."}`,
+      gatewayUrl: url,
       reason: "gateway_access_denied",
     };
-  if (s?.errorKind === "ruled_empty")
+  if (failure?.errorKind === "ruled_empty")
     return {
-      endedSession: !1,
-      forbidden: !1,
-      exitMessage: `Couldn't load settings from Cloud gateway ${e}. None of the settings it served could be applied as written${firstRulingClause(s.rulings)}; ask your administrator to fix them.`,
-      gatewayUrl: e,
+      endedSession: false,
+      forbidden: false,
+      exitMessage: `Couldn't load settings from Cloud gateway ${url}. None of the settings it served could be applied as written${firstRulingClause(failure.rulings)}; ask your administrator to fix them.`,
+      gatewayUrl: url,
       reason: "remote_settings_required_unavailable",
     };
   let y = r
@@ -127,10 +130,10 @@ function gatewaySettingsFailure() {
       ? "Check your network connection, or sign in again with /login."
       : "Check your network connection, or run `claude auth login` to re-authenticate.";
   return {
-    endedSession: !1,
-    forbidden: !1,
-    exitMessage: `Couldn't load settings from Cloud gateway ${e}. ${y}`,
-    gatewayUrl: e,
+    endedSession: false,
+    forbidden: false,
+    exitMessage: `Couldn't load settings from Cloud gateway ${url}. ${y}`,
+    gatewayUrl: url,
     reason: "remote_settings_required_unavailable",
   };
 }
@@ -142,40 +145,37 @@ function remoteSettingsFailureReason() {
 }
 //@ chunk-cjydagjy.js:71536-71578 placement
 async function exitWithStartupFailure(e, r) {
-  (printCliError(r), await sendManagedSettingsRefusal(e));
+  printCliError(r);
+  await sendManagedSettingsRefusal(e);
 }
 //@ chunk-cjydagjy.js:71578-71626 placement
 function redoAuthDependentStartup() {
-  (resetRemoteSettingsSyncCache(),
-    or(),
-    applySafeConfigEnvironmentVariables(),
-    configureProxyAuthHelperFromSettings(),
-    initializeRemoteManagedSettingsLoadingPromise(),
-    initializePolicyLimitsLoadingPromise());
+  resetRemoteSettingsSyncCache();
+  invalidateCommandNames();
+  applySafeConfigEnvironmentVariables();
+  configureProxyAuthHelperFromSettings();
+  initializeRemoteManagedSettingsLoadingPromise();
+  initializePolicyLimitsLoadingPromise();
 }
 //@ chunk-cjydagjy.js:71626-71821 placement
 function redoStartupAfterLauncherLogin(e) {
   try {
-    if (
-      (clearOAuthTokenCache(),
-      resetUserData(),
-      redoAuthDependentStartup(),
-      learnLauncherHostLoginIdentity(validateLoginIdentity),
-      e)
-    )
-      refreshGrowthBookAfterAuthChange();
+    clearOAuthTokenCache();
+    resetUserData();
+    redoAuthDependentStartup();
+    learnLauncherHostLoginIdentity(validateLoginIdentity);
+    if (e) refreshGrowthBookAfterAuthChange();
   } catch (error) {
-    (logError(
+    logError(
       new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
         `[launcher-host-login] the start-up redo threw (${toError(error).name})`,
         "[launcher-host-login] the start-up redo threw",
       ),
-    ),
-      forgetLauncherHostLogin(),
-      clearOAuthTokenCache());
+    );
+    forgetLauncherHostLogin();
+    clearOAuthTokenCache();
   }
 }
-
 export {
   gatewaySettingsFailure,
   redoAuthDependentStartup,

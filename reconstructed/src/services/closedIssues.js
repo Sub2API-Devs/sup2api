@@ -8,22 +8,9 @@
  * pieces: chunk-18hwfzwa.js (11)
  * attribution: placement 11
  */
-import {
-  join,
-  join as join_2,
-  join as join_3,
-  join as join_4,
-  join as join_5,
-  join as join_6,
-  join as join_7,
-  join as join_8,
-  join as join_9,
-  join as join_10,
-  join as join_11,
-  join as join_12,
-} from "path";
+import { join } from "path";
 import { DoctorLazy } from "../cli/handlers/util.js";
-import { u, E, o, A } from "../../vendor/zod/v4/classic/schemas.js";
+import { u, E, string, array } from "../../vendor/zod/v4/classic/schemas.js";
 import { createJsonStore } from "../utils/jsonStore.js";
 import { getClaudeConfigDir } from "../utils/envUtils.js";
 import { STORAGE_SPACES } from "../utils/storage/storageSpaces.js";
@@ -44,103 +31,134 @@ import { logError } from "../utils/log.js";
 import { uniq } from "../utils/collections.js";
 
 //@ chunk-18hwfzwa.js:778738-778841 placement
-var CLOSED_ISSUE_SCHEMA = DoctorLazy(() => u({ number: E(), title: o(), closedAt: o() })),
-  CLOSED_ISSUES_SCHEMA = DoctorLazy(() => A(CLOSED_ISSUE_SCHEMA())),
-  CLOSED_ISSUES_TIMEOUT_MS = 5000,
-  CLOSED_ISSUES_CACHE_TTL_MS = 86400000,
-  CLOSED_ISSUES_LOOKBACK_DAYS = 30;
+var CLOSED_ISSUE_SCHEMA = DoctorLazy(() =>
+  u({
+    number: E(),
+    title: string(),
+    closedAt: string(),
+  }),
+);
+var CLOSED_ISSUES_SCHEMA = DoctorLazy(() => array(CLOSED_ISSUE_SCHEMA()));
+var CLOSED_ISSUES_TIMEOUT_MS = 5000;
+var CLOSED_ISSUES_CACHE_TTL_MS = 86400000;
+var CLOSED_ISSUES_LOOKBACK_DAYS = 30;
 //@ chunk-18hwfzwa.js:778841-778949 placement
 function closedIssuesCachePath() {
-  return createJsonStore(
-    join_8(getClaudeConfigDir(), "cache", "my-closed-issues.json"),
-    CLOSED_ISSUES_SCHEMA,
-    { defaultValue: () => [], ensureDir: !0 },
-  );
+  return createJsonStore(join(getClaudeConfigDir(), "cache", "my-closed-issues.json"), CLOSED_ISSUES_SCHEMA, {
+    defaultValue: () => [],
+    ensureDir: true,
+  });
 }
 //@ chunk-18hwfzwa.js:778949-779024 placement
-function i5e() {
+/**
+ * 已关闭 issue 缓存的存储位置（my-closed-issues.json）。
+ */
+function closedIssuesCacheFile() {
   return STORAGE_SPACES.cache("my-closed-issues", "my-closed-issues.json");
 }
 //@ chunk-18hwfzwa.js:779024-779103 placement
-function H8t(h) {
+/**
+ * 按回看天数（CLOSED_ISSUES_LOOKBACK_DAYS）算出查询用的起始日期（YYYY-MM-DD）。
+ */
+function closedSinceDate(h) {
   return new Date(h - CLOSED_ISSUES_LOOKBACK_DAYS * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 //@ chunk-18hwfzwa.js:779103-780382 placement
-async function fetchMyClosedIssues(h) {
+async function fetchMyClosedIssues(storageV5) {
   if (getIsNonInteractiveSession()) return null;
   if (isEssentialTrafficOnly()) return null;
-  let x = getGlobalConfig(),
-    now = Date.now();
-  if (now - (x.closedIssuesLastChecked ?? 0) < CLOSED_ISSUES_CACHE_TTL_MS) return null;
-  let L = now,
-    { stdout: stdout, code: code } = await execFileNoThrow(
-      "gh",
-      [
-        "issue",
-        "list",
-        "-R",
-        "anthropics/claude-code",
-        "--author",
-        "@me",
-        "--state",
-        "closed",
-        "--search",
-        `closed:>${H8t(now)}`,
-        "--json",
-        "number,title,closedAt,stateReason",
-        "--limit",
-        "30",
-      ],
-      { timeout: CLOSED_ISSUES_TIMEOUT_MS, preserveOutputOnError: !1 },
-    ),
-    Re = Date.now() - L,
-    Be = null;
+  let globalConfig = getGlobalConfig();
+  let now = Date.now();
+  if (now - (globalConfig.closedIssuesLastChecked ?? 0) < CLOSED_ISSUES_CACHE_TTL_MS) return null;
+  let L = now;
+  let { stdout, code } = await execFileNoThrow(
+    "gh",
+    [
+      "issue",
+      "list",
+      "-R",
+      "anthropics/claude-code",
+      "--author",
+      "@me",
+      "--state",
+      "closed",
+      "--search",
+      `closed:>${closedSinceDate(now)}`,
+      "--json",
+      "number,title,closedAt,stateReason",
+      "--limit",
+      "30",
+    ],
+    {
+      timeout: CLOSED_ISSUES_TIMEOUT_MS,
+      preserveOutputOnError: false,
+    },
+  );
+  let Re = Date.now() - L;
+  let Be = null;
   if (code === 0)
     try {
       Be = jsonParse(stdout)
         .filter((rt) => rt.stateReason === "COMPLETED")
-        .map((rt) => ({ number: rt.number, title: rt.title, closedAt: rt.closedAt }));
+        .map((rt) => ({
+          number: rt.number,
+          title: rt.title,
+          closedAt: rt.closedAt,
+        }));
     } catch (error) {
-      logForDebugging(`Failed to parse gh issue list output: ${error}`, { level: "error" });
+      logForDebugging(`Failed to parse gh issue list output: ${error}`, {
+        level: "error",
+      });
     }
   if (Be !== null)
-    if (isStorageV5Enabled() && h !== void 0)
+    if (isStorageV5Enabled() && storageV5 !== undefined)
       try {
-        let write = await h.write(i5e(), jsonStringify(Be), { mode: 438 & ~process.umask() });
-        if (!write.ok)
-          logForDebugging(`Failed to write closed-issues cache: ${formatStorageError(write.error)}`, {
+        let Xe = await storageV5.write(closedIssuesCacheFile(), jsonStringify(Be), {
+          mode: 438 & ~process.umask(),
+        });
+        if (!Xe.ok)
+          logForDebugging(`Failed to write closed-issues cache: ${formatStorageError(Xe.error)}`, {
             level: "error",
           });
       } catch (error) {
-        logForDebugging(`Failed to write closed-issues cache: ${error}`, { level: "error" });
+        logForDebugging(`Failed to write closed-issues cache: ${error}`, {
+          level: "error",
+        });
       }
     else
       try {
         await closedIssuesCachePath().write(Be);
       } catch (error) {
-        logForDebugging(`Failed to write closed-issues cache: ${error}`, { level: "error" });
+        logForDebugging(`Failed to write closed-issues cache: ${error}`, {
+          level: "error",
+        });
       }
-  let He = x.closedIssuesAcknowledged ?? [],
-    We = He;
+  let closedIssuesAcknowledged = globalConfig.closedIssuesAcknowledged ?? [];
+  let We = closedIssuesAcknowledged;
   if (Be !== null) {
     let Xe = new Set(Be.map((rt) => rt.number));
-    We = He.filter((rt) => Xe.has(rt));
+    We = closedIssuesAcknowledged.filter((rt) => Xe.has(rt));
   }
-  let ze = We.length !== He.length || We.some((Xe, rt) => Xe !== He[rt]);
-  return (
-    await saveGlobalConfig(
-      (Xe) => ({ ...Xe, closedIssuesLastChecked: now, ...(ze && { closedIssuesAcknowledged: We }) }),
-      h,
-    ),
-    Re
+  let ze =
+    We.length !== closedIssuesAcknowledged.length || We.some((Xe, rt) => Xe !== closedIssuesAcknowledged[rt]);
+  await saveGlobalConfig(
+    (Xe) => ({
+      ...Xe,
+      closedIssuesLastChecked: now,
+      ...(ze && {
+        closedIssuesAcknowledged: We,
+      }),
+    }),
+    storageV5,
   );
+  return Re;
 }
 //@ chunk-18hwfzwa.js:780382-781217 placement
-async function readClosedIssuesCache(h) {
-  if (h) {
+async function readClosedIssuesCache(storageV5) {
+  if (storageV5) {
     let x;
     try {
-      x = await h.read([i5e()]);
+      x = await storageV5.read([closedIssuesCacheFile()]);
     } catch (error) {
       if (isSadFsErrno(error)) logForDebugging(`closed-issues cache read failed: ${error}`);
       else logError(error);
@@ -165,17 +183,19 @@ async function readClosedIssuesCache(h) {
     try {
       L = jsonParse(Buffer.from(D.value).toString("utf-8"));
     } catch (error) {
-      return (logForDebugging(`closed-issues cache is not valid JSON: ${error}`, { level: "warn" }), []);
+      logForDebugging(`closed-issues cache is not valid JSON: ${error}`, {
+        level: "warn",
+      });
+      return [];
     }
-    let safeParse = CLOSED_ISSUES_SCHEMA().safeParse(L);
-    if (!safeParse.success)
-      return (
-        logForDebugging(`closed-issues cache failed schema validation: ${safeParse.error.message}`, {
-          level: "warn",
-        }),
-        []
-      );
-    return safeParse.data;
+    let ee = CLOSED_ISSUES_SCHEMA().safeParse(L);
+    if (!ee.success) {
+      logForDebugging(`closed-issues cache failed schema validation: ${ee.error.message}`, {
+        level: "warn",
+      });
+      return [];
+    }
+    return ee.data;
   }
   try {
     return await closedIssuesCachePath().read();
@@ -186,34 +206,42 @@ async function readClosedIssuesCache(h) {
   }
 }
 //@ chunk-18hwfzwa.js:781217-781320 placement
-function unacknowledgedClosedIssues(h) {
+function unacknowledgedClosedIssues(closedIssuesCache) {
   let x = new Set(getGlobalConfig().closedIssuesAcknowledged ?? []);
-  return h.filter((D) => !x.has(D.number));
+  return closedIssuesCache.filter((D) => !x.has(D.number));
 }
 //@ chunk-18hwfzwa.js:781320-781497 placement
-function acknowledgeClosedIssues(h, x) {
+function acknowledgeClosedIssues(h, storageV5) {
   if (h.length === 0) return;
-  let D = getGlobalConfig().closedIssuesAcknowledged ?? [],
-    L = uniq([...D, ...h]);
-  if (L.length === D.length) return;
-  saveGlobalConfig((ee) => ({ ...ee, closedIssuesAcknowledged: L }), x);
+  let closedIssuesAcknowledged = getGlobalConfig().closedIssuesAcknowledged ?? [];
+  let L = uniq([...closedIssuesAcknowledged, ...h]);
+  if (L.length === closedIssuesAcknowledged.length) return;
+  saveGlobalConfig(
+    (ee) => ({
+      ...ee,
+      closedIssuesAcknowledged: L,
+    }),
+    storageV5,
+  );
 }
 //@ chunk-18hwfzwa.js:781497-781531 placement
 function selectNumber(Dt) {
   return Dt.number;
 }
 //@ chunk-18hwfzwa.js:781531-781561 placement
-function X8t(Lt, oo) {
+/**
+ * 恒等函数（返回第二个参数），疑为占位或选择器包装。
+ */
+function identity_2(Lt, oo) {
   return oo;
 }
 //@ chunk-18hwfzwa.js:781561-781595 placement
 function selectNumber2(Xt) {
   return Xt.number;
 }
-
 export {
   selectNumber,
-  X8t,
+  identity_2,
   acknowledgeClosedIssues,
   selectNumber2,
   readClosedIssuesCache,

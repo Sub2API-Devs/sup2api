@@ -6,22 +6,31 @@
  * attribution: cjs-require-graph 1
  */
 import { x } from "../../../../../../../runtime/bun-runtime.js";
-import { Iae } from "../../../../../util-endpoints/dist-cjs/index.js";
-import { YJ } from "../../../../../../@smithy/core/dist-cjs/submodules/endpoints/index.browser.js";
-import { ae } from "./ruleset.js";
+import { require_util_endpoints } from "../../../../../util-endpoints/dist-cjs/index.js";
+import { require_index_browser } from "../../../../../../@smithy/core/dist-cjs/submodules/endpoints/index.browser.js";
+import { require_ruleset } from "./ruleset.js";
 
 //@ chunk-ddzww9ex.js:3961-4361 cjs-require-graph
-var he = x(function (ue) {
-  Object.defineProperty(ue, "__esModule", { value: !0 });
-  ue.defaultEndpointResolver = void 0;
-  var pe = Iae(),
-    C = YJ(),
-    de = ae(),
-    Et = new C.EndpointCache({ size: 50, params: ["Endpoint", "Region", "UseDualStack", "UseFIPS"] }),
-    gt = (e, t = {}) =>
-      Et.get(e, () => C.resolveEndpoint(de.ruleSet, { endpointParams: e, logger: t.logger }));
-  ue.defaultEndpointResolver = gt;
-  C.customEndpointFunctions.aws = pe.awsEndpointFunctions;
+var require_endpointResolver = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.defaultEndpointResolver = undefined;
+  var util_endpoints_1 = require_util_endpoints();
+  var util_endpoints_2 = require_index_browser();
+  var ruleset_1 = require_ruleset();
+  var cache = new util_endpoints_2.EndpointCache({
+    size: 50,
+    params: ["Endpoint", "Region", "UseDualStack", "UseFIPS"],
+  });
+  var defaultEndpointResolver = (endpointParams, context = {}) =>
+    cache.get(endpointParams, () =>
+      util_endpoints_2.resolveEndpoint(ruleset_1.ruleSet, {
+        endpointParams,
+        logger: context.logger,
+      }),
+    );
+  cjsExports.defaultEndpointResolver = defaultEndpointResolver;
+  util_endpoints_2.customEndpointFunctions.aws = util_endpoints_1.awsEndpointFunctions;
 });
-
-export { he };
+export { require_endpointResolver };

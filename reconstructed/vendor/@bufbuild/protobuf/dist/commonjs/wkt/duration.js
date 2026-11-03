@@ -6,31 +6,32 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../../runtime/bun-runtime.js";
-import { m_ } from "./google/protobuf/duration_pb.js";
-import { wl } from "../../cjs/create.js";
-import { ko } from "../proto-int64.js";
+import { require_duration_pb } from "./google/protobuf/duration_pb.js";
+import { require_create } from "../../cjs/create.js";
+import { require_proto_int64 } from "../proto-int64.js";
 
 //@ chunk-fq0cr76a.js:415592-415973 cjs-fingerprint
-var _O = x(function (xO) {
-  Object.defineProperty(xO, "__esModule", { value: !0 });
-  xO.durationFromMs = Oz;
-  xO.durationMs = Pz;
-  var bO = m_(),
-    SO = wl(),
-    EO = ko();
-  function Oz(e) {
-    let n = e < 0 ? -1 : 1,
-      abs = Math.abs(e),
-      floored = Math.floor(abs / 1000),
-      h = (abs - floored * 1000) * 1e6;
-    return SO.create(bO.DurationSchema, {
-      seconds: EO.protoInt64.parse(floored * n),
-      nanos: h === 0 ? 0 : h * n,
+var require_duration_2 = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.durationFromMs = durationFromMs;
+  cjsExports.durationMs = durationMs;
+  var duration_pb_js_1 = require_duration_pb();
+  var create_js_1 = require_create();
+  var proto_int64_js_1 = require_proto_int64();
+  function durationFromMs(durationMs) {
+    let sign = durationMs < 0 ? -1 : 1;
+    let absDurationMs = Math.abs(durationMs);
+    let absSeconds = Math.floor(absDurationMs / 1000);
+    let absNanos = (absDurationMs - absSeconds * 1000) * 1e6;
+    return create_js_1.create(duration_pb_js_1.DurationSchema, {
+      seconds: proto_int64_js_1.protoInt64.parse(absSeconds * sign),
+      nanos: absNanos === 0 ? 0 : absNanos * sign,
     });
   }
-  function Pz(e) {
-    return Number(e.seconds) * 1000 + Math.round(e.nanos / 1e6);
+  function durationMs(duration) {
+    return Number(duration.seconds) * 1000 + Math.round(duration.nanos / 1e6);
   }
 });
-
-export { _O };
+export { require_duration_2 };

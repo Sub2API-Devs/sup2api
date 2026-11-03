@@ -8,37 +8,41 @@
  * pieces: chunk-3mec1atf.js (6)
  * attribution: placement 6
  */
-import { j } from "../../../vendor/react/cjs/react.production.js";
+import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
 
 //@ chunk-3mec1atf.js:5903-5907 placement
-j();
+init_react_production();
 //@ chunk-3mec1atf.js:5907-6008 placement
 function createToolWindowTimingState() {
-  return { toolWindowStart: null, toolWindowEnd: null, thinkingBurstStart: null, wasThinking: !1 };
+  return {
+    toolWindowStart: null,
+    toolWindowEnd: null,
+    thinkingBurstStart: null,
+    wasThinking: false,
+  };
 }
+//@ chunk-3mec1atf.js:6008-6460 placement
 /**
  * 根据当前帧（是否有活动工具、thinking 状态、当前时间）推进工具运行窗口与 thinking 爆发的起止时间，返回新状态。
  */
-//@ chunk-3mec1atf.js:6008-6460 placement
 function advanceToolWindowTiming(l, t) {
-  let {
-    toolWindowStart: toolWindowStart,
-    toolWindowEnd: toolWindowEnd,
-    thinkingBurstStart: thinkingBurstStart,
-  } = l;
+  let { toolWindowStart, toolWindowEnd, thinkingBurstStart } = l;
   if (t.hasActiveTools) {
     if (t.toolWindowStartedAt !== null) toolWindowStart = Math.min(t.toolWindowStartedAt, t.now);
     else if (toolWindowStart === null || toolWindowEnd !== null) toolWindowStart = t.now;
     toolWindowEnd = null;
   } else if (toolWindowStart !== null && toolWindowEnd === null) toolWindowEnd = t.now;
-  if (!t.hasActiveTools && t.thinkingStatus !== null) ((toolWindowStart = null), (toolWindowEnd = null));
+  if (!t.hasActiveTools && t.thinkingStatus !== null) {
+    toolWindowStart = null;
+    toolWindowEnd = null;
+  }
   if (t.isThinking) {
     if (!l.wasThinking) thinkingBurstStart = t.now;
   } else thinkingBurstStart = null;
   return {
-    toolWindowStart: toolWindowStart,
-    toolWindowEnd: toolWindowEnd,
-    thinkingBurstStart: thinkingBurstStart,
+    toolWindowStart,
+    toolWindowEnd,
+    thinkingBurstStart,
     wasThinking: t.isThinking,
   };
 }
@@ -46,10 +50,17 @@ function advanceToolWindowTiming(l, t) {
 function toolWindowPhase(l, t) {
   if (t.showToolCallTimer && t.hasActiveTools && l.toolWindowStart !== null) {
     let u = t.now - l.toolWindowStart;
-    if (u >= 2000) return { kind: "tool-running", toolMs: u };
+    if (u >= 2000)
+      return {
+        kind: "tool-running",
+        toolMs: u,
+      };
   }
   if (t.outputLimitRecovery !== null && !t.hasActiveTools)
-    return { kind: "recovering", recovery: t.outputLimitRecovery };
+    return {
+      kind: "recovering",
+      recovery: t.outputLimitRecovery,
+    };
   if (
     t.showToolCallTimer &&
     !t.hasActiveTools &&
@@ -58,12 +69,25 @@ function toolWindowPhase(l, t) {
     l.toolWindowEnd !== null
   ) {
     let u = l.toolWindowEnd - l.toolWindowStart;
-    if (u >= 2000) return { kind: "tool-done", toolMs: u };
+    if (u >= 2000)
+      return {
+        kind: "tool-done",
+        toolMs: u,
+      };
   }
   if (t.thinkingStatus === "thinking" && !t.hasActiveTools)
-    return { kind: "thinking", thinkingMs: l.thinkingBurstStart !== null ? t.now - l.thinkingBurstStart : 0 };
-  if (typeof t.thinkingStatus === "number") return { kind: "thought-for", thoughtMs: t.thinkingStatus };
-  return { kind: "none" };
+    return {
+      kind: "thinking",
+      thinkingMs: l.thinkingBurstStart !== null ? t.now - l.thinkingBurstStart : 0,
+    };
+  if (typeof t.thinkingStatus === "number")
+    return {
+      kind: "thought-for",
+      thoughtMs: t.thinkingStatus,
+    };
+  return {
+    kind: "none",
+  };
 }
 //@ chunk-3mec1atf.js:7190-7367 placement
 function thinkingBurstIntensity(l, t) {
@@ -73,6 +97,5 @@ function thinkingBurstIntensity(l, t) {
   return Math.min(Math.max((u - 1e4) / 1e4, 0), 1);
 }
 //@ chunk-3mec1atf.js:7367-7371 placement
-j();
-
+init_react_production();
 export { createToolWindowTimingState, advanceToolWindowTiming, toolWindowPhase, thinkingBurstIntensity };

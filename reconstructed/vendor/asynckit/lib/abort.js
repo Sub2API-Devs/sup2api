@@ -8,14 +8,14 @@
 import { x } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-h6b7mazd.js:5653-5825 cjs-fingerprint
-var Kt = x(function (Fl, Tn) {
-  Tn.exports = Pa;
-  function Pa(e) {
-    (Object.keys(e.jobs).forEach(Fa.bind(e)), (e.jobs = {}));
+var require_abort = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = abort;
+  function abort(state) {
+    Object.keys(state.jobs).forEach(clean.bind(state));
+    state.jobs = {};
   }
-  function Fa(e) {
-    if (typeof this.jobs[e] == "function") this.jobs[e]();
+  function clean(key) {
+    if (typeof this.jobs[key] == "function") this.jobs[key]();
   }
 });
-
-export { Kt };
+export { require_abort };

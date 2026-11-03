@@ -8,40 +8,66 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:180972-182575 cjs-fingerprint
-var Da = x(function (SE, Ma) {
-  function qe(e, t = {}) {
-    return ((t.variants = e), t);
+var require_groovy = x(function (cjsExports, cjsModule) {
+  function variants(variants, obj = {}) {
+    obj.variants = variants;
+    return obj;
   }
-  function Nd(e) {
-    let regex = e.regex,
-      n = "[A-Za-z0-9_$]+",
-      a = qe([
-        e.C_LINE_COMMENT_MODE,
-        e.C_BLOCK_COMMENT_MODE,
-        e.COMMENT("/\\*\\*", "\\*/", {
-          relevance: 0,
-          contains: [
-            { begin: /\w+@/, relevance: 0 },
-            { className: "doctag", begin: "@[A-Za-z]+" },
-          ],
-        }),
-      ]),
-      s = { className: "regexp", begin: /~?\/[^\/\n]+\//, contains: [e.BACKSLASH_ESCAPE] },
-      o = qe([e.BINARY_NUMBER_MODE, e.C_NUMBER_MODE]),
-      r = qe(
-        [
-          { begin: /"""/, end: /"""/ },
-          { begin: /'''/, end: /'''/ },
-          { begin: "\\$/", end: "/\\$", relevance: 10 },
-          e.APOS_STRING_MODE,
-          e.QUOTE_STRING_MODE,
+  function groovy(hljs) {
+    let regex = hljs.regex;
+    let IDENT_RE = "[A-Za-z0-9_$]+";
+    let COMMENT = variants([
+      hljs.C_LINE_COMMENT_MODE,
+      hljs.C_BLOCK_COMMENT_MODE,
+      hljs.COMMENT("/\\*\\*", "\\*/", {
+        relevance: 0,
+        contains: [
+          {
+            begin: /\w+@/,
+            relevance: 0,
+          },
+          {
+            className: "doctag",
+            begin: "@[A-Za-z]+",
+          },
         ],
-        { className: "string" },
-      ),
-      i = {
-        match: [/(class|interface|trait|enum|record|extends|implements)/, /\s+/, e.UNDERSCORE_IDENT_RE],
-        scope: { 1: "keyword", 3: "title.class" },
-      };
+      }),
+    ]);
+    let REGEXP = {
+      className: "regexp",
+      begin: /~?\/[^\/\n]+\//,
+      contains: [hljs.BACKSLASH_ESCAPE],
+    };
+    let NUMBER = variants([hljs.BINARY_NUMBER_MODE, hljs.C_NUMBER_MODE]);
+    let STRING = variants(
+      [
+        {
+          begin: /"""/,
+          end: /"""/,
+        },
+        {
+          begin: /'''/,
+          end: /'''/,
+        },
+        {
+          begin: "\\$/",
+          end: "/\\$",
+          relevance: 10,
+        },
+        hljs.APOS_STRING_MODE,
+        hljs.QUOTE_STRING_MODE,
+      ],
+      {
+        className: "string",
+      },
+    );
+    let CLASS_DEFINITION = {
+      match: [/(class|interface|trait|enum|record|extends|implements)/, /\s+/, hljs.UNDERSCORE_IDENT_RE],
+      scope: {
+        1: "keyword",
+        3: "title.class",
+      },
+    };
     return {
       name: "Groovy",
       keywords: {
@@ -91,19 +117,35 @@ var Da = x(function (SE, Ma) {
         ],
       },
       contains: [
-        e.SHEBANG({ binary: "groovy", relevance: 10 }),
-        a,
-        r,
-        s,
-        o,
-        i,
-        { className: "meta", begin: "@[A-Za-z]+", relevance: 0 },
-        { className: "attr", begin: "[A-Za-z0-9_$]+[ \t]*:", relevance: 0 },
-        { begin: /\?/, end: /:/, relevance: 0, contains: [a, r, s, o, "self"] },
+        hljs.SHEBANG({
+          binary: "groovy",
+          relevance: 10,
+        }),
+        COMMENT,
+        STRING,
+        REGEXP,
+        NUMBER,
+        CLASS_DEFINITION,
+        {
+          className: "meta",
+          begin: "@[A-Za-z]+",
+          relevance: 0,
+        },
+        {
+          className: "attr",
+          begin: "[A-Za-z0-9_$]+[ \t]*:",
+          relevance: 0,
+        },
+        {
+          begin: /\?/,
+          end: /:/,
+          relevance: 0,
+          contains: [COMMENT, STRING, REGEXP, NUMBER, "self"],
+        },
         {
           className: "symbol",
           begin: "^[ \t]*" + regex.lookahead("[A-Za-z0-9_$]+:"),
-          excludeBegin: !0,
+          excludeBegin: true,
           end: "[A-Za-z0-9_$]+:",
           relevance: 0,
         },
@@ -111,7 +153,6 @@ var Da = x(function (SE, Ma) {
       illegal: /#|<\//,
     };
   }
-  Ma.exports = Nd;
+  cjsModule.exports = groovy;
 });
-
-export { Da };
+export { require_groovy };

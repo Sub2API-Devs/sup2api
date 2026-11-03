@@ -6,113 +6,148 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { Tn } from "./forge.js";
-import { Zn } from "./util.js";
+import { require_forge } from "./forge.js";
+import { require_util } from "./util.js";
 
 //@ chunk-fq0cr76a.js:275290-277737 cjs-fingerprint
-var uC = x(function (Wfe, cC) {
-  var $n = Tn();
-  Zn();
-  cC.exports = $n.log = $n.log || {};
-  $n.log.levels = ["none", "error", "warning", "info", "debug", "verbose", "max"];
-  var mm = {},
-    ZS = [],
-    Rf = null;
-  $n.log.LEVEL_LOCKED = 2;
-  $n.log.NO_LEVEL_CHECK = 4;
-  $n.log.INTERPOLATE = 8;
-  for (Oi = 0; Oi < $n.log.levels.length; ++Oi)
-    ((pm = $n.log.levels[Oi]), (mm[pm] = { index: Oi, name: pm.toUpperCase() }));
-  var pm, Oi;
-  $n.log.logMessage = function (e) {
-    var index = mm[e.level].index;
-    for (var r = 0; r < ZS.length; ++r) {
-      var s = ZS[r];
-      if (s.flags & $n.log.NO_LEVEL_CHECK) s.f(e);
+var require_log = x(function (cjsExports, cjsModule) {
+  var forge = require_forge();
+  require_util();
+  cjsModule.exports = forge.log = forge.log || {};
+  forge.log.levels = ["none", "error", "warning", "info", "debug", "verbose", "max"];
+  var sLevelInfo = {};
+  var sLoggers = [];
+  var sConsoleLogger = null;
+  forge.log.LEVEL_LOCKED = 2;
+  forge.log.NO_LEVEL_CHECK = 4;
+  forge.log.INTERPOLATE = 8;
+  for (i = 0; i < forge.log.levels.length; ++i) {
+    level = forge.log.levels[i];
+    sLevelInfo[level] = {
+      index: i,
+      name: level.toUpperCase(),
+    };
+  }
+  var level;
+  var i;
+  forge.log.logMessage = function (message) {
+    var messageLevelIndex = sLevelInfo[message.level].index;
+    for (var i = 0; i < sLoggers.length; ++i) {
+      var logger = sLoggers[i];
+      if (logger.flags & forge.log.NO_LEVEL_CHECK) logger.f(message);
       else {
-        var index_2 = mm[s.level].index;
-        if (index <= index_2) s.f(s, e);
+        var loggerLevelIndex = sLevelInfo[logger.level].index;
+        if (messageLevelIndex <= loggerLevelIndex) logger.f(logger, message);
       }
     }
   };
-  $n.log.prepareStandard = function (e) {
-    if (!("standard" in e)) e.standard = mm[e.level].name + " [" + e.category + "] " + e.message;
+  forge.log.prepareStandard = function (message) {
+    if (!("standard" in message))
+      message.standard = sLevelInfo[message.level].name + " [" + message.category + "] " + message.message;
   };
-  $n.log.prepareFull = function (e) {
-    if (!("full" in e)) {
-      var n = [e.message];
-      ((n = n.concat([])), (e.full = $n.util.format.apply(this, n)));
+  forge.log.prepareFull = function (message) {
+    if (!("full" in message)) {
+      var args = [message.message];
+      args = args.concat([]);
+      message.full = forge.util.format.apply(this, args);
     }
   };
-  $n.log.prepareStandardFull = function (e) {
-    if (!("standardFull" in e)) ($n.log.prepareStandard(e), (e.standardFull = e.standard));
+  forge.log.prepareStandardFull = function (message) {
+    if (!("standardFull" in message)) {
+      forge.log.prepareStandard(message);
+      message.standardFull = message.standard;
+    }
   };
-  hm = ["error", "warning", "info", "debug", "verbose"];
-  for (Oi = 0; Oi < hm.length; ++Oi)
-    (function (n) {
-      $n.log[n] = function (r, s) {
-        var sliced = Array.prototype.slice.call(arguments).slice(2),
-          y = { timestamp: new Date(), level: n, category: r, message: s, arguments: sliced };
-        $n.log.logMessage(y);
+  levels = ["error", "warning", "info", "debug", "verbose"];
+  for (i = 0; i < levels.length; ++i)
+    (function (level) {
+      forge.log[level] = function (category, message) {
+        var args = Array.prototype.slice.call(arguments).slice(2);
+        var msg = {
+          timestamp: new Date(),
+          level,
+          category,
+          message,
+          arguments: args,
+        };
+        forge.log.logMessage(msg);
       };
-    })(hm[Oi]);
-  var hm, Oi;
-  $n.log.makeLogger = function (e) {
-    var n = { flags: 0, f: e };
-    return ($n.log.setLevel(n, "none"), n);
+    })(levels[i]);
+  var levels;
+  var i;
+  forge.log.makeLogger = function (logFunction) {
+    var logger = {
+      flags: 0,
+      f: logFunction,
+    };
+    forge.log.setLevel(logger, "none");
+    return logger;
   };
-  $n.log.setLevel = function (e, n) {
-    var r = !1;
-    if (e && !(e.flags & $n.log.LEVEL_LOCKED))
-      for (var s = 0; s < $n.log.levels.length; ++s) {
-        var h = $n.log.levels[s];
-        if (n == h) {
-          ((e.level = n), (r = !0));
+  forge.log.setLevel = function (logger, level) {
+    var rval = false;
+    if (logger && !(logger.flags & forge.log.LEVEL_LOCKED))
+      for (var i = 0; i < forge.log.levels.length; ++i) {
+        var aValidLevel = forge.log.levels[i];
+        if (level == aValidLevel) {
+          logger.level = level;
+          rval = true;
           break;
         }
       }
-    return r;
+    return rval;
   };
-  $n.log.lock = function (e, n) {
-    if (typeof n > "u" || n) e.flags |= $n.log.LEVEL_LOCKED;
-    else e.flags &= ~$n.log.LEVEL_LOCKED;
+  forge.log.lock = function (logger, lock) {
+    if (typeof lock === "undefined" || lock) logger.flags |= forge.log.LEVEL_LOCKED;
+    else logger.flags &= ~forge.log.LEVEL_LOCKED;
   };
-  $n.log.addLogger = function (e) {
-    ZS.push(e);
+  forge.log.addLogger = function (logger) {
+    sLoggers.push(logger);
   };
-  if (typeof console < "u" && "log" in console) {
-    if (console.error && console.warn && console.info && console.debug)
-      ((zS = {
+  if (typeof console !== "undefined" && "log" in console) {
+    if (console.error && console.warn && console.info && console.debug) {
+      levelHandlers = {
         error: console.error,
         warning: console.warn,
         info: console.info,
         debug: console.debug,
         verbose: console.debug,
-      }),
-        (yu = function (e, n) {
-          $n.log.prepareStandard(n);
-          var r = zS[n.level],
-            s = [n.standard];
-          ((s = s.concat(n.arguments.slice())), r.apply(console, s));
-        }),
-        (fc = $n.log.makeLogger(yu)));
-    else
-      ((yu = function (n, r) {
-        ($n.log.prepareStandardFull(r), console.log(r.standardFull));
-      }),
-        (fc = $n.log.makeLogger(yu)));
-    ($n.log.setLevel(fc, "debug"), $n.log.addLogger(fc), (Rf = fc));
-  } else console = { log: function () {} };
-  var fc, zS, yu;
-  if (Rf !== null && typeof window < "u" && window.location) {
-    if (((gu = new URL(window.location.href).searchParams), gu.has("console.level")))
-      $n.log.setLevel(Rf, gu.get("console.level").slice(-1)[0]);
-    if (gu.has("console.lock")) {
-      if (((XS = gu.get("console.lock").slice(-1)[0]), XS == "true")) $n.log.lock(Rf);
+      };
+      f = function (logger, message) {
+        forge.log.prepareStandard(message);
+        var handler = levelHandlers[message.level];
+        var args = [message.standard];
+        args = args.concat(message.arguments.slice());
+        handler.apply(console, args);
+      };
+      logger = forge.log.makeLogger(f);
+    } else {
+      f = function (logger, message) {
+        forge.log.prepareStandardFull(message);
+        console.log(message.standardFull);
+      };
+      logger = forge.log.makeLogger(f);
+    }
+    forge.log.setLevel(logger, "debug");
+    forge.log.addLogger(logger);
+    sConsoleLogger = logger;
+  } else
+    console = {
+      log: function () {},
+    };
+  var logger;
+  var levelHandlers;
+  var f;
+  if (sConsoleLogger !== null && typeof window !== "undefined" && window.location) {
+    query = new URL(window.location.href).searchParams;
+    if (query.has("console.level"))
+      forge.log.setLevel(sConsoleLogger, query.get("console.level").slice(-1)[0]);
+    if (query.has("console.lock")) {
+      lock = query.get("console.lock").slice(-1)[0];
+      if (lock == "true") forge.log.lock(sConsoleLogger);
     }
   }
-  var gu, XS;
-  $n.log.consoleLogger = Rf;
+  var query;
+  var lock;
+  forge.log.consoleLogger = sConsoleLogger;
 });
-
-export { uC };
+export { require_log };

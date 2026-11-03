@@ -6,37 +6,45 @@
  * attribution: cjs-require-graph 1
  */
 import { x } from "../../../../../runtime/bun-runtime.js";
-import { Ae } from "./schema.json.js";
-import { Re } from "./meta/applicator.json.js";
-import { Se } from "./meta/unevaluated.json.js";
-import { we } from "./meta/content.json.js";
-import { Oe } from "./meta/core.json.js";
-import { ke } from "./meta/format-annotation.json.js";
-import { xe } from "./meta/meta-data.json.js";
-import { Me } from "./meta/validation.json.js";
+import { require_schema } from "./schema.json.js";
+import { require_applicator } from "./meta/applicator.json.js";
+import { require_unevaluated } from "./meta/unevaluated.json.js";
+import { require_content } from "./meta/content.json.js";
+import { require_core } from "./meta/core.json.js";
+import { require_format_annotation } from "./meta/format-annotation.json.js";
+import { require_meta_data } from "./meta/meta-data.json.js";
+import { require_validation } from "./meta/validation.json.js";
 
 //@ chunk-1r4fv9mg.js:12940-13281 cjs-require-graph
-var Ne = x(function (Ie) {
-  Object.defineProperty(Ie, "__esModule", { value: !0 });
-  var Vt = Ae(),
-    Dt = Re(),
-    Wt = Se(),
-    Lt = we(),
-    Ht = Oe(),
-    Kt = ke(),
-    Gt = xe(),
-    Ut = Me(),
-    zt = ["/properties"];
-  function Xt(e) {
-    return (
-      [Vt, Dt, Wt, Lt, Ht, r(this, Kt), Gt, r(this, Ut)].forEach((a) => this.addMetaSchema(a, void 0, !1)),
-      this
-    );
-    function r(a, n) {
-      return e ? a.$dataMetaSchema(n, zt) : n;
+var require_json_schema_2020_12 = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  var metaSchema = require_schema();
+  var applicator = require_applicator();
+  var unevaluated = require_unevaluated();
+  var content = require_content();
+  var core = require_core();
+  var format = require_format_annotation();
+  var metadata = require_meta_data();
+  var validation = require_validation();
+  var META_SUPPORT_DATA = ["/properties"];
+  function addMetaSchema2020($data) {
+    [
+      metaSchema,
+      applicator,
+      unevaluated,
+      content,
+      core,
+      with$data(this, format),
+      metadata,
+      with$data(this, validation),
+    ].forEach((sch) => this.addMetaSchema(sch, undefined, false));
+    return this;
+    function with$data(ajv, sch) {
+      return $data ? ajv.$dataMetaSchema(sch, META_SUPPORT_DATA) : sch;
     }
   }
-  Ie.default = Xt;
+  cjsExports.default = addMetaSchema2020;
 });
-
-export { Ne };
+export { require_json_schema_2020_12 };

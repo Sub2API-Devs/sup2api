@@ -15,39 +15,54 @@ import { useHasAutoDialog, useTopUserDialog } from "../../state/dialogQueue.js";
 import { getActiveBottomSurface } from "../../screens/repl/storeHooks.js";
 
 //@ chunk-bzr73sfg.js:176949-176959 placement
-var Gy = squashTextNodes;
+/**
+ * squashTextNodes 的别名
+ */
+var squashTextNodesAlias = squashTextNodes;
 //@ chunk-bzr73sfg.js:176959-177027 placement
-var regExp = new RegExp(`[${joined}]`, "u"),
-  regExp_2 = new RegExp(`[\\t${joined}]`, "u");
+var regExp = new RegExp(`[${joined}]`, "u");
+var regExp_2 = new RegExp(`[\\t${joined}]`, "u");
 //@ chunk-bzr73sfg.js:177027-177086 placement
-function hd(n) {
+/**
+ * 非法 UTF-16 代理项替换为替换字符
+ */
+function replaceInvalidUtf16(n) {
   return regExp.test(n) ? n.replace(regExp_3, "\uFFFD") : n;
 }
 //@ chunk-bzr73sfg.js:177086-177118 placement
-function QWe(n) {
-  return nrn([n]);
+/**
+ * 把单个文本节点压平成显示字符串（含制表符展开与代理对修复）。
+ */
+function squashSingleText(n) {
+  return squashTextOf([n]);
 }
 //@ chunk-bzr73sfg.js:177118-177160 placement
-function nrn(n) {
-  return (md(n) ?? n).join("");
+/**
+ * 用 squashTextNodesToSegments 把节点压平并用空串拼接成文本。
+ */
+function squashTextOf(n) {
+  return (needsTextNormalization(n) ?? n).join("");
 }
 //@ chunk-bzr73sfg.js:177160-177245 placement
-function md(n) {
+/**
+ * 判断文本节点是否需要归一化（含可展开控制字符或非法代理项）。
+ */
+function needsTextNormalization(n) {
   return n.some((u) => regExp_2.test(u)) || hasExpandableControls(n)
-    ? expandTabs(n.map((u) => hd(u)))
-    : void 0;
+    ? expandTabs(n.map((u) => replaceInvalidUtf16(u)))
+    : undefined;
 }
+//@ chunk-bzr73sfg.js:177245-177286 fingerprint = LayoutPositionType (0.606)
 /**
  * position 样式 → yoga PositionType（absolute=2，其余 relative=1）。
  */
-//@ chunk-bzr73sfg.js:177245-177286 fingerprint = LayoutPositionType (0.606)
 function toYogaPositionType(position) {
   return position === "absolute" ? 2 : 1;
 }
+//@ chunk-bzr73sfg.js:177286-177323 layout
 /**
  * display 样式 → yoga Display（none=1，其余 flex=0）。
  */
-//@ chunk-bzr73sfg.js:177286-177323 layout
 function toYogaDisplay(display) {
   return display === "none" ? 1 : 0;
 }
@@ -111,25 +126,24 @@ function toYogaJustify(justify) {
 }
 //@ chunk-18hwfzwa.js:329889-329999 fingerprint = LayoutOverflow (0.368)
 function LayoutOverflow() {
-  let h = useHasAutoDialog(),
-    x = useTopUserDialog() !== null,
-    D = getActiveBottomSurface();
-  if (x || (h && D === null)) return "visible";
-  return h ? "suppressed" : "none";
+  let hasAutoDialog = useHasAutoDialog();
+  let x = useTopUserDialog() !== null;
+  let activeBottomSurface = getActiveBottomSurface();
+  if (x || (hasAutoDialog && activeBottomSurface === null)) return "visible";
+  return hasAutoDialog ? "suppressed" : "none";
 }
-
 export {
   LayoutOverflow,
-  QWe,
-  Gy,
-  nrn,
-  hd,
+  squashSingleText,
+  squashTextNodesAlias,
+  squashTextOf,
+  replaceInvalidUtf16,
   toYogaPositionType,
   toYogaWrap,
   toYogaFlexDirection,
   toYogaAlign,
   toYogaJustify,
   toYogaDisplay,
-  md,
+  needsTextNormalization,
   regExp_2,
 };

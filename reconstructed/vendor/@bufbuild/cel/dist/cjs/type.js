@@ -6,184 +6,192 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../runtime/bun-runtime.js";
-import { $o } from "./list.js";
-import { Aa } from "./map.js";
-import { Bi } from "./uint.js";
-import { ba } from "../../../protobuf/dist/commonjs/reflect/index.js";
-import { Os } from "../../../../@anthropic-ai/bedrock-sdk/core/error.js";
+import { require_list } from "./list.js";
+import { require_map } from "./map.js";
+import { require_uint } from "./uint.js";
+import { require_reflect_2 } from "../../../protobuf/dist/commonjs/reflect/index.js";
+import { require_error_4 } from "../../../../@anthropic-ai/bedrock-sdk/core/error.js";
 
 //@ chunk-fq0cr76a.js:470154-473203 cjs-fingerprint
-var Ei = x(function (vL) {
-  Object.defineProperty(vL, "__esModule", { value: !0 });
-  vL.DURATION = vL.TIMESTAMP = vL.CelScalar = void 0;
-  vL.mapType = Ty;
-  vL.listType = Ay;
-  vL.objectType = xp;
-  vL.celType = EQ;
-  vL.isCelType = xQ;
-  vL.isObjectCelType = C_;
-  var SL = $o(),
-    EL = Aa(),
-    xL = Bi(),
-    _L = ba(),
-    Wn = Os(),
-    _p = Symbol.for("@bufbuild/cel/type");
-  vL.CelScalar = {
-    INT: Ta("int"),
-    UINT: Ta("uint"),
-    BOOL: Ta("bool"),
-    STRING: Ta("string"),
-    BYTES: Ta("bytes"),
-    DOUBLE: Ta("double"),
-    NULL: Ta("null_type"),
-    DYN: Ta("dyn"),
-    TYPE: Ta("type"),
+var require_type = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.DURATION = cjsExports.TIMESTAMP = cjsExports.CelScalar = undefined;
+  cjsExports.mapType = mapType;
+  cjsExports.listType = listType;
+  cjsExports.objectType = objectType;
+  cjsExports.celType = celType;
+  cjsExports.isCelType = isCelType;
+  cjsExports.isObjectCelType = isObjectCelType;
+  var list_js_1 = require_list();
+  var map_js_1 = require_map();
+  var uint_js_1 = require_uint();
+  var reflect_1 = require_reflect_2();
+  var wkt_1 = require_error_4();
+  var privateSymbol = Symbol.for("@bufbuild/cel/type");
+  cjsExports.CelScalar = {
+    INT: celScalarType("int"),
+    UINT: celScalarType("uint"),
+    BOOL: celScalarType("bool"),
+    STRING: celScalarType("string"),
+    BYTES: celScalarType("bytes"),
+    DOUBLE: celScalarType("double"),
+    NULL: celScalarType("null_type"),
+    DYN: celScalarType("dyn"),
+    TYPE: celScalarType("type"),
   };
-  vL.TIMESTAMP = xp(Wn.TimestampSchema);
-  vL.DURATION = xp(Wn.DurationSchema);
-  function Ty(e, n) {
+  cjsExports.TIMESTAMP = objectType(wkt_1.TimestampSchema);
+  cjsExports.DURATION = objectType(wkt_1.DurationSchema);
+  function mapType(key, value) {
     return {
-      [_p]: {},
+      [privateSymbol]: {},
       kind: "map",
-      key: e,
-      value: n,
+      key,
+      value,
       name: "map",
       toString() {
-        return `map(${e}, ${n})`;
+        return `map(${key}, ${value})`;
       },
     };
   }
-  function Ay(e) {
+  function listType(element) {
     return {
-      [_p]: {},
+      [privateSymbol]: {},
       kind: "list",
-      element: e,
+      element,
       name: "list",
       toString() {
-        return `list(${e})`;
+        return `list(${element})`;
       },
     };
   }
-  function xp(e) {
-    let n, r;
-    if (typeof e === "string") ((n = e), (r = void 0));
-    else ((n = e.typeName), (r = e));
+  function objectType(descOrTypeName) {
+    let name;
+    let desc;
+    if (typeof descOrTypeName === "string") {
+      name = descOrTypeName;
+      desc = undefined;
+    } else {
+      name = descOrTypeName.typeName;
+      desc = descOrTypeName;
+    }
     return {
-      [_p]: {},
+      [privateSymbol]: {},
       kind: "object",
-      desc: r,
-      name: n,
+      desc,
+      name,
       toString() {
-        return n;
+        return name;
       },
     };
   }
-  function Ta(e) {
+  function celScalarType(scalar) {
     return {
-      [_p]: {},
+      [privateSymbol]: {},
       kind: "scalar",
-      scalar: e,
-      name: e,
+      scalar,
+      name: scalar,
       toString() {
-        return e;
+        return scalar;
       },
     };
   }
-  function EQ(e) {
-    switch (typeof e) {
+  function celType(v) {
+    switch (typeof v) {
       case "bigint":
-        return vL.CelScalar.INT;
+        return cjsExports.CelScalar.INT;
       case "boolean":
-        return vL.CelScalar.BOOL;
+        return cjsExports.CelScalar.BOOL;
       case "number":
-        return vL.CelScalar.DOUBLE;
+        return cjsExports.CelScalar.DOUBLE;
       case "string":
-        return vL.CelScalar.STRING;
+        return cjsExports.CelScalar.STRING;
       case "object":
-        switch (!0) {
-          case e === null:
-            return vL.CelScalar.NULL;
-          case e instanceof Uint8Array:
-            return vL.CelScalar.BYTES;
-          case _L.isReflectMessage(e):
-            return _Q(e);
-          case SL.isCelList(e):
-            return Ay(vL.CelScalar.DYN);
-          case EL.isCelMap(e):
-            return Ty(vL.CelScalar.DYN, vL.CelScalar.DYN);
-          case xL.isCelUint(e):
-            return vL.CelScalar.UINT;
+        switch (true) {
+          case v === null:
+            return cjsExports.CelScalar.NULL;
+          case v instanceof Uint8Array:
+            return cjsExports.CelScalar.BYTES;
+          case reflect_1.isReflectMessage(v):
+            return celTypeOfMessage(v);
+          case list_js_1.isCelList(v):
+            return listType(cjsExports.CelScalar.DYN);
+          case map_js_1.isCelMap(v):
+            return mapType(cjsExports.CelScalar.DYN, cjsExports.CelScalar.DYN);
+          case uint_js_1.isCelUint(v):
+            return cjsExports.CelScalar.UINT;
           default:
-            if (C_(e)) return vL.CelScalar.TYPE;
+            if (isObjectCelType(v)) return cjsExports.CelScalar.TYPE;
         }
     }
-    throw Error(`Not a CEL value: ${e}`);
+    throw Error(`Not a CEL value: ${v}`);
   }
-  function xQ(e) {
-    return typeof e === "object" && e !== null && C_(e);
+  function isCelType(v) {
+    return typeof v === "object" && v !== null && isObjectCelType(v);
   }
-  function C_(e) {
-    return _p in e;
+  function isObjectCelType(v) {
+    return privateSymbol in v;
   }
-  function _Q(e) {
-    let typeName = e.desc.typeName;
-    if (wQ(e)) {
-      if (((typeName = TQ(e.message.typeUrl)), typeName === Wn.ValueSchema.typeName)) {
-        let anyUnpack = Wn.anyUnpack(e.message, Wn.ValueSchema);
-        return anyUnpack ? bL(anyUnpack) : vL.CelScalar.NULL;
+  function celTypeOfMessage(v) {
+    let typeName = v.desc.typeName;
+    if (isReflectMessageAny(v)) {
+      typeName = typeUrlToName(v.message.typeUrl);
+      if (typeName === wkt_1.ValueSchema.typeName) {
+        let value = wkt_1.anyUnpack(v.message, wkt_1.ValueSchema);
+        return value ? valueToType(value) : cjsExports.CelScalar.NULL;
       }
     }
     switch (typeName) {
-      case Wn.FloatValueSchema.typeName:
-      case Wn.DoubleValueSchema.typeName:
-        return vL.CelScalar.DOUBLE;
-      case Wn.UInt64ValueSchema.typeName:
-      case Wn.UInt32ValueSchema.typeName:
-        return vL.CelScalar.UINT;
-      case Wn.Int32ValueSchema.typeName:
-      case Wn.Int64ValueSchema.typeName:
-        return vL.CelScalar.INT;
-      case Wn.StringValueSchema.typeName:
-        return vL.CelScalar.STRING;
-      case Wn.BytesValueSchema.typeName:
-        return vL.CelScalar.BYTES;
-      case Wn.BoolValueSchema.typeName:
-        return vL.CelScalar.BOOL;
-      case Wn.StructSchema.typeName:
-        return Ty(vL.CelScalar.STRING, vL.CelScalar.DYN);
-      case Wn.ListValueSchema.typeName:
-        return Ay(vL.CelScalar.DYN);
-      case Wn.ValueSchema.typeName:
-        return bL(e.message);
+      case wkt_1.FloatValueSchema.typeName:
+      case wkt_1.DoubleValueSchema.typeName:
+        return cjsExports.CelScalar.DOUBLE;
+      case wkt_1.UInt64ValueSchema.typeName:
+      case wkt_1.UInt32ValueSchema.typeName:
+        return cjsExports.CelScalar.UINT;
+      case wkt_1.Int32ValueSchema.typeName:
+      case wkt_1.Int64ValueSchema.typeName:
+        return cjsExports.CelScalar.INT;
+      case wkt_1.StringValueSchema.typeName:
+        return cjsExports.CelScalar.STRING;
+      case wkt_1.BytesValueSchema.typeName:
+        return cjsExports.CelScalar.BYTES;
+      case wkt_1.BoolValueSchema.typeName:
+        return cjsExports.CelScalar.BOOL;
+      case wkt_1.StructSchema.typeName:
+        return mapType(cjsExports.CelScalar.STRING, cjsExports.CelScalar.DYN);
+      case wkt_1.ListValueSchema.typeName:
+        return listType(cjsExports.CelScalar.DYN);
+      case wkt_1.ValueSchema.typeName:
+        return valueToType(v.message);
     }
-    return typeName === e.desc.typeName ? xp(e.desc) : xp(typeName);
+    return typeName === v.desc.typeName ? objectType(v.desc) : objectType(typeName);
   }
-  function bL(e) {
-    switch (e.kind.case) {
+  function valueToType(v) {
+    switch (v.kind.case) {
       case "boolValue":
-        return vL.CelScalar.BOOL;
+        return cjsExports.CelScalar.BOOL;
       case "listValue":
-        return Ay(vL.CelScalar.DYN);
+        return listType(cjsExports.CelScalar.DYN);
       case "nullValue":
-      case void 0:
-        return vL.CelScalar.NULL;
+      case undefined:
+        return cjsExports.CelScalar.NULL;
       case "numberValue":
-        return vL.CelScalar.DOUBLE;
+        return cjsExports.CelScalar.DOUBLE;
       case "stringValue":
-        return vL.CelScalar.STRING;
+        return cjsExports.CelScalar.STRING;
       case "structValue":
-        return Ty(vL.CelScalar.STRING, vL.CelScalar.DYN);
+        return mapType(cjsExports.CelScalar.STRING, cjsExports.CelScalar.DYN);
     }
   }
-  function wQ(e) {
-    return e.desc.typeName === Wn.AnySchema.typeName;
+  function isReflectMessageAny(v) {
+    return v.desc.typeName === wkt_1.AnySchema.typeName;
   }
-  function TQ(e) {
-    let index = e.lastIndexOf("/"),
-      r = index >= 0 ? e.substring(index + 1) : e;
-    if (!r.length) throw Error(`invalid type url: ${e}`);
-    return r;
+  function typeUrlToName(url) {
+    let slash = url.lastIndexOf("/");
+    let name = slash >= 0 ? url.substring(slash + 1) : url;
+    if (!name.length) throw Error(`invalid type url: ${url}`);
+    return name;
   }
 });
-
-export { Ei };
+export { require_type };

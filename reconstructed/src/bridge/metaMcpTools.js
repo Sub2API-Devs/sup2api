@@ -13,15 +13,19 @@ import { logForDebugging } from "../utils/debug.js";
 import { collectServerToolPolicies, buildMcpToolName } from "../services/mcp/mcpStringUtils.js";
 
 //@ chunk-ebk61d3a.js:302-332 placement
-var r = /^[a-zA-Z0-9_-]{1,64}$/;
+var META_MCP_TOOL_NAME_PATTERN = /^[a-zA-Z0-9_-]{1,64}$/;
+//@ chunk-ebk61d3a.js:332-953 placement
 /**
  * 解析 bridge meta MCP 的 tools[] 列表，非数组时告警
  */
-//@ chunk-ebk61d3a.js:332-953 placement
 function parseMetaMcpTools(i, n = CLAUDE_CODE_REMOTE) {
-  if (!("tools" in i) || i.tools === void 0) return [];
-  if (!Array.isArray(i.tools))
-    return (logForDebugging("[bridge:meta-mcp] meta tools[] is not an array", { level: "warn" }), null);
+  if (!("tools" in i) || i.tools === undefined) return [];
+  if (!Array.isArray(i.tools)) {
+    logForDebugging("[bridge:meta-mcp] meta tools[] is not an array", {
+      level: "warn",
+    });
+    return null;
+  }
   let e = [];
   for (let tool of i.tools) {
     if (
@@ -29,21 +33,28 @@ function parseMetaMcpTools(i, n = CLAUDE_CODE_REMOTE) {
       typeof tool !== "object" ||
       !("name" in tool) ||
       typeof tool.name !== "string" ||
-      !r.test(tool.name)
-    )
-      return (
-        logForDebugging("[bridge:meta-mcp] injected tools[] entry is malformed", { level: "warn" }),
-        null
-      );
+      !META_MCP_TOOL_NAME_PATTERN.test(tool.name)
+    ) {
+      logForDebugging("[bridge:meta-mcp] injected tools[] entry is malformed", {
+        level: "warn",
+      });
+      return null;
+    }
     e.push({
       name: tool.name,
       ...("permission_policy" in tool &&
-        typeof tool.permission_policy === "string" && { permission_policy: tool.permission_policy }),
+        typeof tool.permission_policy === "string" && {
+          permission_policy: tool.permission_policy,
+        }),
     });
   }
-  let { allow: allow } = collectServerToolPolicies({ [n]: { type: "http", tools: e } }),
-    l = buildMcpToolName(n, "");
-  return allow.map((o) => (o.startsWith(l) ? o.slice(l.length) : o));
+  let { allow } = collectServerToolPolicies({
+    [n]: {
+      type: "http",
+      tools: e,
+    },
+  });
+  let mcpToolName = buildMcpToolName(n, "");
+  return allow.map((o) => (o.startsWith(mcpToolName) ? o.slice(mcpToolName.length) : o));
 }
-
 export { parseMetaMcpTools };

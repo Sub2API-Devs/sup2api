@@ -19,13 +19,19 @@ import { uniq } from "../collections.js";
 import { readSettingsPath } from "../settings/settingsSources.js";
 
 //@ chunk-fq0cr76a.js:853227-853248 placement
-var uM = ".claude/ssh";
+/**
+ * SHADOWED_SSH_DIR：沙箱内的 .claude/ssh 目录。
+ */
+var SHADOWED_SSH_DIR = ".claude/ssh";
 //@ chunk-fq0cr76a.js:853248-853287 placement
 function getSandboxSettingsSources() {
-  return [...getAllPolicyTierSettings(), ...bqt()];
+  return [...getAllPolicyTierSettings(), ...sandboxSettingsChain()];
 }
 //@ chunk-fq0cr76a.js:853287-853372 placement
-function bqt() {
+/**
+ * sandboxSettingsChain：沙箱设置的读取链。
+ */
+function sandboxSettingsChain() {
   return [
     getSettingsForSource("flagSettings"),
     isSettingSourceEnabled("userSettings") ? getSettingsForSource("userSettings") : null,
@@ -37,69 +43,71 @@ function getPolicySettingsIfEnabled() {
 }
 //@ chunk-fq0cr76a.js:853425-853500 placement
 function collectFromSandboxSettings(e) {
-  return uniq(_0().flatMap((n) => (n?.sandbox && e(n.sandbox)) ?? []));
+  return uniq(sandboxSettingSources().flatMap((n) => (n?.sandbox && e(n.sandbox)) ?? []));
 }
 //@ chunk-fq0cr76a.js:853500-853601 placement
 function firstFromSandboxSettings(e) {
-  for (let n of _0()) {
-    let r = n?.sandbox ? e(n.sandbox) : void 0;
-    if (r !== void 0) return r;
+  for (let n of sandboxSettingSources()) {
+    let r = n?.sandbox ? e(n.sandbox) : undefined;
+    if (r !== undefined) return r;
   }
   return;
 }
 //@ chunk-fq0cr76a.js:853601-853657 placement
-function Ev(e) {
-  let n = getPolicySettingsIfEnabled()?.sandbox;
-  return n ? e(n) : void 0;
+/**
+ * policySandboxSetting：策略层沙箱设置。
+ */
+function policySandboxSetting(e) {
+  let sandbox = getPolicySettingsIfEnabled()?.sandbox;
+  return sandbox ? e(sandbox) : undefined;
 }
 //@ chunk-fq0cr76a.js:853657-853847 placement
 function mergeIgnoreViolations() {
   let e = new Map();
-  for (let n of _0())
-    for (let [r, s] of Object.entries(n?.sandbox?.ignoreViolations ?? {}))
-      e.set(r, uniq([...(e.get(r) ?? []), ...s]));
-  return e.size > 0 ? Object.fromEntries(e) : void 0;
+  for (let n of sandboxSettingSources())
+    for (let [key, value] of Object.entries(n?.sandbox?.ignoreViolations ?? {}))
+      e.set(key, uniq([...(e.get(key) ?? []), ...value]));
+  return e.size > 0 ? Object.fromEntries(e) : undefined;
 }
 //@ chunk-fq0cr76a.js:853847-853916 placement
 function collectAllowRules() {
-  return uniq(_0().flatMap((e) => e?.permissions?.allow ?? []));
+  return uniq(sandboxSettingSources().flatMap((e) => e?.permissions?.allow ?? []));
 }
 //@ chunk-fq0cr76a.js:853916-853952 placement
-function _0() {
-  return [getPolicySettingsIfEnabled(), ...bqt()];
+function sandboxSettingSources() {
+  return [getPolicySettingsIfEnabled(), ...sandboxSettingsChain()];
 }
+//@ chunk-fq0cr76a.js:854002-854139 placement
 /**
  * 读取策略层的沙箱设置项：有合并的策略来源时取 policySettings，否则取各策略层第一个有值的。
  */
-//@ chunk-fq0cr76a.js:854002-854139 placement
 function readPolicySandboxSetting(e) {
   if (getMergedPolicySources() !== null)
     return readSettingsPath(getSettingsForSource("policySettings")?.sandbox, e);
   return getAllPolicyTierSettings()
     .map((n) => readSettingsPath(n.sandbox, e))
-    .find((n) => n !== void 0);
+    .find((n) => n !== undefined);
 }
+//@ chunk-fq0cr76a.js:854139-854253 placement
 /**
  * 读取沙箱设置项：策略层优先，没有时依次查找其他设置来源。
  */
-//@ chunk-fq0cr76a.js:854139-854253 placement
 function readSandboxSetting(e) {
-  let n = readPolicySandboxSetting(e);
-  if (n !== void 0) return n;
-  return bqt()
+  let policySandboxSetting = readPolicySandboxSetting(e);
+  if (policySandboxSetting !== undefined) return policySandboxSetting;
+  return sandboxSettingsChain()
     .map((r) => readSettingsPath(r?.sandbox, e))
-    .find((r) => r !== void 0);
+    .find((r) => r !== undefined);
 }
-
 export {
   collectFromSandboxSettings,
   getSandboxSettingsSources,
-  bqt,
-  Ev,
+  sandboxSettingsChain,
+  policySandboxSetting,
   firstFromSandboxSettings,
   readPolicySandboxSetting,
   collectAllowRules,
-  uM,
+  SHADOWED_SSH_DIR,
   mergeIgnoreViolations,
   readSandboxSetting,
   getPolicySettingsIfEnabled,

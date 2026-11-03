@@ -8,8 +8,8 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:507047-507954 cjs-fingerprint
-var qo = x(function (Eb, Fo) {
-  function n_(e) {
+var require_vala = x(function (cjsExports, cjsModule) {
+  function vala(hljs) {
     return {
       name: "Vala",
       keywords: {
@@ -23,21 +23,29 @@ var qo = x(function (Eb, Fo) {
           className: "class",
           beginKeywords: "class interface namespace",
           end: /\{/,
-          excludeEnd: !0,
+          excludeEnd: true,
           illegal: "[^,:\\n\\s\\.]",
-          contains: [e.UNDERSCORE_TITLE_MODE],
+          contains: [hljs.UNDERSCORE_TITLE_MODE],
         },
-        e.C_LINE_COMMENT_MODE,
-        e.C_BLOCK_COMMENT_MODE,
-        { className: "string", begin: '"""', end: '"""', relevance: 5 },
-        e.APOS_STRING_MODE,
-        e.QUOTE_STRING_MODE,
-        e.C_NUMBER_MODE,
-        { className: "meta", begin: "^#", end: "$" },
+        hljs.C_LINE_COMMENT_MODE,
+        hljs.C_BLOCK_COMMENT_MODE,
+        {
+          className: "string",
+          begin: '"""',
+          end: '"""',
+          relevance: 5,
+        },
+        hljs.APOS_STRING_MODE,
+        hljs.QUOTE_STRING_MODE,
+        hljs.C_NUMBER_MODE,
+        {
+          className: "meta",
+          begin: "^#",
+          end: "$",
+        },
       ],
     };
   }
-  Fo.exports = n_;
+  cjsModule.exports = vala;
 });
-
-export { qo };
+export { require_vala };

@@ -9,45 +9,44 @@
  * attribution: fingerprint 1
  */
 import { homedir } from "os";
-import { join, join as join_2 } from "path";
+import { join } from "path";
 import { getPlatform } from "./platform.js";
 import { logForDebugging } from "./debug.js";
 
 //@ chunk-vr8smdd9.js:10174-10741 fingerprint = getSystemDirectories (1)
 function getSystemDirectories(options) {
-  let r = options?.platform ?? getPlatform(),
-    n = options?.homedir ?? homedir(),
-    s = options?.env ?? process.env,
-    defaults = {
-      HOME: n,
-      DESKTOP: join_2(n, "Desktop"),
-      DOCUMENTS: join_2(n, "Documents"),
-      DOWNLOADS: join_2(n, "Downloads"),
-    };
-  switch (r) {
+  let platform = options?.platform ?? getPlatform();
+  let homeDir = options?.homedir ?? homedir();
+  let env = options?.env ?? process.env;
+  let defaults = {
+    HOME: homeDir,
+    DESKTOP: join(homeDir, "Desktop"),
+    DOCUMENTS: join(homeDir, "Documents"),
+    DOWNLOADS: join(homeDir, "Downloads"),
+  };
+  switch (platform) {
     case "windows": {
-      let f = s.USERPROFILE || n;
+      let userProfile = env.USERPROFILE || homeDir;
       return {
-        HOME: n,
-        DESKTOP: join_2(f, "Desktop"),
-        DOCUMENTS: join_2(f, "Documents"),
-        DOWNLOADS: join_2(f, "Downloads"),
+        HOME: homeDir,
+        DESKTOP: join(userProfile, "Desktop"),
+        DOCUMENTS: join(userProfile, "Documents"),
+        DOWNLOADS: join(userProfile, "Downloads"),
       };
     }
     case "linux":
     case "wsl":
       return {
-        HOME: n,
-        DESKTOP: s.XDG_DESKTOP_DIR || defaults.DESKTOP,
-        DOCUMENTS: s.XDG_DOCUMENTS_DIR || defaults.DOCUMENTS,
-        DOWNLOADS: s.XDG_DOWNLOAD_DIR || defaults.DOWNLOADS,
+        HOME: homeDir,
+        DESKTOP: env.XDG_DESKTOP_DIR || defaults.DESKTOP,
+        DOCUMENTS: env.XDG_DOCUMENTS_DIR || defaults.DOCUMENTS,
+        DOWNLOADS: env.XDG_DOWNLOAD_DIR || defaults.DOWNLOADS,
       };
     case "macos":
     default: {
-      if (r === "unknown") logForDebugging("Unknown platform detected, using default paths");
+      if (platform === "unknown") logForDebugging("Unknown platform detected, using default paths");
       return defaults;
     }
   }
 }
-
 export { getSystemDirectories };

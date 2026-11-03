@@ -5,106 +5,132 @@
  * pieces: chunk-hwmsct5x.js (1)
  * attribution: esm-fingerprint 1
  */
-import { Y } from "../../../core/resource.mjs";
-import { Xs } from "./events.mjs";
-import { ho } from "./resources.mjs";
-import { Qs } from "./threads/threads.mjs";
-import { T } from "../../../internal/headers.mjs";
+import { APIResource } from "../../../core/resource.mjs";
+import { Events } from "./events.mjs";
+import { Resources } from "./resources.mjs";
+import { Threads } from "./threads/threads.mjs";
+import { buildHeaders } from "../../../internal/headers.mjs";
 import { I } from "../../../internal/utils/path.mjs";
-import { Qi } from "../../../core/pagination.mjs";
+import { BidirectionalPageCursor } from "../../../core/pagination.mjs";
 
 //@ chunk-hwmsct5x.js:133758-135536 esm-fingerprint
-var Zs = (() => {
-  class e extends Y {
+var Sessions = (() => {
+  class Sessions extends APIResource {
     constructor() {
       super(...arguments);
-      ((this.events = new Xs(this._client)),
-        (this.resources = new ho(this._client)),
-        (this.threads = new Qs(this._client)));
+      this.events = new Events(this._client);
+      this.resources = new Resources(this._client);
+      this.threads = new Threads(this._client);
     }
-    create(n, r) {
-      let { betas: betas, workspace_id: workspace_id, ...y } = n;
+    create(params, options) {
+      let { betas, workspace_id, ...body } = params;
       return this._client.post("/v1/sessions?beta=true", {
-        body: y,
-        ...r,
-        headers: T([
+        body,
+        ...options,
+        headers: buildHeaders([
           {
             "anthropic-beta": [...(betas ?? []), "managed-agents-2026-04-01"].toString(),
-            ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0),
+            ...(workspace_id != null
+              ? {
+                  "anthropic-workspace-id": workspace_id,
+                }
+              : undefined),
           },
-          r?.headers,
+          options?.headers,
         ]),
       });
     }
-    retrieve(n, r = {}, s) {
-      let { betas: betas, workspace_id: workspace_id } = r ?? {};
-      return this._client.get(I`/v1/sessions/${n}?beta=true`, {
-        ...s,
-        headers: T([
+    retrieve(sessionID, params = {}, options) {
+      let { betas, workspace_id } = params ?? {};
+      return this._client.get(I`/v1/sessions/${sessionID}?beta=true`, {
+        ...options,
+        headers: buildHeaders([
           {
             "anthropic-beta": [...(betas ?? []), "managed-agents-2026-04-01"].toString(),
-            ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0),
+            ...(workspace_id != null
+              ? {
+                  "anthropic-workspace-id": workspace_id,
+                }
+              : undefined),
           },
-          s?.headers,
+          options?.headers,
         ]),
       });
     }
-    update(n, r, s) {
-      let { betas: betas, workspace_id: workspace_id, ...w } = r;
-      return this._client.post(I`/v1/sessions/${n}?beta=true`, {
-        body: w,
-        ...s,
-        headers: T([
+    update(sessionID, params, options) {
+      let { betas, workspace_id, ...body } = params;
+      return this._client.post(I`/v1/sessions/${sessionID}?beta=true`, {
+        body,
+        ...options,
+        headers: buildHeaders([
           {
             "anthropic-beta": [...(betas ?? []), "managed-agents-2026-04-01"].toString(),
-            ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0),
+            ...(workspace_id != null
+              ? {
+                  "anthropic-workspace-id": workspace_id,
+                }
+              : undefined),
           },
-          s?.headers,
+          options?.headers,
         ]),
       });
     }
-    list(n = {}, r) {
-      let { betas: betas, workspace_id: workspace_id, ...y } = n ?? {};
-      return this._client.getAPIList("/v1/sessions?beta=true", Qi, {
-        query: y,
-        ...r,
-        headers: T([
+    list(params = {}, options) {
+      let { betas, workspace_id, ...query } = params ?? {};
+      return this._client.getAPIList("/v1/sessions?beta=true", BidirectionalPageCursor, {
+        query,
+        ...options,
+        headers: buildHeaders([
           {
             "anthropic-beta": [...(betas ?? []), "managed-agents-2026-04-01"].toString(),
-            ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0),
+            ...(workspace_id != null
+              ? {
+                  "anthropic-workspace-id": workspace_id,
+                }
+              : undefined),
           },
-          r?.headers,
+          options?.headers,
         ]),
       });
     }
-    delete(n, r = {}, s) {
-      let { betas: betas, workspace_id: workspace_id } = r ?? {};
-      return this._client.delete(I`/v1/sessions/${n}?beta=true`, {
-        ...s,
-        headers: T([
+    delete(sessionID, params = {}, options) {
+      let { betas, workspace_id } = params ?? {};
+      return this._client.delete(I`/v1/sessions/${sessionID}?beta=true`, {
+        ...options,
+        headers: buildHeaders([
           {
             "anthropic-beta": [...(betas ?? []), "managed-agents-2026-04-01"].toString(),
-            ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0),
+            ...(workspace_id != null
+              ? {
+                  "anthropic-workspace-id": workspace_id,
+                }
+              : undefined),
           },
-          s?.headers,
+          options?.headers,
         ]),
       });
     }
-    archive(n, r = {}, s) {
-      let { betas: betas, workspace_id: workspace_id } = r ?? {};
-      return this._client.post(I`/v1/sessions/${n}/archive?beta=true`, {
-        ...s,
-        headers: T([
+    archive(sessionID, params = {}, options) {
+      let { betas, workspace_id } = params ?? {};
+      return this._client.post(I`/v1/sessions/${sessionID}/archive?beta=true`, {
+        ...options,
+        headers: buildHeaders([
           {
             "anthropic-beta": [...(betas ?? []), "managed-agents-2026-04-01"].toString(),
-            ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0),
+            ...(workspace_id != null
+              ? {
+                  "anthropic-workspace-id": workspace_id,
+                }
+              : undefined),
           },
-          s?.headers,
+          options?.headers,
         ]),
       });
     }
   }
-  return ((e.Events = Xs), (e.Resources = ho), (e.Threads = Qs), e);
+  Sessions.Events = Events;
+  Sessions.Resources = Resources;
+  Sessions.Threads = Threads;
+  return Sessions;
 })();
-
-export { Zs };
+export { Sessions };

@@ -5,48 +5,62 @@
  * pieces: chunk-hwmsct5x.js (1)
  * attribution: esm-fingerprint 1
  */
-import { Y } from "../../../../core/resource.mjs";
-import { fo } from "./rate-limits.mjs";
-import { co } from "./members.mjs";
-import { po } from "./service-accounts.mjs";
-import { T } from "../../../../internal/headers.mjs";
+import { APIResource } from "../../../../core/resource.mjs";
+import { RateLimits_2 } from "./rate-limits.mjs";
+import { Members } from "./members.mjs";
+import { ServiceAccounts_2 } from "./service-accounts.mjs";
+import { buildHeaders } from "../../../../internal/headers.mjs";
 import { I } from "../../../../internal/utils/path.mjs";
-import { Be } from "../../../../core/pagination.mjs";
+import { Page } from "../../../../core/pagination.mjs";
 
 //@ chunk-hwmsct5x.js:128319-129152 esm-fingerprint
-var Ks = (() => {
-  class e extends Y {
+var Workspaces_3 = (() => {
+  class Workspaces extends APIResource {
     constructor() {
       super(...arguments);
-      ((this.rateLimits = new fo(this._client)),
-        (this.members = new co(this._client)),
-        (this.serviceAccounts = new po(this._client)));
+      this.rateLimits = new RateLimits_2(this._client);
+      this.members = new Members(this._client);
+      this.serviceAccounts = new ServiceAccounts_2(this._client);
     }
-    create(n, r) {
-      let { betas: betas, ...h } = n;
+    create(params, options) {
+      let { betas, ...body } = params;
       return this._client.post("/v1/organizations/workspaces?beta=true", {
-        body: h,
-        ...r,
-        headers: T([
-          { ...(betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0) },
-          r?.headers,
+        body,
+        ...options,
+        headers: buildHeaders([
+          {
+            ...(betas?.toString() != null
+              ? {
+                  "anthropic-beta": betas?.toString(),
+                }
+              : undefined),
+          },
+          options?.headers,
         ]),
       });
     }
-    retrieve(n, r) {
-      return this._client.get(I`/v1/organizations/workspaces/${n}?beta=true`, r);
+    retrieve(workspaceID, options) {
+      return this._client.get(I`/v1/organizations/workspaces/${workspaceID}?beta=true`, options);
     }
-    update(n, r, s) {
-      return this._client.post(I`/v1/organizations/workspaces/${n}?beta=true`, { body: r, ...s });
+    update(workspaceID, body, options) {
+      return this._client.post(I`/v1/organizations/workspaces/${workspaceID}?beta=true`, {
+        body,
+        ...options,
+      });
     }
-    list(n = {}, r) {
-      return this._client.getAPIList("/v1/organizations/workspaces?beta=true", Be, { query: n, ...r });
+    list(query = {}, options) {
+      return this._client.getAPIList("/v1/organizations/workspaces?beta=true", Page, {
+        query,
+        ...options,
+      });
     }
-    archive(n, r) {
-      return this._client.post(I`/v1/organizations/workspaces/${n}/archive?beta=true`, r);
+    archive(workspaceID, options) {
+      return this._client.post(I`/v1/organizations/workspaces/${workspaceID}/archive?beta=true`, options);
     }
   }
-  return ((e.RateLimits = fo), (e.Members = co), (e.ServiceAccounts = po), e);
+  Workspaces.RateLimits = RateLimits_2;
+  Workspaces.Members = Members;
+  Workspaces.ServiceAccounts = ServiceAccounts_2;
+  return Workspaces;
 })();
-
-export { Ks };
+export { Workspaces_3 };

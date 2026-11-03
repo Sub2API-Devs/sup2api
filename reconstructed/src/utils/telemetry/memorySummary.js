@@ -8,25 +8,9 @@
  * pieces: chunk-aepeg2w5.js (50)
  * attribution: placement 50
  */
-import {
-  readFile,
-  readFile as readFile_2,
-  readFile as readFile_3,
-  readFile as readFile_4,
-} from "fs/promises";
-import { Readable, Readable as Readable_2 } from "stream";
-import {
-  randomUUID,
-  randomUUID as randomUUID_2,
-  randomUUID as randomUUID_3,
-  randomUUID as randomUUID_4,
-  randomUUID as randomUUID_5,
-  randomUUID as randomUUID_6,
-  randomUUID as randomUUID_7,
-  randomUUID as randomUUID_8,
-  randomUUID as randomUUID_9,
-  randomUUID as randomUUID_10,
-} from "crypto";
+import { readFile } from "fs/promises";
+import { Readable } from "stream";
+import { randomUUID } from "crypto";
 import { logEvent } from "../../services/analytics/index.js";
 import { registerCleanup } from "../cleanupRegistry.js";
 import { HostScoped } from "../hostScoped.js";
@@ -34,9 +18,9 @@ import { getRootSession, isCcsTenant, isDisklessProcess } from "../../bootstrap/
 import { hasEmbeddedSearchTools_2 } from "../embeddedTools.js";
 import { isBareMode } from "../envUtils.js";
 import { isHttpMcpServeInvocation } from "../../entrypoints/mcpServeArgs.js";
-import { mn } from "../remoteEnvironment.js";
+import { isRemoteManagedEnvironment } from "../remoteEnvironment.js";
 import { env } from "../env.js";
-import { gte } from "../semver.js";
+import { semverGt } from "../semver.js";
 import { jsonStringify, jsonParse } from "../slowOperations.js";
 import { repairMalformedStringsDeep, normalizeFullWidthSpace } from "../stringUtils.js";
 import { logForDebugging } from "../debug.js";
@@ -45,38 +29,45 @@ import { logFeatureBad } from "../../services/analytics/featureTelemetry.js";
 import { lit } from "../../services/analytics/safeMetadata.js";
 import { parsePermissionMode } from "../../types/permissions.js";
 import { printableName } from "../printableName.js";
-import { Vt } from "../agentId.js";
+import { normalizeUuidOrNull } from "../agentId.js";
 
 //@ chunk-aepeg2w5.js:759038-759085 placement
-function Bis(e, n) {
-  _s().registerAttributor(e, n);
+/**
+ * 注册内存归因器。
+ */
+function registerMemoryAttributor(e, n) {
+  memoryAttribution().registerAttributor(e, n);
 }
 //@ chunk-aepeg2w5.js:759085-759133 placement
-var Cj = ["bash_shell", "mcp_stdio", "lsp", "other"];
+var CHILD_MEMORY_KINDS = ["bash_shell", "mcp_stdio", "lsp", "other"];
+//@ chunk-aepeg2w5.js:759133-761627 placement
 /**
  * 内存归因统计（子进程、页面大小、上报）。
  */
-//@ chunk-aepeg2w5.js:759133-761627 placement
 class MemoryAttribution {
   attributors = new Map();
   childProcesses = new Map();
   childRegisteredCount = 0;
-  pageSizeBytes = void 0;
-  installed = !1;
-  emitted = !1;
-  unregisterCleanup = void 0;
+  pageSizeBytes = undefined;
+  installed = false;
+  emitted = false;
+  unregisterCleanup = undefined;
   registerAttributor(e, n) {
     this.attributors.set(e, n);
   }
-  registerChild(e, n) {
+  registerChild(kind, n) {
     let r = this.childProcesses.get(n);
     if (r && !r.dead) return;
     this.childRegisteredCount++;
-    let s = { kind: e, peakRssBytes: 0, dead: !1 };
-    (this.childProcesses.set(n, s),
-      this.readChildRssBytes(n).then((h) => {
-        if (h !== void 0 && h > s.peakRssBytes) s.peakRssBytes = h;
-      }));
+    let s = {
+      kind,
+      peakRssBytes: 0,
+      dead: false,
+    };
+    this.childProcesses.set(n, s);
+    this.readChildRssBytes(n).then((h) => {
+      if (h !== undefined && h > s.peakRssBytes) s.peakRssBytes = h;
+    });
   }
   async sampleChildPeaks() {
     if (this.childProcesses.size === 0) return;
@@ -84,245 +75,314 @@ class MemoryAttribution {
     await Promise.all(
       filtered.map(async ([n, r]) => {
         let childRssBytes = await this.readChildRssBytes(n);
-        if (childRssBytes === void 0) r.dead = !0;
+        if (childRssBytes === undefined) r.dead = true;
         else if (childRssBytes > r.peakRssBytes) r.peakRssBytes = childRssBytes;
       }),
     );
   }
   async readChildRssBytes(e) {
     try {
-      let n = await readFile_3(`/proc/${e}/statm`, "utf8"),
-        r = Number(n.split(" ")[1]);
-      return Number.isFinite(r) ? r * (await this.getPageSizeBytes()) : void 0;
+      let file = await readFile(`/proc/${e}/statm`, "utf8");
+      let r = Number(file.split(" ")[1]);
+      return Number.isFinite(r) ? r * (await this.getPageSizeBytes()) : undefined;
     } catch {
       return;
     }
   }
   async getPageSizeBytes() {
-    if (this.pageSizeBytes !== void 0) return this.pageSizeBytes;
+    if (this.pageSizeBytes !== undefined) return this.pageSizeBytes;
     let e = 4096;
     try {
-      let rss = process.memoryUsage().rss,
-        r = await readFile_3("/proc/self/statm", "utf8"),
-        s = Number(r.split(" ")[1]),
-        h = 2 ** Math.round(Math.log2(rss / s));
+      let rss = process.memoryUsage().rss;
+      let file = await readFile("/proc/self/statm", "utf8");
+      let s = Number(file.split(" ")[1]);
+      let h = 2 ** Math.round(Math.log2(rss / s));
       if (Number.isFinite(h) && h > 0) e = h;
     } catch {}
-    return ((this.pageSizeBytes ??= e), this.pageSizeBytes);
+    this.pageSizeBytes ??= e;
+    return this.pageSizeBytes;
   }
   async buildSummary(e) {
-    let memoryUsage = process.memoryUsage(),
-      r = {
-        uptime_s: Math.round(process.uptime()),
-        final_rss_bytes: memoryUsage.rss,
-        final_heap_used_bytes: memoryUsage.heapUsed,
-        final_external_bytes: memoryUsage.external,
-        final_array_buffers_bytes: memoryUsage.arrayBuffers,
-        peak_rss_bytes: Math.max(e.rss, memoryUsage.rss),
-        peak_heap_used_bytes: Math.max(e.heapUsed, memoryUsage.heapUsed),
-        peak_external_bytes: Math.max(e.external, memoryUsage.external),
-        constrained_memory_bytes: process.constrainedMemory?.() || void 0,
-      };
+    let n = process.memoryUsage();
+    let r = {
+      uptime_s: Math.round(process.uptime()),
+      final_rss_bytes: n.rss,
+      final_heap_used_bytes: n.heapUsed,
+      final_external_bytes: n.external,
+      final_array_buffers_bytes: n.arrayBuffers,
+      peak_rss_bytes: Math.max(e.rss, n.rss),
+      peak_heap_used_bytes: Math.max(e.heapUsed, n.heapUsed),
+      peak_external_bytes: Math.max(e.external, n.external),
+      constrained_memory_bytes: process.constrainedMemory?.() || undefined,
+    };
     for (let [y, S] of this.attributors)
       try {
         let w = S();
-        if (((r[`attr_${y}_entries`] = w.entries), w.bytes !== void 0)) r[`attr_${y}_bytes`] = w.bytes;
+        r[`attr_${y}_entries`] = w.entries;
+        if (w.bytes !== undefined) r[`attr_${y}_bytes`] = w.bytes;
       } catch {}
     await this.sampleChildPeaks();
-    let s = 0,
-      h = {};
-    for (let y of this.childProcesses.values())
-      ((s += y.peakRssBytes), (h[y.kind] = (h[y.kind] ?? 0) + y.peakRssBytes));
-    ((r.child_count = this.childRegisteredCount), (r.child_rss_bytes_total = s));
-    for (let y of Cj) if (h[y] !== void 0) r[`child_${y}_rss_bytes`] = h[y];
+    let childRssBytesTotal = 0;
+    let h = {};
+    for (let childProcess of this.childProcesses.values()) {
+      childRssBytesTotal += childProcess.peakRssBytes;
+      h[childProcess.kind] = (h[childProcess.kind] ?? 0) + childProcess.peakRssBytes;
+    }
+    r.child_count = this.childRegisteredCount;
+    r.child_rss_bytes_total = childRssBytesTotal;
+    for (let y of CHILD_MEMORY_KINDS) if (h[y] !== undefined) r[`child_${y}_rss_bytes`] = h[y];
     return r;
   }
   async emitSummaryOnce(e) {
     if (this.emitted) return;
-    this.emitted = !0;
+    this.emitted = true;
     try {
       logEvent("tengu_sdk_memory_summary", await this.buildSummary(e()));
     } catch {}
   }
   installExitSummary(e) {
     if (this.installed) return;
-    ((this.installed = !0), (this.unregisterCleanup = registerCleanup(() => this.emitSummaryOnce(e))));
+    this.installed = true;
+    this.unregisterCleanup = registerCleanup(() => this.emitSummaryOnce(e));
   }
   reset() {
-    ((this.installed = !1),
-      (this.emitted = !1),
-      this.unregisterCleanup?.(),
-      (this.unregisterCleanup = void 0),
-      this.attributors.clear(),
-      this.childProcesses.clear(),
-      (this.childRegisteredCount = 0));
+    this.installed = false;
+    this.emitted = false;
+    this.unregisterCleanup?.();
+    this.unregisterCleanup = undefined;
+    this.attributors.clear();
+    this.childProcesses.clear();
+    this.childRegisteredCount = 0;
   }
 }
 //@ chunk-aepeg2w5.js:761627-761652 placement
-var Rj = new HostScoped(() => new MemoryAttribution());
+var memoryAttributionByHost = new HostScoped(() => new MemoryAttribution());
 //@ chunk-aepeg2w5.js:761652-761689 placement
-function _s() {
-  return Rj.of(getRootSession().host);
+function memoryAttribution() {
+  return memoryAttributionByHost.of(getRootSession().host);
 }
+//@ chunk-aepeg2w5.js:761689-761789 placement
 /**
  * 登记子进程内存。
  */
-//@ chunk-aepeg2w5.js:761689-761789 placement
-function registerChildMemory(e, n) {
+function registerChildMemory(e, pid) {
   if (!hasEmbeddedSearchTools_2() || isBareMode()) return;
-  if (!Number.isFinite(n) || n <= 0) return;
-  _s().registerChild(e, n);
+  if (!Number.isFinite(pid) || pid <= 0) return;
+  memoryAttribution().registerChild(e, pid);
 }
 //@ chunk-aepeg2w5.js:761789-761853 placement
-function Lki(e) {
-  let n = _s().childProcesses.get(e);
-  if (n) n.dead = !0;
+/**
+ * 标记子进程已退出，不再计入内存归因。
+ */
+function markChildProcessDead(pid) {
+  let n = memoryAttribution().childProcesses.get(pid);
+  if (n) n.dead = true;
 }
 //@ chunk-aepeg2w5.js:761853-761898 placement
-function Rx() {
-  return _s().sampleChildPeaks();
+function sampleChildMemoryPeaks() {
+  return memoryAttribution().sampleChildPeaks();
 }
 //@ chunk-aepeg2w5.js:761898-761941 placement
-function Hki(e) {
-  _s().installExitSummary(e);
+/**
+ * 安装退出时的内存汇总。
+ */
+function installMemoryExitSummary(getMemoryPeaks) {
+  memoryAttribution().installExitSummary(getMemoryPeaks);
 }
+//@ chunk-aepeg2w5.js:761941-762097 placement
 /**
  * 会话宿主类型（工具容器、租户、远程）。
  */
-//@ chunk-aepeg2w5.js:761941-762097 placement
 function sessionHostKind() {
   if (isHttpMcpServeInvocation()) return "tool_container_daemon";
   if (isCcsTenant()) return "ccs_tenant";
-  return mn() && Boolean(env.CLAUDE_CODE_REMOTE_SESSION_ID) ? "hosted_worker" : "none";
+  return isRemoteManagedEnvironment() && Boolean(env.CLAUDE_CODE_REMOTE_SESSION_ID)
+    ? "hosted_worker"
+    : "none";
 }
 //@ chunk-aepeg2w5.js:762162-762206 placement
-var Sg = 60000,
-  Oj = 8388608,
-  xx = 32768,
-  dBe = 262144;
+var DEFAULT_STALL_MS = 60000;
+var STALL_SIZE_BASE_BYTES = 8388608;
+var STALL_BYTES_PER_SECOND = 32768;
+var UPLOAD_CHUNK_BYTES = 262144;
 //@ chunk-aepeg2w5.js:762206-762284 placement
-function Pj(e, n) {
-  let min = Math.min(e, Oj);
-  return Math.max(n, Math.ceil((min / xx) * 1000));
+function stallFloorMs(e, stallMs) {
+  let min = Math.min(e, STALL_SIZE_BASE_BYTES);
+  return Math.max(stallMs, Math.ceil((min / STALL_BYTES_PER_SECOND) * 1000));
 }
 //@ chunk-aepeg2w5.js:762284-762341 placement
-function Mx(e, n) {
-  return Math.max(n, Math.ceil((e / xx) * 1000));
+function maxAllowedStallMs(e, stallMs) {
+  return Math.max(stallMs, Math.ceil((e / STALL_BYTES_PER_SECOND) * 1000));
 }
 //@ chunk-aepeg2w5.js:762341-762383 placement
-function dgr() {
-  return gte("1.4.4", "1.4.0");
+/**
+ * zod 版本是否兼容（>= 1.4.0）。
+ */
+function isZodVersionCompatible() {
+  return semverGt("1.4.4", "1.4.0");
 }
 //@ chunk-aepeg2w5.js:762383-762505 placement
 class UploadStalledError extends Error {
   waitedMs;
-  constructor(e) {
+  constructor(waitedMs) {
     super("transfer stalled");
-    this.waitedMs = e;
+    this.waitedMs = waitedMs;
     this.name = "UploadStalledError";
   }
 }
+//@ chunk-aepeg2w5.js:762505-762741 placement
 /**
  * 上传停滞计时器（touch/relax/clear）。
  */
-//@ chunk-aepeg2w5.js:762505-762741 placement
-function createStallTimer(e, n) {
-  let r = !1,
-    s = !1,
-    h = (S, w) => {
-      ((r = !0), S.abort(new UploadStalledError(w)));
-    },
-    y = setTimeout(h, n, e, n);
+function createStallTimer(abortController, n) {
+  let r = false;
+  let s = false;
+  let h = (S, waitedMs) => {
+    r = true;
+    S.abort(new UploadStalledError(waitedMs));
+  };
+  let timer = setTimeout(h, n, abortController, n);
   return {
     touch: () => {
-      if (!s) y.refresh();
+      if (!s) timer.refresh();
     },
     relax: (S) => {
       if (s) return;
-      (clearTimeout(y), (y = setTimeout(h, S, e, S)));
+      clearTimeout(timer);
+      timer = setTimeout(h, S, abortController, S);
     },
     clear: () => {
-      ((s = !0), clearTimeout(y));
+      s = true;
+      clearTimeout(timer);
     },
     fired: () => r,
   };
 }
 //@ chunk-aepeg2w5.js:762741-762850 placement
 function* chunkWithProgress(e, n) {
-  for (let r = 0; r < e.length; r += dBe) (n(r), yield e.subarray(r, Math.min(r + dBe, e.length)));
+  for (let r = 0; r < e.length; r += UPLOAD_CHUNK_BYTES) {
+    n(r);
+    yield e.subarray(r, Math.min(r + UPLOAD_CHUNK_BYTES, e.length));
+  }
   n(e.length);
 }
 //@ chunk-aepeg2w5.js:762850-762905 placement
-function Dx(e, n = {}) {
-  return withStallTimeout(e.length, (r) => chunkWithProgress(e, r), n);
+function uploadBufferWithProgress(buffer, n = {}) {
+  return withStallTimeout(buffer.length, (r) => chunkWithProgress(buffer, r), n);
 }
 //@ chunk-aepeg2w5.js:762905-762956 placement
-function Nki(e, n, r = {}) {
-  return withStallTimeout(n, (s) => Dj(e, s), r);
+/**
+ * 以停滞超时上传流式请求体。
+ */
+function uploadStreamWithProgress(slices, contentLength, r = {}) {
+  return withStallTimeout(contentLength, (s) => streamChunksWithProgress(slices, s), r);
 }
 //@ chunk-aepeg2w5.js:762956-763038 placement
-async function* Dj(e, n) {
+async function* streamChunksWithProgress(e, n) {
   let r = 0;
   n(r);
-  for await (let s of e) ((r += s.length), yield s, n(r));
+  for await (let s of e) {
+    r += s.length;
+    yield s;
+    n(r);
+  }
 }
+//@ chunk-aepeg2w5.js:763038-763516 placement
 /**
  * 带停滞超时的请求。
  */
-//@ chunk-aepeg2w5.js:763038-763516 placement
 function withStallTimeout(e, n, r) {
-  let s = r.stallMs ?? Sg,
-    max = Math.max(Pj(e, s), r.tailFloorMs ?? 0),
-    abortController = new AbortController(),
-    S = () => abortController.abort(r.signal?.reason);
+  let stallMs = r.stallMs ?? DEFAULT_STALL_MS;
+  let max = Math.max(stallFloorMs(e, stallMs), r.tailFloorMs ?? 0);
+  let abortController = new AbortController();
+  let S = () => abortController.abort(r.signal?.reason);
   if (r.signal?.aborted) S();
-  else r.signal?.addEventListener("abort", S, { once: !0 });
-  let w = createStallTimer(abortController, s),
-    R = 0;
+  else
+    r.signal?.addEventListener("abort", S, {
+      once: true,
+    });
+  let stallTimer = createStallTimer(abortController, stallMs);
+  let bytesHanded = 0;
   return {
     body: Readable.from(
       n((x) => {
-        if (((R = x), x === e)) w.relax(max);
-        else w.touch();
+        bytesHanded = x;
+        if (x === e) stallTimer.relax(max);
+        else stallTimer.touch();
       }),
-      { objectMode: !1 },
+      {
+        objectMode: false,
+      },
     ),
     signal: abortController.signal,
     dispose: () => {
-      (w.clear(), r.signal?.removeEventListener("abort", S));
+      stallTimer.clear();
+      r.signal?.removeEventListener("abort", S);
     },
-    seen: () => ({ body_bytes: e, bytes_handed: R, stalled: w.fired() && r.signal?.aborted !== !0 }),
+    seen: () => ({
+      body_bytes: e,
+      bytes_handed: bytesHanded,
+      stalled: stallTimer.fired() && r.signal?.aborted !== true,
+    }),
   };
 }
 //@ chunk-aepeg2w5.js:763551-763584 placement
-var cgr = "/api/directory/plugins";
+/**
+ * 插件目录 API 路径。
+ */
+var PLUGIN_DIRECTORY_API_PATH = "/api/directory/plugins";
+//@ chunk-aepeg2w5.js:763621-763947 placement
 /**
  * 对客户端事件签名。
  */
-//@ chunk-aepeg2w5.js:763621-763947 placement
-async function signClientEvent(e, n, r) {
-  let s = await e?.catch(() => {
+async function signClientEvent(eventSigner, n, r) {
+  let s = await eventSigner?.catch(() => {
     return;
   });
-  if (s === void 0) return { payload: r };
+  if (s === undefined)
+    return {
+      payload: r,
+    };
   try {
-    let h = Wis({ ...r, uuid: r.uuid || randomUUID_9() });
-    if ([n, h.uuid, h.type].some((S) => S.includes("\x00"))) return { payload: r };
-    let sign = await s.sign(n, h);
-    return sign === void 0 ? { payload: r } : { payload: h, device_attestation: sign };
+    let h = normalizeJsonRoundTrip({
+      ...r,
+      uuid: r.uuid || randomUUID(),
+    });
+    if ([n, h.uuid, h.type].some((S) => S.includes("\x00")))
+      return {
+        payload: r,
+      };
+    let y = await s.sign(n, h);
+    return y === undefined
+      ? {
+          payload: r,
+        }
+      : {
+          payload: h,
+          device_attestation: y,
+        };
   } catch (error) {
-    return (noteSignFailure(s, error), { payload: r });
+    noteSignFailure(s, error);
+    return {
+      payload: r,
+    };
   }
 }
 //@ chunk-aepeg2w5.js:763947-764018 placement
-function Wis(e) {
-  let n = jsonStringify(e),
-    r = jsonParse(n);
-  if (Fj.test(n)) (repairMalformedStringsDeep(r), normalizeObjectKeys(r));
+/**
+ * JSON 往返并修复孤立代理项、规范化对象键。
+ */
+function normalizeJsonRoundTrip(e) {
+  let n = jsonStringify(e);
+  let r = jsonParse(n);
+  if (LONE_SURROGATE_ESCAPE_RE.test(n)) {
+    repairMalformedStringsDeep(r);
+    normalizeObjectKeys(r);
+  }
   return r;
 }
 //@ chunk-aepeg2w5.js:764018-764050 placement
-var Fj = /\\ud[89a-f][0-9a-f]{2}/;
+var LONE_SURROGATE_ESCAPE_RE = /\\ud[89a-f][0-9a-f]{2}/;
 //@ chunk-aepeg2w5.js:764050-764302 placement
 function normalizeObjectKeys(e) {
   let n = [e];
@@ -330,78 +390,92 @@ function normalizeObjectKeys(e) {
     let r = n.pop();
     if (r === null || typeof r !== "object") continue;
     let s = r;
-    Object.keys(s).forEach((h) => {
-      let y = s[h];
+    Object.keys(s).forEach((key) => {
+      let y = s[key];
       if (y !== null && typeof y === "object") n.push(y);
-      let S = Array.isArray(r) ? h : normalizeFullWidthSpace(h);
-      if (S !== h) (delete s[h], (s[S] = y));
+      let S = Array.isArray(r) ? key : normalizeFullWidthSpace(key);
+      if (S !== key) {
+        delete s[key];
+        s[S] = y;
+      }
     });
   }
 }
+//@ chunk-aepeg2w5.js:764302-764451 placement
 /**
  * 签名模块加载失败时记录。
  */
-//@ chunk-aepeg2w5.js:764302-764451 placement
 function reportSignerLoadFailure(e) {
-  (logForDebugging(`[clientEventSigner] the signer module did not load: ${errorMessage(e)}`, {
+  logForDebugging(`[clientEventSigner] the signer module did not load: ${errorMessage(e)}`, {
     level: "warn",
-  }),
-    logFeatureBad("client_event_signer", "module_load_failed"));
+  });
+  logFeatureBad("client_event_signer", "module_load_failed");
   return;
 }
 //@ chunk-aepeg2w5.js:764451-764700 placement
-function noteSignFailure(e, n) {
-  if (
-    (logEvent("tengu_client_event_signed", {
-      ok: !1,
-      error: n instanceof RangeError ? lit("RangeError") : lit("other"),
-    }),
-    !e.noteSignFailure())
-  )
-    return;
-  (logForDebugging(`[clientEventSigner] event not signed: ${errorMessage(n)}`, { level: "warn" }),
-    logFeatureBad("client_event_signer", "sign_failed"));
+function noteSignFailure(e, error) {
+  logEvent("tengu_client_event_signed", {
+    ok: false,
+    error: error instanceof RangeError ? lit("RangeError") : lit("other"),
+  });
+  if (!e.noteSignFailure()) return;
+  logForDebugging(`[clientEventSigner] event not signed: ${errorMessage(error)}`, {
+    level: "warn",
+  });
+  logFeatureBad("client_event_signer", "sign_failed");
 }
 //@ chunk-aepeg2w5.js:764700-764784 placement
-class q6e extends Error {
+/**
+ * 客户端事件上传错误基类（带 retryAfterMs）。
+ */
+class ClientEventUploadError extends Error {
   retryAfterMs;
-  constructor(e, n) {
-    super(e);
-    this.retryAfterMs = n;
+  constructor(message, retryAfterMs) {
+    super(message);
+    this.retryAfterMs = retryAfterMs;
   }
 }
 //@ chunk-aepeg2w5.js:764784-764807 placement
-class ugr extends q6e {}
+/**
+ * 批次被拒、需重发的事件上传错误。
+ */
+class ClientEventBatchRejectedError extends ClientEventUploadError {}
 //@ chunk-aepeg2w5.js:764807-764887 placement
-class fgr extends Error {
+/**
+ * 「批次被拒，请稍后重发」错误。
+ */
+class ClientEventResendSoonError extends Error {
   constructor() {
     super("batch refused: resend it in two");
   }
 }
 //@ chunk-aepeg2w5.js:764887-764963 placement
-class cro extends Error {
+/**
+ * 「批次太小」上传错误（带 minBytes）。
+ */
+class ClientEventTooSmallError extends Error {
   minBytes;
-  constructor(e, n) {
-    super(e);
-    this.minBytes = n;
+  constructor(message, minBytes) {
+    super(message);
+    this.minBytes = minBytes;
   }
 }
 //@ chunk-aepeg2w5.js:764963-765073 placement
-var MAX_INT32 = 2147483647,
-  URGENT_RETRIES = 4,
-  uploadStats = {
-    posts: 0,
-    rows: 0,
-    maxRowsPost: 0,
-    failedPosts: 0,
-    droppedRows: 0,
-    otherPosts: 0,
-    otherRows: 0,
-  };
+var MAX_INT32 = 2147483647;
+var URGENT_RETRIES = 4;
+var uploadStats = {
+  posts: 0,
+  rows: 0,
+  maxRowsPost: 0,
+  failedPosts: 0,
+  droppedRows: 0,
+  otherPosts: 0,
+  otherRows: 0,
+};
+//@ chunk-aepeg2w5.js:765073-777777 placement
 /**
  * 客户端事件上传队列（紧急、重试、关闭交接）。
  */
-//@ chunk-aepeg2w5.js:765073-777777 placement
 class ClientEventUploader {
   pending = [];
   urgent = [];
@@ -410,14 +484,14 @@ class ClientEventUploader {
   inFlight;
   inFlightSince = 0;
   undelivered = [];
-  retaining = !1;
-  draining = !1;
-  gathering = !1;
-  closed = !1;
+  retaining = false;
+  draining = false;
+  gathering = false;
+  closed = false;
   backpressureResolvers = [];
   backoff = null;
-  retryNowOwed = !1;
-  cutsNextBackoff = !1;
+  retryNowOwed = false;
+  cutsNextBackoff = false;
   backoffOwedUntil = 0;
   flushResolvers = [];
   droppedBatches = 0;
@@ -431,13 +505,15 @@ class ClientEventUploader {
   owed = 0;
   sentBefore = new Set();
   resendSizes = [];
-  flushing = !1;
+  flushing = false;
   released;
-  counts = { ...uploadStats };
+  counts = {
+    ...uploadStats,
+  };
   tiedToNext = new WeakSet();
   config;
-  constructor(e) {
-    this.config = e;
+  constructor(config) {
+    this.config = config;
   }
   get droppedBatchCount() {
     return this.droppedBatches;
@@ -462,7 +538,8 @@ class ClientEventUploader {
     )
       return;
     if (this.gathering) this.drain();
-    if (((this.holdSpec = e), !e)) {
+    this.holdSpec = e;
+    if (!e) {
       this.release(n);
       return;
     }
@@ -472,25 +549,33 @@ class ClientEventUploader {
   }
   rejudgeHeld() {
     let e = this.holdTimer ? this.heldSince : Date.now();
-    (this.cancelHold(), this.countHeld(), this.applyHoldLimits(e), this.drain());
+    this.cancelHold();
+    this.countHeld();
+    this.applyHoldLimits(e);
+    this.drain();
   }
   cutBackoff() {
-    if (this.backoff?.until !== void 0) this.endBackoff();
-    else if (this.inFlight) this.cutsNextBackoff = !0;
+    if (this.backoff?.until !== undefined) this.endBackoff();
+    else if (this.inFlight) this.cutsNextBackoff = true;
   }
   release(e, n) {
-    (this.endHold(e, n), (this.owed = this.pending.length), this.drain());
+    this.endHold(e, n);
+    this.owed = this.pending.length;
+    this.drain();
   }
   takeUndelivered() {
     let undelivered = this.undelivered;
-    return ((this.undelivered = []), undelivered);
+    this.undelivered = [];
+    return undelivered;
   }
   peekUndelivered() {
     return this.undelivered;
   }
   discardUndelivered() {
     let e = this.undelivered.length;
-    return ((this.undelivered = []), (this.retaining = !1), e);
+    this.undelivered = [];
+    this.retaining = false;
+    return e;
   }
   async enqueue(e, n) {
     let r = Array.isArray(e) ? e : [e];
@@ -500,8 +585,11 @@ class ClientEventUploader {
       return;
     }
     if (n?.urgent) {
-      if ((this.urgent.push(...r), this.backoff?.until !== void 0))
-        ((this.backoffOwedUntil = this.backoff.until), this.endBackoff());
+      this.urgent.push(...r);
+      if (this.backoff?.until !== undefined) {
+        this.backoffOwedUntil = this.backoff.until;
+        this.endBackoff();
+      }
       this.drain();
       return;
     }
@@ -517,8 +605,8 @@ class ClientEventUploader {
         this.drain();
         continue;
       }
-      await new Promise((y) => {
-        this.backpressureResolvers.push(y);
+      await new Promise((resolve) => {
+        this.backpressureResolvers.push(resolve);
       });
     }
     if (this.closed) {
@@ -528,30 +616,34 @@ class ClientEventUploader {
     if (n?.together) {
       for (let y of r.slice(0, -1)) if (typeof y === "object" && y !== null) this.tiedToNext.add(y);
     }
-    if ((this.pending.push(...r), n?.release)) {
+    this.pending.push(...r);
+    if (n?.release) {
       this.release(n.release, n.releasedBy);
       return;
     }
-    let holdOnArrivals = this.holdOnArrivals();
-    if (holdOnArrivals && this.countInto(holdOnArrivals, r) > 0) this.applyHoldLimits(n?.since ?? Date.now());
+    let h = this.holdOnArrivals();
+    if (h && this.countInto(h, r) > 0) this.applyHoldLimits(n?.since ?? Date.now());
     if (!this.config.gatherTick) this.drain();
-    else if (!this.draining && !this.gathering)
-      ((this.gathering = !0),
-        setImmediate((y) => {
-          if (y.gathering) y.drain();
-        }, this));
+    else if (!this.draining && !this.gathering) {
+      this.gathering = true;
+      setImmediate((y) => {
+        if (y.gathering) y.drain();
+      }, this);
+    }
   }
   countInto(e, n) {
     let r = 0;
     for (let s of n)
       if (!e.passes?.(s)) {
-        if ((r++, e.maxBytes !== void 0)) this.heldBytes += Ko(s) ?? 0;
+        r++;
+        if (e.maxBytes !== undefined) this.heldBytes += jsonByteLength(s) ?? 0;
       }
-    return ((this.heldCount += r), r);
+    this.heldCount += r;
+    return r;
   }
   holdOnArrivals() {
     let holdSpec = this.holdSpec;
-    return holdSpec && !this.flushing && (holdSpec.passes || !this.draining) ? holdSpec : void 0;
+    return holdSpec && !this.flushing && (holdSpec.passes || !this.draining) ? holdSpec : undefined;
   }
   sendableCount() {
     let holdSpec = this.holdSpec;
@@ -562,34 +654,41 @@ class ClientEventUploader {
     return owed;
   }
   takePassing(e, n) {
-    let { maxBatchSize: maxBatchSize } = this.config,
-      byteLimit = this.byteLimit(n),
-      h = [],
-      y = [],
-      S = 0,
-      w = !1;
+    let { maxBatchSize } = this.config;
+    let s = this.byteLimit(n);
+    let h = [];
+    let y = [];
+    let S = 0;
+    let w = false;
     for (let R of this.pending) {
       if (w || !e(R)) {
         y.push(R);
         continue;
       }
-      let x = byteLimit === void 0 ? 0 : Ko(R);
-      if (x === void 0) {
+      let x = s === undefined ? 0 : jsonByteLength(R);
+      if (x === undefined) {
         this.sentBefore.delete(R);
         continue;
       }
-      if (h.length > 0 && S + x > (byteLimit ?? 0)) {
-        ((w = !0), y.push(R));
+      if (h.length > 0 && S + x > (s ?? 0)) {
+        w = true;
+        y.push(R);
         continue;
       }
-      ((S += x), h.push(R), (w = h.length >= maxBatchSize));
+      S += x;
+      h.push(R);
+      w = h.length >= maxBatchSize;
     }
-    return ((this.pending = y), { items: h, bytes: S });
+    this.pending = y;
+    return {
+      items: h,
+      bytes: S,
+    };
   }
   jsonBytesOf(e) {
-    if (this.config.maxBatchBytes === void 0) return 0;
+    if (this.config.maxBatchBytes === undefined) return 0;
     let n = 0;
-    for (let r of e) n += Ko(r) ?? 0;
+    for (let r of e) n += jsonByteLength(r) ?? 0;
     return n;
   }
   byteLimit(e) {
@@ -597,12 +696,13 @@ class ClientEventUploader {
       typeof this.config.maxBatchBytes === "function"
         ? this.config.maxBatchBytes()
         : this.config.maxBatchBytes;
-    return n === void 0 || e === void 0 ? n : Math.min(n, e);
+    return n === undefined || e === undefined ? n : Math.min(n, e);
   }
   countHeld() {
-    ((this.heldCount = 0), (this.heldBytes = 0));
-    let holdOnArrivals = this.holdOnArrivals();
-    if (holdOnArrivals) this.countInto(holdOnArrivals, this.pending.slice(this.owed));
+    this.heldCount = 0;
+    this.heldBytes = 0;
+    let e = this.holdOnArrivals();
+    if (e) this.countInto(e, this.pending.slice(this.owed));
   }
   applyHoldLimits(e) {
     let holdSpec = this.holdSpec;
@@ -611,20 +711,21 @@ class ClientEventUploader {
       return;
     }
     let r =
-      holdSpec.maxItems !== void 0 && this.heldCount >= holdSpec.maxItems
+      holdSpec.maxItems !== undefined && this.heldCount >= holdSpec.maxItems
         ? "max_events"
-        : holdSpec.maxBytes !== void 0 && this.heldBytes >= holdSpec.maxBytes
+        : holdSpec.maxBytes !== undefined && this.heldBytes >= holdSpec.maxBytes
           ? "max_bytes"
           : this.pending.length - this.owed >=
-              (this.config.holdMaxItems === void 0
+              (this.config.holdMaxItems === undefined
                 ? this.config.maxBatchSize
                 : Math.max(
                     this.config.holdMaxItems,
                     Math.min(holdSpec.maxItems ?? 0, this.config.maxBatchSize),
                   ))
             ? "cap"
-            : void 0;
-    if ((this.hold(e), r)) this.release(r);
+            : undefined;
+    this.hold(e);
+    if (r) this.release(r);
   }
   hold(e) {
     let holdSpec = this.holdSpec;
@@ -633,118 +734,138 @@ class ClientEventUploader {
       if (e >= this.heldSince) return;
       clearTimeout(this.holdTimer);
     }
-    ((this.heldSince = e), (this.heldRule = holdSpec.rule));
-    let now = Date.now(),
-      min = Math.min(holdSpec.maxAgeMs, Math.max(0, e + holdSpec.maxAgeMs - now));
-    ((this.holdDeadline = now + min), (this.holdTimer = setTimeout(() => this.release("max_age"), min)));
+    this.heldSince = e;
+    this.heldRule = holdSpec.rule;
+    let now = Date.now();
+    let min = Math.min(holdSpec.maxAgeMs, Math.max(0, e + holdSpec.maxAgeMs - now));
+    this.holdDeadline = now + min;
+    this.holdTimer = setTimeout(() => this.release("max_age"), min);
   }
   cancelHold() {
-    if (this.holdTimer) (clearTimeout(this.holdTimer), (this.holdTimer = null));
-    ((this.heldCount = 0), (this.heldBytes = 0));
+    if (this.holdTimer) {
+      clearTimeout(this.holdTimer);
+      this.holdTimer = null;
+    }
+    this.heldCount = 0;
+    this.heldBytes = 0;
   }
   endHold(e, n) {
     let r = this.holdTimer !== null;
-    if ((this.cancelHold(), !r)) return;
-    let now = Date.now(),
-      h = e === "max_age" && isDisklessProcess() ? this.holdDeadline : now,
-      min = Math.min(Math.max(0, Math.round(h - this.heldSince)), MAX_INT32),
-      S = this.pending.length,
-      heldRule = this.heldRule;
+    this.cancelHold();
+    if (!r) return;
+    let now = Date.now();
+    let h = e === "max_age" && isDisklessProcess() ? this.holdDeadline : now;
+    let min = Math.min(Math.max(0, Math.round(h - this.heldSince)), MAX_INT32);
+    let S = this.pending.length;
+    let heldRule = this.heldRule;
     if (this.released) this.reportDrained();
-    ((this.released = { reason: e, rule: heldRule, count: S, ageMs: min, at: now, unsent: S }),
-      this.config.onHoldRelease?.(e, S, min, heldRule, n));
+    this.released = {
+      reason: e,
+      rule: heldRule,
+      count: S,
+      ageMs: min,
+      at: now,
+      unsent: S,
+    };
+    this.config.onHoldRelease?.(e, S, min, heldRule, n);
   }
   retainUndelivered(e) {
-    if (((this.handedOverAfterClose += e.length), !this.retaining)) return;
+    this.handedOverAfterClose += e.length;
+    if (!this.retaining) return;
     let n = this.config.maxQueueSize - this.undelivered.length;
     if (n <= 0) return;
     this.undelivered.push(...(e.length > n ? e.slice(0, n) : e));
   }
   flush(e) {
     if (this.pending.length === 0 && this.urgent.length === 0 && !this.draining) return Promise.resolve();
-    if ((this.endHold("flush"), (this.flushing = !0), e?.retryNow))
-      ((this.retryNowOwed = this.backoff === null), this.endBackoff());
-    return (
-      this.drain(),
-      new Promise((n) => {
-        this.flushResolvers.push(n);
-      })
-    );
+    this.endHold("flush");
+    this.flushing = true;
+    if (e?.retryNow) {
+      this.retryNowOwed = this.backoff === null;
+      this.endBackoff();
+    }
+    this.drain();
+    return new Promise((resolve) => {
+      this.flushResolvers.push(resolve);
+    });
   }
   withdraw(e) {
     if (this.closed) return 0;
     let filtered = this.urgent.filter((S) => {
-        let w = !e(S);
-        if (!w) this.sentBefore.delete(S);
-        return w;
-      }),
-      r = this.urgent.length - filtered.length;
+      let w = !e(S);
+      if (!w) this.sentBefore.delete(S);
+      return w;
+    });
+    let r = this.urgent.length - filtered.length;
     this.urgent = filtered;
-    let owed = this.owed,
-      filtered_2 = this.pending.filter((S, w) => {
-        if (!e(S)) return !0;
-        if (w < this.owed) owed--;
-        return (this.sentBefore.delete(S), !1);
-      }),
-      y = this.pending.length - filtered_2.length;
+    let owed = this.owed;
+    let filtered_2 = this.pending.filter((S, w) => {
+      if (!e(S)) return true;
+      if (w < this.owed) owed--;
+      this.sentBefore.delete(S);
+      return false;
+    });
+    let y = this.pending.length - filtered_2.length;
     if (y === 0) return r;
-    return (
-      (this.pending = filtered_2),
-      (this.owed = owed),
-      (this.resendSizes = []),
-      this.rejudgeHeld(),
-      this.releaseBackpressure(),
-      y + r
-    );
+    this.pending = filtered_2;
+    this.owed = owed;
+    this.resendSizes = [];
+    this.rejudgeHeld();
+    this.releaseBackpressure();
+    return y + r;
   }
   close(e) {
     if (this.closed) return 0;
     if (this.gathering) this.drain();
-    ((this.closed = !0),
-      (this.pendingAtClose = this.urgent.length + this.pending.length),
-      (this.retaining = e?.retainUndelivered === !0),
-      this.cancelHold(),
-      (this.owed = 0),
-      this.sentBefore.clear(),
-      (this.flushing = !1));
+    this.closed = true;
+    this.pendingAtClose = this.urgent.length + this.pending.length;
+    this.retaining = e?.retainUndelivered === true;
+    this.cancelHold();
+    this.owed = 0;
+    this.sentBefore.clear();
+    this.flushing = false;
     let combined = (this.inFlight ?? []).concat(this.urgent, this.pending);
-    ((this.undelivered = this.retaining ? combined : []),
-      (this.inFlight = void 0),
-      (this.urgent = []),
-      (this.pending = []),
-      this.endBackoff());
+    this.undelivered = this.retaining ? combined : [];
+    this.inFlight = undefined;
+    this.urgent = [];
+    this.pending = [];
+    this.endBackoff();
     for (let backpressureResolver of this.backpressureResolvers) backpressureResolver();
     this.backpressureResolvers = [];
     for (let flushResolver of this.flushResolvers) flushResolver();
-    if (((this.flushResolvers = []), this.released)) this.reportDrained(!0);
+    this.flushResolvers = [];
+    if (this.released) this.reportDrained(true);
     return combined.length;
   }
   async drain() {
     if (this.draining || this.closed) return;
-    ((this.gathering = !1), (this.draining = !0));
-    let e = 0,
-      n,
-      r = 0,
-      s = !1,
-      h = 0;
+    this.gathering = false;
+    this.draining = true;
+    let e = 0;
+    let n;
+    let r = 0;
+    let s = false;
+    let h = 0;
     try {
       while (!this.closed) {
-        let y = this.urgent.length > 0,
-          S = this.backoffOwedUntil - Date.now();
+        let y = this.urgent.length > 0;
+        let S = this.backoffOwedUntil - Date.now();
         if (S <= 0 || !y) this.backoffOwedUntil = 0;
         if (S > 0 && !y) {
-          await this.backOff(S, !0);
+          await this.backOff(S, true);
           continue;
         }
-        let w = this.holdSpec?.passes,
-          R,
-          x = !1,
-          P = y && h >= URGENT_RETRIES && S <= 0,
-          F = y && !P;
+        let passes = this.holdSpec?.passes;
+        let R;
+        let x = false;
+        let P = y && h >= URGENT_RETRIES && S <= 0;
+        let F = y && !P;
         if (F) {
-          if (((R = this.takeUrgent()), R.items.length === 0)) continue;
-        } else if (w && this.owed === 0 && !this.flushing) {
-          if (((R = this.takePassing(w, n)), R.items.length === 0)) {
+          R = this.takeUrgent();
+          if (R.items.length === 0) continue;
+        } else if (passes && this.owed === 0 && !this.flushing) {
+          R = this.takePassing(passes, n);
+          if (R.items.length === 0) {
             if (P) {
               h = 0;
               continue;
@@ -752,125 +873,132 @@ class ClientEventUploader {
             break;
           }
         } else {
-          let sendableCount = this.sendableCount();
-          if (sendableCount === 0) {
+          let ae = this.sendableCount();
+          if (ae === 0) {
             if (P) {
               h = 0;
               continue;
             }
             break;
           }
-          if (
-            ((x = this.resendSizes.length > 0), (R = this.takeBatch(sendableCount, n)), R.items.length === 0)
-          )
-            continue;
+          x = this.resendSizes.length > 0;
+          R = this.takeBatch(ae, n);
+          if (R.items.length === 0) continue;
         }
-        let { items: items, bytes: bytes } = R;
-        ((this.inFlight = items), (this.inFlightSince = Date.now()));
-        let j = F ? void 0 : this.released,
-          ee = j !== void 0 && j.unsent > 0,
-          q = items.length,
-          Q = items.findIndex((ae, ie) => !this.sharesPostWithNext(ie, items)) + 1,
-          re = F || x || Q >= items.length ? 0 : Q,
-          { attempt: attempt, again: again } = this.takeAttemptOf(items);
+        let { items, bytes } = R;
+        this.inFlight = items;
+        this.inFlightSince = Date.now();
+        let released = F ? undefined : this.released;
+        let ee = released !== undefined && released.unsent > 0;
+        let q = items.length;
+        let Q = items.findIndex((item, ie) => !this.sharesPostWithNext(ie, items)) + 1;
+        let re = F || x || Q >= items.length ? 0 : Q;
+        let { attempt, again } = this.takeAttemptOf(items);
         try {
-          if (
-            (await this.config.send(items, {
-              held: ee,
-              reason: ee ? j.reason : "none",
-              heldCount: ee ? j.count : 0,
-              holdAgeMs: ee ? j.ageMs : 0,
-              rule: ee ? j.rule : "none",
-              postIndex: this.counts.posts,
-              retryCount: F ? r : e,
-              attempt: attempt,
-              urgent: F,
-              followsUrgent: !F && s,
-              bytes: bytes,
-              cuttable: re > 0,
-              mayResendInTwo: () => re > 0 && !this.closed,
-            }),
-            F)
-          )
-            ((r = 0), h++);
-          else ((e = 0), (h = 0));
-          if (
-            ((s = F),
-            this.counts.posts++,
-            (this.counts.rows += q),
-            (this.counts.maxRowsPost = Math.max(this.counts.maxRowsPost, q)),
-            j)
-          )
-            j.unsent -= q;
+          await this.config.send(items, {
+            held: ee,
+            reason: ee ? released.reason : "none",
+            heldCount: ee ? released.count : 0,
+            holdAgeMs: ee ? released.ageMs : 0,
+            rule: ee ? released.rule : "none",
+            postIndex: this.counts.posts,
+            retryCount: F ? r : e,
+            attempt,
+            urgent: F,
+            followsUrgent: !F && s,
+            bytes,
+            cuttable: re > 0,
+            mayResendInTwo: () => re > 0 && !this.closed,
+          });
+          if (F) {
+            r = 0;
+            h++;
+          } else {
+            e = 0;
+            h = 0;
+          }
+          s = F;
+          this.counts.posts++;
+          this.counts.rows += q;
+          this.counts.maxRowsPost = Math.max(this.counts.maxRowsPost, q);
+          if (released) released.unsent -= q;
         } catch (error) {
-          if (error instanceof fgr && re > 0 && items.length === q && !this.closed) {
-            ((e = 0),
-              this.counts.failedPosts++,
-              this.noteSentBefore(items),
-              (this.pending = items.concat(this.pending)),
-              (this.owed += items.length),
-              (this.resendSizes = [re, items.length - re]));
+          if (error instanceof ClientEventResendSoonError && re > 0 && items.length === q && !this.closed) {
+            e = 0;
+            this.counts.failedPosts++;
+            this.noteSentBefore(items);
+            this.pending = items.concat(this.pending);
+            this.owed += items.length;
+            this.resendSizes = [re, items.length - re];
             continue;
           }
           let ie = F ? ++r : ++e;
-          if ((this.counts.failedPosts++, this.closed)) break;
+          this.counts.failedPosts++;
+          if (this.closed) break;
           if (
-            error instanceof fgr ||
-            (this.config.maxConsecutiveFailures !== void 0 && ie >= this.config.maxConsecutiveFailures)
+            error instanceof ClientEventResendSoonError ||
+            (this.config.maxConsecutiveFailures !== undefined && ie >= this.config.maxConsecutiveFailures)
           ) {
-            if ((this.droppedBatches++, (this.counts.droppedRows += q), j)) j.unsent -= q;
-            if ((this.config.onBatchDropped?.(items.length, ie), F)) r = 0;
-            else ((e = 0), (n = void 0));
+            this.droppedBatches++;
+            this.counts.droppedRows += q;
+            if (released) released.unsent -= q;
+            this.config.onBatchDropped?.(items.length, ie);
+            if (F) r = 0;
+            else {
+              e = 0;
+              n = undefined;
+            }
             this.releaseBackpressure();
             continue;
           }
-          if (
-            ((this.inFlight = void 0),
-            this.noteSentBefore(error instanceof ugr ? again.filter((Ae) => items.includes(Ae)) : items),
-            F)
-          )
-            this.urgent = items.concat(this.urgent);
-          else if (((this.pending = items.concat(this.pending)), (this.owed += items.length), x))
-            this.resendSizes.unshift(items.length);
-          else if (error instanceof cro) {
-            let Ae = items.length === q ? bytes : this.jsonBytesOf(items);
-            if (Ae >= error.minBytes) {
-              let max = Math.max(error.minBytes, Math.floor(Ae / 2));
-              n = Math.min(max, n ?? max);
+          this.inFlight = undefined;
+          this.noteSentBefore(
+            error instanceof ClientEventBatchRejectedError ? again.filter((Ae) => items.includes(Ae)) : items,
+          );
+          if (F) this.urgent = items.concat(this.urgent);
+          else {
+            this.pending = items.concat(this.pending);
+            this.owed += items.length;
+            if (x) this.resendSizes.unshift(items.length);
+            else if (error instanceof ClientEventTooSmallError) {
+              let Ae = items.length === q ? bytes : this.jsonBytesOf(items);
+              if (Ae >= error.minBytes) {
+                let max = Math.max(error.minBytes, Math.floor(Ae / 2));
+                n = Math.min(max, n ?? max);
+              }
             }
           }
-          let Z = error instanceof q6e ? error.retryAfterMs : void 0,
-            retryDelay = this.retryDelay(ie, Z),
-            fe = !F && Z === void 0;
-          if (!fe) this.cutsNextBackoff = !1;
+          let retryAfterMs = error instanceof ClientEventUploadError ? error.retryAfterMs : undefined;
+          let ce = this.retryDelay(ie, retryAfterMs);
+          let fe = !F && retryAfterMs === undefined;
+          if (!fe) this.cutsNextBackoff = false;
           if (fe && this.urgent.length > 0) {
-            this.backoffOwedUntil = Date.now() + retryDelay;
+            this.backoffOwedUntil = Date.now() + ce;
             continue;
           }
-          await this.backOff(retryDelay, fe);
+          await this.backOff(ce, fe);
           continue;
         } finally {
-          this.inFlight = void 0;
+          this.inFlight = undefined;
         }
         this.releaseBackpressure();
       }
     } finally {
-      if (
-        ((this.draining = !1),
-        (this.retryNowOwed = !1),
-        (this.cutsNextBackoff = !1),
-        (this.backoffOwedUntil = 0),
-        this.pending.length === 0 && this.urgent.length === 0)
-      ) {
-        this.flushing = !1;
+      this.draining = false;
+      this.retryNowOwed = false;
+      this.cutsNextBackoff = false;
+      this.backoffOwedUntil = 0;
+      if (this.pending.length === 0 && this.urgent.length === 0) {
+        this.flushing = false;
         for (let flushResolver of this.flushResolvers) flushResolver();
-        if (((this.flushResolvers = []), !this.closed)) this.reportDrained();
+        this.flushResolvers = [];
+        if (!this.closed) this.reportDrained();
       }
       this.config.onIdle?.();
     }
   }
-  reportDrained(e = !1) {
-    let { released: released, counts: counts } = this;
+  reportDrained(e = false) {
+    let { released, counts } = this;
     if (!released) {
       this.counts = {
         ...uploadStats,
@@ -879,78 +1007,102 @@ class ClientEventUploader {
       };
       return;
     }
-    ((this.released = void 0),
-      (this.counts = { ...uploadStats }),
-      this.config.onDrained?.({
-        trigger: e ? "close" : released.reason,
-        rule: released.rule,
-        heldEvents: released.count,
-        heldMs: released.ageMs,
-        ...counts,
-        drainMs: Date.now() - released.at,
-      }));
+    this.released = undefined;
+    this.counts = {
+      ...uploadStats,
+    };
+    this.config.onDrained?.({
+      trigger: e ? "close" : released.reason,
+      rule: released.rule,
+      heldEvents: released.count,
+      heldMs: released.ageMs,
+      ...counts,
+      drainMs: Date.now() - released.at,
+    });
   }
   takeBatch(e, n) {
     let r = this.resendSizes.shift();
-    if (r !== void 0) {
+    if (r !== undefined) {
       this.owed = Math.max(0, this.owed - r);
-      let splice = this.pending.splice(0, r);
-      return { items: splice, bytes: this.jsonBytesOf(splice) };
+      let P = this.pending.splice(0, r);
+      return {
+        items: P,
+        bytes: this.jsonBytesOf(P),
+      };
     }
-    let { maxBatchSize: maxBatchSize } = this.config,
-      byteLimit = this.byteLimit(n),
-      y = 0,
-      S = 0,
-      w = [];
+    let { maxBatchSize } = this.config;
+    let h = this.byteLimit(n);
+    let y = 0;
+    let S = 0;
+    let w = [];
     while (S < e && S < maxBatchSize) {
       let P = 0;
-      if (byteLimit !== void 0) {
-        let F = Ko(this.pending[S]);
-        if (F === void 0) {
-          if ((this.forget(this.pending.splice(S, 1)), e--, S < this.owed)) this.owed--;
+      if (h !== undefined) {
+        let F = jsonByteLength(this.pending[S]);
+        if (F === undefined) {
+          this.forget(this.pending.splice(S, 1));
+          e--;
+          if (S < this.owed) this.owed--;
           continue;
         }
-        if (S > 0 && y + F > byteLimit) break;
+        if (S > 0 && y + F > h) break;
         P = F;
       }
-      ((y += P), w.push(P), S++);
+      y += P;
+      w.push(P);
+      S++;
     }
-    let R = S,
-      x = y;
-    while (S > 0 && this.sharesPostWithNext(S - 1)) (S--, (y -= w[S] ?? 0));
+    let R = S;
+    let x = y;
+    while (S > 0 && this.sharesPostWithNext(S - 1)) {
+      S--;
+      y -= w[S] ?? 0;
+    }
     if (S === 0) {
-      ((S = R), (y = x));
+      S = R;
+      y = x;
       while (S > 0 && this.sharesPostWithNext(S - 1)) {
-        let P = byteLimit === void 0 ? 0 : Ko(this.pending[S]);
-        if (P === void 0) {
-          if ((this.forget(this.pending.splice(S, 1)), S < this.owed)) this.owed--;
-        } else ((y += P), S++);
+        let P = h === undefined ? 0 : jsonByteLength(this.pending[S]);
+        if (P === undefined) {
+          this.forget(this.pending.splice(S, 1));
+          if (S < this.owed) this.owed--;
+        } else {
+          y += P;
+          S++;
+        }
       }
     }
-    return ((this.owed = Math.max(0, this.owed - S)), { items: this.pending.splice(0, S), bytes: y });
+    this.owed = Math.max(0, this.owed - S);
+    return {
+      items: this.pending.splice(0, S),
+      bytes: y,
+    };
   }
   sharesPostWithNext(e, n = this.pending) {
     let r = n[e];
     return e + 1 < n.length && typeof r === "object" && r !== null && this.tiedToNext.has(r);
   }
   takeUrgent() {
-    let { maxBatchSize: maxBatchSize } = this.config,
-      byteLimit = this.byteLimit(void 0),
-      r = 0,
-      s = 0;
+    let { maxBatchSize } = this.config;
+    let n = this.byteLimit(undefined);
+    let r = 0;
+    let s = 0;
     while (s < this.urgent.length && s < maxBatchSize) {
-      if (byteLimit !== void 0) {
-        let h = Ko(this.urgent[s]);
-        if (h === void 0) {
+      if (n !== undefined) {
+        let h = jsonByteLength(this.urgent[s]);
+        if (h === undefined) {
           this.forget(this.urgent.splice(s, 1));
           continue;
         }
-        if (s > 0 && r + h > byteLimit) break;
+        if (s > 0 && r + h > n) break;
         r += h;
       }
       s++;
     }
-    return { items: this.urgent.splice(0, s), bytes: r };
+    return {
+      items: this.urgent.splice(0, s),
+      bytes: r,
+    };
   }
   noteSentBefore(e) {
     for (let n of e) this.sentBefore.add(n);
@@ -959,7 +1111,11 @@ class ClientEventUploader {
     for (let n of e) this.sentBefore.delete(n);
   }
   takeAttemptOf(e) {
-    if (this.sentBefore.size === 0) return { attempt: "first", again: [] };
+    if (this.sentBefore.size === 0)
+      return {
+        attempt: "first",
+        again: [],
+      };
     let filtered = e.filter((r) => this.sentBefore.delete(r));
     return {
       attempt: filtered.length === 0 ? "first" : filtered.length < e.length ? "resend_with_new" : "resend",
@@ -968,14 +1124,14 @@ class ClientEventUploader {
   }
   retryDelay(e, n) {
     let r = Math.random() * this.config.jitterMs;
-    if (n !== void 0 && Number.isFinite(n))
+    if (n !== undefined && Number.isFinite(n))
       return Math.max(this.config.baseDelayMs, Math.min(n, this.config.maxDelayMs)) + r;
     return Math.min(this.config.baseDelayMs * 2 ** (e - 1), this.config.maxDelayMs) + r;
   }
   releaseBackpressure() {
     let backpressureResolvers = this.backpressureResolvers;
     this.backpressureResolvers = [];
-    for (let n of backpressureResolvers) n();
+    for (let backpressureResolver of backpressureResolvers) backpressureResolver();
   }
   inFlightBatch() {
     return this.inFlight;
@@ -984,34 +1140,49 @@ class ClientEventUploader {
     return (this.draining || this.gathering) && !this.closed;
   }
   holdsOnArrival(e) {
-    let holdOnArrivals = this.holdOnArrivals();
-    return !this.closed && holdOnArrivals !== void 0 && !holdOnArrivals.passes?.(e);
+    let n = this.holdOnArrivals();
+    return !this.closed && n !== undefined && !n.passes?.(e);
   }
   held() {
-    return { count: this.heldCount, ageMs: this.holdTimer ? Date.now() - this.heldSince : 0 };
+    return {
+      count: this.heldCount,
+      ageMs: this.holdTimer ? Date.now() - this.heldSince : 0,
+    };
   }
   backlog() {
     return {
       unsent: (this.inFlight?.length ?? 0) + this.urgent.length + this.pending.length,
-      inFlightMs: this.inFlight ? Date.now() - this.inFlightSince : void 0,
+      inFlightMs: this.inFlight ? Date.now() - this.inFlightSince : undefined,
       backingOff: this.backoff !== null,
     };
   }
-  backOff(e, n = !1) {
-    if ((this.config.onIdle?.(), this.retryNowOwed || (n && this.cutsNextBackoff)))
-      return ((this.retryNowOwed = !1), (this.cutsNextBackoff = !1), Promise.resolve());
-    return new Promise((r) => {
-      let s = { end: r, until: n ? Date.now() + e : void 0 };
-      ((this.backoff = s), (s.timer = setTimeout((h) => h.endBackoff(), e, this)));
+  backOff(e, n = false) {
+    this.config.onIdle?.();
+    if (this.retryNowOwed || (n && this.cutsNextBackoff)) {
+      this.retryNowOwed = false;
+      this.cutsNextBackoff = false;
+      return Promise.resolve();
+    }
+    return new Promise((resolve) => {
+      let s = {
+        end: resolve,
+        until: n ? Date.now() + e : undefined,
+      };
+      this.backoff = s;
+      s.timer = setTimeout((h) => h.endBackoff(), e, this);
     });
   }
   endBackoff() {
     let backoff = this.backoff;
-    if (backoff) ((this.backoff = null), clearTimeout(backoff.timer), backoff.end());
+    if (backoff) {
+      this.backoff = null;
+      clearTimeout(backoff.timer);
+      backoff.end();
+    }
   }
 }
 //@ chunk-aepeg2w5.js:777777-777841 placement
-function Ko(e) {
+function jsonByteLength(e) {
   try {
     return Buffer.byteLength(jsonStringify(e));
   } catch {
@@ -1019,97 +1190,116 @@ function Ko(e) {
   }
 }
 //@ chunk-aepeg2w5.js:778099-778111 placement
-var Eg = null;
+var consoleProfileBearerProvider = null;
 //@ chunk-aepeg2w5.js:778111-778150 placement
-function $ki(e) {
-  let n = Eg;
-  return ((Eg = e), n);
+/**
+ * 设置 console profile bearer 提供者并返回旧值。
+ */
+function setConsoleProfileBearerProvider(e) {
+  let n = consoleProfileBearerProvider;
+  consoleProfileBearerProvider = e;
+  return n;
 }
 //@ chunk-aepeg2w5.js:778150-778174 placement
-function $o() {
-  return Eg;
+function getConsoleProfileBearerProvider() {
+  return consoleProfileBearerProvider;
 }
 //@ chunk-aepeg2w5.js:778174-778186 placement
-var kg = null;
+var trustedDeviceProbe = null;
 //@ chunk-aepeg2w5.js:778186-778224 placement
-function Fx(e) {
-  let n = kg;
-  return ((kg = e), n);
+function setTrustedDeviceProbe(isConsoleProfileSessionsCredential) {
+  let n = trustedDeviceProbe;
+  trustedDeviceProbe = isConsoleProfileSessionsCredential;
+  return n;
 }
 //@ chunk-aepeg2w5.js:778224-778258 placement
-function Fki() {
-  return kg?.() === !0;
+/**
+ * 是否已通过可信设备校验。
+ */
+function isTrustedDeviceAttested() {
+  return trustedDeviceProbe?.() === true;
 }
+//@ chunk-aepeg2w5.js:778258-778461 placement
 /**
  * 安全调用事件回调。
  */
-//@ chunk-aepeg2w5.js:778258-778461 placement
 function safeEmit(e, n, r) {
   try {
-    return (e(n), !0);
+    e(n);
+    return true;
   } catch (error) {
     let h = typeof n.subtype === "string" ? `${n.type}:${n.subtype}` : n.type;
-    return (
-      logForDebugging(`[${r}] Dropping ${h} frame \u2014 handler threw: ${errorMessage(error)}`, {
-        level: "error",
-      }),
-      !1
-    );
+    logForDebugging(`[${r}] Dropping ${h} frame \u2014 handler threw: ${errorMessage(error)}`, {
+      level: "error",
+    });
+    return false;
   }
 }
 //@ chunk-aepeg2w5.js:778628-778675 placement
-var Uki = { subtype: "interrupt", cancel_queued: !0 };
+/**
+ * 中断远程会话的控制事件。
+ */
+var INTERRUPT_REMOTE_EVENT = {
+  subtype: "interrupt",
+  cancel_queued: true,
+};
 //@ chunk-aepeg2w5.js:778675-778772 placement
-function pgr(e) {
+/**
+ * 取系统事件里的权限模式。
+ */
+function permissionModeOfSystemEvent(e) {
   if (e.type !== "system" || !("permissionMode" in e)) return;
   return parsePermissionMode(e.permissionMode);
 }
 //@ chunk-aepeg2w5.js:778772-778822 placement
-var wg = ["bridge", "anthropic_cloud", "byoc", "snap"];
+var KNOWN_WORKER_STATES = ["bridge", "anthropic_cloud", "byoc", "snap"];
+//@ chunk-aepeg2w5.js:778822-778865 placement
 /**
  * 是否为已知工作者状态。
  */
-//@ chunk-aepeg2w5.js:778822-778865 placement
-function isKnownWorkerState(e) {
-  return wg.some((n) => n === e);
+function isKnownWorkerState(environmentKind) {
+  return KNOWN_WORKER_STATES.some((n) => n === environmentKind);
 }
 //@ chunk-aepeg2w5.js:778865-778879 placement
-var Kj = 120000;
+var SESSION_INIT_ERROR_GRACE_MS = 120000;
+//@ chunk-aepeg2w5.js:778879-779188 placement
 /**
  * 描述会话初始化错误。
  */
-//@ chunk-aepeg2w5.js:778879-779188 placement
-function describeInitError(e) {
-  let n = typeof e.message === "string" ? printableName(e.message, 500).trim() : "";
+function describeInitError(lastInitError) {
+  let n = typeof lastInitError.message === "string" ? printableName(lastInitError.message, 500).trim() : "";
   if (n && n !== "<nil>") return n;
-  let r = /^[A-Za-z][A-Za-z0-9_]{0,63}$/,
-    found = [e.error_type, e.error_kind].find((h) => typeof h === "string" && r.test(h));
+  let r = /^[A-Za-z][A-Za-z0-9_]{0,63}$/;
+  let found = [lastInitError.error_type, lastInitError.error_kind].find(
+    (h) => typeof h === "string" && r.test(h),
+  );
   return found ? `the cloud environment failed to start (${found})` : "the cloud environment failed to start";
 }
+//@ chunk-aepeg2w5.js:779188-779645 placement
 /**
  * 会话错误摘要。
  */
-//@ chunk-aepeg2w5.js:779188-779645 placement
 function sessionErrorSummary(e, n) {
-  let r = e.environment_kind === "bridge" ? null : e.external_metadata?.last_init_error;
-  if (r) {
+  let lastInitError = e.environment_kind === "bridge" ? null : e.external_metadata?.last_init_error;
+  if (lastInitError) {
     let s =
-        e.worker_status === "running" || e.worker_status === "idle" || e.worker_status === "requires_action",
-      h = String(r.recoverable) === "true",
-      y = typeof r.at === "string" ? Date.parse(r.at) : NaN,
-      S = Number.isFinite(y) && n - y > Kj;
-    if (r.error_kind === "environment_deleted" || (!s && (!h || S))) return describeInitError(r);
+      e.worker_status === "running" || e.worker_status === "idle" || e.worker_status === "requires_action";
+    let h = String(lastInitError.recoverable) === "true";
+    let y = typeof lastInitError.at === "string" ? Date.parse(lastInitError.at) : NaN;
+    let S = Number.isFinite(y) && n - y > SESSION_INIT_ERROR_GRACE_MS;
+    if (lastInitError.error_kind === "environment_deleted" || (!s && (!h || S)))
+      return describeInitError(lastInitError);
   }
   if (e.status === "failed") return "the cloud environment could not be provisioned";
   return;
 }
+//@ chunk-aepeg2w5.js:779645-781069 placement
 /**
  * 描述云会话状态（归档、需要操作等）。
  */
-//@ chunk-aepeg2w5.js:779645-781069 placement
 function describeCloudSession(e, n = {}) {
-  let r = e.status === "archived" ? "archived" : (e.worker_status ?? "idle"),
-    s = r === "requires_action" ? e.external_metadata?.pending_action : void 0;
+  let r = e.status === "archived" ? "archived" : (e.worker_status ?? "idle");
+  let pendingAction = r === "requires_action" ? e.external_metadata?.pending_action : undefined;
   return {
     type: "session",
     id: e.id,
@@ -1127,63 +1317,75 @@ function describeCloudSession(e, n = {}) {
       custom_system_prompt: null,
       append_system_prompt: null,
     },
-    ...(e.config != null && { config_read: !0 }),
-    bound_device_uuid: Vt(e.bound_device_uuid)?.toLowerCase(),
-    ...(e.tags !== void 0 && { tags: e.tags }),
+    ...(e.config != null && {
+      config_read: true,
+    }),
+    bound_device_uuid: normalizeUuidOrNull(e.bound_device_uuid)?.toLowerCase(),
+    ...(e.tags !== undefined && {
+      tags: e.tags,
+    }),
     ...(e.external_metadata?.tool_host_status != null && {
       tool_host_status: e.external_metadata.tool_host_status,
     }),
     ...(e.external_metadata?.device_bind_posture != null && {
       device_bind_posture: e.external_metadata.device_bind_posture,
     }),
-    ...(e.external_metadata?.artifacts != null && { artifacts: e.external_metadata.artifacts }),
+    ...(e.external_metadata?.artifacts != null && {
+      artifacts: e.external_metadata.artifacts,
+    }),
     ...(e.external_metadata?.autocompact_state != null && {
       autocompact_state: e.external_metadata.autocompact_state,
     }),
-    ...(e.agent_id != null && { agent_id: e.agent_id }),
-    ...(e.self_hosted_runner_pool_id != null && { self_hosted_runner_pool_id: e.self_hosted_runner_pool_id }),
+    ...(e.agent_id != null && {
+      agent_id: e.agent_id,
+    }),
+    ...(e.self_hosted_runner_pool_id != null && {
+      self_hosted_runner_pool_id: e.self_hosted_runner_pool_id,
+    }),
     startup_failure: sessionErrorSummary(e, n.serverNow ?? Date.now()),
-    ...(typeof s?.tool_name === "string" && {
+    ...(typeof pendingAction?.tool_name === "string" && {
       pending_action: {
-        name: s.tool_name,
-        ...(typeof s.request_id === "string" && s.request_id !== "" && { request_id: s.request_id }),
+        name: pendingAction.tool_name,
+        ...(typeof pendingAction.request_id === "string" &&
+          pendingAction.request_id !== "" && {
+            request_id: pendingAction.request_id,
+          }),
       },
     }),
   };
 }
-
 export {
   safeEmit,
   signClientEvent,
   sessionHostKind,
-  Fki,
-  wg,
+  isTrustedDeviceAttested,
+  KNOWN_WORKER_STATES,
   describeCloudSession,
   ClientEventUploader,
-  q6e,
-  Fx,
-  $o,
-  dBe,
+  ClientEventUploadError,
+  setTrustedDeviceProbe,
+  getConsoleProfileBearerProvider,
+  UPLOAD_CHUNK_BYTES,
   reportSignerLoadFailure,
-  pgr,
+  permissionModeOfSystemEvent,
   registerChildMemory,
-  Bis,
-  Uki,
-  Rx,
-  Hki,
-  ugr,
-  fgr,
-  cro,
-  $ki,
+  registerMemoryAttributor,
+  INTERRUPT_REMOTE_EVENT,
+  sampleChildMemoryPeaks,
+  installMemoryExitSummary,
+  ClientEventBatchRejectedError,
+  ClientEventResendSoonError,
+  ClientEventTooSmallError,
+  setConsoleProfileBearerProvider,
   isKnownWorkerState,
-  dgr,
-  Nki,
+  isZodVersionCompatible,
+  uploadStreamWithProgress,
   UploadStalledError,
   createStallTimer,
-  cgr,
-  Sg,
-  Dx,
-  Mx,
-  Wis,
-  Lki,
+  PLUGIN_DIRECTORY_API_PATH,
+  DEFAULT_STALL_MS,
+  uploadBufferWithProgress,
+  maxAllowedStallMs,
+  normalizeJsonRoundTrip,
+  markChildProcessDead,
 };

@@ -6,47 +6,54 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { we } from "./utils.js";
+import { require_utils_2 } from "./utils.js";
 
 //@ chunk-spjgqa4y.js:56269-57046 cjs-fingerprint
-var jn = x(function (nl) {
-  var fe = we();
-  function tl(t, e, r) {
-    if ((t.clearRect(0, 0, e.width, e.height), !e.style)) e.style = {};
-    ((e.height = r), (e.width = r), (e.style.height = r + "px"), (e.style.width = r + "px"));
+var require_canvas = x(function (cjsExports) {
+  var Utils = require_utils_2();
+  function clearCanvas(ctx, canvas, size) {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (!canvas.style) canvas.style = {};
+    canvas.height = size;
+    canvas.width = size;
+    canvas.style.height = size + "px";
+    canvas.style.width = size + "px";
   }
-  function rl() {
+  function getCanvasElement() {
     try {
       return document.createElement("canvas");
-    } catch (error) {
+    } catch (e) {
       throw Error("You need to specify a canvas element");
     }
   }
-  nl.render = function (e, r, n) {
-    let i = n,
-      o = r;
-    if (typeof i > "u" && (!r || !r.getContext)) ((i = r), (r = void 0));
-    if (!r) o = rl();
-    i = fe.getOptions(i);
-    let imageWidth = fe.getImageWidth(e.modules.size, i),
-      context = o.getContext("2d"),
-      imageData = context.createImageData(imageWidth, imageWidth);
-    return (
-      fe.qrToImageData(imageData.data, e, i),
-      tl(context, o, imageWidth),
-      context.putImageData(imageData, 0, 0),
-      o
-    );
+  cjsExports.render = function (qrData, canvas, options) {
+    let opts = options;
+    let canvasEl = canvas;
+    if (typeof opts === "undefined" && (!canvas || !canvas.getContext)) {
+      opts = canvas;
+      canvas = undefined;
+    }
+    if (!canvas) canvasEl = getCanvasElement();
+    opts = Utils.getOptions(opts);
+    let size = Utils.getImageWidth(qrData.modules.size, opts);
+    let ctx = canvasEl.getContext("2d");
+    let image = ctx.createImageData(size, size);
+    Utils.qrToImageData(image.data, qrData, opts);
+    clearCanvas(ctx, canvasEl, size);
+    ctx.putImageData(image, 0, 0);
+    return canvasEl;
   };
-  nl.renderToDataURL = function (e, r, n) {
-    let i = n;
-    if (typeof i > "u" && (!r || !r.getContext)) ((i = r), (r = void 0));
-    if (!i) i = {};
-    let render = nl.render(e, r, i),
-      s = i.type || "image/png",
-      l = i.rendererOpts || {};
-    return render.toDataURL(s, l.quality);
+  cjsExports.renderToDataURL = function (qrData, canvas, options) {
+    let opts = options;
+    if (typeof opts === "undefined" && (!canvas || !canvas.getContext)) {
+      opts = canvas;
+      canvas = undefined;
+    }
+    if (!opts) opts = {};
+    let canvasEl = cjsExports.render(qrData, canvas, opts);
+    let type = opts.type || "image/png";
+    let rendererOpts = opts.rendererOpts || {};
+    return canvasEl.toDataURL(type, rendererOpts.quality);
   };
 });
-
-export { jn };
+export { require_canvas };

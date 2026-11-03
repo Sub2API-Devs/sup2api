@@ -29,119 +29,124 @@ import {
 } from "../../services/oauth/refusedSignIn.js";
 import { logFeatureBad } from "../../services/analytics/featureTelemetry.js";
 import { gateBlockReasonCode } from "../../services/policyLimits/orgConfigGate.js";
-import { Z_e } from "../../utils/permissions/permissionPromptHost.js";
-import { _Fo } from "../../utils/hooks/hookMessages.js";
+import { isNoPromptHost } from "../../utils/permissions/permissionPromptHost.js";
+import { isHostDisplayFeatureOn } from "../../utils/hooks/hookMessages.js";
 
 //@ chunk-tyg7f3ek.js:510177-512319 placement
+/**
+ * 备用进程（spare）在未被 claim_session 前收到请求的拒绝文本：等待认领 / 认领失败需冷启动。
+ */
 var SDK_REQUESTS_ALLOWED_BEFORE_CLAIM = {
-    claim_session: !0,
-    initialize: !0,
-    interrupt: !0,
-    end_session: !0,
-    cancel_async_message: !0,
-    set_permission_mode: !0,
-    set_model: !0,
-    set_max_thinking_tokens: !0,
-    apply_flag_settings: !0,
-    set_mcp_permission_mode_override: !0,
-    reload_plugins: !0,
-    reload_skills: !0,
-    reload_output_styles: !0,
-    claude_authenticate: !0,
-    claude_oauth_callback: !0,
-    claude_oauth_wait_for_completion: !0,
-    mcp_authenticate: !0,
-    mcp_oauth_callback_url: !0,
-    mcp_clear_auth: !0,
-    register_device_hooks: !0,
-    upload_device_hook_template: !0,
-    remote_tools_announce: !0,
-    set_chrome_browser_hints: !0,
-    select_chrome_browser: !0,
-    set_prompt_suggestions_paused: !0,
-    rename_session: !0,
-    generate_session_title: !0,
-    message_rated: !0,
-    submit_feedback: !0,
-    submit_survey_feedback: !0,
-    mcp_status: !0,
-    get_context_usage: !0,
-    get_usage: !0,
-    get_session_cost: !0,
-    list_models: !0,
-    get_binary_version: !0,
-    get_settings: !0,
-    get_hooks_listing: !0,
-    list_permission_rules: !0,
-    get_status: !0,
-    get_plan: !0,
-    stop_task: !0,
-    background_tasks: !0,
-    get_memory_dialog: !0,
-    get_skills_dialog: !0,
-    get_chrome_dialog: !0,
-    get_chrome_browsers: !0,
-    get_sandbox_dialog: !0,
-    export_conversation: !0,
-    set_cwd: !1,
-    update_settings: !1,
-    add_directory: !1,
-    register_repo_root: !1,
-    seed_read_state: !1,
-    stage_file: !1,
-    read_file: !1,
-    get_task_output: !1,
-    list_directory: !1,
-    start_shell_task: !1,
-    file_suggestions: !1,
-    get_workspace_diff: !1,
-    rewind_files: !1,
-    list_cloud_sessions: !1,
-    get_cloud_session: !1,
-    get_cloud_session_transcript: !1,
-    mcp_set_servers: !1,
-    mcp_reconnect: !1,
-    mcp_toggle: !1,
-    mcp_read_resource: !1,
-    mcp_call: !1,
-    side_question: !1,
-    ultrareview_launch: !1,
-    fork_conversation: !1,
-    rewind_conversation: !1,
-    poll_event: !1,
-    prefetch_attachments: !1,
-    send_task_message: !1,
-    mcp_tasks_changed: !1,
-    channel_enable: !1,
-    remote_control: !1,
-    set_color: !1,
-    turn_handoff: !1,
-    ui_attach: !1,
-    ui_detach: !1,
-    ui_render: !1,
-    ui_press: !1,
-    ui_input: !1,
-    ui_select: !1,
-    ui_panes: !1,
-    ui_pane_show: !1,
-    ui_pane_focus: !1,
-    ui_close: !1,
-    ui_scroll: !1,
-    ui_focus: !1,
-    ui_prompt_edit: !1,
-    ui_prompt_autocomplete: !1,
-    ui_client_module: !1,
-    ui_client_press: !1,
-    ui_message: !1,
-    ui_client_fault: !1,
-  },
-  hO = "not_claimed: this process is a spare waiting for claim_session; send this request after the claim",
-  _O = "not_claimed: the claim of this spare failed; discard the process and start the session cold";
+  claim_session: true,
+  initialize: true,
+  interrupt: true,
+  end_session: true,
+  cancel_async_message: true,
+  set_permission_mode: true,
+  set_model: true,
+  set_max_thinking_tokens: true,
+  apply_flag_settings: true,
+  set_mcp_permission_mode_override: true,
+  reload_plugins: true,
+  reload_skills: true,
+  reload_output_styles: true,
+  claude_authenticate: true,
+  claude_oauth_callback: true,
+  claude_oauth_wait_for_completion: true,
+  mcp_authenticate: true,
+  mcp_oauth_callback_url: true,
+  mcp_clear_auth: true,
+  register_device_hooks: true,
+  upload_device_hook_template: true,
+  remote_tools_announce: true,
+  set_chrome_browser_hints: true,
+  select_chrome_browser: true,
+  set_prompt_suggestions_paused: true,
+  rename_session: true,
+  generate_session_title: true,
+  message_rated: true,
+  submit_feedback: true,
+  submit_survey_feedback: true,
+  mcp_status: true,
+  get_context_usage: true,
+  get_usage: true,
+  get_session_cost: true,
+  list_models: true,
+  get_binary_version: true,
+  get_settings: true,
+  get_hooks_listing: true,
+  list_permission_rules: true,
+  get_status: true,
+  get_plan: true,
+  stop_task: true,
+  background_tasks: true,
+  get_memory_dialog: true,
+  get_skills_dialog: true,
+  get_chrome_dialog: true,
+  get_chrome_browsers: true,
+  get_sandbox_dialog: true,
+  export_conversation: true,
+  set_cwd: false,
+  update_settings: false,
+  add_directory: false,
+  register_repo_root: false,
+  seed_read_state: false,
+  stage_file: false,
+  read_file: false,
+  get_task_output: false,
+  list_directory: false,
+  start_shell_task: false,
+  file_suggestions: false,
+  get_workspace_diff: false,
+  rewind_files: false,
+  list_cloud_sessions: false,
+  get_cloud_session: false,
+  get_cloud_session_transcript: false,
+  mcp_set_servers: false,
+  mcp_reconnect: false,
+  mcp_toggle: false,
+  mcp_read_resource: false,
+  mcp_call: false,
+  side_question: false,
+  ultrareview_launch: false,
+  fork_conversation: false,
+  rewind_conversation: false,
+  poll_event: false,
+  prefetch_attachments: false,
+  send_task_message: false,
+  mcp_tasks_changed: false,
+  channel_enable: false,
+  remote_control: false,
+  set_color: false,
+  turn_handoff: false,
+  ui_attach: false,
+  ui_detach: false,
+  ui_render: false,
+  ui_press: false,
+  ui_input: false,
+  ui_select: false,
+  ui_panes: false,
+  ui_pane_show: false,
+  ui_pane_focus: false,
+  ui_close: false,
+  ui_scroll: false,
+  ui_focus: false,
+  ui_prompt_edit: false,
+  ui_prompt_autocomplete: false,
+  ui_client_module: false,
+  ui_client_press: false,
+  ui_message: false,
+  ui_client_fault: false,
+};
+var SPARE_NOT_CLAIMED_TEXT =
+  "not_claimed: this process is a spare waiting for claim_session; send this request after the claim";
+var SPARE_CLAIM_FAILED_TEXT =
+  "not_claimed: the claim of this spare failed; discard the process and start the session cold";
 //@ chunk-tyg7f3ek.js:512319-512391 placement
-function isAllowedBeforeClaim(e) {
-  return typeof e === "string" && Object.hasOwn(SDK_REQUESTS_ALLOWED_BEFORE_CLAIM, e)
-    ? SDK_REQUESTS_ALLOWED_BEFORE_CLAIM[e]
-    : !0;
+function isAllowedBeforeClaim(subtype) {
+  return typeof subtype === "string" && Object.hasOwn(SDK_REQUESTS_ALLOWED_BEFORE_CLAIM, subtype)
+    ? SDK_REQUESTS_ALLOWED_BEFORE_CLAIM[subtype]
+    : true;
 }
 //@ chunk-tyg7f3ek.js:512391-512424 placement
 var FLAG_SETTINGS_PLUGIN_KEYS = [...MCP_POLICY_SETTING_KEYS, "enabledPlugins"];
@@ -151,35 +156,38 @@ class FlagSettingsClaimTracker {
   latestRefusal;
   unanswered = new Set();
   received(e) {
-    ((this.latestRequestId = e), (this.latestRefusal = void 0), this.unanswered.add(e));
+    this.latestRequestId = e;
+    this.latestRefusal = undefined;
+    this.unanswered.add(e);
   }
-  answered(e, n) {
-    if ((this.unanswered.delete(e), e === this.latestRequestId)) this.latestRefusal = n;
+  answered(e, latestRefusal) {
+    this.unanswered.delete(e);
+    if (e === this.latestRequestId) this.latestRefusal = latestRefusal;
   }
   claimRefusal() {
     if (this.unanswered.size > 0)
       return "an earlier apply_flag_settings is still unanswered; claim again once it is answered";
-    if (this.latestRefusal !== void 0) return this.latestRefusal;
+    if (this.latestRefusal !== undefined) return this.latestRefusal;
     let e = getFlagSettingsInline() ?? {};
     for (let n of FLAG_SETTINGS_PLUGIN_KEYS) {
       if (!(n in e)) continue;
-      let r = { [n]: e[n] };
-      if (
-        (coerceStringListSettings(r),
-        flagInlineSettingDropped(n) || !getSettingsSchemaForDocument(r).safeParse(r).success)
-      )
+      let r = {
+        [n]: e[n],
+      };
+      coerceStringListSettings(r);
+      if (flagInlineSettingDropped(n) || !getSettingsSchemaForDocument(r).safeParse(r).success)
         return `the flag settings' ${n} would not be in force, because it or another key is invalid`;
     }
     return;
   }
 }
 //@ chunk-tyg7f3ek.js:513063-513116 placement
-var MODEL_DATE_SUFFIX_RE = /-\d{8}$/,
-  z$ = /^(claude-[a-z0-9-]+)(\[1m\])?$/;
+var MODEL_DATE_SUFFIX_RE = /-\d{8}$/;
+var MODEL_WITH_1M_SUFFIX_PATTERN = /^(claude-[a-z0-9-]+)(\[1m\])?$/;
 //@ chunk-tyg7f3ek.js:513116-513278 placement
 function isAutoModeCapableModel(e) {
-  let n = z$.exec(e)?.[1];
-  if (n === void 0 || n.includes("-fast")) return !1;
+  let n = MODEL_WITH_1M_SUFFIX_PATTERN.exec(e)?.[1];
+  if (n === undefined || n.includes("-fast")) return false;
   let r = firstPartyNameToCanonical(n);
   return (
     n.replace(MODEL_DATE_SUFFIX_RE, "") === r &&
@@ -188,20 +196,20 @@ function isAutoModeCapableModel(e) {
     modelSupportsAutoMode(e)
   );
 }
+//@ chunk-tyg7f3ek.js:513278-513584 placement
 /**
  * SDK claude_authenticate：校验新登录的组织策略/托管设置，通过后切换凭证。
  */
-//@ chunk-tyg7f3ek.js:513278-513584 placement
-async function sdkClaudeAuthenticate(e) {
+async function sdkClaudeAuthenticate(err) {
   let n = await checkLoginAllowed({
-    accessToken: e.accessToken,
-    newLogin: e,
-    untieredLogin: needsProfileVerification(e),
-    organizationName: e.profile?.organization.name ?? e.tokenAccount?.organizationName,
+    accessToken: err.accessToken,
+    newLogin: err,
+    untieredLogin: needsProfileVerification(err),
+    organizationName: err.profile?.organization.name ?? err.tokenAccount?.organizationName,
   });
   if (n.ok) return;
   logFeatureBad("sdk_claude_authenticate", gateBlockReasonCode(n.evaluation.decision));
-  let r = await revokeRefusedSignInToken(e);
+  let r = await revokeRefusedSignInToken(err);
   return `${loginBlockedMessage(loginSettingsOutcome(n.evaluation))} ${r}`;
 }
 //@ chunk-tyg7f3ek.js:513584-514533 placement
@@ -216,12 +224,15 @@ function loginBlockedMessage(e) {
   }
 }
 //@ chunk-tyg7f3ek.js:514533-514934 placement
+/**
+ * SDK 宿主在 PreModelSwitch 与 prompt 钩子期间重连时给用户的两条说明：模型未切换、提示未提交，可重试。
+ */
 var SDK_HOOK_RECONNECT_TEXT =
-    "The SDK host reconnected before its PreToolUse hook answered, so this tool call was not executed. No one denied it; retry the same tool call.",
-  Z$ =
-    "The SDK host that registered this PreModelSwitch hook re-initialized before answering; the model was not switched. Retry the switch.",
-  wO =
-    "The SDK host reconnected before its prompt hook answered, so this prompt was not submitted. Send it again.";
+  "The SDK host reconnected before its PreToolUse hook answered, so this tool call was not executed. No one denied it; retry the same tool call.";
+var SDK_PRE_MODEL_SWITCH_RECONNECT_TEXT =
+  "The SDK host that registered this PreModelSwitch hook re-initialized before answering; the model was not switched. Retry the switch.";
+var SDK_PROMPT_HOOK_RECONNECT_TEXT =
+  "The SDK host reconnected before its prompt hook answered, so this prompt was not submitted. Send it again.";
 //@ chunk-tyg7f3ek.js:514934-515537 placement
 function sdkHookReconnectFallback(e) {
   switch (e.hook_event_name) {
@@ -238,20 +249,26 @@ function sdkHookReconnectFallback(e) {
         hookSpecificOutput: {
           hookEventName: "PreModelSwitch",
           permissionDecision: "deny",
-          permissionDecisionReason: Z$,
+          permissionDecisionReason: SDK_PRE_MODEL_SWITCH_RECONNECT_TEXT,
         },
       };
     case "UserPromptSubmit":
       return {
         decision: "block",
-        reason: wO,
-        hookSpecificOutput: { hookEventName: "UserPromptSubmit", suppressOriginalPrompt: !0 },
+        reason: SDK_PROMPT_HOOK_RECONNECT_TEXT,
+        hookSpecificOutput: {
+          hookEventName: "UserPromptSubmit",
+          suppressOriginalPrompt: true,
+        },
       };
     case "UserPromptExpansion":
       return {
         decision: "block",
-        reason: wO,
-        hookSpecificOutput: { hookEventName: "UserPromptExpansion", suppressOriginalPrompt: !0 },
+        reason: SDK_PROMPT_HOOK_RECONNECT_TEXT,
+        hookSpecificOutput: {
+          hookEventName: "UserPromptExpansion",
+          suppressOriginalPrompt: true,
+        },
       };
     default:
       return {};
@@ -260,56 +277,65 @@ function sdkHookReconnectFallback(e) {
 //@ chunk-tyg7f3ek.js:515537-516032 placement
 function buildSdkHookRegistrations(e, n, r) {
   let s = {};
-  for (let [y, S] of Object.entries(e)) {
-    if (S.length === 0) continue;
-    s[y] = S.map((R) => ({
-      matcher: R.matcher ?? void 0,
+  for (let [key, value] of Object.entries(e)) {
+    if (value.length === 0) continue;
+    s[key] = value.map((R) => ({
+      matcher: R.matcher ?? undefined,
       hooks: R.hookCallbackIds.map((hookCallbackId) => n(hookCallbackId, R.timeout)),
       origin: "sdkHost",
-      ...(r.hostOwnsStdinOrigin && { hostOwnsStdin: !0 }),
+      ...(r.hostOwnsStdinOrigin && {
+        hostOwnsStdin: true,
+      }),
     }));
   }
-  let h = getRegisteredHooks();
-  if (h) {
-    let y = {},
-      S = !1;
-    for (let [R, w] of Object.entries(h)) {
-      let filtered = w.filter((L) => !("origin" in L && L.origin === "sdkHost"));
-      if (((S ||= filtered.length !== w.length), filtered.length > 0)) y[R] = filtered;
+  let registeredHooks = getRegisteredHooks();
+  if (registeredHooks) {
+    let y = {};
+    let S = false;
+    for (let [key, value] of Object.entries(registeredHooks)) {
+      let filtered = value.filter((L) => !("origin" in L && L.origin === "sdkHost"));
+      S ||= filtered.length !== value.length;
+      if (filtered.length > 0) y[key] = filtered;
     }
     if (S) {
-      if ((clearRegisteredHooks(), Object.keys(y).length > 0)) registerHookCallbacks(y);
+      clearRegisteredHooks();
+      if (Object.keys(y).length > 0) registerHookCallbacks(y);
     }
   }
   if (Object.keys(s).length > 0) registerHookCallbacks(s);
 }
 //@ chunk-tyg7f3ek.js:516032-516157 placement
 function hasSdkHostHooks() {
-  let e = getRegisteredHooks();
-  if (!e) return !1;
-  return Object.values(e).some((n) => n.some((r) => "origin" in r && r.origin === "sdkHost"));
+  let registeredHooks = getRegisteredHooks();
+  if (!registeredHooks) return false;
+  return Object.values(registeredHooks).some((n) => n.some((r) => "origin" in r && r.origin === "sdkHost"));
 }
 //@ chunk-tyg7f3ek.js:516157-516218 placement
 function sdkHooksIfHostOwnsStdin(e, n) {
-  return n.hostOwnsStdinOrigin ? e.hooks : void 0;
+  return n.hostOwnsStdinOrigin ? e.hooks : undefined;
 }
 //@ chunk-tyg7f3ek.js:516218-516367 placement
 function withHostWordedAsks(e, n, r) {
-  return n.hostOwnsStdinOrigin && r.permissionPromptToolName === "stdio" && !Z_e(r.permissionPrompts) && _Fo()
-    ? { ...e, host_worded_asks: !0 }
+  return n.hostOwnsStdinOrigin &&
+    r.permissionPromptToolName === "stdio" &&
+    !isNoPromptHost(r.permissionPrompts) &&
+    isHostDisplayFeatureOn()
+    ? {
+        ...e,
+        host_worded_asks: true,
+      }
     : e;
 }
 //@ chunk-tyg7f3ek.js:516409-516479 placement
 function mcpClientModule() {
   return require("./chunk-asne9cp8.js").mcpClientModule();
 }
-
 export {
   isAutoModeCapableModel,
   FlagSettingsClaimTracker,
   isAllowedBeforeClaim,
-  _O,
-  hO,
+  SPARE_CLAIM_FAILED_TEXT,
+  SPARE_NOT_CLAIMED_TEXT,
   hasSdkHostHooks,
   withHostWordedAsks,
   sdkClaudeAuthenticate,

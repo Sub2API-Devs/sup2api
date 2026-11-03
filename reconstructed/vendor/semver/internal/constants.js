@@ -8,19 +8,18 @@
 import { x } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-bwbq4xvm.js:1410-1748 cjs-fingerprint
-var Et = x(function (F$, li) {
-  var ZR = Number.MAX_SAFE_INTEGER || 9007199254740991,
-    ev = ["major", "premajor", "minor", "preminor", "patch", "prepatch", "prerelease"];
-  li.exports = {
+var require_constants = x(function (cjsExports, cjsModule) {
+  var MAX_SAFE_INTEGER = Number.MAX_SAFE_INTEGER || 9007199254740991;
+  var RELEASE_TYPES = ["major", "premajor", "minor", "preminor", "patch", "prepatch", "prerelease"];
+  cjsModule.exports = {
     MAX_LENGTH: 256,
     MAX_SAFE_COMPONENT_LENGTH: 16,
     MAX_SAFE_BUILD_LENGTH: 250,
-    MAX_SAFE_INTEGER: ZR,
-    RELEASE_TYPES: ev,
+    MAX_SAFE_INTEGER,
+    RELEASE_TYPES,
     SEMVER_SPEC_VERSION: "2.0.0",
     FLAG_INCLUDE_PRERELEASE: 1,
     FLAG_LOOSE: 2,
   };
 });
-
-export { Et };
+export { require_constants };

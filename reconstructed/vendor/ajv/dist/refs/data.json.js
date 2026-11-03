@@ -8,17 +8,26 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-s82q9s4x.js:57215-57579 cjs-fingerprint
-var zn = x(function (dm, Al) {
-  Al.exports = {
+var require_data_2 = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = {
     $id: "https://raw.githubusercontent.com/ajv-validator/ajv/master/lib/refs/data.json#",
     description: "Meta-schema for $data reference (JSON AnySchema extension proposal)",
     type: "object",
     required: ["$data"],
     properties: {
-      $data: { type: "string", anyOf: [{ format: "relative-json-pointer" }, { format: "json-pointer" }] },
+      $data: {
+        type: "string",
+        anyOf: [
+          {
+            format: "relative-json-pointer",
+          },
+          {
+            format: "json-pointer",
+          },
+        ],
+      },
     },
-    additionalProperties: !1,
+    additionalProperties: false,
   };
 });
-
-export { zn };
+export { require_data_2 };

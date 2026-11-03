@@ -8,150 +8,191 @@
  * pieces: chunk-4v9zy7gn.js (2)
  * attribution: placement 1, fingerprint 1
  */
-import { j, y } from "../../../vendor/react/cjs/react.production.js";
+import { init_react_production, y } from "../../../vendor/react/cjs/react.production.js";
 import { w } from "../../../vendor/react/compiler-runtime.js";
 import { useTerminalSize } from "../../hooks/useTerminalSize.js";
 import { useTheme } from "../../components/design-system/ThemeProvider.js";
 import { MessageActionsKeybindings } from "../../components/messageActions.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
-import { e, r, Fragment } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+  Fragment,
+} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Box, Text } from "../../ink/components/Text.js";
 import { color } from "../../components/design-system/color.js";
 import { TextInput } from "../../components/TextInput.js";
 
 //@ chunk-4v9zy7gn.js:25463-25467 placement
-j();
+init_react_production();
 //@ chunk-4v9zy7gn.js:25467-27429 fingerprint = CheckExistingSecretStep (0.705)
-function CheckExistingSecretStep(t0) {
-  let _ = w(38),
-    {
-      useExistingSecret: useExistingSecret,
-      secretName: secretName,
-      onToggleUseExistingSecret: onToggleUseExistingSecret,
-      onSecretNameChange: onSecretNameChange,
-      onSubmit: onSubmit,
-    } = t0,
-    [o, v] = y(0),
-    terminalSize = useTerminalSize(),
-    [g] = useTheme(),
-    k;
-  if (_[0] !== onToggleUseExistingSecret)
-    ((k = () => onToggleUseExistingSecret(!0)), (_[0] = onToggleUseExistingSecret), (_[1] = k));
-  else k = _[1];
-  let E = k,
-    x;
-  if (_[2] !== onToggleUseExistingSecret)
-    ((x = () => onToggleUseExistingSecret(!1)), (_[2] = onToggleUseExistingSecret), (_[3] = x));
-  else x = _[3];
-  let T = x,
-    W;
-  if (_[4] !== T || _[5] !== E || _[6] !== onSubmit)
-    ((W = { "confirm:previous": E, "confirm:next": T, "confirm:yes": onSubmit }),
-      (_[4] = T),
-      (_[5] = E),
-      (_[6] = onSubmit),
-      (_[7] = W));
-  else W = _[7];
-  let N;
-  if (_[8] !== useExistingSecret)
-    ((N = { context: "Confirmation", isActive: useExistingSecret }), (_[8] = useExistingSecret), (_[9] = N));
-  else N = _[9];
-  MessageActionsKeybindings(W, N);
-  let G;
-  if (_[10] !== T || _[11] !== E)
-    ((G = { "confirm:previous": E, "confirm:next": T }), (_[10] = T), (_[11] = E), (_[12] = G));
-  else G = _[12];
-  const t6 = !useExistingSecret;
-  let V;
-  if (_[13] !== t6) ((V = { context: "Confirmation", isActive: t6 }), (_[13] = t6), (_[14] = V));
-  else V = _[14];
-  MessageActionsKeybindings(G, V);
-  let M;
-  if (_[15] === MEMO_CACHE_SENTINEL)
-    ((M = e(Box, {
-      children: e(Text, {
+function CheckExistingSecretStep(props) {
+  let $ = w(38);
+  let { useExistingSecret, secretName, onToggleUseExistingSecret, onSecretNameChange, onSubmit } = props;
+  let [cursorOffset, setCursorOffset] = y(0);
+  let terminalSize = useTerminalSize();
+  let [theme] = useTheme();
+  let t1;
+  if ($[0] !== onToggleUseExistingSecret) {
+    t1 = () => onToggleUseExistingSecret(true);
+    $[0] = onToggleUseExistingSecret;
+    $[1] = t1;
+  } else t1 = $[1];
+  let handlePrevious = t1;
+  let t2;
+  if ($[2] !== onToggleUseExistingSecret) {
+    t2 = () => onToggleUseExistingSecret(false);
+    $[2] = onToggleUseExistingSecret;
+    $[3] = t2;
+  } else t2 = $[3];
+  let handleNext = t2;
+  let t3;
+  if ($[4] !== handleNext || $[5] !== handlePrevious || $[6] !== onSubmit) {
+    t3 = {
+      "confirm:previous": handlePrevious,
+      "confirm:next": handleNext,
+      "confirm:yes": onSubmit,
+    };
+    $[4] = handleNext;
+    $[5] = handlePrevious;
+    $[6] = onSubmit;
+    $[7] = t3;
+  } else t3 = $[7];
+  let t4;
+  if ($[8] !== useExistingSecret) {
+    t4 = {
+      context: "Confirmation",
+      isActive: useExistingSecret,
+    };
+    $[8] = useExistingSecret;
+    $[9] = t4;
+  } else t4 = $[9];
+  MessageActionsKeybindings(t3, t4);
+  let t5;
+  if ($[10] !== handleNext || $[11] !== handlePrevious) {
+    t5 = {
+      "confirm:previous": handlePrevious,
+      "confirm:next": handleNext,
+    };
+    $[10] = handleNext;
+    $[11] = handlePrevious;
+    $[12] = t5;
+  } else t5 = $[12];
+  const isActive = !useExistingSecret;
+  let t7;
+  if ($[13] !== isActive) {
+    t7 = {
+      context: "Confirmation",
+      isActive,
+    };
+    $[13] = isActive;
+    $[14] = t7;
+  } else t7 = $[14];
+  MessageActionsKeybindings(t5, t7);
+  let t8;
+  if ($[15] === MEMO_CACHE_SENTINEL) {
+    t8 = jsxProd_default(Box, {
+      children: jsxProd_default(Text, {
         color: "warning",
         children: "ANTHROPIC_API_KEY already exists in repository secrets!",
       }),
-    })),
-      (_[15] = M));
-  else M = _[15];
-  let ie;
-  if (_[16] === MEMO_CACHE_SENTINEL)
-    ((ie = e(Box, { children: e(Text, { children: "Would you like to:" }) })), (_[16] = ie));
-  else ie = _[16];
+    });
+    $[15] = t8;
+  } else t8 = $[15];
+  let t9;
+  if ($[16] === MEMO_CACHE_SENTINEL) {
+    t9 = jsxProd_default(Box, {
+      children: jsxProd_default(Text, {
+        children: "Would you like to:",
+      }),
+    });
+    $[16] = t9;
+  } else t9 = $[16];
   let F;
-  if (_[17] !== g || _[18] !== useExistingSecret)
-    ((F = useExistingSecret ? color("success", g)("> ") : "  "),
-      (_[17] = g),
-      (_[18] = useExistingSecret),
-      (_[19] = F));
-  else F = _[19];
+  if ($[17] !== theme || $[18] !== useExistingSecret) {
+    F = useExistingSecret ? color("success", theme)("> ") : "  ";
+    $[17] = theme;
+    $[18] = useExistingSecret;
+    $[19] = F;
+  } else F = $[19];
   let U;
-  if (_[20] !== F)
-    ((U = e(Box, { children: r(Text, { children: [F, "Use the existing API key"] }) })),
-      (_[20] = F),
-      (_[21] = U));
-  else U = _[21];
-  let D;
-  if (_[22] !== g || _[23] !== useExistingSecret)
-    ((D = !useExistingSecret ? color("success", g)("> ") : "  "),
-      (_[22] = g),
-      (_[23] = useExistingSecret),
-      (_[24] = D));
-  else D = _[24];
+  if ($[20] !== F) {
+    U = jsxProd_default(Box, {
+      children: jsxProd_default_2(Text, {
+        children: [F, "Use the existing API key"],
+      }),
+    });
+    $[20] = F;
+    $[21] = U;
+  } else U = $[21];
+  let t13;
+  if ($[22] !== theme || $[23] !== useExistingSecret) {
+    t13 = !useExistingSecret ? color("success", theme)("> ") : "  ";
+    $[22] = theme;
+    $[23] = useExistingSecret;
+    $[24] = t13;
+  } else t13 = $[24];
   let Y;
-  if (_[25] !== D)
-    ((Y = e(Box, { children: r(Text, { children: [D, "Create a new secret with a different name"] }) })),
-      (_[25] = D),
-      (_[26] = Y));
-  else Y = _[26];
+  if ($[25] !== t13) {
+    Y = jsxProd_default(Box, {
+      children: jsxProd_default_2(Text, {
+        children: [t13, "Create a new secret with a different name"],
+      }),
+    });
+    $[25] = t13;
+    $[26] = Y;
+  } else Y = $[26];
   let X;
   if (
-    _[27] !== o ||
-    _[28] !== onSecretNameChange ||
-    _[29] !== onSubmit ||
-    _[30] !== secretName ||
-    _[31] !== terminalSize ||
-    _[32] !== useExistingSecret
-  )
-    ((X =
+    $[27] !== cursorOffset ||
+    $[28] !== onSecretNameChange ||
+    $[29] !== onSubmit ||
+    $[30] !== secretName ||
+    $[31] !== terminalSize ||
+    $[32] !== useExistingSecret
+  ) {
+    X =
       !useExistingSecret &&
-      r(Fragment, {
+      jsxProd_default_2(Fragment, {
         children: [
-          e(Box, {
-            children: e(Text, { children: "Enter new secret name (alphanumeric with underscores):" }),
+          jsxProd_default(Box, {
+            children: jsxProd_default(Text, {
+              children: "Enter new secret name (alphanumeric with underscores):",
+            }),
           }),
-          e(TextInput, {
+          jsxProd_default(TextInput, {
             value: secretName,
             onChange: onSecretNameChange,
-            onSubmit: onSubmit,
-            focus: !0,
+            onSubmit,
+            focus: true,
             placeholder: "e.g., CLAUDE_API_KEY",
             columns: terminalSize.columns,
-            cursorOffset: o,
-            onChangeCursorOffset: v,
-            showCursor: !0,
+            cursorOffset,
+            onChangeCursorOffset: setCursorOffset,
+            showCursor: true,
           }),
         ],
-      })),
-      (_[27] = o),
-      (_[28] = onSecretNameChange),
-      (_[29] = onSubmit),
-      (_[30] = secretName),
-      (_[31] = terminalSize),
-      (_[32] = useExistingSecret),
-      (_[33] = X));
-  else X = _[33];
+      });
+    $[27] = cursorOffset;
+    $[28] = onSecretNameChange;
+    $[29] = onSubmit;
+    $[30] = secretName;
+    $[31] = terminalSize;
+    $[32] = useExistingSecret;
+    $[33] = X;
+  } else X = $[33];
   let pe;
-  if (_[34] !== U || _[35] !== Y || _[36] !== X)
-    ((pe = r(Box, { flexDirection: "column", gap: 1, children: [M, ie, U, Y, X] })),
-      (_[34] = U),
-      (_[35] = Y),
-      (_[36] = X),
-      (_[37] = pe));
-  else pe = _[37];
+  if ($[34] !== U || $[35] !== Y || $[36] !== X) {
+    pe = jsxProd_default_2(Box, {
+      flexDirection: "column",
+      gap: 1,
+      children: [t8, t9, U, Y, X],
+    });
+    $[34] = U;
+    $[35] = Y;
+    $[36] = X;
+    $[37] = pe;
+  } else pe = $[37];
   return pe;
 }
-
 export { CheckExistingSecretStep };

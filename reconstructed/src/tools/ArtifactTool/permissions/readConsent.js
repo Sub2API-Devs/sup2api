@@ -49,9 +49,9 @@ import {
   noticeAskFloorDeny,
 } from "../artifactAccessClasses.js";
 import {
-  z5t,
-  Hte,
-  b3,
+  hasClassPersonConsent,
+  hasSharedReadConsentClasses,
+  hasClassConsent,
   classifyArtifactConsent,
   CLASSIFIER_2,
 } from "../../../services/artifacts/consentClasses.js";
@@ -78,40 +78,46 @@ function coworkSurfacelessSourceDeny() {
       type: "safetyCheck",
       reason:
         "A local file that may sit outside the working folders requires a live human consent surface in a Cowork-frame session",
-      classifierApprovable: !1,
+      classifierApprovable: false,
     },
   };
 }
 //@ chunk-vm0jn40f.js:1255-1719 placement
-function coworkSurfacelessUnreadableSourceDeny(t, e = "file_path") {
+function coworkSurfacelessUnreadableSourceDeny(unreadable, e = "file_path") {
   return {
     behavior: "deny",
-    message: `cannot read ${e} (${t}) \u2014 the file could not be examined, and no one can answer the approval card in this Cowork session. Check that the file exists as a plain file inside the connected folders, then retry with that path.`,
+    message: `cannot read ${e} (${unreadable}) \u2014 the file could not be examined, and no one can answer the approval card in this Cowork session. Check that the file exists as a plain file inside the connected folders, then retry with that path.`,
     decisionReason: {
       type: "safetyCheck",
       reason:
         "A local file that could not be examined requires a live human consent surface in a Cowork-frame session",
-      classifierApprovable: !1,
+      classifierApprovable: false,
     },
   };
 }
 //@ chunk-vm0jn40f.js:1719-2152 placement
 function artifactFilesConsentHeld(t, e, n) {
-  if (attestedReadConsented(t, e.slug) || ownFirstPartyTypeInstance(getShareEntry(e.slug), n)) return !0;
+  if (attestedReadConsented(t, e.slug) || ownFirstPartyTypeInstance(getShareEntry(e.slug), n)) return true;
   if (!(PLAN_MODE_KEEPS_FLAG_OFF_READ_ASKS && getToolPermissionContext(t).mode === "plan")) {
-    let o = getShareEntry(e.slug);
-    if (outsideOrgRead(o))
+    let shareEntry = getShareEntry(e.slug);
+    if (outsideOrgRead(shareEntry))
       return (
-        z5t("foreign_read", e.slug) ||
-        Hte(artifactFilesConsentSlugs(t), "artifactAssetReadHumanConsentSlugs", e.slug)
+        hasClassPersonConsent("foreign_read", e.slug) ||
+        hasSharedReadConsentClasses(
+          artifactFilesConsentSlugs(t),
+          "artifactAssetReadHumanConsentSlugs",
+          e.slug,
+        )
       );
     return (
       n ||
-      (isSomeoneElses(o) && sessionNetworkOff(e) === !1) ||
-      (othersReadIsUserOnly(n, e) ? z5t("foreign_read", e.slug) : b3("foreign_read", e.slug))
+      (isSomeoneElses(shareEntry) && sessionNetworkOff(e) === false) ||
+      (othersReadIsUserOnly(n, e)
+        ? hasClassPersonConsent("foreign_read", e.slug)
+        : hasClassConsent("foreign_read", e.slug))
     );
   }
-  return Hte(
+  return hasSharedReadConsentClasses(
     artifactFilesConsentSlugs(t),
     getToolPermissionContext(t).mode === "plan" || othersReadIsUserOnly(n, e)
       ? "artifactAssetReadHumanConsentSlugs"
@@ -121,106 +127,130 @@ function artifactFilesConsentHeld(t, e, n) {
 }
 //@ chunk-vm0jn40f.js:2152-2313 placement
 function copySourceConsented(t, e, n, s = "copy") {
-  let o = getShareEntry(e.slug);
-  if (s === "copy" && otherOrgCopySource(o)) return outsideOrgYesStands(t, e.slug);
-  let i = ownedByUser(o);
+  let shareEntry = getShareEntry(e.slug);
+  if (s === "copy" && otherOrgCopySource(shareEntry)) return outsideOrgYesStands(t, e.slug);
+  let i = ownedByUser(shareEntry);
   return (
-    (i && (!filesCowritten(o) || ownTypeInstance(o)) && !(n === "files" && filesFromType(o))) ||
+    (i &&
+      (!filesCowritten(shareEntry) || ownTypeInstance(shareEntry)) &&
+      !(n === "files" && filesFromType(shareEntry))) ||
     artifactFilesConsentHeld(t, e, i)
   );
 }
 //@ chunk-vm0jn40f.js:2313-2354 placement
-function attestedReadConsented(t, e) {
-  return g(getToolPermissionContext(t).mode, e);
+function attestedReadConsented(t, slug) {
+  return needsAttestedConsent(getToolPermissionContext(t).mode, slug);
 }
 //@ chunk-vm0jn40f.js:2354-2394 placement
-function g(t, e) {
-  return t !== "plan" && needsAttestedReadConsent(e);
+/**
+ * 判断是否需要证明式读取同意（plan 调用除外）。
+ */
+function needsAttestedConsent(mode, e) {
+  return mode !== "plan" && needsAttestedReadConsent(e);
 }
 //@ chunk-vm0jn40f.js:2394-2506 placement
 function needsAttestedReadConsent(t) {
-  let e = getShareEntry(t);
+  let shareEntry = getShareEntry(t);
   return (
-    isSomeoneElses(e) &&
-    !outsideOrgRead(e) &&
-    e?.lastProbeIssuedAt !== void 0 &&
-    !issuedUnderDepartedAccount(e.lastProbeIssuedAt) &&
+    isSomeoneElses(shareEntry) &&
+    !outsideOrgRead(shareEntry) &&
+    shareEntry?.lastProbeIssuedAt !== undefined &&
+    !issuedUnderDepartedAccount(shareEntry.lastProbeIssuedAt) &&
     isAttestedArtifact(t)
   );
 }
 //@ chunk-vm0jn40f.js:2506-2549 placement
-function attestedDataReadConsented(t, e) {
-  return attestedDataReadConsentedInMode(getToolPermissionContext(t).mode, e);
+function attestedDataReadConsented(t, slug) {
+  return attestedDataReadConsentedInMode(getToolPermissionContext(t).mode, slug);
 }
 //@ chunk-vm0jn40f.js:2549-2593 placement
-function attestedDataReadConsentedInMode(t, e) {
-  return t !== "plan" && attestedDataReadVouched(e);
+function attestedDataReadConsentedInMode(mode, e) {
+  return mode !== "plan" && attestedDataReadVouched(e);
 }
 //@ chunk-vm0jn40f.js:2593-2627 placement
-function attestedDataReadVouched(t) {
-  return p(t) && needsAttestedReadConsent(t);
+function attestedDataReadVouched(slug) {
+  return isOrgSharedEntry(slug) && needsAttestedReadConsent(slug);
 }
 //@ chunk-vm0jn40f.js:2627-2707 placement
-function p(t) {
-  let e = getShareEntry(t);
-  return e !== void 0 && e.probeFailed !== !0 && e.mode === "org";
+/**
+ * 判断共享条目是否为组织可见。
+ */
+function isOrgSharedEntry(t) {
+  let shareEntry = getShareEntry(t);
+  return shareEntry !== undefined && shareEntry.probeFailed !== true && shareEntry.mode === "org";
 }
+//@ chunk-vm0jn40f.js:2707-2885 placement
 /**
  * 第一方类型探测失败且已消失
  */
-//@ chunk-vm0jn40f.js:2707-2885 placement
-function isGoneFirstPartyTypeProbe(t, e) {
-  let n = getShareEntry(e);
+function isGoneFirstPartyTypeProbe(t, slug) {
+  let shareEntry = getShareEntry(slug);
   return (
     getToolPermissionContext(t).mode !== "plan" &&
-    n?.probeFailed === !0 &&
-    n.probeGone === !0 &&
-    n.lastProbeIssuedAt !== void 0 &&
-    !issuedUnderDepartedAccount(n.lastProbeIssuedAt) &&
-    getAttestationKind(e) === "first_party_type"
+    shareEntry?.probeFailed === true &&
+    shareEntry.probeGone === true &&
+    shareEntry.lastProbeIssuedAt !== undefined &&
+    !issuedUnderDepartedAccount(shareEntry.lastProbeIssuedAt) &&
+    getAttestationKind(slug) === "first_party_type"
   );
 }
 //@ chunk-vm0jn40f.js:2885-3022 placement
-function readRulingFor(t, e, n = !1) {
+function readRulingFor(t, e, n = false) {
   let s = classFactsFor("read", t, e);
   return (
     n
       ? attestedDataReadConsented(e, t.slug)
       : attestedReadConsented(e, t.slug) || isGoneFirstPartyTypeProbe(e, t.slug)
   )
-    ? { ask: !1, foreignRead: !0, attested: !0 }
+    ? {
+        ask: false,
+        foreignRead: true,
+        attested: true,
+      }
     : classifyArtifactConsent(s);
 }
 //@ chunk-vm0jn40f.js:3022-3199 placement
 function copySourceRulingFor(t, e) {
-  let n = getShareEntry(t.slug),
-    s = otherOrgCopySource(n)
-      ? classifyArtifactConsent({ ...classFactsFor("read", t, e), owned: !1, outsideOrg: !0 })
-      : readRulingFor(t, e);
-  return s.ask && s.about === "outside_org" ? { ...s, answeredBy: CLASSIFIER_2, informedOnly: !0 } : s;
+  let shareEntry = getShareEntry(t.slug);
+  let s = otherOrgCopySource(shareEntry)
+    ? classifyArtifactConsent({
+        ...classFactsFor("read", t, e),
+        owned: false,
+        outsideOrg: true,
+      })
+    : readRulingFor(t, e);
+  return s.ask && s.about === "outside_org"
+    ? {
+        ...s,
+        answeredBy: CLASSIFIER_2,
+        informedOnly: true,
+      }
+    : s;
 }
 //@ chunk-vm0jn40f.js:3199-3429 placement
 function filesConsentRoute(t, e) {
   if (planConsentMustDeny(t) || coworkConsentMustDeny(t)) return () => "none";
   let n = othersArtifactReadIsUserOnly(e) || outsideOrgReadIsUserOnly(e.slug);
   if (!consentAskCanReachUser(t)) return (a) => (n && !a ? "none" : "save");
-  let s = getToolPermissionContext(t),
-    o = s.mode === "auto",
-    i = s.shouldAvoidPermissionPrompts === !0;
+  let toolPermissionContext = getToolPermissionContext(t);
+  let o = toolPermissionContext.mode === "auto";
+  let i = toolPermissionContext.shouldAvoidPermissionPrompts === true;
   return (a) => (o && !(n && !a) ? "save" : i ? "none" : "ask");
 }
+//@ chunk-vm0jn40f.js:3429-4230 placement
 /**
  * artifact 读取的同意路径与通知通道判定。
  */
-//@ chunk-vm0jn40f.js:3429-4230 placement
 function artifactFetchNoticeLane(t, e, n) {
-  if (!(hasAutoReactNoticePending(e.slug) && !isDelegatedObservationContext(t.agentContext)))
-    return (noteNoticeRead("webfetch", t, e.slug, !1), null);
-  let o = n(),
-    i = artifactViewerUrlFor(e);
-  return ({ forcedBy: forcedBy, personOnly: personOnly }) => {
+  if (!(hasAutoReactNoticePending(e.slug) && !isDelegatedObservationContext(t.agentContext))) {
+    noteNoticeRead("webfetch", t, e.slug, false);
+    return null;
+  }
+  let o = n();
+  let i = artifactViewerUrlFor(e);
+  return ({ forcedBy, personOnly }) => {
     let r = forcedBy ?? o;
-    noteNoticeRead("webfetch", t, e.slug, !0, r !== null);
+    noteNoticeRead("webfetch", t, e.slug, true, r !== null);
     let l = `${personOnly?.lead ?? `Claude wants to fetch the artifact at ${i}`} \u2014 prompted by the new-comments notification; its content enters this conversation`;
     if (r === null) {
       let c = noticeAskFloorDeny(t, "Nothing was fetched", l);
@@ -236,20 +266,21 @@ function artifactFetchNoticeLane(t, e, n) {
       decisionReason: {
         type: "safetyCheck",
         reason: d,
-        classifierApprovable: r === null && personOnly === void 0,
+        classifierApprovable: r === null && personOnly === undefined,
       },
-      ...(r !== null && { matchedAskRule: r }),
-      suppressAlwaysAllowRule: !0,
-      localDisplayOnly: !0,
+      ...(r !== null && {
+        matchedAskRule: r,
+      }),
+      suppressAlwaysAllowRule: true,
+      localDisplayOnly: true,
     };
   };
 }
 //@ chunk-vm0jn40f.js:4230-4311 placement
 function artifactFetchConsumesNotice(t, e) {
-  if (noticeReadDisclosed("webfetch", t, e.slug, !1) && !isDelegatedObservationContext(t.agentContext))
+  if (noticeReadDisclosed("webfetch", t, e.slug, false) && !isDelegatedObservationContext(t.agentContext))
     clearAutoReactNoticePending(e.slug);
 }
-
 export {
   attestedDataReadConsented,
   coworkConsentMustDeny,

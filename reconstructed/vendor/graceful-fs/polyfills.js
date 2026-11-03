@@ -8,270 +8,274 @@
 import { x, importMetaRequire } from "../../runtime/bun-runtime.js";
 
 //@ chunk-bmbhxpfm.js:301-4288 cjs-fingerprint
-var je = x(function (Xt, Ge) {
-  var W = importMetaRequire("constants"),
-    cwd = process.cwd,
-    oe = null,
-    ht = process.env.GRACEFUL_FS_PLATFORM || "linux";
+var require_polyfills = x(function (cjsExports, cjsModule) {
+  var constants = importMetaRequire("constants");
+  var origCwd = process.cwd;
+  var cwd = null;
+  var platform = process.env.GRACEFUL_FS_PLATFORM || "linux";
   process.cwd = function () {
-    if (!oe) oe = cwd.call(process);
-    return oe;
+    if (!cwd) cwd = origCwd.call(process);
+    return cwd;
   };
   try {
     process.cwd();
-  } catch (error) {}
+  } catch (er) {}
   if (typeof process.chdir === "function") {
-    if (
-      ((ue = process.chdir),
-      (process.chdir = function (e) {
-        ((oe = null), ue.call(process, e));
-      }),
-      Object.setPrototypeOf)
-    )
-      Object.setPrototypeOf(process.chdir, ue);
+    chdir = process.chdir;
+    process.chdir = function (d) {
+      cwd = null;
+      chdir.call(process, d);
+    };
+    if (Object.setPrototypeOf) Object.setPrototypeOf(process.chdir, chdir);
   }
-  var ue;
-  Ge.exports = pt;
-  function pt(e) {
-    if (W.hasOwnProperty("O_SYMLINK") && process.version.match(/^v0\.6\.[0-2]|^v0\.5\./)) r(e);
-    if (!e.lutimes) n(e);
-    if (
-      ((e.chown = c(e.chown)),
-      (e.fchown = c(e.fchown)),
-      (e.lchown = c(e.lchown)),
-      (e.chmod = i(e.chmod)),
-      (e.fchmod = i(e.fchmod)),
-      (e.lchmod = i(e.lchmod)),
-      (e.chownSync = h(e.chownSync)),
-      (e.fchownSync = h(e.fchownSync)),
-      (e.lchownSync = h(e.lchownSync)),
-      (e.chmodSync = u(e.chmodSync)),
-      (e.fchmodSync = u(e.fchmodSync)),
-      (e.lchmodSync = u(e.lchmodSync)),
-      (e.stat = m(e.stat)),
-      (e.fstat = m(e.fstat)),
-      (e.lstat = m(e.lstat)),
-      (e.statSync = E(e.statSync)),
-      (e.fstatSync = E(e.fstatSync)),
-      (e.lstatSync = E(e.lstatSync)),
-      e.chmod && !e.lchmod)
-    )
-      ((e.lchmod = function (o, p, f) {
-        if (f) process.nextTick(f);
-      }),
-        (e.lchmodSync = function () {}));
-    if (e.chown && !e.lchown)
-      ((e.lchown = function (o, p, f, a) {
-        if (a) process.nextTick(a);
-      }),
-        (e.lchownSync = function () {}));
-    if (ht === "win32")
-      e.rename =
-        typeof e.rename !== "function"
-          ? e.rename
-          : (function (o) {
-              function p(f, a, s) {
-                var now = Date.now(),
-                  S = 0;
-                o(f, a, function T(j) {
+  var chdir;
+  cjsModule.exports = patch;
+  function patch(fs) {
+    if (constants.hasOwnProperty("O_SYMLINK") && process.version.match(/^v0\.6\.[0-2]|^v0\.5\./))
+      patchLchmod(fs);
+    if (!fs.lutimes) patchLutimes(fs);
+    fs.chown = chownFix(fs.chown);
+    fs.fchown = chownFix(fs.fchown);
+    fs.lchown = chownFix(fs.lchown);
+    fs.chmod = chmodFix(fs.chmod);
+    fs.fchmod = chmodFix(fs.fchmod);
+    fs.lchmod = chmodFix(fs.lchmod);
+    fs.chownSync = chownFixSync(fs.chownSync);
+    fs.fchownSync = chownFixSync(fs.fchownSync);
+    fs.lchownSync = chownFixSync(fs.lchownSync);
+    fs.chmodSync = chmodFixSync(fs.chmodSync);
+    fs.fchmodSync = chmodFixSync(fs.fchmodSync);
+    fs.lchmodSync = chmodFixSync(fs.lchmodSync);
+    fs.stat = statFix(fs.stat);
+    fs.fstat = statFix(fs.fstat);
+    fs.lstat = statFix(fs.lstat);
+    fs.statSync = statFixSync(fs.statSync);
+    fs.fstatSync = statFixSync(fs.fstatSync);
+    fs.lstatSync = statFixSync(fs.lstatSync);
+    if (fs.chmod && !fs.lchmod) {
+      fs.lchmod = function (path, mode, cb) {
+        if (cb) process.nextTick(cb);
+      };
+      fs.lchmodSync = function () {};
+    }
+    if (fs.chown && !fs.lchown) {
+      fs.lchown = function (path, uid, gid, cb) {
+        if (cb) process.nextTick(cb);
+      };
+      fs.lchownSync = function () {};
+    }
+    if (platform === "win32")
+      fs.rename =
+        typeof fs.rename !== "function"
+          ? fs.rename
+          : (function (fs$rename) {
+              function rename(from, to, cb) {
+                var start = Date.now();
+                var backoff = 0;
+                fs$rename(from, to, function CB(er) {
                   if (
-                    j &&
-                    (j.code === "EACCES" || j.code === "EPERM" || j.code === "EBUSY") &&
-                    Date.now() - now < 60000
+                    er &&
+                    (er.code === "EACCES" || er.code === "EPERM" || er.code === "EBUSY") &&
+                    Date.now() - start < 60000
                   ) {
-                    if (
-                      (setTimeout(function () {
-                        e.stat(a, function (C, Z) {
-                          if (C && C.code === "ENOENT") o(f, a, T);
-                          else s(j);
-                        });
-                      }, S),
-                      S < 100)
-                    )
-                      S += 10;
+                    setTimeout(function () {
+                      fs.stat(to, function (stater, st) {
+                        if (stater && stater.code === "ENOENT") fs$rename(from, to, CB);
+                        else cb(er);
+                      });
+                    }, backoff);
+                    if (backoff < 100) backoff += 10;
                     return;
                   }
-                  if (s) s(j);
+                  if (cb) cb(er);
                 });
               }
-              if (Object.setPrototypeOf) Object.setPrototypeOf(p, o);
-              return p;
-            })(e.rename);
-    ((e.read =
-      typeof e.read !== "function"
-        ? e.read
-        : (function (o) {
-            function p(f, a, s, w, S, T) {
-              var j;
-              if (T && typeof T === "function") {
-                var C = 0;
-                j = function (Z, Me, Ce) {
-                  if (Z && Z.code === "EAGAIN" && C < 10) return (C++, o.call(e, f, a, s, w, S, j));
-                  T.apply(this, arguments);
+              if (Object.setPrototypeOf) Object.setPrototypeOf(rename, fs$rename);
+              return rename;
+            })(fs.rename);
+    fs.read =
+      typeof fs.read !== "function"
+        ? fs.read
+        : (function (fs$read) {
+            function read(fd, buffer, offset, length, position, callback_) {
+              var callback;
+              if (callback_ && typeof callback_ === "function") {
+                var eagCounter = 0;
+                callback = function (er, _, __) {
+                  if (er && er.code === "EAGAIN" && eagCounter < 10) {
+                    eagCounter++;
+                    return fs$read.call(fs, fd, buffer, offset, length, position, callback);
+                  }
+                  callback_.apply(this, arguments);
                 };
               }
-              return o.call(e, f, a, s, w, S, j);
+              return fs$read.call(fs, fd, buffer, offset, length, position, callback);
             }
-            if (Object.setPrototypeOf) Object.setPrototypeOf(p, o);
-            return p;
-          })(e.read)),
-      (e.readSync =
-        typeof e.readSync !== "function"
-          ? e.readSync
-          : (function (o) {
-              return function (p, f, a, s, w) {
-                var S = 0;
-                while (!0)
-                  try {
-                    return o.call(e, p, f, a, s, w);
-                  } catch (error) {
-                    if (error.code === "EAGAIN" && S < 10) {
-                      S++;
-                      continue;
-                    }
-                    throw error;
+            if (Object.setPrototypeOf) Object.setPrototypeOf(read, fs$read);
+            return read;
+          })(fs.read);
+    fs.readSync =
+      typeof fs.readSync !== "function"
+        ? fs.readSync
+        : (function (fs$readSync) {
+            return function (fd, buffer, offset, length, position) {
+              var eagCounter = 0;
+              while (true)
+                try {
+                  return fs$readSync.call(fs, fd, buffer, offset, length, position);
+                } catch (er) {
+                  if (er.code === "EAGAIN" && eagCounter < 10) {
+                    eagCounter++;
+                    continue;
                   }
-              };
-            })(e.readSync)));
-    function r(o) {
-      ((o.lchmod = function (p, f, a) {
-        o.open(p, W.O_WRONLY | W.O_SYMLINK, f, function (s, w) {
-          if (s) {
-            if (a) a(s);
+                  throw er;
+                }
+            };
+          })(fs.readSync);
+    function patchLchmod(fs) {
+      fs.lchmod = function (path, mode, callback) {
+        fs.open(path, constants.O_WRONLY | constants.O_SYMLINK, mode, function (err, fd) {
+          if (err) {
+            if (callback) callback(err);
             return;
           }
-          o.fchmod(w, f, function (S) {
-            o.close(w, function (T) {
-              if (a) a(S || T);
+          fs.fchmod(fd, mode, function (err) {
+            fs.close(fd, function (err2) {
+              if (callback) callback(err || err2);
             });
           });
         });
-      }),
-        (o.lchmodSync = function (p, f) {
-          var openSync = o.openSync(p, W.O_WRONLY | W.O_SYMLINK, f),
-            s = !0,
-            w;
-          try {
-            ((w = o.fchmodSync(openSync, f)), (s = !1));
-          } finally {
-            if (s)
-              try {
-                o.closeSync(openSync);
-              } catch (error) {}
-            else o.closeSync(openSync);
-          }
-          return w;
-        }));
+      };
+      fs.lchmodSync = function (path, mode) {
+        var fd = fs.openSync(path, constants.O_WRONLY | constants.O_SYMLINK, mode);
+        var threw = true;
+        var ret;
+        try {
+          ret = fs.fchmodSync(fd, mode);
+          threw = false;
+        } finally {
+          if (threw)
+            try {
+              fs.closeSync(fd);
+            } catch (er) {}
+          else fs.closeSync(fd);
+        }
+        return ret;
+      };
     }
-    function n(o) {
-      if (W.hasOwnProperty("O_SYMLINK") && o.futimes)
-        ((o.lutimes = function (p, f, a, s) {
-          o.open(p, W.O_SYMLINK, function (w, S) {
-            if (w) {
-              if (s) s(w);
+    function patchLutimes(fs) {
+      if (constants.hasOwnProperty("O_SYMLINK") && fs.futimes) {
+        fs.lutimes = function (path, at, mt, cb) {
+          fs.open(path, constants.O_SYMLINK, function (er, fd) {
+            if (er) {
+              if (cb) cb(er);
               return;
             }
-            o.futimes(S, f, a, function (T) {
-              o.close(S, function (j) {
-                if (s) s(T || j);
+            fs.futimes(fd, at, mt, function (er) {
+              fs.close(fd, function (er2) {
+                if (cb) cb(er || er2);
               });
             });
           });
-        }),
-          (o.lutimesSync = function (p, f, a) {
-            var openSync = o.openSync(p, W.O_SYMLINK),
-              w,
-              S = !0;
-            try {
-              ((w = o.futimesSync(openSync, f, a)), (S = !1));
-            } finally {
-              if (S)
-                try {
-                  o.closeSync(openSync);
-                } catch (error) {}
-              else o.closeSync(openSync);
-            }
-            return w;
-          }));
-      else if (o.futimes)
-        ((o.lutimes = function (p, f, a, s) {
-          if (s) process.nextTick(s);
-        }),
-          (o.lutimesSync = function () {}));
-    }
-    function i(o) {
-      if (!o) return o;
-      return function (p, f, a) {
-        return o.call(e, p, f, function (s) {
-          if (b(s)) s = null;
-          if (a) a.apply(this, arguments);
-        });
-      };
-    }
-    function u(o) {
-      if (!o) return o;
-      return function (p, f) {
-        try {
-          return o.call(e, p, f);
-        } catch (error) {
-          if (!b(error)) throw error;
-        }
-      };
-    }
-    function c(o) {
-      if (!o) return o;
-      return function (p, f, a, s) {
-        return o.call(e, p, f, a, function (w) {
-          if (b(w)) w = null;
-          if (s) s.apply(this, arguments);
-        });
-      };
-    }
-    function h(o) {
-      if (!o) return o;
-      return function (p, f, a) {
-        try {
-          return o.call(e, p, f, a);
-        } catch (error) {
-          if (!b(error)) throw error;
-        }
-      };
-    }
-    function m(o) {
-      if (!o) return o;
-      return function (p, f, a) {
-        if (typeof f === "function") ((a = f), (f = null));
-        function s(w, S) {
-          if (S) {
-            if (S.uid < 0) S.uid += 4294967296;
-            if (S.gid < 0) S.gid += 4294967296;
+        };
+        fs.lutimesSync = function (path, at, mt) {
+          var fd = fs.openSync(path, constants.O_SYMLINK);
+          var ret;
+          var threw = true;
+          try {
+            ret = fs.futimesSync(fd, at, mt);
+            threw = false;
+          } finally {
+            if (threw)
+              try {
+                fs.closeSync(fd);
+              } catch (er) {}
+            else fs.closeSync(fd);
           }
-          if (a) a.apply(this, arguments);
-        }
-        return f ? o.call(e, p, f, s) : o.call(e, p, s);
-      };
-    }
-    function E(o) {
-      if (!o) return o;
-      return function (p, f) {
-        var a = f ? o.call(e, p, f) : o.call(e, p);
-        if (a) {
-          if (a.uid < 0) a.uid += 4294967296;
-          if (a.gid < 0) a.gid += 4294967296;
-        }
-        return a;
-      };
-    }
-    function b(o) {
-      if (!o) return !0;
-      if (o.code === "ENOSYS") return !0;
-      var p = !process.getuid || process.getuid() !== 0;
-      if (p) {
-        if (o.code === "EINVAL" || o.code === "EPERM") return !0;
+          return ret;
+        };
+      } else if (fs.futimes) {
+        fs.lutimes = function (_a, _b, _c, cb) {
+          if (cb) process.nextTick(cb);
+        };
+        fs.lutimesSync = function () {};
       }
-      return !1;
+    }
+    function chmodFix(orig) {
+      if (!orig) return orig;
+      return function (target, mode, cb) {
+        return orig.call(fs, target, mode, function (er) {
+          if (chownErOk(er)) er = null;
+          if (cb) cb.apply(this, arguments);
+        });
+      };
+    }
+    function chmodFixSync(orig) {
+      if (!orig) return orig;
+      return function (target, mode) {
+        try {
+          return orig.call(fs, target, mode);
+        } catch (er) {
+          if (!chownErOk(er)) throw er;
+        }
+      };
+    }
+    function chownFix(orig) {
+      if (!orig) return orig;
+      return function (target, uid, gid, cb) {
+        return orig.call(fs, target, uid, gid, function (er) {
+          if (chownErOk(er)) er = null;
+          if (cb) cb.apply(this, arguments);
+        });
+      };
+    }
+    function chownFixSync(orig) {
+      if (!orig) return orig;
+      return function (target, uid, gid) {
+        try {
+          return orig.call(fs, target, uid, gid);
+        } catch (er) {
+          if (!chownErOk(er)) throw er;
+        }
+      };
+    }
+    function statFix(orig) {
+      if (!orig) return orig;
+      return function (target, options, cb) {
+        if (typeof options === "function") {
+          cb = options;
+          options = null;
+        }
+        function callback(er, stats) {
+          if (stats) {
+            if (stats.uid < 0) stats.uid += 4294967296;
+            if (stats.gid < 0) stats.gid += 4294967296;
+          }
+          if (cb) cb.apply(this, arguments);
+        }
+        return options ? orig.call(fs, target, options, callback) : orig.call(fs, target, callback);
+      };
+    }
+    function statFixSync(orig) {
+      if (!orig) return orig;
+      return function (target, options) {
+        var stats = options ? orig.call(fs, target, options) : orig.call(fs, target);
+        if (stats) {
+          if (stats.uid < 0) stats.uid += 4294967296;
+          if (stats.gid < 0) stats.gid += 4294967296;
+        }
+        return stats;
+      };
+    }
+    function chownErOk(er) {
+      if (!er) return true;
+      if (er.code === "ENOSYS") return true;
+      var nonroot = !process.getuid || process.getuid() !== 0;
+      if (nonroot) {
+        if (er.code === "EINVAL" || er.code === "EPERM") return true;
+      }
+      return false;
     }
   }
 });
-
-export { je };
+export { require_polyfills };

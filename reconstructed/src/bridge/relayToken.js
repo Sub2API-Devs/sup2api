@@ -14,7 +14,7 @@ import { disableCoreDumps } from "../utils/processHardening.js";
 //@ chunk-hqm2hdtg.js:291-428 placement
 function disableCoreDumpsForSessionTunnel() {
   if (
-    (process.env.CCR_AGENT_PROXY_TOKEN_FILE_DESCRIPTOR !== void 0 ||
+    (process.env.CCR_AGENT_PROXY_TOKEN_FILE_DESCRIPTOR !== undefined ||
       process.argv.includes("--session-tunnel")) &&
     isHttpMcpServeInvocation()
   )

@@ -10,8 +10,8 @@
  */
 import { Ar } from "../../../runtime/bun-runtime.js";
 import { createSystemMessage } from "../../utils/messages.js";
-import { qtt } from "../../utils/messages/nonUserMessages.js";
-import { j, P } from "../../../vendor/react/cjs/react.production.js";
+import { formatSourceLine } from "../../utils/messages/nonUserMessages.js";
+import { init_react_production, P } from "../../../vendor/react/cjs/react.production.js";
 import { setUiLogSink } from "../../plugins/functionHooks/uiApi.js";
 
 //@ chunk-18hwfzwa.js:36623-36633 placement
@@ -23,28 +23,30 @@ Ar(uiLogNamespace, {
   useUiLog: () => useUiLog,
 });
 //@ chunk-18hwfzwa.js:1809318-1809365 placement
-var zRt = (h) => createSystemMessage(qtt(h.plugin, h.text), "notice");
+var uiLogRowToSystemMessage = (h) => createSystemMessage(formatSourceLine(h.plugin, h.text), "notice");
 //@ chunk-18hwfzwa.js:1809365-1809578 placement
 function appendUiLogRow(h, x, D) {
-  let L = zRt(x),
-    at = h.getSnapshot().at(-1);
+  let L = uiLogRowToSystemMessage(x);
+  let last = h.getSnapshot().at(-1);
   if (
     D === "once" &&
-    at?.type === "system" &&
-    at.subtype === "informational" &&
-    at.level === L.level &&
-    at.content === L.content
+    last?.type === "system" &&
+    last.subtype === "informational" &&
+    last.level === L.level &&
+    last.content === L.content
   )
     return;
-  h.apply({ type: "append", messages: [L] });
+  h.apply({
+    type: "append",
+    messages: [L],
+  });
 }
 //@ chunk-18hwfzwa.js:1809578-1809582 placement
-j();
+init_react_production();
 //@ chunk-18hwfzwa.js:1809582-1809631 placement
 var useUiLog = (h) => {
   P(() => setUiLogSink((x, D) => appendUiLogRow(h, x, D)), [h]);
 };
 //@ chunk-18hwfzwa.js:1809631-1809635 placement
-j();
-
+init_react_production();
 export { uiLogNamespace };

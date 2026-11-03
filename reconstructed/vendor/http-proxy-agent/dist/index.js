@@ -6,132 +6,158 @@
  * attribution: cjs-fingerprint 1
  */
 import { x, importMetaRequire } from "../../../runtime/bun-runtime.js";
-import { pMn } from "../../debug/src/index.js";
-import { yhs } from "../../agent-base/dist/index.js";
+import { require_debug_2 } from "../../debug/src/index.js";
+import { require_agent_base } from "../../agent-base/dist/index.js";
 
 //@ chunk-mrx6y2r5.js:432-3264 cjs-fingerprint
-var Ml = x(function (ze) {
-  var rp =
-      (ze && ze.__createBinding) ||
-      (Object.create
-        ? function (e, t, r, n) {
-            if (n === void 0) n = r;
-            var ownPropertyDescriptor = Object.getOwnPropertyDescriptor(t, r);
-            if (
-              !ownPropertyDescriptor ||
-              ("get" in ownPropertyDescriptor
-                ? !t.__esModule
-                : ownPropertyDescriptor.writable || ownPropertyDescriptor.configurable)
-            )
-              ownPropertyDescriptor = {
-                enumerable: !0,
-                get: function () {
-                  return t[r];
-                },
-              };
-            Object.defineProperty(e, n, ownPropertyDescriptor);
-          }
-        : function (e, t, r, n) {
-            if (n === void 0) n = r;
-            e[n] = t[r];
-          }),
-    np =
-      (ze && ze.__setModuleDefault) ||
-      (Object.create
-        ? function (e, t) {
-            Object.defineProperty(e, "default", { enumerable: !0, value: t });
-          }
-        : function (e, t) {
-            e.default = t;
-          }),
-    Ol =
-      (ze && ze.__importStar) ||
-      function (e) {
-        if (e && e.__esModule) return e;
-        var t = {};
-        if (e != null) {
-          for (var key in e)
-            if (key !== "default" && Object.prototype.hasOwnProperty.call(e, key)) rp(t, e, key);
+var require_http_proxy_agent = x(function (cjsExports) {
+  var __createBinding =
+    (cjsExports && cjsExports.__createBinding) ||
+    (Object.create
+      ? function (o_2, m, k, k2) {
+          if (k2 === undefined) k2 = k;
+          var desc = Object.getOwnPropertyDescriptor(m, k);
+          if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable))
+            desc = {
+              enumerable: true,
+              get: function () {
+                return m[k];
+              },
+            };
+          Object.defineProperty(o_2, k2, desc);
         }
-        return (np(t, e), t);
-      },
-    op =
-      (ze && ze.__importDefault) ||
-      function (e) {
-        return e && e.__esModule ? e : { default: e };
+      : function (o, m, k, k2) {
+          if (k2 === undefined) k2 = k;
+          o[k2] = m[k];
+        });
+  var __setModuleDefault =
+    (cjsExports && cjsExports.__setModuleDefault) ||
+    (Object.create
+      ? function (o, v) {
+          Object.defineProperty(o, "default", {
+            enumerable: true,
+            value: v,
+          });
+        }
+      : function (o, v) {
+          o.default = v;
+        });
+  var __importStar =
+    (cjsExports && cjsExports.__importStar) ||
+    function (mod) {
+      if (mod && mod.__esModule) return mod;
+      var result = {};
+      if (mod != null) {
+        for (var k in mod)
+          if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k))
+            __createBinding(result, mod, k);
+      }
+      __setModuleDefault(result, mod);
+      return result;
+    };
+  var __importDefault =
+    (cjsExports && cjsExports.__importDefault) ||
+    function (mod) {
+      return mod && mod.__esModule
+        ? mod
+        : {
+            default: mod,
+          };
+    };
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.HttpProxyAgent = undefined;
+  var net = __importStar(importMetaRequire("net"));
+  var tls = __importStar(importMetaRequire("tls"));
+  var debug_1 = __importDefault(require_debug_2());
+  var events_1 = importMetaRequire("events");
+  var agent_base_1 = require_agent_base();
+  var url_1 = importMetaRequire("url");
+  var debug = (0, debug_1.default)("http-proxy-agent");
+  class HttpProxyAgent extends agent_base_1.Agent {
+    constructor(proxy, opts) {
+      super(opts);
+      this.proxy = typeof proxy === "string" ? new url_1.URL(proxy) : proxy;
+      this.proxyHeaders = opts?.headers ?? {};
+      debug("Creating new HttpProxyAgent instance: %o", this.proxy.href);
+      let host = (this.proxy.hostname || this.proxy.host).replace(/^\[|\]$/g, "");
+      let port = this.proxy.port
+        ? parseInt(this.proxy.port, 10)
+        : this.proxy.protocol === "https:"
+          ? 443
+          : 80;
+      this.connectOpts = {
+        ...(opts ? omit(opts, "headers") : null),
+        host,
+        port,
       };
-  Object.defineProperty(ze, "__esModule", { value: !0 });
-  ze.HttpProxyAgent = void 0;
-  var ip = Ol(importMetaRequire("net")),
-    sp = Ol(importMetaRequire("tls")),
-    ap = op(pMn()),
-    Nl = importMetaRequire("events"),
-    xl = yhs(),
-    qo = importMetaRequire("url"),
-    qr = (0, ap.default)("http-proxy-agent");
-  class la extends xl.Agent {
-    constructor(e, t) {
-      super(t);
-      ((this.proxy = typeof e === "string" ? new qo.URL(e) : e),
-        (this.proxyHeaders = t?.headers ?? {}),
-        qr("Creating new HttpProxyAgent instance: %o", this.proxy.href));
-      let replaced = (this.proxy.hostname || this.proxy.host).replace(/^\[|\]$/g, ""),
-        n = this.proxy.port ? parseInt(this.proxy.port, 10) : this.proxy.protocol === "https:" ? 443 : 80;
-      this.connectOpts = { ...(t ? cp(t, "headers") : null), host: replaced, port: n };
     }
-    addRequest(e, t) {
-      ((e._header = null), this.setRequestProps(e, t), super.addRequest(e, t));
+    addRequest(req, opts) {
+      req._header = null;
+      this.setRequestProps(req, opts);
+      super.addRequest(req, opts);
     }
-    setRequestProps(e, t) {
-      let { proxy: proxy } = this,
-        n = t.secureEndpoint ? "https:" : "http:",
-        o = e.getHeader("host") || "localhost",
-        i = `${n}//${o}`,
-        s = new qo.URL(e.path, i);
-      if (t.port !== 80) s.port = String(t.port);
-      e.path = String(s);
-      let a = typeof this.proxyHeaders === "function" ? this.proxyHeaders() : { ...this.proxyHeaders };
+    setRequestProps(req, opts) {
+      let { proxy } = this;
+      let protocol = opts.secureEndpoint ? "https:" : "http:";
+      let hostname = req.getHeader("host") || "localhost";
+      let base = `${protocol}//${hostname}`;
+      let url = new url_1.URL(req.path, base);
+      if (opts.port !== 80) url.port = String(opts.port);
+      req.path = String(url);
+      let headers =
+        typeof this.proxyHeaders === "function"
+          ? this.proxyHeaders()
+          : {
+              ...this.proxyHeaders,
+            };
       if (proxy.username || proxy.password) {
-        let c = `${decodeURIComponent(proxy.username)}:${decodeURIComponent(proxy.password)}`;
-        a["Proxy-Authorization"] = `Basic ${Buffer.from(c).toString("base64")}`;
+        let auth = `${decodeURIComponent(proxy.username)}:${decodeURIComponent(proxy.password)}`;
+        headers["Proxy-Authorization"] = `Basic ${Buffer.from(auth).toString("base64")}`;
       }
-      if (!a["Proxy-Connection"]) a["Proxy-Connection"] = this.keepAlive ? "Keep-Alive" : "close";
-      for (let c of Object.keys(a)) {
-        let l = a[c];
-        if (l) e.setHeader(c, l);
+      if (!headers["Proxy-Connection"]) headers["Proxy-Connection"] = this.keepAlive ? "Keep-Alive" : "close";
+      for (let name of Object.keys(headers)) {
+        let value = headers[name];
+        if (value) req.setHeader(name, value);
       }
     }
-    async connect(e, t) {
-      if (((e._header = null), !e.path.includes("://"))) this.setRequestProps(e, t);
-      let r, n;
-      if (
-        (qr("Regenerating stored HTTP header string for request"),
-        e._implicitHeader(),
-        e.outputData && e.outputData.length > 0)
-      )
-        (qr("Patching connection write() output buffer with updated header"),
-          (r = e.outputData[0].data),
-          (n =
-            r.indexOf(`\r
+    async connect(req, opts) {
+      req._header = null;
+      if (!req.path.includes("://")) this.setRequestProps(req, opts);
+      let first;
+      let endOfHeaders;
+      debug("Regenerating stored HTTP header string for request");
+      req._implicitHeader();
+      if (req.outputData && req.outputData.length > 0) {
+        debug("Patching connection write() output buffer with updated header");
+        first = req.outputData[0].data;
+        endOfHeaders =
+          first.indexOf(`\r
 \r
-`) + 4),
-          (e.outputData[0].data = e._header + r.substring(n)),
-          qr("Output buffer: %o", e.outputData[0].data));
-      let o;
-      if (this.proxy.protocol === "https:")
-        (qr("Creating `tls.Socket`: %o", this.connectOpts), (o = sp.connect(this.connectOpts)));
-      else (qr("Creating `net.Socket`: %o", this.connectOpts), (o = ip.connect(this.connectOpts)));
-      return (await Nl.once(o, "connect"), o);
+`) + 4;
+        req.outputData[0].data = req._header + first.substring(endOfHeaders);
+        debug("Output buffer: %o", req.outputData[0].data);
+      }
+      let socket;
+      if (this.proxy.protocol === "https:") {
+        debug("Creating `tls.Socket`: %o", this.connectOpts);
+        socket = tls.connect(this.connectOpts);
+      } else {
+        debug("Creating `net.Socket`: %o", this.connectOpts);
+        socket = net.connect(this.connectOpts);
+      }
+      await events_1.once(socket, "connect");
+      return socket;
     }
   }
-  la.protocols = ["http", "https"];
-  ze.HttpProxyAgent = la;
-  function cp(e, ...t) {
-    let r = {},
-      n;
-    for (n in e) if (!t.includes(n)) r[n] = e[n];
-    return r;
+  HttpProxyAgent.protocols = ["http", "https"];
+  cjsExports.HttpProxyAgent = HttpProxyAgent;
+  function omit(obj, ...keys) {
+    let ret = {};
+    let key;
+    for (key in obj) if (!keys.includes(key)) ret[key] = obj[key];
+    return ret;
   }
 });
-
-export { Ml };
+export { require_http_proxy_agent };

@@ -7,114 +7,107 @@
  */
 
 //@ chunk-mrx6y2r5.js:88382-90381 esm-fingerprint
-class Jr {
-  static serializeJSONBlob(e) {
-    return JSON.stringify(e);
+class Serializer {
+  static serializeJSONBlob(data) {
+    return JSON.stringify(data);
   }
-  static serializeAccounts(e) {
-    let t = {};
-    return (
-      Object.keys(e).map(function (r) {
-        let n = e[r];
-        t[r] = {
-          home_account_id: n.homeAccountId,
-          environment: n.environment,
-          realm: n.realm,
-          local_account_id: n.localAccountId,
-          username: n.username,
-          authority_type: n.authorityType,
-          name: n.name,
-          client_info: n.clientInfo,
-          last_modification_time: n.lastModificationTime,
-          last_modification_app: n.lastModificationApp,
-          tenantProfiles: n.tenantProfiles?.map((o) => JSON.stringify(o)),
-        };
-      }),
-      t
-    );
+  static serializeAccounts(accCache) {
+    let accounts = {};
+    Object.keys(accCache).map(function (key) {
+      let accountEntity = accCache[key];
+      accounts[key] = {
+        home_account_id: accountEntity.homeAccountId,
+        environment: accountEntity.environment,
+        realm: accountEntity.realm,
+        local_account_id: accountEntity.localAccountId,
+        username: accountEntity.username,
+        authority_type: accountEntity.authorityType,
+        name: accountEntity.name,
+        client_info: accountEntity.clientInfo,
+        last_modification_time: accountEntity.lastModificationTime,
+        last_modification_app: accountEntity.lastModificationApp,
+        tenantProfiles: accountEntity.tenantProfiles?.map((tenantProfile) => JSON.stringify(tenantProfile)),
+      };
+    });
+    return accounts;
   }
-  static serializeIdTokens(e) {
-    let t = {};
-    return (
-      Object.keys(e).map(function (r) {
-        let n = e[r];
-        t[r] = {
-          home_account_id: n.homeAccountId,
-          environment: n.environment,
-          credential_type: n.credentialType,
-          client_id: n.clientId,
-          secret: n.secret,
-          realm: n.realm,
-        };
-      }),
-      t
-    );
+  static serializeIdTokens(idTCache) {
+    let idTokens = {};
+    Object.keys(idTCache).map(function (key) {
+      let idTEntity = idTCache[key];
+      idTokens[key] = {
+        home_account_id: idTEntity.homeAccountId,
+        environment: idTEntity.environment,
+        credential_type: idTEntity.credentialType,
+        client_id: idTEntity.clientId,
+        secret: idTEntity.secret,
+        realm: idTEntity.realm,
+      };
+    });
+    return idTokens;
   }
-  static serializeAccessTokens(e) {
-    let t = {};
-    return (
-      Object.keys(e).map(function (r) {
-        let n = e[r];
-        t[r] = {
-          home_account_id: n.homeAccountId,
-          environment: n.environment,
-          credential_type: n.credentialType,
-          client_id: n.clientId,
-          secret: n.secret,
-          realm: n.realm,
-          target: n.target,
-          cached_at: n.cachedAt,
-          expires_on: n.expiresOn,
-          extended_expires_on: n.extendedExpiresOn,
-          refresh_on: n.refreshOn,
-          key_id: n.keyId,
-          token_type: n.tokenType,
-          requestedClaims: n.requestedClaims,
-          requestedClaimsHash: n.requestedClaimsHash,
-          userAssertionHash: n.userAssertionHash,
-        };
-      }),
-      t
-    );
+  static serializeAccessTokens(atCache) {
+    let accessTokens = {};
+    Object.keys(atCache).map(function (key) {
+      let atEntity = atCache[key];
+      accessTokens[key] = {
+        home_account_id: atEntity.homeAccountId,
+        environment: atEntity.environment,
+        credential_type: atEntity.credentialType,
+        client_id: atEntity.clientId,
+        secret: atEntity.secret,
+        realm: atEntity.realm,
+        target: atEntity.target,
+        cached_at: atEntity.cachedAt,
+        expires_on: atEntity.expiresOn,
+        extended_expires_on: atEntity.extendedExpiresOn,
+        refresh_on: atEntity.refreshOn,
+        key_id: atEntity.keyId,
+        token_type: atEntity.tokenType,
+        requestedClaims: atEntity.requestedClaims,
+        requestedClaimsHash: atEntity.requestedClaimsHash,
+        userAssertionHash: atEntity.userAssertionHash,
+      };
+    });
+    return accessTokens;
   }
-  static serializeRefreshTokens(e) {
-    let t = {};
-    return (
-      Object.keys(e).map(function (r) {
-        let n = e[r];
-        t[r] = {
-          home_account_id: n.homeAccountId,
-          environment: n.environment,
-          credential_type: n.credentialType,
-          client_id: n.clientId,
-          secret: n.secret,
-          family_id: n.familyId,
-          target: n.target,
-          realm: n.realm,
-        };
-      }),
-      t
-    );
+  static serializeRefreshTokens(rtCache) {
+    let refreshTokens = {};
+    Object.keys(rtCache).map(function (key) {
+      let rtEntity = rtCache[key];
+      refreshTokens[key] = {
+        home_account_id: rtEntity.homeAccountId,
+        environment: rtEntity.environment,
+        credential_type: rtEntity.credentialType,
+        client_id: rtEntity.clientId,
+        secret: rtEntity.secret,
+        family_id: rtEntity.familyId,
+        target: rtEntity.target,
+        realm: rtEntity.realm,
+      };
+    });
+    return refreshTokens;
   }
-  static serializeAppMetadata(e) {
-    let t = {};
-    return (
-      Object.keys(e).map(function (r) {
-        let n = e[r];
-        t[r] = { client_id: n.clientId, environment: n.environment, family_id: n.familyId };
-      }),
-      t
-    );
+  static serializeAppMetadata(amdtCache) {
+    let appMetadata = {};
+    Object.keys(amdtCache).map(function (key) {
+      let amdtEntity = amdtCache[key];
+      appMetadata[key] = {
+        client_id: amdtEntity.clientId,
+        environment: amdtEntity.environment,
+        family_id: amdtEntity.familyId,
+      };
+    });
+    return appMetadata;
   }
-  static serializeAllCache(e) {
+  static serializeAllCache(inMemCache) {
     return {
-      Account: this.serializeAccounts(e.accounts),
-      IdToken: this.serializeIdTokens(e.idTokens),
-      AccessToken: this.serializeAccessTokens(e.accessTokens),
-      RefreshToken: this.serializeRefreshTokens(e.refreshTokens),
-      AppMetadata: this.serializeAppMetadata(e.appMetadata),
+      Account: this.serializeAccounts(inMemCache.accounts),
+      IdToken: this.serializeIdTokens(inMemCache.idTokens),
+      AccessToken: this.serializeAccessTokens(inMemCache.accessTokens),
+      RefreshToken: this.serializeRefreshTokens(inMemCache.refreshTokens),
+      AppMetadata: this.serializeAppMetadata(inMemCache.appMetadata),
     };
   }
 }
-
-export { Jr };
+export { Serializer };

@@ -6,72 +6,81 @@
  * attribution: esm-layout 3, esm-fingerprint 1
  */
 import { Xa } from "../../../../../../runtime/bun-runtime.js";
-import { W } from "../../../webapi/lib/buffer_utils.js";
-import { O, M } from "../../../browser/runtime/is_key_like.js";
-import { P, f } from "../../../webapi/lib/content_encryption.js";
-import { Ft, Lr } from "../../../browser/runtime/key_to_jwk.js";
+import { init_buffer_utils } from "../../../webapi/lib/buffer_utils.js";
+import { O, init_is_key_like } from "../../../browser/runtime/is_key_like.js";
+import { init_content_encryption, f } from "../../../webapi/lib/content_encryption.js";
+import { keyToJWK_default, keyToJWK } from "../../../browser/runtime/key_to_jwk.js";
 import { z } from "./check_key_type.js";
-import { xe, bt, _e } from "../../../browser/runtime/ecdhes.js";
-import { ie } from "./cek.js";
-import { w } from "../../../browser/runtime/base64url.js";
+import { ecdhAllowed, generateEpk, deriveKey } from "../../../browser/runtime/ecdhes.js";
+import { bitLength } from "./cek.js";
+import { encode } from "../../../browser/runtime/base64url.js";
 import { V } from "../../../browser/runtime/jwk_to_key.js";
-import { ne } from "../../../browser/runtime/aeskw.js";
-import { vt } from "../../../browser/runtime/rsaes.js";
-import { xt } from "../../../browser/runtime/pbes2kw.js";
-import { It } from "../../../browser/lib/aesgcmkw.js";
+import { wrap } from "../../../browser/runtime/aeskw.js";
+import { encrypt_2 } from "../../../browser/runtime/rsaes.js";
+import { encrypt } from "../../../browser/runtime/pbes2kw.js";
+import { wrap_2 } from "../../../browser/lib/aesgcmkw.js";
 
 //@ chunk-2tyrgda4.js:31220-31259 esm-layout
-var Vt = Xa(() => {
-  W();
+var init_encrypt_key_management = Xa(() => {
+  init_buffer_utils();
   O();
-  P();
-  M();
-  Ft = Lr;
+  init_content_encryption();
+  init_is_key_like();
+  keyToJWK_default = keyToJWK;
 });
 //@ chunk-2tyrgda4.js:31259-31293 esm-layout
-async function ot(e) {
-  return Ft(e);
+async function ot(ephemeralKey) {
+  return keyToJWK_default(ephemeralKey);
 }
 //@ chunk-2tyrgda4.js:31293-31315 esm-layout
-var nt = Xa(() => {
-  Vt();
+var init_encrypt_key_management_2 = Xa(() => {
+  init_encrypt_key_management();
 });
 //@ chunk-2tyrgda4.js:31315-32529 esm-fingerprint
-async function $r(e, t, r, o, n = {}) {
-  let a, i, c;
-  switch ((z(e, r, "encrypt"), e)) {
+async function encryptKeyManagement(alg, enc, key, providedCek, providedParameters = {}) {
+  let encryptedKey;
+  let parameters;
+  let cek;
+  switch ((z(alg, key, "encrypt"), alg)) {
     case "dir": {
-      c = r;
+      cek = key;
       break;
     }
     case "ECDH-ES":
     case "ECDH-ES+A128KW":
     case "ECDH-ES+A192KW":
     case "ECDH-ES+A256KW": {
-      if (!xe(r))
+      if (!ecdhAllowed(key))
         throw new f("ECDH with the provided key is not allowed or not supported by your javascript runtime");
-      let { apu: apu, apv: apv } = n,
-        { epk: epk } = n;
-      epk || (epk = (await bt(r)).privateKey);
-      let { x: I, y: b, crv: crv, kty: kty } = await ot(epk),
-        U = await _e(
-          r,
-          epk,
-          e === "ECDH-ES" ? t : e,
-          e === "ECDH-ES" ? ie(t) : parseInt(e.slice(-5, -2), 10),
-          apu,
-          apv,
-        );
-      if (((i = { epk: { x: I, crv: crv, kty: kty } }), kty === "EC")) i.epk.y = b;
-      if (apu) i.apu = w(apu);
-      if (apv) i.apv = w(apv);
-      if (e === "ECDH-ES") {
-        c = U;
+      let { apu, apv } = providedParameters;
+      let { epk: ephemeralKey } = providedParameters;
+      if (!ephemeralKey) ephemeralKey = (await generateEpk(key)).privateKey;
+      let { x, y, crv, kty } = await ot(ephemeralKey);
+      let sharedSecret = await deriveKey(
+        key,
+        ephemeralKey,
+        alg === "ECDH-ES" ? enc : alg,
+        alg === "ECDH-ES" ? bitLength(enc) : parseInt(alg.slice(-5, -2), 10),
+        apu,
+        apv,
+      );
+      parameters = {
+        epk: {
+          x,
+          crv,
+          kty,
+        },
+      };
+      if (kty === "EC") parameters.epk.y = y;
+      if (apu) parameters.apu = encode(apu);
+      if (apv) parameters.apv = encode(apv);
+      if (alg === "ECDH-ES") {
+        cek = sharedSecret;
         break;
       }
-      c = o || V(t);
-      let sliced = e.slice(-6);
-      a = await ne(sliced, U, c);
+      cek = providedCek || V(enc);
+      let kwAlg = alg.slice(-6);
+      encryptedKey = await wrap(kwAlg, sharedSecret, cek);
       break;
     }
     case "RSA1_5":
@@ -79,35 +88,40 @@ async function $r(e, t, r, o, n = {}) {
     case "RSA-OAEP-256":
     case "RSA-OAEP-384":
     case "RSA-OAEP-512": {
-      ((c = o || V(t)), (a = await vt(e, r, c)));
+      cek = providedCek || V(enc);
+      encryptedKey = await encrypt_2(alg, key, cek);
       break;
     }
     case "PBES2-HS256+A128KW":
     case "PBES2-HS384+A192KW":
     case "PBES2-HS512+A256KW": {
-      c = o || V(t);
-      let { p2c: p2c, p2s: p2s } = n;
-      ({ encryptedKey: a, ...i } = await xt(e, r, c, p2c, p2s));
+      cek = providedCek || V(enc);
+      let { p2c, p2s } = providedParameters;
+      ({ encryptedKey, ...parameters } = await encrypt(alg, key, cek, p2c, p2s));
       break;
     }
     case "A128KW":
     case "A192KW":
     case "A256KW": {
-      ((c = o || V(t)), (a = await ne(e, r, c)));
+      cek = providedCek || V(enc);
+      encryptedKey = await wrap(alg, key, cek);
       break;
     }
     case "A128GCMKW":
     case "A192GCMKW":
     case "A256GCMKW": {
-      c = o || V(t);
-      let { iv: iv } = n;
-      ({ encryptedKey: a, ...i } = await It(e, r, c, iv));
+      cek = providedCek || V(enc);
+      let { iv } = providedParameters;
+      ({ encryptedKey, ...parameters } = await wrap_2(alg, key, cek, iv));
       break;
     }
     default:
       throw new f('Invalid or unsupported "alg" (JWE Algorithm) header value');
   }
-  return { cek: c, encryptedKey: a, parameters: i };
+  return {
+    cek,
+    encryptedKey,
+    parameters,
+  };
 }
-
-export { nt, $r };
+export { init_encrypt_key_management_2, encryptKeyManagement };

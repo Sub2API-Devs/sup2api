@@ -8,34 +8,34 @@
  * pieces: chunk-18hwfzwa.js (26)
  * attribution: placement 26
  */
-import {
-  basename,
-  basename as basename_2,
-  basename as basename_3,
-  basename as basename_4,
-  basename as basename_5,
-  basename as basename_6,
-  basename as basename_7,
-  parse,
-  parse as parse_2,
-  parse as parse_3,
-} from "path";
-import { j, y } from "../../../vendor/react/cjs/react.production.js";
+import { basename, parse } from "path";
+import { init_react_production, y } from "../../../vendor/react/cjs/react.production.js";
 import {
   uuidSlugFromUrl,
   parseArtifactUrl,
   getArtifactPublishStubDir,
 } from "../../tools/ArtifactTool/constants.js";
-import { OPENED, rRe, Qet } from "../../tools/ArtifactTool/artifactResumeCarry.js";
+import {
+  OPENED,
+  isPersistableFrameUrl,
+  isCreatedFrameUrl,
+} from "../../tools/ArtifactTool/artifactResumeCarry.js";
 import { stripAnsiAndControls } from "../../utils/printableName.js";
 import { sanitizeDisplayTitle } from "../../utils/textNormalize.js";
-import { probeArtifactForOpen, Bjn, describeOpenFailure } from "../../services/artifacts/openArtifact.js";
+import {
+  probeArtifactForOpen,
+  OPEN_PROBE_TIMEOUT_MS,
+  describeOpenFailure,
+} from "../../services/artifacts/openArtifact.js";
 import { logFeatureBad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 import { openValidatedUrl } from "../../utils/browser.js";
-import { e, r } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { OrderedListWithItem } from "../CustomSelect/selectTable.js";
 import { Text, Box } from "../../ink/components/Text.js";
-import { hf } from "../../utils/permissions/autoModeRulesPrompt.js";
+import { BOXED_DIAMOND_GLYPH } from "../../utils/permissions/autoModeRulesPrompt.js";
 import { formatRelativeTime, truncateToWidth } from "../../utils/format.js";
 import { w } from "../../../vendor/react/compiler-runtime.js";
 import { useAppState } from "../../state/AppState.js";
@@ -44,73 +44,93 @@ import { useIsScreenReaderEnabled } from "../../ink/components/ErrorBoundary.js"
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-18hwfzwa.js:649982-649986 placement
-j();
+init_react_production();
 //@ chunk-18hwfzwa.js:650033-650641 placement
-function visibleArtifactFrames(h) {
+function visibleArtifactFrames(frameUrls) {
   let x = new Map();
-  for (let [D, L] of Object.entries(h).reverse()) {
-    let ee = uuidSlugFromUrl(L.url);
-    if (ee === null || L.dismissed === !0) continue;
-    let ke = x.get(ee),
-      Re = ke !== void 0 && ke.key.startsWith(OPENED) && !D.startsWith(OPENED);
-    if (ke !== void 0 && !Re) continue;
-    let Be = rRe(D) ? void 0 : stripAnsiAndControls(basename_5(D)),
-      He = L.title !== void 0 ? fYt(L.title) : null;
+  for (let [key, value] of Object.entries(frameUrls).reverse()) {
+    let ee = uuidSlugFromUrl(value.url);
+    if (ee === null || value.dismissed === true) continue;
+    let ke = x.get(ee);
+    let Re = ke !== undefined && ke.key.startsWith(OPENED) && !key.startsWith(OPENED);
+    if (ke !== undefined && !Re) continue;
+    let Be = isPersistableFrameUrl(key) ? undefined : stripAnsiAndControls(basename(key));
+    let He = value.title !== undefined ? sanitizeFrameTitle(value.title) : null;
     x.set(ee, {
-      key: D,
+      key,
       artifact: {
         slug: ee,
-        title: He ?? (Be !== void 0 ? parse(Be).name : stripAnsiAndControls(D.slice(D.indexOf(":") + 1))),
-        ...(Be !== void 0 && { sourceFile: Be }),
-        updatedAt: L.updatedAt,
-        isAttached: L.mcpPublished === !0 || (!D.startsWith(OPENED) && !Qet(D)),
-        ...(L.mcpPublished === !0 && { mcpPublished: !0 }),
+        title:
+          He ?? (Be !== undefined ? parse(Be).name : stripAnsiAndControls(key.slice(key.indexOf(":") + 1))),
+        ...(Be !== undefined && {
+          sourceFile: Be,
+        }),
+        updatedAt: value.updatedAt,
+        isAttached: value.mcpPublished === true || (!key.startsWith(OPENED) && !isCreatedFrameUrl(key)),
+        ...(value.mcpPublished === true && {
+          mcpPublished: true,
+        }),
       },
     });
   }
   return Array.from(x.values(), (D) => D.artifact);
 }
 //@ chunk-18hwfzwa.js:650641-650674 placement
-function fYt(h) {
-  return sanitizeDisplayTitle(stripAnsiAndControls(h));
+function sanitizeFrameTitle(title) {
+  return sanitizeDisplayTitle(stripAnsiAndControls(title));
 }
 //@ chunk-18hwfzwa.js:650674-650761 placement
-function Dpo(h, x) {
-  return Object.entries(h)
-    .filter(([, D]) => uuidSlugFromUrl(D.url) === x)
-    .map(([D]) => D);
+/**
+ * 按 slug 从 frameUrls 里找出对应条目（比较 URL 里的 uuid slug）。
+ */
+function framesForSlug(frameUrls, slug) {
+  return Object.entries(frameUrls)
+    .filter(([, value]) => uuidSlugFromUrl(value.url) === slug)
+    .map(([key]) => key);
 }
+//@ chunk-18hwfzwa.js:650761-650971 placement
 /**
  * 关闭某个 Artifact 帧：特定类型直接从 frameUrls 删除，否则标记 dismissed。
  */
-//@ chunk-18hwfzwa.js:650761-650971 placement
 function dismissFrameUrl(h, x) {
   let D = h.frameUrls[x];
-  if (D === void 0 || D.dismissed === !0) return h;
-  if (rRe(x)) {
+  if (D === undefined || D.dismissed === true) return h;
+  if (isPersistableFrameUrl(x)) {
     let { [x]: L, ...ee } = h.frameUrls;
-    return { ...h, frameUrls: ee };
+    return {
+      ...h,
+      frameUrls: ee,
+    };
   }
-  return { ...h, frameUrls: { ...h.frameUrls, [x]: { ...D, dismissed: !0 } } };
+  return {
+    ...h,
+    frameUrls: {
+      ...h.frameUrls,
+      [x]: {
+        ...D,
+        dismissed: true,
+      },
+    },
+  };
 }
 //@ chunk-18hwfzwa.js:650971-651055 placement
-function k2(h) {
+function frameOpenFailed(h) {
   if (h.frameOpenFailedPath == null) return h.frameOpenFailedSeen;
-  return !0;
+  return true;
 }
 //@ chunk-18hwfzwa.js:651381-651414 placement
 var CLOUD_ARTIFACT_CHECKING = "cloud-artifact-checking";
 //@ chunk-18hwfzwa.js:651414-652537 placement
-function openArtifactRow(h, x, D, L) {
-  if (h.fromCloudSession !== !0 && h.mcpPublished !== !0) {
-    openArtifactInBrowser(h.url, x.setState, D);
+function openArtifactRow(h, x, notifications, cloudRowCheck) {
+  if (h.fromCloudSession !== true && h.mcpPublished !== true) {
+    openArtifactInBrowser(h.url, x.setState, notifications);
     return;
   }
-  let ee = h.fromCloudSession === !0 ? "artifact_cloud_row_open" : "artifact_mcp_row_open",
-    ke = parseArtifactUrl(h.url);
-  if (ke === null) return;
-  if (L.inFlight) {
-    D.addNotification({
+  let feature = h.fromCloudSession === true ? "artifact_cloud_row_open" : "artifact_mcp_row_open";
+  let target = parseArtifactUrl(h.url);
+  if (target === null) return;
+  if (cloudRowCheck.inFlight) {
+    notifications.addNotification({
       key: CLOUD_ARTIFACT_CHECKING,
       kind: "feedback",
       text: "Still checking the last artifact you chose.",
@@ -118,76 +138,87 @@ function openArtifactRow(h, x, D, L) {
     });
     return;
   }
-  ((L.inFlight = !0),
-    (async () => {
-      let Re;
-      try {
-        Re = await probeArtifactForOpen(ke, ee, AbortSignal.timeout(Bjn));
-      } catch {
-        if (ee === "artifact_cloud_row_open") logFeatureBad("artifact_cloud_row_open", "check_threw");
-        else logFeatureBad("artifact_mcp_row_open", "check_threw");
-        Re = { ok: !1, reason: "failed" };
-      } finally {
-        L.inFlight = !1;
-      }
-      if (!yYt(x.getState().frameUrls, h.url)) return;
-      if (Re.ok) {
-        if (ee === "artifact_cloud_row_open") logFeatureOk("artifact_cloud_row_open");
-        else logFeatureOk("artifact_mcp_row_open");
-        (D.removeNotification(CLOUD_ARTIFACT_CHECKING), openArtifactInBrowser(h.url, x.setState, D));
-        return;
-      }
-      if (Re.reason === "public_outside_org")
-        if (ee === "artifact_cloud_row_open") logFeatureBad("artifact_cloud_row_open", "public_outside_org");
-        else logFeatureBad("artifact_mcp_row_open", "public_outside_org");
-      D.addNotification({
-        key: "cloud-artifact-not-opened",
-        kind: "feedback",
-        text: describeOpenFailure(Re),
-        priority: "medium",
-        invalidates: [CLOUD_ARTIFACT_CHECKING],
-      });
-    })().catch(() => {}));
+  cloudRowCheck.inFlight = true;
+  (async () => {
+    let result;
+    try {
+      result = await probeArtifactForOpen(target, feature, AbortSignal.timeout(OPEN_PROBE_TIMEOUT_MS));
+    } catch {
+      if (feature === "artifact_cloud_row_open") logFeatureBad("artifact_cloud_row_open", "check_threw");
+      else logFeatureBad("artifact_mcp_row_open", "check_threw");
+      result = {
+        ok: false,
+        reason: "failed",
+      };
+    } finally {
+      cloudRowCheck.inFlight = false;
+    }
+    if (!hasLiveFrameUrl(x.getState().frameUrls, h.url)) return;
+    if (result.ok) {
+      if (feature === "artifact_cloud_row_open") logFeatureOk("artifact_cloud_row_open");
+      else logFeatureOk("artifact_mcp_row_open");
+      notifications.removeNotification(CLOUD_ARTIFACT_CHECKING);
+      openArtifactInBrowser(h.url, x.setState, notifications);
+      return;
+    }
+    if (result.reason === "public_outside_org")
+      if (feature === "artifact_cloud_row_open")
+        logFeatureBad("artifact_cloud_row_open", "public_outside_org");
+      else logFeatureBad("artifact_mcp_row_open", "public_outside_org");
+    notifications.addNotification({
+      key: "cloud-artifact-not-opened",
+      kind: "feedback",
+      text: describeOpenFailure(result),
+      priority: "medium",
+      invalidates: [CLOUD_ARTIFACT_CHECKING],
+    });
+  })().catch(() => {});
 }
 //@ chunk-18hwfzwa.js:652537-652618 placement
-function yYt(h, x) {
-  return Object.values(h).some((D) => D.url === x && D.dismissed !== !0);
+function hasLiveFrameUrl(frameUrls, url) {
+  return Object.values(frameUrls).some((D) => D.url === url && D.dismissed !== true);
 }
 //@ chunk-18hwfzwa.js:652618-652969 placement
-function openArtifactInBrowser(h, x, D) {
-  (openValidatedUrl(withBannerOpenVia(h)).then((L) => {
-    if (!L.ok && L.reason !== "timeout")
+function openArtifactInBrowser(url, setState, D) {
+  openValidatedUrl(withBannerOpenVia(url)).then((validatedUrl) => {
+    if (!validatedUrl.ok && validatedUrl.reason !== "timeout")
       D.addNotification({
         key: "artifact-browser-not-opened",
         kind: "feedback",
-        text: `Couldn't open your browser. Open ${stripAnsiAndControls(h)} yourself.`,
+        text: `Couldn't open your browser. Open ${stripAnsiAndControls(url)} yourself.`,
         priority: "medium",
         invalidates: [CLOUD_ARTIFACT_CHECKING],
       });
-  }),
-    logFeatureOk("frame_link_open"),
-    x((L) => {
-      let ee = k2(L);
-      return ee === L.frameOpenFailedSeen ? L : { ...L, frameOpenFailedSeen: ee };
-    }));
+  });
+  logFeatureOk("frame_link_open");
+  setState((L) => {
+    let ee = frameOpenFailed(L);
+    return ee === L.frameOpenFailedSeen
+      ? L
+      : {
+          ...L,
+          frameOpenFailedSeen: ee,
+        };
+  });
 }
 //@ chunk-18hwfzwa.js:652969-653062 placement
-function BO(h, x) {
-  return Object.values(h)
-    .filter((D) => D.dismissed !== !0 && uuidSlugFromUrl(D.url) === x)
+function liveFramesForSlug(frameUrls, slug) {
+  return Object.values(frameUrls)
+    .filter((D) => D.dismissed !== true && uuidSlugFromUrl(D.url) === slug)
     .at(-1);
 }
 //@ chunk-18hwfzwa.js:653062-653157 placement
-function VKe(h) {
-  return Object.values(h)
-    .filter((x) => x.dismissed !== !0 && uuidSlugFromUrl(x.url) !== null)
+function visibleFrameUrls(frameUrls) {
+  return Object.values(frameUrls)
+    .filter((x) => x.dismissed !== true && uuidSlugFromUrl(x.url) !== null)
     .at(-1);
 }
 //@ chunk-18hwfzwa.js:653157-653270 placement
 function withBannerOpenVia(h) {
   try {
     let x = new URL(h);
-    return (x.searchParams.set("via", "banner_open"), x.toString());
+    x.searchParams.set("via", "banner_open");
+    return x.toString();
   } catch {
     return h;
   }
@@ -196,141 +227,181 @@ function withBannerOpenVia(h) {
 function selectFrameUrls(Lt) {
   return Lt.frameUrls;
 }
+//@ chunk-18hwfzwa.js:653307-653476 placement
 /**
  * 渲染 Artifact 列表中的一项：标题、图标、来源文件与相对更新时间。
  */
-//@ chunk-18hwfzwa.js:653307-653476 placement
 function renderArtifactListItem(oo) {
-  return e(
+  return jsxProd_default(
     OrderedListWithItem.Item,
     {
       label: oo.title,
-      icon: e(Text, { color: "claude", children: hf }),
+      icon: jsxProd_default(Text, {
+        color: "claude",
+        children: BOXED_DIAMOND_GLYPH,
+      }),
       meta: [oo.sourceFile ?? "", oo.updatedAt > 0 ? formatRelativeTime(new Date(oo.updatedAt)) : ""],
     },
     oo.slug,
   );
 }
 //@ chunk-18hwfzwa.js:770990-770994 placement
-j();
+init_react_production();
 //@ chunk-18hwfzwa.js:771025-771073 placement
-function d8t(L) {
+function selectHasVisibleFrames(L) {
   return visibleArtifactFrames(L.frameUrls).length > 0;
 }
 //@ chunk-18hwfzwa.js:771073-771229 placement
 function shouldShowFrameOpenFailure(h) {
-  let x = h.frameOpenFailedPath != null ? h.frameUrls[h.frameOpenFailedPath] : void 0;
-  return x !== void 0 && x.dismissed !== !0 && h.frameOpenFailedSeen === !1;
+  let x = h.frameOpenFailedPath != null ? h.frameUrls[h.frameOpenFailedPath] : undefined;
+  return x !== undefined && x.dismissed !== true && h.frameOpenFailedSeen === false;
 }
 //@ chunk-18hwfzwa.js:771229-771266 placement
 function selectFrameUrls2(io) {
   return io.frameUrls;
 }
 //@ chunk-18hwfzwa.js:771266-771319 placement
-function p8t(so) {
+function selectFrameFooter(so) {
   return so.footerSelection === "frame";
 }
 //@ chunk-18hwfzwa.js:771319-771330 placement
-var w2e = 24;
+var MAX_FRAME_TITLE_WIDTH = 24;
 //@ chunk-18hwfzwa.js:771330-771424 placement
-function ZT() {
-  let $ = w(2),
-    h = useAppState(d8t),
-    D;
-  if ($[0] !== h) ((D = h && isPublishToolEnabled()), ($[0] = h), ($[1] = D));
-  else D = $[1];
+function useFrameFooterState() {
+  let $ = w(2);
+  let appState = useAppState(selectHasVisibleFrames);
+  let D;
+  if ($[0] !== appState) {
+    D = appState && isPublishToolEnabled();
+    $[0] = appState;
+    $[1] = D;
+  } else D = $[1];
   return D;
 }
 //@ chunk-18hwfzwa.js:771424-771452 placement
-function gj() {
+function useFrameOpenFailure() {
   return useAppState(shouldShowFrameOpenFailure);
 }
 //@ chunk-18hwfzwa.js:771452-772576 placement
-function ArtifactFramesPill(h) {
-  let $ = w(16),
-    { onOpen: onOpen } = h,
-    D = ZT(),
-    L = useAppState(selectFrameUrls2),
-    ke;
-  if ($[0] !== L) ((ke = visibleArtifactFrames(L)), ($[0] = L), ($[1] = ke));
-  else ke = $[1];
-  let Re = ke,
-    Be = useAppState(p8t),
-    He = gj(),
-    We = useIsScreenReaderEnabled(),
-    [ze, Xe] = y(!1);
-  if (!D) {
+function ArtifactFramesPill(props) {
+  let $ = w(16);
+  let { onOpen } = props;
+  let frameFooterState = useFrameFooterState();
+  let appState = useAppState(selectFrameUrls2);
+  let ke;
+  if ($[0] !== appState) {
+    ke = visibleArtifactFrames(appState);
+    $[0] = appState;
+    $[1] = ke;
+  } else ke = $[1];
+  let Re = ke;
+  let appState_2 = useAppState(selectFrameFooter);
+  let frameOpenFailure = useFrameOpenFailure();
+  let isScreenReaderEnabled = useIsScreenReaderEnabled();
+  let [ze, Xe] = y(false);
+  if (!frameFooterState) {
     return null;
   }
-  let [rt] = Re,
-    kt;
-  if ($[2] !== Re.length || $[3] !== rt)
-    ((kt =
+  let [rt] = Re;
+  let kt;
+  if ($[2] !== Re.length || $[3] !== rt) {
+    kt =
       Re.length === 1 && rt
-        ? truncateToWidth(rt.sourceFile !== void 0 ? parse_2(rt.sourceFile).name : rt.title, w2e)
-        : null),
-      ($[2] = Re.length),
-      ($[3] = rt),
-      ($[4] = kt));
-  else kt = $[4];
+        ? truncateToWidth(
+            rt.sourceFile !== undefined ? parse(rt.sourceFile).name : rt.title,
+            MAX_FRAME_TITLE_WIDTH,
+          )
+        : null;
+    $[2] = Re.length;
+    $[3] = rt;
+    $[4] = kt;
+  } else kt = $[4];
   let At = kt;
-  if (We) {
-    const It = At !== null ? `artifact ${At}` : `${Re.length} artifacts`;
+  if (isScreenReaderEnabled) {
+    const children = At !== null ? `artifact ${At}` : `${Re.length} artifacts`;
     let Ot;
-    if ($[5] !== It) ((Ot = e(Text, { children: It })), ($[5] = It), ($[6] = Ot));
-    else Ot = $[6];
+    if ($[5] !== children) {
+      Ot = jsxProd_default(Text, {
+        children,
+      });
+      $[5] = children;
+      $[6] = Ot;
+    } else Ot = $[6];
     return Ot;
   }
-  let Et = At ?? String(Re.length),
-    Dt = Be || ze,
-    It;
-  if ($[7] !== Dt || $[8] !== Et || $[9] !== He)
-    ((It = Dt
-      ? r(Text, { color: "claude", inverse: !0, children: [hf, " ", Et] })
-      : r(Text, {
+  let Et = At ?? String(Re.length);
+  let Dt = appState_2 || ze;
+  let It;
+  if ($[7] !== Dt || $[8] !== Et || $[9] !== frameOpenFailure) {
+    It = Dt
+      ? jsxProd_default_2(Text, {
+          color: "claude",
+          inverse: true,
+          children: [BOXED_DIAMOND_GLYPH, " ", Et],
+        })
+      : jsxProd_default_2(Text, {
           children: [
-            e(Text, { color: "claude", children: hf }),
+            jsxProd_default(Text, {
+              color: "claude",
+              children: BOXED_DIAMOND_GLYPH,
+            }),
             " ",
-            e(Text, { color: He ? "claude" : void 0, dimColor: !He, children: Et }),
+            jsxProd_default(Text, {
+              color: frameOpenFailure ? "claude" : undefined,
+              dimColor: !frameOpenFailure,
+              children: Et,
+            }),
           ],
-        })),
-      ($[7] = Dt),
-      ($[8] = Et),
-      ($[9] = He),
-      ($[10] = It));
-  else It = $[10];
+        });
+    $[7] = Dt;
+    $[8] = Et;
+    $[9] = frameOpenFailure;
+    $[10] = It;
+  } else It = $[10];
   let Lt = It;
   if (!onOpen || getArtifactPublishStubDir() !== null) {
     return Lt;
   }
-  let Ot, oo;
-  if ($[11] === MEMO_CACHE_SENTINEL) ((Ot = () => Xe(!0)), (oo = () => Xe(!1)), ($[11] = Ot), ($[12] = oo));
-  else ((Ot = $[11]), (oo = $[12]));
+  let onMouseEnter;
+  let onMouseLeave;
+  if ($[11] === MEMO_CACHE_SENTINEL) {
+    onMouseEnter = () => Xe(true);
+    onMouseLeave = () => Xe(false);
+    $[11] = onMouseEnter;
+    $[12] = onMouseLeave;
+  } else {
+    onMouseEnter = $[11];
+    onMouseLeave = $[12];
+  }
   let Xt;
-  if ($[13] !== onOpen || $[14] !== Lt)
-    ((Xt = e(Box, { onClick: onOpen, onMouseEnter: Ot, onMouseLeave: oo, children: Lt })),
-      ($[13] = onOpen),
-      ($[14] = Lt),
-      ($[15] = Xt));
-  else Xt = $[15];
+  if ($[13] !== onOpen || $[14] !== Lt) {
+    Xt = jsxProd_default(Box, {
+      onClick: onOpen,
+      onMouseEnter,
+      onMouseLeave,
+      children: Lt,
+    });
+    $[13] = onOpen;
+    $[14] = Lt;
+    $[15] = Xt;
+  } else Xt = $[15];
   return Xt;
 }
 //@ chunk-18hwfzwa.js:772576-772580 placement
-j();
+init_react_production();
 //@ chunk-18hwfzwa.js:772580-772584 placement
-j();
-
+init_react_production();
 export {
-  VKe,
-  openArtifactRow,
-  selectFrameUrls,
+  useFrameFooterState,
+  frameOpenFailed,
   visibleArtifactFrames,
-  BO,
+  liveFramesForSlug,
+  openArtifactRow,
+  visibleFrameUrls,
+  selectFrameUrls,
   renderArtifactListItem,
-  gj,
-  ZT,
+  useFrameOpenFailure,
   ArtifactFramesPill,
-  k2,
-  Dpo,
+  framesForSlug,
   dismissFrameUrl,
 };

@@ -9,98 +9,120 @@
  * attribution: placement 12
  */
 import { hostname, platform, arch, homedir } from "os";
-import { basename, basename as basename_2 } from "path";
-import { FCt, CZo, _4 } from "../../../bridge/deviceRegistration.js";
+import { basename } from "path";
+import {
+  deviceSlugOrFallback,
+  MAX_MACHINE_NAME_CHARS,
+  isValidMachineSlug,
+} from "../../../bridge/deviceRegistration.js";
 import { firstLineOf } from "../../../utils/stringUtils.js";
 import { attestationMode } from "../../../services/remoteTools/toolHostAttestation.js";
-import { dkn } from "../protocolNegotiation.js";
+import { MINIMAL_INTERFACE_VERSION } from "../protocolNegotiation.js";
 import { getPlatform } from "../../../utils/platform.js";
-import { shellCapabilityTag, UOs } from "../../../services/remoteTools/shellForwarding.js";
+import { shellCapabilityTag, shellCapabilityFor } from "../../../services/remoteTools/shellForwarding.js";
 import { getResolvedPowerShellEdition } from "../../../utils/shell/powershellDetection.js";
 import { BASH_TOOL_NAME } from "../../../tools/BashTool/toolName.js";
-import { ZSr } from "../../../utils/shell/shellPaths.js";
-import { t7o } from "../protocolSchemas.js";
+import { getResolvedBashShellPath } from "../../../utils/shell/shellPaths.js";
+import { MAX_TRUNCATED_LINES } from "../protocolSchemas.js";
 import { warmDeviceSandbox } from "../deviceSandboxPosture.js";
 import { createAdmissionGate } from "../../../services/remoteTools/remoteToolAdmission.js";
-import { i } from "../../../tools/PowerShellTool/PowerShellTool.js";
+import { isViolinTableFlagOn } from "../../../tools/PowerShellTool/PowerShellTool.js";
 import { getSettingsWithErrors_2 } from "../../../utils/settings/settings.js";
 import { SandboxManager } from "../../../utils/sandbox/sandbox-adapter.js";
 
 //@ chunk-ad2e1aj6.js:4093-5099 placement
-var SERVING_STATE_KEY = "machine",
-  Jo =
-    typeof {
-      ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
-      PACKAGE_URL: "@anthropic-ai/claude-code",
-      README_URL: "https://code.claude.com/docs/en/overview",
-      VERSION: "2.1.316",
-      FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-      BUILD_TIME: "2026-10-30T23:28:13Z",
-      GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
-      HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
-      DD_SOURCEMAP_GROUP: "default",
-    } < "u"
-      ? {
-          ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
-          PACKAGE_URL: "@anthropic-ai/claude-code",
-          README_URL: "https://code.claude.com/docs/en/overview",
-          VERSION: "2.1.316",
-          FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-          BUILD_TIME: "2026-10-30T23:28:13Z",
-          GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
-          HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
-          DD_SOURCEMAP_GROUP: "default",
-        }.VERSION
-      : "unknown";
+/**
+ * 本机对云会话的服务公告：服务状态键、Claude Code 版本、机器名、进程姿态与常驻批准限额。
+ */
+var SERVING_STATE_KEY = "machine";
+var CLAUDE_CODE_VERSION =
+  typeof {
+    ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
+    PACKAGE_URL: "@anthropic-ai/claude-code",
+    README_URL: "https://code.claude.com/docs/en/overview",
+    VERSION: "2.1.316",
+    FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
+    BUILD_TIME: "2026-10-30T23:28:13Z",
+    GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+    HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
+    DD_SOURCEMAP_GROUP: "default",
+  } !== "undefined"
+    ? {
+        ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
+        PACKAGE_URL: "@anthropic-ai/claude-code",
+        README_URL: "https://code.claude.com/docs/en/overview",
+        VERSION: "2.1.316",
+        FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
+        BUILD_TIME: "2026-10-30T23:28:13Z",
+        GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+        HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
+        DD_SOURCEMAP_GROUP: "default",
+      }.VERSION
+    : "unknown";
 //@ chunk-ad2e1aj6.js:5099-5162 placement
-function Qo(e = hostname) {
-  let n = FCt(firstLineOf(e(), "."), CZo);
-  return _4(n) ? n : SERVING_STATE_KEY;
+function servingMachineName(getHostname = hostname) {
+  let n = deviceSlugOrFallback(firstLineOf(getHostname(), "."), MAX_MACHINE_NAME_CHARS);
+  return isValidMachineSlug(n) ? n : SERVING_STATE_KEY;
 }
+//@ chunk-ad2e1aj6.js:5162-5899 placement
 /**
  * 组装本机对云会话的服务公告：策略、启动目录、项目同步、设备 id、文件夹关系与可同步状态。
  */
-//@ chunk-ad2e1aj6.js:5162-5899 placement
 function buildServingAnnouncement({
-  policy: policy,
-  launchDir: launchDir,
-  epoch: epoch,
-  deviceId: deviceId,
-  getHostname: getHostname,
-  projectSync: projectSync = "unknown",
-  syncRoot: syncRoot,
-  folderRelation: folderRelation,
-  readyToSyncAtAttach: readyToSyncAtAttach = !1,
-  servedToolNames: servedToolNames = [],
-  inventory: inventory,
+  policy,
+  launchDir,
+  epoch,
+  deviceId,
+  getHostname,
+  projectSync = "unknown",
+  syncRoot,
+  folderRelation,
+  readyToSyncAtAttach = false,
+  servedToolNames = [],
+  inventory,
 }) {
-  let notes = policy.notes(),
-    x = servedShellLabel(servedToolNames),
-    Y = attestationMode() === "off" ? [] : ["vouched_calls"],
-    F =
-      policy.capabilities?.includes("standing_approvals") === !0 && isWindowsSandboxPolicyViolation()
-        ? ["standing_offered_rules"]
-        : [],
-    D = withSyncAtAttach([...(policy.capabilities ?? []), ...F, ...Y], readyToSyncAtAttach);
+  let P = policy.notes();
+  let x = servedShellLabel(servedToolNames);
+  let Y = attestationMode() === "off" ? [] : ["vouched_calls"];
+  let F =
+    policy.capabilities?.includes("standing_approvals") === true && isWindowsSandboxPolicyViolation()
+      ? ["standing_offered_rules"]
+      : [];
+  let D = withSyncAtAttach([...(policy.capabilities ?? []), ...F, ...Y], readyToSyncAtAttach);
   return {
-    name: Qo(getHostname),
+    name: servingMachineName(getHostname),
     kind: policy.kind,
     platform: platform(),
     arch: arch(),
-    ...(x !== void 0 && { shell: x }),
+    ...(x !== undefined && {
+      shell: x,
+    }),
     home_dir: homedir(),
     working_dir: launchDir,
     project_sync: projectSync,
-    ...(syncRoot !== void 0 && isSyncingFolder(projectSync) && { sync_root: syncRoot }),
+    ...(syncRoot !== undefined &&
+      isSyncingFolder(projectSync) && {
+        sync_root: syncRoot,
+      }),
     ...folderRelationField(projectSync, folderRelation),
     limits: policy.limits,
-    claude_code_version: Jo,
-    tool_host_interface: dkn,
-    ...(D.length > 0 && { capabilities: D }),
-    ...(notes && { notes: notes }),
-    ...(epoch !== void 0 && { epoch: epoch }),
-    ...(deviceId !== void 0 && { device_id: deviceId }),
-    ...(inventory !== void 0 && { inventory: inventory }),
+    claude_code_version: CLAUDE_CODE_VERSION,
+    tool_host_interface: MINIMAL_INTERFACE_VERSION,
+    ...(D.length > 0 && {
+      capabilities: D,
+    }),
+    ...(P && {
+      notes: P,
+    }),
+    ...(epoch !== undefined && {
+      epoch,
+    }),
+    ...(deviceId !== undefined && {
+      device_id: deviceId,
+    }),
+    ...(inventory !== undefined && {
+      inventory,
+    }),
   };
 }
 //@ chunk-ad2e1aj6.js:5899-5965 placement
@@ -111,11 +133,12 @@ function withSyncAtAttach(e, n) {
 //@ chunk-ad2e1aj6.js:5965-5989 placement
 var SYNC_AT_ATTACH = "sync_at_attach";
 //@ chunk-ad2e1aj6.js:5989-6142 placement
-function servedShellLabel(e) {
-  if (getPlatform() === "windows") return shellCapabilityTag(UOs(e, getResolvedPowerShellEdition()));
-  let n = e.includes(BASH_TOOL_NAME) ? ZSr() : void 0,
-    s = n === void 0 ? "" : basename(n);
-  return s !== "" && s.length <= t7o ? s : void 0;
+function servedShellLabel(servedToolNames) {
+  if (getPlatform() === "windows")
+    return shellCapabilityTag(shellCapabilityFor(servedToolNames, getResolvedPowerShellEdition()));
+  let n = servedToolNames.includes(BASH_TOOL_NAME) ? getResolvedBashShellPath() : undefined;
+  let s = n === undefined ? "" : basename(n);
+  return s !== "" && s.length <= MAX_TRUNCATED_LINES ? s : undefined;
 }
 //@ chunk-ad2e1aj6.js:6142-6197 placement
 function isSyncingFolder(e) {
@@ -123,32 +146,47 @@ function isSyncingFolder(e) {
 }
 //@ chunk-ad2e1aj6.js:6197-6266 placement
 function folderRelationField(e, n) {
-  return e === "off" && n !== void 0 ? { folder_relation: n } : {};
+  return e === "off" && n !== undefined
+    ? {
+        folder_relation: n,
+      }
+    : {};
 }
 //@ chunk-ad2e1aj6.js:6266-6324 placement
-var er = async () => (await warmDeviceSandbox().catch(() => {}), { confined: !0 });
+var readProcessPosture = async () => {
+  await warmDeviceSandbox().catch(() => {});
+  return {
+    confined: true,
+  };
+};
 //@ chunk-ad2e1aj6.js:6324-6467 placement
-function admissionGateFor(e, n) {
+function admissionGateFor(e, options) {
   switch (e.admission) {
     case "none":
       return;
     case "device_binding":
-      return createAdmissionGate({ ...n, readPosture: er });
+      return createAdmissionGate({
+        ...options,
+        readPosture: readProcessPosture,
+      });
     case "device_gate":
-      return createAdmissionGate(n);
+      return createAdmissionGate(options);
   }
 }
 //@ chunk-ad2e1aj6.js:6467-6505 placement
-var SESSION_APPROVAL_LIMITS = 1800000,
-  ut = 300000,
-  Tn = 256,
-  tr = 16;
+/**
+ * 会话常驻批准的限额：有效期 30 分钟、最多 256 条、单批 16 条。
+ */
+var SESSION_APPROVAL_LIMITS = 1800000;
+var SESSION_APPROVAL_STALE_MS = 300000;
+var MAX_SESSION_APPROVALS = 256;
+var MAX_SESSION_APPROVAL_BATCH = 16;
+//@ chunk-5ghnps9r.js:935-1078 placement = isWindowsSandboxPolicyViolation (0.526)
 /**
  * （切分错误，权限 UI）当前设置无错误且沙箱未启用时返回 true，此时可提供常驻权限更新。
  */
-//@ chunk-5ghnps9r.js:935-1078 placement = isWindowsSandboxPolicyViolation (0.526)
 function isWindowsSandboxPolicyViolation() {
-  if (!i()) return !1;
+  if (!isViolinTableFlagOn()) return false;
   try {
     return (
       getSettingsWithErrors_2().errors.length === 0 &&
@@ -156,15 +194,14 @@ function isWindowsSandboxPolicyViolation() {
       !SandboxManager.isSandboxingEnabled()
     );
   } catch {
-    return !1;
+    return false;
   }
 }
-
 export {
-  Tn,
-  tr,
+  MAX_SESSION_APPROVALS,
+  MAX_SESSION_APPROVAL_BATCH,
   isWindowsSandboxPolicyViolation,
-  ut,
+  SESSION_APPROVAL_STALE_MS,
   SESSION_APPROVAL_LIMITS,
   buildServingAnnouncement,
   admissionGateFor,

@@ -8,70 +8,86 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-spjgqa4y.js:50618-52033 cjs-fingerprint
-var we = x(function (Ls) {
-  function Rn(t) {
-    if (typeof t === "number") t = t.toString();
-    if (typeof t !== "string") throw Error("Color should be defined as hex string");
-    let parts = t.slice().replace("#", "").split("");
-    if (parts.length < 3 || parts.length === 5 || parts.length > 8) throw Error("Invalid hex color: " + t);
-    if (parts.length === 3 || parts.length === 4)
-      parts = Array.prototype.concat.apply(
+var require_utils_2 = x(function (cjsExports) {
+  function hex2rgba(hex) {
+    if (typeof hex === "number") hex = hex.toString();
+    if (typeof hex !== "string") throw Error("Color should be defined as hex string");
+    let hexCode = hex.slice().replace("#", "").split("");
+    if (hexCode.length < 3 || hexCode.length === 5 || hexCode.length > 8)
+      throw Error("Invalid hex color: " + hex);
+    if (hexCode.length === 3 || hexCode.length === 4)
+      hexCode = Array.prototype.concat.apply(
         [],
-        parts.map(function (n) {
-          return [n, n];
+        hexCode.map(function (c) {
+          return [c, c];
         }),
       );
-    if (parts.length === 6) parts.push("F", "F");
-    let r = parseInt(parts.join(""), 16);
+    if (hexCode.length === 6) hexCode.push("F", "F");
+    let hexValue = parseInt(hexCode.join(""), 16);
     return {
-      r: (r >> 24) & 255,
-      g: (r >> 16) & 255,
-      b: (r >> 8) & 255,
-      a: r & 255,
-      hex: "#" + parts.slice(0, 6).join(""),
+      r: (hexValue >> 24) & 255,
+      g: (hexValue >> 16) & 255,
+      b: (hexValue >> 8) & 255,
+      a: hexValue & 255,
+      hex: "#" + hexCode.slice(0, 6).join(""),
     };
   }
-  Ls.getOptions = function (e) {
-    if (!e) e = {};
-    if (!e.color) e.color = {};
-    let r = typeof e.margin > "u" || e.margin === null || e.margin < 0 ? 4 : e.margin,
-      n = e.width && e.width >= 21 ? e.width : void 0,
-      i = e.scale || 4;
+  cjsExports.getOptions = function (options) {
+    if (!options) options = {};
+    if (!options.color) options.color = {};
+    let margin =
+      typeof options.margin === "undefined" || options.margin === null || options.margin < 0
+        ? 4
+        : options.margin;
+    let width = options.width && options.width >= 21 ? options.width : undefined;
+    let scale = options.scale || 4;
     return {
-      width: n,
-      scale: n ? 4 : i,
-      margin: r,
-      color: { dark: Rn(e.color.dark || "#000000ff"), light: Rn(e.color.light || "#ffffffff") },
-      type: e.type,
-      rendererOpts: e.rendererOpts || {},
+      width,
+      scale: width ? 4 : scale,
+      margin,
+      color: {
+        dark: hex2rgba(options.color.dark || "#000000ff"),
+        light: hex2rgba(options.color.light || "#ffffffff"),
+      },
+      type: options.type,
+      rendererOpts: options.rendererOpts || {},
     };
   };
-  Ls.getScale = function (e, r) {
-    return r.width && r.width >= e + r.margin * 2 ? r.width / (e + r.margin * 2) : r.scale;
+  cjsExports.getScale = function (qrSize, opts) {
+    return opts.width && opts.width >= qrSize + opts.margin * 2
+      ? opts.width / (qrSize + opts.margin * 2)
+      : opts.scale;
   };
-  Ls.getImageWidth = function (e, r) {
-    let scale = Ls.getScale(e, r);
-    return Math.floor((e + r.margin * 2) * scale);
+  cjsExports.getImageWidth = function (qrSize, opts) {
+    let scale = cjsExports.getScale(qrSize, opts);
+    return Math.floor((qrSize + opts.margin * 2) * scale);
   };
-  Ls.qrToImageData = function (e, r, n) {
-    let size = r.modules.size,
-      o = r.modules.data,
-      scale = Ls.getScale(size, n),
-      floored = Math.floor((size + n.margin * 2) * scale),
-      u = n.margin * scale,
-      f = [n.color.light, n.color.dark];
-    for (let a = 0; a < floored; a++)
-      for (let h = 0; h < floored; h++) {
-        let c = (a * floored + h) * 4,
-          light = n.color.light;
-        if (a >= u && h >= u && a < floored - u && h < floored - u) {
-          let floored = Math.floor((a - u) / scale),
-            floored_2 = Math.floor((h - u) / scale);
-          light = f[o[floored * size + floored_2] ? 1 : 0];
+  cjsExports.qrToImageData = function (imgData, qr, opts) {
+    let size = qr.modules.size;
+    let data = qr.modules.data;
+    let scale = cjsExports.getScale(size, opts);
+    let symbolSize = Math.floor((size + opts.margin * 2) * scale);
+    let scaledMargin = opts.margin * scale;
+    let palette = [opts.color.light, opts.color.dark];
+    for (let i = 0; i < symbolSize; i++)
+      for (let j = 0; j < symbolSize; j++) {
+        let posDst = (i * symbolSize + j) * 4;
+        let pxColor = opts.color.light;
+        if (
+          i >= scaledMargin &&
+          j >= scaledMargin &&
+          i < symbolSize - scaledMargin &&
+          j < symbolSize - scaledMargin
+        ) {
+          let iSrc = Math.floor((i - scaledMargin) / scale);
+          let jSrc = Math.floor((j - scaledMargin) / scale);
+          pxColor = palette[data[iSrc * size + jSrc] ? 1 : 0];
         }
-        ((e[c++] = light.r), (e[c++] = light.g), (e[c++] = light.b), (e[c] = light.a));
+        imgData[posDst++] = pxColor.r;
+        imgData[posDst++] = pxColor.g;
+        imgData[posDst++] = pxColor.b;
+        imgData[posDst] = pxColor.a;
       }
   };
 });
-
-export { we };
+export { require_utils_2 };

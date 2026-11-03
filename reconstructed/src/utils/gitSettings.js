@@ -14,8 +14,7 @@ import { getInitialSettings_2 } from "./settings/settings.js";
 //@ chunk-e6aww6q8.js:1355662-1355784 fingerprint = shouldIncludeGitInstructions (1)
 function shouldIncludeGitInstructions() {
   let envVal = env.CLAUDE_CODE_DISABLE_GIT_INSTRUCTIONS;
-  if (envVal !== void 0) return !envVal;
-  return getInitialSettings_2().includeGitInstructions ?? !0;
+  if (envVal !== undefined) return !envVal;
+  return getInitialSettings_2().includeGitInstructions ?? true;
 }
-
 export { shouldIncludeGitInstructions };

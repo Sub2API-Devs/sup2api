@@ -8,40 +8,10 @@
  * pieces: chunk-tyg7f3ek.js (25)
  * attribution: placement 25
  */
-import {
-  randomUUID,
-  randomUUID as randomUUID_2,
-  randomUUID as randomUUID_3,
-  randomUUID as randomUUID_4,
-  randomUUID as randomUUID_5,
-  randomUUID as randomUUID_6,
-  randomUUID as randomUUID_7,
-  randomUUID as randomUUID_8,
-  randomUUID as randomUUID_9,
-  randomUUID as randomUUID_10,
-  randomUUID as randomUUID_11,
-  randomUUID as randomUUID_12,
-  randomUUID as randomUUID_13,
-  randomUUID as randomUUID_14,
-  randomUUID as randomUUID_15,
-  randomUUID as randomUUID_16,
-  randomUUID as randomUUID_17,
-  randomUUID as randomUUID_18,
-  randomUUID as randomUUID_19,
-  randomUUID as randomUUID_20,
-  randomUUID as randomUUID_21,
-} from "crypto";
+import { randomUUID } from "crypto";
 import { AsyncLocalStorage } from "async_hooks";
-import {
-  join,
-  join as join_2,
-  join as join_3,
-  join as join_4,
-  join as join_5,
-  join as join_6,
-  join as join_7,
-} from "path";
-import { parseTaskNumber, taskToolCallsInTranscript, qu } from "./turnStartChecks.js";
+import { join } from "path";
+import { parseTaskNumber, taskToolCallsInTranscript, MAX_TASK_NUMBER } from "./turnStartChecks.js";
 import { trackTaskToolUse, resolvePendingTaskCreate } from "../../utils/task/framework.js";
 import {
   mergeTaskMetadata,
@@ -60,7 +30,7 @@ import {
 import { logForDebugging } from "../../utils/debug.js";
 import { isCompactBoundaryMessage } from "../../services/projects/threadRows.js";
 import { DoctorLazy } from "../handlers/util.js";
-import { u, A, o, pe, oe, E } from "../../../vendor/zod/v4/classic/schemas.js";
+import { u, array, string, record, unknown, E } from "../../../vendor/zod/v4/classic/schemas.js";
 import { TaskStatusSchema } from "../../tools/TaskListTool/TaskListTool.js";
 import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
 import { logFeatureSad, logFeatureOk, logFeatureBad } from "../../services/analytics/featureTelemetry.js";
@@ -83,7 +53,7 @@ import { removeTeammateFromTeamFile } from "../../utils/swarm/teamHelpers.js";
 import { filterMailboxThroughReceiveHooks } from "../../utils/swarm/teammateMailbox.js";
 import { clearOwedIdleNotificationsOnShutdown } from "../../utils/inProcessTeammateHelpers.js";
 import { mainAgentId, getSessionId } from "../../bootstrap/state.js";
-import { Sx } from "../../utils/tempDirRealpaths.js";
+import { sessionTempDirRealpath } from "../../utils/tempDirRealpaths.js";
 import { getActiveMessageQueue } from "../../query/presenceCheck.js";
 import { errorMessage } from "../../utils/errors.js";
 import { ensurePlacedByNameRead } from "../../utils/filePersistence/placedByName.js";
@@ -92,92 +62,132 @@ import { logForDiagnosticsNoPII } from "../../utils/diagLogs.js";
 
 //@ chunk-tyg7f3ek.js:216137-216339 placement
 function rebuildTaskListWithRestartFallback(e) {
-  let n = compactedTaskListIds(e),
-    r = rebuildTaskListFromTranscript(e, n);
+  let n = compactedTaskListIds(e);
+  let r = rebuildTaskListFromTranscript(e, n);
   if (r.carriedList !== "dropped_on_restart") return r;
-  let s = rebuildTaskListFromTranscript(e, { fate: "none" });
-  return { ...s, highestId: Math.max(s.highestId, r.highestId), carriedList: "dropped_on_restart" };
+  let s = rebuildTaskListFromTranscript(e, {
+    fate: "none",
+  });
+  return {
+    ...s,
+    highestId: Math.max(s.highestId, r.highestId),
+    carriedList: "dropped_on_restart",
+  };
 }
+//@ chunk-tyg7f3ek.js:216339-219195 placement
 /**
  * 从转录重建任务列表：处理 create/update、压缩标记里的任务快照与 blocks/blockedBy 关系。
  */
-//@ chunk-tyg7f3ek.js:216339-219195 placement
 function rebuildTaskListFromTranscript(e, n) {
-  let r = { pendingCreates: new Map(), tasks: new Map() },
-    s = new Map(),
-    h = new HighestResponseTracker(),
-    y,
-    S = [],
-    R = new Map(),
-    w = (Z, re) => {
-      let Ae = R.get(Z)?.blocks,
-        Ue = R.get(re)?.blockedBy;
-      if (r.tasks.has(Z) && r.tasks.has(re) && Ae && Ue) {
-        if (!Ae.includes(re)) Ae.push(re);
-        if (!Ue.includes(Z)) Ue.push(Z);
-      }
-    },
-    P = 0,
-    L = (Z) => {
-      P = Math.max(P, parseTaskNumber(Z) ?? 0);
-    };
+  let r = {
+    pendingCreates: new Map(),
+    tasks: new Map(),
+  };
+  let s = new Map();
+  let h = new HighestResponseTracker();
+  let y;
+  let S = [];
+  let R = new Map();
+  let w = (Z, re) => {
+    let blocks = R.get(Z)?.blocks;
+    let blockedBy = R.get(re)?.blockedBy;
+    if (r.tasks.has(Z) && r.tasks.has(re) && blocks && blockedBy) {
+      if (!blocks.includes(re)) blocks.push(re);
+      if (!blockedBy.includes(Z)) blockedBy.push(Z);
+    }
+  };
+  let P = 0;
+  let L = (Z) => {
+    P = Math.max(P, parseTaskNumber(Z) ?? 0);
+  };
   if (n.fate === "used" || n.fate === "highest_id_only") P = n.highestId;
-  let q = n.fate === "used" ? n.highestId : 0;
+  let highestId = n.fate === "used" ? n.highestId : 0;
   if (n.fate === "used")
-    for (let task of n.tasks)
-      (r.tasks.set(task.id, {
+    for (let task of n.tasks) {
+      r.tasks.set(task.id, {
         content: task.subject,
         activeForm: task.activeForm ?? task.subject,
         status: task.status,
-      }),
-        s.set(task.id, dy),
-        R.set(task.id, {
-          description: task.description ?? "",
-          owner: task.owner,
-          metadata: task.metadata,
-          blocks: [...(task.blocks ?? [])],
-          blockedBy: [...(task.blockedBy ?? [])],
-        }));
-  for (let Z of taskToolCallsInTranscript(e, n.fate === "used" ? n.isOlderRow : void 0)) {
-    if ((L(Z.taskId), Z.answeredEarlier)) continue;
+      });
+      s.set(task.id, TASK_CARRIED_BY_MARKER);
+      R.set(task.id, {
+        description: task.description ?? "",
+        owner: task.owner,
+        metadata: task.metadata,
+        blocks: [...(task.blocks ?? [])],
+        blockedBy: [...(task.blockedBy ?? [])],
+      });
+    }
+  for (let Z of taskToolCallsInTranscript(e, n.fate === "used" ? n.isOlderRow : undefined)) {
+    L(Z.taskId);
+    if (Z.answeredEarlier) continue;
     if (Z.kind === "update") {
-      if ((trackTaskToolUse(r, Z.use), !s.has(Z.taskId))) (s.set(Z.taskId, void 0), S.push(Z.taskId));
-      let { description: description, owner: owner, metadata: metadata } = Z.named,
-        ie = R.get(Z.taskId) ?? { description: "", blocks: [], blockedBy: [] };
+      trackTaskToolUse(r, Z.use);
+      if (!s.has(Z.taskId)) {
+        s.set(Z.taskId, undefined);
+        S.push(Z.taskId);
+      }
+      let { description, owner, metadata } = Z.named;
+      let ie = R.get(Z.taskId) ?? {
+        description: "",
+        blocks: [],
+        blockedBy: [],
+      };
       R.set(Z.taskId, {
         ...ie,
-        ...(description !== void 0 && { description: description }),
-        ...(owner !== void 0 && { owner: owner }),
-        ...(metadata !== void 0 && { metadata: mergeTaskMetadata(ie.metadata, metadata) }),
+        ...(description !== undefined && {
+          description,
+        }),
+        ...(owner !== undefined && {
+          owner,
+        }),
+        ...(metadata !== undefined && {
+          metadata: mergeTaskMetadata(ie.metadata, metadata),
+        }),
       });
       for (let Se of Z.named.addBlocks ?? []) w(Z.taskId, Se);
       for (let Se of Z.named.addBlockedBy ?? []) w(Se, Z.taskId);
       continue;
     }
-    let re = parseTaskNumber(Z.taskId);
-    if (Z.askedEarlier && s.get(Z.taskId) === dy && r.tasks.get(Z.taskId)?.content === Z.named.subject)
-      continue;
-    if (re !== void 0 && ((n.fate === "used" && re <= q) || re <= h.highestByOthersThan(Z.response))) {
-      if (n.fate === "used")
-        return (
-          logForDebugging(
-            `[Tasks] rebuild: a create after the compaction marker got id ${Z.taskId}, no higher than one already given out, so the id counter restarted; dropping the marker's list (highest id ${q})`,
-          ),
-          { tasks: [], highestId: q, olderTasks: 0, carriedTasks: 0, carriedList: "dropped_on_restart" }
-        );
-      for (let Ue of Z.response === y ? S : s.keys())
-        if (s.get(Ue) !== Z.response) (s.delete(Ue), r.tasks.delete(Ue), R.delete(Ue));
-      (h.keepOnly(Z.response), (y = Z.response), (S = []));
-    }
-    if (s.get(Z.taskId) === void 0) r.tasks.delete(Z.taskId);
+    let taskNumber = parseTaskNumber(Z.taskId);
     if (
-      (trackTaskToolUse(r, Z.use),
-      resolvePendingTaskCreate(r, Z.result),
-      s.set(Z.taskId, Z.response),
-      S.push(Z.taskId),
-      re !== void 0 && Z.response !== dy)
+      Z.askedEarlier &&
+      s.get(Z.taskId) === TASK_CARRIED_BY_MARKER &&
+      r.tasks.get(Z.taskId)?.content === Z.named.subject
     )
-      h.add(Z.response, re);
+      continue;
+    if (
+      taskNumber !== undefined &&
+      ((n.fate === "used" && taskNumber <= highestId) || taskNumber <= h.highestByOthersThan(Z.response))
+    ) {
+      if (n.fate === "used") {
+        logForDebugging(
+          `[Tasks] rebuild: a create after the compaction marker got id ${Z.taskId}, no higher than one already given out, so the id counter restarted; dropping the marker's list (highest id ${highestId})`,
+        );
+        return {
+          tasks: [],
+          highestId,
+          olderTasks: 0,
+          carriedTasks: 0,
+          carriedList: "dropped_on_restart",
+        };
+      }
+      for (let Ue of Z.response === y ? S : s.keys())
+        if (s.get(Ue) !== Z.response) {
+          s.delete(Ue);
+          r.tasks.delete(Ue);
+          R.delete(Ue);
+        }
+      h.keepOnly(Z.response);
+      y = Z.response;
+      S = [];
+    }
+    if (s.get(Z.taskId) === undefined) r.tasks.delete(Z.taskId);
+    trackTaskToolUse(r, Z.use);
+    resolvePendingTaskCreate(r, Z.result);
+    s.set(Z.taskId, Z.response);
+    S.push(Z.taskId);
+    if (taskNumber !== undefined && Z.response !== TASK_CARRIED_BY_MARKER) h.add(Z.response, taskNumber);
     R.set(Z.taskId, {
       description: Z.named.description ?? "",
       metadata: Z.named.metadata,
@@ -187,24 +197,28 @@ function rebuildTaskListFromTranscript(e, n) {
   }
   let x = [];
   for (let [Z, re] of r.tasks)
-    if (s.get(Z) !== void 0 && parseTaskNumber(Z) !== void 0) {
+    if (s.get(Z) !== undefined && parseTaskNumber(Z) !== undefined) {
       let Ae = R.get(Z);
       x.push({
         id: Z,
         subject: re.content,
         description: Ae?.description ?? "",
         activeForm: re.activeForm,
-        ...(Ae?.owner !== void 0 && { owner: Ae.owner }),
+        ...(Ae?.owner !== undefined && {
+          owner: Ae.owner,
+        }),
         status: re.status,
         blocks: Ae?.blocks ?? [],
         blockedBy: Ae?.blockedBy ?? [],
-        ...(Ae?.metadata !== void 0 && { metadata: Ae.metadata }),
+        ...(Ae?.metadata !== undefined && {
+          metadata: Ae.metadata,
+        }),
       });
     }
   let G = new Map(x.map((Z) => [Z.id, Z]));
   for (let Z of x) Z.blocks = Z.blocks.filter((block) => G.get(block)?.blockedBy.includes(Z.id));
   for (let Z of x) Z.blockedBy = Z.blockedBy.filter((re) => G.get(re)?.blocks.includes(Z.id));
-  for (let Z of r.tasks.keys()) L(Z);
+  for (let key of r.tasks.keys()) L(key);
   return {
     tasks: x,
     highestId: P,
@@ -214,7 +228,7 @@ function rebuildTaskListFromTranscript(e, n) {
   };
 }
 //@ chunk-tyg7f3ek.js:219195-219226 placement
-var dy = "carried by the marker";
+var TASK_CARRIED_BY_MARKER = "carried by the marker";
 //@ chunk-tyg7f3ek.js:219226-219728 placement
 class HighestResponseTracker {
   byResponse = new Map();
@@ -223,9 +237,11 @@ class HighestResponseTracker {
   runnerUp = -1 / 0;
   add(e, n) {
     if (n <= (this.byResponse.get(e) ?? -1 / 0)) return;
-    if ((this.byResponse.set(e, n), n > this.highest)) {
+    this.byResponse.set(e, n);
+    if (n > this.highest) {
       if (this.leader !== e) this.runnerUp = this.highest;
-      ((this.leader = e), (this.highest = n));
+      this.leader = e;
+      this.highest = n;
     } else this.runnerUp = Math.max(this.runnerUp, n);
   }
   highestByOthersThan(e) {
@@ -233,203 +249,244 @@ class HighestResponseTracker {
   }
   keepOnly(e) {
     let n = this.byResponse.get(e);
-    if (
-      (this.byResponse.clear(),
-      (this.leader = void 0),
-      (this.highest = -1 / 0),
-      (this.runnerUp = -1 / 0),
-      n !== void 0)
-    )
-      this.add(e, n);
+    this.byResponse.clear();
+    this.leader = undefined;
+    this.highest = -1 / 0;
+    this.runnerUp = -1 / 0;
+    if (n !== undefined) this.add(e, n);
   }
 }
 //@ chunk-tyg7f3ek.js:219728-219799 placement
-function oP(e) {
+function lowercaseUuidOrEmpty(e) {
   return typeof e.uuid === "string" ? e.uuid.toLowerCase() : "";
 }
 //@ chunk-tyg7f3ek.js:219799-219970 placement
 function compactPreservedUuids(e) {
-  let safeParse = compactTaskListSchemas().safeParse(e.compactMetadata?.preservedMessages);
-  return safeParse.success
-    ? [...(safeParse.data?.uuids ?? []), ...(safeParse.data?.allUuids ?? [])].map((r) => r.toLowerCase())
-    : void 0;
+  let n = compactTaskListSchemas().safeParse(e.compactMetadata?.preservedMessages);
+  return n.success
+    ? [...(n.data?.uuids ?? []), ...(n.data?.allUuids ?? [])].map((r) => r.toLowerCase())
+    : undefined;
 }
 //@ chunk-tyg7f3ek.js:219970-220866 placement
 function compactedTaskListIds(e) {
-  let n = new Set(),
-    r = !0,
-    s = !1;
+  let n = new Set();
+  let r = true;
+  let s = false;
   for (let q of e)
     if (isCompactBoundaryMessage(q)) {
-      s ||= q.compactMetadata?.preCompactTaskList !== void 0;
+      s ||= q.compactMetadata?.preCompactTaskList !== undefined;
       let x = compactPreservedUuids(q);
-      r &&= x !== void 0;
+      r &&= x !== undefined;
       for (let G of x ?? []) n.add(G);
     }
-  let lastIndex = e.findLastIndex((q) => isCompactBoundaryMessage(q) && !n.has(oP(q))),
-    y = e[lastIndex];
-  if (y === void 0 || !isCompactBoundaryMessage(y) || y.compactMetadata?.preCompactTaskList === void 0)
-    return { fate: lastIndex === -1 && s ? "malformed" : "none" };
-  let safeParse = zN().safeParse(y.compactMetadata.preCompactTaskList),
-    R = compactPreservedUuids(y);
-  if (!safeParse.success || R === void 0 || !r)
-    return (
-      logForDebugging(
-        `[Tasks] rebuild: ${safeParse.success ? "a compaction marker's list of kept rows" : "the compaction marker's task list"} is malformed; the marker's task list is ignored and the list is rebuilt from the task calls alone`,
-      ),
-      { fate: "malformed" }
+  let lastIndex = e.findLastIndex((q) => isCompactBoundaryMessage(q) && !n.has(lowercaseUuidOrEmpty(q)));
+  let y = e[lastIndex];
+  if (y === undefined || !isCompactBoundaryMessage(y) || y.compactMetadata?.preCompactTaskList === undefined)
+    return {
+      fate: lastIndex === -1 && s ? "malformed" : "none",
+    };
+  let S = compactTaskListSchema().safeParse(y.compactMetadata.preCompactTaskList);
+  let R = compactPreservedUuids(y);
+  if (!S.success || R === undefined || !r) {
+    logForDebugging(
+      `[Tasks] rebuild: ${S.success ? "a compaction marker's list of kept rows" : "the compaction marker's task list"} is malformed; the marker's task list is ignored and the list is rebuilt from the task calls alone`,
     );
-  let { tasks: tasks, highestId: highestId } = safeParse.data;
-  if (tasks === void 0) return { fate: "highest_id_only", highestId: highestId };
+    return {
+      fate: "malformed",
+    };
+  }
+  let { tasks, highestId } = S.data;
+  if (tasks === undefined)
+    return {
+      fate: "highest_id_only",
+      highestId,
+    };
   let L = new Set(R);
   return {
     fate: "used",
-    tasks: tasks,
-    highestId: tasks.reduce((q, x) => Math.max(q, Number(x.id)), highestId),
-    isOlderRow: (q, x) => x < lastIndex || L.has(oP(q)),
+    tasks,
+    highestId: tasks.reduce((acc, task) => Math.max(acc, Number(task.id)), highestId),
+    isOlderRow: (q, x) => x < lastIndex || L.has(lowercaseUuidOrEmpty(q)),
   };
 }
 //@ chunk-tyg7f3ek.js:220866-221294 placement
-var compactTaskListSchemas = DoctorLazy(() => u({ uuids: A(o()), allUuids: A(o()).optional() }).optional()),
-  zN = DoctorLazy(() =>
-    u({
-      tasks: A(
-        u({
-          id: o().refine((e) => isCanonicalTaskId(e) && parseTaskNumber(e) !== void 0),
-          subject: o(),
-          description: o().optional(),
-          activeForm: o().optional(),
-          status: TaskStatusSchema(),
-          owner: o().optional(),
-          blocks: A(o()).optional(),
-          blockedBy: A(o()).optional(),
-          metadata: pe(o(), oe()).optional(),
-        }),
-      )
-        .refine((e) => new Set(e.map((n) => n.id)).size === e.length)
-        .optional(),
-      highestId: E().int().min(0).max(qu),
-    }),
-  );
+/**
+ * 压缩时携带的任务清单 schema：uuids（及可选 allUuids）与任务数组（id/标题/描述等）。
+ */
+var compactTaskListSchemas = DoctorLazy(() =>
+  u({
+    uuids: array(string()),
+    allUuids: array(string()).optional(),
+  }).optional(),
+);
+var compactTaskListSchema = DoctorLazy(() =>
+  u({
+    tasks: array(
+      u({
+        id: string().refine((id) => isCanonicalTaskId(id) && parseTaskNumber(id) !== undefined),
+        subject: string(),
+        description: string().optional(),
+        activeForm: string().optional(),
+        status: TaskStatusSchema(),
+        owner: string().optional(),
+        blocks: array(string()).optional(),
+        blockedBy: array(string()).optional(),
+        metadata: record(string(), unknown()).optional(),
+      }),
+    )
+      .refine((e) => new Set(e.map((n) => n.id)).size === e.length)
+      .optional(),
+    highestId: E().int().min(0).max(MAX_TASK_NUMBER),
+  }),
+);
 //@ chunk-tyg7f3ek.js:221294-221318 placement
 var TASK_LIST_HANDOFF_STATE = new SessionRootSlot(() => ({}));
 //@ chunk-tyg7f3ek.js:221318-223078 placement
-async function applyTaskListHandoff(e, n) {
-  let r = getTaskListId(),
-    s = { creates: 0, updates: 0, skipped: 0, missing: 0, conflicts: 0, failed: 0 },
-    h = 0,
-    y = [...taskToolCallsInTranscript(e)],
-    S = new Map();
-  for (let { kind: kind, taskId: taskId, named: named } of y) {
+async function applyTaskListHandoff(e, store) {
+  let taskListId = getTaskListId();
+  let s = {
+    creates: 0,
+    updates: 0,
+    skipped: 0,
+    missing: 0,
+    conflicts: 0,
+    failed: 0,
+  };
+  let mark = 0;
+  let y = [...taskToolCallsInTranscript(e)];
+  let S = new Map();
+  for (let { kind, taskId, named } of y) {
     let q = kind === "create" ? (named.subject ?? "") : named.subject;
-    if (q !== void 0) S.set(taskId, (S.get(taskId) ?? new Set()).add(q));
+    if (q !== undefined) S.set(taskId, (S.get(taskId) ?? new Set()).add(q));
   }
   let R = new Set();
-  for (let { kind: kind, taskId: taskId, named: named } of y) {
-    let q = parseTaskNumber(taskId);
-    if (q === void 0) {
+  for (let { kind, taskId, named } of y) {
+    let taskNumber = parseTaskNumber(taskId);
+    if (taskNumber === undefined) {
       s.skipped++;
       continue;
     }
-    if (((h = Math.max(h, q)), kind === "update" && R.has(taskId))) {
+    mark = Math.max(mark, taskNumber);
+    if (kind === "update" && R.has(taskId)) {
       s.conflicts++;
       continue;
     }
     try {
       if (kind === "create") {
-        let ce = named.subject ?? "";
+        let subject = named.subject ?? "";
         if (
           await writeTaskUnderId(
-            r,
+            taskListId,
             {
               id: taskId,
-              subject: ce,
+              subject,
               description: named.description ?? "",
-              ...(named.activeForm !== void 0 && { activeForm: named.activeForm }),
+              ...(named.activeForm !== undefined && {
+                activeForm: named.activeForm,
+              }),
               status: "pending",
               blocks: [],
               blockedBy: [],
-              ...(named.metadata !== void 0 && { metadata: named.metadata }),
+              ...(named.metadata !== undefined && {
+                metadata: named.metadata,
+              }),
             },
-            n,
+            store,
           )
         )
           s.creates++;
         else {
-          let ie = await getTask(r, taskId, n),
-            Se = ie !== null && S.get(taskId)?.has(ie.subject) === !0;
+          let task = await getTask(taskListId, taskId, store);
+          let Se = task !== null && S.get(taskId)?.has(task.subject) === true;
           if (!Se) R.add(taskId);
           s[Se ? "skipped" : "conflicts"]++;
         }
         continue;
       }
       if (named.status === "deleted") {
-        if (await deleteTask(r, taskId, n)) s.updates++;
+        if (await deleteTask(taskListId, taskId, store)) s.updates++;
         else {
-          let ce = await getTask(r, taskId, n);
-          s[ce === null ? "skipped" : "failed"]++;
+          let task = await getTask(taskListId, taskId, store);
+          s[task === null ? "skipped" : "failed"]++;
         }
         continue;
       }
-      let safeParse = TaskStatusSchema().safeParse(named.status),
-        G = {
-          ...(named.subject !== void 0 && { subject: named.subject }),
-          ...(named.description !== void 0 && { description: named.description }),
-          ...(named.activeForm !== void 0 && { activeForm: named.activeForm }),
-          ...(safeParse.success && { status: safeParse.data }),
-          ...(named.owner !== void 0 && { owner: named.owner }),
-          ...(named.metadata !== void 0 && {
-            metadata: mergeTaskMetadata((await getTask(r, taskId, n))?.metadata, named.metadata),
-          }),
-        },
-        Z = (ce) => !R.has(ce),
-        filtered = (named.addBlocks ?? []).filter(Z),
-        filtered_2 = (named.addBlockedBy ?? []).filter(Z);
+      let x = TaskStatusSchema().safeParse(named.status);
+      let G = {
+        ...(named.subject !== undefined && {
+          subject: named.subject,
+        }),
+        ...(named.description !== undefined && {
+          description: named.description,
+        }),
+        ...(named.activeForm !== undefined && {
+          activeForm: named.activeForm,
+        }),
+        ...(x.success && {
+          status: x.data,
+        }),
+        ...(named.owner !== undefined && {
+          owner: named.owner,
+        }),
+        ...(named.metadata !== undefined && {
+          metadata: mergeTaskMetadata((await getTask(taskListId, taskId, store))?.metadata, named.metadata),
+        }),
+      };
+      let Z = (ce) => !R.has(ce);
+      let filtered = (named.addBlocks ?? []).filter(Z);
+      let filtered_2 = (named.addBlockedBy ?? []).filter(Z);
       if (Object.keys(G).length === 0 && filtered.length + filtered_2.length === 0) {
         s.skipped++;
         continue;
       }
-      let Ue = await updateTask(r, taskId, G, n);
+      let Ue = await updateTask(taskListId, taskId, G, store);
       if (Ue === null)
         logForDebugging(`[Tasks] hand-off apply: task ${taskId} is not in the list; its update is skipped`);
-      for (let ce of filtered) await blockTask(r, taskId, ce, n);
-      for (let ce of filtered_2) await blockTask(r, ce, taskId, n);
+      for (let ce of filtered) await blockTask(taskListId, taskId, ce, store);
+      for (let ce of filtered_2) await blockTask(taskListId, ce, taskId, store);
       s[Ue === null ? "missing" : "updates"]++;
     } catch (error) {
-      (s.failed++, (s.error ??= error));
+      s.failed++;
+      s.error ??= error;
     }
   }
-  if (h > 0)
+  if (mark > 0)
     try {
-      await raiseTaskIdMark(r, h, n);
+      await raiseTaskIdMark(taskListId, mark, store);
     } catch (error) {
-      (s.failed++, (s.error ??= error));
+      s.failed++;
+      s.error ??= error;
     }
   return s;
 }
 //@ chunk-tyg7f3ek.js:223078-223424 placement
 async function applyTaskListHandoffIfHonoured(e, n, r) {
   try {
-    if (TASK_LIST_HANDOFF_STATE.peek(e)?.honoured !== !0) return;
-    let { error: error, ...h } = await applyTaskListHandoff(n, r);
+    if (TASK_LIST_HANDOFF_STATE.peek(e)?.honoured !== true) return;
+    let { error, ...h } = await applyTaskListHandoff(n, r);
     if (h.failed + h.missing + h.conflicts > 0) {
-      if ((logFeatureSad("task_list_handoff_apply", "handoff_apply_partial", h), error !== void 0))
-        logError(error);
+      logFeatureSad("task_list_handoff_apply", "handoff_apply_partial", h);
+      if (error !== undefined) logError(error);
     } else if (h.creates + h.updates + h.skipped > 0) logFeatureOk("task_list_handoff_apply", h);
   } catch (error) {
-    (logFeatureBad("task_list_handoff_apply", "handoff_apply_failed"), logError(error));
+    logFeatureBad("task_list_handoff_apply", "handoff_apply_failed");
+    logError(error);
   }
 }
 //@ chunk-tyg7f3ek.js:223424-223689 placement
-function createTaskListCatchUp(e, n, r, s) {
-  if (TASK_LIST_HANDOFF_STATE.peek(e)?.honoured !== !0)
-    return { beforeRun: async () => {}, catchUp: async () => {} };
-  let h = new Set(r.map((w) => w.uuid)),
-    any = n.some((w) => !h.has(w.uuid)),
-    S = !1,
-    R = async () => {
-      ((S = !0), await applyTaskListHandoffIfHonoured(e, n, s));
+function createTaskListCatchUp(session, messages, mutableMessages, storageV5) {
+  if (TASK_LIST_HANDOFF_STATE.peek(session)?.honoured !== true)
+    return {
+      beforeRun: async () => {},
+      catchUp: async () => {},
     };
+  let h = new Set(mutableMessages.map((w) => w.uuid));
+  let any = messages.some((w) => !h.has(w.uuid));
+  let S = false;
+  let R = async () => {
+    S = true;
+    await applyTaskListHandoffIfHonoured(session, messages, storageV5);
+  };
   return {
     beforeRun: R,
     catchUp: async (w) => {
@@ -439,105 +496,117 @@ function createTaskListCatchUp(e, n, r, s) {
 }
 //@ chunk-tyg7f3ek.js:223689-223794 placement
 var taskListRestoreSchema = DoctorLazy(() => {
-  let e = E()
-    .int()
-    .min(0)
-    .max(qu)
-    .optional()
-    .catch(void 0);
-  return u({ count: e, highest_id: e });
+  let e = E().int().min(0).max(MAX_TASK_NUMBER).optional().catch(undefined);
+  return u({
+    count: e,
+    highest_id: e,
+  });
 });
 //@ chunk-tyg7f3ek.js:223794-223972 placement
 function readTaskListRestoreHint(e) {
-  if (e === null || e.readFailed === !0) return;
-  let safeParse = taskListRestoreSchema().safeParse(e.external?.task_list_restore);
-  return safeParse.success ? { count: safeParse.data.count, highestId: safeParse.data.highest_id } : void 0;
+  if (e === null || e.readFailed === true) return;
+  let n = taskListRestoreSchema().safeParse(e.external?.task_list_restore);
+  return n.success
+    ? {
+        count: n.data.count,
+        highestId: n.data.highest_id,
+      }
+    : undefined;
 }
+//@ chunk-tyg7f3ek.js:223972-225451 placement
 /**
  * 会话启动时从转录恢复任务列表（带压缩前快照与延续任务）。
  */
-//@ chunk-tyg7f3ek.js:223972-225451 placement
-async function restoreTaskListAtBoot(e, n, r, s) {
-  let h = readTaskListRestoreHint(await r);
-  if (h === void 0) return;
-  let of = TASK_LIST_HANDOFF_STATE.of(e);
-  of.request = h;
+async function restoreTaskListAtBoot(e, messages, restoredWorkerState, store) {
+  let taskListRestoreHint = readTaskListRestoreHint(await restoredWorkerState);
+  if (taskListRestoreHint === undefined) return;
+  let y = TASK_LIST_HANDOFF_STATE.of(e);
+  y.request = taskListRestoreHint;
   let startTime = performance.now();
   try {
-    let {
-        tasks: tasks,
-        highestId: highestId,
-        olderTasks: olderTasks,
-        carriedTasks: carriedTasks,
-        carriedList: carriedList,
-      } = rebuildTaskListWithRestartFallback(n),
-      max = Math.max(h.highestId ?? 0, h.count ?? 0);
+    let { tasks, highestId, olderTasks, carriedTasks, carriedList } =
+      rebuildTaskListWithRestartFallback(messages);
+    let max = Math.max(taskListRestoreHint.highestId ?? 0, taskListRestoreHint.count ?? 0);
     if (highestId === 0 && max === 0) {
-      of.honoured = !0;
+      y.honoured = true;
       return;
     }
-    let G = getTaskListId(),
-      Z = (Se) => ({
-        task_count: tasks.length,
-        written_count: Se,
-        older_task_count: olderTasks,
-        carried_task_count: carriedTasks,
-        carried_list: fromEnum(carriedList),
-        transcript_highest_id: highestId,
-        duration_ms: Math.round(performance.now() - startTime),
-        ...(h.count !== void 0 && { requested_count: h.count }),
-        ...(h.highestId !== void 0 && { requested_highest_id: h.highestId }),
-      });
-    if ((await findHighestTaskId(G, s)) > 0) {
-      (await raiseTaskIdMark(G, Math.max(highestId, max), s),
-        (of.honoured = !0),
-        logFeatureSad("task_list_restore", "list_not_empty", Z(0)));
+    let taskListId = getTaskListId();
+    let Z = (writtenCount) => ({
+      task_count: tasks.length,
+      written_count: writtenCount,
+      older_task_count: olderTasks,
+      carried_task_count: carriedTasks,
+      carried_list: fromEnum(carriedList),
+      transcript_highest_id: highestId,
+      duration_ms: Math.round(performance.now() - startTime),
+      ...(taskListRestoreHint.count !== undefined && {
+        requested_count: taskListRestoreHint.count,
+      }),
+      ...(taskListRestoreHint.highestId !== undefined && {
+        requested_highest_id: taskListRestoreHint.highestId,
+      }),
+    });
+    if ((await findHighestTaskId(taskListId, store)) > 0) {
+      await raiseTaskIdMark(taskListId, Math.max(highestId, max), store);
+      y.honoured = true;
+      logFeatureSad("task_list_restore", "list_not_empty", Z(0));
       return;
     }
     let re =
-        highestId === 0
-          ? "transcript_shows_no_task"
-          : highestId < max
-            ? "transcript_behind_request"
-            : olderTasks > 0
-              ? "older_tasks_not_in_transcript"
-              : void 0,
-      any = n.some(isCompactBoundaryMessage);
-    if (re !== void 0 && !any) {
+      highestId === 0
+        ? "transcript_shows_no_task"
+        : highestId < max
+          ? "transcript_behind_request"
+          : olderTasks > 0
+            ? "older_tasks_not_in_transcript"
+            : undefined;
+    let any = messages.some(isCompactBoundaryMessage);
+    if (re !== undefined && !any) {
       logFeatureBad("task_list_restore", re, Z(0));
       return;
     }
-    let {
-      restored: restored,
-      written: written,
-      refused: refused,
-      left: left,
-    } = await restoreTaskList(G, tasks, Math.max(highestId, max), s, { wholeOrNothing: !0 });
-    if (refused !== void 0) {
-      logFeatureBad("task_list_restore", left === void 0 ? "task_write_refused" : "task_write_refused_left", {
-        ...Z(written),
-        refused_count: refused,
-        ...(left !== void 0 && { left_count: left }),
-      });
+    let { restored, written, refused, left } = await restoreTaskList(
+      taskListId,
+      tasks,
+      Math.max(highestId, max),
+      store,
+      {
+        wholeOrNothing: true,
+      },
+    );
+    if (refused !== undefined) {
+      logFeatureBad(
+        "task_list_restore",
+        left === undefined ? "task_write_refused" : "task_write_refused_left",
+        {
+          ...Z(written),
+          refused_count: refused,
+          ...(left !== undefined && {
+            left_count: left,
+          }),
+        },
+      );
       return;
     }
-    if (!restored)
-      (await raiseTaskIdMark(G, Math.max(highestId, max), s),
-        logFeatureSad("task_list_restore", "list_not_empty", Z(0)));
-    else if (re !== void 0) logFeatureSad("task_list_restore", re, Z(written));
+    if (!restored) {
+      await raiseTaskIdMark(taskListId, Math.max(highestId, max), store);
+      logFeatureSad("task_list_restore", "list_not_empty", Z(0));
+    } else if (re !== undefined) logFeatureSad("task_list_restore", re, Z(written));
     else logFeatureOk("task_list_restore", Z(written));
-    ((of.honoured = !0),
-      logForDebugging(
-        `[Tasks] boot restore: ${restored ? "restored" : "left alone"}, ${written} of ${tasks.length} task(s) in the transcript written`,
-      ));
+    y.honoured = true;
+    logForDebugging(
+      `[Tasks] boot restore: ${restored ? "restored" : "left alone"}, ${written} of ${tasks.length} task(s) in the transcript written`,
+    );
   } catch (error) {
-    (logFeatureBad("task_list_restore", "restore_failed"), logError(error));
+    logFeatureBad("task_list_restore", "restore_failed");
+    logError(error);
   }
 }
+//@ chunk-tyg7f3ek.js:225488-229008 placement
 /**
  * print 模式下 team-lead 轮询队友邮箱：读未读消息、入队、所有队友结束后停止并收尾。
  */
-//@ chunk-tyg7f3ek.js:225488-229008 placement
 class TeamLeadPoller {
   drain;
   messageQueue;
@@ -545,161 +614,183 @@ class TeamLeadPoller {
   storageV5;
   kick;
   enqueueTeamShutdownPrompt;
-  polling = !1;
+  polling = false;
   consecutiveMarkFailures = 0;
-  markFailureStreakReported = !1;
-  finalLeadDrainDone = !1;
-  constructor({ drain: e, messageQueue: n, store: r, storageV5: s, kick: h, enqueueTeamShutdownPrompt: y }) {
-    ((this.drain = e),
-      (this.messageQueue = n),
-      (this.store = r),
-      (this.storageV5 = s),
-      (this.kick = h),
-      (this.enqueueTeamShutdownPrompt = y));
+  markFailureStreakReported = false;
+  finalLeadDrainDone = false;
+  constructor({ drain, messageQueue, store, storageV5, kick, enqueueTeamShutdownPrompt }) {
+    this.drain = drain;
+    this.messageQueue = messageQueue;
+    this.store = store;
+    this.storageV5 = storageV5;
+    this.kick = kick;
+    this.enqueueTeamShutdownPrompt = enqueueTeamShutdownPrompt;
   }
   pollActive() {
     return this.polling;
   }
-  *poll({ pulseKeepAlive: e, pulseInboxFrameActivity: n }) {
+  *poll({ pulseKeepAlive, pulseInboxFrameActivity }) {
     let teamContext = this.store.getState().teamContext;
-    if (!(teamContext && isTeamLead(teamContext)))
-      return (
-        (this.consecutiveMarkFailures = 0),
-        (this.markFailureStreakReported = !1),
-        (this.finalLeadDrainDone = !1),
-        "done"
-      );
-    let h = "team-lead",
-      y = 500;
-    this.polling = !0;
+    if (!(teamContext && isTeamLead(teamContext))) {
+      this.consecutiveMarkFailures = 0;
+      this.markFailureStreakReported = false;
+      this.finalLeadDrainDone = false;
+      return "done";
+    }
+    let agentName = "team-lead";
+    let y = 500;
+    this.polling = true;
     try {
-      while (!0) {
+      while (true) {
         if (this.drain.inputClosed && this.drain.batchLeftUnstarted) return "done";
-        let state = this.store.getState(),
-          R = hasActiveInProcessTeammates(state) || hasNonLeadTeammate(state.teamContext),
-          w = yield readUnreadMessages(h, state.teamContext?.teamName, this.storageV5),
-          P = Array.isArray(w) ? w : [];
-        if (!R)
+        let state = this.store.getState();
+        let R = hasActiveInProcessTeammates(state) || hasNonLeadTeammate(state.teamContext);
+        let w = yield readUnreadMessages(agentName, state.teamContext?.teamName, this.storageV5);
+        let P = Array.isArray(w) ? w : [];
+        if (!R) {
           if (
             P.length > 0 &&
             this.consecutiveMarkFailures < MARK_READ_FAILURE_CAP &&
             !this.finalLeadDrainDone
           )
-            this.finalLeadDrainDone = !0;
+            this.finalLeadDrainDone = true;
           else {
-            if ((logForDebugging("[print.ts] No more active teammates, stopping poll"), P.length === 0))
-              ((this.consecutiveMarkFailures = 0),
-                (this.markFailureStreakReported = !1),
-                (this.finalLeadDrainDone = !1));
+            logForDebugging("[print.ts] No more active teammates, stopping poll");
+            if (P.length === 0) {
+              this.consecutiveMarkFailures = 0;
+              this.markFailureStreakReported = false;
+              this.finalLeadDrainDone = false;
+            }
             break;
           }
-        else this.finalLeadDrainDone = !1;
+        } else this.finalLeadDrainDone = false;
         if (P.length > 0) {
           logForDebugging(`[print.ts] Team-lead found ${P.length} unread messages`);
-          let L = dedupeMailboxMessages(P, getInboxPath(h, state.teamContext?.teamName), {
-              roster: state.teamContext?.teammates,
-              isPaneTeammate: !1,
-            }),
-            q = (ce) => L.get(ce) === "forged",
-            x = (yield markMessagesAsRead(h, state.teamContext?.teamName, P, this.storageV5)) === !0;
-          if (x) ((this.consecutiveMarkFailures = 0), (this.markFailureStreakReported = !1));
-          else {
-            if ((this.consecutiveMarkFailures++, R && this.consecutiveMarkFailures < MARK_READ_FAILURE_CAP)) {
-              (logForDebugging(
+          let L = dedupeMailboxMessages(P, getInboxPath(agentName, state.teamContext?.teamName), {
+            roster: state.teamContext?.teammates,
+            isPaneTeammate: false,
+          });
+          let q = (ce) => L.get(ce) === "forged";
+          let x =
+            (yield markMessagesAsRead(agentName, state.teamContext?.teamName, P, this.storageV5)) === true;
+          if (x) {
+            this.consecutiveMarkFailures = 0;
+            this.markFailureStreakReported = false;
+          } else {
+            this.consecutiveMarkFailures++;
+            if (R && this.consecutiveMarkFailures < MARK_READ_FAILURE_CAP) {
+              logForDebugging(
                 `[print.ts] Could not mark ${P.length} inbox message(s) read (${this.consecutiveMarkFailures}/${MARK_READ_FAILURE_CAP}); retrying next poll`,
-                { level: "warn" },
-              ),
-                e(),
-                yield sleep(y));
+                {
+                  level: "warn",
+                },
+              );
+              pulseKeepAlive();
+              yield sleep(y);
               continue;
             }
-            if (
-              (logForDebugging(
-                `[print.ts] Could not mark ${P.length} inbox message(s) read for ${this.consecutiveMarkFailures} polls; processing the batch unmarked`,
-                { level: "warn" },
-              ),
-              !this.markFailureStreakReported)
-            )
-              ((this.markFailureStreakReported = !0),
-                logFeatureSad("swarm_inbox_poll", "mark_read_failed_streak"));
-          }
-          let G = state.teamContext?.teamName;
-          for (let ce of P) {
-            let nt = q(ce) ? null : isShutdownApproved(ce.text),
-              ie = nt?.from === ce.from;
-            if (nt && ie && G) {
-              let from = nt.from;
-              logForDebugging(`[print.ts] Processing shutdown_approved from ${from}`);
-              let me = state.teamContext?.teammates
-                ? Object.entries(state.teamContext.teammates).find(([, Me]) => Me.name === from)?.[0]
-                : void 0;
-              if (me)
-                (yield removeTeammateFromTeamFile(G, { agentId: me, name: from }, this.storageV5),
-                  logForDebugging(`[print.ts] Removed ${from} from team file`),
-                  yield unassignTeammateTasks(G, me, from, "shutdown", this.storageV5),
-                  this.store.setState((Me) => {
-                    if (!Me.teamContext?.teammates) return Me;
-                    if (!(me in Me.teamContext.teammates)) return Me;
-                    let { [me]: Ee, ...He } = Me.teamContext.teammates;
-                    return { ...Me, teamContext: { ...Me.teamContext, teammates: He } };
-                  }));
+            logForDebugging(
+              `[print.ts] Could not mark ${P.length} inbox message(s) read for ${this.consecutiveMarkFailures} polls; processing the batch unmarked`,
+              {
+                level: "warn",
+              },
+            );
+            if (!this.markFailureStreakReported) {
+              this.markFailureStreakReported = true;
+              logFeatureSad("swarm_inbox_poll", "mark_read_failed_streak");
             }
           }
-          let filtered = P.filter((ce) => q(ce) || isHeadlessLeadDisplayableMessage(ce.text)),
-            re =
-              filtered.length === 0 || this.drain.endSessionRequested
-                ? []
-                : yield filterMailboxThroughReceiveHooks(filtered, {
-                    provenanceOf: (ce) => L.get(ce) ?? "unverifiable",
-                    agentId: void 0,
-                    isPassedThrough: (ce) => !q(ce) && isStructuredProtocolMessage(ce.text),
-                  }),
-            Ae = Array.isArray(re) ? re : [];
-          if (
-            (clearOwedIdleNotificationsOnShutdown(
-              P.filter((ce) => !q(ce)),
-              this.store.setState,
-            ),
-            Ae.length === 0 || this.drain.endSessionRequested)
-          ) {
-            if ((n(), !x)) (e(), yield sleep(y));
+          let teamName = state.teamContext?.teamName;
+          for (let ce of P) {
+            let nt = q(ce) ? null : isShutdownApproved(ce.text);
+            let ie = nt?.from === ce.from;
+            if (nt && ie && teamName) {
+              let from = nt.from;
+              logForDebugging(`[print.ts] Processing shutdown_approved from ${from}`);
+              let teammateId = state.teamContext?.teammates
+                ? Object.entries(state.teamContext.teammates).find(([, value]) => value.name === from)?.[0]
+                : undefined;
+              if (teammateId) {
+                yield removeTeammateFromTeamFile(
+                  teamName,
+                  {
+                    agentId: teammateId,
+                    name: from,
+                  },
+                  this.storageV5,
+                );
+                logForDebugging(`[print.ts] Removed ${from} from team file`);
+                yield unassignTeammateTasks(teamName, teammateId, from, "shutdown", this.storageV5);
+                this.store.setState((Me) => {
+                  if (!Me.teamContext?.teammates) return Me;
+                  if (!(teammateId in Me.teamContext.teammates)) return Me;
+                  let { [teammateId]: Ee, ...He } = Me.teamContext.teammates;
+                  return {
+                    ...Me,
+                    teamContext: {
+                      ...Me.teamContext,
+                      teammates: He,
+                    },
+                  };
+                });
+              }
+            }
+          }
+          let filtered = P.filter((ce) => q(ce) || isHeadlessLeadDisplayableMessage(ce.text));
+          let re =
+            filtered.length === 0 || this.drain.endSessionRequested
+              ? []
+              : yield filterMailboxThroughReceiveHooks(filtered, {
+                  provenanceOf: (ce) => L.get(ce) ?? "unverifiable",
+                  agentId: undefined,
+                  isPassedThrough: (ce) => !q(ce) && isStructuredProtocolMessage(ce.text),
+                });
+          let Ae = Array.isArray(re) ? re : [];
+          clearOwedIdleNotificationsOnShutdown(
+            P.filter((ce) => !q(ce)),
+            this.store.setState,
+          );
+          if (Ae.length === 0 || this.drain.endSessionRequested) {
+            pulseInboxFrameActivity();
+            if (!x) {
+              pulseKeepAlive();
+              yield sleep(y);
+            }
             continue;
           }
-          let Ue = formatTeammateMessages(Ae, { recipientIsLead: !0 });
-          return (
-            this.messageQueue.enqueue({
-              mode: "prompt",
-              agentId: mainAgentId(),
-              value: Ue,
-              uuid: randomUUID_8(),
-              skipAttachments: !0,
-              foreignWord: "teammate-reply",
-            }),
-            this.kick(),
-            "rekicked"
-          );
+          let value = formatTeammateMessages(Ae, {
+            recipientIsLead: true,
+          });
+          this.messageQueue.enqueue({
+            mode: "prompt",
+            agentId: mainAgentId(),
+            value,
+            uuid: randomUUID(),
+            skipAttachments: true,
+            foreignWord: "teammate-reply",
+          });
+          this.kick();
+          return "rekicked";
         }
-        if (
-          ((this.consecutiveMarkFailures = 0),
-          (this.markFailureStreakReported = !1),
-          this.drain.inputClosed && this.enqueueTeamShutdownPrompt())
-        )
-          return (
-            logForDebugging("[print.ts] Input closed with active teammates, injected shutdown prompt"),
-            "rekicked"
-          );
-        (e(), yield sleep(y));
+        this.consecutiveMarkFailures = 0;
+        this.markFailureStreakReported = false;
+        if (this.drain.inputClosed && this.enqueueTeamShutdownPrompt()) {
+          logForDebugging("[print.ts] Input closed with active teammates, injected shutdown prompt");
+          return "rekicked";
+        }
+        pulseKeepAlive();
+        yield sleep(y);
       }
     } finally {
-      this.polling = !1;
+      this.polling = false;
     }
     return "done";
   }
 }
+//@ chunk-tyg7f3ek.js:229086-229166 placement
 /**
  * 空实现的快照存储（snapshot 原样返回、restore 返回空对象）。
  */
-//@ chunk-tyg7f3ek.js:229086-229166 placement
 class NoopSnapshotStore {
   async snapshot(e, n) {
     return n;
@@ -710,75 +801,88 @@ class NoopSnapshotStore {
   async flush() {}
 }
 //@ chunk-tyg7f3ek.js:229166-229190 placement
-var snapshotStoreStorage = new AsyncLocalStorage(),
-  NOOP_SNAPSHOT_STORE = new NoopSnapshotStore();
+var snapshotStoreStorage = new AsyncLocalStorage();
+var NOOP_SNAPSHOT_STORE = new NoopSnapshotStore();
 //@ chunk-tyg7f3ek.js:229190-229229 placement = getAgentContext (1)
 function getSnapshotStore() {
   return snapshotStoreStorage.getStore() ?? NOOP_SNAPSHOT_STORE;
 }
 //@ chunk-tyg7f3ek.js:229229-229263 placement
-function ap() {
-  return join_3(Sx(), getSessionId());
+function snapshotPathForSession() {
+  return join(sessionTempDirRealpath(), getSessionId());
 }
 //@ chunk-tyg7f3ek.js:229263-229886 placement
 class WorkerDirSyncReporter {
   workerDirSync;
   enqueueSdkEvent;
   turnEndUploadListener;
-  constructor({ workerDirSync: e, enqueueSdkEvent: n, turnEndUploadListener: r }) {
-    ((this.workerDirSync = e), (this.enqueueSdkEvent = n), (this.turnEndUploadListener = r));
+  constructor({ workerDirSync, enqueueSdkEvent, turnEndUploadListener }) {
+    this.workerDirSync = workerDirSync;
+    this.enqueueSdkEvent = enqueueSdkEvent;
+    this.turnEndUploadListener = turnEndUploadListener;
   }
   beforeTurn() {
     import("./chunk-2s3tfbmy.js").then((n) => n.flushSyncedFiles()).catch(() => {});
     return;
   }
-  afterTurn({ turnStartTime: e, signal: n, userEventUuids: r }) {
+  afterTurn({ turnStartTime, signal, userEventUuids }) {
     import("./chunk-2s3tfbmy.js").then((y) => y.flushSyncedFiles()).catch(() => {});
-    let turnEndUploadListener = this.turnEndUploadListener,
-      h = this.workerDirSync?.then(
-        (y) => (
-          y?.afterTurn({ userEventUuids: [...r] }),
-          turnEndUploadListener === void 0 ? void 0 : y?.drain()
-        ),
-      );
-    if (h !== void 0) turnEndUploadListener?.(h);
-    getSnapshotStore().snapshot(ap(), {}).catch(logError);
+    let turnEndUploadListener = this.turnEndUploadListener;
+    let h = this.workerDirSync?.then((y) => {
+      y?.afterTurn({
+        userEventUuids: [...userEventUuids],
+      });
+      return turnEndUploadListener === undefined ? undefined : y?.drain();
+    });
+    if (h !== undefined) turnEndUploadListener?.(h);
+    getSnapshotStore().snapshot(snapshotPathForSession(), {}).catch(logError);
   }
 }
 //@ chunk-tyg7f3ek.js:229886-230095 placement
-function notifyTurnBeganBeforeInit({ sessionState: sessionState, markStartupPhase: markStartupPhase }) {
-  if (getActiveMessageQueue() !== void 0) return;
+function notifyTurnBeganBeforeInit({ sessionState, markStartupPhase }) {
+  if (getActiveMessageQueue() !== undefined) return;
   try {
     sessionState.notifyTurnBeganBeforeInit();
   } catch (error) {
-    logForDebugging(`turn_began_before_init tee failed: ${errorMessage(error)}`, { level: "warn" });
+    logForDebugging(`turn_began_before_init tee failed: ${errorMessage(error)}`, {
+      level: "warn",
+    });
   }
   markStartupPhase?.("turn_began_before_init");
 }
 //@ chunk-tyg7f3ek.js:230095-230291 placement
 async function placeFilesByNameForTurn(e, n) {
-  if (e.fileNames === void 0) return;
+  if (e.fileNames === undefined) return;
   try {
-    let { placeFilesByName: placeFilesByName } = await import("./chunk-55nezfmq.js");
+    let { placeFilesByName } = await import("./chunk-55nezfmq.js");
     await placeFilesByName(e, n);
   } catch (error) {
-    (logFeatureBad("ccr_turn_handoff_files_by_name", "load_failed"), logError(error));
+    logFeatureBad("ccr_turn_handoff_files_by_name", "load_failed");
+    logError(error);
   }
 }
 //@ chunk-tyg7f3ek.js:230291-230503 placement
 async function refreshFilesPlacedByName(e) {
   try {
-    if ((await ensurePlacedByNameRead(), !hasConflictingPlacedFile(e))) return;
-    let { refreshFilesPlacedByName: refreshFilesPlacedByName } = await import("./chunk-648dqenp.js");
+    await ensurePlacedByNameRead();
+    if (!hasConflictingPlacedFile(e)) return;
+    let { refreshFilesPlacedByName } = await import("./chunk-648dqenp.js");
     await refreshFilesPlacedByName(e);
   } catch (error) {
-    (logForDiagnosticsNoPII("warn", "turn_handoff_files_by_name_refresh", { load_failed: 1 }),
-      logError(error));
+    logForDiagnosticsNoPII("warn", "turn_handoff_files_by_name_refresh", {
+      load_failed: 1,
+    });
+    logError(error);
   }
 }
 //@ chunk-tyg7f3ek.js:230503-230577 placement
-var UNPLANNABLE_REASONS = { peer: 1, file_kinds: 2, prompt_hook: 3, unplannable: 4, text_not_typed: 5 };
-
+var UNPLANNABLE_REASONS = {
+  peer: 1,
+  file_kinds: 2,
+  prompt_hook: 3,
+  unplannable: 4,
+  text_not_typed: 5,
+};
 export {
   restoreTaskListAtBoot,
   notifyTurnBeganBeforeInit,
@@ -786,7 +890,7 @@ export {
   WorkerDirSyncReporter,
   TeamLeadPoller,
   getSnapshotStore,
-  ap,
+  snapshotPathForSession,
   createTaskListCatchUp,
   TASK_LIST_HANDOFF_STATE,
   UNPLANNABLE_REASONS,

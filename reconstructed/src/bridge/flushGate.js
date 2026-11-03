@@ -10,12 +10,12 @@
  */
 import { count } from "../utils/collections.js";
 
+//@ chunk-4cm44bmp.js:18886-19536 fingerprint = FlushGate (0.774)
 /**
  * 刷新闸：start 后 enqueue 的条目被暂存；end 取出全部并关闭；evictOldest 按谓词只保留最新 N 条（计入 evictedCount）；drop 丢弃；deactivate 只关闭。
  */
-//@ chunk-4cm44bmp.js:18886-19536 fingerprint = FlushGate (0.774)
 class FlushGate {
-  _active = !1;
+  _active = false;
   _pending = [];
   _evictedCount = 0;
   get active() {
@@ -31,28 +31,33 @@ class FlushGate {
     return this._evictedCount;
   }
   start() {
-    this._active = !0;
+    this._active = true;
   }
   end() {
-    return ((this._active = !1), (this._evictedCount = 0), this._pending.splice(0));
+    this._active = false;
+    this._evictedCount = 0;
+    return this._pending.splice(0);
   }
-  enqueue(...n) {
-    if (!this._active) return !1;
-    return (this._pending.push(...n), !0);
+  enqueue(...items) {
+    if (!this._active) return false;
+    this._pending.push(...items);
+    return true;
   }
   evictOldest(n, h) {
     let w = count(this._pending, n) - h;
     if (w <= 0) return;
-    ((this._evictedCount += w), (this._pending = this._pending.filter((C) => !n(C) || w-- <= 0)));
+    this._evictedCount += w;
+    this._pending = this._pending.filter((C) => !n(C) || w-- <= 0);
   }
   drop() {
-    ((this._active = !1), (this._evictedCount = 0));
-    let n = this._pending.length;
-    return ((this._pending.length = 0), n);
+    this._active = false;
+    this._evictedCount = 0;
+    let count = this._pending.length;
+    this._pending.length = 0;
+    return count;
   }
   deactivate() {
-    this._active = !1;
+    this._active = false;
   }
 }
-
 export { FlushGate };

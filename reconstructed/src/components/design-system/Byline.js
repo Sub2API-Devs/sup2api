@@ -8,51 +8,78 @@
  * pieces: chunk-k1hxk1ex.js (5)
  * attribution: sole-consumer 4, callgraph-witnessed 1
  */
-import { j, Kc, dh, Fy } from "../../../vendor/react/cjs/react.production.js";
-import { r, e, Fragment } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  init_react_production,
+  Kc,
+  isValidElement_default,
+  Fy,
+} from "../../../vendor/react/cjs/react.production.js";
+import {
+  jsxProd_default_2,
+  jsxProd_default,
+  Fragment,
+} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text } from "../../ink/components/Text.js";
 import { w } from "../../../vendor/react/compiler-runtime.js";
 import { EARLY_RETURN_SENTINEL } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-k1hxk1ex.js:380-384 sole-consumer
-j();
+init_react_production();
 //@ chunk-k1hxk1ex.js:384-388 sole-consumer
-j();
+init_react_production();
 //@ chunk-k1hxk1ex.js:388-416 sole-consumer
-function y(s) {
+function isNonEmptyString(s) {
   return s !== "";
 }
 //@ chunk-k1hxk1ex.js:416-519 sole-consumer
 function renderBylineItem(o, a) {
-  return r(
+  return jsxProd_default_2(
     Kc,
-    { children: [a > 0 && e(Text, { dimColor: !0, children: " \xB7 " }), o] },
-    dh(o) ? (o.key ?? a) : a,
+    {
+      children: [
+        a > 0 &&
+          jsxProd_default(Text, {
+            dimColor: true,
+            children: " \xB7 ",
+          }),
+        o,
+      ],
+    },
+    isValidElement_default(o) ? (o.key ?? a) : a,
   );
 }
 //@ chunk-k1hxk1ex.js:519-790 callgraph-witnessed = Byline (0.375)
-function Byline(t0) {
-  let $ = w(5),
-    { children: children } = t0,
-    i,
-    c;
+function Byline(props) {
+  let $ = w(5);
+  let { children } = props;
+  let children_2;
+  let t2;
   if ($[0] !== children) {
-    c = EARLY_RETURN_SENTINEL;
+    t2 = EARLY_RETURN_SENTINEL;
     T: {
-      let filtered = Fy.toArray(children).filter(y);
-      if (filtered.length === 0) {
-        c = null;
+      let validChildren = Fy.toArray(children).filter(isNonEmptyString);
+      if (validChildren.length === 0) {
+        t2 = null;
         break T;
       }
-      i = filtered.map(renderBylineItem);
+      children_2 = validChildren.map(renderBylineItem);
     }
-    (($[0] = children), ($[1] = i), ($[2] = c));
-  } else ((i = $[1]), (c = $[2]));
-  if (c !== EARLY_RETURN_SENTINEL) return c;
-  let f;
-  if ($[3] !== i) ((f = e(Fragment, { children: i })), ($[3] = i), ($[4] = f));
-  else f = $[4];
-  return f;
+    $[0] = children;
+    $[1] = children_2;
+    $[2] = t2;
+  } else {
+    children_2 = $[1];
+    t2 = $[2];
+  }
+  if (t2 !== EARLY_RETURN_SENTINEL) return t2;
+  let t3;
+  if ($[3] !== children_2) {
+    t3 = jsxProd_default(Fragment, {
+      children: children_2,
+    });
+    $[3] = children_2;
+    $[4] = t3;
+  } else t3 = $[4];
+  return t3;
 }
-
 export { Byline };

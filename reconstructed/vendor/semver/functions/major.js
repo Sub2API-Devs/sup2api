@@ -6,13 +6,12 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { G } from "../classes/semver.js";
+import { require_semver } from "../classes/semver.js";
 
 //@ chunk-bwbq4xvm.js:11216-11296 cjs-fingerprint
-var Oi = x(function (s2, Ci) {
-  var Av = G(),
-    Rv = (e, s) => new Av(e, s).major;
-  Ci.exports = Rv;
+var require_major = x(function (cjsExports, cjsModule) {
+  var SemVer = require_semver();
+  var major = (a, loose) => new SemVer(a, loose).major;
+  cjsModule.exports = major;
 });
-
-export { Oi };
+export { require_major };

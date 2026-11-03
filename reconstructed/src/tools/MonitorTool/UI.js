@@ -10,24 +10,30 @@
  */
 import { exceedsLineLimit } from "../../utils/terminal.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
-import { e, r } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { MessageResponse } from "../../components/MessageResponse.js";
 import { Text, Box } from "../../ink/components/Text.js";
 import { SlashCommandLink } from "../../components/SlashCommandLink.js";
 
 //@ chunk-ah34pb7m.js:31379-31431 placement
-function HM(m, { columns: columns }) {
+/**
+ * 监视结果（JSON）超出终端行数时返回 true。
+ */
+function exceedsMonitorLineLimit(m, { columns }) {
   return exceedsLineLimit(jsonStringify(m, null, 2), columns);
 }
 //@ chunk-ah34pb7m.js:31431-31631 placement
 function renderMonitorStarted(m) {
-  return e(MessageResponse, {
-    children: r(Text, {
+  return jsxProd_default(MessageResponse, {
+    children: jsxProd_default_2(Text, {
       children: [
         "Monitor started",
         " ",
-        r(Text, {
-          dimColor: !0,
+        jsxProd_default_2(Text, {
+          dimColor: true,
           children: [
             "\xB7 task ",
             m.taskId,
@@ -40,46 +46,72 @@ function renderMonitorStarted(m) {
     }),
   });
 }
+//@ chunk-ah34pb7m.js:31631-32406 placement
 /**
  * 推送通知结果说明（未发送原因）。
  */
-//@ chunk-ah34pb7m.js:31631-32406 placement
 function PushNotificationResult(m) {
   let d;
   if (m.disabledReason === "config_off")
-    d = r(Box, {
+    d = jsxProd_default_2(Box, {
       flexDirection: "row",
       children: [
-        r(Text, { children: ['Not sent because "Push when Claude decides" is disabled in', " "] }),
-        e(SlashCommandLink, { command: "config" }),
-        e(Text, { children: "." }),
+        jsxProd_default_2(Text, {
+          children: ['Not sent because "Push when Claude decides" is disabled in', " "],
+        }),
+        jsxProd_default(SlashCommandLink, {
+          command: "config",
+        }),
+        jsxProd_default(Text, {
+          children: ".",
+        }),
       ],
     });
   else if (m.disabledReason === "user_present")
-    d = e(Text, { children: "Not sent because you're active in this terminal." });
+    d = jsxProd_default(Text, {
+      children: "Not sent because you're active in this terminal.",
+    });
   else if (m.disabledReason === "no_transport")
     d = m.localSent
-      ? e(Text, { children: "Terminal notification sent." })
-      : r(Box, {
+      ? jsxProd_default(Text, {
+          children: "Terminal notification sent.",
+        })
+      : jsxProd_default_2(Box, {
           flexDirection: "row",
           children: [
-            e(Text, { children: "Not sent \u2014 Remote Control is off. Enable with " }),
-            e(SlashCommandLink, { command: "remote-control" }),
-            e(Text, { children: "." }),
+            jsxProd_default(Text, {
+              children: "Not sent \u2014 Remote Control is off. Enable with ",
+            }),
+            jsxProd_default(SlashCommandLink, {
+              command: "remote-control",
+            }),
+            jsxProd_default(Text, {
+              children: ".",
+            }),
           ],
         });
   else {
-    if (m.localSent === void 0) return null;
-    d = e(Text, {
+    if (m.localSent === undefined) return null;
+    d = jsxProd_default(Text, {
       children: m.localSent ? "Terminal and mobile notification sent." : "Mobile notification sent.",
     });
   }
-  return e(MessageResponse, { height: 1, children: d });
+  return jsxProd_default(MessageResponse, {
+    height: 1,
+    children: d,
+  });
 }
 //@ chunk-ah34pb7m.js:32641-32725 placement
-function KM(m, { columns: columns }) {
+/**
+ * 推送通知结果（错误文本或 JSON）超出终端行数时返回 true。
+ */
+function exceedsPushNotificationLineLimit(m, { columns }) {
   if (m.error) return exceedsLineLimit(m.error, columns);
   return exceedsLineLimit(jsonStringify(m, null, 2), columns);
 }
-
-export { HM, KM, renderMonitorStarted, PushNotificationResult };
+export {
+  exceedsMonitorLineLimit,
+  exceedsPushNotificationLineLimit,
+  renderMonitorStarted,
+  PushNotificationResult,
+};

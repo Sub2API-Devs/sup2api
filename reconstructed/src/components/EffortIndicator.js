@@ -26,20 +26,20 @@ import { useAnimationFrame } from "../ink/components/Input.js";
 
 //@ chunk-18hwfzwa.js:154428-154472 placement
 function isEffortIndicatorShown(h, x, D) {
-  return D ? void 0 : getAppliedEffortLevel(x, h);
+  return D ? undefined : getAppliedEffortLevel(x, h);
 }
 //@ chunk-18hwfzwa.js:154472-154494 placement
 var EFFORT_LEVEL_KEY = "effort-level";
+//@ chunk-18hwfzwa.js:154494-154708 layout
 /**
  * 状态栏 effort 文案：等级符号（或 "effort:"）、等级名（可附实际生效等级）、ultracode 后缀，以及 /effort 或"可能等待下一条消息"提示。
  */
-//@ chunk-18hwfzwa.js:154494-154708 layout
-function effortStatusText(h, x = !1, D = !1, L = !1, ee = h) {
-  if (!h) return;
-  let ke = D ? "effort:" : effortLevelToSymbol(h),
-    Re = x ? " \xB7 ultracode" : "",
-    Be = L ? "may wait for your next message" : "/effort",
-    He = D && ee !== h ? `${ee} (${h})` : ee;
+function effortStatusText(level, x = false, isScreenReaderEnabled = false, L = false, ee = level) {
+  if (!level) return;
+  let ke = isScreenReaderEnabled ? "effort:" : effortLevelToSymbol(level);
+  let Re = x ? " \xB7 ultracode" : "";
+  let Be = L ? "may wait for your next message" : "/effort";
+  let He = isScreenReaderEnabled && ee !== level ? `${ee} (${level})` : ee;
   return `${ke} ${He}${Re} \xB7 ${Be}`;
 }
 //@ chunk-18hwfzwa.js:154708-154864 fingerprint = effortLevelToSymbol (0.879)
@@ -59,19 +59,19 @@ function effortLevelToSymbol(level) {
       return FILLED_CIRCLE;
   }
 }
+//@ chunk-18hwfzwa.js:154864-155087 placement = treeify (0.193)
 /**
  * 用主题渐变色渲染 ULTRACODE 字样（可高亮某个字符）；误配名 treeify，归属错误。
  */
-//@ chunk-18hwfzwa.js:154864-155087 placement = treeify (0.193)
 function treeify(obj, options) {
   if (obj) {
-    let valueStr = getThemeWithOverrides(resolveSetting("theme", "dark").value),
-      L = color("effortUltra", valueStr);
-    if (options === void 0) return L(ULTRACODE);
+    let valueStr = getThemeWithOverrides(resolveSetting("theme", "dark").value);
+    let L = color("effortUltra", valueStr);
+    if (options === undefined) return L(ULTRACODE);
     return [...ULTRACODE]
       .map((key, index) =>
         index === options
-          ? sequential.hex(dkr).bold(key)
+          ? sequential.hex(ULTRACODE_HIGHLIGHT_COLOR).bold(key)
           : index === options - 1 || index === options + 1
             ? sequential.bold(L(key))
             : L(key),
@@ -81,42 +81,43 @@ function treeify(obj, options) {
   return;
 }
 //@ chunk-18hwfzwa.js:155087-155146 placement
-var ULTRACODE = "ultracode",
-  dkr = "#d0b4ff",
-  dNt = ULTRACODE.length + 2,
-  FBe = 120;
+/**
+ * ultracode 的闪光动画常量：高亮色 #d0b4ff、扫过步数（名字长度+2）与每帧 120ms。
+ */
+var ULTRACODE = "ultracode";
+var ULTRACODE_HIGHLIGHT_COLOR = "#d0b4ff";
+var ULTRACODE_SHIMMER_STEPS = ULTRACODE.length + 2;
+var ULTRACODE_SHIMMER_FRAME_MS = 120;
+//@ chunk-18hwfzwa.js:155146-155398 placement
 /**
  * ultracode 开启时的闪光动画帧：按动画帧推进若干步后停止，偏好减少动画时不播放；返回当前帧序号或 undefined。
  */
-//@ chunk-18hwfzwa.js:155146-155398 placement
 function useUltracodeShimmer(h) {
-  let x = usePrefersReducedMotion(),
-    [D, L] = y(!1),
-    ee = R(null);
+  let prefersReducedMotion = usePrefersReducedMotion();
+  let [D, L] = y(false);
+  let ee = R(null);
   P(() => {
-    if (h && !x) ((ee.current = null), L(!0));
-    else L(!1);
-  }, [h, x]);
-  let [, ke] = useAnimationFrame(D ? FBe : null);
+    if (h && !prefersReducedMotion) {
+      ee.current = null;
+      L(true);
+    } else L(false);
+  }, [h, prefersReducedMotion]);
+  let [, ke] = useAnimationFrame(D ? ULTRACODE_SHIMMER_FRAME_MS : null);
   ee.current ??= ke;
-  let floored = Math.floor((ke - ee.current) / FBe),
-    Be = floored >= dNt;
-  if (
-    (P(() => {
-      if (Be) L(!1);
-    }, [Be]),
-    !D || Be)
-  )
-    return;
+  let floored = Math.floor((ke - ee.current) / ULTRACODE_SHIMMER_FRAME_MS);
+  let Be = floored >= ULTRACODE_SHIMMER_STEPS;
+  P(() => {
+    if (Be) L(false);
+  }, [Be]);
+  if (!D || Be) return;
   return floored - 1;
 }
-
 export {
   EFFORT_LEVEL_KEY,
-  effortLevelToSymbol,
   isEffortIndicatorShown,
   useUltracodeShimmer,
   treeify,
   effortStatusText,
-  dkr,
+  effortLevelToSymbol,
+  ULTRACODE_HIGHLIGHT_COLOR,
 };

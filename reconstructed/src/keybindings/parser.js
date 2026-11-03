@@ -10,36 +10,43 @@
  */
 import { normalizeStep } from "./reservedShortcuts.js";
 
+//@ chunk-x1mwqya5.js:1154-1779 fingerprint = parseKeystroke (0.956)
 /**
  * 把单个按键串（如 "ctrl+shift+k"）解析成 Keystroke {key, ctrl, alt, shift, meta, super}。修饰键别名：control→ctrl；opt/option→alt；cmd/command/super/win→super；键名别名：esc→escape、return→enter、del→delete、space→" "、箭头符号→up/down/left/right；其他部分小写后当主键。
  */
-//@ chunk-x1mwqya5.js:1154-1779 fingerprint = parseKeystroke (0.956)
 function parseKeystroke(input) {
-  let parts = input.split("+"),
-    keystroke = { key: "", ctrl: !1, alt: !1, shift: !1, meta: !1, super: !1 };
+  let parts = input.split("+");
+  let keystroke = {
+    key: "",
+    ctrl: false,
+    alt: false,
+    shift: false,
+    meta: false,
+    super: false,
+  };
   for (let part of parts) {
     let lower = part.toLowerCase();
     switch (lower) {
       case "ctrl":
       case "control":
-        keystroke.ctrl = !0;
+        keystroke.ctrl = true;
         break;
       case "alt":
       case "opt":
       case "option":
-        keystroke.alt = !0;
+        keystroke.alt = true;
         break;
       case "shift":
-        keystroke.shift = !0;
+        keystroke.shift = true;
         break;
       case "meta":
-        keystroke.meta = !0;
+        keystroke.meta = true;
         break;
       case "cmd":
       case "command":
       case "super":
       case "win":
-        keystroke.super = !0;
+        keystroke.super = true;
         break;
       case "esc":
         keystroke.key = "escape";
@@ -72,18 +79,18 @@ function parseKeystroke(input) {
   }
   return keystroke;
 }
+//@ chunk-x1mwqya5.js:1779-1865 layout = parseChord (1)
 /**
  * 把和弦串（空格分隔的多次按键，如 "ctrl+x ctrl+s"）解析成 Keystroke 数组；单个空格字符视为 space 键。
  */
-//@ chunk-x1mwqya5.js:1779-1865 layout = parseChord (1)
 function parseChord(input) {
   if (input === " ") return [parseKeystroke("space")];
   return input.trim().split(/\s+/).map(parseKeystroke);
 }
+//@ chunk-x1mwqya5.js:1865-2059 fingerprint = keystrokeToString (1)
 /**
  * Keystroke 转回规范字符串（ctrl+alt+shift+meta+cmd+键名，键名经 keyToDisplayName），用于和弦比较的键与日志。
  */
-//@ chunk-x1mwqya5.js:1865-2059 fingerprint = keystrokeToString (1)
 function keystrokeToString(ks) {
   let parts = [];
   if (ks.ctrl) parts.push("ctrl");
@@ -92,12 +99,13 @@ function keystrokeToString(ks) {
   if (ks.meta) parts.push("meta");
   if (ks.super) parts.push("cmd");
   let displayKey = keyToDisplayName(ks.key);
-  return (parts.push(displayKey), parts.join("+"));
+  parts.push(displayKey);
+  return parts.join("+");
 }
+//@ chunk-x1mwqya5.js:2059-2468 fingerprint = keyToDisplayName (0.948)
 /**
  * 内部键名转显示名：escape→Esc、enter→Enter、箭头→↑↓←→、pageup→PageUp 等；其余原样。
  */
-//@ chunk-x1mwqya5.js:2059-2468 fingerprint = keyToDisplayName (0.948)
 function keyToDisplayName(key) {
   switch (key) {
     case "escape":
@@ -132,17 +140,17 @@ function keyToDisplayName(key) {
       return key;
   }
 }
+//@ chunk-x1mwqya5.js:2468-2510 file-local
 /**
  * 和弦转字符串（各步 keystrokeToString 以空格连接）。
  */
-//@ chunk-x1mwqya5.js:2468-2510 file-local
 function chordToString(chord) {
   return chord.map(keystrokeToString).join(" ");
 }
+//@ chunk-x1mwqya5.js:2510-2736 fingerprint = keystrokeToDisplayString (1)
 /**
  * 按平台生成给用户看的按键文字：alt/meta 在 macOS 显示 opt、其他平台 alt；super 在 macOS 显示 cmd、其他平台 super。
  */
-//@ chunk-x1mwqya5.js:2510-2736 fingerprint = keystrokeToDisplayString (1)
 function keystrokeToDisplayString(ks, platform = "linux") {
   let parts = [];
   if (ks.ctrl) parts.push("ctrl");
@@ -150,39 +158,43 @@ function keystrokeToDisplayString(ks, platform = "linux") {
   if (ks.shift) parts.push("shift");
   if (ks.super) parts.push(platform === "macos" ? "cmd" : "super");
   let displayKey = keyToDisplayName(ks.key);
-  return (parts.push(displayKey), parts.join("+"));
+  parts.push(displayKey);
+  return parts.join("+");
 }
+//@ chunk-x1mwqya5.js:2736-2800 layout = chordToDisplayString (1)
 /**
  * 按平台生成和弦的显示文字（各步 keystrokeToDisplayString 以空格连接）。
  */
-//@ chunk-x1mwqya5.js:2736-2800 layout = chordToDisplayString (1)
 function chordToDisplayString(chord, platform = "linux") {
   return chord.map((ks) => keystrokeToDisplayString(ks, platform)).join(" ");
 }
+//@ chunk-x1mwqya5.js:2800-2941 fingerprint = parseBindings (1)
 /**
  * 把 [{context, bindings:{按键串: action|null}}] 块展开成扁平的 ParsedBinding 列表 {chord, action, context}；顺序即优先级（后者覆盖前者）。
  */
-//@ chunk-x1mwqya5.js:2800-2941 fingerprint = parseBindings (1)
 function parseBindings(blocks) {
   let bindings = [];
   for (let block of blocks)
-    for (let [s, l] of Object.entries(block.bindings))
-      bindings.push({ chord: parseChord(s), action: l, context: block.context });
+    for (let [key, action] of Object.entries(block.bindings))
+      bindings.push({
+        chord: parseChord(key),
+        action,
+        context: block.context,
+      });
   return bindings;
 }
+//@ chunk-6qssfmzs.js:8872-8959 fingerprint = parseChord (1)
 /**
  * 把按键串规范化成比较用字符串：每步修饰键归一（control→ctrl；opt/option/meta→alt；cmd/command/super/win→cmd）并排序，键名查别名表。
  */
-//@ chunk-6qssfmzs.js:8872-8959 fingerprint = parseChord (1)
 function normalizeKeyForComparison(input) {
   if (input === " ") return "space";
   return input.trim().split(/\s+/).map(normalizeStep).join(" ");
 }
-
 export {
+  parseKeystroke,
   parseBindings,
   chordToString,
-  parseKeystroke,
   parseChord,
   normalizeKeyForComparison,
   chordToDisplayString,

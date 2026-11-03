@@ -10,14 +10,17 @@
  */
 import { withHideWhile } from "../../components/dialogs/dialogRequests.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, M, U } from "../../../vendor/zod/v4/classic/schemas.js";
+import { u, M, _enum } from "../../../vendor/zod/v4/classic/schemas.js";
 
 //@ chunk-yddynw6k.js:301-444 placement
 var IT2_SETUP_DIALOG = withHideWhile({
   kind: "it2_setup",
-  payload: DoctorLazy(() => u({ tmuxAvailable: M() })),
-  result: DoctorLazy(() => U(["installed", "use-tmux", "cancelled"])),
+  payload: DoctorLazy(() =>
+    u({
+      tmuxAvailable: M(),
+    }),
+  ),
+  result: DoctorLazy(() => _enum(["installed", "use-tmux", "cancelled"])),
   default: "cancelled",
 });
-
 export { IT2_SETUP_DIALOG };

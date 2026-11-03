@@ -6,46 +6,56 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../runtime/bun-runtime.js";
-import { uh } from "../../compile/codegen/index.js";
-import { ew } from "../../compile/util.js";
+import { require_codegen_2 as require_codegen } from "../../compile/codegen/index.js";
+import { require_util_2 as require_util } from "../../compile/util.js";
 
 //@ chunk-1r4fv9mg.js:4567-5354 cjs-fingerprint
-var ve = x(function (be) {
-  Object.defineProperty(be, "__esModule", { value: !0 });
-  var b = uh(),
-    C = ew(),
-    ht = {
-      message: ({ params: { len: e } }) => b.str`must NOT have more than ${e} items`,
-      params: ({ params: { len: e } }) => b._`{limit: ${e}}`,
+var require_unevaluatedItems = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  var codegen_1 = require_codegen();
+  var util_1 = require_util();
+  var error = {
+    message: ({ params: { len } }) => codegen_1.str`must NOT have more than ${len} items`,
+    params: ({ params: { len } }) => codegen_1._`{limit: ${len}}`,
+  };
+  var def = {
+    keyword: "unevaluatedItems",
+    type: "array",
+    schemaType: ["boolean", "object"],
+    error,
+    code(cxt) {
+      let { gen, schema, data, it } = cxt;
+      let items = it.items || 0;
+      if (items === true) return;
+      let len = gen.const("len", codegen_1._`${data}.length`);
+      if (schema === false) {
+        cxt.setParams({
+          len: items,
+        });
+        cxt.fail(codegen_1._`${len} > ${items}`);
+      } else if (typeof schema == "object" && !util_1.alwaysValidSchema(it, schema)) {
+        let valid = gen.var("valid", codegen_1._`${len} <= ${items}`);
+        gen.if(codegen_1.not(valid), () => validateItems(valid, items));
+        cxt.ok(valid);
+      }
+      it.items = true;
+      function validateItems(valid, from) {
+        gen.forRange("i", from, len, (i) => {
+          cxt.subschema(
+            {
+              keyword: "unevaluatedItems",
+              dataProp: i,
+              dataPropType: util_1.Type.Num,
+            },
+            valid,
+          );
+          if (!it.allErrors) gen.if(codegen_1.not(valid), () => gen.break());
+        });
+      }
     },
-    yt = {
-      keyword: "unevaluatedItems",
-      type: "array",
-      schemaType: ["boolean", "object"],
-      error: ht,
-      code(e) {
-        let { gen: gen, schema: schema, data: n, it: it } = e,
-          i = it.items || 0;
-        if (i === !0) return;
-        let u = gen.const("len", b._`${n}.length`);
-        if (schema === !1) (e.setParams({ len: i }), e.fail(b._`${u} > ${i}`));
-        else if (typeof schema == "object" && !C.alwaysValidSchema(it, schema)) {
-          let s = gen.var("valid", b._`${u} <= ${i}`);
-          (gen.if(b.not(s), () => m(s, i)), e.ok(s));
-        }
-        it.items = !0;
-        function m(s, p) {
-          gen.forRange("i", p, u, (g) => {
-            if (
-              (e.subschema({ keyword: "unevaluatedItems", dataProp: g, dataPropType: C.Type.Num }, s),
-              !it.allErrors)
-            )
-              gen.if(b.not(s), () => gen.break());
-          });
-        }
-      },
-    };
-  be.default = yt;
+  };
+  cjsExports.default = def;
 });
-
-export { ve };
+export { require_unevaluatedItems };

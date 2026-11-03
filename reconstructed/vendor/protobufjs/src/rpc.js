@@ -6,12 +6,11 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { jr } from "./rpc/service.js";
+import { require_service } from "./rpc/service.js";
 
 //@ chunk-798ashq9.js:40656-40707 cjs-fingerprint
-var ZPo = x(function (zr) {
-  var Gi = zr;
-  Gi.Service = jr();
+var require_rpc = x(function (cjsExports) {
+  var rpc = cjsExports;
+  rpc.Service = require_service();
 });
-
-export { ZPo };
+export { require_rpc };

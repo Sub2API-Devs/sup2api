@@ -9,13 +9,13 @@
  * attribution: fingerprint 4
  */
 import { env } from "./env.js";
-import { y } from "./auth/launcherHostLogin.js";
+import { hasProviderEnvFlag } from "./auth/launcherHostLogin.js";
 import { isGatewayLoginForced } from "./auth.js";
 import { lockHolderSocketSlot } from "./auth/lockHolderLiveness.js";
 import { getRootSession } from "../bootstrap/state.js";
 import { isSshPlaceholderAuth } from "./subprocessEnv.js";
 import { isGatewayBackedPolicyDisable, warnHostSuppliedEnv } from "./managedEnvSafety.js";
-import { nbr } from "./managedEnvConstants.js";
+import { TLS_CERT_ENV_VARS } from "./managedEnvConstants.js";
 import { isPolicySlotAdminOrParentComposed } from "./settings/settings.js";
 import { logForDebugging } from "./debug.js";
 import { escapeForDisplay } from "./envValidation.js";
@@ -24,17 +24,17 @@ import { escapeForDisplay } from "./envValidation.js";
 var TRUSTED_SETTING_SOURCES = ["userSettings", "flagSettings", "policySettings"];
 //@ chunk-30p0tvt0.js:918-991 fingerprint = withoutHostManagedProviderVars (1)
 function withoutHostManagedProviderVars() {
-  return !env.CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST && !y() && isGatewayLoginForced();
+  return !env.CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST && !hasProviderEnvFlag() && isGatewayLoginForced();
 }
 //@ chunk-aepeg2w5.js:314368-314663 fingerprint = withoutSSHTunnelVars (0.802)
 function withoutSSHTunnelVars() {
-  let of = lockHolderSocketSlot.of(getRootSession().host);
-  if (of.socket === void 0) {
+  let e = lockHolderSocketSlot.of(getRootSession().host);
+  if (e.socket === undefined) {
     let ANTHROPIC_UNIX_SOCKET = env.ANTHROPIC_UNIX_SOCKET;
-    of.socket =
+    e.socket =
       ANTHROPIC_UNIX_SOCKET &&
       isSshPlaceholderAuth({
-        ANTHROPIC_UNIX_SOCKET: ANTHROPIC_UNIX_SOCKET,
+        ANTHROPIC_UNIX_SOCKET,
         CLAUDE_CODE_OAUTH_TOKEN: env.CLAUDE_CODE_OAUTH_TOKEN,
         ANTHROPIC_API_KEY: env.ANTHROPIC_API_KEY,
         ANTHROPIC_AUTH_TOKEN: env.ANTHROPIC_AUTH_TOKEN,
@@ -42,41 +42,43 @@ function withoutSSHTunnelVars() {
         ? ANTHROPIC_UNIX_SOCKET
         : null;
   }
-  return of.socket ?? void 0;
+  return e.socket ?? undefined;
 }
+//@ chunk-q4qb1h08.js:20486-20921 fingerprint = applySafeConfigEnvironmentVariables (0.34)
 /**
  * 把设置中的 env 写入 process.env：信任前只应用安全来源（user/flag/policy）与安全变量，托管设置的值优先并在覆盖时警告。
  */
-//@ chunk-q4qb1h08.js:20486-20921 fingerprint = applySafeConfigEnvironmentVariables (0.34)
-function applySafeConfigEnvironmentVariables_2(e, n, r, E, s) {
-  if (!e || !r) return e || {};
-  let C = {},
-    _ = [];
-  for (let [a, O] of Object.entries(e)) {
-    if (!r.has(a.toUpperCase()) || isGatewayBackedPolicyDisable(a, O, n)) {
-      C[a] = O;
+function applySafeConfigEnvironmentVariables_2(e, n, hostSpawnEnvKeys, desktopHost, s) {
+  if (!e || !hostSpawnEnvKeys) return e || {};
+  let C = {};
+  let _ = [];
+  for (let [key, value] of Object.entries(e)) {
+    if (!hostSpawnEnvKeys.has(key.toUpperCase()) || isGatewayBackedPolicyDisable(key, value, n)) {
+      C[key] = value;
       continue;
     }
-    let D = process.env[a];
+    let D = process.env[key];
     if (
-      E &&
+      desktopHost &&
       n === "policySettings" &&
-      nbr.some((S) => S === a.toUpperCase()) &&
+      TLS_CERT_ENV_VARS.some((S) => S === key.toUpperCase()) &&
       isPolicySlotAdminOrParentComposed()
     ) {
-      if (((C[a] = O), s && D !== void 0 && D !== O))
+      C[key] = value;
+      if (s && D !== undefined && D !== value)
         logForDebugging(
-          `Using ${escapeForDisplay(a)} from managed settings in place of the value this session had.`,
-          { level: "warn" },
+          `Using ${escapeForDisplay(key)} from managed settings in place of the value this session had.`,
+          {
+            level: "warn",
+          },
         );
       continue;
     }
-    if (s && D !== O) _.push(a);
+    if (s && D !== value) _.push(key);
   }
   if (s && _.length > 0) warnHostSuppliedEnv(_, n, s);
   return C;
 }
-
 export {
   withoutSSHTunnelVars,
   withoutHostManagedProviderVars,

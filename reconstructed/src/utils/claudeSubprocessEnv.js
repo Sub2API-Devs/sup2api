@@ -24,20 +24,23 @@ function claudeSubprocessEnv(e) {
     CLAUDE_PID: String(process.pid),
   };
   if (e.source === "agent") n.AI_AGENT = aiAgentEnvValue("agent");
-  if (e.effortLevel !== void 0) n.CLAUDE_EFFORT = e.effortLevel;
+  if (e.effortLevel !== undefined) n.CLAUDE_EFFORT = e.effortLevel;
   if (shouldPropagateTraceContext()) {
-    let r = getActiveSpanId();
-    if (r !== void 0) n.TRACEPARENT = r;
+    let activeSpanId = getActiveSpanId();
+    if (activeSpanId !== undefined) n.TRACEPARENT = activeSpanId;
   }
   return n;
 }
 //@ chunk-s61vbvea.js:310287-310379 placement
 function claudeEnvContextFrom(e) {
-  return { sessionId: e.session_id, effortLevel: e.effort?.level, source: "harness" };
+  return {
+    sessionId: e.session_id,
+    effortLevel: e.effort?.level,
+    source: "harness",
+  };
 }
 //@ chunk-s61vbvea.js:310379-310452 placement
 function isSpawnedByClaudeCodeSession() {
   return Boolean(env.CLAUDE_CODE_CHILD_SESSION || env.CLAUDECODE);
 }
-
 export { claudeEnvContextFrom, isSpawnedByClaudeCodeSession, claudeSubprocessEnv };

@@ -17,14 +17,19 @@ var SYMBOL_TAG = "[object Symbol]";
 function isSymbol(args) {
   return typeof args == "symbol" || (lV(args) && yre(args) == SYMBOL_TAG);
 }
+//@ chunk-mthxbav8.js:87504-87620 fingerprint = quote (0.636)
 /**
  * 取 ~ 之后的操作数：同一词里有后缀则用后缀，否则用下一个词的文本，并标记是否按字面处理（下一个词带引号）。旧版名 quote 误配。
  */
-//@ chunk-mthxbav8.js:87504-87620 fingerprint = quote (0.636)
 function tildeOperandAt(e, n, r) {
   return n !== ""
-    ? { value: n, tildeLiteral: !0 }
-    : { value: e[r + 1]?.text ?? "", tildeLiteral: e[r + 1]?.quoted ?? !1 };
+    ? {
+        value: n,
+        tildeLiteral: true,
+      }
+    : {
+        value: e[r + 1]?.text ?? "",
+        tildeLiteral: e[r + 1]?.quoted ?? false,
+      };
 }
-
 export { isSymbol, tildeOperandAt };

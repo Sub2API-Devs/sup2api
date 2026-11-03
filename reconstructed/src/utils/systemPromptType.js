@@ -9,12 +9,11 @@
  * attribution: facade-exports 1
  */
 
+//@ chunk-w5ndchqs.js:2472-2496 facade-exports
 /**
  * asSystemPrompt：恒等函数，只做类型标记（字符串数组 → SystemPrompt）。
  */
-//@ chunk-w5ndchqs.js:2472-2496 facade-exports
 function asSystemPrompt(value) {
   return value;
 }
-
 export { asSystemPrompt };

@@ -12,67 +12,64 @@ import { configureApiKeyHeaders } from "../services/api/client.js";
 import { getSessionIngressAuthToken_2 } from "../utils/sessionIngressAuth.js";
 import { registerWorker } from "./workSecret.js";
 import { logForDebugging } from "../utils/debug.js";
-import { SSETransport, WNo, zr } from "../cli/transports/SSETransport.js";
+import { SSETransport, LONG_POLL_TIMEOUT_MS, SHORT_POLL_TIMEOUT_MS } from "../cli/transports/SSETransport.js";
 import { logError } from "../utils/log.js";
-import { CCRClient, WORKER_CONFLICT_CLOSE_CODES, Xe } from "../cli/transports/ccrClient.js";
-import { Oli, redeliveryKind } from "./readReceipts.js";
+import { CCRClient, WORKER_CONFLICT_CLOSE_CODES, isUserPayload } from "../cli/transports/ccrClient.js";
+import { withholdHeldReceipt, redeliveryKind } from "./readReceipts.js";
 import { evaluateInboundAttestationWithPolicy } from "./attestationGate.js";
 import { errorMessage } from "../utils/errors.js";
 
+//@ chunk-fp6aqx1j.js:172333-177999 fingerprint = createV2ReplTransport (0.45)
 /**
  * 建 v2 传输：epoch 取 /bridge 给的值或调 registerWorker；SSETransport 读 `{sessionUrl}/worker/events/stream`，CCRClient 负责写事件、心跳、投递回执、内部事件；
  * epoch 不匹配等请求路径终态时按 4090/4094 关闭，心跳失败而 SSE 正常时 4093，初始化失败 4091；connect() 先 initialize(epoch) 成功后再开读流（outboundOnly 不开）。
  */
-//@ chunk-fp6aqx1j.js:172333-177999 fingerprint = createV2ReplTransport (0.45)
 async function createV2ReplTransport(opts) {
-  let {
-      sessionUrl: sessionUrl,
-      ingressToken: ingressToken,
-      sessionId: sessionId,
-      initialSequenceNum: initialSequenceNum,
-      getAuthToken: getAuthToken,
-    } = opts,
-    reportsReadReceipts = () => opts.inboundReadReceipts?.() === !0,
-    getAuthHeaders;
+  let { sessionUrl, ingressToken, sessionId, initialSequenceNum, getAuthToken } = opts;
+  let reportsReadReceipts = () => opts.inboundReadReceipts?.() === true;
+  let getAuthHeaders;
   if (getAuthToken) getAuthHeaders = () => configureApiKeyHeaders(getAuthToken());
   else getSessionIngressAuthToken_2(ingressToken);
   let epoch = opts.epoch ?? (await registerWorker(sessionUrl, ingressToken));
   logForDebugging(
-    `[bridge:repl] CCR v2: worker sessionId=${sessionId} epoch=${epoch}${opts.epoch !== void 0 ? " (from /bridge)" : " (via registerWorker)"}`,
+    `[bridge:repl] CCR v2: worker sessionId=${sessionId} epoch=${epoch}${opts.epoch !== undefined ? " (from /bridge)" : " (via registerWorker)"}`,
   );
   let sseUrl = new URL(sessionUrl);
   sseUrl.pathname = sseUrl.pathname.replace(/\/$/, "") + "/worker/events/stream";
   let sseTransport = new SSETransport(
-      sseUrl,
-      {},
-      {
-        sessionId: sessionId,
-        initialSequenceNum: initialSequenceNum,
-        getAuthHeaders: getAuthHeaders,
-        connectTimeoutMs: opts.sseConnectTimeoutMs,
-        sseKeepaliveMaxIntervalSeconds: opts.sseKeepaliveMaxIntervalSeconds,
-        longPollFallback: opts.longPollFallback,
-        initialLongPollMode: opts.initialLongPollMode,
-      },
-    ),
-    inboundEnabled = !opts.outboundOnly,
-    selfHealHeartbeats = (opts.selfHealHeartbeats ?? !1) && inboundEnabled,
-    nonOrigin403Retry = (opts.nonOrigin403Retry ?? !1) && inboundEnabled,
-    x = nonOrigin403Retry && selfHealHeartbeats;
+    sseUrl,
+    {},
+    {
+      sessionId,
+      initialSequenceNum,
+      getAuthHeaders,
+      connectTimeoutMs: opts.sseConnectTimeoutMs,
+      sseKeepaliveMaxIntervalSeconds: opts.sseKeepaliveMaxIntervalSeconds,
+      longPollFallback: opts.longPollFallback,
+      initialLongPollMode: opts.initialLongPollMode,
+    },
+  );
+  let inboundEnabled = !opts.outboundOnly;
+  let selfHealHeartbeats = (opts.selfHealHeartbeats ?? false) && inboundEnabled;
+  let nonOrigin403Retry = (opts.nonOrigin403Retry ?? false) && inboundEnabled;
+  let nonOrigin403Transient = nonOrigin403Retry && selfHealHeartbeats;
   if (nonOrigin403Retry)
     sseTransport.setNonOriginRejectionPolicy({
-      windowMs: WNo,
-      maxGapMs: zr,
+      windowMs: LONG_POLL_TIMEOUT_MS,
+      maxGapMs: SHORT_POLL_TIMEOUT_MS,
       onRecovered: opts.onNonOriginRejectionRecovered,
     });
-  let onCloseCallback,
-    closed = !1;
+  let onCloseCallback;
+  let closed = false;
   function closeOnce(I, G, X) {
     if (closed) return;
-    closed = !0;
+    closed = true;
     try {
-      (ccr.close({ goodbye: !1, retainUndeliveredClientEvents: opts.retainUndeliveredOnClose === !0 }),
-        sseTransport.close());
+      ccr.close({
+        goodbye: false,
+        retainUndeliveredClientEvents: opts.retainUndeliveredOnClose === true,
+      });
+      sseTransport.close();
     } catch (error) {
       logError(error);
     }
@@ -83,20 +80,22 @@ async function createV2ReplTransport(opts) {
     }
   }
   let ccr = new CCRClient(sseTransport, new URL(sessionUrl), {
-    getAuthHeaders: getAuthHeaders,
+    getAuthHeaders,
     heartbeatIntervalMs: opts.heartbeatIntervalMs,
     heartbeatJitterFraction: opts.heartbeatJitterFraction,
-    advertiseHeartbeatProbeSupport: (opts.advertiseHeartbeatProbeSupport ?? !1) && inboundEnabled,
+    advertiseHeartbeatProbeSupport: (opts.advertiseHeartbeatProbeSupport ?? false) && inboundEnabled,
     uploadTrim: opts.uploadTrim,
     keepsRequestId: opts.keepsRequestId,
     uploadHoldMarker: opts.uploadHoldMarker,
     liveOnlyShellTaskRows: opts.liveOnlyShellTaskRows,
     artifactSocketIds: opts.artifactSocketIds,
     followsServedPolicy: opts.followsServedPolicy,
-    ...(opts.processExiting && { processExiting: opts.processExiting }),
-    beatOnStaleReconnect: (opts.beatOnStaleReconnect ?? !1) && inboundEnabled,
+    ...(opts.processExiting && {
+      processExiting: opts.processExiting,
+    }),
+    beatOnStaleReconnect: (opts.beatOnStaleReconnect ?? false) && inboundEnabled,
     idleTracker: opts.idleTracker,
-    beatOnReactivation: (opts.beatOnReactivation ?? !1) && inboundEnabled,
+    beatOnReactivation: (opts.beatOnReactivation ?? false) && inboundEnabled,
     skipRedundantHeartbeats: opts.skipRedundantHeartbeats,
     streamEventFlushIntervalMs: opts.streamEventFlushIntervalMs,
     streamEventFirstFlushMs: opts.streamEventFirstFlushMs,
@@ -104,56 +103,57 @@ async function createV2ReplTransport(opts) {
     noSubscriberStreamEventFlushIntervalMs: opts.noSubscriberStreamEventFlushIntervalMs,
     noSubscriberUploadHoldMs: opts.noSubscriberUploadHoldMs,
     dropUnwatchedStreamEvents: opts.dropUnwatchedStreamEvents,
-    nonOrigin403Transient: x,
+    nonOrigin403Transient,
     internalEventUploader: opts.internalEventUploader,
-    stateReadEndsAtRegistration: opts.onConnectNeedsRecord !== !0,
+    stateReadEndsAtRegistration: opts.onConnectNeedsRecord !== true,
     onEpochMismatch: (I) => {
       let G = opts.causeTypedCloseCodes ? WORKER_CONFLICT_CLOSE_CODES[I] : 4090;
-      throw (
-        logForDebugging(
-          `[bridge:repl] CCR v2: terminal request-path condition (${I}) \u2014 closing with ${G} for ${G === 4094 ? "auth recovery" : "poll-loop recovery"}`,
-        ),
-        closeOnce(G, I),
-        Error("terminal request-path condition")
+      logForDebugging(
+        `[bridge:repl] CCR v2: terminal request-path condition (${I}) \u2014 closing with ${G} for ${G === 4094 ? "auth recovery" : "poll-loop recovery"}`,
       );
+      closeOnce(G, I);
+      throw Error("terminal request-path condition");
     },
     onRequestAuthOk: opts.onRequestAuthOk,
     ...(selfHealHeartbeats && {
       onHeartbeatLost: () => {
         if (closed) return;
-        (logForDebugging(
+        logForDebugging(
           "[bridge:repl] CCR v2: heartbeats failing while SSE healthy \u2014 closing for transport rebuild",
-          { level: "warn" },
-        ),
-          closeOnce(4093));
+          {
+            level: "warn",
+          },
+        );
+        closeOnce(4093);
       },
     }),
   });
-  (sseTransport.setOnEvent((I) => {
-    if (opts.processExiting?.() && Xe(I)) return;
-    if ((ccr.reportDelivery(I.event_id, "received"), !(reportsReadReceipts() && Oli(I.event_id))))
+  sseTransport.setOnEvent((I) => {
+    if (opts.processExiting?.() && isUserPayload(I)) return;
+    ccr.reportDelivery(I.event_id, "received");
+    if (!(reportsReadReceipts() && withholdHeldReceipt(I.event_id)))
       ccr.reportDelivery(I.event_id, "processed");
-  }),
-    sseTransport.setEventFilter((event) => {
-      if (evaluateInboundAttestationWithPolicy(event)) return !0;
-      return reportsReadReceipts() ? redeliveryKind(event) : !1;
-    }));
-  let onConnectCallback,
-    writesReady = !1;
+  });
+  sseTransport.setEventFilter((event) => {
+    if (evaluateInboundAttestationWithPolicy(event)) return true;
+    return reportsReadReceipts() ? redeliveryKind(event) : false;
+  });
+  let onConnectCallback;
+  let writesReady = false;
   return {
-    write(I) {
-      return ccr.writeEvent(I);
+    write(msg) {
+      return ccr.writeEvent(msg);
     },
     writeBatch(I) {
       return ccr.writeEvents(I);
     },
     close(I) {
-      if (
-        ((closed = !0),
-        ccr.close({ goodbye: I?.goodbye, retainUndeliveredClientEvents: I?.retainUndelivered }),
-        !I?.retainUndelivered)
-      )
-        ccr.discardUndeliveredClientEvents();
+      closed = true;
+      ccr.close({
+        goodbye: I?.goodbye,
+        retainUndeliveredClientEvents: I?.retainUndelivered,
+      });
+      if (!I?.retainUndelivered) ccr.discardUndeliveredClientEvents();
       sseTransport.close();
     },
     takeUndeliveredEvents() {
@@ -176,17 +176,17 @@ async function createV2ReplTransport(opts) {
       if (sseTransport.isConnectedStatus()) return writesReady ? "connected" : "init";
       return "connecting";
     },
-    setOnData(I) {
-      sseTransport.setOnData(I);
+    setOnData(cb) {
+      sseTransport.setOnData(cb);
     },
-    setOnClose(I) {
-      ((onCloseCallback = I),
-        sseTransport.setOnClose((G, X) => {
-          closeOnce(G ?? 4092, void 0, X);
-        }));
+    setOnClose(cb) {
+      onCloseCallback = cb;
+      sseTransport.setOnClose((code, X) => {
+        closeOnce(code ?? 4092, undefined, X);
+      });
     },
-    setOnConnect(I) {
-      onConnectCallback = I;
+    setOnConnect(cb) {
+      onConnectCallback = cb;
     },
     getLastSequenceNum() {
       return sseTransport.getLastSequenceNum();
@@ -200,15 +200,16 @@ async function createV2ReplTransport(opts) {
     getEpoch() {
       return epoch;
     },
-    reportState(I, G) {
-      ccr.reportState(I, G);
+    reportState(state, G) {
+      ccr.reportState(state, G);
     },
-    reportMetadata(I) {
-      ccr.reportMetadata(I);
+    reportMetadata(metadata) {
+      ccr.reportMetadata(metadata);
     },
     reportInternalMetadata(I) {
-      if (closed) return !1;
-      return (ccr.reportInternalMetadata(I), !0);
+      if (closed) return false;
+      ccr.reportInternalMetadata(I);
+      return true;
     },
     droppedDurableBatchCount() {
       return ccr.droppedDurableBatches;
@@ -219,8 +220,8 @@ async function createV2ReplTransport(opts) {
     droppedWorkerStatePatchCount() {
       return ccr.droppedWorkerStatePatches;
     },
-    reportDelivery(I, G) {
-      ccr.reportDelivery(I, G);
+    reportDelivery(eventId, status) {
+      ccr.reportDelivery(eventId, status);
     },
     setStreamEventFlushIntervalMs(I) {
       ccr.setStreamEventFlushIntervalMs(I);
@@ -256,7 +257,10 @@ async function createV2ReplTransport(opts) {
       return ccr.uploadBacklog();
     },
     getInternalEventBacklog() {
-      return { pending: ccr.internalEventsPending, droppedBatches: ccr.droppedInternalBatches };
+      return {
+        pending: ccr.internalEventsPending,
+        droppedBatches: ccr.droppedInternalBatches,
+      };
     },
     trackFirstFrameUpload(I) {
       return ccr.trackFirstFrameUpload(I);
@@ -282,25 +286,21 @@ async function createV2ReplTransport(opts) {
       ccr.initialize(epoch).then(
         (code) => {
           if (closed) return;
-          if (
-            ((writesReady = !0),
-            logForDebugging(
-              `[bridge:repl] v2 transport ready for writes (epoch=${epoch}); opening the read stream`,
-            ),
-            onConnectCallback?.(code),
-            !opts.outboundOnly && !closed)
-          )
-            sseTransport.connect();
+          writesReady = true;
+          logForDebugging(
+            `[bridge:repl] v2 transport ready for writes (epoch=${epoch}); opening the read stream`,
+          );
+          onConnectCallback?.(code);
+          if (!opts.outboundOnly && !closed) sseTransport.connect();
         },
         (err) => {
-          (logForDebugging(`[bridge:repl] CCR v2 initialize failed: ${errorMessage(err)}`, {
+          logForDebugging(`[bridge:repl] CCR v2 initialize failed: ${errorMessage(err)}`, {
             level: "error",
-          }),
-            closeOnce(4091));
+          });
+          closeOnce(4091);
         },
       );
     },
   };
 }
-
 export { createV2ReplTransport };

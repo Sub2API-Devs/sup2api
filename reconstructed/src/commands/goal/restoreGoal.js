@@ -14,51 +14,57 @@ import { fromEnum, lit } from "../../services/analytics/safeMetadata.js";
 import { getSessionId, getTotalOutputTokens } from "../../bootstrap/state.js";
 import { logEvent } from "../../services/analytics/index.js";
 
+//@ chunk-nhtqnamp.js:385-1085 placement
 /**
  * 恢复会话时从转写还原 /goal 目标与 Stop hook。
  */
-//@ chunk-nhtqnamp.js:385-1085 placement
-function restoreGoalFromTranscript(l, s, d, i) {
-  let e = findActiveGoalCondition(l),
-    r = e !== null ? getGoalBlockedReason() : null,
-    n = r?.code === "hooks_held" ? null : r;
-  if (n !== null) logFeatureSad("goal_set", n.code, { origin: fromEnum("restored") });
+function restoreGoalFromTranscript(messages, setAppState, sessionHooksRegistry, i) {
+  let activeGoalCondition = findActiveGoalCondition(messages);
+  let r = activeGoalCondition !== null ? getGoalBlockedReason() : null;
+  let n = r?.code === "hooks_held" ? null : r;
+  if (n !== null)
+    logFeatureSad("goal_set", n.code, {
+      origin: fromEnum("restored"),
+    });
   let t;
-  if (e === null || n !== null) {
-    if (
-      (s((o) => ((t = o.activeGoal), o.activeGoal === void 0 ? o : { ...o, activeGoal: void 0 })),
-      t !== void 0)
-    )
-      logGoalCleared(t, "resume_swap");
+  if (activeGoalCondition === null || n !== null) {
+    setAppState((o) => {
+      t = o.activeGoal;
+      return o.activeGoal === undefined
+        ? o
+        : {
+            ...o,
+            activeGoal: undefined,
+          };
+    });
+    if (t !== undefined) logGoalCleared(t, "resume_swap");
     return;
   }
-  if (
-    (d.add(getSessionId(), "Stop", "", getValueFromInput(e)),
-    s(
-      (o) => (
-        (t = o.activeGoal),
-        {
-          ...o,
-          activeGoal: {
-            condition: e,
-            iterations: i?.iterations ?? 0,
-            setAt: i?.setAt ?? Date.now(),
-            ...(i?.lastReason !== void 0 && { lastReason: i.lastReason }),
-            origin: "restored",
-            tokensAtStart: getTotalOutputTokens(),
-          },
-        }
-      ),
-    ),
-    t !== void 0)
-  )
-    logGoalCleared(t, "resume_swap");
-  (logEvent("tengu_goal_restored_on_resume", { promptLength: e.length }),
-    logEvent("tengu_stop_hook_added", {
-      promptLength: e.length,
-      via: lit("goal"),
-      origin: fromEnum("restored"),
-    }));
+  sessionHooksRegistry.add(getSessionId(), "Stop", "", getValueFromInput(activeGoalCondition));
+  setAppState((o) => {
+    t = o.activeGoal;
+    return {
+      ...o,
+      activeGoal: {
+        condition: activeGoalCondition,
+        iterations: i?.iterations ?? 0,
+        setAt: i?.setAt ?? Date.now(),
+        ...(i?.lastReason !== undefined && {
+          lastReason: i.lastReason,
+        }),
+        origin: "restored",
+        tokensAtStart: getTotalOutputTokens(),
+      },
+    };
+  });
+  if (t !== undefined) logGoalCleared(t, "resume_swap");
+  logEvent("tengu_goal_restored_on_resume", {
+    promptLength: activeGoalCondition.length,
+  });
+  logEvent("tengu_stop_hook_added", {
+    promptLength: activeGoalCondition.length,
+    via: lit("goal"),
+    origin: fromEnum("restored"),
+  });
 }
-
 export { restoreGoalFromTranscript };

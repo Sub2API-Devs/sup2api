@@ -8,21 +8,48 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:326893-328178 cjs-fingerprint
-var Ii = x(function (Eg, vi) {
-  function Lp(e) {
-    let t = { className: "keyword", begin: "\\$(f[asn]|t|vp[rtd]|children)" },
-      n = { className: "literal", begin: "false|true|PI|undef" },
-      a = { className: "number", begin: "\\b\\d+(\\.\\d+)?(e-?\\d+)?", relevance: 0 },
-      inherit = e.inherit(e.QUOTE_STRING_MODE, { illegal: null }),
-      o = { className: "meta", keywords: { keyword: "include use" }, begin: "include|use <", end: ">" },
-      r = { className: "params", begin: "\\(", end: "\\)", contains: ["self", a, inherit, t, n] },
-      i = { begin: "[*!#%]", relevance: 0 },
-      c = {
-        className: "function",
-        beginKeywords: "module function",
-        end: /=|\{/,
-        contains: [r, e.UNDERSCORE_TITLE_MODE],
-      };
+var require_openscad = x(function (cjsExports, cjsModule) {
+  function openscad(hljs) {
+    let SPECIAL_VARS = {
+      className: "keyword",
+      begin: "\\$(f[asn]|t|vp[rtd]|children)",
+    };
+    let LITERALS = {
+      className: "literal",
+      begin: "false|true|PI|undef",
+    };
+    let NUMBERS = {
+      className: "number",
+      begin: "\\b\\d+(\\.\\d+)?(e-?\\d+)?",
+      relevance: 0,
+    };
+    let STRING = hljs.inherit(hljs.QUOTE_STRING_MODE, {
+      illegal: null,
+    });
+    let PREPRO = {
+      className: "meta",
+      keywords: {
+        keyword: "include use",
+      },
+      begin: "include|use <",
+      end: ">",
+    };
+    let PARAMS = {
+      className: "params",
+      begin: "\\(",
+      end: "\\)",
+      contains: ["self", NUMBERS, STRING, SPECIAL_VARS, LITERALS],
+    };
+    let MODIFIERS = {
+      begin: "[*!#%]",
+      relevance: 0,
+    };
+    let FUNCTIONS = {
+      className: "function",
+      beginKeywords: "module function",
+      end: /=|\{/,
+      contains: [PARAMS, hljs.UNDERSCORE_TITLE_MODE],
+    };
     return {
       name: "OpenSCAD",
       aliases: ["scad"],
@@ -32,10 +59,18 @@ var Ii = x(function (Eg, vi) {
         built_in:
           "circle square polygon text sphere cube cylinder polyhedron translate rotate scale resize mirror multmatrix color offset hull minkowski union difference intersection abs sign sin cos tan acos asin atan atan2 floor round ceil ln log pow sqrt exp rands min max concat lookup str chr search version version_num norm cross parent_module echo import import_dxf dxf_linear_extrude linear_extrude rotate_extrude surface projection render children dxf_cross dxf_dim let assign",
       },
-      contains: [e.C_LINE_COMMENT_MODE, e.C_BLOCK_COMMENT_MODE, a, o, inherit, t, i, c],
+      contains: [
+        hljs.C_LINE_COMMENT_MODE,
+        hljs.C_BLOCK_COMMENT_MODE,
+        NUMBERS,
+        PREPRO,
+        STRING,
+        SPECIAL_VARS,
+        MODIFIERS,
+        FUNCTIONS,
+      ],
     };
   }
-  vi.exports = Lp;
+  cjsModule.exports = openscad;
 });
-
-export { Ii };
+export { require_openscad };

@@ -8,15 +8,16 @@
 import { x } from "../../runtime/bun-runtime.js";
 
 //@ chunk-h6b7mazd.js:8451-8571 cjs-require-graph
-var _o = x(function (np, xo) {
-  var At = Object.defineProperty || !1;
-  if (At)
+var require_es_define_property = x(function (cjsExports, cjsModule) {
+  var $defineProperty = Object.defineProperty || false;
+  if ($defineProperty)
     try {
-      At({}, "a", { value: 1 });
+      $defineProperty({}, "a", {
+        value: 1,
+      });
     } catch (error) {
-      At = !1;
+      $defineProperty = false;
     }
-  xo.exports = At;
+  cjsModule.exports = $defineProperty;
 });
-
-export { _o };
+export { require_es_define_property };

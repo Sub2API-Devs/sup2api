@@ -14,21 +14,30 @@ import { logForDebugging } from "../utils/debug.js";
 import { logFeatureBad, logFeatureOk } from "../services/analytics/featureTelemetry.js";
 import { logEvent } from "../services/analytics/index.js";
 
+//@ chunk-cjydagjy.js:10386-10767 fingerprint = migrateOpusToOpus1m (0.659)
 /**
  * 迁移：userSettings.model 为 opus 且允许 1M 时改成 opus[1m]。
  */
-//@ chunk-cjydagjy.js:10386-10767 fingerprint = migrateOpusToOpus1m (0.659)
 async function migrateOpusToOpus1m(e) {
-  if (!opus1mMergeTagsDefaultOpus()) return !0;
-  if (getSettingsForSourceForUpkeep("userSettings")?.model !== "opus") return !0;
-  let { error: error } = await updateSettingsForSource("userSettings", { model: "opus[1m]" }, void 0, e);
-  if (error)
-    return (
-      logForDebugging(`Failed to migrate opus model setting: ${error}`, { level: "error" }),
-      logFeatureBad("migration_opus_to_opus1m", "migration_opus_to_opus1m_write_failed"),
-      !1
-    );
-  return (logEvent("tengu_opus_to_opus1m_migration", {}), logFeatureOk("migration_opus_to_opus1m"), !0);
+  if (!opus1mMergeTagsDefaultOpus()) return true;
+  if (getSettingsForSourceForUpkeep("userSettings")?.model !== "opus") return true;
+  let { error } = await updateSettingsForSource(
+    "userSettings",
+    {
+      model: "opus[1m]",
+    },
+    undefined,
+    e,
+  );
+  if (error) {
+    logForDebugging(`Failed to migrate opus model setting: ${error}`, {
+      level: "error",
+    });
+    logFeatureBad("migration_opus_to_opus1m", "migration_opus_to_opus1m_write_failed");
+    return false;
+  }
+  logEvent("tengu_opus_to_opus1m_migration", {});
+  logFeatureOk("migration_opus_to_opus1m");
+  return true;
 }
-
 export { migrateOpusToOpus1m };

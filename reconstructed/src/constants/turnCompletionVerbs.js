@@ -9,10 +9,10 @@
  * attribution: fingerprint 1
  */
 
+//@ chunk-ah34pb7m.js:193319-193409 fingerprint = TURN_COMPLETION_VERBS (1)
 /**
  * 轮次完成动词（Baked、Brewed、Cogitated、Worked…）。
  */
-//@ chunk-ah34pb7m.js:193319-193409 fingerprint = TURN_COMPLETION_VERBS (1)
 var TURN_COMPLETION_VERBS = [
   "Baked",
   "Brewed",
@@ -23,5 +23,4 @@ var TURN_COMPLETION_VERBS = [
   "Saut\xE9ed",
   "Worked",
 ];
-
 export { TURN_COMPLETION_VERBS };

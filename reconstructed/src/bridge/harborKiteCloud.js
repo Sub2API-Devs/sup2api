@@ -18,17 +18,17 @@ import { getFeatureValue_CACHED_MAY_BE_STALE } from "../services/analytics/growt
 
 //@ chunk-96k5yyba.js:3522-3726 placement
 function isHarborKiteCloudEnabled() {
-  if (!isCrossSessionMessagingEnabled()) return !1;
+  if (!isCrossSessionMessagingEnabled()) return false;
   if (
     getAPIProvider() !== "firstParty" ||
     isEssentialTrafficOnly() ||
     !isPolicyAllowed("allow_remote_sessions")
   )
-    return !1;
-  if (!isClaudeAISubscriber() || !hasOrganizationContext()) return !1;
+    return false;
+  if (!isClaudeAISubscriber() || !hasOrganizationContext()) return false;
   return (
     Boolean(env.CLAUDE_CODE_HARBOR_KITE_CLOUD) ||
-    getFeatureValue_CACHED_MAY_BE_STALE("tengu_harbor_kite_cloud", !1)
+    getFeatureValue_CACHED_MAY_BE_STALE("tengu_harbor_kite_cloud", false)
   );
 }
 //@ chunk-96k5yyba.js:3726-3826 placement

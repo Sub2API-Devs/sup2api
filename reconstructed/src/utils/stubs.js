@@ -10,10 +10,15 @@
  */
 
 //@ chunk-2z9z57nd.js:191-210 placement
-function izn(n, e) {}
+/**
+ * 空实现的重启桩。
+ */
+function noopRelaunch(n, e) {}
 //@ chunk-2z9z57nd.js:210-234 placement
-function IFs() {
-  return !1;
+/**
+ * 恒 false 的准备桩。
+ */
+function alwaysFalse() {
+  return false;
 }
-
-export { IFs, izn };
+export { alwaysFalse, noopRelaunch };

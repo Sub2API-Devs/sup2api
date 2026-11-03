@@ -8,103 +8,152 @@
 import { x } from "../../../../../../runtime/bun-runtime.js";
 
 //@ chunk-fq0cr76a.js:515339-518581 cjs-fingerprint
-var iU = x(function (rU) {
-  Object.defineProperty(rU, "__esModule", { value: !0 });
-  rU.symbols = rU.wktPublicImportPaths = rU.packageName = void 0;
-  rU.packageName = "@bufbuild/protobuf";
-  rU.wktPublicImportPaths = {
-    "google/protobuf/compiler/plugin.proto": rU.packageName + "/wkt",
-    "google/protobuf/any.proto": rU.packageName + "/wkt",
-    "google/protobuf/api.proto": rU.packageName + "/wkt",
-    "google/protobuf/cpp_features.proto": rU.packageName + "/wkt",
-    "google/protobuf/descriptor.proto": rU.packageName + "/wkt",
-    "google/protobuf/duration.proto": rU.packageName + "/wkt",
-    "google/protobuf/empty.proto": rU.packageName + "/wkt",
-    "google/protobuf/field_mask.proto": rU.packageName + "/wkt",
-    "google/protobuf/go_features.proto": rU.packageName + "/wkt",
-    "google/protobuf/java_features.proto": rU.packageName + "/wkt",
-    "google/protobuf/source_context.proto": rU.packageName + "/wkt",
-    "google/protobuf/struct.proto": rU.packageName + "/wkt",
-    "google/protobuf/timestamp.proto": rU.packageName + "/wkt",
-    "google/protobuf/type.proto": rU.packageName + "/wkt",
-    "google/protobuf/wrappers.proto": rU.packageName + "/wkt",
+var require_symbols = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.symbols = cjsExports.wktPublicImportPaths = cjsExports.packageName = undefined;
+  cjsExports.packageName = "@bufbuild/protobuf";
+  cjsExports.wktPublicImportPaths = {
+    "google/protobuf/compiler/plugin.proto": cjsExports.packageName + "/wkt",
+    "google/protobuf/any.proto": cjsExports.packageName + "/wkt",
+    "google/protobuf/api.proto": cjsExports.packageName + "/wkt",
+    "google/protobuf/cpp_features.proto": cjsExports.packageName + "/wkt",
+    "google/protobuf/descriptor.proto": cjsExports.packageName + "/wkt",
+    "google/protobuf/duration.proto": cjsExports.packageName + "/wkt",
+    "google/protobuf/empty.proto": cjsExports.packageName + "/wkt",
+    "google/protobuf/field_mask.proto": cjsExports.packageName + "/wkt",
+    "google/protobuf/go_features.proto": cjsExports.packageName + "/wkt",
+    "google/protobuf/java_features.proto": cjsExports.packageName + "/wkt",
+    "google/protobuf/source_context.proto": cjsExports.packageName + "/wkt",
+    "google/protobuf/struct.proto": cjsExports.packageName + "/wkt",
+    "google/protobuf/timestamp.proto": cjsExports.packageName + "/wkt",
+    "google/protobuf/type.proto": cjsExports.packageName + "/wkt",
+    "google/protobuf/wrappers.proto": cjsExports.packageName + "/wkt",
   };
-  rU.symbols = {
-    isMessage: { typeOnly: !1, bootstrapWktFrom: "../../is-message.js", from: rU.packageName },
-    Message: { typeOnly: !0, bootstrapWktFrom: "../../types.js", from: rU.packageName },
-    create: { typeOnly: !1, bootstrapWktFrom: "../../create.js", from: rU.packageName },
-    fromJson: { typeOnly: !1, bootstrapWktFrom: "../../from-json.js", from: rU.packageName },
-    fromJsonString: { typeOnly: !1, bootstrapWktFrom: "../../from-json.js", from: rU.packageName },
-    fromBinary: { typeOnly: !1, bootstrapWktFrom: "../../from-binary.js", from: rU.packageName },
-    toBinary: { typeOnly: !1, bootstrapWktFrom: "../../to-binary.js", from: rU.packageName },
-    toJson: { typeOnly: !1, bootstrapWktFrom: "../../to-json.js", from: rU.packageName },
-    toJsonString: { typeOnly: !1, bootstrapWktFrom: "../../to-json.js", from: rU.packageName },
-    protoInt64: { typeOnly: !1, bootstrapWktFrom: "../../proto-int64.js", from: rU.packageName },
-    JsonValue: { typeOnly: !0, bootstrapWktFrom: "../../json-value.js", from: rU.packageName },
-    JsonObject: { typeOnly: !0, bootstrapWktFrom: "../../json-value.js", from: rU.packageName },
+  cjsExports.symbols = {
+    isMessage: {
+      typeOnly: false,
+      bootstrapWktFrom: "../../is-message.js",
+      from: cjsExports.packageName,
+    },
+    Message: {
+      typeOnly: true,
+      bootstrapWktFrom: "../../types.js",
+      from: cjsExports.packageName,
+    },
+    create: {
+      typeOnly: false,
+      bootstrapWktFrom: "../../create.js",
+      from: cjsExports.packageName,
+    },
+    fromJson: {
+      typeOnly: false,
+      bootstrapWktFrom: "../../from-json.js",
+      from: cjsExports.packageName,
+    },
+    fromJsonString: {
+      typeOnly: false,
+      bootstrapWktFrom: "../../from-json.js",
+      from: cjsExports.packageName,
+    },
+    fromBinary: {
+      typeOnly: false,
+      bootstrapWktFrom: "../../from-binary.js",
+      from: cjsExports.packageName,
+    },
+    toBinary: {
+      typeOnly: false,
+      bootstrapWktFrom: "../../to-binary.js",
+      from: cjsExports.packageName,
+    },
+    toJson: {
+      typeOnly: false,
+      bootstrapWktFrom: "../../to-json.js",
+      from: cjsExports.packageName,
+    },
+    toJsonString: {
+      typeOnly: false,
+      bootstrapWktFrom: "../../to-json.js",
+      from: cjsExports.packageName,
+    },
+    protoInt64: {
+      typeOnly: false,
+      bootstrapWktFrom: "../../proto-int64.js",
+      from: cjsExports.packageName,
+    },
+    JsonValue: {
+      typeOnly: true,
+      bootstrapWktFrom: "../../json-value.js",
+      from: cjsExports.packageName,
+    },
+    JsonObject: {
+      typeOnly: true,
+      bootstrapWktFrom: "../../json-value.js",
+      from: cjsExports.packageName,
+    },
     codegen: {
       boot: {
-        typeOnly: !1,
+        typeOnly: false,
         bootstrapWktFrom: "../../codegenv2/boot.js",
-        from: rU.packageName + "/codegenv2",
+        from: cjsExports.packageName + "/codegenv2",
       },
       fileDesc: {
-        typeOnly: !1,
+        typeOnly: false,
         bootstrapWktFrom: "../../codegenv2/file.js",
-        from: rU.packageName + "/codegenv2",
+        from: cjsExports.packageName + "/codegenv2",
       },
       enumDesc: {
-        typeOnly: !1,
+        typeOnly: false,
         bootstrapWktFrom: "../../codegenv2/enum.js",
-        from: rU.packageName + "/codegenv2",
+        from: cjsExports.packageName + "/codegenv2",
       },
       extDesc: {
-        typeOnly: !1,
+        typeOnly: false,
         bootstrapWktFrom: "../../codegenv2/extension.js",
-        from: rU.packageName + "/codegenv2",
+        from: cjsExports.packageName + "/codegenv2",
       },
       messageDesc: {
-        typeOnly: !1,
+        typeOnly: false,
         bootstrapWktFrom: "../../codegenv2/message.js",
-        from: rU.packageName + "/codegenv2",
+        from: cjsExports.packageName + "/codegenv2",
       },
       serviceDesc: {
-        typeOnly: !1,
+        typeOnly: false,
         bootstrapWktFrom: "../../codegenv2/service.js",
-        from: rU.packageName + "/codegenv2",
+        from: cjsExports.packageName + "/codegenv2",
       },
       tsEnum: {
-        typeOnly: !1,
+        typeOnly: false,
         bootstrapWktFrom: "../../codegenv2/enum.js",
-        from: rU.packageName + "/codegenv2",
+        from: cjsExports.packageName + "/codegenv2",
       },
       GenFile: {
-        typeOnly: !0,
+        typeOnly: true,
         bootstrapWktFrom: "../../codegenv2/types.js",
-        from: rU.packageName + "/codegenv2",
+        from: cjsExports.packageName + "/codegenv2",
       },
       GenEnum: {
-        typeOnly: !0,
+        typeOnly: true,
         bootstrapWktFrom: "../../codegenv2/types.js",
-        from: rU.packageName + "/codegenv2",
+        from: cjsExports.packageName + "/codegenv2",
       },
       GenExtension: {
-        typeOnly: !0,
+        typeOnly: true,
         bootstrapWktFrom: "../../codegenv2/types.js",
-        from: rU.packageName + "/codegenv2",
+        from: cjsExports.packageName + "/codegenv2",
       },
       GenMessage: {
-        typeOnly: !0,
+        typeOnly: true,
         bootstrapWktFrom: "../../codegenv2/types.js",
-        from: rU.packageName + "/codegenv2",
+        from: cjsExports.packageName + "/codegenv2",
       },
       GenService: {
-        typeOnly: !0,
+        typeOnly: true,
         bootstrapWktFrom: "../../codegenv2/types.js",
-        from: rU.packageName + "/codegenv2",
+        from: cjsExports.packageName + "/codegenv2",
       },
     },
   };
 });
-
-export { iU };
+export { require_symbols };

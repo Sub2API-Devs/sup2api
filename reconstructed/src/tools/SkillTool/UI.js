@@ -8,7 +8,10 @@
  * pieces: chunk-8ndmcarc.js (3), chunk-a5k9jscj.js (1)
  * attribution: affinity 1, fingerprint 3
  */
-import { e, r } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { MessageResponse } from "../../components/MessageResponse.js";
 import { Text, Box } from "../../ink/components/Text.js";
 import { Byline } from "../../components/design-system/Byline.js";
@@ -23,16 +26,18 @@ function countToolCallsSince(o) {
   let t = o.data.message.message.content[0];
   return t?.type === "tool_use" || t?.type === "tool_result";
 }
+//@ chunk-8ndmcarc.js:16740-17181 fingerprint = renderToolResultMessage (0.915)
 /**
  * Skill 结果渲染：forked 显示 Done/Running in the background；inline 显示 "Successfully loaded skill · N tools allowed · 模型"。
  */
-//@ chunk-8ndmcarc.js:16740-17181 fingerprint = renderToolResultMessage (0.915)
 function renderToolResultMessage(output) {
   if ("status" in output && output.status === "forked")
-    return e(MessageResponse, {
+    return jsxProd_default(MessageResponse, {
       height: 1,
-      children: e(Text, {
-        children: e(Byline, { children: [output.background ? "Running in the background" : "Done"] }),
+      children: jsxProd_default(Text, {
+        children: jsxProd_default(Byline, {
+          children: [output.background ? "Running in the background" : "Done"],
+        }),
       }),
     });
   let parts = ["Successfully loaded skill"];
@@ -41,72 +46,82 @@ function renderToolResultMessage(output) {
     parts.push(`${count} ${plural(count, "tool")} allowed`);
   }
   if ("model" in output && output.model) parts.push(output.model);
-  return e(MessageResponse, { height: 1, children: e(Text, { children: e(Byline, { children: parts }) }) });
+  return jsxProd_default(MessageResponse, {
+    height: 1,
+    children: jsxProd_default(Text, {
+      children: jsxProd_default(Byline, {
+        children: parts,
+      }),
+    }),
+  });
 }
+//@ chunk-8ndmcarc.js:17181-17835 fingerprint = renderToolUseProgressMessage (0.846)
 /**
  * Skill/子代理进度渲染：非 verbose 只显示最近几条工具调用，折叠其余并显示隐藏数量。
  */
-//@ chunk-8ndmcarc.js:17181-17835 fingerprint = renderToolUseProgressMessage (0.846)
-function renderToolUseProgressMessage_3(progressMessages, { tools: tools, verbose: verbose }) {
-  let filtered = progressMessages.filter(countToolCallsSince);
-  if (!filtered.length)
-    return e(MessageResponse, {
+function renderToolUseProgressMessage_3(progressMessages, { tools, verbose }) {
+  let progressMessages_2 = progressMessages.filter(countToolCallsSince);
+  if (!progressMessages_2.length)
+    return jsxProd_default(MessageResponse, {
       height: 1,
-      children: e(Text, { dimColor: !0, children: INITIALIZING_TEXT }),
+      children: jsxProd_default(Text, {
+        dimColor: true,
+        children: INITIALIZING_TEXT,
+      }),
     });
-  let displayedMessages = verbose ? filtered : filtered.slice(-MAX_TAIL_ITEMS),
-    hiddenCount = filtered.length - displayedMessages.length,
-    { lookups: lookups, inProgressToolUseIDs: inProgressToolUseIDs } = buildSubagentLookups(
-      filtered.map((pm) => pm.data),
-    );
-  return e(MessageResponse, {
-    children: r(Box, {
+  let displayedMessages = verbose ? progressMessages_2 : progressMessages_2.slice(-MAX_TAIL_ITEMS);
+  let hiddenCount = progressMessages_2.length - displayedMessages.length;
+  let { lookups, inProgressToolUseIDs } = buildSubagentLookups(progressMessages_2.map((pm) => pm.data));
+  return jsxProd_default(MessageResponse, {
+    children: jsxProd_default_2(Box, {
       flexDirection: "column",
       children: [
-        e(SubAgentProvider, {
+        jsxProd_default(SubAgentProvider, {
           children: displayedMessages.map((progressMessage) =>
-            e(
+            jsxProd_default(
               Box,
               {
-                height: hasAutoModeBlockedToolResult(progressMessage.data.message) ? void 0 : 1,
+                height: hasAutoModeBlockedToolResult(progressMessage.data.message) ? undefined : 1,
                 overflow: "hidden",
-                children: e(agentProgressSelector, {
+                children: jsxProd_default(agentProgressSelector, {
                   message: progressMessage.data.message,
-                  lookups: lookups,
-                  addMargin: !1,
-                  tools: tools,
+                  lookups,
+                  addMargin: false,
+                  tools,
                   commands: [],
-                  verbose: verbose,
-                  inProgressToolUseIDs: inProgressToolUseIDs,
+                  verbose,
+                  inProgressToolUseIDs,
                   progressMessagesForMessage: [],
-                  shouldAnimate: !1,
-                  shouldShowDot: !1,
+                  shouldAnimate: false,
+                  shouldShowDot: false,
                   style: "condensed",
-                  isTranscriptMode: !1,
-                  isStatic: !0,
+                  isTranscriptMode: false,
+                  isStatic: true,
                 }),
               },
               progressMessage.uuid,
             ),
           ),
         }),
-        e(OverflowHint, { count: hiddenCount, unit: "tool use" }),
+        jsxProd_default(OverflowHint, {
+          count: hiddenCount,
+          unit: "tool use",
+        }),
       ],
     }),
   });
 }
+//@ chunk-a5k9jscj.js:3304-3587 fingerprint = renderToolUseMessage (0.607)
 /**
  * Skill 调用的单行显示：skill 名（旧 commands 目录来源加 /），有队友作者时附 "· by 作者"。
  */
-//@ chunk-a5k9jscj.js:3304-3587 fingerprint = renderToolUseMessage (0.607)
-function renderToolUseMessage({ skill: skill }, { commands: commands, teammateAuthorOf: teammateAuthorOf }) {
+function renderToolUseMessage({ skill }, { commands, teammateAuthorOf }) {
   if (!skill) return null;
-  let trimmed = skill.trim(),
-    d = trimmed.startsWith("/") ? trimmed.substring(1) : trimmed,
-    command = commands?.find((h) => h.name === d),
-    v = command?.loadedFrom === "commands_DEPRECATED" ? `/${d}` : d,
-    r = teammateAuthorOf?.(command?.type === "prompt" ? command.source : void 0, d) ?? null;
-  return r ? `${v} \xB7 by ${r}` : v;
+  let trimmed = skill.trim();
+  let d = trimmed.startsWith("/") ? trimmed.substring(1) : trimmed;
+  let command = commands?.find((command) => command.name === d);
+  let displayName = command?.loadedFrom === "commands_DEPRECATED" ? `/${d}` : d;
+  let r = teammateAuthorOf?.(command?.type === "prompt" ? command.source : undefined, d) ?? null;
+  return r ? `${displayName} \xB7 by ${r}` : displayName;
 }
-
 export { renderToolUseProgressMessage_3, renderToolUseMessage };

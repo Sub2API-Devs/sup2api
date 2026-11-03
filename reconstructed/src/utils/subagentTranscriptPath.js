@@ -12,21 +12,20 @@ import { mailboxKeyOf } from "./swarm/teammateMessageRepair.js";
 import { STORAGE_SPACES } from "./storage/storageSpaces.js";
 import { MAX_SIDE_PATH_DEPTH, validateStorageKey } from "./storage/storageKeys.js";
 
+//@ chunk-afa5mksf.js:304-583 placement
 /**
  * 计算子代理转录旁路文件的存储键（替换 .jsonl 后缀，或在会话 sidecar 空间下按代理路径生成）。
  */
-//@ chunk-afa5mksf.js:304-583 placement
 function subagentSidecarKey(a, t) {
   return mailboxKeyOf(
     a,
     (e) => e.replace(/\.jsonl$/, t),
     (e) => {
-      if (e.namespace !== "transcript" || e.agentId === void 0) return;
-      let n = ["subagents", ...(e.agentRelPath ?? []), `agent-${e.agentId}${t}`],
-        sidecar = STORAGE_SPACES.sidecar(e.projectKey, e.sessionId, n);
-      return n.length <= MAX_SIDE_PATH_DEPTH && validateStorageKey(sidecar) === void 0 ? sidecar : void 0;
+      if (e.namespace !== "transcript" || e.agentId === undefined) return;
+      let n = ["subagents", ...(e.agentRelPath ?? []), `agent-${e.agentId}${t}`];
+      let r = STORAGE_SPACES.sidecar(e.projectKey, e.sessionId, n);
+      return n.length <= MAX_SIDE_PATH_DEPTH && validateStorageKey(r) === undefined ? r : undefined;
     },
   );
 }
-
 export { subagentSidecarKey };

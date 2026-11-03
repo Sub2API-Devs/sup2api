@@ -9,10 +9,10 @@
  * attribution: fingerprint 1
  */
 
+//@ chunk-4m46mxx9.js:11784-11914 fingerprint = DANGEROUS_SHELL_PREFIXES (0.646)
 /**
  * 危险的 shell 前缀：zsh/bash/sh/fish/pwsh/cmd/nu 等 shell 本身，命令前缀提取时不能把它们当作可放行的前缀。
  */
-//@ chunk-4m46mxx9.js:11784-11914 fingerprint = DANGEROUS_SHELL_PREFIXES (0.646)
 var DANGEROUS_SHELL_PREFIXES = [
   "zsh",
   "bash",
@@ -32,5 +32,4 @@ var DANGEROUS_SHELL_PREFIXES = [
   "xonsh",
   "ion",
 ];
-
 export { DANGEROUS_SHELL_PREFIXES };

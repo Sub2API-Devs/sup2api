@@ -13,10 +13,10 @@
 function memoryAgeDays(mtimeMs) {
   return Math.max(0, Math.floor((Date.now() - mtimeMs) / 86400000));
 }
+//@ chunk-e6aww6q8.js:116931-117205 fingerprint = memoryFreshnessText (0.667)
 /**
  * 记忆超过 1 天时生成"这条记忆已 N 天，需核实"的提示文字。
  */
-//@ chunk-e6aww6q8.js:116931-117205 fingerprint = memoryFreshnessText (0.667)
 function memoryFreshnessText(mtimeMs) {
   let n = memoryAgeDays(mtimeMs);
   if (n <= 1) return "";
@@ -26,25 +26,24 @@ function memoryFreshnessText(mtimeMs) {
     "claims about code behavior or file:line citations may be outdated. Verify against current code before asserting as fact."
   );
 }
+//@ chunk-e6aww6q8.js:117205-117298 fingerprint = memoryFreshnessNote (1)
 /**
  * 把 memoryFreshnessText 包进 <system-reminder>。
  */
-//@ chunk-e6aww6q8.js:117205-117298 fingerprint = memoryFreshnessNote (1)
 function memoryFreshnessNote(mtimeMs) {
   let text = memoryFreshnessText(mtimeMs);
   if (!text) return "";
   return `<system-reminder>${text}</system-reminder>
 `;
 }
+//@ chunk-vrb44rx7.js:139153-139290 fingerprint = memoryAge (0.657)
 /**
  * 记忆年龄的短文本：today / yesterday / Nd ago。
  */
-//@ chunk-vrb44rx7.js:139153-139290 fingerprint = memoryAge (0.657)
 function memoryAge(mtimeMs) {
   let max = Math.max(0, Math.floor((Date.now() - mtimeMs) / 86400000));
   if (max === 0) return "today";
   if (max === 1) return "yesterday";
   return `${max}d ago`;
 }
-
 export { memoryFreshnessNote, memoryFreshnessText, memoryAge };

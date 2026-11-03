@@ -12,8 +12,11 @@ import { w } from "../../vendor/react/compiler-runtime.js";
 import { y } from "../../vendor/react/cjs/react.production.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 import { useKeybinding } from "../keybindings/useKeybinding.js";
-import { nd } from "../utils/stableEmptyObject.js";
-import { r, e } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { stableEmptyObject } from "../utils/stableEmptyObject.js";
+import {
+  jsxProd_default_2,
+  jsxProd_default,
+} from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Box, Text } from "../ink/components/Text.js";
 import { ModelSelector } from "./agents/ModelSelector.js";
 import { AgentNavigationFooter } from "./agents/AgentNavigationFooter.js";
@@ -23,116 +26,143 @@ import { ConfigurableShortcutHint } from "./ConfigurableShortcutHint.js";
 import { Pane } from "./design-system/Pane.js";
 
 //@ chunk-18hwfzwa.js:676084-676166 affinity
-var hQe = "Toggle thinking mode",
-  yQe = "Enable or disable thinking for this session.";
+var THINKING_TOGGLE_TITLE = "Toggle thinking mode";
+var THINKING_TOGGLE_DESCRIPTION = "Enable or disable thinking for this session.";
 //@ chunk-18hwfzwa.js:676166-678371 fingerprint = ThinkingToggle (0.819)
-function ThinkingToggle(t0) {
-  let $ = w(24),
-    {
-      currentValue: currentValue,
-      onSelect: onSelect,
-      onCancel: onCancel,
-      isMidConversation: isMidConversation,
-    } = t0,
-    [ke, Re] = y(null),
-    He;
-  if ($[0] === MEMO_CACHE_SENTINEL)
-    ((He = [
-      { value: "true", label: "Enabled", description: "Claude will think before responding" },
-      { value: "false", label: "Disabled", description: "Claude will respond without extended thinking" },
-    ]),
-      ($[0] = He));
-  else He = $[0];
-  let We = He,
-    ze;
-  if ($[1] !== ke || $[2] !== onCancel)
-    ((ze = () => {
-      if (ke !== null) Re(null);
+function ThinkingToggle(props) {
+  let $ = w(24);
+  let { currentValue, onSelect, onCancel, isMidConversation } = props;
+  let [confirmationPending, setConfirmationPending] = y(null);
+  let t1;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    t1 = [
+      {
+        value: "true",
+        label: "Enabled",
+        description: "Claude will think before responding",
+      },
+      {
+        value: "false",
+        label: "Disabled",
+        description: "Claude will respond without extended thinking",
+      },
+    ];
+    $[0] = t1;
+  } else t1 = $[0];
+  let options = t1;
+  let t2;
+  if ($[1] !== confirmationPending || $[2] !== onCancel) {
+    t2 = () => {
+      if (confirmationPending !== null) setConfirmationPending(null);
       else onCancel();
-    }),
-      ($[1] = ke),
-      ($[2] = onCancel),
-      ($[3] = ze));
-  else ze = $[3];
-  let Xe;
-  if ($[4] === MEMO_CACHE_SENTINEL) ((Xe = { context: "Confirmation" }), ($[4] = Xe));
-  else Xe = $[4];
-  useKeybinding("confirm:no", ze, Xe);
-  let rt;
-  if ($[5] !== ke || $[6] !== onSelect)
-    ((rt = () => {
-      if (ke !== null) onSelect(ke);
-    }),
-      ($[5] = ke),
-      ($[6] = onSelect),
-      ($[7] = rt));
-  else rt = $[7];
-  const kt = ke !== null;
-  let At;
-  if ($[8] !== kt) ((At = { context: "Confirmation", isActive: kt }), ($[8] = kt), ($[9] = At));
-  else At = $[9];
-  useKeybinding("confirm:yes", rt, At);
-  let It;
-  if ($[10] !== currentValue || $[11] !== isMidConversation || $[12] !== onSelect)
-    ((It = function Dt(value) {
-      let Et = value === "true";
-      if (isMidConversation && Et !== currentValue) Re(Et);
-      else onSelect(Et);
-    }),
-      ($[10] = currentValue),
-      ($[11] = isMidConversation),
-      ($[12] = onSelect),
-      ($[13] = It));
-  else It = $[13];
-  let Dt = It,
-    Lt;
-  if ($[14] === MEMO_CACHE_SENTINEL) ((Lt = nd(!1)), ($[14] = Lt));
-  else Lt = $[14];
-  let oo = Lt,
-    Xt;
-  if ($[15] !== ke || $[16] !== currentValue || $[17] !== Dt || $[18] !== onCancel)
-    ((Xt =
-      ke !== null
-        ? r(Box, {
+    };
+    $[1] = confirmationPending;
+    $[2] = onCancel;
+    $[3] = t2;
+  } else t2 = $[3];
+  let t3;
+  if ($[4] === MEMO_CACHE_SENTINEL) {
+    t3 = {
+      context: "Confirmation",
+    };
+    $[4] = t3;
+  } else t3 = $[4];
+  useKeybinding("confirm:no", t2, t3);
+  let t4;
+  if ($[5] !== confirmationPending || $[6] !== onSelect) {
+    t4 = () => {
+      if (confirmationPending !== null) onSelect(confirmationPending);
+    };
+    $[5] = confirmationPending;
+    $[6] = onSelect;
+    $[7] = t4;
+  } else t4 = $[7];
+  const isActive = confirmationPending !== null;
+  let t6;
+  if ($[8] !== isActive) {
+    t6 = {
+      context: "Confirmation",
+      isActive,
+    };
+    $[8] = isActive;
+    $[9] = t6;
+  } else t6 = $[9];
+  useKeybinding("confirm:yes", t4, t6);
+  let t7;
+  if ($[10] !== currentValue || $[11] !== isMidConversation || $[12] !== onSelect) {
+    t7 = function handleSelectChange(value) {
+      let selected = value === "true";
+      if (isMidConversation && selected !== currentValue) setConfirmationPending(selected);
+      else onSelect(selected);
+    };
+    $[10] = currentValue;
+    $[11] = isMidConversation;
+    $[12] = onSelect;
+    $[13] = t7;
+  } else t7 = $[13];
+  let handleSelectChange = t7;
+  let t8;
+  if ($[14] === MEMO_CACHE_SENTINEL) {
+    t8 = stableEmptyObject(false);
+    $[14] = t8;
+  } else t8 = $[14];
+  let oo = t8;
+  let Xt;
+  if (
+    $[15] !== confirmationPending ||
+    $[16] !== currentValue ||
+    $[17] !== handleSelectChange ||
+    $[18] !== onCancel
+  ) {
+    Xt =
+      confirmationPending !== null
+        ? jsxProd_default_2(Box, {
             flexDirection: "column",
             marginBottom: 1,
             gap: 1,
             children: [
-              e(Text, {
+              jsxProd_default(Text, {
                 color: "warning",
                 children:
                   "Changing thinking mode mid-conversation will increase latency and may reduce quality. For best results, set this at the start of a session.",
               }),
-              e(Text, { color: "warning", children: "Do you want to proceed?" }),
+              jsxProd_default(Text, {
+                color: "warning",
+                children: "Do you want to proceed?",
+              }),
             ],
           })
-        : e(Box, {
+        : jsxProd_default(Box, {
             flexDirection: "column",
             marginBottom: 1,
-            children: e(ModelSelector, {
+            children: jsxProd_default(ModelSelector, {
               defaultValue: currentValue ? "true" : "false",
               defaultFocusValue: currentValue ? "true" : "false",
-              options: We,
-              onChange: Dt,
-              onCancel: onCancel,
+              options,
+              onChange: handleSelectChange,
+              onCancel,
               visibleOptionCount: 2,
             }),
-          })),
-      ($[15] = ke),
-      ($[16] = currentValue),
-      ($[17] = Dt),
-      ($[18] = onCancel),
-      ($[19] = Xt));
-  else Xt = $[19];
-  let io = Xt,
-    so;
-  if ($[20] === MEMO_CACHE_SENTINEL)
-    ((so = e(AgentNavigationFooter, {
-      italic: !1,
-      children: r(Byline, {
+          });
+    $[15] = confirmationPending;
+    $[16] = currentValue;
+    $[17] = handleSelectChange;
+    $[18] = onCancel;
+    $[19] = Xt;
+  } else Xt = $[19];
+  let io = Xt;
+  let so;
+  if ($[20] === MEMO_CACHE_SENTINEL) {
+    so = jsxProd_default(AgentNavigationFooter, {
+      italic: false,
+      children: jsxProd_default_2(Byline, {
         children: [
-          e(KeyboardShortcutHint, { chord: "enter", action: "confirm", ...oo }),
-          e(ConfigurableShortcutHint, {
+          jsxProd_default(KeyboardShortcutHint, {
+            chord: "enter",
+            action: "confirm",
+            ...oo,
+          }),
+          jsxProd_default(ConfigurableShortcutHint, {
             action: "confirm:no",
             context: "Confirmation",
             fallback: "Esc",
@@ -141,32 +171,44 @@ function ThinkingToggle(t0) {
           }),
         ],
       }),
-    })),
-      ($[20] = so));
-  else so = $[20];
-  let po = so,
-    ao;
-  if ($[21] === MEMO_CACHE_SENTINEL)
-    ((ao = r(Box, {
+    });
+    $[20] = so;
+  } else so = $[20];
+  let po = so;
+  let ao;
+  if ($[21] === MEMO_CACHE_SENTINEL) {
+    ao = jsxProd_default_2(Box, {
       marginBottom: 1,
       flexDirection: "column",
       children: [
-        e(Text, { color: "remember", bold: !0, children: hQe }),
-        e(Text, { dimColor: !0, children: yQe }),
+        jsxProd_default(Text, {
+          color: "remember",
+          bold: true,
+          children: THINKING_TOGGLE_TITLE,
+        }),
+        jsxProd_default(Text, {
+          dimColor: true,
+          children: THINKING_TOGGLE_DESCRIPTION,
+        }),
       ],
-    })),
-      ($[21] = ao));
-  else ao = $[21];
-  let co;
-  if ($[22] !== io)
-    ((co = r(Pane, {
+    });
+    $[21] = ao;
+  } else ao = $[21];
+  let t11;
+  if ($[22] !== io) {
+    t11 = jsxProd_default_2(Pane, {
       color: "permission",
-      children: [r(Box, { flexDirection: "column", children: [ao, io] }), po],
-    })),
-      ($[22] = io),
-      ($[23] = co));
-  else co = $[23];
-  return co;
+      children: [
+        jsxProd_default_2(Box, {
+          flexDirection: "column",
+          children: [ao, io],
+        }),
+        po,
+      ],
+    });
+    $[22] = io;
+    $[23] = t11;
+  } else t11 = $[23];
+  return t11;
 }
-
 export { ThinkingToggle };

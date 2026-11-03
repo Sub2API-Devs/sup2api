@@ -8,95 +8,116 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:529224-530928 cjs-fingerprint
-var tc = x(function (Ab, ec) {
-  function l_(e) {
-    e.regex;
-    let COMMENT = e.COMMENT(/\(;/, /;\)/);
-    COMMENT.contains.push("self");
-    let COMMENT_2 = e.COMMENT(/;;/, /$/),
-      a = [
-        "anyfunc",
-        "block",
-        "br",
-        "br_if",
-        "br_table",
-        "call",
-        "call_indirect",
-        "data",
-        "drop",
-        "elem",
-        "else",
-        "end",
-        "export",
-        "func",
-        "global.get",
-        "global.set",
-        "local.get",
-        "local.set",
-        "local.tee",
-        "get_global",
-        "get_local",
-        "global",
-        "if",
-        "import",
-        "local",
-        "loop",
-        "memory",
-        "memory.grow",
-        "memory.size",
-        "module",
-        "mut",
-        "nop",
-        "offset",
-        "param",
-        "result",
-        "return",
-        "select",
-        "set_global",
-        "set_local",
-        "start",
-        "table",
-        "tee_local",
-        "then",
-        "type",
-        "unreachable",
-      ],
-      s = {
-        begin: [/(?:func|call|call_indirect)/, /\s+/, /\$[^\s)]+/],
-        className: { 1: "keyword", 3: "title.function" },
+var require_wasm = x(function (cjsExports, cjsModule) {
+  function wasm(hljs) {
+    hljs.regex;
+    let BLOCK_COMMENT = hljs.COMMENT(/\(;/, /;\)/);
+    BLOCK_COMMENT.contains.push("self");
+    let LINE_COMMENT = hljs.COMMENT(/;;/, /$/);
+    let keyword = [
+      "anyfunc",
+      "block",
+      "br",
+      "br_if",
+      "br_table",
+      "call",
+      "call_indirect",
+      "data",
+      "drop",
+      "elem",
+      "else",
+      "end",
+      "export",
+      "func",
+      "global.get",
+      "global.set",
+      "local.get",
+      "local.set",
+      "local.tee",
+      "get_global",
+      "get_local",
+      "global",
+      "if",
+      "import",
+      "local",
+      "loop",
+      "memory",
+      "memory.grow",
+      "memory.size",
+      "module",
+      "mut",
+      "nop",
+      "offset",
+      "param",
+      "result",
+      "return",
+      "select",
+      "set_global",
+      "set_local",
+      "start",
+      "table",
+      "tee_local",
+      "then",
+      "type",
+      "unreachable",
+    ];
+    let FUNCTION_REFERENCE = {
+      begin: [/(?:func|call|call_indirect)/, /\s+/, /\$[^\s)]+/],
+      className: {
+        1: "keyword",
+        3: "title.function",
       },
-      o = { className: "variable", begin: /\$[\w_]+/ },
-      r = { match: /(\((?!;)|\))+/, className: "punctuation", relevance: 0 },
-      i = {
-        className: "number",
-        relevance: 0,
-        match:
-          /[+-]?\b(?:\d(?:_?\d)*(?:\.\d(?:_?\d)*)?(?:[eE][+-]?\d(?:_?\d)*)?|0x[\da-fA-F](?:_?[\da-fA-F])*(?:\.[\da-fA-F](?:_?[\da-fA-D])*)?(?:[pP][+-]?\d(?:_?\d)*)?)\b|\binf\b|\bnan(?::0x[\da-fA-F](?:_?[\da-fA-D])*)?\b/,
-      },
-      c = { match: /(i32|i64|f32|f64)(?!\.)/, className: "type" },
-      l = {
-        className: "keyword",
-        match:
-          /\b(f32|f64|i32|i64)(?:\.(?:abs|add|and|ceil|clz|const|convert_[su]\/i(?:32|64)|copysign|ctz|demote\/f64|div(?:_[su])?|eqz?|extend_[su]\/i32|floor|ge(?:_[su])?|gt(?:_[su])?|le(?:_[su])?|load(?:(?:8|16|32)_[su])?|lt(?:_[su])?|max|min|mul|nearest|neg?|or|popcnt|promote\/f32|reinterpret\/[fi](?:32|64)|rem_[su]|rot[lr]|shl|shr_[su]|store(?:8|16|32)?|sqrt|sub|trunc(?:_[su]\/f(?:32|64))?|wrap\/i64|xor))\b/,
-      };
+    };
+    let ARGUMENT = {
+      className: "variable",
+      begin: /\$[\w_]+/,
+    };
+    let PARENS = {
+      match: /(\((?!;)|\))+/,
+      className: "punctuation",
+      relevance: 0,
+    };
+    let NUMBER = {
+      className: "number",
+      relevance: 0,
+      match:
+        /[+-]?\b(?:\d(?:_?\d)*(?:\.\d(?:_?\d)*)?(?:[eE][+-]?\d(?:_?\d)*)?|0x[\da-fA-F](?:_?[\da-fA-F])*(?:\.[\da-fA-F](?:_?[\da-fA-D])*)?(?:[pP][+-]?\d(?:_?\d)*)?)\b|\binf\b|\bnan(?::0x[\da-fA-F](?:_?[\da-fA-D])*)?\b/,
+    };
+    let TYPE = {
+      match: /(i32|i64|f32|f64)(?!\.)/,
+      className: "type",
+    };
+    let MATH_OPERATIONS = {
+      className: "keyword",
+      match:
+        /\b(f32|f64|i32|i64)(?:\.(?:abs|add|and|ceil|clz|const|convert_[su]\/i(?:32|64)|copysign|ctz|demote\/f64|div(?:_[su])?|eqz?|extend_[su]\/i32|floor|ge(?:_[su])?|gt(?:_[su])?|le(?:_[su])?|load(?:(?:8|16|32)_[su])?|lt(?:_[su])?|max|min|mul|nearest|neg?|or|popcnt|promote\/f32|reinterpret\/[fi](?:32|64)|rem_[su]|rot[lr]|shl|shr_[su]|store(?:8|16|32)?|sqrt|sub|trunc(?:_[su]\/f(?:32|64))?|wrap\/i64|xor))\b/,
+    };
     return {
       name: "WebAssembly",
-      keywords: { $pattern: /[\w.]+/, keyword: a },
+      keywords: {
+        $pattern: /[\w.]+/,
+        keyword,
+      },
       contains: [
-        COMMENT_2,
-        COMMENT,
-        { match: [/(?:offset|align)/, /\s*/, /=/], className: { 1: "keyword", 3: "operator" } },
-        o,
-        r,
-        s,
-        e.QUOTE_STRING_MODE,
-        c,
-        l,
-        i,
+        LINE_COMMENT,
+        BLOCK_COMMENT,
+        {
+          match: [/(?:offset|align)/, /\s*/, /=/],
+          className: {
+            1: "keyword",
+            3: "operator",
+          },
+        },
+        ARGUMENT,
+        PARENS,
+        FUNCTION_REFERENCE,
+        hljs.QUOTE_STRING_MODE,
+        TYPE,
+        MATH_OPERATIONS,
+        NUMBER,
       ],
     };
   }
-  ec.exports = l_;
+  cjsModule.exports = wasm;
 });
-
-export { tc };
+export { require_wasm };

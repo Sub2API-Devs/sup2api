@@ -8,628 +8,684 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-vwj6ccer.js:31379-42755 cjs-fingerprint
-var ta = x(function (Ot, Ns) {
-  var create = Object.create(null, {
-      location: {
-        get: function () {
-          throw Error("window.location is not supported.");
-        },
+var require_select = x(function (cjsExports, cjsModule) {
+  var Zr = Object.create(null, {
+    location: {
+      get: function () {
+        throw Error("window.location is not supported.");
       },
-    }),
-    Rl = function (e, t) {
-      return e.compareDocumentPosition(t);
     },
-    Il = function (e, t) {
-      return Rl(e, t) & 2 ? 1 : -1;
-    },
-    ea = function (e) {
-      while ((e = e.nextSibling) && e.nodeType !== 1);
-      return e;
-    },
-    It = function (e) {
-      while ((e = e.previousSibling) && e.nodeType !== 1);
-      return e;
-    },
-    Ol = function (e) {
-      if ((e = e.firstChild)) while (e.nodeType !== 1 && (e = e.nextSibling));
-      return e;
-    },
-    ql = function (e) {
-      if ((e = e.lastChild)) while (e.nodeType !== 1 && (e = e.previousSibling));
-      return e;
-    },
-    Rt = function (e) {
-      if (!e.parentNode) return !1;
-      var nodeType = e.parentNode.nodeType;
-      return nodeType === 1 || nodeType === 9;
-    },
-    Es = function (e) {
-      if (!e) return e;
-      var t = e[0];
-      if (t === '"' || t === "'") {
-        if (e[e.length - 1] === t) e = e.slice(1, -1);
-        else e = e.slice(1);
-        return e.replace(C.str_escape, function (r) {
-          var match = /^\\(?:([0-9A-Fa-f]+)|([\r\n\f]+))/.exec(r);
-          if (!match) return r.slice(1);
-          if (match[2]) return "";
-          var s = parseInt(match[1], 16);
-          return String.fromCodePoint ? String.fromCodePoint(s) : String.fromCharCode(s);
-        });
-      } else if (C.ident.test(e)) return lt(e);
-      else return e;
-    },
-    lt = function (e) {
-      return e.replace(C.escape, function (t) {
-        var match = /^\\([0-9A-Fa-f]+)/.exec(t);
-        if (!match) return t[1];
-        var a = parseInt(match[1], 16);
-        return String.fromCodePoint ? String.fromCodePoint(a) : String.fromCharCode(a);
+  });
+  var compareDocumentPosition = function (a, b) {
+    return a.compareDocumentPosition(b);
+  };
+  var order = function (a, b) {
+    return compareDocumentPosition(a, b) & 2 ? 1 : -1;
+  };
+  var next = function (el) {
+    while ((el = el.nextSibling) && el.nodeType !== 1);
+    return el;
+  };
+  var prev = function (el) {
+    while ((el = el.previousSibling) && el.nodeType !== 1);
+    return el;
+  };
+  var child = function (el) {
+    if ((el = el.firstChild)) while (el.nodeType !== 1 && (el = el.nextSibling));
+    return el;
+  };
+  var lastChild = function (el) {
+    if ((el = el.lastChild)) while (el.nodeType !== 1 && (el = el.previousSibling));
+    return el;
+  };
+  var parentIsElement = function (n) {
+    if (!n.parentNode) return false;
+    var nodeType = n.parentNode.nodeType;
+    return nodeType === 1 || nodeType === 9;
+  };
+  var unquote = function (str) {
+    if (!str) return str;
+    var ch = str[0];
+    if (ch === '"' || ch === "'") {
+      if (str[str.length - 1] === ch) str = str.slice(1, -1);
+      else str = str.slice(1);
+      return str.replace(rules.str_escape, function (s_2) {
+        var m = /^\\(?:([0-9A-Fa-f]+)|([\r\n\f]+))/.exec(s_2);
+        if (!m) return s_2.slice(1);
+        if (m[2]) return "";
+        var cp = parseInt(m[1], 16);
+        return String.fromCodePoint ? String.fromCodePoint(cp) : String.fromCharCode(cp);
       });
-    },
-    Hl = (function () {
-      if (Array.prototype.indexOf) return Array.prototype.indexOf;
-      return function (e, t) {
-        var r = this.length;
-        while (r--) if (this[r] === t) return r;
-        return -1;
+    } else if (rules.ident.test(str)) return decodeid(str);
+    else return str;
+  };
+  var decodeid = function (str) {
+    return str.replace(rules.escape, function (s) {
+      var m = /^\\([0-9A-Fa-f]+)/.exec(s);
+      if (!m) return s[1];
+      var cp = parseInt(m[1], 16);
+      return String.fromCodePoint ? String.fromCodePoint(cp) : String.fromCharCode(cp);
+    });
+  };
+  var indexOf = (function () {
+    if (Array.prototype.indexOf) return Array.prototype.indexOf;
+    return function (obj, item) {
+      var i = this.length;
+      while (i--) if (this[i] === item) return i;
+      return -1;
+    };
+  })();
+  var makeInside = function (start, end) {
+    var regex = rules.inside.source.replace(/</g, start).replace(/>/g, end);
+    return new RegExp(regex);
+  };
+  var replace = function (regex, name, val) {
+    regex = regex.source;
+    regex = regex.replace(name, val.source || val);
+    return new RegExp(regex);
+  };
+  var truncateUrl = function (url, num) {
+    return url
+      .replace(/^(?:\w+:\/\/|\/+)/, "")
+      .replace(/(?:\/+|\/*#.*?)$/, "")
+      .split("/", num)
+      .join("/");
+  };
+  var parseNth = function (param_, test) {
+    var param = param_.replace(/\s+/g, "");
+    var cap;
+    if (param === "even") param = "2n+0";
+    else if (param === "odd") param = "2n+1";
+    else if (param.indexOf("n") === -1) param = "0n" + param;
+    cap = /^([+-])?(\d+)?n([+-])?(\d+)?$/.exec(param);
+    return {
+      group: cap[1] === "-" ? -(cap[2] || 1) : +(cap[2] || 1),
+      offset: cap[4] ? (cap[3] === "-" ? -cap[4] : +cap[4]) : 0,
+    };
+  };
+  var nth = function (param_, test, last) {
+    var a = parseNth(param_);
+    var { group, offset } = a;
+    var d = !last ? child : lastChild;
+    var advance = !last ? next : prev;
+    return function (el) {
+      if (!parentIsElement(el)) return;
+      var rel = d(el.parentNode);
+      var pos = 0;
+      while (rel) {
+        if (test(rel, el)) pos++;
+        if (rel === el) {
+          pos -= offset;
+          return group && pos ? pos % group === 0 && pos < 0 === group < 0 : !pos;
+        }
+        rel = advance(rel);
+      }
+    };
+  };
+  var selectors = {
+    "*": (function () {
+      return function () {
+        return true;
       };
     })(),
-    vs = function (e, t) {
-      var replaced = C.inside.source.replace(/</g, e).replace(/>/g, t);
-      return new RegExp(replaced);
-    },
-    ve = function (e, t, r) {
-      return ((e = e.source), (e = e.replace(t, r.source || r)), new RegExp(e));
-    },
-    _s = function (e, t) {
-      return e
-        .replace(/^(?:\w+:\/\/|\/+)/, "")
-        .replace(/(?:\/+|\/*#.*?)$/, "")
-        .split("/", t)
-        .join("/");
-    },
-    Fl = function (e, t) {
-      var replaced = e.replace(/\s+/g, ""),
-        a;
-      if (replaced === "even") replaced = "2n+0";
-      else if (replaced === "odd") replaced = "2n+1";
-      else if (replaced.indexOf("n") === -1) replaced = "0n" + replaced;
-      return (
-        (a = /^([+-])?(\d+)?n([+-])?(\d+)?$/.exec(replaced)),
-        {
-          group: a[1] === "-" ? -(a[2] || 1) : +(a[2] || 1),
-          offset: a[4] ? (a[3] === "-" ? -a[4] : +a[4]) : 0,
-        }
-      );
-    },
-    fn = function (e, t, r) {
-      var a = Fl(e),
-        { group: group, offset: offset } = a,
-        d = !r ? Ol : ql,
-        g = !r ? ea : It;
-      return function (m) {
-        if (!Rt(m)) return;
-        var v = d(m.parentNode),
-          T = 0;
-        while (v) {
-          if (t(v, m)) T++;
-          if (v === m) return ((T -= offset), group && T ? T % group === 0 && T < 0 === group < 0 : !T);
-          v = g(v);
-        }
+    type: function (type) {
+      type = type.toLowerCase();
+      return function (el) {
+        return el.nodeName.toLowerCase() === type;
       };
     },
-    ce = {
-      "*": (function () {
-        return function () {
-          return !0;
-        };
-      })(),
-      type: function (e) {
-        return (
-          (e = e.toLowerCase()),
-          function (t) {
-            return t.nodeName.toLowerCase() === e;
-          }
-        );
-      },
-      attr: function (e, t, r, a) {
-        return (
-          (t = Ts[t]),
-          function (s) {
-            var c;
-            switch (e) {
-              case "for":
-                c = s.htmlFor;
-                break;
-              case "class":
-                if (((c = s.className), c === "" && s.getAttribute("class") == null)) c = null;
-                break;
-              case "href":
-              case "src":
-                c = s.getAttribute(e, 2);
-                break;
-              case "title":
-                c = s.getAttribute("title") || null;
-                break;
-              case "id":
-              case "lang":
-              case "dir":
-              case "accessKey":
-              case "hidden":
-              case "tabIndex":
-              case "style":
-                if (s.getAttribute) {
-                  c = s.getAttribute(e);
-                  break;
-                }
-              default:
-                if (s.hasAttribute && !s.hasAttribute(e)) break;
-                c = s[e] != null ? s[e] : s.getAttribute && s.getAttribute(e);
-                break;
-            }
-            if (c == null) return;
-            if (((c = c + ""), a)) ((c = c.toLowerCase()), (r = r.toLowerCase()));
-            return t(c, r);
-          }
-        );
-      },
-      ":first-child": function (e) {
-        return !It(e) && Rt(e);
-      },
-      ":last-child": function (e) {
-        return !ea(e) && Rt(e);
-      },
-      ":only-child": function (e) {
-        return !It(e) && !ea(e) && Rt(e);
-      },
-      ":nth-child": function (e, t) {
-        return fn(
-          e,
-          function () {
-            return !0;
-          },
-          t,
-        );
-      },
-      ":nth-last-child": function (e) {
-        return ce[":nth-child"](e, !0);
-      },
-      ":root": function (e) {
-        return e.ownerDocument.documentElement === e;
-      },
-      ":empty": function (e) {
-        return !e.firstChild;
-      },
-      ":not": function (e) {
-        var t = hn(e);
-        return function (r) {
-          return !t(r);
-        };
-      },
-      ":first-of-type": function (e) {
-        if (!Rt(e)) return;
-        var nodeName = e.nodeName;
-        while ((e = It(e))) if (e.nodeName === nodeName) return;
-        return !0;
-      },
-      ":last-of-type": function (e) {
-        if (!Rt(e)) return;
-        var nodeName = e.nodeName;
-        while ((e = ea(e))) if (e.nodeName === nodeName) return;
-        return !0;
-      },
-      ":only-of-type": function (e) {
-        return ce[":first-of-type"](e) && ce[":last-of-type"](e);
-      },
-      ":nth-of-type": function (e, t) {
-        return fn(
-          e,
-          function (r, a) {
-            return r.nodeName === a.nodeName;
-          },
-          t,
-        );
-      },
-      ":nth-last-of-type": function (e) {
-        return ce[":nth-of-type"](e, !0);
-      },
-      ":checked": function (e) {
-        return !!(e.checked || e.selected);
-      },
-      ":indeterminate": function (e) {
-        return !ce[":checked"](e);
-      },
-      ":enabled": function (e) {
-        return !e.disabled && e.type !== "hidden";
-      },
-      ":disabled": function (e) {
-        return !!e.disabled;
-      },
-      ":target": function (e) {
-        return e.id === create.location.hash.substring(1);
-      },
-      ":focus": function (e) {
-        return e === e.ownerDocument.activeElement;
-      },
-      ":is": function (e) {
-        return hn(e);
-      },
-      ":matches": function (e) {
-        return ce[":is"](e);
-      },
-      ":nth-match": function (e, t) {
-        var parts = e.split(/\s*,\s*/),
-          a = parts.shift(),
-          s = hn(parts.join(","));
-        return fn(a, s, t);
-      },
-      ":nth-last-match": function (e) {
-        return ce[":nth-match"](e, !0);
-      },
-      ":links-here": function (e) {
-        return e + "" === create.location + "";
-      },
-      ":lang": function (e) {
-        return function (t) {
-          while (t) {
-            if (t.lang) return t.lang.indexOf(e) === 0;
-            t = t.parentNode;
-          }
-        };
-      },
-      ":dir": function (e) {
-        return function (t) {
-          while (t) {
-            if (t.dir) return t.dir === e;
-            t = t.parentNode;
-          }
-        };
-      },
-      ":scope": function (e, t) {
-        var r = t || e.ownerDocument;
-        if (r.nodeType === 9) return e === r.documentElement;
-        return e === r;
-      },
-      ":any-link": function (e) {
-        return typeof e.href === "string";
-      },
-      ":local-link": function (e) {
-        if (e.nodeName) return e.href && e.host === create.location.host;
-        var t = +e + 1;
-        return function (r) {
-          if (!r.href) return;
-          var a = create.location + "",
-            s = r + "";
-          return _s(a, t) === _s(s, t);
-        };
-      },
-      ":default": function (e) {
-        return !!e.defaultSelected;
-      },
-      ":valid": function (e) {
-        return e.willValidate || (e.validity && e.validity.valid);
-      },
-      ":invalid": function (e) {
-        return !ce[":valid"](e);
-      },
-      ":in-range": function (e) {
-        return e.value > e.min && e.value <= e.max;
-      },
-      ":out-of-range": function (e) {
-        return !ce[":in-range"](e);
-      },
-      ":required": function (e) {
-        return !!e.required;
-      },
-      ":optional": function (e) {
-        return !e.required;
-      },
-      ":read-only": function (e) {
-        if (e.readOnly) return !0;
-        var attribute = e.getAttribute("contenteditable"),
-          contentEditable = e.contentEditable,
-          lower = e.nodeName.toLowerCase();
-        return (
-          (lower = lower !== "input" && lower !== "textarea"),
-          (lower || e.disabled) && attribute == null && contentEditable !== "true"
-        );
-      },
-      ":read-write": function (e) {
-        return !ce[":read-only"](e);
-      },
-      ":hover": function () {
-        throw Error(":hover is not supported.");
-      },
-      ":active": function () {
-        throw Error(":active is not supported.");
-      },
-      ":link": function () {
-        throw Error(":link is not supported.");
-      },
-      ":visited": function () {
-        throw Error(":visited is not supported.");
-      },
-      ":column": function () {
-        throw Error(":column is not supported.");
-      },
-      ":nth-column": function () {
-        throw Error(":nth-column is not supported.");
-      },
-      ":nth-last-column": function () {
-        throw Error(":nth-last-column is not supported.");
-      },
-      ":current": function () {
-        throw Error(":current is not supported.");
-      },
-      ":past": function () {
-        throw Error(":past is not supported.");
-      },
-      ":future": function () {
-        throw Error(":future is not supported.");
-      },
-      ":contains": function (e) {
-        return function (t) {
-          var r = t.innerText || t.textContent || t.value || "";
-          return r.indexOf(e) !== -1;
-        };
-      },
-      ":has": function (e) {
-        return function (t) {
-          return ys(e, t).length > 0;
-        };
-      },
-    },
-    Ts = {
-      "-": function () {
-        return !0;
-      },
-      "=": function (e, t) {
-        return e === t;
-      },
-      "*=": function (e, t) {
-        return e.indexOf(t) !== -1;
-      },
-      "~=": function (e, t) {
-        var r, a, s, c;
-        for (a = 0; ; a = r + 1) {
-          if (((r = e.indexOf(t, a)), r === -1)) return !1;
-          if (((s = e[r - 1]), (c = e[r + t.length]), (!s || s === " ") && (!c || c === " "))) return !0;
-        }
-      },
-      "|=": function (e, t) {
-        var index = e.indexOf(t),
-          a;
-        if (index !== 0) return;
-        return ((a = e[index + t.length]), a === "-" || !a);
-      },
-      "^=": function (e, t) {
-        return e.indexOf(t) === 0;
-      },
-      "$=": function (e, t) {
-        var index = e.lastIndexOf(t);
-        return index !== -1 && index + t.length === e.length;
-      },
-      "!=": function (e, t) {
-        return e !== t;
-      },
-    },
-    cr = {
-      " ": function (e) {
-        return function (t) {
-          while ((t = t.parentNode)) if (e(t)) return t;
-        };
-      },
-      ">": function (e) {
-        return function (t) {
-          if ((t = t.parentNode)) return e(t) && t;
-        };
-      },
-      "+": function (e) {
-        return function (t) {
-          if ((t = It(t))) return e(t) && t;
-        };
-      },
-      "~": function (e) {
-        return function (t) {
-          while ((t = It(t))) if (e(t)) return t;
-        };
-      },
-      noop: function (e) {
-        return function (t) {
-          return e(t) && t;
-        };
-      },
-      ref: function (e, t) {
-        var r;
-        function a(s) {
-          var ownerDocument = s.ownerDocument,
-            elementsByTagName = ownerDocument.getElementsByTagName("*"),
-            g = elementsByTagName.length;
-          while (g--) if (((r = elementsByTagName[g]), a.test(s))) return ((r = null), !0);
-          r = null;
-        }
-        return (
-          (a.combinator = function (s) {
-            if (!r || !r.getAttribute) return;
-            var c = r.getAttribute(t) || "";
-            if (c[0] === "#") c = c.substring(1);
-            if (c === s.id && e(r)) return r;
-          }),
-          a
-        );
-      },
-    },
-    C = {
-      escape: /\\(?:[^0-9A-Fa-f\r\n]|[0-9A-Fa-f]{1,6}[\r\n\t ]?)/g,
-      str_escape: /(escape)|\\(\n|\r\n?|\f)/g,
-      nonascii: /[\u00A0-\uFFFF]/,
-      cssid: /(?:(?!-?[0-9])(?:escape|nonascii|[-_a-zA-Z0-9])+)/,
-      qname: /^ *(cssid|\*)/,
-      simple: /^(?:([.#]cssid)|pseudo|attr)/,
-      ref: /^ *\/(cssid)\/ */,
-      combinator: /^(?: +([^ \w*.#\\]) +|( )+|([^ \w*.#\\]))(?! *$)/,
-      attr: /^\[(cssid)(?:([^\w]?=)(inside))?\]/,
-      pseudo: /^(:cssid)(?:\((inside)\))?/,
-      inside: /(?:"(?:\\"|[^"])*"|'(?:\\'|[^'])*'|<[^"'>]*>|\\["'>]|[^"'>])*/,
-      ident: /^(cssid)$/,
-    };
-  C.cssid = ve(C.cssid, "nonascii", C.nonascii);
-  C.cssid = ve(C.cssid, "escape", C.escape);
-  C.qname = ve(C.qname, "cssid", C.cssid);
-  C.simple = ve(C.simple, "cssid", C.cssid);
-  C.ref = ve(C.ref, "cssid", C.cssid);
-  C.attr = ve(C.attr, "cssid", C.cssid);
-  C.pseudo = ve(C.pseudo, "cssid", C.cssid);
-  C.inside = ve(C.inside, `[^"'>]*`, C.inside);
-  C.attr = ve(C.attr, "inside", vs("\\[", "\\]"));
-  C.pseudo = ve(C.pseudo, "inside", vs("\\(", "\\)"));
-  C.simple = ve(C.simple, "pseudo", C.pseudo);
-  C.simple = ve(C.simple, "attr", C.attr);
-  C.ident = ve(C.ident, "cssid", C.cssid);
-  C.str_escape = ve(C.str_escape, "escape", C.escape);
-  var or = function (e) {
-      var replaced = e.replace(/^\s+|\s+$/g, ""),
-        r,
-        a = [],
-        s = [],
-        c,
-        d,
-        g,
-        m,
-        v;
-      while (replaced) {
-        if ((g = C.qname.exec(replaced)))
-          ((replaced = replaced.substring(g[0].length)), (d = lt(g[1])), s.push(Jr(d, !0)));
-        else if ((g = C.simple.exec(replaced)))
-          ((replaced = replaced.substring(g[0].length)), (d = "*"), s.push(Jr(d, !0)), s.push(Jr(g)));
-        else throw SyntaxError("Invalid selector.");
-        while ((g = C.simple.exec(replaced))) ((replaced = replaced.substring(g[0].length)), s.push(Jr(g)));
-        if (replaced[0] === "!")
-          ((replaced = replaced.substring(1)), (c = Pl()), (c.qname = d), s.push(c.simple));
-        if ((g = C.ref.exec(replaced))) {
-          ((replaced = replaced.substring(g[0].length)),
-            (v = cr.ref(dn(s), lt(g[1]))),
-            a.push(v.combinator),
-            (s = []));
-          continue;
-        }
-        if ((g = C.combinator.exec(replaced))) {
-          if (((replaced = replaced.substring(g[0].length)), (m = g[1] || g[2] || g[3]), m === ",")) {
-            a.push(cr.noop(dn(s)));
+    attr: function (key, op, val, i) {
+      op = operators[op];
+      return function (el) {
+        var attr;
+        switch (key) {
+          case "for":
+            attr = el.htmlFor;
             break;
-          }
-        } else m = "noop";
-        if (!cr[m]) throw SyntaxError("Bad combinator.");
-        (a.push(cr[m](dn(s))), (s = []));
-      }
-      if (((r = Bl(a)), (r.qname = d), (r.sel = replaced), c))
-        ((c.lname = r.qname), (c.test = r), (c.qname = c.qname), (c.sel = r.sel), (r = c));
-      if (v) ((v.test = r), (v.qname = r.qname), (v.sel = r.sel), (r = v));
-      return r;
-    },
-    Jr = function (e, t) {
-      if (t) return e === "*" ? ce["*"] : ce.type(e);
-      if (e[1])
-        return e[1][0] === "."
-          ? ce.attr("class", "~=", lt(e[1].substring(1)), !1)
-          : ce.attr("id", "=", lt(e[1].substring(1)), !1);
-      if (e[2]) return e[3] ? ce[lt(e[2])](Es(e[3])) : ce[lt(e[2])];
-      if (e[4]) {
-        var r = e[6],
-          matches = /["'\s]\s*I$/i.test(r);
-        if (matches) r = r.replace(/\s*I$/i, "");
-        return ce.attr(lt(e[4]), e[5] || "-", Es(r), matches);
-      }
-      throw SyntaxError("Unknown Selector.");
-    },
-    dn = function (e) {
-      var t = e.length,
-        r;
-      if (t < 2) return e[0];
-      return function (a) {
-        if (!a) return;
-        for (r = 0; r < t; r++) if (!e[r](a)) return;
-        return !0;
+          case "class":
+            attr = el.className;
+            if (attr === "" && el.getAttribute("class") == null) attr = null;
+            break;
+          case "href":
+          case "src":
+            attr = el.getAttribute(key, 2);
+            break;
+          case "title":
+            attr = el.getAttribute("title") || null;
+            break;
+          case "id":
+          case "lang":
+          case "dir":
+          case "accessKey":
+          case "hidden":
+          case "tabIndex":
+          case "style":
+            if (el.getAttribute) {
+              attr = el.getAttribute(key);
+              break;
+            }
+          default:
+            if (el.hasAttribute && !el.hasAttribute(key)) break;
+            attr = el[key] != null ? el[key] : el.getAttribute && el.getAttribute(key);
+            break;
+        }
+        if (attr == null) return;
+        attr = attr + "";
+        if (i) {
+          attr = attr.toLowerCase();
+          val = val.toLowerCase();
+        }
+        return op(attr, val);
       };
     },
-    Bl = function (e) {
-      if (e.length < 2)
-        return function (t) {
-          return !!e[0](t);
-        };
-      return function (t) {
-        var r = e.length;
-        while (r--) if (!(t = e[r](t))) return;
-        return !0;
-      };
+    ":first-child": function (el) {
+      return !prev(el) && parentIsElement(el);
     },
-    Pl = function () {
-      var e;
-      function t(r) {
-        var ownerDocument = r.ownerDocument,
-          elementsByTagName = ownerDocument.getElementsByTagName(t.lname),
-          c = elementsByTagName.length;
-        while (c--) if (t.test(elementsByTagName[c]) && e === r) return ((e = null), !0);
-        e = null;
-      }
-      return (
-        (t.simple = function (r) {
-          return ((e = r), !0);
-        }),
-        t
+    ":last-child": function (el) {
+      return !next(el) && parentIsElement(el);
+    },
+    ":only-child": function (el) {
+      return !prev(el) && !next(el) && parentIsElement(el);
+    },
+    ":nth-child": function (param, last) {
+      return nth(
+        param,
+        function () {
+          return true;
+        },
+        last,
       );
     },
-    hn = function (e) {
-      var t = or(e),
-        r = [t];
-      while (t.sel) ((t = or(t.sel)), r.push(t));
-      if (r.length < 2) return t;
-      return function (a) {
-        var s = r.length,
-          c = 0;
-        for (; c < s; c++) if (r[c](a)) return !0;
+    ":nth-last-child": function (param) {
+      return selectors[":nth-child"](param, true);
+    },
+    ":root": function (el) {
+      return el.ownerDocument.documentElement === el;
+    },
+    ":empty": function (el) {
+      return !el.firstChild;
+    },
+    ":not": function (sel) {
+      var test = compileGroup(sel);
+      return function (el) {
+        return !test(el);
       };
     },
-    ys = function (e, t) {
-      var r = [],
-        a = or(e),
-        elementsByTagName = t.getElementsByTagName(a.qname),
-        c = 0,
-        d;
-      while ((d = elementsByTagName[c++])) if (a(d)) r.push(d);
-      if (a.sel) {
-        while (a.sel) {
-          ((a = or(a.sel)), (elementsByTagName = t.getElementsByTagName(a.qname)), (c = 0));
-          while ((d = elementsByTagName[c++])) if (a(d) && Hl.call(r, d) === -1) r.push(d);
+    ":first-of-type": function (el) {
+      if (!parentIsElement(el)) return;
+      var type = el.nodeName;
+      while ((el = prev(el))) if (el.nodeName === type) return;
+      return true;
+    },
+    ":last-of-type": function (el) {
+      if (!parentIsElement(el)) return;
+      var type = el.nodeName;
+      while ((el = next(el))) if (el.nodeName === type) return;
+      return true;
+    },
+    ":only-of-type": function (el) {
+      return selectors[":first-of-type"](el) && selectors[":last-of-type"](el);
+    },
+    ":nth-of-type": function (param, last) {
+      return nth(
+        param,
+        function (rel, el) {
+          return rel.nodeName === el.nodeName;
+        },
+        last,
+      );
+    },
+    ":nth-last-of-type": function (param) {
+      return selectors[":nth-of-type"](param, true);
+    },
+    ":checked": function (el) {
+      return !!(el.checked || el.selected);
+    },
+    ":indeterminate": function (el) {
+      return !selectors[":checked"](el);
+    },
+    ":enabled": function (el) {
+      return !el.disabled && el.type !== "hidden";
+    },
+    ":disabled": function (el) {
+      return !!el.disabled;
+    },
+    ":target": function (el) {
+      return el.id === Zr.location.hash.substring(1);
+    },
+    ":focus": function (el) {
+      return el === el.ownerDocument.activeElement;
+    },
+    ":is": function (sel) {
+      return compileGroup(sel);
+    },
+    ":matches": function (sel) {
+      return selectors[":is"](sel);
+    },
+    ":nth-match": function (param, last) {
+      var args = param.split(/\s*,\s*/);
+      var arg = args.shift();
+      var test = compileGroup(args.join(","));
+      return nth(arg, test, last);
+    },
+    ":nth-last-match": function (param) {
+      return selectors[":nth-match"](param, true);
+    },
+    ":links-here": function (el) {
+      return el + "" === Zr.location + "";
+    },
+    ":lang": function (param) {
+      return function (el) {
+        while (el) {
+          if (el.lang) return el.lang.indexOf(param) === 0;
+          el = el.parentNode;
         }
-        r.sort(Il);
-      }
-      return r;
-    };
-  Ns.exports = Ot = function (e, t) {
-    var r, a;
-    if (t.nodeType !== 11 && e.indexOf(" ") === -1) {
-      if (e[0] === "#" && t.rooted && /^#[A-Z_][-A-Z0-9_]*$/i.test(e)) {
-        if (t.doc._hasMultipleElementsWithId) {
-          if (((r = e.substring(1)), !t.doc._hasMultipleElementsWithId(r)))
-            return ((a = t.doc.getElementById(r)), a ? [a] : []);
+      };
+    },
+    ":dir": function (param) {
+      return function (el) {
+        while (el) {
+          if (el.dir) return el.dir === param;
+          el = el.parentNode;
         }
-      }
-      if (e[0] === "." && /^\.\w+$/.test(e)) return t.getElementsByClassName(e.substring(1));
-      if (/^\w+$/.test(e)) return t.getElementsByTagName(e);
-    }
-    return ys(e, t);
+      };
+    },
+    ":scope": function (el, con) {
+      var context = con || el.ownerDocument;
+      if (context.nodeType === 9) return el === context.documentElement;
+      return el === context;
+    },
+    ":any-link": function (el) {
+      return typeof el.href === "string";
+    },
+    ":local-link": function (el) {
+      if (el.nodeName) return el.href && el.host === Zr.location.host;
+      var param = +el + 1;
+      return function (el) {
+        if (!el.href) return;
+        var url = Zr.location + "";
+        var href = el + "";
+        return truncateUrl(url, param) === truncateUrl(href, param);
+      };
+    },
+    ":default": function (el) {
+      return !!el.defaultSelected;
+    },
+    ":valid": function (el) {
+      return el.willValidate || (el.validity && el.validity.valid);
+    },
+    ":invalid": function (el) {
+      return !selectors[":valid"](el);
+    },
+    ":in-range": function (el) {
+      return el.value > el.min && el.value <= el.max;
+    },
+    ":out-of-range": function (el) {
+      return !selectors[":in-range"](el);
+    },
+    ":required": function (el) {
+      return !!el.required;
+    },
+    ":optional": function (el) {
+      return !el.required;
+    },
+    ":read-only": function (el) {
+      if (el.readOnly) return true;
+      var attr = el.getAttribute("contenteditable");
+      var prop = el.contentEditable;
+      var name = el.nodeName.toLowerCase();
+      name = name !== "input" && name !== "textarea";
+      return (name || el.disabled) && attr == null && prop !== "true";
+    },
+    ":read-write": function (el) {
+      return !selectors[":read-only"](el);
+    },
+    ":hover": function () {
+      throw Error(":hover is not supported.");
+    },
+    ":active": function () {
+      throw Error(":active is not supported.");
+    },
+    ":link": function () {
+      throw Error(":link is not supported.");
+    },
+    ":visited": function () {
+      throw Error(":visited is not supported.");
+    },
+    ":column": function () {
+      throw Error(":column is not supported.");
+    },
+    ":nth-column": function () {
+      throw Error(":nth-column is not supported.");
+    },
+    ":nth-last-column": function () {
+      throw Error(":nth-last-column is not supported.");
+    },
+    ":current": function () {
+      throw Error(":current is not supported.");
+    },
+    ":past": function () {
+      throw Error(":past is not supported.");
+    },
+    ":future": function () {
+      throw Error(":future is not supported.");
+    },
+    ":contains": function (param) {
+      return function (el) {
+        var text = el.innerText || el.textContent || el.value || "";
+        return text.indexOf(param) !== -1;
+      };
+    },
+    ":has": function (param) {
+      return function (el) {
+        return find(param, el).length > 0;
+      };
+    },
   };
-  Ot.selectors = ce;
-  Ot.operators = Ts;
-  Ot.combinators = cr;
-  Ot.matches = function (e, t) {
-    var r = { sel: t };
-    do if (((r = or(r.sel)), r(e))) return !0;
-    while (r.sel);
-    return !1;
+  var operators = {
+    "-": function () {
+      return true;
+    },
+    "=": function (attr, val) {
+      return attr === val;
+    },
+    "*=": function (attr, val) {
+      return attr.indexOf(val) !== -1;
+    },
+    "~=": function (attr, val) {
+      var i;
+      var s_2;
+      var f;
+      var l;
+      for (s_2 = 0; ; s_2 = i + 1) {
+        i = attr.indexOf(val, s_2);
+        if (i === -1) return false;
+        f = attr[i - 1];
+        l = attr[i + val.length];
+        if ((!f || f === " ") && (!l || l === " ")) return true;
+      }
+    },
+    "|=": function (attr, val) {
+      var i = attr.indexOf(val);
+      var l;
+      if (i !== 0) return;
+      l = attr[i + val.length];
+      return l === "-" || !l;
+    },
+    "^=": function (attr, val) {
+      return attr.indexOf(val) === 0;
+    },
+    "$=": function (attr, val) {
+      var i = attr.lastIndexOf(val);
+      return i !== -1 && i + val.length === attr.length;
+    },
+    "!=": function (attr, val) {
+      return attr !== val;
+    },
+  };
+  var combinators = {
+    " ": function (test) {
+      return function (el) {
+        while ((el = el.parentNode)) if (test(el)) return el;
+      };
+    },
+    ">": function (test) {
+      return function (el) {
+        if ((el = el.parentNode)) return test(el) && el;
+      };
+    },
+    "+": function (test) {
+      return function (el) {
+        if ((el = prev(el))) return test(el) && el;
+      };
+    },
+    "~": function (test) {
+      return function (el) {
+        while ((el = prev(el))) if (test(el)) return el;
+      };
+    },
+    noop: function (test) {
+      return function (el) {
+        return test(el) && el;
+      };
+    },
+    ref: function (test, name) {
+      var node;
+      function ref(el) {
+        var doc = el.ownerDocument;
+        var nodes = doc.getElementsByTagName("*");
+        var i = nodes.length;
+        while (i--) {
+          node = nodes[i];
+          if (ref.test(el)) {
+            node = null;
+            return true;
+          }
+        }
+        node = null;
+      }
+      ref.combinator = function (el) {
+        if (!node || !node.getAttribute) return;
+        var attr = node.getAttribute(name) || "";
+        if (attr[0] === "#") attr = attr.substring(1);
+        if (attr === el.id && test(node)) return node;
+      };
+      return ref;
+    },
+  };
+  var rules = {
+    escape: /\\(?:[^0-9A-Fa-f\r\n]|[0-9A-Fa-f]{1,6}[\r\n\t ]?)/g,
+    str_escape: /(escape)|\\(\n|\r\n?|\f)/g,
+    nonascii: /[\u00A0-\uFFFF]/,
+    cssid: /(?:(?!-?[0-9])(?:escape|nonascii|[-_a-zA-Z0-9])+)/,
+    qname: /^ *(cssid|\*)/,
+    simple: /^(?:([.#]cssid)|pseudo|attr)/,
+    ref: /^ *\/(cssid)\/ */,
+    combinator: /^(?: +([^ \w*.#\\]) +|( )+|([^ \w*.#\\]))(?! *$)/,
+    attr: /^\[(cssid)(?:([^\w]?=)(inside))?\]/,
+    pseudo: /^(:cssid)(?:\((inside)\))?/,
+    inside: /(?:"(?:\\"|[^"])*"|'(?:\\'|[^'])*'|<[^"'>]*>|\\["'>]|[^"'>])*/,
+    ident: /^(cssid)$/,
+  };
+  rules.cssid = replace(rules.cssid, "nonascii", rules.nonascii);
+  rules.cssid = replace(rules.cssid, "escape", rules.escape);
+  rules.qname = replace(rules.qname, "cssid", rules.cssid);
+  rules.simple = replace(rules.simple, "cssid", rules.cssid);
+  rules.ref = replace(rules.ref, "cssid", rules.cssid);
+  rules.attr = replace(rules.attr, "cssid", rules.cssid);
+  rules.pseudo = replace(rules.pseudo, "cssid", rules.cssid);
+  rules.inside = replace(rules.inside, `[^"'>]*`, rules.inside);
+  rules.attr = replace(rules.attr, "inside", makeInside("\\[", "\\]"));
+  rules.pseudo = replace(rules.pseudo, "inside", makeInside("\\(", "\\)"));
+  rules.simple = replace(rules.simple, "pseudo", rules.pseudo);
+  rules.simple = replace(rules.simple, "attr", rules.attr);
+  rules.ident = replace(rules.ident, "cssid", rules.cssid);
+  rules.str_escape = replace(rules.str_escape, "escape", rules.escape);
+  var compile = function (sel_) {
+    var sel = sel_.replace(/^\s+|\s+$/g, "");
+    var test;
+    var filter = [];
+    var buff = [];
+    var subject;
+    var qname;
+    var cap;
+    var op;
+    var ref;
+    while (sel) {
+      if ((cap = rules.qname.exec(sel))) {
+        sel = sel.substring(cap[0].length);
+        qname = decodeid(cap[1]);
+        buff.push(tok(qname, true));
+      } else if ((cap = rules.simple.exec(sel))) {
+        sel = sel.substring(cap[0].length);
+        qname = "*";
+        buff.push(tok(qname, true));
+        buff.push(tok(cap));
+      } else throw SyntaxError("Invalid selector.");
+      while ((cap = rules.simple.exec(sel))) {
+        sel = sel.substring(cap[0].length);
+        buff.push(tok(cap));
+      }
+      if (sel[0] === "!") {
+        sel = sel.substring(1);
+        subject = makeSubject();
+        subject.qname = qname;
+        buff.push(subject.simple);
+      }
+      if ((cap = rules.ref.exec(sel))) {
+        sel = sel.substring(cap[0].length);
+        ref = combinators.ref(makeSimple(buff), decodeid(cap[1]));
+        filter.push(ref.combinator);
+        buff = [];
+        continue;
+      }
+      if ((cap = rules.combinator.exec(sel))) {
+        sel = sel.substring(cap[0].length);
+        op = cap[1] || cap[2] || cap[3];
+        if (op === ",") {
+          filter.push(combinators.noop(makeSimple(buff)));
+          break;
+        }
+      } else op = "noop";
+      if (!combinators[op]) throw SyntaxError("Bad combinator.");
+      filter.push(combinators[op](makeSimple(buff)));
+      buff = [];
+    }
+    test = makeTest(filter);
+    test.qname = qname;
+    test.sel = sel;
+    if (subject) {
+      subject.lname = test.qname;
+      subject.test = test;
+      subject.qname = subject.qname;
+      subject.sel = test.sel;
+      test = subject;
+    }
+    if (ref) {
+      ref.test = test;
+      ref.qname = test.qname;
+      ref.sel = test.sel;
+      test = ref;
+    }
+    return test;
+  };
+  var tok = function (cap, qname) {
+    if (qname) return cap === "*" ? selectors["*"] : selectors.type(cap);
+    if (cap[1])
+      return cap[1][0] === "."
+        ? selectors.attr("class", "~=", decodeid(cap[1].substring(1)), false)
+        : selectors.attr("id", "=", decodeid(cap[1].substring(1)), false);
+    if (cap[2]) return cap[3] ? selectors[decodeid(cap[2])](unquote(cap[3])) : selectors[decodeid(cap[2])];
+    if (cap[4]) {
+      var value = cap[6];
+      var i = /["'\s]\s*I$/i.test(value);
+      if (i) value = value.replace(/\s*I$/i, "");
+      return selectors.attr(decodeid(cap[4]), cap[5] || "-", unquote(value), i);
+    }
+    throw SyntaxError("Unknown Selector.");
+  };
+  var makeSimple = function (func) {
+    var l = func.length;
+    var i;
+    if (l < 2) return func[0];
+    return function (el) {
+      if (!el) return;
+      for (i = 0; i < l; i++) if (!func[i](el)) return;
+      return true;
+    };
+  };
+  var makeTest = function (func) {
+    if (func.length < 2)
+      return function (el) {
+        return !!func[0](el);
+      };
+    return function (el) {
+      var i = func.length;
+      while (i--) if (!(el = func[i](el))) return;
+      return true;
+    };
+  };
+  var makeSubject = function () {
+    var target;
+    function subject(el) {
+      var node = el.ownerDocument;
+      var scope = node.getElementsByTagName(subject.lname);
+      var i = scope.length;
+      while (i--)
+        if (subject.test(scope[i]) && target === el) {
+          target = null;
+          return true;
+        }
+      target = null;
+    }
+    subject.simple = function (el) {
+      target = el;
+      return true;
+    };
+    return subject;
+  };
+  var compileGroup = function (sel) {
+    var test = compile(sel);
+    var tests = [test];
+    while (test.sel) {
+      test = compile(test.sel);
+      tests.push(test);
+    }
+    if (tests.length < 2) return test;
+    return function (el) {
+      var l = tests.length;
+      var i = 0;
+      for (; i < l; i++) if (tests[i](el)) return true;
+    };
+  };
+  var find = function (sel, node) {
+    var results = [];
+    var test = compile(sel);
+    var scope = node.getElementsByTagName(test.qname);
+    var i = 0;
+    var el;
+    while ((el = scope[i++])) if (test(el)) results.push(el);
+    if (test.sel) {
+      while (test.sel) {
+        test = compile(test.sel);
+        scope = node.getElementsByTagName(test.qname);
+        i = 0;
+        while ((el = scope[i++])) if (test(el) && indexOf.call(results, el) === -1) results.push(el);
+      }
+      results.sort(order);
+    }
+    return results;
+  };
+  cjsModule.exports = cjsExports = function (sel, context) {
+    var id;
+    var r;
+    if (context.nodeType !== 11 && sel.indexOf(" ") === -1) {
+      if (sel[0] === "#" && context.rooted && /^#[A-Z_][-A-Z0-9_]*$/i.test(sel)) {
+        if (context.doc._hasMultipleElementsWithId) {
+          id = sel.substring(1);
+          if (!context.doc._hasMultipleElementsWithId(id)) {
+            r = context.doc.getElementById(id);
+            return r ? [r] : [];
+          }
+        }
+      }
+      if (sel[0] === "." && /^\.\w+$/.test(sel)) return context.getElementsByClassName(sel.substring(1));
+      if (/^\w+$/.test(sel)) return context.getElementsByTagName(sel);
+    }
+    return find(sel, context);
+  };
+  cjsExports.selectors = selectors;
+  cjsExports.operators = operators;
+  cjsExports.combinators = combinators;
+  cjsExports.matches = function (el, sel) {
+    var test = {
+      sel,
+    };
+    do {
+      test = compile(test.sel);
+      if (test(el)) return true;
+    } while (test.sel);
+    return false;
   };
 });
-
-export { ta };
+export { require_select };

@@ -6,661 +6,726 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../runtime/bun-runtime.js";
-import { it } from "./code.js";
-import { or } from "./scope.js";
+import { require_code } from "./code.js";
+import { require_scope } from "./scope.js";
 
 //@ chunk-s82q9s4x.js:5426-17192 cjs-fingerprint
-var uh = x(function (H) {
-  Object.defineProperty(H, "__esModule", { value: !0 });
-  H.or =
-    H.and =
-    H.not =
-    H.CodeGen =
-    H.operators =
-    H.varKinds =
-    H.ValueScopeName =
-    H.ValueScope =
-    H.Scope =
-    H.Name =
-    H.regexpCode =
-    H.stringify =
-    H.getProperty =
-    H.nil =
-    H.strConcat =
-    H.str =
-    H._ =
-      void 0;
-  var g = it(),
-    D = or(),
-    me = it();
-  Object.defineProperty(H, "_", {
-    enumerable: !0,
+var require_codegen_2 = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.or =
+    cjsExports.and =
+    cjsExports.not =
+    cjsExports.CodeGen =
+    cjsExports.operators =
+    cjsExports.varKinds =
+    cjsExports.ValueScopeName =
+    cjsExports.ValueScope =
+    cjsExports.Scope =
+    cjsExports.Name =
+    cjsExports.regexpCode =
+    cjsExports.stringify =
+    cjsExports.getProperty =
+    cjsExports.nil =
+    cjsExports.strConcat =
+    cjsExports.str =
+    cjsExports._ =
+      undefined;
+  var code_1 = require_code();
+  var scope_1 = require_scope();
+  var code_2 = require_code();
+  Object.defineProperty(cjsExports, "_", {
+    enumerable: true,
     get: function () {
-      return me._;
+      return code_2._;
     },
   });
-  Object.defineProperty(H, "str", {
-    enumerable: !0,
+  Object.defineProperty(cjsExports, "str", {
+    enumerable: true,
     get: function () {
-      return me.str;
+      return code_2.str;
     },
   });
-  Object.defineProperty(H, "strConcat", {
-    enumerable: !0,
+  Object.defineProperty(cjsExports, "strConcat", {
+    enumerable: true,
     get: function () {
-      return me.strConcat;
+      return code_2.strConcat;
     },
   });
-  Object.defineProperty(H, "nil", {
-    enumerable: !0,
+  Object.defineProperty(cjsExports, "nil", {
+    enumerable: true,
     get: function () {
-      return me.nil;
+      return code_2.nil;
     },
   });
-  Object.defineProperty(H, "getProperty", {
-    enumerable: !0,
+  Object.defineProperty(cjsExports, "getProperty", {
+    enumerable: true,
     get: function () {
-      return me.getProperty;
+      return code_2.getProperty;
     },
   });
-  Object.defineProperty(H, "stringify", {
-    enumerable: !0,
+  Object.defineProperty(cjsExports, "stringify", {
+    enumerable: true,
     get: function () {
-      return me.stringify;
+      return code_2.stringify;
     },
   });
-  Object.defineProperty(H, "regexpCode", {
-    enumerable: !0,
+  Object.defineProperty(cjsExports, "regexpCode", {
+    enumerable: true,
     get: function () {
-      return me.regexpCode;
+      return code_2.regexpCode;
     },
   });
-  Object.defineProperty(H, "Name", {
-    enumerable: !0,
+  Object.defineProperty(cjsExports, "Name", {
+    enumerable: true,
     get: function () {
-      return me.Name;
+      return code_2.Name;
     },
   });
-  var bt = or();
-  Object.defineProperty(H, "Scope", {
-    enumerable: !0,
+  var scope_2 = require_scope();
+  Object.defineProperty(cjsExports, "Scope", {
+    enumerable: true,
     get: function () {
-      return bt.Scope;
+      return scope_2.Scope;
     },
   });
-  Object.defineProperty(H, "ValueScope", {
-    enumerable: !0,
+  Object.defineProperty(cjsExports, "ValueScope", {
+    enumerable: true,
     get: function () {
-      return bt.ValueScope;
+      return scope_2.ValueScope;
     },
   });
-  Object.defineProperty(H, "ValueScopeName", {
-    enumerable: !0,
+  Object.defineProperty(cjsExports, "ValueScopeName", {
+    enumerable: true,
     get: function () {
-      return bt.ValueScopeName;
+      return scope_2.ValueScopeName;
     },
   });
-  Object.defineProperty(H, "varKinds", {
-    enumerable: !0,
+  Object.defineProperty(cjsExports, "varKinds", {
+    enumerable: true,
     get: function () {
-      return bt.varKinds;
+      return scope_2.varKinds;
     },
   });
-  H.operators = {
-    GT: new g._Code(">"),
-    GTE: new g._Code(">="),
-    LT: new g._Code("<"),
-    LTE: new g._Code("<="),
-    EQ: new g._Code("==="),
-    NEQ: new g._Code("!=="),
-    NOT: new g._Code("!"),
-    OR: new g._Code("||"),
-    AND: new g._Code("&&"),
-    ADD: new g._Code("+"),
+  cjsExports.operators = {
+    GT: new code_1._Code(">"),
+    GTE: new code_1._Code(">="),
+    LT: new code_1._Code("<"),
+    LTE: new code_1._Code("<="),
+    EQ: new code_1._Code("==="),
+    NEQ: new code_1._Code("!=="),
+    NOT: new code_1._Code("!"),
+    OR: new code_1._Code("||"),
+    AND: new code_1._Code("&&"),
+    ADD: new code_1._Code("+"),
   };
-  class ye {
+  class Node {
     optimizeNodes() {
       return this;
     }
-    optimizeNames(e, t) {
+    optimizeNames(_names, _constants) {
       return this;
     }
   }
-  class Gr extends ye {
-    constructor(e, t, r) {
+  class Def extends Node {
+    constructor(varKind, name, rhs) {
       super();
-      ((this.varKind = e), (this.name = t), (this.rhs = r));
+      this.varKind = varKind;
+      this.name = name;
+      this.rhs = rhs;
     }
-    render({ es5: e, _n: t }) {
-      let r = e ? D.varKinds.var : this.varKind,
-        s = this.rhs === void 0 ? "" : ` = ${this.rhs}`;
-      return `${r} ${this.name}${s};` + t;
+    render({ es5, _n }) {
+      let varKind = es5 ? scope_1.varKinds.var : this.varKind;
+      let rhs = this.rhs === undefined ? "" : ` = ${this.rhs}`;
+      return `${varKind} ${this.name}${rhs};` + _n;
     }
-    optimizeNames(e, t) {
-      if (!e[this.name.str]) return;
-      if (this.rhs) this.rhs = ze(this.rhs, e, t);
+    optimizeNames(names, constants) {
+      if (!names[this.name.str]) return;
+      if (this.rhs) this.rhs = optimizeExpr(this.rhs, names, constants);
       return this;
     }
     get names() {
-      return this.rhs instanceof g._CodeOrName ? this.rhs.names : {};
+      return this.rhs instanceof code_1._CodeOrName ? this.rhs.names : {};
     }
   }
-  class cr extends ye {
-    constructor(e, t, r) {
+  class Assign extends Node {
+    constructor(lhs, rhs, sideEffects) {
       super();
-      ((this.lhs = e), (this.rhs = t), (this.sideEffects = r));
+      this.lhs = lhs;
+      this.rhs = rhs;
+      this.sideEffects = sideEffects;
     }
-    render({ _n: e }) {
-      return `${this.lhs} = ${this.rhs};` + e;
+    render({ _n }) {
+      return `${this.lhs} = ${this.rhs};` + _n;
     }
-    optimizeNames(e, t) {
-      if (this.lhs instanceof g.Name && !e[this.lhs.str] && !this.sideEffects) return;
-      return ((this.rhs = ze(this.rhs, e, t)), this);
+    optimizeNames(names, constants) {
+      if (this.lhs instanceof code_1.Name && !names[this.lhs.str] && !this.sideEffects) return;
+      this.rhs = optimizeExpr(this.rhs, names, constants);
+      return this;
     }
     get names() {
-      let e = this.lhs instanceof g.Name ? {} : { ...this.lhs.names };
-      return wt(e, this.rhs);
+      let names =
+        this.lhs instanceof code_1.Name
+          ? {}
+          : {
+              ...this.lhs.names,
+            };
+      return addExprNames(names, this.rhs);
     }
   }
-  class Jr extends cr {
-    constructor(e, t, r, s) {
-      super(e, r, s);
-      this.op = t;
+  class AssignOp extends Assign {
+    constructor(lhs, op, rhs, sideEffects) {
+      super(lhs, rhs, sideEffects);
+      this.op = op;
     }
-    render({ _n: e }) {
-      return `${this.lhs} ${this.op}= ${this.rhs};` + e;
+    render({ _n }) {
+      return `${this.lhs} ${this.op}= ${this.rhs};` + _n;
     }
   }
-  class Wr extends ye {
-    constructor(e) {
+  class Label extends Node {
+    constructor(label) {
       super();
-      ((this.label = e), (this.names = {}));
+      this.label = label;
+      this.names = {};
     }
-    render({ _n: e }) {
-      return `${this.label}:` + e;
-    }
-  }
-  class Br extends ye {
-    constructor(e) {
-      super();
-      ((this.label = e), (this.names = {}));
-    }
-    render({ _n: e }) {
-      return `break${this.label ? ` ${this.label}` : ""};` + e;
+    render({ _n }) {
+      return `${this.label}:` + _n;
     }
   }
-  class Qr extends ye {
-    constructor(e) {
+  class Break extends Node {
+    constructor(label) {
       super();
-      this.error = e;
+      this.label = label;
+      this.names = {};
     }
-    render({ _n: e }) {
-      return `throw ${this.error};` + e;
+    render({ _n }) {
+      return `break${this.label ? ` ${this.label}` : ""};` + _n;
+    }
+  }
+  class Throw extends Node {
+    constructor(error) {
+      super();
+      this.error = error;
+    }
+    render({ _n }) {
+      return `throw ${this.error};` + _n;
     }
     get names() {
       return this.error.names;
     }
   }
-  class Xr extends ye {
-    constructor(e) {
+  class AnyCode extends Node {
+    constructor(code) {
       super();
-      this.code = e;
+      this.code = code;
     }
-    render({ _n: e }) {
-      return `${this.code};` + e;
+    render({ _n }) {
+      return `${this.code};` + _n;
     }
     optimizeNodes() {
-      return `${this.code}` ? this : void 0;
+      return `${this.code}` ? this : undefined;
     }
-    optimizeNames(e, t) {
-      return ((this.code = ze(this.code, e, t)), this);
+    optimizeNames(names, constants) {
+      this.code = optimizeExpr(this.code, names, constants);
+      return this;
     }
     get names() {
-      return this.code instanceof g._CodeOrName ? this.code.names : {};
+      return this.code instanceof code_1._CodeOrName ? this.code.names : {};
     }
   }
-  class Et extends ye {
-    constructor(e = []) {
+  class ParentNode extends Node {
+    constructor(nodes = []) {
       super();
-      this.nodes = e;
+      this.nodes = nodes;
     }
-    render(e) {
-      return this.nodes.reduce((t, r) => t + r.render(e), "");
+    render(opts) {
+      return this.nodes.reduce((code, n) => code + n.render(opts), "");
     }
     optimizeNodes() {
-      let { nodes: nodes } = this,
-        t = nodes.length;
-      while (t--) {
-        let optimizeNodes = nodes[t].optimizeNodes();
-        if (Array.isArray(optimizeNodes)) nodes.splice(t, 1, ...optimizeNodes);
-        else if (optimizeNodes) nodes[t] = optimizeNodes;
-        else nodes.splice(t, 1);
+      let { nodes } = this;
+      let i = nodes.length;
+      while (i--) {
+        let n = nodes[i].optimizeNodes();
+        if (Array.isArray(n)) nodes.splice(i, 1, ...n);
+        else if (n) nodes[i] = n;
+        else nodes.splice(i, 1);
       }
-      return nodes.length > 0 ? this : void 0;
+      return nodes.length > 0 ? this : undefined;
     }
-    optimizeNames(e, t) {
-      let { nodes: nodes } = this,
-        s = nodes.length;
-      while (s--) {
-        let n = nodes[s];
-        if (n.optimizeNames(e, t)) continue;
-        (Da(e, n.names), nodes.splice(s, 1));
+    optimizeNames(names, constants) {
+      let { nodes } = this;
+      let i = nodes.length;
+      while (i--) {
+        let n = nodes[i];
+        if (n.optimizeNames(names, constants)) continue;
+        subtractNames(names, n.names);
+        nodes.splice(i, 1);
       }
-      return nodes.length > 0 ? this : void 0;
+      return nodes.length > 0 ? this : undefined;
     }
     get names() {
-      return this.nodes.reduce((e, t) => Ie(e, t.names), {});
+      return this.nodes.reduce((names, n) => addNames(names, n.names), {});
     }
   }
-  class _e extends Et {
-    render(e) {
-      return "{" + e._n + super.render(e) + "}" + e._n;
+  class BlockNode extends ParentNode {
+    render(opts) {
+      return "{" + opts._n + super.render(opts) + "}" + opts._n;
     }
   }
-  class Yr extends Et {}
-  class at extends _e {}
-  at.kind = "else";
-  class pe extends _e {
-    constructor(e, t) {
-      super(t);
-      this.condition = e;
+  class Root extends ParentNode {}
+  class Else extends BlockNode {}
+  Else.kind = "else";
+  class If extends BlockNode {
+    constructor(condition, nodes) {
+      super(nodes);
+      this.condition = condition;
     }
-    render(e) {
-      let t = `if(${this.condition})` + super.render(e);
-      if (this.else) t += "else " + this.else.render(e);
-      return t;
+    render(opts) {
+      let code = `if(${this.condition})` + super.render(opts);
+      if (this.else) code += "else " + this.else.render(opts);
+      return code;
     }
     optimizeNodes() {
       super.optimizeNodes();
-      let condition = this.condition;
-      if (condition === !0) return this.nodes;
-      let t = this.else;
-      if (t) {
-        let optimizeNodes = t.optimizeNodes();
-        t = this.else = Array.isArray(optimizeNodes) ? new at(optimizeNodes) : optimizeNodes;
+      let cond = this.condition;
+      if (cond === true) return this.nodes;
+      let e = this.else;
+      if (e) {
+        let ns = e.optimizeNodes();
+        e = this.else = Array.isArray(ns) ? new Else(ns) : ns;
       }
-      if (t) {
-        if (condition === !1) return t instanceof pe ? t : t.nodes;
+      if (e) {
+        if (cond === false) return e instanceof If ? e : e.nodes;
         if (this.nodes.length) return this;
-        return new pe(ss(condition), t instanceof pe ? [t] : t.nodes);
+        return new If(not(cond), e instanceof If ? [e] : e.nodes);
       }
-      if (condition === !1 || !this.nodes.length) return;
+      if (cond === false || !this.nodes.length) return;
       return this;
     }
-    optimizeNames(e, t) {
-      var r;
-      if (
-        ((this.else = (r = this.else) === null || r === void 0 ? void 0 : r.optimizeNames(e, t)),
-        !(super.optimizeNames(e, t) || this.else))
-      )
-        return;
-      return ((this.condition = ze(this.condition, e, t)), this);
+    optimizeNames(names, constants) {
+      var _a;
+      this.else =
+        (_a = this.else) === null || _a === undefined ? undefined : _a.optimizeNames(names, constants);
+      if (!(super.optimizeNames(names, constants) || this.else)) return;
+      this.condition = optimizeExpr(this.condition, names, constants);
+      return this;
     }
     get names() {
       let names = super.names;
-      if ((wt(names, this.condition), this.else)) Ie(names, this.else.names);
+      addExprNames(names, this.condition);
+      if (this.else) addNames(names, this.else.names);
       return names;
     }
   }
-  pe.kind = "if";
-  class Ve extends _e {}
-  Ve.kind = "for";
-  class Zr extends Ve {
-    constructor(e) {
+  If.kind = "if";
+  class For extends BlockNode {}
+  For.kind = "for";
+  class ForLoop extends For {
+    constructor(iteration) {
       super();
-      this.iteration = e;
+      this.iteration = iteration;
     }
-    render(e) {
-      return `for(${this.iteration})` + super.render(e);
+    render(opts) {
+      return `for(${this.iteration})` + super.render(opts);
     }
-    optimizeNames(e, t) {
-      if (!super.optimizeNames(e, t)) return;
-      return ((this.iteration = ze(this.iteration, e, t)), this);
+    optimizeNames(names, constants) {
+      if (!super.optimizeNames(names, constants)) return;
+      this.iteration = optimizeExpr(this.iteration, names, constants);
+      return this;
     }
     get names() {
-      return Ie(super.names, this.iteration.names);
+      return addNames(super.names, this.iteration.names);
     }
   }
-  class es extends Ve {
-    constructor(e, t, r, s) {
+  class ForRange extends For {
+    constructor(varKind, name, from, to) {
       super();
-      ((this.varKind = e), (this.name = t), (this.from = r), (this.to = s));
+      this.varKind = varKind;
+      this.name = name;
+      this.from = from;
+      this.to = to;
     }
-    render(e) {
-      let t = e.es5 ? D.varKinds.var : this.varKind,
-        { name: r, from: from, to: to } = this;
-      return `for(${t} ${r}=${from}; ${r}<${to}; ${r}++)` + super.render(e);
+    render(opts) {
+      let varKind = opts.es5 ? scope_1.varKinds.var : this.varKind;
+      let { name, from, to } = this;
+      return `for(${varKind} ${name}=${from}; ${name}<${to}; ${name}++)` + super.render(opts);
     }
     get names() {
-      let e = wt(super.names, this.from);
-      return wt(e, this.to);
+      let names = addExprNames(super.names, this.from);
+      return addExprNames(names, this.to);
     }
   }
-  class ir extends Ve {
-    constructor(e, t, r, s) {
+  class ForIter extends For {
+    constructor(loop, varKind, name, iterable) {
       super();
-      ((this.loop = e), (this.varKind = t), (this.name = r), (this.iterable = s));
+      this.loop = loop;
+      this.varKind = varKind;
+      this.name = name;
+      this.iterable = iterable;
     }
-    render(e) {
-      return `for(${this.varKind} ${this.name} ${this.loop} ${this.iterable})` + super.render(e);
+    render(opts) {
+      return `for(${this.varKind} ${this.name} ${this.loop} ${this.iterable})` + super.render(opts);
     }
-    optimizeNames(e, t) {
-      if (!super.optimizeNames(e, t)) return;
-      return ((this.iterable = ze(this.iterable, e, t)), this);
+    optimizeNames(names, constants) {
+      if (!super.optimizeNames(names, constants)) return;
+      this.iterable = optimizeExpr(this.iterable, names, constants);
+      return this;
     }
     get names() {
-      return Ie(super.names, this.iterable.names);
+      return addNames(super.names, this.iterable.names);
     }
   }
-  class _t extends _e {
-    constructor(e, t, r) {
+  class Func extends BlockNode {
+    constructor(name, args, async) {
       super();
-      ((this.name = e), (this.args = t), (this.async = r));
+      this.name = name;
+      this.args = args;
+      this.async = async;
     }
-    render(e) {
-      return `${this.async ? "async " : ""}function ${this.name}(${this.args})` + super.render(e);
-    }
-  }
-  _t.kind = "func";
-  class gt extends Et {
-    render(e) {
-      return "return " + super.render(e);
+    render(opts) {
+      return `${this.async ? "async " : ""}function ${this.name}(${this.args})` + super.render(opts);
     }
   }
-  gt.kind = "return";
-  class ts extends _e {
-    render(e) {
-      let t = "try" + super.render(e);
-      if (this.catch) t += this.catch.render(e);
-      if (this.finally) t += this.finally.render(e);
-      return t;
+  Func.kind = "func";
+  class Return extends ParentNode {
+    render(opts) {
+      return "return " + super.render(opts);
+    }
+  }
+  Return.kind = "return";
+  class Try extends BlockNode {
+    render(opts) {
+      let code = "try" + super.render(opts);
+      if (this.catch) code += this.catch.render(opts);
+      if (this.finally) code += this.finally.render(opts);
+      return code;
     }
     optimizeNodes() {
-      var e, t;
-      return (
-        super.optimizeNodes(),
-        (e = this.catch) === null || e === void 0 || e.optimizeNodes(),
-        (t = this.finally) === null || t === void 0 || t.optimizeNodes(),
-        this
-      );
+      var _a;
+      var _b;
+      super.optimizeNodes();
+      if (!((_a = this.catch) === null || _a === undefined)) _a.optimizeNodes();
+      if (!((_b = this.finally) === null || _b === undefined)) _b.optimizeNodes();
+      return this;
     }
-    optimizeNames(e, t) {
-      var r, s;
-      return (
-        super.optimizeNames(e, t),
-        (r = this.catch) === null || r === void 0 || r.optimizeNames(e, t),
-        (s = this.finally) === null || s === void 0 || s.optimizeNames(e, t),
-        this
-      );
+    optimizeNames(names, constants) {
+      var _a;
+      var _b;
+      super.optimizeNames(names, constants);
+      if (!((_a = this.catch) === null || _a === undefined)) _a.optimizeNames(names, constants);
+      if (!((_b = this.finally) === null || _b === undefined)) _b.optimizeNames(names, constants);
+      return this;
     }
     get names() {
       let names = super.names;
-      if (this.catch) Ie(names, this.catch.names);
-      if (this.finally) Ie(names, this.finally.names);
+      if (this.catch) addNames(names, this.catch.names);
+      if (this.finally) addNames(names, this.finally.names);
       return names;
     }
   }
-  class $t extends _e {
-    constructor(e) {
+  class Catch extends BlockNode {
+    constructor(error) {
       super();
-      this.error = e;
+      this.error = error;
     }
-    render(e) {
-      return `catch(${this.error})` + super.render(e);
-    }
-  }
-  $t.kind = "catch";
-  class vt extends _e {
-    render(e) {
-      return "finally" + super.render(e);
+    render(opts) {
+      return `catch(${this.error})` + super.render(opts);
     }
   }
-  vt.kind = "finally";
-  class rs {
-    constructor(e, t = {}) {
-      ((this._values = {}),
-        (this._blockStarts = []),
-        (this._constants = {}),
-        (this.opts = {
-          ...t,
-          _n: t.lines
-            ? `
+  Catch.kind = "catch";
+  class Finally extends BlockNode {
+    render(opts) {
+      return "finally" + super.render(opts);
+    }
+  }
+  Finally.kind = "finally";
+  class CodeGen {
+    constructor(extScope, opts = {}) {
+      this._values = {};
+      this._blockStarts = [];
+      this._constants = {};
+      this.opts = {
+        ...opts,
+        _n: opts.lines
+          ? `
 `
-            : "",
-        }),
-        (this._extScope = e),
-        (this._scope = new D.Scope({ parent: e })),
-        (this._nodes = [new Yr()]));
+          : "",
+      };
+      this._extScope = extScope;
+      this._scope = new scope_1.Scope({
+        parent: extScope,
+      });
+      this._nodes = [new Root()];
     }
     toString() {
       return this._root.render(this.opts);
     }
-    name(e) {
-      return this._scope.name(e);
+    name(prefix) {
+      return this._scope.name(prefix);
     }
-    scopeName(e) {
-      return this._extScope.name(e);
+    scopeName(prefix) {
+      return this._extScope.name(prefix);
     }
-    scopeValue(e, t) {
-      let r = this._extScope.value(e, t);
-      return ((this._values[r.prefix] || (this._values[r.prefix] = new Set())).add(r), r);
+    scopeValue(prefixOrName, value) {
+      let name = this._extScope.value(prefixOrName, value);
+      (this._values[name.prefix] || (this._values[name.prefix] = new Set())).add(name);
+      return name;
     }
-    getScopeValue(e, t) {
-      return this._extScope.getValue(e, t);
+    getScopeValue(prefix, keyOrRef) {
+      return this._extScope.getValue(prefix, keyOrRef);
     }
-    scopeRefs(e) {
-      return this._extScope.scopeRefs(e, this._values);
+    scopeRefs(scopeName) {
+      return this._extScope.scopeRefs(scopeName, this._values);
     }
     scopeCode() {
       return this._extScope.scopeCode(this._values);
     }
-    _def(e, t, r, s) {
-      let toName = this._scope.toName(t);
-      if (r !== void 0 && s) this._constants[toName.str] = r;
-      return (this._leafNode(new Gr(e, toName, r)), toName);
+    _def(varKind, nameOrPrefix, rhs, constant) {
+      let name = this._scope.toName(nameOrPrefix);
+      if (rhs !== undefined && constant) this._constants[name.str] = rhs;
+      this._leafNode(new Def(varKind, name, rhs));
+      return name;
     }
-    const(e, t, r) {
-      return this._def(D.varKinds.const, e, t, r);
+    const(nameOrPrefix, rhs, _constant) {
+      return this._def(scope_1.varKinds.const, nameOrPrefix, rhs, _constant);
     }
-    let(e, t, r) {
-      return this._def(D.varKinds.let, e, t, r);
+    let(nameOrPrefix, rhs, _constant) {
+      return this._def(scope_1.varKinds.let, nameOrPrefix, rhs, _constant);
     }
-    var(e, t, r) {
-      return this._def(D.varKinds.var, e, t, r);
+    var(nameOrPrefix, rhs, _constant) {
+      return this._def(scope_1.varKinds.var, nameOrPrefix, rhs, _constant);
     }
-    assign(e, t, r) {
-      return this._leafNode(new cr(e, t, r));
+    assign(lhs, rhs, sideEffects) {
+      return this._leafNode(new Assign(lhs, rhs, sideEffects));
     }
-    add(e, t) {
-      return this._leafNode(new Jr(e, H.operators.ADD, t));
+    add(lhs, rhs) {
+      return this._leafNode(new AssignOp(lhs, cjsExports.operators.ADD, rhs));
     }
-    code(e) {
-      if (typeof e == "function") e();
-      else if (e !== g.nil) this._leafNode(new Xr(e));
+    code(c) {
+      if (typeof c == "function") c();
+      else if (c !== code_1.nil) this._leafNode(new AnyCode(c));
       return this;
     }
-    object(...e) {
-      let t = ["{"];
-      for (let [r, s] of e) {
-        if (t.length > 1) t.push(",");
-        if ((t.push(r), r !== s || this.opts.es5)) (t.push(":"), g.addCodeArg(t, s));
+    object(...keyValues) {
+      let code = ["{"];
+      for (let [key, value] of keyValues) {
+        if (code.length > 1) code.push(",");
+        code.push(key);
+        if (key !== value || this.opts.es5) {
+          code.push(":");
+          code_1.addCodeArg(code, value);
+        }
       }
-      return (t.push("}"), new g._Code(t));
+      code.push("}");
+      return new code_1._Code(code);
     }
-    if(e, t, r) {
-      if ((this._blockNode(new pe(e)), t && r)) this.code(t).else().code(r).endIf();
-      else if (t) this.code(t).endIf();
-      else if (r) throw Error('CodeGen: "else" body without "then" body');
+    if(condition, thenBody, elseBody) {
+      this._blockNode(new If(condition));
+      if (thenBody && elseBody) this.code(thenBody).else().code(elseBody).endIf();
+      else if (thenBody) this.code(thenBody).endIf();
+      else if (elseBody) throw Error('CodeGen: "else" body without "then" body');
       return this;
     }
-    elseIf(e) {
-      return this._elseNode(new pe(e));
+    elseIf(condition) {
+      return this._elseNode(new If(condition));
     }
     else() {
-      return this._elseNode(new at());
+      return this._elseNode(new Else());
     }
     endIf() {
-      return this._endBlockNode(pe, at);
+      return this._endBlockNode(If, Else);
     }
-    _for(e, t) {
-      if ((this._blockNode(e), t)) this.code(t).endFor();
+    _for(node, forBody) {
+      this._blockNode(node);
+      if (forBody) this.code(forBody).endFor();
       return this;
     }
-    for(e, t) {
-      return this._for(new Zr(e), t);
+    for(iteration, forBody) {
+      return this._for(new ForLoop(iteration), forBody);
     }
-    forRange(e, t, r, s, n = this.opts.es5 ? D.varKinds.var : D.varKinds.let) {
-      let toName = this._scope.toName(e);
-      return this._for(new es(n, toName, t, r), () => s(toName));
+    forRange(
+      nameOrPrefix,
+      from,
+      to,
+      forBody,
+      varKind = this.opts.es5 ? scope_1.varKinds.var : scope_1.varKinds.let,
+    ) {
+      let name = this._scope.toName(nameOrPrefix);
+      return this._for(new ForRange(varKind, name, from, to), () => forBody(name));
     }
-    forOf(e, t, r, s = D.varKinds.const) {
-      let toName = this._scope.toName(e);
+    forOf(nameOrPrefix, iterable, forBody, varKind = scope_1.varKinds.const) {
+      let name = this._scope.toName(nameOrPrefix);
       if (this.opts.es5) {
-        let o = t instanceof g.Name ? t : this.var("_arr", t);
-        return this.forRange("_i", 0, g._`${o}.length`, (i) => {
-          (this.var(toName, g._`${o}[${i}]`), r(toName));
+        let arr = iterable instanceof code_1.Name ? iterable : this.var("_arr", iterable);
+        return this.forRange("_i", 0, code_1._`${arr}.length`, (i) => {
+          this.var(name, code_1._`${arr}[${i}]`);
+          forBody(name);
         });
       }
-      return this._for(new ir("of", s, toName, t), () => r(toName));
+      return this._for(new ForIter("of", varKind, name, iterable), () => forBody(name));
     }
-    forIn(e, t, r, s = this.opts.es5 ? D.varKinds.var : D.varKinds.const) {
-      if (this.opts.ownProperties) return this.forOf(e, g._`Object.keys(${t})`, r);
-      let toName = this._scope.toName(e);
-      return this._for(new ir("in", s, toName, t), () => r(toName));
+    forIn(
+      nameOrPrefix,
+      obj,
+      forBody,
+      varKind = this.opts.es5 ? scope_1.varKinds.var : scope_1.varKinds.const,
+    ) {
+      if (this.opts.ownProperties) return this.forOf(nameOrPrefix, code_1._`Object.keys(${obj})`, forBody);
+      let name = this._scope.toName(nameOrPrefix);
+      return this._for(new ForIter("in", varKind, name, obj), () => forBody(name));
     }
     endFor() {
-      return this._endBlockNode(Ve);
+      return this._endBlockNode(For);
     }
-    label(e) {
-      return this._leafNode(new Wr(e));
+    label(label) {
+      return this._leafNode(new Label(label));
     }
-    break(e) {
-      return this._leafNode(new Br(e));
+    break(label) {
+      return this._leafNode(new Break(label));
     }
-    return(e) {
-      let t = new gt();
-      if ((this._blockNode(t), this.code(e), t.nodes.length !== 1))
-        throw Error('CodeGen: "return" should have one node');
-      return this._endBlockNode(gt);
+    return(value) {
+      let node = new Return();
+      this._blockNode(node);
+      this.code(value);
+      if (node.nodes.length !== 1) throw Error('CodeGen: "return" should have one node');
+      return this._endBlockNode(Return);
     }
-    try(e, t, r) {
-      if (!t && !r) throw Error('CodeGen: "try" without "catch" and "finally"');
-      let s = new ts();
-      if ((this._blockNode(s), this.code(e), t)) {
-        let n = this.name("e");
-        ((this._currNode = s.catch = new $t(n)), t(n));
+    try(tryBody, catchCode, finallyCode) {
+      if (!catchCode && !finallyCode) throw Error('CodeGen: "try" without "catch" and "finally"');
+      let node = new Try();
+      this._blockNode(node);
+      this.code(tryBody);
+      if (catchCode) {
+        let error = this.name("e");
+        this._currNode = node.catch = new Catch(error);
+        catchCode(error);
       }
-      if (r) ((this._currNode = s.finally = new vt()), this.code(r));
-      return this._endBlockNode($t, vt);
+      if (finallyCode) {
+        this._currNode = node.finally = new Finally();
+        this.code(finallyCode);
+      }
+      return this._endBlockNode(Catch, Finally);
     }
-    throw(e) {
-      return this._leafNode(new Qr(e));
+    throw(error) {
+      return this._leafNode(new Throw(error));
     }
-    block(e, t) {
-      if ((this._blockStarts.push(this._nodes.length), e)) this.code(e).endBlock(t);
+    block(body, nodeCount) {
+      this._blockStarts.push(this._nodes.length);
+      if (body) this.code(body).endBlock(nodeCount);
       return this;
     }
-    endBlock(e) {
-      let t = this._blockStarts.pop();
-      if (t === void 0) throw Error("CodeGen: not in self-balancing block");
-      let r = this._nodes.length - t;
-      if (r < 0 || (e !== void 0 && r !== e))
-        throw Error(`CodeGen: wrong number of nodes: ${r} vs ${e} expected`);
-      return ((this._nodes.length = t), this);
+    endBlock(nodeCount) {
+      let len = this._blockStarts.pop();
+      if (len === undefined) throw Error("CodeGen: not in self-balancing block");
+      let toClose = this._nodes.length - len;
+      if (toClose < 0 || (nodeCount !== undefined && toClose !== nodeCount))
+        throw Error(`CodeGen: wrong number of nodes: ${toClose} vs ${nodeCount} expected`);
+      this._nodes.length = len;
+      return this;
     }
-    func(e, t = g.nil, r, s) {
-      if ((this._blockNode(new _t(e, t, r)), s)) this.code(s).endFunc();
+    func(name, args = code_1.nil, async, funcBody) {
+      this._blockNode(new Func(name, args, async));
+      if (funcBody) this.code(funcBody).endFunc();
       return this;
     }
     endFunc() {
-      return this._endBlockNode(_t);
+      return this._endBlockNode(Func);
     }
-    optimize(e = 1) {
-      while (e-- > 0)
-        (this._root.optimizeNodes(), this._root.optimizeNames(this._root.names, this._constants));
+    optimize(n = 1) {
+      while (n-- > 0) {
+        this._root.optimizeNodes();
+        this._root.optimizeNames(this._root.names, this._constants);
+      }
     }
-    _leafNode(e) {
-      return (this._currNode.nodes.push(e), this);
+    _leafNode(node) {
+      this._currNode.nodes.push(node);
+      return this;
     }
-    _blockNode(e) {
-      (this._currNode.nodes.push(e), this._nodes.push(e));
+    _blockNode(node) {
+      this._currNode.nodes.push(node);
+      this._nodes.push(node);
     }
-    _endBlockNode(e, t) {
-      let _currNode = this._currNode;
-      if (_currNode instanceof e || (t && _currNode instanceof t)) return (this._nodes.pop(), this);
-      throw Error(`CodeGen: not in block "${t ? `${e.kind}/${t.kind}` : e.kind}"`);
+    _endBlockNode(N1, N2) {
+      let n = this._currNode;
+      if (n instanceof N1 || (N2 && n instanceof N2)) {
+        this._nodes.pop();
+        return this;
+      }
+      throw Error(`CodeGen: not in block "${N2 ? `${N1.kind}/${N2.kind}` : N1.kind}"`);
     }
-    _elseNode(e) {
-      let _currNode = this._currNode;
-      if (!(_currNode instanceof pe)) throw Error('CodeGen: "else" without "if"');
-      return ((this._currNode = _currNode.else = e), this);
+    _elseNode(node) {
+      let n = this._currNode;
+      if (!(n instanceof If)) throw Error('CodeGen: "else" without "if"');
+      this._currNode = n.else = node;
+      return this;
     }
     get _root() {
       return this._nodes[0];
     }
     get _currNode() {
-      let _nodes = this._nodes;
-      return _nodes[_nodes.length - 1];
+      let ns = this._nodes;
+      return ns[ns.length - 1];
     }
-    set _currNode(e) {
-      let _nodes = this._nodes;
-      _nodes[_nodes.length - 1] = e;
+    set _currNode(node) {
+      let ns = this._nodes;
+      ns[ns.length - 1] = node;
     }
   }
-  H.CodeGen = rs;
-  function Ie(e, t) {
-    for (let key in t) e[key] = (e[key] || 0) + (t[key] || 0);
-    return e;
+  cjsExports.CodeGen = CodeGen;
+  function addNames(names, from) {
+    for (let n in from) names[n] = (names[n] || 0) + (from[n] || 0);
+    return names;
   }
-  function wt(e, t) {
-    return t instanceof g._CodeOrName ? Ie(e, t.names) : e;
+  function addExprNames(names, from) {
+    return from instanceof code_1._CodeOrName ? addNames(names, from.names) : names;
   }
-  function ze(e, t, r) {
-    if (e instanceof g.Name) return s(e);
-    if (!n(e)) return e;
-    return new g._Code(
-      e._items.reduce((o, i) => {
-        if (i instanceof g.Name) i = s(i);
-        if (i instanceof g._Code) o.push(...i._items);
-        else o.push(i);
-        return o;
+  function optimizeExpr(expr, names, constants) {
+    if (expr instanceof code_1.Name) return replaceName(expr);
+    if (!canOptimize(expr)) return expr;
+    return new code_1._Code(
+      expr._items.reduce((items, c) => {
+        if (c instanceof code_1.Name) c = replaceName(c);
+        if (c instanceof code_1._Code) items.push(...c._items);
+        else items.push(c);
+        return items;
       }, []),
     );
-    function s(o) {
-      let i = r[o.str];
-      if (i === void 0 || t[o.str] !== 1) return o;
-      return (delete t[o.str], i);
+    function replaceName(n) {
+      let c = constants[n.str];
+      if (c === undefined || names[n.str] !== 1) return n;
+      delete names[n.str];
+      return c;
     }
-    function n(o) {
+    function canOptimize(e) {
       return (
-        o instanceof g._Code &&
-        o._items.some((_item) => _item instanceof g.Name && t[_item.str] === 1 && r[_item.str] !== void 0)
+        e instanceof code_1._Code &&
+        e._items.some((c) => c instanceof code_1.Name && names[c.str] === 1 && constants[c.str] !== undefined)
       );
     }
   }
-  function Da(e, t) {
-    for (let key in t) e[key] = (e[key] || 0) - (t[key] || 0);
+  function subtractNames(names, from) {
+    for (let n in from) names[n] = (names[n] || 0) - (from[n] || 0);
   }
-  function ss(e) {
-    return typeof e == "boolean" || typeof e == "number" || e === null ? !e : g._`!${ar(e)}`;
+  function not(x) {
+    return typeof x == "boolean" || typeof x == "number" || x === null ? !x : code_1._`!${par(x)}`;
   }
-  H.not = ss;
-  var Va = ns(H.operators.AND);
-  function za(...e) {
-    return e.reduce(Va);
+  cjsExports.not = not;
+  var andCode = mappend(cjsExports.operators.AND);
+  function and(...args) {
+    return args.reduce(andCode);
   }
-  H.and = za;
-  var Ua = ns(H.operators.OR);
-  function Ka(...e) {
-    return e.reduce(Ua);
+  cjsExports.and = and;
+  var orCode = mappend(cjsExports.operators.OR);
+  function or(...args) {
+    return args.reduce(orCode);
   }
-  H.or = Ka;
-  function ns(e) {
-    return (t, r) => (t === g.nil ? r : r === g.nil ? t : g._`${ar(t)} ${e} ${ar(r)}`);
+  cjsExports.or = or;
+  function mappend(op) {
+    return (x, y) => (x === code_1.nil ? y : y === code_1.nil ? x : code_1._`${par(x)} ${op} ${par(y)}`);
   }
-  function ar(e) {
-    return e instanceof g.Name ? e : g._`(${e})`;
+  function par(x) {
+    return x instanceof code_1.Name ? x : code_1._`(${x})`;
   }
 });
-
-export { uh };
+export { require_codegen_2 };

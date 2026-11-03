@@ -8,11 +8,11 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:305312-308874 cjs-fingerprint
-var ci = x(function (sg, oi) {
-  function Rp(e) {
+var require_n1ql = x(function (cjsExports, cjsModule) {
+  function n1ql(hljs) {
     return {
       name: "N1QL",
-      case_insensitive: !0,
+      case_insensitive: true,
       contains: [
         {
           beginKeywords:
@@ -325,18 +325,32 @@ var ci = x(function (sg, oi) {
             ],
           },
           contains: [
-            { className: "string", begin: "'", end: "'", contains: [e.BACKSLASH_ESCAPE] },
-            { className: "string", begin: '"', end: '"', contains: [e.BACKSLASH_ESCAPE] },
-            { className: "symbol", begin: "`", end: "`", contains: [e.BACKSLASH_ESCAPE] },
-            e.C_NUMBER_MODE,
-            e.C_BLOCK_COMMENT_MODE,
+            {
+              className: "string",
+              begin: "'",
+              end: "'",
+              contains: [hljs.BACKSLASH_ESCAPE],
+            },
+            {
+              className: "string",
+              begin: '"',
+              end: '"',
+              contains: [hljs.BACKSLASH_ESCAPE],
+            },
+            {
+              className: "symbol",
+              begin: "`",
+              end: "`",
+              contains: [hljs.BACKSLASH_ESCAPE],
+            },
+            hljs.C_NUMBER_MODE,
+            hljs.C_BLOCK_COMMENT_MODE,
           ],
         },
-        e.C_BLOCK_COMMENT_MODE,
+        hljs.C_BLOCK_COMMENT_MODE,
       ],
     };
   }
-  oi.exports = Rp;
+  cjsModule.exports = n1ql;
 });
-
-export { ci };
+export { require_n1ql };

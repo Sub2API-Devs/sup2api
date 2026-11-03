@@ -6,7 +6,24 @@
  * attribution: esm-layout 1, esm-fingerprint 1
  */
 import { defineExports } from "../../../runtime/bun-runtime.js";
-import { Yn, rs, os, Dy, gl, _y, ls, as, Oy, Hy, Ly, ss, Py, bl, us, By } from "./scheduler.production.js";
+import {
+  Yn,
+  rs,
+  os,
+  Dy,
+  gl,
+  _y,
+  ls,
+  as,
+  Oy,
+  Hy,
+  Ly,
+  ss,
+  Py,
+  bl,
+  shouldYieldToHost_default,
+  By,
+} from "./scheduler.production.js";
 
 //@ chunk-bzr73sfg.js:2536-2546 esm-layout
 var Wi = {};
@@ -28,7 +45,7 @@ defineExports(
     unstable_requestPaint: () => ss,
     unstable_runWithPriority: () => Py,
     unstable_scheduleCallback: () => bl,
-    unstable_shouldYield: () => us,
+    unstable_shouldYield: () => shouldYieldToHost_default,
     unstable_wrapCallback: () => By,
   },
   {
@@ -46,9 +63,8 @@ defineExports(
     unstable_requestPaint: (fT) => (ss = fT),
     unstable_runWithPriority: (fT) => (Py = fT),
     unstable_scheduleCallback: (fT) => (bl = fT),
-    unstable_shouldYield: (fT) => (us = fT),
+    unstable_shouldYield: (fT) => (shouldYieldToHost_default = fT),
     unstable_wrapCallback: (fT) => (By = fT),
   },
 );
-
 export { Wi };

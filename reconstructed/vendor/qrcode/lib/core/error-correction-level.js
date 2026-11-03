@@ -8,41 +8,48 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-spjgqa4y.js:1074-1578 cjs-fingerprint
-var be = x(function (fi) {
-  fi.L = { bit: 1 };
-  fi.M = { bit: 0 };
-  fi.Q = { bit: 3 };
-  fi.H = { bit: 2 };
-  function ui(t) {
-    if (typeof t !== "string") throw Error("Param is not a string");
-    switch (t.toLowerCase()) {
+var require_error_correction_level = x(function (cjsExports) {
+  cjsExports.L = {
+    bit: 1,
+  };
+  cjsExports.M = {
+    bit: 0,
+  };
+  cjsExports.Q = {
+    bit: 3,
+  };
+  cjsExports.H = {
+    bit: 2,
+  };
+  function fromString(string) {
+    if (typeof string !== "string") throw Error("Param is not a string");
+    switch (string.toLowerCase()) {
       case "l":
       case "low":
-        return fi.L;
+        return cjsExports.L;
       case "m":
       case "medium":
-        return fi.M;
+        return cjsExports.M;
       case "q":
       case "quartile":
-        return fi.Q;
+        return cjsExports.Q;
       case "h":
       case "high":
-        return fi.H;
+        return cjsExports.H;
       default:
-        throw Error("Unknown EC Level: " + t);
+        throw Error("Unknown EC Level: " + string);
     }
   }
-  fi.isValid = function (e) {
-    return e && typeof e.bit < "u" && e.bit >= 0 && e.bit < 4;
+  cjsExports.isValid = function (level) {
+    return level && typeof level.bit !== "undefined" && level.bit >= 0 && level.bit < 4;
   };
-  fi.from = function (e, r) {
-    if (fi.isValid(e)) return e;
+  cjsExports.from = function (value, defaultValue) {
+    if (cjsExports.isValid(value)) return value;
     try {
-      return ui(e);
-    } catch (error) {
-      return r;
+      return fromString(value);
+    } catch (e) {
+      return defaultValue;
     }
   };
 });
-
-export { be };
+export { require_error_correction_level };

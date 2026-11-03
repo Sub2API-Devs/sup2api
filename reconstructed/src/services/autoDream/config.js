@@ -12,33 +12,41 @@ import { getFeatureValue_CACHED_MAY_BE_STALE } from "../analytics/growthbook.js"
 import { getInitialSettings_2 } from "../../utils/settings/settings.js";
 import { HostScoped } from "../../utils/hostScoped.js";
 
+//@ chunk-rsht1tdj.js:1080-1128 fingerprint = isAutoDreamEnabled (0.799)
 /**
  * 返回 tengu_onyx_plover 原值；为 null 表示 autoDream 关闭。
  */
-//@ chunk-rsht1tdj.js:1080-1128 fingerprint = isAutoDreamEnabled (0.799)
 function getAutoDreamConfigRaw() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_onyx_plover", null);
 }
 //@ chunk-rsht1tdj.js:1128-1195 placement
-function Mrn() {
-  let e = getAutoDreamConfigRaw();
-  return e?.enabled === !0 || e?.available === !0;
+/**
+ * 远程配置里 autoDream 是否可用（enabled 或 available 为真）。
+ */
+function isAutoDreamFeatureOn() {
+  let autoDreamConfigRaw = getAutoDreamConfigRaw();
+  return autoDreamConfigRaw?.enabled === true || autoDreamConfigRaw?.available === true;
 }
+//@ chunk-rsht1tdj.js:1195-1305 placement
 /**
  * 判断 autoDream（自动整理记忆）是否开启：功能可用时优先用设置 autoDreamEnabled，否则看远程配置。
  */
-//@ chunk-rsht1tdj.js:1195-1305 placement
 function isAutoDreamEnabled() {
-  if (!Mrn()) return !1;
+  if (!isAutoDreamFeatureOn()) return false;
   let autoDreamEnabled = getInitialSettings_2().autoDreamEnabled;
-  if (autoDreamEnabled !== void 0) return autoDreamEnabled;
-  return getAutoDreamConfigRaw()?.enabled === !0;
+  if (autoDreamEnabled !== undefined) return autoDreamEnabled;
+  return getAutoDreamConfigRaw()?.enabled === true;
 }
 //@ chunk-rsht1tdj.js:1305-1325 placement
-class Z {
+/**
+ * 每个宿主的 autoDream 运行状态容器，目前只有 runner 字段（由 MOs 注册）。
+ */
+class AutoDreamHostState {
   runner = null;
 }
 //@ chunk-rsht1tdj.js:1325-1348 placement
-var B = new HostScoped(() => new Z());
-
-export { isAutoDreamEnabled, Mrn, B };
+/**
+ * 按宿主划分的 autoDream 状态单例（HostScoped），DOs 与 MOs 都从这里取 runner。
+ */
+var autoDreamHostState = new HostScoped(() => new AutoDreamHostState());
+export { isAutoDreamEnabled, isAutoDreamFeatureOn, autoDreamHostState };

@@ -23,47 +23,73 @@ import { getGlobalConfig } from "./config.js";
 import { settingsChangeDetector } from "./settings/changeDetector.js";
 
 //@ chunk-82kqcve8.js:36843-36866 placement
-var ju = new HostScoped(() => createSignal());
+var focusModeSignalSlot = new HostScoped(() => createSignal());
 //@ chunk-82kqcve8.js:36866-36903 placement
-function Ys() {
-  return ju.of(getRootSession().host);
+function focusModeSignal() {
+  return focusModeSignalSlot.of(getRootSession().host);
 }
 //@ chunk-82kqcve8.js:36903-36984 placement
-function dFe() {
+/**
+ * 判断聚焦模式是否开启：优先读显式 viewMode，否则读 briefTranscript 设置。
+ */
+function isFocusModeEnabled() {
   let viewMode = getInitialSettings_2().viewMode;
-  return viewMode ? viewMode === "focus" : (getGlobalConfig().briefTranscript ?? !1);
+  return viewMode ? viewMode === "focus" : (getGlobalConfig().briefTranscript ?? false);
 }
 //@ chunk-82kqcve8.js:36984-37066 placement
 function isFocusModeFlag() {
   if (getIsNonInteractiveSession()) return getSettingsForSource("flagSettings")?.viewMode === "focus";
-  return dFe();
+  return isFocusModeEnabled();
 }
+//@ chunk-82kqcve8.js:37112-37243 placement
 /**
  * 设置 flag 设置中的视图模式（专注模式），变化时通知设置变更。
  */
-//@ chunk-82kqcve8.js:37112-37243 placement
 function setViewMode(e) {
-  let { viewMode: viewMode = null, ...r } = getFlagSettingsInline() ?? {};
+  let { viewMode = null, ...r } = getFlagSettingsInline() ?? {};
   if (viewMode === e) return;
-  (setFlagSettingsInline(e ? { ...r, viewMode: e } : r),
-    settingsChangeDetector.notifyChange("flagSettings"),
-    $4t());
+  setFlagSettingsInline(
+    e
+      ? {
+          ...r,
+          viewMode: e,
+        }
+      : r,
+  );
+  settingsChangeDetector.notifyChange("flagSettings");
+  invalidateFocusModeSection();
 }
 //@ chunk-82kqcve8.js:37243-37284 placement
-function Zir(e) {
-  return Ys().subscribe(e);
+/**
+ * 订阅聚焦模式变化。
+ */
+function subscribeFocusMode(e) {
+  return focusModeSignal().subscribe(e);
 }
 //@ chunk-82kqcve8.js:37284-37308 placement
-var Vs = ["", ":L", ":L:R"];
+var FOCUS_MODE_SUFFIXES = ["", ":L", ":L:R"];
 //@ chunk-82kqcve8.js:37308-37399 placement
-function $4t() {
-  for (let e of Vs) getSystemPromptSectionCache().delete(`focus_mode${e}`);
-  (noteSystemPromptSectionInvalidation("focus_mode"), Ys().emit());
+/**
+ * 清空聚焦模式各分节的缓存并通知订阅者。
+ */
+function invalidateFocusModeSection() {
+  for (let e of FOCUS_MODE_SUFFIXES) getSystemPromptSectionCache().delete(`focus_mode${e}`);
+  noteSystemPromptSectionInvalidation("focus_mode");
+  focusModeSignal().emit();
 }
 //@ chunk-82kqcve8.js:37399-37477 placement
-function F4t(e = "focus_mode") {
-  for (let n of Vs) getSystemPromptSectionCache().delete(`memory${n}`);
+/**
+ * 清空记忆分节缓存并触发一次刷新。
+ */
+function invalidateMemorySections(e = "focus_mode") {
+  for (let n of FOCUS_MODE_SUFFIXES) getSystemPromptSectionCache().delete(`memory${n}`);
   noteSystemPromptSectionInvalidation(e);
 }
-
-export { dFe, Zir, isFocusModeFlag, F4t, setViewMode, $4t };
+export {
+  isFocusModeEnabled,
+  subscribeFocusMode,
+  isFocusModeFlag,
+  invalidateMemorySections,
+  setViewMode,
+  invalidateFocusModeSection,
+};

@@ -9,8 +9,8 @@
  * attribution: placement 4
  */
 import { normalizeMessagesForAPI } from "../../utils/messages.js";
-import { Us } from "../../services/projects/threadRows.js";
-import { G$, Mr } from "../../utils/agentId.js";
+import { messagesSinceCompactBoundary } from "../../services/projects/threadRows.js";
+import { isSafeIdSegment, identityAgentId2 } from "../../utils/agentId.js";
 import { withTimeout } from "../../utils/sleep.js";
 import {
   flushSessionStorage,
@@ -19,21 +19,32 @@ import {
 } from "../../utils/sessionStorage.js";
 
 //@ chunk-0sfjpx19.js:134912-134944 placement
-var B0n = (e, n) => normalizeMessagesForAPI(Us([...e]), n);
+/**
+ * 把代理消息列表规范化为 API 形状。
+ */
+var normalizeAgentMessagesForApi = (e, n) => normalizeMessagesForAPI(messagesSinceCompactBoundary([...e]), n);
 //@ chunk-0sfjpx19.js:134944-134956 placement
-var Nl = 2000;
+var AGENT_TRANSCRIPT_FLUSH_TIMEOUT_MS = 2000;
 //@ chunk-0sfjpx19.js:134956-135190 placement
 async function waitForAgentTranscriptFlush(e, n) {
-  if (!G$(e)) return null;
-  await withTimeout(flushSessionStorage(), Nl, "saved agent transcript: flush wait").catch(() => {});
+  if (!isSafeIdSegment(e)) return null;
+  await withTimeout(
+    flushSessionStorage(),
+    AGENT_TRANSCRIPT_FLUSH_TIMEOUT_MS,
+    "saved agent transcript: flush wait",
+  ).catch(() => {});
   let s = (await listSubagentIdsFromDisk(n)).includes(e)
-    ? await getAgentTranscript(Mr(e), n, { trustLocal: !0 })
+    ? await getAgentTranscript(identityAgentId2(e), n, {
+        trustLocal: true,
+      })
     : null;
-  return s ? s.messages.filter((message) => $l(message, e)) : null;
+  return s ? s.messages.filter((message) => isMessageFromAgent(message, e)) : null;
 }
 //@ chunk-0sfjpx19.js:135190-135242 placement
-function $l(e, n) {
-  return "agentId" in e && e.agentId === n;
+/**
+ * 判断消息是否来自给定代理。
+ */
+function isMessageFromAgent(message, n) {
+  return "agentId" in message && message.agentId === n;
 }
-
-export { waitForAgentTranscriptFlush, B0n };
+export { waitForAgentTranscriptFlush, normalizeAgentMessagesForApi };

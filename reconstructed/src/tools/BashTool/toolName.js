@@ -9,10 +9,9 @@
  * attribution: fingerprint 1
  */
 
+//@ chunk-bwbq4xvm.js:775255-775269 fingerprint = BASH_TOOL_NAME (1)
 /**
  * Bash 工具名常量 "Bash"。
  */
-//@ chunk-bwbq4xvm.js:775255-775269 fingerprint = BASH_TOOL_NAME (1)
 var BASH_TOOL_NAME = "Bash";
-
 export { BASH_TOOL_NAME };

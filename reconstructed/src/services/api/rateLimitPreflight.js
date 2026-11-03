@@ -16,95 +16,129 @@ import {
 } from "../claudeAiLimits.js";
 import { applyMockHeaders } from "../mockRateLimits.js";
 import { checkMockRateLimitError } from "../rateLimitMocking.js";
-import { Ot } from "../../../vendor/@anthropic-ai/sdk/core/error.mjs";
-import { Vmr } from "../../utils/telemetry/otelRawBodies.js";
+import { APIError } from "../../../vendor/@anthropic-ai/sdk/core/error.mjs";
+import { RATE_LIMIT_PREFLIGHT_MS } from "../../utils/telemetry/otelRawBodies.js";
 import { withDeadline } from "../../utils/sleep.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../analytics/growthbook.js";
 import { isEssentialTrafficOnly } from "../../utils/privacyLevel.js";
 import { isClaudeAISubscriber } from "../../utils/auth.js";
 import { getAPIProvider } from "../../utils/model/providers.js";
-import { dD } from "../lowPriority/lowPriorityMode.js";
+import { isLowPriorityActive } from "../lowPriority/lowPriorityMode.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { logFeatureSad, logFeatureOk } from "../analytics/featureTelemetry.js";
 import { getBareCheckModel } from "../../utils/model/smallFastModel.js";
 import { logError } from "../../utils/log.js";
 
+//@ chunk-e6aww6q8.js:2509323-2509749 placement
 /**
  * 把预检得到的 429 分类：普通 429、超额、其他限额、重置时间不在未来，或真正被拒。
  */
-//@ chunk-e6aww6q8.js:2509323-2509749 placement
-function classifyPreflight429(e, n) {
+function classifyPreflight429(headers, n) {
   if (
-    maybeMockRateLimitHeaders(e.headers ?? new globalThis.Headers()).get(
+    maybeMockRateLimitHeaders(headers.headers ?? new globalThis.Headers()).get(
       "anthropic-ratelimit-unified-status",
     ) !== "rejected"
   )
     return "bare_429";
-  let s = applyMockHeaders(e);
-  if (s.errorCode !== void 0 || s.isUsingOverage === !0 || s.overageInUse === !0) return "overage";
+  let s = applyMockHeaders(headers);
+  if (s.errorCode !== undefined || s.isUsingOverage === true || s.overageInUse === true) return "overage";
   if (s.rateLimitType !== "five_hour" && s.rateLimitType !== "seven_day") return "other_claim";
-  if (s.resetsAt === void 0 || !Number.isFinite(s.resetsAt) || s.resetsAt * 1000 <= n)
+  if (s.resetsAt === undefined || !Number.isFinite(s.resetsAt) || s.resetsAt * 1000 <= n)
     return "reset_not_ahead";
   return "refused";
 }
+//@ chunk-e6aww6q8.js:2509749-2510095 placement
 /**
  * 执行一次额度预检请求，把结果归类为放行、客户端/网络/HTTP 错误或各类 429。
  */
-//@ chunk-e6aww6q8.js:2509749-2510095 placement
-async function runPreflightProbe(e, n, r) {
+async function runPreflightProbe(currentModel, credentials, signal) {
   try {
-    let s = checkMockRateLimitError(e);
+    let s = checkMockRateLimitError(currentModel);
     if (s !== null) throw s;
-    return (await runQuotaProbe(e, n, r), { answer: "admitted" });
+    await runQuotaProbe(currentModel, credentials, signal);
+    return {
+      answer: "admitted",
+    };
   } catch (error) {
-    if (!(error instanceof Ot)) return { answer: "client_error" };
-    if (error.status === void 0) return { answer: "network_error" };
-    if (error.status !== 429) return { answer: "http_error" };
+    if (!(error instanceof APIError))
+      return {
+        answer: "client_error",
+      };
+    if (error.status === undefined)
+      return {
+        answer: "network_error",
+      };
+    if (error.status !== 429)
+      return {
+        answer: "http_error",
+      };
     let h = classifyPreflight429(error, Date.now());
-    return h === "refused" ? { answer: h, rejection: error } : { answer: h };
+    return h === "refused"
+      ? {
+          answer: h,
+          rejection: error,
+        }
+      : {
+          answer: h,
+        };
   }
 }
 //@ chunk-e6aww6q8.js:2510095-2510278 placement
-function stoppedPromise(e, n) {
-  return new Promise((r) => {
-    let s = () => r("stopped");
-    (e.addEventListener("abort", s, { once: !0 }),
-      n.addEventListener("abort", () => e.removeEventListener("abort", s), { once: !0 }));
+function stoppedPromise(stop, signal) {
+  return new Promise((resolve) => {
+    let s = () => resolve("stopped");
+    stop.addEventListener("abort", s, {
+      once: true,
+    });
+    signal.addEventListener("abort", () => stop.removeEventListener("abort", s), {
+      once: true,
+    });
   });
 }
+//@ chunk-e6aww6q8.js:2510278-2510885 placement
 /**
  * 发一次配额探测请求（有截止时间、可外部停止），返回 admitted/refused/deadline/stopped 等；refused 时提供 report 回调把拒绝写入额度状态。
  */
-//@ chunk-e6aww6q8.js:2510278-2510885 placement
 async function preflightRateLimitCore({
-  model: model,
-  credentials: credentials,
-  storageV5: storageV5,
-  stop: stop,
-  logFailure: logFailure,
-  deadlineMs: deadlineMs = Vmr,
+  model,
+  credentials,
+  storageV5,
+  stop,
+  logFailure,
+  deadlineMs = RATE_LIMIT_PREFLIGHT_MS,
 }) {
-  if (stop.aborted) return { answer: "stopped", waitedMs: 0 };
-  let now = Date.now(),
-    abortController = new AbortController();
+  if (stop.aborted)
+    return {
+      answer: "stopped",
+      waitedMs: 0,
+    };
+  let now = Date.now();
+  let abortController = new AbortController();
   try {
-    let accountEpoch = getLimitsAccountEpoch(),
-      outcome = await withDeadline(
-        Promise.race([
-          runPreflightProbe(model, credentials, abortController.signal),
-          stoppedPromise(stop, abortController.signal),
-        ]),
-        deadlineMs,
-      ),
-      waitedMs = Date.now() - now;
-    if (outcome === void 0 || outcome === "stopped")
-      return { answer: outcome ?? "deadline", waitedMs: waitedMs };
-    if (outcome.answer !== "refused") return { answer: outcome.answer, waitedMs: waitedMs };
-    let { rejection: rejection } = outcome,
-      now_2 = Date.now();
+    let accountEpoch = getLimitsAccountEpoch();
+    let outcome = await withDeadline(
+      Promise.race([
+        runPreflightProbe(model, credentials, abortController.signal),
+        stoppedPromise(stop, abortController.signal),
+      ]),
+      deadlineMs,
+    );
+    let waitedMs = Date.now() - now;
+    if (outcome === undefined || outcome === "stopped")
+      return {
+        answer: outcome ?? "deadline",
+        waitedMs,
+      };
+    if (outcome.answer !== "refused")
+      return {
+        answer: outcome.answer,
+        waitedMs,
+      };
+    let { rejection } = outcome;
+    let now_2 = Date.now();
     return {
       answer: "refused",
-      waitedMs: waitedMs,
+      waitedMs,
       report: () => {
         try {
           extractQuotaStatusFromError(rejection, "other", now_2, accountEpoch, storageV5);
@@ -114,60 +148,65 @@ async function preflightRateLimitCore({
       },
     };
   } catch (error) {
-    return (logFailure(error), { answer: "threw", waitedMs: Date.now() - now });
+    logFailure(error);
+    return {
+      answer: "threw",
+      waitedMs: Date.now() - now,
+    };
   } finally {
     abortController.abort();
   }
 }
 //@ chunk-e6aww6q8.js:2510885-2510905 placement
 var weakMap_9 = new WeakMap();
+//@ chunk-e6aww6q8.js:2510905-2512232 placement
 /**
  * 请求前的限流预检，按开关、必要流量、账号类型等决定是否跳过。
  */
-//@ chunk-e6aww6q8.js:2510905-2512232 placement
-async function preflightRateLimit({
-  rejection: rejection,
-  nowMs: nowMs,
-  credentials: credentials,
-  stop: stop,
-}) {
+async function preflightRateLimit({ rejection, nowMs, credentials, stop }) {
   let h;
-  if (!getFeatureValue_CACHED_MAY_BE_STALE("tengu_bright_wall", !0)) h = "skipped_kill_switch_off";
+  if (!getFeatureValue_CACHED_MAY_BE_STALE("tengu_bright_wall", true)) h = "skipped_kill_switch_off";
   else if (isEssentialTrafficOnly()) h = "skipped_essential_traffic_only";
   else if (!isClaudeAISubscriber() || getAPIProvider() !== "firstParty") h = "skipped_account";
-  else if (dD()) h = "skipped_low_priority";
+  else if (isLowPriorityActive()) h = "skipped_low_priority";
   else {
     let S = classifyPreflight429(rejection, nowMs);
     if (S !== "refused") h = `skipped_refusal_${S}`;
   }
-  if (h !== void 0) {
+  if (h !== undefined) {
     logForDebugging(`[usage limit recheck] no probe sent (${h}): the request sleeps on`);
     let S = weakMap_9.get(rejection) ?? new Set();
-    if (!S.has(h)) (weakMap_9.set(rejection, S.add(h)), logFeatureSad("usage_limit_wait_recheck", h));
-    return !1;
+    if (!S.has(h)) {
+      weakMap_9.set(rejection, S.add(h));
+      logFeatureSad("usage_limit_wait_recheck", h);
+    }
+    return false;
   }
   let y = await preflightRateLimitCore({
     model: getBareCheckModel(),
-    credentials: credentials,
-    storageV5: void 0,
-    stop: stop,
+    credentials,
+    storageV5: undefined,
+    stop,
     logFailure: logError,
   });
   switch (y.answer) {
     case "admitted":
-      return (
-        logForDebugging("[usage limit recheck] probe admitted: the request is sent again now"),
-        logFeatureOk("usage_limit_wait_recheck", { lifted: !0, probe_ms: y.waitedMs }),
-        !0
-      );
+      logForDebugging("[usage limit recheck] probe admitted: the request is sent again now");
+      logFeatureOk("usage_limit_wait_recheck", {
+        lifted: true,
+        probe_ms: y.waitedMs,
+      });
+      return true;
     case "refused":
-      return (
-        logForDebugging("[usage limit recheck] probe refused: the request sleeps on"),
-        logFeatureOk("usage_limit_wait_recheck", { lifted: !1, probe_ms: y.waitedMs }),
-        !1
-      );
+      logForDebugging("[usage limit recheck] probe refused: the request sleeps on");
+      logFeatureOk("usage_limit_wait_recheck", {
+        lifted: false,
+        probe_ms: y.waitedMs,
+      });
+      return false;
     case "stopped":
-      return (logForDebugging("[usage limit recheck] the request was given up"), !1);
+      logForDebugging("[usage limit recheck] the request was given up");
+      return false;
     case "bare_429":
     case "overage":
     case "other_claim":
@@ -177,14 +216,13 @@ async function preflightRateLimit({
     case "client_error":
     case "deadline":
     case "threw":
-      return (
-        logForDebugging(
-          `[usage limit recheck] probe gave no clear answer (${y.answer}): the request sleeps on`,
-        ),
-        logFeatureSad("usage_limit_wait_recheck", `probe_${y.answer}`, { probe_ms: y.waitedMs }),
-        !1
+      logForDebugging(
+        `[usage limit recheck] probe gave no clear answer (${y.answer}): the request sleeps on`,
       );
+      logFeatureSad("usage_limit_wait_recheck", `probe_${y.answer}`, {
+        probe_ms: y.waitedMs,
+      });
+      return false;
   }
 }
-
 export { preflightRateLimit, preflightRateLimitCore };

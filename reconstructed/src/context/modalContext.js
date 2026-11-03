@@ -9,21 +9,31 @@
  * attribution: fingerprint 1
  */
 import { zt } from "../../vendor/react/cjs/react.production.js";
-import { mountPluginImage, l$i } from "../plugins/functionHooks/imageApi.js";
+import { mountPluginImage, withSwap } from "../plugins/functionHooks/imageApi.js";
 
+//@ chunk-bc20zedk.js:37038-37224 fingerprint = useModalOrTerminalSize (0.669)
 /**
  * 插件请求的模态框 key 变化或终端尺寸变化时上报尺寸。
  */
-//@ chunk-bc20zedk.js:37038-37224 fingerprint = useModalOrTerminalSize (0.669)
-function useModalOrTerminalSize(o, p, a) {
-  let { plugin: plugin, requestId: requestId, key: key } = o,
-    { columns: columns, rows: rows } = p;
+function useModalOrTerminalSize(o, p, swap) {
+  let { plugin, requestId, key } = o;
+  let { columns, rows } = p;
   zt(() => {
-    if (key === void 0) return;
+    if (key === undefined) return;
     return mountPluginImage(
-      l$i({ plugin: plugin, requestId: requestId, key: key }, { columns: columns, rows: rows }, a),
+      withSwap(
+        {
+          plugin,
+          requestId,
+          key,
+        },
+        {
+          columns,
+          rows,
+        },
+        swap,
+      ),
     );
-  }, [plugin, requestId, key, columns, rows, a]);
+  }, [plugin, requestId, key, columns, rows, swap]);
 }
-
 export { useModalOrTerminalSize };

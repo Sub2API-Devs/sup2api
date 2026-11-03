@@ -14,8 +14,8 @@ import { isUnattendedInteractiveSession } from "../../utils/concurrentSessions.j
 import { getAPIProvider } from "../../utils/model/providers.js";
 import { isClaudeAISubscriber } from "../../utils/auth.js";
 import { isWebSetupEnabled } from "../../services/cloudSessions/webSetup.js";
-import { wt } from "../../remote/remoteMode.js";
-import { ZV } from "./api.js";
+import { isRemoteSessionAvailable } from "../../remote/remoteMode.js";
+import { GITHUB_CONNECTION_STATUS_CACHE } from "./api.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { lit, fromEnum } from "../../services/analytics/safeMetadata.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
@@ -28,71 +28,98 @@ import {
 import { logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 
 //@ chunk-p8zkbd8d.js:567-821 placement
-var TENGU_REFLECTIVE_BEE = "tengu_reflective_bee",
-  S = ["off", "survey"],
-  d = 3,
-  _ = 86400000,
-  TENGU_WEB_SETUP_PUSH_OFFER = "tengu_web_setup_push_offer",
-  iEo =
-    "Pushed to GitHub. Connect GitHub to claude.ai so you can work on this repo even when this machine is offline?",
-  aEo = 1000,
-  UNt = new HostScoped(() => createStore({ status: "none" }));
+/**
+ * Web setup 推送优惠相关常量：模式 off/survey、最多展示 3 次、间隔 1 天，以及按宿主的 offer 状态槽与推送槽。
+ */
+var TENGU_REFLECTIVE_BEE = "tengu_reflective_bee";
+var WEB_SETUP_OFFER_MODES = ["off", "survey"];
+var MAX_WEB_SETUP_OFFER_SHOWS = 3;
+var _ = 86400000;
+var TENGU_WEB_SETUP_PUSH_OFFER = "tengu_web_setup_push_offer";
+var WEB_SETUP_PUSH_OFFER_QUESTION =
+  "Pushed to GitHub. Connect GitHub to claude.ai so you can work on this repo even when this machine is offline?";
+var WEB_SETUP_PUSH_OFFER_DELAY_MS = 1000;
+var WEB_SETUP_PUSH_OFFER_SLOT = new HostScoped(() =>
+  createStore({
+    status: "none",
+  }),
+);
+//@ chunk-p8zkbd8d.js:821-1237 placement
 /**
  * 满足条件（第一方订阅、web-setup 开启、未屏蔽、GitHub 未连接）时根据 tengu_reflective_bee 变体把推送提议置为 pending。
  */
-//@ chunk-p8zkbd8d.js:821-1237 placement
-function maybeArmWebSetupPushOffer({ trigger: trigger, host: host, storageV5: storageV5 }) {
-  let of = UNt.of(host);
-  if (of.getState().status !== "none") return;
+function maybeArmWebSetupPushOffer({ trigger, host, storageV5 }) {
+  let r = WEB_SETUP_PUSH_OFFER_SLOT.of(host);
+  if (r.getState().status !== "none") return;
   if (isUnattendedInteractiveSession()) return;
   if (getAPIProvider() !== "firstParty" || !isClaudeAISubscriber() || !isWebSetupEnabled()) return;
-  if (wt()) return;
+  if (isRemoteSessionAvailable()) return;
   if (isPushOfferSuppressed()) return;
-  if (ZV.of(host).peek(void 0, storageV5) !== "not_connected") return;
-  logEvent(TENGU_WEB_SETUP_PUSH_OFFER, { event: lit("eligible"), trigger: fromEnum(trigger) });
-  let n = getFeatureValue_CACHED_MAY_BE_STALE(TENGU_REFLECTIVE_BEE, "off"),
-    found = S.find((i) => i === n);
-  of.setState(() =>
-    found === void 0 || found === "off"
-      ? { status: "resolved" }
-      : { status: "pending", variant: found, trigger: trigger },
+  if (GITHUB_CONNECTION_STATUS_CACHE.of(host).peek(undefined, storageV5) !== "not_connected") return;
+  logEvent(TENGU_WEB_SETUP_PUSH_OFFER, {
+    event: lit("eligible"),
+    trigger: fromEnum(trigger),
+  });
+  let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE(TENGU_REFLECTIVE_BEE, "off");
+  let found = WEB_SETUP_OFFER_MODES.find((i) => i === featureValue_CACHED_MAY_BE_STALE);
+  r.setState(() =>
+    found === undefined || found === "off"
+      ? {
+          status: "resolved",
+        }
+      : {
+          status: "pending",
+          variant: found,
+          trigger,
+        },
   );
 }
 //@ chunk-p8zkbd8d.js:1237-1443 placement
 function isPushOfferSuppressed() {
   let webSetupPushOffer = getGlobalConfig().webSetupPushOffer;
-  if (webSetupPushOffer?.dismissedForever) return !0;
-  if (getCurrentProjectConfig().webSetupPushOfferShown) return !0;
-  if (webSetupPushOffer?.lastShownAt !== void 0 && Date.now() - webSetupPushOffer.lastShownAt < _) return !0;
-  return (webSetupPushOffer?.shownCount ?? 0) >= d;
+  if (webSetupPushOffer?.dismissedForever) return true;
+  if (getCurrentProjectConfig().webSetupPushOfferShown) return true;
+  if (webSetupPushOffer?.lastShownAt !== undefined && Date.now() - webSetupPushOffer.lastShownAt < _)
+    return true;
+  return (webSetupPushOffer?.shownCount ?? 0) >= MAX_WEB_SETUP_OFFER_SHOWS;
 }
+//@ chunk-p8zkbd8d.js:1443-1629 placement
 /**
  * 把会话中待处理的远程推送提议标记为已解决；未处于 pending 或仍未连接时返回 false。
  */
-//@ chunk-p8zkbd8d.js:1443-1629 placement
-function resolvePendingPushOffer(t, o) {
-  let of = UNt.of(t);
-  if (of.getState().status !== "pending") return !1;
-  if (!isPushOfferSuppressed() && ZV.of(t).peek(void 0, o) === "not_connected") return !1;
-  return (of.setState(() => ({ status: "resolved" })), !0);
+function resolvePendingPushOffer(host, storageV5) {
+  let s = WEB_SETUP_PUSH_OFFER_SLOT.of(host);
+  if (s.getState().status !== "pending") return false;
+  if (
+    !isPushOfferSuppressed() &&
+    GITHUB_CONNECTION_STATUS_CACHE.of(host).peek(undefined, storageV5) === "not_connected"
+  )
+    return false;
+  s.setState(() => ({
+    status: "resolved",
+  }));
+  return true;
 }
+//@ chunk-p8zkbd8d.js:1629-2096 placement
 /**
  * 把 pending 提议标为 shown，上报事件，并记录全局 lastShownAt/shownCount 与项目已展示标记。
  */
-//@ chunk-p8zkbd8d.js:1629-2096 placement
-function markPushOfferShown(t, o) {
-  let of = UNt.of(t),
-    state = of.getState();
+function markPushOfferShown(host, storageV5) {
+  let s = WEB_SETUP_PUSH_OFFER_SLOT.of(host);
+  let state = s.getState();
   if (state.status !== "pending") return;
-  (of.setState(() => ({ ...state, status: "shown" })),
-    logEvent(TENGU_WEB_SETUP_PUSH_OFFER, {
-      event: lit("shown"),
-      variant: fromEnum(state.variant),
-      trigger: fromEnum(state.trigger),
-    }),
-    logFeatureOk("remote_setup_push_offer"));
+  s.setState(() => ({
+    ...state,
+    status: "shown",
+  }));
+  logEvent(TENGU_WEB_SETUP_PUSH_OFFER, {
+    event: lit("shown"),
+    variant: fromEnum(state.variant),
+    trigger: fromEnum(state.trigger),
+  });
+  logFeatureOk("remote_setup_push_offer");
   let now = Date.now();
-  (saveGlobalConfig(
+  saveGlobalConfig(
     (e) =>
       e.webSetupPushOffer?.lastShownAt === now
         ? e
@@ -104,45 +131,56 @@ function markPushOfferShown(t, o) {
               shownCount: (e.webSetupPushOffer?.shownCount ?? 0) + 1,
             },
           },
-    o,
-  ),
-    saveCurrentProjectConfig(
-      (e) => (e.webSetupPushOfferShown ? e : { ...e, webSetupPushOfferShown: !0 }),
-      o,
-    ));
+    storageV5,
+  );
+  saveCurrentProjectConfig(
+    (e) =>
+      e.webSetupPushOfferShown
+        ? e
+        : {
+            ...e,
+            webSetupPushOfferShown: true,
+          },
+    storageV5,
+  );
 }
+//@ chunk-p8zkbd8d.js:2096-2419 placement
 /**
  * 用户对已展示的提议作答后置为 resolved 并上报；选 dont_ask_again 时永久关闭。
  */
-//@ chunk-p8zkbd8d.js:2096-2419 placement
-function resolveShownPushOffer(t, o, s) {
-  let of = UNt.of(t),
-    state = of.getState();
+function resolveShownPushOffer(host, o, storageV5) {
+  let r = WEB_SETUP_PUSH_OFFER_SLOT.of(host);
+  let state = r.getState();
   if (state.status !== "shown") return;
-  if (
-    (of.setState(() => ({ status: "resolved" })),
-    logEvent(TENGU_WEB_SETUP_PUSH_OFFER, {
-      event: fromEnum(o),
-      variant: fromEnum(state.variant),
-      trigger: fromEnum(state.trigger),
-    }),
-    o === "dont_ask_again")
-  )
+  r.setState(() => ({
+    status: "resolved",
+  }));
+  logEvent(TENGU_WEB_SETUP_PUSH_OFFER, {
+    event: fromEnum(o),
+    variant: fromEnum(state.variant),
+    trigger: fromEnum(state.trigger),
+  });
+  if (o === "dont_ask_again")
     saveGlobalConfig(
       (e) =>
         e.webSetupPushOffer?.dismissedForever
           ? e
-          : { ...e, webSetupPushOffer: { ...e.webSetupPushOffer, dismissedForever: !0 } },
-      s,
+          : {
+              ...e,
+              webSetupPushOffer: {
+                ...e.webSetupPushOffer,
+                dismissedForever: true,
+              },
+            },
+      storageV5,
     );
 }
-
 export {
-  UNt,
+  WEB_SETUP_PUSH_OFFER_SLOT,
   resolvePendingPushOffer,
-  aEo,
+  WEB_SETUP_PUSH_OFFER_DELAY_MS,
   markPushOfferShown,
   resolveShownPushOffer,
-  iEo,
+  WEB_SETUP_PUSH_OFFER_QUESTION,
   maybeArmWebSetupPushOffer,
 };

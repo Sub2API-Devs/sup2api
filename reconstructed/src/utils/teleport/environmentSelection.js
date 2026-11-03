@@ -21,54 +21,70 @@ function isSelfHostedPool(e) {
 }
 //@ chunk-f25sswmp.js:14905-14964 placement
 function isCcpoolId(e) {
-  return e !== void 0 && e.startsWith("ccpool_");
+  return e !== undefined && e.startsWith("ccpool_");
 }
 //@ chunk-f25sswmp.js:14964-15013 placement
-var ut = ["anthropic_cloud", "bridge", "snap", "ccs"];
+var CLOUD_ENVIRONMENT_KINDS = ["anthropic_cloud", "bridge", "snap", "ccs"];
 //@ chunk-f25sswmp.js:15013-15220 placement
 function selfHostedEnvironmentKind(e) {
-  let n = (s) => s !== void 0 && s !== null && s !== "";
+  let n = (s) => s !== undefined && s !== null && s !== "";
   if (n(e.self_hosted_runner_pool_id)) return "pool";
-  let environment_kind = e.environment_kind;
-  if (!n(environment_kind) || ut.includes(environment_kind)) return null;
-  return environment_kind === "byoc" ? "byoc" : "unlisted_kind";
+  let environmentKind = e.environment_kind;
+  if (!n(environmentKind) || CLOUD_ENVIRONMENT_KINDS.includes(environmentKind)) return null;
+  return environmentKind === "byoc" ? "byoc" : "unlisted_kind";
 }
 //@ chunk-f25sswmp.js:15220-15257 placement
-function Hsr(e) {
+/**
+ * 是否自托管环境。
+ */
+function isSelfHostedEnvironment(e) {
   return selfHostedEnvironmentKind(e) !== null;
 }
 //@ chunk-f25sswmp.js:15257-15292 placement
-function tPe(e, n) {
+/**
+ * 按谓词查找第一个匹配项。
+ */
+function findFirst(e, n) {
   return e.find(n);
 }
 //@ chunk-f25sswmp.js:15292-15348 layout = TRUSTED_SETTING_SOURCES (1)
 var TRUSTED_SETTING_SOURCES = ["policySettings", "flagSettings", "userSettings"];
+//@ chunk-f25sswmp.js:15348-15653 fingerprint = getEnvironmentSelectionInfo (0.447)
 /**
  * 计算可用云环境与当前选择。
  */
-//@ chunk-f25sswmp.js:15348-15653 fingerprint = getEnvironmentSelectionInfo (0.447)
 function getEnvironmentSelectionInfo() {
-  let e,
-    mergedSettings = getEnabledSettingSources();
-  for (let r = mergedSettings.length - 1; r >= 0; r--) {
-    let source = mergedSettings[r],
-      i = getSettingsForSource(source)?.remote?.defaultEnvironmentId;
-    if (i === void 0) continue;
-    if (isCcpoolId(i) && !TRUSTED_SETTING_SOURCES.includes(source)) {
-      e ??= { id: i, source: source };
+  let e;
+  let mergedSettings = getEnabledSettingSources();
+  for (let j = mergedSettings.length - 1; j >= 0; j--) {
+    let source = mergedSettings[j];
+    let defaultEnvironmentId = getSettingsForSource(source)?.remote?.defaultEnvironmentId;
+    if (defaultEnvironmentId === undefined) continue;
+    if (isCcpoolId(defaultEnvironmentId) && !TRUSTED_SETTING_SOURCES.includes(source)) {
+      e ??= {
+        id: defaultEnvironmentId,
+        source,
+      };
       continue;
     }
-    return { id: i, source: source, ignoredUntrustedPool: e?.id === i ? void 0 : e };
+    return {
+      id: defaultEnvironmentId,
+      source,
+      ignoredUntrustedPool: e?.id === defaultEnvironmentId ? undefined : e,
+    };
   }
-  return { id: void 0, source: void 0, ignoredUntrustedPool: e };
+  return {
+    id: undefined,
+    source: undefined,
+    ignoredUntrustedPool: e,
+  };
 }
-
 export {
   isSelfHostedPoolEnv,
   isSelfHostedPool,
   getEnvironmentSelectionInfo,
   isCcpoolId,
-  tPe,
+  findFirst,
   selfHostedEnvironmentKind,
-  Hsr,
+  isSelfHostedEnvironment,
 };

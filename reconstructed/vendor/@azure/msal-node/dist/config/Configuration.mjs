@@ -5,48 +5,62 @@
  * pieces: chunk-mrx6y2r5.js (3)
  * attribution: esm-fingerprint 3
  */
-import { f, Ae, Ht } from "../../../msal-common/lib/index-node-DhUjlPuB.js";
-import { G } from "../../../msal-common/dist/logger/Logger.mjs";
-import { _o, NodeAuthError, Za } from "../../lib/msal-node.cjs";
+import { Constants, ProtocolMode, AzureCloudInstance } from "../../../msal-common/lib/index-node-DhUjlPuB.js";
+import { LogLevel } from "../../../msal-common/dist/logger/Logger.mjs";
+import { HttpClient, NodeAuthError, ManagedIdentityId } from "../../lib/msal-node.cjs";
 
 //@ chunk-mrx6y2r5.js:223223-224007 esm-fingerprint
-var oy = {
-    clientId: f.EMPTY_STRING,
-    authority: f.DEFAULT_AUTHORITY,
-    clientSecret: f.EMPTY_STRING,
-    clientAssertion: f.EMPTY_STRING,
-    clientCertificate: {
-      thumbprint: f.EMPTY_STRING,
-      thumbprintSha256: f.EMPTY_STRING,
-      privateKey: f.EMPTY_STRING,
-      x5c: f.EMPTY_STRING,
-    },
-    knownAuthorities: [],
-    cloudDiscoveryMetadata: f.EMPTY_STRING,
-    authorityMetadata: f.EMPTY_STRING,
-    clientCapabilities: [],
-    protocolMode: Ae.AAD,
-    azureCloudOptions: { azureCloudInstance: Ht.None, tenant: f.EMPTY_STRING },
-    skipAuthorityMetadataCache: !1,
-    encodeExtraQueryParams: !1,
+var DEFAULT_AUTH_OPTIONS = {
+  clientId: Constants.EMPTY_STRING,
+  authority: Constants.DEFAULT_AUTHORITY,
+  clientSecret: Constants.EMPTY_STRING,
+  clientAssertion: Constants.EMPTY_STRING,
+  clientCertificate: {
+    thumbprint: Constants.EMPTY_STRING,
+    thumbprintSha256: Constants.EMPTY_STRING,
+    privateKey: Constants.EMPTY_STRING,
+    x5c: Constants.EMPTY_STRING,
   },
-  iy = { claimsBasedCachingEnabled: !1 },
-  ec = { loggerCallback: () => {}, piiLoggingEnabled: !1, logLevel: G.Info },
-  sy = {
-    loggerOptions: ec,
-    networkClient: new _o(),
-    proxyUrl: f.EMPTY_STRING,
-    customAgentOptions: {},
-    disableInternalRetries: !1,
+  knownAuthorities: [],
+  cloudDiscoveryMetadata: Constants.EMPTY_STRING,
+  authorityMetadata: Constants.EMPTY_STRING,
+  clientCapabilities: [],
+  protocolMode: ProtocolMode.AAD,
+  azureCloudOptions: {
+    azureCloudInstance: AzureCloudInstance.None,
+    tenant: Constants.EMPTY_STRING,
   },
-  ay = { application: { appName: f.EMPTY_STRING, appVersion: f.EMPTY_STRING } };
+  skipAuthorityMetadataCache: false,
+  encodeExtraQueryParams: false,
+};
+var DEFAULT_CACHE_OPTIONS = {
+  claimsBasedCachingEnabled: false,
+};
+var DEFAULT_LOGGER_OPTIONS = {
+  loggerCallback: () => {},
+  piiLoggingEnabled: false,
+  logLevel: LogLevel.Info,
+};
+var DEFAULT_SYSTEM_OPTIONS = {
+  loggerOptions: DEFAULT_LOGGER_OPTIONS,
+  networkClient: new HttpClient(),
+  proxyUrl: Constants.EMPTY_STRING,
+  customAgentOptions: {},
+  disableInternalRetries: false,
+};
+var DEFAULT_TELEMETRY_OPTIONS = {
+  application: {
+    appName: Constants.EMPTY_STRING,
+    appVersion: Constants.EMPTY_STRING,
+  },
+};
 //@ chunk-mrx6y2r5.js:224007-224459 esm-fingerprint
-function bh({ auth: auth, broker: broker, cache: cache, system: system, telemetry: telemetry }) {
-  let i = {
-    ...sy,
-    networkClient: new _o(system?.proxyUrl, system?.customAgentOptions),
-    loggerOptions: system?.loggerOptions || ec,
-    disableInternalRetries: system?.disableInternalRetries || !1,
+function buildAppConfiguration({ auth, broker, cache, system, telemetry }) {
+  let systemOptions = {
+    ...DEFAULT_SYSTEM_OPTIONS,
+    networkClient: new HttpClient(system?.proxyUrl, system?.customAgentOptions),
+    loggerOptions: system?.loggerOptions || DEFAULT_LOGGER_OPTIONS,
+    disableInternalRetries: system?.disableInternalRetries || false,
   };
   if (
     !!auth.clientCertificate &&
@@ -55,30 +69,42 @@ function bh({ auth: auth, broker: broker, cache: cache, system: system, telemetr
   )
     throw NodeAuthError.createStateNotFoundError();
   return {
-    auth: { ...oy, ...auth },
-    broker: { ...broker },
-    cache: { ...iy, ...cache },
-    system: { ...i, ...system },
-    telemetry: { ...ay, ...telemetry },
+    auth: {
+      ...DEFAULT_AUTH_OPTIONS,
+      ...auth,
+    },
+    broker: {
+      ...broker,
+    },
+    cache: {
+      ...DEFAULT_CACHE_OPTIONS,
+      ...cache,
+    },
+    system: {
+      ...systemOptions,
+      ...system,
+    },
+    telemetry: {
+      ...DEFAULT_TELEMETRY_OPTIONS,
+      ...telemetry,
+    },
   };
 }
 //@ chunk-mrx6y2r5.js:224459-224805 esm-fingerprint
-function Ph({
-  clientCapabilities: clientCapabilities,
-  managedIdentityIdParams: managedIdentityIdParams,
-  system: system,
-}) {
-  let n = new Za(managedIdentityIdParams),
-    o = system?.loggerOptions || ec,
-    i;
-  if (system?.networkClient) i = system.networkClient;
-  else i = new _o(system?.proxyUrl, system?.customAgentOptions);
+function buildManagedIdentityConfiguration({ clientCapabilities, managedIdentityIdParams, system }) {
+  let managedIdentityId = new ManagedIdentityId(managedIdentityIdParams);
+  let loggerOptions = system?.loggerOptions || DEFAULT_LOGGER_OPTIONS;
+  let networkClient;
+  if (system?.networkClient) networkClient = system.networkClient;
+  else networkClient = new HttpClient(system?.proxyUrl, system?.customAgentOptions);
   return {
     clientCapabilities: clientCapabilities || [],
-    managedIdentityId: n,
-    system: { loggerOptions: o, networkClient: i },
-    disableInternalRetries: system?.disableInternalRetries || !1,
+    managedIdentityId,
+    system: {
+      loggerOptions,
+      networkClient,
+    },
+    disableInternalRetries: system?.disableInternalRetries || false,
   };
 }
-
-export { bh, Ph };
+export { buildAppConfiguration, buildManagedIdentityConfiguration };

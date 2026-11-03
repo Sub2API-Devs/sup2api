@@ -7,82 +7,103 @@
  */
 import { Uo } from "../../../../../@azure/logger/dist/esm/index.js";
 import { AbortError_2 } from "../restError.js";
-import { yl } from "../util/helpers.js";
+import { delay } from "../util/helpers.js";
 
 //@ chunk-mrx6y2r5.js:45267-45276 esm-layout
 var Vn = 3;
 //@ chunk-mrx6y2r5.js:45276-45334 esm-fingerprint
-var Bm = Uo("ts-http-runtime retryPolicy"),
-  RETRYPOLICY = "retryPolicy";
+var Bm = Uo("ts-http-runtime retryPolicy");
+var retryPolicyName = "retryPolicy";
 //@ chunk-mrx6y2r5.js:45334-46988 esm-fingerprint
-function jn(e, t = { maxRetries: Vn }) {
-  let r = t.logger || Bm;
+function retryPolicy_2(
+  strategies,
+  options = {
+    maxRetries: Vn,
+  },
+) {
+  let logger = options.logger || Bm;
   return {
-    name: RETRYPOLICY,
-    async sendRequest(n, o) {
-      var i, s;
-      let a,
-        c,
-        l = -1;
-      e: while (!0) {
-        ((l += 1), (a = void 0), (c = void 0));
+    name: retryPolicyName,
+    async sendRequest(request, next) {
+      var _a;
+      var _b;
+      let response;
+      let responseError;
+      let retryCount = -1;
+      e: while (true) {
+        retryCount += 1;
+        response = undefined;
+        responseError = undefined;
         try {
-          (r.info(`Retry ${l}: Attempting to send request`, n.requestId),
-            (a = await o(n)),
-            r.info(`Retry ${l}: Received a response from request`, n.requestId));
-        } catch (error) {
-          if (
-            (r.error(`Retry ${l}: Received an error from request`, n.requestId),
-            (c = error),
-            !error || c.name !== "RestError")
-          )
-            throw error;
-          a = c.response;
+          logger.info(`Retry ${retryCount}: Attempting to send request`, request.requestId);
+          response = await next(request);
+          logger.info(`Retry ${retryCount}: Received a response from request`, request.requestId);
+        } catch (e) {
+          logger.error(`Retry ${retryCount}: Received an error from request`, request.requestId);
+          responseError = e;
+          if (!e || responseError.name !== "RestError") throw e;
+          response = responseError.response;
         }
-        if ((i = n.abortSignal) === null || i === void 0 ? void 0 : i.aborted)
-          throw (r.error(`Retry ${l}: Request aborted.`), new AbortError_2());
-        if (l >= ((s = t.maxRetries) !== null && s !== void 0 ? s : Vn))
-          if (
-            (r.info(
-              `Retry ${l}: Maximum retries reached. Returning the last received response, or throwing the last received error.`,
-            ),
-            c)
-          )
-            throw c;
-          else if (a) return a;
+        if ((_a = request.abortSignal) === null || _a === undefined ? undefined : _a.aborted) {
+          logger.error(`Retry ${retryCount}: Request aborted.`);
+          throw new AbortError_2();
+        }
+        if (retryCount >= ((_b = options.maxRetries) !== null && _b !== undefined ? _b : Vn)) {
+          logger.info(
+            `Retry ${retryCount}: Maximum retries reached. Returning the last received response, or throwing the last received error.`,
+          );
+          if (responseError) throw responseError;
+          else if (response) return response;
           else throw Error("Maximum retries reached with no response or error to throw");
-        r.info(`Retry ${l}: Processing ${e.length} retry strategies.`);
-        t: for (let d of e) {
-          let u = d.logger || r;
-          u.info(`Retry ${l}: Processing retry strategy ${d.name}.`);
-          let retry = d.retry({ retryCount: l, response: a, responseError: c });
-          if (retry.skipStrategy) {
-            u.info(`Retry ${l}: Skipped.`);
+        }
+        logger.info(`Retry ${retryCount}: Processing ${strategies.length} retry strategies.`);
+        t: for (let strategy of strategies) {
+          let strategyLogger = strategy.logger || logger;
+          strategyLogger.info(`Retry ${retryCount}: Processing retry strategy ${strategy.name}.`);
+          let modifiers = strategy.retry({
+            retryCount,
+            response,
+            responseError,
+          });
+          if (modifiers.skipStrategy) {
+            strategyLogger.info(`Retry ${retryCount}: Skipped.`);
             continue t;
           }
-          let { errorToThrow: errorToThrow, retryAfterInMs: retryAfterInMs, redirectTo: redirectTo } = retry;
-          if (errorToThrow)
-            throw (u.error(`Retry ${l}: Retry strategy ${d.name} throws error:`, errorToThrow), errorToThrow);
+          let { errorToThrow, retryAfterInMs, redirectTo } = modifiers;
+          if (errorToThrow) {
+            strategyLogger.error(
+              `Retry ${retryCount}: Retry strategy ${strategy.name} throws error:`,
+              errorToThrow,
+            );
+            throw errorToThrow;
+          }
           if (retryAfterInMs || retryAfterInMs === 0) {
-            (u.info(`Retry ${l}: Retry strategy ${d.name} retries after ${retryAfterInMs}`),
-              await yl(retryAfterInMs, void 0, { abortSignal: n.abortSignal }));
+            strategyLogger.info(
+              `Retry ${retryCount}: Retry strategy ${strategy.name} retries after ${retryAfterInMs}`,
+            );
+            await delay(retryAfterInMs, undefined, {
+              abortSignal: request.abortSignal,
+            });
             continue e;
           }
           if (redirectTo) {
-            (u.info(`Retry ${l}: Retry strategy ${d.name} redirects to ${redirectTo}`), (n.url = redirectTo));
+            strategyLogger.info(
+              `Retry ${retryCount}: Retry strategy ${strategy.name} redirects to ${redirectTo}`,
+            );
+            request.url = redirectTo;
             continue e;
           }
         }
-        if (c)
-          throw (r.info("None of the retry strategies could work with the received error. Throwing it."), c);
-        if (a)
-          return (
-            r.info("None of the retry strategies could work with the received response. Returning it."),
-            a
-          );
+        if (responseError) {
+          logger.info("None of the retry strategies could work with the received error. Throwing it.");
+          throw responseError;
+        }
+        if (response) {
+          logger.info("None of the retry strategies could work with the received response. Returning it.");
+          return response;
+        }
       }
     },
   };
 }
-
-export { jn, Vn };
+export { retryPolicy_2, Vn };

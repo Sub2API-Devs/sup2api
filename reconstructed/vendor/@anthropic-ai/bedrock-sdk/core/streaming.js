@@ -6,21 +6,23 @@
  * attribution: esm-fingerprint 1
  */
 import { Gur } from "../../../@smithy/core/dist-cjs/submodules/event-streams/index.js";
-import { k, J } from "../AWS_restJson1.js";
+import { import_credential_provider_web_identity, import_fetch_http_handler_2 } from "../AWS_restJson1.js";
 
 //@ chunk-h87x8cg3.js:6863-7144 esm-fingerprint
-var B = (e) => new TextDecoder("utf-8").decode(e),
-  _ = (e) => new TextEncoder().encode(e),
-  Ce = () => {
-    let e = new Gur({ utf8Encoder: B, utf8Decoder: _ });
-    return {
-      base64Decoder: k.fromBase64,
-      base64Encoder: k.toBase64,
-      utf8Decoder: _,
-      utf8Encoder: B,
-      eventStreamMarshaller: e,
-      streamCollector: J.streamCollector,
-    };
+var toUtf8 = (input) => new TextDecoder("utf-8").decode(input);
+var fromUtf8 = (input) => new TextEncoder().encode(input);
+var getMinimalSerdeContext = () => {
+  let marshaller = new Gur({
+    utf8Encoder: toUtf8,
+    utf8Decoder: fromUtf8,
+  });
+  return {
+    base64Decoder: import_credential_provider_web_identity.fromBase64,
+    base64Encoder: import_credential_provider_web_identity.toBase64,
+    utf8Decoder: fromUtf8,
+    utf8Encoder: toUtf8,
+    eventStreamMarshaller: marshaller,
+    streamCollector: import_fetch_http_handler_2.streamCollector,
   };
-
-export { Ce, B, _ };
+};
+export { getMinimalSerdeContext, toUtf8, fromUtf8 };

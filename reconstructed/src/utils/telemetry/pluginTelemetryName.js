@@ -15,28 +15,28 @@ import {
   isKnownOfficialPluginName,
 } from "../plugins/pluginIdentifier.js";
 import { OFFICIAL_MARKETPLACE_NAME } from "../plugins/officialMarketplaceNames.js";
-import { kk } from "../plugins/commandSourceErrors.js";
+import { commandSourceSession } from "../plugins/commandSourceErrors.js";
 import { loadKnownMarketplacesSafe, getPluginByIdCacheOnly } from "../plugins/marketplaceManager.js";
-import { buildPluginEventFields, BUILTIN, lYo } from "./pluginTelemetry.js";
+import { buildPluginEventFields, BUILTIN, redactedMarketplaceName } from "./pluginTelemetry.js";
 import { logForDebugging } from "../debug.js";
 import { errorMessage } from "../errors.js";
 import { lit } from "../../services/analytics/safeMetadata.js";
 import { THIRD_PARTY } from "../../services/analytics/metadata.js";
 import { getBuiltinPlugin } from "../../plugins/builtinPlugins.js";
 
+//@ chunk-g8nydygk.js:503-956 placement
 /**
  * 插件遥测字段（官方插件确认存在，否则名字记为第三方）。
  */
-//@ chunk-g8nydygk.js:503-956 placement
 async function pluginTelemetryFields(n, i, r) {
-  let o = normalizePluginId(n),
-    { name: a, marketplace: marketplace } = parsePluginIdentifier_2(o);
-  if (marketplace === OFFICIAL_MARKETPLACE_NAME && kk().nameRegistration === void 0)
+  let o = normalizePluginId(n);
+  let { name: a, marketplace } = parsePluginIdentifier_2(o);
+  if (marketplace === OFFICIAL_MARKETPLACE_NAME && commandSourceSession().nameRegistration === undefined)
     await loadKnownMarketplacesSafe(r);
-  let l = buildPluginEventFields(a, marketplace, i),
-    m = isOfficialOrCommunityMarketplace(marketplace);
-  if (!m && marketplace !== BUILTIN && !isKnownOfficialPluginName(a, marketplace)) return l;
-  let s = !1;
+  let pluginEventFields = buildPluginEventFields(a, marketplace, i);
+  let m = isOfficialOrCommunityMarketplace(marketplace);
+  if (!m && marketplace !== BUILTIN && !isKnownOfficialPluginName(a, marketplace)) return pluginEventFields;
+  let s = false;
   try {
     s = await pluginExists(o, a, marketplace, r);
   } catch (error) {
@@ -45,16 +45,20 @@ async function pluginTelemetryFields(n, i, r) {
     );
   }
   return {
-    ...l,
-    ...(m && marketplace !== void 0 && { marketplace_name_redacted: lYo(marketplace) }),
-    ...(!s && { plugin_name_redacted: lit(THIRD_PARTY) }),
+    ...pluginEventFields,
+    ...(m &&
+      marketplace !== undefined && {
+        marketplace_name_redacted: redactedMarketplaceName(marketplace),
+      }),
+    ...(!s && {
+      plugin_name_redacted: lit(THIRD_PARTY),
+    }),
   };
 }
 //@ chunk-g8nydygk.js:956-1063 placement
-async function pluginExists(n, i, r, o) {
-  if (isKnownOfficialPluginName(i, r)) return !0;
-  if (r === BUILTIN) return getBuiltinPlugin(i) !== void 0;
+async function pluginExists(n, i, marketplace, o) {
+  if (isKnownOfficialPluginName(i, marketplace)) return true;
+  if (marketplace === BUILTIN) return getBuiltinPlugin(i) !== undefined;
   return (await getPluginByIdCacheOnly(n, o)) !== null;
 }
-
 export { pluginTelemetryFields };

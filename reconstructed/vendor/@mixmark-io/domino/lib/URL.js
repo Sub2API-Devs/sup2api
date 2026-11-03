@@ -8,23 +8,25 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-vwj6ccer.js:73463-76243 cjs-fingerprint
-var ca = x(function (Rd, m0) {
-  m0.exports = de;
-  function de(e) {
-    if (!e) return Object.create(de.prototype);
-    this.url = e.replace(/^[ \t\n\r\f]+|[ \t\n\r\f]+$/g, "");
+var require_URL = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = de;
+  function de(url) {
+    if (!url) return Object.create(de.prototype);
+    this.url = url.replace(/^[ \t\n\r\f]+|[ \t\n\r\f]+$/g, "");
     var match = de.pattern.exec(this.url);
     if (match) {
       if (match[2]) this.scheme = match[2];
       if (match[4]) {
-        var match_2 = match[4].match(de.userinfoPattern);
-        if (match_2)
-          ((this.username = match_2[1]),
-            (this.password = match_2[3]),
-            (match[4] = match[4].substring(match_2[0].length)));
+        var userinfo = match[4].match(de.userinfoPattern);
+        if (userinfo) {
+          this.username = userinfo[1];
+          this.password = userinfo[3];
+          match[4] = match[4].substring(userinfo[0].length);
+        }
         if (match[4].match(de.portPattern)) {
-          var index = match[4].lastIndexOf(":");
-          ((this.host = match[4].substring(0, index)), (this.port = match[4].substring(index + 1)));
+          var pos = match[4].lastIndexOf(":");
+          this.host = match[4].substring(0, pos);
+          this.port = match[4].substring(pos + 1);
         } else this.host = match[4];
       }
       if (match[5]) this.path = match[5];
@@ -37,9 +39,9 @@ var ca = x(function (Rd, m0) {
   de.portPattern = /:\d+$/;
   de.authorityPattern = /^[^:\/?#]+:\/\//;
   de.hierarchyPattern = /^[^:\/?#]+:\//;
-  de.percentEncode = function (t) {
-    var code = t.charCodeAt(0);
-    if (code < 256) return "%" + code.toString(16);
+  de.percentEncode = function (s) {
+    var c = s.charCodeAt(0);
+    if (c < 256) return "%" + c.toString(16);
     else throw Error("can't percent-encode codepoints > 255 yet");
   };
   de.prototype = {
@@ -54,83 +56,98 @@ var ca = x(function (Rd, m0) {
       return de.hierarchyPattern.test(this.url);
     },
     toString: function () {
-      var e = "";
-      if (this.scheme !== void 0) e += this.scheme + ":";
+      var s = "";
+      if (this.scheme !== undefined) s += this.scheme + ":";
       if (this.isAbsolute()) {
-        if (((e += "//"), this.username || this.password)) {
-          if (((e += this.username || ""), this.password)) e += ":" + this.password;
-          e += "@";
+        s += "//";
+        if (this.username || this.password) {
+          s += this.username || "";
+          if (this.password) s += ":" + this.password;
+          s += "@";
         }
-        if (this.host) e += this.host;
+        if (this.host) s += this.host;
       }
-      if (this.port !== void 0) e += ":" + this.port;
-      if (this.path !== void 0) e += this.path;
-      if (this.query !== void 0) e += "?" + this.query;
-      if (this.fragment !== void 0) e += "#" + this.fragment;
-      return e;
+      if (this.port !== undefined) s += ":" + this.port;
+      if (this.path !== undefined) s += this.path;
+      if (this.query !== undefined) s += "?" + this.query;
+      if (this.fragment !== undefined) s += "#" + this.fragment;
+      return s;
     },
-    resolve: function (e) {
-      var t = this,
-        r = new de(e),
-        a = new de();
-      if (r.scheme !== void 0)
-        ((a.scheme = r.scheme),
-          (a.username = r.username),
-          (a.password = r.password),
-          (a.host = r.host),
-          (a.port = r.port),
-          (a.path = c(r.path)),
-          (a.query = r.query));
-      else if (((a.scheme = t.scheme), r.host !== void 0))
-        ((a.username = r.username),
-          (a.password = r.password),
-          (a.host = r.host),
-          (a.port = r.port),
-          (a.path = c(r.path)),
-          (a.query = r.query));
-      else if (
-        ((a.username = t.username), (a.password = t.password), (a.host = t.host), (a.port = t.port), !r.path)
-      )
-        if (((a.path = t.path), r.query !== void 0)) a.query = r.query;
-        else a.query = t.query;
-      else {
-        if (r.path.charAt(0) === "/") a.path = c(r.path);
-        else ((a.path = s(t.path, r.path)), (a.path = c(a.path)));
-        a.query = r.query;
+    resolve: function (relative) {
+      var base = this;
+      var r = new de(relative);
+      var t = new de();
+      if (r.scheme !== undefined) {
+        t.scheme = r.scheme;
+        t.username = r.username;
+        t.password = r.password;
+        t.host = r.host;
+        t.port = r.port;
+        t.path = remove_dot_segments(r.path);
+        t.query = r.query;
+      } else {
+        t.scheme = base.scheme;
+        if (r.host !== undefined) {
+          t.username = r.username;
+          t.password = r.password;
+          t.host = r.host;
+          t.port = r.port;
+          t.path = remove_dot_segments(r.path);
+          t.query = r.query;
+        } else {
+          t.username = base.username;
+          t.password = base.password;
+          t.host = base.host;
+          t.port = base.port;
+          if (!r.path) {
+            t.path = base.path;
+            if (r.query !== undefined) t.query = r.query;
+            else t.query = base.query;
+          } else {
+            if (r.path.charAt(0) === "/") t.path = remove_dot_segments(r.path);
+            else {
+              t.path = merge(base.path, r.path);
+              t.path = remove_dot_segments(t.path);
+            }
+            t.query = r.query;
+          }
+        }
       }
-      return ((a.fragment = r.fragment), a.toString());
-      function s(d, g) {
-        if (t.host !== void 0 && !t.path) return "/" + g;
-        var index = d.lastIndexOf("/");
-        if (index === -1) return g;
-        else return d.substring(0, index + 1) + g;
+      t.fragment = r.fragment;
+      return t.toString();
+      function merge(basepath, refpath) {
+        if (base.host !== undefined && !base.path) return "/" + refpath;
+        var lastslash = basepath.lastIndexOf("/");
+        if (lastslash === -1) return refpath;
+        else return basepath.substring(0, lastslash + 1) + refpath;
       }
-      function c(d) {
-        if (!d) return d;
-        var g = "";
-        while (d.length > 0) {
-          if (d === "." || d === "..") {
-            d = "";
+      function remove_dot_segments(path) {
+        if (!path) return path;
+        var output = "";
+        while (path.length > 0) {
+          if (path === "." || path === "..") {
+            path = "";
             break;
           }
-          var substring = d.substring(0, 2),
-            substring_2 = d.substring(0, 3),
-            substring_3 = d.substring(0, 4);
-          if (substring_2 === "../") d = d.substring(3);
-          else if (substring === "./") d = d.substring(2);
-          else if (substring_2 === "/./") d = "/" + d.substring(3);
-          else if (substring === "/." && d.length === 2) d = "/";
-          else if (substring_3 === "/../" || (substring_2 === "/.." && d.length === 3))
-            ((d = "/" + d.substring(4)), (g = g.replace(/\/?[^\/]*$/, "")));
-          else {
-            var ne = d.match(/(\/?([^\/]*))/)[0];
-            ((g += ne), (d = d.substring(ne.length)));
+          var twochars = path.substring(0, 2);
+          var threechars = path.substring(0, 3);
+          var fourchars = path.substring(0, 4);
+          if (threechars === "../") path = path.substring(3);
+          else if (twochars === "./") path = path.substring(2);
+          else if (threechars === "/./") path = "/" + path.substring(3);
+          else if (twochars === "/." && path.length === 2) path = "/";
+          else if (fourchars === "/../" || (threechars === "/.." && path.length === 3)) {
+            path = "/" + path.substring(4);
+            output = output.replace(/\/?[^\/]*$/, "");
+          } else {
+            var segment = path.match(/(\/?([^\/]*))/)[0];
+            output += segment;
+            path = path.substring(segment.length);
           }
         }
-        return g;
+        return output;
       }
     },
   };
 });
-
-export { ca };
+export { require_URL };

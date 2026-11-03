@@ -19,16 +19,15 @@ import { resolveRipgrepTarget } from "../../../utils/ripgrep.js";
 
 //@ chunk-e6aww6q8.js:1452836-1453023 fingerprint = pathFromToolUse (0.43)
 async function pathFromToolUse(e, n) {
-  let path = GrepTool.getPath(e),
-    s = consumeReadPermission(n, path);
+  let toolPermissionContext = GrepTool.getPath(e);
+  let s = consumeReadPermission(n, toolPermissionContext);
   if (e.path) await assertGrepPathExists(e.path, s, n);
-  let h = await resolveRipgrepTarget(path, s);
-  if (h === null) return emptyGrepResult(e);
+  let searchTarget = await resolveRipgrepTarget(toolPermissionContext, s);
+  if (searchTarget === null) return emptyGrepResult(e);
   try {
-    return await runGrep(h, e, n);
+    return await runGrep(searchTarget, e, n);
   } finally {
-    await h.close();
+    await searchTarget.close();
   }
 }
-
 export { pathFromToolUse };

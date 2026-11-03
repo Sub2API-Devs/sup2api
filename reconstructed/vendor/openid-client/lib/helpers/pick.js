@@ -8,12 +8,11 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-1ny7cxrt.js:9110-9227 cjs-require-graph
-var df = x(function (jve, $O) {
-  $O.exports = function (t, ...n) {
-    let o = {};
-    for (let r of n) if (t[r] !== void 0) o[r] = t[r];
-    return o;
+var require_pick = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = function (object, ...paths) {
+    let obj = {};
+    for (let path of paths) if (object[path] !== undefined) obj[path] = object[path];
+    return obj;
   };
 });
-
-export { df };
+export { require_pick };

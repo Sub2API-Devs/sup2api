@@ -8,51 +8,84 @@
  * pieces: chunk-10q8r8ck.js (1)
  * attribution: placement 1
  */
-import { Jn, _C, cwr } from "../../remote/remoteMode.js";
+import { getRemoteCaps, hasRemoteCap, REMOTE_STOPPED_WAITING_NOTICE } from "../../remote/remoteMode.js";
 import { requestContextUsage } from "../../entrypoints/sdk/controlSchemas.js";
 import { isBridgeOrTransport } from "../../cli/transportState.js";
 import { renderToAnsiString } from "../../utils/staticRender.js";
-import { e } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { ContextVisualization } from "../../components/ContextVisualization.js";
 import { formatContextAsMarkdownTable } from "./context-noninteractive.js";
 import { isAbortError, errorMessage } from "../../utils/errors.js";
 import { logForDebugging } from "../../utils/debug.js";
-import { Us } from "../../services/projects/threadRows.js";
+import { messagesSinceCompactBoundary } from "../../services/projects/threadRows.js";
 import { analyzeContextUsage } from "../../utils/analyzeContext.js";
 
+//@ chunk-10q8r8ck.js:27146-28617 placement
 /**
  * /context 命令：显示上下文用量；远程会话通过控制通道获取。
  */
-//@ chunk-10q8r8ck.js:27146-28617 placement
 async function call(onDone, context, args) {
-  let i = context.presentation === "fullscreen" && args.trim().toLowerCase() !== "all",
-    l = Jn();
-  if (l) {
-    if (!_C("controlChannel"))
-      return (onDone("Context usage isn't available over this remote connection"), null);
+  let collapseDetailSections = context.presentation === "fullscreen" && args.trim().toLowerCase() !== "all";
+  let controlChannel = getRemoteCaps();
+  if (controlChannel) {
+    if (!hasRemoteCap("controlChannel")) {
+      onDone("Context usage isn't available over this remote connection");
+      return null;
+    }
     try {
-      let p = await requestContextUsage(l, { signal: context.abortController.signal });
-      if (!p)
-        return (
-          onDone("Couldn't show context usage: the remote sent a reply this version can't display"),
-          null
-        );
-      let f = isBridgeOrTransport(context.session),
-        H = f ? { ...p, memoryFiles: [] } : p,
-        g = await renderToAnsiString(e(ContextVisualization, { data: H, collapseDetailSections: i }), {
-          storageV5: context.storageV5,
-        });
-      if (!f && isBridgeOrTransport(context.session))
-        ((f = !0),
-          (H = { ...p, memoryFiles: [] }),
-          (g = await renderToAnsiString(e(ContextVisualization, { data: H, collapseDetailSections: i }), {
-            storageV5: context.storageV5,
-          })));
-      onDone(g, { display: "system", metaMessages: [formatContextAsMarkdownTable(H)] });
-    } catch (error) {
-      if (isAbortError(error)) return (onDone(cwr), null);
+      let p = await requestContextUsage(controlChannel, {
+        signal: context.abortController.signal,
+      });
+      if (!p) {
+        onDone("Couldn't show context usage: the remote sent a reply this version can't display");
+        return null;
+      }
       let f = isBridgeOrTransport(context.session);
-      if (f) logForDebugging(`/context remote fetch failed: ${errorMessage(error)}`, { level: "error" });
+      let H = f
+        ? {
+            ...p,
+            memoryFiles: [],
+          }
+        : p;
+      let g = await renderToAnsiString(
+        jsxProd_default(ContextVisualization, {
+          data: H,
+          collapseDetailSections,
+        }),
+        {
+          storageV5: context.storageV5,
+        },
+      );
+      if (!f && isBridgeOrTransport(context.session)) {
+        f = true;
+        H = {
+          ...p,
+          memoryFiles: [],
+        };
+        g = await renderToAnsiString(
+          jsxProd_default(ContextVisualization, {
+            data: H,
+            collapseDetailSections,
+          }),
+          {
+            storageV5: context.storageV5,
+          },
+        );
+      }
+      onDone(g, {
+        display: "system",
+        metaMessages: [formatContextAsMarkdownTable(H)],
+      });
+    } catch (error) {
+      if (isAbortError(error)) {
+        onDone(REMOTE_STOPPED_WAITING_NOTICE);
+        return null;
+      }
+      let f = isBridgeOrTransport(context.session);
+      if (f)
+        logForDebugging(`/context remote fetch failed: ${errorMessage(error)}`, {
+          level: "error",
+        });
       onDone(
         f
           ? "Couldn't fetch context from remote"
@@ -62,29 +95,61 @@ async function call(onDone, context, args) {
     return null;
   }
   let {
-      messages: messages,
-      getAppState: getAppState,
-      options: { mainLoopModel: x, tools: A },
-    } = context,
-    L = Us(messages),
-    y = process.stdout.columns || 80,
-    k = getAppState(),
-    T = await analyzeContextUsage(L, x, async () => k.toolPermissionContext, A, k.agentDefinitions, {
+    messages,
+    getAppState,
+    options: { mainLoopModel, tools },
+  } = context;
+  let messages_2 = messagesSinceCompactBoundary(messages);
+  let terminalWidth = process.stdout.columns || 80;
+  let appState = getAppState();
+  let T = await analyzeContextUsage(
+    messages_2,
+    mainLoopModel,
+    async () => appState.toolPermissionContext,
+    tools,
+    appState.agentDefinitions,
+    {
       session: context.session,
-      terminalWidth: y,
+      terminalWidth,
       toolUseContext: context,
-      originalMessages: L,
-      configuredWindow: k.autoCompactWindow,
+      originalMessages: messages_2,
+      configuredWindow: appState.autoCompactWindow,
+    },
+  );
+  let R = isBridgeOrTransport(context.session);
+  let E = R
+    ? {
+        ...T,
+        memoryFiles: [],
+      }
+    : T;
+  let Q = await renderToAnsiString(
+    jsxProd_default(ContextVisualization, {
+      data: E,
+      collapseDetailSections,
     }),
-    R = isBridgeOrTransport(context.session),
-    E = R ? { ...T, memoryFiles: [] } : T,
-    Q = await renderToAnsiString(e(ContextVisualization, { data: E, collapseDetailSections: i }), {
+    {
       storageV5: context.storageV5,
-    });
-  if (!R && isBridgeOrTransport(context.session))
-    ((E = { ...T, memoryFiles: [] }),
-      (Q = await renderToAnsiString(e(ContextVisualization, { data: E, collapseDetailSections: i }), {
+    },
+  );
+  if (!R && isBridgeOrTransport(context.session)) {
+    E = {
+      ...T,
+      memoryFiles: [],
+    };
+    Q = await renderToAnsiString(
+      jsxProd_default(ContextVisualization, {
+        data: E,
+        collapseDetailSections,
+      }),
+      {
         storageV5: context.storageV5,
-      })));
-  return (onDone(Q, { display: "system", metaMessages: [formatContextAsMarkdownTable(E)] }), null);
+      },
+    );
+  }
+  onDone(Q, {
+    display: "system",
+    metaMessages: [formatContextAsMarkdownTable(E)],
+  });
+  return null;
 }

@@ -8,7 +8,7 @@
  * pieces: chunk-aepeg2w5.js (10)
  * attribution: placement 10
  */
-import { isDeepStrictEqual, isDeepStrictEqual as isDeepStrictEqual_2 } from "util";
+import { isDeepStrictEqual } from "util";
 import { plural } from "../stringUtils.js";
 import { storageMarker, withStorageWriteLock, READ_FAILED, stripSlackBinding } from "./storageWriteLock.js";
 import { logForDebugging } from "../debug.js";
@@ -18,72 +18,84 @@ import { clone, jsonParse, jsonStringify } from "../slowOperations.js";
 import { primarySecureStoreKind } from "./index.js";
 
 //@ chunk-aepeg2w5.js:489436-489476 placement
-var S$ = /^[A-Za-z_][A-Za-z0-9_]{0,127}$/;
+var ENV_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]{0,127}$/;
+//@ chunk-aepeg2w5.js:489476-489646 placement
 /**
  * 格式化名称列表：只列出合法名称，其余计为"及 N 个"；全都不合法时只显示数量。
  */
-//@ chunk-aepeg2w5.js:489476-489646 placement
 function formatNameList(e) {
-  let filtered = e.filter((s) => S$.test(s)),
-    r = e.length - filtered.length;
+  let filtered = e.filter((s) => ENV_NAME_RE.test(s));
+  let r = e.length - filtered.length;
   if (r === 0) return filtered.join(", ");
   return filtered.length === 0 ? `${r} ${plural(r, "name")}` : `${filtered.join(", ")} and ${r} more`;
 }
 //@ chunk-aepeg2w5.js:489688-489722 placement
-function bA(e) {
+function storageMarkersOrName(e) {
   return storageMarker(e) ?? [e];
 }
+//@ chunk-aepeg2w5.js:489722-490067 placement
 /**
  * 在所有凭据存储腿上执行修改。
  */
-//@ chunk-aepeg2w5.js:489722-490067 placement
 async function mutateEveryCredentialLeg(e, n, r) {
-  let s = bA(e);
+  let s = storageMarkersOrName(e);
   return withStorageWriteLock(async () => {
     let h = [];
     for (let [y, S] of [...s.entries()].reverse()) {
-      let w = !1;
+      let changed = false;
       try {
-        let { success: success, transient: transient } = await S.mutate(
+        let { success, transient } = await S.mutate(
           (P) => {
             let F = removeFromEveryLeg(n, P);
-            return ((w = F !== P), F);
+            changed = F !== P;
+            return F;
           },
-          vA(e, y, r),
+          markerOrValue(e, y, r),
         );
         h[y] = {
           name: S.name,
-          result: transient === void 0 ? { success: success } : { success: success, transient: transient },
-          changed: w,
+          result:
+            transient === undefined
+              ? {
+                  success,
+                }
+              : {
+                  success,
+                  transient,
+                },
+          changed,
         };
       } catch (error) {
-        h[y] = { name: S.name, error: error };
+        h[y] = {
+          name: S.name,
+          error,
+        };
       }
     }
     return h;
   });
 }
+//@ chunk-aepeg2w5.js:490067-490525 placement
 /**
  * 严格读取所有凭据存储腿。
  */
-//@ chunk-aepeg2w5.js:490067-490525 placement
-async function readEveryCredentialLeg(e, n, r) {
+async function readEveryCredentialLeg(e, n, credentials) {
   let s = [];
-  for (let [h, y] of bA(e).entries()) {
-    let S = vA(e, h, r),
-      w;
+  for (let [h, y] of storageMarkersOrName(e).entries()) {
+    let S = markerOrValue(e, h, credentials);
+    let w;
     try {
-      (y.invalidateCache?.(),
-        (w = await (y.readAsyncStrict?.(S, {
-          inaccessibleAs: "failure",
-          unreadableFileAs: "failure",
-          unparsableEntryAs: "failure",
-        }) ?? y.readAsync(S))));
+      y.invalidateCache?.();
+      w = await (y.readAsyncStrict?.(S, {
+        inaccessibleAs: "failure",
+        unreadableFileAs: "failure",
+        unparsableEntryAs: "failure",
+      }) ?? y.readAsync(S));
     } catch (error) {
-      (logForDebugging(`[secureStorage] strict read of ${y.name} rejected: ${errorMessage(error)}`, {
+      logForDebugging(`[secureStorage] strict read of ${y.name} rejected: ${errorMessage(error)}`, {
         level: "warn",
-      }),
-        (w = READ_FAILED));
+      });
+      w = READ_FAILED;
     }
     if (w !== READ_FAILED && w != null && !isPlainObject(w)) w = READ_FAILED;
     s.push({
@@ -91,35 +103,49 @@ async function readEveryCredentialLeg(e, n, r) {
       value:
         w === READ_FAILED
           ? READ_FAILED
-          : n(clone((y.osGuarded === !0 ? w : stripSlackBinding(w ?? null)) ?? {})),
+          : n(clone((y.osGuarded === true ? w : stripSlackBinding(w ?? null)) ?? {})),
     });
   }
   return s;
 }
+//@ chunk-aepeg2w5.js:490525-490979 placement
 /**
  * 确认凭据已从所有存储移除。
  */
-//@ chunk-aepeg2w5.js:490525-490979 placement
-async function confirmCredentialRemoval(e, n, r) {
+async function confirmCredentialRemoval(secureStorage, n, r) {
   if (
     primarySecureStoreKind() === "keychain" &&
-    !r((await e.readAsync()) ?? {}) &&
-    (await e.readAsyncStrict?.(void 0, { inaccessibleAs: "failure" })) === READ_FAILED
+    !r((await secureStorage.readAsync()) ?? {}) &&
+    (await secureStorage.readAsyncStrict?.(undefined, {
+      inaccessibleAs: "failure",
+    })) === READ_FAILED
   )
-    return { confirmed: !1, reason: "keychain_unreadable" };
+    return {
+      confirmed: false,
+      reason: "keychain_unreadable",
+    };
   let s;
   try {
-    s = (await mutateEveryCredentialLeg(e, n)).every((y) => !("error" in y) && y.result.success);
+    s = (await mutateEveryCredentialLeg(secureStorage, n)).every((y) => !("error" in y) && y.result.success);
   } catch (error) {
-    (logForDebugging(`[secureStorage] removal refused: ${errorMessage(error)}`, { level: "warn" }),
-      (s = (await readEveryCredentialLeg(e, r)).every((S) => S.value === !1)));
+    logForDebugging(`[secureStorage] removal refused: ${errorMessage(error)}`, {
+      level: "warn",
+    });
+    s = (await readEveryCredentialLeg(secureStorage, r)).every((S) => S.value === false);
   }
-  return s ? { confirmed: !0 } : { confirmed: !1, reason: "credential_store_failed" };
+  return s
+    ? {
+        confirmed: true,
+      }
+    : {
+        confirmed: false,
+        reason: "credential_store_failed",
+      };
 }
+//@ chunk-aepeg2w5.js:490979-491882 placement
 /**
  * 对凭据对象应用删除函数（需同步返回对象）。
  */
-//@ chunk-aepeg2w5.js:490979-491882 placement
 function removeFromEveryLeg(e, n) {
   if (!isPlainObject(n) || Object.keys(n).length === 0) return n;
   let r = e(clone(n));
@@ -128,10 +154,10 @@ function removeFromEveryLeg(e, n) {
       "removeFromEveryLeg: the remove function did not return a plain object (an async function returns a Promise). Nothing was written to this store.",
       "secure storage: a remove function did not return a plain object (caller bug, nothing written)",
     );
-  let s = hA(n),
-    h = hA(r),
-    found = Object.keys(h).find((S) => !Object.hasOwn(s, S));
-  if (found !== void 0)
+  let s = deepCloneJson(n);
+  let h = deepCloneJson(r);
+  let found = Object.keys(h).find((key) => !Object.hasOwn(s, key));
+  if (found !== undefined)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
       `removeFromEveryLeg: the remove function added the key "${found}". It may only delete keys. Nothing was written to this store.`,
       "secure storage: a remove function added a key (caller bug, nothing written)",
@@ -141,20 +167,19 @@ function removeFromEveryLeg(e, n) {
       "removeFromEveryLeg: the remove function added or changed a value. It may only delete keys. Nothing was written to this store.",
       "secure storage: a remove function added or changed a value (caller bug, nothing written)",
     );
-  return isDeepStrictEqual_2(h, s) ? n : h;
+  return isDeepStrictEqual(h, s) ? n : h;
 }
 //@ chunk-aepeg2w5.js:491882-492000 placement
 function isSubsetDeepEqual(e, n) {
-  if (!isPlainObject(e) || !isPlainObject(n)) return isDeepStrictEqual_2(e, n);
-  return Object.keys(n).every((r) => Object.hasOwn(e, r) && isSubsetDeepEqual(e[r], n[r]));
+  if (!isPlainObject(e) || !isPlainObject(n)) return isDeepStrictEqual(e, n);
+  return Object.keys(n).every((key) => Object.hasOwn(e, key) && isSubsetDeepEqual(e[key], n[key]));
 }
 //@ chunk-aepeg2w5.js:492000-492031 placement
-function hA(e) {
+function deepCloneJson(e) {
   return jsonParse(jsonStringify(e));
 }
 //@ chunk-aepeg2w5.js:492031-492087 placement
-function vA(e, n, r) {
-  return storageMarker(e) === void 0 || n > 0 ? r : void 0;
+function markerOrValue(e, n, r) {
+  return storageMarker(e) === undefined || n > 0 ? r : undefined;
 }
-
 export { confirmCredentialRemoval, formatNameList, mutateEveryCredentialLeg, readEveryCredentialLeg };

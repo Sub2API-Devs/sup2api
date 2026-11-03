@@ -16,5 +16,4 @@ function getColorModuleUnavailableReason() {
   if (isEnvDefinedFalsy(env.CLAUDE_CODE_SYNTAX_HIGHLIGHT)) return "env";
   return null;
 }
-
 export { getColorModuleUnavailableReason };

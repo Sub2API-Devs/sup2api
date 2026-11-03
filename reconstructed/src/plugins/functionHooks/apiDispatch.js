@@ -8,51 +8,31 @@
  * pieces: chunk-e6aww6q8.js (84)
  * attribution: placement 84
  */
-import {
-  isDeepStrictEqual,
-  isDeepStrictEqual as isDeepStrictEqual_2,
-  isDeepStrictEqual as isDeepStrictEqual_3,
-  isDeepStrictEqual as isDeepStrictEqual_4,
-  isDeepStrictEqual as isDeepStrictEqual_5,
-  isDeepStrictEqual as isDeepStrictEqual_6,
-  isDeepStrictEqual as isDeepStrictEqual_7,
-  isDeepStrictEqual as isDeepStrictEqual_8,
-  isDeepStrictEqual as isDeepStrictEqual_9,
-  isDeepStrictEqual as isDeepStrictEqual_10,
-  isDeepStrictEqual as isDeepStrictEqual_11,
-  isDeepStrictEqual as isDeepStrictEqual_12,
-  isDeepStrictEqual as isDeepStrictEqual_13,
-  isDeepStrictEqual as isDeepStrictEqual_14,
-  isDeepStrictEqual as isDeepStrictEqual_15,
-  isDeepStrictEqual as isDeepStrictEqual_16,
-  isDeepStrictEqual as isDeepStrictEqual_17,
-  isDeepStrictEqual as isDeepStrictEqual_18,
-  isDeepStrictEqual as isDeepStrictEqual_19,
-} from "util";
+import { isDeepStrictEqual } from "util";
 import { createWorkerSlots } from "./hooksWorker.js";
-import { r2r, iEt } from "./hooksModuleLoader.js";
-import { _Lr } from "./modLoadTelemetry.js";
-import { XJ } from "./hostBridge.js";
-import { HooksError, Jeo } from "./hooksErrors.js";
-import { xUe, Teo, Aeo } from "./api/operations.js";
+import { workersLoadedReporter, HOOKS_READY_TIMEOUT_MS } from "./hooksModuleLoader.js";
+import { logModLoaded } from "./modLoadTelemetry.js";
+import { takePending } from "./hostBridge.js";
+import { HooksError, AskRefusedError } from "./hooksErrors.js";
+import { isClockMethod, asHooksError, isFiniteNonNegativeNumber } from "./api/operations.js";
 import { count, uniq } from "../../utils/collections.js";
 import { AGENT } from "../../tools/AgentTool/constants.js";
-import { XLe } from "./mcpServerHooks.js";
-import { iv } from "./uiHooks.js";
+import { isToolFromServer } from "./mcpServerHooks.js";
+import { isPersonInputEvent } from "./uiHooks.js";
 import {
   originKey,
   sameOrigin,
   lentModulesByChain,
   originPlugin,
   pluginStorageKey,
-  Ktr,
+  originLabel,
   apiMethodLabel,
 } from "./hooksWorkerClient.js";
-import { Pei } from "./ui/pressFill.js";
-import { RMi, getCwd } from "../../utils/cwd.js";
+import { pressForEnv } from "./ui/pressFill.js";
+import { runOrExit, getCwd } from "../../utils/cwd.js";
 import { getPluginRegistry } from "../../utils/plugins/pluginLoadState.js";
 import { isModuleAdmitted } from "../../utils/plugins/functionHooks/admission.js";
-import { gos } from "./eventPatterns.js";
+import { removedByPluginText } from "./eventPatterns.js";
 import { logForDebugging } from "../../utils/debug.js";
 import {
   closeGeneratorQuietly,
@@ -74,89 +54,127 @@ import {
   pluginsMatchingEvent,
   hookMembersFor,
 } from "./hookDispatch.js";
-import { AIn } from "./configApi.js";
-import { Nae } from "./sites/siteRules.js";
+import { afterThenYield } from "./configApi.js";
+import { envSiteRuleFor } from "./sites/siteRules.js";
 import { httpFetchForPlugin } from "./httpApi.js";
 import { isOfficialMarketplacePlugin } from "./panes.js";
 import { parsePluginIdentifier_2 } from "../../utils/plugins/pluginIdentifier.js";
-import { xYr, mayLogPluginName, getTelemetryPluginScope } from "../../utils/telemetry/pluginTelemetry.js";
-import { af } from "../../utils/plugins/pluginPolicy.js";
-import { isPlainObject as isPlainObject_4 } from "../../utils/isPlainObject.js";
-import { LX, composeDetachedSections } from "./coreHandlers.js";
+import {
+  pluginNameFields,
+  mayLogPluginName,
+  getTelemetryPluginScope,
+} from "../../utils/telemetry/pluginTelemetry.js";
+import { policyEnabledPluginNameSet } from "../../utils/plugins/pluginPolicy.js";
+import { isPlainObject as isPlainObject_5 } from "../../utils/isPlainObject.js";
+import { PROMPT_COMPOSE_EVENT, composeDetachedSections } from "./coreHandlers.js";
 import { promptComposer } from "./promptComposition.js";
 import { attachedSurfaces } from "./surfaceBinding.js";
-import { Ayn } from "./dispatch/dispatchScope.js";
-import { reportChainFailure, hZr, forwardAbort } from "./dispatch/chain.js";
-import { lYr, freeze as freeze_26 } from "../../utils/attachmentMedia.js";
-import { readPromptBox, normalizePromptBox, freeze_19 } from "./promptApi.js";
+import { runInScope } from "./dispatch/dispatchScope.js";
+import { reportChainFailure, currentDispatch, forwardAbort } from "./dispatch/chain.js";
+import { mediaHoldStore, aYr } from "../../utils/attachmentMedia.js";
+import { readPromptBox, normalizePromptBox, aEt } from "./promptApi.js";
 import { judgeHookInput } from "./dispatch/inputJudging.js";
 import { errorMessage } from "../../utils/errors.js";
 import { isPlainDataObject } from "../../utils/hooks/functionHookMatchers.js";
 import { MAX_NESTING_DEPTH, NESTING_TOO_DEEP_MESSAGE } from "../../utils/structuredCloneLimits.js";
-import { BPe } from "../../utils/plugins/managedPlugins.js";
-import { rle } from "./eventPayloads.js";
+import { isVouchedPolicyPluginId } from "../../utils/plugins/managedPlugins.js";
+import { defaultRoute } from "./eventPayloads.js";
 
 //@ chunk-e6aww6q8.js:3709715-3709728 placement
-var ZV = createWorkerSlots();
+/**
+ * 插件 worker 槽位表
+ */
+var workerSlots = createWorkerSlots();
 //@ chunk-e6aww6q8.js:3709728-3709819 placement
-function XAe(e) {
-  (ZV.notifyLoaded(new Set(e.map((n) => n.name))), r2r.get()?.(e), e.forEach(_Lr));
+/**
+ * 登记已加载的 worker 并通知
+ */
+function noteWorkersLoaded(loadedModules) {
+  workerSlots.notifyLoaded(new Set(loadedModules.map((n) => n.name)));
+  workersLoadedReporter.get()?.(loadedModules);
+  loadedModules.forEach(logModLoaded);
 }
 //@ chunk-e6aww6q8.js:3709819-3709863 placement
-var QAe = (e, n, r) => XJ(e, n)?.reject(new HooksError(r));
+/**
+ * 拒绝某个挂起调用
+ */
+var rejectPendingCall = (pending, environmentId, r) =>
+  takePending(pending, environmentId)?.reject(new HooksError(r));
 //@ chunk-e6aww6q8.js:3709863-3709956 placement
-function srt(e) {
-  if (e.pendingCalls.delete(e.callId)) (e.settleIdle(), e.reject(new HooksError(e.reason)));
-}
-//@ chunk-e6aww6q8.js:3709956-3710027 placement
-function gNr(e, n, r) {
-  let s = setTimeout(QAe, iEt, e, n, r);
-  return (s.unref(), s);
-}
-//@ chunk-e6aww6q8.js:3710027-3710055 placement
-function yNr(e) {
-  e.unref?.();
-}
-//@ chunk-e6aww6q8.js:3710055-3710144 placement
-function irt(e, n) {
-  for (let r of n) {
-    let s = e.get(r) ?? { ops: 0, epoch: 0 };
-    (e.set(r, s), (s.epoch += 1));
+/**
+ * 删除挂起调用并拒绝
+ */
+function settleCallRejection(e) {
+  if (e.pendingCalls.delete(e.callId)) {
+    e.settleIdle();
+    e.reject(new HooksError(e.reason));
   }
 }
+//@ chunk-e6aww6q8.js:3709956-3710027 placement
+/**
+ * 定时让调用超时
+ */
+function scheduleCallTimeout(pendingLoads, n, r) {
+  let timer = setTimeout(rejectPendingCall, HOOKS_READY_TIMEOUT_MS, pendingLoads, n, r);
+  timer.unref();
+  return timer;
+}
+//@ chunk-e6aww6q8.js:3710027-3710055 placement
+/**
+ * 取消引用定时器
+ */
+function unrefTimer(port1) {
+  port1.unref?.();
+}
+//@ chunk-e6aww6q8.js:3710055-3710144 placement
+/**
+ * 递增插件代次
+ */
+function bumpPluginEpochs(work, environments) {
+  for (let r of environments) {
+    let s = work.get(r) ?? {
+      ops: 0,
+      epoch: 0,
+    };
+    work.set(r, s);
+    s.epoch += 1;
+  }
+}
+//@ chunk-e6aww6q8.js:3710144-3710273 placement
 /**
  * 为插件记一次进行中的操作（时钟类不计数）并递增 epoch，返回结束回调。
  */
-//@ chunk-e6aww6q8.js:3710144-3710273 placement
-function trackPluginOp(e, n, r) {
-  let s = xUe(r) ? 0 : 1,
-    h = e.get(n) ?? { ops: 0, epoch: 0 };
-  return (
-    e.set(n, h),
-    (h.ops += s),
-    (h.epoch += 1),
-    () => {
-      ((h.ops -= s), (h.epoch += 1));
-    }
-  );
+function trackPluginOp(work, environmentId, r) {
+  let s = isClockMethod(r) ? 0 : 1;
+  let h = work.get(environmentId) ?? {
+    ops: 0,
+    epoch: 0,
+  };
+  work.set(environmentId, h);
+  h.ops += s;
+  h.epoch += 1;
+  return () => {
+    h.ops -= s;
+    h.epoch += 1;
+  };
 }
+//@ chunk-e6aww6q8.js:3710273-3710462 placement
 /**
  * 统计匹配插件的进行中操作数与 epoch 总和（含进行中的非时钟分发）。
  */
-//@ chunk-e6aww6q8.js:3710273-3710462 placement
-function countActingOps(e, n, r) {
-  let filtered = [...e].filter(([h]) => r(h));
+function countActingOps(work, n, r) {
+  let filtered = [...work].filter(([h]) => r(h));
   return {
     acting:
-      filtered.reduce((h, [, y]) => h + y.ops, 0) +
-      count([...n], (h) => !xUe(h.event) && h.environments.some(r)),
-    epoch: filtered.reduce((h, [, y]) => h + y.epoch, 0),
+      filtered.reduce((acc, [, y]) => acc + y.ops, 0) +
+      count([...n], (h) => !isClockMethod(h.event) && h.environments.some(r)),
+    epoch: filtered.reduce((acc, [, y]) => acc + y.epoch, 0),
   };
 }
+//@ chunk-e6aww6q8.js:3710462-3710686 placement
 /**
  * 同线程宿主的分发状态：名称表、分发、按键记录、待加载、操作控制器、服务中的调用等。
  */
-//@ chunk-e6aww6q8.js:3710462-3710686 placement
 var createHostDispatchState = () => ({
   names: new Map(),
   dispatches: new Map(),
@@ -165,326 +183,427 @@ var createHostDispatchState = () => ({
   pressCounter: 0,
   pendingLoads: new Map(),
   dispatchCounter: 0,
-  died: void 0,
+  died: undefined,
   opControllers: new Map(),
   work: new Map(),
   servedCalls: new Map(),
   callCounter: 0,
 });
 //@ chunk-e6aww6q8.js:3710686-3710743 placement
-var iY = (e, n, r) => () => r !== void 0 && n !== void 0 && e.get(n) === r;
+/**
+ * 该调用仍是当前挂起项
+ */
+var isCurrentPendingCall = (e, n, r) => () => r !== undefined && n !== undefined && e.get(n) === r;
+//@ chunk-e6aww6q8.js:3710743-3710902 placement
 /**
  * 判断调用是否来自模型发起的工具调用（无来源链、事件为 tool.call 且是插件工具）。
  */
-//@ chunk-e6aww6q8.js:3710743-3710902 placement
 function isModelOriginToolCall(e, n) {
-  let r = e !== void 0 && (e.origin === void 0 || e.origin.length === 0),
-    s = e?.event === "tool.call" ? e.tool : void 0,
-    h = s === AGENT || (s !== void 0 && XLe(n, s));
+  let r = e !== undefined && (e.origin === undefined || e.origin.length === 0);
+  let tool = e?.event === "tool.call" ? e.tool : undefined;
+  let h = tool === AGENT || (tool !== undefined && isToolFromServer(n, tool));
   return r && h;
 }
 //@ chunk-e6aww6q8.js:3710902-3710972 placement
-var txe = (e, n) => iv(e?.event) && e?.pressOwner !== void 0 && e.pressOwner === n;
+/**
+ * 按压归属是否一致
+ */
+var isSamePressOwner = (e, n) =>
+  isPersonInputEvent(e?.event) && e?.pressOwner !== undefined && e.pressOwner === n;
 //@ chunk-e6aww6q8.js:3710972-3711017 placement
-var oxe = (e) => e === "ui.render" || e === "ui.focus";
+/**
+ * ui.render/ui.focus
+ */
+var isUiRenderEvent = (rootEvent) => rootEvent === "ui.render" || rootEvent === "ui.focus";
+//@ chunk-e6aww6q8.js:3711017-3711220 placement
 /**
  * 继承调用方的分发事实：仍在分发中时沿用，必要时去掉根事件。
  */
-//@ chunk-e6aww6q8.js:3711017-3711220 placement
-function inheritDispatchFacts(e, n, r) {
-  let s = e?.facts,
-    h = s?.isDispatching?.() === !0,
-    y = oxe(s?.rootEvent) && e?.callers.at(-1) !== n;
+function inheritDispatchFacts(e, environmentId, r) {
+  let facts = e?.facts;
+  let h = facts?.isDispatching?.() === true;
+  let y = isUiRenderEvent(facts?.rootEvent) && e?.callers.at(-1) !== environmentId;
   return h
-    ? { ...s, ...(y && { rootEvent: void 0 }), isDispatching: () => r() && s?.isDispatching?.() === !0 }
-    : void 0;
+    ? {
+        ...facts,
+        ...(y && {
+          rootEvent: undefined,
+        }),
+        isDispatching: () => r() && facts?.isDispatching?.() === true,
+      }
+    : undefined;
 }
+//@ chunk-e6aww6q8.js:3711220-3711356 placement
 /**
  * 取某环境最近一次用户手势的时间。
  */
-//@ chunk-e6aww6q8.js:3711220-3711356 placement
-function latestGestureAt(e, n) {
-  let flattened = [...e].filter((s) => s.environmentId === n).flatMap((s) => s.gestureAt ?? []);
-  return flattened.length === 0 ? void 0 : Math.max(...flattened);
+function latestGestureAt(e, environmentId) {
+  let flattened = [...e].filter((s) => s.environmentId === environmentId).flatMap((s) => s.gestureAt ?? []);
+  return flattened.length === 0 ? undefined : Math.max(...flattened);
 }
 //@ chunk-e6aww6q8.js:3711356-3711430 placement
-var dxe = (e) => () => {
-  let n = e.isSpawnServed !== !0;
-  return ((e.isSpawnServed = !0), n);
+/**
+ * 标记 spawn 已被处理一次
+ */
+var claimSpawnServed = (e) => () => {
+  let n = e.isSpawnServed !== true;
+  e.isSpawnServed = true;
+  return n;
 };
+//@ chunk-e6aww6q8.js:3711430-3711759 placement
 /**
  * 收集借给被调插件且尚未过期的调用帧（按帧去重）。
  */
-//@ chunk-e6aww6q8.js:3711430-3711759 placement
 function collectLentFrames(e, n) {
-  let now = Date.now(),
-    filtered = [...e]
-      .filter((y) => y.callee === n)
-      .flatMap((y) => y.lent)
-      .filter((y) => now < y.until),
-    h = new Map();
+  let now = Date.now();
+  let filtered = [...e]
+    .filter((y) => y.callee === n)
+    .flatMap((y) => y.lent)
+    .filter((y) => now < y.until);
+  let h = new Map();
   for (let y of filtered) {
-    let S = originKey(y.frame),
-      w = h.get(S) ?? y;
+    let S = originKey(y.frame);
+    let w = h.get(S) ?? y;
     h.set(S, {
       frame: w.frame,
       until: Math.max(w.until, y.until),
       alike: uniq([...(w.alike ?? []), ...(y.alike ?? []), y.frame]),
     });
   }
-  return filtered.length === 0 ? void 0 : { lent: [...h.values()] };
+  return filtered.length === 0
+    ? undefined
+    : {
+        lent: [...h.values()],
+      };
 }
 //@ chunk-e6aww6q8.js:3711759-3711821 placement
-function mxe(e, n) {
+/**
+ * 追加调用者帧（去重）
+ */
+function appendCallerFrame(e, n) {
   return [...(e ?? []).filter((r) => !sameOrigin(r, n)), n];
 }
+//@ chunk-e6aww6q8.js:3711821-3712744 placement
 /**
  * 计算一次钩子调用的调用者链（借用帧、持有关系），并更新链上各模块的借用信息。
  */
-//@ chunk-e6aww6q8.js:3711821-3712744 placement
-function buildCallerChain(e, { dispatch: dispatch, held: held, registration: registration, served: served }) {
-  let now = Date.now(),
-    S = registration === void 0 ? served?.lent : void 0,
-    w = held && lentModulesByChain().get(held),
-    L = held?.filter((Ie, Me) => w?.[Me]?.isLent !== !0 || w[Me].isHeld === !0),
-    G = (Ie) => now < Ie.until || L?.includes(Ie.frame) === !0,
-    q = S?.filter((Ie) => G(Ie) && originPlugin(Ie.frame) !== e),
-    Z = q?.map((Ie) => Ie.frame) ?? dispatch?.origin,
-    ke = mxe(
-      Z,
-      dispatch !== void 0 && registration !== void 0 ? { plugin: e, registration: registration } : e,
-    ),
-    we =
-      q?.map((Ie) => ({
-        until: Ie.until,
-        isLent: !0,
-        isHeld: L?.includes(Ie.frame) === !0,
-        alike: Ie.alike,
-      })) ?? (Z === void 0 ? Z : lentModulesByChain().get(Z)),
-    Ee = S?.reduce((Ie, Me) => Math.max(Ie, Me.until), Number.NEGATIVE_INFINITY),
-    Ae = new Map(Z?.map((Ie, Me) => [Ie, we?.[Me]]));
-  if (Ee !== void 0 && Number.isFinite(Ee) && now < Ee) Ae.set(e, { until: Ee, isLent: !1, isHeld: !1 });
-  if (we !== void 0) {
+function buildCallerChain(e, { dispatch, held, registration, served }) {
+  let now = Date.now();
+  let lent = registration === undefined ? served?.lent : undefined;
+  let w = held && lentModulesByChain().get(held);
+  let filtered = held?.filter((Ie, Me) => w?.[Me]?.isLent !== true || w[Me].isHeld === true);
+  let G = (Ie) => now < Ie.until || filtered?.includes(Ie.frame) === true;
+  let filtered_2 = lent?.filter((Ie) => G(Ie) && originPlugin(Ie.frame) !== e);
+  let Z = filtered_2?.map((Ie) => Ie.frame) ?? dispatch?.origin;
+  let ke = appendCallerFrame(
+    Z,
+    dispatch !== undefined && registration !== undefined
+      ? {
+          plugin: e,
+          registration,
+        }
+      : e,
+  );
+  let we =
+    filtered_2?.map((Ie) => ({
+      until: Ie.until,
+      isLent: true,
+      isHeld: filtered?.includes(Ie.frame) === true,
+      alike: Ie.alike,
+    })) ?? (Z === undefined ? Z : lentModulesByChain().get(Z));
+  let reduced = lent?.reduce((acc, Me) => Math.max(acc, Me.until), Number.NEGATIVE_INFINITY);
+  let Ae = new Map(Z?.map((Ie, Me) => [Ie, we?.[Me]]));
+  if (reduced !== undefined && Number.isFinite(reduced) && now < reduced)
+    Ae.set(e, {
+      until: reduced,
+      isLent: false,
+      isHeld: false,
+    });
+  if (we !== undefined) {
     let Ie = ke.length - 1;
     lentModulesByChain().set(
       ke,
       ke.map((Me, We) => ({
         until: Ae.get(Me)?.until ?? Number.POSITIVE_INFINITY,
-        isLent: We < Ie && Ae.get(Me)?.isLent === !0,
-        isHeld: We < Ie && Ae.get(Me)?.isHeld === !0,
+        isLent: We < Ie && Ae.get(Me)?.isLent === true,
+        isHeld: We < Ie && Ae.get(Me)?.isHeld === true,
         alike: Ae.get(Me)?.alike,
       })),
     );
   }
   return ke;
 }
+//@ chunk-e6aww6q8.js:3712744-3714060 placement
 /**
  * 为一次钩子调用构造执行环境（插件身份、可用接口、取消信号）。
  */
-//@ chunk-e6aww6q8.js:3712744-3714060 placement
-function buildHookEnvironment({ state: state }, n, r) {
-  let {
-      environmentId: environmentId,
-      dispatchId: dispatchId,
-      registration: registration,
-      serving: serving,
-    } = n,
-    w = serving === void 0 ? void 0 : state.servedCalls.get(serving),
-    L = dispatchId === void 0 ? void 0 : state.dispatches.get(dispatchId),
-    G = state.names.get(environmentId),
-    q = L?.environments.includes(environmentId),
-    Z = w?.callee === environmentId,
-    Se = registration === void 0,
-    ke = Se && q !== !0,
-    we = Se && Z,
-    Ee = ke || we ? void 0 : L,
-    Ae = we ? inheritDispatchFacts(w, environmentId, iY(state.servedCalls, serving, w)) : void 0,
-    Ie = we ? Ae : Ee,
-    Me = Se && iv(Ie?.rootEvent),
-    We = !Se && txe(Ee, G),
-    ze = !Se && Ee !== void 0,
-    lt = Se ? void 0 : Ee?.listedMedia,
-    Je = Se && !we,
-    nt = Je ? latestGestureAt(state.sentPresses, environmentId) : void 0,
-    pt = We ? Ee?.gestureAt : nt,
-    Et = Je ? Pei(state.keptPresses, n.pressing, environmentId) : void 0,
-    yt = Ee === void 0 && !Z && n.rootEvent === void 0,
-    gt = Z ? w : void 0,
-    It = !Se && q === !0 && G !== void 0 && isModelOriginToolCall(L, G) ? L : void 0;
+function buildHookEnvironment({ state }, n, signal) {
+  let { environmentId, dispatchId, registration, serving } = n;
+  let w = serving === undefined ? undefined : state.servedCalls.get(serving);
+  let L = dispatchId === undefined ? undefined : state.dispatches.get(dispatchId);
+  let G = state.names.get(environmentId);
+  let included = L?.environments.includes(environmentId);
+  let Z = w?.callee === environmentId;
+  let Se = registration === undefined;
+  let ke = Se && included !== true;
+  let we = Se && Z;
+  let Ee = ke || we ? undefined : L;
+  let Ae = we
+    ? inheritDispatchFacts(w, environmentId, isCurrentPendingCall(state.servedCalls, serving, w))
+    : undefined;
+  let Ie = we ? Ae : Ee;
+  let Me = Se && isPersonInputEvent(Ie?.rootEvent);
+  let We = !Se && isSamePressOwner(Ee, G);
+  let ze = !Se && Ee !== undefined;
+  let listedMedia = Se ? undefined : Ee?.listedMedia;
+  let Je = Se && !we;
+  let nt = Je ? latestGestureAt(state.sentPresses, environmentId) : undefined;
+  let pt = We ? Ee?.gestureAt : nt;
+  let Et = Je ? pressForEnv(state.keptPresses, n.pressing, environmentId) : undefined;
+  let yt = Ee === undefined && !Z && n.rootEvent === undefined;
+  let gt = Z ? w : undefined;
+  let It = !Se && included === true && G !== undefined && isModelOriginToolCall(L, G) ? L : undefined;
   return {
     plugin: G ?? `environment ${environmentId}`,
-    signal: r,
+    signal,
     origin:
-      G === void 0
+      G === undefined
         ? (L?.origin ?? [])
         : buildCallerChain(G, {
             dispatch: Ee,
-            held: yt ? void 0 : L?.origin,
-            registration: yt ? void 0 : registration,
+            held: yt ? undefined : L?.origin,
+            registration: yt ? undefined : registration,
             served: yt ? collectLentFrames(state.servedCalls.values(), environmentId) : gt,
           }),
     turnHeld: Ie?.turnHeld,
-    rootEvent: (Me ? void 0 : Ie?.rootEvent) ?? n.rootEvent,
+    rootEvent: (Me ? undefined : Ie?.rootEvent) ?? n.rootEvent,
     ownRoot: n.rootEvent,
-    ...(pt !== void 0 && { vouchedPressAt: pt }),
-    ...(Et !== void 0 && { answersPress: Et }),
-    ...(It !== void 0 && { isModelCallServed: !0, takeServedSpawn: dxe(It) }),
-    ...(!Se && Ee?.isPersonInput === !0 && { isPersonInput: !0 }),
-    ...(ze && { judging: Ee }),
-    ...(lt !== void 0 && { listedMedia: lt }),
+    ...(pt !== undefined && {
+      vouchedPressAt: pt,
+    }),
+    ...(Et !== undefined && {
+      answersPress: Et,
+    }),
+    ...(It !== undefined && {
+      isModelCallServed: true,
+      takeServedSpawn: claimSpawnServed(It),
+    }),
+    ...(!Se &&
+      Ee?.isPersonInput === true && {
+        isPersonInput: true,
+      }),
+    ...(ze && {
+      judging: Ee,
+    }),
+    ...(listedMedia !== undefined && {
+      listedMedia,
+    }),
     cwd: Ie?.cwd,
-    isDispatching: we ? Ae?.isDispatching : iY(state.dispatches, dispatchId, Ee),
-    scopeHolder: (q === !0 ? L : void 0) ?? gt,
-    environmentId: environmentId,
-    ...(Z && { callers: w.callers }),
+    isDispatching: we ? Ae?.isDispatching : isCurrentPendingCall(state.dispatches, dispatchId, Ee),
+    scopeHolder: (included === true ? L : undefined) ?? gt,
+    environmentId,
+    ...(Z && {
+      callers: w.callers,
+    }),
   };
 }
 //@ chunk-e6aww6q8.js:3714060-3714110 placement
-function aY(e, n) {
-  return e.cwd === void 0 ? RMi(n) : n();
+/**
+ * 有 cwd 用之，否则调用
+ */
+function cwdFromOrCall(hookEnvironment, n) {
+  return hookEnvironment.cwd === undefined ? runOrExit(n) : n();
 }
 //@ chunk-e6aww6q8.js:3714110-3714167 placement
-function wxe(e) {
+/**
+ * 调用者链
+ */
+function callerChain(e) {
   return [...(e.callers ?? []), e.environmentId];
 }
 //@ chunk-e6aww6q8.js:3714167-3714206 placement
-var koe = (e) => e.slice(0, e.indexOf("."));
+/**
+ * 取命名空间前缀
+ */
+var namespaceOf = (spelling) => spelling.slice(0, spelling.indexOf("."));
+//@ chunk-e6aww6q8.js:3714206-3714476 placement
 /**
  * 若插件的 hooks 模块是在已变化的策略下被评判的，返回拒绝错误。
  */
-//@ chunk-e6aww6q8.js:3714206-3714476 placement
 function policyChangedRefusal(e, n) {
-  let r = wxe(e);
+  let r = callerChain(e);
   return getPluginRegistry().loadedModules.some(
     (loadedModule) => r.includes(loadedModule.environmentId) && !isModuleAdmitted(loadedModule),
   )
     ? new HooksError(
         `${e.plugin}: $.${n} refused: its hooks module was judged under a policy that has since changed, and is off until it is judged under the one in force`,
       )
-    : void 0;
+    : undefined;
 }
+//@ chunk-e6aww6q8.js:3714476-3714912 placement
 /**
  * 被扣留名词的调用遭拒时生成拒绝说明，并对每个插件/名词只记录一次日志。
  */
-//@ chunk-e6aww6q8.js:3714476-3714912 placement
-function withheldCallRefusal(e, { plugin: plugin, spelling: spelling, by: by }) {
-  let h = gos(spelling, by),
-    y = `${plugin}:${koe(spelling)}`;
-  if (!e.refusalsLogged.has(y)) {
-    e.refusalsLogged.add(y);
-    let S = e.knownArgs.get(plugin),
-      w = S ? pluginStorageKey(S) : plugin;
+function withheldCallRefusal(state, { plugin, spelling, by }) {
+  let h = removedByPluginText(spelling, by);
+  let y = `${plugin}:${namespaceOf(spelling)}`;
+  if (!state.refusalsLogged.has(y)) {
+    state.refusalsLogged.add(y);
+    let S = state.knownArgs.get(plugin);
+    let w = S ? pluginStorageKey(S) : plugin;
     logForDebugging(
-      `hooks module ${w}: ${h} (withheld at engine.create; the call reached the host past $'s stub: through a table a step captured from next(e), or through a $ built before the withholding); later calls on $.${koe(spelling)} are refused without a line`,
-      { level: "warn" },
+      `hooks module ${w}: ${h} (withheld at engine.create; the call reached the host past $'s stub: through a table a step captured from next(e), or through a $ built before the withholding); later calls on $.${namespaceOf(spelling)} are refused without a line`,
+      {
+        level: "warn",
+      },
     );
   }
   return h;
 }
 //@ chunk-e6aww6q8.js:3714912-3715003 placement
-function oIn(e, n, r) {
-  for (let [s, h] of e.crashedWithholders) if (s !== n && h.has(r)) return s;
+/**
+ * 找持有该帧的崩溃者
+ */
+function findCrashedWithholder(e, plugin, r) {
+  for (let [s, h] of e.crashedWithholders) if (s !== plugin && h.has(r)) return s;
   return;
 }
 //@ chunk-e6aww6q8.js:3715003-3715272 placement
-function findStagedRefusal(e, n, r) {
-  let { staged: staged, stagedBefore: stagedBefore, building: building } = e,
-    S = n.environmentId !== void 0 && building?.some((w) => w.environmentId === n.environmentId) === !0;
+function findStagedRefusal(state, caller, r) {
+  let { staged, stagedBefore, building } = state;
+  let S =
+    caller.environmentId !== undefined &&
+    building?.some((w) => w.environmentId === caller.environmentId) === true;
   return (
-    (S ? staged?.refuser(n.plugin, r) : void 0) ??
-    (S ? stagedBefore?.refuser(n.plugin, r) : void 0) ??
-    e.withheld.refuser(n.plugin, r) ??
-    oIn(e, n.plugin, r)
+    (S ? staged?.refuser(caller.plugin, r) : undefined) ??
+    (S ? stagedBefore?.refuser(caller.plugin, r) : undefined) ??
+    state.withheld.refuser(caller.plugin, r) ??
+    findCrashedWithholder(state, caller.plugin, r)
   );
 }
+//@ chunk-e6aww6q8.js:3715272-3715572 placement
 /**
  * 检查 hooks 模块的静态扫描是否列出了某 $ 调用；未加载或未列出时返回宿主规则说明。
  */
-//@ chunk-e6aww6q8.js:3715272-3715572 placement
 function scanAllowsCall(e, n) {
   if (!e) return "no hooks module of that name is loaded, so there is no scan to allow it (host rule)";
-  let included = e.calls.includes(n),
-    s = e.calls.length === 0;
+  let included = e.calls.includes(n);
+  let s = e.calls.length === 0;
   return included
-    ? void 0
+    ? undefined
     : "its hooks module does not call it (host rule; the scan lists " +
         (s ? "no calls" : e.calls.map((h) => `$.${h}`).join(", ")) +
         ")";
 }
 //@ chunk-e6aww6q8.js:3715572-3716099 placement
-function refuseUnadmittedApiCall(e, { spelling: spelling, caller: caller, isClock: isClock }) {
-  let h = e.state.knownArgs.get(caller.plugin),
-    y = scanAllowsCall(h?.scan, spelling);
-  if (h === void 0 || y !== void 0) throw new HooksError(`${caller.plugin}: $.${spelling} refused: ${y}`);
-  let S = findStagedRefusal(e.state, caller, koe(spelling));
-  if (S !== void 0)
-    throw new HooksError(withheldCallRefusal(e.state, { plugin: caller.plugin, spelling: spelling, by: S }));
+function refuseUnadmittedApiCall(e, { spelling, caller, isClock }) {
+  let h = e.state.knownArgs.get(caller.plugin);
+  let y = scanAllowsCall(h?.scan, spelling);
+  if (h === undefined || y !== undefined)
+    throw new HooksError(`${caller.plugin}: $.${spelling} refused: ${y}`);
+  let stagedRefusal = findStagedRefusal(e.state, caller, namespaceOf(spelling));
+  if (stagedRefusal !== undefined)
+    throw new HooksError(
+      withheldCallRefusal(e.state, {
+        plugin: caller.plugin,
+        spelling,
+        by: stagedRefusal,
+      }),
+    );
   let w = policyChangedRefusal(caller, spelling);
-  if (w !== void 0) throw w;
-  if (wxe(caller).some((G) => G !== void 0 && e.state.unadmitted.has(G)) && !isClock)
+  if (w !== undefined) throw w;
+  if (callerChain(caller).some((G) => G !== undefined && e.state.unadmitted.has(G)) && !isClock)
     throw new HooksError(
       `${caller.plugin}: $.${spelling} refused: a hooks module behind the call is not admitted (ops wait for the fold and plugin.register)`,
     );
   return h;
 }
 //@ chunk-e6aww6q8.js:3716099-3716275 placement = returnValue (1)
-async function* returnValue_2(e, n) {
-  let r = !1;
+async function* returnValue(e, n) {
+  let r = false;
   try {
     for (;;) {
       let s = n();
-      if (s !== void 0) throw s;
+      if (s !== undefined) throw s;
       let h = await e.next();
-      if (h.done === !0) return ((r = !0), h.value);
+      if (h.done === true) {
+        r = true;
+        return h.value;
+      }
       yield h.value;
     }
   } finally {
     if (!r) await closeGeneratorQuietly(e);
   }
 }
+//@ chunk-e6aww6q8.js:3716275-3716501 placement
 /**
  * 判断正在准入的插件列表是否已过期（环境已不在已加载模块中）。
  */
-//@ chunk-e6aww6q8.js:3716275-3716501 placement
-function staleAdmittingList(e, n) {
-  let r = e.admitting ?? [],
-    index = r.findIndex((S) => S.environmentId === n.environmentId),
-    h = new Set(getPluginRegistry().loadedModules.map((loadedModule) => loadedModule.environmentId));
-  return r.slice(0, index + 1).some((S) => !h.has(S.environmentId)) ? e.admitting : void 0;
+function staleAdmittingList(state, n) {
+  let admitting = state.admitting ?? [];
+  let index = admitting.findIndex((S) => S.environmentId === n.environmentId);
+  let h = new Set(getPluginRegistry().loadedModules.map((loadedModule) => loadedModule.environmentId));
+  return admitting.slice(0, index + 1).some((S) => !h.has(S.environmentId)) ? state.admitting : undefined;
 }
 //@ chunk-e6aww6q8.js:3716501-3716552 placement = getErrnoPath (0.778)
 function getErrnoPath(e) {
-  return { field: "path", at: e.cwd ?? getCwd() };
+  return {
+    field: "path",
+    at: e.cwd ?? getCwd(),
+  };
 }
 //@ chunk-e6aww6q8.js:3716552-3716604 placement
-var GN = (e, n) => n.admitted ?? e.knownArgs.get(n.plugin);
+/**
+ * 取已接纳的参数
+ */
+var admittedArgs = (e, n) => n.admitted ?? e.knownArgs.get(n.plugin);
+//@ chunk-e6aww6q8.js:3716604-3716716 placement
 /**
  * 取已加载插件的参数，插件未加载时抛 HooksError。
  */
-//@ chunk-e6aww6q8.js:3716604-3716716 placement
 function requireLoadedPluginArgs(e, n, r) {
-  let s = GN(e, n);
-  if (s === void 0) throw new HooksError(`${n.plugin}: ${r}: not a loaded plugin`);
+  let s = admittedArgs(e, n);
+  if (s === undefined) throw new HooksError(`${n.plugin}: ${r}: not a loaded plugin`);
   return s;
 }
 //@ chunk-e6aww6q8.js:3717961-3718001 placement
-var lFr = () => Promise.resolve(Date.now());
+/**
+ * 异步当前时间
+ */
+var nowAsync = () => Promise.resolve(Date.now());
 //@ chunk-e6aww6q8.js:3718001-3718058 placement
-var uFr = (e, n) => sleep(e.ms, n, { ...(n && { abortError: () => Teo(n) }) });
+/**
+ * 带信号的可中止睡眠
+ */
+var sleepWithSignal = (e, signal) =>
+  sleep(e.ms, signal, {
+    ...(signal && {
+      abortError: () => asHooksError(signal),
+    }),
+  });
 //@ chunk-e6aww6q8.js:3718058-3718180 placement
 function checkSleepArgs(e) {
-  let n = e?.ms;
-  return Aeo(n) ? void 0 : `takes { ms }, a non-negative number of milliseconds (got ${String(n)})`;
+  let ms = e?.ms;
+  return isFiniteNonNegativeNumber(ms)
+    ? undefined
+    : `takes { ms }, a non-negative number of milliseconds (got ${String(ms)})`;
 }
 //@ chunk-e6aww6q8.js:3718180-3718227 placement
-var xxe = { check: checkSleepArgs, run: (e, n) => uFr(e, n.signal) };
+/**
+ * clock 方法的 check/run
+ */
+var CLOCK_METHOD = {
+  check: checkSleepArgs,
+  run: (e, n) => sleepWithSignal(e, n.signal),
+};
+//@ chunk-e6aww6q8.js:3718227-3718367 placement
 /**
  * 加载 /config 行句柄（按需导入），供插件读取配置行。
  */
-//@ chunk-e6aww6q8.js:3718227-3718367 placement
 async function loadConfigRowHandles(e, n) {
-  let r = requireBoundSession(e, n),
-    { configRowHandles: configRowHandles } = await import("./chunk-7qydycm2.js");
+  let r = requireBoundSession(e, n);
+  let { configRowHandles } = await import("./chunk-7qydycm2.js");
   return configRowHandles(r.toolContext(new AbortController()));
 }
 //@ chunk-e6aww6q8.js:3720668-3720787 placement
@@ -493,121 +612,191 @@ var WITHHELD_RESULT_SUFFIXES = {
   started: " started, and a plugin withheld its result",
   ran: " ran, and a plugin withheld its result",
 };
+//@ chunk-e6aww6q8.js:3720787-3721548 placement
 /**
  * 对流式 $ 调用经过钩子链（可在钩子重启时等待），最底层调用宿主实现；被拒时按进展状态给出错误。
  */
-//@ chunk-e6aww6q8.js:3720787-3721548 placement
-function streamHookedApiCall({ event: event, args: args, caller: caller, bottom: bottom }) {
-  let h = streamMembersFor(event, caller.origin),
-    y = caller.signal ?? new AbortController().signal;
+function streamHookedApiCall({ event, args, caller, bottom }) {
+  let h = streamMembersFor(event, caller.origin);
+  let signal = caller.signal ?? new AbortController().signal;
   if (h.length === 0 && bottom) return bottom.stream(args, caller);
-  let S = awaitHooksRespawn({ event: event, e: args, origin: caller.origin }, caller.signal);
-  if (S !== void 0)
-    return AIn(S, () => streamHookedApiCall({ event: event, args: args, caller: caller, bottom: bottom }));
-  let w = "nothing",
-    L = () => void (w = "started");
-  function G(Se) {
-    return ((w = "ran"), Se);
-  }
-  let q =
-      bottom &&
-      ((Se, ke) => {
-        let we = bottom.check?.(Se, caller);
-        if (we !== void 0) throw new HooksError(`${event}: ${we} (host check)`);
-        let stream = bottom.stream(Se, { ...caller, signal: ke });
-        return (async function* () {
-          return { value: G(yield* forwardGeneratorWithErrorHook(stream, L)) };
-        })();
-      }),
-    Z = reportStreamChainFailure({
+  let S = awaitHooksRespawn(
+    {
+      event,
       e: args,
-      handlers: h,
-      site: Nae(event),
-      signal: y,
-      origin: hookOriginFromStack(caller.origin),
-      bottom: q,
+      origin: caller.origin,
+    },
+    caller.signal,
+  );
+  if (S !== undefined)
+    return afterThenYield(S, () =>
+      streamHookedApiCall({
+        event,
+        args,
+        caller,
+        bottom,
+      }),
+    );
+  let w = "nothing";
+  let L = () => void (w = "started");
+  function G(Se) {
+    w = "ran";
+    return Se;
+  }
+  let bottom_2 =
+    bottom &&
+    ((Se, signal) => {
+      let we = bottom.check?.(Se, caller);
+      if (we !== undefined) throw new HooksError(`${event}: ${we} (host check)`);
+      let Ee = bottom.stream(Se, {
+        ...caller,
+        signal,
+      });
+      return (async function* () {
+        return {
+          value: G(yield* forwardGeneratorWithErrorHook(Ee, L)),
+        };
+      })();
     });
+  let Z = reportStreamChainFailure({
+    e: args,
+    handlers: h,
+    site: envSiteRuleFor(event),
+    signal,
+    origin: hookOriginFromStack(caller.origin),
+    bottom: bottom_2,
+  });
   return (async function* () {
     let Se = yield* forwardGeneratorWithErrorHook(Z);
-    if (Se.deny !== void 0)
+    if (Se.deny !== undefined)
       throw new HooksError(`${caller.plugin}: $.${event}${WITHHELD_RESULT_SUFFIXES[w]}: ${Se.deny}`);
     return Se.value;
   })();
 }
+//@ chunk-e6aww6q8.js:4008720-4008893 placement
 /**
  * 包装 $.agent.spawn：检查输入暂扣，服务模型发起的派生标记 servesModel。
  */
-//@ chunk-e6aww6q8.js:4008720-4008893 placement
 var wrapAgentSpawnOp = (e) => (n, r) => {
-  let s = r.takeServedSpawn?.() === !0,
-    h = s ? void 0 : submitHoldRefusal(r, "$.agent.spawn");
-  if (h === void 0) return e(n, s ? { ...r, servesModel: !0 } : r);
-  return Promise.resolve({ deny: h });
+  let s = r.takeServedSpawn?.() === true;
+  let h = s ? undefined : submitHoldRefusal(r, "$.agent.spawn");
+  if (h === undefined)
+    return e(
+      n,
+      s
+        ? {
+            ...r,
+            servesModel: true,
+          }
+        : r,
+    );
+  return Promise.resolve({
+    deny: h,
+  });
 };
+//@ chunk-e6aww6q8.js:4008893-4009099 placement
 /**
  * $.http.fetch 表项：参数为 URL，以插件身份调用 httpFetchForPlugin。
  */
-//@ chunk-e6aww6q8.js:4008893-4009099 placement
 var HTTP_FETCH_API = (e) => ({
-  check: (n) => (typeof n?.url === "string" ? void 0 : "takes a URL"),
+  check: (n) => (typeof n?.url === "string" ? undefined : "takes a URL"),
   run: async (n, r) => {
-    let { pluginName: pluginName, pluginStorageId: pluginStorageId } = requireLoadedPluginArgs(
-      e,
-      r,
-      "http.fetch",
+    let { pluginName, pluginStorageId } = requireLoadedPluginArgs(e, r, "http.fetch");
+    return httpFetchForPlugin(
+      n,
+      {
+        pluginName,
+        pluginStorageId,
+      },
+      r.signal,
     );
-    return httpFetchForPlugin(n, { pluginName: pluginName, pluginStorageId: pluginStorageId }, r.signal);
   },
 });
 //@ chunk-e6aww6q8.js:4009099-4009198 placement
-var bMe = (e) => (n, r) =>
-  e(n, r.plugin, { signal: r.signal, cwd: r.cwd, pluginId: r.admitted?.pluginStorageId });
+/**
+ * 绑定插件调用上下文
+ */
+var bindPluginCall = (e) => (n, r) =>
+  e(n, r.plugin, {
+    signal: r.signal,
+    cwd: r.cwd,
+    pluginId: r.admitted?.pluginStorageId,
+  });
 //@ chunk-e6aww6q8.js:4009198-4009271 placement
-function aHn(e, n) {
-  let r = GN(e, n);
-  return r !== void 0 && isOfficialMarketplacePlugin(r.pluginStorageId);
+/**
+ * 是否官方市场插件
+ */
+function isOfficialMarketplace(e, n) {
+  let r = admittedArgs(e, n);
+  return r !== undefined && isOfficialMarketplacePlugin(r.pluginStorageId);
 }
 //@ chunk-e6aww6q8.js:4009271-4009322 placement
-var lHn = (e) => pluginsMatchingEvent("prompt.read", {}).some((n) => n !== e);
+/**
+ * 是否有其他 prompt.read 插件
+ */
+var hasOtherPromptRead = (plugin) => pluginsMatchingEvent("prompt.read", {}).some((n) => n !== plugin);
 //@ chunk-e6aww6q8.js:4009322-4009374 placement
-var Rat = (e, n) => (typeof e !== "string" || e === "" ? n : void 0);
+/**
+ * 插件名或兜底
+ */
+var pluginNameOrFallback = (e, n) => (typeof e !== "string" || e === "" ? n : undefined);
+//@ chunk-e6aww6q8.js:4009374-4009489 placement
 /**
  * 生成插件遥测用的名字字段（按市场判断是否可公开插件名）。
  */
-//@ chunk-e6aww6q8.js:4009374-4009489 placement
-function telemetryNamesForPlugin({ plugin: plugin, admitted: admitted }) {
-  let { marketplace: marketplace } = parsePluginIdentifier_2(admitted?.pluginStorageId ?? plugin);
-  return xYr(plugin, marketplace, mayLogPluginName(getTelemetryPluginScope(plugin, marketplace, af())));
+function telemetryNamesForPlugin({ plugin, admitted }) {
+  let { marketplace } = parsePluginIdentifier_2(admitted?.pluginStorageId ?? plugin);
+  return pluginNameFields(
+    plugin,
+    marketplace,
+    mayLogPluginName(getTelemetryPluginScope(plugin, marketplace, policyEnabledPluginNameSet())),
+  );
 }
 //@ chunk-e6aww6q8.js:4009489-4009573 placement
-var Cat = (e, n) => [
+/**
+ * 遥测调用参数
+ */
+var telemetryCallArgs = (e, querySource) => [
   e.plugin,
-  { querySource: n, names: telemetryNamesForPlugin(e), hookOrigin: e.origin },
+  {
+    querySource,
+    names: telemetryNamesForPlugin(e),
+    hookOrigin: e.origin,
+  },
   e.signal,
 ];
+//@ chunk-e6aww6q8.js:4009573-4010181 placement
 /**
  * 插件 $.prompt.compose：为给定事实组装系统提示，本进程不组装时拒绝。
  */
-//@ chunk-e6aww6q8.js:4009573-4010181 placement
 var promptComposeForPlugin = {
-  check: (e) => (isPlainObject_4(e) ? void 0 : "takes the facts to compose for"),
+  check: (e) => (isPlainObject_5(e) ? undefined : "takes the facts to compose for"),
   run: async (e, n) => {
-    let { site: site } = LX,
-      s = promptComposer(),
-      h = requireBoundSession(n.plugin, "$.prompt.compose"),
-      y = await s?.facts(h.tools(), h.model());
-    if (y === void 0)
+    let { site } = PROMPT_COMPOSE_EVENT;
+    let s = promptComposer();
+    let h = requireBoundSession(n.plugin, "$.prompt.compose");
+    let y = await s?.facts(h.tools(), h.model());
+    if (y === undefined)
       throw new HooksError(`${n.plugin}: $.prompt.compose: this process composes no system prompt`);
-    let S = { ...y, surfaces: attachedSurfaces(), ...e },
-      w = site.checkArgument?.(S, S);
-    if (w !== void 0) throw new HooksError(`${n.plugin}: $.prompt.compose: ${w}`);
-    let L = { keys: site.pinnedKeys ?? [], e: S },
-      G = hookMembersFor("prompt.compose", n.origin, { pinned: L });
-    return Ayn(n.scopeHolder?.scope, () =>
+    let S = {
+      ...y,
+      surfaces: attachedSurfaces(),
+      ...e,
+    };
+    let w = site.checkArgument?.(S, S);
+    if (w !== undefined) throw new HooksError(`${n.plugin}: $.prompt.compose: ${w}`);
+    let pinned = {
+      keys: site.pinnedKeys ?? [],
+      e: S,
+    };
+    let handlers = hookMembersFor("prompt.compose", n.origin, {
+      pinned,
+    });
+    return runInScope(n.scopeHolder?.scope, () =>
       reportChainFailure({
         e: S,
-        handlers: G,
-        site: site,
+        handlers,
+        site,
         signal: n.signal,
         origin: hookOriginFromStack(n.origin),
         bottom: (q) => composeDetachedSections(q, n.origin),
@@ -616,42 +805,59 @@ var promptComposeForPlugin = {
   },
 };
 //@ chunk-e6aww6q8.js:4010181-4010254 placement
-var Aat = (e, n) => e.listedMedia?.includes(n) === !0 && e.isDispatching?.() === !0;
+/**
+ * 是否在分发中列出该附件
+ */
+var isListedMediaDispatching = (e, id) =>
+  e.listedMedia?.includes(id) === true && e.isDispatching?.() === true;
+//@ chunk-e6aww6q8.js:4010254-4010632 placement
 /**
  * $.prompt.attachment.read 表项：参数 {id, offset?}，只能读当前 prompt.submit 列出的附件。
  */
-//@ chunk-e6aww6q8.js:4010254-4010632 placement
 var ATTACHMENT_READ_API = {
   check: (e) => {
-    let n = e?.offset,
-      r = typeof e?.id === "string" && e.id !== "",
-      s = n === void 0 || (typeof n === "number" && Number.isSafeInteger(n) && n >= 0);
+    let offset = e?.offset;
+    let r = typeof e?.id === "string" && e.id !== "";
+    let s =
+      offset === undefined || (typeof offset === "number" && Number.isSafeInteger(offset) && offset >= 0);
     return !r
       ? "takes { id } (an attachment's id, from the prompt.submit in flight)"
       : s
-        ? void 0
-        : `takes offset, a whole number of bytes from 0 (got ${String(n)})`;
+        ? undefined
+        : `takes offset, a whole number of bytes from 0 (got ${String(offset)})`;
   },
   run: async (e, n) => {
-    let r = Aat(n, e.id) ? await lYr.read(e) : freeze_26;
-    return Aat(n, e.id) ? r : freeze_26;
+    let r = isListedMediaDispatching(n, e.id) ? await mediaHoldStore.read(e) : aYr;
+    return isListedMediaDispatching(n, e.id) ? r : aYr;
   },
 };
 //@ chunk-e6aww6q8.js:4010632-4010672 placement
-var TMe = { run: async (e, n) => readPromptBox(n.plugin) };
+/**
+ * 读提示框的接口实现
+ */
+var PROMPT_BOX_READ = {
+  run: async (e, n) => readPromptBox(n.plugin),
+};
 //@ chunk-e6aww6q8.js:4010672-4010724 placement
-var vMe = "submit from a later event (turn.complete)";
+/**
+ * 在后续事件提交的说明
+ */
+var LATER_EVENT_HINT = "submit from a later event (turn.complete)";
 //@ chunk-e6aww6q8.js:4010724-4010815 placement
-var EMe = (e, n) => `called from a ${e} hook, it would wait on the turn this hook ${n}; ${vMe}`;
+/**
+ * 会等待本轮结束的说明
+ */
+var waitingOnTurnText = (e, n) =>
+  `called from a ${e} hook, it would wait on the turn this hook ${n}; ${LATER_EVENT_HINT}`;
 //@ chunk-e6aww6q8.js:4010815-4010981 placement
 function classicHookWaitHazard(e) {
-  return e !== void 0 &&
+  return e !== undefined &&
     e.startsWith("classic.") &&
     e !== "classic.SessionStart" &&
     e !== "classic.Setup" &&
     e !== "classic.SessionEnd"
-    ? EMe(e, "may be holding")
-    : void 0;
+    ? waitingOnTurnText(e, "may be holding")
+    : undefined;
 }
 //@ chunk-e6aww6q8.js:4010981-4011221 placement
 var TURN_HOLDING_EVENTS = [
@@ -670,177 +876,235 @@ var TURN_HOLDING_EVENTS = [
   "config.describe",
   "config.set",
 ];
+//@ chunk-e6aww6q8.js:4011221-4011456 placement
 /**
  * 在会等待当前回合的钩子（prompt.submit、tool.call 等）里调用 submit 时返回说明，提示改用后续事件。
  */
-//@ chunk-e6aww6q8.js:4011221-4011456 placement
 function submitWaitHazard(e) {
   if (e === "prompt.submit")
     return (
       "called from a prompt.submit hook, it would wait on the turn this hook is holding; answer { text } or next(e) instead, or " +
-      vMe
+      LATER_EVENT_HINT
     );
-  return e !== void 0 && TURN_HOLDING_EVENTS.includes(e) ? EMe(e, "is holding") : classicHookWaitHazard(e);
+  return e !== undefined && TURN_HOLDING_EVENTS.includes(e)
+    ? waitingOnTurnText(e, "is holding")
+    : classicHookWaitHazard(e);
 }
+//@ chunk-e6aww6q8.js:4011456-4011804 placement
 /**
  * 把输入框内容交给调用 $.prompt.read 的插件；没有插件调用时直接返回 undefined。
  */
-//@ chunk-e6aww6q8.js:4011456-4011804 placement
 function readPromptBoxForPlugin(e, n, r) {
   let s = scanAllowsCall(n, "prompt.read");
-  if (s !== void 0)
-    return (
-      logForDebugging(`${r} (${e.plugin}): the box goes to plugins that call $.prompt.read; none (${s})`),
-      Promise.resolve(void 0)
-    );
+  if (s !== undefined) {
+    logForDebugging(`${r} (${e.plugin}): the box goes to plugins that call $.prompt.read; none (${s})`);
+    return Promise.resolve(undefined);
+  }
   return judgeHookInput({
     event: "prompt.read",
     args: {},
     caller: e,
-    ...(hZr() === void 0 && { bottom: TMe }),
+    ...(currentDispatch() === undefined && {
+      bottom: PROMPT_BOX_READ,
+    }),
   })
     .then(normalizePromptBox)
-    .catch((h) => {
-      logForDebugging(`${r} (${e.plugin}): the box is not answered: ` + errorMessage(h));
+    .catch((error) => {
+      logForDebugging(`${r} (${e.plugin}): the box is not answered: ` + errorMessage(error));
       return;
     });
 }
 //@ chunk-e6aww6q8.js:4011804-4011859 placement
-async function d2r(e, n, r) {
-  return (await readPromptBoxForPlugin(e, n, r)) ?? freeze_19;
+/**
+ * 取插件的提示框
+ */
+async function promptBoxForPlugin(e, scan, r) {
+  return (await readPromptBoxForPlugin(e, scan, r)) ?? aEt;
 }
 //@ chunk-e6aww6q8.js:4011859-4012121 placement
-function buildLentCallAsk({ lent: lent, judging: judging, signal: signal }, s, h) {
-  let at = lent.at(-1);
-  return judging !== void 0 && at !== void 0
+function buildLentCallAsk({ lent, judging, signal }, callee, call) {
+  let last = lent.at(-1);
+  return judging !== undefined && last !== undefined
     ? {
-        maker: Ktr(at.frame),
-        isAgain: (judging.origin ?? []).some((w) => Ktr(w) === Ktr(at.frame)),
-        judging: judging,
-        frame: at.frame,
+        maker: originLabel(last.frame),
+        isAgain: (judging.origin ?? []).some((w) => originLabel(w) === originLabel(last.frame)),
+        judging,
+        frame: last.frame,
         chain: [],
-        isRepeat: !1,
-        callee: s,
-        call: h,
-        ...(signal !== void 0 && { signal: signal }),
+        isRepeat: false,
+        callee,
+        call,
+        ...(signal !== undefined && {
+          signal,
+        }),
       }
-    : void 0;
+    : undefined;
 }
 //@ chunk-e6aww6q8.js:4012121-4012206 placement
-function SHn(e, n, r) {
-  return { ...e, chain: n.map((s) => s.asked.frame), isRepeat: r.length > 0 };
+/**
+ * 附上提问链与是否重复
+ */
+function withAskChain(e, callsInChain, identicalOpenCalls) {
+  return {
+    ...e,
+    chain: callsInChain.map((s) => s.asked.frame),
+    isRepeat: identicalOpenCalls.length > 0,
+  };
 }
 //@ chunk-e6aww6q8.js:4012206-4012457 placement
-function openCallsInChain({ sentCalls: sentCalls, chainsAbove: chainsAbove }, r) {
-  let s = r.judging.origin ?? [],
-    h = new Set(
-      [...s, ...(lentModulesByChain().get(s) ?? []).flatMap((y) => y.alike ?? [])]
-        .filter((y) => typeof y === "object")
-        .flatMap((y) => [y, ...(chainsAbove.get(y) ?? [])]),
-    );
-  return [...sentCalls].filter((y) => h.has(y.asked.frame));
+function openCallsInChain({ sentCalls, chainsAbove }, r) {
+  let origin = r.judging.origin ?? [];
+  let h = new Set(
+    [...origin, ...(lentModulesByChain().get(origin) ?? []).flatMap((y) => y.alike ?? [])]
+      .filter((y) => typeof y === "object")
+      .flatMap((y) => [y, ...(chainsAbove.get(y) ?? [])]),
+  );
+  return [...sentCalls].filter((sentCall) => h.has(sentCall.asked.frame));
 }
 //@ chunk-e6aww6q8.js:4012457-4012715 placement
-function sendTrackedCall({ sentCalls: sentCalls, chainsAbove: chainsAbove }, r, s) {
-  let promise = new Promise((S) => {
-      S(s());
-    }),
-    y = () => void sentCalls.delete(r);
-  if ((sentCalls.add(r), typeof r.asked.frame === "object")) chainsAbove.set(r.asked.frame, r.asked.chain);
-  return (promise.then(r.waited.resolve, r.waited.reject), r.waited.promise.then(y, y), promise);
+function sendTrackedCall({ sentCalls, chainsAbove }, r, send) {
+  let promise = new Promise((resolve) => {
+    resolve(send());
+  });
+  let y = () => void sentCalls.delete(r);
+  sentCalls.add(r);
+  if (typeof r.asked.frame === "object") chainsAbove.set(r.asked.frame, r.asked.chain);
+  promise.then(r.waited.resolve, r.waited.reject);
+  r.waited.promise.then(y, y);
+  return promise;
 }
+//@ chunk-e6aww6q8.js:4012715-4013184 placement
 /**
  * 把调用排到已打开的相同调用之后，等其完成或被要求时再继续。
  */
-//@ chunk-e6aww6q8.js:4012715-4013184 placement
 function queueBehindOpenCall(e, n, r) {
-  let withResolvers = Promise.withResolvers();
-  return Promise.race([n.waited.promise, withResolvers.promise])
-    .finally(forwardAbort(r.asked.signal, { abort: withResolvers.reject }))
+  let deferred = Promise.withResolvers();
+  return Promise.race([n.waited.promise, deferred.promise])
+    .finally(
+      forwardAbort(r.asked.signal, {
+        abort: deferred.reject,
+      }),
+    )
     .then(
-      () => (
-        r.asked.signal?.throwIfAborted(),
-        sendTrackedCall(e, { asked: r.asked, waited: Promise.withResolvers() }, r.send)
-      ),
-      (h) => {
-        if ((h instanceof Jeo && h.asked === apiMethodLabel(n.asked.call)) || r.asked.signal?.aborted === !0)
-          throw h;
-        if (n.heir !== void 0) return queueBehindOpenCall(e, n.heir, r);
-        return (
-          (n.heir = { asked: r.asked, waited: Promise.withResolvers() }),
-          sendTrackedCall(e, n.heir, r.send)
+      () => {
+        r.asked.signal?.throwIfAborted();
+        return sendTrackedCall(
+          e,
+          {
+            asked: r.asked,
+            waited: Promise.withResolvers(),
+          },
+          r.send,
         );
+      },
+      (error) => {
+        if (
+          (error instanceof AskRefusedError && error.asked === apiMethodLabel(n.asked.call)) ||
+          r.asked.signal?.aborted === true
+        )
+          throw error;
+        if (n.heir !== undefined) return queueBehindOpenCall(e, n.heir, r);
+        n.heir = {
+          asked: r.asked,
+          waited: Promise.withResolvers(),
+        };
+        return sendTrackedCall(e, n.heir, r.send);
       },
     );
 }
 //@ chunk-e6aww6q8.js:4013227-4013322 placement
-function vHn(e, n) {
+/**
+ * 深比较（RangeError 当不等）
+ */
+function deepEqualSafe(e, n) {
   try {
-    return isDeepStrictEqual_14(e, n);
+    return isDeepStrictEqual(e, n);
   } catch (error) {
     if (!(error instanceof RangeError)) throw error;
-    return !1;
+    return false;
   }
 }
 //@ chunk-e6aww6q8.js:4013365-4013458 placement
-var Pat = (e) => Reflect.ownKeys(e).filter((n) => Object.prototype.propertyIsEnumerable.call(e, n));
+/**
+ * 可枚举自有键
+ */
+var enumerableOwnKeys = (e) =>
+  Reflect.ownKeys(e).filter((n) => Object.prototype.propertyIsEnumerable.call(e, n));
+//@ chunk-e6aww6q8.js:4013458-4014051 placement
 /**
  * 深比较中的一步：比较一对值并记录已比较过的对象，用于判断两次调用是否相同。
  */
-//@ chunk-e6aww6q8.js:4013458-4014051 placement
 function compareStep([e, n], r, s) {
-  if (!(typeof e === "object" && e !== null && typeof n === "object" && n !== null))
-    return ((r.isSame = Object.is(e, n)), r.isSame ? s : void 0);
+  if (!(typeof e === "object" && e !== null && typeof n === "object" && n !== null)) {
+    r.isSame = Object.is(e, n);
+    return r.isSame ? s : undefined;
+  }
   if (e === n || r.met.get(e) === n) return s;
   if (!(
     ((Array.isArray(e) && Array.isArray(n) && e.length === n.length) ||
       (isPlainDataObject(e) && isPlainDataObject(n))) &&
     Object.getPrototypeOf(e) === Object.getPrototypeOf(n)
-  ))
-    return ((r.isSame = vHn(e, n)), r.isSame ? s : void 0);
-  let w = Pat(e),
-    L = w.length === Pat(n).length && w.every((q) => Object.prototype.propertyIsEnumerable.call(n, q)),
-    G = (s?.depth ?? 0) + 1;
+  )) {
+    r.isSame = deepEqualSafe(e, n);
+    return r.isSame ? s : undefined;
+  }
+  let w = enumerableOwnKeys(e);
+  let L =
+    w.length === enumerableOwnKeys(n).length &&
+    w.every((q) => Object.prototype.propertyIsEnumerable.call(n, q));
+  let G = (s?.depth ?? 0) + 1;
   if (!L) {
-    r.isSame = !1;
+    r.isSame = false;
     return;
   }
   if (G > MAX_NESTING_DEPTH) throw new HooksError(NESTING_TOO_DEEP_MESSAGE);
-  return (r.met.set(e, n), { first: e, second: n, keys: w, at: 0, depth: G, below: s });
+  r.met.set(e, n);
+  return {
+    first: e,
+    second: n,
+    keys: w,
+    at: 0,
+    depth: G,
+    below: s,
+  };
 }
 //@ chunk-e6aww6q8.js:4014051-4014288 placement
 function iterativeDeepEqual(e, n) {
-  let r = { met: new Map(), isSame: !0 },
-    s = compareStep([e, n], r, void 0);
-  while (s !== void 0) {
-    let { keys: keys, at: at } = s;
+  let r = {
+    met: new Map(),
+    isSame: true,
+  };
+  let s = compareStep([e, n], r, undefined);
+  while (s !== undefined) {
+    let { keys, at } = s;
     if (at < keys.length) {
       let S = keys[at] ?? "";
-      ((s.at = at + 1), (s = compareStep([Reflect.get(s.first, S), Reflect.get(s.second, S)], r, s)));
+      s.at = at + 1;
+      s = compareStep([Reflect.get(s.first, S), Reflect.get(s.second, S)], r, s);
     } else s = s.below;
   }
   return r.isSame;
 }
+//@ chunk-e6aww6q8.js:4014288-4014390 placement
 /**
  * 深比较两值：先用 isDeepStrictEqual，栈溢出（RangeError）时改用迭代比较。
  */
-//@ chunk-e6aww6q8.js:4014288-4014390 placement
 function safeDeepEqual(e, n) {
   try {
-    return isDeepStrictEqual_15(e, n);
+    return isDeepStrictEqual(e, n);
   } catch (error) {
     if (!(error instanceof RangeError)) throw error;
     return iterativeDeepEqual(e, n);
   }
 }
+//@ chunk-e6aww6q8.js:4014390-4014807 placement
 /**
  * 找出与当前调用完全相同（同发起者、被调者与事件）的仍在进行中的调用。
  */
-//@ chunk-e6aww6q8.js:4014390-4014807 placement
-function findIdenticalOpenCalls(e, n) {
+function findIdenticalOpenCalls(callsInChain, n) {
   try {
-    return e.filter(
-      ({ asked: asked }) =>
+    return callsInChain.filter(
+      ({ asked }) =>
         n.isAgain &&
         asked.maker === n.maker &&
         asked.callee === n.callee &&
@@ -852,51 +1116,61 @@ function findIdenticalOpenCalls(e, n) {
         safeDeepEqual(asked.judging.payload, n.judging.payload),
     );
   } catch (error) {
-    return (
-      logForDebugging(
-        `${apiMethodLabel(n.call)}: ${n.maker}'s open calls could not be compared (${errorMessage(error)}); sent at once`,
-        { level: "error" },
-      ),
-      []
+    logForDebugging(
+      `${apiMethodLabel(n.call)}: ${n.maker}'s open calls could not be compared (${errorMessage(error)}); sent at once`,
+      {
+        level: "error",
+      },
     );
+    return [];
   }
 }
+//@ chunk-e6aww6q8.js:4014807-4015204 placement
 /**
  * 同一插件为同一事件第三次发出相同的开放调用时，让它排在第二次后面（第二次无答复则一起结束）。
  */
-//@ chunk-e6aww6q8.js:4014807-4015204 placement
-function dedupeRepeatedCall(e, n, r) {
-  let s = openCallsInChain(e, n),
-    h = findIdenticalOpenCalls(s, n),
-    found = h.slice(1).find((w) => w.asked.isRepeat),
-    S = SHn(n, s, h);
-  if (found === void 0) return sendTrackedCall(e, { asked: S, waited: Promise.withResolvers() }, r);
-  return (
-    logForDebugging(
-      `${apiMethodLabel(n.call)}: ${n.maker} makes the same call again for the same ${n.judging.event}; the third identical open call waits behind the second, and ends with it if the second goes unanswered`,
-    ),
-    queueBehindOpenCall(e, found, { asked: S, send: r })
+function dedupeRepeatedCall(e, lentCallAsk, r) {
+  let callsInChain = openCallsInChain(e, lentCallAsk);
+  let identicalOpenCalls = findIdenticalOpenCalls(callsInChain, lentCallAsk);
+  let found = identicalOpenCalls.slice(1).find((identicalOpenCall) => identicalOpenCall.asked.isRepeat);
+  let asked = withAskChain(lentCallAsk, callsInChain, identicalOpenCalls);
+  if (found === undefined)
+    return sendTrackedCall(
+      e,
+      {
+        asked,
+        waited: Promise.withResolvers(),
+      },
+      r,
+    );
+  logForDebugging(
+    `${apiMethodLabel(lentCallAsk.call)}: ${lentCallAsk.maker} makes the same call again for the same ${lentCallAsk.judging.event}; the third identical open call waits behind the second, and ends with it if the second goes unanswered`,
   );
+  return queueBehindOpenCall(e, found, {
+    asked,
+    send: r,
+  });
 }
+//@ chunk-e6aww6q8.js:4015204-4016330 placement
 /**
  * 说明某个 $ 接口当前不可用的原因：提供它的插件未加载、尚未被 plugin.register 接纳、或策略已变。
  */
-//@ chunk-e6aww6q8.js:4015204-4016330 placement
-function explainApiNotAvailable(
-  e,
-  { caller: caller, ...r },
-  { owner: owner, name: h, method: method, args: args },
-) {
-  let w = apiMethodLabel({ name: h, method: method }),
-    L = e.building ?? [],
-    at = r.callers.at(-1),
-    any = L.some((ze) => ze.environmentId === at),
-    loadedModules = getPluginRegistry().loadedModules,
-    found = (any ? [...L, ...loadedModules] : [...loadedModules, ...L]).find((ze) => ze.name === owner);
-  if (found === void 0)
+function explainApiNotAvailable(e, { caller, ...r }, { owner, name: h, method, args }) {
+  let w = apiMethodLabel({
+    name: h,
+    method,
+  });
+  let building = e.building ?? [];
+  let last = r.callers.at(-1);
+  let any = building.some((ze) => ze.environmentId === last);
+  let loadedModules = getPluginRegistry().loadedModules;
+  let found = (any ? [...building, ...loadedModules] : [...loadedModules, ...building]).find(
+    (ze) => ze.name === owner,
+  );
+  if (found === undefined)
     return Promise.reject(new HooksError(`${w}: plugin ${owner}, which provides $.${h}, is not loaded`));
-  let found_2 = loadedModules.find((ze) => ze.environmentId === at);
-  if (!isModuleAdmitted(found) || (found_2 !== void 0 && !isModuleAdmitted(found_2)))
+  let found_2 = loadedModules.find((loadedModule) => loadedModule.environmentId === last);
+  if (!isModuleAdmitted(found) || (found_2 !== undefined && !isModuleAdmitted(found_2)))
     return Promise.reject(
       new HooksError(
         `$.${h}.${method}: plugin ${owner}, which provides $.${h}, or its caller ${caller} was judged under a policy that has since changed, and is off until judged under the one in force`,
@@ -908,159 +1182,186 @@ function explainApiNotAvailable(
         `${w}: plugin ${owner}, which provides $.${h}, is not admitted yet (plugin.register decides it after its caller)`,
       ),
     );
-  let startTime = performance.now(),
-    Ae = { owner: owner, name: h, method: method, args: args },
-    Ie = () => found.callInterface(Ae, r),
-    Me = buildLentCallAsk(r, found.environmentId, Ae);
-  return (Me !== void 0 ? dedupeRepeatedCall(e, Me, Ie) : Ie()).then(
-    (ze) => (
+  let startTime = performance.now();
+  let Ae = {
+    owner,
+    name: h,
+    method,
+    args,
+  };
+  let Ie = () => found.callInterface(Ae, r);
+  let lentCallAsk = buildLentCallAsk(r, found.environmentId, Ae);
+  return (lentCallAsk !== undefined ? dedupeRepeatedCall(e, lentCallAsk, Ie) : Ie()).then(
+    (ze) => {
       logForDebugging(
         `${w} (${caller} -> ${owner}) answered in ${(performance.now() - startTime).toFixed(1)}ms`,
-      ),
-      ze
-    ),
-    (ze) => {
-      throw (
-        logForDebugging(`${w} (${caller} -> ${owner}) failed: ${errorMessage(ze)}`, { level: "error" }),
-        ze
       );
+      return ze;
+    },
+    (error) => {
+      logForDebugging(`${w} (${caller} -> ${owner}) failed: ${errorMessage(error)}`, {
+        level: "error",
+      });
+      throw error;
     },
   );
 }
 //@ chunk-e6aww6q8.js:4016330-4016365 placement
-var MHn = { run: (e, n) => sessionAuthorizeForPlugin(n.plugin) };
+/**
+ * 会话授权接口
+ */
+var SESSION_AUTHORIZE = {
+  run: (e, n) => sessionAuthorizeForPlugin(n.plugin),
+};
 //@ chunk-e6aww6q8.js:4016365-4016439 placement
-function DHn(e, n) {
-  let r = GN(e, n);
-  return r !== void 0 && BPe(r.pluginStorageId);
+/**
+ * 是否可读会话身份
+ */
+function canReadSessionIdentity(e, n) {
+  let r = admittedArgs(e, n);
+  return r !== undefined && isVouchedPolicyPluginId(r.pluginStorageId);
 }
 //@ chunk-e6aww6q8.js:4016439-4016501 placement
-var LHn = (e) => ({ run: async (n, r) => (DHn(e, r) ? sessionIdentity() : identityRefusal(r.plugin)) });
+/**
+ * $.session.identity 实现
+ */
+var sessionIdentityApi = (e) => ({
+  run: async (n, r) => (canReadSessionIdentity(e, r) ? sessionIdentity() : identityRefusal(r.plugin)),
+});
 //@ chunk-e6aww6q8.js:4016501-4016554 placement
-var l4 = (e, n) => e.knownArgs.get(n)?.pluginStorageId ?? n;
+/**
+ * 取插件存储 id
+ */
+var storageIdOf = (e, plugin) => e.knownArgs.get(plugin)?.pluginStorageId ?? plugin;
 //@ chunk-e6aww6q8.js:4016554-4016646 placement
-async function c2r(e, n, r) {
-  if (r.deny !== void 0) throw new HooksError(`${e.plugin}: $.${n}: ${r.deny}`);
+/**
+ * 有 deny 即抛 HooksError
+ */
+async function throwIfDenied(e, n, r) {
+  if (r.deny !== undefined) throw new HooksError(`${e.plugin}: $.${n}: ${r.deny}`);
 }
 //@ chunk-e6aww6q8.js:4016646-4016942 placement
-var createTelemetryOp = (e, n) => async (r, s) => {
-  let h = n(r),
-    y = Nae(e),
-    S = hookMembersFor(e, s.origin, {
-      ...(y.pinnedKeys !== void 0 && { pinned: { keys: y.pinnedKeys, e: h } }),
-    });
+var createTelemetryOp = (e, defaultRoute) => async (r, s) => {
+  let h = defaultRoute(r);
+  let y = envSiteRuleFor(e);
+  let S = hookMembersFor(e, s.origin, {
+    ...(y.pinnedKeys !== undefined && {
+      pinned: {
+        keys: y.pinnedKeys,
+        e: h,
+      },
+    }),
+  });
   return S.length === 0
-    ? void 0
-    : c2r(
+    ? undefined
+    : throwIfDenied(
         s,
         e,
-        await Ayn(s.scopeHolder?.scope, () =>
+        await runInScope(s.scopeHolder?.scope, () =>
           reportChainFailure({
             e: h,
             handlers: S,
             site: y,
             signal: s.signal,
             origin: hookOriginFromStack(s.origin),
-            bottom: async () => ({ value: void 0 }),
+            bottom: async () => ({
+              value: undefined,
+            }),
           }),
         ),
       );
 };
+//@ chunk-e6aww6q8.js:4016942-4017154 placement
 /**
  * $.telemetry.log 表项：校验 to（anthropic 或 collector）并经钩子链记录。
  */
-//@ chunk-e6aww6q8.js:4016942-4017154 placement
 var TELEMETRY_LOG_API = {
   check: (e) => {
-    let n = isPlainObject_4(e) ? e.to : void 0;
-    return isPlainObject_4(e) && (n === void 0 || n === "anthropic" || n === "collector")
-      ? void 0
+    let to = isPlainObject_5(e) ? e.to : undefined;
+    return isPlainObject_5(e) && (to === undefined || to === "anthropic" || to === "collector")
+      ? undefined
       : 'takes an entry ({ to?, event, ... }, to "anthropic" or "collector")';
   },
-  run: createTelemetryOp("telemetry.log", rle),
+  run: createTelemetryOp("telemetry.log", defaultRoute),
 };
+//@ chunk-e6aww6q8.js:4017154-4017274 placement
 /**
  * $.telemetry.mark 表项：校验条目并经钩子链记录特性标记。
  */
-//@ chunk-e6aww6q8.js:4017154-4017274 placement
 var TELEMETRY_MARK_API = {
-  check: (e) => (isPlainObject_4(e) ? void 0 : "takes an entry ({ feature, kind, reason?, props? })"),
+  check: (e) => (isPlainObject_5(e) ? undefined : "takes an entry ({ feature, kind, reason?, props? })"),
   run: createTelemetryOp("telemetry.mark", (e) => e),
 };
 //@ chunk-e6aww6q8.js:4017274-4017288 placement
-var Fat = 60000;
+/**
+ * 60000
+ */
+var CALL_TIMEOUT_MS = 60000;
+//@ chunk-e6aww6q8.js:4017288-4017450 placement
 /**
  * 生成并记录"$.方法: 某文本（N 字符）保留规则"的说明文本。
  */
-//@ chunk-e6aww6q8.js:4017288-4017450 placement
-function describeTruncation({
-  plugin: plugin,
-  spelling: spelling,
-  what: what,
-  name: s,
-  length: h,
-  kept: kept,
-}) {
-  let S = `$.${spelling}: ${what}${s === void 0 ? "" : ` of ${s}`} (${h} characters) ${kept}`;
-  return (logForDebugging(`${plugin}: ${S}`), S);
+function describeTruncation({ plugin, spelling, what, name: s, length: h, kept }) {
+  let S = `$.${spelling}: ${what}${s === undefined ? "" : ` of ${s}`} (${h} characters) ${kept}`;
+  logForDebugging(`${plugin}: ${S}`);
+  return S;
 }
-
 export {
   safeDeepEqual,
-  c2r,
-  d2r,
-  XAe,
-  ZV,
-  l4,
+  throwIfDenied,
+  promptBoxForPlugin,
+  noteWorkersLoaded,
+  workerSlots,
+  storageIdOf,
   requireLoadedPluginArgs,
   loadConfigRowHandles,
-  GN,
+  admittedArgs,
   getErrnoPath,
-  mxe,
-  oxe,
+  appendCallerFrame,
+  isUiRenderEvent,
   describeTruncation,
-  Cat,
+  telemetryCallArgs,
   telemetryNamesForPlugin,
-  Rat,
+  pluginNameOrFallback,
   explainApiNotAvailable,
-  MHn,
-  LHn,
+  SESSION_AUTHORIZE,
+  sessionIdentityApi,
   submitWaitHazard,
-  TMe,
+  PROMPT_BOX_READ,
   ATTACHMENT_READ_API,
   readPromptBoxForPlugin,
-  lHn,
+  hasOtherPromptRead,
   promptComposeForPlugin,
   wrapAgentSpawnOp,
-  aHn,
+  isOfficialMarketplace,
   TELEMETRY_LOG_API,
   TELEMETRY_MARK_API,
-  Fat,
-  lFr,
-  xxe,
+  CALL_TIMEOUT_MS,
+  nowAsync,
+  CLOCK_METHOD,
   HTTP_FETCH_API,
-  bMe,
+  bindPluginCall,
   refuseUnadmittedApiCall,
   staleAdmittingList,
-  returnValue_2,
+  returnValue,
   streamHookedApiCall,
   policyChangedRefusal,
   trackPluginOp,
   buildHookEnvironment,
-  aY,
+  cwdFromOrCall,
   createHostDispatchState,
-  irt,
+  bumpPluginEpochs,
   countActingOps,
-  gNr,
-  QAe,
-  srt,
+  scheduleCallTimeout,
+  rejectPendingCall,
+  settleCallRejection,
   buildCallerChain,
   collectLentFrames,
   inheritDispatchFacts,
-  iY,
-  txe,
+  isCurrentPendingCall,
+  isSamePressOwner,
   latestGestureAt,
   isModelOriginToolCall,
-  dxe,
-  yNr,
+  claimSpawnServed,
+  unrefTimer,
 };

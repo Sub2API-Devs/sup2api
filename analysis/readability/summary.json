@@ -1,0 +1,71 @@
+{
+ "src": {
+  "top": {
+   "bindings": 91572,
+   "minified": 352,
+   "authenticShort": 2,
+   "readable": 99.6,
+   "readableByRefs": 99.6
+  },
+  "param": {
+   "bindings": 165978,
+   "minified": 98740,
+   "authenticShort": 691,
+   "readable": 40.5,
+   "readableByRefs": 42.3
+  },
+  "local": {
+   "bindings": 231064,
+   "minified": 122577,
+   "authenticShort": 1549,
+   "readable": 47,
+   "readableByRefs": 47.7
+  }
+ },
+ "vendor": {
+  "top": {
+   "bindings": 9247,
+   "minified": 1822,
+   "authenticShort": 72,
+   "readable": 80.3,
+   "readableByRefs": 82
+  },
+  "param": {
+   "bindings": 40307,
+   "minified": 3329,
+   "authenticShort": 3727,
+   "readable": 91.7,
+   "readableByRefs": 91.2
+  },
+  "local": {
+   "bindings": 50523,
+   "minified": 4608,
+   "authenticShort": 3516,
+   "readable": 90.9,
+   "readableByRefs": 90.4
+  }
+ },
+ "runtime": {
+  "top": {
+   "bindings": 18,
+   "minified": 9,
+   "authenticShort": 0,
+   "readable": 50,
+   "readableByRefs": 55
+  },
+  "param": {
+   "bindings": 17,
+   "minified": 17,
+   "authenticShort": 0,
+   "readable": 0,
+   "readableByRefs": 0
+  },
+  "local": {
+   "bindings": 8,
+   "minified": 5,
+   "authenticShort": 0,
+   "readable": 37.5,
+   "readableByRefs": 35.7
+  }
+ }
+}

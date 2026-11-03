@@ -6,25 +6,41 @@
  * attribution: esm-layout 1, esm-fingerprint 1
  */
 import { Ar } from "../../../../../../runtime/bun-runtime.js";
-import { z, x, f_2, k_2, c, $e, Ge, ze, Ve, Fe, h, me, z5, j, O } from "../../esm/util/errors.js";
+import {
+  JOSEAlgNotAllowed,
+  JOSEError,
+  JOSENotSupported,
+  JWEDecryptionFailed,
+  JWEInvalid,
+  JWKInvalid,
+  JWKSInvalid,
+  JWKSMultipleMatchingKeys,
+  JWKSNoMatchingKey,
+  JWKSTimeout,
+  JWSInvalid,
+  JWSSignatureVerificationFailed,
+  JWTClaimValidationFailed,
+  JWTExpired,
+  JWTInvalid,
+} from "../../esm/util/errors.js";
 
 //@ chunk-5h78gfwc.js:227-238 esm-layout
 var errors = {};
 //@ chunk-5h78gfwc.js:238-588 esm-fingerprint
 Ar(errors, {
-  JOSEAlgNotAllowed: () => z,
-  JOSEError: () => x,
-  JOSENotSupported: () => f_2,
-  JWEDecryptionFailed: () => k_2,
-  JWEInvalid: () => c,
-  JWKInvalid: () => $e,
-  JWKSInvalid: () => Ge,
-  JWKSMultipleMatchingKeys: () => ze,
-  JWKSNoMatchingKey: () => Ve,
-  JWKSTimeout: () => Fe,
-  JWSInvalid: () => h,
-  JWSSignatureVerificationFailed: () => me,
-  JWTClaimValidationFailed: () => z5,
-  JWTExpired: () => j,
-  JWTInvalid: () => O,
+  JOSEAlgNotAllowed: () => JOSEAlgNotAllowed,
+  JOSEError: () => JOSEError,
+  JOSENotSupported: () => JOSENotSupported,
+  JWEDecryptionFailed: () => JWEDecryptionFailed,
+  JWEInvalid: () => JWEInvalid,
+  JWKInvalid: () => JWKInvalid,
+  JWKSInvalid: () => JWKSInvalid,
+  JWKSMultipleMatchingKeys: () => JWKSMultipleMatchingKeys,
+  JWKSNoMatchingKey: () => JWKSNoMatchingKey,
+  JWKSTimeout: () => JWKSTimeout,
+  JWSInvalid: () => JWSInvalid,
+  JWSSignatureVerificationFailed: () => JWSSignatureVerificationFailed,
+  JWTClaimValidationFailed: () => JWTClaimValidationFailed,
+  JWTExpired: () => JWTExpired,
+  JWTInvalid: () => JWTInvalid,
 });

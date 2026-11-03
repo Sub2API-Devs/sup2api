@@ -6,57 +6,57 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { $r } from "./xmlnames.js";
-import { ee } from "./utils.js";
-import { un } from "./attributes.js";
-import { xe } from "./Node.js";
-import { yt } from "./NodeList.js";
-import { Qa } from "./NodeUtils.js";
-import { ps } from "./FilteredElementList.js";
-import { Wr } from "./DOMException.js";
-import { xn } from "./DOMTokenList.js";
-import { ta } from "./select.js";
-import { Qr } from "./ContainerNode.js";
-import { ra } from "./ChildNode.js";
-import { mn } from "./NonDocumentTypeChildNode.js";
-import { gn } from "./NamedNodeMap.js";
+import { require_xmlnames } from "./xmlnames.js";
+import { require_utils } from "./utils.js";
+import { require_attributes } from "./attributes.js";
+import { require_Node } from "./Node.js";
+import { require_NodeList } from "./NodeList.js";
+import { require_NodeUtils } from "./NodeUtils.js";
+import { require_FilteredElementList } from "./FilteredElementList.js";
+import { require_DOMException } from "./DOMException.js";
+import { require_DOMTokenList } from "./DOMTokenList.js";
+import { require_select } from "./select.js";
+import { require_ContainerNode } from "./ContainerNode.js";
+import { require_ChildNode } from "./ChildNode.js";
+import { require_NonDocumentTypeChildNode } from "./NonDocumentTypeChildNode.js";
+import { require_NamedNodeMap } from "./NamedNodeMap.js";
 
 //@ chunk-vwj6ccer.js:45299-62055 cjs-fingerprint
-var Ft = x(function (vd, Is) {
-  Is.exports = xt;
-  var bn = $r(),
-    Y = ee(),
-    NAMESPACE = Y.NAMESPACE,
-    na = un(),
-    ke = xe(),
-    En = yt(),
-    zl = Qa(),
-    aa = ps(),
-    Ht = Wr(),
-    Wl = xn(),
-    _n = ta(),
-    Ls = Qr(),
-    Xl = ra(),
-    Kl = mn(),
-    Ms = gn(),
-    create = Object.create(null);
-  function xt(e, t, r, a) {
-    (Ls.call(this),
-      (this.nodeType = ke.ELEMENT_NODE),
-      (this.ownerDocument = e),
-      (this.localName = t),
-      (this.namespaceURI = r),
-      (this.prefix = a),
-      (this._tagName = void 0),
-      (this._attrsByQName = Object.create(null)),
-      (this._attrsByLName = Object.create(null)),
-      (this._attrKeys = []));
+var require_Element = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = Element;
+  var xml = require_xmlnames();
+  var utils = require_utils();
+  var NAMESPACE = utils.NAMESPACE;
+  var attributes = require_attributes();
+  var Node = require_Node();
+  var NodeList = require_NodeList();
+  var NodeUtils = require_NodeUtils();
+  var FilteredElementList = require_FilteredElementList();
+  var DOMException = require_DOMException();
+  var DOMTokenList = require_DOMTokenList();
+  var select = require_select();
+  var ContainerNode = require_ContainerNode();
+  var ChildNode = require_ChildNode();
+  var NonDocumentTypeChildNode = require_NonDocumentTypeChildNode();
+  var NamedNodeMap = require_NamedNodeMap();
+  var uppercaseCache = Object.create(null);
+  function Element(doc, localName, namespaceURI, prefix) {
+    ContainerNode.call(this);
+    this.nodeType = Node.ELEMENT_NODE;
+    this.ownerDocument = doc;
+    this.localName = localName;
+    this.namespaceURI = namespaceURI;
+    this.prefix = prefix;
+    this._tagName = undefined;
+    this._attrsByQName = Object.create(null);
+    this._attrsByLName = Object.create(null);
+    this._attrKeys = [];
   }
-  function vn(e, t) {
-    if (e.nodeType === ke.TEXT_NODE) t.push(e._data);
-    else for (var r = 0, a = e.childNodes.length; r < a; r++) vn(e.childNodes[r], t);
+  function recursiveGetText(node, a_2) {
+    if (node.nodeType === Node.TEXT_NODE) a_2.push(node._data);
+    else for (var i = 0, n = node.childNodes.length; i < n; i++) recursiveGetText(node.childNodes[i], a_2);
   }
-  xt.prototype = Object.create(Ls.prototype, {
+  Element.prototype = Object.create(ContainerNode.prototype, {
     isHTML: {
       get: function () {
         return this.namespaceURI === NAMESPACE.HTML && this.ownerDocument.isHTML;
@@ -64,16 +64,16 @@ var Ft = x(function (vd, Is) {
     },
     tagName: {
       get: function () {
-        if (this._tagName === void 0) {
-          var t;
-          if (this.prefix === null) t = this.localName;
-          else t = this.prefix + ":" + this.localName;
+        if (this._tagName === undefined) {
+          var tn;
+          if (this.prefix === null) tn = this.localName;
+          else tn = this.prefix + ":" + this.localName;
           if (this.isHTML) {
-            var r = create[t];
-            if (!r) create[t] = r = Y.toASCIIUpperCase(t);
-            t = r;
+            var up = uppercaseCache[tn];
+            if (!up) uppercaseCache[tn] = up = utils.toASCIIUpperCase(tn);
+            tn = up;
           }
-          this._tagName = t;
+          this._tagName = tn;
         }
         return this._tagName;
       },
@@ -91,132 +91,142 @@ var Ft = x(function (vd, Is) {
     },
     textContent: {
       get: function () {
-        var e = [];
-        return (vn(this, e), e.join(""));
+        var strings = [];
+        recursiveGetText(this, strings);
+        return strings.join("");
       },
-      set: function (e) {
-        if ((this.removeChildren(), e !== null && e !== void 0 && e !== ""))
-          this._appendChild(this.ownerDocument.createTextNode(e));
+      set: function (newtext) {
+        this.removeChildren();
+        if (newtext !== null && newtext !== undefined && newtext !== "")
+          this._appendChild(this.ownerDocument.createTextNode(newtext));
       },
     },
     innerText: {
       get: function () {
-        var e = [];
-        return (
-          vn(this, e),
-          e
-            .join("")
-            .replace(/[ \t\n\f\r]+/g, " ")
-            .trim()
-        );
+        var strings = [];
+        recursiveGetText(this, strings);
+        return strings
+          .join("")
+          .replace(/[ \t\n\f\r]+/g, " ")
+          .trim();
       },
-      set: function (e) {
-        if ((this.removeChildren(), e !== null && e !== void 0 && e !== ""))
-          this._appendChild(this.ownerDocument.createTextNode(e));
+      set: function (newtext) {
+        this.removeChildren();
+        if (newtext !== null && newtext !== undefined && newtext !== "")
+          this._appendChild(this.ownerDocument.createTextNode(newtext));
       },
     },
     innerHTML: {
       get: function () {
         return this.serialize();
       },
-      set: Y.nyi,
+      set: utils.nyi,
     },
     outerHTML: {
       get: function () {
-        return zl.serializeOne(this, { nodeType: 0 });
+        return NodeUtils.serializeOne(this, {
+          nodeType: 0,
+        });
       },
-      set: function (e) {
-        var ownerDocument = this.ownerDocument,
-          parentNode = this.parentNode;
-        if (parentNode === null) return;
-        if (parentNode.nodeType === ke.DOCUMENT_NODE) Y.NoModificationAllowedError();
-        if (parentNode.nodeType === ke.DOCUMENT_FRAGMENT_NODE)
-          parentNode = parentNode.ownerDocument.createElement("body");
-        var mozHTMLParser = ownerDocument.implementation.mozHTMLParser(ownerDocument._address, parentNode);
-        (mozHTMLParser.parse(e === null ? "" : String(e), !0),
-          this.replaceWith(mozHTMLParser._asDocumentFragment()));
+      set: function (v) {
+        var ownerDocument = this.ownerDocument;
+        var parent = this.parentNode;
+        if (parent === null) return;
+        if (parent.nodeType === Node.DOCUMENT_NODE) utils.NoModificationAllowedError();
+        if (parent.nodeType === Node.DOCUMENT_FRAGMENT_NODE)
+          parent = parent.ownerDocument.createElement("body");
+        var parser = ownerDocument.implementation.mozHTMLParser(ownerDocument._address, parent);
+        parser.parse(v === null ? "" : String(v), true);
+        this.replaceWith(parser._asDocumentFragment());
       },
     },
     _insertAdjacent: {
-      value: function (t, r) {
-        var a = !1;
-        switch (t) {
+      value: function (position, node) {
+        var first = false;
+        switch (position) {
           case "beforebegin":
-            a = !0;
+            first = true;
           case "afterend":
-            var parentNode = this.parentNode;
-            if (parentNode === null) return null;
-            return parentNode.insertBefore(r, a ? this : this.nextSibling);
+            var parent = this.parentNode;
+            if (parent === null) return null;
+            return parent.insertBefore(node, first ? this : this.nextSibling);
           case "afterbegin":
-            a = !0;
+            first = true;
           case "beforeend":
-            return this.insertBefore(r, a ? this.firstChild : null);
+            return this.insertBefore(node, first ? this.firstChild : null);
           default:
-            return Y.SyntaxError();
+            return utils.SyntaxError();
         }
       },
     },
     insertAdjacentElement: {
-      value: function (t, r) {
-        if (r.nodeType !== ke.ELEMENT_NODE) throw TypeError("not an element");
-        return ((t = Y.toASCIILowerCase(String(t))), this._insertAdjacent(t, r));
+      value: function (position, element) {
+        if (element.nodeType !== Node.ELEMENT_NODE) throw TypeError("not an element");
+        position = utils.toASCIILowerCase(String(position));
+        return this._insertAdjacent(position, element);
       },
     },
     insertAdjacentText: {
-      value: function (t, r) {
-        var textNode = this.ownerDocument.createTextNode(r);
-        ((t = Y.toASCIILowerCase(String(t))), this._insertAdjacent(t, textNode));
+      value: function (position, data) {
+        var textNode = this.ownerDocument.createTextNode(data);
+        position = utils.toASCIILowerCase(String(position));
+        this._insertAdjacent(position, textNode);
       },
     },
     insertAdjacentHTML: {
-      value: function (t, r) {
-        ((t = Y.toASCIILowerCase(String(t))), (r = String(r)));
-        var a;
-        switch (t) {
+      value: function (position, text) {
+        position = utils.toASCIILowerCase(String(position));
+        text = String(text);
+        var context;
+        switch (position) {
           case "beforebegin":
           case "afterend":
-            if (((a = this.parentNode), a === null || a.nodeType === ke.DOCUMENT_NODE))
-              Y.NoModificationAllowedError();
+            context = this.parentNode;
+            if (context === null || context.nodeType === Node.DOCUMENT_NODE)
+              utils.NoModificationAllowedError();
             break;
           case "afterbegin":
           case "beforeend":
-            a = this;
+            context = this;
             break;
           default:
-            Y.SyntaxError();
+            utils.SyntaxError();
         }
         if (
-          !(a instanceof xt) ||
-          (a.ownerDocument.isHTML && a.localName === "html" && a.namespaceURI === NAMESPACE.HTML)
+          !(context instanceof Element) ||
+          (context.ownerDocument.isHTML &&
+            context.localName === "html" &&
+            context.namespaceURI === NAMESPACE.HTML)
         )
-          a = a.ownerDocument.createElementNS(NAMESPACE.HTML, "body");
-        var mozHTMLParser = this.ownerDocument.implementation.mozHTMLParser(this.ownerDocument._address, a);
-        (mozHTMLParser.parse(r, !0), this._insertAdjacent(t, mozHTMLParser._asDocumentFragment()));
+          context = context.ownerDocument.createElementNS(NAMESPACE.HTML, "body");
+        var parser = this.ownerDocument.implementation.mozHTMLParser(this.ownerDocument._address, context);
+        parser.parse(text, true);
+        this._insertAdjacent(position, parser._asDocumentFragment());
       },
     },
     children: {
       get: function () {
-        if (!this._children) this._children = new Rs(this);
+        if (!this._children) this._children = new ChildrenCollection(this);
         return this._children;
       },
     },
     attributes: {
       get: function () {
-        if (!this._attributes) this._attributes = new yn(this);
+        if (!this._attributes) this._attributes = new AttributesArray(this);
         return this._attributes;
       },
     },
     firstElementChild: {
       get: function () {
-        for (var firstChild = this.firstChild; firstChild !== null; firstChild = firstChild.nextSibling)
-          if (firstChild.nodeType === ke.ELEMENT_NODE) return firstChild;
+        for (var kid = this.firstChild; kid !== null; kid = kid.nextSibling)
+          if (kid.nodeType === Node.ELEMENT_NODE) return kid;
         return null;
       },
     },
     lastElementChild: {
       get: function () {
-        for (var lastChild = this.lastChild; lastChild !== null; lastChild = lastChild.previousSibling)
-          if (lastChild.nodeType === ke.ELEMENT_NODE) return lastChild;
+        for (var kid = this.lastChild; kid !== null; kid = kid.previousSibling)
+          if (kid.nodeType === Node.ELEMENT_NODE) return kid;
         return null;
       },
     },
@@ -226,174 +236,184 @@ var Ft = x(function (vd, Is) {
       },
     },
     nextElement: {
-      value: function (e) {
-        if (!e) e = this.ownerDocument.documentElement;
-        var firstElementChild = this.firstElementChild;
-        if (!firstElementChild) {
-          if (this === e) return null;
-          firstElementChild = this.nextElementSibling;
+      value: function (root) {
+        if (!root) root = this.ownerDocument.documentElement;
+        var next = this.firstElementChild;
+        if (!next) {
+          if (this === root) return null;
+          next = this.nextElementSibling;
         }
-        if (firstElementChild) return firstElementChild;
-        for (
-          var parentElement = this.parentElement;
-          parentElement && parentElement !== e;
-          parentElement = parentElement.parentElement
-        )
-          if (((firstElementChild = parentElement.nextElementSibling), firstElementChild))
-            return firstElementChild;
+        if (next) return next;
+        for (var parent = this.parentElement; parent && parent !== root; parent = parent.parentElement) {
+          next = parent.nextElementSibling;
+          if (next) return next;
+        }
         return null;
       },
     },
     getElementsByTagName: {
-      value: function (t) {
-        var r;
-        if (!t) return new En();
-        if (t === "*")
-          r = function () {
-            return !0;
+      value: function (lname) {
+        var filter;
+        if (!lname) return new NodeList();
+        if (lname === "*")
+          filter = function () {
+            return true;
           };
-        else if (this.isHTML) r = Yl(t);
-        else r = Tn(t);
-        return new aa(this, r);
+        else if (this.isHTML) filter = htmlLocalNameElementFilter(lname);
+        else filter = localNameElementFilter(lname);
+        return new FilteredElementList(this, filter);
       },
     },
     getElementsByTagNameNS: {
-      value: function (t, r) {
-        var a;
-        if (t === "*" && r === "*")
-          a = function () {
-            return !0;
+      value: function (ns, lname) {
+        var filter;
+        if (ns === "*" && lname === "*")
+          filter = function () {
+            return true;
           };
-        else if (t === "*") a = Tn(r);
-        else if (r === "*") a = Ql(t);
-        else a = $l(t, r);
-        return new aa(this, a);
+        else if (ns === "*") filter = localNameElementFilter(lname);
+        else if (lname === "*") filter = namespaceElementFilter(ns);
+        else filter = namespaceLocalNameElementFilter(ns, lname);
+        return new FilteredElementList(this, filter);
       },
     },
     getElementsByClassName: {
-      value: function (t) {
-        if (((t = String(t).trim()), t === "")) {
-          var r = new En();
-          return r;
+      value: function (names) {
+        names = String(names).trim();
+        if (names === "") {
+          var result = new NodeList();
+          return result;
         }
-        return ((t = t.split(/[ \t\r\n\f]+/)), new aa(this, Zl(t)));
+        names = names.split(/[ \t\r\n\f]+/);
+        return new FilteredElementList(this, classNamesElementFilter(names));
       },
     },
     getElementsByName: {
-      value: function (t) {
-        return new aa(this, Jl(String(t)));
+      value: function (name) {
+        return new FilteredElementList(this, elementNameFilter(String(name)));
       },
     },
     clone: {
       value: function () {
-        var t;
+        var e;
         if (this.namespaceURI !== NAMESPACE.HTML || this.prefix || !this.ownerDocument.isHTML)
-          t = this.ownerDocument.createElementNS(
+          e = this.ownerDocument.createElementNS(
             this.namespaceURI,
             this.prefix !== null ? this.prefix + ":" + this.localName : this.localName,
           );
-        else t = this.ownerDocument.createElement(this.localName);
-        for (var r = 0, a = this._attrKeys.length; r < a; r++) {
-          var s = this._attrKeys[r],
-            c = this._attrsByLName[s],
-            cloneNode = c.cloneNode();
-          (cloneNode._setOwnerElement(t), (t._attrsByLName[s] = cloneNode), t._addQName(cloneNode));
+        else e = this.ownerDocument.createElement(this.localName);
+        for (var i = 0, n = this._attrKeys.length; i < n; i++) {
+          var lname = this._attrKeys[i];
+          var a = this._attrsByLName[lname];
+          var b = a.cloneNode();
+          b._setOwnerElement(e);
+          e._attrsByLName[lname] = b;
+          e._addQName(b);
         }
-        return ((t._attrKeys = this._attrKeys.concat()), t);
+        e._attrKeys = this._attrKeys.concat();
+        return e;
       },
     },
     isEqual: {
-      value: function (t) {
+      value: function (that) {
         if (
-          this.localName !== t.localName ||
-          this.namespaceURI !== t.namespaceURI ||
-          this.prefix !== t.prefix ||
-          this._numattrs !== t._numattrs
+          this.localName !== that.localName ||
+          this.namespaceURI !== that.namespaceURI ||
+          this.prefix !== that.prefix ||
+          this._numattrs !== that._numattrs
         )
-          return !1;
-        for (var r = 0, _numattrs = this._numattrs; r < _numattrs; r++) {
-          var _attr = this._attr(r);
-          if (!t.hasAttributeNS(_attr.namespaceURI, _attr.localName)) return !1;
-          if (t.getAttributeNS(_attr.namespaceURI, _attr.localName) !== _attr.value) return !1;
+          return false;
+        for (var i = 0, n = this._numattrs; i < n; i++) {
+          var a = this._attr(i);
+          if (!that.hasAttributeNS(a.namespaceURI, a.localName)) return false;
+          if (that.getAttributeNS(a.namespaceURI, a.localName) !== a.value) return false;
         }
-        return !0;
+        return true;
       },
     },
     _lookupNamespacePrefix: {
-      value: function (t, r) {
+      value: function (ns, originalElement) {
         if (
           this.namespaceURI &&
-          this.namespaceURI === t &&
+          this.namespaceURI === ns &&
           this.prefix !== null &&
-          r.lookupNamespaceURI(this.prefix) === t
+          originalElement.lookupNamespaceURI(this.prefix) === ns
         )
           return this.prefix;
-        for (var a = 0, _numattrs = this._numattrs; a < _numattrs; a++) {
-          var _attr = this._attr(a);
-          if (_attr.prefix === "xmlns" && _attr.value === t && r.lookupNamespaceURI(_attr.localName) === t)
-            return _attr.localName;
+        for (var i = 0, n = this._numattrs; i < n; i++) {
+          var a = this._attr(i);
+          if (
+            a.prefix === "xmlns" &&
+            a.value === ns &&
+            originalElement.lookupNamespaceURI(a.localName) === ns
+          )
+            return a.localName;
         }
-        var parentElement = this.parentElement;
-        return parentElement ? parentElement._lookupNamespacePrefix(t, r) : null;
+        var parent = this.parentElement;
+        return parent ? parent._lookupNamespacePrefix(ns, originalElement) : null;
       },
     },
     lookupNamespaceURI: {
-      value: function (t) {
-        if (t === "" || t === void 0) t = null;
-        if (this.namespaceURI !== null && this.prefix === t) return this.namespaceURI;
-        for (var r = 0, _numattrs = this._numattrs; r < _numattrs; r++) {
-          var _attr = this._attr(r);
-          if (_attr.namespaceURI === NAMESPACE.XMLNS) {
+      value: function (prefix) {
+        if (prefix === "" || prefix === undefined) prefix = null;
+        if (this.namespaceURI !== null && this.prefix === prefix) return this.namespaceURI;
+        for (var i = 0, n = this._numattrs; i < n; i++) {
+          var a = this._attr(i);
+          if (a.namespaceURI === NAMESPACE.XMLNS) {
             if (
-              (_attr.prefix === "xmlns" && _attr.localName === t) ||
-              (t === null && _attr.prefix === null && _attr.localName === "xmlns")
+              (a.prefix === "xmlns" && a.localName === prefix) ||
+              (prefix === null && a.prefix === null && a.localName === "xmlns")
             )
-              return _attr.value || null;
+              return a.value || null;
           }
         }
-        var parentElement = this.parentElement;
-        return parentElement ? parentElement.lookupNamespaceURI(t) : null;
+        var parent = this.parentElement;
+        return parent ? parent.lookupNamespaceURI(prefix) : null;
       },
     },
     getAttribute: {
-      value: function (t) {
-        var attributeNode = this.getAttributeNode(t);
-        return attributeNode ? attributeNode.value : null;
+      value: function (qname) {
+        var attr = this.getAttributeNode(qname);
+        return attr ? attr.value : null;
       },
     },
     getAttributeNS: {
-      value: function (t, r) {
-        var attributeNodeNS = this.getAttributeNodeNS(t, r);
-        return attributeNodeNS ? attributeNodeNS.value : null;
+      value: function (ns, lname) {
+        var attr = this.getAttributeNodeNS(ns, lname);
+        return attr ? attr.value : null;
       },
     },
     getAttributeNode: {
-      value: function (t) {
-        if (((t = String(t)), /[A-Z]/.test(t) && this.isHTML)) t = Y.toASCIILowerCase(t);
-        var r = this._attrsByQName[t];
-        if (!r) return null;
-        if (Array.isArray(r)) r = r[0];
-        return r;
+      value: function (qname) {
+        qname = String(qname);
+        if (/[A-Z]/.test(qname) && this.isHTML) qname = utils.toASCIILowerCase(qname);
+        var attr = this._attrsByQName[qname];
+        if (!attr) return null;
+        if (Array.isArray(attr)) attr = attr[0];
+        return attr;
       },
     },
     getAttributeNodeNS: {
-      value: function (t, r) {
-        ((t = t === void 0 || t === null ? "" : String(t)), (r = String(r)));
-        var a = this._attrsByLName[t + "|" + r];
-        return a ? a : null;
+      value: function (ns, lname) {
+        ns = ns === undefined || ns === null ? "" : String(ns);
+        lname = String(lname);
+        var attr = this._attrsByLName[ns + "|" + lname];
+        return attr ? attr : null;
       },
     },
     hasAttribute: {
-      value: function (t) {
-        if (((t = String(t)), /[A-Z]/.test(t) && this.isHTML)) t = Y.toASCIILowerCase(t);
-        return this._attrsByQName[t] !== void 0;
+      value: function (qname) {
+        qname = String(qname);
+        if (/[A-Z]/.test(qname) && this.isHTML) qname = utils.toASCIILowerCase(qname);
+        return this._attrsByQName[qname] !== undefined;
       },
     },
     hasAttributeNS: {
-      value: function (t, r) {
-        ((t = t === void 0 || t === null ? "" : String(t)), (r = String(r)));
-        var a = t + "|" + r;
-        return this._attrsByLName[a] !== void 0;
+      value: function (ns, lname) {
+        ns = ns === undefined || ns === null ? "" : String(ns);
+        lname = String(lname);
+        var key = ns + "|" + lname;
+        return this._attrsByLName[key] !== undefined;
       },
     },
     hasAttributes: {
@@ -402,210 +422,254 @@ var Ft = x(function (vd, Is) {
       },
     },
     toggleAttribute: {
-      value: function (t, r) {
-        if (((t = String(t)), !bn.isValidName(t))) Y.InvalidCharacterError();
-        if (/[A-Z]/.test(t) && this.isHTML) t = Y.toASCIILowerCase(t);
-        var a = this._attrsByQName[t];
-        if (a === void 0) {
-          if (r === void 0 || r === !0) return (this._setAttribute(t, ""), !0);
-          return !1;
+      value: function (qname, force) {
+        qname = String(qname);
+        if (!xml.isValidName(qname)) utils.InvalidCharacterError();
+        if (/[A-Z]/.test(qname) && this.isHTML) qname = utils.toASCIILowerCase(qname);
+        var a = this._attrsByQName[qname];
+        if (a === undefined) {
+          if (force === undefined || force === true) {
+            this._setAttribute(qname, "");
+            return true;
+          }
+          return false;
         } else {
-          if (r === void 0 || r === !1) return (this.removeAttribute(t), !1);
-          return !0;
+          if (force === undefined || force === false) {
+            this.removeAttribute(qname);
+            return false;
+          }
+          return true;
         }
       },
     },
     _setAttribute: {
-      value: function (t, r) {
-        var a = this._attrsByQName[t],
-          s;
-        if (!a) ((a = this._newattr(t)), (s = !0));
-        else if (Array.isArray(a)) a = a[0];
-        if (((a.value = r), this._attributes)) this._attributes[t] = a;
-        if (s && this._newattrhook) this._newattrhook(t, r);
+      value: function (qname, value) {
+        var attr = this._attrsByQName[qname];
+        var isnew;
+        if (!attr) {
+          attr = this._newattr(qname);
+          isnew = true;
+        } else if (Array.isArray(attr)) attr = attr[0];
+        attr.value = value;
+        if (this._attributes) this._attributes[qname] = attr;
+        if (isnew && this._newattrhook) this._newattrhook(qname, value);
       },
     },
     setAttribute: {
-      value: function (t, r) {
-        if (((t = String(t)), !bn.isValidName(t))) Y.InvalidCharacterError();
-        if (/[A-Z]/.test(t) && this.isHTML) t = Y.toASCIILowerCase(t);
-        this._setAttribute(t, String(r));
+      value: function (qname, value) {
+        qname = String(qname);
+        if (!xml.isValidName(qname)) utils.InvalidCharacterError();
+        if (/[A-Z]/.test(qname) && this.isHTML) qname = utils.toASCIILowerCase(qname);
+        this._setAttribute(qname, String(value));
       },
     },
     _setAttributeNS: {
-      value: function (t, r, a) {
-        var index = r.indexOf(":"),
-          c,
-          d;
-        if (index < 0) ((c = null), (d = r));
-        else ((c = r.substring(0, index)), (d = r.substring(index + 1)));
-        if (t === "" || t === void 0) t = null;
-        var g = (t === null ? "" : t) + "|" + d,
-          m = this._attrsByLName[g],
-          v;
-        if (!m) {
-          if (((m = new ur(this, d, c, t)), (v = !0), (this._attrsByLName[g] = m), this._attributes))
-            this._attributes[this._attrKeys.length] = m;
-          (this._attrKeys.push(g), this._addQName(m));
+      value: function (ns, qname, value) {
+        var pos = qname.indexOf(":");
+        var prefix;
+        var lname;
+        if (pos < 0) {
+          prefix = null;
+          lname = qname;
+        } else {
+          prefix = qname.substring(0, pos);
+          lname = qname.substring(pos + 1);
         }
-        if (((m.value = a), v && this._newattrhook)) this._newattrhook(r, a);
+        if (ns === "" || ns === undefined) ns = null;
+        var key = (ns === null ? "" : ns) + "|" + lname;
+        var attr = this._attrsByLName[key];
+        var isnew;
+        if (!attr) {
+          attr = new Attr(this, lname, prefix, ns);
+          isnew = true;
+          this._attrsByLName[key] = attr;
+          if (this._attributes) this._attributes[this._attrKeys.length] = attr;
+          this._attrKeys.push(key);
+          this._addQName(attr);
+        }
+        attr.value = value;
+        if (isnew && this._newattrhook) this._newattrhook(qname, value);
       },
     },
     setAttributeNS: {
-      value: function (t, r, a) {
+      value: function (ns, qname, value) {
+        ns = ns === null || ns === undefined || ns === "" ? null : String(ns);
+        qname = String(qname);
+        if (!xml.isValidQName(qname)) utils.InvalidCharacterError();
+        var pos = qname.indexOf(":");
+        var prefix = pos < 0 ? null : qname.substring(0, pos);
         if (
-          ((t = t === null || t === void 0 || t === "" ? null : String(t)),
-          (r = String(r)),
-          !bn.isValidQName(r))
+          (prefix !== null && ns === null) ||
+          (prefix === "xml" && ns !== NAMESPACE.XML) ||
+          ((qname === "xmlns" || prefix === "xmlns") && ns !== NAMESPACE.XMLNS) ||
+          (ns === NAMESPACE.XMLNS && !(qname === "xmlns" || prefix === "xmlns"))
         )
-          Y.InvalidCharacterError();
-        var index = r.indexOf(":"),
-          c = index < 0 ? null : r.substring(0, index);
-        if (
-          (c !== null && t === null) ||
-          (c === "xml" && t !== NAMESPACE.XML) ||
-          ((r === "xmlns" || c === "xmlns") && t !== NAMESPACE.XMLNS) ||
-          (t === NAMESPACE.XMLNS && !(r === "xmlns" || c === "xmlns"))
-        )
-          Y.NamespaceError();
-        this._setAttributeNS(t, r, String(a));
+          utils.NamespaceError();
+        this._setAttributeNS(ns, qname, String(value));
       },
     },
     setAttributeNode: {
-      value: function (t) {
-        if (t.ownerElement !== null && t.ownerElement !== this) throw new Ht(Ht.INUSE_ATTRIBUTE_ERR);
-        var r = null,
-          a = this._attrsByQName[t.name];
-        if (a) {
-          if (!Array.isArray(a)) a = [a];
+      value: function (attr) {
+        if (attr.ownerElement !== null && attr.ownerElement !== this)
+          throw new DOMException(DOMException.INUSE_ATTRIBUTE_ERR);
+        var result = null;
+        var oldAttrs = this._attrsByQName[attr.name];
+        if (oldAttrs) {
+          if (!Array.isArray(oldAttrs)) oldAttrs = [oldAttrs];
           if (
-            a.some(function (s) {
-              return s === t;
+            oldAttrs.some(function (a) {
+              return a === attr;
             })
           )
-            return t;
-          else if (t.ownerElement !== null) throw new Ht(Ht.INUSE_ATTRIBUTE_ERR);
-          (a.forEach(function (s) {
-            this.removeAttributeNode(s);
-          }, this),
-            (r = a[0]));
+            return attr;
+          else if (attr.ownerElement !== null) throw new DOMException(DOMException.INUSE_ATTRIBUTE_ERR);
+          oldAttrs.forEach(function (a) {
+            this.removeAttributeNode(a);
+          }, this);
+          result = oldAttrs[0];
         }
-        return (this.setAttributeNodeNS(t), r);
+        this.setAttributeNodeNS(attr);
+        return result;
       },
     },
     setAttributeNodeNS: {
-      value: function (t) {
-        if (t.ownerElement !== null) throw new Ht(Ht.INUSE_ATTRIBUTE_ERR);
-        var namespaceURI = t.namespaceURI,
-          a = (namespaceURI === null ? "" : namespaceURI) + "|" + t.localName,
-          s = this._attrsByLName[a];
-        if (s) this.removeAttributeNode(s);
-        if ((t._setOwnerElement(this), (this._attrsByLName[a] = t), this._attributes))
-          this._attributes[this._attrKeys.length] = t;
-        if ((this._attrKeys.push(a), this._addQName(t), this._newattrhook))
-          this._newattrhook(t.name, t.value);
-        return s || null;
+      value: function (attr) {
+        if (attr.ownerElement !== null) throw new DOMException(DOMException.INUSE_ATTRIBUTE_ERR);
+        var ns = attr.namespaceURI;
+        var key = (ns === null ? "" : ns) + "|" + attr.localName;
+        var oldAttr = this._attrsByLName[key];
+        if (oldAttr) this.removeAttributeNode(oldAttr);
+        attr._setOwnerElement(this);
+        this._attrsByLName[key] = attr;
+        if (this._attributes) this._attributes[this._attrKeys.length] = attr;
+        this._attrKeys.push(key);
+        this._addQName(attr);
+        if (this._newattrhook) this._newattrhook(attr.name, attr.value);
+        return oldAttr || null;
       },
     },
     removeAttribute: {
-      value: function (t) {
-        if (((t = String(t)), /[A-Z]/.test(t) && this.isHTML)) t = Y.toASCIILowerCase(t);
-        var r = this._attrsByQName[t];
-        if (!r) return;
-        if (Array.isArray(r))
-          if (r.length > 2) r = r.shift();
-          else ((this._attrsByQName[t] = r[1]), (r = r[0]));
-        else this._attrsByQName[t] = void 0;
-        var namespaceURI = r.namespaceURI,
-          s = (namespaceURI === null ? "" : namespaceURI) + "|" + r.localName;
-        this._attrsByLName[s] = void 0;
-        var index = this._attrKeys.indexOf(s);
-        if (this._attributes)
-          (Array.prototype.splice.call(this._attributes, index, 1), (this._attributes[t] = void 0));
-        this._attrKeys.splice(index, 1);
-        var onchange = r.onchange;
-        if ((r._setOwnerElement(null), onchange)) onchange.call(r, this, r.localName, r.value, null);
-        if (this.rooted) this.ownerDocument.mutateRemoveAttr(r);
+      value: function (qname) {
+        qname = String(qname);
+        if (/[A-Z]/.test(qname) && this.isHTML) qname = utils.toASCIILowerCase(qname);
+        var attr = this._attrsByQName[qname];
+        if (!attr) return;
+        if (Array.isArray(attr)) {
+          if (attr.length > 2) attr = attr.shift();
+          else {
+            this._attrsByQName[qname] = attr[1];
+            attr = attr[0];
+          }
+        } else this._attrsByQName[qname] = undefined;
+        var ns = attr.namespaceURI;
+        var key = (ns === null ? "" : ns) + "|" + attr.localName;
+        this._attrsByLName[key] = undefined;
+        var i = this._attrKeys.indexOf(key);
+        if (this._attributes) {
+          Array.prototype.splice.call(this._attributes, i, 1);
+          this._attributes[qname] = undefined;
+        }
+        this._attrKeys.splice(i, 1);
+        var onchange = attr.onchange;
+        attr._setOwnerElement(null);
+        if (onchange) onchange.call(attr, this, attr.localName, attr.value, null);
+        if (this.rooted) this.ownerDocument.mutateRemoveAttr(attr);
       },
     },
     removeAttributeNS: {
-      value: function (t, r) {
-        ((t = t === void 0 || t === null ? "" : String(t)), (r = String(r)));
-        var a = t + "|" + r,
-          s = this._attrsByLName[a];
-        if (!s) return;
-        this._attrsByLName[a] = void 0;
-        var index = this._attrKeys.indexOf(a);
-        if (this._attributes) Array.prototype.splice.call(this._attributes, index, 1);
-        (this._attrKeys.splice(index, 1), this._removeQName(s));
-        var onchange = s.onchange;
-        if ((s._setOwnerElement(null), onchange)) onchange.call(s, this, s.localName, s.value, null);
-        if (this.rooted) this.ownerDocument.mutateRemoveAttr(s);
+      value: function (ns, lname) {
+        ns = ns === undefined || ns === null ? "" : String(ns);
+        lname = String(lname);
+        var key = ns + "|" + lname;
+        var attr = this._attrsByLName[key];
+        if (!attr) return;
+        this._attrsByLName[key] = undefined;
+        var i = this._attrKeys.indexOf(key);
+        if (this._attributes) Array.prototype.splice.call(this._attributes, i, 1);
+        this._attrKeys.splice(i, 1);
+        this._removeQName(attr);
+        var onchange = attr.onchange;
+        attr._setOwnerElement(null);
+        if (onchange) onchange.call(attr, this, attr.localName, attr.value, null);
+        if (this.rooted) this.ownerDocument.mutateRemoveAttr(attr);
       },
     },
     removeAttributeNode: {
-      value: function (t) {
-        var namespaceURI = t.namespaceURI,
-          a = (namespaceURI === null ? "" : namespaceURI) + "|" + t.localName;
-        if (this._attrsByLName[a] !== t) Y.NotFoundError();
-        return (this.removeAttributeNS(namespaceURI, t.localName), t);
+      value: function (attr) {
+        var ns = attr.namespaceURI;
+        var key = (ns === null ? "" : ns) + "|" + attr.localName;
+        if (this._attrsByLName[key] !== attr) utils.NotFoundError();
+        this.removeAttributeNS(ns, attr.localName);
+        return attr;
       },
     },
     getAttributeNames: {
       value: function () {
-        var t = this;
-        return this._attrKeys.map(function (_attrKey) {
-          return t._attrsByLName[_attrKey].name;
+        var elt = this;
+        return this._attrKeys.map(function (key) {
+          return elt._attrsByLName[key].name;
         });
       },
     },
     _getattr: {
-      value: function (t) {
-        var r = this._attrsByQName[t];
-        return r ? r.value : null;
+      value: function (qname) {
+        var attr = this._attrsByQName[qname];
+        return attr ? attr.value : null;
       },
     },
     _setattr: {
-      value: function (t, r) {
-        var a = this._attrsByQName[t],
-          s;
-        if (!a) ((a = this._newattr(t)), (s = !0));
-        if (((a.value = String(r)), this._attributes)) this._attributes[t] = a;
-        if (s && this._newattrhook) this._newattrhook(t, r);
+      value: function (qname, value) {
+        var attr = this._attrsByQName[qname];
+        var isnew;
+        if (!attr) {
+          attr = this._newattr(qname);
+          isnew = true;
+        }
+        attr.value = String(value);
+        if (this._attributes) this._attributes[qname] = attr;
+        if (isnew && this._newattrhook) this._newattrhook(qname, value);
       },
     },
     _newattr: {
-      value: function (t) {
-        var r = new ur(this, t, null, null),
-          a = "|" + t;
-        if (((this._attrsByQName[t] = r), (this._attrsByLName[a] = r), this._attributes))
-          this._attributes[this._attrKeys.length] = r;
-        return (this._attrKeys.push(a), r);
+      value: function (qname) {
+        var attr = new Attr(this, qname, null, null);
+        var key = "|" + qname;
+        this._attrsByQName[qname] = attr;
+        this._attrsByLName[key] = attr;
+        if (this._attributes) this._attributes[this._attrKeys.length] = attr;
+        this._attrKeys.push(key);
+        return attr;
       },
     },
     _addQName: {
-      value: function (e) {
-        var t = e.name,
-          r = this._attrsByQName[t];
-        if (!r) this._attrsByQName[t] = e;
-        else if (Array.isArray(r)) r.push(e);
-        else this._attrsByQName[t] = [r, e];
-        if (this._attributes) this._attributes[t] = e;
+      value: function (attr) {
+        var qname = attr.name;
+        var existing = this._attrsByQName[qname];
+        if (!existing) this._attrsByQName[qname] = attr;
+        else if (Array.isArray(existing)) existing.push(attr);
+        else this._attrsByQName[qname] = [existing, attr];
+        if (this._attributes) this._attributes[qname] = attr;
       },
     },
     _removeQName: {
-      value: function (e) {
-        var t = e.name,
-          r = this._attrsByQName[t];
-        if (Array.isArray(r)) {
-          var index = r.indexOf(e);
-          if ((Y.assert(index !== -1), r.length === 2)) {
-            if (((this._attrsByQName[t] = r[1 - index]), this._attributes))
-              this._attributes[t] = this._attrsByQName[t];
-          } else if ((r.splice(index, 1), this._attributes && this._attributes[t] === e))
-            this._attributes[t] = r[0];
-        } else if ((Y.assert(r === e), (this._attrsByQName[t] = void 0), this._attributes))
-          this._attributes[t] = void 0;
+      value: function (attr) {
+        var qname = attr.name;
+        var target = this._attrsByQName[qname];
+        if (Array.isArray(target)) {
+          var idx = target.indexOf(attr);
+          utils.assert(idx !== -1);
+          if (target.length === 2) {
+            this._attrsByQName[qname] = target[1 - idx];
+            if (this._attributes) this._attributes[qname] = this._attrsByQName[qname];
+          } else {
+            target.splice(idx, 1);
+            if (this._attributes && this._attributes[qname] === attr) this._attributes[qname] = target[0];
+          }
+        } else {
+          utils.assert(target === attr);
+          this._attrsByQName[qname] = undefined;
+          if (this._attributes) this._attributes[qname] = undefined;
+        }
       },
     },
     _numattrs: {
@@ -614,85 +678,91 @@ var Ft = x(function (vd, Is) {
       },
     },
     _attr: {
-      value: function (e) {
-        return this._attrsByLName[this._attrKeys[e]];
+      value: function (n) {
+        return this._attrsByLName[this._attrKeys[n]];
       },
     },
-    id: na.property({ name: "id" }),
-    className: na.property({ name: "class" }),
+    id: attributes.property({
+      name: "id",
+    }),
+    className: attributes.property({
+      name: "class",
+    }),
     classList: {
       get: function () {
         var e = this;
         if (this._classList) return this._classList;
-        var t = new Wl(
+        var dtlist = new DOMTokenList(
           function () {
             return e.className || "";
           },
-          function (r) {
-            e.className = r;
+          function (v) {
+            e.className = v;
           },
         );
-        return ((this._classList = t), t);
+        this._classList = dtlist;
+        return dtlist;
       },
-      set: function (e) {
-        this.className = e;
+      set: function (v) {
+        this.className = v;
       },
     },
     matches: {
-      value: function (e) {
-        return _n.matches(this, e);
+      value: function (selector) {
+        return select.matches(this, selector);
       },
     },
     closest: {
-      value: function (e) {
-        var t = this;
+      value: function (selector) {
+        var el = this;
         do {
-          if (t.matches && t.matches(e)) return t;
-          t = t.parentElement || t.parentNode;
-        } while (t !== null && t.nodeType === ke.ELEMENT_NODE);
+          if (el.matches && el.matches(selector)) return el;
+          el = el.parentElement || el.parentNode;
+        } while (el !== null && el.nodeType === Node.ELEMENT_NODE);
         return null;
       },
     },
     querySelector: {
-      value: function (e) {
-        return _n(e, this)[0];
+      value: function (selector) {
+        return select(selector, this)[0];
       },
     },
     querySelectorAll: {
-      value: function (e) {
-        var t = _n(e, this);
-        return t.item ? t : new En(t);
+      value: function (selector) {
+        var nodes = select(selector, this);
+        return nodes.item ? nodes : new NodeList(nodes);
       },
     },
   });
-  Object.defineProperties(xt.prototype, Xl);
-  Object.defineProperties(xt.prototype, Kl);
-  na.registerChangeHandler(xt, "id", function (e, t, r, a) {
-    if (e.rooted) {
-      if (r) e.ownerDocument.delId(r, e);
-      if (a) e.ownerDocument.addId(a, e);
+  Object.defineProperties(Element.prototype, ChildNode);
+  Object.defineProperties(Element.prototype, NonDocumentTypeChildNode);
+  attributes.registerChangeHandler(Element, "id", function (element, lname, oldval, newval) {
+    if (element.rooted) {
+      if (oldval) element.ownerDocument.delId(oldval, element);
+      if (newval) element.ownerDocument.addId(newval, element);
     }
   });
-  na.registerChangeHandler(xt, "class", function (e, t, r, a) {
-    if (e._classList) e._classList._update();
+  attributes.registerChangeHandler(Element, "class", function (element, lname, oldval, newval) {
+    if (element._classList) element._classList._update();
   });
-  function ur(e, t, r, a, s) {
-    ((this.localName = t),
-      (this.prefix = r === null || r === "" ? null : "" + r),
-      (this.namespaceURI = a === null || a === "" ? null : "" + a),
-      (this.data = s),
-      this._setOwnerElement(e));
+  function Attr(elt, lname, prefix, namespace, value) {
+    this.localName = lname;
+    this.prefix = prefix === null || prefix === "" ? null : "" + prefix;
+    this.namespaceURI = namespace === null || namespace === "" ? null : "" + namespace;
+    this.data = value;
+    this._setOwnerElement(elt);
   }
-  ur.prototype = Object.create(Object.prototype, {
+  Attr.prototype = Object.create(Object.prototype, {
     ownerElement: {
       get: function () {
         return this._ownerElement;
       },
     },
     _setOwnerElement: {
-      value: function (t) {
-        if (((this._ownerElement = t), this.prefix === null && this.namespaceURI === null && t))
-          this.onchange = t._attributeChangeHandlers[this.localName];
+      value: function (elt) {
+        this._ownerElement = elt;
+        if (this.prefix === null && this.namespaceURI === null && elt)
+          this.onchange = elt._attributeChangeHandlers[this.localName];
         else this.onchange = null;
       },
     },
@@ -703,30 +773,32 @@ var Ft = x(function (vd, Is) {
     },
     specified: {
       get: function () {
-        return !0;
+        return true;
       },
     },
     value: {
       get: function () {
         return this.data;
       },
-      set: function (e) {
-        var t = this.data;
-        if (((e = e === void 0 ? "" : e + ""), e === t)) return;
-        if (((this.data = e), this.ownerElement)) {
-          if (this.onchange) this.onchange(this.ownerElement, this.localName, t, e);
-          if (this.ownerElement.rooted) this.ownerElement.ownerDocument.mutateAttr(this, t);
+      set: function (value) {
+        var oldval = this.data;
+        value = value === undefined ? "" : value + "";
+        if (value === oldval) return;
+        this.data = value;
+        if (this.ownerElement) {
+          if (this.onchange) this.onchange(this.ownerElement, this.localName, oldval, value);
+          if (this.ownerElement.rooted) this.ownerElement.ownerDocument.mutateAttr(this, oldval);
         }
       },
     },
     cloneNode: {
-      value: function (t) {
-        return new ur(null, this.localName, this.prefix, this.namespaceURI, this.data);
+      value: function (deep) {
+        return new Attr(null, this.localName, this.prefix, this.namespaceURI, this.data);
       },
     },
     nodeType: {
       get: function () {
-        return ke.ATTRIBUTE_NODE;
+        return Node.ATTRIBUTE_NODE;
       },
     },
     nodeName: {
@@ -738,36 +810,36 @@ var Ft = x(function (vd, Is) {
       get: function () {
         return this.value;
       },
-      set: function (e) {
-        this.value = e;
+      set: function (v) {
+        this.value = v;
       },
     },
     textContent: {
       get: function () {
         return this.value;
       },
-      set: function (e) {
-        if (e === null || e === void 0) e = "";
-        this.value = e;
+      set: function (v) {
+        if (v === null || v === undefined) v = "";
+        this.value = v;
       },
     },
     innerText: {
       get: function () {
         return this.value;
       },
-      set: function (e) {
-        if (e === null || e === void 0) e = "";
-        this.value = e;
+      set: function (v) {
+        if (v === null || v === undefined) v = "";
+        this.value = v;
       },
     },
   });
-  xt._Attr = ur;
-  function yn(e) {
-    Ms.call(this, e);
-    for (var key in e._attrsByQName) this[key] = e._attrsByQName[key];
-    for (var r = 0; r < e._attrKeys.length; r++) this[r] = e._attrsByLName[e._attrKeys[r]];
+  Element._Attr = Attr;
+  function AttributesArray(elt) {
+    NamedNodeMap.call(this, elt);
+    for (var name in elt._attrsByQName) this[name] = elt._attrsByQName[name];
+    for (var i = 0; i < elt._attrKeys.length; i++) this[i] = elt._attrsByLName[elt._attrKeys[i]];
   }
-  yn.prototype = Object.create(Ms.prototype, {
+  AttributesArray.prototype = Object.create(NamedNodeMap.prototype, {
     length: {
       get: function () {
         return this.element._attrKeys.length;
@@ -775,113 +847,121 @@ var Ft = x(function (vd, Is) {
       set: function () {},
     },
     item: {
-      value: function (e) {
-        if (((e = e >>> 0), e >= this.length)) return null;
-        return this.element._attrsByLName[this.element._attrKeys[e]];
+      value: function (n) {
+        n = n >>> 0;
+        if (n >= this.length) return null;
+        return this.element._attrsByLName[this.element._attrKeys[n]];
       },
     },
   });
   if (globalThis.Symbol?.iterator)
-    yn.prototype[globalThis.Symbol.iterator] = function () {
-      var e = 0,
-        t = this.length,
-        r = this;
+    AttributesArray.prototype[globalThis.Symbol.iterator] = function () {
+      var i = 0;
+      var n = this.length;
+      var r = this;
       return {
         next: function () {
-          if (e < t) return { value: r.item(e++) };
-          return { done: !0 };
+          if (i < n)
+            return {
+              value: r.item(i++),
+            };
+          return {
+            done: true,
+          };
         },
       };
     };
-  function Rs(e) {
-    ((this.element = e), this.updateCache());
+  function ChildrenCollection(element) {
+    this.element = element;
+    this.updateCache();
   }
-  Rs.prototype = Object.create(Object.prototype, {
+  ChildrenCollection.prototype = Object.create(Object.prototype, {
     length: {
       get: function () {
-        return (this.updateCache(), this.childrenByNumber.length);
+        this.updateCache();
+        return this.childrenByNumber.length;
       },
     },
     item: {
-      value: function (t) {
-        return (this.updateCache(), this.childrenByNumber[t] || null);
+      value: function (n) {
+        this.updateCache();
+        return this.childrenByNumber[n] || null;
       },
     },
     namedItem: {
-      value: function (t) {
-        return (this.updateCache(), this.childrenByName[t] || null);
+      value: function (name) {
+        this.updateCache();
+        return this.childrenByName[name] || null;
       },
     },
     namedItems: {
       get: function () {
-        return (this.updateCache(), this.childrenByName);
+        this.updateCache();
+        return this.childrenByName;
       },
     },
     updateCache: {
       value: function () {
-        var t = /^(a|applet|area|embed|form|frame|frameset|iframe|img|object)$/;
+        var namedElts = /^(a|applet|area|embed|form|frame|frameset|iframe|img|object)$/;
         if (this.lastModTime !== this.element.lastModTime) {
           this.lastModTime = this.element.lastModTime;
-          var r = (this.childrenByNumber && this.childrenByNumber.length) || 0;
-          for (var a = 0; a < r; a++) this[a] = void 0;
-          ((this.childrenByNumber = []), (this.childrenByName = Object.create(null)));
-          for (
-            var firstChild = this.element.firstChild;
-            firstChild !== null;
-            firstChild = firstChild.nextSibling
-          )
-            if (firstChild.nodeType === ke.ELEMENT_NODE) {
-              ((this[this.childrenByNumber.length] = firstChild), this.childrenByNumber.push(firstChild));
-              var attribute = firstChild.getAttribute("id");
-              if (attribute && !this.childrenByName[attribute]) this.childrenByName[attribute] = firstChild;
-              var attribute_2 = firstChild.getAttribute("name");
+          var n = (this.childrenByNumber && this.childrenByNumber.length) || 0;
+          for (var i = 0; i < n; i++) this[i] = undefined;
+          this.childrenByNumber = [];
+          this.childrenByName = Object.create(null);
+          for (var c_2 = this.element.firstChild; c_2 !== null; c_2 = c_2.nextSibling)
+            if (c_2.nodeType === Node.ELEMENT_NODE) {
+              this[this.childrenByNumber.length] = c_2;
+              this.childrenByNumber.push(c_2);
+              var id = c_2.getAttribute("id");
+              if (id && !this.childrenByName[id]) this.childrenByName[id] = c_2;
+              var name = c_2.getAttribute("name");
               if (
-                attribute_2 &&
+                name &&
                 this.element.namespaceURI === NAMESPACE.HTML &&
-                t.test(this.element.localName) &&
-                !this.childrenByName[attribute_2]
+                namedElts.test(this.element.localName) &&
+                !this.childrenByName[name]
               )
-                this.childrenByName[attribute] = firstChild;
+                this.childrenByName[id] = c_2;
             }
         }
       },
     },
   });
-  function Tn(e) {
-    return function (t) {
-      return t.localName === e;
+  function localNameElementFilter(lname) {
+    return function (e) {
+      return e.localName === lname;
     };
   }
-  function Yl(e) {
-    var toASCIILowerCase = Y.toASCIILowerCase(e);
-    if (toASCIILowerCase === e) return Tn(e);
-    return function (r) {
-      return r.isHTML ? r.localName === toASCIILowerCase : r.localName === e;
+  function htmlLocalNameElementFilter(lname) {
+    var lclname = utils.toASCIILowerCase(lname);
+    if (lclname === lname) return localNameElementFilter(lname);
+    return function (e) {
+      return e.isHTML ? e.localName === lclname : e.localName === lname;
     };
   }
-  function Ql(e) {
-    return function (t) {
-      return t.namespaceURI === e;
+  function namespaceElementFilter(ns) {
+    return function (e) {
+      return e.namespaceURI === ns;
     };
   }
-  function $l(e, t) {
-    return function (r) {
-      return r.namespaceURI === e && r.localName === t;
+  function namespaceLocalNameElementFilter(ns, lname) {
+    return function (e) {
+      return e.namespaceURI === ns && e.localName === lname;
     };
   }
-  function Zl(e) {
-    return function (t) {
-      return e.every(function (r) {
-        return t.classList.contains(r);
+  function classNamesElementFilter(names) {
+    return function (e) {
+      return names.every(function (n) {
+        return e.classList.contains(n);
       });
     };
   }
-  function Jl(e) {
-    return function (t) {
-      if (t.namespaceURI !== NAMESPACE.HTML) return !1;
-      return t.getAttribute("name") === e;
+  function elementNameFilter(name) {
+    return function (e) {
+      if (e.namespaceURI !== NAMESPACE.HTML) return false;
+      return e.getAttribute("name") === name;
     };
   }
 });
-
-export { Ft };
+export { require_Element };

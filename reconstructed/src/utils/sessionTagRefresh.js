@@ -15,12 +15,14 @@ import { isRemoteEgressSuppressedFor, pinSessionId } from "./sessionStorage.js";
 import { getSessionId } from "../bootstrap/state.js";
 
 //@ chunk-cc8c7ddd.js:347-419 placement
-function aW(r) {
+/**
+ * persistBridgeArtifactFrames：持久化 bridge 产物 frame。
+ */
+function persistBridgeArtifactFrames(frameUrls) {
   if (isPublishToolEnabled())
     reportBridgeArtifacts(
-      frameUrlRowsToPersist(r).map(([, e]) => frameUrlToRecord(e)),
+      frameUrlRowsToPersist(frameUrls).map(([, e]) => frameUrlToRecord(e)),
       () => isRemoteEgressSuppressedFor(pinSessionId(getSessionId())),
     );
 }
-
-export { aW };
+export { persistBridgeArtifactFrames };

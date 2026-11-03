@@ -6,13 +6,12 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { Tn } from "./forge.js";
+import { require_forge } from "./forge.js";
 
 //@ chunk-fq0cr76a.js:64596-64701 cjs-fingerprint
-var bo = x(function (pfe, vT) {
-  var Kh = Tn();
-  vT.exports = Kh.md = Kh.md || {};
-  Kh.md.algorithms = Kh.md.algorithms || {};
+var require_md = x(function (cjsExports, cjsModule) {
+  var forge = require_forge();
+  cjsModule.exports = forge.md = forge.md || {};
+  forge.md.algorithms = forge.md.algorithms || {};
 });
-
-export { bo };
+export { require_md };

@@ -9,11 +9,14 @@
  * attribution: placement 3
  */
 import __cc_resource_0 from "../../../assets/artifact-plan.html-80a36a32.txt.zst" with { type: "file" };
-import { Et } from "../../utils/embeddedAssets.js";
+import { readEmbeddedTextSync } from "../../utils/embeddedAssets.js";
 
 //@ chunk-2trvskyb.js:317-339 placement
-var t = __cc_resource_0;
+var artifactPlanHtmlPath = __cc_resource_0;
 //@ chunk-2trvskyb.js:339-371 placement
-var p = Et(t, import.meta.dirname);
+var artifactPlanHtml = readEmbeddedTextSync(artifactPlanHtmlPath, import.meta.dirname);
 //@ chunk-2trvskyb.js:371-379 placement
-var I = p;
+/**
+ * Artifact 计划模板的 HTML 资源文本。
+ */
+var artifactPlanHtml2 = artifactPlanHtml;

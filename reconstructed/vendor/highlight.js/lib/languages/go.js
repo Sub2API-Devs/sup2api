@@ -8,9 +8,9 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:176324-177748 cjs-fingerprint
-var Ra = x(function (bE, Aa) {
-  function gd(e) {
-    let o = {
+var require_go = x(function (cjsExports, cjsModule) {
+  function go(hljs) {
+    let KEYWORDS = {
       keyword: [
         "break",
         "case",
@@ -82,43 +82,70 @@ var Ra = x(function (bE, Aa) {
     return {
       name: "Go",
       aliases: ["golang"],
-      keywords: o,
+      keywords: KEYWORDS,
       illegal: "</",
       contains: [
-        e.C_LINE_COMMENT_MODE,
-        e.C_BLOCK_COMMENT_MODE,
+        hljs.C_LINE_COMMENT_MODE,
+        hljs.C_BLOCK_COMMENT_MODE,
         {
           className: "string",
-          variants: [e.QUOTE_STRING_MODE, e.APOS_STRING_MODE, { begin: "`", end: "`" }],
+          variants: [
+            hljs.QUOTE_STRING_MODE,
+            hljs.APOS_STRING_MODE,
+            {
+              begin: "`",
+              end: "`",
+            },
+          ],
         },
         {
           className: "number",
           variants: [
-            { match: /-?\b0[xX]\.[a-fA-F0-9](_?[a-fA-F0-9])*[pP][+-]?\d(_?\d)*i?/, relevance: 0 },
+            {
+              match: /-?\b0[xX]\.[a-fA-F0-9](_?[a-fA-F0-9])*[pP][+-]?\d(_?\d)*i?/,
+              relevance: 0,
+            },
             {
               match: /-?\b0[xX](_?[a-fA-F0-9])+((\.([a-fA-F0-9](_?[a-fA-F0-9])*)?)?[pP][+-]?\d(_?\d)*)?i?/,
               relevance: 0,
             },
-            { match: /-?\b0[oO](_?[0-7])*i?/, relevance: 0 },
-            { match: /-?\.\d(_?\d)*([eE][+-]?\d(_?\d)*)?i?/, relevance: 0 },
-            { match: /-?\b\d(_?\d)*(\.(\d(_?\d)*)?)?([eE][+-]?\d(_?\d)*)?i?/, relevance: 0 },
+            {
+              match: /-?\b0[oO](_?[0-7])*i?/,
+              relevance: 0,
+            },
+            {
+              match: /-?\.\d(_?\d)*([eE][+-]?\d(_?\d)*)?i?/,
+              relevance: 0,
+            },
+            {
+              match: /-?\b\d(_?\d)*(\.(\d(_?\d)*)?)?([eE][+-]?\d(_?\d)*)?i?/,
+              relevance: 0,
+            },
           ],
         },
-        { begin: /:=/ },
+        {
+          begin: /:=/,
+        },
         {
           className: "function",
           beginKeywords: "func",
           end: "\\s*(\\{|$)",
-          excludeEnd: !0,
+          excludeEnd: true,
           contains: [
-            e.TITLE_MODE,
-            { className: "params", begin: /\(/, end: /\)/, endsParent: !0, keywords: o, illegal: /["']/ },
+            hljs.TITLE_MODE,
+            {
+              className: "params",
+              begin: /\(/,
+              end: /\)/,
+              endsParent: true,
+              keywords: KEYWORDS,
+              illegal: /["']/,
+            },
           ],
         },
       ],
     };
   }
-  Aa.exports = gd;
+  cjsModule.exports = go;
 });
-
-export { Ra };
+export { require_go };

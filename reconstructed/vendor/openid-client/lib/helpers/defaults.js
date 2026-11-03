@@ -6,24 +6,23 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { wu } from "./is_plain_object.js";
+import { require_is_plain_object } from "./is_plain_object.js";
 
 //@ chunk-1ny7cxrt.js:8101-8430 cjs-fingerprint
-var ly = x(function (Rve, ay) {
-  var oy = wu();
-  function sy(e, t, ...n) {
-    for (let o of n) {
-      if (!oy(o)) continue;
-      for (let [r, s] of Object.entries(o)) {
-        if (r === "__proto__" || r === "constructor") continue;
-        if (typeof t[r] > "u" && typeof s < "u") t[r] = s;
-        if (e && oy(t[r]) && oy(s)) sy(!0, t[r], s);
+var require_defaults = x(function (cjsExports, cjsModule) {
+  var isPlainObject = require_is_plain_object();
+  function defaults(deep, target, ...sources) {
+    for (let source of sources) {
+      if (!isPlainObject(source)) continue;
+      for (let [key, value] of Object.entries(source)) {
+        if (key === "__proto__" || key === "constructor") continue;
+        if (typeof target[key] === "undefined" && typeof value !== "undefined") target[key] = value;
+        if (deep && isPlainObject(target[key]) && isPlainObject(value)) defaults(true, target[key], value);
       }
     }
-    return t;
+    return target;
   }
-  ay.exports = sy.bind(void 0, !1);
-  ay.exports.deep = sy.bind(void 0, !0);
+  cjsModule.exports = defaults.bind(undefined, false);
+  cjsModule.exports.deep = defaults.bind(undefined, true);
 });
-
-export { ly };
+export { require_defaults };

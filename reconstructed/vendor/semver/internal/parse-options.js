@@ -8,15 +8,16 @@
 import { x } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-bwbq4xvm.js:5373-5536 cjs-fingerprint
-var as = x(function (Y$, hi) {
-  var freeze = Object.freeze({ loose: !0 }),
-    freeze_2 = Object.freeze({}),
-    pv = (e) => {
-      if (!e) return freeze_2;
-      if (typeof e !== "object") return freeze;
-      return e;
-    };
-  hi.exports = pv;
+var require_parse_options = x(function (cjsExports, cjsModule) {
+  var looseOption = Object.freeze({
+    loose: true,
+  });
+  var emptyOpts = Object.freeze({});
+  var parseOptions = (options) => {
+    if (!options) return emptyOpts;
+    if (typeof options !== "object") return looseOption;
+    return options;
+  };
+  cjsModule.exports = parseOptions;
 });
-
-export { as };
+export { require_parse_options };

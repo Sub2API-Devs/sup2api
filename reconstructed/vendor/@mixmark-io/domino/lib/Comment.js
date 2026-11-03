@@ -6,44 +6,49 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { xe } from "./Node.js";
-import { lr } from "./CharacterData.js";
+import { require_Node } from "./Node.js";
+import { require_CharacterData } from "./CharacterData.js";
 
 //@ chunk-vwj6ccer.js:64873-65458 cjs-fingerprint
-var Cn = x(function (wd, Ks) {
-  Ks.exports = An;
-  var nx = xe(),
-    Xs = lr();
-  function An(e, t) {
-    (Xs.call(this), (this.nodeType = nx.COMMENT_NODE), (this.ownerDocument = e), (this._data = t));
+var require_Comment = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = Comment;
+  var Node = require_Node();
+  var CharacterData = require_CharacterData();
+  function Comment(doc, data) {
+    CharacterData.call(this);
+    this.nodeType = Node.COMMENT_NODE;
+    this.ownerDocument = doc;
+    this._data = data;
   }
-  var fr = {
+  var nodeValue = {
     get: function () {
       return this._data;
     },
-    set: function (e) {
-      if (e === null || e === void 0) e = "";
-      else e = String(e);
-      if (((this._data = e), this.rooted)) this.ownerDocument.mutateValue(this);
+    set: function (v) {
+      if (v === null || v === undefined) v = "";
+      else v = String(v);
+      this._data = v;
+      if (this.rooted) this.ownerDocument.mutateValue(this);
     },
   };
-  An.prototype = Object.create(Xs.prototype, {
-    nodeName: { value: "#comment" },
-    nodeValue: fr,
-    textContent: fr,
-    innerText: fr,
+  Comment.prototype = Object.create(CharacterData.prototype, {
+    nodeName: {
+      value: "#comment",
+    },
+    nodeValue,
+    textContent: nodeValue,
+    innerText: nodeValue,
     data: {
-      get: fr.get,
-      set: function (e) {
-        fr.set.call(this, e === null ? "" : String(e));
+      get: nodeValue.get,
+      set: function (v) {
+        nodeValue.set.call(this, v === null ? "" : String(v));
       },
     },
     clone: {
       value: function () {
-        return new An(this.ownerDocument, this._data);
+        return new Comment(this.ownerDocument, this._data);
       },
     },
   });
 });
-
-export { Cn };
+export { require_Comment };

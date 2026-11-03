@@ -8,40 +8,73 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:229632-230327 cjs-fingerprint
-var Or = x(function (HE, Rr) {
-  function Vd(e) {
-    let t = /([A-Za-z_][A-Za-z_0-9]*)?/,
-      a = {
-        scope: "params",
-        begin: /\(/,
-        end: /\)(?=\:?)/,
-        endsParent: !0,
-        relevance: 7,
-        contains: [
-          { scope: "string", begin: '"', end: '"' },
-          { scope: "keyword", match: ["true", "false", "in"].join("|") },
-          { scope: "variable", match: /[A-Za-z_][A-Za-z_0-9]*/ },
-          { scope: "operator", match: /\+|\-|\*|\/|\%|\=\=|\=|\!|\>|\<|\&\&|\|\|/ },
-        ],
+var require_leaf = x(function (cjsExports, cjsModule) {
+  function leaf(hljs) {
+    let IDENT = /([A-Za-z_][A-Za-z_0-9]*)?/;
+    let PARAMS = {
+      scope: "params",
+      begin: /\(/,
+      end: /\)(?=\:?)/,
+      endsParent: true,
+      relevance: 7,
+      contains: [
+        {
+          scope: "string",
+          begin: '"',
+          end: '"',
+        },
+        {
+          scope: "keyword",
+          match: ["true", "false", "in"].join("|"),
+        },
+        {
+          scope: "variable",
+          match: /[A-Za-z_][A-Za-z_0-9]*/,
+        },
+        {
+          scope: "operator",
+          match: /\+|\-|\*|\/|\%|\=\=|\=|\!|\>|\<|\&\&|\|\|/,
+        },
+      ],
+    };
+    let INSIDE_DISPATCH = {
+      match: [IDENT, /(?=\()/],
+      scope: {
+        1: "keyword",
       },
-      s = { match: [t, /(?=\()/], scope: { 1: "keyword" }, contains: [a] };
-    return (
-      a.contains.unshift(s),
-      {
-        name: "Leaf",
-        contains: [
-          {
-            match: [/#+/, t, /(?=\()/],
-            scope: { 1: "punctuation", 2: "keyword" },
-            starts: { contains: [{ match: /\:/, scope: "punctuation" }] },
-            contains: [a],
+      contains: [PARAMS],
+    };
+    PARAMS.contains.unshift(INSIDE_DISPATCH);
+    return {
+      name: "Leaf",
+      contains: [
+        {
+          match: [/#+/, IDENT, /(?=\()/],
+          scope: {
+            1: "punctuation",
+            2: "keyword",
           },
-          { match: [/#+/, t, /:?/], scope: { 1: "punctuation", 2: "keyword", 3: "punctuation" } },
-        ],
-      }
-    );
+          starts: {
+            contains: [
+              {
+                match: /\:/,
+                scope: "punctuation",
+              },
+            ],
+          },
+          contains: [PARAMS],
+        },
+        {
+          match: [/#+/, IDENT, /:?/],
+          scope: {
+            1: "punctuation",
+            2: "keyword",
+            3: "punctuation",
+          },
+        },
+      ],
+    };
   }
-  Rr.exports = Vd;
+  cjsModule.exports = leaf;
 });
-
-export { Or };
+export { require_leaf };

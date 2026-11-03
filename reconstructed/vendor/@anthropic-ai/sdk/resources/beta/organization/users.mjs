@@ -5,24 +5,29 @@
  * pieces: chunk-hwmsct5x.js (1)
  * attribution: esm-fingerprint 1
  */
-import { Y } from "../../../core/resource.mjs";
+import { APIResource } from "../../../core/resource.mjs";
 import { I } from "../../../internal/utils/path.mjs";
-import { Be } from "../../../core/pagination.mjs";
+import { Page } from "../../../core/pagination.mjs";
 
 //@ chunk-hwmsct5x.js:120791-121173 esm-fingerprint
-class io extends Y {
-  retrieve(e, n) {
-    return this._client.get(I`/v1/organizations/users/${e}?beta=true`, n);
+class Users extends APIResource {
+  retrieve(userID, options) {
+    return this._client.get(I`/v1/organizations/users/${userID}?beta=true`, options);
   }
-  update(e, n, r) {
-    return this._client.post(I`/v1/organizations/users/${e}?beta=true`, { body: n, ...r });
+  update(userID, body, options) {
+    return this._client.post(I`/v1/organizations/users/${userID}?beta=true`, {
+      body,
+      ...options,
+    });
   }
-  list(e = {}, n) {
-    return this._client.getAPIList("/v1/organizations/users?beta=true", Be, { query: e, ...n });
+  list(query = {}, options) {
+    return this._client.getAPIList("/v1/organizations/users?beta=true", Page, {
+      query,
+      ...options,
+    });
   }
-  remove(e, n) {
-    return this._client.delete(I`/v1/organizations/users/${e}?beta=true`, n);
+  remove(userID, options) {
+    return this._client.delete(I`/v1/organizations/users/${userID}?beta=true`, options);
   }
 }
-
-export { io };
+export { Users };

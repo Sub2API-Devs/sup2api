@@ -6,26 +6,27 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { ahs } from "../../util-uri-escape/dist-cjs/index.js";
+import { require_util_uri_escape } from "../../util-uri-escape/dist-cjs/index.js";
 
 //@ chunk-hq88884p.js:5166-5498 cjs-fingerprint
-var uSr = x(function (Gr) {
-  var we = ahs();
-  function Yr(e) {
-    let r = [];
-    for (let n of Object.keys(e).sort()) {
-      let o = e[n];
-      if (((n = we.escapeUri(n)), Array.isArray(o)))
-        for (let s = 0, c = o.length; s < c; s++) r.push(`${n}=${we.escapeUri(o[s])}`);
+var require_querystring_builder = x(function (cjsExports) {
+  var import_util_uri_escape = require_util_uri_escape();
+  function buildQueryString(query) {
+    let parts = [];
+    for (let key of Object.keys(query).sort()) {
+      let value = query[key];
+      key = import_util_uri_escape.escapeUri(key);
+      if (Array.isArray(value))
+        for (let i = 0, iLen = value.length; i < iLen; i++)
+          parts.push(`${key}=${import_util_uri_escape.escapeUri(value[i])}`);
       else {
-        let s = n;
-        if (o || typeof o === "string") s += `=${we.escapeUri(o)}`;
-        r.push(s);
+        let qsEntry = key;
+        if (value || typeof value === "string") qsEntry += `=${import_util_uri_escape.escapeUri(value)}`;
+        parts.push(qsEntry);
       }
     }
-    return r.join("&");
+    return parts.join("&");
   }
-  Gr.buildQueryString = Yr;
+  cjsExports.buildQueryString = buildQueryString;
 });
-
-export { uSr };
+export { require_querystring_builder };

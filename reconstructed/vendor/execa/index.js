@@ -5,232 +5,260 @@
  * pieces: chunk-m4p5zn6n.js (8)
  * attribution: placement 2, esm-layout 1, esm-fingerprint 4, affinity 1
  */
-import pe, { default as re, default as Mr, default as No } from "process";
-import path, { default as path_2 } from "path";
-import { Buffer as jo, Buffer as vo } from "buffer";
+import { default as Mr } from "process";
+import path from "path";
+import { Buffer as jo } from "buffer";
 import child_process from "child_process";
 import { Re } from "../../runtime/bun-runtime.js";
-import { WSr } from "../cross-spawn/index.js";
+import { require_cross_spawn } from "../cross-spawn/index.js";
 import { Kt } from "../npm-run-path/index.js";
-import { enabled, We } from "./lib/verbose.js";
-import { Yt } from "./lib/stdio.js";
-import { Ue, Ke, ze } from "./lib/command.js";
-import { rn, nn, on, en, tn } from "./lib/kill.js";
-import { M } from "./lib/error.js";
-import { De, Tn } from "./lib/promise.js";
-import { Wt } from "../human-signals/build/src/realtime.js";
-import { wn, Cn, En, bn } from "./lib/stream.js";
-import { sn } from "./lib/pipe.js";
+import { verboseDefault, logCommand } from "./lib/verbose.js";
+import { normalizeStdio } from "./lib/stdio.js";
+import { Ue, Ke, parseTemplates } from "./lib/command.js";
+import { validateTimeout, setupTimeout, setExitHandler, spawnedKill, spawnedCancel } from "./lib/kill.js";
+import { makeError } from "./lib/error.js";
+import { mergePromise, getSpawnedPromise } from "./lib/promise.js";
+import { onetime_default } from "../human-signals/build/src/realtime.js";
+import { getSpawnedResult, handleInput, makeAllStream, handleInputSync } from "./lib/stream.js";
+import { addPipeMethods } from "./lib/pipe.js";
 
 //@ chunk-m4p5zn6n.js:7096-7115 placement
-var Rn = Re(WSr(), 1);
+var import_cross_spawn = Re(require_cross_spawn(), 1);
 //@ chunk-m4p5zn6n.js:7223-7413 placement
 function Ce(e) {
   let n =
-      typeof e === "string"
-        ? `
+    typeof e === "string"
+      ? `
 `
-        : `
-`.charCodeAt(),
-    r = typeof e === "string" ? "\r" : "\r".charCodeAt();
+      : `
+`.charCodeAt();
+  let r = typeof e === "string" ? "\r" : "\r".charCodeAt();
   if (e[e.length - 1] === n) e = e.slice(0, -1);
   if (e[e.length - 1] === r) e = e.slice(0, -1);
   return e;
 }
 //@ chunk-m4p5zn6n.js:27831-28526 esm-layout
-var Do = 1e8,
-  Uo = ({
-    env: env,
-    extendEnv: extendEnv,
-    preferLocal: preferLocal,
-    localDir: localDir,
-    execPath: execPath,
-  }) => {
-    let u = extendEnv ? { ...pe.env, ...env } : env;
-    if (preferLocal) return Kt({ env: u, cwd: localDir, execPath: execPath });
-    return u;
-  },
-  _n = (e, n, r = {}) => {
-    let _parse = Rn.default._parse(e, n, r);
-    if (
-      ((e = _parse.command),
-      (n = _parse.args),
-      (r = _parse.options),
-      (r = {
-        maxBuffer: Do,
-        buffer: !0,
-        stripFinalNewline: !0,
-        extendEnv: !0,
-        preferLocal: !1,
-        localDir: r.cwd || pe.cwd(),
-        execPath: pe.execPath,
-        encoding: "utf8",
-        reject: !0,
-        cleanup: !0,
-        all: !1,
-        windowsHide: !0,
-        verbose: enabled,
-        ...r,
-      }),
-      (r.env = Uo(r)),
-      (r.stdio = Yt(r)),
-      pe.platform === "win32" && path.basename(e, ".exe") === "cmd")
-    )
-      n.unshift("/q");
-    return { file: e, args: n, options: r, parsed: _parse };
-  },
-  U = (e, n, r) => {
-    if (typeof n !== "string" && !jo.isBuffer(n)) return r === void 0 ? void 0 : "";
-    if (e.stripFinalNewline) return Ce(n);
-    return n;
+var DEFAULT_MAX_BUFFER = 1e8;
+var getEnv = ({ env: envOption, extendEnv, preferLocal, localDir, execPath }) => {
+  let env = extendEnv
+    ? {
+        ...Mr.env,
+        ...envOption,
+      }
+    : envOption;
+  if (preferLocal)
+    return Kt({
+      env,
+      cwd: localDir,
+      execPath,
+    });
+  return env;
+};
+var handleArguments = (file, args, options = {}) => {
+  let parsed = import_cross_spawn.default._parse(file, args, options);
+  file = parsed.command;
+  args = parsed.args;
+  options = parsed.options;
+  options = {
+    maxBuffer: DEFAULT_MAX_BUFFER,
+    buffer: true,
+    stripFinalNewline: true,
+    extendEnv: true,
+    preferLocal: false,
+    localDir: options.cwd || Mr.cwd(),
+    execPath: Mr.execPath,
+    encoding: "utf8",
+    reject: true,
+    cleanup: true,
+    all: false,
+    windowsHide: true,
+    verbose: verboseDefault,
+    ...options,
   };
+  options.env = getEnv(options);
+  options.stdio = normalizeStdio(options);
+  if (Mr.platform === "win32" && path.basename(file, ".exe") === "cmd") args.unshift("/q");
+  return {
+    file,
+    args,
+    options,
+    parsed,
+  };
+};
+var handleOutput = (options, value, error) => {
+  if (typeof value !== "string" && !jo.isBuffer(value)) return error === undefined ? undefined : "";
+  if (options.stripFinalNewline) return Ce(value);
+  return value;
+};
 //@ chunk-m4p5zn6n.js:28526-29569 esm-fingerprint
-function WMt(e, n, r) {
-  let o = _n(e, n, r),
-    s = Ue(e, n),
-    u = Ke(e, n);
-  (We(u, o.options), rn(o.options));
-  let d;
+function execa(file, args, options) {
+  let parsed = handleArguments(file, args, options);
+  let command = Ue(file, args);
+  let escapedCommand = Ke(file, args);
+  logCommand(escapedCommand, parsed.options);
+  validateTimeout(parsed.options);
+  let spawned;
   try {
-    d = child_process.spawn(o.file, o.args, o.options);
+    spawned = child_process.spawn(parsed.file, parsed.args, parsed.options);
   } catch (error) {
-    let E = new child_process.ChildProcess(),
-      reject = Promise.reject(
-        M({
-          error: error,
-          stdout: "",
-          stderr: "",
-          all: "",
-          command: s,
-          escapedCommand: u,
-          parsed: o,
-          timedOut: !1,
-          isCanceled: !1,
-          killed: !1,
-        }),
-      );
-    return (De(E, reject), E);
+    let dummySpawned = new child_process.ChildProcess();
+    let errorPromise = Promise.reject(
+      makeError({
+        error,
+        stdout: "",
+        stderr: "",
+        all: "",
+        command,
+        escapedCommand,
+        parsed,
+        timedOut: false,
+        isCanceled: false,
+        killed: false,
+      }),
+    );
+    mergePromise(dummySpawned, errorPromise);
+    return dummySpawned;
   }
-  let l = Tn(d),
-    f = nn(d, o.options, l),
-    p = on(d, o.options, f),
-    h = { isCanceled: !1 };
-  ((d.kill = en.bind(null, d.kill.bind(d))), (d.cancel = tn.bind(null, d, h)));
-  let y = Wt(async () => {
-    let [{ error: w, exitCode: E, signal: v, timedOut: A }, H, V, Y] = await wn(d, o.options, p),
-      et = U(o.options, H),
-      tt = U(o.options, V),
-      nt = U(o.options, Y);
-    if (w || E !== 0 || v !== null) {
-      let rt = M({
-        error: w,
-        exitCode: E,
-        signal: v,
-        stdout: et,
-        stderr: tt,
-        all: nt,
-        command: s,
-        escapedCommand: u,
-        parsed: o,
-        timedOut: A,
-        isCanceled: h.isCanceled || (o.options.signal ? o.options.signal.aborted : !1),
-        killed: d.killed,
+  let spawnedPromise = getSpawnedPromise(spawned);
+  let timedPromise = setupTimeout(spawned, parsed.options, spawnedPromise);
+  let processDone = setExitHandler(spawned, parsed.options, timedPromise);
+  let context = {
+    isCanceled: false,
+  };
+  spawned.kill = spawnedKill.bind(null, spawned.kill.bind(spawned));
+  spawned.cancel = spawnedCancel.bind(null, spawned, context);
+  let handlePromiseOnce = onetime_default(async () => {
+    let [{ error, exitCode, signal, timedOut }, stdoutResult, stderrResult, allResult] =
+      await getSpawnedResult(spawned, parsed.options, processDone);
+    let stdout = handleOutput(parsed.options, stdoutResult);
+    let stderr = handleOutput(parsed.options, stderrResult);
+    let all = handleOutput(parsed.options, allResult);
+    if (error || exitCode !== 0 || signal !== null) {
+      let returnedError = makeError({
+        error,
+        exitCode,
+        signal,
+        stdout,
+        stderr,
+        all,
+        command,
+        escapedCommand,
+        parsed,
+        timedOut,
+        isCanceled: context.isCanceled || (parsed.options.signal ? parsed.options.signal.aborted : false),
+        killed: spawned.killed,
       });
-      if (!o.options.reject) return rt;
-      throw rt;
+      if (!parsed.options.reject) return returnedError;
+      throw returnedError;
     }
     return {
-      command: s,
-      escapedCommand: u,
+      command,
+      escapedCommand,
       exitCode: 0,
-      stdout: et,
-      stderr: tt,
-      all: nt,
-      failed: !1,
-      timedOut: !1,
-      isCanceled: !1,
-      killed: !1,
+      stdout,
+      stderr,
+      all,
+      failed: false,
+      timedOut: false,
+      isCanceled: false,
+      killed: false,
     };
   });
-  return (Cn(d, o.options), (d.all = En(d, o.options)), sn(d), De(d, y), d);
+  handleInput(spawned, parsed.options);
+  spawned.all = makeAllStream(spawned, parsed.options);
+  addPipeMethods(spawned);
+  mergePromise(spawned, handlePromiseOnce);
+  return spawned;
 }
 //@ chunk-m4p5zn6n.js:29569-30299 esm-fingerprint
-function B(e, n, r) {
-  let o = _n(e, n, r),
-    s = Ue(e, n),
-    u = Ke(e, n);
-  We(u, o.options);
-  let d = bn(o.options),
-    l;
+function execaSync(file, args, options) {
+  let parsed = handleArguments(file, args, options);
+  let command = Ue(file, args);
+  let escapedCommand = Ke(file, args);
+  logCommand(escapedCommand, parsed.options);
+  let input = handleInputSync(parsed.options);
+  let result;
   try {
-    l = child_process.spawnSync(o.file, o.args, { ...o.options, input: d });
+    result = child_process.spawnSync(parsed.file, parsed.args, {
+      ...parsed.options,
+      input,
+    });
   } catch (error) {
-    throw M({
-      error: error,
+    throw makeError({
+      error,
       stdout: "",
       stderr: "",
       all: "",
-      command: s,
-      escapedCommand: u,
-      parsed: o,
-      timedOut: !1,
-      isCanceled: !1,
-      killed: !1,
+      command,
+      escapedCommand,
+      parsed,
+      timedOut: false,
+      isCanceled: false,
+      killed: false,
     });
   }
-  let f = U(o.options, l.stdout, l.error),
-    p = U(o.options, l.stderr, l.error);
-  if (l.error || l.status !== 0 || l.signal !== null) {
-    let h = M({
-      stdout: f,
-      stderr: p,
-      error: l.error,
-      signal: l.signal,
-      exitCode: l.status,
-      command: s,
-      escapedCommand: u,
-      parsed: o,
-      timedOut: l.error && l.error.code === "ETIMEDOUT",
-      isCanceled: !1,
-      killed: l.signal !== null,
+  let stdout = handleOutput(parsed.options, result.stdout, result.error);
+  let stderr = handleOutput(parsed.options, result.stderr, result.error);
+  if (result.error || result.status !== 0 || result.signal !== null) {
+    let error = makeError({
+      stdout,
+      stderr,
+      error: result.error,
+      signal: result.signal,
+      exitCode: result.status,
+      command,
+      escapedCommand,
+      parsed,
+      timedOut: result.error && result.error.code === "ETIMEDOUT",
+      isCanceled: false,
+      killed: result.signal !== null,
     });
-    if (!o.options.reject) return h;
-    throw h;
+    if (!parsed.options.reject) return error;
+    throw error;
   }
   return {
-    command: s,
-    escapedCommand: u,
+    command,
+    escapedCommand,
     exitCode: 0,
-    stdout: f,
-    stderr: p,
-    failed: !1,
-    timedOut: !1,
-    isCanceled: !1,
-    killed: !1,
+    stdout,
+    stderr,
+    failed: false,
+    timedOut: false,
+    isCanceled: false,
+    killed: false,
   };
 }
 //@ chunk-m4p5zn6n.js:30299-30439 esm-fingerprint
-var Bo = ({ input: input, inputFile: inputFile, stdio: stdio }) =>
-    input === void 0 && inputFile === void 0 && stdio === void 0 ? { stdin: "inherit" } : {},
-  An = (e = {}) => ({ preferLocal: !0, ...Bo(e), ...e });
+var normalizeScriptStdin = ({ input, inputFile, stdio }) =>
+  input === undefined && inputFile === undefined && stdio === undefined
+    ? {
+        stdin: "inherit",
+      }
+    : {};
+var normalizeScriptOptions = (options = {}) => ({
+  preferLocal: true,
+  ...normalizeScriptStdin(options),
+  ...options,
+});
 //@ chunk-m4p5zn6n.js:30439-30740 esm-fingerprint
-function $n(e) {
-  function n(r, ...o) {
-    if (!Array.isArray(r)) return $n({ ...e, ...r });
-    let [s, ...u] = ze(r, o);
-    return WMt(s, u, An(e));
+function create$(options) {
+  function $(templatesOrOptions, ...expressions) {
+    if (!Array.isArray(templatesOrOptions))
+      return create$({
+        ...options,
+        ...templatesOrOptions,
+      });
+    let [file, ...args] = parseTemplates(templatesOrOptions, expressions);
+    return execa(file, args, normalizeScriptOptions(options));
   }
-  return (
-    (n.sync = (r, ...o) => {
-      if (!Array.isArray(r))
-        throw TypeError("Please use $(options).sync`command` instead of $.sync(options)`command`.");
-      let [s, ...u] = ze(r, o);
-      return B(s, u, An(e));
-    }),
-    n
-  );
+  $.sync = (templates, ...expressions) => {
+    if (!Array.isArray(templates))
+      throw TypeError("Please use $(options).sync`command` instead of $.sync(options)`command`.");
+    let [file, ...args] = parseTemplates(templates, expressions);
+    return execaSync(file, args, normalizeScriptOptions(options));
+  };
+  return $;
 }
 //@ chunk-m4p5zn6n.js:30740-30752 affinity
-var oa = $n();
-
-export { WMt, B };
+var oa = create$();
+export { execa, execaSync };

@@ -8,20 +8,28 @@
 import { x } from "../../../../../../runtime/bun-runtime.js";
 
 //@ chunk-fq0cr76a.js:342537-343319 cjs-require-graph
-var Fu = x(function (uk) {
-  Object.defineProperty(uk, "__esModule", { value: !0 });
-  uk.isWrapper = dY;
-  uk.isWrapperDesc = lk;
-  uk.hasCustomJsonRepresentation = fY;
-  function dY(e) {
-    return ck(e.$typeName);
+var require_wrappers = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.isWrapper = isWrapper;
+  cjsExports.isWrapperDesc = isWrapperDesc;
+  cjsExports.hasCustomJsonRepresentation = hasCustomJsonRepresentation;
+  function isWrapper(arg) {
+    return isWrapperTypeName(arg.$typeName);
   }
-  function lk(e) {
-    let n = e.fields[0];
-    return ck(e.typeName) && n !== void 0 && n.fieldKind == "scalar" && n.name == "value" && n.number == 1;
+  function isWrapperDesc(messageDesc) {
+    let f = messageDesc.fields[0];
+    return (
+      isWrapperTypeName(messageDesc.typeName) &&
+      f !== undefined &&
+      f.fieldKind == "scalar" &&
+      f.name == "value" &&
+      f.number == 1
+    );
   }
-  function fY(e) {
-    switch (e.typeName) {
+  function hasCustomJsonRepresentation(desc) {
+    switch (desc.typeName) {
       case "google.protobuf.Any":
       case "google.protobuf.Timestamp":
       case "google.protobuf.Duration":
@@ -29,14 +37,14 @@ var Fu = x(function (uk) {
       case "google.protobuf.Struct":
       case "google.protobuf.Value":
       case "google.protobuf.ListValue":
-        return !0;
+        return true;
       default:
-        return lk(e);
+        return isWrapperDesc(desc);
     }
   }
-  function ck(e) {
+  function isWrapperTypeName(name) {
     return (
-      e.startsWith("google.protobuf.") &&
+      name.startsWith("google.protobuf.") &&
       [
         "DoubleValue",
         "FloatValue",
@@ -47,9 +55,8 @@ var Fu = x(function (uk) {
         "BoolValue",
         "StringValue",
         "BytesValue",
-      ].includes(e.substring(16))
+      ].includes(name.substring(16))
     );
   }
 });
-
-export { Fu };
+export { require_wrappers };

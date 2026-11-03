@@ -15,19 +15,19 @@ import { escapeXmlKeepJoiners, normalizeKeepJoiners } from "../utils/permissions
 
 //@ chunk-g54kbxqw.js:34049-34302 placement
 function isSkillFromUserSource(e) {
-  if (e.loadedFrom === void 0) return Boolean(e.isMcp);
+  if (e.loadedFrom === undefined) return Boolean(e.isMcp);
   switch (e.loadedFrom) {
     case "skills":
     case "commands_DEPRECATED":
     case "plugin":
     case "managed":
     case "bundled":
-      return !1;
+      return false;
     case "syncedSkills":
     case "mcp":
     case "memoryStore":
     case "attachedFolder":
-      return !0;
+      return true;
   }
 }
 //@ chunk-g54kbxqw.js:34302-34394 placement
@@ -42,28 +42,28 @@ function isRemoteOrCowork() {
 //@ chunk-g54kbxqw.js:34486-34733 placement
 function emptySkillFrontmatter() {
   return {
-    hooks: void 0,
+    hooks: undefined,
     allowedTools: [],
     disallowedTools: [],
-    executionContext: void 0,
-    agent: void 0,
-    background: void 0,
-    model: void 0,
-    effort: void 0,
-    shell: void 0,
-    paths: void 0,
-    fallback: void 0,
-    createdBy: void 0,
-    displayName: void 0,
-    metadata: void 0,
+    executionContext: undefined,
+    agent: undefined,
+    background: undefined,
+    model: undefined,
+    effort: undefined,
+    shell: undefined,
+    paths: undefined,
+    fallback: undefined,
+    createdBy: undefined,
+    displayName: undefined,
+    metadata: undefined,
   };
 }
 //@ chunk-g54kbxqw.js:34733-34942 placement
 function escapedSkillFields(e) {
   return {
     description: escapeXmlKeepJoiners(e.description),
-    argumentHint: e.argumentHint === void 0 ? void 0 : escapeXmlKeepJoiners(e.argumentHint),
-    whenToUse: e.whenToUse === void 0 ? void 0 : escapeXmlKeepJoiners(e.whenToUse),
+    argumentHint: e.argumentHint === undefined ? undefined : escapeXmlKeepJoiners(e.argumentHint),
+    whenToUse: e.whenToUse === undefined ? undefined : escapeXmlKeepJoiners(e.whenToUse),
     argumentNames: e.argumentNames.map(escapeXmlKeepJoiners),
   };
 }
@@ -71,10 +71,9 @@ function escapedSkillFields(e) {
 function displaySkillFields(e) {
   return {
     ...escapedSkillFields(e),
-    argumentHint: e.argumentHint === void 0 ? void 0 : normalizeKeepJoiners(e.argumentHint),
+    argumentHint: e.argumentHint === undefined ? undefined : normalizeKeepJoiners(e.argumentHint),
   };
 }
-
 export {
   displaySkillFields,
   isSkillShownToModel,

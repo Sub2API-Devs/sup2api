@@ -6,202 +6,218 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../runtime/bun-runtime.js";
-import { pr } from "../rules.js";
-import { hr } from "./applicability.js";
-import { ct } from "../errors.js";
-import { uh } from "../codegen/index.js";
-import { ew } from "../util.js";
+import { require_rules_2 } from "../rules.js";
+import { require_applicability } from "./applicability.js";
+import { require_errors } from "../errors.js";
+import { require_codegen_2 } from "../codegen/index.js";
+import { require_util_2 } from "../util.js";
 
 //@ chunk-s82q9s4x.js:26116-30071 cjs-fingerprint
-var ut = x(function (Vs) {
-  Object.defineProperty(Vs, "__esModule", { value: !0 });
-  Vs.reportTypeError =
-    Vs.checkDataTypes =
-    Vs.checkDataType =
-    Vs.coerceAndCheckDataType =
-    Vs.getJSONTypes =
-    Vs.getSchemaTypes =
-    Vs.DataType =
-      void 0;
-  var Ts = pr(),
-    Cs = hr(),
-    Ms = ct(),
-    m = uh(),
-    Pt = ew(),
-    Ue;
-  (function (e) {
-    ((e[(e.Correct = 0)] = "Correct"), (e[(e.Wrong = 1)] = "Wrong"));
-  })(Ue || (Vs.DataType = Ue = {}));
-  function Hc(e) {
-    let t = As(e.type);
-    if (t.includes("null")) {
-      if (e.nullable === !1) throw Error("type: null contradicts nullable: false");
+var require_dataType_2 = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.reportTypeError =
+    cjsExports.checkDataTypes =
+    cjsExports.checkDataType =
+    cjsExports.coerceAndCheckDataType =
+    cjsExports.getJSONTypes =
+    cjsExports.getSchemaTypes =
+    cjsExports.DataType =
+      undefined;
+  var rules_1 = require_rules_2();
+  var applicability_1 = require_applicability();
+  var errors_1 = require_errors();
+  var codegen_1 = require_codegen_2();
+  var util_1 = require_util_2();
+  var DataType;
+  (function (DataType) {
+    DataType[(DataType.Correct = 0)] = "Correct";
+    DataType[(DataType.Wrong = 1)] = "Wrong";
+  })(DataType || (cjsExports.DataType = DataType = {}));
+  function getSchemaTypes(schema) {
+    let types = getJSONTypes(schema.type);
+    if (types.includes("null")) {
+      if (schema.nullable === false) throw Error("type: null contradicts nullable: false");
     } else {
-      if (!t.length && e.nullable !== void 0) throw Error('"nullable" cannot be used without "type"');
-      if (e.nullable === !0) t.push("null");
+      if (!types.length && schema.nullable !== undefined)
+        throw Error('"nullable" cannot be used without "type"');
+      if (schema.nullable === true) types.push("null");
     }
-    return t;
+    return types;
   }
-  Vs.getSchemaTypes = Hc;
-  function As(e) {
-    let t = Array.isArray(e) ? e : e ? [e] : [];
-    if (t.every(Ts.isJSONType)) return t;
-    throw Error("type must be JSONType or JSONType[]: " + t.join(","));
+  cjsExports.getSchemaTypes = getSchemaTypes;
+  function getJSONTypes(ts) {
+    let types = Array.isArray(ts) ? ts : ts ? [ts] : [];
+    if (types.every(rules_1.isJSONType)) return types;
+    throw Error("type must be JSONType or JSONType[]: " + types.join(","));
   }
-  Vs.getJSONTypes = As;
-  function Gc(e, t) {
-    let { gen: gen, data: s, opts: opts } = e,
-      o = Jc(t, opts.coerceTypes),
-      i = t.length > 0 && !(o.length === 0 && t.length === 1 && Cs.schemaHasRulesForType(e, t[0]));
-    if (i) {
-      let a = yr(t, s, opts.strictNumbers, Ue.Wrong);
-      gen.if(a, () => {
-        if (o.length) Wc(e, t, o);
-        else _r(e);
+  cjsExports.getJSONTypes = getJSONTypes;
+  function coerceAndCheckDataType(it, types) {
+    let { gen, data, opts } = it;
+    let coerceTo = coerceToTypes(types, opts.coerceTypes);
+    let checkTypes =
+      types.length > 0 &&
+      !(coerceTo.length === 0 && types.length === 1 && applicability_1.schemaHasRulesForType(it, types[0]));
+    if (checkTypes) {
+      let wrongType = checkDataTypes(types, data, opts.strictNumbers, DataType.Wrong);
+      gen.if(wrongType, () => {
+        if (coerceTo.length) coerceData(it, types, coerceTo);
+        else reportTypeError(it);
       });
     }
-    return i;
+    return checkTypes;
   }
-  Vs.coerceAndCheckDataType = Gc;
-  var Ds = new Set(["string", "number", "integer", "boolean", "null"]);
-  function Jc(e, t) {
-    return t ? e.filter((r) => Ds.has(r) || (t === "array" && r === "array")) : [];
+  cjsExports.coerceAndCheckDataType = coerceAndCheckDataType;
+  var COERCIBLE = new Set(["string", "number", "integer", "boolean", "null"]);
+  function coerceToTypes(types, coerceTypes) {
+    return coerceTypes
+      ? types.filter((t) => COERCIBLE.has(t) || (coerceTypes === "array" && t === "array"))
+      : [];
   }
-  function Wc(e, t, r) {
-    let { gen: gen, data: n, opts: opts } = e,
-      i = gen.let("dataType", m._`typeof ${n}`),
-      a = gen.let("coerced", m._`undefined`);
+  function coerceData(it, types, coerceTo) {
+    let { gen, data, opts } = it;
+    let dataType = gen.let("dataType", codegen_1._`typeof ${data}`);
+    let coerced = gen.let("coerced", codegen_1._`undefined`);
     if (opts.coerceTypes === "array")
-      gen.if(m._`${i} == 'object' && Array.isArray(${n}) && ${n}.length == 1`, () =>
+      gen.if(codegen_1._`${dataType} == 'object' && Array.isArray(${data}) && ${data}.length == 1`, () =>
         gen
-          .assign(n, m._`${n}[0]`)
-          .assign(i, m._`typeof ${n}`)
-          .if(yr(t, n, opts.strictNumbers), () => gen.assign(a, n)),
+          .assign(data, codegen_1._`${data}[0]`)
+          .assign(dataType, codegen_1._`typeof ${data}`)
+          .if(checkDataTypes(types, data, opts.strictNumbers), () => gen.assign(coerced, data)),
       );
-    gen.if(m._`${a} !== undefined`);
-    for (let u of r) if (Ds.has(u) || (u === "array" && opts.coerceTypes === "array")) c(u);
-    (gen.else(),
-      _r(e),
-      gen.endIf(),
-      gen.if(m._`${a} !== undefined`, () => {
-        (gen.assign(n, a), Bc(e, a));
-      }));
-    function c(u) {
-      switch (u) {
+    gen.if(codegen_1._`${coerced} !== undefined`);
+    for (let t of coerceTo)
+      if (COERCIBLE.has(t) || (t === "array" && opts.coerceTypes === "array")) coerceSpecificType(t);
+    gen.else();
+    reportTypeError(it);
+    gen.endIf();
+    gen.if(codegen_1._`${coerced} !== undefined`, () => {
+      gen.assign(data, coerced);
+      assignParentData(it, coerced);
+    });
+    function coerceSpecificType(t) {
+      switch (t) {
         case "string":
           gen
-            .elseIf(m._`${i} == "number" || ${i} == "boolean"`)
-            .assign(a, m._`"" + ${n}`)
-            .elseIf(m._`${n} === null`)
-            .assign(a, m._`""`);
+            .elseIf(codegen_1._`${dataType} == "number" || ${dataType} == "boolean"`)
+            .assign(coerced, codegen_1._`"" + ${data}`)
+            .elseIf(codegen_1._`${data} === null`)
+            .assign(coerced, codegen_1._`""`);
           return;
         case "number":
           gen
             .elseIf(
-              m._`${i} == "boolean" || ${n} === null
-              || (${i} == "string" && ${n} && ${n} == +${n})`,
+              codegen_1._`${dataType} == "boolean" || ${data} === null
+              || (${dataType} == "string" && ${data} && ${data} == +${data})`,
             )
-            .assign(a, m._`+${n}`);
+            .assign(coerced, codegen_1._`+${data}`);
           return;
         case "integer":
           gen
             .elseIf(
-              m._`${i} === "boolean" || ${n} === null
-              || (${i} === "string" && ${n} && ${n} == +${n} && !(${n} % 1))`,
+              codegen_1._`${dataType} === "boolean" || ${data} === null
+              || (${dataType} === "string" && ${data} && ${data} == +${data} && !(${data} % 1))`,
             )
-            .assign(a, m._`+${n}`);
+            .assign(coerced, codegen_1._`+${data}`);
           return;
         case "boolean":
           gen
-            .elseIf(m._`${n} === "false" || ${n} === 0 || ${n} === null`)
-            .assign(a, !1)
-            .elseIf(m._`${n} === "true" || ${n} === 1`)
-            .assign(a, !0);
+            .elseIf(codegen_1._`${data} === "false" || ${data} === 0 || ${data} === null`)
+            .assign(coerced, false)
+            .elseIf(codegen_1._`${data} === "true" || ${data} === 1`)
+            .assign(coerced, true);
           return;
         case "null":
-          (gen.elseIf(m._`${n} === "" || ${n} === 0 || ${n} === false`), gen.assign(a, null));
+          gen.elseIf(codegen_1._`${data} === "" || ${data} === 0 || ${data} === false`);
+          gen.assign(coerced, null);
           return;
         case "array":
           gen
             .elseIf(
-              m._`${i} === "string" || ${i} === "number"
-              || ${i} === "boolean" || ${n} === null`,
+              codegen_1._`${dataType} === "string" || ${dataType} === "number"
+              || ${dataType} === "boolean" || ${data} === null`,
             )
-            .assign(a, m._`[${n}]`);
+            .assign(coerced, codegen_1._`[${data}]`);
       }
     }
   }
-  function Bc({ gen: gen, parentData: parentData, parentDataProperty: parentDataProperty }, s) {
-    gen.if(m._`${parentData} !== undefined`, () => gen.assign(m._`${parentData}[${parentDataProperty}]`, s));
+  function assignParentData({ gen, parentData, parentDataProperty }, expr) {
+    gen.if(codegen_1._`${parentData} !== undefined`, () =>
+      gen.assign(codegen_1._`${parentData}[${parentDataProperty}]`, expr),
+    );
   }
-  function mr(e, t, r, s = Ue.Correct) {
-    let n = s === Ue.Correct ? m.operators.EQ : m.operators.NEQ,
-      o;
-    switch (e) {
+  function checkDataType(dataType, data, strictNums, correct = DataType.Correct) {
+    let EQ = correct === DataType.Correct ? codegen_1.operators.EQ : codegen_1.operators.NEQ;
+    let cond;
+    switch (dataType) {
       case "null":
-        return m._`${t} ${n} null`;
+        return codegen_1._`${data} ${EQ} null`;
       case "array":
-        o = m._`Array.isArray(${t})`;
+        cond = codegen_1._`Array.isArray(${data})`;
         break;
       case "object":
-        o = m._`${t} && typeof ${t} == "object" && !Array.isArray(${t})`;
+        cond = codegen_1._`${data} && typeof ${data} == "object" && !Array.isArray(${data})`;
         break;
       case "integer":
-        o = i(m._`!(${t} % 1) && !isNaN(${t})`);
+        cond = numCond(codegen_1._`!(${data} % 1) && !isNaN(${data})`);
         break;
       case "number":
-        o = i();
+        cond = numCond();
         break;
       default:
-        return m._`typeof ${t} ${n} ${e}`;
+        return codegen_1._`typeof ${data} ${EQ} ${dataType}`;
     }
-    return s === Ue.Correct ? o : m.not(o);
-    function i(a = m.nil) {
-      return m.and(m._`typeof ${t} == "number"`, a, r ? m._`isFinite(${t})` : m.nil);
+    return correct === DataType.Correct ? cond : codegen_1.not(cond);
+    function numCond(_cond = codegen_1.nil) {
+      return codegen_1.and(
+        codegen_1._`typeof ${data} == "number"`,
+        _cond,
+        strictNums ? codegen_1._`isFinite(${data})` : codegen_1.nil,
+      );
     }
   }
-  Vs.checkDataType = mr;
-  function yr(e, t, r, s) {
-    if (e.length === 1) return mr(e[0], t, r, s);
-    let n,
-      toHash = Pt.toHash(e);
-    if (toHash.array && toHash.object) {
-      let i = m._`typeof ${t} != "object"`;
-      ((n = toHash.null ? i : m._`!${t} || ${i}`),
-        delete toHash.null,
-        delete toHash.array,
-        delete toHash.object);
-    } else n = m.nil;
-    if (toHash.number) delete toHash.integer;
-    for (let key in toHash) n = m.and(n, mr(key, t, r, s));
-    return n;
+  cjsExports.checkDataType = checkDataType;
+  function checkDataTypes(dataTypes, data, strictNums, correct) {
+    if (dataTypes.length === 1) return checkDataType(dataTypes[0], data, strictNums, correct);
+    let cond;
+    let types = util_1.toHash(dataTypes);
+    if (types.array && types.object) {
+      let notObj = codegen_1._`typeof ${data} != "object"`;
+      cond = types.null ? notObj : codegen_1._`!${data} || ${notObj}`;
+      delete types.null;
+      delete types.array;
+      delete types.object;
+    } else cond = codegen_1.nil;
+    if (types.number) delete types.integer;
+    for (let t in types) cond = codegen_1.and(cond, checkDataType(t, data, strictNums, correct));
+    return cond;
   }
-  Vs.checkDataTypes = yr;
-  var Qc = {
-    message: ({ schema: schema }) => `must be ${schema}`,
-    params: ({ schema: schema, schemaValue: schemaValue }) =>
-      typeof schema == "string" ? m._`{type: ${schema}}` : m._`{type: ${schemaValue}}`,
+  cjsExports.checkDataTypes = checkDataTypes;
+  var typeError = {
+    message: ({ schema }) => `must be ${schema}`,
+    params: ({ schema, schemaValue }) =>
+      typeof schema == "string" ? codegen_1._`{type: ${schema}}` : codegen_1._`{type: ${schemaValue}}`,
   };
-  function _r(e) {
-    let t = Xc(e);
-    Ms.reportError(t, Qc);
+  function reportTypeError(it) {
+    let cxt = getTypeErrorContext(it);
+    errors_1.reportError(cxt, typeError);
   }
-  Vs.reportTypeError = _r;
-  function Xc(e) {
-    let { gen: gen, data: r, schema: schema } = e,
-      schemaRefOrVal = Pt.schemaRefOrVal(e, schema, "type");
+  cjsExports.reportTypeError = reportTypeError;
+  function getTypeErrorContext(it) {
+    let { gen, data, schema } = it;
+    let schemaCode = util_1.schemaRefOrVal(it, schema, "type");
     return {
-      gen: gen,
+      gen,
       keyword: "type",
-      data: r,
+      data,
       schema: schema.type,
-      schemaCode: schemaRefOrVal,
-      schemaValue: schemaRefOrVal,
+      schemaCode,
+      schemaValue: schemaCode,
       parentSchema: schema,
       params: {},
-      it: e,
+      it,
     };
   }
 });
-
-export { ut };
+export { require_dataType_2 };

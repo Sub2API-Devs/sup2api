@@ -8,31 +8,13 @@
  * pieces: chunk-18hwfzwa.js (13)
  * attribution: placement 13
  */
-import {
-  randomUUID,
-  randomUUID as randomUUID_2,
-  randomUUID as randomUUID_3,
-  randomUUID as randomUUID_4,
-  randomUUID as randomUUID_5,
-  randomUUID as randomUUID_6,
-  randomUUID as randomUUID_7,
-  randomUUID as randomUUID_8,
-  randomUUID as randomUUID_9,
-  randomUUID as randomUUID_10,
-  randomUUID as randomUUID_11,
-  randomUUID as randomUUID_12,
-  randomUUID as randomUUID_13,
-  randomUUID as randomUUID_14,
-  randomUUID as randomUUID_15,
-  randomUUID as randomUUID_16,
-  randomUUID as randomUUID_17,
-} from "crypto";
+import { randomUUID } from "crypto";
 import {
   extractInboundMetadata,
   classifyInboundOrigin,
   refineInboundOrigin,
-  awe,
-  qsr,
+  isChatPlatformHuman,
+  humanHintOrPlatform,
   adjustInboundPriority,
   hasTeammateMessageEnvelope,
 } from "./inboundMessageOrigin.js";
@@ -52,20 +34,20 @@ import { promptOriginKind } from "../utils/processUserInput/promptOrigin.js";
 import { buildExternalEventRecord } from "../utils/externalEventRecords.js";
 import { dispatchSessionReceiveHooks } from "../plugins/functionHooks/sessionReceive.js";
 import { originFromBridgeMetadata } from "../utils/messageOrigin.js";
-import { SQ } from "../utils/peerMessageHeaders.js";
-import { den, $Lt } from "../cli/print/rewindStandIn.js";
+import { stripPeerMessageBody } from "../utils/peerMessageHeaders.js";
+import { hasVerifiedSlackHumanTurn, hasSlackLaterNotification } from "../cli/print/rewindStandIn.js";
 import { textNotTypedFlags } from "../utils/messageQueueManager.js";
-import { GRn } from "../utils/turnAttributionKey.js";
+import { inheritedAttributionKey } from "../utils/turnAttributionKey.js";
 import { mainAgentId, recordSubmitTime } from "../bootstrap/state.js";
 import { noteHumanTakeover } from "../services/quotaAutoResume/quotaAutoResume.js";
-import { aO } from "../utils/historyFile.js";
+import { lastTextBlockText } from "../utils/historyFile.js";
 import { logBridgeAttachmentsMissing } from "../cli/print/resumeTurnBoundaries.js";
-import { Vt } from "../utils/agentId.js";
+import { normalizeUuidOrNull } from "../utils/agentId.js";
 import { extractInboundAttachments } from "./inboundAttachments.js";
 import {
   guardPermissionModeChange,
   transitionPermissionMode,
-  aF,
+  permissionModeSignal,
 } from "../utils/permissions/permissionSetup.js";
 import { humanizeToolName } from "./bridgePermissionResponse.js";
 import {
@@ -88,253 +70,305 @@ import { getEndedByModel } from "../tasks/endedByModel.js";
 import { logEvent } from "../services/analytics/index.js";
 import { useHost } from "../context/session.js";
 import { useRenderMode } from "../ink/renderModeContext.js";
-import { P, j } from "../../vendor/react/cjs/react.production.js";
+import { P, init_react_production } from "../../vendor/react/cjs/react.production.js";
 import { isBgSession } from "../utils/concurrentSessions.js";
-import { Jwo } from "../services/daemon/rendezvous.js";
+import { registerRendezvousRunner } from "../services/daemon/rendezvous.js";
 
 //@ chunk-18hwfzwa.js:1611905-1614466 placement
-async function handleBridgeInbound(h, x, D, L, ee, ke, Re, Be) {
-  let { prior: prior, release: release } = h.takeInboundEnqueueTurn();
+async function handleBridgeInbound(h, x, D, L, ee, ke, storageV5, credentials) {
+  let { prior, release } = h.takeInboundEnqueueTurn();
   try {
-    let ze = extractInboundMetadata(x);
-    if (!ze) return;
-    let { uuid: uuid } = ze;
-    recordRemoteSurfaceSeen(ze.clientPlatform, Re);
+    let inboundMetadata = extractInboundMetadata(x);
+    if (!inboundMetadata) return;
+    let { uuid } = inboundMetadata;
+    recordRemoteSurfaceSeen(inboundMetadata.clientPlatform, storageV5);
     let rt = classifyInboundOrigin(
-        ze.content,
-        ze.clientPlatform,
-        ze.inboundOrigin,
-        ze.receiverGroupingId,
-        ze.slackOrigin,
-        ze.activityObservation,
-        ze.fromPlugin,
-      ),
-      kt = classifyInboundOrigin_2(rt) === "ungated" && !isPeerOrSlackPing(rt) && !isTextNotTyped(x),
-      At = refineInboundOrigin(rt, ze.clientPlatform, ze.inboundOrigin),
-      It = escapePluginTags(ze.content, ze.inboundOrigin);
-    if (kt && typeof It === "string" && D(It, At, awe(ze.clientPlatform, ze.inboundOrigin))) {
+      inboundMetadata.content,
+      inboundMetadata.clientPlatform,
+      inboundMetadata.inboundOrigin,
+      inboundMetadata.receiverGroupingId,
+      inboundMetadata.slackOrigin,
+      inboundMetadata.activityObservation,
+      inboundMetadata.fromPlugin,
+    );
+    let kt = classifyInboundOrigin_2(rt) === "ungated" && !isPeerOrSlackPing(rt) && !isTextNotTyped(x);
+    let At = refineInboundOrigin(rt, inboundMetadata.clientPlatform, inboundMetadata.inboundOrigin);
+    let It = escapePluginTags(inboundMetadata.content, inboundMetadata.inboundOrigin);
+    if (
+      kt &&
+      typeof It === "string" &&
+      D(It, At, isChatPlatformHuman(inboundMetadata.clientPlatform, inboundMetadata.inboundOrigin))
+    ) {
       logForDebugging(
-        `[bridge:repl] Ran immediate command without enqueue: ${ze.content.slice(0, 80)}${uuid ? ` uuid=${uuid}` : ""}`,
+        `[bridge:repl] Ran immediate command without enqueue: ${inboundMetadata.content.slice(0, 80)}${uuid ? ` uuid=${uuid}` : ""}`,
       );
       return;
     }
-    using beginInboundIngest = h.beginInboundIngest(isPeerOrSlackPing(rt) ? void 0 : uuid);
-    (await prior, await ke?.());
-    let { resolveAndPrepend: resolveAndPrepend } = await import("./chunk-xth3wpgt.js"),
-      Dt = It,
-      Lt,
-      oo = getInboundRefuseCause(rt);
-    if (oo !== void 0) {
-      logInboundRefused("bridge:repl: dropped before attachment materialization", oo);
+    using Ot = h.beginInboundIngest(isPeerOrSlackPing(rt) ? undefined : uuid);
+    await prior;
+    await ke?.();
+    let { resolveAndPrepend } = await import("./chunk-xth3wpgt.js");
+    let Dt = It;
+    let event;
+    let inboundRefuseCause = getInboundRefuseCause(rt);
+    if (inboundRefuseCause !== undefined) {
+      logInboundRefused("bridge:repl: dropped before attachment materialization", inboundRefuseCause);
       return;
     }
-    let Xt = promptOriginKind(ze.content);
-    if (!isPeerOrSlackPing(rt)) Dt = buildExternalEventRecord(Dt, ze.pastedContent, ze.inlinePastes);
+    let Xt = promptOriginKind(inboundMetadata.content);
+    if (!isPeerOrSlackPing(rt))
+      Dt = buildExternalEventRecord(Dt, inboundMetadata.pastedContent, inboundMetadata.inlinePastes);
     let io = await dispatchSessionReceiveHooks({
       origin: originFromBridgeMetadata(
-        rt ?? refineInboundOrigin(void 0, ze.clientPlatform, ze.inboundOrigin),
+        rt ?? refineInboundOrigin(undefined, inboundMetadata.clientPlatform, inboundMetadata.inboundOrigin),
       ),
       content: Dt,
-      event: Lt,
+      event,
     });
-    if (io.consumed !== void 0) return;
+    if (io.consumed !== undefined) return;
     Dt = io.content;
     using queueing = io.queueing;
-    let po = await resolveAndPrepend(x, Dt, qsr(rt, ze.clientPlatform, ze.inboundOrigin), Re, Be),
-      { content: content, inlinedImagePaths: inlinedImagePaths, missingFiles: missingFiles } = po,
-      Ao = typeof content === "string" ? content.slice(0, 80) : `[${content.length} content blocks]`;
+    let po = await resolveAndPrepend(
+      x,
+      Dt,
+      humanHintOrPlatform(rt, inboundMetadata.clientPlatform, inboundMetadata.inboundOrigin),
+      storageV5,
+      credentials,
+    );
+    let { content, inlinedImagePaths, missingFiles } = po;
+    let Ao = typeof content === "string" ? content.slice(0, 80) : `[${content.length} content blocks]`;
     logForDebugging(`[bridge:repl] Injecting inbound user message: ${Ao}${uuid ? ` uuid=${uuid}` : ""}`);
-    let Bo,
-      Ro = !1;
+    let Bo;
+    let Ro = false;
     if (rt?.kind === "peer")
       Bo = {
-        origin: SQ(rt, content, ze.content),
-        isMeta: !0,
-        skipAttachments: !0,
-        ...(den(h) && { priority: "later" }),
-      };
-    else
-      ((Ro = isHumanOrAutoContinuation(At)),
-        (Bo = {
-          bridgeOrigin: !0,
-          clientPlatform: ze.clientPlatform,
-          ...(At && { origin: At }),
-          ...textNotTypedFlags(x, po),
-          ...(At !== void 0 && !isHumanOrAutoContinuation(At) && { skipAttachments: !0 }),
-          ...(At?.kind === "task-notification" &&
-            adjustInboundPriority(void 0, ze.clientPlatform) === "later" && { priority: "later" }),
-          ...(awe(ze.clientPlatform, ze.inboundOrigin) && {
-            priority: resolveQueuePriority(void 0, content, $Lt(h)),
-            verifiedSlackHumanTurn: !0,
-          }),
-        }));
-    let Ho = GRn(uuid, {
-        isCrossSession: isGatedInbound({
-          ingressOrigin: rt,
-          inboundOrigin: ze.inboundOrigin,
-          envelopePeer: hasTeammateMessageEnvelope(ze.content),
+        origin: stripPeerMessageBody(rt, content, inboundMetadata.content),
+        isMeta: true,
+        skipAttachments: true,
+        ...(hasVerifiedSlackHumanTurn(h) && {
+          priority: "later",
         }),
-      }),
-      Io = {
-        value: content,
-        ...(Xt !== void 0 && { foreignWord: Xt }),
-        mode: "prompt",
-        agentId: mainAgentId(),
-        uuid: uuid,
-        ...(Ho && { turnAttributionKey: Ho }),
-        ...(inlinedImagePaths.length > 0 && { inlinedImagePaths: inlinedImagePaths }),
-        skipSlashCommands: !0,
-        ...Bo,
       };
+    else {
+      Ro = isHumanOrAutoContinuation(At);
+      Bo = {
+        bridgeOrigin: true,
+        clientPlatform: inboundMetadata.clientPlatform,
+        ...(At && {
+          origin: At,
+        }),
+        ...textNotTypedFlags(x, po),
+        ...(At !== undefined &&
+          !isHumanOrAutoContinuation(At) && {
+            skipAttachments: true,
+          }),
+        ...(At?.kind === "task-notification" &&
+          adjustInboundPriority(undefined, inboundMetadata.clientPlatform) === "later" && {
+            priority: "later",
+          }),
+        ...(isChatPlatformHuman(inboundMetadata.clientPlatform, inboundMetadata.inboundOrigin) && {
+          priority: resolveQueuePriority(undefined, content, hasSlackLaterNotification(h)),
+          verifiedSlackHumanTurn: true,
+        }),
+      };
+    }
+    let Ho = inheritedAttributionKey(uuid, {
+      isCrossSession: isGatedInbound({
+        ingressOrigin: rt,
+        inboundOrigin: inboundMetadata.inboundOrigin,
+        envelopePeer: hasTeammateMessageEnvelope(inboundMetadata.content),
+      }),
+    });
+    let Io = {
+      value: content,
+      ...(Xt !== undefined && {
+        foreignWord: Xt,
+      }),
+      mode: "prompt",
+      agentId: mainAgentId(),
+      uuid,
+      ...(Ho && {
+        turnAttributionKey: Ho,
+      }),
+      ...(inlinedImagePaths.length > 0 && {
+        inlinedImagePaths,
+      }),
+      skipSlashCommands: true,
+      ...Bo,
+    };
     if (gateInboundByOrigin(rt, Io) !== "accept") return;
-    if (beginInboundIngest.withdrawn()) {
+    if (Ot.withdrawn()) {
       logForDebugging(`[bridge:repl] Inbound message withdrawn before enqueue${uuid ? ` uuid=${uuid}` : ""}`);
       return;
     }
     if (Ro) {
-      if (
-        ((Io.uuid ??= randomUUID_14()),
-        noteHumanTakeover(Io.uuid),
-        !Io.verifiedSlackHumanTurn && !aO(content)?.startsWith("/"))
-      )
-        recordSubmitTime();
+      Io.uuid ??= randomUUID();
+      noteHumanTakeover(Io.uuid);
+      if (!Io.verifiedSlackHumanTurn && !lastTextBlockText(content)?.startsWith("/")) recordSubmitTime();
     }
-    if (
-      (h.enqueue(Io),
-      logBridgeAttachmentsMissing(Vt(uuid) ?? void 0, extractInboundAttachments(x).length, missingFiles),
-      queueing.queued(),
-      !isPeerOrSlackPing(rt))
-    )
-      ee?.();
+    h.enqueue(Io);
+    logBridgeAttachmentsMissing(
+      normalizeUuidOrNull(uuid) ?? undefined,
+      extractInboundAttachments(x).length,
+      missingFiles,
+    );
+    queueing.queued();
+    if (!isPeerOrSlackPing(rt)) ee?.();
   } catch (error) {
-    logForDebugging(`[bridge:repl] handleInboundMessage failed: ${error}`, { level: "error" });
+    logForDebugging(`[bridge:repl] handleInboundMessage failed: ${error}`, {
+      level: "error",
+    });
   } finally {
     prior.then(release, release);
   }
 }
+//@ chunk-18hwfzwa.js:1614466-1614774 placement
 /**
  * 处理桥接端发来的权限模式切换：先 guardPermissionModeChange 校验，通过后用 transitionPermissionMode 更新 toolPermissionContext 并在下一轮事件循环通知订阅者。
  */
-//@ chunk-18hwfzwa.js:1614466-1614774 placement
 function applyBridgePermissionModeChange(requestedMode, store, setAppState) {
   let L = guardPermissionModeChange(requestedMode, store.getState().toolPermissionContext);
   if (!L.ok) return L;
   let mode = L.mode;
-  return (
-    setAppState((ke) => {
-      let mode_2 = ke.toolPermissionContext.mode;
-      if (mode_2 === mode) return ke;
-      let Be = transitionPermissionMode(mode_2, mode, ke.toolPermissionContext);
-      return { ...ke, toolPermissionContext: { ...Be, mode: mode } };
-    }),
-    setImmediate(() => {
-      aF.emit();
-    }),
-    { ok: !0 }
-  );
+  setAppState((ke) => {
+    let mode_2 = ke.toolPermissionContext.mode;
+    if (mode_2 === mode) return ke;
+    let Be = transitionPermissionMode(mode_2, mode, ke.toolPermissionContext);
+    return {
+      ...ke,
+      toolPermissionContext: {
+        ...Be,
+        mode,
+      },
+    };
+  });
+  setImmediate(() => {
+    permissionModeSignal.emit();
+  });
+  return {
+    ok: true,
+  };
 }
+//@ chunk-18hwfzwa.js:1614774-1615404 placement
 /**
  * 构造桥接的权限请求回调：sendRequest 发 can_use_tool 控制请求（附显示名、建议、阻塞路径等），sendResponse/cancelRequest/onResponse 管理控制响应与待决处理器。
  */
-//@ chunk-18hwfzwa.js:1614774-1615404 placement
 function createBridgePermissionCallbacks(bridge, pendingHandlers) {
   return {
-    sendRequest(D, L, ee, ke, Re, Be, He, We, ze, Xe) {
+    sendRequest(requestId, L, input, toolUseId, description, Be, He, We, ze, Xe) {
       bridge.sendControlRequest({
         type: "control_request",
-        request_id: D,
+        request_id: requestId,
         request: {
           subtype: "can_use_tool",
           tool_name: L,
           display_name: humanizeToolName(L),
-          input: ee,
-          tool_use_id: ke,
-          description: Re,
-          ...(Be && { permission_suggestions: Be }),
-          ...(He && { blocked_path: He }),
-          requires_user_interaction: We || void 0,
-          ...(ze && { tool_kind: ze }),
+          input,
+          tool_use_id: toolUseId,
+          description,
+          ...(Be && {
+            permission_suggestions: Be,
+          }),
+          ...(He && {
+            blocked_path: He,
+          }),
+          requires_user_interaction: We || undefined,
+          ...(ze && {
+            tool_kind: ze,
+          }),
           ...Xe,
         },
       });
     },
-    sendResponse(D, L) {
-      let ee = { ...L };
+    sendResponse(requestId, L) {
+      let response = {
+        ...L,
+      };
       bridge.sendControlResponse({
         type: "control_response",
-        response: { subtype: "success", request_id: D, response: ee },
+        response: {
+          subtype: "success",
+          request_id: requestId,
+          response,
+        },
       });
     },
     cancelRequest(D) {
-      (bridge.sendControlCancelRequest(D), pendingHandlers.delete(D));
+      bridge.sendControlCancelRequest(D);
+      pendingHandlers.delete(D);
     },
-    onResponse(D, L, ee) {
-      return (
-        pendingHandlers.set(D, { toolName: L, handler: ee }),
-        () => {
-          pendingHandlers.delete(D);
-        }
-      );
+    onResponse(D, toolName, handler) {
+      pendingHandlers.set(D, {
+        toolName,
+        handler,
+      });
+      return () => {
+        pendingHandlers.delete(D);
+      };
     },
   };
 }
+//@ chunk-18hwfzwa.js:1615404-1615783 placement
 /**
  * 构造桥接的用户对话框回调：sendRequest 发 request_user_dialog 控制请求，supportsKind 判断对端支持的对话框种类。
  */
-//@ chunk-18hwfzwa.js:1615404-1615783 placement
 function createBridgeDialogCallbacks(bridge, pendingHandlers, supportedKinds) {
   return {
     supportsKind(L) {
       return supportedKinds.has(L);
     },
-    sendRequest(L, ee, ke, Re) {
+    sendRequest(requestId, dialogKind, payload, Re) {
       return bridge.sendControlRequest({
         type: "control_request",
-        request_id: L,
+        request_id: requestId,
         request: {
           subtype: "request_user_dialog",
-          dialog_kind: ee,
-          payload: ke,
-          ...(Re && { tool_use_id: Re }),
+          dialog_kind: dialogKind,
+          payload,
+          ...(Re && {
+            tool_use_id: Re,
+          }),
         },
       });
     },
     cancelRequest(L) {
-      (bridge.sendControlCancelRequest(L), pendingHandlers.delete(L));
+      bridge.sendControlCancelRequest(L);
+      pendingHandlers.delete(L);
     },
-    onResponse(L, ee, ke) {
-      return (
-        pendingHandlers.set(L, { kind: ee, handler: ke }),
-        () => {
-          pendingHandlers.delete(L);
-        }
-      );
+    onResponse(L, kind, handler) {
+      pendingHandlers.set(L, {
+        kind,
+        handler,
+      });
+      return () => {
+        pendingHandlers.delete(L);
+      };
     },
   };
 }
+//@ chunk-18hwfzwa.js:1615783-1616217 placement
 /**
  * 有 CLAUDE_JOB_DIR 时，把作业状态文件里的 bridgeSession* 字段全部清掉（重新读一次再原子写回），出错只记日志。
  */
-//@ chunk-18hwfzwa.js:1615783-1616217 placement
 async function clearBridgeSessionFromJobState(fsOps) {
   let envClaudeJobDir = process.env.CLAUDE_JOB_DIR;
   if (!envClaudeJobDir) return;
   try {
-    let D = await readJobState(envClaudeJobDir, fsOps);
-    if (!D || D.bridgeSessionId === void 0) return;
+    let jobState = await readJobState(envClaudeJobDir, fsOps);
+    if (!jobState || jobState.bridgeSessionId === undefined) return;
     invalidateJobStateCache(envClaudeJobDir);
-    let L = (await readJobState(envClaudeJobDir, fsOps)) ?? D;
+    let L = (await readJobState(envClaudeJobDir, fsOps)) ?? jobState;
     await writeStateAtomic(
       envClaudeJobDir,
       {
         ...L,
-        bridgeSessionId: void 0,
-        bridgeOutboundOnly: void 0,
-        bridgeSessionSeq: void 0,
-        bridgeSessionGroupingId: void 0,
-        bridgeOwnerAccountUuid: void 0,
-        bridgeOwnerOrganizationUuid: void 0,
-        bridgeNoHistoryBackfill: void 0,
+        bridgeSessionId: undefined,
+        bridgeOutboundOnly: undefined,
+        bridgeSessionSeq: undefined,
+        bridgeSessionGroupingId: undefined,
+        bridgeOwnerAccountUuid: undefined,
+        bridgeOwnerOrganizationUuid: undefined,
+        bridgeNoHistoryBackfill: undefined,
         updatedAt: new Date().toISOString(),
       },
       fsOps,
@@ -343,10 +377,10 @@ async function clearBridgeSessionFromJobState(fsOps) {
     logJobWriteError(error);
   }
 }
+//@ chunk-18hwfzwa.js:1616217-1616892 placement
 /**
  * 把当前桥接会话信息（会话 id、仅出站、分组、归属账号/组织、禁止回填历史）写进作业状态文件；值未变化时不写，会话 id 不变时保留 bridgeSessionSeq。
  */
-//@ chunk-18hwfzwa.js:1616217-1616892 placement
 async function persistBridgeSessionToJobState(
   jobDir,
   bridgeSessionId,
@@ -358,30 +392,30 @@ async function persistBridgeSessionToJobState(
 ) {
   if (!jobDir) return;
   try {
-    let Be = await readJobState(jobDir, fsOps);
+    let jobState = await readJobState(jobDir, fsOps);
     if (
-      !Be ||
-      (Be.bridgeSessionId === bridgeSessionId &&
-        Be.bridgeOutboundOnly === outboundOnly &&
-        Be.bridgeSessionGroupingId === groupingId &&
-        Be.bridgeOwnerAccountUuid === owner?.accountUuid &&
-        Be.bridgeOwnerOrganizationUuid === owner?.organizationUuid &&
-        (Be.bridgeNoHistoryBackfill ?? !1) === noHistoryBackfill)
+      !jobState ||
+      (jobState.bridgeSessionId === bridgeSessionId &&
+        jobState.bridgeOutboundOnly === outboundOnly &&
+        jobState.bridgeSessionGroupingId === groupingId &&
+        jobState.bridgeOwnerAccountUuid === owner?.accountUuid &&
+        jobState.bridgeOwnerOrganizationUuid === owner?.organizationUuid &&
+        (jobState.bridgeNoHistoryBackfill ?? false) === noHistoryBackfill)
     )
       return;
     invalidateJobStateCache(jobDir);
-    let He = (await readJobState(jobDir, fsOps)) ?? Be;
+    let He = (await readJobState(jobDir, fsOps)) ?? jobState;
     await writeStateAtomic(
       jobDir,
       {
         ...He,
-        bridgeSessionId: bridgeSessionId,
+        bridgeSessionId,
         bridgeOutboundOnly: outboundOnly,
         bridgeSessionGroupingId: groupingId,
         bridgeOwnerAccountUuid: owner?.accountUuid,
         bridgeOwnerOrganizationUuid: owner?.organizationUuid,
-        bridgeNoHistoryBackfill: noHistoryBackfill || void 0,
-        bridgeSessionSeq: He.bridgeSessionId === bridgeSessionId ? He.bridgeSessionSeq : void 0,
+        bridgeNoHistoryBackfill: noHistoryBackfill || undefined,
+        bridgeSessionSeq: He.bridgeSessionId === bridgeSessionId ? He.bridgeSessionSeq : undefined,
         updatedAt: new Date().toISOString(),
       },
       fsOps,
@@ -390,120 +424,128 @@ async function persistBridgeSessionToJobState(
     logJobWriteError(error);
   }
 }
+//@ chunk-18hwfzwa.js:1616892-1617525 placement
 /**
  * 为桥接端的 context usage 请求收集上下文占用数据：动态加载 collectContextData，带上当前会话、消息、工具、MCP 客户端和系统提示词设置。
  */
-//@ chunk-18hwfzwa.js:1616892-1617525 placement
 async function collectBridgeContextUsage(
-  {
-    getContextUsageInputs: getContextUsageInputs,
-    store: store,
-    transcript: transcript,
-    storageV5: storageV5,
-    credentials: credentials,
-    mainLoopModel: mainLoopModel,
-  },
+  { getContextUsageInputs, store, transcript, storageV5, credentials, mainLoopModel },
   request,
 ) {
-  let { collectContextData: collectContextData } = await import("./chunk-mszdds2y.js"),
-    state = store.getState(),
-    {
-      session: session,
-      tools: tools,
-      mcpClients: mcpClients,
-      customSystemPrompt: customSystemPrompt,
-      appendSystemPrompt: appendSystemPrompt,
-      systemPromptSnapshot: systemPromptSnapshot,
-      runningTurnModelOverride: runningTurnModelOverride,
-    } = getContextUsageInputs();
+  let { collectContextData } = await import("./chunk-mszdds2y.js");
+  let state = store.getState();
+  let {
+    session,
+    tools,
+    mcpClients,
+    customSystemPrompt,
+    appendSystemPrompt,
+    systemPromptSnapshot,
+    runningTurnModelOverride,
+  } = getContextUsageInputs();
   return collectContextData({
-    session: session,
+    session,
     messages: transcript.getSnapshot(),
     getAppState: store.getState,
     getMcp: () => store.getState().mcp,
-    storageV5: storageV5,
-    credentials: credentials,
+    storageV5,
+    credentials,
     options: {
       mainLoopModel: runningTurnModelOverride ?? mainLoopModel,
-      tools: tools,
-      mcpClients: mcpClients,
+      tools,
+      mcpClients,
       agentDefinitions: state.agentDefinitions,
-      customSystemPrompt: customSystemPrompt,
-      appendSystemPrompt: appendSystemPrompt,
-      systemPromptSnapshot: systemPromptSnapshot,
+      customSystemPrompt,
+      appendSystemPrompt,
+      systemPromptSnapshot,
     },
     detail: request?.detail,
   });
 }
 //@ chunk-18hwfzwa.js:1617525-1617578 placement
-var C$o = new Set(["effort", "model", "rename", "usage"]);
+var BRIDGE_IMMEDIATE_COMMAND_NAMES = new Set(["effort", "model", "rename", "usage"]);
 //@ chunk-18hwfzwa.js:1617578-1617634 placement
-function _$o() {
-  return getFeatureValue_CACHED_MAY_BE_STALE("tengu_humming_locket", !0) !== !1;
+function isBridgeImmediateCommandsEnabled() {
+  return getFeatureValue_CACHED_MAY_BE_STALE("tengu_humming_locket", true) !== false;
 }
+//@ chunk-18hwfzwa.js:1617634-1617919 placement
 /**
  * 判断桥接送来的文本是否是可立即执行的斜杠命令：命令必须存在、已启用、不被模型结束状态阻止，且在 BRIDGE_SAFE_COMMANDS 与即时命令白名单中。返回解析结果或 null。
  */
-//@ chunk-18hwfzwa.js:1617634-1617919 placement
 function resolveBridgeImmediateCommand(text, commands, renderMode, endedByModel) {
   if (!text.startsWith("/")) return null;
-  let ee = parseSlashCommand(text),
-    ke = ee && findCommand(ee.commandName, commands);
+  let slashCommand = parseSlashCommand(text);
+  let ke = slashCommand && findCommand(slashCommand.commandName, commands);
   if (!ke || !isCommandEnabled(ke)) return null;
   if (isSlashCommandBlockedByEndedByModel(ke, endedByModel)) return null;
-  let Re = resolveBridgeImmediateCommand_2(text, commands, renderMode, {
-    origin: { kind: "human" },
-    relayAuthored: !1,
+  let bridgeImmediateCommand = resolveBridgeImmediateCommand_2(text, commands, renderMode, {
+    origin: {
+      kind: "human",
+    },
+    relayAuthored: false,
   });
-  if (!Re || !BRIDGE_SAFE_COMMANDS.has(Re.target) || !C$o.has(Re.target.name)) return null;
-  return Re;
+  if (
+    !bridgeImmediateCommand ||
+    !BRIDGE_SAFE_COMMANDS.has(bridgeImmediateCommand.target) ||
+    !BRIDGE_IMMEDIATE_COMMAND_NAMES.has(bridgeImmediateCommand.target.name)
+  )
+    return null;
+  return bridgeImmediateCommand;
 }
+//@ chunk-18hwfzwa.js:1617919-1618267 placement
 /**
  * 后台会话且有活动回合时，把桥接文本当作即时斜杠命令执行（记 tengu_immediate_command_executed），成功返回 true。
  */
-//@ chunk-18hwfzwa.js:1617919-1618267 placement
-function tryRunBridgeImmediateCommand(
-  text,
-  { turn: turn, scope: scope, store: store, transport: transport },
-  renderMode,
-) {
-  if (!_$o() || !turn.guard.isActive) return !1;
-  let Re = resolveBridgeImmediateCommand(text, scope.commands, renderMode, getEndedByModel(store.getState()));
-  if (!Re) return !1;
-  return (
-    logEvent("tengu_immediate_command_executed", {
-      commandName: shippedCommandNameForAnalytics(Re.displayName),
-      fromKeybinding: !1,
-      peerReply: !0,
-    }),
-    transport.runBridgeImmediateCommand(Re.target, Re.args, Re.displayName, { kind: "human" }),
-    !0
+function tryRunBridgeImmediateCommand(text, { turn, scope, store, transport }, renderMode) {
+  if (!isBridgeImmediateCommandsEnabled() || !turn.guard.isActive) return false;
+  let bridgeImmediateCommand = resolveBridgeImmediateCommand(
+    text,
+    scope.commands,
+    renderMode,
+    getEndedByModel(store.getState()),
   );
+  if (!bridgeImmediateCommand) return false;
+  logEvent("tengu_immediate_command_executed", {
+    commandName: shippedCommandNameForAnalytics(bridgeImmediateCommand.displayName),
+    fromKeybinding: false,
+    peerReply: true,
+  });
+  transport.runBridgeImmediateCommand(
+    bridgeImmediateCommand.target,
+    bridgeImmediateCommand.args,
+    bridgeImmediateCommand.displayName,
+    {
+      kind: "human",
+    },
+  );
+  return true;
 }
+//@ chunk-18hwfzwa.js:1618267-1618465 placement
 /**
  * React hook：后台会话中注册桥接即时命令处理器（每宿主一个），卸载时注销。
  */
-//@ chunk-18hwfzwa.js:1618267-1618465 placement
-function useBridgeImmediateCommands({ turn: turn, scope: scope, store: store, transport: transport }) {
-  let ee = useHost(),
-    ke = useRenderMode();
+function useBridgeImmediateCommands({ turn, scope, store, transport }) {
+  let host = useHost();
+  let renderMode = useRenderMode();
   P(() => {
     if (!isBgSession()) return;
-    return (
-      Jwo(ee, (Re) =>
-        tryRunBridgeImmediateCommand(
-          Re,
-          { turn: turn, scope: scope, store: store, transport: transport },
-          ke,
-        ),
+    registerRendezvousRunner(host, (text) =>
+      tryRunBridgeImmediateCommand(
+        text,
+        {
+          turn,
+          scope,
+          store,
+          transport,
+        },
+        renderMode,
       ),
-      () => Jwo(ee, null)
     );
-  }, [ee, turn, scope, store, transport, ke]);
+    return () => registerRendezvousRunner(host, null);
+  }, [host, turn, scope, store, transport, renderMode]);
 }
 //@ chunk-18hwfzwa.js:1618465-1618469 placement
-j();
-
+init_react_production();
 export {
   useBridgeImmediateCommands,
   clearBridgeSessionFromJobState,

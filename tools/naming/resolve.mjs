@@ -178,9 +178,11 @@ for (const { file, b, c } of decided) {
   } else take(modScope, b.min);
 }
 for (const { file, b, c } of decided) {
-  if (b.frozen) { stats.frozen = (stats.frozen ?? 0) + 1; continue; }
   let rec;
-  if (!c) { rec = b.renameTo ? { name: b.renameTo, min: b.min, source: 'auto', confidence: 0.1, declId: b.declId, kind: 'decl', via: 'module-clash' } : { name: b.min, min: b.min, source: 'minified', confidence: 0, declId: b.declId, kind: 'decl' }; stats.kept++; }
+  // frozen (direct eval): the minified name stays; the entry is still written
+  // because the readable emitter needs every top-level binding of the chunk
+  if (b.frozen) { rec = { name: b.min, min: b.min, source: 'minified', confidence: 0, declId: b.declId, kind: 'decl', frozen: true }; stats.frozen = (stats.frozen ?? 0) + 1; }
+  else if (!c) { rec = b.renameTo ? { name: b.renameTo, min: b.min, source: 'auto', confidence: 0.1, declId: b.declId, kind: 'decl', via: 'module-clash' } : { name: b.min, min: b.min, source: 'minified', confidence: 0, declId: b.declId, kind: 'decl' }; stats.kept++; }
   else {
     const scopes = scopesOf(file, b);
     let name = c.name, i = 2;
@@ -199,7 +201,12 @@ for (const [file, im] of importsOf) {
   const m = final.get(file) ?? new Map();
   final.set(file, m);
   for (const b of im) {
-    if (b.frozen) { take(`chunk:${file}`, b.min); stats.frozen = (stats.frozen ?? 0) + 1; continue; }
+    if (b.frozen) {
+      take(`chunk:${file}`, b.min);
+      m.set(b.off, { name: b.min, min: b.min, source: 'minified', kind: 'import', from: b.from, imported: b.imported, frozen: true });
+      stats.frozen = (stats.frozen ?? 0) + 1;
+      continue;
+    }
     let want = b.min;
     const exOff = exportsOf.get(b.from)?.get(b.imported);
     const target = exOff !== undefined ? final.get(b.from)?.get(exOff) : null;

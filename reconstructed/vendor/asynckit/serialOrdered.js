@@ -6,39 +6,37 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../runtime/bun-runtime.js";
-import { Xt, Yt, Qt } from "./lib/state.js";
+import { require_state_2, require_state, require_state_4 } from "./lib/state.js";
 
 //@ chunk-h6b7mazd.js:6876-7253 cjs-fingerprint
-var Zt = x(function (Ul, xt) {
-  var Un = Xt(),
-    $a = Yt(),
-    Va = Qt();
-  xt.exports = Wa;
-  xt.exports.ascending = qn;
-  xt.exports.descending = Ga;
-  function Wa(e, t, r, n) {
-    var o = $a(e, r);
-    return (
-      Un(e, t, o, function s(i, a) {
-        if (i) {
-          n(i, a);
-          return;
-        }
-        if ((o.index++, o.index < (o.keyedList || e).length)) {
-          Un(e, t, o, s);
-          return;
-        }
-        n(null, o.results);
-      }),
-      Va.bind(o, n)
-    );
+var require_serialOrdered = x(function (cjsExports, cjsModule) {
+  var iterate = require_state_2();
+  var initState = require_state();
+  var terminator = require_state_4();
+  cjsModule.exports = serialOrdered;
+  cjsModule.exports.ascending = ascending;
+  cjsModule.exports.descending = descending;
+  function serialOrdered(list, iterator, sortMethod, callback) {
+    var state = initState(list, sortMethod);
+    iterate(list, iterator, state, function iteratorHandler(error, result) {
+      if (error) {
+        callback(error, result);
+        return;
+      }
+      state.index++;
+      if (state.index < (state.keyedList || list).length) {
+        iterate(list, iterator, state, iteratorHandler);
+        return;
+      }
+      callback(null, state.results);
+    });
+    return terminator.bind(state, callback);
   }
-  function qn(e, t) {
-    return e < t ? -1 : e > t ? 1 : 0;
+  function ascending(a, b) {
+    return a < b ? -1 : a > b ? 1 : 0;
   }
-  function Ga(e, t) {
-    return -1 * qn(e, t);
+  function descending(a, b) {
+    return -1 * ascending(a, b);
   }
 });
-
-export { Zt };
+export { require_serialOrdered };

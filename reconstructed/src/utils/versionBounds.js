@@ -9,57 +9,61 @@
  * attribution: placement 5
  */
 import { Re } from "../../runtime/bun-runtime.js";
-import { Vy } from "../../vendor/semver/index.js";
+import { require_semver_3 } from "../../vendor/semver/index.js";
 import { logForDebugging } from "./debug.js";
-import { gte, lte } from "./semver.js";
+import { semverGt, semverLt } from "./semver.js";
 import { getSettingsForSource } from "./settings/settings.js";
 import { logError } from "./log.js";
 
 //@ chunk-29ccbp5f.js:409-426 placement
-var o = Re(Vy(), 1);
+var semver = Re(require_semver_3(), 1);
 //@ chunk-29ccbp5f.js:426-471 placement = doctor (0.368)
 var doctor = new Set(["update", "install", "doctor"]);
+//@ chunk-29ccbp5f.js:471-1477 placement
 /**
  * 按组织策略的最低/最高版本检查当前版本，doctor 类命令跳过；版本号非法时记日志忽略；不满足时返回提示文本，否则 null。
  */
-//@ chunk-29ccbp5f.js:471-1477 placement
 function checkVersionBounds({
-  currentVersion: currentVersion,
+  currentVersion,
   requiredMinimumVersion: minVersion,
   requiredMaximumVersion: maxVersion,
-  topLevelCommand: topLevelCommand,
+  topLevelCommand,
 }) {
   if (!minVersion && !maxVersion) return null;
-  if (topLevelCommand !== void 0 && doctor.has(topLevelCommand)) return null;
-  if (!o.parse(currentVersion)) return null;
+  if (topLevelCommand !== undefined && doctor.has(topLevelCommand)) return null;
+  if (!semver.parse(currentVersion)) return null;
   if (minVersion) {
-    let minParsed = o.parse(minVersion)?.version;
+    let minParsed = semver.parse(minVersion)?.version;
     if (!minParsed)
       logForDebugging(
         `requiredMinimumVersion '${minVersion}' is not a valid semver version \u2014 ignoring`,
-        { level: "error" },
+        {
+          level: "error",
+        },
       );
-    else if (!gte(currentVersion, minParsed))
+    else if (!semverGt(currentVersion, minParsed))
       return `Claude Code ${currentVersion} is older than the minimum version required by your organization (${minVersion}).
 Update Claude Code using your organization's approved method, then try again. If automatic updates are available, \`claude update\` may also work.`;
   }
   if (maxVersion) {
-    let maxParsed = o.parse(maxVersion)?.version;
+    let maxParsed = semver.parse(maxVersion)?.version;
     if (!maxParsed)
       logForDebugging(
         `requiredMaximumVersion '${maxVersion}' is not a valid semver version \u2014 ignoring`,
-        { level: "error" },
+        {
+          level: "error",
+        },
       );
-    else if (!lte(currentVersion, maxParsed))
+    else if (!semverLt(currentVersion, maxParsed))
       return `Claude Code ${currentVersion} is newer than the maximum version allowed by your organization (${maxVersion}).
 Your organization requires version ${maxVersion} or older. Install an approved version using your organization's approved method. \`claude install <version>\` may also work.`;
   }
   return null;
 }
+//@ chunk-29ccbp5f.js:1477-2246 placement
 /**
  * 找到顶层命令后，用策略设置中的版本上下限检查当前版本；出错时记日志返回 null。
  */
-//@ chunk-29ccbp5f.js:1477-2246 placement
 function checkCommandVersionBounds(command) {
   try {
     let topCommand = command.parent ? command : null;
@@ -82,13 +86,14 @@ function checkCommandVersionBounds(command) {
       topLevelCommand: topCommand?.name(),
     });
   } catch (error) {
-    return (logError(error), null);
+    logError(error);
+    return null;
   }
 }
+//@ chunk-29ccbp5f.js:2246-2954 placement
 /**
  * 不针对具体命令，用策略设置中的版本上下限检查当前版本。
  */
-//@ chunk-29ccbp5f.js:2246-2954 placement
 function checkPolicyVersionBounds() {
   try {
     let policy = getSettingsForSource("policySettings");
@@ -106,11 +111,11 @@ function checkPolicyVersionBounds() {
       }.VERSION,
       requiredMinimumVersion: policy?.requiredMinimumVersion,
       requiredMaximumVersion: policy?.requiredMaximumVersion,
-      topLevelCommand: void 0,
+      topLevelCommand: undefined,
     });
   } catch (error) {
-    return (logError(error), null);
+    logError(error);
+    return null;
   }
 }
-
 export { checkCommandVersionBounds, checkPolicyVersionBounds };

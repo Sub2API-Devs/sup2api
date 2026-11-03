@@ -32,169 +32,225 @@ import {
 import { isBridgeEffortSyncEnabled } from "./bridgeGates.js";
 import { logFeatureBad } from "../services/analytics/featureTelemetry.js";
 import { logForDebugging } from "../utils/debug.js";
-import { oQr } from "../utils/permissions/permissionSetup.js";
-import { ao } from "./bridgeHostState.js";
+import { parseEffortOrKeyword } from "../utils/permissions/permissionSetup.js";
+import { bridgeHostState } from "./bridgeHostState.js";
 
 //@ chunk-7rha57gt.js:440-506 placement
-function M_e(e, r) {
-  let o = resolveEffortValue(e, r);
-  return typeof o === "string" ? o : null;
+/**
+ * 把远程控制下发的 effort 取值解析成字符串，非字符串时返回 null（apply_flag_settings 用）。
+ */
+function resolveEffortLevelOrNull(mainLoopModel, effortLevel) {
+  let effortValue = resolveEffortValue(mainLoopModel, effortLevel);
+  return typeof effortValue === "string" ? effortValue : null;
 }
+//@ chunk-7rha57gt.js:506-1889 placement
 /**
  * 应用远程控制下发的 apply_flag_settings（effort 等），对远程控制禁止的项给出说明
  */
-//@ chunk-7rha57gt.js:506-1889 placement
-function applyBridgeFlagSettings(e, { model: model, getAppState: getAppState, setAppState: setAppState }) {
-  if (!isBridgeEffortSyncEnabled())
-    return (
-      logFeatureBad("bridge_flag_settings", "disabled"),
-      { ok: !1, error: "apply_flag_settings: effort changes over Remote Control are turned off" }
-    );
-  let f,
-    n,
-    d = !1;
-  if ("effortLevel" in e && !isRequestedEffortTheHeldLevel(model, e.effortLevel, getAppState())) {
-    if (((d = !0), e.effortLevel != null)) {
-      let u = parseEffortValue(e.effortLevel) ?? resolveEffortKeyword(e.effortLevel);
-      if (typeof u !== "string" || !isEffortLevel(u))
-        return (
-          logFeatureBad("bridge_flag_settings", "invalid_effort_level"),
-          { ok: !1, error: "apply_flag_settings: unrecognized effortLevel" }
-        );
-      ((f = u), (n = clampEffortToCap(u, model)));
-    }
-    let p = getEffortEnvOverride();
-    if (p !== void 0 && n !== p)
-      return (
-        logFeatureBad("bridge_flag_settings", "env_override"),
-        { ok: !1, error: "apply_flag_settings: CLAUDE_CODE_EFFORT_LEVEL overrides effort for this session" }
-      );
+function applyBridgeFlagSettings(e, { model, getAppState, setAppState }) {
+  if (!isBridgeEffortSyncEnabled()) {
+    logFeatureBad("bridge_flag_settings", "disabled");
+    return {
+      ok: false,
+      error: "apply_flag_settings: effort changes over Remote Control are turned off",
+    };
   }
-  let c = parseEffortKeyword(e.effortLevel) === "ultracode",
-    a = "ultracode" in e ? e.ultracode === !0 : void 0;
-  if ((a === !0 || (a === void 0 && c)) && !isUltracodeAvailable(model))
-    return (
-      logFeatureBad("bridge_flag_settings", "ultracode_unavailable"),
-      {
-        ok: !1,
-        error: `apply_flag_settings: ultracode is not available for this session (${isUltracodeAvailable() ? `${model} does not support it` : "dynamic workflows are off"})`,
+  let f;
+  let n;
+  let d = false;
+  if ("effortLevel" in e && !isRequestedEffortTheHeldLevel(model, e.effortLevel, getAppState())) {
+    d = true;
+    if (e.effortLevel != null) {
+      let u = parseEffortValue(e.effortLevel) ?? resolveEffortKeyword(e.effortLevel);
+      if (typeof u !== "string" || !isEffortLevel(u)) {
+        logFeatureBad("bridge_flag_settings", "invalid_effort_level");
+        return {
+          ok: false,
+          error: "apply_flag_settings: unrecognized effortLevel",
+        };
       }
-    );
-  setAppState((p) => {
-    let u = d && !c && isEffortChangedFromSession(model, p, f),
-      i = p;
-    if (d) {
-      let g = toEffortSettingOrDefault(n);
-      if (!isSameEffortSetting(i.sessionEffort, g)) i = { ...i, sessionEffort: g };
+      f = u;
+      n = clampEffortToCap(u, model);
     }
-    if (a === void 0) {
+    let effortEnvOverride = getEffortEnvOverride();
+    if (effortEnvOverride !== undefined && n !== effortEnvOverride) {
+      logFeatureBad("bridge_flag_settings", "env_override");
+      return {
+        ok: false,
+        error: "apply_flag_settings: CLAUDE_CODE_EFFORT_LEVEL overrides effort for this session",
+      };
+    }
+  }
+  let c = parseEffortKeyword(e.effortLevel) === "ultracode";
+  let a = "ultracode" in e ? e.ultracode === true : undefined;
+  if ((a === true || (a === undefined && c)) && !isUltracodeAvailable(model)) {
+    logFeatureBad("bridge_flag_settings", "ultracode_unavailable");
+    return {
+      ok: false,
+      error: `apply_flag_settings: ultracode is not available for this session (${isUltracodeAvailable() ? `${model} does not support it` : "dynamic workflows are off"})`,
+    };
+  }
+  setAppState((p) => {
+    let u = d && !c && isEffortChangedFromSession(model, p, f);
+    let i = p;
+    if (d) {
+      let effortSettingOrDefault = toEffortSettingOrDefault(n);
+      if (!isSameEffortSetting(i.sessionEffort, effortSettingOrDefault))
+        i = {
+          ...i,
+          sessionEffort: effortSettingOrDefault,
+        };
+    }
+    if (a === undefined) {
       if (c) {
-        if (!i.ultracode) i = { ...i, ultracode: !0 };
-      } else if (u && i.ultracode) i = { ...i, ultracode: !1 };
-    } else if ((i.ultracode ?? !1) !== a) i = { ...i, ultracode: a };
+        if (!i.ultracode)
+          i = {
+            ...i,
+            ultracode: true,
+          };
+      } else if (u && i.ultracode)
+        i = {
+          ...i,
+          ultracode: false,
+        };
+    } else if ((i.ultracode ?? false) !== a)
+      i = {
+        ...i,
+        ultracode: a,
+      };
     return i;
   });
-  let l = getAppState();
-  return (
-    logForDebugging(
-      `[bridge] apply_flag_settings applied effort=${resolveEffortLevel(l) ?? "auto"} ultracode=${l.ultracode === !0}`,
-    ),
-    { ok: !0 }
+  let appState = getAppState();
+  logForDebugging(
+    `[bridge] apply_flag_settings applied effort=${resolveEffortLevel(appState) ?? "auto"} ultracode=${appState.ultracode === true}`,
   );
+  return {
+    ok: true,
+  };
 }
+//@ chunk-7rha57gt.js:1889-2401 placement
 /**
  * 解析并种下远程控制会话的 effort 等级（含 ultracode/auto），未知值报错
  */
-//@ chunk-7rha57gt.js:1889-2401 placement
-function seedBridgeEffortLevel(e, { getAppState: getAppState, setAppState: setAppState, latch: latch }) {
-  let level = parseEffortFlag(e.trim()).level,
-    n = level === void 0 ? void 0 : oQr(level);
-  if (n === void 0) return { ok: !1, error: "unrecognized effort" };
-  let d = parseEffortKeyword(level) === "ultracode",
-    c = !d && latch.seedSetUltracode;
-  return (
-    (latch.seedSetUltracode = d),
-    setAppState((a) => {
-      let l = a;
-      if (!isSameEffortSetting(a.sessionEffort, levelEffortSetting(n)))
-        l = { ...l, sessionEffort: levelEffortSetting(n) };
-      if (d && !l.ultracode) l = { ...l, ultracode: !0 };
-      else if (c && l.ultracode) l = { ...l, ultracode: !1 };
-      return l;
-    }),
-    logForDebugging(
-      `[bridge] effort seeded effort=${resolveEffortLevel(getAppState()) ?? "auto"} ultracode=${getAppState().ultracode === !0}`,
-    ),
-    { ok: !0 }
+function seedBridgeEffortLevel(e, { getAppState, setAppState, latch }) {
+  let level = parseEffortFlag(e.trim()).level;
+  let n = level === undefined ? undefined : parseEffortOrKeyword(level);
+  if (n === undefined)
+    return {
+      ok: false,
+      error: "unrecognized effort",
+    };
+  let d = parseEffortKeyword(level) === "ultracode";
+  let seedSetUltracode = !d && latch.seedSetUltracode;
+  latch.seedSetUltracode = d;
+  setAppState((a) => {
+    let l = a;
+    if (!isSameEffortSetting(a.sessionEffort, levelEffortSetting(n)))
+      l = {
+        ...l,
+        sessionEffort: levelEffortSetting(n),
+      };
+    if (d && !l.ultracode)
+      l = {
+        ...l,
+        ultracode: true,
+      };
+    else if (seedSetUltracode && l.ultracode)
+      l = {
+        ...l,
+        ultracode: false,
+      };
+    return l;
+  });
+  logForDebugging(
+    `[bridge] effort seeded effort=${resolveEffortLevel(getAppState()) ?? "auto"} ultracode=${getAppState().ultracode === true}`,
   );
+  return {
+    ok: true,
+  };
 }
+//@ chunk-7rha57gt.js:2401-2860 placement
 /**
  * 把 effort 等级、ultracode 状态和请求 id 中有变化的部分通过桥接 reportMetadata 上报（effort_level / is_ultracode_active / effort_request_id）。
  */
-//@ chunk-7rha57gt.js:2401-2860 placement
-function reportBridgeEffortMetadata({
-  level: level,
-  ultracodeActive: ultracodeActive,
-  requestId: requestId,
-}) {
-  let s = E();
-  if (!s || !isBridgeEffortSyncEnabled()) return;
-  let f = ao(),
-    n = {};
-  if (level !== void 0) {
-    if (((f.lastKnownEffort = level), f.lastReportedEffort !== level))
-      ((f.lastReportedEffort = level), (n.effort_level = level));
+function reportBridgeEffortMetadata({ level, ultracodeActive, requestId }) {
+  let activeOutboundBridgeHandle = getActiveOutboundBridgeHandle();
+  if (!activeOutboundBridgeHandle || !isBridgeEffortSyncEnabled()) return;
+  let f = bridgeHostState();
+  let n = {};
+  if (level !== undefined) {
+    f.lastKnownEffort = level;
+    if (f.lastReportedEffort !== level) {
+      f.lastReportedEffort = level;
+      n.effort_level = level;
+    }
   }
-  if (ultracodeActive !== void 0) {
-    if (((f.lastKnownUltracodeActive = ultracodeActive), f.lastReportedUltracodeActive !== ultracodeActive))
-      ((f.lastReportedUltracodeActive = ultracodeActive), (n.is_ultracode_active = ultracodeActive || null));
+  if (ultracodeActive !== undefined) {
+    f.lastKnownUltracodeActive = ultracodeActive;
+    if (f.lastReportedUltracodeActive !== ultracodeActive) {
+      f.lastReportedUltracodeActive = ultracodeActive;
+      n.is_ultracode_active = ultracodeActive || null;
+    }
   }
-  if (requestId !== void 0) ((f.lastKnownEffortRequestId = requestId), (n.effort_request_id = requestId));
-  if (Object.keys(n).length > 0) s.reportMetadata(n);
+  if (requestId !== undefined) {
+    f.lastKnownEffortRequestId = requestId;
+    n.effort_request_id = requestId;
+  }
+  if (Object.keys(n).length > 0) activeOutboundBridgeHandle.reportMetadata(n);
 }
+//@ chunk-7rha57gt.js:2860-2994 placement
 /**
  * 按当前模型与应用状态算出 effort 默认值和 ultracode 状态并上报给桥接。
  */
-//@ chunk-7rha57gt.js:2860-2994 placement
-function reportEffortForModel(e, r) {
-  if (!E()) return;
-  let o = getModelPickerEffortDefault(e, resolveEffortLevel(r, e) ?? carriedEffortOnly(e));
+function reportEffortForModel(mainLoopModel, r) {
+  if (!getActiveOutboundBridgeHandle()) return;
+  let modelPickerEffortDefault = getModelPickerEffortDefault(
+    mainLoopModel,
+    resolveEffortLevel(r, mainLoopModel) ?? carriedEffortOnly(mainLoopModel),
+  );
   reportBridgeEffortMetadata({
-    level: o === void 0 ? null : M_e(e, o),
-    ultracodeActive: isUltracodeActive(r.ultracode, e),
+    level:
+      modelPickerEffortDefault === undefined
+        ? null
+        : resolveEffortLevelOrNull(mainLoopModel, modelPickerEffortDefault),
+    ultracodeActive: isUltracodeActive(r.ultracode, mainLoopModel),
   });
 }
 //@ chunk-7rha57gt.js:2994-3034 placement
-function w6n(e) {
-  reportBridgeEffortMetadata({ requestId: toBoundedLabel(e) });
+/**
+ * 按 requestId 上报一次桥接 effort 元数据（先做有界标签化）。
+ */
+function reportBridgeEffortForRequest(e) {
+  reportBridgeEffortMetadata({
+    requestId: toBoundedLabel(e),
+  });
 }
 //@ chunk-7rha57gt.js:3034-3125 placement
-function E() {
-  let e = ao(),
-    r = e.replHandle ?? e.sdkHostedHandle;
+function getActiveOutboundBridgeHandle() {
+  let e = bridgeHostState();
+  let r = e.replHandle ?? e.sdkHostedHandle;
   return r && !r.outboundOnly ? r : null;
 }
+//@ chunk-7rha57gt.js:3125-3327 placement
 /**
  * 清空“已上报”记录后把最后一次已知的 effort 状态重新上报（桥接重连时用）。
  */
-//@ chunk-7rha57gt.js:3125-3327 placement
 function resendBridgeEffortMetadata() {
-  let e = ao();
-  ((e.lastReportedEffort = void 0),
-    (e.lastReportedUltracodeActive = void 0),
-    reportBridgeEffortMetadata({
-      level: e.lastKnownEffort,
-      ultracodeActive: e.lastKnownUltracodeActive,
-      requestId: e.lastKnownEffortRequestId,
-    }));
+  let e = bridgeHostState();
+  e.lastReportedEffort = undefined;
+  e.lastReportedUltracodeActive = undefined;
+  reportBridgeEffortMetadata({
+    level: e.lastKnownEffort,
+    ultracodeActive: e.lastKnownUltracodeActive,
+    requestId: e.lastKnownEffortRequestId,
+  });
 }
-
 export {
-  M_e,
+  resolveEffortLevelOrNull,
   seedBridgeEffortLevel,
   reportEffortForModel,
   applyBridgeFlagSettings,
-  w6n,
+  reportBridgeEffortForRequest,
   reportBridgeEffortMetadata,
   resendBridgeEffortMetadata,
 };

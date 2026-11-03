@@ -6,34 +6,33 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { ze } from "./parse.js";
+import { require_parse } from "./parse.js";
 
 //@ chunk-bwbq4xvm.js:10738-11216 cjs-fingerprint
-var zi = x(function (t2, ki) {
-  var vi = ze(),
-    wv = (e, s) => {
-      let n = vi(e, null, !0),
-        r = vi(s, null, !0),
-        compare = n.compare(r);
-      if (compare === 0) return null;
-      let l = compare > 0,
-        c = l ? n : r,
-        h = l ? r : n,
-        m = !!c.prerelease.length;
-      if (!!h.prerelease.length && !m) {
-        if (!h.patch && !h.minor) return "major";
-        if (h.compareMain(c) === 0) {
-          if (h.minor && !h.patch) return "minor";
-          return "patch";
-        }
+var require_diff = x(function (cjsExports, cjsModule) {
+  var parse = require_parse();
+  var diff = (version1, version2) => {
+    let v1 = parse(version1, null, true);
+    let v2 = parse(version2, null, true);
+    let comparison = v1.compare(v2);
+    if (comparison === 0) return null;
+    let v1Higher = comparison > 0;
+    let highVersion = v1Higher ? v1 : v2;
+    let lowVersion = v1Higher ? v2 : v1;
+    let highHasPre = !!highVersion.prerelease.length;
+    if (!!lowVersion.prerelease.length && !highHasPre) {
+      if (!lowVersion.patch && !lowVersion.minor) return "major";
+      if (lowVersion.compareMain(highVersion) === 0) {
+        if (lowVersion.minor && !lowVersion.patch) return "minor";
+        return "patch";
       }
-      let w = m ? "pre" : "";
-      if (n.major !== r.major) return w + "major";
-      if (n.minor !== r.minor) return w + "minor";
-      if (n.patch !== r.patch) return w + "patch";
-      return "prerelease";
-    };
-  ki.exports = wv;
+    }
+    let prefix = highHasPre ? "pre" : "";
+    if (v1.major !== v2.major) return prefix + "major";
+    if (v1.minor !== v2.minor) return prefix + "minor";
+    if (v1.patch !== v2.patch) return prefix + "patch";
+    return "prerelease";
+  };
+  cjsModule.exports = diff;
 });
-
-export { zi };
+export { require_diff };

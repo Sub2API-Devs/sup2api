@@ -8,87 +8,109 @@
  * pieces: chunk-82kqcve8.js (10)
  * attribution: placement 10
  */
-import {
-  dirname,
-  dirname as dirname_2,
-  dirname as dirname_3,
-  dirname as dirname_4,
-  dirname as dirname_5,
-  dirname as dirname_6,
-} from "path";
-import { Qa } from "../../services/orgMemory/promptIndex.js";
-import { ge } from "../identity.js";
+import { dirname } from "path";
+import { isSettingEnabledInSources } from "../../services/orgMemory/promptIndex.js";
+import { identity as identity_2 } from "../identity.js";
 import { isCcsTenant } from "../../bootstrap/state.js";
 import { settingsGrantsConfined, repoResidentSettingSources } from "./permissionsLoader.js";
 import { getSettingsForSource } from "../settings/settings.js";
 import { isFullyQualifiedPath, containsPathTraversal, expandPathOrNull } from "../path.js";
-import { hl } from "../networkPaths.js";
+import { isUntouchableSpelling } from "../networkPaths.js";
 import { arraysEqual, uniq } from "../collections.js";
 import { logFeatureOk, logFeatureSad } from "../../services/analytics/featureTelemetry.js";
 import { logForDebugging } from "../debug.js";
 import { getAutoMemPathSettingSource, hasNoAutoMemPath } from "../../memdir/paths.js";
-import { F4t } from "../focusMode.js";
+import { invalidateMemorySections } from "../focusMode.js";
 
 //@ chunk-82kqcve8.js:124030-124094 placement
 function hasBlockReadsOutsideWorkingDirectories() {
-  return Qa("blockReadsOutsideWorkingDirectories");
+  return isSettingEnabledInSources("blockReadsOutsideWorkingDirectories");
 }
 //@ chunk-82kqcve8.js:124094-124134 placement
-var Za = ge({ value: !1 }, (e) => {
-  e.value = !1;
-});
+var writeBlockCachedState = identity_2(
+  {
+    value: false,
+  },
+  (e) => {
+    e.value = false;
+  },
+);
 //@ chunk-82kqcve8.js:124134-124236 placement
 function isWriteBlockOn() {
-  if (isCcsTenant()) return !1;
-  return ((Za.value ||= Qa("blockWritesOutsideWorkingDirectories")), Za.value);
+  if (isCcsTenant()) return false;
+  writeBlockCachedState.value ||= isSettingEnabledInSources("blockWritesOutsideWorkingDirectories");
+  return writeBlockCachedState.value;
 }
 //@ chunk-82kqcve8.js:124236-124276 placement
-var Ja = ge({ value: [] }, (e) => {
-  e.value = [];
-});
+var readBlockExemptCache = identity_2(
+  {
+    value: [],
+  },
+  (e) => {
+    e.value = [];
+  },
+);
 //@ chunk-82kqcve8.js:124276-124951 placement
 function readBlockExemptPathsInSettings() {
   if (isCcsTenant() || settingsGrantsConfined()) return [];
-  let e = getSettingsForSource("flagSettings")?.permissions?.blockReadsExemptPaths ?? [],
-    flattened = e.flatMap((r) => {
-      if (!isFullyQualifiedPath(r) || hl(r) || containsPathTraversal(r) || r.trim() !== r) return [];
-      let s = expandPathOrNull(r);
-      return s === null || expandPathOrNull(s) !== s || dirname_3(s) === s ? [] : [s];
-    });
-  if (!arraysEqual(e, Ja.value)) {
-    if (((Ja.value = e), flattened.length > 0)) logFeatureOk("permission_block_outside_reads_exempt_paths");
-    if (flattened.length < e.length)
-      (logFeatureSad("permission_block_outside_reads_exempt_paths", "entry_ignored"),
-        logForDebugging(
-          `permissions.blockReadsExemptPaths: ignored ${e.length - flattened.length} of ${e.length} entries; each must be an absolute local path, not a filesystem root, with no ".." segment and no white space at either end, as written and once normalized`,
-          { level: "warn" },
-        ));
+  let blockReadsExemptPaths = getSettingsForSource("flagSettings")?.permissions?.blockReadsExemptPaths ?? [];
+  let flattened = blockReadsExemptPaths.flatMap((blockReadsExemptPath) => {
+    if (
+      !isFullyQualifiedPath(blockReadsExemptPath) ||
+      isUntouchableSpelling(blockReadsExemptPath) ||
+      containsPathTraversal(blockReadsExemptPath) ||
+      blockReadsExemptPath.trim() !== blockReadsExemptPath
+    )
+      return [];
+    let s = expandPathOrNull(blockReadsExemptPath);
+    return s === null || expandPathOrNull(s) !== s || dirname(s) === s ? [] : [s];
+  });
+  if (!arraysEqual(blockReadsExemptPaths, readBlockExemptCache.value)) {
+    readBlockExemptCache.value = blockReadsExemptPaths;
+    if (flattened.length > 0) logFeatureOk("permission_block_outside_reads_exempt_paths");
+    if (flattened.length < blockReadsExemptPaths.length) {
+      logFeatureSad("permission_block_outside_reads_exempt_paths", "entry_ignored");
+      logForDebugging(
+        `permissions.blockReadsExemptPaths: ignored ${blockReadsExemptPaths.length - flattened.length} of ${blockReadsExemptPaths.length} entries; each must be an absolute local path, not a filesystem root, with no ".." segment and no white space at either end, as written and once normalized`,
+        {
+          level: "warn",
+        },
+      );
+    }
   }
   return uniq(flattened);
 }
 //@ chunk-82kqcve8.js:124951-125015 placement
 function isAutoMemPathFromRepoSettings() {
-  let e = getAutoMemPathSettingSource();
-  return e !== void 0 && repoResidentSettingSources().includes(e);
+  let autoMemPathSettingSource = getAutoMemPathSettingSource();
+  return (
+    autoMemPathSettingSource !== undefined && repoResidentSettingSources().includes(autoMemPathSettingSource)
+  );
 }
 //@ chunk-82kqcve8.js:125015-125055 placement
-var Dr = ge({ value: !1 }, (e) => {
-  e.value = !1;
-});
+var readBlockAppliedState = identity_2(
+  {
+    value: false,
+  },
+  (e) => {
+    e.value = false;
+  },
+);
 //@ chunk-82kqcve8.js:125055-125088 placement
 function markReadBlockApplied() {
-  ((Dr.value = !0), F4t());
+  readBlockAppliedState.value = true;
+  invalidateMemorySections();
 }
 //@ chunk-82kqcve8.js:125088-125151 placement
 function isReadBlockOn() {
-  if (!Dr.value && hasBlockReadsOutsideWorkingDirectories()) Dr.value = !0;
-  return Dr.value;
+  if (!readBlockAppliedState.value && hasBlockReadsOutsideWorkingDirectories())
+    readBlockAppliedState.value = true;
+  return readBlockAppliedState.value;
 }
 //@ chunk-82kqcve8.js:125151-125195 placement
 function isAutoMemReadFenced() {
   return isReadBlockOn() && (hasNoAutoMemPath() || isAutoMemPathFromRepoSettings());
 }
-
 export {
   markReadBlockApplied,
   isReadBlockOn,

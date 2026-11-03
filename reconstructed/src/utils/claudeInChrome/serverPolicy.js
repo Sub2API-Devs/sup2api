@@ -24,10 +24,10 @@ function isChromeServerPolicyDenied() {
     isMcpServerDenied(CLAUDE_IN_CHROME_MCP_SERVER_NAME, getClaudeInChromeStdioServerConfig())
   );
 }
+//@ chunk-b8kdmzpq.js:357-547 placement
 /**
  * --chrome 被组织 MCP 策略阻止时的拒绝原因。
  */
-//@ chunk-b8kdmzpq.js:357-547 placement
 function getChromeServerPolicyRefusal() {
   if (!isChromeServerPolicyDenied()) return null;
   if (
@@ -39,9 +39,7 @@ function getChromeServerPolicyRefusal() {
 }
 //@ chunk-b8kdmzpq.js:547-662 placement
 function sessionAutoAllowsToolCalls(r) {
-  let { mode: mode, isBypassPermissionsModeAvailable: isBypassPermissionsModeAvailable } =
-    getToolPermissionContext(r);
+  let { mode, isBypassPermissionsModeAvailable } = getToolPermissionContext(r);
   return mode === "bypassPermissions" || (mode === "plan" && isBypassPermissionsModeAvailable);
 }
-
 export { getChromeServerPolicyRefusal, isChromeServerPolicyDenied, sessionAutoAllowsToolCalls };

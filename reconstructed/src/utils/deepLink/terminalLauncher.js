@@ -17,111 +17,177 @@ import { whichAsync } from "../which.js";
 import { logForDebugging } from "../debug.js";
 import { moveKeeperPid } from "../toolCgroup.js";
 
+//@ chunk-bh9w80kx.js:3781-4323 fingerprint = MACOS_TERMINALS (0.753)
 /**
  * 深链接可用的终端清单：macOS（iTerm2、Ghostty、Kitty、Alacritty、WezTerm、Terminal.app）与 Linux（ghostty、kitty、alacritty、wezterm、gnome-terminal、konsole、xfce4-terminal、mate-terminal、tilix、xterm）。
  */
-//@ chunk-bh9w80kx.js:3781-4323 fingerprint = MACOS_TERMINALS (0.753)
 var MACOS_TERMINALS = [
-    { name: "iTerm2", bundleId: "com.googlecode.iterm2", app: "iTerm" },
-    { name: "Ghostty", bundleId: "com.mitchellh.ghostty", app: "Ghostty" },
-    { name: "Kitty", bundleId: "net.kovidgoyal.kitty", app: "kitty" },
-    { name: "Alacritty", bundleId: "org.alacritty", app: "Alacritty" },
-    { name: "WezTerm", bundleId: "com.github.wez.wezterm", app: "WezTerm" },
-    {
-      name: "Terminal.app",
-      bundleId: "com.apple.Terminal",
-      app: "Terminal",
-      termProgramAliases: ["apple_terminal"],
-    },
-  ],
-  LINUX_TERMINALS = [
-    "ghostty",
-    "kitty",
-    "alacritty",
-    "wezterm",
-    "gnome-terminal",
-    "konsole",
-    "xfce4-terminal",
-    "mate-terminal",
-    "tilix",
-    "xterm",
-  ];
+  {
+    name: "iTerm2",
+    bundleId: "com.googlecode.iterm2",
+    app: "iTerm",
+  },
+  {
+    name: "Ghostty",
+    bundleId: "com.mitchellh.ghostty",
+    app: "Ghostty",
+  },
+  {
+    name: "Kitty",
+    bundleId: "net.kovidgoyal.kitty",
+    app: "kitty",
+  },
+  {
+    name: "Alacritty",
+    bundleId: "org.alacritty",
+    app: "Alacritty",
+  },
+  {
+    name: "WezTerm",
+    bundleId: "com.github.wez.wezterm",
+    app: "WezTerm",
+  },
+  {
+    name: "Terminal.app",
+    bundleId: "com.apple.Terminal",
+    app: "Terminal",
+    termProgramAliases: ["apple_terminal"],
+  },
+];
+var LINUX_TERMINALS = [
+  "ghostty",
+  "kitty",
+  "alacritty",
+  "wezterm",
+  "gnome-terminal",
+  "konsole",
+  "xfce4-terminal",
+  "mate-terminal",
+  "tilix",
+  "xterm",
+];
+//@ chunk-bh9w80kx.js:4323-5035 fingerprint = detectMacosTerminal (0.968)
 /**
  * macOS 终端选择：全局配置 deepLinkTerminal → TERM_PROGRAM → mdfind 查 bundle id → /Applications 下是否存在，最后默认 Terminal.app。
  */
-//@ chunk-bh9w80kx.js:4323-5035 fingerprint = detectMacosTerminal (0.968)
 async function detectMacosTerminal() {
   let stored = getGlobalConfig().deepLinkTerminal;
   if (stored) {
-    let match = MACOS_TERMINALS.find((a) => a.app === stored);
-    if (match) return { name: match.name, command: match.app };
+    let match = MACOS_TERMINALS.find((t) => t.app === stored);
+    if (match)
+      return {
+        name: match.name,
+        command: match.app,
+      };
   }
   let termProgram = env.TERM_PROGRAM;
   if (termProgram) {
-    let normalized = termProgram.replace(/\.app$/i, "").toLowerCase(),
-      match = MACOS_TERMINALS.find(
-        (terminal) =>
-          terminal.app.toLowerCase() === normalized ||
-          terminal.name.toLowerCase() === normalized ||
-          terminal.termProgramAliases?.includes(normalized),
-      );
-    if (match) return { name: match.name, command: match.app };
+    let normalized = termProgram.replace(/\.app$/i, "").toLowerCase();
+    let match = MACOS_TERMINALS.find(
+      (terminal) =>
+        terminal.app.toLowerCase() === normalized ||
+        terminal.name.toLowerCase() === normalized ||
+        terminal.termProgramAliases?.includes(normalized),
+    );
+    if (match)
+      return {
+        name: match.name,
+        command: match.app,
+      };
   }
   for (let terminal of MACOS_TERMINALS) {
-    let { code: code, stdout: stdout } = await execFileNoThrow(
+    let { code, stdout } = await execFileNoThrow(
       "mdfind",
       [`kMDItemCFBundleIdentifier == "${terminal.bundleId}"`],
-      { timeout: 5000, useCwd: !1 },
+      {
+        timeout: 5000,
+        useCwd: false,
+      },
     );
-    if (code === 0 && stdout.trim().length > 0) return { name: terminal.name, command: terminal.app };
+    if (code === 0 && stdout.trim().length > 0)
+      return {
+        name: terminal.name,
+        command: terminal.app,
+      };
   }
   for (let terminal of MACOS_TERMINALS) {
     let { code: lsCode } = await execFileNoThrow("ls", [`/Applications/${terminal.app}.app`], {
       timeout: 1000,
-      useCwd: !1,
+      useCwd: false,
     });
-    if (lsCode === 0) return { name: terminal.name, command: terminal.app };
+    if (lsCode === 0)
+      return {
+        name: terminal.name,
+        command: terminal.app,
+      };
   }
-  return { name: "Terminal.app", command: "Terminal" };
+  return {
+    name: "Terminal.app",
+    command: "Terminal",
+  };
 }
+//@ chunk-bh9w80kx.js:5035-5292 fingerprint = detectLinuxTerminal (1)
 /**
  * Linux 终端选择：$TERMINAL → x-terminal-emulator → 清单中第一个可执行的。
  */
-//@ chunk-bh9w80kx.js:5035-5292 fingerprint = detectLinuxTerminal (1)
 async function detectLinuxTerminal() {
   let termEnv = env.TERMINAL;
   if (termEnv) {
     let resolved = await whichAsync(termEnv);
-    if (resolved) return { name: basename(termEnv), command: resolved };
+    if (resolved)
+      return {
+        name: basename(termEnv),
+        command: resolved,
+      };
   }
   let xte = await whichAsync("x-terminal-emulator");
-  if (xte) return { name: "x-terminal-emulator", command: xte };
+  if (xte)
+    return {
+      name: "x-terminal-emulator",
+      command: xte,
+    };
   for (let terminal of LINUX_TERMINALS) {
     let resolved = await whichAsync(terminal);
-    if (resolved) return { name: terminal, command: resolved };
+    if (resolved)
+      return {
+        name: terminal,
+        command: resolved,
+      };
   }
   return null;
 }
+//@ chunk-bh9w80kx.js:5292-5626 fingerprint = detectWindowsTerminal (0.739)
 /**
  * Windows 终端选择：wt.exe → pwsh.exe → powershell.exe → cmd.exe（ComSpec）。
  */
-//@ chunk-bh9w80kx.js:5292-5626 fingerprint = detectWindowsTerminal (0.739)
 async function detectWindowsTerminal() {
   let wt = await whichAsync("wt.exe");
-  if (wt) return { name: "Windows Terminal", command: wt };
+  if (wt)
+    return {
+      name: "Windows Terminal",
+      command: wt,
+    };
   let pwsh = await whichAsync("pwsh.exe");
-  if (pwsh) return { name: "PowerShell", command: pwsh };
+  if (pwsh)
+    return {
+      name: "PowerShell",
+      command: pwsh,
+    };
   let powershell = await whichAsync("powershell.exe");
-  if (powershell) return { name: "PowerShell", command: powershell };
+  if (powershell)
+    return {
+      name: "PowerShell",
+      command: powershell,
+    };
   return {
     name: "Command Prompt",
     command: env.ComSpec || `${env.SystemRoot || "C:\\Windows"}\\System32\\cmd.exe`,
   };
 }
+//@ chunk-bh9w80kx.js:5626-5752 layout = detectTerminal (0.92)
 /**
  * 按平台选择终端（分派到 macOS/Linux/Windows 的检测函数）。
  */
-//@ chunk-bh9w80kx.js:5626-5752 layout = detectTerminal (0.92)
 async function detectTerminal() {
   switch ("linux") {
     case "darwin":
@@ -134,18 +200,23 @@ async function detectTerminal() {
       return null;
   }
 }
+//@ chunk-bh9w80kx.js:5752-6228 fingerprint = launchInTerminal (0.649)
 /**
  * 在检测到的终端里启动 claude，附带 --deep-link-origin、--deep-link-repo、--deep-link-last-fetch、--prefill 等参数，按平台分派。
  */
-//@ chunk-bh9w80kx.js:5752-6228 fingerprint = launchInTerminal (0.649)
 async function launchInTerminal(claudePath, action) {
   let terminal = await detectTerminal();
-  if (!terminal) return (logForDebugging("No terminal emulator detected", { level: "error" }), !1);
+  if (!terminal) {
+    logForDebugging("No terminal emulator detected", {
+      level: "error",
+    });
+    return false;
+  }
   logForDebugging(`Launching in terminal: ${terminal.name} (${terminal.command})`);
   let claudeArgs = ["--deep-link-origin"];
   if (action.repo) {
-    if ((claudeArgs.push(`--deep-link-repo=${action.repo}`), action.lastFetchMs !== void 0))
-      claudeArgs.push(`--deep-link-last-fetch=${action.lastFetchMs}`);
+    claudeArgs.push(`--deep-link-repo=${action.repo}`);
+    if (action.lastFetchMs !== undefined) claudeArgs.push(`--deep-link-last-fetch=${action.lastFetchMs}`);
   }
   if (action.query) claudeArgs.push(`--prefill=${action.query}`);
   switch ("linux") {
@@ -156,134 +227,156 @@ async function launchInTerminal(claudePath, action) {
     case "win32":
       return launchWindowsTerminal(terminal, claudePath, action);
     default:
-      return !1;
+      return false;
   }
 }
+//@ chunk-bh9w80kx.js:6228-7575 fingerprint = launchMacosTerminal (1)
 /**
  * macOS 启动：iTerm/Terminal.app 用 osascript 执行登录 shell 命令，Ghostty/Alacritty/kitty/WezTerm 用 open -na 传参与工作目录；失败回退 Terminal.app。
  */
-//@ chunk-bh9w80kx.js:6228-7575 fingerprint = launchMacosTerminal (1)
 async function launchMacosTerminal(terminal, claudePath, claudeArgs, cwd) {
   let { cwd: cwd_2 } = cwd;
   switch (terminal.command) {
     case "iTerm": {
-      let o = buildLoginShellCommand(claudePath, cwd),
-        script = `tell application "iTerm"
+      let shCmd = buildLoginShellCommand(claudePath, cwd);
+      let script = `tell application "iTerm"
   if running then
     create window with default profile
   else
     activate
   end if
   tell current session of current window
-    write text ${appleScriptQuote(o)}
+    write text ${appleScriptQuote(shCmd)}
   end tell
-end tell`,
-        { code: code } = await execFileNoThrow("osascript", ["-e", script], { useCwd: !1 });
-      if (code === 0) return !0;
+end tell`;
+      let { code } = await execFileNoThrow("osascript", ["-e", script], {
+        useCwd: false,
+      });
+      if (code === 0) return true;
       break;
     }
     case "Terminal": {
-      let o = buildLoginShellCommand(claudePath, cwd),
-        script = `tell application "Terminal"
-  do script ${appleScriptQuote(o)}
+      let shCmd = buildLoginShellCommand(claudePath, cwd);
+      let script = `tell application "Terminal"
+  do script ${appleScriptQuote(shCmd)}
   activate
-end tell`,
-        { code: code } = await execFileNoThrow("osascript", ["-e", script], { useCwd: !1 });
+end tell`;
+      let { code } = await execFileNoThrow("osascript", ["-e", script], {
+        useCwd: false,
+      });
       return code === 0;
     }
     case "Ghostty": {
       let args = ["-na", terminal.command, "--args", "--window-save-state=never"];
       if (cwd_2) args.push(`--working-directory=${cwd_2}`);
       args.push("-e", claudePath, ...buildShellSafeDeepLinkArgs(cwd));
-      let { code: code } = await execFileNoThrow("open", args, { useCwd: !1 });
-      if (code === 0) return !0;
+      let { code } = await execFileNoThrow("open", args, {
+        useCwd: false,
+      });
+      if (code === 0) return true;
       break;
     }
     case "Alacritty": {
       let args = ["-na", terminal.command, "--args"];
       if (cwd_2) args.push("--working-directory", cwd_2);
       args.push("-e", claudePath, ...claudeArgs);
-      let { code: code } = await execFileNoThrow("open", args, { useCwd: !1 });
-      if (code === 0) return !0;
+      let { code } = await execFileNoThrow("open", args, {
+        useCwd: false,
+      });
+      if (code === 0) return true;
       break;
     }
     case "kitty": {
       let args = ["-na", terminal.command, "--args"];
       if (cwd_2) args.push("--directory", cwd_2);
       args.push(claudePath, ...claudeArgs);
-      let { code: code } = await execFileNoThrow("open", args, { useCwd: !1 });
-      if (code === 0) return !0;
+      let { code } = await execFileNoThrow("open", args, {
+        useCwd: false,
+      });
+      if (code === 0) return true;
       break;
     }
     case "WezTerm": {
       let args = ["-na", terminal.command, "--args", "start"];
       if (cwd_2) args.push("--cwd", cwd_2);
       args.push("--", claudePath, ...claudeArgs);
-      let { code: code } = await execFileNoThrow("open", args, { useCwd: !1 });
-      if (code === 0) return !0;
+      let { code } = await execFileNoThrow("open", args, {
+        useCwd: false,
+      });
+      if (code === 0) return true;
       break;
     }
   }
-  return (
-    logForDebugging(`Failed to launch ${terminal.name}, falling back to Terminal.app`),
-    launchMacosTerminal({ name: "Terminal.app", command: "Terminal" }, claudePath, claudeArgs, cwd)
+  logForDebugging(`Failed to launch ${terminal.name}, falling back to Terminal.app`);
+  return launchMacosTerminal(
+    {
+      name: "Terminal.app",
+      command: "Terminal",
+    },
+    claudePath,
+    claudeArgs,
+    cwd,
   );
 }
+//@ chunk-bh9w80kx.js:7575-8341 fingerprint = launchLinuxTerminal (1)
 /**
  * Linux 启动：按终端名拼工作目录与执行参数（gnome-terminal --、konsole -e、kitty --directory 等），未知终端用 -e 并以 cwd 启动。
  */
-//@ chunk-bh9w80kx.js:7575-8341 fingerprint = launchLinuxTerminal (1)
 async function launchLinuxTerminal(terminal, claudePath, claudeArgs, cwd) {
-  let { cwd: cwd_2 } = cwd,
-    terminalArgs,
-    spawnCwd;
+  let { cwd: cwd_2 } = cwd;
+  let terminalArgs;
+  let spawnCwd;
   switch (terminal.name) {
     case "gnome-terminal":
-      ((terminalArgs = cwd_2 ? [`--working-directory=${cwd_2}`, "--"] : ["--"]),
-        terminalArgs.push(claudePath, ...claudeArgs));
+      terminalArgs = cwd_2 ? [`--working-directory=${cwd_2}`, "--"] : ["--"];
+      terminalArgs.push(claudePath, ...claudeArgs);
       break;
     case "konsole":
-      ((terminalArgs = cwd_2 ? ["--workdir", cwd_2, "-e"] : ["-e"]),
-        terminalArgs.push(claudePath, ...claudeArgs));
+      terminalArgs = cwd_2 ? ["--workdir", cwd_2, "-e"] : ["-e"];
+      terminalArgs.push(claudePath, ...claudeArgs);
       break;
     case "kitty":
-      ((terminalArgs = cwd_2 ? ["--directory", cwd_2] : []), terminalArgs.push(claudePath, ...claudeArgs));
+      terminalArgs = cwd_2 ? ["--directory", cwd_2] : [];
+      terminalArgs.push(claudePath, ...claudeArgs);
       break;
     case "wezterm":
-      ((terminalArgs = cwd_2 ? ["start", "--cwd", cwd_2, "--"] : ["start", "--"]),
-        terminalArgs.push(claudePath, ...claudeArgs));
+      terminalArgs = cwd_2 ? ["start", "--cwd", cwd_2, "--"] : ["start", "--"];
+      terminalArgs.push(claudePath, ...claudeArgs);
       break;
     case "alacritty":
-      ((terminalArgs = cwd_2 ? ["--working-directory", cwd_2, "-e"] : ["-e"]),
-        terminalArgs.push(claudePath, ...claudeArgs));
+      terminalArgs = cwd_2 ? ["--working-directory", cwd_2, "-e"] : ["-e"];
+      terminalArgs.push(claudePath, ...claudeArgs);
       break;
     case "ghostty":
-      ((terminalArgs = cwd_2 ? [`--working-directory=${cwd_2}`, "-e"] : ["-e"]),
-        terminalArgs.push(claudePath, ...buildShellSafeDeepLinkArgs(cwd)));
+      terminalArgs = cwd_2 ? [`--working-directory=${cwd_2}`, "-e"] : ["-e"];
+      terminalArgs.push(claudePath, ...buildShellSafeDeepLinkArgs(cwd));
       break;
     case "xfce4-terminal":
     case "mate-terminal":
-      ((terminalArgs = cwd_2 ? [`--working-directory=${cwd_2}`, "-x"] : ["-x"]),
-        terminalArgs.push(claudePath, ...claudeArgs));
+      terminalArgs = cwd_2 ? [`--working-directory=${cwd_2}`, "-x"] : ["-x"];
+      terminalArgs.push(claudePath, ...claudeArgs);
       break;
     case "tilix":
-      ((terminalArgs = cwd_2 ? [`--working-directory=${cwd_2}`, "-e"] : ["-e"]),
-        terminalArgs.push(claudePath, ...buildShellSafeDeepLinkArgs(cwd)));
+      terminalArgs = cwd_2 ? [`--working-directory=${cwd_2}`, "-e"] : ["-e"];
+      terminalArgs.push(claudePath, ...buildShellSafeDeepLinkArgs(cwd));
       break;
     default:
-      ((terminalArgs = ["-e", claudePath, ...buildShellSafeDeepLinkArgs(cwd)]), (spawnCwd = cwd_2));
+      terminalArgs = ["-e", claudePath, ...buildShellSafeDeepLinkArgs(cwd)];
+      spawnCwd = cwd_2;
       break;
   }
-  return spawnDetached(terminal.command, terminalArgs, { cwd: spawnCwd });
+  return spawnDetached(terminal.command, terminalArgs, {
+    cwd: spawnCwd,
+  });
 }
+//@ chunk-bh9w80kx.js:8341-8775 fingerprint = launchWindowsTerminal (0.827)
 /**
  * Windows 启动：Windows Terminal（-d cwd -- …，; 需转义）、PowerShell（-NoExit -Command & '…'）、cmd（/k 原样参数）。
  */
-//@ chunk-bh9w80kx.js:8341-8775 fingerprint = launchWindowsTerminal (0.827)
 async function launchWindowsTerminal(terminal, claudePath, action) {
-  let args = [],
-    claudeArgs = buildShellSafeDeepLinkArgs(action),
-    cwd = action.cwd;
+  let args = [];
+  let claudeArgs = buildShellSafeDeepLinkArgs(action);
+  let cwd = action.cwd;
   switch (terminal.name) {
     case "Windows Terminal": {
       let l = (c) => c.replaceAll(";", "\\;");
@@ -306,62 +399,66 @@ async function launchWindowsTerminal(terminal, claudePath, action) {
     cwd: action.cwd,
   });
 }
+//@ chunk-bh9w80kx.js:8775-9174 fingerprint = spawnDetached (0.93)
 /**
  * 分离启动终端进程（detached、stdio ignore、unref）；带 cwd 失败时不带 cwd 重试。
  */
-//@ chunk-bh9w80kx.js:8775-9174 fingerprint = spawnDetached (0.93)
 async function spawnDetached(command, args, opts = {}) {
   let trySpawn = (resolve) =>
-    new Promise((o) => {
+    new Promise((resolve_2) => {
       let l = (err) => {
-          (logForDebugging(`Failed to spawn ${command}: ${err.message}`, { level: "error" }), o(!1));
-        },
-        child;
+        logForDebugging(`Failed to spawn ${command}: ${err.message}`, {
+          level: "error",
+        });
+        resolve_2(false);
+      };
+      let child;
       try {
         child = spawn(command, args, {
-          detached: !0,
+          detached: true,
           stdio: "ignore",
-          windowsHide: !1,
+          windowsHide: false,
           cwd: resolve,
           windowsVerbatimArguments: opts.windowsVerbatimArguments,
         });
       } catch (error) {
         return l(error);
       }
-      (moveKeeperPid(child.pid),
-        child.once("error", l),
-        child.once("spawn", () => {
-          (child.unref(), o(!0));
-        }));
+      moveKeeperPid(child.pid);
+      child.once("error", l);
+      child.once("spawn", () => {
+        child.unref();
+        resolve_2(true);
+      });
     });
-  if (await trySpawn(opts.cwd)) return !0;
-  if (opts.cwd) return trySpawn(void 0);
-  return !1;
+  if (await trySpawn(opts.cwd)) return true;
+  if (opts.cwd) return trySpawn(undefined);
+  return false;
 }
+//@ chunk-bh9w80kx.js:9174-9203 layout
 /**
  * 拼进 shell 命令行的深链接参数允许的字符集。
  */
-//@ chunk-bh9w80kx.js:9174-9203 layout
 var SHELL_SAFE_ARGS = /^[A-Za-z0-9 /._=-]+$/;
+//@ chunk-bh9w80kx.js:9203-9529 layout
 /**
  * 生成 shell 安全的深链接参数：cwd 与 query 以 base64url 传（--deep-link-cwd-b64、--prefill-b64）。
  */
-//@ chunk-bh9w80kx.js:9203-9529 layout
 function buildShellSafeDeepLinkArgs(action) {
-  let toBase64Url = (a) => Buffer.from(a, "utf8").toString("base64url"),
-    args = ["--deep-link-origin"];
+  let toBase64Url = (a) => Buffer.from(a, "utf8").toString("base64url");
+  let args = ["--deep-link-origin"];
   if (action.repo) args.push(`--deep-link-repo=${action.repo}`);
-  if (action.lastFetchMs !== void 0) args.push(`--deep-link-last-fetch=${action.lastFetchMs}`);
+  if (action.lastFetchMs !== undefined) args.push(`--deep-link-last-fetch=${action.lastFetchMs}`);
   if (action.cwd) args.push(`--deep-link-cwd-b64=${toBase64Url(action.cwd)}`);
   if (action.query) args.push(`--prefill-b64=${toBase64Url(action.query)}`);
   return args;
 }
+//@ chunk-bh9w80kx.js:9529-10057 layout
 /**
  * 为 iTerm/Terminal.app 拼登录 shell 命令行；参数必须只含安全字符，claude 路径含 ' \ ! $ 换行时拒绝。
  */
-//@ chunk-bh9w80kx.js:9529-10057 layout
-function buildLoginShellCommand(claudePath, n) {
-  let joined = buildShellSafeDeepLinkArgs(n).join(" ");
+function buildLoginShellCommand(claudePath, cwd) {
+  let joined = buildShellSafeDeepLinkArgs(cwd).join(" ");
   if (!SHELL_SAFE_ARGS.test(joined))
     throw Error(`Internal error: shell-safe args contain metacharacters: ${joined}`);
   if (/^[A-Za-z0-9/._-]+$/.test(claudePath)) return `${claudePath} ${joined}`;
@@ -371,12 +468,12 @@ function buildLoginShellCommand(claudePath, n) {
     );
   return `'${claudePath}' ${joined}`;
 }
+//@ chunk-bh9w80kx.js:10057-10178 layout
 /**
  * AppleScript 字符串字面量转义。
  */
-//@ chunk-bh9w80kx.js:10057-10178 layout
-function appleScriptQuote(r) {
-  return `"${r
+function appleScriptQuote(shCmd) {
+  return `"${shCmd
     .replaceAll("\\", "\\\\")
     .replaceAll('"', '\\"')
     .replaceAll(
@@ -386,10 +483,10 @@ function appleScriptQuote(r) {
     )
     .replaceAll("\t", "\\t")}"`;
 }
+//@ chunk-bh9w80kx.js:10178-10426 layout
 /**
  * PowerShell 单引号字符串转义；遇到 U+2018–201B 引号变体拒绝。
  */
-//@ chunk-bh9w80kx.js:10178-10426 layout
 function psQuote(value) {
   if (/[\u2018\u2019\u201A\u201B]/.test(value))
     throw Error(
@@ -397,15 +494,14 @@ function psQuote(value) {
     );
   return `'${value.replaceAll('"', "").replaceAll("'", "''")}'`;
 }
+//@ chunk-bh9w80kx.js:10426-10523 fingerprint = cmdQuote (1)
 /**
  * cmd.exe 参数加引号（去掉 " 和 %、换行变空格、尾部反斜杠加倍）。
  */
-//@ chunk-bh9w80kx.js:10426-10523 fingerprint = cmdQuote (1)
 function cmdQuote(arg) {
   return `"${arg
     .replace(/[\n\t]/g, " ")
     .replace(/["%]/g, "")
     .replace(/(\\+)$/, "$1$1")}"`;
 }
-
 export { launchInTerminal };

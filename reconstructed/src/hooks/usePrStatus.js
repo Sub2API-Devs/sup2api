@@ -8,12 +8,12 @@
  * pieces: chunk-18hwfzwa.js (12), chunk-qgpgvvwv.js (1)
  * attribution: placement 12, fingerprint 1
  */
-import { watch, watch as watch_2 } from "fs";
+import { watch } from "fs";
 import { HistorySearchInput } from "../components/PromptInput/HistorySearchInput.js";
-import { j, y, P, Q, yt } from "../../vendor/react/cjs/react.production.js";
-import { Me } from "../components/design-system/ThemeProvider.js";
+import { init_react_production, y, P, Q, yt } from "../../vendor/react/cjs/react.production.js";
+import { useTheme_2 } from "../components/design-system/ThemeProvider.js";
 import { isBgSession } from "../utils/concurrentSessions.js";
-import { wt } from "../remote/remoteMode.js";
+import { isRemoteSessionAvailable } from "../remote/remoteMode.js";
 import { getOwnJobShortId, getJobDir, readJobState } from "../services/daemon/jobState.js";
 import { ANY_CONTROL_CHAR_RE } from "../utils/stringUtils.js";
 import { isValidKeySegment } from "../utils/storage/storageSpaces.js";
@@ -24,11 +24,15 @@ import {
   TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
 } from "../utils/errors.js";
 import { w } from "../../vendor/react/compiler-runtime.js";
-import { r, Fragment, e } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default_2,
+  Fragment,
+  jsxProd_default,
+} from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Link, Box } from "../ink/components/Text.js";
 import { useAppState } from "../state/AppState.js";
-import { QH } from "../components/PromptInput/footerLinks.js";
-import { o, u, T } from "../../vendor/zod/v4/classic/schemas.js";
+import { MAX_UNKEYED_FOOTER_LINKS } from "../components/PromptInput/footerLinks.js";
+import { string, u, literal } from "../../vendor/zod/v4/classic/schemas.js";
 import { createSignal } from "../utils/signal.js";
 import { fromEnum, lit as lit_2 } from "../services/analytics/safeMetadata.js";
 import { env } from "../utils/env.js";
@@ -42,192 +46,258 @@ import { useClock } from "../ink/components/ClockContext.js";
 import { useHost } from "../context/session.js";
 import { useTerminalFocus } from "../ink/hooks/use-terminal-focus.js";
 import { getLastInteractionTime } from "../bootstrap/state.js";
-import { getPrStatus, zM } from "../utils/ghPrStatus.js";
+import { getPrStatus, currentPrStatusFetcher } from "../utils/ghPrStatus.js";
 import { getPrStatusColor } from "../components/PrBadge.js";
 
 //@ chunk-18hwfzwa.js:814630-814642 placement
-var khe = HistorySearchInput;
+var HistorySearchInputRef = HistorySearchInput;
 //@ chunk-18hwfzwa.js:814642-814646 placement
-j();
+init_react_production();
 //@ chunk-18hwfzwa.js:814675-815319 placement
 function useBgSessionPr() {
-  let [h, x] = y(null),
-    storageV5 = Me().storageV5;
-  return (
-    P(() => {
-      if (!isBgSession() || wt()) return;
-      let L = getOwnJobShortId(),
-        ee = getJobDir(L),
-        ke,
-        Re = async () => {
-          let He = (await readJobState(ee, storageV5))?.children?.find(
-              (ze) => ze.kind !== "frame" && !ANY_CONTROL_CHAR_RE.test(ze.href),
-            ),
-            We = He ? Number(He.id) : NaN;
-          if (!He || !Number.isFinite(We)) return;
-          x((ze) => (ze?.number === We && ze.url === He.href ? ze : { number: We, url: He.href }));
-        };
-      if (storageV5 && isValidKeySegment(L)) return watchJobStateFile(storageV5, L, Re, "[useBgSessionPr]");
-      try {
-        ((ke = watch_2(ee, (Be, He) => {
-          if (He && !He.startsWith("state.json")) return;
-          Re();
-        })),
-          ke.on("error", (Be) =>
-            logForDebugging(`[useBgSessionPr] watcher error: ${errorMessage(Be)}`, { level: "warn" }),
-          ),
-          ke.unref());
-      } catch (error) {
-        logForDebugging(`[useBgSessionPr] watch skipped: ${errorMessage(error)}`);
-      }
-      return (Re(), () => ke?.close());
-    }, [storageV5]),
-    h
-  );
+  let [h, x] = y(null);
+  let storageV5 = useTheme_2().storageV5;
+  P(() => {
+    if (!isBgSession() || isRemoteSessionAvailable()) return;
+    let ownJobShortId = getOwnJobShortId();
+    let jobDir = getJobDir(ownJobShortId);
+    let ke;
+    let Re = async () => {
+      let found = (await readJobState(jobDir, storageV5))?.children?.find(
+        (child) => child.kind !== "frame" && !ANY_CONTROL_CHAR_RE.test(child.href),
+      );
+      let We = found ? Number(found.id) : NaN;
+      if (!found || !Number.isFinite(We)) return;
+      x((ze) =>
+        ze?.number === We && ze.url === found.href
+          ? ze
+          : {
+              number: We,
+              url: found.href,
+            },
+      );
+    };
+    if (storageV5 && isValidKeySegment(ownJobShortId))
+      return watchJobStateFile(storageV5, ownJobShortId, Re, "[useBgSessionPr]");
+    try {
+      ke = watch(jobDir, (Be, He) => {
+        if (He && !He.startsWith("state.json")) return;
+        Re();
+      });
+      ke.on("error", (Be) =>
+        logForDebugging(`[useBgSessionPr] watcher error: ${errorMessage(Be)}`, {
+          level: "warn",
+        }),
+      );
+      ke.unref();
+    } catch (error) {
+      logForDebugging(`[useBgSessionPr] watch skipped: ${errorMessage(error)}`);
+    }
+    Re();
+    return () => ke?.close();
+  }, [storageV5]);
+  return h;
 }
 //@ chunk-18hwfzwa.js:815319-816131 placement
-function FooterLink(h) {
-  let $ = w(17),
-    { link: link } = h,
-    L;
-  if ($[0] !== link.prefix)
-    ((L =
-      link.prefix !== void 0 &&
-      r(Fragment, { children: [e(Text, { dimColor: !0, children: link.prefix }), " "] })),
-      ($[0] = link.prefix),
-      ($[1] = L));
-  else L = $[1];
-  const ee = !link.color;
-  let ke;
-  if ($[2] !== link.color || $[3] !== link.label || $[4] !== ee)
-    ((ke = e(Text, { color: link.color, dimColor: ee, children: link.label })),
-      ($[2] = link.color),
-      ($[3] = link.label),
-      ($[4] = ee),
-      ($[5] = ke));
-  else ke = $[5];
-  const Re = !link.color;
-  let Be;
-  if ($[6] !== link.color || $[7] !== link.label || $[8] !== Re)
-    ((Be = e(Text, { color: link.color, dimColor: Re, underline: !0, children: link.label })),
-      ($[6] = link.color),
-      ($[7] = link.label),
-      ($[8] = Re),
-      ($[9] = Be));
-  else Be = $[9];
+function FooterLink(props) {
+  let $ = w(17);
+  let { link } = props;
+  let L;
+  if ($[0] !== link.prefix) {
+    L =
+      link.prefix !== undefined &&
+      jsxProd_default_2(Fragment, {
+        children: [
+          jsxProd_default(Text, {
+            dimColor: true,
+            children: link.prefix,
+          }),
+          " ",
+        ],
+      });
+    $[0] = link.prefix;
+    $[1] = L;
+  } else L = $[1];
+  const dimColor = !link.color;
+  let fallback;
+  if ($[2] !== link.color || $[3] !== link.label || $[4] !== dimColor) {
+    fallback = jsxProd_default(Text, {
+      color: link.color,
+      dimColor,
+      children: link.label,
+    });
+    $[2] = link.color;
+    $[3] = link.label;
+    $[4] = dimColor;
+    $[5] = fallback;
+  } else fallback = $[5];
+  const dimColor_2 = !link.color;
+  let children;
+  if ($[6] !== link.color || $[7] !== link.label || $[8] !== dimColor_2) {
+    children = jsxProd_default(Text, {
+      color: link.color,
+      dimColor: dimColor_2,
+      underline: true,
+      children: link.label,
+    });
+    $[6] = link.color;
+    $[7] = link.label;
+    $[8] = dimColor_2;
+    $[9] = children;
+  } else children = $[9];
   let He;
-  if ($[10] !== link.url || $[11] !== ke || $[12] !== Be)
-    ((He = e(Link, { url: link.url, fallback: ke, assumeSupport: !0, children: Be })),
-      ($[10] = link.url),
-      ($[11] = ke),
-      ($[12] = Be),
-      ($[13] = He));
-  else He = $[13];
+  if ($[10] !== link.url || $[11] !== fallback || $[12] !== children) {
+    He = jsxProd_default(Link, {
+      url: link.url,
+      fallback,
+      assumeSupport: true,
+      children,
+    });
+    $[10] = link.url;
+    $[11] = fallback;
+    $[12] = children;
+    $[13] = He;
+  } else He = $[13];
   let We;
-  if ($[14] !== L || $[15] !== He)
-    ((We = r(Text, { children: [L, He] })), ($[14] = L), ($[15] = He), ($[16] = We));
-  else We = $[16];
+  if ($[14] !== L || $[15] !== He) {
+    We = jsxProd_default_2(Text, {
+      children: [L, He],
+    });
+    $[14] = L;
+    $[15] = He;
+    $[16] = We;
+  } else We = $[16];
   return We;
 }
 //@ chunk-18hwfzwa.js:816131-816135 placement
-j();
+init_react_production();
 //@ chunk-18hwfzwa.js:816135-816302 placement
 function useFooterLinks(h) {
-  let x = useAppState((L) => L.footerLinks),
-    D = h?.excludeKeyed === !0;
+  let x = useAppState((L) => L.footerLinks);
+  let D = h?.excludeKeyed === true;
   return Q(() => {
-    let L = D ? x.filter((ee) => ee.key === void 0) : x;
-    return L.length <= QH ? L : L.slice(0, QH);
+    let L = D ? x.filter((ee) => ee.key === undefined) : x;
+    return L.length <= MAX_UNKEYED_FOOTER_LINKS ? L : L.slice(0, MAX_UNKEYED_FOOTER_LINKS);
   }, [x, D]);
 }
 //@ chunk-18hwfzwa.js:816302-816306 placement
-j();
+init_react_production();
 //@ chunk-18hwfzwa.js:816306-816399 placement
-var Ceo = 4000,
-  _eo = 3600000,
-  Teo = 60000,
-  Reo = 3,
-  xeo = 300000,
-  Peo = { pr: null, needsAuth: !1, lastUpdated: 0 };
+var PR_POLL_SLOW_MS = 4000;
+var PR_INTERACTION_CACHE_MS = 3600000;
+var PR_NOT_MODIFIED_RESET_MS = 60000;
+var PR_MAX_CONSECUTIVE_ERRORS = 3;
+var PR_STALE_MS = 300000;
+var EMPTY_PR_STATUS_STATE = {
+  pr: null,
+  needsAuth: false,
+  lastUpdated: 0,
+};
 //@ chunk-18hwfzwa.js:816399-819009 placement
 class PrStatusPoller {
   #e;
   #t;
-  #o = Peo;
+  #o = EMPTY_PR_STATUS_STATE;
   #n = createSignal();
   #s = 0;
-  #r = !1;
+  #r = false;
   #c = null;
   #i = 0;
-  #a = !1;
+  #a = false;
   #l = null;
   #d = 0;
   #m = 0;
   #p = -1;
   #u = 0;
   constructor(h, x) {
-    ((this.#e = h), (this.#t = x));
+    this.#e = h;
+    this.#t = x;
   }
   getSnapshot = () => this.#o;
   subscribe = (h) => {
-    let subscribe = this.#n.subscribe(h);
-    if ((this.#s++, !this.#r)) this.#f();
-    let D = !1;
+    let x = this.#n.subscribe(h);
+    this.#s++;
+    if (!this.#r) this.#f();
+    let D = false;
     return () => {
       if (D) return;
-      if (((D = !0), subscribe(), this.#s--, this.#s === 0)) this.#S();
+      D = true;
+      x();
+      this.#s--;
+      if (this.#s === 0) this.#S();
     };
   };
   setInputs(h) {
     let x = this.#t;
-    if (((this.#t = h), !this.#r)) return;
-    if (h.enabled && !x.enabled) ((this.#m = 0), (this.#e.shared.pollerNotModifiedStreak = 0));
+    this.#t = h;
+    if (!this.#r) return;
+    if (h.enabled && !x.enabled) {
+      this.#m = 0;
+      this.#e.shared.pollerNotModifiedStreak = 0;
+    }
     if ((h.focused !== x.focused && this.#y()) || h.isLoading !== x.isLoading || h.enabled !== x.enabled)
       this.#h();
   }
   #f() {
-    ((this.#r = !0),
-      (this.#a = !1),
-      (this.#c = this.#e.shared.bump.subscribe(() => {
-        if (this.#e.shared.pollerDisabled) return;
-        ((this.#m = 0), (this.#d = 0), this.#h());
-      })),
-      this.#g());
+    this.#r = true;
+    this.#a = false;
+    this.#c = this.#e.shared.bump.subscribe(() => {
+      if (this.#e.shared.pollerDisabled) return;
+      this.#m = 0;
+      this.#d = 0;
+      this.#h();
+    });
+    this.#g();
   }
   #S() {
-    ((this.#r = !1), (this.#a = !1), this.#c?.(), (this.#c = null), this.#b());
+    this.#r = false;
+    this.#a = false;
+    this.#c?.();
+    this.#c = null;
+    this.#b();
   }
   #h() {
     if (this.#a) return;
-    ((this.#a = !0),
-      queueMicrotask(() => {
-        if (!this.#a) return;
-        ((this.#a = !1), this.#g());
-      }));
+    this.#a = true;
+    queueMicrotask(() => {
+      if (!this.#a) return;
+      this.#a = false;
+      this.#g();
+    });
   }
   #y() {
-    if (!this.#t.focused || this.#e.shared.pollerDisabled) return !1;
-    if (this.#d === 0) return !1;
-    if (((this.#e.shared.pollerNotModifiedStreak = 0), this.#e.now() - this.#d >= Teo))
-      ((this.#m = 0), (this.#d = 0));
-    return !0;
+    if (!this.#t.focused || this.#e.shared.pollerDisabled) return false;
+    if (this.#d === 0) return false;
+    this.#e.shared.pollerNotModifiedStreak = 0;
+    if (this.#e.now() - this.#d >= PR_NOT_MODIFIED_RESET_MS) {
+      this.#m = 0;
+      this.#d = 0;
+    }
+    return true;
   }
   #b() {
-    if ((this.#i++, this.#l)) (this.#l(), (this.#l = null));
+    this.#i++;
+    if (this.#l) {
+      this.#l();
+      this.#l = null;
+    }
   }
   #g() {
-    if ((this.#b(), !this.#t.enabled)) return;
+    this.#b();
+    if (!this.#t.enabled) return;
     if (this.#e.shared.pollerDisabled) return;
     let h = this.#i;
-    ((this.#p = -1), (this.#u = this.#e.now()));
-    let x = this.#w(!0),
-      D = this.#e.now() - this.#d;
+    this.#p = -1;
+    this.#u = this.#e.now();
+    let x = this.#w(true);
+    let D = this.#e.now() - this.#d;
     if (D >= x) this.#C(h);
     else this.#v(h, x - D);
   }
   #v(h, x) {
     this.#l = this.#e.setTimeout(() => {
-      ((this.#l = null), this.#C(h));
+      this.#l = null;
+      this.#C(h);
     }, x);
   }
   #C(h) {
@@ -243,46 +313,51 @@ class PrStatusPoller {
   }
   async #T(h) {
     if (h !== this.#i) return;
-    let { now: now, shared: shared } = this.#e,
-      lastInteractionTime = this.#e.getLastInteractionTime();
-    if (this.#p !== lastInteractionTime) ((this.#p = lastInteractionTime), (this.#u = now()));
-    else if (now() - this.#u >= _eo) return;
-    let ee = now(),
-      ke;
+    let { now, shared } = this.#e;
+    let lastInteractionTime = this.#e.getLastInteractionTime();
+    if (this.#p !== lastInteractionTime) {
+      this.#p = lastInteractionTime;
+      this.#u = now();
+    } else if (now() - this.#u >= PR_INTERACTION_CACHE_MS) return;
+    let ee = now();
+    let ke;
     try {
       ke = await this.#e.fetchPrStatus();
     } catch (error) {
-      (logError(error), (ke = null));
+      logError(error);
+      ke = null;
     }
     let Re = ke;
     if (h !== this.#i) return;
     this.#d = ee;
-    let Be = Re === "needs-auth" || Re === "gh-missing",
-      He = Be ? Re : !1,
-      We = Re === "fetch-failed",
-      ze = null,
-      Xe = !1;
+    let Be = Re === "needs-auth" || Re === "gh-missing";
+    let He = Be ? Re : false;
+    let We = Re === "fetch-failed";
+    let ze = null;
+    let Xe = false;
     if (!Be && !We && Re !== null) {
-      let { notModified: notModified = !1, ...At } = Re;
-      ((Xe = notModified), (ze = At));
+      let { notModified = false, ...At } = Re;
+      Xe = notModified;
+      ze = At;
     }
-    if (
-      ((this.#m = He ? 1 : ze === null ? this.#m + 1 : 0),
-      (shared.pollerBadStreak = We ? shared.pollerBadStreak + 1 : 0),
-      (shared.pollerNotModifiedStreak = Xe ? shared.pollerNotModifiedStreak + 1 : 0),
-      this.#x(ze, He),
-      shared.pollerBadStreak >= Reo)
-    ) {
-      ((shared.pollerDisabled = !0), logFeatureSad("github_pr_status_direct", "bad_streak_disabled"));
+    this.#m = He ? 1 : ze === null ? this.#m + 1 : 0;
+    shared.pollerBadStreak = We ? shared.pollerBadStreak + 1 : 0;
+    shared.pollerNotModifiedStreak = Xe ? shared.pollerNotModifiedStreak + 1 : 0;
+    this.#x(ze, He);
+    if (shared.pollerBadStreak >= PR_MAX_CONSECUTIVE_ERRORS) {
+      shared.pollerDisabled = true;
+      logFeatureSad("github_pr_status_direct", "bad_streak_disabled");
       return;
     }
     let rt = now() - ee;
-    if (rt > Ceo) {
-      ((shared.pollerDisabled = !0),
-        logFeatureSad("github_pr_status_direct", "slow_disabled", { elapsed_ms: rt }));
+    if (rt > PR_POLL_SLOW_MS) {
+      shared.pollerDisabled = true;
+      logFeatureSad("github_pr_status_direct", "slow_disabled", {
+        elapsed_ms: rt,
+      });
       return;
     }
-    this.#v(h, this.#w(!1));
+    this.#v(h, this.#w(false));
   }
   #x(h, x) {
     let D = this.#o;
@@ -295,7 +370,11 @@ class PrStatusPoller {
       D.needsAuth === x
     )
       return;
-    this.#o = { pr: h, needsAuth: x, lastUpdated: this.#e.now() };
+    this.#o = {
+      pr: h,
+      needsAuth: x,
+      lastUpdated: this.#e.now(),
+    };
     try {
       this.#n.emit();
     } catch (error) {
@@ -303,51 +382,64 @@ class PrStatusPoller {
     }
   }
 }
+//@ chunk-18hwfzwa.js:819009-819222 placement
 /**
  * 根据空闲时长、连续未变化次数等计算 PR 状态轮询间隔（90 秒到 30 分钟，取各项最大值）。
  */
-//@ chunk-18hwfzwa.js:819009-819222 placement
-function computePrPollIntervalMs(h, x, D, L) {
-  let ee = x < 30000 ? 90000 : x < 300000 ? 180000 : x < 1800000 ? 600000 : 1800000,
-    ke = D <= 0 ? 90000 : D === 1 ? 300000 : D === 2 ? 900000 : 1800000,
-    Re = L <= 0 ? 90000 : L === 1 ? 120000 : L === 2 ? 240000 : 300000;
-  return Math.max(ee, ke, Re, h ? 0 : xeo);
+function computePrPollIntervalMs(focused, x, D, pollerNotModifiedStreak) {
+  let ee = x < 30000 ? 90000 : x < 300000 ? 180000 : x < 1800000 ? 600000 : 1800000;
+  let ke = D <= 0 ? 90000 : D === 1 ? 300000 : D === 2 ? 900000 : 1800000;
+  let Re =
+    pollerNotModifiedStreak <= 0
+      ? 90000
+      : pollerNotModifiedStreak === 1
+        ? 120000
+        : pollerNotModifiedStreak === 2
+          ? 240000
+          : 300000;
+  return Math.max(ee, ke, Re, focused ? 0 : PR_STALE_MS);
 }
+//@ chunk-18hwfzwa.js:819222-819564 placement
 /**
  * 创建并订阅 PrStatusPoller：按加载状态、启用开关与终端焦点调整轮询，返回当前分支 PR 状态快照。
  */
-//@ chunk-18hwfzwa.js:819222-819564 placement
-function usePrStatus(h, x = !0) {
-  let D = useClock(),
-    L = useHost(),
-    ee = useTerminalFocus(),
-    [ke] = y(
-      () =>
-        new PrStatusPoller(
-          {
-            setTimeout: (Re, Be) => D.setTimeout(Re, Be),
-            now: () => Date.now(),
-            getLastInteractionTime: () => getLastInteractionTime(),
-            fetchPrStatus: () => getPrStatus(L),
-            shared: zM(),
-          },
-          { isLoading: h, enabled: x, focused: ee },
-        ),
-    );
-  return (
-    P(() => {
-      ke.setInputs({ isLoading: h, enabled: x, focused: ee });
-    }, [ke, h, x, ee]),
-    yt(ke.subscribe, ke.getSnapshot)
+function usePrStatus(isLoading, x = true) {
+  let clock = useClock();
+  let host = useHost();
+  let terminalFocus = useTerminalFocus();
+  let [ke] = y(
+    () =>
+      new PrStatusPoller(
+        {
+          setTimeout: (Re, Be) => clock.setTimeout(Re, Be),
+          now: () => Date.now(),
+          getLastInteractionTime: () => getLastInteractionTime(),
+          fetchPrStatus: () => getPrStatus(host),
+          shared: currentPrStatusFetcher(),
+        },
+        {
+          isLoading,
+          enabled: x,
+          focused: terminalFocus,
+        },
+      ),
   );
+  P(() => {
+    ke.setInputs({
+      isLoading,
+      enabled: x,
+      focused: terminalFocus,
+    });
+  }, [ke, isLoading, x, terminalFocus]);
+  return yt(ke.subscribe, ke.getSnapshot);
 }
 //@ chunk-18hwfzwa.js:819564-819568 placement
-j();
+init_react_production();
 //@ chunk-qgpgvvwv.js:624-808 fingerprint = INITIAL_STATE (0.568)
 function INITIAL_STATE(s, o) {
   if (!s || !o) return null;
-  let d = s.kind === "cr" && !1,
-    u = s.kind === "mr";
+  let d = s.kind === "cr" && false;
+  let u = s.kind === "mr";
   return {
     prefix: u ? "MR" : "PR",
     label: `${u ? "!" : "#"}${s.number}`,
@@ -356,5 +448,4 @@ function INITIAL_STATE(s, o) {
     color: getPrStatusColor(s.reviewState),
   };
 }
-
-export { usePrStatus, useBgSessionPr, INITIAL_STATE, khe, useFooterLinks, FooterLink };
+export { usePrStatus, useBgSessionPr, INITIAL_STATE, HistorySearchInputRef, useFooterLinks, FooterLink };

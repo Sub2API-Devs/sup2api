@@ -14,39 +14,38 @@ import { logEvent } from "../services/analytics/index.js";
 import { logFeatureOk, logFeatureBad } from "../services/analytics/featureTelemetry.js";
 import { logForDebugging } from "../utils/debug.js";
 
+//@ chunk-cjydagjy.js:8258-8852 fingerprint = migrateBypassPermissionsAcceptedToSettings (0.816)
 /**
  * 迁移：全局配置 bypassPermissionsModeAccepted → userSettings.skipDangerousModePermissionPrompt=true。
  */
-//@ chunk-cjydagjy.js:8258-8852 fingerprint = migrateBypassPermissionsAcceptedToSettings (0.816)
 async function migrateBypassPermissionsAcceptedToSettings(e) {
-  if (!getGlobalConfig().bypassPermissionsModeAccepted) return !0;
+  if (!getGlobalConfig().bypassPermissionsModeAccepted) return true;
   try {
     if (!hasSkipDangerousModePermissionPrompt()) {
-      let { error: error } = await updateSettingsForSource(
+      let { error } = await updateSettingsForSource(
         "userSettings",
-        { skipDangerousModePermissionPrompt: !0 },
-        void 0,
+        {
+          skipDangerousModePermissionPrompt: true,
+        },
+        undefined,
         e,
       );
       if (error) throw error;
     }
-    return (
-      logEvent("tengu_migrate_bypass_permissions_accepted", {}),
-      await saveGlobalConfig((current) => {
-        if (!("bypassPermissionsModeAccepted" in current)) return current;
-        let { bypassPermissionsModeAccepted: bypassPermissionsModeAccepted, ...S } = current;
-        return S;
-      }, e),
-      logFeatureOk("migration_bypass_permissions_to_settings"),
-      !0
-    );
+    logEvent("tengu_migrate_bypass_permissions_accepted", {});
+    await saveGlobalConfig((current) => {
+      if (!("bypassPermissionsModeAccepted" in current)) return current;
+      let { bypassPermissionsModeAccepted, ...updatedConfig } = current;
+      return updatedConfig;
+    }, e);
+    logFeatureOk("migration_bypass_permissions_to_settings");
+    return true;
   } catch (error) {
-    return (
-      logForDebugging(`Failed to migrate bypass permissions accepted: ${error}`, { level: "error" }),
-      logFeatureBad("migration_bypass_permissions_to_settings", "migration_bypass_permissions_write_failed"),
-      !1
-    );
+    logForDebugging(`Failed to migrate bypass permissions accepted: ${error}`, {
+      level: "error",
+    });
+    logFeatureBad("migration_bypass_permissions_to_settings", "migration_bypass_permissions_write_failed");
+    return false;
   }
 }
-
 export { migrateBypassPermissionsAcceptedToSettings };

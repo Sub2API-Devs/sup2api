@@ -8,24 +8,34 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:199129-203858 cjs-fingerprint
-var Qa = x(function (DE, Za) {
-  function Md(e) {
-    let regex = e.regex,
-      n = { className: "params", begin: "\\(", end: "\\)" },
-      a = /(_[a-z_\d]+)?/,
-      s = /([de][+-]?\d+)?/,
-      o = {
-        className: "number",
-        variants: [
-          { begin: regex.concat(/\b\d+/, /\.(\d*)/, s, a) },
-          { begin: regex.concat(/\b\d+/, s, a) },
-          { begin: regex.concat(/\.\d+/, s, a) },
-        ],
-        relevance: 0,
-      };
+var require_irpf90 = x(function (cjsExports, cjsModule) {
+  function irpf90(hljs) {
+    let regex = hljs.regex;
+    let PARAMS = {
+      className: "params",
+      begin: "\\(",
+      end: "\\)",
+    };
+    let OPTIONAL_NUMBER_SUFFIX = /(_[a-z_\d]+)?/;
+    let OPTIONAL_NUMBER_EXP = /([de][+-]?\d+)?/;
+    let NUMBER = {
+      className: "number",
+      variants: [
+        {
+          begin: regex.concat(/\b\d+/, /\.(\d*)/, OPTIONAL_NUMBER_EXP, OPTIONAL_NUMBER_SUFFIX),
+        },
+        {
+          begin: regex.concat(/\b\d+/, OPTIONAL_NUMBER_EXP, OPTIONAL_NUMBER_SUFFIX),
+        },
+        {
+          begin: regex.concat(/\.\d+/, OPTIONAL_NUMBER_EXP, OPTIONAL_NUMBER_SUFFIX),
+        },
+      ],
+      relevance: 0,
+    };
     return {
       name: "IRPF90",
-      case_insensitive: !0,
+      case_insensitive: true,
       keywords: {
         literal: ".False. .True.",
         keyword:
@@ -35,21 +45,30 @@ var Qa = x(function (DE, Za) {
       },
       illegal: /\/\*/,
       contains: [
-        e.inherit(e.APOS_STRING_MODE, { className: "string", relevance: 0 }),
-        e.inherit(e.QUOTE_STRING_MODE, { className: "string", relevance: 0 }),
+        hljs.inherit(hljs.APOS_STRING_MODE, {
+          className: "string",
+          relevance: 0,
+        }),
+        hljs.inherit(hljs.QUOTE_STRING_MODE, {
+          className: "string",
+          relevance: 0,
+        }),
         {
           className: "function",
           beginKeywords: "subroutine function program",
           illegal: "[${=\\n]",
-          contains: [e.UNDERSCORE_TITLE_MODE, n],
+          contains: [hljs.UNDERSCORE_TITLE_MODE, PARAMS],
         },
-        e.COMMENT("!", "$", { relevance: 0 }),
-        e.COMMENT("begin_doc", "end_doc", { relevance: 10 }),
-        o,
+        hljs.COMMENT("!", "$", {
+          relevance: 0,
+        }),
+        hljs.COMMENT("begin_doc", "end_doc", {
+          relevance: 10,
+        }),
+        NUMBER,
       ],
     };
   }
-  Za.exports = Md;
+  cjsModule.exports = irpf90;
 });
-
-export { Qa };
+export { require_irpf90 };

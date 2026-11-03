@@ -8,173 +8,176 @@
  * pieces: chunk-e6aww6q8.js (14)
  * attribution: placement 14
  */
-import {
-  realpath,
-  realpath as realpath_2,
-  realpath as realpath_3,
-  realpath as realpath_4,
-  realpath as realpath_5,
-  realpath as realpath_6,
-  realpath as realpath_7,
-  realpath as realpath_8,
-  realpath as realpath_9,
-  realpath as realpath_10,
-  realpath as realpath_11,
-  realpath as realpath_12,
-  realpath as realpath_13,
-  realpath as realpath_14,
-  realpath as realpath_15,
-  realpath as realpath_16,
-  realpath as realpath_17,
-  realpath as realpath_18,
-  realpath as realpath_19,
-  realpath as realpath_20,
-  realpath as realpath_21,
-  realpath as realpath_22,
-  realpath as realpath_23,
-  realpath as realpath_24,
-  realpath as realpath_25,
-  realpath as realpath_26,
-  realpath as realpath_27,
-  realpath as realpath_28,
-  realpath as realpath_29,
-  realpath as realpath_30,
-  realpath as realpath_31,
-  realpath as realpath_32,
-  realpath as realpath_33,
-  realpath as realpath_34,
-  realpath as realpath_35,
-  realpath as realpath_36,
-  realpath as realpath_37,
-  realpath as realpath_38,
-} from "fs/promises";
+import { realpath } from "fs/promises";
 import { isSyncedSkill, isKilledHostCatalogSkill } from "../commandPredicates.js";
-import { Gun } from "./skillsSync.js";
+import { refreshVetoAndRead } from "./skillsSync.js";
 import { readFlagWithOverride } from "../../services/analytics/flagOverrides.js";
 import {
-  OVt,
-  q5o,
-  Xbn,
-  Y5o,
+  isSyncPaused,
+  syncedRootsUnder,
+  isSyncedMarketplace,
+  readSyncBucket,
   otherAccountReason,
   notListedReason,
-  Sie,
-  logSyncedCommandRefused,
-  Lkt,
+  isPluginsSyncVetoed,
+  logSyncedCommandRefused as logSyncedCommandRefused_2,
+  refusalTextFor,
 } from "../../services/plugins/accountSync/syncedPluginHooks.js";
 import { sanitizeTelemetryString } from "../sanitization.js";
 import { logForDebugging } from "../debug.js";
 import { logForDiagnosticsNoPII } from "../diagLogs.js";
 import { findGitRoot, findGitRootRecheckingNegative } from "../git.js";
-import { wZs } from "../attributionFileClasses.js";
+import { ANY_PATTERN } from "../attributionFileClasses.js";
 
 //@ chunk-e6aww6q8.js:1657467-1657508 placement
-function qCe(e) {
-  return isSyncedSkill(e) ? Gun() : isKilledHostCatalogSkill(e);
+/**
+ * 已同步技能不可用时返回原因，否则检查是否是宿主目录技能被清除。
+ */
+function syncedSkillRefusalReason(e) {
+  return isSyncedSkill(e) ? refreshVetoAndRead() : isKilledHostCatalogSkill(e);
 }
 //@ chunk-e6aww6q8.js:1657508-1657542 placement
 var TENGU_IMMUTABLE_LADYBUG = "tengu_immutable_ladybug";
 //@ chunk-e6aww6q8.js:1657542-1657582 placement
-function Vbe() {
-  return readFlagWithOverride(TENGU_IMMUTABLE_LADYBUG, { safe: !0 });
+/**
+ * 读取 tengu_immutable_ladybug 开关。
+ */
+function isImmutableLadybugOn() {
+  return readFlagWithOverride(TENGU_IMMUTABLE_LADYBUG, {
+    safe: true,
+  });
 }
 //@ chunk-e6aww6q8.js:1657582-1657617 placement
-function kZt() {
-  return Vbe() && OVt();
+/**
+ * 开关开启且另有条件成立。
+ */
+function isImmutableLadybugActive() {
+  return isImmutableLadybugOn() && isSyncPaused();
 }
 //@ chunk-e6aww6q8.js:1657617-1657792 placement
 function getSyncedPluginRoots(e) {
-  let n = e.type === "prompt" ? e.pluginSource : void 0;
-  if (n === void 0) return;
-  let r = q5o(n.sourceName, n.pluginPath);
-  return r.length > 0 ? { folder: n.pluginPath, roots: r } : void 0;
+  let pluginSource = e.type === "prompt" ? e.pluginSource : undefined;
+  if (pluginSource === undefined) return;
+  let r = syncedRootsUnder(pluginSource.sourceName, pluginSource.pluginPath);
+  return r.length > 0
+    ? {
+        folder: pluginSource.pluginPath,
+        roots: r,
+      }
+    : undefined;
 }
+//@ chunk-e6aww6q8.js:1657792-1658000 placement
 /**
  * 判断已同步插件的技能能否使用：无目录时（被拒且适用时）返回 no_folder；同步关闭返回 sync_off；否则按同步状态判断。
  */
-//@ chunk-e6aww6q8.js:1657792-1658000 placement
 async function checkSyncedSkillAccess(e, n, r = "not judged") {
-  let s = q5o(e, n);
-  if (n === void 0 || s.length === 0) return r === "refused" && Xbn(e) && Vbe() ? "no_folder" : void 0;
-  if (!Vbe()) return;
-  if (wZt()) return "sync_off";
-  return bZt(await Y5o(), s, n);
+  let s = syncedRootsUnder(e, n);
+  if (n === undefined || s.length === 0)
+    return r === "refused" && isSyncedMarketplace(e) && isImmutableLadybugOn() ? "no_folder" : undefined;
+  if (!isImmutableLadybugOn()) return;
+  if (isSkillSyncOffReason()) return "sync_off";
+  return syncedSkillAccessReason(await readSyncBucket(), s, n);
 }
 //@ chunk-e6aww6q8.js:1658000-1658088 placement
-function bZt(e, n, r) {
+/**
+ * 判断同步技能访问被拒的原因（属于他人账号或未在列表中）。
+ */
+function syncedSkillAccessReason(e, n, r) {
   let s = otherAccountReason(e, n, r);
-  if (s !== void 0 || e === null) return s;
+  if (s !== undefined || e === null) return s;
   return notListedReason(e, n, r);
 }
 //@ chunk-e6aww6q8.js:1658088-1658123 placement
-function wZt() {
-  return Sie() && OVt();
+/**
+ * 技能同步关闭时返回原因。
+ */
+function isSkillSyncOffReason() {
+  return isPluginsSyncVetoed() && isSyncPaused();
 }
+//@ chunk-e6aww6q8.js:1658123-1658225 placement
 /**
  * 检查命令所属同步插件的访问权限（按插件来源名与路径）。
  */
-//@ chunk-e6aww6q8.js:1658123-1658225 placement
-function checkCommandSyncedAccess(e) {
-  let n = e.type === "prompt" ? e.pluginSource : void 0;
-  return checkSyncedSkillAccess(n?.sourceName, n?.pluginPath);
+function checkCommandSyncedAccess(command) {
+  let pluginSource = command.type === "prompt" ? command.pluginSource : undefined;
+  return checkSyncedSkillAccess(pluginSource?.sourceName, pluginSource?.pluginPath);
 }
 //@ chunk-e6aww6q8.js:1658225-1658261 placement
-function gse(e, n) {
-  logSyncedCommandRefused(sanitizeTelemetryString(e.name), n);
+/**
+ * 记录某个同步命令被拒（名称脱敏）。
+ */
+function logSyncedCommandRefused(command, n) {
+  logSyncedCommandRefused_2(sanitizeTelemetryString(command.name), n);
 }
+//@ chunk-e6aww6q8.js:1658261-1658413 placement
 /**
  * 记录同步插件某部分被拒（调试日志与无 PII 诊断）。
  */
-//@ chunk-e6aww6q8.js:1658261-1658413 placement
-function logSyncedPartRefused(e, n, r) {
-  (logForDebugging(`Synced plugin's ${e} refused for '${sanitizeTelemetryString(n)}': ${Lkt(r)}.`, {
-    level: "warn",
-  }),
-    logForDiagnosticsNoPII("info", "plugins_sync_part_refused", { part: e, reason: r }));
+function logSyncedPartRefused(e, agentType, r) {
+  logForDebugging(
+    `Synced plugin's ${e} refused for '${sanitizeTelemetryString(agentType)}': ${refusalTextFor(r)}.`,
+    {
+      level: "warn",
+    },
+  );
+  logForDiagnosticsNoPII("info", "plugins_sync_part_refused", {
+    part: e,
+    reason: r,
+  });
 }
 //@ chunk-e6aww6q8.js:1658413-1658446 placement
-function LZ(e) {
-  return e !== void 0;
+/**
+ * 判断值是否已定义。
+ */
+function isDefined(e) {
+  return e !== undefined;
 }
+//@ chunk-e6aww6q8.js:1658446-1658727 placement
 /**
  * 找出因同步状态不能使用的已同步插件命令，返回命令到原因的映射。
  */
-//@ chunk-e6aww6q8.js:1658446-1658727 placement
 async function findRefusedSyncedCommands(e) {
   let flattened = e.flatMap((y) => {
-    let S = getSyncedPluginRoots(y);
-    return S === void 0 ? [] : [{ command: y, ...S }];
+    let syncedPluginRoots = getSyncedPluginRoots(y);
+    return syncedPluginRoots === undefined
+      ? []
+      : [
+          {
+            command: y,
+            ...syncedPluginRoots,
+          },
+        ];
   });
-  if (flattened.length === 0 || !Vbe()) return new Map();
-  let r = new Map(),
-    s = wZt(),
-    h = s ? null : await Y5o();
-  for (let { command: command, roots: roots, folder: folder } of flattened) {
-    let L = s ? "sync_off" : bZt(h, roots, folder);
-    if (LZ(L)) r.set(command, L);
+  if (flattened.length === 0 || !isImmutableLadybugOn()) return new Map();
+  let r = new Map();
+  let s = isSkillSyncOffReason();
+  let h = s ? null : await readSyncBucket();
+  for (let { command, roots, folder } of flattened) {
+    let L = s ? "sync_off" : syncedSkillAccessReason(h, roots, folder);
+    if (isDefined(L)) r.set(command, L);
   }
   return r;
 }
+//@ chunk-e6aww6q8.js:1658806-1659046 placement
 /**
  * 解析技能的 git 根：项目技能取其所在仓库根，否则回退到给定目录的仓库根，再取真实路径。
  */
-//@ chunk-e6aww6q8.js:1658806-1659046 placement
-async function resolveSkillGitRoot(e, n) {
-  let r = e.type === "prompt" && e.source === "projectSettings" ? (e.skillRoot ?? e.skillFile?.path) : void 0,
-    s = r === void 0 ? null : findGitRoot(r);
-  if (s === null && n === null) return;
-  let h = s ?? (n === null ? null : findGitRootRecheckingNegative(n));
-  return h === null ? wZs : realpath_21(h).catch(() => h);
+async function resolveSkillGitRoot(e, cwdOrNull) {
+  let r =
+    e.type === "prompt" && e.source === "projectSettings" ? (e.skillRoot ?? e.skillFile?.path) : undefined;
+  let s = r === undefined ? null : findGitRoot(r);
+  if (s === null && cwdOrNull === null) return;
+  let h = s ?? (cwdOrNull === null ? null : findGitRootRecheckingNegative(cwdOrNull));
+  return h === null ? ANY_PATTERN : realpath(h).catch(() => h);
 }
-
 export {
   checkSyncedSkillAccess,
   logSyncedPartRefused,
   findRefusedSyncedCommands,
-  gse,
+  logSyncedCommandRefused,
   checkCommandSyncedAccess,
-  qCe,
-  LZ,
+  syncedSkillRefusalReason,
+  isDefined,
   resolveSkillGitRoot,
-  kZt,
+  isImmutableLadybugActive,
 };

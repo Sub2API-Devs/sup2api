@@ -9,92 +9,132 @@
  * attribution: placement 9
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { zodStrictObject, u, o, M } from "../../../vendor/zod/v4/classic/schemas.js";
+import { zodStrictObject, u, string, M } from "../../../vendor/zod/v4/classic/schemas.js";
 import { env } from "../../utils/env.js";
 import { buildTool } from "../../services/tools/permissionCheckGuard.js";
 import {
   SHOWONBOARDINGROLEPICKER,
-  asi,
-  lsi,
+  SHOW_ONBOARDING_ROLE_PICKER_DESCRIPTION,
+  SHOW_ONBOARDING_ROLE_PICKER_PROMPT,
 } from "../ShowOnboardingRolePickerTool/ShowOnboardingRolePickerTool.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 
 //@ chunk-kxyd0g16.js:11581-11642 placement
-function ge(e) {
-  return { data: { status: "unavailable", message: e } };
+/**
+ * 构造“工具不可用”的结果（带说明）。
+ */
+function unavailableResult(message) {
+  return {
+    data: {
+      status: "unavailable",
+      message,
+    },
+  };
 }
 //@ chunk-kxyd0g16.js:11642-11653 placement
-var Yt = 1e4;
+/**
+ * 角色选择结果的最大字符数（10000）。
+ */
+var MAX_ROLE_PICKER_RESULT_CHARS = 1e4;
+//@ chunk-kxyd0g16.js:11653-12231 placement
 /**
  * 校验角色选择回答。
  */
-//@ chunk-kxyd0g16.js:11653-12231 placement
 function checkRolePickerAnswer(e, r) {
   try {
     let prototypeOf = Object.getPrototypeOf(r);
-    if (prototypeOf !== Object.prototype && prototypeOf !== null) return ce("not_an_object");
-    let keys = Object.keys(r),
-      f = keys[0];
-    if (f === void 0 || keys.length > 1) return ce("unknown_field");
-    if (Object.keys(e).length > 0) return ce("changed_shown_field");
+    if (prototypeOf !== Object.prototype && prototypeOf !== null) return roleAnswerRefusal("not_an_object");
+    let keys = Object.keys(r);
+    let f = keys[0];
+    if (f === undefined || keys.length > 1) return roleAnswerRefusal("unknown_field");
+    if (Object.keys(e).length > 0) return roleAnswerRefusal("changed_shown_field");
     let h = r[f];
     switch (f) {
       case "role":
-        if (typeof h !== "string") return ce("response");
+        if (typeof h !== "string") return roleAnswerRefusal("response");
         return h.length > 9991 || JSON.stringify(h).length > 9991
-          ? ce("too_large")
-          : { kind: "admitted", input: { role: h } };
+          ? roleAnswerRefusal("too_large")
+          : {
+              kind: "admitted",
+              input: {
+                role: h,
+              },
+            };
       case "dismissed":
-        return h === !0 ? { kind: "admitted", input: { dismissed: !0 } } : ce("response");
+        return h === true
+          ? {
+              kind: "admitted",
+              input: {
+                dismissed: true,
+              },
+            }
+          : roleAnswerRefusal("response");
       default:
-        return ce("unknown_field");
+        return roleAnswerRefusal("unknown_field");
     }
   } catch {
-    return ce("threw");
+    return roleAnswerRefusal("threw");
   }
 }
 //@ chunk-kxyd0g16.js:12231-12276 placement
-function ce(e) {
-  return { kind: "refused", rule: e };
+/**
+ * 构造角色选择的拒绝结果 {kind:"refused", rule}。
+ */
+function roleAnswerRefusal(rule) {
+  return {
+    kind: "refused",
+    rule,
+  };
 }
 //@ chunk-kxyd0g16.js:12276-12357 placement
-var Dn = DoctorLazy(() => zodStrictObject({})),
-  Ln = DoctorLazy(() => u({ role: o().optional(), dismissed: M().optional() }));
+/**
+ * 角色选择器的输入 schema（空对象）。
+ */
+var rolePickerInputSchema = DoctorLazy(() => zodStrictObject({}));
+var rolePickerOutputSchema = DoctorLazy(() =>
+  u({
+    role: string().optional(),
+    dismissed: M().optional(),
+  }),
+);
 //@ chunk-kxyd0g16.js:12357-12399 placement
-function Mn() {
+/**
+ * 判断是否为远程会话（环境变量 CLAUDE_CODE_REMOTE）。
+ */
+function isRemoteSession() {
   return env.CLAUDE_CODE_REMOTE;
 }
+//@ chunk-kxyd0g16.js:12399-13206 placement
 /**
  * 显示 Cowork 入门角色选择器的工具。
  */
-//@ chunk-kxyd0g16.js:12399-13206 placement
 var RolePickerTool = buildTool({
   name: SHOWONBOARDINGROLEPICKER,
   searchHint: "show the Cowork onboarding role picker",
   backgrounding: "never",
-  maxResultSizeChars: Yt,
+  maxResultSizeChars: MAX_ROLE_PICKER_RESULT_CHARS,
   get inputSchema() {
-    return Dn();
+    return rolePickerInputSchema();
   },
   get outputSchema() {
-    return Ln();
+    return rolePickerOutputSchema();
   },
-  isEnabled: Mn,
+  isEnabled: isRemoteSession,
   isConcurrencySafe() {
-    return !0;
+    return true;
   },
   isReadOnly() {
-    return !0;
+    return true;
   },
   requiresUserInteraction() {
-    return !0;
+    return true;
   },
   admitCardAnswer: checkRolePickerAnswer,
   async description() {
-    return asi;
+    return SHOW_ONBOARDING_ROLE_PICKER_DESCRIPTION;
   },
   async prompt() {
-    return lsi;
+    return SHOW_ONBOARDING_ROLE_PICKER_PROMPT;
   },
   toAutoClassifierInput() {
     return "show onboarding role picker";
@@ -102,52 +142,73 @@ var RolePickerTool = buildTool({
   create() {
     return {
       async checkPermissions(e) {
-        return { behavior: "ask", message: "Pick your role?", updatedInput: {} };
+        return {
+          behavior: "ask",
+          message: "Pick your role?",
+          updatedInput: {},
+        };
       },
       async call(e) {
-        let { role: role, dismissed: dismissed } = e;
+        let { role, dismissed } = e;
         return {
           data: {
-            ...(typeof role === "string" && role.trim() !== "" && { role: role }),
-            ...(typeof dismissed === "boolean" && { dismissed: dismissed }),
+            ...(typeof role === "string" &&
+              role.trim() !== "" && {
+                role,
+              }),
+            ...(typeof dismissed === "boolean" && {
+              dismissed,
+            }),
           },
         };
       },
     };
   },
-  mapToolResultToToolResultBlockParam(e, r) {
-    return { tool_use_id: r, type: "tool_result", content: jsonStringify(e) };
+  mapToolResultToToolResultBlockParam(e, toolUseId) {
+    return {
+      tool_use_id: toolUseId,
+      type: "tool_result",
+      content: jsonStringify(e),
+    };
   },
   renderToolUseMessage() {
     return null;
   },
 });
+//@ chunk-kxyd0g16.js:13206-13642 placement
 /**
  * 校验 Chrome 设置回答。
  */
-//@ chunk-kxyd0g16.js:13206-13642 placement
 function checkChromeSetupAnswer(e, r) {
   try {
     let prototypeOf = Object.getPrototypeOf(r);
-    if (prototypeOf !== Object.prototype && prototypeOf !== null) return Me("not_an_object");
+    if (prototypeOf !== Object.prototype && prototypeOf !== null) return chromeAnswerRefusal("not_an_object");
     let s = {};
-    for (let f of Object.keys(e)) {
-      if (!Object.hasOwn(r, f) || r[f] !== e[f]) return Me("changed_shown_field");
-      s[f] = e[f];
+    for (let key of Object.keys(e)) {
+      if (!Object.hasOwn(r, key) || r[key] !== e[key]) return chromeAnswerRefusal("changed_shown_field");
+      s[key] = e[key];
     }
-    for (let f of Object.keys(r)) {
-      if (Object.hasOwn(e, f)) continue;
-      if (f !== "outcome") return Me("unknown_field");
-      if (r[f] === "connected") s.outcome = "connected";
+    for (let key of Object.keys(r)) {
+      if (Object.hasOwn(e, key)) continue;
+      if (key !== "outcome") return chromeAnswerRefusal("unknown_field");
+      if (r[key] === "connected") s.outcome = "connected";
     }
-    return { kind: "admitted", input: s };
+    return {
+      kind: "admitted",
+      input: s,
+    };
   } catch {
-    return Me("threw");
+    return chromeAnswerRefusal("threw");
   }
 }
 //@ chunk-kxyd0g16.js:13642-13687 placement
-function Me(e) {
-  return { kind: "refused", rule: e };
+/**
+ * 构造 Chrome 设置回答的拒绝结果 {kind:"refused", rule}。
+ */
+function chromeAnswerRefusal(rule) {
+  return {
+    kind: "refused",
+    rule,
+  };
 }
-
-export { RolePickerTool, ge, checkChromeSetupAnswer };
+export { RolePickerTool, unavailableResult, checkChromeSetupAnswer };

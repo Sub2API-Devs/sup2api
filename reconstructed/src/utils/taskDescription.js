@@ -8,18 +8,22 @@
  * pieces: chunk-s1p2wv8d.js (2)
  * attribution: placement 2
  */
-import { Dr, truncateToLength } from "./stringUtils.js";
-import { Yn } from "./stripAnsi.js";
+import { collapseWhitespace, truncateToLength } from "./stringUtils.js";
+import { stripAnsi } from "./stripAnsi.js";
 import { truncateToWidth } from "./format.js";
 
 //@ chunk-s1p2wv8d.js:302-374 placement
-var i = 200,
-  o = i * 4,
-  r = /[\p{Cf}\p{Cs}\p{Zl}\p{Zp}\p{Variation_Selector}]+/gu;
+var MAX_DESCRIPTION_DISPLAY_CHARS = 200;
+var MAX_DESCRIPTION_INPUT_CHARS = MAX_DESCRIPTION_DISPLAY_CHARS * 4;
+var INVISIBLE_CHARS_RE = /[\p{Cf}\p{Cs}\p{Zl}\p{Zp}\p{Variation_Selector}]+/gu;
 //@ chunk-s1p2wv8d.js:374-469 placement
-function vc(n) {
-  let e = n === void 0 ? "" : Dr(Yn(n).replace(r, " "));
-  return e === "" ? void 0 : truncateToWidth(truncateToLength(e, o), i);
+/**
+ * 清洗后台任务描述：去 ANSI/不可见字符、压缩空白并按显示宽度截断。
+ */
+function cleanTaskDescription(n) {
+  let e = n === undefined ? "" : collapseWhitespace(stripAnsi(n).replace(INVISIBLE_CHARS_RE, " "));
+  return e === ""
+    ? undefined
+    : truncateToWidth(truncateToLength(e, MAX_DESCRIPTION_INPUT_CHARS), MAX_DESCRIPTION_DISPLAY_CHARS);
 }
-
-export { vc };
+export { cleanTaskDescription };

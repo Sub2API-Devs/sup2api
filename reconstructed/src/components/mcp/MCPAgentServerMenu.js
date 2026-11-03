@@ -16,10 +16,14 @@ import { useKeybinding } from "../../keybindings/useKeybinding.js";
 import { isUnattendedBgSession } from "../../utils/concurrentSessions.js";
 import { CANNOT_AUTH_WITHOUT_TERMINAL } from "./MCPRemoteServerMenu.js";
 import { classifyMcpAuthTarget } from "../../services/mcp/auth.js";
-import { uo, sanitizeErrorDetail } from "../../services/api/deferredToolsState.js";
+import { normalizeServerNameShort, sanitizeErrorDetail } from "../../services/api/deferredToolsState.js";
 import { redactMcpErrorDetail } from "../../services/mcp/mcpServerOrigin.js";
 import { capitalize } from "../../utils/stringUtils.js";
-import { r, e, Fragment } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default_2,
+  jsxProd_default,
+  Fragment,
+} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Box, Text, Link } from "../../ink/components/Text.js";
 import { Spinner } from "../Spinner.js";
 import { ConfigurableShortcutHint } from "../ConfigurableShortcutHint.js";
@@ -28,94 +32,123 @@ import { Byline } from "../design-system/Byline.js";
 import { KeyboardShortcutHint } from "../design-system/KeyboardShortcutHint.js";
 import { FlexDirectionRow } from "../design-system/Table.js";
 import { color } from "../design-system/color.js";
-import { re } from "../../../vendor/@inquirer/figures/dist/esm/index.js";
+import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/index.js";
 import { StatusIcon } from "../design-system/StatusIcon.js";
 import { ErrorText } from "../ErrorText.js";
 import { ModelSelector } from "../agents/ModelSelector.js";
 
 //@ chunk-cpqpnzp4.js:17999-18067 affinity
-function kt() {
+function getMcpAuthModule() {
   return require("./chunk-asne9cp8.js").mcpAuthModule();
 }
 //@ chunk-cpqpnzp4.js:18067-21061 fingerprint = MCPAgentServerMenu (0.595)
-function MCPAgentServerMenu({ agentServer: agentServer, onCancel: onCancel, onComplete: onComplete }) {
+function MCPAgentServerMenu({ agentServer, onCancel, onComplete }) {
   let c = ce(
-      (T, ...X) => onComplete(typeof T === "string" ? sanitizeTelemetryString(T) : T, ...X),
-      [onComplete],
-    ),
-    [v] = useTheme(),
-    m = useIsScreenReaderEnabled(),
-    [k, f] = y(!1),
-    [b, N] = y(null),
-    [_, h] = y(null),
-    authAbortControllerRef = R(null);
+    (T, ...X) => onComplete(typeof T === "string" ? sanitizeTelemetryString(T) : T, ...X),
+    [onComplete],
+  );
+  let [v] = useTheme();
+  let isScreenReaderEnabled = useIsScreenReaderEnabled();
+  let [isAuthenticating, setIsAuthenticating] = y(false);
+  let [error, setError] = y(null);
+  let [authorizationUrl, setAuthorizationUrl] = y(null);
+  let authAbortControllerRef = R(null);
   P(() => () => authAbortControllerRef.current?.abort(), []);
   let handleEscCancel = ce(() => {
-    if (k) (authAbortControllerRef.current?.abort(), (authAbortControllerRef.current = null), f(!1), h(null));
-  }, [k]);
-  useKeybinding("confirm:no", handleEscCancel, { context: "Confirmation", isActive: k });
+    if (isAuthenticating) {
+      authAbortControllerRef.current?.abort();
+      authAbortControllerRef.current = null;
+      setIsAuthenticating(false);
+      setAuthorizationUrl(null);
+    }
+  }, [isAuthenticating]);
+  useKeybinding("confirm:no", handleEscCancel, {
+    context: "Confirmation",
+    isActive: isAuthenticating,
+  });
   let handleAuthenticate = ce(async () => {
-      if (isUnattendedBgSession()) {
-        N(CANNOT_AUTH_WITHOUT_TERMINAL);
-        return;
-      }
-      if (
-        !agentServer.needsAuth ||
-        !agentServer.url ||
-        (agentServer.transport !== "http" && agentServer.transport !== "sse")
-      )
-        return;
-      let T = classifyMcpAuthTarget(agentServer.name, { type: agentServer.transport, url: agentServer.url });
-      if (T.kind === "anthropic-hosted") {
-        N(T.message);
-        return;
-      }
-      if (T.kind !== "oauth") return;
-      (f(!0), N(null));
-      let controller = new AbortController();
-      authAbortControllerRef.current = controller;
-      try {
-        (await kt().performMCPOAuthFlow(agentServer.name, T.config, h, controller.signal),
-          c(
-            `Authentication successful for ${uo(agentServer.name)}. The server will connect when the agent runs.`,
-          ));
-      } catch (err) {
-        if (err instanceof Error && !(err instanceof kt().AuthenticationCancelledError))
-          N(sanitizeErrorDetail(redactMcpErrorDetail(agentServer.name, T.config, err.message)));
-      } finally {
-        (f(!1), (authAbortControllerRef.current = null));
-      }
-    }, [agentServer, c]),
-    capitalizedServerName = capitalize(String(agentServer.name));
-  if (k)
-    return r(Box, {
+    if (isUnattendedBgSession()) {
+      setError(CANNOT_AUTH_WITHOUT_TERMINAL);
+      return;
+    }
+    if (
+      !agentServer.needsAuth ||
+      !agentServer.url ||
+      (agentServer.transport !== "http" && agentServer.transport !== "sse")
+    )
+      return;
+    let T = classifyMcpAuthTarget(agentServer.name, {
+      type: agentServer.transport,
+      url: agentServer.url,
+    });
+    if (T.kind === "anthropic-hosted") {
+      setError(T.message);
+      return;
+    }
+    if (T.kind !== "oauth") return;
+    setIsAuthenticating(true);
+    setError(null);
+    let controller = new AbortController();
+    authAbortControllerRef.current = controller;
+    try {
+      await getMcpAuthModule().performMCPOAuthFlow(
+        agentServer.name,
+        T.config,
+        setAuthorizationUrl,
+        controller.signal,
+      );
+      c(
+        `Authentication successful for ${normalizeServerNameShort(agentServer.name)}. The server will connect when the agent runs.`,
+      );
+    } catch (err) {
+      if (err instanceof Error && !(err instanceof getMcpAuthModule().AuthenticationCancelledError))
+        setError(sanitizeErrorDetail(redactMcpErrorDetail(agentServer.name, T.config, err.message)));
+    } finally {
+      setIsAuthenticating(false);
+      authAbortControllerRef.current = null;
+    }
+  }, [agentServer, c]);
+  let capitalizedServerName = capitalize(String(agentServer.name));
+  if (isAuthenticating)
+    return jsxProd_default_2(Box, {
       flexDirection: "column",
       gap: 1,
       padding: 1,
       children: [
-        r(Text, { color: "claude", children: ["Authenticating with ", agentServer.name, "\u2026"] }),
-        r(Box, {
-          children: [e(Spinner, {}), e(Text, { children: " A browser window will open for authentication" })],
+        jsxProd_default_2(Text, {
+          color: "claude",
+          children: ["Authenticating with ", agentServer.name, "\u2026"],
         }),
-        _ &&
-          r(Box, {
+        jsxProd_default_2(Box, {
+          children: [
+            jsxProd_default(Spinner, {}),
+            jsxProd_default(Text, {
+              children: " A browser window will open for authentication",
+            }),
+          ],
+        }),
+        authorizationUrl &&
+          jsxProd_default_2(Box, {
             flexDirection: "column",
             children: [
-              e(Text, {
-                dimColor: !0,
+              jsxProd_default(Text, {
+                dimColor: true,
                 children: "If your browser doesn't open automatically, copy this URL manually:",
               }),
-              e(Link, { url: _, assumeSupport: !0 }),
+              jsxProd_default(Link, {
+                url: authorizationUrl,
+                assumeSupport: true,
+              }),
             ],
           }),
-        e(Box, {
+        jsxProd_default(Box, {
           marginLeft: 3,
-          children: r(Text, {
-            dimColor: !0,
+          children: jsxProd_default_2(Text, {
+            dimColor: true,
             children: [
               "Return here after authenticating in your browser.",
               " ",
-              e(ConfigurableShortcutHint, {
+              jsxProd_default(ConfigurableShortcutHint, {
                 action: "confirm:no",
                 context: "Confirmation",
                 fallback: "Esc",
@@ -127,105 +160,166 @@ function MCPAgentServerMenu({ agentServer: agentServer, onCancel: onCancel, onCo
       ],
     });
   let menuOptions = [];
-  if (agentServer.needsAuth) menuOptions.push({ label: "Authenticate", value: "auth" });
-  return (
-    menuOptions.push({ label: "Back", value: "back" }),
-    r(Dialog, {
-      title: `${capitalizedServerName} MCP Server`,
-      subtitle: "agent-only",
-      onCancel: onCancel,
-      inputGuide: r(Byline, {
+  if (agentServer.needsAuth)
+    menuOptions.push({
+      label: "Authenticate",
+      value: "auth",
+    });
+  menuOptions.push({
+    label: "Back",
+    value: "back",
+  });
+  return jsxProd_default_2(Dialog, {
+    title: `${capitalizedServerName} MCP Server`,
+    subtitle: "agent-only",
+    onCancel,
+    inputGuide: jsxProd_default_2(Byline, {
+      children: [
+        !isScreenReaderEnabled &&
+          jsxProd_default(KeyboardShortcutHint, {
+            chord: ["up", "down"],
+            action: "navigate",
+          }),
+        !isScreenReaderEnabled &&
+          jsxProd_default(KeyboardShortcutHint, {
+            chord: "enter",
+            action: "confirm",
+          }),
+        jsxProd_default(ConfigurableShortcutHint, {
+          action: "confirm:no",
+          context: "Confirmation",
+          fallback: "Esc",
+          description: "go back",
+        }),
+      ],
+    }),
+    children: [
+      jsxProd_default_2(FlexDirectionRow, {
+        columns: [
+          {
+            bold: true,
+            width: 8,
+          },
+          {},
+        ],
         children: [
-          !m && e(KeyboardShortcutHint, { chord: ["up", "down"], action: "navigate" }),
-          !m && e(KeyboardShortcutHint, { chord: "enter", action: "confirm" }),
-          e(ConfigurableShortcutHint, {
-            action: "confirm:no",
-            context: "Confirmation",
-            fallback: "Esc",
-            description: "go back",
+          jsxProd_default_2(FlexDirectionRow.Row, {
+            children: [
+              jsxProd_default(Fragment, {
+                children: "Type:",
+              }),
+              jsxProd_default(Text, {
+                dimColor: true,
+                children: agentServer.transport,
+              }),
+            ],
+          }),
+          agentServer.url &&
+            jsxProd_default_2(FlexDirectionRow.Row, {
+              children: [
+                jsxProd_default(Fragment, {
+                  children: "URL:",
+                }),
+                jsxProd_default(Text, {
+                  dimColor: true,
+                  children: agentServer.url,
+                }),
+              ],
+            }),
+          agentServer.command &&
+            jsxProd_default_2(FlexDirectionRow.Row, {
+              children: [
+                jsxProd_default(Fragment, {
+                  children: "Command:",
+                }),
+                jsxProd_default(Text, {
+                  dimColor: true,
+                  children: agentServer.command,
+                }),
+              ],
+            }),
+          jsxProd_default_2(FlexDirectionRow.Row, {
+            children: [
+              jsxProd_default(Fragment, {
+                children: "Used by:",
+              }),
+              jsxProd_default(Text, {
+                dimColor: true,
+                children: agentServer.sourceAgents.join(", "),
+              }),
+            ],
           }),
         ],
       }),
-      children: [
-        r(FlexDirectionRow, {
-          columns: [{ bold: !0, width: 8 }, {}],
+      jsxProd_default(Box, {
+        children: jsxProd_default_2(FlexDirectionRow, {
+          columns: [
+            {
+              bold: true,
+              width: 8,
+            },
+            {},
+          ],
           children: [
-            r(FlexDirectionRow.Row, {
+            jsxProd_default_2(FlexDirectionRow.Row, {
               children: [
-                e(Fragment, { children: "Type:" }),
-                e(Text, { dimColor: !0, children: agentServer.transport }),
+                jsxProd_default(Fragment, {
+                  children: "Status:",
+                }),
+                jsxProd_default_2(Text, {
+                  children: [color("inactive", v)(figures_default.radioOff), " not connected (agent-only)"],
+                }),
               ],
             }),
-            agentServer.url &&
-              r(FlexDirectionRow.Row, {
+            agentServer.needsAuth &&
+              jsxProd_default_2(FlexDirectionRow.Row, {
                 children: [
-                  e(Fragment, { children: "URL:" }),
-                  e(Text, { dimColor: !0, children: agentServer.url }),
+                  jsxProd_default(Fragment, {
+                    children: "Auth:",
+                  }),
+                  jsxProd_default_2(Text, {
+                    children: [
+                      jsxProd_default(StatusIcon, {
+                        status: "warning",
+                        withSpace: true,
+                      }),
+                      "may need authentication",
+                    ],
+                  }),
                 ],
               }),
-            agentServer.command &&
-              r(FlexDirectionRow.Row, {
-                children: [
-                  e(Fragment, { children: "Command:" }),
-                  e(Text, { dimColor: !0, children: agentServer.command }),
-                ],
-              }),
-            r(FlexDirectionRow.Row, {
-              children: [
-                e(Fragment, { children: "Used by:" }),
-                e(Text, { dimColor: !0, children: agentServer.sourceAgents.join(", ") }),
-              ],
-            }),
           ],
         }),
-        e(Box, {
-          children: r(FlexDirectionRow, {
-            columns: [{ bold: !0, width: 8 }, {}],
-            children: [
-              r(FlexDirectionRow.Row, {
-                children: [
-                  e(Fragment, { children: "Status:" }),
-                  r(Text, { children: [color("inactive", v)(re.radioOff), " not connected (agent-only)"] }),
-                ],
-              }),
-              agentServer.needsAuth &&
-                r(FlexDirectionRow.Row, {
-                  children: [
-                    e(Fragment, { children: "Auth:" }),
-                    r(Text, {
-                      children: [
-                        e(StatusIcon, { status: "warning", withSpace: !0 }),
-                        "may need authentication",
-                      ],
-                    }),
-                  ],
-                }),
-            ],
+      }),
+      jsxProd_default(Box, {
+        children: jsxProd_default(Text, {
+          dimColor: true,
+          children: "This server connects only when running the agent.",
+        }),
+      }),
+      error &&
+        jsxProd_default(Box, {
+          children: jsxProd_default(ErrorText, {
+            error,
           }),
         }),
-        e(Box, {
-          children: e(Text, { dimColor: !0, children: "This server connects only when running the agent." }),
+      jsxProd_default(Box, {
+        children: jsxProd_default(ModelSelector, {
+          options: menuOptions,
+          onChange: async (value) => {
+            switch (value) {
+              case "auth":
+                await handleAuthenticate();
+                break;
+              case "back":
+                onCancel();
+                break;
+            }
+          },
+          onCancel,
         }),
-        b && e(Box, { children: e(ErrorText, { error: b }) }),
-        e(Box, {
-          children: e(ModelSelector, {
-            options: menuOptions,
-            onChange: async (exitState) => {
-              switch (exitState) {
-                case "auth":
-                  await handleAuthenticate();
-                  break;
-                case "back":
-                  onCancel();
-                  break;
-              }
-            },
-            onCancel: onCancel,
-          }),
-        }),
-      ],
-    })
-  );
+      }),
+    ],
+  });
 }
-
 export { MCPAgentServerMenu };

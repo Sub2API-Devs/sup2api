@@ -14,7 +14,7 @@ import {
   CONFIDENTIAL_MODEL_ID,
   containsMaskedId,
   getMaskedModelIds,
-  Mc,
+  masksEveryId,
   MODEL_PLACEHOLDER_VALUES,
   isPublicModelId,
 } from "./catalogEntries.js";
@@ -24,10 +24,10 @@ import {
   getAPIProvider,
   isFirstPartyApiBackend,
   catalogModels,
-  D3,
+  findServedCatalogRow,
   getRowFamily,
-  Fy,
-  a6e,
+  familyDefaultMap,
+  MODEL_FAMILY_NAMES,
   providerCatalogKey,
 } from "../providers.js";
 import {
@@ -37,25 +37,34 @@ import {
   catalogIdForProviderModelId,
 } from "../modelCatalog.js";
 import { DoctorLazy } from "../../../cli/handlers/util.js";
-import { u, T, E, o, A, pe, oe, M } from "../../../../vendor/zod/v4/classic/schemas.js";
+import {
+  u,
+  literal,
+  E,
+  string,
+  array,
+  record,
+  unknown,
+  M,
+} from "../../../../vendor/zod/v4/classic/schemas.js";
 import { safeParseJSON } from "../../json.js";
 import { logForDebugging } from "../../debug.js";
 import { uniq } from "../../collections.js";
 import { logError } from "../../log.js";
 import { MODEL_KEY_BY_FIRST_PARTY_ID } from "../configs.js";
 
+//@ chunk-aepeg2w5.js:143350-143420 placement = modelMatchesVersionPrefix (1)
 /**
  * 含 claude- 且可解析为版本化模型。
  */
-//@ chunk-aepeg2w5.js:143350-143420 placement = modelMatchesVersionPrefix (1)
 function isVersionedClaudeModelSpec(e) {
   let n = normalizeModelId(e);
   return n.includes("claude-") && parseModelId(n) !== null;
 }
+//@ chunk-aepeg2w5.js:143420-143564 placement
 /**
  * 对字段值（字符串或数组）中的模型 id 做遮盖，无变化时返回原值。
  */
-//@ chunk-aepeg2w5.js:143420-143564 placement
 function maskModelFieldValue(e, n, r) {
   if (typeof e === "string") return maskModelIdList(e, n, r);
   let mapped = e.map((h) => (typeof h === "string" ? maskModelIdList(h, n, r) : h));
@@ -66,241 +75,321 @@ function maskModelIdList(e, n, r) {
   let s = (S) => {
     if (n && (r ? /[-0-9]/.test(S) : isVersionedClaudeModelSpec(S)))
       return maskModelIdForTelemetry(S) === CONFIDENTIAL_MODEL_ID ? CONFIDENTIAL_MODEL_ID : S;
-    return containsMaskedId(S, getMaskedModelIds()) || (r && ob(S)) ? CONFIDENTIAL_MODEL_ID : S;
+    return containsMaskedId(S, getMaskedModelIds()) || (r && isConfidentialShorthand(S))
+      ? CONFIDENTIAL_MODEL_ID
+      : S;
   };
   if (!e.includes(",")) return s(e);
-  let h = !1,
-    mapped = e.split(",").map((S) => {
-      let w = s(S);
-      if (w !== S) h = !0;
-      return w;
-    });
+  let h = false;
+  let mapped = e.split(",").map((S) => {
+    let w = s(S);
+    if (w !== S) h = true;
+    return w;
+  });
   return h ? mapped.join(",") : e;
 }
 //@ chunk-aepeg2w5.js:143813-143904 placement
-function ob(e) {
+/**
+ * 判断字符串是否为需遮盖的保密模型简写。
+ */
+function isConfidentialShorthand(e) {
   let n = normalizeModelId(e);
   return (
-    Mc() && !/[-0-9,]/.test(e) && n.length > 0 && !MODEL_PLACEHOLDER_VALUES.has(n) && !isPublicModelId(n)
+    masksEveryId() &&
+    !/[-0-9,]/.test(e) &&
+    n.length > 0 &&
+    !MODEL_PLACEHOLDER_VALUES.has(n) &&
+    !isPublicModelId(n)
   );
 }
+//@ chunk-aepeg2w5.js:143904-143959 placement
 /**
  * 当前目录来源。
  */
-//@ chunk-aepeg2w5.js:143904-143959 placement
 function servedCatalogSource() {
   return getProviderState().servedCatalogActive?.source;
 }
 //@ chunk-aepeg2w5.js:143959-144006 placement
-function O3t() {
+/**
+ * 取当前生效的服务端目录激活信息。
+ */
+function servedCatalogActive() {
   return getProviderState().servedCatalogActive;
 }
+//@ chunk-aepeg2w5.js:144006-144173 placement
 /**
  * 当前生效的服务端目录（被抑制时为 null）。
  */
-//@ chunk-aepeg2w5.js:144006-144173 placement
 function activeServedCatalog() {
-  let e = getProviderState();
-  if (e.servedCatalogSuppressDepth > 0) return null;
-  let servedCatalogActive = e.servedCatalogActive,
-    r = servedCatalogActive?.catalog ?? null;
-  if (r === null || !rN(servedCatalogActive?.source)) return null;
-  return r;
+  let providerState = getProviderState();
+  if (providerState.servedCatalogSuppressDepth > 0) return null;
+  let servedCatalogActive = providerState.servedCatalogActive;
+  let catalog = servedCatalogActive?.catalog ?? null;
+  if (catalog === null || !catalogSourceAllowed(servedCatalogActive?.source)) return null;
+  return catalog;
 }
 //@ chunk-aepeg2w5.js:144173-144243 placement
-function rN(e) {
-  if (e === "published") return getAPIProvider() !== "gateway";
+function catalogSourceAllowed(source) {
+  if (source === "published") return getAPIProvider() !== "gateway";
   return isFirstPartyApiBackend();
 }
+//@ chunk-aepeg2w5.js:144243-144407 placement
 /**
  * 返回生效的服务端目录（激活的目录，或第一方后端下保留的停用行）。
  */
-//@ chunk-aepeg2w5.js:144243-144407 placement
 function getEffectiveServedCatalog() {
   let e = activeServedCatalog();
   if (e !== null) return e;
-  let n = getProviderState(),
-    servedCatalogDeactivatedRows = n.servedCatalogDeactivatedRows;
+  let providerState = getProviderState();
+  let servedCatalogDeactivatedRows = providerState.servedCatalogDeactivatedRows;
   if (
-    servedCatalogDeactivatedRows === void 0 ||
-    n.servedCatalogSuppressDepth > 0 ||
+    servedCatalogDeactivatedRows === undefined ||
+    providerState.servedCatalogSuppressDepth > 0 ||
     !isFirstPartyApiBackend()
   )
     return null;
   return servedCatalogDeactivatedRows;
 }
 //@ chunk-aepeg2w5.js:144407-144486 placement
-function Vte() {
+/**
+ * 判断生效目录的来源是否为 served（服务端下发）。
+ */
+function isServedCatalogActive() {
   return activeServedCatalog() !== null && getProviderState().servedCatalogActive?.source === "served";
 }
+//@ chunk-aepeg2w5.js:144486-144568 placement
 /**
  * 是否使用已发布目录。
  */
-//@ chunk-aepeg2w5.js:144486-144568 placement
 function isPublishedCatalogActive() {
   return activeServedCatalog() !== null && getProviderState().servedCatalogActive?.source === "published";
 }
+//@ chunk-aepeg2w5.js:144568-144602 placement
 /**
  * 已发布目录生效且启用。
  */
-//@ chunk-aepeg2w5.js:144568-144602 placement
 function isPublishedCatalogInUse() {
   return isPublishedCatalogActive() && isFirstPartyApiBackend();
 }
 //@ chunk-aepeg2w5.js:144602-144636 placement
-function Cpr() {
+/**
+ * 判断当前是否有生效目录。
+ */
+function isEffectiveCatalogActive() {
   return activeServedCatalog() !== null;
 }
 //@ chunk-aepeg2w5.js:144636-144686 placement
-function fo() {
+/**
+ * 取生效目录中的模型行列表。
+ */
+function activeCatalogModels() {
   let e = activeServedCatalog();
   return e === null ? [] : catalogModels(e);
 }
+//@ chunk-aepeg2w5.js:144686-144798 placement
 /**
  * 在抑制目录的状态下执行。
  */
-//@ chunk-aepeg2w5.js:144686-144798 placement
 function withCatalogSuppressed(e) {
-  let n = getProviderState();
-  n.servedCatalogSuppressDepth++;
+  let providerState = getProviderState();
+  providerState.servedCatalogSuppressDepth++;
   try {
     return e();
   } finally {
-    n.servedCatalogSuppressDepth--;
+    providerState.servedCatalogSuppressDepth--;
   }
 }
+//@ chunk-aepeg2w5.js:144798-144853 placement
 /**
  * 目录是否被抑制。
  */
-//@ chunk-aepeg2w5.js:144798-144853 placement
 function isCatalogSuppressed() {
   return getProviderState().servedCatalogSuppressDepth > 0;
 }
 //@ chunk-aepeg2w5.js:144853-144890 placement
-function UUe(...e) {
+/**
+ * 在生效目录中查找模型条目。
+ */
+function findEffectiveServedEntry(...e) {
   return findServedEntry(getEffectiveServedCatalog(), e);
 }
+//@ chunk-aepeg2w5.js:144890-144926 placement
 /**
  * 在服务端目录中查找模型。
  */
-//@ chunk-aepeg2w5.js:144890-144926 placement
 function findServedModel(...e) {
   return findServedEntry(activeServedCatalog(), e);
 }
 //@ chunk-aepeg2w5.js:144926-144996 placement
-function uto(e) {
+/**
+ * 按 id 或身份拼写在生效目录中查模型条目。
+ */
+function findActiveServedByIdentity(e) {
   let n = activeServedCatalog();
   if (n === null) return;
-  return D3(n, e) ?? findByIdentitySpelling(n, e);
+  return findServedCatalogRow(n, e) ?? findByIdentitySpelling(n, e);
 }
 //@ chunk-aepeg2w5.js:144996-145265 placement
 function findServedEntry(e, n) {
   if (e === null) return;
-  let [r, ...s] = n,
-    h =
-      r !== void 0 &&
-      isPublishedCatalogInUse() &&
-      getCatalogState().modelKnowledge?.isModelOverrideValue(r) === !0;
-  if (r !== void 0 && !h) {
-    let y = D3(e, r) ?? findByIdentitySpelling(e, r);
-    if (y !== void 0) return y;
+  let [r, ...s] = n;
+  let h =
+    r !== undefined &&
+    isPublishedCatalogInUse() &&
+    getCatalogState().modelKnowledge?.isModelOverrideValue(r) === true;
+  if (r !== undefined && !h) {
+    let y = findServedCatalogRow(e, r) ?? findByIdentitySpelling(e, r);
+    if (y !== undefined) return y;
   }
   for (let y of s) {
-    if (y === void 0) continue;
-    let S = D3(e, y);
-    if (S !== void 0) return S;
+    if (y === undefined) continue;
+    let servedCatalogRow = findServedCatalogRow(e, y);
+    if (servedCatalogRow !== undefined) return servedCatalogRow;
   }
   return;
 }
 //@ chunk-aepeg2w5.js:145265-145467 placement
 function findByIdentitySpelling(e, n) {
-  let r = getCatalogState().modelKnowledge?.identitySpelling;
-  if (r === void 0) return;
-  let s = normalizeModelId(r(n));
+  let identitySpelling = getCatalogState().modelKnowledge?.identitySpelling;
+  if (identitySpelling === undefined) return;
+  let s = normalizeModelId(identitySpelling(n));
   if (s !== normalizeModelId(n)) {
-    let h = D3(e, s);
-    if (h !== void 0) return h;
+    let servedCatalogRow = findServedCatalogRow(e, s);
+    if (servedCatalogRow !== undefined) return servedCatalogRow;
   }
-  return catalogModels(e).find((h) => normalizeModelId(h.id) !== s && normalizeModelId(r(h.id)) === s);
+  return catalogModels(e).find(
+    (h) => normalizeModelId(h.id) !== s && normalizeModelId(identitySpelling(h.id)) === s,
+  );
 }
 //@ chunk-aepeg2w5.js:145467-145511 placement
-function dn(...e) {
-  return UUe(...e)?.runtime;
+/**
+ * 取生效目录中某模型的 runtime 信息。
+ */
+function servedRuntime(...e) {
+  return findEffectiveServedEntry(...e)?.runtime;
 }
 //@ chunk-aepeg2w5.js:145511-145562 placement
-var Ic = { min: 1e5, max: 1e7 },
-  Axt = { min: 1024, max: 128000 };
+/**
+ * 输入/输出 token 数的合法区间。
+ */
+var MAX_INPUT_TOKEN_RANGE = {
+  min: 1e5,
+  max: 1e7,
+};
+var OUTPUT_TOKEN_RANGE = {
+  min: 1024,
+  max: 128000,
+};
 //@ chunk-aepeg2w5.js:145562-145601 placement
-function bi(...e) {
-  return Nc(UUe(...e));
+/**
+ * 取生效目录模型的 max_input_tokens（限制在合法区间）。
+ */
+function servedMaxInputTokens(...e) {
+  return clampInputTokens(findEffectiveServedEntry(...e));
 }
 //@ chunk-aepeg2w5.js:145601-145679 placement
-function Nc(e) {
-  return l6e(e?.runtime?.max_input_tokens ?? e?.context_window, Ic);
+/**
+ * 把输入 token 值限制在合法区间，不合法返回 undefined。
+ */
+function clampInputTokens(effectiveServedEntry) {
+  return clampInRange(
+    effectiveServedEntry?.runtime?.max_input_tokens ?? effectiveServedEntry?.context_window,
+    MAX_INPUT_TOKEN_RANGE,
+  );
 }
 //@ chunk-aepeg2w5.js:145679-145741 placement
-function ub(...e) {
-  return l6e(dn(...e)?.max_output_tokens, Axt);
+/**
+ * 取生效目录模型的 max_output_tokens。
+ */
+function servedMaxOutputTokens(...e) {
+  return clampInRange(servedRuntime(...e)?.max_output_tokens, OUTPUT_TOKEN_RANGE);
 }
 //@ chunk-aepeg2w5.js:145741-145807 placement
-function Fc(...e) {
-  return l6e(dn(...e)?.default_output_tokens, Axt);
+/**
+ * 取生效目录模型的 default_output_tokens。
+ */
+function servedDefaultOutputTokens(...e) {
+  return clampInRange(servedRuntime(...e)?.default_output_tokens, OUTPUT_TOKEN_RANGE);
 }
+//@ chunk-aepeg2w5.js:145807-145891 placement
 /**
  * 模型支持的 effort 级别。
  */
-//@ chunk-aepeg2w5.js:145807-145891 placement
 function modelEffortLevels(...e) {
-  return dn(...e)?.effort_levels?.map((n) => n.trim().toLowerCase());
+  return servedRuntime(...e)?.effort_levels?.map((effortLevel) => effortLevel.trim().toLowerCase());
 }
 //@ chunk-aepeg2w5.js:145891-145989 placement
-function twi(...e) {
-  let n = dn(...e)?.default_effort;
-  return n === void 0 ? void 0 : n.trim().toLowerCase();
+/**
+ * 取生效目录模型的默认 effort 级别（小写）。
+ */
+function servedDefaultEffort(...e) {
+  let defaultEffort = servedRuntime(...e)?.default_effort;
+  return defaultEffort === undefined ? undefined : defaultEffort.trim().toLowerCase();
 }
 //@ chunk-aepeg2w5.js:145989-146038 placement
-function $os(...e) {
-  return dn(...e)?.capabilities;
+/**
+ * 取生效目录模型的能力列表。
+ */
+function servedCapabilities(...e) {
+  return servedRuntime(...e)?.capabilities;
 }
+//@ chunk-aepeg2w5.js:146038-146221 placement
 /**
  * 判断名字是否在目录列表中（以 - 前缀表示显式排除），未列出返回 undefined。
  */
-//@ chunk-aepeg2w5.js:146038-146221 placement
 function matchesCatalogList(e, ...n) {
-  let r = $os(...n)?.map((h) => h.trim().toLowerCase());
-  if (r === void 0) return;
+  let mapped = servedCapabilities(...n)?.map((h) => h.trim().toLowerCase());
+  if (mapped === undefined) return;
   let lower = e.trim().toLowerCase();
-  if (r.includes(lower)) return !0;
-  return r.includes(`-${lower}`) ? !1 : void 0;
+  if (mapped.includes(lower)) return true;
+  return mapped.includes(`-${lower}`) ? false : undefined;
 }
 //@ chunk-aepeg2w5.js:146221-146287 placement
-function lb(...e) {
-  let n = UUe(...e);
-  return n === void 0 ? void 0 : getRowFamily(n);
+/**
+ * 取生效目录模型所属的模型族。
+ */
+function servedRowFamily(...e) {
+  let effectiveServedEntry = findEffectiveServedEntry(...e);
+  return effectiveServedEntry === undefined ? undefined : getRowFamily(effectiveServedEntry);
 }
+//@ chunk-aepeg2w5.js:146287-146702 placement
 /**
  * 组织强制/配置的默认模型。
  */
-//@ chunk-aepeg2w5.js:146287-146702 placement
 function orgDefaultModelState() {
-  let e = activeServedCatalog()?.state;
-  if (e === void 0) return;
-  let n = e.org_enforced_default_model?.trim();
-  if (n) return { model: n, orgConfigured: !0, enforced: !0, accountResolved: !0 };
-  let r = e.model?.trim();
-  if (!r) return;
-  let s = e.selection_source === "org_configuration" || e.selection_source === "custom_role_configuration",
-    h = e.selection_source?.trim();
-  return { model: r, orgConfigured: s, enforced: !1, accountResolved: s || (!!h && h !== "global_default") };
+  let state = activeServedCatalog()?.state;
+  if (state === undefined) return;
+  let trimmed = state.org_enforced_default_model?.trim();
+  if (trimmed)
+    return {
+      model: trimmed,
+      orgConfigured: true,
+      enforced: true,
+      accountResolved: true,
+    };
+  let trimmed_2 = state.model?.trim();
+  if (!trimmed_2) return;
+  let s =
+    state.selection_source === "org_configuration" || state.selection_source === "custom_role_configuration";
+  let trimmed_3 = state.selection_source?.trim();
+  return {
+    model: trimmed_2,
+    orgConfigured: s,
+    enforced: false,
+    accountResolved: s || (!!trimmed_3 && trimmed_3 !== "global_default"),
+  };
 }
 //@ chunk-aepeg2w5.js:146702-146788 placement
-function l6e(e, n) {
-  return e !== void 0 && Number.isInteger(e) && e >= n.min && e <= n.max ? e : void 0;
+/**
+ * 整数且在区间内时返回原值，否则 undefined。
+ */
+function clampInRange(e, n) {
+  return e !== undefined && Number.isInteger(e) && e >= n.min && e <= n.max ? e : undefined;
 }
+//@ chunk-aepeg2w5.js:146788-210373 placement
 /**
  * 内置的模型目录 JSON（version 3444）。
  */
-//@ chunk-aepeg2w5.js:146788-210373 placement
 var BUNDLED_MODEL_CATALOG = {
   $schema: "https://downloads.claude.ai/model-catalog/v1/schema.json",
   schema_version: 1,
@@ -314,19 +403,88 @@ var BUNDLED_MODEL_CATALOG = {
         {
           id: "cc",
           model: "claude-opus-5-5",
-          thinking: { type: "effort", effort: "medium" },
+          thinking: {
+            type: "effort",
+            effort: "medium",
+          },
           thinking_by_model: [
-            { id: "claude-fable-5-1", thinking: { type: "effort", effort: "high" } },
-            { id: "claude-opus-5-5", thinking: { type: "effort", effort: "medium" } },
-            { id: "claude-sonnet-5-5", thinking: { type: "effort", effort: "medium" } },
-            { id: "claude-haiku-5-5", thinking: { type: "effort", effort: "medium" } },
-            { id: "claude-fable-5", thinking: { type: "effort", effort: "high" } },
-            { id: "claude-opus-5", thinking: { type: "effort", effort: "high" } },
-            { id: "claude-opus-4-8", thinking: { type: "effort", effort: "high" } },
-            { id: "claude-opus-4-7", thinking: { type: "effort", effort: "xhigh" } },
-            { id: "claude-opus-4-6", thinking: { type: "effort", effort: "high" } },
-            { id: "claude-sonnet-5", thinking: { type: "effort", effort: "high" } },
-            { id: "claude-sonnet-4-6", thinking: { type: "effort", effort: "high" } },
+            {
+              id: "claude-fable-5-1",
+              thinking: {
+                type: "effort",
+                effort: "high",
+              },
+            },
+            {
+              id: "claude-opus-5-5",
+              thinking: {
+                type: "effort",
+                effort: "medium",
+              },
+            },
+            {
+              id: "claude-sonnet-5-5",
+              thinking: {
+                type: "effort",
+                effort: "medium",
+              },
+            },
+            {
+              id: "claude-haiku-5-5",
+              thinking: {
+                type: "effort",
+                effort: "medium",
+              },
+            },
+            {
+              id: "claude-fable-5",
+              thinking: {
+                type: "effort",
+                effort: "high",
+              },
+            },
+            {
+              id: "claude-opus-5",
+              thinking: {
+                type: "effort",
+                effort: "high",
+              },
+            },
+            {
+              id: "claude-opus-4-8",
+              thinking: {
+                type: "effort",
+                effort: "high",
+              },
+            },
+            {
+              id: "claude-opus-4-7",
+              thinking: {
+                type: "effort",
+                effort: "xhigh",
+              },
+            },
+            {
+              id: "claude-opus-4-6",
+              thinking: {
+                type: "effort",
+                effort: "high",
+              },
+            },
+            {
+              id: "claude-sonnet-5",
+              thinking: {
+                type: "effort",
+                effort: "high",
+              },
+            },
+            {
+              id: "claude-sonnet-4-6",
+              thinking: {
+                type: "effort",
+                effort: "high",
+              },
+            },
           ],
           selection_source: "global_default",
         },
@@ -341,16 +499,38 @@ var BUNDLED_MODEL_CATALOG = {
               short_name: "Opus",
               description: "For complex work and everyday tasks",
               section: "main",
-              capabilities: { compass: !0, gsuite_tools: !0, mm_images: !0, mm_pdf: !0, web_search: !0 },
+              capabilities: {
+                compass: true,
+                gsuite_tools: true,
+                mm_images: true,
+                mm_pdf: true,
+                web_search: true,
+              },
               thinking: {
                 type: "effort",
                 description:
                   "Higher effort means more thorough responses, but takes longer and uses your limits faster.",
                 effort_options: [
-                  { id: "low", name: "Low" },
-                  { id: "medium", name: "Medium", badge: { message: "Recommended", variant: "neutral" } },
-                  { id: "high", name: "High" },
-                  { id: "xhigh", name: "Extra" },
+                  {
+                    id: "low",
+                    name: "Low",
+                  },
+                  {
+                    id: "medium",
+                    name: "Medium",
+                    badge: {
+                      message: "Recommended",
+                      variant: "neutral",
+                    },
+                  },
+                  {
+                    id: "high",
+                    name: "High",
+                  },
+                  {
+                    id: "xhigh",
+                    name: "Extra",
+                  },
                   {
                     id: "max",
                     name: "Max",
@@ -365,19 +545,30 @@ var BUNDLED_MODEL_CATALOG = {
                 type: "toggle",
                 name: "Fast mode",
                 options: [
-                  { id: "fast", name: "Enable fast mode", selector_label: "Fast" },
-                  { id: "off", name: "Off" },
+                  {
+                    id: "fast",
+                    name: "Enable fast mode",
+                    selector_label: "Fast",
+                  },
+                  {
+                    id: "off",
+                    name: "Off",
+                  },
                 ],
               },
               min_claude_code_version: "2.1.280",
-              quick_select: !0,
+              quick_select: true,
               runtime: {
                 max_input_tokens: 1e6,
                 max_output_tokens: 128000,
                 effort_levels: ["low", "medium", "high", "xhigh", "max"],
                 default_effort: "medium",
                 capabilities: ["compass", "gsuite_tools", "mm_images", "mm_pdf", "web_search"],
-                image_limits: { max_width: 2576, max_height: 2576, max_image_tokens: 4784 },
+                image_limits: {
+                  max_width: 2576,
+                  max_height: 2576,
+                  max_image_tokens: 4784,
+                },
                 family: "opus",
               },
               offered_on: [
@@ -396,16 +587,38 @@ var BUNDLED_MODEL_CATALOG = {
               short_name: "Sonnet",
               description: "Most efficient for simpler tasks",
               section: "main",
-              capabilities: { compass: !0, gsuite_tools: !0, mm_images: !0, mm_pdf: !0, web_search: !0 },
+              capabilities: {
+                compass: true,
+                gsuite_tools: true,
+                mm_images: true,
+                mm_pdf: true,
+                web_search: true,
+              },
               thinking: {
                 type: "effort",
                 description:
                   "Higher effort means more thorough responses, but takes longer and uses your limits faster.",
                 effort_options: [
-                  { id: "low", name: "Low" },
-                  { id: "medium", name: "Medium", badge: { message: "Recommended", variant: "neutral" } },
-                  { id: "high", name: "High" },
-                  { id: "xhigh", name: "Extra" },
+                  {
+                    id: "low",
+                    name: "Low",
+                  },
+                  {
+                    id: "medium",
+                    name: "Medium",
+                    badge: {
+                      message: "Recommended",
+                      variant: "neutral",
+                    },
+                  },
+                  {
+                    id: "high",
+                    name: "High",
+                  },
+                  {
+                    id: "xhigh",
+                    name: "Extra",
+                  },
                   {
                     id: "max",
                     name: "Max",
@@ -416,14 +629,18 @@ var BUNDLED_MODEL_CATALOG = {
                   },
                 ],
               },
-              quick_select: !0,
+              quick_select: true,
               runtime: {
                 max_input_tokens: 1e6,
                 max_output_tokens: 128000,
                 effort_levels: ["low", "medium", "high", "xhigh", "max"],
                 default_effort: "medium",
                 capabilities: ["compass", "gsuite_tools", "mm_images", "mm_pdf", "web_search"],
-                image_limits: { max_width: 2576, max_height: 2576, max_image_tokens: 4784 },
+                image_limits: {
+                  max_width: 2576,
+                  max_height: 2576,
+                  max_image_tokens: 4784,
+                },
                 family: "sonnet",
               },
               offered_on: [
@@ -442,16 +659,38 @@ var BUNDLED_MODEL_CATALOG = {
               short_name: "Fable",
               description: "For your toughest challenges",
               section: "main",
-              capabilities: { compass: !0, gsuite_tools: !0, mm_images: !0, mm_pdf: !0, web_search: !0 },
+              capabilities: {
+                compass: true,
+                gsuite_tools: true,
+                mm_images: true,
+                mm_pdf: true,
+                web_search: true,
+              },
               thinking: {
                 type: "effort",
                 description:
                   "Higher effort means more thorough responses, but takes longer and uses your limits faster.",
                 effort_options: [
-                  { id: "low", name: "Low" },
-                  { id: "medium", name: "Medium" },
-                  { id: "high", name: "High", badge: { message: "Recommended", variant: "neutral" } },
-                  { id: "xhigh", name: "Extra" },
+                  {
+                    id: "low",
+                    name: "Low",
+                  },
+                  {
+                    id: "medium",
+                    name: "Medium",
+                  },
+                  {
+                    id: "high",
+                    name: "High",
+                    badge: {
+                      message: "Recommended",
+                      variant: "neutral",
+                    },
+                  },
+                  {
+                    id: "xhigh",
+                    name: "Extra",
+                  },
                   {
                     id: "max",
                     name: "Max",
@@ -463,14 +702,18 @@ var BUNDLED_MODEL_CATALOG = {
                 ],
               },
               min_claude_code_version: "2.1.251",
-              quick_select: !0,
+              quick_select: true,
               runtime: {
                 max_input_tokens: 1e6,
                 max_output_tokens: 128000,
                 effort_levels: ["low", "medium", "high", "xhigh", "max"],
                 default_effort: "high",
                 capabilities: ["compass", "gsuite_tools", "mm_images", "mm_pdf", "web_search"],
-                image_limits: { max_width: 2576, max_height: 2576, max_image_tokens: 4784 },
+                image_limits: {
+                  max_width: 2576,
+                  max_height: 2576,
+                  max_image_tokens: 4784,
+                },
                 family: "fable",
               },
               offered_on: [
@@ -489,16 +732,38 @@ var BUNDLED_MODEL_CATALOG = {
               short_name: "Haiku",
               description: "Fastest for quick answers",
               section: "main",
-              capabilities: { compass: !0, gsuite_tools: !0, mm_images: !0, mm_pdf: !0, web_search: !0 },
+              capabilities: {
+                compass: true,
+                gsuite_tools: true,
+                mm_images: true,
+                mm_pdf: true,
+                web_search: true,
+              },
               thinking: {
                 type: "effort",
                 description:
                   "Higher effort means more thorough responses, but takes longer and uses your limits faster.",
                 effort_options: [
-                  { id: "low", name: "Low" },
-                  { id: "medium", name: "Medium", badge: { message: "Recommended", variant: "neutral" } },
-                  { id: "high", name: "High" },
-                  { id: "xhigh", name: "Extra" },
+                  {
+                    id: "low",
+                    name: "Low",
+                  },
+                  {
+                    id: "medium",
+                    name: "Medium",
+                    badge: {
+                      message: "Recommended",
+                      variant: "neutral",
+                    },
+                  },
+                  {
+                    id: "high",
+                    name: "High",
+                  },
+                  {
+                    id: "xhigh",
+                    name: "Extra",
+                  },
                   {
                     id: "max",
                     name: "Max",
@@ -509,14 +774,18 @@ var BUNDLED_MODEL_CATALOG = {
                   },
                 ],
               },
-              quick_select: !0,
+              quick_select: true,
               runtime: {
                 max_input_tokens: 1e6,
                 max_output_tokens: 128000,
                 effort_levels: ["low", "medium", "high", "xhigh", "max"],
                 default_effort: "medium",
                 capabilities: ["compass", "gsuite_tools", "mm_images", "mm_pdf", "web_search"],
-                image_limits: { max_width: 2576, max_height: 2576, max_image_tokens: 4784 },
+                image_limits: {
+                  max_width: 2576,
+                  max_height: 2576,
+                  max_image_tokens: 4784,
+                },
                 family: "haiku",
               },
               offered_on: [
@@ -534,14 +803,26 @@ var BUNDLED_MODEL_CATALOG = {
               name: "Haiku 4.5",
               short_name: "Haiku",
               section: "overflow",
-              capabilities: { compass: !0, gsuite_tools: !0, mm_images: !0, mm_pdf: !0, web_search: !0 },
-              thinking: { type: "none" },
+              capabilities: {
+                compass: true,
+                gsuite_tools: true,
+                mm_images: true,
+                mm_pdf: true,
+                web_search: true,
+              },
+              thinking: {
+                type: "none",
+              },
               auto_permission_mode: "unavailable",
               runtime: {
                 max_input_tokens: 200000,
                 max_output_tokens: 64000,
                 capabilities: ["compass", "gsuite_tools", "mm_images", "mm_pdf", "web_search"],
-                image_limits: { max_width: 1568, max_height: 1568, max_image_tokens: 1568 },
+                image_limits: {
+                  max_width: 1568,
+                  max_height: 1568,
+                  max_image_tokens: 1568,
+                },
                 family: "haiku",
               },
               offered_on: [
@@ -559,16 +840,38 @@ var BUNDLED_MODEL_CATALOG = {
               name: "Sonnet 5",
               short_name: "Sonnet",
               section: "overflow",
-              capabilities: { compass: !0, gsuite_tools: !0, mm_images: !0, mm_pdf: !0, web_search: !0 },
+              capabilities: {
+                compass: true,
+                gsuite_tools: true,
+                mm_images: true,
+                mm_pdf: true,
+                web_search: true,
+              },
               thinking: {
                 type: "effort",
                 description:
                   "Higher effort means more thorough responses, but takes longer and uses your limits faster.",
                 effort_options: [
-                  { id: "low", name: "Low" },
-                  { id: "medium", name: "Medium" },
-                  { id: "high", name: "High", badge: { message: "Recommended", variant: "neutral" } },
-                  { id: "xhigh", name: "Extra" },
+                  {
+                    id: "low",
+                    name: "Low",
+                  },
+                  {
+                    id: "medium",
+                    name: "Medium",
+                  },
+                  {
+                    id: "high",
+                    name: "High",
+                    badge: {
+                      message: "Recommended",
+                      variant: "neutral",
+                    },
+                  },
+                  {
+                    id: "xhigh",
+                    name: "Extra",
+                  },
                   {
                     id: "max",
                     name: "Max",
@@ -585,7 +888,11 @@ var BUNDLED_MODEL_CATALOG = {
                 effort_levels: ["low", "medium", "high", "xhigh", "max"],
                 default_effort: "high",
                 capabilities: ["compass", "gsuite_tools", "mm_images", "mm_pdf", "web_search"],
-                image_limits: { max_width: 2576, max_height: 2576, max_image_tokens: 4784 },
+                image_limits: {
+                  max_width: 2576,
+                  max_height: 2576,
+                  max_image_tokens: 4784,
+                },
                 family: "sonnet",
               },
               offered_on: [
@@ -603,16 +910,38 @@ var BUNDLED_MODEL_CATALOG = {
               name: "Opus 5",
               short_name: "Opus",
               section: "overflow",
-              capabilities: { compass: !0, gsuite_tools: !0, mm_images: !0, mm_pdf: !0, web_search: !0 },
+              capabilities: {
+                compass: true,
+                gsuite_tools: true,
+                mm_images: true,
+                mm_pdf: true,
+                web_search: true,
+              },
               thinking: {
                 type: "effort",
                 description:
                   "Higher effort means more thorough responses, but takes longer and uses your limits faster.",
                 effort_options: [
-                  { id: "low", name: "Low" },
-                  { id: "medium", name: "Medium" },
-                  { id: "high", name: "High", badge: { message: "Recommended", variant: "neutral" } },
-                  { id: "xhigh", name: "Extra" },
+                  {
+                    id: "low",
+                    name: "Low",
+                  },
+                  {
+                    id: "medium",
+                    name: "Medium",
+                  },
+                  {
+                    id: "high",
+                    name: "High",
+                    badge: {
+                      message: "Recommended",
+                      variant: "neutral",
+                    },
+                  },
+                  {
+                    id: "xhigh",
+                    name: "Extra",
+                  },
                   {
                     id: "max",
                     name: "Max",
@@ -627,8 +956,15 @@ var BUNDLED_MODEL_CATALOG = {
                 type: "toggle",
                 name: "Fast mode",
                 options: [
-                  { id: "fast", name: "Enable fast mode", selector_label: "Fast" },
-                  { id: "off", name: "Off" },
+                  {
+                    id: "fast",
+                    name: "Enable fast mode",
+                    selector_label: "Fast",
+                  },
+                  {
+                    id: "off",
+                    name: "Off",
+                  },
                 ],
               },
               runtime: {
@@ -637,7 +973,11 @@ var BUNDLED_MODEL_CATALOG = {
                 effort_levels: ["low", "medium", "high", "xhigh", "max"],
                 default_effort: "high",
                 capabilities: ["compass", "gsuite_tools", "mm_images", "mm_pdf", "web_search"],
-                image_limits: { max_width: 2576, max_height: 2576, max_image_tokens: 4784 },
+                image_limits: {
+                  max_width: 2576,
+                  max_height: 2576,
+                  max_image_tokens: 4784,
+                },
                 family: "opus",
               },
               offered_on: [
@@ -655,16 +995,38 @@ var BUNDLED_MODEL_CATALOG = {
               name: "Fable 5",
               short_name: "Fable",
               section: "overflow",
-              capabilities: { compass: !0, gsuite_tools: !0, mm_images: !0, mm_pdf: !0, web_search: !0 },
+              capabilities: {
+                compass: true,
+                gsuite_tools: true,
+                mm_images: true,
+                mm_pdf: true,
+                web_search: true,
+              },
               thinking: {
                 type: "effort",
                 description:
                   "Higher effort means more thorough responses, but takes longer and uses your limits faster.",
                 effort_options: [
-                  { id: "low", name: "Low" },
-                  { id: "medium", name: "Medium" },
-                  { id: "high", name: "High", badge: { message: "Recommended", variant: "neutral" } },
-                  { id: "xhigh", name: "Extra" },
+                  {
+                    id: "low",
+                    name: "Low",
+                  },
+                  {
+                    id: "medium",
+                    name: "Medium",
+                  },
+                  {
+                    id: "high",
+                    name: "High",
+                    badge: {
+                      message: "Recommended",
+                      variant: "neutral",
+                    },
+                  },
+                  {
+                    id: "xhigh",
+                    name: "Extra",
+                  },
                   {
                     id: "max",
                     name: "Max",
@@ -681,7 +1043,11 @@ var BUNDLED_MODEL_CATALOG = {
                 effort_levels: ["low", "medium", "high", "xhigh", "max"],
                 default_effort: "high",
                 capabilities: ["compass", "gsuite_tools", "mm_images", "mm_pdf", "web_search"],
-                image_limits: { max_width: 2576, max_height: 2576, max_image_tokens: 4784 },
+                image_limits: {
+                  max_width: 2576,
+                  max_height: 2576,
+                  max_image_tokens: 4784,
+                },
                 family: "fable",
               },
               offered_on: [
@@ -699,16 +1065,38 @@ var BUNDLED_MODEL_CATALOG = {
               name: "Opus 4.8",
               short_name: "Opus",
               section: "overflow",
-              capabilities: { compass: !0, gsuite_tools: !0, mm_images: !0, mm_pdf: !0, web_search: !0 },
+              capabilities: {
+                compass: true,
+                gsuite_tools: true,
+                mm_images: true,
+                mm_pdf: true,
+                web_search: true,
+              },
               thinking: {
                 type: "effort",
                 description:
                   "Higher effort means more thorough responses, but takes longer and uses your limits faster.",
                 effort_options: [
-                  { id: "low", name: "Low" },
-                  { id: "medium", name: "Medium" },
-                  { id: "high", name: "High", badge: { message: "Recommended", variant: "neutral" } },
-                  { id: "xhigh", name: "Extra" },
+                  {
+                    id: "low",
+                    name: "Low",
+                  },
+                  {
+                    id: "medium",
+                    name: "Medium",
+                  },
+                  {
+                    id: "high",
+                    name: "High",
+                    badge: {
+                      message: "Recommended",
+                      variant: "neutral",
+                    },
+                  },
+                  {
+                    id: "xhigh",
+                    name: "Extra",
+                  },
                   {
                     id: "max",
                     name: "Max",
@@ -723,8 +1111,15 @@ var BUNDLED_MODEL_CATALOG = {
                 type: "toggle",
                 name: "Fast mode",
                 options: [
-                  { id: "fast", name: "Enable fast mode", selector_label: "Fast" },
-                  { id: "off", name: "Off" },
+                  {
+                    id: "fast",
+                    name: "Enable fast mode",
+                    selector_label: "Fast",
+                  },
+                  {
+                    id: "off",
+                    name: "Off",
+                  },
                 ],
               },
               runtime: {
@@ -733,7 +1128,11 @@ var BUNDLED_MODEL_CATALOG = {
                 effort_levels: ["low", "medium", "high", "xhigh", "max"],
                 default_effort: "high",
                 capabilities: ["compass", "gsuite_tools", "mm_images", "mm_pdf", "web_search"],
-                image_limits: { max_width: 2576, max_height: 2576, max_image_tokens: 4784 },
+                image_limits: {
+                  max_width: 2576,
+                  max_height: 2576,
+                  max_image_tokens: 4784,
+                },
                 family: "opus",
               },
               offered_on: [
@@ -751,16 +1150,38 @@ var BUNDLED_MODEL_CATALOG = {
               name: "Opus 4.7",
               short_name: "Opus",
               section: "overflow",
-              capabilities: { compass: !0, gsuite_tools: !0, mm_images: !0, mm_pdf: !0, web_search: !0 },
+              capabilities: {
+                compass: true,
+                gsuite_tools: true,
+                mm_images: true,
+                mm_pdf: true,
+                web_search: true,
+              },
               thinking: {
                 type: "effort",
                 description:
                   "Higher effort means more thorough responses, but takes longer and uses your limits faster.",
                 effort_options: [
-                  { id: "low", name: "Low" },
-                  { id: "medium", name: "Medium" },
-                  { id: "high", name: "High" },
-                  { id: "xhigh", name: "Extra", badge: { message: "Recommended", variant: "neutral" } },
+                  {
+                    id: "low",
+                    name: "Low",
+                  },
+                  {
+                    id: "medium",
+                    name: "Medium",
+                  },
+                  {
+                    id: "high",
+                    name: "High",
+                  },
+                  {
+                    id: "xhigh",
+                    name: "Extra",
+                    badge: {
+                      message: "Recommended",
+                      variant: "neutral",
+                    },
+                  },
                   {
                     id: "max",
                     name: "Max",
@@ -777,7 +1198,11 @@ var BUNDLED_MODEL_CATALOG = {
                 effort_levels: ["low", "medium", "high", "xhigh", "max"],
                 default_effort: "xhigh",
                 capabilities: ["compass", "gsuite_tools", "mm_images", "mm_pdf", "web_search"],
-                image_limits: { max_width: 2576, max_height: 2576, max_image_tokens: 4784 },
+                image_limits: {
+                  max_width: 2576,
+                  max_height: 2576,
+                  max_image_tokens: 4784,
+                },
                 family: "opus",
               },
               offered_on: [
@@ -795,15 +1220,34 @@ var BUNDLED_MODEL_CATALOG = {
               name: "Opus 4.6",
               short_name: "Opus",
               section: "overflow",
-              capabilities: { compass: !0, gsuite_tools: !0, mm_images: !0, mm_pdf: !0, web_search: !0 },
+              capabilities: {
+                compass: true,
+                gsuite_tools: true,
+                mm_images: true,
+                mm_pdf: true,
+                web_search: true,
+              },
               thinking: {
                 type: "effort",
                 description:
                   "Higher effort means more thorough responses, but takes longer and uses your limits faster.",
                 effort_options: [
-                  { id: "low", name: "Low" },
-                  { id: "medium", name: "Medium" },
-                  { id: "high", name: "High", badge: { message: "Recommended", variant: "neutral" } },
+                  {
+                    id: "low",
+                    name: "Low",
+                  },
+                  {
+                    id: "medium",
+                    name: "Medium",
+                  },
+                  {
+                    id: "high",
+                    name: "High",
+                    badge: {
+                      message: "Recommended",
+                      variant: "neutral",
+                    },
+                  },
                   {
                     id: "max",
                     name: "Max",
@@ -818,8 +1262,15 @@ var BUNDLED_MODEL_CATALOG = {
                 type: "toggle",
                 name: "Fast mode",
                 options: [
-                  { id: "fast", name: "Enable fast mode", selector_label: "Fast" },
-                  { id: "off", name: "Off" },
+                  {
+                    id: "fast",
+                    name: "Enable fast mode",
+                    selector_label: "Fast",
+                  },
+                  {
+                    id: "off",
+                    name: "Off",
+                  },
                 ],
               },
               runtime: {
@@ -828,7 +1279,11 @@ var BUNDLED_MODEL_CATALOG = {
                 effort_levels: ["low", "medium", "high", "max"],
                 default_effort: "high",
                 capabilities: ["compass", "gsuite_tools", "mm_images", "mm_pdf", "web_search"],
-                image_limits: { max_width: 1568, max_height: 1568, max_image_tokens: 1568 },
+                image_limits: {
+                  max_width: 1568,
+                  max_height: 1568,
+                  max_image_tokens: 1568,
+                },
                 family: "opus",
               },
               offered_on: ["first_party", "anthropic_aws", "bedrock", "vertex", "foundry", "gateway"],
@@ -838,15 +1293,34 @@ var BUNDLED_MODEL_CATALOG = {
               name: "Sonnet 4.6",
               short_name: "Sonnet",
               section: "overflow",
-              capabilities: { compass: !0, gsuite_tools: !0, mm_images: !0, mm_pdf: !0, web_search: !0 },
+              capabilities: {
+                compass: true,
+                gsuite_tools: true,
+                mm_images: true,
+                mm_pdf: true,
+                web_search: true,
+              },
               thinking: {
                 type: "effort",
                 description:
                   "Higher effort means more thorough responses, but takes longer and uses your limits faster.",
                 effort_options: [
-                  { id: "low", name: "Low" },
-                  { id: "medium", name: "Medium" },
-                  { id: "high", name: "High", badge: { message: "Recommended", variant: "neutral" } },
+                  {
+                    id: "low",
+                    name: "Low",
+                  },
+                  {
+                    id: "medium",
+                    name: "Medium",
+                  },
+                  {
+                    id: "high",
+                    name: "High",
+                    badge: {
+                      message: "Recommended",
+                      variant: "neutral",
+                    },
+                  },
                   {
                     id: "max",
                     name: "Max",
@@ -863,7 +1337,11 @@ var BUNDLED_MODEL_CATALOG = {
                 effort_levels: ["low", "medium", "high", "max"],
                 default_effort: "high",
                 capabilities: ["compass", "gsuite_tools", "mm_images", "mm_pdf", "web_search"],
-                image_limits: { max_width: 1568, max_height: 1568, max_image_tokens: 1568 },
+                image_limits: {
+                  max_width: 1568,
+                  max_height: 1568,
+                  max_image_tokens: 1568,
+                },
                 family: "sonnet",
               },
               offered_on: ["first_party", "anthropic_aws", "bedrock", "vertex", "foundry", "gateway"],
@@ -873,27 +1351,58 @@ var BUNDLED_MODEL_CATALOG = {
               name: "Opus 4.1",
               short_name: "Opus",
               section: "overflow",
-              capabilities: { compass: !0, gsuite_tools: !0, mm_images: !0, mm_pdf: !0, web_search: !0 },
-              thinking: { type: "none" },
+              capabilities: {
+                compass: true,
+                gsuite_tools: true,
+                mm_images: true,
+                mm_pdf: true,
+                web_search: true,
+              },
+              thinking: {
+                type: "none",
+              },
               auto_permission_mode: "unavailable",
               runtime: {
                 max_input_tokens: 200000,
                 max_output_tokens: 32000,
                 capabilities: ["compass", "gsuite_tools", "mm_images", "mm_pdf", "web_search"],
-                image_limits: { max_width: 1568, max_height: 1568, max_image_tokens: 1568 },
+                image_limits: {
+                  max_width: 1568,
+                  max_height: 1568,
+                  max_image_tokens: 1568,
+                },
                 family: "opus",
               },
               offered_on: ["bedrock"],
             },
           ],
           settings_vocabulary: {
-            create_mode: { default: 1 },
-            effort_level: { high: 3, low: 1, max: 5, medium: 2, xhigh: 4 },
-            thinking_mode: { auto: 2, extended: 1, off: 3 },
+            create_mode: {
+              default: 1,
+            },
+            effort_level: {
+              high: 3,
+              low: 1,
+              max: 5,
+              medium: 2,
+              xhigh: 4,
+            },
+            thinking_mode: {
+              auto: 2,
+              extended: 1,
+              off: 3,
+            },
           },
           provider_alias_targets: {
-            fable: { default: "claude-fable-5-1", per_provider: { gateway: "claude-fable-5" } },
-            haiku: { default: "claude-haiku-5-5" },
+            fable: {
+              default: "claude-fable-5-1",
+              per_provider: {
+                gateway: "claude-fable-5",
+              },
+            },
+            haiku: {
+              default: "claude-haiku-5-5",
+            },
             opus: {
               default: "claude-opus-5-5",
               per_provider: {
@@ -907,7 +1416,10 @@ var BUNDLED_MODEL_CATALOG = {
             },
             sonnet: {
               default: "claude-sonnet-5-5",
-              per_provider: { anthropic_aws: "claude-sonnet-4-6", gateway: "claude-sonnet-4-6" },
+              per_provider: {
+                anthropic_aws: "claude-sonnet-4-6",
+                gateway: "claude-sonnet-4-6",
+              },
             },
           },
         },
@@ -918,19 +1430,88 @@ var BUNDLED_MODEL_CATALOG = {
         {
           id: "ccd",
           model: "claude-opus-5-5",
-          thinking: { type: "effort", effort: "medium" },
+          thinking: {
+            type: "effort",
+            effort: "medium",
+          },
           thinking_by_model: [
-            { id: "claude-fable-5-1", thinking: { type: "effort", effort: "high" } },
-            { id: "claude-opus-5-5", thinking: { type: "effort", effort: "medium" } },
-            { id: "claude-sonnet-5-5", thinking: { type: "effort", effort: "medium" } },
-            { id: "claude-haiku-5-5", thinking: { type: "effort", effort: "medium" } },
-            { id: "claude-fable-5", thinking: { type: "effort", effort: "high" } },
-            { id: "claude-opus-5", thinking: { type: "effort", effort: "high" } },
-            { id: "claude-opus-4-8", thinking: { type: "effort", effort: "high" } },
-            { id: "claude-opus-4-7", thinking: { type: "effort", effort: "xhigh" } },
-            { id: "claude-opus-4-6", thinking: { type: "effort", effort: "high" } },
-            { id: "claude-sonnet-5", thinking: { type: "effort", effort: "high" } },
-            { id: "claude-sonnet-4-6", thinking: { type: "effort", effort: "high" } },
+            {
+              id: "claude-fable-5-1",
+              thinking: {
+                type: "effort",
+                effort: "high",
+              },
+            },
+            {
+              id: "claude-opus-5-5",
+              thinking: {
+                type: "effort",
+                effort: "medium",
+              },
+            },
+            {
+              id: "claude-sonnet-5-5",
+              thinking: {
+                type: "effort",
+                effort: "medium",
+              },
+            },
+            {
+              id: "claude-haiku-5-5",
+              thinking: {
+                type: "effort",
+                effort: "medium",
+              },
+            },
+            {
+              id: "claude-fable-5",
+              thinking: {
+                type: "effort",
+                effort: "high",
+              },
+            },
+            {
+              id: "claude-opus-5",
+              thinking: {
+                type: "effort",
+                effort: "high",
+              },
+            },
+            {
+              id: "claude-opus-4-8",
+              thinking: {
+                type: "effort",
+                effort: "high",
+              },
+            },
+            {
+              id: "claude-opus-4-7",
+              thinking: {
+                type: "effort",
+                effort: "xhigh",
+              },
+            },
+            {
+              id: "claude-opus-4-6",
+              thinking: {
+                type: "effort",
+                effort: "high",
+              },
+            },
+            {
+              id: "claude-sonnet-5",
+              thinking: {
+                type: "effort",
+                effort: "high",
+              },
+            },
+            {
+              id: "claude-sonnet-4-6",
+              thinking: {
+                type: "effort",
+                effort: "high",
+              },
+            },
           ],
           selection_source: "global_default",
         },
@@ -944,16 +1525,38 @@ var BUNDLED_MODEL_CATALOG = {
               name: "Opus 5.5",
               short_name: "Opus",
               section: "main",
-              capabilities: { compass: !0, gsuite_tools: !0, mm_images: !0, mm_pdf: !0, web_search: !0 },
+              capabilities: {
+                compass: true,
+                gsuite_tools: true,
+                mm_images: true,
+                mm_pdf: true,
+                web_search: true,
+              },
               thinking: {
                 type: "effort",
                 description:
                   "Higher effort means more thorough responses, but takes longer and uses your limits faster.",
                 effort_options: [
-                  { id: "low", name: "Low" },
-                  { id: "medium", name: "Medium", badge: { message: "Recommended", variant: "neutral" } },
-                  { id: "high", name: "High" },
-                  { id: "xhigh", name: "Extra" },
+                  {
+                    id: "low",
+                    name: "Low",
+                  },
+                  {
+                    id: "medium",
+                    name: "Medium",
+                    badge: {
+                      message: "Recommended",
+                      variant: "neutral",
+                    },
+                  },
+                  {
+                    id: "high",
+                    name: "High",
+                  },
+                  {
+                    id: "xhigh",
+                    name: "Extra",
+                  },
                   {
                     id: "max",
                     name: "Max",
@@ -968,19 +1571,30 @@ var BUNDLED_MODEL_CATALOG = {
                 type: "toggle",
                 name: "Fast mode",
                 options: [
-                  { id: "fast", name: "Enable fast mode", selector_label: "Fast" },
-                  { id: "off", name: "Off" },
+                  {
+                    id: "fast",
+                    name: "Enable fast mode",
+                    selector_label: "Fast",
+                  },
+                  {
+                    id: "off",
+                    name: "Off",
+                  },
                 ],
               },
               min_claude_code_version: "2.1.280",
-              quick_select: !0,
+              quick_select: true,
               runtime: {
                 max_input_tokens: 1e6,
                 max_output_tokens: 128000,
                 effort_levels: ["low", "medium", "high", "xhigh", "max"],
                 default_effort: "medium",
                 capabilities: ["compass", "gsuite_tools", "mm_images", "mm_pdf", "web_search"],
-                image_limits: { max_width: 2576, max_height: 2576, max_image_tokens: 4784 },
+                image_limits: {
+                  max_width: 2576,
+                  max_height: 2576,
+                  max_image_tokens: 4784,
+                },
                 family: "opus",
               },
               offered_on: [
@@ -998,16 +1612,38 @@ var BUNDLED_MODEL_CATALOG = {
               name: "Sonnet 5.5",
               short_name: "Sonnet",
               section: "main",
-              capabilities: { compass: !0, gsuite_tools: !0, mm_images: !0, mm_pdf: !0, web_search: !0 },
+              capabilities: {
+                compass: true,
+                gsuite_tools: true,
+                mm_images: true,
+                mm_pdf: true,
+                web_search: true,
+              },
               thinking: {
                 type: "effort",
                 description:
                   "Higher effort means more thorough responses, but takes longer and uses your limits faster.",
                 effort_options: [
-                  { id: "low", name: "Low" },
-                  { id: "medium", name: "Medium", badge: { message: "Recommended", variant: "neutral" } },
-                  { id: "high", name: "High" },
-                  { id: "xhigh", name: "Extra" },
+                  {
+                    id: "low",
+                    name: "Low",
+                  },
+                  {
+                    id: "medium",
+                    name: "Medium",
+                    badge: {
+                      message: "Recommended",
+                      variant: "neutral",
+                    },
+                  },
+                  {
+                    id: "high",
+                    name: "High",
+                  },
+                  {
+                    id: "xhigh",
+                    name: "Extra",
+                  },
                   {
                     id: "max",
                     name: "Max",
@@ -1018,14 +1654,18 @@ var BUNDLED_MODEL_CATALOG = {
                   },
                 ],
               },
-              quick_select: !0,
+              quick_select: true,
               runtime: {
                 max_input_tokens: 1e6,
                 max_output_tokens: 128000,
                 effort_levels: ["low", "medium", "high", "xhigh", "max"],
                 default_effort: "medium",
                 capabilities: ["compass", "gsuite_tools", "mm_images", "mm_pdf", "web_search"],
-                image_limits: { max_width: 2576, max_height: 2576, max_image_tokens: 4784 },
+                image_limits: {
+                  max_width: 2576,
+                  max_height: 2576,
+                  max_image_tokens: 4784,
+                },
                 family: "sonnet",
               },
               offered_on: [
@@ -1043,16 +1683,38 @@ var BUNDLED_MODEL_CATALOG = {
               name: "Fable 5.1",
               short_name: "Fable",
               section: "main",
-              capabilities: { compass: !0, gsuite_tools: !0, mm_images: !0, mm_pdf: !0, web_search: !0 },
+              capabilities: {
+                compass: true,
+                gsuite_tools: true,
+                mm_images: true,
+                mm_pdf: true,
+                web_search: true,
+              },
               thinking: {
                 type: "effort",
                 description:
                   "Higher effort means more thorough responses, but takes longer and uses your limits faster.",
                 effort_options: [
-                  { id: "low", name: "Low" },
-                  { id: "medium", name: "Medium" },
-                  { id: "high", name: "High", badge: { message: "Recommended", variant: "neutral" } },
-                  { id: "xhigh", name: "Extra" },
+                  {
+                    id: "low",
+                    name: "Low",
+                  },
+                  {
+                    id: "medium",
+                    name: "Medium",
+                  },
+                  {
+                    id: "high",
+                    name: "High",
+                    badge: {
+                      message: "Recommended",
+                      variant: "neutral",
+                    },
+                  },
+                  {
+                    id: "xhigh",
+                    name: "Extra",
+                  },
                   {
                     id: "max",
                     name: "Max",
@@ -1064,14 +1726,18 @@ var BUNDLED_MODEL_CATALOG = {
                 ],
               },
               min_claude_code_version: "2.1.251",
-              quick_select: !0,
+              quick_select: true,
               runtime: {
                 max_input_tokens: 1e6,
                 max_output_tokens: 128000,
                 effort_levels: ["low", "medium", "high", "xhigh", "max"],
                 default_effort: "high",
                 capabilities: ["compass", "gsuite_tools", "mm_images", "mm_pdf", "web_search"],
-                image_limits: { max_width: 2576, max_height: 2576, max_image_tokens: 4784 },
+                image_limits: {
+                  max_width: 2576,
+                  max_height: 2576,
+                  max_image_tokens: 4784,
+                },
                 family: "fable",
               },
               offered_on: [
@@ -1089,16 +1755,38 @@ var BUNDLED_MODEL_CATALOG = {
               name: "Haiku 5.5",
               short_name: "Haiku",
               section: "main",
-              capabilities: { compass: !0, gsuite_tools: !0, mm_images: !0, mm_pdf: !0, web_search: !0 },
+              capabilities: {
+                compass: true,
+                gsuite_tools: true,
+                mm_images: true,
+                mm_pdf: true,
+                web_search: true,
+              },
               thinking: {
                 type: "effort",
                 description:
                   "Higher effort means more thorough responses, but takes longer and uses your limits faster.",
                 effort_options: [
-                  { id: "low", name: "Low" },
-                  { id: "medium", name: "Medium", badge: { message: "Recommended", variant: "neutral" } },
-                  { id: "high", name: "High" },
-                  { id: "xhigh", name: "Extra" },
+                  {
+                    id: "low",
+                    name: "Low",
+                  },
+                  {
+                    id: "medium",
+                    name: "Medium",
+                    badge: {
+                      message: "Recommended",
+                      variant: "neutral",
+                    },
+                  },
+                  {
+                    id: "high",
+                    name: "High",
+                  },
+                  {
+                    id: "xhigh",
+                    name: "Extra",
+                  },
                   {
                     id: "max",
                     name: "Max",
@@ -1109,14 +1797,18 @@ var BUNDLED_MODEL_CATALOG = {
                   },
                 ],
               },
-              quick_select: !0,
+              quick_select: true,
               runtime: {
                 max_input_tokens: 1e6,
                 max_output_tokens: 128000,
                 effort_levels: ["low", "medium", "high", "xhigh", "max"],
                 default_effort: "medium",
                 capabilities: ["compass", "gsuite_tools", "mm_images", "mm_pdf", "web_search"],
-                image_limits: { max_width: 2576, max_height: 2576, max_image_tokens: 4784 },
+                image_limits: {
+                  max_width: 2576,
+                  max_height: 2576,
+                  max_image_tokens: 4784,
+                },
                 family: "haiku",
               },
               offered_on: [
@@ -1134,14 +1826,26 @@ var BUNDLED_MODEL_CATALOG = {
               name: "Haiku 4.5",
               short_name: "Haiku",
               section: "overflow",
-              capabilities: { compass: !0, gsuite_tools: !0, mm_images: !0, mm_pdf: !0, web_search: !0 },
-              thinking: { type: "none" },
+              capabilities: {
+                compass: true,
+                gsuite_tools: true,
+                mm_images: true,
+                mm_pdf: true,
+                web_search: true,
+              },
+              thinking: {
+                type: "none",
+              },
               auto_permission_mode: "unavailable",
               runtime: {
                 max_input_tokens: 200000,
                 max_output_tokens: 64000,
                 capabilities: ["compass", "gsuite_tools", "mm_images", "mm_pdf", "web_search"],
-                image_limits: { max_width: 1568, max_height: 1568, max_image_tokens: 1568 },
+                image_limits: {
+                  max_width: 1568,
+                  max_height: 1568,
+                  max_image_tokens: 1568,
+                },
                 family: "haiku",
               },
               offered_on: [
@@ -1159,16 +1863,38 @@ var BUNDLED_MODEL_CATALOG = {
               name: "Sonnet 5",
               short_name: "Sonnet",
               section: "overflow",
-              capabilities: { compass: !0, gsuite_tools: !0, mm_images: !0, mm_pdf: !0, web_search: !0 },
+              capabilities: {
+                compass: true,
+                gsuite_tools: true,
+                mm_images: true,
+                mm_pdf: true,
+                web_search: true,
+              },
               thinking: {
                 type: "effort",
                 description:
                   "Higher effort means more thorough responses, but takes longer and uses your limits faster.",
                 effort_options: [
-                  { id: "low", name: "Low" },
-                  { id: "medium", name: "Medium" },
-                  { id: "high", name: "High", badge: { message: "Recommended", variant: "neutral" } },
-                  { id: "xhigh", name: "Extra" },
+                  {
+                    id: "low",
+                    name: "Low",
+                  },
+                  {
+                    id: "medium",
+                    name: "Medium",
+                  },
+                  {
+                    id: "high",
+                    name: "High",
+                    badge: {
+                      message: "Recommended",
+                      variant: "neutral",
+                    },
+                  },
+                  {
+                    id: "xhigh",
+                    name: "Extra",
+                  },
                   {
                     id: "max",
                     name: "Max",
@@ -1185,7 +1911,11 @@ var BUNDLED_MODEL_CATALOG = {
                 effort_levels: ["low", "medium", "high", "xhigh", "max"],
                 default_effort: "high",
                 capabilities: ["compass", "gsuite_tools", "mm_images", "mm_pdf", "web_search"],
-                image_limits: { max_width: 2576, max_height: 2576, max_image_tokens: 4784 },
+                image_limits: {
+                  max_width: 2576,
+                  max_height: 2576,
+                  max_image_tokens: 4784,
+                },
                 family: "sonnet",
               },
               offered_on: [
@@ -1203,16 +1933,38 @@ var BUNDLED_MODEL_CATALOG = {
               name: "Opus 5",
               short_name: "Opus",
               section: "overflow",
-              capabilities: { compass: !0, gsuite_tools: !0, mm_images: !0, mm_pdf: !0, web_search: !0 },
+              capabilities: {
+                compass: true,
+                gsuite_tools: true,
+                mm_images: true,
+                mm_pdf: true,
+                web_search: true,
+              },
               thinking: {
                 type: "effort",
                 description:
                   "Higher effort means more thorough responses, but takes longer and uses your limits faster.",
                 effort_options: [
-                  { id: "low", name: "Low" },
-                  { id: "medium", name: "Medium" },
-                  { id: "high", name: "High", badge: { message: "Recommended", variant: "neutral" } },
-                  { id: "xhigh", name: "Extra" },
+                  {
+                    id: "low",
+                    name: "Low",
+                  },
+                  {
+                    id: "medium",
+                    name: "Medium",
+                  },
+                  {
+                    id: "high",
+                    name: "High",
+                    badge: {
+                      message: "Recommended",
+                      variant: "neutral",
+                    },
+                  },
+                  {
+                    id: "xhigh",
+                    name: "Extra",
+                  },
                   {
                     id: "max",
                     name: "Max",
@@ -1227,8 +1979,15 @@ var BUNDLED_MODEL_CATALOG = {
                 type: "toggle",
                 name: "Fast mode",
                 options: [
-                  { id: "fast", name: "Enable fast mode", selector_label: "Fast" },
-                  { id: "off", name: "Off" },
+                  {
+                    id: "fast",
+                    name: "Enable fast mode",
+                    selector_label: "Fast",
+                  },
+                  {
+                    id: "off",
+                    name: "Off",
+                  },
                 ],
               },
               runtime: {
@@ -1237,7 +1996,11 @@ var BUNDLED_MODEL_CATALOG = {
                 effort_levels: ["low", "medium", "high", "xhigh", "max"],
                 default_effort: "high",
                 capabilities: ["compass", "gsuite_tools", "mm_images", "mm_pdf", "web_search"],
-                image_limits: { max_width: 2576, max_height: 2576, max_image_tokens: 4784 },
+                image_limits: {
+                  max_width: 2576,
+                  max_height: 2576,
+                  max_image_tokens: 4784,
+                },
                 family: "opus",
               },
               offered_on: [
@@ -1255,16 +2018,38 @@ var BUNDLED_MODEL_CATALOG = {
               name: "Fable 5",
               short_name: "Fable",
               section: "overflow",
-              capabilities: { compass: !0, gsuite_tools: !0, mm_images: !0, mm_pdf: !0, web_search: !0 },
+              capabilities: {
+                compass: true,
+                gsuite_tools: true,
+                mm_images: true,
+                mm_pdf: true,
+                web_search: true,
+              },
               thinking: {
                 type: "effort",
                 description:
                   "Higher effort means more thorough responses, but takes longer and uses your limits faster.",
                 effort_options: [
-                  { id: "low", name: "Low" },
-                  { id: "medium", name: "Medium" },
-                  { id: "high", name: "High", badge: { message: "Recommended", variant: "neutral" } },
-                  { id: "xhigh", name: "Extra" },
+                  {
+                    id: "low",
+                    name: "Low",
+                  },
+                  {
+                    id: "medium",
+                    name: "Medium",
+                  },
+                  {
+                    id: "high",
+                    name: "High",
+                    badge: {
+                      message: "Recommended",
+                      variant: "neutral",
+                    },
+                  },
+                  {
+                    id: "xhigh",
+                    name: "Extra",
+                  },
                   {
                     id: "max",
                     name: "Max",
@@ -1281,7 +2066,11 @@ var BUNDLED_MODEL_CATALOG = {
                 effort_levels: ["low", "medium", "high", "xhigh", "max"],
                 default_effort: "high",
                 capabilities: ["compass", "gsuite_tools", "mm_images", "mm_pdf", "web_search"],
-                image_limits: { max_width: 2576, max_height: 2576, max_image_tokens: 4784 },
+                image_limits: {
+                  max_width: 2576,
+                  max_height: 2576,
+                  max_image_tokens: 4784,
+                },
                 family: "fable",
               },
               offered_on: [
@@ -1299,16 +2088,38 @@ var BUNDLED_MODEL_CATALOG = {
               name: "Opus 4.8",
               short_name: "Opus",
               section: "overflow",
-              capabilities: { compass: !0, gsuite_tools: !0, mm_images: !0, mm_pdf: !0, web_search: !0 },
+              capabilities: {
+                compass: true,
+                gsuite_tools: true,
+                mm_images: true,
+                mm_pdf: true,
+                web_search: true,
+              },
               thinking: {
                 type: "effort",
                 description:
                   "Higher effort means more thorough responses, but takes longer and uses your limits faster.",
                 effort_options: [
-                  { id: "low", name: "Low" },
-                  { id: "medium", name: "Medium" },
-                  { id: "high", name: "High", badge: { message: "Recommended", variant: "neutral" } },
-                  { id: "xhigh", name: "Extra" },
+                  {
+                    id: "low",
+                    name: "Low",
+                  },
+                  {
+                    id: "medium",
+                    name: "Medium",
+                  },
+                  {
+                    id: "high",
+                    name: "High",
+                    badge: {
+                      message: "Recommended",
+                      variant: "neutral",
+                    },
+                  },
+                  {
+                    id: "xhigh",
+                    name: "Extra",
+                  },
                   {
                     id: "max",
                     name: "Max",
@@ -1323,8 +2134,15 @@ var BUNDLED_MODEL_CATALOG = {
                 type: "toggle",
                 name: "Fast mode",
                 options: [
-                  { id: "fast", name: "Enable fast mode", selector_label: "Fast" },
-                  { id: "off", name: "Off" },
+                  {
+                    id: "fast",
+                    name: "Enable fast mode",
+                    selector_label: "Fast",
+                  },
+                  {
+                    id: "off",
+                    name: "Off",
+                  },
                 ],
               },
               runtime: {
@@ -1333,7 +2151,11 @@ var BUNDLED_MODEL_CATALOG = {
                 effort_levels: ["low", "medium", "high", "xhigh", "max"],
                 default_effort: "high",
                 capabilities: ["compass", "gsuite_tools", "mm_images", "mm_pdf", "web_search"],
-                image_limits: { max_width: 2576, max_height: 2576, max_image_tokens: 4784 },
+                image_limits: {
+                  max_width: 2576,
+                  max_height: 2576,
+                  max_image_tokens: 4784,
+                },
                 family: "opus",
               },
               offered_on: [
@@ -1351,16 +2173,38 @@ var BUNDLED_MODEL_CATALOG = {
               name: "Opus 4.7",
               short_name: "Opus",
               section: "overflow",
-              capabilities: { compass: !0, gsuite_tools: !0, mm_images: !0, mm_pdf: !0, web_search: !0 },
+              capabilities: {
+                compass: true,
+                gsuite_tools: true,
+                mm_images: true,
+                mm_pdf: true,
+                web_search: true,
+              },
               thinking: {
                 type: "effort",
                 description:
                   "Higher effort means more thorough responses, but takes longer and uses your limits faster.",
                 effort_options: [
-                  { id: "low", name: "Low" },
-                  { id: "medium", name: "Medium" },
-                  { id: "high", name: "High" },
-                  { id: "xhigh", name: "Extra", badge: { message: "Recommended", variant: "neutral" } },
+                  {
+                    id: "low",
+                    name: "Low",
+                  },
+                  {
+                    id: "medium",
+                    name: "Medium",
+                  },
+                  {
+                    id: "high",
+                    name: "High",
+                  },
+                  {
+                    id: "xhigh",
+                    name: "Extra",
+                    badge: {
+                      message: "Recommended",
+                      variant: "neutral",
+                    },
+                  },
                   {
                     id: "max",
                     name: "Max",
@@ -1377,7 +2221,11 @@ var BUNDLED_MODEL_CATALOG = {
                 effort_levels: ["low", "medium", "high", "xhigh", "max"],
                 default_effort: "xhigh",
                 capabilities: ["compass", "gsuite_tools", "mm_images", "mm_pdf", "web_search"],
-                image_limits: { max_width: 2576, max_height: 2576, max_image_tokens: 4784 },
+                image_limits: {
+                  max_width: 2576,
+                  max_height: 2576,
+                  max_image_tokens: 4784,
+                },
                 family: "opus",
               },
               offered_on: [
@@ -1395,15 +2243,34 @@ var BUNDLED_MODEL_CATALOG = {
               name: "Opus 4.6",
               short_name: "Opus",
               section: "overflow",
-              capabilities: { compass: !0, gsuite_tools: !0, mm_images: !0, mm_pdf: !0, web_search: !0 },
+              capabilities: {
+                compass: true,
+                gsuite_tools: true,
+                mm_images: true,
+                mm_pdf: true,
+                web_search: true,
+              },
               thinking: {
                 type: "effort",
                 description:
                   "Higher effort means more thorough responses, but takes longer and uses your limits faster.",
                 effort_options: [
-                  { id: "low", name: "Low" },
-                  { id: "medium", name: "Medium" },
-                  { id: "high", name: "High", badge: { message: "Recommended", variant: "neutral" } },
+                  {
+                    id: "low",
+                    name: "Low",
+                  },
+                  {
+                    id: "medium",
+                    name: "Medium",
+                  },
+                  {
+                    id: "high",
+                    name: "High",
+                    badge: {
+                      message: "Recommended",
+                      variant: "neutral",
+                    },
+                  },
                   {
                     id: "max",
                     name: "Max",
@@ -1418,8 +2285,15 @@ var BUNDLED_MODEL_CATALOG = {
                 type: "toggle",
                 name: "Fast mode",
                 options: [
-                  { id: "fast", name: "Enable fast mode", selector_label: "Fast" },
-                  { id: "off", name: "Off" },
+                  {
+                    id: "fast",
+                    name: "Enable fast mode",
+                    selector_label: "Fast",
+                  },
+                  {
+                    id: "off",
+                    name: "Off",
+                  },
                 ],
               },
               runtime: {
@@ -1428,7 +2302,11 @@ var BUNDLED_MODEL_CATALOG = {
                 effort_levels: ["low", "medium", "high", "max"],
                 default_effort: "high",
                 capabilities: ["compass", "gsuite_tools", "mm_images", "mm_pdf", "web_search"],
-                image_limits: { max_width: 1568, max_height: 1568, max_image_tokens: 1568 },
+                image_limits: {
+                  max_width: 1568,
+                  max_height: 1568,
+                  max_image_tokens: 1568,
+                },
                 family: "opus",
               },
               offered_on: ["first_party", "anthropic_aws", "bedrock", "vertex", "foundry", "gateway"],
@@ -1438,15 +2316,34 @@ var BUNDLED_MODEL_CATALOG = {
               name: "Sonnet 4.6",
               short_name: "Sonnet",
               section: "overflow",
-              capabilities: { compass: !0, gsuite_tools: !0, mm_images: !0, mm_pdf: !0, web_search: !0 },
+              capabilities: {
+                compass: true,
+                gsuite_tools: true,
+                mm_images: true,
+                mm_pdf: true,
+                web_search: true,
+              },
               thinking: {
                 type: "effort",
                 description:
                   "Higher effort means more thorough responses, but takes longer and uses your limits faster.",
                 effort_options: [
-                  { id: "low", name: "Low" },
-                  { id: "medium", name: "Medium" },
-                  { id: "high", name: "High", badge: { message: "Recommended", variant: "neutral" } },
+                  {
+                    id: "low",
+                    name: "Low",
+                  },
+                  {
+                    id: "medium",
+                    name: "Medium",
+                  },
+                  {
+                    id: "high",
+                    name: "High",
+                    badge: {
+                      message: "Recommended",
+                      variant: "neutral",
+                    },
+                  },
                   {
                     id: "max",
                     name: "Max",
@@ -1463,7 +2360,11 @@ var BUNDLED_MODEL_CATALOG = {
                 effort_levels: ["low", "medium", "high", "max"],
                 default_effort: "high",
                 capabilities: ["compass", "gsuite_tools", "mm_images", "mm_pdf", "web_search"],
-                image_limits: { max_width: 1568, max_height: 1568, max_image_tokens: 1568 },
+                image_limits: {
+                  max_width: 1568,
+                  max_height: 1568,
+                  max_image_tokens: 1568,
+                },
                 family: "sonnet",
               },
               offered_on: ["first_party", "anthropic_aws", "bedrock", "vertex", "foundry", "gateway"],
@@ -1473,27 +2374,58 @@ var BUNDLED_MODEL_CATALOG = {
               name: "Opus 4.1",
               short_name: "Opus",
               section: "overflow",
-              capabilities: { compass: !0, gsuite_tools: !0, mm_images: !0, mm_pdf: !0, web_search: !0 },
-              thinking: { type: "none" },
+              capabilities: {
+                compass: true,
+                gsuite_tools: true,
+                mm_images: true,
+                mm_pdf: true,
+                web_search: true,
+              },
+              thinking: {
+                type: "none",
+              },
               auto_permission_mode: "unavailable",
               runtime: {
                 max_input_tokens: 200000,
                 max_output_tokens: 32000,
                 capabilities: ["compass", "gsuite_tools", "mm_images", "mm_pdf", "web_search"],
-                image_limits: { max_width: 1568, max_height: 1568, max_image_tokens: 1568 },
+                image_limits: {
+                  max_width: 1568,
+                  max_height: 1568,
+                  max_image_tokens: 1568,
+                },
                 family: "opus",
               },
               offered_on: ["bedrock"],
             },
           ],
           settings_vocabulary: {
-            create_mode: { default: 1 },
-            effort_level: { high: 3, low: 1, max: 5, medium: 2, xhigh: 4 },
-            thinking_mode: { auto: 2, extended: 1, off: 3 },
+            create_mode: {
+              default: 1,
+            },
+            effort_level: {
+              high: 3,
+              low: 1,
+              max: 5,
+              medium: 2,
+              xhigh: 4,
+            },
+            thinking_mode: {
+              auto: 2,
+              extended: 1,
+              off: 3,
+            },
           },
           provider_alias_targets: {
-            fable: { default: "claude-fable-5-1", per_provider: { gateway: "claude-fable-5" } },
-            haiku: { default: "claude-haiku-5-5" },
+            fable: {
+              default: "claude-fable-5-1",
+              per_provider: {
+                gateway: "claude-fable-5",
+              },
+            },
+            haiku: {
+              default: "claude-haiku-5-5",
+            },
             opus: {
               default: "claude-opus-5-5",
               per_provider: {
@@ -1507,7 +2439,10 @@ var BUNDLED_MODEL_CATALOG = {
             },
             sonnet: {
               default: "claude-sonnet-5-5",
-              per_provider: { anthropic_aws: "claude-sonnet-4-6", gateway: "claude-sonnet-4-6" },
+              per_provider: {
+                anthropic_aws: "claude-sonnet-4-6",
+                gateway: "claude-sonnet-4-6",
+              },
             },
           },
         },
@@ -1518,19 +2453,88 @@ var BUNDLED_MODEL_CATALOG = {
         {
           id: "ccr",
           model: "claude-opus-5-5",
-          thinking: { type: "effort", effort: "medium" },
+          thinking: {
+            type: "effort",
+            effort: "medium",
+          },
           thinking_by_model: [
-            { id: "claude-fable-5-1", thinking: { type: "effort", effort: "high" } },
-            { id: "claude-opus-5-5", thinking: { type: "effort", effort: "medium" } },
-            { id: "claude-sonnet-5-5", thinking: { type: "effort", effort: "medium" } },
-            { id: "claude-haiku-5-5", thinking: { type: "effort", effort: "medium" } },
-            { id: "claude-fable-5", thinking: { type: "effort", effort: "high" } },
-            { id: "claude-opus-5", thinking: { type: "effort", effort: "high" } },
-            { id: "claude-opus-4-8", thinking: { type: "effort", effort: "high" } },
-            { id: "claude-opus-4-7", thinking: { type: "effort", effort: "xhigh" } },
-            { id: "claude-opus-4-6", thinking: { type: "effort", effort: "high" } },
-            { id: "claude-sonnet-5", thinking: { type: "effort", effort: "high" } },
-            { id: "claude-sonnet-4-6", thinking: { type: "effort", effort: "high" } },
+            {
+              id: "claude-fable-5-1",
+              thinking: {
+                type: "effort",
+                effort: "high",
+              },
+            },
+            {
+              id: "claude-opus-5-5",
+              thinking: {
+                type: "effort",
+                effort: "medium",
+              },
+            },
+            {
+              id: "claude-sonnet-5-5",
+              thinking: {
+                type: "effort",
+                effort: "medium",
+              },
+            },
+            {
+              id: "claude-haiku-5-5",
+              thinking: {
+                type: "effort",
+                effort: "medium",
+              },
+            },
+            {
+              id: "claude-fable-5",
+              thinking: {
+                type: "effort",
+                effort: "high",
+              },
+            },
+            {
+              id: "claude-opus-5",
+              thinking: {
+                type: "effort",
+                effort: "high",
+              },
+            },
+            {
+              id: "claude-opus-4-8",
+              thinking: {
+                type: "effort",
+                effort: "high",
+              },
+            },
+            {
+              id: "claude-opus-4-7",
+              thinking: {
+                type: "effort",
+                effort: "xhigh",
+              },
+            },
+            {
+              id: "claude-opus-4-6",
+              thinking: {
+                type: "effort",
+                effort: "high",
+              },
+            },
+            {
+              id: "claude-sonnet-5",
+              thinking: {
+                type: "effort",
+                effort: "high",
+              },
+            },
+            {
+              id: "claude-sonnet-4-6",
+              thinking: {
+                type: "effort",
+                effort: "high",
+              },
+            },
           ],
           selection_source: "global_default",
         },
@@ -1544,16 +2548,38 @@ var BUNDLED_MODEL_CATALOG = {
               name: "Opus 5.5",
               short_name: "Opus",
               section: "main",
-              capabilities: { compass: !0, gsuite_tools: !0, mm_images: !0, mm_pdf: !0, web_search: !0 },
+              capabilities: {
+                compass: true,
+                gsuite_tools: true,
+                mm_images: true,
+                mm_pdf: true,
+                web_search: true,
+              },
               thinking: {
                 type: "effort",
                 description:
                   "Higher effort means more thorough responses, but takes longer and uses your limits faster.",
                 effort_options: [
-                  { id: "low", name: "Low" },
-                  { id: "medium", name: "Medium", badge: { message: "Recommended", variant: "neutral" } },
-                  { id: "high", name: "High" },
-                  { id: "xhigh", name: "Extra" },
+                  {
+                    id: "low",
+                    name: "Low",
+                  },
+                  {
+                    id: "medium",
+                    name: "Medium",
+                    badge: {
+                      message: "Recommended",
+                      variant: "neutral",
+                    },
+                  },
+                  {
+                    id: "high",
+                    name: "High",
+                  },
+                  {
+                    id: "xhigh",
+                    name: "Extra",
+                  },
                   {
                     id: "max",
                     name: "Max",
@@ -1568,19 +2594,30 @@ var BUNDLED_MODEL_CATALOG = {
                 type: "toggle",
                 name: "Fast mode",
                 options: [
-                  { id: "fast", name: "Enable fast mode", selector_label: "Fast" },
-                  { id: "off", name: "Off" },
+                  {
+                    id: "fast",
+                    name: "Enable fast mode",
+                    selector_label: "Fast",
+                  },
+                  {
+                    id: "off",
+                    name: "Off",
+                  },
                 ],
               },
               min_claude_code_version: "2.1.280",
-              quick_select: !0,
+              quick_select: true,
               runtime: {
                 max_input_tokens: 1e6,
                 max_output_tokens: 128000,
                 effort_levels: ["low", "medium", "high", "xhigh", "max"],
                 default_effort: "medium",
                 capabilities: ["compass", "gsuite_tools", "mm_images", "mm_pdf", "web_search"],
-                image_limits: { max_width: 2576, max_height: 2576, max_image_tokens: 4784 },
+                image_limits: {
+                  max_width: 2576,
+                  max_height: 2576,
+                  max_image_tokens: 4784,
+                },
                 family: "opus",
               },
               offered_on: [
@@ -1598,16 +2635,38 @@ var BUNDLED_MODEL_CATALOG = {
               name: "Sonnet 5.5",
               short_name: "Sonnet",
               section: "main",
-              capabilities: { compass: !0, gsuite_tools: !0, mm_images: !0, mm_pdf: !0, web_search: !0 },
+              capabilities: {
+                compass: true,
+                gsuite_tools: true,
+                mm_images: true,
+                mm_pdf: true,
+                web_search: true,
+              },
               thinking: {
                 type: "effort",
                 description:
                   "Higher effort means more thorough responses, but takes longer and uses your limits faster.",
                 effort_options: [
-                  { id: "low", name: "Low" },
-                  { id: "medium", name: "Medium", badge: { message: "Recommended", variant: "neutral" } },
-                  { id: "high", name: "High" },
-                  { id: "xhigh", name: "Extra" },
+                  {
+                    id: "low",
+                    name: "Low",
+                  },
+                  {
+                    id: "medium",
+                    name: "Medium",
+                    badge: {
+                      message: "Recommended",
+                      variant: "neutral",
+                    },
+                  },
+                  {
+                    id: "high",
+                    name: "High",
+                  },
+                  {
+                    id: "xhigh",
+                    name: "Extra",
+                  },
                   {
                     id: "max",
                     name: "Max",
@@ -1618,14 +2677,18 @@ var BUNDLED_MODEL_CATALOG = {
                   },
                 ],
               },
-              quick_select: !0,
+              quick_select: true,
               runtime: {
                 max_input_tokens: 1e6,
                 max_output_tokens: 128000,
                 effort_levels: ["low", "medium", "high", "xhigh", "max"],
                 default_effort: "medium",
                 capabilities: ["compass", "gsuite_tools", "mm_images", "mm_pdf", "web_search"],
-                image_limits: { max_width: 2576, max_height: 2576, max_image_tokens: 4784 },
+                image_limits: {
+                  max_width: 2576,
+                  max_height: 2576,
+                  max_image_tokens: 4784,
+                },
                 family: "sonnet",
               },
               offered_on: [
@@ -1643,16 +2706,38 @@ var BUNDLED_MODEL_CATALOG = {
               name: "Fable 5.1",
               short_name: "Fable",
               section: "main",
-              capabilities: { compass: !0, gsuite_tools: !0, mm_images: !0, mm_pdf: !0, web_search: !0 },
+              capabilities: {
+                compass: true,
+                gsuite_tools: true,
+                mm_images: true,
+                mm_pdf: true,
+                web_search: true,
+              },
               thinking: {
                 type: "effort",
                 description:
                   "Higher effort means more thorough responses, but takes longer and uses your limits faster.",
                 effort_options: [
-                  { id: "low", name: "Low" },
-                  { id: "medium", name: "Medium" },
-                  { id: "high", name: "High", badge: { message: "Recommended", variant: "neutral" } },
-                  { id: "xhigh", name: "Extra" },
+                  {
+                    id: "low",
+                    name: "Low",
+                  },
+                  {
+                    id: "medium",
+                    name: "Medium",
+                  },
+                  {
+                    id: "high",
+                    name: "High",
+                    badge: {
+                      message: "Recommended",
+                      variant: "neutral",
+                    },
+                  },
+                  {
+                    id: "xhigh",
+                    name: "Extra",
+                  },
                   {
                     id: "max",
                     name: "Max",
@@ -1664,14 +2749,18 @@ var BUNDLED_MODEL_CATALOG = {
                 ],
               },
               min_claude_code_version: "2.1.251",
-              quick_select: !0,
+              quick_select: true,
               runtime: {
                 max_input_tokens: 1e6,
                 max_output_tokens: 128000,
                 effort_levels: ["low", "medium", "high", "xhigh", "max"],
                 default_effort: "high",
                 capabilities: ["compass", "gsuite_tools", "mm_images", "mm_pdf", "web_search"],
-                image_limits: { max_width: 2576, max_height: 2576, max_image_tokens: 4784 },
+                image_limits: {
+                  max_width: 2576,
+                  max_height: 2576,
+                  max_image_tokens: 4784,
+                },
                 family: "fable",
               },
               offered_on: [
@@ -1689,16 +2778,38 @@ var BUNDLED_MODEL_CATALOG = {
               name: "Haiku 5.5",
               short_name: "Haiku",
               section: "main",
-              capabilities: { compass: !0, gsuite_tools: !0, mm_images: !0, mm_pdf: !0, web_search: !0 },
+              capabilities: {
+                compass: true,
+                gsuite_tools: true,
+                mm_images: true,
+                mm_pdf: true,
+                web_search: true,
+              },
               thinking: {
                 type: "effort",
                 description:
                   "Higher effort means more thorough responses, but takes longer and uses your limits faster.",
                 effort_options: [
-                  { id: "low", name: "Low" },
-                  { id: "medium", name: "Medium", badge: { message: "Recommended", variant: "neutral" } },
-                  { id: "high", name: "High" },
-                  { id: "xhigh", name: "Extra" },
+                  {
+                    id: "low",
+                    name: "Low",
+                  },
+                  {
+                    id: "medium",
+                    name: "Medium",
+                    badge: {
+                      message: "Recommended",
+                      variant: "neutral",
+                    },
+                  },
+                  {
+                    id: "high",
+                    name: "High",
+                  },
+                  {
+                    id: "xhigh",
+                    name: "Extra",
+                  },
                   {
                     id: "max",
                     name: "Max",
@@ -1709,14 +2820,18 @@ var BUNDLED_MODEL_CATALOG = {
                   },
                 ],
               },
-              quick_select: !0,
+              quick_select: true,
               runtime: {
                 max_input_tokens: 1e6,
                 max_output_tokens: 128000,
                 effort_levels: ["low", "medium", "high", "xhigh", "max"],
                 default_effort: "medium",
                 capabilities: ["compass", "gsuite_tools", "mm_images", "mm_pdf", "web_search"],
-                image_limits: { max_width: 2576, max_height: 2576, max_image_tokens: 4784 },
+                image_limits: {
+                  max_width: 2576,
+                  max_height: 2576,
+                  max_image_tokens: 4784,
+                },
                 family: "haiku",
               },
               offered_on: [
@@ -1734,14 +2849,26 @@ var BUNDLED_MODEL_CATALOG = {
               name: "Haiku 4.5",
               short_name: "Haiku",
               section: "overflow",
-              capabilities: { compass: !0, gsuite_tools: !0, mm_images: !0, mm_pdf: !0, web_search: !0 },
-              thinking: { type: "none" },
+              capabilities: {
+                compass: true,
+                gsuite_tools: true,
+                mm_images: true,
+                mm_pdf: true,
+                web_search: true,
+              },
+              thinking: {
+                type: "none",
+              },
               auto_permission_mode: "unavailable",
               runtime: {
                 max_input_tokens: 200000,
                 max_output_tokens: 64000,
                 capabilities: ["compass", "gsuite_tools", "mm_images", "mm_pdf", "web_search"],
-                image_limits: { max_width: 1568, max_height: 1568, max_image_tokens: 1568 },
+                image_limits: {
+                  max_width: 1568,
+                  max_height: 1568,
+                  max_image_tokens: 1568,
+                },
                 family: "haiku",
               },
               offered_on: [
@@ -1759,16 +2886,38 @@ var BUNDLED_MODEL_CATALOG = {
               name: "Sonnet 5",
               short_name: "Sonnet",
               section: "overflow",
-              capabilities: { compass: !0, gsuite_tools: !0, mm_images: !0, mm_pdf: !0, web_search: !0 },
+              capabilities: {
+                compass: true,
+                gsuite_tools: true,
+                mm_images: true,
+                mm_pdf: true,
+                web_search: true,
+              },
               thinking: {
                 type: "effort",
                 description:
                   "Higher effort means more thorough responses, but takes longer and uses your limits faster.",
                 effort_options: [
-                  { id: "low", name: "Low" },
-                  { id: "medium", name: "Medium" },
-                  { id: "high", name: "High", badge: { message: "Recommended", variant: "neutral" } },
-                  { id: "xhigh", name: "Extra" },
+                  {
+                    id: "low",
+                    name: "Low",
+                  },
+                  {
+                    id: "medium",
+                    name: "Medium",
+                  },
+                  {
+                    id: "high",
+                    name: "High",
+                    badge: {
+                      message: "Recommended",
+                      variant: "neutral",
+                    },
+                  },
+                  {
+                    id: "xhigh",
+                    name: "Extra",
+                  },
                   {
                     id: "max",
                     name: "Max",
@@ -1785,7 +2934,11 @@ var BUNDLED_MODEL_CATALOG = {
                 effort_levels: ["low", "medium", "high", "xhigh", "max"],
                 default_effort: "high",
                 capabilities: ["compass", "gsuite_tools", "mm_images", "mm_pdf", "web_search"],
-                image_limits: { max_width: 2576, max_height: 2576, max_image_tokens: 4784 },
+                image_limits: {
+                  max_width: 2576,
+                  max_height: 2576,
+                  max_image_tokens: 4784,
+                },
                 family: "sonnet",
               },
               offered_on: [
@@ -1803,16 +2956,38 @@ var BUNDLED_MODEL_CATALOG = {
               name: "Opus 5",
               short_name: "Opus",
               section: "overflow",
-              capabilities: { compass: !0, gsuite_tools: !0, mm_images: !0, mm_pdf: !0, web_search: !0 },
+              capabilities: {
+                compass: true,
+                gsuite_tools: true,
+                mm_images: true,
+                mm_pdf: true,
+                web_search: true,
+              },
               thinking: {
                 type: "effort",
                 description:
                   "Higher effort means more thorough responses, but takes longer and uses your limits faster.",
                 effort_options: [
-                  { id: "low", name: "Low" },
-                  { id: "medium", name: "Medium" },
-                  { id: "high", name: "High", badge: { message: "Recommended", variant: "neutral" } },
-                  { id: "xhigh", name: "Extra" },
+                  {
+                    id: "low",
+                    name: "Low",
+                  },
+                  {
+                    id: "medium",
+                    name: "Medium",
+                  },
+                  {
+                    id: "high",
+                    name: "High",
+                    badge: {
+                      message: "Recommended",
+                      variant: "neutral",
+                    },
+                  },
+                  {
+                    id: "xhigh",
+                    name: "Extra",
+                  },
                   {
                     id: "max",
                     name: "Max",
@@ -1827,8 +3002,15 @@ var BUNDLED_MODEL_CATALOG = {
                 type: "toggle",
                 name: "Fast mode",
                 options: [
-                  { id: "fast", name: "Enable fast mode", selector_label: "Fast" },
-                  { id: "off", name: "Off" },
+                  {
+                    id: "fast",
+                    name: "Enable fast mode",
+                    selector_label: "Fast",
+                  },
+                  {
+                    id: "off",
+                    name: "Off",
+                  },
                 ],
               },
               runtime: {
@@ -1837,7 +3019,11 @@ var BUNDLED_MODEL_CATALOG = {
                 effort_levels: ["low", "medium", "high", "xhigh", "max"],
                 default_effort: "high",
                 capabilities: ["compass", "gsuite_tools", "mm_images", "mm_pdf", "web_search"],
-                image_limits: { max_width: 2576, max_height: 2576, max_image_tokens: 4784 },
+                image_limits: {
+                  max_width: 2576,
+                  max_height: 2576,
+                  max_image_tokens: 4784,
+                },
                 family: "opus",
               },
               offered_on: [
@@ -1855,16 +3041,38 @@ var BUNDLED_MODEL_CATALOG = {
               name: "Fable 5",
               short_name: "Fable",
               section: "overflow",
-              capabilities: { compass: !0, gsuite_tools: !0, mm_images: !0, mm_pdf: !0, web_search: !0 },
+              capabilities: {
+                compass: true,
+                gsuite_tools: true,
+                mm_images: true,
+                mm_pdf: true,
+                web_search: true,
+              },
               thinking: {
                 type: "effort",
                 description:
                   "Higher effort means more thorough responses, but takes longer and uses your limits faster.",
                 effort_options: [
-                  { id: "low", name: "Low" },
-                  { id: "medium", name: "Medium" },
-                  { id: "high", name: "High", badge: { message: "Recommended", variant: "neutral" } },
-                  { id: "xhigh", name: "Extra" },
+                  {
+                    id: "low",
+                    name: "Low",
+                  },
+                  {
+                    id: "medium",
+                    name: "Medium",
+                  },
+                  {
+                    id: "high",
+                    name: "High",
+                    badge: {
+                      message: "Recommended",
+                      variant: "neutral",
+                    },
+                  },
+                  {
+                    id: "xhigh",
+                    name: "Extra",
+                  },
                   {
                     id: "max",
                     name: "Max",
@@ -1881,7 +3089,11 @@ var BUNDLED_MODEL_CATALOG = {
                 effort_levels: ["low", "medium", "high", "xhigh", "max"],
                 default_effort: "high",
                 capabilities: ["compass", "gsuite_tools", "mm_images", "mm_pdf", "web_search"],
-                image_limits: { max_width: 2576, max_height: 2576, max_image_tokens: 4784 },
+                image_limits: {
+                  max_width: 2576,
+                  max_height: 2576,
+                  max_image_tokens: 4784,
+                },
                 family: "fable",
               },
               offered_on: [
@@ -1899,16 +3111,38 @@ var BUNDLED_MODEL_CATALOG = {
               name: "Opus 4.8",
               short_name: "Opus",
               section: "overflow",
-              capabilities: { compass: !0, gsuite_tools: !0, mm_images: !0, mm_pdf: !0, web_search: !0 },
+              capabilities: {
+                compass: true,
+                gsuite_tools: true,
+                mm_images: true,
+                mm_pdf: true,
+                web_search: true,
+              },
               thinking: {
                 type: "effort",
                 description:
                   "Higher effort means more thorough responses, but takes longer and uses your limits faster.",
                 effort_options: [
-                  { id: "low", name: "Low" },
-                  { id: "medium", name: "Medium" },
-                  { id: "high", name: "High", badge: { message: "Recommended", variant: "neutral" } },
-                  { id: "xhigh", name: "Extra" },
+                  {
+                    id: "low",
+                    name: "Low",
+                  },
+                  {
+                    id: "medium",
+                    name: "Medium",
+                  },
+                  {
+                    id: "high",
+                    name: "High",
+                    badge: {
+                      message: "Recommended",
+                      variant: "neutral",
+                    },
+                  },
+                  {
+                    id: "xhigh",
+                    name: "Extra",
+                  },
                   {
                     id: "max",
                     name: "Max",
@@ -1923,8 +3157,15 @@ var BUNDLED_MODEL_CATALOG = {
                 type: "toggle",
                 name: "Fast mode",
                 options: [
-                  { id: "fast", name: "Enable fast mode", selector_label: "Fast" },
-                  { id: "off", name: "Off" },
+                  {
+                    id: "fast",
+                    name: "Enable fast mode",
+                    selector_label: "Fast",
+                  },
+                  {
+                    id: "off",
+                    name: "Off",
+                  },
                 ],
               },
               runtime: {
@@ -1933,7 +3174,11 @@ var BUNDLED_MODEL_CATALOG = {
                 effort_levels: ["low", "medium", "high", "xhigh", "max"],
                 default_effort: "high",
                 capabilities: ["compass", "gsuite_tools", "mm_images", "mm_pdf", "web_search"],
-                image_limits: { max_width: 2576, max_height: 2576, max_image_tokens: 4784 },
+                image_limits: {
+                  max_width: 2576,
+                  max_height: 2576,
+                  max_image_tokens: 4784,
+                },
                 family: "opus",
               },
               offered_on: [
@@ -1951,16 +3196,38 @@ var BUNDLED_MODEL_CATALOG = {
               name: "Opus 4.7",
               short_name: "Opus",
               section: "overflow",
-              capabilities: { compass: !0, gsuite_tools: !0, mm_images: !0, mm_pdf: !0, web_search: !0 },
+              capabilities: {
+                compass: true,
+                gsuite_tools: true,
+                mm_images: true,
+                mm_pdf: true,
+                web_search: true,
+              },
               thinking: {
                 type: "effort",
                 description:
                   "Higher effort means more thorough responses, but takes longer and uses your limits faster.",
                 effort_options: [
-                  { id: "low", name: "Low" },
-                  { id: "medium", name: "Medium" },
-                  { id: "high", name: "High" },
-                  { id: "xhigh", name: "Extra", badge: { message: "Recommended", variant: "neutral" } },
+                  {
+                    id: "low",
+                    name: "Low",
+                  },
+                  {
+                    id: "medium",
+                    name: "Medium",
+                  },
+                  {
+                    id: "high",
+                    name: "High",
+                  },
+                  {
+                    id: "xhigh",
+                    name: "Extra",
+                    badge: {
+                      message: "Recommended",
+                      variant: "neutral",
+                    },
+                  },
                   {
                     id: "max",
                     name: "Max",
@@ -1977,7 +3244,11 @@ var BUNDLED_MODEL_CATALOG = {
                 effort_levels: ["low", "medium", "high", "xhigh", "max"],
                 default_effort: "xhigh",
                 capabilities: ["compass", "gsuite_tools", "mm_images", "mm_pdf", "web_search"],
-                image_limits: { max_width: 2576, max_height: 2576, max_image_tokens: 4784 },
+                image_limits: {
+                  max_width: 2576,
+                  max_height: 2576,
+                  max_image_tokens: 4784,
+                },
                 family: "opus",
               },
               offered_on: [
@@ -1995,15 +3266,34 @@ var BUNDLED_MODEL_CATALOG = {
               name: "Opus 4.6",
               short_name: "Opus",
               section: "overflow",
-              capabilities: { compass: !0, gsuite_tools: !0, mm_images: !0, mm_pdf: !0, web_search: !0 },
+              capabilities: {
+                compass: true,
+                gsuite_tools: true,
+                mm_images: true,
+                mm_pdf: true,
+                web_search: true,
+              },
               thinking: {
                 type: "effort",
                 description:
                   "Higher effort means more thorough responses, but takes longer and uses your limits faster.",
                 effort_options: [
-                  { id: "low", name: "Low" },
-                  { id: "medium", name: "Medium" },
-                  { id: "high", name: "High", badge: { message: "Recommended", variant: "neutral" } },
+                  {
+                    id: "low",
+                    name: "Low",
+                  },
+                  {
+                    id: "medium",
+                    name: "Medium",
+                  },
+                  {
+                    id: "high",
+                    name: "High",
+                    badge: {
+                      message: "Recommended",
+                      variant: "neutral",
+                    },
+                  },
                   {
                     id: "max",
                     name: "Max",
@@ -2018,8 +3308,15 @@ var BUNDLED_MODEL_CATALOG = {
                 type: "toggle",
                 name: "Fast mode",
                 options: [
-                  { id: "fast", name: "Enable fast mode", selector_label: "Fast" },
-                  { id: "off", name: "Off" },
+                  {
+                    id: "fast",
+                    name: "Enable fast mode",
+                    selector_label: "Fast",
+                  },
+                  {
+                    id: "off",
+                    name: "Off",
+                  },
                 ],
               },
               runtime: {
@@ -2028,7 +3325,11 @@ var BUNDLED_MODEL_CATALOG = {
                 effort_levels: ["low", "medium", "high", "max"],
                 default_effort: "high",
                 capabilities: ["compass", "gsuite_tools", "mm_images", "mm_pdf", "web_search"],
-                image_limits: { max_width: 1568, max_height: 1568, max_image_tokens: 1568 },
+                image_limits: {
+                  max_width: 1568,
+                  max_height: 1568,
+                  max_image_tokens: 1568,
+                },
                 family: "opus",
               },
               offered_on: ["first_party", "anthropic_aws", "bedrock", "vertex", "foundry", "gateway"],
@@ -2038,15 +3339,34 @@ var BUNDLED_MODEL_CATALOG = {
               name: "Sonnet 4.6",
               short_name: "Sonnet",
               section: "overflow",
-              capabilities: { compass: !0, gsuite_tools: !0, mm_images: !0, mm_pdf: !0, web_search: !0 },
+              capabilities: {
+                compass: true,
+                gsuite_tools: true,
+                mm_images: true,
+                mm_pdf: true,
+                web_search: true,
+              },
               thinking: {
                 type: "effort",
                 description:
                   "Higher effort means more thorough responses, but takes longer and uses your limits faster.",
                 effort_options: [
-                  { id: "low", name: "Low" },
-                  { id: "medium", name: "Medium" },
-                  { id: "high", name: "High", badge: { message: "Recommended", variant: "neutral" } },
+                  {
+                    id: "low",
+                    name: "Low",
+                  },
+                  {
+                    id: "medium",
+                    name: "Medium",
+                  },
+                  {
+                    id: "high",
+                    name: "High",
+                    badge: {
+                      message: "Recommended",
+                      variant: "neutral",
+                    },
+                  },
                   {
                     id: "max",
                     name: "Max",
@@ -2063,20 +3383,43 @@ var BUNDLED_MODEL_CATALOG = {
                 effort_levels: ["low", "medium", "high", "max"],
                 default_effort: "high",
                 capabilities: ["compass", "gsuite_tools", "mm_images", "mm_pdf", "web_search"],
-                image_limits: { max_width: 1568, max_height: 1568, max_image_tokens: 1568 },
+                image_limits: {
+                  max_width: 1568,
+                  max_height: 1568,
+                  max_image_tokens: 1568,
+                },
                 family: "sonnet",
               },
               offered_on: ["first_party", "anthropic_aws", "bedrock", "vertex", "foundry", "gateway"],
             },
           ],
           settings_vocabulary: {
-            create_mode: { default: 1 },
-            effort_level: { high: 3, low: 1, max: 5, medium: 2, xhigh: 4 },
-            thinking_mode: { auto: 2, extended: 1, off: 3 },
+            create_mode: {
+              default: 1,
+            },
+            effort_level: {
+              high: 3,
+              low: 1,
+              max: 5,
+              medium: 2,
+              xhigh: 4,
+            },
+            thinking_mode: {
+              auto: 2,
+              extended: 1,
+              off: 3,
+            },
           },
           provider_alias_targets: {
-            fable: { default: "claude-fable-5-1", per_provider: { gateway: "claude-fable-5" } },
-            haiku: { default: "claude-haiku-5-5" },
+            fable: {
+              default: "claude-fable-5-1",
+              per_provider: {
+                gateway: "claude-fable-5",
+              },
+            },
+            haiku: {
+              default: "claude-haiku-5-5",
+            },
             opus: {
               default: "claude-opus-5-5",
               per_provider: {
@@ -2090,7 +3433,10 @@ var BUNDLED_MODEL_CATALOG = {
             },
             sonnet: {
               default: "claude-sonnet-5-5",
-              per_provider: { anthropic_aws: "claude-sonnet-4-6", gateway: "claude-sonnet-4-6" },
+              per_provider: {
+                anthropic_aws: "claude-sonnet-4-6",
+                gateway: "claude-sonnet-4-6",
+              },
             },
           },
         },
@@ -2101,26 +3447,107 @@ var BUNDLED_MODEL_CATALOG = {
         {
           id: "chat",
           model: "claude-sonnet-4-6",
-          thinking: { type: "effort_and_mode", effort: "low", mode: "off" },
+          thinking: {
+            type: "effort_and_mode",
+            effort: "low",
+            mode: "off",
+          },
           thinking_by_model: [
-            { id: "claude-fable-5-1", thinking: { type: "effort_and_mode", effort: "medium", mode: "auto" } },
-            { id: "claude-opus-5-5", thinking: { type: "effort_and_mode", effort: "medium", mode: "auto" } },
+            {
+              id: "claude-fable-5-1",
+              thinking: {
+                type: "effort_and_mode",
+                effort: "medium",
+                mode: "auto",
+              },
+            },
+            {
+              id: "claude-opus-5-5",
+              thinking: {
+                type: "effort_and_mode",
+                effort: "medium",
+                mode: "auto",
+              },
+            },
             {
               id: "claude-sonnet-5-5",
-              thinking: { type: "effort_and_mode", effort: "medium", mode: "auto" },
+              thinking: {
+                type: "effort_and_mode",
+                effort: "medium",
+                mode: "auto",
+              },
             },
-            { id: "claude-haiku-5-5", thinking: { type: "effort_and_mode", effort: "medium", mode: "auto" } },
-            { id: "claude-fable-5", thinking: { type: "effort_and_mode", effort: "high", mode: "auto" } },
-            { id: "claude-opus-5", thinking: { type: "effort_and_mode", effort: "high", mode: "auto" } },
-            { id: "claude-opus-4-8", thinking: { type: "effort_and_mode", effort: "high", mode: "auto" } },
-            { id: "claude-opus-4-7", thinking: { type: "effort_and_mode", effort: "xhigh", mode: "auto" } },
+            {
+              id: "claude-haiku-5-5",
+              thinking: {
+                type: "effort_and_mode",
+                effort: "medium",
+                mode: "auto",
+              },
+            },
+            {
+              id: "claude-fable-5",
+              thinking: {
+                type: "effort_and_mode",
+                effort: "high",
+                mode: "auto",
+              },
+            },
+            {
+              id: "claude-opus-5",
+              thinking: {
+                type: "effort_and_mode",
+                effort: "high",
+                mode: "auto",
+              },
+            },
+            {
+              id: "claude-opus-4-8",
+              thinking: {
+                type: "effort_and_mode",
+                effort: "high",
+                mode: "auto",
+              },
+            },
+            {
+              id: "claude-opus-4-7",
+              thinking: {
+                type: "effort_and_mode",
+                effort: "xhigh",
+                mode: "auto",
+              },
+            },
             {
               id: "claude-opus-4-6",
-              thinking: { type: "effort_and_mode", effort: "medium", mode: "extended" },
+              thinking: {
+                type: "effort_and_mode",
+                effort: "medium",
+                mode: "extended",
+              },
             },
-            { id: "claude-sonnet-5", thinking: { type: "effort_and_mode", effort: "medium", mode: "auto" } },
-            { id: "claude-sonnet-4-6", thinking: { type: "effort_and_mode", effort: "low", mode: "off" } },
-            { id: "claude-haiku-4-5-20251001", thinking: { type: "mode", mode: "extended" } },
+            {
+              id: "claude-sonnet-5",
+              thinking: {
+                type: "effort_and_mode",
+                effort: "medium",
+                mode: "auto",
+              },
+            },
+            {
+              id: "claude-sonnet-4-6",
+              thinking: {
+                type: "effort_and_mode",
+                effort: "low",
+                mode: "off",
+              },
+            },
+            {
+              id: "claude-haiku-4-5-20251001",
+              thinking: {
+                type: "mode",
+                mode: "extended",
+              },
+            },
           ],
           selection_source: "global_default",
         },
@@ -2135,21 +3562,39 @@ var BUNDLED_MODEL_CATALOG = {
               short_name: "Fable",
               description: "For your toughest challenges",
               section: "main",
-              capabilities: { compass: !0, gsuite_tools: !0, mm_images: !0, mm_pdf: !0, web_search: !0 },
+              capabilities: {
+                compass: true,
+                gsuite_tools: true,
+                mm_images: true,
+                mm_pdf: true,
+                web_search: true,
+              },
               thinking: {
                 type: "effort_and_mode",
                 description:
                   "Higher effort means more thorough responses, but takes longer and uses your limits faster.",
                 effort_options: [
-                  { id: "low", name: "Low" },
+                  {
+                    id: "low",
+                    name: "Low",
+                  },
                   {
                     id: "medium",
                     name: "Medium",
-                    recommended: !0,
-                    badge: { message: "Recommended", variant: "neutral" },
+                    recommended: true,
+                    badge: {
+                      message: "Recommended",
+                      variant: "neutral",
+                    },
                   },
-                  { id: "high", name: "High" },
-                  { id: "xhigh", name: "Extra" },
+                  {
+                    id: "high",
+                    name: "High",
+                  },
+                  {
+                    id: "xhigh",
+                    name: "Extra",
+                  },
                   {
                     id: "max",
                     name: "Max",
@@ -2160,13 +3605,17 @@ var BUNDLED_MODEL_CATALOG = {
                   },
                 ],
                 mode_options: [
-                  { id: "auto", name: "Thinking", description: "Can think for more complex tasks" },
+                  {
+                    id: "auto",
+                    name: "Thinking",
+                    description: "Can think for more complex tasks",
+                  },
                 ],
               },
               hard_limit: 950000,
               voice_model: "claude-opus-5",
               min_claude_code_version: "2.1.251",
-              quick_select: !0,
+              quick_select: true,
             },
             {
               id: "claude-opus-5-5",
@@ -2174,21 +3623,39 @@ var BUNDLED_MODEL_CATALOG = {
               short_name: "Opus",
               description: "For complex work and everyday tasks",
               section: "main",
-              capabilities: { compass: !0, gsuite_tools: !0, mm_images: !0, mm_pdf: !0, web_search: !0 },
+              capabilities: {
+                compass: true,
+                gsuite_tools: true,
+                mm_images: true,
+                mm_pdf: true,
+                web_search: true,
+              },
               thinking: {
                 type: "effort_and_mode",
                 description:
                   "Higher effort means more thorough responses, but takes longer and uses your limits faster.",
                 effort_options: [
-                  { id: "low", name: "Low" },
+                  {
+                    id: "low",
+                    name: "Low",
+                  },
                   {
                     id: "medium",
                     name: "Medium",
-                    recommended: !0,
-                    badge: { message: "Recommended", variant: "neutral" },
+                    recommended: true,
+                    badge: {
+                      message: "Recommended",
+                      variant: "neutral",
+                    },
                   },
-                  { id: "high", name: "High" },
-                  { id: "xhigh", name: "Extra" },
+                  {
+                    id: "high",
+                    name: "High",
+                  },
+                  {
+                    id: "xhigh",
+                    name: "Extra",
+                  },
                   {
                     id: "max",
                     name: "Max",
@@ -2199,14 +3666,18 @@ var BUNDLED_MODEL_CATALOG = {
                   },
                 ],
                 mode_options: [
-                  { id: "auto", name: "Thinking", description: "Can think for more complex tasks" },
+                  {
+                    id: "auto",
+                    name: "Thinking",
+                    description: "Can think for more complex tasks",
+                  },
                 ],
               },
               hard_limit: 950000,
-              supports_fast_mode: !0,
+              supports_fast_mode: true,
               voice_model: "claude-opus-5",
               min_claude_code_version: "2.1.280",
-              quick_select: !0,
+              quick_select: true,
             },
             {
               id: "claude-sonnet-5-5",
@@ -2214,21 +3685,39 @@ var BUNDLED_MODEL_CATALOG = {
               short_name: "Sonnet",
               description: "Most efficient for simpler tasks",
               section: "main",
-              capabilities: { compass: !0, gsuite_tools: !0, mm_images: !0, mm_pdf: !0, web_search: !0 },
+              capabilities: {
+                compass: true,
+                gsuite_tools: true,
+                mm_images: true,
+                mm_pdf: true,
+                web_search: true,
+              },
               thinking: {
                 type: "effort_and_mode",
                 description:
                   "Higher effort means more thorough responses, but takes longer and uses your limits faster.",
                 effort_options: [
-                  { id: "low", name: "Low" },
+                  {
+                    id: "low",
+                    name: "Low",
+                  },
                   {
                     id: "medium",
                     name: "Medium",
-                    recommended: !0,
-                    badge: { message: "Recommended", variant: "neutral" },
+                    recommended: true,
+                    badge: {
+                      message: "Recommended",
+                      variant: "neutral",
+                    },
                   },
-                  { id: "high", name: "High" },
-                  { id: "xhigh", name: "Extra" },
+                  {
+                    id: "high",
+                    name: "High",
+                  },
+                  {
+                    id: "xhigh",
+                    name: "Extra",
+                  },
                   {
                     id: "max",
                     name: "Max",
@@ -2239,13 +3728,17 @@ var BUNDLED_MODEL_CATALOG = {
                   },
                 ],
                 mode_options: [
-                  { id: "auto", name: "Thinking", description: "Can think for more complex tasks" },
+                  {
+                    id: "auto",
+                    name: "Thinking",
+                    description: "Can think for more complex tasks",
+                  },
                 ],
-                always_on: !0,
+                always_on: true,
               },
               hard_limit: 950000,
               voice_model: "claude-sonnet-5",
-              quick_select: !0,
+              quick_select: true,
             },
             {
               id: "claude-haiku-5-5",
@@ -2253,21 +3746,39 @@ var BUNDLED_MODEL_CATALOG = {
               short_name: "Haiku",
               description: "Fastest for quick answers",
               section: "main",
-              capabilities: { compass: !0, gsuite_tools: !0, mm_images: !0, mm_pdf: !0, web_search: !0 },
+              capabilities: {
+                compass: true,
+                gsuite_tools: true,
+                mm_images: true,
+                mm_pdf: true,
+                web_search: true,
+              },
               thinking: {
                 type: "effort_and_mode",
                 description:
                   "Higher effort means more thorough responses, but takes longer and uses your limits faster.",
                 effort_options: [
-                  { id: "low", name: "Low" },
+                  {
+                    id: "low",
+                    name: "Low",
+                  },
                   {
                     id: "medium",
                     name: "Medium",
-                    recommended: !0,
-                    badge: { message: "Recommended", variant: "neutral" },
+                    recommended: true,
+                    badge: {
+                      message: "Recommended",
+                      variant: "neutral",
+                    },
                   },
-                  { id: "high", name: "High" },
-                  { id: "xhigh", name: "Extra" },
+                  {
+                    id: "high",
+                    name: "High",
+                  },
+                  {
+                    id: "xhigh",
+                    name: "Extra",
+                  },
                   {
                     id: "max",
                     name: "Max",
@@ -2278,34 +3789,56 @@ var BUNDLED_MODEL_CATALOG = {
                   },
                 ],
                 mode_options: [
-                  { id: "auto", name: "Thinking", description: "Can think for more complex tasks" },
+                  {
+                    id: "auto",
+                    name: "Thinking",
+                    description: "Can think for more complex tasks",
+                  },
                 ],
-                always_on: !0,
+                always_on: true,
               },
               hard_limit: 950000,
               voice_model: "claude-haiku-4-5-20251001",
-              quick_select: !0,
+              quick_select: true,
             },
             {
               id: "claude-fable-5",
               name: "Fable 5",
               short_name: "Fable",
               section: "overflow",
-              capabilities: { compass: !0, gsuite_tools: !0, mm_images: !0, mm_pdf: !0, web_search: !0 },
+              capabilities: {
+                compass: true,
+                gsuite_tools: true,
+                mm_images: true,
+                mm_pdf: true,
+                web_search: true,
+              },
               thinking: {
                 type: "effort_and_mode",
                 description:
                   "Higher effort means more thorough responses, but takes longer and uses your limits faster.",
                 effort_options: [
-                  { id: "low", name: "Low" },
-                  { id: "medium", name: "Medium" },
+                  {
+                    id: "low",
+                    name: "Low",
+                  },
+                  {
+                    id: "medium",
+                    name: "Medium",
+                  },
                   {
                     id: "high",
                     name: "High",
-                    recommended: !0,
-                    badge: { message: "Recommended", variant: "neutral" },
+                    recommended: true,
+                    badge: {
+                      message: "Recommended",
+                      variant: "neutral",
+                    },
                   },
-                  { id: "xhigh", name: "Extra" },
+                  {
+                    id: "xhigh",
+                    name: "Extra",
+                  },
                   {
                     id: "max",
                     name: "Max",
@@ -2316,7 +3849,11 @@ var BUNDLED_MODEL_CATALOG = {
                   },
                 ],
                 mode_options: [
-                  { id: "auto", name: "Thinking", description: "Can think for more complex tasks" },
+                  {
+                    id: "auto",
+                    name: "Thinking",
+                    description: "Can think for more complex tasks",
+                  },
                 ],
               },
               hard_limit: 449000,
@@ -2327,21 +3864,39 @@ var BUNDLED_MODEL_CATALOG = {
               name: "Opus 5",
               short_name: "Opus",
               section: "overflow",
-              capabilities: { compass: !0, gsuite_tools: !0, mm_images: !0, mm_pdf: !0, web_search: !0 },
+              capabilities: {
+                compass: true,
+                gsuite_tools: true,
+                mm_images: true,
+                mm_pdf: true,
+                web_search: true,
+              },
               thinking: {
                 type: "effort_and_mode",
                 description:
                   "Higher effort means more thorough responses, but takes longer and uses your limits faster.",
                 effort_options: [
-                  { id: "low", name: "Low" },
-                  { id: "medium", name: "Medium" },
+                  {
+                    id: "low",
+                    name: "Low",
+                  },
+                  {
+                    id: "medium",
+                    name: "Medium",
+                  },
                   {
                     id: "high",
                     name: "High",
-                    recommended: !0,
-                    badge: { message: "Recommended", variant: "neutral" },
+                    recommended: true,
+                    badge: {
+                      message: "Recommended",
+                      variant: "neutral",
+                    },
                   },
-                  { id: "xhigh", name: "Extra" },
+                  {
+                    id: "xhigh",
+                    name: "Extra",
+                  },
                   {
                     id: "max",
                     name: "Max",
@@ -2352,33 +3907,55 @@ var BUNDLED_MODEL_CATALOG = {
                   },
                 ],
                 mode_options: [
-                  { id: "auto", name: "Thinking", description: "Can think for more complex tasks" },
+                  {
+                    id: "auto",
+                    name: "Thinking",
+                    description: "Can think for more complex tasks",
+                  },
                 ],
-                always_on: !0,
+                always_on: true,
               },
               hard_limit: 950000,
-              supports_fast_mode: !0,
+              supports_fast_mode: true,
             },
             {
               id: "claude-opus-4-8",
               name: "Opus 4.8",
               short_name: "Opus",
               section: "overflow",
-              capabilities: { compass: !0, gsuite_tools: !0, mm_images: !0, mm_pdf: !0, web_search: !0 },
+              capabilities: {
+                compass: true,
+                gsuite_tools: true,
+                mm_images: true,
+                mm_pdf: true,
+                web_search: true,
+              },
               thinking: {
                 type: "effort_and_mode",
                 description:
                   "Higher effort means more thorough responses, but takes longer and uses your limits faster.",
                 effort_options: [
-                  { id: "low", name: "Low" },
-                  { id: "medium", name: "Medium" },
+                  {
+                    id: "low",
+                    name: "Low",
+                  },
+                  {
+                    id: "medium",
+                    name: "Medium",
+                  },
                   {
                     id: "high",
                     name: "High",
-                    recommended: !0,
-                    badge: { message: "Recommended", variant: "neutral" },
+                    recommended: true,
+                    badge: {
+                      message: "Recommended",
+                      variant: "neutral",
+                    },
                   },
-                  { id: "xhigh", name: "Extra" },
+                  {
+                    id: "xhigh",
+                    name: "Extra",
+                  },
                   {
                     id: "max",
                     name: "Max",
@@ -2389,12 +3966,19 @@ var BUNDLED_MODEL_CATALOG = {
                   },
                 ],
                 mode_options: [
-                  { id: "auto", name: "Thinking", description: "Can think for more complex tasks" },
-                  { id: "off", name: "Off" },
+                  {
+                    id: "auto",
+                    name: "Thinking",
+                    description: "Can think for more complex tasks",
+                  },
+                  {
+                    id: "off",
+                    name: "Off",
+                  },
                 ],
               },
               hard_limit: 950000,
-              supports_fast_mode: !0,
+              supports_fast_mode: true,
               voice_model: "claude-opus-5",
             },
             {
@@ -2402,20 +3986,38 @@ var BUNDLED_MODEL_CATALOG = {
               name: "Opus 4.7",
               short_name: "Opus",
               section: "overflow",
-              capabilities: { compass: !0, gsuite_tools: !0, mm_images: !0, mm_pdf: !0, web_search: !0 },
+              capabilities: {
+                compass: true,
+                gsuite_tools: true,
+                mm_images: true,
+                mm_pdf: true,
+                web_search: true,
+              },
               thinking: {
                 type: "effort_and_mode",
                 description:
                   "Higher effort means more thorough responses, but takes longer and uses your limits faster.",
                 effort_options: [
-                  { id: "low", name: "Low" },
-                  { id: "medium", name: "Medium" },
-                  { id: "high", name: "High" },
+                  {
+                    id: "low",
+                    name: "Low",
+                  },
+                  {
+                    id: "medium",
+                    name: "Medium",
+                  },
+                  {
+                    id: "high",
+                    name: "High",
+                  },
                   {
                     id: "xhigh",
                     name: "Extra",
-                    recommended: !0,
-                    badge: { message: "Recommended", variant: "neutral" },
+                    recommended: true,
+                    badge: {
+                      message: "Recommended",
+                      variant: "neutral",
+                    },
                   },
                   {
                     id: "max",
@@ -2427,8 +4029,15 @@ var BUNDLED_MODEL_CATALOG = {
                   },
                 ],
                 mode_options: [
-                  { id: "auto", name: "Thinking", description: "Can think for more complex tasks" },
-                  { id: "off", name: "Off" },
+                  {
+                    id: "auto",
+                    name: "Thinking",
+                    description: "Can think for more complex tasks",
+                  },
+                  {
+                    id: "off",
+                    name: "Off",
+                  },
                 ],
               },
               hard_limit: 449000,
@@ -2439,20 +4048,35 @@ var BUNDLED_MODEL_CATALOG = {
               name: "Opus 4.6",
               short_name: "Opus",
               section: "overflow",
-              capabilities: { compass: !0, gsuite_tools: !0, mm_images: !0, mm_pdf: !0, web_search: !0 },
+              capabilities: {
+                compass: true,
+                gsuite_tools: true,
+                mm_images: true,
+                mm_pdf: true,
+                web_search: true,
+              },
               thinking: {
                 type: "effort_and_mode",
                 description:
                   "Higher effort means more thorough responses, but takes longer and uses your limits faster.",
                 effort_options: [
-                  { id: "low", name: "Low" },
+                  {
+                    id: "low",
+                    name: "Low",
+                  },
                   {
                     id: "medium",
                     name: "Medium",
-                    recommended: !0,
-                    badge: { message: "Recommended", variant: "neutral" },
+                    recommended: true,
+                    badge: {
+                      message: "Recommended",
+                      variant: "neutral",
+                    },
                   },
-                  { id: "high", name: "High" },
+                  {
+                    id: "high",
+                    name: "High",
+                  },
                   {
                     id: "max",
                     name: "Max",
@@ -2463,12 +4087,19 @@ var BUNDLED_MODEL_CATALOG = {
                   },
                 ],
                 mode_options: [
-                  { id: "extended", name: "Extended", description: "Always uses deep reasoning" },
-                  { id: "off", name: "Off" },
+                  {
+                    id: "extended",
+                    name: "Extended",
+                    description: "Always uses deep reasoning",
+                  },
+                  {
+                    id: "off",
+                    name: "Off",
+                  },
                 ],
               },
               hard_limit: 449000,
-              supports_fast_mode: !0,
+              supports_fast_mode: true,
               voice_model: "claude-opus-5",
             },
             {
@@ -2476,21 +4107,39 @@ var BUNDLED_MODEL_CATALOG = {
               name: "Sonnet 5",
               short_name: "Sonnet",
               section: "overflow",
-              capabilities: { compass: !0, gsuite_tools: !0, mm_images: !0, mm_pdf: !0, web_search: !0 },
+              capabilities: {
+                compass: true,
+                gsuite_tools: true,
+                mm_images: true,
+                mm_pdf: true,
+                web_search: true,
+              },
               thinking: {
                 type: "effort_and_mode",
                 description:
                   "Higher effort means more thorough responses, but takes longer and uses your limits faster.",
                 effort_options: [
-                  { id: "low", name: "Low" },
+                  {
+                    id: "low",
+                    name: "Low",
+                  },
                   {
                     id: "medium",
                     name: "Medium",
-                    recommended: !0,
-                    badge: { message: "Recommended", variant: "neutral" },
+                    recommended: true,
+                    badge: {
+                      message: "Recommended",
+                      variant: "neutral",
+                    },
                   },
-                  { id: "high", name: "High" },
-                  { id: "xhigh", name: "Extra" },
+                  {
+                    id: "high",
+                    name: "High",
+                  },
+                  {
+                    id: "xhigh",
+                    name: "Extra",
+                  },
                   {
                     id: "max",
                     name: "Max",
@@ -2501,8 +4150,15 @@ var BUNDLED_MODEL_CATALOG = {
                   },
                 ],
                 mode_options: [
-                  { id: "auto", name: "Thinking", description: "Can think for more complex tasks" },
-                  { id: "off", name: "Off" },
+                  {
+                    id: "auto",
+                    name: "Thinking",
+                    description: "Can think for more complex tasks",
+                  },
+                  {
+                    id: "off",
+                    name: "Off",
+                  },
                 ],
               },
               hard_limit: 950000,
@@ -2512,7 +4168,13 @@ var BUNDLED_MODEL_CATALOG = {
               name: "Sonnet 4.6",
               short_name: "Sonnet",
               section: "overflow",
-              capabilities: { compass: !0, gsuite_tools: !0, mm_images: !0, mm_pdf: !0, web_search: !0 },
+              capabilities: {
+                compass: true,
+                gsuite_tools: true,
+                mm_images: true,
+                mm_pdf: true,
+                web_search: true,
+              },
               thinking: {
                 type: "effort_and_mode",
                 description:
@@ -2521,11 +4183,20 @@ var BUNDLED_MODEL_CATALOG = {
                   {
                     id: "low",
                     name: "Low",
-                    recommended: !0,
-                    badge: { message: "Recommended", variant: "neutral" },
+                    recommended: true,
+                    badge: {
+                      message: "Recommended",
+                      variant: "neutral",
+                    },
                   },
-                  { id: "medium", name: "Medium" },
-                  { id: "high", name: "High" },
+                  {
+                    id: "medium",
+                    name: "Medium",
+                  },
+                  {
+                    id: "high",
+                    name: "High",
+                  },
                   {
                     id: "max",
                     name: "Max",
@@ -2536,8 +4207,15 @@ var BUNDLED_MODEL_CATALOG = {
                   },
                 ],
                 mode_options: [
-                  { id: "auto", name: "Thinking", description: "Can think for more complex tasks" },
-                  { id: "off", name: "Off" },
+                  {
+                    id: "auto",
+                    name: "Thinking",
+                    description: "Can think for more complex tasks",
+                  },
+                  {
+                    id: "off",
+                    name: "Off",
+                  },
                 ],
               },
               hard_limit: 449000,
@@ -2548,12 +4226,25 @@ var BUNDLED_MODEL_CATALOG = {
               name: "Haiku 4.5",
               short_name: "Haiku",
               section: "overflow",
-              capabilities: { compass: !0, gsuite_tools: !0, mm_images: !0, mm_pdf: !0, web_search: !0 },
+              capabilities: {
+                compass: true,
+                gsuite_tools: true,
+                mm_images: true,
+                mm_pdf: true,
+                web_search: true,
+              },
               thinking: {
                 type: "mode",
                 mode_options: [
-                  { id: "extended", name: "Extended", description: "Always uses deep reasoning" },
-                  { id: "off", name: "Off" },
+                  {
+                    id: "extended",
+                    name: "Extended",
+                    description: "Always uses deep reasoning",
+                  },
+                  {
+                    id: "off",
+                    name: "Off",
+                  },
                 ],
               },
               hard_limit: 190000,
@@ -2564,36 +4255,70 @@ var BUNDLED_MODEL_CATALOG = {
               name: "Opus 4.5",
               short_name: "Opus",
               section: "deprecated",
-              capabilities: { compass: !0, gsuite_tools: !0, mm_images: !0, mm_pdf: !0, web_search: !0 },
+              capabilities: {
+                compass: true,
+                gsuite_tools: true,
+                mm_images: true,
+                mm_pdf: true,
+                web_search: true,
+              },
               thinking: {
                 type: "effort_and_mode",
                 description:
                   "Higher effort means more thorough responses, but takes longer and uses your limits faster.",
                 effort_options: [
-                  { id: "low", name: "Low" },
-                  { id: "medium", name: "Medium" },
+                  {
+                    id: "low",
+                    name: "Low",
+                  },
+                  {
+                    id: "medium",
+                    name: "Medium",
+                  },
                   {
                     id: "high",
                     name: "High",
-                    recommended: !0,
-                    badge: { message: "Recommended", variant: "neutral" },
+                    recommended: true,
+                    badge: {
+                      message: "Recommended",
+                      variant: "neutral",
+                    },
                   },
                 ],
                 mode_options: [
-                  { id: "extended", name: "Extended", description: "Always uses deep reasoning" },
-                  { id: "off", name: "Off" },
+                  {
+                    id: "extended",
+                    name: "Extended",
+                    description: "Always uses deep reasoning",
+                  },
+                  {
+                    id: "off",
+                    name: "Off",
+                  },
                 ],
               },
               hard_limit: 190000,
               auto_permission_mode: "unavailable",
               voice_model: "claude-opus-5",
-              disabled: !0,
+              disabled: true,
             },
           ],
           settings_vocabulary: {
-            create_mode: { default: 1 },
-            effort_level: { high: 3, low: 1, max: 5, medium: 2, xhigh: 4 },
-            thinking_mode: { auto: 2, extended: 1, off: 3 },
+            create_mode: {
+              default: 1,
+            },
+            effort_level: {
+              high: 3,
+              low: 1,
+              max: 5,
+              medium: 2,
+              xhigh: 4,
+            },
+            thinking_mode: {
+              auto: 2,
+              extended: 1,
+              off: 3,
+            },
           },
         },
       ],
@@ -2603,29 +4328,107 @@ var BUNDLED_MODEL_CATALOG = {
         {
           id: "cowork",
           model: "claude-sonnet-4-6",
-          thinking: { type: "effort_and_mode", effort: "medium", mode: "auto" },
+          thinking: {
+            type: "effort_and_mode",
+            effort: "medium",
+            mode: "auto",
+          },
           thinking_by_model: [
-            { id: "claude-fable-5-1", thinking: { type: "effort_and_mode", effort: "medium", mode: "auto" } },
-            { id: "claude-opus-5-5", thinking: { type: "effort_and_mode", effort: "medium", mode: "auto" } },
+            {
+              id: "claude-fable-5-1",
+              thinking: {
+                type: "effort_and_mode",
+                effort: "medium",
+                mode: "auto",
+              },
+            },
+            {
+              id: "claude-opus-5-5",
+              thinking: {
+                type: "effort_and_mode",
+                effort: "medium",
+                mode: "auto",
+              },
+            },
             {
               id: "claude-sonnet-5-5",
-              thinking: { type: "effort_and_mode", effort: "medium", mode: "auto" },
+              thinking: {
+                type: "effort_and_mode",
+                effort: "medium",
+                mode: "auto",
+              },
             },
-            { id: "claude-haiku-5-5", thinking: { type: "effort_and_mode", effort: "medium", mode: "auto" } },
-            { id: "claude-fable-5", thinking: { type: "effort_and_mode", effort: "high", mode: "auto" } },
-            { id: "claude-opus-5", thinking: { type: "effort_and_mode", effort: "high", mode: "auto" } },
-            { id: "claude-opus-4-8", thinking: { type: "effort_and_mode", effort: "high", mode: "auto" } },
-            { id: "claude-opus-4-7", thinking: { type: "effort_and_mode", effort: "xhigh", mode: "auto" } },
+            {
+              id: "claude-haiku-5-5",
+              thinking: {
+                type: "effort_and_mode",
+                effort: "medium",
+                mode: "auto",
+              },
+            },
+            {
+              id: "claude-fable-5",
+              thinking: {
+                type: "effort_and_mode",
+                effort: "high",
+                mode: "auto",
+              },
+            },
+            {
+              id: "claude-opus-5",
+              thinking: {
+                type: "effort_and_mode",
+                effort: "high",
+                mode: "auto",
+              },
+            },
+            {
+              id: "claude-opus-4-8",
+              thinking: {
+                type: "effort_and_mode",
+                effort: "high",
+                mode: "auto",
+              },
+            },
+            {
+              id: "claude-opus-4-7",
+              thinking: {
+                type: "effort_and_mode",
+                effort: "xhigh",
+                mode: "auto",
+              },
+            },
             {
               id: "claude-opus-4-6",
-              thinking: { type: "effort_and_mode", effort: "medium", mode: "extended" },
+              thinking: {
+                type: "effort_and_mode",
+                effort: "medium",
+                mode: "extended",
+              },
             },
-            { id: "claude-sonnet-5", thinking: { type: "effort_and_mode", effort: "high", mode: "auto" } },
+            {
+              id: "claude-sonnet-5",
+              thinking: {
+                type: "effort_and_mode",
+                effort: "high",
+                mode: "auto",
+              },
+            },
             {
               id: "claude-sonnet-4-6",
-              thinking: { type: "effort_and_mode", effort: "medium", mode: "auto" },
+              thinking: {
+                type: "effort_and_mode",
+                effort: "medium",
+                mode: "auto",
+              },
             },
-            { id: "claude-haiku-4-5-20251001", thinking: { type: "mode", mode: "extended" } },
+            {
+              id: "claude-haiku-4-5-20251001",
+              thinking: {
+                type: "mode",
+                mode: "extended",
+              },
+            },
           ],
           selection_source: "global_default",
         },
@@ -2640,21 +4443,39 @@ var BUNDLED_MODEL_CATALOG = {
               short_name: "Fable",
               description: "For your toughest challenges",
               section: "main",
-              capabilities: { compass: !0, gsuite_tools: !0, mm_images: !0, mm_pdf: !0, web_search: !0 },
+              capabilities: {
+                compass: true,
+                gsuite_tools: true,
+                mm_images: true,
+                mm_pdf: true,
+                web_search: true,
+              },
               thinking: {
                 type: "effort_and_mode",
                 description:
                   "Higher effort means more thorough responses, but takes longer and uses your limits faster.",
                 effort_options: [
-                  { id: "low", name: "Low" },
+                  {
+                    id: "low",
+                    name: "Low",
+                  },
                   {
                     id: "medium",
                     name: "Medium",
-                    recommended: !0,
-                    badge: { message: "Recommended", variant: "neutral" },
+                    recommended: true,
+                    badge: {
+                      message: "Recommended",
+                      variant: "neutral",
+                    },
                   },
-                  { id: "high", name: "High" },
-                  { id: "xhigh", name: "Extra" },
+                  {
+                    id: "high",
+                    name: "High",
+                  },
+                  {
+                    id: "xhigh",
+                    name: "Extra",
+                  },
                   {
                     id: "max",
                     name: "Max",
@@ -2665,12 +4486,16 @@ var BUNDLED_MODEL_CATALOG = {
                   },
                 ],
                 mode_options: [
-                  { id: "auto", name: "Thinking", description: "Can think for more complex tasks" },
+                  {
+                    id: "auto",
+                    name: "Thinking",
+                    description: "Can think for more complex tasks",
+                  },
                 ],
               },
               hard_limit: 950000,
               min_claude_code_version: "2.1.251",
-              quick_select: !0,
+              quick_select: true,
             },
             {
               id: "claude-opus-5-5",
@@ -2678,21 +4503,39 @@ var BUNDLED_MODEL_CATALOG = {
               short_name: "Opus",
               description: "For complex work and everyday tasks",
               section: "main",
-              capabilities: { compass: !0, gsuite_tools: !0, mm_images: !0, mm_pdf: !0, web_search: !0 },
+              capabilities: {
+                compass: true,
+                gsuite_tools: true,
+                mm_images: true,
+                mm_pdf: true,
+                web_search: true,
+              },
               thinking: {
                 type: "effort_and_mode",
                 description:
                   "Higher effort means more thorough responses, but takes longer and uses your limits faster.",
                 effort_options: [
-                  { id: "low", name: "Low" },
+                  {
+                    id: "low",
+                    name: "Low",
+                  },
                   {
                     id: "medium",
                     name: "Medium",
-                    recommended: !0,
-                    badge: { message: "Recommended", variant: "neutral" },
+                    recommended: true,
+                    badge: {
+                      message: "Recommended",
+                      variant: "neutral",
+                    },
                   },
-                  { id: "high", name: "High" },
-                  { id: "xhigh", name: "Extra" },
+                  {
+                    id: "high",
+                    name: "High",
+                  },
+                  {
+                    id: "xhigh",
+                    name: "Extra",
+                  },
                   {
                     id: "max",
                     name: "Max",
@@ -2703,13 +4546,17 @@ var BUNDLED_MODEL_CATALOG = {
                   },
                 ],
                 mode_options: [
-                  { id: "auto", name: "Thinking", description: "Can think for more complex tasks" },
+                  {
+                    id: "auto",
+                    name: "Thinking",
+                    description: "Can think for more complex tasks",
+                  },
                 ],
               },
               hard_limit: 950000,
-              supports_fast_mode: !0,
+              supports_fast_mode: true,
               min_claude_code_version: "2.1.280",
-              quick_select: !0,
+              quick_select: true,
             },
             {
               id: "claude-sonnet-5-5",
@@ -2717,21 +4564,39 @@ var BUNDLED_MODEL_CATALOG = {
               short_name: "Sonnet",
               description: "Most efficient for simpler tasks",
               section: "main",
-              capabilities: { compass: !0, gsuite_tools: !0, mm_images: !0, mm_pdf: !0, web_search: !0 },
+              capabilities: {
+                compass: true,
+                gsuite_tools: true,
+                mm_images: true,
+                mm_pdf: true,
+                web_search: true,
+              },
               thinking: {
                 type: "effort_and_mode",
                 description:
                   "Higher effort means more thorough responses, but takes longer and uses your limits faster.",
                 effort_options: [
-                  { id: "low", name: "Low" },
+                  {
+                    id: "low",
+                    name: "Low",
+                  },
                   {
                     id: "medium",
                     name: "Medium",
-                    recommended: !0,
-                    badge: { message: "Recommended", variant: "neutral" },
+                    recommended: true,
+                    badge: {
+                      message: "Recommended",
+                      variant: "neutral",
+                    },
                   },
-                  { id: "high", name: "High" },
-                  { id: "xhigh", name: "Extra" },
+                  {
+                    id: "high",
+                    name: "High",
+                  },
+                  {
+                    id: "xhigh",
+                    name: "Extra",
+                  },
                   {
                     id: "max",
                     name: "Max",
@@ -2742,12 +4607,16 @@ var BUNDLED_MODEL_CATALOG = {
                   },
                 ],
                 mode_options: [
-                  { id: "auto", name: "Thinking", description: "Can think for more complex tasks" },
+                  {
+                    id: "auto",
+                    name: "Thinking",
+                    description: "Can think for more complex tasks",
+                  },
                 ],
-                always_on: !0,
+                always_on: true,
               },
               hard_limit: 950000,
-              quick_select: !0,
+              quick_select: true,
             },
             {
               id: "claude-haiku-5-5",
@@ -2755,21 +4624,39 @@ var BUNDLED_MODEL_CATALOG = {
               short_name: "Haiku",
               description: "Fastest for quick answers",
               section: "main",
-              capabilities: { compass: !0, gsuite_tools: !0, mm_images: !0, mm_pdf: !0, web_search: !0 },
+              capabilities: {
+                compass: true,
+                gsuite_tools: true,
+                mm_images: true,
+                mm_pdf: true,
+                web_search: true,
+              },
               thinking: {
                 type: "effort_and_mode",
                 description:
                   "Higher effort means more thorough responses, but takes longer and uses your limits faster.",
                 effort_options: [
-                  { id: "low", name: "Low" },
+                  {
+                    id: "low",
+                    name: "Low",
+                  },
                   {
                     id: "medium",
                     name: "Medium",
-                    recommended: !0,
-                    badge: { message: "Recommended", variant: "neutral" },
+                    recommended: true,
+                    badge: {
+                      message: "Recommended",
+                      variant: "neutral",
+                    },
                   },
-                  { id: "high", name: "High" },
-                  { id: "xhigh", name: "Extra" },
+                  {
+                    id: "high",
+                    name: "High",
+                  },
+                  {
+                    id: "xhigh",
+                    name: "Extra",
+                  },
                   {
                     id: "max",
                     name: "Max",
@@ -2780,33 +4667,55 @@ var BUNDLED_MODEL_CATALOG = {
                   },
                 ],
                 mode_options: [
-                  { id: "auto", name: "Thinking", description: "Can think for more complex tasks" },
+                  {
+                    id: "auto",
+                    name: "Thinking",
+                    description: "Can think for more complex tasks",
+                  },
                 ],
-                always_on: !0,
+                always_on: true,
               },
               hard_limit: 950000,
-              quick_select: !0,
+              quick_select: true,
             },
             {
               id: "claude-fable-5",
               name: "Fable 5",
               short_name: "Fable",
               section: "overflow",
-              capabilities: { compass: !0, gsuite_tools: !0, mm_images: !0, mm_pdf: !0, web_search: !0 },
+              capabilities: {
+                compass: true,
+                gsuite_tools: true,
+                mm_images: true,
+                mm_pdf: true,
+                web_search: true,
+              },
               thinking: {
                 type: "effort_and_mode",
                 description:
                   "Higher effort means more thorough responses, but takes longer and uses your limits faster.",
                 effort_options: [
-                  { id: "low", name: "Low" },
-                  { id: "medium", name: "Medium" },
+                  {
+                    id: "low",
+                    name: "Low",
+                  },
+                  {
+                    id: "medium",
+                    name: "Medium",
+                  },
                   {
                     id: "high",
                     name: "High",
-                    recommended: !0,
-                    badge: { message: "Recommended", variant: "neutral" },
+                    recommended: true,
+                    badge: {
+                      message: "Recommended",
+                      variant: "neutral",
+                    },
                   },
-                  { id: "xhigh", name: "Extra" },
+                  {
+                    id: "xhigh",
+                    name: "Extra",
+                  },
                   {
                     id: "max",
                     name: "Max",
@@ -2817,7 +4726,11 @@ var BUNDLED_MODEL_CATALOG = {
                   },
                 ],
                 mode_options: [
-                  { id: "auto", name: "Thinking", description: "Can think for more complex tasks" },
+                  {
+                    id: "auto",
+                    name: "Thinking",
+                    description: "Can think for more complex tasks",
+                  },
                 ],
               },
               hard_limit: 449000,
@@ -2827,21 +4740,39 @@ var BUNDLED_MODEL_CATALOG = {
               name: "Opus 5",
               short_name: "Opus",
               section: "overflow",
-              capabilities: { compass: !0, gsuite_tools: !0, mm_images: !0, mm_pdf: !0, web_search: !0 },
+              capabilities: {
+                compass: true,
+                gsuite_tools: true,
+                mm_images: true,
+                mm_pdf: true,
+                web_search: true,
+              },
               thinking: {
                 type: "effort_and_mode",
                 description:
                   "Higher effort means more thorough responses, but takes longer and uses your limits faster.",
                 effort_options: [
-                  { id: "low", name: "Low" },
-                  { id: "medium", name: "Medium" },
+                  {
+                    id: "low",
+                    name: "Low",
+                  },
+                  {
+                    id: "medium",
+                    name: "Medium",
+                  },
                   {
                     id: "high",
                     name: "High",
-                    recommended: !0,
-                    badge: { message: "Recommended", variant: "neutral" },
+                    recommended: true,
+                    badge: {
+                      message: "Recommended",
+                      variant: "neutral",
+                    },
                   },
-                  { id: "xhigh", name: "Extra" },
+                  {
+                    id: "xhigh",
+                    name: "Extra",
+                  },
                   {
                     id: "max",
                     name: "Max",
@@ -2852,33 +4783,55 @@ var BUNDLED_MODEL_CATALOG = {
                   },
                 ],
                 mode_options: [
-                  { id: "auto", name: "Thinking", description: "Can think for more complex tasks" },
+                  {
+                    id: "auto",
+                    name: "Thinking",
+                    description: "Can think for more complex tasks",
+                  },
                 ],
-                always_on: !0,
+                always_on: true,
               },
               hard_limit: 950000,
-              supports_fast_mode: !0,
+              supports_fast_mode: true,
             },
             {
               id: "claude-opus-4-8",
               name: "Opus 4.8",
               short_name: "Opus",
               section: "overflow",
-              capabilities: { compass: !0, gsuite_tools: !0, mm_images: !0, mm_pdf: !0, web_search: !0 },
+              capabilities: {
+                compass: true,
+                gsuite_tools: true,
+                mm_images: true,
+                mm_pdf: true,
+                web_search: true,
+              },
               thinking: {
                 type: "effort_and_mode",
                 description:
                   "Higher effort means more thorough responses, but takes longer and uses your limits faster.",
                 effort_options: [
-                  { id: "low", name: "Low" },
-                  { id: "medium", name: "Medium" },
+                  {
+                    id: "low",
+                    name: "Low",
+                  },
+                  {
+                    id: "medium",
+                    name: "Medium",
+                  },
                   {
                     id: "high",
                     name: "High",
-                    recommended: !0,
-                    badge: { message: "Recommended", variant: "neutral" },
+                    recommended: true,
+                    badge: {
+                      message: "Recommended",
+                      variant: "neutral",
+                    },
                   },
-                  { id: "xhigh", name: "Extra" },
+                  {
+                    id: "xhigh",
+                    name: "Extra",
+                  },
                   {
                     id: "max",
                     name: "Max",
@@ -2889,32 +4842,57 @@ var BUNDLED_MODEL_CATALOG = {
                   },
                 ],
                 mode_options: [
-                  { id: "auto", name: "Thinking", description: "Can think for more complex tasks" },
-                  { id: "off", name: "Off" },
+                  {
+                    id: "auto",
+                    name: "Thinking",
+                    description: "Can think for more complex tasks",
+                  },
+                  {
+                    id: "off",
+                    name: "Off",
+                  },
                 ],
               },
               hard_limit: 950000,
-              supports_fast_mode: !0,
+              supports_fast_mode: true,
             },
             {
               id: "claude-opus-4-7",
               name: "Opus 4.7",
               short_name: "Opus",
               section: "overflow",
-              capabilities: { compass: !0, gsuite_tools: !0, mm_images: !0, mm_pdf: !0, web_search: !0 },
+              capabilities: {
+                compass: true,
+                gsuite_tools: true,
+                mm_images: true,
+                mm_pdf: true,
+                web_search: true,
+              },
               thinking: {
                 type: "effort_and_mode",
                 description:
                   "Higher effort means more thorough responses, but takes longer and uses your limits faster.",
                 effort_options: [
-                  { id: "low", name: "Low" },
-                  { id: "medium", name: "Medium" },
-                  { id: "high", name: "High" },
+                  {
+                    id: "low",
+                    name: "Low",
+                  },
+                  {
+                    id: "medium",
+                    name: "Medium",
+                  },
+                  {
+                    id: "high",
+                    name: "High",
+                  },
                   {
                     id: "xhigh",
                     name: "Extra",
-                    recommended: !0,
-                    badge: { message: "Recommended", variant: "neutral" },
+                    recommended: true,
+                    badge: {
+                      message: "Recommended",
+                      variant: "neutral",
+                    },
                   },
                   {
                     id: "max",
@@ -2926,8 +4904,15 @@ var BUNDLED_MODEL_CATALOG = {
                   },
                 ],
                 mode_options: [
-                  { id: "auto", name: "Thinking", description: "Can think for more complex tasks" },
-                  { id: "off", name: "Off" },
+                  {
+                    id: "auto",
+                    name: "Thinking",
+                    description: "Can think for more complex tasks",
+                  },
+                  {
+                    id: "off",
+                    name: "Off",
+                  },
                 ],
               },
               hard_limit: 449000,
@@ -2937,20 +4922,35 @@ var BUNDLED_MODEL_CATALOG = {
               name: "Opus 4.6",
               short_name: "Opus",
               section: "overflow",
-              capabilities: { compass: !0, gsuite_tools: !0, mm_images: !0, mm_pdf: !0, web_search: !0 },
+              capabilities: {
+                compass: true,
+                gsuite_tools: true,
+                mm_images: true,
+                mm_pdf: true,
+                web_search: true,
+              },
               thinking: {
                 type: "effort_and_mode",
                 description:
                   "Higher effort means more thorough responses, but takes longer and uses your limits faster.",
                 effort_options: [
-                  { id: "low", name: "Low" },
+                  {
+                    id: "low",
+                    name: "Low",
+                  },
                   {
                     id: "medium",
                     name: "Medium",
-                    recommended: !0,
-                    badge: { message: "Recommended", variant: "neutral" },
+                    recommended: true,
+                    badge: {
+                      message: "Recommended",
+                      variant: "neutral",
+                    },
                   },
-                  { id: "high", name: "High" },
+                  {
+                    id: "high",
+                    name: "High",
+                  },
                   {
                     id: "max",
                     name: "Max",
@@ -2961,33 +4961,58 @@ var BUNDLED_MODEL_CATALOG = {
                   },
                 ],
                 mode_options: [
-                  { id: "extended", name: "Extended", description: "Always uses deep reasoning" },
-                  { id: "off", name: "Off" },
+                  {
+                    id: "extended",
+                    name: "Extended",
+                    description: "Always uses deep reasoning",
+                  },
+                  {
+                    id: "off",
+                    name: "Off",
+                  },
                 ],
               },
               hard_limit: 449000,
-              supports_fast_mode: !0,
+              supports_fast_mode: true,
             },
             {
               id: "claude-sonnet-5",
               name: "Sonnet 5",
               short_name: "Sonnet",
               section: "overflow",
-              capabilities: { compass: !0, gsuite_tools: !0, mm_images: !0, mm_pdf: !0, web_search: !0 },
+              capabilities: {
+                compass: true,
+                gsuite_tools: true,
+                mm_images: true,
+                mm_pdf: true,
+                web_search: true,
+              },
               thinking: {
                 type: "effort_and_mode",
                 description:
                   "Higher effort means more thorough responses, but takes longer and uses your limits faster.",
                 effort_options: [
-                  { id: "low", name: "Low" },
-                  { id: "medium", name: "Medium" },
+                  {
+                    id: "low",
+                    name: "Low",
+                  },
+                  {
+                    id: "medium",
+                    name: "Medium",
+                  },
                   {
                     id: "high",
                     name: "High",
-                    recommended: !0,
-                    badge: { message: "Recommended", variant: "neutral" },
+                    recommended: true,
+                    badge: {
+                      message: "Recommended",
+                      variant: "neutral",
+                    },
                   },
-                  { id: "xhigh", name: "Extra" },
+                  {
+                    id: "xhigh",
+                    name: "Extra",
+                  },
                   {
                     id: "max",
                     name: "Max",
@@ -2998,8 +5023,15 @@ var BUNDLED_MODEL_CATALOG = {
                   },
                 ],
                 mode_options: [
-                  { id: "auto", name: "Thinking", description: "Can think for more complex tasks" },
-                  { id: "off", name: "Off" },
+                  {
+                    id: "auto",
+                    name: "Thinking",
+                    description: "Can think for more complex tasks",
+                  },
+                  {
+                    id: "off",
+                    name: "Off",
+                  },
                 ],
               },
               hard_limit: 950000,
@@ -3009,20 +5041,35 @@ var BUNDLED_MODEL_CATALOG = {
               name: "Sonnet 4.6",
               short_name: "Sonnet",
               section: "overflow",
-              capabilities: { compass: !0, gsuite_tools: !0, mm_images: !0, mm_pdf: !0, web_search: !0 },
+              capabilities: {
+                compass: true,
+                gsuite_tools: true,
+                mm_images: true,
+                mm_pdf: true,
+                web_search: true,
+              },
               thinking: {
                 type: "effort_and_mode",
                 description:
                   "Higher effort means more thorough responses, but takes longer and uses your limits faster.",
                 effort_options: [
-                  { id: "low", name: "Low" },
+                  {
+                    id: "low",
+                    name: "Low",
+                  },
                   {
                     id: "medium",
                     name: "Medium",
-                    recommended: !0,
-                    badge: { message: "Recommended", variant: "neutral" },
+                    recommended: true,
+                    badge: {
+                      message: "Recommended",
+                      variant: "neutral",
+                    },
                   },
-                  { id: "high", name: "High" },
+                  {
+                    id: "high",
+                    name: "High",
+                  },
                   {
                     id: "max",
                     name: "Max",
@@ -3033,8 +5080,15 @@ var BUNDLED_MODEL_CATALOG = {
                   },
                 ],
                 mode_options: [
-                  { id: "auto", name: "Thinking", description: "Can think for more complex tasks" },
-                  { id: "off", name: "Off" },
+                  {
+                    id: "auto",
+                    name: "Thinking",
+                    description: "Can think for more complex tasks",
+                  },
+                  {
+                    id: "off",
+                    name: "Off",
+                  },
                 ],
               },
               hard_limit: 449000,
@@ -3044,12 +5098,25 @@ var BUNDLED_MODEL_CATALOG = {
               name: "Haiku 4.5",
               short_name: "Haiku",
               section: "overflow",
-              capabilities: { compass: !0, gsuite_tools: !0, mm_images: !0, mm_pdf: !0, web_search: !0 },
+              capabilities: {
+                compass: true,
+                gsuite_tools: true,
+                mm_images: true,
+                mm_pdf: true,
+                web_search: true,
+              },
               thinking: {
                 type: "mode",
                 mode_options: [
-                  { id: "extended", name: "Extended", description: "Always uses deep reasoning" },
-                  { id: "off", name: "Off" },
+                  {
+                    id: "extended",
+                    name: "Extended",
+                    description: "Always uses deep reasoning",
+                  },
+                  {
+                    id: "off",
+                    name: "Off",
+                  },
                 ],
               },
               hard_limit: 190000,
@@ -3057,9 +5124,21 @@ var BUNDLED_MODEL_CATALOG = {
             },
           ],
           settings_vocabulary: {
-            create_mode: { default: 1 },
-            effort_level: { high: 3, low: 1, max: 5, medium: 2, xhigh: 4 },
-            thinking_mode: { auto: 2, extended: 1, off: 3 },
+            create_mode: {
+              default: 1,
+            },
+            effort_level: {
+              high: 3,
+              low: 1,
+              max: 5,
+              medium: 2,
+              xhigh: 4,
+            },
+            thinking_mode: {
+              auto: 2,
+              extended: 1,
+              off: 3,
+            },
           },
         },
       ],
@@ -3067,558 +5146,658 @@ var BUNDLED_MODEL_CATALOG = {
   },
 };
 //@ chunk-aepeg2w5.js:210373-210446 placement
-var iN = "claude-code-client-data-v1\x00",
-  nwi = /^\/[A-Za-z0-9_./-]{1,300}$/;
+/**
+ * 客户端数据缓存的键前缀与合法路径正则。
+ */
+var CLIENT_DATA_CACHE_PREFIX = "claude-code-client-data-v1\x00";
+var CLIENT_DATA_PATH_RE = /^\/[A-Za-z0-9_./-]{1,300}$/;
 //@ chunk-aepeg2w5.js:210446-210484 placement
-function rwi(e) {
-  return `${iN}${e}\x00`;
+/**
+ * 拼出某客户端的缓存键。
+ */
+function clientDataSchema(pathname) {
+  return `${CLIENT_DATA_CACHE_PREFIX}${pathname}\x00`;
 }
 //@ chunk-aepeg2w5.js:210484-210746 placement
-var CLIENT_DATA_SCHEMA_VERSIONS = [1, 2],
-  SEMVER_RE = /^\d{1,9}\.\d{1,9}\.\d{1,9}$/,
-  clientDataConfigSchema = DoctorLazy(() =>
-    u({
-      schema_version: T(CLIENT_DATA_SCHEMA_VERSIONS),
-      version: E().int().nonnegative(),
-      min_claude_code_version: o().regex(SEMVER_RE).optional(),
-      configs: A(u({ model_pattern: o().min(1).max(200), client_data: pe(o(), oe()) }).loose()).max(50),
-    }).loose(),
-  );
+var CLIENT_DATA_SCHEMA_VERSIONS = [1, 2];
+var SEMVER_RE_2 = /^\d{1,9}\.\d{1,9}\.\d{1,9}$/;
+var clientDataConfigSchema = DoctorLazy(() =>
+  u({
+    schema_version: literal(CLIENT_DATA_SCHEMA_VERSIONS),
+    version: E().int().nonnegative(),
+    min_claude_code_version: string().regex(SEMVER_RE_2).optional(),
+    configs: array(
+      u({
+        model_pattern: string().min(1).max(200),
+        client_data: record(string(), unknown()),
+      }).loose(),
+    ).max(50),
+  }).loose(),
+);
+//@ chunk-aepeg2w5.js:210746-211370 placement
 /**
  * 解析目录文档字节。
  */
-//@ chunk-aepeg2w5.js:210746-211370 placement
-function parseCatalogDocument(e) {
-  let n = safeParseJSON(Buffer.from(e).toString("utf8"), !1);
+function parseCatalogDocument(documentBytes) {
+  let n = safeParseJSON(Buffer.from(documentBytes).toString("utf8"), false);
   if (n === null || typeof n !== "object" || !("schema_version" in n))
-    return { ok: !1, reason: "parse_failed" };
+    return {
+      ok: false,
+      reason: "parse_failed",
+    };
   if (!CLIENT_DATA_SCHEMA_VERSIONS.some((h) => h === n.schema_version))
-    return { ok: !1, reason: typeof n.schema_version === "number" ? "unsupported_schema" : "parse_failed" };
-  let safeParse = clientDataConfigSchema().safeParse(n);
-  if (!safeParse.success) return { ok: !1, reason: "parse_failed" };
+    return {
+      ok: false,
+      reason: typeof n.schema_version === "number" ? "unsupported_schema" : "parse_failed",
+    };
+  let r = clientDataConfigSchema().safeParse(n);
+  if (!r.success)
+    return {
+      ok: false,
+      reason: "parse_failed",
+    };
   let s = [];
-  for (let config of safeParse.data.configs)
+  for (let config of r.data.configs)
     try {
-      s.push({ pattern: new RegExp(config.model_pattern), clientData: config.client_data });
+      s.push({
+        pattern: new RegExp(config.model_pattern),
+        clientData: config.client_data,
+      });
     } catch {
-      return { ok: !1, reason: "parse_failed" };
+      return {
+        ok: false,
+        reason: "parse_failed",
+      };
     }
   return {
-    ok: !0,
+    ok: true,
     document: {
-      version: safeParse.data.version,
-      minClaudeCodeVersion: safeParse.data.min_claude_code_version,
+      version: r.data.version,
+      minClaudeCodeVersion: r.data.min_claude_code_version,
       entries: s,
     },
   };
 }
+//@ chunk-aepeg2w5.js:211370-211452 placement
 /**
  * 匹配模型的客户端数据。
  */
-//@ chunk-aepeg2w5.js:211370-211452 placement
 function clientDataForModel(e, n) {
   return e.entries.find((entry) => entry.pattern.test(n))?.clientData ?? null;
 }
 //@ chunk-aepeg2w5.js:211452-211532 placement
-var Rpr = ["cc", "ccr", "ccd"],
-  M3t = 2097152,
-  aN = /^(?:W\/)?"[!#-~\x80-\xff]*"$/,
-  uN = 256;
+/**
+ * 目录表面（cc/ccr/ccd）名单与文档体积、ETag 格式常量。
+ */
+var SURFACE_NAMES = ["cc", "ccr", "ccd"];
+var ETAG_RE = 2097152;
+var MAX_ETAG_CHARS = /^(?:W\/)?"[!#-~\x80-\xff]*"$/;
+var catalogRowSchema = 256;
+//@ chunk-aepeg2w5.js:211532-211612 placement
 /**
  * 是否为合法 ETag。
  */
-//@ chunk-aepeg2w5.js:211532-211612 placement
-function isValidEtag(e) {
-  return typeof e === "string" && e.length > 0 && e.length <= uN && aN.test(e);
+function isValidEtag(etag) {
+  return (
+    typeof etag === "string" &&
+    etag.length > 0 &&
+    etag.length <= catalogRowSchema &&
+    MAX_ETAG_CHARS.test(etag)
+  );
 }
+//@ chunk-aepeg2w5.js:211612-213697 placement
 /**
  * 目录通知（标题、文本、按钮）schema。
  */
-//@ chunk-aepeg2w5.js:211612-213697 placement
 var CatalogNoticeSchema = DoctorLazy(() =>
-    u({
-      title: o().nullish(),
-      text: o().nullish(),
-      cta: u({ copy: o().nullish(), intent: o().nullish(), redirect_hint: o().nullish() }).loose().nullish(),
-      is_dismissible: M().nullish(),
-    }).loose(),
-  ),
-  _b = DoctorLazy(() => u({ id: o().optional(), name: o().optional(), description: o().optional() }).loose()),
-  lN = DoctorLazy(() =>
-    u({
-      type: o().optional(),
-      description: o().optional(),
-      effort_options: A(_b()).optional(),
-      mode_options: A(_b()).optional(),
-      always_on: M().optional(),
-    }).loose(),
-  ),
-  dN = DoctorLazy(() => {
-    let max = E().min(0.005).max(1e4),
-      n = { input: max, output: max, cache_write_5m: max, cache_write_1h: max, cache_read: max };
-    return u({
+  u({
+    title: string().nullish(),
+    text: string().nullish(),
+    cta: u({
+      copy: string().nullish(),
+      intent: string().nullish(),
+      redirect_hint: string().nullish(),
+    })
+      .loose()
+      .nullish(),
+    is_dismissible: M().nullish(),
+  }).loose(),
+);
+var optionSchema = DoctorLazy(() =>
+  u({
+    id: string().optional(),
+    name: string().optional(),
+    description: string().optional(),
+  }).loose(),
+);
+var optionGroupSchema = DoctorLazy(() =>
+  u({
+    type: string().optional(),
+    description: string().optional(),
+    effort_options: array(optionSchema()).optional(),
+    mode_options: array(optionSchema()).optional(),
+    always_on: M().optional(),
+  }).loose(),
+);
+var pricingSchema = DoctorLazy(() => {
+  let e = E().min(0.005).max(1e4);
+  let n = {
+    input: e,
+    output: e,
+    cache_write_5m: e,
+    cache_write_1h: e,
+    cache_read: e,
+  };
+  return u({
+    ...n,
+    web_search: e,
+    long_prompt: u({
+      above_prompt_tokens: E().int().positive(),
       ...n,
-      web_search: max,
-      long_prompt: u({ above_prompt_tokens: E().int().positive(), ...n }).optional(),
-    }).loose();
-  }),
-  cN = DoctorLazy(() =>
-    u({
-      max_input_tokens: E().optional(),
-      max_output_tokens: E().optional(),
-      default_output_tokens: E().optional(),
-      effort_levels: A(o()).optional(),
-      default_effort: o().optional(),
-      capabilities: A(o()).optional(),
-      family: o().optional(),
-      knowledge_cutoff: o().optional(),
-      default_for_family: o().optional(),
-      fast_default_for_family: o().optional(),
-      image_limits: u({
-        max_width: E()
-          .optional()
-          .catch(void 0),
-        max_height: E()
-          .optional()
-          .catch(void 0),
-      })
-        .loose()
-        .nullish()
-        .catch(void 0),
-      eager_input_streaming: u({
-        bedrock: M()
-          .optional()
-          .catch(void 0),
-        vertex: M()
-          .optional()
-          .catch(void 0),
-      })
-        .loose()
-        .nullish()
-        .catch(void 0),
-      pricing: dN()
-        .nullish()
-        .catch(void 0),
-    }).loose(),
-  ),
-  fN = DoctorLazy(() =>
-    u({
-      id: o(),
-      name: o().optional(),
-      short_name: o().optional(),
-      description: o().optional(),
-      section: o().optional(),
-      disabled: M().optional(),
-      confidential: M().optional(),
-      early_access: M().optional().catch(!0),
-      notice: CatalogNoticeSchema().nullish(),
-      selection_notice: CatalogNoticeSchema().nullish(),
-      badge: u({ message: o().optional(), variant: o().optional() }).loose().nullish(),
-      tooltip: u({ content: o().optional() }).loose().nullish(),
-      capabilities: pe(o(), M()).optional(),
-      thinking: lN().optional(),
-      fast_mode: u({}).loose().optional(),
-      hard_limit: E().optional(),
-      context_window: E().optional(),
-      quick_select: M().optional(),
-      runtime: cN().optional(),
-      behaves_as: o().nullish(),
-      provider_ids: pe(o(), o().nullish()).nullish(),
-      offered_on: A(o())
-        .nullish()
-        .catch(void 0),
-      min_claude_code_version: o().regex(SEMVER_RE).nullish().catch(null),
-    }).loose(),
-  ),
-  hb = 64;
+    }).optional(),
+  }).loose();
+});
+var runtimeSchema = DoctorLazy(() =>
+  u({
+    max_input_tokens: E().optional(),
+    max_output_tokens: E().optional(),
+    default_output_tokens: E().optional(),
+    effort_levels: array(string()).optional(),
+    default_effort: string().optional(),
+    capabilities: array(string()).optional(),
+    family: string().optional(),
+    knowledge_cutoff: string().optional(),
+    default_for_family: string().optional(),
+    fast_default_for_family: string().optional(),
+    image_limits: u({
+      max_width: E().optional().catch(undefined),
+      max_height: E().optional().catch(undefined),
+    })
+      .loose()
+      .nullish()
+      .catch(undefined),
+    eager_input_streaming: u({
+      bedrock: M().optional().catch(undefined),
+      vertex: M().optional().catch(undefined),
+    })
+      .loose()
+      .nullish()
+      .catch(undefined),
+    pricing: pricingSchema().nullish().catch(undefined),
+  }).loose(),
+);
+var modelRowSchema = DoctorLazy(() =>
+  u({
+    id: string(),
+    name: string().optional(),
+    short_name: string().optional(),
+    description: string().optional(),
+    section: string().optional(),
+    disabled: M().optional(),
+    confidential: M().optional(),
+    early_access: M().optional().catch(true),
+    notice: CatalogNoticeSchema().nullish(),
+    selection_notice: CatalogNoticeSchema().nullish(),
+    badge: u({
+      message: string().optional(),
+      variant: string().optional(),
+    })
+      .loose()
+      .nullish(),
+    tooltip: u({
+      content: string().optional(),
+    })
+      .loose()
+      .nullish(),
+    capabilities: record(string(), M()).optional(),
+    thinking: optionGroupSchema().optional(),
+    fast_mode: u({}).loose().optional(),
+    hard_limit: E().optional(),
+    context_window: E().optional(),
+    quick_select: M().optional(),
+    runtime: runtimeSchema().optional(),
+    behaves_as: string().nullish(),
+    provider_ids: record(string(), string().nullish()).nullish(),
+    offered_on: array(string()).nullish().catch(undefined),
+    min_claude_code_version: string().regex(SEMVER_RE_2).nullish().catch(null),
+  }).loose(),
+);
+var parseCatalogRows = 64;
+//@ chunk-aepeg2w5.js:213697-214096 placement
 /**
  * 把目录模型分为有效、部分有效、无效。
  */
-//@ chunk-aepeg2w5.js:213697-214096 placement
-function partitionCatalogModels(e) {
-  let n = fN(),
-    r = idOnlySchema(),
-    s = confidentialMarkerSchema(),
-    h = [],
-    y = [],
-    S = [],
-    w = 0;
-  for (let R of e) {
-    let safeParse = n.safeParse(R);
-    if (safeParse.success) {
-      h.push(safeParse.data);
+function partitionCatalogModels(models) {
+  let n = modelRowSchema();
+  let r = idOnlySchema();
+  let s = confidentialMarkerSchema();
+  let h = [];
+  let y = [];
+  let S = [];
+  let unidentifiedDropCount = 0;
+  for (let R of models) {
+    let x = n.safeParse(R);
+    if (x.success) {
+      h.push(x.data);
       continue;
     }
-    let safeParse_2 = r.safeParse(R);
-    if (!safeParse_2.success || normalizeModelId(safeParse_2.data.id).length === 0 || y.length >= hb) {
-      w += 1;
+    let P = r.safeParse(R);
+    if (!P.success || normalizeModelId(P.data.id).length === 0 || y.length >= parseCatalogRows) {
+      unidentifiedDropCount += 1;
       continue;
     }
-    if ((y.push(safeParse_2.data.id), s.safeParse(R).success)) S.push(safeParse_2.data.id);
+    y.push(P.data.id);
+    if (s.safeParse(R).success) S.push(P.data.id);
   }
   return {
     rows: h,
-    invalidCount: e.length - h.length,
+    invalidCount: models.length - h.length,
     droppedModelIds: y,
     droppedConfidentialIds: S,
-    unidentifiedDropCount: w,
+    unidentifiedDropCount,
   };
 }
 //@ chunk-aepeg2w5.js:214096-214288 placement
-var idOnlySchema = DoctorLazy(() => u({ id: o() })),
-  confidentialMarkerSchema = DoctorLazy(() => u({ confidential: T(!0) })),
-  aliasEntrySchema = DoctorLazy(() =>
-    u({
-      default: o()
-        .nullish()
-        .catch(void 0),
-      per_provider: pe(
-        o(),
-        o()
-          .nullish()
-          .catch(void 0),
-      )
-        .nullish()
-        .catch(void 0),
-    }).loose(),
-  );
+var idOnlySchema = DoctorLazy(() =>
+  u({
+    id: string(),
+  }),
+);
+var confidentialMarkerSchema = DoctorLazy(() =>
+  u({
+    confidential: literal(true),
+  }),
+);
+var aliasEntrySchema = DoctorLazy(() =>
+  u({
+    default: string().nullish().catch(undefined),
+    per_provider: record(string(), string().nullish().catch(undefined)).nullish().catch(undefined),
+  }).loose(),
+);
+//@ chunk-aepeg2w5.js:214288-215471 placement
 /**
  * 目录模型 schema（wire/stored 两种）。
  */
-//@ chunk-aepeg2w5.js:214288-215471 placement
 function catalogModelSchema(e) {
   let n = () =>
-      oe()
-        .optional()
-        .transform(() => {
-          return;
-        }),
-    r = e === "stored" ? A(o()).optional() : n(),
-    s = e === "stored" ? M().optional() : n();
+    unknown()
+      .optional()
+      .transform(() => {
+        return;
+      });
+  let r = e === "stored" ? array(string()).optional() : n();
+  let droppedUnidentifiedRows = e === "stored" ? M().optional() : n();
   return u({
-    id: o(),
-    models: A(oe()).optional(),
-    description: o().optional(),
+    id: string(),
+    models: array(unknown()).optional(),
+    description: string().optional(),
     auto_compact_window: E().optional(),
-    provider_alias_targets: pe(
-      o(),
-      aliasEntrySchema()
-        .nullish()
-        .catch(void 0),
-    )
+    provider_alias_targets: record(string(), aliasEntrySchema().nullish().catch(undefined))
       .nullish()
-      .catch(void 0),
+      .catch(undefined),
     dropped_model_ids: r,
     dropped_confidential_ids: r,
-    dropped_unidentified_rows: s,
+    dropped_unidentified_rows: droppedUnidentifiedRows,
   })
     .loose()
     .transform((h) => {
       let {
-          dropped_model_ids: dropped_model_ids,
-          dropped_confidential_ids: dropped_confidential_ids,
-          dropped_unidentified_rows: dropped_unidentified_rows,
-          ...R
-        } = h,
-        x =
-          e === "stored"
-            ? {
-                ids: dropped_model_ids ?? [],
-                confidentialIds: dropped_confidential_ids ?? [],
-                unidentified: dropped_unidentified_rows === !0,
-              }
-            : { ids: [], confidentialIds: [], unidentified: !1 },
-        P = R.models === void 0 ? void 0 : partitionCatalogModels(R.models);
-      if (P !== void 0 && P.invalidCount > 0)
+        dropped_model_ids: droppedModelIds,
+        dropped_confidential_ids: droppedConfidentialIds,
+        dropped_unidentified_rows: droppedUnidentifiedRows,
+        ...R
+      } = h;
+      let x =
+        e === "stored"
+          ? {
+              ids: droppedModelIds ?? [],
+              confidentialIds: droppedConfidentialIds ?? [],
+              unidentified: droppedUnidentifiedRows === true,
+            }
+          : {
+              ids: [],
+              confidentialIds: [],
+              unidentified: false,
+            };
+      let P = R.models === undefined ? undefined : partitionCatalogModels(R.models);
+      if (P !== undefined && P.invalidCount > 0)
         logForDebugging(
           `[servedCatalog] surface ${R.id}: ${P.invalidCount} of ${R.models?.length ?? 0} served rows failed row validation`,
         );
-      let F = uniq([...x.ids, ...(P?.droppedModelIds ?? [])]),
-        sliced = F.slice(0, hb),
-        filtered = uniq([...x.confidentialIds, ...(P?.droppedConfidentialIds ?? [])]).filter((ee) =>
-          sliced.includes(ee),
-        ),
-        j = x.unidentified || (P?.unidentifiedDropCount ?? 0) > 0 || F.length > sliced.length;
+      let F = uniq([...x.ids, ...(P?.droppedModelIds ?? [])]);
+      let sliced = F.slice(0, parseCatalogRows);
+      let filtered = uniq([...x.confidentialIds, ...(P?.droppedConfidentialIds ?? [])]).filter((ee) =>
+        sliced.includes(ee),
+      );
+      let j = x.unidentified || (P?.unidentifiedDropCount ?? 0) > 0 || F.length > sliced.length;
       return {
         ...R,
         models: P?.rows,
-        ...(sliced.length > 0 && { dropped_model_ids: sliced }),
-        ...(filtered.length > 0 && { dropped_confidential_ids: filtered }),
-        ...(j && { dropped_unidentified_rows: !0 }),
+        ...(sliced.length > 0 && {
+          dropped_model_ids: sliced,
+        }),
+        ...(filtered.length > 0 && {
+          dropped_confidential_ids: filtered,
+        }),
+        ...(j && {
+          dropped_unidentified_rows: true,
+        }),
       };
     });
 }
+//@ chunk-aepeg2w5.js:215471-215973 placement
 /**
  * 目录模型 wire/stored schema 实例。
  */
-//@ chunk-aepeg2w5.js:215471-215973 placement
-var CatalogModelWireSchema = DoctorLazy(() => catalogModelSchema("wire")),
-  swi = DoctorLazy(() => catalogModelSchema("stored")),
-  vCn = DoctorLazy(() =>
-    u({
-      id: o(),
-      model: o().optional(),
-      selection_source: o().optional(),
-      org_enforced_default_model: o().optional(),
-      thinking: oe().optional(),
-      thinking_by_model: oe().optional(),
-    }).loose(),
-  ),
-  xpr = [
-    "token_org",
-    "membership",
-    "api_key_org",
-    "console_org",
-    "federation_org",
-    "service_key_org",
-    "public",
-  ],
-  pto = DoctorLazy(() =>
-    u({
-      model_selector_state: A(vCn()).optional(),
-      model_selector_config: A(CatalogModelWireSchema()).optional(),
-      organization_uuid: o().optional(),
-      resolution: o().optional(),
-    }).loose(),
-  );
+var CatalogModelWireSchema = DoctorLazy(() => catalogModelSchema("wire"));
+var storedRowSchema = DoctorLazy(() => catalogModelSchema("stored"));
+var selectorStateSchema = DoctorLazy(() =>
+  u({
+    id: string(),
+    model: string().optional(),
+    selection_source: string().optional(),
+    org_enforced_default_model: string().optional(),
+    thinking: unknown().optional(),
+    thinking_by_model: unknown().optional(),
+  }).loose(),
+);
+var ACCOUNT_KIND_VALUES = [
+  "token_org",
+  "membership",
+  "api_key_org",
+  "console_org",
+  "federation_org",
+  "service_key_org",
+  "public",
+];
+var catalogDocumentSchema = DoctorLazy(() =>
+  u({
+    model_selector_state: array(selectorStateSchema()).optional(),
+    model_selector_config: array(CatalogModelWireSchema()).optional(),
+    organization_uuid: string().optional(),
+    resolution: string().optional(),
+  }).loose(),
+);
+//@ chunk-aepeg2w5.js:215973-216153 placement
 /**
  * 取目录中某选择器界面的配置与状态。
  */
-//@ chunk-aepeg2w5.js:215973-216153 placement
 function getSelectorSurface(e, n) {
-  let r = e.model_selector_config?.find((h) => h.id === n);
-  if (!r) return null;
-  let s = e.model_selector_state?.find((h) => h.id === n);
-  return { surface: n, config: r, ...(s && { state: s }) };
+  let found = e.model_selector_config?.find((h) => h.id === n);
+  if (!found) return null;
+  let found_2 = e.model_selector_state?.find((h) => h.id === n);
+  return {
+    surface: n,
+    config: found,
+    ...(found_2 && {
+      state: found_2,
+    }),
+  };
 }
+//@ chunk-aepeg2w5.js:216153-216422 placement
 /**
  * 已发布目录常量：schema 版本、全部保留标记、大小上限、签名 schema 与时间戳正则。
  */
-//@ chunk-aepeg2w5.js:216153-216422 placement
-var CATALOG_SCHEMA_VERSION = 1,
-  HOLD_ALL = "*",
-  CATALOG_SCHEMA = M3t,
-  MAX_DOCUMENT_CHARS = 16384,
-  SIGNATURE_SCHEMA_VERSION = 1,
-  RSASSA_PKCS1_V1_5_SHA512 = "RSASSA-PKCS1-v1_5-SHA512",
-  catalogSignatureSchema = DoctorLazy(() =>
-    u({
-      schema: T(SIGNATURE_SCHEMA_VERSION),
-      algorithm: T(RSASSA_PKCS1_V1_5_SHA512),
-      signature: o().min(1),
-      publicKeySha256: o().regex(/^[0-9a-f]{64}$/),
-    }).loose(),
-  ),
-  ISO_TIMESTAMP_RE = /^\d{4}-\d{2}-\d{2}[Tt ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:[Zz]|[+-]\d{2}:\d{2})$/;
+var CATALOG_SCHEMA_VERSION = 1;
+var HOLD_ALL = "*";
+var CATALOG_SCHEMA = ETAG_RE;
+var MAX_DOCUMENT_CHARS = 16384;
+var SIGNATURE_SCHEMA_VERSION = 1;
+var RSASSA_PKCS1_V1_5_SHA512 = "RSASSA-PKCS1-v1_5-SHA512";
+var catalogSignatureSchema = DoctorLazy(() =>
+  u({
+    schema: literal(SIGNATURE_SCHEMA_VERSION),
+    algorithm: literal(RSASSA_PKCS1_V1_5_SHA512),
+    signature: string().min(1),
+    publicKeySha256: string().regex(/^[0-9a-f]{64}$/),
+  }).loose(),
+);
+var ISO_TIMESTAMP_RE_2 = /^\d{4}-\d{2}-\d{2}[Tt ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:[Zz]|[+-]\d{2}:\d{2})$/;
+//@ chunk-aepeg2w5.js:216422-216527 placement
 /**
  * 解析 ISO 时间戳字符串为毫秒。
  */
-//@ chunk-aepeg2w5.js:216422-216527 placement
-function parseIsoTimestamp(e) {
-  if (e === void 0 || !ISO_TIMESTAMP_RE.test(e)) return;
-  let parse = Date.parse(e);
-  return Number.isFinite(parse) ? parse : void 0;
+function parseIsoTimestamp(expiresAt) {
+  if (expiresAt === undefined || !ISO_TIMESTAMP_RE_2.test(expiresAt)) return;
+  let timestamp = Date.parse(expiresAt);
+  return Number.isFinite(timestamp) ? timestamp : undefined;
 }
+//@ chunk-aepeg2w5.js:216527-216763 placement
 /**
  * 目录文档 schema。
  */
-//@ chunk-aepeg2w5.js:216527-216763 placement
 var CatalogDocumentSchema = DoctorLazy(() =>
   u({
-    $schema: o().optional(),
-    schema_version: T(CATALOG_SCHEMA_VERSION),
+    $schema: string().optional(),
+    schema_version: literal(CATALOG_SCHEMA_VERSION),
     version: E().int().nonnegative(),
-    issued_at: o().optional(),
-    expires_at: o().optional(),
-    key_id: o().optional(),
-    hold: A(o()).optional().catch([HOLD_ALL]),
-    surfaces: pe(o(), pto()),
+    issued_at: string().optional(),
+    expires_at: string().optional(),
+    key_id: string().optional(),
+    hold: array(string()).optional().catch([HOLD_ALL]),
+    surfaces: record(string(), catalogDocumentSchema()),
   }).loose(),
 );
+//@ chunk-aepeg2w5.js:216763-216863 placement
 /**
  * 判断条目是否对某模型（或全部）保留。
  */
-//@ chunk-aepeg2w5.js:216763-216863 placement
 function isHeldForModel(e, n) {
   return (e.hold ?? []).some((r) => {
     let lower = r.trim().toLowerCase();
     return lower === HOLD_ALL || lower === n;
   });
 }
+//@ chunk-aepeg2w5.js:216863-217003 placement
 /**
  * 读取文档的 schema_version 数字。
  */
-//@ chunk-aepeg2w5.js:216863-217003 placement
 function getSchemaVersion(e) {
   if (e === null || typeof e !== "object" || !("schema_version" in e)) return;
-  let schema_version = e.schema_version;
-  return typeof schema_version === "number" ? schema_version : void 0;
+  let schemaVersion = e.schema_version;
+  return typeof schemaVersion === "number" ? schemaVersion : undefined;
 }
+//@ chunk-aepeg2w5.js:217003-217348 placement
 /**
  * 取指定界面（cc/ccr/ccd）的目录状态。
  */
-//@ chunk-aepeg2w5.js:217003-217348 placement
 function surfaceStateFor(e, n) {
   for (let [r, s] of [
     [n, e.surfaces[n]],
     ["cc", e.surfaces.cc],
   ]) {
-    if (s === void 0) continue;
-    let h = getSelectorSurface(s, r);
-    if (h === null) continue;
-    if (h.state === void 0) return { surface: n, config: h.config, origin: "published" };
+    if (s === undefined) continue;
+    let selectorSurface = getSelectorSurface(s, r);
+    if (selectorSurface === null) continue;
+    if (selectorSurface.state === undefined)
+      return {
+        surface: n,
+        config: selectorSurface.config,
+        origin: "published",
+      };
     let {
-      org_enforced_default_model: org_enforced_default_model,
-      selection_source: selection_source,
+      org_enforced_default_model: orgEnforcedDefaultModel,
+      selection_source: selectionSource,
       ...w
-    } = h.state;
-    return { surface: n, config: h.config, state: w, origin: "published" };
+    } = selectorSurface.state;
+    return {
+      surface: n,
+      config: selectorSurface.config,
+      state: w,
+      origin: "published",
+    };
   }
   return null;
 }
+//@ chunk-aepeg2w5.js:217348-217467 placement
 /**
  * 列出文档所有界面选择器配置中的模型。
  */
-//@ chunk-aepeg2w5.js:217348-217467 placement
 function listSurfaceModels(e) {
-  return Object.values(e.surfaces).flatMap((n) =>
-    (n.model_selector_config ?? []).flatMap((r) => r.models ?? []),
+  return Object.values(e.surfaces).flatMap((surface) =>
+    (surface.model_selector_config ?? []).flatMap((r) => r.models ?? []),
   );
 }
 //@ chunk-aepeg2w5.js:217467-217618 placement
 var bundledCatalogSeed = DoctorLazy(() => {
-  let safeParse = CatalogDocumentSchema().safeParse(BUNDLED_MODEL_CATALOG);
-  if (!safeParse.success) logError(Error("published model-catalog seed does not parse"));
-  return { document: safeParse.success ? safeParse.data : null };
+  let e = CatalogDocumentSchema().safeParse(BUNDLED_MODEL_CATALOG);
+  if (!e.success) logError(Error("published model-catalog seed does not parse"));
+  return {
+    document: e.success ? e.data : null,
+  };
 });
 //@ chunk-aepeg2w5.js:217618-217654 placement
-function kCn() {
+/**
+ * 取内置的模型目录文档。
+ */
+function bundledCatalogDocument() {
   return bundledCatalogSeed().document;
 }
 //@ chunk-aepeg2w5.js:217654-217694 placement
-function dwi() {
-  return kCn()?.version ?? 0;
+/**
+ * 取内置目录的版本号。
+ */
+function bundledCatalogVersion() {
+  return bundledCatalogDocument()?.version ?? 0;
 }
 //@ chunk-aepeg2w5.js:217694-217752 placement
-function cwi(e) {
-  let n = kCn();
+/**
+ * 取内置目录在某表面下的状态。
+ */
+function bundledSurfaceState(e) {
+  let n = bundledCatalogDocument();
   return n === null ? null : surfaceStateFor(n, e);
 }
 //@ chunk-aepeg2w5.js:217752-217802 placement
-function vb(e) {
+function stripDateSuffixFromId(e) {
   return normalizeModelId(e).replace(/-\d{8}$/, "");
 }
+//@ chunk-aepeg2w5.js:217802-218052 placement
 /**
  * 查找目录中缺少的族默认模型（种子有、编译期有但目录没有）。
  */
-//@ chunk-aepeg2w5.js:217802-218052 placement
-function findMissingFamilyDefault(e) {
-  let n = new Set(catalogModels(e).map((s) => vb(s.id))),
-    r = Fy(e);
-  for (let s of a6e) {
-    let h = r[s],
-      y = resolveCatalogAlias(s, "first_party");
-    if (h === void 0 || y === void 0) continue;
-    if (n.has(y)) continue;
-    if (getCatalogEntry(vb(h)) === void 0) continue;
-    return { family: s, compiled: y, seed: h };
+function findMissingFamilyDefault(catalog) {
+  let n = new Set(catalogModels(catalog).map((s) => stripDateSuffixFromId(s.id)));
+  let r = familyDefaultMap(catalog);
+  for (let s of MODEL_FAMILY_NAMES) {
+    let h = r[s];
+    let catalogAlias = resolveCatalogAlias(s, "first_party");
+    if (h === undefined || catalogAlias === undefined) continue;
+    if (n.has(catalogAlias)) continue;
+    if (getCatalogEntry(stripDateSuffixFromId(h)) === undefined) continue;
+    return {
+      family: s,
+      compiled: catalogAlias,
+      seed: h,
+    };
   }
   return null;
 }
 //@ chunk-aepeg2w5.js:218052-218106 placement
-function Uc(e) {
+/**
+ * 判断后端是否属于目录表面（firstParty/gateway）。
+ */
+function isCatalogSurfaceBackend(e) {
   return e === "firstParty" || e === "gateway";
 }
 //@ chunk-aepeg2w5.js:218106-218152 placement
-var EN = /^[A-Za-z0-9][A-Za-z0-9._:@-]{0,255}$/;
+var PROVIDER_MODEL_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._:@-]{0,255}$/;
+//@ chunk-aepeg2w5.js:218152-218260 placement
 /**
  * 取目录条目在指定提供商下的模型 id（不合法时返回 undefined）。
  */
-//@ chunk-aepeg2w5.js:218152-218260 placement
 function getProviderModelIdForEntry(e, n) {
-  let r = e.provider_ids?.[providerCatalogKey(n)]?.trim();
-  if (r !== void 0 && !EN.test(r)) return;
-  return r ? r : void 0;
+  let trimmed = e.provider_ids?.[providerCatalogKey(n)]?.trim();
+  if (trimmed !== undefined && !PROVIDER_MODEL_ID_RE.test(trimmed)) return;
+  return trimmed ? trimmed : undefined;
 }
 //@ chunk-aepeg2w5.js:218260-218340 placement
-function Yte(e) {
-  let n = Hc(e);
-  return n !== void 0 && Object.hasOwn(MODEL_KEY_BY_FIRST_PARTY_ID, n)
+/**
+ * 取目录条目的模型键（按 firstParty id 查表）。
+ */
+function entryModelKey(id) {
+  let n = firstPartyIdFromCatalog(id);
+  return n !== undefined && Object.hasOwn(MODEL_KEY_BY_FIRST_PARTY_ID, n)
     ? MODEL_KEY_BY_FIRST_PARTY_ID[n]
-    : void 0;
+    : undefined;
 }
 //@ chunk-aepeg2w5.js:218340-218439 placement
-function Hc(e) {
+/**
+ * 从目录解析模型的 firstParty id。
+ */
+function firstPartyIdFromCatalog(e) {
   let n = catalogIdForProviderModelId(normalizeModelId(e));
-  if (n === void 0) return;
-  return getCatalogEntry(n)?.provider_ids.first_party ?? void 0;
+  if (n === undefined) return;
+  return getCatalogEntry(n)?.provider_ids.first_party ?? undefined;
 }
 //@ chunk-aepeg2w5.js:218439-218511 placement
-function Bae(e) {
-  let n = Yte(e);
-  return n === void 0 ? `id:${normalizeModelId(e)}` : `key:${n}`;
+/**
+ * 生成模型的身份键（有模型键用 key:，否则 id:）。
+ */
+function modelIdentityKey(e) {
+  let n = entryModelKey(e);
+  return n === undefined ? `id:${normalizeModelId(e)}` : `key:${n}`;
 }
-
 export {
   findServedModel,
-  Cpr,
-  Vte,
+  isEffectiveCatalogActive,
+  isServedCatalogActive,
   activeServedCatalog,
-  fo,
-  Yte,
-  UUe,
-  bi,
+  activeCatalogModels,
+  entryModelKey,
+  findEffectiveServedEntry,
+  servedMaxInputTokens,
   modelEffortLevels,
-  twi,
-  dn,
+  servedDefaultEffort,
+  servedRuntime,
   withCatalogSuppressed,
-  xpr,
+  ACCOUNT_KIND_VALUES,
   isValidEtag,
   CATALOG_SCHEMA,
   getSchemaVersion,
   CATALOG_SCHEMA_VERSION,
   CatalogDocumentSchema,
-  dwi,
-  O3t,
-  kCn,
+  bundledCatalogVersion,
+  servedCatalogActive,
+  bundledCatalogDocument,
   isHeldForModel,
   findMissingFamilyDefault,
-  Bae,
+  modelIdentityKey,
   surfaceStateFor,
-  cwi,
-  l6e,
-  Axt,
+  bundledSurfaceState,
+  clampInRange,
+  OUTPUT_TOKEN_RANGE,
   servedCatalogSource,
   clientDataForModel,
-  nwi,
-  rwi,
+  CLIENT_DATA_PATH_RE,
+  clientDataSchema,
   parseCatalogDocument,
-  ob,
+  isConfidentialShorthand,
   maskModelFieldValue,
-  Uc,
+  isCatalogSurfaceBackend,
   getEffectiveServedCatalog,
-  Fc,
-  isCatalogSuppressed,
   listSurfaceModels,
-  Ic,
+  servedDefaultOutputTokens,
+  isCatalogSuppressed,
+  MAX_INPUT_TOKEN_RANGE,
   getProviderModelIdForEntry,
-  Hc,
-  lb,
+  firstPartyIdFromCatalog,
+  servedRowFamily,
   isPublishedCatalogInUse,
   matchesCatalogList,
-  uto,
+  findActiveServedByIdentity,
   isPublishedCatalogActive,
   orgDefaultModelState,
-  Nc,
-  ub,
-  Rpr,
-  swi,
-  vCn,
-  M3t,
-  pto,
+  clampInputTokens,
+  servedMaxOutputTokens,
+  SURFACE_NAMES,
+  storedRowSchema,
+  selectorStateSchema,
+  ETAG_RE,
+  catalogDocumentSchema,
   getSelectorSurface,
   MAX_DOCUMENT_CHARS,
   catalogSignatureSchema,
-  $os,
+  servedCapabilities,
   parseIsoTimestamp,
 };

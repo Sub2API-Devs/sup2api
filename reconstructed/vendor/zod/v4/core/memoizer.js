@@ -5,91 +5,99 @@
  * pieces: chunk-7vp249v4.js (11)
  * attribution: esm-fingerprint 7, esm-layout 4
  */
-import { dSr } from "./util.js";
+import { rawShape } from "./util.js";
 
 //@ chunk-7vp249v4.js:44335-44472 esm-fingerprint
-class ZodCyclicError extends Error {
+class $ZodCyclicError extends Error {
   constructor() {
     super("Cannot parse a reference cycle that closes through a transform");
     this.name = "ZodCyclicError";
   }
 }
 //@ chunk-7vp249v4.js:44472-44493 esm-fingerprint
-var Ge = "~memo",
-  _n = [];
+var STATE = "~memo";
+var NO_ISSUES = [];
 //@ chunk-7vp249v4.js:44493-44570 esm-fingerprint
-function xn(e) {
-  return e !== null && (typeof e === "object" || typeof e === "function");
+function isRef(value) {
+  return value !== null && (typeof value === "object" || typeof value === "function");
 }
 //@ chunk-7vp249v4.js:44570-44645 esm-fingerprint
-function We(e) {
-  return e.map((t) => (t.path ? { ...t, path: t.path.slice() } : { ...t }));
+function cloneIssues(issues) {
+  return issues.map((iss) =>
+    iss.path
+      ? {
+          ...iss,
+          path: iss.path.slice(),
+        }
+      : {
+          ...iss,
+        },
+  );
 }
 //@ chunk-7vp249v4.js:44645-44677 esm-layout
-var weakMap = new WeakMap(),
-  G = 0,
-  xe = 1,
-  q = 2;
+var recursive = new WeakMap();
+var NONE = 0;
+var ASSUMED = 1;
+var PROVEN = 2;
 //@ chunk-7vp249v4.js:44677-46254 esm-fingerprint
-function ve(e, t, r) {
-  let n = weakMap.get(e);
-  if (n !== void 0) return n ? q : G;
-  if (t.has(e)) return q;
-  t.add(e);
-  let i = G,
-    s = (f) => {
-      if (i !== q && f?._zod) {
-        let d = ve(f, t, r);
-        if (d > i) i = d;
-      }
-    },
-    c = (f, d) => {
-      let _ = G;
-      for (let m of Reflect.ownKeys(f)) {
-        let ownPropertyDescriptor = Object.getOwnPropertyDescriptor(f, m);
-        if (d && !ownPropertyDescriptor.enumerable) continue;
-        let g = ownPropertyDescriptor.get
-          ? xe
-          : ownPropertyDescriptor.value?._zod
-            ? ve(ownPropertyDescriptor.value, t, r)
-            : G;
-        if (g > _) _ = g;
-      }
-      return _;
-    },
-    a = (f) => {
-      if (f > i) i = f;
-    },
-    def = e._zod.def,
-    p = def.type;
-  switch (p) {
+function isRecursive(inst, stack, resolve) {
+  let cached = recursive.get(inst);
+  if (cached !== undefined) return cached ? PROVEN : NONE;
+  if (stack.has(inst)) return PROVEN;
+  stack.add(inst);
+  let result = NONE;
+  let check = (child) => {
+    if (result !== PROVEN && child?._zod) {
+      let answer = isRecursive(child, stack, resolve);
+      if (answer > result) result = answer;
+    }
+  };
+  let shape = (sh, spread) => {
+    let answer = NONE;
+    for (let key of Reflect.ownKeys(sh)) {
+      let desc = Object.getOwnPropertyDescriptor(sh, key);
+      if (spread && !desc.enumerable) continue;
+      let child = desc.get ? ASSUMED : desc.value?._zod ? isRecursive(desc.value, stack, resolve) : NONE;
+      if (child > answer) answer = child;
+    }
+    return answer;
+  };
+  let merge = (answer) => {
+    if (answer > result) result = answer;
+  };
+  let def = inst._zod.def;
+  let kind = def.type;
+  switch (kind) {
     case "object": {
-      let f = dSr(def);
-      (a(f ? c(f, !0) : xe), s(def.catchall));
+      let raw = rawShape(def);
+      merge(raw ? shape(raw, true) : ASSUMED);
+      check(def.catchall);
       break;
     }
     case "properties":
-      a(c(def.shape, !1));
+      merge(shape(def.shape, false));
       break;
     case "array":
-      s(def.element);
+      check(def.element);
       break;
     case "tuple":
-      for (let item of def.items) s(item);
-      s(def.rest);
+      for (let el of def.items) check(el);
+      check(def.rest);
       break;
     case "record":
     case "map":
-      (s(def.keyType), s(def.valueType));
+      check(def.keyType);
+      check(def.valueType);
       break;
     case "set":
-      s(def.valueType);
+      check(def.valueType);
       break;
     case "union":
-      for (let option of def.options) s(option);
+      for (let el of def.options) check(el);
       break;
     case "intersection":
-      (s(def.left), s(def.right));
+      check(def.left);
+      check(def.right);
       break;
     case "optional":
     case "nullable":
@@ -100,17 +108,19 @@ function ve(e, t, r) {
     case "nonoptional":
     case "promise":
     case "success":
-      s(def.innerType);
+      check(def.innerType);
       break;
     case "pipe":
-      (s(def.in), s(def.out));
+      check(def.in);
+      check(def.out);
       break;
     case "function":
-      (s(def.input), s(def.output));
+      check(def.input);
+      check(def.output);
       break;
     case "lazy": {
-      let f = def._cachedInner ?? (r ? e._zod.innerType : void 0);
-      a(f ? ve(f, t, !1) : xe);
+      let inner = def._cachedInner ?? (resolve ? inst._zod.innerType : undefined);
+      merge(inner ? isRecursive(inner, stack, false) : ASSUMED);
       break;
     }
     case "template_literal":
@@ -136,109 +146,134 @@ function ve(e, t, r) {
       break;
     default:
       for (let key in def) {
-        let ownPropertyDescriptor = Object.getOwnPropertyDescriptor(def, key);
-        if (!ownPropertyDescriptor || ownPropertyDescriptor.get) continue;
-        let _ = ownPropertyDescriptor.value;
-        if (!_ || typeof _ !== "object") continue;
-        if (_._zod) s(_);
-        else if (Array.isArray(_)) for (let m of _) s(m);
+        let desc = Object.getOwnPropertyDescriptor(def, key);
+        if (!desc || desc.get) continue;
+        let value = desc.value;
+        if (!value || typeof value !== "object") continue;
+        if (value._zod) check(value);
+        else if (Array.isArray(value)) for (let el of value) check(el);
       }
   }
-  return (t.delete(e), Os(e, i));
+  stack.delete(inst);
+  return settle(inst, result);
 }
 //@ chunk-7vp249v4.js:46254-46306 esm-layout
-function Os(e, t) {
-  if (t !== xe) weakMap.set(e, t === q);
-  return t;
+function settle(inst, answer) {
+  if (answer !== ASSUMED) recursive.set(inst, answer === PROVEN);
+  return answer;
 }
 //@ chunk-7vp249v4.js:46306-46394 esm-fingerprint
-function As(e, t) {
-  let r = e.buckets.get(t);
-  if (!r) ((r = new WeakMap()), e.buckets.set(t, r));
-  return r;
+function bucketFor(state, inst) {
+  let bucket = state.buckets.get(inst);
+  if (!bucket) {
+    bucket = new WeakMap();
+    state.buckets.set(inst, bucket);
+  }
+  return bucket;
 }
 //@ chunk-7vp249v4.js:46394-47625 esm-layout
-var _e,
-  ge = [],
-  Es = {
-    alloc(e, t, r) {
-      let n = _e;
-      if (!n) return r;
-      _e = void 0;
-      let i = { value: r, issues: null };
-      return (n.set(t.value, i), ge.push(i), r);
-    },
-    guard(e) {
-      var t;
-      ((t = e._zod).deferred ?? (t.deferred = []),
-        e._zod.deferred.push(() => {
-          let parse = e._zod.parse,
-            n = (i, s) => {
-              if (s.direction !== "backward" && Ts(s, i.value)) throw new ZodCyclicError();
-              return parse(i, s);
-            };
-          if (((e._zod.parse = n), e._zod.run === parse)) e._zod.run = n;
-        }));
-    },
-    attach(e) {
-      var t;
-      let r,
-        n = !1,
-        i,
-        s;
-      ((t = e._zod).deferred ?? (t.deferred = []),
-        e._zod.deferred.push(() => {
-          let parse = e._zod.parse,
-            a = (l, p) => {
-              if (r === void 0) {
-                let v = ve(e, new Set(), !1);
-                if (v === G) {
-                  if (((e._zod.parse = parse), e._zod.run === a)) e._zod.run = parse;
-                  return parse(l, p);
-                }
-                if (v === q || n) r = !0;
-                else n = !0;
-              }
-              let f = l.value;
-              if (!xn(f)) return parse(l, p);
-              let d = p[Ge];
-              if (!d) ((d = { buckets: new WeakMap(), backEdges: void 0 }), (p[Ge] = d));
-              let _;
-              if (i === p) _ = s;
-              else ((_ = As(d, e)), (i = p), (s = _));
-              let m = _.get(f);
-              if (m) {
-                if (((l.value = m.value), m.issues)) {
-                  if (m.issues.length) l.issues.push(...We(m.issues));
-                } else
-                  ((l.memo = !0), d.backEdges ?? (d.backEdges = new WeakSet()), d.backEdges.add(m.value));
-                return l;
-              }
-              _e = _;
-              let h = ge.length,
-                g = parse(l, p);
-              _e = void 0;
-              let x = ge.length > h ? ge.pop() : void 0;
-              if (g instanceof Promise)
-                return g.then((v) => {
-                  if (x) x.issues = v.issues.length ? We(v.issues) : _n;
-                  return v;
-                });
-              if (x) x.issues = g.issues.length ? We(g.issues) : _n;
-              return g;
-            };
-          if (((e._zod.parse = a), e._zod.run === parse)) e._zod.run = a;
-        }));
-    },
-  };
+var handoff;
+var open = [];
+var memo = {
+  alloc(_inst, payload, empty) {
+    let bucket = handoff;
+    if (!bucket) return empty;
+    handoff = undefined;
+    let entry = {
+      value: empty,
+      issues: null,
+    };
+    bucket.set(payload.value, entry);
+    open.push(entry);
+    return empty;
+  },
+  guard(inst) {
+    var _a;
+    (_a = inst._zod).deferred ?? (_a.deferred = []);
+    inst._zod.deferred.push(() => {
+      let base = inst._zod.parse;
+      let wrapped = (payload, ctx) => {
+        if (ctx.direction !== "backward" && isBackEdge(ctx, payload.value)) throw new $ZodCyclicError();
+        return base(payload, ctx);
+      };
+      inst._zod.parse = wrapped;
+      if (inst._zod.run === base) inst._zod.run = wrapped;
+    });
+  },
+  attach(inst) {
+    var _a;
+    let isRecursiveInst;
+    let rechecked = false;
+    let lastCtx;
+    let lastBucket;
+    (_a = inst._zod).deferred ?? (_a.deferred = []);
+    inst._zod.deferred.push(() => {
+      let base = inst._zod.parse;
+      let wrapped = (payload, ctx) => {
+        if (isRecursiveInst === undefined) {
+          let walked = isRecursive(inst, new Set(), false);
+          if (walked === NONE) {
+            inst._zod.parse = base;
+            if (inst._zod.run === wrapped) inst._zod.run = base;
+            return base(payload, ctx);
+          }
+          if (walked === PROVEN || rechecked) isRecursiveInst = true;
+          else rechecked = true;
+        }
+        let input = payload.value;
+        if (!isRef(input)) return base(payload, ctx);
+        let state = ctx[STATE];
+        if (!state) {
+          state = {
+            buckets: new WeakMap(),
+            backEdges: undefined,
+          };
+          ctx[STATE] = state;
+        }
+        let bucket;
+        if (lastCtx === ctx) bucket = lastBucket;
+        else {
+          bucket = bucketFor(state, inst);
+          lastCtx = ctx;
+          lastBucket = bucket;
+        }
+        let hit = bucket.get(input);
+        if (hit) {
+          payload.value = hit.value;
+          if (hit.issues) {
+            if (hit.issues.length) payload.issues.push(...cloneIssues(hit.issues));
+          } else {
+            payload.memo = true;
+            state.backEdges ?? (state.backEdges = new WeakSet());
+            state.backEdges.add(hit.value);
+          }
+          return payload;
+        }
+        handoff = bucket;
+        let depth = open.length;
+        let result = base(payload, ctx);
+        handoff = undefined;
+        let entry = open.length > depth ? open.pop() : undefined;
+        if (result instanceof Promise)
+          return result.then((r) => {
+            if (entry) entry.issues = r.issues.length ? cloneIssues(r.issues) : NO_ISSUES;
+            return r;
+          });
+        if (entry) entry.issues = result.issues.length ? cloneIssues(result.issues) : NO_ISSUES;
+        return result;
+      };
+      inst._zod.parse = wrapped;
+      if (inst._zod.run === base) inst._zod.run = wrapped;
+    });
+  },
+};
 //@ chunk-7vp249v4.js:47625-47649 esm-layout
 function yn() {
-  return Es;
+  return memo;
 }
 //@ chunk-7vp249v4.js:47649-47724 esm-fingerprint
-function Ts(e, t) {
-  let r = e[Ge]?.backEdges;
-  return r !== void 0 && xn(t) && r.has(t);
+function isBackEdge(ctx, value) {
+  let backEdges = ctx[STATE]?.backEdges;
+  return backEdges !== undefined && isRef(value) && backEdges.has(value);
 }
-
 export { yn };

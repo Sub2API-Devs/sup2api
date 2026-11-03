@@ -11,7 +11,7 @@
 import { open, stat, mkdir, writeFile, link, unlink, readFile } from "fs/promises";
 import { join } from "path";
 import { getXDGDataHome } from "../xdg.js";
-import { jbo } from "../deepLink/registerProtocol.js";
+import { isRunningFromVersionsDir } from "../deepLink/registerProtocol.js";
 import { makeTempSiblingPath, retryFsOp } from "../atomicPublishWrite.js";
 import { getPlatform } from "../platform.js";
 import { env } from "../env.js";
@@ -21,17 +21,17 @@ import { logForDebugging } from "../debug.js";
 import { HostScoped } from "../hostScoped.js";
 import { execFileNoThrow } from "../execFileNoThrow.js";
 
+//@ chunk-x4gcvpxy.js:565-574 placement
 /**
  * Mach-O load command LC_SEGMENT_64（25）。
  */
-//@ chunk-x4gcvpxy.js:565-574 placement
 var LC_SEGMENT_64 = 25;
+//@ chunk-x4gcvpxy.js:574-1111 placement
 /**
  * 解析 Mach-O 头，从 __info_plist 节读出可执行文件内嵌的 Info.plist。
  */
-//@ chunk-x4gcvpxy.js:574-1111 placement
-async function readEmbeddedInfoPlist(s) {
-  let fd = await open(s, "r");
+async function readEmbeddedInfoPlist(execPath) {
+  let fd = await open(execPath, "r");
   try {
     let header = Buffer.alloc(32);
     await fd.read(header, 0, header.length, 0);
@@ -47,8 +47,9 @@ async function readEmbeddedInfoPlist(s) {
           "__info_plist\x00\x00\x00\x00"
         )
           continue;
-        let alloc = Buffer.alloc(Number(loadCommands.readBigUInt64LE(sectionOffset + 40)));
-        return (await fd.read(alloc, 0, alloc.length, loadCommands.readUInt32LE(sectionOffset + 48)), alloc);
+        let f = Buffer.alloc(Number(loadCommands.readBigUInt64LE(sectionOffset + 40)));
+        await fd.read(f, 0, f.length, loadCommands.readUInt32LE(sectionOffset + 48));
+        return f;
       }
     }
     return null;
@@ -56,21 +57,23 @@ async function readEmbeddedInfoPlist(s) {
     await fd.close();
   }
 }
+//@ chunk-x4gcvpxy.js:1111-1560 placement = MACOS_SYMLINK_PATH (0.623)
 /**
  * （误归 deepLink）在 XDG data 下建 ClaudeCode.app：写内嵌 Info.plist、把当前可执行文件硬链接为 Contents/MacOS/claude，返回路径；失败返回 null。
  */
-//@ chunk-x4gcvpxy.js:1111-1560 placement = MACOS_SYMLINK_PATH (0.623)
 async function ensureMacAppBundleLink() {
   let s = join(getXDGDataHome(), "claude");
-  if (!jbo()) return null;
-  let macosDir = join(s, "ClaudeCode.app", "Contents", "MacOS"),
-    appBinaryPath = join(macosDir, "claude");
+  if (!isRunningFromVersionsDir()) return null;
+  let macosDir = join(s, "ClaudeCode.app", "Contents", "MacOS");
+  let appBinaryPath = join(macosDir, "claude");
   try {
     let infoPlist = await readEmbeddedInfoPlist(process.execPath);
     if (infoPlist === null) return null;
     let ino = (await stat(process.execPath)).ino;
-    (await mkdir(macosDir, { recursive: !0 }),
-      await writeFile(join(macosDir, "..", "Info.plist"), infoPlist));
+    await mkdir(macosDir, {
+      recursive: true,
+    });
+    await writeFile(join(macosDir, "..", "Info.plist"), infoPlist);
     try {
       if ((await stat(appBinaryPath)).ino === ino) return appBinaryPath;
     } catch {}
@@ -86,10 +89,10 @@ async function ensureMacAppBundleLink() {
     return null;
   }
 }
+//@ chunk-x4gcvpxy.js:1560-2021 fingerprint = detectHomebrew (0.303)
 /**
  * macOS 上为后台进程准备稳定路径/TCC 相关处理（切分可疑：旧版名 detectHomebrew 不符）。
  */
-//@ chunk-x4gcvpxy.js:1560-2021 fingerprint = detectHomebrew (0.303)
 async function detectHomebrew() {
   if (getPlatform() !== "macos") return;
   if (env.CLAUDE_BG_TCC_DISCLAIMED) {
@@ -97,14 +100,20 @@ async function detectHomebrew() {
     return;
   }
   let execPath =
-      (env.CLAUDE_PTY_HOST_NO_STABLE_PATH === "1" || env.CLAUDE_CODE_DISABLE_BG_STABLE_PATH
-        ? null
-        : await ensureMacAppBundleLink()) ?? process.execPath,
-    t = [...(isStandaloneExecutable() ? [execPath] : [execPath, process.argv[1]]), ...process.argv.slice(2)],
-    r = compactEnvObject(process.env);
-  ((r.CLAUDE_BG_TCC_DISCLAIMED = "1"), delete r.CLAUDE_PTY_HOST_NO_STABLE_PATH);
+    (env.CLAUDE_PTY_HOST_NO_STABLE_PATH === "1" || env.CLAUDE_CODE_DISABLE_BG_STABLE_PATH
+      ? null
+      : await ensureMacAppBundleLink()) ?? process.execPath;
+  let t = [
+    ...(isStandaloneExecutable() ? [execPath] : [execPath, process.argv[1]]),
+    ...process.argv.slice(2),
+  ];
+  let r = compactEnvObject(process.env);
+  r.CLAUDE_BG_TCC_DISCLAIMED = "1";
+  delete r.CLAUDE_PTY_HOST_NO_STABLE_PATH;
   try {
-    process.execve(execPath, t, r, { macDisclaimResponsibility: !0 });
+    process.execve(execPath, t, r, {
+      macDisclaimResponsibility: true,
+    });
   } catch {}
 }
 //@ chunk-hntsfzas.js:2480-2555 fingerprint = isDistroFamily (1)
@@ -112,7 +121,7 @@ function isDistroFamily(osRelease, families) {
   return families.includes(osRelease.id) || osRelease.idLike.some((like) => families.includes(like));
 }
 //@ chunk-hntsfzas.js:2555-4839 fingerprint = getPackageManager (0.31)
-class getPackageManager {
+class getPackageManager_2 {
   sources;
   osRelease;
   pacman;
@@ -120,15 +129,18 @@ class getPackageManager {
   rpm;
   apk;
   packageManager;
-  constructor(e) {
-    this.sources = e;
+  constructor(sources) {
+    this.sources = sources;
   }
   getOsRelease() {
     return (this.osRelease ??= this.sources.readOsRelease().then(
-      (e) => {
-        let match = e.match(/^ID=["']?(\S+?)["']?\s*$/m),
-          match_2 = e.match(/^ID_LIKE=["']?(.+?)["']?\s*$/m);
-        return { id: match?.[1] ?? "", idLike: match_2?.[1]?.split(" ") ?? [] };
+      (content) => {
+        let idMatch = content.match(/^ID=["']?(\S+?)["']?\s*$/m);
+        let idLikeMatch = content.match(/^ID_LIKE=["']?(.+?)["']?\s*$/m);
+        return {
+          id: idMatch?.[1] ?? "",
+          idLike: idLikeMatch?.[1]?.split(" ") ?? [],
+        };
       },
       () => null,
     ));
@@ -145,48 +157,59 @@ class getPackageManager {
   detectApk() {
     return (this.apk ??= this.ownsExecutable(["alpine"], "apk", ["info", "--who-owns"]));
   }
-  async ownsExecutable(e, n, a) {
-    if (this.sources.platform() !== "linux") return !1;
+  async ownsExecutable(families, n, a) {
+    if (this.sources.platform() !== "linux") return false;
     let osRelease = await this.getOsRelease();
-    if (osRelease && !isDistroFamily(osRelease, e)) return !1;
-    let execFileNoThrow = await this.sources.execFileNoThrow(n, [...a, this.sources.execPath()], {
+    if (osRelease && !isDistroFamily(osRelease, families)) return false;
+    let r = await this.sources.execFileNoThrow(n, [...a, this.sources.execPath()], {
       timeout: 5000,
-      useCwd: !1,
-      useToolMemoryCgroup: !1,
+      useCwd: false,
+      useToolMemoryCgroup: false,
     });
-    if (execFileNoThrow.code === 0 && execFileNoThrow.stdout)
-      return (logForDebugging(`Detected ${n} installation: ${execFileNoThrow.stdout.trim()}`), !0);
-    return !1;
+    if (r.code === 0 && r.stdout) {
+      logForDebugging(`Detected ${n} installation: ${r.stdout.trim()}`);
+      return true;
+    }
+    return false;
   }
   detectHomebrew() {
     let platform = this.sources.platform();
-    if (platform !== "macos" && platform !== "linux" && platform !== "wsl") return !1;
+    if (platform !== "macos" && platform !== "linux" && platform !== "wsl") return false;
     let execPath = this.sources.execPath();
-    if (execPath.includes("/Caskroom/"))
-      return (logForDebugging(`Detected Homebrew cask installation: ${execPath}`), !0);
-    return !1;
+    if (execPath.includes("/Caskroom/")) {
+      logForDebugging(`Detected Homebrew cask installation: ${execPath}`);
+      return true;
+    }
+    return false;
   }
   getHomebrewCaskName() {
     return this.sources.execPath().match(/\/Caskroom\/([^/]+)\//)?.[1] ?? null;
   }
   detectWinget() {
-    if (this.sources.platform() !== "windows") return !1;
-    let execPath = this.sources.execPath();
+    if (this.sources.platform() !== "windows") return false;
+    let e = this.sources.execPath();
     for (let n of [/Microsoft[/\\]WinGet[/\\]Packages/i, /Microsoft[/\\]WinGet[/\\]Links/i])
-      if (n.test(execPath)) return (logForDebugging(`Detected winget installation: ${execPath}`), !0);
-    return !1;
+      if (n.test(e)) {
+        logForDebugging(`Detected winget installation: ${e}`);
+        return true;
+      }
+    return false;
   }
   detectMise() {
     let execPath = this.sources.execPath();
-    if (/[/\\]mise[/\\]installs[/\\]/i.test(execPath))
-      return (logForDebugging(`Detected mise installation: ${execPath}`), !0);
-    return !1;
+    if (/[/\\]mise[/\\]installs[/\\]/i.test(execPath)) {
+      logForDebugging(`Detected mise installation: ${execPath}`);
+      return true;
+    }
+    return false;
   }
   detectAsdf() {
     let execPath = this.sources.execPath();
-    if (/[/\\]\.?asdf[/\\]installs[/\\]/i.test(execPath))
-      return (logForDebugging(`Detected asdf installation: ${execPath}`), !0);
-    return !1;
+    if (/[/\\]\.?asdf[/\\]installs[/\\]/i.test(execPath)) {
+      logForDebugging(`Detected asdf installation: ${execPath}`);
+      return true;
+    }
+    return false;
   }
   getPackageManager() {
     return (this.packageManager ??= this.detectPackageManager());
@@ -206,12 +229,11 @@ class getPackageManager {
 //@ chunk-hntsfzas.js:4839-4993 fingerprint = getOsRelease (0.424)
 var getOsRelease = new HostScoped(
   () =>
-    new getPackageManager({
+    new getPackageManager_2({
       platform: getPlatform,
       readOsRelease: () => readFile("/etc/os-release", "utf8"),
-      execFileNoThrow: execFileNoThrow,
+      execFileNoThrow,
       execPath: () => process.execPath || process.argv[0] || "",
     }),
 );
-
 export { getOsRelease, detectHomebrew };

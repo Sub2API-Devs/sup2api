@@ -14,108 +14,134 @@ import { programBaseName } from "./commandRules.js";
 import { DECLARATION_BUILTINS } from "./commandTables.js";
 import { readFlagWithOverride } from "../../../services/analytics/flagOverrides.js";
 
+//@ chunk-63f0f3kd.js:3787-3818 placement
 /**
  * 对一条 shell 命令（tree-sitter AST）做后台 worktree 守卫分析：返回拒绝原因文本或 null。
  */
-//@ chunk-63f0f3kd.js:3787-3818 placement
-function analyzeCommandForWorktree(t) {
-  return analyzeShellProgram(t, !1);
+function analyzeCommandForWorktree(tree) {
+  return analyzeShellProgram(tree, false);
 }
 //@ chunk-63f0f3kd.js:3818-3888 placement
-function analyzeSimpleCommandForWorktree(t) {
-  return analyzeShellProgram(t, !0)?.replace(TOO_COMPLEX_SUFFIX, "in a plain command") ?? null;
+function analyzeSimpleCommandForWorktree(tree) {
+  return analyzeShellProgram(tree, true)?.replace(TOO_COMPLEX_SUFFIX, "in a plain command") ?? null;
 }
 //@ chunk-63f0f3kd.js:3888-4071 placement
 function isParseFailureNode(t) {
   return (
-    t.nodeType === void 0 ||
+    t.nodeType === undefined ||
     t.nodeType === "PARSE_ABORT" ||
     t.nodeType === "ERROR" ||
-    (t.differential === !0 && !/^(?:heredoc_redirect|concatenation|word|string)$/.test(t.nodeType))
+    (t.differential === true && !/^(?:heredoc_redirect|concatenation|word|string)$/.test(t.nodeType))
   );
 }
+//@ chunk-63f0f3kd.js:4071-4764 placement
 /**
  * 建立分析状态（变量种类、整数/数组名、绑定位置、cwd 等）并遍历整棵语法树，产出第一条拒绝原因。
  */
-//@ chunk-63f0f3kd.js:4071-4764 placement
-function analyzeShellProgram(t, e) {
+function analyzeShellProgram(t, simple) {
   let i = {
-    simple: e,
+    simple,
     kinds: new Map(),
     integerNames: new Set(),
     arrayNames: new Set(),
     bindingSites: new Map(),
     optionSafeNames: new Map(),
     pathNames: new Set(),
-    opaqueNames: !1,
+    opaqueNames: false,
     shellFilledWord: null,
     shellSetNameWord: null,
-    statPathDenied: !1,
-    dateDirectiveDenied: !1,
-    pathAssigned: !1,
+    statPathDenied: false,
+    dateDirectiveDenied: false,
+    pathAssigned: false,
     startupHazards: new Map(),
-    allExported: !1,
-    stdinFed: !1,
-    pipedFrom: void 0,
-    inputAssembled: !1,
+    allExported: false,
+    stdinFed: false,
+    pipedFrom: undefined,
+    inputAssembled: false,
     cwd: ".",
-    opaqueCwd: !1,
-    deviceLinked: !1,
+    opaqueCwd: false,
+    deviceLinked: false,
     scopes: [new Map()],
     depth: 0,
   };
-  ((i.pathAssigned = /(?:^|\W)(?:PATH|LD_\w*|DYLD_\w*)(?:\[[^\]]*\])?[+:]?=/i.test(t.text)),
-    analyzeAssignment(t, i, !1),
-    (i.opaqueNames ||= [...i.kinds.values()].includes("other")));
-  let n = withStdinState(t, i, !1);
+  i.pathAssigned = /(?:^|\W)(?:PATH|LD_\w*|DYLD_\w*)(?:\[[^\]]*\])?[+:]?=/i.test(t.text);
+  analyzeAssignment(t, i, false);
+  i.opaqueNames ||= [...i.kinds.values()].includes("other");
+  let n = withStdinState(t, i, false);
   return n && / arithmetically |command output/.test(n)
     ? n + (i.statPathDenied ? STAT_VALUE_NOTE : "") + (i.dateDirectiveDenied ? DATE_VALUE_NOTE : "")
     : n;
 }
 //@ chunk-63f0f3kd.js:4764-4904 placement
-var DYNAMIC_VALUE_FLAGS = { integer: !1, inert: !1, arithmeticSafe: !1, optionSafe: !1, written: !1 },
-  zt = { integer: !0, inert: !0, arithmeticSafe: !0, optionSafe: !0, written: !1 };
+/**
+ * “该值可静态确定且可安全当选项”的标志对象，与 DYNAMIC_VALUE_FLAGS 相对。
+ */
+var DYNAMIC_VALUE_FLAGS = {
+  integer: false,
+  inert: false,
+  arithmeticSafe: false,
+  optionSafe: false,
+  written: false,
+};
+var STATIC_VALUE_FLAGS = {
+  integer: true,
+  inert: true,
+  arithmeticSafe: true,
+  optionSafe: true,
+  written: false,
+};
 //@ chunk-63f0f3kd.js:4904-4956 placement
 function wordSet(t) {
   return new Set(t.trim().split(/\s+/));
 }
 //@ chunk-63f0f3kd.js:4956-5126 placement
-var SHELL_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/,
-  Pe = /^("?)\$(?:([A-Za-z_]\w*)|\{([A-Za-z_]\w*)\})\1$/,
-  Dn = /^[A-Za-z0-9_.\/+:@~][A-Za-z0-9_.\/+:@~-]*$/,
-  Wt = /^[A-Za-z0-9 _.,:\/=+@%^~#-]*$/;
+/**
+ * 匹配“整词就是一个变量引用”（$name、${name}，可带引号）。
+ */
+var SHELL_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
+var SINGLE_VAR_REF_RE = /^("?)\$(?:([A-Za-z_]\w*)|\{([A-Za-z_]\w*)\})\1$/;
+var SAFE_PATH_TOKEN_RE = /^[A-Za-z0-9_.\/+:@~][A-Za-z0-9_.\/+:@~-]*$/;
+var PLAIN_TEXT_RE = /^[A-Za-z0-9 _.,:\/=+@%^~#-]*$/;
 //@ chunk-63f0f3kd.js:5126-5273 placement
-function isPlainWordText(t) {
-  return t
+function isPlainWordText(text) {
+  return text
     .split(
       `
 `,
     )
     .every(
-      (e) =>
-        Wt.test(e) &&
-        e.split(/\s+/).every((i) => {
+      (line) =>
+        PLAIN_TEXT_RE.test(line) &&
+        line.split(/\s+/).every((i) => {
           let n = programBaseName(i.replace(/^.*=/, ""));
           return !GIT_COMMAND_PATTERN.test(n) && !DECLARATION_BUILTINS.has(n);
         }),
     );
 }
 //@ chunk-63f0f3kd.js:5273-6183 placement
-var GIT_COMMAND_PATTERN = /^git(?:\.exe|\.real|-[a-z][\w-]*)?$/i,
-  me = /^(?:GIT_\w*|HOME|CDPATH|XDG_CONFIG_HOME)$/i,
-  Ce =
-    /^(?:BASH_ALIASES|BASH_CMDS|SHELLOPTS|BASHOPTS|PWD|OLDPWD|DIRSTACK|dirstack|options|commands|nameddirs|(?:dis_)?(?:functions(?:_source)?|[gs]?aliases|builtins|reswords))$/,
-  ft =
-    /^(?:_|REPLY|OPTARG|MAPFILE|COPROC|BASH_REMATCH|BASH_COMMAND|BASH_ARGV|BASH_SOURCE|FUNCNAME|DIRSTACK|PWD|OLDPWD|READLINE_\w+|COMP_\w+)$/,
-  Ts = /^(?:MATCH|match|MBEGIN|MEND|mbegin|mend|argv|reply)$/,
-  Pn = /^(?:(?:cd|f|man|module_|mail)?path)$/i,
-  Rs = /^[\s0-9A-Za-z_+\-*\/%()<>=!&|^~?:,#]*$/,
-  ks =
-    /^(?:jobtexts|jobdirs|history|historywords|funcstack|functrace|funcfiletrace|funcsourcetrace|zsh_scheduled_events|keymaps|widgets|modules|zcurses_windows|zgdbm_tied|mapfile|terminfo|termcap|langinfo|dis_patchars|ZFTP_(?:SESSION|HOST|USER|ACCOUNT|PWD|SYSTEM|REPLY|FILE)|ZSH_DEBUG_CMD|ZSH_EXECUTION_STRING|BASH_EXECUTION_STRING)$/,
-  TENGU_MOSSY_KESTREL = "tengu_mossy_kestrel";
+/**
+ * 影响 git 位置或全局配置的环境变量（GIT_*、HOME、CDPATH、XDG_CONFIG_HOME）。
+ */
+var GIT_COMMAND_PATTERN = /^git(?:\.exe|\.real|-[a-z][\w-]*)?$/i;
+var GIT_LOCATION_ENV_RE = /^(?:GIT_\w*|HOME|CDPATH|XDG_CONFIG_HOME)$/i;
+var SHELL_STATE_SETTING_VARIABLES =
+  /^(?:BASH_ALIASES|BASH_CMDS|SHELLOPTS|BASHOPTS|PWD|OLDPWD|DIRSTACK|dirstack|options|commands|nameddirs|(?:dis_)?(?:functions(?:_source)?|[gs]?aliases|builtins|reswords))$/;
+var SHELL_SPECIAL_VARIABLES =
+  /^(?:_|REPLY|OPTARG|MAPFILE|COPROC|BASH_REMATCH|BASH_COMMAND|BASH_ARGV|BASH_SOURCE|FUNCNAME|DIRSTACK|PWD|OLDPWD|READLINE_\w+|COMP_\w+)$/;
+var ZSH_SPECIAL_VARIABLES = /^(?:MATCH|match|MBEGIN|MEND|mbegin|mend|argv|reply)$/;
+var PATH_LIKE_VARIABLES_RE = /^(?:(?:cd|f|man|module_|mail)?path)$/i;
+var SAFE_QUOTED_TEXT_RE = /^[\s0-9A-Za-z_+\-*\/%()<>=!&|^~?:,#]*$/;
+var ZSH_MANAGED_VARIABLES =
+  /^(?:jobtexts|jobdirs|history|historywords|funcstack|functrace|funcfiletrace|funcsourcetrace|zsh_scheduled_events|keymaps|widgets|modules|zcurses_windows|zgdbm_tied|mapfile|terminfo|termcap|langinfo|dis_patchars|ZFTP_(?:SESSION|HOST|USER|ACCOUNT|PWD|SYSTEM|REPLY|FILE)|ZSH_DEBUG_CMD|ZSH_EXECUTION_STRING|BASH_EXECUTION_STRING)$/;
+var TENGU_MOSSY_KESTREL = "tengu_mossy_kestrel";
 //@ chunk-63f0f3kd.js:6183-6247 placement
 function isStartupHazardVariable(t) {
-  return (ks.test(t) || Ce.test(t)) && readFlagWithOverride(TENGU_MOSSY_KESTREL, { safe: !0 });
+  return (
+    (ZSH_MANAGED_VARIABLES.test(t) || SHELL_STATE_SETTING_VARIABLES.test(t)) &&
+    readFlagWithOverride(TENGU_MOSSY_KESTREL, {
+      safe: true,
+    })
+  );
 }
 //@ chunk-63f0f3kd.js:6247-6352 placement
 var COMPLETION_VARIABLE_PATTERN =
@@ -124,39 +150,44 @@ var COMPLETION_VARIABLE_PATTERN =
 function isShellManagedVariable(t) {
   let upper = t.toUpperCase();
   return (
-    (ft.test(upper) && (!/^(?:COMP|READLINE)_/.test(upper) || COMPLETION_VARIABLE_PATTERN.test(upper))) ||
+    (SHELL_SPECIAL_VARIABLES.test(upper) &&
+      (!/^(?:COMP|READLINE)_/.test(upper) || COMPLETION_VARIABLE_PATTERN.test(upper))) ||
     upper === "MATCH" ||
     upper === "ARGV"
   );
 }
 //@ chunk-63f0f3kd.js:6478-6556 placement
-var SHELL_AUTO_VARIABLES = /^(?:RANDOM|SECONDS|LINENO|PPID|SHLVL|OPTIND)$/,
-  TENGU_EAGER_CHARM = "tengu_eager_charm";
+var SHELL_AUTO_VARIABLES = /^(?:RANDOM|SECONDS|LINENO|PPID|SHLVL|OPTIND)$/;
+var TENGU_EAGER_CHARM = "tengu_eager_charm";
 //@ chunk-63f0f3kd.js:6556-6594 placement
-function ve() {
-  return readFlagWithOverride(TENGU_EAGER_CHARM, { safe: !0 });
+/**
+ * 读取 tengu_eager_charm 开关：是否追踪 shell 自身设置的变量名（用于整数变量与 for 循环绑定分析）。
+ */
+function isEagerShellSetScreeningEnabled() {
+  return readFlagWithOverride(TENGU_EAGER_CHARM, {
+    safe: true,
+  });
 }
-
 export {
   wordSet,
   isStartupHazardVariable,
-  ft,
+  SHELL_SPECIAL_VARIABLES,
   isShellManagedVariable,
-  ve,
+  isEagerShellSetScreeningEnabled,
   isPlainWordText,
   SHELL_NAME_PATTERN,
   DYNAMIC_VALUE_FLAGS,
-  zt,
-  Pn,
-  Ts,
+  STATIC_VALUE_FLAGS,
+  PATH_LIKE_VARIABLES_RE,
+  ZSH_SPECIAL_VARIABLES,
   SHELL_AUTO_VARIABLES,
-  Wt,
-  Pe,
-  Rs,
-  Dn,
-  me,
+  PLAIN_TEXT_RE,
+  SINGLE_VAR_REF_RE,
+  SAFE_QUOTED_TEXT_RE,
+  SAFE_PATH_TOKEN_RE,
+  GIT_LOCATION_ENV_RE,
   GIT_COMMAND_PATTERN,
-  Ce,
+  SHELL_STATE_SETTING_VARIABLES,
   isParseFailureNode,
   analyzeCommandForWorktree,
   analyzeSimpleCommandForWorktree,

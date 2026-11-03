@@ -8,75 +8,78 @@
  * pieces: chunk-s61vbvea.js (29)
  * attribution: placement 29
  */
-import {
-  createReadStream,
-  constants,
-  constants as constants_2,
-  constants as constants_3,
-  constants as constants_4,
-  constants as constants_5,
-} from "fs";
-import {
-  stat,
-  stat as stat_2,
-  stat as stat_3,
-  stat as stat_4,
-  stat as stat_5,
-  open,
-  open as open_2,
-  open as open_3,
-  open as open_4,
-  open as open_5,
-  open as open_6,
-  open as open_7,
-} from "fs/promises";
-import {
-  createHash,
-  createHash as createHash_2,
-  createHash as createHash_3,
-  createHash as createHash_4,
-} from "crypto";
+import { createReadStream, constants } from "fs";
+import { stat, open } from "fs/promises";
+import { createHash } from "crypto";
 import { transcriptLines } from "./backgroundSessionResume.js";
 import { isENOENT, getErrnoCode } from "./errors.js";
 import { publishWriteAtomic, O_NONBLOCK } from "./atomicPublishWrite.js";
-import { K_s, V_s, CDi, RDi, GDn, isPasteIdHex, G_s } from "./pastedContent.js";
+import {
+  OPENING_PUNCT_RE,
+  CLOSING_PUNCT_RE,
+  PASTED_CONTENT_OPEN_PREFIX,
+  PASTED_CONTENT_CLOSE_PREFIX,
+  PASTE_ID_LENGTH,
+  isPasteIdHex,
+  PASTED_CONTENT_LINE_END,
+} from "./pastedContent.js";
 import { uniq } from "./collections.js";
 
 //@ chunk-s61vbvea.js:20915-21013 placement
-function aO(e) {
+/**
+ * 取消息内容中的最后一段文本（字符串或末尾文本块）。
+ */
+function lastTextBlockText(e) {
   if (typeof e === "string") return e;
-  let at = e.at(-1);
-  return at?.type === "text" ? at.text : null;
+  let last = e.at(-1);
+  return last?.type === "text" ? last.text : null;
 }
 //@ chunk-s61vbvea.js:21152-21206 placement
-var xnt = { stale: 1e4, retries: { retries: 3, minTimeout: 50 } };
+/**
+ * 读写 history.jsonl 的重试配置。
+ */
+var HISTORY_FILE_RETRY_OPTIONS = {
+  stale: 1e4,
+  retries: {
+    retries: 3,
+    minTimeout: 50,
+  },
+};
+//@ chunk-s61vbvea.js:21206-21367 placement
 /**
  * 按 \r 拆分历史文本行；含 U+2028/2029 的段若不是合法 JSON 则再按这两个字符拆开。
  */
-//@ chunk-s61vbvea.js:21206-21367 placement
 function splitHistoryLines(e) {
   return e.split("\r").flatMap((n) => {
     if (!/[\u2028\u2029]/.test(n)) return [n];
     try {
-      return (JSON.parse(n), [n]);
+      JSON.parse(n);
+      return [n];
     } catch {
       return n.split(/[\u2028\u2029]/);
     }
   });
 }
 //@ chunk-s61vbvea.js:21367-21428 placement
-async function* SVo(e) {
-  for await (let n of transcriptLines(e)) yield* splitHistoryLines(n);
+/**
+ * 流式拆分历史文件的行（按 \r 与 U+2028/2029 处理）。
+ */
+async function* splitHistoryStream(readStream) {
+  for await (let n of transcriptLines(readStream)) yield* splitHistoryLines(n);
 }
+//@ chunk-s61vbvea.js:21428-21791 placement
 /**
  * 流式扫描历史文件，统计匹配行；filter 模式下把未匹配的行原子写回（可保留原文件权限）。
  */
-//@ chunk-s61vbvea.js:21428-21791 placement
 async function filterHistoryFile(e, n, r, { fileMode: s = "default", beforeWrite: h } = {}) {
-  let y = [],
-    S = 0;
+  let y = [];
+  let S = 0;
   try {
-    for await (let R of SVo(createReadStream(e, { encoding: "utf8" })))
+    for await (let R of splitHistoryStream(
+      createReadStream(e, {
+        encoding: "utf8",
+      }),
+    ))
       if (n(R)) S++;
       else if (r === "filter") y.push(R);
   } catch (error) {
@@ -85,288 +88,334 @@ async function filterHistoryFile(e, n, r, { fileMode: s = "default", beforeWrite
   }
   if (r !== "filter" || S === 0) return S;
   h?.();
-  let w = s === "preserve" ? (await stat(e)).mode & 511 : void 0;
-  return (
-    await publishWriteAtomic(
-      e,
-      y.length
-        ? `${y.join(`
+  let exactMode = s === "preserve" ? (await stat(e)).mode & 511 : undefined;
+  await publishWriteAtomic(
+    e,
+    y.length
+      ? `${y.join(`
 `)}
 `
-        : "",
-      { exactMode: w },
-    ),
-    S
+      : "",
+    {
+      exactMode,
+    },
   );
+  return S;
 }
 //@ chunk-s61vbvea.js:21791-21816 placement
-class J2t extends Error {}
+/**
+ * history.jsonl 不是普通文件或扫描期间被改写时抛出的错误。
+ */
+class HistoryFileError extends Error {}
 //@ chunk-s61vbvea.js:21816-21831 placement
-var im = 4194304;
+var HISTORY_SCAN_CHUNK_BYTES = 4194304;
+//@ chunk-s61vbvea.js:21831-23698 placement
 /**
  * 安全打开 history.jsonl（拒绝符号链接、特殊文件，校验哈希）
  */
-//@ chunk-s61vbvea.js:21831-23698 placement
 async function openHistoryFile(
-  e,
-  n,
-  {
-    start: start,
-    end: end,
-    tail: tail,
-    expect: expect,
-    verifiedHead: verifiedHead,
-    residueBytes: residueBytes = 0,
-  },
+  historyPath,
+  shouldDrop,
+  { start, end, tail, expect, verifiedHead, residueBytes = 0 },
 ) {
-  let R = [],
-    x = 0,
-    P = (re) => {
-      let he = re.endsWith("\r") ? re.slice(0, -1) : re;
-      if (n(he)) x++;
-      else R.push(he);
-    },
-    j = !0,
-    G = !1,
-    L = (re) => {
-      j = !1;
-      let str = re.toString("utf8"),
-        Se = str.endsWith("\r") ? str.slice(0, -1) : str;
-      if (residueBytes <= 0 || re.length <= residueBytes || !n(Se)) {
-        P(str);
-        return;
-      }
-      ((G = !0),
-        P(re.subarray(0, residueBytes).toString("utf8")),
-        P(re.subarray(residueBytes).toString("utf8")));
-    },
-    q = 0,
-    alloc = Buffer.alloc(0),
-    Z = createHash("sha256"),
-    ee;
+  let R = [];
+  let x = 0;
+  let P = (re) => {
+    let he = re.endsWith("\r") ? re.slice(0, -1) : re;
+    if (shouldDrop(he)) x++;
+    else R.push(he);
+  };
+  let j = true;
+  let split = false;
+  let L = (re) => {
+    j = false;
+    let str = re.toString("utf8");
+    let Se = str.endsWith("\r") ? str.slice(0, -1) : str;
+    if (residueBytes <= 0 || re.length <= residueBytes || !shouldDrop(Se)) {
+      P(str);
+      return;
+    }
+    split = true;
+    P(re.subarray(0, residueBytes).toString("utf8"));
+    P(re.subarray(residueBytes).toString("utf8"));
+  };
+  let q = 0;
+  let Q = Buffer.alloc(0);
+  let hash = createHash("sha256");
+  let ee;
   try {
-    ee = await open(e, constants.O_RDONLY | constants.O_NOFOLLOW | O_NONBLOCK);
+    ee = await open(historyPath, constants.O_RDONLY | constants.O_NOFOLLOW | O_NONBLOCK);
   } catch (error) {
-    let he = getErrnoCode(error);
-    if (he === "ELOOP" || he === "ENXIO") throw new J2t("history.jsonl is not a regular file at open");
+    let errnoCode = getErrnoCode(error);
+    if (errnoCode === "ELOOP" || errnoCode === "ENXIO")
+      throw new HistoryFileError("history.jsonl is not a regular file at open");
     throw error;
   }
   try {
     let stats = await ee.stat();
     if (
       !stats.isFile() ||
-      (expect !== void 0 &&
+      (expect !== undefined &&
         ((expect.ino !== 0 && stats.ino !== expect.ino) || stats.birthtimeMs !== expect.birthtimeMs))
     )
-      throw new J2t("history.jsonl changed between its screen and the scan");
-    if (verifiedHead !== void 0) {
-      let Se = createHash("sha256"),
-        ce = 0;
+      throw new HistoryFileError("history.jsonl changed between its screen and the scan");
+    if (verifiedHead !== undefined) {
+      let hash = createHash("sha256");
+      let ce = 0;
       while (ce < verifiedHead.bytes) {
-        let alloc = Buffer.alloc(Math.min(im, verifiedHead.bytes - ce)),
-          { bytesRead: bytesRead } = await ee.read(alloc, 0, alloc.length, ce);
+        let we = Buffer.alloc(Math.min(HISTORY_SCAN_CHUNK_BYTES, verifiedHead.bytes - ce));
+        let { bytesRead } = await ee.read(we, 0, we.length, ce);
         if (bytesRead === 0) break;
-        (Se.update(alloc.subarray(0, bytesRead)), (ce += bytesRead));
+        hash.update(we.subarray(0, bytesRead));
+        ce += bytesRead;
       }
-      if (ce !== verifiedHead.bytes || Se.digest("hex") !== verifiedHead.digest)
-        throw new J2t("history.jsonl was rewritten under the head an earlier scan judged");
+      if (ce !== verifiedHead.bytes || hash.digest("hex") !== verifiedHead.digest)
+        throw new HistoryFileError("history.jsonl was rewritten under the head an earlier scan judged");
     }
     let max = Math.max(0, end - start);
     while (q < max) {
-      let alloc_2 = Buffer.alloc(Math.min(im, max - q)),
-        ce = 0;
-      while (ce < alloc_2.length) {
-        let { bytesRead: bytesRead } = await ee.read(alloc_2, ce, alloc_2.length - ce, start + q + ce);
+      let Se = Buffer.alloc(Math.min(HISTORY_SCAN_CHUNK_BYTES, max - q));
+      let ce = 0;
+      while (ce < Se.length) {
+        let { bytesRead } = await ee.read(Se, ce, Se.length - ce, start + q + ce);
         if (bytesRead === 0) break;
         ce += bytesRead;
       }
       if (ce === 0) break;
       q += ce;
-      let we = alloc.length ? Buffer.concat([alloc, alloc_2.subarray(0, ce)]) : alloc_2.subarray(0, ce),
-        index = we.lastIndexOf(10);
+      let we = Q.length ? Buffer.concat([Q, Se.subarray(0, ce)]) : Se.subarray(0, ce);
+      let index = we.lastIndexOf(10);
       if (index === -1) {
-        alloc = we;
+        Q = we;
         continue;
       }
-      Z.update(we.subarray(0, index + 1));
+      hash.update(we.subarray(0, index + 1));
       let Ee = 0;
       if (j) {
         let index = we.indexOf(10);
-        (L(we.subarray(0, index)), (Ee = index + 1));
+        L(we.subarray(0, index));
+        Ee = index + 1;
       }
-      let parts = we.toString("utf8", Ee, index + 1).split(`
+      let lines = we.toString("utf8", Ee, index + 1).split(`
 `);
-      parts.pop();
-      for (let Me of parts) P(Me);
-      alloc = we.subarray(index + 1);
+      lines.pop();
+      for (let line of lines) P(line);
+      Q = we.subarray(index + 1);
     }
   } finally {
     await ee.close();
   }
-  let ae = alloc.length === 0,
-    se = q - alloc.length;
-  if (tail === "judge" && alloc.length > 0) {
-    if ((Z.update(alloc), j)) L(alloc);
-    else P(alloc.toString("utf8"));
+  let terminated = Q.length === 0;
+  let se = q - Q.length;
+  if (tail === "judge" && Q.length > 0) {
+    hash.update(Q);
+    if (j) L(Q);
+    else P(Q.toString("utf8"));
     se = q;
   }
-  return { kept: R, dropped: x, consumed: start + se, digest: Z.digest("hex"), terminated: ae, split: G };
+  return {
+    kept: R,
+    dropped: x,
+    consumed: start + se,
+    digest: hash.digest("hex"),
+    terminated,
+    split,
+  };
 }
 //@ chunk-s61vbvea.js:23698-23802 placement
 function toCharCodes(e) {
   let uint16Array = new Uint16Array(e.length);
-  for (let r = 0; r < e.length; r++) uint16Array[r] = e.charCodeAt(r);
+  for (let j = 0; j < e.length; j++) uint16Array[j] = e.charCodeAt(j);
   return uint16Array;
 }
 //@ chunk-s61vbvea.js:23802-23947 placement
 function kmpFailureTable(e) {
   let int32Array = new Int32Array(e.length);
-  for (let r = 1, s = 0; r < e.length; r++) {
-    while (s > 0 && e[r] !== e[s]) s = int32Array[s - 1];
-    if (e[r] === e[s]) s++;
-    int32Array[r] = s;
+  for (let j = 1, s = 0; j < e.length; j++) {
+    while (s > 0 && e[j] !== e[s]) s = int32Array[s - 1];
+    if (e[j] === e[s]) s++;
+    int32Array[j] = s;
   }
   return int32Array;
 }
 //@ chunk-s61vbvea.js:23947-23964 placement
-var Px = 8,
-  Ox = 1024;
+var FINDER_PREFIX_CHARS = 8;
+var FINDER_CACHE_MAX = 1024;
+//@ chunk-s61vbvea.js:23964-24692 placement
 /**
  * 为大文本创建子串查找器：先用首段 indexOf 定位，再用 KMP 精确匹配，压缩周期性重复的命中，返回按位置二分查找下一次出现的函数（结果缓存）。
  */
-//@ chunk-s61vbvea.js:23964-24692 placement
 function createSubstringFinder(e) {
-  let haystackCodes,
-    cache = new Map();
+  let haystackCodes;
+  let cache = new Map();
   return (s) => {
     let cached = cache.get(s);
-    if (cached !== void 0) return cached;
-    let sliced = s.slice(0, Px),
-      firstIndex = s.length > e.length ? -1 : e.indexOf(sliced);
+    if (cached !== undefined) return cached;
+    let sliced = s.slice(0, FINDER_PREFIX_CHARS);
+    let firstIndex = s.length > e.length ? -1 : e.indexOf(sliced);
     if (firstIndex === -1) {
       let q = () => -1;
-      return (cache.set(s, q), q);
+      cache.set(s, q);
+      return q;
     }
-    let needleCodes = toCharCodes(s),
-      failure = kmpFailureTable(needleCodes),
-      period = needleCodes.length - failure.at(-1),
-      starts = [],
-      runEnds = [],
-      codes = (haystackCodes ??= toCharCodes(e));
+    let needleCodes = toCharCodes(s);
+    let failure = kmpFailureTable(needleCodes);
+    let period = needleCodes.length - failure.at(-1);
+    let starts = [];
+    let runEnds = [];
+    let codes = (haystackCodes ??= toCharCodes(e));
     for (let q = firstIndex, Q = 0; q < codes.length; q++) {
       if (Q === 0) {
         let index = e.indexOf(sliced, q);
         if (index === -1) break;
-        ((q = index + sliced.length - 1), (Q = sliced.length - 1));
+        q = index + sliced.length - 1;
+        Q = sliced.length - 1;
       }
       let Z = codes[q];
       while (Q > 0 && Z !== needleCodes[Q]) Q = failure[Q - 1];
       if (Z === needleCodes[Q]) Q++;
       if (Q === needleCodes.length) {
-        let ee = q + 1 - needleCodes.length,
-          ae = runEnds.length - 1;
+        let ee = q + 1 - needleCodes.length;
+        let ae = runEnds.length - 1;
         if (ae >= 0 && ee - runEnds[ae] === period) runEnds[ae] = ee;
-        else (starts.push(ee), runEnds.push(ee));
+        else {
+          starts.push(ee);
+          runEnds.push(ee);
+        }
         Q = failure[Q - 1];
       }
     }
     let findNext = (q) => {
-      let Q = 0,
-        Z = runEnds.length;
+      let Q = 0;
+      let Z = runEnds.length;
       while (Q < Z) {
         let ae = (Q + Z) >> 1;
         if (runEnds[ae] < q) Q = ae + 1;
         else Z = ae;
       }
       let ee = starts[Q];
-      if (ee === void 0) return -1;
+      if (ee === undefined) return -1;
       return q > ee ? ee + Math.ceil((q - ee) / period) * period : ee;
     };
-    if (starts.length <= Ox) cache.set(s, findNext);
+    if (starts.length <= FINDER_CACHE_MAX) cache.set(s, findNext);
     return findNext;
   };
 }
 //@ chunk-s61vbvea.js:24692-24722 placement
-var Ix = /[\p{L}\p{N}_@#./\\]/u;
+var WORD_CHAR_RE = /[\p{L}\p{N}_@#./\\]/u;
+//@ chunk-s61vbvea.js:24722-25109 placement
 /**
  * 判断匹配是否独立成词：前面（跳过开括号类字符）不是词字符，后面（跳过闭括号类字符）是结尾或空白；带缓存区间。
  */
-//@ chunk-s61vbvea.js:24722-25109 placement
 function isWordBoundaryMatch(e, n, r, s, h, y, S) {
   if (!y) {
     let R = n - 1;
-    while (R >= s && K_s.test(e[R])) R = R <= S.openersTo && R >= S.openersFrom ? S.openersFrom - 1 : R - 1;
-    if (n - 1 >= s && R < n - 1) ((S.openersFrom = Math.max(R + 1, s)), (S.openersTo = n - 1));
-    if (R >= s && Ix.test(e[R])) return !1;
+    while (R >= s && OPENING_PUNCT_RE.test(e[R]))
+      R = R <= S.openersTo && R >= S.openersFrom ? S.openersFrom - 1 : R - 1;
+    if (n - 1 >= s && R < n - 1) {
+      S.openersFrom = Math.max(R + 1, s);
+      S.openersTo = n - 1;
+    }
+    if (R >= s && WORD_CHAR_RE.test(e[R])) return false;
   }
   let w = r;
-  while (w < h && V_s.test(e[w])) w = w >= S.closersFrom && w < S.closersTo ? S.closersTo : w + 1;
-  if (((w = Math.min(w, h)), w > r)) ((S.closersFrom = r), (S.closersTo = w));
+  while (w < h && CLOSING_PUNCT_RE.test(e[w]))
+    w = w >= S.closersFrom && w < S.closersTo ? S.closersTo : w + 1;
+  w = Math.min(w, h);
+  if (w > r) {
+    S.closersFrom = r;
+    S.closersTo = w;
+  }
   return w >= h || /\s/.test(e[w]);
 }
 //@ chunk-s61vbvea.js:25109-25184 placement
-function am() {
-  return { openersFrom: 0, openersTo: -1, closersFrom: 0, closersTo: 0 };
+function emptySpanBudget() {
+  return {
+    openersFrom: 0,
+    openersTo: -1,
+    closersFrom: 0,
+    closersTo: 0,
+  };
 }
+//@ chunk-s61vbvea.js:25184-25346 placement
 /**
  * 找出文本中与历史内容相同的区间（多种匹配方式合并）。
  */
-//@ chunk-s61vbvea.js:25184-25346 placement
-function findHistoryCopySpans(e, n, r = createSubstringFinder(e)) {
-  let s = pickHistoryCopy(e, n, r, !0, "anyCopy");
+function findHistoryCopySpans(e, n, substringFinder = createSubstringFinder(e)) {
+  let s = pickHistoryCopy(e, n, substringFinder, true, "anyCopy");
   return mergeSpans([
     ...s.spans,
-    ...pickHistoryCopy(e, n, r, !1, "anyCopy").spans,
-    ...(s.skipped ? pickHistoryCopy(e, n, r, !0, "standingCopy").spans : []),
+    ...pickHistoryCopy(e, n, substringFinder, false, "anyCopy").spans,
+    ...(s.skipped ? pickHistoryCopy(e, n, substringFinder, true, "standingCopy").spans : []),
   ]);
 }
 //@ chunk-s61vbvea.js:25346-26375 placement
 function pickHistoryCopy(e, n, r, s, h) {
-  let y = [],
-    S = [],
-    w = !1,
-    sorted = uniq(n)
-      .filter((x) => x !== "")
-      .sort((x, P) => P.length - x.length);
+  let y = [];
+  let S = [];
+  let skipped = false;
+  let sorted = uniq(n)
+    .filter((x) => x !== "")
+    .sort((x, P) => P.length - x.length);
   for (let x of sorted) {
-    let P = r(x),
-      j = [],
-      G = [],
-      L = am(),
-      q = 0,
-      Q = 0,
-      Z = y[0]?.from ?? e.length,
-      ee = 0,
-      ae = 0;
+    let P = r(x);
+    let j = [];
+    let G = [];
+    let L = emptySpanBudget();
+    let q = 0;
+    let Q = 0;
+    let Z = y[0]?.from ?? e.length;
+    let ee = 0;
+    let ae = 0;
     for (;;) {
       let se = P(ee);
       if (se === -1) break;
       let re = se + x.length;
       if (re > Z || se < Q) {
-        while (q < y.length && se >= y[q].from) ((Q = y[q].to), q++);
-        if (((Z = y[q]?.from ?? e.length), re <= Q)) {
+        while (q < y.length && se >= y[q].from) {
+          Q = y[q].to;
+          q++;
+        }
+        Z = y[q]?.from ?? e.length;
+        if (re <= Q) {
           ee = Q - x.length + 1;
           continue;
         }
-        let he = se >= Q && re <= Z,
-          Se = !1;
+        let he = se >= Q && re <= Z;
+        let Se = false;
         if (!he && isWordBoundaryMatch(e, se, re, Q, Z, se === ae, L)) {
-          let ce = se < Q ? P(Q) : -1,
-            we = ce !== -1 && ce < Math.min(re, Z);
+          let ce = se < Q ? P(Q) : -1;
+          let we = ce !== -1 && ce < Math.min(re, Z);
           if (we && h === "standingCopy") {
             let ie = Q;
             while (ie < ce && /\s/.test(e[ie])) ie++;
-            we = ie === ce && isWordBoundaryMatch(e, ce, ce + x.length, Q, Z, ce === Q, am());
+            we = ie === ce && isWordBoundaryMatch(e, ce, ce + x.length, Q, Z, ce === Q, emptySpanBudget());
           }
-          if (we) w = !0;
-          else (G.push({ from: se, to: re }), (Se = !0));
+          if (we) skipped = true;
+          else {
+            G.push({
+              from: se,
+              to: re,
+            });
+            Se = true;
+          }
         }
-        if (se >= Q && re > Z) ((Q = y[q].to), q++, (Z = y[q]?.from ?? e.length), (ee = re));
-        else ee = Math.max(se, Q);
+        if (se >= Q && re > Z) {
+          Q = y[q].to;
+          q++;
+          Z = y[q]?.from ?? e.length;
+          ee = re;
+        } else ee = Math.max(se, Q);
         ae = s && Se ? Math.max(re, Q) : Q;
         continue;
       }
-      if (isWordBoundaryMatch(e, se, re, Q, Z, se === ae, L)) (j.push({ from: se, to: re }), (ae = re));
+      if (isWordBoundaryMatch(e, se, re, Q, Z, se === ae, L)) {
+        j.push({
+          from: se,
+          to: re,
+        });
+        ae = re;
+      }
       ee = re;
     }
     if (s) {
@@ -376,85 +425,109 @@ function pickHistoryCopy(e, n, r, s, h) {
     if (j.length > 0) y = [...y, ...j].sort((se, re) => se.from - re.from);
     if (G.length > 0) S = mergeSpans([...S, ...G]);
   }
-  return { spans: S.length === 0 ? y : mergeSpans([...y, ...S]), skipped: w };
+  return {
+    spans: S.length === 0 ? y : mergeSpans([...y, ...S]),
+    skipped,
+  };
 }
 //@ chunk-s61vbvea.js:26375-26538 placement
 function mergeSpans(e) {
   let n = [];
   for (let r of e.sort((s, h) => s.from - h.from)) {
-    let at = n.at(-1);
-    if (at !== void 0 && r.from < at.to) at.to = Math.max(at.to, r.to);
-    else n.push({ ...r });
+    let last = n.at(-1);
+    if (last !== undefined && r.from < last.to) last.to = Math.max(last.to, r.to);
+    else
+      n.push({
+        ...r,
+      });
   }
   return n;
 }
+//@ chunk-s61vbvea.js:26538-26707 placement
 /**
  * 合并重叠或相接的区间。
  */
-//@ chunk-s61vbvea.js:26538-26707 placement
 function mergeAdjacentSpans(e) {
   let n = [];
   for (let r of [...e].sort((s, h) => s.from - h.from)) {
-    let at = n.at(-1);
-    if (at !== void 0 && r.from <= at.to) at.to = Math.max(at.to, r.to);
-    else n.push({ ...r });
+    let last = n.at(-1);
+    if (last !== undefined && r.from <= last.to) last.to = Math.max(last.to, r.to);
+    else
+      n.push({
+        ...r,
+      });
   }
   return n;
 }
 //@ chunk-s61vbvea.js:26707-26978 placement
-function findAllMatches(e, n) {
-  let r = kmpFailureTable(n);
+function findAllMatches(e, charCodes) {
+  let r = kmpFailureTable(charCodes);
   if (r.at(-1) === 0) return;
   let s = [];
-  for (let h = 0, y = 0; h < e.length; h++) {
-    while (y > 0 && e[h] !== n[y]) y = r[y - 1];
-    if (e[h] === n[y]) y++;
-    if (y === n.length) {
-      let S = h + 1 - n.length,
-        at = s.at(-1);
-      if (at !== void 0 && S <= at.to) at.to = h + 1;
-      else s.push({ from: S, to: h + 1 });
+  for (let j = 0, y = 0; j < e.length; j++) {
+    while (y > 0 && e[j] !== charCodes[y]) y = r[y - 1];
+    if (e[j] === charCodes[y]) y++;
+    if (y === charCodes.length) {
+      let S = j + 1 - charCodes.length;
+      let last = s.at(-1);
+      if (last !== undefined && S <= last.to) last.to = j + 1;
+      else
+        s.push({
+          from: S,
+          to: j + 1,
+        });
       y = r[y - 1];
     }
   }
   return s;
 }
+//@ chunk-s61vbvea.js:26978-27253 placement
 /**
  * 在文本中找出各粘贴内容出现的区间（含 < 的内容用 KMP 全匹配），合并后返回。
  */
-//@ chunk-s61vbvea.js:26978-27253 placement
-function findPasteSpans(e, n, r = createSubstringFinder(e)) {
-  let s = [],
-    h;
+function findPasteSpans(e, n, substringFinder = createSubstringFinder(e)) {
+  let s = [];
+  let h;
   for (let y of uniq(n)) {
     if (y === "") continue;
-    let S = r(y),
-      w = y.includes("<") && S(0) !== -1 ? findAllMatches((h ??= toCharCodes(e)), toCharCodes(y)) : void 0;
-    if (w !== void 0) {
+    let S = substringFinder(y);
+    let w =
+      y.includes("<") && S(0) !== -1 ? findAllMatches((h ??= toCharCodes(e)), toCharCodes(y)) : undefined;
+    if (w !== undefined) {
       for (let R of w) s.push(R);
       continue;
     }
-    for (let R = S(0); R !== -1; R = S(R + y.length)) s.push({ from: R, to: R + y.length });
+    for (let R = S(0); R !== -1; R = S(R + y.length))
+      s.push({
+        from: R,
+        to: R + y.length,
+      });
   }
   return mergeAdjacentSpans(s);
 }
+//@ chunk-s61vbvea.js:27253-27619 placement
 /**
  * 找出文本中带 id 的开/闭标签标记，按位置排序。
  */
-//@ chunk-s61vbvea.js:27253-27619 placement
 function findTagMarkers(e) {
   let n = [];
   for (let [r, s] of [
-    [CDi, !0],
-    [RDi, !1],
+    [PASTED_CONTENT_OPEN_PREFIX, true],
+    [PASTED_CONTENT_CLOSE_PREFIX, false],
   ])
     for (let index = e.indexOf(r); index !== -1; index = e.indexOf(r, index + 1)) {
-      let y = index + r.length,
-        sliced = e.slice(y, y + GDn),
-        w = y + GDn;
+      let y = index + r.length;
+      let sliced = e.slice(y, y + PASTE_ID_LENGTH);
+      let w = y + PASTE_ID_LENGTH;
       if (!isPasteIdHex(sliced)) continue;
       if (s) {
-        if (e.startsWith(G_s, w)) n.push({ at: index, end: w + G_s.length, id: sliced, opens: s });
+        if (e.startsWith(PASTED_CONTENT_LINE_END, w))
+          n.push({
+            at: index,
+            end: w + PASTED_CONTENT_LINE_END.length,
+            id: sliced,
+            opens: s,
+          });
       } else if (
         e.startsWith('">', w) &&
         (index === 0 ||
@@ -462,123 +535,138 @@ function findTagMarkers(e) {
             `
 `)
       )
-        n.push({ at: index, end: w + 2, id: sliced, opens: s });
+        n.push({
+          at: index,
+          end: w + 2,
+          id: sliced,
+          opens: s,
+        });
     }
   return n.sort((r, s) => r.at - s.at);
 }
+//@ chunk-s61vbvea.js:27619-28298 placement
 /**
  * 在文本中配对开/闭标签标记，生成区块（含正文范围），跳过与排除区间重叠或被指定文本包含的标记。
  */
-//@ chunk-s61vbvea.js:27619-28298 placement
 function findTaggedBlocks(e, n = [], r = []) {
-  let markers = findTagMarkers(e),
-    isExcluded = (R) =>
-      r.some((x) => x !== "" && e.slice(Math.max(0, R.at - x.length + 1), R.end + x.length - 1).includes(x)),
-    fill = Array(markers.length + 1).fill(markers.length);
-  for (let R = markers.length - 1; R >= 0; R--) {
-    let x = markers[R];
-    fill[R] = findOverlappingSpan(n, x.at, x.end) === -1 && !isExcluded(x) ? R : fill[R + 1];
+  let markers = findTagMarkers(e);
+  let isExcluded = (R) =>
+    r.some((x) => x !== "" && e.slice(Math.max(0, R.at - x.length + 1), R.end + x.length - 1).includes(x));
+  let y = Array(markers.length + 1).fill(markers.length);
+  for (let j = markers.length - 1; j >= 0; j--) {
+    let x = markers[j];
+    y[j] = findOverlappingSpan(n, x.at, x.end) === -1 && !isExcluded(x) ? j : y[j + 1];
   }
   let closersById = new Map();
-  markers.forEach((R, x) => {
-    if (!R.opens) {
-      let P = closersById.get(R.id);
-      if (P === void 0) closersById.set(R.id, [x]);
+  markers.forEach((marker, x) => {
+    if (!marker.opens) {
+      let P = closersById.get(marker.id);
+      if (P === undefined) closersById.set(marker.id, [x]);
       else P.push(x);
     }
   });
   let blocks = [];
-  return (
-    markers.forEach((R, x) => {
-      if (!R.opens) return;
-      let P = closersById.get(R.id) ?? [],
-        j = fill[x + 1],
-        G = 0,
-        L = P.length;
-      while (G < L) {
-        let Z = (G + L) >> 1;
-        if (P[Z] <= j) G = Z + 1;
-        else L = Z;
-      }
-      let q = P[G - 1];
-      if (q === void 0 || q <= x || markers[q].at < R.end) return;
-      let Q = markers[q];
-      blocks.push({
-        from: R.at,
-        to:
-          e[Q.end] ===
-          `
+  markers.forEach((marker, x) => {
+    if (!marker.opens) return;
+    let P = closersById.get(marker.id) ?? [];
+    let j = y[x + 1];
+    let G = 0;
+    let L = P.length;
+    while (G < L) {
+      let Z = (G + L) >> 1;
+      if (P[Z] <= j) G = Z + 1;
+      else L = Z;
+    }
+    let q = P[G - 1];
+    if (q === undefined || q <= x || markers[q].at < marker.end) return;
+    let Q = markers[q];
+    blocks.push({
+      from: marker.at,
+      to:
+        e[Q.end] ===
+        `
 `
-            ? Q.end + 1
-            : Q.end,
-        bodyFrom: R.end,
-        bodyTo: Math.max(R.end, Q.at - 1),
-      });
-    }),
-    blocks
-  );
+          ? Q.end + 1
+          : Q.end,
+      bodyFrom: marker.end,
+      bodyTo: Math.max(marker.end, Q.at - 1),
+    });
+  });
+  return blocks;
 }
 //@ chunk-s61vbvea.js:28298-28425 placement
-function findOverlappingSpan(e, n, r) {
-  let s = 0,
-    h = e.length;
+function findOverlappingSpan(e, n, end) {
+  let s = 0;
+  let h = e.length;
   while (s < h) {
     let y = (s + h) >> 1;
     if (e[y].to <= n) s = y + 1;
     else h = y;
   }
-  return s < e.length && e[s].from < r ? s : -1;
+  return s < e.length && e[s].from < end ? s : -1;
 }
+//@ chunk-s61vbvea.js:28425-28680 placement
 /**
  * 合并区块与额外区间（取并集，保留正文范围）。
  */
-//@ chunk-s61vbvea.js:28425-28680 placement
-function mergeBlocks(e, n) {
-  let sorted = [...n, ...e.map((h) => ({ ...h, bodyFrom: h.from, bodyTo: h.to }))].sort(
-      (h, y) => h.from - y.from || y.to - h.to,
-    ),
-    s = [];
+function mergeBlocks(historyCopySpans, taggedBlocks) {
+  let sorted = [
+    ...taggedBlocks,
+    ...historyCopySpans.map((h) => ({
+      ...h,
+      bodyFrom: h.from,
+      bodyTo: h.to,
+    })),
+  ].sort((h, y) => h.from - y.from || y.to - h.to);
+  let s = [];
   for (let h of sorted) {
-    let at = s.at(-1);
-    if (at !== void 0 && h.from < at.to) {
-      if (h.to > at.to) ((at.to = h.to), (at.bodyTo = h.bodyTo));
-    } else s.push({ ...h });
+    let last = s.at(-1);
+    if (last !== undefined && h.from < last.to) {
+      if (h.to > last.to) {
+        last.to = h.to;
+        last.bodyTo = h.bodyTo;
+      }
+    } else
+      s.push({
+        ...h,
+      });
   }
   return s;
 }
+//@ chunk-s61vbvea.js:28680-29131 placement
 /**
  * 按区块重组文本：区块外的片段经转换，区块内的正文经渲染并用开/闭标记包裹，控制前后空行。
  */
-//@ chunk-s61vbvea.js:28680-29131 placement
-function renderWithBlocks(e, n, r, s) {
-  let parts = [],
-    trailingNewlines = 0,
-    atStart = !0,
-    push = (j) => {
-      if (j === "") return;
-      (parts.push(j), (atStart = !1));
-      let G = 0;
-      while (
-        G < j.length &&
-        j[j.length - 1 - G] ===
-          `
+function renderWithBlocks(e, n, r, escapePastedContentTag) {
+  let parts = [];
+  let trailingNewlines = 0;
+  let atStart = true;
+  let push = (j) => {
+    if (j === "") return;
+    parts.push(j);
+    atStart = false;
+    let G = 0;
+    while (
+      G < j.length &&
+      j[j.length - 1 - G] ===
+        `
 `
-      )
-        G++;
-      trailingNewlines = G === j.length ? trailingNewlines + G : G;
-    },
-    pos = 0,
-    afterBlock = !1,
-    flushUntil = (j) => {
-      let G = s(e.slice(pos, j));
-      if (G !== "")
-        push(
-          (afterBlock
-            ? `
+    )
+      G++;
+    trailingNewlines = G === j.length ? trailingNewlines + G : G;
+  };
+  let pos = 0;
+  let afterBlock = false;
+  let flushUntil = (j) => {
+    let G = escapePastedContentTag(e.slice(pos, j));
+    if (G !== "")
+      push(
+        (afterBlock
+          ? `
 `
-            : "") + G,
-        );
-    };
+          : "") + G,
+      );
+  };
   for (let j of n) {
     let from = j.from;
     while (
@@ -590,7 +678,7 @@ function renderWithBlocks(e, n, r, s) {
       from--;
     flushUntil(from);
     let L = r(e.slice(j.bodyFrom, j.bodyTo));
-    (push(
+    push(
       atStart || trailingNewlines === 0
         ? `
 
@@ -599,44 +687,54 @@ function renderWithBlocks(e, n, r, s) {
           ? `
 `
           : "",
-    ),
-      push(`${L.opener}${L.body}
-${L.closer}`),
-      (pos = j.to));
+    );
+    push(`${L.opener}${L.body}
+${L.closer}`);
+    pos = j.to;
     while (
       e[pos] ===
       `
 `
     )
       pos++;
-    afterBlock = !0;
+    afterBlock = true;
   }
-  return (flushUntil(e.length), parts.join(""));
+  flushUntil(e.length);
+  return parts.join("");
 }
 //@ chunk-s61vbvea.js:29131-29220 placement
-var Znt = (e) => e.promptSubmitted === void 0 && (e.screeningPending === !0 || e.screeningOwed === !0);
+/**
+ * 判断历史记录是否仍在等待/欠一次屏幕检查。
+ */
+var isScreeningPendingEntry = (e) =>
+  e.promptSubmitted === undefined && (e.screeningPending === true || e.screeningOwed === true);
 //@ chunk-s61vbvea.js:29220-29250 placement
-var EKt = (e, n) => (n === e ? void 0 : n);
+/**
+ * 值未变化时返回 undefined，否则返回新值。
+ */
+var unchangedOrUndefined = (e, text) => (text === e ? undefined : text);
 //@ chunk-s61vbvea.js:29250-29487 placement
-function getHistoryEntryForCommand(e, n, r) {
-  let { screened: screened, unanswered: unanswered } = r,
-    historyEntry = e.historyEntry,
-    S = screened?.dropped === !0 || (unanswered === "skipped" && screened === void 0 && Znt(e));
-  if (historyEntry === void 0 || S) return;
-  let w = screened === void 0 ? EKt(e.value, e.promptSubmitted?.text) : screened.rewritten;
-  return w === void 0 ? historyEntry : n(historyEntry, w);
+function getHistoryEntryForCommand(e, placed, r) {
+  let { screened, unanswered } = r;
+  let historyEntry = e.historyEntry;
+  let S =
+    screened?.dropped === true ||
+    (unanswered === "skipped" && screened === undefined && isScreeningPendingEntry(e));
+  if (historyEntry === undefined || S) return;
+  let w =
+    screened === undefined ? unchangedOrUndefined(e.value, e.promptSubmitted?.text) : screened.rewritten;
+  return w === undefined ? historyEntry : placed(historyEntry, w);
 }
-
 export {
-  aO,
+  lastTextBlockText,
   findHistoryCopySpans,
-  xnt,
+  HISTORY_FILE_RETRY_OPTIONS,
   getHistoryEntryForCommand,
-  EKt,
-  Znt,
+  unchangedOrUndefined,
+  isScreeningPendingEntry,
   openHistoryFile,
-  J2t,
-  SVo,
+  HistoryFileError,
+  splitHistoryStream,
   splitHistoryLines,
   filterHistoryFile,
   createSubstringFinder,

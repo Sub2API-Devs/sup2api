@@ -6,74 +6,77 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { xe } from "./Node.js";
-import { yt } from "./NodeList.js";
-import { Qr } from "./ContainerNode.js";
-import { Ft } from "./Element.js";
-import { ta } from "./select.js";
-import { ee } from "./utils.js";
+import { require_Node } from "./Node.js";
+import { require_NodeList } from "./NodeList.js";
+import { require_ContainerNode } from "./ContainerNode.js";
+import { require_Element } from "./Element.js";
+import { require_select } from "./select.js";
+import { require_utils } from "./utils.js";
 
 //@ chunk-vwj6ccer.js:65458-66492 cjs-fingerprint
-var kn = x(function (Sd, $s) {
-  $s.exports = Dn;
-  var ix = xe(),
-    sx = yt(),
-    Qs = Qr(),
-    sa = Ft(),
-    cx = ta(),
-    Ys = ee();
-  function Dn(e) {
-    (Qs.call(this), (this.nodeType = ix.DOCUMENT_FRAGMENT_NODE), (this.ownerDocument = e));
+var require_DocumentFragment = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = DocumentFragment;
+  var Node = require_Node();
+  var NodeList = require_NodeList();
+  var ContainerNode = require_ContainerNode();
+  var Element = require_Element();
+  var select = require_select();
+  var utils = require_utils();
+  function DocumentFragment(doc) {
+    ContainerNode.call(this);
+    this.nodeType = Node.DOCUMENT_FRAGMENT_NODE;
+    this.ownerDocument = doc;
   }
-  Dn.prototype = Object.create(Qs.prototype, {
-    nodeName: { value: "#document-fragment" },
+  DocumentFragment.prototype = Object.create(ContainerNode.prototype, {
+    nodeName: {
+      value: "#document-fragment",
+    },
     nodeValue: {
       get: function () {
         return null;
       },
       set: function () {},
     },
-    textContent: Object.getOwnPropertyDescriptor(sa.prototype, "textContent"),
-    innerText: Object.getOwnPropertyDescriptor(sa.prototype, "innerText"),
+    textContent: Object.getOwnPropertyDescriptor(Element.prototype, "textContent"),
+    innerText: Object.getOwnPropertyDescriptor(Element.prototype, "innerText"),
     querySelector: {
-      value: function (e) {
-        var querySelectorAll = this.querySelectorAll(e);
-        return querySelectorAll.length ? querySelectorAll[0] : null;
+      value: function (selector) {
+        var nodes = this.querySelectorAll(selector);
+        return nodes.length ? nodes[0] : null;
       },
     },
     querySelectorAll: {
-      value: function (e) {
-        var create = Object.create(this);
-        ((create.isHTML = !0),
-          (create.getElementsByTagName = sa.prototype.getElementsByTagName),
-          (create.nextElement = Object.getOwnPropertyDescriptor(sa.prototype, "firstElementChild").get));
-        var r = cx(e, create);
-        return r.item ? r : new sx(r);
+      value: function (selector) {
+        var context = Object.create(this);
+        context.isHTML = true;
+        context.getElementsByTagName = Element.prototype.getElementsByTagName;
+        context.nextElement = Object.getOwnPropertyDescriptor(Element.prototype, "firstElementChild").get;
+        var nodes = select(selector, context);
+        return nodes.item ? nodes : new NodeList(nodes);
       },
     },
     clone: {
       value: function () {
-        return new Dn(this.ownerDocument);
+        return new DocumentFragment(this.ownerDocument);
       },
     },
     isEqual: {
-      value: function (t) {
-        return !0;
+      value: function (n) {
+        return true;
       },
     },
     innerHTML: {
       get: function () {
         return this.serialize();
       },
-      set: Ys.nyi,
+      set: utils.nyi,
     },
     outerHTML: {
       get: function () {
         return this.serialize();
       },
-      set: Ys.nyi,
+      set: utils.nyi,
     },
   });
 });
-
-export { kn };
+export { require_DocumentFragment };

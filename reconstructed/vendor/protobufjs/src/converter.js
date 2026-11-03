@@ -10,257 +10,272 @@ import { nt } from "./enum.js";
 import { de } from "./util.js";
 
 //@ chunk-pwh5dx3n.js:96427-101568 cjs-fingerprint
-var ja = x(function (Cd) {
-  var Sd = Cd,
-    Pi = nt(),
-    gt = de();
-  function Ha(e, t, r, i) {
-    var s = !1;
-    if (t.resolvedType)
-      if (t.resolvedType instanceof Pi) {
-        e("switch(d%s){", i);
-        for (var values = t.resolvedType.values, keys = Object.keys(values), o = 0; o < keys.length; ++o) {
-          if (values[keys[o]] === t.typeDefault && !s) {
-            if ((e("default:")('if(typeof(d%s)==="number"){m%s=d%s;break}', i, i, i), !t.repeated))
-              e("break");
-            s = !0;
+var ja = x(function (cjsExports) {
+  var converter = cjsExports;
+  var Enum = nt();
+  var util = de();
+  function genValuePartial_fromObject(gen, field, fieldIndex, prop) {
+    var defaultAlreadyEmitted = false;
+    if (field.resolvedType) {
+      if (field.resolvedType instanceof Enum) {
+        gen("switch(d%s){", prop);
+        for (
+          var values = field.resolvedType.values, keys = Object.keys(values), i = 0;
+          i < keys.length;
+          ++i
+        ) {
+          if (values[keys[i]] === field.typeDefault && !defaultAlreadyEmitted) {
+            gen("default:")('if(typeof(d%s)==="number"){m%s=d%s;break}', prop, prop, prop);
+            if (!field.repeated) gen("break");
+            defaultAlreadyEmitted = true;
           }
-          e("case%j:", keys[o])("case %i:", values[keys[o]])("m%s=%j", i, values[keys[o]])("break");
+          gen("case%j:", keys[i])("case %i:", values[keys[i]])("m%s=%j", prop, values[keys[i]])("break");
         }
-        e("}");
+        gen("}");
       } else
-        e('if(typeof d%s!=="object")', i)("throw TypeError(%j)", t.fullName + ": object expected")(
+        gen('if(typeof d%s!=="object")', prop)("throw TypeError(%j)", field.fullName + ": object expected")(
           "m%s=types[%i].fromObject(d%s,n+1)",
-          i,
-          r,
-          i,
+          prop,
+          fieldIndex,
+          prop,
         );
-    else {
-      var l = !1;
-      switch (t.type) {
+    } else {
+      var isUnsigned = false;
+      switch (field.type) {
         case "double":
         case "float":
-          e("m%s=Number(d%s)", i, i);
+          gen("m%s=Number(d%s)", prop, prop);
           break;
         case "uint32":
         case "fixed32":
-          e("m%s=d%s>>>0", i, i);
+          gen("m%s=d%s>>>0", prop, prop);
           break;
         case "int32":
         case "sint32":
         case "sfixed32":
-          e("m%s=d%s|0", i, i);
+          gen("m%s=d%s|0", prop, prop);
           break;
         case "uint64":
-          l = !0;
+          isUnsigned = true;
         case "int64":
         case "sint64":
         case "fixed64":
         case "sfixed64":
-          e("if(util.Long)")("(m%s=util.Long.fromValue(d%s)).unsigned=%j", i, i, l)(
+          gen("if(util.Long)")("(m%s=util.Long.fromValue(d%s)).unsigned=%j", prop, prop, isUnsigned)(
             'else if(typeof d%s==="string")',
-            i,
+            prop,
           )(
             "m%s=parseInt(d%s,10)",
-            i,
-            i,
-          )('else if(typeof d%s==="number")', i)(
+            prop,
+            prop,
+          )('else if(typeof d%s==="number")', prop)(
             "m%s=d%s",
-            i,
-            i,
-          )('else if(typeof d%s==="object")', i)(
+            prop,
+            prop,
+          )('else if(typeof d%s==="object")', prop)(
             "m%s=new util.LongBits(d%s.low>>>0,d%s.high>>>0).toNumber(%s)",
-            i,
-            i,
-            i,
-            l ? "true" : "",
+            prop,
+            prop,
+            prop,
+            isUnsigned ? "true" : "",
           );
           break;
         case "bytes":
-          e('if(typeof d%s==="string")', i)(
+          gen('if(typeof d%s==="string")', prop)(
             "util.base64.decode(d%s,m%s=util.newBuffer(util.base64.length(d%s)),0)",
-            i,
-            i,
-            i,
-          )("else if(d%s.length >= 0)", i)("m%s=d%s", i, i);
+            prop,
+            prop,
+            prop,
+          )("else if(d%s.length >= 0)", prop)("m%s=d%s", prop, prop);
           break;
         case "string":
-          e("m%s=String(d%s)", i, i);
+          gen("m%s=String(d%s)", prop, prop);
           break;
         case "bool":
-          e("m%s=Boolean(d%s)", i, i);
+          gen("m%s=Boolean(d%s)", prop, prop);
           break;
       }
     }
-    return e;
+    return gen;
   }
-  Sd.fromObject = function (t) {
-    var fieldsArray = t.fieldsArray,
-      i = gt.codegen(["d", "n"], t.name + "$fromObject")("if(d instanceof this.ctor)")("return d")(
-        "if(n===undefined)n=0",
-      )("if(n>util.recursionLimit)")('throw Error("maximum nesting depth exceeded")');
-    if (!fieldsArray.length) return i("return new this.ctor");
-    i("var m=new this.ctor");
-    for (var s = 0; s < fieldsArray.length; ++s) {
-      var resolved = fieldsArray[s].resolve(),
-        safeProp = gt.safeProp(resolved.name);
-      if (resolved.map)
-        (i("if(d%s){", safeProp)('if(typeof d%s!=="object")', safeProp)(
+  converter.fromObject = function (mtype) {
+    var fields = mtype.fieldsArray;
+    var gen = util.codegen(["d", "n"], mtype.name + "$fromObject")("if(d instanceof this.ctor)")("return d")(
+      "if(n===undefined)n=0",
+    )("if(n>util.recursionLimit)")('throw Error("maximum nesting depth exceeded")');
+    if (!fields.length) return gen("return new this.ctor");
+    gen("var m=new this.ctor");
+    for (var i = 0; i < fields.length; ++i) {
+      var field = fields[i].resolve();
+      var prop = util.safeProp(field.name);
+      if (field.map) {
+        gen("if(d%s){", prop)('if(typeof d%s!=="object")', prop)(
           "throw TypeError(%j)",
-          resolved.fullName + ": object expected",
-        )("m%s={}", safeProp)("for(var ks=Object.keys(d%s),i=0;i<ks.length;++i){", safeProp),
-          i('if(ks[i]==="__proto__")')("util.makeProp(m%s,ks[i])", safeProp),
-          Ha(i, resolved, s, safeProp + "[ks[i]]")("}")("}"));
-      else if (resolved.repeated)
-        (i("if(d%s){", safeProp)("if(!Array.isArray(d%s))", safeProp)(
+          field.fullName + ": object expected",
+        )("m%s={}", prop)("for(var ks=Object.keys(d%s),i=0;i<ks.length;++i){", prop);
+        gen('if(ks[i]==="__proto__")')("util.makeProp(m%s,ks[i])", prop);
+        genValuePartial_fromObject(gen, field, i, prop + "[ks[i]]")("}")("}");
+      } else if (field.repeated) {
+        gen("if(d%s){", prop)("if(!Array.isArray(d%s))", prop)(
           "throw TypeError(%j)",
-          resolved.fullName + ": array expected",
-        )("m%s=[]", safeProp)("for(var i=0;i<d%s.length;++i){", safeProp),
-          Ha(i, resolved, s, safeProp + "[i]")("}")("}"));
-      else {
-        if (!(resolved.resolvedType instanceof Pi)) i("if(d%s!=null){", safeProp);
-        if ((Ha(i, resolved, s, safeProp), !(resolved.resolvedType instanceof Pi))) i("}");
+          field.fullName + ": array expected",
+        )("m%s=[]", prop)("for(var i=0;i<d%s.length;++i){", prop);
+        genValuePartial_fromObject(gen, field, i, prop + "[i]")("}")("}");
+      } else {
+        if (!(field.resolvedType instanceof Enum)) gen("if(d%s!=null){", prop);
+        genValuePartial_fromObject(gen, field, i, prop);
+        if (!(field.resolvedType instanceof Enum)) gen("}");
       }
     }
-    return i("return m");
+    return gen("return m");
   };
-  function Wa(e, t, r, i) {
-    if (t.resolvedType)
-      if (t.resolvedType instanceof Pi)
-        e(
+  function genValuePartial_toObject(gen, field, fieldIndex, prop) {
+    if (field.resolvedType) {
+      if (field.resolvedType instanceof Enum)
+        gen(
           "d%s=o.enums===String?(types[%i].values[m%s]===undefined?m%s:types[%i].values[m%s]):m%s",
-          i,
-          r,
-          i,
-          i,
-          r,
-          i,
-          i,
+          prop,
+          fieldIndex,
+          prop,
+          prop,
+          fieldIndex,
+          prop,
+          prop,
         );
-      else e("d%s=types[%i].toObject(m%s,o)", i, r, i);
-    else {
-      var s = !1;
-      switch (t.type) {
+      else gen("d%s=types[%i].toObject(m%s,o)", prop, fieldIndex, prop);
+    } else {
+      var isUnsigned = false;
+      switch (field.type) {
         case "double":
         case "float":
-          e("d%s=o.json&&!isFinite(m%s)?String(m%s):m%s", i, i, i, i);
+          gen("d%s=o.json&&!isFinite(m%s)?String(m%s):m%s", prop, prop, prop, prop);
           break;
         case "uint64":
-          s = !0;
+          isUnsigned = true;
         case "int64":
         case "sint64":
         case "fixed64":
         case "sfixed64":
-          e('if(typeof m%s==="number")', i)("d%s=o.longs===String?String(m%s):m%s", i, i, i)("else")(
+          gen('if(typeof m%s==="number")', prop)("d%s=o.longs===String?String(m%s):m%s", prop, prop, prop)(
+            "else",
+          )(
             "d%s=o.longs===String?util.Long.prototype.toString.call(m%s):o.longs===Number?new util.LongBits(m%s.low>>>0,m%s.high>>>0).toNumber(%s):m%s",
-            i,
-            i,
-            i,
-            i,
-            s ? "true" : "",
-            i,
+            prop,
+            prop,
+            prop,
+            prop,
+            isUnsigned ? "true" : "",
+            prop,
           );
           break;
         case "bytes":
-          e(
+          gen(
             "d%s=o.bytes===String?util.base64.encode(m%s,0,m%s.length):o.bytes===Array?Array.prototype.slice.call(m%s):m%s",
-            i,
-            i,
-            i,
-            i,
-            i,
+            prop,
+            prop,
+            prop,
+            prop,
+            prop,
           );
           break;
         default:
-          e("d%s=m%s", i, i);
+          gen("d%s=m%s", prop, prop);
           break;
       }
     }
-    return e;
+    return gen;
   }
-  Sd.toObject = function (t) {
-    var sorted = t.fieldsArray.slice().sort(gt.compareFieldsById);
-    if (!sorted.length) return gt.codegen()("return {}");
-    var i = gt.codegen(["m", "o"], t.name + "$toObject")("if(!o)")("o={}")("var d={}"),
-      s = [],
-      n = [],
-      a = [],
-      o = 0;
-    for (; o < sorted.length; ++o)
-      if (!sorted[o].partOf) (sorted[o].resolve().repeated ? s : sorted[o].map ? n : a).push(sorted[o]);
-    if (s.length) {
-      i("if(o.arrays||o.defaults){");
-      for (o = 0; o < s.length; ++o) i("d%s=[]", gt.safeProp(s[o].name));
-      i("}");
+  converter.toObject = function (mtype) {
+    var fields = mtype.fieldsArray.slice().sort(util.compareFieldsById);
+    if (!fields.length) return util.codegen()("return {}");
+    var gen = util.codegen(["m", "o"], mtype.name + "$toObject")("if(!o)")("o={}")("var d={}");
+    var repeatedFields = [];
+    var mapFields = [];
+    var normalFields = [];
+    var i = 0;
+    for (; i < fields.length; ++i)
+      if (!fields[i].partOf)
+        (fields[i].resolve().repeated ? repeatedFields : fields[i].map ? mapFields : normalFields).push(
+          fields[i],
+        );
+    if (repeatedFields.length) {
+      gen("if(o.arrays||o.defaults){");
+      for (i = 0; i < repeatedFields.length; ++i) gen("d%s=[]", util.safeProp(repeatedFields[i].name));
+      gen("}");
     }
-    if (n.length) {
-      i("if(o.objects||o.defaults){");
-      for (o = 0; o < n.length; ++o) i("d%s={}", gt.safeProp(n[o].name));
-      i("}");
+    if (mapFields.length) {
+      gen("if(o.objects||o.defaults){");
+      for (i = 0; i < mapFields.length; ++i) gen("d%s={}", util.safeProp(mapFields[i].name));
+      gen("}");
     }
-    if (a.length) {
-      i("if(o.defaults){");
-      for (o = 0; o < a.length; ++o) {
-        var l = a[o],
-          safeProp = gt.safeProp(l.name);
-        if (l.resolvedType instanceof Pi)
-          i("d%s=o.enums===String?%j:%j", safeProp, l.resolvedType.valuesById[l.typeDefault], l.typeDefault);
-        else if (l.long)
-          i("if(util.Long){")(
+    if (normalFields.length) {
+      gen("if(o.defaults){");
+      for (i = 0; i < normalFields.length; ++i) {
+        var field = normalFields[i];
+        var prop = util.safeProp(field.name);
+        if (field.resolvedType instanceof Enum)
+          gen(
+            "d%s=o.enums===String?%j:%j",
+            prop,
+            field.resolvedType.valuesById[field.typeDefault],
+            field.typeDefault,
+          );
+        else if (field.long)
+          gen("if(util.Long){")(
             "var n=new util.Long(%i,%i,%j)",
-            l.typeDefault.low,
-            l.typeDefault.high,
-            l.typeDefault.unsigned,
+            field.typeDefault.low,
+            field.typeDefault.high,
+            field.typeDefault.unsigned,
           )(
             "d%s=o.longs===String?n.toString():o.longs===Number?n.toNumber():n",
-            safeProp,
+            prop,
           )("}else")(
             "d%s=o.longs===String?%j:%i",
-            safeProp,
-            l.typeDefault.toString(),
-            l.typeDefault.toNumber(),
+            prop,
+            field.typeDefault.toString(),
+            field.typeDefault.toNumber(),
           );
-        else if (l.bytes) {
-          var u = Array.prototype.slice.call(l.typeDefault);
-          i(
+        else if (field.bytes) {
+          var arrayDefault = Array.prototype.slice.call(field.typeDefault);
+          gen(
             "if(o.bytes===String)d%s=%j",
-            safeProp,
-            String.fromCharCode.apply(String, l.typeDefault),
-          )("else{")("d%s=%j", safeProp, u)(
+            prop,
+            String.fromCharCode.apply(String, field.typeDefault),
+          )("else{")("d%s=%j", prop, arrayDefault)(
             "if(o.bytes!==Array)d%s=util.newBuffer(d%s)",
-            safeProp,
-            safeProp,
+            prop,
+            prop,
           )("}");
-        } else i("d%s=%j", safeProp, l.typeDefault);
+        } else gen("d%s=%j", prop, field.typeDefault);
       }
-      i("}");
+      gen("}");
     }
-    var d = !1;
-    for (o = 0; o < sorted.length; ++o) {
-      var l = sorted[o],
-        index = t._fieldsArray.indexOf(l),
-        safeProp = gt.safeProp(l.name);
-      if (l.map) {
-        if (!d) ((d = !0), i("var ks2"));
-        (i("if(m%s&&(ks2=Object.keys(m%s)).length){", safeProp, safeProp)("d%s={}", safeProp)(
+    var hasKs2 = false;
+    for (i = 0; i < fields.length; ++i) {
+      var field = fields[i];
+      var index = mtype._fieldsArray.indexOf(field);
+      var prop = util.safeProp(field.name);
+      if (field.map) {
+        if (!hasKs2) {
+          hasKs2 = true;
+          gen("var ks2");
+        }
+        gen("if(m%s&&(ks2=Object.keys(m%s)).length){", prop, prop)("d%s={}", prop)(
           "for(var j=0;j<ks2.length;++j){",
-        ),
-          i('if(ks2[j]==="__proto__")')("util.makeProp(d%s,ks2[j])", safeProp),
-          Wa(i, l, index, safeProp + "[ks2[j]]")("}"));
-      } else if (l.repeated)
-        (i("if(m%s&&m%s.length){", safeProp, safeProp)("d%s=[]", safeProp)(
-          "for(var j=0;j<m%s.length;++j){",
-          safeProp,
-        ),
-          Wa(i, l, index, safeProp + "[j]")("}"));
-      else if (
-        (i("if(m%s!=null&&m.hasOwnProperty(%j)){", safeProp, l.name), Wa(i, l, index, safeProp), l.partOf)
-      )
-        i("if(o.oneofs)")("d%s=%j", gt.safeProp(l.partOf.name), l.name);
-      i("}");
+        );
+        gen('if(ks2[j]==="__proto__")')("util.makeProp(d%s,ks2[j])", prop);
+        genValuePartial_toObject(gen, field, index, prop + "[ks2[j]]")("}");
+      } else if (field.repeated) {
+        gen("if(m%s&&m%s.length){", prop, prop)("d%s=[]", prop)("for(var j=0;j<m%s.length;++j){", prop);
+        genValuePartial_toObject(gen, field, index, prop + "[j]")("}");
+      } else {
+        gen("if(m%s!=null&&m.hasOwnProperty(%j)){", prop, field.name);
+        genValuePartial_toObject(gen, field, index, prop);
+        if (field.partOf) gen("if(o.oneofs)")("d%s=%j", util.safeProp(field.partOf.name), field.name);
+      }
+      gen("}");
     }
-    return i("return d");
+    return gen("return d");
   };
 });
-
 export { ja };

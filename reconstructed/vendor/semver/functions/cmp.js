@@ -6,45 +6,44 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { Nn, Pn, Tt, ps, us, ms } from "./eq.js";
+import { require_eq_3, require_eq_4, require_eq, require_eq_5, require_eq_2, require_eq_6 } from "./eq.js";
 
 //@ chunk-bwbq4xvm.js:12601-13126 cjs-fingerprint
-var Mn = x(function (b2, sl) {
-  var ek = Nn(),
-    tk = Pn(),
-    sk = Tt(),
-    nk = ps(),
-    rk = us(),
-    ok = ms(),
-    ak = (e, s, n, r) => {
-      switch (s) {
-        case "===":
-          if (typeof e === "object") e = e.version;
-          if (typeof n === "object") n = n.version;
-          return e === n;
-        case "!==":
-          if (typeof e === "object") e = e.version;
-          if (typeof n === "object") n = n.version;
-          return e !== n;
-        case "":
-        case "=":
-        case "==":
-          return ek(e, n, r);
-        case "!=":
-          return tk(e, n, r);
-        case ">":
-          return sk(e, n, r);
-        case ">=":
-          return nk(e, n, r);
-        case "<":
-          return rk(e, n, r);
-        case "<=":
-          return ok(e, n, r);
-        default:
-          throw TypeError(`Invalid operator: ${s}`);
-      }
-    };
-  sl.exports = ak;
+var require_cmp = x(function (cjsExports, cjsModule) {
+  var eq = require_eq_3();
+  var neq = require_eq_4();
+  var gt = require_eq();
+  var gte = require_eq_5();
+  var lt = require_eq_2();
+  var lte = require_eq_6();
+  var cmp = (a, op, b, loose) => {
+    switch (op) {
+      case "===":
+        if (typeof a === "object") a = a.version;
+        if (typeof b === "object") b = b.version;
+        return a === b;
+      case "!==":
+        if (typeof a === "object") a = a.version;
+        if (typeof b === "object") b = b.version;
+        return a !== b;
+      case "":
+      case "=":
+      case "==":
+        return eq(a, b, loose);
+      case "!=":
+        return neq(a, b, loose);
+      case ">":
+        return gt(a, b, loose);
+      case ">=":
+        return gte(a, b, loose);
+      case "<":
+        return lt(a, b, loose);
+      case "<=":
+        return lte(a, b, loose);
+      default:
+        throw TypeError(`Invalid operator: ${op}`);
+    }
+  };
+  cjsModule.exports = cmp;
 });
-
-export { Mn };
+export { require_cmp };

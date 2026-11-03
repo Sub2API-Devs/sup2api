@@ -8,37 +8,33 @@
 import { x } from "../../../../../runtime/bun-runtime.js";
 
 //@ chunk-spjgqa4y.js:53699-54100 cjs-fingerprint
-var qrTerminalRenderer = x(function (zs) {
-  zs.render = function (t, e, r) {
-    let size = t.modules.size,
-      i = t.modules.data,
-      o = "\x1B[40m  \x1B[0m",
-      s = "\x1B[47m  \x1B[0m",
-      l = "",
-      joined = Array(size + 3).join("\x1B[47m  \x1B[0m"),
-      joined_2 = Array(2).join("\x1B[47m  \x1B[0m");
-    l +=
-      joined +
+var qrTerminalRenderer = x(function (cjsExports) {
+  cjsExports.render = function (qrData, options, cb) {
+    let size = qrData.modules.size;
+    let data = qrData.modules.data;
+    let black = "\x1B[40m  \x1B[0m";
+    let white = "\x1B[47m  \x1B[0m";
+    let output = "";
+    let hMargin = Array(size + 3).join("\x1B[47m  \x1B[0m");
+    let vMargin = Array(2).join("\x1B[47m  \x1B[0m");
+    output +=
+      hMargin +
       `
 `;
-    for (let a = 0; a < size; ++a) {
-      l += "\x1B[47m  \x1B[0m";
-      for (let h = 0; h < size; h++) l += i[a * size + h] ? "\x1B[40m  \x1B[0m" : "\x1B[47m  \x1B[0m";
-      l +=
-        joined_2 +
+    for (let i = 0; i < size; ++i) {
+      output += "\x1B[47m  \x1B[0m";
+      for (let j = 0; j < size; j++) output += data[i * size + j] ? "\x1B[40m  \x1B[0m" : "\x1B[47m  \x1B[0m";
+      output +=
+        vMargin +
         `
 `;
     }
-    if (
-      ((l +=
-        joined +
-        `
-`),
-      typeof r === "function")
-    )
-      r(null, l);
-    return l;
+    output +=
+      hMargin +
+      `
+`;
+    if (typeof cb === "function") cb(null, output);
+    return output;
   };
 });
-
 export { qrTerminalRenderer };

@@ -9,52 +9,60 @@
  * attribution: placement 6, fingerprint 1
  */
 import { join } from "path";
-import { j } from "../../vendor/react/cjs/react.production.js";
+import { init_react_production } from "../../vendor/react/cjs/react.production.js";
 import { HostScoped } from "../utils/hostScoped.js";
 
 //@ chunk-tzghj6zv.js:37733-37737 placement
-j();
+init_react_production();
+//@ chunk-tzghj6zv.js:37796-38184 placement
 /**
  * 进程内的少量会话状态：包管理器更新上次失败时间与最新版本、fast 图标提示是否已显示、记忆选择器上次路径。
  */
-//@ chunk-tzghj6zv.js:37796-38184 placement
 class UpdaterSessionState {
   packageManagerUpdateLastFailedAt = 0;
   packageManagerLatestVersion = null;
-  fastIconHintShown = !1;
-  memorySelectorLastPath = void 0;
-  recordPackageManagerUpdateFailure(d) {
-    this.packageManagerUpdateLastFailedAt = d;
+  fastIconHintShown = false;
+  memorySelectorLastPath = undefined;
+  recordPackageManagerUpdateFailure(packageManagerUpdateLastFailedAt) {
+    this.packageManagerUpdateLastFailedAt = packageManagerUpdateLastFailedAt;
   }
-  recordPackageManagerLatestVersion(d) {
-    this.packageManagerLatestVersion = d;
+  recordPackageManagerLatestVersion(packageManagerLatestVersion) {
+    this.packageManagerLatestVersion = packageManagerLatestVersion;
   }
   markFastIconHintShown() {
-    this.fastIconHintShown = !0;
+    this.fastIconHintShown = true;
   }
-  rememberMemorySelectorPath(d) {
-    this.memorySelectorLastPath = d;
+  rememberMemorySelectorPath(memorySelectorLastPath) {
+    this.memorySelectorLastPath = memorySelectorLastPath;
   }
 }
 //@ chunk-tzghj6zv.js:38184-38210 placement
-var Ipt = new HostScoped(() => new UpdaterSessionState());
+/**
+ * 导出值：packageManagerAutoUpdaterSlot（包管理器自动更新器槽）；位于「包管理器安装（brew/winget/mise 等）的更新提示命令」模块。
+ */
+var packageManagerAutoUpdaterSlot = new HostScoped(() => new UpdaterSessionState());
 //@ chunk-tzghj6zv.js:38210-38254 placement
-function Hi(Tt) {
+function selectAutoUpdaterResult(Tt) {
   return Tt.autoUpdaterResult;
 }
+//@ chunk-tzghj6zv.js:38254-38359 placement
 /**
  * 自动更新结果是 install_failed 时把它清掉，返回新状态；否则原样返回。
  */
-//@ chunk-tzghj6zv.js:38254-38359 placement
 function clearFailedAutoUpdaterResult(cr) {
-  return cr.autoUpdaterResult?.status === "install_failed" ? { ...cr, autoUpdaterResult: null } : cr;
+  return cr.autoUpdaterResult?.status === "install_failed"
+    ? {
+        ...cr,
+        autoUpdaterResult: null,
+      }
+    : cr;
 }
+//@ chunk-tzghj6zv.js:38359-38669 placement
 /**
  * 返回包管理器的升级命令 argv：homebrew 用 brew upgrade --cask，winget 用 LOCALAPPDATA 下的 winget.exe 静默升级 Anthropic.ClaudeCode；其他返回 null。
  */
-//@ chunk-tzghj6zv.js:38359-38669 placement
-function getPackageManagerUpgradeCommand(d, h) {
-  switch (d) {
+function getPackageManagerUpgradeCommand(packageManager, h) {
+  switch (packageManager) {
     case "homebrew":
       return ["brew", "upgrade", "--cask", h ?? "claude-code"];
     case "winget": {
@@ -88,10 +96,9 @@ function PackageManagerAutoUpdater_2(d, h) {
       return "your package manager update command";
   }
 }
-
 export {
-  Ipt,
-  Hi,
+  packageManagerAutoUpdaterSlot,
+  selectAutoUpdaterResult,
   clearFailedAutoUpdaterResult,
   getPackageManagerUpgradeCommand,
   PackageManagerAutoUpdater_2,

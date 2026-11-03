@@ -15,7 +15,7 @@ import {
 } from "../settings/settings.js";
 import {
   getHookDisplayText,
-  Eqr,
+  isHookPluginSatisfied,
   hookSourceDescriptionDisplayString,
   getHookStatusText,
 } from "./hooksSettings.js";
@@ -25,14 +25,14 @@ import {
   shouldAllowManagedHooksOnly,
   policySettingsUnreadable,
 } from "./hooksConfigSnapshot.js";
-import { O7o } from "../hooks.js";
+import { isHookEligible } from "../hooks.js";
 import { isHookPolicyUnanswered } from "../../commands/goal/goal.js";
 import { isCustomizationDisabled } from "../settings/customizationDisabled.js";
-import { eKt } from "./managedHooksOnly.js";
+import { isManagedOrAllowlistedHook } from "./managedHooksOnly.js";
 import { getPolicyAllowedSet } from "../plugins/pluginPolicy.js";
 import { isSafeMode, getSafeModeExitHint, isBareMode, getBareModeExitHint } from "../envUtils.js";
 import { isRestrictedToPluginOnly } from "../settings/pluginOnlyPolicy.js";
-import { Mu, escapeControlChars } from "../stringUtils.js";
+import { escapeControlCharsForDisplay, escapeControlChars } from "../stringUtils.js";
 import {
   getHookEventMetadata,
   groupHooksByEventAndMatcher,
@@ -43,22 +43,25 @@ import { hasPolicySettings } from "../plugins/managedPluginSeating.js";
 
 //@ chunk-w5j5chas.js:647-792 placement = isHTTPConfig (0.785)
 function redactHttpHeaderValues(config) {
-  if (config.type !== "http" || config.headers === void 0) return config;
-  return { ...config, headers: Object.fromEntries(Object.keys(config.headers).map((o) => [o, ""])) };
+  if (config.type !== "http" || config.headers === undefined) return config;
+  return {
+    ...config,
+    headers: Object.fromEntries(Object.keys(config.headers).map((key) => [key, ""])),
+  };
 }
 //@ chunk-w5j5chas.js:792-940 placement
 function countHooksInSource(t) {
-  let o = 0,
-    n = getSettingsForSource(t)?.hooks ?? {};
-  for (let s of Object.values(n)) {
+  let o = 0;
+  let hooks = getSettingsForSource(t)?.hooks ?? {};
+  for (let s of Object.values(hooks)) {
     if (!Array.isArray(s)) continue;
     for (let c of s) o += c.hooks?.length ?? 0;
   }
   return o;
 }
 //@ chunk-w5j5chas.js:940-1181 placement
-function hookContentLabel(t) {
-  switch (t.type) {
+function hookContentLabel(config) {
+  switch (config.type) {
     case "command":
       return "Command";
     case "prompt":
@@ -69,42 +72,45 @@ function hookContentLabel(t) {
     case "mcp_tool":
       return "MCP tool";
     case "script":
-      return t.file !== void 0 ? "Script file" : "Script";
+      return config.file !== undefined ? "Script file" : "Script";
     default:
       return "Definition";
   }
 }
 //@ chunk-w5j5chas.js:1181-1257 placement
-function E(t) {
-  if (t.type === "script") return t.file ?? t.script ?? "";
-  return getHookDisplayText(t);
+function hookCommandDisplayText(config) {
+  if (config.type === "script") return config.file ?? config.script ?? "";
+  return getHookDisplayText(config);
 }
 //@ chunk-w5j5chas.js:1257-1614 placement
 function isHookSourceActive(t) {
   if (t.source === "sessionHook")
     return (
-      (!shouldSkipSessionHooksByPolicy() || O7o(t.config)) && (!isHookPolicyUnanswered() || Eqr(t.config))
+      (!shouldSkipSessionHooksByPolicy() || isHookEligible(t.config)) &&
+      (!isHookPolicyUnanswered() || isHookPluginSatisfied(t.config))
     );
-  if (isCustomizationDisabled("hooks")) return !1;
-  if (t.source === "builtinHook") return !0;
-  if (shouldDisableAllHooksIncludingManaged()) return !1;
-  if (t.source === "policySettings") return !0;
+  if (isCustomizationDisabled("hooks")) return false;
+  if (t.source === "builtinHook") return true;
+  if (shouldDisableAllHooksIncludingManaged()) return false;
+  if (t.source === "policySettings") return true;
   let o = shouldAllowManagedHooksOnly() || isHookPolicyUnanswered();
   if (t.source === "pluginHook") {
-    let n = t.pluginName ?? "",
-      s = isHookPolicyUnanswered() ? eKt(n) : getPolicyAllowedSet()?.has(n) === !0;
+    let pluginName = t.pluginName ?? "";
+    let s = isHookPolicyUnanswered()
+      ? isManagedOrAllowlistedHook(pluginName)
+      : getPolicyAllowedSet()?.has(pluginName) === true;
     return !isSafeMode() && (!o || s);
   }
   return !o && !isRestrictedToPluginOnly("hooks");
 }
 //@ chunk-w5j5chas.js:1614-2544 placement
 function hookSourceLabel(t) {
-  let config = t.config,
-    n = t.source === "userSettings" || t.source === "projectSettings" || t.source === "localSettings",
-    s = redactHttpHeaderValues(config);
+  let config = t.config;
+  let n = t.source === "userSettings" || t.source === "projectSettings" || t.source === "localSettings";
+  let s = redactHttpHeaderValues(config);
   return {
     event: t.event,
-    matcher: Mu(t.matcher ?? ""),
+    matcher: escapeControlCharsForDisplay(t.matcher ?? ""),
     source: t.source,
     sourceLabel:
       t.source === "flagSettings"
@@ -112,22 +118,45 @@ function hookSourceLabel(t) {
         : t.source === "policySettings"
           ? "Managed settings (set by your organization)"
           : hookSourceDescriptionDisplayString(t.source),
-    ...(t.pluginName !== void 0 && { pluginName: Mu(t.pluginName) }),
+    ...(t.pluginName !== undefined && {
+      pluginName: escapeControlCharsForDisplay(t.pluginName),
+    }),
     type: config.type,
     displayText: getHookStatusText(config),
-    commandText: escapeControlChars(E(config)),
+    commandText: escapeControlChars(hookCommandDisplayText(config)),
     contentLabel: hookContentLabel(config),
-    ...("if" in config && config.if !== void 0 && { condition: Mu(config.if) }),
-    ...("timeout" in config && typeof config.timeout === "number" && { timeout: config.timeout }),
+    ...("if" in config &&
+      config.if !== undefined && {
+        condition: escapeControlCharsForDisplay(config.if),
+      }),
+    ...("timeout" in config &&
+      typeof config.timeout === "number" && {
+        timeout: config.timeout,
+      }),
     ...("statusMessage" in config &&
-      config.statusMessage !== void 0 &&
-      config.statusMessage !== "" && { statusMessage: Mu(config.statusMessage) }),
-    ...("once" in config && config.once === !0 && { runsOnce: !0 }),
+      config.statusMessage !== undefined &&
+      config.statusMessage !== "" && {
+        statusMessage: escapeControlCharsForDisplay(config.statusMessage),
+      }),
+    ...("once" in config &&
+      config.once === true && {
+        runsOnce: true,
+      }),
     ...(config.type === "command" &&
-      (config.async === !0 || config.asyncRewake === !0) && { runsInBackground: !0 }),
-    ...(!isHookSourceActive(t) && { disabled: !0 }),
+      (config.async === true || config.asyncRewake === true) && {
+        runsInBackground: true,
+      }),
+    ...(!isHookSourceActive(t) && {
+      disabled: true,
+    }),
     ...(n && {
-      editable: { matcher: t.matcher ?? "", config: s, ...(s !== config && { headersRedacted: !0 }) },
+      editable: {
+        matcher: t.matcher ?? "",
+        config: s,
+        ...(s !== config && {
+          headersRedacted: true,
+        }),
+      },
     }),
   };
 }
@@ -139,85 +168,111 @@ function getManagedHooksForEventMatcher(t, o) {
     if (!Array.isArray(c)) continue;
     for (let u of c) {
       if ((u.matcher ?? "") !== o) continue;
-      for (let hook of u.hooks) n.push(hookSourceLabel({ event: t, config: hook, matcher: o, source: s }));
+      for (let config of u.hooks)
+        n.push(
+          hookSourceLabel({
+            event: t,
+            config,
+            matcher: o,
+            source: s,
+          }),
+        );
     }
   }
   return n;
 }
+//@ chunk-w5j5chas.js:2798-4160 placement
 /**
  * 汇总托管策略对钩子的限制（仅托管钩子、仅插件、全部禁用等）用于展示。
  */
-//@ chunk-w5j5chas.js:2798-4160 placement
-function hookPolicySummary(t) {
-  let o = getSettingsForSource("policySettings"),
-    n = o?.allowManagedHooksOnly === !0,
-    s = isRestrictedToPluginOnly("hooks"),
-    c = o?.disableAllHooks === !0,
-    u = getSettings_DEPRECATED()?.disableAllHooks === !0,
-    r = getHookEventMetadata([]),
-    m = groupHooksByEventAndMatcher(t, []),
-    b = (e) =>
-      e.source === "sessionHook" ||
-      e.source === "pluginHook" ||
-      e.source === "builtinHook" ||
-      isSettingSourceEnabled(e.source),
-    p = !n && !s,
-    g = [],
-    d = [];
-  for (let e of Object.keys(r)) {
-    let M = getSortedMatchersForEvent(m, e),
-      a = [],
-      y = new Set();
-    for (let i of M)
-      if ((y.add(i), a.push(...(m[e]?.[i] ?? []).filter(b).map(hookSourceLabel)), p))
-        a.push(...getManagedHooksForEventMatcher(e, i));
+function hookPolicySummary(appState) {
+  let settingsForSource = getSettingsForSource("policySettings");
+  let n = settingsForSource?.allowManagedHooksOnly === true;
+  let s = isRestrictedToPluginOnly("hooks");
+  let disabledByPolicy = settingsForSource?.disableAllHooks === true;
+  let allDisabled = getSettings_DEPRECATED()?.disableAllHooks === true;
+  let hookEventMetadata = getHookEventMetadata([]);
+  let hooksByEventAndMatcher = groupHooksByEventAndMatcher(appState, []);
+  let b = (e) =>
+    e.source === "sessionHook" ||
+    e.source === "pluginHook" ||
+    e.source === "builtinHook" ||
+    isSettingSourceEnabled(e.source);
+  let p = !n && !s;
+  let g = [];
+  let d = [];
+  for (let key of Object.keys(hookEventMetadata)) {
+    let sortedMatchersForEvent = getSortedMatchersForEvent(hooksByEventAndMatcher, key);
+    let a = [];
+    let y = new Set();
+    for (let i of sortedMatchersForEvent) {
+      y.add(i);
+      a.push(...(hooksByEventAndMatcher[key]?.[i] ?? []).filter(b).map(hookSourceLabel));
+      if (p) a.push(...getManagedHooksForEventMatcher(key, i));
+    }
     if (p) {
       let i = new Set();
       for (let l of ["flagSettings", "policySettings"]) {
-        let k = getSettingsForSource(l)?.hooks?.[e];
+        let k = getSettingsForSource(l)?.hooks?.[key];
         if (!Array.isArray(k)) continue;
         for (let C of k) {
-          let H = C.matcher ?? "";
-          if (!y.has(H)) i.add(H);
+          let matcher = C.matcher ?? "";
+          if (!y.has(matcher)) i.add(matcher);
         }
       }
-      for (let l of [...i].sort()) a.push(...getManagedHooksForEventMatcher(e, l));
+      for (let l of [...i].sort()) a.push(...getManagedHooksForEventMatcher(key, l));
     }
-    if (a.length > 0)
-      (g.push({
-        name: e,
-        summary: r[e].summary,
-        supportsMatcher: r[e].matcherMetadata !== void 0 || a.some((i) => i.matcher !== ""),
+    if (a.length > 0) {
+      g.push({
+        name: key,
+        summary: hookEventMetadata[key].summary,
+        supportsMatcher:
+          hookEventMetadata[key].matcherMetadata !== undefined || a.some((i) => i.matcher !== ""),
         hookCount: a.length,
-      }),
-        d.push(...a));
+      });
+      d.push(...a);
+    }
   }
   let mapped = getSettingsWithErrors_2()
     .errors.filter((error) => error.severity !== "warning")
-    .map((e) => ({ file: e.file, path: e.path, message: e.message }));
+    .map((error) => ({
+      file: error.file,
+      path: error.path,
+      message: error.message,
+    }));
   return {
     events: g,
     hooks: d,
-    eventCatalog: Object.keys(r).map((e) => ({
-      name: e,
-      summary: r[e].summary,
-      supportsMatcher: r[e].matcherMetadata !== void 0 || e === "FileChanged",
+    eventCatalog: Object.keys(hookEventMetadata).map((key) => ({
+      name: key,
+      summary: hookEventMetadata[key].summary,
+      supportsMatcher: hookEventMetadata[key].matcherMetadata !== undefined || key === "FileChanged",
     })),
     policy: {
-      disabledByPolicy: c,
+      disabledByPolicy,
       managedOnly: n,
       pluginOnly: s,
-      allDisabled: u,
+      allDisabled,
       policyHookCount: countHooksInSource("policySettings"),
-      ...(policySettingsUnreadable() && { policyUnreadable: !0 }),
+      ...(policySettingsUnreadable() && {
+        policyUnreadable: true,
+      }),
     },
     ...(isSafeMode() && {
-      safeMode: { managedHooksStillApply: hasPolicySettings(), exitHint: getSafeModeExitHint() },
+      safeMode: {
+        managedHooksStillApply: hasPolicySettings(),
+        exitHint: getSafeModeExitHint(),
+      },
     }),
     ...(isBareMode() &&
-      isCustomizationDisabled("hooks") && { bareMode: { exitHint: getBareModeExitHint() } }),
-    ...(mapped.length > 0 && { errors: mapped }),
+      isCustomizationDisabled("hooks") && {
+        bareMode: {
+          exitHint: getBareModeExitHint(),
+        },
+      }),
+    ...(mapped.length > 0 && {
+      errors: mapped,
+    }),
   };
 }
-
 export { hookPolicySummary, redactHttpHeaderValues };

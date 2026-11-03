@@ -6,8 +6,8 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { QGe } from "./util/minimal.js";
-import { eIo } from "./roots.js";
+import { require_minimal as QGe } from "./util/minimal.js";
+import { require_roots as eIo } from "./roots.js";
 import { ed } from "../../@protobufjs/codegen/index.js";
 import { id } from "./util/fetch.js";
 import { ad } from "../../@protobufjs/path/index.js";
@@ -17,110 +17,122 @@ import { nt } from "./enum.js";
 import { xs } from "./root.js";
 
 //@ chunk-pwh5dx3n.js:112807-114753 cjs-fingerprint
-var de = x(function (pA, Nd) {
-  var Z = (Nd.exports = QGe()),
-    Ad = eIo(),
-    Za,
-    eo;
-  Z.codegen = ed();
-  Z.fetch = id();
-  Z.path = ad();
-  Z.patterns = ld();
-  var reservedRe = Z.patterns.reservedRe,
-    unsafePropertyRe = Z.patterns.unsafePropertyRe;
-  Z.fs = Z.inquire("fs");
-  Z.checkDepth = function (t) {
-    if (t === void 0) t = 0;
-    if (t > Z.recursionLimit) throw Error("max depth exceeded");
-    return t;
+var de = x(function (cjsExports, cjsModule) {
+  var util = (cjsModule.exports = QGe());
+  var roots = eIo();
+  var Type;
+  var Enum;
+  util.codegen = ed();
+  util.fetch = id();
+  util.path = ad();
+  util.patterns = ld();
+  var reservedRe = util.patterns.reservedRe;
+  var unsafePropertyRe = util.patterns.unsafePropertyRe;
+  util.fs = util.inquire("fs");
+  util.checkDepth = function (depth) {
+    if (depth === undefined) depth = 0;
+    if (depth > util.recursionLimit) throw Error("max depth exceeded");
+    return depth;
   };
-  Z.toArray = function (t) {
-    if (t) {
-      var keys = Object.keys(t),
-        i = Array(keys.length),
-        s = 0;
-      while (s < keys.length) i[s] = t[keys[s++]];
-      return i;
+  util.toArray = function (object) {
+    if (object) {
+      var keys = Object.keys(object);
+      var array = Array(keys.length);
+      var index = 0;
+      while (index < keys.length) array[index] = object[keys[index++]];
+      return array;
     }
     return [];
   };
-  Z.toObject = function (t) {
-    var r = {},
-      i = 0;
-    while (i < t.length) {
-      var s = t[i++],
-        n = t[i++];
-      if (n !== void 0) r[s] = n;
+  util.toObject = function (array) {
+    var object = {};
+    var index = 0;
+    while (index < array.length) {
+      var key = array[index++];
+      var val = array[index++];
+      if (val !== undefined) object[key] = val;
     }
-    return r;
+    return object;
   };
-  Z.isReserved = function (t) {
-    return reservedRe.test(t);
+  util.isReserved = function (name) {
+    return reservedRe.test(name);
   };
-  Z.safeProp = function (t) {
-    if (!/^[$\w_]+$/.test(t) || reservedRe.test(t)) return "[" + JSON.stringify(t) + "]";
-    return "." + t;
+  util.safeProp = function (prop) {
+    if (!/^[$\w_]+$/.test(prop) || reservedRe.test(prop)) return "[" + JSON.stringify(prop) + "]";
+    return "." + prop;
   };
-  Z.ucFirst = function (t) {
-    return t.charAt(0).toUpperCase() + t.substring(1);
+  util.ucFirst = function (str) {
+    return str.charAt(0).toUpperCase() + str.substring(1);
   };
-  var NE = /_([a-z])/g;
-  Z.camelCase = function (t) {
+  var camelCaseRe = /_([a-z])/g;
+  util.camelCase = function (str) {
     return (
-      t.substring(0, 1) +
-      t.substring(1).replace(NE, function (r, i) {
-        return i.toUpperCase();
+      str.substring(0, 1) +
+      str.substring(1).replace(camelCaseRe, function ($0, $1) {
+        return $1.toUpperCase();
       })
     );
   };
-  Z.compareFieldsById = function (t, r) {
-    return t.id - r.id;
+  util.compareFieldsById = function (a, b) {
+    return a.id - b.id;
   };
-  Z.decorateType = function (t, r) {
-    if (t.$type) {
-      if (r && t.$type.name !== r)
-        (Z.decorateRoot.remove(t.$type), (t.$type.name = r), Z.decorateRoot.add(t.$type));
-      return t.$type;
-    }
-    if (!Za) Za = Ps();
-    var i = new Za(r || t.name);
-    return (
-      Z.decorateRoot.add(i),
-      (i.ctor = t),
-      Object.defineProperty(t, "$type", { value: i, enumerable: !1 }),
-      Object.defineProperty(t.prototype, "$type", { value: i, enumerable: !1 }),
-      i
-    );
-  };
-  var ME = 0;
-  Z.decorateEnum = function (t) {
-    if (t.$type) return t.$type;
-    if (!eo) eo = nt();
-    var r = new eo("Enum" + ME++, t);
-    return (Z.decorateRoot.add(r), Object.defineProperty(t, "$type", { value: r, enumerable: !1 }), r);
-  };
-  Z.setProperty = function (t, r, i, s) {
-    function n(a, o, l) {
-      var c = o.shift();
-      if (unsafePropertyRe.test(c)) return a;
-      if (o.length > 0) a[c] = n(a[c] || {}, o, l);
-      else {
-        var u = a[c];
-        if (u && s) return a;
-        if (u) l = [].concat(u).concat(l);
-        a[c] = l;
+  util.decorateType = function (ctor, typeName) {
+    if (ctor.$type) {
+      if (typeName && ctor.$type.name !== typeName) {
+        util.decorateRoot.remove(ctor.$type);
+        ctor.$type.name = typeName;
+        util.decorateRoot.add(ctor.$type);
       }
-      return a;
+      return ctor.$type;
     }
-    if (typeof t !== "object") throw TypeError("dst must be an object");
-    if (!r) throw TypeError("path must be specified");
-    return ((r = r.split(".")), n(t, r, i));
+    if (!Type) Type = Ps();
+    var type = new Type(typeName || ctor.name);
+    util.decorateRoot.add(type);
+    type.ctor = ctor;
+    Object.defineProperty(ctor, "$type", {
+      value: type,
+      enumerable: false,
+    });
+    Object.defineProperty(ctor.prototype, "$type", {
+      value: type,
+      enumerable: false,
+    });
+    return type;
   };
-  Object.defineProperty(Z, "decorateRoot", {
+  var decorateEnumIndex = 0;
+  util.decorateEnum = function (object) {
+    if (object.$type) return object.$type;
+    if (!Enum) Enum = nt();
+    var enm = new Enum("Enum" + decorateEnumIndex++, object);
+    util.decorateRoot.add(enm);
+    Object.defineProperty(object, "$type", {
+      value: enm,
+      enumerable: false,
+    });
+    return enm;
+  };
+  util.setProperty = function (dst, path, value, ifNotSet) {
+    function setProp(dst, path, value) {
+      var part = path.shift();
+      if (unsafePropertyRe.test(part)) return dst;
+      if (path.length > 0) dst[part] = setProp(dst[part] || {}, path, value);
+      else {
+        var prevValue = dst[part];
+        if (prevValue && ifNotSet) return dst;
+        if (prevValue) value = [].concat(prevValue).concat(value);
+        dst[part] = value;
+      }
+      return dst;
+    }
+    if (typeof dst !== "object") throw TypeError("dst must be an object");
+    if (!path) throw TypeError("path must be specified");
+    path = path.split(".");
+    return setProp(dst, path, value);
+  };
+  Object.defineProperty(util, "decorateRoot", {
     get: function () {
-      return Ad.decorated || (Ad.decorated = new (xs())());
+      return roots.decorated || (roots.decorated = new (xs())());
     },
   });
 });
-
 export { de };

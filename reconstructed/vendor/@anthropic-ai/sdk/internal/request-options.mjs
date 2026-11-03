@@ -7,9 +7,10 @@
  */
 
 //@ chunk-hwmsct5x.js:18982-19086 esm-fingerprint
-var Xl = ({ headers: headers, body: body }) => ({
-  bodyHeaders: { "content-type": "application/json" },
+var FallbackEncoder = ({ headers, body }) => ({
+  bodyHeaders: {
+    "content-type": "application/json",
+  },
   body: JSON.stringify(body),
 });
-
-export { Xl };
+export { FallbackEncoder };

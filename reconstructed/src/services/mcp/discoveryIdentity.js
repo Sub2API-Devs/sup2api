@@ -9,115 +9,173 @@
  * attribution: placement 17
  */
 import { createDecipheriv } from "crypto";
-import { V2, ceil, regExp, dt, hashCacheKeyId, Z, K } from "./discoveryCache.js";
+import {
+  CACHE_VERSION_PREFIX,
+  Pe,
+  regExp,
+  BASE64URL_CHARS_RE,
+  hashCacheKeyId,
+  IV_BYTES,
+  AUTH_TAG_BYTES,
+} from "./discoveryCache.js";
 import { HostScoped } from "../../utils/hostScoped.js";
 import { getRootSession } from "../../bootstrap/state.js";
-import { D4s, getDiscoveryCacheStore } from "./mcpAccountKey.js";
+import { getCacheOffLatched, getDiscoveryCacheStore } from "./mcpAccountKey.js";
 import { truncateToLength } from "../../utils/stringUtils.js";
 import { isCurrentIdentityEpoch, getMcpIdentitySnapshot } from "./identityChange.js";
-import { gnr } from "./redactMcpErrors.js";
+import { ACCOUNT_CHANGED_REASON } from "./redactMcpErrors.js";
 
 //@ chunk-0qyh5wah.js:4326-4362 placement
-function xe(e) {
+/**
+ * 取封印文件头里的摘要。
+ */
+function headerDigest(e) {
   return parseSealedHeader(e)?.digest;
 }
 //@ chunk-0qyh5wah.js:4362-4556 placement
 function parseSealedHeader(e) {
-  if (!e.startsWith(V2)) return;
-  let r = V2.length + ceil;
+  if (!e.startsWith(CACHE_VERSION_PREFIX)) return;
+  let r = CACHE_VERSION_PREFIX.length + Pe;
   if (e.length <= r || e[r] !== ":") return;
-  let sliced = e.slice(V2.length, r),
-    sliced_2 = e.slice(r + 1);
-  if (!regExp.test(sliced) || !dt.test(sliced_2)) return;
-  return { digest: sliced, body: sliced_2 };
+  let sliced = e.slice(CACHE_VERSION_PREFIX.length, r);
+  let sliced_2 = e.slice(r + 1);
+  if (!regExp.test(sliced) || !BASE64URL_CHARS_RE.test(sliced_2)) return;
+  return {
+    digest: sliced,
+    body: sliced_2,
+  };
 }
+//@ chunk-0qyh5wah.js:4556-5082 placement
 /**
  * 解开加密的发现缓存条目：校验版本前缀与缓存键摘要头，按 IV|密文|认证标签 拆分，用 AES-256-GCM 与 AAD 解密，失败给出 v1/short/header/tag 原因。
  */
-//@ chunk-0qyh5wah.js:4556-5082 placement
 function openDiscoverySeal(keyInfo, sealed) {
-  if (!sealed.startsWith(V2)) return { ok: !1, reason: "v1" };
+  if (!sealed.startsWith(CACHE_VERSION_PREFIX))
+    return {
+      ok: false,
+      reason: "v1",
+    };
   let header = parseSealedHeader(sealed);
-  if (!header) return { ok: !1, reason: "short" };
-  if (header.digest !== hashCacheKeyId(keyInfo.cacheKey)) return { ok: !1, reason: "header" };
+  if (!header)
+    return {
+      ok: false,
+      reason: "short",
+    };
+  if (header.digest !== hashCacheKeyId(keyInfo.cacheKey))
+    return {
+      ok: false,
+      reason: "header",
+    };
   let raw = Buffer.from(header.body, "base64url");
-  if (raw.length < Z + K) return { ok: !1, reason: "short" };
-  let iv = raw.subarray(0, Z),
-    authTag = raw.subarray(raw.length - K),
-    ciphertext = raw.subarray(Z, raw.length - K);
+  if (raw.length < IV_BYTES + AUTH_TAG_BYTES)
+    return {
+      ok: false,
+      reason: "short",
+    };
+  let iv = raw.subarray(0, IV_BYTES);
+  let authTag = raw.subarray(raw.length - AUTH_TAG_BYTES);
+  let ciphertext = raw.subarray(IV_BYTES, raw.length - AUTH_TAG_BYTES);
   try {
-    let l = createDecipheriv("aes-256-gcm", keyInfo.key, iv, { authTagLength: K });
-    return (
-      l.setAuthTag(authTag),
-      l.setAAD(keyInfo.aad),
-      { ok: !0, plaintext: Buffer.concat([l.update(ciphertext), l.final()]).toString("utf8") }
-    );
+    let decipheriv = createDecipheriv("aes-256-gcm", keyInfo.key, iv, {
+      authTagLength: AUTH_TAG_BYTES,
+    });
+    decipheriv.setAuthTag(authTag);
+    decipheriv.setAAD(keyInfo.aad);
+    return {
+      ok: true,
+      plaintext: Buffer.concat([decipheriv.update(ciphertext), decipheriv.final()]).toString("utf8"),
+    };
   } catch {
-    return { ok: !1, reason: "tag" };
+    return {
+      ok: false,
+      reason: "tag",
+    };
   }
 }
 //@ chunk-0qyh5wah.js:5082-5123 placement
-var ut = 4096,
-  ft = 1024,
-  lt = new HostScoped(() => new PresentedCredentialLog());
+/**
+ * 按宿主保存的“呈现过的凭据”记录。
+ */
+var MAX_PRESENTED_CREDENTIALS = 4096;
+var MAX_CREDENTIAL_PREFIX_CHARS = 1024;
+var presentedCredentialLog = new HostScoped(() => new PresentedCredentialLog());
 //@ chunk-0qyh5wah.js:5123-5160 placement
-function Ny() {
-  return lt.of(getRootSession().host);
+/**
+ * 取当前宿主的呈现凭据记录。
+ */
+function getPresentedCredentialLog() {
+  return presentedCredentialLog.of(getRootSession().host);
 }
 //@ chunk-0qyh5wah.js:5160-5238 placement
-function basicAuthValue(e, r) {
-  if (!e || !r) return;
+function basicAuthValue(clientId, clientSecret) {
+  if (!clientId || !clientSecret) return;
   try {
-    return btoa(`${e}:${r}`);
+    return btoa(`${clientId}:${clientSecret}`);
   } catch {
     return;
   }
 }
 //@ chunk-0qyh5wah.js:5238-5274 placement
-function pt() {
-  return D4s() !== void 0;
+/**
+ * 呈现凭据记录是否开启。
+ */
+function isPresentedLogEnabled() {
+  return getCacheOffLatched() !== undefined;
 }
+//@ chunk-0qyh5wah.js:5274-5851 placement
 /**
  * 记录连接时呈现过的凭据片段（有数量上限，超出时标记不完整并给出一次提示），关闭记录时清空。
  */
-//@ chunk-0qyh5wah.js:5274-5851 placement
 class PresentedCredentialLog {
   seen = new Set();
-  off = !1;
-  incomplete = !1;
+  off = false;
+  incomplete = false;
   overflowNotice = null;
   record(e) {
     if (this.recordingOff()) return;
     if (typeof e !== "string" || e === "") return;
-    let r = truncateToLength(e, ft);
+    let r = truncateToLength(e, MAX_CREDENTIAL_PREFIX_CHARS);
     if (this.seen.has(r)) return;
-    if (this.seen.size >= ut) {
-      ((this.incomplete = !0), (this.overflowNotice ??= !0));
+    if (this.seen.size >= MAX_PRESENTED_CREDENTIALS) {
+      this.incomplete = true;
+      this.overflowNotice ??= true;
       return;
     }
     this.seen.add(r);
   }
   recordingOff() {
-    if (!this.off && pt())
-      ((this.off = !0), this.seen.clear(), (this.incomplete = !1), (this.overflowNotice = null));
+    if (!this.off && isPresentedLogEnabled()) {
+      this.off = true;
+      this.seen.clear();
+      this.incomplete = false;
+      this.overflowNotice = null;
+    }
     return this.off;
   }
   takeOverflowNotice() {
-    if (this.overflowNotice === !0) return ((this.overflowNotice = !1), !0);
-    return !1;
+    if (this.overflowNotice === true) {
+      this.overflowNotice = false;
+      return true;
+    }
+    return false;
   }
   snapshot() {
-    return (this.recordingOff(), { atoms: [...this.seen], complete: !this.incomplete });
+    this.recordingOff();
+    return {
+      atoms: [...this.seen],
+      complete: !this.incomplete,
+    };
   }
 }
 //@ chunk-0qyh5wah.js:5851-5932 placement
-function setAccountResolver(e) {
-  let r = getDiscoveryCacheStore();
-  ((r.accountResolver = e), (r.lastResolvedAccountToken = void 0));
+function setAccountResolver(accountResolver) {
+  let discoveryCacheStore = getDiscoveryCacheStore();
+  discoveryCacheStore.accountResolver = accountResolver;
+  discoveryCacheStore.lastResolvedAccountToken = undefined;
 }
 //@ chunk-0qyh5wah.js:5932-5967 placement
-function setEraResolver(e) {
-  getDiscoveryCacheStore().eraResolver = e;
+function setEraResolver(eraResolver) {
+  getDiscoveryCacheStore().eraResolver = eraResolver;
 }
 //@ chunk-0qyh5wah.js:5967-6007 placement
 function currentEra() {
@@ -125,49 +183,60 @@ function currentEra() {
 }
 //@ chunk-0qyh5wah.js:6007-6059 placement
 function hasAccountResolver() {
-  return getDiscoveryCacheStore().accountResolver !== void 0;
+  return getDiscoveryCacheStore().accountResolver !== undefined;
 }
 //@ chunk-0qyh5wah.js:6059-6177 placement
-function isRemoteMcpTransport(e) {
-  switch (e.type) {
+function isRemoteMcpTransport(config) {
+  switch (config.type) {
     case "stdio":
-    case void 0:
+    case undefined:
     case "sdk":
     case "sse-ide":
     case "ws-ide":
-      return !1;
+      return false;
     default:
-      return !0;
+      return true;
   }
 }
 //@ chunk-0qyh5wah.js:6177-6215 placement
-function R_t(e, r) {
-  return !isCurrentIdentityEpoch(r) && isRemoteMcpTransport(e);
+/**
+ * 远程服务器且身份代号已变化。
+ */
+function identityChangedForRemote(config, attemptEpoch) {
+  return !isCurrentIdentityEpoch(attemptEpoch) && isRemoteMcpTransport(config);
 }
 //@ chunk-0qyh5wah.js:6215-6310 placement
-function identityChangedFailure(e, r) {
-  return { name: e, type: "failed", config: r, error: gnr, errorCode: "IDENTITY_CHANGED" };
+function identityChangedFailure(name, config) {
+  return {
+    name,
+    type: "failed",
+    config,
+    error: ACCOUNT_CHANGED_REASON,
+    errorCode: "IDENTITY_CHANGED",
+  };
 }
 //@ chunk-0qyh5wah.js:6310-6359 placement
 function hasRemoteMcpServers(e) {
   return e.some((r) => isRemoteMcpTransport(r.config));
 }
 //@ chunk-0qyh5wah.js:6359-6392 placement
-function vt() {
+/**
+ * 当前 MCP 身份快照里的令牌。
+ */
+function currentIdentityToken() {
   return getMcpIdentitySnapshot().token;
 }
-
 export {
   currentEra,
-  vt,
-  Ny,
+  currentIdentityToken,
+  getPresentedCredentialLog,
   openDiscoverySeal,
-  xe,
+  headerDigest,
   setEraResolver,
   hasAccountResolver,
   setAccountResolver,
   isRemoteMcpTransport,
-  R_t,
+  identityChangedForRemote,
   identityChangedFailure,
   hasRemoteMcpServers,
   basicAuthValue,

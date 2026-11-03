@@ -6,153 +6,196 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { QGe } from "./util/minimal.js";
+import { require_minimal } from "./util/minimal.js";
 
 //@ chunk-798ashq9.js:30944-34145 cjs-fingerprint
-var yHr = x(function (Oc, _r) {
-  _r.exports = w;
-  var j = QGe(),
-    Wt,
-    { LongBits: LongBits, base64: base64, utf8: utf8 } = j;
-  function vt(l, u, f) {
-    ((this.fn = l), (this.len = u), (this.next = void 0), (this.val = f));
+var require_writer = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = Writer;
+  var util = require_minimal();
+  var BufferWriter;
+  var { LongBits, base64, utf8 } = util;
+  function Op(fn, len, val) {
+    this.fn = fn;
+    this.len = len;
+    this.next = undefined;
+    this.val = val;
   }
-  function Xt() {}
-  function Fi(l) {
-    ((this.head = l.head), (this.tail = l.tail), (this.len = l.len), (this.next = l.states));
+  function noop() {}
+  function State(writer) {
+    this.head = writer.head;
+    this.tail = writer.tail;
+    this.len = writer.len;
+    this.next = writer.states;
   }
-  function w() {
-    ((this.len = 0), (this.head = new vt(Xt, 0, 0)), (this.tail = this.head), (this.states = null));
+  function Writer() {
+    this.len = 0;
+    this.head = new Op(noop, 0, 0);
+    this.tail = this.head;
+    this.states = null;
   }
-  var Ir = function () {
-    return j.Buffer
+  var create = function () {
+    return util.Buffer
       ? function () {
-          return (w.create = function () {
-            return new Wt();
+          return (Writer.create = function () {
+            return new BufferWriter();
           })();
         }
       : function () {
-          return new w();
+          return new Writer();
         };
   };
-  w.create = Ir();
-  w.alloc = function (u) {
-    return new j.Array(u);
+  Writer.create = create();
+  Writer.alloc = function (size) {
+    return new util.Array(size);
   };
-  if (j.Array !== Array) w.alloc = j.pool(w.alloc, j.Array.prototype.subarray);
-  w.prototype._push = function (u, f, d) {
-    return ((this.tail = this.tail.next = new vt(u, f, d)), (this.len += f), this);
+  if (util.Array !== Array) Writer.alloc = util.pool(Writer.alloc, util.Array.prototype.subarray);
+  Writer.prototype._push = function (fn, len, val) {
+    this.tail = this.tail.next = new Op(fn, len, val);
+    this.len += len;
+    return this;
   };
-  function Zt(l, u, f) {
-    u[f] = l & 255;
+  function writeByte(val, buf, pos) {
+    buf[pos] = val & 255;
   }
-  function Ki(l, u, f) {
-    while (l > 127) ((u[f++] = (l & 127) | 128), (l >>>= 7));
-    u[f] = l;
-  }
-  function Qt(l, u) {
-    ((this.len = l), (this.next = void 0), (this.val = u));
-  }
-  Qt.prototype = Object.create(vt.prototype);
-  Qt.prototype.fn = Ki;
-  w.prototype.uint32 = function (u) {
-    return (
-      (this.len += (this.tail = this.tail.next =
-        new Qt((u = u >>> 0) < 128 ? 1 : u < 16384 ? 2 : u < 2097152 ? 3 : u < 268435456 ? 4 : 5, u)).len),
-      this
-    );
-  };
-  w.prototype.int32 = function (u) {
-    return u < 0 ? this._push(te, 10, LongBits.fromNumber(u)) : this.uint32(u);
-  };
-  w.prototype.sint32 = function (u) {
-    return this.uint32(((u << 1) ^ (u >> 31)) >>> 0);
-  };
-  function te(l, u, f) {
-    while (l.hi) ((u[f++] = (l.lo & 127) | 128), (l.lo = ((l.lo >>> 7) | (l.hi << 25)) >>> 0), (l.hi >>>= 7));
-    while (l.lo > 127) ((u[f++] = (l.lo & 127) | 128), (l.lo = l.lo >>> 7));
-    u[f++] = l.lo;
-  }
-  w.prototype.uint64 = function (u) {
-    var from = LongBits.from(u);
-    return this._push(te, from.length(), from);
-  };
-  w.prototype.int64 = w.prototype.uint64;
-  w.prototype.sint64 = function (u) {
-    var zzEncode = LongBits.from(u).zzEncode();
-    return this._push(te, zzEncode.length(), zzEncode);
-  };
-  w.prototype.bool = function (u) {
-    return this._push(Zt, 1, u ? 1 : 0);
-  };
-  function $t(l, u, f) {
-    ((u[f] = l & 255), (u[f + 1] = (l >>> 8) & 255), (u[f + 2] = (l >>> 16) & 255), (u[f + 3] = l >>> 24));
-  }
-  w.prototype.fixed32 = function (u) {
-    return this._push($t, 4, u >>> 0);
-  };
-  w.prototype.sfixed32 = w.prototype.fixed32;
-  w.prototype.fixed64 = function (u) {
-    var from = LongBits.from(u);
-    return this._push($t, 4, from.lo)._push($t, 4, from.hi);
-  };
-  w.prototype.sfixed64 = w.prototype.fixed64;
-  w.prototype.float = function (u) {
-    return this._push(j.float.writeFloatLE, 4, u);
-  };
-  w.prototype.double = function (u) {
-    return this._push(j.float.writeDoubleLE, 8, u);
-  };
-  var ji = j.Array.prototype.set
-    ? function (u, f, d) {
-        f.set(u, d);
-      }
-    : function (u, f, d) {
-        for (var i = 0; i < u.length; ++i) f[d + i] = u[i];
-      };
-  w.prototype.bytes = function (u) {
-    var f = u.length >>> 0;
-    if (!f) return this._push(Zt, 1, 0);
-    if (j.isString(u)) {
-      var alloc = w.alloc((f = base64.length(u)));
-      (base64.decode(u, alloc, 0), (u = alloc));
+  function writeVarint32(val, buf, pos) {
+    while (val > 127) {
+      buf[pos++] = (val & 127) | 128;
+      val >>>= 7;
     }
-    return this.uint32(f)._push(ji, f, u);
-  };
-  w.prototype.string = function (u) {
-    var f = utf8.length(u);
-    return f ? this.uint32(f)._push(utf8.write, f, u) : this._push(Zt, 1, 0);
-  };
-  w.prototype.fork = function () {
-    return ((this.states = new Fi(this)), (this.head = this.tail = new vt(Xt, 0, 0)), (this.len = 0), this);
-  };
-  w.prototype.reset = function () {
-    if (this.states)
-      ((this.head = this.states.head),
-        (this.tail = this.states.tail),
-        (this.len = this.states.len),
-        (this.states = this.states.next));
-    else ((this.head = this.tail = new vt(Xt, 0, 0)), (this.len = 0));
+    buf[pos] = val;
+  }
+  function VarintOp(len, val) {
+    this.len = len;
+    this.next = undefined;
+    this.val = val;
+  }
+  VarintOp.prototype = Object.create(Op.prototype);
+  VarintOp.prototype.fn = writeVarint32;
+  Writer.prototype.uint32 = function (value) {
+    this.len += (this.tail = this.tail.next =
+      new VarintOp(
+        (value = value >>> 0) < 128 ? 1 : value < 16384 ? 2 : value < 2097152 ? 3 : value < 268435456 ? 4 : 5,
+        value,
+      )).len;
     return this;
   };
-  w.prototype.ldelim = function () {
-    var head = this.head,
-      tail = this.tail,
-      len = this.len;
-    if ((this.reset().uint32(len), len))
-      ((this.tail.next = head.next), (this.tail = tail), (this.len += len));
+  Writer.prototype.int32 = function (value) {
+    return value < 0 ? this._push(writeVarint64, 10, LongBits.fromNumber(value)) : this.uint32(value);
+  };
+  Writer.prototype.sint32 = function (value) {
+    return this.uint32(((value << 1) ^ (value >> 31)) >>> 0);
+  };
+  function writeVarint64(val, buf, pos) {
+    while (val.hi) {
+      buf[pos++] = (val.lo & 127) | 128;
+      val.lo = ((val.lo >>> 7) | (val.hi << 25)) >>> 0;
+      val.hi >>>= 7;
+    }
+    while (val.lo > 127) {
+      buf[pos++] = (val.lo & 127) | 128;
+      val.lo = val.lo >>> 7;
+    }
+    buf[pos++] = val.lo;
+  }
+  Writer.prototype.uint64 = function (value) {
+    var bits = LongBits.from(value);
+    return this._push(writeVarint64, bits.length(), bits);
+  };
+  Writer.prototype.int64 = Writer.prototype.uint64;
+  Writer.prototype.sint64 = function (value) {
+    var bits = LongBits.from(value).zzEncode();
+    return this._push(writeVarint64, bits.length(), bits);
+  };
+  Writer.prototype.bool = function (value) {
+    return this._push(writeByte, 1, value ? 1 : 0);
+  };
+  function writeFixed32(val, buf, pos) {
+    buf[pos] = val & 255;
+    buf[pos + 1] = (val >>> 8) & 255;
+    buf[pos + 2] = (val >>> 16) & 255;
+    buf[pos + 3] = val >>> 24;
+  }
+  Writer.prototype.fixed32 = function (value) {
+    return this._push(writeFixed32, 4, value >>> 0);
+  };
+  Writer.prototype.sfixed32 = Writer.prototype.fixed32;
+  Writer.prototype.fixed64 = function (value) {
+    var bits = LongBits.from(value);
+    return this._push(writeFixed32, 4, bits.lo)._push(writeFixed32, 4, bits.hi);
+  };
+  Writer.prototype.sfixed64 = Writer.prototype.fixed64;
+  Writer.prototype.float = function (value) {
+    return this._push(util.float.writeFloatLE, 4, value);
+  };
+  Writer.prototype.double = function (value) {
+    return this._push(util.float.writeDoubleLE, 8, value);
+  };
+  var writeBytes = util.Array.prototype.set
+    ? function (val, buf, pos) {
+        buf.set(val, pos);
+      }
+    : function (val, buf, pos) {
+        for (var i = 0; i < val.length; ++i) buf[pos + i] = val[i];
+      };
+  Writer.prototype.bytes = function (value) {
+    var len = value.length >>> 0;
+    if (!len) return this._push(writeByte, 1, 0);
+    if (util.isString(value)) {
+      var buf = Writer.alloc((len = base64.length(value)));
+      base64.decode(value, buf, 0);
+      value = buf;
+    }
+    return this.uint32(len)._push(writeBytes, len, value);
+  };
+  Writer.prototype.string = function (value) {
+    var len = utf8.length(value);
+    return len ? this.uint32(len)._push(utf8.write, len, value) : this._push(writeByte, 1, 0);
+  };
+  Writer.prototype.fork = function () {
+    this.states = new State(this);
+    this.head = this.tail = new Op(noop, 0, 0);
+    this.len = 0;
     return this;
   };
-  w.prototype.finish = function () {
-    var u = this.head.next,
-      alloc = this.constructor.alloc(this.len),
-      d = 0;
-    while (u) (u.fn(u.val, alloc, d), (d += u.len), (u = u.next));
-    return alloc;
+  Writer.prototype.reset = function () {
+    if (this.states) {
+      this.head = this.states.head;
+      this.tail = this.states.tail;
+      this.len = this.states.len;
+      this.states = this.states.next;
+    } else {
+      this.head = this.tail = new Op(noop, 0, 0);
+      this.len = 0;
+    }
+    return this;
   };
-  w._configure = function (l) {
-    ((Wt = l), (w.create = Ir()), Wt._configure());
+  Writer.prototype.ldelim = function () {
+    var head = this.head;
+    var tail = this.tail;
+    var len = this.len;
+    this.reset().uint32(len);
+    if (len) {
+      this.tail.next = head.next;
+      this.tail = tail;
+      this.len += len;
+    }
+    return this;
+  };
+  Writer.prototype.finish = function () {
+    var head = this.head.next;
+    var buf = this.constructor.alloc(this.len);
+    var pos = 0;
+    while (head) {
+      head.fn(head.val, buf, pos);
+      pos += head.len;
+      head = head.next;
+    }
+    return buf;
+  };
+  Writer._configure = function (BufferWriter_) {
+    BufferWriter = BufferWriter_;
+    Writer.create = create();
+    BufferWriter._configure();
   };
 });
-
-export { yHr };
+export { require_writer };

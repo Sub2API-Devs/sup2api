@@ -6,283 +6,349 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../../runtime/bun-runtime.js";
-import { Ut } from "../../../../../@smithy/core/dist-cjs/submodules/cbor/index.js";
-import { _D } from "../../../../../@smithy/core/dist-cjs/submodules/schema/index.js";
-import { ff } from "../../../../../@smithy/core/dist-cjs/submodules/client/index.js";
-import { jRt } from "../../../../../@smithy/core/dist-cjs/submodules/protocols/index.js";
-import { z6t } from "../../../../../@smithy/core/dist-cjs/submodules/serde/index.js";
+import { require_cbor } from "../../../../../@smithy/core/dist-cjs/submodules/cbor/index.js";
+import { require_schema } from "../../../../../@smithy/core/dist-cjs/submodules/schema/index.js";
+import { require_client } from "../../../../../@smithy/core/dist-cjs/submodules/client/index.js";
+import { require_protocols as require_protocols_2 } from "../../../../../@smithy/core/dist-cjs/submodules/protocols/index.js";
+import { require_serde } from "../../../../../@smithy/core/dist-cjs/submodules/serde/index.js";
 import { base64Module } from "../../../../credential-provider-web-identity/dist-cjs/index.js";
-import { IR } from "../../../../../@smithy/util-utf8/dist-cjs/index.js";
-import { jt } from "../../../../xml-builder/dist-cjs/index.js";
+import { require_util_utf8 } from "../../../../../@smithy/util-utf8/dist-cjs/index.js";
+import { require_xml_builder } from "../../../../xml-builder/dist-cjs/index.js";
 
 //@ chunk-edce4vxq.js:136783-166742 cjs-fingerprint
-var Fme = x(function (Sd) {
-  var ei = Ut(),
-    U = _D(),
-    he = ff(),
-    Y = jRt(),
-    X = z6t(),
-    qe = base64Module(),
-    ri = IR(),
-    se = jt();
-  class De {
+var require_protocols = x(function (cjsExports) {
+  var cbor = require_cbor();
+  var schema = require_schema();
+  var smithyClient = require_client();
+  var protocols = require_protocols_2();
+  var serde = require_serde();
+  var utilBase64 = base64Module();
+  var utilUtf8 = require_util_utf8();
+  var xmlBuilder = require_xml_builder();
+  class ProtocolLib {
     queryCompat;
-    constructor(e = !1) {
-      this.queryCompat = e;
+    constructor(queryCompat = false) {
+      this.queryCompat = queryCompat;
     }
-    resolveRestContentType(e, t) {
-      let memberSchemas = t.getMemberSchemas(),
-        found = Object.values(memberSchemas).find((o) => !!o.getMergedTraits().httpPayload);
-      if (found) {
-        let mediaType = found.getMergedTraits().mediaType;
+    resolveRestContentType(defaultContentType, inputSchema) {
+      let members = inputSchema.getMemberSchemas();
+      let httpPayloadMember = Object.values(members).find((m) => !!m.getMergedTraits().httpPayload);
+      if (httpPayloadMember) {
+        let mediaType = httpPayloadMember.getMergedTraits().mediaType;
         if (mediaType) return mediaType;
-        else if (found.isStringSchema()) return "text/plain";
-        else if (found.isBlobSchema()) return "application/octet-stream";
-        else return e;
-      } else if (!t.isUnitSchema()) {
+        else if (httpPayloadMember.isStringSchema()) return "text/plain";
+        else if (httpPayloadMember.isBlobSchema()) return "application/octet-stream";
+        else return defaultContentType;
+      } else if (!inputSchema.isUnitSchema()) {
         if (
-          Object.values(memberSchemas).find((a) => {
-            let {
-              httpQuery: httpQuery,
-              httpQueryParams: httpQueryParams,
-              httpHeader: httpHeader,
-              httpLabel: httpLabel,
-              httpPrefixHeaders: httpPrefixHeaders,
-            } = a.getMergedTraits();
+          Object.values(members).find((m_2) => {
+            let { httpQuery, httpQueryParams, httpHeader, httpLabel, httpPrefixHeaders } =
+              m_2.getMergedTraits();
             return (
-              !httpQuery && !httpQueryParams && !httpHeader && !httpLabel && httpPrefixHeaders === void 0
+              !httpQuery && !httpQueryParams && !httpHeader && !httpLabel && httpPrefixHeaders === undefined
             );
           })
         )
-          return e;
+          return defaultContentType;
       }
     }
-    async getErrorSchemaOrThrowBaseException(e, t, r, s, o, a) {
-      let c = t,
-        d = e;
-      if (e.includes("#")) [c, d] = e.split("#");
-      let f = { $metadata: o, $fault: r.statusCode < 500 ? "client" : "server" },
-        m = U.TypeRegistry.for(c);
+    async getErrorSchemaOrThrowBaseException(
+      errorIdentifier,
+      defaultNamespace,
+      response,
+      dataObject,
+      metadata,
+      getErrorSchema,
+    ) {
+      let namespace = defaultNamespace;
+      let errorName = errorIdentifier;
+      if (errorIdentifier.includes("#")) [namespace, errorName] = errorIdentifier.split("#");
+      let errorMetadata = {
+        $metadata: metadata,
+        $fault: response.statusCode < 500 ? "client" : "server",
+      };
+      let registry = schema.TypeRegistry.for(namespace);
       try {
-        return { errorSchema: a?.(m, d) ?? m.getSchema(e), errorMetadata: f };
-      } catch (error) {
-        s.message = s.message ?? s.Message ?? "UnknownError";
-        let N = U.TypeRegistry.for("smithy.ts.sdk.synthetic." + c),
-          baseException = N.getBaseException();
-        if (baseException) {
-          let T = N.getErrorCtor(baseException) ?? Error;
-          throw this.decorateServiceException(Object.assign(new T({ name: d }), f), s);
+        return {
+          errorSchema: getErrorSchema?.(registry, errorName) ?? registry.getSchema(errorIdentifier),
+          errorMetadata,
+        };
+      } catch (e) {
+        dataObject.message = dataObject.message ?? dataObject.Message ?? "UnknownError";
+        let synthetic = schema.TypeRegistry.for("smithy.ts.sdk.synthetic." + namespace);
+        let baseExceptionSchema = synthetic.getBaseException();
+        if (baseExceptionSchema) {
+          let ErrorCtor = synthetic.getErrorCtor(baseExceptionSchema) ?? Error;
+          throw this.decorateServiceException(
+            Object.assign(
+              new ErrorCtor({
+                name: errorName,
+              }),
+              errorMetadata,
+            ),
+            dataObject,
+          );
         }
-        throw this.decorateServiceException(Object.assign(Error(d), f), s);
+        throw this.decorateServiceException(Object.assign(Error(errorName), errorMetadata), dataObject);
       }
     }
-    decorateServiceException(e, t = {}) {
+    decorateServiceException(exception, additions = {}) {
       if (this.queryCompat) {
-        let r = e.Message ?? t.Message,
-          decorateServiceException = he.decorateServiceException(e, t);
-        if (r) ((decorateServiceException.Message = r), (decorateServiceException.message = r));
-        return decorateServiceException;
+        let msg = exception.Message ?? additions.Message;
+        let error = smithyClient.decorateServiceException(exception, additions);
+        if (msg) {
+          error.Message = msg;
+          error.message = msg;
+        }
+        return error;
       }
-      return he.decorateServiceException(e, t);
+      return smithyClient.decorateServiceException(exception, additions);
     }
-    setQueryCompatError(e, t) {
-      let r = t.headers?.["x-amzn-query-error"];
-      if (e !== void 0 && r != null) {
-        let [s, o] = r.split(";"),
-          entries = Object.entries(e),
-          c = { Code: s, Type: o };
-        Object.assign(e, c);
-        for (let [d, f] of entries) c[d] = f;
-        (delete c.__type, (e.Error = c));
+    setQueryCompatError(output, response) {
+      let queryErrorHeader = response.headers?.["x-amzn-query-error"];
+      if (output !== undefined && queryErrorHeader != null) {
+        let [Code, Type] = queryErrorHeader.split(";");
+        let entries = Object.entries(output);
+        let c = {
+          Code,
+          Type,
+        };
+        Object.assign(output, c);
+        for (let [k, v] of entries) c[k] = v;
+        delete c.__type;
+        output.Error = c;
       }
     }
-    queryCompatOutput(e, t) {
-      if (e.Error) t.Error = e.Error;
-      if (e.Type) t.Type = e.Type;
-      if (e.Code) t.Code = e.Code;
+    queryCompatOutput(queryCompatErrorData, errorData) {
+      if (queryCompatErrorData.Error) errorData.Error = queryCompatErrorData.Error;
+      if (queryCompatErrorData.Type) errorData.Type = queryCompatErrorData.Type;
+      if (queryCompatErrorData.Code) errorData.Code = queryCompatErrorData.Code;
     }
   }
-  class si extends ei.SmithyRpcV2CborProtocol {
+  class AwsSmithyRpcV2CborProtocol extends cbor.SmithyRpcV2CborProtocol {
     awsQueryCompatible;
     mixin;
-    constructor({ defaultNamespace: e, awsQueryCompatible: t }) {
-      super({ defaultNamespace: e });
-      ((this.awsQueryCompatible = !!t), (this.mixin = new De(this.awsQueryCompatible)));
+    constructor({ defaultNamespace, awsQueryCompatible }) {
+      super({
+        defaultNamespace,
+      });
+      this.awsQueryCompatible = !!awsQueryCompatible;
+      this.mixin = new ProtocolLib(this.awsQueryCompatible);
     }
-    async serializeRequest(e, t, r) {
-      let serializeRequest = await super.serializeRequest(e, t, r);
-      if (this.awsQueryCompatible) serializeRequest.headers["x-amzn-query-mode"] = "true";
-      return serializeRequest;
+    async serializeRequest(operationSchema, input, context) {
+      let request = await super.serializeRequest(operationSchema, input, context);
+      if (this.awsQueryCompatible) request.headers["x-amzn-query-mode"] = "true";
+      return request;
     }
-    async handleError(e, t, r, s, o) {
-      if (this.awsQueryCompatible) this.mixin.setQueryCompatError(s, r);
-      let a = ei.loadSmithyRpcV2CborErrorCode(r, s) ?? "Unknown",
-        { errorSchema: errorSchema, errorMetadata: errorMetadata } =
-          await this.mixin.getErrorSchemaOrThrowBaseException(a, this.options.defaultNamespace, r, s, o),
-        of = U.NormalizedSchema.of(errorSchema),
-        m = s.message ?? s.Message ?? "Unknown",
-        N = new (U.TypeRegistry.for(errorSchema[1]).getErrorCtor(errorSchema) ?? Error)(m),
-        b = {};
-      for (let [T, _] of of.structIterator()) b[T] = this.deserializer.readValue(_, s[T]);
-      if (this.awsQueryCompatible) this.mixin.queryCompatOutput(s, b);
+    async handleError(operationSchema, context, response, dataObject, metadata) {
+      if (this.awsQueryCompatible) this.mixin.setQueryCompatError(dataObject, response);
+      let errorName = cbor.loadSmithyRpcV2CborErrorCode(response, dataObject) ?? "Unknown";
+      let { errorSchema, errorMetadata } = await this.mixin.getErrorSchemaOrThrowBaseException(
+        errorName,
+        this.options.defaultNamespace,
+        response,
+        dataObject,
+        metadata,
+      );
+      let ns = schema.NormalizedSchema.of(errorSchema);
+      let message = dataObject.message ?? dataObject.Message ?? "Unknown";
+      let N = new (schema.TypeRegistry.for(errorSchema[1]).getErrorCtor(errorSchema) ?? Error)(message);
+      let output = {};
+      for (let [name, member] of ns.structIterator())
+        output[name] = this.deserializer.readValue(member, dataObject[name]);
+      if (this.awsQueryCompatible) this.mixin.queryCompatOutput(dataObject, output);
       throw this.mixin.decorateServiceException(
-        Object.assign(N, errorMetadata, { $fault: of.getMergedTraits().error, message: m }, b),
-        s,
+        Object.assign(
+          N,
+          errorMetadata,
+          {
+            $fault: ns.getMergedTraits().error,
+            message,
+          },
+          output,
+        ),
+        dataObject,
       );
     }
   }
-  var hd = (e) => {
-      if (e == null) return e;
-      if (typeof e === "number" || typeof e === "bigint") {
-        let t = Error(`Received number ${e} where a string was expected.`);
-        return ((t.name = "Warning"), console.warn(t), String(e));
+  var _toStr = (val) => {
+    if (val == null) return val;
+    if (typeof val === "number" || typeof val === "bigint") {
+      let warning = Error(`Received number ${val} where a string was expected.`);
+      warning.name = "Warning";
+      console.warn(warning);
+      return String(val);
+    }
+    if (typeof val === "boolean") {
+      let warning = Error(`Received boolean ${val} where a string was expected.`);
+      warning.name = "Warning";
+      console.warn(warning);
+      return String(val);
+    }
+    return val;
+  };
+  var _toBool = (val) => {
+    if (val == null) return val;
+    if (typeof val === "string") {
+      let lowercase = val.toLowerCase();
+      if (val !== "" && lowercase !== "false" && lowercase !== "true") {
+        let warning = Error(`Received string "${val}" where a boolean was expected.`);
+        warning.name = "Warning";
+        console.warn(warning);
       }
-      if (typeof e === "boolean") {
-        let t = Error(`Received boolean ${e} where a string was expected.`);
-        return ((t.name = "Warning"), console.warn(t), String(e));
+      return val !== "" && lowercase !== "false";
+    }
+    return val;
+  };
+  var _toNum = (val) => {
+    if (val == null) return val;
+    if (typeof val === "string") {
+      let num = Number(val);
+      if (num.toString() !== val) {
+        let warning = Error(`Received string "${val}" where a number was expected.`);
+        warning.name = "Warning";
+        console.warn(warning);
+        return val;
       }
-      return e;
-    },
-    fd = (e) => {
-      if (e == null) return e;
-      if (typeof e === "string") {
-        let lower = e.toLowerCase();
-        if (e !== "" && lower !== "false" && lower !== "true") {
-          let r = Error(`Received string "${e}" where a boolean was expected.`);
-          ((r.name = "Warning"), console.warn(r));
-        }
-        return e !== "" && lower !== "false";
-      }
-      return e;
-    },
-    pd = (e) => {
-      if (e == null) return e;
-      if (typeof e === "string") {
-        let t = Number(e);
-        if (t.toString() !== e) {
-          let r = Error(`Received string "${e}" where a number was expected.`);
-          return ((r.name = "Warning"), console.warn(r), e);
-        }
-        return t;
-      }
-      return e;
-    };
-  class Ee {
+      return num;
+    }
+    return val;
+  };
+  class SerdeContextConfig {
     serdeContext;
-    setSerdeContext(e) {
-      this.serdeContext = e;
+    setSerdeContext(serdeContext) {
+      this.serdeContext = serdeContext;
     }
   }
-  function md(e, t, r) {
-    if (r?.source) {
-      let source = r.source;
-      if (typeof t === "number") {
-        if (t > Number.MAX_SAFE_INTEGER || t < Number.MIN_SAFE_INTEGER || source !== String(t))
-          if (source.includes(".")) return new X.NumericValue(source, "bigDecimal");
-          else return BigInt(source);
+  function jsonReviver(key, value, context) {
+    if (context?.source) {
+      let numericString = context.source;
+      if (typeof value === "number") {
+        if (
+          value > Number.MAX_SAFE_INTEGER ||
+          value < Number.MIN_SAFE_INTEGER ||
+          numericString !== String(value)
+        )
+          if (numericString.includes(".")) return new serde.NumericValue(numericString, "bigDecimal");
+          else return BigInt(numericString);
       }
     }
-    return t;
+    return value;
   }
-  var ni = (e, t) => he.collectBody(e, t).then((r) => (t?.utf8Encoder ?? ri.toUtf8)(r)),
-    mr = (e, t) =>
-      ni(e, t).then((r) => {
-        if (r.length)
-          try {
-            return JSON.parse(r);
-          } catch (error) {
-            if (error?.name === "SyntaxError")
-              Object.defineProperty(error, "$responseBodyText", { value: r });
-            throw error;
-          }
-        return {};
-      }),
-    gd = async (e, t) => {
-      let r = await mr(e, t);
-      return ((r.message = r.message ?? r.Message), r);
-    },
-    gr = (e, t) => {
-      let r = (a, c) => Object.keys(a).find((d) => d.toLowerCase() === c.toLowerCase()),
-        s = (a) => {
-          let c = a;
-          if (typeof c === "number") c = c.toString();
-          if (c.indexOf(",") >= 0) c = c.split(",")[0];
-          if (c.indexOf(":") >= 0) c = c.split(":")[0];
-          if (c.indexOf("#") >= 0) c = c.split("#")[1];
-          return c;
-        },
-        o = r(e.headers, "x-amzn-errortype");
-      if (o !== void 0) return s(e.headers[o]);
-      if (t && typeof t === "object") {
-        let a = r(t, "code");
-        if (a && t[a] !== void 0) return s(t[a]);
-        if (t.__type !== void 0) return s(t.__type);
-      }
+  var collectBodyString = (streamBody, context) =>
+    smithyClient
+      .collectBody(streamBody, context)
+      .then((body) => (context?.utf8Encoder ?? utilUtf8.toUtf8)(body));
+  var parseJsonBody = (streamBody, context) =>
+    collectBodyString(streamBody, context).then((encoded) => {
+      if (encoded.length)
+        try {
+          return JSON.parse(encoded);
+        } catch (e) {
+          if (e?.name === "SyntaxError")
+            Object.defineProperty(e, "$responseBodyText", {
+              value: encoded,
+            });
+          throw e;
+        }
+      return {};
+    });
+  var parseJsonErrorBody = async (errorBody, context) => {
+    let value = await parseJsonBody(errorBody, context);
+    value.message = value.message ?? value.Message;
+    return value;
+  };
+  var loadRestJsonErrorCode = (output, data) => {
+    let findKey = (object, key) => Object.keys(object).find((k) => k.toLowerCase() === key.toLowerCase());
+    let sanitizeErrorCode = (rawValue) => {
+      let cleanValue = rawValue;
+      if (typeof cleanValue === "number") cleanValue = cleanValue.toString();
+      if (cleanValue.indexOf(",") >= 0) cleanValue = cleanValue.split(",")[0];
+      if (cleanValue.indexOf(":") >= 0) cleanValue = cleanValue.split(":")[0];
+      if (cleanValue.indexOf("#") >= 0) cleanValue = cleanValue.split("#")[1];
+      return cleanValue;
     };
-  class yr extends Ee {
+    let headerKey = findKey(output.headers, "x-amzn-errortype");
+    if (headerKey !== undefined) return sanitizeErrorCode(output.headers[headerKey]);
+    if (data && typeof data === "object") {
+      let codeKey = findKey(data, "code");
+      if (codeKey && data[codeKey] !== undefined) return sanitizeErrorCode(data[codeKey]);
+      if (data.__type !== undefined) return sanitizeErrorCode(data.__type);
+    }
+  };
+  class JsonShapeDeserializer extends SerdeContextConfig {
     settings;
-    constructor(e) {
+    constructor(settings) {
       super();
-      this.settings = e;
+      this.settings = settings;
     }
-    async read(e, t) {
-      return this._read(e, typeof t === "string" ? JSON.parse(t, md) : await mr(t, this.serdeContext));
+    async read(schema, data) {
+      return this._read(
+        schema,
+        typeof data === "string"
+          ? JSON.parse(data, jsonReviver)
+          : await parseJsonBody(data, this.serdeContext),
+      );
     }
-    readObject(e, t) {
-      return this._read(e, t);
+    readObject(schema, data) {
+      return this._read(schema, data);
     }
-    _read(e, t) {
-      let r = t !== null && typeof t === "object",
-        of = U.NormalizedSchema.of(e);
-      if (of.isListSchema() && Array.isArray(t)) {
-        let valueSchema = of.getValueSchema(),
-          c = [],
-          d = !!of.getMergedTraits().sparse;
-        for (let f of t) if (d || f != null) c.push(this._read(valueSchema, f));
-        return c;
-      } else if (of.isMapSchema() && r) {
-        let valueSchema = of.getValueSchema(),
-          c = {},
-          d = !!of.getMergedTraits().sparse;
-        for (let [f, m] of Object.entries(t)) if (d || m != null) c[f] = this._read(valueSchema, m);
-        return c;
-      } else if (of.isStructSchema() && r) {
-        let a = {};
-        for (let [c, d] of of.structIterator()) {
-          let f = this.settings.jsonName ? (d.getMergedTraits().jsonName ?? c) : c,
-            _read = this._read(d, t[f]);
-          if (_read != null) a[c] = _read;
+    _read(schema$1, value) {
+      let isObject = value !== null && typeof value === "object";
+      let ns = schema.NormalizedSchema.of(schema$1);
+      if (ns.isListSchema() && Array.isArray(value)) {
+        let listMember = ns.getValueSchema();
+        let out = [];
+        let sparse = !!ns.getMergedTraits().sparse;
+        for (let item of value) if (sparse || item != null) out.push(this._read(listMember, item));
+        return out;
+      } else if (ns.isMapSchema() && isObject) {
+        let mapMember = ns.getValueSchema();
+        let out = {};
+        let sparse = !!ns.getMergedTraits().sparse;
+        for (let [_k, _v] of Object.entries(value))
+          if (sparse || _v != null) out[_k] = this._read(mapMember, _v);
+        return out;
+      } else if (ns.isStructSchema() && isObject) {
+        let out = {};
+        for (let [memberName, memberSchema] of ns.structIterator()) {
+          let fromKey = this.settings.jsonName
+            ? (memberSchema.getMergedTraits().jsonName ?? memberName)
+            : memberName;
+          let deserializedValue = this._read(memberSchema, value[fromKey]);
+          if (deserializedValue != null) out[memberName] = deserializedValue;
         }
-        return a;
+        return out;
       }
-      if (of.isBlobSchema() && typeof t === "string") return qe.fromBase64(t);
-      let mediaType = of.getMergedTraits().mediaType;
-      if (of.isStringSchema() && typeof t === "string" && mediaType) {
-        if (mediaType === "application/json" || mediaType.endsWith("+json")) return X.LazyJsonString.from(t);
+      if (ns.isBlobSchema() && typeof value === "string") return utilBase64.fromBase64(value);
+      let mediaType = ns.getMergedTraits().mediaType;
+      if (ns.isStringSchema() && typeof value === "string" && mediaType) {
+        if (mediaType === "application/json" || mediaType.endsWith("+json"))
+          return serde.LazyJsonString.from(value);
       }
-      if (of.isTimestampSchema() && t != null)
-        switch (Y.determineTimestampFormat(of, this.settings)) {
+      if (ns.isTimestampSchema() && value != null)
+        switch (protocols.determineTimestampFormat(ns, this.settings)) {
           case 5:
-            return X.parseRfc3339DateTimeWithOffset(t);
+            return serde.parseRfc3339DateTimeWithOffset(value);
           case 6:
-            return X.parseRfc7231DateTime(t);
+            return serde.parseRfc7231DateTime(value);
           case 7:
-            return X.parseEpochTimestamp(t);
+            return serde.parseEpochTimestamp(value);
           default:
-            return (
-              console.warn("Missing timestamp format, parsing value with Date constructor:", t),
-              new Date(t)
-            );
+            console.warn("Missing timestamp format, parsing value with Date constructor:", value);
+            return new Date(value);
         }
-      if (of.isBigIntegerSchema() && (typeof t === "number" || typeof t === "string")) return BigInt(t);
-      if (of.isBigDecimalSchema() && t != null) {
-        if (t instanceof X.NumericValue) return t;
-        let a = t;
-        if (a.type === "bigDecimal" && "string" in a) return new X.NumericValue(a.string, a.type);
-        return new X.NumericValue(String(t), "bigDecimal");
+      if (ns.isBigIntegerSchema() && (typeof value === "number" || typeof value === "string"))
+        return BigInt(value);
+      if (ns.isBigDecimalSchema() && value != null) {
+        if (value instanceof serde.NumericValue) return value;
+        let untyped = value;
+        if (untyped.type === "bigDecimal" && "string" in untyped)
+          return new serde.NumericValue(untyped.string, untyped.type);
+        return new serde.NumericValue(String(value), "bigDecimal");
       }
-      if (of.isNumericSchema() && typeof t === "string")
-        switch (t) {
+      if (ns.isNumericSchema() && typeof value === "string")
+        switch (value) {
           case "Infinity":
             return 1 / 0;
           case "-Infinity":
@@ -290,208 +356,240 @@ var Fme = x(function (Sd) {
           case "NaN":
             return NaN;
         }
-      if (of.isDocumentSchema())
-        if (r) {
-          let a = Array.isArray(t) ? [] : {};
-          for (let [c, d] of Object.entries(t))
-            if (d instanceof X.NumericValue) a[c] = d;
-            else a[c] = this._read(of, d);
-          return a;
-        } else return structuredClone(t);
-      return t;
+      if (ns.isDocumentSchema())
+        if (isObject) {
+          let out = Array.isArray(value) ? [] : {};
+          for (let [k, v] of Object.entries(value))
+            if (v instanceof serde.NumericValue) out[k] = v;
+            else out[k] = this._read(ns, v);
+          return out;
+        } else return structuredClone(value);
+      return value;
     }
   }
-  var fromCharCode = String.fromCharCode(925);
-  class ii {
+  var NUMERIC_CONTROL_CHAR = String.fromCharCode(925);
+  class JsonReplacer {
     values = new Map();
     counter = 0;
     stage = 0;
     createReplacer() {
       if (this.stage === 1) throw Error("@aws-sdk/core/protocols - JsonReplacer already created.");
       if (this.stage === 2) throw Error("@aws-sdk/core/protocols - JsonReplacer exhausted.");
-      return (
-        (this.stage = 1),
-        (e, t) => {
-          if (t instanceof X.NumericValue) {
-            let r = `${fromCharCode + "nv" + this.counter++}_` + t.string;
-            return (this.values.set(`"${r}"`, t.string), r);
-          }
-          if (typeof t === "bigint") {
-            let str = t.toString(),
-              s = `${fromCharCode + "b" + this.counter++}_` + str;
-            return (this.values.set(`"${s}"`, str), s);
-          }
-          return t;
+      this.stage = 1;
+      return (key, value) => {
+        if (value instanceof serde.NumericValue) {
+          let v = `${NUMERIC_CONTROL_CHAR + "nv" + this.counter++}_` + value.string;
+          this.values.set(`"${v}"`, value.string);
+          return v;
         }
-      );
+        if (typeof value === "bigint") {
+          let s_2 = value.toString();
+          let v = `${NUMERIC_CONTROL_CHAR + "b" + this.counter++}_` + s_2;
+          this.values.set(`"${v}"`, s_2);
+          return v;
+        }
+        return value;
+      };
     }
-    replaceInJson(e) {
+    replaceInJson(json) {
       if (this.stage === 0) throw Error("@aws-sdk/core/protocols - JsonReplacer not created yet.");
       if (this.stage === 2) throw Error("@aws-sdk/core/protocols - JsonReplacer exhausted.");
-      if (((this.stage = 2), this.counter === 0)) return e;
-      for (let [t, r] of this.values) e = e.replace(t, r);
-      return e;
+      this.stage = 2;
+      if (this.counter === 0) return json;
+      for (let [key, value] of this.values) json = json.replace(key, value);
+      return json;
     }
   }
-  class Er extends Ee {
+  class JsonShapeSerializer extends SerdeContextConfig {
     settings;
     buffer;
     rootSchema;
-    constructor(e) {
+    constructor(settings) {
       super();
-      this.settings = e;
+      this.settings = settings;
     }
-    write(e, t) {
-      ((this.rootSchema = U.NormalizedSchema.of(e)), (this.buffer = this._write(this.rootSchema, t)));
+    write(schema$1, value) {
+      this.rootSchema = schema.NormalizedSchema.of(schema$1);
+      this.buffer = this._write(this.rootSchema, value);
     }
-    writeDiscriminatedDocument(e, t) {
-      if ((this.write(e, t), typeof this.buffer === "object"))
-        this.buffer.__type = U.NormalizedSchema.of(e).getName(!0);
+    writeDiscriminatedDocument(schema$1, value) {
+      this.write(schema$1, value);
+      if (typeof this.buffer === "object")
+        this.buffer.__type = schema.NormalizedSchema.of(schema$1).getName(true);
     }
     flush() {
-      let { rootSchema: rootSchema } = this;
-      if (((this.rootSchema = void 0), rootSchema?.isStructSchema() || rootSchema?.isDocumentSchema())) {
-        let t = new ii();
-        return t.replaceInJson(JSON.stringify(this.buffer, t.createReplacer(), 0));
+      let { rootSchema } = this;
+      this.rootSchema = undefined;
+      if (rootSchema?.isStructSchema() || rootSchema?.isDocumentSchema()) {
+        let replacer = new JsonReplacer();
+        return replacer.replaceInJson(JSON.stringify(this.buffer, replacer.createReplacer(), 0));
       }
       return this.buffer;
     }
-    _write(e, t, r) {
-      let s = t !== null && typeof t === "object",
-        of = U.NormalizedSchema.of(e);
-      if (of.isListSchema() && Array.isArray(t)) {
-        let valueSchema = of.getValueSchema(),
-          c = [],
-          d = !!of.getMergedTraits().sparse;
-        for (let f of t) if (d || f != null) c.push(this._write(valueSchema, f));
-        return c;
-      } else if (of.isMapSchema() && s) {
-        let valueSchema = of.getValueSchema(),
-          c = {},
-          d = !!of.getMergedTraits().sparse;
-        for (let [f, m] of Object.entries(t)) if (d || m != null) c[f] = this._write(valueSchema, m);
-        return c;
-      } else if (of.isStructSchema() && s) {
-        let a = {};
-        for (let [c, d] of of.structIterator()) {
-          let f = this.settings.jsonName ? (d.getMergedTraits().jsonName ?? c) : c,
-            _write = this._write(d, t[c], of);
-          if (_write !== void 0) a[f] = _write;
+    _write(schema$1, value, container) {
+      let isObject = value !== null && typeof value === "object";
+      let ns = schema.NormalizedSchema.of(schema$1);
+      if (ns.isListSchema() && Array.isArray(value)) {
+        let listMember = ns.getValueSchema();
+        let out = [];
+        let sparse = !!ns.getMergedTraits().sparse;
+        for (let item of value) if (sparse || item != null) out.push(this._write(listMember, item));
+        return out;
+      } else if (ns.isMapSchema() && isObject) {
+        let mapMember = ns.getValueSchema();
+        let out = {};
+        let sparse = !!ns.getMergedTraits().sparse;
+        for (let [_k, _v] of Object.entries(value))
+          if (sparse || _v != null) out[_k] = this._write(mapMember, _v);
+        return out;
+      } else if (ns.isStructSchema() && isObject) {
+        let out = {};
+        for (let [memberName, memberSchema] of ns.structIterator()) {
+          let targetKey = this.settings.jsonName
+            ? (memberSchema.getMergedTraits().jsonName ?? memberName)
+            : memberName;
+          let serializableValue = this._write(memberSchema, value[memberName], ns);
+          if (serializableValue !== undefined) out[targetKey] = serializableValue;
         }
-        return a;
+        return out;
       }
-      if (t === null && r?.isStructSchema()) return;
+      if (value === null && container?.isStructSchema()) return;
       if (
-        (of.isBlobSchema() && (t instanceof Uint8Array || typeof t === "string")) ||
-        (of.isDocumentSchema() && t instanceof Uint8Array)
+        (ns.isBlobSchema() && (value instanceof Uint8Array || typeof value === "string")) ||
+        (ns.isDocumentSchema() && value instanceof Uint8Array)
       ) {
-        if (of === this.rootSchema) return t;
-        return (this.serdeContext?.base64Encoder ?? qe.toBase64)(t);
+        if (ns === this.rootSchema) return value;
+        return (this.serdeContext?.base64Encoder ?? utilBase64.toBase64)(value);
       }
-      if ((of.isTimestampSchema() || of.isDocumentSchema()) && t instanceof Date)
-        switch (Y.determineTimestampFormat(of, this.settings)) {
+      if ((ns.isTimestampSchema() || ns.isDocumentSchema()) && value instanceof Date)
+        switch (protocols.determineTimestampFormat(ns, this.settings)) {
           case 5:
-            return t.toISOString().replace(".000Z", "Z");
+            return value.toISOString().replace(".000Z", "Z");
           case 6:
-            return X.dateToUtcString(t);
+            return serde.dateToUtcString(value);
           case 7:
-            return t.getTime() / 1000;
+            return value.getTime() / 1000;
           default:
-            return (console.warn("Missing timestamp format, using epoch seconds", t), t.getTime() / 1000);
+            console.warn("Missing timestamp format, using epoch seconds", value);
+            return value.getTime() / 1000;
         }
-      if (of.isNumericSchema() && typeof t === "number") {
-        if (Math.abs(t) === 1 / 0 || isNaN(t)) return String(t);
+      if (ns.isNumericSchema() && typeof value === "number") {
+        if (Math.abs(value) === 1 / 0 || isNaN(value)) return String(value);
       }
-      if (of.isStringSchema()) {
-        if (typeof t > "u" && of.isIdempotencyToken()) return X.generateIdempotencyToken();
-        let mediaType = of.getMergedTraits().mediaType;
-        if (t != null && mediaType) {
+      if (ns.isStringSchema()) {
+        if (typeof value === "undefined" && ns.isIdempotencyToken()) return serde.generateIdempotencyToken();
+        let mediaType = ns.getMergedTraits().mediaType;
+        if (value != null && mediaType) {
           if (mediaType === "application/json" || mediaType.endsWith("+json"))
-            return X.LazyJsonString.from(t);
+            return serde.LazyJsonString.from(value);
         }
       }
-      if (of.isDocumentSchema())
-        if (s) {
-          let a = Array.isArray(t) ? [] : {};
-          for (let [c, d] of Object.entries(t))
-            if (d instanceof X.NumericValue) a[c] = d;
-            else a[c] = this._write(of, d);
-          return a;
-        } else return structuredClone(t);
-      return t;
+      if (ns.isDocumentSchema())
+        if (isObject) {
+          let out = Array.isArray(value) ? [] : {};
+          for (let [k, v] of Object.entries(value))
+            if (v instanceof serde.NumericValue) out[k] = v;
+            else out[k] = this._write(ns, v);
+          return out;
+        } else return structuredClone(value);
+      return value;
     }
   }
-  class lt extends Ee {
+  class JsonCodec extends SerdeContextConfig {
     settings;
-    constructor(e) {
+    constructor(settings) {
       super();
-      this.settings = e;
+      this.settings = settings;
     }
     createSerializer() {
-      let e = new Er(this.settings);
-      return (e.setSerdeContext(this.serdeContext), e);
+      let serializer = new JsonShapeSerializer(this.settings);
+      serializer.setSerdeContext(this.serdeContext);
+      return serializer;
     }
     createDeserializer() {
-      let e = new yr(this.settings);
-      return (e.setSerdeContext(this.serdeContext), e);
+      let deserializer = new JsonShapeDeserializer(this.settings);
+      deserializer.setSerdeContext(this.serdeContext);
+      return deserializer;
     }
   }
-  class dt extends Y.RpcProtocol {
+  class AwsJsonRpcProtocol extends protocols.RpcProtocol {
     serializer;
     deserializer;
     serviceTarget;
     codec;
     mixin;
     awsQueryCompatible;
-    constructor({ defaultNamespace: e, serviceTarget: t, awsQueryCompatible: r }) {
-      super({ defaultNamespace: e });
-      ((this.serviceTarget = t),
-        (this.codec = new lt({ timestampFormat: { useTrait: !0, default: 7 }, jsonName: !1 })),
-        (this.serializer = this.codec.createSerializer()),
-        (this.deserializer = this.codec.createDeserializer()),
-        (this.awsQueryCompatible = !!r),
-        (this.mixin = new De(this.awsQueryCompatible)));
+    constructor({ defaultNamespace, serviceTarget, awsQueryCompatible }) {
+      super({
+        defaultNamespace,
+      });
+      this.serviceTarget = serviceTarget;
+      this.codec = new JsonCodec({
+        timestampFormat: {
+          useTrait: true,
+          default: 7,
+        },
+        jsonName: false,
+      });
+      this.serializer = this.codec.createSerializer();
+      this.deserializer = this.codec.createDeserializer();
+      this.awsQueryCompatible = !!awsQueryCompatible;
+      this.mixin = new ProtocolLib(this.awsQueryCompatible);
     }
-    async serializeRequest(e, t, r) {
-      let serializeRequest = await super.serializeRequest(e, t, r);
-      if (!serializeRequest.path.endsWith("/")) serializeRequest.path += "/";
-      if (
-        (Object.assign(serializeRequest.headers, {
-          "content-type": `application/x-amz-json-${this.getJsonRpcVersion()}`,
-          "x-amz-target": `${this.serviceTarget}.${e.name}`,
-        }),
-        this.awsQueryCompatible)
-      )
-        serializeRequest.headers["x-amzn-query-mode"] = "true";
-      if (U.deref(e.input) === "unit" || !serializeRequest.body) serializeRequest.body = "{}";
-      return serializeRequest;
+    async serializeRequest(operationSchema, input, context) {
+      let request = await super.serializeRequest(operationSchema, input, context);
+      if (!request.path.endsWith("/")) request.path += "/";
+      Object.assign(request.headers, {
+        "content-type": `application/x-amz-json-${this.getJsonRpcVersion()}`,
+        "x-amz-target": `${this.serviceTarget}.${operationSchema.name}`,
+      });
+      if (this.awsQueryCompatible) request.headers["x-amzn-query-mode"] = "true";
+      if (schema.deref(operationSchema.input) === "unit" || !request.body) request.body = "{}";
+      return request;
     }
     getPayloadCodec() {
       return this.codec;
     }
-    async handleError(e, t, r, s, o) {
-      if (this.awsQueryCompatible) this.mixin.setQueryCompatError(s, r);
-      let a = gr(r, s) ?? "Unknown",
-        { errorSchema: errorSchema, errorMetadata: errorMetadata } =
-          await this.mixin.getErrorSchemaOrThrowBaseException(a, this.options.defaultNamespace, r, s, o),
-        of = U.NormalizedSchema.of(errorSchema),
-        m = s.message ?? s.Message ?? "Unknown",
-        N = new (U.TypeRegistry.for(errorSchema[1]).getErrorCtor(errorSchema) ?? Error)(m),
-        b = {};
-      for (let [T, _] of of.structIterator()) {
-        let I = _.getMergedTraits().jsonName ?? T;
-        b[T] = this.codec.createDeserializer().readObject(_, s[I]);
+    async handleError(operationSchema, context, response, dataObject, metadata) {
+      if (this.awsQueryCompatible) this.mixin.setQueryCompatError(dataObject, response);
+      let errorIdentifier = loadRestJsonErrorCode(response, dataObject) ?? "Unknown";
+      let { errorSchema, errorMetadata } = await this.mixin.getErrorSchemaOrThrowBaseException(
+        errorIdentifier,
+        this.options.defaultNamespace,
+        response,
+        dataObject,
+        metadata,
+      );
+      let ns = schema.NormalizedSchema.of(errorSchema);
+      let message = dataObject.message ?? dataObject.Message ?? "Unknown";
+      let N = new (schema.TypeRegistry.for(errorSchema[1]).getErrorCtor(errorSchema) ?? Error)(message);
+      let output = {};
+      for (let [name, member] of ns.structIterator()) {
+        let target = member.getMergedTraits().jsonName ?? name;
+        output[name] = this.codec.createDeserializer().readObject(member, dataObject[target]);
       }
-      if (this.awsQueryCompatible) this.mixin.queryCompatOutput(s, b);
+      if (this.awsQueryCompatible) this.mixin.queryCompatOutput(dataObject, output);
       throw this.mixin.decorateServiceException(
-        Object.assign(N, errorMetadata, { $fault: of.getMergedTraits().error, message: m }, b),
-        s,
+        Object.assign(
+          N,
+          errorMetadata,
+          {
+            $fault: ns.getMergedTraits().error,
+            message,
+          },
+          output,
+        ),
+        dataObject,
       );
     }
   }
-  class oi extends dt {
-    constructor({ defaultNamespace: e, serviceTarget: t, awsQueryCompatible: r }) {
-      super({ defaultNamespace: e, serviceTarget: t, awsQueryCompatible: r });
+  class AwsJson1_0Protocol extends AwsJsonRpcProtocol {
+    constructor({ defaultNamespace, serviceTarget, awsQueryCompatible }) {
+      super({
+        defaultNamespace,
+        serviceTarget,
+        awsQueryCompatible,
+      });
     }
     getShapeId() {
       return "aws.protocols#awsJson1_0";
@@ -503,9 +601,13 @@ var Fme = x(function (Sd) {
       return "application/x-amz-json-1.0";
     }
   }
-  class ai extends dt {
-    constructor({ defaultNamespace: e, serviceTarget: t, awsQueryCompatible: r }) {
-      super({ defaultNamespace: e, serviceTarget: t, awsQueryCompatible: r });
+  class AwsJson1_1Protocol extends AwsJsonRpcProtocol {
+    constructor({ defaultNamespace, serviceTarget, awsQueryCompatible }) {
+      super({
+        defaultNamespace,
+        serviceTarget,
+        awsQueryCompatible,
+      });
     }
     getShapeId() {
       return "aws.protocols#awsJson1_1";
@@ -517,17 +619,32 @@ var Fme = x(function (Sd) {
       return "application/x-amz-json-1.1";
     }
   }
-  class ci extends Y.HttpBindingProtocol {
+  class AwsRestJsonProtocol extends protocols.HttpBindingProtocol {
     serializer;
     deserializer;
     codec;
-    mixin = new De();
-    constructor({ defaultNamespace: e }) {
-      super({ defaultNamespace: e });
-      let t = { timestampFormat: { useTrait: !0, default: 7 }, httpBindings: !0, jsonName: !0 };
-      ((this.codec = new lt(t)),
-        (this.serializer = new Y.HttpInterceptingShapeSerializer(this.codec.createSerializer(), t)),
-        (this.deserializer = new Y.HttpInterceptingShapeDeserializer(this.codec.createDeserializer(), t)));
+    mixin = new ProtocolLib();
+    constructor({ defaultNamespace }) {
+      super({
+        defaultNamespace,
+      });
+      let settings = {
+        timestampFormat: {
+          useTrait: true,
+          default: 7,
+        },
+        httpBindings: true,
+        jsonName: true,
+      };
+      this.codec = new JsonCodec(settings);
+      this.serializer = new protocols.HttpInterceptingShapeSerializer(
+        this.codec.createSerializer(),
+        settings,
+      );
+      this.deserializer = new protocols.HttpInterceptingShapeDeserializer(
+        this.codec.createDeserializer(),
+        settings,
+      );
     }
     getShapeId() {
       return "aws.protocols#restJson1";
@@ -535,647 +652,755 @@ var Fme = x(function (Sd) {
     getPayloadCodec() {
       return this.codec;
     }
-    setSerdeContext(e) {
-      (this.codec.setSerdeContext(e), super.setSerdeContext(e));
+    setSerdeContext(serdeContext) {
+      this.codec.setSerdeContext(serdeContext);
+      super.setSerdeContext(serdeContext);
     }
-    async serializeRequest(e, t, r) {
-      let serializeRequest = await super.serializeRequest(e, t, r),
-        of = U.NormalizedSchema.of(e.input);
-      if (!serializeRequest.headers["content-type"]) {
-        let restContentType = this.mixin.resolveRestContentType(this.getDefaultContentType(), of);
-        if (restContentType) serializeRequest.headers["content-type"] = restContentType;
+    async serializeRequest(operationSchema, input, context) {
+      let request = await super.serializeRequest(operationSchema, input, context);
+      let inputSchema = schema.NormalizedSchema.of(operationSchema.input);
+      if (!request.headers["content-type"]) {
+        let contentType = this.mixin.resolveRestContentType(this.getDefaultContentType(), inputSchema);
+        if (contentType) request.headers["content-type"] = contentType;
       }
-      if (
-        serializeRequest.body == null &&
-        serializeRequest.headers["content-type"] === this.getDefaultContentType()
-      )
-        serializeRequest.body = "{}";
-      return serializeRequest;
+      if (request.body == null && request.headers["content-type"] === this.getDefaultContentType())
+        request.body = "{}";
+      return request;
     }
-    async deserializeResponse(e, t, r) {
-      let deserializeResponse = await super.deserializeResponse(e, t, r),
-        of = U.NormalizedSchema.of(e.output);
-      for (let [a, c] of of.structIterator())
-        if (c.getMemberTraits().httpPayload && !(a in deserializeResponse)) deserializeResponse[a] = null;
-      return deserializeResponse;
+    async deserializeResponse(operationSchema, context, response) {
+      let output = await super.deserializeResponse(operationSchema, context, response);
+      let outputSchema = schema.NormalizedSchema.of(operationSchema.output);
+      for (let [name, member] of outputSchema.structIterator())
+        if (member.getMemberTraits().httpPayload && !(name in output)) output[name] = null;
+      return output;
     }
-    async handleError(e, t, r, s, o) {
-      let a = gr(r, s) ?? "Unknown",
-        { errorSchema: errorSchema, errorMetadata: errorMetadata } =
-          await this.mixin.getErrorSchemaOrThrowBaseException(a, this.options.defaultNamespace, r, s, o),
-        of = U.NormalizedSchema.of(errorSchema),
-        m = s.message ?? s.Message ?? "Unknown",
-        N = new (U.TypeRegistry.for(errorSchema[1]).getErrorCtor(errorSchema) ?? Error)(m);
-      await this.deserializeHttpMessage(errorSchema, t, r, s);
-      let b = {};
-      for (let [T, _] of of.structIterator()) {
-        let I = _.getMergedTraits().jsonName ?? T;
-        b[T] = this.codec.createDeserializer().readObject(_, s[I]);
+    async handleError(operationSchema, context, response, dataObject, metadata) {
+      let errorIdentifier = loadRestJsonErrorCode(response, dataObject) ?? "Unknown";
+      let { errorSchema, errorMetadata } = await this.mixin.getErrorSchemaOrThrowBaseException(
+        errorIdentifier,
+        this.options.defaultNamespace,
+        response,
+        dataObject,
+        metadata,
+      );
+      let ns = schema.NormalizedSchema.of(errorSchema);
+      let message = dataObject.message ?? dataObject.Message ?? "Unknown";
+      let N = new (schema.TypeRegistry.for(errorSchema[1]).getErrorCtor(errorSchema) ?? Error)(message);
+      await this.deserializeHttpMessage(errorSchema, context, response, dataObject);
+      let output = {};
+      for (let [name, member] of ns.structIterator()) {
+        let target = member.getMergedTraits().jsonName ?? name;
+        output[name] = this.codec.createDeserializer().readObject(member, dataObject[target]);
       }
       throw this.mixin.decorateServiceException(
-        Object.assign(N, errorMetadata, { $fault: of.getMergedTraits().error, message: m }, b),
-        s,
+        Object.assign(
+          N,
+          errorMetadata,
+          {
+            $fault: ns.getMergedTraits().error,
+            message,
+          },
+          output,
+        ),
+        dataObject,
       );
     }
     getDefaultContentType() {
       return "application/json";
     }
   }
-  var yd = (e) => {
-    if (e == null) return;
-    if (typeof e === "object" && "__type" in e) delete e.__type;
-    return he.expectUnion(e);
+  var awsExpectUnion = (value) => {
+    if (value == null) return;
+    if (typeof value === "object" && "__type" in value) delete value.__type;
+    return smithyClient.expectUnion(value);
   };
-  class ht extends Ee {
+  class XmlShapeDeserializer extends SerdeContextConfig {
     settings;
     stringDeserializer;
-    constructor(e) {
+    constructor(settings) {
       super();
-      ((this.settings = e), (this.stringDeserializer = new Y.FromStringShapeDeserializer(e)));
+      this.settings = settings;
+      this.stringDeserializer = new protocols.FromStringShapeDeserializer(settings);
     }
-    setSerdeContext(e) {
-      ((this.serdeContext = e), this.stringDeserializer.setSerdeContext(e));
+    setSerdeContext(serdeContext) {
+      this.serdeContext = serdeContext;
+      this.stringDeserializer.setSerdeContext(serdeContext);
     }
-    read(e, t, r) {
-      let of = U.NormalizedSchema.of(e),
-        memberSchemas = of.getMemberSchemas();
+    read(schema$1, bytes, key) {
+      let ns = schema.NormalizedSchema.of(schema$1);
+      let memberSchemas = ns.getMemberSchemas();
       if (
-        of.isStructSchema() &&
-        of.isMemberSchema() &&
-        !!Object.values(memberSchemas).find((f) => !!f.getMemberTraits().eventPayload)
+        ns.isStructSchema() &&
+        ns.isMemberSchema() &&
+        !!Object.values(memberSchemas).find((memberNs) => !!memberNs.getMemberTraits().eventPayload)
       ) {
-        let f = {},
-          m = Object.keys(memberSchemas)[0];
-        if (memberSchemas[m].isBlobSchema()) f[m] = t;
-        else f[m] = this.read(memberSchemas[m], t);
-        return f;
+        let output = {};
+        let memberName = Object.keys(memberSchemas)[0];
+        if (memberSchemas[memberName].isBlobSchema()) output[memberName] = bytes;
+        else output[memberName] = this.read(memberSchemas[memberName], bytes);
+        return output;
       }
-      let c = (this.serdeContext?.utf8Encoder ?? ri.toUtf8)(t),
-        xml = this.parseXml(c);
-      return this.readSchema(e, r ? xml[r] : xml);
+      let xmlString = (this.serdeContext?.utf8Encoder ?? utilUtf8.toUtf8)(bytes);
+      let parsedObject = this.parseXml(xmlString);
+      return this.readSchema(schema$1, key ? parsedObject[key] : parsedObject);
     }
-    readSchema(e, t) {
-      let of = U.NormalizedSchema.of(e);
-      if (of.isUnitSchema()) return;
-      let mergedTraits = of.getMergedTraits();
-      if (of.isListSchema() && !Array.isArray(t)) return this.readSchema(of, [t]);
-      if (t == null) return t;
-      if (typeof t === "object") {
-        let o = !!mergedTraits.sparse,
-          a = !!mergedTraits.xmlFlattened;
-        if (of.isListSchema()) {
-          let valueSchema = of.getValueSchema(),
-            f = [],
-            m = valueSchema.getMergedTraits().xmlName ?? "member",
-            y = a ? t : (t[0] ?? t)[m],
-            N = Array.isArray(y) ? y : [y];
-          for (let b of N) if (b != null || o) f.push(this.readSchema(valueSchema, b));
-          return f;
+    readSchema(_schema, value) {
+      let ns = schema.NormalizedSchema.of(_schema);
+      if (ns.isUnitSchema()) return;
+      let traits = ns.getMergedTraits();
+      if (ns.isListSchema() && !Array.isArray(value)) return this.readSchema(ns, [value]);
+      if (value == null) return value;
+      if (typeof value === "object") {
+        let sparse = !!traits.sparse;
+        let flat = !!traits.xmlFlattened;
+        if (ns.isListSchema()) {
+          let listValue = ns.getValueSchema();
+          let buffer = [];
+          let sourceKey = listValue.getMergedTraits().xmlName ?? "member";
+          let source = flat ? value : (value[0] ?? value)[sourceKey];
+          let sourceArray = Array.isArray(source) ? source : [source];
+          for (let v of sourceArray) if (v != null || sparse) buffer.push(this.readSchema(listValue, v));
+          return buffer;
         }
-        let c = {};
-        if (of.isMapSchema()) {
-          let keySchema = of.getKeySchema(),
-            valueSchema = of.getValueSchema(),
-            m;
-          if (a) m = Array.isArray(t) ? t : [t];
-          else m = Array.isArray(t.entry) ? t.entry : [t.entry];
-          let y = keySchema.getMergedTraits().xmlName ?? "key",
-            N = valueSchema.getMergedTraits().xmlName ?? "value";
-          for (let b of m) {
-            let T = b[y],
-              _ = b[N];
-            if (_ != null || o) c[T] = this.readSchema(valueSchema, _);
+        let buffer = {};
+        if (ns.isMapSchema()) {
+          let keyNs = ns.getKeySchema();
+          let memberNs = ns.getValueSchema();
+          let entries;
+          if (flat) entries = Array.isArray(value) ? value : [value];
+          else entries = Array.isArray(value.entry) ? value.entry : [value.entry];
+          let keyProperty = keyNs.getMergedTraits().xmlName ?? "key";
+          let valueProperty = memberNs.getMergedTraits().xmlName ?? "value";
+          for (let entry of entries) {
+            let key = entry[keyProperty];
+            let value = entry[valueProperty];
+            if (value != null || sparse) buffer[key] = this.readSchema(memberNs, value);
           }
-          return c;
+          return buffer;
         }
-        if (of.isStructSchema()) {
-          for (let [d, f] of of.structIterator()) {
-            let mergedTraits = f.getMergedTraits(),
-              y = !mergedTraits.httpPayload
-                ? (f.getMemberTraits().xmlName ?? d)
-                : (mergedTraits.xmlName ?? f.getName());
-            if (t[y] != null) c[d] = this.readSchema(f, t[y]);
+        if (ns.isStructSchema()) {
+          for (let [memberName, memberSchema] of ns.structIterator()) {
+            let memberTraits = memberSchema.getMergedTraits();
+            let xmlObjectKey = !memberTraits.httpPayload
+              ? (memberSchema.getMemberTraits().xmlName ?? memberName)
+              : (memberTraits.xmlName ?? memberSchema.getName());
+            if (value[xmlObjectKey] != null)
+              buffer[memberName] = this.readSchema(memberSchema, value[xmlObjectKey]);
           }
-          return c;
+          return buffer;
         }
-        if (of.isDocumentSchema()) return t;
-        throw Error(`@aws-sdk/core/protocols - xml deserializer unhandled schema type for ${of.getName(!0)}`);
+        if (ns.isDocumentSchema()) return value;
+        throw Error(
+          `@aws-sdk/core/protocols - xml deserializer unhandled schema type for ${ns.getName(true)}`,
+        );
       }
-      if (of.isListSchema()) return [];
-      if (of.isMapSchema() || of.isStructSchema()) return {};
-      return this.stringDeserializer.read(of, t);
+      if (ns.isListSchema()) return [];
+      if (ns.isMapSchema() || ns.isStructSchema()) return {};
+      return this.stringDeserializer.read(ns, value);
     }
-    parseXml(e) {
-      if (e.length) {
-        let t;
+    parseXml(xml) {
+      if (xml.length) {
+        let parsedObj;
         try {
-          t = se.parseXML(e);
-        } catch (error) {
-          if (error && typeof error === "object")
-            Object.defineProperty(error, "$responseBodyText", { value: e });
-          throw error;
+          parsedObj = xmlBuilder.parseXML(xml);
+        } catch (e) {
+          if (e && typeof e === "object")
+            Object.defineProperty(e, "$responseBodyText", {
+              value: xml,
+            });
+          throw e;
         }
-        let r = "#text",
-          s = Object.keys(t)[0],
-          o = t[s];
-        if (o[r]) ((o[s] = o[r]), delete o[r]);
-        return he.getValueFromTextNode(o);
+        let textNodeName = "#text";
+        let key = Object.keys(parsedObj)[0];
+        let parsedObjToReturn = parsedObj[key];
+        if (parsedObjToReturn[textNodeName]) {
+          parsedObjToReturn[key] = parsedObjToReturn[textNodeName];
+          delete parsedObjToReturn[textNodeName];
+        }
+        return smithyClient.getValueFromTextNode(parsedObjToReturn);
       }
       return {};
     }
   }
-  class ui extends Ee {
+  class QueryShapeSerializer extends SerdeContextConfig {
     settings;
     buffer;
-    constructor(e) {
+    constructor(settings) {
       super();
-      this.settings = e;
+      this.settings = settings;
     }
-    write(e, t, r = "") {
-      if (this.buffer === void 0) this.buffer = "";
-      let of = U.NormalizedSchema.of(e);
-      if (r && !r.endsWith(".")) r += ".";
-      if (of.isBlobSchema()) {
-        if (typeof t === "string" || t instanceof Uint8Array)
-          (this.writeKey(r), this.writeValue((this.serdeContext?.base64Encoder ?? qe.toBase64)(t)));
-      } else if (of.isBooleanSchema() || of.isNumericSchema() || of.isStringSchema()) {
-        if (t != null) (this.writeKey(r), this.writeValue(String(t)));
-        else if (of.isIdempotencyToken()) (this.writeKey(r), this.writeValue(X.generateIdempotencyToken()));
-      } else if (of.isBigIntegerSchema()) {
-        if (t != null) (this.writeKey(r), this.writeValue(String(t)));
-      } else if (of.isBigDecimalSchema()) {
-        if (t != null)
-          (this.writeKey(r), this.writeValue(t instanceof X.NumericValue ? t.string : String(t)));
-      } else if (of.isTimestampSchema()) {
-        if (t instanceof Date)
-          switch ((this.writeKey(r), Y.determineTimestampFormat(of, this.settings))) {
+    write(schema$1, value, prefix = "") {
+      if (this.buffer === undefined) this.buffer = "";
+      let ns = schema.NormalizedSchema.of(schema$1);
+      if (prefix && !prefix.endsWith(".")) prefix += ".";
+      if (ns.isBlobSchema()) {
+        if (typeof value === "string" || value instanceof Uint8Array) {
+          this.writeKey(prefix);
+          this.writeValue((this.serdeContext?.base64Encoder ?? utilBase64.toBase64)(value));
+        }
+      } else if (ns.isBooleanSchema() || ns.isNumericSchema() || ns.isStringSchema()) {
+        if (value != null) {
+          this.writeKey(prefix);
+          this.writeValue(String(value));
+        } else if (ns.isIdempotencyToken()) {
+          this.writeKey(prefix);
+          this.writeValue(serde.generateIdempotencyToken());
+        }
+      } else if (ns.isBigIntegerSchema()) {
+        if (value != null) {
+          this.writeKey(prefix);
+          this.writeValue(String(value));
+        }
+      } else if (ns.isBigDecimalSchema()) {
+        if (value != null) {
+          this.writeKey(prefix);
+          this.writeValue(value instanceof serde.NumericValue ? value.string : String(value));
+        }
+      } else if (ns.isTimestampSchema()) {
+        if (value instanceof Date)
+          switch ((this.writeKey(prefix), protocols.determineTimestampFormat(ns, this.settings))) {
             case 5:
-              this.writeValue(t.toISOString().replace(".000Z", "Z"));
+              this.writeValue(value.toISOString().replace(".000Z", "Z"));
               break;
             case 6:
-              this.writeValue(he.dateToUtcString(t));
+              this.writeValue(smithyClient.dateToUtcString(value));
               break;
             case 7:
-              this.writeValue(String(t.getTime() / 1000));
+              this.writeValue(String(value.getTime() / 1000));
               break;
           }
-      } else if (of.isDocumentSchema())
-        throw Error(`@aws-sdk/core/protocols - QuerySerializer unsupported document type ${of.getName(!0)}`);
-      else if (of.isListSchema()) {
-        if (Array.isArray(t))
-          if (t.length === 0) {
-            if (this.settings.serializeEmptyLists) (this.writeKey(r), this.writeValue(""));
+      } else if (ns.isDocumentSchema())
+        throw Error(
+          `@aws-sdk/core/protocols - QuerySerializer unsupported document type ${ns.getName(true)}`,
+        );
+      else if (ns.isListSchema()) {
+        if (Array.isArray(value))
+          if (value.length === 0) {
+            if (this.settings.serializeEmptyLists) {
+              this.writeKey(prefix);
+              this.writeValue("");
+            }
           } else {
-            let valueSchema = of.getValueSchema(),
-              a = this.settings.flattenLists || of.getMergedTraits().xmlFlattened,
-              c = 1;
-            for (let d of t) {
-              if (d == null) continue;
-              let key = this.getKey("member", valueSchema.getMergedTraits().xmlName),
-                m = a ? `${r}${c}` : `${r}${key}.${c}`;
-              (this.write(valueSchema, d, m), ++c);
+            let member = ns.getValueSchema();
+            let flat = this.settings.flattenLists || ns.getMergedTraits().xmlFlattened;
+            let i = 1;
+            for (let item of value) {
+              if (item == null) continue;
+              let suffix = this.getKey("member", member.getMergedTraits().xmlName);
+              let key = flat ? `${prefix}${i}` : `${prefix}${suffix}.${i}`;
+              this.write(member, item, key);
+              ++i;
             }
           }
-      } else if (of.isMapSchema()) {
-        if (t && typeof t === "object") {
-          let keySchema = of.getKeySchema(),
-            valueSchema = of.getValueSchema(),
-            xmlFlattened = of.getMergedTraits().xmlFlattened,
-            d = 1;
-          for (let [f, m] of Object.entries(t)) {
-            if (m == null) continue;
-            let key = this.getKey("key", keySchema.getMergedTraits().xmlName),
-              N = xmlFlattened ? `${r}${d}.${key}` : `${r}entry.${d}.${key}`,
-              key_2 = this.getKey("value", valueSchema.getMergedTraits().xmlName),
-              T = xmlFlattened ? `${r}${d}.${key_2}` : `${r}entry.${d}.${key_2}`;
-            (this.write(keySchema, f, N), this.write(valueSchema, m, T), ++d);
+      } else if (ns.isMapSchema()) {
+        if (value && typeof value === "object") {
+          let keySchema = ns.getKeySchema();
+          let memberSchema = ns.getValueSchema();
+          let flat = ns.getMergedTraits().xmlFlattened;
+          let i = 1;
+          for (let [k, v] of Object.entries(value)) {
+            if (v == null) continue;
+            let keySuffix = this.getKey("key", keySchema.getMergedTraits().xmlName);
+            let key = flat ? `${prefix}${i}.${keySuffix}` : `${prefix}entry.${i}.${keySuffix}`;
+            let valueSuffix = this.getKey("value", memberSchema.getMergedTraits().xmlName);
+            let valueKey = flat ? `${prefix}${i}.${valueSuffix}` : `${prefix}entry.${i}.${valueSuffix}`;
+            this.write(keySchema, k, key);
+            this.write(memberSchema, v, valueKey);
+            ++i;
           }
         }
-      } else if (of.isStructSchema()) {
-        if (t && typeof t === "object")
-          for (let [o, a] of of.structIterator()) {
-            if (t[o] == null && !a.isIdempotencyToken()) continue;
-            let key = this.getKey(o, a.getMergedTraits().xmlName),
-              d = `${r}${key}`;
-            this.write(a, t[o], d);
+      } else if (ns.isStructSchema()) {
+        if (value && typeof value === "object")
+          for (let [memberName, member] of ns.structIterator()) {
+            if (value[memberName] == null && !member.isIdempotencyToken()) continue;
+            let suffix = this.getKey(memberName, member.getMergedTraits().xmlName);
+            let key = `${prefix}${suffix}`;
+            this.write(member, value[memberName], key);
           }
-      } else if (of.isUnitSchema());
+      } else if (ns.isUnitSchema());
       else
-        throw Error(`@aws-sdk/core/protocols - QuerySerializer unrecognized schema type ${of.getName(!0)}`);
+        throw Error(`@aws-sdk/core/protocols - QuerySerializer unrecognized schema type ${ns.getName(true)}`);
     }
     flush() {
-      if (this.buffer === void 0)
+      if (this.buffer === undefined)
         throw Error("@aws-sdk/core/protocols - QuerySerializer cannot flush with nothing written to buffer.");
-      let buffer = this.buffer;
-      return (delete this.buffer, buffer);
+      let str = this.buffer;
+      delete this.buffer;
+      return str;
     }
-    getKey(e, t) {
-      let r = t ?? e;
-      if (this.settings.capitalizeKeys) return r[0].toUpperCase() + r.slice(1);
-      return r;
+    getKey(memberName, xmlName) {
+      let key = xmlName ?? memberName;
+      if (this.settings.capitalizeKeys) return key[0].toUpperCase() + key.slice(1);
+      return key;
     }
-    writeKey(e) {
-      if (e.endsWith(".")) e = e.slice(0, e.length - 1);
-      this.buffer += `&${Y.extendedEncodeURIComponent(e)}=`;
+    writeKey(key) {
+      if (key.endsWith(".")) key = key.slice(0, key.length - 1);
+      this.buffer += `&${protocols.extendedEncodeURIComponent(key)}=`;
     }
-    writeValue(e) {
-      this.buffer += Y.extendedEncodeURIComponent(e);
+    writeValue(value) {
+      this.buffer += protocols.extendedEncodeURIComponent(value);
     }
   }
-  class Sr extends Y.RpcProtocol {
+  class AwsQueryProtocol extends protocols.RpcProtocol {
     options;
     serializer;
     deserializer;
-    mixin = new De();
-    constructor(e) {
-      super({ defaultNamespace: e.defaultNamespace });
-      this.options = e;
-      let t = {
-        timestampFormat: { useTrait: !0, default: 5 },
-        httpBindings: !1,
-        xmlNamespace: e.xmlNamespace,
-        serviceNamespace: e.defaultNamespace,
-        serializeEmptyLists: !0,
+    mixin = new ProtocolLib();
+    constructor(options) {
+      super({
+        defaultNamespace: options.defaultNamespace,
+      });
+      this.options = options;
+      let settings = {
+        timestampFormat: {
+          useTrait: true,
+          default: 5,
+        },
+        httpBindings: false,
+        xmlNamespace: options.xmlNamespace,
+        serviceNamespace: options.defaultNamespace,
+        serializeEmptyLists: true,
       };
-      ((this.serializer = new ui(t)), (this.deserializer = new ht(t)));
+      this.serializer = new QueryShapeSerializer(settings);
+      this.deserializer = new XmlShapeDeserializer(settings);
     }
     getShapeId() {
       return "aws.protocols#awsQuery";
     }
-    setSerdeContext(e) {
-      (this.serializer.setSerdeContext(e), this.deserializer.setSerdeContext(e));
+    setSerdeContext(serdeContext) {
+      this.serializer.setSerdeContext(serdeContext);
+      this.deserializer.setSerdeContext(serdeContext);
     }
     getPayloadCodec() {
       throw Error("AWSQuery protocol has no payload codec.");
     }
-    async serializeRequest(e, t, r) {
-      let serializeRequest = await super.serializeRequest(e, t, r);
-      if (!serializeRequest.path.endsWith("/")) serializeRequest.path += "/";
-      if (
-        (Object.assign(serializeRequest.headers, { "content-type": "application/x-www-form-urlencoded" }),
-        U.deref(e.input) === "unit" || !serializeRequest.body)
-      )
-        serializeRequest.body = "";
-      let o = e.name.split("#")[1] ?? e.name;
-      if (
-        ((serializeRequest.body = `Action=${o}&Version=${this.options.version}` + serializeRequest.body),
-        serializeRequest.body.endsWith("&"))
-      )
-        serializeRequest.body = serializeRequest.body.slice(-1);
-      return serializeRequest;
+    async serializeRequest(operationSchema, input, context) {
+      let request = await super.serializeRequest(operationSchema, input, context);
+      if (!request.path.endsWith("/")) request.path += "/";
+      Object.assign(request.headers, {
+        "content-type": "application/x-www-form-urlencoded",
+      });
+      if (schema.deref(operationSchema.input) === "unit" || !request.body) request.body = "";
+      let action = operationSchema.name.split("#")[1] ?? operationSchema.name;
+      request.body = `Action=${action}&Version=${this.options.version}` + request.body;
+      if (request.body.endsWith("&")) request.body = request.body.slice(-1);
+      return request;
     }
-    async deserializeResponse(e, t, r) {
-      let deserializer = this.deserializer,
-        of = U.NormalizedSchema.of(e.output),
-        a = {};
-      if (r.statusCode >= 300) {
-        let collectBody = await Y.collectBody(r.body, t);
-        if (collectBody.byteLength > 0) Object.assign(a, await deserializer.read(15, collectBody));
-        await this.handleError(e, t, r, a, this.deserializeMetadata(r));
+    async deserializeResponse(operationSchema, context, response) {
+      let deserializer = this.deserializer;
+      let ns = schema.NormalizedSchema.of(operationSchema.output);
+      let dataObject = {};
+      if (response.statusCode >= 300) {
+        let bytes = await protocols.collectBody(response.body, context);
+        if (bytes.byteLength > 0) Object.assign(dataObject, await deserializer.read(15, bytes));
+        await this.handleError(
+          operationSchema,
+          context,
+          response,
+          dataObject,
+          this.deserializeMetadata(response),
+        );
       }
-      for (let key in r.headers) {
-        let N = r.headers[key];
-        (delete r.headers[key], (r.headers[key.toLowerCase()] = N));
+      for (let header in response.headers) {
+        let value = response.headers[header];
+        delete response.headers[header];
+        response.headers[header.toLowerCase()] = value;
       }
-      let c = e.name.split("#")[1] ?? e.name,
-        d = of.isStructSchema() && this.useNestedResult() ? c + "Result" : void 0,
-        collectBody = await Y.collectBody(r.body, t);
-      if (collectBody.byteLength > 0) Object.assign(a, await deserializer.read(of, collectBody, d));
-      return { $metadata: this.deserializeMetadata(r), ...a };
+      let shortName = operationSchema.name.split("#")[1] ?? operationSchema.name;
+      let awsQueryResultKey =
+        ns.isStructSchema() && this.useNestedResult() ? shortName + "Result" : undefined;
+      let bytes = await protocols.collectBody(response.body, context);
+      if (bytes.byteLength > 0)
+        Object.assign(dataObject, await deserializer.read(ns, bytes, awsQueryResultKey));
+      return {
+        $metadata: this.deserializeMetadata(response),
+        ...dataObject,
+      };
     }
     useNestedResult() {
-      return !0;
+      return true;
     }
-    async handleError(e, t, r, s, o) {
-      let a = this.loadQueryErrorCode(r, s) ?? "Unknown",
-        queryError = this.loadQueryError(s),
-        queryErrorMessage = this.loadQueryErrorMessage(s);
-      ((queryError.message = queryErrorMessage),
-        (queryError.Error = { Type: queryError.Type, Code: queryError.Code, Message: queryErrorMessage }));
-      let { errorSchema: errorSchema, errorMetadata: errorMetadata } =
-          await this.mixin.getErrorSchemaOrThrowBaseException(
-            a,
-            this.options.defaultNamespace,
-            r,
-            queryError,
-            o,
-            (_, I) => {
-              try {
-                return _.getSchema(I);
-              } catch (error) {
-                return _.find((v) => U.NormalizedSchema.of(v).getMergedTraits().awsQueryError?.[0] === I);
-              }
-            },
-          ),
-        of = U.NormalizedSchema.of(errorSchema),
-        b = new (U.TypeRegistry.for(errorSchema[1]).getErrorCtor(errorSchema) ?? Error)(queryErrorMessage),
-        T = { Error: queryError.Error };
-      for (let [_, I] of of.structIterator()) {
-        let F = I.getMergedTraits().xmlName ?? _,
-          v = queryError[F] ?? s[F];
-        T[_] = this.deserializer.readSchema(I, v);
+    async handleError(operationSchema, context, response, dataObject, metadata) {
+      let errorIdentifier = this.loadQueryErrorCode(response, dataObject) ?? "Unknown";
+      let errorData = this.loadQueryError(dataObject);
+      let message = this.loadQueryErrorMessage(dataObject);
+      errorData.message = message;
+      errorData.Error = {
+        Type: errorData.Type,
+        Code: errorData.Code,
+        Message: message,
+      };
+      let { errorSchema, errorMetadata } = await this.mixin.getErrorSchemaOrThrowBaseException(
+        errorIdentifier,
+        this.options.defaultNamespace,
+        response,
+        errorData,
+        metadata,
+        (registry, errorName) => {
+          try {
+            return registry.getSchema(errorName);
+          } catch (e) {
+            return registry.find(
+              (schema$1) =>
+                schema.NormalizedSchema.of(schema$1).getMergedTraits().awsQueryError?.[0] === errorName,
+            );
+          }
+        },
+      );
+      let ns = schema.NormalizedSchema.of(errorSchema);
+      let b = new (schema.TypeRegistry.for(errorSchema[1]).getErrorCtor(errorSchema) ?? Error)(message);
+      let output = {
+        Error: errorData.Error,
+      };
+      for (let [name, member] of ns.structIterator()) {
+        let target = member.getMergedTraits().xmlName ?? name;
+        let value = errorData[target] ?? dataObject[target];
+        output[name] = this.deserializer.readSchema(member, value);
       }
       throw this.mixin.decorateServiceException(
         Object.assign(
           b,
           errorMetadata,
-          { $fault: of.getMergedTraits().error, message: queryErrorMessage },
-          T,
+          {
+            $fault: ns.getMergedTraits().error,
+            message,
+          },
+          output,
         ),
-        s,
+        dataObject,
       );
     }
-    loadQueryErrorCode(e, t) {
-      let r = (t.Errors?.[0]?.Error ?? t.Errors?.Error ?? t.Error)?.Code;
-      if (r !== void 0) return r;
-      if (e.statusCode == 404) return "NotFound";
+    loadQueryErrorCode(output, data) {
+      let code = (data.Errors?.[0]?.Error ?? data.Errors?.Error ?? data.Error)?.Code;
+      if (code !== undefined) return code;
+      if (output.statusCode == 404) return "NotFound";
     }
-    loadQueryError(e) {
-      return e.Errors?.[0]?.Error ?? e.Errors?.Error ?? e.Error;
+    loadQueryError(data) {
+      return data.Errors?.[0]?.Error ?? data.Errors?.Error ?? data.Error;
     }
-    loadQueryErrorMessage(e) {
-      let queryError = this.loadQueryError(e);
-      return queryError?.message ?? queryError?.Message ?? e.message ?? e.Message ?? "Unknown";
+    loadQueryErrorMessage(data) {
+      let errorData = this.loadQueryError(data);
+      return errorData?.message ?? errorData?.Message ?? data.message ?? data.Message ?? "Unknown";
     }
     getDefaultContentType() {
       return "application/x-www-form-urlencoded";
     }
   }
-  class li extends Sr {
+  class AwsEc2QueryProtocol extends AwsQueryProtocol {
     options;
-    constructor(e) {
-      super(e);
-      this.options = e;
-      let t = { capitalizeKeys: !0, flattenLists: !0, serializeEmptyLists: !1 };
-      Object.assign(this.serializer.settings, t);
+    constructor(options) {
+      super(options);
+      this.options = options;
+      let ec2Settings = {
+        capitalizeKeys: true,
+        flattenLists: true,
+        serializeEmptyLists: false,
+      };
+      Object.assign(this.serializer.settings, ec2Settings);
     }
     useNestedResult() {
-      return !1;
+      return false;
     }
   }
-  var di = (e, t) =>
-      ni(e, t).then((r) => {
-        if (r.length) {
-          let s;
-          try {
-            s = se.parseXML(r);
-          } catch (error) {
-            if (error && typeof error === "object")
-              Object.defineProperty(error, "$responseBodyText", { value: r });
-            throw error;
-          }
-          let o = "#text",
-            a = Object.keys(s)[0],
-            c = s[a];
-          if (c[o]) ((c[a] = c[o]), delete c[o]);
-          return he.getValueFromTextNode(c);
+  var parseXmlBody = (streamBody, context) =>
+    collectBodyString(streamBody, context).then((encoded) => {
+      if (encoded.length) {
+        let parsedObj;
+        try {
+          parsedObj = xmlBuilder.parseXML(encoded);
+        } catch (e) {
+          if (e && typeof e === "object")
+            Object.defineProperty(e, "$responseBodyText", {
+              value: encoded,
+            });
+          throw e;
         }
-        return {};
-      }),
-    Ed = async (e, t) => {
-      let r = await di(e, t);
-      if (r.Error) r.Error.message = r.Error.message ?? r.Error.Message;
-      return r;
-    },
-    hi = (e, t) => {
-      if (t?.Error?.Code !== void 0) return t.Error.Code;
-      if (t?.Code !== void 0) return t.Code;
-      if (e.statusCode == 404) return "NotFound";
-    };
-  class wr extends Ee {
+        let textNodeName = "#text";
+        let key = Object.keys(parsedObj)[0];
+        let parsedObjToReturn = parsedObj[key];
+        if (parsedObjToReturn[textNodeName]) {
+          parsedObjToReturn[key] = parsedObjToReturn[textNodeName];
+          delete parsedObjToReturn[textNodeName];
+        }
+        return smithyClient.getValueFromTextNode(parsedObjToReturn);
+      }
+      return {};
+    });
+  var parseXmlErrorBody = async (errorBody, context) => {
+    let value = await parseXmlBody(errorBody, context);
+    if (value.Error) value.Error.message = value.Error.message ?? value.Error.Message;
+    return value;
+  };
+  var loadRestXmlErrorCode = (output, data) => {
+    if (data?.Error?.Code !== undefined) return data.Error.Code;
+    if (data?.Code !== undefined) return data.Code;
+    if (output.statusCode == 404) return "NotFound";
+  };
+  class XmlShapeSerializer extends SerdeContextConfig {
     settings;
     stringBuffer;
     byteBuffer;
     buffer;
-    constructor(e) {
+    constructor(settings) {
       super();
-      this.settings = e;
+      this.settings = settings;
     }
-    write(e, t) {
-      let of = U.NormalizedSchema.of(e);
-      if (of.isStringSchema() && typeof t === "string") this.stringBuffer = t;
-      else if (of.isBlobSchema())
-        this.byteBuffer = "byteLength" in t ? t : (this.serdeContext?.base64Decoder ?? qe.fromBase64)(t);
+    write(schema$1, value) {
+      let ns = schema.NormalizedSchema.of(schema$1);
+      if (ns.isStringSchema() && typeof value === "string") this.stringBuffer = value;
+      else if (ns.isBlobSchema())
+        this.byteBuffer =
+          "byteLength" in value ? value : (this.serdeContext?.base64Decoder ?? utilBase64.fromBase64)(value);
       else {
-        this.buffer = this.writeStruct(of, t, void 0);
-        let mergedTraits = of.getMergedTraits();
-        if (mergedTraits.httpPayload && !mergedTraits.xmlName) this.buffer.withName(of.getName());
+        this.buffer = this.writeStruct(ns, value, undefined);
+        let traits = ns.getMergedTraits();
+        if (traits.httpPayload && !traits.xmlName) this.buffer.withName(ns.getName());
       }
     }
     flush() {
-      if (this.byteBuffer !== void 0) {
-        let byteBuffer = this.byteBuffer;
-        return (delete this.byteBuffer, byteBuffer);
+      if (this.byteBuffer !== undefined) {
+        let bytes = this.byteBuffer;
+        delete this.byteBuffer;
+        return bytes;
       }
-      if (this.stringBuffer !== void 0) {
-        let stringBuffer = this.stringBuffer;
-        return (delete this.stringBuffer, stringBuffer);
+      if (this.stringBuffer !== undefined) {
+        let str = this.stringBuffer;
+        delete this.stringBuffer;
+        return str;
       }
       let buffer = this.buffer;
       if (this.settings.xmlNamespace) {
         if (!buffer?.attributes?.xmlns) buffer.addAttribute("xmlns", this.settings.xmlNamespace);
       }
-      return (delete this.buffer, buffer.toString());
+      delete this.buffer;
+      return buffer.toString();
     }
-    writeStruct(e, t, r) {
-      let mergedTraits = e.getMergedTraits(),
-        o =
-          e.isMemberSchema() && !mergedTraits.httpPayload
-            ? (e.getMemberTraits().xmlName ?? e.getMemberName())
-            : (mergedTraits.xmlName ?? e.getName());
-      if (!o || !e.isStructSchema())
+    writeStruct(ns, value, parentXmlns) {
+      let traits = ns.getMergedTraits();
+      let name =
+        ns.isMemberSchema() && !traits.httpPayload
+          ? (ns.getMemberTraits().xmlName ?? ns.getMemberName())
+          : (traits.xmlName ?? ns.getName());
+      if (!name || !ns.isStructSchema())
         throw Error(
-          `@aws-sdk/core/protocols - xml serializer, cannot write struct with empty name or non-struct, schema=${e.getName(!0)}.`,
+          `@aws-sdk/core/protocols - xml serializer, cannot write struct with empty name or non-struct, schema=${ns.getName(true)}.`,
         );
-      let of = se.XmlNode.of(o),
-        [c, d] = this.getXmlnsAttribute(e, r);
-      for (let [f, m] of e.structIterator()) {
-        let y = t[f];
-        if (y != null || m.isIdempotencyToken()) {
-          if (m.getMergedTraits().xmlAttribute) {
-            of.addAttribute(m.getMergedTraits().xmlName ?? f, this.writeSimple(m, y));
+      let structXmlNode = xmlBuilder.XmlNode.of(name);
+      let [xmlnsAttr, xmlns] = this.getXmlnsAttribute(ns, parentXmlns);
+      for (let [memberName, memberSchema] of ns.structIterator()) {
+        let val = value[memberName];
+        if (val != null || memberSchema.isIdempotencyToken()) {
+          if (memberSchema.getMergedTraits().xmlAttribute) {
+            structXmlNode.addAttribute(
+              memberSchema.getMergedTraits().xmlName ?? memberName,
+              this.writeSimple(memberSchema, val),
+            );
             continue;
           }
-          if (m.isListSchema()) this.writeList(m, y, of, d);
-          else if (m.isMapSchema()) this.writeMap(m, y, of, d);
-          else if (m.isStructSchema()) of.addChildNode(this.writeStruct(m, y, d));
+          if (memberSchema.isListSchema()) this.writeList(memberSchema, val, structXmlNode, xmlns);
+          else if (memberSchema.isMapSchema()) this.writeMap(memberSchema, val, structXmlNode, xmlns);
+          else if (memberSchema.isStructSchema())
+            structXmlNode.addChildNode(this.writeStruct(memberSchema, val, xmlns));
           else {
-            let of_2 = se.XmlNode.of(m.getMergedTraits().xmlName ?? m.getMemberName());
-            (this.writeSimpleInto(m, y, of_2, d), of.addChildNode(of_2));
+            let memberNode = xmlBuilder.XmlNode.of(
+              memberSchema.getMergedTraits().xmlName ?? memberSchema.getMemberName(),
+            );
+            this.writeSimpleInto(memberSchema, val, memberNode, xmlns);
+            structXmlNode.addChildNode(memberNode);
           }
         }
       }
-      if (d) of.addAttribute(c, d);
-      return of;
+      if (xmlns) structXmlNode.addAttribute(xmlnsAttr, xmlns);
+      return structXmlNode;
     }
-    writeList(e, t, r, s) {
-      if (!e.isMemberSchema())
+    writeList(listMember, array, container, parentXmlns) {
+      if (!listMember.isMemberSchema())
         throw Error(
-          `@aws-sdk/core/protocols - xml serializer, cannot write non-member list: ${e.getName(!0)}`,
+          `@aws-sdk/core/protocols - xml serializer, cannot write non-member list: ${listMember.getName(true)}`,
         );
-      let mergedTraits = e.getMergedTraits(),
-        valueSchema = e.getValueSchema(),
-        mergedTraits_2 = valueSchema.getMergedTraits(),
-        d = !!mergedTraits_2.sparse,
-        f = !!mergedTraits.xmlFlattened,
-        [m, y] = this.getXmlnsAttribute(e, s),
-        N = (b, T) => {
-          if (valueSchema.isListSchema()) this.writeList(valueSchema, Array.isArray(T) ? T : [T], b, y);
-          else if (valueSchema.isMapSchema()) this.writeMap(valueSchema, T, b, y);
-          else if (valueSchema.isStructSchema()) {
-            let writeStruct = this.writeStruct(valueSchema, T, y);
-            b.addChildNode(
-              writeStruct.withName(
-                f ? (mergedTraits.xmlName ?? e.getMemberName()) : (mergedTraits_2.xmlName ?? "member"),
-              ),
-            );
-          } else {
-            let of = se.XmlNode.of(
-              f ? (mergedTraits.xmlName ?? e.getMemberName()) : (mergedTraits_2.xmlName ?? "member"),
-            );
-            (this.writeSimpleInto(valueSchema, T, of, y), b.addChildNode(of));
-          }
-        };
-      if (f) {
-        for (let b of t) if (d || b != null) N(r, b);
-      } else {
-        let of = se.XmlNode.of(mergedTraits.xmlName ?? e.getMemberName());
-        if (y) of.addAttribute(m, y);
-        for (let T of t) if (d || T != null) N(of, T);
-        r.addChildNode(of);
-      }
-    }
-    writeMap(e, t, r, s, o = !1) {
-      if (!e.isMemberSchema())
-        throw Error(
-          `@aws-sdk/core/protocols - xml serializer, cannot write non-member map: ${e.getName(!0)}`,
-        );
-      let mergedTraits = e.getMergedTraits(),
-        keySchema = e.getKeySchema(),
-        f = keySchema.getMergedTraits().xmlName ?? "key",
-        valueSchema = e.getValueSchema(),
-        mergedTraits_2 = valueSchema.getMergedTraits(),
-        N = mergedTraits_2.xmlName ?? "value",
-        b = !!mergedTraits_2.sparse,
-        T = !!mergedTraits.xmlFlattened,
-        [_, I] = this.getXmlnsAttribute(e, s),
-        F = (v, W, M) => {
-          let of = se.XmlNode.of(f, W),
-            [Pe, q] = this.getXmlnsAttribute(keySchema, I);
-          if (q) of.addAttribute(Pe, q);
-          v.addChildNode(of);
-          let of_2 = se.XmlNode.of(N);
-          if (valueSchema.isListSchema()) this.writeList(valueSchema, M, of_2, I);
-          else if (valueSchema.isMapSchema()) this.writeMap(valueSchema, M, of_2, I, !0);
-          else if (valueSchema.isStructSchema()) of_2 = this.writeStruct(valueSchema, M, I);
-          else this.writeSimpleInto(valueSchema, M, of_2, I);
-          v.addChildNode(of_2);
-        };
-      if (T) {
-        for (let [v, W] of Object.entries(t))
-          if (b || W != null) {
-            let of = se.XmlNode.of(mergedTraits.xmlName ?? e.getMemberName());
-            (F(of, v, W), r.addChildNode(of));
-          }
-      } else {
-        let v;
-        if (!o) {
-          if (((v = se.XmlNode.of(mergedTraits.xmlName ?? e.getMemberName())), I)) v.addAttribute(_, I);
-          r.addChildNode(v);
+      let listTraits = listMember.getMergedTraits();
+      let listValueSchema = listMember.getValueSchema();
+      let listValueTraits = listValueSchema.getMergedTraits();
+      let sparse = !!listValueTraits.sparse;
+      let flat = !!listTraits.xmlFlattened;
+      let [xmlnsAttr, xmlns] = this.getXmlnsAttribute(listMember, parentXmlns);
+      let writeItem = (container, value) => {
+        if (listValueSchema.isListSchema())
+          this.writeList(listValueSchema, Array.isArray(value) ? value : [value], container, xmlns);
+        else if (listValueSchema.isMapSchema()) this.writeMap(listValueSchema, value, container, xmlns);
+        else if (listValueSchema.isStructSchema()) {
+          let struct = this.writeStruct(listValueSchema, value, xmlns);
+          container.addChildNode(
+            struct.withName(
+              flat
+                ? (listTraits.xmlName ?? listMember.getMemberName())
+                : (listValueTraits.xmlName ?? "member"),
+            ),
+          );
+        } else {
+          let listItemNode = xmlBuilder.XmlNode.of(
+            flat ? (listTraits.xmlName ?? listMember.getMemberName()) : (listValueTraits.xmlName ?? "member"),
+          );
+          this.writeSimpleInto(listValueSchema, value, listItemNode, xmlns);
+          container.addChildNode(listItemNode);
         }
-        for (let [W, M] of Object.entries(t))
-          if (b || M != null) {
-            let of = se.XmlNode.of("entry");
-            (F(of, W, M), (o ? r : v).addChildNode(of));
+      };
+      if (flat) {
+        for (let value of array) if (sparse || value != null) writeItem(container, value);
+      } else {
+        let listNode = xmlBuilder.XmlNode.of(listTraits.xmlName ?? listMember.getMemberName());
+        if (xmlns) listNode.addAttribute(xmlnsAttr, xmlns);
+        for (let value of array) if (sparse || value != null) writeItem(listNode, value);
+        container.addChildNode(listNode);
+      }
+    }
+    writeMap(mapMember, map, container, parentXmlns, containerIsMap = false) {
+      if (!mapMember.isMemberSchema())
+        throw Error(
+          `@aws-sdk/core/protocols - xml serializer, cannot write non-member map: ${mapMember.getName(true)}`,
+        );
+      let mapTraits = mapMember.getMergedTraits();
+      let mapKeySchema = mapMember.getKeySchema();
+      let xmlName = mapKeySchema.getMergedTraits().xmlName ?? "key";
+      let mapValueSchema = mapMember.getValueSchema();
+      let mapValueTraits = mapValueSchema.getMergedTraits();
+      let valueTag = mapValueTraits.xmlName ?? "value";
+      let sparse = !!mapValueTraits.sparse;
+      let flat = !!mapTraits.xmlFlattened;
+      let [xmlnsAttr, xmlns] = this.getXmlnsAttribute(mapMember, parentXmlns);
+      let addKeyValue = (entry, key, val) => {
+        let keyNode = xmlBuilder.XmlNode.of(xmlName, key);
+        let [keyXmlnsAttr, keyXmlns] = this.getXmlnsAttribute(mapKeySchema, xmlns);
+        if (keyXmlns) keyNode.addAttribute(keyXmlnsAttr, keyXmlns);
+        entry.addChildNode(keyNode);
+        let valueNode = xmlBuilder.XmlNode.of(valueTag);
+        if (mapValueSchema.isListSchema()) this.writeList(mapValueSchema, val, valueNode, xmlns);
+        else if (mapValueSchema.isMapSchema()) this.writeMap(mapValueSchema, val, valueNode, xmlns, true);
+        else if (mapValueSchema.isStructSchema()) valueNode = this.writeStruct(mapValueSchema, val, xmlns);
+        else this.writeSimpleInto(mapValueSchema, val, valueNode, xmlns);
+        entry.addChildNode(valueNode);
+      };
+      if (flat) {
+        for (let [key, val] of Object.entries(map))
+          if (sparse || val != null) {
+            let entry = xmlBuilder.XmlNode.of(mapTraits.xmlName ?? mapMember.getMemberName());
+            addKeyValue(entry, key, val);
+            container.addChildNode(entry);
+          }
+      } else {
+        let mapNode;
+        if (!containerIsMap) {
+          mapNode = xmlBuilder.XmlNode.of(mapTraits.xmlName ?? mapMember.getMemberName());
+          if (xmlns) mapNode.addAttribute(xmlnsAttr, xmlns);
+          container.addChildNode(mapNode);
+        }
+        for (let [key, val] of Object.entries(map))
+          if (sparse || val != null) {
+            let entry = xmlBuilder.XmlNode.of("entry");
+            addKeyValue(entry, key, val);
+            (containerIsMap ? container : mapNode).addChildNode(entry);
           }
       }
     }
-    writeSimple(e, t) {
-      if (t === null) throw Error("@aws-sdk/core/protocols - (XML serializer) cannot write null value.");
-      let of = U.NormalizedSchema.of(e),
-        s = null;
-      if (t && typeof t === "object")
-        if (of.isBlobSchema()) s = (this.serdeContext?.base64Encoder ?? qe.toBase64)(t);
-        else if (of.isTimestampSchema() && t instanceof Date)
-          switch (Y.determineTimestampFormat(of, this.settings)) {
+    writeSimple(_schema, value) {
+      if (value === null) throw Error("@aws-sdk/core/protocols - (XML serializer) cannot write null value.");
+      let ns = schema.NormalizedSchema.of(_schema);
+      let nodeContents = null;
+      if (value && typeof value === "object")
+        if (ns.isBlobSchema())
+          nodeContents = (this.serdeContext?.base64Encoder ?? utilBase64.toBase64)(value);
+        else if (ns.isTimestampSchema() && value instanceof Date)
+          switch (protocols.determineTimestampFormat(ns, this.settings)) {
             case 5:
-              s = t.toISOString().replace(".000Z", "Z");
+              nodeContents = value.toISOString().replace(".000Z", "Z");
               break;
             case 6:
-              s = he.dateToUtcString(t);
+              nodeContents = smithyClient.dateToUtcString(value);
               break;
             case 7:
-              s = String(t.getTime() / 1000);
+              nodeContents = String(value.getTime() / 1000);
               break;
             default:
-              (console.warn("Missing timestamp format, using http date", t), (s = he.dateToUtcString(t)));
+              console.warn("Missing timestamp format, using http date", value);
+              nodeContents = smithyClient.dateToUtcString(value);
               break;
           }
-        else if (of.isBigDecimalSchema() && t) {
-          if (t instanceof X.NumericValue) return t.string;
-          return String(t);
-        } else if (of.isMapSchema() || of.isListSchema())
+        else if (ns.isBigDecimalSchema() && value) {
+          if (value instanceof serde.NumericValue) return value.string;
+          return String(value);
+        } else if (ns.isMapSchema() || ns.isListSchema())
           throw Error(
             "@aws-sdk/core/protocols - xml serializer, cannot call _write() on List/Map schema, call writeList or writeMap() instead.",
           );
         else
           throw Error(
-            `@aws-sdk/core/protocols - xml serializer, unhandled schema type for object value and schema: ${of.getName(!0)}`,
+            `@aws-sdk/core/protocols - xml serializer, unhandled schema type for object value and schema: ${ns.getName(true)}`,
           );
-      if (of.isBooleanSchema() || of.isNumericSchema() || of.isBigIntegerSchema() || of.isBigDecimalSchema())
-        s = String(t);
-      if (of.isStringSchema())
-        if (t === void 0 && of.isIdempotencyToken()) s = X.generateIdempotencyToken();
-        else s = String(t);
-      if (s === null) throw Error(`Unhandled schema-value pair ${of.getName(!0)}=${t}`);
-      return s;
+      if (ns.isBooleanSchema() || ns.isNumericSchema() || ns.isBigIntegerSchema() || ns.isBigDecimalSchema())
+        nodeContents = String(value);
+      if (ns.isStringSchema())
+        if (value === undefined && ns.isIdempotencyToken()) nodeContents = serde.generateIdempotencyToken();
+        else nodeContents = String(value);
+      if (nodeContents === null) throw Error(`Unhandled schema-value pair ${ns.getName(true)}=${value}`);
+      return nodeContents;
     }
-    writeSimpleInto(e, t, r, s) {
-      let writeSimple = this.writeSimple(e, t),
-        of = U.NormalizedSchema.of(e),
-        c = new se.XmlText(writeSimple),
-        [d, f] = this.getXmlnsAttribute(of, s);
-      if (f) r.addAttribute(d, f);
-      r.addChildNode(c);
+    writeSimpleInto(_schema, value, into, parentXmlns) {
+      let nodeContents = this.writeSimple(_schema, value);
+      let ns = schema.NormalizedSchema.of(_schema);
+      let content = new xmlBuilder.XmlText(nodeContents);
+      let [xmlnsAttr, xmlns] = this.getXmlnsAttribute(ns, parentXmlns);
+      if (xmlns) into.addAttribute(xmlnsAttr, xmlns);
+      into.addChildNode(content);
     }
-    getXmlnsAttribute(e, t) {
-      let mergedTraits = e.getMergedTraits(),
-        [s, o] = mergedTraits.xmlNamespace ?? [];
-      if (o && o !== t) return [s ? `xmlns:${s}` : "xmlns", o];
-      return [void 0, void 0];
+    getXmlnsAttribute(ns, parentXmlns) {
+      let traits = ns.getMergedTraits();
+      let [prefix, xmlns] = traits.xmlNamespace ?? [];
+      if (xmlns && xmlns !== parentXmlns) return [prefix ? `xmlns:${prefix}` : "xmlns", xmlns];
+      return [undefined, undefined];
     }
   }
-  class xr extends Ee {
+  class XmlCodec extends SerdeContextConfig {
     settings;
-    constructor(e) {
+    constructor(settings) {
       super();
-      this.settings = e;
+      this.settings = settings;
     }
     createSerializer() {
-      let e = new wr(this.settings);
-      return (e.setSerdeContext(this.serdeContext), e);
+      let serializer = new XmlShapeSerializer(this.settings);
+      serializer.setSerdeContext(this.serdeContext);
+      return serializer;
     }
     createDeserializer() {
-      let e = new ht(this.settings);
-      return (e.setSerdeContext(this.serdeContext), e);
+      let deserializer = new XmlShapeDeserializer(this.settings);
+      deserializer.setSerdeContext(this.serdeContext);
+      return deserializer;
     }
   }
-  class fi extends Y.HttpBindingProtocol {
+  class AwsRestXmlProtocol extends protocols.HttpBindingProtocol {
     codec;
     serializer;
     deserializer;
-    mixin = new De();
-    constructor(e) {
-      super(e);
-      let t = {
-        timestampFormat: { useTrait: !0, default: 5 },
-        httpBindings: !0,
-        xmlNamespace: e.xmlNamespace,
-        serviceNamespace: e.defaultNamespace,
+    mixin = new ProtocolLib();
+    constructor(options) {
+      super(options);
+      let settings = {
+        timestampFormat: {
+          useTrait: true,
+          default: 5,
+        },
+        httpBindings: true,
+        xmlNamespace: options.xmlNamespace,
+        serviceNamespace: options.defaultNamespace,
       };
-      ((this.codec = new xr(t)),
-        (this.serializer = new Y.HttpInterceptingShapeSerializer(this.codec.createSerializer(), t)),
-        (this.deserializer = new Y.HttpInterceptingShapeDeserializer(this.codec.createDeserializer(), t)));
+      this.codec = new XmlCodec(settings);
+      this.serializer = new protocols.HttpInterceptingShapeSerializer(
+        this.codec.createSerializer(),
+        settings,
+      );
+      this.deserializer = new protocols.HttpInterceptingShapeDeserializer(
+        this.codec.createDeserializer(),
+        settings,
+      );
     }
     getPayloadCodec() {
       return this.codec;
@@ -1183,69 +1408,86 @@ var Fme = x(function (Sd) {
     getShapeId() {
       return "aws.protocols#restXml";
     }
-    async serializeRequest(e, t, r) {
-      let serializeRequest = await super.serializeRequest(e, t, r),
-        of = U.NormalizedSchema.of(e.input);
-      if (!serializeRequest.headers["content-type"]) {
-        let restContentType = this.mixin.resolveRestContentType(this.getDefaultContentType(), of);
-        if (restContentType) serializeRequest.headers["content-type"] = restContentType;
+    async serializeRequest(operationSchema, input, context) {
+      let request = await super.serializeRequest(operationSchema, input, context);
+      let inputSchema = schema.NormalizedSchema.of(operationSchema.input);
+      if (!request.headers["content-type"]) {
+        let contentType = this.mixin.resolveRestContentType(this.getDefaultContentType(), inputSchema);
+        if (contentType) request.headers["content-type"] = contentType;
       }
-      if (serializeRequest.headers["content-type"] === this.getDefaultContentType()) {
-        if (typeof serializeRequest.body === "string")
-          serializeRequest.body = '<?xml version="1.0" encoding="UTF-8"?>' + serializeRequest.body;
+      if (request.headers["content-type"] === this.getDefaultContentType()) {
+        if (typeof request.body === "string")
+          request.body = '<?xml version="1.0" encoding="UTF-8"?>' + request.body;
       }
-      return serializeRequest;
+      return request;
     }
-    async deserializeResponse(e, t, r) {
-      return super.deserializeResponse(e, t, r);
+    async deserializeResponse(operationSchema, context, response) {
+      return super.deserializeResponse(operationSchema, context, response);
     }
-    async handleError(e, t, r, s, o) {
-      let a = hi(r, s) ?? "Unknown",
-        { errorSchema: errorSchema, errorMetadata: errorMetadata } =
-          await this.mixin.getErrorSchemaOrThrowBaseException(a, this.options.defaultNamespace, r, s, o),
-        of = U.NormalizedSchema.of(errorSchema),
-        m = s.Error?.message ?? s.Error?.Message ?? s.message ?? s.Message ?? "Unknown",
-        N = new (U.TypeRegistry.for(errorSchema[1]).getErrorCtor(errorSchema) ?? Error)(m);
-      await this.deserializeHttpMessage(errorSchema, t, r, s);
-      let b = {};
-      for (let [T, _] of of.structIterator()) {
-        let I = _.getMergedTraits().xmlName ?? T,
-          F = s.Error?.[I] ?? s[I];
-        b[T] = this.codec.createDeserializer().readSchema(_, F);
+    async handleError(operationSchema, context, response, dataObject, metadata) {
+      let errorIdentifier = loadRestXmlErrorCode(response, dataObject) ?? "Unknown";
+      let { errorSchema, errorMetadata } = await this.mixin.getErrorSchemaOrThrowBaseException(
+        errorIdentifier,
+        this.options.defaultNamespace,
+        response,
+        dataObject,
+        metadata,
+      );
+      let ns = schema.NormalizedSchema.of(errorSchema);
+      let message =
+        dataObject.Error?.message ??
+        dataObject.Error?.Message ??
+        dataObject.message ??
+        dataObject.Message ??
+        "Unknown";
+      let N = new (schema.TypeRegistry.for(errorSchema[1]).getErrorCtor(errorSchema) ?? Error)(message);
+      await this.deserializeHttpMessage(errorSchema, context, response, dataObject);
+      let output = {};
+      for (let [name, member] of ns.structIterator()) {
+        let target = member.getMergedTraits().xmlName ?? name;
+        let value = dataObject.Error?.[target] ?? dataObject[target];
+        output[name] = this.codec.createDeserializer().readSchema(member, value);
       }
       throw this.mixin.decorateServiceException(
-        Object.assign(N, errorMetadata, { $fault: of.getMergedTraits().error, message: m }, b),
-        s,
+        Object.assign(
+          N,
+          errorMetadata,
+          {
+            $fault: ns.getMergedTraits().error,
+            message,
+          },
+          output,
+        ),
+        dataObject,
       );
     }
     getDefaultContentType() {
       return "application/xml";
     }
   }
-  Sd.AwsEc2QueryProtocol = li;
-  Sd.AwsJson1_0Protocol = oi;
-  Sd.AwsJson1_1Protocol = ai;
-  Sd.AwsJsonRpcProtocol = dt;
-  Sd.AwsQueryProtocol = Sr;
-  Sd.AwsRestJsonProtocol = ci;
-  Sd.AwsRestXmlProtocol = fi;
-  Sd.AwsSmithyRpcV2CborProtocol = si;
-  Sd.JsonCodec = lt;
-  Sd.JsonShapeDeserializer = yr;
-  Sd.JsonShapeSerializer = Er;
-  Sd.XmlCodec = xr;
-  Sd.XmlShapeDeserializer = ht;
-  Sd.XmlShapeSerializer = wr;
-  Sd._toBool = fd;
-  Sd._toNum = pd;
-  Sd._toStr = hd;
-  Sd.awsExpectUnion = yd;
-  Sd.loadRestJsonErrorCode = gr;
-  Sd.loadRestXmlErrorCode = hi;
-  Sd.parseJsonBody = mr;
-  Sd.parseJsonErrorBody = gd;
-  Sd.parseXmlBody = di;
-  Sd.parseXmlErrorBody = Ed;
+  cjsExports.AwsEc2QueryProtocol = AwsEc2QueryProtocol;
+  cjsExports.AwsJson1_0Protocol = AwsJson1_0Protocol;
+  cjsExports.AwsJson1_1Protocol = AwsJson1_1Protocol;
+  cjsExports.AwsJsonRpcProtocol = AwsJsonRpcProtocol;
+  cjsExports.AwsQueryProtocol = AwsQueryProtocol;
+  cjsExports.AwsRestJsonProtocol = AwsRestJsonProtocol;
+  cjsExports.AwsRestXmlProtocol = AwsRestXmlProtocol;
+  cjsExports.AwsSmithyRpcV2CborProtocol = AwsSmithyRpcV2CborProtocol;
+  cjsExports.JsonCodec = JsonCodec;
+  cjsExports.JsonShapeDeserializer = JsonShapeDeserializer;
+  cjsExports.JsonShapeSerializer = JsonShapeSerializer;
+  cjsExports.XmlCodec = XmlCodec;
+  cjsExports.XmlShapeDeserializer = XmlShapeDeserializer;
+  cjsExports.XmlShapeSerializer = XmlShapeSerializer;
+  cjsExports._toBool = _toBool;
+  cjsExports._toNum = _toNum;
+  cjsExports._toStr = _toStr;
+  cjsExports.awsExpectUnion = awsExpectUnion;
+  cjsExports.loadRestJsonErrorCode = loadRestJsonErrorCode;
+  cjsExports.loadRestXmlErrorCode = loadRestXmlErrorCode;
+  cjsExports.parseJsonBody = parseJsonBody;
+  cjsExports.parseJsonErrorBody = parseJsonErrorBody;
+  cjsExports.parseXmlBody = parseXmlBody;
+  cjsExports.parseXmlErrorBody = parseXmlErrorBody;
 });
-
-export { Fme };
+export { require_protocols };

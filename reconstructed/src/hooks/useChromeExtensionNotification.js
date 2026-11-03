@@ -15,15 +15,14 @@ import {
 } from "../components/rateLimit/quotaAutoResume.js";
 
 //@ chunk-18hwfzwa.js:465224-465321 fingerprint = _temp (0.576)
-function Zz(h, x) {
-  (cancelQuotaAutoResume(x),
-    h({
-      key: QUOTA_AUTO_RESUME_CANCELLED,
-      kind: "feedback",
-      text: AUTO_CONTINUE_CANCELLED_TEXT,
-      priority: "immediate",
-      timeoutMs: 8000,
-    }));
+function cancelQuotaAutoResumeWithNotice(addNotification, gesture) {
+  cancelQuotaAutoResume(gesture);
+  addNotification({
+    key: QUOTA_AUTO_RESUME_CANCELLED,
+    kind: "feedback",
+    text: AUTO_CONTINUE_CANCELLED_TEXT,
+    priority: "immediate",
+    timeoutMs: 8000,
+  });
 }
-
-export { Zz };
+export { cancelQuotaAutoResumeWithNotice };

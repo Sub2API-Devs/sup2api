@@ -9,73 +9,9 @@
  * attribution: fingerprint 3, placement 1, sole-consumer 6, affinity 1, layout 10, facade-exports 17, callgraph-witnessed 1
  */
 import { resolve, join, dirname, isAbsolute } from "path";
-import {
-  stat,
-  stat as stat_2,
-  rename,
-  rename as rename_2,
-  unlink,
-  unlink as unlink_2,
-  mkdir,
-  mkdir as mkdir_2,
-  appendFile,
-  appendFile as appendFile_2,
-  symlink,
-  symlink as symlink_2,
-} from "fs/promises";
-import {
-  randomUUID,
-  randomUUID as randomUUID_2,
-  randomUUID as randomUUID_3,
-  randomUUID as randomUUID_4,
-  randomUUID as randomUUID_5,
-  randomUUID as randomUUID_6,
-  randomUUID as randomUUID_7,
-  randomUUID as randomUUID_8,
-  randomUUID as randomUUID_9,
-  randomUUID as randomUUID_10,
-  randomUUID as randomUUID_11,
-  randomUUID as randomUUID_12,
-  randomUUID as randomUUID_13,
-  randomUUID as randomUUID_14,
-  randomUUID as randomUUID_15,
-  randomUUID as randomUUID_16,
-  randomUUID as randomUUID_17,
-  randomUUID as randomUUID_18,
-  randomUUID as randomUUID_19,
-  randomUUID as randomUUID_20,
-  randomUUID as randomUUID_21,
-  randomUUID as randomUUID_22,
-  randomUUID as randomUUID_23,
-  randomUUID as randomUUID_24,
-  randomUUID as randomUUID_25,
-  randomUUID as randomUUID_26,
-  randomUUID as randomUUID_27,
-  randomUUID as randomUUID_28,
-  randomUUID as randomUUID_29,
-  randomUUID as randomUUID_30,
-  randomUUID as randomUUID_31,
-  randomUUID as randomUUID_32,
-  randomUUID as randomUUID_33,
-  randomUUID as randomUUID_34,
-  randomUUID as randomUUID_35,
-  randomUUID as randomUUID_36,
-  randomUUID as randomUUID_37,
-  randomUUID as randomUUID_38,
-  randomUUID as randomUUID_39,
-  randomUUID as randomUUID_40,
-  randomUUID as randomUUID_41,
-  randomUUID as randomUUID_42,
-  randomUUID as randomUUID_43,
-  randomUUID as randomUUID_44,
-  randomUUID as randomUUID_45,
-  randomUUID as randomUUID_46,
-  randomUUID as randomUUID_47,
-  randomUUID as randomUUID_48,
-  randomUUID as randomUUID_49,
-  randomUUID as randomUUID_50,
-} from "crypto";
-import { RS } from "./sanitization.js";
+import { stat, rename, unlink, mkdir, appendFile, symlink } from "fs/promises";
+import { randomUUID } from "crypto";
+import { INVISIBLE_CHAR_CLASS_SOURCE } from "./sanitization.js";
 import { bindAsyncResource } from "./asyncResourceBind.js";
 import { isWindowsDevicePath } from "./windowsUncPaths.js";
 import { PathSpace, escapeControlChars, toUnicodeEscapes } from "./resultError.js";
@@ -84,7 +20,7 @@ import { parseDebugFilterCached, registerCleanup } from "./cleanupRegistry.js";
 import { isEnvTruthy, getClaudeConfigDir, getClaudeConfigDirOrNull } from "./envUtils.js";
 import { isStorageV5Enabled } from "./hoverRest.js";
 import { redactSecrets } from "../services/teamMemorySync/secretScanner.js";
-import { jsonStringify, sn } from "./slowOperations.js";
+import { jsonStringify, shouldLogDebugCategory } from "./slowOperations.js";
 import { withDeadline } from "./sleep.js";
 import { isENOENT, isEISDIR } from "./errors.js";
 import { getFsImplementation } from "./fsOperations.js";
@@ -95,52 +31,88 @@ import { writeToStderr, getStderrDroppedTotal } from "./process.js";
 import { renderAttachment } from "./messages.js";
 
 //@ chunk-cgr0tezp.js:14410-14556 placement
-var ASYNC_HOOKS_MODULE = globalThis.process?.getBuiltinModule?.("async_hooks"),
-  qt = ASYNC_HOOKS_MODULE !== void 0,
-  et = ASYNC_HOOKS_MODULE
-    ? new ASYNC_HOOKS_MODULE.AsyncLocalStorage()
-    : {
-        run: (e, n) => n(),
-        getStore: () => {
-          return;
-        },
-      };
+/**
+ * 运行环境是否提供 async_hooks（决定是否能用 AsyncLocalStorage）。
+ */
+var ASYNC_HOOKS_MODULE = globalThis.process?.getBuiltinModule?.("async_hooks");
+var asyncHooksAvailable = ASYNC_HOOKS_MODULE !== undefined;
+var backendStorageContext = ASYNC_HOOKS_MODULE
+  ? new ASYNC_HOOKS_MODULE.AsyncLocalStorage()
+  : {
+      run: (e, n) => n(),
+      getStore: () => {
+        return;
+      },
+    };
 //@ chunk-cgr0tezp.js:77194-77351 sole-consumer
-var LOG_LEVEL_ORDER = { verbose: 0, debug: 1, info: 2, warn: 3, error: 4 },
-  UNSAFE_LOG_CHARS = new RegExp(`(?!\\t)[${RS}]`, "gu"),
-  qs = 10485760,
-  pr = 1048576,
-  Qs = 1e4,
-  eo = 262144,
-  to = 5000,
-  hr = 100,
-  no = bindAsyncResource((e) => e());
+/**
+ * 调试日志轮转的大小上限（10 MiB）。
+ */
+var LOG_LEVEL_ORDER = {
+  verbose: 0,
+  debug: 1,
+  info: 2,
+  warn: 3,
+  error: 4,
+};
+var UNSAFE_LOG_CHARS = new RegExp(`(?!\\t)[${INVISIBLE_CHAR_CLASS_SOURCE}]`, "gu");
+var MAX_DEBUG_LOG_BYTES = 10485760;
+var MAX_DEBUG_BACKLOG_BYTES = 1048576;
+var DEBUG_BACKLOG_STALL_MS = 1e4;
+var MAX_DEBUG_LINE_BYTES = 262144;
+var DEBUG_SYNC_DRAIN_SUSPECT_MS = 5000;
+var DEBUG_SYNC_DRAIN_DEADLINE_MS = 100;
+var DEBUG_STUCK_DEFAULT = bindAsyncResource((e) => e());
 //@ chunk-cgr0tezp.js:77351-77393 sole-consumer
-function ro(e) {
+/**
+ * 判断字符串是否为合法的日志级别。
+ */
+function isValidLogLevel(e) {
   return Object.hasOwn(LOG_LEVEL_ORDER, e);
 }
 //@ chunk-cgr0tezp.js:77393-77432 sole-consumer
-function mr(e) {
+/**
+ * 解析日志文件路径（Windows 设备路径返回 null）。
+ */
+function resolveLogPathOrNull(e) {
   return isWindowsDevicePath(e) ? null : resolve(e);
 }
 //@ chunk-cgr0tezp.js:77432-77447 sole-consumer
-function yr() {}
+/**
+ * 吞掉错误的空回调（用于 catch）。
+ */
+function noopLogError() {}
 //@ chunk-cgr0tezp.js:77447-77477 sole-consumer
-var io = { arm: "v5", target: null };
+/**
+ * 调试日志目的地的初始状态（v5 存储、无本地文件）。
+ */
+var DEFAULT_DEBUG_SINK_STATE = {
+  arm: "v5",
+  target: null,
+};
 //@ chunk-cgr0tezp.js:77477-77531 sole-consumer
-function so(e, n) {
+/**
+ * 按当前积压位置标记是否卡住。
+ */
+function markBacklogStuck(e, n) {
   e.stuck = e.appendSince === n ? "yes" : "no";
 }
 //@ chunk-cgr0tezp.js:77531-77568 affinity
-var oo = { sessionId: "", fromBackend: !1 };
+/**
+ * 空的日志上下文（无会话 id、非后端写入）。
+ */
+var EMPTY_LOG_CONTEXT = {
+  sessionId: "",
+  fromBackend: false,
+};
+//@ chunk-cgr0tezp.js:77568-77873 fingerprint = getDebugLogPath (0.414)
 /**
  * 计算调试日志目标：默认 <配置目录>/debug/<sessionId>.txt（storage v5 时写存储），--debug-file 为原始文件并可轮换、更新 latest 链接。
  */
-//@ chunk-cgr0tezp.js:77568-77873 fingerprint = getDebugLogPath (0.414)
 function resolveDebugLogTarget(e, n, r, i) {
-  let s = join(n, "debug"),
-    o = join(s, `${e.sessionId}.txt`),
-    a;
+  let s = join(n, "debug");
+  let o = join(s, `${e.sessionId}.txt`);
+  let a;
   if (r === null) a = o;
   else if (i !== null && r === i) a = join(i, `${e.sessionId}.txt`);
   else a = r;
@@ -154,38 +126,65 @@ function resolveDebugLogTarget(e, n, r, i) {
   };
 }
 //@ chunk-cgr0tezp.js:77873-77923 layout
-function Dt(e) {
+/**
+ * 把路径包装成用户命名的路径空间。
+ */
+function userNamedPathSpace(e) {
   return PathSpace.userNamed(isAbsolute(e) ? e : resolve(e));
 }
 //@ chunk-cgr0tezp.js:77923-77991 layout
-function ao(e) {
-  return e.code === "Failed" && e.telemetryCode === "ENOENT";
+/**
+ * 判断重命名失败是否为 ENOENT 遥测失败。
+ */
+function isENOENTTelemetryFailure(error) {
+  return error.code === "Failed" && error.telemetryCode === "ENOENT";
 }
 //@ chunk-cgr0tezp.js:77991-78029 layout
-function uo(e, n = qt) {
-  return n ? e : void 0;
+/**
+ * 有 async_hooks 时保留存储 v5 参数，否则返回 undefined。
+ */
+function storageV5IfAsyncHooks(storageV5, n = asyncHooksAvailable) {
+  return n ? storageV5 : undefined;
 }
 //@ chunk-cgr0tezp.js:78029-78303 layout
-async function appendDebugToStore(e, n, r, i) {
-  let s = { namespace: "log", sessionId: n, channel: "debug" },
-    run = await et.run(!0, () => e.append(s, [{ data: r }], i ? { markLatest: !0 } : void 0));
-  if (run.ok) return "landed";
-  return i && run.error.code === "InvalidArgument" && run.error.argument === "opts.markLatest"
+async function appendDebugToStore(e, sessionId, data, i) {
+  let s = {
+    namespace: "log",
+    sessionId,
+    channel: "debug",
+  };
+  let o = await backendStorageContext.run(true, () =>
+    e.append(
+      s,
+      [
+        {
+          data,
+        },
+      ],
+      i
+        ? {
+            markLatest: true,
+          }
+        : undefined,
+    ),
+  );
+  if (o.ok) return "landed";
+  return i && o.error.code === "InvalidArgument" && o.error.argument === "opts.markLatest"
     ? "refused"
     : "dropped";
 }
+//@ chunk-cgr0tezp.js:78303-89982 layout
 /**
  * 调试日志器：从 argv/env 读取 --debug、-d、--debug=filter、--debug-to-stderr/-d2e、--debug-file、DEBUG/DEBUG_SDK、CLAUDE_CODE_DEBUG_LOG_LEVEL、CLAUDE_CODE_DEBUG_LOGS_DIR；行格式 `<ISO时间> [LEVEL] 消息`，消息经脱敏（redactSecrets），默认路径 <配置目录>/debug/<sessionId>.txt。
  */
-//@ chunk-cgr0tezp.js:78303-89982 layout
 class DebugLogger {
   deps;
   minLevel;
   filter;
   toStderr;
   filePath;
-  runtimeDebugEnabled = !1;
-  hasFormattedOutput = !1;
+  runtimeDebugEnabled = false;
+  hasFormattedOutput = false;
   debugFromLaunch;
   storageV5;
   writer = null;
@@ -201,60 +200,61 @@ class DebugLogger {
   };
   appendOldest = this.appendOldestChunks.bind(this);
   backendLinesLogged = 0;
-  exiting = !1;
-  exitHandlerRegistered = !1;
+  exiting = false;
+  exitHandlerRegistered = false;
   successor = null;
   writtenBytes = -1;
-  rotating = !1;
+  rotating = false;
   resolvedLogPath = null;
   overrideDirectory = null;
   rotationTarget = null;
-  latestMarked = !1;
-  latestRefused = !1;
+  latestMarked = false;
+  latestRefused = false;
   constructor(e) {
     this.deps = e;
-    if (((this.storageV5 = uo(e.storageV5)), e.launchIdentity !== void 0)) {
-      ((this.minLevel = e.launchIdentity.minLevel),
-        (this.filter = e.launchIdentity.filter),
-        (this.toStderr = e.launchIdentity.toStderr),
-        (this.filePath = e.launchIdentity.filePath),
-        (this.debugFromLaunch = e.launchIdentity.debugFromLaunch));
+    this.storageV5 = storageV5IfAsyncHooks(e.storageV5);
+    if (e.launchIdentity !== undefined) {
+      this.minLevel = e.launchIdentity.minLevel;
+      this.filter = e.launchIdentity.filter;
+      this.toStderr = e.launchIdentity.toStderr;
+      this.filePath = e.launchIdentity.filePath;
+      this.debugFromLaunch = e.launchIdentity.debugFromLaunch;
       return;
     }
-    let n = Array.isArray(e.argv) ? e.argv : [],
-      r = cliArgvReader(),
-      i;
-    if (r !== void 0) i = r(n);
+    let argv = Array.isArray(e.argv) ? e.argv : [];
+    let r = cliArgvReader();
+    let i;
+    if (r !== undefined) i = r(argv);
     else {
-      let index = n.indexOf("--");
-      i = index === -1 ? n : n.slice(0, index);
+      let index = argv.indexOf("--");
+      i = index === -1 ? argv : argv.slice(0, index);
     }
-    let s = e.env.CLAUDE_CODE_DEBUG_LOG_LEVEL?.toLowerCase().trim();
-    this.minLevel = s && ro(s) ? s : "debug";
+    let trimmed = e.env.CLAUDE_CODE_DEBUG_LOG_LEVEL?.toLowerCase().trim();
+    this.minLevel = trimmed && isValidLogLevel(trimmed) ? trimmed : "debug";
     let found = i.find((u) => u.startsWith("--debug="));
-    ((this.filter = found ? parseDebugFilterCached(found.substring(8)) : null),
-      (this.toStderr = i.includes("--debug-to-stderr") || i.includes("-d2e")));
+    this.filter = found ? parseDebugFilterCached(found.substring(8)) : null;
+    this.toStderr = i.includes("--debug-to-stderr") || i.includes("-d2e");
     let a = null;
-    for (let u = 0; u < i.length; u++) {
-      let c = i[u];
+    for (let j = 0; j < i.length; j++) {
+      let c = i[j];
       if (c.startsWith("--debug-file=")) {
-        a = mr(c.substring(13));
+        a = resolveLogPathOrNull(c.substring(13));
         break;
       }
-      if (c === "--debug-file" && u + 1 < i.length) {
-        a = mr(i[u + 1]);
+      if (c === "--debug-file" && j + 1 < i.length) {
+        a = resolveLogPathOrNull(i[j + 1]);
         break;
       }
     }
-    ((this.filePath = a),
-      (this.debugFromLaunch =
-        isEnvTruthy(e.env.DEBUG) ||
-        isEnvTruthy(e.env.DEBUG_SDK) ||
-        i.includes("--debug") ||
-        i.includes("-d") ||
-        this.toStderr ||
-        found !== void 0 ||
-        this.filePath !== null));
+    this.filePath = a;
+    this.debugFromLaunch =
+      isEnvTruthy(e.env.DEBUG) ||
+      isEnvTruthy(e.env.DEBUG_SDK) ||
+      i.includes("--debug") ||
+      i.includes("-d") ||
+      this.toStderr ||
+      found !== undefined ||
+      this.filePath !== null;
   }
   isDebugMode() {
     return this.runtimeDebugEnabled || this.debugFromLaunch;
@@ -263,7 +263,7 @@ class DebugLogger {
     return this.takesLevel(e) && (this.deps.isAnt || this.isDebugMode());
   }
   drainsSyncAtExit() {
-    return !(isStorageV5Enabled() && this.storageV5 !== void 0 && this.deps.syncExitDrain === !1);
+    return !(isStorageV5Enabled() && this.storageV5 !== undefined && this.deps.syncExitDrain === false);
   }
   launchIdentity() {
     return {
@@ -278,7 +278,8 @@ class DebugLogger {
   }
   enableDebugLogging() {
     let e = this.isDebugMode() || this.deps.isAnt;
-    return ((this.runtimeDebugEnabled = !0), e);
+    this.runtimeDebugEnabled = true;
+    return e;
   }
   logPath() {
     return (
@@ -298,23 +299,28 @@ class DebugLogger {
     return this.overrideDirectory;
   }
   isArmed() {
-    return this.storageV5 !== void 0;
+    return this.storageV5 !== undefined;
   }
   takesLevel(e) {
     return LOG_LEVEL_ORDER[e] >= LOG_LEVEL_ORDER[this.minLevel];
   }
-  log(e, { level: n } = { level: "debug" }) {
+  log(
+    e,
+    { level: n } = {
+      level: "debug",
+    },
+  ) {
     if (!this.takesLevel(n)) return;
     let r = this.deps.limits?.();
-    if (r === void 0) {
+    if (r === undefined) {
       this.emit(e, n);
       return;
     }
     let i =
-        e.length > r.maxMessageLength
-          ? `debug message not logged: it has ${e.length} characters, over this log's fixed limit of ${r.maxMessageLength} per message`
-          : e,
-      { admitted: admitted, leftOutBefore: leftOutBefore } = r.admit(i.length);
+      e.length > r.maxMessageLength
+        ? `debug message not logged: it has ${e.length} characters, over this log's fixed limit of ${r.maxMessageLength} per message`
+        : e;
+    let { admitted, leftOutBefore } = r.admit(i.length);
     if (!admitted) return;
     r.timed(() => {
       if (leftOutBefore > 0)
@@ -340,136 +346,179 @@ class DebugLogger {
     }
     this.write(s);
   }
-  write(e) {
-    let writer = this.getWriter(),
-      r = oo;
-    if (this.storageV5 !== void 0) {
-      if (((r = { sessionId: this.deps.sessionId(), fromBackend: et.getStore() === !0 }), r.fromBackend))
-        this.backendLinesLogged++;
+  write(content) {
+    let writer = this.getWriter();
+    let r = EMPTY_LOG_CONTEXT;
+    if (this.storageV5 !== undefined) {
+      r = {
+        sessionId: this.deps.sessionId(),
+        fromBackend: backendStorageContext.getStore() === true,
+      };
+      if (r.fromBackend) this.backendLinesLogged++;
     }
-    if ((writer.write({ origin: r, content: e }), this.exiting)) writer.flush();
+    writer.write({
+      origin: r,
+      content,
+    });
+    if (this.exiting) writer.flush();
   }
   async flush() {
     let backendLinesLogged = this.backendLinesLogged;
-    if ((this.writer?.flush(), await this.drained(), this.storageV5 !== void 0 && this.successor))
-      return this.successor.flush();
-    for (let n = 0; this.backendLinesLogged !== backendLinesLogged && n < 3; n++)
-      ((backendLinesLogged = this.backendLinesLogged), this.writer?.flush(), await this.drained());
-    if (this.backlog.droppedCount > 0 && this.backlog.length === 0 && !this.successor)
-      (this.write(""), this.writer?.flush(), await this.drained());
+    this.writer?.flush();
+    await this.drained();
+    if (this.storageV5 !== undefined && this.successor) return this.successor.flush();
+    for (let i = 0; this.backendLinesLogged !== backendLinesLogged && i < 3; i++) {
+      backendLinesLogged = this.backendLinesLogged;
+      this.writer?.flush();
+      await this.drained();
+    }
+    if (this.backlog.droppedCount > 0 && this.backlog.length === 0 && !this.successor) {
+      this.write("");
+      this.writer?.flush();
+      await this.drained();
+    }
   }
   async drained() {
     if (this.isAppendStuck()) return;
-    let e = this.backlog.chain.then(() => !0);
-    do if (await withDeadline(e, hr)) return;
+    let e = this.backlog.chain.then(() => true);
+    do if (await withDeadline(e, DEBUG_SYNC_DRAIN_DEADLINE_MS)) return;
     while (!this.isAppendStuck());
   }
   isAppendStuck() {
-    let backlog = this.backlog,
-      { appendSince: appendSince } = backlog;
-    if (backlog.stuck === "no" && appendSince !== 0 && Date.now() - appendSince >= to)
-      ((backlog.stuck = "suspected"), setTimeout(so, hr, backlog, appendSince).unref());
+    let backlog = this.backlog;
+    let { appendSince } = backlog;
+    if (
+      backlog.stuck === "no" &&
+      appendSince !== 0 &&
+      Date.now() - appendSince >= DEBUG_SYNC_DRAIN_SUSPECT_MS
+    ) {
+      backlog.stuck = "suspected";
+      setTimeout(markBacklogStuck, DEBUG_SYNC_DRAIN_DEADLINE_MS, backlog, appendSince).unref();
+    }
     return backlog.stuck === "yes";
   }
-  dispose(e) {
-    this.redirect = e;
+  dispose(redirect) {
+    this.redirect = redirect;
     try {
       this.writer?.dispose();
     } finally {
-      ((this.redirect = null), (this.writer = null));
+      this.redirect = null;
+      this.writer = null;
     }
   }
   succeed(e) {
-    ((this.runtimeDebugEnabled = e.runtimeDebugEnabled),
-      (this.hasFormattedOutput = e.hasFormattedOutput),
-      (this.unflushedChunks = e.unflushedChunks),
-      (this.backlog = e.backlog),
-      (this.exitHandlerRegistered = e.exitHandlerRegistered),
-      (e.successor = this),
-      e.dispose((n) => {
-        this.write(n);
-      }));
+    this.runtimeDebugEnabled = e.runtimeDebugEnabled;
+    this.hasFormattedOutput = e.hasFormattedOutput;
+    this.unflushedChunks = e.unflushedChunks;
+    this.backlog = e.backlog;
+    this.exitHandlerRegistered = e.exitHandlerRegistered;
+    e.successor = this;
+    e.dispose((n) => {
+      this.write(n);
+    });
   }
   handleExit() {
     if (this.successor) {
       this.successor.handleExit();
       return;
     }
-    if (((this.exiting = !0), this.backlog.droppedCount > 0))
+    this.exiting = true;
+    if (this.backlog.droppedCount > 0)
       try {
         this.write("");
       } catch {}
-    (this.writer?.flush(), this.drainSync());
+    this.writer?.flush();
+    this.drainSync();
   }
-  async maybeRotate(e, n, r = qs) {
-    let i = isStorageV5Enabled() && this.storageV5 !== void 0 ? this.storageV5.hostFiles : void 0;
-    if (this.writtenBytes < 0)
-      if (i) {
-        let stats = await i.stat(Dt(e));
+  async maybeRotate(e, n, r = MAX_DEBUG_LOG_BYTES) {
+    let hostFiles =
+      isStorageV5Enabled() && this.storageV5 !== undefined ? this.storageV5.hostFiles : undefined;
+    if (this.writtenBytes < 0) {
+      if (hostFiles) {
+        let stats = await hostFiles.stat(userNamedPathSpace(e));
         this.writtenBytes = stats.ok && stats.value.kind !== "absent" ? stats.value.size : 0;
       } else
         this.writtenBytes = await stat(e)
           .then((s) => s.size)
           .catch(() => 0);
-    else this.writtenBytes += n;
+    } else this.writtenBytes += n;
     if (this.writtenBytes <= r || this.rotating) return;
-    this.rotating = !0;
+    this.rotating = true;
     try {
       let s = e.endsWith(".txt") ? `${e.slice(0, -4)}.1.txt` : `${e}.1`;
-      if (i) {
-        let o = Dt(e),
-          a = Dt(s),
-          rename = await i.rename(o, a);
-        if (!rename.ok && !ao(rename.error)) {
-          if ((await i.delete(a, { missingOk: !0 }), !(await i.rename(o, a)).ok))
-            await i.delete(o, { missingOk: !0 });
+      if (hostFiles) {
+        let o = userNamedPathSpace(e);
+        let a = userNamedPathSpace(s);
+        let u = await hostFiles.rename(o, a);
+        if (!u.ok && !isENOENTTelemetryFailure(u.error)) {
+          await hostFiles.delete(a, {
+            missingOk: true,
+          });
+          if (!(await hostFiles.rename(o, a)).ok)
+            await hostFiles.delete(o, {
+              missingOk: true,
+            });
         }
       } else
         try {
           await rename(e, s);
         } catch (error) {
-          if (!isENOENT(error))
-            (await unlink(s).catch(() => {}), await rename(e, s).catch(() => unlink(e).catch(() => {})));
+          if (!isENOENT(error)) {
+            await unlink(s).catch(() => {});
+            await rename(e, s).catch(() => unlink(e).catch(() => {}));
+          }
         }
       this.writtenBytes = 0;
     } finally {
-      this.rotating = !1;
+      this.rotating = false;
     }
   }
   shouldLog(e) {
-    if (this.deps.isTestEnvironment && !this.toStderr && this.filePath === null) return !1;
-    if (!this.deps.isAnt && !this.isDebugMode()) return !1;
-    if (typeof process > "u" || typeof process.versions > "u" || typeof process.versions.node > "u")
-      return !1;
-    return sn(e, this.filter);
+    if (this.deps.isTestEnvironment && !this.toStderr && this.filePath === null) return false;
+    if (!this.deps.isAnt && !this.isDebugMode()) return false;
+    if (
+      typeof process === "undefined" ||
+      typeof process.versions === "undefined" ||
+      typeof process.versions.node === "undefined"
+    )
+      return false;
+    return shouldLogDebugCategory(e, this.filter);
   }
   resolveDirToFile(e) {
-    return ((this.resolvedLogPath = join(e, `${this.deps.sessionId()}.txt`)), this.resolvedLogPath);
+    this.resolvedLogPath = join(e, `${this.deps.sessionId()}.txt`);
+    return this.resolvedLogPath;
   }
   async appendGroup(e, n, r, i) {
-    if (this.storageV5 !== void 0 && e.arm === "v5") {
+    if (this.storageV5 !== undefined && e.arm === "v5") {
       await this.appendV5AndMark(this.storageV5, n, r);
       return;
     }
     if (e.target === null || !this.writesFiles()) return;
-    if (i) await mkdir(dirname(e.target), { recursive: !0 }).catch(() => {});
+    if (i)
+      await mkdir(dirname(e.target), {
+        recursive: true,
+      }).catch(() => {});
     let s = e;
     try {
       await appendFile(e.target, r);
     } catch (error) {
       if (!isEISDIR(error)) throw error;
-      if (this.storageV5 === void 0)
-        ((s = { ...e, target: this.resolveDirToFile(e.target) }), await appendFile(s.target, r));
-      else {
-        if (
-          ((this.overrideDirectory = e.target),
-          (s = resolveDebugLogTarget(n, e.configHome, e.target, e.target)),
-          s.arm === "v5")
-        ) {
+      if (this.storageV5 === undefined) {
+        s = {
+          ...e,
+          target: this.resolveDirToFile(e.target),
+        };
+        await appendFile(s.target, r);
+      } else {
+        this.overrideDirectory = e.target;
+        s = resolveDebugLogTarget(n, e.configHome, e.target, e.target);
+        if (s.arm === "v5") {
           await this.appendV5AndMark(this.storageV5, n, r);
           return;
         }
-        await mkdir(dirname(s.target), { recursive: !0 }).catch(() => {});
+        await mkdir(dirname(s.target), {
+          recursive: true,
+        }).catch(() => {});
         try {
           await appendFile(s.target, r);
         } catch {
@@ -478,107 +527,126 @@ class DebugLogger {
       }
     }
     if (s.rotate) {
-      if (this.storageV5 !== void 0 && s.target !== this.rotationTarget)
-        ((this.rotationTarget = s.target), (this.writtenBytes = -1));
-      await this.maybeRotate(s.target, Buffer.byteLength(r)).catch(yr);
+      if (this.storageV5 !== undefined && s.target !== this.rotationTarget) {
+        this.rotationTarget = s.target;
+        this.writtenBytes = -1;
+      }
+      await this.maybeRotate(s.target, Buffer.byteLength(r)).catch(noopLogError);
     }
     if (s.pointLatest) this.markLatestSymlink();
   }
   async appendV5AndMark(e, n, r) {
-    let i = isStorageV5Enabled(),
-      s = i && !this.latestMarked && !this.latestRefused,
-      o = await appendDebugToStore(e, n.sessionId, r, s);
-    if (o === "refused")
-      ((this.latestRefused = !0),
-        (o = await appendDebugToStore(e, n.sessionId, r, !1)),
-        this.log(
-          "debug log: the storage backend refused markLatest; <debug folder>/latest is not pointed in this process",
-          { level: "warn" },
-        ));
+    let i = isStorageV5Enabled();
+    let s = i && !this.latestMarked && !this.latestRefused;
+    let o = await appendDebugToStore(e, n.sessionId, r, s);
+    if (o === "refused") {
+      this.latestRefused = true;
+      o = await appendDebugToStore(e, n.sessionId, r, false);
+      this.log(
+        "debug log: the storage backend refused markLatest; <debug folder>/latest is not pointed in this process",
+        {
+          level: "warn",
+        },
+      );
+    }
     if (o !== "landed") return;
-    if (s && !this.latestRefused) this.latestMarked = !0;
+    if (s && !this.latestRefused) this.latestMarked = true;
     else if (!i) this.markLatestSymlink();
   }
   markLatestSymlink() {
-    if (!this.latestMarked && this.writesFiles()) ((this.latestMarked = !0), this.updateLatestSymlink());
+    if (!this.latestMarked && this.writesFiles()) {
+      this.latestMarked = true;
+      this.updateLatestSymlink();
+    }
   }
   isSessionDiskless() {
     try {
-      return this.deps.diskless?.() === !0;
+      return this.deps.diskless?.() === true;
     } catch {
-      return !0;
+      return true;
     }
   }
   writesFiles() {
-    if (this.isSessionDiskless()) return !1;
+    if (this.isSessionDiskless()) return false;
     try {
       return (
-        this.deps.defaultFile?.() !== !1 ||
+        this.deps.defaultFile?.() !== false ||
         this.filePath !== null ||
-        this.deps.env.CLAUDE_CODE_DEBUG_LOGS_DIR !== void 0
+        this.deps.env.CLAUDE_CODE_DEBUG_LOGS_DIR !== undefined
       );
     } catch {
-      return !1;
+      return false;
     }
   }
   async appendOldestChunks() {
-    let backlog = this.backlog,
-      n = this.unflushedChunks[0],
-      r = n?.queued;
-    if (r === void 0) return;
-    let i = 0,
-      s = 0,
-      o = !1;
-    for (let { content: content, queued: queued } of this.unflushedChunks) {
+    let backlog = this.backlog;
+    let n = this.unflushedChunks[0];
+    let queued = n?.queued;
+    if (queued === undefined) return;
+    let i = 0;
+    let s = 0;
+    let o = false;
+    for (let { content, queued: queued_2 } of this.unflushedChunks) {
       if (
-        queued === void 0 ||
-        queued.owner !== r.owner ||
-        queued.decision.arm !== r.decision.arm ||
-        queued.decision.target !== r.decision.target ||
-        queued.origin.sessionId !== r.origin.sessionId ||
-        queued.origin.fromBackend !== r.origin.fromBackend ||
-        (i > 0 && s + content.length > eo)
+        queued_2 === undefined ||
+        queued_2.owner !== queued.owner ||
+        queued_2.decision.arm !== queued.decision.arm ||
+        queued_2.decision.target !== queued.decision.target ||
+        queued_2.origin.sessionId !== queued.origin.sessionId ||
+        queued_2.origin.fromBackend !== queued.origin.fromBackend ||
+        (i > 0 && s + content.length > MAX_DEBUG_LINE_BYTES)
       )
         break;
-      (i++, (s += content.length), (o ||= queued.needMkdir));
+      i++;
+      s += content.length;
+      o ||= queued_2.needMkdir;
     }
-    if (
-      ((backlog.appendSince = Date.now()),
-      await r.owner
-        .appendGroup(
-          r.decision,
-          r.origin,
-          this.unflushedChunks
-            .slice(0, i)
-            .map((a) => a.content)
-            .join(""),
-          o,
-        )
-        .catch(yr),
-      (backlog.appendSince = 0),
-      (backlog.stuck = "no"),
-      this.unflushedChunks[0] === n)
-    )
-      (this.unflushedChunks.splice(0, i), (backlog.length -= s));
+    backlog.appendSince = Date.now();
+    await queued.owner
+      .appendGroup(
+        queued.decision,
+        queued.origin,
+        this.unflushedChunks
+          .slice(0, i)
+          .map((unflushedChunk) => unflushedChunk.content)
+          .join(""),
+        o,
+      )
+      .catch(noopLogError);
+    backlog.appendSince = 0;
+    backlog.stuck = "no";
+    if (this.unflushedChunks[0] === n) {
+      this.unflushedChunks.splice(0, i);
+      backlog.length -= s;
+    }
   }
   drainSync() {
     if (this.unflushedChunks.length === 0) return;
-    if (
-      ((this.backlog.length = 0), !this.drainsSyncAtExit() || !this.writesFiles() || this.isAppendStuck())
-    ) {
+    this.backlog.length = 0;
+    if (!this.drainsSyncAtExit() || !this.writesFiles() || this.isAppendStuck()) {
       this.unflushedChunks.length = 0;
       return;
     }
     let e = [];
-    for (let n of this.unflushedChunks.splice(0)) {
-      if (n.target === null) continue;
-      let at = e.at(-1);
-      if (at !== void 0 && at.armed === n.armed && (!n.armed || at.target === n.target)) at.parts.push(n);
-      else e.push({ target: n.target, armed: n.armed, parts: [n] });
+    for (let unflushedChunk of this.unflushedChunks.splice(0)) {
+      if (unflushedChunk.target === null) continue;
+      let last = e.at(-1);
+      if (
+        last !== undefined &&
+        last.armed === unflushedChunk.armed &&
+        (!unflushedChunk.armed || last.target === unflushedChunk.target)
+      )
+        last.parts.push(unflushedChunk);
+      else
+        e.push({
+          target: unflushedChunk.target,
+          armed: unflushedChunk.armed,
+          parts: [unflushedChunk],
+        });
     }
-    for (let { target: target, armed: armed, parts: parts } of e) {
-      let s = armed ? target : this.logPath(),
-        joined = parts.map((a) => a.content).join("");
+    for (let { target, armed, parts } of e) {
+      let s = armed ? target : this.logPath();
+      let joined = parts.map((part) => part.content).join("");
       try {
         getFsImplementation().mkdirSync(dirname(s));
       } catch {}
@@ -589,18 +657,22 @@ class DebugLogger {
           try {
             if (!armed) getFsImplementation().appendFileSync(this.resolveDirToFile(s), joined);
             else {
-              let u = (d, g) => {
-                  try {
-                    getFsImplementation().appendFileSync(join(s, `${d}.txt`), g);
-                  } catch {}
-                },
-                c = parts[0]?.sessionId,
-                l = "";
-              for (let d of parts) {
-                if (d.sessionId !== c) (u(c, l), (c = d.sessionId), (l = ""));
-                l += d.content;
+              let u = (sessionId, g) => {
+                try {
+                  getFsImplementation().appendFileSync(join(s, `${sessionId}.txt`), g);
+                } catch {}
+              };
+              let sessionId = parts[0]?.sessionId;
+              let l = "";
+              for (let part of parts) {
+                if (part.sessionId !== sessionId) {
+                  u(sessionId, l);
+                  sessionId = part.sessionId;
+                  l = "";
+                }
+                l += part.content;
               }
-              u(c, l);
+              u(sessionId, l);
             }
           } catch {}
       }
@@ -610,42 +682,46 @@ class DebugLogger {
     return this.backlog.droppedTotal;
   }
   takeDroppedNote() {
-    let { droppedCount: droppedCount } = this.backlog;
+    let { droppedCount } = this.backlog;
     if (droppedCount === 0) return "";
-    return (
-      (this.backlog.droppedCount = 0),
-      `${new Date().toISOString()} [WARN] debug messages not logged: ${droppedCount} since the line above, because writes to this log were over 10 s behind, with over 1 MiB waiting
-`
-    );
+    this.backlog.droppedCount = 0;
+    return `${new Date().toISOString()} [WARN] debug messages not logged: ${droppedCount} since the line above, because writes to this log were over 10 s behind, with over 1 MiB waiting
+`;
   }
   groupLines(e) {
     let n = e[0];
-    if (n === void 0) return [];
-    let r = this.filePath ?? this.deps.env.CLAUDE_CODE_DEBUG_LOGS_DIR ?? null,
-      isSessionDiskless = this.isSessionDiskless();
-    if (isSessionDiskless && (this.storageV5 === void 0 || r !== null)) return [];
-    if (this.storageV5 === void 0)
+    if (n === undefined) return [];
+    let r = this.filePath ?? this.deps.env.CLAUDE_CODE_DEBUG_LOGS_DIR ?? null;
+    let i = this.isSessionDiskless();
+    if (i && (this.storageV5 === undefined || r !== null)) return [];
+    if (this.storageV5 === undefined)
       return [
         {
-          decision: { target: this.logPath(), arm: "raw", configHome: "", rotate: !0, pointLatest: !0 },
+          decision: {
+            target: this.logPath(),
+            arm: "raw",
+            configHome: "",
+            rotate: true,
+            pointLatest: true,
+          },
           origin: n.origin,
           lines: e,
         },
       ];
     let s = [];
     for (let o of e) {
-      if (isSessionDiskless && o.origin.fromBackend) continue;
-      let at = s.at(-1);
+      if (i && o.origin.fromBackend) continue;
+      let last = s.at(-1);
       if (
-        at !== void 0 &&
-        at.origin.sessionId === o.origin.sessionId &&
-        at.origin.fromBackend === o.origin.fromBackend
+        last !== undefined &&
+        last.origin.sessionId === o.origin.sessionId &&
+        last.origin.fromBackend === o.origin.fromBackend
       )
-        at.lines.push(o);
+        last.lines.push(o);
       else
         s.push({
-          decision: isSessionDiskless
-            ? io
+          decision: i
+            ? DEFAULT_DEBUG_SINK_STATE
             : resolveDebugLogTarget(o.origin, this.deps.configHomeDir(), r, this.overrideDirectory),
           origin: o.origin,
           lines: [o],
@@ -655,103 +731,119 @@ class DebugLogger {
   }
   getWriter() {
     if (this.writer) return this.writer;
-    let e = null,
-      n = this.storageV5 !== void 0;
-    if (
-      ((this.writer = createBufferedWriter({
-        writeBatch: (r) => {
-          if (this.redirect) {
-            this.redirect(r.map((o) => o.content).join(""));
-            return;
-          }
-          if (this.exiting) {
-            for (let o of this.groupLines(r))
-              this.unflushedChunks.push({
-                target: o.decision.target,
-                sessionId: o.origin.sessionId,
-                armed: n,
-                content: this.takeDroppedNote() + o.lines.map((line) => line.content).join(""),
-              });
-            this.drainSync();
-            return;
-          }
-          let writesFiles = this.writesFiles(),
-            backlog = this.backlog;
-          this.isAppendStuck();
-          for (let o of this.groupLines(r)) {
-            if (o.decision.arm === "raw" && !writesFiles) continue;
-            if (
-              backlog.droppedCount > 0
-                ? backlog.length >= pr / 2
-                : backlog.length >= pr && Date.now() - (this.unflushedChunks[0]?.queued?.at ?? 1 / 0) >= Qs
-            ) {
-              ((backlog.droppedCount += o.lines.length), (backlog.droppedTotal += o.lines.length));
-              continue;
-            }
-            let a = this.takeDroppedNote() + o.lines.map((line) => line.content).join("");
-            if (a === "") continue;
-            let u = o.decision.arm === "raw" ? dirname(o.decision.target) : null,
-              c = u !== null && (o.origin.fromBackend || e !== u);
-            if (u !== null) e = u;
-            (this.unflushedChunks.push({
+    let e = null;
+    let armed = this.storageV5 !== undefined;
+    this.writer = createBufferedWriter({
+      writeBatch: (r) => {
+        if (this.redirect) {
+          this.redirect(r.map((o) => o.content).join(""));
+          return;
+        }
+        if (this.exiting) {
+          for (let o of this.groupLines(r))
+            this.unflushedChunks.push({
               target: o.decision.target,
               sessionId: o.origin.sessionId,
-              armed: n,
-              content: a,
-              queued: { at: Date.now(), owner: this, decision: o.decision, origin: o.origin, needMkdir: c },
-            }),
-              (backlog.length += a.length),
-              (backlog.chain = no(() => backlog.chain.then(this.appendOldest))));
+              armed,
+              content: this.takeDroppedNote() + o.lines.map((line) => line.content).join(""),
+            });
+          this.drainSync();
+          return;
+        }
+        let i = this.writesFiles();
+        let backlog = this.backlog;
+        this.isAppendStuck();
+        for (let o of this.groupLines(r)) {
+          if (o.decision.arm === "raw" && !i) continue;
+          if (
+            backlog.droppedCount > 0
+              ? backlog.length >= MAX_DEBUG_BACKLOG_BYTES / 2
+              : backlog.length >= MAX_DEBUG_BACKLOG_BYTES &&
+                Date.now() - (this.unflushedChunks[0]?.queued?.at ?? 1 / 0) >= DEBUG_BACKLOG_STALL_MS
+          ) {
+            backlog.droppedCount += o.lines.length;
+            backlog.droppedTotal += o.lines.length;
+            continue;
           }
-        },
-        sizeOf: (r) => r.content.length,
-        flushIntervalMs: 1000,
-        maxBufferSize: 100,
-        immediateMode: this.isDebugMode(),
-      })),
-      this.deps.registerCleanup(async () => {
-        (this.writer?.dispose(), await this.drained());
-      }),
-      !this.exitHandlerRegistered)
-    )
-      ((this.exitHandlerRegistered = !0), this.deps.onExit(this.handleExit.bind(this)));
+          let a = this.takeDroppedNote() + o.lines.map((line) => line.content).join("");
+          if (a === "") continue;
+          let u = o.decision.arm === "raw" ? dirname(o.decision.target) : null;
+          let needMkdir = u !== null && (o.origin.fromBackend || e !== u);
+          if (u !== null) e = u;
+          this.unflushedChunks.push({
+            target: o.decision.target,
+            sessionId: o.origin.sessionId,
+            armed,
+            content: a,
+            queued: {
+              at: Date.now(),
+              owner: this,
+              decision: o.decision,
+              origin: o.origin,
+              needMkdir,
+            },
+          });
+          backlog.length += a.length;
+          backlog.chain = DEBUG_STUCK_DEFAULT(() => backlog.chain.then(this.appendOldest));
+        }
+      },
+      sizeOf: (r) => r.content.length,
+      flushIntervalMs: 1000,
+      maxBufferSize: 100,
+      immediateMode: this.isDebugMode(),
+    });
+    this.deps.registerCleanup(async () => {
+      this.writer?.dispose();
+      await this.drained();
+    });
+    if (!this.exitHandlerRegistered) {
+      this.exitHandlerRegistered = true;
+      this.deps.onExit(this.handleExit.bind(this));
+    }
     return this.writer;
   }
   async updateLatestSymlink() {
     try {
-      let logPath = this.logPath(),
-        n = join(dirname(logPath), "latest");
-      (await unlink(n).catch(() => {}), await symlink(logPath, n));
+      let e = this.logPath();
+      let n = join(dirname(e), "latest");
+      await unlink(n).catch(() => {});
+      await symlink(e, n);
     } catch {}
   }
 }
 //@ chunk-cgr0tezp.js:89982-90167 layout
 class DebugLoggerConfig {
-  instance = void 0;
+  instance = undefined;
   init = {};
-  defaultFile = !0;
-  limits = void 0;
-  setInstance(e) {
-    this.instance = e;
+  defaultFile = true;
+  limits = undefined;
+  setInstance(instance) {
+    this.instance = instance;
   }
-  setInit(e) {
-    this.init = e;
+  setInit(init) {
+    this.init = init;
   }
   disableDefaultFile() {
-    this.defaultFile = !1;
+    this.defaultFile = false;
   }
-  setLimits(e) {
-    this.limits = e;
+  setLimits(limits) {
+    this.limits = limits;
   }
 }
 //@ chunk-cgr0tezp.js:90167-90192 layout
-var lo = new HostScoped(() => new DebugLoggerConfig());
+/**
+ * 按进程根保存的调试日志器配置。
+ */
+var debugLoggerConfigByRoot = new HostScoped(() => new DebugLoggerConfig());
 //@ chunk-cgr0tezp.js:90192-90220 layout
-function Se() {
-  return onProcessRootHost(lo);
+/**
+ * 取出调试日志器配置（进程根作用域）。
+ */
+function getDebugLoggerConfig() {
+  return onProcessRootHost(debugLoggerConfigByRoot);
 }
 //@ chunk-cgr0tezp.js:90220-90700 layout
-function createDebugLogger(e, n) {
+function createDebugLogger(debugLoggerConfig, n) {
   return new DebugLogger({
     argv: process.argv,
     env: process.env,
@@ -764,49 +856,54 @@ function createDebugLogger(e, n) {
       registerCleanup(r);
     },
     writeToStderr: (r) => {
-      writeToStderr(r, { mayDrop: !0 });
+      writeToStderr(r, {
+        mayDrop: true,
+      });
     },
-    isAnt: n?.isAnt ?? !1,
-    isTestEnvironment: n?.isTestEnvironment ?? !1,
+    isAnt: n?.isAnt ?? false,
+    isTestEnvironment: n?.isTestEnvironment ?? false,
     launchIdentity: n,
     storageV5:
-      e.init.storageV5 !== void 0 && e.init.configHome === getClaudeConfigDirOrNull()
-        ? e.init.storageV5
-        : void 0,
-    syncExitDrain: e.init.syncExitDrain,
+      debugLoggerConfig.init.storageV5 !== undefined &&
+      debugLoggerConfig.init.configHome === getClaudeConfigDirOrNull()
+        ? debugLoggerConfig.init.storageV5
+        : undefined,
+    syncExitDrain: debugLoggerConfig.init.syncExitDrain,
     diskless: () => isDiskless(),
-    defaultFile: () => e.defaultFile,
-    limits: () => e.limits,
+    defaultFile: () => debugLoggerConfig.defaultFile,
+    limits: () => debugLoggerConfig.limits,
   });
 }
 //@ chunk-cgr0tezp.js:90700-91055 facade-exports
 function initDefaultDebugLog(e) {
-  let n = Se();
-  n.setInit({
+  let debugLoggerConfig = getDebugLoggerConfig();
+  debugLoggerConfig.setInit({
     storageV5: e.storageV5,
     configHome: getClaudeConfigDirOrNull(),
     syncExitDrain: e.syncExitDrain,
   });
-  let instance = n.instance;
+  let instance = debugLoggerConfig.instance;
   if (instance) {
-    let i = createDebugLogger(n, instance.launchIdentity());
-    (n.setInstance(i), i.succeed(instance));
+    let debugLogger = createDebugLogger(debugLoggerConfig, instance.launchIdentity());
+    debugLoggerConfig.setInstance(debugLogger);
+    debugLogger.succeed(instance);
   }
-  if (e.syncExitDrain === !1 && !getDebugLogger().drainsSyncAtExit())
+  if (e.syncExitDrain === false && !getDebugLogger().drainsSyncAtExit())
     logForDebugging(
       "Sync exit drain off for this process: debug lines still queued at exit are dropped, so this log may end short",
     );
 }
+//@ chunk-cgr0tezp.js:91055-91144 layout
 /**
  * 取（必要时创建）当前宿主的 DebugLogger 单例。
  */
-//@ chunk-cgr0tezp.js:91055-91144 layout
 function getDebugLogger() {
-  let e = Se(),
-    instance = e.instance;
+  let debugLoggerConfig = getDebugLoggerConfig();
+  let instance = debugLoggerConfig.instance;
   if (instance) return instance;
-  let r = createDebugLogger(e);
-  return (e.setInstance(r), r);
+  let debugLogger = createDebugLogger(debugLoggerConfig);
+  debugLoggerConfig.setInstance(debugLogger);
+  return debugLogger;
 }
 //@ chunk-cgr0tezp.js:91144-91179 facade-exports
 function getMinDebugLogLevel() {
@@ -838,15 +935,16 @@ function enableDebugLogging() {
 }
 //@ chunk-cgr0tezp.js:91419-91513 facade-exports
 function resetDebugCaches() {
-  let e = Se(),
-    instance = e.instance;
+  let debugLoggerConfig = getDebugLoggerConfig();
+  let instance = debugLoggerConfig.instance;
   if (!instance) return;
-  let r = createDebugLogger(e);
-  (e.setInstance(r), r.succeed(instance));
+  let debugLogger = createDebugLogger(debugLoggerConfig);
+  debugLoggerConfig.setInstance(debugLogger);
+  debugLogger.succeed(instance);
 }
 //@ chunk-cgr0tezp.js:91513-91554 facade-exports
-function setHasFormattedOutput(e) {
-  getDebugLogger().hasFormattedOutput = e;
+function setHasFormattedOutput(hasFormattedOutput) {
+  getDebugLogger().hasFormattedOutput = hasFormattedOutput;
 }
 //@ chunk-cgr0tezp.js:91554-91599 facade-exports
 function getHasFormattedOutput() {
@@ -854,7 +952,7 @@ function getHasFormattedOutput() {
 }
 //@ chunk-cgr0tezp.js:91599-91649 facade-exports = flushAsciicastRecorder (0.627)
 async function flushDebugLogs() {
-  await Se().instance?.flush();
+  await getDebugLoggerConfig().instance?.flush();
 }
 //@ chunk-cgr0tezp.js:91649-91775 facade-exports
 function droppedDebugOutputTotals() {
@@ -862,14 +960,19 @@ function droppedDebugOutputTotals() {
     ? {}
     : {
         debug_stderr_dropped_total: getStderrDroppedTotal(),
-        debug_file_dropped_total: Se().instance?.droppedLineTotal() ?? 0,
+        debug_file_dropped_total: getDebugLoggerConfig().instance?.droppedLineTotal() ?? 0,
       };
 }
+//@ chunk-cgr0tezp.js:91775-91820 facade-exports = fetchTeamMemory (0.597)
 /**
  * 写一行调试日志（默认 debug 级）到 DebugLogger：只有调试模式或 ant 构建才落盘，目标为 --debug-file 或 <配置目录>/debug/<sessionId>.txt，--debug-to-stderr 时写 stderr；按 --debug=过滤串筛分类。全局 3800+ 处调用。
  */
-//@ chunk-cgr0tezp.js:91775-91820 facade-exports = fetchTeamMemory (0.597)
-function logForDebugging(e, n = { level: "debug" }) {
+function logForDebugging(
+  e,
+  n = {
+    level: "debug",
+  },
+) {
   getDebugLogger().log(e, n);
 }
 //@ chunk-cgr0tezp.js:91820-91855 facade-exports
@@ -877,22 +980,30 @@ function getDebugLogPath() {
   return getDebugLogger().logPath();
 }
 //@ chunk-cgr0tezp.js:91855-91906 facade-exports
-function isDefaultDebugLogPath(e, n) {
-  return e === getDebugLogger().defaultLogPath(n);
+function isDefaultDebugLogPath(debugLogPath, sessionId) {
+  return debugLogPath === getDebugLogger().defaultLogPath(sessionId);
 }
 //@ chunk-cgr0tezp.js:91906-91931 facade-exports
 function logAntError(e, n) {
   return;
 }
 //@ chunk-2f906bwf.js:292-330 fingerprint = LEVEL_ORDER (0.871)
-var LEVEL_ORDER = { debug: 0, info: 1, warn: 2, error: 3 };
+var LEVEL_ORDER = {
+  debug: 0,
+  info: 1,
+  warn: 2,
+  error: 3,
+};
+//@ chunk-e6aww6q8.js:3373785-3374007 callgraph-witnessed = logForDebugging (0.147)
 /**
  * 把附件对象包成 type:'attachment' 消息（uuid、时间戳；queued_command/poll_events 沿用原时间戳）。旧版名 logForDebugging 为错配。
  */
-//@ chunk-e6aww6q8.js:3373785-3374007 callgraph-witnessed = logForDebugging (0.147)
 function createAttachmentMessage_2(
   message,
-  n = { now: () => new Date().toISOString(), uuid: () => randomUUID_32() },
+  n = {
+    now: () => new Date().toISOString(),
+    uuid: () => randomUUID(),
+  },
 ) {
   let r = renderAttachment(message);
   return {
@@ -905,11 +1016,13 @@ function createAttachmentMessage_2(
   };
 }
 //@ chunk-qchp9vrd.js:196768-196814 fingerprint = updateLatestDebugLogSymlink (1)
-var LATEST_DEBUG_LOG_LINK = "latest",
-  fl = 256,
-  pl = 2097152,
-  Pp = 33554432;
-
+/**
+ * 更新 latest 符号链接时的最大尝试次数（256）。
+ */
+var LATEST_DEBUG_LOG_LINK = "latest";
+var MAX_DEBUG_LATEST_LINK_ATTEMPTS = 256;
+var MAX_DEBUG_LOG_ROTATE_BYTES = 2097152;
+var MAX_DEBUG_LOG_TOTAL_BYTES = 33554432;
 export {
   logForDebugging,
   createAttachmentMessage_2,
@@ -928,10 +1041,10 @@ export {
   droppedDebugOutputTotals,
   enableDebugLogging,
   isDefaultDebugLogPath,
-  fl,
-  pl,
+  MAX_DEBUG_LATEST_LINK_ATTEMPTS,
+  MAX_DEBUG_LOG_ROTATE_BYTES,
   LATEST_DEBUG_LOG_LINK,
-  Pp,
+  MAX_DEBUG_LOG_TOTAL_BYTES,
   resetDebugCaches,
   getDebugFilePath,
 };

@@ -6,16 +6,15 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { ze } from "./parse.js";
+import { require_parse } from "./parse.js";
 
 //@ chunk-bwbq4xvm.js:10407-10538 cjs-fingerprint
-var wi = x(function (Z$, Ti) {
-  var Ev = ze(),
-    Sv = (e, s) => {
-      let n = Ev(e.trim().replace(/^[=v]+/, ""), s);
-      return n ? n.version : null;
-    };
-  Ti.exports = Sv;
+var require_clean = x(function (cjsExports, cjsModule) {
+  var parse = require_parse();
+  var clean = (version, options) => {
+    let s = parse(version.trim().replace(/^[=v]+/, ""), options);
+    return s ? s.version : null;
+  };
+  cjsModule.exports = clean;
 });
-
-export { wi };
+export { require_clean };

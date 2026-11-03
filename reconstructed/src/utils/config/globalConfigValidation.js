@@ -8,7 +8,12 @@
  * pieces: chunk-aepeg2w5.js (15)
  * attribution: placement 15
  */
-import { BI1, AI, TI, CI } from "../plugins/pluginDirectories.js";
+import {
+  BI_KEY_UNAVAILABLE,
+  MAX_TIMESTAMPED_ENTRIES,
+  USAGE_SNAPSHOT_FUTURE_SKEW_MS,
+  USAGE_SNAPSHOT_LOOKAHEAD_MS,
+} from "../plugins/pluginDirectories.js";
 import { createSignal } from "../signal.js";
 import { createKeyedQueue } from "../promiseQueue.js";
 import { HostScoped } from "../hostScoped.js";
@@ -16,10 +21,10 @@ import { getSettingsFieldSchema } from "../settings/types.js";
 import { onProcessRootHost } from "../../bootstrap/state.js";
 import { logForDebugging } from "../debug.js";
 
+//@ chunk-aepeg2w5.js:64835-64934 placement = pluginDataDirPath (1)
 /**
  * 是否为 {data, at:number} 形状的值（名字配错，见 lead 建议）。
  */
-//@ chunk-aepeg2w5.js:64835-64934 placement = pluginDataDirPath (1)
 function isTimestampedValue(pluginId) {
   return (
     typeof pluginId === "object" &&
@@ -29,44 +34,51 @@ function isTimestampedValue(pluginId) {
     typeof pluginId.at === "number"
   );
 }
+//@ chunk-aepeg2w5.js:64934-65148 placement
 /**
  * 在带时间戳的记录集中写入一项，并保留同前缀的最近若干项（按时间倒序，总数有上限）。
  */
-//@ chunk-aepeg2w5.js:64934-65148 placement
-function withTimestampedEntry(e, n, r) {
+function withTimestampedEntry(clientDataCacheSlots, n, r) {
   let s =
-    typeof e === "object" && e !== null
-      ? Object.entries(e)
-          .filter((h) => h[0] !== n && h[0].startsWith(BI1) && isTimestampedValue(h[1]))
+    typeof clientDataCacheSlots === "object" && clientDataCacheSlots !== null
+      ? Object.entries(clientDataCacheSlots)
+          .filter((h) => h[0] !== n && h[0].startsWith(BI_KEY_UNAVAILABLE) && isTimestampedValue(h[1]))
           .sort(([, h], [, y]) => y.at - h.at)
-          .slice(0, AI - 1)
+          .slice(0, MAX_TIMESTAMPED_ENTRIES - 1)
       : [];
   return Object.fromEntries([[n, r], ...s]);
 }
 //@ chunk-aepeg2w5.js:65148-65192 placement
-function kh(e, n) {
-  return readTimestampedEntry(e, n)?.data ?? null;
+/**
+ * 读取带时间戳记录里的 data（不是时间戳值时返回 null）。
+ */
+function readTimestampedData(clientDataCacheSlots, n) {
+  return readTimestampedEntry(clientDataCacheSlots, n)?.data ?? null;
 }
+//@ chunk-aepeg2w5.js:65192-65304 placement
 /**
  * 读取带时间戳记录集中的一项数据（不是时间戳值时返回 null）。
  */
-//@ chunk-aepeg2w5.js:65192-65304 placement
-function readTimestampedEntry(e, n) {
-  if (typeof e !== "object" || e === null) return null;
-  let r = e[n];
-  return isTimestampedValue(r) ? { data: r.data ?? null } : null;
+function readTimestampedEntry(clientDataCacheSlots, n) {
+  if (typeof clientDataCacheSlots !== "object" || clientDataCacheSlots === null) return null;
+  let r = clientDataCacheSlots[n];
+  return isTimestampedValue(r)
+    ? {
+        data: r.data ?? null,
+      }
+    : null;
 }
+//@ chunk-aepeg2w5.js:65304-65626 placement
 /**
  * 在缓存记录中找到与入口、模型、组织匹配且未过期的一条。
  */
-//@ chunk-aepeg2w5.js:65304-65626 placement
-function findMatchingUsageSnapshot(e, n) {
-  if (typeof e !== "object" || e === null) return null;
-  let now = Date.now(),
-    s = now - TI,
-    h = now + CI,
-    y = null;
-  for (let S of Object.values(e)) {
+function findMatchingUsageSnapshot(clientDataCacheSlots, n) {
+  if (typeof clientDataCacheSlots !== "object" || clientDataCacheSlots === null) return null;
+  let now = Date.now();
+  let s = now - USAGE_SNAPSHOT_FUTURE_SKEW_MS;
+  let h = now + USAGE_SNAPSHOT_LOOKAHEAD_MS;
+  let y = null;
+  for (let S of Object.values(clientDataCacheSlots)) {
     if (
       !isTimestampedValue(S) ||
       (S.entrypoint ?? null) !== n.entrypoint ||
@@ -77,102 +89,137 @@ function findMatchingUsageSnapshot(e, n) {
     if (!(S.at >= s && S.at <= h)) continue;
     if (y === null || S.at > y.at) y = S;
   }
-  return y === null ? null : { data: y.data ?? null };
+  return y === null
+    ? null
+    : {
+        data: y.data ?? null,
+      };
 }
+//@ chunk-aepeg2w5.js:65626-71013 placement
 /**
  * 全局配置（~/.claude.json）存储：缓存、mtime、读取许可、经存储后端重载、写入。
  */
-//@ chunk-aepeg2w5.js:65626-71013 placement
 class GlobalConfigStore {
-  cache = { config: null, mtime: 0 };
+  cache = {
+    config: null,
+    mtime: 0,
+  };
   lastReadFileStats = null;
   installed = createSignal();
   cacheHits = 0;
   cacheMisses = 0;
-  readingAllowed = !1;
+  readingAllowed = false;
   enableError = null;
-  enableSettled = !1;
+  enableSettled = false;
   enablePromise = null;
-  reloadThroughStorageOwed = !1;
+  reloadThroughStorageOwed = false;
   reloadThroughStoragePromise = null;
   writeQueues = createKeyedQueue();
   pendingWrites = 0;
   pendingExternalRefresh = null;
-  freshnessWatcherStarted = !1;
-  freshnessEventWatch = void 0;
-  freshnessBackend = void 0;
-  freshnessSubscription = void 0;
-  fileWatchFallback = !0;
-  unhandedWritesInMemory = !1;
-  loadedVersion = void 0;
+  freshnessWatcherStarted = false;
+  freshnessEventWatch = undefined;
+  freshnessBackend = undefined;
+  freshnessSubscription = undefined;
+  fileWatchFallback = true;
+  unhandedWritesInMemory = false;
+  loadedVersion = undefined;
   landedWriteCount = 0;
-  freshnessResubscribed = !1;
-  insideParseErrorTelemetry = !1;
-  parseErrorLogged = !1;
+  freshnessResubscribed = false;
+  insideParseErrorTelemetry = false;
+  parseErrorLogged = false;
   lastGetConfigOutcome = "parsed";
-  trustAccepted = !1;
-  localSettingsGitTracked = void 0;
+  trustAccepted = false;
+  localSettingsGitTracked = undefined;
   projectPathForConfig = null;
   generatedUserID = null;
   generatedMachineID = null;
   generatedSummonSidKey = null;
   remoteControlMachineIdOnce = null;
   gracefulExitStampedProjects = new Set();
-  bootPhaseOpen = !0;
+  bootPhaseOpen = true;
   bootAnchorMs;
-  bootPhaseSignalForTesting = void 0;
+  bootPhaseSignalForTesting = undefined;
   clientDataCacheKeyGetter = null;
   clientDataWindowSeed = null;
   clientDataReadGate = null;
   clientDataStrictReadGate = null;
   clientDataStaleMatchGetter = null;
   clientDataOverride = null;
-  useRealPipelineUnderTest = !1;
+  useRealPipelineUnderTest = false;
   testGlobalConfig;
   testProjectConfig;
   now;
-  constructor({ now: e, testGlobalConfig: n, testProjectConfig: r }) {
-    ((this.now = e), (this.bootAnchorMs = e()), (this.testGlobalConfig = n), (this.testProjectConfig = r));
+  constructor({ now, testGlobalConfig, testProjectConfig }) {
+    this.now = now;
+    this.bootAnchorMs = now();
+    this.testGlobalConfig = testGlobalConfig;
+    this.testProjectConfig = testProjectConfig;
   }
   readCache() {
     if (this.cache.config) this.cacheHits++;
     else this.cacheMisses++;
     return this.cache.config;
   }
-  installDiskRead(e, n) {
-    ((this.cache = { config: e, mtime: n?.mtimeMs ?? this.now() }),
-      (this.lastReadFileStats = n ? { mtime: n.mtimeMs, size: n.size } : null),
-      this.installed.emit());
+  installDiskRead(config, n) {
+    this.cache = {
+      config,
+      mtime: n?.mtimeMs ?? this.now(),
+    };
+    this.lastReadFileStats = n
+      ? {
+          mtime: n.mtimeMs,
+          size: n.size,
+        }
+      : null;
+    this.installed.emit();
   }
-  applyOptimistic(e) {
-    this.cache = { config: e, mtime: this.now() };
+  applyOptimistic(config) {
+    this.cache = {
+      config,
+      mtime: this.now(),
+    };
   }
-  writeThrough(e) {
-    ((this.cache = { config: e, mtime: this.now() }),
-      (this.lastReadFileStats = null),
-      this.landedWriteCount++,
-      this.installed.emit());
+  writeThrough(config) {
+    this.cache = {
+      config,
+      mtime: this.now(),
+    };
+    this.lastReadFileStats = null;
+    this.landedWriteCount++;
+    this.installed.emit();
   }
   get writeGeneration() {
     return this.landedWriteCount;
   }
   advanceFreshnessCursor() {
-    ((this.cache = { config: this.cache.config, mtime: this.now() }),
-      (this.lastReadFileStats = null),
-      this.landedWriteCount++);
+    this.cache = {
+      config: this.cache.config,
+      mtime: this.now(),
+    };
+    this.lastReadFileStats = null;
+    this.landedWriteCount++;
   }
   clearCache() {
-    this.cache = { config: null, mtime: 0 };
+    this.cache = {
+      config: null,
+      mtime: 0,
+    };
   }
-  setLastReadFileStats(e) {
-    this.lastReadFileStats = e;
+  setLastReadFileStats(lastReadFileStats) {
+    this.lastReadFileStats = lastReadFileStats;
   }
   takeCacheStats() {
-    let e = { hits: this.cacheHits, misses: this.cacheMisses };
-    return ((this.cacheHits = 0), (this.cacheMisses = 0), e);
+    let e = {
+      hits: this.cacheHits,
+      misses: this.cacheMisses,
+    };
+    this.cacheHits = 0;
+    this.cacheMisses = 0;
+    return e;
   }
   allowReading() {
-    this.readingAllowed = !0;
+    this.readingAllowed = true;
   }
   enable(e) {
     if (this.enableSettled) {
@@ -182,106 +229,116 @@ class GlobalConfigStore {
     if (!this.enablePromise) this.enablePromise = e();
     return this.enablePromise;
   }
-  recordEnableError(e) {
-    this.enableError = e;
+  recordEnableError(enableError) {
+    this.enableError = enableError;
   }
   markEnableSettled() {
-    this.enableSettled = !0;
+    this.enableSettled = true;
   }
   oweReloadThroughStorage() {
-    this.reloadThroughStorageOwed = !0;
+    this.reloadThroughStorageOwed = true;
   }
   reloadThroughStorageOnce(e) {
-    if (this.reloadThroughStorageOwed)
-      ((this.reloadThroughStorageOwed = !1), (this.reloadThroughStoragePromise = e()));
+    if (this.reloadThroughStorageOwed) {
+      this.reloadThroughStorageOwed = false;
+      this.reloadThroughStoragePromise = e();
+    }
     return this.reloadThroughStoragePromise ?? Promise.resolve();
   }
   resetEnableGate() {
-    ((this.readingAllowed = !1),
-      (this.enableError = null),
-      (this.enableSettled = !1),
-      (this.enablePromise = null),
-      (this.reloadThroughStorageOwed = !1),
-      (this.reloadThroughStoragePromise = null),
-      (this.fileWatchFallback = !0),
-      (this.unhandedWritesInMemory = !1));
+    this.readingAllowed = false;
+    this.enableError = null;
+    this.enableSettled = false;
+    this.enablePromise = null;
+    this.reloadThroughStorageOwed = false;
+    this.reloadThroughStoragePromise = null;
+    this.fileWatchFallback = true;
+    this.unhandedWritesInMemory = false;
   }
   beginPendingWrite() {
     this.pendingWrites++;
   }
   endPendingWrite() {
-    return ((this.pendingWrites = Math.max(0, this.pendingWrites - 1)), this.pendingWrites);
+    this.pendingWrites = Math.max(0, this.pendingWrites - 1);
+    return this.pendingWrites;
   }
   pendingWriteCount() {
     return this.pendingWrites;
   }
-  deferExternalRefresh(e) {
-    this.pendingExternalRefresh = e;
+  deferExternalRefresh(pendingExternalRefresh) {
+    this.pendingExternalRefresh = pendingExternalRefresh;
   }
   takePendingExternalRefresh() {
     let pendingExternalRefresh = this.pendingExternalRefresh;
-    return ((this.pendingExternalRefresh = null), pendingExternalRefresh);
+    this.pendingExternalRefresh = null;
+    return pendingExternalRefresh;
   }
-  setFreshnessWatcherStarted(e) {
-    this.freshnessWatcherStarted = e;
+  setFreshnessWatcherStarted(freshnessWatcherStarted) {
+    this.freshnessWatcherStarted = freshnessWatcherStarted;
   }
-  setFreshnessEventWatch(e) {
-    this.freshnessEventWatch = e;
+  setFreshnessEventWatch(freshnessEventWatch) {
+    this.freshnessEventWatch = freshnessEventWatch;
   }
-  setFreshnessBackend(e) {
-    ((this.freshnessBackend = e), (this.freshnessResubscribed = !1));
+  setFreshnessBackend(freshnessBackend) {
+    this.freshnessBackend = freshnessBackend;
+    this.freshnessResubscribed = false;
   }
-  setFreshnessSubscription(e) {
-    this.freshnessSubscription = e;
+  setFreshnessSubscription(freshnessSubscription) {
+    this.freshnessSubscription = freshnessSubscription;
   }
-  setFileWatchFallback(e) {
-    this.fileWatchFallback = e;
+  setFileWatchFallback(fileWatchFallback) {
+    this.fileWatchFallback = fileWatchFallback;
   }
-  setUnhandedWritesInMemory(e) {
-    this.unhandedWritesInMemory = e;
+  setUnhandedWritesInMemory(unhandedWritesInMemory) {
+    this.unhandedWritesInMemory = unhandedWritesInMemory;
   }
-  setLoadedVersion(e) {
-    this.loadedVersion = e;
+  setLoadedVersion(loadedVersion) {
+    this.loadedVersion = loadedVersion;
   }
   claimFreshnessResubscribe() {
-    if (this.freshnessResubscribed) return !1;
-    return ((this.freshnessResubscribed = !0), !0);
+    if (this.freshnessResubscribed) return false;
+    this.freshnessResubscribed = true;
+    return true;
   }
-  setLastGetConfigOutcome(e) {
-    this.lastGetConfigOutcome = e;
+  setLastGetConfigOutcome(lastGetConfigOutcome) {
+    this.lastGetConfigOutcome = lastGetConfigOutcome;
   }
   claimParseErrorLog() {
     let e = !this.parseErrorLogged;
-    return ((this.parseErrorLogged = !0), e);
+    this.parseErrorLogged = true;
+    return e;
   }
-  setInsideParseErrorTelemetry(e) {
-    this.insideParseErrorTelemetry = e;
+  setInsideParseErrorTelemetry(insideParseErrorTelemetry) {
+    this.insideParseErrorTelemetry = insideParseErrorTelemetry;
   }
   clearParseErrorDedup() {
-    this.parseErrorLogged = !1;
+    this.parseErrorLogged = false;
   }
   closeBootPhase() {
-    this.bootPhaseOpen = !1;
+    this.bootPhaseOpen = false;
   }
   bootPhaseStillOpen(e) {
-    if (!this.bootPhaseOpen) return !1;
-    if (this.now() - this.bootAnchorMs >= e) return ((this.bootPhaseOpen = !1), !1);
-    return !0;
+    if (!this.bootPhaseOpen) return false;
+    if (this.now() - this.bootAnchorMs >= e) {
+      this.bootPhaseOpen = false;
+      return false;
+    }
+    return true;
   }
-  setTrustAccepted(e) {
-    this.trustAccepted = e;
+  setTrustAccepted(trustAccepted) {
+    this.trustAccepted = trustAccepted;
   }
-  setLocalSettingsGitTracked(e) {
-    this.localSettingsGitTracked = e;
+  setLocalSettingsGitTracked(localSettingsGitTracked) {
+    this.localSettingsGitTracked = localSettingsGitTracked;
   }
-  setProjectPathForConfig(e) {
-    this.projectPathForConfig = e;
+  setProjectPathForConfig(projectPathForConfig) {
+    this.projectPathForConfig = projectPathForConfig;
   }
-  setGeneratedUserID(e) {
-    this.generatedUserID = e;
+  setGeneratedUserID(generatedUserID) {
+    this.generatedUserID = generatedUserID;
   }
-  setGeneratedMachineID(e) {
-    this.generatedMachineID = e;
+  setGeneratedMachineID(generatedMachineID) {
+    this.generatedMachineID = generatedMachineID;
   }
   clearGeneratedMachineID() {
     this.generatedMachineID = null;
@@ -289,35 +346,36 @@ class GlobalConfigStore {
   clearGeneratedSummonSidKey() {
     this.generatedSummonSidKey = null;
   }
-  setGeneratedSummonSidKey(e) {
-    this.generatedSummonSidKey = e;
+  setGeneratedSummonSidKey(generatedSummonSidKey) {
+    this.generatedSummonSidKey = generatedSummonSidKey;
   }
   remoteControlMachineIdOnceFrom(e) {
-    return ((this.remoteControlMachineIdOnce ??= e()), this.remoteControlMachineIdOnce);
+    this.remoteControlMachineIdOnce ??= e();
+    return this.remoteControlMachineIdOnce;
   }
   clearRemoteControlMachineIdOnce() {
     this.remoteControlMachineIdOnce = null;
   }
-  setClientDataCacheKeyGetter(e) {
-    this.clientDataCacheKeyGetter = e;
+  setClientDataCacheKeyGetter(clientDataCacheKeyGetter) {
+    this.clientDataCacheKeyGetter = clientDataCacheKeyGetter;
   }
-  setClientDataWindowSeed(e) {
-    this.clientDataWindowSeed = e;
+  setClientDataWindowSeed(clientDataWindowSeed) {
+    this.clientDataWindowSeed = clientDataWindowSeed;
   }
-  setClientDataReadGate(e) {
-    this.clientDataReadGate = e;
+  setClientDataReadGate(clientDataReadGate) {
+    this.clientDataReadGate = clientDataReadGate;
   }
-  setClientDataStrictReadGate(e) {
-    this.clientDataStrictReadGate = e;
+  setClientDataStrictReadGate(clientDataStrictReadGate) {
+    this.clientDataStrictReadGate = clientDataStrictReadGate;
   }
-  setClientDataStaleMatchGetter(e) {
-    this.clientDataStaleMatchGetter = e;
+  setClientDataStaleMatchGetter(clientDataStaleMatchGetter) {
+    this.clientDataStaleMatchGetter = clientDataStaleMatchGetter;
   }
-  setClientDataOverride(e) {
-    this.clientDataOverride = e;
+  setClientDataOverride(clientDataOverride) {
+    this.clientDataOverride = clientDataOverride;
   }
-  setUseRealPipelineUnderTest(e) {
-    this.useRealPipelineUnderTest = e;
+  setUseRealPipelineUnderTest(useRealPipelineUnderTest) {
+    this.useRealPipelineUnderTest = useRealPipelineUnderTest;
   }
   overwriteTestGlobalConfig(e) {
     Object.assign(this.testGlobalConfig, e);
@@ -330,69 +388,87 @@ class GlobalConfigStore {
   }
 }
 //@ chunk-aepeg2w5.js:71013-71060 placement
-var textDecoder = new TextDecoder("utf-8", { ignoreBOM: !0 });
+var textDecoder = new TextDecoder("utf-8", {
+  ignoreBOM: true,
+});
 //@ chunk-aepeg2w5.js:71060-71115 placement
-var RI = ["remoteControlAtStartup", "autoUploadSessions"];
+/**
+ * 与自动上传相关的开关键（remoteControlAtStartup、autoUploadSessions）。
+ */
+var AUTO_UPLOAD_FLAG_KEYS = ["remoteControlAtStartup", "autoUploadSessions"];
 //@ chunk-aepeg2w5.js:71115-71153 placement
-function gxn(e) {
-  return RI.includes(e);
+/**
+ * 判断键是否为自动上传相关开关。
+ */
+function isAutoUploadFlagKey(e) {
+  return AUTO_UPLOAD_FLAG_KEYS.includes(e);
 }
 //@ chunk-aepeg2w5.js:71153-71179 placement
-var xI = new HostScoped(() => new Set());
+/**
+ * 已记录过“忽略无效配置值”的键集合。
+ */
+var ignoredConfigKeysLogged = new HostScoped(() => new Set());
+//@ chunk-aepeg2w5.js:71179-71258 placement
 /**
  * 校验全局配置字段值，无效时记录忽略。
  */
-//@ chunk-aepeg2w5.js:71179-71258 placement
 function validateConfigValue(e, n) {
-  if (n === void 0) return;
-  let r = Ah(e, n);
-  return (noteIgnoredGlobalConfigValue(e, r !== void 0), r);
+  if (n === undefined) return;
+  let configField = parseConfigField(e, n);
+  noteIgnoredGlobalConfigValue(e, configField !== undefined);
+  return configField;
 }
 //@ chunk-aepeg2w5.js:71258-71341 placement
-function n9t(e, n) {
-  if (n === void 0) return;
-  let r = Ah(e, n);
-  return (noteIgnoredGlobalConfigValue(e, r !== void 0), r ?? !1);
+/**
+ * 判断配置值对该字段是否有效（无效时记录一次）。
+ */
+function isValidGlobalConfigValue(e, n) {
+  if (n === undefined) return;
+  let configField = parseConfigField(e, n);
+  noteIgnoredGlobalConfigValue(e, configField !== undefined);
+  return configField ?? false;
 }
+//@ chunk-aepeg2w5.js:71341-71462 placement
 /**
  * 判断 ~/.claude.json 中某个设置的值对该设置是否无效。
  */
-//@ chunk-aepeg2w5.js:71341-71462 placement
 function isInvalidGlobalConfigValue(e, n) {
-  if (n === void 0) return !1;
-  let safeParse = getSettingsFieldSchema(e).safeParse(n);
-  return !safeParse.success || (safeParse.data === void 0 && typeof n !== "string");
+  if (n === undefined) return false;
+  let r = getSettingsFieldSchema(e).safeParse(n);
+  return !r.success || (r.data === undefined && typeof n !== "string");
 }
 //@ chunk-aepeg2w5.js:71462-71543 placement
-function Ah(e, n) {
-  let safeParse = getSettingsFieldSchema(e).safeParse(n);
-  return safeParse.success ? (safeParse.data ?? void 0) : void 0;
+/**
+ * 用对应的设置字段 schema 解析配置值。
+ */
+function parseConfigField(e, n) {
+  let r = getSettingsFieldSchema(e).safeParse(n);
+  return r.success ? (r.data ?? undefined) : undefined;
 }
 //@ chunk-aepeg2w5.js:71543-71810 placement
 function noteIgnoredGlobalConfigValue(e, n) {
-  let r = onProcessRootHost(xI);
+  let r = onProcessRootHost(ignoredConfigKeysLogged);
   if (n) {
     r.delete(e);
     return;
   }
   if (r.has(e)) return;
   r.add(e);
-  let s = gxn(e) ? "it counts as off" : "it counts as unset";
+  let s = isAutoUploadFlagKey(e) ? "it counts as off" : "it counts as unset";
   logForDebugging(
     `Ignoring "${e}" in ~/.claude.json: its value is not valid for this setting, so ${s}. Set it with /config or in settings.json.`,
   );
 }
-
 export {
   GlobalConfigStore,
-  n9t,
+  isValidGlobalConfigValue,
   textDecoder,
   isTimestampedValue,
-  kh,
+  readTimestampedData,
   readTimestampedEntry,
   findMatchingUsageSnapshot,
   withTimestampedEntry,
   validateConfigValue,
   isInvalidGlobalConfigValue,
-  gxn,
+  isAutoUploadFlagKey,
 };

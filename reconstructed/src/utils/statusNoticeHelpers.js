@@ -20,5 +20,4 @@ function getAgentDescriptionsTotalTokens(agentDefinitions) {
       return total + roughTokenCountEstimation(description);
     }, 0);
 }
-
 export { getAgentDescriptionsTotalTokens };

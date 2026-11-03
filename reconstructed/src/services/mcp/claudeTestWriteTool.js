@@ -14,13 +14,18 @@ import { renderToolUseMessage_3 } from "../../tools/MCPTool/UI.js";
 //@ chunk-e6aww6q8.js:4678621-4678802 placement = mergeClients (1)
 function mergeClients_2(e) {
   if (e === null || typeof e !== "object" || !("name" in e) || !("text" in e)) return null;
-  let { name: n, text: text } = e;
-  return typeof n === "string" && typeof text === "string" ? { name: n, text: text } : null;
+  let { name: n, text } = e;
+  return typeof n === "string" && typeof text === "string"
+    ? {
+        name: n,
+        text,
+      }
+    : null;
 }
+//@ chunk-e6aww6q8.js:4678802-4679035 placement
 /**
  * Claude 测试草稿写入工具的显示覆盖：显示名与工具调用消息渲染（名称合法时直接显示）。
  */
-//@ chunk-e6aww6q8.js:4678802-4679035 placement
 function claudeTestWriteToolOverrides() {
   return {
     uiTableKey: MCP_CLAUDE_TEST_WRITE,
@@ -30,9 +35,15 @@ function claudeTestWriteToolOverrides() {
     renderToolUseMessage(e, n) {
       if (n.verbose) return renderToolUseMessage_3(e, n);
       if (typeof e.name !== "string") return "";
-      return regExp_17.test(e.name) ? e.name : renderToolUseMessage_3({ name: e.name }, n);
+      return regExp_17.test(e.name)
+        ? e.name
+        : renderToolUseMessage_3(
+            {
+              name: e.name,
+            },
+            n,
+          );
     },
   };
 }
-
 export { claudeTestWriteToolOverrides, mergeClients_2 };

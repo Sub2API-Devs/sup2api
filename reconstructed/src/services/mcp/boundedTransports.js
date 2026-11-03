@@ -8,26 +8,29 @@
  * pieces: chunk-8t8n4kdh.js (10)
  * attribution: placement 10
  */
-import { z2 } from "./mcpCallConstants.js";
+import { MAX_STRUCTURED_RESULT_BYTES } from "./mcpCallConstants.js";
 import { mcpInboundDoorOnFetch } from "./mcpInboundDoor.js";
 import { alwaysTrue } from "../../utils/slowOperations.js";
-import { Bpe } from "../../utils/jsonScan.js";
-import { YNr } from "../../../vendor/@modelcontextprotocol/client/dist/src-D_zzAWoS.mjs";
-import { jr } from "../../../vendor/@modelcontextprotocol/client/dist/stdio.mjs";
-import { assertNotShuttingDown, gBt } from "./connectionLifecycle.js";
+import { sliceTopLevelValues } from "../../utils/jsonScan.js";
+import { deserializeMessage } from "../../../vendor/@modelcontextprotocol/client/dist/src-D_zzAWoS.mjs";
+import { StdioClientTransport } from "../../../vendor/@modelcontextprotocol/client/dist/stdio.mjs";
+import { assertNotShuttingDown, trackOrphanStdioServer } from "./connectionLifecycle.js";
 import { logForDebugging } from "../../utils/debug.js";
 
 //@ chunk-8t8n4kdh.js:19954-20126 placement
-var MCP_BODY_LIMIT = z2,
-  ea = 4 * MCP_BODY_LIMIT,
-  ta = /^\s*text\/event-stream\s*(?:;|$)/i,
-  na = 32,
-  ra = new Map([
-    ["gzip", "gzip"],
-    ["x-gzip", "gzip"],
-    ["deflate", "deflate"],
-  ]),
-  Ao = "so Claude Code stopped reading it";
+/**
+ * 超出上限时的说明（“所以 Claude Code 停止读取”）。
+ */
+var MCP_BODY_LIMIT = MAX_STRUCTURED_RESULT_BYTES;
+var MAX_DECOMPRESSED_BODY_BYTES = 4 * MCP_BODY_LIMIT;
+var SSE_CONTENT_TYPE_RE = /^\s*text\/event-stream\s*(?:;|$)/i;
+var MIN_LINE_CHARS = 32;
+var COMPRESSION_ALIASES = new Map([
+  ["gzip", "gzip"],
+  ["x-gzip", "gzip"],
+  ["deflate", "deflate"],
+]);
+var STOPPED_READING_NOTE = "so Claude Code stopped reading it";
 //@ chunk-8t8n4kdh.js:20126-20411 placement
 class HttpBodyOverflowError extends Error {
   constructor(e, n) {
@@ -35,27 +38,31 @@ class HttpBodyOverflowError extends Error {
     super(
       (n === "event"
         ? `sent more than ${rounded}MB in one event of an event stream (no blank line ended it)`
-        : `sent a response larger than ${rounded}MB (counted after decompression)`) + `, ${Ao}.`,
+        : `sent a response larger than ${rounded}MB (counted after decompression)`) +
+        `, ${STOPPED_READING_NOTE}.`,
     );
     this.name = "HttpBodyOverflowError";
   }
 }
+//@ chunk-8t8n4kdh.js:20411-21096 placement
 /**
  * 生成限制 MCP HTTP 响应的 TransformStream：累计字节超过总上限报 body 溢出；逐字节跟踪 SSE 行与事件边界，单个事件超过上限报 event 溢出；每 8ms 让出一次事件循环。
  */
-//@ chunk-8t8n4kdh.js:20411-21096 placement
 function createSseLimitStream(maxEventBytes, maxBodyBytes) {
-  let bodyBytes = 0,
-    eventBytes = 0,
-    bodyCapCoversEvents = maxBodyBytes <= maxEventBytes,
-    lineLength = 0,
-    afterCR = !1,
-    startTime = performance.now();
+  let bodyBytes = 0;
+  let eventBytes = 0;
+  let bodyCapCoversEvents = maxBodyBytes <= maxEventBytes;
+  let lineLength = 0;
+  let afterCR = false;
+  let startTime = performance.now();
   return new TransformStream({
     async transform(P, M) {
-      if (performance.now() - startTime > 8)
-        (await new Promise((ie) => setImmediate(ie)), (startTime = performance.now()));
-      if (((bodyBytes += P.length), bodyBytes > maxBodyBytes)) {
+      if (performance.now() - startTime > 8) {
+        await new Promise((resolve) => setImmediate(resolve));
+        startTime = performance.now();
+      }
+      bodyBytes += P.length;
+      if (bodyBytes > maxBodyBytes) {
         M.error(new HttpBodyOverflowError(maxBodyBytes, "body"));
         return;
       }
@@ -63,29 +70,40 @@ function createSseLimitStream(maxEventBytes, maxBodyBytes) {
         M.enqueue(P);
         return;
       }
-      let j = -1,
-        { length: R } = P,
-        ce = -1,
-        Q = -1;
-      for (let ie = 0; ie < R; ie++) {
-        let ge = P[ie];
+      let j = -1;
+      let { length: R } = P;
+      let ce = -1;
+      let Q = -1;
+      for (let idx = 0; idx < R; idx++) {
+        let ge = P[idx];
         if (afterCR && ge === 10) {
-          afterCR = !1;
+          afterCR = false;
           continue;
         }
-        if (((afterCR = !1), ge === 10 || ge === 13)) {
-          if (lineLength === 0) j = ie;
-          ((lineLength = 0), (afterCR = ge === 13));
+        afterCR = false;
+        if (ge === 10 || ge === 13) {
+          if (lineLength === 0) j = idx;
+          lineLength = 0;
+          afterCR = ge === 13;
           continue;
         }
-        if ((lineLength++, lineLength < na)) continue;
-        let Ie = ie + 1;
-        if (ce < Ie) ((ce = P.indexOf(10, Ie)), (ce = ce === -1 ? R : ce));
-        if (Q < Ie) ((Q = P.indexOf(13, Ie)), (Q = Q === -1 ? R : Q));
+        lineLength++;
+        if (lineLength < MIN_LINE_CHARS) continue;
+        let Ie = idx + 1;
+        if (ce < Ie) {
+          ce = P.indexOf(10, Ie);
+          ce = ce === -1 ? R : ce;
+        }
+        if (Q < Ie) {
+          Q = P.indexOf(13, Ie);
+          Q = Q === -1 ? R : Q;
+        }
         let min = Math.min(ce, Q);
-        ((lineLength += min - Ie), (ie = min - 1));
+        lineLength += min - Ie;
+        idx = min - 1;
       }
-      if (((eventBytes = j >= 0 ? P.length - 1 - j : eventBytes + P.length), eventBytes > maxEventBytes)) {
+      eventBytes = j >= 0 ? P.length - 1 - j : eventBytes + P.length;
+      if (eventBytes > maxEventBytes) {
         M.error(new HttpBodyOverflowError(maxEventBytes, "event"));
         return;
       }
@@ -93,105 +111,125 @@ function createSseLimitStream(maxEventBytes, maxBodyBytes) {
     },
   });
 }
+//@ chunk-8t8n4kdh.js:21096-23130 placement
 /**
  * 包装 MCP HTTP 传输的 fetch：限制单个 SSE 事件与响应体大小（解压后计），拒绝不支持的 Content-Encoding，超限抛 HttpBodyOverflowError。
  */
-//@ chunk-8t8n4kdh.js:21096-23130 placement
-function createBoundedFetch(e, { refusesCodings: n = !1 } = {}) {
+function createBoundedFetch(e, { refusesCodings: n = false } = {}) {
   let r = mcpInboundDoorOnFetch();
   return async (s, h) => {
     r?.noteRequests(h?.body);
-    let upper = (h?.method ?? "GET").toUpperCase(),
-      S = r !== void 0 && alwaysTrue() && typeof DecompressionStream < "u",
-      w = await e(s, { ...h, ...(S && { decompress: !1 }) });
+    let upper = (h?.method ?? "GET").toUpperCase();
+    let S = r !== undefined && alwaysTrue() && typeof DecompressionStream !== "undefined";
+    let w = await e(s, {
+      ...h,
+      ...(S && {
+        decompress: false,
+      }),
+    });
     if (!w.body || w.body.locked) return w;
-    let P = h?.body;
+    let body = h?.body;
     if (
       upper === "POST" &&
-      typeof P === "string" &&
-      P.includes('"jsonrpc"') &&
-      (w.status === 202 || (w.ok && isJsonRpcNotificationOrResponse(P)))
-    )
-      return (
-        await w.body.cancel().catch(() => {}),
-        new Response(null, { status: w.status, statusText: w.statusText, headers: w.headers })
-      );
+      typeof body === "string" &&
+      body.includes('"jsonrpc"') &&
+      (w.status === 202 || (w.ok && isJsonRpcNotificationOrResponse(body)))
+    ) {
+      await w.body.cancel().catch(() => {});
+      return new Response(null, {
+        status: w.status,
+        statusText: w.statusText,
+        headers: w.headers,
+      });
+    }
     let [M, ...j] = (w.headers.get("content-encoding") ?? "")
       .toLowerCase()
       .split(",")
       .map((he) => he.trim())
       .filter((he) => he !== "" && he !== "identity");
-    if (n && M !== void 0)
-      throw (
-        await w.body.cancel(),
-        Error(
-          "sent a response with a Content-Encoding. Claude Code reads none from a tool container, so it did not read the response.",
-        )
+    if (n && M !== undefined) {
+      await w.body.cancel();
+      throw Error(
+        "sent a response with a Content-Encoding. Claude Code reads none from a tool container, so it did not read the response.",
       );
+    }
     let R = S && w.headers.get("content-length") !== "0";
-    if (R && (M === "br" || M === "zstd"))
-      throw (
-        await w.body.cancel(),
-        Error(
-          "sent a response compressed with br or zstd. Claude Code reads only gzip and deflate, so it did not read the response.",
-        )
+    if (R && (M === "br" || M === "zstd")) {
+      await w.body.cancel();
+      throw Error(
+        "sent a response compressed with br or zstd. Claude Code reads only gzip and deflate, so it did not read the response.",
       );
-    let ce = R && M !== void 0 && j.length === 0 ? ra.get(M) : void 0,
-      Q = ce ? w.body.pipeThrough(new DecompressionStream(ce)) : w.body,
-      ie = MCP_BODY_LIMIT,
-      headers = new Headers(h?.headers);
+    }
+    let ce = R && M !== undefined && j.length === 0 ? COMPRESSION_ALIASES.get(M) : undefined;
+    let Q = ce ? w.body.pipeThrough(new DecompressionStream(ce)) : w.body;
+    let maxBodyBytes = MCP_BODY_LIMIT;
+    let headers = new Headers(h?.headers);
     if (
       w.ok &&
-      ta.test(w.headers.get("content-type") ?? "") &&
+      SSE_CONTENT_TYPE_RE.test(w.headers.get("content-type") ?? "") &&
       headers.get("accept")?.includes("text/event-stream")
     )
-      ie =
+      maxBodyBytes =
         w.status === 200 &&
-        (r === void 0 || M === void 0) &&
+        (r === undefined || M === undefined) &&
         (upper === "GET" || headers.get("mcp-method") === "subscriptions/listen")
           ? 1 / 0
-          : ea;
-    let pipeThrough = Q.pipeThrough(createSseLimitStream(MCP_BODY_LIMIT, ie)),
-      G = r?.judging({
-        url: String(s),
-        isGet: upper === "GET",
-        ok: w.ok,
-        contentType: w.headers.get("content-type"),
-      }),
-      Pe = G ? pipeThrough.pipeThrough(G.through) : pipeThrough,
-      { headers: headers_2 } = w;
-    if (G?.contentType !== void 0)
-      ((headers_2 = new Headers(headers_2)), headers_2.set("content-type", G.contentType));
-    let nt = w.status >= 200 && w.status <= 599,
-      response = new Response(Pe, {
-        status: nt ? w.status : 200,
-        statusText: w.statusText,
-        headers: headers_2,
+          : MAX_DECOMPRESSED_BODY_BYTES;
+    let Ie = Q.pipeThrough(createSseLimitStream(MCP_BODY_LIMIT, maxBodyBytes));
+    let G = r?.judging({
+      url: String(s),
+      isGet: upper === "GET",
+      ok: w.ok,
+      contentType: w.headers.get("content-type"),
+    });
+    let Pe = G ? Ie.pipeThrough(G.through) : Ie;
+    let { headers: headers_2 } = w;
+    if (G?.contentType !== undefined) {
+      headers_2 = new Headers(headers_2);
+      headers_2.set("content-type", G.contentType);
+    }
+    let nt = w.status >= 200 && w.status <= 599;
+    let response = new Response(Pe, {
+      status: nt ? w.status : 200,
+      statusText: w.statusText,
+      headers: headers_2,
+    });
+    if (!nt) {
+      Object.defineProperty(response, "status", {
+        value: w.status,
       });
-    if (!nt)
-      (Object.defineProperty(response, "status", { value: w.status }),
-        Object.defineProperty(response, "ok", { value: w.ok }));
-    return (
-      Object.defineProperty(response, "url", { value: w.url }),
-      Object.defineProperty(response, "redirected", { value: w.redirected }),
-      Object.defineProperty(response, "type", { value: w.type }),
-      response
-    );
+      Object.defineProperty(response, "ok", {
+        value: w.ok,
+      });
+    }
+    Object.defineProperty(response, "url", {
+      value: w.url,
+    });
+    Object.defineProperty(response, "redirected", {
+      value: w.redirected,
+    });
+    Object.defineProperty(response, "type", {
+      value: w.type,
+    });
+    return response;
   };
 }
 //@ chunk-8t8n4kdh.js:23130-23172 placement
-var aa = new Set(["jsonrpc", "id", "method"]);
+/**
+ * JSON-RPC 消息的基本键集合。
+ */
+var JSONRPC_MESSAGE_KEYS = new Set(["jsonrpc", "id", "method"]);
 //@ chunk-8t8n4kdh.js:23172-23326 placement
-function isJsonRpcNotificationOrResponse(e) {
-  if (e.includes('"id":') && e.includes('"method":')) return !1;
-  let n = Bpe(e, aa);
+function isJsonRpcNotificationOrResponse(body) {
+  if (body.includes('"id":') && body.includes('"method":')) return false;
+  let n = sliceTopLevelValues(body, JSONRPC_MESSAGE_KEYS);
   return n?.get("jsonrpc") === '"2.0"' && n.has("method") !== n.has("id");
 }
 //@ chunk-8t8n4kdh.js:23326-23629 placement
 class StdoutOverflowError extends Error {
-  constructor(e) {
+  constructor(capBytes) {
     super(
-      `wrote >${Math.round(e / 1024 / 1024)}MB to stdout without a JSON-RPC message boundary. The server is likely writing logs or other non-protocol data to stdout instead of stderr. Disconnecting to prevent unbounded memory growth.`,
+      `wrote >${Math.round(capBytes / 1024 / 1024)}MB to stdout without a JSON-RPC message boundary. The server is likely writing logs or other non-protocol data to stdout instead of stderr. Disconnecting to prevent unbounded memory growth.`,
     );
     this.name = "StdoutOverflowError";
   }
@@ -203,69 +241,80 @@ class BoundedLineBuffer {
   onMessage;
   chunks = [];
   byteLength = 0;
-  overflowed = !1;
-  overflowThrown = !1;
-  constructor(e, n, r) {
-    this.capBytes = e;
-    this.onOverflow = n;
-    this.onMessage = r;
+  overflowed = false;
+  overflowThrown = false;
+  constructor(capBytes, onOverflow, onMessage) {
+    this.capBytes = capBytes;
+    this.onOverflow = onOverflow;
+    this.onMessage = onMessage;
   }
   append(e) {
     if (this.overflowed) return;
     if (this.byteLength + e.length > this.capBytes) {
-      ((this.chunks = []),
-        (this.byteLength = 0),
-        (this.overflowed = !0),
-        this.onOverflow(new StdoutOverflowError(this.capBytes)));
+      this.chunks = [];
+      this.byteLength = 0;
+      this.overflowed = true;
+      this.onOverflow(new StdoutOverflowError(this.capBytes));
       return;
     }
-    (this.chunks.push(e), (this.byteLength += e.length));
+    this.chunks.push(e);
+    this.byteLength += e.length;
   }
   readMessage() {
     if (this.overflowed) {
       if (this.overflowThrown) return null;
-      throw ((this.overflowThrown = !0), new StdoutOverflowError(this.capBytes));
+      this.overflowThrown = true;
+      throw new StdoutOverflowError(this.capBytes);
     }
     if (this.chunks.length === 0) return null;
-    let at = this.chunks.at(-1),
-      index = at.indexOf(10);
+    let last = this.chunks.at(-1);
+    let index = last.indexOf(10);
     if (index === -1) return null;
-    let r = this.chunks.length === 1 ? at : Buffer.concat(this.chunks),
-      s = r.length - at.length + index,
-      replaced = r.toString("utf8", 0, s).replace(/\r$/, ""),
-      chunk = r.subarray(s + 1);
-    ((this.chunks = chunk.length > 0 ? [chunk] : []), (this.byteLength = chunk.length));
-    let S = YNr(replaced);
-    return (this.onMessage(S), S);
+    let r = this.chunks.length === 1 ? last : Buffer.concat(this.chunks);
+    let s = r.length - last.length + index;
+    let line = r.toString("utf8", 0, s).replace(/\r$/, "");
+    let chunk = r.subarray(s + 1);
+    this.chunks = chunk.length > 0 ? [chunk] : [];
+    this.byteLength = chunk.length;
+    let S = deserializeMessage(line);
+    this.onMessage(S);
+    return S;
   }
   clear() {
-    ((this.chunks = []), (this.byteLength = 0));
+    this.chunks = [];
+    this.byteLength = 0;
   }
 }
 //@ chunk-8t8n4kdh.js:24515-24547 placement
 var SERVER_DISCOVER_PROBE = "server-discover-probe-";
 //@ chunk-8t8n4kdh.js:24547-25800 placement
-class BoundedStdioClientTransport extends jr {
+class BoundedStdioClientTransport extends StdioClientTransport {
   overflowError;
-  answeredProbeLate = !1;
+  answeredProbeLate = false;
   onAnsweredProbeLate;
   constructor(e) {
-    super({ ...e, maxBufferSize: z2 });
+    super({
+      ...e,
+      maxBufferSize: MAX_STRUCTURED_RESULT_BYTES,
+    });
     this._readBuffer = new BoundedLineBuffer(
-      z2,
-      (n) => {
-        ((this.overflowError = n), queueMicrotask(() => void this.close()));
+      MAX_STRUCTURED_RESULT_BYTES,
+      (overflowError) => {
+        this.overflowError = overflowError;
+        queueMicrotask(() => void this.close());
       },
       (n) => {
         if (
-          this._anthropicProbeTimedOut === !0 &&
+          this._anthropicProbeTimedOut === true &&
           "id" in n &&
           typeof n.id === "string" &&
           n.id.startsWith(SERVER_DISCOVER_PROBE) &&
           "result" in n &&
           !this.answeredProbeLate
-        )
-          ((this.answeredProbeLate = !0), this.onAnsweredProbeLate?.());
+        ) {
+          this.answeredProbeLate = true;
+          this.onAnsweredProbeLate?.();
+        }
       },
     );
   }
@@ -275,11 +324,12 @@ class BoundedStdioClientTransport extends jr {
   #e;
   async start() {
     assertNotShuttingDown();
-    let e = this.serverProcess !== void 0,
-      start = super.start(),
-      serverProcess = this.serverProcess;
-    if (!e && serverProcess?.pid !== void 0) this.#e = gBt(serverProcess);
-    if ((await start, !e && serverProcess === void 0)) this.#t(this.serverProcess);
+    let e = this.serverProcess !== undefined;
+    let n = super.start();
+    let serverProcess = this.serverProcess;
+    if (!e && serverProcess?.pid !== undefined) this.#e = trackOrphanStdioServer(serverProcess);
+    await n;
+    if (!e && serverProcess === undefined) this.#t(this.serverProcess);
     if (!(this._readBuffer instanceof BoundedLineBuffer))
       throw Error(
         "BoundedStdioClientTransport: _readBuffer is no longer the BoundedReadBuffer \u2014 " +
@@ -287,11 +337,12 @@ class BoundedStdioClientTransport extends jr {
       );
   }
   handOffExitCleanup() {
-    (this.#e?.(), (this.#e = void 0));
+    this.#e?.();
+    this.#e = undefined;
   }
   #t(e) {
-    if (e?.pid !== void 0) {
-      this.#e = gBt(e);
+    if (e?.pid !== undefined) {
+      this.#e = trackOrphanStdioServer(e);
       return;
     }
     if (this.pid !== null)
@@ -301,12 +352,11 @@ class BoundedStdioClientTransport extends jr {
       );
   }
 }
-
 export {
   HttpBodyOverflowError,
   createBoundedFetch,
   BoundedStdioClientTransport,
   StdoutOverflowError,
   MCP_BODY_LIMIT,
-  Ao,
+  STOPPED_READING_NOTE,
 };

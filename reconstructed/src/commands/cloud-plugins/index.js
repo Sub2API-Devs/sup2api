@@ -11,16 +11,18 @@
 import { isCloudPluginForwardingEnabledCached } from "../../services/analytics/violinGates.js";
 import { env } from "../../utils/env.js";
 
+//@ chunk-e6aww6q8.js:1684398-1684623 placement
 /**
  * /cloud-plugins 命令对象（local-jsx）；描述：Choose whether cloud sessions use the plugins enabled on this machine；isEnabled: ()=>YTn()&&!i.CLAUDE_CODE_DISABLE_PLUGIN_FORWARDING；实现 chunk-n30mmv2p.js 的 No。
  */
-//@ chunk-e6aww6q8.js:1684398-1684623 placement
 var cloudPluginsCommand = {
   type: "local-jsx",
   name: "cloud-plugins",
   description: "Choose whether cloud sessions use the plugins enabled on this machine",
-  requires: { workspace: !1, ink: !0 },
+  requires: {
+    workspace: false,
+    ink: true,
+  },
   isEnabled: () => isCloudPluginForwardingEnabledCached() && !env.CLAUDE_CODE_DISABLE_PLUGIN_FORWARDING,
 };
-
 export { cloudPluginsCommand };

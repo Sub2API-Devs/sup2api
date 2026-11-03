@@ -11,25 +11,43 @@
 import { hu } from "../../vendor/zod/v4/classic/schemas.js";
 
 //@ chunk-xkyzvvf1.js:227-257 placement
-var y3e = "(invalid tool name)";
+/**
+ * 无效工具名使用的占位文本。
+ */
+var INVALID_TOOL_NAME_TEXT = "(invalid tool name)";
 //@ chunk-xkyzvvf1.js:257-285 placement
-function Fh(e) {
+/**
+ * 深度冻结工具名（占位实现，转调 hu）。
+ */
+function deepFreezeToolName(e) {
   return hu(e);
 }
 //@ chunk-xkyzvvf1.js:285-310 placement
-function ple(e) {
+/**
+ * 原样返回输入（占位）。
+ */
+function identityFreeze(e) {
   return e;
 }
 //@ chunk-xkyzvvf1.js:310-335 placement
-function Yls(e) {
+/**
+ * 原样返回输入（占位）。
+ */
+function identityFreeze2(e) {
   return e;
 }
 //@ chunk-xkyzvvf1.js:335-360 placement
-function pAi(e) {
+/**
+ * 原样返回输入（占位）。
+ */
+function identityFreeze3(e) {
   return e;
 }
 //@ chunk-xkyzvvf1.js:360-385 placement
-function mAi(e) {
+/**
+ * 原样返回输入（占位）。
+ */
+function identityFreeze4(e) {
   return e;
 }
 //@ chunk-xkyzvvf1.js:385-857 placement
@@ -39,22 +57,22 @@ function mintDisplayedUpdates(e) {
   if (!Number.isSafeInteger(e.length) || e.length < 0)
     throw TypeError("mintDisplayedUpdates: non-integer length in mint input \u2014 plain data only");
   let o = [];
-  for (let r = 0; r < e.length; r++) {
-    if (!(r in e)) throw TypeError("mintDisplayedUpdates: sparse mint input \u2014 plain data only");
-    o.push(deepFreezePlainData(e[r]));
+  for (let i = 0; i < e.length; i++) {
+    if (!(i in e)) throw TypeError("mintDisplayedUpdates: sparse mint input \u2014 plain data only");
+    o.push(deepFreezePlainData(e[i]));
   }
   return Object.freeze(o);
 }
+//@ chunk-xkyzvvf1.js:857-2216 placement
 /**
  * 深度冻结纯数据（拒绝函数、非纯原型、稀疏数组）
  */
-//@ chunk-xkyzvvf1.js:857-2216 placement
 function deepFreezePlainData(e, o = new WeakMap()) {
   if (typeof e === "function")
     throw TypeError("deepFreezePlainData: function in mint input \u2014 plain data only");
   if (e !== null && typeof e === "object") {
     let r = o.get(e);
-    if (r !== void 0) return r;
+    if (r !== undefined) return r;
     let prototypeOf = Object.getPrototypeOf(e);
     if (
       !(Array.isArray(e)
@@ -63,35 +81,43 @@ function deepFreezePlainData(e, o = new WeakMap()) {
     )
       throw TypeError("deepFreezePlainData: non-plain prototype in mint input \u2014 plain data only");
     let ownPropertyDescriptors = Object.getOwnPropertyDescriptors(e);
-    for (let t of Object.keys(ownPropertyDescriptors)) {
-      let n = ownPropertyDescriptors[t];
-      if (n && (n.get !== void 0 || n.set !== void 0))
+    for (let key of Object.keys(ownPropertyDescriptors)) {
+      let n = ownPropertyDescriptors[key];
+      if (n && (n.get !== undefined || n.set !== undefined))
         throw TypeError("deepFreezePlainData: accessor property in mint input \u2014 plain data only");
     }
     if (Object.getOwnPropertySymbols(e).length > 0)
       throw TypeError("deepFreezePlainData: symbol-keyed property in mint input \u2014 plain data only");
-    for (let t of Object.keys(ownPropertyDescriptors)) {
-      let n = ownPropertyDescriptors[t];
-      if (n && n.enumerable === !1 && !(Array.isArray(e) && t === "length"))
+    for (let key of Object.keys(ownPropertyDescriptors)) {
+      let n = ownPropertyDescriptors[key];
+      if (n && n.enumerable === false && !(Array.isArray(e) && key === "length"))
         throw TypeError("deepFreezePlainData: non-enumerable property in mint input \u2014 plain data only");
     }
     let a = Array.isArray(e) ? [] : {};
     o.set(e, a);
-    for (let t of Object.keys(ownPropertyDescriptors)) {
-      if (Array.isArray(e) && t === "length") continue;
-      if (t === "__proto__" || t === "constructor")
+    for (let key of Object.keys(ownPropertyDescriptors)) {
+      if (Array.isArray(e) && key === "length") continue;
+      if (key === "__proto__" || key === "constructor")
         throw TypeError("deepFreezePlainData: prototype-key property in mint input \u2014 plain data only");
-      let n = ownPropertyDescriptors[t];
-      Object.defineProperty(a, t, {
+      let n = ownPropertyDescriptors[key];
+      Object.defineProperty(a, key, {
         value: deepFreezePlainData(n?.value, o),
-        enumerable: !0,
-        writable: !1,
-        configurable: !1,
+        enumerable: true,
+        writable: false,
+        configurable: false,
       });
     }
-    return (Object.freeze(a), a);
+    Object.freeze(a);
+    return a;
   }
   return e;
 }
-
-export { y3e, mAi, pAi, mintDisplayedUpdates, Fh, ple, Yls };
+export {
+  INVALID_TOOL_NAME_TEXT,
+  identityFreeze4,
+  identityFreeze3,
+  mintDisplayedUpdates,
+  deepFreezeToolName,
+  identityFreeze,
+  identityFreeze2,
+};

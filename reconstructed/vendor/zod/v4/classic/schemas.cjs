@@ -6,828 +6,903 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { Wr } from "../core/index.cjs";
-import { nd } from "../core/json-schema-processors.cjs";
-import { td } from "../core/to-json-schema.cjs";
-import { B_ } from "../locales/en.cjs";
-import { Ah } from "./checks.cjs";
-import { ob } from "./parse.cjs";
+import { require_core_2 } from "../core/index.cjs";
+import { require_json_schema_processors } from "../core/json-schema-processors.cjs";
+import { require_to_json_schema } from "../core/to-json-schema.cjs";
+import { require_en } from "../locales/en.cjs";
+import { require_checks_2 } from "./checks.cjs";
+import { require_parse_2 } from "./parse.cjs";
 
 //@ chunk-1ny7cxrt.js:595236-626893 cjs-fingerprint
-var ra = x(function (v) {
-  var TX =
-      (v && v.__createBinding) ||
-      (Object.create
-        ? function (e, t, n, o) {
-            if (o === void 0) o = n;
-            var ownPropertyDescriptor = Object.getOwnPropertyDescriptor(t, n);
-            if (
-              !ownPropertyDescriptor ||
-              ("get" in ownPropertyDescriptor
-                ? !t.__esModule
-                : ownPropertyDescriptor.writable || ownPropertyDescriptor.configurable)
-            )
-              ownPropertyDescriptor = {
-                enumerable: !0,
-                get: function () {
-                  return t[n];
-                },
-              };
-            Object.defineProperty(e, o, ownPropertyDescriptor);
-          }
-        : function (e, t, n, o) {
-            if (o === void 0) o = n;
-            e[o] = t[n];
-          }),
-    $X =
-      (v && v.__setModuleDefault) ||
-      (Object.create
-        ? function (e, t) {
-            Object.defineProperty(e, "default", { enumerable: !0, value: t });
-          }
-        : function (e, t) {
-            e.default = t;
-          }),
-    Mh =
-      (v && v.__importStar) ||
-      function (e) {
-        if (e && e.__esModule) return e;
-        var t = {};
-        if (e != null) {
-          for (var key in e)
-            if (key !== "default" && Object.prototype.hasOwnProperty.call(e, key)) TX(t, e, key);
+var require_schemas_2 = x(function (cjsExports) {
+  var __createBinding =
+    (cjsExports && cjsExports.__createBinding) ||
+    (Object.create
+      ? function (o_2, m, k, k2) {
+          if (k2 === undefined) k2 = k;
+          var desc = Object.getOwnPropertyDescriptor(m, k);
+          if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable))
+            desc = {
+              enumerable: true,
+              get: function () {
+                return m[k];
+              },
+            };
+          Object.defineProperty(o_2, k2, desc);
         }
-        return ($X(t, e), t);
-      },
-    RX =
-      (v && v.__importDefault) ||
-      function (e) {
-        return e && e.__esModule ? e : { default: e };
-      };
-  Object.defineProperty(v, "__esModule", { value: !0 });
-  v.ZodIntersection =
-    v.ZodDiscriminatedUnion =
-    v.ZodXor =
-    v.ZodUnion =
-    v.ZodObject =
-    v.ZodArray =
-    v.ZodDate =
-    v.ZodVoid =
-    v.ZodNever =
-    v.ZodUnknown =
-    v.ZodAny =
-    v.ZodNull =
-    v.ZodUndefined =
-    v.ZodSymbol =
-    v.ZodBigIntFormat =
-    v.ZodBigInt =
-    v.ZodBoolean =
-    v.ZodNumberFormat =
-    v.ZodNumber =
-    v.ZodCustomStringFormat =
-    v.ZodJWT =
-    v.ZodIBAN =
-    v.ZodCreditCard =
-    v.ZodE164 =
-    v.ZodBase64URL =
-    v.ZodBase64 =
-    v.ZodCIDRv6 =
-    v.ZodCIDRv4 =
-    v.ZodIPv6 =
-    v.ZodMAC =
-    v.ZodIPv4 =
-    v.ZodKSUID =
-    v.ZodXID =
-    v.ZodULID =
-    v.ZodCUID2 =
-    v.ZodCUID =
-    v.ZodNanoID =
-    v.ZodEmoji =
-    v.ZodURL =
-    v.ZodUUID =
-    v.ZodGUID =
-    v.ZodEmail =
-    v.ZodISODuration =
-    v.ZodISOTime =
-    v.ZodISODate =
-    v.ZodISODateTime =
-    v.ZodStringFormat =
-    v.ZodString =
-    v._ZodString =
-    v.ZodType =
-      void 0;
-  v.stringbool =
-    v.ZodInstanceOf =
-    v.meta =
-    v.describe =
-    v.ZodProperties =
-    v.ZodCustom =
-    v.ZodFunction =
-    v.ZodPromise =
-    v.ZodLazy =
-    v.ZodTemplateLiteral =
-    v.ZodReadonly =
-    v.ZodPreprocess =
-    v.ZodCodec =
-    v.ZodPipe =
-    v.ZodNaN =
-    v.ZodCatch =
-    v.ZodSuccess =
-    v.ZodNonOptional =
-    v.ZodPrefault =
-    v.ZodDefault =
-    v.ZodNullable =
-    v.ZodExactOptional =
-    v.ZodOptional =
-    v.ZodTransform =
-    v.ZodFile =
-    v.ZodLiteral =
-    v.ZodEnum =
-    v.ZodSet =
-    v.ZodMap =
-    v.ZodRecord =
-    v.ZodTuple =
-      void 0;
-  v.string = Th;
-  v.email = jX;
-  v.guid = xX;
-  v.uuid = LX;
-  v.uuidv4 = NX;
-  v.uuidv6 = UX;
-  v.uuidv7 = zX;
-  v.url = FX;
-  v.httpUrl = BX;
-  v.emoji = HX;
-  v.nanoid = KX;
-  v.cuid = ZX;
-  v.cuid2 = VX;
-  v.ulid = qX;
-  v.xid = GX;
-  v.ksuid = WX;
-  v.ipv4 = YX;
-  v.mac = JX;
-  v.ipv6 = XX;
-  v.cidrv4 = QX;
-  v.cidrv6 = e7;
-  v.base64 = t7;
-  v.base64url = n7;
-  v.e164 = r7;
-  v.creditCard = i7;
-  v.iban = o7;
-  v.jwt = s7;
-  v.stringFormat = a7;
-  v.hostname = l7;
-  v.hex = c7;
-  v.hash = u7;
-  v.number = gT;
-  v.int = sb;
-  v.float32 = d7;
-  v.float64 = f7;
-  v.int32 = p7;
-  v.uint32 = h7;
-  v.boolean = yT;
-  v.bigint = m7;
-  v.int64 = g7;
-  v.uint64 = y7;
-  v.symbol = _7;
-  v.undefined = b7;
-  v.null = _T;
-  v.any = v7;
-  v.unknown = sc;
-  v.never = lb;
-  v.void = w7;
-  v.date = O7;
-  v.array = xh;
-  v.keyof = S7;
-  v.object = k7;
-  v.strictObject = E7;
-  v.looseObject = P7;
-  v.union = cb;
-  v.xor = A7;
-  v.discriminatedUnion = I7;
-  v.intersection = bT;
-  v.tuple = vT;
-  v.record = wT;
-  v.partialRecord = C7;
-  v.looseRecord = T7;
-  v.map = $7;
-  v.set = R7;
-  v.enum = ub;
-  v.nativeEnum = D7;
-  v.literal = M7;
-  v.file = j7;
-  v.transform = db;
-  v.optional = Rh;
-  v.exactOptional = OT;
-  v.nullable = Dh;
-  v.nullish = x7;
-  v._default = ST;
-  v.prefault = kT;
-  v.nonoptional = ET;
-  v.success = L7;
-  v.catch = PT;
-  v.nan = N7;
-  v.pipe = ab;
-  v.codec = U7;
-  v.invertCodec = z7;
-  v.readonly = AT;
-  v.templateLiteral = F7;
-  v.lazy = IT;
-  v.promise = B7;
-  v._function = Lh;
-  v.function = Lh;
-  v._function = Lh;
-  v.function = Lh;
-  v.properties = CT;
-  v.check = H7;
-  v.custom = K7;
-  v.refine = TT;
-  v.superRefine = $T;
-  v.instanceof = Z7;
-  v.json = q7;
-  v.preprocess = G7;
-  var R = Mh(Wr()),
-    de = Wr(),
-    Xe = Mh(nd()),
-    oc = td(),
-    DX = RX(B_()),
-    pt = Mh(Ah()),
-    Yr = Mh(ob());
-  function MX() {
-    if (!R.globalConfig.localeError) R.config((0, DX.default)());
+      : function (o_2, m, k, k2) {
+          if (k2 === undefined) k2 = k;
+          o_2[k2] = m[k];
+        });
+  var __setModuleDefault =
+    (cjsExports && cjsExports.__setModuleDefault) ||
+    (Object.create
+      ? function (o, v) {
+          Object.defineProperty(o, "default", {
+            enumerable: true,
+            value: v,
+          });
+        }
+      : function (o, v) {
+          o.default = v;
+        });
+  var __importStar =
+    (cjsExports && cjsExports.__importStar) ||
+    function (mod) {
+      if (mod && mod.__esModule) return mod;
+      var result = {};
+      if (mod != null) {
+        for (var k in mod)
+          if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k))
+            __createBinding(result, mod, k);
+      }
+      __setModuleDefault(result, mod);
+      return result;
+    };
+  var __importDefault =
+    (cjsExports && cjsExports.__importDefault) ||
+    function (mod) {
+      return mod && mod.__esModule
+        ? mod
+        : {
+            default: mod,
+          };
+    };
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.ZodIntersection =
+    cjsExports.ZodDiscriminatedUnion =
+    cjsExports.ZodXor =
+    cjsExports.ZodUnion =
+    cjsExports.ZodObject =
+    cjsExports.ZodArray =
+    cjsExports.ZodDate =
+    cjsExports.ZodVoid =
+    cjsExports.ZodNever =
+    cjsExports.ZodUnknown =
+    cjsExports.ZodAny =
+    cjsExports.ZodNull =
+    cjsExports.ZodUndefined =
+    cjsExports.ZodSymbol =
+    cjsExports.ZodBigIntFormat =
+    cjsExports.ZodBigInt =
+    cjsExports.ZodBoolean =
+    cjsExports.ZodNumberFormat =
+    cjsExports.ZodNumber =
+    cjsExports.ZodCustomStringFormat =
+    cjsExports.ZodJWT =
+    cjsExports.ZodIBAN =
+    cjsExports.ZodCreditCard =
+    cjsExports.ZodE164 =
+    cjsExports.ZodBase64URL =
+    cjsExports.ZodBase64 =
+    cjsExports.ZodCIDRv6 =
+    cjsExports.ZodCIDRv4 =
+    cjsExports.ZodIPv6 =
+    cjsExports.ZodMAC =
+    cjsExports.ZodIPv4 =
+    cjsExports.ZodKSUID =
+    cjsExports.ZodXID =
+    cjsExports.ZodULID =
+    cjsExports.ZodCUID2 =
+    cjsExports.ZodCUID =
+    cjsExports.ZodNanoID =
+    cjsExports.ZodEmoji =
+    cjsExports.ZodURL =
+    cjsExports.ZodUUID =
+    cjsExports.ZodGUID =
+    cjsExports.ZodEmail =
+    cjsExports.ZodISODuration =
+    cjsExports.ZodISOTime =
+    cjsExports.ZodISODate =
+    cjsExports.ZodISODateTime =
+    cjsExports.ZodStringFormat =
+    cjsExports.ZodString =
+    cjsExports._ZodString =
+    cjsExports.ZodType =
+      undefined;
+  cjsExports.stringbool =
+    cjsExports.ZodInstanceOf =
+    cjsExports.meta =
+    cjsExports.describe =
+    cjsExports.ZodProperties =
+    cjsExports.ZodCustom =
+    cjsExports.ZodFunction =
+    cjsExports.ZodPromise =
+    cjsExports.ZodLazy =
+    cjsExports.ZodTemplateLiteral =
+    cjsExports.ZodReadonly =
+    cjsExports.ZodPreprocess =
+    cjsExports.ZodCodec =
+    cjsExports.ZodPipe =
+    cjsExports.ZodNaN =
+    cjsExports.ZodCatch =
+    cjsExports.ZodSuccess =
+    cjsExports.ZodNonOptional =
+    cjsExports.ZodPrefault =
+    cjsExports.ZodDefault =
+    cjsExports.ZodNullable =
+    cjsExports.ZodExactOptional =
+    cjsExports.ZodOptional =
+    cjsExports.ZodTransform =
+    cjsExports.ZodFile =
+    cjsExports.ZodLiteral =
+    cjsExports.ZodEnum =
+    cjsExports.ZodSet =
+    cjsExports.ZodMap =
+    cjsExports.ZodRecord =
+    cjsExports.ZodTuple =
+      undefined;
+  cjsExports.string = string;
+  cjsExports.email = email;
+  cjsExports.guid = guid;
+  cjsExports.uuid = uuid;
+  cjsExports.uuidv4 = uuidv4;
+  cjsExports.uuidv6 = uuidv6;
+  cjsExports.uuidv7 = uuidv7;
+  cjsExports.url = url;
+  cjsExports.httpUrl = httpUrl;
+  cjsExports.emoji = emoji;
+  cjsExports.nanoid = nanoid;
+  cjsExports.cuid = cuid;
+  cjsExports.cuid2 = cuid2;
+  cjsExports.ulid = ulid;
+  cjsExports.xid = xid;
+  cjsExports.ksuid = ksuid;
+  cjsExports.ipv4 = ipv4;
+  cjsExports.mac = mac;
+  cjsExports.ipv6 = ipv6;
+  cjsExports.cidrv4 = cidrv4;
+  cjsExports.cidrv6 = cidrv6;
+  cjsExports.base64 = base64;
+  cjsExports.base64url = base64url;
+  cjsExports.e164 = e164;
+  cjsExports.creditCard = creditCard;
+  cjsExports.iban = iban;
+  cjsExports.jwt = jwt;
+  cjsExports.stringFormat = stringFormat;
+  cjsExports.hostname = hostname;
+  cjsExports.hex = hex;
+  cjsExports.hash = hash;
+  cjsExports.number = number;
+  cjsExports.int = int;
+  cjsExports.float32 = float32;
+  cjsExports.float64 = float64;
+  cjsExports.int32 = int32;
+  cjsExports.uint32 = uint32;
+  cjsExports.boolean = boolean;
+  cjsExports.bigint = bigint;
+  cjsExports.int64 = int64;
+  cjsExports.uint64 = uint64;
+  cjsExports.symbol = symbol;
+  cjsExports.undefined = _undefined;
+  cjsExports.null = _null;
+  cjsExports.any = any;
+  cjsExports.unknown = unknown;
+  cjsExports.never = never;
+  cjsExports.void = _void;
+  cjsExports.date = date;
+  cjsExports.array = array;
+  cjsExports.keyof = keyof;
+  cjsExports.object = object;
+  cjsExports.strictObject = strictObject;
+  cjsExports.looseObject = looseObject;
+  cjsExports.union = union;
+  cjsExports.xor = xor;
+  cjsExports.discriminatedUnion = discriminatedUnion;
+  cjsExports.intersection = intersection;
+  cjsExports.tuple = tuple;
+  cjsExports.record = record;
+  cjsExports.partialRecord = partialRecord;
+  cjsExports.looseRecord = looseRecord;
+  cjsExports.map = map;
+  cjsExports.set = set;
+  cjsExports.enum = _enum;
+  cjsExports.nativeEnum = nativeEnum;
+  cjsExports.literal = literal;
+  cjsExports.file = file;
+  cjsExports.transform = transform;
+  cjsExports.optional = optional;
+  cjsExports.exactOptional = exactOptional;
+  cjsExports.nullable = nullable;
+  cjsExports.nullish = nullish;
+  cjsExports._default = _default;
+  cjsExports.prefault = prefault;
+  cjsExports.nonoptional = nonoptional;
+  cjsExports.success = success;
+  cjsExports.catch = _catch;
+  cjsExports.nan = nan;
+  cjsExports.pipe = pipe;
+  cjsExports.codec = codec;
+  cjsExports.invertCodec = invertCodec;
+  cjsExports.readonly = readonly;
+  cjsExports.templateLiteral = templateLiteral;
+  cjsExports.lazy = lazy;
+  cjsExports.promise = promise;
+  cjsExports._function = _function;
+  cjsExports.function = _function;
+  cjsExports._function = _function;
+  cjsExports.function = _function;
+  cjsExports.properties = properties;
+  cjsExports.check = check;
+  cjsExports.custom = custom;
+  cjsExports.refine = refine;
+  cjsExports.superRefine = superRefine;
+  cjsExports.instanceof = _instanceof;
+  cjsExports.json = json;
+  cjsExports.preprocess = preprocess;
+  var core = __importStar(require_core_2());
+  var index_js_1 = require_core_2();
+  var processors = __importStar(require_json_schema_processors());
+  var to_json_schema_js_1 = require_to_json_schema();
+  var en_js_1 = __importDefault(require_en());
+  var checks = __importStar(require_checks_2());
+  var parse = __importStar(require_parse_2());
+  function _ensureDefaultLocale() {
+    if (!core.globalConfig.localeError) core.config((0, en_js_1.default)());
   }
-  function na() {
-    if (!R.globalConfig.memoizer) R.config({ memoizer: R.memoizer() });
+  function _ensureDefaultMemoizer() {
+    if (!core.globalConfig.memoizer)
+      core.config({
+        memoizer: core.memoizer(),
+      });
   }
-  v.ZodType = R.$constructor(
+  cjsExports.ZodType = core.$constructor(
     "ZodType",
-    (e, t) => (MX(), R.$ZodType.init(e, t), (e.def = t), (e.type = t.type), e),
+    (inst, def) => {
+      _ensureDefaultLocale();
+      core.$ZodType.init(inst, def);
+      inst.def = def;
+      inst.type = def.type;
+      return inst;
+    },
     {
-      check(...e) {
+      check(...chks) {
         let def = this.def;
         return this.clone(
-          de.util.mergeDefs(def, {
+          index_js_1.util.mergeDefs(def, {
             checks: [
               ...(def.checks ?? []),
-              ...e.map((n) =>
-                typeof n === "function" ? { _zod: { check: n, def: { check: "custom" }, onattach: [] } } : n,
+              ...chks.map((ch) =>
+                typeof ch === "function"
+                  ? {
+                      _zod: {
+                        check: ch,
+                        def: {
+                          check: "custom",
+                        },
+                        onattach: [],
+                      },
+                    }
+                  : ch,
               ),
             ],
           }),
-          { parent: !0 },
+          {
+            parent: true,
+          },
         );
       },
-      with(...e) {
-        return this.check(...e);
+      with(...chks) {
+        return this.check(...chks);
       },
-      clone(e, t) {
-        return R.clone(this, e, t);
+      clone(def, params) {
+        return core.clone(this, def, params);
       },
       brand() {
         return this;
       },
-      register(e, t) {
-        return (e.add(this, t), this);
+      register(reg, meta) {
+        reg.add(this, meta);
+        return this;
       },
-      refine(e, t) {
-        return this.check(TT(e, t));
+      refine(check, params) {
+        return this.check(refine(check, params));
       },
-      superRefine(e, t) {
-        return this.check($T(e, t));
+      superRefine(refinement, params) {
+        return this.check(superRefine(refinement, params));
       },
-      overwrite(e) {
-        return this.check(pt.overwrite(e));
+      overwrite(fn) {
+        return this.check(checks.overwrite(fn));
       },
       optional() {
-        return Rh(this);
+        return optional(this);
       },
       exactOptional() {
-        return OT(this);
+        return exactOptional(this);
       },
       nullable() {
-        return Dh(this);
+        return nullable(this);
       },
       nullish() {
-        return Rh(Dh(this));
+        return optional(nullable(this));
       },
-      nonoptional(e) {
-        return ET(this, e);
+      nonoptional(params) {
+        return nonoptional(this, params);
       },
       array() {
-        return xh(this);
+        return array(this);
       },
-      or(e) {
-        return cb([this, e]);
+      or(arg) {
+        return union([this, arg]);
       },
-      and(e) {
-        return bT(this, e);
+      and(arg) {
+        return intersection(this, arg);
       },
-      transform(e) {
-        return ab(this, db(e));
+      transform(tx) {
+        return pipe(this, transform(tx));
       },
-      default(e) {
-        return ST(this, e);
+      default(d) {
+        return _default(this, d);
       },
-      prefault(e) {
-        return kT(this, e);
+      prefault(d) {
+        return prefault(this, d);
       },
-      catch(e) {
-        return PT(this, e);
+      catch(params) {
+        return _catch(this, params);
       },
-      pipe(e) {
-        return ab(this, e);
+      pipe(target) {
+        return pipe(this, target);
       },
       readonly() {
-        return AT(this);
+        return readonly(this);
       },
-      describe(e) {
-        let clone = this.clone();
-        return (R.globalRegistry.add(clone, { description: e }), clone);
+      describe(description) {
+        let cl = this.clone();
+        core.globalRegistry.add(cl, {
+          description,
+        });
+        return cl;
       },
-      meta(...e) {
-        if (e.length === 0) return R.globalRegistry.get(this);
-        let clone = this.clone();
-        return (R.globalRegistry.add(clone, e[0]), clone);
+      meta(...args) {
+        if (args.length === 0) return core.globalRegistry.get(this);
+        let cl = this.clone();
+        core.globalRegistry.add(cl, args[0]);
+        return cl;
       },
       isOptional() {
-        return this.safeParse(void 0).success;
+        return this.safeParse(undefined).success;
       },
       isNullable() {
         return this.safeParse(null).success;
       },
-      apply(e, ...t) {
-        return t.length === 0 ? e(this) : e(this, ...t);
+      apply(fn, ...args) {
+        return args.length === 0 ? fn(this) : fn(this, ...args);
       },
       get "~standard"() {
-        return de.util.hide(this, "~standard", {
-          ...R.standardProps(this),
+        return index_js_1.util.hide(this, "~standard", {
+          ...core.standardProps(this),
           jsonSchema: {
-            input: oc.createStandardJSONSchemaMethod(this, "input"),
-            output: oc.createStandardJSONSchemaMethod(this, "output"),
+            input: to_json_schema_js_1.createStandardJSONSchemaMethod(this, "input"),
+            output: to_json_schema_js_1.createStandardJSONSchemaMethod(this, "output"),
           },
         });
       },
-      set "~standard"(e) {
-        de.util.own(this, "~standard", e);
+      set "~standard"(value) {
+        index_js_1.util.own(this, "~standard", value);
       },
-      parse: function e(t, n) {
-        return Yr.parse(this, t, n, { callee: e });
+      parse: function _parse(data, params) {
+        return parse.parse(this, data, params, {
+          callee: _parse,
+        });
       },
-      parseAsync: async function e(t, n) {
-        return await Yr.parseAsync(this, t, n, { callee: e });
+      parseAsync: async function _parseAsync(data, params) {
+        return await parse.parseAsync(this, data, params, {
+          callee: _parseAsync,
+        });
       },
-      safeParse(e, t) {
-        return Yr.safeParse(this, e, t);
+      safeParse(data, params) {
+        return parse.safeParse(this, data, params);
       },
-      async safeParseAsync(e, t) {
-        return Yr.safeParseAsync(this, e, t);
+      async safeParseAsync(data, params) {
+        return parse.safeParseAsync(this, data, params);
       },
       get spa() {
         return this?.safeParseAsync;
       },
-      set spa(e) {
-        de.util.own(this, "spa", e);
+      set spa(value) {
+        index_js_1.util.own(this, "spa", value);
       },
-      validate(e, t) {
-        return Yr.validate(this, e, t);
+      validate(data, params) {
+        return parse.validate(this, data, params);
       },
-      validateAsync(e, t) {
-        return Yr.validateAsync(this, e, t);
+      validateAsync(data, params) {
+        return parse.validateAsync(this, data, params);
       },
-      encode: function e(t, n) {
-        return Yr.encode(this, t, n, { callee: e });
+      encode: function _encode(data, params) {
+        return parse.encode(this, data, params, {
+          callee: _encode,
+        });
       },
-      decode: function e(t, n) {
-        return Yr.decode(this, t, n, { callee: e });
+      decode: function _decode(data, params) {
+        return parse.decode(this, data, params, {
+          callee: _decode,
+        });
       },
-      encodeAsync: async function e(t, n) {
-        return await Yr.encodeAsync(this, t, n, { callee: e });
+      encodeAsync: async function _encodeAsync(data, params) {
+        return await parse.encodeAsync(this, data, params, {
+          callee: _encodeAsync,
+        });
       },
-      decodeAsync: async function e(t, n) {
-        return await Yr.decodeAsync(this, t, n, { callee: e });
+      decodeAsync: async function _decodeAsync(data, params) {
+        return await parse.decodeAsync(this, data, params, {
+          callee: _decodeAsync,
+        });
       },
-      safeEncode(e, t) {
-        return Yr.safeEncode(this, e, t);
+      safeEncode(data, params) {
+        return parse.safeEncode(this, data, params);
       },
-      safeDecode(e, t) {
-        return Yr.safeDecode(this, e, t);
+      safeDecode(data, params) {
+        return parse.safeDecode(this, data, params);
       },
-      async safeEncodeAsync(e, t) {
-        return Yr.safeEncodeAsync(this, e, t);
+      async safeEncodeAsync(data, params) {
+        return parse.safeEncodeAsync(this, data, params);
       },
-      async safeDecodeAsync(e, t) {
-        return Yr.safeDecodeAsync(this, e, t);
+      async safeDecodeAsync(data, params) {
+        return parse.safeDecodeAsync(this, data, params);
       },
-      toJSONSchema(e) {
-        return oc.createToJSONSchemaMethod(this, {})(e);
+      toJSONSchema(params) {
+        return to_json_schema_js_1.createToJSONSchemaMethod(this, {})(params);
       },
       get description() {
-        return R.globalRegistry.get(this)?.description;
+        return core.globalRegistry.get(this)?.description;
       },
       get _def() {
         return this._zod.def;
       },
     },
   );
-  v._ZodString = R.$constructor(
+  cjsExports._ZodString = core.$constructor(
     "_ZodString",
-    (e, t) => {
-      (R.$ZodString.init(e, t),
-        v.ZodType.init(e, t),
-        (e._zod.processJSONSchema = (n, o, r) => Xe.stringProcessor(e, n, o, r)));
+    (inst, def) => {
+      core.$ZodString.init(inst, def);
+      cjsExports.ZodType.init(inst, def);
+      inst._zod.processJSONSchema = (ctx, json, params) =>
+        processors.stringProcessor(inst, ctx, json, params);
     },
-    de.util.derived(
+    index_js_1.util.derived(
       {
-        format: (e) => Xe.aggregateChecks(e).format ?? null,
-        minLength: (e) => Xe.aggregateChecks(e).minimum ?? null,
-        maxLength: (e) => Xe.aggregateChecks(e).maximum ?? null,
+        format: (inst) => processors.aggregateChecks(inst).format ?? null,
+        minLength: (inst) => processors.aggregateChecks(inst).minimum ?? null,
+        maxLength: (inst) => processors.aggregateChecks(inst).maximum ?? null,
       },
       {
-        regex(...e) {
-          return this.check(pt.regex(...e));
+        regex(...args) {
+          return this.check(checks.regex(...args));
         },
-        includes(...e) {
-          return this.check(pt.includes(...e));
+        includes(...args) {
+          return this.check(checks.includes(...args));
         },
-        startsWith(...e) {
-          return this.check(pt.startsWith(...e));
+        startsWith(...args) {
+          return this.check(checks.startsWith(...args));
         },
-        endsWith(...e) {
-          return this.check(pt.endsWith(...e));
+        endsWith(...args) {
+          return this.check(checks.endsWith(...args));
         },
-        min(...e) {
-          return this.check(pt.minLength(...e));
+        min(...args) {
+          return this.check(checks.minLength(...args));
         },
-        max(...e) {
-          return this.check(pt.maxLength(...e));
+        max(...args) {
+          return this.check(checks.maxLength(...args));
         },
-        length(...e) {
-          return this.check(pt.length(...e));
+        length(...args) {
+          return this.check(checks.length(...args));
         },
-        nonempty(...e) {
-          return this.check(pt.minLength(1, ...e));
+        nonempty(...args) {
+          return this.check(checks.minLength(1, ...args));
         },
-        lowercase(e) {
-          return this.check(pt.lowercase(e));
+        lowercase(params) {
+          return this.check(checks.lowercase(params));
         },
-        uppercase(e) {
-          return this.check(pt.uppercase(e));
+        uppercase(params) {
+          return this.check(checks.uppercase(params));
         },
         trim() {
-          return this.check(pt.trim());
+          return this.check(checks.trim());
         },
-        normalize(...e) {
-          return this.check(pt.normalize(...e));
+        normalize(...args) {
+          return this.check(checks.normalize(...args));
         },
         toLowerCase() {
-          return this.check(pt.toLowerCase());
+          return this.check(checks.toLowerCase());
         },
         toUpperCase() {
-          return this.check(pt.toUpperCase());
+          return this.check(checks.toUpperCase());
         },
         slugify() {
-          return this.check(pt.slugify());
+          return this.check(checks.slugify());
         },
       },
     ),
   );
-  v.ZodString = R.$constructor(
+  cjsExports.ZodString = core.$constructor(
     "ZodString",
-    (e, t) => {
-      (R.$ZodString.init(e, t), v._ZodString.init(e, t));
+    (inst, def) => {
+      core.$ZodString.init(inst, def);
+      cjsExports._ZodString.init(inst, def);
     },
     {
-      email(e) {
-        return this.check(R._email(v.ZodEmail, e));
+      email(params) {
+        return this.check(core._email(cjsExports.ZodEmail, params));
       },
-      url(e) {
-        return this.check(R._url(v.ZodURL, e));
+      url(params) {
+        return this.check(core._url(cjsExports.ZodURL, params));
       },
-      jwt(e) {
-        return this.check(R._jwt(v.ZodJWT, e));
+      jwt(params) {
+        return this.check(core._jwt(cjsExports.ZodJWT, params));
       },
-      emoji(e) {
-        return this.check(R._emoji(v.ZodEmoji, e));
+      emoji(params) {
+        return this.check(core._emoji(cjsExports.ZodEmoji, params));
       },
-      guid(e) {
-        return this.check(R._guid(v.ZodGUID, e));
+      guid(params) {
+        return this.check(core._guid(cjsExports.ZodGUID, params));
       },
-      uuid(e) {
-        return this.check(R._uuid(v.ZodUUID, e));
+      uuid(params) {
+        return this.check(core._uuid(cjsExports.ZodUUID, params));
       },
-      uuidv4(e) {
-        return this.check(R._uuidv4(v.ZodUUID, e));
+      uuidv4(params) {
+        return this.check(core._uuidv4(cjsExports.ZodUUID, params));
       },
-      uuidv6(e) {
-        return this.check(R._uuidv6(v.ZodUUID, e));
+      uuidv6(params) {
+        return this.check(core._uuidv6(cjsExports.ZodUUID, params));
       },
-      uuidv7(e) {
-        return this.check(R._uuidv7(v.ZodUUID, e));
+      uuidv7(params) {
+        return this.check(core._uuidv7(cjsExports.ZodUUID, params));
       },
-      nanoid(e) {
-        return this.check(R._nanoid(v.ZodNanoID, e));
+      nanoid(params) {
+        return this.check(core._nanoid(cjsExports.ZodNanoID, params));
       },
-      cuid(e) {
-        return this.check(R._cuid(v.ZodCUID, e));
+      cuid(params) {
+        return this.check(core._cuid(cjsExports.ZodCUID, params));
       },
-      cuid2(e) {
-        return this.check(R._cuid2(v.ZodCUID2, e));
+      cuid2(params) {
+        return this.check(core._cuid2(cjsExports.ZodCUID2, params));
       },
-      ulid(e) {
-        return this.check(R._ulid(v.ZodULID, e));
+      ulid(params) {
+        return this.check(core._ulid(cjsExports.ZodULID, params));
       },
-      base64(e) {
-        return this.check(R._base64(v.ZodBase64, e));
+      base64(params) {
+        return this.check(core._base64(cjsExports.ZodBase64, params));
       },
-      base64url(e) {
-        return this.check(R._base64url(v.ZodBase64URL, e));
+      base64url(params) {
+        return this.check(core._base64url(cjsExports.ZodBase64URL, params));
       },
-      xid(e) {
-        return this.check(R._xid(v.ZodXID, e));
+      xid(params) {
+        return this.check(core._xid(cjsExports.ZodXID, params));
       },
-      ksuid(e) {
-        return this.check(R._ksuid(v.ZodKSUID, e));
+      ksuid(params) {
+        return this.check(core._ksuid(cjsExports.ZodKSUID, params));
       },
-      ipv4(e) {
-        return this.check(R._ipv4(v.ZodIPv4, e));
+      ipv4(params) {
+        return this.check(core._ipv4(cjsExports.ZodIPv4, params));
       },
-      ipv6(e) {
-        return this.check(R._ipv6(v.ZodIPv6, e));
+      ipv6(params) {
+        return this.check(core._ipv6(cjsExports.ZodIPv6, params));
       },
-      cidrv4(e) {
-        return this.check(R._cidrv4(v.ZodCIDRv4, e));
+      cidrv4(params) {
+        return this.check(core._cidrv4(cjsExports.ZodCIDRv4, params));
       },
-      cidrv6(e) {
-        return this.check(R._cidrv6(v.ZodCIDRv6, e));
+      cidrv6(params) {
+        return this.check(core._cidrv6(cjsExports.ZodCIDRv6, params));
       },
-      e164(e) {
-        return this.check(R._e164(v.ZodE164, e));
+      e164(params) {
+        return this.check(core._e164(cjsExports.ZodE164, params));
       },
-      datetime(e) {
-        return this.check(R._isoDateTime(v.ZodISODateTime, e));
+      datetime(params) {
+        return this.check(core._isoDateTime(cjsExports.ZodISODateTime, params));
       },
-      date(e) {
-        return this.check(R._isoDate(v.ZodISODate, e));
+      date(params) {
+        return this.check(core._isoDate(cjsExports.ZodISODate, params));
       },
-      time(e) {
-        return this.check(R._isoTime(v.ZodISOTime, e));
+      time(params) {
+        return this.check(core._isoTime(cjsExports.ZodISOTime, params));
       },
-      duration(e) {
-        return this.check(R._isoDuration(v.ZodISODuration, e));
+      duration(params) {
+        return this.check(core._isoDuration(cjsExports.ZodISODuration, params));
       },
     },
   );
-  function Th(e) {
-    return R._string(v.ZodString, e);
+  function string(params) {
+    return core._string(cjsExports.ZodString, params);
   }
-  v.ZodStringFormat = R.$constructor("ZodStringFormat", (e, t) => {
-    (R.$ZodStringFormat.init(e, t), v._ZodString.init(e, t));
+  cjsExports.ZodStringFormat = core.$constructor("ZodStringFormat", (inst, def) => {
+    core.$ZodStringFormat.init(inst, def);
+    cjsExports._ZodString.init(inst, def);
   });
-  v.ZodISODateTime = R.$constructor("ZodISODateTime", (e, t) => {
-    (R.$ZodISODateTime.init(e, t), v.ZodStringFormat.init(e, t));
+  cjsExports.ZodISODateTime = core.$constructor("ZodISODateTime", (inst, def) => {
+    core.$ZodISODateTime.init(inst, def);
+    cjsExports.ZodStringFormat.init(inst, def);
   });
-  v.ZodISODate = R.$constructor("ZodISODate", (e, t) => {
-    (R.$ZodISODate.init(e, t), v.ZodStringFormat.init(e, t));
+  cjsExports.ZodISODate = core.$constructor("ZodISODate", (inst, def) => {
+    core.$ZodISODate.init(inst, def);
+    cjsExports.ZodStringFormat.init(inst, def);
   });
-  v.ZodISOTime = R.$constructor("ZodISOTime", (e, t) => {
-    (R.$ZodISOTime.init(e, t), v.ZodStringFormat.init(e, t));
+  cjsExports.ZodISOTime = core.$constructor("ZodISOTime", (inst, def) => {
+    core.$ZodISOTime.init(inst, def);
+    cjsExports.ZodStringFormat.init(inst, def);
   });
-  v.ZodISODuration = R.$constructor("ZodISODuration", (e, t) => {
-    (R.$ZodISODuration.init(e, t), v.ZodStringFormat.init(e, t));
+  cjsExports.ZodISODuration = core.$constructor("ZodISODuration", (inst, def) => {
+    core.$ZodISODuration.init(inst, def);
+    cjsExports.ZodStringFormat.init(inst, def);
   });
-  v.ZodEmail = R.$constructor("ZodEmail", (e, t) => {
-    (R.$ZodEmail.init(e, t), v.ZodStringFormat.init(e, t));
+  cjsExports.ZodEmail = core.$constructor("ZodEmail", (inst, def) => {
+    core.$ZodEmail.init(inst, def);
+    cjsExports.ZodStringFormat.init(inst, def);
   });
-  function jX(e) {
-    return R._email(v.ZodEmail, e);
+  function email(params) {
+    return core._email(cjsExports.ZodEmail, params);
   }
-  v.ZodGUID = R.$constructor("ZodGUID", (e, t) => {
-    (R.$ZodGUID.init(e, t), v.ZodStringFormat.init(e, t));
+  cjsExports.ZodGUID = core.$constructor("ZodGUID", (inst, def) => {
+    core.$ZodGUID.init(inst, def);
+    cjsExports.ZodStringFormat.init(inst, def);
   });
-  function xX(e) {
-    return R._guid(v.ZodGUID, e);
+  function guid(params) {
+    return core._guid(cjsExports.ZodGUID, params);
   }
-  v.ZodUUID = R.$constructor("ZodUUID", (e, t) => {
-    (R.$ZodUUID.init(e, t), v.ZodStringFormat.init(e, t));
+  cjsExports.ZodUUID = core.$constructor("ZodUUID", (inst, def) => {
+    core.$ZodUUID.init(inst, def);
+    cjsExports.ZodStringFormat.init(inst, def);
   });
-  function LX(e) {
-    return R._uuid(v.ZodUUID, e);
+  function uuid(params) {
+    return core._uuid(cjsExports.ZodUUID, params);
   }
-  function NX(e) {
-    return R._uuidv4(v.ZodUUID, e);
+  function uuidv4(params) {
+    return core._uuidv4(cjsExports.ZodUUID, params);
   }
-  function UX(e) {
-    return R._uuidv6(v.ZodUUID, e);
+  function uuidv6(params) {
+    return core._uuidv6(cjsExports.ZodUUID, params);
   }
-  function zX(e) {
-    return R._uuidv7(v.ZodUUID, e);
+  function uuidv7(params) {
+    return core._uuidv7(cjsExports.ZodUUID, params);
   }
-  v.ZodURL = R.$constructor("ZodURL", (e, t) => {
-    (R.$ZodURL.init(e, t), v.ZodStringFormat.init(e, t));
+  cjsExports.ZodURL = core.$constructor("ZodURL", (inst, def) => {
+    core.$ZodURL.init(inst, def);
+    cjsExports.ZodStringFormat.init(inst, def);
   });
-  function FX(e) {
-    return R._url(v.ZodURL, e);
+  function url(params) {
+    return core._url(cjsExports.ZodURL, params);
   }
-  function BX(e) {
-    return R._url(v.ZodURL, {
-      protocol: R.regexes.httpProtocol,
-      hostname: R.regexes.domain,
-      ...de.util.normalizeParams(e),
+  function httpUrl(params) {
+    return core._url(cjsExports.ZodURL, {
+      protocol: core.regexes.httpProtocol,
+      hostname: core.regexes.domain,
+      ...index_js_1.util.normalizeParams(params),
     });
   }
-  v.ZodEmoji = R.$constructor("ZodEmoji", (e, t) => {
-    (R.$ZodEmoji.init(e, t), v.ZodStringFormat.init(e, t));
+  cjsExports.ZodEmoji = core.$constructor("ZodEmoji", (inst, def) => {
+    core.$ZodEmoji.init(inst, def);
+    cjsExports.ZodStringFormat.init(inst, def);
   });
-  function HX(e) {
-    return R._emoji(v.ZodEmoji, e);
+  function emoji(params) {
+    return core._emoji(cjsExports.ZodEmoji, params);
   }
-  v.ZodNanoID = R.$constructor("ZodNanoID", (e, t) => {
-    (R.$ZodNanoID.init(e, t), v.ZodStringFormat.init(e, t));
+  cjsExports.ZodNanoID = core.$constructor("ZodNanoID", (inst, def) => {
+    core.$ZodNanoID.init(inst, def);
+    cjsExports.ZodStringFormat.init(inst, def);
   });
-  function KX(e) {
-    return R._nanoid(v.ZodNanoID, e);
+  function nanoid(params) {
+    return core._nanoid(cjsExports.ZodNanoID, params);
   }
-  v.ZodCUID = R.$constructor("ZodCUID", (e, t) => {
-    (R.$ZodCUID.init(e, t), v.ZodStringFormat.init(e, t));
+  cjsExports.ZodCUID = core.$constructor("ZodCUID", (inst, def) => {
+    core.$ZodCUID.init(inst, def);
+    cjsExports.ZodStringFormat.init(inst, def);
   });
-  function ZX(e) {
-    return R._cuid(v.ZodCUID, e);
+  function cuid(params) {
+    return core._cuid(cjsExports.ZodCUID, params);
   }
-  v.ZodCUID2 = R.$constructor("ZodCUID2", (e, t) => {
-    (R.$ZodCUID2.init(e, t), v.ZodStringFormat.init(e, t));
+  cjsExports.ZodCUID2 = core.$constructor("ZodCUID2", (inst, def) => {
+    core.$ZodCUID2.init(inst, def);
+    cjsExports.ZodStringFormat.init(inst, def);
   });
-  function VX(e) {
-    return R._cuid2(v.ZodCUID2, e);
+  function cuid2(params) {
+    return core._cuid2(cjsExports.ZodCUID2, params);
   }
-  v.ZodULID = R.$constructor("ZodULID", (e, t) => {
-    (R.$ZodULID.init(e, t), v.ZodStringFormat.init(e, t));
+  cjsExports.ZodULID = core.$constructor("ZodULID", (inst, def) => {
+    core.$ZodULID.init(inst, def);
+    cjsExports.ZodStringFormat.init(inst, def);
   });
-  function qX(e) {
-    return R._ulid(v.ZodULID, e);
+  function ulid(params) {
+    return core._ulid(cjsExports.ZodULID, params);
   }
-  v.ZodXID = R.$constructor("ZodXID", (e, t) => {
-    (R.$ZodXID.init(e, t), v.ZodStringFormat.init(e, t));
+  cjsExports.ZodXID = core.$constructor("ZodXID", (inst, def) => {
+    core.$ZodXID.init(inst, def);
+    cjsExports.ZodStringFormat.init(inst, def);
   });
-  function GX(e) {
-    return R._xid(v.ZodXID, e);
+  function xid(params) {
+    return core._xid(cjsExports.ZodXID, params);
   }
-  v.ZodKSUID = R.$constructor("ZodKSUID", (e, t) => {
-    (R.$ZodKSUID.init(e, t), v.ZodStringFormat.init(e, t));
+  cjsExports.ZodKSUID = core.$constructor("ZodKSUID", (inst, def) => {
+    core.$ZodKSUID.init(inst, def);
+    cjsExports.ZodStringFormat.init(inst, def);
   });
-  function WX(e) {
-    return R._ksuid(v.ZodKSUID, e);
+  function ksuid(params) {
+    return core._ksuid(cjsExports.ZodKSUID, params);
   }
-  v.ZodIPv4 = R.$constructor("ZodIPv4", (e, t) => {
-    (R.$ZodIPv4.init(e, t), v.ZodStringFormat.init(e, t));
+  cjsExports.ZodIPv4 = core.$constructor("ZodIPv4", (inst, def) => {
+    core.$ZodIPv4.init(inst, def);
+    cjsExports.ZodStringFormat.init(inst, def);
   });
-  function YX(e) {
-    return R._ipv4(v.ZodIPv4, e);
+  function ipv4(params) {
+    return core._ipv4(cjsExports.ZodIPv4, params);
   }
-  v.ZodMAC = R.$constructor("ZodMAC", (e, t) => {
-    (R.$ZodMAC.init(e, t), v.ZodStringFormat.init(e, t));
+  cjsExports.ZodMAC = core.$constructor("ZodMAC", (inst, def) => {
+    core.$ZodMAC.init(inst, def);
+    cjsExports.ZodStringFormat.init(inst, def);
   });
-  function JX(e) {
-    return R._mac(v.ZodMAC, e);
+  function mac(params) {
+    return core._mac(cjsExports.ZodMAC, params);
   }
-  v.ZodIPv6 = R.$constructor("ZodIPv6", (e, t) => {
-    (R.$ZodIPv6.init(e, t), v.ZodStringFormat.init(e, t));
+  cjsExports.ZodIPv6 = core.$constructor("ZodIPv6", (inst, def) => {
+    core.$ZodIPv6.init(inst, def);
+    cjsExports.ZodStringFormat.init(inst, def);
   });
-  function XX(e) {
-    return R._ipv6(v.ZodIPv6, e);
+  function ipv6(params) {
+    return core._ipv6(cjsExports.ZodIPv6, params);
   }
-  v.ZodCIDRv4 = R.$constructor("ZodCIDRv4", (e, t) => {
-    (R.$ZodCIDRv4.init(e, t), v.ZodStringFormat.init(e, t));
+  cjsExports.ZodCIDRv4 = core.$constructor("ZodCIDRv4", (inst, def) => {
+    core.$ZodCIDRv4.init(inst, def);
+    cjsExports.ZodStringFormat.init(inst, def);
   });
-  function QX(e) {
-    return R._cidrv4(v.ZodCIDRv4, e);
+  function cidrv4(params) {
+    return core._cidrv4(cjsExports.ZodCIDRv4, params);
   }
-  v.ZodCIDRv6 = R.$constructor("ZodCIDRv6", (e, t) => {
-    (R.$ZodCIDRv6.init(e, t), v.ZodStringFormat.init(e, t));
+  cjsExports.ZodCIDRv6 = core.$constructor("ZodCIDRv6", (inst, def) => {
+    core.$ZodCIDRv6.init(inst, def);
+    cjsExports.ZodStringFormat.init(inst, def);
   });
-  function e7(e) {
-    return R._cidrv6(v.ZodCIDRv6, e);
+  function cidrv6(params) {
+    return core._cidrv6(cjsExports.ZodCIDRv6, params);
   }
-  v.ZodBase64 = R.$constructor("ZodBase64", (e, t) => {
-    (R.$ZodBase64.init(e, t), v.ZodStringFormat.init(e, t));
+  cjsExports.ZodBase64 = core.$constructor("ZodBase64", (inst, def) => {
+    core.$ZodBase64.init(inst, def);
+    cjsExports.ZodStringFormat.init(inst, def);
   });
-  function t7(e) {
-    return R._base64(v.ZodBase64, e);
+  function base64(params) {
+    return core._base64(cjsExports.ZodBase64, params);
   }
-  v.ZodBase64URL = R.$constructor("ZodBase64URL", (e, t) => {
-    (R.$ZodBase64URL.init(e, t), v.ZodStringFormat.init(e, t));
+  cjsExports.ZodBase64URL = core.$constructor("ZodBase64URL", (inst, def) => {
+    core.$ZodBase64URL.init(inst, def);
+    cjsExports.ZodStringFormat.init(inst, def);
   });
-  function n7(e) {
-    return R._base64url(v.ZodBase64URL, e);
+  function base64url(params) {
+    return core._base64url(cjsExports.ZodBase64URL, params);
   }
-  v.ZodE164 = R.$constructor("ZodE164", (e, t) => {
-    (R.$ZodE164.init(e, t), v.ZodStringFormat.init(e, t));
+  cjsExports.ZodE164 = core.$constructor("ZodE164", (inst, def) => {
+    core.$ZodE164.init(inst, def);
+    cjsExports.ZodStringFormat.init(inst, def);
   });
-  function r7(e) {
-    return R._e164(v.ZodE164, e);
+  function e164(params) {
+    return core._e164(cjsExports.ZodE164, params);
   }
-  v.ZodCreditCard = R.$constructor("ZodCreditCard", (e, t) => {
-    (R.$ZodCreditCard.init(e, t), v.ZodStringFormat.init(e, t));
+  cjsExports.ZodCreditCard = core.$constructor("ZodCreditCard", (inst, def) => {
+    core.$ZodCreditCard.init(inst, def);
+    cjsExports.ZodStringFormat.init(inst, def);
   });
-  function i7(e) {
-    return R._creditCard(v.ZodCreditCard, e);
+  function creditCard(params) {
+    return core._creditCard(cjsExports.ZodCreditCard, params);
   }
-  v.ZodIBAN = R.$constructor("ZodIBAN", (e, t) => {
-    (R.$ZodIBAN.init(e, t), v.ZodStringFormat.init(e, t));
+  cjsExports.ZodIBAN = core.$constructor("ZodIBAN", (inst, def) => {
+    core.$ZodIBAN.init(inst, def);
+    cjsExports.ZodStringFormat.init(inst, def);
   });
-  function o7(e) {
-    return R._iban(v.ZodIBAN, e);
+  function iban(params) {
+    return core._iban(cjsExports.ZodIBAN, params);
   }
-  v.ZodJWT = R.$constructor("ZodJWT", (e, t) => {
-    (R.$ZodJWT.init(e, t), v.ZodStringFormat.init(e, t));
+  cjsExports.ZodJWT = core.$constructor("ZodJWT", (inst, def) => {
+    core.$ZodJWT.init(inst, def);
+    cjsExports.ZodStringFormat.init(inst, def);
   });
-  function s7(e) {
-    return R._jwt(v.ZodJWT, e);
+  function jwt(params) {
+    return core._jwt(cjsExports.ZodJWT, params);
   }
-  v.ZodCustomStringFormat = R.$constructor("ZodCustomStringFormat", (e, t) => {
-    (R.$ZodCustomStringFormat.init(e, t), v.ZodStringFormat.init(e, t));
+  cjsExports.ZodCustomStringFormat = core.$constructor("ZodCustomStringFormat", (inst, def) => {
+    core.$ZodCustomStringFormat.init(inst, def);
+    cjsExports.ZodStringFormat.init(inst, def);
   });
-  function a7(e, t, n = {}) {
-    return R._stringFormat(v.ZodCustomStringFormat, e, t, n);
+  function stringFormat(format, fnOrRegex, _params = {}) {
+    return core._stringFormat(cjsExports.ZodCustomStringFormat, format, fnOrRegex, _params);
   }
-  function l7(e) {
-    return R._stringFormat(v.ZodCustomStringFormat, "hostname", R.regexes.hostname, e);
+  function hostname(_params) {
+    return core._stringFormat(cjsExports.ZodCustomStringFormat, "hostname", core.regexes.hostname, _params);
   }
-  function c7(e) {
-    return R._stringFormat(v.ZodCustomStringFormat, "hex", R.regexes.hex, e);
+  function hex(_params) {
+    return core._stringFormat(cjsExports.ZodCustomStringFormat, "hex", core.regexes.hex, _params);
   }
-  function u7(e, t) {
-    let n = t?.enc ?? "hex",
-      o = `${e}_${n}`,
-      r = R.regexes[o];
-    if (!r) throw Error(`Unrecognized hash format: ${o}`);
-    return R._stringFormat(v.ZodCustomStringFormat, o, r, t);
+  function hash(alg, params) {
+    let enc = params?.enc ?? "hex";
+    let format = `${alg}_${enc}`;
+    let regex = core.regexes[format];
+    if (!regex) throw Error(`Unrecognized hash format: ${format}`);
+    return core._stringFormat(cjsExports.ZodCustomStringFormat, format, regex, params);
   }
-  v.ZodNumber = R.$constructor(
+  cjsExports.ZodNumber = core.$constructor(
     "ZodNumber",
-    (e, t) => {
-      (R.$ZodNumber.init(e, t),
-        v.ZodType.init(e, t),
-        (e._zod.processJSONSchema = (n, o, r) => Xe.numberProcessor(e, n, o, r)),
-        (e.isFinite = !0));
+    (inst, def) => {
+      core.$ZodNumber.init(inst, def);
+      cjsExports.ZodType.init(inst, def);
+      inst._zod.processJSONSchema = (ctx, json, params) =>
+        processors.numberProcessor(inst, ctx, json, params);
+      inst.isFinite = true;
     },
-    de.util.derived(
+    index_js_1.util.derived(
       {
-        minValue: (e) => {
-          let { minimum: minimum, exclusiveMinimum: exclusiveMinimum } = Xe.aggregateChecks(e);
+        minValue: (inst) => {
+          let { minimum, exclusiveMinimum } = processors.aggregateChecks(inst);
           return Math.max(minimum ?? Number.NEGATIVE_INFINITY, exclusiveMinimum ?? Number.NEGATIVE_INFINITY);
         },
-        maxValue: (e) => {
-          let { maximum: maximum, exclusiveMaximum: exclusiveMaximum } = Xe.aggregateChecks(e);
+        maxValue: (inst) => {
+          let { maximum, exclusiveMaximum } = processors.aggregateChecks(inst);
           return Math.min(maximum ?? Number.POSITIVE_INFINITY, exclusiveMaximum ?? Number.POSITIVE_INFINITY);
         },
-        isInt: (e) => {
-          let { isInt: isInt, multipleOf: multipleOf } = Xe.aggregateChecks(e);
+        isInt: (inst) => {
+          let { isInt, multipleOf } = processors.aggregateChecks(inst);
           return !!isInt || !!multipleOf?.some(Number.isSafeInteger);
         },
-        format: (e) => Xe.aggregateChecks(e).format ?? null,
+        format: (inst) => processors.aggregateChecks(inst).format ?? null,
       },
       {
-        gt(e, t) {
-          return this.check(pt.gt(e, t));
+        gt(value, params) {
+          return this.check(checks.gt(value, params));
         },
-        gte(e, t) {
-          return this.check(pt.gte(e, t));
+        gte(value, params) {
+          return this.check(checks.gte(value, params));
         },
-        min(e, t) {
-          return this.check(pt.gte(e, t));
+        min(value, params) {
+          return this.check(checks.gte(value, params));
         },
-        lt(e, t) {
-          return this.check(pt.lt(e, t));
+        lt(value, params) {
+          return this.check(checks.lt(value, params));
         },
-        lte(e, t) {
-          return this.check(pt.lte(e, t));
+        lte(value, params) {
+          return this.check(checks.lte(value, params));
         },
-        max(e, t) {
-          return this.check(pt.lte(e, t));
+        max(value, params) {
+          return this.check(checks.lte(value, params));
         },
-        int(e) {
-          return this.check(sb(e));
+        int(params) {
+          return this.check(int(params));
         },
-        safe(e) {
-          return this.check(sb(e));
+        safe(params) {
+          return this.check(int(params));
         },
-        positive(e) {
-          return this.check(pt.gt(0, e));
+        positive(params) {
+          return this.check(checks.gt(0, params));
         },
-        nonnegative(e) {
-          return this.check(pt.gte(0, e));
+        nonnegative(params) {
+          return this.check(checks.gte(0, params));
         },
-        negative(e) {
-          return this.check(pt.lt(0, e));
+        negative(params) {
+          return this.check(checks.lt(0, params));
         },
-        nonpositive(e) {
-          return this.check(pt.lte(0, e));
+        nonpositive(params) {
+          return this.check(checks.lte(0, params));
         },
-        multipleOf(e, t) {
-          return this.check(pt.multipleOf(e, t));
+        multipleOf(value, params) {
+          return this.check(checks.multipleOf(value, params));
         },
-        step(e, t) {
-          return this.check(pt.multipleOf(e, t));
+        step(value, params) {
+          return this.check(checks.multipleOf(value, params));
         },
         finite() {
           return this;
@@ -835,325 +910,382 @@ var ra = x(function (v) {
       },
     ),
   );
-  function gT(e) {
-    return R._number(v.ZodNumber, e);
+  function number(params) {
+    return core._number(cjsExports.ZodNumber, params);
   }
-  v.ZodNumberFormat = R.$constructor("ZodNumberFormat", (e, t) => {
-    (R.$ZodNumberFormat.init(e, t), v.ZodNumber.init(e, t));
+  cjsExports.ZodNumberFormat = core.$constructor("ZodNumberFormat", (inst, def) => {
+    core.$ZodNumberFormat.init(inst, def);
+    cjsExports.ZodNumber.init(inst, def);
   });
-  function sb(e) {
-    return R._int(v.ZodNumberFormat, e);
+  function int(params) {
+    return core._int(cjsExports.ZodNumberFormat, params);
   }
-  function d7(e) {
-    return R._float32(v.ZodNumberFormat, e);
+  function float32(params) {
+    return core._float32(cjsExports.ZodNumberFormat, params);
   }
-  function f7(e) {
-    return R._float64(v.ZodNumberFormat, e);
+  function float64(params) {
+    return core._float64(cjsExports.ZodNumberFormat, params);
   }
-  function p7(e) {
-    return R._int32(v.ZodNumberFormat, e);
+  function int32(params) {
+    return core._int32(cjsExports.ZodNumberFormat, params);
   }
-  function h7(e) {
-    return R._uint32(v.ZodNumberFormat, e);
+  function uint32(params) {
+    return core._uint32(cjsExports.ZodNumberFormat, params);
   }
-  v.ZodBoolean = R.$constructor("ZodBoolean", (e, t) => {
-    (R.$ZodBoolean.init(e, t),
-      v.ZodType.init(e, t),
-      (e._zod.processJSONSchema = (n, o, r) => Xe.booleanProcessor(e, n, o, r)));
+  cjsExports.ZodBoolean = core.$constructor("ZodBoolean", (inst, def) => {
+    core.$ZodBoolean.init(inst, def);
+    cjsExports.ZodType.init(inst, def);
+    inst._zod.processJSONSchema = (ctx, json, params) => processors.booleanProcessor(inst, ctx, json, params);
   });
-  function yT(e) {
-    return R._boolean(v.ZodBoolean, e);
+  function boolean(params) {
+    return core._boolean(cjsExports.ZodBoolean, params);
   }
-  v.ZodBigInt = R.$constructor(
+  cjsExports.ZodBigInt = core.$constructor(
     "ZodBigInt",
-    (e, t) => {
-      (R.$ZodBigInt.init(e, t),
-        v.ZodType.init(e, t),
-        (e._zod.processJSONSchema = (n, o, r) => Xe.bigintProcessor(e, n, o, r)));
+    (inst, def) => {
+      core.$ZodBigInt.init(inst, def);
+      cjsExports.ZodType.init(inst, def);
+      inst._zod.processJSONSchema = (ctx, json, params) =>
+        processors.bigintProcessor(inst, ctx, json, params);
     },
-    de.util.derived(
+    index_js_1.util.derived(
       {
-        minValue: (e) => Xe.aggregateChecks(e).minimum ?? null,
-        maxValue: (e) => Xe.aggregateChecks(e).maximum ?? null,
-        format: (e) => Xe.aggregateChecks(e).format ?? null,
+        minValue: (inst) => processors.aggregateChecks(inst).minimum ?? null,
+        maxValue: (inst) => processors.aggregateChecks(inst).maximum ?? null,
+        format: (inst) => processors.aggregateChecks(inst).format ?? null,
       },
       {
-        gte(e, t) {
-          return this.check(pt.gte(e, t));
+        gte(value, params) {
+          return this.check(checks.gte(value, params));
         },
-        min(e, t) {
-          return this.check(pt.gte(e, t));
+        min(value, params) {
+          return this.check(checks.gte(value, params));
         },
-        gt(e, t) {
-          return this.check(pt.gt(e, t));
+        gt(value, params) {
+          return this.check(checks.gt(value, params));
         },
-        lt(e, t) {
-          return this.check(pt.lt(e, t));
+        lt(value, params) {
+          return this.check(checks.lt(value, params));
         },
-        lte(e, t) {
-          return this.check(pt.lte(e, t));
+        lte(value, params) {
+          return this.check(checks.lte(value, params));
         },
-        max(e, t) {
-          return this.check(pt.lte(e, t));
+        max(value, params) {
+          return this.check(checks.lte(value, params));
         },
-        positive(e) {
-          return this.check(pt.gt(BigInt(0), e));
+        positive(params) {
+          return this.check(checks.gt(BigInt(0), params));
         },
-        negative(e) {
-          return this.check(pt.lt(BigInt(0), e));
+        negative(params) {
+          return this.check(checks.lt(BigInt(0), params));
         },
-        nonpositive(e) {
-          return this.check(pt.lte(BigInt(0), e));
+        nonpositive(params) {
+          return this.check(checks.lte(BigInt(0), params));
         },
-        nonnegative(e) {
-          return this.check(pt.gte(BigInt(0), e));
+        nonnegative(params) {
+          return this.check(checks.gte(BigInt(0), params));
         },
-        multipleOf(e, t) {
-          return this.check(pt.multipleOf(e, t));
+        multipleOf(value, params) {
+          return this.check(checks.multipleOf(value, params));
         },
       },
     ),
   );
-  function m7(e) {
-    return R._bigint(v.ZodBigInt, e);
+  function bigint(params) {
+    return core._bigint(cjsExports.ZodBigInt, params);
   }
-  v.ZodBigIntFormat = R.$constructor("ZodBigIntFormat", (e, t) => {
-    (R.$ZodBigIntFormat.init(e, t), v.ZodBigInt.init(e, t));
+  cjsExports.ZodBigIntFormat = core.$constructor("ZodBigIntFormat", (inst, def) => {
+    core.$ZodBigIntFormat.init(inst, def);
+    cjsExports.ZodBigInt.init(inst, def);
   });
-  function g7(e) {
-    return R._int64(v.ZodBigIntFormat, e);
+  function int64(params) {
+    return core._int64(cjsExports.ZodBigIntFormat, params);
   }
-  function y7(e) {
-    return R._uint64(v.ZodBigIntFormat, e);
+  function uint64(params) {
+    return core._uint64(cjsExports.ZodBigIntFormat, params);
   }
-  v.ZodSymbol = R.$constructor("ZodSymbol", (e, t) => {
-    (R.$ZodSymbol.init(e, t),
-      v.ZodType.init(e, t),
-      (e._zod.processJSONSchema = (n, o, r) => Xe.symbolProcessor(e, n, o, r)));
+  cjsExports.ZodSymbol = core.$constructor("ZodSymbol", (inst, def) => {
+    core.$ZodSymbol.init(inst, def);
+    cjsExports.ZodType.init(inst, def);
+    inst._zod.processJSONSchema = (ctx, json, params) => processors.symbolProcessor(inst, ctx, json, params);
   });
-  function _7(e) {
-    return R._symbol(v.ZodSymbol, e);
+  function symbol(params) {
+    return core._symbol(cjsExports.ZodSymbol, params);
   }
-  v.ZodUndefined = R.$constructor("ZodUndefined", (e, t) => {
-    (R.$ZodUndefined.init(e, t),
-      v.ZodType.init(e, t),
-      (e._zod.processJSONSchema = (n, o, r) => Xe.undefinedProcessor(e, n, o, r)));
+  cjsExports.ZodUndefined = core.$constructor("ZodUndefined", (inst, def) => {
+    core.$ZodUndefined.init(inst, def);
+    cjsExports.ZodType.init(inst, def);
+    inst._zod.processJSONSchema = (ctx, json, params) =>
+      processors.undefinedProcessor(inst, ctx, json, params);
   });
-  function b7(e) {
-    return R._undefined(v.ZodUndefined, e);
+  function _undefined(params) {
+    return core._undefined(cjsExports.ZodUndefined, params);
   }
-  v.ZodNull = R.$constructor("ZodNull", (e, t) => {
-    (R.$ZodNull.init(e, t),
-      v.ZodType.init(e, t),
-      (e._zod.processJSONSchema = (n, o, r) => Xe.nullProcessor(e, n, o, r)));
+  cjsExports.ZodNull = core.$constructor("ZodNull", (inst, def) => {
+    core.$ZodNull.init(inst, def);
+    cjsExports.ZodType.init(inst, def);
+    inst._zod.processJSONSchema = (ctx, json, params) => processors.nullProcessor(inst, ctx, json, params);
   });
-  function _T(e) {
-    return R._null(v.ZodNull, e);
+  function _null(params) {
+    return core._null(cjsExports.ZodNull, params);
   }
-  v.ZodAny = R.$constructor("ZodAny", (e, t) => {
-    (R.$ZodAny.init(e, t),
-      v.ZodType.init(e, t),
-      (e._zod.processJSONSchema = (n, o, r) => Xe.anyProcessor(e, n, o, r)));
+  cjsExports.ZodAny = core.$constructor("ZodAny", (inst, def) => {
+    core.$ZodAny.init(inst, def);
+    cjsExports.ZodType.init(inst, def);
+    inst._zod.processJSONSchema = (ctx, json, params) => processors.anyProcessor(inst, ctx, json, params);
   });
-  function v7() {
-    return R._any(v.ZodAny);
+  function any() {
+    return core._any(cjsExports.ZodAny);
   }
-  v.ZodUnknown = R.$constructor("ZodUnknown", (e, t) => {
-    (R.$ZodUnknown.init(e, t),
-      v.ZodType.init(e, t),
-      (e._zod.processJSONSchema = (n, o, r) => Xe.unknownProcessor(e, n, o, r)));
+  cjsExports.ZodUnknown = core.$constructor("ZodUnknown", (inst, def) => {
+    core.$ZodUnknown.init(inst, def);
+    cjsExports.ZodType.init(inst, def);
+    inst._zod.processJSONSchema = (ctx, json, params) => processors.unknownProcessor(inst, ctx, json, params);
   });
-  function sc() {
-    return R._unknown(v.ZodUnknown);
+  function unknown() {
+    return core._unknown(cjsExports.ZodUnknown);
   }
-  v.ZodNever = R.$constructor("ZodNever", (e, t) => {
-    (R.$ZodNever.init(e, t),
-      v.ZodType.init(e, t),
-      (e._zod.processJSONSchema = (n, o, r) => Xe.neverProcessor(e, n, o, r)));
+  cjsExports.ZodNever = core.$constructor("ZodNever", (inst, def) => {
+    core.$ZodNever.init(inst, def);
+    cjsExports.ZodType.init(inst, def);
+    inst._zod.processJSONSchema = (ctx, json, params) => processors.neverProcessor(inst, ctx, json, params);
   });
-  function lb(e) {
-    return R._never(v.ZodNever, e);
+  function never(params) {
+    return core._never(cjsExports.ZodNever, params);
   }
-  v.ZodVoid = R.$constructor("ZodVoid", (e, t) => {
-    (R.$ZodVoid.init(e, t),
-      v.ZodType.init(e, t),
-      (e._zod.processJSONSchema = (n, o, r) => Xe.voidProcessor(e, n, o, r)));
+  cjsExports.ZodVoid = core.$constructor("ZodVoid", (inst, def) => {
+    core.$ZodVoid.init(inst, def);
+    cjsExports.ZodType.init(inst, def);
+    inst._zod.processJSONSchema = (ctx, json, params) => processors.voidProcessor(inst, ctx, json, params);
   });
-  function w7(e) {
-    return R._void(v.ZodVoid, e);
+  function _void(params) {
+    return core._void(cjsExports.ZodVoid, params);
   }
-  v.ZodDate = R.$constructor(
+  cjsExports.ZodDate = core.$constructor(
     "ZodDate",
-    (e, t) => {
-      (R.$ZodDate.init(e, t),
-        v.ZodType.init(e, t),
-        (e._zod.processJSONSchema = (n, o, r) => Xe.dateProcessor(e, n, o, r)),
-        (e.min = (n, o) => e.check(pt.gte(n, o))),
-        (e.max = (n, o) => e.check(pt.lte(n, o))));
+    (inst, def) => {
+      core.$ZodDate.init(inst, def);
+      cjsExports.ZodType.init(inst, def);
+      inst._zod.processJSONSchema = (ctx, json, params) => processors.dateProcessor(inst, ctx, json, params);
+      inst.min = (value, params) => inst.check(checks.gte(value, params));
+      inst.max = (value, params) => inst.check(checks.lte(value, params));
     },
-    de.util.derived(
+    index_js_1.util.derived(
       {
-        minDate: (e) => {
-          let { minimum: minimum } = Xe.aggregateChecks(e);
+        minDate: (inst) => {
+          let { minimum } = processors.aggregateChecks(inst);
           return minimum ? new Date(minimum) : null;
         },
-        maxDate: (e) => {
-          let { maximum: maximum } = Xe.aggregateChecks(e);
+        maxDate: (inst) => {
+          let { maximum } = processors.aggregateChecks(inst);
           return maximum ? new Date(maximum) : null;
         },
       },
       {},
     ),
   );
-  function O7(e) {
-    return R._date(v.ZodDate, e);
+  function date(params) {
+    return core._date(cjsExports.ZodDate, params);
   }
-  v.ZodArray = R.$constructor(
+  cjsExports.ZodArray = core.$constructor(
     "ZodArray",
-    (e, t) => {
-      (na(),
-        R.$ZodArray.init(e, t),
-        v.ZodType.init(e, t),
-        (e._zod.processJSONSchema = (n, o, r) => Xe.arrayProcessor(e, n, o, r)),
-        (e.element = t.element));
+    (inst, def) => {
+      _ensureDefaultMemoizer();
+      core.$ZodArray.init(inst, def);
+      cjsExports.ZodType.init(inst, def);
+      inst._zod.processJSONSchema = (ctx, json, params) => processors.arrayProcessor(inst, ctx, json, params);
+      inst.element = def.element;
     },
     {
-      min(e, t) {
-        return this.check(pt.minLength(e, t));
+      min(n, params) {
+        return this.check(checks.minLength(n, params));
       },
-      nonempty(e) {
-        return this.check(pt.minLength(1, e));
+      nonempty(params) {
+        return this.check(checks.minLength(1, params));
       },
-      max(e, t) {
-        return this.check(pt.maxLength(e, t));
+      max(n, params) {
+        return this.check(checks.maxLength(n, params));
       },
-      length(e, t) {
-        return this.check(pt.length(e, t));
+      length(n, params) {
+        return this.check(checks.length(n, params));
       },
       unwrap() {
         return this.element;
       },
     },
   );
-  function xh(e, t) {
-    return R._array(v.ZodArray, e, t);
+  function array(element, params) {
+    return core._array(cjsExports.ZodArray, element, params);
   }
-  function S7(e) {
-    let shape = e._zod.def.shape;
-    return ub(Object.keys(shape));
+  function keyof(schema) {
+    let shape = schema._zod.def.shape;
+    return _enum(Object.keys(shape));
   }
-  v.ZodObject = R.$constructor(
+  cjsExports.ZodObject = core.$constructor(
     "ZodObject",
-    (e, t) => {
-      (na(),
-        R.$ZodObjectJIT.init(e, t),
-        v.ZodType.init(e, t),
-        (e._zod.processJSONSchema = (n, o, r) => Xe.objectProcessor(e, n, o, r)),
-        de.util.installLazyProp(e, "shape", (n) => n._zod.def.shape, !1));
+    (inst, def) => {
+      _ensureDefaultMemoizer();
+      core.$ZodObjectJIT.init(inst, def);
+      cjsExports.ZodType.init(inst, def);
+      inst._zod.processJSONSchema = (ctx, json, params) =>
+        processors.objectProcessor(inst, ctx, json, params);
+      index_js_1.util.installLazyProp(inst, "shape", (n) => n._zod.def.shape, false);
     },
     {
       keyof() {
-        return ub(Object.keys(this._zod.def.shape));
+        return _enum(Object.keys(this._zod.def.shape));
       },
-      catchall(e) {
-        return this.clone(de.util.mergeDefs(this._zod.def, { catchall: e }));
+      catchall(catchall) {
+        return this.clone(
+          index_js_1.util.mergeDefs(this._zod.def, {
+            catchall,
+          }),
+        );
       },
       passthrough() {
-        return this.clone(de.util.mergeDefs(this._zod.def, { catchall: sc() }));
+        return this.clone(
+          index_js_1.util.mergeDefs(this._zod.def, {
+            catchall: unknown(),
+          }),
+        );
       },
       loose() {
-        return this.clone(de.util.mergeDefs(this._zod.def, { catchall: sc() }));
+        return this.clone(
+          index_js_1.util.mergeDefs(this._zod.def, {
+            catchall: unknown(),
+          }),
+        );
       },
       strict() {
-        return this.clone(de.util.mergeDefs(this._zod.def, { catchall: lb() }));
+        return this.clone(
+          index_js_1.util.mergeDefs(this._zod.def, {
+            catchall: never(),
+          }),
+        );
       },
       strip() {
-        return this.clone(de.util.mergeDefs(this._zod.def, { catchall: void 0 }));
+        return this.clone(
+          index_js_1.util.mergeDefs(this._zod.def, {
+            catchall: undefined,
+          }),
+        );
       },
-      extend(e) {
-        return de.util.extend(this, e);
+      extend(incoming) {
+        return index_js_1.util.extend(this, incoming);
       },
-      safeExtend(e) {
-        return de.util.safeExtend(this, e);
+      safeExtend(incoming) {
+        return index_js_1.util.safeExtend(this, incoming);
       },
-      merge(e) {
-        return de.util.merge(this, e);
+      merge(other) {
+        return index_js_1.util.merge(this, other);
       },
-      pick(e) {
-        return de.util.pick(this, e);
+      pick(mask) {
+        return index_js_1.util.pick(this, mask);
       },
-      omit(e) {
-        return de.util.omit(this, e);
+      omit(mask) {
+        return index_js_1.util.omit(this, mask);
       },
-      partial(...e) {
-        return de.util.partial(v.ZodOptional, this, e[0]);
+      partial(...args) {
+        return index_js_1.util.partial(cjsExports.ZodOptional, this, args[0]);
       },
-      exactPartial(...e) {
-        return de.util.partial(v.ZodExactOptional, this, e[0], "exactPartial");
+      exactPartial(...args) {
+        return index_js_1.util.partial(cjsExports.ZodExactOptional, this, args[0], "exactPartial");
       },
-      required(...e) {
-        return de.util.required(v.ZodNonOptional, this, e[0]);
+      required(...args) {
+        return index_js_1.util.required(cjsExports.ZodNonOptional, this, args[0]);
       },
     },
   );
-  function k7(e, t) {
-    let n = { type: "object", shape: e ?? {}, ...de.util.normalizeParams(t) };
-    return new v.ZodObject(n);
+  function object(shape, params) {
+    let def = {
+      type: "object",
+      shape: shape ?? {},
+      ...index_js_1.util.normalizeParams(params),
+    };
+    return new cjsExports.ZodObject(def);
   }
-  function E7(e, t) {
-    return new v.ZodObject({ type: "object", shape: e, catchall: lb(), ...de.util.normalizeParams(t) });
-  }
-  function P7(e, t) {
-    return new v.ZodObject({ type: "object", shape: e, catchall: sc(), ...de.util.normalizeParams(t) });
-  }
-  v.ZodUnion = R.$constructor("ZodUnion", (e, t) => {
-    (R.$ZodUnion.init(e, t),
-      v.ZodType.init(e, t),
-      (e._zod.processJSONSchema = (n, o, r) => Xe.unionProcessor(e, n, o, r)),
-      (e.options = t.options));
-  });
-  function cb(e, t) {
-    return new v.ZodUnion({ type: "union", options: e, ...de.util.normalizeParams(t) });
-  }
-  v.ZodXor = R.$constructor("ZodXor", (e, t) => {
-    (v.ZodUnion.init(e, t),
-      R.$ZodXor.init(e, t),
-      (e._zod.processJSONSchema = (n, o, r) => Xe.unionProcessor(e, n, o, r)),
-      (e.options = t.options));
-  });
-  function A7(e, t) {
-    return new v.ZodXor({ type: "union", options: e, inclusive: !1, ...de.util.normalizeParams(t) });
-  }
-  v.ZodDiscriminatedUnion = R.$constructor("ZodDiscriminatedUnion", (e, t) => {
-    (v.ZodUnion.init(e, t), R.$ZodDiscriminatedUnion.init(e, t));
-  });
-  function I7(e, t, n) {
-    return new v.ZodDiscriminatedUnion({
-      type: "union",
-      options: t,
-      discriminator: e,
-      ...de.util.normalizeParams(n),
+  function strictObject(shape, params) {
+    return new cjsExports.ZodObject({
+      type: "object",
+      shape,
+      catchall: never(),
+      ...index_js_1.util.normalizeParams(params),
     });
   }
-  v.ZodIntersection = R.$constructor("ZodIntersection", (e, t) => {
-    (R.$ZodIntersection.init(e, t),
-      v.ZodType.init(e, t),
-      (e._zod.processJSONSchema = (n, o, r) => Xe.intersectionProcessor(e, n, o, r)));
-  });
-  function bT(e, t) {
-    return new v.ZodIntersection({ type: "intersection", left: e, right: t });
+  function looseObject(shape, params) {
+    return new cjsExports.ZodObject({
+      type: "object",
+      shape,
+      catchall: unknown(),
+      ...index_js_1.util.normalizeParams(params),
+    });
   }
-  v.ZodTuple = R.$constructor(
+  cjsExports.ZodUnion = core.$constructor("ZodUnion", (inst, def) => {
+    core.$ZodUnion.init(inst, def);
+    cjsExports.ZodType.init(inst, def);
+    inst._zod.processJSONSchema = (ctx, json, params) => processors.unionProcessor(inst, ctx, json, params);
+    inst.options = def.options;
+  });
+  function union(options, params) {
+    return new cjsExports.ZodUnion({
+      type: "union",
+      options,
+      ...index_js_1.util.normalizeParams(params),
+    });
+  }
+  cjsExports.ZodXor = core.$constructor("ZodXor", (inst, def) => {
+    cjsExports.ZodUnion.init(inst, def);
+    core.$ZodXor.init(inst, def);
+    inst._zod.processJSONSchema = (ctx, json, params) => processors.unionProcessor(inst, ctx, json, params);
+    inst.options = def.options;
+  });
+  function xor(options, params) {
+    return new cjsExports.ZodXor({
+      type: "union",
+      options,
+      inclusive: false,
+      ...index_js_1.util.normalizeParams(params),
+    });
+  }
+  cjsExports.ZodDiscriminatedUnion = core.$constructor("ZodDiscriminatedUnion", (inst, def) => {
+    cjsExports.ZodUnion.init(inst, def);
+    core.$ZodDiscriminatedUnion.init(inst, def);
+  });
+  function discriminatedUnion(discriminator, options, params) {
+    return new cjsExports.ZodDiscriminatedUnion({
+      type: "union",
+      options,
+      discriminator,
+      ...index_js_1.util.normalizeParams(params),
+    });
+  }
+  cjsExports.ZodIntersection = core.$constructor("ZodIntersection", (inst, def) => {
+    core.$ZodIntersection.init(inst, def);
+    cjsExports.ZodType.init(inst, def);
+    inst._zod.processJSONSchema = (ctx, json, params) =>
+      processors.intersectionProcessor(inst, ctx, json, params);
+  });
+  function intersection(left, right) {
+    return new cjsExports.ZodIntersection({
+      type: "intersection",
+      left,
+      right,
+    });
+  }
+  cjsExports.ZodTuple = core.$constructor(
     "ZodTuple",
-    (e, t) => {
-      (na(),
-        R.$ZodTuple.init(e, t),
-        v.ZodType.init(e, t),
-        (e._zod.processJSONSchema = (n, o, r) => Xe.tupleProcessor(e, n, o, r)));
+    (inst, def) => {
+      _ensureDefaultMemoizer();
+      core.$ZodTuple.init(inst, def);
+      cjsExports.ZodType.init(inst, def);
+      inst._zod.processJSONSchema = (ctx, json, params) => processors.tupleProcessor(inst, ctx, json, params);
     },
     {
-      rest(e) {
-        return this.clone({ ...this._zod.def, rest: e });
+      rest(rest) {
+        return this.clone({
+          ...this._zod.def,
+          rest,
+        });
       },
       partial() {
         let def = this._zod.def;
@@ -1161,280 +1293,377 @@ var ra = x(function (v) {
           throw Error(".partial() cannot be used on tuple schemas containing refinements");
         return this.clone({
           ...def,
-          items: def.items.map((item) => new v.ZodOptional({ type: "optional", innerType: item })),
+          items: def.items.map(
+            (item) =>
+              new cjsExports.ZodOptional({
+                type: "optional",
+                innerType: item,
+              }),
+          ),
         });
       },
     },
   );
-  function vT(e, t, n) {
-    let o = t instanceof R.$ZodType,
-      r = o ? n : t,
-      s = o ? t : null;
-    return new v.ZodTuple({ type: "tuple", items: e, rest: s, ...de.util.normalizeParams(r) });
-  }
-  v.ZodRecord = R.$constructor("ZodRecord", (e, t) => {
-    (na(),
-      R.$ZodRecord.init(e, t),
-      v.ZodType.init(e, t),
-      (e._zod.processJSONSchema = (n, o, r) => Xe.recordProcessor(e, n, o, r)),
-      (e.keyType = t.keyType),
-      (e.valueType = t.valueType));
-  });
-  function wT(e, t, n) {
-    if (!t || !t._zod)
-      return new v.ZodRecord({ type: "record", keyType: Th(), valueType: e, ...de.util.normalizeParams(t) });
-    return new v.ZodRecord({ type: "record", keyType: e, valueType: t, ...de.util.normalizeParams(n) });
-  }
-  function C7(e, t, n) {
-    return new v.ZodRecord({
-      type: "record",
-      keyType: e,
-      valueType: t,
-      ...de.util.normalizeParams(n),
-      partial: !0,
+  function tuple(items, _paramsOrRest, _params) {
+    let hasRest = _paramsOrRest instanceof core.$ZodType;
+    let params = hasRest ? _params : _paramsOrRest;
+    let rest = hasRest ? _paramsOrRest : null;
+    return new cjsExports.ZodTuple({
+      type: "tuple",
+      items,
+      rest,
+      ...index_js_1.util.normalizeParams(params),
     });
   }
-  function T7(e, t, n) {
-    return new v.ZodRecord({
+  cjsExports.ZodRecord = core.$constructor("ZodRecord", (inst, def) => {
+    _ensureDefaultMemoizer();
+    core.$ZodRecord.init(inst, def);
+    cjsExports.ZodType.init(inst, def);
+    inst._zod.processJSONSchema = (ctx, json, params) => processors.recordProcessor(inst, ctx, json, params);
+    inst.keyType = def.keyType;
+    inst.valueType = def.valueType;
+  });
+  function record(keyType, valueType, params) {
+    if (!valueType || !valueType._zod)
+      return new cjsExports.ZodRecord({
+        type: "record",
+        keyType: string(),
+        valueType: keyType,
+        ...index_js_1.util.normalizeParams(valueType),
+      });
+    return new cjsExports.ZodRecord({
       type: "record",
-      keyType: e,
-      valueType: t,
+      keyType,
+      valueType,
+      ...index_js_1.util.normalizeParams(params),
+    });
+  }
+  function partialRecord(keyType, valueType, params) {
+    return new cjsExports.ZodRecord({
+      type: "record",
+      keyType,
+      valueType,
+      ...index_js_1.util.normalizeParams(params),
+      partial: true,
+    });
+  }
+  function looseRecord(keyType, valueType, params) {
+    return new cjsExports.ZodRecord({
+      type: "record",
+      keyType,
+      valueType,
       mode: "loose",
-      ...de.util.normalizeParams(n),
+      ...index_js_1.util.normalizeParams(params),
     });
   }
-  v.ZodMap = R.$constructor("ZodMap", (e, t) => {
-    (na(),
-      R.$ZodMap.init(e, t),
-      v.ZodType.init(e, t),
-      (e._zod.processJSONSchema = (n, o, r) => Xe.mapProcessor(e, n, o, r)),
-      (e.keyType = t.keyType),
-      (e.valueType = t.valueType),
-      (e.min = (...n) => e.check(R._minSize(...n))),
-      (e.nonempty = (n) => e.check(R._minSize(1, n))),
-      (e.max = (...n) => e.check(R._maxSize(...n))),
-      (e.size = (...n) => e.check(R._size(...n))));
+  cjsExports.ZodMap = core.$constructor("ZodMap", (inst, def) => {
+    _ensureDefaultMemoizer();
+    core.$ZodMap.init(inst, def);
+    cjsExports.ZodType.init(inst, def);
+    inst._zod.processJSONSchema = (ctx, json, params) => processors.mapProcessor(inst, ctx, json, params);
+    inst.keyType = def.keyType;
+    inst.valueType = def.valueType;
+    inst.min = (...args) => inst.check(core._minSize(...args));
+    inst.nonempty = (params) => inst.check(core._minSize(1, params));
+    inst.max = (...args) => inst.check(core._maxSize(...args));
+    inst.size = (...args) => inst.check(core._size(...args));
   });
-  function $7(e, t, n) {
-    return new v.ZodMap({ type: "map", keyType: e, valueType: t, ...de.util.normalizeParams(n) });
+  function map(keyType, valueType, params) {
+    return new cjsExports.ZodMap({
+      type: "map",
+      keyType,
+      valueType,
+      ...index_js_1.util.normalizeParams(params),
+    });
   }
-  v.ZodSet = R.$constructor("ZodSet", (e, t) => {
-    (na(),
-      R.$ZodSet.init(e, t),
-      v.ZodType.init(e, t),
-      (e._zod.processJSONSchema = (n, o, r) => Xe.setProcessor(e, n, o, r)),
-      (e.min = (...n) => e.check(R._minSize(...n))),
-      (e.nonempty = (n) => e.check(R._minSize(1, n))),
-      (e.max = (...n) => e.check(R._maxSize(...n))),
-      (e.size = (...n) => e.check(R._size(...n))));
+  cjsExports.ZodSet = core.$constructor("ZodSet", (inst, def) => {
+    _ensureDefaultMemoizer();
+    core.$ZodSet.init(inst, def);
+    cjsExports.ZodType.init(inst, def);
+    inst._zod.processJSONSchema = (ctx, json, params) => processors.setProcessor(inst, ctx, json, params);
+    inst.min = (...args) => inst.check(core._minSize(...args));
+    inst.nonempty = (params) => inst.check(core._minSize(1, params));
+    inst.max = (...args) => inst.check(core._maxSize(...args));
+    inst.size = (...args) => inst.check(core._size(...args));
   });
-  function R7(e, t) {
-    return new v.ZodSet({ type: "set", valueType: e, ...de.util.normalizeParams(t) });
+  function set(valueType, params) {
+    return new cjsExports.ZodSet({
+      type: "set",
+      valueType,
+      ...index_js_1.util.normalizeParams(params),
+    });
   }
-  v.ZodEnum = R.$constructor("ZodEnum", (e, t) => {
-    (R.$ZodEnum.init(e, t),
-      v.ZodType.init(e, t),
-      (e._zod.processJSONSchema = (o, r, s) => Xe.enumProcessor(e, o, r, s)),
-      (e.enum = t.entries),
-      (e.options = [...e._zod.values]));
-    let n = new Set(Object.keys(t.entries));
-    ((e.extract = (o, r) => {
-      let s = {};
-      for (let a of o)
-        if (n.has(a)) s[a] = t.entries[a];
-        else throw Error(`Key ${a} not found in enum`);
-      return new v.ZodEnum({ ...t, checks: [], ...de.util.normalizeParams(r), entries: s });
-    }),
-      (e.exclude = (o, r) => {
-        let s = { ...t.entries };
-        for (let a of o)
-          if (n.has(a)) delete s[a];
-          else throw Error(`Key ${a} not found in enum`);
-        return new v.ZodEnum({ ...t, checks: [], ...de.util.normalizeParams(r), entries: s });
-      }));
+  cjsExports.ZodEnum = core.$constructor("ZodEnum", (inst, def) => {
+    core.$ZodEnum.init(inst, def);
+    cjsExports.ZodType.init(inst, def);
+    inst._zod.processJSONSchema = (ctx, json, params) => processors.enumProcessor(inst, ctx, json, params);
+    inst.enum = def.entries;
+    inst.options = [...inst._zod.values];
+    let keys = new Set(Object.keys(def.entries));
+    inst.extract = (values, params) => {
+      let newEntries = {};
+      for (let value of values)
+        if (keys.has(value)) newEntries[value] = def.entries[value];
+        else throw Error(`Key ${value} not found in enum`);
+      return new cjsExports.ZodEnum({
+        ...def,
+        checks: [],
+        ...index_js_1.util.normalizeParams(params),
+        entries: newEntries,
+      });
+    };
+    inst.exclude = (values, params) => {
+      let newEntries = {
+        ...def.entries,
+      };
+      for (let value of values)
+        if (keys.has(value)) delete newEntries[value];
+        else throw Error(`Key ${value} not found in enum`);
+      return new cjsExports.ZodEnum({
+        ...def,
+        checks: [],
+        ...index_js_1.util.normalizeParams(params),
+        entries: newEntries,
+      });
+    };
   });
-  function ub(e, t) {
-    let n = Array.isArray(e) ? Object.fromEntries(e.map((o) => [o, o])) : e;
-    return new v.ZodEnum({ type: "enum", entries: n, ...de.util.normalizeParams(t) });
+  function _enum(values, params) {
+    let entries = Array.isArray(values) ? Object.fromEntries(values.map((v) => [v, v])) : values;
+    return new cjsExports.ZodEnum({
+      type: "enum",
+      entries,
+      ...index_js_1.util.normalizeParams(params),
+    });
   }
-  function D7(e, t) {
-    return new v.ZodEnum({ type: "enum", entries: e, ...de.util.normalizeParams(t) });
+  function nativeEnum(entries, params) {
+    return new cjsExports.ZodEnum({
+      type: "enum",
+      entries,
+      ...index_js_1.util.normalizeParams(params),
+    });
   }
-  v.ZodLiteral = R.$constructor("ZodLiteral", (e, t) => {
-    (R.$ZodLiteral.init(e, t),
-      v.ZodType.init(e, t),
-      (e._zod.processJSONSchema = (n, o, r) => Xe.literalProcessor(e, n, o, r)),
-      (e.values = new Set(t.values)),
-      Object.defineProperty(e, "value", {
-        get() {
-          if (t.values.length > 1)
-            throw Error("This schema contains multiple valid literal values. Use `.values` instead.");
-          return t.values[0];
-        },
-      }));
+  cjsExports.ZodLiteral = core.$constructor("ZodLiteral", (inst, def) => {
+    core.$ZodLiteral.init(inst, def);
+    cjsExports.ZodType.init(inst, def);
+    inst._zod.processJSONSchema = (ctx, json, params) => processors.literalProcessor(inst, ctx, json, params);
+    inst.values = new Set(def.values);
+    Object.defineProperty(inst, "value", {
+      get() {
+        if (def.values.length > 1)
+          throw Error("This schema contains multiple valid literal values. Use `.values` instead.");
+        return def.values[0];
+      },
+    });
   });
-  function M7(e, t) {
-    return new v.ZodLiteral({
+  function literal(value, params) {
+    return new cjsExports.ZodLiteral({
       type: "literal",
-      values: Array.isArray(e) ? e : [e],
-      ...de.util.normalizeParams(t),
+      values: Array.isArray(value) ? value : [value],
+      ...index_js_1.util.normalizeParams(params),
     });
   }
-  v.ZodFile = R.$constructor("ZodFile", (e, t) => {
-    (R.$ZodFile.init(e, t),
-      v.ZodType.init(e, t),
-      (e._zod.processJSONSchema = (n, o, r) => Xe.fileProcessor(e, n, o, r)),
-      (e.min = (n, o) => e.check(R._minSize(n, o))),
-      (e.max = (n, o) => e.check(R._maxSize(n, o))),
-      (e.mime = (n, o) => e.check(R._mime(Array.isArray(n) ? n : [n], o))));
+  cjsExports.ZodFile = core.$constructor("ZodFile", (inst, def) => {
+    core.$ZodFile.init(inst, def);
+    cjsExports.ZodType.init(inst, def);
+    inst._zod.processJSONSchema = (ctx, json, params) => processors.fileProcessor(inst, ctx, json, params);
+    inst.min = (size, params) => inst.check(core._minSize(size, params));
+    inst.max = (size, params) => inst.check(core._maxSize(size, params));
+    inst.mime = (types, params) => inst.check(core._mime(Array.isArray(types) ? types : [types], params));
   });
-  function j7(e) {
-    return R._file(v.ZodFile, e);
+  function file(params) {
+    return core._file(cjsExports.ZodFile, params);
   }
-  v.ZodTransform = R.$constructor("ZodTransform", (e, t) => {
-    (na(),
-      R.$ZodTransform.init(e, t),
-      v.ZodType.init(e, t),
-      (e._zod.processJSONSchema = (n, o, r) => Xe.transformProcessor(e, n, o, r)),
-      (e._zod.parse = (n, o) => {
-        if (o.direction === "backward") throw new R.$ZodEncodeError(e.constructor.name);
-        n.addIssue = (s) => {
-          if (typeof s === "string") n.issues.push(de.util.issue(s, n.value, t));
-          else {
-            let a = s;
-            if (a.fatal) a.continue = !1;
-            if ((a.code ?? (a.code = "custom"), !("input" in a))) a.input = n.value;
-            (a.inst ?? (a.inst = e), n.issues.push(de.util.issue(a)));
-          }
-        };
-        let transform = t.transform(n.value, n);
-        if (transform instanceof Promise) return transform.then((s) => ((n.value = s), n));
-        return ((n.value = transform), n);
-      }));
+  cjsExports.ZodTransform = core.$constructor("ZodTransform", (inst, def) => {
+    _ensureDefaultMemoizer();
+    core.$ZodTransform.init(inst, def);
+    cjsExports.ZodType.init(inst, def);
+    inst._zod.processJSONSchema = (ctx, json, params) =>
+      processors.transformProcessor(inst, ctx, json, params);
+    inst._zod.parse = (payload, _ctx) => {
+      if (_ctx.direction === "backward") throw new core.$ZodEncodeError(inst.constructor.name);
+      payload.addIssue = (issue) => {
+        if (typeof issue === "string") payload.issues.push(index_js_1.util.issue(issue, payload.value, def));
+        else {
+          let _issue = issue;
+          if (_issue.fatal) _issue.continue = false;
+          _issue.code ?? (_issue.code = "custom");
+          if (!("input" in _issue)) _issue.input = payload.value;
+          _issue.inst ?? (_issue.inst = inst);
+          payload.issues.push(index_js_1.util.issue(_issue));
+        }
+      };
+      let output = def.transform(payload.value, payload);
+      if (output instanceof Promise)
+        return output.then((output) => {
+          payload.value = output;
+          return payload;
+        });
+      payload.value = output;
+      return payload;
+    };
   });
-  function db(e) {
-    return new v.ZodTransform({ type: "transform", transform: e });
+  function transform(fn) {
+    return new cjsExports.ZodTransform({
+      type: "transform",
+      transform: fn,
+    });
   }
-  v.ZodOptional = R.$constructor("ZodOptional", (e, t) => {
-    (R.$ZodOptional.init(e, t),
-      v.ZodType.init(e, t),
-      (e._zod.processJSONSchema = (n, o, r) => Xe.optionalProcessor(e, n, o, r)),
-      (e.unwrap = () => e._zod.def.innerType));
+  cjsExports.ZodOptional = core.$constructor("ZodOptional", (inst, def) => {
+    core.$ZodOptional.init(inst, def);
+    cjsExports.ZodType.init(inst, def);
+    inst._zod.processJSONSchema = (ctx, json, params) =>
+      processors.optionalProcessor(inst, ctx, json, params);
+    inst.unwrap = () => inst._zod.def.innerType;
   });
-  function Rh(e) {
-    return new v.ZodOptional({ type: "optional", innerType: e });
+  function optional(innerType) {
+    return new cjsExports.ZodOptional({
+      type: "optional",
+      innerType,
+    });
   }
-  v.ZodExactOptional = R.$constructor("ZodExactOptional", (e, t) => {
-    (R.$ZodExactOptional.init(e, t),
-      v.ZodType.init(e, t),
-      (e._zod.processJSONSchema = (n, o, r) => Xe.optionalProcessor(e, n, o, r)),
-      (e.unwrap = () => e._zod.def.innerType));
+  cjsExports.ZodExactOptional = core.$constructor("ZodExactOptional", (inst, def) => {
+    core.$ZodExactOptional.init(inst, def);
+    cjsExports.ZodType.init(inst, def);
+    inst._zod.processJSONSchema = (ctx, json, params) =>
+      processors.optionalProcessor(inst, ctx, json, params);
+    inst.unwrap = () => inst._zod.def.innerType;
   });
-  function OT(e) {
-    return new v.ZodExactOptional({ type: "optional", innerType: e });
+  function exactOptional(innerType) {
+    return new cjsExports.ZodExactOptional({
+      type: "optional",
+      innerType,
+    });
   }
-  v.ZodNullable = R.$constructor("ZodNullable", (e, t) => {
-    (R.$ZodNullable.init(e, t),
-      v.ZodType.init(e, t),
-      (e._zod.processJSONSchema = (n, o, r) => Xe.nullableProcessor(e, n, o, r)),
-      (e.unwrap = () => e._zod.def.innerType));
+  cjsExports.ZodNullable = core.$constructor("ZodNullable", (inst, def) => {
+    core.$ZodNullable.init(inst, def);
+    cjsExports.ZodType.init(inst, def);
+    inst._zod.processJSONSchema = (ctx, json, params) =>
+      processors.nullableProcessor(inst, ctx, json, params);
+    inst.unwrap = () => inst._zod.def.innerType;
   });
-  function Dh(e) {
-    return new v.ZodNullable({ type: "nullable", innerType: e });
+  function nullable(innerType) {
+    return new cjsExports.ZodNullable({
+      type: "nullable",
+      innerType,
+    });
   }
-  function x7(e) {
-    return Rh(Dh(e));
+  function nullish(innerType) {
+    return optional(nullable(innerType));
   }
-  v.ZodDefault = R.$constructor("ZodDefault", (e, t) => {
-    (R.$ZodDefault.init(e, t),
-      v.ZodType.init(e, t),
-      (e._zod.processJSONSchema = (n, o, r) => Xe.defaultProcessor(e, n, o, r)),
-      (e.unwrap = () => e._zod.def.innerType),
-      (e.removeDefault = e.unwrap));
+  cjsExports.ZodDefault = core.$constructor("ZodDefault", (inst, def) => {
+    core.$ZodDefault.init(inst, def);
+    cjsExports.ZodType.init(inst, def);
+    inst._zod.processJSONSchema = (ctx, json, params) => processors.defaultProcessor(inst, ctx, json, params);
+    inst.unwrap = () => inst._zod.def.innerType;
+    inst.removeDefault = inst.unwrap;
   });
-  function ST(e, t) {
-    return new v.ZodDefault({
+  function _default(innerType, defaultValue) {
+    return new cjsExports.ZodDefault({
       type: "default",
-      innerType: e,
+      innerType,
       get defaultValue() {
-        return typeof t === "function" ? t() : de.util.shallowClone(t);
+        return typeof defaultValue === "function"
+          ? defaultValue()
+          : index_js_1.util.shallowClone(defaultValue);
       },
     });
   }
-  v.ZodPrefault = R.$constructor("ZodPrefault", (e, t) => {
-    (R.$ZodPrefault.init(e, t),
-      v.ZodType.init(e, t),
-      (e._zod.processJSONSchema = (n, o, r) => Xe.prefaultProcessor(e, n, o, r)),
-      (e.unwrap = () => e._zod.def.innerType));
+  cjsExports.ZodPrefault = core.$constructor("ZodPrefault", (inst, def) => {
+    core.$ZodPrefault.init(inst, def);
+    cjsExports.ZodType.init(inst, def);
+    inst._zod.processJSONSchema = (ctx, json, params) =>
+      processors.prefaultProcessor(inst, ctx, json, params);
+    inst.unwrap = () => inst._zod.def.innerType;
   });
-  function kT(e, t) {
-    return new v.ZodPrefault({
+  function prefault(innerType, defaultValue) {
+    return new cjsExports.ZodPrefault({
       type: "prefault",
-      innerType: e,
+      innerType,
       get defaultValue() {
-        return typeof t === "function" ? t() : de.util.shallowClone(t);
+        return typeof defaultValue === "function"
+          ? defaultValue()
+          : index_js_1.util.shallowClone(defaultValue);
       },
     });
   }
-  v.ZodNonOptional = R.$constructor("ZodNonOptional", (e, t) => {
-    (R.$ZodNonOptional.init(e, t),
-      v.ZodType.init(e, t),
-      (e._zod.processJSONSchema = (n, o, r) => Xe.nonoptionalProcessor(e, n, o, r)),
-      (e.unwrap = () => e._zod.def.innerType));
+  cjsExports.ZodNonOptional = core.$constructor("ZodNonOptional", (inst, def) => {
+    core.$ZodNonOptional.init(inst, def);
+    cjsExports.ZodType.init(inst, def);
+    inst._zod.processJSONSchema = (ctx, json, params) =>
+      processors.nonoptionalProcessor(inst, ctx, json, params);
+    inst.unwrap = () => inst._zod.def.innerType;
   });
-  function ET(e, t) {
-    return new v.ZodNonOptional({ type: "nonoptional", innerType: e, ...de.util.normalizeParams(t) });
-  }
-  v.ZodSuccess = R.$constructor("ZodSuccess", (e, t) => {
-    (R.$ZodSuccess.init(e, t),
-      v.ZodType.init(e, t),
-      (e._zod.processJSONSchema = (n, o, r) => Xe.successProcessor(e, n, o, r)),
-      (e.unwrap = () => e._zod.def.innerType));
-  });
-  function L7(e) {
-    return new v.ZodSuccess({ type: "success", innerType: e });
-  }
-  v.ZodCatch = R.$constructor("ZodCatch", (e, t) => {
-    (R.$ZodCatch.init(e, t),
-      v.ZodType.init(e, t),
-      (e._zod.processJSONSchema = (n, o, r) => Xe.catchProcessor(e, n, o, r)),
-      (e.unwrap = () => e._zod.def.innerType),
-      (e.removeCatch = e.unwrap));
-  });
-  function PT(e, t) {
-    return new v.ZodCatch({
-      type: "catch",
-      innerType: e,
-      catchValue: typeof t === "function" ? t : R.util.constantCatch(t),
+  function nonoptional(innerType, params) {
+    return new cjsExports.ZodNonOptional({
+      type: "nonoptional",
+      innerType,
+      ...index_js_1.util.normalizeParams(params),
     });
   }
-  v.ZodNaN = R.$constructor("ZodNaN", (e, t) => {
-    (R.$ZodNaN.init(e, t),
-      v.ZodType.init(e, t),
-      (e._zod.processJSONSchema = (n, o, r) => Xe.nanProcessor(e, n, o, r)));
+  cjsExports.ZodSuccess = core.$constructor("ZodSuccess", (inst, def) => {
+    core.$ZodSuccess.init(inst, def);
+    cjsExports.ZodType.init(inst, def);
+    inst._zod.processJSONSchema = (ctx, json, params) => processors.successProcessor(inst, ctx, json, params);
+    inst.unwrap = () => inst._zod.def.innerType;
   });
-  function N7(e) {
-    return R._nan(v.ZodNaN, e);
+  function success(innerType) {
+    return new cjsExports.ZodSuccess({
+      type: "success",
+      innerType,
+    });
   }
-  v.ZodPipe = R.$constructor("ZodPipe", (e, t) => {
-    (R.$ZodPipe.init(e, t),
-      v.ZodType.init(e, t),
-      (e._zod.processJSONSchema = (n, o, r) => Xe.pipeProcessor(e, n, o, r)),
-      (e.in = t.in),
-      (e.out = t.out));
+  cjsExports.ZodCatch = core.$constructor("ZodCatch", (inst, def) => {
+    core.$ZodCatch.init(inst, def);
+    cjsExports.ZodType.init(inst, def);
+    inst._zod.processJSONSchema = (ctx, json, params) => processors.catchProcessor(inst, ctx, json, params);
+    inst.unwrap = () => inst._zod.def.innerType;
+    inst.removeCatch = inst.unwrap;
   });
-  function ab(e, t) {
-    return new v.ZodPipe({ type: "pipe", in: e, out: t });
+  function _catch(innerType, catchValue) {
+    return new cjsExports.ZodCatch({
+      type: "catch",
+      innerType,
+      catchValue: typeof catchValue === "function" ? catchValue : core.util.constantCatch(catchValue),
+    });
   }
-  v.ZodCodec = R.$constructor("ZodCodec", (e, t) => {
-    (v.ZodPipe.init(e, t), R.$ZodCodec.init(e, t));
+  cjsExports.ZodNaN = core.$constructor("ZodNaN", (inst, def) => {
+    core.$ZodNaN.init(inst, def);
+    cjsExports.ZodType.init(inst, def);
+    inst._zod.processJSONSchema = (ctx, json, params) => processors.nanProcessor(inst, ctx, json, params);
   });
-  function U7(e, t, n) {
-    return new v.ZodCodec({ type: "pipe", in: e, out: t, transform: n.decode, reverseTransform: n.encode });
+  function nan(params) {
+    return core._nan(cjsExports.ZodNaN, params);
   }
-  function z7(e) {
-    let def = e._zod.def;
-    return new v.ZodCodec({
+  cjsExports.ZodPipe = core.$constructor("ZodPipe", (inst, def) => {
+    core.$ZodPipe.init(inst, def);
+    cjsExports.ZodType.init(inst, def);
+    inst._zod.processJSONSchema = (ctx, json, params) => processors.pipeProcessor(inst, ctx, json, params);
+    inst.in = def.in;
+    inst.out = def.out;
+  });
+  function pipe(in_, out) {
+    return new cjsExports.ZodPipe({
+      type: "pipe",
+      in: in_,
+      out,
+    });
+  }
+  cjsExports.ZodCodec = core.$constructor("ZodCodec", (inst, def) => {
+    cjsExports.ZodPipe.init(inst, def);
+    core.$ZodCodec.init(inst, def);
+  });
+  function codec(in_, out, params) {
+    return new cjsExports.ZodCodec({
+      type: "pipe",
+      in: in_,
+      out,
+      transform: params.decode,
+      reverseTransform: params.encode,
+    });
+  }
+  function invertCodec(codec) {
+    let def = codec._zod.def;
+    return new cjsExports.ZodCodec({
       type: "pipe",
       in: def.out,
       out: def.in,
@@ -1442,147 +1671,179 @@ var ra = x(function (v) {
       reverseTransform: def.transform,
     });
   }
-  v.ZodPreprocess = R.$constructor("ZodPreprocess", (e, t) => {
-    (v.ZodPipe.init(e, t), R.$ZodPreprocess.init(e, t));
+  cjsExports.ZodPreprocess = core.$constructor("ZodPreprocess", (inst, def) => {
+    cjsExports.ZodPipe.init(inst, def);
+    core.$ZodPreprocess.init(inst, def);
   });
-  v.ZodReadonly = R.$constructor("ZodReadonly", (e, t) => {
-    (R.$ZodReadonly.init(e, t),
-      v.ZodType.init(e, t),
-      (e._zod.processJSONSchema = (n, o, r) => Xe.readonlyProcessor(e, n, o, r)),
-      (e.unwrap = () => e._zod.def.innerType));
+  cjsExports.ZodReadonly = core.$constructor("ZodReadonly", (inst, def) => {
+    core.$ZodReadonly.init(inst, def);
+    cjsExports.ZodType.init(inst, def);
+    inst._zod.processJSONSchema = (ctx, json, params) =>
+      processors.readonlyProcessor(inst, ctx, json, params);
+    inst.unwrap = () => inst._zod.def.innerType;
   });
-  function AT(e) {
-    return new v.ZodReadonly({ type: "readonly", innerType: e });
-  }
-  v.ZodTemplateLiteral = R.$constructor("ZodTemplateLiteral", (e, t) => {
-    (R.$ZodTemplateLiteral.init(e, t),
-      v.ZodType.init(e, t),
-      (e._zod.processJSONSchema = (n, o, r) => Xe.templateLiteralProcessor(e, n, o, r)));
-  });
-  function F7(e, t) {
-    return new v.ZodTemplateLiteral({ type: "template_literal", parts: e, ...de.util.normalizeParams(t) });
-  }
-  v.ZodLazy = R.$constructor("ZodLazy", (e, t) => {
-    (R.$ZodLazy.init(e, t),
-      v.ZodType.init(e, t),
-      (e._zod.processJSONSchema = (n, o, r) => Xe.lazyProcessor(e, n, o, r)),
-      (e.unwrap = () => e._zod.def.getter()));
-  });
-  function IT(e) {
-    return new v.ZodLazy({ type: "lazy", getter: e });
-  }
-  v.ZodPromise = R.$constructor("ZodPromise", (e, t) => {
-    (R.$ZodPromise.init(e, t),
-      v.ZodType.init(e, t),
-      (e._zod.processJSONSchema = (n, o, r) => Xe.promiseProcessor(e, n, o, r)),
-      (e.unwrap = () => e._zod.def.innerType));
-  });
-  function B7(e) {
-    return new v.ZodPromise({ type: "promise", innerType: e });
-  }
-  v.ZodFunction = R.$constructor("ZodFunction", (e, t) => {
-    (R.$ZodFunction.init(e, t),
-      v.ZodType.init(e, t),
-      (e._zod.processJSONSchema = (n, o, r) => Xe.functionProcessor(e, n, o, r)));
-  });
-  function Lh(e) {
-    return new v.ZodFunction({
-      type: "function",
-      input: Array.isArray(e?.input) ? vT(e?.input) : (e?.input ?? xh(sc())),
-      output: e?.output ?? sc(),
+  function readonly(innerType) {
+    return new cjsExports.ZodReadonly({
+      type: "readonly",
+      innerType,
     });
   }
-  v.ZodCustom = R.$constructor("ZodCustom", (e, t) => {
-    (R.$ZodCustom.init(e, t),
-      v.ZodType.init(e, t),
-      (e._zod.processJSONSchema = (n, o, r) => Xe.customProcessor(e, n, o, r)));
+  cjsExports.ZodTemplateLiteral = core.$constructor("ZodTemplateLiteral", (inst, def) => {
+    core.$ZodTemplateLiteral.init(inst, def);
+    cjsExports.ZodType.init(inst, def);
+    inst._zod.processJSONSchema = (ctx, json, params) =>
+      processors.templateLiteralProcessor(inst, ctx, json, params);
   });
-  v.ZodProperties = R.$constructor("ZodProperties", (e, t) => {
-    (na(), R.$ZodProperties.init(e, t), v.ZodType.init(e, t));
+  function templateLiteral(parts, params) {
+    return new cjsExports.ZodTemplateLiteral({
+      type: "template_literal",
+      parts,
+      ...index_js_1.util.normalizeParams(params),
+    });
+  }
+  cjsExports.ZodLazy = core.$constructor("ZodLazy", (inst, def) => {
+    core.$ZodLazy.init(inst, def);
+    cjsExports.ZodType.init(inst, def);
+    inst._zod.processJSONSchema = (ctx, json, params) => processors.lazyProcessor(inst, ctx, json, params);
+    inst.unwrap = () => inst._zod.def.getter();
   });
-  function CT(e, t) {
-    return R._properties(v.ZodProperties, e, t);
+  function lazy(getter) {
+    return new cjsExports.ZodLazy({
+      type: "lazy",
+      getter,
+    });
   }
-  function H7(e) {
-    let t = new R.$ZodCheck({ check: "custom" });
-    return ((t._zod.check = e), t);
+  cjsExports.ZodPromise = core.$constructor("ZodPromise", (inst, def) => {
+    core.$ZodPromise.init(inst, def);
+    cjsExports.ZodType.init(inst, def);
+    inst._zod.processJSONSchema = (ctx, json, params) => processors.promiseProcessor(inst, ctx, json, params);
+    inst.unwrap = () => inst._zod.def.innerType;
+  });
+  function promise(innerType) {
+    return new cjsExports.ZodPromise({
+      type: "promise",
+      innerType,
+    });
   }
-  function K7(e, t) {
-    return R._custom(v.ZodCustom, e ?? (() => !0), t);
+  cjsExports.ZodFunction = core.$constructor("ZodFunction", (inst, def) => {
+    core.$ZodFunction.init(inst, def);
+    cjsExports.ZodType.init(inst, def);
+    inst._zod.processJSONSchema = (ctx, json, params) =>
+      processors.functionProcessor(inst, ctx, json, params);
+  });
+  function _function(params) {
+    return new cjsExports.ZodFunction({
+      type: "function",
+      input: Array.isArray(params?.input) ? tuple(params?.input) : (params?.input ?? array(unknown())),
+      output: params?.output ?? unknown(),
+    });
   }
-  function TT(e, t = {}) {
-    return R._refine(v.ZodCustom, e, t);
+  cjsExports.ZodCustom = core.$constructor("ZodCustom", (inst, def) => {
+    core.$ZodCustom.init(inst, def);
+    cjsExports.ZodType.init(inst, def);
+    inst._zod.processJSONSchema = (ctx, json, params) => processors.customProcessor(inst, ctx, json, params);
+  });
+  cjsExports.ZodProperties = core.$constructor("ZodProperties", (inst, def) => {
+    _ensureDefaultMemoizer();
+    core.$ZodProperties.init(inst, def);
+    cjsExports.ZodType.init(inst, def);
+  });
+  function properties(shape, params) {
+    return core._properties(cjsExports.ZodProperties, shape, params);
   }
-  function $T(e, t) {
-    return R._superRefine(e, t);
+  function check(fn) {
+    let ch = new core.$ZodCheck({
+      check: "custom",
+    });
+    ch._zod.check = fn;
+    return ch;
   }
-  v.describe = R.describe;
-  v.meta = R.meta;
-  v.ZodInstanceOf = R.$constructor(
+  function custom(fn, _params) {
+    return core._custom(cjsExports.ZodCustom, fn ?? (() => true), _params);
+  }
+  function refine(fn, _params = {}) {
+    return core._refine(cjsExports.ZodCustom, fn, _params);
+  }
+  function superRefine(fn, params) {
+    return core._superRefine(fn, params);
+  }
+  cjsExports.describe = core.describe;
+  cjsExports.meta = core.meta;
+  cjsExports.ZodInstanceOf = core.$constructor(
     "ZodInstanceOf",
-    (e, t) => {
-      v.ZodCustom.init(e, t);
+    (inst, def) => {
+      cjsExports.ZodCustom.init(inst, def);
     },
     {
-      properties(e, t) {
-        return this.check(CT(e, t));
+      properties(shape, params) {
+        return this.check(properties(shape, params));
       },
     },
   );
-  function Z7(e, t = {}) {
-    let n = new v.ZodInstanceOf({
+  function _instanceof(cls, params = {}) {
+    let inst = new cjsExports.ZodInstanceOf({
       type: "custom",
       check: "custom",
-      fn: (o) => o instanceof e,
-      abort: !0,
-      ...de.util.normalizeParams(t),
+      fn: (data) => data instanceof cls,
+      abort: true,
+      ...index_js_1.util.normalizeParams(params),
     });
-    return (
-      (n._zod.bag.Class = e),
-      (n._zod.check = (o) => {
-        if (!(o.value instanceof e))
-          o.issues.push({
-            code: "invalid_type",
-            expected: e.name,
-            input: o.value,
-            inst: n,
-            path: [...(n._zod.def.path ?? [])],
-          });
-      }),
-      n
+    inst._zod.bag.Class = cls;
+    inst._zod.check = (payload) => {
+      if (!(payload.value instanceof cls))
+        payload.issues.push({
+          code: "invalid_type",
+          expected: cls.name,
+          input: payload.value,
+          inst,
+          path: [...(inst._zod.def.path ?? [])],
+        });
+    };
+    return inst;
+  }
+  var stringbool = (...args) =>
+    core._stringbool(
+      {
+        Codec: cjsExports.ZodCodec,
+        Boolean: cjsExports.ZodBoolean,
+        String: cjsExports.ZodString,
+      },
+      ...args,
     );
+  cjsExports.stringbool = stringbool;
+  function json(params) {
+    let jsonSchema = lazy(() =>
+      union([string(params), number(), boolean(), _null(), array(jsonSchema), record(string(), jsonSchema)]),
+    );
+    return jsonSchema;
   }
-  var V7 = (...e) => R._stringbool({ Codec: v.ZodCodec, Boolean: v.ZodBoolean, String: v.ZodString }, ...e);
-  v.stringbool = V7;
-  function q7(e) {
-    let t = IT(() => cb([Th(e), gT(), yT(), _T(), xh(t), wT(Th(), t)]));
-    return t;
-  }
-  function G7(e, t) {
-    return new v.ZodPreprocess({ type: "pipe", in: db(e), out: t });
+  function preprocess(fn, schema) {
+    return new cjsExports.ZodPreprocess({
+      type: "pipe",
+      in: transform(fn),
+      out: schema,
+    });
   }
   (function () {
-    var ownPropertyNames = Object.getOwnPropertyNames(v);
-    for (var t = 0; t < ownPropertyNames.length; t++) {
-      var ownPropertyDescriptor = Object.getOwnPropertyDescriptor(v, ownPropertyNames[t]);
-      if (!ownPropertyDescriptor || !ownPropertyDescriptor.get || !ownPropertyDescriptor.configurable)
-        continue;
-      var o;
+    var keys = Object.getOwnPropertyNames(cjsExports);
+    for (var i = 0; i < keys.length; i++) {
+      var desc = Object.getOwnPropertyDescriptor(cjsExports, keys[i]);
+      if (!desc || !desc.get || !desc.configurable) continue;
+      var value;
       try {
-        o = ownPropertyDescriptor.get();
-      } catch (error) {
+        value = desc.get();
+      } catch (e) {
         continue;
       }
-      if (o === void 0) continue;
-      Object.defineProperty(v, ownPropertyNames[t], {
-        value: o,
-        writable: !1,
-        enumerable: ownPropertyDescriptor.enumerable,
-        configurable: !1,
+      if (value === undefined) continue;
+      Object.defineProperty(cjsExports, keys[i], {
+        value,
+        writable: false,
+        enumerable: desc.enumerable,
+        configurable: false,
       });
     }
-    Object.freeze(v);
+    Object.freeze(cjsExports);
   })();
 });
-
-export { ra };
+export { require_schemas_2 };

@@ -8,11 +8,15 @@
  * pieces: chunk-c55mbvfz.js (24)
  * attribution: placement 24
  */
-import { j } from "../../../vendor/react/cjs/react.production.js";
+import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
 import { MEMORY_LIST_TOOL_NAME, MEMORY_READ, MEMORY_WRITE } from "../../tools/MemoryTool/memoryToolNames.js";
-import { BRACKET_CONFUSABLES, escapeXmlText } from "../../utils/sanitization.js";
+import { BRACKET_CONFUSABLES_2, escapeXmlText } from "../../utils/sanitization.js";
 import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
-import { readSavedSelection, Jpe, yPe } from "../../services/orgMemory/selection.js";
+import {
+  readSavedSelection,
+  selectionAccountKey,
+  isPublicProjects,
+} from "../../services/orgMemory/selection.js";
 import {
   disconnectOrgMemory,
   reconnectOrgMemory,
@@ -27,7 +31,11 @@ import {
   getOrgMemoryDecision,
   getOrgMemoryServedIdentity,
 } from "../../services/orgMemory/orgMemoryDecision.js";
-import { mwe, buildMemoryStoreEntry, formatMemoryStoreLine } from "../../memdir/memoryStoresPrompt.js";
+import {
+  setSharedMemoryServedViaTools,
+  buildMemoryStoreEntry,
+  formatMemoryStoreLine,
+} from "../../memdir/memoryStoresPrompt.js";
 import { clearOrgMemoryCredential } from "../../services/orgMemory/credential.js";
 import { logError } from "../../utils/log.js";
 import {
@@ -35,7 +43,7 @@ import {
   getStoreScopeLabel,
   describeStoreScope,
 } from "../../services/orgMemory/storeLabels.js";
-import { Qpe, CAt } from "../../services/memorySync/availability.js";
+import { readableOrgMemoryStores, isStoreWritable } from "../../services/memorySync/availability.js";
 import { isNetworkPath } from "../../utils/fsSafety/networkPathCheck.js";
 import { truncateCodePoints } from "../../utils/stringUtils.js";
 import { loadStorePromptIndex } from "../../services/orgMemory/promptIndex.js";
@@ -45,81 +53,95 @@ import { wrapInSystemReminder } from "../../utils/messages.js";
 import { describeMemoryStoreIndex, wrapFetchedMemoryIndex } from "../../memdir/memdir.js";
 
 //@ chunk-c55mbvfz.js:21749-21753 placement
-j();
+init_react_production();
 //@ chunk-c55mbvfz.js:21819-21926 placement
-var MEMORY_TOOL_NAMES = `${MEMORY_LIST_TOOL_NAME} / ${MEMORY_READ} / ${MEMORY_WRITE}`,
-  MAX_PROJECT_NAME_CHARS = 80,
-  BRACKET_CONFUSABLES_REGEX = new RegExp(`[${[...BRACKET_CONFUSABLES.keys()].join("")}]`, "gu"),
-  MEMORY_INDEX_FETCH_TIMEOUT_MS = 20000,
-  MEMORY_SWITCH_TIMEOUT_MS = 120000;
+var MEMORY_TOOL_NAMES = `${MEMORY_LIST_TOOL_NAME} / ${MEMORY_READ} / ${MEMORY_WRITE}`;
+var MAX_PROJECT_NAME_CHARS = 80;
+var BRACKET_CONFUSABLES_REGEX = new RegExp(`[${[...BRACKET_CONFUSABLES_2.keys()].join("")}]`, "gu");
+var MEMORY_INDEX_FETCH_TIMEOUT_MS = 20000;
+var MEMORY_SWITCH_TIMEOUT_MS = 120000;
 //@ chunk-c55mbvfz.js:21926-21973 placement
-class Yo {
+class RequestEpoch {
   latest = 0;
   begin() {
     return ++this.latest;
   }
 }
 //@ chunk-c55mbvfz.js:21973-21999 placement
-var Jt = new SessionRootSlot(() => new Yo());
+var requestEpochSlot = new SessionRootSlot(() => new RequestEpoch());
+//@ chunk-c55mbvfz.js:21999-23215 placement
 /**
  * 切换/断开当前目录使用的组织记忆项目，等待决定落定并返回结果状态。
  */
-//@ chunk-c55mbvfz.js:21999-23215 placement
-async function switchOrgMemoryProject(b, _) {
+async function switchOrgMemoryProject(session, _) {
   try {
-    let of = Jt.of(b),
-      begin = of.begin(),
-      T = _ === "project" ? readSavedSelection() : null,
-      x = Jpe(),
-      D = snapshotOrgMemoryStores(),
-      N = () => {
-        D = snapshotOrgMemoryStores();
-      },
-      B = _ === "off" ? disconnectOrgMemory(N) : reconnectOrgMemory(N),
-      I = (await withDeadline(B, MEMORY_INDEX_FETCH_TIMEOUT_MS)) ?? "timeout";
-    if (I !== "timeout" && I.kind === "refused")
-      return (
-        logMemoryProjectSwitch("refused", D, D, []),
-        logFeatureSad("org_memory_project_switch", I.reason),
-        { outcome: "refused", notice: memoryDeferredText(I.reason) }
-      );
-    let L = snapshotOrgMemoryStores(),
-      U = I === "timeout" || I.current.state === "undecided",
-      V = U ? "pending" : memorySwitchOutcome(_, D, L),
-      ee = I !== "timeout" && I.current.state === "on" ? I.current.request.selection : null,
-      Y = !U && T !== null && ee !== T && Jpe() === x && readSavedSelection() === null;
+    let C = requestEpochSlot.of(session);
+    let v = C.begin();
+    let T = _ === "project" ? readSavedSelection() : null;
+    let x = selectionAccountKey();
+    let D = snapshotOrgMemoryStores();
+    let N = () => {
+      D = snapshotOrgMemoryStores();
+    };
+    let B = _ === "off" ? disconnectOrgMemory(N) : reconnectOrgMemory(N);
+    let I = (await withDeadline(B, MEMORY_INDEX_FETCH_TIMEOUT_MS)) ?? "timeout";
+    if (I !== "timeout" && I.kind === "refused") {
+      logMemoryProjectSwitch("refused", D, D, []);
+      logFeatureSad("org_memory_project_switch", I.reason);
+      return {
+        outcome: "refused",
+        notice: memoryDeferredText(I.reason),
+      };
+    }
+    let L = snapshotOrgMemoryStores();
+    let U = I === "timeout" || I.current.state === "undecided";
+    let V = U ? "pending" : memorySwitchOutcome(_, D, L);
+    let selection = I !== "timeout" && I.current.state === "on" ? I.current.request.selection : null;
+    let pickDropped =
+      !U && T !== null && selection !== T && selectionAccountKey() === x && readSavedSelection() === null;
     applyMemoryWritableState(V, D, L);
     let K = V === "switched" || V === "connected" ? await loadMemoryStoresContent(L.stores) : [];
-    if ((logMemoryProjectSwitch(V, D, L, K, Y), Y))
-      logFeatureSad("org_memory_project_switch", "selection_dropped");
+    logMemoryProjectSwitch(V, D, L, K, pickDropped);
+    if (pickDropped) logFeatureSad("org_memory_project_switch", "selection_dropped");
     else if (V === "unavailable" || V === "pending")
       logFeatureSad(
         "org_memory_project_switch",
         I === "timeout" ? "switch_deadline" : memoryUnavailableReason(I.current),
       );
-    else logFeatureOk("org_memory_project_switch", { outcome: fromEnum(V) });
+    else
+      logFeatureOk("org_memory_project_switch", {
+        outcome: fromEnum(V),
+      });
     if (V === "pending")
-      B.then(() => waitForOrgMemoryDecisionSettled(MEMORY_SWITCH_TIMEOUT_MS, void 0, { unref: !0 }))
+      B.then(() =>
+        waitForOrgMemoryDecisionSettled(MEMORY_SWITCH_TIMEOUT_MS, undefined, {
+          unref: true,
+        }),
+      )
         .then(() => {
-          if (begin !== of.latest) return;
+          if (v !== C.latest) return;
           let H = snapshotOrgMemoryStores();
-          if (pe(D) || H.stores.length > 0) mwe(H.stores.some((store) => store.writable));
+          if (hasOrgMemoryContent(D) || H.stores.length > 0)
+            setSharedMemoryServedViaTools(H.stores.some((store) => store.writable));
         })
         .catch(() => {});
-    let X = buildOrgMemoryPrompt(V, _, D, L, K, Y);
+    let orgMemoryPrompt = buildOrgMemoryPrompt(V, _, D, L, K, pickDropped);
     return {
       outcome: V,
-      notice: describeMemorySwitchOutcome(V, _, D, L, Y),
-      ...(X !== null && { modelMessage: X }),
+      notice: describeMemorySwitchOutcome(V, _, D, L, pickDropped),
+      ...(orgMemoryPrompt !== null && {
+        modelMessage: orgMemoryPrompt,
+      }),
     };
   } catch (error) {
-    return (
-      shrinkOrgMemoryDecisionWriteAsk(),
-      clearOrgMemoryCredential(),
-      logError(error),
-      logFeatureBad("org_memory_project_switch", "unexpected_throw"),
-      { outcome: "unavailable", notice: memoryNotConnectedText(_) }
-    );
+    shrinkOrgMemoryDecisionWriteAsk();
+    clearOrgMemoryCredential();
+    logError(error);
+    logFeatureBad("org_memory_project_switch", "unexpected_throw");
+    return {
+      outcome: "unavailable",
+      notice: memoryNotConnectedText(_),
+    };
   }
 }
 //@ chunk-c55mbvfz.js:23215-23481 placement
@@ -127,20 +149,21 @@ function applyMemoryWritableState(b, _, C) {
   switch (b) {
     case "switched":
     case "connected":
-      mwe(C.stores.some((store) => store.writable));
+      setSharedMemoryServedViaTools(C.stores.some((store) => store.writable));
       return;
     case "disconnected":
     case "unavailable":
     case "pending":
-      if (pe(_)) mwe(!1);
+      if (hasOrgMemoryContent(_)) setSharedMemoryServedViaTools(false);
       return;
     case "unchanged":
-      if (pe(_) || C.stores.length > 0) mwe(C.stores.some((store) => store.writable));
+      if (hasOrgMemoryContent(_) || C.stores.length > 0)
+        setSharedMemoryServedViaTools(C.stores.some((store) => store.writable));
       return;
   }
 }
 //@ chunk-c55mbvfz.js:23481-23538 placement
-function pe(b) {
+function hasOrgMemoryContent(b) {
   return b.servedEarlier || b.stores.length > 0;
 }
 //@ chunk-c55mbvfz.js:23538-23715 placement
@@ -148,27 +171,40 @@ function snapshotOrgMemoryStores() {
   return {
     project: describeMemoryProjectSelection(getOrgMemoryDecision()),
     servedEarlier: getOrgMemoryServedIdentity() !== null,
-    stores: sortRootFirst(Qpe()).map((b) => ({
+    stores: sortRootFirst(readableOrgMemoryStores()).map((b) => ({
       id: getStoreScopeLabel(b),
       description: describeStoreScope(b),
-      writable: CAt(b),
+      writable: isStoreWritable(b),
       promptIndex: b.promptIndex,
       store: b,
     })),
   };
 }
 //@ chunk-c55mbvfz.js:23715-24020 placement
-function describeMemoryProjectSelection(b) {
-  if (b.state !== "on") return { kind: "none" };
-  let selection = b.request.selection;
-  if (selection === null || b.selectionSource !== "preference") return { kind: "default" };
-  if (yPe(selection)) return { kind: "picked", name: "all public projects" };
-  let C = getOrgMemoryPickerData()?.candidates.find((v) => v.id === selection);
-  return { kind: "picked", name: C === void 0 ? null : sanitizeProjectName(C.name) };
+function describeMemoryProjectSelection(orgMemoryDecision) {
+  if (orgMemoryDecision.state !== "on")
+    return {
+      kind: "none",
+    };
+  let selection = orgMemoryDecision.request.selection;
+  if (selection === null || orgMemoryDecision.selectionSource !== "preference")
+    return {
+      kind: "default",
+    };
+  if (isPublicProjects(selection))
+    return {
+      kind: "picked",
+      name: "all public projects",
+    };
+  let found = getOrgMemoryPickerData()?.candidates.find((candidate) => candidate.id === selection);
+  return {
+    kind: "picked",
+    name: found === undefined ? null : sanitizeProjectName(found.name),
+  };
 }
 //@ chunk-c55mbvfz.js:24020-24221 placement
-function sanitizeProjectName(b) {
-  let trimmed = isNetworkPath(b)
+function sanitizeProjectName(name) {
+  let trimmed = isNetworkPath(name)
     .replaceAll('"', "'")
     .replaceAll("<", "\u2039")
     .replaceAll(">", "\u203A")
@@ -186,7 +222,7 @@ function sameMemoryStores(b, _) {
     b.stores.every((store, v) => {
       let T = _.stores[v];
       return (
-        T !== void 0 &&
+        T !== undefined &&
         store.id === T.id &&
         store.store.path === T.store.path &&
         store.promptIndex === T.promptIndex &&
@@ -198,7 +234,7 @@ function sameMemoryStores(b, _) {
 //@ chunk-c55mbvfz.js:24439-24634 placement
 function memorySwitchOutcome(b, _, C) {
   if (C.stores.length === 0) {
-    if (b === "off") return pe(_) ? "disconnected" : "unchanged";
+    if (b === "off") return hasOrgMemoryContent(_) ? "disconnected" : "unchanged";
     return "unavailable";
   }
   if (_.stores.length === 0) return "connected";
@@ -220,22 +256,35 @@ function memoryUnavailableReason(b) {
   }
 }
 //@ chunk-c55mbvfz.js:24841-25164 placement
-async function loadMemoryStoresContent(b) {
-  let filtered = b.filter((v) => v.promptIndex !== void 0),
-    results = await Promise.all(filtered.map((v) => loadStorePromptIndex(v.store)));
-  return filtered.map((v, T) => {
+async function loadMemoryStoresContent(stores) {
+  let filtered = stores.filter((v) => v.promptIndex !== undefined);
+  let results = await Promise.all(filtered.map((v) => loadStorePromptIndex(v.store)));
+  return filtered.map((store, T) => {
     let x = results[T];
-    if (x === null || x === void 0) return { store: v, state: "unavailable", content: "" };
+    if (x === null || x === undefined)
+      return {
+        store,
+        state: "unavailable",
+        content: "",
+      };
     return x.content.trim() === ""
-      ? { store: v, state: "empty", content: "" }
-      : { store: v, state: "loaded", content: x.content };
+      ? {
+          store,
+          state: "empty",
+          content: "",
+        }
+      : {
+          store,
+          state: "loaded",
+          content: x.content,
+        };
   });
 }
 //@ chunk-c55mbvfz.js:25164-25456 placement
-function logMemoryProjectSwitch(b, _, C, v, T = !1) {
+function logMemoryProjectSwitch(b, _, C, v, pickDropped = false) {
   logEvent("tengu_org_memory_project_switch", {
     outcome: fromEnum(b),
-    pick_dropped: T,
+    pick_dropped: pickDropped,
     stores_before: _.stores.length,
     stores_after: C.stores.length,
     indexes_loaded: count(v, (x) => x.state === "loaded"),
@@ -274,14 +323,14 @@ function memoryNotConnectedText(b) {
 }
 //@ chunk-c55mbvfz.js:26503-26775 placement
 function memoryConnectedText(b) {
-  let any = b.stores.some((store) => store.writable),
-    C = `connected to ${memoryProjectLabel(b.project)}${any ? "" : " (read-only)"}`,
-    v = any ? "Claude can use it and save to it now" : "Claude can use it now";
+  let any = b.stores.some((store) => store.writable);
+  let C = `connected to ${memoryProjectLabel(b.project)}${any ? "" : " (read-only)"}`;
+  let v = any ? "Claude can use it and save to it now" : "Claude can use it now";
   return b.project.kind === "picked" ? `${C} \u2014 saved for this directory; ${v}` : `${C} \u2014 ${v}`;
 }
 //@ chunk-c55mbvfz.js:26775-27054 placement
-function memoryDeferredText(b) {
-  switch (b) {
+function memoryDeferredText(reason) {
+  switch (reason) {
     case "account_boundary":
       return "saved for this directory \u2014 the account changed mid-session, so it connects next session";
     case "untrusted_workspace":
@@ -303,43 +352,43 @@ function describeStaleMemoryPick(b, _) {
   }
 }
 //@ chunk-c55mbvfz.js:27496-27659 placement
-function memoryProjectLabel(b) {
-  switch (b.kind) {
+function memoryProjectLabel(project) {
+  switch (project.kind) {
     case "none":
       return "project memory";
     case "default":
       return "the default project memory";
     case "picked":
-      return b.name ?? "the picked project";
+      return project.name ?? "the picked project";
   }
 }
 //@ chunk-c55mbvfz.js:27659-27912 placement
-function memoryProjectPromptLabel(b) {
-  switch (b.kind) {
+function memoryProjectPromptLabel(project) {
+  switch (project.kind) {
     case "none":
       return "project memory";
     case "default":
       return "the default project memory";
     case "picked":
-      return b.name === null
+      return project.name === null
         ? "a project with no displayable name"
-        : `project "${escapeXmlText(b.name).replace(BRACKET_CONFUSABLES_REGEX, (_) => `&#${_.codePointAt(0)};`)}"`;
+        : `project "${escapeXmlText(project.name).replace(BRACKET_CONFUSABLES_REGEX, (_) => `&#${_.codePointAt(0)};`)}"`;
   }
 }
+//@ chunk-c55mbvfz.js:27912-31441 placement
 /**
  * 生成组织记忆项目的系统提示段（最近项目、已连接存储列表、读写说明）。
  */
-//@ chunk-c55mbvfz.js:27912-31441 placement
-function buildOrgMemoryPrompt(b, _, C, v, T, x = !1) {
-  let D = C.stores.length > 0 ? ` \u2014 most recently ${memoryProjectPromptLabel(C.project)}` : "",
-    N = pe(C)
-      ? ` Any connected memory store list or shared memory index your system prompt may carry, and any ${MEMORY_TOOL_NAMES} results earlier in this conversation, describe an earlier connection${D}, possibly to a different project. Treat them as stale until re-checked with the tools: do not attribute those memories to, or save them into, the project connected now on the strength of the earlier results alone. Your personal memory directory, if your system prompt names one, is unaffected.`
-      : "";
+function buildOrgMemoryPrompt(b, _, C, v, T, x = false) {
+  let D = C.stores.length > 0 ? ` \u2014 most recently ${memoryProjectPromptLabel(C.project)}` : "";
+  let N = hasOrgMemoryContent(C)
+    ? ` Any connected memory store list or shared memory index your system prompt may carry, and any ${MEMORY_TOOL_NAMES} results earlier in this conversation, describe an earlier connection${D}, possibly to a different project. Treat them as stale until re-checked with the tools: do not attribute those memories to, or save them into, the project connected now on the strength of the earlier results alone. Your personal memory directory, if your system prompt names one, is unaffected.`
+    : "";
   switch (b) {
     case "unchanged":
       return null;
     case "pending":
-      if (pe(C))
+      if (hasOrgMemoryContent(C))
         return wrapInSystemReminder(
           `This session is no longer connected to ${memoryProjectPromptLabel(C.project)} (a re-pick in /memory is still being applied). Any connected memory store list or shared memory index your system prompt may carry, and any ${MEMORY_TOOL_NAMES} results earlier in this conversation, are stale. Call ${MEMORY_LIST_TOOL_NAME} with no arguments to check what, if anything, is connected before relying on the memory tools again.`,
         );
@@ -350,20 +399,20 @@ function buildOrgMemoryPrompt(b, _, C, v, T, x = !1) {
           );
     case "disconnected":
     case "unavailable":
-      if (!pe(C)) return null;
+      if (!hasOrgMemoryContent(C)) return null;
       return wrapInSystemReminder(
         `This session is no longer connected to ${memoryProjectPromptLabel(C.project)} (${b === "disconnected" ? "the user turned it off in /memory" : x ? "the project the user re-picked is no longer available, so the pick was cleared and nothing connected" : "reconnecting to the re-picked project failed"}). Any connected memory store list or shared memory index your system prompt may carry, and any ${MEMORY_TOOL_NAMES} results earlier in this conversation, are stale, and nothing is connected for the memory tools to serve until the user reconnects in /memory (${MEMORY_LIST_TOOL_NAME} with no arguments reports what, if anything, is connected whenever you need to re-check). If the user asks you to remember something, use your personal memory directory if your system prompt names one; otherwise explain that project memory is disconnected for this session.`,
       );
     case "switched":
     case "connected": {
       let mapped = v.stores.map((store) =>
-          buildMemoryStoreEntry(store.store, store.writable, store.id, store.description),
-        ),
-        found = mapped.find((V) => !V.readOnly),
-        L =
-          found === void 0
-            ? `Every connected store is read-only in this session: ${MEMORY_WRITE} calls are refused.`
-            : `Save new shared memories in \`${found.id}\` under \`${found.projectDir}\` and keep its index \`${found.indexPath}\` current, as the ${MEMORY_WRITE} tool prompt describes. Private memories belong in your personal memory directory, if your system prompt names one; the shared stores are for what teammates should also see. Never save secrets, credentials or other sensitive data to the shared stores.`;
+        buildMemoryStoreEntry(store.store, store.writable, store.id, store.description),
+      );
+      let found = mapped.find((V) => !V.readOnly);
+      let L =
+        found === undefined
+          ? `Every connected store is read-only in this session: ${MEMORY_WRITE} calls are refused.`
+          : `Save new shared memories in \`${found.id}\` under \`${found.projectDir}\` and keep its index \`${found.indexPath}\` current, as the ${MEMORY_WRITE} tool prompt describes. Private memories belong in your personal memory directory, if your system prompt names one; the shared stores are for what teammates should also see. Never save secrets, credentials or other sensitive data to the shared stores.`;
       return [
         wrapInSystemReminder(
           [
@@ -385,8 +434,8 @@ function buildOrgMemoryPrompt(b, _, C, v, T, x = !1) {
 }
 //@ chunk-c55mbvfz.js:31441-31716 placement
 function memoryIndexPromptSection(b) {
-  let _ = `/${b.store.promptIndex}`,
-    C = describeMemoryStoreIndex(b.store.id, _);
+  let _ = `/${b.store.promptIndex}`;
+  let C = describeMemoryStoreIndex(b.store.id, _);
   switch (b.state) {
     case "unavailable":
       return `(${C} could not be fetched just now \u2014 call ${MEMORY_READ} on it when you need it.)`;
@@ -396,5 +445,4 @@ function memoryIndexPromptSection(b) {
       return wrapFetchedMemoryIndex(C, _, b.content);
   }
 }
-
 export { switchOrgMemoryProject };

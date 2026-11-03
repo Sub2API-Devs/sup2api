@@ -8,22 +8,9 @@
  * pieces: chunk-1ny7cxrt.js (1), chunk-9cjx5pnm.js (4), chunk-aepeg2w5.js (1), chunk-ay9hyszk.js (10), chunk-cgr0tezp.js (1)
  * attribution: fingerprint 12, sole-consumer 2, affinity 1, placement 1, layout 1
  */
-import {
-  win32,
-  join,
-  join as join_2,
-  join as join_3,
-  join as join_4,
-  join as join_5,
-  join as join_6,
-  join as join_7,
-  join as join_8,
-  join as join_9,
-  join as join_10,
-  join as join_11,
-} from "path";
+import { win32, join } from "path";
 import { getTeamName, getAgentId, getAgentName, getTeammateColor } from "../teammate.js";
-import { y } from "../../components/teams/TeamStatus.js";
+import { isTeamLeadDefault } from "../../components/teams/TeamStatus.js";
 import { readTeamFileAsync } from "./teamHelpers.js";
 import { logForDebugging } from "../debug.js";
 import { TEAM_LEAD } from "./constants.js";
@@ -39,7 +26,7 @@ import { logError } from "../log.js";
 import { logFeatureBad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 import { readStringListAt } from "../../services/claudeGateway/desktopSettings.js";
 import {
-  eE,
+  identityReader,
   splitCommandWords,
   REFRESH_LOCK_ENV_KEYS,
   REFRESH_LOCK_FILES,
@@ -48,30 +35,30 @@ import { computeContentHash } from "../commitAttribution.js";
 import { getProjectConfigRoot } from "../../bootstrap/state.js";
 import { getFsImplementation } from "../fsOperations.js";
 import { getProjectDirsUpToHome } from "../secureStorage/macOsKeychainHelpers.js";
-import { Mn } from "../pathClassification.js";
+import { identity } from "../pathClassification.js";
 
 //@ chunk-ay9hyszk.js:884-969 fingerprint = generateRequestId (1)
 function generateRequestId() {
   return `perm-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 }
+//@ chunk-ay9hyszk.js:969-1490 fingerprint = createPermissionRequest (0.959)
 /**
  * 构造权限请求记录（id、worker 身份与颜色、团队名、工具名、输入、建议等），缺团队/worker 信息时抛错。
  */
-//@ chunk-ay9hyszk.js:969-1490 fingerprint = createPermissionRequest (0.959)
 function createPermissionRequest(params) {
-  let r = params.teamName || getTeamName(),
-    n = params.workerId || getAgentId(),
-    o = params.workerName || getAgentName(),
-    i = params.workerColor || getTeammateColor();
-  if (!r) throw Error("Team name is required for permission requests");
-  if (!n) throw Error("Worker ID is required for permission requests");
-  if (!o) throw Error("Worker name is required for permission requests");
+  let teamName = params.teamName || getTeamName();
+  let workerId = params.workerId || getAgentId();
+  let workerName = params.workerName || getAgentName();
+  let workerColor = params.workerColor || getTeammateColor();
+  if (!teamName) throw Error("Team name is required for permission requests");
+  if (!workerId) throw Error("Worker ID is required for permission requests");
+  if (!workerName) throw Error("Worker name is required for permission requests");
   return {
     id: generateRequestId(),
-    workerId: n,
-    workerName: o,
-    workerColor: i,
-    teamName: r,
+    workerId,
+    workerName,
+    workerColor,
+    teamName,
     toolName: params.toolName,
     toolUseId: params.toolUseId,
     description: params.description,
@@ -81,39 +68,51 @@ function createPermissionRequest(params) {
   };
 }
 //@ chunk-ay9hyszk.js:1564-1618 placement
-function Yqe() {
-  let e = getTeamName(),
-    r = getAgentId();
-  return !!e && !!r && !y();
+/**
+ * 是否处于可发权限请求的队友上下文（有团队与 agent id 且非主进程）。
+ */
+function isTeammateContextReady() {
+  let teamName = getTeamName();
+  let agentId = getAgentId();
+  return !!teamName && !!agentId && !isTeamLeadDefault();
 }
+//@ chunk-ay9hyszk.js:1618-1769 fingerprint = getLeaderName (0.553)
 /**
  * 确认团队文件存在后返回 leader 名（固定 team-lead）。
  */
-//@ chunk-ay9hyszk.js:1618-1769 fingerprint = getLeaderName (0.553)
 async function getLeaderName(teamName, storage) {
   let team = teamName || getTeamName();
   if (!team) return null;
-  if (!(await readTeamFileAsync(team, storage)))
-    return (logForDebugging(`[PermissionSync] Team file not found for team: ${team}`), null);
+  if (!(await readTeamFileAsync(team, storage))) {
+    logForDebugging(`[PermissionSync] Team file not found for team: ${team}`);
+    return null;
+  }
   return TEAM_LEAD;
 }
+//@ chunk-ay9hyszk.js:1769-1940 layout
 /**
  * 写 mailbox 并记录投递成功/失败日志。
  */
-//@ chunk-ay9hyszk.js:1769-1940 layout
 async function deliverViaMailbox(recipient, message, teamName, label, storage) {
-  if ((await writeToMailbox(recipient, message, teamName, storage)) === void 0)
-    return (logForDebugging(`[PermissionSync] FAILED to deliver ${label}`, { level: "error" }), !1);
-  return (logForDebugging(`[PermissionSync] Sent ${label}`), !0);
+  if ((await writeToMailbox(recipient, message, teamName, storage)) === undefined) {
+    logForDebugging(`[PermissionSync] FAILED to deliver ${label}`, {
+      level: "error",
+    });
+    return false;
+  }
+  logForDebugging(`[PermissionSync] Sent ${label}`);
+  return true;
 }
+//@ chunk-ay9hyszk.js:1940-2548 fingerprint = sendPermissionRequestViaMailbox (0.939)
 /**
  * worker 把权限请求作为 permission_request 帧写入 leader 的 inbox。
  */
-//@ chunk-ay9hyszk.js:1940-2548 fingerprint = sendPermissionRequestViaMailbox (0.939)
 async function sendPermissionRequestViaMailbox(request, storage) {
-  let n = await getLeaderName(request.teamName, storage);
-  if (!n)
-    return (logForDebugging("[PermissionSync] Cannot send permission request: leader name not found"), !1);
+  let leaderName = await getLeaderName(request.teamName, storage);
+  if (!leaderName) {
+    logForDebugging("[PermissionSync] Cannot send permission request: leader name not found");
+    return false;
+  }
   try {
     let message = createPermissionRequestMessage({
       request_id: request.id,
@@ -125,7 +124,7 @@ async function sendPermissionRequestViaMailbox(request, storage) {
       permission_suggestions: request.permissionSuggestions,
     });
     return await deliverViaMailbox(
-      n,
+      leaderName,
       {
         from: request.workerName,
         text: jsonStringify(message),
@@ -133,21 +132,19 @@ async function sendPermissionRequestViaMailbox(request, storage) {
         color: request.workerColor,
       },
       request.teamName,
-      `permission request ${jsonStringify(request.id)} to leader ${jsonStringify(n)} via mailbox`,
+      `permission request ${jsonStringify(request.id)} to leader ${jsonStringify(leaderName)} via mailbox`,
       storage,
     );
   } catch (error) {
-    return (
-      logForDebugging(`[PermissionSync] Failed to send permission request via mailbox: ${error}`),
-      logError(error),
-      !1
-    );
+    logForDebugging(`[PermissionSync] Failed to send permission request via mailbox: ${error}`);
+    logError(error);
+    return false;
   }
 }
+//@ chunk-ay9hyszk.js:2548-3140 fingerprint = sendPermissionResponseViaMailbox (0.853)
 /**
  * leader 把审批结果（approved→success、否则 error）作为 permission_response 写入 worker 的 inbox。
  */
-//@ chunk-ay9hyszk.js:2548-3140 fingerprint = sendPermissionResponseViaMailbox (0.853)
 async function sendPermissionResponseViaMailbox(
   workerName,
   resolution,
@@ -156,9 +153,11 @@ async function sendPermissionResponseViaMailbox(
   storage,
   toolUseId,
 ) {
-  let d = teamName || getTeamName();
-  if (!d)
-    return (logForDebugging("[PermissionSync] Cannot send permission response: team name not found"), !1);
+  let team = teamName || getTeamName();
+  if (!team) {
+    logForDebugging("[PermissionSync] Cannot send permission response: team name not found");
+    return false;
+  }
   try {
     let message = createPermissionResponseMessage({
       request_id: requestId,
@@ -171,90 +170,87 @@ async function sendPermissionResponseViaMailbox(
     });
     return await deliverViaMailbox(
       workerName,
-      { from: TEAM_LEAD, text: jsonStringify(message), timestamp: new Date().toISOString() },
-      d,
+      {
+        from: TEAM_LEAD,
+        text: jsonStringify(message),
+        timestamp: new Date().toISOString(),
+      },
+      team,
       `permission response for ${jsonStringify(requestId)} to worker ${jsonStringify(workerName)} via mailbox`,
       storage,
     );
   } catch (error) {
-    return (
-      logForDebugging(`[PermissionSync] Failed to send permission response via mailbox: ${error}`),
-      logError(error),
-      !1
-    );
+    logForDebugging(`[PermissionSync] Failed to send permission response via mailbox: ${error}`);
+    logError(error);
+    return false;
   }
 }
+//@ chunk-ay9hyszk.js:3140-3230 fingerprint = generateSandboxRequestId (1)
 /**
  * 生成沙箱权限请求 ID：sandbox-<时间戳>-<随机>。
  */
-//@ chunk-ay9hyszk.js:3140-3230 fingerprint = generateSandboxRequestId (1)
 function generateSandboxRequestId() {
   return `sandbox-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 }
+//@ chunk-ay9hyszk.js:3230-4309 fingerprint = sendSandboxPermissionRequestViaMailbox (0.755)
 /**
  * worker 请求沙箱网络访问某主机：写 sandbox_permission_request 到 leader 的 inbox，记 swarm_sandbox_permission_request。
  */
-//@ chunk-ay9hyszk.js:3230-4309 fingerprint = sendSandboxPermissionRequestViaMailbox (0.755)
 async function sendSandboxPermissionRequestViaMailbox(host, requestId, teamName, storage) {
   let team = teamName || getTeamName();
-  if (!team)
-    return (
-      logForDebugging("[PermissionSync] Cannot send sandbox permission request: team name not found"),
-      logFeatureBad("swarm_sandbox_permission_request", "no_team_name"),
-      !1
-    );
-  let a = await getLeaderName(team, storage);
-  if (!a)
-    return (
-      logForDebugging("[PermissionSync] Cannot send sandbox permission request: leader name not found"),
-      logFeatureBad("swarm_sandbox_permission_request", "no_leader"),
-      !1
-    );
-  let workerId = getAgentId(),
-    workerName = getAgentName(),
-    workerColor = getTeammateColor();
-  if (!workerId || !workerName)
-    return (
-      logForDebugging("[PermissionSync] Cannot send sandbox permission request: worker ID or name not found"),
-      logFeatureBad("swarm_sandbox_permission_request", "no_worker_identity"),
-      !1
-    );
+  if (!team) {
+    logForDebugging("[PermissionSync] Cannot send sandbox permission request: team name not found");
+    logFeatureBad("swarm_sandbox_permission_request", "no_team_name");
+    return false;
+  }
+  let leaderName = await getLeaderName(team, storage);
+  if (!leaderName) {
+    logForDebugging("[PermissionSync] Cannot send sandbox permission request: leader name not found");
+    logFeatureBad("swarm_sandbox_permission_request", "no_leader");
+    return false;
+  }
+  let workerId = getAgentId();
+  let workerName = getAgentName();
+  let workerColor = getTeammateColor();
+  if (!workerId || !workerName) {
+    logForDebugging("[PermissionSync] Cannot send sandbox permission request: worker ID or name not found");
+    logFeatureBad("swarm_sandbox_permission_request", "no_worker_identity");
+    return false;
+  }
   try {
     let message = createSandboxPermissionRequestMessage({
-        requestId: requestId,
-        workerId: workerId,
-        workerName: workerName,
-        workerColor: workerColor,
-        host: host,
-      }),
-      w = await deliverViaMailbox(
-        a,
-        {
-          from: workerName,
-          text: jsonStringify(message),
-          timestamp: new Date().toISOString(),
-          color: workerColor,
-        },
-        team,
-        `sandbox permission request ${jsonStringify(requestId)} for host ${jsonStringify(host)} to leader ${jsonStringify(a)} via mailbox`,
-        storage,
-      );
+      requestId,
+      workerId,
+      workerName,
+      workerColor,
+      host,
+    });
+    let w = await deliverViaMailbox(
+      leaderName,
+      {
+        from: workerName,
+        text: jsonStringify(message),
+        timestamp: new Date().toISOString(),
+        color: workerColor,
+      },
+      team,
+      `sandbox permission request ${jsonStringify(requestId)} for host ${jsonStringify(host)} to leader ${jsonStringify(leaderName)} via mailbox`,
+      storage,
+    );
     if (w) logFeatureOk("swarm_sandbox_permission_request");
     else logFeatureBad("swarm_sandbox_permission_request", "mailbox_write_failed");
     return w;
   } catch (error) {
-    return (
-      logForDebugging(`[PermissionSync] Failed to send sandbox permission request via mailbox: ${error}`),
-      logError(error),
-      logFeatureBad("swarm_sandbox_permission_request", "mailbox_write_failed"),
-      !1
-    );
+    logForDebugging(`[PermissionSync] Failed to send sandbox permission request via mailbox: ${error}`);
+    logError(error);
+    logFeatureBad("swarm_sandbox_permission_request", "mailbox_write_failed");
+    return false;
   }
 }
+//@ chunk-ay9hyszk.js:4309-4787 fingerprint = sendSandboxPermissionResponseViaMailbox (0.884)
 /**
  * leader 回复沙箱主机权限（sandbox_permission_response）。
  */
-//@ chunk-ay9hyszk.js:4309-4787 fingerprint = sendSandboxPermissionResponseViaMailbox (0.884)
 async function sendSandboxPermissionResponseViaMailbox(
   workerName,
   requestId,
@@ -263,73 +259,86 @@ async function sendSandboxPermissionResponseViaMailbox(
   teamName,
   storage,
 ) {
-  let d = teamName || getTeamName();
-  if (!d)
-    return (
-      logForDebugging("[PermissionSync] Cannot send sandbox permission response: team name not found"),
-      !1
-    );
+  let team = teamName || getTeamName();
+  if (!team) {
+    logForDebugging("[PermissionSync] Cannot send sandbox permission response: team name not found");
+    return false;
+  }
   try {
-    let message = createSandboxPermissionResponseMessage({ requestId: requestId, host: host, allow: allow });
+    let message = createSandboxPermissionResponseMessage({
+      requestId,
+      host,
+      allow,
+    });
     return await deliverViaMailbox(
       workerName,
-      { from: TEAM_LEAD, text: jsonStringify(message), timestamp: new Date().toISOString() },
-      d,
+      {
+        from: TEAM_LEAD,
+        text: jsonStringify(message),
+        timestamp: new Date().toISOString(),
+      },
+      team,
       `sandbox permission response for ${jsonStringify(requestId)} (host: ${jsonStringify(host)}, allow: ${jsonStringify(allow)}) to worker ${jsonStringify(workerName)} via mailbox`,
       storage,
     );
   } catch (error) {
-    return (
-      logForDebugging(`[PermissionSync] Failed to send sandbox permission response via mailbox: ${error}`),
-      logError(error),
-      !1
-    );
+    logForDebugging(`[PermissionSync] Failed to send sandbox permission response via mailbox: ${error}`);
+    logError(error);
+    return false;
   }
 }
 //@ chunk-9cjx5pnm.js:19664-19726 sole-consumer
-var Rt = (e, r, s) => e.find((n) => n.plugin_id === r.id && n.status === s);
+var findInstallPreferenceEntry = (e, r, s) => e.find((n) => n.plugin_id === r.id && n.status === s);
 //@ chunk-9cjx5pnm.js:19726-19768 sole-consumer
-var ta = (e) => (e === void 0 ? "available" : void 0);
+var installPreferenceValue = (installPreferenceEntry) =>
+  installPreferenceEntry === undefined ? "available" : undefined;
 //@ chunk-9cjx5pnm.js:19768-19806 affinity = _temp0 (1)
-var sa = (a_5) => ({ kind: "plugin", id: a_5.id });
+var pluginInstallSource = (a_5) => ({
+  kind: "plugin",
+  id: a_5.id,
+});
 //@ chunk-9cjx5pnm.js:19806-19928 fingerprint = pollForResponse (0.385)
 var buildInstallPreferenceFields = (e, r) => ({
-  source: sa(e),
-  proposed_install_preference: ta(Rt(r, e, "approved")),
-  predecessor_uuid: Rt(r, e, "denied")?.uuid,
+  source: pluginInstallSource(e),
+  proposed_install_preference: installPreferenceValue(findInstallPreferenceEntry(r, e, "approved")),
+  predecessor_uuid: findInstallPreferenceEntry(r, e, "denied")?.uuid,
 });
+//@ chunk-1ny7cxrt.js:1385435-1385609 fingerprint = getPermissionDir (0.573)
 /**
  * 从设置的 permissions.deny 里挑出不带参数、非 MCP 的工具名，作为 disabledBuiltinTools。与团队权限同步无关。
  */
-//@ chunk-1ny7cxrt.js:1385435-1385609 fingerprint = getPermissionDir (0.573)
 function getDisabledBuiltinToolsFromSettings(settings) {
-  let t = readStringListAt(settings, ["permissions", "deny"]);
-  if (!t) return {};
-  let filtered = t.filter((o) => !o.includes("(") && !o.startsWith("mcp__"));
-  return filtered.length > 0 ? { disabledBuiltinTools: filtered } : {};
+  let stringListAt = readStringListAt(settings, ["permissions", "deny"]);
+  if (!stringListAt) return {};
+  let filtered = stringListAt.filter((o) => !o.includes("(") && !o.startsWith("mcp__"));
+  return filtered.length > 0
+    ? {
+        disabledBuiltinTools: filtered,
+      }
+    : {};
 }
+//@ chunk-aepeg2w5.js:327126-327537 fingerprint = readPendingPermissions (0.309)
 /**
  * 为一次带锁的操作计算锁/结果/持有者/接管请求文件路径（按命令与参数哈希）。与团队权限无关。
  */
-//@ chunk-aepeg2w5.js:327126-327537 fingerprint = readPendingPermissions (0.309)
-function getOperationLockPaths(e, n, r = eE) {
+function getOperationLockPaths(e, n, r = identityReader) {
   let any = splitCommandWords(n).some((S) => {
-      let replaced = S.replace(/["']/g, "").replace(/^--?\w[\w-]*=|^[&*]?\d*[<>]+&?/, "");
-      return (
-        /[\\/]/.test(replaced) &&
-        !replaced.includes("://") &&
-        !/^[~$%]/.test(replaced) &&
-        !win32.isAbsolute(replaced)
-      );
-    }),
-    sliced = computeContentHash(
-      jsonStringify([
-        n,
-        ...r(REFRESH_LOCK_ENV_KEYS[e]),
-        ...(any ? [getProjectConfigRoot() ?? getFsImplementation().cwd()] : []),
-      ]),
-    ).slice(0, 16),
-    filePath = join_5(getProjectDirsUpToHome(), `${REFRESH_LOCK_FILES[e]}-${sliced}`);
+    let replaced = S.replace(/["']/g, "").replace(/^--?\w[\w-]*=|^[&*]?\d*[<>]+&?/, "");
+    return (
+      /[\\/]/.test(replaced) &&
+      !replaced.includes("://") &&
+      !/^[~$%]/.test(replaced) &&
+      !win32.isAbsolute(replaced)
+    );
+  });
+  let sliced = computeContentHash(
+    jsonStringify([
+      n,
+      ...r(REFRESH_LOCK_ENV_KEYS[e]),
+      ...(any ? [getProjectConfigRoot() ?? getFsImplementation().cwd()] : []),
+    ]),
+  ).slice(0, 16);
+  let filePath = join(getProjectDirsUpToHome(), `${REFRESH_LOCK_FILES[e]}-${sliced}`);
   return {
     lockfilePath: `${filePath}.lock`,
     outcomePath: `${filePath}.json`,
@@ -339,11 +348,10 @@ function getOperationLockPaths(e, n, r = eE) {
 }
 //@ chunk-cgr0tezp.js:29083-29143 fingerprint = getResolvedDir (1)
 function getResolvedPath(target) {
-  return target.kind === "resolved" ? Mn(target.path) : void 0;
+  return target.kind === "resolved" ? identity(target.path) : undefined;
 }
-
 export {
-  Yqe,
+  isTeammateContextReady,
   getOperationLockPaths,
   generateSandboxRequestId,
   sendSandboxPermissionRequestViaMailbox,

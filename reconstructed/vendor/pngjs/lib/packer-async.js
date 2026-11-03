@@ -6,40 +6,43 @@
  * attribution: cjs-fingerprint 1
  */
 import { x, importMetaRequire } from "../../../runtime/bun-runtime.js";
-import { se } from "./constants.js";
-import { yt } from "./packer.js";
+import { require_constants } from "./constants.js";
+import { require_packer } from "./packer.js";
 
 //@ chunk-spjgqa4y.js:42993-43714 cjs-fingerprint
-var sn = x(function (Xl, on) {
-  var tn = importMetaRequire("util"),
-    wt = importMetaRequire("stream"),
-    rn = se(),
-    ls = yt(),
-    nn = (on.exports = function (t) {
-      wt.call(this);
-      let e = t || {};
-      ((this._packer = new ls(e)), (this._deflate = this._packer.createDeflate()), (this.readable = !0));
-    });
-  tn.inherits(nn, wt);
-  nn.prototype.pack = function (t, e, r, n) {
-    if ((this.emit("data", Buffer.from(rn.PNG_SIGNATURE)), this.emit("data", this._packer.packIHDR(e, r)), n))
-      this.emit("data", this._packer.packGAMA(n));
-    let filterData = this._packer.filterData(t, e, r);
-    (this._deflate.on("error", this.emit.bind(this, "error")),
-      this._deflate.on(
-        "data",
-        function (o) {
-          this.emit("data", this._packer.packIDAT(o));
-        }.bind(this),
-      ),
-      this._deflate.on(
-        "end",
-        function () {
-          (this.emit("data", this._packer.packIEND()), this.emit("end"));
-        }.bind(this),
-      ),
-      this._deflate.end(filterData));
+var require_packer_async = x(function (cjsExports, cjsModule) {
+  var util = importMetaRequire("util");
+  var Stream = importMetaRequire("stream");
+  var constants = require_constants();
+  var Packer = require_packer();
+  var PackerAsync = (cjsModule.exports = function (opt) {
+    Stream.call(this);
+    let options = opt || {};
+    this._packer = new Packer(options);
+    this._deflate = this._packer.createDeflate();
+    this.readable = true;
+  });
+  util.inherits(PackerAsync, Stream);
+  PackerAsync.prototype.pack = function (data, width, height, gamma) {
+    this.emit("data", Buffer.from(constants.PNG_SIGNATURE));
+    this.emit("data", this._packer.packIHDR(width, height));
+    if (gamma) this.emit("data", this._packer.packGAMA(gamma));
+    let filteredData = this._packer.filterData(data, width, height);
+    this._deflate.on("error", this.emit.bind(this, "error"));
+    this._deflate.on(
+      "data",
+      function (compressedData) {
+        this.emit("data", this._packer.packIDAT(compressedData));
+      }.bind(this),
+    );
+    this._deflate.on(
+      "end",
+      function () {
+        this.emit("data", this._packer.packIEND());
+        this.emit("end");
+      }.bind(this),
+    );
+    this._deflate.end(filteredData);
   };
 });
-
-export { sn };
+export { require_packer_async };

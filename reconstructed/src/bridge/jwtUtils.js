@@ -17,14 +17,14 @@ import { logEvent } from "../services/analytics/index.js";
 //@ chunk-aepeg2w5.js:275640-275783 file-local
 function formatDuration(ms) {
   if (ms < 60000) return `${Math.round(ms / 1000)}s`;
-  let floored = Math.floor(ms / 60000),
-    rounded = Math.round((ms % 60000) / 1000);
-  return rounded > 0 ? `${floored}m ${rounded}s` : `${floored}m`;
+  let m = Math.floor(ms / 60000);
+  let rounded = Math.round((ms % 60000) / 1000);
+  return rounded > 0 ? `${m}m ${rounded}s` : `${m}m`;
 }
+//@ chunk-aepeg2w5.js:275783-275974 fingerprint = decodeJwtPayload (1)
 /**
  * 解码 JWT payload（兼容 sk-ant-si- 前缀），失败返回 null。
  */
-//@ chunk-aepeg2w5.js:275783-275974 fingerprint = decodeJwtPayload (1)
 function decodeJwtPayload(token) {
   let parts = (token.startsWith("sk-ant-si-") ? token.slice(10) : token).split(".");
   if (parts.length !== 3 || !parts[1]) return null;
@@ -34,66 +34,70 @@ function decodeJwtPayload(token) {
     return null;
   }
 }
+//@ chunk-aepeg2w5.js:275974-276141 layout
 /**
  * token 的 aud 是否是 claude-gateway。
  */
-//@ chunk-aepeg2w5.js:275974-276141 layout
 function isGatewayToken(token) {
-  let n = token ? decodeJwtPayload(token) : null,
-    r = n !== null && typeof n === "object" && "aud" in n ? n.aud : void 0;
-  return r === "claude-gateway" || (Array.isArray(r) && r.includes("claude-gateway"));
+  let n = token ? decodeJwtPayload(token) : null;
+  let aud = n !== null && typeof n === "object" && "aud" in n ? n.aud : undefined;
+  return aud === "claude-gateway" || (Array.isArray(aud) && aud.includes("claude-gateway"));
 }
+//@ chunk-aepeg2w5.js:276141-276276 layout
 /**
  * 从 JWT 负载取 session_id。
  */
-//@ chunk-aepeg2w5.js:276141-276276 layout
 function getJwtSessionId(token) {
-  let n = decodeJwtPayload(token);
-  return n !== null && typeof n === "object" && "session_id" in n && typeof n.session_id === "string"
-    ? n.session_id
-    : void 0;
+  let payload = decodeJwtPayload(token);
+  return payload !== null &&
+    typeof payload === "object" &&
+    "session_id" in payload &&
+    typeof payload.session_id === "string"
+    ? payload.session_id
+    : undefined;
 }
+//@ chunk-aepeg2w5.js:276276-276397 fingerprint = decodeJwtExpiry (1)
 /**
  * 从 JWT 负载取 exp（秒），无法解析返回 null。
  */
-//@ chunk-aepeg2w5.js:276276-276397 fingerprint = decodeJwtExpiry (1)
 function decodeJwtExpiry(token) {
   let payload = decodeJwtPayload(token);
   if (payload !== null && typeof payload === "object" && "exp" in payload && typeof payload.exp === "number")
     return payload.exp;
   return null;
 }
+//@ chunk-aepeg2w5.js:276397-276436 layout
 /**
  * 刷新调度默认值：提前 5 分钟、后续刷新间隔 30 分钟、最多失败 3 次、失败重试 60 秒。
  */
-//@ chunk-aepeg2w5.js:276397-276436 layout
-var DEFAULT_REFRESH_BUFFER_MS = 300000,
-  FOLLOWUP_REFRESH_MS = 1800000,
-  DEFAULT_MAX_FAILURES = 3,
-  RETRY_DELAY_MS = 60000;
+var DEFAULT_REFRESH_BUFFER_MS = 300000;
+var FOLLOWUP_REFRESH_MS = 1800000;
+var DEFAULT_MAX_FAILURES = 3;
+var RETRY_DELAY_MS = 60000;
+//@ chunk-aepeg2w5.js:276436-279315 fingerprint = createTokenRefreshScheduler (0.831)
 /**
  * 按 sessionId 调度 token 刷新：schedule（解 JWT exp，提前 buffer 刷新，可自适应 20%）、scheduleFromExpiresIn、refreshNow、cancel、cancelAll；
  * 刷新时取新 OAuth token 调 onRefresh，失败按次数重试，耗尽调 onExhausted；每次调度递增代号，过期回调直接丢弃。
  */
-//@ chunk-aepeg2w5.js:276436-279315 fingerprint = createTokenRefreshScheduler (0.831)
 function createTokenRefreshScheduler({
-  getAccessToken: getAccessToken,
-  onRefresh: onRefresh,
-  onExhausted: onExhausted,
-  label: label,
-  refreshBufferMs: refreshBufferMs = DEFAULT_REFRESH_BUFFER_MS,
-  maxFailures: maxFailures = DEFAULT_MAX_FAILURES,
-  adaptiveBuffer: adaptiveBuffer = !1,
-  rescheduleFromNewToken: rescheduleFromNewToken = !1,
-  decodeExpiry: decodeExpiry = decodeJwtExpiry,
-  formatDelay: formatDelay = formatDuration,
+  getAccessToken,
+  onRefresh,
+  onExhausted,
+  label,
+  refreshBufferMs = DEFAULT_REFRESH_BUFFER_MS,
+  maxFailures = DEFAULT_MAX_FAILURES,
+  adaptiveBuffer = false,
+  rescheduleFromNewToken = false,
+  decodeExpiry = decodeJwtExpiry,
+  formatDelay = formatDuration,
 }) {
-  let timers = new Map(),
-    failureCounts = new Map(),
-    generations = new Map();
+  let timers = new Map();
+  let failureCounts = new Map();
+  let generations = new Map();
   function nextGeneration(sessionId) {
-    let Z = (generations.get(sessionId) ?? 0) + 1;
-    return (generations.set(sessionId, Z), Z);
+    let gen = (generations.get(sessionId) ?? 0) + 1;
+    generations.set(sessionId, gen);
+    return gen;
   }
   function schedule(sessionId, token) {
     let expiry = decodeExpiry(token);
@@ -105,11 +109,13 @@ function createTokenRefreshScheduler({
     }
     let existing = timers.get(sessionId);
     if (existing) clearTimeout(existing);
-    let gen = nextGeneration(sessionId),
-      expiryDate = new Date(expiry * 1000).toISOString(),
-      xe = expiry * 1000 - Date.now(),
-      Ie = adaptiveBuffer ? Math.min(refreshBufferMs, Math.max(1000, Math.floor(xe * 0.2))) : refreshBufferMs,
-      De = xe - Ie;
+    let gen = nextGeneration(sessionId);
+    let expiryDate = new Date(expiry * 1000).toISOString();
+    let xe = expiry * 1000 - Date.now();
+    let Ie = adaptiveBuffer
+      ? Math.min(refreshBufferMs, Math.max(1000, Math.floor(xe * 0.2)))
+      : refreshBufferMs;
+    let De = xe - Ie;
     if (De <= 0)
       logForDebugging(
         `[${label}:token] Token for sessionId=${sessionId} expires=${expiryDate} (past or within buffer), refreshing immediately`,
@@ -123,36 +129,36 @@ function createTokenRefreshScheduler({
     scheduleAt(sessionId, Date.now() + De, gen);
   }
   let MAX_TIMER_CHUNK_MS = 60000;
-  function scheduleAt(ie, Z, ce) {
-    failureCounts.delete(ie);
+  function scheduleAt(sessionId, Z, ce) {
+    failureCounts.delete(sessionId);
     function fe() {
-      if (generations.get(ie) !== ce) return;
+      if (generations.get(sessionId) !== ce) return;
       let Ae = Z - Date.now();
       if (Ae <= 0) {
-        doRefresh(ie, ce);
+        doRefresh(sessionId, ce);
         return;
       }
-      let Me = setTimeout(fe, Math.min(Ae, MAX_TIMER_CHUNK_MS));
-      timers.set(ie, Me);
+      let timer = setTimeout(fe, Math.min(Ae, MAX_TIMER_CHUNK_MS));
+      timers.set(sessionId, timer);
     }
     fe();
   }
   function scheduleFromExpiresIn(sessionId, expiresInSeconds) {
     let existing = timers.get(sessionId);
     if (existing) clearTimeout(existing);
-    let gen = nextGeneration(sessionId),
-      delayMs = Math.max(expiresInSeconds * 1000 - refreshBufferMs, 30000);
-    (logForDebugging(
+    let gen = nextGeneration(sessionId);
+    let delayMs = Math.max(expiresInSeconds * 1000 - refreshBufferMs, 30000);
+    logForDebugging(
       `[${label}:token] Scheduled token refresh for sessionId=${sessionId} in ${formatDelay(delayMs)} (expires_in=${expiresInSeconds}s, buffer=${refreshBufferMs / 1000}s)`,
-    ),
-      scheduleAt(sessionId, Date.now() + delayMs, gen));
+    );
+    scheduleAt(sessionId, Date.now() + delayMs, gen);
   }
-  function refreshNow(ie) {
-    let Z = timers.get(ie);
-    if (Z) clearTimeout(Z);
-    let ce = nextGeneration(ie);
-    (logForDebugging(`[${label}:token] Immediate token refresh requested for sessionId=${ie}`),
-      doRefresh(ie, ce));
+  function refreshNow(sessionId) {
+    let timer = timers.get(sessionId);
+    if (timer) clearTimeout(timer);
+    let ce = nextGeneration(sessionId);
+    logForDebugging(`[${label}:token] Immediate token refresh requested for sessionId=${sessionId}`);
+    doRefresh(sessionId, ce);
   }
   async function doRefresh(sessionId, gen) {
     let oauthToken;
@@ -161,7 +167,9 @@ function createTokenRefreshScheduler({
     } catch (err) {
       logForDebugging(
         `[${label}:token] getAccessToken threw for sessionId=${sessionId}: ${errorMessage(err)}`,
-        { level: "error" },
+        {
+          level: "error",
+        },
       );
     }
     if (generations.get(sessionId) !== gen) {
@@ -171,66 +179,69 @@ function createTokenRefreshScheduler({
       return;
     }
     if (!oauthToken) {
-      let Ae = (failureCounts.get(sessionId) ?? 0) + 1;
-      if (
-        (failureCounts.set(sessionId, Ae),
-        logForDebugging(
-          `[${label}:token] No OAuth token available for refresh, sessionId=${sessionId} (failure ${Ae}${Number.isFinite(maxFailures) ? `/${maxFailures}` : ""})`,
-          { level: "error" },
-        ),
-        logForDiagnosticsNoPII("error", "bridge_token_refresh_no_oauth"),
-        Ae < maxFailures)
-      ) {
+      let failures = (failureCounts.get(sessionId) ?? 0) + 1;
+      failureCounts.set(sessionId, failures);
+      logForDebugging(
+        `[${label}:token] No OAuth token available for refresh, sessionId=${sessionId} (failure ${failures}${Number.isFinite(maxFailures) ? `/${maxFailures}` : ""})`,
+        {
+          level: "error",
+        },
+      );
+      logForDiagnosticsNoPII("error", "bridge_token_refresh_no_oauth");
+      if (failures < maxFailures) {
         let retryTimer = setTimeout(doRefresh, RETRY_DELAY_MS, sessionId, gen);
         timers.set(sessionId, retryTimer);
         return;
       }
-      (logForDebugging(
-        `[${label}:token] Refresh chain exhausted for sessionId=${sessionId} after ${Ae} consecutive failures`,
-        { level: "error" },
-      ),
-        logForDiagnosticsNoPII("error", "bridge_token_refresh_exhausted"),
-        onExhausted?.(sessionId, "no_oauth_token"));
+      logForDebugging(
+        `[${label}:token] Refresh chain exhausted for sessionId=${sessionId} after ${failures} consecutive failures`,
+        {
+          level: "error",
+        },
+      );
+      logForDiagnosticsNoPII("error", "bridge_token_refresh_exhausted");
+      onExhausted?.(sessionId, "no_oauth_token");
       return;
     }
-    if (
-      (failureCounts.delete(sessionId),
-      logForDebugging(
-        `[${label}:token] Refreshing token for sessionId=${sessionId}: new token prefix=${oauthToken.slice(0, 15)}\u2026`,
-      ),
-      logEvent("tengu_bridge_token_refreshed", {}),
-      onRefresh(sessionId, oauthToken),
-      rescheduleFromNewToken && decodeExpiry(oauthToken))
-    ) {
+    failureCounts.delete(sessionId);
+    logForDebugging(
+      `[${label}:token] Refreshing token for sessionId=${sessionId}: new token prefix=${oauthToken.slice(0, 15)}\u2026`,
+    );
+    logEvent("tengu_bridge_token_refreshed", {});
+    onRefresh(sessionId, oauthToken);
+    if (rescheduleFromNewToken && decodeExpiry(oauthToken)) {
       schedule(sessionId, oauthToken);
       return;
     }
     let timer = setTimeout(doRefresh, FOLLOWUP_REFRESH_MS, sessionId, gen);
-    (timers.set(sessionId, timer),
-      logForDebugging(
-        rescheduleFromNewToken
-          ? `[${label}:token] Non-JWT token \u2014 scheduled fallback refresh for sessionId=${sessionId} in ${formatDelay(FOLLOWUP_REFRESH_MS)}`
-          : `[${label}:token] Scheduled follow-up refresh for sessionId=${sessionId} in ${formatDelay(FOLLOWUP_REFRESH_MS)}`,
-      ));
+    timers.set(sessionId, timer);
+    logForDebugging(
+      rescheduleFromNewToken
+        ? `[${label}:token] Non-JWT token \u2014 scheduled fallback refresh for sessionId=${sessionId} in ${formatDelay(FOLLOWUP_REFRESH_MS)}`
+        : `[${label}:token] Scheduled follow-up refresh for sessionId=${sessionId} in ${formatDelay(FOLLOWUP_REFRESH_MS)}`,
+    );
   }
   function cancel(sessionId) {
     nextGeneration(sessionId);
     let timer = timers.get(sessionId);
-    if (timer) (clearTimeout(timer), timers.delete(sessionId));
+    if (timer) {
+      clearTimeout(timer);
+      timers.delete(sessionId);
+    }
     failureCounts.delete(sessionId);
   }
   function cancelAll() {
     for (let sessionId of generations.keys()) nextGeneration(sessionId);
     for (let timer of timers.values()) clearTimeout(timer);
-    (timers.clear(), failureCounts.clear());
+    timers.clear();
+    failureCounts.clear();
   }
   return {
-    schedule: schedule,
-    scheduleFromExpiresIn: scheduleFromExpiresIn,
-    refreshNow: refreshNow,
-    cancel: cancel,
-    cancelAll: cancelAll,
+    schedule,
+    scheduleFromExpiresIn,
+    refreshNow,
+    cancel,
+    cancelAll,
   };
 }
-
 export { createTokenRefreshScheduler, decodeJwtExpiry, decodeJwtPayload, isGatewayToken, getJwtSessionId };

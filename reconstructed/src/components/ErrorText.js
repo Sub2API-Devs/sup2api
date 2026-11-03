@@ -10,26 +10,34 @@
  */
 import { w } from "../../vendor/react/compiler-runtime.js";
 import { errorMessage } from "../utils/errors.js";
-import { e } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { jsxProd_default } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text } from "../ink/components/Text.js";
 
+//@ chunk-d051nw0y.js:331-526 placement
 /**
  * 以错误颜色显示错误信息，无错误时不渲染。
  */
-//@ chunk-d051nw0y.js:331-526 placement
-function ErrorText(m) {
-  let p = w(4),
-    { error: error } = m;
+function ErrorText(props) {
+  let p = w(4);
+  let { error } = props;
   if (!error) {
     return null;
   }
-  let o;
-  if (p[0] !== error) ((o = errorMessage(error)), (p[0] = error), (p[1] = o));
-  else o = p[1];
+  let children;
+  if (p[0] !== error) {
+    children = errorMessage(error);
+    p[0] = error;
+    p[1] = children;
+  } else children = p[1];
   let f;
-  if (p[2] !== o) ((f = e(Text, { color: "error", children: o })), (p[2] = o), (p[3] = f));
-  else f = p[3];
+  if (p[2] !== children) {
+    f = jsxProd_default(Text, {
+      color: "error",
+      children,
+    });
+    p[2] = children;
+    p[3] = f;
+  } else f = p[3];
   return f;
 }
-
 export { ErrorText };

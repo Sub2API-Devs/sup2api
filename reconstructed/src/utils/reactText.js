@@ -8,21 +8,20 @@
  * pieces: chunk-sqp1074w.js (2)
  * attribution: placement 2
  */
-import { j, dh } from "../../vendor/react/cjs/react.production.js";
+import { init_react_production, isValidElement_default } from "../../vendor/react/cjs/react.production.js";
 
 //@ chunk-sqp1074w.js:229-233 placement
-j();
+init_react_production();
+//@ chunk-sqp1074w.js:233-427 placement
 /**
  * 递归提取 React 节点的纯文本（字符串、数字、数组与元素 children）。
  */
-//@ chunk-sqp1074w.js:233-427 placement
 function reactNodeText(r) {
   if (typeof r === "string") return r;
   if (typeof r === "number") return String(r);
   if (!r) return "";
   if (Array.isArray(r)) return r.map(reactNodeText).join("");
-  if (dh(r)) return reactNodeText(r.props.children);
+  if (isValidElement_default(r)) return reactNodeText(r.props.children);
   return "";
 }
-
 export { reactNodeText };

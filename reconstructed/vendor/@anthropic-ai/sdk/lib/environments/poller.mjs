@@ -5,191 +5,269 @@
  * pieces: chunk-hwmsct5x.js (4)
  * attribution: esm-layout 2, esm-fingerprint 2
  */
-import { Kn, ke } from "../../internal/tslib.mjs";
-import { ps } from "../helper-client.mjs";
-import { qt } from "../../internal/utils/abort.mjs";
-import { pr } from "../../core/error.mjs";
-import { Tb } from "../../internal/utils/log.mjs";
-import { T } from "../../internal/headers.mjs";
-import { on, fs, qu, hJ, cs } from "../../internal/utils/backoff.mjs";
+import { __classPrivateFieldSet, __classPrivateFieldGet } from "../../internal/tslib.mjs";
+import { copyClientForHelper } from "../helper-client.mjs";
+import { linkAbort } from "../../internal/utils/abort.mjs";
+import { AnthropicError } from "../../core/error.mjs";
+import { loggerFor } from "../../internal/utils/log.mjs";
+import { buildHeaders } from "../../internal/headers.mjs";
+import { isFatal4xx, applyJitter, jitter, isStatus, cs } from "../../internal/utils/backoff.mjs";
 import { sleepUnlessAborted } from "../../tools/agent-toolset/memories.mjs";
-import { Ko } from "../../internal/utils/uuid.mjs";
+import { uuid4 } from "../../internal/utils/uuid.mjs";
 
 //@ chunk-hwmsct5x.js:56388-59048 esm-layout
-var An,
-  hs,
-  dt,
-  ms,
-  gs,
-  _s,
-  Pr,
-  Cr,
-  kn,
-  xn,
-  bs,
-  Tn,
-  Ir,
-  gm = 999,
-  _m = 1000,
-  bm = 60000,
-  ym = 300000,
-  Fr = (() => {
-    class e {
-      constructor(n) {
-        (An.set(this, void 0),
-          hs.set(this, !1),
-          dt.set(this, void 0),
-          ms.set(this, void 0),
-          gs.set(this, void 0),
-          _s.set(this, void 0),
-          Pr.set(this, void 0),
-          Cr.set(this, void 0),
-          kn.set(this, void 0),
-          (this.client = n.client),
-          (this.environmentId = n.environmentId),
-          (this.environmentKey = n.environmentKey),
-          (this.workerId = n.workerId ?? Em()),
-          Kn(
-            this,
-            An,
-            ps(n.client, { authToken: n.environmentKey, helper: "environments-work-poller" }),
-            "f",
-          ),
-          Kn(this, gs, n.autoStop ?? !0, "f"),
-          Kn(this, _s, n.drain ?? !1, "f"),
-          Kn(this, Pr, n.blockMs === void 0 ? gm : n.blockMs, "f"),
-          Kn(this, Cr, n.reclaimOlderThanMs ?? null, "f"),
-          Kn(this, kn, n.requestOptions, "f"),
-          Kn(this, dt, new AbortController(), "f"),
-          Kn(this, ms, qt(n.signal, ke(this, dt, "f")), "f"));
-      }
-      get signal() {
-        return ke(this, dt, "f").signal;
-      }
-      abort() {
-        ke(this, dt, "f").abort();
-      }
-      async *[((An = new WeakMap()),
-      (hs = new WeakMap()),
-      (dt = new WeakMap()),
-      (ms = new WeakMap()),
-      (gs = new WeakMap()),
-      (_s = new WeakMap()),
-      (Pr = new WeakMap()),
-      (Cr = new WeakMap()),
-      (kn = new WeakMap()),
-      Symbol.asyncIterator)]() {
-        if (ke(this, hs, "f")) throw new pr("Cannot iterate over a consumed WorkPoller");
-        Kn(this, hs, !0, "f");
-        let n = Tb(this.client);
-        n.info("poller starting", { component: "work-poller", environment_id: this.environmentId });
-        let r = new Sm(n, this.environmentId);
-        try {
-          let s = 0;
-          while (!ke(this, dt, "f").signal.aborted) {
-            let h;
-            try {
-              h = await ke(this, An, "f").beta.environments.work.poll(
-                this.environmentId,
-                {
-                  "Anthropic-Worker-ID": this.workerId,
-                  ...(ke(this, Pr, "f") !== null ? { block_ms: ke(this, Pr, "f") } : {}),
-                  ...(ke(this, Cr, "f") !== null ? { reclaim_older_than_ms: ke(this, Cr, "f") } : {}),
-                },
-                { headers: T([ke(this, kn, "f")?.headers]), signal: ke(this, dt, "f").signal },
-              );
-            } catch (error) {
-              if (ke(this, dt, "f").signal.aborted) return;
-              if (on(error))
-                throw (n.error("poll failed permanently, stopping poller", { error: String(error) }), error);
-              let w = fs(wm(s));
-              (n.warn("poll failed, backing off", { error: String(error), backoff_ms: w }),
-                s++,
-                await sleepUnlessAborted(w, ke(this, dt, "f").signal));
-              continue;
+var _WorkPoller_runnerClient;
+var _WorkPoller_consumed;
+var _WorkPoller_controller;
+var _WorkPoller_detachExternal;
+var _WorkPoller_autoStop;
+var _WorkPoller_drain;
+var _WorkPoller_blockMs;
+var _WorkPoller_reclaimOlderThanMs;
+var _WorkPoller_requestOpts;
+var _IdleLog_log;
+var _IdleLog_environmentId;
+var _IdleLog_idleSince;
+var _IdleLog_lastReport;
+var POLL_BLOCK_MS = 999;
+var POLL_BACKOFF_BASE_MS = 1000;
+var POLL_BACKOFF_CAP_MS = 60000;
+var IDLE_REPORT_INTERVAL_MS = 300000;
+var WorkPoller = (() => {
+  class WorkPoller {
+    constructor(opts) {
+      _WorkPoller_runnerClient.set(this, undefined);
+      _WorkPoller_consumed.set(this, false);
+      _WorkPoller_controller.set(this, undefined);
+      _WorkPoller_detachExternal.set(this, undefined);
+      _WorkPoller_autoStop.set(this, undefined);
+      _WorkPoller_drain.set(this, undefined);
+      _WorkPoller_blockMs.set(this, undefined);
+      _WorkPoller_reclaimOlderThanMs.set(this, undefined);
+      _WorkPoller_requestOpts.set(this, undefined);
+      this.client = opts.client;
+      this.environmentId = opts.environmentId;
+      this.environmentKey = opts.environmentKey;
+      this.workerId = opts.workerId ?? defaultWorkerId();
+      __classPrivateFieldSet(
+        this,
+        _WorkPoller_runnerClient,
+        copyClientForHelper(opts.client, {
+          authToken: opts.environmentKey,
+          helper: "environments-work-poller",
+        }),
+        "f",
+      );
+      __classPrivateFieldSet(this, _WorkPoller_autoStop, opts.autoStop ?? true, "f");
+      __classPrivateFieldSet(this, _WorkPoller_drain, opts.drain ?? false, "f");
+      __classPrivateFieldSet(
+        this,
+        _WorkPoller_blockMs,
+        opts.blockMs === undefined ? POLL_BLOCK_MS : opts.blockMs,
+        "f",
+      );
+      __classPrivateFieldSet(this, _WorkPoller_reclaimOlderThanMs, opts.reclaimOlderThanMs ?? null, "f");
+      __classPrivateFieldSet(this, _WorkPoller_requestOpts, opts.requestOptions, "f");
+      __classPrivateFieldSet(this, _WorkPoller_controller, new AbortController(), "f");
+      __classPrivateFieldSet(
+        this,
+        _WorkPoller_detachExternal,
+        linkAbort(opts.signal, __classPrivateFieldGet(this, _WorkPoller_controller, "f")),
+        "f",
+      );
+    }
+    get signal() {
+      return __classPrivateFieldGet(this, _WorkPoller_controller, "f").signal;
+    }
+    abort() {
+      __classPrivateFieldGet(this, _WorkPoller_controller, "f").abort();
+    }
+    async *[((_WorkPoller_runnerClient = new WeakMap()),
+    (_WorkPoller_consumed = new WeakMap()),
+    (_WorkPoller_controller = new WeakMap()),
+    (_WorkPoller_detachExternal = new WeakMap()),
+    (_WorkPoller_autoStop = new WeakMap()),
+    (_WorkPoller_drain = new WeakMap()),
+    (_WorkPoller_blockMs = new WeakMap()),
+    (_WorkPoller_reclaimOlderThanMs = new WeakMap()),
+    (_WorkPoller_requestOpts = new WeakMap()),
+    Symbol.asyncIterator)]() {
+      if (__classPrivateFieldGet(this, _WorkPoller_consumed, "f"))
+        throw new AnthropicError("Cannot iterate over a consumed WorkPoller");
+      __classPrivateFieldSet(this, _WorkPoller_consumed, true, "f");
+      let log = loggerFor(this.client);
+      log.info("poller starting", {
+        component: "work-poller",
+        environment_id: this.environmentId,
+      });
+      let idle = new IdleLog(log, this.environmentId);
+      try {
+        let attempt = 0;
+        while (!__classPrivateFieldGet(this, _WorkPoller_controller, "f").signal.aborted) {
+          let work;
+          try {
+            work = await __classPrivateFieldGet(
+              this,
+              _WorkPoller_runnerClient,
+              "f",
+            ).beta.environments.work.poll(
+              this.environmentId,
+              {
+                "Anthropic-Worker-ID": this.workerId,
+                ...(__classPrivateFieldGet(this, _WorkPoller_blockMs, "f") !== null
+                  ? {
+                      block_ms: __classPrivateFieldGet(this, _WorkPoller_blockMs, "f"),
+                    }
+                  : {}),
+                ...(__classPrivateFieldGet(this, _WorkPoller_reclaimOlderThanMs, "f") !== null
+                  ? {
+                      reclaim_older_than_ms: __classPrivateFieldGet(
+                        this,
+                        _WorkPoller_reclaimOlderThanMs,
+                        "f",
+                      ),
+                    }
+                  : {}),
+              },
+              {
+                headers: buildHeaders([__classPrivateFieldGet(this, _WorkPoller_requestOpts, "f")?.headers]),
+                signal: __classPrivateFieldGet(this, _WorkPoller_controller, "f").signal,
+              },
+            );
+          } catch (e) {
+            if (__classPrivateFieldGet(this, _WorkPoller_controller, "f").signal.aborted) return;
+            if (isFatal4xx(e)) {
+              log.error("poll failed permanently, stopping poller", {
+                error: String(e),
+              });
+              throw e;
             }
-            if (((s = 0), h == null)) {
-              if (ke(this, _s, "f")) return;
-              (r.onEmptyPoll(), await sleepUnlessAborted(qu(1000, 3000), ke(this, dt, "f").signal));
-              continue;
-            }
-            (r.onClaim(),
-              n.info("claimed work", {
-                component: "work-poller",
-                environment_id: this.environmentId,
-                work_id: h.id,
-                work_type: h.data.type,
-              }));
-            try {
-              await ke(this, An, "f").beta.environments.work.ack(
-                h.id,
-                { environment_id: h.environment_id },
-                { headers: T([ke(this, kn, "f")?.headers]), signal: ke(this, dt, "f").signal },
-              );
-            } catch (error) {
-              n.error("ack failed", { work_id: h.id, error: String(error) });
-              continue;
-            }
-            try {
-              yield h;
-            } finally {
-              if (ke(this, gs, "f"))
-                try {
-                  await ke(this, An, "f").beta.environments.work.stop(
-                    h.id,
-                    { environment_id: h.environment_id },
-                    { headers: T([ke(this, kn, "f")?.headers]) },
-                  );
-                } catch (error) {
-                  if (!hJ(error, 409)) n.warn("stop failed", { work_id: h.id, error: String(error) });
-                }
-            }
+            let wait = applyJitter(backoff(attempt));
+            log.warn("poll failed, backing off", {
+              error: String(e),
+              backoff_ms: wait,
+            });
+            attempt++;
+            await sleepUnlessAborted(wait, __classPrivateFieldGet(this, _WorkPoller_controller, "f").signal);
+            continue;
           }
-        } finally {
-          ke(this, ms, "f").call(this);
+          attempt = 0;
+          if (work == null) {
+            if (__classPrivateFieldGet(this, _WorkPoller_drain, "f")) return;
+            idle.onEmptyPoll();
+            await sleepUnlessAborted(
+              jitter(1000, 3000),
+              __classPrivateFieldGet(this, _WorkPoller_controller, "f").signal,
+            );
+            continue;
+          }
+          idle.onClaim();
+          log.info("claimed work", {
+            component: "work-poller",
+            environment_id: this.environmentId,
+            work_id: work.id,
+            work_type: work.data.type,
+          });
+          try {
+            await __classPrivateFieldGet(this, _WorkPoller_runnerClient, "f").beta.environments.work.ack(
+              work.id,
+              {
+                environment_id: work.environment_id,
+              },
+              {
+                headers: buildHeaders([__classPrivateFieldGet(this, _WorkPoller_requestOpts, "f")?.headers]),
+                signal: __classPrivateFieldGet(this, _WorkPoller_controller, "f").signal,
+              },
+            );
+          } catch (e) {
+            log.error("ack failed", {
+              work_id: work.id,
+              error: String(e),
+            });
+            continue;
+          }
+          try {
+            yield work;
+          } finally {
+            if (__classPrivateFieldGet(this, _WorkPoller_autoStop, "f"))
+              try {
+                await __classPrivateFieldGet(this, _WorkPoller_runnerClient, "f").beta.environments.work.stop(
+                  work.id,
+                  {
+                    environment_id: work.environment_id,
+                  },
+                  {
+                    headers: buildHeaders([
+                      __classPrivateFieldGet(this, _WorkPoller_requestOpts, "f")?.headers,
+                    ]),
+                  },
+                );
+              } catch (e) {
+                if (!isStatus(e, 409))
+                  log.warn("stop failed", {
+                    work_id: work.id,
+                    error: String(e),
+                  });
+              }
+          }
         }
+      } finally {
+        __classPrivateFieldGet(this, _WorkPoller_detachExternal, "f").call(this);
       }
-    }
-    return e;
-  })();
-//@ chunk-hwmsct5x.js:59048-59082 esm-layout
-function wm(e) {
-  return cs(e, _m, bm);
-}
-//@ chunk-hwmsct5x.js:59082-59732 esm-fingerprint
-var Sm = (() => {
-  class e {
-    constructor(n, r) {
-      (xn.set(this, void 0),
-        bs.set(this, void 0),
-        Tn.set(this, void 0),
-        Ir.set(this, 0),
-        Kn(this, xn, n, "f"),
-        Kn(this, bs, r, "f"));
-    }
-    onEmptyPoll() {
-      let now = Date.now(),
-        r = { component: "work-poller", environment_id: ke(this, bs, "f") };
-      if (ke(this, Tn, "f") === void 0)
-        (Kn(this, Tn, Kn(this, Ir, now, "f"), "f"), ke(this, xn, "f").info("idle; polling for work", r));
-      else if (now - ke(this, Ir, "f") >= ym)
-        (Kn(this, Ir, now, "f"),
-          ke(this, xn, "f").info(
-            `still polling; idle for ${Math.round((now - ke(this, Tn, "f")) / 1000)}s`,
-            r,
-          ));
-      else ke(this, xn, "f").debug("poll returned no work", r);
-    }
-    onClaim() {
-      Kn(this, Tn, void 0, "f");
     }
   }
-  return ((xn = new WeakMap()), (bs = new WeakMap()), (Tn = new WeakMap()), (Ir = new WeakMap()), e);
+  return WorkPoller;
+})();
+//@ chunk-hwmsct5x.js:59048-59082 esm-layout
+function backoff(attempt) {
+  return cs(attempt, POLL_BACKOFF_BASE_MS, POLL_BACKOFF_CAP_MS);
+}
+//@ chunk-hwmsct5x.js:59082-59732 esm-fingerprint
+var IdleLog = (() => {
+  class IdleLog {
+    constructor(log, environmentId) {
+      _IdleLog_log.set(this, undefined);
+      _IdleLog_environmentId.set(this, undefined);
+      _IdleLog_idleSince.set(this, undefined);
+      _IdleLog_lastReport.set(this, 0);
+      __classPrivateFieldSet(this, _IdleLog_log, log, "f");
+      __classPrivateFieldSet(this, _IdleLog_environmentId, environmentId, "f");
+    }
+    onEmptyPoll() {
+      let now = Date.now();
+      let fields = {
+        component: "work-poller",
+        environment_id: __classPrivateFieldGet(this, _IdleLog_environmentId, "f"),
+      };
+      if (__classPrivateFieldGet(this, _IdleLog_idleSince, "f") === undefined) {
+        __classPrivateFieldSet(
+          this,
+          _IdleLog_idleSince,
+          __classPrivateFieldSet(this, _IdleLog_lastReport, now, "f"),
+          "f",
+        );
+        __classPrivateFieldGet(this, _IdleLog_log, "f").info("idle; polling for work", fields);
+      } else if (now - __classPrivateFieldGet(this, _IdleLog_lastReport, "f") >= IDLE_REPORT_INTERVAL_MS) {
+        __classPrivateFieldSet(this, _IdleLog_lastReport, now, "f");
+        __classPrivateFieldGet(this, _IdleLog_log, "f").info(
+          `still polling; idle for ${Math.round((now - __classPrivateFieldGet(this, _IdleLog_idleSince, "f")) / 1000)}s`,
+          fields,
+        );
+      } else __classPrivateFieldGet(this, _IdleLog_log, "f").debug("poll returned no work", fields);
+    }
+    onClaim() {
+      __classPrivateFieldSet(this, _IdleLog_idleSince, undefined, "f");
+    }
+  }
+  _IdleLog_log = new WeakMap();
+  _IdleLog_environmentId = new WeakMap();
+  _IdleLog_idleSince = new WeakMap();
+  _IdleLog_lastReport = new WeakMap();
+  return IdleLog;
 })();
 //@ chunk-hwmsct5x.js:59732-59815 esm-fingerprint
-function Em() {
-  let n = globalThis.process?.env?.HOSTNAME;
-  return n ? `${n}-${Ko()}` : Ko();
+function defaultWorkerId() {
+  let host = globalThis.process?.env?.HOSTNAME;
+  return host ? `${host}-${uuid4()}` : uuid4();
 }
-
-export { Fr };
+export { WorkPoller };

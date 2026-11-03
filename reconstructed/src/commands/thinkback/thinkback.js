@@ -16,5 +16,4 @@ function getThinkbackSkillDir(e) {
   let [n, r] = e.split("/");
   return foldName(n ?? "") === "skills" && foldName(r ?? "") === SYNCED_DIR;
 }
-
 export { getThinkbackSkillDir };

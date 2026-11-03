@@ -8,25 +8,27 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-spjgqa4y.js:2022-2536 cjs-fingerprint
-var Ut = x(function (wl, qt) {
-  function de(t) {
-    if (!t || t < 1) throw Error("BitMatrix size must be defined and greater than 0");
-    ((this.size = t), (this.data = new Uint8Array(t * t)), (this.reservedBit = new Uint8Array(t * t)));
+var require_bit_matrix = x(function (cjsExports, cjsModule) {
+  function BitMatrix(size) {
+    if (!size || size < 1) throw Error("BitMatrix size must be defined and greater than 0");
+    this.size = size;
+    this.data = new Uint8Array(size * size);
+    this.reservedBit = new Uint8Array(size * size);
   }
-  de.prototype.set = function (t, e, r, n) {
-    let i = t * this.size + e;
-    if (((this.data[i] = r), n)) this.reservedBit[i] = !0;
+  BitMatrix.prototype.set = function (row, col, value, reserved) {
+    let index = row * this.size + col;
+    this.data[index] = value;
+    if (reserved) this.reservedBit[index] = true;
   };
-  de.prototype.get = function (t, e) {
-    return this.data[t * this.size + e];
+  BitMatrix.prototype.get = function (row, col) {
+    return this.data[row * this.size + col];
   };
-  de.prototype.xor = function (t, e, r) {
-    this.data[t * this.size + e] ^= r;
+  BitMatrix.prototype.xor = function (row, col, value) {
+    this.data[row * this.size + col] ^= value;
   };
-  de.prototype.isReserved = function (t, e) {
-    return this.reservedBit[t * this.size + e];
+  BitMatrix.prototype.isReserved = function (row, col) {
+    return this.reservedBit[row * this.size + col];
   };
-  qt.exports = de;
+  cjsModule.exports = BitMatrix;
 });
-
-export { Ut };
+export { require_bit_matrix };

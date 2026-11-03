@@ -6,57 +6,57 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { xe } from "./Node.js";
-import { lr } from "./CharacterData.js";
+import { require_Node } from "./Node.js";
+import { require_CharacterData } from "./CharacterData.js";
 
 //@ chunk-vwj6ccer.js:66492-67219 cjs-fingerprint
-var Mn = x(function (Ad, Js) {
-  Js.exports = Ln;
-  var ox = xe(),
-    Zs = lr();
-  function Ln(e, t, r) {
-    (Zs.call(this),
-      (this.nodeType = ox.PROCESSING_INSTRUCTION_NODE),
-      (this.ownerDocument = e),
-      (this.target = t),
-      (this._data = r));
+var require_ProcessingInstruction = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = ProcessingInstruction;
+  var Node = require_Node();
+  var CharacterData = require_CharacterData();
+  function ProcessingInstruction(doc, target, data) {
+    CharacterData.call(this);
+    this.nodeType = Node.PROCESSING_INSTRUCTION_NODE;
+    this.ownerDocument = doc;
+    this.target = target;
+    this._data = data;
   }
-  var dr = {
+  var nodeValue = {
     get: function () {
       return this._data;
     },
-    set: function (e) {
-      if (e === null || e === void 0) e = "";
-      else e = String(e);
-      if (((this._data = e), this.rooted)) this.ownerDocument.mutateValue(this);
+    set: function (v) {
+      if (v === null || v === undefined) v = "";
+      else v = String(v);
+      this._data = v;
+      if (this.rooted) this.ownerDocument.mutateValue(this);
     },
   };
-  Ln.prototype = Object.create(Zs.prototype, {
+  ProcessingInstruction.prototype = Object.create(CharacterData.prototype, {
     nodeName: {
       get: function () {
         return this.target;
       },
     },
-    nodeValue: dr,
-    textContent: dr,
-    innerText: dr,
+    nodeValue,
+    textContent: nodeValue,
+    innerText: nodeValue,
     data: {
-      get: dr.get,
-      set: function (e) {
-        dr.set.call(this, e === null ? "" : String(e));
+      get: nodeValue.get,
+      set: function (v) {
+        nodeValue.set.call(this, v === null ? "" : String(v));
       },
     },
     clone: {
       value: function () {
-        return new Ln(this.ownerDocument, this.target, this._data);
+        return new ProcessingInstruction(this.ownerDocument, this.target, this._data);
       },
     },
     isEqual: {
-      value: function (t) {
-        return this.target === t.target && this._data === t._data;
+      value: function (n) {
+        return this.target === n.target && this._data === n._data;
       },
     },
   });
 });
-
-export { Mn };
+export { require_ProcessingInstruction };

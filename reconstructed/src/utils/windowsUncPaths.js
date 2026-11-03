@@ -9,19 +9,19 @@
  * attribution: placement 11
  */
 import { realpathSync, realpath } from "fs";
-import { iM, bt } from "./fsJunctions.js";
-import { Qn, cl } from "./pathClassification.js";
+import { hasWin32DevicePrefixSpelling, normalizeWin32Path } from "./fsJunctions.js";
+import { isUncOrDevicePath, hasDotSegment } from "./pathClassification.js";
 import { isWslUncPath } from "./networkPaths.js";
 
+//@ chunk-aat7wt0p.js:11254-11391 placement
 /**
  * 返回路径中第一个通配字符（*、?、成对的 [）的位置，没有则为 -1。
  */
-//@ chunk-aat7wt0p.js:11254-11391 placement
 function firstGlobCharIndex(t) {
-  for (let n = 0; n < t.length; n++) {
-    let e = t[n];
-    if (e === "*" || e === "?") return n;
-    if (e === "[" && t.indexOf("]", n + 1) !== -1) return n;
+  for (let i = 0; i < t.length; i++) {
+    let e = t[i];
+    if (e === "*" || e === "?") return i;
+    if (e === "[" && t.indexOf("]", i + 1) !== -1) return i;
   }
   return -1;
 }
@@ -31,76 +31,82 @@ function toUncLongPath(t) {
   if (t.startsWith("\\\\?\\") && t.length >= 7 && t[5] === ":") return t.slice(4);
   return t;
 }
+//@ chunk-aat7wt0p.js:11541-11834 placement
 /**
  * 对 Windows 设备/长路径形式反复去掉 \\?\ 等前缀并合并开头的重复分隔符，得到普通路径。
  */
-//@ chunk-aat7wt0p.js:11541-11834 placement
 function stripLongPathPrefixes(t) {
   if (isWindowsDevicePath(t)) {
     let replaced = toUncLongPath(t).replace(/^([\\/])[\\/]+/, "$1");
-    for (let e = 0; e < Lt && iM(replaced); e++) {
-      replaced = bt(replaced).replace(/^([\\/])[\\/]+/, "$1");
+    for (let i = 0; i < MAX_PREFIX_STRIPS && hasWin32DevicePrefixSpelling(replaced); i++) {
+      replaced = normalizeWin32Path(replaced).replace(/^([\\/])[\\/]+/, "$1");
       let r = 1;
       while (
         replaced[r] === "?" &&
         replaced[r + 1] === "?" &&
-        (r + 2 === replaced.length || et(replaced[r + 2]))
+        (r + 2 === replaced.length || isPathSeparator(replaced[r + 2]))
       ) {
         r += 3;
-        while (et(replaced[r])) r++;
+        while (isPathSeparator(replaced[r])) r++;
       }
       replaced = replaced.slice(0, 1) + replaced.slice(r);
     }
-    return iM(replaced) ? replaced.slice(0, 1) : replaced;
+    return hasWin32DevicePrefixSpelling(replaced) ? replaced.slice(0, 1) : replaced;
   }
   return t;
 }
 //@ chunk-aat7wt0p.js:11834-11843 placement
-var Lt = 4;
+var MAX_PREFIX_STRIPS = 4;
 //@ chunk-aat7wt0p.js:11843-11883 placement
-function et(t) {
+function isPathSeparator(t) {
   return t === "\\" || t === "/";
 }
+//@ chunk-aat7wt0p.js:11883-12019 placement
 /**
  * 判断路径是否为 Windows 设备命名空间形式（卷 GUID、\\?\ 或 \\.\ 前缀等）。
  */
-//@ chunk-aat7wt0p.js:11883-12019 placement
 function isWindowsDevicePath(t) {
-  if (/^\\\\\?\\volume\{/i.test(t)) return rt(t);
-  if (iM(t)) return !0;
-  let n = toUncLongPath(t);
-  if (n !== t && rt(n)) return !0;
-  return Qn(n) && !isWslUncPath(n);
+  if (/^\\\\\?\\volume\{/i.test(t)) return containsDotSegmentOrSlash(t);
+  if (hasWin32DevicePrefixSpelling(t)) return true;
+  let uncLongPath = toUncLongPath(t);
+  if (uncLongPath !== t && containsDotSegmentOrSlash(uncLongPath)) return true;
+  return isUncOrDevicePath(uncLongPath) && !isWslUncPath(uncLongPath);
 }
 //@ chunk-aat7wt0p.js:12019-12064 placement
-function rt(t) {
-  return cl(t) || t.includes("/");
+function containsDotSegmentOrSlash(t) {
+  return hasDotSegment(t) || t.includes("/");
 }
 //@ chunk-aat7wt0p.js:12064-12125 placement
-function Tm(t) {
+/**
+ * 原生 realpath 转长路径形式，失败返回 null。
+ */
+function nativeRealpathLong(t) {
   try {
     return toUncLongPath(realpathSync.native(t));
   } catch {
     return null;
   }
 }
+//@ chunk-aat7wt0p.js:12125-12231 placement
 /**
  * 异步取原生 realpath 并转为长路径形式，失败返回 null。
  */
-//@ chunk-aat7wt0p.js:12125-12231 placement
 async function realpathNativeAsync(t) {
-  return new Promise((n) => {
+  return new Promise((resolve) => {
     try {
       realpath.native(t, (e, r) => {
-        n(e ? null : toUncLongPath(r));
+        resolve(e ? null : toUncLongPath(r));
       });
     } catch {
-      n(null);
+      resolve(null);
     }
   });
 }
 //@ chunk-aat7wt0p.js:12231-12282 placement
-function bLi(t) {
+/**
+ * 原生 realpath，失败返回 null。
+ */
+function nativeRealpathOrNull(t) {
   try {
     return realpathSync(t);
   } catch {
@@ -108,19 +114,18 @@ function bLi(t) {
   }
 }
 //@ chunk-aat7wt0p.js:12282-12312 placement
-var Ct = 4,
-  N = 50,
-  Muo = N * (Ct - 1),
-  ot;
-
+var MAX_SYMLINK_HOPS = 4;
+var MAX_REALPATH_DEPTH = 50;
+var MAX_REALPATH_WORK = MAX_REALPATH_DEPTH * (MAX_SYMLINK_HOPS - 1);
+var realpathCacheSlot;
 export {
-  Tm,
+  nativeRealpathLong,
   toUncLongPath,
   realpathNativeAsync,
   isWindowsDevicePath,
   firstGlobCharIndex,
   stripLongPathPrefixes,
-  N,
-  bLi,
-  Muo,
+  MAX_REALPATH_DEPTH,
+  nativeRealpathOrNull,
+  MAX_REALPATH_WORK,
 };

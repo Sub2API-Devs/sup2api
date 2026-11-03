@@ -8,19 +8,31 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:301777-302076 cjs-fingerprint
-var ni = x(function (ag, ti) {
-  function Np(e) {
+var require_mojolicious = x(function (cjsExports, cjsModule) {
+  function mojolicious(hljs) {
     return {
       name: "Mojolicious",
       subLanguage: "xml",
       contains: [
-        { className: "meta", begin: "^__(END|DATA)__$" },
-        { begin: "^\\s*%{1,2}={0,2}", end: "$", subLanguage: "perl" },
-        { begin: "<%{1,2}={0,2}", end: "={0,1}%>", subLanguage: "perl", excludeBegin: !0, excludeEnd: !0 },
+        {
+          className: "meta",
+          begin: "^__(END|DATA)__$",
+        },
+        {
+          begin: "^\\s*%{1,2}={0,2}",
+          end: "$",
+          subLanguage: "perl",
+        },
+        {
+          begin: "<%{1,2}={0,2}",
+          end: "={0,1}%>",
+          subLanguage: "perl",
+          excludeBegin: true,
+          excludeEnd: true,
+        },
       ],
     };
   }
-  ti.exports = Np;
+  cjsModule.exports = mojolicious;
 });
-
-export { ni };
+export { require_mojolicious };

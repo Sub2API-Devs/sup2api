@@ -6,20 +6,21 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { lt } from "./resolve.js";
+import { require_resolve_2 } from "./resolve.js";
 
 //@ chunk-s82q9s4x.js:52170-52476 cjs-fingerprint
-var jvn = x(function (Cn) {
-  Object.defineProperty(Cn, "__esModule", { value: !0 });
-  var Ge = lt();
-  class Tn extends Error {
-    constructor(e, t, r, s) {
-      super(s || `can't resolve reference ${r} from id ${t}`);
-      ((this.missingRef = Ge.resolveUrl(e, t, r)),
-        (this.missingSchema = Ge.normalizeId(Ge.getFullPath(e, this.missingRef))));
+var require_ref_error_2 = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  var resolve_1 = require_resolve_2();
+  class MissingRefError extends Error {
+    constructor(resolver, baseId, ref, msg) {
+      super(msg || `can't resolve reference ${ref} from id ${baseId}`);
+      this.missingRef = resolve_1.resolveUrl(resolver, baseId, ref);
+      this.missingSchema = resolve_1.normalizeId(resolve_1.getFullPath(resolver, this.missingRef));
     }
   }
-  Cn.default = Tn;
+  cjsExports.default = MissingRefError;
 });
-
-export { jvn };
+export { require_ref_error_2 };

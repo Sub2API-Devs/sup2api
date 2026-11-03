@@ -8,10 +8,10 @@
  * pieces: chunk-e6aww6q8.js (2)
  * attribution: placement 2
  */
-import { sT } from "../../utils/pastedContent.js";
+import { bunHashOf } from "../../utils/pastedContent.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { getPluginRegistry } from "../../utils/plugins/pluginLoadState.js";
-import { ems } from "./policyGate.js";
+import { computedSettings } from "./policyGate.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { uniq } from "../../utils/collections.js";
 import { En } from "../../../vendor/lodash-es/_inlinedHelpers.js";
@@ -22,78 +22,84 @@ import { toError } from "../../utils/errors.js";
 
 //@ chunk-e6aww6q8.js:4159986-4160098 placement
 function settingsReadKey(e) {
-  let toSorted = [...e.keys()].toSorted();
-  return sT(jsonStringify([toSorted, toSorted.map((r) => [e.get(r)].filter((s) => s !== void 0))]));
+  let n = [...e.keys()].toSorted();
+  return bunHashOf(jsonStringify([n, n.map((r) => [e.get(r)].filter((s) => s !== undefined))]));
 }
+//@ chunk-e6aww6q8.js:4160098-4162230 placement
 /**
  * 插件读取引擎合并后的设置；插件与设置都未变化时复用上次结果。
  */
-//@ chunk-e6aww6q8.js:4160098-4162230 placement
 async function readMergedSettingsForPlugin(e, n) {
   let hookedMerge = e.hookedMerge;
-  hookedMerge.queuedFor = void 0;
+  hookedMerge.queuedFor = undefined;
   try {
-    let s = getPluginRegistry();
-    await s.hookRegistrationInFlight?.catch(() => {});
+    let pluginRegistry = getPluginRegistry();
+    await pluginRegistry.hookRegistrationInFlight?.catch(() => {});
     let answers = hookedMerge.answers;
-    if (s.loadedModules.length === 0 && answers === null) return;
-    let y = jsonStringify(s.loadedModules.map((loadedModule) => loadedModule.environmentId)),
-      S = ems(hookedMerge);
+    if (pluginRegistry.loadedModules.length === 0 && answers === null) return;
+    let y = jsonStringify(pluginRegistry.loadedModules.map((loadedModule) => loadedModule.environmentId));
+    let S = computedSettings(hookedMerge);
     if (y === hookedMerge.askedOf && S === hookedMerge.askedAbout && hookedMerge.unsettled.size === 0) {
       logForDebugging(
         `settings.read: the engine's merge is not raised again (${n}): neither the loaded plugins nor the settings changed.`,
       );
       return;
     }
-    let startTime = performance.now(),
-      G = await import("./chunk-2xg1ep72.js"),
-      engineMergeRead = await G.engineMergeRead();
-    if (engineMergeRead === void 0 && hookedMerge.visited.length === 0) hookedMerge.unsettled = new Set();
-    let Z = engineMergeRead ?? [];
+    let startTime = performance.now();
+    let G = await import("./chunk-2xg1ep72.js");
+    let q = await G.engineMergeRead();
+    if (q === undefined && hookedMerge.visited.length === 0) hookedMerge.unsettled = new Set();
+    let Z = q ?? [];
     logForDebugging(
       `settings.read: the engine's merge was raised (${n}) in ${(performance.now() - startTime).toFixed(1)} ms; ${Z.length} keys answered otherwise than the files.`,
     );
-    let Se = answers?.values ?? new Map(),
-      ke = new Map(Z.filter((Je) => !hookedMerge.unsettled.has(Je.key)).map((Je) => [Je.key, Je.value])),
-      Ee = hookedMerge.visited.includes(settingsReadKey(ke))
-        ? uniq([...ke.keys(), ...Se.keys()]).filter(
-            (Je) => ke.has(Je) !== Se.has(Je) || !En(ke.get(Je), Se.get(Je)),
-          )
-        : [];
-    if (Ee.length > 0)
-      ((hookedMerge.unsettled = new Set([...hookedMerge.unsettled, ...Ee])),
-        logForDebugging(
-          `settings.read: the merge never settles for ${Ee.join(", ")}; no hook's answer is taken for it.`,
-          { level: "warn" },
-        ));
-    let filtered = Z.filter((Je) => !hookedMerge.unsettled.has(Je.key)),
-      Me =
-        filtered.length + hookedMerge.unsettled.size === 0
-          ? null
-          : {
-              values: new Map(filtered.map((Je) => [Je.key, Je.value])),
-              errors: [...hookedMerge.unsettled].map((Je) => ({
-                path: Je,
-                severity: "warning",
-                statusOnly: !0,
-                message: `${Je} never settles under a settings.read hook (one of: ${G.settingsReadPlugins().join(", ")}): taking its answer was followed by a reload of the plugins, and the plugins then loaded answered as before it. No hook's answer is taken for this key; the settings files' own value stands.`,
-              })),
-              source: SETTING_SOURCES.findLast((Je) => filtered.some((nt) => nt.source === Je)),
-            };
+    let Se = answers?.values ?? new Map();
+    let ke = new Map(Z.filter((Je) => !hookedMerge.unsettled.has(Je.key)).map((Je) => [Je.key, Je.value]));
+    let Ee = hookedMerge.visited.includes(settingsReadKey(ke))
+      ? uniq([...ke.keys(), ...Se.keys()]).filter(
+          (Je) => ke.has(Je) !== Se.has(Je) || !En(ke.get(Je), Se.get(Je)),
+        )
+      : [];
+    if (Ee.length > 0) {
+      hookedMerge.unsettled = new Set([...hookedMerge.unsettled, ...Ee]);
+      logForDebugging(
+        `settings.read: the merge never settles for ${Ee.join(", ")}; no hook's answer is taken for it.`,
+        {
+          level: "warn",
+        },
+      );
+    }
+    let filtered = Z.filter((Je) => !hookedMerge.unsettled.has(Je.key));
+    let Me =
+      filtered.length + hookedMerge.unsettled.size === 0
+        ? null
+        : {
+            values: new Map(filtered.map((Je) => [Je.key, Je.value])),
+            errors: [...hookedMerge.unsettled].map((Je) => ({
+              path: Je,
+              severity: "warning",
+              statusOnly: true,
+              message: `${Je} never settles under a settings.read hook (one of: ${G.settingsReadPlugins().join(", ")}): taking its answer was followed by a reload of the plugins, and the plugins then loaded answered as before it. No hook's answer is taken for this key; the settings files' own value stands.`,
+            })),
+            source: SETTING_SOURCES.findLast((Je) => filtered.some((nt) => nt.source === Je)),
+          };
     if (En(Me, answers)) {
-      ((hookedMerge.visited = []), (hookedMerge.askedOf = y), (hookedMerge.askedAbout = S));
+      hookedMerge.visited = [];
+      hookedMerge.askedOf = y;
+      hookedMerge.askedAbout = S;
       return;
     }
-    ((hookedMerge.answers = Me), (hookedMerge.isAnnouncing = !0));
-    let hookRegistration = s.hookRegistration;
+    hookedMerge.answers = Me;
+    hookedMerge.isAnnouncing = true;
+    let hookRegistration = pluginRegistry.hookRegistration;
     try {
       settingsChangeDetector.notifyChange(
         SETTING_SOURCES.findLast((Je) => Je === Me?.source || Je === answers?.source) ?? "policySettings",
       );
     } finally {
-      hookedMerge.isAnnouncing = !1;
+      hookedMerge.isAnnouncing = false;
     }
-    let ze = s.hookRegistration !== hookRegistration;
+    let ze = pluginRegistry.hookRegistration !== hookRegistration;
     hookedMerge.visited = ze ? [...hookedMerge.visited, settingsReadKey(Se)] : [];
     let lt = await import("./chunk-7dqhgs3y.js");
     lt.configureProxyAuthHelperFromSettings();
@@ -101,5 +107,4 @@ async function readMergedSettingsForPlugin(e, n) {
     logError(toError(error));
   }
 }
-
 export { readMergedSettingsForPlugin };

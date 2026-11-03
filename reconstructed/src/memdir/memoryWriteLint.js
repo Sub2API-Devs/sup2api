@@ -8,23 +8,13 @@
  * pieces: chunk-e6aww6q8.js (18)
  * attribution: placement 18
  */
-import {
-  normalize,
-  normalize as normalize_2,
-  normalize as normalize_3,
-  normalize as normalize_4,
-  normalize as normalize_5,
-  normalize as normalize_6,
-  normalize as normalize_7,
-  normalize as normalize_8,
-  normalize as normalize_9,
-} from "path";
-import { ht } from "../services/mcp/cliOwnedClients.js";
-import { isDisallowedMemoryChar, nfcLower as nfcLower_2, mpr } from "./memdir.js";
+import { normalize } from "path";
+import { getCliOwnedState } from "../services/mcp/cliOwnedClients.js";
+import { isDisallowedMemoryChar, nfcLower as nfcLower_2, isDisallowedChar } from "./memdir.js";
 import { getIsNonInteractiveSession } from "../bootstrap/state.js";
 import { getAutoMemPathOrNull } from "./paths.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../services/analytics/growthbook.js";
-import { l8, TAi } from "../utils/sessionPeers.js";
+import { neutralizeInboundTags, inboundTagOpenerOffsets } from "../utils/sessionPeers.js";
 import { logEvent } from "../services/analytics/index.js";
 import { fromEnum } from "../services/analytics/safeMetadata.js";
 import { jsonStringify } from "../utils/slowOperations.js";
@@ -32,35 +22,47 @@ import { getFirstLine, truncateToLength } from "../utils/stringUtils.js";
 import { HostScoped } from "../utils/hostScoped.js";
 
 //@ chunk-e6aww6q8.js:1362512-1362563 placement
-function wSt(e, n, r) {
-  let vscodeClient = ht().vscodeClient;
+/**
+ * 记忆写入检查的入口；当前实现在取 vscodeClient 后直接返回（未启用检查）。
+ */
+function lintMemoryWrite(e, n, r) {
+  let vscodeClient = getCliOwnedState().vscodeClient;
   return;
 }
 //@ chunk-e6aww6q8.js:1362598-1362651 placement
-var TENGU_MEMDIR_WRITE_LINT = "tengu_memdir_write_lint",
-  eXt = /\.md[. ]*$/iu;
+/**
+ * 记忆写入检查开关名
+ */
+var TENGU_MEMDIR_WRITE_LINT = "tengu_memdir_write_lint";
+var MARKDOWN_EXT_RE = /\.md[. ]*$/iu;
 //@ chunk-e6aww6q8.js:1362651-1362720 placement
-function rXt(e) {
+/**
+ * 收集不可见/控制字符
+ */
+function collectHiddenChars(e) {
   let n = [];
   for (let r of e) if (isDisallowedMemoryChar(r)) n.push(r);
   return n;
 }
 //@ chunk-e6aww6q8.js:1362720-1362795 placement
-function IL(e) {
-  return e.agentId === void 0 && !getIsNonInteractiveSession() ? "interactive" : "background";
+/**
+ * 判断这次记忆写入来自交互会话还是后台会话。
+ */
+function memoryWriteSource(e) {
+  return e.agentId === undefined && !getIsNonInteractiveSession() ? "interactive" : "background";
 }
 //@ chunk-e6aww6q8.js:1362795-1362914 placement
 function getAutoMemRelativePath(e) {
-  let n = getAutoMemPathOrNull();
-  if (n === null) return null;
-  let r = normalizeMemoryPath(e),
-    s = normalizeMemoryPath(n);
+  let autoMemPathOrNull = getAutoMemPathOrNull();
+  if (autoMemPathOrNull === null) return null;
+  let r = normalizeMemoryPath(e);
+  let s = normalizeMemoryPath(autoMemPathOrNull);
   return r.startsWith(s) ? r.slice(s.length) : null;
 }
 //@ chunk-e6aww6q8.js:1362914-1363028 placement
 function normalizeMemoryPath(e) {
   return nfcLower_2(
-    normalize_4(e)
+    normalize(e)
       .split(/[/\\]/u)
       .map((n) => (n === "." || n === ".." ? n : n.replace(/[. ]+$/u, "")))
       .join("/"),
@@ -68,16 +70,22 @@ function normalizeMemoryPath(e) {
 }
 //@ chunk-e6aww6q8.js:1363028-1363136 placement
 function shouldLintMemoryWrite(e) {
-  let n = Sqo(e);
+  let n = basenameOfPath(e);
   return (
-    (eXt.test(n) || eXt.test(n.replace(/:.*$/u, ""))) &&
+    (MARKDOWN_EXT_RE.test(n) || MARKDOWN_EXT_RE.test(n.replace(/:.*$/u, ""))) &&
     getAutoMemRelativePath(e) !== null &&
-    getFeatureValue_CACHED_MAY_BE_STALE(TENGU_MEMDIR_WRITE_LINT, !1)
+    getFeatureValue_CACHED_MAY_BE_STALE(TENGU_MEMDIR_WRITE_LINT, false)
   );
 }
 //@ chunk-e6aww6q8.js:1363136-1363198 placement
-function iXt(e) {
-  return { hidden: rXt(e).length > 0, tags: l8(e) !== e };
+/**
+ * 判断记忆文本里是否有不可见字符以及是否含 HTML 标签。
+ */
+function classifyMemoryText(e) {
+  return {
+    hidden: collectHiddenChars(e).length > 0,
+    tags: neutralizeInboundTags(e) !== e,
+  };
 }
 //@ chunk-e6aww6q8.js:1363198-1363320 placement
 function logMemoryWriteLint(e, n, r) {
@@ -88,68 +96,87 @@ function logMemoryWriteLint(e, n, r) {
     harness_tags: r.tags,
   });
 }
+//@ chunk-e6aww6q8.js:1363320-1364118 placement
 /**
  * 拒绝路径含不可见或控制字符的记忆文件。
  */
-//@ chunk-e6aww6q8.js:1363320-1364118 placement
-function lintMemoryFilePath(e, n, r) {
-  if (!shouldLintMemoryWrite(e)) return null;
-  let filtered = [...(getAutoMemRelativePath(e) ?? normalize_4(e))].filter(mpr);
-  if (filtered.length > 0)
-    return (
-      logMemoryWriteLint(r, "refused", { hidden: !0, tags: !1 }),
-      `This memory file's path contains invisible or control characters (${describeHiddenCharacters(filtered)}). Name it without them and write the file again; nothing was written.`
-    );
+function lintMemoryFilePath(absolutePath, n, r) {
+  if (!shouldLintMemoryWrite(absolutePath)) return null;
+  let filtered = [...(getAutoMemRelativePath(absolutePath) ?? normalize(absolutePath))].filter(
+    isDisallowedChar,
+  );
+  if (filtered.length > 0) {
+    logMemoryWriteLint(r, "refused", {
+      hidden: true,
+      tags: false,
+    });
+    return `This memory file's path contains invisible or control characters (${describeHiddenCharacters(filtered)}). Name it without them and write the file again; nothing was written.`;
+  }
   if (r !== "interactive") return null;
-  let h = iXt(n);
+  let h = classifyMemoryText(n);
   if (!h.hidden && !h.tags) return null;
   logMemoryWriteLint(r, "refused", h);
   let y = [];
-  if (h.hidden) y.push(`invisible or control characters (${describeHiddenCharacters(rXt(n))})`);
+  if (h.hidden)
+    y.push(`invisible or control characters (${describeHiddenCharacters(collectHiddenChars(n))})`);
   if (h.tags) {
-    let mapped = TAi(n)
-        .slice(0, 3)
-        .map((L) => jsonStringify(getFirstLine(truncateToLength(n.slice(L), 24)))),
-      w = mapped.length > 0 ? mapped.join(", ") : "for example <system-reminder>";
+    let mapped = inboundTagOpenerOffsets(n)
+      .slice(0, 3)
+      .map((L) => jsonStringify(getFirstLine(truncateToLength(n.slice(L), 24))));
+    let w = mapped.length > 0 ? mapped.join(", ") : "for example <system-reminder>";
     y.push(`text shaped like a harness tag (${w}), which a memory file must not carry`);
   }
   return `This memory file's text contains ${y.join(" and ")}. Remove that and write the file again; nothing was written.`;
 }
+//@ chunk-e6aww6q8.js:1364118-1364253 placement
 /**
  * 后台写入自动记忆目录的文本时（开关打开且路径匹配），检测隐藏字符与 harness 标签，有则打点并剥离后返回，否则原样返回。
  */
-//@ chunk-e6aww6q8.js:1364118-1364253 placement
-function lintBackgroundMemoryWrite(e, n, r) {
-  if (r !== "background" || !shouldLintMemoryWrite(e)) return n;
-  let s = iXt(n);
+function lintBackgroundMemoryWrite(absolutePath, n, r) {
+  if (r !== "background" || !shouldLintMemoryWrite(absolutePath)) return n;
+  let s = classifyMemoryText(n);
   if (!s.hidden && !s.tags) return n;
-  return (logMemoryWriteLint(r, "stripped", s), dXt(n));
+  logMemoryWriteLint(r, "stripped", s);
+  return stripHiddenChars(n);
 }
 //@ chunk-e6aww6q8.js:1364253-1364294 placement
-function eSe(e, n) {
-  return shouldLintMemoryWrite(e) ? dXt(n) : n;
+/**
+ * 若启用写入检查，去掉不可见字符并归一化，否则原样返回。
+ */
+function lintMemoryTextIfEnabled(e, n) {
+  return shouldLintMemoryWrite(e) ? stripHiddenChars(n) : n;
 }
 //@ chunk-e6aww6q8.js:1364414-1364449 placement
-var aXt = new HostScoped(() => new Set()),
-  yqo = 256;
+/**
+ * 按宿主记录已检查过的记忆写入 id（最多 256 个，超出淘汰最早）。
+ */
+var lintedWriteIds = new HostScoped(() => new Set());
+var MAX_LINTED_WRITE_IDS = 256;
+//@ chunk-e6aww6q8.js:1364449-1364561 placement
 /**
  * 把一次写入的标识记进会话级的有限集合（超过上限淘汰最早的）。
  */
-//@ chunk-e6aww6q8.js:1364449-1364561 placement
-function rememberLintedWrite(e, n) {
-  if (n === void 0) return;
-  let of = aXt.of(e);
-  if ((of.add(n), of.size > yqo)) of.delete(of.values().next().value);
+function rememberLintedWrite(host, toolUseId) {
+  if (toolUseId === undefined) return;
+  let r = lintedWriteIds.of(host);
+  r.add(toolUseId);
+  if (r.size > MAX_LINTED_WRITE_IDS) r.delete(r.values().next().value);
 }
 //@ chunk-e6aww6q8.js:1364561-1364618 placement
-function rSe(e, n) {
-  return n !== void 0 && aXt.of(e).delete(n);
+/**
+ * 移除写入 id 记录
+ */
+function forgetLintedWrite(host, toolUseId) {
+  return toolUseId !== undefined && lintedWriteIds.of(host).delete(toolUseId);
 }
 //@ chunk-e6aww6q8.js:1364618-1364687 placement
-function dXt(e) {
+/**
+ * 去掉不可见字符后归一化
+ */
+function stripHiddenChars(e) {
   let n = "";
   for (let r of e) if (!isDisallowedMemoryChar(r)) n += r;
-  return l8(n);
+  return neutralizeInboundTags(n);
 }
 //@ chunk-e6aww6q8.js:1364687-1364947 placement
 function describeHiddenCharacters(e) {
@@ -162,8 +189,18 @@ function describeHiddenCharacters(e) {
   return n.size > 6 ? `${mapped.join(", ")} and more` : mapped.join(", ");
 }
 //@ chunk-e6aww6q8.js:1364947-1365030 placement
-function Sqo(e) {
+/**
+ * 取最后一段路径
+ */
+function basenameOfPath(e) {
   return e.slice(Math.max(e.lastIndexOf("/"), e.lastIndexOf("\\")) + 1);
 }
-
-export { wSt, lintMemoryFilePath, lintBackgroundMemoryWrite, rememberLintedWrite, eSe, IL, rSe };
+export {
+  lintMemoryWrite,
+  lintMemoryFilePath,
+  lintBackgroundMemoryWrite,
+  rememberLintedWrite,
+  lintMemoryTextIfEnabled,
+  memoryWriteSource,
+  forgetLintedWrite,
+};

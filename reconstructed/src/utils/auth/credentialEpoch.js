@@ -8,45 +8,66 @@
  * pieces: chunk-aepeg2w5.js (7)
  * attribution: placement 7
  */
-import { xL } from "./oauthRefreshLock.js";
+import { credentialSignalByHost } from "./oauthRefreshLock.js";
 import { getRootSession } from "../../bootstrap/state.js";
 import { HostScoped } from "../hostScoped.js";
 import { createSignal } from "../signal.js";
 
 //@ chunk-aepeg2w5.js:313968-314005 placement
-function Nv() {
-  return xL.of(getRootSession().host);
+/**
+ * 按宿主隔离的凭据代次事件源。
+ */
+function credentialEpochEmitter() {
+  return credentialSignalByHost.of(getRootSession().host);
 }
+//@ chunk-aepeg2w5.js:314005-314031 placement
 /**
  * 发出凭据变化事件。
  */
-//@ chunk-aepeg2w5.js:314005-314031 placement
 function emitCredentialChange() {
-  Nv().emit();
+  credentialEpochEmitter().emit();
 }
 //@ chunk-aepeg2w5.js:314031-314072 placement
-function W3t(e) {
-  return Nv().subscribe(e);
-}
 /**
- * 隧道凭据代次请求头与事件。
+ * 订阅凭据变化事件。
  */
+function onCredentialChange(e) {
+  return credentialEpochEmitter().subscribe(e);
+}
 //@ chunk-aepeg2w5.js:314072-314139 placement
-var TUNNEL_CREDENTIAL_EPOCH_HEADER = "x-claude-code-tunnel-credential-epoch",
-  Fv = new HostScoped(() => createSignal());
+/**
+ * 按宿主隔离的凭据代次信号。
+ */
+var TUNNEL_CREDENTIAL_EPOCH_HEADER = "x-claude-code-tunnel-credential-epoch";
+var credentialEpochSignalByHost = new HostScoped(() => createSignal());
 //@ chunk-aepeg2w5.js:314139-314206 placement
-function Qos(e) {
-  let n = xto(e);
-  if (n !== void 0) Fv.of(getRootSession().host).emit(n);
+/**
+ * 从请求头值发出凭据代次变化（值不合法时忽略）。
+ */
+function emitEpochFromHeader(e) {
+  let epochNumber = parseEpochNumber(e);
+  if (epochNumber !== undefined) credentialEpochSignalByHost.of(getRootSession().host).emit(epochNumber);
 }
 //@ chunk-aepeg2w5.js:314206-314258 placement
-function Hwi(e) {
-  return Fv.of(getRootSession().host).subscribe(e);
+/**
+ * 订阅凭据代次变化。
+ */
+function subscribeCredentialEpoch(onTunnelCredentialEpoch) {
+  return credentialEpochSignalByHost.of(getRootSession().host).subscribe(onTunnelCredentialEpoch);
 }
 //@ chunk-aepeg2w5.js:314258-314332 placement
-function xto(e) {
+/**
+ * 把请求头值解析成非负整数（格式不符返回 undefined）。
+ */
+function parseEpochNumber(e) {
   if (e == null || !/^\d{1,15}$/.test(e)) return;
   return Number(e);
 }
-
-export { W3t, emitCredentialChange, TUNNEL_CREDENTIAL_EPOCH_HEADER, xto, Hwi, Qos };
+export {
+  onCredentialChange,
+  emitCredentialChange,
+  TUNNEL_CREDENTIAL_EPOCH_HEADER,
+  parseEpochNumber,
+  subscribeCredentialEpoch,
+  emitEpochFromHeader,
+};

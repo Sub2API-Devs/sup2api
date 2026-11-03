@@ -12,30 +12,39 @@ import { readSecureStorageForMcp } from "./credentialStoreRead.js";
 import { READ_FAILED } from "../../utils/secureStorage/storageWriteLock.js";
 import { getServerKey } from "./auth.js";
 
+//@ chunk-xbm7kra6.js:266-844 placement
 /**
  * 吊销存储的 MCP 令牌。
  */
-//@ chunk-xbm7kra6.js:266-844 placement
 async function revokeStoredMcpTokens(n, i) {
   if ((await readSecureStorageForMcp()) === READ_FAILED)
-    return { cleared: !1, reason: "credential_store_failed" };
-  let mcpAuthModule = require("./chunk-asne9cp8.js").mcpAuthModule(),
-    t = new Set(),
-    e = { cleared: !0 };
+    return {
+      cleared: false,
+      reason: "credential_store_failed",
+    };
+  let c = require("./chunk-asne9cp8.js").mcpAuthModule();
+  let t = new Set();
+  let e = {
+    cleared: true,
+  };
   for (let r of i) {
     if (r.type !== "http" && r.type !== "sse") continue;
-    let a = getServerKey(n, r);
-    if (t.has(a)) continue;
-    t.add(a);
-    let revokeServerTokens = await mcpAuthModule.revokeServerTokens(n, r);
-    if (!revokeServerTokens.cleared && (e.cleared || revokeServerTokens.reason === "credential_store_failed"))
-      e = revokeServerTokens;
+    let serverKey = getServerKey(n, r);
+    if (t.has(serverKey)) continue;
+    t.add(serverKey);
+    let o = await c.revokeServerTokens(n, r);
+    if (!o.cleared && (e.cleared || o.reason === "credential_store_failed")) e = o;
   }
   if (!e.cleared && e.reason === "credential_store_failed") return e;
-  let s = await readSecureStorageForMcp();
-  if (s === READ_FAILED || [...t].some((r) => s?.mcpOAuth?.[r] !== void 0))
-    return { cleared: !1, reason: "credential_store_failed" };
+  let secureStorageForMcp = await readSecureStorageForMcp();
+  if (
+    secureStorageForMcp === READ_FAILED ||
+    [...t].some((r) => secureStorageForMcp?.mcpOAuth?.[r] !== undefined)
+  )
+    return {
+      cleared: false,
+      reason: "credential_store_failed",
+    };
   return e;
 }
-
 export { revokeStoredMcpTokens };

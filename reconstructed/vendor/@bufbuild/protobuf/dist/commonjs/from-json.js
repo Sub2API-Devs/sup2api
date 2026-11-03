@@ -6,432 +6,511 @@
  * attribution: cjs-require-graph 1
  */
 import { x } from "../../../../../runtime/bun-runtime.js";
-import { Ns } from "../cjs/descriptors.js";
-import { ko } from "./proto-int64.js";
-import { wl } from "../cjs/create.js";
-import { Po } from "../cjs/reflect/reflect.js";
-import { op } from "../cjs/reflect/error.js";
-import { Dg } from "../cjs/reflect/reflect-check.js";
-import { Ec } from "../cjs/reflect/names.js";
-import { dp } from "../cjs/wire/base64-encoding.js";
-import { Os } from "../../../../@anthropic-ai/bedrock-sdk/core/error.js";
-import { gp } from "./extensions.js";
+import { require_descriptors } from "../cjs/descriptors.js";
+import { require_proto_int64 } from "./proto-int64.js";
+import { require_create } from "../cjs/create.js";
+import { require_reflect } from "../cjs/reflect/reflect.js";
+import { require_error_2 } from "../cjs/reflect/error.js";
+import { require_reflect_check } from "../cjs/reflect/reflect-check.js";
+import { require_names } from "../cjs/reflect/names.js";
+import { require_base64_encoding } from "../cjs/wire/base64-encoding.js";
+import { require_error_4 } from "../../../../@anthropic-ai/bedrock-sdk/core/error.js";
+import { require_extensions } from "./extensions.js";
 
 //@ chunk-fq0cr76a.js:456071-465470 cjs-require-graph
-var JP = x(function (XP) {
-  Object.defineProperty(XP, "__esModule", { value: !0 });
-  XP.fromJsonString = LJ;
-  XP.mergeFromJsonString = BJ;
-  XP.fromJson = GP;
-  XP.mergeFromJson = HP;
-  XP.enumFromJson = UJ;
-  XP.isEnumJson = FJ;
-  var hr = Ns(),
-    xy = ko(),
-    Ol = wl(),
-    Mo = Po(),
-    gs = op(),
-    vr = Dg(),
-    $P = Ec(),
-    VP = dp(),
-    Ps = Os(),
-    Sy = gp(),
-    FP = { ignoreUnknownFields: !1 };
-  function WP(e) {
-    return e ? Object.assign(Object.assign({}, FP), e) : FP;
+var require_from_json = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.fromJsonString = fromJsonString;
+  cjsExports.mergeFromJsonString = mergeFromJsonString;
+  cjsExports.fromJson = fromJson;
+  cjsExports.mergeFromJson = mergeFromJson;
+  cjsExports.enumFromJson = enumFromJson;
+  cjsExports.isEnumJson = isEnumJson;
+  var descriptors_js_1 = require_descriptors();
+  var proto_int64_js_1 = require_proto_int64();
+  var create_js_1 = require_create();
+  var reflect_js_1 = require_reflect();
+  var error_js_1 = require_error_2();
+  var reflect_check_js_1 = require_reflect_check();
+  var names_js_1 = require_names();
+  var base64_encoding_js_1 = require_base64_encoding();
+  var index_js_1 = require_error_4();
+  var extensions_js_1 = require_extensions();
+  var FP = {
+    ignoreUnknownFields: false,
+  };
+  function makeReadContext(options) {
+    return options ? Object.assign(Object.assign({}, FP), options) : FP;
   }
-  function LJ(e, n, r) {
-    return GP(e, jP(n, e.typeName), r);
+  function fromJsonString(schema, json, options) {
+    return fromJson(schema, parseJsonString(json, schema.typeName), options);
   }
-  function BJ(e, n, r, s) {
-    return HP(e, n, jP(r, e.typeName), s);
+  function mergeFromJsonString(schema, target, json, options) {
+    return mergeFromJson(schema, target, parseJsonString(json, schema.typeName), options);
   }
-  function GP(e, n, r) {
-    let reflect = Mo.reflect(e);
+  function fromJson(schema, json, options) {
+    let msg = reflect_js_1.reflect(schema);
     try {
-      sd(reflect, n, WP(r));
-    } catch (error) {
-      if (gs.isFieldError(error))
-        throw Error(`cannot decode ${error.field()} from JSON: ${error.message}`, { cause: error });
-      throw error;
+      readMessage(msg, json, makeReadContext(options));
+    } catch (e) {
+      if (error_js_1.isFieldError(e))
+        throw Error(`cannot decode ${e.field()} from JSON: ${e.message}`, {
+          cause: e,
+        });
+      throw e;
     }
-    return reflect.message;
+    return msg.message;
   }
-  function HP(e, n, r, s) {
+  function mergeFromJson(schema, target, json, options) {
     try {
-      sd(Mo.reflect(e, n), r, WP(s));
-    } catch (error) {
-      if (gs.isFieldError(error))
-        throw Error(`cannot decode ${error.field()} from JSON: ${error.message}`, { cause: error });
-      throw error;
+      readMessage(reflect_js_1.reflect(schema, target), json, makeReadContext(options));
+    } catch (e) {
+      if (error_js_1.isFieldError(e))
+        throw Error(`cannot decode ${e.field()} from JSON: ${e.message}`, {
+          cause: e,
+        });
+      throw e;
     }
-    return n;
+    return target;
   }
-  function UJ(e, n) {
-    return w_(e, n, !1);
+  function enumFromJson(descEnum, json) {
+    return readEnum(descEnum, json, false);
   }
-  function FJ(e, n) {
-    return e.values.find((r) => r.name === n) !== void 0;
+  function isEnumJson(descEnum, value) {
+    return descEnum.values.find((v) => v.name === value) !== undefined;
   }
-  var weakMap = new WeakMap();
-  function MJ(e, n) {
-    var r;
-    if (!weakMap.has(e)) {
-      let s = new Map();
-      for (let field of e.fields) s.set(field.name, field).set(field.jsonName, field);
-      weakMap.set(e, s);
+  var messageJsonFields = new WeakMap();
+  function getJsonField(desc, jsonKey) {
+    var _a;
+    if (!messageJsonFields.has(desc)) {
+      let jsonNames = new Map();
+      for (let field of desc.fields) jsonNames.set(field.name, field).set(field.jsonName, field);
+      messageJsonFields.set(desc, jsonNames);
     }
-    return (r = weakMap.get(e)) === null || r === void 0 ? void 0 : r.get(n);
+    return (_a = messageJsonFields.get(desc)) === null || _a === undefined ? undefined : _a.get(jsonKey);
   }
-  function sd(e, n, r) {
-    var s;
-    if (qJ(e, n, r)) return;
-    if (n == null || Array.isArray(n) || typeof n != "object")
-      throw Error(`cannot decode ${e.desc} from JSON: ${vr.formatVal(n)}`);
-    let h = new Map();
-    for (let [y, b] of Object.entries(n)) {
-      let S = MJ(e.desc, y);
-      if (S) {
-        if (S.oneof) {
-          if (b === null && S.fieldKind == "scalar") continue;
-          let w = h.get(S.oneof);
-          if (w !== void 0)
-            throw new gs.FieldError(S.oneof, `oneof set multiple times by ${w.name} and ${S.name}`);
-          h.set(S.oneof, S);
+  function readMessage(msg, json, ctx) {
+    var _a;
+    if (tryWktFromJson(msg, json, ctx)) return;
+    if (json == null || Array.isArray(json) || typeof json != "object")
+      throw Error(`cannot decode ${msg.desc} from JSON: ${reflect_check_js_1.formatVal(json)}`);
+    let oneofSeen = new Map();
+    for (let [jsonKey, jsonValue] of Object.entries(json)) {
+      let field = getJsonField(msg.desc, jsonKey);
+      if (field) {
+        if (field.oneof) {
+          if (jsonValue === null && field.fieldKind == "scalar") continue;
+          let seen = oneofSeen.get(field.oneof);
+          if (seen !== undefined)
+            throw new error_js_1.FieldError(
+              field.oneof,
+              `oneof set multiple times by ${seen.name} and ${field.name}`,
+            );
+          oneofSeen.set(field.oneof, field);
         }
-        MP(e, S, b, r);
+        readField(msg, field, jsonValue, ctx);
       } else {
-        let w = void 0;
+        let extension = undefined;
         if (
-          y.startsWith("[") &&
-          y.endsWith("]") &&
-          (w =
-            (s = r.registry) === null || s === void 0
-              ? void 0
-              : s.getExtension(y.substring(1, y.length - 1))) &&
-          w.extendee.typeName === e.desc.typeName
+          jsonKey.startsWith("[") &&
+          jsonKey.endsWith("]") &&
+          (extension =
+            (_a = ctx.registry) === null || _a === undefined
+              ? undefined
+              : _a.getExtension(jsonKey.substring(1, jsonKey.length - 1))) &&
+          extension.extendee.typeName === msg.desc.typeName
         ) {
-          let [R, D, O] = Sy.createExtensionContainer(w);
-          (MP(R, D, b, r), Sy.setExtension(e.message, w, O()));
+          let [container, field, get] = extensions_js_1.createExtensionContainer(extension);
+          readField(container, field, jsonValue, ctx);
+          extensions_js_1.setExtension(msg.message, extension, get());
         }
-        if (!w && !r.ignoreUnknownFields)
-          throw Error(`cannot decode ${e.desc} from JSON: key "${y}" is unknown`);
+        if (!extension && !ctx.ignoreUnknownFields)
+          throw Error(`cannot decode ${msg.desc} from JSON: key "${jsonKey}" is unknown`);
       }
     }
   }
-  function MP(e, n, r, s) {
-    switch (n.fieldKind) {
+  function readField(msg, field, json, ctx) {
+    switch (field.fieldKind) {
       case "scalar":
-        HJ(e, n, r);
+        readScalarField(msg, field, json);
         break;
       case "enum":
-        GJ(e, n, r, s);
+        readEnumField(msg, field, json, ctx);
         break;
       case "message":
-        WJ(e, n, r, s);
+        readMessageField(msg, field, json, ctx);
         break;
       case "list":
-        VJ(e.get(n), r, s);
+        readListField(msg.get(field), json, ctx);
         break;
       case "map":
-        $J(e.get(n), r, s);
+        readMapField(msg.get(field), json, ctx);
         break;
     }
   }
-  function KP(e, n, r) {
-    if (e.scalar && n !== null) return T_(e, n);
-    if (e.message && !Ey(e, n)) {
-      let reflect = Mo.reflect(e.message);
-      return (sd(reflect, n, r), reflect);
+  function readListOrMapItem(field, json, ctx) {
+    if (field.scalar && json !== null) return scalarFromJson(field, json);
+    if (field.message && !isResetSentinelNullValue(field, json)) {
+      let msgValue = reflect_js_1.reflect(field.message);
+      readMessage(msgValue, json, ctx);
+      return msgValue;
     }
-    if (e.enum && !Ey(e, n)) return w_(e.enum, n, r.ignoreUnknownFields);
-    throw new gs.FieldError(e, `${e.fieldKind === "list" ? "list item" : "map value"} must not be null`);
-  }
-  function $J(e, n, r) {
-    if (n === null) return;
-    let field = e.field();
-    if (typeof n != "object" || Array.isArray(n))
-      throw new gs.FieldError(field, "expected object, got " + vr.formatVal(n));
-    for (let [h, y] of Object.entries(n)) {
-      let b = KJ(field.mapKey, h),
-        S = KP(field, y, r);
-      if (S !== _y) e.set(b, S);
-    }
-  }
-  function VJ(e, n, r) {
-    if (n === null) return;
-    let field = e.field();
-    if (!Array.isArray(n)) throw new gs.FieldError(field, "expected Array, got " + vr.formatVal(n));
-    for (let h of n) {
-      let y = KP(field, h, r);
-      if (y !== _y) e.add(y);
-    }
-  }
-  function WJ(e, n, r, s) {
-    if (Ey(n, r)) {
-      e.clear(n);
-      return;
-    }
-    let h = e.isSet(n) ? e.get(n) : Mo.reflect(n.message);
-    (sd(h, r, s), e.set(n, h));
-  }
-  function GJ(e, n, r, s) {
-    if (Ey(n, r)) {
-      e.clear(n);
-      return;
-    }
-    let h = w_(n.enum, r, s.ignoreUnknownFields);
-    if (h !== _y) e.set(n, h);
-  }
-  function HJ(e, n, r) {
-    if (r === null) e.clear(n);
-    else e.set(n, T_(n, r));
-  }
-  function Ey(e, n) {
-    var r, s;
-    return (
-      n === null &&
-      ((r = e.message) === null || r === void 0 ? void 0 : r.typeName) != "google.protobuf.Value" &&
-      ((s = e.enum) === null || s === void 0 ? void 0 : s.typeName) != "google.protobuf.NullValue"
+    if (field.enum && !isResetSentinelNullValue(field, json))
+      return readEnum(field.enum, json, ctx.ignoreUnknownFields);
+    throw new error_js_1.FieldError(
+      field,
+      `${field.fieldKind === "list" ? "list item" : "map value"} must not be null`,
     );
   }
-  var _y = Symbol();
-  function w_(e, n, r) {
-    if (n === null) return e.values[0].number;
-    switch (typeof n) {
+  function readMapField(map, json, ctx) {
+    if (json === null) return;
+    let field = map.field();
+    if (typeof json != "object" || Array.isArray(json))
+      throw new error_js_1.FieldError(field, "expected object, got " + reflect_check_js_1.formatVal(json));
+    for (let [jsonMapKey, value] of Object.entries(json)) {
+      let key = mapKeyFromJson(field.mapKey, jsonMapKey);
+      let value_2 = readListOrMapItem(field, value, ctx);
+      if (value_2 !== tokenIgnoredUnknownEnum) map.set(key, value_2);
+    }
+  }
+  function readListField(list, json, ctx) {
+    if (json === null) return;
+    let field = list.field();
+    if (!Array.isArray(json))
+      throw new error_js_1.FieldError(field, "expected Array, got " + reflect_check_js_1.formatVal(json));
+    for (let jsonItem of json) {
+      let value = readListOrMapItem(field, jsonItem, ctx);
+      if (value !== tokenIgnoredUnknownEnum) list.add(value);
+    }
+  }
+  function readMessageField(msg, field, json, ctx) {
+    if (isResetSentinelNullValue(field, json)) {
+      msg.clear(field);
+      return;
+    }
+    let msgValue = msg.isSet(field) ? msg.get(field) : reflect_js_1.reflect(field.message);
+    readMessage(msgValue, json, ctx);
+    msg.set(field, msgValue);
+  }
+  function readEnumField(msg, field, json, ctx) {
+    if (isResetSentinelNullValue(field, json)) {
+      msg.clear(field);
+      return;
+    }
+    let enumValue = readEnum(field.enum, json, ctx.ignoreUnknownFields);
+    if (enumValue !== tokenIgnoredUnknownEnum) msg.set(field, enumValue);
+  }
+  function readScalarField(msg, field, json) {
+    if (json === null) msg.clear(field);
+    else msg.set(field, scalarFromJson(field, json));
+  }
+  function isResetSentinelNullValue(field, json) {
+    var _a;
+    var _b;
+    return (
+      json === null &&
+      ((_a = field.message) === null || _a === undefined ? undefined : _a.typeName) !=
+        "google.protobuf.Value" &&
+      ((_b = field.enum) === null || _b === undefined ? undefined : _b.typeName) !=
+        "google.protobuf.NullValue"
+    );
+  }
+  var tokenIgnoredUnknownEnum = Symbol();
+  function readEnum(desc, json, ignoreUnknownFields) {
+    if (json === null) return desc.values[0].number;
+    switch (typeof json) {
       case "number":
-        if (Number.isInteger(n)) return n;
+        if (Number.isInteger(json)) return json;
         break;
       case "string":
-        let found = e.values.find((h) => h.name === n);
-        if (found !== void 0) return found.number;
-        if (r) return _y;
+        let value = desc.values.find((ev) => ev.name === json);
+        if (value !== undefined) return value.number;
+        if (ignoreUnknownFields) return tokenIgnoredUnknownEnum;
         break;
     }
-    throw Error(`cannot decode ${e} from JSON: ${vr.formatVal(n)}`);
+    throw Error(`cannot decode ${desc} from JSON: ${reflect_check_js_1.formatVal(json)}`);
   }
-  function T_(e, n) {
-    switch (e.scalar) {
-      case hr.ScalarType.DOUBLE:
-      case hr.ScalarType.FLOAT:
-        if (n === "NaN") return NaN;
-        if (n === "Infinity") return Number.POSITIVE_INFINITY;
-        if (n === "-Infinity") return Number.NEGATIVE_INFINITY;
-        if (typeof n == "number") {
-          if (Number.isNaN(n)) throw new gs.FieldError(e, "unexpected NaN number");
-          if (!Number.isFinite(n)) throw new gs.FieldError(e, "unexpected infinite number");
+  function scalarFromJson(field, json) {
+    switch (field.scalar) {
+      case descriptors_js_1.ScalarType.DOUBLE:
+      case descriptors_js_1.ScalarType.FLOAT:
+        if (json === "NaN") return NaN;
+        if (json === "Infinity") return Number.POSITIVE_INFINITY;
+        if (json === "-Infinity") return Number.NEGATIVE_INFINITY;
+        if (typeof json == "number") {
+          if (Number.isNaN(json)) throw new error_js_1.FieldError(field, "unexpected NaN number");
+          if (!Number.isFinite(json)) throw new error_js_1.FieldError(field, "unexpected infinite number");
           break;
         }
-        if (typeof n == "string") {
-          if (n === "") break;
-          if (n.trim().length !== n.length) break;
-          let r = Number(n);
-          if (!Number.isFinite(r)) break;
-          return r;
+        if (typeof json == "string") {
+          if (json === "") break;
+          if (json.trim().length !== json.length) break;
+          let float = Number(json);
+          if (!Number.isFinite(float)) break;
+          return float;
         }
         break;
-      case hr.ScalarType.INT32:
-      case hr.ScalarType.FIXED32:
-      case hr.ScalarType.SFIXED32:
-      case hr.ScalarType.SINT32:
-      case hr.ScalarType.UINT32:
-        return qP(n);
-      case hr.ScalarType.BYTES:
-        if (typeof n == "string") {
-          if (n === "") return new Uint8Array(0);
+      case descriptors_js_1.ScalarType.INT32:
+      case descriptors_js_1.ScalarType.FIXED32:
+      case descriptors_js_1.ScalarType.SFIXED32:
+      case descriptors_js_1.ScalarType.SINT32:
+      case descriptors_js_1.ScalarType.UINT32:
+        return int32FromJson(json);
+      case descriptors_js_1.ScalarType.BYTES:
+        if (typeof json == "string") {
+          if (json === "") return new Uint8Array(0);
           try {
-            return VP.base64Decode(n);
-          } catch (error) {
-            let s = error instanceof Error ? error.message : String(error);
-            throw new gs.FieldError(e, s);
+            return base64_encoding_js_1.base64Decode(json);
+          } catch (e) {
+            let message = e instanceof Error ? e.message : String(e);
+            throw new error_js_1.FieldError(field, message);
           }
         }
         break;
     }
-    return n;
+    return json;
   }
-  function KJ(e, n) {
-    switch (e) {
-      case hr.ScalarType.BOOL:
-        switch (n) {
+  function mapKeyFromJson(type, jsonString) {
+    switch (type) {
+      case descriptors_js_1.ScalarType.BOOL:
+        switch (jsonString) {
           case "true":
-            return !0;
+            return true;
           case "false":
-            return !1;
+            return false;
         }
-        return n;
-      case hr.ScalarType.INT32:
-      case hr.ScalarType.FIXED32:
-      case hr.ScalarType.UINT32:
-      case hr.ScalarType.SFIXED32:
-      case hr.ScalarType.SINT32:
-        return qP(n);
+        return jsonString;
+      case descriptors_js_1.ScalarType.INT32:
+      case descriptors_js_1.ScalarType.FIXED32:
+      case descriptors_js_1.ScalarType.UINT32:
+      case descriptors_js_1.ScalarType.SFIXED32:
+      case descriptors_js_1.ScalarType.SINT32:
+        return int32FromJson(jsonString);
       default:
-        return n;
+        return jsonString;
     }
   }
-  function qP(e) {
-    if (typeof e == "string") {
-      if (e === "") return e;
-      if (e.trim().length !== e.length) return e;
-      let n = Number(e);
-      if (Number.isNaN(n)) return e;
-      return n;
+  function int32FromJson(json) {
+    if (typeof json == "string") {
+      if (json === "") return json;
+      if (json.trim().length !== json.length) return json;
+      let num = Number(json);
+      if (Number.isNaN(num)) return json;
+      return num;
     }
-    return e;
+    return json;
   }
-  function jP(e, n) {
+  function parseJsonString(jsonString, typeName) {
     try {
-      return JSON.parse(e);
-    } catch (error) {
-      let s = error instanceof Error ? error.message : String(error);
-      throw Error(`cannot decode message ${n} from JSON: ${s}`, { cause: error });
+      return JSON.parse(jsonString);
+    } catch (e) {
+      let message = e instanceof Error ? e.message : String(e);
+      throw Error(`cannot decode message ${typeName} from JSON: ${message}`, {
+        cause: e,
+      });
     }
   }
-  function qJ(e, n, r) {
-    if (!e.desc.typeName.startsWith("google.protobuf.")) return !1;
-    switch (e.desc.typeName) {
+  function tryWktFromJson(msg, jsonValue, ctx) {
+    if (!msg.desc.typeName.startsWith("google.protobuf.")) return false;
+    switch (msg.desc.typeName) {
       case "google.protobuf.Any":
-        return (jJ(e.message, n, r), !0);
+        anyFromJson(msg.message, jsonValue, ctx);
+        return true;
       case "google.protobuf.Timestamp":
-        return (YJ(e.message, n), !0);
+        timestampFromJson(msg.message, jsonValue);
+        return true;
       case "google.protobuf.Duration":
-        return (ZJ(e.message, n), !0);
+        durationFromJson(msg.message, jsonValue);
+        return true;
       case "google.protobuf.FieldMask":
-        return (zJ(e.message, n), !0);
+        fieldMaskFromJson(msg.message, jsonValue);
+        return true;
       case "google.protobuf.Struct":
-        return (YP(e.message, n), !0);
+        structFromJson(msg.message, jsonValue);
+        return true;
       case "google.protobuf.Value":
-        return (A_(e.message, n), !0);
+        valueFromJson(msg.message, jsonValue);
+        return true;
       case "google.protobuf.ListValue":
-        return (ZP(e.message, n), !0);
+        listValueFromJson(msg.message, jsonValue);
+        return true;
       default:
-        if (Ps.isWrapperDesc(e.desc)) {
-          let s = e.desc.fields[0];
-          if (n === null) e.clear(s);
-          else e.set(s, T_(s, n));
-          return !0;
+        if (index_js_1.isWrapperDesc(msg.desc)) {
+          let valueField = msg.desc.fields[0];
+          if (jsonValue === null) msg.clear(valueField);
+          else msg.set(valueField, scalarFromJson(valueField, jsonValue));
+          return true;
         }
-        return !1;
+        return false;
     }
   }
-  function jJ(e, n, r) {
-    var s;
-    if (n === null || Array.isArray(n) || typeof n != "object")
+  function anyFromJson(any, json, ctx) {
+    var _a;
+    if (json === null || Array.isArray(json) || typeof json != "object")
       throw Error(
-        `cannot decode message ${e.$typeName} from JSON: expected object but got ${vr.formatVal(n)}`,
+        `cannot decode message ${any.$typeName} from JSON: expected object but got ${reflect_check_js_1.formatVal(json)}`,
       );
-    if (Object.keys(n).length == 0) return;
-    let h = n["@type"];
-    if (typeof h != "string" || h == "")
-      throw Error(`cannot decode message ${e.$typeName} from JSON: "@type" is empty`);
-    let y = h.includes("/") ? h.substring(h.lastIndexOf("/") + 1) : h;
-    if (!y.length) throw Error(`cannot decode message ${e.$typeName} from JSON: "@type" is invalid`);
-    let b = (s = r.registry) === null || s === void 0 ? void 0 : s.getMessage(y);
-    if (!b) throw Error(`cannot decode message ${e.$typeName} from JSON: ${h} is not in the type registry`);
-    let reflect = Mo.reflect(b);
-    if (Ps.hasCustomJsonRepresentation(b) && Object.prototype.hasOwnProperty.call(n, "value")) {
-      let w = n.value;
-      sd(reflect, w, r);
+    if (Object.keys(json).length == 0) return;
+    let typeUrl = json["@type"];
+    if (typeof typeUrl != "string" || typeUrl == "")
+      throw Error(`cannot decode message ${any.$typeName} from JSON: "@type" is empty`);
+    let typeName = typeUrl.includes("/") ? typeUrl.substring(typeUrl.lastIndexOf("/") + 1) : typeUrl;
+    if (!typeName.length) throw Error(`cannot decode message ${any.$typeName} from JSON: "@type" is invalid`);
+    let desc = (_a = ctx.registry) === null || _a === undefined ? undefined : _a.getMessage(typeName);
+    if (!desc)
+      throw Error(`cannot decode message ${any.$typeName} from JSON: ${typeUrl} is not in the type registry`);
+    let msg = reflect_js_1.reflect(desc);
+    if (index_js_1.hasCustomJsonRepresentation(desc) && Object.prototype.hasOwnProperty.call(json, "value")) {
+      let value = json.value;
+      readMessage(msg, value, ctx);
     } else {
-      let merged = Object.assign({}, n);
-      (delete merged["@type"], sd(reflect, merged, r));
+      let copy = Object.assign({}, json);
+      delete copy["@type"];
+      readMessage(msg, copy, ctx);
     }
-    Ps.anyPack(reflect.desc, reflect.message, e);
+    index_js_1.anyPack(msg.desc, msg.message, any);
   }
-  function YJ(e, n) {
-    if (typeof n !== "string")
-      throw Error(`cannot decode message ${e.$typeName} from JSON: ${vr.formatVal(n)}`);
-    let match = n.match(
+  function timestampFromJson(timestamp, json) {
+    if (typeof json !== "string")
+      throw Error(
+        `cannot decode message ${timestamp.$typeName} from JSON: ${reflect_check_js_1.formatVal(json)}`,
+      );
+    let matches = json.match(
       /^([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})(?:\.([0-9]{1,9}))?(?:Z|([+-][0-9][0-9]:[0-9][0-9]))$/,
     );
-    if (!match) throw Error(`cannot decode message ${e.$typeName} from JSON: invalid RFC 3339 string`);
-    let parse = Date.parse(
-      match[1] +
+    if (!matches)
+      throw Error(`cannot decode message ${timestamp.$typeName} from JSON: invalid RFC 3339 string`);
+    let ms = Date.parse(
+      matches[1] +
         "-" +
-        match[2] +
+        matches[2] +
         "-" +
-        match[3] +
+        matches[3] +
         "T" +
-        match[4] +
+        matches[4] +
         ":" +
-        match[5] +
+        matches[5] +
         ":" +
-        match[6] +
-        (match[8] ? match[8] : "Z"),
+        matches[6] +
+        (matches[8] ? matches[8] : "Z"),
     );
-    if (Number.isNaN(parse))
-      throw Error(`cannot decode message ${e.$typeName} from JSON: invalid RFC 3339 string`);
-    if (parse < Date.parse("0001-01-01T00:00:00Z") || parse > Date.parse("9999-12-31T23:59:59Z"))
+    if (Number.isNaN(ms))
+      throw Error(`cannot decode message ${timestamp.$typeName} from JSON: invalid RFC 3339 string`);
+    if (ms < Date.parse("0001-01-01T00:00:00Z") || ms > Date.parse("9999-12-31T23:59:59Z"))
       throw Error(
-        `cannot decode message ${e.$typeName} from JSON: must be from 0001-01-01T00:00:00Z to 9999-12-31T23:59:59Z inclusive`,
+        `cannot decode message ${timestamp.$typeName} from JSON: must be from 0001-01-01T00:00:00Z to 9999-12-31T23:59:59Z inclusive`,
       );
-    if (((e.seconds = xy.protoInt64.parse(parse / 1000)), (e.nanos = 0), match[7]))
-      e.nanos = parseInt("1" + match[7] + "0".repeat(9 - match[7].length)) - 1e9;
+    timestamp.seconds = proto_int64_js_1.protoInt64.parse(ms / 1000);
+    timestamp.nanos = 0;
+    if (matches[7]) timestamp.nanos = parseInt("1" + matches[7] + "0".repeat(9 - matches[7].length)) - 1e9;
   }
-  function ZJ(e, n) {
-    if (typeof n !== "string")
-      throw Error(`cannot decode message ${e.$typeName} from JSON: ${vr.formatVal(n)}`);
-    let match = n.match(/^(-?[0-9]+)(?:\.([0-9]+))?s/);
-    if (match === null) throw Error(`cannot decode message ${e.$typeName} from JSON: ${vr.formatVal(n)}`);
-    let s = Number(match[1]);
-    if (s > 315576000000 || s < -315576000000)
-      throw Error(`cannot decode message ${e.$typeName} from JSON: ${vr.formatVal(n)}`);
-    if (((e.seconds = xy.protoInt64.parse(s)), typeof match[2] !== "string")) return;
-    let h = match[2] + "0".repeat(9 - match[2].length);
-    if (((e.nanos = parseInt(h)), s < 0 || Object.is(s, -0))) e.nanos = -e.nanos;
+  function durationFromJson(duration, json) {
+    if (typeof json !== "string")
+      throw Error(
+        `cannot decode message ${duration.$typeName} from JSON: ${reflect_check_js_1.formatVal(json)}`,
+      );
+    let match = json.match(/^(-?[0-9]+)(?:\.([0-9]+))?s/);
+    if (match === null)
+      throw Error(
+        `cannot decode message ${duration.$typeName} from JSON: ${reflect_check_js_1.formatVal(json)}`,
+      );
+    let longSeconds = Number(match[1]);
+    if (longSeconds > 315576000000 || longSeconds < -315576000000)
+      throw Error(
+        `cannot decode message ${duration.$typeName} from JSON: ${reflect_check_js_1.formatVal(json)}`,
+      );
+    duration.seconds = proto_int64_js_1.protoInt64.parse(longSeconds);
+    if (typeof match[2] !== "string") return;
+    let nanosStr = match[2] + "0".repeat(9 - match[2].length);
+    duration.nanos = parseInt(nanosStr);
+    if (longSeconds < 0 || Object.is(longSeconds, -0)) duration.nanos = -duration.nanos;
   }
-  function zJ(e, n) {
-    if (typeof n !== "string")
-      throw Error(`cannot decode message ${e.$typeName} from JSON: ${vr.formatVal(n)}`);
-    if (n === "") return;
-    e.paths = n.split(",").map((r) => {
-      if (r.includes("_"))
-        throw Error(`cannot decode message ${e.$typeName} from JSON: path names must be lowerCamelCase`);
-      return $P.protoSnakeCase(r);
+  function fieldMaskFromJson(fieldMask, json) {
+    if (typeof json !== "string")
+      throw Error(
+        `cannot decode message ${fieldMask.$typeName} from JSON: ${reflect_check_js_1.formatVal(json)}`,
+      );
+    if (json === "") return;
+    fieldMask.paths = json.split(",").map((path) => {
+      if (path.includes("_"))
+        throw Error(
+          `cannot decode message ${fieldMask.$typeName} from JSON: path names must be lowerCamelCase`,
+        );
+      return names_js_1.protoSnakeCase(path);
     });
   }
-  function YP(e, n) {
-    if (typeof n != "object" || n == null || Array.isArray(n))
-      throw Error(`cannot decode message ${e.$typeName} from JSON ${vr.formatVal(n)}`);
-    for (let [r, s] of Object.entries(n)) {
-      let create = Ol.create(Ps.ValueSchema);
-      (A_(create, s), (e.fields[r] = create));
+  function structFromJson(struct, json) {
+    if (typeof json != "object" || json == null || Array.isArray(json))
+      throw Error(
+        `cannot decode message ${struct.$typeName} from JSON ${reflect_check_js_1.formatVal(json)}`,
+      );
+    for (let [k, v] of Object.entries(json)) {
+      let parsedV = create_js_1.create(index_js_1.ValueSchema);
+      valueFromJson(parsedV, v);
+      struct.fields[k] = parsedV;
     }
   }
-  function A_(e, n) {
-    switch (typeof n) {
+  function valueFromJson(value, json) {
+    switch (typeof json) {
       case "number":
-        e.kind = { case: "numberValue", value: n };
+        value.kind = {
+          case: "numberValue",
+          value: json,
+        };
         break;
       case "string":
-        e.kind = { case: "stringValue", value: n };
+        value.kind = {
+          case: "stringValue",
+          value: json,
+        };
         break;
       case "boolean":
-        e.kind = { case: "boolValue", value: n };
+        value.kind = {
+          case: "boolValue",
+          value: json,
+        };
         break;
       case "object":
-        if (n === null) e.kind = { case: "nullValue", value: Ps.NullValue.NULL_VALUE };
-        else if (Array.isArray(n)) {
-          let create = Ol.create(Ps.ListValueSchema);
-          (ZP(create, n), (e.kind = { case: "listValue", value: create }));
+        if (json === null)
+          value.kind = {
+            case: "nullValue",
+            value: index_js_1.NullValue.NULL_VALUE,
+          };
+        else if (Array.isArray(json)) {
+          let listValue = create_js_1.create(index_js_1.ListValueSchema);
+          listValueFromJson(listValue, json);
+          value.kind = {
+            case: "listValue",
+            value: listValue,
+          };
         } else {
-          let create = Ol.create(Ps.StructSchema);
-          (YP(create, n), (e.kind = { case: "structValue", value: create }));
+          let struct = create_js_1.create(index_js_1.StructSchema);
+          structFromJson(struct, json);
+          value.kind = {
+            case: "structValue",
+            value: struct,
+          };
         }
         break;
       default:
-        throw Error(`cannot decode message ${e.$typeName} from JSON ${vr.formatVal(n)}`);
+        throw Error(
+          `cannot decode message ${value.$typeName} from JSON ${reflect_check_js_1.formatVal(json)}`,
+        );
     }
-    return e;
+    return value;
   }
-  function ZP(e, n) {
-    if (!Array.isArray(n)) throw Error(`cannot decode message ${e.$typeName} from JSON ${vr.formatVal(n)}`);
-    for (let r of n) {
-      let create = Ol.create(Ps.ValueSchema);
-      (A_(create, r), e.values.push(create));
+  function listValueFromJson(listValue, json) {
+    if (!Array.isArray(json))
+      throw Error(
+        `cannot decode message ${listValue.$typeName} from JSON ${reflect_check_js_1.formatVal(json)}`,
+      );
+    for (let r of json) {
+      let value = create_js_1.create(index_js_1.ValueSchema);
+      valueFromJson(value, r);
+      listValue.values.push(value);
     }
   }
 });
-
-export { JP };
+export { require_from_json };

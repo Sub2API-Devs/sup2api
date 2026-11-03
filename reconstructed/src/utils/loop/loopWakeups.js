@@ -35,234 +35,263 @@ import { logFeatureOk, logFeatureSad } from "../../services/analytics/featureTel
 import { getCronJitterConfig } from "../cronJitterConfig.js";
 import { getHookCallerOrScheduler } from "../workloadContext.js";
 import { CACHE_LEAD_MIN_INTERVAL_MS } from "../cronTasks.js";
-import { oR } from "../../services/api/promptCacheBreakDetection.js";
+import { CACHE_TTL_1H_MS } from "../../services/api/promptCacheBreakDetection.js";
 
 //@ chunk-b3265t9j.js:609-680 placement
-var LOOP_WAKE_LIMITS = require("./chunk-w6rm7nhv.js"),
-  k = 60,
-  PQe = 3600,
-  P = 600000,
-  O = 1200,
-  x = 1;
+/**
+ * 动态循环唤醒的限制常量（最小延迟、最大年龄、宽限、默认唤醒间隔、连续保活次数）。
+ */
+var LOOP_WAKE_LIMITS = require("./chunk-w6rm7nhv.js");
+var MIN_LOOP_DELAY_S = 60;
+var MAX_LOOP_AGE_SECONDS = 3600;
+var KEEPALIVE_GRACE_MS = 600000;
+var DEFAULT_KEEPALIVE_WAKE_MS = 1200;
+var MAX_CONSECUTIVE_KEEPALIVES = 1;
 //@ chunk-b3265t9j.js:680-751 placement
-function b(e, o) {
-  (logEvent("tengu_loop_ended", { reason: fromEnum(e), ...o }), setLoopEnded(!0), resetLoopWakeFires());
+function endLoop(e, o) {
+  logEvent("tengu_loop_ended", {
+    reason: fromEnum(e),
+    ...o,
+  });
+  setLoopEnded(true);
+  resetLoopWakeFires();
 }
 //@ chunk-b3265t9j.js:751-867 placement
 function loopKeepaliveSetting() {
   let CLAUDE_CODE_LOOP_KEEPALIVE = env.CLAUDE_CODE_LOOP_KEEPALIVE;
-  if (CLAUDE_CODE_LOOP_KEEPALIVE !== void 0) return CLAUDE_CODE_LOOP_KEEPALIVE;
-  return getFeatureValue_CACHED_MAY_BE_STALE("tengu_kairos_loop_keepalive", !0);
+  if (CLAUDE_CODE_LOOP_KEEPALIVE !== undefined) return CLAUDE_CODE_LOOP_KEEPALIVE;
+  return getFeatureValue_CACHED_MAY_BE_STALE("tengu_kairos_loop_keepalive", true);
 }
 //@ chunk-b3265t9j.js:867-961 placement
-function scheduleLoopWakeup(e, o, n, l, r) {
-  return armLoopWakeup(e, o, { viaKeepalive: !1, reason: n, toolUseId: l, owner: { caller: r } });
+function scheduleLoopWakeup(delaySeconds, prompt, reason, toolUseId, caller) {
+  return armLoopWakeup(delaySeconds, prompt, {
+    viaKeepalive: false,
+    reason,
+    toolUseId,
+    owner: {
+      caller,
+    },
+  });
 }
 //@ chunk-b3265t9j.js:961-1189 placement
-function scheduleKeepaliveWakeup(e, o) {
-  if (getLoopConsecutiveKeepalives() >= x)
-    return (
-      logForDebugging(
-        "[loop] keepalive budget exhausted (model declined to reschedule twice) \u2014 ending loop",
-      ),
-      b("model_stopped", { via_keepalive: !0 }),
-      null
+function scheduleKeepaliveWakeup(loopTickInFlightPrompt, rearmedFor) {
+  if (getLoopConsecutiveKeepalives() >= MAX_CONSECUTIVE_KEEPALIVES) {
+    logForDebugging(
+      "[loop] keepalive budget exhausted (model declined to reschedule twice) \u2014 ending loop",
     );
-  return armLoopWakeup(O, e, { viaKeepalive: !0, owner: { rearmedFor: o } });
+    endLoop("model_stopped", {
+      via_keepalive: true,
+    });
+    return null;
+  }
+  return armLoopWakeup(DEFAULT_KEEPALIVE_WAKE_MS, loopTickInFlightPrompt, {
+    viaKeepalive: true,
+    owner: {
+      rearmedFor,
+    },
+  });
 }
 //@ chunk-b3265t9j.js:1189-1218 placement
 function resetLoopState() {
-  (setLoopEnded(!1), resetLoopWakeFires());
+  setLoopEnded(false);
+  resetLoopWakeFires();
 }
 //@ chunk-b3265t9j.js:1218-1755 placement
 function endLoopIfIdle() {
-  let e = getLoopEnded(),
-    filtered = getSessionCronTasks().filter((l) => l.kind === "loop"),
-    n = getLoopTickInFlightPrompt();
-  if (
-    (setLoopTickInFlightPrompt(null),
-    setLoopConsecutiveKeepalives(0),
-    removeSessionCronTasks(filtered.map((l) => l.id)),
-    filtered.length === 0)
-  )
-    F();
+  let loopEnded = getLoopEnded();
+  let filtered = getSessionCronTasks().filter((l) => l.kind === "loop");
+  let loopTickInFlightPrompt = getLoopTickInFlightPrompt();
+  setLoopTickInFlightPrompt(null);
+  setLoopConsecutiveKeepalives(0);
+  removeSessionCronTasks(filtered.map((l) => l.id));
+  if (filtered.length === 0) clearPendingLoopWakeup();
   for (let l of filtered) deleteLoopChainStartedAt(l.prompt);
-  if (n !== null) deleteLoopChainStartedAt(n);
-  if (e)
-    return (
-      logForDebugging(
-        "[loop] ScheduleWakeup({stop:true}) after loop already ended \u2014 cleanup only, terminal event suppressed",
-      ),
-      filtered.length
-    );
-  return (
+  if (loopTickInFlightPrompt !== null) deleteLoopChainStartedAt(loopTickInFlightPrompt);
+  if (loopEnded) {
     logForDebugging(
-      `[loop] model called ScheduleWakeup({stop:true}) \u2014 ending loop (${filtered.length} pending wakeup(s) cancelled${n !== null ? ", tick in flight" : ""})`,
-    ),
-    b("model_stopped", { via_keepalive: !1 }),
-    logFeatureOk("loop_schedule_wakeup"),
-    filtered.length
+      "[loop] ScheduleWakeup({stop:true}) after loop already ended \u2014 cleanup only, terminal event suppressed",
+    );
+    return filtered.length;
+  }
+  logForDebugging(
+    `[loop] model called ScheduleWakeup({stop:true}) \u2014 ending loop (${filtered.length} pending wakeup(s) cancelled${loopTickInFlightPrompt !== null ? ", tick in flight" : ""})`,
   );
+  endLoop("model_stopped", {
+    via_keepalive: false,
+  });
+  logFeatureOk("loop_schedule_wakeup");
+  return filtered.length;
 }
+//@ chunk-b3265t9j.js:1755-3043 placement
 /**
  * 为 /loop 动态模式安排下一次唤醒：记录原因、调用者与是否保活，创建会话定时任务。
  */
-//@ chunk-b3265t9j.js:1755-3043 placement
 function armLoopWakeup(e, o, n) {
-  let { viaKeepalive: viaKeepalive, reason: reason, toolUseId: toolUseId, owner: owner } = n;
+  let { viaKeepalive, reason, toolUseId, owner } = n;
   if (!viaKeepalive) setLoopConsecutiveKeepalives(0);
-  let p = removeLoopCronTasks(),
-    now = Date.now(),
-    s = getLoopChainStartedAt(o),
-    A = s !== void 0 && now > s.lastScheduledFor + PQe * 1000,
-    _ = s === void 0 || A ? now : s.startedAt,
-    recurringMaxAgeMs = getCronJitterConfig().recurringMaxAgeMs;
+  let supersededCount = removeLoopCronTasks();
+  let now = Date.now();
+  let loopChainStartedAt = getLoopChainStartedAt(o);
+  let A =
+    loopChainStartedAt !== undefined &&
+    now > loopChainStartedAt.lastScheduledFor + MAX_LOOP_AGE_SECONDS * 1000;
+  let _ = loopChainStartedAt === undefined || A ? now : loopChainStartedAt.startedAt;
+  let recurringMaxAgeMs = getCronJitterConfig().recurringMaxAgeMs;
   if (recurringMaxAgeMs > 0 && now - _ >= recurringMaxAgeMs) {
-    if (!s?.agedOut)
-      (setLoopChainStartedAt(o, { startedAt: _, lastScheduledFor: now - (PQe - k) * 1000, agedOut: !0 }),
-        logEvent("tengu_loop_dynamic_wakeup_aged_out", {
-          loop_age_ms: now - _,
-          max_age_ms: recurringMaxAgeMs,
-        }),
-        b("aged_out", { via_keepalive: viaKeepalive }),
-        logFeatureSad("loop_schedule_wakeup", "loop_wakeup_aged_out"));
+    if (!loopChainStartedAt?.agedOut) {
+      setLoopChainStartedAt(o, {
+        startedAt: _,
+        lastScheduledFor: now - (MAX_LOOP_AGE_SECONDS - MIN_LOOP_DELAY_S) * 1000,
+        agedOut: true,
+      });
+      logEvent("tengu_loop_dynamic_wakeup_aged_out", {
+        loop_age_ms: now - _,
+        max_age_ms: recurringMaxAgeMs,
+      });
+      endLoop("aged_out", {
+        via_keepalive: viaKeepalive,
+      });
+      logFeatureSad("loop_schedule_wakeup", "loop_wakeup_aged_out");
+    }
     return null;
   }
-  let {
-    clamped: clamped,
-    wasClamped: wasClamped,
-    targetMs: targetMs,
-    createdAt: createdAt,
-  } = clampDelaySeconds(e);
-  if (
-    (createLoopWakeTask({
-      targetMs: targetMs,
-      createdAt: createdAt,
-      prompt: o,
-      reason: reason,
-      chainStartedAt: _,
-      viaKeepalive: viaKeepalive,
-      toolUseId: toolUseId,
-      owner: owner,
-    }),
-    viaKeepalive)
-  )
-    return (
-      setLoopConsecutiveKeepalives(getLoopConsecutiveKeepalives() + 1),
-      logForDebugging(`[loop] keepalive armed (model did not reschedule): ${clamped}s fallback`),
-      logEvent("tengu_loop_keepalive_fired", {
-        clamped_delay_seconds: clamped,
-        prompt_is_sentinel: LOOP_WAKE_LIMITS.isLoopDefaultSentinel(o),
-      }),
-      logFeatureSad("loop_schedule_wakeup", "model_no_reschedule"),
-      { scheduledFor: targetMs, clampedDelaySeconds: clamped, wasClamped: wasClamped }
-    );
-  return (
-    logForDebugging(
-      `[loop] dynamic wakeup scheduled: ${clamped}s${wasClamped ? ` (clamped from ${e}s)` : ""}${reason !== void 0 ? ` \u2014 ${reason}` : ""}`,
-    ),
-    logEvent("tengu_loop_dynamic_wakeup_scheduled", {
-      chosen_delay_seconds: Number.isFinite(e) ? e : 0,
+  let { clamped, wasClamped, targetMs, createdAt } = clampDelaySeconds(e);
+  createLoopWakeTask({
+    targetMs,
+    createdAt,
+    prompt: o,
+    reason,
+    chainStartedAt: _,
+    viaKeepalive,
+    toolUseId,
+    owner,
+  });
+  if (viaKeepalive) {
+    setLoopConsecutiveKeepalives(getLoopConsecutiveKeepalives() + 1);
+    logForDebugging(`[loop] keepalive armed (model did not reschedule): ${clamped}s fallback`);
+    logEvent("tengu_loop_keepalive_fired", {
       clamped_delay_seconds: clamped,
-      was_clamped: wasClamped,
-      reason_length: reason?.length ?? 0,
-      superseded_count: p,
-    }),
-    logFeatureOk("loop_schedule_wakeup"),
-    { scheduledFor: targetMs, clampedDelaySeconds: clamped, wasClamped: wasClamped }
+      prompt_is_sentinel: LOOP_WAKE_LIMITS.isLoopDefaultSentinel(o),
+    });
+    logFeatureSad("loop_schedule_wakeup", "model_no_reschedule");
+    return {
+      scheduledFor: targetMs,
+      clampedDelaySeconds: clamped,
+      wasClamped,
+    };
+  }
+  logForDebugging(
+    `[loop] dynamic wakeup scheduled: ${clamped}s${wasClamped ? ` (clamped from ${e}s)` : ""}${reason !== undefined ? ` \u2014 ${reason}` : ""}`,
   );
+  logEvent("tengu_loop_dynamic_wakeup_scheduled", {
+    chosen_delay_seconds: Number.isFinite(e) ? e : 0,
+    clamped_delay_seconds: clamped,
+    was_clamped: wasClamped,
+    reason_length: reason?.length ?? 0,
+    superseded_count: supersededCount,
+  });
+  logFeatureOk("loop_schedule_wakeup");
+  return {
+    scheduledFor: targetMs,
+    clampedDelaySeconds: clamped,
+    wasClamped,
+  };
 }
 //@ chunk-b3265t9j.js:3043-3385 placement
-function scheduleWakeupAt({
-  scheduledFor: scheduledFor,
-  prompt: prompt,
-  reason: reason,
-  chainStartedAt: chainStartedAt,
-  plugin: plugin,
-}) {
+function scheduleWakeupAt({ scheduledFor, prompt, reason, chainStartedAt, plugin }) {
   let now = Date.now();
   if (scheduledFor <= now || hasLoopTask()) return;
-  (createLoopWakeTask({
+  createLoopWakeTask({
     targetMs: scheduledFor,
     createdAt: Math.max(now, scheduledFor - 60000),
-    prompt: prompt,
-    reason: reason,
+    prompt,
+    reason,
     chainStartedAt: Math.min(chainStartedAt, now),
-    viaKeepalive: !1,
-    toolUseId: void 0,
-    owner: { rearmedFor: plugin },
-  }),
-    logForDebugging(
-      `[loop] re-armed pending wakeup for ${new Date(scheduledFor).toISOString()} after resume`,
-    ));
+    viaKeepalive: false,
+    toolUseId: undefined,
+    owner: {
+      rearmedFor: plugin,
+    },
+  });
+  logForDebugging(`[loop] re-armed pending wakeup for ${new Date(scheduledFor).toISOString()} after resume`);
 }
 //@ chunk-b3265t9j.js:3385-3841 placement
 function createLoopWakeTask({
-  targetMs: targetMs,
-  createdAt: createdAt,
-  prompt: prompt,
-  reason: reason,
-  chainStartedAt: chainStartedAt,
-  viaKeepalive: viaKeepalive,
-  toolUseId: toolUseId,
-  owner: owner,
+  targetMs,
+  createdAt,
+  prompt,
+  reason,
+  chainStartedAt,
+  viaKeepalive,
+  toolUseId,
+  owner,
 }) {
-  let m = "rearmedFor" in owner ? owner.rearmedFor : getHookCallerOrScheduler(owner.caller),
-    date = new Date(targetMs);
-  if (
-    (addSessionCronTask({
-      id: I(),
-      cron: `${date.getMinutes()} ${date.getHours()} * * *`,
-      prompt: prompt,
-      createdAt: createdAt,
-      kind: "loop",
-      scheduledFor: targetMs,
-      reason: reason,
-      ...(viaKeepalive && { keepalive: !0 }),
-      ...(m !== void 0 && { plugin: m }),
+  let m = "rearmedFor" in owner ? owner.rearmedFor : getHookCallerOrScheduler(owner.caller);
+  let date = new Date(targetMs);
+  addSessionCronTask({
+    id: randomWakeupId(),
+    cron: `${date.getMinutes()} ${date.getHours()} * * *`,
+    prompt,
+    createdAt,
+    kind: "loop",
+    scheduledFor: targetMs,
+    reason,
+    ...(viaKeepalive && {
+      keepalive: true,
     }),
-    setLoopChainStartedAt(prompt, { startedAt: chainStartedAt, lastScheduledFor: targetMs }),
-    setScheduledTasksEnabled(!0),
-    setLoopEnded(!1),
-    toolUseId !== void 0)
-  )
+    ...(m !== undefined && {
+      plugin: m,
+    }),
+  });
+  setLoopChainStartedAt(prompt, {
+    startedAt: chainStartedAt,
+    lastScheduledFor: targetMs,
+  });
+  setScheduledTasksEnabled(true);
+  setLoopEnded(false);
+  if (toolUseId !== undefined)
     announcePendingLoopWakeup({
-      toolUseId: toolUseId,
+      toolUseId,
       scheduledFor: targetMs,
-      chainStartedAt: chainStartedAt,
+      chainStartedAt,
     });
 }
 //@ chunk-b3265t9j.js:3841-4296 placement
 function clampDelaySeconds(e) {
   let o;
-  if (Number.isNaN(e)) o = k;
-  else if (e === 1 / 0) o = PQe;
-  else if (e === -1 / 0) o = k;
+  if (Number.isNaN(e)) o = MIN_LOOP_DELAY_S;
+  else if (e === 1 / 0) o = MAX_LOOP_AGE_SECONDS;
+  else if (e === -1 / 0) o = MIN_LOOP_DELAY_S;
   else o = Math.round(e);
-  let max = Math.max(k, Math.min(PQe, o)),
-    l = !Number.isFinite(e) || o !== max,
-    now = Date.now(),
-    u = now + max * 1000,
-    d = y(u),
-    cacheLeadMs = getCronJitterConfig().cacheLeadMs;
+  let max = Math.max(MIN_LOOP_DELAY_S, Math.min(MAX_LOOP_AGE_SECONDS, o));
+  let wasClamped = !Number.isFinite(e) || o !== max;
+  let now = Date.now();
+  let u = now + max * 1000;
+  let d = roundUpToMinute(u);
+  let cacheLeadMs = getCronJitterConfig().cacheLeadMs;
   if (cacheLeadMs > 0 && max * 1000 <= CACHE_LEAD_MIN_INTERVAL_MS) {
     let s = CACHE_LEAD_MIN_INTERVAL_MS - cacheLeadMs;
-    while (d - now > s && d - 60000 >= now + k * 1000) d -= 60000;
+    while (d - now > s && d - 60000 >= now + MIN_LOOP_DELAY_S * 1000) d -= 60000;
   }
   if (cacheLeadMs > 0) {
-    let s = getLastMainThreadRequestAt() ?? now,
-      _ = (now - s <= P ? Math.min(now, s) : now) + oR - cacheLeadMs;
-    while (d > _ && d - 60000 >= now + k * 1000) d -= 60000;
+    let s = getLastMainThreadRequestAt() ?? now;
+    let _ = (now - s <= KEEPALIVE_GRACE_MS ? Math.min(now, s) : now) + CACHE_TTL_1H_MS - cacheLeadMs;
+    while (d > _ && d - 60000 >= now + MIN_LOOP_DELAY_S * 1000) d -= 60000;
   }
-  let m = u < d ? u : d - 1;
-  return { clamped: max, wasClamped: l, targetMs: d, createdAt: m };
+  let createdAt = u < d ? u : d - 1;
+  return {
+    clamped: max,
+    wasClamped,
+    targetMs: d,
+    createdAt,
+  };
 }
 //@ chunk-b3265t9j.js:4296-4342 placement
-function y(e) {
+function roundUpToMinute(e) {
   return Math.ceil(e / 60000) * 60000;
 }
 //@ chunk-b3265t9j.js:4342-4428 placement
-function I() {
+function randomWakeupId() {
   return Math.floor(Math.random() * 4294967295)
     .toString(16)
     .padStart(8, "0");
@@ -276,8 +305,8 @@ function removeLoopCronTasks() {
   return removeSessionCronTasks(mapped);
 }
 //@ chunk-b3265t9j.js:4534-4559 placement
-function F() {
-  announcePendingLoopWakeup(void 0);
+function clearPendingLoopWakeup() {
+  announcePendingLoopWakeup(undefined);
 }
 //@ chunk-b3265t9j.js:4559-4612 placement
 function hasLoopTask() {
@@ -285,25 +314,26 @@ function hasLoopTask() {
 }
 //@ chunk-b3265t9j.js:4612-5009 placement
 function syncLoopTickState() {
-  let filtered = getSessionCronTasks().filter((n) => n.kind === "loop"),
-    o = getLoopTickInFlightPrompt();
-  if ((setLoopTickInFlightPrompt(null), setLoopConsecutiveKeepalives(0), filtered.length === 0)) F();
-  if (filtered.length === 0 && o === null) return 0;
+  let filtered = getSessionCronTasks().filter((n) => n.kind === "loop");
+  let loopTickInFlightPrompt = getLoopTickInFlightPrompt();
+  setLoopTickInFlightPrompt(null);
+  setLoopConsecutiveKeepalives(0);
+  if (filtered.length === 0) clearPendingLoopWakeup();
+  if (filtered.length === 0 && loopTickInFlightPrompt === null) return 0;
   removeSessionCronTasks(filtered.map((n) => n.id));
   for (let n of filtered) deleteLoopChainStartedAt(n.prompt);
-  if (o !== null) deleteLoopChainStartedAt(o);
-  return (
-    logForDebugging(
-      `[loop/dynamic] cancelled ${filtered.length} pending loop wakeup(s) on user abort${o !== null ? " (tick in flight)" : ""}`,
-    ),
-    b("user_abort", { loops_cancelled: filtered.length }),
-    logFeatureOk("loop_cancel_all"),
-    filtered.length
+  if (loopTickInFlightPrompt !== null) deleteLoopChainStartedAt(loopTickInFlightPrompt);
+  logForDebugging(
+    `[loop/dynamic] cancelled ${filtered.length} pending loop wakeup(s) on user abort${loopTickInFlightPrompt !== null ? " (tick in flight)" : ""}`,
   );
+  endLoop("user_abort", {
+    loops_cancelled: filtered.length,
+  });
+  logFeatureOk("loop_cancel_all");
+  return filtered.length;
 }
-
 export {
-  PQe,
+  MAX_LOOP_AGE_SECONDS,
   hasLoopTask,
   scheduleWakeupAt,
   syncLoopTickState,

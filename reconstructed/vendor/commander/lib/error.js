@@ -8,25 +8,25 @@
 import { x } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-b7dyevzy.js:304-707 cjs-fingerprint
-var b = x(function (et) {
-  class V extends Error {
-    constructor(t, e, i) {
-      super(i);
-      (Error.captureStackTrace(this, this.constructor),
-        (this.name = this.constructor.name),
-        (this.code = e),
-        (this.exitCode = t),
-        (this.nestedError = void 0));
+var require_error = x(function (cjsExports) {
+  class CommanderError extends Error {
+    constructor(exitCode, code, message) {
+      super(message);
+      Error.captureStackTrace(this, this.constructor);
+      this.name = this.constructor.name;
+      this.code = code;
+      this.exitCode = exitCode;
+      this.nestedError = undefined;
     }
   }
-  class W extends V {
-    constructor(t) {
-      super(1, "commander.invalidArgument", t);
-      (Error.captureStackTrace(this, this.constructor), (this.name = this.constructor.name));
+  class InvalidArgumentError extends CommanderError {
+    constructor(message) {
+      super(1, "commander.invalidArgument", message);
+      Error.captureStackTrace(this, this.constructor);
+      this.name = this.constructor.name;
     }
   }
-  et.CommanderError = V;
-  et.InvalidArgumentError = W;
+  cjsExports.CommanderError = CommanderError;
+  cjsExports.InvalidArgumentError = InvalidArgumentError;
 });
-
-export { b };
+export { require_error };

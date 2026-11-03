@@ -16,39 +16,36 @@ import { logEvent } from "../services/analytics/index.js";
 import { logFeatureOk, logFeatureBad } from "../services/analytics/featureTelemetry.js";
 import { logError } from "../utils/log.js";
 
+//@ chunk-cjydagjy.js:12267-12860 placement
 /**
  * 迁移：把全局配置里的用户意图类设置搬到 userSettings。
  */
-//@ chunk-cjydagjy.js:12267-12860 placement
 async function migrateUserIntentToSettings(e) {
-  let r = getGlobalConfig(),
-    n = getSettingsForSourceForUpkeep("userSettings"),
-    s = {};
+  let globalConfig = getGlobalConfig();
+  let settingsForSourceForUpkeep = getSettingsForSourceForUpkeep("userSettings");
+  let s = {};
   for (let S of USER_INTENT_SETTING_KEYS) {
-    let y = r[S];
-    if (y === void 0) continue;
+    let y = globalConfig[S];
+    if (y === undefined) continue;
     if (y === DEFAULT_GLOBAL_CONFIG[S]) continue;
-    if (n?.[S] !== void 0) continue;
+    if (settingsForSourceForUpkeep?.[S] !== undefined) continue;
     let P = validateConfigValue(S, y);
-    if (P === void 0) continue;
+    if (P === undefined) continue;
     s[S] = P;
   }
-  if (Object.keys(s).length === 0) return !0;
+  if (Object.keys(s).length === 0) return true;
   try {
-    let { error: error } = await updateSettingsForSource("userSettings", s, void 0, e);
+    let { error } = await updateSettingsForSource("userSettings", s, undefined, e);
     if (error) throw error;
-    return (
-      logEvent("tengu_migrate_user_intent_to_settings", { migrated_count: Object.keys(s).length }),
-      logFeatureOk("migration_user_intent_to_settings"),
-      !0
-    );
+    logEvent("tengu_migrate_user_intent_to_settings", {
+      migrated_count: Object.keys(s).length,
+    });
+    logFeatureOk("migration_user_intent_to_settings");
+    return true;
   } catch (error) {
-    return (
-      logError(Error(`Failed to migrate user-intent settings: ${error}`)),
-      logFeatureBad("migration_user_intent_to_settings", "migration_user_intent_write_failed"),
-      !1
-    );
+    logError(Error(`Failed to migrate user-intent settings: ${error}`));
+    logFeatureBad("migration_user_intent_to_settings", "migration_user_intent_write_failed");
+    return false;
   }
 }
-
 export { migrateUserIntentToSettings };

@@ -7,33 +7,39 @@
  */
 
 //@ chunk-2g090z7k.js:229-399 esm-fingerprint
-function Kje(n) {
+function isAbortError_2(err) {
   return (
-    typeof n === "object" &&
-    n !== null &&
-    (("name" in n && n.name === "AbortError") ||
-      ("message" in n && String(n.message).includes("FetchRequestCanceledException")))
+    typeof err === "object" &&
+    err !== null &&
+    (("name" in err && err.name === "AbortError") ||
+      ("message" in err && String(err.message).includes("FetchRequestCanceledException")))
   );
 }
 //@ chunk-2g090z7k.js:399-792 esm-fingerprint
-var V7t = (n) => {
-  if (n instanceof Error) return n;
-  if (typeof n === "object" && n !== null) {
+var castToError = (err) => {
+  if (err instanceof Error) return err;
+  if (typeof err === "object" && err !== null) {
     try {
-      let e = Object.prototype.toString.call(n);
-      if (e === "[object Error]" || e === "[object DOMException]") {
-        let t = Error(n.message, n.cause ? { cause: n.cause } : {});
-        if (n.stack) t.stack = n.stack;
-        if (n.cause && !t.cause) t.cause = n.cause;
-        if (n.name) t.name = n.name;
-        return t;
+      let tag = Object.prototype.toString.call(err);
+      if (tag === "[object Error]" || tag === "[object DOMException]") {
+        let error = Error(
+          err.message,
+          err.cause
+            ? {
+                cause: err.cause,
+              }
+            : {},
+        );
+        if (err.stack) error.stack = err.stack;
+        if (err.cause && !error.cause) error.cause = err.cause;
+        if (err.name) error.name = err.name;
+        return error;
       }
     } catch {}
     try {
-      return Error(JSON.stringify(n));
+      return Error(JSON.stringify(err));
     } catch {}
   }
-  return Error(n);
+  return Error(err);
 };
-
-export { V7t, Kje };
+export { castToError, isAbortError_2 };

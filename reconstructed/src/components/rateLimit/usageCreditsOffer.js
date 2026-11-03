@@ -9,28 +9,32 @@
  * attribution: placement 24
  */
 import {
-  Ne,
-  Y,
-  dt,
-  Fr,
-  re,
+  answeredStatusForWall,
+  currentResetFlowState,
+  isFlowForWall,
+  MAX_STATUS_ATTEMPTS,
+  setResetFlowState,
   fetchJuniperTideStatus,
-  Kr,
-  O7,
-  ot,
+  STATUS_RETRY_DELAY_MS,
+  getResetFlowPhase,
+  isFailedForWall,
   canArmLowPriorityReset,
   claimJuniperTide,
-  $r,
+  STATUS_REQUEST_TIMEOUT_MS,
 } from "../../services/rateLimit/rateLimitWall.js";
-import { WQe, JTe, enqueueAutoContinuation } from "../../services/rateLimitContinuation.js";
+import {
+  isFiveHourAutoResumable,
+  currentSubscriptionTier,
+  enqueueAutoContinuation,
+} from "../../services/rateLimitContinuation.js";
 import {
   isLimitResetEnabled,
   fillDatePlaceholder,
   getLimitResetCopy,
-  oJn,
-  J3s,
+  limitResetConfigVersion,
+  limitResetAutoContinue,
 } from "../../commands/limit-reset/index.js";
-import { xk, truncateToWidth } from "../../utils/format.js";
+import { formatResetTimeWithLocale, truncateToWidth } from "../../utils/format.js";
 import {
   getLimitsAccountEpoch,
   getCurrentLimits,
@@ -41,7 +45,7 @@ import {
 import {
   isQuotaAutoResumeArmed,
   cancelQuotaAutoResume,
-  C7e,
+  confirmAndFire,
   isConversationResetSwitch,
 } from "../../services/quotaAutoResume/quotaAutoResume.js";
 import { withDeadline } from "../../utils/sleep.js";
@@ -49,33 +53,40 @@ import { logError } from "../../utils/log.js";
 import { toError } from "../../utils/errors.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { fromEnum, fromEnumOpt } from "../../services/analytics/safeMetadata.js";
-import { dD, endLowPriority } from "../../services/lowPriority/lowPriorityMode.js";
+import { isLowPriorityActive, endLowPriority } from "../../services/lowPriority/lowPriorityMode.js";
 import { logFeatureOk, logFeatureSad } from "../../services/analytics/featureTelemetry.js";
 import { onSessionSwitch } from "../../bootstrap/state.js";
-import { YO } from "../../utils/permissions/autoModeRulesPrompt.js";
+import { CIRCLE_MARK_GLYPH } from "../../utils/permissions/autoModeRulesPrompt.js";
 import { bunStringWidth } from "../../ink/stringWidth.js";
-import { PXo, X8r, CYBER_SAFEGUARDS_ARTICLE_URL } from "../../services/api/refusalFallback.js";
+import {
+  SAFEGUARDS_MODEL_ARTICLE_URL,
+  SAFEGUARDS_DEFAULT_ARTICLE_URL,
+  CYBER_SAFEGUARDS_ARTICLE_URL,
+} from "../../services/api/refusalFallback.js";
 import { w } from "../../../vendor/react/compiler-runtime.js";
-import { wJe } from "../permissions/FallbackPermissionRequest.js";
+import { useFallbackPermission } from "../permissions/FallbackPermissionRequest.js";
 import { EARLY_RETURN_SENTINEL } from "../../../runtime/bun-runtime.js";
-import { e, r } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { LinkifiedText as LinkifiedText_2 } from "../LinkifiedText.js";
 import { Text, Link } from "../../ink/components/Text.js";
 
+//@ chunk-fm6h4dv7.js:40379-40615 placement
 /**
  * 用量额度已花完时给出下次可用时间说明。
  */
-//@ chunk-fm6h4dv7.js:40379-40615 placement
 function usageCreditsSpentLine(i, s = Date.now()) {
-  let d = Ne(i);
+  let d = answeredStatusForWall(i);
   if (
-    !WQe(i) ||
-    d === void 0 ||
+    !isFiveHourAutoResumable(i) ||
+    d === undefined ||
     d === null ||
     d.arm !== "reset" ||
     d.available ||
     d.nextAvailableAt === null ||
-    i.resetsAt === void 0 ||
+    i.resetsAt === undefined ||
     i.resetsAt * 1000 <= s ||
     !isLimitResetEnabled()
   )
@@ -83,192 +94,235 @@ function usageCreditsSpentLine(i, s = Date.now()) {
   return fillDatePlaceholder(getLimitResetCopy().spentLine, formatIsoResetTime(d.nextAvailableAt));
 }
 //@ chunk-fm6h4dv7.js:40615-40734 placement
-function formatIsoResetTime(i) {
-  if (i === null) return;
-  let parse = Date.parse(i);
-  return Number.isFinite(parse) ? xk(Math.floor(parse / 1000), !1, !0, !0) : void 0;
+function formatIsoResetTime(nextAvailableAt) {
+  if (nextAvailableAt === null) return;
+  let timestamp = Date.parse(nextAvailableAt);
+  return Number.isFinite(timestamp)
+    ? formatResetTimeWithLocale(Math.floor(timestamp / 1000), false, true, true)
+    : undefined;
 }
+//@ chunk-fm6h4dv7.js:40734-40852 placement
 /**
  * 撞到可重置的限额墙时（功能开启且该墙符合条件），记下可继续的重置时间并异步查询用量额度/重置是否可用。
  */
-//@ chunk-fm6h4dv7.js:40734-40852 placement
-function offerUsageCreditsAtWall(i, s) {
-  if (!isLimitResetEnabled() || !WQe(i)) return;
-  let d = Y();
-  (subscribeSessionSwitchReset(d),
-    (d.continuableWallResetsAt = i.resetsAt ?? null),
-    askUsageCreditsAvailability(i, s, "wall"));
+function offerUsageCreditsAtWall(quotaLimits, credentials) {
+  if (!isLimitResetEnabled() || !isFiveHourAutoResumable(quotaLimits)) return;
+  let d = currentResetFlowState();
+  subscribeSessionSwitchReset(d);
+  d.continuableWallResetsAt = quotaLimits.resetsAt ?? null;
+  askUsageCreditsAvailability(quotaLimits, credentials, "wall");
 }
+//@ chunk-fm6h4dv7.js:40852-41598 placement
 /**
  * 询问服务端用量额度是否可用（按阶段去重）。
  */
-//@ chunk-fm6h4dv7.js:40852-41598 placement
-function askUsageCreditsAvailability(i, s, d) {
-  if (!isLimitResetEnabled() || !WQe(i)) return Promise.resolve();
-  let resetsAt = i.resetsAt;
-  if (resetsAt === void 0) return Promise.resolve();
-  let b = Y(),
-    _ = getLimitsAccountEpoch(),
-    state = b.state,
-    C = 0;
-  if (state.phase !== "idle" && dt(state, i))
+function askUsageCreditsAvailability(currentLimits, s, d) {
+  if (!isLimitResetEnabled() || !isFiveHourAutoResumable(currentLimits)) return Promise.resolve();
+  let resetsAt = currentLimits.resetsAt;
+  if (resetsAt === undefined) return Promise.resolve();
+  let b = currentResetFlowState();
+  let accountEpoch = getLimitsAccountEpoch();
+  let state = b.state;
+  let failures = 0;
+  if (state.phase !== "idle" && isFlowForWall(state, currentLimits))
     switch (state.phase) {
       case "answered":
         return Promise.resolve();
       case "asking":
         return b.pendingAsk ?? Promise.resolve();
       case "failed":
-        if (d === "wall" && state.failures >= Fr) return Promise.resolve();
-        C = state.failures;
+        if (d === "wall" && state.failures >= MAX_STATUS_ATTEMPTS) return Promise.resolve();
+        failures = state.failures;
     }
-  re({ phase: "asking", wallResetsAt: resetsAt, accountEpoch: _ });
-  let A = isQuotaAutoResumeArmed(),
-    k = withDeadline(fetchJuniperTideStatus(s), Kr)
-      .then((T) => {
+  setResetFlowState({
+    phase: "asking",
+    wallResetsAt: resetsAt,
+    accountEpoch,
+  });
+  let autoArmed = isQuotaAutoResumeArmed();
+  let k = withDeadline(fetchJuniperTideStatus(s), STATUS_RETRY_DELAY_MS)
+    .then((T) => {
+      settleUsageCreditsAsk({
+        wallResetsAt: resetsAt,
+        accountEpoch,
+        failures,
+        result: T ?? {
+          kind: "failed",
+        },
+        autoArmed,
+      });
+    })
+    .catch((error) => {
+      logError(toError(error));
+      try {
         settleUsageCreditsAsk({
           wallResetsAt: resetsAt,
-          accountEpoch: _,
-          failures: C,
-          result: T ?? { kind: "failed" },
-          autoArmed: A,
+          accountEpoch,
+          failures,
+          result: {
+            kind: "failed",
+          },
+          autoArmed,
         });
-      })
-      .catch((T) => {
-        logError(toError(T));
-        try {
-          settleUsageCreditsAsk({
-            wallResetsAt: resetsAt,
-            accountEpoch: _,
-            failures: C,
-            result: { kind: "failed" },
-            autoArmed: A,
-          });
-        } catch (error) {
-          logError(toError(error));
-        }
-      })
-      .finally(() => {
-        if (b.pendingAsk === k) b.pendingAsk = null;
-      });
-  return ((b.pendingAsk = k), k);
+      } catch (error) {
+        logError(toError(error));
+      }
+    })
+    .finally(() => {
+      if (b.pendingAsk === k) b.pendingAsk = null;
+    });
+  b.pendingAsk = k;
+  return k;
 }
+//@ chunk-fm6h4dv7.js:41598-42664 placement
 /**
  * 处理额度询问结果并更新状态。
  */
-//@ chunk-fm6h4dv7.js:41598-42664 placement
-function settleUsageCreditsAsk({
-  wallResetsAt: wallResetsAt,
-  accountEpoch: accountEpoch,
-  failures: failures,
-  result: m,
-  autoArmed: autoArmed,
-}) {
-  let _ = O7();
-  if (_.phase !== "asking" || _.wallResetsAt !== wallResetsAt || _.accountEpoch !== accountEpoch) return;
-  let h = m.kind === "answered" ? m.status : null;
-  if (m.kind === "failed")
-    re({ phase: "failed", wallResetsAt: wallResetsAt, accountEpoch: accountEpoch, failures: failures + 1 });
-  else re({ phase: "answered", wallResetsAt: wallResetsAt, accountEpoch: accountEpoch, status: h });
+function settleUsageCreditsAsk({ wallResetsAt, accountEpoch, failures, result: m, autoArmed }) {
+  let resetFlowPhase = getResetFlowPhase();
   if (
-    (logEvent("tengu_juniper_tide_asked", {
-      outcome: fromEnum(m.kind === "answered" ? (h === null ? "absent" : "block") : m.kind),
-      attempt: failures + 1,
-      eligible: h?.eligible ?? !1,
-      ineligible_reason: fromEnumOpt(h?.ineligibleReason) ?? void 0,
-      config_version: oJn(),
-    }),
-    h === null || !h.eligible)
+    resetFlowPhase.phase !== "asking" ||
+    resetFlowPhase.wallResetsAt !== wallResetsAt ||
+    resetFlowPhase.accountEpoch !== accountEpoch
   )
     return;
+  let status = m.kind === "answered" ? m.status : null;
+  if (m.kind === "failed")
+    setResetFlowState({
+      phase: "failed",
+      wallResetsAt,
+      accountEpoch,
+      failures: failures + 1,
+    });
+  else
+    setResetFlowState({
+      phase: "answered",
+      wallResetsAt,
+      accountEpoch,
+      status,
+    });
+  logEvent("tengu_juniper_tide_asked", {
+    outcome: fromEnum(m.kind === "answered" ? (status === null ? "absent" : "block") : m.kind),
+    attempt: failures + 1,
+    eligible: status?.eligible ?? false,
+    ineligible_reason: fromEnumOpt(status?.ineligibleReason) ?? undefined,
+    config_version: limitResetConfigVersion(),
+  });
+  if (status === null || !status.eligible) return;
   logEvent("tengu_juniper_tide_wall", {
-    in_experiment: h.inExperiment,
-    arm: fromEnumOpt(h.arm) ?? void 0,
-    available: h.available,
-    tier: fromEnum(JTe()),
+    in_experiment: status.inExperiment,
+    arm: fromEnumOpt(status.arm) ?? undefined,
+    available: status.available,
+    tier: fromEnum(currentSubscriptionTier()),
     auto_armed: autoArmed,
-    low_priority_active: dD(),
-    config_version: oJn(),
-    surface: fromEnumOpt(h.eventProps?.surface) ?? void 0,
-    server_tier: fromEnumOpt(h.eventProps?.tier) ?? void 0,
-    tenure_bucket: fromEnumOpt(h.eventProps?.tenureBucket) ?? void 0,
-    billing_path: fromEnumOpt(h.eventProps?.billingPath) ?? void 0,
-    billing_period: fromEnumOpt(h.eventProps?.billingPeriod) ?? void 0,
-    extra_usage_state: fromEnumOpt(h.eventProps?.extraUsageState) ?? void 0,
+    low_priority_active: isLowPriorityActive(),
+    config_version: limitResetConfigVersion(),
+    surface: fromEnumOpt(status.eventProps?.surface) ?? undefined,
+    server_tier: fromEnumOpt(status.eventProps?.tier) ?? undefined,
+    tenure_bucket: fromEnumOpt(status.eventProps?.tenureBucket) ?? undefined,
+    billing_path: fromEnumOpt(status.eventProps?.billingPath) ?? undefined,
+    billing_period: fromEnumOpt(status.eventProps?.billingPeriod) ?? undefined,
+    extra_usage_state: fromEnumOpt(status.eventProps?.extraUsageState) ?? undefined,
   });
 }
+//@ chunk-fm6h4dv7.js:42664-42878 placement
 /**
  * 每个重置时间只打点一次 tengu_juniper_tide_shown（5 小时限额重置提示），附带实验分组、展示位置与配置版本。
  */
-//@ chunk-fm6h4dv7.js:42664-42878 placement
 function logLimitResetOfferShown(i, s) {
-  let d = i.resetsAt ?? null,
-    m = Y();
-  if (d === null || m.shownWallResetsAt === d) return;
-  m.shownWallResetsAt = d;
-  let b = Ne(i);
+  let resetsAt = i.resetsAt ?? null;
+  let m = currentResetFlowState();
+  if (resetsAt === null || m.shownWallResetsAt === resetsAt) return;
+  m.shownWallResetsAt = resetsAt;
+  let b = answeredStatusForWall(i);
   logEvent("tengu_juniper_tide_shown", {
-    arm: fromEnumOpt(b?.arm) ?? void 0,
+    arm: fromEnumOpt(b?.arm) ?? undefined,
     surface: fromEnum(s),
-    config_version: oJn(),
+    config_version: limitResetConfigVersion(),
   });
 }
 //@ chunk-fm6h4dv7.js:42878-42922 placement
-function Qho(i, s) {
-  if (ot(i)) askUsageCreditsAvailability(i, s, "dialog");
+/**
+ * 函数 maybeOpenUsageCreditsDialog（满足条件时打开对话框）。
+ */
+function maybeOpenUsageCreditsDialog(claudeAiLimits, credentials) {
+  if (isFailedForWall(claudeAiLimits)) askUsageCreditsAvailability(claudeAiLimits, credentials, "dialog");
 }
+//@ chunk-fm6h4dv7.js:42922-43047 placement
 /**
  * 检查用量额度（出错时返回 unavailable）。
  */
-//@ chunk-fm6h4dv7.js:42922-43047 placement
-async function checkUsageCredits(i, s) {
+async function checkUsageCredits(i, credentials) {
   try {
-    return await checkUsageCreditsUnsafe(i, s);
+    return await checkUsageCreditsUnsafe(i, credentials);
   } catch (error) {
-    return (logError(toError(error)), { outcome: "unavailable", text: getLimitResetCopy().unavailableLine });
+    logError(toError(error));
+    return {
+      outcome: "unavailable",
+      text: getLimitResetCopy().unavailableLine,
+    };
   }
 }
+//@ chunk-fm6h4dv7.js:43047-44741 placement
 /**
  * 检查用量额度的实际逻辑。
  */
-//@ chunk-fm6h4dv7.js:43047-44741 placement
-async function checkUsageCreditsUnsafe(i, s) {
-  let d = Y(),
-    m = getLimitResetCopy();
-  if (Ne(getCurrentLimits()) === void 0) {
+async function checkUsageCreditsUnsafe(entry, credentials) {
+  let d = currentResetFlowState();
+  let limitResetCopy = getLimitResetCopy();
+  if (answeredStatusForWall(getCurrentLimits()) === undefined) {
     let k = d.pendingAsk !== null;
-    if ((await askUsageCreditsAvailability(getCurrentLimits(), s, i), k && ot(getCurrentLimits())))
-      await askUsageCreditsAvailability(getCurrentLimits(), s, i);
+    await askUsageCreditsAvailability(getCurrentLimits(), credentials, entry);
+    if (k && isFailedForWall(getCurrentLimits()))
+      await askUsageCreditsAvailability(getCurrentLimits(), credentials, entry);
   }
-  let b = getCurrentLimits();
-  if (!canArmLowPriorityReset(b) || b.resetsAt === void 0) {
-    let k = usageCreditsSpentLine(b);
-    if (k !== void 0) return { outcome: "spent", text: k };
-    return ot(b)
-      ? { outcome: "unavailable", text: m.unavailableLine }
-      : { outcome: "not_offered", text: RESET_UNAVAILABLE_TEXT };
+  let currentLimits = getCurrentLimits();
+  if (!canArmLowPriorityReset(currentLimits) || currentLimits.resetsAt === undefined) {
+    let k = usageCreditsSpentLine(currentLimits);
+    if (k !== undefined)
+      return {
+        outcome: "spent",
+        text: k,
+      };
+    return isFailedForWall(currentLimits)
+      ? {
+          outcome: "unavailable",
+          text: limitResetCopy.unavailableLine,
+        }
+      : {
+          outcome: "not_offered",
+          text: RESET_UNAVAILABLE_TEXT,
+        };
   }
-  if (d.claiming) return { outcome: "unavailable", text: RESET_IN_PROGRESS_TEXT };
-  let resetsAt = b.resetsAt,
-    h = oJn();
+  if (d.claiming)
+    return {
+      outcome: "unavailable",
+      text: RESET_IN_PROGRESS_TEXT,
+    };
+  let resetsAt = currentLimits.resetsAt;
+  let configVersion = limitResetConfigVersion();
   logEvent("tengu_juniper_tide_selected", {
-    entry: fromEnum(i),
+    entry: fromEnum(entry),
     auto_armed: isQuotaAutoResumeArmed(),
-    config_version: h,
+    config_version: configVersion,
   });
-  let now = Date.now(),
-    A;
-  d.claiming = !0;
+  let now = Date.now();
+  let A;
+  d.claiming = true;
   try {
-    A = (await withDeadline(claimJuniperTide(s), $r)) ?? { result: "error", nextAvailableAt: null };
+    A = (await withDeadline(claimJuniperTide(credentials), STATUS_REQUEST_TIMEOUT_MS)) ?? {
+      result: "error",
+      nextAvailableAt: null,
+    };
   } finally {
-    d.claiming = !1;
+    d.claiming = false;
   }
   switch (
     (logEvent("tengu_juniper_tide_result", {
       result: fromEnum(A.result),
-      entry: fromEnum(i),
+      entry: fromEnum(entry),
       latency_ms: Date.now() - now,
-      config_version: h,
+      config_version: configVersion,
     }),
     A.result)
   ) {
@@ -289,57 +343,81 @@ async function checkUsageCreditsUnsafe(i, s) {
     case "reset":
     case "not_limited": {
       d.unsettledClaimWallResetsAt = null;
-      let k = J3s() && d.continuableWallResetsAt === resetsAt;
-      ((d.continuableWallResetsAt = null), applyFiveHourResetLocally(d, resetsAt, i, k));
+      let k = limitResetAutoContinue() && d.continuableWallResetsAt === resetsAt;
+      d.continuableWallResetsAt = null;
+      applyFiveHourResetLocally(d, resetsAt, entry, k);
       let T = fillDatePlaceholder(
-        m.successLine,
-        A.result === "reset" ? formatIsoResetTime(A.nextAvailableAt) : void 0,
+        limitResetCopy.successLine,
+        A.result === "reset" ? formatIsoResetTime(A.nextAvailableAt) : undefined,
       );
-      return { outcome: "reset", text: k ? T : `${T} \xB7 send a message to continue` };
+      return {
+        outcome: "reset",
+        text: k ? T : `${T} \xB7 send a message to continue`,
+      };
     }
     case "already_used": {
-      if ((markResetUnavailable(resetsAt, A.nextAvailableAt), d.unsettledClaimWallResetsAt === resetsAt))
-        ((d.unsettledClaimWallResetsAt = null), zr(s));
+      markResetUnavailable(resetsAt, A.nextAvailableAt);
+      if (d.unsettledClaimWallResetsAt === resetsAt) {
+        d.unsettledClaimWallResetsAt = null;
+        openUsageCreditsOffer(credentials);
+      }
       return {
         outcome: "spent",
-        text: fillDatePlaceholder(m.spentLine, formatIsoResetTime(A.nextAvailableAt)),
+        text: fillDatePlaceholder(limitResetCopy.spentLine, formatIsoResetTime(A.nextAvailableAt)),
       };
     }
     case "ineligible":
-      return (markResetIneligible(resetsAt), { outcome: "not_offered", text: RESET_UNAVAILABLE_TEXT });
+      markResetIneligible(resetsAt);
+      return {
+        outcome: "not_offered",
+        text: RESET_UNAVAILABLE_TEXT,
+      };
     case "auth_error":
-      return { outcome: "unavailable", text: RESET_LOGIN_FAILED_TEXT };
+      return {
+        outcome: "unavailable",
+        text: RESET_LOGIN_FAILED_TEXT,
+      };
     case "unavailable":
     case "rate_limited":
     case "error":
       if (A.result === "error") d.unsettledClaimWallResetsAt = resetsAt;
-      return { outcome: "unavailable", text: m.unavailableLine };
+      return {
+        outcome: "unavailable",
+        text: limitResetCopy.unavailableLine,
+      };
   }
 }
 //@ chunk-fm6h4dv7.js:44741-44946 placement
-var RESET_UNAVAILABLE_TEXT = "A 5-hour limit reset isn't available right now.",
-  RESET_IN_PROGRESS_TEXT = "Your 5-hour limit is already being reset \xB7 one moment",
-  RESET_LOGIN_FAILED_TEXT =
-    "Couldn't reset your 5-hour limit with this login \xB7 run /login, then try again";
+var RESET_UNAVAILABLE_TEXT = "A 5-hour limit reset isn't available right now.";
+var RESET_IN_PROGRESS_TEXT = "Your 5-hour limit is already being reset \xB7 one moment";
+var RESET_LOGIN_FAILED_TEXT =
+  "Couldn't reset your 5-hour limit with this login \xB7 run /login, then try again";
+//@ chunk-fm6h4dv7.js:44946-45202 placement
 /**
  * 5 小时限额重置成功后的本地收尾：取消额度自动继续、记录、把被拒的 five_hour 状态改回 allowed、复位提示状态、必要时刷新、发出 reset 事件；每步单独 try/catch。
  */
-//@ chunk-fm6h4dv7.js:44946-45202 placement
-function applyFiveHourResetLocally(i, s, d, m) {
+function applyFiveHourResetLocally(i, resetsAt, entry, m) {
   let b = [
     () => cancelQuotaAutoResume("juniper_tide"),
     () => {
       endLowPriority("reset");
     },
-    () => clearFiveHourRejection(s),
+    () => clearFiveHourRejection(resetsAt),
     () => {
-      let _ = O7();
-      if (_.phase !== "idle" && _.wallResetsAt === s) re({ phase: "idle" });
+      let resetFlowPhase = getResetFlowPhase();
+      if (resetFlowPhase.phase !== "idle" && resetFlowPhase.wallResetsAt === resetsAt)
+        setResetFlowState({
+          phase: "idle",
+        });
     },
     () => {
       if (m) enqueueAutoContinuation();
     },
-    () => i.events.emit({ type: "reset", entry: d }),
+    () =>
+      i.events.emit({
+        type: "reset",
+        entry,
+      }),
   ];
   for (let _ of b)
     try {
@@ -351,67 +429,101 @@ function applyFiveHourResetLocally(i, s, d, m) {
 //@ chunk-fm6h4dv7.js:45202-45392 placement
 function clearFiveHourRejection(i) {
   forgetHeldWindows(["five_hour"]);
-  let s = getCurrentLimits();
-  if (s.status !== "rejected" || s.rateLimitType !== "five_hour" || s.resetsAt !== i) return;
-  emitLimitsStatusChange({ ...s, status: "allowed", rateLimitType: void 0, resetsAt: void 0 });
+  let currentLimits = getCurrentLimits();
+  if (
+    currentLimits.status !== "rejected" ||
+    currentLimits.rateLimitType !== "five_hour" ||
+    currentLimits.resetsAt !== i
+  )
+    return;
+  emitLimitsStatusChange({
+    ...currentLimits,
+    status: "allowed",
+    rateLimitType: undefined,
+    resetsAt: undefined,
+  });
 }
 //@ chunk-fm6h4dv7.js:45392-45465 placement
-function zr(i) {
+function openUsageCreditsOffer(i) {
   if (isQuotaAutoResumeArmed()) {
-    C7e();
+    confirmAndFire();
     return;
   }
-  probeQuotaStatusAtStart(i, void 0).catch((s) => {
-    logError(toError(s));
+  probeQuotaStatusAtStart(i, undefined).catch((error) => {
+    logError(toError(error));
   });
 }
 //@ chunk-fm6h4dv7.js:45465-45650 placement
-function markResetUnavailable(i, s) {
-  let d = O7();
-  if (d.phase !== "answered" || d.wallResetsAt !== i || d.status === null) return;
-  re({ ...d, status: { ...d.status, available: !1, nextAvailableAt: s ?? d.status.nextAvailableAt } });
+function markResetUnavailable(resetsAt, nextAvailableAt) {
+  let resetFlowPhase = getResetFlowPhase();
+  if (
+    resetFlowPhase.phase !== "answered" ||
+    resetFlowPhase.wallResetsAt !== resetsAt ||
+    resetFlowPhase.status === null
+  )
+    return;
+  setResetFlowState({
+    ...resetFlowPhase,
+    status: {
+      ...resetFlowPhase.status,
+      available: false,
+      nextAvailableAt: nextAvailableAt ?? resetFlowPhase.status.nextAvailableAt,
+    },
+  });
 }
 //@ chunk-fm6h4dv7.js:45650-45801 placement
-function markResetIneligible(i) {
-  let s = O7();
-  if (s.phase !== "answered" || s.wallResetsAt !== i || s.status === null) return;
-  re({ ...s, status: { ...s.status, eligible: !1, available: !1 } });
+function markResetIneligible(resetsAt) {
+  let resetFlowPhase = getResetFlowPhase();
+  if (
+    resetFlowPhase.phase !== "answered" ||
+    resetFlowPhase.wallResetsAt !== resetsAt ||
+    resetFlowPhase.status === null
+  )
+    return;
+  setResetFlowState({
+    ...resetFlowPhase,
+    status: {
+      ...resetFlowPhase.status,
+      eligible: false,
+      available: false,
+    },
+  });
 }
 //@ chunk-fm6h4dv7.js:45801-45935 placement
 function subscribeSessionSwitchReset(i) {
   if (i.sessionSwitchSubscribed) return;
-  ((i.sessionSwitchSubscribed = !0),
-    onSessionSwitch((s, d) => {
-      if (isConversationResetSwitch(d)) i.continuableWallResetsAt = null;
-    }));
+  i.sessionSwitchSubscribed = true;
+  onSessionSwitch((s, d) => {
+    if (isConversationResetSwitch(d)) i.continuableWallResetsAt = null;
+  });
 }
+//@ chunk-fm6h4dv7.js:45935-46054 placement
 /**
  * 会话状态短语常量（running / waiting for a prompt / waiting）、分隔符、8 位短 id 正则与长度上限。
  */
-//@ chunk-fm6h4dv7.js:45935-46054 placement
-var SESSION_RUNNING_LABEL = "session running",
-  SESSION_WAITING_PROMPT_LABEL = "session waiting for a prompt",
-  SESSION_WAITING_LABEL = "session waiting",
-  MIDDOT_SEPARATOR = " \xB7 ",
-  SHORT_ID_RE = /^[0-9a-f]{8}$/,
-  MIN_SESSION_NAME_CHARS = 20;
+var SESSION_RUNNING_LABEL = "session running";
+var SESSION_WAITING_PROMPT_LABEL = "session waiting for a prompt";
+var SESSION_WAITING_LABEL = "session waiting";
+var MIDDOT_SEPARATOR = " \xB7 ";
+var SHORT_ID_RE = /^[0-9a-f]{8}$/;
+var MIN_SESSION_NAME_CHARS = 20;
+//@ chunk-fm6h4dv7.js:46054-46209 placement
 /**
  * 按分隔符拆分状态文字、去掉空段，第一段之后的各段用 " · " 重新连接。
  */
-//@ chunk-fm6h4dv7.js:46054-46209 placement
 function normalizeStatusSegments(i) {
   let filtered = i
-    .split(YO)
+    .split(CIRCLE_MARK_GLYPH)
     .map((b) => b.trim())
     .filter(Boolean);
   if (filtered.length === 0) return;
   let [d, ...m] = filtered;
-  return m.length === 0 ? d : `${d} ${YO} ${m.join(MIDDOT_SEPARATOR)}`;
+  return m.length === 0 ? d : `${d} ${CIRCLE_MARK_GLYPH} ${m.join(MIDDOT_SEPARATOR)}`;
 }
+//@ chunk-fm6h4dv7.js:46209-46554 placement
 /**
  * 解析限额标签字符串。
  */
-//@ chunk-fm6h4dv7.js:46209-46554 placement
 function parseRateLimitLabel(i) {
   if (!i.startsWith(SESSION_RUNNING_LABEL) && !i.startsWith(SESSION_WAITING_PROMPT_LABEL)) return null;
   if (
@@ -419,140 +531,200 @@ function parseRateLimitLabel(i) {
 `)
   )
     return null;
-  let parts = i.split(MIDDOT_SEPARATOR),
-    d = parts[0];
+  let parts = i.split(MIDDOT_SEPARATOR);
+  let d = parts[0];
   if (d !== SESSION_RUNNING_LABEL && d !== SESSION_WAITING_PROMPT_LABEL) return null;
-  let lastIndex = parts.findLastIndex((k) => SHORT_ID_RE.test(k)),
-    b = lastIndex === -1 ? void 0 : parts[lastIndex],
-    _ = lastIndex === -1 ? parts.length : lastIndex,
-    sliced = parts.slice(1, _),
-    C = sliced.length > 0 ? sliced.join(MIDDOT_SEPARATOR) : void 0,
-    A = lastIndex === -1 ? [] : parts.slice(lastIndex + 1);
-  return { state: d, name: C, id: b, chips: A };
+  let lastIndex = parts.findLastIndex((k) => SHORT_ID_RE.test(k));
+  let id = lastIndex === -1 ? undefined : parts[lastIndex];
+  let _ = lastIndex === -1 ? parts.length : lastIndex;
+  let sliced = parts.slice(1, _);
+  let name = sliced.length > 0 ? sliced.join(MIDDOT_SEPARATOR) : undefined;
+  let chips = lastIndex === -1 ? [] : parts.slice(lastIndex + 1);
+  return {
+    state: d,
+    name,
+    id,
+    chips,
+  };
 }
+//@ chunk-fm6h4dv7.js:46554-46927 placement
 /**
  * 按宽度逐步缩短限额标签。
  */
-//@ chunk-fm6h4dv7.js:46554-46927 placement
-function fitRateLimitLabel(i, s, d = !0) {
-  let m = (_) => bunStringWidth(YAr(_)),
-    b = { ...i, chips: [...i.chips] };
+function fitRateLimitLabel(fields, s, d = true) {
+  let m = (_) => bunStringWidth(offerDedupeKey(_));
+  let b = {
+    ...fields,
+    chips: [...fields.chips],
+  };
   if (m(b) <= s) return b;
   if (b.state === SESSION_WAITING_PROMPT_LABEL) {
-    if (((b = { ...b, state: SESSION_WAITING_LABEL }), m(b) <= s)) return b;
+    b = {
+      ...b,
+      state: SESSION_WAITING_LABEL,
+    };
+    if (m(b) <= s) return b;
   }
-  if (b.id !== void 0 && b.name !== void 0 && d) {
-    if (((b = { ...b, id: void 0 }), m(b) <= s)) return b;
+  if (b.id !== undefined && b.name !== undefined && d) {
+    b = {
+      ...b,
+      id: undefined,
+    };
+    if (m(b) <= s) return b;
   }
-  if (b.name !== void 0) {
-    let _ = m({ ...b, name: void 0 }),
-      h = s - _ - bunStringWidth(MIDDOT_SEPARATOR),
-      C = bunStringWidth(b.name),
-      A = C > MIN_SESSION_NAME_CHARS ? Math.max(h, MIN_SESSION_NAME_CHARS) : h;
-    if (A >= 1 && A < C) b = { ...b, name: truncateToWidth(b.name, A) };
+  if (b.name !== undefined) {
+    let _ = m({
+      ...b,
+      name: undefined,
+    });
+    let h = s - _ - bunStringWidth(MIDDOT_SEPARATOR);
+    let C = bunStringWidth(b.name);
+    let A = C > MIN_SESSION_NAME_CHARS ? Math.max(h, MIN_SESSION_NAME_CHARS) : h;
+    if (A >= 1 && A < C)
+      b = {
+        ...b,
+        name: truncateToWidth(b.name, A),
+      };
   }
   return b;
 }
 //@ chunk-fm6h4dv7.js:46927-47019 placement
-function YAr(i) {
+/**
+ * 函数 offerDedupeKey（按状态/名/id/标签拼键）。
+ */
+function offerDedupeKey(i) {
   return [i.state, ...(i.name ? [i.name] : []), ...(i.id ? [i.id] : []), ...i.chips].join(MIDDOT_SEPARATOR);
 }
 //@ chunk-fm6h4dv7.js:47019-47063 placement
-function ti(i) {
-  let { index: index } = i;
+function hasIndex(i) {
+  let { index } = i;
   return index !== -1;
 }
 //@ chunk-fm6h4dv7.js:47063-47130 placement
-var mapped = [PXo, X8r, CYBER_SAFEGUARDS_ARTICLE_URL].map((i) => ({ url: i, marker: `learn more: ${i}` }));
+var mapped = [SAFEGUARDS_MODEL_ARTICLE_URL, SAFEGUARDS_DEFAULT_ARTICLE_URL, CYBER_SAFEGUARDS_ARTICLE_URL].map(
+  (i) => ({
+    url: i,
+    marker: `learn more: ${i}`,
+  }),
+);
+//@ chunk-fm6h4dv7.js:47130-48311 placement
 /**
  * 把文本中的标记替换为可点击链接。
  */
-//@ chunk-fm6h4dv7.js:47130-48311 placement
-function LinkifiedText(i) {
-  let _ = w(33),
-    { children: children, color: color, bold: bold } = i,
-    b = wJe(),
-    h,
-    C,
-    A,
-    k,
-    T,
-    x;
-  if (_[0] !== bold || _[1] !== children || _[2] !== color || _[3] !== b) {
+function LinkifiedText(props) {
+  let _ = w(33);
+  let { children, color, bold } = props;
+  let fallbackPermission = useFallbackPermission();
+  let h;
+  let C;
+  let color_2;
+  let bold_2;
+  let T;
+  let x;
+  if (_[0] !== bold || _[1] !== children || _[2] !== color || _[3] !== fallbackPermission) {
     x = EARLY_RETURN_SENTINEL;
     Fe: {
       let L;
-      if (_[10] !== children)
-        ((L = (I) => {
-          let { url: url, marker: marker } = I;
-          return { url: url, marker: marker, index: children.indexOf(marker) };
-        }),
-          (_[10] = children),
-          (_[11] = L));
-      else L = _[11];
-      C = mapped.map(L).find(ti);
-      if (!b || C === void 0) {
+      if (_[10] !== children) {
+        L = (I) => {
+          let { url, marker } = I;
+          return {
+            url,
+            marker,
+            index: children.indexOf(marker),
+          };
+        };
+        _[10] = children;
+        _[11] = L;
+      } else L = _[11];
+      C = mapped.map(L).find(hasIndex);
+      if (!fallbackPermission || C === undefined) {
         let I;
-        if (_[12] !== bold || _[13] !== children || _[14] !== color)
-          ((I = e(LinkifiedText_2, { color: color, bold: bold, children: children })),
-            (_[12] = bold),
-            (_[13] = children),
-            (_[14] = color),
-            (_[15] = I));
-        else I = _[15];
+        if (_[12] !== bold || _[13] !== children || _[14] !== color) {
+          I = jsxProd_default(LinkifiedText_2, {
+            color,
+            bold,
+            children,
+          });
+          _[12] = bold;
+          _[13] = children;
+          _[14] = color;
+          _[15] = I;
+        } else I = _[15];
         x = I;
         break Fe;
       }
       h = Text;
-      A = color;
-      k = bold;
+      color_2 = color;
+      bold_2 = bold;
       T = children.slice(0, C.index);
     }
-    ((_[0] = bold),
-      (_[1] = children),
-      (_[2] = color),
-      (_[3] = b),
-      (_[4] = h),
-      (_[5] = C),
-      (_[6] = A),
-      (_[7] = k),
-      (_[8] = T),
-      (_[9] = x));
-  } else ((h = _[4]), (C = _[5]), (A = _[6]), (k = _[7]), (T = _[8]), (x = _[9]));
+    _[0] = bold;
+    _[1] = children;
+    _[2] = color;
+    _[3] = fallbackPermission;
+    _[4] = h;
+    _[5] = C;
+    _[6] = color_2;
+    _[7] = bold_2;
+    _[8] = T;
+    _[9] = x;
+  } else {
+    h = _[4];
+    C = _[5];
+    color_2 = _[6];
+    bold_2 = _[7];
+    T = _[8];
+    x = _[9];
+  }
   if (x !== EARLY_RETURN_SENTINEL) return x;
-  let L;
-  if (_[16] !== bold || _[17] !== color)
-    ((L = e(Text, { color: color, bold: bold, underline: !0, children: "learn more" })),
-      (_[16] = bold),
-      (_[17] = color),
-      (_[18] = L));
-  else L = _[18];
+  let children_2;
+  if (_[16] !== bold || _[17] !== color) {
+    children_2 = jsxProd_default(Text, {
+      color,
+      bold,
+      underline: true,
+      children: "learn more",
+    });
+    _[16] = bold;
+    _[17] = color;
+    _[18] = children_2;
+  } else children_2 = _[18];
   let I;
-  if (_[19] !== C.url || _[20] !== L)
-    ((I = e(Link, { url: C.url, children: L })), (_[19] = C.url), (_[20] = L), (_[21] = I));
-  else I = _[21];
+  if (_[19] !== C.url || _[20] !== children_2) {
+    I = jsxProd_default(Link, {
+      url: C.url,
+      children: children_2,
+    });
+    _[19] = C.url;
+    _[20] = children_2;
+    _[21] = I;
+  } else I = _[21];
   let G;
-  if (_[22] !== children || _[23] !== C.index || _[24] !== C.marker.length)
-    ((G = children.slice(C.index + C.marker.length)),
-      (_[22] = children),
-      (_[23] = C.index),
-      (_[24] = C.marker.length),
-      (_[25] = G));
-  else G = _[25];
+  if (_[22] !== children || _[23] !== C.index || _[24] !== C.marker.length) {
+    G = children.slice(C.index + C.marker.length);
+    _[22] = children;
+    _[23] = C.index;
+    _[24] = C.marker.length;
+    _[25] = G;
+  } else G = _[25];
   let R;
-  if (_[26] !== h || _[27] !== A || _[28] !== k || _[29] !== T || _[30] !== I || _[31] !== G)
-    ((R = r(h, { color: A, bold: k, children: [T, I, G] })),
-      (_[26] = h),
-      (_[27] = A),
-      (_[28] = k),
-      (_[29] = T),
-      (_[30] = I),
-      (_[31] = G),
-      (_[32] = R));
-  else R = _[32];
+  if (_[26] !== h || _[27] !== color_2 || _[28] !== bold_2 || _[29] !== T || _[30] !== I || _[31] !== G) {
+    R = jsxProd_default_2(h, {
+      color: color_2,
+      bold: bold_2,
+      children: [T, I, G],
+    });
+    _[26] = h;
+    _[27] = color_2;
+    _[28] = bold_2;
+    _[29] = T;
+    _[30] = I;
+    _[31] = G;
+    _[32] = R;
+  } else R = _[32];
   return R;
 }
-
 export {
   LinkifiedText,
   offerUsageCreditsAtWall,
@@ -563,7 +735,7 @@ export {
   normalizeStatusSegments,
   SESSION_RUNNING_LABEL,
   SESSION_WAITING_PROMPT_LABEL,
-  YAr,
-  Qho,
+  offerDedupeKey,
+  maybeOpenUsageCreditsDialog,
   checkUsageCredits,
 };

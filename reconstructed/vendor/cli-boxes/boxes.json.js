@@ -8,8 +8,8 @@
 import { x } from "../../runtime/bun-runtime.js";
 
 //@ chunk-zxbmtfmw.js:264-1413 cjs-fingerprint
-var cliBoxesData = x(function (h, L) {
-  L.exports = {
+var cliBoxesData = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = {
     single: {
       topLeft: "\u250C",
       top: "\u2500",
@@ -92,5 +92,4 @@ var cliBoxesData = x(function (h, L) {
     },
   };
 });
-
 export { cliBoxesData };

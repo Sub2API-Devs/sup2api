@@ -13,15 +13,17 @@ import {
   computeRemoteSettingsEligibility,
 } from "../services/cloudSessions/eligibility.js";
 
+//@ chunk-s4skx7fa.js:231-369 placement
 /**
  * 组织托管设置的提示文案（由 IT 管理员集中管理）。
  */
-//@ chunk-s4skx7fa.js:231-369 placement
 var MANAGED_SETTINGS_NOTICE =
   "Your organization may apply global configuration to Claude Code. These settings are centrally managed by your IT administrator.";
 //@ chunk-s4skx7fa.js:369-400 placement
-function eZ() {
+/**
+ * 函数 managedSettingsUrl（托管设置提示链接）。
+ */
+function managedSettingsUrl() {
   return getRemoteSettingsOrgUuid(computeRemoteSettingsEligibility());
 }
-
-export { eZ, MANAGED_SETTINGS_NOTICE };
+export { managedSettingsUrl, MANAGED_SETTINGS_NOTICE };

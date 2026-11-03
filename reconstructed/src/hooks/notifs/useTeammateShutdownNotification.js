@@ -19,8 +19,8 @@ function parseCount(notif) {
   return match?.[1] ? parseInt(match[1], 10) : 1;
 }
 //@ chunk-18hwfzwa.js:1788064-1788103 layout
-function mGo(h, x) {
-  return makeSpawnNotif(parseCount(h) + 1);
+function foldTeammatesStarted(notif, x) {
+  return makeSpawnNotif(parseCount(notif) + 1);
 }
 //@ chunk-18hwfzwa.js:1788103-1788257 fingerprint = makeSpawnNotif (0.664)
 function makeSpawnNotif(count) {
@@ -30,12 +30,12 @@ function makeSpawnNotif(count) {
     text: count === 1 ? "1 teammate started" : `${count} teammates started`,
     priority: "low",
     timeoutMs: 5000,
-    fold: mGo,
+    fold: foldTeammatesStarted,
   };
 }
 //@ chunk-18hwfzwa.js:1788257-1788296 layout
-function pGo(h, x) {
-  return makeShutdownNotif(parseCount(h) + 1);
+function foldTeammatesShutdown(acc, _incoming) {
+  return makeShutdownNotif(parseCount(acc) + 1);
 }
 //@ chunk-18hwfzwa.js:1788296-1788457 fingerprint = makeShutdownNotif (0.664)
 function makeShutdownNotif(count) {
@@ -45,16 +45,15 @@ function makeShutdownNotif(count) {
     text: count === 1 ? "1 teammate shut down" : `${count} teammates shut down`,
     priority: "low",
     timeoutMs: 5000,
-    fold: pGo,
+    fold: foldTeammatesShutdown,
   };
 }
 //@ chunk-e6aww6q8.js:4718644-4718761 fingerprint = useTeammateLifecycleNotification (0.759)
 function useTeammateLifecycleNotification(e) {
-  if (!isLocalAgent(e)) return !1;
+  if (!isLocalAgent(e)) return false;
   return (
     e.status === "running" ||
     (e.status === "completed" && [...keepaliveReasons(e)].some((n) => n !== FLAG_IDLE_WINDOW))
   );
 }
-
 export { useTeammateLifecycleNotification, makeSpawnNotif, makeShutdownNotif };

@@ -8,7 +8,7 @@
  * pieces: chunk-18hwfzwa.js (12)
  * attribution: placement 12
  */
-import { $f } from "../../utils/messageQueueManager.js";
+import { isMainAgentCommand } from "../../utils/messageQueueManager.js";
 import { parseTaskNotificationToolUseId } from "../../services/tools/detachedToolCalls.js";
 import { Stream } from "../../utils/stream.js";
 import { logError } from "../../utils/log.js";
@@ -27,119 +27,132 @@ import { emitStatusChange, forwardStreamEventToBridge } from "../../state/onChan
 import { bunStringWidth } from "../../ink/stringWidth.js";
 
 //@ chunk-18hwfzwa.js:1496841-1496892 placement
-function Ukt(h, x) {
-  return (D) => h.isRunning || (x() && D());
+function isBusyOrPending(guard, x) {
+  return (D) => guard.isRunning || (x() && D());
 }
+//@ chunk-18hwfzwa.js:1496892-1497059 placement
 /**
  * 是否有等待结果的任务或待处理的任务通知。
  */
-//@ chunk-18hwfzwa.js:1496892-1497059 placement
-function hasPendingTaskResults(h, x) {
+function hasPendingTaskResults(h, commandQueue) {
   return (
     h.awaitingResult().length > 0 ||
-    x.some(
+    commandQueue.some(
       (D) =>
         D.mode === "task-notification" &&
-        D.passive !== !0 &&
-        $f(D) &&
+        D.passive !== true &&
+        isMainAgentCommand(D) &&
         typeof D.value === "string" &&
         parseTaskNotificationToolUseId(D.value) !== null,
     )
   );
 }
+//@ chunk-18hwfzwa.js:1497059-1497308 placement
 /**
  * 等待中的任务都停止时调用回调，返回取消订阅函数。
  */
-//@ chunk-18hwfzwa.js:1497059-1497308 placement
 function onAwaitedTasksStopped(h, x) {
-  let awaitingResult = h.awaitingResult();
-  if (awaitingResult.length === 0) return () => {};
-  let subscribe = h.subscribe(() => {
-    let snapshot = h.getSnapshot(),
-      ke = !0;
-    for (let Re of awaitingResult) {
+  let D = h.awaitingResult();
+  if (D.length === 0) return () => {};
+  let L = h.subscribe(() => {
+    let snapshot = h.getSnapshot();
+    let ke = true;
+    for (let Re of D) {
       let Be = snapshot.get(Re);
       if (Be?.status === "running") return;
-      if (Be?.status !== "stopped") ke = !1;
+      if (Be?.status !== "stopped") ke = false;
     }
-    if ((subscribe(), ke)) x();
+    L();
+    if (ke) x();
   });
-  return subscribe;
+  return L;
 }
 //@ chunk-18hwfzwa.js:1497308-1497318 placement
-var $qo = 5;
+var SLOW_TURN_READ_LOG_MS = 5;
+//@ chunk-18hwfzwa.js:1497318-1501087 placement
 /**
  * 读取引擎回合：消费查询引擎事件流，转成 REPL 消息、进度与结果。
  */
-//@ chunk-18hwfzwa.js:1497318-1501087 placement
 async function readEngineTurn({
-  engine: engine,
-  feed: feed,
-  turnInput: turnInput,
-  newMessages: newMessages,
-  onQueryEvent: onQueryEvent,
-  addNotification: addNotification,
-  onMainRequestStart: onMainRequestStart,
-  onRead: onRead,
-  onStatus: onStatus,
+  engine,
+  feed,
+  turnInput,
+  newMessages,
+  onQueryEvent,
+  addNotification,
+  onMainRequestStart,
+  onRead,
+  onStatus,
 }) {
   feed.pendingQueryParams.push(turnInput);
-  let last = newMessages.findLast((At) => At.type === "user");
+  let last = newMessages.findLast((newMessage) => newMessage.type === "user");
   if (feed.input === null) {
     let At = new Stream();
-    ((feed.input = At), engine.streamInput(At).catch(logError));
+    feed.input = At;
+    engine.streamInput(At).catch(logError);
   }
   feed.input.enqueue({
     type: "user",
-    message: last?.message ?? { role: "user", content: "" },
+    message: last?.message ?? {
+      role: "user",
+      content: "",
+    },
     parent_tool_use_id: null,
   });
-  let now = Date.now(),
-    acquire = await feed.readLock.acquire(),
-    rt = Date.now() - now;
-  if (rt >= $qo) logForDebugging(`[engine] turn read waited ${rt}ms for the previous turn's result`);
+  let now = Date.now();
+  let Xe = await feed.readLock.acquire();
+  let rt = Date.now() - now;
+  if (rt >= SLOW_TURN_READ_LOG_MS)
+    logForDebugging(`[engine] turn read waited ${rt}ms for the previous turn's result`);
   let kt;
   try {
     onRead?.();
-    while (!0) {
-      let { value: At, done: It } = await engine.next();
+    while (true) {
+      let { value: msg, done: It } = await engine.next();
       if (It) break;
-      if (At.type === "system" && At.subtype === "api_retry") continue;
-      if (At.type === "system" && At.subtype === "model_refusal_fallback") {
-        onQueryEvent(createRefusalFallbackMessage(At));
+      if (msg.type === "system" && msg.subtype === "api_retry") continue;
+      if (msg.type === "system" && msg.subtype === "model_refusal_fallback") {
+        onQueryEvent(createRefusalFallbackMessage(msg));
         continue;
       }
-      if (At.type === "system" && At.subtype === "model_refusal_no_fallback") {
-        onQueryEvent(createRefusalNoFallbackMessage(At));
+      if (msg.type === "system" && msg.subtype === "model_refusal_no_fallback") {
+        onQueryEvent(createRefusalNoFallbackMessage(msg));
         continue;
       }
-      if (At.type === "system" && At.subtype === "memory_recall") continue;
-      if (At.type === "system" && At.subtype === "thinking_tokens" && "estimated_tokens_delta" in At)
+      if (msg.type === "system" && msg.subtype === "memory_recall") continue;
+      if (msg.type === "system" && msg.subtype === "thinking_tokens" && "estimated_tokens_delta" in msg)
         continue;
-      if (At.type === "system" && At.subtype === "compact_boundary") {
-        onQueryEvent(convertCompactBoundaryMessage(At));
-        continue;
-      }
-      if (At.type === "system" && At.subtype === "model_fallback") {
-        onQueryEvent(createModelFallbackSystemMessage(At));
+      if (msg.type === "system" && msg.subtype === "compact_boundary") {
+        onQueryEvent(convertCompactBoundaryMessage(msg));
         continue;
       }
-      if (At.type === "system" && At.subtype === "model_consent_fallback") {
-        onQueryEvent(createConsentFallbackMessage(At));
+      if (msg.type === "system" && msg.subtype === "model_fallback") {
+        onQueryEvent(createModelFallbackSystemMessage(msg));
         continue;
       }
-      if (At.type === "result") {
-        if (((kt = At), At.is_error)) {
-          let Ot = At.subtype === "success" ? At.result : At.errors.join("; ");
-          if (
-            (logForDebugging(
-              `[engine] turn ended in error: ${Ot}`,
-              isAbortedTerminalReason(At.terminal_reason) ? void 0 : { level: "error" },
-            ),
-            At.subtype === "error_during_execution" && !isAbortedTerminalReason(At.terminal_reason))
-          )
+      if (msg.type === "system" && msg.subtype === "model_consent_fallback") {
+        onQueryEvent(createConsentFallbackMessage(msg));
+        continue;
+      }
+      if (msg.type === "result") {
+        kt = msg;
+        if (msg.is_error) {
+          let Ot = msg.subtype === "success" ? msg.result : msg.errors.join("; ");
+          logForDebugging(
+            `[engine] turn ended in error: ${Ot}`,
+            isAbortedTerminalReason(msg.terminal_reason)
+              ? undefined
+              : {
+                  level: "error",
+                },
+          );
+          if (msg.subtype === "error_during_execution" && !isAbortedTerminalReason(msg.terminal_reason))
             try {
-              onQueryEvent(createApiErrorMessage({ content: Ot }));
+              onQueryEvent(
+                createApiErrorMessage({
+                  content: Ot,
+                }),
+              );
             } catch (error) {
               logForDebugging(`[engine] failed to render degraded-turn error: ${errorMessage(error)}`, {
                 level: "error",
@@ -148,113 +161,118 @@ async function readEngineTurn({
         }
         break;
       }
-      if (At.type === "system" && At.subtype === "notification") {
-        addNotification(normalizeSdkNotification(At));
+      if (msg.type === "system" && msg.subtype === "notification") {
+        addNotification(normalizeSdkNotification(msg));
         continue;
       }
-      if (At.type === "system" && At.subtype === "status") {
-        if (At.status === "requesting") onMainRequestStart();
-        (emitStatusChange({
-          status: At.status,
-          permissionMode: At.permissionMode,
-          compactResult: At.compact_result,
-          compactError: At.compact_error,
-        }),
-          onStatus?.(At.compact_result));
+      if (msg.type === "system" && msg.subtype === "status") {
+        if (msg.status === "requesting") onMainRequestStart();
+        emitStatusChange({
+          status: msg.status,
+          permissionMode: msg.permissionMode,
+          compactResult: msg.compact_result,
+          compactError: msg.compact_error,
+        });
+        onStatus?.(msg.compact_result);
         continue;
       }
-      if (At.type === "system" && At.subtype === "permission_denied") continue;
+      if (msg.type === "system" && msg.subtype === "permission_denied") continue;
       if (
-        At.type === "system" &&
-        (At.subtype === "task_started" ||
-          At.subtype === "task_progress" ||
-          At.subtype === "task_updated" ||
-          At.subtype === "task_notification" ||
-          At.subtype === "background_tasks_changed" ||
-          At.subtype === "feedback_draft_queued" ||
-          At.subtype === "task_summary" ||
-          At.subtype === "session_metadata" ||
-          At.subtype === "session_state_changed" ||
-          At.subtype === "post_turn_summary" ||
-          At.subtype === "hook_started" ||
-          At.subtype === "hook_progress" ||
-          At.subtype === "hook_response" ||
-          At.subtype === "commands_changed" ||
-          At.subtype === "elicitation_complete" ||
-          At.subtype === "files_persisted" ||
-          At.subtype === "mirror_error" ||
-          At.subtype === "code_change_published" ||
-          At.subtype === "ui_invalidate" ||
-          At.subtype === "ui_log" ||
-          At.subtype === "ui_toast" ||
-          At.subtype === "ui_status" ||
-          At.subtype === "ui_panes" ||
-          At.subtype === "ui_placed" ||
-          At.subtype === "ui_scroll" ||
-          At.subtype === "ui_focus" ||
-          At.subtype === "permission_check_status" ||
-          At.subtype === "vcs_state_changed" ||
-          At.subtype === "dev_intent" ||
-          At.subtype === "session_title_changed" ||
-          At.subtype === "turn_preempted" ||
-          At.subtype === "per_turn_effort_changed" ||
-          At.subtype === "file_attachments_missing")
+        msg.type === "system" &&
+        (msg.subtype === "task_started" ||
+          msg.subtype === "task_progress" ||
+          msg.subtype === "task_updated" ||
+          msg.subtype === "task_notification" ||
+          msg.subtype === "background_tasks_changed" ||
+          msg.subtype === "feedback_draft_queued" ||
+          msg.subtype === "task_summary" ||
+          msg.subtype === "session_metadata" ||
+          msg.subtype === "session_state_changed" ||
+          msg.subtype === "post_turn_summary" ||
+          msg.subtype === "hook_started" ||
+          msg.subtype === "hook_progress" ||
+          msg.subtype === "hook_response" ||
+          msg.subtype === "commands_changed" ||
+          msg.subtype === "elicitation_complete" ||
+          msg.subtype === "files_persisted" ||
+          msg.subtype === "mirror_error" ||
+          msg.subtype === "code_change_published" ||
+          msg.subtype === "ui_invalidate" ||
+          msg.subtype === "ui_log" ||
+          msg.subtype === "ui_toast" ||
+          msg.subtype === "ui_status" ||
+          msg.subtype === "ui_panes" ||
+          msg.subtype === "ui_placed" ||
+          msg.subtype === "ui_scroll" ||
+          msg.subtype === "ui_focus" ||
+          msg.subtype === "permission_check_status" ||
+          msg.subtype === "vcs_state_changed" ||
+          msg.subtype === "dev_intent" ||
+          msg.subtype === "session_title_changed" ||
+          msg.subtype === "turn_preempted" ||
+          msg.subtype === "per_turn_effort_changed" ||
+          msg.subtype === "file_attachments_missing")
       )
         continue;
-      if (At.type === "system" && At.subtype === "informational" && !("timestamp" in At)) continue;
-      if (At.type === "tool_progress") continue;
-      if (At.type === "tool_use_summary") continue;
-      if (At.type === "assistant" && "parent_tool_use_id" in At) continue;
-      if (At.type === "auth_status") continue;
-      if (At.type === "prompt_suggestion") continue;
-      if (At.type === "system" && At.subtype === "init") continue;
-      if (At.type === "rate_limit_event") continue;
-      if (At.type === "conversation_reset") continue;
-      if (At.type === "command_lifecycle") continue;
-      if (At.type === "stream_event") {
-        (forwardStreamEventToBridge(At), onQueryEvent(At));
+      if (msg.type === "system" && msg.subtype === "informational" && !("timestamp" in msg)) continue;
+      if (msg.type === "tool_progress") continue;
+      if (msg.type === "tool_use_summary") continue;
+      if (msg.type === "assistant" && "parent_tool_use_id" in msg) continue;
+      if (msg.type === "auth_status") continue;
+      if (msg.type === "prompt_suggestion") continue;
+      if (msg.type === "system" && msg.subtype === "init") continue;
+      if (msg.type === "rate_limit_event") continue;
+      if (msg.type === "conversation_reset") continue;
+      if (msg.type === "command_lifecycle") continue;
+      if (msg.type === "stream_event") {
+        forwardStreamEventToBridge(msg);
+        onQueryEvent(msg);
         continue;
       }
-      onQueryEvent(At);
+      onQueryEvent(msg);
     }
   } catch (error) {
-    engine.interrupt("consumer-error", { scope: "turn-cancel" });
+    engine.interrupt("consumer-error", {
+      scope: "turn-cancel",
+    });
     let It = await engine.next();
     while (!It.done && It.value.type !== "result") It = await engine.next();
     throw error;
   } finally {
-    acquire();
+    Xe();
   }
   return kt;
 }
+//@ chunk-18hwfzwa.js:1501087-1501338 placement
 /**
  * 更新工具提示表（clear 删除、其他覆盖）。
  */
-//@ chunk-18hwfzwa.js:1501087-1501338 placement
 function applyToolHint(h, x) {
   if (x.kind === "clear") {
     if (!h.has(x.toolUseId)) return h;
     let ee = new Map(h);
-    return (ee.delete(x.toolUseId), ee);
+    ee.delete(x.toolUseId);
+    return ee;
   }
   let D = h.get(x.toolUseId);
   if (x.kind === "background_hint" && D?.kind === x.kind) return h;
   let L = new Map(h);
-  return (L.set(x.toolUseId, x), L);
+  L.set(x.toolUseId, x);
+  return L;
 }
+//@ chunk-18hwfzwa.js:1501338-1501474 placement
 /**
  * 删除已完成工具的提示。
  */
-//@ chunk-18hwfzwa.js:1501338-1501474 placement
-function dropToolHints(h, x) {
-  if (h.size === 0) return h;
+function dropToolHints(toolProgress, x) {
+  if (toolProgress.size === 0) return toolProgress;
   let D = null;
-  for (let L of h.keys())
-    if (x.has(L)) {
-      if (D === null) D = new Map(h);
-      D.delete(L);
+  for (let key of toolProgress.keys())
+    if (x.has(key)) {
+      if (D === null) D = new Map(toolProgress);
+      D.delete(key);
     }
-  return D ?? h;
+  return D ?? toolProgress;
 }
 //@ chunk-18hwfzwa.js:1501474-1502268 placement
 class FlushBatcher {
@@ -264,11 +282,11 @@ class FlushBatcher {
   onFlush;
   flushIntervalMs;
   boundFlush;
-  constructor({ scheduleTimeout: h, onFlush: x, flushIntervalMs: D }) {
-    ((this.scheduleTimeout = h),
-      (this.onFlush = x),
-      (this.flushIntervalMs = D),
-      (this.boundFlush = this.flush.bind(this)));
+  constructor({ scheduleTimeout, onFlush, flushIntervalMs }) {
+    this.scheduleTimeout = scheduleTimeout;
+    this.onFlush = onFlush;
+    this.flushIntervalMs = flushIntervalMs;
+    this.boundFlush = this.flush.bind(this);
   }
   apply(h) {
     let x = h(this.pending);
@@ -276,82 +294,87 @@ class FlushBatcher {
       this.clear();
       return;
     }
-    if (((this.pending = x), this.cancelScheduledFlush === null))
+    this.pending = x;
+    if (this.cancelScheduledFlush === null)
       this.cancelScheduledFlush = this.scheduleTimeout(this.boundFlush, this.flushIntervalMs);
   }
   clear() {
-    ((this.pending = null), this.dispose(), this.onFlush(null));
+    this.pending = null;
+    this.dispose();
+    this.onFlush(null);
   }
   peek() {
     return this.pending;
   }
   flushNow() {
-    if (this.cancelScheduledFlush !== null) (this.dispose(), this.flush());
+    if (this.cancelScheduledFlush !== null) {
+      this.dispose();
+      this.flush();
+    }
   }
   dispose() {
-    if (this.cancelScheduledFlush !== null) (this.cancelScheduledFlush(), (this.cancelScheduledFlush = null));
+    if (this.cancelScheduledFlush !== null) {
+      this.cancelScheduledFlush();
+      this.cancelScheduledFlush = null;
+    }
   }
   flush() {
-    ((this.cancelScheduledFlush = null), this.onFlush(this.pending));
+    this.cancelScheduledFlush = null;
+    this.onFlush(this.pending);
   }
 }
+//@ chunk-18hwfzwa.js:1502268-1502398 placement
 /**
  * 创建批量刷新器（默认 100ms）。
  */
-//@ chunk-18hwfzwa.js:1502268-1502398 placement
-function createFlushBatcher({
-  scheduleTimeout: scheduleTimeout,
-  onFlush: onFlush,
-  flushIntervalMs: flushIntervalMs = 100,
-}) {
+function createFlushBatcher({ scheduleTimeout, onFlush, flushIntervalMs = 100 }) {
   return new FlushBatcher({
-    scheduleTimeout: scheduleTimeout,
-    onFlush: onFlush,
-    flushIntervalMs: flushIntervalMs,
+    scheduleTimeout,
+    onFlush,
+    flushIntervalMs,
   });
 }
 //@ chunk-18hwfzwa.js:1502398-1502489 placement
-var Kqo = 30000,
-  Gqo = 500,
-  zkt = new Map(),
-  Ykt = new Set(),
-  Zee = [],
-  ete = [],
-  DRAINED_SHELL_LINE = "drained-shell-line",
-  Qqo = 2;
+var TURN_RESULT_TIMEOUT_MS = 30000;
+var DRAIN_POLL_MS = 500;
+var inFlightByShell = new Map();
+var drainedShells = new Set();
+var pendingShellLines = [];
+var completedShellLines = [];
+var DRAINED_SHELL_LINE = "drained-shell-line";
+var MIN_SHELL_WIDTH_SLACK = 2;
 //@ chunk-18hwfzwa.js:1502489-1502569 placement
-function Xkt(h) {
+function endsBeforeLastLine(h) {
   let index = h.lastIndexOf(`
 `);
   return index !== -1 && /\S/.test(h.slice(0, index));
 }
+//@ chunk-18hwfzwa.js:1502569-1502683 placement
 /**
  * 末行接近终端宽度。
  */
-//@ chunk-18hwfzwa.js:1502569-1502683 placement
-function isLineNearlyFull(h, x) {
+function isLineNearlyFull(h, columns) {
   let index = h.lastIndexOf(`
 `);
-  if (Xkt(h)) return !0;
+  if (endsBeforeLastLine(h)) return true;
   let sliced = h.slice(index + 1);
-  return /\S/.test(sliced) && bunStringWidth(sliced) >= x - Qqo;
+  return /\S/.test(sliced) && bunStringWidth(sliced) >= columns - MIN_SHELL_WIDTH_SLACK;
 }
-
 export {
-  Zee,
-  zkt,
-  Ykt,
-  ete,
+  pendingShellLines,
+  inFlightByShell,
+  drainedShells,
+  completedShellLines,
   createFlushBatcher,
   isLineNearlyFull,
-  Xkt,
-  Kqo,
+  endsBeforeLastLine,
+  TURN_RESULT_TIMEOUT_MS,
   applyToolHint,
   DRAINED_SHELL_LINE,
   dropToolHints,
-  Gqo,
+  DRAIN_POLL_MS,
   onAwaitedTasksStopped,
   hasPendingTaskResults,
   readEngineTurn,
-  Ukt,
+  isBusyOrPending,
 };

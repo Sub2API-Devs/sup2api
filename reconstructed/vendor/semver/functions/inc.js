@@ -6,20 +6,27 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { G } from "../classes/semver.js";
+import { require_semver } from "../classes/semver.js";
 
 //@ chunk-bwbq4xvm.js:10538-10738 cjs-fingerprint
-var Ri = x(function (e2, Ai) {
-  var yi = G(),
-    Tv = (e, s, n, r, a) => {
-      if (typeof n === "string") ((a = r), (r = n), (n = void 0));
-      try {
-        return new yi(e instanceof yi ? e.version : e, n).inc(s, r, a).version;
-      } catch (error) {
-        return null;
-      }
-    };
-  Ai.exports = Tv;
+var require_inc = x(function (cjsExports, cjsModule) {
+  var SemVer = require_semver();
+  var inc = (version, release, options, identifier, identifierBase) => {
+    if (typeof options === "string") {
+      identifierBase = identifier;
+      identifier = options;
+      options = undefined;
+    }
+    try {
+      return new SemVer(version instanceof SemVer ? version.version : version, options).inc(
+        release,
+        identifier,
+        identifierBase,
+      ).version;
+    } catch (er) {
+      return null;
+    }
+  };
+  cjsModule.exports = inc;
 });
-
-export { Ri };
+export { require_inc };

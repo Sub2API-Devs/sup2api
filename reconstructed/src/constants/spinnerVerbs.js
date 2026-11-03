@@ -10,20 +10,20 @@
  */
 import { getInitialSettings_2 } from "../utils/settings/settings.js";
 
+//@ chunk-hbc3mvx0.js:2172-2306 fingerprint = getSpinnerVerbs (1)
 /**
  * 转圈动词：settings.spinnerVerbs 为 replace 模式时替换默认表，否则追加。
  */
-//@ chunk-hbc3mvx0.js:2172-2306 fingerprint = getSpinnerVerbs (1)
 function getSpinnerVerbs() {
   let config = getInitialSettings_2().spinnerVerbs;
   if (!config) return SPINNER_VERBS;
   if (config.mode === "replace") return config.verbs.length > 0 ? config.verbs : SPINNER_VERBS;
   return [...SPINNER_VERBS, ...config.verbs];
 }
+//@ chunk-hbc3mvx0.js:2306-4751 fingerprint = SPINNER_VERBS (0.984)
 /**
  * 默认转圈动词表（Accomplishing、Clauding、Cogitating…）。
  */
-//@ chunk-hbc3mvx0.js:2306-4751 fingerprint = SPINNER_VERBS (0.984)
 var SPINNER_VERBS = [
   "Accomplishing",
   "Actioning",
@@ -213,5 +213,4 @@ var SPINNER_VERBS = [
   "Zesting",
   "Zigzagging",
 ];
-
 export { getSpinnerVerbs };

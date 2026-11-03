@@ -5,39 +5,38 @@
  * pieces: chunk-a8ee6x44.js (1)
  * attribution: cjs-require-graph 1
  */
-import { x as x_2 } from "../../../../../../runtime/bun-runtime.js";
-import { Dae } from "../../../../region-config-resolver/dist-cjs/index.js";
-import { Kg } from "../../../../../@smithy/protocol-http/dist-cjs/index.js";
-import { ff } from "../../../../../@smithy/core/dist-cjs/submodules/client/index.js";
-import { It } from "./auth/httpAuthExtensionConfiguration.js";
+import { x } from "../../../../../../runtime/bun-runtime.js";
+import { require_region_config_resolver } from "../../../../region-config-resolver/dist-cjs/index.js";
+import { require_protocol_http } from "../../../../../@smithy/protocol-http/dist-cjs/index.js";
+import { require_client } from "../../../../../@smithy/core/dist-cjs/submodules/client/index.js";
+import { require_httpAuthExtensionConfiguration } from "./auth/httpAuthExtensionConfiguration.js";
 
 //@ chunk-a8ee6x44.js:10562-11130 cjs-require-graph
-var bt = x_2(function (Tt) {
-  Object.defineProperty(Tt, "__esModule", { value: !0 });
-  Tt.resolveRuntimeExtensions = void 0;
-  var B = Dae(),
-    Q = Kg(),
-    Y = ff(),
-    J = It(),
-    Ho = (e, t) => {
-      let merged = Object.assign(
-        B.getAwsRegionExtensionConfiguration(e),
-        Y.getDefaultExtensionConfiguration(e),
-        Q.getHttpHandlerExtensionConfiguration(e),
-        J.getHttpAuthExtensionConfiguration(e),
-      );
-      return (
-        t.forEach((u) => u.configure(merged)),
-        Object.assign(
-          e,
-          B.resolveAwsRegionExtensionConfiguration(merged),
-          Y.resolveDefaultRuntimeConfig(merged),
-          Q.resolveHttpHandlerRuntimeConfig(merged),
-          J.resolveHttpAuthRuntimeConfig(merged),
-        )
-      );
-    };
-  Tt.resolveRuntimeExtensions = Ho;
+var require_runtimeExtensions = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.resolveRuntimeExtensions = undefined;
+  var region_config_resolver_1 = require_region_config_resolver();
+  var protocol_http_1 = require_protocol_http();
+  var smithy_client_1 = require_client();
+  var httpAuthExtensionConfiguration_1 = require_httpAuthExtensionConfiguration();
+  var resolveRuntimeExtensions = (runtimeConfig, extensions) => {
+    let extensionConfiguration = Object.assign(
+      region_config_resolver_1.getAwsRegionExtensionConfiguration(runtimeConfig),
+      smithy_client_1.getDefaultExtensionConfiguration(runtimeConfig),
+      protocol_http_1.getHttpHandlerExtensionConfiguration(runtimeConfig),
+      httpAuthExtensionConfiguration_1.getHttpAuthExtensionConfiguration(runtimeConfig),
+    );
+    extensions.forEach((extension) => extension.configure(extensionConfiguration));
+    return Object.assign(
+      runtimeConfig,
+      region_config_resolver_1.resolveAwsRegionExtensionConfiguration(extensionConfiguration),
+      smithy_client_1.resolveDefaultRuntimeConfig(extensionConfiguration),
+      protocol_http_1.resolveHttpHandlerRuntimeConfig(extensionConfiguration),
+      httpAuthExtensionConfiguration_1.resolveHttpAuthRuntimeConfig(extensionConfiguration),
+    );
+  };
+  cjsExports.resolveRuntimeExtensions = resolveRuntimeExtensions;
 });
-
-export { bt };
+export { require_runtimeExtensions };

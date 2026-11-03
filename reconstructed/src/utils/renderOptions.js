@@ -20,30 +20,47 @@ import { applyRelaunchTerminalSize } from "./relaunchTerminalSize.js";
 
 //@ chunk-rr03x1jm.js:510-1001 fingerprint = getStdinOverride (0.316)
 function getStdinOverride() {
-  if (process.stdin.isTTY) return { kind: "stdin" };
-  if (isEnvTruthy(!1)) return { kind: "unavailable", reason: "ci" };
-  if (eagerFirstOperand() === "mcp") return { kind: "unavailable", reason: "mcp" };
+  if (process.stdin.isTTY)
+    return {
+      kind: "stdin",
+    };
+  if (isEnvTruthy(false))
+    return {
+      kind: "unavailable",
+      reason: "ci",
+    };
+  if (eagerFirstOperand() === "mcp")
+    return {
+      kind: "unavailable",
+      reason: "mcp",
+    };
   try {
-    let ttyFd = openSync("/dev/tty", "r"),
-      ttyStream = new ReadStream(ttyFd);
-    return (
-      handleStreamGoneErrors(ttyStream),
-      ttyStream.on("error", (r) => {
-        (logEvent("tengu_tty_stream_error", errorTelemetryFields(r)),
-          logForDebugging(`/dev/tty stream error: ${r}`, { level: "debug" }));
-      }),
-      (ttyStream.isTTY = !0),
-      { kind: "override", stream: ttyStream }
-    );
+    let ttyFd = openSync("/dev/tty", "r");
+    let ttyStream = new ReadStream(ttyFd);
+    handleStreamGoneErrors(ttyStream);
+    ttyStream.on("error", (r) => {
+      logEvent("tengu_tty_stream_error", errorTelemetryFields(r));
+      logForDebugging(`/dev/tty stream error: ${r}`, {
+        level: "debug",
+      });
+    });
+    ttyStream.isTTY = true;
+    return {
+      kind: "override",
+      stream: ttyStream,
+    };
   } catch (err) {
-    return (
-      logForDebugging(`Could not open /dev/tty for stdin override: ${err}`, { level: "error" }),
-      { kind: "unavailable", reason: "tty_unavailable" }
-    );
+    logForDebugging(`Could not open /dev/tty for stdin override: ${err}`, {
+      level: "error",
+    });
+    return {
+      kind: "unavailable",
+      reason: "tty_unavailable",
+    };
   }
 }
 //@ chunk-rr03x1jm.js:1001-1075 layout
-class i {
+class stdinOverrideCell {
   input = null;
   get() {
     return (this.input ??= getStdinOverride());
@@ -53,14 +70,16 @@ class i {
   }
 }
 //@ chunk-rr03x1jm.js:1075-1089 facade-exports
-var stdinOverrideCache = new i();
+var stdinOverrideCache = new stdinOverrideCell();
 //@ chunk-rr03x1jm.js:1089-1225 facade-exports = getBaseRenderOptions (0.509)
-function getBaseRenderOptions(exitOnCtrlC = !1) {
+function getBaseRenderOptions(exitOnCtrlC = false) {
   applyRelaunchTerminalSize();
-  let e = stdinOverrideCache.get(),
-    options = { exitOnCtrlC: exitOnCtrlC };
-  if (e.kind === "override") options.stdin = e.stream;
-  return ((options.isScreenReaderEnabled = isScreenReaderMode()), options);
+  let stdin = stdinOverrideCache.get();
+  let options = {
+    exitOnCtrlC,
+  };
+  if (stdin.kind === "override") options.stdin = stdin.stream;
+  options.isScreenReaderEnabled = isScreenReaderMode();
+  return options;
 }
-
 export { getBaseRenderOptions, stdinOverrideCache };

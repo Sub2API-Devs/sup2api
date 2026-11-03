@@ -10,23 +10,17 @@
  */
 
 //@ chunk-fq0cr76a.js:901792-901811 affinity
-var weakSet_3 = new WeakSet();
+var weakSet = new WeakSet();
 //@ chunk-fq0cr76a.js:901811-901980 fingerprint = SandboxFilesystemConfigSchema (0.466)
 function SandboxFilesystemConfigSchema(e) {
-  if (weakSet_3.has(e)) return !0;
-  let {
-      denyRead: denyRead,
-      allowRead: allowRead,
-      allowWrite: allowWrite,
-      denyWrite: denyWrite,
-    } = e.filesystem,
-    all = [denyRead, allowRead ?? [], allowWrite, denyWrite].every((b) => b.every(isString));
-  if (all) weakSet_3.add(e);
+  if (weakSet.has(e)) return true;
+  let { denyRead, allowRead, allowWrite, denyWrite } = e.filesystem;
+  let all = [denyRead, allowRead ?? [], allowWrite, denyWrite].every((b) => b.every(isString));
+  if (all) weakSet.add(e);
   return all;
 }
 //@ chunk-fq0cr76a.js:901980-902023 affinity
 function isString(e) {
   return typeof e === "string";
 }
-
 export { SandboxFilesystemConfigSchema };

@@ -10,7 +10,11 @@
  */
 import { w } from "../../../vendor/react/compiler-runtime.js";
 import { useWizard } from "./useWizard.js";
-import { e, r, Fragment } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+  Fragment,
+} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Dialog } from "../design-system/Dialog.js";
 import { Byline } from "../design-system/Byline.js";
 import { KeyboardShortcutHint } from "../design-system/KeyboardShortcutHint.js";
@@ -18,72 +22,89 @@ import { ConfigurableShortcutHint } from "../ConfigurableShortcutHint.js";
 import { Box, Text } from "../../ink/components/Text.js";
 
 //@ chunk-095ptjmr.js:3004-3989 fingerprint = WizardDialogLayout (0.585)
-function WizardDialogLayout(t0) {
-  let $ = w(15),
-    { title: titleOverride, color: t1, children: children, subtitle: subtitle, footerText: footerText } = t0,
-    c = t1 === void 0 ? "suggestion" : t1,
-    {
-      currentStepIndex: currentStepIndex,
-      totalSteps: totalSteps,
-      title: providerTitle,
-      showStepCounter: showStepCounter,
-      goBack: goBack,
-      pendingExitHint: pendingExitHint,
-    } = useWizard(),
-    title = titleOverride || providerTitle || "Wizard",
-    se = showStepCounter !== !1 ? ` (${currentStepIndex + 1}/${totalSteps})` : "";
-  const t2 = `${title}${se}`;
-  let m;
-  if ($[0] !== children || $[1] !== c || $[2] !== goBack || $[3] !== subtitle || $[4] !== t2)
-    ((m = e(Dialog, {
-      title: t2,
-      subtitle: subtitle,
+function WizardDialogLayout(props) {
+  let $ = w(15);
+  let { title: titleOverride, color, children, subtitle, footerText } = props;
+  let color_2 = color === undefined ? "suggestion" : color;
+  let {
+    currentStepIndex,
+    totalSteps,
+    title: providerTitle,
+    showStepCounter,
+    goBack,
+    pendingExitHint,
+  } = useWizard();
+  let title = titleOverride || providerTitle || "Wizard";
+  let stepSuffix = showStepCounter !== false ? ` (${currentStepIndex + 1}/${totalSteps})` : "";
+  const title_2 = `${title}${stepSuffix}`;
+  let t3;
+  if ($[0] !== children || $[1] !== color_2 || $[2] !== goBack || $[3] !== subtitle || $[4] !== title_2) {
+    t3 = jsxProd_default(Dialog, {
+      title: title_2,
+      subtitle,
       onCancel: goBack,
-      color: c,
-      hideInputGuide: !0,
-      isCancelActive: !1,
-      children: children,
-    })),
-      ($[0] = children),
-      ($[1] = c),
-      ($[2] = goBack),
-      ($[3] = subtitle),
-      ($[4] = t2),
-      ($[5] = m));
-  else m = $[5];
-  let a;
-  if ($[6] !== currentStepIndex || $[7] !== footerText || $[8] !== pendingExitHint)
-    ((a =
+      color: color_2,
+      hideInputGuide: true,
+      isCancelActive: false,
+      children,
+    });
+    $[0] = children;
+    $[1] = color_2;
+    $[2] = goBack;
+    $[3] = subtitle;
+    $[4] = title_2;
+    $[5] = t3;
+  } else t3 = $[5];
+  let children_2;
+  if ($[6] !== currentStepIndex || $[7] !== footerText || $[8] !== pendingExitHint) {
+    children_2 =
       pendingExitHint ??
       footerText ??
-      r(Byline, {
+      jsxProd_default_2(Byline, {
         children: [
-          e(KeyboardShortcutHint, { chord: ["up", "down"], action: "navigate" }),
-          e(KeyboardShortcutHint, { chord: "enter", action: "select" }),
-          e(ConfigurableShortcutHint, {
+          jsxProd_default(KeyboardShortcutHint, {
+            chord: ["up", "down"],
+            action: "navigate",
+          }),
+          jsxProd_default(KeyboardShortcutHint, {
+            chord: "enter",
+            action: "select",
+          }),
+          jsxProd_default(ConfigurableShortcutHint, {
             action: "confirm:no",
             context: "Confirmation",
             fallback: "Esc",
             description: currentStepIndex > 0 ? "go back" : "cancel",
           }),
         ],
-      })),
-      ($[6] = currentStepIndex),
-      ($[7] = footerText),
-      ($[8] = pendingExitHint),
-      ($[9] = a));
-  else a = $[9];
+      });
+    $[6] = currentStepIndex;
+    $[7] = footerText;
+    $[8] = pendingExitHint;
+    $[9] = children_2;
+  } else children_2 = $[9];
   let k;
-  if ($[10] !== a)
-    ((k = e(Box, { marginLeft: 2, marginTop: 1, children: e(Text, { dimColor: !0, children: a }) })),
-      ($[10] = a),
-      ($[11] = k));
-  else k = $[11];
-  let B;
-  if ($[12] !== m || $[13] !== k)
-    ((B = r(Fragment, { children: [m, k] })), ($[12] = m), ($[13] = k), ($[14] = B));
-  else B = $[14];
-  return B;
+  if ($[10] !== children_2) {
+    k = jsxProd_default(Box, {
+      marginLeft: 2,
+      marginTop: 1,
+      children: jsxProd_default(Text, {
+        dimColor: true,
+        children: children_2,
+      }),
+    });
+    $[10] = children_2;
+    $[11] = k;
+  } else k = $[11];
+  let t5;
+  if ($[12] !== t3 || $[13] !== k) {
+    t5 = jsxProd_default_2(Fragment, {
+      children: [t3, k],
+    });
+    $[12] = t3;
+    $[13] = k;
+    $[14] = t5;
+  } else t5 = $[14];
+  return t5;
 }
-
 export { WizardDialogLayout };

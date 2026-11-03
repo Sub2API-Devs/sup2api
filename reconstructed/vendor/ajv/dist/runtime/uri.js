@@ -6,14 +6,15 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { so } from "../../../fast-uri/index.js";
+import { require_fast_uri } from "../../../fast-uri/index.js";
 
 //@ chunk-s82q9s4x.js:68634-68784 cjs-fingerprint
-var io = x(function (oo) {
-  Object.defineProperty(oo, "__esModule", { value: !0 });
-  var no = so();
-  no.code = 'require("ajv/dist/runtime/uri").default';
-  oo.default = no;
+var require_uri_2 = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  var uri = require_fast_uri();
+  uri.code = 'require("ajv/dist/runtime/uri").default';
+  cjsExports.default = uri;
 });
-
-export { io };
+export { require_uri_2 };

@@ -17,10 +17,10 @@ import { WINDOWS_PROFILE_FOLDER_NAMES, foldCaseSimple } from "./windowsProfileFo
 //@ chunk-dcmhvw5a.js:426871-426947 fingerprint = execTmux (1)
 function isPosixPlatform() {
   try {
-    let e = getPlatform();
-    return e !== "windows" && e !== "wsl";
+    let platform = getPlatform();
+    return platform !== "windows" && platform !== "wsl";
   } catch {
-    return !1;
+    return false;
   }
 }
 //@ chunk-e2fknt7w.js:20091-20376 file-local
@@ -29,8 +29,8 @@ function getWslWindowsUserDirs(e) {
   return uniq(
     e.flatMap((n) =>
       driveMountsForPath(posix.normalize(n)).flatMap((o) => {
-        let filtered = o.beneath.split("/").filter(Boolean),
-          s = count(o.within.split("/"), Boolean);
+        let filtered = o.beneath.split("/").filter(Boolean);
+        let s = count(o.within.split("/"), Boolean);
         return filtered.length >= 2 && s <= 2 && WINDOWS_PROFILE_FOLDER_NAMES(foldCaseSimple(filtered[0]))
           ? [[o.mountPoint, ...filtered.slice(s, 2)].join("/").replace(/^\/\//, "/")]
           : [];
@@ -38,5 +38,4 @@ function getWslWindowsUserDirs(e) {
     ),
   );
 }
-
 export { isPosixPlatform, getWslWindowsUserDirs };

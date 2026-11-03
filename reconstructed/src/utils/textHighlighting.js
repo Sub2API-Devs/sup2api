@@ -8,27 +8,36 @@
  * pieces: chunk-e6aww6q8.js (3)
  * attribution: callgraph-witnessed 1, file-last-pair 1, fingerprint 1
  */
-import { eQs } from "../../vendor/@alcalzone/ansi-tokenize/build/tokenize.js";
+import { tokenize } from "../../vendor/@alcalzone/ansi-tokenize/build/tokenize.js";
 import { activeAnsiCodes } from "../components/PromptInput/inputDecorations.js";
 import { VEt } from "../../vendor/@alcalzone/ansi-tokenize/build/ansiCodes.js";
-import { U7n } from "../../vendor/@alcalzone/ansi-tokenize/build/undo.js";
+import { undoAnsiCodes } from "../../vendor/@alcalzone/ansi-tokenize/build/undo.js";
 
 //@ chunk-e6aww6q8.js:64385-64477 callgraph-witnessed = segmentTextByHighlights (0.706)
 function segmentTextByHighlights(text, highlights) {
-  if (highlights.length === 0) return [{ text: text, start: 0 }];
+  if (highlights.length === 0)
+    return [
+      {
+        text,
+        start: 0,
+      },
+    ];
   return new HighlightSegmenter(text).segment(reduceCodes(highlights));
 }
 //@ chunk-e6aww6q8.js:64477-64702 file-last-pair
 function reduceCodes(codes) {
-  let sorted = [...codes].sort((h, y) => {
-      if (h.start !== y.start) return h.start - y.start;
-      return y.priority - h.priority;
-    }),
-    r = [],
-    s = -1 / 0;
-  for (let h of sorted) {
-    if (h.start === h.end) continue;
-    if (h.start >= s) (r.push(h), (s = Math.max(s, h.end)));
+  let sortedHighlights = [...codes].sort((h, y) => {
+    if (h.start !== y.start) return h.start - y.start;
+    return y.priority - h.priority;
+  });
+  let r = [];
+  let s = -1 / 0;
+  for (let sortedHighlight of sortedHighlights) {
+    if (sortedHighlight.start === sortedHighlight.end) continue;
+    if (sortedHighlight.start >= s) {
+      r.push(sortedHighlight);
+      s = Math.max(s, sortedHighlight.end);
+    }
   }
   return r;
 }
@@ -41,56 +50,66 @@ class HighlightSegmenter {
   tokenIdx = 0;
   charIdx = 0;
   codes = [];
-  constructor(e) {
-    this.text = e;
-    this.tokens = eQs(e);
+  constructor(text) {
+    this.text = text;
+    this.tokens = tokenize(text);
   }
-  segment(e) {
-    let n = [];
-    for (let s of e) {
-      let segmentTo = this.segmentTo(s.start);
-      if (segmentTo) n.push(segmentTo);
-      let segmentTo_2 = this.segmentTo(s.end);
-      if (segmentTo_2) ((segmentTo_2.highlight = s), n.push(segmentTo_2));
-    }
-    let segmentTo = this.segmentTo(1 / 0);
-    if (segmentTo) n.push(segmentTo);
-    return n;
-  }
-  segmentTo(e) {
-    if (this.tokenIdx >= this.tokens.length || e <= this.visiblePos) return null;
-    let visiblePos = this.visiblePos;
-    while (this.tokenIdx < this.tokens.length) {
-      let L = this.tokens[this.tokenIdx];
-      if (L.type !== "ansi") break;
-      (this.codes.push(L), (this.stringPos += L.code.length), this.tokenIdx++);
-    }
-    let stringPos = this.stringPos,
-      s = [...this.codes];
-    while (this.visiblePos < e && this.tokenIdx < this.tokens.length) {
-      let L = this.tokens[this.tokenIdx];
-      if (L.type === "ansi") (this.codes.push(L), (this.stringPos += L.code.length), this.tokenIdx++);
-      else {
-        let G = e - this.visiblePos,
-          q = L.value.length - this.charIdx,
-          min = Math.min(G, q);
-        if (
-          ((this.stringPos += min),
-          (this.visiblePos += min),
-          (this.charIdx += min),
-          this.charIdx >= L.value.length)
-        )
-          (this.tokenIdx++, (this.charIdx = 0));
+  segment(highlights) {
+    let segments = [];
+    for (let highlight of highlights) {
+      let before = this.segmentTo(highlight.start);
+      if (before) segments.push(before);
+      let highlighted = this.segmentTo(highlight.end);
+      if (highlighted) {
+        highlighted.highlight = highlight;
+        segments.push(highlighted);
       }
     }
-    if (this.stringPos === stringPos) return null;
-    let h = activeAnsiCodes(s),
-      y = activeAnsiCodes(this.codes);
-    this.codes = y;
-    let S = VEt(h),
-      w = VEt(U7n(y));
-    return { text: S + this.text.substring(stringPos, this.stringPos) + w, start: visiblePos };
+    let after = this.segmentTo(1 / 0);
+    if (after) segments.push(after);
+    return segments;
+  }
+  segmentTo(targetVisiblePos) {
+    if (this.tokenIdx >= this.tokens.length || targetVisiblePos <= this.visiblePos) return null;
+    let visibleStart = this.visiblePos;
+    while (this.tokenIdx < this.tokens.length) {
+      let token = this.tokens[this.tokenIdx];
+      if (token.type !== "ansi") break;
+      this.codes.push(token);
+      this.stringPos += token.code.length;
+      this.tokenIdx++;
+    }
+    let stringStart = this.stringPos;
+    let codesStart = [...this.codes];
+    while (this.visiblePos < targetVisiblePos && this.tokenIdx < this.tokens.length) {
+      let token = this.tokens[this.tokenIdx];
+      if (token.type === "ansi") {
+        this.codes.push(token);
+        this.stringPos += token.code.length;
+        this.tokenIdx++;
+      } else {
+        let charsNeeded = targetVisiblePos - this.visiblePos;
+        let charsAvailable = token.value.length - this.charIdx;
+        let charsToTake = Math.min(charsNeeded, charsAvailable);
+        this.stringPos += charsToTake;
+        this.visiblePos += charsToTake;
+        this.charIdx += charsToTake;
+        if (this.charIdx >= token.value.length) {
+          this.tokenIdx++;
+          this.charIdx = 0;
+        }
+      }
+    }
+    if (this.stringPos === stringStart) return null;
+    let prefixCodes = activeAnsiCodes(codesStart);
+    let suffixCodes = activeAnsiCodes(this.codes);
+    this.codes = suffixCodes;
+    let prefix = VEt(prefixCodes);
+    let suffix = VEt(undoAnsiCodes(suffixCodes));
+    return {
+      text: prefix + this.text.substring(stringStart, this.stringPos) + suffix,
+      start: visibleStart,
+    };
   }
 }
-
 export { segmentTextByHighlights, reduceCodes };

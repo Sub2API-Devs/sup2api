@@ -8,8 +8,8 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:491187-491619 cjs-fingerprint
-var No = x(function (cb, To) {
-  function Ym(e) {
+var require_taggerscript = x(function (cjsExports, cjsModule) {
+  function taggerscript(hljs) {
     return {
       name: "Tagger Script",
       contains: [
@@ -18,19 +18,41 @@ var No = x(function (cb, To) {
           begin: /\$noop\(/,
           end: /\)/,
           contains: [
-            { begin: /\\[()]/ },
-            { begin: /\(/, end: /\)/, contains: [{ begin: /\\[()]/ }, "self"] },
+            {
+              begin: /\\[()]/,
+            },
+            {
+              begin: /\(/,
+              end: /\)/,
+              contains: [
+                {
+                  begin: /\\[()]/,
+                },
+                "self",
+              ],
+            },
           ],
           relevance: 10,
         },
-        { className: "keyword", begin: /\$[_a-zA-Z0-9]+(?=\()/ },
-        { className: "variable", begin: /%[_a-zA-Z0-9:]+%/ },
-        { className: "symbol", begin: /\\[\\nt$%,()]/ },
-        { className: "symbol", begin: /\\u[a-fA-F0-9]{4}/ },
+        {
+          className: "keyword",
+          begin: /\$[_a-zA-Z0-9]+(?=\()/,
+        },
+        {
+          className: "variable",
+          begin: /%[_a-zA-Z0-9:]+%/,
+        },
+        {
+          className: "symbol",
+          begin: /\\[\\nt$%,()]/,
+        },
+        {
+          className: "symbol",
+          begin: /\\u[a-fA-F0-9]{4}/,
+        },
       ],
     };
   }
-  To.exports = Ym;
+  cjsModule.exports = taggerscript;
 });
-
-export { No };
+export { require_taggerscript };

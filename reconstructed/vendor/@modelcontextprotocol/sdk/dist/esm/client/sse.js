@@ -6,103 +6,116 @@
  * attribution: esm-fingerprint 2
  */
 import { createFetchWithDefaults, headersToObject } from "../../../../../../src/utils/fetchWithDefaults.js";
-import { AM, Aue, NHe } from "./auth.js";
-import { hZe } from "../../../../../eventsource/dist/index.js";
+import { UnauthorizedError, auth, extractWWWAuthenticateParams } from "./auth.js";
+import { EventSource } from "../../../../../eventsource/dist/index.js";
 import { JSONRPCMessageSchema } from "../types.js";
 
 //@ chunk-z1n5m6nf.js:28313-28406 esm-fingerprint
-class Mt extends Error {
-  constructor(e, r, n) {
-    super(`SSE error: ${r}`);
-    ((this.code = e), (this.event = n));
+class SseError extends Error {
+  constructor(code, message, event) {
+    super(`SSE error: ${message}`);
+    this.code = code;
+    this.event = event;
   }
 }
 //@ chunk-z1n5m6nf.js:28406-31818 esm-fingerprint
-class _t {
-  constructor(e, r) {
-    ((this._url = e),
-      (this._resourceMetadataUrl = void 0),
-      (this._scope = void 0),
-      (this._eventSourceInit = r?.eventSourceInit),
-      (this._requestInit = r?.requestInit),
-      (this._authProvider = r?.authProvider),
-      (this._fetch = r?.fetch),
-      (this._fetchWithInit = createFetchWithDefaults(r?.fetch, r?.requestInit)));
+class SSEClientTransport {
+  constructor(url, opts) {
+    this._url = url;
+    this._resourceMetadataUrl = undefined;
+    this._scope = undefined;
+    this._eventSourceInit = opts?.eventSourceInit;
+    this._requestInit = opts?.requestInit;
+    this._authProvider = opts?.authProvider;
+    this._fetch = opts?.fetch;
+    this._fetchWithInit = createFetchWithDefaults(opts?.fetch, opts?.requestInit);
   }
   async _authThenStart() {
-    if (!this._authProvider) throw new AM("No auth provider");
-    let e;
+    if (!this._authProvider) throw new UnauthorizedError("No auth provider");
+    let result;
     try {
-      e = await Aue(this._authProvider, {
+      result = await auth(this._authProvider, {
         serverUrl: this._url,
         resourceMetadataUrl: this._resourceMetadataUrl,
         scope: this._scope,
         fetchFn: this._fetchWithInit,
       });
     } catch (error) {
-      throw (this.onerror?.(error), error);
+      this.onerror?.(error);
+      throw error;
     }
-    if (e !== "AUTHORIZED") throw new AM();
+    if (result !== "AUTHORIZED") throw new UnauthorizedError();
     return await this._startOrAuth();
   }
   async _commonHeaders() {
-    let e = {};
+    let headers = {};
     if (this._authProvider) {
       let tokens = await this._authProvider.tokens();
-      if (tokens) e.Authorization = `Bearer ${tokens.access_token}`;
+      if (tokens) headers.Authorization = `Bearer ${tokens.access_token}`;
     }
-    if (this._protocolVersion) e["mcp-protocol-version"] = this._protocolVersion;
-    let r = headersToObject(this._requestInit?.headers);
-    return new Headers({ ...e, ...r });
+    if (this._protocolVersion) headers["mcp-protocol-version"] = this._protocolVersion;
+    let extraHeaders = headersToObject(this._requestInit?.headers);
+    return new Headers({
+      ...headers,
+      ...extraHeaders,
+    });
   }
   _startOrAuth() {
-    let e = this?._eventSourceInit?.fetch ?? this._fetch ?? fetch;
-    return new Promise((r, n) => {
-      ((this._eventSource = new hZe(this._url.href, {
+    let fetchImpl = this?._eventSourceInit?.fetch ?? this._fetch ?? fetch;
+    return new Promise((resolve, reject) => {
+      this._eventSource = new EventSource(this._url.href, {
         ...this._eventSourceInit,
-        fetch: async (s, h) => {
-          let _commonHeaders = await this._commonHeaders();
-          _commonHeaders.set("Accept", "text/event-stream");
-          let S = await e(s, { ...h, headers: _commonHeaders });
-          if (S.status === 401 && S.headers.has("www-authenticate")) {
-            let { resourceMetadataUrl: resourceMetadataUrl, scope: scope } = NHe(S);
-            ((this._resourceMetadataUrl = resourceMetadataUrl), (this._scope = scope));
+        fetch: async (url, init) => {
+          let headers = await this._commonHeaders();
+          headers.set("Accept", "text/event-stream");
+          let response = await fetchImpl(url, {
+            ...init,
+            headers,
+          });
+          if (response.status === 401 && response.headers.has("www-authenticate")) {
+            let { resourceMetadataUrl, scope } = extractWWWAuthenticateParams(response);
+            this._resourceMetadataUrl = resourceMetadataUrl;
+            this._scope = scope;
           }
-          return S;
+          return response;
         },
-      })),
-        (this._abortController = new AbortController()),
-        (this._eventSource.onerror = (s) => {
-          if (s.code === 401 && this._authProvider) {
-            this._authThenStart().then(r, n);
-            return;
-          }
-          let h = new Mt(s.code, s.message, s);
-          (n(h), this.onerror?.(h));
-        }),
-        (this._eventSource.onopen = () => {}),
-        this._eventSource.addEventListener("endpoint", (s) => {
-          let h = s;
-          try {
-            if (((this._endpoint = new URL(h.data, this._url)), this._endpoint.origin !== this._url.origin))
-              throw Error(`Endpoint origin does not match connection origin: ${this._endpoint.origin}`);
-          } catch (error) {
-            (n(error), this.onerror?.(error), this.close());
-            return;
-          }
-          r();
-        }),
-        (this._eventSource.onmessage = (s) => {
-          let h = s,
-            y;
-          try {
-            y = JSONRPCMessageSchema.parse(JSON.parse(h.data));
-          } catch (error) {
-            this.onerror?.(error);
-            return;
-          }
-          this.onmessage?.(y);
-        }));
+      });
+      this._abortController = new AbortController();
+      this._eventSource.onerror = (event) => {
+        if (event.code === 401 && this._authProvider) {
+          this._authThenStart().then(resolve, reject);
+          return;
+        }
+        let error = new SseError(event.code, event.message, event);
+        reject(error);
+        this.onerror?.(error);
+      };
+      this._eventSource.onopen = () => {};
+      this._eventSource.addEventListener("endpoint", (event) => {
+        let messageEvent = event;
+        try {
+          this._endpoint = new URL(messageEvent.data, this._url);
+          if (this._endpoint.origin !== this._url.origin)
+            throw Error(`Endpoint origin does not match connection origin: ${this._endpoint.origin}`);
+        } catch (error) {
+          reject(error);
+          this.onerror?.(error);
+          this.close();
+          return;
+        }
+        resolve();
+      });
+      this._eventSource.onmessage = (event) => {
+        let messageEvent = event;
+        let message;
+        try {
+          message = JSONRPCMessageSchema.parse(JSON.parse(messageEvent.data));
+        } catch (error) {
+          this.onerror?.(error);
+          return;
+        }
+        this.onmessage?.(message);
+      };
     });
   }
   async start() {
@@ -112,62 +125,64 @@ class _t {
       );
     return await this._startOrAuth();
   }
-  async finishAuth(e) {
-    if (!this._authProvider) throw new AM("No auth provider");
+  async finishAuth(authorizationCode) {
+    if (!this._authProvider) throw new UnauthorizedError("No auth provider");
     if (
-      (await Aue(this._authProvider, {
+      (await auth(this._authProvider, {
         serverUrl: this._url,
-        authorizationCode: e,
+        authorizationCode,
         resourceMetadataUrl: this._resourceMetadataUrl,
         scope: this._scope,
         fetchFn: this._fetchWithInit,
       })) !== "AUTHORIZED"
     )
-      throw new AM("Failed to authorize");
+      throw new UnauthorizedError("Failed to authorize");
   }
   async close() {
-    (this._abortController?.abort(), this._eventSource?.close(), this.onclose?.());
+    this._abortController?.abort();
+    this._eventSource?.close();
+    this.onclose?.();
   }
-  async send(e) {
+  async send(message) {
     if (!this._endpoint) throw Error("Not connected");
     try {
-      let _commonHeaders = await this._commonHeaders();
-      _commonHeaders.set("content-type", "application/json");
-      let n = {
-          ...this._requestInit,
-          method: "POST",
-          headers: _commonHeaders,
-          body: JSON.stringify(e),
-          signal: this._abortController?.signal,
-        },
-        s = await (this._fetch ?? fetch)(this._endpoint, n);
-      if (!s.ok) {
-        let h = await s.text().catch(() => null);
-        if (s.status === 401 && this._authProvider) {
-          let { resourceMetadataUrl: resourceMetadataUrl, scope: scope } = NHe(s);
+      let headers = await this._commonHeaders();
+      headers.set("content-type", "application/json");
+      let init = {
+        ...this._requestInit,
+        method: "POST",
+        headers,
+        body: JSON.stringify(message),
+        signal: this._abortController?.signal,
+      };
+      let response = await (this._fetch ?? fetch)(this._endpoint, init);
+      if (!response.ok) {
+        let text = await response.text().catch(() => null);
+        if (response.status === 401 && this._authProvider) {
+          let { resourceMetadataUrl, scope } = extractWWWAuthenticateParams(response);
+          this._resourceMetadataUrl = resourceMetadataUrl;
+          this._scope = scope;
           if (
-            ((this._resourceMetadataUrl = resourceMetadataUrl),
-            (this._scope = scope),
-            (await Aue(this._authProvider, {
+            (await auth(this._authProvider, {
               serverUrl: this._url,
               resourceMetadataUrl: this._resourceMetadataUrl,
               scope: this._scope,
               fetchFn: this._fetchWithInit,
-            })) !== "AUTHORIZED")
+            })) !== "AUTHORIZED"
           )
-            throw new AM();
-          return this.send(e);
+            throw new UnauthorizedError();
+          return this.send(message);
         }
-        throw Error(`Error POSTing to endpoint (HTTP ${s.status}): ${h}`);
+        throw Error(`Error POSTing to endpoint (HTTP ${response.status}): ${text}`);
       }
-      await s.body?.cancel();
+      await response.body?.cancel();
     } catch (error) {
-      throw (this.onerror?.(error), error);
+      this.onerror?.(error);
+      throw error;
     }
   }
-  setProtocolVersion(e) {
-    this._protocolVersion = e;
+  setProtocolVersion(version) {
+    this._protocolVersion = version;
   }
 }
-
-export { _t, Mt };
+export { SSEClientTransport, SseError };

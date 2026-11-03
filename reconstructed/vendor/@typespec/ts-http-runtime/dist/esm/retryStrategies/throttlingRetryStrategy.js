@@ -5,41 +5,46 @@
  * pieces: chunk-mrx6y2r5.js (4)
  * attribution: esm-fingerprint 4
  */
-import { Tl } from "../util/helpers.js";
+import { parseHeaderValueAsNumber } from "../util/helpers.js";
 
 //@ chunk-mrx6y2r5.js:43991-44059 esm-fingerprint
-var RETRY_AFTER = "Retry-After",
-  Um = ["retry-after-ms", "x-ms-retry-after-ms", RETRY_AFTER];
+var RetryAfterHeader = "Retry-After";
+var AllRetryAfterHeaders = ["retry-after-ms", "x-ms-retry-after-ms", RetryAfterHeader];
 //@ chunk-mrx6y2r5.js:44059-44323 esm-fingerprint
-function El(e) {
-  if (!(e && [429, 503].includes(e.status))) return;
+function getRetryAfterInMs(response) {
+  if (!(response && [429, 503].includes(response.status))) return;
   try {
-    for (let o of Um) {
-      let i = Tl(e, o);
-      if (i === 0 || i) return i * (o === RETRY_AFTER ? 1000 : 1);
+    for (let header of AllRetryAfterHeaders) {
+      let retryAfterValue = parseHeaderValueAsNumber(response, header);
+      if (retryAfterValue === 0 || retryAfterValue)
+        return retryAfterValue * (header === RetryAfterHeader ? 1000 : 1);
     }
-    let t = e.headers.get(RETRY_AFTER);
-    if (!t) return;
-    let n = Date.parse(t) - Date.now();
-    return Number.isFinite(n) ? Math.max(0, n) : void 0;
-  } catch (error) {
+    let retryAfterHeader = response.headers.get(RetryAfterHeader);
+    if (!retryAfterHeader) return;
+    let diff = Date.parse(retryAfterHeader) - Date.now();
+    return Number.isFinite(diff) ? Math.max(0, diff) : undefined;
+  } catch (_a) {
     return;
   }
 }
 //@ chunk-mrx6y2r5.js:44323-44368 esm-fingerprint
-function Cl(e) {
-  return Number.isFinite(El(e));
+function isThrottlingRetryResponse(response) {
+  return Number.isFinite(getRetryAfterInMs(response));
 }
 //@ chunk-mrx6y2r5.js:44368-44526 esm-fingerprint
-function Al() {
+function throttlingRetryStrategy() {
   return {
     name: "throttlingRetryStrategy",
-    retry({ response: e }) {
-      let t = El(e);
-      if (!Number.isFinite(t)) return { skipStrategy: !0 };
-      return { retryAfterInMs: t };
+    retry({ response }) {
+      let retryAfterInMs = getRetryAfterInMs(response);
+      if (!Number.isFinite(retryAfterInMs))
+        return {
+          skipStrategy: true,
+        };
+      return {
+        retryAfterInMs,
+      };
     },
   };
 }
-
-export { Cl, Al };
+export { isThrottlingRetryResponse, throttlingRetryStrategy };

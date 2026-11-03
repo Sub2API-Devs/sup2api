@@ -8,15 +8,15 @@
  * pieces: chunk-z1n5m6nf.js (16)
  * attribution: placement 16
  */
-import { z2, HPe } from "./mcpCallConstants.js";
+import { MAX_STRUCTURED_RESULT_BYTES, sanitizeCallMark } from "./mcpCallConstants.js";
 import { mcpInboundDoorOnFetch } from "./mcpInboundDoor.js";
 import { alwaysTrue } from "../../utils/slowOperations.js";
-import { Bpe } from "../../utils/jsonScan.js";
-import { $Ao } from "../../../vendor/@modelcontextprotocol/sdk/dist/esm/shared/stdio.js";
-import { to } from "../../../vendor/@modelcontextprotocol/sdk/dist/esm/client/stdio.js";
-import { assertNotShuttingDown, gBt } from "./connectionLifecycle.js";
+import { sliceTopLevelValues } from "../../utils/jsonScan.js";
+import { deserializeMessage } from "../../../vendor/@modelcontextprotocol/sdk/dist/esm/shared/stdio.js";
+import { StdioClientTransport } from "../../../vendor/@modelcontextprotocol/sdk/dist/esm/client/stdio.js";
+import { assertNotShuttingDown, trackOrphanStdioServer } from "./connectionLifecycle.js";
 import { logForDebugging } from "../../utils/debug.js";
-import { NSn } from "./mcpClientCapabilities.js";
+import { isStatelessSkipInitEnabled } from "./mcpClientCapabilities.js";
 import {
   InitializeResultSchema,
   SUPPORTED_PROTOCOL_VERSIONS,
@@ -25,22 +25,22 @@ import {
   isJSONRPCNotification,
 } from "../../../vendor/@modelcontextprotocol/sdk/dist/esm/types.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { kt, A, o } from "../../../vendor/zod/v4/classic/schemas.js";
+import { looseObject, array, string } from "../../../vendor/zod/v4/classic/schemas.js";
 
-/**
- * HTTP 正文上限与编码表
- */
 //@ chunk-z1n5m6nf.js:34302-34474 placement
-var HTTP_BODY_LIMITS = z2,
-  $r = 4 * HTTP_BODY_LIMITS,
-  Br = /^\s*text\/event-stream\s*(?:;|$)/i,
-  Hr = 32,
-  jr = new Map([
-    ["gzip", "gzip"],
-    ["x-gzip", "gzip"],
-    ["deflate", "deflate"],
-  ]),
-  oo = "so Claude Code stopped reading it";
+/**
+ * 超出上限时的说明。
+ */
+var HTTP_BODY_LIMITS = MAX_STRUCTURED_RESULT_BYTES;
+var MAX_DECOMPRESSED_BODY_BYTES = 4 * HTTP_BODY_LIMITS;
+var SSE_CONTENT_TYPE_RE = /^\s*text\/event-stream\s*(?:;|$)/i;
+var MIN_LINE_CHARS = 32;
+var COMPRESSION_ALIASES = new Map([
+  ["gzip", "gzip"],
+  ["x-gzip", "gzip"],
+  ["deflate", "deflate"],
+]);
+var STOPPED_READING_NOTE_2 = "so Claude Code stopped reading it";
 //@ chunk-z1n5m6nf.js:34474-34759 placement
 class HttpBodyOverflowError_2 extends Error {
   constructor(e, r) {
@@ -48,27 +48,31 @@ class HttpBodyOverflowError_2 extends Error {
     super(
       (r === "event"
         ? `sent more than ${rounded}MB in one event of an event stream (no blank line ended it)`
-        : `sent a response larger than ${rounded}MB (counted after decompression)`) + `, ${oo}.`,
+        : `sent a response larger than ${rounded}MB (counted after decompression)`) +
+        `, ${STOPPED_READING_NOTE_2}.`,
     );
     this.name = "HttpBodyOverflowError";
   }
 }
+//@ chunk-z1n5m6nf.js:34759-35428 placement
 /**
  * 限制正文大小并让出事件循环的流
  */
-//@ chunk-z1n5m6nf.js:34759-35428 placement
 function boundedBodyStream(e, r) {
-  let n = 0,
-    s = 0,
-    h = r <= e,
-    y = 0,
-    S = !1,
-    startTime = performance.now();
+  let n = 0;
+  let s = 0;
+  let h = r <= e;
+  let y = 0;
+  let S = false;
+  let startTime = performance.now();
   return new TransformStream({
     async transform(M, w) {
-      if (performance.now() - startTime > 8)
-        (await new Promise((U) => setImmediate(U)), (startTime = performance.now()));
-      if (((n += M.length), n > r)) {
+      if (performance.now() - startTime > 8) {
+        await new Promise((resolve) => setImmediate(resolve));
+        startTime = performance.now();
+      }
+      n += M.length;
+      if (n > r) {
         w.error(new HttpBodyOverflowError_2(r, "body"));
         return;
       }
@@ -76,29 +80,40 @@ function boundedBodyStream(e, r) {
         w.enqueue(M);
         return;
       }
-      let R = -1,
-        { length: E } = M,
-        Q = -1,
-        H = -1;
-      for (let U = 0; U < E; U++) {
-        let re = M[U];
+      let R = -1;
+      let { length: E } = M;
+      let Q = -1;
+      let H = -1;
+      for (let j = 0; j < E; j++) {
+        let re = M[j];
         if (S && re === 10) {
-          S = !1;
+          S = false;
           continue;
         }
-        if (((S = !1), re === 10 || re === 13)) {
-          if (y === 0) R = U;
-          ((y = 0), (S = re === 13));
+        S = false;
+        if (re === 10 || re === 13) {
+          if (y === 0) R = j;
+          y = 0;
+          S = re === 13;
           continue;
         }
-        if ((y++, y < Hr)) continue;
-        let he = U + 1;
-        if (Q < he) ((Q = M.indexOf(10, he)), (Q = Q === -1 ? E : Q));
-        if (H < he) ((H = M.indexOf(13, he)), (H = H === -1 ? E : H));
+        y++;
+        if (y < MIN_LINE_CHARS) continue;
+        let he = j + 1;
+        if (Q < he) {
+          Q = M.indexOf(10, he);
+          Q = Q === -1 ? E : Q;
+        }
+        if (H < he) {
+          H = M.indexOf(13, he);
+          H = H === -1 ? E : H;
+        }
         let min = Math.min(Q, H);
-        ((y += min - he), (U = min - 1));
+        y += min - he;
+        j = min - 1;
       }
-      if (((s = R >= 0 ? M.length - 1 - R : s + M.length), s > e)) {
+      s = R >= 0 ? M.length - 1 - R : s + M.length;
+      if (s > e) {
         w.error(new HttpBodyOverflowError_2(e, "event"));
         return;
       }
@@ -106,167 +121,190 @@ function boundedBodyStream(e, r) {
     },
   });
 }
+//@ chunk-z1n5m6nf.js:35428-37449 placement
 /**
  * 限制响应大小与编码的 fetch 包装
  */
-//@ chunk-z1n5m6nf.js:35428-37449 placement
-function boundedFetch(e, { refusesCodings: r = !1 } = {}) {
+function boundedFetch(e, { refusesCodings: r = false } = {}) {
   let n = mcpInboundDoorOnFetch();
   return async (s, h) => {
     n?.noteRequests(h?.body);
-    let upper = (h?.method ?? "GET").toUpperCase(),
-      S = n !== void 0 && alwaysTrue() && typeof DecompressionStream < "u",
-      T = await e(s, { ...h, ...(S && { decompress: !1 }) });
+    let upper = (h?.method ?? "GET").toUpperCase();
+    let S = n !== undefined && alwaysTrue() && typeof DecompressionStream !== "undefined";
+    let T = await e(s, {
+      ...h,
+      ...(S && {
+        decompress: false,
+      }),
+    });
     if (!T.body || T.body.locked) return T;
-    let M = h?.body;
+    let body = h?.body;
     if (
       upper === "POST" &&
-      typeof M === "string" &&
-      M.includes('"jsonrpc"') &&
-      (T.status === 202 || (T.ok && isJsonRpcRequestOrNotification(M)))
-    )
-      return (
-        await T.body.cancel().catch(() => {}),
-        new Response(null, { status: T.status, statusText: T.statusText, headers: T.headers })
-      );
+      typeof body === "string" &&
+      body.includes('"jsonrpc"') &&
+      (T.status === 202 || (T.ok && isJsonRpcRequestOrNotification(body)))
+    ) {
+      await T.body.cancel().catch(() => {});
+      return new Response(null, {
+        status: T.status,
+        statusText: T.statusText,
+        headers: T.headers,
+      });
+    }
     let [w, ...R] = (T.headers.get("content-encoding") ?? "")
       .toLowerCase()
       .split(",")
       .map((ge) => ge.trim())
       .filter((ge) => ge !== "" && ge !== "identity");
-    if (r && w !== void 0)
-      throw (
-        await T.body.cancel(),
-        Error(
-          "sent a response with a Content-Encoding. Claude Code reads none from a tool container, so it did not read the response.",
-        )
+    if (r && w !== undefined) {
+      await T.body.cancel();
+      throw Error(
+        "sent a response with a Content-Encoding. Claude Code reads none from a tool container, so it did not read the response.",
       );
+    }
     let E = S && T.headers.get("content-length") !== "0";
-    if (E && (w === "br" || w === "zstd"))
-      throw (
-        await T.body.cancel(),
-        Error(
-          "sent a response compressed with br or zstd. Claude Code reads only gzip and deflate, so it did not read the response.",
-        )
+    if (E && (w === "br" || w === "zstd")) {
+      await T.body.cancel();
+      throw Error(
+        "sent a response compressed with br or zstd. Claude Code reads only gzip and deflate, so it did not read the response.",
       );
-    let Q = E && w !== void 0 && R.length === 0 ? jr.get(w) : void 0,
-      H = Q ? T.body.pipeThrough(new DecompressionStream(Q)) : T.body,
-      U = HTTP_BODY_LIMITS,
-      headers = new Headers(h?.headers);
+    }
+    let Q = E && w !== undefined && R.length === 0 ? COMPRESSION_ALIASES.get(w) : undefined;
+    let H = Q ? T.body.pipeThrough(new DecompressionStream(Q)) : T.body;
+    let U = HTTP_BODY_LIMITS;
+    let headers = new Headers(h?.headers);
     if (
       T.ok &&
-      Br.test(T.headers.get("content-type") ?? "") &&
+      SSE_CONTENT_TYPE_RE.test(T.headers.get("content-type") ?? "") &&
       headers.get("accept")?.includes("text/event-stream")
     )
       U =
         T.status === 200 &&
-        (n === void 0 || w === void 0) &&
+        (n === undefined || w === undefined) &&
         (upper === "GET" || headers.get("mcp-method") === "subscriptions/listen")
           ? 1 / 0
-          : $r;
-    let pipeThrough = H.pipeThrough(boundedBodyStream(HTTP_BODY_LIMITS, U)),
-      G = n?.judging({
-        url: String(s),
-        isGet: upper === "GET",
-        ok: T.ok,
-        contentType: T.headers.get("content-type"),
-      }),
-      q = G ? pipeThrough.pipeThrough(G.through) : pipeThrough,
-      { headers: headers_2 } = T;
-    if (G?.contentType !== void 0)
-      ((headers_2 = new Headers(headers_2)), headers_2.set("content-type", G.contentType));
-    let fe = T.status >= 200 && T.status <= 599,
-      response = new Response(q, {
-        status: fe ? T.status : 200,
-        statusText: T.statusText,
-        headers: headers_2,
+          : MAX_DECOMPRESSED_BODY_BYTES;
+    let he = H.pipeThrough(boundedBodyStream(HTTP_BODY_LIMITS, U));
+    let G = n?.judging({
+      url: String(s),
+      isGet: upper === "GET",
+      ok: T.ok,
+      contentType: T.headers.get("content-type"),
+    });
+    let q = G ? he.pipeThrough(G.through) : he;
+    let { headers: headers_2 } = T;
+    if (G?.contentType !== undefined) {
+      headers_2 = new Headers(headers_2);
+      headers_2.set("content-type", G.contentType);
+    }
+    let fe = T.status >= 200 && T.status <= 599;
+    let response = new Response(q, {
+      status: fe ? T.status : 200,
+      statusText: T.statusText,
+      headers: headers_2,
+    });
+    if (!fe) {
+      Object.defineProperty(response, "status", {
+        value: T.status,
       });
-    if (!fe)
-      (Object.defineProperty(response, "status", { value: T.status }),
-        Object.defineProperty(response, "ok", { value: T.ok }));
-    return (
-      Object.defineProperty(response, "url", { value: T.url }),
-      Object.defineProperty(response, "redirected", { value: T.redirected }),
-      Object.defineProperty(response, "type", { value: T.type }),
-      response
-    );
+      Object.defineProperty(response, "ok", {
+        value: T.ok,
+      });
+    }
+    Object.defineProperty(response, "url", {
+      value: T.url,
+    });
+    Object.defineProperty(response, "redirected", {
+      value: T.redirected,
+    });
+    Object.defineProperty(response, "type", {
+      value: T.type,
+    });
+    return response;
   };
 }
 //@ chunk-z1n5m6nf.js:37449-37491 placement
 var JSONRPC_ENVELOPE_KEYS = new Set(["jsonrpc", "id", "method"]);
+//@ chunk-z1n5m6nf.js:37491-37645 placement
 /**
  * 文本是否为 JSON-RPC 请求或通知
  */
-//@ chunk-z1n5m6nf.js:37491-37645 placement
-function isJsonRpcRequestOrNotification(e) {
-  if (e.includes('"id":') && e.includes('"method":')) return !1;
-  let r = Bpe(e, JSONRPC_ENVELOPE_KEYS);
+function isJsonRpcRequestOrNotification(body) {
+  if (body.includes('"id":') && body.includes('"method":')) return false;
+  let r = sliceTopLevelValues(body, JSONRPC_ENVELOPE_KEYS);
   return r?.get("jsonrpc") === '"2.0"' && r.has("method") !== r.has("id");
 }
 //@ chunk-z1n5m6nf.js:37645-37948 placement
 class StdoutOverflowError_2 extends Error {
-  constructor(e) {
+  constructor(capBytes) {
     super(
-      `wrote >${Math.round(e / 1024 / 1024)}MB to stdout without a JSON-RPC message boundary. The server is likely writing logs or other non-protocol data to stdout instead of stderr. Disconnecting to prevent unbounded memory growth.`,
+      `wrote >${Math.round(capBytes / 1024 / 1024)}MB to stdout without a JSON-RPC message boundary. The server is likely writing logs or other non-protocol data to stdout instead of stderr. Disconnecting to prevent unbounded memory growth.`,
     );
     this.name = "StdoutOverflowError";
   }
 }
+//@ chunk-z1n5m6nf.js:37948-38779 placement
 /**
  * 有上限的读缓冲
  */
-//@ chunk-z1n5m6nf.js:37948-38779 placement
 class BoundedReadBuffer {
   capBytes;
   onOverflow;
   chunks = [];
   byteLength = 0;
-  overflowed = !1;
-  overflowThrown = !1;
-  constructor(e, r) {
-    this.capBytes = e;
-    this.onOverflow = r;
+  overflowed = false;
+  overflowThrown = false;
+  constructor(capBytes, onOverflow) {
+    this.capBytes = capBytes;
+    this.onOverflow = onOverflow;
   }
   append(e) {
     if (this.overflowed) return;
     if (this.byteLength + e.length > this.capBytes) {
-      ((this.chunks = []),
-        (this.byteLength = 0),
-        (this.overflowed = !0),
-        this.onOverflow(new StdoutOverflowError_2(this.capBytes)));
+      this.chunks = [];
+      this.byteLength = 0;
+      this.overflowed = true;
+      this.onOverflow(new StdoutOverflowError_2(this.capBytes));
       return;
     }
-    (this.chunks.push(e), (this.byteLength += e.length));
+    this.chunks.push(e);
+    this.byteLength += e.length;
   }
   readMessage() {
     if (this.overflowed) {
       if (this.overflowThrown) return null;
-      throw ((this.overflowThrown = !0), new StdoutOverflowError_2(this.capBytes));
+      this.overflowThrown = true;
+      throw new StdoutOverflowError_2(this.capBytes);
     }
     if (this.chunks.length === 0) return null;
-    let at = this.chunks.at(-1),
-      index = at.indexOf(10);
+    let last = this.chunks.at(-1);
+    let index = last.indexOf(10);
     if (index === -1) return null;
-    let n = this.chunks.length === 1 ? at : Buffer.concat(this.chunks),
-      s = n.length - at.length + index,
-      replaced = n.toString("utf8", 0, s).replace(/\r$/, ""),
-      chunk = n.subarray(s + 1);
-    return ((this.chunks = chunk.length > 0 ? [chunk] : []), (this.byteLength = chunk.length), $Ao(replaced));
+    let n = this.chunks.length === 1 ? last : Buffer.concat(this.chunks);
+    let s = n.length - last.length + index;
+    let line = n.toString("utf8", 0, s).replace(/\r$/, "");
+    let chunk = n.subarray(s + 1);
+    this.chunks = chunk.length > 0 ? [chunk] : [];
+    this.byteLength = chunk.length;
+    return deserializeMessage(line);
   }
   clear() {
-    ((this.chunks = []), (this.byteLength = 0));
+    this.chunks = [];
+    this.byteLength = 0;
   }
 }
+//@ chunk-z1n5m6nf.js:38779-39544 placement
 /**
  * 限制输出大小的 stdio 传输
  */
-//@ chunk-z1n5m6nf.js:38779-39544 placement
-class BoundedStdioTransport extends to {
+class BoundedStdioTransport extends StdioClientTransport {
   overflowError;
   constructor(e) {
     super(e);
-    this._readBuffer = new BoundedReadBuffer(z2, (r) => {
-      ((this.overflowError = r), queueMicrotask(() => void this.close()));
+    this._readBuffer = new BoundedReadBuffer(MAX_STRUCTURED_RESULT_BYTES, (overflowError) => {
+      this.overflowError = overflowError;
+      queueMicrotask(() => void this.close());
     });
   }
   get serverProcess() {
@@ -275,18 +313,20 @@ class BoundedStdioTransport extends to {
   #e;
   async start() {
     assertNotShuttingDown();
-    let e = this.serverProcess !== void 0,
-      start = super.start(),
-      serverProcess = this.serverProcess;
-    if (!e && serverProcess?.pid !== void 0) this.#e = gBt(serverProcess);
-    if ((await start, !e && serverProcess === void 0)) this.#t(this.serverProcess);
+    let e = this.serverProcess !== undefined;
+    let r = super.start();
+    let serverProcess = this.serverProcess;
+    if (!e && serverProcess?.pid !== undefined) this.#e = trackOrphanStdioServer(serverProcess);
+    await r;
+    if (!e && serverProcess === undefined) this.#t(this.serverProcess);
   }
   handOffExitCleanup() {
-    (this.#e?.(), (this.#e = void 0));
+    this.#e?.();
+    this.#e = undefined;
   }
   #t(e) {
-    if (e?.pid !== void 0) {
-      this.#e = gBt(e);
+    if (e?.pid !== undefined) {
+      this.#e = trackOrphanStdioServer(e);
       return;
     }
     if (this.pid !== null)
@@ -297,64 +337,73 @@ class BoundedStdioTransport extends to {
   }
 }
 //@ chunk-z1n5m6nf.js:39544-39617 placement
-function isStatelessClaudeAiProxy_2(e) {
-  return e.type === "claudeai-proxy" && e.stateless === !0 && NSn();
+function isStatelessClaudeAiProxy_2(serverRef) {
+  return serverRef.type === "claudeai-proxy" && serverRef.stateless === true && isStatelessSkipInitEnabled();
 }
 //@ chunk-z1n5m6nf.js:39617-40126 placement
-function getCachedInitializeResult_2(e) {
-  if (!isStatelessClaudeAiProxy_2(e) || e.type !== "claudeai-proxy") return;
-  if (e.cachedInitResponse == null) return;
-  let safeParse = InitializeResultSchema.safeParse(e.cachedInitResponse);
-  if (!safeParse.success) {
+function getCachedInitializeResult_2(serverRef) {
+  if (!isStatelessClaudeAiProxy_2(serverRef) || serverRef.type !== "claudeai-proxy") return;
+  if (serverRef.cachedInitResponse == null) return;
+  let r = InitializeResultSchema.safeParse(serverRef.cachedInitResponse);
+  if (!r.success) {
     logForDebugging(
-      `[claudeai-mcp] cached_init_response for ${e.id} failed InitializeResult validation \u2014 falling back to real initialize`,
+      `[claudeai-mcp] cached_init_response for ${serverRef.id} failed InitializeResult validation \u2014 falling back to real initialize`,
     );
     return;
   }
-  if (!SUPPORTED_PROTOCOL_VERSIONS.includes(safeParse.data.protocolVersion)) {
+  if (!SUPPORTED_PROTOCOL_VERSIONS.includes(r.data.protocolVersion)) {
     logForDebugging(
-      `[claudeai-mcp] cached_init_response for ${e.id} carries unsupported protocolVersion ${HPe(safeParse.data.protocolVersion)} \u2014 falling back to real initialize`,
+      `[claudeai-mcp] cached_init_response for ${serverRef.id} carries unsupported protocolVersion ${sanitizeCallMark(r.data.protocolVersion)} \u2014 falling back to real initialize`,
     );
     return;
   }
-  return safeParse.data;
+  return r.data;
 }
 //@ chunk-z1n5m6nf.js:40126-40240 placement
 var discoverResponseSchema = DoctorLazy(() =>
-  kt({
-    supportedVersions: A(o()),
-    capabilities: kt({}),
-    serverInfo: kt({ name: o(), version: o() }).optional(),
+  looseObject({
+    supportedVersions: array(string()),
+    capabilities: looseObject({}),
+    serverInfo: looseObject({
+      name: string(),
+      version: string(),
+    }).optional(),
   }),
 );
+//@ chunk-z1n5m6nf.js:40240-40660 placement
 /**
  * claude.ai 代理的缓存 discover 结果
  */
-//@ chunk-z1n5m6nf.js:40240-40660 placement
-function cachedDiscoverOutcome(e) {
-  if (!isStatelessClaudeAiProxy_2(e) || e.type !== "claudeai-proxy") return;
-  if (e.discoverSupport === "legacy") return "method-not-found";
-  if (e.discoverSupport !== "supported") return;
-  if (e.cachedDiscoverResponse == null) return;
-  let safeParse = discoverResponseSchema().safeParse(e.cachedDiscoverResponse);
-  if (!safeParse.success) {
+function cachedDiscoverOutcome(serverRef) {
+  if (!isStatelessClaudeAiProxy_2(serverRef) || serverRef.type !== "claudeai-proxy") return;
+  if (serverRef.discoverSupport === "legacy") return "method-not-found";
+  if (serverRef.discoverSupport !== "supported") return;
+  if (serverRef.cachedDiscoverResponse == null) return;
+  let r = discoverResponseSchema().safeParse(serverRef.cachedDiscoverResponse);
+  if (!r.success) {
     logForDebugging(
-      `[claudeai-mcp] cached_discover_response for ${e.id} failed DiscoverResult shape check \u2014 passing server/discover through`,
+      `[claudeai-mcp] cached_discover_response for ${serverRef.id} failed DiscoverResult shape check \u2014 passing server/discover through`,
     );
     return;
   }
-  return { result: safeParse.data };
+  return {
+    result: r.data,
+  };
 }
 //@ chunk-z1n5m6nf.js:40660-41200 placement
 function answerHandshakeLocally_2(transport, cachedInitialize, discoverAnswer) {
   let s = transport.send.bind(transport);
   transport.send = async (h, y) => {
-    if (cachedInitialize !== void 0 && isJSONRPCRequest(h) && h.method === "initialize") {
-      let S = { jsonrpc: "2.0", id: h.id, result: cachedInitialize };
+    if (cachedInitialize !== undefined && isJSONRPCRequest(h) && h.method === "initialize") {
+      let S = {
+        jsonrpc: "2.0",
+        id: h.id,
+        result: cachedInitialize,
+      };
       queueMicrotask(() => transport.onmessage?.(S));
       return;
     }
-    if (discoverAnswer !== void 0 && isJSONRPCRequest(h) && h.method === "server/discover") {
+    if (discoverAnswer !== undefined && isJSONRPCRequest(h) && h.method === "server/discover") {
       let S =
         discoverAnswer === "method-not-found"
           ? {
@@ -365,7 +414,11 @@ function answerHandshakeLocally_2(transport, cachedInitialize, discoverAnswer) {
                 message: "server/discover resolved locally as unsupported",
               },
             }
-          : { jsonrpc: "2.0", id: h.id, result: discoverAnswer.result };
+          : {
+              jsonrpc: "2.0",
+              id: h.id,
+              result: discoverAnswer.result,
+            };
       queueMicrotask(() => transport.onmessage?.(S));
       return;
     }
@@ -374,19 +427,24 @@ function answerHandshakeLocally_2(transport, cachedInitialize, discoverAnswer) {
   };
 }
 //@ chunk-z1n5m6nf.js:41200-41489 placement
-function answerGetStreamLocally_2(e, r) {
-  let href = new URL(r).href;
+function answerGetStreamLocally_2(e, proxyUrl) {
+  let href = new URL(proxyUrl).href;
   return async (s, h) => {
     if ((h?.method ?? "GET").toUpperCase() !== "GET") return e(s, h);
     let y = typeof s === "object" && s !== null && "url" in s ? s.url : String(s);
     if (new URL(y).href === href)
-      return new Response(null, { status: 405, statusText: "Method Not Allowed" });
+      return new Response(null, {
+        status: 405,
+        statusText: "Method Not Allowed",
+      });
     return e(s, h);
   };
 }
 //@ chunk-z1n5m6nf.js:41521-41559 placement
-var lt = require("./chunk-tn4j580p.js");
-
+/**
+ * 懒加载的网络相关模块（当前为 chunk 引用）。
+ */
+var netModule = require("./chunk-tn4j580p.js");
 export {
   HttpBodyOverflowError_2,
   boundedFetch,
@@ -398,6 +456,6 @@ export {
   answerHandshakeLocally_2,
   StdoutOverflowError_2,
   HTTP_BODY_LIMITS,
-  oo,
-  lt,
+  STOPPED_READING_NOTE_2,
+  netModule,
 };

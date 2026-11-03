@@ -8,39 +8,41 @@
 import { x } from "../../../../../../runtime/bun-runtime.js";
 
 //@ chunk-fq0cr76a.js:321485-322426 cjs-require-graph
-var Ec = x(function (_N) {
-  Object.defineProperty(_N, "__esModule", { value: !0 });
-  _N.qualifiedName = Wq;
-  _N.protoCamelCase = Gq;
-  _N.protoSnakeCase = Hq;
-  _N.safeObjectProperty = qq;
-  function Wq(e) {
-    switch (e.kind) {
+var require_names = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.qualifiedName = qualifiedName;
+  cjsExports.protoCamelCase = protoCamelCase;
+  cjsExports.protoSnakeCase = protoSnakeCase;
+  cjsExports.safeObjectProperty = safeObjectProperty;
+  function qualifiedName(desc) {
+    switch (desc.kind) {
       case "field":
       case "oneof":
       case "rpc":
-        return e.parent.typeName + "." + e.name;
+        return desc.parent.typeName + "." + desc.name;
       case "enum_value": {
-        let n = e.parent.parent ? e.parent.parent.typeName : e.parent.file.proto.package;
-        return n + (n.length > 0 ? "." : "") + e.name;
+        let p = desc.parent.parent ? desc.parent.parent.typeName : desc.parent.file.proto.package;
+        return p + (p.length > 0 ? "." : "") + desc.name;
       }
       case "service":
       case "message":
       case "enum":
       case "extension":
-        return e.typeName;
+        return desc.typeName;
       case "file":
-        return e.proto.name;
+        return desc.proto.name;
     }
   }
-  function Gq(e) {
-    let n = !1,
-      r = [];
-    for (let s = 0; s < e.length; s++) {
-      let charAt = e.charAt(s);
-      switch (charAt) {
+  function protoCamelCase(snakeCase) {
+    let capNext = false;
+    let b = [];
+    for (let i = 0; i < snakeCase.length; i++) {
+      let c = snakeCase.charAt(i);
+      switch (c) {
         case "_":
-          n = !0;
+          capNext = true;
           break;
         case "0":
         case "1":
@@ -52,23 +54,26 @@ var Ec = x(function (_N) {
         case "7":
         case "8":
         case "9":
-          (r.push(charAt), (n = !1));
+          b.push(c);
+          capNext = false;
           break;
         default:
-          if (n) ((n = !1), (charAt = charAt.toUpperCase()));
-          r.push(charAt);
+          if (capNext) {
+            capNext = false;
+            c = c.toUpperCase();
+          }
+          b.push(c);
           break;
       }
     }
-    return r.join("");
+    return b.join("");
   }
-  function Hq(e) {
-    return e.replace(/[A-Z]/g, (n) => "_" + n.toLowerCase());
+  function protoSnakeCase(lowerCamelCase) {
+    return lowerCamelCase.replace(/[A-Z]/g, (letter) => "_" + letter.toLowerCase());
   }
-  var Kq = new Set(["constructor", "toString", "toJSON", "valueOf"]);
-  function qq(e) {
-    return Kq.has(e) ? e + "$" : e;
+  var reservedObjectProperties = new Set(["constructor", "toString", "toJSON", "valueOf"]);
+  function safeObjectProperty(name) {
+    return reservedObjectProperties.has(name) ? name + "$" : name;
   }
 });
-
-export { Ec };
+export { require_names };

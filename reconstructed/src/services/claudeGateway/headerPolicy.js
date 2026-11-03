@@ -8,34 +8,45 @@
  * pieces: chunk-1ny7cxrt.js (2)
  * attribution: placement 2
  */
-
 //@ chunk-1ny7cxrt.js:1387798-1388194 placement
-var HTTPS_API_ANTHROPIC_COM = "https://api.anthropic.com",
-  nbe = new Set([
-    "authorization",
-    "proxy-authorization",
-    "x-api-key",
-    "api-key",
-    "host",
-    "content-length",
-    "content-encoding",
-    "transfer-encoding",
-    "connection",
-    "keep-alive",
-    "te",
-    "trailer",
-    "upgrade",
-    "expect",
-    "content-type",
-    "accept",
-    "accept-encoding",
-    "user-agent",
-    "x-litellm-end-user-id",
-  ]),
-  rbe = ["anthropic-", "x-stainless-", "x-claude-gateway-", "x-goog-", "x-amz-", "x-amzn-"];
+/**
+ * 保留的请求头前缀（anthropic-、x-stainless-、x-claude-gateway-、x-goog-、x-amz-、x-amzn-）。
+ */
+var HTTPS_API_ANTHROPIC_COM = "https://api.anthropic.com";
+var RESERVED_FORWARD_HEADERS = new Set([
+  "authorization",
+  "proxy-authorization",
+  "x-api-key",
+  "api-key",
+  "host",
+  "content-length",
+  "content-encoding",
+  "transfer-encoding",
+  "connection",
+  "keep-alive",
+  "te",
+  "trailer",
+  "upgrade",
+  "expect",
+  "content-type",
+  "accept",
+  "accept-encoding",
+  "user-agent",
+  "x-litellm-end-user-id",
+]);
+var RESERVED_HEADER_PREFIXES = [
+  "anthropic-",
+  "x-stainless-",
+  "x-claude-gateway-",
+  "x-goog-",
+  "x-amz-",
+  "x-amzn-",
+];
 //@ chunk-1ny7cxrt.js:1388194-1388260 placement
-function ibe(e) {
-  return nbe.has(e) || rbe.some((t) => e.startsWith(t));
+/**
+ * 判断请求头名是否保留（命中保留集合或前缀）。
+ */
+function isReservedHeaderName(e) {
+  return RESERVED_FORWARD_HEADERS.has(e) || RESERVED_HEADER_PREFIXES.some((t) => e.startsWith(t));
 }
-
-export { ibe, HTTPS_API_ANTHROPIC_COM };
+export { isReservedHeaderName, HTTPS_API_ANTHROPIC_COM };

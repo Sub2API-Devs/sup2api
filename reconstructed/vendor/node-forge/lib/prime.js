@@ -6,125 +6,137 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { Tn } from "./forge.js";
-import { Zn } from "./util.js";
-import { Ef } from "./jsbn.js";
-import { Ci } from "./random.js";
+import { require_forge } from "./forge.js";
+import { require_util } from "./util.js";
+import { require_jsbn } from "./jsbn.js";
+import { require_random } from "./random.js";
 
 //@ chunk-fq0cr76a.js:117883-120062 cjs-fingerprint
-var xS = x(function (Afe, ES) {
-  var el = Tn();
-  Zn();
-  Ef();
-  Ci();
+var require_prime = x(function (cjsExports, cjsModule) {
+  var forge = require_forge();
+  require_util();
+  require_jsbn();
+  require_random();
   (function () {
-    if (el.prime) {
-      ES.exports = el.prime;
+    if (forge.prime) {
+      cjsModule.exports = forge.prime;
       return;
     }
-    var e = (ES.exports = el.prime = el.prime || {}),
-      BigInteger = el.jsbn.BigInteger,
-      r = [6, 4, 2, 4, 2, 4, 6, 2],
-      s = new BigInteger(null);
-    s.fromInt(30);
-    var h = function (O, L) {
-      return O | L;
+    var prime = (cjsModule.exports = forge.prime = forge.prime || {});
+    var BigInteger = forge.jsbn.BigInteger;
+    var GCD_30_DELTA = [6, 4, 2, 4, 2, 4, 6, 2];
+    var THIRTY = new BigInteger(null);
+    THIRTY.fromInt(30);
+    var op_or = function (x, y) {
+      return x | y;
     };
-    e.generateProbablePrime = function (O, L, V) {
-      if (typeof L === "function") ((V = L), (L = {}));
-      L = L || {};
-      var K = L.algorithm || "PRIMEINC";
-      if (typeof K === "string") K = { name: K };
-      K.options = K.options || {};
-      var q = L.prng || el.random,
-        Z = {
-          nextBytes: function (J) {
-            var bytesSync = q.getBytesSync(J.length);
-            for (var ae = 0; ae < J.length; ++ae) J[ae] = bytesSync.charCodeAt(ae);
-          },
+    prime.generateProbablePrime = function (bits, options, callback) {
+      if (typeof options === "function") {
+        callback = options;
+        options = {};
+      }
+      options = options || {};
+      var algorithm = options.algorithm || "PRIMEINC";
+      if (typeof algorithm === "string")
+        algorithm = {
+          name: algorithm,
         };
-      if (K.name === "PRIMEINC") return y(O, Z, K.options, V);
-      throw Error("Invalid prime generation algorithm: " + K.name);
+      algorithm.options = algorithm.options || {};
+      var prng = options.prng || forge.random;
+      var rng = {
+        nextBytes: function (x) {
+          var b = prng.getBytesSync(x.length);
+          for (var i = 0; i < x.length; ++i) x[i] = b.charCodeAt(i);
+        },
+      };
+      if (algorithm.name === "PRIMEINC") return primeincFindPrime(bits, rng, algorithm.options, callback);
+      throw Error("Invalid prime generation algorithm: " + algorithm.name);
     };
-    function y(O, L, V, K) {
-      if ("workers" in V) return w(O, L, V, K);
-      return b(O, L, V, K);
+    function primeincFindPrime(bits, rng, options, callback) {
+      if ("workers" in options) return primeincFindPrimeWithWorkers(bits, rng, options, callback);
+      return primeincFindPrimeWithoutWorkers(bits, rng, options, callback);
     }
-    function b(O, L, V, K) {
-      var q = R(O, L),
-        Z = 0,
-        J = D(q.bitLength());
-      if ("millerRabinTests" in V) J = V.millerRabinTests;
-      var ie = 10;
-      if ("maxBlockTime" in V) ie = V.maxBlockTime;
-      S(q, O, L, Z, J, ie, K);
+    function primeincFindPrimeWithoutWorkers(bits, rng, options, callback) {
+      var num = generateRandom(bits, rng);
+      var deltaIdx = 0;
+      var mrTests = getMillerRabinTests(num.bitLength());
+      if ("millerRabinTests" in options) mrTests = options.millerRabinTests;
+      var maxBlockTime = 10;
+      if ("maxBlockTime" in options) maxBlockTime = options.maxBlockTime;
+      _primeinc(num, bits, rng, deltaIdx, mrTests, maxBlockTime, callback);
     }
-    function S(O, L, V, K, q, Z, J) {
-      var ie = +new Date();
+    function _primeinc(num, bits, rng, deltaIdx, mrTests, maxBlockTime, callback) {
+      var start = +new Date();
       do {
-        if (O.bitLength() > L) O = R(L, V);
-        if (O.isProbablePrime(q)) return J(null, O);
-        O.dAddOffset(r[K++ % 8], 0);
-      } while (Z < 0 || +new Date() - ie < Z);
-      el.util.setImmediate(function () {
-        S(O, L, V, K, q, Z, J);
+        if (num.bitLength() > bits) num = generateRandom(bits, rng);
+        if (num.isProbablePrime(mrTests)) return callback(null, num);
+        num.dAddOffset(GCD_30_DELTA[deltaIdx++ % 8], 0);
+      } while (maxBlockTime < 0 || +new Date() - start < maxBlockTime);
+      forge.util.setImmediate(function () {
+        _primeinc(num, bits, rng, deltaIdx, mrTests, maxBlockTime, callback);
       });
     }
-    function w(O, L, V, K) {
-      if (typeof Worker > "u") return b(O, L, V, K);
-      var q = R(O, L),
-        workers = V.workers,
-        J = V.workLoad || 100,
-        ie = (J * 30) / 8,
-        ae = V.workerScript || "forge/prime.worker.js";
-      if (workers === -1)
-        return el.util.estimateCores(function (ue, me) {
-          if (ue) me = 2;
-          ((workers = me - 1), Se());
+    function primeincFindPrimeWithWorkers(bits, rng, options, callback) {
+      if (typeof Worker === "undefined") return primeincFindPrimeWithoutWorkers(bits, rng, options, callback);
+      var num = generateRandom(bits, rng);
+      var numWorkers = options.workers;
+      var workLoad = options.workLoad || 100;
+      var range = (workLoad * 30) / 8;
+      var workerScript = options.workerScript || "forge/prime.worker.js";
+      if (numWorkers === -1)
+        return forge.util.estimateCores(function (err, cores) {
+          if (err) cores = 2;
+          numWorkers = cores - 1;
+          generate();
         });
-      Se();
-      function Se() {
-        workers = Math.max(1, workers);
-        var ue = [];
-        for (var me = 0; me < workers; ++me) ue[me] = new Worker(ae);
-        var Ne = workers;
-        for (var me = 0; me < workers; ++me) ue[me].addEventListener("message", Ie);
-        var Ce = !1;
-        function Ie(he) {
-          if (Ce) return;
-          --Ne;
-          var ft = he.data;
-          if (ft.found) {
-            for (var rt = 0; rt < ue.length; ++rt) ue[rt].terminate();
-            return ((Ce = !0), K(null, new BigInteger(ft.prime, 16)));
+      generate();
+      function generate() {
+        numWorkers = Math.max(1, numWorkers);
+        var workers = [];
+        for (var i = 0; i < numWorkers; ++i) workers[i] = new Worker(workerScript);
+        var running = numWorkers;
+        for (var i = 0; i < numWorkers; ++i) workers[i].addEventListener("message", workerMessage);
+        var found = false;
+        function workerMessage(e) {
+          if (found) return;
+          --running;
+          var data = e.data;
+          if (data.found) {
+            for (var i = 0; i < workers.length; ++i) workers[i].terminate();
+            found = true;
+            return callback(null, new BigInteger(data.prime, 16));
           }
-          if (q.bitLength() > O) q = R(O, L);
-          var str = q.toString(16);
-          (he.target.postMessage({ hex: str, workLoad: J }), q.dAddOffset(ie, 0));
+          if (num.bitLength() > bits) num = generateRandom(bits, rng);
+          var hex = num.toString(16);
+          e.target.postMessage({
+            hex,
+            workLoad,
+          });
+          num.dAddOffset(range, 0);
         }
       }
     }
-    function R(O, L) {
-      var V = new BigInteger(O, L),
-        K = O - 1;
-      if (!V.testBit(K)) V.bitwiseTo(BigInteger.ONE.shiftLeft(K), h, V);
-      return (V.dAddOffset(31 - V.mod(s).byteValue(), 0), V);
+    function generateRandom(bits, rng) {
+      var num = new BigInteger(bits, rng);
+      var bits1 = bits - 1;
+      if (!num.testBit(bits1)) num.bitwiseTo(BigInteger.ONE.shiftLeft(bits1), op_or, num);
+      num.dAddOffset(31 - num.mod(THIRTY).byteValue(), 0);
+      return num;
     }
-    function D(O) {
-      if (O <= 100) return 27;
-      if (O <= 150) return 18;
-      if (O <= 200) return 15;
-      if (O <= 250) return 12;
-      if (O <= 300) return 9;
-      if (O <= 350) return 8;
-      if (O <= 400) return 7;
-      if (O <= 500) return 6;
-      if (O <= 600) return 5;
-      if (O <= 800) return 4;
-      if (O <= 1250) return 3;
+    function getMillerRabinTests(bits) {
+      if (bits <= 100) return 27;
+      if (bits <= 150) return 18;
+      if (bits <= 200) return 15;
+      if (bits <= 250) return 12;
+      if (bits <= 300) return 9;
+      if (bits <= 350) return 8;
+      if (bits <= 400) return 7;
+      if (bits <= 500) return 6;
+      if (bits <= 600) return 5;
+      if (bits <= 800) return 4;
+      if (bits <= 1250) return 3;
       return 2;
     }
   })();
 });
-
-export { xS };
+export { require_prime };

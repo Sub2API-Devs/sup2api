@@ -15,7 +15,7 @@ import {
   locateSessionProjectDir,
   locateAgentTranscript,
   getProjectsDir,
-  yH,
+  worktreeFromProgress,
 } from "../utils/sessionStorage.js";
 import { subagentSidecarKey } from "../utils/subagentTranscriptPath.js";
 import { jsonStringify, jsonParse } from "../utils/slowOperations.js";
@@ -30,11 +30,14 @@ import { isENOENT, getErrnoCode } from "../utils/errors.js";
 import { FORKED_SKILL_SCOPING_SCHEMA, FORKED_SKILL_MARKER_SCHEMA } from "../types/ids.js";
 
 //@ chunk-jb5bg5s7.js:781-794 placement
-var p = 524288;
+/**
+ * forked 技能侧车文件的大小上限。
+ */
+var FORKED_SKILL_SIDECAR_MAX_BYTES = 524288;
+//@ chunk-jb5bg5s7.js:794-936 placement
 /**
  * 由 transcript 路径得到 forked 技能的 scoping 与 marker 文件路径。
  */
-//@ chunk-jb5bg5s7.js:794-936 placement
 function forkedSkillSidecarPaths(e) {
   return {
     scoping: e.replace(/\.jsonl$/, ".forked-skill.json"),
@@ -42,22 +45,38 @@ function forkedSkillSidecarPaths(e) {
   };
 }
 //@ chunk-jb5bg5s7.js:936-968 placement
-function v(e) {
+/**
+ * 由代理 id 得到 forked 技能的两个侧车文件路径。
+ */
+function sidecarPathsForAgent(e) {
   return forkedSkillSidecarPaths(getAgentTranscriptPath(e));
 }
+//@ chunk-jb5bg5s7.js:968-1142 placement
 /**
  * 定位 forked 技能侧车文件（两者都找到才返回）。
  */
-//@ chunk-jb5bg5s7.js:968-1142 placement
 function locateForkedSkillSidecars(e) {
-  if (e === void 0) return;
-  let r = subagentSidecarKey(e, ".forked-skill.json"),
-    n = subagentSidecarKey(e, ".forked-skill.marker.json");
-  return r !== void 0 && n !== void 0 ? { scoping: r, provenanceMarker: n } : void 0;
+  if (e === undefined) return;
+  let r = subagentSidecarKey(e, ".forked-skill.json");
+  let n = subagentSidecarKey(e, ".forked-skill.marker.json");
+  return r !== undefined && n !== undefined
+    ? {
+        scoping: r,
+        provenanceMarker: n,
+      }
+    : undefined;
 }
 //@ chunk-jb5bg5s7.js:1142-1212 placement
-function M(e) {
-  return jsonStringify({ forkedSkill: !0, ...(e !== void 0 && { skillName: e }) });
+/**
+ * 序列化 forked 技能的来源标记 JSON。
+ */
+function forkedSkillMarkerJson(e) {
+  return jsonStringify({
+    forkedSkill: true,
+    ...(e !== undefined && {
+      skillName: e,
+    }),
+  });
 }
 //@ chunk-jb5bg5s7.js:1212-1761 placement
 function readForkedSkillMarker(e) {
@@ -67,80 +86,128 @@ function readForkedSkillMarker(e) {
     return u && toSidecarStorageKeys(u);
   }
   if (dirname(r) !== getProjectsDir()) return;
-  let n = basename(r),
-    i = getSessionId(),
-    o = join(r, i) + sep,
-    a = getAgentTranscriptPath(e);
-  if (!a.startsWith(o)) return;
-  let parts = a.slice(o.length).split(sep),
-    at = parts.at(-1);
-  if (at === void 0 || !at.endsWith(".jsonl") || ![n, i, ...parts].every(isValidKeySegment)) return;
-  let sliced = parts.slice(0, -1),
-    S = (u) => ({ namespace: "sidecar", projectKey: n, sessionId: i, relPath: [...sliced, u] }),
-    g = S(at.replace(/\.jsonl$/, ".forked-skill.json")),
-    y = S(at.replace(/\.jsonl$/, ".forked-skill.marker.json"));
-  return validateStorageKey(g) === void 0 && validateStorageKey(y) === void 0
-    ? { scoping: g, provenanceMarker: y }
-    : void 0;
+  let n = basename(r);
+  let sessionId = getSessionId();
+  let o = join(r, sessionId) + sep;
+  let agentTranscriptPath = getAgentTranscriptPath(e);
+  if (!agentTranscriptPath.startsWith(o)) return;
+  let parts = agentTranscriptPath.slice(o.length).split(sep);
+  let last = parts.at(-1);
+  if (last === undefined || !last.endsWith(".jsonl") || ![n, sessionId, ...parts].every(isValidKeySegment))
+    return;
+  let sliced = parts.slice(0, -1);
+  let S = (u) => ({
+    namespace: "sidecar",
+    projectKey: n,
+    sessionId,
+    relPath: [...sliced, u],
+  });
+  let g = S(last.replace(/\.jsonl$/, ".forked-skill.json"));
+  let y = S(last.replace(/\.jsonl$/, ".forked-skill.marker.json"));
+  return validateStorageKey(g) === undefined && validateStorageKey(y) === undefined
+    ? {
+        scoping: g,
+        provenanceMarker: y,
+      }
+    : undefined;
 }
+//@ chunk-jb5bg5s7.js:1761-1872 placement
 /**
  * 侧车路径转为存储键。
  */
-//@ chunk-jb5bg5s7.js:1761-1872 placement
 function toSidecarStorageKeys(e) {
-  let r = toStorageKey(e.scoping),
-    n = toStorageKey(e.provenanceMarker);
-  return r && n ? { scoping: r, provenanceMarker: n } : void 0;
+  let storageKey = toStorageKey(e.scoping);
+  let storageKey_2 = toStorageKey(e.provenanceMarker);
+  return storageKey && storageKey_2
+    ? {
+        scoping: storageKey,
+        provenanceMarker: storageKey_2,
+      }
+    : undefined;
 }
+//@ chunk-jb5bg5s7.js:1872-2234 placement
 /**
  * 经存储后端读取侧车文本（absent/unusable/text）。
  */
-//@ chunk-jb5bg5s7.js:1872-2234 placement
 async function readSidecarText(e, r) {
-  let statMeta = await e.statMeta(r);
-  if (!statMeta.ok)
-    return statMeta.error.code === "NotFound"
-      ? { kind: "absent" }
-      : { kind: "unusable", ...l(statMeta.error) };
-  if (statMeta.value.size > p) return { kind: "unusable" };
-  let read = await e.read([r]);
-  if (!read.ok) return { kind: "unusable", ...l(read.error) };
-  let o = read.value.items[0];
-  return o.found ? { kind: "text", text: Buffer.from(o.value).toString("utf8") } : { kind: "absent" };
+  let n = await e.statMeta(r);
+  if (!n.ok)
+    return n.error.code === "NotFound"
+      ? {
+          kind: "absent",
+        }
+      : {
+          kind: "unusable",
+          ...unavailableFlag(n.error),
+        };
+  if (n.value.size > FORKED_SKILL_SIDECAR_MAX_BYTES)
+    return {
+      kind: "unusable",
+    };
+  let i = await e.read([r]);
+  if (!i.ok)
+    return {
+      kind: "unusable",
+      ...unavailableFlag(i.error),
+    };
+  let o = i.value.items[0];
+  return o.found
+    ? {
+        kind: "text",
+        text: Buffer.from(o.value).toString("utf8"),
+      }
+    : {
+        kind: "absent",
+      };
 }
+//@ chunk-jb5bg5s7.js:2234-2382 placement
 /**
  * 侧车是否存在（读取失败视为存在）。
  */
-//@ chunk-jb5bg5s7.js:2234-2382 placement
-async function sidecarPresent(e, r) {
-  let statMeta = await e.statMeta(r);
-  if (statMeta.ok) return { present: !0 };
-  return statMeta.error.code === "NotFound" ? { present: !1 } : { present: !0, ...l(statMeta.error) };
+async function sidecarPresent(e, provenanceMarker) {
+  let n = await e.statMeta(provenanceMarker);
+  if (n.ok)
+    return {
+      present: true,
+    };
+  return n.error.code === "NotFound"
+    ? {
+        present: false,
+      }
+    : {
+        present: true,
+        ...unavailableFlag(n.error),
+      };
 }
 //@ chunk-jb5bg5s7.js:2382-2432 placement
-function c(e) {
-  return e === !0 ? { transientRead: !0 } : {};
+function transientReadFlag(e) {
+  return e === true
+    ? {
+        transientRead: true,
+      }
+    : {};
 }
 //@ chunk-jb5bg5s7.js:2432-2463 placement
-function l(e) {
-  return c(isUnavailableError(e));
+function unavailableFlag(error) {
+  return transientReadFlag(isUnavailableError(error));
 }
+//@ chunk-jb5bg5s7.js:2463-2670 placement
 /**
  * 经存储后端写侧车文件，失败抛错。
  */
-//@ chunk-jb5bg5s7.js:2463-2670 placement
 async function writeSidecar(e, r, n) {
-  let write = await e.write(r, M(n), { mode: 438 & ~process.umask() });
-  if (!write.ok)
-    throw (
-      logForDebugging(`forked-skill provenance marker write: ${write.error.code}`),
-      Error("forked-skill provenance marker write failed")
-    );
+  let i = await e.write(r, forkedSkillMarkerJson(n), {
+    mode: 438 & ~process.umask(),
+  });
+  if (!i.ok) {
+    logForDebugging(`forked-skill provenance marker write: ${i.error.code}`);
+    throw Error("forked-skill provenance marker write failed");
+  }
 }
+//@ chunk-jb5bg5s7.js:2670-2802 placement
 /**
  * 无盘会话禁止写侧车。
  */
-//@ chunk-jb5bg5s7.js:2670-2802 placement
 function assertNotDiskless() {
   if (isDiskless())
     throw Error(
@@ -148,58 +215,78 @@ function assertNotDiskless() {
     );
 }
 //@ chunk-jb5bg5s7.js:2802-2899 placement
-async function fLr(e, r, n) {
-  let i = isStorageV5Enabled() && n ? pathToSessionSideKey(e) : void 0;
+/**
+ * 写入 forked 技能标记：有存储后端时写存储，否则原子写文件。
+ */
+async function writeForkedSkillMarker(provenanceMarker, r, n) {
+  let i = isStorageV5Enabled() && n ? pathToSessionSideKey(provenanceMarker) : undefined;
   if (n && i) return writeSidecar(n, i, r);
-  (assertNotDiskless(), await writeFileAtomic(e, M(r)));
+  assertNotDiskless();
+  await writeFileAtomic(provenanceMarker, forkedSkillMarkerJson(r));
 }
 //@ chunk-jb5bg5s7.js:2899-3305 placement
-async function writeForkedSkillScoping(e, r, n) {
-  let i = isStorageV5Enabled() && n ? readForkedSkillMarker(e) : void 0;
-  if (n && i) {
-    await writeSidecar(n, i.provenanceMarker, r.skillName);
-    let write = await n.write(i.scoping, jsonStringify(r), { mode: 438 & ~process.umask() });
-    if (!write.ok)
-      throw (
-        logForDebugging(`forked-skill scoping write: ${write.error.code}`),
-        Error("forked-skill scoping record write failed")
-      );
+async function writeForkedSkillScoping(e, r, storageV5) {
+  let i = isStorageV5Enabled() && storageV5 ? readForkedSkillMarker(e) : undefined;
+  if (storageV5 && i) {
+    await writeSidecar(storageV5, i.provenanceMarker, r.skillName);
+    let a = await storageV5.write(i.scoping, jsonStringify(r), {
+      mode: 438 & ~process.umask(),
+    });
+    if (!a.ok) {
+      logForDebugging(`forked-skill scoping write: ${a.error.code}`);
+      throw Error("forked-skill scoping record write failed");
+    }
     return;
   }
   assertNotDiskless();
-  let o = v(e);
-  (await mkdir(dirname(o.scoping), { recursive: !0 }),
-    await fLr(o.provenanceMarker, r.skillName),
-    await writeFileAtomic(o.scoping, jsonStringify(r)));
+  let o = sidecarPathsForAgent(e);
+  await mkdir(dirname(o.scoping), {
+    recursive: true,
+  });
+  await writeForkedSkillMarker(o.provenanceMarker, r.skillName);
+  await writeFileAtomic(o.scoping, jsonStringify(r));
 }
+//@ chunk-jb5bg5s7.js:3305-3437 placement
 /**
  * 读取某代理的 forked 技能 scoping（存储后端或本地文件）。
  */
-//@ chunk-jb5bg5s7.js:3305-3437 placement
 async function readForkedSkillScoping(e, r) {
-  let n = isStorageV5Enabled() && r ? readForkedSkillMarker(e) : void 0;
+  let n = isStorageV5Enabled() && r ? readForkedSkillMarker(e) : undefined;
   if (r && n) return readScopingViaStorage(r, n);
   let i = locateForkedSkillSidecars(locateAgentTranscript(e));
-  return i === void 0 ? { status: "diskless" } : readScopingFromFiles(i);
+  return i === undefined
+    ? {
+        status: "diskless",
+      }
+    : readScopingFromFiles(i);
 }
+//@ chunk-jb5bg5s7.js:3437-3794 placement
 /**
  * 从本地文件读取 scoping；不存在时检查 marker 判断 absent-but-marked。
  */
-//@ chunk-jb5bg5s7.js:3437-3794 placement
 async function readScopingFromFiles(e, r) {
-  let n = isStorageV5Enabled() && r ? toSidecarStorageKeys(e) : void 0;
+  let n = isStorageV5Enabled() && r ? toSidecarStorageKeys(e) : undefined;
   if (r && n) return readScopingViaStorage(r, n);
-  let i = yH(e.scoping),
-    o = yH(e.provenanceMarker);
-  if (i === void 0 || o === void 0) return { status: "diskless" };
+  let i = worktreeFromProgress(e.scoping);
+  let o = worktreeFromProgress(e.provenanceMarker);
+  if (i === undefined || o === undefined)
+    return {
+      status: "diskless",
+    };
   let a;
   try {
     let s = await lstat(i);
-    if (!s.isFile() || s.size > p) return { status: "malformed" };
+    if (!s.isFile() || s.size > FORKED_SKILL_SIDECAR_MAX_BYTES)
+      return {
+        status: "malformed",
+      };
     a = await readFile(i, "utf-8");
   } catch (error) {
     if (isENOENT(error)) return await checkMarkerFile(o);
-    return { status: "malformed", ...c(isUnavailableErrorCode(getErrnoCode(error))) };
+    return {
+      status: "malformed",
+      ...transientReadFlag(isUnavailableErrorCode(getErrnoCode(error))),
+    };
   }
   return parseSkillScoping(a);
 }
@@ -209,58 +296,85 @@ function parseSkillScoping(v_0) {
   try {
     r = jsonParse(v_0);
   } catch {
-    return { status: "malformed" };
+    return {
+      status: "malformed",
+    };
   }
-  let safeParse = FORKED_SKILL_SCOPING_SCHEMA().safeParse(r);
-  return safeParse.success ? { status: "valid", scoping: safeParse.data } : { status: "malformed" };
+  let n = FORKED_SKILL_SCOPING_SCHEMA().safeParse(r);
+  return n.success
+    ? {
+        status: "valid",
+        scoping: n.data,
+      }
+    : {
+        status: "malformed",
+      };
 }
+//@ chunk-jb5bg5s7.js:3954-4248 layout
 /**
  * 经存储后端读取 scoping。
  */
-//@ chunk-jb5bg5s7.js:3954-4248 layout
 async function readScopingViaStorage(e, r) {
-  let n = await readSidecarText(e, r.scoping);
-  switch (n.kind) {
+  let sidecarText = await readSidecarText(e, r.scoping);
+  switch (sidecarText.kind) {
     case "text":
-      return parseSkillScoping(n.text);
+      return parseSkillScoping(sidecarText.text);
     case "unusable":
-      return { status: "malformed", ...c(n.transientRead) };
+      return {
+        status: "malformed",
+        ...transientReadFlag(sidecarText.transientRead),
+      };
     case "absent": {
       let i = await sidecarPresent(e, r.provenanceMarker);
-      return i.present ? { status: "absent-but-marked", ...c(i.transientRead) } : { status: "absent" };
+      return i.present
+        ? {
+            status: "absent-but-marked",
+            ...transientReadFlag(i.transientRead),
+          }
+        : {
+            status: "absent",
+          };
     }
   }
 }
+//@ chunk-jb5bg5s7.js:4248-4403 placement
 /**
  * 只有 marker 文件时返回 absent-but-marked。
  */
-//@ chunk-jb5bg5s7.js:4248-4403 placement
 async function checkMarkerFile(e) {
   try {
-    return (await lstat(e), { status: "absent-but-marked" });
+    await lstat(e);
+    return {
+      status: "absent-but-marked",
+    };
   } catch (error) {
     return isENOENT(error)
-      ? { status: "absent" }
-      : { status: "absent-but-marked", ...c(isUnavailableErrorCode(getErrnoCode(error))) };
+      ? {
+          status: "absent",
+        }
+      : {
+          status: "absent-but-marked",
+          ...transientReadFlag(isUnavailableErrorCode(getErrnoCode(error))),
+        };
   }
 }
+//@ chunk-jb5bg5s7.js:4403-4772 placement
 /**
  * 从 provenance marker 读出 forked 技能名。
  */
-//@ chunk-jb5bg5s7.js:4403-4772 placement
 async function readForkedSkillName(e, r) {
-  let n,
-    i = isStorageV5Enabled() && r ? readForkedSkillMarker(e) : void 0;
+  let n;
+  let i = isStorageV5Enabled() && r ? readForkedSkillMarker(e) : undefined;
   if (r && i) {
-    let s = await readSidecarText(r, i.provenanceMarker);
-    if (s.kind !== "text") return;
-    n = s.text;
+    let sidecarText = await readSidecarText(r, i.provenanceMarker);
+    if (sidecarText.kind !== "text") return;
+    n = sidecarText.text;
   } else if (isDiskless()) return;
   else {
-    let { provenanceMarker: provenanceMarker } = v(e);
+    let { provenanceMarker } = sidecarPathsForAgent(e);
     try {
       let d = await lstat(provenanceMarker);
-      if (!d.isFile() || d.size > p) return;
+      if (!d.isFile() || d.size > FORKED_SKILL_SIDECAR_MAX_BYTES) return;
       n = await readFile(provenanceMarker, "utf-8");
     } catch {
       return;
@@ -272,15 +386,14 @@ async function readForkedSkillName(e, r) {
   } catch {
     return;
   }
-  let safeParse = FORKED_SKILL_MARKER_SCHEMA().safeParse(o);
-  return safeParse.success ? safeParse.data.skillName : void 0;
+  let a = FORKED_SKILL_MARKER_SCHEMA().safeParse(o);
+  return a.success ? a.data.skillName : undefined;
 }
-
 export {
   writeForkedSkillScoping,
   readForkedSkillScoping,
   readForkedSkillName,
   forkedSkillSidecarPaths,
   readScopingFromFiles,
-  fLr,
+  writeForkedSkillMarker,
 };

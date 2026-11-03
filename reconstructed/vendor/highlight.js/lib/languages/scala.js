@@ -8,60 +8,129 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:414424-416491 cjs-fingerprint
-var Ps = x(function (Wg, ks) {
-  function dm(e) {
-    let regex = e.regex,
-      n = { className: "meta", begin: "@[A-Za-z]+" },
-      a = { className: "subst", variants: [{ begin: "\\$[A-Za-z0-9_]+" }, { begin: /\$\{/, end: /\}/ }] },
-      s = {
-        className: "string",
-        variants: [
-          { begin: '"""', end: '"""' },
-          { begin: '"', end: '"', illegal: "\\n", contains: [e.BACKSLASH_ESCAPE] },
-          { begin: '[a-z]+"', end: '"', illegal: "\\n", contains: [e.BACKSLASH_ESCAPE, a] },
-          { className: "string", begin: '[a-z]+"""', end: '"""', contains: [a], relevance: 10 },
-        ],
+var require_scala = x(function (cjsExports, cjsModule) {
+  function scala(hljs) {
+    let regex = hljs.regex;
+    let ANNOTATION = {
+      className: "meta",
+      begin: "@[A-Za-z]+",
+    };
+    let SUBST = {
+      className: "subst",
+      variants: [
+        {
+          begin: "\\$[A-Za-z0-9_]+",
+        },
+        {
+          begin: /\$\{/,
+          end: /\}/,
+        },
+      ],
+    };
+    let STRING = {
+      className: "string",
+      variants: [
+        {
+          begin: '"""',
+          end: '"""',
+        },
+        {
+          begin: '"',
+          end: '"',
+          illegal: "\\n",
+          contains: [hljs.BACKSLASH_ESCAPE],
+        },
+        {
+          begin: '[a-z]+"',
+          end: '"',
+          illegal: "\\n",
+          contains: [hljs.BACKSLASH_ESCAPE, SUBST],
+        },
+        {
+          className: "string",
+          begin: '[a-z]+"""',
+          end: '"""',
+          contains: [SUBST],
+          relevance: 10,
+        },
+      ],
+    };
+    let TYPE = {
+      className: "type",
+      begin: "\\b[A-Z][A-Za-z0-9_]*",
+      relevance: 0,
+    };
+    let NAME = {
+      className: "title",
+      begin: /[^0-9\n\t "'(),.`{}\[\]:;][^\n\t "'(),.`{}\[\]:;]+|[^0-9\n\t "'(),.`{}\[\]:;=]/,
+      relevance: 0,
+    };
+    let CLASS = {
+      className: "class",
+      beginKeywords: "class object trait type",
+      end: /[:={\[\n;]/,
+      excludeEnd: true,
+      contains: [
+        hljs.C_LINE_COMMENT_MODE,
+        hljs.C_BLOCK_COMMENT_MODE,
+        {
+          beginKeywords: "extends with",
+          relevance: 10,
+        },
+        {
+          begin: /\[/,
+          end: /\]/,
+          excludeBegin: true,
+          excludeEnd: true,
+          relevance: 0,
+          contains: [TYPE, hljs.C_LINE_COMMENT_MODE, hljs.C_BLOCK_COMMENT_MODE],
+        },
+        {
+          className: "params",
+          begin: /\(/,
+          end: /\)/,
+          excludeBegin: true,
+          excludeEnd: true,
+          relevance: 0,
+          contains: [TYPE, hljs.C_LINE_COMMENT_MODE, hljs.C_BLOCK_COMMENT_MODE],
+        },
+        NAME,
+      ],
+    };
+    let METHOD = {
+      className: "function",
+      beginKeywords: "def",
+      end: regex.lookahead(/[:={\[(\n;]/),
+      contains: [NAME],
+    };
+    let EXTENSION = {
+      begin: [/^\s*/, "extension", /\s+(?=[[(])/],
+      beginScope: {
+        2: "keyword",
       },
-      o = { className: "type", begin: "\\b[A-Z][A-Za-z0-9_]*", relevance: 0 },
-      r = {
-        className: "title",
-        begin: /[^0-9\n\t "'(),.`{}\[\]:;][^\n\t "'(),.`{}\[\]:;]+|[^0-9\n\t "'(),.`{}\[\]:;=]/,
-        relevance: 0,
+    };
+    let END = {
+      begin: [/^\s*/, /end/, /\s+/, /(extension\b)?/],
+      beginScope: {
+        2: "keyword",
+        4: "keyword",
       },
-      i = {
-        className: "class",
-        beginKeywords: "class object trait type",
-        end: /[:={\[\n;]/,
-        excludeEnd: !0,
-        contains: [
-          e.C_LINE_COMMENT_MODE,
-          e.C_BLOCK_COMMENT_MODE,
-          { beginKeywords: "extends with", relevance: 10 },
-          {
-            begin: /\[/,
-            end: /\]/,
-            excludeBegin: !0,
-            excludeEnd: !0,
-            relevance: 0,
-            contains: [o, e.C_LINE_COMMENT_MODE, e.C_BLOCK_COMMENT_MODE],
-          },
-          {
-            className: "params",
-            begin: /\(/,
-            end: /\)/,
-            excludeBegin: !0,
-            excludeEnd: !0,
-            relevance: 0,
-            contains: [o, e.C_LINE_COMMENT_MODE, e.C_BLOCK_COMMENT_MODE],
-          },
-          r,
-        ],
+    };
+    let INLINE_MODES = [
+      {
+        match: /\.inline\b/,
       },
-      c = { className: "function", beginKeywords: "def", end: regex.lookahead(/[:={\[(\n;]/), contains: [r] },
-      l = { begin: [/^\s*/, "extension", /\s+(?=[[(])/], beginScope: { 2: "keyword" } },
-      d = { begin: [/^\s*/, /end/, /\s+/, /(extension\b)?/], beginScope: { 2: "keyword", 4: "keyword" } },
-      m = [{ match: /\.inline\b/ }, { begin: /\binline(?=\s)/, keywords: "inline" }],
-      p = { begin: [/\(\s*/, /using/, /\s+(?!\))/], beginScope: { 2: "keyword" } };
+      {
+        begin: /\binline(?=\s)/,
+        keywords: "inline",
+      },
+    ];
+    let USING_PARAM_CLAUSE = {
+      begin: [/\(\s*/, /using/, /\s+(?!\))/],
+      beginScope: {
+        2: "keyword",
+      },
+    };
     return {
       name: "Scala",
       keywords: {
@@ -72,26 +141,34 @@ var Ps = x(function (Wg, ks) {
       contains: [
         {
           begin: ["//>", /\s+/, /using/, /\s+/, /\S+/],
-          beginScope: { 1: "comment", 3: "keyword", 5: "type" },
+          beginScope: {
+            1: "comment",
+            3: "keyword",
+            5: "type",
+          },
           end: /$/,
-          contains: [{ className: "string", begin: /\S+/ }],
+          contains: [
+            {
+              className: "string",
+              begin: /\S+/,
+            },
+          ],
         },
-        e.C_LINE_COMMENT_MODE,
-        e.C_BLOCK_COMMENT_MODE,
-        s,
-        o,
-        c,
-        i,
-        e.C_NUMBER_MODE,
-        l,
-        d,
-        ...m,
-        p,
-        n,
+        hljs.C_LINE_COMMENT_MODE,
+        hljs.C_BLOCK_COMMENT_MODE,
+        STRING,
+        TYPE,
+        METHOD,
+        CLASS,
+        hljs.C_NUMBER_MODE,
+        EXTENSION,
+        END,
+        ...INLINE_MODES,
+        USING_PARAM_CLAUSE,
+        ANNOTATION,
       ],
     };
   }
-  ks.exports = dm;
+  cjsModule.exports = scala;
 });
-
-export { Ps };
+export { require_scala };

@@ -12,44 +12,43 @@ import { env } from "./env.js";
 import { isSelfHostedRemoteEnvironment } from "./remoteEnvironment.js";
 import { setSessionIngressToken, setOauthTokenFromFd } from "../bootstrap/state.js";
 
+//@ chunk-636x8tdt.js:303-371 placement
 /**
  * 是否为 review 来源的远程会话。
  */
-//@ chunk-636x8tdt.js:303-371 placement
 function isReviewSession() {
   return env.CLAUDE_CODE_REMOTE_SESSION_ORIGIN === "review";
 }
+//@ chunk-636x8tdt.js:371-404 placement
 /**
  * 是否使用会话访问令牌。
  */
-//@ chunk-636x8tdt.js:371-404 placement
 function usesSessionAccessToken() {
   return isSelfHostedRemoteEnvironment() && isReviewSession();
 }
+//@ chunk-636x8tdt.js:404-507 placement
 /**
  * 使用会话访问令牌时，返回需要从子进程环境中移除的令牌相关环境变量名。
  */
-//@ chunk-636x8tdt.js:404-507 placement
 function getSessionTokenEnvKeys() {
   return usesSessionAccessToken()
     ? ["CLAUDE_CODE_SESSION_ACCESS_TOKEN", "CLAUDE_SESSION_INGRESS_TOKEN_FILE"]
     : [];
 }
+//@ chunk-636x8tdt.js:507-680 placement
 /**
  * 使用会话访问令牌时，把令牌类环境变量写入对应的内存缓存（会话入口令牌或 OAuth 令牌），返回是否已处理。
  */
-//@ chunk-636x8tdt.js:507-680 placement
-function applySessionTokenEnv(r, e) {
-  if (!usesSessionAccessToken()) return !1;
+function applySessionTokenEnv(r, token) {
+  if (!usesSessionAccessToken()) return false;
   if (r === "CLAUDE_CODE_SESSION_ACCESS_TOKEN") {
-    if (e !== "") setSessionIngressToken(e);
-    return !0;
+    if (token !== "") setSessionIngressToken(token);
+    return true;
   }
   if (r === "CLAUDE_CODE_OAUTH_TOKEN") {
-    if (e !== "") setOauthTokenFromFd(e);
-    return !0;
+    if (token !== "") setOauthTokenFromFd(token);
+    return true;
   }
-  return !1;
+  return false;
 }
-
 export { usesSessionAccessToken, isReviewSession, getSessionTokenEnvKeys, applySessionTokenEnv };

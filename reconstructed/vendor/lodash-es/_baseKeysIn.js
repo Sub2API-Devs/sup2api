@@ -6,16 +6,16 @@
  * attribution: placement 1
  */
 import { RR } from "../@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
-import { c, hasOwnProperty_2 } from "../../src/utils/git/gitSafeEnv.js";
-import { X8e } from "./_isPrototype.js";
+import { keysInOf, hasOwnProperty_2 } from "../../src/utils/git/gitSafeEnv.js";
+import { isPrototype_default } from "./_isPrototype.js";
 
 //@ chunk-3a1caa6f.js:892-1022 placement
-function baseKeysIn(e) {
-  if (!RR(e)) return c(e);
-  var r = X8e(e),
-    n = [];
-  for (var key in e) if (!(key == "constructor" && (r || !hasOwnProperty_2.call(e, key)))) n.push(key);
-  return n;
+function baseKeysIn(object) {
+  if (!RR(object)) return keysInOf(object);
+  var isProto = isPrototype_default(object);
+  var result = [];
+  for (var key in object)
+    if (!(key == "constructor" && (isProto || !hasOwnProperty_2.call(object, key)))) result.push(key);
+  return result;
 }
-
 export { baseKeysIn };

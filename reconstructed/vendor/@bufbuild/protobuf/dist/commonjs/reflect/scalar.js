@@ -6,68 +6,69 @@
  * attribution: cjs-require-graph 1
  */
 import { x } from "../../../../../../runtime/bun-runtime.js";
-import { ko } from "../proto-int64.js";
-import { Ns } from "../../cjs/descriptors.js";
+import { require_proto_int64 } from "../proto-int64.js";
+import { require_descriptors } from "../../cjs/descriptors.js";
 
 //@ chunk-fq0cr76a.js:328178-329308 cjs-require-graph
-var El = x(function (FN) {
-  Object.defineProperty(FN, "__esModule", { value: !0 });
-  FN.scalarEquals = vj;
-  FN.scalarZeroValue = wj;
-  FN.isScalarZeroValue = Tj;
-  var UN = ko(),
-    Dn = Ns();
-  function vj(e, n, r) {
-    if (n === r) return !0;
-    if (e == Dn.ScalarType.BYTES) {
-      if (!(n instanceof Uint8Array) || !(r instanceof Uint8Array)) return !1;
-      if (n.length !== r.length) return !1;
-      for (let s = 0; s < n.length; s++) if (n[s] !== r[s]) return !1;
-      return !0;
+var require_scalar = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.scalarEquals = scalarEquals;
+  cjsExports.scalarZeroValue = scalarZeroValue;
+  cjsExports.isScalarZeroValue = isScalarZeroValue;
+  var proto_int64_js_1 = require_proto_int64();
+  var descriptors_js_1 = require_descriptors();
+  function scalarEquals(type, a, b) {
+    if (a === b) return true;
+    if (type == descriptors_js_1.ScalarType.BYTES) {
+      if (!(a instanceof Uint8Array) || !(b instanceof Uint8Array)) return false;
+      if (a.length !== b.length) return false;
+      for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+      return true;
     }
-    switch (e) {
-      case Dn.ScalarType.UINT64:
-      case Dn.ScalarType.FIXED64:
-      case Dn.ScalarType.INT64:
-      case Dn.ScalarType.SFIXED64:
-      case Dn.ScalarType.SINT64:
-        return n == r;
+    switch (type) {
+      case descriptors_js_1.ScalarType.UINT64:
+      case descriptors_js_1.ScalarType.FIXED64:
+      case descriptors_js_1.ScalarType.INT64:
+      case descriptors_js_1.ScalarType.SFIXED64:
+      case descriptors_js_1.ScalarType.SINT64:
+        return a == b;
     }
-    return !1;
+    return false;
   }
-  function wj(e, n) {
-    switch (e) {
-      case Dn.ScalarType.STRING:
+  function scalarZeroValue(type, longAsString) {
+    switch (type) {
+      case descriptors_js_1.ScalarType.STRING:
         return "";
-      case Dn.ScalarType.BOOL:
-        return !1;
-      case Dn.ScalarType.DOUBLE:
-      case Dn.ScalarType.FLOAT:
+      case descriptors_js_1.ScalarType.BOOL:
+        return false;
+      case descriptors_js_1.ScalarType.DOUBLE:
+      case descriptors_js_1.ScalarType.FLOAT:
         return 0;
-      case Dn.ScalarType.INT64:
-      case Dn.ScalarType.UINT64:
-      case Dn.ScalarType.SFIXED64:
-      case Dn.ScalarType.FIXED64:
-      case Dn.ScalarType.SINT64:
-        return n ? "0" : UN.protoInt64.zero;
-      case Dn.ScalarType.BYTES:
+      case descriptors_js_1.ScalarType.INT64:
+      case descriptors_js_1.ScalarType.UINT64:
+      case descriptors_js_1.ScalarType.SFIXED64:
+      case descriptors_js_1.ScalarType.FIXED64:
+      case descriptors_js_1.ScalarType.SINT64:
+        return longAsString ? "0" : proto_int64_js_1.protoInt64.zero;
+      case descriptors_js_1.ScalarType.BYTES:
         return new Uint8Array(0);
       default:
         return 0;
     }
   }
-  function Tj(e, n) {
-    switch (e) {
-      case Dn.ScalarType.BOOL:
-        return n === !1;
-      case Dn.ScalarType.STRING:
-        return n === "";
-      case Dn.ScalarType.BYTES:
-        return n instanceof Uint8Array && !n.byteLength;
+  function isScalarZeroValue(type, value) {
+    switch (type) {
+      case descriptors_js_1.ScalarType.BOOL:
+        return value === false;
+      case descriptors_js_1.ScalarType.STRING:
+        return value === "";
+      case descriptors_js_1.ScalarType.BYTES:
+        return value instanceof Uint8Array && !value.byteLength;
       default:
-        return n == 0;
+        return value == 0;
     }
   }
 });
-
-export { El };
+export { require_scalar };

@@ -9,58 +9,70 @@
  * attribution: placement 4
  */
 import { normalizeMcpServerName } from "../../services/api/deferredToolsState.js";
-import { stringArray } from "../collections.js";
+import { stringArray as stringArray_2 } from "../collections.js";
 import { isConnectedOrCached } from "../../skills/bundled/scheduleRemoteAgents.js";
 import { buildMcpToolName } from "../../services/mcp/mcpStringUtils.js";
 import { getDenyRuleIndex, isToolDeniedByIndex } from "../permissions/permissions.js";
 import { logEvent } from "../../services/analytics/index.js";
 
 //@ chunk-e6aww6q8.js:3288241-3288316 placement
-function UAr(e, n, r) {
-  return `"${normalizeMcpServerName(n)}" (MCP server "${normalizeMcpServerName(e)}"): "${normalizeMcpServerName(r)}"`;
+/**
+ * 描述一个被丢弃的 MCP 工具（服务器、工具名与原因）。
+ */
+function describeDroppedMcpTool(name, toolName, reason) {
+  return `"${normalizeMcpServerName(toolName)}" (MCP server "${normalizeMcpServerName(name)}"): "${normalizeMcpServerName(reason)}"`;
 }
 //@ chunk-e6aww6q8.js:3288316-3288327 placement
-var jAr = 30;
+/**
+ * 逐条列出的被丢弃工具上限（30），超出改给汇总。
+ */
+var MAX_LISTED_DROPPED_TOOLS = 30;
 //@ chunk-e6aww6q8.js:3288327-3288419 placement
-function WAr(e, n) {
-  return `MCP server "${normalizeMcpServerName(e)}": ${n} tools excluded (invalid input schema)`;
+/**
+ * 汇总某 MCP 服务器被丢弃工具数量的说明。
+ */
+function describeDroppedToolSummary(name, n) {
+  return `MCP server "${normalizeMcpServerName(name)}": ${n} tools excluded (invalid input schema)`;
 }
+//@ chunk-e6aww6q8.js:3288419-3289161 placement
 /**
  * 生成 MCP 工具被丢弃的增量附件。
  */
-//@ chunk-e6aww6q8.js:3288419-3289161 placement
-function buildMcpDroppedToolsDelta(e, n, r) {
+function buildMcpDroppedToolsDelta(mcpClients, n, toolPermissionContext) {
   let s = new Set();
   for (let w of n) {
     if (w.type !== "attachment" || w.attachment.type !== "mcp_dropped_tools_delta") continue;
-    for (let L of stringArray(w.attachment.addedEntries)) s.add(L);
+    for (let L of stringArray_2(w.attachment.addedEntries)) s.add(L);
   }
-  let h,
-    y = new Set();
-  for (let w of e) {
+  let h;
+  let y = new Set();
+  for (let w of mcpClients) {
     if (!isConnectedOrCached(w) || !w.droppedTools?.length) continue;
     let L = new Set();
     for (let droppedTool of w.droppedTools) {
       let q = {
         name: buildMcpToolName(w.name, droppedTool.toolName),
-        mcpInfo: { serverName: w.name, toolName: droppedTool.toolName },
+        mcpInfo: {
+          serverName: w.name,
+          toolName: droppedTool.toolName,
+        },
       };
-      if (((h ??= getDenyRuleIndex(r)), isToolDeniedByIndex(r, h.index, q))) continue;
-      L.add(UAr(w.name, droppedTool.toolName, droppedTool.reason));
+      h ??= getDenyRuleIndex(toolPermissionContext);
+      if (isToolDeniedByIndex(toolPermissionContext, h.index, q)) continue;
+      L.add(describeDroppedMcpTool(w.name, droppedTool.toolName, droppedTool.reason));
     }
-    if (L.size > jAr) y.add(WAr(w.name, L.size));
+    if (L.size > MAX_LISTED_DROPPED_TOOLS) y.add(describeDroppedToolSummary(w.name, L.size));
     else for (let G of L) y.add(G);
   }
   let sorted = [...y].filter((w) => !s.has(w)).sort();
   if (sorted.length === 0) return null;
-  return (
-    logEvent("tengu_mcp_dropped_tools_pool_change", {
-      addedCount: sorted.length,
-      priorAnnouncedCount: s.size,
-      messagesLength: n.length,
-    }),
-    { addedEntries: sorted }
-  );
+  logEvent("tengu_mcp_dropped_tools_pool_change", {
+    addedCount: sorted.length,
+    priorAnnouncedCount: s.size,
+    messagesLength: n.length,
+  });
+  return {
+    addedEntries: sorted,
+  };
 }
-
 export { buildMcpDroppedToolsDelta };

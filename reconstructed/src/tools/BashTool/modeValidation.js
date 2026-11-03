@@ -17,57 +17,80 @@ var ACCEPT_EDITS_ALLOWED_COMMANDS = ["mkdir", "touch", "rm", "rmdir", "mv", "cp"
 function isFilesystemCommand(command) {
   return ACCEPT_EDITS_ALLOWED_COMMANDS.includes(command);
 }
+//@ chunk-e6aww6q8.js:1163273-1163720 fingerprint = validateCommandForMode (0.931)
 /**
  * acceptEdits 模式下，mkdir/touch/rm/rmdir/mv/cp/sed 这类文件系统命令自动允许（touch 的参数需是简单路径）。
  */
-//@ chunk-e6aww6q8.js:1163273-1163720 fingerprint = validateCommandForMode (0.931)
 function validateCommandForMode(cmd, toolPermissionContext) {
-  let r = stripSafeWrappers(cmd),
-    [s] = r.split(/\s+/);
-  if (!s) return { behavior: "passthrough", message: "Base command not found" };
+  let r = stripSafeWrappers(cmd);
+  let [baseCmd] = r.split(/\s+/);
+  if (!baseCmd)
+    return {
+      behavior: "passthrough",
+      message: "Base command not found",
+    };
   let h =
-    s === "touch" &&
+    baseCmd === "touch" &&
     (r !== cmd.trim() ||
       !r
         .split(/\s+/)
         .slice(1)
         .every((y) => /^['"]?[\w./~]/.test(y)));
-  if (toolPermissionContext.mode === "acceptEdits" && isFilesystemCommand(s) && !h)
+  if (toolPermissionContext.mode === "acceptEdits" && isFilesystemCommand(baseCmd) && !h)
     return {
       behavior: "allow",
-      updatedInput: { command: cmd },
-      decisionReason: { type: "mode", mode: "acceptEdits" },
+      updatedInput: {
+        command: cmd,
+      },
+      decisionReason: {
+        type: "mode",
+        mode: "acceptEdits",
+      },
     };
   return {
     behavior: "passthrough",
-    message: `No mode-specific handling for '${s}' in ${toolPermissionContext.mode} mode`,
+    message: `No mode-specific handling for '${baseCmd}' in ${toolPermissionContext.mode} mode`,
   };
 }
+//@ chunk-e6aww6q8.js:1163720-1164354 fingerprint = checkPermissionMode (0.89)
 /**
  * 按权限模式校验：bypass/dontAsk 交给主流程；所有子命令都被 acceptEdits 允许时整体 allow，否则 passthrough。
  */
-//@ chunk-e6aww6q8.js:1163720-1164354 fingerprint = checkPermissionMode (0.89)
 function checkPermissionMode(input, toolPermissionContext) {
   if (toolPermissionContext.mode === "bypassPermissions")
-    return { behavior: "passthrough", message: "Bypass mode is handled in main permission flow" };
+    return {
+      behavior: "passthrough",
+      message: "Bypass mode is handled in main permission flow",
+    };
   if (toolPermissionContext.mode === "dontAsk")
-    return { behavior: "passthrough", message: "DontAsk mode is handled in main permission flow" };
-  let commands = splitCommand(input.command),
-    s = !1;
+    return {
+      behavior: "passthrough",
+      message: "DontAsk mode is handled in main permission flow",
+    };
+  let commands = splitCommand(input.command);
+  let s = false;
   for (let cmd of commands) {
     let result = validateCommandForMode(cmd, toolPermissionContext);
     if (result.behavior === "ask" || result.behavior === "deny") return result;
     if (result.behavior === "passthrough")
-      return { behavior: "passthrough", message: "No mode-specific validation required" };
-    s = !0;
+      return {
+        behavior: "passthrough",
+        message: "No mode-specific validation required",
+      };
+    s = true;
   }
   if (s)
     return {
       behavior: "allow",
       updatedInput: input,
-      decisionReason: { type: "mode", mode: toolPermissionContext.mode },
+      decisionReason: {
+        type: "mode",
+        mode: toolPermissionContext.mode,
+      },
     };
-  return { behavior: "passthrough", message: "No mode-specific validation required" };
+  return {
+    behavior: "passthrough",
+    message: "No mode-specific validation required",
+  };
 }
-
 export { checkPermissionMode };

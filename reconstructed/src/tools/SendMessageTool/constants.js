@@ -11,39 +11,43 @@
 import { isPlainObject } from "../../utils/isPlainObject.js";
 import { toolMatchesName } from "../../Tool.js";
 
+//@ chunk-rvwp1taf.js:226-353 callgraph-witnessed = SEND_MESSAGE_TOOL_NAME (0.247)
 /**
  * SendMessage 常量：工具名 "SendMessage"、ccd_session_mgmt、summary 上限 200、观测字段列表。
  */
-//@ chunk-rvwp1taf.js:226-353 callgraph-witnessed = SEND_MESSAGE_TOOL_NAME (0.247)
-var SENDMESSAGE = "SendMessage",
-  CCD_SESSION_MGMT = "ccd_session_mgmt",
-  SUMMARY_MAX_CHARS = 200,
-  OBSERVABLE_INPUT_FIELDS = ["type", "recipient", "recipient_kind", "content", "request_id", "approve"];
+var SENDMESSAGE = "SendMessage";
+var CCD_SESSION_MGMT = "ccd_session_mgmt";
+var SUMMARY_MAX_CHARS = 200;
+var OBSERVABLE_INPUT_FIELDS = ["type", "recipient", "recipient_kind", "content", "request_id", "approve"];
 //@ chunk-rvwp1taf.js:353-429 placement
-function jcs(e) {
+/**
+ * 判断 SendMessage 输入是否具备“收件人 + 消息或空闲订阅”的形状（用于剥离可观察字段）。
+ */
+function hasSendMessageShape(e) {
   return "to" in e && ("message" in e || "notify_when_idle" in e);
 }
+//@ chunk-rvwp1taf.js:429-547 placement
 /**
  * 若 SendMessage 输入含可观察字段，返回去掉这些字段的副本。
  */
-//@ chunk-rvwp1taf.js:429-547 placement
 function stripObservableFields(e) {
-  if (!isPlainObject(e) || !jcs(e) || !OBSERVABLE_INPUT_FIELDS.some((n) => n in e)) return;
-  let o = { ...e };
+  if (!isPlainObject(e) || !hasSendMessageShape(e) || !OBSERVABLE_INPUT_FIELDS.some((n) => n in e)) return;
+  let o = {
+    ...e,
+  };
   for (let n of OBSERVABLE_INPUT_FIELDS) delete o[n];
   return o;
 }
 //@ chunk-fj90tvf9.js:263-307 placement
-function hasSendMessageTool(o) {
-  return o.some((e) => toolMatchesName(e, SENDMESSAGE));
+function hasSendMessageTool(tools) {
+  return tools.some((e) => toolMatchesName(e, SENDMESSAGE));
 }
-
 export {
   SENDMESSAGE,
   stripObservableFields,
   hasSendMessageTool,
+  CCD_SESSION_MGMT,
   SUMMARY_MAX_CHARS,
   OBSERVABLE_INPUT_FIELDS,
-  jcs,
-  CCD_SESSION_MGMT,
+  hasSendMessageShape,
 };

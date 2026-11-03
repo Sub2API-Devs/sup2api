@@ -9,23 +9,30 @@
  * attribution: fingerprint 1
  */
 
+//@ chunk-j387qrdq.js:263-628 fingerprint = EMPTY_USAGE (0.906)
 /**
  * 空 usage：所有 token 计数为 0，server_tool_use 为 0，service_tier=standard，speed/fallback_credit 为 null 一类默认值。
  */
-//@ chunk-j387qrdq.js:263-628 fingerprint = EMPTY_USAGE (0.906)
 var EMPTY_USAGE = {
-  output_tokens_details: { thinking_tokens: 0 },
+  output_tokens_details: {
+    thinking_tokens: 0,
+  },
   input_tokens: 0,
   cache_creation_input_tokens: 0,
   cache_read_input_tokens: 0,
   output_tokens: 0,
-  server_tool_use: { web_search_requests: 0, web_fetch_requests: 0 },
+  server_tool_use: {
+    web_search_requests: 0,
+    web_fetch_requests: 0,
+  },
   service_tier: "standard",
-  cache_creation: { ephemeral_1h_input_tokens: 0, ephemeral_5m_input_tokens: 0 },
+  cache_creation: {
+    ephemeral_1h_input_tokens: 0,
+    ephemeral_5m_input_tokens: 0,
+  },
   inference_geo: "",
   iterations: [],
   speed: "standard",
   fallback_credit: null,
 };
-
 export { EMPTY_USAGE };

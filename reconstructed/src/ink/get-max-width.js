@@ -8,17 +8,15 @@
  * pieces: chunk-bzr73sfg.js (1)
  * attribution: fingerprint 1
  */
-
+//@ chunk-bzr73sfg.js:288084-288217 fingerprint = getMaxWidth (0.706)
 /**
  * yoga 节点的内容宽度：计算宽度减左右内边距与边框。
  */
-//@ chunk-bzr73sfg.js:288084-288217 fingerprint = getMaxWidth (0.706)
-var getMaxWidth = (n) =>
-    n.getComputedWidth() -
-    n.getComputedPadding(0) -
-    n.getComputedPadding(2) -
-    n.getComputedBorder(0) -
-    n.getComputedBorder(2),
-  getMaxWidthAlias = getMaxWidth;
-
+var getMaxWidth = (yogaNode) =>
+  yogaNode.getComputedWidth() -
+  yogaNode.getComputedPadding(0) -
+  yogaNode.getComputedPadding(2) -
+  yogaNode.getComputedBorder(0) -
+  yogaNode.getComputedBorder(2);
+var getMaxWidthAlias = getMaxWidth;
 export { getMaxWidthAlias };

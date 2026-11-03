@@ -9,38 +9,43 @@
  * attribution: fingerprint 1
  */
 
+//@ chunk-e6aww6q8.js:4677220-4677720 fingerprint = appendTeamMemorySummaryParts (1)
 /**
  * 在折叠摘要中追加"Recalling/Recalled N team memories"等团队记忆读/搜/写计数。
  */
-//@ chunk-e6aww6q8.js:4677220-4677720 fingerprint = appendTeamMemorySummaryParts (1)
 function appendTeamMemorySummaryParts(memoryCounts, isActive, parts) {
-  let s = memoryCounts.teamMemoryReadCount ?? 0,
-    h = memoryCounts.teamMemorySearchCount ?? 0,
-    y = memoryCounts.teamMemoryWriteCount ?? 0;
-  if (s > 0) {
-    let S = isActive
+  let teamReadCount = memoryCounts.teamMemoryReadCount ?? 0;
+  let teamSearchCount = memoryCounts.teamMemorySearchCount ?? 0;
+  let teamWriteCount = memoryCounts.teamMemoryWriteCount ?? 0;
+  if (teamReadCount > 0) {
+    let verb = isActive
       ? parts.length === 0
         ? "Recalling"
         : "recalling"
       : parts.length === 0
         ? "Recalled"
         : "recalled";
-    parts.push(`${S} ${s} team ${s === 1 ? "memory" : "memories"}`);
+    parts.push(`${verb} ${teamReadCount} team ${teamReadCount === 1 ? "memory" : "memories"}`);
   }
-  if (h > 0) {
-    let S = isActive
+  if (teamSearchCount > 0) {
+    let verb = isActive
       ? parts.length === 0
         ? "Searching"
         : "searching"
       : parts.length === 0
         ? "Searched"
         : "searched";
-    parts.push(`${S} team memories`);
+    parts.push(`${verb} team memories`);
   }
-  if (y > 0) {
-    let S = isActive ? (parts.length === 0 ? "Writing" : "writing") : parts.length === 0 ? "Wrote" : "wrote";
-    parts.push(`${S} ${y} team ${y === 1 ? "memory" : "memories"}`);
+  if (teamWriteCount > 0) {
+    let verb = isActive
+      ? parts.length === 0
+        ? "Writing"
+        : "writing"
+      : parts.length === 0
+        ? "Wrote"
+        : "wrote";
+    parts.push(`${verb} ${teamWriteCount} team ${teamWriteCount === 1 ? "memory" : "memories"}`);
   }
 }
-
 export { appendTeamMemorySummaryParts };

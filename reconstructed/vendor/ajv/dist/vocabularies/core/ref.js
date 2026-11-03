@@ -6,131 +6,151 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../runtime/bun-runtime.js";
-import { jvn } from "../../compile/ref_error.js";
-import { Q } from "../code.js";
-import { uh } from "../../compile/codegen/index.js";
-import { DPe } from "../../compile/names.js";
-import { tlr } from "../../compile/index.js";
-import { ew } from "../../compile/util.js";
+import { require_ref_error_2 } from "../../compile/ref_error.js";
+import { require_code_2 } from "../code.js";
+import { require_codegen_2 } from "../../compile/codegen/index.js";
+import { require_names } from "../../compile/names.js";
+import { require_compile_2 } from "../../compile/index.js";
+import { require_util_2 } from "../../compile/util.js";
 
 //@ chunk-s82q9s4x.js:81297-83654 cjs-fingerprint
-var _Xr = x(function (vo) {
-  Object.defineProperty(vo, "__esModule", { value: !0 });
-  vo.callRef = vo.getValidate = void 0;
-  var Xd = jvn(),
-    At = Q(),
-    C = uh(),
-    Qe = DPe(),
-    Dt = tlr(),
-    Ee = ew(),
-    Yd = {
-      keyword: "$ref",
-      schemaType: "string",
-      code(e) {
-        let { gen: gen, schema: schema, it: it } = e,
-          { baseId: baseId, schemaEnv: schemaEnv, validateName: validateName, opts: opts, self: c } = it,
-          { root: root } = schemaEnv;
-        if ((schema === "#" || schema === "#/") && baseId === root.baseId) return f();
-        let l = Dt.resolveRef.call(c, root, baseId, schema);
-        if (l === void 0) throw new Xd.default(it.opts.uriResolver, baseId, schema);
-        if (l instanceof Dt.SchemaEnv) return b(l);
-        return _(l);
-        function f() {
-          if (schemaEnv === root) return Mt(e, validateName, schemaEnv, schemaEnv.$async);
-          let scopeValue = gen.scopeValue("root", { ref: root });
-          return Mt(e, C._`${scopeValue}.validate`, root, root.$async);
-        }
-        function b(h) {
-          let p = $o(e, h);
-          Mt(e, p, h, h.$async);
-        }
-        function _(h) {
-          let scopeValue = gen.scopeValue(
-              "schema",
-              opts.code.source === !0 ? { ref: h, code: C.stringify(h) } : { ref: h },
-            ),
-            y = gen.name("valid"),
-            subschema = e.subschema(
-              {
-                schema: h,
-                dataTypes: [],
-                schemaPath: C.nil,
-                topSchemaRef: scopeValue,
-                errSchemaPath: schema,
+var require_ref = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.callRef = cjsExports.getValidate = undefined;
+  var ref_error_1 = require_ref_error_2();
+  var code_1 = require_code_2();
+  var codegen_1 = require_codegen_2();
+  var names_1 = require_names();
+  var compile_1 = require_compile_2();
+  var util_1 = require_util_2();
+  var def = {
+    keyword: "$ref",
+    schemaType: "string",
+    code(cxt) {
+      let { gen, schema: $ref, it } = cxt;
+      let { baseId, schemaEnv: env, validateName, opts, self: c } = it;
+      let { root } = env;
+      if (($ref === "#" || $ref === "#/") && baseId === root.baseId) return callRootRef();
+      let schOrEnv = compile_1.resolveRef.call(c, root, baseId, $ref);
+      if (schOrEnv === undefined) throw new ref_error_1.default(it.opts.uriResolver, baseId, $ref);
+      if (schOrEnv instanceof compile_1.SchemaEnv) return callValidate(schOrEnv);
+      return inlineRefSchema(schOrEnv);
+      function callRootRef() {
+        if (env === root) return callRef(cxt, validateName, env, env.$async);
+        let rootName = gen.scopeValue("root", {
+          ref: root,
+        });
+        return callRef(cxt, codegen_1._`${rootName}.validate`, root, root.$async);
+      }
+      function callValidate(sch) {
+        let v = getValidate(cxt, sch);
+        callRef(cxt, v, sch, sch.$async);
+      }
+      function inlineRefSchema(sch) {
+        let schName = gen.scopeValue(
+          "schema",
+          opts.code.source === true
+            ? {
+                ref: sch,
+                code: codegen_1.stringify(sch),
+              }
+            : {
+                ref: sch,
               },
-              y,
-            );
-          (e.mergeEvaluated(subschema), e.ok(y));
-        }
-      },
-    };
-  function $o(e, t) {
-    let { gen: gen } = e;
-    return t.validate
-      ? gen.scopeValue("validate", { ref: t.validate })
-      : C._`${gen.scopeValue("wrapper", { ref: t })}.validate`;
+        );
+        let valid = gen.name("valid");
+        let schCxt = cxt.subschema(
+          {
+            schema: sch,
+            dataTypes: [],
+            schemaPath: codegen_1.nil,
+            topSchemaRef: schName,
+            errSchemaPath: $ref,
+          },
+          valid,
+        );
+        cxt.mergeEvaluated(schCxt);
+        cxt.ok(valid);
+      }
+    },
+  };
+  function getValidate(cxt, sch) {
+    let { gen } = cxt;
+    return sch.validate
+      ? gen.scopeValue("validate", {
+          ref: sch.validate,
+        })
+      : codegen_1._`${gen.scopeValue("wrapper", {
+          ref: sch,
+        })}.validate`;
   }
-  vo.getValidate = $o;
-  function Mt(e, t, r, s) {
-    let { gen: gen, it: it } = e,
-      { allErrors: allErrors, schemaEnv: schemaEnv, opts: opts } = it,
-      u = opts.passContext ? Qe.default.this : C.nil;
-    if (s) l();
-    else f();
-    function l() {
-      if (!schemaEnv.$async) throw Error("async schema referenced by sync schema");
-      let h = gen.let("valid");
-      (gen.try(
+  cjsExports.getValidate = getValidate;
+  function callRef(cxt, v, sch, $async) {
+    let { gen, it } = cxt;
+    let { allErrors, schemaEnv: env, opts } = it;
+    let passCxt = opts.passContext ? names_1.default.this : codegen_1.nil;
+    if ($async) callAsyncRef();
+    else callSyncRef();
+    function callAsyncRef() {
+      if (!env.$async) throw Error("async schema referenced by sync schema");
+      let valid = gen.let("valid");
+      gen.try(
         () => {
-          if ((gen.code(C._`await ${At.callValidateCode(e, t, u)}`), _(t), !allErrors)) gen.assign(h, !0);
+          gen.code(codegen_1._`await ${code_1.callValidateCode(cxt, v, passCxt)}`);
+          addEvaluatedFrom(v);
+          if (!allErrors) gen.assign(valid, true);
         },
-        (p) => {
-          if ((gen.if(C._`!(${p} instanceof ${it.ValidationError})`, () => gen.throw(p)), b(p), !allErrors))
-            gen.assign(h, !1);
+        (e) => {
+          gen.if(codegen_1._`!(${e} instanceof ${it.ValidationError})`, () => gen.throw(e));
+          addErrorsFrom(e);
+          if (!allErrors) gen.assign(valid, false);
         },
-      ),
-        e.ok(h));
+      );
+      cxt.ok(valid);
     }
-    function f() {
-      e.result(
-        At.callValidateCode(e, t, u),
-        () => _(t),
-        () => b(t),
+    function callSyncRef() {
+      cxt.result(
+        code_1.callValidateCode(cxt, v, passCxt),
+        () => addEvaluatedFrom(v),
+        () => addErrorsFrom(v),
       );
     }
-    function b(h) {
-      let p = C._`${h}.errors`;
-      (gen.assign(
-        Qe.default.vErrors,
-        C._`${Qe.default.vErrors} === null ? ${p} : ${Qe.default.vErrors}.concat(${p})`,
-      ),
-        gen.assign(Qe.default.errors, C._`${Qe.default.vErrors}.length`));
+    function addErrorsFrom(source) {
+      let errs = codegen_1._`${source}.errors`;
+      gen.assign(
+        names_1.default.vErrors,
+        codegen_1._`${names_1.default.vErrors} === null ? ${errs} : ${names_1.default.vErrors}.concat(${errs})`,
+      );
+      gen.assign(names_1.default.errors, codegen_1._`${names_1.default.vErrors}.length`);
     }
-    function _(h) {
-      var p;
+    function addEvaluatedFrom(source) {
+      var _a;
       if (!it.opts.unevaluated) return;
-      let y =
-        (p = r === null || r === void 0 ? void 0 : r.validate) === null || p === void 0
-          ? void 0
-          : p.evaluated;
-      if (it.props !== !0)
-        if (y && !y.dynamicProps) {
-          if (y.props !== void 0) it.props = Ee.mergeEvaluated.props(gen, y.props, it.props);
+      let schEvaluated =
+        (_a = sch === null || sch === undefined ? undefined : sch.validate) === null || _a === undefined
+          ? undefined
+          : _a.evaluated;
+      if (it.props !== true)
+        if (schEvaluated && !schEvaluated.dynamicProps) {
+          if (schEvaluated.props !== undefined)
+            it.props = util_1.mergeEvaluated.props(gen, schEvaluated.props, it.props);
         } else {
-          let v = gen.var("props", C._`${h}.evaluated.props`);
-          it.props = Ee.mergeEvaluated.props(gen, v, it.props, C.Name);
+          let props = gen.var("props", codegen_1._`${source}.evaluated.props`);
+          it.props = util_1.mergeEvaluated.props(gen, props, it.props, codegen_1.Name);
         }
-      if (it.items !== !0)
-        if (y && !y.dynamicItems) {
-          if (y.items !== void 0) it.items = Ee.mergeEvaluated.items(gen, y.items, it.items);
+      if (it.items !== true)
+        if (schEvaluated && !schEvaluated.dynamicItems) {
+          if (schEvaluated.items !== undefined)
+            it.items = util_1.mergeEvaluated.items(gen, schEvaluated.items, it.items);
         } else {
-          let v = gen.var("items", C._`${h}.evaluated.items`);
-          it.items = Ee.mergeEvaluated.items(gen, v, it.items, C.Name);
+          let items = gen.var("items", codegen_1._`${source}.evaluated.items`);
+          it.items = util_1.mergeEvaluated.items(gen, items, it.items, codegen_1.Name);
         }
     }
   }
-  vo.callRef = Mt;
-  vo.default = Yd;
+  cjsExports.callRef = callRef;
+  cjsExports.default = def;
 });
-
-export { _Xr };
+export { require_ref };

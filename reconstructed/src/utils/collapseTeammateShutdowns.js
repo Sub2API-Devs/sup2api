@@ -18,29 +18,37 @@ function isTeammateShutdownAttachment(msg) {
     msg.attachment.status === "completed"
   );
 }
+//@ chunk-ag5x7vhf.js:120451-120727 fingerprint = collapseTeammateShutdowns (1)
 /**
  * 把多条队友关闭通知合并为一个 teammate_shutdown_batch 附件。
  */
-//@ chunk-ag5x7vhf.js:120451-120727 fingerprint = collapseTeammateShutdowns (1)
 function collapseTeammateShutdowns(messages) {
-  let result = [],
-    x = 0;
-  while (x < messages.length) {
-    let msg = messages[x];
+  let result = [];
+  let i = 0;
+  while (i < messages.length) {
+    let msg = messages[i];
     if (isTeammateShutdownAttachment(msg)) {
-      let k = 0;
-      while (x < messages.length && isTeammateShutdownAttachment(messages[x])) (k++, x++);
-      if (k === 1) result.push(msg);
+      let count = 0;
+      while (i < messages.length && isTeammateShutdownAttachment(messages[i])) {
+        count++;
+        i++;
+      }
+      if (count === 1) result.push(msg);
       else
         result.push({
           type: "attachment",
           uuid: msg.uuid,
           timestamp: msg.timestamp,
-          attachment: { type: "teammate_shutdown_batch", count: k },
+          attachment: {
+            type: "teammate_shutdown_batch",
+            count,
+          },
         });
-    } else (result.push(msg), x++);
+    } else {
+      result.push(msg);
+      i++;
+    }
   }
   return result;
 }
-
 export { collapseTeammateShutdowns };

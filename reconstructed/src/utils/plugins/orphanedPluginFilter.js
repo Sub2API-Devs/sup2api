@@ -8,401 +8,73 @@
  * pieces: chunk-e6aww6q8.js (4)
  * attribution: fingerprint 1, placement 3
  */
-import {
-  normalize,
-  normalize as normalize_2,
-  normalize as normalize_3,
-  normalize as normalize_4,
-  normalize as normalize_5,
-  normalize as normalize_6,
-  normalize as normalize_7,
-  normalize as normalize_8,
-  normalize as normalize_9,
-  dirname,
-  dirname as dirname_2,
-  dirname as dirname_3,
-  dirname as dirname_4,
-  dirname as dirname_5,
-  dirname as dirname_6,
-  dirname as dirname_7,
-  dirname as dirname_8,
-  dirname as dirname_9,
-  dirname as dirname_10,
-  dirname as dirname_11,
-  dirname as dirname_12,
-  dirname as dirname_13,
-  dirname as dirname_14,
-  dirname as dirname_15,
-  dirname as dirname_16,
-  dirname as dirname_17,
-  dirname as dirname_18,
-  dirname as dirname_19,
-  dirname as dirname_20,
-  dirname as dirname_21,
-  dirname as dirname_22,
-  dirname as dirname_23,
-  dirname as dirname_24,
-  dirname as dirname_25,
-  dirname as dirname_26,
-  dirname as dirname_27,
-  dirname as dirname_28,
-  dirname as dirname_29,
-  dirname as dirname_30,
-  dirname as dirname_31,
-  dirname as dirname_32,
-  dirname as dirname_33,
-  dirname as dirname_34,
-  dirname as dirname_35,
-  dirname as dirname_36,
-  dirname as dirname_37,
-  dirname as dirname_38,
-  dirname as dirname_39,
-  dirname as dirname_40,
-  dirname as dirname_41,
-  dirname as dirname_42,
-  dirname as dirname_43,
-  dirname as dirname_44,
-  dirname as dirname_45,
-  dirname as dirname_46,
-  dirname as dirname_47,
-  dirname as dirname_48,
-  dirname as dirname_49,
-  dirname as dirname_50,
-  dirname as dirname_51,
-  dirname as dirname_52,
-  dirname as dirname_53,
-  dirname as dirname_54,
-  dirname as dirname_55,
-  dirname as dirname_56,
-  dirname as dirname_57,
-  dirname as dirname_58,
-  dirname as dirname_59,
-  dirname as dirname_60,
-  dirname as dirname_61,
-  dirname as dirname_62,
-  dirname as dirname_63,
-  dirname as dirname_64,
-  dirname as dirname_65,
-  dirname as dirname_66,
-  dirname as dirname_67,
-  dirname as dirname_68,
-  dirname as dirname_69,
-  dirname as dirname_70,
-  dirname as dirname_71,
-  dirname as dirname_72,
-  dirname as dirname_73,
-  dirname as dirname_74,
-  dirname as dirname_75,
-  dirname as dirname_76,
-  dirname as dirname_77,
-  isAbsolute,
-  isAbsolute as isAbsolute_2,
-  isAbsolute as isAbsolute_3,
-  isAbsolute as isAbsolute_4,
-  isAbsolute as isAbsolute_5,
-  isAbsolute as isAbsolute_6,
-  isAbsolute as isAbsolute_7,
-  isAbsolute as isAbsolute_8,
-  isAbsolute as isAbsolute_9,
-  isAbsolute as isAbsolute_10,
-  isAbsolute as isAbsolute_11,
-  isAbsolute as isAbsolute_12,
-  isAbsolute as isAbsolute_13,
-  isAbsolute as isAbsolute_14,
-  isAbsolute as isAbsolute_15,
-  isAbsolute as isAbsolute_16,
-  isAbsolute as isAbsolute_17,
-  isAbsolute as isAbsolute_18,
-  isAbsolute as isAbsolute_19,
-  isAbsolute as isAbsolute_20,
-  isAbsolute as isAbsolute_21,
-  isAbsolute as isAbsolute_22,
-  isAbsolute as isAbsolute_23,
-  isAbsolute as isAbsolute_24,
-  isAbsolute as isAbsolute_25,
-  isAbsolute as isAbsolute_26,
-  isAbsolute as isAbsolute_27,
-  isAbsolute as isAbsolute_28,
-  isAbsolute as isAbsolute_29,
-  isAbsolute as isAbsolute_30,
-  isAbsolute as isAbsolute_31,
-  isAbsolute as isAbsolute_32,
-  isAbsolute as isAbsolute_33,
-  isAbsolute as isAbsolute_34,
-  isAbsolute as isAbsolute_35,
-  isAbsolute as isAbsolute_36,
-  isAbsolute as isAbsolute_37,
-  isAbsolute as isAbsolute_38,
-  isAbsolute as isAbsolute_39,
-  isAbsolute as isAbsolute_40,
-  isAbsolute as isAbsolute_42,
-  isAbsolute as isAbsolute_43,
-  isAbsolute as isAbsolute_44,
-  isAbsolute as isAbsolute_45,
-  isAbsolute as isAbsolute_46,
-  isAbsolute as isAbsolute_47,
-  isAbsolute as isAbsolute_48,
-  isAbsolute as isAbsolute_49,
-  isAbsolute as isAbsolute_50,
-  isAbsolute as isAbsolute_51,
-  isAbsolute as isAbsolute_52,
-  isAbsolute as isAbsolute_53,
-  isAbsolute as isAbsolute_54,
-  isAbsolute as isAbsolute_55,
-  isAbsolute as isAbsolute_56,
-  isAbsolute as isAbsolute_57,
-  relative,
-  relative as relative_2,
-  relative as relative_3,
-  relative as relative_4,
-  relative as relative_5,
-  relative as relative_6,
-  relative as relative_7,
-  relative as relative_8,
-  relative as relative_9,
-  relative as relative_10,
-  relative as relative_11,
-  relative as relative_12,
-  relative as relative_13,
-  relative as relative_14,
-  relative as relative_15,
-  relative as relative_16,
-  relative as relative_17,
-  relative as relative_18,
-  relative as relative_19,
-  relative as relative_20,
-  relative as relative_21,
-  relative as relative_22,
-  relative as relative_23,
-  relative as relative_24,
-  relative as relative_25,
-  relative as relative_26,
-  relative as relative_27,
-  relative as relative_28,
-  relative as relative_29,
-  relative as relative_30,
-  relative as relative_31,
-  relative as relative_32,
-  relative as relative_33,
-  relative as relative_34,
-  relative as relative_35,
-  relative as relative_36,
-  relative as relative_37,
-  relative as relative_38,
-  relative as relative_39,
-  relative as relative_40,
-  relative as relative_41,
-  relative as relative_42,
-  relative as relative_43,
-  relative as relative_44,
-  relative as relative_45,
-  relative as relative_46,
-  relative as relative_47,
-  relative as relative_48,
-  sep,
-  sep as sep_2,
-  sep as sep_3,
-  sep as sep_4,
-  sep as sep_5,
-  sep as sep_6,
-  sep as sep_7,
-  sep as sep_8,
-  sep as sep_9,
-  sep as sep_10,
-  sep as sep_11,
-  sep as sep_12,
-  sep as sep_13,
-  sep as sep_14,
-  sep as sep_15,
-  sep as sep_16,
-  sep as sep_17,
-  sep as sep_18,
-  sep as sep_19,
-  sep as sep_20,
-  sep as sep_21,
-  sep as sep_22,
-  sep as sep_23,
-  sep as sep_24,
-  sep as sep_25,
-  sep as sep_26,
-  sep as sep_27,
-  sep as sep_28,
-  sep as sep_29,
-  sep as sep_30,
-  sep as sep_31,
-  sep as sep_32,
-  sep as sep_33,
-  sep as sep_34,
-  sep as sep_35,
-  sep as sep_36,
-  sep as sep_37,
-  sep as sep_38,
-  sep as sep_39,
-  sep as sep_40,
-  sep as sep_41,
-  sep as sep_42,
-  sep as sep_43,
-  sep as sep_44,
-  sep as sep_45,
-  sep as sep_46,
-  sep as sep_47,
-  sep as sep_48,
-  sep as sep_49,
-  sep as sep_50,
-  sep as sep_51,
-  sep as sep_52,
-  sep as sep_53,
-  sep as sep_54,
-  sep as sep_55,
-  sep as sep_56,
-  sep as sep_57,
-  sep as sep_58,
-  sep as sep_59,
-  sep as sep_60,
-  sep as sep_61,
-  sep as sep_62,
-  sep as sep_63,
-  sep as sep_64,
-  sep as sep_65,
-  sep as sep_66,
-  sep as sep_67,
-  sep as sep_68,
-  sep as sep_69,
-  sep as sep_70,
-  sep as sep_71,
-  sep as sep_72,
-  sep as sep_73,
-} from "path";
-import {
-  realpath,
-  realpath as realpath_2,
-  realpath as realpath_3,
-  realpath as realpath_4,
-  realpath as realpath_5,
-  realpath as realpath_6,
-  realpath as realpath_7,
-  realpath as realpath_8,
-  realpath as realpath_9,
-  realpath as realpath_10,
-  realpath as realpath_11,
-  realpath as realpath_12,
-  realpath as realpath_13,
-  realpath as realpath_14,
-  realpath as realpath_15,
-  realpath as realpath_16,
-  realpath as realpath_17,
-  realpath as realpath_18,
-  realpath as realpath_19,
-  realpath as realpath_20,
-  realpath as realpath_21,
-  realpath as realpath_22,
-  realpath as realpath_23,
-  realpath as realpath_24,
-  realpath as realpath_25,
-  realpath as realpath_26,
-  realpath as realpath_27,
-  realpath as realpath_28,
-  realpath as realpath_29,
-  realpath as realpath_30,
-  realpath as realpath_31,
-  realpath as realpath_32,
-  realpath as realpath_33,
-  realpath as realpath_34,
-  realpath as realpath_35,
-  realpath as realpath_36,
-  realpath as realpath_37,
-  realpath as realpath_38,
-  readdir,
-  readdir as readdir_2,
-  readdir as readdir_3,
-  readdir as readdir_4,
-  readdir as readdir_5,
-  readdir as readdir_6,
-  readdir as readdir_7,
-  readdir as readdir_8,
-  readdir as readdir_9,
-  readdir as readdir_10,
-  readdir as readdir_11,
-  readdir as readdir_12,
-  readdir as readdir_13,
-  readdir as readdir_14,
-  readdir as readdir_15,
-  readdir as readdir_16,
-  readdir as readdir_17,
-  readdir as readdir_18,
-  readdir as readdir_19,
-  readdir as readdir_20,
-  readdir as readdir_21,
-  readdir as readdir_22,
-  readdir as readdir_23,
-  readdir as readdir_24,
-  readdir as readdir_25,
-  readdir as readdir_26,
-  readdir as readdir_27,
-  readdir as readdir_28,
-  readdir as readdir_29,
-  readdir as readdir_30,
-  readdir as readdir_31,
-  readdir as readdir_32,
-} from "fs/promises";
+import { normalize, dirname, isAbsolute, relative, sep } from "path";
+import { realpath, readdir } from "fs/promises";
 import { getPluginRegistry } from "./pluginLoadState.js";
 import { projectPluginCacheDir } from "./pluginCachePaths.js";
 import { isStorageV5Enabled } from "../hoverRest.js";
 import { isENOENT } from "../errors.js";
-import { ripGrep, N6r } from "../ripgrep.js";
-import { R1 } from "./cacheUtils.js";
+import { ripGrep_2, ripgrepStorageOverride } from "../ripgrep.js";
+import { ORPHAN_MARKER_FILE } from "./cacheUtils.js";
 
+//@ chunk-e6aww6q8.js:1435631-1436326 fingerprint = getGlobExclusionsForPluginCache (0.908)
 /**
  * 为 Grep/Glob 生成排除插件缓存里孤儿版本目录的 glob（避免搜到已废弃的旧版本）。
  */
-//@ chunk-e6aww6q8.js:1435631-1436326 fingerprint = getGlobExclusionsForPluginCache (0.908)
-async function getGlobExclusionsForPluginCache(e, n) {
-  let r = getPluginRegistry(),
-    cachePath = normalize_5(projectPluginCacheDir());
+async function getGlobExclusionsForPluginCache(searchPath, storageV5) {
+  let pluginRegistry = getPluginRegistry();
+  let cachePath = normalize(projectPluginCacheDir());
   if (
-    e &&
-    !(pathsOverlap(e, cachePath) || pathsOverlap(e, await realpath_20(cachePath).catch(() => cachePath)))
+    searchPath &&
+    !(
+      pathsOverlap(searchPath, cachePath) ||
+      pathsOverlap(searchPath, await realpath(cachePath).catch(() => cachePath))
+    )
   )
     return [];
-  if (r.orphanedVersionGlobExclusions !== null) return r.orphanedVersionGlobExclusions;
+  if (pluginRegistry.orphanedVersionGlobExclusions !== null)
+    return pluginRegistry.orphanedVersionGlobExclusions;
   try {
     if (
-      !(isStorageV5Enabled() && n !== void 0) &&
-      (await readdir_21(cachePath).then((y) => y.length === 0, isENOENT))
-    )
-      return ((r.orphanedVersionGlobExclusions = []), r.orphanedVersionGlobExclusions);
-    let h = await ripGrep(
-      ["--files", "--hidden", "--no-ignore", "--max-depth", "4", "--glob", R1],
+      !(isStorageV5Enabled() && storageV5 !== undefined) &&
+      (await readdir(cachePath).then((y) => y.length === 0, isENOENT))
+    ) {
+      pluginRegistry.orphanedVersionGlobExclusions = [];
+      return pluginRegistry.orphanedVersionGlobExclusions;
+    }
+    let markers = await ripGrep_2(
+      ["--files", "--hidden", "--no-ignore", "--max-depth", "4", "--glob", ORPHAN_MARKER_FILE],
       cachePath,
       new AbortController().signal,
-      { cwd: N6r(n) },
+      {
+        cwd: ripgrepStorageOverride(storageV5),
+      },
     );
-    return (
-      (r.orphanedVersionGlobExclusions = h.map((markerPath) => {
-        let versionDir = dirname_38(markerPath);
-        return `!**/${(isAbsolute_30(versionDir) ? relative_23(cachePath, versionDir) : versionDir).replaceAll("\\", "/")}/**`;
-      })),
-      r.orphanedVersionGlobExclusions
-    );
+    pluginRegistry.orphanedVersionGlobExclusions = markers.map((markerPath) => {
+      let versionDir = dirname(markerPath);
+      return `!**/${(isAbsolute(versionDir) ? relative(cachePath, versionDir) : versionDir).replaceAll("\\", "/")}/**`;
+    });
+    return pluginRegistry.orphanedVersionGlobExclusions;
   } catch {
-    return ((r.orphanedVersionGlobExclusions = []), r.orphanedVersionGlobExclusions);
+    pluginRegistry.orphanedVersionGlobExclusions = [];
+    return pluginRegistry.orphanedVersionGlobExclusions;
   }
 }
 //@ chunk-e6aww6q8.js:1436326-1436381 placement
-function vYs() {
+/**
+ * clearOrphanedGlobExclusions：清空孤儿版本 glob 排除缓存。
+ */
+function clearOrphanedGlobExclusions() {
   getPluginRegistry().orphanedVersionGlobExclusions = null;
 }
 //@ chunk-e6aww6q8.js:1436381-1436490 placement
 function pathsOverlap(a, b) {
-  let na = w9t(a),
-    nb = w9t(b);
-  return (
-    na === nb || na === sep_38 || nb === sep_38 || na.startsWith(nb + sep_38) || nb.startsWith(na + sep_38)
-  );
+  let na = normalizeGlobPath(a);
+  let nb = normalizeGlobPath(b);
+  return na === nb || na === sep || nb === sep || na.startsWith(nb + sep) || nb.startsWith(na + sep);
 }
 //@ chunk-e6aww6q8.js:1436490-1436520 placement
-function w9t(e) {
-  return normalize_5(e);
+function normalizeGlobPath(e) {
+  return normalize(e);
 }
-
-export { getGlobExclusionsForPluginCache, vYs };
+export { getGlobExclusionsForPluginCache, clearOrphanedGlobExclusions };

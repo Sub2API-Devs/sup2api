@@ -9,13 +9,13 @@
  * attribution: fingerprint 2, layout 2
  */
 import { BACKSPACE_KEY } from "./types.js";
-import { rIs, Cursor } from "../utils/Cursor.js";
+import { replaceWithSpaces, Cursor } from "../utils/Cursor.js";
 import { findTextObject } from "./textObjects.js";
 
+//@ chunk-530hfzwb.js:3592-4356 fingerprint = applySingleMotion (0.926)
 /**
  * 执行一次基础移动：h/l 不跨行；空格/退格可跨行；j/k 按逻辑行、gj/gk 按折行后的屏幕行；w b e / W B E 单词移动；0 ^ $ 行首/首个非空/行尾；G 到最后一行；% 跳到行内下一个括号的配对括号。
  */
-//@ chunk-530hfzwb.js:3592-4356 fingerprint = applySingleMotion (0.926)
 function applySingleMotion(key, cursor) {
   switch (key) {
     case "h":
@@ -55,38 +55,37 @@ function applySingleMotion(key, cursor) {
     case "G":
       return cursor.startOfLastLine();
     case "%": {
-      let r = findMatchingBracketOffset(rIs(cursor.text), cursor.offset);
-      return r === null ? cursor : new Cursor(cursor.measuredText, r);
+      let matchingBracketOffset = findMatchingBracketOffset(replaceWithSpaces(cursor.text), cursor.offset);
+      return matchingBracketOffset === null ? cursor : new Cursor(cursor.measuredText, matchingBracketOffset);
     }
     default:
       return cursor;
   }
 }
+//@ chunk-530hfzwb.js:4356-4554 layout
 /**
  * % 移动：在光标到行尾之间找第一个 ()[]{}，返回其配对括号的位置。
  */
-//@ chunk-530hfzwb.js:4356-4554 layout
 function findMatchingBracketOffset(text, offset) {
   let index = text.indexOf(
-      `
+    `
 `,
-      offset,
-    ),
-    n = index === -1 ? text.length : index,
-    search = text.slice(offset, n).search(/[()[\]{}]/);
-  if (search === -1) return null;
-  let o = offset + search,
-    i = findTextObject(text, o, text[o], !1);
-  if (!i) return null;
-  return i.start === o ? i.end - 1 : i.start;
+    offset,
+  );
+  let n = index === -1 ? text.length : index;
+  let s = text.slice(offset, n).search(/[()[\]{}]/);
+  if (s === -1) return null;
+  let offset_2 = offset + s;
+  let textObject = findTextObject(text, offset_2, text[offset_2], false);
+  if (!textObject) return null;
+  return textObject.start === offset_2 ? textObject.end - 1 : textObject.start;
 }
 //@ chunk-530hfzwb.js:4554-4594 layout
-function isInclusiveMotion(e) {
-  return "eE$%".includes(e);
+function isInclusiveMotion(key) {
+  return "eE$%".includes(key);
 }
 //@ chunk-530hfzwb.js:4594-4643 fingerprint = isLinewiseMotion (1)
 function isLinewiseMotion(key) {
   return "jkG".includes(key) || key === "gg";
 }
-
 export { applySingleMotion, isLinewiseMotion, isInclusiveMotion };

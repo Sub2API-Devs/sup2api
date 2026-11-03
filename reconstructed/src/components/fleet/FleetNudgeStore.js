@@ -8,7 +8,7 @@
  * pieces: chunk-5gatfnjn.js (9)
  * attribution: placement 9
  */
-import { j, qt, Se } from "../../../vendor/react/cjs/react.production.js";
+import { init_react_production, qt, Se } from "../../../vendor/react/cjs/react.production.js";
 import {
   listJobs,
   IDLE_NEEDS,
@@ -23,23 +23,26 @@ import { logForDebugging } from "../../utils/debug.js";
 import { logEvent } from "../../services/analytics/index.js";
 
 //@ chunk-5gatfnjn.js:426-430 placement
-j();
+init_react_production();
 //@ chunk-5gatfnjn.js:430-509 placement
-async function lRr(e) {
-  let s = !1,
-    i = await listJobs(void 0, e, () => {
-      s = !0;
-    });
+/**
+ * 函数 requestNudgeOnce（未获批时返回 nudge）；位于「fleet 提示状态存储（2.1.316 新增）」模块。
+ */
+async function requestNudgeOnce(storageV5) {
+  let s = false;
+  let i = await listJobs(undefined, storageV5, () => {
+    s = true;
+  });
   return s ? null : i;
 }
 //@ chunk-5gatfnjn.js:509-542 placement
-var h = 120000,
-  c = 1800000,
-  p = 1e4,
-  m = 3;
+var NUDGE_MIN_GAP_MS = 120000;
+var NUDGE_MAX_GAP_MS = 1800000;
+var NUDGE_POLL_MS = 1e4;
+var NUDGE_MAX_COUNT = 3;
 //@ chunk-5gatfnjn.js:542-605 placement
-function S(e) {
-  return !isDoneJob(e) && e.tempo === "blocked" && e.needs !== IDLE_NEEDS;
+function isBlockedNeedingNudge(riskLevel) {
+  return !isDoneJob(riskLevel) && riskLevel.tempo === "blocked" && riskLevel.needs !== IDLE_NEEDS;
 }
 //@ chunk-5gatfnjn.js:605-669 placement = getRiskColor (1)
 function isDoneJob(riskLevel) {
@@ -51,33 +54,40 @@ function isDoneJob(riskLevel) {
 class FleetNudgeStore {
   #p;
   #g;
-  #s = void 0;
+  #s = undefined;
   #m = createSignal();
   #h = 0;
-  #n = !1;
-  #u = !0;
+  #n = false;
+  #u = true;
   #o = null;
   #e = null;
-  #d = !1;
+  #d = false;
   #t = 0;
   #i = null;
   #l = 0;
   #S;
   constructor(e) {
-    ((this.#p = e?.sweepMs ?? p), (this.#g = e?.ignoredAfterMs ?? c));
-    let s = e?.storageV5;
-    this.#S = () => lRr(s);
+    this.#p = e?.sweepMs ?? NUDGE_POLL_MS;
+    this.#g = e?.ignoredAfterMs ?? NUDGE_MAX_GAP_MS;
+    let storageV5 = e?.storageV5;
+    this.#S = () => requestNudgeOnce(storageV5);
   }
   getSnapshot = () => this.#s;
   subscribe = (e) => {
-    let subscribe = this.#m.subscribe(e);
-    if ((this.#h++, !this.#n))
-      if (((this.#n = !0), this.#s === void 0)) this.#r();
+    let s = this.#m.subscribe(e);
+    this.#h++;
+    if (!this.#n) {
+      this.#n = true;
+      if (this.#s === undefined) this.#r();
       else this.#f();
-    let i = !1;
+    }
+    let i = false;
     return () => {
       if (i) return;
-      if (((i = !0), subscribe(), this.#h--, this.#h === 0)) this.#N();
+      i = true;
+      s();
+      this.#h--;
+      if (this.#h === 0) this.#N();
     };
   };
   refetch = () => this.#r();
@@ -86,23 +96,35 @@ class FleetNudgeStore {
   }
   setFocused(e) {
     if (e === this.#u) return;
-    if (((this.#u = e), !this.#n)) return;
-    if (e) ((this.#l = 0), this.#r());
-    else this.#a();
+    this.#u = e;
+    if (!this.#n) return;
+    if (e) {
+      this.#l = 0;
+      this.#r();
+    } else this.#a();
   }
   recordOpenViaLeft() {
-    if ((this.#c(), this.#t > 0 && Date.now() - this.#t <= h))
-      (logFeatureOk("fleet_needs_input_nudge"), (this.#t = 0));
+    this.#c();
+    if (this.#t > 0 && Date.now() - this.#t <= NUDGE_MIN_GAP_MS) {
+      logFeatureOk("fleet_needs_input_nudge");
+      this.#t = 0;
+    }
     return this.#s;
   }
   #r() {
-    if ((this.#a(), this.#e)) return ((this.#d = !0), this.#e);
-    return (
-      (this.#e = this.#b().finally(() => {
-        if (((this.#e = null), this.#d)) ((this.#d = !1), this.#r());
-      })),
-      this.#e
-    );
+    this.#a();
+    if (this.#e) {
+      this.#d = true;
+      return this.#e;
+    }
+    this.#e = this.#b().finally(() => {
+      this.#e = null;
+      if (this.#d) {
+        this.#d = false;
+        this.#r();
+      }
+    });
+    return this.#e;
   }
   async #b() {
     let e;
@@ -113,71 +135,97 @@ class FleetNudgeStore {
     }
     if (!this.#n) return;
     if (e !== null) this.#l = 0;
-    else if (++this.#l <= m) {
+    else if (++this.#l <= NUDGE_MAX_COUNT) {
       if (this.#l === 1)
         logForDebugging(
           "[fleet nudge] listing sessions failed for a reason that may pass; keeping the counts",
-          { level: "warn" },
+          {
+            level: "warn",
+          },
         );
       if (this.#u) this.#f();
       return;
     }
-    let s = e ?? [],
-      i = 0,
-      r = 0,
-      u = 0,
-      d = 0,
-      l = getOwnJobShortId();
+    let s = e ?? [];
+    let i = 0;
+    let r = 0;
+    let u = 0;
+    let d = 0;
+    let ownJobShortId = getOwnJobShortId();
     for (let n of s) {
-      if (n.id === l) continue;
+      if (n.id === ownJobShortId) continue;
       if (isDoneJob(n.state)) {
-        if ((r++, terminalOutcome(n.state.state) === "success")) u++;
+        r++;
+        if (terminalOutcome(n.state.state) === "success") u++;
         continue;
       }
-      if ((d++, S(n.state))) i++;
+      d++;
+      if (isBlockedNeedingNudge(n.state)) i++;
     }
-    if (i === 0) (this.#c(), (this.#t = 0));
+    if (i === 0) {
+      this.#c();
+      this.#t = 0;
+    }
     let o = this.#s;
     if (o?.needsInput !== i || o?.done !== r || o?.succeeded !== u) {
-      let n = o !== void 0 && i > o.needsInput;
-      if (
-        ((this.#s = { needsInput: i, done: r, succeeded: u }),
-        logEvent("tengu_fleet_nudge_state", {
-          needs_input_count: i,
-          done_count: r,
-          succeeded_count: u,
-          increased: n,
-        }),
-        n)
-      )
-        ((this.#t = Date.now()), this.#_());
+      let n = o !== undefined && i > o.needsInput;
+      this.#s = {
+        needsInput: i,
+        done: r,
+        succeeded: u,
+      };
+      logEvent("tengu_fleet_nudge_state", {
+        needs_input_count: i,
+        done_count: r,
+        succeeded_count: u,
+        increased: n,
+      });
+      if (n) {
+        this.#t = Date.now();
+        this.#_();
+      }
       this.#m.emit();
     }
     if (d > 0 && this.#u) this.#f();
   }
   #f() {
-    (this.#a(), (this.#o = setTimeout(() => void this.#r(), this.#p)), this.#o.unref());
+    this.#a();
+    this.#o = setTimeout(() => void this.#r(), this.#p);
+    this.#o.unref();
   }
   #_() {
-    (this.#c(),
-      (this.#i = setTimeout(() => {
-        ((this.#i = null), logFeatureSad("fleet_needs_input_nudge", "ignored"), (this.#t = 0));
-      }, this.#g)),
-      this.#i.unref());
+    this.#c();
+    this.#i = setTimeout(() => {
+      this.#i = null;
+      logFeatureSad("fleet_needs_input_nudge", "ignored");
+      this.#t = 0;
+    }, this.#g);
+    this.#i.unref();
   }
   #a() {
-    if (this.#o) (clearTimeout(this.#o), (this.#o = null));
+    if (this.#o) {
+      clearTimeout(this.#o);
+      this.#o = null;
+    }
   }
   #c() {
-    if (this.#i) (clearTimeout(this.#i), (this.#i = null));
+    if (this.#i) {
+      clearTimeout(this.#i);
+      this.#i = null;
+    }
   }
   #N() {
-    (this.#a(), (this.#d = !1), (this.#n = !1));
+    this.#a();
+    this.#d = false;
+    this.#n = false;
   }
 }
 //@ chunk-5gatfnjn.js:2632-2718 placement
-function ensureFleetNudgeStore(e, s) {
-  return ((e.fleetNudgeStore ??= new FleetNudgeStore({ storageV5: s })), e.fleetNudgeStore);
+function ensureFleetNudgeStore(e, storageV5) {
+  e.fleetNudgeStore ??= new FleetNudgeStore({
+    storageV5,
+  });
+  return e.fleetNudgeStore;
 }
 //@ chunk-5gatfnjn.js:2718-2735 placement
 var FleetNudgeStoreContext = qt(null);
@@ -190,5 +238,4 @@ function useFleetNudgeStore() {
     );
   return e;
 }
-
-export { useFleetNudgeStore, FleetNudgeStore, lRr, isDoneJob, FleetNudgeStoreContext };
+export { useFleetNudgeStore, FleetNudgeStore, requestNudgeOnce, isDoneJob, FleetNudgeStoreContext };

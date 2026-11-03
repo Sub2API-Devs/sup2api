@@ -8,117 +8,185 @@
 import { x } from "../../../../../../runtime/bun-runtime.js";
 
 //@ chunk-fq0cr76a.js:324123-326473 cjs-require-graph
-var Tg = x(function (DN) {
-  Object.defineProperty(DN, "__esModule", { value: !0 });
-  DN.varint64read = lj;
-  DN.varint64write = cj;
-  DN.int64FromString = uj;
-  DN.int64ToString = dj;
-  DN.uInt64ToString = NN;
-  DN.varint32write = pj;
-  DN.varint32read = hj;
-  function lj() {
-    let e = 0,
-      n = 0;
-    for (let s = 0; s < 28; s += 7) {
-      let h = this.buf[this.pos++];
-      if (((e |= (h & 127) << s), (h & 128) == 0)) return (this.assertBounds(), [e, n]);
+var require_varint = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.varint64read = varint64read;
+  cjsExports.varint64write = varint64write;
+  cjsExports.int64FromString = int64FromString;
+  cjsExports.int64ToString = int64ToString;
+  cjsExports.uInt64ToString = uInt64ToString;
+  cjsExports.varint32write = varint32write;
+  cjsExports.varint32read = varint32read;
+  function varint64read() {
+    let lowBits = 0;
+    let highBits = 0;
+    for (let shift = 0; shift < 28; shift += 7) {
+      let b = this.buf[this.pos++];
+      lowBits |= (b & 127) << shift;
+      if ((b & 128) == 0) {
+        this.assertBounds();
+        return [lowBits, highBits];
+      }
     }
-    let r = this.buf[this.pos++];
-    if (((e |= (r & 15) << 28), (n = (r & 112) >> 4), (r & 128) == 0)) return (this.assertBounds(), [e, n]);
-    for (let s = 3; s <= 31; s += 7) {
-      let h = this.buf[this.pos++];
-      if (((n |= (h & 127) << s), (h & 128) == 0)) return (this.assertBounds(), [e, n]);
+    let middleByte = this.buf[this.pos++];
+    lowBits |= (middleByte & 15) << 28;
+    highBits = (middleByte & 112) >> 4;
+    if ((middleByte & 128) == 0) {
+      this.assertBounds();
+      return [lowBits, highBits];
+    }
+    for (let shift = 3; shift <= 31; shift += 7) {
+      let b = this.buf[this.pos++];
+      highBits |= (b & 127) << shift;
+      if ((b & 128) == 0) {
+        this.assertBounds();
+        return [lowBits, highBits];
+      }
     }
     throw Error("invalid varint");
   }
-  function cj(e, n, r) {
-    for (let y = 0; y < 28; y = y + 7) {
-      let b = e >>> y,
-        S = !(b >>> 7 == 0 && n == 0),
-        w = (S ? b | 128 : b) & 255;
-      if ((r.push(w), !S)) return;
+  function varint64write(lo, hi, bytes) {
+    for (let i = 0; i < 28; i = i + 7) {
+      let shift = lo >>> i;
+      let hasNext = !(shift >>> 7 == 0 && hi == 0);
+      let byte = (hasNext ? shift | 128 : shift) & 255;
+      bytes.push(byte);
+      if (!hasNext) return;
     }
-    let s = ((e >>> 28) & 15) | ((n & 7) << 4),
-      h = n >> 3 != 0;
-    if ((r.push((h ? s | 128 : s) & 255), !h)) return;
-    for (let y = 3; y < 31; y = y + 7) {
-      let b = n >>> y,
-        S = b >>> 7 != 0,
-        w = (S ? b | 128 : b) & 255;
-      if ((r.push(w), !S)) return;
+    let splitBits = ((lo >>> 28) & 15) | ((hi & 7) << 4);
+    let hasMoreBits = hi >> 3 != 0;
+    bytes.push((hasMoreBits ? splitBits | 128 : splitBits) & 255);
+    if (!hasMoreBits) return;
+    for (let i = 3; i < 31; i = i + 7) {
+      let shift = hi >>> i;
+      let hasNext = shift >>> 7 != 0;
+      let byte = (hasNext ? shift | 128 : shift) & 255;
+      bytes.push(byte);
+      if (!hasNext) return;
     }
-    r.push((n >>> 31) & 1);
+    bytes.push((hi >>> 31) & 1);
   }
-  var wg = 4294967296;
-  function uj(e) {
-    let n = e[0] === "-";
-    if (n) e = e.slice(1);
-    let r = 1e6,
-      s = 0,
-      h = 0;
-    function y(b, S) {
-      let w = Number(e.slice(b, S));
-      if (((h *= r), (s = s * r + w), s >= wg)) ((h = h + ((s / wg) | 0)), (s = s % wg));
+  var TWO_PWR_32_DBL = 4294967296;
+  function int64FromString(dec) {
+    let minus = dec[0] === "-";
+    if (minus) dec = dec.slice(1);
+    let base = 1e6;
+    let lowBits = 0;
+    let highBits = 0;
+    function add1e6digit(begin, end) {
+      let digit1e6 = Number(dec.slice(begin, end));
+      highBits *= base;
+      lowBits = lowBits * base + digit1e6;
+      if (lowBits >= TWO_PWR_32_DBL) {
+        highBits = highBits + ((lowBits / TWO_PWR_32_DBL) | 0);
+        lowBits = lowBits % TWO_PWR_32_DBL;
+      }
     }
-    return (y(-24, -18), y(-18, -12), y(-12, -6), y(-6), n ? kN(s, h) : Fx(s, h));
+    add1e6digit(-24, -18);
+    add1e6digit(-18, -12);
+    add1e6digit(-12, -6);
+    add1e6digit(-6);
+    return minus ? negate(lowBits, highBits) : newBits(lowBits, highBits);
   }
-  function dj(e, n) {
-    let r = Fx(e, n),
-      s = r.hi & 2147483648;
-    if (s) r = kN(r.lo, r.hi);
-    let h = NN(r.lo, r.hi);
-    return s ? "-" + h : h;
+  function int64ToString(lo, hi) {
+    let bits = newBits(lo, hi);
+    let negative = bits.hi & 2147483648;
+    if (negative) bits = negate(bits.lo, bits.hi);
+    let result = uInt64ToString(bits.lo, bits.hi);
+    return negative ? "-" + result : result;
   }
-  function NN(e, n) {
-    if ((({ lo: e, hi: n } = fj(e, n)), n <= 2097151)) return String(wg * n + e);
-    let r = e & 16777215,
-      s = ((e >>> 24) | (n << 8)) & 16777215,
-      h = (n >> 16) & 65535,
-      y = r + s * 6777216 + h * 6710656,
-      b = s + h * 8147497,
-      S = h * 2,
-      w = 1e7;
-    if (y >= w) ((b += Math.floor(y / w)), (y %= w));
-    if (b >= w) ((S += Math.floor(b / w)), (b %= w));
-    return S.toString() + IN(b) + IN(y);
+  function uInt64ToString(lo, hi) {
+    ({ lo, hi } = toUnsigned(lo, hi));
+    if (hi <= 2097151) return String(TWO_PWR_32_DBL * hi + lo);
+    let low = lo & 16777215;
+    let mid = ((lo >>> 24) | (hi << 8)) & 16777215;
+    let high = (hi >> 16) & 65535;
+    let digitA = low + mid * 6777216 + high * 6710656;
+    let digitB = mid + high * 8147497;
+    let digitC = high * 2;
+    let base = 1e7;
+    if (digitA >= base) {
+      digitB += Math.floor(digitA / base);
+      digitA %= base;
+    }
+    if (digitB >= base) {
+      digitC += Math.floor(digitB / base);
+      digitB %= base;
+    }
+    return (
+      digitC.toString() + decimalFrom1e7WithLeadingZeros(digitB) + decimalFrom1e7WithLeadingZeros(digitA)
+    );
   }
-  function fj(e, n) {
-    return { lo: e >>> 0, hi: n >>> 0 };
+  function toUnsigned(lo, hi) {
+    return {
+      lo: lo >>> 0,
+      hi: hi >>> 0,
+    };
   }
-  function Fx(e, n) {
-    return { lo: e | 0, hi: n | 0 };
+  function newBits(lo, hi) {
+    return {
+      lo: lo | 0,
+      hi: hi | 0,
+    };
   }
-  function kN(e, n) {
-    if (((n = ~n), e)) e = ~e + 1;
-    else n += 1;
-    return Fx(e, n);
+  function negate(lowBits, highBits) {
+    highBits = ~highBits;
+    if (lowBits) lowBits = ~lowBits + 1;
+    else highBits += 1;
+    return newBits(lowBits, highBits);
   }
-  var IN = (e) => {
-    let n = String(e);
-    return "0000000".slice(n.length) + n;
+  var decimalFrom1e7WithLeadingZeros = (digit1e7) => {
+    let partial = String(digit1e7);
+    return "0000000".slice(partial.length) + partial;
   };
-  function pj(e, n) {
-    if (e >= 0) {
-      while (e > 127) (n.push((e & 127) | 128), (e = e >>> 7));
-      n.push(e);
+  function varint32write(value, bytes) {
+    if (value >= 0) {
+      while (value > 127) {
+        bytes.push((value & 127) | 128);
+        value = value >>> 7;
+      }
+      bytes.push(value);
     } else {
-      for (let r = 0; r < 9; r++) (n.push((e & 127) | 128), (e = e >> 7));
-      n.push(1);
+      for (let i = 0; i < 9; i++) {
+        bytes.push((value & 127) | 128);
+        value = value >> 7;
+      }
+      bytes.push(1);
     }
   }
-  function hj() {
-    let e = this.buf[this.pos++],
-      n = e & 127;
-    if ((e & 128) == 0) return (this.assertBounds(), n);
-    if (((e = this.buf[this.pos++]), (n |= (e & 127) << 7), (e & 128) == 0)) return (this.assertBounds(), n);
-    if (((e = this.buf[this.pos++]), (n |= (e & 127) << 14), (e & 128) == 0)) return (this.assertBounds(), n);
-    if (((e = this.buf[this.pos++]), (n |= (e & 127) << 21), (e & 128) == 0)) return (this.assertBounds(), n);
-    ((e = this.buf[this.pos++]), (n |= (e & 15) << 28));
-    for (let r = 5; (e & 128) !== 0 && r < 10; r++) e = this.buf[this.pos++];
-    if ((e & 128) != 0) throw Error("invalid varint");
-    return (this.assertBounds(), n >>> 0);
+  function varint32read() {
+    let b = this.buf[this.pos++];
+    let result = b & 127;
+    if ((b & 128) == 0) {
+      this.assertBounds();
+      return result;
+    }
+    b = this.buf[this.pos++];
+    result |= (b & 127) << 7;
+    if ((b & 128) == 0) {
+      this.assertBounds();
+      return result;
+    }
+    b = this.buf[this.pos++];
+    result |= (b & 127) << 14;
+    if ((b & 128) == 0) {
+      this.assertBounds();
+      return result;
+    }
+    b = this.buf[this.pos++];
+    result |= (b & 127) << 21;
+    if ((b & 128) == 0) {
+      this.assertBounds();
+      return result;
+    }
+    b = this.buf[this.pos++];
+    result |= (b & 15) << 28;
+    for (let readBytes = 5; (b & 128) !== 0 && readBytes < 10; readBytes++) b = this.buf[this.pos++];
+    if ((b & 128) != 0) throw Error("invalid varint");
+    this.assertBounds();
+    return result >>> 0;
   }
 });
-
-export { Tg };
+export { require_varint };

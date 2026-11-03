@@ -8,19 +8,24 @@
 import { x } from "../../../../../../runtime/bun-runtime.js";
 
 //@ chunk-1r4fv9mg.js:8621-9050 cjs-fingerprint
-var Se = x(function (Ar, It) {
-  It.exports = {
+var require_unevaluated = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = {
     $schema: "https://json-schema.org/draft/2020-12/schema",
     $id: "https://json-schema.org/draft/2020-12/meta/unevaluated",
-    $vocabulary: { "https://json-schema.org/draft/2020-12/vocab/unevaluated": !0 },
+    $vocabulary: {
+      "https://json-schema.org/draft/2020-12/vocab/unevaluated": true,
+    },
     $dynamicAnchor: "meta",
     title: "Unevaluated applicator vocabulary meta-schema",
     type: ["object", "boolean"],
     properties: {
-      unevaluatedItems: { $dynamicRef: "#meta" },
-      unevaluatedProperties: { $dynamicRef: "#meta" },
+      unevaluatedItems: {
+        $dynamicRef: "#meta",
+      },
+      unevaluatedProperties: {
+        $dynamicRef: "#meta",
+      },
     },
   };
 });
-
-export { Se };
+export { require_unevaluated };

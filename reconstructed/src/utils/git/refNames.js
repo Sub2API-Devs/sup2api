@@ -11,35 +11,37 @@
 import { isWellFormedString } from "../stringUtils.js";
 
 //@ chunk-6xf89m6d.js:227-305 placement
-var MAX_GIT_REF_CHARS = 255,
-  MAX_GIT_REF_BYTES = 255,
-  INVALID_GIT_REF_CHARS_RE = /[\x00-\x20\x7f~^:?*[\\]/,
-  CONTROL_OR_FORMAT_CHARS_RE = /[\p{Cc}\p{Cf}\uFFFD]/u,
-  MAX_GIT_REF_COMPONENT_BYTES = 250;
+var MAX_GIT_REF_CHARS = 255;
+var MAX_GIT_REF_BYTES = 255;
+var INVALID_GIT_REF_CHARS_RE = /[\x00-\x20\x7f~^:?*[\\]/;
+var CONTROL_OR_FORMAT_CHARS_RE = /[\p{Cc}\p{Cf}\uFFFD]/u;
+var MAX_GIT_REF_COMPONENT_BYTES = 250;
+//@ chunk-6xf89m6d.js:305-365 placement
 /**
  * 校验 git 引用名：UTF-8 字节长度 ≤255，且逐项规则通过（非 @/HEAD、不以 - 开头、无控制符、各段 ≤250 字节）。
  */
-//@ chunk-6xf89m6d.js:305-365 placement
-function isValidGitRefName(n) {
-  return Buffer.byteLength(n, "utf8") <= MAX_GIT_REF_BYTES && isValidGitRefNameChars(n);
-}
-//@ chunk-6xf89m6d.js:365-523 placement
-function isValidGitRefNameChars(n) {
+function isValidGitRefName(worktreeBranch) {
   return (
-    n.length <= MAX_GIT_REF_CHARS &&
-    n !== "@" &&
-    n !== "HEAD" &&
-    isWellFormedString(n) &&
-    getTaskListLockPath(n) &&
-    !CONTROL_OR_FORMAT_CHARS_RE.test(n) &&
-    !n.startsWith("-") &&
-    n.split("/").every((r) => Buffer.byteLength(r, "utf8") <= MAX_GIT_REF_COMPONENT_BYTES)
+    Buffer.byteLength(worktreeBranch, "utf8") <= MAX_GIT_REF_BYTES && isValidGitRefNameChars(worktreeBranch)
   );
 }
+//@ chunk-6xf89m6d.js:365-523 placement
+function isValidGitRefNameChars(taskListId) {
+  return (
+    taskListId.length <= MAX_GIT_REF_CHARS &&
+    taskListId !== "@" &&
+    taskListId !== "HEAD" &&
+    isWellFormedString(taskListId) &&
+    getTaskListLockPath(taskListId) &&
+    !CONTROL_OR_FORMAT_CHARS_RE.test(taskListId) &&
+    !taskListId.startsWith("-") &&
+    taskListId.split("/").every((r) => Buffer.byteLength(r, "utf8") <= MAX_GIT_REF_COMPONENT_BYTES)
+  );
+}
+//@ chunk-6xf89m6d.js:523-685 placement = getTaskListLockPath (1)
 /**
  * git ref 名合法性检查（切分误归）。
  */
-//@ chunk-6xf89m6d.js:523-685 placement = getTaskListLockPath (1)
 function getTaskListLockPath(taskListId) {
   return (
     !INVALID_GIT_REF_CHARS_RE.test(taskListId) &&
@@ -49,5 +51,4 @@ function getTaskListLockPath(taskListId) {
     taskListId.split("/").every((r) => r !== "" && !r.startsWith(".") && !r.endsWith(".lock"))
   );
 }
-
 export { isValidGitRefName, MAX_GIT_REF_CHARS };

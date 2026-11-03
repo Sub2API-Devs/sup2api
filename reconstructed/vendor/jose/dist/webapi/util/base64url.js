@@ -6,29 +6,32 @@
  * attribution: esm-fingerprint 2
  */
 import { textDecoder, textEncoder } from "../lib/buffer_utils.js";
-import { ue, Ce } from "../lib/base64.js";
+import { decodeBase64, encodeBase64 } from "../lib/base64.js";
 
 //@ chunk-5h78gfwc.js:1615-1923 esm-fingerprint
-function v_2(e) {
+function decode_2(input) {
   if (Uint8Array.fromBase64)
-    return Uint8Array.fromBase64(typeof e === "string" ? e : textDecoder.decode(e), {
+    return Uint8Array.fromBase64(typeof input === "string" ? input : textDecoder.decode(input), {
       alphabet: "base64url",
     });
-  let t = e;
-  if (t instanceof Uint8Array) t = textDecoder.decode(t);
-  t = t.replace(/-/g, "+").replace(/_/g, "/");
+  let encoded = input;
+  if (encoded instanceof Uint8Array) encoded = textDecoder.decode(encoded);
+  encoded = encoded.replace(/-/g, "+").replace(/_/g, "/");
   try {
-    return ue(t);
+    return decodeBase64(encoded);
   } catch {
     throw TypeError("The input to be decoded is not correctly encoded.");
   }
 }
 //@ chunk-5h78gfwc.js:1923-2140 esm-fingerprint
-function y(e) {
-  let t = e;
-  if (typeof t === "string") t = textEncoder.encode(t);
-  if (Uint8Array.prototype.toBase64) return t.toBase64({ alphabet: "base64url", omitPadding: !0 });
-  return Ce(t).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
+function encode_2(input) {
+  let unencoded = input;
+  if (typeof unencoded === "string") unencoded = textEncoder.encode(unencoded);
+  if (Uint8Array.prototype.toBase64)
+    return unencoded.toBase64({
+      alphabet: "base64url",
+      omitPadding: true,
+    });
+  return encodeBase64(unencoded).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
 }
-
-export { y, v_2 };
+export { encode_2, decode_2 };

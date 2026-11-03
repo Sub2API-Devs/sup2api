@@ -15,11 +15,10 @@ function zn(e) {
 //@ chunk-mrx6y2r5.js:34851-34958 esm-fingerprint
 function tr(e) {
   if (zn(e)) {
-    let t = typeof e.name === "string",
-      r = typeof e.message === "string";
-    return t && r;
+    let hasName = typeof e.name === "string";
+    let r = typeof e.message === "string";
+    return hasName && r;
   }
-  return !1;
+  return false;
 }
-
 export { zn, tr };

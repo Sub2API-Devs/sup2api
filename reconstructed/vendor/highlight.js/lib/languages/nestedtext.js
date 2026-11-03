@@ -8,25 +8,59 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:308874-309437 cjs-fingerprint
-var di = x(function (og, li) {
-  function Op(e) {
-    let t = { match: [/^\s*(?=\S)/, /[^:]+/, /:\s*/, /$/], className: { 2: "attribute", 3: "punctuation" } },
-      n = {
-        match: [/^\s*(?=\S)/, /[^:]*[^: ]/, /[ ]*:/, /[ ]/, /.*$/],
-        className: { 2: "attribute", 3: "punctuation", 5: "string" },
+var require_nestedtext = x(function (cjsExports, cjsModule) {
+  function nestedtext(hljs) {
+    let NESTED = {
+      match: [/^\s*(?=\S)/, /[^:]+/, /:\s*/, /$/],
+      className: {
+        2: "attribute",
+        3: "punctuation",
       },
-      a = { match: [/^\s*/, />/, /[ ]/, /.*$/], className: { 2: "punctuation", 4: "string" } },
-      s = {
-        variants: [{ match: [/^\s*/, /-/, /[ ]/, /.*$/] }, { match: [/^\s*/, /-$/] }],
-        className: { 2: "bullet", 4: "string" },
-      };
+    };
+    let DICTIONARY_ITEM = {
+      match: [/^\s*(?=\S)/, /[^:]*[^: ]/, /[ ]*:/, /[ ]/, /.*$/],
+      className: {
+        2: "attribute",
+        3: "punctuation",
+        5: "string",
+      },
+    };
+    let STRING = {
+      match: [/^\s*/, />/, /[ ]/, /.*$/],
+      className: {
+        2: "punctuation",
+        4: "string",
+      },
+    };
+    let LIST_ITEM = {
+      variants: [
+        {
+          match: [/^\s*/, /-/, /[ ]/, /.*$/],
+        },
+        {
+          match: [/^\s*/, /-$/],
+        },
+      ],
+      className: {
+        2: "bullet",
+        4: "string",
+      },
+    };
     return {
       name: "Nested Text",
       aliases: ["nt"],
-      contains: [e.inherit(e.HASH_COMMENT_MODE, { begin: /^\s*(?=#)/, excludeBegin: !0 }), s, a, t, n],
+      contains: [
+        hljs.inherit(hljs.HASH_COMMENT_MODE, {
+          begin: /^\s*(?=#)/,
+          excludeBegin: true,
+        }),
+        LIST_ITEM,
+        STRING,
+        NESTED,
+        DICTIONARY_ITEM,
+      ],
     };
   }
-  li.exports = Op;
+  cjsModule.exports = nestedtext;
 });
-
-export { di };
+export { require_nestedtext };

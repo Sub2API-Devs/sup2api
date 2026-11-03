@@ -14,23 +14,32 @@ import { JETBRAINS_IDES } from "../../utils/env.js";
 import { terminalDetector } from "../../ink/terminalColorSupport.js";
 
 //@ chunk-e6aww6q8.js:1735556-1735607 placement = default (1)
-var Men = { isEnabled: () => !1, isHidden: !0, name: "stub" };
+var stubScrollSpeedCommand = {
+  isEnabled: () => false,
+  isHidden: true,
+  name: "stub",
+};
 //@ chunk-e6aww6q8.js:1735607-1735658 placement = default (1)
-var Oen = { isEnabled: () => !1, isHidden: !0, name: "stub" };
+var stubScrollSpeedCommand_2 = {
+  isEnabled: () => false,
+  isHidden: true,
+  name: "stub",
+};
+//@ chunk-e6aww6q8.js:1735658-1735872 placement
 /**
  * /scroll-speed 命令对象（local-jsx）；描述：Adjust mouse wheel scroll speed；isEnabled: ()=>{if(!wd())return!1;let e=_u();return!(e?jhe.includes(e.terminal??""):DA.isJetBrainsIdeTerminal())}；实现 chunk-myhtjy4v.js 的 gr。
  */
-//@ chunk-e6aww6q8.js:1735658-1735872 placement
 var scrollSpeedCommandDefinition = {
-    type: "local-jsx",
-    name: "scroll-speed",
-    description: "Adjust mouse wheel scroll speed",
-    isEnabled: () => {
-      if (!isFullscreenEnvEnabled()) return !1;
-      let e = getAttacherCaps();
-      return !(e ? JETBRAINS_IDES.includes(e.terminal ?? "") : terminalDetector.isJetBrainsIdeTerminal());
-    },
+  type: "local-jsx",
+  name: "scroll-speed",
+  description: "Adjust mouse wheel scroll speed",
+  isEnabled: () => {
+    if (!isFullscreenEnvEnabled()) return false;
+    let attacherCaps = getAttacherCaps();
+    return !(attacherCaps
+      ? JETBRAINS_IDES.includes(attacherCaps.terminal ?? "")
+      : terminalDetector.isJetBrainsIdeTerminal());
   },
-  scrollSpeedCommand = scrollSpeedCommandDefinition;
-
-export { Oen, Men, scrollSpeedCommand };
+};
+var scrollSpeedCommand = scrollSpeedCommandDefinition;
+export { stubScrollSpeedCommand_2, stubScrollSpeedCommand, scrollSpeedCommand };

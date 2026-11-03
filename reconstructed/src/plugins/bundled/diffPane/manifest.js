@@ -10,10 +10,10 @@
  */
 import { x } from "../../../../runtime/bun-runtime.js";
 
+//@ chunk-wyqg6m3h.js:4629-5213 placement
 /**
  * 内置 diff 插件包的 manifest（CommonJS 包裹）：声明扫描到的钩子（session.start、ui.render、command.run…）与调用的宿主能力。
  */
-//@ chunk-wyqg6m3h.js:4629-5213 placement
 var diffPaneManifest = x(function (QI, li) {
   li.exports = {
     scan: {
@@ -53,10 +53,12 @@ var diffPaneManifest = x(function (QI, li) {
         "ui.status",
       ],
       runCommands: ["clear", "diff", "resume"],
-      env: { reads: ["CLAUDE_CODE_DISABLE_FILE_CHECKPOINTING"], writes: [] },
+      env: {
+        reads: ["CLAUDE_CODE_DISABLE_FILE_CHECKPOINTING"],
+        writes: [],
+      },
     },
     files: {},
   };
 });
-
 export { diffPaneManifest };

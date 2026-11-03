@@ -8,13 +8,14 @@
  * pieces: chunk-01h7thcn.js (2)
  * attribution: placement 2
  */
-
 //@ chunk-01h7thcn.js:191-204 placement
-var t = {},
-  e = t;
+var EMPTY_FROZEN_OBJECT = {};
+var EMPTY_FROZEN_OBJECT_ALT = EMPTY_FROZEN_OBJECT;
 //@ chunk-01h7thcn.js:204-232 placement
-function nd(o) {
-  return o ? e : t;
+/**
+ * 返回共享的冻结空对象（真值/假值两个别名）。
+ */
+function stableEmptyObject(o) {
+  return o ? EMPTY_FROZEN_OBJECT_ALT : EMPTY_FROZEN_OBJECT;
 }
-
-export { nd };
+export { stableEmptyObject };

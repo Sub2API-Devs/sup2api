@@ -13,177 +13,207 @@ import { Sr } from "./oneof.js";
 import { de } from "./util.js";
 
 //@ chunk-pwh5dx3n.js:109305-112807 cjs-fingerprint
-var xs = x(function (fA, wd) {
-  wd.exports = Le;
-  var Is = zr();
-  ((Le.prototype = Object.create(Is.prototype)).constructor = Le).className = "Root";
-  var Ns = Yt(),
-    Ja = nt(),
-    AE = Sr(),
-    Ut = de(),
-    Xa,
-    Qa,
-    Ni;
-  function Le(e) {
-    (Is.call(this, "", e),
-      (this.deferred = []),
-      (this.files = []),
-      (this._edition = "proto2"),
-      (this._fullyQualifiedObjects = {}));
+var xs = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = Root;
+  var Namespace = zr();
+  ((Root.prototype = Object.create(Namespace.prototype)).constructor = Root).className = "Root";
+  var Field = Yt();
+  var Enum = nt();
+  var OneOf = Sr();
+  var util = de();
+  var Type;
+  var parse;
+  var common;
+  function Root(options) {
+    Namespace.call(this, "", options);
+    this.deferred = [];
+    this.files = [];
+    this._edition = "proto2";
+    this._fullyQualifiedObjects = {};
   }
-  Le.fromJSON = function (t, r, i) {
-    if (((i = Ut.checkDepth(i)), !r)) r = new Le();
-    if (t.options) r.setOptions(t.options);
-    return r.addJSON(t.nested, i).resolveAll();
+  Root.fromJSON = function (json, root, depth) {
+    depth = util.checkDepth(depth);
+    if (!root) root = new Root();
+    if (json.options) root.setOptions(json.options);
+    return root.addJSON(json.nested, depth).resolveAll();
   };
-  Le.prototype.resolvePath = Ut.path.resolve;
-  Le.prototype.fetch = Ut.fetch;
-  function Od() {}
-  Le.prototype.load = function e(t, r, i) {
-    if (typeof r === "function") ((i = r), (r = void 0));
-    var s = this;
-    if (!i) return Ut.asPromise(e, s, t, r);
-    var n = i === Od;
-    function a(m, f) {
-      if (!i) return;
-      if (n) throw m;
-      if (f) f.resolveAll();
-      var y = i;
-      ((i = null), y(m, f));
+  Root.prototype.resolvePath = util.path.resolve;
+  Root.prototype.fetch = util.fetch;
+  function SYNC() {}
+  Root.prototype.load = function load(filename, options, callback) {
+    if (typeof options === "function") {
+      callback = options;
+      options = undefined;
     }
-    function o(m) {
-      var index = m.lastIndexOf("google/protobuf/");
-      if (index > -1) {
-        var substring = m.substring(index);
-        if (substring in Ni) return substring;
+    var s = this;
+    if (!callback) return util.asPromise(load, s, filename, options);
+    var sync = callback === SYNC;
+    function finish(err, root) {
+      if (!callback) return;
+      if (sync) throw err;
+      if (root) root.resolveAll();
+      var cb = callback;
+      callback = null;
+      cb(err, root);
+    }
+    function getBundledFileName(filename) {
+      var idx = filename.lastIndexOf("google/protobuf/");
+      if (idx > -1) {
+        var altname = filename.substring(idx);
+        if (altname in common) return altname;
       }
       return null;
     }
-    function l(m, f) {
+    function l(filename, source) {
       try {
-        if (Ut.isString(f) && f.charAt(0) === "{") f = JSON.parse(f);
-        if (!Ut.isString(f)) s.setOptions(f.options).addJSON(f.nested);
+        if (util.isString(source) && source.charAt(0) === "{") source = JSON.parse(source);
+        if (!util.isString(source)) s.setOptions(source.options).addJSON(source.nested);
         else {
-          Qa.filename = m;
-          var y = Qa(f, s, r),
-            C,
-            E = 0;
-          if (y.imports) {
-            for (; E < y.imports.length; ++E)
-              if ((C = o(y.imports[E]) || s.resolvePath(m, y.imports[E]))) c(C);
+          parse.filename = filename;
+          var parsed = parse(source, s, options);
+          var resolved;
+          var i = 0;
+          if (parsed.imports) {
+            for (; i < parsed.imports.length; ++i)
+              if (
+                (resolved =
+                  getBundledFileName(parsed.imports[i]) || s.resolvePath(filename, parsed.imports[i]))
+              )
+                c(resolved);
           }
-          if (y.weakImports) {
-            for (E = 0; E < y.weakImports.length; ++E)
-              if ((C = o(y.weakImports[E]) || s.resolvePath(m, y.weakImports[E]))) c(C, !0);
+          if (parsed.weakImports) {
+            for (i = 0; i < parsed.weakImports.length; ++i)
+              if (
+                (resolved =
+                  getBundledFileName(parsed.weakImports[i]) || s.resolvePath(filename, parsed.weakImports[i]))
+              )
+                c(resolved, true);
           }
         }
-      } catch (error) {
-        a(error);
+      } catch (err) {
+        finish(err);
       }
-      if (!n && !u) a(null, s);
+      if (!sync && !queued) finish(null, s);
     }
-    function c(m, f) {
-      if (((m = o(m) || m), s.files.indexOf(m) > -1)) return;
-      if ((s.files.push(m), m in Ni)) {
-        if (n) l(m, Ni[m]);
-        else
-          (++u,
-            setTimeout(function () {
-              (--u, l(m, Ni[m]));
-            }));
+    function c(filename, weak) {
+      filename = getBundledFileName(filename) || filename;
+      if (s.files.indexOf(filename) > -1) return;
+      s.files.push(filename);
+      if (filename in common) {
+        if (sync) l(filename, common[filename]);
+        else {
+          ++queued;
+          setTimeout(function () {
+            --queued;
+            l(filename, common[filename]);
+          });
+        }
         return;
       }
-      if (n) {
-        var y;
+      if (sync) {
+        var source;
         try {
-          y = Ut.fs.readFileSync(m).toString("utf8");
-        } catch (error) {
-          if (!f) a(error);
+          source = util.fs.readFileSync(filename).toString("utf8");
+        } catch (err) {
+          if (!weak) finish(err);
           return;
         }
-        l(m, y);
-      } else
-        (++u,
-          s.fetch(m, function (C, E) {
-            if ((--u, !i)) return;
-            if (C) {
-              if (!f) a(C);
-              else if (!u) a(null, s);
-              return;
-            }
-            l(m, E);
-          }));
+        l(filename, source);
+      } else {
+        ++queued;
+        s.fetch(filename, function (err, source) {
+          --queued;
+          if (!callback) return;
+          if (err) {
+            if (!weak) finish(err);
+            else if (!queued) finish(null, s);
+            return;
+          }
+          l(filename, source);
+        });
+      }
     }
-    var u = 0;
-    if (Ut.isString(t)) t = [t];
-    for (var d = 0, h; d < t.length; ++d) if ((h = s.resolvePath("", t[d]))) c(h);
-    if (n) return (s.resolveAll(), s);
-    if (!u) a(null, s);
+    var queued = 0;
+    if (util.isString(filename)) filename = [filename];
+    for (var i = 0, resolved; i < filename.length; ++i)
+      if ((resolved = s.resolvePath("", filename[i]))) c(resolved);
+    if (sync) {
+      s.resolveAll();
+      return s;
+    }
+    if (!queued) finish(null, s);
     return s;
   };
-  Le.prototype.loadSync = function (t, r) {
-    if (!Ut.isNode) throw Error("not supported");
-    return this.load(t, r, Od);
+  Root.prototype.loadSync = function (filename, options) {
+    if (!util.isNode) throw Error("not supported");
+    return this.load(filename, options, SYNC);
   };
-  Le.prototype.resolveAll = function () {
+  Root.prototype.resolveAll = function () {
     if (!this._needsRecursiveResolve) return this;
     if (this.deferred.length)
       throw Error(
         "unresolvable extensions: " +
           this.deferred
-            .map(function (t) {
-              return "'extend " + t.extend + "' in " + t.parent.fullName;
+            .map(function (field) {
+              return "'extend " + field.extend + "' in " + field.parent.fullName;
             })
             .join(", "),
       );
-    return Is.prototype.resolveAll.call(this);
+    return Namespace.prototype.resolveAll.call(this);
   };
-  var Ms = /^[A-Z]/;
-  function bd(e, t) {
-    var lookup = t.parent.lookup(t.extend);
-    if (lookup) {
-      var i = new Ns(t.fullName, t.id, t.type, t.rule, void 0, t.options);
-      if (lookup.get(i.name)) return !0;
-      return ((i.declaringField = t), (t.extensionField = i), lookup.add(i), !0);
+  var exposeRe = /^[A-Z]/;
+  function tryHandleExtension(root, field) {
+    var extendedType = field.parent.lookup(field.extend);
+    if (extendedType) {
+      var sisterField = new Field(field.fullName, field.id, field.type, field.rule, undefined, field.options);
+      if (extendedType.get(sisterField.name)) return true;
+      sisterField.declaringField = field;
+      field.extensionField = sisterField;
+      extendedType.add(sisterField);
+      return true;
     }
-    return !1;
+    return false;
   }
-  Le.prototype._handleAdd = function (t) {
-    if (t instanceof Ns) {
-      if (t.extend !== void 0 && !t.extensionField) {
-        if (!bd(this, t)) this.deferred.push(t);
+  Root.prototype._handleAdd = function (object) {
+    if (object instanceof Field) {
+      if (object.extend !== undefined && !object.extensionField) {
+        if (!tryHandleExtension(this, object)) this.deferred.push(object);
       }
-    } else if (t instanceof Ja) {
-      if (Ms.test(t.name)) t.parent[t.name] = t.values;
-    } else if (!(t instanceof AE)) {
-      if (t instanceof Xa)
-        for (var r = 0; r < this.deferred.length;)
-          if (bd(this, this.deferred[r])) this.deferred.splice(r, 1);
-          else ++r;
-      for (var i = 0; i < t.nestedArray.length; ++i) this._handleAdd(t._nestedArray[i]);
-      if (Ms.test(t.name)) t.parent[t.name] = t;
+    } else if (object instanceof Enum) {
+      if (exposeRe.test(object.name)) object.parent[object.name] = object.values;
+    } else if (!(object instanceof OneOf)) {
+      if (object instanceof Type)
+        for (var i_2 = 0; i_2 < this.deferred.length;)
+          if (tryHandleExtension(this, this.deferred[i_2])) this.deferred.splice(i_2, 1);
+          else ++i_2;
+      for (var j = 0; j < object.nestedArray.length; ++j) this._handleAdd(object._nestedArray[j]);
+      if (exposeRe.test(object.name)) object.parent[object.name] = object;
     }
-    if (t instanceof Xa || t instanceof Ja || t instanceof Ns) this._fullyQualifiedObjects[t.fullName] = t;
+    if (object instanceof Type || object instanceof Enum || object instanceof Field)
+      this._fullyQualifiedObjects[object.fullName] = object;
   };
-  Le.prototype._handleRemove = function (t) {
-    if (t instanceof Ns) {
-      if (t.extend !== void 0)
-        if (t.extensionField) (t.extensionField.parent.remove(t.extensionField), (t.extensionField = null));
-        else {
-          var index = this.deferred.indexOf(t);
+  Root.prototype._handleRemove = function (object) {
+    if (object instanceof Field) {
+      if (object.extend !== undefined)
+        if (object.extensionField) {
+          object.extensionField.parent.remove(object.extensionField);
+          object.extensionField = null;
+        } else {
+          var index = this.deferred.indexOf(object);
           if (index > -1) this.deferred.splice(index, 1);
         }
-    } else if (t instanceof Ja) {
-      if (Ms.test(t.name)) delete t.parent[t.name];
-    } else if (t instanceof Is) {
-      for (var i = 0; i < t.nestedArray.length; ++i) this._handleRemove(t._nestedArray[i]);
-      if (Ms.test(t.name)) delete t.parent[t.name];
+    } else if (object instanceof Enum) {
+      if (exposeRe.test(object.name)) delete object.parent[object.name];
+    } else if (object instanceof Namespace) {
+      for (var i = 0; i < object.nestedArray.length; ++i) this._handleRemove(object._nestedArray[i]);
+      if (exposeRe.test(object.name)) delete object.parent[object.name];
     }
-    delete this._fullyQualifiedObjects[t.fullName];
+    delete this._fullyQualifiedObjects[object.fullName];
   };
-  Le._configure = function (e, t, r) {
-    ((Xa = e), (Qa = t), (Ni = r));
+  Root._configure = function (Type_, parse_, common_) {
+    Type = Type_;
+    parse = parse_;
+    common = common_;
   };
 });
-
 export { xs };

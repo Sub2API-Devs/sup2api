@@ -9,16 +9,16 @@
  * attribution: placement 3
  */
 import { logRemoteTools } from "./remoteToolsDebug.js";
-import { N6 } from "../../utils/stableHash.js";
+import { stableHashWithSalt } from "../../utils/stableHash.js";
 import { SHELL_TOOL_NAMES } from "../../utils/shell/shellToolUtils.js";
 import { sleep } from "../../utils/sleep.js";
 
 //@ chunk-4nx37fzw.js:334-344 placement
-var a = 256;
+var MAX_ASK_CARDS_TRACKED = 256;
+//@ chunk-4nx37fzw.js:344-3731 placement
 /**
  * 一次远程 ask 的状态机（发起、继承的请求撤回、超时、回答）。
  */
-//@ chunk-4nx37fzw.js:344-3731 placement
 class RemoteAskCard {
   callId;
   toolName;
@@ -31,7 +31,7 @@ class RemoteAskCard {
   #i;
   #u;
   #a;
-  #l = !1;
+  #l = false;
   #d;
   #h;
   #m;
@@ -44,23 +44,23 @@ class RemoteAskCard {
   #y = 0;
   #w = 0;
   #g;
-  #A = !1;
+  #A = false;
   #b = new Map();
   #o;
   #n;
   constructor(e) {
-    ((this.callId = e.callId),
-      (this.toolName = e.toolName),
-      (this.hostName = e.hostName),
-      (this.dispatchEpoch = e.dispatchEpoch),
-      (this.#k = e.onAskEnded),
-      (this.#n = e.now),
-      (this.issuedAt = e.now()));
+    this.callId = e.callId;
+    this.toolName = e.toolName;
+    this.hostName = e.hostName;
+    this.dispatchEpoch = e.dispatchEpoch;
+    this.#k = e.onAskEnded;
+    this.#n = e.now;
+    this.issuedAt = e.now();
   }
   get phase() {
-    if (this.#o !== void 0) return "settled";
-    if (this.#t !== void 0) return "asking";
-    return this.#d === void 0 ? "pending" : "sent";
+    if (this.#o !== undefined) return "settled";
+    if (this.#t !== undefined) return "asking";
+    return this.#d === undefined ? "pending" : "sent";
   }
   get instanceId() {
     return this.#e;
@@ -77,17 +77,20 @@ class RemoteAskCard {
   get inheritedWithdrawn() {
     return this.#l;
   }
-  inherit(e, n) {
-    this.#a = { requestId: e, withdraw: n };
+  inherit(requestId, withdraw) {
+    this.#a = {
+      requestId,
+      withdraw,
+    };
   }
   withdrawInherited() {
-    if (this.#a === void 0 || this.#l) return !1;
-    return (
-      (this.#l = !0),
-      logRemoteTools(this.callId, "inherited standing request withdrawn", { host_inst: this.#e }),
-      this.#a.withdraw(),
-      !0
-    );
+    if (this.#a === undefined || this.#l) return false;
+    this.#l = true;
+    logRemoteTools(this.callId, "inherited standing request withdrawn", {
+      host_inst: this.#e,
+    });
+    this.#a.withdraw();
+    return true;
   }
   get ask() {
     return this.#t;
@@ -114,10 +117,10 @@ class RemoteAskCard {
     return this.#A;
   }
   noteSentWithoutAskSeat() {
-    this.#A = !0;
+    this.#A = true;
   }
   get askingMs() {
-    return this.#t === void 0 ? this.#f : this.#f + (this.#n() - this.#t.since);
+    return this.#t === undefined ? this.#f : this.#f + (this.#n() - this.#t.since);
   }
   get settled() {
     return this.#o;
@@ -126,23 +129,27 @@ class RemoteAskCard {
     return this.#d?.wireName;
   }
   get fingerprint() {
-    if (this.#h === void 0 && this.#d !== void 0) this.#h = N6(this.#d.wireName, this.#d.input);
+    if (this.#h === undefined && this.#d !== undefined)
+      this.#h = stableHashWithSalt(this.#d.wireName, this.#d.input);
     return this.#h;
   }
   get askedAboutKey() {
-    if (this.#d === void 0) return;
+    if (this.#d === undefined) return;
     return SHELL_TOOL_NAMES.includes(this.toolName)
-      ? N6(this.#d.wireName, { command: this.#d.input.command })
+      ? stableHashWithSalt(this.#d.wireName, {
+          command: this.#d.input.command,
+        })
       : this.fingerprint;
   }
   sent(e) {
-    ((this.#d = e), (this.#h = void 0));
+    this.#d = e;
+    this.#h = undefined;
   }
   questionRaised() {
     this.#r = "raised";
   }
   answeredWithoutPrompt() {
-    this.#r = this.#s === void 0 ? "answered" : "none";
+    this.#r = this.#s === undefined ? "answered" : "none";
   }
   get approvedBy() {
     return this.#p;
@@ -151,33 +158,35 @@ class RemoteAskCard {
     this.#p = e;
   }
   recordAddressee(e, n, t) {
-    if (this.#e !== void 0 && this.#e !== e) this.#s = void 0;
-    ((this.#e = e), (this.#i ??= n), (this.#u = t ?? this.#u));
+    if (this.#e !== undefined && this.#e !== e) this.#s = undefined;
+    this.#e = e;
+    this.#i ??= n;
+    this.#u = t ?? this.#u;
   }
   beginQueuedWait() {
-    let e = this.#n(),
-      n = !1;
+    let e = this.#n();
+    let n = false;
     return () => {
       if (n) return;
-      ((n = !0), (this.#y += this.#n() - e));
+      n = true;
+      this.#y += this.#n() - e;
     };
   }
   beginAskSeatWait() {
-    let e = this.#n(),
-      n = !1;
+    let e = this.#n();
+    let n = false;
     return () => {
       if (n) return;
-      ((n = !0), (this.#w += this.#n() - e));
+      n = true;
+      this.#w += this.#n() - e;
     };
   }
   beginReconnectHold() {
     let e = this.#n();
-    return (
-      (this.#g = 0),
-      () => {
-        this.#g = this.#n() - e;
-      }
-    );
+    this.#g = 0;
+    return () => {
+      this.#g = this.#n() - e;
+    };
   }
   legTransit(e) {
     return this.#b.get(e);
@@ -192,57 +201,77 @@ class RemoteAskCard {
     this.#m = e;
   }
   async whileAsking(e, n, t) {
-    if ((this.#c(), (this.#r = "asking"), (this.#t = { ...e, since: this.#n() }), this.#s !== void 0))
-      e.end?.(this.#s);
-    let abortController = new AbortController(),
-      i,
-      s = () => {
-        if (t === void 0 || abortController.signal.aborted) return;
-        i?.abort();
-        let abortController_2 = new AbortController();
-        ((i = abortController_2),
-          sleep(t.afterMs, abortController_2.signal).then(() => {
-            if (!abortController_2.signal.aborted && !abortController.signal.aborted)
-              (logRemoteTools(this.callId, "ask lapsed unanswered", { ask_id: e.askId, after_ms: t.afterMs }),
-                this.endAsk(t.reason));
-          }));
-      };
+    this.#c();
+    this.#r = "asking";
+    this.#t = {
+      ...e,
+      since: this.#n(),
+    };
+    if (this.#s !== undefined) e.end?.(this.#s);
+    let abortController = new AbortController();
+    let i;
+    let s = () => {
+      if (t === undefined || abortController.signal.aborted) return;
+      i?.abort();
+      let abortController_2 = new AbortController();
+      i = abortController_2;
+      sleep(t.afterMs, abortController_2.signal).then(() => {
+        if (!abortController_2.signal.aborted && !abortController.signal.aborted) {
+          logRemoteTools(this.callId, "ask lapsed unanswered", {
+            ask_id: e.askId,
+            after_ms: t.afterMs,
+          });
+          this.endAsk(t.reason);
+        }
+      });
+    };
     s();
     try {
-      return await n({ hold: () => i?.abort(), resume: s });
+      return await n({
+        hold: () => i?.abort(),
+        resume: s,
+      });
     } finally {
-      (abortController.abort(), i?.abort(), (this.#r = this.#s === void 0 ? "answered" : "none"), this.#c());
+      abortController.abort();
+      i?.abort();
+      this.#r = this.#s === undefined ? "answered" : "none";
+      this.#c();
     }
   }
   endAsk(e) {
-    if (this.#s !== void 0) return;
-    ((this.#s = e),
-      logRemoteTools(this.callId, "ask ended without an answer", {
-        reason: e,
-        ask_id: this.#t?.askId,
-        host_inst: this.#e,
-        showing: this.#t?.end !== void 0,
-      }),
-      this.#t?.end?.(e),
-      this.#k?.(e));
+    if (this.#s !== undefined) return;
+    this.#s = e;
+    logRemoteTools(this.callId, "ask ended without an answer", {
+      reason: e,
+      ask_id: this.#t?.askId,
+      host_inst: this.#e,
+      showing: this.#t?.end !== undefined,
+    });
+    this.#t?.end?.(e);
+    this.#k?.(e);
   }
   #c() {
-    if (this.#t === void 0) return;
-    ((this.#f += this.#n() - this.#t.since), (this.#t = void 0));
+    if (this.#t === undefined) return;
+    this.#f += this.#n() - this.#t.since;
+    this.#t = undefined;
   }
   markSettled(e) {
-    if (this.#o !== void 0) return;
-    return (
-      this.#c(),
-      (this.#o = {
-        outcome:
-          e.kind === "completed"
-            ? { kind: "completed", disposition: e.disposition }
-            : { kind: "error", code: e.code },
-        at: this.#n(),
-      }),
-      this.#o
-    );
+    if (this.#o !== undefined) return;
+    this.#c();
+    this.#o = {
+      outcome:
+        e.kind === "completed"
+          ? {
+              kind: "completed",
+              disposition: e.disposition,
+            }
+          : {
+              kind: "error",
+              code: e.code,
+            },
+      at: this.#n(),
+    };
+    return this.#o;
   }
 }
 //@ chunk-4nx37fzw.js:3731-4680 placement
@@ -251,21 +280,25 @@ class RemoteAskSeat {
   #e = new Map();
   #i = [];
   begin(e) {
-    let n = new RemoteAskCard({ ...e, now: this.now });
-    return (this.#e.set(e.callId, n), n);
+    let n = new RemoteAskCard({
+      ...e,
+      now: this.now,
+    });
+    this.#e.set(e.callId, n);
+    return n;
   }
   settle(e, n) {
-    let markSettled = e.markSettled(n);
-    if (markSettled === void 0) return;
+    let t = e.markSettled(n);
+    if (t === undefined) return;
     if (this.#e.get(e.callId) === e) this.#e.delete(e.callId);
     this.remember({
       callId: e.callId,
       toolName: e.toolName,
       hostName: e.hostName,
       fingerprint: e.fingerprint,
-      asked: e.card !== void 0,
+      asked: e.card !== undefined,
       askedAboutKey: e.askedAboutKey,
-      ...markSettled,
+      ...t,
     });
   }
   get(e) {
@@ -277,11 +310,11 @@ class RemoteAskSeat {
     return n;
   }
   recentByFingerprint(e, n) {
-    let t = [],
-      now = this.now();
+    let t = [];
+    let d = this.now();
     for (let i = this.#i.length - 1; i >= 0; i -= 1) {
       let s = this.#i[i];
-      if (now - s.at > n) break;
+      if (d - s.at > n) break;
       if (s.fingerprint === e) t.push(s);
     }
     return t;
@@ -289,15 +322,18 @@ class RemoteAskSeat {
   askedAboutBefore(e) {
     let askedAboutKey = e.askedAboutKey;
     return (
-      askedAboutKey !== void 0 &&
+      askedAboutKey !== undefined &&
       this.#i.some((t) => t.asked && t.askedAboutKey === askedAboutKey && t.callId !== e.callId)
     );
   }
   remember(e) {
-    let n = { ...e, at: Math.min(e.at, this.now()) },
-      lastIndex = this.#i.findLastIndex((d) => d.at <= n.at);
-    if ((this.#i.splice(lastIndex + 1, 0, n), this.#i.length > a)) this.#i.shift();
+    let n = {
+      ...e,
+      at: Math.min(e.at, this.now()),
+    };
+    let lastIndex = this.#i.findLastIndex((d) => d.at <= n.at);
+    this.#i.splice(lastIndex + 1, 0, n);
+    if (this.#i.length > MAX_ASK_CARDS_TRACKED) this.#i.shift();
   }
 }
-
 export { RemoteAskSeat };

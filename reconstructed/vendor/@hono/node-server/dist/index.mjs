@@ -6,104 +6,114 @@
  * attribution: esm-fingerprint 17
  */
 import { Readable } from "stream";
-import { Http2ServerRequest, Http2ServerRequest as Http2ServerRequest_2, constants } from "http2";
+import { Http2ServerRequest, constants } from "http2";
 import fe from "crypto";
 import { logForDebugging } from "../../../../src/utils/debug.js";
 
 //@ chunk-k26nnqnx.js:16450-17916 esm-fingerprint
 var RequestError = class extends Error {
-    constructor(e, r) {
-      super(e, r);
-      this.name = "RequestError";
-    }
-  },
-  re = (e) => {
-    if (e instanceof RequestError) return e;
-    return new RequestError(e.message, { cause: e });
-  },
-  oe = global.Request,
-  P = class extends oe {
-    constructor(e, r) {
-      if (typeof e === "object" && E in e) e = e[E]();
-      if (typeof r?.body?.getReader < "u") r.duplex ??= "half";
-      super(e, r);
-    }
-  },
-  ne = (e) => {
-    let r = [],
-      rawHeaders = e.rawHeaders;
-    for (let o = 0; o < rawHeaders.length; o += 2) {
-      let { [o]: s, [o + 1]: a } = rawHeaders;
-      if (s.charCodeAt(0) !== 58) r.push([s, a]);
-    }
-    return new Headers(r);
-  },
-  V = Symbol("wrapBodyStream"),
-  se = (e, r, n, o, s) => {
-    let a = { method: e, headers: n, signal: s.signal };
-    if (e === "TRACE") {
-      a.method = "GET";
-      let c = new P(r, a);
-      return (
-        Object.defineProperty(c, "method", {
-          get() {
-            return "TRACE";
-          },
-        }),
-        c
-      );
-    }
-    if (!(e === "GET" || e === "HEAD"))
-      if ("rawBody" in o && o.rawBody instanceof Buffer)
-        a.body = new ReadableStream({
-          start(c) {
-            (c.enqueue(o.rawBody), c.close());
-          },
-        });
-      else if (o[V]) {
-        let c;
-        a.body = new ReadableStream({
-          async pull(u) {
-            try {
-              c ||= Readable.toWeb(o).getReader();
-              let { done: f, value: p } = await c.read();
-              if (f) u.close();
-              else u.enqueue(p);
-            } catch (error) {
-              u.error(error);
-            }
-          },
-        });
-      } else a.body = Readable.toWeb(o);
-    return new P(r, a);
-  },
-  E = Symbol("getRequestCache"),
-  z = Symbol("requestCache"),
-  _ = Symbol("incomingKey"),
-  O = Symbol("urlKey"),
-  ae = Symbol("headersKey"),
-  T = Symbol("abortControllerKey"),
-  ie = Symbol("getAbortController"),
-  H = {
-    get method() {
-      return this[_].method || "GET";
-    },
-    get url() {
-      return this[O];
-    },
-    get headers() {
-      return (this[ae] ||= ne(this[_]));
-    },
-    [ie]() {
-      return (this[E](), this[T]);
-    },
-    [E]() {
-      return (
-        (this[T] ||= new AbortController()),
-        (this[z] ||= se(this.method, this[O], this.headers, this[_], this[T]))
-      );
-    },
+  constructor(message, options) {
+    super(message, options);
+    this.name = "RequestError";
+  }
+};
+var toRequestError = (e) => {
+  if (e instanceof RequestError) return e;
+  return new RequestError(e.message, {
+    cause: e,
+  });
+};
+var GlobalRequest = global.Request;
+var P = class extends GlobalRequest {
+  constructor(input, options) {
+    if (typeof input === "object" && getRequestCache in input) input = input[getRequestCache]();
+    if (typeof options?.body?.getReader !== "undefined") options.duplex ??= "half";
+    super(input, options);
+  }
+};
+var newHeadersFromIncoming = (incoming) => {
+  let headerRecord = [];
+  let rawHeaders = incoming.rawHeaders;
+  for (let i = 0; i < rawHeaders.length; i += 2) {
+    let { [i]: key, [i + 1]: value } = rawHeaders;
+    if (key.charCodeAt(0) !== 58) headerRecord.push([key, value]);
+  }
+  return new Headers(headerRecord);
+};
+var wrapBodyStream = Symbol("wrapBodyStream");
+var newRequestFromIncoming = (method, url, headers, incoming, abortController) => {
+  let init = {
+    method,
+    headers,
+    signal: abortController.signal,
   };
+  if (method === "TRACE") {
+    init.method = "GET";
+    let req = new P(url, init);
+    Object.defineProperty(req, "method", {
+      get() {
+        return "TRACE";
+      },
+    });
+    return req;
+  }
+  if (!(method === "GET" || method === "HEAD"))
+    if ("rawBody" in incoming && incoming.rawBody instanceof Buffer)
+      init.body = new ReadableStream({
+        start(controller) {
+          controller.enqueue(incoming.rawBody);
+          controller.close();
+        },
+      });
+    else if (incoming[wrapBodyStream]) {
+      let reader;
+      init.body = new ReadableStream({
+        async pull(controller) {
+          try {
+            reader ||= Readable.toWeb(incoming).getReader();
+            let { done, value } = await reader.read();
+            if (done) controller.close();
+            else controller.enqueue(value);
+          } catch (error) {
+            controller.error(error);
+          }
+        },
+      });
+    } else init.body = Readable.toWeb(incoming);
+  return new P(url, init);
+};
+var getRequestCache = Symbol("getRequestCache");
+var requestCache = Symbol("requestCache");
+var incomingKey = Symbol("incomingKey");
+var urlKey = Symbol("urlKey");
+var headersKey = Symbol("headersKey");
+var abortControllerKey = Symbol("abortControllerKey");
+var getAbortController = Symbol("getAbortController");
+var requestPrototype = {
+  get method() {
+    return this[incomingKey].method || "GET";
+  },
+  get url() {
+    return this[urlKey];
+  },
+  get headers() {
+    return (this[headersKey] ||= newHeadersFromIncoming(this[incomingKey]));
+  },
+  [getAbortController]() {
+    this[getRequestCache]();
+    return this[abortControllerKey];
+  },
+  [getRequestCache]() {
+    this[abortControllerKey] ||= new AbortController();
+    return (this[requestCache] ||= newRequestFromIncoming(
+      this.method,
+      this[urlKey],
+      this.headers,
+      this[incomingKey],
+      this[abortControllerKey],
+    ));
+  },
+};
 //@ chunk-k26nnqnx.js:17916-18123 esm-fingerprint
 [
   "body",
@@ -118,369 +128,443 @@ var RequestError = class extends Error {
   "referrerPolicy",
   "signal",
   "keepalive",
-].forEach((e) => {
-  Object.defineProperty(H, e, {
+].forEach((k) => {
+  Object.defineProperty(requestPrototype, k, {
     get() {
-      return this[E]()[e];
+      return this[getRequestCache]()[k];
     },
   });
 });
 //@ chunk-k26nnqnx.js:18123-18264 esm-fingerprint
-["arrayBuffer", "blob", "clone", "formData", "json", "text"].forEach((e) => {
-  Object.defineProperty(H, e, {
+["arrayBuffer", "blob", "clone", "formData", "json", "text"].forEach((k) => {
+  Object.defineProperty(requestPrototype, k, {
     value: function () {
-      return this[E]()[e]();
+      return this[getRequestCache]()[k]();
     },
   });
 });
 //@ chunk-k26nnqnx.js:18264-18506 esm-fingerprint
-Object.defineProperty(H, Symbol.for("nodejs.util.inspect.custom"), {
-  value: function (e, r, n) {
-    let o = { method: this.method, url: this.url, headers: this.headers, nativeRequest: this[z] };
-    return `Request (lightweight) ${n(o, { ...r, depth: e == null ? null : e - 1 })}`;
+Object.defineProperty(requestPrototype, Symbol.for("nodejs.util.inspect.custom"), {
+  value: function (depth, options, inspectFn) {
+    let props = {
+      method: this.method,
+      url: this.url,
+      headers: this.headers,
+      nativeRequest: this[requestCache],
+    };
+    return `Request (lightweight) ${inspectFn(props, {
+      ...options,
+      depth: depth == null ? null : depth - 1,
+    })}`;
   },
 });
 //@ chunk-k26nnqnx.js:18506-18543 esm-fingerprint
-Object.setPrototypeOf(H, P.prototype);
+Object.setPrototypeOf(requestPrototype, P.prototype);
 //@ chunk-k26nnqnx.js:18543-19981 esm-fingerprint
-var ce = (e, r) => {
-    let create = Object.create(H);
-    create[_] = e;
-    let o = e.url || "";
-    if (o[0] !== "/" && (o.startsWith("http://") || o.startsWith("https://"))) {
-      if (e instanceof Http2ServerRequest_2)
-        throw new RequestError("Absolute URL for :path is not allowed in HTTP/2");
-      try {
-        let u = new URL(o);
-        create[O] = u.href;
-      } catch (error) {
-        throw new RequestError("Invalid absolute URL", { cause: error });
+var newRequest = (incoming, defaultHostname) => {
+  let req = Object.create(requestPrototype);
+  req[incomingKey] = incoming;
+  let incomingUrl = incoming.url || "";
+  if (incomingUrl[0] !== "/" && (incomingUrl.startsWith("http://") || incomingUrl.startsWith("https://"))) {
+    if (incoming instanceof Http2ServerRequest)
+      throw new RequestError("Absolute URL for :path is not allowed in HTTP/2");
+    try {
+      let url2 = new URL(incomingUrl);
+      req[urlKey] = url2.href;
+    } catch (e) {
+      throw new RequestError("Invalid absolute URL", {
+        cause: e,
+      });
+    }
+    return req;
+  }
+  let host =
+    (incoming instanceof Http2ServerRequest ? incoming.authority : incoming.headers.host) || defaultHostname;
+  if (!host) throw new RequestError("Missing host header");
+  let scheme;
+  if (incoming instanceof Http2ServerRequest) {
+    scheme = incoming.scheme;
+    if (!(scheme === "http" || scheme === "https")) throw new RequestError("Unsupported scheme");
+  } else scheme = incoming.socket && incoming.socket.encrypted ? "https" : "http";
+  let url = new URL(`${scheme}://${host}${incomingUrl}`);
+  if (url.hostname.length !== host.length && url.hostname !== host.replace(/:\d+$/, ""))
+    throw new RequestError("Invalid host header");
+  req[urlKey] = url.href;
+  return req;
+};
+var responseCache = Symbol("responseCache");
+var getResponseCache = Symbol("getResponseCache");
+var cacheKey = Symbol("cache");
+var GlobalResponse = global.Response;
+var Response2 = class _Response {
+  #t;
+  #e;
+  [getResponseCache]() {
+    delete this[cacheKey];
+    return (this[responseCache] ||= new GlobalResponse(this.#t, this.#e));
+  }
+  constructor(body, init) {
+    let headers;
+    this.#t = body;
+    if (init instanceof _Response) {
+      let cachedGlobalResponse = init[responseCache];
+      if (cachedGlobalResponse) {
+        this.#e = cachedGlobalResponse;
+        this[getResponseCache]();
+        return;
+      } else {
+        this.#e = init.#e;
+        headers = new Headers(init.#e.headers);
       }
-      return create;
+    } else this.#e = init;
+    if (
+      typeof body === "string" ||
+      typeof body?.getReader !== "undefined" ||
+      body instanceof Blob ||
+      body instanceof Uint8Array
+    )
+      this[cacheKey] = [init?.status || 200, body, headers || init?.headers];
+  }
+  get headers() {
+    let cache = this[cacheKey];
+    if (cache) {
+      if (!(cache[2] instanceof Headers))
+        cache[2] = new Headers(
+          cache[2] || {
+            "content-type": "text/plain; charset=UTF-8",
+          },
+        );
+      return cache[2];
     }
-    let s = (e instanceof Http2ServerRequest_2 ? e.authority : e.headers.host) || r;
-    if (!s) throw new RequestError("Missing host header");
-    let a;
-    if (e instanceof Http2ServerRequest_2) {
-      if (((a = e.scheme), !(a === "http" || a === "https"))) throw new RequestError("Unsupported scheme");
-    } else a = e.socket && e.socket.encrypted ? "https" : "http";
-    let c = new URL(`${a}://${s}${o}`);
-    if (c.hostname.length !== s.length && c.hostname !== s.replace(/:\d+$/, ""))
-      throw new RequestError("Invalid host header");
-    return ((create[O] = c.href), create);
-  },
-  I = Symbol("responseCache"),
-  R = Symbol("getResponseCache"),
-  w = Symbol("cache"),
-  U = global.Response,
-  C = class e {
-    #t;
-    #e;
-    [R]() {
-      return (delete this[w], (this[I] ||= new U(this.#t, this.#e)));
-    }
-    constructor(r, n) {
-      let o;
-      if (((this.#t = r), n instanceof e)) {
-        let s = n[I];
-        if (s) {
-          ((this.#e = s), this[R]());
-          return;
-        } else ((this.#e = n.#e), (o = new Headers(n.#e.headers)));
-      } else this.#e = n;
-      if (typeof r === "string" || typeof r?.getReader < "u" || r instanceof Blob || r instanceof Uint8Array)
-        this[w] = [n?.status || 200, r, o || n?.headers];
-    }
-    get headers() {
-      let r = this[w];
-      if (r) {
-        if (!(r[2] instanceof Headers))
-          r[2] = new Headers(r[2] || { "content-type": "text/plain; charset=UTF-8" });
-        return r[2];
-      }
-      return this[R]().headers;
-    }
-    get status() {
-      return this[w]?.[0] ?? this[R]().status;
-    }
-    get ok() {
-      let status = this.status;
-      return status >= 200 && status < 300;
-    }
-  };
+    return this[getResponseCache]().headers;
+  }
+  get status() {
+    return this[cacheKey]?.[0] ?? this[getResponseCache]().status;
+  }
+  get ok() {
+    let status = this.status;
+    return status >= 200 && status < 300;
+  }
+};
 //@ chunk-k26nnqnx.js:19981-20133 esm-fingerprint
-["body", "bodyUsed", "redirected", "statusText", "trailers", "type", "url"].forEach((e) => {
-  Object.defineProperty(C.prototype, e, {
+["body", "bodyUsed", "redirected", "statusText", "trailers", "type", "url"].forEach((k) => {
+  Object.defineProperty(Response2.prototype, k, {
     get() {
-      return this[R]()[e];
+      return this[getResponseCache]()[k];
     },
   });
 });
 //@ chunk-k26nnqnx.js:20133-20284 esm-fingerprint
-["arrayBuffer", "blob", "clone", "formData", "json", "text"].forEach((e) => {
-  Object.defineProperty(C.prototype, e, {
+["arrayBuffer", "blob", "clone", "formData", "json", "text"].forEach((k) => {
+  Object.defineProperty(Response2.prototype, k, {
     value: function () {
-      return this[R]()[e]();
+      return this[getResponseCache]()[k]();
     },
   });
 });
 //@ chunk-k26nnqnx.js:20284-20536 esm-fingerprint
-Object.defineProperty(C.prototype, Symbol.for("nodejs.util.inspect.custom"), {
-  value: function (e, r, n) {
-    let o = { status: this.status, headers: this.headers, ok: this.ok, nativeResponse: this[I] };
-    return `Response (lightweight) ${n(o, { ...r, depth: e == null ? null : e - 1 })}`;
+Object.defineProperty(Response2.prototype, Symbol.for("nodejs.util.inspect.custom"), {
+  value: function (depth, options, inspectFn) {
+    let props = {
+      status: this.status,
+      headers: this.headers,
+      ok: this.ok,
+      nativeResponse: this[responseCache],
+    };
+    return `Response (lightweight) ${inspectFn(props, {
+      ...options,
+      depth: depth == null ? null : depth - 1,
+    })}`;
   },
 });
 //@ chunk-k26nnqnx.js:20536-20563 esm-fingerprint
-Object.setPrototypeOf(C, U);
+Object.setPrototypeOf(Response2, GlobalResponse);
 //@ chunk-k26nnqnx.js:20563-20610 esm-fingerprint
-Object.setPrototypeOf(C.prototype, U.prototype);
+Object.setPrototypeOf(Response2.prototype, GlobalResponse.prototype);
 //@ chunk-k26nnqnx.js:20610-20708 esm-fingerprint
-async function le(e) {
-  return Promise.race([e, Promise.resolve().then(() => Promise.resolve(void 0))]);
+async function readWithoutBlocking(readPromise) {
+  return Promise.race([readPromise, Promise.resolve().then(() => Promise.resolve(undefined))]);
 }
 //@ chunk-k26nnqnx.js:20708-21081 esm-fingerprint
-function Y(e, r, n) {
-  let o = (u) => {
-    e.cancel(u).catch(() => {});
+function writeFromReadableStreamDefaultReader(reader, writable, currentReadPromise) {
+  let cancel = (error) => {
+    reader.cancel(error).catch(() => {});
   };
-  return (
-    r.on("close", o),
-    r.on("error", o),
-    (n ?? e.read()).then(c, s),
-    e.closed.finally(() => {
-      (r.off("close", o), r.off("error", o));
-    })
-  );
-  function s(u) {
-    if (u) r.destroy(u);
+  writable.on("close", cancel);
+  writable.on("error", cancel);
+  (currentReadPromise ?? reader.read()).then(flow, handleStreamError);
+  return reader.closed.finally(() => {
+    writable.off("close", cancel);
+    writable.off("error", cancel);
+  });
+  function handleStreamError(error) {
+    if (error) writable.destroy(error);
   }
-  function a() {
-    e.read().then(c, s);
+  function onDrain() {
+    reader.read().then(flow, handleStreamError);
   }
-  function c({ done: u, value: f }) {
+  function flow({ done, value }) {
     try {
-      if (u) r.end();
-      else if (!r.write(f)) r.once("drain", a);
-      else return e.read().then(c, s);
-    } catch (error) {
-      s(error);
+      if (done) writable.end();
+      else if (!writable.write(value)) writable.once("drain", onDrain);
+      else return reader.read().then(flow, handleStreamError);
+    } catch (e) {
+      handleStreamError(e);
     }
   }
 }
 //@ chunk-k26nnqnx.js:21081-21208 esm-fingerprint
-function de(e, r) {
-  if (e.locked) throw TypeError("ReadableStream is locked.");
-  else if (r.destroyed) return;
-  return Y(e.getReader(), r);
+function writeFromReadableStream(stream, writable) {
+  if (stream.locked) throw TypeError("ReadableStream is locked.");
+  else if (writable.destroyed) return;
+  return writeFromReadableStreamDefaultReader(stream.getReader(), writable);
 }
 //@ chunk-k26nnqnx.js:21208-21464 esm-fingerprint
-var q = (e) => {
-    let r = {};
-    if (!(e instanceof Headers)) e = new Headers(e ?? void 0);
-    let n = [];
-    for (let [o, s] of e)
-      if (o === "set-cookie") n.push(s);
-      else r[o] = s;
-    if (n.length > 0) r["set-cookie"] = n;
-    return ((r["content-type"] ??= "text/plain; charset=UTF-8"), r);
-  },
-  X_HONO_ALREADY_SENT = "x-hono-already-sent";
+var buildOutgoingHttpHeaders = (headers) => {
+  let res = {};
+  if (!(headers instanceof Headers)) headers = new Headers(headers ?? undefined);
+  let cookies = [];
+  for (let [k, v] of headers)
+    if (k === "set-cookie") cookies.push(v);
+    else res[k] = v;
+  if (cookies.length > 0) res["set-cookie"] = cookies;
+  res["content-type"] ??= "text/plain; charset=UTF-8";
+  return res;
+};
+var X_ALREADY_SENT = "x-hono-already-sent";
 //@ chunk-k26nnqnx.js:21464-21509 esm-fingerprint
-if (typeof global.crypto > "u") global.crypto = fe;
+if (typeof global.crypto === "undefined") global.crypto = fe;
 //@ chunk-k26nnqnx.js:21509-24883 esm-fingerprint
-var D = Symbol("outgoingEnded"),
-  W = Symbol("incomingDraining"),
-  he = 500,
-  pe = 67108864,
-  A = (e) => {
-    let r = e;
-    if (e.destroyed || r[W]) return;
-    if (((r[W] = !0), e instanceof Http2ServerRequest)) {
-      try {
-        e.stream?.close?.(constants.NGHTTP2_NO_ERROR);
-      } catch {}
-      return;
-    }
-    let n = 0,
-      o = () => {
-        (clearTimeout(a), e.off("data", c), e.off("end", o), e.off("error", o));
-      },
-      s = () => {
-        o();
-        let socket = e.socket;
-        if (socket && !socket.destroyed) socket.destroySoon();
-      },
-      a = setTimeout(s, he);
-    a.unref?.();
-    let c = (u) => {
-      if (((n += u.length), n > pe)) s();
+var outgoingEnded = Symbol("outgoingEnded");
+var incomingDraining = Symbol("incomingDraining");
+var DRAIN_TIMEOUT_MS = 500;
+var MAX_DRAIN_BYTES = 67108864;
+var drainIncoming = (incoming) => {
+  let incomingWithDrainState = incoming;
+  if (incoming.destroyed || incomingWithDrainState[incomingDraining]) return;
+  incomingWithDrainState[incomingDraining] = true;
+  if (incoming instanceof Http2ServerRequest) {
+    try {
+      incoming.stream?.close?.(constants.NGHTTP2_NO_ERROR);
+    } catch {}
+    return;
+  }
+  let bytesRead = 0;
+  let cleanup = () => {
+    clearTimeout(timer);
+    incoming.off("data", onData);
+    incoming.off("end", cleanup);
+    incoming.off("error", cleanup);
+  };
+  let forceClose = () => {
+    cleanup();
+    let socket = incoming.socket;
+    if (socket && !socket.destroyed) socket.destroySoon();
+  };
+  let timer = setTimeout(forceClose, DRAIN_TIMEOUT_MS);
+  timer.unref?.();
+  let onData = (chunk) => {
+    bytesRead += chunk.length;
+    if (bytesRead > MAX_DRAIN_BYTES) forceClose();
+  };
+  incoming.on("data", onData);
+  incoming.on("end", cleanup);
+  incoming.on("error", cleanup);
+  incoming.resume();
+};
+var handleRequestError = () =>
+  new Response(null, {
+    status: 400,
+  });
+var handleFetchError = (e) =>
+  new Response(null, {
+    status:
+      e instanceof Error && (e.name === "TimeoutError" || e.constructor.name === "TimeoutError") ? 504 : 500,
+  });
+var handleResponseError = (e, outgoing) => {
+  let err =
+    e instanceof Error
+      ? e
+      : Error("unknown error", {
+          cause: e,
+        });
+  if (err.code === "ERR_STREAM_PREMATURE_CLOSE") console.info("The user aborted a request.");
+  else {
+    console.error(e);
+    if (!outgoing.headersSent)
+      outgoing.writeHead(500, {
+        "Content-Type": "text/plain",
+      });
+    outgoing.end(`Error: ${err.message}`);
+    outgoing.destroy(err);
+  }
+};
+var flushHeaders = (outgoing) => {
+  if ("flushHeaders" in outgoing && outgoing.writable) outgoing.flushHeaders();
+};
+var responseViaCache = async (res, outgoing) => {
+  let [status, body, header] = res[cacheKey];
+  let hasContentLength = false;
+  if (!header)
+    header = {
+      "content-type": "text/plain; charset=UTF-8",
     };
-    (e.on("data", c), e.on("end", o), e.on("error", o), e.resume());
-  },
-  me = () => new Response(null, { status: 400 }),
-  X = (e) =>
-    new Response(null, {
-      status:
-        e instanceof Error && (e.name === "TimeoutError" || e.constructor.name === "TimeoutError")
-          ? 504
-          : 500,
-    }),
-  x = (e, r) => {
-    let n = e instanceof Error ? e : Error("unknown error", { cause: e });
-    if (n.code === "ERR_STREAM_PREMATURE_CLOSE") console.info("The user aborted a request.");
-    else {
-      if ((console.error(e), !r.headersSent)) r.writeHead(500, { "Content-Type": "text/plain" });
-      (r.end(`Error: ${n.message}`), r.destroy(n));
-    }
-  },
-  J = (e) => {
-    if ("flushHeaders" in e && e.writable) e.flushHeaders();
-  },
-  Q = async (e, r) => {
-    let [n, o, s] = e[w],
-      a = !1;
-    if (!s) s = { "content-type": "text/plain; charset=UTF-8" };
-    else if (s instanceof Headers) ((a = s.has("content-length")), (s = q(s)));
-    else if (Array.isArray(s)) {
-      let headers = new Headers(s);
-      ((a = headers.has("content-length")), (s = q(headers)));
-    } else
-      for (let key in s)
-        if (key.length === 14 && key.toLowerCase() === "content-length") {
-          a = !0;
+  else if (header instanceof Headers) {
+    hasContentLength = header.has("content-length");
+    header = buildOutgoingHttpHeaders(header);
+  } else if (Array.isArray(header)) {
+    let headerObj = new Headers(header);
+    hasContentLength = headerObj.has("content-length");
+    header = buildOutgoingHttpHeaders(headerObj);
+  } else
+    for (let key in header)
+      if (key.length === 14 && key.toLowerCase() === "content-length") {
+        hasContentLength = true;
+        break;
+      }
+  if (!hasContentLength) {
+    if (typeof body === "string") header["Content-Length"] = Buffer.byteLength(body);
+    else if (body instanceof Uint8Array) header["Content-Length"] = body.byteLength;
+    else if (body instanceof Blob) header["Content-Length"] = body.size;
+  }
+  outgoing.writeHead(status, header);
+  if (typeof body === "string" || body instanceof Uint8Array) outgoing.end(body);
+  else if (body instanceof Blob) outgoing.end(new Uint8Array(await body.arrayBuffer()));
+  else {
+    flushHeaders(outgoing);
+    await writeFromReadableStream(body, outgoing)?.catch((e) => handleResponseError(e, outgoing));
+  }
+  outgoing[outgoingEnded]?.();
+};
+var isPromise = (res) => typeof res.then === "function";
+var responseViaResponseObject = async (res, outgoing, options = {}) => {
+  if (isPromise(res))
+    if (options.errorHandler)
+      try {
+        res = await res;
+      } catch (err) {
+        let errRes = await options.errorHandler(err);
+        if (!errRes) return;
+        res = errRes;
+      }
+    else res = await res.catch(handleFetchError);
+  if (cacheKey in res) return responseViaCache(res, outgoing);
+  let resHeaderRecord = buildOutgoingHttpHeaders(res.headers);
+  if (res.body) {
+    let reader = res.body.getReader();
+    let values = [];
+    let done = false;
+    let currentReadPromise = undefined;
+    if (resHeaderRecord["transfer-encoding"] !== "chunked") {
+      let maxReadCount = 2;
+      for (let i = 0; i < maxReadCount; i++) {
+        currentReadPromise ||= reader.read();
+        let chunk = await readWithoutBlocking(currentReadPromise).catch((e) => {
+          console.error(e);
+          done = true;
+        });
+        if (!chunk) {
+          if (i === 1) {
+            await new Promise((resolve) => setTimeout(resolve));
+            maxReadCount = 3;
+            continue;
+          }
           break;
         }
-    if (!a) {
-      if (typeof o === "string") s["Content-Length"] = Buffer.byteLength(o);
-      else if (o instanceof Uint8Array) s["Content-Length"] = o.byteLength;
-      else if (o instanceof Blob) s["Content-Length"] = o.size;
+        currentReadPromise = undefined;
+        if (chunk.value) values.push(chunk.value);
+        if (chunk.done) {
+          done = true;
+          break;
+        }
+      }
+      if (done && !("content-length" in resHeaderRecord))
+        resHeaderRecord["content-length"] = values.reduce((acc, value) => acc + value.length, 0);
     }
-    if ((r.writeHead(n, s), typeof o === "string" || o instanceof Uint8Array)) r.end(o);
-    else if (o instanceof Blob) r.end(new Uint8Array(await o.arrayBuffer()));
-    else (J(r), await de(o, r)?.catch((c) => x(c, r)));
-    r[D]?.();
-  },
-  ye = (e) => typeof e.then === "function",
-  be = async (e, r, n = {}) => {
-    if (ye(e))
-      if (n.errorHandler)
-        try {
-          e = await e;
-        } catch (error) {
-          let errorHandler = await n.errorHandler(error);
-          if (!errorHandler) return;
-          e = errorHandler;
-        }
-      else e = await e.catch(X);
-    if (w in e) return Q(e, r);
-    let o = q(e.headers);
-    if (e.body) {
-      let reader = e.body.getReader(),
-        a = [],
-        c = !1,
-        u = void 0;
-      if (o["transfer-encoding"] !== "chunked") {
-        let f = 2;
-        for (let p = 0; p < f; p++) {
-          u ||= reader.read();
-          let m = await le(u).catch((b) => {
-            (console.error(b), (c = !0));
-          });
-          if (!m) {
-            if (p === 1) {
-              (await new Promise((b) => setTimeout(b)), (f = 3));
-              continue;
-            }
-            break;
-          }
-          if (((u = void 0), m.value)) a.push(m.value);
-          if (m.done) {
-            c = !0;
-            break;
-          }
-        }
-        if (c && !("content-length" in o)) o["content-length"] = a.reduce((p, m) => p + m.length, 0);
-      }
-      if (
-        (r.writeHead(e.status, o),
-        a.forEach((f) => {
-          r.write(f);
-        }),
-        c)
-      )
-        r.end();
-      else {
-        if (a.length === 0) J(r);
-        await Y(reader, r, u);
-      }
-    } else if (o[X_HONO_ALREADY_SENT]);
-    else (r.writeHead(e.status, o), r.end());
-    r[D]?.();
-  },
-  G = (e, r = {}) => {
-    let n = r.autoCleanupIncoming ?? !0;
-    if (r.overrideGlobalObjects !== !1 && global.Request !== P)
-      (Object.defineProperty(global, "Request", { value: P }),
-        Object.defineProperty(global, "Response", { value: C }));
-    return async (o, s) => {
-      let a, c;
-      try {
-        c = ce(o, r.hostname);
-        let u = !n || o.method === "GET" || o.method === "HEAD";
-        if (!u) {
-          if (
-            ((o[V] = !0),
-            o.on("end", () => {
-              u = !0;
-            }),
-            o instanceof Http2ServerRequest)
-          )
-            s[D] = () => {
-              if (!u)
-                setTimeout(() => {
-                  if (!u)
-                    setTimeout(() => {
-                      A(o);
-                    });
-                });
-            };
-          s.on("finish", () => {
-            if (!u) A(o);
-          });
-        }
-        if (
-          (s.on("close", () => {
-            if (c[T]) {
-              if (o.errored) c[T].abort(o.errored.toString());
-              else if (!s.writableFinished) c[T].abort("Client connection prematurely closed.");
-            }
-            if (!u)
+    outgoing.writeHead(res.status, resHeaderRecord);
+    values.forEach((value) => {
+      outgoing.write(value);
+    });
+    if (done) outgoing.end();
+    else {
+      if (values.length === 0) flushHeaders(outgoing);
+      await writeFromReadableStreamDefaultReader(reader, outgoing, currentReadPromise);
+    }
+  } else if (resHeaderRecord[X_ALREADY_SENT]);
+  else {
+    outgoing.writeHead(res.status, resHeaderRecord);
+    outgoing.end();
+  }
+  outgoing[outgoingEnded]?.();
+};
+var getRequestListener = (fetchCallback, options = {}) => {
+  let autoCleanupIncoming = options.autoCleanupIncoming ?? true;
+  if (options.overrideGlobalObjects !== false && global.Request !== P) {
+    Object.defineProperty(global, "Request", {
+      value: P,
+    });
+    Object.defineProperty(global, "Response", {
+      value: Response2,
+    });
+  }
+  return async (incoming, outgoing) => {
+    let res;
+    let req;
+    try {
+      req = newRequest(incoming, options.hostname);
+      let incomingEnded = !autoCleanupIncoming || incoming.method === "GET" || incoming.method === "HEAD";
+      if (!incomingEnded) {
+        incoming[wrapBodyStream] = true;
+        incoming.on("end", () => {
+          incomingEnded = true;
+        });
+        if (incoming instanceof Http2ServerRequest)
+          outgoing[outgoingEnded] = () => {
+            if (!incomingEnded)
               setTimeout(() => {
-                if (!u)
+                if (!incomingEnded)
                   setTimeout(() => {
-                    A(o);
+                    drainIncoming(incoming);
                   });
               });
-          }),
-          (a = e(c, { incoming: o, outgoing: s })),
-          w in a)
-        )
-          return Q(a, s);
-      } catch (error) {
-        if (!a)
-          if (r.errorHandler) {
-            if (((a = await r.errorHandler(c ? error : re(error))), !a)) return;
-          } else if (!c) a = me();
-          else a = X(error);
-        else return x(error, s);
+          };
+        outgoing.on("finish", () => {
+          if (!incomingEnded) drainIncoming(incoming);
+        });
       }
-      try {
-        return await be(a, s, r);
-      } catch (error) {
-        return x(error, s);
-      }
-    };
+      outgoing.on("close", () => {
+        if (req[abortControllerKey]) {
+          if (incoming.errored) req[abortControllerKey].abort(incoming.errored.toString());
+          else if (!outgoing.writableFinished)
+            req[abortControllerKey].abort("Client connection prematurely closed.");
+        }
+        if (!incomingEnded)
+          setTimeout(() => {
+            if (!incomingEnded)
+              setTimeout(() => {
+                drainIncoming(incoming);
+              });
+          });
+      });
+      res = fetchCallback(req, {
+        incoming,
+        outgoing,
+      });
+      if (cacheKey in res) return responseViaCache(res, outgoing);
+    } catch (e) {
+      if (!res) {
+        if (options.errorHandler) {
+          res = await options.errorHandler(req ? e : toRequestError(e));
+          if (!res) return;
+        } else if (!req) res = handleRequestError();
+        else res = handleFetchError(e);
+      } else return handleResponseError(e, outgoing);
+    }
+    try {
+      return await responseViaResponseObject(res, outgoing, options);
+    } catch (e) {
+      return handleResponseError(e, outgoing);
+    }
   };
-
-export { G };
+};
+export { getRequestListener };

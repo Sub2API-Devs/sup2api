@@ -10,8 +10,10 @@
  */
 
 //@ chunk-886baxky.js:191-217 placement
-function ge(e, t) {
+/**
+ * 恒等函数（identity）。
+ */
+function identity(e, t) {
   return e;
 }
-
-export { ge };
+export { identity };

@@ -11,105 +11,135 @@
 import { w } from "../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { useKeybinding } from "../../keybindings/useKeybinding.js";
-import { e, r } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Box, Text } from "../../ink/components/Text.js";
-import { re } from "../../../vendor/@inquirer/figures/dist/esm/index.js";
+import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/index.js";
 import { GITHUB_ACTION_SETUP_DOCS_URL } from "../../constants/github-app.js";
 
 //@ chunk-4v9zy7gn.js:32810-34294 fingerprint = InstallAppStep (0.475)
-function InstallAppStep(t0) {
-  let f = w(12),
-    { repoUrl: repoUrl, onSubmit: onSubmit } = t0,
-    C;
-  if (f[0] === MEMO_CACHE_SENTINEL) ((C = { context: "Confirmation" }), (f[0] = C));
-  else C = f[0];
-  useKeybinding("confirm:yes", onSubmit, C);
-  let u;
-  if (f[1] === MEMO_CACHE_SENTINEL)
-    ((u = e(Box, {
+function InstallAppStep(props) {
+  let $ = w(12);
+  let { repoUrl, onSubmit } = props;
+  let t1;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    t1 = {
+      context: "Confirmation",
+    };
+    $[0] = t1;
+  } else t1 = $[0];
+  useKeybinding("confirm:yes", onSubmit, t1);
+  let t2;
+  if ($[1] === MEMO_CACHE_SENTINEL) {
+    t2 = jsxProd_default(Box, {
       flexDirection: "column",
       marginBottom: 1,
-      children: e(Text, { bold: !0, children: "Install the Claude GitHub App" }),
-    })),
-      (f[1] = u));
-  else u = f[1];
-  let o;
-  if (f[2] === MEMO_CACHE_SENTINEL)
-    ((o = e(Box, {
-      marginBottom: 1,
-      children: e(Text, { children: "Opening browser to install the Claude GitHub App\u2026" }),
-    })),
-      (f[2] = o));
-  else o = f[2];
-  let v;
-  if (f[3] === MEMO_CACHE_SENTINEL)
-    ((v = e(Box, {
-      marginBottom: 1,
-      children: e(Text, { children: "If your browser doesn't open automatically, visit:" }),
-    })),
-      (f[3] = v));
-  else v = f[3];
-  let A;
-  if (f[4] === MEMO_CACHE_SENTINEL)
-    ((A = e(Box, {
-      marginBottom: 1,
-      children: e(Text, { underline: !0, children: "https://github.com/apps/claude" }),
-    })),
-      (f[4] = A));
-  else A = f[4];
-  let g;
-  if (f[5] !== repoUrl)
-    ((g = e(Box, {
-      marginBottom: 1,
-      children: r(Text, {
-        children: ["Please install the app for repository: ", e(Text, { bold: !0, children: repoUrl })],
+      children: jsxProd_default(Text, {
+        bold: true,
+        children: "Install the Claude GitHub App",
       }),
-    })),
-      (f[5] = repoUrl),
-      (f[6] = g));
-  else g = f[6];
-  let _;
-  if (f[7] === MEMO_CACHE_SENTINEL)
-    ((_ = e(Box, {
+    });
+    $[1] = t2;
+  } else t2 = $[1];
+  let t3;
+  if ($[2] === MEMO_CACHE_SENTINEL) {
+    t3 = jsxProd_default(Box, {
       marginBottom: 1,
-      children: e(Text, {
-        dimColor: !0,
+      children: jsxProd_default(Text, {
+        children: "Opening browser to install the Claude GitHub App\u2026",
+      }),
+    });
+    $[2] = t3;
+  } else t3 = $[2];
+  let t4;
+  if ($[3] === MEMO_CACHE_SENTINEL) {
+    t4 = jsxProd_default(Box, {
+      marginBottom: 1,
+      children: jsxProd_default(Text, {
+        children: "If your browser doesn't open automatically, visit:",
+      }),
+    });
+    $[3] = t4;
+  } else t4 = $[3];
+  let t5;
+  if ($[4] === MEMO_CACHE_SENTINEL) {
+    t5 = jsxProd_default(Box, {
+      marginBottom: 1,
+      children: jsxProd_default(Text, {
+        underline: true,
+        children: "https://github.com/apps/claude",
+      }),
+    });
+    $[4] = t5;
+  } else t5 = $[4];
+  let t6;
+  if ($[5] !== repoUrl) {
+    t6 = jsxProd_default(Box, {
+      marginBottom: 1,
+      children: jsxProd_default_2(Text, {
+        children: [
+          "Please install the app for repository: ",
+          jsxProd_default(Text, {
+            bold: true,
+            children: repoUrl,
+          }),
+        ],
+      }),
+    });
+    $[5] = repoUrl;
+    $[6] = t6;
+  } else t6 = $[6];
+  let t7;
+  if ($[7] === MEMO_CACHE_SENTINEL) {
+    t7 = jsxProd_default(Box, {
+      marginBottom: 1,
+      children: jsxProd_default(Text, {
+        dimColor: true,
         children: "Important: Make sure to grant access to this specific repository",
       }),
-    })),
-      (f[7] = _));
-  else _ = f[7];
-  let k;
-  if (f[8] === MEMO_CACHE_SENTINEL)
-    ((k = e(Box, {
-      children: r(Text, {
-        bold: !0,
+    });
+    $[7] = t7;
+  } else t7 = $[7];
+  let t8;
+  if ($[8] === MEMO_CACHE_SENTINEL) {
+    t8 = jsxProd_default(Box, {
+      children: jsxProd_default_2(Text, {
+        bold: true,
         color: "permission",
-        children: ["Press Enter once you've installed the app", re.ellipsis],
+        children: ["Press Enter once you've installed the app", figures_default.ellipsis],
       }),
-    })),
-      (f[8] = k));
-  else k = f[8];
-  let E;
-  if (f[9] === MEMO_CACHE_SENTINEL)
-    ((E = e(Box, {
+    });
+    $[8] = t8;
+  } else t8 = $[8];
+  let t9;
+  if ($[9] === MEMO_CACHE_SENTINEL) {
+    t9 = jsxProd_default(Box, {
       marginTop: 1,
-      children: r(Text, {
-        dimColor: !0,
+      children: jsxProd_default_2(Text, {
+        dimColor: true,
         children: [
           "Having trouble? See manual setup instructions at:",
           " ",
-          e(Text, { color: "claude", children: GITHUB_ACTION_SETUP_DOCS_URL }),
+          jsxProd_default(Text, {
+            color: "claude",
+            children: GITHUB_ACTION_SETUP_DOCS_URL,
+          }),
         ],
       }),
-    })),
-      (f[9] = E));
-  else E = f[9];
-  let x;
-  if (f[10] !== g)
-    ((x = r(Box, { flexDirection: "column", children: [u, o, v, A, g, _, k, E] })), (f[10] = g), (f[11] = x));
-  else x = f[11];
-  return x;
+    });
+    $[9] = t9;
+  } else t9 = $[9];
+  let t10;
+  if ($[10] !== t6) {
+    t10 = jsxProd_default_2(Box, {
+      flexDirection: "column",
+      children: [t2, t3, t4, t5, t6, t7, t8, t9],
+    });
+    $[10] = t6;
+    $[11] = t10;
+  } else t10 = $[11];
+  return t10;
 }
-
 export { InstallAppStep };

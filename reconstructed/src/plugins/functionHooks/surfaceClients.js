@@ -13,23 +13,23 @@ import { Ar } from "../../../runtime/bun-runtime.js";
 import {
   dispatchUiMessage,
   describeClientFailure,
-  A4r,
-  C4r,
+  desktopFaultDispatcher,
+  DEFAULT_MODULE_FAILURE,
   DESKTOP_SURFACE_RUNTIME_SOURCE,
-  P4r,
+  surfaceLimits,
   toUiFaultEvent,
   toUiMessageEvent,
 } from "./ui/desktopSurface.js";
-import { Xh } from "../../ink/scrollConstants.js";
+import { SCROLL_JUMP_LINES } from "../../ink/scrollConstants.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { errorMessage, getErrnoCode } from "../../utils/errors.js";
-import { ge } from "../../utils/identity.js";
+import { identity } from "../../utils/identity.js";
 import { createStore } from "../../state/store.js";
-import { ONE_ENGINE_NODE_COMPONENT, zte } from "./ui/treeConstants.js";
+import { ONE_ENGINE_NODE_COMPONENT, surfaceRowLedger } from "./ui/treeConstants.js";
 import { currentVersion, sayPlainCode, logLine, unknownBorderNote } from "./ui/renderDispatch.js";
 import { isPlainObject } from "../../utils/isPlainObject.js";
-import { d3t, c3t } from "./ui/elements.js";
-import { Q5e, pd } from "../../utils/hooks/functionHookMatchers.js";
+import { isHoverableType, elementScope } from "./ui/elements.js";
+import { deepFreezeInPlace, matcherLog } from "../../utils/hooks/functionHookMatchers.js";
 import {
   wellFormed,
   validateTree,
@@ -42,139 +42,237 @@ import {
   plainLinkNote,
 } from "./ui/validateTree.js";
 import { jsonParse } from "../../utils/slowOperations.js";
-import { g2 } from "./panes.js";
+import { paneHostSlot } from "./panes.js";
 import {
-  QAn,
-  lSi,
-  dSi,
+  isVmError,
+  inboundCopier,
+  runVmPrelude,
   createVmInstanceofObject,
   createErrorConverters,
   createVmConsole,
 } from "./vm/vmGlobals.js";
-import { Jun, n0e } from "../../utils/shutdown/pendingWrites.js";
-import { jfr, mSi, gSi, linkHooksModule } from "./vm/moduleLoader.js";
+import { claimPendingWriteLine, isUntrustedObject } from "../../utils/shutdown/pendingWrites.js";
+import { rejectionText, newVmHostContext, runInVmWithTrace, linkHooksModule } from "./vm/moduleLoader.js";
 import { tellOnce } from "./ui/renderNotices.js";
-import { createVmErrorDescriber, B5e } from "./vm/vmRealm.js";
-import { HooksError, SIe } from "./hooksErrors.js";
-import { afr, lEe } from "./sites/plainData.js";
-import { freezeApiObject, NH } from "./dispatch/chain.js";
-import { BT } from "./vm/vmBootstrapSource.js";
-import { iEt } from "./hooksModuleLoader.js";
+import { createVmErrorDescriber, timeoutOption } from "./vm/vmRealm.js";
+import { HooksError, envUnloadedError } from "./hooksErrors.js";
+import { MAX_TREE_TEXT_CHARS_2, checkPlainData } from "./sites/plainData.js";
+import { freezeApiObject, nullPrototypeFunction } from "./dispatch/chain.js";
+import { withUseStrict } from "./vm/vmBootstrapSource.js";
+import { HOOKS_READY_TIMEOUT_MS } from "./hooksModuleLoader.js";
 import { withTimeout } from "../../utils/sleep.js";
-import { to } from "../../utils/valueSlot.js";
+import { createValueSlot } from "../../utils/valueSlot.js";
 import { createSignal } from "../../utils/signal.js";
-import { Hvt, hostDrawnPresses } from "./ui/interactions.js";
+import { heldRunners, hostDrawnPresses } from "./ui/interactions.js";
 import { getPluginRegistry } from "../../utils/plugins/pluginLoadState.js";
 import { isModuleAdmitted } from "../../utils/plugins/functionHooks/admission.js";
-import { QNe } from "../hooksModules/loadedModuleFilters.js";
+import { findLoadedModule } from "../hooksModules/loadedModuleFilters.js";
 import { subscribe_2 } from "../../components/permissions/AskUserQuestionPermissionRequest/uiRenderHook.js";
-import { _ee } from "../../utils/cloudTrash.js";
+import { moveToCloudTrash } from "../../utils/cloudTrash.js";
 import { reportPluginProblem } from "./hooksWorkerClient.js";
-import { Rs } from "../../utils/hooks/hookSerialization.js";
+import { stableStringifySafe } from "../../utils/hooks/hookSerialization.js";
 
 //@ chunk-jv2zdrd7.js:1178-1189 placement
-var HNt = {};
+/**
+ * 空对象
+ */
+var EMPTY_SURFACE_CLIENTS = {};
 //@ chunk-jv2zdrd7.js:1189-1310 placement
-Ar(HNt, {
-  clientFocusStore: () => HTe,
-  default: () => HNt,
-  focusClient: () => Qrn,
-  focusedClientId: () => io,
-  releaseClientFocus: () => Ewo,
+Ar(EMPTY_SURFACE_CLIENTS, {
+  clientFocusStore: () => focusStore,
+  default: () => EMPTY_SURFACE_CLIENTS,
+  focusClient: () => setFocusedClient,
+  focusedClientId: () => focusedClientId,
+  releaseClientFocus: () => clearFocusedClient,
 });
 //@ chunk-jv2zdrd7.js:1310-1809 placement
 function createUiMessagePort(r = {}) {
-  let i = r.run ?? dispatchUiMessage,
-    f =
-      r.schedule ??
-      ((m) => {
-        let c = setTimeout(m, Xh);
-        return () => {
-          clearTimeout(c);
-        };
-      }),
-    w =
-      r.warn ??
-      ((m) => {
-        logForDebugging(m, { level: "warn" });
-      }),
-    p = new Map(),
-    T,
-    a = 0;
+  let run = r.run ?? dispatchUiMessage;
+  let f =
+    r.schedule ??
+    ((m) => {
+      let timer = setTimeout(m, SCROLL_JUMP_LINES);
+      return () => {
+        clearTimeout(timer);
+      };
+    });
+  let w =
+    r.warn ??
+    ((m) => {
+      logForDebugging(m, {
+        level: "warn",
+      });
+    });
+  let p = new Map();
+  let T;
+  let a = 0;
   function u() {
-    T = void 0;
+    T = undefined;
     let m = [...p.values()];
     p.clear();
-    for (let { message: message, reply: reply } of m)
-      ((a += 1),
-        i(message).then(reply, (v) => {
-          w(
-            `ui.message ${message.plugin}/${message.message.element}: the chain threw (${errorMessage(v)}); no reply`,
-          );
-        }));
+    for (let { message, reply } of m) {
+      a += 1;
+      run(message).then(reply, (error) => {
+        w(
+          `ui.message ${message.plugin}/${message.message.element}: the chain threw (${errorMessage(error)}); no reply`,
+        );
+      });
+    }
   }
   return {
-    post(m, c, E) {
-      (p.set(m, { message: c, reply: E }), (T ??= f(u)));
+    post(m, message, reply) {
+      p.set(m, {
+        message,
+        reply,
+      });
+      T ??= f(u);
     },
     cancel(m) {
-      if ((p.delete(m), p.size === 0 && T !== void 0)) (T(), (T = void 0));
+      p.delete(m);
+      if (p.size === 0 && T !== undefined) {
+        T();
+        T = undefined;
+      }
     },
     dispatched: () => a,
   };
 }
 //@ chunk-jv2zdrd7.js:1809-1822 placement
-var We = createUiMessagePort();
+/**
+ * UI 消息端口
+ */
+var uiMessagePort = createUiMessagePort();
 //@ chunk-jv2zdrd7.js:1822-1862 placement
-var wwo = (r, i) => `${r}\x00client\x00${i}`;
+/**
+ * 客户端界面键
+ */
+var clientSurfaceKey = (requestId, key) => `${requestId}\x00client\x00${key}`;
 //@ chunk-jv2zdrd7.js:1862-1951 placement
-var ye = (r) => ({ component: r.component, requestId: wwo(r.requestId, r.key), surface: r.surface });
+/**
+ * 客户端描述
+ */
+var surfaceClientInfo = (r) => ({
+  component: r.component,
+  requestId: clientSurfaceKey(r.requestId, r.key),
+  surface: r.surface,
+});
 //@ chunk-jv2zdrd7.js:1951-1996 placement
-var ne = (r, i, f) => `Client ${i}: ${describeClientFailure(r, i, f)}`;
+/**
+ * 客户端失败说明
+ */
+var clientFailureText = (plugin, i, f) => `Client ${i}: ${describeClientFailure(plugin, i, f)}`;
 //@ chunk-jv2zdrd7.js:1996-2069 placement
-var HTe = ge(createStore({ focusedId: null }), (r) => r.setState(() => ({ focusedId: null })));
+/**
+ * 焦点 store
+ */
+var focusStore = identity(
+  createStore({
+    focusedId: null,
+  }),
+  (r) =>
+    r.setState(() => ({
+      focusedId: null,
+    })),
+);
 //@ chunk-jv2zdrd7.js:2069-2133 placement
-var Qrn = (r) => HTe.setState((i) => (i.focusedId === r ? i : { focusedId: r }));
+/**
+ * 设置焦点
+ */
+var setFocusedClient = (id) =>
+  focusStore.setState((i) =>
+    i.focusedId === id
+      ? i
+      : {
+          focusedId: id,
+        },
+  );
 //@ chunk-jv2zdrd7.js:2133-2169 placement
-var io = () => HTe.getState().focusedId;
+/**
+ * 取焦点 id
+ */
+var focusedClientId = () => focusStore.getState().focusedId;
 //@ chunk-jv2zdrd7.js:2169-2236 placement
-var Ewo = (r) => HTe.setState((i) => (i.focusedId === r ? { focusedId: null } : i));
+/**
+ * 清除焦点
+ */
+var clearFocusedClient = (id) =>
+  focusStore.setState((i) =>
+    i.focusedId === id
+      ? {
+          focusedId: null,
+        }
+      : i,
+  );
 //@ chunk-jv2zdrd7.js:2236-2259 placement
-var U = (r) => (r === ONE_ENGINE_NODE_COMPONENT ? 1 : 0);
+/**
+ * 引擎节点权重
+ */
+var engineNodeWeight = (component) => (component === ONE_ENGINE_NODE_COMPONENT ? 1 : 0);
 //@ chunk-jv2zdrd7.js:2259-2383 placement
-function createClientSite(r, i) {
-  let f = { surface: r.drawing.surface, component: i, requestId: r.requestId };
-  return { site: f, bornAt: currentVersion(f), holders: 0 };
+function createClientSite(r, component) {
+  let f = {
+    surface: r.drawing.surface,
+    component,
+    requestId: r.requestId,
+  };
+  return {
+    site: f,
+    bornAt: currentVersion(f),
+    holders: 0,
+  };
 }
 //@ chunk-jv2zdrd7.js:2383-2419 placement
-var Se = (r, i) => ({ plugin: r, handle: i });
+/**
+ * 持有句柄
+ */
+var heldHandle = (plugin, handle) => ({
+  plugin,
+  handle,
+});
+//@ chunk-jv2zdrd7.js:2419-2785 placement
 /**
  * 解析界面模块返回的元素树 JSON，把 held 句柄转为按键记录、悬停组归属到插件。
  */
-//@ chunk-jv2zdrd7.js:2419-2785 placement
-function toClientTree(r, i, f) {
+function toClientTree(plugin, i, f) {
   function w(p) {
     if (!isPlainObject(p)) return p;
-    let { props: props, hover: hover, children: children, held: held } = p,
-      c = { type: p.type };
-    if (props !== void 0) c.props = props;
-    if (hover !== void 0) c.hover = hover;
-    if (d3t(p.type) && c3t(hover) !== void 0) c.group = { plugin: r };
-    if (typeof held === "number") c.press = Se(r, f(held));
+    let { props, hover, children, held } = p;
+    let c = {
+      type: p.type,
+    };
+    if (props !== undefined) c.props = props;
+    if (hover !== undefined) c.hover = hover;
+    if (isHoverableType(p.type) && elementScope(hover) !== undefined)
+      c.group = {
+        plugin,
+      };
+    if (typeof held === "number") c.press = heldHandle(plugin, f(held));
     if ((typeof held !== "number" || p.type === "Button") && Array.isArray(children))
       c.children = children.map(w);
     return c;
   }
-  return Q5e(w(wellFormed(jsonParse(i))));
+  return deepFreezeInPlace(w(wellFormed(jsonParse(i))));
 }
 //@ chunk-jv2zdrd7.js:2785-2846 placement
-var se = (r) => [r.plugin, r.surface, r.requestId, r.key].join(" ");
+/**
+ * 客户端日志键
+ */
+var clientLogKey = (r) => [r.plugin, r.surface, r.requestId, r.key].join(" ");
 //@ chunk-jv2zdrd7.js:2846-2856 placement
-var ie = 20;
+/**
+ * 20
+ */
+var MAX_CLIENT_MEASURE_TRIES = 20;
 //@ chunk-jv2zdrd7.js:2856-2865 placement
-var ae = 8;
+/**
+ * 8
+ */
+var MAX_CLIENT_SETTLE_TRIES = 8;
 //@ chunk-jv2zdrd7.js:2865-2874 placement
-var ve = 3;
+/**
+ * 3
+ */
+var MAX_CLIENT_REDRAW_TRIES = 3;
 //@ chunk-jv2zdrd7.js:2874-2988 placement
 var clientKeyOf = (r) => ({
   plugin: r.plugin,
@@ -185,85 +283,103 @@ var clientKeyOf = (r) => ({
 });
 //@ chunk-jv2zdrd7.js:2988-3635 placement
 var CLIENT_STATES = (r, i) => ({
-  id: se(r),
+  id: clientLogKey(r),
   plugin: r.plugin,
   module: r.module,
   element: r.key,
-  drawing: ye(r),
+  drawing: surfaceClientInfo(r),
   requestId: r.requestId,
   clock: r.clock,
   props: r.props,
   handedProps: r.props,
   columns: 0,
   rows: 0,
-  surface: void 0,
-  snapshot: { status: "loading" },
+  surface: undefined,
+  snapshot: {
+    status: "loading",
+  },
   listeners: new Set(),
   held: [],
   holders: 1,
-  dialogHolders: U(r.component),
-  rowSite: U(r.component) === 0 ? r.component : void 0,
-  drawnSite: void 0,
-  isOverBudget: !1,
-  isDirty: !1,
-  isRendering: !1,
+  dialogHolders: engineNodeWeight(r.component),
+  rowSite: engineNodeWeight(r.component) === 0 ? r.component : undefined,
+  drawnSite: undefined,
+  isOverBudget: false,
+  isDirty: false,
+  isRendering: false,
   unpromptedRenders: 0,
-  renderTimer: void 0,
+  renderTimer: undefined,
   measurings: 0,
   frameOutcome: "unmeasured",
-  isUnsettled: !1,
+  isUnsettled: false,
   terminal: i,
-  selfDrawnTimer: void 0,
+  selfDrawnTimer: undefined,
   renderedAt: i,
-  thrownAt: void 0,
-  toldLast: void 0,
-  isDestroyed: !1,
-  destroyTimer: void 0,
+  thrownAt: undefined,
+  toldLast: undefined,
+  isDestroyed: false,
+  destroyTimer: undefined,
   mountGeneration: 0,
   heldIn: new Map(),
-  environmentId: void 0,
+  environmentId: undefined,
 });
 //@ chunk-jv2zdrd7.js:3635-3772 placement
 var tellClientProblem = (r, i, f) =>
   sayPlainCode({
     key: [`${r.plugin}#${r.environmentId}`, `Client ${r.module}`, i].join(" "),
     lead: r.plugin,
-    text: ne(r.plugin, r.module, f),
+    text: clientFailureText(r.plugin, r.module, f),
   });
 //@ chunk-jv2zdrd7.js:3772-4249 placement
 var UNSETTLED_MEASURE_NOTES = {
-  instance: `its region changed size on each of ${ae} measurings in one frame, so it is drawn as last measured; give the Client a height and a width, or draw no more than surface.rows and surface.columns`,
-  frame: `the Clients on screen were measured again in ${ie} passes of one frame, this one in the next, so it is drawn as last measured; some change their region at every measuring: give each a height and a width, or draw no more than surface.rows and surface.columns`,
+  instance: `its region changed size on each of ${MAX_CLIENT_SETTLE_TRIES} measurings in one frame, so it is drawn as last measured; give the Client a height and a width, or draw no more than surface.rows and surface.columns`,
+  frame: `the Clients on screen were measured again in ${MAX_CLIENT_MEASURE_TRIES} passes of one frame, this one in the next, so it is drawn as last measured; some change their region at every measuring: give each a height and a width, or draw no more than surface.rows and surface.columns`,
 };
 //@ chunk-jv2zdrd7.js:4249-4291 placement
-var vo = (r, i) => tellClientProblem(r, `unsettled ${i}`, UNSETTLED_MEASURE_NOTES[i]);
+/**
+ * 上报未结算
+ */
+var reportUnsettled = (r, i) => tellClientProblem(r, `unsettled ${i}`, UNSETTLED_MEASURE_NOTES[i]);
 //@ chunk-jv2zdrd7.js:4291-4379 placement
-function B() {
-  let r = g2.get();
+/**
+ * 视口键
+ */
+function surfaceViewportKey() {
+  let r = paneHostSlot.get();
   return [r?.columns, r?.rows, r?.conversationColumns].join("x");
 }
 //@ chunk-jv2zdrd7.js:4379-4521 placement
-function createFaultReporter(r = A4r()) {
+function createFaultReporter(r = desktopFaultDispatcher()) {
   return (i) =>
-    void r(i).catch((f) => {
-      pd().log(`ui.fault ${i.plugin}/${i.fault.element}: the chain threw (${errorMessage(f)})`, "warn");
+    void r(i).catch((error) => {
+      matcherLog().log(
+        `ui.fault ${i.plugin}/${i.fault.element}: the chain threw (${errorMessage(error)})`,
+        "warn",
+      );
     });
 }
 //@ chunk-jv2zdrd7.js:4521-4615 placement
-function Ae(r, i) {
-  let { name: f, message: message } = QAn(r) ? r : i(r);
-  return message.trim() !== "" ? message : f === "Error" ? C4r : f;
+/**
+ * 客户端错误文本
+ */
+function clientErrorMessage(r, vmErrorDescriber) {
+  let { name: f, message } = isVmError(r) ? r : vmErrorDescriber(r);
+  return message.trim() !== "" ? message : f === "Error" ? DEFAULT_MODULE_FAILURE : f;
 }
 //@ chunk-jv2zdrd7.js:4615-4719 placement
 var UNHANDLED_SURFACE_REJECTION_TEXT = (r) =>
   `Client: a promise a surface module did not return was rejected: ${r}; the session goes on`;
 //@ chunk-jv2zdrd7.js:4719-4994 placement
-var CLIENT_FAULT_TEXTS = ({ pluginName: pluginName, environmentId: environmentId, owns: owns }) =>
-  Jun((w, p) => {
-    if (![p, w].some((u) => !n0e(u) && owns(u))) return;
-    let a = UNHANDLED_SURFACE_REJECTION_TEXT(logLine(jfr(w)));
+var CLIENT_FAULT_TEXTS = ({ pluginName, environmentId, owns }) =>
+  claimPendingWriteLine((w, p) => {
+    if (![p, w].some((u) => !isUntrustedObject(u) && owns(u))) return;
+    let a = UNHANDLED_SURFACE_REJECTION_TEXT(logLine(rejectionText(w)));
     try {
-      tellOnce({ key: `${pluginName}#${environmentId} Client rejection`, lead: pluginName, text: a });
+      tellOnce({
+        key: `${pluginName}#${environmentId} Client rejection`,
+        lead: pluginName,
+        text: a,
+      });
     } catch (error) {
       logForDebugging(`${pluginName}: the fault could not be said: ${errorMessage(error)}`, {
         level: "error",
@@ -272,115 +388,136 @@ var CLIENT_FAULT_TEXTS = ({ pluginName: pluginName, environmentId: environmentId
     return `${pluginName}: ${a}`;
   });
 //@ chunk-jv2zdrd7.js:5016-5074 placement
-var Fe = (r) => QAn(r) && getErrnoCode(r) === "ERR_SCRIPT_EXECUTION_TIMEOUT";
+/**
+ * 是否脚本超时
+ */
+var isScriptTimeout = (r) => isVmError(r) && getErrnoCode(r) === "ERR_SCRIPT_EXECUTION_TIMEOUT";
 //@ chunk-jv2zdrd7.js:5074-5086 placement
-var Ie = 1000;
+/**
+ * 1000
+ */
+var CLIENT_TICK_MS = 1000;
 //@ chunk-jv2zdrd7.js:5086-5099 placement
-var _e = 60000;
+/**
+ * 60000
+ */
+var CLIENT_LOAD_TIMEOUT_MS = 60000;
 //@ chunk-jv2zdrd7.js:5099-5126 placement
-var je = "__surface__.run()";
+/**
+ * "__surface__.run()"
+ */
+var SURFACE_RUN_LABEL = "__surface__.run()";
 //@ chunk-jv2zdrd7.js:5126-5171 placement
-var Ne = (r, i) => ({ ...r, timers: new Map(), tick: i });
+/**
+ * 客户端运行时
+ */
+var clientRuntime = (r, tick) => ({
+  ...r,
+  timers: new Map(),
+  tick,
+});
+//@ chunk-jv2zdrd7.js:5171-8615 placement
 /**
  * 在隔离环境中加载插件的 surface 模块并建立客户端实例（约 3.4 KB）。
  */
-//@ chunk-jv2zdrd7.js:5171-8615 placement
 async function loadSurfaceModule(r, i = {}) {
-  let {
-      pluginName: pluginName,
-      pluginRoot: pluginRoot,
-      environmentId: environmentId,
-      surfaceModules: surfaceModules,
-    } = r,
-    a = !1,
-    { sandbox: sandbox, context: context } = mSi(),
-    c = lSi(context),
-    E = (o) => Q5e(c(o)),
-    v = dSi(context, pluginRoot),
-    O = createVmInstanceofObject(context),
-    y = createVmErrorDescriber(context),
-    { intoEnvironment: intoEnvironment } = createErrorConverters(y, v, O),
-    I = gSi(context, intoEnvironment);
-  Object.assign(sandbox, { console: createVmConsole(I, `[${pluginName}] surface`) });
-  let me = CLIENT_FAULT_TEXTS({ pluginName: pluginName, environmentId: environmentId, owns: O }),
-    C = new Map(),
-    A = 0,
-    pe = 0;
+  let { pluginName, pluginRoot, environmentId, surfaceModules } = r;
+  let a = false;
+  let { sandbox, context } = newVmHostContext();
+  let c = inboundCopier(context);
+  let E = (o) => deepFreezeInPlace(c(o));
+  let v = runVmPrelude(context, pluginRoot);
+  let vmInstanceofObject = createVmInstanceofObject(context);
+  let vmErrorDescriber = createVmErrorDescriber(context);
+  let { intoEnvironment } = createErrorConverters(vmErrorDescriber, v, vmInstanceofObject);
+  let I = runInVmWithTrace(context, intoEnvironment);
+  Object.assign(sandbox, {
+    console: createVmConsole(I, `[${pluginName}] surface`),
+  });
+  let me = CLIENT_FAULT_TEXTS({
+    pluginName,
+    environmentId,
+    owns: vmInstanceofObject,
+  });
+  let C = new Map();
+  let A = 0;
+  let pe = 0;
   function H(o) {
     let n = C.get(o);
     if (!n) throw new HooksError(`${pluginName}: no client instance ${o}`);
     return n;
   }
   function ue(o, n) {
-    let s = H(o),
-      l = `${pluginName}: Client ${s.module}: post: the data`;
-    if (n.length > afr)
-      throw new HooksError(`${l} serializes to ${n.length} characters, over the ${afr} limit; not sent`);
-    let x = jsonParse(n),
-      g = lEe(x);
-    if (g !== void 0) throw new HooksError(`${l} ${g}; not sent`);
+    let s = H(o);
+    let l = `${pluginName}: Client ${s.module}: post: the data`;
+    if (n.length > MAX_TREE_TEXT_CHARS_2)
+      throw new HooksError(
+        `${l} serializes to ${n.length} characters, over the ${MAX_TREE_TEXT_CHARS_2} limit; not sent`,
+      );
+    let x = jsonParse(n);
+    let g = checkPlainData(x);
+    if (g !== undefined) throw new HooksError(`${l} ${g}; not sent`);
     s.host.post(x);
   }
   function W(o, n) {
-    let s = H(o),
-      l = ++pe;
-    return (
-      s.timers.set(
-        l,
-        s.host.startTimer(n, () => {
-          if (C.get(o)?.timers.has(l) === !0) s.tick(l);
-        }),
-      ),
-      l
+    let s = H(o);
+    let l = ++pe;
+    s.timers.set(
+      l,
+      s.host.startTimer(n, () => {
+        if (C.get(o)?.timers.has(l) === true) s.tick(l);
+      }),
     );
+    return l;
   }
   let R = freezeApiObject({
-      schedule: NH(
-        I((o) => {
-          C.get(o)?.host.schedule();
-        }),
-      ),
-      post: NH(I(ue)),
-      startTimer: NH(I(W)),
-      stopTimer: NH(
-        I((o, n) => {
-          let s = C.get(o);
-          (s?.timers.get(n)?.(), s?.timers.delete(n));
-        }),
-      ),
-      fault: NH(
-        I((o, n) => {
-          let s = C.get(o);
-          if (s === void 0) {
-            logForDebugging(
-              `${pluginName}: Client: a promise an instance since unmounted returned was rejected: ${logLine(n)}`,
-              { level: "warn" },
-            );
-            return;
-          }
-          s.host.fault(
-            new HooksError(`${pluginName}: Client ${s.module}: a promise it returned was rejected: ${n}`),
+    schedule: nullPrototypeFunction(
+      I((o) => {
+        C.get(o)?.host.schedule();
+      }),
+    ),
+    post: nullPrototypeFunction(I(ue)),
+    startTimer: nullPrototypeFunction(I(W)),
+    stopTimer: nullPrototypeFunction(
+      I((o, n) => {
+        let s = C.get(o);
+        s?.timers.get(n)?.();
+        s?.timers.delete(n);
+      }),
+    ),
+    fault: nullPrototypeFunction(
+      I((o, n) => {
+        let s = C.get(o);
+        if (s === undefined) {
+          logForDebugging(
+            `${pluginName}: Client: a promise an instance since unmounted returned was rejected: ${logLine(n)}`,
+            {
+              level: "warn",
+            },
           );
-        }),
-      ),
-    }),
-    {
-      mount: mount,
-      setProps: setProps,
-      resize: resize,
-      stage: stage,
-      dropHeld: dropHeld,
-      hasListener: hasListener,
-      unmount: unmount,
-    } = vmModule.runInContext(BT(DESKTOP_SURFACE_RUNTIME_SOURCE), context)(R, E(P4r())),
-    le = new vmModule.Script(BT(je), { filename: `${pluginName} surface` }),
-    he = i.budgetMs ?? Ie,
-    j = B5e(Ie, i.budgetMs),
-    Z = (o) => (Fe(o) ? `ran longer than its ${he}ms budget` : Ae(o, y)),
-    ee = (o, n) => new HooksError(`${pluginName}: Client ${o}: ${Z(n)}`);
+          return;
+        }
+        s.host.fault(
+          new HooksError(`${pluginName}: Client ${s.module}: a promise it returned was rejected: ${n}`),
+        );
+      }),
+    ),
+  });
+  let { mount, setProps, resize, stage, dropHeld, hasListener, unmount } = vmModule.runInContext(
+    withUseStrict(DESKTOP_SURFACE_RUNTIME_SOURCE),
+    context,
+  )(R, E(surfaceLimits()));
+  let le = new vmModule.Script(withUseStrict(SURFACE_RUN_LABEL), {
+    filename: `${pluginName} surface`,
+  });
+  let budgetMs = i.budgetMs ?? CLIENT_TICK_MS;
+  let j = timeoutOption(CLIENT_TICK_MS, i.budgetMs);
+  let Z = (o) =>
+    isScriptTimeout(o) ? `ran longer than its ${budgetMs}ms budget` : clientErrorMessage(o, vmErrorDescriber);
+  let ee = (o, n) => new HooksError(`${pluginName}: Client ${o}: ${Z(n)}`);
   function b(o, n, s) {
-    if (a) throw SIe(pluginName);
-    stage(o.id, n, s === void 0 ? void 0 : E(s));
+    if (a) throw envUnloadedError(pluginName);
+    stage(o.id, n, s === undefined ? undefined : E(s));
     try {
       return le.runInContext(context, j);
     } catch (error) {
@@ -388,36 +525,44 @@ async function loadSurfaceModule(r, i = {}) {
     }
   }
   let oe = linkHooksModule({
-      args: {
-        pluginName: pluginName,
-        pluginRoot: pluginRoot,
-        linked: surfaceModules.flatMap((o) => o.linked),
-        links: surfaceModules.flatMap((o) => o.links),
-      },
-      context: context,
-      isScanned: !0,
-      stamped: (o) => o(),
-      evaluateOptions: j,
-    }),
-    z = i.readyMs ?? iEt,
-    F = new Map();
-  for (let o of surfaceModules) F.set(o.module, await N(o));
-  async function N(o) {
+    args: {
+      pluginName,
+      pluginRoot,
+      linked: surfaceModules.flatMap((surfaceModule) => surfaceModule.linked),
+      links: surfaceModules.flatMap((surfaceModule) => surfaceModule.links),
+    },
+    context,
+    isScanned: true,
+    stamped: (o) => o(),
+    evaluateOptions: j,
+  });
+  let readyMs = i.readyMs ?? HOOKS_READY_TIMEOUT_MS;
+  let F = new Map();
+  for (let surfaceModule of surfaceModules) F.set(surfaceModule.module, await N(surfaceModule));
+  async function N(surfaceModule) {
     try {
-      let n = await withTimeout(oe.load(o.modulePath, o.source), z, `its top level did not settle in ${z}ms`);
-      return { component: o.component, exports: n };
+      let n = await withTimeout(
+        oe.load(surfaceModule.modulePath, surfaceModule.source),
+        readyMs,
+        `its top level did not settle in ${readyMs}ms`,
+      );
+      return {
+        component: surfaceModule.component,
+        exports: n,
+      };
     } catch (error) {
       return {
         error: new HooksError(
-          `${pluginName}: Client ${o.module}: the surface module did not load: ${Z(error)}`,
+          `${pluginName}: Client ${surfaceModule.module}: the surface module did not load: ${Z(error)}`,
         ),
       };
     }
   }
   function X(o) {
     if (!C.delete(o.id)) return;
-    for (let n of o.timers.values()) n();
-    if ((o.timers.clear(), !a)) unmount(o.id);
+    for (let timer of o.timers.values()) timer();
+    o.timers.clear();
+    if (!a) unmount(o.id);
   }
   function re(o) {
     let n = F.get(o);
@@ -428,8 +573,8 @@ async function loadSurfaceModule(r, i = {}) {
       );
     }
     if ("error" in n) throw n.error;
-    let { component: component, exports: l } = n,
-      x = Object.hasOwn(l, component) && l[component];
+    let { component, exports: l } = n;
+    let x = Object.hasOwn(l, component) && l[component];
     if (typeof x !== "function")
       throw new HooksError(
         `${pluginName}: Client ${o}: its export ${component} is not a function (props, surface) => tree`,
@@ -440,207 +585,242 @@ async function loadSurfaceModule(r, i = {}) {
     if (!a) o();
   }
   function e(o) {
-    let { props: props, host: host } = o;
-    if (a) throw SIe(pluginName);
-    let l = re(o.module),
-      x = ++A,
-      g = Ne({ id: x, module: o.module, host: host }, (h) => {
-        b(g, "tick", h);
-      });
-    return (
-      C.set(x, g),
-      mount(x, l, E(props)),
+    let { props, host } = o;
+    if (a) throw envUnloadedError(pluginName);
+    let l = re(o.module);
+    let x = ++A;
+    let g = clientRuntime(
       {
         id: x,
-        render: () => {
-          let h = b(g, "render");
-          if (typeof h !== "string") throw ee(o.module, Error("the module returned no tree"));
-          return h;
-        },
-        setProps: (h) => K(() => setProps(x, E(h))),
-        resize: (h, P) => K(() => resize(x, h, P)),
-        pointer: (h) => {
-          b(g, "pointer", h);
-        },
-        key: (h) => {
-          b(g, "key", h);
-        },
-        runHeld: (h, P) => {
-          b(g, "held", { handle: h, event: P });
-        },
-        dropHeld: (h) => K(() => dropHeld(x, E(h))),
-        hasPointerListener: () => !a && hasListener(x, "pointer"),
-        hasKeyListener: () => !a && hasListener(x, "key"),
-        unmount: () => X(g),
-      }
+        module: o.module,
+        host,
+      },
+      (h) => {
+        b(g, "tick", h);
+      },
     );
+    C.set(x, g);
+    mount(x, l, E(props));
+    return {
+      id: x,
+      render: () => {
+        let h = b(g, "render");
+        if (typeof h !== "string") throw ee(o.module, Error("the module returned no tree"));
+        return h;
+      },
+      setProps: (h) => K(() => setProps(x, E(h))),
+      resize: (h, P) => K(() => resize(x, h, P)),
+      pointer: (h) => {
+        b(g, "pointer", h);
+      },
+      key: (h) => {
+        b(g, "key", h);
+      },
+      runHeld: (handle, event) => {
+        b(g, "held", {
+          handle,
+          event,
+        });
+      },
+      dropHeld: (h) => K(() => dropHeld(x, E(h))),
+      hasPointerListener: () => !a && hasListener(x, "pointer"),
+      hasKeyListener: () => !a && hasListener(x, "key"),
+      unmount: () => X(g),
+    };
   }
   return {
-    pluginName: pluginName,
-    environmentId: environmentId,
+    pluginName,
+    environmentId,
     mount: e,
     dispose() {
       if (a) return;
       for (let o of [...C.values()]) X(o);
-      (setTimeout(me, _e).unref(), (a = !0));
+      setTimeout(me, CLIENT_LOAD_TIMEOUT_MS).unref();
+      a = true;
     },
     isDisposed: () => a,
   };
 }
 //@ chunk-jv2zdrd7.js:8615-8673 placement
-var qe = (r, i) => ({ environmentId: r, loading: i, loaded: void 0 });
+/**
+ * 加载中的环境
+ */
+var loadingEnv = (environmentId, loading) => ({
+  environmentId,
+  loading,
+  loaded: undefined,
+});
 //@ chunk-jv2zdrd7.js:8673-8708 placement
-var Ge = ge(to(), (r) => r.set(void 0));
+/**
+ * 界面宿主槽
+ */
+var surfaceHostSlot = identity(createValueSlot(), (r) => r.set(undefined));
 //@ chunk-jv2zdrd7.js:8708-9958 placement
 function createSurfaceEnvironmentPool() {
-  let r = new Map(),
-    i = createSignal(),
-    f;
+  let r = new Map();
+  let signal = createSignal();
+  let f;
   function w(a, u) {
     if (r.get(a) === u) r.delete(a);
-    (u.loading.then(
+    u.loading.then(
       (c) => {
-        (c.dispose(),
-          Hvt.forget(a),
-          logForDebugging(`surface environment of ${a} (environment ${u.environmentId}) disposed`));
+        c.dispose();
+        heldRunners.forget(a);
+        logForDebugging(`surface environment of ${a} (environment ${u.environmentId}) disposed`);
       },
       () => {},
-    ),
-      queueMicrotask(() => i.emit(a)));
+    );
+    queueMicrotask(() => signal.emit(a));
   }
   function p() {
     let a = new Map(
       getPluginRegistry()
         .loadedModules.filter(isModuleAdmitted)
-        .map((u) => [u.name, u.environmentId]),
+        .map((loadedModule) => [loadedModule.name, loadedModule.environmentId]),
     );
     for (let [u, m] of [...r]) if (a.get(u) !== m.environmentId) w(u, m);
   }
   function T(a) {
-    let u = QNe(a);
-    if (!u) return Promise.reject(new HooksError(`${a}: Client: the plugin is not loaded`));
+    let loadedModule = findLoadedModule(a);
+    if (!loadedModule) return Promise.reject(new HooksError(`${a}: Client: the plugin is not loaded`));
     let m = r.get(a);
-    if (m?.environmentId === u.environmentId) return m.loading;
+    if (m?.environmentId === loadedModule.environmentId) return m.loading;
     if (m) w(a, m);
-    let { surfaceModules: surfaceModules, pluginRoot: pluginRoot } = u.args;
+    let { surfaceModules, pluginRoot } = loadedModule.args;
     if (!surfaceModules || surfaceModules.length === 0)
       return Promise.reject(
         new HooksError(
           `${a}: Client: the plugin loaded no surface module (its hooks module builds no Client from a literal path), so nothing can draw its Clients`,
         ),
       );
-    let v = Ge.get(),
-      { environmentId: environmentId } = u,
-      y = qe(
-        environmentId,
-        loadSurfaceModule(
-          {
-            pluginName: a,
-            pluginRoot: pluginRoot,
-            environmentId: environmentId,
-            surfaceModules: surfaceModules,
-          },
-          v === void 0 ? {} : { budgetMs: v },
-        ).then(
-          (M) => (
-            (y.loaded = M),
-            logForDebugging(
-              `surface environment of ${a} (environment ${environmentId}) loaded ` +
-                surfaceModules.map((I) => I.module).join(", "),
-            ),
-            M
-          ),
-        ),
-      );
-    return (r.set(a, y), y.loading);
+    let v = surfaceHostSlot.get();
+    let { environmentId } = loadedModule;
+    let y = loadingEnv(
+      environmentId,
+      loadSurfaceModule(
+        {
+          pluginName: a,
+          pluginRoot,
+          environmentId,
+          surfaceModules,
+        },
+        v === undefined
+          ? {}
+          : {
+              budgetMs: v,
+            },
+      ).then((surfaceModule) => {
+        y.loaded = surfaceModule;
+        logForDebugging(
+          `surface environment of ${a} (environment ${environmentId}) loaded ` +
+            surfaceModules.map((surfaceModule) => surfaceModule.module).join(", "),
+        );
+        return surfaceModule;
+      }),
+    );
+    r.set(a, y);
+    return y.loading;
   }
   return {
     environmentFor(a) {
-      return ((f ??= subscribe_2(p)), T(a));
+      f ??= subscribe_2(p);
+      return T(a);
     },
     sweep: p,
-    onDisposed: i.subscribe,
+    onDisposed: signal.subscribe,
     disposeAll() {
       for (let [a, u] of [...r]) w(a, u);
-      (f?.(), (f = void 0));
+      f?.();
+      f = undefined;
     },
     count: () => r.size,
   };
 }
 //@ chunk-jv2zdrd7.js:9958-9970 placement
-var Xe = createSurfaceEnvironmentPool();
+/**
+ * 界面环境池
+ */
+var surfaceEnvPool = createSurfaceEnvironmentPool();
+//@ chunk-jv2zdrd7.js:9970-17440 placement
 /**
  * 管理 surface 客户端：测量、重绘稳定性检测、异常上报（约 7.5 KB）。
  */
-//@ chunk-jv2zdrd7.js:9970-17440 placement
 function createSurfaceClientHost(r = {}) {
-  let i = r.environments ?? Xe,
-    f = r.port ?? We,
-    w = r.raiseFault ?? createFaultReporter(),
-    p = new Map(),
-    T,
-    a = 0,
-    u = !1,
-    m;
-  function c(e, o) {
-    e.snapshot = o;
+  let environments = r.environments ?? surfaceEnvPool;
+  let port = r.port ?? uiMessagePort;
+  let w = r.raiseFault ?? createFaultReporter();
+  let p = new Map();
+  let T;
+  let a = 0;
+  let u = false;
+  let m;
+  function c(e, snapshot) {
+    e.snapshot = snapshot;
     for (let listener of e.listeners) listener();
   }
   function E(e) {
-    (C(e, e.held), (e.held = []));
+    C(e, e.held);
+    e.held = [];
   }
   function v(e) {
-    if (
-      ((e.mountGeneration += 1),
-      R(e),
-      (e.isDirty = !1),
-      (e.isOverBudget = !1),
-      (e.thrownAt = void 0),
-      (e.drawnSite = void 0),
-      zte.dropClient(H(e)),
-      e.renderTimer)
-    )
-      (clearImmediate(e.renderTimer), (e.renderTimer = void 0));
-    (clearImmediate(e.selfDrawnTimer),
-      j(e),
-      (e.measurings = 0),
-      (e.frameOutcome = "unmeasured"),
-      (e.isUnsettled = !1),
-      _ee.holdDrawing(e.plugin, e.drawing, []),
-      E(e),
-      e.surface?.unmount(),
-      (e.surface = void 0),
-      f.cancel(e.id),
-      Ewo(e.id));
+    e.mountGeneration += 1;
+    R(e);
+    e.isDirty = false;
+    e.isOverBudget = false;
+    e.thrownAt = undefined;
+    e.drawnSite = undefined;
+    surfaceRowLedger.dropClient(H(e));
+    if (e.renderTimer) {
+      clearImmediate(e.renderTimer);
+      e.renderTimer = undefined;
+    }
+    clearImmediate(e.selfDrawnTimer);
+    j(e);
+    e.measurings = 0;
+    e.frameOutcome = "unmeasured";
+    e.isUnsettled = false;
+    moveToCloudTrash.holdDrawing(e.plugin, e.drawing, []);
+    E(e);
+    e.surface?.unmount();
+    e.surface = undefined;
+    port.cancel(e.id);
+    clearFocusedClient(e.id);
   }
   function O(e, o, n) {
-    let s = ne(e.plugin, e.module, o),
-      l = `${e.plugin}: ${s}`;
-    return (
-      pd().log(`${l}; ${n}`, "warn"),
-      reportPluginProblem(e.plugin, s, e.toldLast === s ? "once" : "again"),
-      (e.toldLast = s),
-      l
+    let s = clientFailureText(e.plugin, e.module, o);
+    let l = `${e.plugin}: ${s}`;
+    matcherLog().log(`${l}; ${n}`, "warn");
+    reportPluginProblem(e.plugin, s, e.toldLast === s ? "once" : "again");
+    e.toldLast = s;
+    return l;
+  }
+  function y(e, error, phase) {
+    let s = errorMessage(error);
+    let text = O(e, s, "the instance unmounted");
+    let x = new Map(e.heldIn);
+    v(e);
+    c(e, {
+      status: "failed",
+      text,
+    });
+    w(
+      toUiFaultEvent(clientKeyOf(e), e.drawing.surface, {
+        phase,
+        reason: s,
+        sites: () =>
+          [...e.heldIn.values()]
+            .filter((g) => g.holders > 0)
+            .map((g) => ({
+              site: g.site,
+              bornAt: (x.get(g.site.component) ?? g).bornAt,
+            })),
+      }),
     );
   }
-  function y(e, o, n) {
-    let s = errorMessage(o),
-      l = O(e, s, "the instance unmounted"),
-      x = new Map(e.heldIn);
-    (v(e),
-      c(e, { status: "failed", text: l }),
-      w(
-        toUiFaultEvent(clientKeyOf(e), e.drawing.surface, {
-          phase: n,
-          reason: s,
-          sites: () =>
-            [...e.heldIn.values()]
-              .filter((g) => g.holders > 0)
-              .map((g) => ({ site: g.site, bornAt: (x.get(g.site.component) ?? g).bornAt })),
-        }),
-      ));
-  }
-  let M = (e, o) => `${o} ${Rs({ props: e.handedProps })}`;
+  let M = (e, o) =>
+    `${o} ${stableStringifySafe({
+      props: e.handedProps,
+    })}`;
   function I(e, o) {
     if (!e.surface || e.isDestroyed) return;
     try {
@@ -649,31 +829,37 @@ function createSurfaceClientHost(r = {}) {
       y(e, error, "run");
     }
   }
-  function me(e, o) {
-    let n = [],
-      s = [],
-      l = [],
-      x = 0,
-      g = 0;
+  function me(e, surface) {
+    let n = [];
+    let s = [];
+    let l = [];
+    let x = 0;
+    let g = 0;
     try {
-      let h = toClientTree(e.plugin, o.render(), (S) => {
-          let hold = Hvt.hold(e.plugin, (Te) => {
-            (R(e), I(e, () => o.runHeld(S, Te)));
-          });
-          return (n.push({ surfaceHandle: hold, environmentHandle: S }), hold);
-        }),
-        P = validateTree(h, void 0, {
-          surface: e.drawing.surface,
-          within: N(e),
-          measured: (S, V) => {
-            ((x = S), (g = V));
-          },
+      let clientTree = toClientTree(e.plugin, surface.render(), (S) => {
+        let V = heldRunners.hold(e.plugin, (Te) => {
+          R(e);
+          I(e, () => surface.runHeld(S, Te));
         });
-      if (P !== void 0) throw new HooksError(`returned a tree that does not validate (${P})`);
+        n.push({
+          surfaceHandle: V,
+          environmentHandle: S,
+        });
+        return V;
+      });
+      let P = validateTree(clientTree, undefined, {
+        surface: e.drawing.surface,
+        within: N(e),
+        measured: (S, V) => {
+          x = S;
+          g = V;
+        },
+      });
+      if (P !== undefined) throw new HooksError(`returned a tree that does not validate (${P})`);
       return [
         withPlainLinks(
           withPlainCode(
-            withKnownBorders(h, (S) => tellClientProblem(e, "borderStyle", unknownBorderNote(S))),
+            withKnownBorders(clientTree, (S) => tellClientProblem(e, "borderStyle", unknownBorderNote(S))),
             (S) => {
               s.push(S);
             },
@@ -690,20 +876,23 @@ function createSurfaceClientHost(r = {}) {
         g,
       ];
     } catch (error) {
-      throw (C(e, n), error);
+      C(e, n);
+      throw error;
     }
   }
-  function C(e, o) {
-    (Hvt.release(
+  function C(e, held) {
+    heldRunners.release(
       e.plugin,
-      o.map((n) => n.surfaceHandle),
-    ),
-      e.surface?.dropHeld(o.map((n) => n.environmentHandle)));
+      held.map((n) => n.surfaceHandle),
+    );
+    e.surface?.dropHeld(held.map((n) => n.environmentHandle));
   }
   function A(e) {
-    let { surface: surface } = e;
+    let { surface } = e;
     if (!surface || e.isDestroyed) return;
-    ((e.isDirty = !1), (e.isRendering = !0), (e.renderedAt = B()));
+    e.isDirty = false;
+    e.isRendering = true;
+    e.renderedAt = surfaceViewportKey();
     let n;
     try {
       n = me(e, surface);
@@ -711,28 +900,33 @@ function createSurfaceClientHost(r = {}) {
       y(e, error, "render");
       return;
     } finally {
-      e.isRendering = !1;
+      e.isRendering = false;
     }
-    let [s, l, x, g, h, P] = n,
-      S = N(e) === ONE_ENGINE_NODE_COMPONENT;
-    if (S && !zte.fits(H(e), x, P)) {
-      ((e.isOverBudget = !0),
-        C(e, l),
-        O(
-          e,
-          `returned a tree of ${x} rows that, with the tree around the dialog and its other Clients, passes ${P}`,
-          "the frame before it kept",
-        ));
+    let [s, l, x, g, h, P] = n;
+    let S = N(e) === ONE_ENGINE_NODE_COMPONENT;
+    if (S && !surfaceRowLedger.fits(H(e), x, P)) {
+      e.isOverBudget = true;
+      C(e, l);
+      O(
+        e,
+        `returned a tree of ${x} rows that, with the tree around the dialog and its other Clients, passes ${P}`,
+        "the frame before it kept",
+      );
       return;
     }
-    e.isOverBudget = !1;
+    e.isOverBudget = false;
     let held = e.held;
     e.held = l;
-    let Ke = hostDrawnPresses(s, e.drawing);
-    (C(e, held), (e.drawnSite = N(e)), c(e, { status: "drawn", tree: Ke }));
+    let tree = hostDrawnPresses(s, e.drawing);
+    C(e, held);
+    e.drawnSite = N(e);
+    c(e, {
+      status: "drawn",
+      tree,
+    });
     for (let _ of g) tellClientProblem(e, plainCodeFinding(_), plainCodeNote(_));
     for (let _ of h) tellClientProblem(e, `${e.drawing.surface} ${plainLinkFinding(_)}`, plainLinkNote(_));
-    if (S) zte.recordClient(H(e), x);
+    if (S) surfaceRowLedger.recordClient(H(e), x);
   }
   function pe(e) {
     for (let o of p.values())
@@ -742,14 +936,22 @@ function createSurfaceClientHost(r = {}) {
         o.drawing.surface === e.surface &&
         !o.isDirty &&
         !o.isDestroyed &&
-        o.surface !== void 0
-      )
-        ((o.isDirty = !0), (o.unpromptedRenders = 0), (o.renderTimer = setImmediate(W, o)));
+        o.surface !== undefined
+      ) {
+        o.isDirty = true;
+        o.unpromptedRenders = 0;
+        o.renderTimer = setImmediate(W, o);
+      }
   }
-  let H = (e) => ({ requestId: e.requestId, surface: e.drawing.surface, plugin: e.plugin, key: e.element });
+  let H = (e) => ({
+    requestId: e.requestId,
+    surface: e.drawing.surface,
+    plugin: e.plugin,
+    key: e.element,
+  });
   function ue(e) {
     if (e.isDirty || e.isDestroyed || !e.surface) return;
-    if (e.unpromptedRenders >= ve) {
+    if (e.unpromptedRenders >= MAX_CLIENT_REDRAW_TRIES) {
       let o = new HooksError(
         `set its state again after each of ${e.unpromptedRenders} renders, nothing heard between; set state on a pointer or key event, a tick, a press or new props, and let a render settle`,
       );
@@ -757,51 +959,60 @@ function createSurfaceClientHost(r = {}) {
       y(e, o, "run");
       return;
     }
-    ((e.isDirty = !0), (e.renderTimer = setImmediate(W, e)));
+    e.isDirty = true;
+    e.renderTimer = setImmediate(W, e);
   }
   function W(e) {
-    if (((e.renderTimer = void 0), e.isDirty))
-      ((e.unpromptedRenders += 1),
-        clearImmediate(e.selfDrawnTimer),
-        (e.selfDrawnTimer = setImmediate(j, e)),
-        A(e));
+    e.renderTimer = undefined;
+    if (e.isDirty) {
+      e.unpromptedRenders += 1;
+      clearImmediate(e.selfDrawnTimer);
+      e.selfDrawnTimer = setImmediate(j, e);
+      A(e);
+    }
   }
   function R(e) {
     for (let o of p.values()) if (o.plugin === e.plugin) o.unpromptedRenders = 0;
   }
   function ce(e, o) {
     let mountGeneration = e.mountGeneration;
-    f.post(e.id, toUiMessageEvent(clientKeyOf(e), e.drawing.surface, o), (s) => {
-      if (s.props !== void 0 && !e.isDestroyed && e.mountGeneration === mountGeneration) Y(e, s.props);
+    port.post(e.id, toUiMessageEvent(clientKeyOf(e), e.drawing.surface, o), (s) => {
+      if (s.props !== undefined && !e.isDestroyed && e.mountGeneration === mountGeneration) Y(e, s.props);
     });
   }
   function de(e, o) {
     if (e.isDestroyed || e.surface) return;
-    if (e.thrownAt !== void 0) {
-      if (e.thrownAt === M(e, B())) return;
-      ((e.thrownAt = void 0), (e.props = e.handedProps));
+    if (e.thrownAt !== undefined) {
+      if (e.thrownAt === M(e, surfaceViewportKey())) return;
+      e.thrownAt = undefined;
+      e.props = e.handedProps;
       for (let [n, s] of e.heldIn)
-        if (s.holders > 0) e.heldIn.set(n, { ...s, bornAt: currentVersion(s.site) });
+        if (s.holders > 0)
+          e.heldIn.set(n, {
+            ...s,
+            bornAt: currentVersion(s.site),
+          });
     }
     try {
-      ((e.environmentId = o.environmentId),
-        (e.surface = o.mount({
-          module: e.module,
-          props: e.props,
-          host: {
-            schedule: () => ue(e),
-            post: (n) => ce(e, n),
-            startTimer: (n, s) =>
-              e.clock.every(n, () => {
-                (R(e), I(e, s));
-              }),
-            fault: (n) =>
-              I(e, () => {
-                throw n;
-              }),
-          },
-        })),
-        e.surface.resize(e.columns, e.rows));
+      e.environmentId = o.environmentId;
+      e.surface = o.mount({
+        module: e.module,
+        props: e.props,
+        host: {
+          schedule: () => ue(e),
+          post: (n) => ce(e, n),
+          startTimer: (n, s) =>
+            e.clock.every(n, () => {
+              R(e);
+              I(e, s);
+            }),
+          fault: (n) =>
+            I(e, () => {
+              throw n;
+            }),
+        },
+      });
+      e.surface.resize(e.columns, e.rows);
     } catch (error) {
       y(e, error, "load");
       return;
@@ -810,164 +1021,230 @@ function createSurfaceClientHost(r = {}) {
   }
   function q(e) {
     e.mountGeneration += 1;
-    let mountGeneration = e.mountGeneration,
-      n = () => e.mountGeneration === mountGeneration && !e.isDestroyed;
-    i.environmentFor(e.plugin).then(
+    let mountGeneration = e.mountGeneration;
+    let n = () => e.mountGeneration === mountGeneration && !e.isDestroyed;
+    environments.environmentFor(e.plugin).then(
       (s) => {
         if (n()) de(e, s);
       },
-      (s) => {
-        if (n()) y(e, s, "load");
+      (error) => {
+        if (n()) y(e, error, "load");
       },
     );
   }
   function Y(e, o) {
-    if (Rs(o) === Rs(e.props)) return;
-    ((e.props = o),
-      R(e),
-      I(e, () => {
-        e.surface?.setProps(o);
-      }),
-      A(e));
+    if (stableStringifySafe(o) === stableStringifySafe(e.props)) return;
+    e.props = o;
+    R(e);
+    I(e, () => {
+      e.surface?.setProps(o);
+    });
+    A(e);
   }
   function J(e, o) {
-    ((e.handedProps = o), Y(e, o));
+    e.handedProps = o;
+    Y(e, o);
   }
   function G(e) {
     if (e.isDestroyed) return;
-    if (((e.isDestroyed = !0), clearTimeout(e.destroyTimer), v(e), p.get(e.id) === e)) p.delete(e.id);
+    e.isDestroyed = true;
+    clearTimeout(e.destroyTimer);
+    v(e);
+    if (p.get(e.id) === e) p.delete(e.id);
   }
   function Q() {
-    ((m = void 0), (a = 0));
-    for (let e of p.values())
-      ((e.isUnsettled &&= e.frameOutcome !== "measured"),
-        (e.measurings = 0),
-        (e.frameOutcome = "unmeasured"));
+    m = undefined;
+    a = 0;
+    for (let e of p.values()) {
+      e.isUnsettled &&= e.frameOutcome !== "measured";
+      e.measurings = 0;
+      e.frameOutcome = "unmeasured";
+    }
   }
   function le(e) {
-    let o = e.measurings >= (e.isUnsettled ? 1 : ae),
-      n = e.measurings > 0 && a > ie;
-    return o ? "instance" : n ? "frame" : void 0;
+    let o = e.measurings >= (e.isUnsettled ? 1 : MAX_CLIENT_SETTLE_TRIES);
+    let n = e.measurings > 0 && a > MAX_CLIENT_MEASURE_TRIES;
+    return o ? "instance" : n ? "frame" : undefined;
   }
   function he(e, o) {
-    if (((e.frameOutcome = "passed over"), e.surface?.resize(e.columns, e.rows), !e.isUnsettled))
-      ((e.isUnsettled = !0), vo(e, o));
+    e.frameOutcome = "passed over";
+    e.surface?.resize(e.columns, e.rows);
+    if (!e.isUnsettled) {
+      e.isUnsettled = true;
+      reportUnsettled(e, o);
+    }
   }
   function j(e) {
-    e.selfDrawnTimer = void 0;
+    e.selfDrawnTimer = undefined;
   }
   function Z(e) {
     if (e.holders === 0) G(e);
   }
   function ee(e, o) {
     if (o.columns === e.columns && o.rows === e.rows) return;
-    let n = B(),
-      s = n !== e.terminal,
-      l = u && !s && e.measurings > 0;
-    if (((e.terminal = n), (e.columns = o.columns), (e.rows = o.rows), l)) ((a += 1), (u = !1));
-    let x = s ? void 0 : le(e);
-    if (x !== void 0) {
+    let n = surfaceViewportKey();
+    let s = n !== e.terminal;
+    let l = u && !s && e.measurings > 0;
+    e.terminal = n;
+    e.columns = o.columns;
+    e.rows = o.rows;
+    if (l) {
+      a += 1;
+      u = false;
+    }
+    let x = s ? undefined : le(e);
+    if (x !== undefined) {
       he(e, x);
       return;
     }
     if (!s) e.measurings += 1;
     if (e.frameOutcome === "unmeasured") e.frameOutcome = "measured";
-    if (((m ??= setImmediate(Q)), s || e.selfDrawnTimer === void 0)) R(e);
-    if (e.surface) (e.surface.resize(o.columns, o.rows), A(e));
+    m ??= setImmediate(Q);
+    if (s || e.selfDrawnTimer === undefined) R(e);
+    if (e.surface) {
+      e.surface.resize(o.columns, o.rows);
+      A(e);
+    }
   }
   function b(e, o) {
-    if (
-      (F(e, o, -1),
-      (e.holders = Math.max(0, e.holders - 1)),
-      (e.dialogHolders = Math.max(0, e.dialogHolders - U(o))),
-      e.holders === 0 && !e.isDestroyed)
-    )
-      (clearTimeout(e.destroyTimer), (e.destroyTimer = setTimeout(Z, 0, e)));
-    else if (!oe(e)) z(e);
+    F(e, o, -1);
+    e.holders = Math.max(0, e.holders - 1);
+    e.dialogHolders = Math.max(0, e.dialogHolders - engineNodeWeight(o));
+    if (e.holders === 0 && !e.isDestroyed) {
+      clearTimeout(e.destroyTimer);
+      e.destroyTimer = setTimeout(Z, 0, e);
+    } else if (!oe(e)) z(e);
   }
   function oe(e) {
-    return e.surface === void 0 || e.drawnSite === N(e);
+    return e.surface === undefined || e.drawnSite === N(e);
   }
   function z(e) {
-    if ((R(e), zte.dropClient(H(e)), (e.drawnSite = void 0), e.snapshot.status === "drawn"))
-      c(e, { status: "loading" });
+    R(e);
+    surfaceRowLedger.dropClient(H(e));
+    e.drawnSite = undefined;
+    if (e.snapshot.status === "drawn")
+      c(e, {
+        status: "loading",
+      });
     A(e);
   }
-  function F(e, o, n) {
-    let s = e.heldIn.get(o) ?? createClientSite(e, o);
-    e.heldIn.set(o, { ...s, holders: Math.max(0, s.holders + n) });
+  function F(e, component, n) {
+    let s = e.heldIn.get(component) ?? createClientSite(e, component);
+    e.heldIn.set(component, {
+      ...s,
+      holders: Math.max(0, s.holders + n),
+    });
   }
   function N(e) {
     return e.dialogHolders > 0 ? ONE_ENGINE_NODE_COMPONENT : (e.rowSite ?? e.drawing.component);
   }
-  let X = (e, o) => ({
+  let X = (e, component) => ({
     id: e.id,
     plugin: e.plugin,
     module: e.module,
-    subscribe: (n) => (e.listeners.add(n), () => e.listeners.delete(n)),
+    subscribe: (n) => {
+      e.listeners.add(n);
+      return () => e.listeners.delete(n);
+    },
     getSnapshot: () => e.snapshot,
     setProps: (n) => J(e, n),
     laidOut: () => {
-      u = !0;
+      u = true;
     },
-    resize: (n, s) => ee(e, { columns: n, rows: s }),
+    resize: (columns, rows) =>
+      ee(e, {
+        columns,
+        rows,
+      }),
     pointer: (n) => {
-      (R(e), I(e, () => e.surface?.pointer(n)));
+      R(e);
+      I(e, () => e.surface?.pointer(n));
     },
     key: (n) => {
-      (R(e), I(e, () => e.surface?.key(n)));
+      R(e);
+      I(e, () => e.surface?.key(n));
     },
-    acceptsPointer: () => e.surface?.hasPointerListener() === !0,
-    acceptsKeys: () => e.surface?.hasKeyListener() === !0,
+    acceptsPointer: () => e.surface?.hasPointerListener() === true,
+    acceptsKeys: () => e.surface?.hasKeyListener() === true,
     threw: (n) => {
-      if (e.surface === void 0 || e.isDestroyed) return;
-      (y(e, n, "render"), (e.thrownAt = M(e, e.renderedAt)));
+      if (e.surface === undefined || e.isDestroyed) return;
+      y(e, n, "render");
+      e.thrownAt = M(e, e.renderedAt);
     },
-    drawnAgain: () => (e.thrownAt !== void 0 && e.thrownAt !== M(e, B()) && e.holders > 0 ? q(e) : void 0),
-    release: () => b(e, o),
+    drawnAgain: () =>
+      e.thrownAt !== undefined && e.thrownAt !== M(e, surfaceViewportKey()) && e.holders > 0
+        ? q(e)
+        : undefined,
+    release: () => b(e, component),
   });
   function re(e) {
     for (let o of p.values()) {
       if (o.plugin !== e || o.isDestroyed) continue;
-      if ((v(o), (o.toldLast = void 0), c(o, { status: "loading" }), o.holders > 0)) q(o);
+      v(o);
+      o.toldLast = undefined;
+      c(o, {
+        status: "loading",
+      });
+      if (o.holders > 0) q(o);
     }
   }
   function K(e, o) {
-    (clearTimeout(e.destroyTimer),
-      (e.destroyTimer = void 0),
-      (e.holders += 1),
-      F(e, o.component, 1),
-      (e.clock = o.clock));
-    let n = U(o.component);
-    if (((e.dialogHolders += n), (e.rowSite = n === 0 ? o.component : e.rowSite), oe(e))) J(e, o.props);
-    else
-      ((e.handedProps = o.props),
-        (e.props = o.props),
-        I(e, () => {
-          e.surface?.setProps(o.props);
-        }),
-        z(e));
+    clearTimeout(e.destroyTimer);
+    e.destroyTimer = undefined;
+    e.holders += 1;
+    F(e, o.component, 1);
+    e.clock = o.clock;
+    let n = engineNodeWeight(o.component);
+    e.dialogHolders += n;
+    e.rowSite = n === 0 ? o.component : e.rowSite;
+    if (oe(e)) J(e, o.props);
+    else {
+      e.handedProps = o.props;
+      e.props = o.props;
+      I(e, () => {
+        e.surface?.setProps(o.props);
+      });
+      z(e);
+    }
     return X(e, o.component);
   }
   return {
     acquire(e) {
-      T ??= [i.onDisposed(re), zte.onFreed(pe)];
-      let o = p.get(se(e));
-      if (o !== void 0 && !o.isDestroyed && o.module === e.module) return K(o, e);
+      T ??= [environments.onDisposed(re), surfaceRowLedger.onFreed(pe)];
+      let o = p.get(clientLogKey(e));
+      if (o !== undefined && !o.isDestroyed && o.module === e.module) return K(o, e);
       if (o) G(o);
-      let s = CLIENT_STATES(e, B());
-      return (p.set(s.id, s), F(s, e.component, 1), q(s), X(s, e.component));
+      let s = CLIENT_STATES(e, surfaceViewportKey());
+      p.set(s.id, s);
+      F(s, e.component, 1);
+      q(s);
+      return X(s, e.component);
     },
     remountPlugin: re,
     count: () => p.size,
     dispose() {
       for (let e of T ?? []) e();
-      ((T = void 0), clearImmediate(m), Q());
-      for (let e of p.values()) (clearImmediate(e.selfDrawnTimer), j(e));
+      T = undefined;
+      clearImmediate(m);
+      Q();
+      for (let e of p.values()) {
+        clearImmediate(e.selfDrawnTimer);
+        j(e);
+      }
     },
   };
 }
 //@ chunk-jv2zdrd7.js:17440-17454 placement
-var TDs = createSurfaceClientHost();
-
-export { HTe, Qrn, createSurfaceClientHost, wwo, createUiMessagePort, Ewo, TDs };
+/**
+ * 界面客户端宿主
+ */
+var surfaceClientHost = createSurfaceClientHost();
+export {
+  focusStore,
+  setFocusedClient,
+  createSurfaceClientHost,
+  clientSurfaceKey,
+  createUiMessagePort,
+  clearFocusedClient,
+  surfaceClientHost,
+};

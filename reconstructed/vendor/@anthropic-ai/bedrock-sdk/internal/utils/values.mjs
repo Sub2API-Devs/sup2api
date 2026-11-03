@@ -5,11 +5,12 @@
  * pieces: chunk-e7naa6k8.js (1)
  * attribution: esm-fingerprint 1
  */
-
 //@ chunk-e7naa6k8.js:373-453 esm-fingerprint
-var M = /^[a-z][a-z0-9+.-]*:/i,
-  D = (e) => M.test(e),
-  y = (e) => ((y = Array.isArray), y(e)),
-  C = y;
-
-export { C, D };
+var startsWithSchemeRegexp = /^[a-z][a-z0-9+.-]*:/i;
+var D = (url) => startsWithSchemeRegexp.test(url);
+var isArray = (val) => {
+  isArray = Array.isArray;
+  return isArray(val);
+};
+var isArray_default = isArray;
+export { isArray_default, D };

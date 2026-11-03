@@ -8,28 +8,33 @@
  * pieces: chunk-12wyw8h8.js (14)
  * attribution: placement 14
  */
-import { join, join as join_2, resolve, relative, sep, dirname } from "path";
+import { join, resolve, relative, sep, dirname } from "path";
 import { mkdir, writeFile } from "fs/promises";
 import { PluginManifestSchema } from "../../utils/plugins/schemas.js";
-import { trimTrailingDotsSpaces, f3, MJ, SYNCED_DIR } from "../../utils/plugins/syncedItems.js";
+import {
+  trimTrailingDotsSpaces,
+  isSyncedDirName,
+  isHiddenFoldName,
+  SYNCED_DIR,
+} from "../../utils/plugins/syncedItems.js";
 import { checkReservedPluginName } from "../../utils/plugins/reservedPluginNames.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { getErrnoCode } from "../../utils/errors.js";
 import { writeFileAtomic } from "../../utils/atomicPublishWrite.js";
 
+//@ chunk-12wyw8h8.js:26282-26413 placement
 /**
  * 插件清单 schema 地址与插件脚手架支持的组件类型。
  */
-//@ chunk-12wyw8h8.js:26282-26413 placement
-var PLUGIN_SCHEMA_URL = "https://anthropic.com/claude-code/plugin.schema.json",
-  PLUGIN_COMPONENT_KINDS = ["skills", "agents", "hooks", "mcp", "lsp", "output-style", "channel"];
+var PLUGIN_SCHEMA_URL = "https://anthropic.com/claude-code/plugin.schema.json";
+var PLUGIN_COMPONENT_KINDS = ["skills", "agents", "hooks", "mcp", "lsp", "output-style", "channel"];
 //@ chunk-12wyw8h8.js:26413-26881 placement
 function pluginNameProblem(e) {
-  let safeParse = PluginManifestSchema().shape.name.safeParse(e);
-  if (!safeParse.success) return safeParse.error.issues[0]?.message ?? null;
+  let n = PluginManifestSchema().shape.name.safeParse(e);
+  if (!n.success) return n.error.issues[0]?.message ?? null;
   if (e.includes("/") || e.includes("\\") || e.includes("..") || e === ".")
     return 'Plugin name cannot contain path separators (/ or \\), ".." sequences, or be "."';
-  if (!trimTrailingDotsSpaces(e) || f3(e) || MJ(e))
+  if (!trimTrailingDotsSpaces(e) || isSyncedDirName(e) || isHiddenFoldName(e))
     return `Plugin name cannot be "${SYNCED_DIR}" or start with "." \u2014 those directories are never loaded as plugin adoptions`;
   let p = checkReservedPluginName(e);
   if (p?.severity === "error") return p.message;
@@ -37,94 +42,143 @@ function pluginNameProblem(e) {
 }
 //@ chunk-12wyw8h8.js:26881-28004 placement
 function pluginManifestTemplate(e) {
-  let { name: n, description: description, author: author } = e,
-    f = e.with ?? [],
-    o = [],
-    m = {
-      $schema: PLUGIN_SCHEMA_URL,
-      name: n,
-      version: "0.1.0",
-      description: description ?? "TODO: describe what this plugin provides",
-    };
+  let { name, description, author } = e;
+  let f = e.with ?? [];
+  let o = [];
+  let m = {
+    $schema: PLUGIN_SCHEMA_URL,
+    name,
+    version: "0.1.0",
+    description: description ?? "TODO: describe what this plugin provides",
+  };
   if (author) m.author = author;
-  if (
-    ((m.skills = ["./"]),
-    o.push({
-      relPath: join_2(".claude-plugin", "plugin.json"),
-      contents:
-        jsonStringify(m, null, 2) +
-        `
+  m.skills = ["./"];
+  o.push({
+    relPath: join(".claude-plugin", "plugin.json"),
+    contents:
+      jsonStringify(m, null, 2) +
+      `
 `,
-    }),
-    o.push({ relPath: "SKILL.md", contents: skillTemplate(n) }),
-    f.includes("skills"))
-  )
-    o.push({ relPath: join_2("skills", "example", "SKILL.md"), contents: skillTemplate("example") });
-  if (f.includes("agents")) o.push({ relPath: join_2("agents", "example.md"), contents: agentTemplate() });
+  });
+  o.push({
+    relPath: "SKILL.md",
+    contents: skillTemplate(name),
+  });
+  if (f.includes("skills"))
+    o.push({
+      relPath: join("skills", "example", "SKILL.md"),
+      contents: skillTemplate("example"),
+    });
+  if (f.includes("agents"))
+    o.push({
+      relPath: join("agents", "example.md"),
+      contents: agentTemplate(),
+    });
   if (f.includes("hooks"))
     o.push(
-      { relPath: join_2("hooks", "hooks.json"), contents: hooksJsonTemplate() },
       {
-        relPath: join_2("hooks-handlers", "on-session-start.ts"),
+        relPath: join("hooks", "hooks.json"),
+        contents: hooksJsonTemplate(),
+      },
+      {
+        relPath: join("hooks-handlers", "on-session-start.ts"),
         contents: sessionStartHookTemplate(),
         mode: 493,
       },
     );
   if (f.includes("mcp") && !f.includes("channel"))
-    o.push({ relPath: ".mcp.json", contents: mcpJsonTemplate() });
-  if (f.includes("lsp")) o.push({ relPath: ".lsp.json", contents: lspJsonTemplate() });
+    o.push({
+      relPath: ".mcp.json",
+      contents: mcpJsonTemplate(),
+    });
+  if (f.includes("lsp"))
+    o.push({
+      relPath: ".lsp.json",
+      contents: lspJsonTemplate(),
+    });
   if (f.includes("output-style"))
-    o.push({ relPath: join_2("output-styles", `${n}.md`), contents: outputStyleTemplate(n) });
-  if (f.includes("channel"))
-    ((m.channels = [{ server: n, displayName: n }]),
-      o.push(
-        { relPath: ".mcp.json", contents: channelMcpJsonTemplate(n) },
-        { relPath: "server.ts", contents: channelServerTemplate(n) },
-        { relPath: "package.json", contents: channelPackageJsonTemplate(n) },
-      ));
-  return (
-    (o[0].contents =
-      jsonStringify(m, null, 2) +
-      `
-`),
-    o
-  );
+    o.push({
+      relPath: join("output-styles", `${name}.md`),
+      contents: outputStyleTemplate(name),
+    });
+  if (f.includes("channel")) {
+    m.channels = [
+      {
+        server: name,
+        displayName: name,
+      },
+    ];
+    o.push(
+      {
+        relPath: ".mcp.json",
+        contents: channelMcpJsonTemplate(name),
+      },
+      {
+        relPath: "server.ts",
+        contents: channelServerTemplate(name),
+      },
+      {
+        relPath: "package.json",
+        contents: channelPackageJsonTemplate(name),
+      },
+    );
+  }
+  o[0].contents =
+    jsonStringify(m, null, 2) +
+    `
+`;
+  return o;
 }
+//@ chunk-12wyw8h8.js:28004-28600 placement
 /**
  * `claude plugin` 脚手架：生成插件目录、manifest、示例技能/命令与 bun 脚本模板。
  */
-//@ chunk-12wyw8h8.js:28004-28600 placement
 async function scaffoldPlugin(e, n, r) {
   let p = resolve(e);
   if (!r.force)
     try {
-      await mkdir(join_2(p, ".claude-plugin"));
+      await mkdir(join(p, ".claude-plugin"));
     } catch (error) {
       if (getErrnoCode(error) === "EEXIST")
-        return { ok: !1, error: `${join_2(p, ".claude-plugin")} already exists. Use --force to overwrite.` };
+        return {
+          ok: false,
+          error: `${join(p, ".claude-plugin")} already exists. Use --force to overwrite.`,
+        };
       if (getErrnoCode(error) !== "ENOENT") throw error;
     }
   let f = [];
   for (let o of n) {
-    let m = resolve(p, o.relPath),
-      u = relative(p, m);
+    let m = resolve(p, o.relPath);
+    let u = relative(p, m);
     if (u.startsWith(".." + sep) || u === "..")
-      return { ok: !1, error: `Refusing to write outside ${p}: ${o.relPath}` };
-    if ((await mkdir(dirname(m), { recursive: !0 }), r.force)) await writeFileAtomic(m, o.contents, o.mode);
+      return {
+        ok: false,
+        error: `Refusing to write outside ${p}: ${o.relPath}`,
+      };
+    await mkdir(dirname(m), {
+      recursive: true,
+    });
+    if (r.force) await writeFileAtomic(m, o.contents, o.mode);
     else
       try {
-        await writeFile(m, o.contents, { flag: "wx", mode: o.mode });
+        await writeFile(m, o.contents, {
+          flag: "wx",
+          mode: o.mode,
+        });
       } catch (error) {
         if (getErrnoCode(error) !== "EEXIST") throw error;
         f.push(o.relPath);
       }
   }
-  return { ok: !0, skipped: f };
+  return {
+    ok: true,
+    skipped: f,
+  };
 }
+//@ chunk-12wyw8h8.js:28600-28931 placement
 /**
  * 生成插件技能 SKILL.md 模板。
  */
-//@ chunk-12wyw8h8.js:28600-28931 placement
 function skillTemplate(e) {
   return `---
 name: ${e}
@@ -176,10 +230,10 @@ function hooksJsonTemplate() {
 `
   );
 }
+//@ chunk-12wyw8h8.js:29271-29635 placement
 /**
  * 生成 SessionStart 钩子处理脚本模板。
  */
-//@ chunk-12wyw8h8.js:29271-29635 placement
 function sessionStartHookTemplate() {
   return `#!/usr/bin/env bun
 // SessionStart hook handler. Reads the event from stdin, writes a JSON result
@@ -196,8 +250,14 @@ function mcpJsonTemplate() {
     jsonStringify(
       {
         mcpServers: {
-          "example-remote": { type: "http", url: "https://example.com/mcp" },
-          "example-local": { command: "npx", args: ["<your-mcp-server-package>"] },
+          "example-remote": {
+            type: "http",
+            url: "https://example.com/mcp",
+          },
+          "example-local": {
+            command: "npx",
+            args: ["<your-mcp-server-package>"],
+          },
         },
       },
       null,
@@ -215,7 +275,9 @@ function lspJsonTemplate() {
         example: {
           command: "example-language-server",
           args: ["--stdio"],
-          extensionToLanguage: { ".example": "example" },
+          extensionToLanguage: {
+            ".example": "example",
+          },
         },
       },
       null,
@@ -225,10 +287,10 @@ function lspJsonTemplate() {
 `
   );
 }
+//@ chunk-12wyw8h8.js:29954-30314 placement
 /**
  * 生成插件输出样式模板。
  */
-//@ chunk-12wyw8h8.js:29954-30314 placement
 function outputStyleTemplate(e) {
   return `---
 name: ${e}
@@ -269,8 +331,12 @@ function channelPackageJsonTemplate(e) {
         name: `claude-channel-${e}`,
         version: "0.1.0",
         type: "module",
-        scripts: { start: "bun install --no-summary && bun server.ts" },
-        dependencies: { "@modelcontextprotocol/sdk": "^1.0.0" },
+        scripts: {
+          start: "bun install --no-summary && bun server.ts",
+        },
+        dependencies: {
+          "@modelcontextprotocol/sdk": "^1.0.0",
+        },
       },
       null,
       2,
@@ -279,10 +345,10 @@ function channelPackageJsonTemplate(e) {
 `
   );
 }
+//@ chunk-12wyw8h8.js:30670-32781 placement
 /**
  * 生成 channel 插件的 bun server.ts 示例源码（MCP 服务器骨架），name 用于服务名。
  */
-//@ chunk-12wyw8h8.js:30670-32781 placement
 function channelServerTemplate(name) {
   return `#!/usr/bin/env bun
 /**
@@ -351,5 +417,4 @@ mcp.setRequestHandler(CallToolRequestSchema, async req => {
 await mcp.connect(new StdioServerTransport())
 `;
 }
-
 export { pluginNameProblem, PLUGIN_COMPONENT_KINDS, pluginManifestTemplate, scaffoldPlugin };

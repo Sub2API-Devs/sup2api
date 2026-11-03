@@ -1,68 +1,68 @@
 # 对拍：original vs runnable
 
-- 时间：2026-11-03T02:51:59.553Z，耗时 78 s
+- 时间：2026-11-03T11:01:51.639Z，耗时 94 s
 - 运行时：bun 1.4.4+38afee6c8，node v24.20.0，win32-x64
 - 场景：54；归一化后一致：54；预期满足：基线 54，候选 54
 - 重跑后才一致（不稳定）的场景：无
 - 不归一化就会不一致的场景：23（doctor, mcp-add, print-hi, print-hi-first-party, print-json, print-stream-json, print-stdin, print-stream-json-input, print-model-alias, print-system-prompt, print-bare, print-api-error, print-tools, print-tools-stream-json, print-max-turns, print-permission-denied, print-mcp, ink-mcp-lifecycle, ink-auth-status, ink-auth-status-text, tty-session, print-bash-stdout, print-bash-stdout-unshimmed）
-- 归一化规则命中次数：path:bun=1，path:tree=7，path:cwd=164，path:home=46，uuid=128，port=40，header:content-length=38，date=37，duration=67，hex64=38，cch=1，iso-ts=16，parallel-tool-results=2，path:project=3，path:tmp=2，tty-turn-line=1
+- 归一化规则命中次数：path:bun=1，path:tree=7，path:cwd=164，path:home=46，uuid=128，port=40，header:content-length=38，date=37，duration=67，hex64=38，cch=1，iso-ts=16，parallel-tool-results=3，path:project=3，path:tmp=2，tty-turn-line=1
 
 | 场景 | 一致 | 基线预期 | 候选预期 | 退出码 | API 请求 | 外网请求 | 耗时 ms |
 |---|---|---|---|---|---|---|---|
-| version | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 2383/1863 |
-| version-verbose | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 1162/659 |
-| help | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 4387/3854 |
-| help-mcp | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 2184/1677 |
-| help-mcp-add | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 4419/3871 |
-| help-mcp-list | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 2160/1645 |
-| help-plugin | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 3319/2802 |
-| help-plugin-marketplace | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 4454/3932 |
-| help-plugin-install | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 2191/1650 |
-| help-auth | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 4386/3863 |
-| help-agents | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 2171/1618 |
-| help-auto-mode | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 4388/3854 |
-| help-doctor | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 2163/1656 |
-| help-update | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 3322/2809 |
-| help-install | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 4473/3950 |
-| help-setup-token | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 2180/1646 |
-| help-import | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 4406/3893 |
-| help-ultrareview | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 2191/1673 |
-| help-gateway | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 4410/3880 |
-| help-purge | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 2193/1669 |
-| invalid-option | 是 | 满足 | 满足 | 1/1 | 0/0 | 0/0 | 3349/2791 |
-| doctor | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 4484/3917 |
-| plugin-list-json | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 2210/1642 |
-| agents-json | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 3784/3275 |
-| update-offline | 是 | 满足 | 满足 | 1/1 | 0/0 | 0/0 | 1711/3248 |
-| mcp-add | 是 | 满足 | 满足 | 1/1 | 0/0 | 0/0 | 11274/10719 |
-| mcp-list-ink-limit | 是 | 满足 | 满足 | 1/1 | 0/0 | 0/0 | 2850/2320 |
-| print-hi | 是 | 满足 | 满足 | 0/0 | 1/1 | 0/0 | 4359/3847 |
-| print-hi-first-party | 是 | 满足 | 满足 | 0/0 | 1/1 | 12/12 | 22367/21797 |
-| print-json | 是 | 满足 | 满足 | 0/0 | 1/1 | 0/0 | 3015/3430 |
-| print-stream-json | 是 | 满足 | 满足 | 0/0 | 1/1 | 0/0 | 2246/2767 |
-| print-stdin | 是 | 满足 | 满足 | 0/0 | 1/1 | 0/0 | 2443/2882 |
-| print-stream-json-input | 是 | 满足 | 满足 | 0/0 | 1/1 | 0/0 | 2157/2685 |
-| print-model-alias | 是 | 满足 | 满足 | 0/0 | 1/1 | 0/0 | 2224/2651 |
-| print-system-prompt | 是 | 满足 | 满足 | 0/0 | 1/1 | 0/0 | 2175/2733 |
-| print-bare | 是 | 满足 | 满足 | 0/0 | 1/1 | 0/0 | 2816/2271 |
-| print-api-error | 是 | 满足 | 满足 | 1/1 | 6/6 | 0/0 | 2183/2720 |
-| print-tools | 是 | 满足 | 满足 | 0/0 | 6/6 | 0/0 | 2992/3406 |
-| print-tools-stream-json | 是 | 满足 | 满足 | 0/0 | 6/6 | 0/0 | 3339/3740 |
-| print-max-turns | 是 | 满足 | 满足 | 1/1 | 1/1 | 0/0 | 4429/3885 |
-| print-permission-denied | 是 | 满足 | 满足 | 0/0 | 2/2 | 0/0 | 3446/3859 |
-| print-mcp | 是 | 满足 | 满足 | 0/0 | 3/3 | 0/0 | 6889/6342 |
-| ink-mcp-list-empty | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 2554/1978 |
-| ink-mcp-lifecycle | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 14633/13627 |
-| ink-plugin-list | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 1680/3773 |
-| ink-plugin-marketplace-list | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 3180/2710 |
-| ink-auth-status | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 1640/4110 |
-| ink-auth-status-text | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 2755/2226 |
-| ink-auto-mode-defaults | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 2726/3185 |
-| ink-auto-mode-config | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 3775/4788 |
-| tty-first-run | 是 | 满足 | 满足 | 1/1 | 0/0 | 2/2 | 3897/3309 |
-| tty-session | 是 | 满足 | 满足 | 0/0 | 1/1 | 0/0 | 6894/7280 |
-| print-bash-stdout | 是 | 满足 | 满足 | 0/0 | 2/2 | 0/0 | 2911/3411 |
-| print-bash-stdout-unshimmed | 是 | 满足 | 满足 | 0/0 | 2/2 | 0/0 | 2828/3292 |
+| version | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 3025/2336 |
+| version-verbose | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 1449/793 |
+| help | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 5400/4746 |
+| help-mcp | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 2661/2032 |
+| help-mcp-add | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 5583/4941 |
+| help-mcp-list | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 2720/2048 |
+| help-plugin | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 4286/3655 |
+| help-plugin-marketplace | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 5514/4885 |
+| help-plugin-install | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 2703/1986 |
+| help-auth | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 5354/4749 |
+| help-agents | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 2649/1969 |
+| help-auto-mode | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 5381/4752 |
+| help-doctor | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 2643/2014 |
+| help-update | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 4030/3363 |
+| help-install | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 5476/4842 |
+| help-setup-token | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 2752/2095 |
+| help-import | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 5563/4928 |
+| help-ultrareview | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 2724/2063 |
+| help-gateway | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 5529/4861 |
+| help-purge | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 2715/2080 |
+| invalid-option | 是 | 满足 | 满足 | 1/1 | 0/0 | 0/0 | 4116/3461 |
+| doctor | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 5518/4847 |
+| plugin-list-json | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 2718/2038 |
+| agents-json | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 4703/4072 |
+| update-offline | 是 | 满足 | 满足 | 1/1 | 0/0 | 0/0 | 2197/4042 |
+| mcp-add | 是 | 满足 | 满足 | 1/1 | 0/0 | 0/0 | 13573/12912 |
+| mcp-list-ink-limit | 是 | 满足 | 满足 | 1/1 | 0/0 | 0/0 | 3309/2715 |
+| print-hi | 是 | 满足 | 满足 | 0/0 | 1/1 | 0/0 | 5203/4590 |
+| print-hi-first-party | 是 | 满足 | 满足 | 0/0 | 1/1 | 12/12 | 24789/24070 |
+| print-json | 是 | 满足 | 满足 | 0/0 | 1/1 | 0/0 | 3565/4081 |
+| print-stream-json | 是 | 满足 | 满足 | 0/0 | 1/1 | 0/0 | 2462/2973 |
+| print-stdin | 是 | 满足 | 满足 | 0/0 | 1/1 | 0/0 | 3287/3799 |
+| print-stream-json-input | 是 | 满足 | 满足 | 0/0 | 1/1 | 0/0 | 3676/3017 |
+| print-model-alias | 是 | 满足 | 满足 | 0/0 | 1/1 | 0/0 | 2499/3063 |
+| print-system-prompt | 是 | 满足 | 满足 | 0/0 | 1/1 | 0/0 | 2659/3219 |
+| print-bare | 是 | 满足 | 满足 | 0/0 | 1/1 | 0/0 | 2452/3006 |
+| print-api-error | 是 | 满足 | 满足 | 1/1 | 6/6 | 0/0 | 2418/3087 |
+| print-tools | 是 | 满足 | 满足 | 0/0 | 6/6 | 0/0 | 3525/4169 |
+| print-tools-stream-json | 是 | 满足 | 满足 | 0/0 | 6/6 | 0/0 | 5658/6277 |
+| print-max-turns | 是 | 满足 | 满足 | 1/1 | 1/1 | 0/0 | 4564/5136 |
+| print-permission-denied | 是 | 满足 | 满足 | 0/0 | 2/2 | 0/0 | 5116/4379 |
+| print-mcp | 是 | 满足 | 满足 | 0/0 | 3/3 | 0/0 | 8904/9390 |
+| ink-mcp-list-empty | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 3249/2421 |
+| ink-mcp-lifecycle | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 18797/14844 |
+| ink-plugin-list | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 2082/2550 |
+| ink-plugin-marketplace-list | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 3812/3144 |
+| ink-auth-status | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 4335/3717 |
+| ink-auth-status-text | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 5209/4565 |
+| ink-auto-mode-defaults | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 4738/5208 |
+| ink-auto-mode-config | 是 | 满足 | 满足 | 0/0 | 0/0 | 0/0 | 3914/4414 |
+| tty-first-run | 是 | 满足 | 满足 | 1/1 | 0/0 | 2/2 | 3526/4095 |
+| tty-session | 是 | 满足 | 满足 | 0/0 | 1/1 | 0/0 | 7342/7855 |
+| print-bash-stdout | 是 | 满足 | 满足 | 0/0 | 2/2 | 0/0 | 3267/3814 |
+| print-bash-stdout-unshimmed | 是 | 满足 | 满足 | 0/0 | 2/2 | 0/0 | 4512/3820 |
 
 ## 场景说明
 

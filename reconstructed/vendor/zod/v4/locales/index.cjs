@@ -6,592 +6,609 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { QP } from "./ar.cjs";
-import { tA } from "./az.cjs";
-import { iA } from "./be.cjs";
-import { sA } from "./bg.cjs";
-import { lA } from "./bn.cjs";
-import { uA } from "./ca.cjs";
-import { fA } from "./ckb.cjs";
-import { hA } from "./cs.cjs";
-import { gA } from "./da.cjs";
-import { _A } from "./de.cjs";
-import { vA } from "./el.cjs";
-import { B_ } from "./en.cjs";
-import { SA } from "./eo.cjs";
-import { EA } from "./es.cjs";
-import { AA } from "./fa.cjs";
-import { CA } from "./fi.cjs";
-import { $A } from "./fr.cjs";
-import { DA } from "./fr-CA.cjs";
-import { jA } from "./gu.cjs";
-import { LA } from "./he.cjs";
-import { UA } from "./hi.cjs";
-import { FA } from "./hr.cjs";
-import { HA } from "./hu.cjs";
-import { VA } from "./hy.cjs";
-import { GA } from "./id.cjs";
-import { YA } from "./is.cjs";
-import { XA } from "./it.cjs";
-import { eI } from "./ja.cjs";
-import { nI } from "./ka.cjs";
-import { oI, oC } from "./kh.cjs";
-import { H_ } from "./km.cjs";
-import { aI } from "./kn.cjs";
-import { cI } from "./ko.cjs";
-import { fI } from "./lt.cjs";
-import { hI } from "./mk.cjs";
-import { gI } from "./ms.cjs";
-import { _I } from "./ne.cjs";
-import { vI } from "./nl.cjs";
-import { OI } from "./nn.cjs";
-import { kI } from "./no.cjs";
-import { PI } from "./ota.cjs";
-import { II } from "./ps.cjs";
-import { TI } from "./pl.cjs";
-import { RI } from "./pt.cjs";
-import { MI } from "./pt-BR.cjs";
-import { xI } from "./ro.cjs";
-import { UI } from "./ru.cjs";
-import { FI } from "./sk.cjs";
-import { HI } from "./sl.cjs";
-import { ZI } from "./sv.cjs";
-import { qI } from "./ta.cjs";
-import { WI } from "./tg.cjs";
-import { JI } from "./th.cjs";
-import { QI } from "./tk.cjs";
-import { nC } from "./tr.cjs";
-import { K_ } from "./uk.cjs";
-import { aC } from "./ur.cjs";
-import { cC } from "./uz.cjs";
-import { dC } from "./vi.cjs";
-import { pC } from "./zh-CN.cjs";
-import { mC } from "./zh-TW.cjs";
-import { yC } from "./yo.cjs";
+import { require_ar } from "./ar.cjs";
+import { require_az } from "./az.cjs";
+import { require_be } from "./be.cjs";
+import { require_bg } from "./bg.cjs";
+import { require_bn } from "./bn.cjs";
+import { require_ca } from "./ca.cjs";
+import { require_ckb } from "./ckb.cjs";
+import { require_cs } from "./cs.cjs";
+import { require_da } from "./da.cjs";
+import { require_de } from "./de.cjs";
+import { require_el } from "./el.cjs";
+import { require_en } from "./en.cjs";
+import { require_eo } from "./eo.cjs";
+import { require_es } from "./es.cjs";
+import { require_fa } from "./fa.cjs";
+import { require_fi } from "./fi.cjs";
+import { require_fr } from "./fr.cjs";
+import { require_fr_CA } from "./fr-CA.cjs";
+import { require_gu } from "./gu.cjs";
+import { require_he } from "./he.cjs";
+import { require_hi } from "./hi.cjs";
+import { require_hr } from "./hr.cjs";
+import { require_hu } from "./hu.cjs";
+import { require_hy } from "./hy.cjs";
+import { require_id } from "./id.cjs";
+import { require_is } from "./is.cjs";
+import { require_it } from "./it.cjs";
+import { require_ja } from "./ja.cjs";
+import { require_ka } from "./ka.cjs";
+import { require_kh, require_kh_2 } from "./kh.cjs";
+import { require_km } from "./km.cjs";
+import { require_kn } from "./kn.cjs";
+import { require_ko } from "./ko.cjs";
+import { require_lt } from "./lt.cjs";
+import { require_mk } from "./mk.cjs";
+import { require_ms } from "./ms.cjs";
+import { require_ne } from "./ne.cjs";
+import { require_nl } from "./nl.cjs";
+import { require_nn } from "./nn.cjs";
+import { require_no } from "./no.cjs";
+import { require_ota } from "./ota.cjs";
+import { require_ps } from "./ps.cjs";
+import { require_pl } from "./pl.cjs";
+import { require_pt } from "./pt.cjs";
+import { require_pt_BR } from "./pt-BR.cjs";
+import { require_ro } from "./ro.cjs";
+import { require_ru } from "./ru.cjs";
+import { require_sk } from "./sk.cjs";
+import { require_sl } from "./sl.cjs";
+import { require_sv } from "./sv.cjs";
+import { require_ta } from "./ta.cjs";
+import { require_tg } from "./tg.cjs";
+import { require_th } from "./th.cjs";
+import { require_tk } from "./tk.cjs";
+import { require_tr } from "./tr.cjs";
+import { require_uk } from "./uk.cjs";
+import { require_ur } from "./ur.cjs";
+import { require_uz } from "./uz.cjs";
+import { require_vi } from "./vi.cjs";
+import { require_zh_CN } from "./zh-CN.cjs";
+import { require_zh_TW } from "./zh-TW.cjs";
+import { require_yo } from "./yo.cjs";
 
 //@ chunk-1ny7cxrt.js:501263-508147 cjs-fingerprint
-var Z_ = x(function (Y) {
-  var He =
-    (Y && Y.__importDefault) ||
-    function (e) {
-      return e && e.__esModule ? e : { default: e };
+var require_locales = x(function (cjsExports) {
+  var __importDefault =
+    (cjsExports && cjsExports.__importDefault) ||
+    function (mod) {
+      return mod && mod.__esModule
+        ? mod
+        : {
+            default: mod,
+          };
     };
-  Object.defineProperty(Y, "__esModule", { value: !0 });
-  Y.sv =
-    Y.sl =
-    Y.sk =
-    Y.ru =
-    Y.ro =
-    Y.ptBR =
-    Y.pt =
-    Y.pl =
-    Y.ps =
-    Y.ota =
-    Y.no =
-    Y.nn =
-    Y.nl =
-    Y.ne =
-    Y.ms =
-    Y.mk =
-    Y.lt =
-    Y.ko =
-    Y.kn =
-    Y.km =
-    Y.kh =
-    Y.ka =
-    Y.ja =
-    Y.it =
-    Y.is =
-    Y.id =
-    Y.hy =
-    Y.hu =
-    Y.hr =
-    Y.hi =
-    Y.he =
-    Y.gu =
-    Y.frCA =
-    Y.fr =
-    Y.fi =
-    Y.fa =
-    Y.es =
-    Y.eo =
-    Y.en =
-    Y.el =
-    Y.de =
-    Y.da =
-    Y.cs =
-    Y.ckb =
-    Y.ca =
-    Y.bn =
-    Y.bg =
-    Y.be =
-    Y.az =
-    Y.ar =
-      void 0;
-  Y.yo = Y.zhTW = Y.zhCN = Y.vi = Y.uz = Y.ur = Y.uk = Y.ua = Y.tr = Y.tk = Y.th = Y.tg = Y.ta = void 0;
-  var G3 = QP();
-  Object.defineProperty(Y, "ar", {
-    enumerable: !0,
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.sv =
+    cjsExports.sl =
+    cjsExports.sk =
+    cjsExports.ru =
+    cjsExports.ro =
+    cjsExports.ptBR =
+    cjsExports.pt =
+    cjsExports.pl =
+    cjsExports.ps =
+    cjsExports.ota =
+    cjsExports.no =
+    cjsExports.nn =
+    cjsExports.nl =
+    cjsExports.ne =
+    cjsExports.ms =
+    cjsExports.mk =
+    cjsExports.lt =
+    cjsExports.ko =
+    cjsExports.kn =
+    cjsExports.km =
+    cjsExports.kh =
+    cjsExports.ka =
+    cjsExports.ja =
+    cjsExports.it =
+    cjsExports.is =
+    cjsExports.id =
+    cjsExports.hy =
+    cjsExports.hu =
+    cjsExports.hr =
+    cjsExports.hi =
+    cjsExports.he =
+    cjsExports.gu =
+    cjsExports.frCA =
+    cjsExports.fr =
+    cjsExports.fi =
+    cjsExports.fa =
+    cjsExports.es =
+    cjsExports.eo =
+    cjsExports.en =
+    cjsExports.el =
+    cjsExports.de =
+    cjsExports.da =
+    cjsExports.cs =
+    cjsExports.ckb =
+    cjsExports.ca =
+    cjsExports.bn =
+    cjsExports.bg =
+    cjsExports.be =
+    cjsExports.az =
+    cjsExports.ar =
+      undefined;
+  cjsExports.yo =
+    cjsExports.zhTW =
+    cjsExports.zhCN =
+    cjsExports.vi =
+    cjsExports.uz =
+    cjsExports.ur =
+    cjsExports.uk =
+    cjsExports.ua =
+    cjsExports.tr =
+    cjsExports.tk =
+    cjsExports.th =
+    cjsExports.tg =
+    cjsExports.ta =
+      undefined;
+  var ar_js_1 = require_ar();
+  Object.defineProperty(cjsExports, "ar", {
+    enumerable: true,
     get: function () {
-      return He(G3).default;
+      return __importDefault(ar_js_1).default;
     },
   });
-  var W3 = tA();
-  Object.defineProperty(Y, "az", {
-    enumerable: !0,
+  var az_js_1 = require_az();
+  Object.defineProperty(cjsExports, "az", {
+    enumerable: true,
     get: function () {
-      return He(W3).default;
+      return __importDefault(az_js_1).default;
     },
   });
-  var Y3 = iA();
-  Object.defineProperty(Y, "be", {
-    enumerable: !0,
+  var be_js_1 = require_be();
+  Object.defineProperty(cjsExports, "be", {
+    enumerable: true,
     get: function () {
-      return He(Y3).default;
+      return __importDefault(be_js_1).default;
     },
   });
-  var J3 = sA();
-  Object.defineProperty(Y, "bg", {
-    enumerable: !0,
+  var bg_js_1 = require_bg();
+  Object.defineProperty(cjsExports, "bg", {
+    enumerable: true,
     get: function () {
-      return He(J3).default;
+      return __importDefault(bg_js_1).default;
     },
   });
-  var X3 = lA();
-  Object.defineProperty(Y, "bn", {
-    enumerable: !0,
+  var bn_js_1 = require_bn();
+  Object.defineProperty(cjsExports, "bn", {
+    enumerable: true,
     get: function () {
-      return He(X3).default;
+      return __importDefault(bn_js_1).default;
     },
   });
-  var Q3 = uA();
-  Object.defineProperty(Y, "ca", {
-    enumerable: !0,
+  var ca_js_1 = require_ca();
+  Object.defineProperty(cjsExports, "ca", {
+    enumerable: true,
     get: function () {
-      return He(Q3).default;
+      return __importDefault(ca_js_1).default;
     },
   });
-  var e5 = fA();
-  Object.defineProperty(Y, "ckb", {
-    enumerable: !0,
+  var ckb_js_1 = require_ckb();
+  Object.defineProperty(cjsExports, "ckb", {
+    enumerable: true,
     get: function () {
-      return He(e5).default;
+      return __importDefault(ckb_js_1).default;
     },
   });
-  var n5 = hA();
-  Object.defineProperty(Y, "cs", {
-    enumerable: !0,
+  var cs_js_1 = require_cs();
+  Object.defineProperty(cjsExports, "cs", {
+    enumerable: true,
     get: function () {
-      return He(n5).default;
+      return __importDefault(cs_js_1).default;
     },
   });
-  var r5 = gA();
-  Object.defineProperty(Y, "da", {
-    enumerable: !0,
+  var da_js_1 = require_da();
+  Object.defineProperty(cjsExports, "da", {
+    enumerable: true,
     get: function () {
-      return He(r5).default;
+      return __importDefault(da_js_1).default;
     },
   });
-  var i5 = _A();
-  Object.defineProperty(Y, "de", {
-    enumerable: !0,
+  var de_js_1 = require_de();
+  Object.defineProperty(cjsExports, "de", {
+    enumerable: true,
     get: function () {
-      return He(i5).default;
+      return __importDefault(de_js_1).default;
     },
   });
-  var o5 = vA();
-  Object.defineProperty(Y, "el", {
-    enumerable: !0,
+  var el_js_1 = require_el();
+  Object.defineProperty(cjsExports, "el", {
+    enumerable: true,
     get: function () {
-      return He(o5).default;
+      return __importDefault(el_js_1).default;
     },
   });
-  var s5 = B_();
-  Object.defineProperty(Y, "en", {
-    enumerable: !0,
+  var en_js_1 = require_en();
+  Object.defineProperty(cjsExports, "en", {
+    enumerable: true,
     get: function () {
-      return He(s5).default;
+      return __importDefault(en_js_1).default;
     },
   });
-  var a5 = SA();
-  Object.defineProperty(Y, "eo", {
-    enumerable: !0,
+  var eo_js_1 = require_eo();
+  Object.defineProperty(cjsExports, "eo", {
+    enumerable: true,
     get: function () {
-      return He(a5).default;
+      return __importDefault(eo_js_1).default;
     },
   });
-  var l5 = EA();
-  Object.defineProperty(Y, "es", {
-    enumerable: !0,
+  var es_js_1 = require_es();
+  Object.defineProperty(cjsExports, "es", {
+    enumerable: true,
     get: function () {
-      return He(l5).default;
+      return __importDefault(es_js_1).default;
     },
   });
-  var c5 = AA();
-  Object.defineProperty(Y, "fa", {
-    enumerable: !0,
+  var fa_js_1 = require_fa();
+  Object.defineProperty(cjsExports, "fa", {
+    enumerable: true,
     get: function () {
-      return He(c5).default;
+      return __importDefault(fa_js_1).default;
     },
   });
-  var u5 = CA();
-  Object.defineProperty(Y, "fi", {
-    enumerable: !0,
+  var fi_js_1 = require_fi();
+  Object.defineProperty(cjsExports, "fi", {
+    enumerable: true,
     get: function () {
-      return He(u5).default;
+      return __importDefault(fi_js_1).default;
     },
   });
-  var d5 = $A();
-  Object.defineProperty(Y, "fr", {
-    enumerable: !0,
+  var fr_js_1 = require_fr();
+  Object.defineProperty(cjsExports, "fr", {
+    enumerable: true,
     get: function () {
-      return He(d5).default;
+      return __importDefault(fr_js_1).default;
     },
   });
-  var f5 = DA();
-  Object.defineProperty(Y, "frCA", {
-    enumerable: !0,
+  var fr_CA_js_1 = require_fr_CA();
+  Object.defineProperty(cjsExports, "frCA", {
+    enumerable: true,
     get: function () {
-      return He(f5).default;
+      return __importDefault(fr_CA_js_1).default;
     },
   });
-  var p5 = jA();
-  Object.defineProperty(Y, "gu", {
-    enumerable: !0,
+  var gu_js_1 = require_gu();
+  Object.defineProperty(cjsExports, "gu", {
+    enumerable: true,
     get: function () {
-      return He(p5).default;
+      return __importDefault(gu_js_1).default;
     },
   });
-  var h5 = LA();
-  Object.defineProperty(Y, "he", {
-    enumerable: !0,
+  var he_js_1 = require_he();
+  Object.defineProperty(cjsExports, "he", {
+    enumerable: true,
     get: function () {
-      return He(h5).default;
+      return __importDefault(he_js_1).default;
     },
   });
-  var m5 = UA();
-  Object.defineProperty(Y, "hi", {
-    enumerable: !0,
+  var hi_js_1 = require_hi();
+  Object.defineProperty(cjsExports, "hi", {
+    enumerable: true,
     get: function () {
-      return He(m5).default;
+      return __importDefault(hi_js_1).default;
     },
   });
-  var g5 = FA();
-  Object.defineProperty(Y, "hr", {
-    enumerable: !0,
+  var hr_js_1 = require_hr();
+  Object.defineProperty(cjsExports, "hr", {
+    enumerable: true,
     get: function () {
-      return He(g5).default;
+      return __importDefault(hr_js_1).default;
     },
   });
-  var y5 = HA();
-  Object.defineProperty(Y, "hu", {
-    enumerable: !0,
+  var hu_js_1 = require_hu();
+  Object.defineProperty(cjsExports, "hu", {
+    enumerable: true,
     get: function () {
-      return He(y5).default;
+      return __importDefault(hu_js_1).default;
     },
   });
-  var _5 = VA();
-  Object.defineProperty(Y, "hy", {
-    enumerable: !0,
+  var hy_js_1 = require_hy();
+  Object.defineProperty(cjsExports, "hy", {
+    enumerable: true,
     get: function () {
-      return He(_5).default;
+      return __importDefault(hy_js_1).default;
     },
   });
-  var b5 = GA();
-  Object.defineProperty(Y, "id", {
-    enumerable: !0,
+  var id_js_1 = require_id();
+  Object.defineProperty(cjsExports, "id", {
+    enumerable: true,
     get: function () {
-      return He(b5).default;
+      return __importDefault(id_js_1).default;
     },
   });
-  var v5 = YA();
-  Object.defineProperty(Y, "is", {
-    enumerable: !0,
+  var is_js_1 = require_is();
+  Object.defineProperty(cjsExports, "is", {
+    enumerable: true,
     get: function () {
-      return He(v5).default;
+      return __importDefault(is_js_1).default;
     },
   });
-  var w5 = XA();
-  Object.defineProperty(Y, "it", {
-    enumerable: !0,
+  var it_js_1 = require_it();
+  Object.defineProperty(cjsExports, "it", {
+    enumerable: true,
     get: function () {
-      return He(w5).default;
+      return __importDefault(it_js_1).default;
     },
   });
-  var O5 = eI();
-  Object.defineProperty(Y, "ja", {
-    enumerable: !0,
+  var ja_js_1 = require_ja();
+  Object.defineProperty(cjsExports, "ja", {
+    enumerable: true,
     get: function () {
-      return He(O5).default;
+      return __importDefault(ja_js_1).default;
     },
   });
-  var S5 = nI();
-  Object.defineProperty(Y, "ka", {
-    enumerable: !0,
+  var ka_js_1 = require_ka();
+  Object.defineProperty(cjsExports, "ka", {
+    enumerable: true,
     get: function () {
-      return He(S5).default;
+      return __importDefault(ka_js_1).default;
     },
   });
-  var k5 = oI();
-  Object.defineProperty(Y, "kh", {
-    enumerable: !0,
+  var kh_js_1 = require_kh();
+  Object.defineProperty(cjsExports, "kh", {
+    enumerable: true,
     get: function () {
-      return He(k5).default;
+      return __importDefault(kh_js_1).default;
     },
   });
-  var E5 = H_();
-  Object.defineProperty(Y, "km", {
-    enumerable: !0,
+  var km_js_1 = require_km();
+  Object.defineProperty(cjsExports, "km", {
+    enumerable: true,
     get: function () {
-      return He(E5).default;
+      return __importDefault(km_js_1).default;
     },
   });
-  var P5 = aI();
-  Object.defineProperty(Y, "kn", {
-    enumerable: !0,
+  var kn_js_1 = require_kn();
+  Object.defineProperty(cjsExports, "kn", {
+    enumerable: true,
     get: function () {
-      return He(P5).default;
+      return __importDefault(kn_js_1).default;
     },
   });
-  var A5 = cI();
-  Object.defineProperty(Y, "ko", {
-    enumerable: !0,
+  var ko_js_1 = require_ko();
+  Object.defineProperty(cjsExports, "ko", {
+    enumerable: true,
     get: function () {
-      return He(A5).default;
+      return __importDefault(ko_js_1).default;
     },
   });
-  var I5 = fI();
-  Object.defineProperty(Y, "lt", {
-    enumerable: !0,
+  var lt_js_1 = require_lt();
+  Object.defineProperty(cjsExports, "lt", {
+    enumerable: true,
     get: function () {
-      return He(I5).default;
+      return __importDefault(lt_js_1).default;
     },
   });
-  var C5 = hI();
-  Object.defineProperty(Y, "mk", {
-    enumerable: !0,
+  var mk_js_1 = require_mk();
+  Object.defineProperty(cjsExports, "mk", {
+    enumerable: true,
     get: function () {
-      return He(C5).default;
+      return __importDefault(mk_js_1).default;
     },
   });
-  var T5 = gI();
-  Object.defineProperty(Y, "ms", {
-    enumerable: !0,
+  var ms_js_1 = require_ms();
+  Object.defineProperty(cjsExports, "ms", {
+    enumerable: true,
     get: function () {
-      return He(T5).default;
+      return __importDefault(ms_js_1).default;
     },
   });
-  var $5 = _I();
-  Object.defineProperty(Y, "ne", {
-    enumerable: !0,
+  var ne_js_1 = require_ne();
+  Object.defineProperty(cjsExports, "ne", {
+    enumerable: true,
     get: function () {
-      return He($5).default;
+      return __importDefault(ne_js_1).default;
     },
   });
-  var R5 = vI();
-  Object.defineProperty(Y, "nl", {
-    enumerable: !0,
+  var nl_js_1 = require_nl();
+  Object.defineProperty(cjsExports, "nl", {
+    enumerable: true,
     get: function () {
-      return He(R5).default;
+      return __importDefault(nl_js_1).default;
     },
   });
-  var D5 = OI();
-  Object.defineProperty(Y, "nn", {
-    enumerable: !0,
+  var nn_js_1 = require_nn();
+  Object.defineProperty(cjsExports, "nn", {
+    enumerable: true,
     get: function () {
-      return He(D5).default;
+      return __importDefault(nn_js_1).default;
     },
   });
-  var M5 = kI();
-  Object.defineProperty(Y, "no", {
-    enumerable: !0,
+  var no_js_1 = require_no();
+  Object.defineProperty(cjsExports, "no", {
+    enumerable: true,
     get: function () {
-      return He(M5).default;
+      return __importDefault(no_js_1).default;
     },
   });
-  var j5 = PI();
-  Object.defineProperty(Y, "ota", {
-    enumerable: !0,
+  var ota_js_1 = require_ota();
+  Object.defineProperty(cjsExports, "ota", {
+    enumerable: true,
     get: function () {
-      return He(j5).default;
+      return __importDefault(ota_js_1).default;
     },
   });
-  var x5 = II();
-  Object.defineProperty(Y, "ps", {
-    enumerable: !0,
+  var ps_js_1 = require_ps();
+  Object.defineProperty(cjsExports, "ps", {
+    enumerable: true,
     get: function () {
-      return He(x5).default;
+      return __importDefault(ps_js_1).default;
     },
   });
-  var L5 = TI();
-  Object.defineProperty(Y, "pl", {
-    enumerable: !0,
+  var pl_js_1 = require_pl();
+  Object.defineProperty(cjsExports, "pl", {
+    enumerable: true,
     get: function () {
-      return He(L5).default;
+      return __importDefault(pl_js_1).default;
     },
   });
-  var N5 = RI();
-  Object.defineProperty(Y, "pt", {
-    enumerable: !0,
+  var pt_js_1 = require_pt();
+  Object.defineProperty(cjsExports, "pt", {
+    enumerable: true,
     get: function () {
-      return He(N5).default;
+      return __importDefault(pt_js_1).default;
     },
   });
-  var U5 = MI();
-  Object.defineProperty(Y, "ptBR", {
-    enumerable: !0,
+  var pt_BR_js_1 = require_pt_BR();
+  Object.defineProperty(cjsExports, "ptBR", {
+    enumerable: true,
     get: function () {
-      return He(U5).default;
+      return __importDefault(pt_BR_js_1).default;
     },
   });
-  var F5 = xI();
-  Object.defineProperty(Y, "ro", {
-    enumerable: !0,
+  var ro_js_1 = require_ro();
+  Object.defineProperty(cjsExports, "ro", {
+    enumerable: true,
     get: function () {
-      return He(F5).default;
+      return __importDefault(ro_js_1).default;
     },
   });
-  var B5 = UI();
-  Object.defineProperty(Y, "ru", {
-    enumerable: !0,
+  var ru_js_1 = require_ru();
+  Object.defineProperty(cjsExports, "ru", {
+    enumerable: true,
     get: function () {
-      return He(B5).default;
+      return __importDefault(ru_js_1).default;
     },
   });
-  var H5 = FI();
-  Object.defineProperty(Y, "sk", {
-    enumerable: !0,
+  var sk_js_1 = require_sk();
+  Object.defineProperty(cjsExports, "sk", {
+    enumerable: true,
     get: function () {
-      return He(H5).default;
+      return __importDefault(sk_js_1).default;
     },
   });
-  var K5 = HI();
-  Object.defineProperty(Y, "sl", {
-    enumerable: !0,
+  var sl_js_1 = require_sl();
+  Object.defineProperty(cjsExports, "sl", {
+    enumerable: true,
     get: function () {
-      return He(K5).default;
+      return __importDefault(sl_js_1).default;
     },
   });
-  var Z5 = ZI();
-  Object.defineProperty(Y, "sv", {
-    enumerable: !0,
+  var sv_js_1 = require_sv();
+  Object.defineProperty(cjsExports, "sv", {
+    enumerable: true,
     get: function () {
-      return He(Z5).default;
+      return __importDefault(sv_js_1).default;
     },
   });
-  var V5 = qI();
-  Object.defineProperty(Y, "ta", {
-    enumerable: !0,
+  var ta_js_1 = require_ta();
+  Object.defineProperty(cjsExports, "ta", {
+    enumerable: true,
     get: function () {
-      return He(V5).default;
+      return __importDefault(ta_js_1).default;
     },
   });
-  var q5 = WI();
-  Object.defineProperty(Y, "tg", {
-    enumerable: !0,
+  var tg_js_1 = require_tg();
+  Object.defineProperty(cjsExports, "tg", {
+    enumerable: true,
     get: function () {
-      return He(q5).default;
+      return __importDefault(tg_js_1).default;
     },
   });
-  var G5 = JI();
-  Object.defineProperty(Y, "th", {
-    enumerable: !0,
+  var th_js_1 = require_th();
+  Object.defineProperty(cjsExports, "th", {
+    enumerable: true,
     get: function () {
-      return He(G5).default;
+      return __importDefault(th_js_1).default;
     },
   });
-  var W5 = QI();
-  Object.defineProperty(Y, "tk", {
-    enumerable: !0,
+  var tk_js_1 = require_tk();
+  Object.defineProperty(cjsExports, "tk", {
+    enumerable: true,
     get: function () {
-      return He(W5).default;
+      return __importDefault(tk_js_1).default;
     },
   });
-  var Y5 = nC();
-  Object.defineProperty(Y, "tr", {
-    enumerable: !0,
+  var tr_js_1 = require_tr();
+  Object.defineProperty(cjsExports, "tr", {
+    enumerable: true,
     get: function () {
-      return He(Y5).default;
+      return __importDefault(tr_js_1).default;
     },
   });
-  var J5 = oC();
-  Object.defineProperty(Y, "ua", {
-    enumerable: !0,
+  var ua_js_1 = require_kh_2();
+  Object.defineProperty(cjsExports, "ua", {
+    enumerable: true,
     get: function () {
-      return He(J5).default;
+      return __importDefault(ua_js_1).default;
     },
   });
-  var X5 = K_();
-  Object.defineProperty(Y, "uk", {
-    enumerable: !0,
+  var uk_js_1 = require_uk();
+  Object.defineProperty(cjsExports, "uk", {
+    enumerable: true,
     get: function () {
-      return He(X5).default;
+      return __importDefault(uk_js_1).default;
     },
   });
-  var Q5 = aC();
-  Object.defineProperty(Y, "ur", {
-    enumerable: !0,
+  var ur_js_1 = require_ur();
+  Object.defineProperty(cjsExports, "ur", {
+    enumerable: true,
     get: function () {
-      return He(Q5).default;
+      return __importDefault(ur_js_1).default;
     },
   });
-  var eY = cC();
-  Object.defineProperty(Y, "uz", {
-    enumerable: !0,
+  var uz_js_1 = require_uz();
+  Object.defineProperty(cjsExports, "uz", {
+    enumerable: true,
     get: function () {
-      return He(eY).default;
+      return __importDefault(uz_js_1).default;
     },
   });
-  var tY = dC();
-  Object.defineProperty(Y, "vi", {
-    enumerable: !0,
+  var vi_js_1 = require_vi();
+  Object.defineProperty(cjsExports, "vi", {
+    enumerable: true,
     get: function () {
-      return He(tY).default;
+      return __importDefault(vi_js_1).default;
     },
   });
-  var nY = pC();
-  Object.defineProperty(Y, "zhCN", {
-    enumerable: !0,
+  var zh_CN_js_1 = require_zh_CN();
+  Object.defineProperty(cjsExports, "zhCN", {
+    enumerable: true,
     get: function () {
-      return He(nY).default;
+      return __importDefault(zh_CN_js_1).default;
     },
   });
-  var rY = mC();
-  Object.defineProperty(Y, "zhTW", {
-    enumerable: !0,
+  var zh_TW_js_1 = require_zh_TW();
+  Object.defineProperty(cjsExports, "zhTW", {
+    enumerable: true,
     get: function () {
-      return He(rY).default;
+      return __importDefault(zh_TW_js_1).default;
     },
   });
-  var iY = yC();
-  Object.defineProperty(Y, "yo", {
-    enumerable: !0,
+  var yo_js_1 = require_yo();
+  Object.defineProperty(cjsExports, "yo", {
+    enumerable: true,
     get: function () {
-      return He(iY).default;
+      return __importDefault(yo_js_1).default;
     },
   });
   (function () {
-    var ownPropertyNames = Object.getOwnPropertyNames(Y);
-    for (var t = 0; t < ownPropertyNames.length; t++) {
-      var ownPropertyDescriptor = Object.getOwnPropertyDescriptor(Y, ownPropertyNames[t]);
-      if (!ownPropertyDescriptor || !ownPropertyDescriptor.get || !ownPropertyDescriptor.configurable)
-        continue;
-      var o;
+    var keys = Object.getOwnPropertyNames(cjsExports);
+    for (var i = 0; i < keys.length; i++) {
+      var desc = Object.getOwnPropertyDescriptor(cjsExports, keys[i]);
+      if (!desc || !desc.get || !desc.configurable) continue;
+      var value;
       try {
-        o = ownPropertyDescriptor.get();
-      } catch (error) {
+        value = desc.get();
+      } catch (e) {
         continue;
       }
-      if (o === void 0) continue;
-      Object.defineProperty(Y, ownPropertyNames[t], {
-        value: o,
-        writable: !1,
-        enumerable: ownPropertyDescriptor.enumerable,
-        configurable: !1,
+      if (value === undefined) continue;
+      Object.defineProperty(cjsExports, keys[i], {
+        value,
+        writable: false,
+        enumerable: desc.enumerable,
+        configurable: false,
       });
     }
-    Object.freeze(Y);
+    Object.freeze(cjsExports);
   })();
 });
-
-export { Z_ };
+export { require_locales };

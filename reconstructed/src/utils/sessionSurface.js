@@ -9,25 +9,32 @@
  * attribution: placement 2
  */
 import { isChildSession, hostScheduledRun, getSessionEntrypoint, isTopHostSession } from "./sessionShape.js";
-import { mn } from "./remoteEnvironment.js";
-import { Fdo } from "./entrypointKinds.js";
+import { isRemoteManagedEnvironment } from "./remoteEnvironment.js";
+import { REMOTE_TRIGGER_ENTRYPOINTS_SET } from "./entrypointKinds.js";
 import { isActingAsBot } from "../services/ccrAgentProxy/agentProxy.js";
 import { env } from "./env.js";
 
 //@ chunk-1gpnajts.js:348-559 placement
 function getSessionSurface() {
   if (isChildSession() || hostScheduledRun()) return null;
-  if (mn()) {
-    let t = getSessionEntrypoint();
-    if (t === void 0 || !t.startsWith("remote") || Fdo.has(t)) return null;
+  if (isRemoteManagedEnvironment()) {
+    let sessionEntrypoint = getSessionEntrypoint();
+    if (
+      sessionEntrypoint === undefined ||
+      !sessionEntrypoint.startsWith("remote") ||
+      REMOTE_TRIGGER_ENTRYPOINTS_SET.has(sessionEntrypoint)
+    )
+      return null;
     return isActingAsBot() ? null : "cloud";
   }
   if (env.CLAUDE_CODE_REMOTE) return null;
   return isTopHostSession() ? "desktop" : null;
 }
 //@ chunk-1gpnajts.js:559-627 placement
-function a6n() {
-  return env.CLAUDE_CODE_ARTIFACT_SHARE === !0 && getSessionSurface() !== null;
+/**
+ * isArtifactShareSession：开启了 Artifact 共享且有会话表面。
+ */
+function isArtifactShareSession() {
+  return env.CLAUDE_CODE_ARTIFACT_SHARE === true && getSessionSurface() !== null;
 }
-
-export { a6n };
+export { isArtifactShareSession };

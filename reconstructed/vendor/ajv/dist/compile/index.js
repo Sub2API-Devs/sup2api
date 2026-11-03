@@ -6,206 +6,257 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { uh } from "./codegen/index.js";
-import { elr } from "../runtime/validation_error.js";
-import { DPe } from "./names.js";
-import { lt } from "./resolve.js";
-import { ew } from "./util.js";
-import { Bvn } from "./validate/index.js";
+import { require_codegen_2 } from "./codegen/index.js";
+import { require_validation_error_2 } from "../runtime/validation_error.js";
+import { require_names } from "./names.js";
+import { require_resolve_2 } from "./resolve.js";
+import { require_util_2 } from "./util.js";
+import { require_validate_2 } from "./validate/index.js";
 
 //@ chunk-s82q9s4x.js:52476-57215 cjs-fingerprint
-var tlr = x(function (Dn) {
-  Object.defineProperty(Dn, "__esModule", { value: !0 });
-  Dn.resolveSchema = Dn.getCompilingSchema = Dn.resolveRef = Dn.compileSchema = Dn.SchemaEnv = void 0;
-  var V = uh(),
-    kl = elr(),
-    Me = DPe(),
-    z = lt(),
-    jt = ew(),
-    Mn = Bvn();
-  class dt {
-    constructor(e) {
-      var t;
-      ((this.refs = {}), (this.dynamicAnchors = {}));
-      let r;
-      if (typeof e.schema == "object") r = e.schema;
-      ((this.schema = e.schema),
-        (this.schemaId = e.schemaId),
-        (this.root = e.root || this),
-        (this.baseId =
-          (t = e.baseId) !== null && t !== void 0
-            ? t
-            : z.normalizeId(r === null || r === void 0 ? void 0 : r[e.schemaId || "$id"])),
-        (this.schemaPath = e.schemaPath),
-        (this.localRefs = e.localRefs),
-        (this.meta = e.meta),
-        (this.$async = r === null || r === void 0 ? void 0 : r.$async),
-        (this.refs = {}));
+var require_compile_2 = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.resolveSchema =
+    cjsExports.getCompilingSchema =
+    cjsExports.resolveRef =
+    cjsExports.compileSchema =
+    cjsExports.SchemaEnv =
+      undefined;
+  var codegen_1 = require_codegen_2();
+  var validation_error_1 = require_validation_error_2();
+  var names_1 = require_names();
+  var resolve_1 = require_resolve_2();
+  var util_1 = require_util_2();
+  var validate_1 = require_validate_2();
+  class SchemaEnv {
+    constructor(env) {
+      var _a;
+      this.refs = {};
+      this.dynamicAnchors = {};
+      let schema;
+      if (typeof env.schema == "object") schema = env.schema;
+      this.schema = env.schema;
+      this.schemaId = env.schemaId;
+      this.root = env.root || this;
+      this.baseId =
+        (_a = env.baseId) !== null && _a !== undefined
+          ? _a
+          : resolve_1.normalizeId(
+              schema === null || schema === undefined ? undefined : schema[env.schemaId || "$id"],
+            );
+      this.schemaPath = env.schemaPath;
+      this.localRefs = env.localRefs;
+      this.meta = env.meta;
+      this.$async = schema === null || schema === undefined ? undefined : schema.$async;
+      this.refs = {};
     }
   }
-  Dn.SchemaEnv = dt;
-  function Sr(e) {
-    let t = An.call(this, e);
-    if (t) return t;
-    let fullPath = z.getFullPath(this.opts.uriResolver, e.root.baseId),
-      { es5: es5, lines: lines } = this.opts.code,
-      { ownProperties: ownProperties } = this.opts,
-      i = new V.CodeGen(this.scope, { es5: es5, lines: lines, ownProperties: ownProperties }),
-      a;
-    if (e.$async)
-      a = i.scopeValue("Error", {
-        ref: kl.default,
-        code: V._`require("ajv/dist/runtime/validation_error").default`,
+  cjsExports.SchemaEnv = SchemaEnv;
+  function compileSchema(sch) {
+    let _sch = getCompilingSchema.call(this, sch);
+    if (_sch) return _sch;
+    let rootId = resolve_1.getFullPath(this.opts.uriResolver, sch.root.baseId);
+    let { es5, lines } = this.opts.code;
+    let { ownProperties } = this.opts;
+    let gen = new codegen_1.CodeGen(this.scope, {
+      es5,
+      lines,
+      ownProperties,
+    });
+    let _ValidationError;
+    if (sch.$async)
+      _ValidationError = gen.scopeValue("Error", {
+        ref: validation_error_1.default,
+        code: codegen_1._`require("ajv/dist/runtime/validation_error").default`,
       });
-    let scopeName = i.scopeName("validate");
-    e.validateName = scopeName;
-    let u = {
-        gen: i,
-        allErrors: this.opts.allErrors,
-        data: Me.default.data,
-        parentData: Me.default.parentData,
-        parentDataProperty: Me.default.parentDataProperty,
-        dataNames: [Me.default.data],
-        dataPathArr: [V.nil],
-        dataLevel: 0,
-        dataTypes: [],
-        definedProperties: new Set(),
-        topSchemaRef: i.scopeValue(
-          "schema",
-          this.opts.code.source === !0 ? { ref: e.schema, code: V.stringify(e.schema) } : { ref: e.schema },
-        ),
-        validateName: scopeName,
-        ValidationError: a,
-        schema: e.schema,
-        schemaEnv: e,
-        rootId: fullPath,
-        baseId: e.baseId || fullPath,
-        schemaPath: V.nil,
-        errSchemaPath: e.schemaPath || (this.opts.jtd ? "" : "#"),
-        errorPath: V._`""`,
-        opts: this.opts,
-        self: this,
-      },
-      l;
+    let validateName = gen.scopeName("validate");
+    sch.validateName = validateName;
+    let schemaCxt = {
+      gen,
+      allErrors: this.opts.allErrors,
+      data: names_1.default.data,
+      parentData: names_1.default.parentData,
+      parentDataProperty: names_1.default.parentDataProperty,
+      dataNames: [names_1.default.data],
+      dataPathArr: [codegen_1.nil],
+      dataLevel: 0,
+      dataTypes: [],
+      definedProperties: new Set(),
+      topSchemaRef: gen.scopeValue(
+        "schema",
+        this.opts.code.source === true
+          ? {
+              ref: sch.schema,
+              code: codegen_1.stringify(sch.schema),
+            }
+          : {
+              ref: sch.schema,
+            },
+      ),
+      validateName,
+      ValidationError: _ValidationError,
+      schema: sch.schema,
+      schemaEnv: sch,
+      rootId,
+      baseId: sch.baseId || rootId,
+      schemaPath: codegen_1.nil,
+      errSchemaPath: sch.schemaPath || (this.opts.jtd ? "" : "#"),
+      errorPath: codegen_1._`""`,
+      opts: this.opts,
+      self: this,
+    };
+    let sourceCode;
     try {
-      (this._compilations.add(e), Mn.validateFunctionCode(u), i.optimize(this.opts.code.optimize));
-      let str = i.toString();
-      if (((l = `${i.scopeRefs(Me.default.scope)}return ${str}`), this.opts.code.process))
-        l = this.opts.code.process(l, e);
-      let _ = Function(`${Me.default.self}`, `${Me.default.scope}`, l)(this, this.scope.get());
-      if (
-        (this.scope.value(scopeName, { ref: _ }),
-        (_.errors = null),
-        (_.schema = e.schema),
-        (_.schemaEnv = e),
-        e.$async)
-      )
-        _.$async = !0;
-      if (this.opts.code.source === !0)
-        _.source = { validateName: scopeName, validateCode: str, scopeValues: i._values };
+      this._compilations.add(sch);
+      validate_1.validateFunctionCode(schemaCxt);
+      gen.optimize(this.opts.code.optimize);
+      let validateCode = gen.toString();
+      sourceCode = `${gen.scopeRefs(names_1.default.scope)}return ${validateCode}`;
+      if (this.opts.code.process) sourceCode = this.opts.code.process(sourceCode, sch);
+      let validate = Function(
+        `${names_1.default.self}`,
+        `${names_1.default.scope}`,
+        sourceCode,
+      )(this, this.scope.get());
+      this.scope.value(validateName, {
+        ref: validate,
+      });
+      validate.errors = null;
+      validate.schema = sch.schema;
+      validate.schemaEnv = sch;
+      if (sch.$async) validate.$async = true;
+      if (this.opts.code.source === true)
+        validate.source = {
+          validateName,
+          validateCode,
+          scopeValues: gen._values,
+        };
       if (this.opts.unevaluated) {
-        let { props: props, items: items } = u;
-        if (
-          ((_.evaluated = {
-            props: props instanceof V.Name ? void 0 : props,
-            items: items instanceof V.Name ? void 0 : items,
-            dynamicProps: props instanceof V.Name,
-            dynamicItems: items instanceof V.Name,
-          }),
-          _.source)
-        )
-          _.source.evaluated = V.stringify(_.evaluated);
+        let { props, items } = schemaCxt;
+        validate.evaluated = {
+          props: props instanceof codegen_1.Name ? undefined : props,
+          items: items instanceof codegen_1.Name ? undefined : items,
+          dynamicProps: props instanceof codegen_1.Name,
+          dynamicItems: items instanceof codegen_1.Name,
+        };
+        if (validate.source) validate.source.evaluated = codegen_1.stringify(validate.evaluated);
       }
-      return ((e.validate = _), e);
-    } catch (error) {
-      if ((delete e.validate, delete e.validateName, l))
-        this.logger.error("Error compiling schema, function code:", l);
-      throw error;
+      sch.validate = validate;
+      return sch;
+    } catch (e) {
+      delete sch.validate;
+      delete sch.validateName;
+      if (sourceCode) this.logger.error("Error compiling schema, function code:", sourceCode);
+      throw e;
     } finally {
-      this._compilations.delete(e);
+      this._compilations.delete(sch);
     }
   }
-  Dn.compileSchema = Sr;
-  function ql(e, t, r) {
-    var s;
-    r = z.resolveUrl(this.opts.uriResolver, t, r);
-    let n = e.refs[r];
-    if (n) return n;
-    let o = xl.call(this, e, r);
-    if (o === void 0) {
-      let i = (s = e.localRefs) === null || s === void 0 ? void 0 : s[r],
-        { schemaId: schemaId } = this.opts;
-      if (i) o = new dt({ schema: i, schemaId: schemaId, root: e, baseId: t });
+  cjsExports.compileSchema = compileSchema;
+  function resolveRef(root, baseId, ref) {
+    var _a;
+    ref = resolve_1.resolveUrl(this.opts.uriResolver, baseId, ref);
+    let schOrFunc = root.refs[ref];
+    if (schOrFunc) return schOrFunc;
+    let _sch = resolve.call(this, root, ref);
+    if (_sch === undefined) {
+      let schema = (_a = root.localRefs) === null || _a === undefined ? undefined : _a[ref];
+      let { schemaId } = this.opts;
+      if (schema)
+        _sch = new SchemaEnv({
+          schema,
+          schemaId,
+          root,
+          baseId,
+        });
     }
-    if (o === void 0) return;
-    return (e.refs[r] = Ol.call(this, o));
+    if (_sch === undefined) return;
+    return (root.refs[ref] = inlineOrCompile.call(this, _sch));
   }
-  Dn.resolveRef = ql;
-  function Ol(e) {
-    if (z.inlineRef(e.schema, this.opts.inlineRefs)) return e.schema;
-    return e.validate ? e : Sr.call(this, e);
+  cjsExports.resolveRef = resolveRef;
+  function inlineOrCompile(sch) {
+    if (resolve_1.inlineRef(sch.schema, this.opts.inlineRefs)) return sch.schema;
+    return sch.validate ? sch : compileSchema.call(this, sch);
   }
-  function An(e) {
-    for (let _compilation of this._compilations) if (jl(_compilation, e)) return _compilation;
+  function getCompilingSchema(schEnv) {
+    for (let sch of this._compilations) if (sameSchemaEnv(sch, schEnv)) return sch;
   }
-  Dn.getCompilingSchema = An;
-  function jl(e, t) {
-    return e.schema === t.schema && e.root === t.root && e.baseId === t.baseId;
+  cjsExports.getCompilingSchema = getCompilingSchema;
+  function sameSchemaEnv(s1, s2) {
+    return s1.schema === s2.schema && s1.root === s2.root && s1.baseId === s2.baseId;
   }
-  function xl(e, t) {
-    let r;
-    while (typeof (r = this.refs[t]) == "string") t = r;
-    return r || this.schemas[t] || xt.call(this, e, t);
+  function resolve(root, ref) {
+    let sch;
+    while (typeof (sch = this.refs[ref]) == "string") ref = sch;
+    return sch || this.schemas[ref] || resolveSchema.call(this, root, ref);
   }
-  function xt(e, t) {
-    let parse = this.opts.uriResolver.parse(t),
-      _getFullPath = z._getFullPath(this.opts.uriResolver, parse),
-      fullPath = z.getFullPath(this.opts.uriResolver, e.baseId, void 0);
-    if (Object.keys(e.schema).length > 0 && _getFullPath === fullPath) return Er.call(this, parse, e);
-    let normalizeId = z.normalizeId(_getFullPath),
-      i = this.refs[normalizeId] || this.schemas[normalizeId];
-    if (typeof i == "string") {
-      let a = xt.call(this, e, i);
-      if (typeof (a === null || a === void 0 ? void 0 : a.schema) !== "object") return;
-      return Er.call(this, parse, a);
+  function resolveSchema(root, ref) {
+    let p = this.opts.uriResolver.parse(ref);
+    let refPath = resolve_1._getFullPath(this.opts.uriResolver, p);
+    let baseId = resolve_1.getFullPath(this.opts.uriResolver, root.baseId, undefined);
+    if (Object.keys(root.schema).length > 0 && refPath === baseId) return getJsonPointer.call(this, p, root);
+    let id = resolve_1.normalizeId(refPath);
+    let schOrRef = this.refs[id] || this.schemas[id];
+    if (typeof schOrRef == "string") {
+      let sch = resolveSchema.call(this, root, schOrRef);
+      if (typeof (sch === null || sch === undefined ? undefined : sch.schema) !== "object") return;
+      return getJsonPointer.call(this, p, sch);
     }
-    if (typeof (i === null || i === void 0 ? void 0 : i.schema) !== "object") return;
-    if (!i.validate) Sr.call(this, i);
-    if (normalizeId === z.normalizeId(t)) {
-      let { schema: schema } = i,
-        { schemaId: schemaId } = this.opts,
-        u = schema[schemaId];
-      if (u) fullPath = z.resolveUrl(this.opts.uriResolver, fullPath, u);
-      return new dt({ schema: schema, schemaId: schemaId, root: e, baseId: fullPath });
+    if (typeof (schOrRef === null || schOrRef === undefined ? undefined : schOrRef.schema) !== "object")
+      return;
+    if (!schOrRef.validate) compileSchema.call(this, schOrRef);
+    if (id === resolve_1.normalizeId(ref)) {
+      let { schema } = schOrRef;
+      let { schemaId } = this.opts;
+      let schId = schema[schemaId];
+      if (schId) baseId = resolve_1.resolveUrl(this.opts.uriResolver, baseId, schId);
+      return new SchemaEnv({
+        schema,
+        schemaId,
+        root,
+        baseId,
+      });
     }
-    return Er.call(this, parse, i);
+    return getJsonPointer.call(this, p, schOrRef);
   }
-  Dn.resolveSchema = xt;
-  var Rl = new Set(["properties", "patternProperties", "enum", "dependencies", "definitions"]);
-  function Er(e, { baseId: baseId, schema: schema, root: root }) {
-    var n;
-    if (((n = e.fragment) === null || n === void 0 ? void 0 : n[0]) !== "/") return;
-    for (let a of e.fragment.slice(1).split("/")) {
+  cjsExports.resolveSchema = resolveSchema;
+  var PREVENT_SCOPE_CHANGE = new Set([
+    "properties",
+    "patternProperties",
+    "enum",
+    "dependencies",
+    "definitions",
+  ]);
+  function getJsonPointer(parsedRef, { baseId, schema, root }) {
+    var _a;
+    if (((_a = parsedRef.fragment) === null || _a === undefined ? undefined : _a[0]) !== "/") return;
+    for (let part of parsedRef.fragment.slice(1).split("/")) {
       if (typeof schema === "boolean") return;
-      let c = schema[jt.unescapeFragment(a)];
-      if (c === void 0) return;
-      schema = c;
-      let u = typeof schema === "object" && schema[this.opts.schemaId];
-      if (!Rl.has(a) && u) baseId = z.resolveUrl(this.opts.uriResolver, baseId, u);
+      let partSchema = schema[util_1.unescapeFragment(part)];
+      if (partSchema === undefined) return;
+      schema = partSchema;
+      let schId = typeof schema === "object" && schema[this.opts.schemaId];
+      if (!PREVENT_SCOPE_CHANGE.has(part) && schId)
+        baseId = resolve_1.resolveUrl(this.opts.uriResolver, baseId, schId);
     }
-    let o;
-    if (typeof schema != "boolean" && schema.$ref && !jt.schemaHasRulesButRef(schema, this.RULES)) {
-      let url = z.resolveUrl(this.opts.uriResolver, baseId, schema.$ref);
-      o = xt.call(this, root, url);
+    let env;
+    if (typeof schema != "boolean" && schema.$ref && !util_1.schemaHasRulesButRef(schema, this.RULES)) {
+      let $ref = resolve_1.resolveUrl(this.opts.uriResolver, baseId, schema.$ref);
+      env = resolveSchema.call(this, root, $ref);
     }
-    let { schemaId: schemaId } = this.opts;
-    if (
-      ((o = o || new dt({ schema: schema, schemaId: schemaId, root: root, baseId: baseId })),
-      o.schema !== o.root.schema)
-    )
-      return o;
+    let { schemaId } = this.opts;
+    env =
+      env ||
+      new SchemaEnv({
+        schema,
+        schemaId,
+        root,
+        baseId,
+      });
+    if (env.schema !== env.root.schema) return env;
     return;
   }
 });
-
-export { tlr };
+export { require_compile_2 };

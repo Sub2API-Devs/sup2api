@@ -5,248 +5,293 @@
  * pieces: chunk-6ja29j2n.js (2)
  * attribution: esm-fingerprint 2
  */
-import { u, H } from "../common/html.js";
+import { TAG_ID, H } from "../common/html.js";
 import { E } from "../../lib/common/html.js";
 
 //@ chunk-6ja29j2n.js:117020-117587 esm-fingerprint
-var Ue = new Set([u.DD, u.DT, u.LI, u.OPTGROUP, u.OPTION, u.P, u.RB, u.RP, u.RT, u.RTC]),
-  Be = new Set([...Ue, u.CAPTION, u.COLGROUP, u.TBODY, u.TD, u.TFOOT, u.TH, u.THEAD, u.TR]),
-  ee = new Set([u.APPLET, u.CAPTION, u.HTML, u.MARQUEE, u.OBJECT, u.TABLE, u.TD, u.TEMPLATE, u.TH]),
-  gt = new Set([...ee, u.OL, u.UL]),
-  Pt = new Set([...ee, u.BUTTON]),
-  ke = new Set([u.ANNOTATION_XML, u.MI, u.MN, u.MO, u.MS, u.MTEXT]),
-  He = new Set([u.DESC, u.FOREIGN_OBJECT, u.TITLE]),
-  Mt = new Set([u.TR, u.TEMPLATE, u.HTML]),
-  xt = new Set([u.TBODY, u.TFOOT, u.THEAD, u.TEMPLATE, u.HTML]),
-  Bt = new Set([u.TABLE, u.TEMPLATE, u.HTML]),
-  kt = new Set([u.TD, u.TH]);
+var IMPLICIT_END_TAG_REQUIRED = new Set([
+  TAG_ID.DD,
+  TAG_ID.DT,
+  TAG_ID.LI,
+  TAG_ID.OPTGROUP,
+  TAG_ID.OPTION,
+  TAG_ID.P,
+  TAG_ID.RB,
+  TAG_ID.RP,
+  TAG_ID.RT,
+  TAG_ID.RTC,
+]);
+var IMPLICIT_END_TAG_REQUIRED_THOROUGHLY = new Set([
+  ...IMPLICIT_END_TAG_REQUIRED,
+  TAG_ID.CAPTION,
+  TAG_ID.COLGROUP,
+  TAG_ID.TBODY,
+  TAG_ID.TD,
+  TAG_ID.TFOOT,
+  TAG_ID.TH,
+  TAG_ID.THEAD,
+  TAG_ID.TR,
+]);
+var SCOPING_ELEMENTS_HTML = new Set([
+  TAG_ID.APPLET,
+  TAG_ID.CAPTION,
+  TAG_ID.HTML,
+  TAG_ID.MARQUEE,
+  TAG_ID.OBJECT,
+  TAG_ID.TABLE,
+  TAG_ID.TD,
+  TAG_ID.TEMPLATE,
+  TAG_ID.TH,
+]);
+var SCOPING_ELEMENTS_HTML_LIST = new Set([...SCOPING_ELEMENTS_HTML, TAG_ID.OL, TAG_ID.UL]);
+var SCOPING_ELEMENTS_HTML_BUTTON = new Set([...SCOPING_ELEMENTS_HTML, TAG_ID.BUTTON]);
+var SCOPING_ELEMENTS_MATHML = new Set([
+  TAG_ID.ANNOTATION_XML,
+  TAG_ID.MI,
+  TAG_ID.MN,
+  TAG_ID.MO,
+  TAG_ID.MS,
+  TAG_ID.MTEXT,
+]);
+var SCOPING_ELEMENTS_SVG = new Set([TAG_ID.DESC, TAG_ID.FOREIGN_OBJECT, TAG_ID.TITLE]);
+var TABLE_ROW_CONTEXT = new Set([TAG_ID.TR, TAG_ID.TEMPLATE, TAG_ID.HTML]);
+var TABLE_BODY_CONTEXT = new Set([TAG_ID.TBODY, TAG_ID.TFOOT, TAG_ID.THEAD, TAG_ID.TEMPLATE, TAG_ID.HTML]);
+var TABLE_CONTEXT = new Set([TAG_ID.TABLE, TAG_ID.TEMPLATE, TAG_ID.HTML]);
+var TABLE_CELLS = new Set([TAG_ID.TD, TAG_ID.TH]);
 //@ chunk-6ja29j2n.js:117587-122132 esm-fingerprint
-class he {
+class OpenElementStack {
   get currentTmplContentOrNode() {
     return this._isInTemplate() ? this.treeAdapter.getTemplateContent(this.current) : this.current;
   }
-  constructor(e, t, a) {
-    ((this.treeAdapter = t),
-      (this.handler = a),
-      (this.items = []),
-      (this.tagIDs = []),
-      (this.stackTop = -1),
-      (this.tmplCount = 0),
-      (this.currentTagId = u.UNKNOWN),
-      (this.current = e));
+  constructor(e, treeAdapter, handler) {
+    this.treeAdapter = treeAdapter;
+    this.handler = handler;
+    this.items = [];
+    this.tagIDs = [];
+    this.stackTop = -1;
+    this.tmplCount = 0;
+    this.currentTagId = TAG_ID.UNKNOWN;
+    this.current = e;
   }
-  _indexOf(e) {
-    return this.items.lastIndexOf(e, this.stackTop);
+  _indexOf(element) {
+    return this.items.lastIndexOf(element, this.stackTop);
   }
   _isInTemplate() {
-    return this.currentTagId === u.TEMPLATE && this.treeAdapter.getNamespaceURI(this.current) === E.HTML;
+    return this.currentTagId === TAG_ID.TEMPLATE && this.treeAdapter.getNamespaceURI(this.current) === E.HTML;
   }
   _updateCurrentElement() {
-    ((this.current = this.items[this.stackTop]), (this.currentTagId = this.tagIDs[this.stackTop]));
+    this.current = this.items[this.stackTop];
+    this.currentTagId = this.tagIDs[this.stackTop];
   }
-  push(e, t) {
-    if (
-      (this.stackTop++,
-      (this.items[this.stackTop] = e),
-      (this.current = e),
-      (this.tagIDs[this.stackTop] = t),
-      (this.currentTagId = t),
-      this._isInTemplate())
-    )
-      this.tmplCount++;
-    this.handler.onItemPush(e, t, !0);
+  push(element, tagID) {
+    this.stackTop++;
+    this.items[this.stackTop] = element;
+    this.current = element;
+    this.tagIDs[this.stackTop] = tagID;
+    this.currentTagId = tagID;
+    if (this._isInTemplate()) this.tmplCount++;
+    this.handler.onItemPush(element, tagID, true);
   }
   pop() {
-    let e = this.current;
+    let popped = this.current;
     if (this.tmplCount > 0 && this._isInTemplate()) this.tmplCount--;
-    (this.stackTop--, this._updateCurrentElement(), this.handler.onItemPop(e, !0));
+    this.stackTop--;
+    this._updateCurrentElement();
+    this.handler.onItemPop(popped, true);
   }
-  replace(e, t) {
-    let _indexOf = this._indexOf(e);
-    if (((this.items[_indexOf] = t), _indexOf === this.stackTop)) this.current = t;
+  replace(oldElement, newElement) {
+    let idx = this._indexOf(oldElement);
+    this.items[idx] = newElement;
+    if (idx === this.stackTop) this.current = newElement;
   }
-  insertAfter(e, t, a) {
-    let n = this._indexOf(e) + 1;
-    if ((this.items.splice(n, 0, t), this.tagIDs.splice(n, 0, a), this.stackTop++, n === this.stackTop))
-      this._updateCurrentElement();
-    this.handler.onItemPush(this.current, this.currentTagId, n === this.stackTop);
+  insertAfter(referenceElement, newElement, newElementID) {
+    let insertionIdx = this._indexOf(referenceElement) + 1;
+    this.items.splice(insertionIdx, 0, newElement);
+    this.tagIDs.splice(insertionIdx, 0, newElementID);
+    this.stackTop++;
+    if (insertionIdx === this.stackTop) this._updateCurrentElement();
+    this.handler.onItemPush(this.current, this.currentTagId, insertionIdx === this.stackTop);
   }
-  popUntilTagNamePopped(e) {
-    let t = this.stackTop + 1;
-    do t = this.tagIDs.lastIndexOf(e, t - 1);
-    while (t > 0 && this.treeAdapter.getNamespaceURI(this.items[t]) !== E.HTML);
-    this.shortenToLength(t < 0 ? 0 : t);
+  popUntilTagNamePopped(tagName) {
+    let targetIdx = this.stackTop + 1;
+    do targetIdx = this.tagIDs.lastIndexOf(tagName, targetIdx - 1);
+    while (targetIdx > 0 && this.treeAdapter.getNamespaceURI(this.items[targetIdx]) !== E.HTML);
+    this.shortenToLength(targetIdx < 0 ? 0 : targetIdx);
   }
-  shortenToLength(e) {
-    while (this.stackTop >= e) {
-      let t = this.current;
+  shortenToLength(idx) {
+    while (this.stackTop >= idx) {
+      let popped = this.current;
       if (this.tmplCount > 0 && this._isInTemplate()) this.tmplCount -= 1;
-      (this.stackTop--, this._updateCurrentElement(), this.handler.onItemPop(t, this.stackTop < e));
+      this.stackTop--;
+      this._updateCurrentElement();
+      this.handler.onItemPop(popped, this.stackTop < idx);
     }
   }
-  popUntilElementPopped(e) {
-    let _indexOf = this._indexOf(e);
-    this.shortenToLength(_indexOf < 0 ? 0 : _indexOf);
+  popUntilElementPopped(element) {
+    let idx = this._indexOf(element);
+    this.shortenToLength(idx < 0 ? 0 : idx);
   }
-  popUntilPopped(e, t) {
-    let _indexOfTagNames = this._indexOfTagNames(e, t);
-    this.shortenToLength(_indexOfTagNames < 0 ? 0 : _indexOfTagNames);
+  popUntilPopped(tagNames, targetNS) {
+    let idx = this._indexOfTagNames(tagNames, targetNS);
+    this.shortenToLength(idx < 0 ? 0 : idx);
   }
   popUntilNumberedHeaderPopped() {
     this.popUntilPopped(H, E.HTML);
   }
   popUntilTableCellPopped() {
-    this.popUntilPopped(kt, E.HTML);
+    this.popUntilPopped(TABLE_CELLS, E.HTML);
   }
   popAllUpToHtmlElement() {
-    ((this.tmplCount = 0), this.shortenToLength(1));
+    this.tmplCount = 0;
+    this.shortenToLength(1);
   }
-  _indexOfTagNames(e, t) {
-    for (let stackTop = this.stackTop; stackTop >= 0; stackTop--)
-      if (e.has(this.tagIDs[stackTop]) && this.treeAdapter.getNamespaceURI(this.items[stackTop]) === t)
-        return stackTop;
+  _indexOfTagNames(tagNames, namespace) {
+    for (let i = this.stackTop; i >= 0; i--)
+      if (tagNames.has(this.tagIDs[i]) && this.treeAdapter.getNamespaceURI(this.items[i]) === namespace)
+        return i;
     return -1;
   }
-  clearBackTo(e, t) {
-    let _indexOfTagNames = this._indexOfTagNames(e, t);
-    this.shortenToLength(_indexOfTagNames + 1);
+  clearBackTo(tagNames, targetNS) {
+    let idx = this._indexOfTagNames(tagNames, targetNS);
+    this.shortenToLength(idx + 1);
   }
   clearBackToTableContext() {
-    this.clearBackTo(Bt, E.HTML);
+    this.clearBackTo(TABLE_CONTEXT, E.HTML);
   }
   clearBackToTableBodyContext() {
-    this.clearBackTo(xt, E.HTML);
+    this.clearBackTo(TABLE_BODY_CONTEXT, E.HTML);
   }
   clearBackToTableRowContext() {
-    this.clearBackTo(Mt, E.HTML);
+    this.clearBackTo(TABLE_ROW_CONTEXT, E.HTML);
   }
-  remove(e) {
-    let _indexOf = this._indexOf(e);
-    if (_indexOf >= 0)
-      if (_indexOf === this.stackTop) this.pop();
-      else
-        (this.items.splice(_indexOf, 1),
-          this.tagIDs.splice(_indexOf, 1),
-          this.stackTop--,
-          this._updateCurrentElement(),
-          this.handler.onItemPop(e, !1));
+  remove(element) {
+    let idx = this._indexOf(element);
+    if (idx >= 0)
+      if (idx === this.stackTop) this.pop();
+      else {
+        this.items.splice(idx, 1);
+        this.tagIDs.splice(idx, 1);
+        this.stackTop--;
+        this._updateCurrentElement();
+        this.handler.onItemPop(element, false);
+      }
   }
   tryPeekProperlyNestedBodyElement() {
-    return this.stackTop >= 1 && this.tagIDs[1] === u.BODY ? this.items[1] : null;
+    return this.stackTop >= 1 && this.tagIDs[1] === TAG_ID.BODY ? this.items[1] : null;
   }
-  contains(e) {
-    return this._indexOf(e) > -1;
+  contains(element) {
+    return this._indexOf(element) > -1;
   }
-  getCommonAncestor(e) {
-    let t = this._indexOf(e) - 1;
-    return t >= 0 ? this.items[t] : null;
+  getCommonAncestor(element) {
+    let elementIdx = this._indexOf(element) - 1;
+    return elementIdx >= 0 ? this.items[elementIdx] : null;
   }
   isRootHtmlElementCurrent() {
-    return this.stackTop === 0 && this.tagIDs[0] === u.HTML;
+    return this.stackTop === 0 && this.tagIDs[0] === TAG_ID.HTML;
   }
-  hasInDynamicScope(e, t) {
-    for (let stackTop = this.stackTop; stackTop >= 0; stackTop--) {
-      let n = this.tagIDs[stackTop];
-      switch (this.treeAdapter.getNamespaceURI(this.items[stackTop])) {
+  hasInDynamicScope(tagName, htmlScope) {
+    for (let i = this.stackTop; i >= 0; i--) {
+      let tn = this.tagIDs[i];
+      switch (this.treeAdapter.getNamespaceURI(this.items[i])) {
         case E.HTML: {
-          if (n === e) return !0;
-          if (t.has(n)) return !1;
+          if (tn === tagName) return true;
+          if (htmlScope.has(tn)) return false;
           break;
         }
         case E.SVG: {
-          if (He.has(n)) return !1;
+          if (SCOPING_ELEMENTS_SVG.has(tn)) return false;
           break;
         }
         case E.MATHML: {
-          if (ke.has(n)) return !1;
+          if (SCOPING_ELEMENTS_MATHML.has(tn)) return false;
           break;
         }
       }
     }
-    return !0;
+    return true;
   }
-  hasInScope(e) {
-    return this.hasInDynamicScope(e, ee);
+  hasInScope(tagName) {
+    return this.hasInDynamicScope(tagName, SCOPING_ELEMENTS_HTML);
   }
-  hasInListItemScope(e) {
-    return this.hasInDynamicScope(e, gt);
+  hasInListItemScope(tagName) {
+    return this.hasInDynamicScope(tagName, SCOPING_ELEMENTS_HTML_LIST);
   }
-  hasInButtonScope(e) {
-    return this.hasInDynamicScope(e, Pt);
+  hasInButtonScope(tagName) {
+    return this.hasInDynamicScope(tagName, SCOPING_ELEMENTS_HTML_BUTTON);
   }
   hasNumberedHeaderInScope() {
-    for (let stackTop = this.stackTop; stackTop >= 0; stackTop--) {
-      let t = this.tagIDs[stackTop];
-      switch (this.treeAdapter.getNamespaceURI(this.items[stackTop])) {
+    for (let i = this.stackTop; i >= 0; i--) {
+      let tn = this.tagIDs[i];
+      switch (this.treeAdapter.getNamespaceURI(this.items[i])) {
         case E.HTML: {
-          if (H.has(t)) return !0;
-          if (ee.has(t)) return !1;
+          if (H.has(tn)) return true;
+          if (SCOPING_ELEMENTS_HTML.has(tn)) return false;
           break;
         }
         case E.SVG: {
-          if (He.has(t)) return !1;
+          if (SCOPING_ELEMENTS_SVG.has(tn)) return false;
           break;
         }
         case E.MATHML: {
-          if (ke.has(t)) return !1;
+          if (SCOPING_ELEMENTS_MATHML.has(tn)) return false;
           break;
         }
       }
     }
-    return !0;
+    return true;
   }
-  hasInTableScope(e) {
-    for (let stackTop = this.stackTop; stackTop >= 0; stackTop--) {
-      if (this.treeAdapter.getNamespaceURI(this.items[stackTop]) !== E.HTML) continue;
-      switch (this.tagIDs[stackTop]) {
-        case e:
-          return !0;
-        case u.TABLE:
-        case u.HTML:
-          return !1;
+  hasInTableScope(tagName) {
+    for (let i = this.stackTop; i >= 0; i--) {
+      if (this.treeAdapter.getNamespaceURI(this.items[i]) !== E.HTML) continue;
+      switch (this.tagIDs[i]) {
+        case tagName:
+          return true;
+        case TAG_ID.TABLE:
+        case TAG_ID.HTML:
+          return false;
       }
     }
-    return !0;
+    return true;
   }
   hasTableBodyContextInTableScope() {
-    for (let stackTop = this.stackTop; stackTop >= 0; stackTop--) {
-      if (this.treeAdapter.getNamespaceURI(this.items[stackTop]) !== E.HTML) continue;
-      switch (this.tagIDs[stackTop]) {
-        case u.TBODY:
-        case u.THEAD:
-        case u.TFOOT:
-          return !0;
-        case u.TABLE:
-        case u.HTML:
-          return !1;
+    for (let i = this.stackTop; i >= 0; i--) {
+      if (this.treeAdapter.getNamespaceURI(this.items[i]) !== E.HTML) continue;
+      switch (this.tagIDs[i]) {
+        case TAG_ID.TBODY:
+        case TAG_ID.THEAD:
+        case TAG_ID.TFOOT:
+          return true;
+        case TAG_ID.TABLE:
+        case TAG_ID.HTML:
+          return false;
       }
     }
-    return !0;
+    return true;
   }
-  hasInSelectScope(e) {
-    for (let stackTop = this.stackTop; stackTop >= 0; stackTop--) {
-      if (this.treeAdapter.getNamespaceURI(this.items[stackTop]) !== E.HTML) continue;
-      switch (this.tagIDs[stackTop]) {
-        case e:
-          return !0;
-        case u.OPTION:
-        case u.OPTGROUP:
+  hasInSelectScope(tagName) {
+    for (let i = this.stackTop; i >= 0; i--) {
+      if (this.treeAdapter.getNamespaceURI(this.items[i]) !== E.HTML) continue;
+      switch (this.tagIDs[i]) {
+        case tagName:
+          return true;
+        case TAG_ID.OPTION:
+        case TAG_ID.OPTGROUP:
           break;
         default:
-          return !1;
+          return false;
       }
     }
-    return !0;
+    return true;
   }
   generateImpliedEndTags() {
-    while (Ue.has(this.currentTagId)) this.pop();
+    while (IMPLICIT_END_TAG_REQUIRED.has(this.currentTagId)) this.pop();
   }
   generateImpliedEndTagsThoroughly() {
-    while (Be.has(this.currentTagId)) this.pop();
+    while (IMPLICIT_END_TAG_REQUIRED_THOROUGHLY.has(this.currentTagId)) this.pop();
   }
-  generateImpliedEndTagsWithExclusion(e) {
-    while (this.currentTagId !== e && Be.has(this.currentTagId)) this.pop();
+  generateImpliedEndTagsWithExclusion(exclusionId) {
+    while (this.currentTagId !== exclusionId && IMPLICIT_END_TAG_REQUIRED_THOROUGHLY.has(this.currentTagId))
+      this.pop();
   }
 }
-
-export { he };
+export { OpenElementStack };

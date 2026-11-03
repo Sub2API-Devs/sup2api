@@ -11,15 +11,18 @@
 import { HostScoped } from "../../utils/hostScoped.js";
 import { onProcessRootHost } from "../../bootstrap/state.js";
 
+//@ chunk-8kte1b36.js:262-374 facade-exports = stripProtoFields (1)
 /**
  * 去掉 _PROTO_ 前缀的字段（这些只进 1P protobuf 的特权列，不发往 Datadog）。
  */
-//@ chunk-8kte1b36.js:262-374 facade-exports = stripProtoFields (1)
 function stripProtoFields(metadata) {
   let result;
   for (let key in metadata)
     if (key.startsWith("_PROTO_")) {
-      if (result === void 0) result = { ...metadata };
+      if (result === undefined)
+        result = {
+          ...metadata,
+        };
       delete result[key];
     }
   return result ?? metadata;
@@ -28,15 +31,22 @@ function stripProtoFields(metadata) {
 var MAX_QUEUED_EVENTS = 1000;
 //@ chunk-8kte1b36.js:385-450 layout
 function createAnalyticsQueueState() {
-  return { eventQueue: [], sink: null, droppedEventCount: 0 };
+  return {
+    eventQueue: [],
+    sink: null,
+    droppedEventCount: 0,
+  };
 }
+//@ chunk-8kte1b36.js:450-556 layout
 /**
  * 事件入队：队列满 1000 时丢弃最旧事件并累计 droppedEventCount。
  */
-//@ chunk-8kte1b36.js:450-556 layout
-function enqueueAnalyticsEvent(t, e) {
-  if (t.eventQueue.length >= MAX_QUEUED_EVENTS) (t.eventQueue.shift(), t.droppedEventCount++);
-  t.eventQueue.push(e);
+function enqueueAnalyticsEvent(state, e) {
+  if (state.eventQueue.length >= MAX_QUEUED_EVENTS) {
+    state.eventQueue.shift();
+    state.droppedEventCount++;
+  }
+  state.eventQueue.push(e);
 }
 //@ chunk-8kte1b36.js:556-574 layout
 class AnalyticsQueueHolder {
@@ -48,47 +58,55 @@ var analyticsQueueByHost = new HostScoped(() => new AnalyticsQueueHolder());
 function getAnalyticsQueueHolder() {
   return onProcessRootHost(analyticsQueueByHost);
 }
+//@ chunk-8kte1b36.js:623-888 facade-exports
 /**
  * 挂上分析 sink（只允许一次），在 microtask 中按顺序回放之前排队的事件。
  */
-//@ chunk-8kte1b36.js:623-888 facade-exports
 function attachAnalyticsSink(newSink) {
   let state = getAnalyticsQueueHolder().state;
-  if (state.sink !== null) return !1;
-  if (((state.sink = newSink), state.eventQueue.length > 0)) {
-    let eventQueue = state.eventQueue;
-    ((state.eventQueue = []),
-      queueMicrotask(() => {
-        for (let event of eventQueue)
-          if (event.async) newSink.logEventAsync(event.eventName, event.metadata);
-          else newSink.logEvent(event.eventName, event.metadata);
-      }));
+  if (state.sink !== null) return false;
+  state.sink = newSink;
+  if (state.eventQueue.length > 0) {
+    let queuedEvents = state.eventQueue;
+    state.eventQueue = [];
+    queueMicrotask(() => {
+      for (let event of queuedEvents)
+        if (event.async) newSink.logEventAsync(event.eventName, event.metadata);
+        else newSink.logEvent(event.eventName, event.metadata);
+    });
   }
-  return !0;
+  return true;
 }
+//@ chunk-8kte1b36.js:888-1005 facade-exports = logEvent (0.878)
 /**
  * 记录分析事件：sink 未挂上前进入内存队列（上限 1000，满了丢最旧并计数），挂上后直接交给 sink.logEvent。
  */
-//@ chunk-8kte1b36.js:888-1005 facade-exports = logEvent (0.878)
 function logEvent(eventName, metadata) {
   let state = getAnalyticsQueueHolder().state;
   if (state.sink === null) {
-    enqueueAnalyticsEvent(state, { eventName: eventName, metadata: metadata, async: !1 });
+    enqueueAnalyticsEvent(state, {
+      eventName,
+      metadata,
+      async: false,
+    });
     return;
   }
   state.sink.logEvent(eventName, metadata);
 }
+//@ chunk-8kte1b36.js:1005-1140 facade-exports = logEventAsync (0.883)
 /**
  * logEvent 的异步版本，等待 sink 发送完成；sink 未挂上时同样入队。
  */
-//@ chunk-8kte1b36.js:1005-1140 facade-exports = logEventAsync (0.883)
 async function logEventAsync(eventName, metadata) {
   let state = getAnalyticsQueueHolder().state;
   if (state.sink === null) {
-    enqueueAnalyticsEvent(state, { eventName: eventName, metadata: metadata, async: !0 });
+    enqueueAnalyticsEvent(state, {
+      eventName,
+      metadata,
+      async: true,
+    });
     return;
   }
   await state.sink.logEventAsync(eventName, metadata);
 }
-
 export { logEvent, logEventAsync, stripProtoFields, attachAnalyticsSink };

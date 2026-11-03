@@ -10,249 +10,293 @@ import * as httpModule from "http";
 import * as httpsModule from "https";
 import * as zlibModule from "zlib";
 import { AbortError_2, RestError } from "./restError.js";
-import { tt } from "./util/sanitizer.js";
-import { Ve } from "./log.js";
+import { Sanitizer } from "./util/sanitizer.js";
+import { logger_2 } from "./log.js";
 import { et } from "./pipelineRequest.js";
 
 //@ chunk-mrx6y2r5.js:37932-37942 esm-layout
-var Pm = {};
+var DEFAULT_TLS_SETTINGS = {};
 //@ chunk-mrx6y2r5.js:37942-37994 esm-fingerprint
-function Gn(e) {
-  return e && typeof e.pipe === "function";
+function isReadableStream(body) {
+  return body && typeof body.pipe === "function";
 }
 //@ chunk-mrx6y2r5.js:37994-38224 esm-fingerprint
-function fl(e) {
-  if (e.readable === !1) return Promise.resolve();
-  return new Promise((t) => {
-    let r = () => {
-      (t(), e.removeListener("close", r), e.removeListener("end", r), e.removeListener("error", r));
+function isStreamComplete(stream) {
+  if (stream.readable === false) return Promise.resolve();
+  return new Promise((resolve) => {
+    let handler = () => {
+      resolve();
+      stream.removeListener("close", handler);
+      stream.removeListener("end", handler);
+      stream.removeListener("error", handler);
     };
-    (e.on("close", r), e.on("end", r), e.on("error", r));
+    stream.on("close", handler);
+    stream.on("end", handler);
+    stream.on("error", handler);
   });
 }
 //@ chunk-mrx6y2r5.js:38224-38280 esm-fingerprint
-function ml(e) {
-  return e && typeof e.byteLength === "number";
+function isArrayBuffer(body) {
+  return body && typeof body.byteLength === "number";
 }
 //@ chunk-mrx6y2r5.js:38280-38502 esm-fingerprint
-class Ks extends Transform {
-  _transform(e, t, r) {
-    (this.push(e), (this.loadedBytes += e.length));
+class ReportTransform extends Transform {
+  _transform(chunk, _encoding, callback) {
+    this.push(chunk);
+    this.loadedBytes += chunk.length;
     try {
-      (this.progressCallback({ loadedBytes: this.loadedBytes }), r());
-    } catch (error) {
-      r(error);
+      this.progressCallback({
+        loadedBytes: this.loadedBytes,
+      });
+      callback();
+    } catch (e) {
+      callback(e);
     }
   }
-  constructor(e) {
+  constructor(progressCallback) {
     super();
-    ((this.loadedBytes = 0), (this.progressCallback = e));
+    this.loadedBytes = 0;
+    this.progressCallback = progressCallback;
   }
 }
 //@ chunk-mrx6y2r5.js:38502-41828 esm-fingerprint
-class pl {
+class NodeHttpClient {
   constructor() {
     this.cachedHttpsAgents = new WeakMap();
   }
-  async sendRequest(e) {
-    var t, r, n;
-    let abortController = new AbortController(),
-      i;
-    if (e.abortSignal) {
-      if (e.abortSignal.aborted)
+  async sendRequest(request) {
+    var _a;
+    var _b;
+    var _c;
+    let abortController = new AbortController();
+    let abortListener;
+    if (request.abortSignal) {
+      if (request.abortSignal.aborted)
         throw new AbortError_2("The operation was aborted. Request has already been canceled.");
-      ((i = (u) => {
-        if (u.type === "abort") abortController.abort();
-      }),
-        e.abortSignal.addEventListener("abort", i));
+      abortListener = (event) => {
+        if (event.type === "abort") abortController.abort();
+      };
+      request.abortSignal.addEventListener("abort", abortListener);
     }
-    let s;
-    if (e.timeout > 0)
-      s = setTimeout(() => {
-        let u = new tt();
-        (Ve.info(`request to '${u.sanitizeUrl(e.url)}' timed out. canceling...`), abortController.abort());
-      }, e.timeout);
-    let a = e.headers.get("Accept-Encoding"),
-      c =
-        (a === null || a === void 0 ? void 0 : a.includes("gzip")) ||
-        (a === null || a === void 0 ? void 0 : a.includes("deflate")),
-      l = typeof e.body === "function" ? e.body() : e.body;
-    if (l && !e.headers.has("Content-Length")) {
-      let u = getBodyLength(l);
-      if (u !== null) e.headers.set("Content-Length", u);
+    let timeoutId;
+    if (request.timeout > 0)
+      timeoutId = setTimeout(() => {
+        let sanitizer = new Sanitizer();
+        logger_2.info(`request to '${sanitizer.sanitizeUrl(request.url)}' timed out. canceling...`);
+        abortController.abort();
+      }, request.timeout);
+    let acceptEncoding = request.headers.get("Accept-Encoding");
+    let shouldDecompress =
+      (acceptEncoding === null || acceptEncoding === undefined
+        ? undefined
+        : acceptEncoding.includes("gzip")) ||
+      (acceptEncoding === null || acceptEncoding === undefined
+        ? undefined
+        : acceptEncoding.includes("deflate"));
+    let body = typeof request.body === "function" ? request.body() : request.body;
+    if (body && !request.headers.has("Content-Length")) {
+      let bodyLength = getBodyLength(body);
+      if (bodyLength !== null) request.headers.set("Content-Length", bodyLength);
     }
-    let d;
+    let responseStream;
     try {
-      if (l && e.onUploadProgress) {
-        let onUploadProgress = e.onUploadProgress,
-          v = new Ks(onUploadProgress);
-        if (
-          (v.on("error", (U) => {
-            Ve.error("Error in upload progress", U);
-          }),
-          Gn(l))
-        )
-          l.pipe(v);
-        else v.end(l);
-        l = v;
+      if (body && request.onUploadProgress) {
+        let onUploadProgress = request.onUploadProgress;
+        let uploadReportStream = new ReportTransform(onUploadProgress);
+        uploadReportStream.on("error", (e) => {
+          logger_2.error("Error in upload progress", e);
+        });
+        if (isReadableStream(body)) body.pipe(uploadReportStream);
+        else uploadReportStream.end(body);
+        body = uploadReportStream;
       }
-      let request = await this.makeRequest(e, abortController, l);
-      if (s !== void 0) clearTimeout(s);
-      let m = Om(request),
-        y = { status: (t = request.statusCode) !== null && t !== void 0 ? t : 0, headers: m, request: e };
-      if (e.method === "HEAD") return (request.resume(), y);
-      d = c ? Nm(request, m) : request;
-      let onDownloadProgress = e.onDownloadProgress;
+      let res = await this.makeRequest(request, abortController, body);
+      if (timeoutId !== undefined) clearTimeout(timeoutId);
+      let headers = getResponseHeaders(res);
+      let response = {
+        status: (_a = res.statusCode) !== null && _a !== undefined ? _a : 0,
+        headers,
+        request,
+      };
+      if (request.method === "HEAD") {
+        res.resume();
+        return response;
+      }
+      responseStream = shouldDecompress ? getDecodedResponseStream(res, headers) : res;
+      let onDownloadProgress = request.onDownloadProgress;
       if (onDownloadProgress) {
-        let I = new Ks(onDownloadProgress);
-        (I.on("error", (v) => {
-          Ve.error("Error in download progress", v);
-        }),
-          d.pipe(I),
-          (d = I));
+        let downloadReportStream = new ReportTransform(onDownloadProgress);
+        downloadReportStream.on("error", (e) => {
+          logger_2.error("Error in download progress", e);
+        });
+        responseStream.pipe(downloadReportStream);
+        responseStream = downloadReportStream;
       }
       if (
-        ((r = e.streamResponseStatusCodes) === null || r === void 0
-          ? void 0
-          : r.has(Number.POSITIVE_INFINITY)) ||
-        ((n = e.streamResponseStatusCodes) === null || n === void 0 ? void 0 : n.has(y.status))
+        ((_b = request.streamResponseStatusCodes) === null || _b === undefined
+          ? undefined
+          : _b.has(Number.POSITIVE_INFINITY)) ||
+        ((_c = request.streamResponseStatusCodes) === null || _c === undefined
+          ? undefined
+          : _c.has(response.status))
       )
-        y.readableStreamBody = d;
-      else y.bodyAsText = await xm(d);
-      return y;
+        response.readableStreamBody = responseStream;
+      else response.bodyAsText = await streamToText(responseStream);
+      return response;
     } finally {
-      if (e.abortSignal && i) {
-        let resolved = Promise.resolve();
-        if (Gn(l)) resolved = fl(l);
-        let resolved_2 = Promise.resolve();
-        if (Gn(d)) resolved_2 = fl(d);
-        Promise.all([resolved, resolved_2])
+      if (request.abortSignal && abortListener) {
+        let uploadStreamDone = Promise.resolve();
+        if (isReadableStream(body)) uploadStreamDone = isStreamComplete(body);
+        let downloadStreamDone = Promise.resolve();
+        if (isReadableStream(responseStream)) downloadStreamDone = isStreamComplete(responseStream);
+        Promise.all([uploadStreamDone, downloadStreamDone])
           .then(() => {
-            var p;
-            if (i) (p = e.abortSignal) === null || p === void 0 || p.removeEventListener("abort", i);
+            var _a;
+            if (abortListener) {
+              if (!((_a = request.abortSignal) === null || _a === undefined))
+                _a.removeEventListener("abort", abortListener);
+            }
           })
-          .catch((p) => {
-            Ve.warning("Error when cleaning up abortListener on httpRequest", p);
+          .catch((e) => {
+            logger_2.warning("Error when cleaning up abortListener on httpRequest", e);
           });
       }
     }
   }
-  makeRequest(e, t, r) {
-    var n;
-    let o = new URL(e.url),
-      i = o.protocol !== "https:";
-    if (i && !e.allowInsecureConnection)
-      throw Error(`Cannot connect to ${e.url} while allowInsecureConnection is false.`);
-    let s = (n = e.agent) !== null && n !== void 0 ? n : this.getOrCreateAgent(e, i),
-      merged = Object.assign(
-        {
-          agent: s,
-          hostname: o.hostname,
-          path: `${o.pathname}${o.search}`,
-          port: o.port,
-          method: e.method,
-          headers: e.headers.toJSON({ preserveCase: !0 }),
-        },
-        e.requestOverrides,
-      );
-    return new Promise((c, l) => {
-      let d = i ? httpModule.request(merged, c) : httpsModule.request(merged, c);
-      if (
-        (d.once("error", (u) => {
-          var m;
-          l(
-            new RestError(u.message, {
-              code: (m = u.code) !== null && m !== void 0 ? m : RestError.REQUEST_SEND_ERROR,
-              request: e,
-            }),
-          );
+  makeRequest(request, abortController, body) {
+    var _a;
+    let url = new URL(request.url);
+    let isInsecure = url.protocol !== "https:";
+    if (isInsecure && !request.allowInsecureConnection)
+      throw Error(`Cannot connect to ${request.url} while allowInsecureConnection is false.`);
+    let agent =
+      (_a = request.agent) !== null && _a !== undefined ? _a : this.getOrCreateAgent(request, isInsecure);
+    let options = Object.assign(
+      {
+        agent,
+        hostname: url.hostname,
+        path: `${url.pathname}${url.search}`,
+        port: url.port,
+        method: request.method,
+        headers: request.headers.toJSON({
+          preserveCase: true,
         }),
-        t.signal.addEventListener("abort", () => {
-          let u = new AbortError_2(
-            "The operation was aborted. Rejecting from abort signal callback while making request.",
-          );
-          (d.destroy(u), l(u));
-        }),
-        r && Gn(r))
-      )
-        r.pipe(d);
-      else if (r)
-        if (typeof r === "string" || Buffer.isBuffer(r)) d.end(r);
-        else if (ml(r)) d.end(ArrayBuffer.isView(r) ? Buffer.from(r.buffer) : Buffer.from(r));
-        else (Ve.error("Unrecognized body type", r), l(new RestError("Unrecognized body type")));
-      else d.end();
+      },
+      request.requestOverrides,
+    );
+    return new Promise((resolve, reject) => {
+      let req = isInsecure ? httpModule.request(options, resolve) : httpsModule.request(options, resolve);
+      req.once("error", (err) => {
+        var _a;
+        reject(
+          new RestError(err.message, {
+            code: (_a = err.code) !== null && _a !== undefined ? _a : RestError.REQUEST_SEND_ERROR,
+            request,
+          }),
+        );
+      });
+      abortController.signal.addEventListener("abort", () => {
+        let abortError = new AbortError_2(
+          "The operation was aborted. Rejecting from abort signal callback while making request.",
+        );
+        req.destroy(abortError);
+        reject(abortError);
+      });
+      if (body && isReadableStream(body)) body.pipe(req);
+      else if (body) {
+        if (typeof body === "string" || Buffer.isBuffer(body)) req.end(body);
+        else if (isArrayBuffer(body))
+          req.end(ArrayBuffer.isView(body) ? Buffer.from(body.buffer) : Buffer.from(body));
+        else {
+          logger_2.error("Unrecognized body type", body);
+          reject(new RestError("Unrecognized body type"));
+        }
+      } else req.end();
     });
   }
-  getOrCreateAgent(e, t) {
-    var r;
-    let disableKeepAlive = e.disableKeepAlive;
-    if (t) {
+  getOrCreateAgent(request, isInsecure) {
+    var _a;
+    let disableKeepAlive = request.disableKeepAlive;
+    if (isInsecure) {
       if (disableKeepAlive) return httpModule.globalAgent;
-      if (!this.cachedHttpAgent) this.cachedHttpAgent = new httpModule.Agent({ keepAlive: !0 });
+      if (!this.cachedHttpAgent)
+        this.cachedHttpAgent = new httpModule.Agent({
+          keepAlive: true,
+        });
       return this.cachedHttpAgent;
     } else {
-      if (disableKeepAlive && !e.tlsSettings) return httpsModule.globalAgent;
-      let o = (r = e.tlsSettings) !== null && r !== void 0 ? r : Pm,
-        i = this.cachedHttpsAgents.get(o);
-      if (i && i.options.keepAlive === !disableKeepAlive) return i;
-      return (
-        Ve.info("No cached TLS Agent exist, creating a new Agent"),
-        (i = new httpsModule.Agent(Object.assign({ keepAlive: !disableKeepAlive }, o))),
-        this.cachedHttpsAgents.set(o, i),
-        i
+      if (disableKeepAlive && !request.tlsSettings) return httpsModule.globalAgent;
+      let tlsSettings = (_a = request.tlsSettings) !== null && _a !== undefined ? _a : DEFAULT_TLS_SETTINGS;
+      let agent = this.cachedHttpsAgents.get(tlsSettings);
+      if (agent && agent.options.keepAlive === !disableKeepAlive) return agent;
+      logger_2.info("No cached TLS Agent exist, creating a new Agent");
+      agent = new httpsModule.Agent(
+        Object.assign(
+          {
+            keepAlive: !disableKeepAlive,
+          },
+          tlsSettings,
+        ),
       );
+      this.cachedHttpsAgents.set(tlsSettings, agent);
+      return agent;
     }
   }
 }
 //@ chunk-mrx6y2r5.js:41828-41989 esm-fingerprint
-function Om(e) {
-  let t = et();
-  for (let r of Object.keys(e.headers)) {
-    let n = e.headers[r];
-    if (Array.isArray(n)) {
-      if (n.length > 0) t.set(r, n[0]);
-    } else if (n) t.set(r, n);
+function getResponseHeaders(res) {
+  let headers = et();
+  for (let header of Object.keys(res.headers)) {
+    let value = res.headers[header];
+    if (Array.isArray(value)) {
+      if (value.length > 0) headers.set(header, value[0]);
+    } else if (value) headers.set(header, value);
   }
-  return t;
+  return headers;
 }
 //@ chunk-mrx6y2r5.js:41989-42172 esm-fingerprint
-function Nm(e, t) {
-  let r = t.get("Content-Encoding");
-  if (r === "gzip") {
-    let gunzip = zlibModule.createGunzip();
-    return (e.pipe(gunzip), gunzip);
-  } else if (r === "deflate") {
+function getDecodedResponseStream(stream, headers) {
+  let contentEncoding = headers.get("Content-Encoding");
+  if (contentEncoding === "gzip") {
+    let unzip = zlibModule.createGunzip();
+    stream.pipe(unzip);
+    return unzip;
+  } else if (contentEncoding === "deflate") {
     let inflate = zlibModule.createInflate();
-    return (e.pipe(inflate), inflate);
+    stream.pipe(inflate);
+    return inflate;
   }
-  return e;
+  return stream;
 }
 //@ chunk-mrx6y2r5.js:42172-42529 esm-fingerprint
-function xm(e) {
-  return new Promise((t, r) => {
-    let n = [];
-    (e.on("data", (o) => {
-      if (Buffer.isBuffer(o)) n.push(o);
-      else n.push(Buffer.from(o));
-    }),
-      e.on("end", () => {
-        t(Buffer.concat(n).toString("utf8"));
-      }),
-      e.on("error", (o) => {
-        if (o && (o === null || o === void 0 ? void 0 : o.name) === "AbortError") r(o);
-        else
-          r(new RestError(`Error reading response as text: ${o.message}`, { code: RestError.PARSE_ERROR }));
-      }));
+function streamToText(stream) {
+  return new Promise((resolve, reject) => {
+    let buffer = [];
+    stream.on("data", (chunk) => {
+      if (Buffer.isBuffer(chunk)) buffer.push(chunk);
+      else buffer.push(Buffer.from(chunk));
+    });
+    stream.on("end", () => {
+      resolve(Buffer.concat(buffer).toString("utf8"));
+    });
+    stream.on("error", (e) => {
+      if (e && (e === null || e === undefined ? undefined : e.name) === "AbortError") reject(e);
+      else
+        reject(
+          new RestError(`Error reading response as text: ${e.message}`, {
+            code: RestError.PARSE_ERROR,
+          }),
+        );
+    });
   });
 }
 //@ chunk-mrx6y2r5.js:42529-42736 esm-fingerprint
-function getBodyLength(e) {
-  if (!e) return 0;
-  else if (Buffer.isBuffer(e)) return e.length;
-  else if (Gn(e)) return null;
-  else if (ml(e)) return e.byteLength;
-  else if (typeof e === "string") return Buffer.from(e).length;
+function getBodyLength(body) {
+  if (!body) return 0;
+  else if (Buffer.isBuffer(body)) return body.length;
+  else if (isReadableStream(body)) return null;
+  else if (isArrayBuffer(body)) return body.byteLength;
+  else if (typeof body === "string") return Buffer.from(body).length;
   else return null;
 }
-
-export { pl };
+export { NodeHttpClient };

@@ -22,12 +22,12 @@ import { isAutoResumableLimit } from "./api/errors.js";
 import { enqueueCommand } from "../utils/messageQueueManager.js";
 
 //@ chunk-9694pmdw.js:392-597 placement
-function getSubscriptionTier(e, r) {
-  switch (e) {
+function getSubscriptionTier(subscriptionType, rateLimitTier) {
+  switch (subscriptionType) {
     case "pro":
       return "pro";
     case "max":
-      switch (r) {
+      switch (rateLimitTier) {
         case "default_claude_max_5x":
           return "max_5x";
         case "default_claude_max_20x":
@@ -43,7 +43,10 @@ function getSubscriptionTier(e, r) {
 var AUTO_CONTINUE_PROMPT =
   "You can continue now. Continue the task you were working on when the usage limit was reached; do not repeat work that is already complete.";
 //@ chunk-9694pmdw.js:744-832 placement
-function Qce() {
+/**
+ * 判断是否满足自动续写条件。
+ */
+function isAutoContinueEligible() {
   return (
     isClaudeAISubscriber() &&
     getOauthAccountInfo()?.billingType !== "usage_based" &&
@@ -54,23 +57,43 @@ function Qce() {
   );
 }
 //@ chunk-9694pmdw.js:832-899 placement
-function WQe(e) {
-  return Qce() && isAutoResumableLimit(e) && e.rateLimitType === "five_hour";
+/**
+ * 判断 5 小时额度是否可自动恢复。
+ */
+function isFiveHourAutoResumable(e) {
+  return isAutoContinueEligible() && isAutoResumableLimit(e) && e.rateLimitType === "five_hour";
 }
 //@ chunk-9694pmdw.js:899-996 placement
-var n = ["five_hour", "seven_day", "seven_day_overage_included", "seven_day_opus", "seven_day_sonnet"];
+var AUTO_RESUMABLE_LIMIT_TYPES = [
+  "five_hour",
+  "seven_day",
+  "seven_day_overage_included",
+  "seven_day_opus",
+  "seven_day_sonnet",
+];
 //@ chunk-9694pmdw.js:996-1087 placement
-function hin(e) {
-  return Qce() && isAutoResumableLimit(e) && e.rateLimitType !== void 0 && n.includes(e.rateLimitType);
+/**
+ * 判断某额度类型是否支持自动恢复。
+ */
+function canAutoResumeLimitType(e) {
+  return (
+    isAutoContinueEligible() &&
+    isAutoResumableLimit(e) &&
+    e.rateLimitType !== undefined &&
+    AUTO_RESUMABLE_LIMIT_TYPES.includes(e.rateLimitType)
+  );
 }
 //@ chunk-9694pmdw.js:1087-1122 placement
-function JTe() {
+/**
+ * 由订阅类型与限额档位得到订阅等级。
+ */
+function currentSubscriptionTier() {
   return getSubscriptionTier(getSubscriptionType(), getRateLimitTier());
 }
+//@ chunk-9694pmdw.js:1122-1269 placement
 /**
  * 用量限制解除后把自动继续提示（meta、低优先级、跳过斜杠命令）排入主 agent 的命令队列。
  */
-//@ chunk-9694pmdw.js:1122-1269 placement
 function enqueueAutoContinuation() {
   enqueueCommand({
     agentId: mainAgentId(),
@@ -78,10 +101,17 @@ function enqueueAutoContinuation() {
     priority: "later",
     value: AUTO_CONTINUE_PROMPT,
     uuid: randomUUID(),
-    origin: { kind: "auto-continuation" },
-    isMeta: !0,
-    skipSlashCommands: !0,
+    origin: {
+      kind: "auto-continuation",
+    },
+    isMeta: true,
+    skipSlashCommands: true,
   });
 }
-
-export { WQe, Qce, JTe, enqueueAutoContinuation, hin };
+export {
+  isFiveHourAutoResumable,
+  isAutoContinueEligible,
+  currentSubscriptionTier,
+  enqueueAutoContinuation,
+  canAutoResumeLimitType,
+};

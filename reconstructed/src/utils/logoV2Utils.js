@@ -27,88 +27,124 @@ function getLayoutMode(columns) {
   if (columns >= 70) return "horizontal";
   return "compact";
 }
+//@ chunk-8jypjjdf.js:18713-19333 layout
 /**
  * 按终端显示宽度截断路径：保留首段与末段，中间用 … 代替。
  */
-//@ chunk-8jypjjdf.js:18713-19333 layout
-function truncatePathForDisplay(o, a) {
-  if (bunStringWidth(o) <= a) return o;
-  let t = "/",
-    l = "\u2026",
-    c = 1,
-    m = 1,
-    parts = o.split(t),
-    d = parts[0] || "",
-    f = parts.at(-1) || "",
-    h = bunStringWidth(d),
-    u = bunStringWidth(f);
-  if (parts.length === 1) return truncateToWidth(o, a);
-  if (d === "" && c + m + u >= a) return `${t}${truncateToWidth(f, Math.max(1, a - m))}`;
-  if (d !== "" && c * 2 + m + u >= a) return `${l}${t}${truncateToWidth(f, Math.max(1, a - c - m))}`;
+function truncatePathForDisplay(path, maxLength) {
+  if (bunStringWidth(path) <= maxLength) return path;
+  let separator = "/";
+  let ellipsis = "\u2026";
+  let ellipsisWidth = 1;
+  let separatorWidth = 1;
+  let parts = path.split(separator);
+  let first = parts[0] || "";
+  let last = parts.at(-1) || "";
+  let firstWidth = bunStringWidth(first);
+  let lastWidth = bunStringWidth(last);
+  if (parts.length === 1) return truncateToWidth(path, maxLength);
+  if (first === "" && ellipsisWidth + separatorWidth + lastWidth >= maxLength)
+    return `${separator}${truncateToWidth(last, Math.max(1, maxLength - separatorWidth))}`;
+  if (first !== "" && ellipsisWidth * 2 + separatorWidth + lastWidth >= maxLength)
+    return `${ellipsis}${separator}${truncateToWidth(last, Math.max(1, maxLength - ellipsisWidth - separatorWidth))}`;
   if (parts.length === 2) {
-    let g = a - c - m - u;
-    return `${truncateToWidthNoEllipsis(d, g)}${l}${t}${f}`;
+    let availableForFirst = maxLength - ellipsisWidth - separatorWidth - lastWidth;
+    return `${truncateToWidthNoEllipsis(first, availableForFirst)}${ellipsis}${separator}${last}`;
   }
-  let b = a - h - u - c - 2 * m;
-  if (b <= 0) {
-    let max = Math.max(0, a - u - c - 2 * m);
-    return `${truncateToWidthNoEllipsis(d, max)}${t}${l}${t}${f}`;
+  let available = maxLength - firstWidth - lastWidth - ellipsisWidth - 2 * separatorWidth;
+  if (available <= 0) {
+    let availableForFirst = Math.max(0, maxLength - lastWidth - ellipsisWidth - 2 * separatorWidth);
+    return `${truncateToWidthNoEllipsis(first, availableForFirst)}${separator}${ellipsis}${separator}${last}`;
   }
-  let C = [];
-  for (let g = parts.length - 2; g > 0; g--) {
-    let W = parts[g];
-    if (W && bunStringWidth(W) + m <= b) (C.unshift(W), (b -= bunStringWidth(W) + m));
-    else break;
+  let middleParts = [];
+  for (let i = parts.length - 2; i > 0; i--) {
+    let part = parts[i];
+    if (part && bunStringWidth(part) + separatorWidth <= available) {
+      middleParts.unshift(part);
+      available -= bunStringWidth(part) + separatorWidth;
+    } else break;
   }
-  if (C.length === 0) return `${d}${t}${l}${t}${f}`;
-  return `${d}${t}${l}${t}${C.join(t)}${t}${f}`;
+  if (middleParts.length === 0) return `${first}${separator}${ellipsis}${separator}${last}`;
+  return `${first}${separator}${ellipsis}${separator}${middleParts.join(separator)}${separator}${last}`;
 }
+//@ chunk-8jypjjdf.js:19333-20174 fingerprint = getLogoDisplayData (0.471)
 /**
  * 欢迎框（Logo v2）显示数据：版本、cwd、账号/计费信息等。
  */
-//@ chunk-8jypjjdf.js:19333-20174 fingerprint = getLogoDisplayData (0.471)
 function getLogoDisplayData() {
   let version =
-      env.DEMO_VERSION ??
-      `${{ ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues", PACKAGE_URL: "@anthropic-ai/claude-code", README_URL: "https://code.claude.com/docs/en/overview", VERSION: "2.1.316", FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues", BUILD_TIME: "2026-10-30T23:28:13Z", GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1", HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js", DD_SOURCEMAP_GROUP: "default" }.VERSION}${getBuildRefSuffix()}`,
-    serverUrl = getDirectConnectServerUrl(),
-    t = env.DEMO_VERSION
-      ? "/code/claude"
-      : getIsRemoteMode() &&
-          (getFeatureValue_SESSION_PINNED("tengu_violin_wood", !1) ||
-            getFeatureValue_SESSION_PINNED(TENGU_VIOLIN_MAPLE, !1))
-        ? tildify(getOriginalCwd())
-        : getDisplayPath(getCwd()),
-    l = env.CLAUDE_CODE_HIDE_CWD ? "" : serverUrl ? `${t} in ${serverUrl.replace(/^https?:\/\//, "")}` : t,
-    c = getAPIProvider(),
-    m =
-      c !== "firstParty"
-        ? THIRD_PARTY_PROVIDER_LABELS[c]
-        : isClaudeAISubscriber()
-          ? getSubscriptionName()
-          : "API Usage Billing",
-    agentName = getInitialSettings_2().agent;
-  return { version: version, cwd: l, billingType: m, agentName: agentName };
+    env.DEMO_VERSION ??
+    `${
+      {
+        ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
+        PACKAGE_URL: "@anthropic-ai/claude-code",
+        README_URL: "https://code.claude.com/docs/en/overview",
+        VERSION: "2.1.316",
+        FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
+        BUILD_TIME: "2026-10-30T23:28:13Z",
+        GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+        HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
+        DD_SOURCEMAP_GROUP: "default",
+      }.VERSION
+    }${getBuildRefSuffix()}`;
+  let serverUrl = getDirectConnectServerUrl();
+  let displayPath = env.DEMO_VERSION
+    ? "/code/claude"
+    : getIsRemoteMode() &&
+        (getFeatureValue_SESSION_PINNED("tengu_violin_wood", false) ||
+          getFeatureValue_SESSION_PINNED(TENGU_VIOLIN_MAPLE, false))
+      ? tildify(getOriginalCwd())
+      : getDisplayPath(getCwd());
+  let cwd = env.CLAUDE_CODE_HIDE_CWD
+    ? ""
+    : serverUrl
+      ? `${displayPath} in ${serverUrl.replace(/^https?:\/\//, "")}`
+      : displayPath;
+  let apiProvider = getAPIProvider();
+  let billingType =
+    apiProvider !== "firstParty"
+      ? THIRD_PARTY_PROVIDER_LABELS[apiProvider]
+      : isClaudeAISubscriber()
+        ? getSubscriptionName()
+        : "API Usage Billing";
+  let agentName = getInitialSettings_2().agent;
+  return {
+    version,
+    cwd,
+    billingType,
+    agentName,
+  };
 }
 //@ chunk-8jypjjdf.js:20174-20372 fingerprint = formatModelAndBilling (0.846)
-function formatModelAndBilling(o, a, t, l) {
-  if (bunStringWidth(l) + 3 + bunStringWidth(a) > t)
-    return { shouldSplit: !0, truncatedModel: truncate(o, t), truncatedBilling: truncate(a, t) };
+function formatModelAndBilling(modelName, billingType, availableWidth, l) {
+  if (bunStringWidth(l) + 3 + bunStringWidth(billingType) > availableWidth)
+    return {
+      shouldSplit: true,
+      truncatedModel: truncate(modelName, availableWidth),
+      truncatedBilling: truncate(billingType, availableWidth),
+    };
   return {
-    shouldSplit: !1,
-    truncatedModel: truncate(o, Math.max(t - bunStringWidth(a) - 3, 10)),
-    truncatedBilling: a,
+    shouldSplit: false,
+    truncatedModel: truncate(modelName, Math.max(availableWidth - bunStringWidth(billingType) - 3, 10)),
+    truncatedBilling: billingType,
   };
 }
 //@ chunk-t3sg9e26.js:1126-1313 fingerprint = truncatePath (0.711)
 function truncatePath(e, n, t) {
   let middleParts = [];
-  for (let [s, o] of Object.entries(e)) {
-    if (o === void 0) continue;
-    if (s === n) middleParts.unshift({ name: s, value: o });
-    else if (t && s.toUpperCase() === n) middleParts.push({ name: s, value: o });
+  for (let [key, value] of Object.entries(e)) {
+    if (value === undefined) continue;
+    if (key === n)
+      middleParts.unshift({
+        name: key,
+        value,
+      });
+    else if (t && key.toUpperCase() === n)
+      middleParts.push({
+        name: key,
+        value,
+      });
   }
   return middleParts;
 }
-
 export { getLogoDisplayData, truncatePathForDisplay, formatModelAndBilling, getLayoutMode, truncatePath };

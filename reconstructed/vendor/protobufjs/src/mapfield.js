@@ -11,23 +11,25 @@ import { Cr } from "./types.js";
 import { de } from "./util.js";
 
 //@ chunk-pwh5dx3n.js:85940-86966 cjs-fingerprint
-var Ts = x(function (sA, hd) {
-  hd.exports = Lt;
-  var Da = Yt();
-  ((Lt.prototype = Object.create(Da.prototype)).constructor = Lt).className = "MapField";
-  var lE = Cr(),
-    Ai = de();
-  function Lt(e, t, r, i, s, n) {
-    if ((Da.call(this, e, t, i, void 0, void 0, s, n), !Ai.isString(r)))
-      throw TypeError("keyType must be a string");
-    ((this.keyType = r), (this.resolvedKeyType = null), (this.map = !0));
+var Ts = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = MapField;
+  var Field = Yt();
+  ((MapField.prototype = Object.create(Field.prototype)).constructor = MapField).className = "MapField";
+  var types = Cr();
+  var util = de();
+  function MapField(name, id, keyType, type, options, comment) {
+    Field.call(this, name, id, type, undefined, undefined, options, comment);
+    if (!util.isString(keyType)) throw TypeError("keyType must be a string");
+    this.keyType = keyType;
+    this.resolvedKeyType = null;
+    this.map = true;
   }
-  Lt.fromJSON = function (t, r) {
-    return new Lt(t, r.id, r.keyType, r.type, r.options, r.comment);
+  MapField.fromJSON = function (name, json) {
+    return new MapField(name, json.id, json.keyType, json.type, json.options, json.comment);
   };
-  Lt.prototype.toJSON = function (t) {
-    var r = t ? Boolean(t.keepComments) : !1;
-    return Ai.toObject([
+  MapField.prototype.toJSON = function (toJSONOptions) {
+    var keepComments = toJSONOptions ? Boolean(toJSONOptions.keepComments) : false;
+    return util.toObject([
       "keyType",
       this.keyType,
       "type",
@@ -39,21 +41,23 @@ var Ts = x(function (sA, hd) {
       "options",
       this.options,
       "comment",
-      r ? this.comment : void 0,
+      keepComments ? this.comment : undefined,
     ]);
   };
-  Lt.prototype.resolve = function () {
+  MapField.prototype.resolve = function () {
     if (this.resolved) return this;
-    if (lE.mapKey[this.keyType] === void 0) throw Error("invalid key type: " + this.keyType);
-    return Da.prototype.resolve.call(this);
+    if (types.mapKey[this.keyType] === undefined) throw Error("invalid key type: " + this.keyType);
+    return Field.prototype.resolve.call(this);
   };
-  Lt.d = function (t, r, i) {
-    if (typeof i === "function") i = Ai.decorateType(i).name;
-    else if (i && typeof i === "object") i = Ai.decorateEnum(i).name;
-    return function (n, a) {
-      Ai.decorateType(n.constructor).add(new Lt(a, t, r, i));
+  MapField.d = function (fieldId, fieldKeyType, fieldValueType) {
+    if (typeof fieldValueType === "function") fieldValueType = util.decorateType(fieldValueType).name;
+    else if (fieldValueType && typeof fieldValueType === "object")
+      fieldValueType = util.decorateEnum(fieldValueType).name;
+    return function (prototype, fieldName) {
+      util
+        .decorateType(prototype.constructor)
+        .add(new MapField(fieldName, fieldId, fieldKeyType, fieldValueType));
     };
   };
 });
-
 export { Ts };

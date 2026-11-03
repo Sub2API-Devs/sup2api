@@ -8,12 +8,11 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-hq88884p.js:4952-5166 cjs-fingerprint
-var ahs = x(function (Xr) {
-  var ot = (e) => encodeURIComponent(e).replace(/[!'()*]/g, qr),
-    qr = (e) => `%${e.charCodeAt(0).toString(16).toUpperCase()}`,
-    Kr = (e) => e.split("/").map(ot).join("/");
-  Xr.escapeUri = ot;
-  Xr.escapeUriPath = Kr;
+var require_util_uri_escape = x(function (cjsExports) {
+  var escapeUri = (e) => encodeURIComponent(e).replace(/[!'()*]/g, hexEncode);
+  var hexEncode = (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`;
+  var escapeUriPath = (uri) => uri.split("/").map(escapeUri).join("/");
+  cjsExports.escapeUri = escapeUri;
+  cjsExports.escapeUriPath = escapeUriPath;
 });
-
-export { ahs };
+export { require_util_uri_escape };

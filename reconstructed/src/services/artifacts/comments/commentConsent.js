@@ -35,13 +35,16 @@ import { logFeatureSad } from "../../analytics/featureTelemetry.js";
 import { isAbortError } from "../../../utils/errors.js";
 
 //@ chunk-grzs9chm.js:634-686 placement
-var COMMENT_TARGET_KEY = "__artifactCommentTarget",
-  g = 120,
-  C = 4000,
-  T = 32;
+/**
+ * 评论目标的键与文本截断上限（目标 120 字符、正文 4000、@提及 32）。
+ */
+var COMMENT_TARGET_KEY = "__artifactCommentTarget";
+var COMMENT_TARGET_MAX_CHARS = 120;
+var COMMENT_TEXT_MAX_CHARS = 4000;
+var MENTION_MAX_CHARS = 32;
 //@ chunk-grzs9chm.js:686-720 placement
-function _(e, t) {
-  return `${e}/${t}`;
+function _(slug, t) {
+  return `${slug}/${t}`;
 }
 //@ chunk-grzs9chm.js:720-866 placement
 function flattenCommentText(e) {
@@ -55,18 +58,20 @@ function flattenCommentText(e) {
     .trim();
 }
 //@ chunk-grzs9chm.js:866-950 placement
-function A(e, t) {
+function truncateCommentText(e, t) {
   let o = flattenCommentText(e);
   return Array.from(o).length > t ? `${extractPageText(truncateCodePoints(o, t))}\u2026` : o;
 }
 //@ chunk-grzs9chm.js:950-1524 placement
-function openingCommentExcerpt(e, t, o) {
-  let found = e.find((s) => s.id === t),
-    n = found?.comments[0];
-  if (found === void 0 || n === void 0 || found.commentsDegraded) return;
+function openingCommentExcerpt(threads, t, o) {
+  let found = threads.find((s) => s.id === t);
+  let n = found?.comments[0];
+  if (found === undefined || n === undefined || found.commentsDegraded) return;
   let a = spacedFromClosingQuote(
     characterReferencesAsBrackets(
-      sweepProvenanceMarker(A(n.text.replace(DECISION_SURFACE_BRACKETS_RE, " "), g)),
+      sweepProvenanceMarker(
+        truncateCommentText(n.text.replace(DECISION_SURFACE_BRACKETS_RE, " "), COMMENT_TARGET_MAX_CHARS),
+      ),
     )
       .replace(ANGLE_BRACKET_RUN_RE, " ")
       .replace(SCHEME_SEPARATOR_RE, DEFANGED_SCHEME_SEPARATOR)
@@ -74,73 +79,87 @@ function openingCommentExcerpt(e, t, o) {
       .trim(),
   );
   if (a === "") return;
-  let i = isOwnPrincipal(n.account, o),
-    c = getCommentAuthorKind(n),
-    d =
-      n.postedByArtifact || c === "unknown"
-        ? "unknown"
-        : n.role === "assistant"
-          ? i
-            ? "claude"
-            : "unknown"
-          : c === "agent"
-            ? "unknown"
-            : i
-              ? "user"
-              : "viewer";
+  let i = isOwnPrincipal(n.account, o);
+  let commentAuthorKind = getCommentAuthorKind(n);
+  let d =
+    n.postedByArtifact || commentAuthorKind === "unknown"
+      ? "unknown"
+      : n.role === "assistant"
+        ? i
+          ? "claude"
+          : "unknown"
+        : commentAuthorKind === "agent"
+          ? "unknown"
+          : i
+            ? "user"
+            : "viewer";
   return {
     display: {
       thread_id: t,
       by: d,
       excerpt: a,
       replies: found.comments.length - 1,
-      resolved: found.resolved && found.resolvedDegraded !== !0,
+      resolved: found.resolved && found.resolvedDegraded !== true,
     },
-    ...(d === "viewer" && n.access !== void 0 && { access: n.access }),
+    ...(d === "viewer" &&
+      n.access !== undefined && {
+        access: n.access,
+      }),
   };
 }
 //@ chunk-grzs9chm.js:1524-1637 placement
 function canAskCommentConsent(e) {
-  let t = getToolPermissionContext(e);
-  return e.toolUseId !== void 0 && t.mode !== "dontAsk" && t.shouldAvoidPermissionPrompts !== !0;
+  let toolPermissionContext = getToolPermissionContext(e);
+  return (
+    e.toolUseId !== undefined &&
+    toolPermissionContext.mode !== "dontAsk" &&
+    toolPermissionContext.shouldAvoidPermissionPrompts !== true
+  );
 }
+//@ chunk-grzs9chm.js:1637-2550 placement
 /**
  * 读取 artifact 评论线程开头评论，用于构造"Claude 想读取此评论线程"的同意提示。
  */
-//@ chunk-grzs9chm.js:1637-2550 placement
 async function readCommentConsentTarget(e, t, o) {
   if (!ARTIFACT_SLUG_RE.test(t)) return;
-  let r = _(e.slug, t),
-    commentTargets = getLiveState().commentTargets,
-    accountEpoch = getLiveState().accountEpoch,
-    i = commentTargets.get(r);
-  if (i !== void 0 && o.toolUseId !== void 0 && i.toolUseId === o.toolUseId) return i.target;
-  let { signal: signal, cleanup: cleanup } = createCombinedAbortSignal(o.abortController.signal, {
-    timeoutMs: C,
-    refTimer: !0,
+  let r = _(e.slug, t);
+  let commentTargets = getLiveState().commentTargets;
+  let accountEpoch = getLiveState().accountEpoch;
+  let i = commentTargets.get(r);
+  if (i !== undefined && o.toolUseId !== undefined && i.toolUseId === o.toolUseId) return i.target;
+  let { signal, cleanup } = createCombinedAbortSignal(o.abortController.signal, {
+    timeoutMs: COMMENT_TEXT_MAX_CHARS,
+    refTimer: true,
   });
   try {
-    let [s, p] = await Promise.all([
-      readArtifactComments(e, signal, o.credentials, "artifact_comment_consent_read", { skipBootProbe: !0 }),
+    let [artifactComments, gatewayAccountInfo] = await Promise.all([
+      readArtifactComments(e, signal, o.credentials, "artifact_comment_consent_read", {
+        skipBootProbe: true,
+      }),
       getGatewayAccountInfoAsync(o.credentials),
     ]);
-    if (s.err !== null) {
+    if (artifactComments.err !== null) {
       commentTargets.delete(r);
       return;
     }
-    let m = openingCommentExcerpt(s.threads, t, {
-      account: p?.accountUuid?.toLowerCase(),
+    let m = openingCommentExcerpt(artifactComments.threads, t, {
+      account: gatewayAccountInfo?.accountUuid?.toLowerCase(),
       tokens: ownPrincipalTokens(),
     });
-    if (m === void 0) {
-      (logFeatureSad("artifact_comment_consent_read", "no_opening_comment"), commentTargets.delete(r));
+    if (m === undefined) {
+      logFeatureSad("artifact_comment_consent_read", "no_opening_comment");
+      commentTargets.delete(r);
       return;
     }
     if (getLiveState().accountEpoch !== accountEpoch) return;
-    (commentTargets.delete(r), commentTargets.set(r, { target: m, toolUseId: o.toolUseId }));
-    while (commentTargets.size > T) {
+    commentTargets.delete(r);
+    commentTargets.set(r, {
+      target: m,
+      toolUseId: o.toolUseId,
+    });
+    while (commentTargets.size > MENTION_MAX_CHARS) {
       let u = commentTargets.keys().next().value;
-      if (u === void 0) break;
+      if (u === undefined) break;
       commentTargets.delete(u);
     }
     return m;
@@ -153,20 +172,20 @@ async function readCommentConsentTarget(e, t, o) {
   }
 }
 //@ chunk-grzs9chm.js:2550-2709 placement
-function describeRolePossessive(e) {
-  switch (e) {
+function describeRolePossessive(access) {
+  switch (access) {
     case "owner":
       return "the owner's";
     case "editor":
       return "an editor's";
     case "commenter":
       return "a commenter's";
-    case void 0:
+    case undefined:
       return "a viewer's";
   }
 }
 //@ chunk-grzs9chm.js:2709-2959 placement
-function describeCommentForConsent({ display: display, access: access }) {
+function describeCommentForConsent({ display, access }) {
   switch (display.by) {
     case "user":
       return `your comment "${display.excerpt}"`;
@@ -179,7 +198,7 @@ function describeCommentForConsent({ display: display, access: access }) {
   }
 }
 //@ chunk-grzs9chm.js:2959-3175 placement
-function describeThreadForConsent({ display: display, access: access }) {
+function describeThreadForConsent({ display, access }) {
   switch (display.by) {
     case "user":
       return "your comment thread";
@@ -193,11 +212,15 @@ function describeThreadForConsent({ display: display, access: access }) {
 }
 //@ chunk-grzs9chm.js:3175-3282 placement
 function withCommentTarget(e, t) {
-  if (t === void 0 && !(COMMENT_TARGET_KEY in e)) return;
+  if (t === undefined && !(COMMENT_TARGET_KEY in e)) return;
   let { [COMMENT_TARGET_KEY]: o, ...r } = e;
-  return t === void 0 ? r : { ...r, [COMMENT_TARGET_KEY]: t };
+  return t === undefined
+    ? r
+    : {
+        ...r,
+        [COMMENT_TARGET_KEY]: t,
+      };
 }
-
 export {
   canAskCommentConsent,
   readCommentConsentTarget,

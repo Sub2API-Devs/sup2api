@@ -33,36 +33,42 @@ import {
 import { env } from "../../utils/env.js";
 import { getHostState } from "../../utils/hostEnvironment.js";
 import { registerBuiltinPlugin, isBuiltinPluginAvailable } from "../builtinPlugins.js";
-import { Jme } from "../../skills/bundledSkillsGate.js";
+import { isBundledSkillGatedOff } from "../../skills/bundledSkillsGate.js";
 
 //@ chunk-ad0qz7kc.js:3822-3831 placement
-var f = {};
+/**
+ * 空对象默认导出
+ */
+var EMPTY_MODULE = {};
 //@ chunk-ad0qz7kc.js:3831-4029 placement
-Ar(f, {
-  MCP_SERVERS: () => s,
+Ar(EMPTY_MODULE, {
+  MCP_SERVERS: () => CLAUDE_PLATFORM_MCP_SERVERS,
   PLUGIN_DESCRIPTION: () => CLAUDE_PLATFORM_DESCRIPTION,
   PLUGIN_NAME: () => CC_PLUGIN_CLAUDE_PLATFORM,
-  PLUGIN_VERSION: () => a,
-  availabilityFlag: () => o,
-  default: () => f,
+  PLUGIN_VERSION: () => CLAUDE_PLATFORM_PLUGIN_VERSION,
+  availabilityFlag: () => CLAUDE_PLATFORM_FLAG,
+  default: () => EMPTY_MODULE,
   isAvailable: () => isClaudePlatformAvailable,
-  mayUseServer: () => n,
+  mayUseServer: () => mayUseClaudePlatformServer,
   registerPlugin: () => registerClaudePlatformPlugin,
   skills: () => loadClaudeApiSkills,
 });
 //@ chunk-ad0qz7kc.js:4029-4071 placement
-function o() {
+/**
+ * 返回 Claude 平台插件的特性开关名 tengu_peppy_crescent。
+ */
+function CLAUDE_PLATFORM_FLAG() {
   return "tengu_peppy_crescent";
 }
+//@ chunk-ad0qz7kc.js:4071-4311 placement
 /**
  * Claude 平台插件可用条件：交互式、非后台、非 --agent-id、非 bare、tool search 为 tst、第一方 API、合规无污点且开关开启。
  */
-//@ chunk-ad0qz7kc.js:4071-4311 placement
 function isClaudePlatformAvailable() {
   return (
     getIsInteractive() &&
     !isBgSession() &&
-    eagerParseCliFlag("--agent-id") === void 0 &&
+    eagerParseCliFlag("--agent-id") === undefined &&
     !isBareMode() &&
     !isCustomizationDisabled("mcpAutoDiscovered") &&
     getToolSearchMode() === "tst" &&
@@ -75,31 +81,47 @@ function isClaudePlatformAvailable() {
     !isPolicyVerdictAbsent() &&
     !isSessionVerdictDisowned() &&
     getComplianceTaints().length === 0 &&
-    getFeatureValue_SESSION_PINNED(o(), !1) === !0
+    getFeatureValue_SESSION_PINNED(CLAUDE_PLATFORM_FLAG(), false) === true
   );
 }
 //@ chunk-ad0qz7kc.js:4311-4383 placement
-function n() {
-  let { value: e, source: source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE(o(), !1);
-  return isClaudePlatformAvailable() && e === !0 && isServedFeatureSource(source);
+/**
+ * 平台可用、开关为 true 且来源是服务端时才允许使用平台 MCP 服务器。
+ */
+function mayUseClaudePlatformServer() {
+  let { value: e, source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE(CLAUDE_PLATFORM_FLAG(), false);
+  return isClaudePlatformAvailable() && e === true && isServedFeatureSource(source);
 }
 //@ chunk-ad0qz7kc.js:4383-4453 placement
-var s = { docs: { type: "http", url: "https://platform.claude.com/docs/mcp" } };
+/**
+ * 平台 docs MCP 配置
+ */
+var CLAUDE_PLATFORM_MCP_SERVERS = {
+  docs: {
+    type: "http",
+    url: "https://platform.claude.com/docs/mcp",
+  },
+};
 //@ chunk-ad0qz7kc.js:4453-4617 placement
 var CLAUDE_PLATFORM_DESCRIPTION =
   "Connects Claude to the Claude Platform developer docs (platform.claude.com) so it can search and read them while building with the Claude API (/claude-api)";
 //@ chunk-ad0qz7kc.js:4617-4651 placement
 var CC_PLUGIN_CLAUDE_PLATFORM = "cc-plugin-claude-platform";
 //@ chunk-ad0qz7kc.js:4651-4665 placement
-var a = "0.1.0";
+/**
+ * 内置 claude-platform 插件的版本号 0.1.0，随插件清单一起声明。
+ */
+var CLAUDE_PLATFORM_PLUGIN_VERSION = "0.1.0";
+//@ chunk-ad0qz7kc.js:4665-4885 placement
 /**
  * 加载 claude-api 技能定义（CLAUDE_CODE_DISABLE_CLAUDE_API_SKILL 时禁用，内置同名技能时让位）。
  */
-//@ chunk-ad0qz7kc.js:4665-4885 placement
 function loadClaudeApiSkills() {
-  let { claudeApiSkillDefinition: claudeApiSkillDefinition } = require("./chunk-7dsm65bp.js"),
-    r = env.CLAUDE_CODE_DISABLE_CLAUDE_API_SKILL === !0,
-    d = claudeApiSkillDefinition({ disabled: r });
+  let { claudeApiSkillDefinition } = require("./chunk-7dsm65bp.js");
+  let r = env.CLAUDE_CODE_DISABLE_CLAUDE_API_SKILL === true;
+  let d = claudeApiSkillDefinition({
+    disabled: r,
+  });
   return [
     {
       ...d,
@@ -108,23 +130,23 @@ function loadClaudeApiSkills() {
     },
   ];
 }
+//@ chunk-ad0qz7kc.js:4885-5053 placement
 /**
  * 注册内置 Claude 平台插件（技能与 MCP 服务器）。
  */
-//@ chunk-ad0qz7kc.js:4885-5053 placement
 function registerClaudePlatformPlugin() {
   let e;
   registerBuiltinPlugin({
     name: CC_PLUGIN_CLAUDE_PLATFORM,
     description: CLAUDE_PLATFORM_DESCRIPTION,
-    version: a,
+    version: CLAUDE_PLATFORM_PLUGIN_VERSION,
     isAvailable: isClaudePlatformAvailable,
     get skills() {
-      return isBuiltinPluginAvailable(CC_PLUGIN_CLAUDE_PLATFORM) && !Jme("claude-api")
+      return isBuiltinPluginAvailable(CC_PLUGIN_CLAUDE_PLATFORM) && !isBundledSkillGatedOff("claude-api")
         ? (e ??= loadClaudeApiSkills())
-        : void 0;
+        : undefined;
     },
-    mcpServers: s,
-    mayConnectMcpServer: n,
+    mcpServers: CLAUDE_PLATFORM_MCP_SERVERS,
+    mayConnectMcpServer: mayUseClaudePlatformServer,
   });
 }

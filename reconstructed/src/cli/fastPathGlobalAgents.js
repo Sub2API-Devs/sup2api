@@ -17,8 +17,9 @@ import {
 import { exitWithError } from "../utils/process.js";
 
 //@ chunk-hr00hxnh.js:1422-1497 placement
-function i() {
-  let r = getProxyUrlWithSource();
-  if (r && !parseProxyUrl(r.value)) exitWithError(describeInvalidProxyUrl(r.source, r.value));
+function configureGlobalAgentsWithProxyCheck() {
+  let proxyUrlWithSource = getProxyUrlWithSource();
+  if (proxyUrlWithSource && !parseProxyUrl(proxyUrlWithSource.value))
+    exitWithError(describeInvalidProxyUrl(proxyUrlWithSource.source, proxyUrlWithSource.value));
   configureGlobalAgents();
 }

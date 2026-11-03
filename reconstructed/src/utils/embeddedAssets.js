@@ -13,39 +13,57 @@ import { readFile } from "fs/promises";
 import { readFileSync } from "fs";
 
 //@ chunk-sgzeept5.js:308-330 placement
-var g = [40, 181, 47, 253];
+/**
+ * zstd 压缩流的魔数字节。
+ */
+var ZSTD_MAGIC_BYTES = [40, 181, 47, 253];
 //@ chunk-sgzeept5.js:330-389 placement
-function s(r) {
-  return r.length >= 4 && g.every((t, e) => r[e] === t);
+/**
+ * 判断数据是否以 zstd 魔数开头。
+ */
+function isZstdCompressed(file) {
+  return file.length >= 4 && ZSTD_MAGIC_BYTES.every((t, e) => file[e] === t);
 }
 //@ chunk-sgzeept5.js:389-426 placement
-function o(r, t) {
+/**
+ * 内嵌资源路径解析（相对路径拼上基准目录）。
+ */
+function resolveResourcePath(r, t) {
   return isAbsolute(r) ? r : join(t, r);
 }
+//@ chunk-sgzeept5.js:426-532 placement
 /**
  * 读取内嵌资源（zstd 压缩时解压）为文本。
  */
-//@ chunk-sgzeept5.js:426-532 placement
-async function readEmbeddedText(r, t) {
-  let e = await readFile(o(r, t));
-  return (s(e) ? await Bun.zstdDecompress(e) : e).toString("utf8");
+async function readEmbeddedText(r, dirname) {
+  let file = await readFile(resolveResourcePath(r, dirname));
+  return (isZstdCompressed(file) ? await Bun.zstdDecompress(file) : file).toString("utf8");
 }
 //@ chunk-sgzeept5.js:532-582 placement
-function Et(r, t) {
-  return readEmbeddedSync(r, t).toString("utf8");
+/**
+ * 同步读取内嵌资源并转成文本。
+ */
+function readEmbeddedTextSync(r, dirname) {
+  return readEmbeddedSync(r, dirname).toString("utf8");
 }
+//@ chunk-sgzeept5.js:582-764 placement
 /**
  * 同步读取内嵌资源（必要时解压），缺失时抛错。
  */
-//@ chunk-sgzeept5.js:582-764 placement
 function readEmbeddedSync(r, t) {
-  let e = o(r, t);
+  let resourcePath = resolveResourcePath(r, t);
   try {
-    let n = readFileSync(e);
-    return s(n) ? Bun.zstdDecompressSync(n) : n;
+    let file = readFileSync(resourcePath);
+    return isZstdCompressed(file) ? Bun.zstdDecompressSync(file) : file;
   } catch (error) {
-    throw Object.assign(Error("embedded asset is missing or corrupt", { cause: error }), { path: e });
+    throw Object.assign(
+      Error("embedded asset is missing or corrupt", {
+        cause: error,
+      }),
+      {
+        path: resourcePath,
+      },
+    );
   }
 }
-
-export { Et, readEmbeddedText, readEmbeddedSync };
+export { readEmbeddedTextSync, readEmbeddedText, readEmbeddedSync };

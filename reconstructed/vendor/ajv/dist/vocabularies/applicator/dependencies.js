@@ -6,82 +6,98 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../runtime/bun-runtime.js";
-import { uh } from "../../compile/codegen/index.js";
-import { ew } from "../../compile/util.js";
-import { Q } from "../code.js";
+import { require_codegen_2 } from "../../compile/codegen/index.js";
+import { require_util_2 } from "../../compile/util.js";
+import { require_code_2 } from "../code.js";
 
 //@ chunk-s82q9s4x.js:96663-98190 cjs-fingerprint
-var bXr = x(function (vi) {
-  Object.defineProperty(vi, "__esModule", { value: !0 });
-  vi.validateSchemaDeps = vi.validatePropertyDeps = vi.error = void 0;
-  var et = uh(),
-    _i = ew(),
-    de = Q();
-  vi.error = {
-    message: ({ params: { property: e, depsCount: t, deps: r } }) =>
-      et.str`must have ${t === 1 ? "property" : "properties"} ${r} when property ${e} is present`,
-    params: ({ params: { property: e, depsCount: t, deps: r, missingProperty: s } }) => et._`{property: ${e},
-    missingProperty: ${s},
-    depsCount: ${t},
-    deps: ${r}}`,
+var require_dependencies = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.validateSchemaDeps = cjsExports.validatePropertyDeps = cjsExports.error = undefined;
+  var codegen_1 = require_codegen_2();
+  var util_1 = require_util_2();
+  var code_1 = require_code_2();
+  cjsExports.error = {
+    message: ({ params: { property, depsCount, deps } }) =>
+      codegen_1.str`must have ${depsCount === 1 ? "property" : "properties"} ${deps} when property ${property} is present`,
+    params: ({
+      params: { property, depsCount, deps, missingProperty },
+    }) => codegen_1._`{property: ${property},
+    missingProperty: ${missingProperty},
+    depsCount: ${depsCount},
+    deps: ${deps}}`,
   };
-  var fp = {
+  var def = {
     keyword: "dependencies",
     type: "object",
     schemaType: "object",
-    error: vi.error,
-    code(e) {
-      let [t, r] = pp(e);
-      (gi(e, t), $i(e, r));
+    error: cjsExports.error,
+    code(cxt) {
+      let [propDeps, schDeps] = splitDependencies(cxt);
+      validatePropertyDeps(cxt, propDeps);
+      validateSchemaDeps(cxt, schDeps);
     },
   };
-  function pp({ schema: schema }) {
-    let t = {},
-      r = {};
+  function splitDependencies({ schema }) {
+    let propertyDeps = {};
+    let schemaDeps = {};
     for (let key in schema) {
       if (key === "__proto__") continue;
-      let n = Array.isArray(schema[key]) ? t : r;
-      n[key] = schema[key];
+      let deps = Array.isArray(schema[key]) ? propertyDeps : schemaDeps;
+      deps[key] = schema[key];
     }
-    return [t, r];
+    return [propertyDeps, schemaDeps];
   }
-  function gi(e, t = e.schema) {
-    let { gen: gen, data: s, it: it } = e;
-    if (Object.keys(t).length === 0) return;
-    let o = gen.let("missing");
-    for (let key in t) {
-      let a = t[key];
-      if (a.length === 0) continue;
-      let propertyInData = de.propertyInData(gen, s, key, it.opts.ownProperties);
-      if ((e.setParams({ property: key, depsCount: a.length, deps: a.join(", ") }), it.allErrors))
-        gen.if(propertyInData, () => {
-          for (let u of a) de.checkReportMissingProp(e, u);
+  function validatePropertyDeps(cxt, propertyDeps = cxt.schema) {
+    let { gen, data, it } = cxt;
+    if (Object.keys(propertyDeps).length === 0) return;
+    let missing = gen.let("missing");
+    for (let prop in propertyDeps) {
+      let deps = propertyDeps[prop];
+      if (deps.length === 0) continue;
+      let hasProperty = code_1.propertyInData(gen, data, prop, it.opts.ownProperties);
+      cxt.setParams({
+        property: prop,
+        depsCount: deps.length,
+        deps: deps.join(", "),
+      });
+      if (it.allErrors)
+        gen.if(hasProperty, () => {
+          for (let depProp of deps) code_1.checkReportMissingProp(cxt, depProp);
         });
-      else
-        (gen.if(et._`${propertyInData} && (${de.checkMissingProp(e, a, o)})`),
-          de.reportMissingProp(e, o),
-          gen.else());
+      else {
+        gen.if(codegen_1._`${hasProperty} && (${code_1.checkMissingProp(cxt, deps, missing)})`);
+        code_1.reportMissingProp(cxt, missing);
+        gen.else();
+      }
     }
   }
-  vi.validatePropertyDeps = gi;
-  function $i(e, t = e.schema) {
-    let { gen: gen, data: s, keyword: keyword, it: it } = e,
-      i = gen.name("valid");
-    for (let key in t) {
-      if (_i.alwaysValidSchema(it, t[key])) continue;
-      (gen.if(
-        de.propertyInData(gen, s, key, it.opts.ownProperties),
+  cjsExports.validatePropertyDeps = validatePropertyDeps;
+  function validateSchemaDeps(cxt, schemaDeps = cxt.schema) {
+    let { gen, data, keyword, it } = cxt;
+    let valid = gen.name("valid");
+    for (let prop in schemaDeps) {
+      if (util_1.alwaysValidSchema(it, schemaDeps[prop])) continue;
+      gen.if(
+        code_1.propertyInData(gen, data, prop, it.opts.ownProperties),
         () => {
-          let subschema = e.subschema({ keyword: keyword, schemaProp: key }, i);
-          e.mergeValidEvaluated(subschema, i);
+          let schCxt = cxt.subschema(
+            {
+              keyword,
+              schemaProp: prop,
+            },
+            valid,
+          );
+          cxt.mergeValidEvaluated(schCxt, valid);
         },
-        () => gen.var(i, !0),
-      ),
-        e.ok(i));
+        () => gen.var(valid, true),
+      );
+      cxt.ok(valid);
     }
   }
-  vi.validateSchemaDeps = $i;
-  vi.default = fp;
+  cjsExports.validateSchemaDeps = validateSchemaDeps;
+  cjsExports.default = def;
 });
-
-export { bXr };
+export { require_dependencies };

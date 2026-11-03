@@ -5,102 +5,126 @@
  * pieces: chunk-hwmsct5x.js (1)
  * attribution: esm-fingerprint 1
  */
-import { Y } from "../../../core/resource.mjs";
-import { bo } from "./credentials.mjs";
-import { T } from "../../../internal/headers.mjs";
+import { APIResource } from "../../../core/resource.mjs";
+import { Credentials } from "./credentials.mjs";
+import { buildHeaders } from "../../../internal/headers.mjs";
 import { I } from "../../../internal/utils/path.mjs";
-import { ee } from "../../../core/pagination.mjs";
+import { TokenPage } from "../../../core/pagination.mjs";
 
 //@ chunk-hwmsct5x.js:142965-144643 esm-fingerprint
-var ri = (() => {
-  class e extends Y {
+var Vaults = (() => {
+  class Vaults extends APIResource {
     constructor() {
       super(...arguments);
-      this.credentials = new bo(this._client);
+      this.credentials = new Credentials(this._client);
     }
-    create(n, r) {
-      let { betas: betas, workspace_id: workspace_id, ...y } = n;
+    create(params, options) {
+      let { betas, workspace_id, ...body } = params;
       return this._client.post("/v1/vaults?beta=true", {
-        body: y,
-        ...r,
-        headers: T([
+        body,
+        ...options,
+        headers: buildHeaders([
           {
             "anthropic-beta": [...(betas ?? []), "managed-agents-2026-04-01"].toString(),
-            ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0),
+            ...(workspace_id != null
+              ? {
+                  "anthropic-workspace-id": workspace_id,
+                }
+              : undefined),
           },
-          r?.headers,
+          options?.headers,
         ]),
       });
     }
-    retrieve(n, r = {}, s) {
-      let { betas: betas, workspace_id: workspace_id } = r ?? {};
-      return this._client.get(I`/v1/vaults/${n}?beta=true`, {
-        ...s,
-        headers: T([
+    retrieve(vaultID, params = {}, options) {
+      let { betas, workspace_id } = params ?? {};
+      return this._client.get(I`/v1/vaults/${vaultID}?beta=true`, {
+        ...options,
+        headers: buildHeaders([
           {
             "anthropic-beta": [...(betas ?? []), "managed-agents-2026-04-01"].toString(),
-            ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0),
+            ...(workspace_id != null
+              ? {
+                  "anthropic-workspace-id": workspace_id,
+                }
+              : undefined),
           },
-          s?.headers,
+          options?.headers,
         ]),
       });
     }
-    update(n, r, s) {
-      let { betas: betas, workspace_id: workspace_id, ...w } = r;
-      return this._client.post(I`/v1/vaults/${n}?beta=true`, {
-        body: w,
-        ...s,
-        headers: T([
+    update(vaultID, params, options) {
+      let { betas, workspace_id, ...body } = params;
+      return this._client.post(I`/v1/vaults/${vaultID}?beta=true`, {
+        body,
+        ...options,
+        headers: buildHeaders([
           {
             "anthropic-beta": [...(betas ?? []), "managed-agents-2026-04-01"].toString(),
-            ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0),
+            ...(workspace_id != null
+              ? {
+                  "anthropic-workspace-id": workspace_id,
+                }
+              : undefined),
           },
-          s?.headers,
+          options?.headers,
         ]),
       });
     }
-    list(n = {}, r) {
-      let { betas: betas, workspace_id: workspace_id, ...y } = n ?? {};
-      return this._client.getAPIList("/v1/vaults?beta=true", ee, {
-        query: y,
-        ...r,
-        headers: T([
+    list(params = {}, options) {
+      let { betas, workspace_id, ...query } = params ?? {};
+      return this._client.getAPIList("/v1/vaults?beta=true", TokenPage, {
+        query,
+        ...options,
+        headers: buildHeaders([
           {
             "anthropic-beta": [...(betas ?? []), "managed-agents-2026-04-01"].toString(),
-            ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0),
+            ...(workspace_id != null
+              ? {
+                  "anthropic-workspace-id": workspace_id,
+                }
+              : undefined),
           },
-          r?.headers,
+          options?.headers,
         ]),
       });
     }
-    delete(n, r = {}, s) {
-      let { betas: betas, workspace_id: workspace_id } = r ?? {};
-      return this._client.delete(I`/v1/vaults/${n}?beta=true`, {
-        ...s,
-        headers: T([
+    delete(vaultID, params = {}, options) {
+      let { betas, workspace_id } = params ?? {};
+      return this._client.delete(I`/v1/vaults/${vaultID}?beta=true`, {
+        ...options,
+        headers: buildHeaders([
           {
             "anthropic-beta": [...(betas ?? []), "managed-agents-2026-04-01"].toString(),
-            ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0),
+            ...(workspace_id != null
+              ? {
+                  "anthropic-workspace-id": workspace_id,
+                }
+              : undefined),
           },
-          s?.headers,
+          options?.headers,
         ]),
       });
     }
-    archive(n, r = {}, s) {
-      let { betas: betas, workspace_id: workspace_id } = r ?? {};
-      return this._client.post(I`/v1/vaults/${n}/archive?beta=true`, {
-        ...s,
-        headers: T([
+    archive(vaultID, params = {}, options) {
+      let { betas, workspace_id } = params ?? {};
+      return this._client.post(I`/v1/vaults/${vaultID}/archive?beta=true`, {
+        ...options,
+        headers: buildHeaders([
           {
             "anthropic-beta": [...(betas ?? []), "managed-agents-2026-04-01"].toString(),
-            ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0),
+            ...(workspace_id != null
+              ? {
+                  "anthropic-workspace-id": workspace_id,
+                }
+              : undefined),
           },
-          s?.headers,
+          options?.headers,
         ]),
       });
     }
   }
-  return ((e.Credentials = bo), e);
+  Vaults.Credentials = Credentials;
+  return Vaults;
 })();
-
-export { ri };
+export { Vaults };

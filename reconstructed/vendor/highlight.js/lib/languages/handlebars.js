@@ -8,107 +8,214 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:183653-185869 cjs-fingerprint
-var ka = x(function (RE, xa) {
-  function Ad(e) {
-    let regex = e.regex,
-      n = {
-        $pattern: /[\w.\/]+/,
-        built_in: [
-          "action",
-          "bindattr",
-          "collection",
-          "component",
-          "concat",
-          "debugger",
-          "each",
-          "each-in",
-          "get",
-          "hash",
-          "if",
-          "in",
-          "input",
-          "link-to",
-          "loc",
-          "log",
-          "lookup",
-          "mut",
-          "outlet",
-          "partial",
-          "query-params",
-          "render",
-          "template",
-          "textarea",
-          "unbound",
-          "unless",
-          "view",
-          "with",
-          "yield",
-        ],
-      },
-      a = { $pattern: /[\w.\/]+/, literal: ["true", "false", "undefined", "null"] },
-      s = /""|"[^"]+"/,
-      o = /''|'[^']+'/,
-      r = /\[\]|\[[^\]]+\]/,
-      i = /[^\s!"#%&'()*+,.\/;<=>@\[\\\]^`{|}~]+/,
-      c = /(\.|\/)/,
-      either = regex.either(s, o, r, i),
-      combined = regex.concat(
-        regex.optional(/\.|\.\/|\//),
-        either,
-        regex.anyNumberOfTimes(regex.concat(c, either)),
-      ),
-      combined_2 = regex.concat("(", r, "|", i, ")(?==)"),
-      p = { begin: combined },
-      inherit = e.inherit(p, { keywords: a }),
-      E = { begin: /\(/, end: /\)/ },
-      u = {
-        className: "attr",
-        begin: combined_2,
-        relevance: 0,
+var require_handlebars = x(function (cjsExports, cjsModule) {
+  function handlebars(hljs) {
+    let regex = hljs.regex;
+    let BUILT_INS = {
+      $pattern: /[\w.\/]+/,
+      built_in: [
+        "action",
+        "bindattr",
+        "collection",
+        "component",
+        "concat",
+        "debugger",
+        "each",
+        "each-in",
+        "get",
+        "hash",
+        "if",
+        "in",
+        "input",
+        "link-to",
+        "loc",
+        "log",
+        "lookup",
+        "mut",
+        "outlet",
+        "partial",
+        "query-params",
+        "render",
+        "template",
+        "textarea",
+        "unbound",
+        "unless",
+        "view",
+        "with",
+        "yield",
+      ],
+    };
+    let LITERALS = {
+      $pattern: /[\w.\/]+/,
+      literal: ["true", "false", "undefined", "null"],
+    };
+    let DOUBLE_QUOTED_ID_REGEX = /""|"[^"]+"/;
+    let SINGLE_QUOTED_ID_REGEX = /''|'[^']+'/;
+    let BRACKET_QUOTED_ID_REGEX = /\[\]|\[[^\]]+\]/;
+    let PLAIN_ID_REGEX = /[^\s!"#%&'()*+,.\/;<=>@\[\\\]^`{|}~]+/;
+    let PATH_DELIMITER_REGEX = /(\.|\/)/;
+    let ANY_ID = regex.either(
+      DOUBLE_QUOTED_ID_REGEX,
+      SINGLE_QUOTED_ID_REGEX,
+      BRACKET_QUOTED_ID_REGEX,
+      PLAIN_ID_REGEX,
+    );
+    let IDENTIFIER_REGEX = regex.concat(
+      regex.optional(/\.|\.\/|\//),
+      ANY_ID,
+      regex.anyNumberOfTimes(regex.concat(PATH_DELIMITER_REGEX, ANY_ID)),
+    );
+    let HASH_PARAM_REGEX = regex.concat("(", BRACKET_QUOTED_ID_REGEX, "|", PLAIN_ID_REGEX, ")(?==)");
+    let HELPER_NAME_OR_PATH_EXPRESSION = {
+      begin: IDENTIFIER_REGEX,
+    };
+    let HELPER_PARAMETER = hljs.inherit(HELPER_NAME_OR_PATH_EXPRESSION, {
+      keywords: LITERALS,
+    });
+    let SUB_EXPRESSION = {
+      begin: /\(/,
+      end: /\)/,
+    };
+    let HASH = {
+      className: "attr",
+      begin: HASH_PARAM_REGEX,
+      relevance: 0,
+      starts: {
+        begin: /=/,
+        end: /=/,
         starts: {
-          begin: /=/,
-          end: /=/,
-          starts: { contains: [e.NUMBER_MODE, e.QUOTE_STRING_MODE, e.APOS_STRING_MODE, inherit, E] },
+          contains: [
+            hljs.NUMBER_MODE,
+            hljs.QUOTE_STRING_MODE,
+            hljs.APOS_STRING_MODE,
+            HELPER_PARAMETER,
+            SUB_EXPRESSION,
+          ],
         },
       },
-      b = { begin: /as\s+\|/, keywords: { keyword: "as" }, end: /\|/, contains: [{ begin: /\w+/ }] },
-      f = {
-        contains: [e.NUMBER_MODE, e.QUOTE_STRING_MODE, e.APOS_STRING_MODE, b, u, inherit, E],
-        returnEnd: !0,
+    };
+    let BLOCK_PARAMS = {
+      begin: /as\s+\|/,
+      keywords: {
+        keyword: "as",
       },
-      inherit_2 = e.inherit(p, { className: "name", keywords: n, starts: e.inherit(f, { end: /\)/ }) });
-    E.contains = [inherit_2];
-    let inherit_3 = e.inherit(p, { keywords: n, className: "name", starts: e.inherit(f, { end: /\}\}/ }) }),
-      inherit_4 = e.inherit(p, { keywords: n, className: "name" }),
-      inherit_5 = e.inherit(p, { className: "name", keywords: n, starts: e.inherit(f, { end: /\}\}/ }) });
+      end: /\|/,
+      contains: [
+        {
+          begin: /\w+/,
+        },
+      ],
+    };
+    let HELPER_PARAMETERS = {
+      contains: [
+        hljs.NUMBER_MODE,
+        hljs.QUOTE_STRING_MODE,
+        hljs.APOS_STRING_MODE,
+        BLOCK_PARAMS,
+        HASH,
+        HELPER_PARAMETER,
+        SUB_EXPRESSION,
+      ],
+      returnEnd: true,
+    };
+    let SUB_EXPRESSION_CONTENTS = hljs.inherit(HELPER_NAME_OR_PATH_EXPRESSION, {
+      className: "name",
+      keywords: BUILT_INS,
+      starts: hljs.inherit(HELPER_PARAMETERS, {
+        end: /\)/,
+      }),
+    });
+    SUB_EXPRESSION.contains = [SUB_EXPRESSION_CONTENTS];
+    let OPENING_BLOCK_MUSTACHE_CONTENTS = hljs.inherit(HELPER_NAME_OR_PATH_EXPRESSION, {
+      keywords: BUILT_INS,
+      className: "name",
+      starts: hljs.inherit(HELPER_PARAMETERS, {
+        end: /\}\}/,
+      }),
+    });
+    let CLOSING_BLOCK_MUSTACHE_CONTENTS = hljs.inherit(HELPER_NAME_OR_PATH_EXPRESSION, {
+      keywords: BUILT_INS,
+      className: "name",
+    });
+    let BASIC_MUSTACHE_CONTENTS = hljs.inherit(HELPER_NAME_OR_PATH_EXPRESSION, {
+      className: "name",
+      keywords: BUILT_INS,
+      starts: hljs.inherit(HELPER_PARAMETERS, {
+        end: /\}\}/,
+      }),
+    });
     return {
       name: "Handlebars",
       aliases: ["hbs", "html.hbs", "html.handlebars", "htmlbars"],
-      case_insensitive: !0,
+      case_insensitive: true,
       subLanguage: "xml",
       contains: [
-        { begin: /\\\{\{/, skip: !0 },
-        { begin: /\\\\(?=\{\{)/, skip: !0 },
-        e.COMMENT(/\{\{!--/, /--\}\}/),
-        e.COMMENT(/\{\{!/, /\}\}/),
+        {
+          begin: /\\\{\{/,
+          skip: true,
+        },
+        {
+          begin: /\\\\(?=\{\{)/,
+          skip: true,
+        },
+        hljs.COMMENT(/\{\{!--/, /--\}\}/),
+        hljs.COMMENT(/\{\{!/, /\}\}/),
         {
           className: "template-tag",
           begin: /\{\{\{\{(?!\/)/,
           end: /\}\}\}\}/,
-          contains: [inherit_3],
-          starts: { end: /\{\{\{\{\//, returnEnd: !0, subLanguage: "xml" },
+          contains: [OPENING_BLOCK_MUSTACHE_CONTENTS],
+          starts: {
+            end: /\{\{\{\{\//,
+            returnEnd: true,
+            subLanguage: "xml",
+          },
         },
-        { className: "template-tag", begin: /\{\{\{\{\//, end: /\}\}\}\}/, contains: [inherit_4] },
-        { className: "template-tag", begin: /\{\{#/, end: /\}\}/, contains: [inherit_3] },
-        { className: "template-tag", begin: /\{\{(?=else\}\})/, end: /\}\}/, keywords: "else" },
-        { className: "template-tag", begin: /\{\{(?=else if)/, end: /\}\}/, keywords: "else if" },
-        { className: "template-tag", begin: /\{\{\//, end: /\}\}/, contains: [inherit_4] },
-        { className: "template-variable", begin: /\{\{\{/, end: /\}\}\}/, contains: [inherit_5] },
-        { className: "template-variable", begin: /\{\{/, end: /\}\}/, contains: [inherit_5] },
+        {
+          className: "template-tag",
+          begin: /\{\{\{\{\//,
+          end: /\}\}\}\}/,
+          contains: [CLOSING_BLOCK_MUSTACHE_CONTENTS],
+        },
+        {
+          className: "template-tag",
+          begin: /\{\{#/,
+          end: /\}\}/,
+          contains: [OPENING_BLOCK_MUSTACHE_CONTENTS],
+        },
+        {
+          className: "template-tag",
+          begin: /\{\{(?=else\}\})/,
+          end: /\}\}/,
+          keywords: "else",
+        },
+        {
+          className: "template-tag",
+          begin: /\{\{(?=else if)/,
+          end: /\}\}/,
+          keywords: "else if",
+        },
+        {
+          className: "template-tag",
+          begin: /\{\{\//,
+          end: /\}\}/,
+          contains: [CLOSING_BLOCK_MUSTACHE_CONTENTS],
+        },
+        {
+          className: "template-variable",
+          begin: /\{\{\{/,
+          end: /\}\}\}/,
+          contains: [BASIC_MUSTACHE_CONTENTS],
+        },
+        {
+          className: "template-variable",
+          begin: /\{\{/,
+          end: /\}\}/,
+          contains: [BASIC_MUSTACHE_CONTENTS],
+        },
       ],
     };
   }
-  xa.exports = Ad;
+  cjsModule.exports = handlebars;
 });
-
-export { ka };
+export { require_handlebars };

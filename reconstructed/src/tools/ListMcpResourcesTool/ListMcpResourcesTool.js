@@ -9,11 +9,11 @@
  * attribution: fingerprint 2, layout 2
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, o, A } from "../../../vendor/zod/v4/classic/schemas.js";
+import { u, string, array } from "../../../vendor/zod/v4/classic/schemas.js";
 import { isPlainObject } from "../../utils/isPlainObject.js";
 import { buildTool } from "../../services/tools/permissionCheckGuard.js";
 import { LISTMCPRESOURCESTOOL, LIST_MCP_RESOURCES_DESCRIPTION, LIST_MCP_RESOURCES_PROMPT } from "./prompt.js";
-import { Lfn } from "../../services/mcp/withheldResources.js";
+import { hasWithheldResources } from "../../services/mcp/withheldResources.js";
 import { findServersByName } from "../../services/mcp/normalization.js";
 import {
   TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
@@ -30,57 +30,61 @@ import { READMCPRESOURCETOOL } from "../ReadMcpResourceTool/prompt.js";
 import { logMCPError } from "../../utils/log.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 
+//@ chunk-9ycd12hk.js:1114-1475 fingerprint = outputSchema (0.862)
 /**
  * ListMcpResources 输入 schema（server 可选）与输出 schema（uri/name/mimeType/description/server 数组）。
  */
-//@ chunk-9ycd12hk.js:1114-1475 fingerprint = outputSchema (0.862)
 var listMcpResourcesInputSchema = DoctorLazy(() =>
-    u({ server: o().optional().describe("Optional server name to filter resources by") }),
+  u({
+    server: string().optional().describe("Optional server name to filter resources by"),
+  }),
+);
+var listMcpResourcesOutputSchema = DoctorLazy(() =>
+  array(
+    u({
+      uri: string().describe("Resource URI"),
+      name: string().describe("Resource name"),
+      mimeType: string().optional().describe("MIME type of the resource"),
+      description: string().optional().describe("Resource description"),
+      server: string().describe("Server that provides this resource"),
+    }),
   ),
-  listMcpResourcesOutputSchema = DoctorLazy(() =>
-    A(
-      u({
-        uri: o().describe("Resource URI"),
-        name: o().describe("Resource name"),
-        mimeType: o().optional().describe("MIME type of the resource"),
-        description: o().optional().describe("Resource description"),
-        server: o().describe("Server that provides this resource"),
-      }),
-    ),
-  );
+);
 //@ chunk-9ycd12hk.js:1475-1778 layout
 function sanitizeResourceListForCreation(e) {
-  let { hasMcpInboundDoor: hasMcpInboundDoor } = require("./chunk-dtcp5kc6.js");
+  let { hasMcpInboundDoor } = require("./chunk-dtcp5kc6.js");
   if (!Array.isArray(e) || !hasMcpInboundDoor()) return e;
-  return e
-    .filter(isPlainObject)
-    .map(({ uri: uri, name: n, mimeType: mimeType, description: description, server: server }) => ({
-      uri: stringOr("", uri),
-      name: stringOr("", n),
-      ...(typeof mimeType === "string" && { mimeType: mimeType }),
-      ...(typeof description === "string" && { description: description }),
-      server: stringOr("", server),
-    }));
+  return e.filter(isPlainObject).map(({ uri, name: n, mimeType, description, server }) => ({
+    uri: stringOr("", uri),
+    name: stringOr("", n),
+    ...(typeof mimeType === "string" && {
+      mimeType,
+    }),
+    ...(typeof description === "string" && {
+      description,
+    }),
+    server: stringOr("", server),
+  }));
 }
 //@ chunk-9ycd12hk.js:1778-1825 layout
 function stringOr(e, s) {
   return typeof s === "string" ? s : e;
 }
+//@ chunk-9ycd12hk.js:1825-3769 fingerprint = ListMcpResourcesTool (0.516)
 /**
  * ListMcpResources 工具（别名 ListMcpResources，shouldDefer，只读可并发，backgrounding never）。可选 server 过滤；对每个有 resources 能力的已连接服务器 ensureConnectedClient 后拉 resources/list（claude.ai 代理/特定 HTTP 服务器出现发现错误时重连重试一次），过滤掉 MCP Apps UI 资源（ui://、text/html;profile=mcp-app）；结果为空时提示"服务器可能仍提供工具"。
  */
-//@ chunk-9ycd12hk.js:1825-3769 fingerprint = ListMcpResourcesTool (0.516)
 var ListMcpResourcesTool = buildTool({
   isConcurrencySafe() {
-    return !0;
+    return true;
   },
   isReadOnly() {
-    return !0;
+    return true;
   },
-  toAutoClassifierInput(e) {
-    return e.server ?? "";
+  toAutoClassifierInput(input) {
+    return input.server ?? "";
   },
-  shouldDefer: !0,
+  shouldDefer: true,
   name: LISTMCPRESOURCESTOOL,
   aliases: ["ListMcpResources"],
   searchHint: "list resources from connected MCP servers",
@@ -100,41 +104,38 @@ var ListMcpResourcesTool = buildTool({
   },
   create(e) {
     return {
-      async call(s, { signal: l }) {
-        let filtered = e.turnMcpClients.filter((turnMcpClient) => !Lfn(turnMcpClient, e.agentId)),
-          { server: server } = s,
-          f = server ? findServersByName(filtered, server) : filtered;
-        if (server && f.length === 0)
+      async call(input, { signal }) {
+        let mcpClients = e.turnMcpClients.filter(
+          (turnMcpClient) => !hasWithheldResources(turnMcpClient, e.agentId),
+        );
+        let { server: targetServer } = input;
+        let clientsToProcess = targetServer ? findServersByName(mcpClients, targetServer) : mcpClients;
+        if (targetServer && clientsToProcess.length === 0)
           throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-            `Server "${server}" not found. Available servers: ${filtered.map((i) => i.name).join(", ")}`,
+            `Server "${targetServer}" not found. Available servers: ${mcpClients.map((mcpClient) => mcpClient.name).join(", ")}`,
             "MCP server not found",
           );
         let results = await Promise.all(
-          f.map(async (i) => {
+          clientsToProcess.map(async (i) => {
             if (!isConnectedOrCached(i) || !i.capabilities?.resources) return [];
-            let mcpClientModule = require("./chunk-asne9cp8.js").mcpClientModule(),
-              y = () =>
-                mcpClientModule.ensureConnectedClient(i, { signal: l, context: "MCP resource listing" });
+            let M = require("./chunk-asne9cp8.js").mcpClientModule();
+            let y = () =>
+              M.ensureConnectedClient(i, {
+                signal,
+                context: "MCP resource listing",
+              });
             try {
               let c = await y();
-              if (Lfn(c, e.agentId)) return [];
-              let R = await raceWithAbortSignal(
-                mcpClientModule.fetchResourcesForClient(c),
-                l,
-                () => new AbortError(),
-              );
+              if (hasWithheldResources(c, e.agentId)) return [];
+              let R = await raceWithAbortSignal(M.fetchResourcesForClient(c), signal, () => new AbortError());
               if (
                 (i.config.type === "claudeai-proxy" ||
                   (i.config.type === "http" && isSameOriginAsCcr(i.config.url))) &&
-                mcpClientModule.getDiscoveryFetchError(R) !== void 0
+                M.getDiscoveryFetchError(R) !== undefined
               ) {
                 let S = await y();
                 if (S !== c)
-                  R = await raceWithAbortSignal(
-                    mcpClientModule.fetchResourcesForClient(S),
-                    l,
-                    () => new AbortError(),
-                  );
+                  R = await raceWithAbortSignal(M.fetchResourcesForClient(S), signal, () => new AbortError());
               }
               let filtered = R.filter((S) => !isMcpAppResource(S));
               if (filtered.length < R.length)
@@ -148,8 +149,10 @@ var ListMcpResourcesTool = buildTool({
             }
           }),
         );
-        if (l.aborted) throw new AbortError();
-        return { data: results.flat() };
+        if (signal.aborted) throw new AbortError();
+        return {
+          data: results.flat(),
+        };
       },
     };
   },
@@ -158,15 +161,18 @@ var ListMcpResourcesTool = buildTool({
   },
   userFacingName: () => "listMcpResources",
   stripForCreation: sanitizeResourceListForCreation,
-  mapToolResultToToolResultBlockParam(e, s) {
-    if (!e || e.length === 0)
+  mapToolResultToToolResultBlockParam(content, toolUseID) {
+    if (!content || content.length === 0)
       return {
-        tool_use_id: s,
+        tool_use_id: toolUseID,
         type: "tool_result",
         content: "No resources found. MCP servers may still provide tools even if they have no resources.",
       };
-    return { tool_use_id: s, type: "tool_result", content: jsonStringify(e) };
+    return {
+      tool_use_id: toolUseID,
+      type: "tool_result",
+      content: jsonStringify(content),
+    };
   },
 });
-
 export { ListMcpResourcesTool };

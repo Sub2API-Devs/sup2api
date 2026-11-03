@@ -11,23 +11,36 @@
 import { createSignal } from "../../utils/signal.js";
 import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
 
+//@ chunk-r533agbk.js:263-589 placement
 /**
  * 登录事件计数器：凭证保存与登录完成次数，可订阅。
  */
-//@ chunk-r533agbk.js:263-589 placement
 class LoginEventCounter {
-  #e = { credentialsPersisted: 0, loginCompleted: 0 };
+  #e = {
+    credentialsPersisted: 0,
+    loginCompleted: 0,
+  };
   #t = createSignal();
   subscribe = (t) => this.#t.subscribe(t);
   getSnapshot = () => this.#e;
   credentialsPersisted() {
-    ((this.#e = { ...this.#e, credentialsPersisted: this.#e.credentialsPersisted + 1 }), this.#t.emit());
+    this.#e = {
+      ...this.#e,
+      credentialsPersisted: this.#e.credentialsPersisted + 1,
+    };
+    this.#t.emit();
   }
   loginCompleted() {
-    ((this.#e = { ...this.#e, loginCompleted: this.#e.loginCompleted + 1 }), this.#t.emit());
+    this.#e = {
+      ...this.#e,
+      loginCompleted: this.#e.loginCompleted + 1,
+    };
+    this.#t.emit();
   }
 }
 //@ chunk-r533agbk.js:589-614 placement
-var KV = new SessionRootSlot(() => new LoginEventCounter());
-
-export { KV };
+/**
+ * 按会话根保存的登录事件计数器。
+ */
+var loginEventCounter = new SessionRootSlot(() => new LoginEventCounter());
+export { loginEventCounter };

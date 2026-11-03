@@ -14,7 +14,7 @@ import {
   buildArtifactsMcpLaptopEntryAfterStart,
   noteLoginsCompletedForArtifactsMcpLaptopEntry,
 } from "../artifacts/artifactsMcpLaptop.js";
-import { KV } from "../oauth/loginEvents.js";
+import { loginEventCounter } from "../oauth/loginEvents.js";
 import { isArtifactToolEnabled } from "../artifacts/artifactToolGates.js";
 import {
   getEffectiveMcpPolicyKey,
@@ -22,7 +22,7 @@ import {
   doesEnterpriseMcpConfigExist,
   isMcpServerAllowedByPolicy,
 } from "./config.js";
-import { kA } from "../policyLimits/coldStartWaiter.js";
+import { awaitPolicyColdStartWaiter } from "../policyLimits/coldStartWaiter.js";
 import { isRemoteSettingsFetchFailed } from "../cloudSessions/eligibility.js";
 import { getStrictMcpConfig } from "../../bootstrap/state.js";
 import { logError } from "../../utils/log.js";
@@ -31,61 +31,62 @@ import { onPolicyVerdictHeldStart } from "../policyLimits/policyState.js";
 import { settingsChangeDetector } from "../../utils/settings/changeDetector.js";
 
 //@ chunk-cm57mjc2.js:12063-13013 placement
-function registerArtifactsMcpLaptopEntry({
-  session: session,
-  store: store,
-  scope: scope,
-  storageV5: storageV5,
-  credentials: credentials,
-}) {
+function registerArtifactsMcpLaptopEntry({ session, store, scope, storageV5, credentials }) {
   if (!mayBuildArtifactsMcpLaptopEntryAfterStart()) return () => {};
-  let of = KV.of(session),
-    t = [],
-    n = !1,
-    c = () => {
-      n = !0;
-      for (let e of t.splice(0)) e();
-    },
-    g = async () => {
-      if (n || !isArtifactToolEnabled() || !isArtifactsMcpLaptopLoginCompleted()) return;
-      let e = getEffectiveMcpPolicyKey(),
-        { servers: servers } = await getClaudeCodeMcpConfigs(scope.dynamicMcpConfig ?? {}, {
-          storageV5: storageV5,
-          credentials: credentials,
-        });
-      if ((await kA(), n || isRemoteSettingsFetchFailed())) return;
-      if (getEffectiveMcpPolicyKey() !== e) {
-        o();
-        return;
-      }
-      let r = buildArtifactsMcpLaptopEntryAfterStart({
-        toolPermissionContext: store.getState().toolPermissionContext,
-        configuredNames: new Set([...Object.keys(scope.dynamicMcpConfig ?? {}), ...Object.keys(servers)]),
-        fixedServerSet: getStrictMcpConfig()
-          ? "strict_mcp_config"
-          : doesEnterpriseMcpConfigExist()
-            ? "managed_mcp_config"
-            : null,
-        allowedByPolicy: isMcpServerAllowedByPolicy,
-      });
-      if (r === "waiting") return;
-      if ((c(), r !== null)) scope.updateDynamicMcpConfig((y) => ({ ...y, [r.name]: r.config }));
-    },
-    a = () => void g().catch(logError),
-    o = () => queueMicrotask(a),
-    S = () => {
-      (noteLoginsCompletedForArtifactsMcpLaptopEntry(of.getSnapshot().loginCompleted, "as_it_completed"),
-        o());
-    };
+  let s = loginEventCounter.of(session);
+  let t = [];
+  let n = false;
+  let c = () => {
+    n = true;
+    for (let e of t.splice(0)) e();
+  };
+  let g = async () => {
+    if (n || !isArtifactToolEnabled() || !isArtifactsMcpLaptopLoginCompleted()) return;
+    let effectiveMcpPolicyKey = getEffectiveMcpPolicyKey();
+    let { servers } = await getClaudeCodeMcpConfigs(scope.dynamicMcpConfig ?? {}, {
+      storageV5,
+      credentials,
+    });
+    await awaitPolicyColdStartWaiter();
+    if (n || isRemoteSettingsFetchFailed()) return;
+    if (getEffectiveMcpPolicyKey() !== effectiveMcpPolicyKey) {
+      o();
+      return;
+    }
+    let artifactsMcpLaptopEntryAfterStart = buildArtifactsMcpLaptopEntryAfterStart({
+      toolPermissionContext: store.getState().toolPermissionContext,
+      configuredNames: new Set([...Object.keys(scope.dynamicMcpConfig ?? {}), ...Object.keys(servers)]),
+      fixedServerSet: getStrictMcpConfig()
+        ? "strict_mcp_config"
+        : doesEnterpriseMcpConfigExist()
+          ? "managed_mcp_config"
+          : null,
+      allowedByPolicy: isMcpServerAllowedByPolicy,
+    });
+    if (artifactsMcpLaptopEntryAfterStart === "waiting") return;
+    c();
+    if (artifactsMcpLaptopEntryAfterStart !== null)
+      scope.updateDynamicMcpConfig((y) => ({
+        ...y,
+        [artifactsMcpLaptopEntryAfterStart.name]: artifactsMcpLaptopEntryAfterStart.config,
+      }));
+  };
+  let a = () => void g().catch(logError);
+  let o = () => queueMicrotask(a);
+  let S = () => {
+    noteLoginsCompletedForArtifactsMcpLaptopEntry(s.getSnapshot().loginCompleted, "as_it_completed");
+    o();
+  };
   try {
-    (t.push(of.subscribe(S)),
-      t.push(onGrowthBookRefresh(o)),
-      t.push(onPolicyVerdictHeldStart(o)),
-      t.push(settingsChangeDetector.subscribe(o)),
-      noteLoginsCompletedForArtifactsMcpLaptopEntry(of.getSnapshot().loginCompleted, "later"),
-      a());
+    t.push(s.subscribe(S));
+    t.push(onGrowthBookRefresh(o));
+    t.push(onPolicyVerdictHeldStart(o));
+    t.push(settingsChangeDetector.subscribe(o));
+    noteLoginsCompletedForArtifactsMcpLaptopEntry(s.getSnapshot().loginCompleted, "later");
+    a();
   } catch (error) {
-    throw (c(), error);
+    c();
+    throw error;
   }
   return c;
 }

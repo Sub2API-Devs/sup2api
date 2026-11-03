@@ -12,50 +12,65 @@ import { x, Ar } from "../../../runtime/bun-runtime.js";
 import {
   RESPONSIVE_MODE_PLUGIN,
   shouldUseResponsiveMode,
-  iAo,
-  sAo,
-  rGn,
+  isResponsiveModeOn,
+  responsiveModeDefault,
+  isRealUserPrompt,
 } from "../../plugins/bundled/responsiveMode.js";
 import { registerBuiltinPlugin, builtinHooksModuleRef } from "../../plugins/builtinPlugins.js";
-import { wt } from "../../remote/remoteMode.js";
+import { isRemoteSessionAvailable } from "../../remote/remoteMode.js";
 import { isRemoteEntrypoint } from "../../utils/entrypointKinds.js";
 
 //@ chunk-jr1te1aj.js:3810-3937 placement
 var RESPONSIVE_MODE_HOOKS_MANIFEST = x(function (ce, y) {
   y.exports = {
-    scan: { hooks: ["prompt.section", "prompt.submit", "ui.render"], calls: ["turn.abort"] },
+    scan: {
+      hooks: ["prompt.section", "prompt.submit", "ui.render"],
+      calls: ["turn.abort"],
+    },
     files: {},
   };
 });
 //@ chunk-jr1te1aj.js:3937-3946 placement
-var f = {};
+/**
+ * 响应模式插件的模块导出表（默认导出）。
+ */
+var responsiveModeExports = {};
 //@ chunk-jr1te1aj.js:3946-4258 placement
-Ar(f, {
-  DRAFT_HINT: () => h,
+Ar(responsiveModeExports, {
+  DRAFT_HINT: () => DRAFT_HINT_TEXT,
   FOCUS_MODE: () => FOCUS_MODE,
   PLUGIN_LISTING: () => RESPONSIVE_MODE_PLUGIN,
   REMINDER: () => RESPONSIVE_MODE_REMINDER,
   SECTION: () => RESPONSIVE_MODE_SECTION,
-  cutsTheTurn: () => a,
-  default: () => f,
+  cutsTheTurn: () => cutsTheTurnOnSubmit,
+  default: () => responsiveModeExports,
   enterAnswersNow: () => shouldUseResponsiveMode,
-  isAvailable: () => iAo,
-  isOnByDefault: () => sAo,
-  isTypedWords: () => rGn,
-  register: () => S,
+  isAvailable: () => isResponsiveModeOn,
+  isOnByDefault: () => responsiveModeDefault,
+  isTypedWords: () => isRealUserPrompt,
+  register: () => registerResponsiveModePromptSimple,
   registerHooks: () => registerResponsiveModePrompt,
   registerPlugin: () => registerResponsiveModePlugin,
-  spliceDraftHint: () => w,
-  typedByTheUser: () => s,
+  spliceDraftHint: () => noSpliceHint,
+  typedByTheUser: () => isTypedComposerText,
 });
 //@ chunk-jr1te1aj.js:4258-4343 placement
-function s(e) {
-  return e.origin.kind === "composer" && e.attachments === void 0 && rGn(e.text);
+/**
+ * 输入来自 composer、无附件且是用户键入的词。
+ */
+function isTypedComposerText(e) {
+  return e.origin.kind === "composer" && e.attachments === undefined && isRealUserPrompt(e.text);
 }
 //@ chunk-jr1te1aj.js:4343-4387 placement
-var a = (e) => s(e) && e.turnId !== void 0 && !e.wait;
+/**
+ * 键入词、已有回合 id 且不在等待（提交会打断当前回合）。
+ */
+var cutsTheTurnOnSubmit = (e) => isTypedComposerText(e) && e.turnId !== undefined && !e.wait;
 //@ chunk-jr1te1aj.js:4387-4455 placement
-var h = "enter to interrupt and send \xB7 ctrl+x then enter to queue";
+/**
+ * 草稿提示文案：enter 打断并发送、ctrl+x 再 enter 排队。
+ */
+var DRAFT_HINT_TEXT = "enter to interrupt and send \xB7 ctrl+x then enter to queue";
 //@ chunk-jr1te1aj.js:4455-4474 placement
 var FOCUS_MODE = "focus_mode";
 //@ chunk-jr1te1aj.js:4474-4874 placement
@@ -108,33 +123,70 @@ Avoid these patterns and their cousins:
 Say what you found, what you did, what you need, and stop.`;
 //@ chunk-jr1te1aj.js:7130-7663 placement
 function registerResponsiveModePrompt(e, l, T, k) {
-  (e("prompt.section", { name: FOCUS_MODE }, async (i, t, r) => {
-    let { text: text } = await r(t);
-    return { text: text === null ? RESPONSIVE_MODE_SECTION : text };
-  }),
-    e("prompt.submit", async (i, t, r) => {
-      if (!s(t)) return r(t);
-      let o = await r({ ...t, context: [...(t.context ?? []), RESPONSIVE_MODE_REMINDER] });
-      if (o.drop === void 0 && a(t) && !l())
-        await i.turn.abort({ turnId: t.turnId }).catch(() => {
+  e(
+    "prompt.section",
+    {
+      name: FOCUS_MODE,
+    },
+    async (i, t, r) => {
+      let { text } = await r(t);
+      return {
+        text: text === null ? RESPONSIVE_MODE_SECTION : text,
+      };
+    },
+  );
+  e("prompt.submit", async (i, t, r) => {
+    if (!isTypedComposerText(t)) return r(t);
+    let o = await r({
+      ...t,
+      context: [...(t.context ?? []), RESPONSIVE_MODE_REMINDER],
+    });
+    if (o.drop === undefined && cutsTheTurnOnSubmit(t) && !l())
+      await i.turn
+        .abort({
+          turnId: t.turnId,
+        })
+        .catch(() => {
           return;
         });
-      return o;
-    }),
-    e("ui.render", { component: "PromptHint" }, async (i, t, r) => {
+    return o;
+  });
+  e(
+    "ui.render",
+    {
+      component: "PromptHint",
+    },
+    async (i, t, r) => {
       if (!(t.props.isDraft && t.props.isWorking) || k()) return r(t);
-      let o = l() ? T() : h,
-        b = t.surface === "terminal" ? { tail: o } : { hint: o };
-      return r({ ...t, props: { ...t.props, ...b } });
-    }));
+      let o = l() ? T() : DRAFT_HINT_TEXT;
+      let b =
+        t.surface === "terminal"
+          ? {
+              tail: o,
+            }
+          : {
+              hint: o,
+            };
+      return r({
+        ...t,
+        props: {
+          ...t.props,
+          ...b,
+        },
+      });
+    },
+  );
 }
 //@ chunk-jr1te1aj.js:7663-7703 placement
-function S(e) {
+/**
+ * 注册简化版的响应式模式提示注入。
+ */
+function registerResponsiveModePromptSimple(e) {
   registerResponsiveModePrompt(
     e,
-    () => !1,
+    () => false,
     () => "",
-    () => !1,
+    () => false,
   );
 }
 //@ chunk-jr1te1aj.js:7703-7807 placement
@@ -143,14 +195,25 @@ var registerResponsiveModePlugin = () =>
     ...RESPONSIVE_MODE_PLUGIN,
     hooksModule: builtinHooksModuleRef(
       import.meta.dir,
-      { register: (e) => registerResponsiveModePrompt(e, N, w, () => wt() || isRemoteEntrypoint()) },
+      {
+        register: (e) =>
+          registerResponsiveModePrompt(
+            e,
+            isRemoteEntrypoint_2,
+            noSpliceHint,
+            () => isRemoteSessionAvailable() || isRemoteEntrypoint(),
+          ),
+      },
       () => RESPONSIVE_MODE_HOOKS_MANIFEST(),
     ),
   });
 //@ chunk-jr1te1aj.js:7807-7847 placement
-function N() {
-  if (isRemoteEntrypoint()) return !0;
-  return !1;
+function isRemoteEntrypoint_2() {
+  if (isRemoteEntrypoint()) return true;
+  return false;
 }
 //@ chunk-jr1te1aj.js:7847-7860 placement
-var w = () => "";
+/**
+ * 不拼接草稿提示（返回空串）。
+ */
+var noSpliceHint = () => "";

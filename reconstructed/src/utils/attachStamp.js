@@ -15,58 +15,84 @@ import { sleep } from "./sleep.js";
 //@ chunk-qmbda0jr.js:333-434 placement
 class AttachStampState {
   stampMs = 0;
-  detachedSinceLastAttach = !1;
+  detachedSinceLastAttach = false;
   reset() {
-    ((this.stampMs = 0), (this.detachedSinceLastAttach = !1));
+    this.stampMs = 0;
+    this.detachedSinceLastAttach = false;
   }
 }
 //@ chunk-qmbda0jr.js:434-457 placement
-var s = new HostScoped(() => new AttachStampState());
+/**
+ * 按宿主隔离的附加时间戳状态。
+ */
+var attachStampByHost = new HostScoped(() => new AttachStampState());
 //@ chunk-qmbda0jr.js:457-492 placement
-function a() {
-  return s.of(getRootSession().host);
+/**
+ * 取出当前宿主的附加时间戳状态。
+ */
+function getAttachStampState() {
+  return attachStampByHost.of(getRootSession().host);
 }
+//@ chunk-qmbda0jr.js:492-630 placement
 /**
  * 记录附加时间戳（0 重置）。
  */
-//@ chunk-qmbda0jr.js:492-630 placement
 function noteAttachStamp(e) {
-  let t = a();
+  let attachStampState = getAttachStampState();
   if (e === 0) {
-    t.reset();
+    attachStampState.reset();
     return;
   }
-  if (t.detachedSinceLastAttach || t.stampMs === 0) t.stampMs = e;
-  t.detachedSinceLastAttach = !1;
+  if (attachStampState.detachedSinceLastAttach || attachStampState.stampMs === 0)
+    attachStampState.stampMs = e;
+  attachStampState.detachedSinceLastAttach = false;
 }
 //@ chunk-qmbda0jr.js:630-676 placement
-function aon() {
-  a().detachedSinceLastAttach = !0;
+/**
+ * 标记自上次附加后已分离。
+ */
+function markDetachedSinceAttach() {
+  getAttachStampState().detachedSinceLastAttach = true;
 }
 //@ chunk-qmbda0jr.js:676-726 placement
-function sEo() {
-  return a().detachedSinceLastAttach;
+/**
+ * 自上次附加后是否分离过。
+ */
+function wasDetachedSinceAttach() {
+  return getAttachStampState().detachedSinceLastAttach;
 }
 //@ chunk-qmbda0jr.js:726-760 placement
-function oQe() {
-  return a().stampMs;
+/**
+ * 读取附加时间戳（毫秒）。
+ */
+function getAttachStampMs() {
+  return getAttachStampState().stampMs;
 }
 //@ chunk-qmbda0jr.js:760-785 placement
-function lon(e) {
-  return !1;
+/**
+ * 附加是否已稳定（当前恒返回 false）。
+ */
+function isAttachSettled(e) {
+  return false;
 }
+//@ chunk-qmbda0jr.js:785-945 placement
 /**
  * 等待附加稳定。
  */
-//@ chunk-qmbda0jr.js:785-945 placement
 async function waitForAttachSettle() {
   for (;;) {
     let now = Date.now();
-    if (!lon(now)) return;
-    let { detachedSinceLastAttach: detachedSinceLastAttach, stampMs: stampMs } = a(),
-      c = detachedSinceLastAttach || stampMs === 0 ? 500 : stampMs + 500 - now;
+    if (!isAttachSettled(now)) return;
+    let { detachedSinceLastAttach, stampMs } = getAttachStampState();
+    let c = detachedSinceLastAttach || stampMs === 0 ? 500 : stampMs + 500 - now;
     await sleep(Math.max(25, c) + 25);
   }
 }
-
-export { aon, oQe, sEo, lon, waitForAttachSettle, noteAttachStamp };
+export {
+  markDetachedSinceAttach,
+  getAttachStampMs,
+  wasDetachedSinceAttach,
+  isAttachSettled,
+  waitForAttachSettle,
+  noteAttachStamp,
+};

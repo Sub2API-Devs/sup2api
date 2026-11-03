@@ -14,54 +14,97 @@ import {
   getFeatureValueWithSource_CACHED_MAY_BE_STALE,
 } from "../../services/analytics/growthbook.js";
 import { TENGU_CHAIR_SERMON } from "../messages.js";
-import { Ao } from "../../bootstrap/sessionFeatureValues.js";
+import { getSessionFeatureValues } from "../../bootstrap/sessionFeatureValues.js";
 
 //@ chunk-e6aww6q8.js:122354-122381 placement
-function X1t() {
+/**
+ * 线程状态特性是否开启（tengu_foamy_spring）。
+ */
+function isThreadStateFeatureOn() {
   return isFoamySpringEnabled();
 }
 //@ chunk-e6aww6q8.js:122381-122463 placement
-function i9() {
-  let e = getFeatureValue_CACHED_MAY_BE_STALE(TENGU_CHAIR_SERMON, !1) === !0,
-    { source: source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE(TENGU_CHAIR_SERMON, !1);
-  return { value: e, source: source };
+/**
+ * 读取线程状态提醒开关（tengu_chair_sermon）及其来源。
+ */
+function threadStateReminderSetting() {
+  let value = getFeatureValue_CACHED_MAY_BE_STALE(TENGU_CHAIR_SERMON, false) === true;
+  let { source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE(TENGU_CHAIR_SERMON, false);
+  return {
+    value,
+    source,
+  };
 }
+//@ chunk-e6aww6q8.js:122463-122636 placement
 /**
  * 读取提醒折叠开关（功能开启时在会话内缓存非回退来源的值）。
  */
-//@ chunk-e6aww6q8.js:122463-122636 placement
 function reminderFoldSetting() {
-  if (!X1t()) return i9().value;
-  let e = Ao();
-  if (e.reminderFold !== void 0) return e.reminderFold;
-  let { value: n, source: source } = i9();
-  if (source !== "fallback") e.reminderFold = n;
+  if (!isThreadStateFeatureOn()) return threadStateReminderSetting().value;
+  let sessionFeatureValues = getSessionFeatureValues();
+  if (sessionFeatureValues.reminderFold !== undefined) return sessionFeatureValues.reminderFold;
+  let { value: n, source } = threadStateReminderSetting();
+  if (source !== "fallback") sessionFeatureValues.reminderFold = n;
   return n;
 }
+//@ chunk-e6aww6q8.js:122636-122913 placement
 /**
  * 决定提醒折叠设置：显式值优先，其次会话缓存，再次远程配置（非回退来源时写入缓存）。
  */
-//@ chunk-e6aww6q8.js:122636-122913 placement
 function resolveReminderFold(e) {
-  let n = i9();
-  if (e !== void 0) return { fold: e, cached: n };
-  if (!X1t()) return { fold: void 0, cached: n };
-  let reminderFold = Ao().reminderFold;
-  if (reminderFold !== void 0) return { fold: reminderFold, cached: n };
-  if (n.source === "fallback") return { fold: void 0, cached: n };
-  return ((Ao().reminderFold = n.value), { fold: n.value, cached: n });
+  let n = threadStateReminderSetting();
+  if (e !== undefined)
+    return {
+      fold: e,
+      cached: n,
+    };
+  if (!isThreadStateFeatureOn())
+    return {
+      fold: undefined,
+      cached: n,
+    };
+  let reminderFold = getSessionFeatureValues().reminderFold;
+  if (reminderFold !== undefined)
+    return {
+      fold: reminderFold,
+      cached: n,
+    };
+  if (n.source === "fallback")
+    return {
+      fold: undefined,
+      cached: n,
+    };
+  getSessionFeatureValues().reminderFold = n.value;
+  return {
+    fold: n.value,
+    cached: n,
+  };
 }
 //@ chunk-e6aww6q8.js:122913-122958 placement
-var nao = /^(\d{1,6}m|\d{1,6}h \d{1,2}m) ago$/;
+/**
+ * 匹配 “N m ago / N h M m ago” 形式的相对时间文本。
+ */
+var RELATIVE_TIME_AGO_RE = /^(\d{1,6}m|\d{1,6}h \d{1,2}m) ago$/;
+//@ chunk-e6aww6q8.js:122958-123190 placement
 /**
  * 线程状态提示行："用户最后写于某时，此后 Claude 已发送 N 条回复"。
  */
-//@ chunk-e6aww6q8.js:122958-123190 placement
-function threadStateLine(e, n) {
-  if (typeof e !== "string" || !nao.test(e) || typeof n !== "number" || !Number.isSafeInteger(n) || n < 0)
+function threadStateLine(sinceUser, repliesSinceUser) {
+  if (
+    typeof sinceUser !== "string" ||
+    !RELATIVE_TIME_AGO_RE.test(sinceUser) ||
+    typeof repliesSinceUser !== "number" ||
+    !Number.isSafeInteger(repliesSinceUser) ||
+    repliesSinceUser < 0
+  )
     return;
-  let r = n === 1 ? "1 reply" : `${n} replies`;
-  return `Thread state: the user last wrote ${e}. Claude has sent ${r} since then.`;
+  let r = repliesSinceUser === 1 ? "1 reply" : `${repliesSinceUser} replies`;
+  return `Thread state: the user last wrote ${sinceUser}. Claude has sent ${r} since then.`;
 }
-
-export { X1t, reminderFoldSetting, i9, threadStateLine, resolveReminderFold };
+export {
+  isThreadStateFeatureOn,
+  reminderFoldSetting,
+  threadStateReminderSetting,
+  threadStateLine,
+  resolveReminderFold,
+};

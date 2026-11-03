@@ -5,92 +5,107 @@
  * pieces: chunk-hwmsct5x.js (7)
  * attribution: esm-layout 1, esm-fingerprint 6
  */
-import { Kje, V7t } from "../internal/errors.mjs";
-import { ef, AHn, pr } from "./error.mjs";
-import { Tb, hu } from "../internal/utils/log.mjs";
-import { St } from "./streaming.mjs";
-import { ar } from "../internal/parse.mjs";
+import { isAbortError_2, castToError } from "../internal/errors.mjs";
+import { APIConnectionError, RetryableError, AnthropicError } from "./error.mjs";
+import { loggerFor, defaultLogger } from "../internal/utils/log.mjs";
+import { Stream } from "./streaming.mjs";
+import { addResponseIDs } from "../internal/parse.mjs";
 
 //@ chunk-hwmsct5x.js:34791-34810 esm-layout
-var weakSet = new WeakSet();
+var fetchOriginErrors = new WeakSet();
 //@ chunk-hwmsct5x.js:34810-34873 esm-fingerprint
-function Vi(e) {
-  return typeof e === "object" && e !== null && weakSet.has(e);
+function isFetchOriginError(err) {
+  return typeof err === "object" && err !== null && fetchOriginErrors.has(err);
 }
 //@ chunk-hwmsct5x.js:34873-35039 esm-fingerprint
-function bu(e) {
-  let n = new Set();
-  while (typeof e === "object" && e !== null && !n.has(e)) {
-    if ((n.add(e), Vi(e) || Kje(e) || e instanceof ef || e instanceof AHn)) return !0;
-    e = e.cause;
+function isRetryableError(err) {
+  let seen = new Set();
+  while (typeof err === "object" && err !== null && !seen.has(err)) {
+    seen.add(err);
+    if (
+      isFetchOriginError(err) ||
+      isAbortError_2(err) ||
+      err instanceof APIConnectionError ||
+      err instanceof RetryableError
+    )
+      return true;
+    err = err.cause;
   }
-  return !1;
+  return false;
 }
 //@ chunk-hwmsct5x.js:35039-35483 esm-fingerprint
-function wrapFetchWithMiddleware(e, n, r, s) {
-  return async (h, y = {}) => {
-    if (n.length === 0) return e.call(void 0, h, y);
-    let w = y.headers instanceof Headers ? y.headers : new Headers(y.headers),
-      S = await composeMiddleware(
-        e,
-        n,
-        r,
-        s,
-      )({ ...y, headers: w, url: typeof h === "string" ? h : h instanceof URL ? h.href : h.url });
-    if (S.bodyUsed || S.body?.locked)
-      throw new pr(
+function wrapFetchWithMiddleware(fetchFn, middleware, options, client) {
+  return async (url, init = {}) => {
+    if (middleware.length === 0) return fetchFn.call(undefined, url, init);
+    let headers = init.headers instanceof Headers ? init.headers : new Headers(init.headers);
+    let response = await composeMiddleware(
+      fetchFn,
+      middleware,
+      options,
+      client,
+    )({
+      ...init,
+      headers,
+      url: typeof url === "string" ? url : url instanceof URL ? url.href : url.url,
+    });
+    if (response.bodyUsed || response.body?.locked)
+      throw new AnthropicError(
         "middleware consumed the response body; use response.clone() to inspect it, or return new Response(body, response) to consume and replace it",
       );
-    return S;
+    return response;
   };
 }
 //@ chunk-hwmsct5x.js:35483-35655 esm-fingerprint
-function Bh(e, n) {
-  let weakMap = new WeakMap();
+function createMiddlewareContext(options, client) {
+  let cache = new WeakMap();
   return {
-    options: e,
-    logger: n ? Tb(n) : hu(),
-    parse(s) {
-      if (e?.stream && s.ok) return parseResponseBody(s, e, n);
-      let h = weakMap.get(s);
-      if (!h) ((h = parseResponseBody(s, e, n)), weakMap.set(s, h));
-      return h;
+    options,
+    logger: client ? loggerFor(client) : defaultLogger(),
+    parse(response) {
+      if (options?.stream && response.ok) return parseResponseBody(response, options, client);
+      let parsed = cache.get(response);
+      if (!parsed) {
+        parsed = parseResponseBody(response, options, client);
+        cache.set(response, parsed);
+      }
+      return parsed;
     },
   };
 }
 //@ chunk-hwmsct5x.js:35655-36235 esm-fingerprint
-async function parseResponseBody(e, n, r) {
-  if (e.bodyUsed || e.body?.locked)
-    throw new pr(
+async function parseResponseBody(response, options, client) {
+  if (response.bodyUsed || response.body?.locked)
+    throw new AnthropicError(
       "cannot ctx.parse() a response whose body was already consumed; call ctx.parse() instead of reading the body, or read via response.clone()",
     );
-  if (n?.stream && e.ok) return St.fromSSEResponse(e.clone(), new AbortController(), r);
-  if (e.status === 204) return null;
-  if (n?.__binaryResponse) return e;
-  let h = e.headers.get("content-type")?.split(";")[0]?.trim();
-  if (h?.includes("application/json") || h?.endsWith("+json")) {
-    if (e.headers.get("content-length") === "0") return;
-    return ar(await e.clone().json(), e);
+  if (options?.stream && response.ok)
+    return Stream.fromSSEResponse(response.clone(), new AbortController(), client);
+  if (response.status === 204) return null;
+  if (options?.__binaryResponse) return response;
+  let mediaType = response.headers.get("content-type")?.split(";")[0]?.trim();
+  if (mediaType?.includes("application/json") || mediaType?.endsWith("+json")) {
+    if (response.headers.get("content-length") === "0") return;
+    return addResponseIDs(await response.clone().json(), response);
   }
-  return await e.clone().text();
+  return await response.clone().text();
 }
 //@ chunk-hwmsct5x.js:36235-36448 esm-fingerprint
-function composeMiddleware(e, n, r, s) {
-  let h = async ({ url: url, ...S }) => {
-      try {
-        return await e.call(void 0, url, S);
-      } catch (error) {
-        let R = V7t(error);
-        throw (weakSet.add(R), R);
-      }
-    },
-    y = Bh(r, s);
-  for (let w = n.length - 1; w >= 0; w--) {
-    let S = n[w],
-      E = h;
-    h = async (R) => S(R, E, y);
+function composeMiddleware(fetchFn, middleware, options, client) {
+  let next = async ({ url, ...init }) => {
+    try {
+      return await fetchFn.call(undefined, url, init);
+    } catch (err) {
+      let error = castToError(err);
+      fetchOriginErrors.add(error);
+      throw error;
+    }
+  };
+  let ctx = createMiddlewareContext(options, client);
+  for (let i = middleware.length - 1; i >= 0; i--) {
+    let mw = middleware[i];
+    let nextInner = next;
+    next = async (request) => mw(request, nextInner, ctx);
   }
-  return h;
+  return next;
 }
-
-export { wrapFetchWithMiddleware, bu, Vi };
+export { wrapFetchWithMiddleware, isRetryableError, isFetchOriginError };

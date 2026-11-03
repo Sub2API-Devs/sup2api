@@ -14,5 +14,4 @@ import { CliUserError } from "../errors.js";
 class PassingCauseError extends CliUserError {
   name = "PassingCauseError";
 }
-
 export { PassingCauseError };

@@ -20,7 +20,10 @@ import { beginOAuthRefreshLockHold } from "../auth.js";
 import { errorMessage } from "../errors.js";
 
 //@ chunk-arf5kz9d.js:506-514 placement
-var p = 5;
+/**
+ * OAuth 槽位锁的最大尝试次数（5）。
+ */
+var MAX_SLOT_LOCK_ATTEMPTS = 5;
 //@ chunk-arf5kz9d.js:514-677 placement
 class OauthSlotLockContendedError extends Error {
   constructor() {
@@ -28,38 +31,39 @@ class OauthSlotLockContendedError extends Error {
     this.name = "OauthSlotLockContendedError";
   }
 }
+//@ chunk-arf5kz9d.js:677-1368 placement
 /**
  * 在 OAuth 槽位刷新锁下执行（托管服务器会话不允许）。
  */
-//@ chunk-arf5kz9d.js:677-1368 placement
 async function withOauthSlotRefreshLock(o, n) {
-  if (isDiskless())
-    throw (
-      logFeatureBad("oauth_token_refresh", "oauth_slot_refresh_diskless"),
-      Error("This hosted session (claude-code-server) cannot refresh an OAuth token")
-    );
-  let s = getProjectDirsUpToHome();
-  await getFsImplementation().mkdir(s);
-  let i = join(s, o),
-    a = !1,
-    r,
-    l = 0;
+  if (isDiskless()) {
+    logFeatureBad("oauth_token_refresh", "oauth_slot_refresh_diskless");
+    throw Error("This hosted session (claude-code-server) cannot refresh an OAuth token");
+  }
+  let projectDirsUpToHome = getProjectDirsUpToHome();
+  await getFsImplementation().mkdir(projectDirsUpToHome);
+  let i = join(projectDirsUpToHome, o);
+  let a = false;
+  let r;
+  let l = 0;
   while (!r) {
     l++;
     try {
       r = await lock(i, {
         lockfilePath: i,
-        realpath: !1,
+        realpath: false,
         stale: 60000,
         update: 5000,
         onCompromised: (e) => {
-          ((a = !0),
-            logForDebugging(`OAuth refresh lock ${o} compromised: ${e.message}`, { level: "error" }));
+          a = true;
+          logForDebugging(`OAuth refresh lock ${o} compromised: ${e.message}`, {
+            level: "error",
+          });
         },
       });
     } catch (error) {
       if (error.code === "ELOCKED") {
-        if (l < p) {
+        if (l < MAX_SLOT_LOCK_ATTEMPTS) {
           await sleep(1000 + Math.random() * 1000);
           continue;
         }
@@ -68,8 +72,10 @@ async function withOauthSlotRefreshLock(o, n) {
       throw error;
     }
   }
-  let c = { isCompromised: () => a },
-    h = beginOAuthRefreshLockHold();
+  let c = {
+    isCompromised: () => a,
+  };
+  let h = beginOAuthRefreshLockHold();
   try {
     return await n(c);
   } finally {
@@ -77,12 +83,13 @@ async function withOauthSlotRefreshLock(o, n) {
       try {
         await r();
       } catch (error) {
-        logForDebugging(`OAuth refresh lock ${o} release failed: ${errorMessage(error)}`, { level: "error" });
+        logForDebugging(`OAuth refresh lock ${o} release failed: ${errorMessage(error)}`, {
+          level: "error",
+        });
       }
     } finally {
       h();
     }
   }
 }
-
 export { withOauthSlotRefreshLock, OauthSlotLockContendedError };

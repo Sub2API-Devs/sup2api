@@ -8,11 +8,21 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:419934-421127 cjs-fingerprint
-var Fs = x(function (Xg, Gs) {
-  function mm(e) {
-    let t = [
-      e.C_NUMBER_MODE,
-      { className: "string", begin: `'|"`, end: `'|"`, contains: [e.BACKSLASH_ESCAPE, { begin: "''" }] },
+var require_scilab = x(function (cjsExports, cjsModule) {
+  function scilab(hljs) {
+    let COMMON_CONTAINS = [
+      hljs.C_NUMBER_MODE,
+      {
+        className: "string",
+        begin: `'|"`,
+        end: `'|"`,
+        contains: [
+          hljs.BACKSLASH_ESCAPE,
+          {
+            begin: "''",
+          },
+        ],
+      },
     ];
     return {
       name: "Scilab",
@@ -31,15 +41,29 @@ var Fs = x(function (Xg, Gs) {
           className: "function",
           beginKeywords: "function",
           end: "$",
-          contains: [e.UNDERSCORE_TITLE_MODE, { className: "params", begin: "\\(", end: "\\)" }],
+          contains: [
+            hljs.UNDERSCORE_TITLE_MODE,
+            {
+              className: "params",
+              begin: "\\(",
+              end: "\\)",
+            },
+          ],
         },
-        { begin: "[a-zA-Z_][a-zA-Z_0-9]*[\\.']+", relevance: 0 },
-        { begin: "\\[", end: "\\][\\.']*", relevance: 0, contains: t },
-        e.COMMENT("//", "$"),
-      ].concat(t),
+        {
+          begin: "[a-zA-Z_][a-zA-Z_0-9]*[\\.']+",
+          relevance: 0,
+        },
+        {
+          begin: "\\[",
+          end: "\\][\\.']*",
+          relevance: 0,
+          contains: COMMON_CONTAINS,
+        },
+        hljs.COMMENT("//", "$"),
+      ].concat(COMMON_CONTAINS),
     };
   }
-  Gs.exports = mm;
+  cjsModule.exports = scilab;
 });
-
-export { Fs };
+export { require_scilab };

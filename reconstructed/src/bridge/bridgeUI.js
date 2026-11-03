@@ -27,147 +27,160 @@ import { plural, sanitizeSessionTitle } from "../utils/stringUtils.js";
 import { getRemoteSessionUrl } from "../constants/product.js";
 
 //@ chunk-wbbfk060.js:13677-13732 fingerprint = QR_OPTIONS (1)
-var QR_OPTIONS = { type: "utf8", errorCorrectionLevel: "L", small: !0 };
+var QR_OPTIONS = {
+  type: "utf8",
+  errorCorrectionLevel: "L",
+  small: true,
+};
+//@ chunk-wbbfk060.js:13732-19273 fingerprint = createBridgeLogger (0.801)
 /**
  * 创建终端日志/状态显示器：printBanner 打印连接地址与 QR，logSession*\/logStatus 输出事件，updateIdleStatus/updateReconnectingStatus/updateSessionStatus 重绘状态行（ANSI 回退清除），支持多会话列表与 spawn 模式显示。
  */
-//@ chunk-wbbfk060.js:13732-19273 fingerprint = createBridgeLogger (0.801)
 function createBridgeLogger(options) {
-  let s = options.write ?? ((h) => process.stdout.write(h)),
-    verbose = options.verbose,
-    P = options.projectsHint ?? (() => !1),
-    U = 0,
-    currentState = "idle",
-    currentStateText = "Ready",
-    j = null,
-    repoName = "",
-    branch = "",
-    debugLogPath = "",
-    connectUrl = "",
-    cachedIngressUrl = "",
-    activeSessionUrl = null,
-    qrLines = [],
-    be = !1,
-    Oe = "",
-    lastToolSummary = null,
-    ve = 0,
-    q = 0,
-    sessionMax = 1,
-    spawnModeDisplay = null,
-    X = null,
-    spawnMode = "single-session",
-    sessionDisplayInfo = new Map(),
-    connectingTimer = null,
-    ze = 0;
+  let write = options.write ?? ((h) => process.stdout.write(h));
+  let verbose = options.verbose;
+  let P = options.projectsHint ?? (() => false);
+  let statusLineCount = 0;
+  let currentState = "idle";
+  let currentStateText = "Ready";
+  let j = null;
+  let repoName = "";
+  let branch = "";
+  let debugLogPath = "";
+  let connectUrl = "";
+  let cachedIngressUrl = "";
+  let activeSessionUrl = null;
+  let qrLines = [];
+  let qrVisible = false;
+  let Oe = "";
+  let lastToolSummary = null;
+  let lastToolTime = 0;
+  let sessionActive = 0;
+  let sessionMax = 1;
+  let spawnModeDisplay = null;
+  let X = null;
+  let spawnMode = "single-session";
+  let sessionDisplayInfo = new Map();
+  let connectingTimer = null;
+  let connectingTick = 0;
   function countVisualLines(text) {
-    let L = process.stdout.columns || 80,
-      te = 0;
+    let cols = process.stdout.columns || 80;
+    let count = 0;
     for (let logical of text.split(`
 `)) {
       if (logical.length === 0) {
-        te++;
+        count++;
         continue;
       }
       let width = bunStringWidth(logical);
-      te += Math.max(1, Math.ceil(width / L));
+      count += Math.max(1, Math.ceil(width / cols));
     }
     if (
       text.endsWith(`
 `)
     )
-      te--;
-    return te;
+      count--;
+    return count;
   }
   function writeStatus(text) {
-    (s(text), (U += countVisualLines(text)));
+    write(text);
+    statusLineCount += countVisualLines(text);
   }
   function clearStatusLines() {
-    if (U <= 0) return;
-    (s(`\x1B[${U}A`), s("\x1B[J"), (U = 0));
+    if (statusLineCount <= 0) return;
+    write(`\x1B[${statusLineCount}A`);
+    write("\x1B[J");
+    statusLineCount = 0;
   }
   function printLog(line) {
-    if ((clearStatusLines(), s(line), currentState === "reconnecting" && j)) Re(j.delayStr, j.elapsedStr);
+    clearStatusLines();
+    write(line);
+    if (currentState === "reconnecting" && j) Re(j.delayStr, j.elapsedStr);
     else renderStatusLine();
   }
   function regenerateQr(url) {
     if (url === Oe) return;
-    ((Oe = url),
-      toString(url, QR_OPTIONS)
-        .then((lines) => {
-          ((qrLines = lines
-            .split(
-              `
+    Oe = url;
+    toString(url, QR_OPTIONS)
+      .then((lines) => {
+        qrLines = lines
+          .split(
+            `
 `,
-            )
-            .filter((te) => te.length > 0)),
-            renderStatusLine());
-        })
-        .catch((L) => {
-          logForDebugging(`QR code generation failed: ${L}`, { level: "error" });
-        }));
+          )
+          .filter((line) => line.length > 0);
+        renderStatusLine();
+      })
+      .catch((e) => {
+        logForDebugging(`QR code generation failed: ${e}`, {
+          level: "error",
+        });
+      });
   }
   function renderConnectingLine() {
     clearStatusLines();
-    let h = BRIDGE_SPINNER_FRAMES[ze % BRIDGE_SPINNER_FRAMES.length],
-      suffix = "";
+    let frame = BRIDGE_SPINNER_FRAMES[connectingTick % BRIDGE_SPINNER_FRAMES.length];
+    let suffix = "";
     if (repoName) suffix += sequential.dim(" \xB7 ") + sequential.dim(repoName);
     if (branch) suffix += sequential.dim(" \xB7 ") + sequential.dim(branch);
-    writeStatus(`${sequential.yellow(h)} ${sequential.yellow("Connecting")}${suffix}
+    writeStatus(`${sequential.yellow(frame)} ${sequential.yellow("Connecting")}${suffix}
 `);
   }
   function startConnecting() {
-    (stopConnecting(),
-      renderConnectingLine(),
-      (connectingTimer = setInterval(() => {
-        (ze++, renderConnectingLine());
-      }, 150)));
+    stopConnecting();
+    renderConnectingLine();
+    connectingTimer = setInterval(() => {
+      connectingTick++;
+      renderConnectingLine();
+    }, 150);
   }
   function stopConnecting() {
-    if (connectingTimer) (clearInterval(connectingTimer), (connectingTimer = null));
+    if (connectingTimer) {
+      clearInterval(connectingTimer);
+      connectingTimer = null;
+    }
   }
-  function Re(h, L) {
-    if (be)
-      for (let je of qrLines)
-        writeStatus(`${sequential.dim(je)}
+  function Re(delayStr, elapsedStr) {
+    if (qrVisible)
+      for (let line of qrLines)
+        writeStatus(`${sequential.dim(line)}
 `);
-    let te = BRIDGE_SPINNER_FRAMES[ze % BRIDGE_SPINNER_FRAMES.length];
-    (ze++,
-      writeStatus(`${sequential.yellow(te)} ${sequential.yellow("Reconnecting")} ${sequential.dim("\xB7")} ${sequential.dim(`retrying in ${h}`)} ${sequential.dim("\xB7")} ${sequential.dim(`disconnected ${L}`)}
-`));
+    let frame = BRIDGE_SPINNER_FRAMES[connectingTick % BRIDGE_SPINNER_FRAMES.length];
+    connectingTick++;
+    writeStatus(`${sequential.yellow(frame)} ${sequential.yellow("Reconnecting")} ${sequential.dim("\xB7")} ${sequential.dim(`retrying in ${delayStr}`)} ${sequential.dim("\xB7")} ${sequential.dim(`disconnected ${elapsedStr}`)}
+`);
   }
   function renderStatusLine() {
     if (currentState === "reconnecting") return;
     clearStatusLines();
     let isIdle = currentState === "idle";
-    if (be)
+    if (qrVisible)
       for (let line of qrLines)
         writeStatus(`${sequential.dim(line)}
 `);
-    let indicator = BRIDGE_READY_INDICATOR,
-      te = isIdle ? sequential.green : sequential.cyan,
-      we = (isIdle ? sequential.green : sequential.cyan)(currentStateText),
-      suffix = "";
+    let indicator = BRIDGE_READY_INDICATOR;
+    let indicatorColor = isIdle ? sequential.green : sequential.cyan;
+    let we = (isIdle ? sequential.green : sequential.cyan)(currentStateText);
+    let suffix = "";
     if (repoName) suffix += sequential.dim(" \xB7 ") + sequential.dim(repoName);
     if (branch && spawnMode !== "worktree") suffix += sequential.dim(" \xB7 ") + sequential.dim(branch);
-    if (
-      (writeStatus(`${te(indicator)} ${we}${suffix}
-`),
-      sessionMax > 1)
-    ) {
-      let Fe =
+    writeStatus(`${indicatorColor(indicator)} ${we}${suffix}
+`);
+    if (sessionMax > 1) {
+      let modeHint =
         spawnMode === "worktree"
           ? "New sessions will be created in an isolated worktree"
           : "New sessions will be created in the current directory";
-      writeStatus(`    ${sequential.dim(`Capacity: ${q}/${sessionMax} \xB7 ${Fe}`)}
+      writeStatus(`    ${sequential.dim(`Capacity: ${sessionActive}/${sessionMax} \xB7 ${modeHint}`)}
 `);
-      for (let [, Ie] of sessionDisplayInfo) {
-        let st = Ie.title ? truncateToWidth(Ie.title, 35) : sequential.dim("Attached"),
-          titleLinked = wrapWithOsc8Link(st, Ie.url),
-          act = Ie.activity,
-          gt =
-            act && act.type !== "result" && act.type !== "error"
-              ? sequential.dim(` ${truncateToWidth(act.summary, 40)}`)
-              : "";
+      for (let [, info] of sessionDisplayInfo) {
+        let titleText = info.title ? truncateToWidth(info.title, 35) : sequential.dim("Attached");
+        let titleLinked = wrapWithOsc8Link(titleText, info.url);
+        let act = info.activity;
+        let gt =
+          act && act.type !== "result" && act.type !== "error"
+            ? sequential.dim(` ${truncateToWidth(act.summary, 40)}`)
+            : "";
         writeStatus(`    ${titleLinked}${gt}
 `);
       }
@@ -177,123 +190,133 @@ function createBridgeLogger(options) {
         spawnMode === "single-session"
           ? "Single session \xB7 exits when complete"
           : spawnMode === "worktree"
-            ? `Capacity: ${q}/1 \xB7 New sessions will be created in an isolated worktree`
-            : `Capacity: ${q}/1 \xB7 New sessions will be created in the current directory`;
+            ? `Capacity: ${sessionActive}/1 \xB7 New sessions will be created in an isolated worktree`
+            : `Capacity: ${sessionActive}/1 \xB7 New sessions will be created in the current directory`;
       writeStatus(`    ${sequential.dim(Fe)}
 `);
     }
     if (X) {
-      let { text: text, unattended: unattended } = X;
+      let { text, unattended } = X;
       writeStatus(`    ${unattended ? sequential.yellow(text) : sequential.dim(text)}
 `);
     }
-    if (sessionMax === 1 && !isIdle && lastToolSummary && Date.now() - ve < BRIDGE_STATUS_CONSTANTS)
+    if (sessionMax === 1 && !isIdle && lastToolSummary && Date.now() - lastToolTime < BRIDGE_STATUS_CONSTANTS)
       writeStatus(`  ${sequential.dim(truncateToWidth(lastToolSummary, 60))}
 `);
-    let Ce = activeSessionUrl ?? connectUrl;
-    if (Ce) {
+    let url = activeSessionUrl ?? connectUrl;
+    if (url) {
       writeStatus(`
 `);
-      let Fe = isIdle ? buildIdleFooterText(Ce) : buildActiveFooterText(Ce),
-        Ie = be
-          ? sequential.dim.italic("space to hide QR code")
-          : sequential.dim.italic("space to show QR code"),
-        st = spawnModeDisplay ? sequential.dim.italic(" \xB7 w to toggle spawn mode") : "";
-      if (
-        (writeStatus(`${sequential.dim(Fe)}
-`),
-        (isIdle || sessionMax > 1) && P())
-      )
+      let footerText = isIdle ? buildIdleFooterText(url) : buildActiveFooterText(url);
+      let qrHint = qrVisible
+        ? sequential.dim.italic("space to hide QR code")
+        : sequential.dim.italic("space to show QR code");
+      let toggleHint = spawnModeDisplay ? sequential.dim.italic(" \xB7 w to toggle spawn mode") : "";
+      writeStatus(`${sequential.dim(footerText)}
+`);
+      if ((isIdle || sessionMax > 1) && P())
         writeStatus(`${sequential.dim(PROJECTS_HINT_TEXT)}
 `);
-      writeStatus(`${Ie}${st}
+      writeStatus(`${qrHint}${toggleHint}
 `);
     }
   }
   return {
-    printBanner(h, L) {
-      if (
-        ((cachedIngressUrl = h.sessionIngressUrl),
-        (connectUrl = buildBridgeConnectUrl(L, cachedIngressUrl)),
-        regenerateQr(connectUrl),
-        verbose)
-      )
-        s(
+    printBanner(config, environmentId) {
+      cachedIngressUrl = config.sessionIngressUrl;
+      connectUrl = buildBridgeConnectUrl(environmentId, cachedIngressUrl);
+      regenerateQr(connectUrl);
+      if (verbose)
+        write(
           sequential.dim("Remote Control") +
-            ` v${{ ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues", PACKAGE_URL: "@anthropic-ai/claude-code", README_URL: "https://code.claude.com/docs/en/overview", VERSION: "2.1.316", FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues", BUILD_TIME: "2026-10-30T23:28:13Z", GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1", HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js", DD_SOURCEMAP_GROUP: "default" }.VERSION}
+            ` v${
+              {
+                ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
+                PACKAGE_URL: "@anthropic-ai/claude-code",
+                README_URL: "https://code.claude.com/docs/en/overview",
+                VERSION: "2.1.316",
+                FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
+                BUILD_TIME: "2026-10-30T23:28:13Z",
+                GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+                HOOKS_WORKER_URL:
+                  import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
+                DD_SOURCEMAP_GROUP: "default",
+              }.VERSION
+            }
 `,
         );
       if (verbose) {
-        if (h.spawnMode !== "single-session")
-          (s(
+        if (config.spawnMode !== "single-session") {
+          write(
             sequential.dim("Spawn mode: ") +
-              `${h.spawnMode}
+              `${config.spawnMode}
 `,
-          ),
-            s(
-              sequential.dim("Max concurrent sessions: ") +
-                `${h.maxSessions}
+          );
+          write(
+            sequential.dim("Max concurrent sessions: ") +
+              `${config.maxSessions}
 `,
-            ));
-        s(
+          );
+        }
+        write(
           sequential.dim("Environment ID: ") +
-            `${L}
+            `${environmentId}
 `,
         );
       }
-      if (h.livePreviewPorts && h.livePreviewPorts.size > 0) {
-        let joined = [...h.livePreviewPorts].sort((je, we) => je - we).join(", ");
-        s(
-          sequential.yellow(`\u26A0  Live preview enabled: 127.0.0.1 ${plural(h.livePreviewPorts.size, "port")} ${joined} ${h.livePreviewPorts.size > 1 ? "are" : "is"} reachable from this session's livepreview URL while Remote Control is running.
+      if (config.livePreviewPorts && config.livePreviewPorts.size > 0) {
+        let joined = [...config.livePreviewPorts].sort((je, we) => je - we).join(", ");
+        write(
+          sequential.yellow(`\u26A0  Live preview enabled: 127.0.0.1 ${plural(config.livePreviewPorts.size, "port")} ${joined} ${config.livePreviewPorts.size > 1 ? "are" : "is"} reachable from this session's livepreview URL while Remote Control is running.
 `),
         );
       }
-      (s(`
-`),
-        startConnecting());
+      write(`
+`);
+      startConnecting();
     },
-    logSessionStart(h, L) {
+    logSessionStart(sessionId, prompt) {
       if (verbose) {
-        let short = truncateToWidth(L, 80);
+        let short = truncateToWidth(prompt, 80);
         printLog(
           sequential.dim(`[${timestamp()}]`) +
-            ` Session started: ${sequential.white(`"${short}"`)} (${sequential.dim(h)})
+            ` Session started: ${sequential.white(`"${short}"`)} (${sequential.dim(sessionId)})
 `,
         );
       }
     },
-    logSessionComplete(h, L) {
+    logSessionComplete(sessionId, durationMs) {
       printLog(
         sequential.dim(`[${timestamp()}]`) +
-          ` Session ${sequential.green("completed")} (${formatDuration(L)}) ${sequential.dim(h)}
+          ` Session ${sequential.green("completed")} (${formatDuration(durationMs)}) ${sequential.dim(sessionId)}
 `,
       );
     },
-    logSessionFailed(h, L) {
+    logSessionFailed(sessionId, error) {
       printLog(
         sequential.dim(`[${timestamp()}]`) +
-          ` Session ${sequential.red("failed")}: ${L} ${sequential.dim(h)}
+          ` Session ${sequential.red("failed")}: ${error} ${sequential.dim(sessionId)}
 `,
       );
     },
-    logStatus(h) {
+    logStatus(message) {
       printLog(
         sequential.dim(`[${timestamp()}]`) +
-          ` ${h}
+          ` ${message}
 `,
       );
     },
-    logVerbose(h) {
+    logVerbose(message) {
       if (verbose)
         printLog(
-          sequential.dim(`[${timestamp()}] ${h}`) +
+          sequential.dim(`[${timestamp()}] ${message}`) +
             `
 `,
         );
     },
-    logError(h) {
+    logError(message) {
       printLog(
-        sequential.red(`[${timestamp()}] Error: ${h}`) +
+        sequential.red(`[${timestamp()}] Error: ${message}`) +
           `
 `,
       );
@@ -305,92 +328,112 @@ function createBridgeLogger(options) {
 `,
       );
     },
-    logReconnected(h) {
-      ((j = null),
-        printLog(
-          sequential.dim(`[${timestamp()}]`) +
-            ` ${sequential.green("Reconnected")} after ${formatDuration(h)}
+    logReconnected(disconnectedMs) {
+      j = null;
+      printLog(
+        sequential.dim(`[${timestamp()}]`) +
+          ` ${sequential.green("Reconnected")} after ${formatDuration(disconnectedMs)}
 `,
-        ));
+      );
     },
-    setRepoInfo(h, L) {
-      ((repoName = h), (branch = L));
+    setRepoInfo(repo, branchName) {
+      repoName = repo;
+      branch = branchName;
     },
-    setDebugLogPath(h) {
-      debugLogPath = h;
+    setDebugLogPath(path) {
+      debugLogPath = path;
     },
     updateIdleStatus() {
-      (stopConnecting(),
-        (currentState = "idle"),
-        (currentStateText = "Ready"),
-        (lastToolSummary = null),
-        (ve = 0),
-        (activeSessionUrl = null),
-        regenerateQr(connectUrl),
-        renderStatusLine());
-    },
-    setAttached(h) {
-      if (
-        (stopConnecting(),
-        (currentState = "attached"),
-        (currentStateText = "Connected"),
-        (lastToolSummary = null),
-        (ve = 0),
-        sessionMax <= 1)
-      )
-        ((activeSessionUrl = getRemoteSessionUrl(h, cachedIngressUrl)), regenerateQr(activeSessionUrl));
+      stopConnecting();
+      currentState = "idle";
+      currentStateText = "Ready";
+      lastToolSummary = null;
+      lastToolTime = 0;
+      activeSessionUrl = null;
+      regenerateQr(connectUrl);
       renderStatusLine();
     },
-    updateReconnectingStatus(h, L) {
-      (stopConnecting(),
-        clearStatusLines(),
-        (currentState = "reconnecting"),
-        (j = { delayStr: h, elapsedStr: L }),
-        Re(h, L));
+    setAttached(sessionId) {
+      stopConnecting();
+      currentState = "attached";
+      currentStateText = "Connected";
+      lastToolSummary = null;
+      lastToolTime = 0;
+      if (sessionMax <= 1) {
+        activeSessionUrl = getRemoteSessionUrl(sessionId, cachedIngressUrl);
+        regenerateQr(activeSessionUrl);
+      }
+      renderStatusLine();
     },
-    updateSessionStatus(h, L, te, je) {
-      if (te.type === "tool_start") ((lastToolSummary = te.summary), (ve = Date.now()));
+    updateReconnectingStatus(delayStr, elapsedStr) {
+      stopConnecting();
+      clearStatusLines();
+      currentState = "reconnecting";
+      j = {
+        delayStr,
+        elapsedStr,
+      };
+      Re(delayStr, elapsedStr);
+    },
+    updateSessionStatus(_sessionId, _elapsed, activity, _trail) {
+      if (activity.type === "tool_start") {
+        lastToolSummary = activity.summary;
+        lastToolTime = Date.now();
+      }
       renderStatusLine();
     },
     clearStatus(h) {
-      if ((stopConnecting(), clearStatusLines(), h?.final)) j = null;
+      stopConnecting();
+      clearStatusLines();
+      if (h?.final) j = null;
     },
     setCloudSessionsStatus(h) {
       if (h?.text === X?.text && h?.unattended === X?.unattended) return;
-      if (((X = h), U > 0 && connectingTimer === null)) renderStatusLine();
+      X = h;
+      if (statusLineCount > 0 && connectingTimer === null) renderStatusLine();
     },
     detachTerminal() {
-      s = () => {};
+      write = () => {};
     },
     toggleQr() {
-      ((be = !be), renderStatusLine());
-    },
-    updateSessionCount(h, L, te) {
-      if (q === h && sessionMax === L && spawnMode === te) return;
-      ((q = h), (sessionMax = L), (spawnMode = te));
-    },
-    setSpawnModeDisplay(h) {
-      if (spawnModeDisplay === h) return;
-      if (((spawnModeDisplay = h), h)) spawnMode = h;
-    },
-    addSession(h, L) {
-      sessionDisplayInfo.set(h, { url: L });
-    },
-    updateSessionActivity(h, L) {
-      let info = sessionDisplayInfo.get(h);
-      if (!info) return;
-      info.activity = L;
-    },
-    setSessionTitle(h, L) {
-      let info = sessionDisplayInfo.get(h);
-      if (!info) return;
-      let je = sanitizeSessionTitle(L);
-      if (((info.title = je), currentState === "reconnecting")) return;
-      if (sessionMax === 1) ((currentState = "titled"), (currentStateText = truncateToWidth(je, 40)));
+      qrVisible = !qrVisible;
       renderStatusLine();
     },
-    removeSession(h) {
-      sessionDisplayInfo.delete(h);
+    updateSessionCount(active, max, mode) {
+      if (sessionActive === active && sessionMax === max && spawnMode === mode) return;
+      sessionActive = active;
+      sessionMax = max;
+      spawnMode = mode;
+    },
+    setSpawnModeDisplay(mode) {
+      if (spawnModeDisplay === mode) return;
+      spawnModeDisplay = mode;
+      if (mode) spawnMode = mode;
+    },
+    addSession(sessionId, url) {
+      sessionDisplayInfo.set(sessionId, {
+        url,
+      });
+    },
+    updateSessionActivity(sessionId, activity) {
+      let info = sessionDisplayInfo.get(sessionId);
+      if (!info) return;
+      info.activity = activity;
+    },
+    setSessionTitle(sessionId, L) {
+      let info = sessionDisplayInfo.get(sessionId);
+      if (!info) return;
+      let je = sanitizeSessionTitle(L);
+      info.title = je;
+      if (currentState === "reconnecting") return;
+      if (sessionMax === 1) {
+        currentState = "titled";
+        currentStateText = truncateToWidth(je, 40);
+      }
+      renderStatusLine();
+    },
+    removeSession(sessionId) {
+      sessionDisplayInfo.delete(sessionId);
     },
     refreshDisplay() {
       if (currentState === "reconnecting") return;
@@ -398,5 +441,4 @@ function createBridgeLogger(options) {
     },
   };
 }
-
 export { createBridgeLogger };

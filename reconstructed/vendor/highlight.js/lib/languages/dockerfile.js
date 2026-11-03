@@ -8,27 +8,29 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:121731-122157 cjs-fingerprint
-var xn = x(function (Zu, wn) {
-  function Wl(e) {
+var require_dockerfile = x(function (cjsExports, cjsModule) {
+  function dockerfile(hljs) {
     return {
       name: "Dockerfile",
       aliases: ["docker"],
-      case_insensitive: !0,
+      case_insensitive: true,
       keywords: ["from", "maintainer", "expose", "env", "arg", "user", "onbuild", "stopsignal"],
       contains: [
-        e.HASH_COMMENT_MODE,
-        e.APOS_STRING_MODE,
-        e.QUOTE_STRING_MODE,
-        e.NUMBER_MODE,
+        hljs.HASH_COMMENT_MODE,
+        hljs.APOS_STRING_MODE,
+        hljs.QUOTE_STRING_MODE,
+        hljs.NUMBER_MODE,
         {
           beginKeywords: "run cmd entrypoint volume add copy workdir label healthcheck shell",
-          starts: { end: /[^\\]$/, subLanguage: "bash" },
+          starts: {
+            end: /[^\\]$/,
+            subLanguage: "bash",
+          },
         },
       ],
       illegal: "</",
     };
   }
-  wn.exports = Wl;
+  cjsModule.exports = dockerfile;
 });
-
-export { xn };
+export { require_dockerfile };

@@ -14,16 +14,19 @@ import { getRootSession } from "../../bootstrap/state.js";
 
 //@ chunk-e6aww6q8.js:127851-127967 placement
 class ExplorePlanAgentsGate {
-  latched = void 0;
+  latched = undefined;
   isEnabled() {
-    return ((this.latched ??= !env.CLAUDE_CODE_DISABLE_EXPLORE_PLAN_AGENTS), this.latched);
+    this.latched ??= !env.CLAUDE_CODE_DISABLE_EXPLORE_PLAN_AGENTS;
+    return this.latched;
   }
 }
 //@ chunk-e6aww6q8.js:127967-127994 placement
-var uao = new HostScoped(() => new ExplorePlanAgentsGate());
+var explorePlanAgentsGateSlots = new HostScoped(() => new ExplorePlanAgentsGate());
 //@ chunk-e6aww6q8.js:127994-128044 placement
-function oG() {
-  return uao.of(getRootSession().host).isEnabled();
+/**
+ * 判断 Explore/Plan 内置代理是否启用。
+ */
+function isExplorePlanAgentsEnabled() {
+  return explorePlanAgentsGateSlots.of(getRootSession().host).isEnabled();
 }
-
-export { oG };
+export { isExplorePlanAgentsEnabled };

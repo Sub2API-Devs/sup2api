@@ -28,5 +28,4 @@ var joined = [
   "",
 ].join(`
 `);
-
 export { joined };

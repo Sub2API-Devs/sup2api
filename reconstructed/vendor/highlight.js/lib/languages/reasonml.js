@@ -8,8 +8,8 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:391276-392734 cjs-fingerprint
-var fs = x(function (Bg, bs) {
-  function tm(e) {
+var require_reasonml = x(function (cjsExports, cjsModule) {
+  function reasonml(hljs) {
     return {
       name: "ReasonML",
       aliases: ["re"],
@@ -93,34 +93,65 @@ var fs = x(function (Bg, bs) {
       },
       illegal: /(:-|:=|\$\{|\+=)/,
       contains: [
-        { scope: "literal", match: /\[(\|\|)?\]|\(\)/, relevance: 0 },
-        e.C_LINE_COMMENT_MODE,
-        e.COMMENT(/\/\*/, /\*\//, { illegal: /^(#,\/\/)/ }),
-        { scope: "symbol", match: /\'[A-Za-z_](?!\')[\w\']*/ },
-        { scope: "type", match: /`[A-Z][\w\']*/ },
-        { scope: "type", match: /\b[A-Z][\w\']*/, relevance: 0 },
-        { match: /[a-z_]\w*\'[\w\']*/, relevance: 0 },
+        {
+          scope: "literal",
+          match: /\[(\|\|)?\]|\(\)/,
+          relevance: 0,
+        },
+        hljs.C_LINE_COMMENT_MODE,
+        hljs.COMMENT(/\/\*/, /\*\//, {
+          illegal: /^(#,\/\/)/,
+        }),
+        {
+          scope: "symbol",
+          match: /\'[A-Za-z_](?!\')[\w\']*/,
+        },
+        {
+          scope: "type",
+          match: /`[A-Z][\w\']*/,
+        },
+        {
+          scope: "type",
+          match: /\b[A-Z][\w\']*/,
+          relevance: 0,
+        },
+        {
+          match: /[a-z_]\w*\'[\w\']*/,
+          relevance: 0,
+        },
         {
           scope: "operator",
           match: /\s+(\|\||\+[\+\.]?|\*[\*\/\.]?|\/[\.]?|\.\.\.|\|>|&&|===?)\s+/,
           relevance: 0,
         },
-        e.inherit(e.APOS_STRING_MODE, { scope: "string", relevance: 0 }),
-        e.inherit(e.QUOTE_STRING_MODE, { illegal: null }),
+        hljs.inherit(hljs.APOS_STRING_MODE, {
+          scope: "string",
+          relevance: 0,
+        }),
+        hljs.inherit(hljs.QUOTE_STRING_MODE, {
+          illegal: null,
+        }),
         {
           scope: "number",
           variants: [
-            { match: /\b0[xX][a-fA-F0-9_]+[Lln]?/ },
-            { match: /\b0[oO][0-7_]+[Lln]?/ },
-            { match: /\b0[bB][01_]+[Lln]?/ },
-            { match: /\b[0-9][0-9_]*([Lln]|(\.[0-9_]*)?([eE][-+]?[0-9_]+)?)/ },
+            {
+              match: /\b0[xX][a-fA-F0-9_]+[Lln]?/,
+            },
+            {
+              match: /\b0[oO][0-7_]+[Lln]?/,
+            },
+            {
+              match: /\b0[bB][01_]+[Lln]?/,
+            },
+            {
+              match: /\b[0-9][0-9_]*([Lln]|(\.[0-9_]*)?([eE][-+]?[0-9_]+)?)/,
+            },
           ],
           relevance: 0,
         },
       ],
     };
   }
-  bs.exports = tm;
+  cjsModule.exports = reasonml;
 });
-
-export { fs };
+export { require_reasonml };

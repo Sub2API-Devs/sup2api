@@ -15,27 +15,27 @@ import { getRootSession } from "../../bootstrap/state.js";
 class AnnouncementState {
   announcementSlotWinner = null;
   announcementSlotGovernance = null;
-  announcementSlotReleased = !1;
+  announcementSlotReleased = false;
   countedNoticeImpressions = new Set();
-  startupAnnouncementPick = void 0;
+  startupAnnouncementPick = undefined;
   companyAnnouncement = null;
   fotwContent = null;
-  ccCeMigrateGroup = void 0;
+  ccCeMigrateGroup = undefined;
   savedModelSuccessorDrawnAt = null;
   emergencyTipShown = null;
-  voiceFooterHintCounted = !1;
-  voiceFooterHintUnderCap = void 0;
-  isLogoRetired = !1;
+  voiceFooterHintCounted = false;
+  voiceFooterHintUnderCap = undefined;
+  isLogoRetired = false;
   reset() {
-    ((this.announcementSlotWinner = null),
-      (this.announcementSlotGovernance = null),
-      (this.announcementSlotReleased = !1),
-      this.countedNoticeImpressions.clear(),
-      (this.startupAnnouncementPick = void 0),
-      (this.companyAnnouncement = null),
-      (this.fotwContent = null),
-      (this.ccCeMigrateGroup = void 0),
-      (this.savedModelSuccessorDrawnAt = null));
+    this.announcementSlotWinner = null;
+    this.announcementSlotGovernance = null;
+    this.announcementSlotReleased = false;
+    this.countedNoticeImpressions.clear();
+    this.startupAnnouncementPick = undefined;
+    this.companyAnnouncement = null;
+    this.fotwContent = null;
+    this.ccCeMigrateGroup = undefined;
+    this.savedModelSuccessorDrawnAt = null;
   }
 }
 //@ chunk-3w159cb0.js:888-914 placement
@@ -44,5 +44,4 @@ var announcementStateByHost = new SessionRootSlot(() => new AnnouncementState())
 function announcementState() {
   return announcementStateByHost.of(getRootSession());
 }
-
 export { announcementState, announcementStateByHost };

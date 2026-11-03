@@ -8,64 +8,139 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:244617-246122 cjs-fingerprint
-var Mr = x(function (zE, hr) {
-  function tp(e) {
-    let s = { className: "literal", begin: "\\b(t{1}|nil)\\b" },
-      o = {
-        className: "number",
-        variants: [
-          { begin: "(-|\\+)?\\d+(\\.\\d+|\\/\\d+)?((d|e|f|l|s|D|E|F|L|S)(\\+|-)?\\d+)?", relevance: 0 },
-          { begin: "#(b|B)[0-1]+(/[0-1]+)?" },
-          { begin: "#(o|O)[0-7]+(/[0-7]+)?" },
-          { begin: "#(x|X)[0-9a-fA-F]+(/[0-9a-fA-F]+)?" },
-          {
-            begin:
-              "#(c|C)\\((-|\\+)?\\d+(\\.\\d+|\\/\\d+)?((d|e|f|l|s|D|E|F|L|S)(\\+|-)?\\d+)? +(-|\\+)?\\d+(\\.\\d+|\\/\\d+)?((d|e|f|l|s|D|E|F|L|S)(\\+|-)?\\d+)?",
-            end: "\\)",
-          },
-        ],
-      },
-      inherit = e.inherit(e.QUOTE_STRING_MODE, { illegal: null }),
-      COMMENT = e.COMMENT(";", "$", { relevance: 0 }),
-      c = { begin: "\\*", end: "\\*" },
-      l = { className: "symbol", begin: "[:&][a-zA-Z_\\-+\\*\\/<=>&#][a-zA-Z0-9_\\-+*\\/<=>&#!]*" },
-      d = { begin: "[a-zA-Z_\\-+\\*\\/<=>&#][a-zA-Z0-9_\\-+*\\/<=>&#!]*", relevance: 0 },
-      m = { begin: "\\|[^]*?\\|" },
-      _ = {
-        contains: [o, inherit, c, l, { begin: "\\(", end: "\\)", contains: ["self", s, inherit, o, d] }, d],
-        variants: [
-          { begin: "['`]\\(", end: "\\)" },
-          { begin: "\\(quote ", end: "\\)", keywords: { name: "quote" } },
-          { begin: "'\\|[^]*?\\|" },
-        ],
-      },
-      E = {
-        variants: [
-          { begin: "'[a-zA-Z_\\-+\\*\\/<=>&#][a-zA-Z0-9_\\-+*\\/<=>&#!]*" },
-          {
-            begin:
-              "#'[a-zA-Z_\\-+\\*\\/<=>&#][a-zA-Z0-9_\\-+*\\/<=>&#!]*(::[a-zA-Z_\\-+\\*\\/<=>&#][a-zA-Z0-9_\\-+*\\/<=>&#!]*)*",
-          },
-        ],
-      },
-      u = { begin: "\\(\\s*", end: "\\)" },
-      b = { endsWithParent: !0, relevance: 0 };
-    return (
-      (u.contains = [
+var require_lisp = x(function (cjsExports, cjsModule) {
+  function lisp(hljs) {
+    let LITERAL = {
+      className: "literal",
+      begin: "\\b(t{1}|nil)\\b",
+    };
+    let NUMBER = {
+      className: "number",
+      variants: [
         {
-          className: "name",
-          variants: [
-            { begin: "[a-zA-Z_\\-+\\*\\/<=>&#][a-zA-Z0-9_\\-+*\\/<=>&#!]*", relevance: 0 },
-            { begin: "\\|[^]*?\\|" },
-          ],
+          begin: "(-|\\+)?\\d+(\\.\\d+|\\/\\d+)?((d|e|f|l|s|D|E|F|L|S)(\\+|-)?\\d+)?",
+          relevance: 0,
         },
-        b,
-      ]),
-      (b.contains = [_, E, u, s, o, inherit, COMMENT, c, l, m, d]),
-      { name: "Lisp", illegal: /\S/, contains: [o, e.SHEBANG(), s, inherit, COMMENT, _, E, u, d] }
-    );
+        {
+          begin: "#(b|B)[0-1]+(/[0-1]+)?",
+        },
+        {
+          begin: "#(o|O)[0-7]+(/[0-7]+)?",
+        },
+        {
+          begin: "#(x|X)[0-9a-fA-F]+(/[0-9a-fA-F]+)?",
+        },
+        {
+          begin:
+            "#(c|C)\\((-|\\+)?\\d+(\\.\\d+|\\/\\d+)?((d|e|f|l|s|D|E|F|L|S)(\\+|-)?\\d+)? +(-|\\+)?\\d+(\\.\\d+|\\/\\d+)?((d|e|f|l|s|D|E|F|L|S)(\\+|-)?\\d+)?",
+          end: "\\)",
+        },
+      ],
+    };
+    let STRING = hljs.inherit(hljs.QUOTE_STRING_MODE, {
+      illegal: null,
+    });
+    let COMMENT = hljs.COMMENT(";", "$", {
+      relevance: 0,
+    });
+    let VARIABLE = {
+      begin: "\\*",
+      end: "\\*",
+    };
+    let KEYWORD = {
+      className: "symbol",
+      begin: "[:&][a-zA-Z_\\-+\\*\\/<=>&#][a-zA-Z0-9_\\-+*\\/<=>&#!]*",
+    };
+    let IDENT = {
+      begin: "[a-zA-Z_\\-+\\*\\/<=>&#][a-zA-Z0-9_\\-+*\\/<=>&#!]*",
+      relevance: 0,
+    };
+    let MEC = {
+      begin: "\\|[^]*?\\|",
+    };
+    let QUOTED = {
+      contains: [
+        NUMBER,
+        STRING,
+        VARIABLE,
+        KEYWORD,
+        {
+          begin: "\\(",
+          end: "\\)",
+          contains: ["self", LITERAL, STRING, NUMBER, IDENT],
+        },
+        IDENT,
+      ],
+      variants: [
+        {
+          begin: "['`]\\(",
+          end: "\\)",
+        },
+        {
+          begin: "\\(quote ",
+          end: "\\)",
+          keywords: {
+            name: "quote",
+          },
+        },
+        {
+          begin: "'\\|[^]*?\\|",
+        },
+      ],
+    };
+    let QUOTED_ATOM = {
+      variants: [
+        {
+          begin: "'[a-zA-Z_\\-+\\*\\/<=>&#][a-zA-Z0-9_\\-+*\\/<=>&#!]*",
+        },
+        {
+          begin:
+            "#'[a-zA-Z_\\-+\\*\\/<=>&#][a-zA-Z0-9_\\-+*\\/<=>&#!]*(::[a-zA-Z_\\-+\\*\\/<=>&#][a-zA-Z0-9_\\-+*\\/<=>&#!]*)*",
+        },
+      ],
+    };
+    let LIST = {
+      begin: "\\(\\s*",
+      end: "\\)",
+    };
+    let BODY = {
+      endsWithParent: true,
+      relevance: 0,
+    };
+    LIST.contains = [
+      {
+        className: "name",
+        variants: [
+          {
+            begin: "[a-zA-Z_\\-+\\*\\/<=>&#][a-zA-Z0-9_\\-+*\\/<=>&#!]*",
+            relevance: 0,
+          },
+          {
+            begin: "\\|[^]*?\\|",
+          },
+        ],
+      },
+      BODY,
+    ];
+    BODY.contains = [
+      QUOTED,
+      QUOTED_ATOM,
+      LIST,
+      LITERAL,
+      NUMBER,
+      STRING,
+      COMMENT,
+      VARIABLE,
+      KEYWORD,
+      MEC,
+      IDENT,
+    ];
+    return {
+      name: "Lisp",
+      illegal: /\S/,
+      contains: [NUMBER, hljs.SHEBANG(), LITERAL, STRING, COMMENT, QUOTED, QUOTED_ATOM, LIST, IDENT],
+    };
   }
-  hr.exports = tp;
+  cjsModule.exports = lisp;
 });
-
-export { Mr };
+export { require_lisp };

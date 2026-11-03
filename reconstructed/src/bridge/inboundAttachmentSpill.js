@@ -17,76 +17,88 @@ import { READ_LIMITS } from "../utils/fsBoundRead.js";
 import { openRegularFileForRead } from "../utils/fsSafety/boundOpen.js";
 
 //@ chunk-5wx09b4h.js:479-492 placement
-var S = 300000;
+var SPILL_FILE_MAX_AGE_MS = 300000;
+//@ chunk-5wx09b4h.js:492-1274 placement
 /**
  * 为入站附件打开溢出文件并计算 sha256。
  */
-//@ chunk-5wx09b4h.js:492-1274 placement
-async function openSpill(a, e, i = 384) {
-  let r = await readdir(a.at).catch(() => []);
+async function openSpill(attachmentsDir, e, i = 384) {
+  let r = await readdir(attachmentsDir.at).catch(() => []);
   await Promise.all(
     r
       .filter((t) => isOwnTempName(t, basename(e)))
       .map(async (t) => {
-        let o = join(a.at, t),
-          d = await lstat(o).catch(() => {
-            return;
-          });
-        if (d !== void 0 && d.mtimeMs < Date.now() - S) await rm(o, { force: !0 }).catch(() => {});
+        let o = join(attachmentsDir.at, t);
+        let d = await lstat(o).catch(() => {
+          return;
+        });
+        if (d !== undefined && d.mtimeMs < Date.now() - SPILL_FILE_MAX_AGE_MS)
+          await rm(o, {
+            force: true,
+          }).catch(() => {});
       }),
   );
-  let n = join(a.at, basename(makeTempSiblingPath(e))),
-    s = await open(n, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | READ_LIMITS, 384).catch(
-      async (t) => {
-        throw (await a.release(), t);
-      },
-    ),
-    m = createHash("sha256"),
-    p = 0,
-    f = !1;
+  let n = join(attachmentsDir.at, basename(makeTempSiblingPath(e)));
+  let s = await open(n, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | READ_LIMITS, 384).catch(
+    async (error) => {
+      await attachmentsDir.release();
+      throw error;
+    },
+  );
+  let hash = createHash("sha256");
+  let size = 0;
+  let f = false;
   return {
     async write(t) {
-      (m.update(t), (p += t.byteLength), await s.writeFile(t));
+      hash.update(t);
+      size += t.byteLength;
+      await s.writeFile(t);
     },
     async finish() {
       if (i !== 384) await s.chmod(i);
-      let { dev: dev, ino: ino } = await s.stat();
-      return (
-        await s.close(),
-        (f = !0),
-        {
-          path: n,
-          placeAt: join(a.at, basename(e)),
-          target: e,
-          size: p,
-          sha256: m.digest("hex"),
-          identity: `${dev}:${ino}`,
-          release: a.release,
-        }
-      );
+      let { dev, ino } = await s.stat();
+      await s.close();
+      f = true;
+      return {
+        path: n,
+        placeAt: join(attachmentsDir.at, basename(e)),
+        target: e,
+        size,
+        sha256: hash.digest("hex"),
+        identity: `${dev}:${ino}`,
+        release: attachmentsDir.release,
+      };
     },
     async discard() {
-      if (!f)
-        (await s.close().catch(() => {}), await rm(n, { force: !0 }).catch(() => {}), await a.release());
+      if (!f) {
+        await s.close().catch(() => {});
+        await rm(n, {
+          force: true,
+        }).catch(() => {});
+        await attachmentsDir.release();
+      }
     },
   };
 }
 //@ chunk-5wx09b4h.js:1274-1615 placement
-async function sha256OfFile(a, e) {
-  let i = await openRegularFileForRead(a).catch(() => null);
+async function sha256OfFile(path, e) {
+  let i = await openRegularFileForRead(path).catch(() => null);
   if (i === null) return null;
   try {
     let stats = await i.stat();
     if (!stats.isFile() || stats.size !== e) return null;
-    let n = createHash("sha256");
-    for await (let s of i.createReadStream({ autoClose: !1, end: e - 1, highWaterMark: 1048576 }))
-      n.update(s);
-    return n.digest("hex");
+    let hash = createHash("sha256");
+    for await (let s of i.createReadStream({
+      autoClose: false,
+      end: e - 1,
+      highWaterMark: 1048576,
+    }))
+      hash.update(s);
+    return hash.digest("hex");
   } catch {
     return null;
   } finally {
     await i.close().catch(() => {});
   }
 }
-
 export { sha256OfFile, openSpill };

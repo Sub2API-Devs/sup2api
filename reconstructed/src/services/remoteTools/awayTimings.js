@@ -10,8 +10,13 @@
  */
 
 //@ chunk-bcesxe71.js:191-205 placement
-var CXe = 45000;
+/**
+ * 会话存活判定超时。
+ */
+var SESSION_LIVENESS_TIMEOUT_MS = 45000;
 //@ chunk-bcesxe71.js:205-218 placement
-var f$n = 1000;
-
-export { f$n, CXe };
+/**
+ * 重连退避的起始间隔。
+ */
+var RECONNECT_BACKOFF_BASE_MS = 1000;
+export { RECONNECT_BACKOFF_BASE_MS, SESSION_LIVENESS_TIMEOUT_MS };

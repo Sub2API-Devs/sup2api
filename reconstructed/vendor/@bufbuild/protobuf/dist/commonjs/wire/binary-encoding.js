@@ -6,193 +6,237 @@
  * attribution: cjs-require-graph 1
  */
 import { x } from "../../../../../../runtime/bun-runtime.js";
-import { Tg } from "../../cjs/wire/varint.js";
-import { ko } from "../proto-int64.js";
-import { Rg } from "../../cjs/wire/text-encoding.js";
+import { require_varint } from "../../cjs/wire/varint.js";
+import { require_proto_int64 } from "../proto-int64.js";
+import { require_text_encoding } from "../../cjs/wire/text-encoding.js";
 
 //@ chunk-fq0cr76a.js:332773-338210 cjs-require-graph
-var xc = x(function (YN) {
-  Object.defineProperty(YN, "__esModule", { value: !0 });
-  YN.BinaryReader =
-    YN.BinaryWriter =
-    YN.INT32_MIN =
-    YN.INT32_MAX =
-    YN.UINT32_MAX =
-    YN.FLOAT32_MIN =
-    YN.FLOAT32_MAX =
-    YN.WireType =
-      void 0;
-  var ii = Tg(),
-    rs = ko(),
-    Ig = Rg(),
-    _l;
-  (function (e) {
-    ((e[(e.Varint = 0)] = "Varint"),
-      (e[(e.Bit64 = 1)] = "Bit64"),
-      (e[(e.LengthDelimited = 2)] = "LengthDelimited"),
-      (e[(e.StartGroup = 3)] = "StartGroup"),
-      (e[(e.EndGroup = 4)] = "EndGroup"),
-      (e[(e.Bit32 = 5)] = "Bit32"));
-  })(_l || (YN.WireType = _l = {}));
-  YN.FLOAT32_MAX = 340282346638528860000000000000000000000;
-  YN.FLOAT32_MIN = -340282346638528860000000000000000000000;
-  YN.UINT32_MAX = 4294967295;
-  YN.INT32_MAX = 2147483647;
-  YN.INT32_MIN = -2147483648;
-  class qN {
-    constructor(e = Ig.getTextEncoding().encodeUtf8) {
-      ((this.encodeUtf8 = e), (this.stack = []), (this.chunks = []), (this.buf = []));
+var require_binary_encoding = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.BinaryReader =
+    cjsExports.BinaryWriter =
+    cjsExports.INT32_MIN =
+    cjsExports.INT32_MAX =
+    cjsExports.UINT32_MAX =
+    cjsExports.FLOAT32_MIN =
+    cjsExports.FLOAT32_MAX =
+    cjsExports.WireType =
+      undefined;
+  var varint_js_1 = require_varint();
+  var proto_int64_js_1 = require_proto_int64();
+  var text_encoding_js_1 = require_text_encoding();
+  var WireType;
+  (function (WireType) {
+    WireType[(WireType.Varint = 0)] = "Varint";
+    WireType[(WireType.Bit64 = 1)] = "Bit64";
+    WireType[(WireType.LengthDelimited = 2)] = "LengthDelimited";
+    WireType[(WireType.StartGroup = 3)] = "StartGroup";
+    WireType[(WireType.EndGroup = 4)] = "EndGroup";
+    WireType[(WireType.Bit32 = 5)] = "Bit32";
+  })(WireType || (cjsExports.WireType = WireType = {}));
+  cjsExports.FLOAT32_MAX = 340282346638528860000000000000000000000;
+  cjsExports.FLOAT32_MIN = -340282346638528860000000000000000000000;
+  cjsExports.UINT32_MAX = 4294967295;
+  cjsExports.INT32_MAX = 2147483647;
+  cjsExports.INT32_MIN = -2147483648;
+  class BinaryWriter {
+    constructor(encodeUtf8 = text_encoding_js_1.getTextEncoding().encodeUtf8) {
+      this.encodeUtf8 = encodeUtf8;
+      this.stack = [];
+      this.chunks = [];
+      this.buf = [];
     }
     finish() {
-      if (this.buf.length) (this.chunks.push(new Uint8Array(this.buf)), (this.buf = []));
-      let e = 0;
-      for (let s = 0; s < this.chunks.length; s++) e += this.chunks[s].length;
-      let uint8Array = new Uint8Array(e),
-        r = 0;
-      for (let s = 0; s < this.chunks.length; s++)
-        (uint8Array.set(this.chunks[s], r), (r += this.chunks[s].length));
-      return ((this.chunks = []), uint8Array);
+      if (this.buf.length) {
+        this.chunks.push(new Uint8Array(this.buf));
+        this.buf = [];
+      }
+      let len = 0;
+      for (let i = 0; i < this.chunks.length; i++) len += this.chunks[i].length;
+      let bytes = new Uint8Array(len);
+      let offset = 0;
+      for (let i = 0; i < this.chunks.length; i++) {
+        bytes.set(this.chunks[i], offset);
+        offset += this.chunks[i].length;
+      }
+      this.chunks = [];
+      return bytes;
     }
     fork() {
-      return (
-        this.stack.push({ chunks: this.chunks, buf: this.buf }),
-        (this.chunks = []),
-        (this.buf = []),
-        this
-      );
+      this.stack.push({
+        chunks: this.chunks,
+        buf: this.buf,
+      });
+      this.chunks = [];
+      this.buf = [];
+      return this;
     }
     join() {
-      let finish = this.finish(),
-        n = this.stack.pop();
-      if (!n) throw Error("invalid state, fork stack empty");
-      return ((this.chunks = n.chunks), (this.buf = n.buf), this.uint32(finish.byteLength), this.raw(finish));
+      let chunk = this.finish();
+      let prev = this.stack.pop();
+      if (!prev) throw Error("invalid state, fork stack empty");
+      this.chunks = prev.chunks;
+      this.buf = prev.buf;
+      this.uint32(chunk.byteLength);
+      return this.raw(chunk);
     }
-    tag(e, n) {
-      return this.uint32(((e << 3) | n) >>> 0);
+    tag(fieldNo, type) {
+      return this.uint32(((fieldNo << 3) | type) >>> 0);
     }
-    raw(e) {
-      if (this.buf.length) (this.chunks.push(new Uint8Array(this.buf)), (this.buf = []));
-      return (this.chunks.push(e), this);
+    raw(chunk) {
+      if (this.buf.length) {
+        this.chunks.push(new Uint8Array(this.buf));
+        this.buf = [];
+      }
+      this.chunks.push(chunk);
+      return this;
     }
-    uint32(e) {
-      KN(e);
-      while (e > 127) (this.buf.push((e & 127) | 128), (e = e >>> 7));
-      return (this.buf.push(e), this);
+    uint32(value) {
+      assertUInt32(value);
+      while (value > 127) {
+        this.buf.push((value & 127) | 128);
+        value = value >>> 7;
+      }
+      this.buf.push(value);
+      return this;
     }
-    int32(e) {
-      return (Mx(e), ii.varint32write(e, this.buf), this);
+    int32(value) {
+      assertInt32(value);
+      varint_js_1.varint32write(value, this.buf);
+      return this;
     }
-    bool(e) {
-      return (this.buf.push(e ? 1 : 0), this);
+    bool(value) {
+      this.buf.push(value ? 1 : 0);
+      return this;
     }
-    bytes(e) {
-      return (this.uint32(e.byteLength), this.raw(e));
+    bytes(value) {
+      this.uint32(value.byteLength);
+      return this.raw(value);
     }
-    string(e) {
-      let encodeUtf8 = this.encodeUtf8(e);
-      return (this.uint32(encodeUtf8.byteLength), this.raw(encodeUtf8));
+    string(value) {
+      let chunk = this.encodeUtf8(value);
+      this.uint32(chunk.byteLength);
+      return this.raw(chunk);
     }
-    float(e) {
-      eY(e);
-      let uint8Array = new Uint8Array(4);
-      return (new DataView(uint8Array.buffer).setFloat32(0, e, !0), this.raw(uint8Array));
+    float(value) {
+      assertFloat32(value);
+      let chunk = new Uint8Array(4);
+      new DataView(chunk.buffer).setFloat32(0, value, true);
+      return this.raw(chunk);
     }
-    double(e) {
-      let uint8Array = new Uint8Array(8);
-      return (new DataView(uint8Array.buffer).setFloat64(0, e, !0), this.raw(uint8Array));
+    double(value) {
+      let chunk = new Uint8Array(8);
+      new DataView(chunk.buffer).setFloat64(0, value, true);
+      return this.raw(chunk);
     }
-    fixed32(e) {
-      KN(e);
-      let uint8Array = new Uint8Array(4);
-      return (new DataView(uint8Array.buffer).setUint32(0, e, !0), this.raw(uint8Array));
+    fixed32(value) {
+      assertUInt32(value);
+      let chunk = new Uint8Array(4);
+      new DataView(chunk.buffer).setUint32(0, value, true);
+      return this.raw(chunk);
     }
-    sfixed32(e) {
-      Mx(e);
-      let uint8Array = new Uint8Array(4);
-      return (new DataView(uint8Array.buffer).setInt32(0, e, !0), this.raw(uint8Array));
+    sfixed32(value) {
+      assertInt32(value);
+      let chunk = new Uint8Array(4);
+      new DataView(chunk.buffer).setInt32(0, value, true);
+      return this.raw(chunk);
     }
-    sint32(e) {
-      return (Mx(e), (e = ((e << 1) ^ (e >> 31)) >>> 0), ii.varint32write(e, this.buf), this);
+    sint32(value) {
+      assertInt32(value);
+      value = ((value << 1) ^ (value >> 31)) >>> 0;
+      varint_js_1.varint32write(value, this.buf);
+      return this;
     }
-    sfixed64(e) {
-      let uint8Array = new Uint8Array(8),
-        dataView = new DataView(uint8Array.buffer),
-        enc = rs.protoInt64.enc(e);
-      return (dataView.setInt32(0, enc.lo, !0), dataView.setInt32(4, enc.hi, !0), this.raw(uint8Array));
+    sfixed64(value) {
+      let chunk = new Uint8Array(8);
+      let view = new DataView(chunk.buffer);
+      let tc = proto_int64_js_1.protoInt64.enc(value);
+      view.setInt32(0, tc.lo, true);
+      view.setInt32(4, tc.hi, true);
+      return this.raw(chunk);
     }
-    fixed64(e) {
-      let uint8Array = new Uint8Array(8),
-        dataView = new DataView(uint8Array.buffer),
-        uEnc = rs.protoInt64.uEnc(e);
-      return (dataView.setInt32(0, uEnc.lo, !0), dataView.setInt32(4, uEnc.hi, !0), this.raw(uint8Array));
+    fixed64(value) {
+      let chunk = new Uint8Array(8);
+      let view = new DataView(chunk.buffer);
+      let tc = proto_int64_js_1.protoInt64.uEnc(value);
+      view.setInt32(0, tc.lo, true);
+      view.setInt32(4, tc.hi, true);
+      return this.raw(chunk);
     }
-    int64(e) {
-      let enc = rs.protoInt64.enc(e);
-      return (ii.varint64write(enc.lo, enc.hi, this.buf), this);
+    int64(value) {
+      let tc = proto_int64_js_1.protoInt64.enc(value);
+      varint_js_1.varint64write(tc.lo, tc.hi, this.buf);
+      return this;
     }
-    sint64(e) {
-      let enc = rs.protoInt64.enc(e),
-        r = enc.hi >> 31,
-        s = (enc.lo << 1) ^ r,
-        h = ((enc.hi << 1) | (enc.lo >>> 31)) ^ r;
-      return (ii.varint64write(s, h, this.buf), this);
+    sint64(value) {
+      let tc = proto_int64_js_1.protoInt64.enc(value);
+      let sign = tc.hi >> 31;
+      let lo = (tc.lo << 1) ^ sign;
+      let hi = ((tc.hi << 1) | (tc.lo >>> 31)) ^ sign;
+      varint_js_1.varint64write(lo, hi, this.buf);
+      return this;
     }
-    uint64(e) {
-      let uEnc = rs.protoInt64.uEnc(e);
-      return (ii.varint64write(uEnc.lo, uEnc.hi, this.buf), this);
+    uint64(value) {
+      let tc = proto_int64_js_1.protoInt64.uEnc(value);
+      varint_js_1.varint64write(tc.lo, tc.hi, this.buf);
+      return this;
     }
   }
-  YN.BinaryWriter = qN;
-  class jN {
-    constructor(e, n = Ig.getTextEncoding().decodeUtf8) {
-      ((this.decodeUtf8 = n),
-        (this.varint64 = ii.varint64read),
-        (this.uint32 = ii.varint32read),
-        (this.buf = e),
-        (this.len = e.length),
-        (this.pos = 0),
-        (this.view = new DataView(e.buffer, e.byteOffset, e.byteLength)));
+  cjsExports.BinaryWriter = BinaryWriter;
+  class BinaryReader {
+    constructor(buf, decodeUtf8 = text_encoding_js_1.getTextEncoding().decodeUtf8) {
+      this.decodeUtf8 = decodeUtf8;
+      this.varint64 = varint_js_1.varint64read;
+      this.uint32 = varint_js_1.varint32read;
+      this.buf = buf;
+      this.len = buf.length;
+      this.pos = 0;
+      this.view = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
     }
     tag() {
-      let pos = this.pos,
-        uint32 = this.uint32(),
-        r = this.pos - pos;
-      if (r > 5 || (r == 5 && this.buf[this.pos - 1] > 15))
+      let start = this.pos;
+      let tag = this.uint32();
+      let bytesRead = this.pos - start;
+      if (bytesRead > 5 || (bytesRead == 5 && this.buf[this.pos - 1] > 15))
         throw Error("illegal tag: varint overflows uint32");
-      let s = uint32 >>> 3,
-        h = uint32 & 7;
-      if (s <= 0 || h > 5) throw Error("illegal tag: field no " + s + " wire type " + h);
-      return [s, h];
+      let fieldNo = tag >>> 3;
+      let wireType = tag & 7;
+      if (fieldNo <= 0 || wireType > 5)
+        throw Error("illegal tag: field no " + fieldNo + " wire type " + wireType);
+      return [fieldNo, wireType];
     }
-    skip(e, n) {
-      let pos = this.pos;
-      switch (e) {
-        case _l.Varint:
+    skip(wireType, fieldNo) {
+      let start = this.pos;
+      switch (wireType) {
+        case WireType.Varint:
           while (this.buf[this.pos++] & 128);
           break;
-        case _l.Bit64:
+        case WireType.Bit64:
           this.pos += 4;
-        case _l.Bit32:
+        case WireType.Bit32:
           this.pos += 4;
           break;
-        case _l.LengthDelimited:
-          let uint32 = this.uint32();
-          this.pos += uint32;
+        case WireType.LengthDelimited:
+          let len = this.uint32();
+          this.pos += len;
           break;
-        case _l.StartGroup:
+        case WireType.StartGroup:
           for (;;) {
-            let [h, y] = this.tag();
-            if (y === _l.EndGroup) {
-              if (n !== void 0 && h !== n) throw Error("invalid end group tag");
+            let [fn, wt] = this.tag();
+            if (wt === WireType.EndGroup) {
+              if (fieldNo !== undefined && fn !== fieldNo) throw Error("invalid end group tag");
               break;
             }
-            this.skip(y, h);
+            this.skip(wt, fn);
           }
           break;
         default:
-          throw Error("cant skip wire type " + e);
+          throw Error("cant skip wire type " + wireType);
       }
-      return (this.assertBounds(), this.buf.subarray(pos, this.pos));
+      this.assertBounds();
+      return this.buf.subarray(start, this.pos);
     }
     assertBounds() {
       if (this.pos > this.len) throw RangeError("premature EOF");
@@ -201,70 +245,76 @@ var xc = x(function (YN) {
       return this.uint32() | 0;
     }
     sint32() {
-      let uint32 = this.uint32();
-      return (uint32 >>> 1) ^ -(uint32 & 1);
+      let zze = this.uint32();
+      return (zze >>> 1) ^ -(zze & 1);
     }
     int64() {
-      return rs.protoInt64.dec(...this.varint64());
+      return proto_int64_js_1.protoInt64.dec(...this.varint64());
     }
     uint64() {
-      return rs.protoInt64.uDec(...this.varint64());
+      return proto_int64_js_1.protoInt64.uDec(...this.varint64());
     }
     sint64() {
-      let [e, n] = this.varint64(),
-        r = -(e & 1);
-      return ((e = ((e >>> 1) | ((n & 1) << 31)) ^ r), (n = (n >>> 1) ^ r), rs.protoInt64.dec(e, n));
+      let [lo, hi] = this.varint64();
+      let s = -(lo & 1);
+      lo = ((lo >>> 1) | ((hi & 1) << 31)) ^ s;
+      hi = (hi >>> 1) ^ s;
+      return proto_int64_js_1.protoInt64.dec(lo, hi);
     }
     bool() {
-      let [e, n] = this.varint64();
-      return e !== 0 || n !== 0;
+      let [lo, hi] = this.varint64();
+      return lo !== 0 || hi !== 0;
     }
     fixed32() {
-      return this.view.getUint32((this.pos += 4) - 4, !0);
+      return this.view.getUint32((this.pos += 4) - 4, true);
     }
     sfixed32() {
-      return this.view.getInt32((this.pos += 4) - 4, !0);
+      return this.view.getInt32((this.pos += 4) - 4, true);
     }
     fixed64() {
-      return rs.protoInt64.uDec(this.sfixed32(), this.sfixed32());
+      return proto_int64_js_1.protoInt64.uDec(this.sfixed32(), this.sfixed32());
     }
     sfixed64() {
-      return rs.protoInt64.dec(this.sfixed32(), this.sfixed32());
+      return proto_int64_js_1.protoInt64.dec(this.sfixed32(), this.sfixed32());
     }
     float() {
-      return this.view.getFloat32((this.pos += 4) - 4, !0);
+      return this.view.getFloat32((this.pos += 4) - 4, true);
     }
     double() {
-      return this.view.getFloat64((this.pos += 8) - 8, !0);
+      return this.view.getFloat64((this.pos += 8) - 8, true);
     }
     bytes() {
-      let uint32 = this.uint32(),
-        pos = this.pos;
-      return ((this.pos += uint32), this.assertBounds(), this.buf.subarray(pos, pos + uint32));
+      let len = this.uint32();
+      let start = this.pos;
+      this.pos += len;
+      this.assertBounds();
+      return this.buf.subarray(start, start + len);
     }
-    string(e) {
-      return this.decodeUtf8(this.bytes(), e);
+    string(strict) {
+      return this.decodeUtf8(this.bytes(), strict);
     }
   }
-  YN.BinaryReader = jN;
-  function Mx(e) {
-    if (typeof e == "string") e = Number(e);
-    else if (typeof e != "number") throw Error("invalid int32: " + typeof e);
-    if (!Number.isInteger(e) || e > YN.INT32_MAX || e < YN.INT32_MIN) throw Error("invalid int32: " + e);
+  cjsExports.BinaryReader = BinaryReader;
+  function assertInt32(arg) {
+    if (typeof arg == "string") arg = Number(arg);
+    else if (typeof arg != "number") throw Error("invalid int32: " + typeof arg);
+    if (!Number.isInteger(arg) || arg > cjsExports.INT32_MAX || arg < cjsExports.INT32_MIN)
+      throw Error("invalid int32: " + arg);
   }
-  function KN(e) {
-    if (typeof e == "string") e = Number(e);
-    else if (typeof e != "number") throw Error("invalid uint32: " + typeof e);
-    if (!Number.isInteger(e) || e > YN.UINT32_MAX || e < 0) throw Error("invalid uint32: " + e);
+  function assertUInt32(arg) {
+    if (typeof arg == "string") arg = Number(arg);
+    else if (typeof arg != "number") throw Error("invalid uint32: " + typeof arg);
+    if (!Number.isInteger(arg) || arg > cjsExports.UINT32_MAX || arg < 0)
+      throw Error("invalid uint32: " + arg);
   }
-  function eY(e) {
-    if (typeof e == "string") {
-      let n = e;
-      if (((e = Number(e)), Number.isNaN(e) && n !== "NaN")) throw Error("invalid float32: " + n);
-    } else if (typeof e != "number") throw Error("invalid float32: " + typeof e);
-    if (Number.isFinite(e) && (e > YN.FLOAT32_MAX || e < YN.FLOAT32_MIN))
-      throw Error("invalid float32: " + e);
+  function assertFloat32(arg) {
+    if (typeof arg == "string") {
+      let o = arg;
+      arg = Number(arg);
+      if (Number.isNaN(arg) && o !== "NaN") throw Error("invalid float32: " + o);
+    } else if (typeof arg != "number") throw Error("invalid float32: " + typeof arg);
+    if (Number.isFinite(arg) && (arg > cjsExports.FLOAT32_MAX || arg < cjsExports.FLOAT32_MIN))
+      throw Error("invalid float32: " + arg);
   }
 });
-
-export { xc };
+export { require_binary_encoding };

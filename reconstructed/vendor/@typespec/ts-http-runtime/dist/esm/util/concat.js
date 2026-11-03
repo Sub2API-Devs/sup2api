@@ -13,18 +13,18 @@ function rt(e, t) {
   return Buffer.from(e, t);
 }
 //@ chunk-mrx6y2r5.js:49828-49879 esm-layout
-function hasStreamMethod(e) {
-  return typeof e.stream === "function";
+function hasStreamMethod(source) {
+  return typeof source.stream === "function";
 }
 //@ chunk-mrx6y2r5.js:49914-50120 esm-fingerprint
 function readableStreamAsyncIterator() {
   return __asyncGenerator(this, arguments, function* () {
     let reader = this.getReader();
     try {
-      while (!0) {
-        let { done: r, value: n } = yield __await(reader.read());
-        if (r) return yield __await(void 0);
-        yield yield __await(n);
+      while (true) {
+        let { done, value } = yield __await(reader.read());
+        if (done) return yield __await(undefined);
+        yield yield __await(value);
       }
     } finally {
       reader.releaseLock();
@@ -32,44 +32,55 @@ function readableStreamAsyncIterator() {
   });
 }
 //@ chunk-mrx6y2r5.js:50120-50231 esm-fingerprint
-function polyfillReadableStreamIterator(e) {
-  if (!e[Symbol.asyncIterator]) e[Symbol.asyncIterator] = readableStreamAsyncIterator.bind(e);
-  if (!e.values) e.values = readableStreamAsyncIterator.bind(e);
+function polyfillReadableStreamIterator(webStream) {
+  if (!webStream[Symbol.asyncIterator])
+    webStream[Symbol.asyncIterator] = readableStreamAsyncIterator.bind(webStream);
+  if (!webStream.values) webStream.values = readableStreamAsyncIterator.bind(webStream);
 }
 //@ chunk-mrx6y2r5.js:50231-50318 esm-fingerprint
-function toNodeReadable(e) {
-  if (e instanceof ReadableStream) return (polyfillReadableStreamIterator(e), Readable.fromWeb(e));
-  else return e;
+function toNodeReadable(stream) {
+  if (stream instanceof ReadableStream) {
+    polyfillReadableStreamIterator(stream);
+    return Readable.fromWeb(stream);
+  } else return stream;
 }
 //@ chunk-mrx6y2r5.js:50318-50445 esm-fingerprint
-function toNodeReadableFromBody(e) {
-  if (e instanceof Uint8Array) return Readable.from(Buffer.from(e));
-  else if (hasStreamMethod(e)) return toNodeReadable(e.stream());
-  else return toNodeReadable(e);
+function toNodeReadableFromBody(source) {
+  if (source instanceof Uint8Array) return Readable.from(Buffer.from(source));
+  else if (hasStreamMethod(source)) return toNodeReadable(source.stream());
+  else return toNodeReadable(source);
 }
 //@ chunk-mrx6y2r5.js:50445-50855 esm-fingerprint
-async function Pl(e) {
+async function concat(sources) {
   return function () {
-    let mapped = e.map((r) => (typeof r === "function" ? r() : r)).map(toNodeReadableFromBody);
+    let streams = sources.map((x) => (typeof x === "function" ? x() : x)).map(toNodeReadableFromBody);
     return Readable.from(
       (function () {
         return __asyncGenerator(this, arguments, function* () {
-          var r, n, o, i;
-          for (let l of mapped)
+          var _a;
+          var e_1;
+          var _b;
+          var _c;
+          for (let stream of streams)
             try {
               for (
-                var s = !0, a = ((n = void 0), __asyncValues(l)), c;
-                (c = yield __await(a.next())), (r = c.done), !r;
-                s = !0
-              )
-                ((i = c.value), (s = !1), yield yield __await(i));
-            } catch (error) {
-              n = { error: error };
+                var _d = true, stream_1 = ((e_1 = undefined), __asyncValues(stream)), stream_1_1;
+                (stream_1_1 = yield __await(stream_1.next())), (_a = stream_1_1.done), !_a;
+                _d = true
+              ) {
+                _c = stream_1_1.value;
+                _d = false;
+                yield yield __await(_c);
+              }
+            } catch (e_1_1) {
+              e_1 = {
+                error: e_1_1,
+              };
             } finally {
               try {
-                if (!s && !r && (o = a.return)) yield __await(o.call(a));
+                if (!_d && !_a && (_b = stream_1.return)) yield __await(_b.call(stream_1));
               } finally {
-                if (n) throw n.error;
+                if (e_1) throw e_1.error;
               }
             }
         });
@@ -77,5 +88,4 @@ async function Pl(e) {
     );
   };
 }
-
-export { rt, hasStreamMethod, Pl };
+export { rt, hasStreamMethod, concat };

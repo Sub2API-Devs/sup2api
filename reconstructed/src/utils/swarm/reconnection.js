@@ -14,19 +14,19 @@ import { readTeamFileAsync, getTeamFilePath } from "./teamHelpers.js";
 import { logError } from "../log.js";
 import { withTelemetryMessage } from "../errors.js";
 
+//@ chunk-47mye09a.js:2287-2880 fingerprint = computeInitialTeamContext (0.946)
 /**
  * 启动时根据动态团队上下文与团队文件计算初始 teamContext（无 agentId 视为 leader）。
  */
-//@ chunk-47mye09a.js:2287-2880 fingerprint = computeInitialTeamContext (0.946)
 async function computeInitialTeamContext(storage) {
   let context = getDynamicTeamContext();
   if (!context?.teamName || !context?.agentName) {
     logForDebugging("[Reconnection] computeInitialTeamContext: No teammate context set (not a teammate)");
     return;
   }
-  let { teamName: teamName, agentId: agentId, agentName: agentName } = context,
-    u = await readTeamFileAsync(teamName, storage);
-  if (!u) {
+  let { teamName, agentId, agentName } = context;
+  let teamFile = await readTeamFileAsync(teamName, storage);
+  if (!teamFile) {
     logError(
       withTelemetryMessage(
         Error(`[computeInitialTeamContext] Could not read team file for ${teamName}`),
@@ -35,58 +35,57 @@ async function computeInitialTeamContext(storage) {
     );
     return;
   }
-  let teamFile = getTeamFilePath(teamName),
-    isLeader = !agentId;
-  return (
-    logForDebugging(
-      `[Reconnection] Computed initial team context for ${isLeader ? "leader" : `teammate ${agentName}`} in team ${teamName}`,
-    ),
-    {
-      teamName: teamName,
-      teamFilePath: teamFile,
-      leadAgentId: u.leadAgentId,
-      selfAgentId: agentId,
-      selfAgentName: agentName,
-      isLeader: isLeader,
-      teammates: {},
-    }
+  let teamFilePath = getTeamFilePath(teamName);
+  let isLeader = !agentId;
+  logForDebugging(
+    `[Reconnection] Computed initial team context for ${isLeader ? "leader" : `teammate ${agentName}`} in team ${teamName}`,
   );
+  return {
+    teamName,
+    teamFilePath,
+    leadAgentId: teamFile.leadAgentId,
+    selfAgentId: agentId,
+    selfAgentName: agentName,
+    isLeader,
+    teammates: {},
+  };
 }
+//@ chunk-47mye09a.js:2880-3454 fingerprint = initializeTeammateContextFromSession (0.955)
 /**
  * 恢复会话时从团队文件找回成员 agentId，写入 AppState.teamContext（isLeader=false）。
  */
-//@ chunk-47mye09a.js:2880-3454 fingerprint = initializeTeammateContextFromSession (0.955)
 async function initializeTeammateContextFromSession(setAppState, teamName, agentName, storage) {
-  let i = await readTeamFileAsync(teamName, storage);
-  if (!i) {
+  let teamFile = await readTeamFileAsync(teamName, storage);
+  if (!teamFile) {
     logForDebugging(
       `[initializeTeammateContextFromSession] Could not read team file for ${teamName} (agent: ${agentName}) \u2014 team may have been disbanded`,
-      { level: "error" },
+      {
+        level: "error",
+      },
     );
     return;
   }
-  let member = i.members.find((member) => member.name === agentName);
+  let member = teamFile.members.find((m) => m.name === agentName);
   if (!member)
     logForDebugging(
       `[Reconnection] Member ${agentName} not found in team ${teamName} - may have been removed`,
     );
-  let agentId = member?.agentId,
-    teamFilePath = getTeamFilePath(teamName);
-  (setAppState((prev) => ({
+  let agentId = member?.agentId;
+  let teamFilePath = getTeamFilePath(teamName);
+  setAppState((prev) => ({
     ...prev,
     teamContext: {
-      teamName: teamName,
-      teamFilePath: teamFilePath,
-      leadAgentId: i.leadAgentId,
+      teamName,
+      teamFilePath,
+      leadAgentId: teamFile.leadAgentId,
       selfAgentId: agentId,
       selfAgentName: agentName,
-      isLeader: !1,
+      isLeader: false,
       teammates: {},
     },
-  })),
-    logForDebugging(
-      `[Reconnection] Initialized agent context from session for ${agentName} in team ${teamName}`,
-    ));
+  }));
+  logForDebugging(
+    `[Reconnection] Initialized agent context from session for ${agentName} in team ${teamName}`,
+  );
 }
-
 export { computeInitialTeamContext, initializeTeammateContextFromSession };

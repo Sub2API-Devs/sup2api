@@ -10,16 +10,15 @@
  */
 import { sleep } from "./sleep.js";
 
+//@ chunk-zn0hg2p9.js:226-329 placement
 /**
  * 生成指数退避等待函数（第 n 次等待 base·2^(n-1)，50%–100% 抖动）。
  */
-//@ chunk-zn0hg2p9.js:226-329 placement
 function createJitteredBackoff(e) {
   return function (r) {
-    let t = e * 2 ** (r - 1),
-      rounded = Math.round(t * (0.5 + Math.random() / 2));
+    let t = e * 2 ** (r - 1);
+    let rounded = Math.round(t * (0.5 + Math.random() / 2));
     return sleep(rounded);
   };
 }
-
 export { createJitteredBackoff };

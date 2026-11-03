@@ -8,41 +8,11 @@
  * pieces: chunk-aepeg2w5.js (17)
  * attribution: placement 17
  */
-import {
-  lstat,
-  lstat as lstat_2,
-  lstat as lstat_3,
-  unlink,
-  unlink as unlink_2,
-  unlink as unlink_3,
-  unlink as unlink_4,
-  rmdir,
-  rmdir as rmdir_2,
-} from "fs/promises";
-import {
-  join,
-  join as join_2,
-  join as join_3,
-  join as join_4,
-  join as join_5,
-  join as join_6,
-  join as join_7,
-  join as join_8,
-  join as join_9,
-  join as join_10,
-  join as join_11,
-} from "path";
-import {
-  mkdirSync,
-  rmdirSync,
-  stat as stat_2,
-  statSync,
-  statSync as statSync_2,
-  utimes,
-  utimesSync,
-} from "fs";
+import { lstat, unlink, rmdir } from "fs/promises";
+import { join } from "path";
+import { mkdirSync, rmdirSync, stat as stat_2, statSync, utimes, utimesSync } from "fs";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, E, o } from "../../../vendor/zod/v4/classic/schemas.js";
+import { u, E, string } from "../../../vendor/zod/v4/classic/schemas.js";
 import {
   ownProcStartAsync,
   looksLikeFullHostProcessTable,
@@ -61,51 +31,63 @@ import { HostScoped } from "../hostScoped.js";
 import { createSignal } from "../signal.js";
 
 //@ chunk-aepeg2w5.js:310460-310734 placement
-var TENGU_QUIET_MARTEN = "tengu_quiet_marten",
-  TENGU_ZANY_BOOK = "tengu_zany_book",
-  bL = ".oauth_refresh.lock.owner",
-  vL = 4096,
-  EL = DoctorLazy(() =>
-    u({
-      pid: E().int(),
-      procStart: o().max(64).optional(),
-      pidDomain: o().max(512),
-      pidSpace: o().max(512),
-      lockBirthtimeMs: E().positive(),
-      legacyLockBirthtimeMs: E().positive().optional(),
-    }),
-  );
+/**
+ * 锁持有者记录的文件名（.oauth_refresh.lock.owner）。
+ */
+var TENGU_QUIET_MARTEN = "tengu_quiet_marten";
+var TENGU_ZANY_BOOK = "tengu_zany_book";
+var LOCK_OWNER_FILE_NAME = ".oauth_refresh.lock.owner";
+var MAX_LOCK_OWNER_BYTES = 4096;
+var lockOwnerSchema = DoctorLazy(() =>
+  u({
+    pid: E().int(),
+    procStart: string().max(64).optional(),
+    pidDomain: string().max(512),
+    pidSpace: string().max(512),
+    lockBirthtimeMs: E().positive(),
+    legacyLockBirthtimeMs: E().positive().optional(),
+  }),
+);
 //@ chunk-aepeg2w5.js:310734-310809 placement
-class Ev {
+/**
+ * OAuth 锁相关开关读取器的状态类。
+ */
+class OAuthLockFlagReader {
   reader = null;
-  register(e) {
-    let reader = this.reader;
-    return ((this.reader = e), reader);
+  register(reader) {
+    let reader_2 = this.reader;
+    this.reader = reader;
+    return reader_2;
   }
 }
 //@ chunk-aepeg2w5.js:310809-310823 placement
-var wv = new Ev();
+/**
+ * 全局唯一的 OAuth 锁开关读取器。
+ */
+var oauthLockFlagReader = new OAuthLockFlagReader();
 //@ chunk-aepeg2w5.js:310823-310860 placement
-function Cv(e) {
-  return wv.register(e);
+/**
+ * 注册 OAuth 锁开关读取器。
+ */
+function setOAuthLockFlagReader(getFeatureValue_CACHED_MAY_BE_STALE) {
+  return oauthLockFlagReader.register(getFeatureValue_CACHED_MAY_BE_STALE);
 }
 //@ chunk-aepeg2w5.js:310860-310925 placement
-function xf(e) {
+/**
+ * 读取指定开关；读取异常时视为开启。
+ */
+function isOAuthLockFlagOn(e) {
   try {
-    return wv.reader?.(e, !0) !== !1;
+    return oauthLockFlagReader.reader?.(e, true) !== false;
   } catch {
-    return !0;
+    return true;
   }
 }
+//@ chunk-aepeg2w5.js:310925-311401 placement
 /**
  * 写入 OAuth 刷新锁的持有者记录。
  */
-//@ chunk-aepeg2w5.js:310925-311401 placement
-async function writeLockOwnerRecord({
-  claudeDir: claudeDir,
-  lockfilePath: lockfilePath,
-  legacyLockfilePath: legacyLockfilePath,
-}) {
+async function writeLockOwnerRecord({ claudeDir, lockfilePath, legacyLockfilePath }) {
   try {
     let [s, h, y, S] = await Promise.all([
       lstat(lockfilePath),
@@ -116,21 +98,33 @@ async function writeLockOwnerRecord({
     if (!(s.birthtimeMs > 0)) return null;
     let w = {
       pid: process.pid,
-      ...(y !== void 0 && { procStart: y }),
+      ...(y !== undefined && {
+        procStart: y,
+      }),
       pidDomain: S,
       pidSpace: ownPidSpace(),
       lockBirthtimeMs: s.birthtimeMs,
-      ...(h !== null && h.birthtimeMs > 0 && { legacyLockBirthtimeMs: h.birthtimeMs }),
+      ...(h !== null &&
+        h.birthtimeMs > 0 && {
+          legacyLockBirthtimeMs: h.birthtimeMs,
+        }),
     };
-    return (await writeFileAtomic(Pf(claudeDir), jsonStringify(w)), s.birthtimeMs);
+    await writeFileAtomic(lockOwnerRecordPath(claudeDir), jsonStringify(w));
+    return s.birthtimeMs;
   } catch (error) {
-    return (logForDebugging(`OAuth refresh lock owner record not written: ${errorMessage(error)}`), null);
+    logForDebugging(`OAuth refresh lock owner record not written: ${errorMessage(error)}`);
+    return null;
   }
 }
 //@ chunk-aepeg2w5.js:311401-311517 placement
 async function removeOwnLockOwnerRecord(e, n) {
-  let r = await readLockOwnerRecord(e);
-  if (r === null || r.pid !== process.pid || r.lockBirthtimeMs !== n) return;
+  let lockOwnerRecord = await readLockOwnerRecord(e);
+  if (
+    lockOwnerRecord === null ||
+    lockOwnerRecord.pid !== process.pid ||
+    lockOwnerRecord.lockBirthtimeMs !== n
+  )
+    return;
   await removeLockOwnerRecord(e);
 }
 //@ chunk-aepeg2w5.js:311517-311752 placement
@@ -143,97 +137,105 @@ async function checkLockStillOwned(e) {
     return getErrnoCode(error) === "ENOENT" ? "lock_changed" : n;
   }
 }
+//@ chunk-aepeg2w5.js:311752-312876 placement
 /**
  * 核对锁持有者（是否已被接管、记录是否匹配）。
  */
-//@ chunk-aepeg2w5.js:311752-312876 placement
-async function checkLockOwner({
-  claudeDir: claudeDir,
-  lockfilePath: lockfilePath,
-  legacyLockfilePath: legacyLockfilePath,
-  watchedMtimeMs: watchedMtimeMs,
-}) {
-  let h = !1;
+async function checkLockOwner({ claudeDir, lockfilePath, legacyLockfilePath, watchedMtimeMs }) {
+  let h = false;
   try {
-    if (!xf(TENGU_QUIET_MARTEN)) return "disabled";
-    let y = await readLockOwnerRecord(claudeDir);
-    if (y === null)
+    if (!isOAuthLockFlagOn(TENGU_QUIET_MARTEN)) return "disabled";
+    let lockOwnerRecord = await readLockOwnerRecord(claudeDir);
+    if (lockOwnerRecord === null)
       return (await lstat(lockfilePath)).mtimeMs === watchedMtimeMs ? "no_owner_record" : "lock_changed";
     let S = async () => {
-        let j = await lstat(lockfilePath);
-        if (j.mtimeMs !== watchedMtimeMs) return "lock_changed";
-        return j.birthtimeMs === y.lockBirthtimeMs ? null : "record_mismatch";
-      },
-      w = await S();
+      let j = await lstat(lockfilePath);
+      if (j.mtimeMs !== watchedMtimeMs) return "lock_changed";
+      return j.birthtimeMs === lockOwnerRecord.lockBirthtimeMs ? null : "record_mismatch";
+    };
+    let w = await S();
     if (w !== null) return w;
-    if (y.pidDomain !== (await ownPidDomain()) || y.pidSpace !== ownPidSpace()) return "foreign_pid_space";
+    if (lockOwnerRecord.pidDomain !== (await ownPidDomain()) || lockOwnerRecord.pidSpace !== ownPidSpace())
+      return "foreign_pid_space";
     if (!(await looksLikeFullHostProcessTable())) return "pid_view_untrusted";
-    let { pid: pid, procStart: procStart } = y;
+    let { pid, procStart } = lockOwnerRecord;
     if (!(
       isProbeablePid(pid) &&
       (isProcessProvablyGone(pid) ||
         (await isExitedProcessAsync(pid)) ||
-        (procStart !== void 0 && (await provenSameProcessAsync(pid, procStart)) === !1))
+        (procStart !== undefined && (await provenSameProcessAsync(pid, procStart)) === false))
     ))
       return "holder_not_proven_gone";
-    let F = await lstat(legacyLockfilePath).catch((j) => {
-      if (getErrnoCode(j) === "ENOENT") return null;
-      throw j;
+    let F = await lstat(legacyLockfilePath).catch((error) => {
+      if (getErrnoCode(error) === "ENOENT") return null;
+      throw error;
     });
-    if (F !== null && F.birthtimeMs !== y.legacyLockBirthtimeMs) return "legacy_lock_held";
-    if (((h = !0), F !== null)) await _v(legacyLockfilePath);
-    h = !1;
+    if (F !== null && F.birthtimeMs !== lockOwnerRecord.legacyLockBirthtimeMs) return "legacy_lock_held";
+    h = true;
+    if (F !== null) await removeOrIgnoreMissing(legacyLockfilePath);
+    h = false;
     let L = await S();
     if (L !== null) return L;
-    ((h = !0), await _v(lockfilePath));
-    let G = await readLockOwnerRecord(claudeDir);
-    if (G !== null && G.pid === y.pid && G.lockBirthtimeMs === y.lockBirthtimeMs)
+    h = true;
+    await removeOrIgnoreMissing(lockfilePath);
+    let lockOwnerRecord_2 = await readLockOwnerRecord(claudeDir);
+    if (
+      lockOwnerRecord_2 !== null &&
+      lockOwnerRecord_2.pid === lockOwnerRecord.pid &&
+      lockOwnerRecord_2.lockBirthtimeMs === lockOwnerRecord.lockBirthtimeMs
+    )
       await removeLockOwnerRecord(claudeDir);
     return "taken_over";
   } catch (error) {
-    if ((logForDebugging(`OAuth refresh lock takeover skipped: ${errorMessage(error)}`), h))
-      return "remove_failed";
+    logForDebugging(`OAuth refresh lock takeover skipped: ${errorMessage(error)}`);
+    if (h) return "remove_failed";
     return getErrnoCode(error) === "ENOENT" ? "lock_changed" : "probe_failed";
   }
 }
 //@ chunk-aepeg2w5.js:312876-312907 placement
-function Pf(e) {
-  return join_4(e, bL);
+/**
+ * 锁持有者记录文件的路径。
+ */
+function lockOwnerRecordPath(e) {
+  return join(e, LOCK_OWNER_FILE_NAME);
 }
 //@ chunk-aepeg2w5.js:312907-313066 placement
-async function readLockOwnerRecord(e) {
-  let n = await readSmallFileOrNull(Pf(e), vL);
-  if (n === null) return null;
+async function readLockOwnerRecord(claudeDir) {
+  let smallFileOrNull = await readSmallFileOrNull(lockOwnerRecordPath(claudeDir), MAX_LOCK_OWNER_BYTES);
+  if (smallFileOrNull === null) return null;
   let r;
   try {
-    r = jsonParse(n);
+    r = jsonParse(smallFileOrNull);
   } catch {
     return null;
   }
-  let safeParse = EL().safeParse(r);
-  return safeParse.success ? safeParse.data : null;
+  let s = lockOwnerSchema().safeParse(r);
+  return s.success ? s.data : null;
 }
 //@ chunk-aepeg2w5.js:313066-313194 placement
 async function removeLockOwnerRecord(e) {
   try {
-    await unlink(Pf(e));
+    await unlink(lockOwnerRecordPath(e));
   } catch (error) {
     if (getErrnoCode(error) !== "ENOENT")
       logForDebugging(`OAuth refresh lock owner record not removed: ${errorMessage(error)}`);
   }
 }
 //@ chunk-aepeg2w5.js:313194-313268 placement
-async function _v(e) {
+/**
+ * 删除目录，ENOENT 时忽略。
+ */
+async function removeOrIgnoreMissing(e) {
   try {
     await rmdir(e);
   } catch (error) {
     if (getErrnoCode(error) !== "ENOENT") throw error;
   }
 }
+//@ chunk-aepeg2w5.js:313372-313833 placement
 /**
  * 文件系统操作的延迟结算器。
  */
-//@ chunk-aepeg2w5.js:313372-313833 placement
 class FsSettler {
   settling = 0;
   mkdir(e, n) {
@@ -279,15 +281,35 @@ class FsSettler {
   }
 }
 //@ chunk-aepeg2w5.js:313833-313848 placement
-var Iv = new Map();
+/**
+ * 按目录保存的文件系统延迟结算器。
+ */
+var fsSettlerByDir = new Map();
 //@ chunk-aepeg2w5.js:313848-313945 placement
-function Mf(e) {
-  if (!xf(TENGU_ZANY_BOOK)) return;
-  let n = Iv.get(e);
-  if (n === void 0) ((n = new FsSettler()), Iv.set(e, n));
-  return { fs: n };
+/**
+ * 取某目录的延迟结算器（按需创建）。
+ */
+function getFsSettler(e) {
+  if (!isOAuthLockFlagOn(TENGU_ZANY_BOOK)) return;
+  let n = fsSettlerByDir.get(e);
+  if (n === undefined) {
+    n = new FsSettler();
+    fsSettlerByDir.set(e, n);
+  }
+  return {
+    fs: n,
+  };
 }
 //@ chunk-aepeg2w5.js:313945-313968 placement
-var xL = new HostScoped(() => createSignal());
-
-export { Mf, writeLockOwnerRecord, removeOwnLockOwnerRecord, checkLockStillOwned, xL, Cv };
+/**
+ * 按宿主隔离的凭据变化信号。
+ */
+var credentialSignalByHost = new HostScoped(() => createSignal());
+export {
+  getFsSettler,
+  writeLockOwnerRecord,
+  removeOwnLockOwnerRecord,
+  checkLockStillOwned,
+  credentialSignalByHost,
+  setOAuthLockFlagReader,
+};

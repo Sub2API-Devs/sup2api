@@ -8,8 +8,8 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:177748-178386 cjs-fingerprint
-var va = x(function (fE, Oa) {
-  function bd(e) {
+var require_golo = x(function (cjsExports, cjsModule) {
+  function golo(hljs) {
     return {
       name: "Golo",
       keywords: {
@@ -64,14 +64,16 @@ var va = x(function (fE, Oa) {
         literal: ["true", "false", "null"],
       },
       contains: [
-        e.HASH_COMMENT_MODE,
-        e.QUOTE_STRING_MODE,
-        e.C_NUMBER_MODE,
-        { className: "meta", begin: "@[A-Za-z]+" },
+        hljs.HASH_COMMENT_MODE,
+        hljs.QUOTE_STRING_MODE,
+        hljs.C_NUMBER_MODE,
+        {
+          className: "meta",
+          begin: "@[A-Za-z]+",
+        },
       ],
     };
   }
-  Oa.exports = bd;
+  cjsModule.exports = golo;
 });
-
-export { va };
+export { require_golo };

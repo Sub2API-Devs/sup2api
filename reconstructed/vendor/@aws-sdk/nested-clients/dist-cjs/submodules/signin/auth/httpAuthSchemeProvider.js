@@ -6,57 +6,68 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../../../runtime/bun-runtime.js";
-import { Rx } from "../../../../../core/dist-cjs/index.js";
-import { bD } from "../../../../../../@smithy/util-middleware/dist-cjs/index.js";
+import { require_core as require_core_2 } from "../../../../../core/dist-cjs/index.js";
+import { require_util_middleware } from "../../../../../../@smithy/util-middleware/dist-cjs/index.js";
 
 //@ chunk-y366fgzk.js:783-1795 cjs-fingerprint
-var U = x(function (Y) {
-  Object.defineProperty(Y, "__esModule", { value: !0 });
-  Y.resolveHttpAuthSchemeConfig =
-    Y.defaultSigninHttpAuthSchemeProvider =
-    Y.defaultSigninHttpAuthSchemeParametersProvider =
-      void 0;
-  var W = Rx(),
-    S = bD(),
-    pt = async (e, t, r) => ({
-      operation: S.getSmithyContext(t).operation,
-      region:
-        (await S.normalizeProvider(e.region)()) ||
-        (() => {
-          throw Error("expected `region` to be configured for `aws.auth#sigv4`");
-        })(),
-    });
-  Y.defaultSigninHttpAuthSchemeParametersProvider = pt;
-  function lt(e) {
+var require_httpAuthSchemeProvider = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.resolveHttpAuthSchemeConfig =
+    cjsExports.defaultSigninHttpAuthSchemeProvider =
+    cjsExports.defaultSigninHttpAuthSchemeParametersProvider =
+      undefined;
+  var core_1 = require_core_2();
+  var util_middleware_1 = require_util_middleware();
+  var defaultSigninHttpAuthSchemeParametersProvider = async (config, context, input) => ({
+    operation: util_middleware_1.getSmithyContext(context).operation,
+    region:
+      (await util_middleware_1.normalizeProvider(config.region)()) ||
+      (() => {
+        throw Error("expected `region` to be configured for `aws.auth#sigv4`");
+      })(),
+  });
+  cjsExports.defaultSigninHttpAuthSchemeParametersProvider = defaultSigninHttpAuthSchemeParametersProvider;
+  function createAwsAuthSigv4HttpAuthOption(authParameters) {
     return {
       schemeId: "aws.auth#sigv4",
-      signingProperties: { name: "signin", region: e.region },
-      propertiesExtractor: (t, r) => ({ signingProperties: { config: t, context: r } }),
+      signingProperties: {
+        name: "signin",
+        region: authParameters.region,
+      },
+      propertiesExtractor: (config, context) => ({
+        signingProperties: {
+          config,
+          context,
+        },
+      }),
     };
   }
-  function ht(e) {
-    return { schemeId: "smithy.api#noAuth" };
+  function createSmithyApiNoAuthHttpAuthOption(authParameters) {
+    return {
+      schemeId: "smithy.api#noAuth",
+    };
   }
-  var gt = (e) => {
-    let t = [];
-    switch (e.operation) {
+  var defaultSigninHttpAuthSchemeProvider = (authParameters) => {
+    let options = [];
+    switch (authParameters.operation) {
       case "CreateOAuth2Token": {
-        t.push(ht(e));
+        options.push(createSmithyApiNoAuthHttpAuthOption(authParameters));
         break;
       }
       default:
-        t.push(lt(e));
+        options.push(createAwsAuthSigv4HttpAuthOption(authParameters));
     }
-    return t;
+    return options;
   };
-  Y.defaultSigninHttpAuthSchemeProvider = gt;
-  var _t = (e) => {
-    let awsSdkSigV4Config = W.resolveAwsSdkSigV4Config(e);
-    return Object.assign(awsSdkSigV4Config, {
-      authSchemePreference: S.normalizeProvider(e.authSchemePreference ?? []),
+  cjsExports.defaultSigninHttpAuthSchemeProvider = defaultSigninHttpAuthSchemeProvider;
+  var resolveHttpAuthSchemeConfig = (config) => {
+    let config_0 = core_1.resolveAwsSdkSigV4Config(config);
+    return Object.assign(config_0, {
+      authSchemePreference: util_middleware_1.normalizeProvider(config.authSchemePreference ?? []),
     });
   };
-  Y.resolveHttpAuthSchemeConfig = _t;
+  cjsExports.resolveHttpAuthSchemeConfig = resolveHttpAuthSchemeConfig;
 });
-
-export { U };
+export { require_httpAuthSchemeProvider };

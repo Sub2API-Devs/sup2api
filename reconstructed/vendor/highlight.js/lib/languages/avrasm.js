@@ -8,13 +8,13 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:47064-49028 cjs-fingerprint
-var Ct = x(function (Nu, It) {
-  function al(e) {
+var require_avrasm = x(function (cjsExports, cjsModule) {
+  function avrasm(hljs) {
     return {
       name: "AVR Assembly",
-      case_insensitive: !0,
+      case_insensitive: true,
       keywords: {
-        $pattern: "\\.?" + e.IDENT_RE,
+        $pattern: "\\.?" + hljs.IDENT_RE,
         keyword:
           "adc add adiw and andi asr bclr bld brbc brbs brcc brcs break breq brge brhc brhs brid brie brlo brlt brmi brne brpl brsh brtc brts brvc brvs bset bst call cbi cbr clc clh cli cln clr cls clt clv clz com cp cpc cpi cpse dec eicall eijmp elpm eor fmul fmuls fmulsu icall ijmp in inc jmp ld ldd ldi lds lpm lsl lsr mov movw mul muls mulsu neg nop or ori out pop push rcall ret reti rjmp rol ror sbc sbr sbrc sbrs sec seh sbi sbci sbic sbis sbiw sei sen ser ses set sev sez sleep spm st std sts sub subi swap tst wdr",
         built_in:
@@ -22,20 +22,39 @@ var Ct = x(function (Nu, It) {
         meta: ".byte .cseg .db .def .device .dseg .dw .endmacro .equ .eseg .exit .include .list .listmac .macro .nolist .org .set",
       },
       contains: [
-        e.C_BLOCK_COMMENT_MODE,
-        e.COMMENT(";", "$", { relevance: 0 }),
-        e.C_NUMBER_MODE,
-        e.BINARY_NUMBER_MODE,
-        { className: "number", begin: "\\b(\\$[a-zA-Z0-9]+|0o[0-7]+)" },
-        e.QUOTE_STRING_MODE,
-        { className: "string", begin: "'", end: "[^\\\\]'", illegal: "[^\\\\][^']" },
-        { className: "symbol", begin: "^[A-Za-z0-9_.$]+:" },
-        { className: "meta", begin: "#", end: "$" },
-        { className: "subst", begin: "@[0-9]+" },
+        hljs.C_BLOCK_COMMENT_MODE,
+        hljs.COMMENT(";", "$", {
+          relevance: 0,
+        }),
+        hljs.C_NUMBER_MODE,
+        hljs.BINARY_NUMBER_MODE,
+        {
+          className: "number",
+          begin: "\\b(\\$[a-zA-Z0-9]+|0o[0-7]+)",
+        },
+        hljs.QUOTE_STRING_MODE,
+        {
+          className: "string",
+          begin: "'",
+          end: "[^\\\\]'",
+          illegal: "[^\\\\][^']",
+        },
+        {
+          className: "symbol",
+          begin: "^[A-Za-z0-9_.$]+:",
+        },
+        {
+          className: "meta",
+          begin: "#",
+          end: "$",
+        },
+        {
+          className: "subst",
+          begin: "@[0-9]+",
+        },
       ],
     };
   }
-  It.exports = al;
+  cjsModule.exports = avrasm;
 });
-
-export { Ct };
+export { require_avrasm };

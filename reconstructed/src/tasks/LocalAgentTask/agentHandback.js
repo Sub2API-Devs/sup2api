@@ -16,25 +16,25 @@ import { TASK_NOTIFICATION, TASK_ID, SUMMARY, AGENT_NOTIFICATION_PREFIX } from "
 import { formatTaskNotification, NEXT } from "../../utils/xmlTags.js";
 import { escapeXml_2 as escapeXml, unescapeHtmlEntities } from "../../utils/confusables.js";
 
+//@ chunk-e6aww6q8.js:579516-579783 placement
 /**
  * 判断子代理结果是否可直接交回给某个接收者（单条内容、无警告、无 worktree 等），返回接收者。
  */
-//@ chunk-e6aww6q8.js:579516-579783 placement
 function handbackRecipientOf({
   result: e,
-  deliveries: deliveries,
-  reviewWarning: reviewWarning,
-  worktreePath: worktreePath,
-  maxTurnsReached: maxTurnsReached,
-  checkpoint: checkpoint,
-  reportedBeforePass: reportedBeforePass,
+  deliveries,
+  reviewWarning,
+  worktreePath,
+  maxTurnsReached,
+  checkpoint,
+  reportedBeforePass,
 }) {
   if (
     (e.handback !== "send" && e.handback !== "flagged") ||
     e.content.length !== 1 ||
-    reviewWarning !== void 0 ||
-    worktreePath !== void 0 ||
-    maxTurnsReached !== void 0 ||
+    reviewWarning !== undefined ||
+    worktreePath !== undefined ||
+    maxTurnsReached !== undefined ||
     checkpoint ||
     reportedBeforePass
   )
@@ -42,30 +42,33 @@ function handbackRecipientOf({
   return deliveries?.at(-1)?.recipient;
 }
 //@ chunk-e6aww6q8.js:579783-580032 placement
-function shouldUseHandbackPointer({ handbackRecipient: handbackRecipient, routedAgentId: routedAgentId }) {
+function shouldUseHandbackPointer({ handbackRecipient, routedAgentId }) {
   try {
     if (
-      handbackRecipient === void 0 ||
+      handbackRecipient === undefined ||
       routedAgentId !== mainAgentId() ||
       handbackRecipient !== routedAgentId ||
-      !getFeatureValue_CACHED_MAY_BE_STALE("tengu_hushed_kestrel", !0)
+      !getFeatureValue_CACHED_MAY_BE_STALE("tengu_hushed_kestrel", true)
     )
-      return !1;
-    return (logFeatureOk("agent_handback_pointer_notice"), !0);
+      return false;
+    logFeatureOk("agent_handback_pointer_notice");
+    return true;
   } catch (error) {
-    return (logError(error), logFeatureSad("agent_handback_pointer_notice", "decision_threw"), !1);
+    logError(error);
+    logFeatureSad("agent_handback_pointer_notice", "decision_threw");
+    return false;
   }
 }
 //@ chunk-e6aww6q8.js:580032-580149 placement
-var RESUMED_BY_USER_SUFFIX = '" was resumed by the user',
-  USER_RESUMED_NOTICE_PATTERN = new RegExp(
-    `^<${TASK_NOTIFICATION}>\\n<${TASK_ID}>([^<]+)</${TASK_ID}>\\n<${SUMMARY}>[^<]*${RESUMED_BY_USER_SUFFIX}</${SUMMARY}>`,
-  );
+var RESUMED_BY_USER_SUFFIX = '" was resumed by the user';
+var USER_RESUMED_NOTICE_PATTERN = new RegExp(
+  `^<${TASK_NOTIFICATION}>\\n<${TASK_ID}>([^<]+)</${TASK_ID}>\\n<${SUMMARY}>[^<]*${RESUMED_BY_USER_SUFFIX}</${SUMMARY}>`,
+);
+//@ chunk-e6aww6q8.js:580149-580647 placement
 /**
  * 生成"用户已从转录视图恢复该代理"的任务通知。
  */
-//@ chunk-e6aww6q8.js:580149-580647 placement
-function buildUserResumedNotice({ agentId: agentId, description: description, to: to }) {
+function buildUserResumedNotice({ agentId, description, to }) {
   return {
     value: formatTaskNotification({
       taskId: agentId,
@@ -74,23 +77,39 @@ function buildUserResumedNotice({ agentId: agentId, description: description, to
 <note>The user resumed this agent from its transcript view; it is running again. Do not treat its work as cancelled or relaunch it; its result arrives in a later task-notification for this task-id.</note>`,
     }),
     mode: "task-notification",
-    skipAttachments: !0,
+    skipAttachments: true,
     priority: NEXT,
     agentId: to,
     taskId: agentId,
-    userResumeNotice: !0,
-    origin: { kind: "task-notification", producer: "session-task" },
-    ...(to === mainAgentId() && { passive: !0 }),
+    userResumeNotice: true,
+    origin: {
+      kind: "task-notification",
+      producer: "session-task",
+    },
+    ...(to === mainAgentId() && {
+      passive: true,
+    }),
   };
 }
 //@ chunk-e6aww6q8.js:580647-580717 placement
-function o6s(e) {
+/**
+ * 从「用户已恢复」提示文本中取出任务 id。
+ */
+function userResumeNoticeTaskId(e) {
   let n = USER_RESUMED_NOTICE_PATTERN.exec(e)?.[1];
-  return n === void 0 ? void 0 : unescapeHtmlEntities(n);
+  return n === undefined ? undefined : unescapeHtmlEntities(n);
 }
 //@ chunk-e6aww6q8.js:580717-580780 placement
-function zBe(e, n) {
-  return e.userResumeNotice === !0 && e.taskId === n;
+/**
+ * 判断通知是否是针对给定任务的用户恢复提示。
+ */
+function isUserResumeNoticeFor(e, taskId) {
+  return e.userResumeNotice === true && e.taskId === taskId;
 }
-
-export { handbackRecipientOf, buildUserResumedNotice, o6s, shouldUseHandbackPointer, zBe };
+export {
+  handbackRecipientOf,
+  buildUserResumedNotice,
+  userResumeNoticeTaskId,
+  shouldUseHandbackPointer,
+  isUserResumeNoticeFor,
+};

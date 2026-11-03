@@ -6,15 +6,15 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { Wr } from "./DOMException.js";
-import { Xr } from "./config.js";
+import { require_DOMException } from "./DOMException.js";
+import { require_config } from "./config.js";
 
 //@ chunk-vwj6ccer.js:5355-7704 cjs-fingerprint
-var ee = x(function (wu) {
-  var J = Wr(),
-    ae = J,
-    isApiWritable = Xr().isApiWritable;
-  wu.NAMESPACE = {
+var require_utils = x(function (cjsExports) {
+  var DOMException = require_DOMException();
+  var ERR = DOMException;
+  var isApiWritable = require_config().isApiWritable;
+  cjsExports.NAMESPACE = {
     HTML: "http://www.w3.org/1999/xhtml",
     XML: "http://www.w3.org/XML/1998/namespace",
     XMLNS: "http://www.w3.org/2000/xmlns/",
@@ -22,104 +22,107 @@ var ee = x(function (wu) {
     SVG: "http://www.w3.org/2000/svg",
     XLINK: "http://www.w3.org/1999/xlink",
   };
-  wu.IndexSizeError = function () {
-    throw new J(ae.INDEX_SIZE_ERR);
+  cjsExports.IndexSizeError = function () {
+    throw new DOMException(ERR.INDEX_SIZE_ERR);
   };
-  wu.HierarchyRequestError = function () {
-    throw new J(ae.HIERARCHY_REQUEST_ERR);
+  cjsExports.HierarchyRequestError = function () {
+    throw new DOMException(ERR.HIERARCHY_REQUEST_ERR);
   };
-  wu.WrongDocumentError = function () {
-    throw new J(ae.WRONG_DOCUMENT_ERR);
+  cjsExports.WrongDocumentError = function () {
+    throw new DOMException(ERR.WRONG_DOCUMENT_ERR);
   };
-  wu.InvalidCharacterError = function () {
-    throw new J(ae.INVALID_CHARACTER_ERR);
+  cjsExports.InvalidCharacterError = function () {
+    throw new DOMException(ERR.INVALID_CHARACTER_ERR);
   };
-  wu.NoModificationAllowedError = function () {
-    throw new J(ae.NO_MODIFICATION_ALLOWED_ERR);
+  cjsExports.NoModificationAllowedError = function () {
+    throw new DOMException(ERR.NO_MODIFICATION_ALLOWED_ERR);
   };
-  wu.NotFoundError = function () {
-    throw new J(ae.NOT_FOUND_ERR);
+  cjsExports.NotFoundError = function () {
+    throw new DOMException(ERR.NOT_FOUND_ERR);
   };
-  wu.NotSupportedError = function () {
-    throw new J(ae.NOT_SUPPORTED_ERR);
+  cjsExports.NotSupportedError = function () {
+    throw new DOMException(ERR.NOT_SUPPORTED_ERR);
   };
-  wu.InvalidStateError = function () {
-    throw new J(ae.INVALID_STATE_ERR);
+  cjsExports.InvalidStateError = function () {
+    throw new DOMException(ERR.INVALID_STATE_ERR);
   };
-  wu.SyntaxError = function () {
-    throw new J(ae.SYNTAX_ERR);
+  cjsExports.SyntaxError = function () {
+    throw new DOMException(ERR.SYNTAX_ERR);
   };
-  wu.InvalidModificationError = function () {
-    throw new J(ae.INVALID_MODIFICATION_ERR);
+  cjsExports.InvalidModificationError = function () {
+    throw new DOMException(ERR.INVALID_MODIFICATION_ERR);
   };
-  wu.NamespaceError = function () {
-    throw new J(ae.NAMESPACE_ERR);
+  cjsExports.NamespaceError = function () {
+    throw new DOMException(ERR.NAMESPACE_ERR);
   };
-  wu.InvalidAccessError = function () {
-    throw new J(ae.INVALID_ACCESS_ERR);
+  cjsExports.InvalidAccessError = function () {
+    throw new DOMException(ERR.INVALID_ACCESS_ERR);
   };
-  wu.TypeMismatchError = function () {
-    throw new J(ae.TYPE_MISMATCH_ERR);
+  cjsExports.TypeMismatchError = function () {
+    throw new DOMException(ERR.TYPE_MISMATCH_ERR);
   };
-  wu.SecurityError = function () {
-    throw new J(ae.SECURITY_ERR);
+  cjsExports.SecurityError = function () {
+    throw new DOMException(ERR.SECURITY_ERR);
   };
-  wu.NetworkError = function () {
-    throw new J(ae.NETWORK_ERR);
+  cjsExports.NetworkError = function () {
+    throw new DOMException(ERR.NETWORK_ERR);
   };
-  wu.AbortError = function () {
-    throw new J(ae.ABORT_ERR);
+  cjsExports.AbortError = function () {
+    throw new DOMException(ERR.ABORT_ERR);
   };
-  wu.UrlMismatchError = function () {
-    throw new J(ae.URL_MISMATCH_ERR);
+  cjsExports.UrlMismatchError = function () {
+    throw new DOMException(ERR.URL_MISMATCH_ERR);
   };
-  wu.QuotaExceededError = function () {
-    throw new J(ae.QUOTA_EXCEEDED_ERR);
+  cjsExports.QuotaExceededError = function () {
+    throw new DOMException(ERR.QUOTA_EXCEEDED_ERR);
   };
-  wu.TimeoutError = function () {
-    throw new J(ae.TIMEOUT_ERR);
+  cjsExports.TimeoutError = function () {
+    throw new DOMException(ERR.TIMEOUT_ERR);
   };
-  wu.InvalidNodeTypeError = function () {
-    throw new J(ae.INVALID_NODE_TYPE_ERR);
+  cjsExports.InvalidNodeTypeError = function () {
+    throw new DOMException(ERR.INVALID_NODE_TYPE_ERR);
   };
-  wu.DataCloneError = function () {
-    throw new J(ae.DATA_CLONE_ERR);
+  cjsExports.DataCloneError = function () {
+    throw new DOMException(ERR.DATA_CLONE_ERR);
   };
-  wu.nyi = function () {
+  cjsExports.nyi = function () {
     throw Error("NotYetImplemented");
   };
-  wu.shouldOverride = function () {
+  cjsExports.shouldOverride = function () {
     throw Error("Abstract function; should be overriding in subclass.");
   };
-  wu.assert = function (e, t) {
-    if (!e)
+  cjsExports.assert = function (expr, msg) {
+    if (!expr)
       throw Error(
         "Assertion failed: " +
-          (t || "") +
+          (msg || "") +
           `
 ` +
           Error().stack,
       );
   };
-  wu.expose = function (e, t) {
-    for (var key in e) Object.defineProperty(t.prototype, key, { value: e[key], writable: isApiWritable });
+  cjsExports.expose = function (src, c) {
+    for (var n in src)
+      Object.defineProperty(c.prototype, n, {
+        value: src[n],
+        writable: isApiWritable,
+      });
   };
-  wu.merge = function (e, t) {
-    for (var key in t) e[key] = t[key];
+  cjsExports.merge = function (a, b) {
+    for (var n in b) a[n] = b[n];
   };
-  wu.documentOrder = function (e, t) {
-    return 3 - (e.compareDocumentPosition(t) & 6);
+  cjsExports.documentOrder = function (n, m) {
+    return 3 - (n.compareDocumentPosition(m) & 6);
   };
-  wu.toASCIILowerCase = function (e) {
-    return e.replace(/[A-Z]+/g, function (t) {
-      return t.toLowerCase();
+  cjsExports.toASCIILowerCase = function (s) {
+    return s.replace(/[A-Z]+/g, function (c) {
+      return c.toLowerCase();
     });
   };
-  wu.toASCIIUpperCase = function (e) {
-    return e.replace(/[a-z]+/g, function (t) {
-      return t.toUpperCase();
+  cjsExports.toASCIIUpperCase = function (s) {
+    return s.replace(/[a-z]+/g, function (c) {
+      return c.toUpperCase();
     });
   };
 });
-
-export { ee };
+export { require_utils };

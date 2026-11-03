@@ -6,153 +6,186 @@
  * attribution: esm-layout 6, esm-fingerprint 1
  */
 import { Re } from "../../../../runtime/bun-runtime.js";
-import { $h } from "../../../@smithy/property-provider/dist-cjs/index.js";
+import { require_property_provider } from "../../../@smithy/property-provider/dist-cjs/index.js";
 import { fromEnv } from "../../credential-provider-env/dist-cjs/index.js";
 import { fromIni } from "../../credential-provider-ini/dist-cjs/index.js";
 import { defaultProvider } from "../../credential-provider-node/dist-cjs/index.js";
-import { dR } from "../../../@smithy/core/dist-cjs/submodules/config/index.native.js";
-import { wD } from "../../../@smithy/node-config-provider/dist-cjs/index.js";
-import { EE } from "../../../@smithy/core/dist-cjs/index.js";
+import { require_index_native } from "../../../@smithy/core/dist-cjs/submodules/config/index.native.js";
+import { require_node_config_provider } from "../../../@smithy/node-config-provider/dist-cjs/index.js";
+import { require_core } from "../../../@smithy/core/dist-cjs/index.js";
 
 //@ chunk-thwbpw6e.js:561-1125 esm-layout
-var x = Re($h()),
-  O = (...e) => {
-    let r = -1,
-      merged = Object.assign(
-        async (t) => {
-          let o = await P(...e)(t);
-          if (!o.expiration && r !== -1) o.expiration = new Date(Date.now() + r);
-          return o;
-        },
-        {
-          expireAfter(t) {
-            if (t < 300000)
-              throw Error(
-                "@aws-sdk/credential-providers - createCredentialChain(...).expireAfter(ms) may not be called with a duration lower than five minutes.",
-              );
-            return ((r = t), merged);
+var ProviderError = Re(require_property_provider());
+var O = (...credentialProviders) => {
+  let expireAfter = -1;
+  let withOptions = Object.assign(
+    async (awsIdentityProperties) => {
+      let credentials = await propertyProviderChain(...credentialProviders)(awsIdentityProperties);
+      if (!credentials.expiration && expireAfter !== -1)
+        credentials.expiration = new Date(Date.now() + expireAfter);
+      return credentials;
+    },
+    {
+      expireAfter(milliseconds) {
+        if (milliseconds < 300000)
+          throw Error(
+            "@aws-sdk/credential-providers - createCredentialChain(...).expireAfter(ms) may not be called with a duration lower than five minutes.",
+          );
+        expireAfter = milliseconds;
+        return withOptions;
+      },
+    },
+  );
+  return withOptions;
+};
+var propertyProviderChain =
+  (...providers) =>
+  async (awsIdentityProperties) => {
+    if (providers.length === 0)
+      throw new ProviderError.ProviderError("No providers in chain", {
+        tryNextLink: false,
+      });
+    let lastProviderError;
+    for (let provider of providers)
+      try {
+        return await provider(awsIdentityProperties);
+      } catch (err) {
+        lastProviderError = err;
+        if (err?.tryNextLink) continue;
+        throw err;
+      }
+    throw lastProviderError;
+  };
+//@ chunk-thwbpw6e.js:1125-1143 esm-layout
+var R = (init) => fromEnv(init);
+//@ chunk-thwbpw6e.js:1143-1169 esm-layout
+var F = (e = {}) =>
+  fromIni({
+    ...e,
+  });
+//@ chunk-thwbpw6e.js:1169-1195 esm-layout
+var v = (init = {}) =>
+  defaultProvider({
+    ...init,
+  });
+//@ chunk-thwbpw6e.js:1195-1221 esm-layout
+var NODE_REGION_CONFIG_FILE_OPTIONS = Re(require_index_native());
+var loadConfig = Re(require_node_config_provider());
+//@ chunk-thwbpw6e.js:1221-3607 esm-layout
+var normalizeProvider = Re(require_core());
+var CredentialsProviderError = Re(require_property_provider());
+var ASSUME_ROLE_DEFAULT_REGION = "us-east-1";
+var fromTemporaryCredentials$1 = (options, credentialDefaultProvider, regionProvider) => {
+  let stsClient;
+  return async (awsIdentityProperties = {}) => {
+    let { callerClientConfig } = awsIdentityProperties;
+    let profile = options.clientConfig?.profile ?? callerClientConfig?.profile;
+    let logger = options.logger ?? callerClientConfig?.logger;
+    logger?.debug("@aws-sdk/credential-providers - fromTemporaryCredentials (STS)");
+    let params = {
+      ...options.params,
+      RoleSessionName: options.params.RoleSessionName ?? "aws-sdk-js-" + Date.now(),
+    };
+    if (params?.SerialNumber) {
+      if (!options.mfaCodeProvider)
+        throw new CredentialsProviderError.CredentialsProviderError(
+          "Temporary credential requires multi-factor authentication, but no MFA code callback was provided.",
+          {
+            tryNextLink: false,
+            logger,
           },
+        );
+      params.TokenCode = await options.mfaCodeProvider(params?.SerialNumber);
+    }
+    let { AssumeRoleCommand, STSClient } = await import("./chunk-nm3tp7ry.js");
+    if (!stsClient) {
+      let defaultCredentialsOrError =
+        typeof credentialDefaultProvider === "function" ? credentialDefaultProvider() : undefined;
+      let credentialSources = [
+        options.masterCredentials,
+        options.clientConfig?.credentials,
+        void callerClientConfig?.credentials,
+        callerClientConfig?.credentialDefaultProvider?.(),
+        defaultCredentialsOrError,
+      ];
+      let credentialSource = "STS client default credentials";
+      if (credentialSources[0]) credentialSource = "options.masterCredentials";
+      else if (credentialSources[1]) credentialSource = "options.clientConfig.credentials";
+      else if (credentialSources[2]) {
+        credentialSource = "caller client's credentials";
+        throw Error("fromTemporaryCredentials recursion in callerClientConfig.credentials");
+      } else if (credentialSources[3]) credentialSource = "caller client's credentialDefaultProvider";
+      else if (credentialSources[4]) credentialSource = "AWS SDK default credentials";
+      let regionSources = [
+        options.clientConfig?.region,
+        callerClientConfig?.region,
+        await regionProvider?.({
+          profile,
+        }),
+        ASSUME_ROLE_DEFAULT_REGION,
+      ];
+      let regionSource = "default partition's default region";
+      if (regionSources[0]) regionSource = "options.clientConfig.region";
+      else if (regionSources[1]) regionSource = "caller client's region";
+      else if (regionSources[2]) regionSource = "file or env region";
+      let requestHandlerSources = [
+        filterRequestHandler(options.clientConfig?.requestHandler),
+        filterRequestHandler(callerClientConfig?.requestHandler),
+      ];
+      let requestHandlerSource = "STS default requestHandler";
+      if (requestHandlerSources[0]) requestHandlerSource = "options.clientConfig.requestHandler";
+      else if (requestHandlerSources[1]) requestHandlerSource = "caller client's requestHandler";
+      logger?.debug?.(
+        `@aws-sdk/credential-providers - fromTemporaryCredentials STS client init with ${regionSource}=${await normalizeProvider.normalizeProvider(coalesce(regionSources))()}, ${credentialSource}, ${requestHandlerSource}.`,
+      );
+      stsClient = new STSClient({
+        userAgentAppId: callerClientConfig?.userAgentAppId,
+        ...options.clientConfig,
+        credentials: coalesce(credentialSources),
+        logger,
+        profile,
+        region: coalesce(regionSources),
+        requestHandler: coalesce(requestHandlerSources),
+      });
+    }
+    if (options.clientPlugins)
+      for (let plugin of options.clientPlugins) stsClient.middlewareStack.use(plugin);
+    let { Credentials } = await stsClient.send(new AssumeRoleCommand(params));
+    if (!Credentials || !Credentials.AccessKeyId || !Credentials.SecretAccessKey)
+      throw new CredentialsProviderError.CredentialsProviderError(
+        `Invalid response from STS.assumeRole call with role ${params.RoleArn}`,
+        {
+          logger,
         },
       );
-    return merged;
-  },
-  P =
-    (...e) =>
-    async (r) => {
-      if (e.length === 0) throw new x.ProviderError("No providers in chain", { tryNextLink: !1 });
-      let n;
-      for (let i of e)
-        try {
-          return await i(r);
-        } catch (error) {
-          if (((n = error), error?.tryNextLink)) continue;
-          throw error;
-        }
-      throw n;
+    return {
+      accessKeyId: Credentials.AccessKeyId,
+      secretAccessKey: Credentials.SecretAccessKey,
+      sessionToken: Credentials.SessionToken,
+      expiration: Credentials.Expiration,
+      credentialScope: Credentials.CredentialScope,
     };
-//@ chunk-thwbpw6e.js:1125-1143 esm-layout
-var R = (e) => fromEnv(e);
-//@ chunk-thwbpw6e.js:1143-1169 esm-layout
-var F = (e = {}) => fromIni({ ...e });
-//@ chunk-thwbpw6e.js:1169-1195 esm-layout
-var v = (e = {}) => defaultProvider({ ...e });
-//@ chunk-thwbpw6e.js:1195-1221 esm-layout
-var E = Re(dR()),
-  T = Re(wD());
-//@ chunk-thwbpw6e.js:1221-3607 esm-layout
-var h = Re(EE()),
-  S = Re($h()),
-  US_EAST_1 = "us-east-1",
-  A = (e, r, n) => {
-    let i;
-    return async (t = {}) => {
-      let { callerClientConfig: callerClientConfig } = t,
-        w = e.clientConfig?.profile ?? callerClientConfig?.profile,
-        c = e.logger ?? callerClientConfig?.logger;
-      c?.debug("@aws-sdk/credential-providers - fromTemporaryCredentials (STS)");
-      let f = { ...e.params, RoleSessionName: e.params.RoleSessionName ?? "aws-sdk-js-" + Date.now() };
-      if (f?.SerialNumber) {
-        if (!e.mfaCodeProvider)
-          throw new S.CredentialsProviderError(
-            "Temporary credential requires multi-factor authentication, but no MFA code callback was provided.",
-            { tryNextLink: !1, logger: c },
-          );
-        f.TokenCode = await e.mfaCodeProvider(f?.SerialNumber);
-      }
-      let { AssumeRoleCommand: AssumeRoleCommand, STSClient: STSClient } =
-        await import("./chunk-nm3tp7ry.js");
-      if (!i) {
-        let u = typeof r === "function" ? r() : void 0,
-          s = [
-            e.masterCredentials,
-            e.clientConfig?.credentials,
-            void callerClientConfig?.credentials,
-            callerClientConfig?.credentialDefaultProvider?.(),
-            u,
-          ],
-          l = "STS client default credentials";
-        if (s[0]) l = "options.masterCredentials";
-        else if (s[1]) l = "options.clientConfig.credentials";
-        else if (s[2])
-          throw (
-            (l = "caller client's credentials"),
-            Error("fromTemporaryCredentials recursion in callerClientConfig.credentials")
-          );
-        else if (s[3]) l = "caller client's credentialDefaultProvider";
-        else if (s[4]) l = "AWS SDK default credentials";
-        let d = [e.clientConfig?.region, callerClientConfig?.region, await n?.({ profile: w }), US_EAST_1],
-          m = "default partition's default region";
-        if (d[0]) m = "options.clientConfig.region";
-        else if (d[1]) m = "caller client's region";
-        else if (d[2]) m = "file or env region";
-        let C = [y(e.clientConfig?.requestHandler), y(callerClientConfig?.requestHandler)],
-          g = "STS default requestHandler";
-        if (C[0]) g = "options.clientConfig.requestHandler";
-        else if (C[1]) g = "caller client's requestHandler";
-        (c?.debug?.(
-          `@aws-sdk/credential-providers - fromTemporaryCredentials STS client init with ${m}=${await h.normalizeProvider(p(d))()}, ${l}, ${g}.`,
-        ),
-          (i = new STSClient({
-            userAgentAppId: callerClientConfig?.userAgentAppId,
-            ...e.clientConfig,
-            credentials: p(s),
-            logger: c,
-            profile: w,
-            region: p(d),
-            requestHandler: p(C),
-          })));
-      }
-      if (e.clientPlugins) for (let clientPlugin of e.clientPlugins) i.middlewareStack.use(clientPlugin);
-      let { Credentials: Credentials } = await i.send(new AssumeRoleCommand(f));
-      if (!Credentials || !Credentials.AccessKeyId || !Credentials.SecretAccessKey)
-        throw new S.CredentialsProviderError(
-          `Invalid response from STS.assumeRole call with role ${f.RoleArn}`,
-          { logger: c },
-        );
-      return {
-        accessKeyId: Credentials.AccessKeyId,
-        secretAccessKey: Credentials.SecretAccessKey,
-        sessionToken: Credentials.SessionToken,
-        expiration: Credentials.Expiration,
-        credentialScope: Credentials.CredentialScope,
-      };
-    };
-  },
-  y = (e) => (e?.metadata?.handlerProtocol === "h2" ? void 0 : e),
-  p = (e) => {
-    for (let r of e) if (r !== void 0) return r;
   };
+};
+var filterRequestHandler = (requestHandler) =>
+  requestHandler?.metadata?.handlerProtocol === "h2" ? undefined : requestHandler;
+var coalesce = (args) => {
+  for (let item of args) if (item !== undefined) return item;
+};
 //@ chunk-thwbpw6e.js:3607-3836 esm-fingerprint
-var M = (e) =>
-  A(e, v, async ({ profile: profile = process.env.AWS_PROFILE }) =>
-    T.loadConfig(
+var fromTemporaryCredentials = (options) =>
+  fromTemporaryCredentials$1(options, v, async ({ profile = process.env.AWS_PROFILE }) =>
+    loadConfig.loadConfig(
       {
-        environmentVariableSelector: (n) => n.AWS_REGION,
-        configFileSelector: (n) => n.region,
+        environmentVariableSelector: (env) => env.AWS_REGION,
+        configFileSelector: (profileData) => profileData.region,
         default: () => {
           return;
         },
       },
-      { ...E.NODE_REGION_CONFIG_FILE_OPTIONS, profile: profile },
+      {
+        ...NODE_REGION_CONFIG_FILE_OPTIONS.NODE_REGION_CONFIG_FILE_OPTIONS,
+        profile,
+      },
     )(),
   );

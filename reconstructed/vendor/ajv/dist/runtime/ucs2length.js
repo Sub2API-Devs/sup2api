@@ -8,21 +8,26 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-s82q9s4x.js:85041-85340 cjs-fingerprint
-var Oo = x(function (qo) {
-  Object.defineProperty(qo, "__esModule", { value: !0 });
-  function ko(e) {
-    let t = e.length,
-      r = 0,
-      s = 0,
-      n;
-    while (s < t)
-      if ((r++, (n = e.charCodeAt(s++)), n >= 55296 && n <= 56319 && s < t)) {
-        if (((n = e.charCodeAt(s)), (n & 64512) === 56320)) s++;
+var require_ucs2length = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  function ucs2length(str) {
+    let len = str.length;
+    let length = 0;
+    let pos = 0;
+    let value;
+    while (pos < len) {
+      length++;
+      value = str.charCodeAt(pos++);
+      if (value >= 55296 && value <= 56319 && pos < len) {
+        value = str.charCodeAt(pos);
+        if ((value & 64512) === 56320) pos++;
       }
-    return r;
+    }
+    return length;
   }
-  qo.default = ko;
-  ko.code = 'require("ajv/dist/runtime/ucs2length").default';
+  cjsExports.default = ucs2length;
+  ucs2length.code = 'require("ajv/dist/runtime/ucs2length").default';
 });
-
-export { Oo };
+export { require_ucs2length };

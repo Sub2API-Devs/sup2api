@@ -6,44 +6,51 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../runtime/bun-runtime.js";
-import { uh } from "../../compile/codegen/index.js";
-import { DPe } from "../../compile/names.js";
-import { _Xr } from "../core/ref.js";
+import { require_codegen_2 as require_codegen } from "../../compile/codegen/index.js";
+import { require_names } from "../../compile/names.js";
+import { require_ref } from "../core/ref.js";
 
 //@ chunk-1r4fv9mg.js:1267-1958 cjs-fingerprint
-var F = x(function (Z) {
-  Object.defineProperty(Z, "__esModule", { value: !0 });
-  Z.dynamicRef = void 0;
-  var k = uh(),
-    We = DPe(),
-    M = _Xr(),
-    Le = { keyword: "$dynamicRef", schemaType: "string", code: (e) => Y(e, e.schema) };
-  function Y(e, r) {
-    let { gen: gen, keyword: keyword, it: it } = e;
-    if (r[0] !== "#") throw Error(`"${keyword}" only supports hash fragment reference`);
-    let sliced = r.slice(1);
-    if (it.allErrors) u();
+var require_dynamicRef = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.dynamicRef = undefined;
+  var codegen_1 = require_codegen();
+  var names_1 = require_names();
+  var ref_1 = require_ref();
+  var def = {
+    keyword: "$dynamicRef",
+    schemaType: "string",
+    code: (cxt) => dynamicRef(cxt, cxt.schema),
+  };
+  function dynamicRef(cxt, ref) {
+    let { gen, keyword, it } = cxt;
+    if (ref[0] !== "#") throw Error(`"${keyword}" only supports hash fragment reference`);
+    let anchor = ref.slice(1);
+    if (it.allErrors) _dynamicRef();
     else {
-      let s = gen.let("valid", !1);
-      (u(s), e.ok(s));
+      let valid = gen.let("valid", false);
+      _dynamicRef(valid);
+      cxt.ok(valid);
     }
-    function u(s) {
-      if (it.schemaEnv.root.dynamicAnchors[sliced]) {
-        let p = gen.let("_v", k._`${We.default.dynamicAnchors}${k.getProperty(sliced)}`);
-        gen.if(p, m(p, s), m(it.validateName, s));
-      } else m(it.validateName, s)();
+    function _dynamicRef(valid) {
+      if (it.schemaEnv.root.dynamicAnchors[anchor]) {
+        let v = gen.let("_v", codegen_1._`${names_1.default.dynamicAnchors}${codegen_1.getProperty(anchor)}`);
+        gen.if(v, _callRef(v, valid), _callRef(it.validateName, valid));
+      } else _callRef(it.validateName, valid)();
     }
-    function m(s, p) {
-      return p
+    function _callRef(validate, valid) {
+      return valid
         ? () =>
             gen.block(() => {
-              (M.callRef(e, s), gen.let(p, !0));
+              ref_1.callRef(cxt, validate);
+              gen.let(valid, true);
             })
-        : () => M.callRef(e, s);
+        : () => ref_1.callRef(cxt, validate);
     }
   }
-  Z.dynamicRef = Y;
-  Z.default = Le;
+  cjsExports.dynamicRef = dynamicRef;
+  cjsExports.default = def;
 });
-
-export { F };
+export { require_dynamicRef };

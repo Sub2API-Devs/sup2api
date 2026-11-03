@@ -7,43 +7,53 @@
  */
 
 //@ chunk-mrx6y2r5.js:30140-30178 esm-layout
-function Fo(e) {
-  return e.toLowerCase();
+function normalizeName(name) {
+  return name.toLowerCase();
 }
 //@ chunk-mrx6y2r5.js:30178-30239 esm-fingerprint
-function* Im(e) {
-  for (let t of e.values()) yield [t.name, t.value];
+function* headerIterator(map) {
+  for (let entry of map.values()) yield [entry.name, entry.value];
 }
 //@ chunk-mrx6y2r5.js:30239-30845 esm-fingerprint
-class ll {
-  constructor(e) {
-    if (((this._headersMap = new Map()), e)) for (let t of Object.keys(e)) this.set(t, e[t]);
+class HttpHeadersImpl {
+  constructor(rawHeaders) {
+    this._headersMap = new Map();
+    if (rawHeaders)
+      for (let headerName of Object.keys(rawHeaders)) this.set(headerName, rawHeaders[headerName]);
   }
-  set(e, t) {
-    this._headersMap.set(Fo(e), { name: e, value: String(t).trim() });
+  set(name, value) {
+    this._headersMap.set(normalizeName(name), {
+      name,
+      value: String(value).trim(),
+    });
   }
-  get(e) {
-    var t;
-    return (t = this._headersMap.get(Fo(e))) === null || t === void 0 ? void 0 : t.value;
+  get(name) {
+    var _a;
+    return (_a = this._headersMap.get(normalizeName(name))) === null || _a === undefined
+      ? undefined
+      : _a.value;
   }
-  has(e) {
-    return this._headersMap.has(Fo(e));
+  has(name) {
+    return this._headersMap.has(normalizeName(name));
   }
-  delete(e) {
-    this._headersMap.delete(Fo(e));
+  delete(name) {
+    this._headersMap.delete(normalizeName(name));
   }
-  toJSON(e = {}) {
-    let t = {};
-    if (e.preserveCase) for (let r of this._headersMap.values()) t[r.name] = r.value;
-    else for (let [r, n] of this._headersMap) t[r] = n.value;
-    return t;
+  toJSON(options = {}) {
+    let result = {};
+    if (options.preserveCase) for (let entry of this._headersMap.values()) result[entry.name] = entry.value;
+    else for (let [normalizedName, entry] of this._headersMap) result[normalizedName] = entry.value;
+    return result;
   }
   toString() {
-    return JSON.stringify(this.toJSON({ preserveCase: !0 }));
+    return JSON.stringify(
+      this.toJSON({
+        preserveCase: true,
+      }),
+    );
   }
   [Symbol.iterator]() {
-    return Im(this._headersMap);
+    return headerIterator(this._headersMap);
   }
 }
-
-export { ll };
+export { HttpHeadersImpl };

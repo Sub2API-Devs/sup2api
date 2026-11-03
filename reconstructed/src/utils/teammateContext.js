@@ -9,12 +9,14 @@
  * attribution: fingerprint 1
  */
 
+//@ chunk-fxf1mb10.js:581-625 fingerprint = createTeammateContext (1)
 /**
  * 用配置构造 teammate 上下文并标 isInProcess=true。
  */
-//@ chunk-fxf1mb10.js:581-625 fingerprint = createTeammateContext (1)
 function createTeammateContext(config) {
-  return { ...config, isInProcess: !0 };
+  return {
+    ...config,
+    isInProcess: true,
+  };
 }
-
 export { createTeammateContext };

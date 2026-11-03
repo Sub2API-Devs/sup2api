@@ -10,26 +10,44 @@
  */
 
 //@ chunk-y7y3wdde.js:191-260 placement
-var r = new Set(["update", "upgrade", "doctor", "forward-home-settings"]);
+/**
+ * 需要走快速路径的顶层子命令集合。
+ */
+var FAST_PATH_SUBCOMMANDS = new Set(["update", "upgrade", "doctor", "forward-home-settings"]);
 //@ chunk-y7y3wdde.js:260-283 placement
-function i(o) {
-  return !1;
+/**
+ * 插件相关快速路径的占位判定，当前恒返回 false。
+ */
+function isPluginsFastPathArg(o) {
+  return false;
 }
 //@ chunk-y7y3wdde.js:283-352 placement
-function s(o) {
+/**
+ * 参数里是否有 mcp serve
+ */
+function isMcpServe(o) {
   let index = o.indexOf("mcp");
   return index !== -1 && o[index + 1] === "serve";
 }
 //@ chunk-y7y3wdde.js:352-432 placement
-function a(o) {
+/**
+ * agents 后跟 --json
+ */
+function isAgentsJson(o) {
   let index = o.indexOf("agents");
   return index !== -1 && o.includes("--json", index + 1);
 }
 //@ chunk-y7y3wdde.js:432-515 placement
-function c(o) {
+/**
+ * plugin/plugins 后跟 eval
+ */
+function isPluginEval(o) {
   return o.some((n, e) => (n === "plugin" || n === "plugins") && o[e + 1] === "eval");
 }
 //@ chunk-y7y3wdde.js:515-580 placement
-function l(o) {
+/**
+ * remote-control 或 rc
+ */
+function isRemoteControlCommand(o) {
   return o.some((n) => n === "remote-control" || n === "rc");
 }

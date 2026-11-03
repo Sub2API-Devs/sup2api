@@ -9,34 +9,59 @@
  * attribution: placement 1
  */
 import { w } from "../../../vendor/react/compiler-runtime.js";
-import { e, r } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Box } from "../../ink/components/Text.js";
 
+//@ chunk-j2fh7g5w.js:300-709 placement
 /**
  * 暗色文本，可附带提示（hint）。
  */
-//@ chunk-j2fh7g5w.js:300-709 placement
-function HintText(R) {
-  let c = w(9),
-    { children: children, hint: hint } = R;
+function HintText(props) {
+  let c = w(9);
+  let { children, hint } = props;
   if (!hint) {
     let o;
-    if (c[0] !== children)
-      ((o = e(Text, { dimColor: !0, children: children })), (c[0] = children), (c[1] = o));
-    else o = c[1];
+    if (c[0] !== children) {
+      o = jsxProd_default(Text, {
+        dimColor: true,
+        children,
+      });
+      c[0] = children;
+      c[1] = o;
+    } else o = c[1];
     return o;
   }
   let o;
-  if (c[2] !== children) ((o = e(Text, { dimColor: !0, children: children })), (c[2] = children), (c[3] = o));
-  else o = c[3];
+  if (c[2] !== children) {
+    o = jsxProd_default(Text, {
+      dimColor: true,
+      children,
+    });
+    c[2] = children;
+    c[3] = o;
+  } else o = c[3];
   let d;
-  if (c[4] !== hint) ((d = e(Text, { dimColor: !0, children: hint })), (c[4] = hint), (c[5] = d));
-  else d = c[5];
+  if (c[4] !== hint) {
+    d = jsxProd_default(Text, {
+      dimColor: true,
+      children: hint,
+    });
+    c[4] = hint;
+    c[5] = d;
+  } else d = c[5];
   let a;
-  if (c[6] !== o || c[7] !== d)
-    ((a = r(Box, { flexDirection: "column", children: [o, d] })), (c[6] = o), (c[7] = d), (c[8] = a));
-  else a = c[8];
+  if (c[6] !== o || c[7] !== d) {
+    a = jsxProd_default_2(Box, {
+      flexDirection: "column",
+      children: [o, d],
+    });
+    c[6] = o;
+    c[7] = d;
+    c[8] = a;
+  } else a = c[8];
   return a;
 }
-
 export { HintText };

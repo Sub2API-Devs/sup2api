@@ -11,75 +11,86 @@
 import { withHideWhile } from "../../components/dialogs/dialogRequests.js";
 import { RESUME_RETURN } from "../../components/nudges/nudgeIds.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, E, M, U } from "../../../vendor/zod/v4/classic/schemas.js";
+import { u, E, M, _enum } from "../../../vendor/zod/v4/classic/schemas.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import { getGlobalConfig, saveGlobalConfig } from "../../utils/config.js";
 import { env } from "../../utils/env.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
 
+//@ chunk-18hwfzwa.js:330496-330709 placement
 /**
  * 续接旧会话时提议压缩的对话框定义（compact/continue/dismiss/never）。
  */
-//@ chunk-18hwfzwa.js:330496-330709 placement
 var RESUME_COMPACT_DIALOG = withHideWhile({
   kind: RESUME_RETURN,
-  payload: DoctorLazy(() => u({ sessionAgeMinutes: E(), estimatedTokens: E(), hasPrecomputedSummary: M() })),
-  result: DoctorLazy(() => U(["compact", "continue", "dismiss", "never", "cancelled"])),
+  payload: DoctorLazy(() =>
+    u({
+      sessionAgeMinutes: E(),
+      estimatedTokens: E(),
+      hasPrecomputedSummary: M(),
+    }),
+  ),
+  result: DoctorLazy(() => _enum(["compact", "continue", "dismiss", "never", "cancelled"])),
   default: "cancelled",
   hideWhile: [],
 });
 //@ chunk-18hwfzwa.js:330709-331225 placement
-function shouldOfferResumeCompact(h, x) {
+function shouldOfferResumeCompact(h, estimateTokensWithAnchor) {
   if (
-    !getFeatureValue_CACHED_MAY_BE_STALE("tengu_gleaming_fair", !1) &&
-    !getFeatureValue_CACHED_MAY_BE_STALE("tengu_gleaming_fair_reuse", !1)
+    !getFeatureValue_CACHED_MAY_BE_STALE("tengu_gleaming_fair", false) &&
+    !getFeatureValue_CACHED_MAY_BE_STALE("tengu_gleaming_fair_reuse", false)
   )
     return null;
   if (getGlobalConfig().resumeReturnDismissed) return null;
-  let D = env.CLAUDE_CODE_RESUME_THRESHOLD_MINUTES ?? 70,
-    L = env.CLAUDE_CODE_RESUME_TOKEN_THRESHOLD ?? 1e5,
-    ee = Date.now() - 60000,
-    ke = h.findLast(
-      (He) => (He.type === "user" || He.type === "assistant") && Date.parse(He.timestamp) < ee,
-    )?.timestamp;
-  if (!ke) return null;
-  let Re = (Date.now() - Date.parse(ke)) / 60000;
-  if (Re < D) return null;
-  let Be = x(h);
-  if (Be < L) return null;
-  return { sessionAgeMinutes: Re, estimatedTokens: Be };
+  let CLAUDE_CODE_RESUME_THRESHOLD_MINUTES = env.CLAUDE_CODE_RESUME_THRESHOLD_MINUTES ?? 70;
+  let CLAUDE_CODE_RESUME_TOKEN_THRESHOLD = env.CLAUDE_CODE_RESUME_TOKEN_THRESHOLD ?? 1e5;
+  let ee = Date.now() - 60000;
+  let timestamp = h.findLast(
+    (He) => (He.type === "user" || He.type === "assistant") && Date.parse(He.timestamp) < ee,
+  )?.timestamp;
+  if (!timestamp) return null;
+  let Re = (Date.now() - Date.parse(timestamp)) / 60000;
+  if (Re < CLAUDE_CODE_RESUME_THRESHOLD_MINUTES) return null;
+  let Be = estimateTokensWithAnchor(h);
+  if (Be < CLAUDE_CODE_RESUME_TOKEN_THRESHOLD) return null;
+  return {
+    sessionAgeMinutes: Re,
+    estimatedTokens: Be,
+  };
 }
 //@ chunk-18hwfzwa.js:331225-331801 placement
 async function runResumeCompactOffer(
-  h,
+  requestDialog,
   x,
-  {
-    getMessageCount: getMessageCount,
-    storage: storage,
-    runCompact: runCompact,
-    hasPrecomputedSummary: hasPrecomputedSummary,
-  },
+  { getMessageCount, storage, runCompact, hasPrecomputedSummary },
 ) {
-  let Re = getFeatureValue_CACHED_MAY_BE_STALE("tengu_gleaming_fair_reuse", !1),
-    Be = Re && !x.hasPrecomputedSummary ? "skipped_no_summary" : await h(RESUME_COMPACT_DIALOG, x);
+  let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE(
+    "tengu_gleaming_fair_reuse",
+    false,
+  );
+  let Be =
+    featureValue_CACHED_MAY_BE_STALE && !x.hasPrecomputedSummary
+      ? "skipped_no_summary"
+      : await requestDialog(RESUME_COMPACT_DIALOG, x);
   if (Be === "cancelled") return Be;
-  let He = Re && Be === "compact" && !hasPrecomputedSummary() ? "summary_gone" : Be;
-  if (
-    (logEvent("tengu_resume_return_action", {
-      action: fromEnum(He),
-      sessionAgeMinutes: Math.round(x.sessionAgeMinutes),
-      messageCount: getMessageCount(),
-      estimatedTokens: x.estimatedTokens,
-    }),
-    He === "never")
-  )
+  let He =
+    featureValue_CACHED_MAY_BE_STALE && Be === "compact" && !hasPrecomputedSummary() ? "summary_gone" : Be;
+  logEvent("tengu_resume_return_action", {
+    action: fromEnum(He),
+    sessionAgeMinutes: Math.round(x.sessionAgeMinutes),
+    messageCount: getMessageCount(),
+    estimatedTokens: x.estimatedTokens,
+  });
+  if (He === "never")
     await saveGlobalConfig((We) => {
       if (We.resumeReturnDismissed) return We;
-      return { ...We, resumeReturnDismissed: !0 };
+      return {
+        ...We,
+        resumeReturnDismissed: true,
+      };
     }, storage);
   if (He === "compact") runCompact();
   return He;
 }
-
 export { shouldOfferResumeCompact, runResumeCompactOffer, RESUME_COMPACT_DIALOG };

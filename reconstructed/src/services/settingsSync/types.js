@@ -14,5 +14,4 @@ function SYNC_KEYS(b) {
   let match = /[\\/]\.claude[\\/]rules[\\/]([^\\/]+)$/.exec(b);
   return match ? `~/.claude/rules/${match[1]}` : "~/.claude/CLAUDE.md";
 }
-
 export { SYNC_KEYS };

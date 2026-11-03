@@ -5,25 +5,28 @@
  * pieces: chunk-fq0cr76a.js (8)
  * attribution: esm-fingerprint 6, esm-layout 2
  */
-import { QSe, w8o } from "./sandbox-utils.js";
+import { encodeSandboxedCommand, SANDBOXED_COMMAND_KEY_LENGTH } from "./sandbox-utils.js";
 
 //@ chunk-fq0cr76a.js:653509-654298 esm-fingerprint
-class _m {
+class SandboxViolationStore {
   constructor() {
-    ((this.violations = []), (this.totalCount = 0), (this.maxSize = 100), (this.listeners = new Set()));
+    this.violations = [];
+    this.totalCount = 0;
+    this.maxSize = 100;
+    this.listeners = new Set();
   }
-  addViolation(e) {
-    if (
-      (this.violations.push({ ...e, line: fE(e.line) }),
-      this.totalCount++,
-      this.violations.length > this.maxSize)
-    )
-      this.violations = this.violations.slice(-this.maxSize);
+  addViolation(violation) {
+    this.violations.push({
+      ...violation,
+      line: sanitizeViolationText(violation.line),
+    });
+    this.totalCount++;
+    if (this.violations.length > this.maxSize) this.violations = this.violations.slice(-this.maxSize);
     this.notifyListeners();
   }
-  getViolations(e) {
-    if (e === void 0) return [...this.violations];
-    return this.violations.slice(-e);
+  getViolations(limit) {
+    if (limit === undefined) return [...this.violations];
+    return this.violations.slice(-limit);
   }
   getCount() {
     return this.violations.length;
@@ -31,21 +34,20 @@ class _m {
   getTotalCount() {
     return this.totalCount;
   }
-  getViolationsForCommand(e) {
-    let n = QSe(e);
-    return this.violations.filter((violation) => violation.encodedCommand === n);
+  getViolationsForCommand(command) {
+    let commandBase64 = encodeSandboxedCommand(command);
+    return this.violations.filter((v) => v.encodedCommand === commandBase64);
   }
   clear() {
-    ((this.violations = []), this.notifyListeners());
+    this.violations = [];
+    this.notifyListeners();
   }
-  subscribe(e) {
-    return (
-      this.listeners.add(e),
-      e(this.getViolations()),
-      () => {
-        this.listeners.delete(e);
-      }
-    );
+  subscribe(listener) {
+    this.listeners.add(listener);
+    listener(this.getViolations());
+    return () => {
+      this.listeners.delete(listener);
+    };
   }
   notifyListeners() {
     let violations = this.getViolations();
@@ -53,35 +55,34 @@ class _m {
   }
 }
 //@ chunk-fq0cr76a.js:654298-654510 esm-fingerprint
-function Eu(e, n, r) {
-  if (!r) return !1;
-  if ((r["*"] ?? []).some((h) => e.includes(h))) return !0;
-  if (n === void 0) return !1;
-  for (let [h, y] of Object.entries(r))
-    if (h !== "*" && n.includes(h) && y.some((b) => e.includes(b))) return !0;
-  return !1;
+function shouldIgnoreViolation(line, command, ignoreViolations) {
+  if (!ignoreViolations) return false;
+  if ((ignoreViolations["*"] ?? []).some((p) => line.includes(p))) return true;
+  if (command === undefined) return false;
+  for (let [pattern, patterns] of Object.entries(ignoreViolations))
+    if (pattern !== "*" && command.includes(pattern) && patterns.some((p) => line.includes(p))) return true;
+  return false;
 }
 //@ chunk-fq0cr76a.js:654510-654644 esm-fingerprint
-var p5 =
+var DISPLAY_UNSAFE_CHARACTERS =
   /[\x00-\x1f\x7f-\x9f\u00ad\u061c\u200b-\u200f\u2028\u2029\u202a-\u202e\u2060-\u2064\u2066-\u2069\ufeff\u{e0000}-\u{e007f}]+/gu;
 //@ chunk-fq0cr76a.js:654644-654711 esm-fingerprint
-function fE(e) {
-  return e.replace(p5, " ").replace(/[<>]/g, "").trim();
+function sanitizeViolationText(text) {
+  return text.replace(DISPLAY_UNSAFE_CHARACTERS, " ").replace(/[<>]/g, "").trim();
 }
 //@ chunk-fq0cr76a.js:654711-654747 esm-layout
-function DC(e) {
-  return OC(fE(e), w8o);
+function DC(decodedKey) {
+  return cutBetweenCharacters(sanitizeViolationText(decodedKey), SANDBOXED_COMMAND_KEY_LENGTH);
 }
 //@ chunk-fq0cr76a.js:654747-654758 esm-layout
-var h5 = 500;
+var MAX_DENIAL_REASON_LENGTH = 500;
 //@ chunk-fq0cr76a.js:654758-654803 esm-fingerprint
-function vm(e) {
-  return OC(fE(e), h5).trimEnd();
+function sanitizeDenialReason(reason) {
+  return cutBetweenCharacters(sanitizeViolationText(reason), MAX_DENIAL_REASON_LENGTH).trimEnd();
 }
 //@ chunk-fq0cr76a.js:654803-654888 esm-fingerprint
-function OC(e, n) {
-  let sliced = e.slice(0, n);
-  return /[\uD800-\uDBFF]$/.test(sliced) ? sliced.slice(0, -1) : sliced;
+function cutBetweenCharacters(text, length) {
+  let cut = text.slice(0, length);
+  return /[\uD800-\uDBFF]$/.test(cut) ? cut.slice(0, -1) : cut;
 }
-
-export { vm, _m, DC, Eu };
+export { sanitizeDenialReason, SandboxViolationStore, DC, shouldIgnoreViolation };

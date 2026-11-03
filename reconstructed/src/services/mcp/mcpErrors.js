@@ -11,28 +11,49 @@
 import { ErrorCode, McpError } from "../../../vendor/@modelcontextprotocol/sdk/dist/esm/types.js";
 
 //@ chunk-7mmyrw4c.js:230-271 placement
-var o = new Set([-32002, ErrorCode.InvalidParams]);
+/**
+ * 视为参数类错误的码集合（McpError 版本）。
+ */
+var PARAMS_ERROR_CODES = new Set([-32002, ErrorCode.InvalidParams]);
 //@ chunk-7mmyrw4c.js:271-322 placement
-function e(n) {
-  return n instanceof McpError ? n.code : void 0;
+/**
+ * 取 McpError 的 code。
+ */
+function mcpErrorCode(n) {
+  return n instanceof McpError ? n.code : undefined;
 }
 //@ chunk-7mmyrw4c.js:322-387 placement
-function t(n) {
+/**
+ * 判断是否为 MethodNotFound。
+ */
+function isMethodNotFoundError(n) {
   return n instanceof McpError && n.code === ErrorCode.MethodNotFound;
 }
 //@ chunk-7mmyrw4c.js:387-481 placement
-function i(n) {
+/**
+ * 判断是否为 MethodNotFound 或 InvalidParams。
+ */
+function isMethodNotFoundOrInvalidParams(n) {
   return n instanceof McpError && (n.code === ErrorCode.MethodNotFound || n.code === ErrorCode.InvalidParams);
 }
 //@ chunk-7mmyrw4c.js:481-533 placement
-function c(n) {
-  return n instanceof McpError && o.has(n.code);
+/**
+ * 判断是否属于参数类错误码。
+ */
+function isParamsOrInvalidError(n) {
+  return n instanceof McpError && PARAMS_ERROR_CODES.has(n.code);
 }
 //@ chunk-7mmyrw4c.js:533-597 placement
-function u(n) {
+/**
+ * 判断是否为 InvalidParams。
+ */
+function isInvalidParamsError(n) {
   return n instanceof McpError && n.code === ErrorCode.InvalidParams;
 }
 //@ chunk-7mmyrw4c.js:597-670 placement
-function d(n) {
+/**
+ * 判断是否为 UrlElicitationRequired。
+ */
+function isUrlElicitationRequiredError(n) {
   return n instanceof McpError && n.code === ErrorCode.UrlElicitationRequired;
 }

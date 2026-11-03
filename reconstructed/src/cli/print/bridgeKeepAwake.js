@@ -15,84 +15,105 @@ import {
   isBridgeRcChildCliEntrypointEnabled,
   isBridgeTurnKeepAwakeEnabled,
 } from "../../bridge/bridgeGates.js";
-import { vS, Ehe } from "../../utils/remoteEnvironment.js";
+import { isBridgeEnvironment, isTopLevelBridgeSession } from "../../utils/remoteEnvironment.js";
 import { applySdkCliEntrypointOverride } from "../../constants/system.js";
 import { logFeatureOk, logFeatureSad, logFeatureBad } from "../../services/analytics/featureTelemetry.js";
 import { isMacOS } from "../../services/preventSleep.js";
-import { oen, DAs, sen } from "../../utils/forkSourceNote.js";
+import {
+  acquireSleepPreventer,
+  isSleepPreventerHeld,
+  releaseSleepPreventer,
+} from "../../utils/forkSourceNote.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { errorMessage } from "../../utils/errors.js";
 
+//@ chunk-tyg7f3ek.js:395444-395469 sole-consumer
 /**
  * 按宿主懒建的 StdoutGuard 单例。
  */
-//@ chunk-tyg7f3ek.js:395444-395469 sole-consumer
 var stdoutGuardSlot = new HostScoped(() => new installStreamJsonStdoutGuard());
 //@ chunk-tyg7f3ek.js:395469-395503 placement
-function installStdoutGuard(e) {
-  stdoutGuardSlot.of(e).install();
+function installStdoutGuard(host) {
+  stdoutGuardSlot.of(host).install();
 }
 //@ chunk-tyg7f3ek.js:395503-395736 placement
 function applyBridgeChildCliEntrypoint() {
-  if (env.CLAUDE_CODE_BRIDGE_CHILD_CLI_ENTRYPOINT !== !0 || !isBridgeRcChildCliEntrypointEnabled()) return;
-  if ((env.unset("CLAUDE_CODE_BRIDGE_CHILD_CLI_ENTRYPOINT"), vS()))
+  if (env.CLAUDE_CODE_BRIDGE_CHILD_CLI_ENTRYPOINT !== true || !isBridgeRcChildCliEntrypointEnabled()) return;
+  env.unset("CLAUDE_CODE_BRIDGE_CHILD_CLI_ENTRYPOINT");
+  if (isBridgeEnvironment())
     if (applySdkCliEntrypointOverride()) logFeatureOk("bridge_cli_entrypoint_name");
     else logFeatureSad("bridge_cli_entrypoint_name", "name_not_taken");
 }
 //@ chunk-tyg7f3ek.js:395736-395770 placement
-var KEEP_AWAKE_TIMEOUTS_MS = 900000,
-  qq = 3600000,
-  jq = 60000;
+var KEEP_AWAKE_TIMEOUTS_MS = 900000;
+var KEEP_AWAKE_MAX_IDLE_MS = 3600000;
+var KEEP_AWAKE_RENEW_INTERVAL_MS = 60000;
+//@ chunk-tyg7f3ek.js:395770-396442 placement
 /**
  * macOS 上 Remote Control 桥会话运行轮次时阻止系统睡眠，空闲或超时释放。
  */
-//@ chunk-tyg7f3ek.js:395770-396442 placement
-function createBridgeTurnKeepAwake(e) {
-  if (!Ehe() || !isMacOS()) return () => {};
-  let n = "idle",
-    r,
-    s,
-    h = !1,
-    y = !1,
-    S;
+function createBridgeTurnKeepAwake(sessionState) {
+  if (!isTopLevelBridgeSession() || !isMacOS()) return () => {};
+  let n = "idle";
+  let r;
+  let s;
+  let h = false;
+  let y = false;
+  let S;
   function R(x) {
-    if (n === "idle") return ((h = !1), (r = void 0), !1);
-    if (s !== void 0 && x - s >= qq) h = !0;
-    if (h || !isBridgeTurnKeepAwakeEnabled()) return !1;
-    if (!e.waitingOnUser) return ((r = void 0), !0);
-    return ((r ??= x), x - r < KEEP_AWAKE_TIMEOUTS_MS);
+    if (n === "idle") {
+      h = false;
+      r = undefined;
+      return false;
+    }
+    if (s !== undefined && x - s >= KEEP_AWAKE_MAX_IDLE_MS) h = true;
+    if (h || !isBridgeTurnKeepAwakeEnabled()) return false;
+    if (!sessionState.waitingOnUser) {
+      r = undefined;
+      return true;
+    }
+    r ??= x;
+    return x - r < KEEP_AWAKE_TIMEOUTS_MS;
   }
   function w() {
-    let now = Date.now(),
-      G = R(now);
-    if (G === (s !== void 0)) return;
+    let now = Date.now();
+    let G = R(now);
+    if (G === (s !== undefined)) return;
     if (G) {
-      ((s = now), oen(), (S = setInterval(P, jq)), S.unref());
+      s = now;
+      acquireSleepPreventer();
+      S = setInterval(P, KEEP_AWAKE_RENEW_INTERVAL_MS);
+      S.unref();
       return;
     }
-    ((s = void 0), clearInterval(S));
-    let Z = DAs();
-    if ((sen(), !y))
-      if (((y = !0), Z)) logFeatureOk("bridge_turn_keep_awake");
+    s = undefined;
+    clearInterval(S);
+    let Z = isSleepPreventerHeld();
+    releaseSleepPreventer();
+    if (!y) {
+      y = true;
+      if (Z) logFeatureOk("bridge_turn_keep_awake");
       else logFeatureBad("bridge_turn_keep_awake", "no_inhibitor");
+    }
   }
   function P() {
     try {
       w();
     } catch (error) {
-      logForDebugging(`keep-awake hold failed: ${errorMessage(error)}`, { level: "error" });
+      logForDebugging(`keep-awake hold failed: ${errorMessage(error)}`, {
+        level: "error",
+      });
     }
   }
-  function L(x) {
-    ((n = x), P());
+  function L(state) {
+    n = state;
+    P();
   }
-  let subscribe = e.stateChanged.subscribe(L);
-  return (
-    L(e.getState()),
-    () => {
-      (subscribe(), L("idle"));
-    }
-  );
+  let q = sessionState.stateChanged.subscribe(L);
+  L(sessionState.getState());
+  return () => {
+    q();
+    L("idle");
+  };
 }
-
 export { installStdoutGuard, createBridgeTurnKeepAwake, applyBridgeChildCliEntrypoint };

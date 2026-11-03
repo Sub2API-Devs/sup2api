@@ -9,18 +9,17 @@
  * attribution: placement 1
  */
 
+//@ chunk-24t3dkzb.js:4916-5094 placement = Event (1)
 /**
  * Ink 事件基类：记录是否已调用 stopImmediatePropagation。
  */
-//@ chunk-24t3dkzb.js:4916-5094 placement = Event (1)
 class InkEvent {
-  _didStopImmediatePropagation = !1;
+  _didStopImmediatePropagation = false;
   didStopImmediatePropagation() {
     return this._didStopImmediatePropagation;
   }
   stopImmediatePropagation() {
-    this._didStopImmediatePropagation = !0;
+    this._didStopImmediatePropagation = true;
   }
 }
-
 export { InkEvent };

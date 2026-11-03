@@ -20,15 +20,15 @@ class BoundedTimeoutError extends Error {
     this.name = "BoundedTimeoutError";
   }
 }
+//@ chunk-jhr3szt9.js:348-554 placement
 /**
  * 给 Promise 加超时：超时抛 BoundedTimeoutError（延迟上限 2^31−1 毫秒），结束后清除定时器并吞掉原 Promise 的后续拒绝。
  */
-//@ chunk-jhr3szt9.js:348-554 placement
 async function withBoundedTimeout(e, r, n) {
-  let t,
-    promise = new Promise((c, i) => {
-      t = setTimeout((s, u, m) => s(new BoundedTimeoutError(u, m)), Math.min(r, 2147483647), i, n, r);
-    });
+  let t;
+  let promise = new Promise((resolve, reject) => {
+    t = setTimeout((s, u, m) => s(new BoundedTimeoutError(u, m)), Math.min(r, 2147483647), reject, n, r);
+  });
   try {
     return await Promise.race([e, promise]);
   } finally {
@@ -37,10 +37,15 @@ async function withBoundedTimeout(e, r, n) {
   }
 }
 //@ chunk-jhr3szt9.js:554-567 placement
-var Hln = 5000;
+/**
+ * 单次文件系统操作的超时（5 秒）。
+ */
+var FS_OP_TIMEOUT_MS = 5000;
 //@ chunk-jhr3szt9.js:567-659 placement
-function z_(e, r) {
-  return withBoundedTimeout(e, Hln, `[runner:stuck] fs op '${r}' (check TMPDIR mount health)`);
+/**
+ * 给文件系统操作套上超时与 “runner:stuck” 提示。
+ */
+function withFsOpTimeout(e, r) {
+  return withBoundedTimeout(e, FS_OP_TIMEOUT_MS, `[runner:stuck] fs op '${r}' (check TMPDIR mount health)`);
 }
-
-export { withBoundedTimeout, BoundedTimeoutError, Hln, z_ };
+export { withBoundedTimeout, BoundedTimeoutError, FS_OP_TIMEOUT_MS, withFsOpTimeout };

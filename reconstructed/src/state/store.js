@@ -10,30 +10,34 @@
  */
 import { bindAsyncResource } from "../utils/asyncResourceBind.js";
 
+//@ chunk-2mbp91tg.js:706-962 fingerprint = createStore (0.922)
 /**
  * 极简状态容器：getState/setState(updater)/subscribe；状态引用不变时不通知，变化时先调用 onChange({newState, oldState}) 再通知订阅者。
  */
-//@ chunk-2mbp91tg.js:706-962 fingerprint = createStore (0.922)
 function createStore(initialState, onChange) {
-  let r = initialState,
-    listeners = new Set(),
-    a = onChange && bindAsyncResource(onChange),
-    s = () => r;
+  let state = initialState;
+  let listeners = new Set();
+  let a = onChange && bindAsyncResource(onChange);
+  let s = () => state;
   return {
     getSnapshot: s,
     getState: s,
     setState: (updater) => {
-      let o = r,
-        next = updater(o);
-      if (Object.is(next, o)) return;
-      ((r = next), a?.({ newState: next, oldState: o }));
+      let prev = state;
+      let next = updater(prev);
+      if (Object.is(next, prev)) return;
+      state = next;
+      a?.({
+        newState: next,
+        oldState: prev,
+      });
       for (let listener of listeners) listener();
     },
     subscribe: (listener) => {
       let o = bindAsyncResource(listener);
-      return (listeners.add(o), () => listeners.delete(o));
+      listeners.add(o);
+      return () => listeners.delete(o);
     },
   };
 }
-
 export { createStore };

@@ -12,26 +12,36 @@ import { env } from "./env.js";
 import { isEnvTruthy } from "./envUtils.js";
 
 //@ chunk-rsktsadk.js:262-273 placement
-var t = null;
+var personalConfigRestrictionFlag = null;
 //@ chunk-rsktsadk.js:273-293 placement
-function c_i(e) {
-  t = e;
+/**
+ * setPersonalConfigRestriction：设置个人配置限制。
+ */
+function setPersonalConfigRestriction(getLatchedPreSettingsEnvSnapshot) {
+  personalConfigRestrictionFlag = getLatchedPreSettingsEnvSnapshot;
 }
 //@ chunk-rsktsadk.js:293-407 placement
 function isPersonalConfigRestricted() {
   return (
-    env.CLAUDE_CODE_RESTRICT_PERSONAL_CONFIG === !0 ||
-    isEnvTruthy(t?.()?.CLAUDE_CODE_RESTRICT_PERSONAL_CONFIG)
+    env.CLAUDE_CODE_RESTRICT_PERSONAL_CONFIG === true ||
+    isEnvTruthy(personalConfigRestrictionFlag?.()?.CLAUDE_CODE_RESTRICT_PERSONAL_CONFIG)
   );
 }
 //@ chunk-rsktsadk.js:407-417 placement
-var o = 300;
+var PERSONAL_CONFIG_TTL_SECONDS = 300;
 //@ chunk-rsktsadk.js:417-624 placement
 function getPersonalConfigFixHint() {
-  let e = t?.(),
-    n = (e === void 0 ? env.CLAUDE_CODE_PERSONAL_CONFIG_FIX : e.CLAUDE_CODE_PERSONAL_CONFIG_FIX)?.trim();
-  if (n === void 0 || n === "" || n.length > o || /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(n)) return;
-  return n;
+  let e = personalConfigRestrictionFlag?.();
+  let trimmed = (
+    e === undefined ? env.CLAUDE_CODE_PERSONAL_CONFIG_FIX : e.CLAUDE_CODE_PERSONAL_CONFIG_FIX
+  )?.trim();
+  if (
+    trimmed === undefined ||
+    trimmed === "" ||
+    trimmed.length > PERSONAL_CONFIG_TTL_SECONDS ||
+    /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(trimmed)
+  )
+    return;
+  return trimmed;
 }
-
-export { isPersonalConfigRestricted, getPersonalConfigFixHint, c_i };
+export { isPersonalConfigRestricted, getPersonalConfigFixHint, setPersonalConfigRestriction };

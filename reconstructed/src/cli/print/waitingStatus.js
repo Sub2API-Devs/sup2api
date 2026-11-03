@@ -13,7 +13,7 @@ import { logError } from "../../utils/log.js";
 import { PERSISTENT_WAIT_CHUNK_MS } from "../../services/api/withRetry.js";
 import { onUsageLimitWaitsChanged, usageLimitWaits } from "../../services/claudeAiLimits.js";
 import { isMainOrAgentQuerySource } from "../../services/api/requestHeaders.js";
-import { JKn } from "../../services/quotaAutoResume/quotaAutoResume.js";
+import { limitAppliesToModelOrCanonical } from "../../services/quotaAutoResume/quotaAutoResume.js";
 import { getAPIProvider } from "../../utils/model/providers.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import { stopAllRunningTasks } from "../../tasks/stopTask.js";
@@ -22,59 +22,69 @@ import {
   drainQueuedTaskNotifications,
   artifactWatchStopNotice,
 } from "../../tasks/MonitorWsTask/MonitorWsTask.js";
-import { mg } from "../../utils/messageQueueManager.js";
+import { commandQueueManager } from "../../utils/messageQueueManager.js";
 import { ASKUSERQUESTION } from "../../tools/AskUserQuestionTool/prompt.js";
 import { updateSessionActivity } from "../../utils/concurrentSessions.js";
-import { eyt } from "../../services/artifacts/artifactPresence.js";
+import { setWorking } from "../../services/artifacts/artifactPresence.js";
 
+//@ chunk-tyg7f3ek.js:613969-614422 placement
 /**
  * 在主线程等待限流重置时定期向 SDK 宿主发送 usage_limit_wait_heartbeat。
  */
-//@ chunk-tyg7f3ek.js:613969-614422 placement
-function createUsageLimitWaitHeartbeat({ readMainLoopModel: readMainLoopModel, emit: emit }) {
-  let r,
-    s = !1;
+function createUsageLimitWaitHeartbeat({ readMainLoopModel, emit }) {
+  let r;
+  let s = false;
   function h() {
-    if (r !== void 0) (clearInterval(r), (r = void 0), (s = !1));
+    if (r !== undefined) {
+      clearInterval(r);
+      r = undefined;
+      s = false;
+    }
   }
   function y() {
     try {
-      let now = Date.now(),
-        P = px(now);
+      let now = Date.now();
+      let P = usageLimitWaitsAfter(now);
       if (P.length === 0) {
         h();
         return;
       }
-      if (!KG()) return;
+      if (!isUsageLimitWaitNoticeEnabled()) return;
       let L = earliestRateLimitRetry(P, readMainLoopModel(), now);
       if (L) {
-        if ((emit(L), !s)) ((s = !0), logFeatureOk("usage_limit_wait_heartbeat"));
+        emit(L);
+        if (!s) {
+          s = true;
+          logFeatureOk("usage_limit_wait_heartbeat");
+        }
       }
     } catch (error) {
       logError(error);
     }
   }
   function S() {
-    let w = px(Date.now()).length > 0;
-    if (w && r === void 0) ((r = setInterval(y, PERSISTENT_WAIT_CHUNK_MS)), r.unref?.(), y());
-    else if (w && !s) y();
+    let w = usageLimitWaitsAfter(Date.now()).length > 0;
+    if (w && r === undefined) {
+      r = setInterval(y, PERSISTENT_WAIT_CHUNK_MS);
+      r.unref?.();
+      y();
+    } else if (w && !s) y();
     else if (!w) h();
   }
   let R = onUsageLimitWaitsChanged(S);
-  return (
-    S(),
-    () => {
-      (R(), h());
-    }
-  );
+  S();
+  return () => {
+    R();
+    h();
+  };
 }
 //@ chunk-tyg7f3ek.js:614422-614749 placement
-function earliestRateLimitRetry(e, n, r) {
+function earliestRateLimitRetry(e, mainLoopModel, r) {
   let s;
   for (let h of e) {
     if (h.route === "main_thread") return;
     if (!isMainOrAgentQuerySource(h.querySource)) continue;
-    if (!JKn(h, n)) continue;
+    if (!limitAppliesToModelOrCanonical(h, mainLoopModel)) continue;
     if (!s || h.retryAtMs < s.retryAtMs) s = h;
   }
   if (!s) return;
@@ -89,59 +99,71 @@ function earliestRateLimitRetry(e, n, r) {
   };
 }
 //@ chunk-tyg7f3ek.js:614749-614804 placement
-function px(e) {
+function usageLimitWaitsAfter(e) {
   return usageLimitWaits().filter((n) => n.retryAtMs > e);
 }
 //@ chunk-tyg7f3ek.js:614804-614884 placement
-function KG() {
-  if (getAPIProvider() === "gateway") return !1;
-  return getFeatureValue_CACHED_MAY_BE_STALE("tengu_rustling_sunset", !0);
+function isUsageLimitWaitNoticeEnabled() {
+  if (getAPIProvider() === "gateway") return false;
+  return getFeatureValue_CACHED_MAY_BE_STALE("tengu_rustling_sunset", true);
 }
 //@ chunk-tyg7f3ek.js:614884-614989 placement
 function teardownAutoReactAndRooms(e) {
   stopAllRunningTasks(e);
-  let n = killAutoReactSubscriptions(e.taskRegistry, { durable: !1 }),
-    r = drainQueuedTaskNotifications(mg(), { leaveArtifactRooms: !0 });
+  let n = killAutoReactSubscriptions(e.taskRegistry, {
+    durable: false,
+  });
+  let r = drainQueuedTaskNotifications(commandQueueManager(), {
+    leaveArtifactRooms: true,
+  });
   artifactWatchStopNotice(n, r);
 }
 //@ chunk-tyg7f3ek.js:614989-615051 placement
-var VG = { running: "busy", requires_action: "waiting", idle: "idle" };
+var WAITING_STATE_NAMES = {
+  running: "busy",
+  requires_action: "waiting",
+  idle: "idle",
+};
 //@ chunk-tyg7f3ek.js:615051-615317 placement
-function createWaitingStatusReporter(e) {
+function createWaitingStatusReporter(storageV5) {
   let n;
   return (r, s) => {
     {
-      let h = VG[r],
-        y =
-          h !== "waiting"
-            ? void 0
-            : s?.tool_name === ASKUSERQUESTION || s?.tool_name.startsWith("dialog:")
-              ? "input needed"
-              : "permission prompt",
-        S = `${h}
+      let h = WAITING_STATE_NAMES[r];
+      let y =
+        h !== "waiting"
+          ? undefined
+          : s?.tool_name === ASKUSERQUESTION || s?.tool_name.startsWith("dialog:")
+            ? "input needed"
+            : "permission prompt";
+      let S = `${h}
 ${y ?? ""}`;
       if (S === n) return;
-      ((n = S),
-        updateSessionActivity({ status: h, waitingFor: y }, e).then((R) => {
-          if (!R && n === S) n = void 0;
-        }));
+      n = S;
+      updateSessionActivity(
+        {
+          status: h,
+          waitingFor: y,
+        },
+        storageV5,
+      ).then((R) => {
+        if (!R && n === S) n = undefined;
+      });
     }
   };
 }
 //@ chunk-tyg7f3ek.js:615317-615453 placement
-function createUserDecisionReporter(e, n) {
-  let r = !1;
+function createUserDecisionReporter(e, sessionState) {
+  let r = false;
   function s() {
-    eyt(e, r && !n.userDecisionPending);
+    setWorking(e, r && !sessionState.userDecisionPending);
   }
-  return (
-    n.userDecisionPendingChanged.subscribe(s),
-    (h) => {
-      ((r = h), s());
-    }
-  );
+  sessionState.userDecisionPendingChanged.subscribe(s);
+  return (h) => {
+    r = h;
+    s();
+  };
 }
-
 export {
   createUsageLimitWaitHeartbeat,
   createUserDecisionReporter,

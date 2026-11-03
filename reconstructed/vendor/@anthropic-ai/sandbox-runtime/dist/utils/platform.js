@@ -5,24 +5,26 @@
  * pieces: chunk-r0ads4ty.js (2)
  * attribution: esm-fingerprint 2
  */
-import * as fsModule from "fs";
+import "fs";
 import * as fsModule_2 from "fs";
-import * as fsModule_3 from "fs";
+import "fs";
 
 //@ chunk-r0ads4ty.js:212-405 esm-fingerprint
-function sli() {
+function getWslVersion() {
   try {
-    let content = fsModule.readFileSync("/proc/version", { encoding: "utf8" }),
-      match = content.match(/WSL(\d+)/i);
-    if (match && match[1]) return match[1];
-    if (content.toLowerCase().includes("microsoft")) return "1";
+    let procVersion = fsModule_2.readFileSync("/proc/version", {
+      encoding: "utf8",
+    });
+    let wslVersionMatch = procVersion.match(/WSL(\d+)/i);
+    if (wslVersionMatch && wslVersionMatch[1]) return wslVersionMatch[1];
+    if (procVersion.toLowerCase().includes("microsoft")) return "1";
     return;
   } catch {
     return;
   }
 }
 //@ chunk-r0ads4ty.js:405-541 esm-fingerprint
-function zv() {
+function getPlatform() {
   switch ("linux") {
     case "darwin":
       return "macos";
@@ -34,5 +36,4 @@ function zv() {
       return "unknown";
   }
 }
-
-export { zv, sli };
+export { getPlatform, getWslVersion };

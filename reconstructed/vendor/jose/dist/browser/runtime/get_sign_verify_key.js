@@ -6,24 +6,35 @@
  * attribution: esm-layout 1, esm-fingerprint 1
  */
 import { Xa } from "../../../../../runtime/bun-runtime.js";
-import { E } from "../../webapi/lib/content_encryption.js";
+import { init_content_encryption_2 } from "../../webapi/lib/content_encryption.js";
 import { g, p } from "../../webapi/lib/buffer_utils.js";
-import { yt } from "../../node/esm/lib/crypto_key.js";
+import { checkSigCryptoKey } from "../../node/esm/lib/crypto_key.js";
 import { A } from "../../node/esm/lib/invalid_key_input.js";
 import { m } from "./is_key_like.js";
 
 //@ chunk-2tyrgda4.js:27831-27852 esm-layout
-var tt = Xa(() => {
-  E();
+var init_get_sign_verify_key = Xa(() => {
+  init_content_encryption_2();
 });
 //@ chunk-2tyrgda4.js:27852-28098 esm-fingerprint
-function me(e, t, r) {
-  if (g(t)) return (yt(t, e, r), t);
-  if (t instanceof Uint8Array) {
-    if (!e.startsWith("HS")) throw TypeError(A(t, ...m));
-    return p.subtle.importKey("raw", t, { hash: `SHA-${e.slice(-3)}`, name: "HMAC" }, !1, [r]);
+function getCryptoKey_3(alg, key, usage) {
+  if (g(key)) {
+    checkSigCryptoKey(key, alg, usage);
+    return key;
   }
-  throw TypeError(A(t, ...m, "Uint8Array"));
+  if (key instanceof Uint8Array) {
+    if (!alg.startsWith("HS")) throw TypeError(A(key, ...m));
+    return p.subtle.importKey(
+      "raw",
+      key,
+      {
+        hash: `SHA-${alg.slice(-3)}`,
+        name: "HMAC",
+      },
+      false,
+      [usage],
+    );
+  }
+  throw TypeError(A(key, ...m, "Uint8Array"));
 }
-
-export { me, tt };
+export { getCryptoKey_3, init_get_sign_verify_key };

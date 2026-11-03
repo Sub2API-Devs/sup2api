@@ -8,88 +8,114 @@
 import { x } from "../../../../../runtime/bun-runtime.js";
 
 //@ chunk-pwh5dx3n.js:44332-52023 cjs-fingerprint
-var Qc = x(function (Xc) {
-  Object.defineProperty(Xc, "t", { value: !0 });
-  class ya {
-    constructor(e, t, r = 1) {
-      ((this.i = void 0), (this.h = void 0), (this.o = void 0), (this.u = e), (this.l = t), (this.p = r));
+var Qc = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "t", {
+    value: true,
+  });
+  class TreeNode {
+    constructor(t_2, e, s = 1) {
+      this.i = undefined;
+      this.h = undefined;
+      this.o = undefined;
+      this.u = t_2;
+      this.l = e;
+      this.p = s;
     }
     I() {
-      let e = this,
-        t = e.o.o === e;
-      if (t && e.p === 1) e = e.h;
-      else if (e.i) {
-        e = e.i;
-        while (e.h) e = e.h;
+      let t_2 = this;
+      let e = t_2.o.o === t_2;
+      if (e && t_2.p === 1) t_2 = t_2.h;
+      else if (t_2.i) {
+        t_2 = t_2.i;
+        while (t_2.h) t_2 = t_2.h;
       } else {
-        if (t) return e.o;
-        let r = e.o;
-        while (r.i === e) ((e = r), (r = e.o));
-        e = r;
+        if (e) return t_2.o;
+        let s = t_2.o;
+        while (s.i === t_2) {
+          t_2 = s;
+          s = t_2.o;
+        }
+        t_2 = s;
       }
-      return e;
+      return t_2;
     }
     B() {
-      let e = this;
-      if (e.h) {
-        e = e.h;
-        while (e.i) e = e.i;
-        return e;
+      let t_2 = this;
+      if (t_2.h) {
+        t_2 = t_2.h;
+        while (t_2.i) t_2 = t_2.i;
+        return t_2;
       } else {
-        let t = e.o;
-        while (t.h === e) ((e = t), (t = e.o));
-        if (e.h !== t) return t;
-        else return e;
+        let e = t_2.o;
+        while (e.h === t_2) {
+          t_2 = e;
+          e = t_2.o;
+        }
+        if (t_2.h !== e) return e;
+        else return t_2;
       }
     }
     _() {
-      let e = this.o,
-        t = this.h,
-        r = t.i;
-      if (e.o === this) e.o = t;
-      else if (e.i === this) e.i = t;
-      else e.h = t;
-      if (((t.o = e), (t.i = this), (this.o = t), (this.h = r), r)) r.o = this;
-      return t;
+      let t_2 = this.o;
+      let e = this.h;
+      let s = e.i;
+      if (t_2.o === this) t_2.o = e;
+      else if (t_2.i === this) t_2.i = e;
+      else t_2.h = e;
+      e.o = t_2;
+      e.i = this;
+      this.o = e;
+      this.h = s;
+      if (s) s.o = this;
+      return e;
     }
     g() {
-      let e = this.o,
-        t = this.i,
-        r = t.h;
-      if (e.o === this) e.o = t;
-      else if (e.i === this) e.i = t;
-      else e.h = t;
-      if (((t.o = e), (t.h = this), (this.o = t), (this.i = r), r)) r.o = this;
-      return t;
+      let t_2 = this.o;
+      let e = this.i;
+      let s = e.h;
+      if (t_2.o === this) t_2.o = e;
+      else if (t_2.i === this) t_2.i = e;
+      else t_2.h = e;
+      e.o = t_2;
+      e.h = this;
+      this.o = e;
+      this.i = s;
+      if (s) s.o = this;
+      return e;
     }
   }
-  class jc extends ya {
+  class TreeNodeEnableIndex extends TreeNode {
     constructor() {
       super(...arguments);
       this.M = 1;
     }
     _() {
-      let e = super._();
-      return (this.O(), e.O(), e);
+      let t = super._();
+      this.O();
+      t.O();
+      return t;
     }
     g() {
-      let e = super.g();
-      return (this.O(), e.O(), e);
+      let t = super.g();
+      this.O();
+      t.O();
+      return t;
     }
     O() {
-      if (((this.M = 1), this.i)) this.M += this.i.M;
+      this.M = 1;
+      if (this.i) this.M += this.i.M;
       if (this.h) this.M += this.h.M;
     }
   }
-  class Gc {
-    constructor(e = 0) {
-      this.iteratorType = e;
+  class ContainerIterator {
+    constructor(t = 0) {
+      this.iteratorType = t;
     }
-    equals(e) {
-      return this.T === e.T;
+    equals(t) {
+      return this.T === t.T;
     }
   }
-  class $c {
+  class Base {
     constructor() {
       this.m = 0;
     }
@@ -103,461 +129,593 @@ var Qc = x(function (Xc) {
       return this.m === 0;
     }
   }
-  class Vc extends $c {}
-  function mr() {
+  class Container extends Base {}
+  function throwIteratorAccessError() {
     throw RangeError("Iterator access denied!");
   }
-  class Yc extends Vc {
+  class TreeContainer extends Container {
     constructor(
-      e = function (r, i) {
-        if (r < i) return -1;
-        if (r > i) return 1;
+      t_2 = function (t, e) {
+        if (t < e) return -1;
+        if (t > e) return 1;
         return 0;
       },
-      t = !1,
+      e = false,
     ) {
       super();
-      ((this.v = void 0),
-        (this.A = e),
-        (this.enableIndex = t),
-        (this.N = t ? jc : ya),
-        (this.C = new this.N()));
+      this.v = undefined;
+      this.A = t_2;
+      this.enableIndex = e;
+      this.N = e ? TreeNodeEnableIndex : TreeNode;
+      this.C = new this.N();
     }
-    R(e, t) {
-      let r = this.C;
-      while (e) {
-        let i = this.A(e.u, t);
-        if (i < 0) e = e.h;
-        else if (i > 0) ((r = e), (e = e.i));
-        else return e;
+    R(t_2, e) {
+      let s = this.C;
+      while (t_2) {
+        let i = this.A(t_2.u, e);
+        if (i < 0) t_2 = t_2.h;
+        else if (i > 0) {
+          s = t_2;
+          t_2 = t_2.i;
+        } else return t_2;
       }
-      return r;
+      return s;
     }
-    K(e, t) {
-      let r = this.C;
-      while (e)
-        if (this.A(e.u, t) <= 0) e = e.h;
-        else ((r = e), (e = e.i));
-      return r;
+    K(t_2, t) {
+      let s = this.C;
+      while (t_2)
+        if (this.A(t_2.u, t) <= 0) t_2 = t_2.h;
+        else {
+          s = t_2;
+          t_2 = t_2.i;
+        }
+      return s;
     }
-    L(e, t) {
-      let r = this.C;
-      while (e) {
-        let i = this.A(e.u, t);
-        if (i < 0) ((r = e), (e = e.h));
-        else if (i > 0) e = e.i;
-        else return e;
+    L(t_2, e) {
+      let s = this.C;
+      while (t_2) {
+        let i = this.A(t_2.u, e);
+        if (i < 0) {
+          s = t_2;
+          t_2 = t_2.h;
+        } else if (i > 0) t_2 = t_2.i;
+        else return t_2;
       }
-      return r;
+      return s;
     }
-    k(e, t) {
-      let r = this.C;
-      while (e)
-        if (this.A(e.u, t) < 0) ((r = e), (e = e.h));
-        else e = e.i;
-      return r;
+    k(t_2, t) {
+      let s = this.C;
+      while (t_2)
+        if (this.A(t_2.u, t) < 0) {
+          s = t_2;
+          t_2 = t_2.h;
+        } else t_2 = t_2.i;
+      return s;
     }
-    P(e) {
-      while (!0) {
-        let t = e.o;
-        if (t === this.C) return;
-        if (e.p === 1) {
-          e.p = 0;
+    P(t_2) {
+      while (true) {
+        let e = t_2.o;
+        if (e === this.C) return;
+        if (t_2.p === 1) {
+          t_2.p = 0;
           return;
         }
-        if (e === t.i) {
-          let r = t.h;
-          if (r.p === 1)
-            if (((r.p = 0), (t.p = 1), t === this.v)) this.v = t._();
-            else t._();
-          else if (r.h && r.h.p === 1) {
-            if (((r.p = t.p), (t.p = 0), (r.h.p = 0), t === this.v)) this.v = t._();
-            else t._();
+        if (t_2 === e.i) {
+          let s = e.h;
+          if (s.p === 1) {
+            s.p = 0;
+            e.p = 1;
+            if (e === this.v) this.v = e._();
+            else e._();
+          } else if (s.h && s.h.p === 1) {
+            s.p = e.p;
+            e.p = 0;
+            s.h.p = 0;
+            if (e === this.v) this.v = e._();
+            else e._();
             return;
-          } else if (r.i && r.i.p === 1) ((r.p = 1), (r.i.p = 0), r.g());
-          else ((r.p = 1), (e = t));
+          } else if (s.i && s.i.p === 1) {
+            s.p = 1;
+            s.i.p = 0;
+            s.g();
+          } else {
+            s.p = 1;
+            t_2 = e;
+          }
         } else {
-          let r = t.i;
-          if (r.p === 1)
-            if (((r.p = 0), (t.p = 1), t === this.v)) this.v = t.g();
-            else t.g();
-          else if (r.i && r.i.p === 1) {
-            if (((r.p = t.p), (t.p = 0), (r.i.p = 0), t === this.v)) this.v = t.g();
-            else t.g();
+          let s = e.i;
+          if (s.p === 1) {
+            s.p = 0;
+            e.p = 1;
+            if (e === this.v) this.v = e.g();
+            else e.g();
+          } else if (s.i && s.i.p === 1) {
+            s.p = e.p;
+            e.p = 0;
+            s.i.p = 0;
+            if (e === this.v) this.v = e.g();
+            else e.g();
             return;
-          } else if (r.h && r.h.p === 1) ((r.p = 1), (r.h.p = 0), r._());
-          else ((r.p = 1), (e = t));
+          } else if (s.h && s.h.p === 1) {
+            s.p = 1;
+            s.h.p = 0;
+            s._();
+          } else {
+            s.p = 1;
+            t_2 = e;
+          }
         }
       }
     }
-    S(e) {
+    S(t_2) {
       if (this.m === 1) {
         this.clear();
         return;
       }
-      let t = e;
-      while (t.i || t.h) {
-        if (t.h) {
-          t = t.h;
-          while (t.i) t = t.i;
-        } else t = t.i;
-        let i = e.u;
-        ((e.u = t.u), (t.u = i));
-        let s = e.l;
-        ((e.l = t.l), (t.l = s), (e = t));
+      let e = t_2;
+      while (e.i || e.h) {
+        if (e.h) {
+          e = e.h;
+          while (e.i) e = e.i;
+        } else e = e.i;
+        let s_2 = t_2.u;
+        t_2.u = e.u;
+        e.u = s_2;
+        let i = t_2.l;
+        t_2.l = e.l;
+        e.l = i;
+        t_2 = e;
       }
-      if (this.C.i === t) this.C.i = t.o;
-      else if (this.C.h === t) this.C.h = t.o;
-      this.P(t);
-      let r = t.o;
-      if (t === r.i) r.i = void 0;
-      else r.h = void 0;
-      if (((this.m -= 1), (this.v.p = 0), this.enableIndex)) while (r !== this.C) ((r.M -= 1), (r = r.o));
+      if (this.C.i === e) this.C.i = e.o;
+      else if (this.C.h === e) this.C.h = e.o;
+      this.P(e);
+      let s = e.o;
+      if (e === s.i) s.i = undefined;
+      else s.h = undefined;
+      this.m -= 1;
+      this.v.p = 0;
+      if (this.enableIndex)
+        while (s !== this.C) {
+          s.M -= 1;
+          s = s.o;
+        }
     }
-    U(e) {
-      let t = typeof e === "number" ? e : void 0,
-        r = typeof e === "function" ? e : void 0,
-        i = typeof e > "u" ? [] : void 0,
-        s = 0,
-        n = this.v,
-        a = [];
-      while (a.length || n)
-        if (n) (a.push(n), (n = n.i));
-        else {
-          if (((n = a.pop()), s === t)) return n;
-          (i && i.push(n), r && r(n, s, this), (s += 1), (n = n.h));
+    U(t_2) {
+      let e = typeof t_2 === "number" ? t_2 : undefined;
+      let s_2 = typeof t_2 === "function" ? t_2 : undefined;
+      let i = typeof t_2 === "undefined" ? [] : undefined;
+      let r = 0;
+      let n = this.v;
+      let h = [];
+      while (h.length || n)
+        if (n) {
+          h.push(n);
+          n = n.i;
+        } else {
+          n = h.pop();
+          if (r === e) return n;
+          if (i) i.push(n);
+          if (s_2) s_2(n, r, this);
+          r += 1;
+          n = n.h;
         }
       return i;
     }
-    j(e) {
-      while (!0) {
-        let t = e.o;
-        if (t.p === 0) return;
-        let r = t.o;
-        if (t === r.i) {
-          let i = r.h;
+    j(t_2) {
+      while (true) {
+        let e = t_2.o;
+        if (e.p === 0) return;
+        let s_2 = e.o;
+        if (e === s_2.i) {
+          let i = s_2.h;
           if (i && i.p === 1) {
-            if (((i.p = t.p = 0), r === this.v)) return;
-            ((r.p = 1), (e = r));
+            i.p = e.p = 0;
+            if (s_2 === this.v) return;
+            s_2.p = 1;
+            t_2 = s_2;
             continue;
-          } else if (e === t.h) {
-            if (((e.p = 0), e.i)) e.i.o = t;
-            if (e.h) e.h.o = r;
-            if (((t.h = e.i), (r.i = e.h), (e.i = t), (e.h = r), r === this.v))
-              ((this.v = e), (this.C.o = e));
-            else {
-              let s = r.o;
-              if (s.i === r) s.i = e;
-              else s.h = e;
+          } else if (t_2 === e.h) {
+            t_2.p = 0;
+            if (t_2.i) t_2.i.o = e;
+            if (t_2.h) t_2.h.o = s_2;
+            e.h = t_2.i;
+            s_2.i = t_2.h;
+            t_2.i = e;
+            t_2.h = s_2;
+            if (s_2 === this.v) {
+              this.v = t_2;
+              this.C.o = t_2;
+            } else {
+              let e = s_2.o;
+              if (e.i === s_2) e.i = t_2;
+              else e.h = t_2;
             }
-            ((e.o = r.o), (t.o = e), (r.o = e), (r.p = 1));
+            t_2.o = s_2.o;
+            e.o = t_2;
+            s_2.o = t_2;
+            s_2.p = 1;
           } else {
-            if (((t.p = 0), r === this.v)) this.v = r.g();
-            else r.g();
-            r.p = 1;
+            e.p = 0;
+            if (s_2 === this.v) this.v = s_2.g();
+            else s_2.g();
+            s_2.p = 1;
             return;
           }
         } else {
-          let i = r.i;
+          let i = s_2.i;
           if (i && i.p === 1) {
-            if (((i.p = t.p = 0), r === this.v)) return;
-            ((r.p = 1), (e = r));
+            i.p = e.p = 0;
+            if (s_2 === this.v) return;
+            s_2.p = 1;
+            t_2 = s_2;
             continue;
-          } else if (e === t.i) {
-            if (((e.p = 0), e.i)) e.i.o = r;
-            if (e.h) e.h.o = t;
-            if (((r.h = e.i), (t.i = e.h), (e.i = r), (e.h = t), r === this.v))
-              ((this.v = e), (this.C.o = e));
-            else {
-              let s = r.o;
-              if (s.i === r) s.i = e;
-              else s.h = e;
+          } else if (t_2 === e.i) {
+            t_2.p = 0;
+            if (t_2.i) t_2.i.o = s_2;
+            if (t_2.h) t_2.h.o = e;
+            s_2.h = t_2.i;
+            e.i = t_2.h;
+            t_2.i = s_2;
+            t_2.h = e;
+            if (s_2 === this.v) {
+              this.v = t_2;
+              this.C.o = t_2;
+            } else {
+              let e = s_2.o;
+              if (e.i === s_2) e.i = t_2;
+              else e.h = t_2;
             }
-            ((e.o = r.o), (t.o = e), (r.o = e), (r.p = 1));
+            t_2.o = s_2.o;
+            e.o = t_2;
+            s_2.o = t_2;
+            s_2.p = 1;
           } else {
-            if (((t.p = 0), r === this.v)) this.v = r._();
-            else r._();
-            r.p = 1;
+            e.p = 0;
+            if (s_2 === this.v) this.v = s_2._();
+            else s_2._();
+            s_2.p = 1;
             return;
           }
         }
-        if (this.enableIndex) (t.O(), r.O(), e.O());
+        if (this.enableIndex) {
+          e.O();
+          s_2.O();
+          t_2.O();
+        }
         return;
       }
     }
-    q(e, t, r) {
-      if (this.v === void 0)
-        return (
-          (this.m += 1),
-          (this.v = new this.N(e, t, 0)),
-          (this.v.o = this.C),
-          (this.C.o = this.C.i = this.C.h = this.v),
-          this.m
-        );
-      let i,
-        s = this.C.i,
-        n = this.A(s.u, e);
-      if (n === 0) return ((s.l = t), this.m);
-      else if (n > 0) ((s.i = new this.N(e, t)), (s.i.o = s), (i = s.i), (this.C.i = i));
-      else {
-        let a = this.C.h,
-          o = this.A(a.u, e);
-        if (o === 0) return ((a.l = t), this.m);
-        else if (o < 0) ((a.h = new this.N(e, t)), (a.h.o = a), (i = a.h), (this.C.h = i));
-        else {
-          if (r !== void 0) {
-            let l = r.T;
-            if (l !== this.C) {
-              let c = this.A(l.u, e);
-              if (c === 0) return ((l.l = t), this.m);
-              else if (c > 0) {
-                let u = l.I(),
-                  d = this.A(u.u, e);
-                if (d === 0) return ((u.l = t), this.m);
-                else if (d < 0)
-                  if (((i = new this.N(e, t)), u.h === void 0)) ((u.h = i), (i.o = u));
-                  else ((l.i = i), (i.o = l));
+    q(t_2, e, s_2) {
+      if (this.v === undefined) {
+        this.m += 1;
+        this.v = new this.N(t_2, e, 0);
+        this.v.o = this.C;
+        this.C.o = this.C.i = this.C.h = this.v;
+        return this.m;
+      }
+      let i;
+      let r = this.C.i;
+      let n = this.A(r.u, t_2);
+      if (n === 0) {
+        r.l = e;
+        return this.m;
+      } else if (n > 0) {
+        r.i = new this.N(t_2, e);
+        r.i.o = r;
+        i = r.i;
+        this.C.i = i;
+      } else {
+        let r = this.C.h;
+        let n = this.A(r.u, t_2);
+        if (n === 0) {
+          r.l = e;
+          return this.m;
+        } else if (n < 0) {
+          r.h = new this.N(t_2, e);
+          r.h.o = r;
+          i = r.h;
+          this.C.h = i;
+        } else {
+          if (s_2 !== undefined) {
+            let r = s_2.T;
+            if (r !== this.C) {
+              let s = this.A(r.u, t_2);
+              if (s === 0) {
+                r.l = e;
+                return this.m;
+              } else if (s > 0) {
+                let s = r.I();
+                let n = this.A(s.u, t_2);
+                if (n === 0) {
+                  s.l = e;
+                  return this.m;
+                } else if (n < 0) {
+                  i = new this.N(t_2, e);
+                  if (s.h === undefined) {
+                    s.h = i;
+                    i.o = s;
+                  } else {
+                    r.i = i;
+                    i.o = r;
+                  }
+                }
               }
             }
           }
-          if (i === void 0) {
+          if (i === undefined) {
             i = this.v;
-            while (!0) {
-              let l = this.A(i.u, e);
-              if (l > 0) {
-                if (i.i === void 0) {
-                  ((i.i = new this.N(e, t)), (i.i.o = i), (i = i.i));
+            while (true) {
+              let s = this.A(i.u, t_2);
+              if (s > 0) {
+                if (i.i === undefined) {
+                  i.i = new this.N(t_2, e);
+                  i.i.o = i;
+                  i = i.i;
                   break;
                 }
                 i = i.i;
-              } else if (l < 0) {
-                if (i.h === void 0) {
-                  ((i.h = new this.N(e, t)), (i.h.o = i), (i = i.h));
+              } else if (s < 0) {
+                if (i.h === undefined) {
+                  i.h = new this.N(t_2, e);
+                  i.h.o = i;
+                  i = i.h;
                   break;
                 }
                 i = i.h;
-              } else return ((i.l = t), this.m);
+              } else {
+                i.l = e;
+                return this.m;
+              }
             }
           }
         }
       }
       if (this.enableIndex) {
-        let a = i.o;
-        while (a !== this.C) ((a.M += 1), (a = a.o));
+        let t = i.o;
+        while (t !== this.C) {
+          t.M += 1;
+          t = t.o;
+        }
       }
-      return (this.j(i), (this.m += 1), this.m);
+      this.j(i);
+      this.m += 1;
+      return this.m;
     }
-    H(e, t) {
-      while (e) {
-        let r = this.A(e.u, t);
-        if (r < 0) e = e.h;
-        else if (r > 0) e = e.i;
-        else return e;
+    H(t_2, e) {
+      while (t_2) {
+        let s = this.A(t_2.u, e);
+        if (s < 0) t_2 = t_2.h;
+        else if (s > 0) t_2 = t_2.i;
+        else return t_2;
       }
-      return e || this.C;
+      return t_2 || this.C;
     }
     clear() {
-      ((this.m = 0), (this.v = void 0), (this.C.o = void 0), (this.C.i = this.C.h = void 0));
+      this.m = 0;
+      this.v = undefined;
+      this.C.o = undefined;
+      this.C.i = this.C.h = undefined;
     }
-    updateKeyByIterator(e, t) {
-      let r = e.T;
-      if (r === this.C) mr();
-      if (this.m === 1) return ((r.u = t), !0);
-      let i = r.B().u;
-      if (r === this.C.i) {
-        if (this.A(i, t) > 0) return ((r.u = t), !0);
-        return !1;
+    updateKeyByIterator(t_2, e) {
+      let s_2 = t_2.T;
+      if (s_2 === this.C) throwIteratorAccessError();
+      if (this.m === 1) {
+        s_2.u = e;
+        return true;
       }
-      let s = r.I().u;
-      if (r === this.C.h) {
-        if (this.A(s, t) < 0) return ((r.u = t), !0);
-        return !1;
+      let i = s_2.B().u;
+      if (s_2 === this.C.i) {
+        if (this.A(i, e) > 0) {
+          s_2.u = e;
+          return true;
+        }
+        return false;
       }
-      if (this.A(s, t) >= 0 || this.A(i, t) <= 0) return !1;
-      return ((r.u = t), !0);
+      let r = s_2.I().u;
+      if (s_2 === this.C.h) {
+        if (this.A(r, e) < 0) {
+          s_2.u = e;
+          return true;
+        }
+        return false;
+      }
+      if (this.A(r, e) >= 0 || this.A(i, e) <= 0) return false;
+      s_2.u = e;
+      return true;
     }
-    eraseElementByPos(e) {
-      if (e < 0 || e > this.m - 1) throw RangeError();
-      let t = this.U(e);
-      return (this.S(t), this.m);
+    eraseElementByPos(t_2) {
+      if (t_2 < 0 || t_2 > this.m - 1) throw RangeError();
+      let e = this.U(t_2);
+      this.S(e);
+      return this.m;
     }
-    eraseElementByKey(e) {
-      if (this.m === 0) return !1;
-      let t = this.H(this.v, e);
-      if (t === this.C) return !1;
-      return (this.S(t), !0);
+    eraseElementByKey(t_2) {
+      if (this.m === 0) return false;
+      let e = this.H(this.v, t_2);
+      if (e === this.C) return false;
+      this.S(e);
+      return true;
     }
-    eraseElementByIterator(e) {
-      let t = e.T;
-      if (t === this.C) mr();
-      let r = t.h === void 0;
-      if (e.iteratorType === 0) {
-        if (r) e.next();
-      } else if (!r || t.i === void 0) e.next();
-      return (this.S(t), e);
+    eraseElementByIterator(t_2) {
+      let e = t_2.T;
+      if (e === this.C) throwIteratorAccessError();
+      let s = e.h === undefined;
+      if (t_2.iteratorType === 0) {
+        if (s) t_2.next();
+      } else if (!s || e.i === undefined) t_2.next();
+      this.S(e);
+      return t_2;
     }
     getHeight() {
       if (this.m === 0) return 0;
-      function e(t) {
+      function traversal(t) {
         if (!t) return 0;
-        return Math.max(e(t.i), e(t.h)) + 1;
+        return Math.max(traversal(t.i), traversal(t.h)) + 1;
       }
-      return e(this.v);
+      return traversal(this.v);
     }
   }
-  class Kc extends Gc {
-    constructor(e, t, r) {
-      super(r);
-      if (((this.T = e), (this.C = t), this.iteratorType === 0))
-        ((this.pre = function () {
-          if (this.T === this.C.i) mr();
-          return ((this.T = this.T.I()), this);
-        }),
-          (this.next = function () {
-            if (this.T === this.C) mr();
-            return ((this.T = this.T.B()), this);
-          }));
-      else
-        ((this.pre = function () {
-          if (this.T === this.C.h) mr();
-          return ((this.T = this.T.B()), this);
-        }),
-          (this.next = function () {
-            if (this.T === this.C) mr();
-            return ((this.T = this.T.I()), this);
-          }));
+  class TreeIterator extends ContainerIterator {
+    constructor(t_2, e, s) {
+      super(s);
+      this.T = t_2;
+      this.C = e;
+      if (this.iteratorType === 0) {
+        this.pre = function () {
+          if (this.T === this.C.i) throwIteratorAccessError();
+          this.T = this.T.I();
+          return this;
+        };
+        this.next = function () {
+          if (this.T === this.C) throwIteratorAccessError();
+          this.T = this.T.B();
+          return this;
+        };
+      } else {
+        this.pre = function () {
+          if (this.T === this.C.h) throwIteratorAccessError();
+          this.T = this.T.B();
+          return this;
+        };
+        this.next = function () {
+          if (this.T === this.C) throwIteratorAccessError();
+          this.T = this.T.I();
+          return this;
+        };
+      }
     }
     get index() {
-      let e = this.T,
-        t = this.C.o;
-      if (e === this.C) {
-        if (t) return t.M - 1;
+      let t_2 = this.T;
+      let e = this.C.o;
+      if (t_2 === this.C) {
+        if (e) return e.M - 1;
         return 0;
       }
-      let r = 0;
-      if (e.i) r += e.i.M;
-      while (e !== t) {
-        let i = e.o;
-        if (e === i.h) {
-          if (((r += 1), i.i)) r += i.i.M;
+      let s = 0;
+      if (t_2.i) s += t_2.i.M;
+      while (t_2 !== e) {
+        let e = t_2.o;
+        if (t_2 === e.h) {
+          s += 1;
+          if (e.i) s += e.i.M;
         }
-        e = i;
+        t_2 = e;
       }
-      return r;
+      return s;
     }
     isAccessible() {
       return this.T !== this.C;
     }
   }
-  class it extends Kc {
-    constructor(e, t, r, i) {
-      super(e, t, i);
-      this.container = r;
+  class OrderedMapIterator extends TreeIterator {
+    constructor(t_2, e, s, i) {
+      super(t_2, e, i);
+      this.container = s;
     }
     get pointer() {
-      if (this.T === this.C) mr();
-      let e = this;
+      if (this.T === this.C) throwIteratorAccessError();
+      let t_2 = this;
       return new Proxy([], {
-        get(t, r) {
-          if (r === "0") return e.T.u;
-          else if (r === "1") return e.T.l;
-          return ((t[0] = e.T.u), (t[1] = e.T.l), t[r]);
+        get(e, s) {
+          if (s === "0") return t_2.T.u;
+          else if (s === "1") return t_2.T.l;
+          e[0] = t_2.T.u;
+          e[1] = t_2.T.l;
+          return e[s];
         },
-        set(t, r, i) {
-          if (r !== "1") throw TypeError("prop must be 1");
-          return ((e.T.l = i), !0);
+        set(e, s, i) {
+          if (s !== "1") throw TypeError("prop must be 1");
+          t_2.T.l = i;
+          return true;
         },
       });
     }
     copy() {
-      return new it(this.T, this.C, this.container, this.iteratorType);
+      return new OrderedMapIterator(this.T, this.C, this.container, this.iteratorType);
     }
   }
-  class Jc extends Yc {
-    constructor(e = [], t, r) {
-      super(t, r);
+  class OrderedMap extends TreeContainer {
+    constructor(t_2 = [], e, s) {
+      super(e, s);
       let i = this;
-      e.forEach(function (s) {
-        i.setElement(s[0], s[1]);
+      t_2.forEach(function (t) {
+        i.setElement(t[0], t[1]);
       });
     }
     begin() {
-      return new it(this.C.i || this.C, this.C, this);
+      return new OrderedMapIterator(this.C.i || this.C, this.C, this);
     }
     end() {
-      return new it(this.C, this.C, this);
+      return new OrderedMapIterator(this.C, this.C, this);
     }
     rBegin() {
-      return new it(this.C.h || this.C, this.C, this, 1);
+      return new OrderedMapIterator(this.C.h || this.C, this.C, this, 1);
     }
     rEnd() {
-      return new it(this.C, this.C, this, 1);
+      return new OrderedMapIterator(this.C, this.C, this, 1);
     }
     front() {
       if (this.m === 0) return;
-      let e = this.C.i;
-      return [e.u, e.l];
+      let t = this.C.i;
+      return [t.u, t.l];
     }
     back() {
       if (this.m === 0) return;
-      let e = this.C.h;
-      return [e.u, e.l];
-    }
-    lowerBound(e) {
-      let t = this.R(this.v, e);
-      return new it(t, this.C, this);
-    }
-    upperBound(e) {
-      let t = this.K(this.v, e);
-      return new it(t, this.C, this);
-    }
-    reverseLowerBound(e) {
-      let t = this.L(this.v, e);
-      return new it(t, this.C, this);
-    }
-    reverseUpperBound(e) {
-      let t = this.k(this.v, e);
-      return new it(t, this.C, this);
-    }
-    forEach(e) {
-      this.U(function (t, r, i) {
-        e([t.u, t.l], r, i);
-      });
-    }
-    setElement(e, t, r) {
-      return this.q(e, t, r);
-    }
-    getElementByPos(e) {
-      if (e < 0 || e > this.m - 1) throw RangeError();
-      let t = this.U(e);
+      let t = this.C.h;
       return [t.u, t.l];
     }
-    find(e) {
-      let t = this.H(this.v, e);
-      return new it(t, this.C, this);
+    lowerBound(t_2) {
+      let e = this.R(this.v, t_2);
+      return new OrderedMapIterator(e, this.C, this);
+    }
+    upperBound(t_2) {
+      let e = this.K(this.v, t_2);
+      return new OrderedMapIterator(e, this.C, this);
+    }
+    reverseLowerBound(t_2) {
+      let e = this.L(this.v, t_2);
+      return new OrderedMapIterator(e, this.C, this);
+    }
+    reverseUpperBound(t_2) {
+      let e = this.k(this.v, t_2);
+      return new OrderedMapIterator(e, this.C, this);
+    }
+    forEach(t_2) {
+      this.U(function (e, s, i) {
+        t_2([e.u, e.l], s, i);
+      });
+    }
+    setElement(t_2, e, s) {
+      return this.q(t_2, e, s);
+    }
+    getElementByPos(t_2) {
+      if (t_2 < 0 || t_2 > this.m - 1) throw RangeError();
+      let e = this.U(t_2);
+      return [e.u, e.l];
+    }
+    find(t_2) {
+      let e = this.H(this.v, t_2);
+      return new OrderedMapIterator(e, this.C, this);
     }
     getElementByKey(e) {
       return this.H(this.v, e).l;
     }
-    union(e) {
-      let t = this;
-      return (
-        e.forEach(function (r) {
-          t.setElement(r[0], r[1]);
-        }),
-        this.m
-      );
+    union(t_2) {
+      let e = this;
+      t_2.forEach(function (t) {
+        e.setElement(t[0], t[1]);
+      });
+      return this.m;
     }
     *[Symbol.iterator]() {
-      let e = this.m,
-        t = this.U();
-      for (let r = 0; r < e; ++r) {
-        let i = t[r];
-        yield [i.u, i.l];
+      let t_2 = this.m;
+      let e = this.U();
+      for (let s = 0; s < t_2; ++s) {
+        let t = e[s];
+        yield [t.u, t.l];
       }
     }
   }
-  Xc.OrderedMap = Jc;
+  cjsExports.OrderedMap = OrderedMap;
 });
-
 export { Qc };

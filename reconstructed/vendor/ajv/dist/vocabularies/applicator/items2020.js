@@ -6,37 +6,39 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../runtime/bun-runtime.js";
-import { uh } from "../../compile/codegen/index.js";
-import { ew } from "../../compile/util.js";
-import { Q } from "../code.js";
-import { Rr } from "./additionalItems.js";
+import { require_codegen_2 } from "../../compile/codegen/index.js";
+import { require_util_2 } from "../../compile/util.js";
+import { require_code_2 } from "../code.js";
+import { require_additionalItems } from "./additionalItems.js";
 
 //@ chunk-s82q9s4x.js:94448-94968 cjs-fingerprint
-var hi = x(function (pi) {
-  Object.defineProperty(pi, "__esModule", { value: !0 });
-  var Ut = uh(),
-    li = ew(),
-    di = Q(),
-    fi = Rr(),
-    ip = {
-      message: ({ params: { len: e } }) => Ut.str`must NOT have more than ${e} items`,
-      params: ({ params: { len: e } }) => Ut._`{limit: ${e}}`,
+var require_items2020 = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  var codegen_1 = require_codegen_2();
+  var util_1 = require_util_2();
+  var code_1 = require_code_2();
+  var additionalItems_1 = require_additionalItems();
+  var error = {
+    message: ({ params: { len } }) => codegen_1.str`must NOT have more than ${len} items`,
+    params: ({ params: { len } }) => codegen_1._`{limit: ${len}}`,
+  };
+  var def = {
+    keyword: "items",
+    type: "array",
+    schemaType: ["object", "boolean"],
+    before: "uniqueItems",
+    error,
+    code(cxt) {
+      let { schema, parentSchema, it } = cxt;
+      let { prefixItems } = parentSchema;
+      it.items = true;
+      if (util_1.alwaysValidSchema(it, schema)) return;
+      if (prefixItems) additionalItems_1.validateAdditionalItems(cxt, prefixItems);
+      else cxt.ok(code_1.validateArray(cxt));
     },
-    ap = {
-      keyword: "items",
-      type: "array",
-      schemaType: ["object", "boolean"],
-      before: "uniqueItems",
-      error: ip,
-      code(e) {
-        let { schema: schema, parentSchema: parentSchema, it: it } = e,
-          { prefixItems: prefixItems } = parentSchema;
-        if (((it.items = !0), li.alwaysValidSchema(it, schema))) return;
-        if (prefixItems) fi.validateAdditionalItems(e, prefixItems);
-        else e.ok(di.validateArray(e));
-      },
-    };
-  pi.default = ap;
+  };
+  cjsExports.default = def;
 });
-
-export { hi };
+export { require_items2020 };

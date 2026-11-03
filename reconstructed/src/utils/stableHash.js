@@ -12,9 +12,12 @@ import { createHash } from "crypto";
 import { jsonStringify, jsonParse } from "./slowOperations.js";
 
 //@ chunk-ay9hyszk.js:508-517 placement
-var S = 32;
+var MAX_SORT_DEPTH = 32;
 //@ chunk-ay9hyszk.js:517-608 placement
-function N6(e, r) {
+/**
+ * 稳定哈希：sha256(salt \0 JSON(键排序后的值))。
+ */
+function stableHashWithSalt(e, r) {
   return createHash("sha256")
     .update(e)
     .update("\x00")
@@ -23,20 +26,22 @@ function N6(e, r) {
 }
 //@ chunk-ay9hyszk.js:608-836 placement
 function sortKeysDeep(e, r = 0) {
-  if (r > S) return e;
+  if (r > MAX_SORT_DEPTH) return e;
   if (Array.isArray(e)) return e.map((n) => sortKeysDeep(n, r + 1));
   if (typeof e === "object" && e !== null)
     return Object.fromEntries(
       Object.entries(e)
         .sort(([n], [o]) => (n < o ? -1 : n > o ? 1 : 0))
-        .map(([n, o]) => [n, sortKeysDeep(o, r + 1)]),
+        .map(([key, value]) => [key, sortKeysDeep(value, r + 1)]),
     );
   return e;
 }
 //@ chunk-ay9hyszk.js:836-884 placement
-function BVt(e, r) {
+/**
+ * 先 JSON 往返再计算稳定哈希。
+ */
+function stableHashOfJson(toolName, r) {
   let n = jsonParse(jsonStringify(r));
-  return N6(e, n);
+  return stableHashWithSalt(toolName, n);
 }
-
-export { BVt, N6 };
+export { stableHashOfJson, stableHashWithSalt };

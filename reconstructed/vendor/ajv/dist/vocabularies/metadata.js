@@ -8,10 +8,12 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-s82q9s4x.js:108414-108718 cjs-fingerprint
-var BQo = x(function (ta) {
-  Object.defineProperty(ta, "__esModule", { value: !0 });
-  ta.contentVocabulary = ta.metadataVocabulary = void 0;
-  ta.metadataVocabulary = [
+var require_metadata = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.contentVocabulary = cjsExports.metadataVocabulary = undefined;
+  cjsExports.metadataVocabulary = [
     "title",
     "description",
     "default",
@@ -20,7 +22,6 @@ var BQo = x(function (ta) {
     "writeOnly",
     "examples",
   ];
-  ta.contentVocabulary = ["contentMediaType", "contentEncoding", "contentSchema"];
+  cjsExports.contentVocabulary = ["contentMediaType", "contentEncoding", "contentSchema"];
 });
-
-export { BQo };
+export { require_metadata };

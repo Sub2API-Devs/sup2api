@@ -18,16 +18,16 @@ import { initialize1PEventLogging } from "../../services/analytics/firstPartyEve
 import { isStorageV5Enabled } from "../../utils/hoverRest.js";
 import { initDefaultDebugLog } from "../../utils/debug.js";
 import { watchGlobalConfigThroughStorage, seedInstallIDs } from "../../utils/config.js";
-import { S0s } from "../../services/selfHostedRunner/runnerApi.js";
+import { claudeAiOrigin } from "../../services/selfHostedRunner/runnerApi.js";
 import { isStandaloneExecutable, jsonStringify } from "../../utils/slowOperations.js";
 import { env } from "../../utils/env.js";
 import { logFeatureBadAsync, logFeatureOkAsync } from "../../services/analytics/featureTelemetry.js";
 import { exitAfterAnalyticsFlush } from "../exit.js";
 
+//@ chunk-w14wefpp.js:4744-12414 placement
 /**
  * `claude self-hosted-runner setup` 向导的系统提示词：指导模型用 self_hosted_runner_* 工具带操作员完成自托管 runner 配置。
  */
-//@ chunk-w14wefpp.js:4744-12414 placement
 function buildSelfHostedRunnerSetupPrompt(t) {
   return `You are guiding an operator from zero to a working **self-hosted runner** for Claude Code cloud sessions. The operator must leave able to do this themselves \u2014 you have typed tools that make *you* efficient, but every API tool you call returns an \`equivalent.ui\` path. **After every API tool call, surface that \`equivalent.ui\` path to the operator** so they can repeat the action without you.
 
@@ -79,29 +79,32 @@ Walk them through where each surface lives on the **Cloud environments** admin p
 Production deployment is **taught, not tooled** \u2014 there is no \`deploy_to_k8s\` tool. If asked, explain the k8s/compose pattern and Write a sample manifest; the operator owns their orchestrator.`;
 }
 //@ chunk-w14wefpp.js:12414-12892 placement
+/**
+ * claude self-hosted-runner setup 向导：允许的工具集与系统提示词（受限制工具集的初始化配置流程）。
+ */
 var SELF_HOSTED_RUNNER_SETUP_TOOLS = [
-    "Bash",
-    "Read",
-    "Write",
-    "TodoWrite",
-    "TaskCreate",
-    "TaskGet",
-    "TaskList",
-    "TaskUpdate",
-    "self_hosted_runner_get_pool",
-    "self_hosted_runner_list_runners",
-    "self_hosted_runner_list_secrets",
-    "self_hosted_runner_read_health",
-    "self_hosted_runner_read_metrics",
-    "self_hosted_runner_spawn_local",
-    "self_hosted_runner_tail_log",
-  ].join(","),
-  v =
-    "Start the self-hosted runner setup wizard. Greet me and begin Phase 1 (create an environment in the Admin UI). Walk me through one step at a time.";
+  "Bash",
+  "Read",
+  "Write",
+  "TodoWrite",
+  "TaskCreate",
+  "TaskGet",
+  "TaskList",
+  "TaskUpdate",
+  "self_hosted_runner_get_pool",
+  "self_hosted_runner_list_runners",
+  "self_hosted_runner_list_secrets",
+  "self_hosted_runner_read_health",
+  "self_hosted_runner_read_metrics",
+  "self_hosted_runner_spawn_local",
+  "self_hosted_runner_tail_log",
+].join(",");
+var SELF_HOSTED_RUNNER_SETUP_PROMPT =
+  "Start the self-hosted runner setup wizard. Greet me and begin Phase 1 (create an environment in the Admin UI). Walk me through one step at a time.";
+//@ chunk-w14wefpp.js:12892-14766 placement
 /**
  * self-hosted-runner setup 子命令入口：处理 --help，然后以受限工具集启动交互向导。
  */
-//@ chunk-w14wefpp.js:12892-14766 placement
 async function runSelfHostedRunnerSetup(t, s) {
   if (t.includes("--help") || t.includes("-h")) {
     console.log(`Usage: claude self-hosted-runner setup [args...]
@@ -118,8 +121,12 @@ Any extra args are passed to the underlying Claude Code session.`);
   if (a !== null) exitWithError(a.reason);
   initializeAnalyticsSink();
   let n = pinStorageV5(s);
-  if ((initialize1PEventLogging(n), isStorageV5Enabled() && n !== void 0)) {
-    (initDefaultDebugLog({ storageV5: n }), watchGlobalConfigThroughStorage(n));
+  initialize1PEventLogging(n);
+  if (isStorageV5Enabled() && n !== undefined) {
+    initDefaultDebugLog({
+      storageV5: n,
+    });
+    watchGlobalConfigThroughStorage(n);
     let [
       { composePolicyLimitsClient: o, primePolicyLimitsCache: c },
       { credentialsStoreFor: p },
@@ -129,44 +136,55 @@ Any extra args are passed to the underlying Claude Code session.`);
       import("./chunk-y36z1q7c.js"),
       import("./chunk-ts9rfgqd.js"),
     ]);
-    (o({ storageV5: n }), await m(p(n)), await c(n), await seedInstallIDs(n));
+    o({
+      storageV5: n,
+    });
+    await m(p(n));
+    await c(n);
+    await seedInstallIDs(n);
   }
-  let r = buildSelfHostedRunnerSetupPrompt(S0s()),
-    u = isStandaloneExecutable() ? [] : [process.argv[1]],
-    d = t.length > 0 && !t[0].startsWith("-") ? [] : [v],
-    l = [
-      ...u,
-      ...d,
-      "--append-system-prompt",
-      r,
-      "--tools",
-      SELF_HOSTED_RUNNER_SETUP_TOOLS,
-      "--permission-mode",
-      "default",
-      ...t,
-    ];
+  let selfHostedRunnerSetupPrompt = buildSelfHostedRunnerSetupPrompt(claudeAiOrigin());
+  let u = isStandaloneExecutable() ? [] : [process.argv[1]];
+  let d = t.length > 0 && !t[0].startsWith("-") ? [] : [SELF_HOSTED_RUNNER_SETUP_PROMPT];
+  let l = [
+    ...u,
+    ...d,
+    "--append-system-prompt",
+    selfHostedRunnerSetupPrompt,
+    "--tools",
+    SELF_HOSTED_RUNNER_SETUP_TOOLS,
+    "--permission-mode",
+    "default",
+    ...t,
+  ];
   if (env.DEBUG)
     console.error(
       "[self-hosted-runner:setup] spawning:",
-      jsonStringify({ argv: [process.execPath, ...l.map((o) => (o === r ? `<${r.length} chars>` : o))] }),
+      jsonStringify({
+        argv: [
+          process.execPath,
+          ...l.map((o) =>
+            o === selfHostedRunnerSetupPrompt ? `<${selfHostedRunnerSetupPrompt.length} chars>` : o,
+          ),
+        ],
+      }),
     );
-  let e = spawnSync(process.execPath, l, { stdio: "inherit" });
-  if (e.error)
-    return (
-      await logFeatureBadAsync("cli_self_hosted_setup", "spawn_failed"),
-      console.error(`[self-hosted-runner:setup] failed to spawn child: ${e.error.message}`),
-      exitAfterAnalyticsFlush(1)
-    );
-  if ((e.status !== null && e.status !== 0) || e.signal)
-    (await logFeatureBadAsync("cli_self_hosted_setup", e.signal ? "child_signal" : "child_nonzero"),
-      console.error(
-        `[self-hosted-runner:setup] child exited with status ${e.status ?? "(null)"}${e.signal ? `, signal ${e.signal}` : ""}`,
-      ));
-  else await logFeatureOkAsync("cli_self_hosted_setup");
-  return (
+  let e = spawnSync(process.execPath, l, {
+    stdio: "inherit",
+  });
+  if (e.error) {
+    await logFeatureBadAsync("cli_self_hosted_setup", "spawn_failed");
+    console.error(`[self-hosted-runner:setup] failed to spawn child: ${e.error.message}`);
+    return exitAfterAnalyticsFlush(1);
+  }
+  if ((e.status !== null && e.status !== 0) || e.signal) {
+    await logFeatureBadAsync("cli_self_hosted_setup", e.signal ? "child_signal" : "child_nonzero");
     console.error(
-      "[self-hosted-runner:setup] To continue setup, re-run `claude self-hosted-runner setup` \u2014 resuming the session with `claude --resume`/`-c` will not re-enable the setup tools.",
-    ),
-    exitAfterAnalyticsFlush(e.status !== null ? e.status : 1)
+      `[self-hosted-runner:setup] child exited with status ${e.status ?? "(null)"}${e.signal ? `, signal ${e.signal}` : ""}`,
+    );
+  } else await logFeatureOkAsync("cli_self_hosted_setup");
+  console.error(
+    "[self-hosted-runner:setup] To continue setup, re-run `claude self-hosted-runner setup` \u2014 resuming the session with `claude --resume`/`-c` will not re-enable the setup tools.",
   );
+  return exitAfterAnalyticsFlush(e.status !== null ? e.status : 1);
 }

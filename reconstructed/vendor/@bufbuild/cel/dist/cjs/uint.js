@@ -8,27 +8,28 @@
 import { x } from "../../../../../runtime/bun-runtime.js";
 
 //@ chunk-fq0cr76a.js:359141-359464 cjs-fingerprint
-var Bi = x(function (Lk) {
-  Object.defineProperty(Lk, "__esModule", { value: !0 });
-  Lk.celUint = WY;
-  Lk.isCelUint = GY;
-  var Ok = Symbol.for("@bufbuild/cel/uint");
-  function WY(e) {
-    return new Pk(e);
+var require_uint = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.celUint = celUint;
+  cjsExports.isCelUint = isCelUint;
+  var privateSymbol = Symbol.for("@bufbuild/cel/uint");
+  function celUint(v) {
+    return new Uint(v);
   }
-  function GY(e) {
-    return typeof e === "object" && e !== null && Ok in e;
+  function isCelUint(v) {
+    return typeof v === "object" && v !== null && privateSymbol in v;
   }
-  class Pk {
+  class Uint {
     _value;
-    [Ok] = {};
-    constructor(e) {
-      this._value = e;
+    [privateSymbol] = {};
+    constructor(_value) {
+      this._value = _value;
     }
     get value() {
       return this._value;
     }
   }
 });
-
-export { Bi };
+export { require_uint };

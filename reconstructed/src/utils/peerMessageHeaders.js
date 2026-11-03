@@ -9,25 +9,38 @@
  * attribution: placement 26
  */
 import { createHmac } from "crypto";
-import { firstMeaningfulLine, Hb } from "./swarm/teammateIds.js";
-import { stripInvisibleChars as stripInvisibleChars_2 } from "./sanitization.js";
+import { firstMeaningfulLine, clipTeammateText } from "./swarm/teammateIds.js";
+import { stripInvisibleChars as stripInvisibleChars_3 } from "./sanitization.js";
 import { truncateToWidth } from "./format.js";
 import { CROSS_SESSION_MESSAGE } from "../constants/xml.js";
-import { jdt } from "./confusables.js";
+import { scrubCloseTag } from "./confusables.js";
 
 //@ chunk-qg0af0yq.js:19143-19155 placement
-var Sds = 120;
+/**
+ * MAX_PEER_LABEL_WIDTH：对端会话标签/首行的显示宽度上限。
+ */
+var MAX_PEER_LABEL_WIDTH = 120;
 //@ chunk-qg0af0yq.js:19155-19248 placement
-function sPn(e) {
-  let n = firstMeaningfulLine(e, (t) => stripInvisibleChars_2(t, " ", { keepEmojiJoiners: !0 }));
-  return n === "" ? "" : truncateToWidth(n, Sds);
+/**
+ * firstLineOfPeerBody：取正文首个有意义的行并截断到显示宽度。
+ */
+function firstLineOfPeerBody(e) {
+  let n = firstMeaningfulLine(e, (t) =>
+    stripInvisibleChars_3(t, " ", {
+      keepEmojiJoiners: true,
+    }),
+  );
+  return n === "" ? "" : truncateToWidth(n, MAX_PEER_LABEL_WIDTH);
 }
 //@ chunk-qg0af0yq.js:19248-19293 placement
-var Oe = ["bypass", "prompting"],
-  Hn = new Set(Oe);
+var PEER_FROM_MODES = ["bypass", "prompting"];
+var PEER_FROM_MODE_SET = new Set(PEER_FROM_MODES);
 //@ chunk-qg0af0yq.js:19293-19326 placement
-function FAi(e) {
-  return Hn.has(e);
+/**
+ * isPeerFromMode：判断字符串是否是合法的 from-mode。
+ */
+function isPeerFromMode(e) {
+  return PEER_FROM_MODE_SET.has(e);
 }
 //@ chunk-qg0af0yq.js:19326-19499 placement
 function percentEncodeHeaderValue(e) {
@@ -37,15 +50,24 @@ function percentEncodeHeaderValue(e) {
   );
 }
 //@ chunk-qg0af0yq.js:19499-19539 placement
-function DBe(e) {
+/**
+ * bridgeAddressFromToken：把 bridge 访问令牌拼成 bridge: 前缀的地址。
+ */
+function bridgeAddressFromToken(e) {
   return `bridge:${percentEncodeHeaderValue(e)}`;
 }
 //@ chunk-qg0af0yq.js:19539-19575 placement
-function u8(e) {
+/**
+ * udsAddressFromPath：把套接字路径拼成 uds: 前缀的地址。
+ */
+function udsAddressFromPath(e) {
   return `uds:${percentEncodeHeaderValue(e)}`;
 }
 //@ chunk-qg0af0yq.js:19575-19638 placement
-function q(e) {
+/**
+ * decodeHeaderValue：容错解码 URL 编码的消息头值。
+ */
+function decodeHeaderValue(e) {
   try {
     return decodeURIComponent(e);
   } catch {
@@ -53,180 +75,239 @@ function q(e) {
   }
 }
 //@ chunk-qg0af0yq.js:19638-19682 placement
-var Me = /^[A-Za-z0-9_-]{1,80}$/,
-  iPn = 32,
-  De = 24;
+/**
+ * PEER_SESSION_ID_PATTERN：from-session 的合法字符与长度；MAX_HOP_CHAIN_LENGTH：跳链最多保留的跳数；HOP_ID_HEX_LENGTH：单跳 id 的十六进制长度（HMAC 截断长度）（同一声明共 3 个绑定）。
+ */
+var PEER_SESSION_ID_PATTERN = /^[A-Za-z0-9_-]{1,80}$/;
+var MAX_HOP_CHAIN_LENGTH = 32;
+var HOP_ID_HEX_LENGTH = 24;
 //@ chunk-qg0af0yq.js:19682-19758 placement
-function UAi(e, n) {
-  return createHmac("sha256", n).update(e).digest("hex").slice(0, De);
+/**
+ * hopIdHmac：用会话密钥对跳 id 做 HMAC 并截断。
+ */
+function hopIdHmac(e, randomIdSecret) {
+  return createHmac("sha256", randomIdSecret).update(e).digest("hex").slice(0, HOP_ID_HEX_LENGTH);
 }
+//@ chunk-qg0af0yq.js:19758-19909 placement
 /**
  * 对端消息头的字符集、跳链 id 与跳链格式、值长度上限及对应正则。
  */
-//@ chunk-qg0af0yq.js:19758-19909 placement
-var HEADER_VALUE_CHARS = "A-Za-z0-9%:_/.\\\\-",
-  HOP_ID_PATTERN = `[0-9a-f]{${De}}`,
-  HOP_CHAIN_PATTERN = `${HOP_ID_PATTERN}(?:,${HOP_ID_PATTERN}){0,${iPn - 1}}`,
-  HOP_CHAIN_REGEX = new RegExp(`^${HOP_CHAIN_PATTERN}$`),
-  MAX_HEADER_VALUE_LENGTH = 300,
-  HEADER_VALUE_REGEX = new RegExp(`^[${HEADER_VALUE_CHARS}]{1,${MAX_HEADER_VALUE_LENGTH}}$`);
+var HEADER_VALUE_CHARS = "A-Za-z0-9%:_/.\\\\-";
+var HOP_ID_PATTERN = `[0-9a-f]{${HOP_ID_HEX_LENGTH}}`;
+var HOP_CHAIN_PATTERN = `${HOP_ID_PATTERN}(?:,${HOP_ID_PATTERN}){0,${MAX_HOP_CHAIN_LENGTH - 1}}`;
+var HOP_CHAIN_REGEX = new RegExp(`^${HOP_CHAIN_PATTERN}$`);
+var MAX_HEADER_VALUE_LENGTH = 300;
+var HEADER_VALUE_REGEX = new RegExp(`^[${HEADER_VALUE_CHARS}]{1,${MAX_HEADER_VALUE_LENGTH}}$`);
 //@ chunk-qg0af0yq.js:19909-19943 placement
-function BAi(e) {
-  return HEADER_VALUE_REGEX.test(e);
+/**
+ * isValidHeaderValue：判断消息头值是否符合字符集与长度上限。
+ */
+function isValidHeaderValue(from) {
+  return HEADER_VALUE_REGEX.test(from);
 }
+//@ chunk-qg0af0yq.js:19943-20077 placement
 /**
  * 在跳链后追加本节点并保留最近若干跳。
  */
-//@ chunk-qg0af0yq.js:19943-20077 placement
 function extendHopChain(e, n) {
-  if (e === void 0) return;
+  if (e === undefined) return;
   let t = [...e];
   if (n) t.push(n);
   if (t.length === 0) return;
-  return t.length > iPn ? t.slice(t.length - iPn) : t;
+  return t.length > MAX_HOP_CHAIN_LENGTH ? t.slice(t.length - MAX_HOP_CHAIN_LENGTH) : t;
 }
 //@ chunk-qg0af0yq.js:20077-20510 placement
 function formatPeerMessageHeader(e, n, t, r, i, s) {
   let o = [];
   if (e) o.push(`from="${e}"`);
-  if (t && Me.test(t)) o.push(`from-session="${t}"`);
-  if (r !== void 0 && r.length > 0) {
+  if (t && PEER_SESSION_ID_PATTERN.test(t)) o.push(`from-session="${t}"`);
+  if (r !== undefined && r.length > 0) {
     let joined = r.join(",");
     if (HOP_CHAIN_REGEX.test(joined)) o.push(`hop-chain="${joined}"`);
   }
-  let a = n === void 0 ? void 0 : Hb(n.replace(/["<>]/g, ""));
+  let a = n === undefined ? undefined : clipTeammateText(n.replace(/["<>]/g, ""));
   if (a) o.push(`from-name="${a}"`);
   if (i) o.push(`from-mode="${i}"`);
-  let l = s === void 0 ? void 0 : Hb(s.replace(/["<>]/g, ""));
+  let l = s === undefined ? undefined : clipTeammateText(s.replace(/["<>]/g, ""));
   if (l) o.push(`from-plugin="${l}"`);
   return o.length > 0 ? ` ${o.join(" ")}` : "";
 }
 //@ chunk-qg0af0yq.js:20510-20555 placement
 var regExp_2 = new RegExp(`^<${CROSS_SESSION_MESSAGE} from="([^"]+)"`);
 //@ chunk-qg0af0yq.js:20555-20647 placement
-function hIt(e, n, t, r, i, s, o) {
+/**
+ * wrapPeerMessage：把正文包成 cross-session-message 标签并带上消息头。
+ */
+function wrapPeerMessage(e, n, t, r, i, s, o) {
   let a = formatPeerMessageHeader(e, n, r, i, s, o);
   return `<${CROSS_SESSION_MESSAGE}${a}>
-${jdt(CROSS_SESSION_MESSAGE, t)}
+${scrubCloseTag(CROSS_SESSION_MESSAGE, t)}
 </${CROSS_SESSION_MESSAGE}>`;
 }
 //@ chunk-qg0af0yq.js:20647-21343 placement
 function parsePeerMessageHeader(e) {
   {
     if (typeof e !== "string") return;
-    let replaced = Me.source.replace(/^\^|\$$/g, ""),
-      replaced_2 = HOP_CHAIN_REGEX.source.replace(/^\^|\$$/g, ""),
-      r = e,
-      match = r.match(
-        new RegExp(
-          `^<${CROSS_SESSION_MESSAGE}(?: from="([${HEADER_VALUE_CHARS}]+)")?(?: from-session="(${replaced})")?(?: hop-chain="(${replaced_2})")?(?: from-name="([^"<>\\n\\r]+)")?(?: from-mode="(${Oe.join("|")})")?(?: from-plugin="([^"<>\\n\\r]+)")?>\\n([\\s\\S]*)\\n</${CROSS_SESSION_MESSAGE}>$`,
-        ),
-      );
+    let replaced = PEER_SESSION_ID_PATTERN.source.replace(/^\^|\$$/g, "");
+    let replaced_2 = HOP_CHAIN_REGEX.source.replace(/^\^|\$$/g, "");
+    let r = e;
+    let match = r.match(
+      new RegExp(
+        `^<${CROSS_SESSION_MESSAGE}(?: from="([${HEADER_VALUE_CHARS}]+)")?(?: from-session="(${replaced})")?(?: hop-chain="(${replaced_2})")?(?: from-name="([^"<>\\n\\r]+)")?(?: from-mode="(${PEER_FROM_MODES.join("|")})")?(?: from-plugin="([^"<>\\n\\r]+)")?>\\n([\\s\\S]*)\\n</${CROSS_SESSION_MESSAGE}>$`,
+      ),
+    );
     if (!match) return;
-    let s = match[3] !== void 0 ? match[3].split(",") : void 0,
-      o = match[5];
-    if (hIt(match[1], match[4], match[7] ?? "", match[2], s, o, match[6]) !== r) return;
+    let s = match[3] !== undefined ? match[3].split(",") : undefined;
+    let o = match[5];
+    if (wrapPeerMessage(match[1], match[4], match[7] ?? "", match[2], s, o, match[6]) !== r) return;
     return {
-      ...(match[1] !== void 0 && { from: match[1] }),
-      ...(match[2] !== void 0 && { fromSession: match[2] }),
-      ...(s !== void 0 && { hopChain: s }),
-      ...(match[4] !== void 0 && { fromName: match[4] }),
-      ...(o !== void 0 && { fromMode: o }),
-      ...(match[6] !== void 0 && { fromPlugin: match[6] }),
+      ...(match[1] !== undefined && {
+        from: match[1],
+      }),
+      ...(match[2] !== undefined && {
+        fromSession: match[2],
+      }),
+      ...(s !== undefined && {
+        hopChain: s,
+      }),
+      ...(match[4] !== undefined && {
+        fromName: match[4],
+      }),
+      ...(o !== undefined && {
+        fromMode: o,
+      }),
+      ...(match[6] !== undefined && {
+        fromPlugin: match[6],
+      }),
       body: match[7] ?? "",
     };
   }
   return;
 }
+//@ chunk-qg0af0yq.js:21343-21488 placement
 /**
  * 去掉对端消息头中的跳链。
  */
-//@ chunk-qg0af0yq.js:21343-21488 placement
 function dropHopChain(e) {
-  let n = parsePeerMessageHeader(e);
-  if (!n || n.hopChain === void 0) return e;
-  return hIt(n.from, n.fromName, n.body, n.fromSession, void 0, n.fromMode, n.fromPlugin);
+  let peerMessageHeader = parsePeerMessageHeader(e);
+  if (!peerMessageHeader || peerMessageHeader.hopChain === undefined) return e;
+  return wrapPeerMessage(
+    peerMessageHeader.from,
+    peerMessageHeader.fromName,
+    peerMessageHeader.body,
+    peerMessageHeader.fromSession,
+    undefined,
+    peerMessageHeader.fromMode,
+    peerMessageHeader.fromPlugin,
+  );
 }
+//@ chunk-qg0af0yq.js:21488-21653 placement
 /**
  * 给对端消息头标注来源插件（未标注时）。
  */
-//@ chunk-qg0af0yq.js:21488-21653 placement
-function tagPeerMessagePlugin(e, n) {
-  if (n === void 0) return e;
-  let t = parsePeerMessageHeader(e);
-  if (!t || t.fromPlugin !== void 0) return e;
-  return hIt(t.from, t.fromName, t.body, t.fromSession, t.hopChain, t.fromMode, n);
+function tagPeerMessagePlugin(e, plugin) {
+  if (plugin === undefined) return e;
+  let peerMessageHeader = parsePeerMessageHeader(e);
+  if (!peerMessageHeader || peerMessageHeader.fromPlugin !== undefined) return e;
+  return wrapPeerMessage(
+    peerMessageHeader.from,
+    peerMessageHeader.fromName,
+    peerMessageHeader.body,
+    peerMessageHeader.fromSession,
+    peerMessageHeader.hopChain,
+    peerMessageHeader.fromMode,
+    plugin,
+  );
 }
 //@ chunk-qg0af0yq.js:21653-21735 placement
-function SQ(e, n, t) {
-  if (e.body === void 0 || n === t) return e;
-  let { body: body, ...i } = e;
+/**
+ * stripPeerMessageBody：发送者与接收者相同时去掉正文，避免回显。
+ */
+function stripPeerMessageBody(e, n, t) {
+  if (e.body === undefined || n === t) return e;
+  let { body, ...i } = e;
   return i;
 }
+//@ chunk-qg0af0yq.js:21735-21994 placement
 /**
  * 从对端消息头提取发送者名、来源会话、跳链、模式与正文。
  */
-//@ chunk-qg0af0yq.js:21735-21994 placement
 function peerMessageInfo(e) {
-  let n = parsePeerMessageHeader(e);
-  if (!n) return {};
-  let t = n.fromName ? Hb(n.fromName) : "";
+  let peerMessageHeader = parsePeerMessageHeader(e);
+  if (!peerMessageHeader) return {};
+  let t = peerMessageHeader.fromName ? clipTeammateText(peerMessageHeader.fromName) : "";
   return {
-    ...(t && { name: t }),
-    ...(n.fromSession !== void 0 && { fromSession: n.fromSession }),
-    ...(n.hopChain !== void 0 && { hopChain: n.hopChain }),
-    ...(n.fromMode !== void 0 && { fromMode: n.fromMode }),
-    body: n.body,
+    ...(t && {
+      name: t,
+    }),
+    ...(peerMessageHeader.fromSession !== undefined && {
+      fromSession: peerMessageHeader.fromSession,
+    }),
+    ...(peerMessageHeader.hopChain !== undefined && {
+      hopChain: peerMessageHeader.hopChain,
+    }),
+    ...(peerMessageHeader.fromMode !== undefined && {
+      fromMode: peerMessageHeader.fromMode,
+    }),
+    body: peerMessageHeader.body,
   };
 }
+//@ chunk-qg0af0yq.js:21994-22184 placement
 /**
  * 找到最近一条真实用户消息，若来自对端则返回其跳链。
  */
-//@ chunk-qg0af0yq.js:21994-22184 placement
 function lastPeerHopChain(e) {
-  for (let n = e.length - 1; n >= 0; n--) {
-    let t = e[n];
+  for (let i = e.length - 1; i >= 0; i--) {
+    let t = e[i];
     if (t.type !== "user" || t.toolUseResult || t.isCompactSummary) continue;
-    return t.origin?.kind === "peer" ? (t.origin.hopChain ?? []) : void 0;
+    return t.origin?.kind === "peer" ? (t.origin.hopChain ?? []) : undefined;
   }
   return;
 }
 //@ chunk-qg0af0yq.js:22184-22240 placement
 var regExp_3 = new RegExp(`^(?:uds|bridge|did):[${HEADER_VALUE_CHARS}]{1,200}$`);
 //@ chunk-qg0af0yq.js:22240-22274 placement
-function $ge(e) {
+/**
+ * isPeerAddress：判断字符串是否是 uds:/bridge:/did: 形式的对等地址。
+ */
+function isPeerAddress(e) {
   return regExp_3.test(e);
 }
 //@ chunk-qg0af0yq.js:22274-22349 placement
-var jn = /^\/\S*\.sock$/,
-  Vn = /^[\\/]{2}[.?][\\/]pipe[\\/]/i,
-  Zn = /^\/\S*\.sock/;
+/**
+ * UNIX_SOCKET_PATH_PATTERN：匹配以 / 结尾的 .sock 绝对路径；NAMED_PIPE_PATH_PATTERN：匹配 \\?\pipe\ 形式的 Windows 命名管道；UNIX_SOCKET_PREFIX_PATTERN：匹配 .sock 路径前缀（不要求结尾）（同一声明共 3 个绑定）。
+ */
+var UNIX_SOCKET_PATH_PATTERN = /^\/\S*\.sock$/;
+var NAMED_PIPE_PATH_PATTERN = /^[\\/]{2}[.?][\\/]pipe[\\/]/i;
+var UNIX_SOCKET_PREFIX_PATTERN = /^\/\S*\.sock/;
 //@ chunk-qg0af0yq.js:22349-22383 placement
-function vds(e) {
-  return Zn.test(e);
+/**
+ * isUnixSocketPath：判断是否是 unix 套接字路径。
+ */
+function isUnixSocketPath(e) {
+  return UNIX_SOCKET_PREFIX_PATTERN.test(e);
 }
-
 export {
-  BAi,
-  SQ,
+  isValidHeaderValue,
+  stripPeerMessageBody,
   peerMessageInfo,
-  $ge,
-  u8,
-  FAi,
+  isPeerAddress,
+  udsAddressFromPath,
+  isPeerFromMode,
   dropHopChain,
-  Sds,
+  MAX_PEER_LABEL_WIDTH,
   MAX_HEADER_VALUE_LENGTH,
   lastPeerHopChain,
-  sPn,
-  UAi,
-  DBe,
-  iPn,
-  hIt,
+  firstLineOfPeerBody,
+  hopIdHmac,
+  bridgeAddressFromToken,
+  MAX_HOP_CHAIN_LENGTH,
+  wrapPeerMessage,
   extendHopChain,
   regExp_2,
   tagPeerMessagePlugin,
-  vds,
-  q,
-  jn,
-  Vn,
+  isUnixSocketPath,
+  decodeHeaderValue,
+  UNIX_SOCKET_PATH_PATTERN,
+  NAMED_PIPE_PATH_PATTERN,
 };

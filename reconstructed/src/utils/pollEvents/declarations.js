@@ -9,14 +9,29 @@
  * attribution: placement 35
  */
 import { POLL } from "../../tools/PollTool/prompt.js";
-import { kFe, oCt, ime, vYe, QAt, zar, renderPollEvent } from "../pollEvents.js";
+import {
+  mentionsReservedKind,
+  eventByteLength,
+  MAX_POLL_EVENT_ENVELOPE_BYTES,
+  normalizeNewlines,
+  isValidPollEventKind,
+  sanitizeEventAttributes,
+  renderPollEvent,
+} from "../pollEvents.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import { isAbortError } from "../errors.js";
 import { logError } from "../log.js";
-import { ge } from "../identity.js";
+import { identity as identity_2 } from "../identity.js";
 import { logFeatureOk, logFeatureSad, logFeatureBad } from "../../services/analytics/featureTelemetry.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { zodStrictObject, o, oe, A, pe, u } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  zodStrictObject,
+  string,
+  unknown,
+  array,
+  record,
+  u,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import { jsonStringify } from "../slowOperations.js";
 import { memoizeWithLRU } from "../memoize.js";
 import { safeParseJSON } from "../json.js";
@@ -24,15 +39,22 @@ import { logForDebugging } from "../debug.js";
 import { sanitizeTelemetryString } from "../sanitization.js";
 
 //@ chunk-e6aww6q8.js:157378-157503 placement
-var TENGU_MOONLIT_ISLAND = "tengu_moonlit_island",
-  ivt = `<system>One or more events arrived; they follow as the result of a ${POLL} call.</system>`;
+/**
+ * POLL_EVENTS_ANNOUNCE_LINE：轮询事件到达时的系统提示行。
+ */
+var TENGU_MOONLIT_ISLAND = "tengu_moonlit_island";
+var POLL_EVENTS_ANNOUNCE_LINE = `<system>One or more events arrived; they follow as the result of a ${POLL} call.</system>`;
 //@ chunk-e6aww6q8.js:157503-157670 placement
 function declaredRoundStamp(e) {
   try {
     return e.length > 0 &&
-      e.every(({ pollEvent: pollEvent }) => pollEvent?.declared !== void 0 && !kFe(pollEvent.kind)) &&
-      getFeatureValue_CACHED_MAY_BE_STALE(TENGU_MOONLIT_ISLAND, !1)
-      ? { declaredRound: !0 }
+      e.every(
+        ({ pollEvent }) => pollEvent?.declared !== undefined && !mentionsReservedKind(pollEvent.kind),
+      ) &&
+      getFeatureValue_CACHED_MAY_BE_STALE(TENGU_MOONLIT_ISLAND, false)
+      ? {
+          declaredRound: true,
+        }
       : {};
   } catch (error) {
     if (!isAbortError(error)) logError(error);
@@ -40,368 +62,560 @@ function declaredRoundStamp(e) {
   }
 }
 //@ chunk-e6aww6q8.js:157670-157695 placement
-function vVs(e) {
-  return !1;
+/**
+ * neverDeclaresEvents：恒 false 的声明判定（占位）。
+ */
+function neverDeclaresEvents(e) {
+  return false;
 }
 //@ chunk-e6aww6q8.js:157695-157810 placement
 function isDeclaredRound(e) {
   try {
     return (
-      e.declaredRound === !0 &&
-      e.userRoleGuard !== !0 &&
-      getFeatureValue_CACHED_MAY_BE_STALE(TENGU_MOONLIT_ISLAND, !0)
+      e.declaredRound === true &&
+      e.userRoleGuard !== true &&
+      getFeatureValue_CACHED_MAY_BE_STALE(TENGU_MOONLIT_ISLAND, true)
     );
   } catch (error) {
     if (!isAbortError(error)) logError(error);
-    return !1;
+    return false;
   }
 }
 //@ chunk-e6aww6q8.js:157810-157845 placement
-var nvt = ge(new Set(), (e) => e.clear());
+var declaredRoundsSeen = identity_2(new Set(), (e) => e.clear());
+//@ chunk-e6aww6q8.js:157845-158153 placement
 /**
  * 每个回合记录一次"轮询事件声明轮次"的特性状态（已生效、开关关闭或未标记）。
  */
-//@ chunk-e6aww6q8.js:157845-158153 placement
 function logDeclaredRound(e, n) {
   try {
     if (
-      nvt.has(e) ||
-      n.userRoleGuard === !0 ||
-      n.declared === void 0 ||
+      declaredRoundsSeen.has(e) ||
+      n.userRoleGuard === true ||
+      n.declared === undefined ||
       n.declared.length === 0 ||
       n.declared.some((r) => r === null) ||
-      n.kinds?.some(kFe) === !0
+      n.kinds?.some(mentionsReservedKind) === true
     )
       return;
-    if ((nvt.add(e), isDeclaredRound(n))) logFeatureOk("poll_event_declared_round");
-    else logFeatureSad("poll_event_declared_round", n.declaredRound === !0 ? "flag_off" : "not_stamped");
+    declaredRoundsSeen.add(e);
+    if (isDeclaredRound(n)) logFeatureOk("poll_event_declared_round");
+    else logFeatureSad("poll_event_declared_round", n.declaredRound === true ? "flag_off" : "not_stamped");
   } catch {}
 }
+//@ chunk-e6aww6q8.js:158153-158565 placement
 /**
  * 轮询事件声明的上限与 schema：kind 数量、字段路径数、枚举值数、at 令牌长度、描述长度、对象嵌套深度、提示词字节数、kind 名称格式、保留键，以及声明/事件 schema。
  */
-//@ chunk-e6aww6q8.js:158153-158565 placement
-var MAX_DECLARED_KINDS = 64,
-  MAX_FIELD_PATHS = 48,
-  MAX_ENUM_VALUES = 32,
-  MAX_AT_TOKEN_LENGTH = 256,
-  MAX_KIND_DESCRIPTION = 500,
-  MAX_OBJECT_DEPTH = 3,
-  MAX_DECLARATIONS_PROMPT_BYTES = 16384,
-  KIND_NAME_REGEX = /^[a-z][a-z0-9_-]{0,63}$/,
-  RESERVED_ENVELOPE_KEYS = new Set(["type", "kind", "at", "nonce"]),
-  declarationSchema = DoctorLazy(() =>
-    zodStrictObject({
-      kind: o(),
-      description: o().max(MAX_KIND_DESCRIPTION).optional(),
-      schema: oe().optional(),
-      untrusted_fields: A(o()).max(MAX_FIELD_PATHS).optional(),
-      auto_mode_fields: A(o()).max(MAX_FIELD_PATHS).optional(),
-    }),
-  ),
-  declarationsSchema = DoctorLazy(() => A(declarationSchema()).max(MAX_DECLARED_KINDS)),
-  eventFieldsSchema = DoctorLazy(() => pe(o(), oe())),
-  pollEventSchema = DoctorLazy(() => u({ kind: o(), at: o(), fields: eventFieldsSchema() })),
-  EMPTY_DECLARATIONS = new Map();
+var MAX_DECLARED_KINDS = 64;
+var MAX_FIELD_PATHS = 48;
+var MAX_ENUM_VALUES = 32;
+var MAX_AT_TOKEN_LENGTH = 256;
+var MAX_KIND_DESCRIPTION = 500;
+var MAX_OBJECT_DEPTH = 3;
+var MAX_DECLARATIONS_PROMPT_BYTES = 16384;
+var KIND_NAME_REGEX = /^[a-z][a-z0-9_-]{0,63}$/;
+var RESERVED_ENVELOPE_KEYS = new Set(["type", "kind", "at", "nonce"]);
+var declarationSchema = DoctorLazy(() =>
+  zodStrictObject({
+    kind: string(),
+    description: string().max(MAX_KIND_DESCRIPTION).optional(),
+    schema: unknown().optional(),
+    untrusted_fields: array(string()).max(MAX_FIELD_PATHS).optional(),
+    auto_mode_fields: array(string()).max(MAX_FIELD_PATHS).optional(),
+  }),
+);
+var declarationsSchema = DoctorLazy(() => array(declarationSchema()).max(MAX_DECLARED_KINDS));
+var eventFieldsSchema = DoctorLazy(() => record(string(), unknown()));
+var pollEventSchema = DoctorLazy(() =>
+  u({
+    kind: string(),
+    at: string(),
+    fields: eventFieldsSchema(),
+  }),
+);
+var EMPTY_DECLARATIONS = new Map();
 //@ chunk-e6aww6q8.js:158565-158612 placement
-function Xun() {
-  return mvt()?.declarations ?? EMPTY_DECLARATIONS;
+/**
+ * eventDeclarations：宿主声明的事件种类。
+ */
+function eventDeclarations() {
+  return noHostDeclarations()?.declarations ?? EMPTY_DECLARATIONS;
 }
 //@ chunk-e6aww6q8.js:158612-158647 placement
-function TVs() {
-  return mvt()?.fault;
+/**
+ * eventDeclarationFault：事件声明解析失败的原因。
+ */
+function eventDeclarationFault() {
+  return noHostDeclarations()?.fault;
 }
 //@ chunk-e6aww6q8.js:158647-159176 placement
 function validatePollEventDeclarations(e) {
-  let safeParse = declarationsSchema().safeParse(e);
-  if (!safeParse.success) {
-    let h = safeParse.error.issues[0],
-      y = h?.path.join(".") ?? "",
-      S = y === "" ? "" : ` at ${y}`,
-      w = h?.code === "unrecognized_keys" ? `: ${m$e(h.keys)} is not a key it takes` : "";
-    return { ok: !1, reason: `declarations do not match the schema${S}${w}` };
+  let n = declarationsSchema().safeParse(e);
+  if (!n.success) {
+    let h = n.error.issues[0];
+    let y = h?.path.join(".") ?? "";
+    let S = y === "" ? "" : ` at ${y}`;
+    let w = h?.code === "unrecognized_keys" ? `: ${telemetryStringList(h.keys)} is not a key it takes` : "";
+    return {
+      ok: false,
+      reason: `declarations do not match the schema${S}${w}`,
+    };
   }
   let r = new Map();
-  for (let h of safeParse.data) {
+  for (let h of n.data) {
     let y = validatePollEventDeclaration(h, r);
     if (!y.ok) return y;
     r.set(y.value.kind, y.value);
   }
-  let byteLength = Buffer.byteLength(declaredKindsPrompt(r) ?? "", "utf8");
-  if (byteLength > MAX_DECLARATIONS_PROMPT_BYTES)
+  let s = Buffer.byteLength(declaredKindsPrompt(r) ?? "", "utf8");
+  if (s > MAX_DECLARATIONS_PROMPT_BYTES)
     return {
-      ok: !1,
-      reason: `the declared kinds take ${byteLength} bytes of prompt (cap ${MAX_DECLARATIONS_PROMPT_BYTES})`,
+      ok: false,
+      reason: `the declared kinds take ${s} bytes of prompt (cap ${MAX_DECLARATIONS_PROMPT_BYTES})`,
     };
-  return { ok: !0, declarations: r };
+  return {
+    ok: true,
+    declarations: r,
+  };
 }
+//@ chunk-e6aww6q8.js:159176-159499 placement
 /**
  * 生成宿主声明的轮询事件说明提示词：每种 kind 的字段与不受信字段列表。
  */
-//@ chunk-e6aww6q8.js:159176-159499 placement
 function declaredKindsPrompt(e) {
   if (e.size === 0) return;
-  return `Your host declares the event kinds below. Poll returns each one as an event element whose body is one JSON object, with only the fields listed for its kind. ${glo} The host sets every field except those listed as untrusted, which may hold text from untrusted sources.
+  return `Your host declares the event kinds below. Poll returns each one as an event element whose body is one JSON object, with only the fields listed for its kind. ${EVENT_NONCE_RULE_TEXT} The host sets every field except those listed as untrusted, which may hold text from untrusted sources.
 ${declaredKindsList(e)}`;
 }
 //@ chunk-e6aww6q8.js:159499-159590 placement
-var glo = "Such an event ends at the closing tag that repeats the nonce of its opening tag.";
+var EVENT_NONCE_RULE_TEXT =
+  "Such an event ends at the closing tag that repeats the nonce of its opening tag.";
+//@ chunk-e6aww6q8.js:159590-159984 placement
 /**
  * 校验一条轮询事件：kind 未保留、字段符合声明、字段总字节不超限、at 是合法令牌，通过时返回信封与字段。
  */
-//@ chunk-e6aww6q8.js:159590-159984 placement
-function buildPollEventEnvelope({ declaration: declaration, at: at, fields: fields }) {
-  if (kFe(declaration.kind)) return { ok: !1, reason: `kind ${declaration.kind} is reserved` };
+function buildPollEventEnvelope({ declaration, at, fields }) {
+  if (mentionsReservedKind(declaration.kind))
+    return {
+      ok: false,
+      reason: `kind ${declaration.kind} is reserved`,
+    };
   let s = validateEventFields(declaration.fields, fields, "");
-  if (!s.ok) return { ok: !1, reason: `${s.reason} on kind ${declaration.kind}` };
-  let h = oCt(s.value);
-  if (h > ime) return { ok: !1, reason: `fields are ${h} bytes (cap ${ime})` };
-  if (!kvt(at)) return { ok: !1, reason: "at is not a token" };
-  return { ok: !0, envelope: _lo(declaration.kind, at, s.value), fields: s.value };
+  if (!s.ok)
+    return {
+      ok: false,
+      reason: `${s.reason} on kind ${declaration.kind}`,
+    };
+  let h = eventByteLength(s.value);
+  if (h > MAX_POLL_EVENT_ENVELOPE_BYTES)
+    return {
+      ok: false,
+      reason: `fields are ${h} bytes (cap ${MAX_POLL_EVENT_ENVELOPE_BYTES})`,
+    };
+  if (!isValidAtToken(at))
+    return {
+      ok: false,
+      reason: "at is not a token",
+    };
+  return {
+    ok: true,
+    envelope: renderEventElement(declaration.kind, at, s.value),
+    fields: s.value,
+  };
 }
 //@ chunk-e6aww6q8.js:159984-160037 placement
-function AVs(e) {
+/**
+ * collectFieldStrings：汇总事件字段的字符串。
+ */
+function collectFieldStrings(fields) {
   let n = [];
-  return (
-    collectFieldStrings(e, n),
-    n.join(`
-`)
-  );
+  collectFieldStrings_2(fields, n);
+  return n.join(`
+`);
 }
 //@ chunk-e6aww6q8.js:160037-160263 placement
-function collectFieldStrings(e, n) {
-  if (typeof e === "string") n.push(vYe(e));
+function collectFieldStrings_2(e, n) {
+  if (typeof e === "string") n.push(normalizeNewlines(e));
   else if (typeof e === "number" || typeof e === "boolean") n.push(String(e));
-  else if (Array.isArray(e)) for (let r of e) collectFieldStrings(r, n);
-  else if (dG(e)) for (let r of Object.values(e)) collectFieldStrings(r, n);
+  else if (Array.isArray(e)) for (let r of e) collectFieldStrings_2(r, n);
+  else if (isPlainRecord(e)) for (let r of Object.values(e)) collectFieldStrings_2(r, n);
 }
 //@ chunk-e6aww6q8.js:160263-160313 placement
-function CVs(e) {
-  return escapeHtmlChars(jsonStringify(vYe(e))).slice(1, -1);
+/**
+ * escapedEventJsonBody：转义后的事件 JSON 正文。
+ */
+function escapedEventJsonBody(e) {
+  return escapeHtmlChars(jsonStringify(normalizeNewlines(e))).slice(1, -1);
 }
+//@ chunk-e6aww6q8.js:160313-160538 placement
 /**
  * 取出事件中声明为 auto_mode_fields 的字段，序列化后给自动模式分类器。
  */
-//@ chunk-e6aww6q8.js:160313-160538 placement
-function autoModeFieldsText({ declaration: declaration, fields: fields }) {
+function autoModeFieldsText({ declaration, fields }) {
   let filtered = declaration.fields
     .map((field) => field.name)
     .filter((s) => declaration.auto_mode_fields.includes(s) && Object.hasOwn(fields, s));
   return filtered.length === 0
-    ? void 0
-    : wvt({ kind: declaration.kind, ...Object.fromEntries(filtered.map((s) => [s, fields[s]])) });
+    ? undefined
+    : sanitizedJson({
+        kind: declaration.kind,
+        ...Object.fromEntries(filtered.map((s) => [s, fields[s]])),
+      });
 }
 //@ chunk-e6aww6q8.js:160538-160560 placement
-function mvt() {
+function noHostDeclarations() {
   return;
 }
 //@ chunk-e6aww6q8.js:160560-160808 placement
 var parseDeclarationsCached = memoizeWithLRU(
   (e) => {
-    let n = validatePollEventDeclarations(safeParseJSON(e, !1));
-    if (!n.ok)
-      return (
-        logFeatureBad("poll_event_delivery", "declarations_invalid"),
-        logForDebugging(`poll event declarations refused: ${n.reason}`, { level: "error" }),
-        { declarations: EMPTY_DECLARATIONS, fault: n.reason }
-      );
-    return { declarations: n.declarations };
+    let n = validatePollEventDeclarations(safeParseJSON(e, false));
+    if (!n.ok) {
+      logFeatureBad("poll_event_delivery", "declarations_invalid");
+      logForDebugging(`poll event declarations refused: ${n.reason}`, {
+        level: "error",
+      });
+      return {
+        declarations: EMPTY_DECLARATIONS,
+        fault: n.reason,
+      };
+    }
+    return {
+      declarations: n.declarations,
+    };
   },
   (e) => e,
   4,
 );
+//@ chunk-e6aww6q8.js:160808-162060 placement
 /**
  * 校验轮询事件声明（kind 合法、不重复、描述无换行、受信字段）。
  */
-//@ chunk-e6aww6q8.js:160808-162060 placement
 function validatePollEventDeclaration(e, n) {
-  let { kind: kind } = e;
-  if (!QAt(kind)) return { ok: !1, reason: "invalid kind" };
-  if (kFe(kind)) return { ok: !1, reason: `kind ${kind} is reserved for a trusted in-process producer` };
-  if (n.has(kind)) return { ok: !1, reason: `kind ${kind} is declared twice` };
+  let { kind } = e;
+  if (!isValidPollEventKind(kind))
+    return {
+      ok: false,
+      reason: "invalid kind",
+    };
+  if (mentionsReservedKind(kind))
+    return {
+      ok: false,
+      reason: `kind ${kind} is reserved for a trusted in-process producer`,
+    };
+  if (n.has(kind))
+    return {
+      ok: false,
+      reason: `kind ${kind} is declared twice`,
+    };
   if (
-    e.description !== void 0 &&
+    e.description !== undefined &&
     (/[\n<>]/.test(e.description) || sanitizeTelemetryString(e.description) !== e.description)
   )
     return {
-      ok: !1,
+      ok: false,
       reason: `kind ${kind}: the description has a line break, markup or a character that cannot be shown`,
     };
   let s =
-    e.schema === void 0
-      ? { ok: !0, value: [] }
-      : validatePollEventSchema(e.schema, "", 1, { left: MAX_FIELD_PATHS });
-  if (!s.ok) return { ok: !1, reason: `kind ${kind}: ${s.reason}` };
-  let h = e.untrusted_fields ?? [];
-  for (let w of h) {
-    let L = fieldPathProblem(s.value, w);
-    if (L !== void 0)
-      return { ok: !1, reason: `kind ${kind}: untrusted_fields names "${sanitizeTelemetryString(w)}", ${L}` };
-  }
-  if (new Set(h).size !== h.length)
-    return { ok: !1, reason: `kind ${kind}: untrusted_fields names a field twice` };
-  let y = e.auto_mode_fields ?? [],
-    found = y.find((w) => !s.value.some((L) => L.name === w));
-  if (found !== void 0)
+    e.schema === undefined
+      ? {
+          ok: true,
+          value: [],
+        }
+      : validatePollEventSchema(e.schema, "", 1, {
+          left: MAX_FIELD_PATHS,
+        });
+  if (!s.ok)
     return {
-      ok: !1,
+      ok: false,
+      reason: `kind ${kind}: ${s.reason}`,
+    };
+  let untrustedFields = e.untrusted_fields ?? [];
+  for (let untrustedField of untrustedFields) {
+    let L = fieldPathProblem(s.value, untrustedField);
+    if (L !== undefined)
+      return {
+        ok: false,
+        reason: `kind ${kind}: untrusted_fields names "${sanitizeTelemetryString(untrustedField)}", ${L}`,
+      };
+  }
+  if (new Set(untrustedFields).size !== untrustedFields.length)
+    return {
+      ok: false,
+      reason: `kind ${kind}: untrusted_fields names a field twice`,
+    };
+  let autoModeFields = e.auto_mode_fields ?? [];
+  let found = autoModeFields.find((autoModeField) => !s.value.some((L) => L.name === autoModeField));
+  if (found !== undefined)
+    return {
+      ok: false,
       reason: `kind ${kind}: auto_mode_fields names "${sanitizeTelemetryString(found)}", which is not a field of the kind itself`,
     };
-  if (new Set(y).size !== y.length)
-    return { ok: !1, reason: `kind ${kind}: auto_mode_fields names a field twice` };
+  if (new Set(autoModeFields).size !== autoModeFields.length)
+    return {
+      ok: false,
+      reason: `kind ${kind}: auto_mode_fields names a field twice`,
+    };
   return {
-    ok: !0,
+    ok: true,
     value: {
-      kind: kind,
-      ...(e.description !== void 0 && { description: e.description }),
+      kind,
+      ...(e.description !== undefined && {
+        description: e.description,
+      }),
       fields: s.value,
-      untrusted_fields: h,
-      auto_mode_fields: y,
+      untrusted_fields: untrustedFields,
+      auto_mode_fields: autoModeFields,
     },
   };
 }
+//@ chunk-e6aww6q8.js:162060-163490 placement
 /**
  * 校验轮询事件字段的 schema（对象嵌套深度等）。
  */
-//@ chunk-e6aww6q8.js:162060-163490 placement
 function validatePollEventSchema(e, n, r, s) {
   let h = n === "" ? "the schema" : `field ${n.slice(0, -1)}`;
-  if (!dG(e) || e.type !== "object") return { ok: !1, reason: `${h} is not an object schema` };
-  if (r > MAX_OBJECT_DEPTH)
-    return { ok: !1, reason: `${h} nests objects more than ${MAX_OBJECT_DEPTH} deep` };
-  let filtered = Object.keys(e).filter(
-    (Se) =>
-      Se !== "type" &&
-      Se !== "properties" &&
-      Se !== "required" &&
-      Se !== "additionalProperties" &&
-      !(Se === "$schema" && n === ""),
-  );
-  if (filtered.length > 0) return { ok: !1, reason: `${h}: ${m$e(filtered)} is not a key it takes` };
-  if (e.additionalProperties !== void 0 && e.additionalProperties !== !1)
-    return { ok: !1, reason: `${h}: additionalProperties, when present, is false` };
-  let S = e.properties === void 0 ? {} : e.properties,
-    w = e.required === void 0 ? [] : e.required;
-  if (!dG(S) || !Array.isArray(w) || !w.every((Se) => typeof Se === "string"))
-    return { ok: !1, reason: `${h}: properties is an object and required a list of names` };
-  let keys = Object.keys(S);
-  if (((s.left -= keys.length), s.left < 0)) return { ok: !1, reason: `more than ${MAX_FIELD_PATHS} fields` };
-  let G = new Set(w),
-    found = w.find((Se) => !Object.hasOwn(S, Se));
-  if (found !== void 0)
+  if (!isPlainRecord(e) || e.type !== "object")
     return {
-      ok: !1,
+      ok: false,
+      reason: `${h} is not an object schema`,
+    };
+  if (r > MAX_OBJECT_DEPTH)
+    return {
+      ok: false,
+      reason: `${h} nests objects more than ${MAX_OBJECT_DEPTH} deep`,
+    };
+  let filtered = Object.keys(e).filter(
+    (key) =>
+      key !== "type" &&
+      key !== "properties" &&
+      key !== "required" &&
+      key !== "additionalProperties" &&
+      !(key === "$schema" && n === ""),
+  );
+  if (filtered.length > 0)
+    return {
+      ok: false,
+      reason: `${h}: ${telemetryStringList(filtered)} is not a key it takes`,
+    };
+  if (e.additionalProperties !== undefined && e.additionalProperties !== false)
+    return {
+      ok: false,
+      reason: `${h}: additionalProperties, when present, is false`,
+    };
+  let properties = e.properties === undefined ? {} : e.properties;
+  let required = e.required === undefined ? [] : e.required;
+  if (
+    !isPlainRecord(properties) ||
+    !Array.isArray(required) ||
+    !required.every((Se) => typeof Se === "string")
+  )
+    return {
+      ok: false,
+      reason: `${h}: properties is an object and required a list of names`,
+    };
+  let keys = Object.keys(properties);
+  s.left -= keys.length;
+  if (s.left < 0)
+    return {
+      ok: false,
+      reason: `more than ${MAX_FIELD_PATHS} fields`,
+    };
+  let G = new Set(required);
+  let found = required.find((Se) => !Object.hasOwn(properties, Se));
+  if (found !== undefined)
+    return {
+      ok: false,
       reason: `${h}: required names "${sanitizeTelemetryString(found)}", which is not a property`,
     };
   let Z = [];
   for (let Se of keys) {
     if (!KIND_NAME_REGEX.test(Se) || (n === "" && RESERVED_ENVELOPE_KEYS.has(Se)))
       return {
-        ok: !1,
+        ok: false,
         reason: `field "${sanitizeTelemetryString(n + Se)}" is not a name a host may declare (a lowercase letter, then up to 63 lowercase letters, digits, hyphens or underscores, and not type, kind, at or nonce)`,
       };
-    let ke = validatePollEventField(S[Se], n + Se, r, s);
+    let ke = validatePollEventField(properties[Se], n + Se, r, s);
     if (!ke.ok) return ke;
-    Z.push({ name: Se, required: G.has(Se), is: ke.value });
+    Z.push({
+      name: Se,
+      required: G.has(Se),
+      is: ke.value,
+    });
   }
-  return { ok: !0, value: Z };
+  return {
+    ok: true,
+    value: Z,
+  };
 }
+//@ chunk-e6aww6q8.js:163490-165066 placement
 /**
  * 校验轮询事件单个字段的 schema（类型、枚举）。
  */
-//@ chunk-e6aww6q8.js:163490-165066 placement
 function validatePollEventField(e, n, r, s) {
-  if (!dG(e)) return { ok: !1, reason: `field ${n} has no schema` };
+  if (!isPlainRecord(e))
+    return {
+      ok: false,
+      reason: `field ${n} has no schema`,
+    };
   switch (e.type) {
     case "string": {
       let h = unknownKeysProblem(e, ["type", "enum"], n);
-      if (h !== void 0) return { ok: !1, reason: h };
-      if (e.enum === void 0) return { ok: !0, value: { type: "string" } };
+      if (h !== undefined)
+        return {
+          ok: false,
+          reason: h,
+        };
+      if (e.enum === undefined)
+        return {
+          ok: true,
+          value: {
+            type: "string",
+          },
+        };
       let y = e.enum;
       if (
         !Array.isArray(y) ||
         y.length === 0 ||
         y.length > MAX_ENUM_VALUES ||
-        !y.every((S) => typeof S === "string" && kvt(S)) ||
+        !y.every((S) => typeof S === "string" && isValidAtToken(S)) ||
         new Set(y).size !== y.length
       )
         return {
-          ok: !1,
+          ok: false,
           reason: `field ${n} has an enum that is not a list of 1 to ${MAX_ENUM_VALUES} tokens, or lists one twice`,
         };
-      return { ok: !0, value: { type: "string", values: y } };
+      return {
+        ok: true,
+        value: {
+          type: "string",
+          values: y,
+        },
+      };
     }
     case "boolean": {
       let h = unknownKeysProblem(e, ["type"], n);
-      return h === void 0 ? { ok: !0, value: { type: "boolean" } } : { ok: !1, reason: h };
+      return h === undefined
+        ? {
+            ok: true,
+            value: {
+              type: "boolean",
+            },
+          }
+        : {
+            ok: false,
+            reason: h,
+          };
     }
     case "integer":
     case "number": {
       let h = unknownKeysProblem(e, ["type", "minimum", "maximum"], n);
-      if (h !== void 0) return { ok: !1, reason: h };
-      let { minimum: minimum, maximum: maximum } = e;
-      if ((minimum !== void 0 && !f$e(minimum)) || (maximum !== void 0 && !f$e(maximum)))
-        return { ok: !1, reason: `field ${n}: minimum and maximum, when present, are numbers` };
-      if (minimum !== void 0 && maximum !== void 0 && minimum > maximum)
-        return { ok: !1, reason: `field ${n}: minimum is greater than maximum` };
+      if (h !== undefined)
+        return {
+          ok: false,
+          reason: h,
+        };
+      let { minimum, maximum } = e;
+      if (
+        (minimum !== undefined && !isFiniteNumber(minimum)) ||
+        (maximum !== undefined && !isFiniteNumber(maximum))
+      )
+        return {
+          ok: false,
+          reason: `field ${n}: minimum and maximum, when present, are numbers`,
+        };
+      if (minimum !== undefined && maximum !== undefined && minimum > maximum)
+        return {
+          ok: false,
+          reason: `field ${n}: minimum is greater than maximum`,
+        };
       return {
-        ok: !0,
+        ok: true,
         value: {
           type: e.type,
-          ...(minimum !== void 0 && { minimum: minimum }),
-          ...(maximum !== void 0 && { maximum: maximum }),
+          ...(minimum !== undefined && {
+            minimum,
+          }),
+          ...(maximum !== undefined && {
+            maximum,
+          }),
         },
       };
     }
     case "array": {
       let h = unknownKeysProblem(e, ["type", "items"], n);
-      if (h !== void 0) return { ok: !1, reason: h };
-      if (dG(e.items) && e.items.type === "array")
-        return { ok: !1, reason: `field ${n} is a list of lists, which a field may not be` };
+      if (h !== undefined)
+        return {
+          ok: false,
+          reason: h,
+        };
+      if (isPlainRecord(e.items) && e.items.type === "array")
+        return {
+          ok: false,
+          reason: `field ${n} is a list of lists, which a field may not be`,
+        };
       let y = validatePollEventField(e.items, `${n}[]`, r, s);
-      return y.ok ? { ok: !0, value: { type: "array", items: y.value } } : y;
+      return y.ok
+        ? {
+            ok: true,
+            value: {
+              type: "array",
+              items: y.value,
+            },
+          }
+        : y;
     }
     case "object": {
       let h = validatePollEventSchema(e, `${n}.`, r + 1, s);
-      return h.ok ? { ok: !0, value: { type: "object", fields: h.value } } : h;
+      return h.ok
+        ? {
+            ok: true,
+            value: {
+              type: "object",
+              fields: h.value,
+            },
+          }
+        : h;
     }
     default:
       return {
-        ok: !1,
+        ok: false,
         reason: `field ${n} has a type that is not string, boolean, integer, number, array or object`,
       };
   }
 }
+//@ chunk-e6aww6q8.js:165066-165551 placement
 /**
  * 检查字段路径（a.b[] 形式）是否指向已声明的文本字段，不是时返回问题描述。
  */
-//@ chunk-e6aww6q8.js:165066-165551 placement
-function fieldPathProblem(e, n) {
-  let r = e,
-    s;
-  for (let h of n.split(".")) {
-    let endsWith = h.endsWith("[]"),
-      S = endsWith ? h.slice(0, -2) : h;
-    if (((s = r?.find((w) => w.name === S)?.is), s === void 0)) return "which is not a declared field";
-    if (endsWith && (s.type !== "array" || s.items.type === "string"))
+function fieldPathProblem(e, untrustedField) {
+  let r = e;
+  let s;
+  for (let h of untrustedField.split(".")) {
+    let y = h.endsWith("[]");
+    let S = y ? h.slice(0, -2) : h;
+    s = r?.find((w) => w.name === S)?.is;
+    if (s === undefined) return "which is not a declared field";
+    if (y && (s.type !== "array" || s.items.type === "string"))
       return s.type === "array" ? "which names a list of strings, written without []" : "which is not a list";
-    if (s.type === "array" && (endsWith || s.items.type === "string")) s = s.items;
-    r = s.type === "object" ? s.fields : void 0;
+    if (s.type === "array" && (y || s.items.type === "string")) s = s.items;
+    r = s.type === "object" ? s.fields : undefined;
   }
-  return s?.type === "string" ? void 0 : "which does not hold text";
+  return s?.type === "string" ? undefined : "which does not hold text";
 }
+//@ chunk-e6aww6q8.js:165551-166010 placement
 /**
  * 递归描述声明字段（枚举值、嵌套对象与列表），跳过不受信字段。
  */
-//@ chunk-e6aww6q8.js:165551-166010 placement
-function describeFields(e, n, r) {
-  return e.flatMap(({ name: s, is: is }) => {
+function describeFields(fields, n, r) {
+  return fields.flatMap(({ name: s, is }) => {
     let y = r + s;
     if (n.has(y)) return [];
     let S = is.type === "array" ? is.items : is;
     switch (S.type) {
       case "string":
-        return [S.values === void 0 ? s : `${s} (${S.values.join(" | ")})`];
+        return [S.values === undefined ? s : `${s} (${S.values.join(" | ")})`];
       case "object": {
         let w = describeFields(S.fields, n, is.type === "array" ? `${y}[].` : `${y}.`);
         if (w.length === 0) return S.fields.length === 0 ? [s] : [];
@@ -415,97 +629,131 @@ function describeFields(e, n, r) {
     }
   });
 }
+//@ chunk-e6aww6q8.js:166010-166427 placement
 /**
  * 按声明校验事件字段：不允许未声明字段，必填字段必须存在，逐个校验值类型。
  */
-//@ chunk-e6aww6q8.js:166010-166427 placement
-function validateEventFields(e, n, r) {
-  let found = Object.keys(n).find((y) => !e.some((S) => S.name === y));
-  if (found !== void 0)
-    return { ok: !1, reason: `field "${sanitizeTelemetryString(r + found)}" is not declared` };
+function validateEventFields(fields, n, r) {
+  let found = Object.keys(n).find((key) => !fields.some((S) => S.name === key));
+  if (found !== undefined)
+    return {
+      ok: false,
+      reason: `field "${sanitizeTelemetryString(r + found)}" is not declared`,
+    };
   let h = [];
-  for (let y of e) {
-    let S = r + y.name,
-      w = Object.hasOwn(n, y.name) ? n[y.name] : void 0;
-    if (w === void 0) {
-      if (y.required) return { ok: !1, reason: `missing field ${S}` };
+  for (let y of fields) {
+    let S = r + y.name;
+    let w = Object.hasOwn(n, y.name) ? n[y.name] : undefined;
+    if (w === undefined) {
+      if (y.required)
+        return {
+          ok: false,
+          reason: `missing field ${S}`,
+        };
       continue;
     }
     let L = validatePollEventValue(y.is, w, S);
     if (!L.ok) return L;
     h.push([y.name, L.value]);
   }
-  return { ok: !0, value: Object.fromEntries(h) };
+  return {
+    ok: true,
+    value: Object.fromEntries(h),
+  };
 }
 //@ chunk-e6aww6q8.js:166427-167330 placement
 function validatePollEventValue(e, n, r) {
   switch (e.type) {
     case "string":
-      return typeof n === "string" && (e.values === void 0 || e.values.includes(n))
-        ? { ok: !0, value: n }
+      return typeof n === "string" && (e.values === undefined || e.values.includes(n))
+        ? {
+            ok: true,
+            value: n,
+          }
         : {
-            ok: !1,
-            reason: `field ${r} is not ${e.values === void 0 ? "a string" : "one of its enum values"}`,
+            ok: false,
+            reason: `field ${r} is not ${e.values === undefined ? "a string" : "one of its enum values"}`,
           };
     case "boolean":
       return typeof n === "boolean"
-        ? { ok: !0, value: n }
-        : { ok: !1, reason: `field ${r} is not a boolean` };
+        ? {
+            ok: true,
+            value: n,
+          }
+        : {
+            ok: false,
+            reason: `field ${r} is not a boolean`,
+          };
     case "integer":
     case "number":
-      return f$e(n) &&
+      return isFiniteNumber(n) &&
         (e.type === "number" || Number.isSafeInteger(n)) &&
-        (e.minimum === void 0 || n >= e.minimum) &&
-        (e.maximum === void 0 || n <= e.maximum)
-        ? { ok: !0, value: n }
+        (e.minimum === undefined || n >= e.minimum) &&
+        (e.maximum === undefined || n <= e.maximum)
+        ? {
+            ok: true,
+            value: n,
+          }
         : {
-            ok: !1,
+            ok: false,
             reason: `field ${r} is not ${e.type === "integer" ? "an integer" : "a number"} in its range`,
           };
     case "array": {
-      if (!Array.isArray(n)) return { ok: !1, reason: `field ${r} is not a list` };
+      if (!Array.isArray(n))
+        return {
+          ok: false,
+          reason: `field ${r} is not a list`,
+        };
       let s = [];
       for (let [h, y] of n.entries()) {
         let S = validatePollEventValue(e.items, y, `${r}[${h}]`);
         if (!S.ok) return S;
         s.push(S.value);
       }
-      return { ok: !0, value: s };
+      return {
+        ok: true,
+        value: s,
+      };
     }
     case "object":
-      return dG(n)
+      return isPlainRecord(n)
         ? validateEventFields(e.fields, n, `${r}.`)
-        : { ok: !1, reason: `field ${r} is not an object` };
+        : {
+            ok: false,
+            reason: `field ${r} is not an object`,
+          };
   }
 }
 //@ chunk-e6aww6q8.js:167330-167472 placement
 function unknownKeysProblem(e, n, r) {
-  let filtered = Object.keys(e).filter((h) => !n.includes(h));
-  return filtered.length === 0 ? void 0 : `field ${r}: ${m$e(filtered)} is not a key it takes`;
+  let filtered = Object.keys(e).filter((key) => !n.includes(key));
+  return filtered.length === 0
+    ? undefined
+    : `field ${r}: ${telemetryStringList(filtered)} is not a key it takes`;
 }
 //@ chunk-e6aww6q8.js:167472-167543 placement
-function dG(e) {
+function isPlainRecord(e) {
   return typeof e === "object" && e !== null && !Array.isArray(e);
 }
 //@ chunk-e6aww6q8.js:167543-167606 placement
-function f$e(e) {
+function isFiniteNumber(e) {
   return typeof e === "number" && Number.isFinite(e);
 }
 //@ chunk-e6aww6q8.js:167606-167673 placement
-function m$e(e) {
+function telemetryStringList(e) {
   return e.map((n) => `"${sanitizeTelemetryString(String(n))}"`).join(", ");
 }
 //@ chunk-e6aww6q8.js:167673-167748 placement
-function kvt(e) {
-  return e.length <= MAX_AT_TOKEN_LENGTH && /^[\x21-\x7E]+$/.test(e) && zar(e) === e;
+function isValidAtToken(e) {
+  return e.length <= MAX_AT_TOKEN_LENGTH && /^[\x21-\x7E]+$/.test(e) && sanitizeEventAttributes(e) === e;
 }
 //@ chunk-e6aww6q8.js:167748-167821 placement
-function _lo(e, n, r) {
+function renderEventElement(kind, at, r) {
   return renderPollEvent({
-    kind: e,
-    at: n,
+    kind,
+    at,
     content: `
-${escapeHtmlChars(wvt(r))}
+${escapeHtmlChars(sanitizedJson(r))}
 `,
   });
 }
@@ -513,42 +761,41 @@ ${escapeHtmlChars(wvt(r))}
 function escapeHtmlChars(e) {
   return e.replaceAll("<", "\\u003c").replaceAll(">", "\\u003e").replaceAll("&", "\\u0026");
 }
+//@ chunk-e6aww6q8.js:167924-168346 placement
 /**
  * 把声明的事件 kind 列成提示词条目：描述、字段与不受信字段。
  */
-//@ chunk-e6aww6q8.js:167924-168346 placement
 function declaredKindsList(e) {
   return [...e.values()].map((n) => {
-    let r = describeFields(n.fields, new Set(n.untrusted_fields), ""),
-      s = [
-        ...(n.description === void 0 || n.description === ""
-          ? []
-          : [/[.!?]$/.test(n.description) ? n.description : `${n.description}.`]),
-        ...(r.length > 0 ? [`Fields: ${r.join(", ")}.`] : []),
-        ...(n.untrusted_fields.length > 0 ? [`Untrusted: ${n.untrusted_fields.join(", ")}.`] : []),
-      ];
+    let r = describeFields(n.fields, new Set(n.untrusted_fields), "");
+    let s = [
+      ...(n.description === undefined || n.description === ""
+        ? []
+        : [/[.!?]$/.test(n.description) ? n.description : `${n.description}.`]),
+      ...(r.length > 0 ? [`Fields: ${r.join(", ")}.`] : []),
+      ...(n.untrusted_fields.length > 0 ? [`Untrusted: ${n.untrusted_fields.join(", ")}.`] : []),
+    ];
     return s.length === 0 ? `- ${n.kind}` : `- ${n.kind}: ${s.join(" ")}`;
   }).join(`
 `);
 }
 //@ chunk-e6aww6q8.js:168346-168410 placement
-function wvt(e) {
-  return jsonStringify(e, (n, r) => (typeof r === "string" ? vYe(r) : r));
+function sanitizedJson(e) {
+  return jsonStringify(e, (n, r) => (typeof r === "string" ? normalizeNewlines(r) : r));
 }
-
 export {
   isDeclaredRound,
-  ivt,
+  POLL_EVENTS_ANNOUNCE_LINE,
   buildPollEventEnvelope,
   logDeclaredRound,
   pollEventSchema,
   declaredKindsPrompt,
-  Xun,
+  eventDeclarations,
   declaredRoundStamp,
-  CVs,
-  vVs,
+  escapedEventJsonBody,
+  neverDeclaresEvents,
   eventFieldsSchema,
-  TVs,
+  eventDeclarationFault,
   autoModeFieldsText,
-  AVs,
+  collectFieldStrings,
 };

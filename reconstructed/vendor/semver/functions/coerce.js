@@ -6,40 +6,42 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { G } from "../classes/semver.js";
-import { ze } from "./parse.js";
-import { Ye } from "../internal/re.js";
+import { require_semver } from "../classes/semver.js";
+import { require_parse } from "./parse.js";
+import { require_re } from "../internal/re.js";
 
 //@ chunk-bwbq4xvm.js:13126-13833 cjs-fingerprint
-var rl = x(function (E2, nl) {
-  var ik = G(),
-    lk = ze(),
-    { safeRe: safeRe, t: gs } = Ye(),
-    dk = (e, s) => {
-      if (e instanceof ik) return e;
-      if (typeof e === "number") e = String(e);
-      if (typeof e !== "string") return null;
-      s = s || {};
-      let n = null;
-      if (!s.rtl) n = e.match(s.includePrerelease ? safeRe[gs.COERCEFULL] : safeRe[gs.COERCE]);
-      else {
-        let m = s.includePrerelease ? safeRe[gs.COERCERTLFULL] : safeRe[gs.COERCERTL],
-          f;
-        while ((f = m.exec(e)) && (!n || n.index + n[0].length !== e.length)) {
-          if (!n || f.index + f[0].length !== n.index + n[0].length) n = f;
-          m.lastIndex = f.index + f[1].length + f[2].length;
-        }
-        m.lastIndex = -1;
+var require_coerce = x(function (cjsExports, cjsModule) {
+  var SemVer = require_semver();
+  var parse = require_parse();
+  var { safeRe: re, t } = require_re();
+  var coerce = (version, options) => {
+    if (version instanceof SemVer) return version;
+    if (typeof version === "number") version = String(version);
+    if (typeof version !== "string") return null;
+    options = options || {};
+    let match = null;
+    if (!options.rtl) match = version.match(options.includePrerelease ? re[t.COERCEFULL] : re[t.COERCE]);
+    else {
+      let coerceRtlRegex = options.includePrerelease ? re[t.COERCERTLFULL] : re[t.COERCERTL];
+      let next;
+      while (
+        (next = coerceRtlRegex.exec(version)) &&
+        (!match || match.index + match[0].length !== version.length)
+      ) {
+        if (!match || next.index + next[0].length !== match.index + match[0].length) match = next;
+        coerceRtlRegex.lastIndex = next.index + next[1].length + next[2].length;
       }
-      if (n === null) return null;
-      let r = n[2],
-        a = n[3] || "0",
-        l = n[4] || "0",
-        c = s.includePrerelease && n[5] ? `-${n[5]}` : "",
-        h = s.includePrerelease && n[6] ? `+${n[6]}` : "";
-      return lk(`${r}.${a}.${l}${c}${h}`, s);
-    };
-  nl.exports = dk;
+      coerceRtlRegex.lastIndex = -1;
+    }
+    if (match === null) return null;
+    let major = match[2];
+    let minor = match[3] || "0";
+    let patch = match[4] || "0";
+    let prerelease = options.includePrerelease && match[5] ? `-${match[5]}` : "";
+    let build = options.includePrerelease && match[6] ? `+${match[6]}` : "";
+    return parse(`${major}.${minor}.${patch}${prerelease}${build}`, options);
+  };
+  cjsModule.exports = coerce;
 });
-
-export { rl };
+export { require_coerce };

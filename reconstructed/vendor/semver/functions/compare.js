@@ -6,13 +6,12 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { G } from "../classes/semver.js";
+import { require_semver } from "../classes/semver.js";
 
 //@ chunk-bwbq4xvm.js:11583-11679 cjs-fingerprint
-var Z = x(function (a2, Ui) {
-  var Li = G(),
-    Nv = (e, s, n) => new Li(e, n).compare(new Li(s, n));
-  Ui.exports = Nv;
+var require_compare = x(function (cjsExports, cjsModule) {
+  var SemVer = require_semver();
+  var compare = (a, b, loose) => new SemVer(a, loose).compare(new SemVer(b, loose));
+  cjsModule.exports = compare;
 });
-
-export { Z };
+export { require_compare };

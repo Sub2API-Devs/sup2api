@@ -6,14 +6,14 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { ca } from "./URL.js";
+import { require_URL } from "./URL.js";
 
 //@ chunk-vwj6ccer.js:79901-83403 cjs-fingerprint
-var Vn = x(function (Fd, k0) {
-  var oe = ca();
-  k0.exports = pr;
-  function pr() {}
-  pr.prototype = Object.create(Object.prototype, {
+var require_URLUtils = x(function (cjsExports, cjsModule) {
+  var oe = require_URL();
+  cjsModule.exports = URLUtils;
+  function URLUtils() {}
+  URLUtils.prototype = Object.create(Object.prototype, {
     _url: {
       get: function () {
         return new oe(this.href);
@@ -21,191 +21,204 @@ var Vn = x(function (Fd, k0) {
     },
     protocol: {
       get: function () {
-        var _url = this._url;
-        if (_url && _url.scheme) return _url.scheme + ":";
+        var url = this._url;
+        if (url && url.scheme) return url.scheme + ":";
         else return ":";
       },
-      set: function (e) {
-        var href = this.href,
-          r = new oe(href);
-        if (r.isAbsolute()) {
-          if (
-            ((e = e.replace(/:+$/, "")), (e = e.replace(/[^-+\.a-zA-Z0-9]/g, oe.percentEncode)), e.length > 0)
-          )
-            ((r.scheme = e), (href = r.toString()));
+      set: function (v) {
+        var output = this.href;
+        var url = new oe(output);
+        if (url.isAbsolute()) {
+          v = v.replace(/:+$/, "");
+          v = v.replace(/[^-+\.a-zA-Z0-9]/g, oe.percentEncode);
+          if (v.length > 0) {
+            url.scheme = v;
+            output = url.toString();
+          }
         }
-        this.href = href;
+        this.href = output;
       },
     },
     host: {
       get: function () {
-        var _url = this._url;
-        if (_url.isAbsolute() && _url.isAuthorityBased())
-          return _url.host + (_url.port ? ":" + _url.port : "");
+        var url = this._url;
+        if (url.isAbsolute() && url.isAuthorityBased()) return url.host + (url.port ? ":" + url.port : "");
         else return "";
       },
-      set: function (e) {
-        var href = this.href,
-          r = new oe(href);
-        if (r.isAbsolute() && r.isAuthorityBased()) {
-          if (((e = e.replace(/[^-+\._~!$&'()*,;:=a-zA-Z0-9]/g, oe.percentEncode)), e.length > 0))
-            ((r.host = e), delete r.port, (href = r.toString()));
+      set: function (v) {
+        var output = this.href;
+        var url = new oe(output);
+        if (url.isAbsolute() && url.isAuthorityBased()) {
+          v = v.replace(/[^-+\._~!$&'()*,;:=a-zA-Z0-9]/g, oe.percentEncode);
+          if (v.length > 0) {
+            url.host = v;
+            delete url.port;
+            output = url.toString();
+          }
         }
-        this.href = href;
+        this.href = output;
       },
     },
     hostname: {
       get: function () {
-        var _url = this._url;
-        if (_url.isAbsolute() && _url.isAuthorityBased()) return _url.host;
+        var url = this._url;
+        if (url.isAbsolute() && url.isAuthorityBased()) return url.host;
         else return "";
       },
-      set: function (e) {
-        var href = this.href,
-          r = new oe(href);
-        if (r.isAbsolute() && r.isAuthorityBased()) {
-          if (
-            ((e = e.replace(/^\/+/, "")),
-            (e = e.replace(/[^-+\._~!$&'()*,;:=a-zA-Z0-9]/g, oe.percentEncode)),
-            e.length > 0)
-          )
-            ((r.host = e), (href = r.toString()));
+      set: function (v) {
+        var output = this.href;
+        var url = new oe(output);
+        if (url.isAbsolute() && url.isAuthorityBased()) {
+          v = v.replace(/^\/+/, "");
+          v = v.replace(/[^-+\._~!$&'()*,;:=a-zA-Z0-9]/g, oe.percentEncode);
+          if (v.length > 0) {
+            url.host = v;
+            output = url.toString();
+          }
         }
-        this.href = href;
+        this.href = output;
       },
     },
     port: {
       get: function () {
-        var _url = this._url;
-        if (_url.isAbsolute() && _url.isAuthorityBased() && _url.port !== void 0) return _url.port;
+        var url = this._url;
+        if (url.isAbsolute() && url.isAuthorityBased() && url.port !== undefined) return url.port;
         else return "";
       },
-      set: function (e) {
-        var href = this.href,
-          r = new oe(href);
-        if (r.isAbsolute() && r.isAuthorityBased()) {
-          if (((e = "" + e), (e = e.replace(/[^0-9].*$/, "")), (e = e.replace(/^0+/, "")), e.length === 0))
-            e = "0";
-          if (parseInt(e, 10) <= 65535) ((r.port = e), (href = r.toString()));
+      set: function (v) {
+        var output = this.href;
+        var url = new oe(output);
+        if (url.isAbsolute() && url.isAuthorityBased()) {
+          v = "" + v;
+          v = v.replace(/[^0-9].*$/, "");
+          v = v.replace(/^0+/, "");
+          if (v.length === 0) v = "0";
+          if (parseInt(v, 10) <= 65535) {
+            url.port = v;
+            output = url.toString();
+          }
         }
-        this.href = href;
+        this.href = output;
       },
     },
     pathname: {
       get: function () {
-        var _url = this._url;
-        if (_url.isAbsolute() && _url.isHierarchical()) return _url.path;
+        var url = this._url;
+        if (url.isAbsolute() && url.isHierarchical()) return url.path;
         else return "";
       },
-      set: function (e) {
-        var href = this.href,
-          r = new oe(href);
-        if (r.isAbsolute() && r.isHierarchical()) {
-          if (e.charAt(0) !== "/") e = "/" + e;
-          ((e = e.replace(/[^-+\._~!$&'()*,;:=@\/a-zA-Z0-9]/g, oe.percentEncode)),
-            (r.path = e),
-            (href = r.toString()));
+      set: function (v) {
+        var output = this.href;
+        var url = new oe(output);
+        if (url.isAbsolute() && url.isHierarchical()) {
+          if (v.charAt(0) !== "/") v = "/" + v;
+          v = v.replace(/[^-+\._~!$&'()*,;:=@\/a-zA-Z0-9]/g, oe.percentEncode);
+          url.path = v;
+          output = url.toString();
         }
-        this.href = href;
+        this.href = output;
       },
     },
     search: {
       get: function () {
-        var _url = this._url;
-        if (_url.isAbsolute() && _url.isHierarchical() && _url.query !== void 0) return "?" + _url.query;
+        var url = this._url;
+        if (url.isAbsolute() && url.isHierarchical() && url.query !== undefined) return "?" + url.query;
         else return "";
       },
-      set: function (e) {
-        var href = this.href,
-          r = new oe(href);
-        if (r.isAbsolute() && r.isHierarchical()) {
-          if (e.charAt(0) === "?") e = e.substring(1);
-          ((e = e.replace(/[^-+\._~!$&'()*,;:=@\/?a-zA-Z0-9]/g, oe.percentEncode)),
-            (r.query = e),
-            (href = r.toString()));
+      set: function (v) {
+        var output = this.href;
+        var url = new oe(output);
+        if (url.isAbsolute() && url.isHierarchical()) {
+          if (v.charAt(0) === "?") v = v.substring(1);
+          v = v.replace(/[^-+\._~!$&'()*,;:=@\/?a-zA-Z0-9]/g, oe.percentEncode);
+          url.query = v;
+          output = url.toString();
         }
-        this.href = href;
+        this.href = output;
       },
     },
     hash: {
       get: function () {
-        var _url = this._url;
-        if (_url == null || _url.fragment == null || _url.fragment === "") return "";
-        else return "#" + _url.fragment;
+        var url = this._url;
+        if (url == null || url.fragment == null || url.fragment === "") return "";
+        else return "#" + url.fragment;
       },
-      set: function (e) {
-        var href = this.href,
-          r = new oe(href);
-        if (e.charAt(0) === "#") e = e.substring(1);
-        ((e = e.replace(/[^-+\._~!$&'()*,;:=@\/?a-zA-Z0-9]/g, oe.percentEncode)),
-          (r.fragment = e),
-          (href = r.toString()),
-          (this.href = href));
+      set: function (v) {
+        var output = this.href;
+        var url = new oe(output);
+        if (v.charAt(0) === "#") v = v.substring(1);
+        v = v.replace(/[^-+\._~!$&'()*,;:=@\/?a-zA-Z0-9]/g, oe.percentEncode);
+        url.fragment = v;
+        output = url.toString();
+        this.href = output;
       },
     },
     username: {
       get: function () {
-        var _url = this._url;
-        return _url.username || "";
+        var url = this._url;
+        return url.username || "";
       },
-      set: function (e) {
-        var href = this.href,
-          r = new oe(href);
-        if (r.isAbsolute())
-          ((e = e.replace(/[\x00-\x1F\x7F-\uFFFF "#<>?`\/@\\:]/g, oe.percentEncode)),
-            (r.username = e),
-            (href = r.toString()));
-        this.href = href;
+      set: function (v) {
+        var output = this.href;
+        var url = new oe(output);
+        if (url.isAbsolute()) {
+          v = v.replace(/[\x00-\x1F\x7F-\uFFFF "#<>?`\/@\\:]/g, oe.percentEncode);
+          url.username = v;
+          output = url.toString();
+        }
+        this.href = output;
       },
     },
     password: {
       get: function () {
-        var _url = this._url;
-        return _url.password || "";
+        var url = this._url;
+        return url.password || "";
       },
-      set: function (e) {
-        var href = this.href,
-          r = new oe(href);
-        if (r.isAbsolute()) {
-          if (e === "") r.password = null;
-          else ((e = e.replace(/[\x00-\x1F\x7F-\uFFFF "#<>?`\/@\\]/g, oe.percentEncode)), (r.password = e));
-          href = r.toString();
+      set: function (v) {
+        var output = this.href;
+        var url = new oe(output);
+        if (url.isAbsolute()) {
+          if (v === "") url.password = null;
+          else {
+            v = v.replace(/[\x00-\x1F\x7F-\uFFFF "#<>?`\/@\\]/g, oe.percentEncode);
+            url.password = v;
+          }
+          output = url.toString();
         }
-        this.href = href;
+        this.href = output;
       },
     },
     origin: {
       get: function () {
-        var _url = this._url;
-        if (_url == null) return "";
-        var t = function (r) {
-          var a = [_url.scheme, _url.host, +_url.port || r];
-          return a[0] + "://" + a[1] + (a[2] === r ? "" : ":" + a[2]);
+        var url = this._url;
+        if (url == null) return "";
+        var originForPort = function (defaultPort) {
+          var origin = [url.scheme, url.host, +url.port || defaultPort];
+          return origin[0] + "://" + origin[1] + (origin[2] === defaultPort ? "" : ":" + origin[2]);
         };
-        switch (_url.scheme) {
+        switch (url.scheme) {
           case "ftp":
-            return t(21);
+            return originForPort(21);
           case "gopher":
-            return t(70);
+            return originForPort(70);
           case "http":
           case "ws":
-            return t(80);
+            return originForPort(80);
           case "https":
           case "wss":
-            return t(443);
+            return originForPort(443);
           default:
-            return _url.scheme + "://";
+            return url.scheme + "://";
         }
       },
     },
   });
-  pr._inherit = function (e) {
-    Object.getOwnPropertyNames(pr.prototype).forEach(function (t) {
-      if (t === "constructor" || t === "href") return;
-      var ownPropertyDescriptor = Object.getOwnPropertyDescriptor(pr.prototype, t);
-      Object.defineProperty(e, t, ownPropertyDescriptor);
+  URLUtils._inherit = function (proto) {
+    Object.getOwnPropertyNames(URLUtils.prototype).forEach(function (p) {
+      if (p === "constructor" || p === "href") return;
+      var desc = Object.getOwnPropertyDescriptor(URLUtils.prototype, p);
+      Object.defineProperty(proto, p, desc);
     });
   };
 });
-
-export { Vn };
+export { require_URLUtils };

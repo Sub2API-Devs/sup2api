@@ -8,12 +8,12 @@
  * pieces: chunk-18hwfzwa.js (5)
  * attribution: placement 5
  */
-import { e } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { logForDebugging } from "../../utils/debug.js";
-import { o } from "../../../vendor/zod/v4/classic/schemas.js";
+import { string } from "../../../vendor/zod/v4/classic/schemas.js";
 import { getCurrentSessionFile, queueSessionMetadataEntry } from "../../utils/sessionStorage.js";
 import { getSessionId } from "../../bootstrap/state.js";
-import { Nqo } from "../../utils/requestReplay.js";
+import { ZERO_UUID } from "../../utils/requestReplay.js";
 import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
 import { parseSlashCommand } from "../../utils/slashCommandParsing.js";
 import { findCommand } from "../../commands.js";
@@ -26,22 +26,28 @@ import { isPromptHookObserved } from "../../utils/telemetry/sessionTracing.js";
 import { withExpandedPastes } from "../../utils/hooks/postSamplingHooks.js";
 import { gracefulShutdownSync } from "../../utils/gracefulShutdown.js";
 
+//@ chunk-18hwfzwa.js:1473473-1474045 placement
 /**
  * rewind 后跟踪新回合消息，写入后补写 last-prompt 元数据。
  */
-//@ chunk-18hwfzwa.js:1473473-1474045 placement
 class LastPromptRestamp {
-  #e = !1;
-  #t = void 0;
+  #e = false;
+  #t = undefined;
   #o = new Set();
   get isDue() {
     return this.#e;
   }
   rewound() {
-    if ((this.#o.clear(), getCurrentSessionFile() !== null)) ((this.#e = !0), (this.#t = getSessionId()));
+    this.#o.clear();
+    if (getCurrentSessionFile() !== null) {
+      this.#e = true;
+      this.#t = getSessionId();
+    }
   }
   conversationReplaced() {
-    ((this.#e = !1), (this.#t = void 0), this.#o.clear());
+    this.#e = false;
+    this.#t = undefined;
+    this.#o.clear();
   }
   turnStarts(h) {
     if (!this.#e) return;
@@ -53,50 +59,54 @@ class LastPromptRestamp {
   }
   rowsQueued(h) {
     if (!h.some((x) => this.#o.has(x.uuid))) return;
-    if ((this.#o.clear(), this.#t !== getSessionId())) return;
-    ((this.#e = !1),
-      (this.#t = void 0),
-      queueSessionMetadataEntry({
-        type: "last-prompt",
-        leafUuid: Nqo,
-        explicit: !0,
-        sessionId: getSessionId(),
-      }));
+    this.#o.clear();
+    if (this.#t !== getSessionId()) return;
+    this.#e = false;
+    this.#t = undefined;
+    queueSessionMetadataEntry({
+      type: "last-prompt",
+      leafUuid: ZERO_UUID,
+      explicit: true,
+      sessionId: getSessionId(),
+    });
   }
   writeFailed(h) {
     if (h.some((x) => this.#o.has(x.uuid))) this.#o.clear();
   }
 }
 //@ chunk-18hwfzwa.js:1474045-1474072 placement
-var oE = new SessionRootSlot(() => new LastPromptRestamp());
+var lastPromptRestampSlot = new SessionRootSlot(() => new LastPromptRestamp());
+//@ chunk-18hwfzwa.js:1474110-1474259 placement
 /**
  * 非斜杠命令或非本地命令的输入才记录为提示。
  */
-//@ chunk-18hwfzwa.js:1474110-1474259 placement
-function shouldRecordPrompt(h, x) {
-  let D = parseSlashCommand(h);
-  if (!D) return !0;
-  let L = findCommand(D.commandName, x);
-  if (!L) return !looksLikeCommand(D.commandName);
-  return L.type !== "local" && L.type !== "local-jsx";
+function shouldRecordPrompt(h, commands) {
+  let slashCommand = parseSlashCommand(h);
+  if (!slashCommand) return true;
+  let command = findCommand(slashCommand.commandName, commands);
+  if (!command) return !looksLikeCommand(slashCommand.commandName);
+  return command.type !== "local" && command.type !== "local-jsx";
 }
+//@ chunk-18hwfzwa.js:1474259-1474466 placement
 /**
  * 生成写历史记录的函数（命令参数变化时写展开后的文本，只写一次）。
  */
-//@ chunk-18hwfzwa.js:1474259-1474466 placement
-function createPromptHistoryWriter({ entry: entry, name: x, typed: typed, write: write }) {
-  let ee = entry === void 0,
-    ke = snapshotHookRegistration();
-  if (entry !== void 0 && !isPromptHookObserved()) ((ee = !0), write(entry));
+function createPromptHistoryWriter({ entry, name: x, typed, write }) {
+  let ee = entry === undefined;
+  let ke = snapshotHookRegistration();
+  if (entry !== undefined && !isPromptHookObserved()) {
+    ee = true;
+    write(entry);
+  }
   return (Re) => {
     let Be = hasHookRegistrationChanged(ke);
-    if (ee || entry === void 0 || Be) return;
-    ((ee = !0), write(Re === typed ? entry : withExpandedPastes(entry, `/${x} ${Re}`.trim())));
+    if (ee || entry === undefined || Be) return;
+    ee = true;
+    write(Re === typed ? entry : withExpandedPastes(entry, `/${x} ${Re}`.trim()));
   };
 }
 //@ chunk-18hwfzwa.js:1474466-1474487 placement
-function Bqo() {
+function shutdownNow() {
   gracefulShutdownSync(0);
 }
-
-export { Bqo, createPromptHistoryWriter, shouldRecordPrompt, oE };
+export { shutdownNow, createPromptHistoryWriter, shouldRecordPrompt, lastPromptRestampSlot };

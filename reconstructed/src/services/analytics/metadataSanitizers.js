@@ -13,307 +13,375 @@ import { ENTRYPOINT_KINDS } from "../../utils/entrypointKinds.js";
 import { isKnownModelName } from "../../utils/model/knownModelNames.js";
 import { ALL_TELEMETRY_CODES, keys, keys_2 } from "./telemetryCodes.js";
 import {
-  KR,
-  GR,
+  SIGNATURE_TRUST_STATES,
+  ENFORCEMENT_MODES,
   ALLOW_CODE_RE,
   ORG_DENIAL_REASONS,
   AUTH_SURFACES,
   SETTINGS_FETCH_OUTCOMES,
   SIGNED_DOCUMENT_KINDS,
-  BR,
+  SIGNATURE_VERIFY_RESULTS,
 } from "./authOutcomeTelemetry.js";
 
+//@ chunk-aepeg2w5.js:740083-745386 placement
 /**
  * 元数据字段校验器（布尔、日期、正则、枚举、组合）。
  */
-//@ chunk-aepeg2w5.js:740083-745386 placement
-var isBoolean = (e) => typeof e === "boolean",
-  lx = (e) => e instanceof Date && !Number.isNaN(e.getTime()),
-  sn = (e) => (n) => typeof n === "string" && e.test(n),
-  we = (...e) => {
-    let n;
-    return (r) => typeof r === "string" && (n ??= new Set(e)).has(r);
+var isBoolean = (e) => typeof e === "boolean";
+var isDateValidator = (e) => e instanceof Date && !Number.isNaN(e.getTime());
+var regexValidator = (e) => (n) => typeof n === "string" && e.test(n);
+var oneOfValidator = (...e) => {
+  let n;
+  return (r) => typeof r === "string" && (n ??= new Set(e)).has(r);
+};
+var anyOfValidators =
+  (...e) =>
+  (n) =>
+    e.some((r) => r(n));
+var UUID_HEX_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+var EVENT_NAME_RE = /^[A-Za-z][A-Za-z0-9_]{0,127}$/;
+var TAGGED_SESSION_ID_RE = /^(session|cse)(_(local|staging))?_01[1-9A-HJ-NP-Za-km-z]{22}$/;
+var isTaggedSessionId = (e) =>
+  typeof e === "string" && TAGGED_SESSION_ID_RE.test(e) && decodeTaggedUuid(e) !== undefined;
+var SHA256_HEX_RE = /^[0-9a-f]{64}$/;
+var SEMVER_WITH_PRERELEASE_RE =
+  /^\d{1,4}\.\d{1,4}\.\d{1,6}(-(dev|alpha|beta|rc)(\.\d{1,10}){0,2})?(\+[0-9a-f]{1,12})?$/;
+var SEMVER_PLAIN_RE = /^\d{1,4}\.\d{1,4}\.\d{1,6}(-(dev|alpha|beta|rc))?$/;
+var isUuid = regexValidator(UUID_HEX_RE);
+var CLIENT_TYPES = [
+  "cli",
+  "remote",
+  "github-action",
+  "sdk-typescript",
+  "sdk-python",
+  "sdk-cli",
+  "claude-vscode",
+  "local-agent",
+  "claude-desktop",
+];
+var PLATFORM_NAMES = [
+  "darwin",
+  "linux",
+  "win32",
+  "freebsd",
+  "openbsd",
+  "netbsd",
+  "android",
+  "aix",
+  "sunos",
+  "cygwin",
+  "haiku",
+  "macos",
+  "windows",
+  "wsl",
+  "unknown",
+];
+var ARCH_NAMES = [
+  "arm",
+  "arm64",
+  "ia32",
+  "loong64",
+  "mips",
+  "mipsel",
+  "ppc",
+  "ppc64",
+  "riscv64",
+  "s390",
+  "s390x",
+  "x64",
+];
+var ENTRYPOINT_VALIDATOR = oneOfValidator(...Object.keys(ENTRYPOINT_KINDS), "other");
+var isKnownModelOrNonconforming = (e) =>
+  typeof e === "string" && (e === "nonconforming" || isKnownModelName(e));
+var TOP_LEVEL_FIELD_VALIDATORS = {
+  event_name: regexValidator(EVENT_NAME_RE),
+  event_id: isUuid,
+  client_timestamp: isDateValidator,
+  session_id: anyOfValidators(isUuid, isTaggedSessionId),
+  parent_session_id: anyOfValidators(isUuid, isTaggedSessionId),
+  device_id: regexValidator(SHA256_HEX_RE),
+  user_type: oneOfValidator("ant", "external"),
+  client_type: oneOfValidator(...CLIENT_TYPES),
+  agent_type: oneOfValidator("teammate", "subagent", "standalone"),
+  is_interactive: isBoolean,
+  entrypoint: ENTRYPOINT_VALIDATOR,
+  model: isKnownModelOrNonconforming,
+};
+var ENV_FIELD_VALIDATORS = {
+  version: regexValidator(SEMVER_WITH_PRERELEASE_RE),
+  platform: oneOfValidator(...PLATFORM_NAMES),
+  arch: oneOfValidator(...ARCH_NAMES),
+};
+var AUTH_FIELD_VALIDATORS = {
+  organization_uuid: isUuid,
+  account_uuid: isUuid,
+};
+var keys_3 = Object.keys(TOP_LEVEL_FIELD_VALIDATORS);
+var SAMPLE_RATE_FIELDS = ["sample_rate"];
+var nonNegativeInt32Validator = (e) =>
+  typeof e === "number" && Number.isInteger(e) && e >= 0 && e < 2147483648;
+var nonNegativeSafeIntValidator = (e) => typeof e === "number" && Number.isSafeInteger(e) && e >= 0;
+var nonNegativeFiniteValidator = (e) => typeof e === "number" && Number.isFinite(e) && e >= 0;
+var httpStatusValidator = (e) => typeof e === "number" && Number.isInteger(e) && e >= 100 && e <= 599;
+var SWEEP_SKIP_REASONS = {
+  diskless: true,
+  user_source_disabled: true,
+  settings_unknowable: true,
+  settings_invalid_key_set: true,
+  remote_settings_unknowable: true,
+};
+var UNANSWERED_HOOK_STATES = {
+  load_failed: true,
+  load_owed: true,
+  load_running: true,
+  unanswered: true,
+};
+var EXEMPTED_SETTINGS_REASONS = {
+  no: true,
+  relative_config_home: true,
+  settings_moved: true,
+  inside_tree: true,
+  shared_directory: true,
+};
+var GATE_DECISIONS = {
+  pass: true,
+  pass_cached: true,
+  pass_exempt: true,
+  blocked: true,
+  refused: true,
+};
+var GATE_DECISION_REASONS = {
+  ok: true,
+  none_configured: true,
+  refused_credential: true,
+  refused_not_entitled: true,
+  refused_other: true,
+  blocked_by_intermediary: true,
+  unavailable_timeout: true,
+  unavailable_connect: true,
+  unavailable_server: true,
+  unavailable_rate_limited: true,
+  unavailable_credential_refresh: true,
+  unavailable_pending: true,
+  unavailable_settings_unusable: true,
+  client_no_credentials: true,
+  client_error: true,
+  not_attempted: true,
+  not_required: true,
+};
+var GATE_RESOURCES = {
+  policy: true,
+  settings: true,
+};
+var GATE_SURFACES = {
+  login: true,
+  startup: true,
+  noninteractive: true,
+};
+var GATE_SHADOW_TRIGGERS = {
+  both_resolved: true,
+  first_prompt: true,
+  exit: true,
+  settled: true,
+};
+var GATE_FINAL_OUTCOMES = {
+  passed: true,
+  quit: true,
+  sign_in: true,
+  exit: true,
+  failed: true,
+};
+var GATE_EXCLUSION_REASONS = {
+  flag_off: true,
+  rollout_percent: true,
+  provider: true,
+  base_url: true,
+  auth_command: true,
+  credential_shape: true,
+  tier_unknown: true,
+  tier_not_in_plans: true,
+  host_token: true,
+};
+var CREDENTIAL_SHAPES = {
+  stored_login: true,
+  untiered_login: true,
+  api_key: true,
+  env_token_only: true,
+  key_helper_only: true,
+  none: true,
+};
+var FLAG_SOURCES = {
+  override: true,
+  payload: true,
+  disk: true,
+  disabled: true,
+  fallback: true,
+};
+var SUBSCRIPTION_TIERS = {
+  max: true,
+  pro: true,
+  team: true,
+  enterprise: true,
+};
+var isTelemetryCode = oneOfValidator(...ALL_TELEMETRY_CODES);
+var FEATURE_CODE_FIELDS = {
+  feature_name: isTelemetryCode,
+};
+var STORED_COPY_FIELDS = {
+  stored_copy: oneOfValidator(...SIGNATURE_TRUST_STATES),
+  stored_copy_gate: oneOfValidator(...ENFORCEMENT_MODES),
+};
+var EVENT_FIELD_VALIDATORS = {
+  tengu_retention_sweep: {
+    phase: oneOfValidator("start", "complete"),
+    skipped: isBoolean,
+    skipReason: oneOfValidator(...Object.keys(SWEEP_SKIP_REASONS)),
+    usedDefault: isBoolean,
+    periodDays: nonNegativeSafeIntValidator,
+    transcriptsDeleted: nonNegativeInt32Validator,
+    transcriptsExemptedDesktop: nonNegativeInt32Validator,
+    sessionFilesDeleted: nonNegativeInt32Validator,
+    artifactsDeleted: nonNegativeInt32Validator,
+    filesRetainedFresh: nonNegativeInt32Validator,
+    filesPastCutoff: nonNegativeInt32Validator,
+    historyEntriesPruned: nonNegativeInt32Validator,
+    errors: nonNegativeInt32Validator,
+    seedAdminRemoved: nonNegativeInt32Validator,
+    seedAdminErrors: nonNegativeInt32Validator,
+    seedAdminHeld: nonNegativeInt32Validator,
+    seedAdminRefused: oneOfValidator(...Object.keys(EXEMPTED_SETTINGS_REASONS)),
+    hooksUnasked: oneOfValidator(...Object.keys(UNANSWERED_HOOK_STATES)),
   },
-  Vl =
-    (...e) =>
-    (n) =>
-      e.some((r) => r(n)),
-  xz = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
-  Oz = /^[A-Za-z][A-Za-z0-9_]{0,127}$/,
-  Pz = /^(session|cse)(_(local|staging))?_01[1-9A-HJ-NP-Za-km-z]{22}$/,
-  jR = (e) => typeof e === "string" && Pz.test(e) && decodeTaggedUuid(e) !== void 0,
-  Mz = /^[0-9a-f]{64}$/,
-  dx = /^\d{1,4}\.\d{1,4}\.\d{1,6}(-(dev|alpha|beta|rc)(\.\d{1,10}){0,2})?(\+[0-9a-f]{1,12})?$/,
-  VR = /^\d{1,4}\.\d{1,4}\.\d{1,6}(-(dev|alpha|beta|rc))?$/,
-  fr = sn(xz),
-  Iz = [
-    "cli",
-    "remote",
-    "github-action",
-    "sdk-typescript",
-    "sdk-python",
-    "sdk-cli",
-    "claude-vscode",
-    "local-agent",
-    "claude-desktop",
-  ],
-  cx = [
-    "darwin",
-    "linux",
-    "win32",
-    "freebsd",
-    "openbsd",
-    "netbsd",
-    "android",
-    "aix",
-    "sunos",
-    "cygwin",
-    "haiku",
-    "macos",
-    "windows",
-    "wsl",
-    "unknown",
-  ],
-  fx = [
-    "arm",
-    "arm64",
-    "ia32",
-    "loong64",
-    "mips",
-    "mipsel",
-    "ppc",
-    "ppc64",
-    "riscv64",
-    "s390",
-    "s390x",
-    "x64",
-  ],
-  px = we(...Object.keys(ENTRYPOINT_KINDS), "other"),
-  mx = (e) => typeof e === "string" && (e === "nonconforming" || isKnownModelName(e)),
-  nt = {
-    event_name: sn(Oz),
-    event_id: fr,
-    client_timestamp: lx,
-    session_id: Vl(fr, jR),
-    parent_session_id: Vl(fr, jR),
-    device_id: sn(Mz),
-    user_type: we("ant", "external"),
-    client_type: we(...Iz),
-    agent_type: we("teammate", "subagent", "standalone"),
-    is_interactive: isBoolean,
-    entrypoint: px,
-    model: mx,
+  tengu_feature_ok: FEATURE_CODE_FIELDS,
+  tengu_feature_bad: FEATURE_CODE_FIELDS,
+  tengu_feature_sad: FEATURE_CODE_FIELDS,
+  tengu_org_policy_denied: {
+    org_policy_key: regexValidator(ALLOW_CODE_RE),
+    org_policy_deny_kind: oneOfValidator(...ORG_DENIAL_REASONS),
+    org_policy_taint_named: isBoolean,
+    surface: oneOfValidator(...AUTH_SURFACES),
   },
-  fs = { version: sn(dx), platform: we(...cx), arch: we(...fx) },
-  cs = { organization_uuid: fr, account_uuid: fr },
-  keys_3 = Object.keys(nt),
-  Dz = ["sample_rate"],
-  Pt = (e) => typeof e === "number" && Number.isInteger(e) && e >= 0 && e < 2147483648,
-  as = (e) => typeof e === "number" && Number.isSafeInteger(e) && e >= 0,
-  Br = (e) => typeof e === "number" && Number.isFinite(e) && e >= 0,
-  Nz = (e) => typeof e === "number" && Number.isInteger(e) && e >= 100 && e <= 599,
-  Fz = {
-    diskless: !0,
-    user_source_disabled: !0,
-    settings_unknowable: !0,
-    settings_invalid_key_set: !0,
-    remote_settings_unknowable: !0,
+  tengu_policy_limits_fetch: {
+    success: isBoolean,
+    is_load: isBoolean,
+    restrictions_denied_count: nonNegativeInt32Validator,
+    compliance_taint_count: nonNegativeInt32Validator,
+    outcome_reason: oneOfValidator(...SETTINGS_FETCH_OUTCOMES),
+    ...STORED_COPY_FIELDS,
   },
-  Lz = { load_failed: !0, load_owed: !0, load_running: !0, unanswered: !0 },
-  Uz = { no: !0, relative_config_home: !0, settings_moved: !0, inside_tree: !0, shared_directory: !0 },
-  YR = { pass: !0, pass_cached: !0, pass_exempt: !0, blocked: !0, refused: !0 },
-  Lo = {
-    ok: !0,
-    none_configured: !0,
-    refused_credential: !0,
-    refused_not_entitled: !0,
-    refused_other: !0,
-    blocked_by_intermediary: !0,
-    unavailable_timeout: !0,
-    unavailable_connect: !0,
-    unavailable_server: !0,
-    unavailable_rate_limited: !0,
-    unavailable_credential_refresh: !0,
-    unavailable_pending: !0,
-    unavailable_settings_unusable: !0,
-    client_no_credentials: !0,
-    client_error: !0,
-    not_attempted: !0,
-    not_required: !0,
+  tengu_remote_settings_fetch: {
+    success: isBoolean,
+    is_load: isBoolean,
+    outcome_reason: oneOfValidator(...SETTINGS_FETCH_OUTCOMES),
+    ...STORED_COPY_FIELDS,
   },
-  qR = { policy: !0, settings: !0 },
-  XR = { login: !0, startup: !0, noninteractive: !0 },
-  Hz = { both_resolved: !0, first_prompt: !0, exit: !0, settled: !0 },
-  Bz = { passed: !0, quit: !0, sign_in: !0, exit: !0, failed: !0 },
-  JR = {
-    flag_off: !0,
-    rollout_percent: !0,
-    provider: !0,
-    base_url: !0,
-    auth_command: !0,
-    credential_shape: !0,
-    tier_unknown: !0,
-    tier_not_in_plans: !0,
-    host_token: !0,
+  tengu_signed_cache_shadow: {
+    cache: oneOfValidator(...SIGNED_DOCUMENT_KINDS),
+    result: oneOfValidator(...SIGNATURE_VERIFY_RESULTS),
   },
-  Kz = {
-    stored_login: !0,
-    untiered_login: !0,
-    api_key: !0,
-    env_token_only: !0,
-    key_helper_only: !0,
-    none: !0,
+  tengu_frontmatter_grant_withheld: {
+    origin: oneOfValidator(...keys),
+    tool_count: nonNegativeInt32Validator,
+    reason: oneOfValidator(...keys_2),
   },
-  QR = { override: !0, payload: !0, disk: !0, disabled: !0, fallback: !0 },
-  ZR = { max: !0, pro: !0, team: !0, enterprise: !0 },
-  Gz = we(...ALL_TELEMETRY_CODES),
-  cg = { feature_name: Gz },
-  ex = { stored_copy: we(...KR), stored_copy_gate: we(...GR) },
-  tx = {
-    tengu_retention_sweep: {
-      phase: we("start", "complete"),
-      skipped: isBoolean,
-      skipReason: we(...Object.keys(Fz)),
-      usedDefault: isBoolean,
-      periodDays: as,
-      transcriptsDeleted: Pt,
-      transcriptsExemptedDesktop: Pt,
-      sessionFilesDeleted: Pt,
-      artifactsDeleted: Pt,
-      filesRetainedFresh: Pt,
-      filesPastCutoff: Pt,
-      historyEntriesPruned: Pt,
-      errors: Pt,
-      seedAdminRemoved: Pt,
-      seedAdminErrors: Pt,
-      seedAdminHeld: Pt,
-      seedAdminRefused: we(...Object.keys(Uz)),
-      hooksUnasked: we(...Object.keys(Lz)),
-    },
-    tengu_feature_ok: cg,
-    tengu_feature_bad: cg,
-    tengu_feature_sad: cg,
-    tengu_org_policy_denied: {
-      org_policy_key: sn(ALLOW_CODE_RE),
-      org_policy_deny_kind: we(...ORG_DENIAL_REASONS),
-      org_policy_taint_named: isBoolean,
-      surface: we(...AUTH_SURFACES),
-    },
-    tengu_policy_limits_fetch: {
-      success: isBoolean,
-      is_load: isBoolean,
-      restrictions_denied_count: Pt,
-      compliance_taint_count: Pt,
-      outcome_reason: we(...SETTINGS_FETCH_OUTCOMES),
-      ...ex,
-    },
-    tengu_remote_settings_fetch: {
-      success: isBoolean,
-      is_load: isBoolean,
-      outcome_reason: we(...SETTINGS_FETCH_OUTCOMES),
-      ...ex,
-    },
-    tengu_signed_cache_shadow: { cache: we(...SIGNED_DOCUMENT_KINDS), result: we(...BR) },
-    tengu_frontmatter_grant_withheld: { origin: we(...keys), tool_count: Pt, reason: we(...keys_2) },
-    tengu_org_config_gate_shadow: {
-      decision: we(...Object.keys(YR)),
-      decision_reason: we(...Object.keys(Lo)),
-      decision_resource: we(...Object.keys(qR)),
-      surface: we(...Object.keys(XR)),
-      blocked_ms: Pt,
-      candidate_if_armed: isBoolean,
-      exclusion_if_armed: we(...Object.keys(JR)),
-      candidate_now: isBoolean,
-      exclusion_now: we(...Object.keys(JR)),
-      flag_enabled: isBoolean,
-      flag_source: we(...Object.keys(QR)),
-      flag_percent: Br,
-      grace_ttl_hours: Br,
-      tier: we(...Object.keys(ZR)),
-      credential_shape: we(...Object.keys(Kz)),
-      policy_reason: we(...Object.keys(Lo)),
-      policy_has_cache: isBoolean,
-      policy_cache_age_ms: as,
-      settings_reason: we(...Object.keys(Lo)),
-      settings_has_cache: isBoolean,
-      settings_cache_age_ms: as,
-      shadow_trigger: we(...Object.keys(Hz)),
-    },
-    tengu_org_config_gate: {
-      decision: we(...Object.keys(YR)),
-      decision_reason: we(...Object.keys(Lo)),
-      decision_resource: we(...Object.keys(qR)),
-      surface: we(...Object.keys(XR)),
-      blocked_ms: Br,
-      attempt: Pt,
-      decided_without_waiting: isBoolean,
-      final_outcome: we(...Object.keys(Bz)),
-      recovered_after_ms: Br,
-      tier: we(...Object.keys(ZR)),
-      flag_source: we(...Object.keys(QR)),
-      flag_percent: Br,
-      grace_ttl_hours: Br,
-      budget_ms: Br,
-      policy_reason: we(...Object.keys(Lo)),
-      policy_has_cache: isBoolean,
-      policy_cache_age_ms: as,
-      settings_reason: we(...Object.keys(Lo)),
-      settings_has_cache: isBoolean,
-      settings_cache_age_ms: as,
-      http_status: Nz,
-    },
+  tengu_org_config_gate_shadow: {
+    decision: oneOfValidator(...Object.keys(GATE_DECISIONS)),
+    decision_reason: oneOfValidator(...Object.keys(GATE_DECISION_REASONS)),
+    decision_resource: oneOfValidator(...Object.keys(GATE_RESOURCES)),
+    surface: oneOfValidator(...Object.keys(GATE_SURFACES)),
+    blocked_ms: nonNegativeInt32Validator,
+    candidate_if_armed: isBoolean,
+    exclusion_if_armed: oneOfValidator(...Object.keys(GATE_EXCLUSION_REASONS)),
+    candidate_now: isBoolean,
+    exclusion_now: oneOfValidator(...Object.keys(GATE_EXCLUSION_REASONS)),
+    flag_enabled: isBoolean,
+    flag_source: oneOfValidator(...Object.keys(FLAG_SOURCES)),
+    flag_percent: nonNegativeFiniteValidator,
+    grace_ttl_hours: nonNegativeFiniteValidator,
+    tier: oneOfValidator(...Object.keys(SUBSCRIPTION_TIERS)),
+    credential_shape: oneOfValidator(...Object.keys(CREDENTIAL_SHAPES)),
+    policy_reason: oneOfValidator(...Object.keys(GATE_DECISION_REASONS)),
+    policy_has_cache: isBoolean,
+    policy_cache_age_ms: nonNegativeSafeIntValidator,
+    settings_reason: oneOfValidator(...Object.keys(GATE_DECISION_REASONS)),
+    settings_has_cache: isBoolean,
+    settings_cache_age_ms: nonNegativeSafeIntValidator,
+    shadow_trigger: oneOfValidator(...Object.keys(GATE_SHADOW_TRIGGERS)),
   },
-  HIPAA_REDACTED = "hipaa_redacted";
+  tengu_org_config_gate: {
+    decision: oneOfValidator(...Object.keys(GATE_DECISIONS)),
+    decision_reason: oneOfValidator(...Object.keys(GATE_DECISION_REASONS)),
+    decision_resource: oneOfValidator(...Object.keys(GATE_RESOURCES)),
+    surface: oneOfValidator(...Object.keys(GATE_SURFACES)),
+    blocked_ms: nonNegativeFiniteValidator,
+    attempt: nonNegativeInt32Validator,
+    decided_without_waiting: isBoolean,
+    final_outcome: oneOfValidator(...Object.keys(GATE_FINAL_OUTCOMES)),
+    recovered_after_ms: nonNegativeFiniteValidator,
+    tier: oneOfValidator(...Object.keys(SUBSCRIPTION_TIERS)),
+    flag_source: oneOfValidator(...Object.keys(FLAG_SOURCES)),
+    flag_percent: nonNegativeFiniteValidator,
+    grace_ttl_hours: nonNegativeFiniteValidator,
+    budget_ms: nonNegativeFiniteValidator,
+    policy_reason: oneOfValidator(...Object.keys(GATE_DECISION_REASONS)),
+    policy_has_cache: isBoolean,
+    policy_cache_age_ms: nonNegativeSafeIntValidator,
+    settings_reason: oneOfValidator(...Object.keys(GATE_DECISION_REASONS)),
+    settings_has_cache: isBoolean,
+    settings_cache_age_ms: nonNegativeSafeIntValidator,
+    http_status: httpStatusValidator,
+  },
+};
+var HIPAA_REDACTED = "hipaa_redacted";
+//@ chunk-aepeg2w5.js:745386-745712 placement
 /**
  * 按校验器表过滤对象字段（未知字符串替换为占位）。
  */
-//@ chunk-aepeg2w5.js:745386-745712 placement
 function sanitizeFields(e, n) {
   let r = {};
   if (!e) return r;
-  for (let s of Object.keys(e)) {
-    let h = e[s];
-    if (h === void 0 || h === "" || (Array.isArray(h) && h.length === 0)) continue;
-    let y = Object.hasOwn(n, s) ? n[s] : void 0;
-    if (y !== void 0) {
-      if (y(h)) r[s] = h;
-    } else if (typeof h === "string") r[s] = HIPAA_REDACTED;
-    else if (Array.isArray(h) && h.every((S) => typeof S === "string")) r[s] = [HIPAA_REDACTED];
+  for (let key of Object.keys(e)) {
+    let h = e[key];
+    if (h === undefined || h === "" || (Array.isArray(h) && h.length === 0)) continue;
+    let y = Object.hasOwn(n, key) ? n[key] : undefined;
+    if (y !== undefined) {
+      if (y(h)) r[key] = h;
+    } else if (typeof h === "string") r[key] = HIPAA_REDACTED;
+    else if (Array.isArray(h) && h.every((S) => typeof S === "string")) r[key] = [HIPAA_REDACTED];
   }
   return r;
 }
+//@ chunk-aepeg2w5.js:745712-745825 placement
 /**
  * 按校验器表清洗事件元数据（顶层、env、auth）。
  */
-//@ chunk-aepeg2w5.js:745712-745825 placement
 function sanitizeEventMetadata(e) {
   return {
-    ...sanitizeFields(e, nt),
-    env: sanitizeFields(e.env, fs),
-    auth: sanitizeFields(e.auth, cs),
+    ...sanitizeFields(e, TOP_LEVEL_FIELD_VALIDATORS),
+    env: sanitizeFields(e.env, ENV_FIELD_VALIDATORS),
+    auth: sanitizeFields(e.auth, AUTH_FIELD_VALIDATORS),
     additional_metadata: e.additional_metadata,
   };
 }
-
 export {
   sanitizeEventMetadata,
-  fr,
-  sn,
-  lx,
-  we,
+  isUuid,
+  regexValidator,
+  isDateValidator,
+  oneOfValidator,
   sanitizeFields,
-  Dz,
-  tx,
-  Vl,
+  SAMPLE_RATE_FIELDS,
+  EVENT_FIELD_VALIDATORS,
+  anyOfValidators,
   isBoolean,
-  nt,
-  fs,
-  cs,
-  VR,
-  dx,
-  cx,
-  fx,
-  px,
-  mx,
+  TOP_LEVEL_FIELD_VALIDATORS,
+  ENV_FIELD_VALIDATORS,
+  AUTH_FIELD_VALIDATORS,
+  SEMVER_PLAIN_RE,
+  SEMVER_WITH_PRERELEASE_RE,
+  PLATFORM_NAMES,
+  ARCH_NAMES,
+  ENTRYPOINT_VALIDATOR,
+  isKnownModelOrNonconforming,
   HIPAA_REDACTED,
 };

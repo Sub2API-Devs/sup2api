@@ -10,42 +10,41 @@
  */
 import { gatewayLog } from "../../gateway/gatewayBanner.js";
 
+//@ chunk-1ny7cxrt.js:1509074-1514980 placement
 /**
  * 获取 Postgres advisory 锁后执行网关存储迁移。
  */
-//@ chunk-1ny7cxrt.js:1509074-1514980 placement
 async function runGatewayMigrations(e) {
-  let reserve = await e.reserve();
+  let t = await e.reserve();
   try {
-    (gatewayLog(
+    gatewayLog(
       "info",
       "waiting for migration lock (another replica may be migrating; check pg_locks for key 6775156 if this persists)",
-    ),
-      await reserve`SELECT pg_advisory_lock(6775156)`);
+    );
+    await t`SELECT pg_advisory_lock(6775156)`;
     try {
-      await reserve`CREATE TABLE IF NOT EXISTS _migrations (
+      await t`CREATE TABLE IF NOT EXISTS _migrations (
         version    INTEGER PRIMARY KEY,
         applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
       )`;
-      let n = await reserve`SELECT coalesce(max(version), 0) AS v FROM _migrations`,
-        o = Number(n[0].v);
-      while (!0) {
+      let n = await t`SELECT coalesce(max(version), 0) AS v FROM _migrations`;
+      let o = Number(n[0].v);
+      while (true) {
         o += 1;
-        let r = !1;
-        if (
-          (await reserve.begin(async (s) => {
-            switch (o) {
-              case 1:
-                (await s`CREATE TABLE kv (
+        let r = false;
+        await t.begin(async (s) => {
+          switch (o) {
+            case 1:
+              await s`CREATE TABLE kv (
                 key        TEXT PRIMARY KEY,
                 value      TEXT NOT NULL,
                 expires_at TIMESTAMPTZ
-              )`,
-                  await s`CREATE INDEX kv_expires_at ON kv (expires_at)
-                       WHERE expires_at IS NOT NULL`);
-                break;
-              case 2:
-                (await s`CREATE TABLE spend_limits (
+              )`;
+              await s`CREATE INDEX kv_expires_at ON kv (expires_at)
+                       WHERE expires_at IS NOT NULL`;
+              break;
+            case 2:
+              await s`CREATE TABLE spend_limits (
                 id          TEXT PRIMARY KEY,
                 scope_type  TEXT NOT NULL
                             CHECK (scope_type IN ('user', 'rbac_group', 'organization')),
@@ -58,10 +57,10 @@ async function runGatewayMigrations(e) {
                 created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
                 updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
                 created_by  TEXT
-              )`,
-                  await s`CREATE UNIQUE INDEX spend_limits_scope
-                       ON spend_limits (scope_type, scope_id, period)`,
-                  await s`
+              )`;
+              await s`CREATE UNIQUE INDEX spend_limits_scope
+                       ON spend_limits (scope_type, scope_id, period)`;
+              await s`
                 CREATE OR REPLACE FUNCTION caps_by_period(p_principal text, p_groups text[], p_mode text)
                 RETURNS TABLE(period text, amount bigint, scope_type text, scope_id text, id text)
                 LANGUAGE sql STABLE AS $$
@@ -82,10 +81,10 @@ async function runGatewayMigrations(e) {
                     CASE WHEN scope_type = 'rbac_group'
                          THEN CASE WHEN p_mode = 'min' THEN amount ELSE -amount END END,
                     id
-                $$`);
-                break;
-              case 3:
-                (await s`CREATE TABLE admin_audit (
+                $$`;
+              break;
+            case 3:
+              await s`CREATE TABLE admin_audit (
                 id      BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
                 at      TIMESTAMPTZ NOT NULL DEFAULT now(),
                 actor   TEXT NOT NULL,
@@ -94,74 +93,72 @@ async function runGatewayMigrations(e) {
                 before  JSONB,
                 after   JSONB,
                 reason  TEXT
-              )`,
-                  await s`CREATE INDEX admin_audit_at ON admin_audit (at)`);
-                break;
-              case 4:
-                (await s`CREATE TABLE spend (
+              )`;
+              await s`CREATE INDEX admin_audit_at ON admin_audit (at)`;
+              break;
+            case 4:
+              await s`CREATE TABLE spend (
                 principal  TEXT NOT NULL,
                 period     TEXT NOT NULL,  -- bucket key: YYYY-MM | YYYY-MM-DD | YYYY-Www
                 cents      DOUBLE PRECISION NOT NULL DEFAULT 0,
                 updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
                 PRIMARY KEY (principal, period)
-              )`,
-                  await s`CREATE INDEX spend_updated_at ON spend (updated_at)`);
-                break;
-              case 5:
-                (await s`CREATE TABLE principal_emails (
+              )`;
+              await s`CREATE INDEX spend_updated_at ON spend (updated_at)`;
+              break;
+            case 5:
+              await s`CREATE TABLE principal_emails (
                 principal  TEXT PRIMARY KEY,
                 email      TEXT,
                 name       TEXT,
                 groups     JSONB,
                 updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-              )`,
-                  await s`CREATE INDEX principal_emails_updated_at ON principal_emails (updated_at)`);
-                break;
-              case 6:
-                await s`CREATE INDEX spend_period_cents
+              )`;
+              await s`CREATE INDEX principal_emails_updated_at ON principal_emails (updated_at)`;
+              break;
+            case 6:
+              await s`CREATE INDEX spend_period_cents
                        ON spend (period, cents DESC, principal)`;
-                break;
-              case 7:
-                (await s`SET LOCAL lock_timeout = '1s'`,
-                  await s`ALTER TABLE spend_limits
+              break;
+            case 7:
+              await s`SET LOCAL lock_timeout = '1s'`;
+              await s`ALTER TABLE spend_limits
                 ADD COLUMN pooled_limit_enabled BOOLEAN NOT NULL DEFAULT false,
                 ADD COLUMN pooled_monthly_credit_limit BIGINT,
                 ADD CONSTRAINT spend_limits_pooled_requires_limit
                   CHECK (NOT pooled_limit_enabled OR pooled_monthly_credit_limit IS NOT NULL),
                 ADD CONSTRAINT spend_limits_pooled_amount_requires_group
                   CHECK (pooled_monthly_credit_limit IS NULL
-                         OR (scope_type = 'rbac_group' AND period = 'monthly'))`.catch((a) => {
-                    if (a instanceof Error && "errno" in a && a.errno === "55P03")
-                      gatewayLog(
-                        "error",
-                        "migration 7 could not lock the spend_limits table within 1s: another session holds a lock on it (a backup, a long query, or a session idle in a transaction; see pg_locks). Nothing was changed. Start the gateway again once the lock is gone",
-                      );
-                    throw a;
-                  }),
-                  await s`CREATE TABLE pooled_spend (
+                         OR (scope_type = 'rbac_group' AND period = 'monthly'))`.catch((error) => {
+                if (error instanceof Error && "errno" in error && error.errno === "55P03")
+                  gatewayLog(
+                    "error",
+                    "migration 7 could not lock the spend_limits table within 1s: another session holds a lock on it (a backup, a long query, or a session idle in a transaction; see pg_locks). Nothing was changed. Start the gateway again once the lock is gone",
+                  );
+                throw error;
+              });
+              await s`CREATE TABLE pooled_spend (
                 rbac_group_id TEXT NOT NULL,
                 period        TEXT NOT NULL,  -- YYYY-MM
                 cents         DOUBLE PRECISION NOT NULL DEFAULT 0,
                 updated_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
                 PRIMARY KEY (rbac_group_id, period)
-              )`);
-                break;
-              default:
-                return;
-            }
-            (await s`INSERT INTO _migrations (version) VALUES (${o})`, (r = !0));
-          }),
-          !r)
-        )
-          break;
+              )`;
+              break;
+            default:
+              return;
+          }
+          await s`INSERT INTO _migrations (version) VALUES (${o})`;
+          r = true;
+        });
+        if (!r) break;
         gatewayLog("info", `migration ${o} applied`);
       }
     } finally {
-      await reserve`SELECT pg_advisory_unlock(6775156)`;
+      await t`SELECT pg_advisory_unlock(6775156)`;
     }
   } finally {
-    reserve.release();
+    t.release();
   }
 }
-
 export { runGatewayMigrations };

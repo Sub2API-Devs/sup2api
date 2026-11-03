@@ -10,42 +10,45 @@
  */
 import { WireSafeControlError } from "../../utils/errors.js";
 
+//@ chunk-6g64aje3.js:227-470 placement
 /**
  * repo root 错误码对应的遥测语气（路径/权限类为 sad，工作区移动与意外错误为 bad），以及"list denied: "前缀。
  */
-//@ chunk-6g64aje3.js:227-470 placement
 var REPO_ROOT_ERROR_TONES = {
-    invalid_path: "sad",
-    unsupported_name: "sad",
-    symlink_in_path: "sad",
-    path_not_canonical: "sad",
-    read_rule: "sad",
-    not_found: "sad",
-    not_a_directory: "sad",
-    os_permission_denied: "sad",
-    workspace_moved: "bad",
-    unexpected_error: "bad",
-  },
-  t = "list denied: ";
+  invalid_path: "sad",
+  unsupported_name: "sad",
+  symlink_in_path: "sad",
+  path_not_canonical: "sad",
+  read_rule: "sad",
+  not_found: "sad",
+  not_a_directory: "sad",
+  os_permission_denied: "sad",
+  workspace_moved: "bad",
+  unexpected_error: "bad",
+};
+var LIST_DENIED_PREFIX = "list denied: ";
+//@ chunk-6g64aje3.js:470-517 placement
 /**
  * 构造带错误码的 repo root 错误。
  */
-//@ chunk-6g64aje3.js:470-517 placement
 function repoRootError(e, n) {
-  return new WireSafeControlError(`${t}${e}`, n, e);
+  return new WireSafeControlError(`${LIST_DENIED_PREFIX}${e}`, n, e);
 }
+//@ chunk-6g64aje3.js:517-638 placement
 /**
  * 取 repo root 错误码。
  */
-//@ chunk-6g64aje3.js:517-638 placement
-function repoRootErrorClass(e) {
-  if (!(e instanceof WireSafeControlError)) return;
-  let errorClass = e.errorClass;
-  return errorClass !== void 0 && o(errorClass) && e.message === `${t}${errorClass}` ? errorClass : void 0;
+function repoRootErrorClass(error) {
+  if (!(error instanceof WireSafeControlError)) return;
+  let errorClass = error.errorClass;
+  return errorClass !== undefined &&
+    isRepoRootErrorCode(errorClass) &&
+    error.message === `${LIST_DENIED_PREFIX}${errorClass}`
+    ? errorClass
+    : undefined;
 }
 //@ chunk-6g64aje3.js:638-680 placement
-function o(e) {
-  return Object.hasOwn(REPO_ROOT_ERROR_TONES, e);
+function isRepoRootErrorCode(errorClass) {
+  return Object.hasOwn(REPO_ROOT_ERROR_TONES, errorClass);
 }
-
 export { repoRootError, repoRootErrorClass, REPO_ROOT_ERROR_TONES };

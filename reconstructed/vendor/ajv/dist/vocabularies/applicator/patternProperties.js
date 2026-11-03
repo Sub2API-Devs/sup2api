@@ -6,66 +6,79 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../runtime/bun-runtime.js";
-import { Q } from "../code.js";
-import { uh } from "../../compile/codegen/index.js";
-import { ew } from "../../compile/util.js";
+import { require_code_2 } from "../code.js";
+import { require_codegen_2 } from "../../compile/codegen/index.js";
+import { require_util_2 } from "../../compile/util.js";
 
 //@ chunk-s82q9s4x.js:101484-102646 cjs-fingerprint
-var Ri = x(function (xi) {
-  Object.defineProperty(xi, "__esModule", { value: !0 });
-  var Lt = Q(),
-    je = uh(),
-    Ht = ew(),
-    Gt = ew(),
-    Pp = {
-      keyword: "patternProperties",
-      type: "object",
-      schemaType: "object",
-      code(e) {
-        let { gen: gen, schema: schema, data: s, parentSchema: parentSchema, it: it } = e,
-          { opts: opts } = it,
-          allSchemaProperties = Lt.allSchemaProperties(schema),
-          filtered = allSchemaProperties.filter((p) => Ht.alwaysValidSchema(it, schema[p]));
-        if (
-          allSchemaProperties.length === 0 ||
-          (filtered.length === allSchemaProperties.length && (!it.opts.unevaluated || it.props === !0))
-        )
-          return;
-        let u = opts.strictSchema && !opts.allowMatchingProperties && parentSchema.properties,
-          l = gen.name("valid");
-        if (it.props !== !0 && !(it.props instanceof je.Name))
-          it.props = Gt.evaluatedPropsToName(gen, it.props);
-        let { props: props } = it;
-        b();
-        function b() {
-          for (let p of allSchemaProperties) {
-            if (u) _(p);
-            if (it.allErrors) h(p);
-            else (gen.var(l, !0), h(p), gen.if(l));
+var require_patternProperties = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  var code_1 = require_code_2();
+  var codegen_1 = require_codegen_2();
+  var util_1 = require_util_2();
+  var util_2 = require_util_2();
+  var def = {
+    keyword: "patternProperties",
+    type: "object",
+    schemaType: "object",
+    code(cxt) {
+      let { gen, schema, data, parentSchema, it } = cxt;
+      let { opts } = it;
+      let patterns = code_1.allSchemaProperties(schema);
+      let alwaysValidPatterns = patterns.filter((pattern) => util_1.alwaysValidSchema(it, schema[pattern]));
+      if (
+        patterns.length === 0 ||
+        (alwaysValidPatterns.length === patterns.length && (!it.opts.unevaluated || it.props === true))
+      )
+        return;
+      let checkProperties = opts.strictSchema && !opts.allowMatchingProperties && parentSchema.properties;
+      let valid = gen.name("valid");
+      if (it.props !== true && !(it.props instanceof codegen_1.Name))
+        it.props = util_2.evaluatedPropsToName(gen, it.props);
+      let { props } = it;
+      validatePatternProperties();
+      function validatePatternProperties() {
+        for (let pat of patterns) {
+          if (checkProperties) checkMatchingProperties(pat);
+          if (it.allErrors) validateProperties(pat);
+          else {
+            gen.var(valid, true);
+            validateProperties(pat);
+            gen.if(valid);
           }
         }
-        function _(p) {
-          for (let key in u)
-            if (new RegExp(p).test(key))
-              Ht.checkStrictMode(it, `property ${key} matches pattern ${p} (use allowMatchingProperties)`);
-        }
-        function h(p) {
-          gen.forIn("key", s, (y) => {
-            gen.if(je._`${Lt.usePattern(e, p)}.test(${y})`, () => {
-              let included = filtered.includes(p);
-              if (!included)
-                e.subschema(
-                  { keyword: "patternProperties", schemaProp: p, dataProp: y, dataPropType: Gt.Type.Str },
-                  l,
-                );
-              if (it.opts.unevaluated && props !== !0) gen.assign(je._`${props}[${y}]`, !0);
-              else if (!included && !it.allErrors) gen.if(je.not(l), () => gen.break());
-            });
+      }
+      function checkMatchingProperties(pat) {
+        for (let prop in checkProperties)
+          if (new RegExp(pat).test(prop))
+            util_1.checkStrictMode(
+              it,
+              `property ${prop} matches pattern ${pat} (use allowMatchingProperties)`,
+            );
+      }
+      function validateProperties(pat) {
+        gen.forIn("key", data, (key) => {
+          gen.if(codegen_1._`${code_1.usePattern(cxt, pat)}.test(${key})`, () => {
+            let alwaysValid = alwaysValidPatterns.includes(pat);
+            if (!alwaysValid)
+              cxt.subschema(
+                {
+                  keyword: "patternProperties",
+                  schemaProp: pat,
+                  dataProp: key,
+                  dataPropType: util_2.Type.Str,
+                },
+                valid,
+              );
+            if (it.opts.unevaluated && props !== true) gen.assign(codegen_1._`${props}[${key}]`, true);
+            else if (!alwaysValid && !it.allErrors) gen.if(codegen_1.not(valid), () => gen.break());
           });
-        }
-      },
-    };
-  xi.default = Pp;
+        });
+      }
+    },
+  };
+  cjsExports.default = def;
 });
-
-export { Ri };
+export { require_patternProperties };

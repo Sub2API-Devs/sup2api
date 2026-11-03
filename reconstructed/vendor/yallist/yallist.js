@@ -6,194 +6,255 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../runtime/bun-runtime.js";
-import { BO } from "./iterator.js";
+import { require_iterator } from "./iterator.js";
 
 //@ chunk-1ny7cxrt.js:10965-15716 cjs-fingerprint
-var KO = x(function (Fve, HO) {
-  HO.exports = Nt;
-  Nt.Node = Fa;
-  Nt.create = Nt;
-  function Nt(e) {
+var require_yallist = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = Yallist;
+  Yallist.Node = Node;
+  Yallist.create = Yallist;
+  function Yallist(list) {
     var t = this;
-    if (!(t instanceof Nt)) t = new Nt();
-    if (((t.tail = null), (t.head = null), (t.length = 0), e && typeof e.forEach === "function"))
-      e.forEach(function (r) {
-        t.push(r);
+    if (!(t instanceof Yallist)) t = new Yallist();
+    t.tail = null;
+    t.head = null;
+    t.length = 0;
+    if (list && typeof list.forEach === "function")
+      list.forEach(function (item) {
+        t.push(item);
       });
-    else if (arguments.length > 0) for (var n = 0, o = arguments.length; n < o; n++) t.push(arguments[n]);
+    else if (arguments.length > 0) for (var i = 0, l = arguments.length; i < l; i++) t.push(arguments[i]);
     return t;
   }
-  Nt.prototype.removeNode = function (e) {
-    if (e.list !== this) throw Error("removing node which does not belong to this list");
-    var { next: t, prev: prev } = e;
-    if (t) t.prev = prev;
-    if (prev) prev.next = t;
-    if (e === this.head) this.head = t;
-    if (e === this.tail) this.tail = prev;
-    return (e.list.length--, (e.next = null), (e.prev = null), (e.list = null), t);
+  Yallist.prototype.removeNode = function (node) {
+    if (node.list !== this) throw Error("removing node which does not belong to this list");
+    var { next, prev } = node;
+    if (next) next.prev = prev;
+    if (prev) prev.next = next;
+    if (node === this.head) this.head = next;
+    if (node === this.tail) this.tail = prev;
+    node.list.length--;
+    node.next = null;
+    node.prev = null;
+    node.list = null;
+    return next;
   };
-  Nt.prototype.unshiftNode = function (e) {
-    if (e === this.head) return;
-    if (e.list) e.list.removeNode(e);
+  Yallist.prototype.unshiftNode = function (node) {
+    if (node === this.head) return;
+    if (node.list) node.list.removeNode(node);
     var head = this.head;
-    if (((e.list = this), (e.next = head), head)) head.prev = e;
-    if (((this.head = e), !this.tail)) this.tail = e;
+    node.list = this;
+    node.next = head;
+    if (head) head.prev = node;
+    this.head = node;
+    if (!this.tail) this.tail = node;
     this.length++;
   };
-  Nt.prototype.pushNode = function (e) {
-    if (e === this.tail) return;
-    if (e.list) e.list.removeNode(e);
+  Yallist.prototype.pushNode = function (node) {
+    if (node === this.tail) return;
+    if (node.list) node.list.removeNode(node);
     var tail = this.tail;
-    if (((e.list = this), (e.prev = tail), tail)) tail.next = e;
-    if (((this.tail = e), !this.head)) this.head = e;
+    node.list = this;
+    node.prev = tail;
+    if (tail) tail.next = node;
+    this.tail = node;
+    if (!this.head) this.head = node;
     this.length++;
   };
-  Nt.prototype.push = function () {
-    for (var e = 0, t = arguments.length; e < t; e++) bF(this, arguments[e]);
+  Yallist.prototype.push = function () {
+    for (var i = 0, l = arguments.length; i < l; i++) push(this, arguments[i]);
     return this.length;
   };
-  Nt.prototype.unshift = function () {
-    for (var e = 0, t = arguments.length; e < t; e++) vF(this, arguments[e]);
+  Yallist.prototype.unshift = function () {
+    for (var i = 0, l = arguments.length; i < l; i++) unshift(this, arguments[i]);
     return this.length;
   };
-  Nt.prototype.pop = function () {
+  Yallist.prototype.pop = function () {
     if (!this.tail) return;
-    var e = this.tail.value;
-    if (((this.tail = this.tail.prev), this.tail)) this.tail.next = null;
+    var res = this.tail.value;
+    this.tail = this.tail.prev;
+    if (this.tail) this.tail.next = null;
     else this.head = null;
-    return (this.length--, e);
+    this.length--;
+    return res;
   };
-  Nt.prototype.shift = function () {
+  Yallist.prototype.shift = function () {
     if (!this.head) return;
-    var e = this.head.value;
-    if (((this.head = this.head.next), this.head)) this.head.prev = null;
+    var res = this.head.value;
+    this.head = this.head.next;
+    if (this.head) this.head.prev = null;
     else this.tail = null;
-    return (this.length--, e);
+    this.length--;
+    return res;
   };
-  Nt.prototype.forEach = function (e, t) {
-    t = t || this;
-    for (var head = this.head, o = 0; head !== null; o++)
-      (e.call(t, head.value, o, this), (head = head.next));
-  };
-  Nt.prototype.forEachReverse = function (e, t) {
-    t = t || this;
-    for (var tail = this.tail, o = this.length - 1; tail !== null; o--)
-      (e.call(t, tail.value, o, this), (tail = tail.prev));
-  };
-  Nt.prototype.get = function (e) {
-    for (var t = 0, head = this.head; head !== null && t < e; t++) head = head.next;
-    if (t === e && head !== null) return head.value;
-  };
-  Nt.prototype.getReverse = function (e) {
-    for (var t = 0, tail = this.tail; tail !== null && t < e; t++) tail = tail.prev;
-    if (t === e && tail !== null) return tail.value;
-  };
-  Nt.prototype.map = function (e, t) {
-    t = t || this;
-    var n = new Nt();
-    for (var head = this.head; head !== null;) (n.push(e.call(t, head.value, this)), (head = head.next));
-    return n;
-  };
-  Nt.prototype.mapReverse = function (e, t) {
-    t = t || this;
-    var n = new Nt();
-    for (var tail = this.tail; tail !== null;) (n.push(e.call(t, tail.value, this)), (tail = tail.prev));
-    return n;
-  };
-  Nt.prototype.reduce = function (e, t) {
-    var n,
-      head = this.head;
-    if (arguments.length > 1) n = t;
-    else if (this.head) ((head = this.head.next), (n = this.head.value));
-    else throw TypeError("Reduce of empty list with no initial value");
-    for (var r = 0; head !== null; r++) ((n = e(n, head.value, r)), (head = head.next));
-    return n;
-  };
-  Nt.prototype.reduceReverse = function (e, t) {
-    var n,
-      tail = this.tail;
-    if (arguments.length > 1) n = t;
-    else if (this.tail) ((tail = this.tail.prev), (n = this.tail.value));
-    else throw TypeError("Reduce of empty list with no initial value");
-    for (var r = this.length - 1; tail !== null; r--) ((n = e(n, tail.value, r)), (tail = tail.prev));
-    return n;
-  };
-  Nt.prototype.toArray = function () {
-    var e = Array(this.length);
-    for (var t = 0, head = this.head; head !== null; t++) ((e[t] = head.value), (head = head.next));
-    return e;
-  };
-  Nt.prototype.toArrayReverse = function () {
-    var e = Array(this.length);
-    for (var t = 0, tail = this.tail; tail !== null; t++) ((e[t] = tail.value), (tail = tail.prev));
-    return e;
-  };
-  Nt.prototype.slice = function (e, t) {
-    if (((t = t || this.length), t < 0)) t += this.length;
-    if (((e = e || 0), e < 0)) e += this.length;
-    var n = new Nt();
-    if (t < e || t < 0) return n;
-    if (e < 0) e = 0;
-    if (t > this.length) t = this.length;
-    for (var o = 0, head = this.head; head !== null && o < e; o++) head = head.next;
-    for (; head !== null && o < t; o++, head = head.next) n.push(head.value);
-    return n;
-  };
-  Nt.prototype.sliceReverse = function (e, t) {
-    if (((t = t || this.length), t < 0)) t += this.length;
-    if (((e = e || 0), e < 0)) e += this.length;
-    var n = new Nt();
-    if (t < e || t < 0) return n;
-    if (e < 0) e = 0;
-    if (t > this.length) t = this.length;
-    for (var o = this.length, tail = this.tail; tail !== null && o > t; o--) tail = tail.prev;
-    for (; tail !== null && o > e; o--, tail = tail.prev) n.push(tail.value);
-    return n;
-  };
-  Nt.prototype.splice = function (e, t, ...n) {
-    if (e > this.length) e = this.length - 1;
-    if (e < 0) e = this.length + e;
-    for (var o = 0, head = this.head; head !== null && o < e; o++) head = head.next;
-    var s = [];
-    for (var o = 0; head && o < t; o++) (s.push(head.value), (head = this.removeNode(head)));
-    if (head === null) head = this.tail;
-    if (head !== this.head && head !== this.tail) head = head.prev;
-    for (var o = 0; o < n.length; o++) head = _F(this, head, n[o]);
-    return s;
-  };
-  Nt.prototype.reverse = function () {
-    var head = this.head,
-      tail = this.tail;
-    for (var n = head; n !== null; n = n.prev) {
-      var prev = n.prev;
-      ((n.prev = n.next), (n.next = prev));
+  Yallist.prototype.forEach = function (fn, thisp) {
+    thisp = thisp || this;
+    for (var walker = this.head, i = 0; walker !== null; i++) {
+      fn.call(thisp, walker.value, i, this);
+      walker = walker.next;
     }
-    return ((this.head = tail), (this.tail = head), this);
   };
-  function _F(e, t, n) {
-    var o = t === e.head ? new Fa(n, null, t, e) : new Fa(n, t, t.next, e);
-    if (o.next === null) e.tail = o;
-    if (o.prev === null) e.head = o;
-    return (e.length++, o);
+  Yallist.prototype.forEachReverse = function (fn, thisp) {
+    thisp = thisp || this;
+    for (var walker = this.tail, i = this.length - 1; walker !== null; i--) {
+      fn.call(thisp, walker.value, i, this);
+      walker = walker.prev;
+    }
+  };
+  Yallist.prototype.get = function (n_2) {
+    for (var i = 0, walker = this.head; walker !== null && i < n_2; i++) walker = walker.next;
+    if (i === n_2 && walker !== null) return walker.value;
+  };
+  Yallist.prototype.getReverse = function (n_2) {
+    for (var i = 0, walker = this.tail; walker !== null && i < n_2; i++) walker = walker.prev;
+    if (i === n_2 && walker !== null) return walker.value;
+  };
+  Yallist.prototype.map = function (fn, thisp) {
+    thisp = thisp || this;
+    var res = new Yallist();
+    for (var walker = this.head; walker !== null;) {
+      res.push(fn.call(thisp, walker.value, this));
+      walker = walker.next;
+    }
+    return res;
+  };
+  Yallist.prototype.mapReverse = function (fn, thisp) {
+    thisp = thisp || this;
+    var res = new Yallist();
+    for (var walker = this.tail; walker !== null;) {
+      res.push(fn.call(thisp, walker.value, this));
+      walker = walker.prev;
+    }
+    return res;
+  };
+  Yallist.prototype.reduce = function (fn, initial) {
+    var acc;
+    var walker = this.head;
+    if (arguments.length > 1) acc = initial;
+    else if (this.head) {
+      walker = this.head.next;
+      acc = this.head.value;
+    } else throw TypeError("Reduce of empty list with no initial value");
+    for (var i = 0; walker !== null; i++) {
+      acc = fn(acc, walker.value, i);
+      walker = walker.next;
+    }
+    return acc;
+  };
+  Yallist.prototype.reduceReverse = function (fn, initial) {
+    var acc;
+    var walker = this.tail;
+    if (arguments.length > 1) acc = initial;
+    else if (this.tail) {
+      walker = this.tail.prev;
+      acc = this.tail.value;
+    } else throw TypeError("Reduce of empty list with no initial value");
+    for (var i = this.length - 1; walker !== null; i--) {
+      acc = fn(acc, walker.value, i);
+      walker = walker.prev;
+    }
+    return acc;
+  };
+  Yallist.prototype.toArray = function () {
+    var arr = Array(this.length);
+    for (var i = 0, walker = this.head; walker !== null; i++) {
+      arr[i] = walker.value;
+      walker = walker.next;
+    }
+    return arr;
+  };
+  Yallist.prototype.toArrayReverse = function () {
+    var arr = Array(this.length);
+    for (var i = 0, walker = this.tail; walker !== null; i++) {
+      arr[i] = walker.value;
+      walker = walker.prev;
+    }
+    return arr;
+  };
+  Yallist.prototype.slice = function (from, to) {
+    to = to || this.length;
+    if (to < 0) to += this.length;
+    from = from || 0;
+    if (from < 0) from += this.length;
+    var ret = new Yallist();
+    if (to < from || to < 0) return ret;
+    if (from < 0) from = 0;
+    if (to > this.length) to = this.length;
+    for (var i = 0, walker = this.head; walker !== null && i < from; i++) walker = walker.next;
+    for (; walker !== null && i < to; i++, walker = walker.next) ret.push(walker.value);
+    return ret;
+  };
+  Yallist.prototype.sliceReverse = function (from, to) {
+    to = to || this.length;
+    if (to < 0) to += this.length;
+    from = from || 0;
+    if (from < 0) from += this.length;
+    var ret = new Yallist();
+    if (to < from || to < 0) return ret;
+    if (from < 0) from = 0;
+    if (to > this.length) to = this.length;
+    for (var i = this.length, walker = this.tail; walker !== null && i > to; i--) walker = walker.prev;
+    for (; walker !== null && i > from; i--, walker = walker.prev) ret.push(walker.value);
+    return ret;
+  };
+  Yallist.prototype.splice = function (start, deleteCount, ...nodes) {
+    if (start > this.length) start = this.length - 1;
+    if (start < 0) start = this.length + start;
+    for (var i = 0, walker = this.head; walker !== null && i < start; i++) walker = walker.next;
+    var ret = [];
+    for (var i = 0; walker && i < deleteCount; i++) {
+      ret.push(walker.value);
+      walker = this.removeNode(walker);
+    }
+    if (walker === null) walker = this.tail;
+    if (walker !== this.head && walker !== this.tail) walker = walker.prev;
+    for (var i = 0; i < nodes.length; i++) walker = insert(this, walker, nodes[i]);
+    return ret;
+  };
+  Yallist.prototype.reverse = function () {
+    var head = this.head;
+    var tail = this.tail;
+    for (var walker = head; walker !== null; walker = walker.prev) {
+      var p = walker.prev;
+      walker.prev = walker.next;
+      walker.next = p;
+    }
+    this.head = tail;
+    this.tail = head;
+    return this;
+  };
+  function insert(e, node, value) {
+    var inserted = node === e.head ? new Node(value, null, node, e) : new Node(value, node, node.next, e);
+    if (inserted.next === null) e.tail = inserted;
+    if (inserted.prev === null) e.head = inserted;
+    e.length++;
+    return inserted;
   }
-  function bF(e, t) {
-    if (((e.tail = new Fa(t, e.tail, null, e)), !e.head)) e.head = e.tail;
+  function push(e, item) {
+    e.tail = new Node(item, e.tail, null, e);
+    if (!e.head) e.head = e.tail;
     e.length++;
   }
-  function vF(e, t) {
-    if (((e.head = new Fa(t, null, e.head, e)), !e.tail)) e.tail = e.head;
+  function unshift(e, item) {
+    e.head = new Node(item, null, e.head, e);
+    if (!e.tail) e.tail = e.head;
     e.length++;
   }
-  function Fa(e, t, n, o) {
-    if (!(this instanceof Fa)) return new Fa(e, t, n, o);
-    if (((this.list = o), (this.value = e), t)) ((t.next = this), (this.prev = t));
-    else this.prev = null;
-    if (n) ((n.prev = this), (this.next = n));
-    else this.next = null;
+  function Node(value, prev, next, list) {
+    if (!(this instanceof Node)) return new Node(value, prev, next, list);
+    this.list = list;
+    this.value = value;
+    if (prev) {
+      prev.next = this;
+      this.prev = prev;
+    } else this.prev = null;
+    if (next) {
+      next.prev = this;
+      this.next = next;
+    } else this.next = null;
   }
   try {
-    BO()(Nt);
-  } catch (error) {}
+    require_iterator()(Yallist);
+  } catch (er) {}
 });
-
-export { KO };
+export { require_yallist };

@@ -14,29 +14,36 @@ import { lineWidth } from "./line-width-cache.js";
 
 //@ chunk-bzr73sfg.js:290208-290219 placement
 var MAX_SCROLL_TRACE_EVENTS = 256;
+//@ chunk-bzr73sfg.js:290219-291919 placement
 /**
  * 记录滚轮输入事件与实时状态（滚动速度调试/演示标尺）。
  */
-//@ chunk-bzr73sfg.js:290219-291919 placement
 class ScrollTrace {
-  enabled = !1;
+  enabled = false;
   events = [];
   position = null;
   lastInputTs = 0;
-  snapshot = { enabled: !1, events: this.events, position: null };
+  snapshot = {
+    enabled: false,
+    events: this.events,
+    position: null,
+  };
   listeners = new Set();
-  liveWatching = !1;
-  demoRuler = !1;
+  liveWatching = false;
+  demoRuler = false;
   liveState = null;
   liveListeners = new Set();
   setLiveWatching(n, u) {
-    let f = n && (u?.demoRuler ?? !0);
+    let f = n && (u?.demoRuler ?? true);
     if (this.liveWatching === n && this.demoRuler === f) return;
-    if (((this.liveWatching = n), (this.demoRuler = f), !n)) this.liveState = null;
+    this.liveWatching = n;
+    this.demoRuler = f;
+    if (!n) this.liveState = null;
     for (let liveListener of this.liveListeners) liveListener();
   }
   subscribeLive(n) {
-    return (this.liveListeners.add(n), () => this.liveListeners.delete(n));
+    this.liveListeners.add(n);
+    return () => this.liveListeners.delete(n);
   }
   getLiveState() {
     return this.liveState;
@@ -48,7 +55,8 @@ class ScrollTrace {
     return this.demoRuler;
   }
   subscribe(n) {
-    return (this.listeners.add(n), () => this.listeners.delete(n));
+    this.listeners.add(n);
+    return () => this.listeners.delete(n);
   }
   getSnapshot() {
     return this.snapshot;
@@ -58,47 +66,68 @@ class ScrollTrace {
   }
   setEnabled(n) {
     if (this.enabled === n) return;
-    if (((this.enabled = n), !n)) ((this.events = []), (this.lastInputTs = 0), (this.position = null));
+    this.enabled = n;
+    if (!n) {
+      this.events = [];
+      this.lastInputTs = 0;
+      this.position = null;
+    }
     this.bump();
   }
-  recordInput(n, u, f, m) {
+  recordInput(dir, u, f, m) {
     if (this.liveWatching) {
-      this.liveState = { wheelMode: f.wheelMode };
+      this.liveState = {
+        wheelMode: f.wheelMode,
+      };
       for (let liveListener of this.liveListeners) liveListener();
     }
     if (!this.enabled) return;
-    let p = this.lastInputTs === 0 ? 1 / 0 : m - this.lastInputTs;
-    ((this.lastInputTs = m),
-      this.push({
-        kind: "in",
-        ts: m,
-        dir: n,
-        step: u,
-        flip: f.pendingFlip && u === 0,
-        gap: p,
-        mult: f.mult,
-        wheelMode: f.wheelMode,
-        burst: f.burstCount,
-        jbBypass: f.jbBypass,
-      }));
+    let gap = this.lastInputTs === 0 ? 1 / 0 : m - this.lastInputTs;
+    this.lastInputTs = m;
+    this.push({
+      kind: "in",
+      ts: m,
+      dir,
+      step: u,
+      flip: f.pendingFlip && u === 0,
+      gap,
+      mult: f.mult,
+      wheelMode: f.wheelMode,
+      burst: f.burstCount,
+      jbBypass: f.jbBypass,
+    });
   }
-  recordOut(n, u, f) {
+  recordOut(applied, remaining, algo) {
     if (!this.enabled) return;
-    this.push({ kind: "out", ts: performance.now(), applied: n, remaining: u, algo: f });
+    this.push({
+      kind: "out",
+      ts: performance.now(),
+      applied,
+      remaining,
+      algo,
+    });
   }
   recordPosition(n) {
     if (!this.enabled) return;
-    this.position = { top: n.getScrollTop(), height: n.getScrollHeight(), viewport: n.getViewportHeight() };
+    this.position = {
+      top: n.getScrollTop(),
+      height: n.getScrollHeight(),
+      viewport: n.getViewportHeight(),
+    };
   }
   push(n) {
-    ((this.events =
+    this.events =
       this.events.length >= MAX_SCROLL_TRACE_EVENTS
         ? [...this.events.slice(1 - MAX_SCROLL_TRACE_EVENTS), n]
-        : [...this.events, n]),
-      this.bump());
+        : [...this.events, n];
+    this.bump();
   }
   bump() {
-    this.snapshot = { enabled: this.enabled, events: this.events, position: this.position };
+    this.snapshot = {
+      enabled: this.enabled,
+      events: this.events,
+      position: this.position,
+    };
     for (let listener of this.listeners) listener();
   }
 }
@@ -112,10 +141,10 @@ function getScrollTrace() {
 function setScrollTraceLiveWatching(n, u) {
   getScrollTrace().setLiveWatching(n, u);
 }
+//@ chunk-bzr73sfg.js:292025-292070 placement
 /**
  * 订阅滚轮实时状态的辅助函数组。
  */
-//@ chunk-bzr73sfg.js:292025-292070 placement
 function subscribeScrollTraceLive(n) {
   return getScrollTrace().subscribeLive(n);
 }
@@ -132,8 +161,8 @@ function isScrollTraceDemoRuler() {
   return getScrollTrace().isDemoRulerEnabled();
 }
 //@ chunk-bzr73sfg.js:292204-292252 placement
-function recordScrollInput(n, u, f, m) {
-  getScrollTrace().recordInput(n, u, f, m);
+function recordScrollInput(n, rows, state, m) {
+  getScrollTrace().recordInput(n, rows, state, m);
 }
 //@ chunk-bzr73sfg.js:292252-292293 placement
 function recordScrollOut(n, u, f) {
@@ -143,26 +172,26 @@ function recordScrollOut(n, u, f) {
 function recordScrollPosition(n) {
   getScrollTrace().recordPosition(n);
 }
+//@ chunk-bzr73sfg.js:292332-292494 callgraph-fingerprint = widestLine (1)
 /**
  * 多行文本中最宽一行的显示宽度。
  */
-//@ chunk-bzr73sfg.js:292332-292494 callgraph-fingerprint = widestLine (1)
 function widestLine(string) {
-  let u = 0,
-    f = 0;
-  while (f <= string.length) {
-    let index = string.indexOf(
-        `
+  let maxWidth = 0;
+  let start = 0;
+  while (start <= string.length) {
+    let end = string.indexOf(
+      `
 `,
-        f,
-      ),
-      line = index === -1 ? string.substring(f) : string.substring(f, index);
-    if (((u = Math.max(u, lineWidth(line))), index === -1)) break;
-    f = index + 1;
+      start,
+    );
+    let line = end === -1 ? string.substring(start) : string.substring(start, end);
+    maxWidth = Math.max(maxWidth, lineWidth(line));
+    if (end === -1) break;
+    start = end + 1;
   }
-  return u;
+  return maxWidth;
 }
-
 export {
   recordScrollPosition,
   recordScrollInput,

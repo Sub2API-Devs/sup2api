@@ -8,10 +8,11 @@
  * pieces: chunk-byrfpew1.js (1)
  * attribution: placement 1
  */
-
 //@ chunk-byrfpew1.js:191-229 placement
-var Sbt = 256,
-  O1t = 20971520,
-  _un = 67108864;
-
-export { Sbt, O1t, _un };
+/**
+ * 单个工具输入最多文件数（256）。
+ */
+var MAX_FILES_PER_INPUT = 256;
+var MAX_FILE_BYTES = 20971520;
+var MAX_TOTAL_BYTES = 67108864;
+export { MAX_FILES_PER_INPUT, MAX_FILE_BYTES, MAX_TOTAL_BYTES };

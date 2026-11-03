@@ -15,14 +15,13 @@ import { getSettingsForSource } from "./settings.js";
 function capturePolicySnapshot() {
   setStartupPolicySnapshot(structuredClone(getSettingsForSource("policySettings")));
 }
+//@ chunk-8nbkhts5.js:326-422 placement
 /**
  * 策略设置快照是否已变化。
  */
-//@ chunk-8nbkhts5.js:326-422 placement
 function hasPolicyDiverged() {
-  let t = getStartupPolicySnapshot();
-  if (t === void 0) return !0;
-  return !Bun.deepEquals(t, getSettingsForSource("policySettings"));
+  let startupPolicySnapshot = getStartupPolicySnapshot();
+  if (startupPolicySnapshot === undefined) return true;
+  return !Bun.deepEquals(startupPolicySnapshot, getSettingsForSource("policySettings"));
 }
-
 export { hasPolicyDiverged, capturePolicySnapshot };

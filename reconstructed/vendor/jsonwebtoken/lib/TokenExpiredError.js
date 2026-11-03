@@ -6,17 +6,18 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { vo } from "./JsonWebTokenError.js";
+import { require_JsonWebTokenError } from "./JsonWebTokenError.js";
 
 //@ chunk-mrx6y2r5.js:4325-4528 cjs-fingerprint
-var ac = x(function (tL, Fh) {
-  var Hh = vo(),
-    ds = function (e, t) {
-      (Hh.call(this, e), (this.name = "TokenExpiredError"), (this.expiredAt = t));
-    };
-  ds.prototype = Object.create(Hh.prototype);
-  ds.prototype.constructor = ds;
-  Fh.exports = ds;
+var require_TokenExpiredError = x(function (cjsExports, cjsModule) {
+  var JsonWebTokenError = require_JsonWebTokenError();
+  var TokenExpiredError = function (message, expiredAt) {
+    JsonWebTokenError.call(this, message);
+    this.name = "TokenExpiredError";
+    this.expiredAt = expiredAt;
+  };
+  TokenExpiredError.prototype = Object.create(JsonWebTokenError.prototype);
+  TokenExpiredError.prototype.constructor = TokenExpiredError;
+  cjsModule.exports = TokenExpiredError;
 });
-
-export { ac };
+export { require_TokenExpiredError };

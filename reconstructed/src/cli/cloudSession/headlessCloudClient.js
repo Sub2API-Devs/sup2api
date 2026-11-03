@@ -10,52 +10,57 @@
  */
 import { randomUUID } from "crypto";
 import { truncateToLength } from "../../utils/stringUtils.js";
-import { Pje } from "../../utils/stripAnsi.js";
+import { sanitizeAnsiText } from "../../utils/stripAnsi.js";
 import { canonicalToolName } from "../../utils/permissions/permissionRuleParser.js";
-import { classifyToolNameKind, u3s } from "../../services/tools/toolDecisionTelemetry.js";
+import { classifyToolNameKind, TOOL_NAME_KINDS } from "../../services/tools/toolDecisionTelemetry.js";
 import { count } from "../../utils/collections.js";
 
 //@ chunk-3wek6r2k.js:29300-29431 placement
-function cloudInformationalMessage(e, o, n, r) {
+function cloudInformationalMessage(sessionId, level, content, r) {
   return {
     type: "system",
     subtype: "informational",
-    level: o,
-    content: n,
-    ...(r !== void 0 && { tag: r }),
+    level,
+    content,
+    ...(r !== undefined && {
+      tag: r,
+    }),
     uuid: randomUUID(),
-    session_id: e,
+    session_id: sessionId,
   };
 }
 //@ chunk-3wek6r2k.js:29431-29456 placement
-var CLOUD_TEXT_LIMITS = 512,
-  lPr = 200,
-  dPr = 8;
+/**
+ * 云会话文本单行截断长度（200）与短列表保留条数（8）。
+ */
+var CLOUD_TEXT_LIMITS = 512;
+var CLOUD_LINE_MAX_CHARS = 200;
+var CLOUD_SHORT_LIST_MAX = 8;
 //@ chunk-3wek6r2k.js:29456-29488 placement
 function clipCloudLine(e) {
-  return sanitizeCloudText(e, lPr);
+  return sanitizeCloudText(e, CLOUD_LINE_MAX_CHARS);
 }
 //@ chunk-3wek6r2k.js:29488-29686 placement
-var CLOUD_TEXT_MAX_CHARS = 2048,
-  VARIATION_SELECTOR_CLASS = "[\\u200C\\u200D\\uFE00-\\uFE0F\\u{E0100}-\\u{E01EF}]",
-  regExp = new RegExp(VARIATION_SELECTOR_CLASS, "gu"),
-  regExp_2 = new RegExp(
-    `(?:(?!${VARIATION_SELECTOR_CLASS})[\\p{Cc}\\p{Cf}\\p{Default_Ignorable_Code_Point}\\u2028\\u2029])+`,
-    "gu",
-  ),
-  MAX_KEPT_VARIATION_SELECTORS = 8;
+var CLOUD_TEXT_MAX_CHARS = 2048;
+var VARIATION_SELECTOR_CLASS = "[\\u200C\\u200D\\uFE00-\\uFE0F\\u{E0100}-\\u{E01EF}]";
+var regExp = new RegExp(VARIATION_SELECTOR_CLASS, "gu");
+var regExp_2 = new RegExp(
+  `(?:(?!${VARIATION_SELECTOR_CLASS})[\\p{Cc}\\p{Cf}\\p{Default_Ignorable_Code_Point}\\u2028\\u2029])+`,
+  "gu",
+);
+var MAX_KEPT_VARIATION_SELECTORS = 8;
 //@ chunk-3wek6r2k.js:29686-29718 placement
 function clipCloudText(e) {
   return sanitizeCloudText(e, CLOUD_TEXT_MAX_CHARS);
 }
+//@ chunk-3wek6r2k.js:29718-29818 placement
 /**
  * 清理并截断来自云会话的文本（去控制/格式字符、限制不可见连接符数量）。
  */
-//@ chunk-3wek6r2k.js:29718-29818 placement
 function sanitizeCloudText(e, o = CLOUD_TEXT_LIMITS) {
   let n = 0;
   return truncateToLength(
-    Pje(e)
+    sanitizeAnsiText(e)
       .replace(regExp_2, " ")
       .replace(regExp, (r) => (n++ < MAX_KEPT_VARIATION_SELECTORS ? r : ""))
       .trim(),
@@ -63,35 +68,38 @@ function sanitizeCloudText(e, o = CLOUD_TEXT_LIMITS) {
   );
 }
 //@ chunk-3wek6r2k.js:29818-29868 placement
-var Rr = 400,
-  Dc = /^[0-9A-Za-z][0-9A-Za-z.+-]{0,63}$/;
+var MAX_KNOWN_TOOLS_LISTED = 400;
+var VERSION_STRING_PATTERN = /^[0-9A-Za-z][0-9A-Za-z.+-]{0,63}$/;
 //@ chunk-3wek6r2k.js:29868-30601 placement
-function logCloudWorkerInit(e, o) {
-  let n =
-      typeof e.claude_code_version === "string" && Dc.test(e.claude_code_version)
-        ? e.claude_code_version
-        : "unknown",
-    startup_timing = e.startup_timing,
-    u =
-      typeof startup_timing === "object" && startup_timing !== null && "warm_spare_claimed" in startup_timing
-        ? startup_timing.warm_spare_claimed
-        : void 0,
-    p = typeof u === "boolean" ? String(u) : "unknown",
-    h = `[headlessCloudClient] worker init: claude_code_version=${n} warm_spare=${p}`;
+function logCloudWorkerInit(e, builtInNames) {
+  let claudeCodeVersion =
+    typeof e.claude_code_version === "string" && VERSION_STRING_PATTERN.test(e.claude_code_version)
+      ? e.claude_code_version
+      : "unknown";
+  let startupTiming = e.startup_timing;
+  let warmSpareClaimed =
+    typeof startupTiming === "object" && startupTiming !== null && "warm_spare_claimed" in startupTiming
+      ? startupTiming.warm_spare_claimed
+      : undefined;
+  let p = typeof warmSpareClaimed === "boolean" ? String(warmSpareClaimed) : "unknown";
+  let h = `[headlessCloudClient] worker init: claude_code_version=${claudeCodeVersion} warm_spare=${p}`;
   if (!Array.isArray(e.tools)) return `${h} tools=unknown`;
-  let mapped = e.tools.filter((tool) => typeof tool === "string").map(canonicalToolName),
-    filtered = mapped.filter((A) => o.has(A)),
-    mapped_2 = mapped.filter((A) => !o.has(A)).map(classifyToolNameKind),
-    flattened = u3s.flatMap((A) => {
-      let se = count(mapped_2, (q) => q === A);
-      return se > 0 ? [`${A} x${se}`] : [];
-    }),
-    joined = [...filtered.slice(0, Rr), ...flattened].join(","),
-    P = filtered.length > Rr ? ` (+${filtered.length - Rr} more not shown)` : "";
+  let mapped = e.tools.filter((tool) => typeof tool === "string").map(canonicalToolName);
+  let filtered = mapped.filter((A) => builtInNames.has(A));
+  let mapped_2 = mapped.filter((A) => !builtInNames.has(A)).map(classifyToolNameKind);
+  let flattened = TOOL_NAME_KINDS.flatMap((A) => {
+    let se = count(mapped_2, (q) => q === A);
+    return se > 0 ? [`${A} x${se}`] : [];
+  });
+  let joined = [...filtered.slice(0, MAX_KNOWN_TOOLS_LISTED), ...flattened].join(",");
+  let P =
+    filtered.length > MAX_KNOWN_TOOLS_LISTED
+      ? ` (+${filtered.length - MAX_KNOWN_TOOLS_LISTED} more not shown)`
+      : "";
   return `${h} tools(${mapped.length})=${joined}${P}`;
 }
 //@ chunk-3wek6r2k.js:30601-30637 placement
-var ln = "Cloud session disconnected";
+var CLOUD_DISCONNECTED_PREFIX = "Cloud session disconnected";
 //@ chunk-3wek6r2k.js:30637-30831 placement
 function cloudDisconnectReason(e) {
   switch (e) {
@@ -101,90 +109,119 @@ function cloudDisconnectReason(e) {
     case "invalid_session_id":
     case "request_rejected":
     case "malformed_response":
-    case void 0:
+    case undefined:
       return "stream_closed";
   }
 }
+//@ chunk-3wek6r2k.js:30831-31542 placement
 /**
  * 把云会话断开原因（stream_closed、untrusted_device、attach_rejected 等）转成给用户的说明。
  */
-//@ chunk-3wek6r2k.js:30831-31542 placement
 function cloudDisconnectMessage(e) {
   switch (e) {
     case "stream_closed":
-      return `${ln} (stream_closed): this machine is no longer attached. If the session still exists it keeps running in the cloud; open it again to re-attach.`;
+      return `${CLOUD_DISCONNECTED_PREFIX} (stream_closed): this machine is no longer attached. If the session still exists it keeps running in the cloud; open it again to re-attach.`;
     case "untrusted_device":
-      return `${ln} (untrusted_device): the server no longer accepts this machine's device proof. Sign in again on this machine, then open the session again.`;
+      return `${CLOUD_DISCONNECTED_PREFIX} (untrusted_device): the server no longer accepts this machine's device proof. Sign in again on this machine, then open the session again.`;
     case "session_stale_relogin":
-      return `${ln} (session_stale_relogin): the sign-in on this machine has expired. Sign in again on this machine, then open the session again.`;
+      return `${CLOUD_DISCONNECTED_PREFIX} (session_stale_relogin): the sign-in on this machine has expired. Sign in again on this machine, then open the session again.`;
     case "attach_rejected":
-      return `${ln} (attach_rejected): this cloud session can no longer be attached to (it may have been archived). Start a new cloud session instead.`;
+      return `${CLOUD_DISCONNECTED_PREFIX} (attach_rejected): this cloud session can no longer be attached to (it may have been archived). Start a new cloud session instead.`;
   }
 }
 //@ chunk-3wek6r2k.js:31542-31880 placement
+/**
+ * --max-turns 无法确认时的失败条目 {kind:'lost', name:'--max-turns', why:…}。
+ */
 var CLOUD_REFUSAL_SUBTYPES = {
-    bypass: "rejected_argv",
-    attach_restriction: "rejected_tool_restriction",
-    tool_restriction: "rejected_tool_restriction",
-    deny_rule_unclosed: "deny_rule_unclosed",
-    sdk_mcp: "rejected_argv",
-    unsupported: "rejected_unsupported",
-  },
-  FMs = {
-    kind: "lost",
-    name: "--max-turns",
-    why: "the service did not confirm the turn limit, so assume none is enforced",
-  };
+  bypass: "rejected_argv",
+  attach_restriction: "rejected_tool_restriction",
+  tool_restriction: "rejected_tool_restriction",
+  deny_rule_unclosed: "deny_rule_unclosed",
+  sdk_mcp: "rejected_argv",
+  unsupported: "rejected_unsupported",
+};
+var MAX_TURNS_UNCONFIRMED_ENTRY = {
+  kind: "lost",
+  name: "--max-turns",
+  why: "the service did not confirm the turn limit, so assume none is enforced",
+};
 //@ chunk-3wek6r2k.js:31880-32097 placement
-function cloudLaunchOptionsFrom(e, o) {
+function cloudLaunchOptionsFrom(e, flagSettings) {
   return {
     mcpConfigFlagServers: e.mcpConfigFlagServers,
-    flagSettings: o,
+    flagSettings,
     systemPrompt: e.systemPromptCli,
     appendSystemPrompt: e.appendSystemPromptCli,
     selectedAgentDefinition: e.mainThreadAgentDefinition ?? null,
   };
 }
 //@ chunk-3wek6r2k.js:32097-32145 placement
-function withMaxTurns(e, o) {
-  return { ...e, maxTurns: o, ...!1 };
+function withMaxTurns(e, maxTurns) {
+  return {
+    ...e,
+    maxTurns,
+    ...false,
+  };
 }
 //@ chunk-3wek6r2k.js:32145-32221 placement
-var FLAG_TREAT_CLIENT = { treat: "client" },
-  ge = { treat: "create" },
-  Se = { treat: "ignore", kind: "lost" };
+var FLAG_TREAT_CLIENT = {
+  treat: "client",
+};
+var FLAG_TREAT_CREATE = {
+  treat: "create",
+};
+var FLAG_TREAT_IGNORE_LOST = {
+  treat: "ignore",
+  kind: "lost",
+};
 //@ chunk-3wek6r2k.js:32221-32277 placement
-function lostFlag(e) {
-  return { treat: "ignore", kind: "lost", why: e };
+function lostFlag(why) {
+  return {
+    treat: "ignore",
+    kind: "lost",
+    why,
+  };
 }
 //@ chunk-3wek6r2k.js:32277-32368 placement
-var FLAG_TREAT_PREFERENCE = { treat: "ignore", kind: "preference" },
-  Fc = { treat: "ignore", kind: "kept" },
-  G = { treat: "moot" };
+var FLAG_TREAT_PREFERENCE = {
+  treat: "ignore",
+  kind: "preference",
+};
+var FLAG_TREAT_IGNORE_KEPT = {
+  treat: "ignore",
+  kind: "kept",
+};
+var FLAG_TREAT_MOOT = {
+  treat: "moot",
+};
 //@ chunk-3wek6r2k.js:32368-32425 placement
-function refusedFlag(e, o) {
-  return { treat: "refuse", group: e, naming: o };
+function refusedFlag(group, naming) {
+  return {
+    treat: "refuse",
+    group,
+    naming,
+  };
 }
-
 export {
   sanitizeCloudText,
   refusedFlag,
   FLAG_TREAT_CLIENT,
-  G,
+  FLAG_TREAT_MOOT,
   lostFlag,
-  ge,
-  Se,
+  FLAG_TREAT_CREATE,
+  FLAG_TREAT_IGNORE_LOST,
   FLAG_TREAT_PREFERENCE,
-  Fc,
+  FLAG_TREAT_IGNORE_KEPT,
   clipCloudText,
-  lPr,
+  CLOUD_LINE_MAX_CHARS,
   cloudInformationalMessage,
   clipCloudLine,
-  dPr,
+  CLOUD_SHORT_LIST_MAX,
   cloudDisconnectReason,
   cloudDisconnectMessage,
   logCloudWorkerInit,
-  FMs,
+  MAX_TURNS_UNCONFIRMED_ENTRY,
   withMaxTurns,
   cloudLaunchOptionsFrom,
   CLOUD_REFUSAL_SUBTYPES,

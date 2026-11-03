@@ -9,24 +9,27 @@
  * attribution: placement 4
  */
 import { getAccountPluginsSyncEnabled } from "../../bootstrap/state.js";
-import { wie, Hkt } from "../../services/plugins/accountSync/syncedPluginHooks.js";
+import {
+  syncSettingsEnabled,
+  isPluginsSyncEligible,
+} from "../../services/plugins/accountSync/syncedPluginHooks.js";
 import { withFeatureTelemetry } from "../../services/analytics/featureTelemetry.js";
 import { logError } from "../log.js";
 import {
   readClaudeAiMarketplaceRegistry,
   ensureClaudeAiMarketplace,
-  F$o,
+  accountMarketplacesPromiseCache,
   readAccountMarketplacesCache,
   fetchClaudeAiMarketplaceRows,
   syncAccountMarketplaceScopes,
-  yqs,
-  B$o,
+  writeAccountMarketplacesCache,
+  removeAccountSyncedFile,
 } from "./claudeAiMarketplaces.js";
 import { getInstalledPluginsAsync } from "./installedPluginsManager.js";
 import { marketplaceSuffix } from "./pluginIdentifier.js";
 import { logForDiagnosticsNoPII } from "../diagLogs.js";
-import { getSyncBucket, Tit, m5t } from "./syncedItems.js";
-import { Bue, ufn } from "../claudeAiSync/pluginsSync.js";
+import { getSyncBucket, bucketOrg, MARKETPLACES_JSON_FILE } from "./syncedItems.js";
+import { syncedPluginBucketDir, ensurePluginsBucketRoot } from "../claudeAiSync/pluginsSync.js";
 import { getStrictKnownMarketplaces } from "./marketplacePolicy.js";
 import { shouldAllowManagedPermissionRulesOnly } from "../permissions/permissionsLoader.js";
 import { logForDebugging } from "../debug.js";
@@ -35,24 +38,24 @@ import { errorMessage } from "../errors.js";
 //@ chunk-3wek6r2k.js:74928-75063 placement
 class MarketplacesSyncFailed extends Error {
   code;
-  constructor(e) {
+  constructor(code) {
     super("claude.ai marketplaces sync failed");
-    this.code = e;
+    this.code = code;
     this.name = "MarketplacesSyncFailed";
   }
 }
+//@ chunk-3wek6r2k.js:75063-75306 placement
 /**
  * 把 claude.ai 账号插件市场同步到本地（开关与条件满足时），带遥测。
  */
-//@ chunk-3wek6r2k.js:75063-75306 placement
-async function syncClaudeAiMarketplaces(e, o, n) {
+async function syncClaudeAiMarketplaces(rootSession, credentials, n) {
   try {
-    if (!getAccountPluginsSyncEnabled() || !wie() || Hkt()) return !1;
-    let r = syncAccountMarketplaces(o, n);
+    if (!getAccountPluginsSyncEnabled() || !syncSettingsEnabled() || isPluginsSyncEligible()) return false;
+    let r = syncAccountMarketplaces(credentials, n);
     try {
       return await withFeatureTelemetry(
         "claudeai_marketplaces_sync",
-        () => resolveAccountMarketplaceBucket(e, o),
+        () => resolveAccountMarketplaceBucket(rootSession, credentials),
         (u) => (u instanceof MarketplacesSyncFailed ? u.code : "unexpected"),
       );
     } finally {
@@ -60,89 +63,111 @@ async function syncClaudeAiMarketplaces(e, o, n) {
     }
   } catch (error) {
     if (!(error instanceof MarketplacesSyncFailed)) logError(error);
-    return !1;
+    return false;
   }
 }
 //@ chunk-3wek6r2k.js:75306-75714 placement
-async function syncAccountMarketplaces(e, o) {
+async function syncAccountMarketplaces(credentials, o) {
   try {
     let entries = Object.entries(await readClaudeAiMarketplaceRegistry());
     if (entries.length === 0) return;
-    let r = await getInstalledPluginsAsync(o),
-      u = new Set(
-        Object.entries(r.plugins).flatMap(([h, S]) => (S.length > 0 ? [marketplaceSuffix(h)] : [])),
+    let installedPlugins = await getInstalledPluginsAsync(o);
+    let u = new Set(
+      Object.entries(installedPlugins.plugins).flatMap(([key, value]) =>
+        value.length > 0 ? [marketplaceSuffix(key)] : [],
       ),
-      filtered = entries.filter(([h]) => u.has(h));
+    );
+    let filtered = entries.filter(([h]) => u.has(h));
     if (filtered.length === 0) return;
-    (logForDiagnosticsNoPII("info", "claudeai_catalog_background_refresh", { count: filtered.length }),
-      await Promise.all(
-        filtered.map(([h, S]) =>
-          ensureClaudeAiMarketplace(h, S.source, { mode: "refresh", credentials: e, isBackground: !0 }),
-        ),
-      ));
+    logForDiagnosticsNoPII("info", "claudeai_catalog_background_refresh", {
+      count: filtered.length,
+    });
+    await Promise.all(
+      filtered.map(([h, S]) =>
+        ensureClaudeAiMarketplace(h, S.source, {
+          mode: "refresh",
+          credentials,
+          isBackground: true,
+        }),
+      ),
+    );
   } catch (error) {
     logError(error);
   }
 }
 //@ chunk-3wek6r2k.js:75714-76896 placement
 async function resolveAccountMarketplaceBucket(e, o) {
-  let n = await getSyncBucket(o);
-  if (n === null) throw new MarketplacesSyncFailed("bucket_unresolved");
-  let r = Bue(n),
-    u = Tit(n) ?? "";
+  let syncBucket = await getSyncBucket(o);
+  if (syncBucket === null) throw new MarketplacesSyncFailed("bucket_unresolved");
+  let r = syncedPluginBucketDir(syncBucket);
+  let u = bucketOrg(syncBucket) ?? "";
   try {
-    await ufn(e, n);
+    await ensurePluginsBucketRoot(e, syncBucket);
   } catch {
     throw new MarketplacesSyncFailed("root_refused");
   }
   logForDiagnosticsNoPII("info", "marketplaces_sync_starting");
-  let of = F$o.of(e.host),
-    h = await readAccountMarketplacesCache(r),
-    S =
-      (getStrictKnownMarketplaces() !== null || shouldAllowManagedPermissionRulesOnly()) &&
-      Object.keys(await readClaudeAiMarketplaceRegistry()).length > 0,
-    y = await fetchClaudeAiMarketplaceRows({ etag: S ? void 0 : h?.etag, credentials: o });
-  switch (y.status) {
+  let p = accountMarketplacesPromiseCache.of(e.host);
+  let accountMarketplacesCache = await readAccountMarketplacesCache(r);
+  let S =
+    (getStrictKnownMarketplaces() !== null || shouldAllowManagedPermissionRulesOnly()) &&
+    Object.keys(await readClaudeAiMarketplaceRegistry()).length > 0;
+  let claudeAiMarketplaceRows = await fetchClaudeAiMarketplaceRows({
+    etag: S ? undefined : accountMarketplacesCache?.etag,
+    credentials: o,
+  });
+  switch (claudeAiMarketplaceRows.status) {
     case "ok": {
-      if (y.dropped > 0)
-        logForDiagnosticsNoPII("warn", "marketplaces_sync_rows_dropped", { count: y.dropped });
-      let M = !0;
+      if (claudeAiMarketplaceRows.dropped > 0)
+        logForDiagnosticsNoPII("warn", "marketplaces_sync_rows_dropped", {
+          count: claudeAiMarketplaceRows.dropped,
+        });
+      let M = true;
       try {
-        await syncAccountMarketplaceScopes(y.rows, u);
+        await syncAccountMarketplaceScopes(claudeAiMarketplaceRows.rows, u);
       } catch (error) {
-        ((M = !1),
-          logForDiagnosticsNoPII("warn", "marketplaces_sync_scope_sync_failed"),
-          logForDebugging(
-            `claude.ai marketplaces: could not re-derive added marketplaces' scopes: ${errorMessage(error)}`,
-            { level: "warn" },
-          ));
+        M = false;
+        logForDiagnosticsNoPII("warn", "marketplaces_sync_scope_sync_failed");
+        logForDebugging(
+          `claude.ai marketplaces: could not re-derive added marketplaces' scopes: ${errorMessage(error)}`,
+          {
+            level: "warn",
+          },
+        );
       }
-      let E = M ? y.etag : void 0,
-        w = h === null || h.etag !== E || E === void 0;
-      if (w) (await yqs(r, { etag: E, rows: y.rows }), of.invalidate());
-      return (
-        logForDiagnosticsNoPII("info", "marketplaces_sync_complete", { count: y.rows.length, changed: w }),
-        w
-      );
+      let etag = M ? claudeAiMarketplaceRows.etag : undefined;
+      let w =
+        accountMarketplacesCache === null || accountMarketplacesCache.etag !== etag || etag === undefined;
+      if (w) {
+        await writeAccountMarketplacesCache(r, {
+          etag,
+          rows: claudeAiMarketplaceRows.rows,
+        });
+        p.invalidate();
+      }
+      logForDiagnosticsNoPII("info", "marketplaces_sync_complete", {
+        count: claudeAiMarketplaceRows.rows.length,
+        changed: w,
+      });
+      return w;
     }
     case "not_modified":
-      if ((logForDiagnosticsNoPII("info", "marketplaces_sync_not_modified"), h === null))
-        throw new MarketplacesSyncFailed("not_modified_without_cache");
-      return !1;
+      logForDiagnosticsNoPII("info", "marketplaces_sync_not_modified");
+      if (accountMarketplacesCache === null) throw new MarketplacesSyncFailed("not_modified_without_cache");
+      return false;
     case "denied":
-      throw (
-        logForDiagnosticsNoPII("warn", "marketplaces_sync_failed", { code: y.code }),
-        await B$o(n, m5t),
-        of.invalidate(),
-        new MarketplacesSyncFailed(y.code)
-      );
+      logForDiagnosticsNoPII("warn", "marketplaces_sync_failed", {
+        code: claudeAiMarketplaceRows.code,
+      });
+      await removeAccountSyncedFile(syncBucket, MARKETPLACES_JSON_FILE);
+      p.invalidate();
+      throw new MarketplacesSyncFailed(claudeAiMarketplaceRows.code);
     case "skipped":
     case "failed":
-      throw (
-        logForDiagnosticsNoPII("warn", "marketplaces_sync_failed", { code: y.code }),
-        new MarketplacesSyncFailed(y.code)
-      );
+      logForDiagnosticsNoPII("warn", "marketplaces_sync_failed", {
+        code: claudeAiMarketplaceRows.code,
+      });
+      throw new MarketplacesSyncFailed(claudeAiMarketplaceRows.code);
   }
 }
-
 export { syncClaudeAiMarketplaces };

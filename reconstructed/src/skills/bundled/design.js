@@ -9,9 +9,9 @@
  * attribution: placement 10
  */
 import { CLAUDE_DESIGN_TOOL_NAME, LIST } from "../../tools/ClaudeDesignTool/constants.js";
-import { Jme } from "../bundledSkillsGate.js";
+import { isBundledSkillGatedOff } from "../bundledSkillsGate.js";
 import { DESIGN } from "./bundledSkillNames.js";
-import { UW } from "../../tools/DesignSyncTool/DesignSyncTool.js";
+import { isDesignSyncAllowed } from "../../tools/DesignSyncTool/DesignSyncTool.js";
 import {
   isArtifactTypeAliasEnabled,
   orgAllowsArtifactTypeAlias,
@@ -26,21 +26,46 @@ function designToolCall(e) {
 }
 //@ chunk-hantmvxa.js:105723-106363 placement
 var DESIGN_SUBCOMMANDS = [
-  { value: "sync", description: "Push your local design system to claude.ai/design" },
-  { value: "login", description: "Authorize design access with your claude.ai account", isFinal: !0 },
-  { value: "consent", description: "Grant Claude agent access to your Design projects", isFinal: !0 },
-  { value: "revoke", description: "Revoke Claude agent access to your Design projects", isFinal: !0 },
-  { value: "import", description: "Pull a Claude Design project into the working directory" },
-  { value: "export", description: "Push the working directory into a new Claude Design project" },
-  { value: "status", description: "Show design-system auth and available design systems", isFinal: !0 },
+  {
+    value: "sync",
+    description: "Push your local design system to claude.ai/design",
+  },
+  {
+    value: "login",
+    description: "Authorize design access with your claude.ai account",
+    isFinal: true,
+  },
+  {
+    value: "consent",
+    description: "Grant Claude agent access to your Design projects",
+    isFinal: true,
+  },
+  {
+    value: "revoke",
+    description: "Revoke Claude agent access to your Design projects",
+    isFinal: true,
+  },
+  {
+    value: "import",
+    description: "Pull a Claude Design project into the working directory",
+  },
+  {
+    value: "export",
+    description: "Push the working directory into a new Claude Design project",
+  },
+  {
+    value: "status",
+    description: "Show design-system auth and available design systems",
+    isFinal: true,
+  },
 ];
+//@ chunk-hantmvxa.js:106363-108585 placement
 /**
  * /design 的分派提示词：先调用 Claude Design 工具 list，再按第一个参数调用对应操作。
  */
-//@ chunk-hantmvxa.js:106363-108585 placement
 function buildDesignPrompt(e) {
-  let trimmed = e.trim(),
-    s = designToolCall;
+  let trimmed = e.trim();
+  let s = designToolCall;
   return [
     "You are handling a `/design` command for Claude Design (claude.ai/design).",
     "",
@@ -90,31 +115,34 @@ function buildDesignPrompt(e) {
 `);
 }
 //@ chunk-hantmvxa.js:108585-108757 placement
-var freeze = Object.freeze({
-    sync: "design-sync",
-    login: "design-login",
-    consent: "design-consent",
-    revoke: "design-revoke",
-  }),
-  li = new Set([...Object.keys(freeze), "import", "export", "status"]);
+/**
+ * /design 命令接受的参数动作名集合。
+ */
+var rt = Object.freeze({
+  sync: "design-sync",
+  login: "design-login",
+  consent: "design-consent",
+  revoke: "design-revoke",
+});
+var DESIGN_COMMAND_NAMES = new Set([...Object.keys(rt), "import", "export", "status"]);
 //@ chunk-hantmvxa.js:108757-108933 placement
 function resolveDesignCommandMode(e) {
-  if (Jme(DESIGN)) return UW() ? "consent" : null;
+  if (isBundledSkillGatedOff(DESIGN)) return isDesignSyncAllowed() ? "consent" : null;
   if (isArtifactTypeAliasEnabled()) {
     if (orgAllowsArtifactTypeAlias(DESIGN_TYPE_ALIAS)) return "types";
-    return UW() ? "consent" : null;
+    return isDesignSyncAllowed() ? "consent" : null;
   }
   if (e.hubMode && isDesignSyncEnabled()) return "hub";
-  return UW() ? "consent" : null;
+  return isDesignSyncAllowed() ? "consent" : null;
 }
 //@ chunk-hantmvxa.js:108933-109093 placement
 var DESIGN_HUB_MENU_DESCRIPTION =
-    "Work with Claude Design (claude.ai/design) \u2014 create, import, export, sync, login",
-  DESIGN_CONSENT_DESCRIPTION = "Grant or revoke Claude agent access to your Design projects";
+  "Work with Claude Design (claude.ai/design) \u2014 create, import, export, sync, login";
+var DESIGN_CONSENT_DESCRIPTION = "Grant or revoke Claude agent access to your Design projects";
+//@ chunk-hantmvxa.js:109093-109420 placement
 /**
  * Claude Design 技能的描述文本：sync/login 走专用命令，其余映射到原生工具。
  */
-//@ chunk-hantmvxa.js:109093-109420 placement
 function designHubDescription() {
   return (
     "Hub for Claude Design (claude.ai/design): routes `sync`/`login` to their dedicated commands and maps `import`/`export`/`status`/free-form prompts to the native `" +
@@ -143,58 +171,80 @@ var DESIGN_COMMAND_VARIANTS = {
   },
 };
 //@ chunk-hantmvxa.js:109679-109753 placement
-function Ie(e) {
-  return [{ type: "text", text: `\`/design\` was invoked. ${e}` }];
+/**
+ * 拼出「/design 被调用」的文本块。
+ */
+function designInvokedText(e) {
+  return [
+    {
+      type: "text",
+      text: `\`/design\` was invoked. ${e}`,
+    },
+  ];
 }
+//@ chunk-hantmvxa.js:109753-111106 placement
 /**
  * /design 的 getPromptForCommand：按参数选 consent/types/hub 等模式拼提示词。
  */
-//@ chunk-hantmvxa.js:109753-111106 placement
 async function getDesignPromptForCommand(e, n) {
-  let s = resolveDesignCommandMode(n),
-    trimmed = e.trim(),
-    h = trimmed.split(/\s+/, 1)[0] ?? "",
-    lower = h.toLowerCase(),
-    trimmed_2 = trimmed.slice(h.length).trim(),
-    b = Jme(DESIGN),
-    k = !b && isDesignSyncEnabled(),
-    C = (S) =>
-      Ie(
-        `"${S}" is a Claude Design account or project command, not a brief, and this session does not offer it (for import, export or status, claude.ai/design is the place). Tell the user that in one line and stop \u2014 do not make anything named "${S}".`,
-      );
-  if (li.has(lower)) {
-    let S = !b && n.designSync && UW();
+  let designCommandMode = resolveDesignCommandMode(n);
+  let trimmed = e.trim();
+  let h = trimmed.split(/\s+/, 1)[0] ?? "";
+  let lower = h.toLowerCase();
+  let trimmed_2 = trimmed.slice(h.length).trim();
+  let b = isBundledSkillGatedOff(DESIGN);
+  let k = !b && isDesignSyncEnabled();
+  let C = (S) =>
+    designInvokedText(
+      `"${S}" is a Claude Design account or project command, not a brief, and this session does not offer it (for import, export or status, claude.ai/design is the place). Tell the user that in one line and stop \u2014 do not make anything named "${S}".`,
+    );
+  if (DESIGN_COMMAND_NAMES.has(lower)) {
+    let S = !b && n.designSync && isDesignSyncAllowed();
     if (lower === "sync" && (trimmed_2 || !S))
       return S
-        ? Ie(
+        ? designInvokedText(
             `"sync ${trimmed_2}" is the Claude Design sync command with a design-system hint, not a brief. Tell the user to run \`/design-sync ${trimmed_2}\` instead (the dedicated command takes the hint) and stop \u2014 do not make anything.`,
           )
         : C(trimmed);
-    if (!trimmed_2 && lower in freeze)
-      return Ie(
+    if (!trimmed_2 && lower in rt)
+      return designInvokedText(
         `\`/design ${lower}\` is for the user to type themselves, in an interactive Claude Code terminal signed in to claude.ai; if they already did, this session does not offer it (organization policy or sign-in). Say so in one line and stop.`,
       );
     if (lower === "import" && trimmed_2 && !k) return C(trimmed);
-    if (k && (s === "hub" || !trimmed_2 || lower === "import"))
-      return [{ type: "text", text: buildDesignPrompt(e) }];
+    if (k && (designCommandMode === "hub" || !trimmed_2 || lower === "import"))
+      return [
+        {
+          type: "text",
+          text: buildDesignPrompt(e),
+        },
+      ];
     if (!trimmed_2) return C(trimmed);
   }
-  switch (s) {
+  switch (designCommandMode) {
     case "types":
-      return [{ type: "text", text: buildArtifactTypeAliasPrompt(DESIGN_TYPE_ALIAS, e) }];
+      return [
+        {
+          type: "text",
+          text: buildArtifactTypeAliasPrompt(DESIGN_TYPE_ALIAS, e),
+        },
+      ];
     case "hub":
-      return [{ type: "text", text: buildDesignPrompt(e) }];
+      return [
+        {
+          type: "text",
+          text: buildDesignPrompt(e),
+        },
+      ];
     default:
-      return Ie(
+      return designInvokedText(
         "In this session /design only manages agent access to Claude Design projects: tell the user to run `/design consent` or `/design revoke`, and stop.",
       );
   }
 }
-
 export {
   DESIGN_SUBCOMMANDS,
   resolveDesignCommandMode,
   DESIGN_COMMAND_VARIANTS,
-  freeze,
+  rt,
   getDesignPromptForCommand,
 };

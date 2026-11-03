@@ -9,18 +9,24 @@
  * attribution: placement 1
  */
 
+//@ chunk-sv2dmqp8.js:191-749 placement
 /**
  * 判断 hook 附件来自插件还是普通 hook，并给出对应事件名。
  */
-//@ chunk-sv2dmqp8.js:191-749 placement
 function classifyHookAttachmentSource(attachment) {
   switch (attachment.type) {
     case "hook_additional_context":
       return attachment.hookName === "prompt.submit" ||
         attachment.hookName === "prompt.mention" ||
         attachment.hookName === "tool.call"
-        ? { kind: "plugin", event: attachment.hookName }
-        : { kind: "hook", event: attachment.hookEvent };
+        ? {
+            kind: "plugin",
+            event: attachment.hookName,
+          }
+        : {
+            kind: "hook",
+            event: attachment.hookEvent,
+          };
     case "hook_blocking_error":
     case "hook_stopped_continuation":
     case "hook_success":
@@ -31,10 +37,14 @@ function classifyHookAttachmentSource(attachment) {
     case "hook_permission_decision":
     case "hook_deferred_tool":
     case "async_hook_response":
-      return { kind: "hook", event: attachment.hookEvent };
+      return {
+        kind: "hook",
+        event: attachment.hookEvent,
+      };
     default:
-      return { kind: "engine" };
+      return {
+        kind: "engine",
+      };
   }
 }
-
 export { classifyHookAttachmentSource };

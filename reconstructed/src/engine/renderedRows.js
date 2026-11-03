@@ -10,12 +10,12 @@
  */
 import { Ar } from "../../runtime/bun-runtime.js";
 import {
-  Pwo,
+  TYPED_BLOCK_SCHEMA,
   THINKING_AND_RESULT_TYPES,
-  A1n,
-  NNt,
+  START_KEY,
+  TEXT_BLOCK_SCHEMA,
   toolResultBlockSchema,
-  Mwo,
+  toolResultBlock,
   messageToTextBlocks,
   summarizeMessageForExport,
   refuseSessionAppend,
@@ -23,9 +23,9 @@ import {
   parseTypedBlocks,
   isTextOnlyAppend,
   checkAppendBlock,
-  rQe,
+  resolveBlocks,
   buildPluginAppendRow,
-  Two,
+  pluginNameOf,
   contentTextParts,
   normalizeAppendedToolResult,
   matchAppendBlock,
@@ -58,22 +58,25 @@ import { matcherDoors } from "../plugins/functionHooks/sites/uiSites.js";
 import { safeDeepEqual } from "../plugins/functionHooks/apiDispatch.js";
 
 //@ chunk-1nk4j4sn.js:12078-12087 placement
-var U = {};
+/**
+ * 导出值：renderedRowsCache（空对象缓存）。
+ */
+var renderedRowsCache = {};
 //@ chunk-1nk4j4sn.js:12087-13277 placement
-Ar(U, {
-  BLOCK_SCHEMA: () => Pwo,
+Ar(renderedRowsCache, {
+  BLOCK_SCHEMA: () => TYPED_BLOCK_SCHEMA,
   BOUNDARY_SUFFIX: () => BOUNDARY_SUFFIX,
   COMMAND_ROW_TAGS: () => COMMAND_ROW_TAGS,
   DELIVERY_ATTACHMENT_TYPES: () => DELIVERY_ATTACHMENT_TYPES,
   HEAD_BLOCK_TYPES: () => THINKING_AND_RESULT_TYPES,
   REWRITABLE_BLOCK_TYPES: () => KEYLESS_BLOCK_TYPES,
   SESSION_APPEND: () => SESSION_APPEND_EVENT,
-  START_KEY: () => A1n,
-  TEXT_BLOCK_SCHEMA: () => NNt,
+  START_KEY: () => START_KEY,
+  TEXT_BLOCK_SCHEMA: () => TEXT_BLOCK_SCHEMA,
   TOOL_RESULT_ANSWER_SCHEMA: () => toolResultBlockSchema,
   anchorKeysOf: () => contentBlockStableKeys,
   answeredBlockOf: () => answeredBlockOf,
-  answeredPickOf: () => Mwo,
+  answeredPickOf: () => toolResultBlock,
   answeredToolUseId: () => getToolUseIdOfMessage,
   appendContentOf: () => messageToTextBlocks,
   appendCoreOf: () => appendCoreOf,
@@ -86,7 +89,7 @@ Ar(U, {
   attachmentRenderingsOf: () => attachmentToContents,
   callAppended: () => callAppended,
   candidateBlocksOf: () => parseTypedBlocks,
-  default: () => U,
+  default: () => renderedRowsCache,
   doorOf: () => doorOf,
   doorsHeldTo: () => matcherDoors,
   filledRow: () => mergeMessageInPlace,
@@ -95,10 +98,10 @@ Ar(U, {
   lastTextOf: () => lastTextOf,
   mintedRowOf: () => checkAppendBlock,
   pickTextOf: () => pickTextOf,
-  pickedTextsOf: () => rQe,
+  pickedTextsOf: () => resolveBlocks,
   pluginAppendInputOf: () => buildPluginAppendRow,
   pluginAppended: () => pluginAppended,
-  pluginNameOf: () => Two,
+  pluginNameOf: () => pluginNameOf,
   renderedRowOf: () => renderedRowOf,
   renderingOf: () => renderingOf,
   renderingTextsOf: () => contentTextParts,
@@ -119,108 +122,156 @@ Ar(U, {
 var renderedRowOf = (e, o) => ({
   ...e,
   rendered: o,
-  ...(e.attachment.type === "queued_command" && { renderedInHumanTurn: o }),
+  ...(e.attachment.type === "queued_command" && {
+    renderedInHumanTurn: o,
+  }),
 });
 //@ chunk-1nk4j4sn.js:13375-13516 placement
-var assistantContentOf = (e, o) =>
+var assistantContentOf = (content, o) =>
   o.flatMap((r) => {
-    if (r.kind === "text") return [{ type: "text", text: r.text, citations: null }];
-    let n = e[r.index];
-    return n === void 0 ? [] : [n];
+    if (r.kind === "text")
+      return [
+        {
+          type: "text",
+          text: r.text,
+          citations: null,
+        },
+      ];
+    let n = content[r.index];
+    return n === undefined ? [] : [n];
   });
 //@ chunk-1nk4j4sn.js:13516-13622 placement
 function renderingOf(e, o) {
   let [r] = e;
-  return { content: o && e.length === 1 && r !== void 0 ? r : e.map((p) => ({ type: "text", text: p })) };
+  return {
+    content:
+      o && e.length === 1 && r !== undefined
+        ? r
+        : e.map((text) => ({
+            type: "text",
+            text,
+          })),
+  };
 }
 //@ chunk-1nk4j4sn.js:13622-13840 placement
-function renderingWithTexts(e, o) {
+function renderingWithTexts(e, blocks) {
   let mapped = e.map((s) => contentTextParts(s).length);
-  if (o.length !== mapped.reduce((s, i) => s + i, 0)) return [renderingOf(o, o.length === 1)];
+  if (blocks.length !== mapped.reduce((acc, i) => acc + i, 0))
+    return [renderingOf(blocks, blocks.length === 1)];
   let p = 0;
   return e.map((s, i) => {
-    let a = mapped[i] ?? 0,
-      sliced = o.slice(p, p + a);
-    return ((p += a), renderingOf(sliced, typeof s.content === "string"));
+    let a = mapped[i] ?? 0;
+    let sliced = blocks.slice(p, p + a);
+    p += a;
+    return renderingOf(sliced, typeof s.content === "string");
   });
 }
 //@ chunk-1nk4j4sn.js:13840-14052 placement
 function answeredBlockOf(e, o) {
   if (o.kind !== "tool-result" || e.type !== "tool_result") return e;
-  let { is_error: is_error, ...p } = e,
-    s = o.isError === (e.is_error === !0);
+  let { is_error: isError, ...p } = e;
+  let s = o.isError === (e.is_error === true);
   return {
     ...(s ? e : p),
     content: reconcileAppendContent(e.content, o.content),
-    ...(!s && o.isError && { is_error: !0 }),
+    ...(!s &&
+      o.isError && {
+        is_error: true,
+      }),
   };
 }
 //@ chunk-1nk4j4sn.js:14052-14091 placement
 var pickTextOf = (e, o) => (e?.kind === "text" ? e.text : o);
 //@ chunk-1nk4j4sn.js:14091-14350 placement
-function userContentOf(e, o) {
-  let [r] = o,
-    n = o.length === 1 && r?.kind !== "tool-result";
-  return typeof e === "string"
+function userContentOf(content, o) {
+  let [r] = o;
+  let n = o.length === 1 && r?.kind !== "tool-result";
+  return typeof content === "string"
     ? n
-      ? pickTextOf(r, e)
-      : o.map((s) => ({ type: "text", text: pickTextOf(s, e) }))
+      ? pickTextOf(r, content)
+      : o.map((s) => ({
+          type: "text",
+          text: pickTextOf(s, content),
+        }))
     : o.flatMap((s) => {
-        if (s.kind === "text") return [{ type: "text", text: s.text }];
-        let a = e[s.index];
-        return a === void 0 ? [] : [answeredBlockOf(a, s)];
+        if (s.kind === "text")
+          return [
+            {
+              type: "text",
+              text: s.text,
+            },
+          ];
+        let a = content[s.index];
+        return a === undefined ? [] : [answeredBlockOf(a, s)];
       });
 }
 //@ chunk-1nk4j4sn.js:14350-14430 placement
-var k = (e, o) => (safeDeepEqual(o, e.message.content) ? e : { ...e, message: { ...e.message, content: o } });
+var withRewrittenContent = (e, o) =>
+  safeDeepEqual(o, e.message.content)
+    ? e
+    : {
+        ...e,
+        message: {
+          ...e.message,
+          content: o,
+        },
+      };
 //@ chunk-1nk4j4sn.js:14430-14869 placement
-function rowWithContent(e, o) {
-  let r = normalizeAppendedToolResult(messageToTextBlocks(e), parseTypedBlocks(o.content));
-  switch (e.type) {
+function rowWithContent(message, message_2) {
+  let r = normalizeAppendedToolResult(messageToTextBlocks(message), parseTypedBlocks(message_2.content));
+  switch (message.type) {
     case "user":
-      return k(e, userContentOf(e.message.content, r));
+      return withRewrittenContent(message, userContentOf(message.message.content, r));
     case "assistant":
-      return k(e, assistantContentOf(e.message.content, r));
+      return withRewrittenContent(message, assistantContentOf(message.message.content, r));
     case "attachment": {
-      let n = attachmentToContents(e),
-        p = rQe(n.flatMap(contentTextParts), r),
-        s = renderingWithTexts(n, p);
-      return !isTextOnlyAppend(e.attachment.type, n) || p.length === 0 || safeDeepEqual(s, n)
-        ? e
-        : renderedRowOf(e, s);
+      let n = attachmentToContents(message);
+      let blocks = resolveBlocks(n.flatMap(contentTextParts), r);
+      let s = renderingWithTexts(n, blocks);
+      return !isTextOnlyAppend(message.attachment.type, n) || blocks.length === 0 || safeDeepEqual(s, n)
+        ? message
+        : renderedRowOf(message, s);
     }
     case "system": {
-      if (!("content" in e) || typeof e.content !== "string") return e;
-      let joined = rQe([e.content], r).join(`
+      if (!("content" in message) || typeof message.content !== "string") return message;
+      let joined = resolveBlocks([message.content], r).join(`
 `);
-      return joined === e.content ? e : { ...e, content: joined };
+      return joined === message.content
+        ? message
+        : {
+            ...message,
+            content: joined,
+          };
     }
   }
 }
+//@ chunk-1nk4j4sn.js:14869-15092 placement = extractErrorDetail (1)
 /**
  * 用新消息内容覆盖旧消息（同类型时只换 content），返回旧对象。与 bridge 无关。
  */
-//@ chunk-1nk4j4sn.js:14869-15092 placement = extractErrorDetail (1)
 function mergeMessageInPlace(e, o) {
   let r = (e.type === "assistant" && o.type === "assistant") || (e.type === "user" && o.type === "user");
   if (e === o) return e;
-  if (r && "message" in e && "message" in o) return ((e.message.content = o.message.content), e);
+  if (r && "message" in e && "message" in o) {
+    e.message.content = o.message.content;
+    return e;
+  }
   return Object.assign(e, o);
 }
+//@ chunk-3xb70ww4.js:2932-3238 placement
 /**
  * 为内容块生成稳定键：tool_use:<id>、tool_result:<tool_use_id>，其他块 type#序号；被忽略类型返回 undefined。
  */
-//@ chunk-3xb70ww4.js:2932-3238 placement
 function contentBlockStableKeys(t) {
   let e = new Map();
   return t.map((n) => {
     if (KEYLESS_BLOCK_TYPES.has(n.type)) return;
     if (n.type === "tool_use" && typeof n.id === "string") return `tool_use:${n.id}`;
-    let tool_use_id = n.tool_use_id;
-    if (n.type === "tool_result" && typeof tool_use_id === "string") return `tool_result:${tool_use_id}`;
+    let toolUseId = n.tool_use_id;
+    if (n.type === "tool_result" && typeof toolUseId === "string") return `tool_result:${toolUseId}`;
     let i = e.get(n.type) ?? 0;
-    return (e.set(n.type, i + 1), `${n.type}#${i}`);
+    e.set(n.type, i + 1);
+    return `${n.type}#${i}`;
   });
 }
-
 export { rowWithContent, mergeMessageInPlace, contentBlockStableKeys };

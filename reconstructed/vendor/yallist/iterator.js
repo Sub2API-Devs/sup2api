@@ -8,12 +8,11 @@
 import { x } from "../../runtime/bun-runtime.js";
 
 //@ chunk-1ny7cxrt.js:10826-10965 cjs-fingerprint
-var BO = x(function (zve, FO) {
-  FO.exports = function (e) {
-    e.prototype[Symbol.iterator] = function* () {
-      for (let head = this.head; head; head = head.next) yield head.value;
+var require_iterator = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = function (Yallist) {
+    Yallist.prototype[Symbol.iterator] = function* () {
+      for (let walker = this.head; walker; walker = walker.next) yield walker.value;
     };
   };
 });
-
-export { BO };
+export { require_iterator };

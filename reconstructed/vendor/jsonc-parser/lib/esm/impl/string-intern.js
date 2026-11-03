@@ -7,56 +7,55 @@
  */
 
 //@ chunk-kndsyy4v.js:5028-5078 esm-fingerprint
-var mapped = Array(20)
+var cachedSpaces = Array(20)
   .fill(0)
-  .map((e, s) => " ".repeat(s));
+  .map((_, index) => " ".repeat(index));
 //@ chunk-kndsyy4v.js:5078-5455 esm-fingerprint
-var H = {
-    " ": {
-      "\n": Array(200)
-        .fill(0)
-        .map(
-          (e, s) =>
-            `
-` + " ".repeat(s),
-        ),
-      "\r": Array(200)
-        .fill(0)
-        .map((e, s) => "\r" + " ".repeat(s)),
-      "\r\n": Array(200)
-        .fill(0)
-        .map(
-          (e, s) =>
-            `\r
-` + " ".repeat(s),
-        ),
-    },
-    "\t": {
-      "\n": Array(200)
-        .fill(0)
-        .map(
-          (e, s) =>
-            `
-` + "\t".repeat(s),
-        ),
-      "\r": Array(200)
-        .fill(0)
-        .map((e, s) => "\r" + "\t".repeat(s)),
-      "\r\n": Array(200)
-        .fill(0)
-        .map(
-          (e, s) =>
-            `\r
-` + "\t".repeat(s),
-        ),
-    },
+var cachedBreakLinesWithSpaces = {
+  " ": {
+    "\n": Array(200)
+      .fill(0)
+      .map(
+        (_, index) =>
+          `
+` + " ".repeat(index),
+      ),
+    "\r": Array(200)
+      .fill(0)
+      .map((_, index) => "\r" + " ".repeat(index)),
+    "\r\n": Array(200)
+      .fill(0)
+      .map(
+        (_, index) =>
+          `\r
+` + " ".repeat(index),
+      ),
   },
-  K = [
-    `
+  "\t": {
+    "\n": Array(200)
+      .fill(0)
+      .map(
+        (_, index) =>
+          `
+` + "\t".repeat(index),
+      ),
+    "\r": Array(200)
+      .fill(0)
+      .map((_, index) => "\r" + "\t".repeat(index)),
+    "\r\n": Array(200)
+      .fill(0)
+      .map(
+        (_, index) =>
+          `\r
+` + "\t".repeat(index),
+      ),
+  },
+};
+var K = [
+  `
 `,
-    "\r",
-    `\r
+  "\r",
+  `\r
 `,
-  ];
-
-export { K, mapped, H };
+];
+export { K, cachedSpaces, cachedBreakLinesWithSpaces };

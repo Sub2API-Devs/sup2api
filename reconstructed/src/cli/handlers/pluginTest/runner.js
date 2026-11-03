@@ -8,28 +8,8 @@
  * pieces: chunk-1tz177x8.js (29)
  * attribution: placement 29
  */
-import {
-  join,
-  join as join_2,
-  join as join_3,
-  join as join_4,
-  join as join_5,
-  join as join_6,
-  relative,
-  relative as relative_2,
-  relative as relative_3,
-  sep,
-  isAbsolute,
-  resolve,
-} from "path";
-import {
-  mkdir,
-  writeFile,
-  readFile,
-  readFile as readFile_2,
-  readdir,
-  readdir as readdir_2,
-} from "fs/promises";
+import { join, relative, sep, isAbsolute, resolve } from "path";
+import { mkdir, writeFile, readFile, readdir } from "fs/promises";
 import { availableParallelism } from "os";
 import { Ar } from "../../../../runtime/bun-runtime.js";
 import {
@@ -51,32 +31,32 @@ import {
 } from "./refusal.js";
 import { joined } from "../modCommands.js";
 import { endPluginTest } from "./endPluginTest.js";
-import { createHooksEngine, pSi } from "../../../plugins/functionHooks/vm/moduleLoader.js";
-import { NH, freezeApiObject } from "../../../plugins/functionHooks/dispatch/chain.js";
+import { createHooksEngine, linkAndLoadModule } from "../../../plugins/functionHooks/vm/moduleLoader.js";
+import { nullPrototypeFunction, freezeApiObject } from "../../../plugins/functionHooks/dispatch/chain.js";
 import { describeLogArg, describeThrownValue } from "../../../plugins/functionHooks/vm/vmRealm.js";
 import { errorMessage } from "../../../utils/errors.js";
 import { HooksError } from "../../../plugins/functionHooks/hooksErrors.js";
 import { createVmContext } from "../../../plugins/functionHooks/vm/vmGlobals.js";
 import {
   createTestKitModule,
-  oo,
-  qo,
+  fileErrorReport,
+  errorTextOf,
   CLAUDE_CODE_TESTING,
-  Bt,
-  Eo,
+  KIT_SETTLE_TICKS,
+  cleanFileReport,
   TEST_REPORT_SCHEMA,
-  pi,
-  mi,
-  Wo,
+  pickChildEnvAllowlist,
+  envWithoutGrowthBook,
+  PLUGIN_TEST_FILE_TIMEOUT_MS,
 } from "./kit.js";
 import { sleep } from "../../../utils/sleep.js";
 import { REPORT_MARK } from "./reportMark.js";
 import { safeParseJSON } from "../../../utils/json.js";
-import { rYr } from "../../../utils/plugins/hooksModulesLoadGate.js";
+import { hooksModulesGateSourceChanged } from "../../../utils/plugins/hooksModulesLoadGate.js";
 import { getLaunchCommand } from "../../../utils/deepLink/registerProtocol.js";
 import { safeExecFile } from "../../../utils/safeSpawn.js";
 import { subprocessEnv } from "../../../utils/subprocessEnv.js";
-import { SLOW_HOOK_REPORT_INTERVAL_MS } from "../../../plugins/functionHooks/dispatch/slowHookReports.js";
+import { SLOW_HOOK_REPORT_INTERVAL_MS_2 } from "../../../plugins/functionHooks/dispatch/slowHookReports.js";
 import { plural } from "../../../utils/stringUtils.js";
 import { installTestHost } from "./engineShim.js";
 import { jsonStringify } from "../../../utils/slowOperations.js";
@@ -115,52 +95,64 @@ Ar(runnerNamespace, {
 //@ chunk-1tz177x8.js:13828-13837 placement
 var CHILD_ARGV_LENGTH = 3;
 //@ chunk-1tz177x8.js:13869-13993 placement
-var createTestHooksEngine = (e, r) => (n, s, m) =>
+var createTestHooksEngine = (bare, register) => (args, host, bounds) =>
   createHooksEngine({
-    bare: e,
-    args: n,
-    host: s,
-    bounds: m,
-    isInstallingGlobals: !1,
-    loaded: () => Promise.resolve({ register: r }),
+    bare,
+    args,
+    host,
+    bounds,
+    isInstallingGlobals: false,
+    loaded: () =>
+      Promise.resolve({
+        register,
+      }),
   });
 //@ chunk-1tz177x8.js:14104-14394 placement
 async function scaffoldPluginTestDir(e, r, n) {
-  let s = join_2(e, "hooks", "register.js");
-  return (
-    await mkdir(join_2(e, ".claude-plugin"), { recursive: !0 }),
-    await mkdir(join_2(e, "hooks")),
-    await writeFile(
-      join_2(e, ".claude-plugin", "plugin.json"),
-      `{"name":"${r}"}
+  let s = join(e, "hooks", "register.js");
+  await mkdir(join(e, ".claude-plugin"), {
+    recursive: true,
+  });
+  await mkdir(join(e, "hooks"));
+  await writeFile(
+    join(e, ".claude-plugin", "plugin.json"),
+    `{"name":"${r}"}
 `,
-    ),
-    await writeFile(
-      join_2(e, "hooks", "hooks.json"),
-      `{"modules":["./register.js"]}
-`,
-    ),
-    await writeFile(s, n),
-    s
   );
+  await writeFile(
+    join(e, "hooks", "hooks.json"),
+    `{"modules":["./register.js"]}
+`,
+  );
+  await writeFile(s, n);
+  return s;
 }
 //@ chunk-1tz177x8.js:46664-46728 placement
-var to = { tab: 9, space: 32, delete: 127, c1Last: 159, radix: 16, digits: 4 };
+var CONTROL_CHAR_BOUNDS = {
+  tab: 9,
+  space: 32,
+  delete: 127,
+  c1Last: 159,
+  radix: 16,
+  digits: 4,
+};
 //@ chunk-1tz177x8.js:46728-46911 placement
 var escapeControlChars = (e) =>
   [...e]
     .map((r) => {
-      let code = r.charCodeAt(0),
-        s = (code < to.space && code !== to.tab) || (code >= to.delete && code <= to.c1Last),
-        padded = code.toString(to.radix).padStart(to.digits, "0");
+      let code = r.charCodeAt(0);
+      let s =
+        (code < CONTROL_CHAR_BOUNDS.space && code !== CONTROL_CHAR_BOUNDS.tab) ||
+        (code >= CONTROL_CHAR_BOUNDS.delete && code <= CONTROL_CHAR_BOUNDS.c1Last);
+      let padded = code.toString(CONTROL_CHAR_BOUNDS.radix).padStart(CONTROL_CHAR_BOUNDS.digits, "0");
       return s ? `\\u${padded}` : r;
     })
     .join("");
 //@ chunk-1tz177x8.js:46911-47088 placement
-function createChildConsole(e) {
+function createChildConsole(wrapMethod) {
   let r = () =>
-    NH(
-      e((...n) => {
+    nullPrototypeFunction(
+      wrapMethod((...n) => {
         process.stderr.write(
           n
             .map(describeLogArg)
@@ -176,55 +168,78 @@ function createChildConsole(e) {
         );
       }),
     );
-  return freezeApiObject({ log: r(), info: r(), warn: r(), error: r(), debug: r() });
+  return freezeApiObject({
+    log: r(),
+    info: r(),
+    warn: r(),
+    error: r(),
+    debug: r(),
+  });
 }
 //@ chunk-1tz177x8.js:47088-47153 placement
-function ir({ live: live, id: id, fire: fire, fn: fn, args: args }) {
-  (live.delete(id), fire(fn, args));
+function fireTimerCallback({ live, id, fire, fn, args }) {
+  live.delete(id);
+  fire(fn, args);
 }
 //@ chunk-1tz177x8.js:47153-47171 placement
-var pr = 2147483647;
+var MAX_TIMER_DELAY_MS = 2147483647;
 //@ chunk-1tz177x8.js:47171-47221 placement
-var mr = (e, r, n) => ({ globals: e, clearAll: r, thrown: n });
+var createVmTimers = (globals, clearAll, thrown) => ({
+  globals,
+  clearAll,
+  thrown,
+});
+//@ chunk-1tz177x8.js:47221-47801 placement
 /**
  * 为测试 vm 提供 setTimeout/setInterval/clear*：真实计时器回调转进 vm 调用，延迟有上限；clearAll 清掉所有计时器，thrown 返回回调抛出的错误。
  */
-//@ chunk-1tz177x8.js:47221-47801 placement
-function createVmTimers(wrapMethod, call) {
-  let n = new Map(),
-    s = 0,
-    m = [],
-    f = (h, k) => {
-      call(h, ...k).catch((y) => {
-        m = [...m, errorMessage(y)];
-      });
-    },
-    a = (h) =>
-      NH(
-        wrapMethod((k, y, ...b) => {
-          if (typeof k !== "function") throw new HooksError("a timer takes a function");
-          let z = Number.isFinite(y) && Number(y) > 0 ? Number(y) : 0,
-            min = Math.min(z, pr);
-          return (
-            (s += 1),
-            n.set(
-              s,
-              h
-                ? setInterval(f, min, k, b)
-                : setTimeout(ir, min, { live: n, id: s, fire: f, fn: k, args: b }),
-            ),
-            s
-          );
-        }),
-      ),
-    c = NH(
-      wrapMethod((h) => {
-        let k = typeof h === "number" ? n.get(h) : void 0;
-        if (k) (n.delete(h), clearInterval(k));
+function createVmTimers_2(wrapMethod, call) {
+  let n = new Map();
+  let s = 0;
+  let m = [];
+  let f = (h, k) => {
+    call(h, ...k).catch((error) => {
+      m = [...m, errorMessage(error)];
+    });
+  };
+  let a = (h) =>
+    nullPrototypeFunction(
+      wrapMethod((k, y, ...b) => {
+        if (typeof k !== "function") throw new HooksError("a timer takes a function");
+        let z = Number.isFinite(y) && Number(y) > 0 ? Number(y) : 0;
+        let min = Math.min(z, MAX_TIMER_DELAY_MS);
+        s += 1;
+        n.set(
+          s,
+          h
+            ? setInterval(f, min, k, b)
+            : setTimeout(fireTimerCallback, min, {
+                live: n,
+                id: s,
+                fire: f,
+                fn: k,
+                args: b,
+              }),
+        );
+        return s;
       }),
     );
-  return mr(
-    { setTimeout: a(!1), setInterval: a(!0), clearTimeout: c, clearInterval: c },
+  let c = nullPrototypeFunction(
+    wrapMethod((h) => {
+      let k = typeof h === "number" ? n.get(h) : undefined;
+      if (k) {
+        n.delete(h);
+        clearInterval(k);
+      }
+    }),
+  );
+  return createVmTimers(
+    {
+      setTimeout: a(false),
+      setInterval: a(true),
+      clearTimeout: c,
+      clearInterval: c,
+    },
     () => {
       for (let h of n.values()) clearInterval(h);
       n.clear();
@@ -234,8 +249,8 @@ function createVmTimers(wrapMethod, call) {
 }
 //@ chunk-1tz177x8.js:47801-48089 placement
 function createTestEnvironment(e) {
-  let r = createVmContext(e),
-    { vmCall: vmCall, vmSettle: vmSettle, fromEnvironment: fromEnvironment, wrapMethod: wrapMethod } = r;
+  let vmContext = createVmContext(e);
+  let { vmCall, vmSettle, fromEnvironment, wrapMethod } = vmContext;
   async function a(h, ...k) {
     try {
       return (await vmSettle(vmCall(h, ...k))).v;
@@ -243,205 +258,235 @@ function createTestEnvironment(e) {
       throw fromEnvironment(error);
     }
   }
-  let c = createVmTimers(wrapMethod, a);
-  return (
-    Object.assign(r.globals, { console: createChildConsole(wrapMethod), ...c.globals }),
-    { bare: r, call: a, dispose: c.clearAll, thrown: c.thrown }
-  );
+  let vmTimers = createVmTimers_2(wrapMethod, a);
+  Object.assign(vmContext.globals, {
+    console: createChildConsole(wrapMethod),
+    ...vmTimers.globals,
+  });
+  return {
+    bare: vmContext,
+    call: a,
+    dispose: vmTimers.clearAll,
+    thrown: vmTimers.thrown,
+  };
 }
 //@ chunk-1tz177x8.js:48089-48755 placement
-async function runTestFileInChild(e, r) {
-  let n = createTestEnvironment(e),
-    s = await createTestKitModule(n, e),
-    m = (a) => oo(r, qo(a)),
-    f = (a) => oo(r, `its tests did not finish: ${qo(a)}`);
+async function runTestFileInChild(root, file) {
+  let environment = createTestEnvironment(root);
+  let testKitModule = await createTestKitModule(environment, root);
+  let m = (a) => fileErrorReport(file, errorTextOf(a));
+  let f = (a) => fileErrorReport(file, `its tests did not finish: ${errorTextOf(a)}`);
   try {
-    let a = await pSi({
+    let a = await linkAndLoadModule({
       args: {
-        modulePath: r,
-        pluginName: relative(e, r),
-        pluginRoot: e,
-        source: await readFile_2(r, { encoding: "utf8" }),
+        modulePath: file,
+        pluginName: relative(root, file),
+        pluginRoot: root,
+        source: await readFile(file, {
+          encoding: "utf8",
+        }),
         linked: [],
         links: [],
       },
-      context: n.bare.context,
-      isScanned: !1,
+      context: environment.bare.context,
+      isScanned: false,
       stamped: (y) => y(),
-      virtual: new Map([[CLAUDE_CODE_TESTING, s.module]]),
+      virtual: new Map([[CLAUDE_CODE_TESTING, testKitModule.module]]),
     }).then(() => {
       return;
     }, m);
     if (a) return a;
-    let c = await s
-      .run()
-      .then(
-        (y) => (y.length === 0 ? oo(r, "it declares no test(): nothing ran") : { file: r, results: y }),
-        f,
-      );
-    for (let y = 0; y < Bt; y += 1) await sleep(0);
-    let thrown = n.thrown();
-    return thrown.length === 0
+    let c = await testKitModule.run().then(
+      (y) =>
+        y.length === 0
+          ? fileErrorReport(file, "it declares no test(): nothing ran")
+          : {
+              file,
+              results: y,
+            },
+      f,
+    );
+    for (let y = 0; y < KIT_SETTLE_TICKS; y += 1) await sleep(0);
+    let h = environment.thrown();
+    return h.length === 0
       ? c
       : {
           ...c,
           results: [
             ...c.results,
-            Eo(
-              `a timer callback threw: ${thrown.join(`
+            cleanFileReport(
+              `a timer callback threw: ${h.join(`
 `)}`,
             ),
           ],
         };
   } finally {
-    (await s.dispose(), n.dispose());
+    await testKitModule.dispose();
+    environment.dispose();
   }
 }
+//@ chunk-1tz177x8.js:48755-49173 placement
 /**
  * 从子进程输出里取最后一行 REPORT_MARK 报告；没有报告时生成失败结果；退出码非 0 时追加一条失败说明。
  */
-//@ chunk-1tz177x8.js:48755-49173 placement
 function readChildReport(file, stdout, exitCode) {
   let last = stdout
-      .split(
-        `
+    .split(
+      `
 `,
-      )
-      .findLast((c) => c.startsWith(REPORT_MARK)),
-    safeParse = TEST_REPORT_SCHEMA().safeParse(
-      last === void 0 ? null : safeParseJSON(last.slice(REPORT_MARK.length)),
-    ),
-    f = safeParse.success && safeParse.data.file === file ? safeParse.data : void 0;
-  if (f === void 0) return oo(file, `its run ended without a report (exit code ${exitCode ?? "?"})`);
+    )
+    .findLast((line) => line.startsWith(REPORT_MARK));
+  let m = TEST_REPORT_SCHEMA().safeParse(
+    last === undefined ? null : safeParseJSON(last.slice(REPORT_MARK.length)),
+  );
+  let f = m.success && m.data.file === file ? m.data : undefined;
+  if (f === undefined)
+    return fileErrorReport(file, `its run ended without a report (exit code ${exitCode ?? "?"})`);
   return exitCode === 0
     ? f
     : {
         ...f,
         results: [
           ...f.results,
-          Eo(
+          cleanFileReport(
             `its run exited with code ${exitCode ?? "?"} after reporting: a rejection nothing handled, or a throw after its test ended`,
           ),
         ],
       };
 }
 //@ chunk-1tz177x8.js:49201-49254 placement
-var lr = /^\s+at (?:.+ \()?(?:\S+:\d+:\d+|native)\)?$/;
+var STACK_FRAME_PATTERN = /^\s+at (?:.+ \()?(?:\S+:\d+:\d+|native)\)?$/;
 //@ chunk-1tz177x8.js:49254-49282 placement
-var cr = (e, r) => e.includes(r);
+var stringIncludes = (line, r) => line.includes(r);
 //@ chunk-1tz177x8.js:49282-49566 placement
 function formatFailureStack(e, r) {
-  let parts = e.split(`
-`),
-    s = parts.findLastIndex((a) => !lr.test(a)) + 1,
-    mapped = parts
-      .slice(s)
-      .filter((a) => cr(a, r))
-      .map((a) => a.replaceAll(`${r}${sep}`, "").replaceAll(`${r}/`, "")),
-    f = [...parts.slice(0, s), ...mapped];
+  let lines = e.split(`
+`);
+  let s = lines.findLastIndex((line) => !STACK_FRAME_PATTERN.test(line)) + 1;
+  let mapped = lines
+    .slice(s)
+    .filter((line) => stringIncludes(line, r))
+    .map((line) => line.replaceAll(`${r}${sep}`, "").replaceAll(`${r}/`, ""));
+  let f = [...lines.slice(0, s), ...mapped];
   return f.slice(0, f.findLastIndex((a) => a.trim() !== "") + 1).map((a) => `  ${escapeControlChars(a)}`)
     .join(`
 `);
 }
+//@ chunk-1tz177x8.js:49599-49910 placement
 /**
  * 生成单个测试文件的结果报告（加载失败与每个测试的通过/失败及耗时）。
  */
-//@ chunk-1tz177x8.js:49599-49910 placement
-function formatFileReport(e, r) {
-  let n = ["", `${escapeControlChars(relative_2(r, e.file))}:`];
-  if (e.error !== void 0) n.push("(fail) the file did not load", formatFailureStack(e.error, r));
+function formatFileReport(e, root) {
+  let n = ["", `${escapeControlChars(relative(root, e.file))}:`];
+  if (e.error !== undefined) n.push("(fail) the file did not load", formatFailureStack(e.error, root));
   for (let s of e.results) {
-    let m = `[${s.ms.toFixed(2)}ms]`,
-      f = s.failure === null,
-      a = escapeControlChars(s.title);
-    n.push(...(f ? [`(pass) ${a} ${m}`] : [`(fail) ${a} ${m}`, formatFailureStack(s.failure ?? "", r)]));
+    let m = `[${s.ms.toFixed(2)}ms]`;
+    let f = s.failure === null;
+    let a = escapeControlChars(s.title);
+    n.push(...(f ? [`(pass) ${a} ${m}`] : [`(fail) ${a} ${m}`, formatFailureStack(s.failure ?? "", root)]));
   }
   return `${n.join(`
 `)}
 `;
 }
 //@ chunk-1tz177x8.js:49910-49965 placement
-function gr() {
-  return rYr() ? { DISABLE_GROWTHBOOK: "1" } : {};
+function growthBookDisabledEnv() {
+  return hooksModulesGateSourceChanged()
+    ? {
+        DISABLE_GROWTHBOOK: "1",
+      }
+    : {};
 }
 //@ chunk-1tz177x8.js:49965-50519 placement
-async function spawnPluginTestChild(e, r) {
-  let n = getLaunchCommand({ pinToCurrentBinary: !0 });
+async function spawnPluginTestChild(e, file) {
+  let launchCommand = getLaunchCommand({
+    pinToCurrentBinary: true,
+  });
   try {
-    let s = await safeExecFile(n.cmd, [...n.prefixArgs, "plugin", "test", "--file", r, e], {
-      cwd: e,
-      env: { ...pi(mi(subprocessEnv())), ...gr() },
-      extendEnv: !1,
-      stdin: "ignore",
-      stdout: "pipe",
-      stderr: "inherit",
-      reject: !1,
-      timeout: Wo,
-      toolCgroupClass: "plugin",
-      windowsHide: !0,
-    });
-    return s.timedOut === !0
-      ? oo(
-          r,
-          `it did not finish: its run passed ${Wo} ms and was killed, its results with it; a test that never yields (a loop with no await) outlasts its own timeout`,
+    let s = await safeExecFile(
+      launchCommand.cmd,
+      [...launchCommand.prefixArgs, "plugin", "test", "--file", file, e],
+      {
+        cwd: e,
+        env: {
+          ...pickChildEnvAllowlist(envWithoutGrowthBook(subprocessEnv())),
+          ...growthBookDisabledEnv(),
+        },
+        extendEnv: false,
+        stdin: "ignore",
+        stdout: "pipe",
+        stderr: "inherit",
+        reject: false,
+        timeout: PLUGIN_TEST_FILE_TIMEOUT_MS,
+        toolCgroupClass: "plugin",
+        windowsHide: true,
+      },
+    );
+    return s.timedOut === true
+      ? fileErrorReport(
+          file,
+          `it did not finish: its run passed ${PLUGIN_TEST_FILE_TIMEOUT_MS} ms and was killed, its results with it; a test that never yields (a loop with no await) outlasts its own timeout`,
         )
-      : readChildReport(r, s.stdout, s.exitCode);
+      : readChildReport(file, s.stdout, s.exitCode);
   } catch (error) {
-    return oo(r, `its child did not run: ${errorMessage(error)}`);
+    return fileErrorReport(file, `its child did not run: ${errorMessage(error)}`);
   }
 }
 //@ chunk-1tz177x8.js:50562-51178 placement
-async function runPluginTests({ root: root, files: files, runFile: runFile, write: write }) {
-  let startTime = performance.now(),
-    max = Math.max(1, Math.min(files.length, availableParallelism())),
-    a = [],
-    c = 0;
+async function runPluginTests({ root, files, runFile, write }) {
+  let startTime = performance.now();
+  let max = Math.max(1, Math.min(files.length, availableParallelism()));
+  let a = [];
+  let c = 0;
   function h() {
     let I = files[c];
-    if (((c += 1), I === void 0)) return;
+    c += 1;
+    if (I === undefined) return;
     let j = runFile(I);
-    (a.push(j), j.then(h, h));
+    a.push(j);
+    j.then(h, h);
   }
   for (let I = 0; I < max; I += 1) h();
-  let k = 0,
-    y = 0;
+  let k = 0;
+  let y = 0;
   for (let I = 0; I < files.length; I += 1) {
     while (!a[I]) await Promise.race(a);
     let j = await a[I];
     write(formatFileReport(j, root));
     let filtered = j.results.filter((W) => W.failure !== null);
-    ((k += j.results.length - filtered.length), (y += filtered.length + (j.error === void 0 ? 0 : 1)));
+    k += j.results.length - filtered.length;
+    y += filtered.length + (j.error === undefined ? 0 : 1);
   }
-  let toFixed = ((performance.now() - startTime) / SLOW_HOOK_REPORT_INTERVAL_MS).toFixed(2),
-    z = k + y;
-  return (
-    write(`
+  let b = ((performance.now() - startTime) / SLOW_HOOK_REPORT_INTERVAL_MS_2).toFixed(2);
+  let z = k + y;
+  write(`
  ${k} pass
  ${y} fail
-Ran ${z} ${plural(z, "test")} across ${files.length} ${plural(files.length, "file")}. [${toFixed}s]
-`),
-    y === 0 ? 0 : 1
-  );
+Ran ${z} ${plural(z, "test")} across ${files.length} ${plural(files.length, "file")}. [${b}s]
+`);
+  return y === 0 ? 0 : 1;
 }
 //@ chunk-1tz177x8.js:51178-51190 placement
-var ee = 1000;
+var MAX_TEST_FILES = 1000;
+//@ chunk-1tz177x8.js:51258-51661 placement
 /**
  * 递归查找目录下的 *.test.ts(x) 文件（跳过 node_modules 与隐藏目录，数量有上限）。
  */
-//@ chunk-1tz177x8.js:51258-51661 placement
 async function findTestFiles(root) {
-  let r = [],
-    n = [root];
-  for (let s = n.pop(); s !== void 0; s = n.pop()) {
-    let m = await readdir_2(s, { withFileTypes: !0 });
+  let r = [];
+  let n = [root];
+  for (let s = n.pop(); s !== undefined; s = n.pop()) {
+    let m = await readdir(s, {
+      withFileTypes: true,
+    });
     for (let f of m) {
-      let a = join_6(s, f.name),
-        c = f.name === "node_modules" || f.name.startsWith("."),
-        h = f.isFile() && /\.test\.tsx?$/.test(f.name);
+      let a = join(s, f.name);
+      let c = f.name === "node_modules" || f.name.startsWith(".");
+      let h = f.isFile() && /\.test\.tsx?$/.test(f.name);
       if (f.isDirectory() && !c) n.push(a);
       if (h) r.push(a);
-      if (r.length > ee)
-        throw new HooksError(`more than ${ee} test files under ${root}; name a narrower folder`);
+      if (r.length > MAX_TEST_FILES)
+        throw new HooksError(`more than ${MAX_TEST_FILES} test files under ${root}; name a narrower folder`);
     }
   }
   return r.toSorted();
@@ -453,29 +498,34 @@ var LATE_TURNS = 3;
 //@ chunk-1tz177x8.js:51773-51796 placement
 var safeMessageOf = (e) => describeThrownValue(e).msg;
 //@ chunk-1tz177x8.js:51796-52299 placement
-async function runChild({ file: file, dir: dir, write: write }) {
-  let s = relative_3(dir, file);
-  if (!(s !== "" && !s.startsWith("..") && !isAbsolute(s)))
-    return (
-      process.stderr.write(`claude plugin test: ${file} is not in ${dir}
-`),
-      1
-    );
+async function runChild({ file, dir, write }) {
+  let s = relative(dir, file);
+  if (!(s !== "" && !s.startsWith("..") && !isAbsolute(s))) {
+    process.stderr.write(`claude plugin test: ${file} is not in ${dir}
+`);
+    return 1;
+  }
   let f = [];
   function a(c) {
     let h = safeMessageOf(c);
-    isTeardown(h) || f.push(h);
+    if (!isTeardown(h)) f.push(h);
   }
-  (process.on("unhandledRejection", a), installTestHost());
+  process.on("unhandledRejection", a);
+  installTestHost();
   try {
     let c = await runTestFileInChild(dir, file);
     for (let b = 0; b < LATE_TURNS; b += 1) await sleep(0);
-    let h = f.length === 0,
-      k = Eo(
-        `a rejection nothing handled: ${f.join(`
+    let h = f.length === 0;
+    let k = cleanFileReport(
+      `a rejection nothing handled: ${f.join(`
 `)}`,
-      ),
-      y = h ? c : { ...c, results: [...c.results, k] };
+    );
+    let y = h
+      ? c
+      : {
+          ...c,
+          results: [...c.results, k],
+        };
     write(`${REPORT_MARK}${jsonStringify(y)}
 `);
   } finally {
@@ -483,44 +533,55 @@ async function runChild({ file: file, dir: dir, write: write }) {
   }
   return 0;
 }
+//@ chunk-1tz177x8.js:52299-52948 placement
 /**
  * `claude plugin test` 入口：在插件目录下查找 *.test.ts(x)，逐个在子进程中用测试 kit 加载插件与 hooks 模块，驱动引擎事件与 ui.render，汇总 pass/fail。
  */
-//@ chunk-1tz177x8.js:52299-52948 placement
 async function pluginTestMain(e) {
   let r = (k) => {
     process.stdout.write(k);
   };
-  if (e.includes("--help") || e.includes("-h")) return (r(joined), 0);
+  if (e.includes("--help") || e.includes("-h")) {
+    r(joined);
+    return 0;
+  }
   let [n, s, m] = e;
-  if (n === "--file" && e.length === CHILD_ARGV_LENGTH && s !== void 0 && m !== void 0)
-    return endPluginTest(await runChild({ file: s, dir: m, write: r }));
-  let a = resolve(getCwd(), e[0] ?? "."),
-    c = await loadTestPlugins(a, "user").then(
-      () => {
-        return;
-      },
-      (k) => errorMessage(k),
+  if (n === "--file" && e.length === CHILD_ARGV_LENGTH && s !== undefined && m !== undefined)
+    return endPluginTest(
+      await runChild({
+        file: s,
+        dir: m,
+        write: r,
+      }),
     );
-  if (c !== void 0)
-    return (
-      process.stderr.write(`claude plugin test: ${c}
-`),
-      1
-    );
-  let h = await findTestFiles(a).catch((k) => {
-    process.stderr.write(`claude plugin test: ${errorMessage(k)}
+  let root = resolve(getCwd(), e[0] ?? ".");
+  let c = await loadTestPlugins(root, "user").then(
+    () => {
+      return;
+    },
+    (error) => errorMessage(error),
+  );
+  if (c !== undefined) {
+    process.stderr.write(`claude plugin test: ${c}
+`);
+    return 1;
+  }
+  let h = await findTestFiles(root).catch((error) => {
+    process.stderr.write(`claude plugin test: ${errorMessage(error)}
 `);
     return;
   });
   if (!h) return 1;
-  if (h.length === 0)
-    return (
-      process.stderr.write(`claude plugin test: no *.test.ts or *.test.tsx under ${a}
-`),
-      1
-    );
-  return runPluginTests({ root: a, files: h, runFile: (k) => spawnPluginTestChild(a, k), write: r });
+  if (h.length === 0) {
+    process.stderr.write(`claude plugin test: no *.test.ts or *.test.tsx under ${root}
+`);
+    return 1;
+  }
+  return runPluginTests({
+    root,
+    files: h,
+    runFile: (k) => spawnPluginTestChild(root, k),
+    write: r,
+  });
 }
-
 export { scaffoldPluginTestDir, createTestHooksEngine };

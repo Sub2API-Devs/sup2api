@@ -13,17 +13,21 @@ import { isFirstPartyProvider } from "./model/providers.js";
 import { isSelfAddressableSessionId, toCompatSessionId } from "../bridge/sessionIdCompat.js";
 
 //@ chunk-m00wdbj6.js:262-311 placement
-function gHe() {
+/**
+ * isRemoteFirstPartySession：远程且第一方提供方。
+ */
+function isRemoteFirstPartySession() {
   return env.CLAUDE_CODE_REMOTE && isFirstPartyProvider();
 }
+//@ chunk-pwqvnehp.js:265-384 placement
 /**
  * 远程会话中返回本会话可被寻址的兼容会话 id，非远程或 id 不合法时返回 undefined。
  */
-//@ chunk-pwqvnehp.js:265-384 placement
 function ownRemoteSessionId() {
-  if (env.CLAUDE_CODE_REMOTE !== !0) return;
-  let e = env.CLAUDE_CODE_REMOTE_SESSION_ID ?? "";
-  return isSelfAddressableSessionId(e) ? toCompatSessionId(e) : void 0;
+  if (env.CLAUDE_CODE_REMOTE !== true) return;
+  let CLAUDE_CODE_REMOTE_SESSION_ID = env.CLAUDE_CODE_REMOTE_SESSION_ID ?? "";
+  return isSelfAddressableSessionId(CLAUDE_CODE_REMOTE_SESSION_ID)
+    ? toCompatSessionId(CLAUDE_CODE_REMOTE_SESSION_ID)
+    : undefined;
 }
-
-export { ownRemoteSessionId, gHe };
+export { ownRemoteSessionId, isRemoteFirstPartySession };

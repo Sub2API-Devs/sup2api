@@ -13,73 +13,80 @@ import { zodStrictObject, u } from "../../../vendor/zod/v4/classic/schemas.js";
 import { TodoListSchema } from "../../utils/todo/types.js";
 import { buildTool } from "../../services/tools/permissionCheckGuard.js";
 import { TODO_WRITE_TOOL_NAME } from "./constants.js";
-import { TODO_WRITE_DESCRIPTION, Ro } from "./prompt.js";
+import { TODO_WRITE_DESCRIPTION, todoWritePromptFor } from "./prompt.js";
 import { isTaskToolsEnabled } from "../../utils/tasks.js";
 import { todoToolsEnabled } from "../../utils/sessionKind.js";
 import { getSessionId } from "../../bootstrap/state.js";
 
+//@ chunk-kxyd0g16.js:61420-62488 fingerprint = TodoWriteTool (0.74)
 /**
  * TodoWrite 工具（strict、shouldDefer）：isEnabled = 任务工具未启用 且 todo 类工具可用；把整份 todos 存入按 agentId/会话的内存表，全部完成时清空。
  */
-//@ chunk-kxyd0g16.js:61420-62488 fingerprint = TodoWriteTool (0.74)
 var todoWriteInputSchema = DoctorLazy(() =>
-    zodStrictObject({ todos: TodoListSchema().describe("The updated todo list") }),
-  ),
-  todoWriteOutputSchema = DoctorLazy(() =>
-    u({
-      oldTodos: TodoListSchema().describe("The todo list before the update"),
-      newTodos: TodoListSchema().describe("The todo list after the update"),
-    }),
-  ),
-  TodoWriteTool = buildTool({
-    name: TODO_WRITE_TOOL_NAME,
-    searchHint: "manage the session task checklist",
-    backgrounding: "never",
-    maxResultSizeChars: 1e5,
-    strict: !0,
-    async description() {
-      return TODO_WRITE_DESCRIPTION;
-    },
-    async prompt({ model: e, leanPrompt: r }) {
-      return Ro(e, r);
-    },
-    get inputSchema() {
-      return todoWriteInputSchema();
-    },
-    get outputSchema() {
-      return todoWriteOutputSchema();
-    },
-    userFacingName() {
-      return "";
-    },
-    shouldDefer: !0,
-    isEnabled() {
-      return !isTaskToolsEnabled() && todoToolsEnabled();
-    },
-    toAutoClassifierInput(e) {
-      return `${e.todos.length} items`;
-    },
-    renderToolUseMessage() {
-      return null;
-    },
-    create(e) {
-      return {
-        async call({ todos: r }) {
-          let n = e.agentId ?? getSessionId(),
-            s = e.todos.get(n) ?? [],
-            all = r.every((h) => h.status === "completed");
-          return (e.todos.set(n, all ? [] : r), { data: { oldTodos: s, newTodos: r } });
-        },
-      };
-    },
-    mapToolResultToToolResultBlockParam(e, r) {
-      return {
-        tool_use_id: r,
-        type: "tool_result",
-        content:
-          "Todos have been modified successfully. Ensure that you continue to use the todo list to track your progress. Please proceed with the current tasks if applicable",
-      };
-    },
-  });
-
+  zodStrictObject({
+    todos: TodoListSchema().describe("The updated todo list"),
+  }),
+);
+var todoWriteOutputSchema = DoctorLazy(() =>
+  u({
+    oldTodos: TodoListSchema().describe("The todo list before the update"),
+    newTodos: TodoListSchema().describe("The todo list after the update"),
+  }),
+);
+var TodoWriteTool = buildTool({
+  name: TODO_WRITE_TOOL_NAME,
+  searchHint: "manage the session task checklist",
+  backgrounding: "never",
+  maxResultSizeChars: 1e5,
+  strict: true,
+  async description() {
+    return TODO_WRITE_DESCRIPTION;
+  },
+  async prompt({ model, leanPrompt }) {
+    return todoWritePromptFor(model, leanPrompt);
+  },
+  get inputSchema() {
+    return todoWriteInputSchema();
+  },
+  get outputSchema() {
+    return todoWriteOutputSchema();
+  },
+  userFacingName() {
+    return "";
+  },
+  shouldDefer: true,
+  isEnabled() {
+    return !isTaskToolsEnabled() && todoToolsEnabled();
+  },
+  toAutoClassifierInput(input) {
+    return `${input.todos.length} items`;
+  },
+  renderToolUseMessage() {
+    return null;
+  },
+  create(e) {
+    return {
+      async call({ todos }) {
+        let n = e.agentId ?? getSessionId();
+        let oldTodos = e.todos.get(n) ?? [];
+        let allDone = todos.every((h) => h.status === "completed");
+        e.todos.set(n, allDone ? [] : todos);
+        return {
+          data: {
+            oldTodos,
+            newTodos: todos,
+          },
+        };
+      },
+    };
+  },
+  mapToolResultToToolResultBlockParam(e, toolUseID) {
+    return {
+      tool_use_id: toolUseID,
+      type: "tool_result",
+      content:
+        "Todos have been modified successfully. Ensure that you continue to use the todo list to track your progress. Please proceed with the current tasks if applicable",
+    };
+  },
+});
 export { TodoWriteTool };

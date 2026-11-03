@@ -9,7 +9,7 @@
  * attribution: placement 5
  */
 import { hasModuleHookingSite, getLoadedModulesForSite } from "../hooksModules/loadedModuleFilters.js";
-import { ge } from "../../utils/identity.js";
+import { identity as identity_2 } from "../../utils/identity.js";
 import { toolProvider } from "./providerTiers.js";
 import { NO_CORE_AT_CHAIN_BOTTOM } from "./eventCatalog.js";
 import { logForDebugging } from "../../utils/debug.js";
@@ -22,70 +22,108 @@ import {
 } from "../../services/api/toolDescriptionCache.js";
 import { UI_ENV_SITE_RULES } from "./sites/siteRules.js";
 
-/**
- * 应用 tool.describe 钩子对工具描述的改写，并防止内置安全插件被改动。
- */
 //@ chunk-e6aww6q8.js:57418-58251 placement
-var applyToolDescribeHooks = (e) =>
-    hasModuleHookingSite(
-      "tool.describe",
-      e === void 0 ? void 0 : { tool: e },
-      getLoadedModulesForSite("tool.describe"),
-    ),
-  Nyt = ge({ isSent: !1 }, (e) => {
-    e.isSent = !1;
-  }),
-  Jto = (e, n, r) =>
-    hasModuleHookingSite("tool.describe", { tool: e.name })
-      ? toolProvider(e)
-          .then(async (s) => ({
-            isCounted: applyToolDescribeHooks(e.name),
-            result: await NO_CORE_AT_CHAIN_BOTTOM(
-              "tool.describe",
-              {},
-            )({ tool: e.name, description: n, provider: s, ...(r && { isDeferred: r }) }),
-          }))
-          .then(({ isCounted: isCounted, result: h }) => {
-            let y = h.isDeferred === !0;
-            if (y !== r)
-              logForDebugging(`tool.describe ${e.name}: a hook set isDeferred ${String(r)} -> ${String(y)}`);
-            if ((y !== r || h.description !== wellFormedLeaves(n)) && !isCounted) {
-              if (
-                (logForDebugging(
-                  `tool.describe ${e.name}: the built-in sec-default plugin changed this tool, though its hook should only pass the event on`,
-                  { level: "error" },
-                ),
-                !Nyt.isSent)
-              )
-                ((Nyt.isSent = !0),
-                  logFeatureSad("plugin_function_hooks_tool_describe", "sec_default_changed_tool"));
+/**
+ * 判断插件是否订阅了 tool.describe 钩子（是则返回次数），配套的 Nyt 记录「已发送」标记、Jto 负责调用钩子并应用返回的 description 与 isDeferred。
+ */
+var applyToolDescribeHooks = (name) =>
+  hasModuleHookingSite(
+    "tool.describe",
+    name === undefined
+      ? undefined
+      : {
+          tool: name,
+        },
+    getLoadedModulesForSite("tool.describe"),
+  );
+var toolDescribeChanged = identity_2(
+  {
+    isSent: false,
+  },
+  (e) => {
+    e.isSent = false;
+  },
+);
+var applyToolDescribe = (e, n, r) =>
+  hasModuleHookingSite("tool.describe", {
+    tool: e.name,
+  })
+    ? toolProvider(e)
+        .then(async (provider) => ({
+          isCounted: applyToolDescribeHooks(e.name),
+          result: await NO_CORE_AT_CHAIN_BOTTOM(
+            "tool.describe",
+            {},
+          )({
+            tool: e.name,
+            description: n,
+            provider,
+            ...(r && {
+              isDeferred: r,
+            }),
+          }),
+        }))
+        .then(({ isCounted, result: h }) => {
+          let y = h.isDeferred === true;
+          if (y !== r)
+            logForDebugging(`tool.describe ${e.name}: a hook set isDeferred ${String(r)} -> ${String(y)}`);
+          if ((y !== r || h.description !== wellFormedLeaves(n)) && !isCounted) {
+            logForDebugging(
+              `tool.describe ${e.name}: the built-in sec-default plugin changed this tool, though its hook should only pass the event on`,
+              {
+                level: "error",
+              },
+            );
+            if (!toolDescribeChanged.isSent) {
+              toolDescribeChanged.isSent = true;
+              logFeatureSad("plugin_function_hooks_tool_describe", "sec_default_changed_tool");
             }
-            return { description: h.description, isDeferred: y };
-          })
-      : Promise.resolve({ description: n, isDeferred: r });
+          }
+          return {
+            description: h.description,
+            isDeferred: y,
+          };
+        })
+    : Promise.resolve({
+        description: n,
+        isDeferred: r,
+      });
 //@ chunk-e6aww6q8.js:58251-58260 placement
-setToolDescribeResolver(Jto);
+setToolDescribeResolver(applyToolDescribe);
 //@ chunk-e6aww6q8.js:58260-58317 placement
-setToolDescribePresence((e) => hasModuleHookingSite("tool.describe", e === void 0 ? void 0 : { tool: e }));
+setToolDescribePresence((e) =>
+  hasModuleHookingSite(
+    "tool.describe",
+    e === undefined
+      ? undefined
+      : {
+          tool: e,
+        },
+  ),
+);
 //@ chunk-e6aww6q8.js:58317-58326 placement
 setToolDescribeBuildPresence(applyToolDescribeHooks);
+//@ chunk-e6aww6q8.js:78028-78212 placement
 /**
  * tool.describe 事件定义：核心原样返回描述（延迟加载时带 isDeferred）。
  */
-//@ chunk-e6aww6q8.js:78028-78212 placement
 var TOOL_DESCRIBE_EVENT = {
   site: UI_ENV_SITE_RULES["tool.describe"],
   core: {
     name: "core",
-    isCore: !0,
+    isCore: true,
     budgetMs: 0,
     run: async (e) => {
-      let { description: description, isDeferred: isDeferred } = e;
-      return isDeferred === !0
-        ? { description: description, isDeferred: isDeferred }
-        : { description: description };
+      let { description, isDeferred } = e;
+      return isDeferred === true
+        ? {
+            description,
+            isDeferred,
+          }
+        : {
+            description,
+          };
     },
   },
 };
-
 export { TOOL_DESCRIBE_EVENT };

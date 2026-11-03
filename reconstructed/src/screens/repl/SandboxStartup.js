@@ -8,7 +8,7 @@
  * pieces: chunk-18hwfzwa.js (3)
  * attribution: placement 3
  */
-import { e } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { SandboxManager, isMisleadingConsentHost } from "../../utils/sandbox/sandbox-adapter.js";
 import { gracefulShutdownSync } from "../../utils/gracefulShutdown.js";
 import { logForDebugging } from "../../utils/debug.js";
@@ -16,58 +16,76 @@ import { logSetupIssues } from "../../utils/notifications/setupIssues.js";
 import { createDependencyWatcher } from "../../cli/print/rewindStandIn.js";
 import { errorMessage } from "../../utils/errors.js";
 import { getModeBaseBehavior } from "../../utils/permissions/PermissionMode.js";
-import { vjt, W3n, G3n } from "../../tools/BashTool/sandboxNetwork.js";
+import {
+  areCommandNetworkListsOffered,
+  commandDomainDenyReason,
+  sandboxHostDenyReason,
+} from "../../tools/BashTool/sandboxNetwork.js";
 import { conversationSnapshot } from "../../utils/inboxClassification.js";
 import { classifySandboxNetworkHost } from "../../utils/permissions/sandboxNetworkClassifier.js";
 import { isModelDrivenSession } from "../../utils/teammate.js";
 import { isAgentSwarmsEnabled } from "../../utils/agentSwarmsEnabled.js";
 import {
-  Yqe,
+  isTeammateContextReady,
   generateSandboxRequestId,
   sendSandboxPermissionRequestViaMailbox,
 } from "../../utils/swarm/permissionSync.js";
 import { toApprovalLabel } from "../../utils/permissions/approvalPayloadSerialization.js";
 import { registerSandboxPermissionCallback } from "../../hooks/useSwarmPermissionPoller.js";
-import { j } from "../../../vendor/react/cjs/react.production.js";
+import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
 
+//@ chunk-18hwfzwa.js:412092-415122 placement
 /**
  * SandboxStartup：REPL 启动时初始化沙箱并处理失败提示。
  */
-//@ chunk-18hwfzwa.js:412092-415122 placement
 class SandboxStartup {
   #e;
   constructor(h) {
     this.#e = h;
   }
   start() {
-    let { store: store, setAppState: setAppState, isRemoteSession: isRemoteSession } = this.#e,
-      sandboxUnavailableReason = SandboxManager.getSandboxUnavailableReason();
-    if (sandboxUnavailableReason && SandboxManager.isSandboxRequired())
-      return (
-        process.stderr.write(
-          `
+    let { store, setAppState, isRemoteSession } = this.#e;
+    let sandboxUnavailableReason = SandboxManager.getSandboxUnavailableReason();
+    if (sandboxUnavailableReason && SandboxManager.isSandboxRequired()) {
+      process.stderr.write(
+        `
 Error: sandbox required but unavailable: ${sandboxUnavailableReason}
 ` +
-            `  sandbox.failIfUnavailable is set \u2014 refusing to start without a working sandbox.
+          `  sandbox.failIfUnavailable is set \u2014 refusing to start without a working sandbox.
 
 `,
-        ),
-        gracefulShutdownSync(1, "other"),
-        { stop: () => {}, refused: !0 }
       );
+      gracefulShutdownSync(1, "other");
+      return {
+        stop: () => {},
+        refused: true,
+      };
+    }
     if (sandboxUnavailableReason)
-      logForDebugging(`sandbox disabled: ${sandboxUnavailableReason}`, { level: "warn" });
-    let ee = sandboxUnavailableReason ? void 0 : SandboxManager.getMaskCredentialWarning();
-    if (ee) logForDebugging(`sandbox: ${ee}`, { level: "warn" });
-    if (sandboxUnavailableReason || ee)
-      (logSetupIssues("sandbox", 1),
-        setAppState((Be) => {
-          if (Be.setupIssues.sandboxIssueCount === 1) return Be;
-          return { ...Be, setupIssues: { ...Be.setupIssues, sandboxIssueCount: 1 } };
-        }));
+      logForDebugging(`sandbox disabled: ${sandboxUnavailableReason}`, {
+        level: "warn",
+      });
+    let ee = sandboxUnavailableReason ? undefined : SandboxManager.getMaskCredentialWarning();
+    if (ee)
+      logForDebugging(`sandbox: ${ee}`, {
+        level: "warn",
+      });
+    if (sandboxUnavailableReason || ee) {
+      logSetupIssues("sandbox", 1);
+      setAppState((Be) => {
+        if (Be.setupIssues.sandboxIssueCount === 1) return Be;
+        return {
+          ...Be,
+          setupIssues: {
+            ...Be.setupIssues,
+            sandboxIssueCount: 1,
+          },
+        };
+      });
+    }
     let ke =
-      sandboxUnavailableReason && !isRemoteSession ? SandboxManager.getSandboxSetUpAgainWarning() : void 0;
-    if (ke !== void 0)
+      sandboxUnavailableReason && !isRemoteSession ? SandboxManager.getSandboxSetUpAgainWarning() : undefined;
+    if (ke !== undefined)
       setAppState((Be) =>
         Be.setupIssues.securityWarnings.some((securityWarning) => securityWarning.text === ke)
           ? Be
@@ -75,43 +93,56 @@ Error: sandbox required but unavailable: ${sandboxUnavailableReason}
               ...Be,
               setupIssues: {
                 ...Be.setupIssues,
-                securityWarnings: [...Be.setupIssues.securityWarnings, { text: ke }],
+                securityWarnings: [
+                  ...Be.setupIssues.securityWarnings,
+                  {
+                    text: ke,
+                  },
+                ],
               },
             },
       );
-    if (isRemoteSession) return { stop: () => {}, refused: !1 };
+    if (isRemoteSession)
+      return {
+        stop: () => {},
+        refused: false,
+      };
     return {
       stop: createDependencyWatcher(
         [store],
         () => [SandboxManager.isSandboxingEnabled(), SandboxManager.getSandboxRestartWarning()],
         (Be, He) => {
-          if (He !== void 0)
-            return (
-              setAppState((We) =>
-                We.setupIssues.securityWarnings.some((securityWarning) => securityWarning.text === He)
-                  ? We
-                  : {
-                      ...We,
-                      setupIssues: {
-                        ...We.setupIssues,
-                        securityWarnings: [...We.setupIssues.securityWarnings, { text: He }],
-                      },
+          if (He !== undefined) {
+            setAppState((We) =>
+              We.setupIssues.securityWarnings.some((securityWarning) => securityWarning.text === He)
+                ? We
+                : {
+                    ...We,
+                    setupIssues: {
+                      ...We.setupIssues,
+                      securityWarnings: [
+                        ...We.setupIssues.securityWarnings,
+                        {
+                          text: He,
+                        },
+                      ],
                     },
-              ),
-              () => {
-                setAppState((We) => ({
-                  ...We,
-                  setupIssues: {
-                    ...We.setupIssues,
-                    securityWarnings: We.setupIssues.securityWarnings.filter(
-                      (securityWarning) => securityWarning.text !== He,
-                    ),
                   },
-                }));
-              }
             );
+            return () => {
+              setAppState((We) => ({
+                ...We,
+                setupIssues: {
+                  ...We.setupIssues,
+                  securityWarnings: We.setupIssues.securityWarnings.filter(
+                    (securityWarning) => securityWarning.text !== He,
+                  ),
+                },
+              }));
+            };
+          }
           if (!Be) return;
-          if (ke !== void 0)
+          if (ke !== undefined)
             setAppState((We) =>
               We.setupIssues.securityWarnings.some((securityWarning) => securityWarning.text === ke)
                 ? {
@@ -137,42 +168,37 @@ Error: sandbox required but unavailable: ${sandboxUnavailableReason}
                     ...ze.setupIssues.securityWarnings.filter(
                       (securityWarning) => !profileReadSecurityWarnings.includes(securityWarning.text),
                     ),
-                    ...profileReadSecurityWarnings.map((Xe) => ({ text: Xe })),
+                    ...profileReadSecurityWarnings.map((text) => ({
+                      text,
+                    })),
                   ],
                 },
               }));
             })
-            .catch((We) => {
-              (process.stderr.write(`
-\u274C Sandbox Error: ${errorMessage(We)}
-`),
-                gracefulShutdownSync(1, "other"));
+            .catch((error) => {
+              process.stderr.write(`
+\u274C Sandbox Error: ${errorMessage(error)}
+`);
+              gracefulShutdownSync(1, "other");
             });
         },
       ),
-      refused: !1,
+      refused: false,
     };
   }
   ask = async (h) => {
-    let {
-        store: store,
-        storageV5: storageV5,
-        credentials: credentials,
-        scope: scope,
-        getMessages: getMessages,
-      } = this.#e,
-      state = store.getState(),
-      { mode: mode, isBypassPermissionsModeAvailable: isBypassPermissionsModeAvailable } =
-        state.toolPermissionContext;
+    let { store, storageV5, credentials, scope, getMessages } = this.#e;
+    let state = store.getState();
+    let { mode, isBypassPermissionsModeAvailable } = state.toolPermissionContext;
     switch (getModeBaseBehavior(mode, isBypassPermissionsModeAvailable)) {
       case "allow":
-        return !0;
+        return true;
       case "deny":
-        return !1;
+        return false;
       case "classify":
-        if (vjt()) return W3n();
-        let ze = G3n();
-        if (ze !== void 0) return ze;
+        if (areCommandNetworkListsOffered()) return commandDomainDenyReason();
+        let ze = sandboxHostDenyReason();
+        if (ze !== undefined) return ze;
         return scope
           .sandboxClassifierVerdicts()
           .getOrClassify(h.host, h.port, conversationSnapshot(getMessages()), () =>
@@ -184,42 +210,57 @@ Error: sandbox required but unavailable: ${sandboxUnavailableReason}
               state.toolPermissionContext,
               new AbortController().signal,
               {
-                isSubagentLoop: isModelDrivenSession(void 0),
-                recordPresumed: !0,
-                storageV5: storageV5,
-                credentials: credentials,
+                isSubagentLoop: isModelDrivenSession(undefined),
+                recordPresumed: true,
+                storageV5,
+                credentials,
               },
             ),
           );
       case "ask":
-        return this.#t(h, void 0);
+        return this.#t(h, undefined);
     }
   };
-  async #t(h, x) {
-    let { setAppState: setAppState, storageV5: storageV5, networkPrompts: networkPrompts } = this.#e;
-    if (isAgentSwarmsEnabled() && Yqe()) {
-      if (isMisleadingConsentHost(h.host))
-        return (
-          logForDebugging(
-            `[sandbox] Refusing to forward a worker ask for a host srt would re-spell: ${toApprovalLabel(h.host) ?? "(unshowable)"}`,
-            { level: "warn" },
-          ),
-          !1
+  async #t(h, expiry) {
+    let { setAppState, storageV5, networkPrompts } = this.#e;
+    if (isAgentSwarmsEnabled() && isTeammateContextReady()) {
+      if (isMisleadingConsentHost(h.host)) {
+        logForDebugging(
+          `[sandbox] Refusing to forward a worker ask for a host srt would re-spell: ${toApprovalLabel(h.host) ?? "(unshowable)"}`,
+          {
+            level: "warn",
+          },
         );
-      let ke = generateSandboxRequestId();
-      if (!(await sendSandboxPermissionRequestViaMailbox(h.host, ke, void 0, storageV5)))
-        return networkPrompts.ask(h, { forwardToBridge: !1, expiry: x });
-      return new Promise((Be) => {
-        (registerSandboxPermissionCallback({ requestId: ke, host: h.host, resolve: Be }),
-          setAppState((He) => ({ ...He, pendingSandboxRequest: { requestId: ke, host: h.host } })));
+        return false;
+      }
+      let requestId = generateSandboxRequestId();
+      if (!(await sendSandboxPermissionRequestViaMailbox(h.host, requestId, undefined, storageV5)))
+        return networkPrompts.ask(h, {
+          forwardToBridge: false,
+          expiry,
+        });
+      return new Promise((resolve) => {
+        registerSandboxPermissionCallback({
+          requestId,
+          host: h.host,
+          resolve,
+        });
+        setAppState((He) => ({
+          ...He,
+          pendingSandboxRequest: {
+            requestId,
+            host: h.host,
+          },
+        }));
       });
     }
-    return networkPrompts.ask(h, { expiry: x });
+    return networkPrompts.ask(h, {
+      expiry,
+    });
   }
 }
 //@ chunk-18hwfzwa.js:415122-415126 placement
-j();
+init_react_production();
 //@ chunk-18hwfzwa.js:415164-415168 placement
-j();
-
+init_react_production();
 export { SandboxStartup };

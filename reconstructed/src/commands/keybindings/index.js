@@ -10,19 +10,20 @@
  */
 import { isKeybindingCustomizationEnabled } from "../../keybindings/loadUserBindings.js";
 
+//@ chunk-e6aww6q8.js:1722860-1723067 fingerprint = keybindings (0.628)
 /**
  * /keybindings 命令对象（local）；描述：Open your keyboard shortcuts file；isEnabled: ()=>Iee()；实现 chunk-1nat7wre.js 的 T。
  */
-//@ chunk-e6aww6q8.js:1722860-1723067 fingerprint = keybindings (0.628)
 var keybindingsCommandDefinition = {
-    name: "keybindings",
-    description: "Open your keyboard shortcuts file",
-    isEnabled: () => isKeybindingCustomizationEnabled(),
-    supportsNonInteractive: !1,
-    type: "local",
-    requires: { workspace: !1 },
-    load: () => import("./chunk-1nat7wre.js"),
+  name: "keybindings",
+  description: "Open your keyboard shortcuts file",
+  isEnabled: () => isKeybindingCustomizationEnabled(),
+  supportsNonInteractive: false,
+  type: "local",
+  requires: {
+    workspace: false,
   },
-  keybindingsCommand = keybindingsCommandDefinition;
-
+  load: () => import("./chunk-1nat7wre.js"),
+};
+var keybindingsCommand = keybindingsCommandDefinition;
 export { keybindingsCommand };

@@ -6,45 +6,46 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../runtime/bun-runtime.js";
-import { Q } from "../code.js";
-import { ew } from "../../compile/util.js";
-import { uh } from "../../compile/codegen/index.js";
+import { require_code_2 } from "../code.js";
+import { require_util_2 } from "../../compile/util.js";
+import { require_codegen_2 } from "../../compile/codegen/index.js";
 
 //@ chunk-s82q9s4x.js:85927-86590 cjs-fingerprint
-var Mo = x(function (Co) {
-  Object.defineProperty(Co, "__esModule", { value: !0 });
-  var Io = Q(),
-    To = ew(),
-    X = uh(),
-    _f = {
-      message: ({ schemaCode: schemaCode }) => X.str`must match pattern "${schemaCode}"`,
-      params: ({ schemaCode: schemaCode }) => X._`{pattern: ${schemaCode}}`,
+var require_pattern = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  var code_1 = require_code_2();
+  var util_1 = require_util_2();
+  var codegen_1 = require_codegen_2();
+  var error = {
+    message: ({ schemaCode }) => codegen_1.str`must match pattern "${schemaCode}"`,
+    params: ({ schemaCode }) => codegen_1._`{pattern: ${schemaCode}}`,
+  };
+  var def = {
+    keyword: "pattern",
+    type: "string",
+    schemaType: "string",
+    $data: true,
+    error,
+    code(cxt) {
+      let { gen, data, $data, schema, schemaCode, it } = cxt;
+      let u_2 = it.opts.unicodeRegExp ? "u" : "";
+      if ($data) {
+        let { regExp } = it.opts.code;
+        let regExpCode = regExp.code === "new RegExp" ? codegen_1._`new RegExp` : util_1.useFunc(gen, regExp);
+        let valid = gen.let("valid");
+        gen.try(
+          () => gen.assign(valid, codegen_1._`${regExpCode}(${schemaCode}, ${u_2}).test(${data})`),
+          () => gen.assign(valid, false),
+        );
+        cxt.fail$data(codegen_1._`!${valid}`);
+      } else {
+        let regExp = code_1.usePattern(cxt, schema);
+        cxt.fail$data(codegen_1._`!${regExp}.test(${data})`);
+      }
     },
-    gf = {
-      keyword: "pattern",
-      type: "string",
-      schemaType: "string",
-      $data: !0,
-      error: _f,
-      code(e) {
-        let { gen: gen, data: r, $data: $data, schema: schema, schemaCode: schemaCode, it: it } = e,
-          a = it.opts.unicodeRegExp ? "u" : "";
-        if ($data) {
-          let { regExp: regExp } = it.opts.code,
-            u = regExp.code === "new RegExp" ? X._`new RegExp` : To.useFunc(gen, regExp),
-            l = gen.let("valid");
-          (gen.try(
-            () => gen.assign(l, X._`${u}(${schemaCode}, ${a}).test(${r})`),
-            () => gen.assign(l, !1),
-          ),
-            e.fail$data(X._`!${l}`));
-        } else {
-          let usePattern = Io.usePattern(e, schema);
-          e.fail$data(X._`!${usePattern}.test(${r})`);
-        }
-      },
-    };
-  Co.default = gf;
+  };
+  cjsExports.default = def;
 });
-
-export { Mo };
+export { require_pattern };

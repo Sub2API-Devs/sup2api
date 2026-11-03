@@ -8,8 +8,7 @@
 import { x } from "../../runtime/bun-runtime.js";
 
 //@ chunk-h6b7mazd.js:7817-7864 cjs-require-graph
-var no = x(function (Gl, ro) {
-  ro.exports = Math.abs;
+var require_abs = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = Math.abs;
 });
-
-export { no };
+export { require_abs };

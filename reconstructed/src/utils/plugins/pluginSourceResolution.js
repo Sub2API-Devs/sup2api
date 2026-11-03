@@ -16,42 +16,59 @@ import {
   tryUnwrapTextPayload,
 } from "./marketplaceManager.js";
 import { parsePluginIdentifier } from "./pluginIdentifier.js";
-import { L2e } from "./pluginDirectories.js";
+import { isLocalMarketplaceEntry } from "./pluginDirectories.js";
 import { resolvePluginEntryPath, entryResolutionError } from "./localMarketplacePaths.js";
 
 //@ chunk-vbctfrwr.js:319-483 placement
-function unresolvedForLocalMarketplace(e) {
-  return e !== void 0 && isLocalMarketplaceSource(e)
+function unresolvedForLocalMarketplace(source) {
+  return source !== undefined && isLocalMarketplaceSource(source)
     ? {
         kind: "unresolved",
         reason: "Its marketplace is a folder whose catalog could not be read, or lists it no more.",
       }
-    : { kind: "copy" };
+    : {
+        kind: "copy",
+      };
 }
+//@ chunk-vbctfrwr.js:483-942 placement
 /**
  * 根据缓存的市场条目判断插件来源：本地市场内的相对路径插件解析成目录路径；其他来源返回 copy； 本地市场条目解析失败时返回 unresolved 与原因。
  */
-//@ chunk-vbctfrwr.js:483-942 placement
 async function resolvePluginSourceLocation(e, o) {
-  let [r, l] = await Promise.all([getPluginByIdCacheOnly(e, o), loadKnownMarketplacesSafe(o)]),
-    n = l[parsePluginIdentifier(e).marketplace ?? ""]?.source;
-  if (r === null) return unresolvedForLocalMarketplace(n);
-  let { source: source } = r.entry,
-    c = L2e(source, n);
-  if (typeof source !== "string" || !c) return { kind: "copy" };
-  let i = seedDirFor(r.marketplaceInstallLocation) === void 0 ? "workspace" : "system",
-    a = await resolvePluginEntryPath(
-      e,
-      r.marketplaceInstallLocation,
-      source,
-      l,
-      tryUnwrapTextPayload(),
-      o,
-      i,
-    );
-  return a.kind === "ok"
-    ? { kind: "folder", path: a.entryPath }
-    : { kind: "unresolved", reason: entryResolutionError(a, r.marketplaceInstallLocation, source).message };
+  let [pluginByIdCacheOnly, knownMarketplaces] = await Promise.all([
+    getPluginByIdCacheOnly(e, o),
+    loadKnownMarketplacesSafe(o),
+  ]);
+  let source = knownMarketplaces[parsePluginIdentifier(e).marketplace ?? ""]?.source;
+  if (pluginByIdCacheOnly === null) return unresolvedForLocalMarketplace(source);
+  let { source: source_2 } = pluginByIdCacheOnly.entry;
+  let c = isLocalMarketplaceEntry(source_2, source);
+  if (typeof source_2 !== "string" || !c)
+    return {
+      kind: "copy",
+    };
+  let i = seedDirFor(pluginByIdCacheOnly.marketplaceInstallLocation) === undefined ? "workspace" : "system";
+  let pluginEntryPath = await resolvePluginEntryPath(
+    e,
+    pluginByIdCacheOnly.marketplaceInstallLocation,
+    source_2,
+    knownMarketplaces,
+    tryUnwrapTextPayload(),
+    o,
+    i,
+  );
+  return pluginEntryPath.kind === "ok"
+    ? {
+        kind: "folder",
+        path: pluginEntryPath.entryPath,
+      }
+    : {
+        kind: "unresolved",
+        reason: entryResolutionError(
+          pluginEntryPath,
+          pluginByIdCacheOnly.marketplaceInstallLocation,
+          source_2,
+        ).message,
+      };
 }
-
 export { resolvePluginSourceLocation };

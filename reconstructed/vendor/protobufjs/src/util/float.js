@@ -8,207 +8,223 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-798ashq9.js:8495-12915 cjs-require-graph
-var mr = x(function (sc, hr) {
-  hr.exports = fr(fr);
-  function fr(l) {
-    if (typeof Float32Array < "u")
+var require_float = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = factory(factory);
+  function factory(l) {
+    if (typeof Float32Array !== "undefined")
       (function () {
-        var float32Array = new Float32Array([-0]),
-          uint8Array = new Uint8Array(float32Array.buffer),
-          d = uint8Array[3] === 128;
-        function i(r, n, c) {
-          ((float32Array[0] = r),
-            (n[c] = uint8Array[0]),
-            (n[c + 1] = uint8Array[1]),
-            (n[c + 2] = uint8Array[2]),
-            (n[c + 3] = uint8Array[3]));
+        var f32 = new Float32Array([-0]);
+        var f8b = new Uint8Array(f32.buffer);
+        var le = f8b[3] === 128;
+        function writeFloat_f32_cpy(val, buf, pos) {
+          f32[0] = val;
+          buf[pos] = f8b[0];
+          buf[pos + 1] = f8b[1];
+          buf[pos + 2] = f8b[2];
+          buf[pos + 3] = f8b[3];
         }
-        function o(r, n, c) {
-          ((float32Array[0] = r),
-            (n[c] = uint8Array[3]),
-            (n[c + 1] = uint8Array[2]),
-            (n[c + 2] = uint8Array[1]),
-            (n[c + 3] = uint8Array[0]));
+        function writeFloat_f32_rev(val, buf, pos) {
+          f32[0] = val;
+          buf[pos] = f8b[3];
+          buf[pos + 1] = f8b[2];
+          buf[pos + 2] = f8b[1];
+          buf[pos + 3] = f8b[0];
         }
-        ((l.writeFloatLE = d ? i : o), (l.writeFloatBE = d ? o : i));
-        function e(r, n) {
-          return (
-            (uint8Array[0] = r[n]),
-            (uint8Array[1] = r[n + 1]),
-            (uint8Array[2] = r[n + 2]),
-            (uint8Array[3] = r[n + 3]),
-            float32Array[0]
-          );
+        l.writeFloatLE = le ? writeFloat_f32_cpy : writeFloat_f32_rev;
+        l.writeFloatBE = le ? writeFloat_f32_rev : writeFloat_f32_cpy;
+        function readFloat_f32_cpy(buf, pos) {
+          f8b[0] = buf[pos];
+          f8b[1] = buf[pos + 1];
+          f8b[2] = buf[pos + 2];
+          f8b[3] = buf[pos + 3];
+          return f32[0];
         }
-        function t(r, n) {
-          return (
-            (uint8Array[3] = r[n]),
-            (uint8Array[2] = r[n + 1]),
-            (uint8Array[1] = r[n + 2]),
-            (uint8Array[0] = r[n + 3]),
-            float32Array[0]
-          );
+        function readFloat_f32_rev(buf, pos) {
+          f8b[3] = buf[pos];
+          f8b[2] = buf[pos + 1];
+          f8b[1] = buf[pos + 2];
+          f8b[0] = buf[pos + 3];
+          return f32[0];
         }
-        ((l.readFloatLE = d ? e : t), (l.readFloatBE = d ? t : e));
+        l.readFloatLE = le ? readFloat_f32_cpy : readFloat_f32_rev;
+        l.readFloatBE = le ? readFloat_f32_rev : readFloat_f32_cpy;
       })();
     else
       (function () {
-        function u(d, i, o, e) {
-          var t = i < 0 ? 1 : 0;
-          if (t) i = -i;
-          if (i === 0) d(1 / i > 0 ? 0 : 2147483648, o, e);
-          else if (isNaN(i)) d(2143289344, o, e);
-          else if (i > 340282346638528860000000000000000000000) d(((t << 31) | 2139095040) >>> 0, o, e);
-          else if (i < 0.000000000000000000000000000000000000011754943508222875)
-            d(
-              ((t << 31) | Math.round(i / 0.000000000000000000000000000000000000000000001401298464324817)) >>>
+        function writeFloat_ieee754(writeUint, val, buf, pos) {
+          var sign = val < 0 ? 1 : 0;
+          if (sign) val = -val;
+          if (val === 0) writeUint(1 / val > 0 ? 0 : 2147483648, buf, pos);
+          else if (isNaN(val)) writeUint(2143289344, buf, pos);
+          else if (val > 340282346638528860000000000000000000000)
+            writeUint(((sign << 31) | 2139095040) >>> 0, buf, pos);
+          else if (val < 0.000000000000000000000000000000000000011754943508222875)
+            writeUint(
+              ((sign << 31) |
+                Math.round(val / 0.000000000000000000000000000000000000000000001401298464324817)) >>>
                 0,
-              o,
-              e,
+              buf,
+              pos,
             );
           else {
-            var floored = Math.floor(Math.log(i) / Math.LN2),
-              n = Math.round(i * Math.pow(2, -floored) * 8388608) & 8388607;
-            d(((t << 31) | ((floored + 127) << 23) | n) >>> 0, o, e);
+            var exponent = Math.floor(Math.log(val) / Math.LN2);
+            var mantissa = Math.round(val * Math.pow(2, -exponent) * 8388608) & 8388607;
+            writeUint(((sign << 31) | ((exponent + 127) << 23) | mantissa) >>> 0, buf, pos);
           }
         }
-        ((l.writeFloatLE = u.bind(null, pr)), (l.writeFloatBE = u.bind(null, sr)));
-        function f(d, i, o) {
-          var e = d(i, o),
-            t = (e >> 31) * 2 + 1,
-            r = (e >>> 23) & 255,
-            n = e & 8388607;
-          return r === 255
-            ? n
+        l.writeFloatLE = writeFloat_ieee754.bind(null, writeUintLE);
+        l.writeFloatBE = writeFloat_ieee754.bind(null, writeUintBE);
+        function readFloat_ieee754(readUint, buf, pos) {
+          var uint = readUint(buf, pos);
+          var sign = (uint >> 31) * 2 + 1;
+          var exponent = (uint >>> 23) & 255;
+          var mantissa = uint & 8388607;
+          return exponent === 255
+            ? mantissa
               ? NaN
-              : t * (1 / 0)
-            : r === 0
-              ? t * 0.000000000000000000000000000000000000000000001401298464324817 * n
-              : t * Math.pow(2, r - 150) * (n + 8388608);
+              : sign * (1 / 0)
+            : exponent === 0
+              ? sign * 0.000000000000000000000000000000000000000000001401298464324817 * mantissa
+              : sign * Math.pow(2, exponent - 150) * (mantissa + 8388608);
         }
-        ((l.readFloatLE = f.bind(null, dr)), (l.readFloatBE = f.bind(null, yr)));
+        l.readFloatLE = readFloat_ieee754.bind(null, readUintLE);
+        l.readFloatBE = readFloat_ieee754.bind(null, readUintBE);
       })();
-    if (typeof Float64Array < "u")
+    if (typeof Float64Array !== "undefined")
       (function () {
-        var float64Array = new Float64Array([-0]),
-          uint8Array = new Uint8Array(float64Array.buffer),
-          d = uint8Array[7] === 128;
-        function i(r, n, c) {
-          ((float64Array[0] = r),
-            (n[c] = uint8Array[0]),
-            (n[c + 1] = uint8Array[1]),
-            (n[c + 2] = uint8Array[2]),
-            (n[c + 3] = uint8Array[3]),
-            (n[c + 4] = uint8Array[4]),
-            (n[c + 5] = uint8Array[5]),
-            (n[c + 6] = uint8Array[6]),
-            (n[c + 7] = uint8Array[7]));
+        var f64 = new Float64Array([-0]);
+        var f8b = new Uint8Array(f64.buffer);
+        var le = f8b[7] === 128;
+        function writeDouble_f64_cpy(val, buf, pos) {
+          f64[0] = val;
+          buf[pos] = f8b[0];
+          buf[pos + 1] = f8b[1];
+          buf[pos + 2] = f8b[2];
+          buf[pos + 3] = f8b[3];
+          buf[pos + 4] = f8b[4];
+          buf[pos + 5] = f8b[5];
+          buf[pos + 6] = f8b[6];
+          buf[pos + 7] = f8b[7];
         }
-        function o(r, n, c) {
-          ((float64Array[0] = r),
-            (n[c] = uint8Array[7]),
-            (n[c + 1] = uint8Array[6]),
-            (n[c + 2] = uint8Array[5]),
-            (n[c + 3] = uint8Array[4]),
-            (n[c + 4] = uint8Array[3]),
-            (n[c + 5] = uint8Array[2]),
-            (n[c + 6] = uint8Array[1]),
-            (n[c + 7] = uint8Array[0]));
+        function writeDouble_f64_rev(val, buf, pos) {
+          f64[0] = val;
+          buf[pos] = f8b[7];
+          buf[pos + 1] = f8b[6];
+          buf[pos + 2] = f8b[5];
+          buf[pos + 3] = f8b[4];
+          buf[pos + 4] = f8b[3];
+          buf[pos + 5] = f8b[2];
+          buf[pos + 6] = f8b[1];
+          buf[pos + 7] = f8b[0];
         }
-        ((l.writeDoubleLE = d ? i : o), (l.writeDoubleBE = d ? o : i));
-        function e(r, n) {
-          return (
-            (uint8Array[0] = r[n]),
-            (uint8Array[1] = r[n + 1]),
-            (uint8Array[2] = r[n + 2]),
-            (uint8Array[3] = r[n + 3]),
-            (uint8Array[4] = r[n + 4]),
-            (uint8Array[5] = r[n + 5]),
-            (uint8Array[6] = r[n + 6]),
-            (uint8Array[7] = r[n + 7]),
-            float64Array[0]
-          );
+        l.writeDoubleLE = le ? writeDouble_f64_cpy : writeDouble_f64_rev;
+        l.writeDoubleBE = le ? writeDouble_f64_rev : writeDouble_f64_cpy;
+        function readDouble_f64_cpy(buf, pos) {
+          f8b[0] = buf[pos];
+          f8b[1] = buf[pos + 1];
+          f8b[2] = buf[pos + 2];
+          f8b[3] = buf[pos + 3];
+          f8b[4] = buf[pos + 4];
+          f8b[5] = buf[pos + 5];
+          f8b[6] = buf[pos + 6];
+          f8b[7] = buf[pos + 7];
+          return f64[0];
         }
-        function t(r, n) {
-          return (
-            (uint8Array[7] = r[n]),
-            (uint8Array[6] = r[n + 1]),
-            (uint8Array[5] = r[n + 2]),
-            (uint8Array[4] = r[n + 3]),
-            (uint8Array[3] = r[n + 4]),
-            (uint8Array[2] = r[n + 5]),
-            (uint8Array[1] = r[n + 6]),
-            (uint8Array[0] = r[n + 7]),
-            float64Array[0]
-          );
+        function readDouble_f64_rev(buf, pos) {
+          f8b[7] = buf[pos];
+          f8b[6] = buf[pos + 1];
+          f8b[5] = buf[pos + 2];
+          f8b[4] = buf[pos + 3];
+          f8b[3] = buf[pos + 4];
+          f8b[2] = buf[pos + 5];
+          f8b[1] = buf[pos + 6];
+          f8b[0] = buf[pos + 7];
+          return f64[0];
         }
-        ((l.readDoubleLE = d ? e : t), (l.readDoubleBE = d ? t : e));
+        l.readDoubleLE = le ? readDouble_f64_cpy : readDouble_f64_rev;
+        l.readDoubleBE = le ? readDouble_f64_rev : readDouble_f64_cpy;
       })();
     else
       (function () {
-        function u(d, i, o, e, t, r) {
-          var n = e < 0 ? 1 : 0;
-          if (n) e = -e;
-          if (e === 0) (d(0, t, r + i), d(1 / e > 0 ? 0 : 2147483648, t, r + o));
-          else if (isNaN(e)) (d(0, t, r + i), d(2146959360, t, r + o));
-          else if (
-            e >
+        function writeDouble_ieee754(writeUint, off0, off1, val, buf, pos) {
+          var sign = val < 0 ? 1 : 0;
+          if (sign) val = -val;
+          if (val === 0) {
+            writeUint(0, buf, pos + off0);
+            writeUint(1 / val > 0 ? 0 : 2147483648, buf, pos + off1);
+          } else if (isNaN(val)) {
+            writeUint(0, buf, pos + off0);
+            writeUint(2146959360, buf, pos + off1);
+          } else if (
+            val >
             179769313486231570000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-          )
-            (d(0, t, r + i), d(((n << 31) | 2146435072) >>> 0, t, r + o));
-          else {
-            var c;
+          ) {
+            writeUint(0, buf, pos + off0);
+            writeUint(((sign << 31) | 2146435072) >>> 0, buf, pos + off1);
+          } else {
+            var mantissa;
             if (
-              e <
+              val <
               0.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000022250738585072014
-            )
-              ((c =
-                e /
-                0.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000005),
-                d(c >>> 0, t, r + i),
-                d(((n << 31) | (c / 4294967296)) >>> 0, t, r + o));
-            else {
-              var floored = Math.floor(Math.log(e) / Math.LN2);
-              if (floored === 1024) floored = 1023;
-              ((c = e * Math.pow(2, -floored)),
-                d((c * 4503599627370496) >>> 0, t, r + i),
-                d(((n << 31) | ((floored + 1023) << 20) | ((c * 1048576) & 1048575)) >>> 0, t, r + o));
+            ) {
+              mantissa =
+                val /
+                0.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000005;
+              writeUint(mantissa >>> 0, buf, pos + off0);
+              writeUint(((sign << 31) | (mantissa / 4294967296)) >>> 0, buf, pos + off1);
+            } else {
+              var exponent = Math.floor(Math.log(val) / Math.LN2);
+              if (exponent === 1024) exponent = 1023;
+              mantissa = val * Math.pow(2, -exponent);
+              writeUint((mantissa * 4503599627370496) >>> 0, buf, pos + off0);
+              writeUint(
+                ((sign << 31) | ((exponent + 1023) << 20) | ((mantissa * 1048576) & 1048575)) >>> 0,
+                buf,
+                pos + off1,
+              );
             }
           }
         }
-        ((l.writeDoubleLE = u.bind(null, pr, 0, 4)), (l.writeDoubleBE = u.bind(null, sr, 4, 0)));
-        function f(d, i, o, e, t) {
-          var r = d(e, t + i),
-            n = d(e, t + o),
-            c = (n >> 31) * 2 + 1,
-            s = (n >>> 20) & 2047,
-            m = 4294967296 * (n & 1048575) + r;
-          return s === 2047
-            ? m
+        l.writeDoubleLE = writeDouble_ieee754.bind(null, writeUintLE, 0, 4);
+        l.writeDoubleBE = writeDouble_ieee754.bind(null, writeUintBE, 4, 0);
+        function readDouble_ieee754(readUint, off0, off1, buf, pos) {
+          var lo = readUint(buf, pos + off0);
+          var hi = readUint(buf, pos + off1);
+          var sign = (hi >> 31) * 2 + 1;
+          var exponent = (hi >>> 20) & 2047;
+          var mantissa = 4294967296 * (hi & 1048575) + lo;
+          return exponent === 2047
+            ? mantissa
               ? NaN
-              : c * (1 / 0)
-            : s === 0
-              ? c *
+              : sign * (1 / 0)
+            : exponent === 0
+              ? sign *
                 0.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000005 *
-                m
-              : c * Math.pow(2, s - 1075) * (m + 4503599627370496);
+                mantissa
+              : sign * Math.pow(2, exponent - 1075) * (mantissa + 4503599627370496);
         }
-        ((l.readDoubleLE = f.bind(null, dr, 0, 4)), (l.readDoubleBE = f.bind(null, yr, 4, 0)));
+        l.readDoubleLE = readDouble_ieee754.bind(null, readUintLE, 0, 4);
+        l.readDoubleBE = readDouble_ieee754.bind(null, readUintBE, 4, 0);
       })();
     return l;
   }
-  function pr(l, u, f) {
-    ((u[f] = l & 255), (u[f + 1] = (l >>> 8) & 255), (u[f + 2] = (l >>> 16) & 255), (u[f + 3] = l >>> 24));
+  function writeUintLE(val, buf, pos) {
+    buf[pos] = val & 255;
+    buf[pos + 1] = (val >>> 8) & 255;
+    buf[pos + 2] = (val >>> 16) & 255;
+    buf[pos + 3] = val >>> 24;
   }
-  function sr(l, u, f) {
-    ((u[f] = l >>> 24), (u[f + 1] = (l >>> 16) & 255), (u[f + 2] = (l >>> 8) & 255), (u[f + 3] = l & 255));
+  function writeUintBE(val, buf, pos) {
+    buf[pos] = val >>> 24;
+    buf[pos + 1] = (val >>> 16) & 255;
+    buf[pos + 2] = (val >>> 8) & 255;
+    buf[pos + 3] = val & 255;
   }
-  function dr(l, u) {
-    return (l[u] | (l[u + 1] << 8) | (l[u + 2] << 16) | (l[u + 3] << 24)) >>> 0;
+  function readUintLE(buf, pos) {
+    return (buf[pos] | (buf[pos + 1] << 8) | (buf[pos + 2] << 16) | (buf[pos + 3] << 24)) >>> 0;
   }
-  function yr(l, u) {
-    return ((l[u] << 24) | (l[u + 1] << 16) | (l[u + 2] << 8) | l[u + 3]) >>> 0;
+  function readUintBE(buf, pos) {
+    return ((buf[pos] << 24) | (buf[pos + 1] << 16) | (buf[pos + 2] << 8) | buf[pos + 3]) >>> 0;
   }
 });
-
-export { mr };
+export { require_float };

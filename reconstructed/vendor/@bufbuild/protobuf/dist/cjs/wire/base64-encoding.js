@@ -8,25 +8,28 @@
 import { x } from "../../../../../../runtime/bun-runtime.js";
 
 //@ chunk-fq0cr76a.js:360236-361489 cjs-require-graph
-var dp = x(function (Kk) {
-  Object.defineProperty(Kk, "__esModule", { value: !0 });
-  Kk.base64Decode = YY;
-  Kk.base64Encode = ZY;
-  function YY(e) {
-    let n = zY(),
-      r = (e.length * 3) / 4;
-    if (e[e.length - 2] == "=") r -= 2;
-    else if (e[e.length - 1] == "=") r -= 1;
-    let uint8Array = new Uint8Array(r),
-      h = 0,
-      y = 0,
-      b,
-      S = 0;
-    for (let w = 0; w < e.length; w++) {
-      if (((b = n[e.charCodeAt(w)]), b === void 0))
-        switch (e[w]) {
+var require_base64_encoding = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.base64Decode = base64Decode;
+  cjsExports.base64Encode = base64Encode;
+  function base64Decode(base64Str) {
+    let table = getDecodeTable();
+    let es = (base64Str.length * 3) / 4;
+    if (base64Str[base64Str.length - 2] == "=") es -= 2;
+    else if (base64Str[base64Str.length - 1] == "=") es -= 1;
+    let bytes = new Uint8Array(es);
+    let bytePos = 0;
+    let groupPos = 0;
+    let b;
+    let p = 0;
+    for (let i = 0; i < base64Str.length; i++) {
+      b = table[base64Str.charCodeAt(i)];
+      if (b === undefined)
+        switch (base64Str[i]) {
           case "=":
-            y = 0;
+            groupPos = 0;
           case `
 `:
           case "\r":
@@ -36,66 +39,83 @@ var dp = x(function (Kk) {
           default:
             throw Error("invalid base64 string");
         }
-      switch (y) {
+      switch (groupPos) {
         case 0:
-          ((S = b), (y = 1));
+          p = b;
+          groupPos = 1;
           break;
         case 1:
-          ((uint8Array[h++] = (S << 2) | ((b & 48) >> 4)), (S = b), (y = 2));
+          bytes[bytePos++] = (p << 2) | ((b & 48) >> 4);
+          p = b;
+          groupPos = 2;
           break;
         case 2:
-          ((uint8Array[h++] = ((S & 15) << 4) | ((b & 60) >> 2)), (S = b), (y = 3));
+          bytes[bytePos++] = ((p & 15) << 4) | ((b & 60) >> 2);
+          p = b;
+          groupPos = 3;
           break;
         case 3:
-          ((uint8Array[h++] = ((S & 3) << 6) | b), (y = 0));
+          bytes[bytePos++] = ((p & 3) << 6) | b;
+          groupPos = 0;
           break;
       }
     }
-    if (y == 1) throw Error("invalid base64 string");
-    return uint8Array.subarray(0, h);
+    if (groupPos == 1) throw Error("invalid base64 string");
+    return bytes.subarray(0, bytePos);
   }
-  function ZY(e, n = "std") {
-    let r = Hk(n),
-      s = n == "std",
-      h = "",
-      y = 0,
-      b,
-      S = 0;
-    for (let w = 0; w < e.length; w++)
-      switch (((b = e[w]), y)) {
+  function base64Encode(bytes, encoding = "std") {
+    let table = getEncodeTable(encoding);
+    let pad = encoding == "std";
+    let base64 = "";
+    let groupPos = 0;
+    let b;
+    let p = 0;
+    for (let i = 0; i < bytes.length; i++)
+      switch (((b = bytes[i]), groupPos)) {
         case 0:
-          ((h += r[b >> 2]), (S = (b & 3) << 4), (y = 1));
+          base64 += table[b >> 2];
+          p = (b & 3) << 4;
+          groupPos = 1;
           break;
         case 1:
-          ((h += r[S | (b >> 4)]), (S = (b & 15) << 2), (y = 2));
+          base64 += table[p | (b >> 4)];
+          p = (b & 15) << 2;
+          groupPos = 2;
           break;
         case 2:
-          ((h += r[S | (b >> 6)]), (h += r[b & 63]), (y = 0));
+          base64 += table[p | (b >> 6)];
+          base64 += table[b & 63];
+          groupPos = 0;
           break;
       }
-    if (y) {
-      if (((h += r[S]), s)) {
-        if (((h += "="), y == 1)) h += "=";
+    if (groupPos) {
+      base64 += table[p];
+      if (pad) {
+        base64 += "=";
+        if (groupPos == 1) base64 += "=";
       }
     }
-    return h;
+    return base64;
   }
-  var Gg, Gk, Vu;
-  function Hk(e) {
-    if (!Gg)
-      ((Gg = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/".split("")),
-        (Gk = Gg.slice(0, -2).concat("-", "_")));
-    return e == "url" ? Gk : Gg;
-  }
-  function zY() {
-    if (!Vu) {
-      Vu = [];
-      let e = Hk("std");
-      for (let n = 0; n < e.length; n++) Vu[e[n].charCodeAt(0)] = n;
-      ((Vu[45] = e.indexOf("+")), (Vu[95] = e.indexOf("/")));
+  var encodeTableStd;
+  var encodeTableUrl;
+  var decodeTable;
+  function getEncodeTable(encoding) {
+    if (!encodeTableStd) {
+      encodeTableStd = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/".split("");
+      encodeTableUrl = encodeTableStd.slice(0, -2).concat("-", "_");
     }
-    return Vu;
+    return encoding == "url" ? encodeTableUrl : encodeTableStd;
+  }
+  function getDecodeTable() {
+    if (!decodeTable) {
+      decodeTable = [];
+      let encodeTable = getEncodeTable("std");
+      for (let i = 0; i < encodeTable.length; i++) decodeTable[encodeTable[i].charCodeAt(0)] = i;
+      decodeTable[45] = encodeTable.indexOf("+");
+      decodeTable[95] = encodeTable.indexOf("/");
+    }
+    return decodeTable;
   }
 });
-
-export { dp };
+export { require_base64_encoding };

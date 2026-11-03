@@ -9,181 +9,202 @@
  * attribution: placement 2, fingerprint 1
  */
 import { isDeepStrictEqual } from "util";
-import { j, y, ce } from "../../../vendor/react/cjs/react.production.js";
+import { init_react_production, y, ce } from "../../../vendor/react/cjs/react.production.js";
 import { useLatestState } from "./option-map.js";
 import { useSelectNavigation } from "./use-select-navigation.js";
 import { useRegisterOverlay } from "../../context/overlayContext.js";
 import { normalizeFullWidthDigits_2, replaceIdeographicSpace } from "../../utils/stringUtils.js";
 
 //@ chunk-nq7jz8ya.js:608-612 placement
-j();
+init_react_production();
 //@ chunk-nq7jz8ya.js:612-616 placement
-j();
+init_react_production();
 //@ chunk-nq7jz8ya.js:658-3281 fingerprint = useMultiSelectState (0.639)
 function useMultiSelectState({
-  isDisabled: isDisabled = !1,
-  visibleOptionCount: visibleOptionCount = 5,
-  options: options,
-  defaultValue: defaultValue = [],
-  onChange: onChange,
-  onCancel: onCancel,
-  onFocus: onFocus,
-  submitButtonText: submitButtonText,
-  onSubmit: onSubmit,
-  onDownFromLastItem: onDownFromLastItem,
-  hideIndexes: hideIndexes = !1,
-  refuseSubmitFocus: refuseSubmitFocus,
+  isDisabled = false,
+  visibleOptionCount = 5,
+  options,
+  defaultValue = [],
+  onChange,
+  onCancel,
+  onFocus,
+  submitButtonText,
+  onSubmit,
+  onDownFromLastItem,
+  hideIndexes = false,
+  refuseSubmitFocus,
 }) {
-  let [J, T, k] = useLatestState(defaultValue),
-    [N, V, z] = useLatestState(!1),
-    [i, he] = y(options);
-  if (options !== i && !isDeepStrictEqual(options, i)) (T(defaultValue), he(options));
+  let [J, T, selectedValues] = useLatestState(defaultValue);
+  let [N, V, z] = useLatestState(false);
+  let [lastOptions, setLastOptions] = y(options);
+  if (options !== lastOptions && !isDeepStrictEqual(options, lastOptions)) {
+    T(defaultValue);
+    setLastOptions(options);
+  }
   let [D, Q] = y(() => {
-      let initialMap = new Map();
-      return (
-        options.forEach((option) => {
-          if (option.type === "input" && option.initialValue)
-            initialMap.set(option.value, option.initialValue);
-        }),
-        initialMap
-      );
-    }),
-    updateSelectedValues = ce(
-      (values) => {
-        let a = typeof values === "function" ? values(k()) : values;
-        if (onChange?.(a) === !1) return;
-        T(a);
-      },
-      [k, T, onChange],
-    ),
-    C = ce(
-      (t) => {
-        if (options.find((a) => a.value === t)?.disabled === !0) return;
-        updateSelectedValues((a) => (a.includes(t) ? a.filter((f) => f !== t) : [...a, t]));
-      },
-      [options, updateSelectedValues],
-    ),
-    navigation = useSelectNavigation({
-      visibleOptionCount: visibleOptionCount,
-      options: options,
-      onFocus: onFocus,
+    let initialMap = new Map();
+    options.forEach((option) => {
+      if (option.type === "input" && option.initialValue) initialMap.set(option.value, option.initialValue);
     });
+    return initialMap;
+  });
+  let updateSelectedValues = ce(
+    (values) => {
+      let newValues = typeof values === "function" ? values(selectedValues()) : values;
+      if (onChange?.(newValues) === false) return;
+      T(newValues);
+    },
+    [selectedValues, T, onChange],
+  );
+  let C = ce(
+    (t) => {
+      if (options.find((option) => option.value === t)?.disabled === true) return;
+      updateSelectedValues((a) => (a.includes(t) ? a.filter((v) => v !== t) : [...a, t]));
+    },
+    [options, updateSelectedValues],
+  );
+  let navigation = useSelectNavigation({
+    visibleOptionCount,
+    options,
+    onFocus,
+  });
   useRegisterOverlay("multi-select");
   let updateInputValue = ce(
     (value, inputValue) => {
-      let found = options.find((prev) => prev.value === value);
-      if (found?.type === "input" && found.onChange(inputValue) === !1) return;
-      (Q((b) => {
+      let found = options.find((opt) => opt.value === value);
+      if (found?.type === "input" && found.onChange(inputValue) === false) return;
+      Q((b) => {
         let next = new Map(b);
-        return (next.set(value, inputValue), next);
-      }),
-        updateSelectedValues((b) => {
-          if (inputValue) {
-            if (!b.includes(value)) return [...b, value];
-            return b;
-          } else return b.filter((F) => F !== value);
-        }));
+        next.set(value, inputValue);
+        return next;
+      });
+      updateSelectedValues((prev) => {
+        if (inputValue) {
+          if (!prev.includes(value)) return [...prev, value];
+          return prev;
+        } else return prev.filter((v) => v !== value);
+      });
     },
     [options, updateSelectedValues],
   );
   return {
     ...navigation,
     focusOption: (opt) => {
-      (V(!1), navigation.focusOption(opt));
+      V(false);
+      navigation.focusOption(opt);
     },
     scrollViewport: (prev) => {
-      let focusedValue = navigation.getFocusedValue(),
-        scrollViewport = navigation.scrollViewport(prev);
-      if (navigation.getFocusedValue() !== focusedValue) V(!1);
-      return scrollViewport;
+      let focusedValue = navigation.getFocusedValue();
+      let f = navigation.scrollViewport(prev);
+      if (navigation.getFocusedValue() !== focusedValue) V(false);
+      return f;
     },
     selectedValues: J,
-    getSelectedValues: k,
+    getSelectedValues: selectedValues,
     inputValues: D,
     isSubmitFocused: N,
-    updateInputValue: updateInputValue,
+    updateInputValue,
     toggleValue: C,
-    onCancel: onCancel,
-    handleKeyDown: (t) => {
+    onCancel,
+    handleKeyDown: (event) => {
       if (isDisabled) return;
-      let normalizedInput = normalizeFullWidthDigits_2(t.key),
-        focusedValue = navigation.getFocusedValue(),
-        F = options.find((opt) => opt.value === focusedValue)?.type === "input",
-        h = z();
+      let normalizedInput = normalizeFullWidthDigits_2(event.key);
+      let focusedValue = navigation.getFocusedValue();
+      let F = options.find((opt) => opt.value === focusedValue)?.type === "input";
+      let h = z();
       if (F) {
         if (!(
-          t.key === "up" ||
-          t.key === "down" ||
-          t.key === "escape" ||
-          t.key === "tab" ||
-          t.key === "return" ||
-          (t.ctrl && (t.key === "n" || t.key === "p" || t.key === "return"))
+          event.key === "up" ||
+          event.key === "down" ||
+          event.key === "escape" ||
+          event.key === "tab" ||
+          event.key === "return" ||
+          (event.ctrl && (event.key === "n" || event.key === "p" || event.key === "return"))
         ))
           return;
       }
       let lastOptionValue = options.at(-1)?.value;
-      if (t.key === "tab" && !t.shift) {
-        if ((t.preventDefault(), submitButtonText && onSubmit && focusedValue === lastOptionValue && !h)) {
+      if (event.key === "tab" && !event.shift) {
+        event.preventDefault();
+        if (submitButtonText && onSubmit && focusedValue === lastOptionValue && !h) {
           if (refuseSubmitFocus?.()) return;
-          V(!0);
+          V(true);
         } else if (!h) navigation.focusNextOption();
         return;
       }
-      if (t.key === "tab" && t.shift) {
-        if ((t.preventDefault(), submitButtonText && onSubmit && h))
-          (V(!1), navigation.focusOption(lastOptionValue));
-        else navigation.focusPreviousOption();
+      if (event.key === "tab" && event.shift) {
+        event.preventDefault();
+        if (submitButtonText && onSubmit && h) {
+          V(false);
+          navigation.focusOption(lastOptionValue);
+        } else navigation.focusPreviousOption();
         return;
       }
-      if (t.key === "down" || (t.ctrl && t.key === "n") || (!t.ctrl && !t.shift && t.key === "j")) {
-        if ((t.preventDefault(), h && onDownFromLastItem)) onDownFromLastItem();
+      if (
+        event.key === "down" ||
+        (event.ctrl && event.key === "n") ||
+        (!event.ctrl && !event.shift && event.key === "j")
+      ) {
+        event.preventDefault();
+        if (h && onDownFromLastItem) onDownFromLastItem();
         else if (submitButtonText && onSubmit && focusedValue === lastOptionValue && !h) {
           if (refuseSubmitFocus?.()) return;
-          V(!0);
+          V(true);
         } else if (!submitButtonText && onDownFromLastItem && focusedValue === lastOptionValue)
           onDownFromLastItem();
         else if (!h) navigation.focusNextOption();
         return;
       }
-      if (t.key === "up" || (t.ctrl && t.key === "p") || (!t.ctrl && !t.shift && t.key === "k")) {
-        if ((t.preventDefault(), submitButtonText && onSubmit && h))
-          (V(!1), navigation.focusOption(lastOptionValue));
-        else navigation.focusPreviousOption();
+      if (
+        event.key === "up" ||
+        (event.ctrl && event.key === "p") ||
+        (!event.ctrl && !event.shift && event.key === "k")
+      ) {
+        event.preventDefault();
+        if (submitButtonText && onSubmit && h) {
+          V(false);
+          navigation.focusOption(lastOptionValue);
+        } else navigation.focusPreviousOption();
         return;
       }
-      if (t.key === "pagedown") {
-        (t.preventDefault(), navigation.focusNextPage());
+      if (event.key === "pagedown") {
+        event.preventDefault();
+        navigation.focusNextPage();
         return;
       }
-      if (t.key === "pageup") {
-        (t.preventDefault(), navigation.focusPreviousPage());
+      if (event.key === "pageup") {
+        event.preventDefault();
+        navigation.focusPreviousPage();
         return;
       }
-      if (t.key === "return" || replaceIdeographicSpace(t.key) === " ") {
-        if ((t.preventDefault(), t.ctrl && t.key === "return" && F && onSubmit)) {
-          onSubmit(k());
+      if (event.key === "return" || replaceIdeographicSpace(event.key) === " ") {
+        event.preventDefault();
+        if (event.ctrl && event.key === "return" && F && onSubmit) {
+          onSubmit(selectedValues());
           return;
         }
-        if (t.key === "return" && h && onSubmit) {
-          onSubmit(k());
+        if (event.key === "return" && h && onSubmit) {
+          onSubmit(selectedValues());
           return;
         }
-        if (t.key === "return" && !submitButtonText && onSubmit) {
-          onSubmit(k());
+        if (event.key === "return" && !submitButtonText && onSubmit) {
+          onSubmit(selectedValues());
           return;
         }
-        if (!h && focusedValue !== void 0) C(focusedValue);
+        if (!h && focusedValue !== undefined) C(focusedValue);
         return;
       }
       if (!hideIndexes && /^[0-9]$/.test(normalizedInput)) {
-        t.preventDefault();
-        let O = parseInt(normalizedInput) - 1;
-        if (O >= 0 && O < options.length) C(options[O].value);
+        event.preventDefault();
+        let index = parseInt(normalizedInput) - 1;
+        if (index >= 0 && index < options.length) C(options[index].value);
         return;
       }
-      if (t.key === "escape") (onCancel(), t.stopImmediatePropagation());
+      if (event.key === "escape") {
+        onCancel();
+        event.stopImmediatePropagation();
+      }
     },
   };
 }
-
 export { useMultiSelectState };

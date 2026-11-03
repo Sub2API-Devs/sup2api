@@ -8,54 +8,8 @@
  * pieces: chunk-9cjx5pnm.js (81)
  * attribution: placement 81
  */
-import {
-  join,
-  join as join_2,
-  join as join_3,
-  join as join_4,
-  join as join_5,
-  join as join_6,
-  join as join_7,
-  join as join_8,
-  join as join_9,
-  join as join_10,
-  join as join_11,
-  join as join_12,
-  join as join_13,
-  dirname,
-  dirname as dirname_2,
-  dirname as dirname_3,
-  dirname as dirname_4,
-  dirname as dirname_5,
-  dirname as dirname_6,
-  basename,
-  basename as basename_2,
-  basename as basename_3,
-  basename as basename_4,
-  basename as basename_5,
-  basename as basename_6,
-  basename as basename_7,
-  basename as basename_8,
-  resolve,
-  resolve as resolve_2,
-  resolve as resolve_3,
-} from "path";
-import {
-  readdir,
-  lstat,
-  lstat as lstat_2,
-  lstat as lstat_3,
-  lstat as lstat_4,
-  lstat as lstat_5,
-  realpath,
-  realpath as realpath_2,
-  realpath as realpath_3,
-  open,
-  mkdir,
-  mkdir as mkdir_2,
-  writeFile,
-  mkdtemp,
-} from "fs/promises";
+import { join, dirname, basename, resolve } from "path";
+import { readdir, lstat, realpath, open, mkdir, writeFile, mkdtemp } from "fs/promises";
 import {
   exclusionEntriesFor,
   relativePosixPathOf,
@@ -63,23 +17,32 @@ import {
   MAX_COPY_DEPTH,
   statEntry,
   assertGitignoreNotHardlinked,
-  $e,
+  isIgnorableErrno,
   readGitignoreSafely,
   byPath,
   processEndingError,
   removeValidationCopy,
   errorDetails,
-  De,
+  MANIFEST_DIR_NAME,
   unreadableOnError,
   FILE_MODE_RW,
   draftManifestOf,
 } from "./validationCopy.js";
 import { limitConcurrency } from "../../../utils/concurrencyLimit.js";
-import { oTo, Qh, j0s, kOr } from "../../../tools/PublishPluginTool/constants.js";
-import { hm } from "../../../utils/pathPrefix.js";
-import { $c } from "../../../utils/platformTargets.js";
+import {
+  MAX_PUBLISH_FILES,
+  refusalResult,
+  MAX_PUBLISH_STEPS,
+  MAX_PUBLISH_BYTES,
+} from "../../../tools/PublishPluginTool/constants.js";
+import { isSubpathOf } from "../../../utils/pathPrefix.js";
+import { readOnlyNoFollowFlags } from "../../../utils/platformTargets.js";
 import { getErrnoCode } from "../../../utils/errors.js";
-import { readPluginFileSafe, getMcpAuthCache, FF } from "../../../utils/plugins/safeFileRead.js";
+import {
+  readPluginFileSafe,
+  getMcpAuthCache,
+  isDirectoryOrFalse,
+} from "../../../utils/plugins/safeFileRead.js";
 import { computeContentHash } from "../../../utils/commitAttribution.js";
 import { isCleanupStarted, registerCleanup } from "../../../utils/cleanupRegistry.js";
 import { tmpdir } from "../../../utils/tempDir.js";
@@ -89,10 +52,10 @@ import { printableName } from "../../../utils/printableName.js";
 import { jsonStringify } from "../../../utils/slowOperations.js";
 import { redactSecrets } from "../../teamMemorySync/secretScanner.js";
 import { DoctorLazy } from "../../../cli/handlers/util.js";
-import { u, o, A } from "../../../../vendor/zod/v4/classic/schemas.js";
-import { PLUGIN_MANIFEST_PATH, $kt } from "../../../utils/plugins/commandSource.js";
+import { u, string, array } from "../../../../vendor/zod/v4/classic/schemas.js";
+import { PLUGIN_MANIFEST_PATH, pluginRootHasMarker } from "../../../utils/plugins/commandSource.js";
 import { safeParseJSON } from "../../../utils/json.js";
-import { _P } from "../../../skills/loadSkillsDir.js";
+import { identityPath_2 } from "../../../skills/loadSkillsDir.js";
 import {
   sanitizeForDisplay,
   resolveValidateTarget,
@@ -104,198 +67,285 @@ import { truncateToLength } from "../../../utils/stringUtils.js";
 
 //@ chunk-9cjx5pnm.js:4777-5044 placement
 function excludeListedFiles(e, r, s) {
-  let flattened = s.flatMap((f) => exclusionEntriesFor(e, r, f)),
-    a = new Set(flattened.map((f) => f.path)),
-    filtered = s.filter((f) => !a.has(relativePosixPathOf(e, f)));
+  let flattened = s.flatMap((f) => exclusionEntriesFor(e, r, f));
+  let a = new Set(flattened.map((f) => f.path));
+  let filtered = s.filter((f) => !a.has(relativePosixPathOf(e, f)));
   return {
     files: filtered.filter((f) => f.kind === "file").map((f) => listingEntry(e, f)),
     leftOut: flattened,
-    folders: filtered.filter((f) => f.kind === "folder").map((f) => ({ path: f.path, scope: r.scope })),
+    folders: filtered
+      .filter((f) => f.kind === "folder")
+      .map((f) => ({
+        path: f.path,
+        scope: r.scope,
+      })),
   };
 }
 //@ chunk-9cjx5pnm.js:5044-5229 placement
 async function scanPublishDir(e, r) {
-  let s = limitConcurrency(MAX_COPY_DEPTH, (a) => statEntry(join_3(r.path, a))),
-    results = await Promise.all((await readdir(r.path)).toSorted().map(s));
+  let s = limitConcurrency(MAX_COPY_DEPTH, (a) => statEntry(join(r.path, a)));
+  let results = await Promise.all((await readdir(r.path)).toSorted().map(s));
   return excludeListedFiles(
     e,
-    { path: r.path, scope: r.scope.concat(await assertGitignoreNotHardlinked(r.path, results)) },
+    {
+      path: r.path,
+      scope: r.scope.concat(await assertGitignoreNotHardlinked(r.path, results)),
+    },
     results,
   );
 }
 //@ chunk-9cjx5pnm.js:5261-5318 placement
-function gr(e) {
-  let r = dirname_3(e);
-  return r === e ? [e] : [e, ...gr(r)];
+/**
+ * 列出自身及所有祖先目录。
+ */
+function ancestorDirs(e) {
+  let r = dirname(e);
+  return r === e ? [e] : [e, ...ancestorDirs(r)];
 }
 //@ chunk-9cjx5pnm.js:5384-5458 placement
-var oi = (e) =>
-  lstat_3(join_7(e, ".git")).then(
-    () => !0,
-    (r) => ($e(r) ? !1 : Promise.reject(r)),
+/**
+ * 判断目录下是否有 .git。
+ */
+var hasGitDir = (e) =>
+  lstat(join(e, ".git")).then(
+    () => true,
+    (error) => (isIgnorableErrno(error) ? false : Promise.reject(error)),
   );
 //@ chunk-9cjx5pnm.js:5458-5577 placement
 async function ancestorGitignoreDirs(e) {
-  let r = gr(e);
-  for (let [s, n] of r.entries()) if (await oi(n)) return r.slice(1, s + 1).toReversed();
+  let r = ancestorDirs(e);
+  for (let [s, n] of r.entries()) if (await hasGitDir(n)) return r.slice(1, s + 1).toReversed();
   return [];
 }
 //@ chunk-9cjx5pnm.js:5577-5644 placement
-var si = async (e) => (await Promise.all((await ancestorGitignoreDirs(e)).map(readGitignoreSafely))).flat();
+/**
+ * 读取祖先目录的 .gitignore 规则。
+ */
+var ancestorGitignoreRules = async (e) =>
+  (await Promise.all((await ancestorGitignoreDirs(e)).map(readGitignoreSafely))).flat();
 //@ chunk-9cjx5pnm.js:5644-5879 placement
 async function scanPublishFolder(e) {
-  let r = [],
-    s = [],
-    n = [{ path: e, scope: await si(e) }];
+  let r = [];
+  let s = [];
+  let n = [
+    {
+      path: e,
+      scope: await ancestorGitignoreRules(e),
+    },
+  ];
   for (let a of n) {
-    if (r.length > oTo) break;
+    if (r.length > MAX_PUBLISH_FILES) break;
     let f = await scanPublishDir(e, a);
-    (r.push(...f.files), s.push(...f.leftOut), n.push(...f.folders));
+    r.push(...f.files);
+    s.push(...f.leftOut);
+    n.push(...f.folders);
   }
-  return { files: r.toSorted(byPath), leftOut: s.toSorted(byPath) };
+  return {
+    files: r.toSorted(byPath),
+    leftOut: s.toSorted(byPath),
+  };
 }
 //@ chunk-9cjx5pnm.js:6070-6081 placement
-var Rr = 448;
+/**
+ * 复制/创建目录的权限（0700）。
+ */
+var DIR_MODE = 448;
 //@ chunk-9cjx5pnm.js:6081-6092 placement
-var ni = 384;
+/**
+ * 写文件的权限（0600）。
+ */
+var FILE_MODE = 384;
 //@ chunk-9cjx5pnm.js:6173-6183 placement
-var ai = !1;
+/**
+ * 读取 .gitignore 时传给读取函数的选项（当前为 false）。
+ */
+var READ_GITIGNORE_OPTIONS = false;
 //@ chunk-9cjx5pnm.js:6183-6193 placement
-var _r = 1n;
+/**
+ * 单链接文件的 nlink 值（1n）。
+ */
+var SINGLE_LINK_NLINK = 1n;
 //@ chunk-9cjx5pnm.js:6193-6227 placement
-var freeze_4 = Object.freeze({ bigint: !0 });
+var Or = Object.freeze({
+  bigint: true,
+});
 //@ chunk-9cjx5pnm.js:6227-6389 placement
 async function isSamePublishFile(e, r, s) {
-  let n = await realpath_2(r).catch(() => e),
-    m = hm(e, n, ai)
-      ? await lstat_4(n, freeze_4).catch(() => {
-          return;
-        })
-      : void 0;
-  return m?.ino === s.ino && m.dev === s.dev && m.nlink === _r;
+  let n = await realpath(r).catch(() => e);
+  let m = isSubpathOf(e, n, READ_GITIGNORE_OPTIONS)
+    ? await lstat(n, Or).catch(() => {
+        return;
+      })
+    : undefined;
+  return m?.ino === s.ino && m.dev === s.dev && m.nlink === SINGLE_LINK_NLINK;
 }
 //@ chunk-9cjx5pnm.js:6425-6485 placement
-var freeze_5 = Object.freeze(["ENOENT", "ENOTDIR", "ELOOP", "EISDIR"]);
+var li = Object.freeze(["ENOENT", "ENOTDIR", "ELOOP", "EISDIR"]);
 //@ chunk-9cjx5pnm.js:6485-6567 placement
-var di = (e) =>
-  open(e, $c()).catch((r) => (freeze_5.includes(getErrnoCode(r) ?? "") ? void 0 : Promise.reject(r)));
+/**
+ * 打开文件，忽略指定错误码。
+ */
+var openOrIgnore = (e) =>
+  open(e, readOnlyNoFollowFlags()).catch((error) =>
+    li.includes(getErrnoCode(error) ?? "") ? undefined : Promise.reject(error),
+  );
 //@ chunk-9cjx5pnm.js:6636-6730 placement
-var hi = async (e, r) =>
-  (await readPluginFileSafe(e, dirname_5(r))) === "ok" &&
+/**
+ * 判断文件可安全读取且是普通文件。
+ */
+var isOpenableFile = async (e, r) =>
+  (await readPluginFileSafe(e, dirname(r))) === "ok" &&
   (
-    await lstat_5(r).catch(() => {
+    await lstat(r).catch(() => {
       return;
     })
-  )?.isFile() === !0;
+  )?.isFile() === true;
 //@ chunk-9cjx5pnm.js:6730-7001 placement
 async function openPublishFile(e, r) {
-  let s = join_10(e, r.path),
-    a = (await hi(e, s)) ? await di(s) : void 0;
+  let s = join(e, r.path);
+  let a = (await isOpenableFile(e, s)) ? await openOrIgnore(s) : undefined;
   try {
-    let m = await a?.stat(freeze_4),
-      c =
-        m?.isFile() === !0 &&
-        m.size === BigInt(r.bytes) &&
-        m.nlink === _r &&
-        (await isSamePublishFile(e, s, m))
-          ? await a?.readFile()
-          : void 0;
-    return c?.length === r.bytes ? c : void 0;
+    let stats = await a?.stat(Or);
+    let c =
+      stats?.isFile() === true &&
+      stats.size === BigInt(r.bytes) &&
+      stats.nlink === SINGLE_LINK_NLINK &&
+      (await isSamePublishFile(e, s, stats))
+        ? await a?.readFile()
+        : undefined;
+    return c?.length === r.bytes ? c : undefined;
   } finally {
     await a?.close();
   }
 }
 //@ chunk-9cjx5pnm.js:7001-7299 placement
 async function copyPublishFile(e, r, s) {
-  let n = await openPublishFile(e, s);
-  if (n === void 0) return;
-  return (
-    await mkdir_2(dirname_4(join_9(r, s.path)), { recursive: !0, mode: Rr })
-      .then(() => writeFile(join_9(r, s.path), n, { flag: "wx", mode: ni }))
-      .catch((a) =>
-        Promise.reject(
-          Error("A file could not be copied to be validated", {
-            cause: `${getErrnoCode(a) ?? ""} ${s.path}`.trim(),
-          }),
-        ),
+  let publishFile = await openPublishFile(e, s);
+  if (publishFile === undefined) return;
+  await mkdir(dirname(join(r, s.path)), {
+    recursive: true,
+    mode: DIR_MODE,
+  })
+    .then(() =>
+      writeFile(join(r, s.path), publishFile, {
+        flag: "wx",
+        mode: FILE_MODE,
+      }),
+    )
+    .catch((error) =>
+      Promise.reject(
+        Error("A file could not be copied to be validated", {
+          cause: `${getErrnoCode(error) ?? ""} ${s.path}`.trim(),
+        }),
       ),
-    computeContentHash(n)
-  );
+    );
+  return computeContentHash(publishFile);
 }
 //@ chunk-9cjx5pnm.js:7299-7352 placement
-async function Pi(e, r, s) {
-  (e.abort(), await r, await s());
+/**
+ * 中止请求并等待清理。
+ */
+async function abortAndWait(abortController, r, s) {
+  abortController.abort();
+  await r;
+  await s();
 }
 //@ chunk-9cjx5pnm.js:7352-7418 placement
-var _i = (e, r) => Object.fromEntries(e.map((s, n) => [s.path, r[n] ?? ""]));
+/**
+ * 按路径映射哈希。
+ */
+var hashByPath = (e, r) => Object.fromEntries(e.map((s, n) => [s.path, r[n] ?? ""]));
 //@ chunk-9cjx5pnm.js:7418-7460 placement
-var Oi = (e, r, s) => ({ home: e, dir: r, hashes: s });
+/**
+ * 组装快照句柄（home、dir、hashes）。
+ */
+var snapshotHandle = (home, dir, hashes) => ({
+  home,
+  dir,
+  hashes,
+});
+//@ chunk-9cjx5pnm.js:7460-8407 placement
 /**
  * 把要发布的插件目录复制到临时快照目录（claude-publish-*），供校验和打包。
  */
-//@ chunk-9cjx5pnm.js:7460-8407 placement
-async function snapshotPublishFolder(e, r) {
+async function snapshotPublishFolder(e, files) {
   if (isCleanupStarted()) return Promise.reject(processEndingError());
-  let s = await mkdtemp(join_8(tmpdir(), "claude-publish-")).catch((h) =>
-      Promise.reject(
-        Error("A folder to validate a copy in could not be made", { cause: getErrnoCode(h) ?? "" }),
-      ),
+  let home = await mkdtemp(join(tmpdir(), "claude-publish-")).catch((error) =>
+    Promise.reject(
+      Error("A folder to validate a copy in could not be made", {
+        cause: getErrnoCode(error) ?? "",
+      }),
     ),
-    n = onceExport(() => removeValidationCopy(s));
-  if (isCleanupStarted()) return (await n(), Promise.reject(processEndingError()));
-  let a = join_8(s, "copy", basename_4(e)),
-    abortController = new AbortController(),
-    f = Promise.resolve()
-      .then(() => mkdir(a, { recursive: !0, mode: Rr }))
-      .catch(() => {
-        return;
-      })
-      .then(() =>
-        Promise.allSettled(
-          r.map(
-            limitConcurrency(MAX_COPY_DEPTH, (h) =>
-              abortController.signal.aborted
-                ? Promise.resolve(void 0)
-                : copyPublishFile(e, a, h).catch((w) => (abortController.abort(), Promise.reject(w))),
-            ),
+  );
+  let n = onceExport(() => removeValidationCopy(home));
+  if (isCleanupStarted()) {
+    await n();
+    return Promise.reject(processEndingError());
+  }
+  let dir = join(home, "copy", basename(e));
+  let abortController = new AbortController();
+  let f = Promise.resolve()
+    .then(() =>
+      mkdir(dir, {
+        recursive: true,
+        mode: DIR_MODE,
+      }),
+    )
+    .catch(() => {
+      return;
+    })
+    .then(() =>
+      Promise.allSettled(
+        files.map(
+          limitConcurrency(MAX_COPY_DEPTH, (h) =>
+            abortController.signal.aborted
+              ? Promise.resolve(undefined)
+              : copyPublishFile(e, dir, h).catch((error) => {
+                  abortController.abort();
+                  return Promise.reject(error);
+                }),
           ),
         ),
-      );
-  using c = registerCleanup(() => Pi(abortController, f, n));
-  let g = await f,
-    found = g.find((h) => h.status === "rejected"),
-    found_2 = r.find((h, w) => g[w]?.status === "fulfilled" && !g[w].value);
-  if (
-    (await (found === void 0 && found_2 === void 0 && !abortController.signal.aborted ? void 0 : n()),
-    found?.status === "rejected")
-  )
-    return Promise.reject(found.reason);
-  if (abortController.signal.aborted) return (await n(), Promise.reject(processEndingError()));
-  if (found_2 !== void 0) return { missed: found_2.path };
-  return Oi(
-    s,
-    a,
-    _i(
-      r,
-      g.map((h) => (h.status === "fulfilled" ? h.value : void 0)),
+      ),
+    );
+  using c = registerCleanup(() => abortAndWait(abortController, f, n));
+  let g = await f;
+  let found = g.find((h) => h.status === "rejected");
+  let found_2 = files.find((h, w) => g[w]?.status === "fulfilled" && !g[w].value);
+  await (found === undefined && found_2 === undefined && !abortController.signal.aborted ? undefined : n());
+  if (found?.status === "rejected") return Promise.reject(found.reason);
+  if (abortController.signal.aborted) {
+    await n();
+    return Promise.reject(processEndingError());
+  }
+  if (found_2 !== undefined)
+    return {
+      missed: found_2.path,
+    };
+  return snapshotHandle(
+    home,
+    dir,
+    hashByPath(
+      files,
+      g.map((h) => (h.status === "fulfilled" ? h.value : undefined)),
     ),
   );
 }
 //@ chunk-9cjx5pnm.js:8407-8482 placement
-var fileChangedOutcome = (e) => Qh("changed", [`${e.missed} is not the file that was listed`]);
+var fileChangedOutcome = (e) => refusalResult("changed", [`${e.missed} is not the file that was listed`]);
 //@ chunk-9cjx5pnm.js:8482-8984 placement
 function diffListing(e, r) {
   let s = new Set(e.listing.files.map((file) => file.path));
   return [
     ...e.listing.files
       .filter((file) => !Object.hasOwn(r.hashes, file.path))
-      .map((n) => "Among the files to send only since the folder was read: " + n.path),
+      .map((file) => "Among the files to send only since the folder was read: " + file.path),
     ...Object.keys(r.hashes)
-      .filter((n) => !s.has(n))
-      .map((n) => "No longer among the files to send since the folder was read: " + n),
+      .filter((key) => !s.has(key))
+      .map((key) => "No longer among the files to send since the folder was read: " + key),
     ...e.listing.files
       .filter((file) => Object.hasOwn(r.hashes, file.path) && e.hashes[file.path] !== r.hashes[file.path])
-      .map((n) => `${n.path} is not the file that was listed`),
+      .map((file) => `${file.path} is not the file that was listed`),
   ].slice(0, 1);
 }
 //@ chunk-9cjx5pnm.js:8984-9148 placement
@@ -303,7 +353,7 @@ function checkSnapshotUnchanged(e, r) {
   let s = e.kind === "ready" ? diffListing(e, r) : [];
   return s.length === 0 && (e.kind !== "ready" || e.listing.files.length === Object.keys(r.hashes).length)
     ? e
-    : Qh("changed", s);
+    : refusalResult("changed", s);
 }
 //@ chunk-9cjx5pnm.js:9181-9272 placement = _temp0 (1)
 var slugifyPluginName = (a_5) =>
@@ -313,73 +363,141 @@ var slugifyPluginName = (a_5) =>
     .replaceAll(/^-|-$/g, "") || "plugin";
 //@ chunk-9cjx5pnm.js:9272-9399 placement
 function folderNameFindings(e) {
-  let r = checkReservedPluginName(slugifyPluginName(basename_5(e)));
+  let r = checkReservedPluginName(slugifyPluginName(basename(e)));
   return r?.severity === "error" ? [`${r.message} The name comes from the folder: rename it.`] : [];
 }
 //@ chunk-9cjx5pnm.js:9432-9457 placement
-var Fi = (e) => e && printableName(e, j0s);
+/**
+ * 清洗插件描述。
+ */
+var sanitizeDescription = (e) => e && printableName(e, MAX_PUBLISH_STEPS);
 //@ chunk-9cjx5pnm.js:9457-9472 placement
-var Ni = "0.1.0";
+/**
+ * 补全 manifest 时使用的默认版本（0.1.0）。
+ */
+var DEFAULT_PLUGIN_VERSION = "0.1.0";
 //@ chunk-9cjx5pnm.js:9472-9547 placement
-var Di = (
-  e,
-  r,
-) => `${jsonStringify({ name: slugifyPluginName(basename_6(e)), version: Ni, description: Fi(r) }, null, 2)}
+/**
+ * 生成草稿 manifest 文本。
+ */
+var draftManifestText = (e, r) => `${jsonStringify(
+  {
+    name: slugifyPluginName(basename(e)),
+    version: DEFAULT_PLUGIN_VERSION,
+    description: sanitizeDescription(r),
+  },
+  null,
+  2,
+)}
 `;
 //@ chunk-9cjx5pnm.js:9547-9608 placement
-var Ui = (e, r) => ({ kind: "needs-manifest", root: e, draft: Di(e, r) });
+/**
+ * 生成 “需要补 manifest” 的结果。
+ */
+var needsManifestResult = (e, r) => ({
+  kind: "needs-manifest",
+  root: e,
+  draft: draftManifestText(e, r),
+});
 //@ chunk-9cjx5pnm.js:9608-9700 placement
-var zi = (e) =>
+/**
+ * 汇总各文件的校验错误。
+ */
+var combinedIssues = (e) =>
   e.flatMap((r) => r.errors.map((error) => `${r.filePath}: ${error.path}: ${redactSecrets(error.message)}`));
 //@ chunk-9cjx5pnm.js:9729-9801 placement
-var Ci = (e) => ({ name: e.name, version: e.version, description: e.description });
+/**
+ * 提取 manifest 的摘要字段。
+ */
+var pickManifestSummary = (e) => ({
+  name: e.name,
+  version: e.version,
+  description: e.description,
+});
 //@ chunk-9cjx5pnm.js:9801-9879 placement
-var Bi = DoctorLazy(() => u({ name: o(), version: o().optional(), description: o().optional() }));
+/**
+ * 插件 manifest 摘要 schema。
+ */
+var pluginManifestSummarySchema = DoctorLazy(() =>
+  u({
+    name: string(),
+    version: string().optional(),
+    description: string().optional(),
+  }),
+);
 //@ chunk-9cjx5pnm.js:9879-10051 placement
-async function readDraftManifestState(e) {
-  let r = await getMcpAuthCache(join_11(e, PLUGIN_MANIFEST_PATH)),
-    safeParse = Bi().safeParse(safeParseJSON(r.kind === "ok" ? r.content : ""));
-  if (r.kind === "absent") return "absent";
-  return safeParse.success ? Ci(safeParse.data) : "unreadable";
+async function readDraftManifestState(dir) {
+  let mcpAuthCache = await getMcpAuthCache(join(dir, PLUGIN_MANIFEST_PATH));
+  let s = pluginManifestSummarySchema().safeParse(
+    safeParseJSON(mcpAuthCache.kind === "ok" ? mcpAuthCache.content : ""),
+  );
+  if (mcpAuthCache.kind === "absent") return "absent";
+  return s.success ? pickManifestSummary(s.data) : "unreadable";
 }
 //@ chunk-9cjx5pnm.js:10051-10118 placement
-function Wi(e, r) {
-  return e !== void 0 && r !== void 0 ? [[e.path, computeContentHash(r)]] : [];
+/**
+ * 生成单个文件的哈希对。
+ */
+function hashPair(e, r) {
+  return e !== undefined && r !== undefined ? [[e.path, computeContentHash(r)]] : [];
 }
 //@ chunk-9cjx5pnm.js:10118-10277 placement
 async function readAllListed(e, r, s) {
-  let results = await Promise.all(e.map(limitConcurrency(MAX_COPY_DEPTH, r))),
-    found = e.find((f, c) => results[c] === void 0);
-  return found === void 0 ? results.flatMap((f, c) => s(e[c], f)) : { missed: found.path };
+  let results = await Promise.all(e.map(limitConcurrency(MAX_COPY_DEPTH, r)));
+  let found = e.find((f, c) => results[c] === undefined);
+  return found === undefined
+    ? results.flatMap((f, c) => s(e[c], f))
+    : {
+        missed: found.path,
+      };
 }
 //@ chunk-9cjx5pnm.js:10277-10388 placement
-async function hashListedFiles(e, r) {
-  let s = await readAllListed(r, (n) => openPublishFile(e, n), Wi);
-  return "missed" in s ? s : { hashes: Object.fromEntries(s) };
+async function hashListedFiles(e, files) {
+  let allListed = await readAllListed(files, (n) => openPublishFile(e, n), hashPair);
+  return "missed" in allListed
+    ? allListed
+    : {
+        hashes: Object.fromEntries(allListed),
+      };
 }
 //@ chunk-9cjx5pnm.js:10388-10469 placement
-var Xr = (e) =>
-  e.files.map((file) => file.path).filter((r) => `/${r}`.endsWith(`/${_P(PLUGIN_MANIFEST_PATH)}`));
+/**
+ * 找出 manifest 文件路径。
+ */
+var manifestPaths = (e) =>
+  e.files
+    .map((file) => file.path)
+    .filter((r) => `/${r}`.endsWith(`/${identityPath_2(PLUGIN_MANIFEST_PATH)}`));
 //@ chunk-9cjx5pnm.js:10469-10664 placement
 function publishSizeRefusal(e, r) {
-  let s = Xr(e);
-  if (s.length > 1) return Qh("findings", [`More than one manifest: ${s.join(", ")}`]);
-  if (e.files.length > oTo) return Qh("too-many-files");
-  return r > kOr ? Qh("too-large") : void 0;
+  let s = manifestPaths(e);
+  if (s.length > 1) return refusalResult("findings", [`More than one manifest: ${s.join(", ")}`]);
+  if (e.files.length > MAX_PUBLISH_FILES) return refusalResult("too-many-files");
+  return r > MAX_PUBLISH_BYTES ? refusalResult("too-large") : undefined;
 }
 //@ chunk-9cjx5pnm.js:10664-10894 placement
-async function buildPublishSnapshot(e, r) {
-  let s = await scanPublishFolder(e),
-    reduced = s.files.reduce((c, g) => c + g.bytes, 0),
-    a = publishSizeRefusal(s, reduced);
-  if (a !== void 0) return a;
+async function buildPublishSnapshot(e, manifest) {
+  let s = await scanPublishFolder(e);
+  let reduced = s.files.reduce((acc, file) => acc + file.bytes, 0);
+  let a = publishSizeRefusal(s, reduced);
+  if (a !== undefined) return a;
   let m = await hashListedFiles(e, s.files);
   return "missed" in m
     ? fileChangedOutcome(m)
-    : { kind: "ready", root: e, manifest: r, listing: s, bytes: reduced, hashes: m.hashes };
+    : {
+        kind: "ready",
+        root: e,
+        manifest,
+        listing: s,
+        bytes: reduced,
+        hashes: m.hashes,
+      };
 }
 //@ chunk-9cjx5pnm.js:10941-10975 placement
-var qi = [
+/**
+ * 引号与前缀字符集合。
+ */
+var QUOTE_CHARS = [
   " ",
   "\t",
   `
@@ -389,22 +507,25 @@ var qi = [
   "(",
 ];
 //@ chunk-9cjx5pnm.js:10975-11043 placement
-var $i = (e) => e.slice(0, 1 + Math.max(...qi.map((r) => e.lastIndexOf(r))));
+/**
+ * 取到最后一个引号为止的前缀。
+ */
+var prefixThroughLastQuote = (e) => e.slice(0, 1 + Math.max(...QUOTE_CHARS.map((r) => e.lastIndexOf(r))));
 //@ chunk-9cjx5pnm.js:11043-11148 placement
 function replaceSegmentsWith(e, r, s) {
   let parts = e.split(r);
   return parts
     .slice(0, -1)
-    .map((a) => $i(a) + s)
+    .map((a) => prefixThroughLastQuote(a) + s)
     .concat(parts.at(-1) ?? "")
     .join("");
 }
 //@ chunk-9cjx5pnm.js:11148-11343 placement
 function mapCopyPathToOriginal(e, r, s) {
-  let n = dirname_6(r.dir),
-    replaced = dirname_6(s).replace(/[\\/]$/, "");
-  return [`${basename_7(r.home)}/copy`, `${basename_7(r.home)}\\copy`].reduce(
-    (m, f) => replaceSegmentsWith(m, f, replaced),
+  let n = dirname(r.dir);
+  let replaced = dirname(s).replace(/[\\/]$/, "");
+  return [`${basename(r.home)}/copy`, `${basename(r.home)}\\copy`].reduce(
+    (acc, f) => replaceSegmentsWith(acc, f, replaced),
     e.replaceAll(n, () => replaced).replaceAll(sanitizeForDisplay(n, n.length), () => replaced),
   );
 }
@@ -413,51 +534,67 @@ var mapCopyPathsInResults = (e, r, s) =>
   e.map((n) => ({
     ...n,
     filePath: mapCopyPathToOriginal(n.filePath, r, s),
-    errors: n.errors.map((error) => ({ ...error, message: mapCopyPathToOriginal(error.message, r, s) })),
+    errors: n.errors.map((error) => ({
+      ...error,
+      message: mapCopyPathToOriginal(error.message, r, s),
+    })),
   }));
 //@ chunk-9cjx5pnm.js:11469-11562 placement
-function Yi(e) {
-  return e.kind === "ready" && Xr(e.listing).length === 0 ? Qh("unreadable", [_P(PLUGIN_MANIFEST_PATH)]) : e;
+/**
+ * 缺 manifest 时改成不可读结果。
+ */
+function requireManifestPath(publishSnapshot) {
+  return publishSnapshot.kind === "ready" && manifestPaths(publishSnapshot.listing).length === 0
+    ? refusalResult("unreadable", [identityPath_2(PLUGIN_MANIFEST_PATH)])
+    : publishSnapshot;
 }
 //@ chunk-9cjx5pnm.js:11562-11962 placement
 async function validateSnapshot(e, r, s) {
-  let { manifest: manifest, contents: contents } = await resolveValidateTarget(r.dir),
-    m = manifest?.errors.some((x) => x.code === NO_MANIFEST) ?? !0,
-    combined = zi(mapCopyPathsInResults(m ? contents : [manifest ?? [], contents].flat(), r, e)).concat(
-      m ? folderNameFindings(e) : [],
-    ),
-    c = m ? await $kt(r.dir) : manifest?.fileType === "plugin",
-    g = await readDraftManifestState(r.dir);
-  if (!c) return Qh("not-a-plugin");
-  if (combined.length > 0) return Qh("findings", combined);
-  if (g === "unreadable") return Qh("unreadable", [_P(PLUGIN_MANIFEST_PATH)]);
-  return g === "absent" ? Ui(e, s) : checkSnapshotUnchanged(Yi(await buildPublishSnapshot(e, g)), r);
+  let { manifest, contents } = await resolveValidateTarget(r.dir);
+  let m = manifest?.errors.some((error) => error.code === NO_MANIFEST) ?? true;
+  let combined = combinedIssues(
+    mapCopyPathsInResults(m ? contents : [manifest ?? [], contents].flat(), r, e),
+  ).concat(m ? folderNameFindings(e) : []);
+  let c = m ? await pluginRootHasMarker(r.dir) : manifest?.fileType === "plugin";
+  let manifest_2 = await readDraftManifestState(r.dir);
+  if (!c) return refusalResult("not-a-plugin");
+  if (combined.length > 0) return refusalResult("findings", combined);
+  if (manifest_2 === "unreadable") return refusalResult("unreadable", [identityPath_2(PLUGIN_MANIFEST_PATH)]);
+  return manifest_2 === "absent"
+    ? needsManifestResult(e, s)
+    : checkSnapshotUnchanged(requireManifestPath(await buildPublishSnapshot(e, manifest_2)), r);
 }
 //@ chunk-9cjx5pnm.js:11962-12057 placement
-function Qi(e) {
-  let r = _P(PLUGIN_MANIFEST_PATH);
-  return e.leftOut.some((n) => n.path === r) ? Qh("unreadable", [r]) : void 0;
+/**
+ * 检查 manifest 是否被排除在外。
+ */
+function leftOutManifestProblem(e) {
+  let r = identityPath_2(PLUGIN_MANIFEST_PATH);
+  return e.leftOut.some((n) => n.path === r) ? refusalResult("unreadable", [r]) : undefined;
 }
 //@ chunk-9cjx5pnm.js:12057-12411 placement
 async function checkPublishFolderSize(e, r) {
-  let s = await scanPublishFolder(e),
-    n =
-      Qi(s) ??
-      publishSizeRefusal(
-        s,
-        s.files.reduce((c, g) => c + g.bytes, 0),
-      );
-  if (n !== void 0) return n;
+  let s = await scanPublishFolder(e);
+  let n =
+    leftOutManifestProblem(s) ??
+    publishSizeRefusal(
+      s,
+      s.files.reduce((acc, file) => acc + file.bytes, 0),
+    );
+  if (n !== undefined) return n;
   let a = await snapshotPublishFolder(e, s.files);
   if ("missed" in a) return fileChangedOutcome(a);
   let m = onceExport(() => removeValidationCopy(a.home));
   using f = registerCleanup(m);
-  if (isCleanupStarted()) return (await m(), Promise.reject(processEndingError()));
+  if (isCleanupStarted()) {
+    await m();
+    return Promise.reject(processEndingError());
+  }
   try {
-    return await validateSnapshot(e, a, r).catch((c) =>
-      Qh(
+    return await validateSnapshot(e, a, r).catch((error) =>
+      refusalResult(
         "unreadable",
-        errorDetails(c).map((g) => mapCopyPathToOriginal(g, a, e)),
+        errorDetails(error).map((g) => mapCopyPathToOriginal(g, a, e)),
       ),
     );
   } finally {
@@ -465,55 +602,88 @@ async function checkPublishFolderSize(e, r) {
   }
 }
 //@ chunk-9cjx5pnm.js:12411-12614 placement
-async function resolvePublishFolder(e, r) {
-  let s = await realpath(resolve(getCwd(), e)).catch(() => {
+async function resolvePublishFolder(folder, description) {
+  let s = await realpath(resolve(getCwd(), folder)).catch(() => {
     return;
   });
-  if (!(s !== void 0 && (await FF(s)))) return Qh("no-folder", [e]);
-  return (await readPluginFileSafe(s, join(s, De))) === "refused"
-    ? Qh("unreadable", [De])
-    : unreadableOnError(checkPublishFolderSize(s, r));
+  if (!(s !== undefined && (await isDirectoryOrFalse(s)))) return refusalResult("no-folder", [folder]);
+  return (await readPluginFileSafe(s, join(s, MANIFEST_DIR_NAME))) === "refused"
+    ? refusalResult("unreadable", [MANIFEST_DIR_NAME])
+    : unreadableOnError(checkPublishFolderSize(s, description));
 }
 //@ chunk-9cjx5pnm.js:12614-12683 placement
-var on = (e) => ({ path: _P(PLUGIN_MANIFEST_PATH), bytes: Buffer.byteLength(e.draft), mode: FILE_MODE_RW });
+/**
+ * 构造草稿 manifest 的条目。
+ */
+var draftManifestEntry = (e) => ({
+  path: identityPath_2(PLUGIN_MANIFEST_PATH),
+  bytes: Buffer.byteLength(e.draft),
+  mode: FILE_MODE_RW,
+});
 //@ chunk-9cjx5pnm.js:12716-12860 placement
 function draftManifestSummary(e) {
-  let safeParse = PluginManifestSchema().safeParse(safeParseJSON(e.draft));
+  let r = PluginManifestSchema().safeParse(safeParseJSON(e.draft));
   return {
-    name: safeParse.data?.name ?? basename_8(e.root),
-    version: safeParse.data?.version,
-    description: safeParse.data?.description,
+    name: r.data?.name ?? basename(e.root),
+    version: r.data?.version,
+    description: r.data?.description,
   };
 }
 //@ chunk-9cjx5pnm.js:12860-12932 placement
-var nn = (e, r) => ({ files: e.files.concat(r).toSorted(byPath), leftOut: e.leftOut });
+/**
+ * 把草稿条目并入文件列表。
+ */
+var appendFiles = (listing, r) => ({
+  files: listing.files.concat(r).toSorted(byPath),
+  leftOut: listing.leftOut,
+});
 //@ chunk-9cjx5pnm.js:12932-12967 placement
-var an = (e, r, s) => ({ ...e, [r]: computeContentHash(s) });
+/**
+ * 给哈希表加上某文件的哈希。
+ */
+var withHash = (hashes, path, draft) => ({
+  ...hashes,
+  [path]: computeContentHash(draft),
+});
 //@ chunk-9cjx5pnm.js:12967-13073 placement
-var withDraftManifest = (e, r, s) => ({
-  ...e,
-  bytes: e.bytes + r.bytes,
-  listing: nn(e.listing, r),
-  hashes: an(e.hashes, r.path, s.draft),
+var withDraftManifest = (publishSnapshot, r, s) => ({
+  ...publishSnapshot,
+  bytes: publishSnapshot.bytes + r.bytes,
+  listing: appendFiles(publishSnapshot.listing, r),
+  hashes: withHash(publishSnapshot.hashes, r.path, s.draft),
 });
 //@ chunk-9cjx5pnm.js:13073-13167 placement
-async function mn(e) {
-  let r = on(e),
-    s = await buildPublishSnapshot(e.root, draftManifestSummary(e));
-  return s.kind === "ready" ? withDraftManifest(s, r, e) : s;
+/**
+ * 为 “需要补 manifest” 的情况补上草稿。
+ */
+async function buildWithDraftManifest(e) {
+  let r = draftManifestEntry(e);
+  let publishSnapshot = await buildPublishSnapshot(e.root, draftManifestSummary(e));
+  return publishSnapshot.kind === "ready" ? withDraftManifest(publishSnapshot, r, e) : publishSnapshot;
 }
 //@ chunk-9cjx5pnm.js:13167-13234 placement
-async function fn(e) {
-  return e.kind === "needs-manifest" ? unreadableOnError(mn(e)) : e;
+/**
+ * 需要补 manifest 时重算快照。
+ */
+async function ensureManifest(publishFolder) {
+  return publishFolder.kind === "needs-manifest"
+    ? unreadableOnError(buildWithDraftManifest(publishFolder))
+    : publishFolder;
 }
 //@ chunk-9cjx5pnm.js:13234-13441 placement
-async function preparePublishFolder(e, r) {
-  let s = await resolvePublishFolder(e.folder, e.description),
-    n = await fn(s);
-  if (n.kind === "refused") return n;
-  return n.kind === "ready"
-    ? { wanted: e, plan: n, organization: r, draft: draftManifestOf(s), withheld: !1 }
-    : Qh("unreadable");
+async function preparePublishFolder(e, organization) {
+  let publishFolder = await resolvePublishFolder(e.folder, e.description);
+  let manifest = await ensureManifest(publishFolder);
+  if (manifest.kind === "refused") return manifest;
+  return manifest.kind === "ready"
+    ? {
+        wanted: e,
+        plan: manifest,
+        organization,
+        draft: draftManifestOf(publishFolder),
+        withheld: false,
+      }
+    : refusalResult("unreadable");
 }
 //@ chunk-9cjx5pnm.js:13441-13826 placement
 var PUBLISH_STOPPED_TEXT = Object.freeze({
@@ -526,47 +696,85 @@ var PUBLISH_STOPPED_TEXT = Object.freeze({
 });
 //@ chunk-9cjx5pnm.js:13826-13895 placement
 function stoppedOrResult(e, r, s) {
-  return e.signal.aborted ? Qh("stopped", [PUBLISH_STOPPED_TEXT[s]]) : r;
+  return e.signal.aborted ? refusalResult("stopped", [PUBLISH_STOPPED_TEXT[s]]) : r;
 }
 //@ chunk-9cjx5pnm.js:14213-14224 placement
-var dn = 200;
+/**
+ * 客户端错误状态码下界（200）。
+ */
+var CLIENT_ERROR_MIN = 200;
 //@ chunk-9cjx5pnm.js:14224-14235 placement
-var cn = 300;
+/**
+ * 客户端错误状态码上界（300）。
+ */
+var CLIENT_ERROR_MAX = 300;
 //@ chunk-9cjx5pnm.js:14235-14274 placement
-var isClientErrorStatus = (e) => e.status >= dn && e.status < cn;
+var isClientErrorStatus = (e) => e.status >= CLIENT_ERROR_MIN && e.status < CLIENT_ERROR_MAX;
 //@ chunk-9cjx5pnm.js:14274-14285 placement
-var gn = 400;
+/**
+ * 状态码 400。
+ */
+var STATUS_BAD_REQUEST = 400;
 //@ chunk-9cjx5pnm.js:14285-14296 placement
-var hn = 405;
+/**
+ * 状态码 405。
+ */
+var STATUS_METHOD_NOT_ALLOWED = 405;
 //@ chunk-9cjx5pnm.js:14296-14307 placement
-var bn = 404;
+/**
+ * 状态码 404。
+ */
+var STATUS_NOT_FOUND = 404;
 //@ chunk-9cjx5pnm.js:14307-14318 placement
-var yn = 501;
+/**
+ * 状态码 501。
+ */
+var STATUS_NOT_IMPLEMENTED = 501;
 //@ chunk-9cjx5pnm.js:14318-14329 placement
-var xn = 422;
+/**
+ * 状态码 422。
+ */
+var STATUS_UNPROCESSABLE = 422;
 //@ chunk-9cjx5pnm.js:14329-14368 placement
-var freeze_6 = Object.freeze([gn, bn, hn, xn, yn]);
+var Rn = Object.freeze([
+  STATUS_BAD_REQUEST,
+  STATUS_NOT_FOUND,
+  STATUS_METHOD_NOT_ALLOWED,
+  STATUS_UNPROCESSABLE,
+  STATUS_NOT_IMPLEMENTED,
+]);
 //@ chunk-9cjx5pnm.js:14368-14378 placement
-var Sn = 20;
+/**
+ * 最多列出的错误条数（20）。
+ */
+var MAX_LISTED_ERRORS = 20;
 //@ chunk-9cjx5pnm.js:14378-14389 placement
-var Pn = 300;
+/**
+ * 单条错误的最大字符数（300）。
+ */
+var MAX_ERROR_CHARS = 300;
 //@ chunk-9cjx5pnm.js:14389-14428 placement
-var freeze_7 = Object.freeze(["scan", "other"]);
+var _n = Object.freeze(["scan", "other"]);
 //@ chunk-9cjx5pnm.js:14428-14544 placement
-var publishFindingsList = (e, r) =>
-  [...r.findings, ...[r.message ?? ""].filter((s) => s !== "" && freeze_7.includes(e))]
-    .slice(0, Sn)
-    .map((s) => truncateToLength(s, Pn));
+var publishFindingsList = (e, publishApiError) =>
+  [...publishApiError.findings, ...[publishApiError.message ?? ""].filter((s) => s !== "" && _n.includes(e))]
+    .slice(0, MAX_LISTED_ERRORS)
+    .map((s) => truncateToLength(s, MAX_ERROR_CHARS));
 //@ chunk-9cjx5pnm.js:14544-14783 placement
 var publishApiErrorSchema = DoctorLazy(() =>
   u({
     error: u({
-      message: o().optional(),
+      message: string().optional(),
       details: u({
-        error_code: o().optional(),
+        error_code: string().optional(),
         validation_errors: u({
-          message: o().optional(),
-          plugins: A(u({ name: o().optional(), error: o().optional() })).optional(),
+          message: string().optional(),
+          plugins: array(
+            u({
+              name: string().optional(),
+              error: string().optional(),
+            }),
+          ).optional(),
         }).optional(),
       }).optional(),
     }).optional(),
@@ -574,37 +782,45 @@ var publishApiErrorSchema = DoctorLazy(() =>
 );
 //@ chunk-9cjx5pnm.js:14783-15042 placement
 function parsePublishApiError(e) {
-  let r = publishApiErrorSchema().safeParse(e.data).data?.error,
-    s = r?.details?.validation_errors;
+  let error = publishApiErrorSchema().safeParse(e.data).data?.error;
+  let validationErrors = error?.details?.validation_errors;
   return {
-    code: r?.details?.error_code,
-    message: r?.message,
+    code: error?.details?.error_code,
+    message: error?.message,
     findings: [
-      s?.message ?? "",
-      ...(s?.plugins ?? []).map((n) => [n.name, n.error].filter(Boolean).join(": ")),
+      validationErrors?.message ?? "",
+      ...(validationErrors?.plugins ?? []).map((n) => [n.name, n.error].filter(Boolean).join(": ")),
     ].filter(Boolean),
   };
 }
 //@ chunk-9cjx5pnm.js:15042-15144 placement
 function publishApiOutcome(e, r) {
-  let s = parsePublishApiError(e),
-    n = r.codes[s.code ?? ""] ?? r.statuses[e.status] ?? "other";
-  return Qh(n, publishFindingsList(n, s));
+  let publishApiError = parsePublishApiError(e);
+  let n = r.codes[publishApiError.code ?? ""] ?? r.statuses[e.status] ?? "other";
+  return refusalResult(n, publishFindingsList(n, publishApiError));
 }
 //@ chunk-9cjx5pnm.js:15144-15169 placement
-var freeze_8 = Object.freeze({});
+var An = Object.freeze({});
 //@ chunk-9cjx5pnm.js:15169-15183 placement
-var En = 120000;
+/**
+ * 发布 POST 请求的超时（120000 毫秒）。
+ */
+var PUBLISH_POST_TIMEOUT_MS = 120000;
 //@ chunk-9cjx5pnm.js:15183-15196 placement
-var Ln = 15000;
+/**
+ * 发布 GET 请求的超时（15000 毫秒）。
+ */
+var PUBLISH_GET_TIMEOUT_MS = 15000;
 //@ chunk-9cjx5pnm.js:15196-15235 placement
-var PUBLISH_HTTP = Object.freeze({ get: Ln, post: En });
-
+var PUBLISH_HTTP = Object.freeze({
+  get: PUBLISH_GET_TIMEOUT_MS,
+  post: PUBLISH_POST_TIMEOUT_MS,
+});
 export {
-  freeze_8,
+  An,
   PUBLISH_HTTP,
   parsePublishApiError,
-  freeze_6,
+  Rn,
   isClientErrorStatus,
   publishApiOutcome,
   slugifyPluginName,

@@ -9,9 +9,12 @@
  * attribution: placement 2
  */
 import __cc_resource_0 from "../../../../assets/package-validate.mjs-3a0e4e2a.txt.zst" with { type: "file" };
-import { Et } from "../../../utils/embeddedAssets.js";
+import { readEmbeddedTextSync } from "../../../utils/embeddedAssets.js";
 
 //@ chunk-4yryjne9.js:319-341 placement
-var Q = __cc_resource_0;
+var packageMjs3a0e4e2aPath = __cc_resource_0;
 //@ chunk-4yryjne9.js:341-373 placement
-var e = Et(Q, import.meta.dirname);
+/**
+ * design-system 打包技能附带的 package 校验脚本文本。
+ */
+var packageMjs3a0e4e2a = readEmbeddedTextSync(packageMjs3a0e4e2aPath, import.meta.dirname);

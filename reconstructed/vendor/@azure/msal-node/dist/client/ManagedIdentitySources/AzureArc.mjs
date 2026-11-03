@@ -8,131 +8,165 @@
 import { accessSync, constants, statSync, readFileSync } from "fs";
 import path from "path";
 import {
-  Me,
-  w,
-  k,
-  ne,
-  ae,
-  UNABLE_TO_CREATE_AZURE_ARC,
-  He,
-  J,
-  Ne,
-  ce,
-  WWW_AUTHENTICATE_HEADER_MISSING,
-  os,
-  PLATFORM_NOT_SUPPORTED,
-  INVALID_FILE_EXTENSION,
-  INVALID_FILE_PATH,
-  UNABLE_TO_READ_SECRET_FILE,
-  Ah,
-  INVALID_SECRET,
+  BaseManagedIdentitySource,
+  ManagedIdentityEnvironmentVariableNames,
+  ManagedIdentitySourceNames,
+  ManagedIdentityIdType,
+  createManagedIdentityError,
+  unableToCreateAzureArc,
+  ManagedIdentityRequestParameters,
+  HttpMethod,
+  ManagedIdentityHeaders,
+  ManagedIdentityQueryParameters,
+  wwwAuthenticateHeaderMissing,
+  wwwAuthenticateHeaderUnsupportedFormat,
+  platformNotSupported,
+  invalidFileExtension,
+  invalidFilePath,
+  unableToReadSecretFile,
+  AZURE_ARC_SECRET_FILE_MAX_SIZE_BYTES,
+  invalidSecret,
 } from "../../../lib/msal-node.cjs";
-import { b, me, AuthError, g, NETWORK_ERROR } from "../../../../msal-common/lib/index-node-DhUjlPuB.js";
+import {
+  HttpStatus,
+  EncodingTypes,
+  AuthError,
+  createClientAuthError,
+  networkError,
+} from "../../../../msal-common/lib/index-node-DhUjlPuB.js";
 
 //@ chunk-mrx6y2r5.js:273815-274154 esm-fingerprint
-var FE = "2019-11-01",
-  Bf = "http://127.0.0.1:40342/metadata/identity/oauth2/token",
-  zf = "N/A: himds executable exists",
-  Gf = {
-    win32: `${process.env.ProgramData}\\AzureConnectedMachineAgent\\Tokens\\`,
-    linux: "/var/opt/azcmagent/tokens/",
-  },
-  $E = {
-    win32: `${process.env.ProgramFiles}\\AzureConnectedMachineAgent\\himds.exe`,
-    linux: "/opt/azcmagent/bin/himds",
-  };
+var ARC_API_VERSION = "2019-11-01";
+var DEFAULT_AZURE_ARC_IDENTITY_ENDPOINT = "http://127.0.0.1:40342/metadata/identity/oauth2/token";
+var HIMDS_EXECUTABLE_HELPER_STRING = "N/A: himds executable exists";
+var SUPPORTED_AZURE_ARC_PLATFORMS = {
+  win32: `${process.env.ProgramData}\\AzureConnectedMachineAgent\\Tokens\\`,
+  linux: "/var/opt/azcmagent/tokens/",
+};
+var AZURE_ARC_FILE_DETECTION = {
+  win32: `${process.env.ProgramFiles}\\AzureConnectedMachineAgent\\himds.exe`,
+  linux: "/opt/azcmagent/bin/himds",
+};
 //@ chunk-mrx6y2r5.js:274154-276388 esm-fingerprint
-class Jt extends Me {
-  constructor(e, t, r, n, o, i) {
-    super(e, t, r, n, o);
-    this.identityEndpoint = i;
+class AzureArc extends BaseManagedIdentitySource {
+  constructor(logger, nodeStorage, networkClient, cryptoProvider, disableInternalRetries, identityEndpoint) {
+    super(logger, nodeStorage, networkClient, cryptoProvider, disableInternalRetries);
+    this.identityEndpoint = identityEndpoint;
   }
   static getEnvironmentVariables() {
-    let e = process.env[w.IDENTITY_ENDPOINT],
-      t = process.env[w.IMDS_ENDPOINT];
-    if (!e || !t) {
-      let linux = $E.linux;
+    let identityEndpoint = process.env[ManagedIdentityEnvironmentVariableNames.IDENTITY_ENDPOINT];
+    let imdsEndpoint = process.env[ManagedIdentityEnvironmentVariableNames.IMDS_ENDPOINT];
+    if (!identityEndpoint || !imdsEndpoint) {
+      let fileDetectionPath = AZURE_ARC_FILE_DETECTION.linux;
       try {
-        (accessSync(linux, constants.F_OK | constants.R_OK), (e = Bf), (t = zf));
-      } catch (error) {}
+        accessSync(fileDetectionPath, constants.F_OK | constants.R_OK);
+        identityEndpoint = DEFAULT_AZURE_ARC_IDENTITY_ENDPOINT;
+        imdsEndpoint = HIMDS_EXECUTABLE_HELPER_STRING;
+      } catch (err) {}
     }
-    return [e, t];
+    return [identityEndpoint, imdsEndpoint];
   }
-  static tryCreate(e, t, r, n, o, i) {
-    let [s, a] = Jt.getEnvironmentVariables();
-    if (!s || !a)
-      return (
-        e.info(
-          `[Managed Identity] ${k.AZURE_ARC} managed identity is unavailable through environment variables because one or both of '${w.IDENTITY_ENDPOINT}' and '${w.IMDS_ENDPOINT}' are not defined. ${k.AZURE_ARC} managed identity is also unavailable through file detection.`,
-        ),
-        null
+  static tryCreate(
+    logger,
+    nodeStorage,
+    networkClient,
+    cryptoProvider,
+    disableInternalRetries,
+    managedIdentityId,
+  ) {
+    let [identityEndpoint, imdsEndpoint] = AzureArc.getEnvironmentVariables();
+    if (!identityEndpoint || !imdsEndpoint) {
+      logger.info(
+        `[Managed Identity] ${ManagedIdentitySourceNames.AZURE_ARC} managed identity is unavailable through environment variables because one or both of '${ManagedIdentityEnvironmentVariableNames.IDENTITY_ENDPOINT}' and '${ManagedIdentityEnvironmentVariableNames.IMDS_ENDPOINT}' are not defined. ${ManagedIdentitySourceNames.AZURE_ARC} managed identity is also unavailable through file detection.`,
       );
-    if (a === zf)
-      e.info(
-        `[Managed Identity] ${k.AZURE_ARC} managed identity is available through file detection. Defaulting to known ${k.AZURE_ARC} endpoint: ${Bf}. Creating ${k.AZURE_ARC} managed identity.`,
+      return null;
+    }
+    if (imdsEndpoint === HIMDS_EXECUTABLE_HELPER_STRING)
+      logger.info(
+        `[Managed Identity] ${ManagedIdentitySourceNames.AZURE_ARC} managed identity is available through file detection. Defaulting to known ${ManagedIdentitySourceNames.AZURE_ARC} endpoint: ${DEFAULT_AZURE_ARC_IDENTITY_ENDPOINT}. Creating ${ManagedIdentitySourceNames.AZURE_ARC} managed identity.`,
       );
     else {
-      let validatedEnvVariableUrlString = Jt.getValidatedEnvVariableUrlString(
-        w.IDENTITY_ENDPOINT,
-        s,
-        k.AZURE_ARC,
-        e,
+      let validatedIdentityEndpoint = AzureArc.getValidatedEnvVariableUrlString(
+        ManagedIdentityEnvironmentVariableNames.IDENTITY_ENDPOINT,
+        identityEndpoint,
+        ManagedIdentitySourceNames.AZURE_ARC,
+        logger,
       );
-      (validatedEnvVariableUrlString.endsWith("/") && validatedEnvVariableUrlString.slice(0, -1),
-        Jt.getValidatedEnvVariableUrlString(w.IMDS_ENDPOINT, a, k.AZURE_ARC, e),
-        e.info(
-          `[Managed Identity] Environment variables validation passed for ${k.AZURE_ARC} managed identity. Endpoint URI: ${validatedEnvVariableUrlString}. Creating ${k.AZURE_ARC} managed identity.`,
-        ));
+      if (validatedIdentityEndpoint.endsWith("/")) validatedIdentityEndpoint.slice(0, -1);
+      AzureArc.getValidatedEnvVariableUrlString(
+        ManagedIdentityEnvironmentVariableNames.IMDS_ENDPOINT,
+        imdsEndpoint,
+        ManagedIdentitySourceNames.AZURE_ARC,
+        logger,
+      );
+      logger.info(
+        `[Managed Identity] Environment variables validation passed for ${ManagedIdentitySourceNames.AZURE_ARC} managed identity. Endpoint URI: ${validatedIdentityEndpoint}. Creating ${ManagedIdentitySourceNames.AZURE_ARC} managed identity.`,
+      );
     }
-    if (i.idType !== ne.SYSTEM_ASSIGNED) throw ae(UNABLE_TO_CREATE_AZURE_ARC);
-    return new Jt(e, t, r, n, o, s);
-  }
-  createRequest(e) {
-    let t = new He(J.GET, this.identityEndpoint.replace("localhost", "127.0.0.1"));
-    return (
-      (t.headers[Ne.METADATA_HEADER_NAME] = "true"),
-      (t.queryParameters[ce.API_VERSION] = FE),
-      (t.queryParameters[ce.RESOURCE] = e),
-      t
+    if (managedIdentityId.idType !== ManagedIdentityIdType.SYSTEM_ASSIGNED)
+      throw createManagedIdentityError(unableToCreateAzureArc);
+    return new AzureArc(
+      logger,
+      nodeStorage,
+      networkClient,
+      cryptoProvider,
+      disableInternalRetries,
+      identityEndpoint,
     );
   }
-  async getServerTokenResponseAsync(e, t, r, n) {
-    let o;
-    if (e.status === b.UNAUTHORIZED) {
-      let i = e.headers["www-authenticate"];
-      if (!i) throw ae(WWW_AUTHENTICATE_HEADER_MISSING);
-      if (!i.includes("Basic realm=")) throw ae(os);
-      let s = i.split("Basic realm=")[1];
-      if (!Gf.hasOwnProperty("linux")) throw ae(PLATFORM_NOT_SUPPORTED);
-      let linux = Gf.linux,
-        base = path.basename(s);
-      if (!base.endsWith(".key")) throw ae(INVALID_FILE_EXTENSION);
-      if (linux + base !== s) throw ae(INVALID_FILE_PATH);
-      let l;
+  createRequest(resource) {
+    let request = new ManagedIdentityRequestParameters(
+      HttpMethod.GET,
+      this.identityEndpoint.replace("localhost", "127.0.0.1"),
+    );
+    request.headers[ManagedIdentityHeaders.METADATA_HEADER_NAME] = "true";
+    request.queryParameters[ManagedIdentityQueryParameters.API_VERSION] = ARC_API_VERSION;
+    request.queryParameters[ManagedIdentityQueryParameters.RESOURCE] = resource;
+    return request;
+  }
+  async getServerTokenResponseAsync(originalResponse, networkClient, networkRequest, networkRequestOptions) {
+    let retryResponse;
+    if (originalResponse.status === HttpStatus.UNAUTHORIZED) {
+      let wwwAuthHeader = originalResponse.headers["www-authenticate"];
+      if (!wwwAuthHeader) throw createManagedIdentityError(wwwAuthenticateHeaderMissing);
+      if (!wwwAuthHeader.includes("Basic realm="))
+        throw createManagedIdentityError(wwwAuthenticateHeaderUnsupportedFormat);
+      let secretFilePath = wwwAuthHeader.split("Basic realm=")[1];
+      if (!SUPPORTED_AZURE_ARC_PLATFORMS.hasOwnProperty("linux"))
+        throw createManagedIdentityError(platformNotSupported);
+      let expectedSecretFilePath = SUPPORTED_AZURE_ARC_PLATFORMS.linux;
+      let fileName = path.basename(secretFilePath);
+      if (!fileName.endsWith(".key")) throw createManagedIdentityError(invalidFileExtension);
+      if (expectedSecretFilePath + fileName !== secretFilePath)
+        throw createManagedIdentityError(invalidFilePath);
+      let secretFileSize;
       try {
-        l = await statSync(s).size;
-      } catch (error) {
-        throw ae(UNABLE_TO_READ_SECRET_FILE);
+        secretFileSize = await statSync(secretFilePath).size;
+      } catch (e) {
+        throw createManagedIdentityError(unableToReadSecretFile);
       }
-      if (l > Ah) throw ae(INVALID_SECRET);
-      let d;
+      if (secretFileSize > AZURE_ARC_SECRET_FILE_MAX_SIZE_BYTES)
+        throw createManagedIdentityError(invalidSecret);
+      let secret;
       try {
-        d = readFileSync(s, me.UTF8);
-      } catch (error) {
-        throw ae(UNABLE_TO_READ_SECRET_FILE);
+        secret = readFileSync(secretFilePath, EncodingTypes.UTF8);
+      } catch (e) {
+        throw createManagedIdentityError(unableToReadSecretFile);
       }
-      let u = `Basic ${d}`;
-      (this.logger.info("[Managed Identity] Adding authorization header to the request."),
-        (r.headers[Ne.AUTHORIZATION_HEADER_NAME] = u));
+      let authHeaderValue = `Basic ${secret}`;
+      this.logger.info("[Managed Identity] Adding authorization header to the request.");
+      networkRequest.headers[ManagedIdentityHeaders.AUTHORIZATION_HEADER_NAME] = authHeaderValue;
       try {
-        o = await t.sendGetRequestAsync(r.computeUri(), n);
+        retryResponse = await networkClient.sendGetRequestAsync(
+          networkRequest.computeUri(),
+          networkRequestOptions,
+        );
       } catch (error) {
         if (error instanceof AuthError) throw error;
-        else throw g(NETWORK_ERROR);
+        else throw createClientAuthError(networkError);
       }
     }
-    return this.getServerTokenResponse(o || e);
+    return this.getServerTokenResponse(retryResponse || originalResponse);
   }
 }
-
-export { Jt };
+export { AzureArc };

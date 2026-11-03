@@ -8,18 +8,18 @@
  * pieces: chunk-e6aww6q8.js (1)
  * attribution: fingerprint 1
  */
-
+//@ chunk-e6aww6q8.js:2026674-2026805 fingerprint = theme (0.698)
 /**
  * /theme 命令对象（local-jsx）；描述：Change the theme；实现 chunk-3s4dbk22.js 的 Or。
  */
-//@ chunk-e6aww6q8.js:2026674-2026805 fingerprint = theme (0.698)
 var themeCommandDefinition = {
-    type: "local-jsx",
-    name: "theme",
-    description: "Change the theme",
-    immediate: (args, presentation) => presentation === "fullscreen",
-    requires: { ink: !0 },
+  type: "local-jsx",
+  name: "theme",
+  description: "Change the theme",
+  immediate: (args, presentation) => presentation === "fullscreen",
+  requires: {
+    ink: true,
   },
-  themeCommand = themeCommandDefinition;
-
+};
+var themeCommand = themeCommandDefinition;
 export { themeCommand };

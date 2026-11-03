@@ -7,79 +7,97 @@
  */
 
 //@ chunk-6ja29j2n.js:122132-122138 esm-layout
-var p;
+var EntryType;
 //@ chunk-6ja29j2n.js:122138-122212 esm-fingerprint
-(function (e) {
-  ((e[(e.Marker = 0)] = "Marker"), (e[(e.Element = 1)] = "Element"));
-})(p || (p = {}));
+(function (EntryType) {
+  EntryType[(EntryType.Marker = 0)] = "Marker";
+  EntryType[(EntryType.Element = 1)] = "Element";
+})(EntryType || (EntryType = {}));
 //@ chunk-6ja29j2n.js:122212-122235 esm-fingerprint
-var Fe = { type: p.Marker };
+var MARKER = {
+  type: EntryType.Marker,
+};
 //@ chunk-6ja29j2n.js:122235-123774 esm-fingerprint
-class le {
-  constructor(e) {
-    ((this.treeAdapter = e), (this.entries = []), (this.bookmark = null));
+class FormattingElementList {
+  constructor(treeAdapter) {
+    this.treeAdapter = treeAdapter;
+    this.entries = [];
+    this.bookmark = null;
   }
-  _getNoahArkConditionCandidates(e, t) {
-    let a = [],
-      n = t.length,
-      tagName = this.treeAdapter.getTagName(e),
-      namespaceURI = this.treeAdapter.getNamespaceURI(e);
-    for (let l = 0; l < this.entries.length; l++) {
-      let _ = this.entries[l];
-      if (_.type === p.Marker) break;
-      let { element: element } = _;
+  _getNoahArkConditionCandidates(newElement, neAttrs) {
+    let candidates = [];
+    let neAttrsLength = neAttrs.length;
+    let neTagName = this.treeAdapter.getTagName(newElement);
+    let neNamespaceURI = this.treeAdapter.getNamespaceURI(newElement);
+    for (let i = 0; i < this.entries.length; i++) {
+      let entry = this.entries[i];
+      if (entry.type === EntryType.Marker) break;
+      let { element } = entry;
       if (
-        this.treeAdapter.getTagName(element) === tagName &&
-        this.treeAdapter.getNamespaceURI(element) === namespaceURI
+        this.treeAdapter.getTagName(element) === neTagName &&
+        this.treeAdapter.getNamespaceURI(element) === neNamespaceURI
       ) {
-        let attrList = this.treeAdapter.getAttrList(element);
-        if (attrList.length === n) a.push({ idx: l, attrs: attrList });
+        let elementAttrs = this.treeAdapter.getAttrList(element);
+        if (elementAttrs.length === neAttrsLength)
+          candidates.push({
+            idx: i,
+            attrs: elementAttrs,
+          });
       }
     }
-    return a;
+    return candidates;
   }
-  _ensureNoahArkCondition(e) {
+  _ensureNoahArkCondition(newElement) {
     if (this.entries.length < 3) return;
-    let attrList = this.treeAdapter.getAttrList(e),
-      _getNoahArkConditionCandidates = this._getNoahArkConditionCandidates(e, attrList);
-    if (_getNoahArkConditionCandidates.length < 3) return;
-    let n = new Map(attrList.map((h) => [h.name, h.value])),
-      d = 0;
-    for (let h = 0; h < _getNoahArkConditionCandidates.length; h++) {
-      let l = _getNoahArkConditionCandidates[h];
-      if (l.attrs.every((attr) => n.get(attr.name) === attr.value)) {
-        if (((d += 1), d >= 3)) this.entries.splice(l.idx, 1);
+    let neAttrs = this.treeAdapter.getAttrList(newElement);
+    let candidates = this._getNoahArkConditionCandidates(newElement, neAttrs);
+    if (candidates.length < 3) return;
+    let neAttrsMap = new Map(neAttrs.map((neAttr) => [neAttr.name, neAttr.value]));
+    let validCandidates = 0;
+    for (let i = 0; i < candidates.length; i++) {
+      let candidate = candidates[i];
+      if (candidate.attrs.every((cAttr) => neAttrsMap.get(cAttr.name) === cAttr.value)) {
+        validCandidates += 1;
+        if (validCandidates >= 3) this.entries.splice(candidate.idx, 1);
       }
     }
   }
   insertMarker() {
-    this.entries.unshift(Fe);
+    this.entries.unshift(MARKER);
   }
-  pushElement(e, t) {
-    (this._ensureNoahArkCondition(e), this.entries.unshift({ type: p.Element, element: e, token: t }));
+  pushElement(element, token) {
+    this._ensureNoahArkCondition(element);
+    this.entries.unshift({
+      type: EntryType.Element,
+      element,
+      token,
+    });
   }
-  insertElementAfterBookmark(e, t) {
-    let index = this.entries.indexOf(this.bookmark);
-    this.entries.splice(index, 0, { type: p.Element, element: e, token: t });
+  insertElementAfterBookmark(element, token) {
+    let bookmarkIdx = this.entries.indexOf(this.bookmark);
+    this.entries.splice(bookmarkIdx, 0, {
+      type: EntryType.Element,
+      element,
+      token,
+    });
   }
-  removeEntry(e) {
-    let index = this.entries.indexOf(e);
-    if (index >= 0) this.entries.splice(index, 1);
+  removeEntry(entry) {
+    let entryIndex = this.entries.indexOf(entry);
+    if (entryIndex >= 0) this.entries.splice(entryIndex, 1);
   }
   clearToLastMarker() {
-    let index = this.entries.indexOf(Fe);
-    if (index >= 0) this.entries.splice(0, index + 1);
+    let markerIdx = this.entries.indexOf(MARKER);
+    if (markerIdx >= 0) this.entries.splice(0, markerIdx + 1);
     else this.entries.length = 0;
   }
-  getElementEntryInScopeWithTagName(e) {
-    let found = this.entries.find(
-      (entry) => entry.type === p.Marker || this.treeAdapter.getTagName(entry.element) === e,
+  getElementEntryInScopeWithTagName(tagName) {
+    let entry = this.entries.find(
+      (entry) => entry.type === EntryType.Marker || this.treeAdapter.getTagName(entry.element) === tagName,
     );
-    return found && found.type === p.Element ? found : null;
+    return entry && entry.type === EntryType.Element ? entry : null;
   }
-  getElementEntry(e) {
-    return this.entries.find((entry) => entry.type === p.Element && entry.element === e);
+  getElementEntry(element) {
+    return this.entries.find((entry) => entry.type === EntryType.Element && entry.element === element);
   }
 }
-
-export { le, p };
+export { FormattingElementList, EntryType };

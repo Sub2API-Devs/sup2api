@@ -10,8 +10,11 @@
  */
 import { homedir } from "os";
 import { join } from "path";
-import { j, y, P } from "../../vendor/react/cjs/react.production.js";
-import { e, r } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { init_react_production, y, P } from "../../vendor/react/cjs/react.production.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+} from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { BulletRow } from "../components/design-system/BulletRow.js";
 import { Text, Box } from "../ink/components/Text.js";
 import { env } from "../utils/env.js";
@@ -20,7 +23,7 @@ import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 import { StatusIcon } from "../components/design-system/StatusIcon.js";
 import { useClock } from "../ink/components/ClockContext.js";
 import { logForDebugging } from "../utils/debug.js";
-import { y9 } from "../utils/updateChannel.js";
+import { autoUpdatesChannel } from "../utils/updateChannel.js";
 import {
   installLatest,
   checkInstall,
@@ -34,262 +37,378 @@ import { ManifestSignatureError } from "../utils/nativeInstaller/download.js";
 import { useTimeout, render } from "../ink/hooks/useTerminalHooks.js";
 
 //@ chunk-na8jp6ng.js:13095-13099 placement
-j();
+init_react_production();
 //@ chunk-na8jp6ng.js:13156-13228 file-last-pair
-function N(message, index) {
-  return e(BulletRow, { children: e(Text, { dimColor: !0, children: message }) }, index);
+function renderDimMessage(message, index) {
+  return jsxProd_default(
+    BulletRow,
+    {
+      children: jsxProd_default(Text, {
+        dimColor: true,
+        children: message,
+      }),
+    },
+    index,
+  );
 }
 //@ chunk-na8jp6ng.js:13228-13368 fingerprint = getInstallationPath (1)
 function getInstallationPath() {
-  let isWindows = env.platform === "win32",
-    homeDir = homedir();
+  let isWindows = env.platform === "win32";
+  let homeDir = homedir();
   if (isWindows) return join(homeDir, ".local", "bin", "claude.exe").replaceAll("/", "\\");
   return "~/.local/bin/claude";
 }
 //@ chunk-na8jp6ng.js:13368-13807 fingerprint = SetupNotes (0.431)
-function SetupNotes(t0) {
-  let l = w(5),
-    { messages: messages } = t0;
+function SetupNotes(props) {
+  let $ = w(5);
+  let { messages } = props;
   if (messages.length === 0) {
     return null;
   }
-  let h;
-  if (l[0] === MEMO_CACHE_SENTINEL)
-    ((h = e(Box, {
-      children: r(Text, {
+  let t1;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    t1 = jsxProd_default(Box, {
+      children: jsxProd_default_2(Text, {
         color: "warning",
-        children: [e(StatusIcon, { status: "warning", withSpace: !0 }), "Setup notes:"],
+        children: [
+          jsxProd_default(StatusIcon, {
+            status: "warning",
+            withSpace: true,
+          }),
+          "Setup notes:",
+        ],
       }),
-    })),
-      (l[0] = h));
-  else h = l[0];
-  let o;
-  if (l[1] !== messages) ((o = messages.map(N)), (l[1] = messages), (l[2] = o));
-  else o = l[2];
-  let g;
-  if (l[3] !== o)
-    ((g = r(Box, {
+    });
+    $[0] = t1;
+  } else t1 = $[0];
+  let children;
+  if ($[1] !== messages) {
+    children = messages.map(renderDimMessage);
+    $[1] = messages;
+    $[2] = children;
+  } else children = $[2];
+  let t3;
+  if ($[3] !== children) {
+    t3 = jsxProd_default_2(Box, {
       flexDirection: "column",
       gap: 0,
       marginBottom: 1,
-      children: [h, e(Box, { flexDirection: "column", marginLeft: 2, children: o })],
-    })),
-      (l[3] = o),
-      (l[4] = g));
-  else g = l[4];
-  return g;
+      children: [
+        t1,
+        jsxProd_default(Box, {
+          flexDirection: "column",
+          marginLeft: 2,
+          children,
+        }),
+      ],
+    });
+    $[3] = children;
+    $[4] = t3;
+  } else t3 = $[4];
+  return t3;
 }
 //@ chunk-na8jp6ng.js:13807-18584 fingerprint = Install (0.73)
-function Install({ onDone: onDone, force: force, target: target, storageV5: storageV5 }) {
-  let [o, g] = y({ type: "checking" }),
-    C = useClock();
-  return (
-    P(() => {
-      async function run() {
-        try {
-          logForDebugging(`Install: Starting installation process (force=${force}, target=${target})`);
-          let channelOrVersion = target || y9();
-          (g({ type: "installing", version: channelOrVersion }),
-            logForDebugging(
-              `Install: Calling installLatest(channelOrVersion=${channelOrVersion}, forceReinstall=${force})`,
-            ));
-          let p = await installLatest(channelOrVersion, force, storageV5);
-          if (
-            (logForDebugging(
-              `Install: installLatest returned version=${p.latestVersion}, wasUpdated=${p.wasUpdated}, lockFailed=${p.lockFailed}`,
-            ),
-            p.lockFailed)
-          )
-            throw Error(
-              "Could not install - another process is currently installing Claude. Please try again in a moment.",
-            );
-          if (!p.latestVersion)
-            logForDebugging("Install: Failed to retrieve version information during install", {
-              level: "error",
-            });
-          let I = !1;
-          if (target === "latest" || target === "stable" || target === "rc") {
-            let u = target === "rc" ? "stable" : target,
-              { error: error } = await updateSettingsForSource(
-                "userSettings",
-                { autoUpdatesChannel: u },
-                void 0,
-                storageV5,
-              );
-            ((I = error === null),
-              logForDebugging(
-                I
-                  ? `Install: Saved autoUpdatesChannel=${u} to user settings`
-                  : `Install: Could not save autoUpdatesChannel=${u}: ${errorMessage(error)}`,
-                { level: I ? "debug" : "warn" },
-              ));
-          }
-          if (p.skippedUnverifiedRelease && p.latestVersion) {
-            g({
-              type: "error",
-              message: `Skipped: the update target for @${channelOrVersion} resolved to ${p.latestVersion}, which predates release-signature enforcement, so this client (${{ ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues", PACKAGE_URL: "@anthropic-ai/claude-code", README_URL: "https://code.claude.com/docs/en/overview", VERSION: "2.1.316", FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues", BUILD_TIME: "2026-10-30T23:28:13Z", GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1", HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js", DD_SOURCEMAP_GROUP: "default" }.VERSION}) will not switch to it automatically.${I ? " Channel preference saved." : ""} Run \`claude install ${p.latestVersion}\` to install that exact version.`,
-            });
-            return;
-          }
-          if (!p.wasUpdated) logForDebugging("Install: Already up to date");
-          g({ type: "setting-up" });
-          let setupMessages = await checkInstall(!0);
-          if (
-            (logForDebugging(`Install: Setup launcher completed with ${setupMessages.length} messages`),
-            setupMessages.length > 0)
-          )
-            setupMessages.forEach((msg) => logForDebugging(`Install: Setup message: ${msg.message}`));
-          logForDebugging("Install: Cleaning up npm installations after successful install");
-          let { removed: removed, errors: errors, warnings: warnings } = await cleanupNpmInstallations();
-          if (removed > 0) logForDebugging(`Cleaned up ${removed} npm installation(s)`);
-          if (errors.length > 0) logForDebugging(`Cleanup errors: ${errors.join(", ")}`);
-          let aliasMessages = await cleanupShellAliases();
-          if (aliasMessages.length > 0)
-            logForDebugging(`Shell alias cleanup: ${aliasMessages.map((u) => u.message).join("; ")}`);
-          logEvent("tengu_claude_install_command", {
-            has_version: p.latestVersion ? 1 : 0,
-            forced: force ? 1 : 0,
+function Install({ onDone, force, target, storageV5 }) {
+  let [state, setState] = y({
+    type: "checking",
+  });
+  let clock = useClock();
+  P(() => {
+    async function run() {
+      try {
+        logForDebugging(`Install: Starting installation process (force=${force}, target=${target})`);
+        let channelOrVersion = target || autoUpdatesChannel();
+        setState({
+          type: "installing",
+          version: channelOrVersion,
+        });
+        logForDebugging(
+          `Install: Calling installLatest(channelOrVersion=${channelOrVersion}, forceReinstall=${force})`,
+        );
+        let result = await installLatest(channelOrVersion, force, storageV5);
+        logForDebugging(
+          `Install: installLatest returned version=${result.latestVersion}, wasUpdated=${result.wasUpdated}, lockFailed=${result.lockFailed}`,
+        );
+        if (result.lockFailed)
+          throw Error(
+            "Could not install - another process is currently installing Claude. Please try again in a moment.",
+          );
+        if (!result.latestVersion)
+          logForDebugging("Install: Failed to retrieve version information during install", {
+            level: "error",
           });
-          let allWarnings = [...warnings, ...aliasMessages.map((m_0) => m_0.message)];
-          if (setupMessages.length > 0)
-            (g({ type: "set-up", messages: setupMessages.map((m_1) => m_1.message) }),
-              C.setTimeout(
-                () =>
-                  g({
-                    type: "success",
-                    version: p.latestVersion || "current",
-                    setupMessages: [...setupMessages.map((m_2) => m_2.message), ...allWarnings],
-                  }),
-                2000,
-              ));
-          else
-            (logForDebugging("Install: Shell PATH already configured"),
-              g({ type: "success", version: p.latestVersion || "current", setupMessages: allWarnings }));
-        } catch (error) {
-          (logForDebugging(`Install command failed: ${error}`, { level: "error" }),
-            g({
-              type: "error",
-              message: errorMessage(error),
-              forceMayHelp: !(error instanceof ManifestSignatureError),
-            }));
+        let I = false;
+        if (target === "latest" || target === "stable" || target === "rc") {
+          let u = target === "rc" ? "stable" : target;
+          let { error } = await updateSettingsForSource(
+            "userSettings",
+            {
+              autoUpdatesChannel: u,
+            },
+            undefined,
+            storageV5,
+          );
+          I = error === null;
+          logForDebugging(
+            I
+              ? `Install: Saved autoUpdatesChannel=${u} to user settings`
+              : `Install: Could not save autoUpdatesChannel=${u}: ${errorMessage(error)}`,
+            {
+              level: I ? "debug" : "warn",
+            },
+          );
         }
-      }
-      run();
-    }, [C, force, target, storageV5]),
-    useTimeout(
-      () => {
-        if (o.type === "success")
-          onDone("Claude Code installation completed successfully", { display: "system" });
-        else if (o.type === "error") onDone("Claude Code installation failed", { display: "system" });
-      },
-      o.type === "success" ? 2000 : o.type === "error" ? 3000 : null,
-    ),
-    r(Box, {
-      flexDirection: "column",
-      marginTop: 1,
-      children: [
-        o.type === "checking" && e(Text, { color: "claude", children: "Checking installation status..." }),
-        o.type === "cleaning-npm" &&
-          e(Text, { color: "warning", children: "Cleaning up old npm installations..." }),
-        o.type === "installing" &&
-          r(Text, { color: "claude", children: ["Installing Claude Code native build ", o.version, "..."] }),
-        o.type === "setting-up" &&
-          e(Text, { color: "claude", children: "Setting up launcher and shell integration..." }),
-        o.type === "set-up" && e(SetupNotes, { messages: o.messages }),
-        o.type === "success" &&
-          r(Box, {
-            flexDirection: "column",
-            gap: 1,
-            children: [
-              r(Box, {
-                children: [
-                  e(StatusIcon, { status: "success", withSpace: !0 }),
-                  e(Text, { color: "success", bold: !0, children: "Claude Code successfully installed!" }),
-                ],
+        if (result.skippedUnverifiedRelease && result.latestVersion) {
+          setState({
+            type: "error",
+            message: `Skipped: the update target for @${channelOrVersion} resolved to ${result.latestVersion}, which predates release-signature enforcement, so this client (${
+              {
+                ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
+                PACKAGE_URL: "@anthropic-ai/claude-code",
+                README_URL: "https://code.claude.com/docs/en/overview",
+                VERSION: "2.1.316",
+                FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
+                BUILD_TIME: "2026-10-30T23:28:13Z",
+                GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+                HOOKS_WORKER_URL:
+                  import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
+                DD_SOURCEMAP_GROUP: "default",
+              }.VERSION
+            }) will not switch to it automatically.${I ? " Channel preference saved." : ""} Run \`claude install ${result.latestVersion}\` to install that exact version.`,
+          });
+          return;
+        }
+        if (!result.wasUpdated) logForDebugging("Install: Already up to date");
+        setState({
+          type: "setting-up",
+        });
+        let setupMessages = await checkInstall(true);
+        logForDebugging(`Install: Setup launcher completed with ${setupMessages.length} messages`);
+        if (setupMessages.length > 0)
+          setupMessages.forEach((msg) => logForDebugging(`Install: Setup message: ${msg.message}`));
+        logForDebugging("Install: Cleaning up npm installations after successful install");
+        let { removed, errors, warnings } = await cleanupNpmInstallations();
+        if (removed > 0) logForDebugging(`Cleaned up ${removed} npm installation(s)`);
+        if (errors.length > 0) logForDebugging(`Cleanup errors: ${errors.join(", ")}`);
+        let aliasMessages = await cleanupShellAliases();
+        if (aliasMessages.length > 0)
+          logForDebugging(`Shell alias cleanup: ${aliasMessages.map((m) => m.message).join("; ")}`);
+        logEvent("tengu_claude_install_command", {
+          has_version: result.latestVersion ? 1 : 0,
+          forced: force ? 1 : 0,
+        });
+        let allWarnings = [...warnings, ...aliasMessages.map((m_0) => m_0.message)];
+        if (setupMessages.length > 0) {
+          setState({
+            type: "set-up",
+            messages: setupMessages.map((m_1) => m_1.message),
+          });
+          clock.setTimeout(
+            () =>
+              setState({
+                type: "success",
+                version: result.latestVersion || "current",
+                setupMessages: [...setupMessages.map((m_2) => m_2.message), ...allWarnings],
               }),
-              r(Box, {
-                marginLeft: 2,
-                flexDirection: "column",
-                gap: 1,
-                children: [
-                  o.version !== "current" &&
-                    r(Box, {
-                      children: [
-                        e(Text, { dimColor: !0, children: "Version: " }),
-                        e(Text, { color: "claude", children: o.version }),
-                      ],
-                    }),
-                  r(Box, {
+            2000,
+          );
+        } else {
+          logForDebugging("Install: Shell PATH already configured");
+          setState({
+            type: "success",
+            version: result.latestVersion || "current",
+            setupMessages: allWarnings,
+          });
+        }
+      } catch (error) {
+        logForDebugging(`Install command failed: ${error}`, {
+          level: "error",
+        });
+        setState({
+          type: "error",
+          message: errorMessage(error),
+          forceMayHelp: !(error instanceof ManifestSignatureError),
+        });
+      }
+    }
+    run();
+  }, [clock, force, target, storageV5]);
+  useTimeout(
+    () => {
+      if (state.type === "success")
+        onDone("Claude Code installation completed successfully", {
+          display: "system",
+        });
+      else if (state.type === "error")
+        onDone("Claude Code installation failed", {
+          display: "system",
+        });
+    },
+    state.type === "success" ? 2000 : state.type === "error" ? 3000 : null,
+  );
+  return jsxProd_default_2(Box, {
+    flexDirection: "column",
+    marginTop: 1,
+    children: [
+      state.type === "checking" &&
+        jsxProd_default(Text, {
+          color: "claude",
+          children: "Checking installation status...",
+        }),
+      state.type === "cleaning-npm" &&
+        jsxProd_default(Text, {
+          color: "warning",
+          children: "Cleaning up old npm installations...",
+        }),
+      state.type === "installing" &&
+        jsxProd_default_2(Text, {
+          color: "claude",
+          children: ["Installing Claude Code native build ", state.version, "..."],
+        }),
+      state.type === "setting-up" &&
+        jsxProd_default(Text, {
+          color: "claude",
+          children: "Setting up launcher and shell integration...",
+        }),
+      state.type === "set-up" &&
+        jsxProd_default(SetupNotes, {
+          messages: state.messages,
+        }),
+      state.type === "success" &&
+        jsxProd_default_2(Box, {
+          flexDirection: "column",
+          gap: 1,
+          children: [
+            jsxProd_default_2(Box, {
+              children: [
+                jsxProd_default(StatusIcon, {
+                  status: "success",
+                  withSpace: true,
+                }),
+                jsxProd_default(Text, {
+                  color: "success",
+                  bold: true,
+                  children: "Claude Code successfully installed!",
+                }),
+              ],
+            }),
+            jsxProd_default_2(Box, {
+              marginLeft: 2,
+              flexDirection: "column",
+              gap: 1,
+              children: [
+                state.version !== "current" &&
+                  jsxProd_default_2(Box, {
                     children: [
-                      e(Text, { dimColor: !0, children: "Location: " }),
-                      e(Text, { color: "text", children: getInstallationPath() }),
+                      jsxProd_default(Text, {
+                        dimColor: true,
+                        children: "Version: ",
+                      }),
+                      jsxProd_default(Text, {
+                        color: "claude",
+                        children: state.version,
+                      }),
                     ],
                   }),
-                ],
-              }),
-              e(Box, {
-                marginLeft: 2,
-                flexDirection: "column",
-                gap: 1,
-                children: r(Box, {
-                  marginTop: 1,
+                jsxProd_default_2(Box, {
                   children: [
-                    e(Text, { dimColor: !0, children: "Next: Run " }),
-                    e(Text, { color: "claude", bold: !0, children: "claude --help" }),
-                    e(Text, { dimColor: !0, children: " to get started" }),
+                    jsxProd_default(Text, {
+                      dimColor: true,
+                      children: "Location: ",
+                    }),
+                    jsxProd_default(Text, {
+                      color: "text",
+                      children: getInstallationPath(),
+                    }),
                   ],
                 }),
-              }),
-              o.setupMessages.length > 0 && e(SetupNotes, { messages: o.setupMessages }),
-            ],
-          }),
-        o.type === "error" &&
-          r(Box, {
-            flexDirection: "column",
-            gap: 1,
-            children: [
-              r(Box, {
+              ],
+            }),
+            jsxProd_default(Box, {
+              marginLeft: 2,
+              flexDirection: "column",
+              gap: 1,
+              children: jsxProd_default_2(Box, {
+                marginTop: 1,
                 children: [
-                  e(StatusIcon, { status: "error", withSpace: !0 }),
-                  e(Text, { color: "error", children: "Installation failed" }),
+                  jsxProd_default(Text, {
+                    dimColor: true,
+                    children: "Next: Run ",
+                  }),
+                  jsxProd_default(Text, {
+                    color: "claude",
+                    bold: true,
+                    children: "claude --help",
+                  }),
+                  jsxProd_default(Text, {
+                    dimColor: true,
+                    children: " to get started",
+                  }),
                 ],
               }),
-              e(Text, { color: "error", children: o.message }),
-              o.forceMayHelp &&
-                e(Box, {
-                  marginTop: 1,
-                  children: e(Text, {
-                    dimColor: !0,
-                    children: "Try running with --force to override checks",
-                  }),
+            }),
+            state.setupMessages.length > 0 &&
+              jsxProd_default(SetupNotes, {
+                messages: state.setupMessages,
+              }),
+          ],
+        }),
+      state.type === "error" &&
+        jsxProd_default_2(Box, {
+          flexDirection: "column",
+          gap: 1,
+          children: [
+            jsxProd_default_2(Box, {
+              children: [
+                jsxProd_default(StatusIcon, {
+                  status: "error",
+                  withSpace: true,
                 }),
-            ],
-          }),
-      ],
-    })
-  );
+                jsxProd_default(Text, {
+                  color: "error",
+                  children: "Installation failed",
+                }),
+              ],
+            }),
+            jsxProd_default(Text, {
+              color: "error",
+              children: state.message,
+            }),
+            state.forceMayHelp &&
+              jsxProd_default(Box, {
+                marginTop: 1,
+                children: jsxProd_default(Text, {
+                  dimColor: true,
+                  children: "Try running with --force to override checks",
+                }),
+              }),
+          ],
+        }),
+    ],
+  });
 }
+//@ chunk-na8jp6ng.js:18584-18880 fingerprint = install (1)
 /**
  * /install 命令对象（local-jsx）；描述：Install Claude Code native build。
  */
-//@ chunk-na8jp6ng.js:18584-18880 fingerprint = install (1)
 var installCommand = {
   type: "local-jsx",
   name: "install",
   description: "Install Claude Code native build",
   argumentHint: "[options]",
-  async call(f, c, l) {
-    let included = l.includes("--force"),
-      g = l.filter((x) => !x.startsWith("--"))[0],
-      { unmount: unmount } = await render(
-        e(Install, {
-          onDone: (x, m) => {
-            (unmount(), f(x, m));
-          },
-          force: included,
-          target: g,
-          storageV5: c?.storageV5,
-        }),
-      );
+  async call(onDone, c, args) {
+    let force = args.includes("--force");
+    let target = args.filter((arg) => !arg.startsWith("--"))[0];
+    let { unmount } = await render(
+      jsxProd_default(Install, {
+        onDone: (result, options) => {
+          unmount();
+          onDone(result, options);
+        },
+        force,
+        target,
+        storageV5: c?.storageV5,
+      }),
+    );
   },
 };

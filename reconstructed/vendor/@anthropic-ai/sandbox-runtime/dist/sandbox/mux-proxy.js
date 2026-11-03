@@ -5,144 +5,142 @@
  * pieces: chunk-fq0cr76a.js (3)
  * attribution: esm-layout 1, esm-fingerprint 2
  */
-import {
-  join,
-  join as join_2,
-  join as join_3,
-  join as join_4,
-  join as join_5,
-  join as join_6,
-  join as join_7,
-  join as join_8,
-  join as join_9,
-  join as join_10,
-  join as join_11,
-} from "path";
-import { tmpdir, tmpdir as tmpdir_2, tmpdir as tmpdir_3, tmpdir as tmpdir_4, tmpdir as tmpdir_5 } from "os";
-import {
-  connect,
-  connect as connect_2,
-  createServer as createServer_4,
-  createServer as createServer_5,
-} from "net";
+import { join } from "path";
+import { tmpdir } from "os";
+import { connect, createServer as createServer_5 } from "net";
 import { unlink } from "fs/promises";
-import { rmSync, rmSync as rmSync_2, rmSync as rmSync_3, rmSync as rmSync_4 } from "fs";
-import { zv } from "../utils/platform.js";
-import { At } from "../utils/debug.js";
-import { vE } from "./tls-terminate-proxy.js";
+import { rmSync } from "fs";
+import { getPlatform as getPlatform_2 } from "../utils/platform.js";
+import { logForDebugging as logForDebugging_2 } from "../utils/debug.js";
+import { closeAfterFlush } from "./tls-terminate-proxy.js";
 import { Mm } from "./sandbox-manager.js";
 
 //@ chunk-fq0cr76a.js:703511-703545 esm-layout
-var BH = new Set([4, 5]),
-  UH = 1e4,
-  FH = 0;
+var SOCKS_FIRST_BYTES = new Set([4, 5]);
+var DEFAULT_FIRST_BYTE_TIMEOUT_MS = 1e4;
+var backendSeq = 0;
 //@ chunk-fq0cr76a.js:703545-703628 esm-fingerprint
-function MH() {
-  return join_3(tmpdir_2(), `srt-mux-${process.pid}-${(FH++).toString(36)}.sock`);
+function unixSocketPath() {
+  return join(tmpdir(), `srt-mux-${process.pid}-${(backendSeq++).toString(36)}.sock`);
 }
 //@ chunk-fq0cr76a.js:703628-705566 esm-fingerprint
-function xR(e) {
-  let n = e.firstByteTimeoutMs ?? UH,
-    r = zv() === "windows",
-    s,
-    h,
-    y = new Set();
-  function b(w) {
-    if (s === void 0 && h === void 0) {
-      (At("mux: HTTP dispatch before backend bound; dropping", { level: "error" }), w.destroy());
+function createMuxProxyServer(opts) {
+  let firstByteTimeoutMs = opts.firstByteTimeoutMs ?? DEFAULT_FIRST_BYTE_TIMEOUT_MS;
+  let isWindows = getPlatform_2() === "windows";
+  let backendSocketPath;
+  let backendTcpPort;
+  let openSockets = new Set();
+  function dispatchHttp(client) {
+    if (backendSocketPath === undefined && backendTcpPort === undefined) {
+      logForDebugging_2("mux: HTTP dispatch before backend bound; dropping", {
+        level: "error",
+      });
+      client.destroy();
       return;
     }
-    let R = s ? connect_2(s) : connect_2(h, "127.0.0.1"),
-      D = !1;
-    (R.once("data", () => {
-      D = !0;
-    }),
-      R.on("error", (O) => {
-        if (D) {
-          At(`mux: HTTP backend error: ${O.message}`);
-          return;
-        }
-        let L = O.code ?? "ERR";
-        if ((At(`mux: HTTP backend dial failed: ${O.message}`, { level: "error" }), !w.destroyed))
-          w.end(`HTTP/1.1 502 Bad Gateway\r
-Connection: close\r
-\r
-mux backend dial failed (${L})
-`);
-      }),
-      w.on("error", () => R.destroy()),
-      w.once("close", () => R.destroy()),
-      R.once("close", () => vE(w, () => {})),
-      w.pipe(R),
-      R.pipe(w));
-  }
-  let S = createServer_4((w) => {
-    (y.add(w),
-      w.once("close", () => y.delete(w)),
-      w.on("error", (D) => At(`mux: client socket error: ${D.message}`)));
-    let R = setTimeout(() => {
-      (At("mux: first-byte timeout; destroying connection"), w.destroy());
-    }, n);
-    if (typeof R.unref === "function") R.unref();
-    w.once("readable", () => {
-      clearTimeout(R);
-      let read = w.read(1);
-      if (!read || read.length === 0) {
-        w.destroy();
+    let upstream = backendSocketPath ? connect(backendSocketPath) : connect(backendTcpPort, "127.0.0.1");
+    let answered = false;
+    upstream.once("data", () => {
+      answered = true;
+    });
+    upstream.on("error", (err) => {
+      if (answered) {
+        logForDebugging_2(`mux: HTTP backend error: ${err.message}`);
         return;
       }
-      if ((w.unshift(read), BH.has(read[0]))) e.handleSocksConnection(w);
-      else b(w);
+      let code = err.code ?? "ERR";
+      logForDebugging_2(`mux: HTTP backend dial failed: ${err.message}`, {
+        level: "error",
+      });
+      if (!client.destroyed)
+        client.end(`HTTP/1.1 502 Bad Gateway\r
+Connection: close\r
+\r
+mux backend dial failed (${code})
+`);
+    });
+    client.on("error", () => upstream.destroy());
+    client.once("close", () => upstream.destroy());
+    upstream.once("close", () => closeAfterFlush(client, () => {}));
+    client.pipe(upstream);
+    upstream.pipe(client);
+  }
+  let server = createServer_5((client) => {
+    openSockets.add(client);
+    client.once("close", () => openSockets.delete(client));
+    client.on("error", (err) => logForDebugging_2(`mux: client socket error: ${err.message}`));
+    let timer = setTimeout(() => {
+      logForDebugging_2("mux: first-byte timeout; destroying connection");
+      client.destroy();
+    }, firstByteTimeoutMs);
+    if (typeof timer.unref === "function") timer.unref();
+    client.once("readable", () => {
+      clearTimeout(timer);
+      let peek = client.read(1);
+      if (!peek || peek.length === 0) {
+        client.destroy();
+        return;
+      }
+      client.unshift(peek);
+      if (SOCKS_FIRST_BYTES.has(peek[0])) opts.handleSocksConnection(client);
+      else dispatchHttp(client);
     });
   });
   return {
-    server: S,
+    server,
     getPort() {
-      let address = S.address();
-      return address && typeof address === "object" ? address.port : void 0;
+      let addr = server.address();
+      return addr && typeof addr === "object" ? addr.port : undefined;
     },
     async listenHttpBackend() {
-      if (!r) {
-        let R = MH();
-        (await unlink(R).catch(() => {}),
-          await new Promise((D, O) => {
-            (e.httpServer.once("error", O),
-              e.httpServer.listen(R, () => {
-                (e.httpServer.removeListener("error", O), D());
-              }));
-          }),
-          (s = R),
-          At(`mux: HTTP backend listening on ${R}`));
+      if (!isWindows) {
+        let path = unixSocketPath();
+        await unlink(path).catch(() => {});
+        await new Promise((resolve, reject) => {
+          opts.httpServer.once("error", reject);
+          opts.httpServer.listen(path, () => {
+            opts.httpServer.removeListener("error", reject);
+            resolve();
+          });
+        });
+        backendSocketPath = path;
+        logForDebugging_2(`mux: HTTP backend listening on ${path}`);
         return;
       }
-      await Mm(e.httpServer, (R) => e.httpServer.listen(R, "127.0.0.1"), e.httpBackendPortRange, new Set());
-      let address = e.httpServer.address();
-      return (
-        (h = address && typeof address === "object" ? address.port : void 0),
-        At(`mux: HTTP backend listening on 127.0.0.1:${h}`),
-        h
+      await Mm(
+        opts.httpServer,
+        (p) => opts.httpServer.listen(p, "127.0.0.1"),
+        opts.httpBackendPortRange,
+        new Set(),
       );
+      let addr = opts.httpServer.address();
+      backendTcpPort = addr && typeof addr === "object" ? addr.port : undefined;
+      logForDebugging_2(`mux: HTTP backend listening on 127.0.0.1:${backendTcpPort}`);
+      return backendTcpPort;
     },
     async close() {
-      for (let w of y) w.destroy();
-      if (
-        (y.clear(),
-        await new Promise((w) => S.close(() => w())),
-        await new Promise((w) => e.httpServer.close(() => w())),
-        s)
-      )
-        (await unlink(s).catch(() => {}), (s = void 0));
-      h = void 0;
+      for (let s of openSockets) s.destroy();
+      openSockets.clear();
+      await new Promise((resolve) => server.close(() => resolve()));
+      await new Promise((resolve) => opts.httpServer.close(() => resolve()));
+      if (backendSocketPath) {
+        await unlink(backendSocketPath).catch(() => {});
+        backendSocketPath = undefined;
+      }
+      backendTcpPort = undefined;
     },
     removeBackendSocketSync() {
       try {
-        if (s) rmSync_2(s, { force: !0 });
+        if (backendSocketPath)
+          rmSync(backendSocketPath, {
+            force: true,
+          });
       } catch {}
     },
     unref() {
-      (S.unref(), e.httpServer.unref());
+      server.unref();
+      opts.httpServer.unref();
     },
   };
 }
-
-export { xR };
+export { createMuxProxyServer };

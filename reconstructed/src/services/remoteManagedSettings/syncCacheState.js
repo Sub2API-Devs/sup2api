@@ -8,25 +8,27 @@
  * pieces: chunk-82kqcve8.js (1)
  * attribution: placement 1
  */
-import { open, open as open_2, open as open_3 } from "fs/promises";
-import { constants, constants as constants_2 } from "fs";
-import { oYe, isSymlinkPath, Yf } from "./consentRecords.js";
-import { ws } from "../../utils/fsFlags.js";
+import { open } from "fs/promises";
+import { constants } from "fs";
+import { syncStampPath, isSymlinkPath, MAX_SYNC_STAMP_BYTES } from "./consentRecords.js";
+import { NOFOLLOW_NONBLOCK_FLAGS } from "../../utils/fsFlags.js";
 
+//@ chunk-82kqcve8.js:161260-161594 placement = getSessionMemoryContent (0.632)
 /**
  * 读取远程设置同步时间戳文件 <remote-settings>.synced-at（只接受 1–16 位数字，拒绝符号链接）。
  */
-//@ chunk-82kqcve8.js:161260-161594 placement = getSessionMemoryContent (0.632)
 async function readRemoteSettingsSyncStamp() {
-  let fs = oYe(),
-    n;
+  let fs = syncStampPath();
+  let n;
   try {
-    if (ws === 0 && (await isSymlinkPath(fs))) return;
-    let h = await open_2(fs, constants_2.O_RDONLY | ws);
+    if (NOFOLLOW_NONBLOCK_FLAGS === 0 && (await isSymlinkPath(fs))) return;
+    let h = await open(fs, constants.O_RDONLY | NOFOLLOW_NONBLOCK_FLAGS);
     try {
       let stats = await h.stat();
-      if (!stats.isFile() || stats.size > Yf) return;
-      n = await h.readFile({ encoding: "utf-8" });
+      if (!stats.isFile() || stats.size > MAX_SYNC_STAMP_BYTES) return;
+      n = await h.readFile({
+        encoding: "utf-8",
+      });
     } finally {
       await h.close();
     }
@@ -36,7 +38,6 @@ async function readRemoteSettingsSyncStamp() {
   let trimmed = n.trim();
   if (!/^\d{1,16}$/.test(trimmed)) return;
   let s = Number(trimmed);
-  return Number.isFinite(s) ? s : void 0;
+  return Number.isFinite(s) ? s : undefined;
 }
-
 export { readRemoteSettingsSyncStamp };

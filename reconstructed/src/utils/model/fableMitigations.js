@@ -11,31 +11,44 @@
 import { modelSupportsCapability } from "./modelCatalog.js";
 import { isLocalAgentOrCowork } from "../entrypointKinds.js";
 
+//@ chunk-m8whhcc1.js:264-383 placement
 /**
  * 判断模型是否需要 Fable 5 缓解措施（按能力声明，claude-mythos-5 默认需要）。
  */
-//@ chunk-m8whhcc1.js:264-383 placement
-function needsFableMitigations(o, n) {
-  let e = modelSupportsCapability(o, "fable_5_mitigations", n);
-  if (e !== void 0) return e;
-  if (o === "claude-mythos-5") return !0;
-  return !1;
+function needsFableMitigations(canonicalName, n) {
+  let e = modelSupportsCapability(canonicalName, "fable_5_mitigations", n);
+  if (e !== undefined) return e;
+  if (canonicalName === "claude-mythos-5") return true;
+  return false;
 }
 //@ chunk-m8whhcc1.js:383-450 placement
-function YFe(o) {
-  return !isLocalAgentOrCowork() && modelSupportsCapability(o, "fable_5_1_prompt_bundle") === !0;
+/**
+ * 判断是否使用 Fable 5.1 提示词包。
+ */
+function usesFablePromptBundle(canonicalName) {
+  return (
+    !isLocalAgentOrCowork() && modelSupportsCapability(canonicalName, "fable_5_1_prompt_bundle") === true
+  );
 }
 //@ chunk-m8whhcc1.js:450-503 placement
-function e5e(o) {
-  return o.startsWith("claude-fable-");
+/**
+ * 判断模型 id 是否属于 fable 系列。
+ */
+function isFableModel(canonicalName) {
+  return canonicalName.startsWith("claude-fable-");
 }
 //@ chunk-m8whhcc1.js:503-557 placement
-function Thi(o) {
-  return o.startsWith("claude-mythos-");
+/**
+ * 判断模型 id 是否属于 mythos 系列。
+ */
+function isMythosModel(canonicalName) {
+  return canonicalName.startsWith("claude-mythos-");
 }
 //@ chunk-m8whhcc1.js:557-582 placement
-function ycr(o) {
-  return !1;
+/**
+ * 恒返回 false（缓解措施占位）。
+ */
+function neverMitigated(canonicalName) {
+  return false;
 }
-
-export { needsFableMitigations, e5e, ycr, YFe, Thi };
+export { needsFableMitigations, isFableModel, neverMitigated, usesFablePromptBundle, isMythosModel };

@@ -6,18 +6,17 @@
  * attribution: placement 1
  */
 import { gao } from "./_inlinedHelpers.js";
-import { Ohe } from "../../src/utils/git/gitSafeEnv.js";
+import { assignValueRaw } from "../../src/utils/git/gitSafeEnv.js";
 
+//@ chunk-e6aww6q8.js:2230725-2230847 placement
 /**
  * lodash countBy 的内联副本（第三方代码误归 toolSearch）。
  */
-//@ chunk-e6aww6q8.js:2230725-2230847 placement
-var objectProto = Object.prototype,
-  hasOwnProperty = objectProto.hasOwnProperty,
-  countBy = gao(function (e, n, r) {
-    if (hasOwnProperty.call(e, r)) ++e[r];
-    else Ohe(e, r, 1);
-  }),
-  countByAlias = countBy;
-
+var objectProto = Object.prototype;
+var hasOwnProperty = objectProto.hasOwnProperty;
+var countBy = gao(function (result, n, key) {
+  if (hasOwnProperty.call(result, key)) ++result[key];
+  else assignValueRaw(result, key, 1);
+});
+var countByAlias = countBy;
 export { countByAlias };

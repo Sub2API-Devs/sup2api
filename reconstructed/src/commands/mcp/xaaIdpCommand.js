@@ -17,13 +17,13 @@ import { errorMessage } from "../../utils/errors.js";
 import { createHyperlink } from "../../utils/hyperlink.js";
 
 //@ chunk-4vq0yytw.js:16442-16516 affinity
-function l() {
+function mcpXaaIdpModule() {
   return require("./chunk-asne9cp8.js").mcpXaaIdpLoginModule();
 }
 //@ chunk-4vq0yytw.js:16516-20902 fingerprint = registerMcpXaaIdpCommand (0.928)
-function registerMcpXaaIdpCommand(v, p) {
-  let xaaIdp = v.command("xaa").description("Manage the XAA (SEP-990) IdP connection");
-  (xaaIdp
+function registerMcpXaaIdpCommand(mcp, p) {
+  let xaaIdp = mcp.command("xaa").description("Manage the XAA (SEP-990) IdP connection");
+  xaaIdp
     .command("setup")
     .description("Configure the IdP connection (one-time setup for all XAA-enabled servers)")
     .requiredOption("--issuer <url>", "IdP issuer URL (OIDC discovery)")
@@ -34,12 +34,12 @@ function registerMcpXaaIdpCommand(v, p) {
       "Fixed loopback callback port (only if IdP does not honor RFC 8252 port-any matching)",
     )
     .action(
-      p(async (s, e) => {
+      p(async (s, options) => {
         let issuerUrl;
         try {
-          issuerUrl = new URL(e.issuer);
+          issuerUrl = new URL(options.issuer);
         } catch {
-          return cliError(`Error: --issuer must be a valid URL (got "${e.issuer}")`);
+          return cliError(`Error: --issuer must be a valid URL (got "${options.issuer}")`);
         }
         if (
           issuerUrl.protocol !== "https:" &&
@@ -53,120 +53,140 @@ function registerMcpXaaIdpCommand(v, p) {
           return cliError(
             `Error: --issuer must use https:// (got "${issuerUrl.protocol}//${issuerUrl.host}")`,
           );
-        let o = e.callbackPort ? parseIntLoose(e.callbackPort) : void 0;
-        if (o !== void 0 && (!Number.isInteger(o) || o <= 0 || o > 65535))
+        let callbackPort = options.callbackPort ? parseIntLoose(options.callbackPort) : undefined;
+        if (
+          callbackPort !== undefined &&
+          (!Number.isInteger(callbackPort) || callbackPort <= 0 || callbackPort > 65535)
+        )
           return cliError("Error: --callback-port must be an integer in [1, 65535]");
-        let r = e.clientSecret ? env.MCP_XAA_IDP_CLIENT_SECRET : void 0;
-        if (e.clientSecret && !r)
+        let secret = options.clientSecret ? env.MCP_XAA_IDP_CLIENT_SECRET : undefined;
+        if (options.clientSecret && !secret)
           return cliError("Error: --client-secret requires MCP_XAA_IDP_CLIENT_SECRET env var");
-        let old = getXaaIdpSettings(),
-          oldIssuer = old?.issuer,
-          oldClientId = old?.clientId,
-          { error: error } = await updateSettingsForSource(
-            "userSettings",
-            { xaaIdp: { issuer: e.issuer, clientId: e.clientId, callbackPort: o } },
-            void 0,
-            s,
-          );
+        let old = getXaaIdpSettings();
+        let oldIssuer = old?.issuer;
+        let oldClientId = old?.clientId;
+        let { error } = await updateSettingsForSource(
+          "userSettings",
+          {
+            xaaIdp: {
+              issuer: options.issuer,
+              clientId: options.clientId,
+              callbackPort,
+            },
+          },
+          undefined,
+          s,
+        );
         if (error) return cliError(`Error writing settings: ${error.message}`);
         if (oldIssuer) {
-          if (l().issuerKey(oldIssuer) !== l().issuerKey(e.issuer))
-            (await l().clearIdpIdToken(oldIssuer), await l().clearIdpClientSecret(oldIssuer));
-          else if (oldClientId !== e.clientId)
-            (await l().clearIdpIdToken(oldIssuer), await l().clearIdpClientSecret(oldIssuer));
+          if (mcpXaaIdpModule().issuerKey(oldIssuer) !== mcpXaaIdpModule().issuerKey(options.issuer)) {
+            await mcpXaaIdpModule().clearIdpIdToken(oldIssuer);
+            await mcpXaaIdpModule().clearIdpClientSecret(oldIssuer);
+          } else if (oldClientId !== options.clientId) {
+            await mcpXaaIdpModule().clearIdpIdToken(oldIssuer);
+            await mcpXaaIdpModule().clearIdpClientSecret(oldIssuer);
+          }
         }
-        if (r) {
-          let { success: success, warning: warning } = await l().saveIdpClientSecret(e.issuer, r);
+        if (secret) {
+          let { success, warning } = await mcpXaaIdpModule().saveIdpClientSecret(options.issuer, secret);
           if (!success)
             return cliError(
               `Error: settings written but keychain save failed${warning ? ` \u2014 ${warning}` : ""}. Re-run with --client-secret once keychain is available.`,
             );
         }
-        cliOk(`XAA IdP connection configured for ${e.issuer}`);
+        cliOk(`XAA IdP connection configured for ${options.issuer}`);
       }),
-    ),
-    xaaIdp
-      .command("login")
-      .description(
-        "Cache an IdP id_token so XAA-enabled MCP servers authenticate silently. Default: run the OIDC browser login. With --id-token: write a pre-obtained JWT directly (used by conformance/e2e tests where the mock IdP does not serve /authorize).",
-      )
-      .option("--force", "Ignore any cached id_token and re-login (useful after IdP-side revocation)")
-      .option(
-        "--id-token <jwt>",
-        "Write this pre-obtained id_token directly to cache, skipping the OIDC browser login",
-      )
-      .action(async (options) => {
-        let idp = getXaaIdpSettings();
-        if (!idp) return cliError("Error: no XAA IdP connection. Run 'claude mcp xaa setup' first.");
-        if (options.idToken)
-          try {
-            let saveIdpIdTokenFromJwt = await l().saveIdpIdTokenFromJwt(idp.issuer, options.idToken);
-            return cliOk(
-              `id_token cached for ${idp.issuer} (expires ${new Date(saveIdpIdTokenFromJwt).toISOString()})`,
-            );
-          } catch (error) {
-            return cliError(`id_token cache write failed: ${errorMessage(error)}`);
-          }
-        if (options.force) await l().clearIdpIdToken(idp.issuer);
-        if ((await l().getCachedIdpIdToken(idp.issuer)) !== void 0)
-          return cliOk(
-            `Already logged in to ${idp.issuer} (cached id_token still valid). Use --force to re-login.`,
-          );
-        process.stdout.write(`Opening browser for IdP login at ${idp.issuer}\u2026
-`);
+    );
+  xaaIdp
+    .command("login")
+    .description(
+      "Cache an IdP id_token so XAA-enabled MCP servers authenticate silently. Default: run the OIDC browser login. With --id-token: write a pre-obtained JWT directly (used by conformance/e2e tests where the mock IdP does not serve /authorize).",
+    )
+    .option("--force", "Ignore any cached id_token and re-login (useful after IdP-side revocation)")
+    .option(
+      "--id-token <jwt>",
+      "Write this pre-obtained id_token directly to cache, skipping the OIDC browser login",
+    )
+    .action(async (options) => {
+      let idp = getXaaIdpSettings();
+      if (!idp) return cliError("Error: no XAA IdP connection. Run 'claude mcp xaa setup' first.");
+      if (options.idToken)
         try {
-          (await l().acquireIdpIdToken({
-            idpIssuer: idp.issuer,
-            idpClientId: idp.clientId,
-            idpClientSecret: await l().getIdpClientSecret(idp.issuer),
-            callbackPort: idp.callbackPort,
-            onAuthorizationUrl: (url) => {
-              process.stdout.write(`If the browser did not open, visit:
-  ${createHyperlink(url, void 0, { assumeSupport: !0 })}
-`);
-            },
-          }),
-            cliOk("Logged in. MCP servers with --xaa will now authenticate silently."));
+          let expiresAt = await mcpXaaIdpModule().saveIdpIdTokenFromJwt(idp.issuer, options.idToken);
+          return cliOk(`id_token cached for ${idp.issuer} (expires ${new Date(expiresAt).toISOString()})`);
         } catch (error) {
-          cliError(`IdP login failed: ${errorMessage(error)}`);
+          return cliError(`id_token cache write failed: ${errorMessage(error)}`);
         }
-      }),
-    xaaIdp
-      .command("show")
-      .description("Show the current IdP connection config")
-      .action(async () => {
-        let idp = getXaaIdpSettings();
-        if (!idp) return cliOk("No XAA IdP connection configured.");
-        let e = (await l().getIdpClientSecret(idp.issuer)) !== void 0,
-          t = (await l().getCachedIdpIdToken(idp.issuer)) !== void 0;
-        if (
-          (process.stdout.write(`Issuer:        ${idp.issuer}
-`),
-          process.stdout.write(`Client ID:     ${idp.clientId}
-`),
-          idp.callbackPort !== void 0)
-        )
-          process.stdout.write(`Callback port: ${idp.callbackPort}
+      if (options.force) await mcpXaaIdpModule().clearIdpIdToken(idp.issuer);
+      if ((await mcpXaaIdpModule().getCachedIdpIdToken(idp.issuer)) !== undefined)
+        return cliOk(
+          `Already logged in to ${idp.issuer} (cached id_token still valid). Use --force to re-login.`,
+        );
+      process.stdout.write(`Opening browser for IdP login at ${idp.issuer}\u2026
 `);
-        (process.stdout.write(`Client secret: ${e ? "(stored in keychain)" : "(not set \u2014 PKCE-only)"}
-`),
-          process.stdout
-            .write(`Logged in:     ${t ? "yes (id_token cached)" : "no \u2014 run 'claude mcp xaa login'"}
-`),
-          cliOk());
+      try {
+        await mcpXaaIdpModule().acquireIdpIdToken({
+          idpIssuer: idp.issuer,
+          idpClientId: idp.clientId,
+          idpClientSecret: await mcpXaaIdpModule().getIdpClientSecret(idp.issuer),
+          callbackPort: idp.callbackPort,
+          onAuthorizationUrl: (url) => {
+            process.stdout.write(`If the browser did not open, visit:
+  ${createHyperlink(url, undefined, {
+    assumeSupport: true,
+  })}
+`);
+          },
+        });
+        cliOk("Logged in. MCP servers with --xaa will now authenticate silently.");
+      } catch (e) {
+        cliError(`IdP login failed: ${errorMessage(e)}`);
+      }
+    });
+  xaaIdp
+    .command("show")
+    .description("Show the current IdP connection config")
+    .action(async () => {
+      let idp = getXaaIdpSettings();
+      if (!idp) return cliOk("No XAA IdP connection configured.");
+      let hasSecret = (await mcpXaaIdpModule().getIdpClientSecret(idp.issuer)) !== undefined;
+      let hasIdToken = (await mcpXaaIdpModule().getCachedIdpIdToken(idp.issuer)) !== undefined;
+      process.stdout.write(`Issuer:        ${idp.issuer}
+`);
+      process.stdout.write(`Client ID:     ${idp.clientId}
+`);
+      if (idp.callbackPort !== undefined)
+        process.stdout.write(`Callback port: ${idp.callbackPort}
+`);
+      process.stdout
+        .write(`Client secret: ${hasSecret ? "(stored in keychain)" : "(not set \u2014 PKCE-only)"}
+`);
+      process.stdout
+        .write(`Logged in:     ${hasIdToken ? "yes (id_token cached)" : "no \u2014 run 'claude mcp xaa login'"}
+`);
+      cliOk();
+    });
+  xaaIdp
+    .command("clear")
+    .description("Clear the IdP connection config and cached id_token")
+    .action(
+      p(async (s) => {
+        let idp = getXaaIdpSettings();
+        let { error } = await updateSettingsForSource(
+          "userSettings",
+          {
+            xaaIdp: undefined,
+          },
+          undefined,
+          s,
+        );
+        if (error) return cliError(`Error writing settings: ${error.message}`);
+        if (idp) {
+          await mcpXaaIdpModule().clearIdpIdToken(idp.issuer);
+          await mcpXaaIdpModule().clearIdpClientSecret(idp.issuer);
+        }
+        cliOk("XAA IdP connection cleared");
       }),
-    xaaIdp
-      .command("clear")
-      .description("Clear the IdP connection config and cached id_token")
-      .action(
-        p(async (s) => {
-          let idp = getXaaIdpSettings(),
-            { error: error } = await updateSettingsForSource("userSettings", { xaaIdp: void 0 }, void 0, s);
-          if (error) return cliError(`Error writing settings: ${error.message}`);
-          if (idp) (await l().clearIdpIdToken(idp.issuer), await l().clearIdpClientSecret(idp.issuer));
-          cliOk("XAA IdP connection cleared");
-        }),
-      ));
+    );
 }
-
 export { registerMcpXaaIdpCommand };

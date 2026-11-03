@@ -5,363 +5,508 @@
  * pieces: chunk-fq0cr76a.js (40)
  * attribution: esm-fingerprint 32, esm-layout 8
  */
-import * as pathModule from "path";
 import * as pathModule_2 from "path";
-import * as pathModule_3 from "path";
-import * as pathModule_4 from "path";
-import * as pathModule_5 from "path";
-import { spawn, spawn as spawn_2, spawn as spawn_3, spawn as spawn_4, spawn as spawn_5 } from "child_process";
-import { sS, dsr, csr, QSe, Cwn, Ad, zot, Dqt, F3r, oS, ITt, Vot, B3r, x4e } from "./sandbox-utils.js";
-import { Oqt, xTt } from "./glob-pattern.js";
-import { nc } from "./path-entries.js";
-import { At } from "../utils/debug.js";
-import { Ym } from "./java-proxy-agent.js";
-import { ha } from "../utils/which.js";
-import { zee } from "../utils/shell-quote.js";
-import { Eu } from "./sandbox-violation-store.js";
+import "path";
+import "path";
+import "path";
+import "path";
+import { spawn } from "child_process";
+import {
+  normalizePathForSandbox,
+  DANGEROUS_FILES,
+  getDangerousDirectories,
+  encodeSandboxedCommand,
+  Cwn,
+  containsGlobChars,
+  zot,
+  Dqt,
+  nameLocation,
+  isAtOrUnder,
+  ITt,
+  generateProxyEnvVars,
+  buildPosixGitSafeDirEnv,
+  decodeSandboxedCommand,
+} from "./sandbox-utils.js";
+import { escapeRegexLiteral, xTt } from "./glob-pattern.js";
+import { literalReadings } from "./path-entries.js";
+import { logForDebugging as logForDebugging_2 } from "../utils/debug.js";
+import { buildJavaToolOptions } from "./java-proxy-agent.js";
+import { whichSync } from "../utils/which.js";
+import { quote } from "../utils/shell-quote.js";
+import { shouldIgnoreViolation } from "./sandbox-violation-store.js";
 
 //@ chunk-fq0cr76a.js:758526-758857 esm-fingerprint
-function G8(e = !1) {
-  let n = sS(process.cwd(), { literal: !0 }),
-    r = [],
-    s = (y) => Hf(pathModule_2.resolve(n, y)),
-    h = (y) => K8(n, y);
-  for (let y of dsr) (r.push(s(y)), r.push(h(`**/${y}`)));
-  for (let y of csr()) (r.push(s(y)), r.push(h(`**/${y}/**`)));
-  if ((r.push(s(".git/hooks")), r.push(h("**/.git/hooks/**")), !e))
-    (r.push(s(".git/config")), r.push(h("**/.git/config")));
-  return r;
+function macGetMandatoryDenyEntries(allowGitConfig = false) {
+  let cwd = normalizePathForSandbox(process.cwd(), {
+    literal: true,
+  });
+  let entries = [];
+  let literal = (relativePath) => toLiteralPathEntry(pathModule_2.resolve(cwd, relativePath));
+  let beneathCwd = (pattern) => anchoredGlobEntry(cwd, pattern);
+  for (let fileName of DANGEROUS_FILES) {
+    entries.push(literal(fileName));
+    entries.push(beneathCwd(`**/${fileName}`));
+  }
+  for (let dirName of getDangerousDirectories()) {
+    entries.push(literal(dirName));
+    entries.push(beneathCwd(`**/${dirName}/**`));
+  }
+  entries.push(literal(".git/hooks"));
+  entries.push(beneathCwd("**/.git/hooks/**"));
+  if (!allowGitConfig) {
+    entries.push(literal(".git/config"));
+    entries.push(beneathCwd("**/.git/config"));
+  }
+  return entries;
 }
 //@ chunk-fq0cr76a.js:758857-758913 esm-fingerprint
-var h1 = `_${Math.random().toString(36).slice(2, 11)}_SBX`;
+var sessionSuffix = `_${Math.random().toString(36).slice(2, 11)}_SBX`;
 //@ chunk-fq0cr76a.js:758913-758962 esm-fingerprint
-function H8(e) {
-  return `CMD64_${QSe(e)}_END_${h1}`;
+function generateLogTag(attributionCommand) {
+  return `CMD64_${encodeSandboxedCommand(attributionCommand)}_END_${sessionSuffix}`;
 }
 //@ chunk-fq0cr76a.js:758962-759040 esm-fingerprint
-function gc(e) {
-  return e.glob ? `(regex ${qs(g1(e))})` : `(subpath ${qs(e.path)})`;
+function pathFilter(entry) {
+  return entry.glob ? `(regex ${escapePath(globRegex(entry))})` : `(subpath ${escapePath(entry.path)})`;
 }
 //@ chunk-fq0cr76a.js:759040-759173 esm-fingerprint
-function m1(e, n) {
-  if (e.anchor === void 0) return n(e.path);
-  let sliced = e.path.slice(e.anchor.length);
-  return `^${Oqt(e.anchor)}${n(sliced).slice(1)}`;
+function anchorRegex(entry, compile) {
+  if (entry.anchor === undefined) return compile(entry.path);
+  let pattern = entry.path.slice(entry.anchor.length);
+  return `^${escapeRegexLiteral(entry.anchor)}${compile(pattern).slice(1)}`;
 }
 //@ chunk-fq0cr76a.js:759173-759205 esm-layout
-function g1(e) {
-  return m1(e, xTt);
+function globRegex(entry) {
+  return anchorRegex(entry, xTt);
 }
 //@ chunk-fq0cr76a.js:759205-759237 esm-layout
-function XE(e) {
-  return m1(e, Cwn);
+function denyGlobEntryRegex(entry) {
+  return anchorRegex(entry, Cwn);
 }
 //@ chunk-fq0cr76a.js:759237-759315 esm-fingerprint
-function ll(e) {
-  return e.glob ? `(regex ${qs(XE(e))})` : `(subpath ${qs(e.path)})`;
+function denyPathFilter(entry) {
+  return entry.glob
+    ? `(regex ${escapePath(denyGlobEntryRegex(entry))})`
+    : `(subpath ${escapePath(entry.path)})`;
 }
 //@ chunk-fq0cr76a.js:759315-759439 esm-fingerprint
-function y1(e) {
-  if (!e.glob) return e.path;
-  let n = e.anchor ?? "";
-  return n + e.path.slice(n.length).replace(/\[[^\]]*\]|[*?]+/g, "x");
+function entrySamplePath(entry) {
+  if (!entry.glob) return entry.path;
+  let anchor = entry.anchor ?? "";
+  return anchor + entry.path.slice(anchor.length).replace(/\[[^\]]*\]|[*?]+/g, "x");
 }
 //@ chunk-fq0cr76a.js:759439-759584 esm-fingerprint
-function eg(e, n) {
-  let r = [...new Set(n)];
-  if (r.length === 0) return e;
-  let joined = r.map((h) => `(require-not ${h})`).join(" ");
-  return `(require-all ${e} ${joined})`;
+function carveFilter(filter, carveOuts) {
+  let unique = [...new Set(carveOuts)];
+  if (unique.length === 0) return filter;
+  let nots = unique.map((c) => `(require-not ${c})`).join(" ");
+  return `(require-all ${filter} ${nots})`;
 }
 //@ chunk-fq0cr76a.js:759584-759644 esm-fingerprint
-function K8(e, n) {
-  return { glob: !0, path: pathModule_2.join(e, n), anchor: e };
+function anchoredGlobEntry(anchor, pattern) {
+  return {
+    glob: true,
+    path: pathModule_2.join(anchor, pattern),
+    anchor,
+  };
 }
 //@ chunk-fq0cr76a.js:759644-759727 esm-fingerprint
-function S1(e) {
-  return Ad(e) ? { glob: !0, path: sS(e) } : { glob: !1, path: sS(e, { literal: !0 }) };
+function toPathEntry(pathPattern) {
+  return containsGlobChars(pathPattern)
+    ? {
+        glob: true,
+        path: normalizePathForSandbox(pathPattern),
+      }
+    : {
+        glob: false,
+        path: normalizePathForSandbox(pathPattern, {
+          literal: true,
+        }),
+      };
 }
 //@ chunk-fq0cr76a.js:759727-759782 esm-fingerprint
-function Hf(e) {
-  return { path: sS(e, { literal: !0 }), glob: !1 };
+function toLiteralPathEntry(literalPath) {
+  return {
+    path: normalizePathForSandbox(literalPath, {
+      literal: true,
+    }),
+    glob: false,
+  };
 }
 //@ chunk-fq0cr76a.js:759782-759835 esm-fingerprint
-function E1(e, n) {
-  return (e ?? []).flatMap((r) => nc(r, n));
+function alsoReadAs(spellings, kind) {
+  return (spellings ?? []).flatMap((spelling) => literalReadings(spelling, kind));
 }
 //@ chunk-fq0cr76a.js:759835-759911 esm-layout
-function Qm(e, n, r) {
-  return [...(n ?? []).map(S1), ...E1(n, e), ...(r ?? []).map(Hf)];
+function callerEntries(kind, spellings, literalPaths) {
+  return [
+    ...(spellings ?? []).map(toPathEntry),
+    ...alsoReadAs(spellings, kind),
+    ...(literalPaths ?? []).map(toLiteralPathEntry),
+  ];
 }
 //@ chunk-fq0cr76a.js:759911-759949 esm-layout
-function x1(e, n) {
-  return e.test(y1(n));
+function denyGlobCovers(denyRegex, entry) {
+  return denyRegex.test(entrySamplePath(entry));
 }
 //@ chunk-fq0cr76a.js:759949-759986 esm-layout
-function Gf(e, n) {
-  return zot(y1(e), n);
+function isStrictlyUnder(entry, dir) {
+  return zot(entrySamplePath(entry), dir);
 }
 //@ chunk-fq0cr76a.js:759986-760195 esm-fingerprint
-function Jm(e, n) {
-  let r = (y) => Dqt(y)[1] ?? y,
-    s = JE(n),
-    h = e === "deny" || n.glob ? r(s) : F3r(s, r);
-  if (h === s || h === "/" || oS(h, "/dev")) return [n];
-  return [n, n.glob ? { glob: !0, path: h + n.path.slice(s.length), anchor: h } : { glob: !1, path: h }];
+function inBothSpellings(kind, entry) {
+  let resolved = (p) => Dqt(p)[1] ?? p;
+  let base = entryBaseDir(entry);
+  let canonical = kind === "deny" || entry.glob ? resolved(base) : nameLocation(base, resolved);
+  if (canonical === base || canonical === "/" || isAtOrUnder(canonical, "/dev")) return [entry];
+  return [
+    entry,
+    entry.glob
+      ? {
+          glob: true,
+          path: canonical + entry.path.slice(base.length),
+          anchor: canonical,
+        }
+      : {
+          glob: false,
+          path: canonical,
+        },
+  ];
 }
 //@ chunk-fq0cr76a.js:760195-760645 esm-fingerprint
-function q8(e, n, r) {
-  let flattened = [...Qm("deny", e.credentialDenyOnly, void 0), ...r].flatMap((h) => Jm("deny", h));
+function resolveReadConfig(config, writeRoots, libraryDenies) {
+  let credentialDenies = [
+    ...callerEntries("deny", config.credentialDenyOnly, undefined),
+    ...libraryDenies,
+  ].flatMap((entry) => inBothSpellings("deny", entry));
   return {
     denies: [
-      ...Qm(
+      ...callerEntries(
         "deny",
-        e.denyOnly.filter((h) => !e.credentialDenyOnly?.includes(h)),
-        e.literalDenyOnly,
-      ).flatMap((h) => Jm("deny", h)),
-      ...flattened,
+        config.denyOnly.filter((p) => !config.credentialDenyOnly?.includes(p)),
+        config.literalDenyOnly,
+      ).flatMap((entry) => inBothSpellings("deny", entry)),
+      ...credentialDenies,
     ],
-    credentialDenies: new Set(flattened),
-    ownAllows: (e.ownAllowWithinDeny ?? []).map(Hf).flatMap((h) => Jm("allow", h)),
-    allows: Qm("allow", e.allowWithinDeny, e.literalAllowWithinDeny).flatMap((h) => Jm("allow", h)),
-    writeRoots: [...n],
+    credentialDenies: new Set(credentialDenies),
+    ownAllows: (config.ownAllowWithinDeny ?? [])
+      .map(toLiteralPathEntry)
+      .flatMap((entry) => inBothSpellings("allow", entry)),
+    allows: callerEntries("allow", config.allowWithinDeny, config.literalAllowWithinDeny).flatMap((entry) =>
+      inBothSpellings("allow", entry),
+    ),
+    writeRoots: [...writeRoots],
   };
 }
 //@ chunk-fq0cr76a.js:760645-761096 esm-fingerprint
-function j8(e) {
-  let n = [],
-    r = !1,
-    mapped = e.allows.filter((allow) => !allow.glob).map((h) => h.path);
-  for (let deny of e.denies) {
-    let y = e.credentialDenies.has(deny);
+function lateReadDenyFilters(resolved) {
+  let filters = [];
+  let coversRoot = false;
+  let literalAllowDirs = resolved.allows.filter((a) => !a.glob).map((a) => a.path);
+  for (let deny of resolved.denies) {
+    let isCredential = resolved.credentialDenies.has(deny);
     if (!deny.glob) {
-      if (y) {
-        let mapped = e.ownAllows.filter((ownAllow) => oS(ownAllow.path, deny.path)).map((R) => gc(R));
-        n.push(eg(ll(deny), mapped));
-      } else if (mapped.some((w) => Gf(deny, w))) n.push(ll(deny));
+      if (isCredential) {
+        let carveOuts = resolved.ownAllows
+          .filter((a) => isAtOrUnder(a.path, deny.path))
+          .map((a) => pathFilter(a));
+        filters.push(carveFilter(denyPathFilter(deny), carveOuts));
+      } else if (literalAllowDirs.some((a) => isStrictlyUnder(deny, a))) filters.push(denyPathFilter(deny));
       continue;
     }
-    let regExp = new RegExp(XE(deny));
-    if (regExp.test("/")) r = !0;
-    let mapped_2 = (y ? e.ownAllows : e.allows).filter((w) => x1(regExp, w)).map((w) => gc(w));
-    n.push(eg(ll(deny), mapped_2));
+    let denyRegex = new RegExp(denyGlobEntryRegex(deny));
+    if (denyRegex.test("/")) coversRoot = true;
+    let carveOuts = (isCredential ? resolved.ownAllows : resolved.allows)
+      .filter((a) => denyGlobCovers(denyRegex, a))
+      .map((a) => pathFilter(a));
+    filters.push(carveFilter(denyPathFilter(deny), carveOuts));
   }
-  return { filters: n, coversRoot: r };
+  return {
+    filters,
+    coversRoot,
+  };
 }
 //@ chunk-fq0cr76a.js:761096-761215 esm-fingerprint
-function Y8(e) {
-  let n = e.split(/[*?[\]]/)[0];
-  if (!n || n === "/") return "/";
-  return n.endsWith("/") ? n.slice(0, -1) : pathModule_2.dirname(n);
+function globBaseDir(normalizedGlob) {
+  let staticPrefix = normalizedGlob.split(/[*?[\]]/)[0];
+  if (!staticPrefix || staticPrefix === "/") return "/";
+  return staticPrefix.endsWith("/") ? staticPrefix.slice(0, -1) : pathModule_2.dirname(staticPrefix);
 }
 //@ chunk-fq0cr76a.js:761215-761283 esm-fingerprint
-function JE(e) {
-  if (!e.glob) return e.path;
-  return e.anchor ?? Y8(e.path);
+function entryBaseDir(entry) {
+  if (!entry.glob) return entry.path;
+  return entry.anchor ?? globBaseDir(entry.path);
 }
 //@ chunk-fq0cr76a.js:761283-762077 esm-fingerprint
-function z8(e, n) {
-  let { denies: denies, credentialDenies: credentialDenies, writeRoots: writeRoots } = e;
+function generateReadDenyUnlinkRules(resolved, logTag) {
+  let { denies, credentialDenies, writeRoots } = resolved;
   if (writeRoots.length === 0) return [];
-  let mapped = writeRoots.filter((D) => D.glob).map((D) => new RegExp(g1(D))),
-    mapped_2 = writeRoots.filter((D) => !D.glob).map((D) => D.path),
-    S = (D) => mapped_2.some((O) => Gf({ path: D, glob: !1 }, O)) || mapped.some((O) => O.test(D)),
-    w = new Set(),
-    R = (D, O) => {
-      for (let L of D) if (S(L) || (O && mapped_2.includes(L))) w.add(`(literal ${qs(L)})`);
-    };
-  for (let D of denies) {
-    let O = credentialDenies.has(D),
-      L = O ? [] : [...e.allows, ...writeRoots];
-    if (D.glob) {
-      let V = JE(D);
+  let writeRootRegexes = writeRoots.filter((w) => w.glob).map((w) => new RegExp(globRegex(w)));
+  let literalWriteRoots = writeRoots.filter((w) => !w.glob).map((w) => w.path);
+  let strictlyBelowWriteRoot = (p) =>
+    literalWriteRoots.some((w) =>
+      isStrictlyUnder(
+        {
+          path: p,
+          glob: false,
+        },
+        w,
+      ),
+    ) || writeRootRegexes.some((re) => re.test(p));
+  let filters = new Set();
+  let protectDirs = (dirs, withWriteRoots) => {
+    for (let dir of dirs)
+      if (strictlyBelowWriteRoot(dir) || (withWriteRoots && literalWriteRoots.includes(dir)))
+        filters.add(`(literal ${escapePath(dir)})`);
+  };
+  for (let deny of denies) {
+    let isCredential = credentialDenies.has(deny);
+    let exceptions = isCredential ? [] : [...resolved.allows, ...writeRoots];
+    if (deny.glob) {
+      let baseDir = entryBaseDir(deny);
       if (!(
-        mapped.length > 0 ||
-        mapped_2.some((J) => V === J || Gf({ path: V, glob: !1 }, J) || Gf({ path: J, glob: !1 }, V))
+        writeRootRegexes.length > 0 ||
+        literalWriteRoots.some(
+          (w) =>
+            baseDir === w ||
+            isStrictlyUnder(
+              {
+                path: baseDir,
+                glob: false,
+              },
+              w,
+            ) ||
+            isStrictlyUnder(
+              {
+                path: w,
+                glob: false,
+              },
+              baseDir,
+            ),
+        )
       ))
         continue;
-      let regExp = new RegExp(XE(D)),
-        mapped_3 = L.filter((J) => x1(regExp, J)).map((J) => gc(J));
-      if ((w.add(eg(ll(D), mapped_3)), V !== "/")) R([V, ...tg(V)], O);
+      let denyRegex = new RegExp(denyGlobEntryRegex(deny));
+      let carveOuts = exceptions.filter((e) => denyGlobCovers(denyRegex, e)).map((e) => pathFilter(e));
+      filters.add(carveFilter(denyPathFilter(deny), carveOuts));
+      if (baseDir !== "/") protectDirs([baseDir, ...getAncestorDirectories(baseDir)], isCredential);
     } else {
-      if (!O && !S(D.path)) continue;
-      let mapped = L.filter((K) => Gf(K, D.path)).map((K) => gc(K));
-      (w.add(eg(ll(D), mapped)), R(tg(D.path), O));
+      if (!isCredential && !strictlyBelowWriteRoot(deny.path)) continue;
+      let carveOuts = exceptions.filter((e) => isStrictlyUnder(e, deny.path)).map((e) => pathFilter(e));
+      filters.add(carveFilter(denyPathFilter(deny), carveOuts));
+      protectDirs(getAncestorDirectories(deny.path), isCredential);
     }
   }
-  return to("deny", ["file-write-unlink"], w, n);
+  return renderRule("deny", ["file-write-unlink"], filters, logTag);
 }
 //@ chunk-fq0cr76a.js:762077-762208 esm-fingerprint
-function to(e, n, r, s) {
-  if (r.size === 0) return [];
-  return [`(${e} ${n.join(" ")}`, ...[...r].map((h) => `  ${h}`), `  (with message "${s}"))`];
+function renderRule(action, operations, filters, logTag) {
+  if (filters.size === 0) return [];
+  return [
+    `(${action} ${operations.join(" ")}`,
+    ...[...filters].map((f) => `  ${f}`),
+    `  (with message "${logTag}"))`,
+  ];
 }
 //@ chunk-fq0cr76a.js:762208-762330 esm-fingerprint
-function tg(e) {
-  let n = [],
-    dir = pathModule_2.dirname(e);
-  while (dir !== "/" && dir !== ".") {
-    n.push(dir);
-    let dir_2 = pathModule_2.dirname(dir);
-    if (dir_2 === dir) break;
-    dir = dir_2;
+function getAncestorDirectories(pathStr) {
+  let ancestors = [];
+  let currentPath = pathModule_2.dirname(pathStr);
+  while (currentPath !== "/" && currentPath !== ".") {
+    ancestors.push(currentPath);
+    let parentPath = pathModule_2.dirname(currentPath);
+    if (parentPath === currentPath) break;
+    currentPath = parentPath;
   }
-  return n;
+  return ancestors;
 }
 //@ chunk-fq0cr76a.js:762330-762346 esm-layout
-var _1 = 900,
-  X8 = 4;
+var SBPL_STRING_MAX_BYTES = 900;
+var MIN_DENY_GROUP_SIZE = 4;
 //@ chunk-fq0cr76a.js:762346-763045 esm-fingerprint
-function J8(e) {
-  let n = new Map();
-  for (let h of e) {
-    if (h.glob) continue;
-    let path = h.path,
-      dir = pathModule_2.dirname(path),
-      dir_2 = pathModule_2.dirname(dir);
-    if (dir_2 === dir || dir === path || dir_2 === "/") continue;
-    let w = n.get(dir_2);
-    if (!w) ((w = new Map()), n.set(dir_2, w));
-    let base = pathModule_2.basename(dir),
-      D = w.get(base);
-    if (!D) ((D = new Set()), w.set(base, D));
-    D.add(pathModule_2.basename(path));
-  }
-  let r = new Set(),
-    s = [];
-  for (let [h, y] of n) {
-    let b = new Map();
-    for (let [S, w] of y) {
-      let sorted = [...w].sort(),
-        joined = sorted.join("\x00"),
-        O = b.get(joined);
-      if (!O) ((O = { dir: h, names: [], leaves: sorted }), b.set(joined, O));
-      O.names.push(S);
+function groupLiteralDenyPaths(entries) {
+  let byDir = new Map();
+  for (let entry of entries) {
+    if (entry.glob) continue;
+    let entryPath = entry.path;
+    let parent = pathModule_2.dirname(entryPath);
+    let dir = pathModule_2.dirname(parent);
+    if (dir === parent || parent === entryPath || dir === "/") continue;
+    let names = byDir.get(dir);
+    if (!names) {
+      names = new Map();
+      byDir.set(dir, names);
     }
-    for (let S of b.values()) {
-      let w = mc(v1(S)) + mc(w1(S));
-      if (((S.names = S.names.filter((R) => w + mc(Oqt(R)) <= _1)), S.names.length < X8)) continue;
-      s.push(S);
-      for (let R of S.names) for (let leave of S.leaves) r.add(pathModule_2.join(h, R, leave));
+    let name = pathModule_2.basename(parent);
+    let leaves = names.get(name);
+    if (!leaves) {
+      leaves = new Set();
+      names.set(name, leaves);
+    }
+    leaves.add(pathModule_2.basename(entryPath));
+  }
+  let grouped = new Set();
+  let groups = [];
+  for (let [dir, names] of byDir) {
+    let bySignature = new Map();
+    for (let [name, leafSet] of names) {
+      let leaves = [...leafSet].sort();
+      let signature = leaves.join("\x00");
+      let group = bySignature.get(signature);
+      if (!group) {
+        group = {
+          dir,
+          names: [],
+          leaves,
+        };
+        bySignature.set(signature, group);
+      }
+      group.names.push(name);
+    }
+    for (let group of bySignature.values()) {
+      let fixedLength = regexLength(groupRegexPrefix(group)) + regexLength(groupDenyTail(group));
+      group.names = group.names.filter(
+        (name) => fixedLength + regexLength(escapeRegexLiteral(name)) <= SBPL_STRING_MAX_BYTES,
+      );
+      if (group.names.length < MIN_DENY_GROUP_SIZE) continue;
+      groups.push(group);
+      for (let name of group.names)
+        for (let leaf of group.leaves) grouped.add(pathModule_2.join(dir, name, leaf));
     }
   }
-  return { groups: s, rest: e.filter((h) => !r.has(h.path)) };
+  return {
+    groups,
+    rest: entries.filter((e) => !grouped.has(e.path)),
+  };
 }
 //@ chunk-fq0cr76a.js:763045-763094 esm-layout
-function mc(e) {
-  return Buffer.byteLength(qs(e)) - 2;
+function regexLength(fragment) {
+  return Buffer.byteLength(escapePath(fragment)) - 2;
 }
 //@ chunk-fq0cr76a.js:763094-763134 esm-fingerprint
-function v1(e) {
-  return `^${Oqt(e.dir)}/(`;
+function groupRegexPrefix(group) {
+  return `^${escapeRegexLiteral(group.dir)}/(`;
 }
 //@ chunk-fq0cr76a.js:763134-763199 esm-fingerprint
-function w1(e) {
-  return `)/(${e.leaves.map(Oqt).join("|")})(/.*)?$`;
+function groupDenyTail(group) {
+  return `)/(${group.leaves.map(escapeRegexLiteral).join("|")})(/.*)?$`;
 }
 //@ chunk-fq0cr76a.js:763199-763539 esm-fingerprint
-function Q8(e) {
-  let n = v1(e),
-    r = w1(e),
-    s = ")$",
-    h = mc(n) + mc(r),
-    y = [],
-    b = [],
-    S = 0;
-  for (let R of e.names.map(Oqt)) {
-    let D = mc(R) + (b.length === 0 ? 0 : 1);
-    if (b.length > 0 && h + S + D > _1) (y.push(b), (b = []), (S = 0));
-    (b.push(R), (S += b.length === 1 ? mc(R) : D));
+function literalDenyGroupFilters(group) {
+  let prefix = groupRegexPrefix(group);
+  let denyTail = groupDenyTail(group);
+  let pinTail = ")$";
+  let fixedLength = regexLength(prefix) + regexLength(denyTail);
+  let chunks = [];
+  let chunk = [];
+  let chunkLength = 0;
+  for (let name of group.names.map(escapeRegexLiteral)) {
+    let nameLength = regexLength(name) + (chunk.length === 0 ? 0 : 1);
+    if (chunk.length > 0 && fixedLength + chunkLength + nameLength > SBPL_STRING_MAX_BYTES) {
+      chunks.push(chunk);
+      chunk = [];
+      chunkLength = 0;
+    }
+    chunk.push(name);
+    chunkLength += chunk.length === 1 ? regexLength(name) : nameLength;
   }
-  y.push(b);
-  let mapped = y.map((R) => R.join("|"));
+  chunks.push(chunk);
+  let alternations = chunks.map((names) => names.join("|"));
   return {
-    deny: mapped.map((R) => `(regex ${qs(n + R + r)})`),
-    pins: mapped.map((R) => `(regex ${qs(n + R + ")$")})`),
+    deny: alternations.map((names) => `(regex ${escapePath(prefix + names + denyTail)})`),
+    pins: alternations.map((names) => `(regex ${escapePath(prefix + names + ")$")})`),
   };
 }
 //@ chunk-fq0cr76a.js:763539-763624 esm-fingerprint
-function e9(e, n) {
-  return to("deny", ["file-write-unlink", "file-write-create"], T1(e), n);
+function generateMoveBlockingRules(entries, logTag) {
+  return renderRule("deny", ["file-write-unlink", "file-write-create"], moveBlockingFilters(entries), logTag);
 }
 //@ chunk-fq0cr76a.js:763624-763809 esm-fingerprint
-function T1(e) {
-  let n = new Set();
-  for (let r of e) {
-    n.add(ll(r));
-    let s = JE(r);
-    if (r.glob) {
-      if (s === "/") continue;
-      n.add(`(literal ${qs(s)})`);
+function moveBlockingFilters(entries) {
+  let filters = new Set();
+  for (let entry of entries) {
+    filters.add(denyPathFilter(entry));
+    let baseDir = entryBaseDir(entry);
+    if (entry.glob) {
+      if (baseDir === "/") continue;
+      filters.add(`(literal ${escapePath(baseDir)})`);
     }
-    for (let h of tg(s)) n.add(`(literal ${qs(h)})`);
+    for (let ancestorDir of getAncestorDirectories(baseDir))
+      filters.add(`(literal ${escapePath(ancestorDir)})`);
   }
-  return n;
+  return filters;
 }
 //@ chunk-fq0cr76a.js:763809-764446 esm-fingerprint
-function t9(e, n) {
-  if (!e) return ["(allow file-read*)"];
-  let r = [];
-  r.push("(allow file-read*)");
-  let any = e.denies.some((deny) => deny.path === "/"),
-    h = new Set(e.denies.map(ll));
-  r.push(...to("deny", ["file-read*"], h, n));
-  let y = new Set(e.allows.map((allow) => gc(allow)));
-  r.push(...to("allow", ["file-read*"], y, n));
-  let b = j8(e);
-  if ((r.push(...to("deny", ["file-read*"], new Set(b.filters), n)), any || b.coversRoot))
-    r.push('(allow file-read* (literal "/"))');
-  if (e.denies.length > 0) r.push("(allow file-read-metadata", "  (vnode-type DIRECTORY))");
-  r.push(...e9(e.denies, n));
-  let S = new Set(e.writeRoots.map(gc));
-  return (r.push(...to("allow", ["file-write-unlink", "file-write-create"], S, n)), r);
+function generateReadRules(resolved, logTag) {
+  if (!resolved) return ["(allow file-read*)"];
+  let rules = [];
+  rules.push("(allow file-read*)");
+  let deniesRoot = resolved.denies.some((d) => d.path === "/");
+  let denyFilters = new Set(resolved.denies.map(denyPathFilter));
+  rules.push(...renderRule("deny", ["file-read*"], denyFilters, logTag));
+  let allowFilters = new Set(resolved.allows.map((a) => pathFilter(a)));
+  rules.push(...renderRule("allow", ["file-read*"], allowFilters, logTag));
+  let late = lateReadDenyFilters(resolved);
+  rules.push(...renderRule("deny", ["file-read*"], new Set(late.filters), logTag));
+  if (deniesRoot || late.coversRoot) rules.push('(allow file-read* (literal "/"))');
+  if (resolved.denies.length > 0) rules.push("(allow file-read-metadata", "  (vnode-type DIRECTORY))");
+  rules.push(...generateMoveBlockingRules(resolved.denies, logTag));
+  let writeAllowFilters = new Set(resolved.writeRoots.map(pathFilter));
+  rules.push(...renderRule("allow", ["file-write-unlink", "file-write-create"], writeAllowFilters, logTag));
+  return rules;
 }
 //@ chunk-fq0cr76a.js:764446-764513 esm-fingerprint
-function n9(e) {
-  return Qm("allow", e?.allowOnly, e?.literalAllowOnly);
+function writeRootEntries(config) {
+  return callerEntries("allow", config?.allowOnly, config?.literalAllowOnly);
 }
 //@ chunk-fq0cr76a.js:764513-765190 esm-fingerprint
-function r9(e, n, r, s) {
-  if (!e) return ["(allow file-write*)"];
-  let h = [],
-    y = new Set();
-  for (let L of s) y.add(gc(L));
-  h.push(...to("allow", ["file-write*"], y, n));
-  let b = [...(e.denyWithinAllow || []).map(S1), ...(e.literalDenyWithinAllow ?? []).map(Hf), ...G8(r)];
-  b.push(...E1(e.denyWithinAllow, "deny"));
-  let { groups: groups, rest: rest } = J8(b),
-    mapped = groups.map(Q8),
-    D = new Set();
-  for (let { deny: deny } of mapped) for (let V of deny) D.add(V);
-  for (let L of rest) D.add(ll(L));
-  h.push(...to("deny", ["file-write*"], D, n));
-  let O = T1(rest);
-  for (let [L, { deny: V, pins: K }] of mapped.entries()) {
-    for (let Z of [...V, ...K]) O.add(Z);
-    let { dir: dir } = groups[L];
-    for (let Z of [dir, ...tg(dir)]) O.add(`(literal ${qs(Z)})`);
+function generateWriteRules(config, logTag, allowGitConfig, writeRoots) {
+  if (!config) return ["(allow file-write*)"];
+  let rules = [];
+  let allowFilters = new Set();
+  for (let entry of writeRoots) allowFilters.add(pathFilter(entry));
+  rules.push(...renderRule("allow", ["file-write*"], allowFilters, logTag));
+  let denyEntries = [
+    ...(config.denyWithinAllow || []).map(toPathEntry),
+    ...(config.literalDenyWithinAllow ?? []).map(toLiteralPathEntry),
+    ...macGetMandatoryDenyEntries(allowGitConfig),
+  ];
+  denyEntries.push(...alsoReadAs(config.denyWithinAllow, "deny"));
+  let { groups, rest: ungrouped } = groupLiteralDenyPaths(denyEntries);
+  let groupFilters = groups.map(literalDenyGroupFilters);
+  let denyFilters = new Set();
+  for (let { deny } of groupFilters) for (let filter of deny) denyFilters.add(filter);
+  for (let entry of ungrouped) denyFilters.add(denyPathFilter(entry));
+  rules.push(...renderRule("deny", ["file-write*"], denyFilters, logTag));
+  let moveFilters = moveBlockingFilters(ungrouped);
+  for (let [index, { deny, pins }] of groupFilters.entries()) {
+    for (let filter of [...deny, ...pins]) moveFilters.add(filter);
+    let { dir } = groups[index];
+    for (let ancestorDir of [dir, ...getAncestorDirectories(dir)])
+      moveFilters.add(`(literal ${escapePath(ancestorDir)})`);
   }
-  return (h.push(...to("deny", ["file-write-unlink", "file-write-create"], O, n)), h);
+  rules.push(...renderRule("deny", ["file-write-unlink", "file-write-create"], moveFilters, logTag));
+  return rules;
 }
 //@ chunk-fq0cr76a.js:765190-772859 esm-fingerprint
-function s9({
-  readConfig: readConfig,
-  libraryDenyEntries: libraryDenyEntries,
-  writeConfig: writeConfig,
-  httpProxyPort: httpProxyPort,
-  socksProxyPort: socksProxyPort,
-  needsNetworkRestriction: needsNetworkRestriction,
-  allowUnixSockets: allowUnixSockets,
-  allowAllUnixSockets: allowAllUnixSockets,
-  allowLocalBinding: allowLocalBinding,
-  allowMachLookup: allowMachLookup,
-  allowPty: allowPty,
-  allowGitConfig: allowGitConfig = !1,
-  enableWeakerNetworkIsolation: enableWeakerNetworkIsolation = !1,
-  allowAppleEvents: allowAppleEvents = !1,
-  logTag: logTag,
+function generateSandboxProfile({
+  readConfig,
+  libraryDenyEntries,
+  writeConfig,
+  httpProxyPort,
+  socksProxyPort,
+  needsNetworkRestriction,
+  allowUnixSockets,
+  allowAllUnixSockets,
+  allowLocalBinding,
+  allowMachLookup,
+  allowPty,
+  allowGitConfig = false,
+  enableWeakerNetworkIsolation = false,
+  allowAppleEvents = false,
+  logTag,
 }) {
-  let q = [
+  let profile = [
     "(version 1)",
     `(deny default (with message "${logTag}"))`,
     "",
@@ -418,10 +563,10 @@ function s9({
     ...(allowMachLookup && allowMachLookup.length > 0
       ? [
           "; User-specified XPC/Mach services",
-          ...allowMachLookup.map((ie) =>
-            ie.endsWith("*")
-              ? `(allow mach-lookup (global-name-prefix ${qs(ie.slice(0, -1))}))`
-              : `(allow mach-lookup (global-name ${qs(ie)}))`,
+          ...allowMachLookup.map((name) =>
+            name.endsWith("*")
+              ? `(allow mach-lookup (global-name-prefix ${escapePath(name.slice(0, -1))}))`
+              : `(allow mach-lookup (global-name ${escapePath(name)}))`,
           ),
         ]
       : []),
@@ -534,215 +679,265 @@ function s9({
     ")",
     "",
   ];
-  if ((q.push("; Network"), !needsNetworkRestriction)) q.push("(allow network*)");
+  profile.push("; Network");
+  if (!needsNetworkRestriction) profile.push("(allow network*)");
   else {
-    if (allowLocalBinding)
-      (q.push('(allow network-bind (local ip "*:*"))'),
-        q.push('(allow network-inbound (local ip "*:*"))'),
-        q.push('(allow network-outbound (remote ip "localhost:*"))'));
-    if (allowAllUnixSockets)
-      (q.push("(allow system-socket (socket-domain AF_UNIX))"),
-        q.push('(allow network-bind (local unix-socket (path-regex #"^/")))'),
-        q.push('(allow network-outbound (remote unix-socket (path-regex #"^/")))'));
-    else if (allowUnixSockets && allowUnixSockets.length > 0) {
-      q.push("(allow system-socket (socket-domain AF_UNIX))");
-      for (let ie of allowUnixSockets) {
-        let ae = sS(ie);
-        (q.push(`(allow network-bind (local unix-socket (subpath ${qs(ae)})))`),
-          q.push(`(allow network-outbound (remote unix-socket (subpath ${qs(ae)})))`));
+    if (allowLocalBinding) {
+      profile.push('(allow network-bind (local ip "*:*"))');
+      profile.push('(allow network-inbound (local ip "*:*"))');
+      profile.push('(allow network-outbound (remote ip "localhost:*"))');
+    }
+    if (allowAllUnixSockets) {
+      profile.push("(allow system-socket (socket-domain AF_UNIX))");
+      profile.push('(allow network-bind (local unix-socket (path-regex #"^/")))');
+      profile.push('(allow network-outbound (remote unix-socket (path-regex #"^/")))');
+    } else if (allowUnixSockets && allowUnixSockets.length > 0) {
+      profile.push("(allow system-socket (socket-domain AF_UNIX))");
+      for (let socketPath of allowUnixSockets) {
+        let normalizedPath = normalizePathForSandbox(socketPath);
+        profile.push(`(allow network-bind (local unix-socket (subpath ${escapePath(normalizedPath)})))`);
+        profile.push(`(allow network-outbound (remote unix-socket (subpath ${escapePath(normalizedPath)})))`);
       }
     }
-    if (httpProxyPort !== void 0)
-      (q.push(
-        ...to(
+    if (httpProxyPort !== undefined) {
+      profile.push(
+        ...renderRule(
           "deny",
           ["network-bind", "network-inbound"],
           new Set([`(local ip "*:${httpProxyPort}")`]),
           logTag,
         ),
-      ),
-        q.push(`(allow network-outbound (remote ip "localhost:${httpProxyPort}"))`));
-    if (socksProxyPort !== void 0 && socksProxyPort !== httpProxyPort)
-      (q.push(
-        ...to(
+      );
+      profile.push(`(allow network-outbound (remote ip "localhost:${httpProxyPort}"))`);
+    }
+    if (socksProxyPort !== undefined && socksProxyPort !== httpProxyPort) {
+      profile.push(
+        ...renderRule(
           "deny",
           ["network-bind", "network-inbound"],
           new Set([`(local ip "*:${socksProxyPort}")`]),
           logTag,
         ),
-      ),
-        q.push(`(allow network-outbound (remote ip "localhost:${socksProxyPort}"))`));
+      );
+      profile.push(`(allow network-outbound (remote ip "localhost:${socksProxyPort}"))`);
+    }
   }
-  q.push("");
-  let Z = n9(writeConfig),
-    J =
-      readConfig || libraryDenyEntries.length > 0
-        ? q8(readConfig ?? { denyOnly: [] }, Z, libraryDenyEntries)
-        : void 0;
-  if (
-    (q.push("; File read"),
-    q.push(...t9(J, logTag)),
-    q.push(""),
-    q.push("; File write"),
-    q.push(...r9(writeConfig, logTag, allowGitConfig, Z)),
-    J)
-  ) {
-    let ie = z8(J, logTag);
-    if (ie.length > 0)
-      (q.push(""), q.push("; File read: keep read-denied paths inside write roots in place"), q.push(...ie));
+  profile.push("");
+  let writeRoots = writeRootEntries(writeConfig);
+  let resolvedRead =
+    readConfig || libraryDenyEntries.length > 0
+      ? resolveReadConfig(
+          readConfig ?? {
+            denyOnly: [],
+          },
+          writeRoots,
+          libraryDenyEntries,
+        )
+      : undefined;
+  profile.push("; File read");
+  profile.push(...generateReadRules(resolvedRead, logTag));
+  profile.push("");
+  profile.push("; File write");
+  profile.push(...generateWriteRules(writeConfig, logTag, allowGitConfig, writeRoots));
+  if (resolvedRead) {
+    let unlinkRules = generateReadDenyUnlinkRules(resolvedRead, logTag);
+    if (unlinkRules.length > 0) {
+      profile.push("");
+      profile.push("; File read: keep read-denied paths inside write roots in place");
+      profile.push(...unlinkRules);
+    }
   }
-  if (allowPty)
-    (q.push(""),
-      q.push("; Pseudo-terminal (pty) support"),
-      q.push("(allow pseudo-tty)"),
-      q.push("(allow file-ioctl"),
-      q.push('  (literal "/dev/ptmx")'),
-      q.push('  (regex #"^/dev/ttys")'),
-      q.push(")"),
-      q.push("(allow file-read* file-write*"),
-      q.push('  (literal "/dev/ptmx")'),
-      q.push('  (regex #"^/dev/ttys")'),
-      q.push(")"));
-  return q.join(`
+  if (allowPty) {
+    profile.push("");
+    profile.push("; Pseudo-terminal (pty) support");
+    profile.push("(allow pseudo-tty)");
+    profile.push("(allow file-ioctl");
+    profile.push('  (literal "/dev/ptmx")');
+    profile.push('  (regex #"^/dev/ttys")');
+    profile.push(")");
+    profile.push("(allow file-read* file-write*");
+    profile.push('  (literal "/dev/ptmx")');
+    profile.push('  (regex #"^/dev/ttys")');
+    profile.push(")");
+  }
+  return profile.join(`
 `);
 }
 //@ chunk-fq0cr76a.js:772859-772899 esm-layout
-function qs(e) {
-  return JSON.stringify(e);
+function escapePath(pathStr) {
+  return JSON.stringify(pathStr);
 }
 //@ chunk-fq0cr76a.js:772899-774892 esm-fingerprint
-function G6r(e) {
+function wrapCommandWithSandboxMacOS(params) {
   let {
-      command: command,
-      commandId: commandId,
-      needsNetworkRestriction: needsNetworkRestriction,
-      httpProxyPort: httpProxyPort,
-      socksProxyPort: socksProxyPort,
-      proxyAuthToken: proxyAuthToken,
-      caCertPath: caCertPath,
-      javaAgentJarPath: javaAgentJarPath,
-      allowUnixSockets: allowUnixSockets,
-      allowAllUnixSockets: allowAllUnixSockets,
-      allowLocalBinding: allowLocalBinding,
-      allowMachLookup: allowMachLookup,
-      readConfig: readConfig,
-      writeConfig: writeConfig,
-      unsetEnvVars: unsetEnvVars,
-      setEnvVars: setEnvVars,
-      maskedFileBinds: maskedFileBinds,
-      degradeToDenyPaths: degradeToDenyPaths,
-      allowPty: allowPty,
-      allowGitConfig: allowGitConfig = !1,
-      gitSafeDirectories: gitSafeDirectories,
-      enableWeakerNetworkIsolation: enableWeakerNetworkIsolation = !1,
-      allowAppleEvents: allowAppleEvents = !1,
-      binShell: binShell,
-    } = e,
-    Ie = maskedFileBinds?.map((jt) => jt.realPath) ?? [];
-  if (Ie.length > 0) At("[Sandbox macOS] file mask degrades to deny on macOS until the interposer lands");
-  let mapped = [...Ie, ...(degradeToDenyPaths ?? [])].map(Hf),
-    ft =
-      (readConfig && (readConfig.denyOnly.length > 0 || (readConfig.literalDenyOnly?.length ?? 0) > 0)) ||
-      mapped.length > 0,
-    rt = writeConfig !== void 0,
-    ut =
-      (unsetEnvVars !== void 0 && unsetEnvVars.length > 0) ||
-      (setEnvVars !== void 0 && Object.keys(setEnvVars).length > 0),
-    we = (gitSafeDirectories?.length ?? 0) > 0;
-  if (!needsNetworkRestriction && !ft && !rt && !ut && !we) return command;
-  let Ae = ITt(command, commandId),
-    dt = H8(Ae),
-    Me = s9({
-      readConfig: readConfig,
-      libraryDenyEntries: mapped,
-      writeConfig: writeConfig,
-      httpProxyPort: httpProxyPort,
-      socksProxyPort: socksProxyPort,
-      needsNetworkRestriction: needsNetworkRestriction,
-      allowUnixSockets: allowUnixSockets,
-      allowAllUnixSockets: allowAllUnixSockets,
-      allowLocalBinding: allowLocalBinding,
-      allowMachLookup: allowMachLookup,
-      allowPty: allowPty,
-      allowGitConfig: allowGitConfig,
-      enableWeakerNetworkIsolation: enableWeakerNetworkIsolation,
-      allowAppleEvents: allowAppleEvents,
-      logTag: dt,
-    }),
-    Ft = Vot(httpProxyPort, socksProxyPort, caCertPath, proxyAuthToken, writeConfig === void 0, QSe(Ae)),
-    mt = Ym({
-      agentJarPath: javaAgentJarPath,
-      flags:
-        needsNetworkRestriction &&
-        (allowLocalBinding || httpProxyPort !== void 0 || socksProxyPort !== void 0)
-          ? ["-Djava.net.preferIPv4Stack=true"]
-          : [],
-      unsetEnvVars: unsetEnvVars,
-      inherited: process.env.JAVA_TOOL_OPTIONS,
-    });
-  if (mt !== void 0) Ft.push(`JAVA_TOOL_OPTIONS=${mt}`);
-  if (gitSafeDirectories && gitSafeDirectories.length > 0) {
-    let jt = B3r({ safeDirs: gitSafeDirectories, unsetEnvVars: unsetEnvVars, setEnvVars: setEnvVars });
-    for (let [Rn, Xe] of Object.entries(jt)) Ft.push(`${Rn}=${Xe}`);
-  }
-  let Mt = binShell || "bash",
-    mn = ha(Mt);
-  if (!mn) throw Error(`Shell '${Mt}' not found in PATH`);
-  let flattened = (unsetEnvVars ?? []).flatMap((jt) => ["-u", jt]),
-    mapped_2 = Object.entries(setEnvVars ?? {}).map(([jt, Rn]) => `${jt}=${Rn}`),
-    gt = zee(["env", ...flattened, ...mapped_2, ...Ft, "/usr/bin/sandbox-exec", "-p", Me, mn, "-c", command]);
-  return (
-    At(
-      `[Sandbox macOS] Applied restrictions - network: ${!!(httpProxyPort || socksProxyPort)}, read: ${ft ? (readConfig && "allowAllExcept" in readConfig ? "allowAllExcept" : "denyAllExcept") : "none"}, write: ${writeConfig ? ("allowAllExcept" in writeConfig ? "allowAllExcept" : "denyAllExcept") : "none"}`,
-    ),
-    gt
+    command,
+    commandId,
+    needsNetworkRestriction,
+    httpProxyPort,
+    socksProxyPort,
+    proxyAuthToken,
+    caCertPath,
+    javaAgentJarPath,
+    allowUnixSockets,
+    allowAllUnixSockets,
+    allowLocalBinding,
+    allowMachLookup,
+    readConfig,
+    writeConfig,
+    unsetEnvVars,
+    setEnvVars,
+    maskedFileBinds,
+    degradeToDenyPaths,
+    allowPty,
+    allowGitConfig = false,
+    gitSafeDirectories,
+    enableWeakerNetworkIsolation = false,
+    allowAppleEvents = false,
+    binShell,
+  } = params;
+  let maskedDenyPaths = maskedFileBinds?.map((b) => b.realPath) ?? [];
+  if (maskedDenyPaths.length > 0)
+    logForDebugging_2("[Sandbox macOS] file mask degrades to deny on macOS until the interposer lands");
+  let libraryDenyEntries = [...maskedDenyPaths, ...(degradeToDenyPaths ?? [])].map(toLiteralPathEntry);
+  let hasReadRestrictions =
+    (readConfig && (readConfig.denyOnly.length > 0 || (readConfig.literalDenyOnly?.length ?? 0) > 0)) ||
+    libraryDenyEntries.length > 0;
+  let hasWriteRestrictions = writeConfig !== undefined;
+  let hasEnvRestrictions =
+    (unsetEnvVars !== undefined && unsetEnvVars.length > 0) ||
+    (setEnvVars !== undefined && Object.keys(setEnvVars).length > 0);
+  let hasGitConfig = (gitSafeDirectories?.length ?? 0) > 0;
+  if (
+    !needsNetworkRestriction &&
+    !hasReadRestrictions &&
+    !hasWriteRestrictions &&
+    !hasEnvRestrictions &&
+    !hasGitConfig
+  )
+    return command;
+  let attributionCommand = ITt(command, commandId);
+  let logTag = generateLogTag(attributionCommand);
+  let profile = generateSandboxProfile({
+    readConfig,
+    libraryDenyEntries,
+    writeConfig,
+    httpProxyPort,
+    socksProxyPort,
+    needsNetworkRestriction,
+    allowUnixSockets,
+    allowAllUnixSockets,
+    allowLocalBinding,
+    allowMachLookup,
+    allowPty,
+    allowGitConfig,
+    enableWeakerNetworkIsolation,
+    allowAppleEvents,
+    logTag,
+  });
+  let proxyEnvArgs = generateProxyEnvVars(
+    httpProxyPort,
+    socksProxyPort,
+    caCertPath,
+    proxyAuthToken,
+    writeConfig === undefined,
+    encodeSandboxedCommand(attributionCommand),
   );
+  let javaToolOptions = buildJavaToolOptions({
+    agentJarPath: javaAgentJarPath,
+    flags:
+      needsNetworkRestriction &&
+      (allowLocalBinding || httpProxyPort !== undefined || socksProxyPort !== undefined)
+        ? ["-Djava.net.preferIPv4Stack=true"]
+        : [],
+    unsetEnvVars,
+    inherited: process.env.JAVA_TOOL_OPTIONS,
+  });
+  if (javaToolOptions !== undefined) proxyEnvArgs.push(`JAVA_TOOL_OPTIONS=${javaToolOptions}`);
+  if (gitSafeDirectories && gitSafeDirectories.length > 0) {
+    let gitCfg = buildPosixGitSafeDirEnv({
+      safeDirs: gitSafeDirectories,
+      unsetEnvVars,
+      setEnvVars,
+    });
+    for (let [name, value] of Object.entries(gitCfg)) proxyEnvArgs.push(`${name}=${value}`);
+  }
+  let shellName = binShell || "bash";
+  let shell = whichSync(shellName);
+  if (!shell) throw Error(`Shell '${shellName}' not found in PATH`);
+  let unsetEnvArgs = (unsetEnvVars ?? []).flatMap((name) => ["-u", name]);
+  let setEnvArgs = Object.entries(setEnvVars ?? {}).map(([name, value]) => `${name}=${value}`);
+  let wrappedCommand = quote([
+    "env",
+    ...unsetEnvArgs,
+    ...setEnvArgs,
+    ...proxyEnvArgs,
+    "/usr/bin/sandbox-exec",
+    "-p",
+    profile,
+    shell,
+    "-c",
+    command,
+  ]);
+  logForDebugging_2(
+    `[Sandbox macOS] Applied restrictions - network: ${!!(httpProxyPort || socksProxyPort)}, read: ${hasReadRestrictions ? (readConfig && "allowAllExcept" in readConfig ? "allowAllExcept" : "denyAllExcept") : "none"}, write: ${writeConfig ? ("allowAllExcept" in writeConfig ? "allowAllExcept" : "denyAllExcept") : "none"}`,
+  );
+  return wrappedCommand;
 }
 //@ chunk-fq0cr76a.js:774892-775857 esm-fingerprint
-function A1(e, n, r) {
-  let s = /CMD64_(.+?)_END/,
-    h = /Sandbox:\s+(.+)$/,
-    y = spawn_3("log", ["stream", "--predicate", `(eventMessage ENDSWITH "${h1}")`, "--style", "compact"]);
-  return (
-    y.stdout?.on("data", (b) => {
-      let parts = b.toString().split(`
-`),
-        found = parts.find((K) => K.includes("Sandbox:") && K.includes("deny")),
-        found_2 = parts.find((K) => K.startsWith("CMD64_"));
-      if (!found) return;
-      let match = found.match(h);
-      if (!match?.[1]) return;
-      let O = match[1],
-        L,
-        V;
-      if (found_2) {
-        if (((V = found_2.match(s)?.[1]), V))
-          try {
-            L = r(x4e(V));
-          } catch {}
-      }
-      if (
-        O.includes("mDNSResponder") ||
-        O.includes("mach-lookup com.apple.diagnosticd") ||
-        O.includes("mach-lookup com.apple.analyticsd")
-      )
-        return;
-      if (Eu(O, L, n)) return;
-      e({ line: O, command: L, encodedCommand: V, timestamp: new Date() });
-    }),
-    y.stderr?.on("data", (b) => {
-      At(`[Sandbox Monitor] Log stream stderr: ${b.toString()}`);
-    }),
-    y.on("error", (b) => {
-      At(`[Sandbox Monitor] Failed to start log stream: ${b.message}`);
-    }),
-    y.on("exit", (b) => {
-      At(`[Sandbox Monitor] Log stream exited with code: ${b}`);
-    }),
-    () => {
-      (At("[Sandbox Monitor] Stopping log monitor"), y.kill("SIGTERM"));
+function startMacOSSandboxLogMonitor(callback, ignoreViolations, resolveCommandText) {
+  let s = /CMD64_(.+?)_END/;
+  let sandboxExtractRegex = /Sandbox:\s+(.+)$/;
+  let logProcess = spawn("log", [
+    "stream",
+    "--predicate",
+    `(eventMessage ENDSWITH "${sessionSuffix}")`,
+    "--style",
+    "compact",
+  ]);
+  logProcess.stdout?.on("data", (data) => {
+    let lines = data.toString().split(`
+`);
+    let violationLine = lines.find((line) => line.includes("Sandbox:") && line.includes("deny"));
+    let commandLine = lines.find((line) => line.startsWith("CMD64_"));
+    if (!violationLine) return;
+    let sandboxMatch = violationLine.match(sandboxExtractRegex);
+    if (!sandboxMatch?.[1]) return;
+    let violationDetails = sandboxMatch[1];
+    let command;
+    let encodedCommand;
+    if (commandLine) {
+      encodedCommand = commandLine.match(s)?.[1];
+      if (encodedCommand)
+        try {
+          command = resolveCommandText(decodeSandboxedCommand(encodedCommand));
+        } catch {}
     }
-  );
+    if (
+      violationDetails.includes("mDNSResponder") ||
+      violationDetails.includes("mach-lookup com.apple.diagnosticd") ||
+      violationDetails.includes("mach-lookup com.apple.analyticsd")
+    )
+      return;
+    if (shouldIgnoreViolation(violationDetails, command, ignoreViolations)) return;
+    callback({
+      line: violationDetails,
+      command,
+      encodedCommand,
+      timestamp: new Date(),
+    });
+  });
+  logProcess.stderr?.on("data", (data) => {
+    logForDebugging_2(`[Sandbox Monitor] Log stream stderr: ${data.toString()}`);
+  });
+  logProcess.on("error", (error) => {
+    logForDebugging_2(`[Sandbox Monitor] Failed to start log stream: ${error.message}`);
+  });
+  logProcess.on("exit", (code) => {
+    logForDebugging_2(`[Sandbox Monitor] Log stream exited with code: ${code}`);
+  });
+  return () => {
+    logForDebugging_2("[Sandbox Monitor] Stopping log monitor");
+    logProcess.kill("SIGTERM");
+  };
 }
-
-export { G6r, A1 };
+export { wrapCommandWithSandboxMacOS, startMacOSSandboxLogMonitor };

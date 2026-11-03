@@ -27,14 +27,19 @@ import {
 } from "./NoteCard.js";
 
 //@ chunk-bss4k1z9.js:18000-18043 placement
-var msSince = (e) => (e === void 0 ? void 0 : Date.now() - e);
+var msSince = (shownAt) => (shownAt === undefined ? undefined : Date.now() - shownAt);
 //@ chunk-bss4k1z9.js:18043-18086 placement
-var msToAnswerProp = (e) => (e === void 0 ? {} : { ms_to_answer: e });
+var msToAnswerProp = (msToAnswer) =>
+  msToAnswer === undefined
+    ? {}
+    : {
+        ms_to_answer: msToAnswer,
+      };
 //@ chunk-bss4k1z9.js:18086-18224 placement
-var usageProps = (e) => ({
-  cache_read: e?.cache_read_input_tokens ?? 0,
-  cache_create: e?.cache_creation_input_tokens ?? 0,
-  output_tokens: e?.output_tokens ?? 0,
+var usageProps = (usage) => ({
+  cache_read: usage?.cache_read_input_tokens ?? 0,
+  cache_create: usage?.cache_creation_input_tokens ?? 0,
+  output_tokens: usage?.output_tokens ?? 0,
 });
 //@ chunk-bss4k1z9.js:18224-18236 placement
 var MS_PER_SECOND = 1000;
@@ -44,29 +49,33 @@ var RELEASE_BASE = /^(\d+)\.(\d+)\.(\d+)(-dev)?$/;
 function versionMarkOf(e) {
   let match = RELEASE_BASE.exec(e?.base ?? "");
   if (!match) return;
-  let o = Number(match[1]),
-    r = Number(match[2]),
-    n = Number(match[3]);
+  let o = Number(match[1]);
+  let r = Number(match[2]);
+  let n = Number(match[3]);
   if (![o, r, n].every(Number.isSafeInteger)) return;
-  let parse = Date.parse(e?.builtAt ?? "");
+  let timestamp = Date.parse(e?.builtAt ?? "");
   return {
     major: o,
     minor: r,
     patch: n,
-    isDev: match[4] !== void 0,
-    ...(Number.isFinite(parse) && { builtAtS: Math.floor(parse / MS_PER_SECOND) }),
+    isDev: match[4] !== undefined,
+    ...(Number.isFinite(timestamp) && {
+      builtAtS: Math.floor(timestamp / MS_PER_SECOND),
+    }),
   };
 }
 //@ chunk-bss4k1z9.js:18561-18726 placement
-var versionProps = (e) =>
-  e === void 0
+var versionProps = (version) =>
+  version === undefined
     ? {}
     : {
-        version_major: e.major,
-        version_minor: e.minor,
-        version_patch: e.patch,
-        version_is_dev: e.isDev,
-        ...(e.builtAtS !== void 0 && { built_at_s: e.builtAtS }),
+        version_major: version.major,
+        version_minor: version.minor,
+        version_patch: version.patch,
+        version_is_dev: version.isDev,
+        ...(version.builtAtS !== undefined && {
+          built_at_s: version.builtAtS,
+        }),
       };
 //@ chunk-bss4k1z9.js:18726-19272 placement
 var answered = (e) => ({
@@ -77,13 +86,25 @@ var answered = (e) => ({
       ...msToAnswerProp(e.msToAnswer),
       turn_in_progress: e.isTurnInProgress,
       offers_shown: e.offersShown,
-      ...(e.iteration !== void 0 && { iteration: e.iteration }),
-      ...(e.promptOrigin !== void 0 && { prompt_origin: choiceOf(e.promptOrigin, PROMPT_ORIGINS) }),
-      ...(e.promptsSurvived !== void 0 && { prompts_survived: e.promptsSurvived }),
-      ...(e.leftBy !== void 0 && { left_by: choiceOf(e.leftBy, LEFT_BY) }),
+      ...(e.iteration !== undefined && {
+        iteration: e.iteration,
+      }),
+      ...(e.promptOrigin !== undefined && {
+        prompt_origin: choiceOf(e.promptOrigin, PROMPT_ORIGINS),
+      }),
+      ...(e.promptsSurvived !== undefined && {
+        prompts_survived: e.promptsSurvived,
+      }),
+      ...(e.leftBy !== undefined && {
+        left_by: choiceOf(e.leftBy, LEFT_BY),
+      }),
       ...versionProps(e.version),
-      ...(e.clearedBy !== void 0 && { cleared_by: choiceOf(e.clearedBy, CLEARED_BY) }),
-      ...(e.offVia !== void 0 && { off_via: choiceOf(e.offVia, OFF_VIA) }),
+      ...(e.clearedBy !== undefined && {
+        cleared_by: choiceOf(e.clearedBy, CLEARED_BY),
+      }),
+      ...(e.offVia !== undefined && {
+        off_via: choiceOf(e.offVia, OFF_VIA),
+      }),
       ...lineKind(e.line),
       ...tagOpener(e.tag),
     },
@@ -133,7 +154,8 @@ var proposed = (e) => ({
 //@ chunk-bss4k1z9.js:19829-19922 placement
 async function send(e, t) {
   try {
-    if ((await t.log(e.entry), e.mark)) await t.mark(e.mark);
+    await t.log(e.entry);
+    if (e.mark) await t.mark(e.mark);
   } catch {
     return;
   }
@@ -142,13 +164,10 @@ async function send(e, t) {
 var CLOCK_LENGTH = 8;
 //@ chunk-bss4k1z9.js:19931-20123 placement
 function checkLineOf(e) {
-  let toFixed = (e.latencyMs / MS_PER_SECOND).toFixed(1),
-    sliced = new Date(e.at).toTimeString().slice(0, CLOCK_LENGTH);
-  return (
-    `debug \xB7 check ${e.number} \xB7 step ${e.step} \xB7 ` + `${e.outcome} \xB7 ${toFixed}s \xB7 ${sliced}`
-  );
+  let t = (e.latencyMs / MS_PER_SECOND).toFixed(1);
+  let sliced = new Date(e.at).toTimeString().slice(0, CLOCK_LENGTH);
+  return `debug \xB7 check ${e.number} \xB7 step ${e.step} \xB7 ` + `${e.outcome} \xB7 ${t}s \xB7 ${sliced}`;
 }
-
 export {
   CLOCK_LENGTH,
   MS_PER_SECOND,

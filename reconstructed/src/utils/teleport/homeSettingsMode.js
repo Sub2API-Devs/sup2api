@@ -8,7 +8,7 @@
  * pieces: chunk-e6aww6q8.js (18)
  * attribution: placement 18
  */
-import { gor, Uxe } from "../permissions/sensitivePaths.js";
+import { neverTrueAsync, neverTrue as neverTrue_2 } from "../permissions/sensitivePaths.js";
 import {
   isSettingsToCloudEnabled,
   isSettingsToCloudEnabledCached,
@@ -17,7 +17,7 @@ import {
 } from "../../services/analytics/violinGates.js";
 import {
   getGlobalConfig,
-  Obr,
+  IDE_KIND_LABELS,
   saveGlobalConfigDurably,
   saveGlobalConfig,
   readGlobalConfigFromDiskOrThrow,
@@ -29,81 +29,114 @@ import { getIsNonInteractiveSession } from "../../bootstrap/state.js";
 import { getEnabledSettingSources } from "../settings/constants.js";
 
 //@ chunk-e6aww6q8.js:1939213-1939237 placement
-function bon() {
-  return !1;
+function isRemoteHomeSettingsDisabled() {
+  return false;
 }
 //@ chunk-e6aww6q8.js:1939237-1939261 placement
-function oN(e) {
-  return !1;
+/**
+ * 外部构建恒 false 的启动同意阻断判断。
+ */
+function isLaunchConsentBlocked(e) {
+  return false;
 }
 //@ chunk-e6aww6q8.js:1939261-1939346 placement
-function pwt(e) {
-  return oN(e)
-    ? { enabled: gor, enabledNow: Uxe }
-    : { enabled: isSettingsToCloudEnabled, enabledNow: isSettingsToCloudEnabledCached };
+/**
+ * 家目录设置转发特性开关（含当前生效值）。
+ */
+function homeSettingsForwardingFeature(e) {
+  return isLaunchConsentBlocked(e)
+    ? {
+        enabled: neverTrueAsync,
+        enabledNow: neverTrue_2,
+      }
+    : {
+        enabled: isSettingsToCloudEnabled,
+        enabledNow: isSettingsToCloudEnabledCached,
+      };
 }
 //@ chunk-e6aww6q8.js:1939346-1939397 placement
-function kBo(e) {
-  return e === "forward" ? "host" : void 0;
+/**
+ * 宿主同意值到模式的映射（forward → host）。
+ */
+function hostConsentToMode(e) {
+  return e === "forward" ? "host" : undefined;
 }
 //@ chunk-e6aww6q8.js:1939397-1939421 placement
-function Rpn() {
-  return !0;
+/**
+ * 家目录设置是否已获转发同意（外部构建恒 true）。
+ */
+function isHomeSettingsForwardConsent() {
+  return true;
 }
 //@ chunk-e6aww6q8.js:1939421-1939465 placement
-function hKe({ hostConsent: hostConsent }) {
-  return kBo(hostConsent);
+/**
+ * 解析宿主同意对应的模式。
+ */
+function resolveHostConsentMode({ hostConsent }) {
+  return hostConsentToMode(hostConsent);
 }
 //@ chunk-e6aww6q8.js:1939465-1939561 placement
-function gbe() {
+/**
+ * 取已存的家目录设置模式（缺省 keep_local）。
+ */
+function storedHomeSettingsMode() {
   let remoteHomeSettingsMode = getGlobalConfig().remoteHomeSettingsMode;
-  return fZ(remoteHomeSettingsMode) ?? (remoteHomeSettingsMode === void 0 ? void 0 : "keep_local");
+  return (
+    normalizeHomeSettingsMode(remoteHomeSettingsMode) ??
+    (remoteHomeSettingsMode === undefined ? undefined : "keep_local")
+  );
 }
 //@ chunk-e6aww6q8.js:1939561-1939661 placement
 function isForwardModeEffective(e) {
-  if (e === void 0 || e === "stored") return (e === "stored" || Rpn()) && Rtr() === "forward";
-  return !0;
+  if (e === undefined || e === "stored")
+    return (e === "stored" || isHomeSettingsForwardConsent()) && currentForwardMode() === "forward";
+  return true;
 }
 //@ chunk-e6aww6q8.js:1939661-1939751 placement
-function yKe({
-  launchConsent: launchConsent,
-  isProjectSynced: isProjectSynced,
-  launchMayForward: launchMayForward,
-  surface: surface,
-  trigger: trigger,
-}) {}
+/**
+ * 记录家目录设置提示（外部构建空实现）。
+ */
+function noteHomeSettingsPrompt({ launchConsent, isProjectSynced, launchMayForward, surface, trigger }) {}
 //@ chunk-e6aww6q8.js:1939751-1939761 placement
-var vtr = 3;
+var MAX_HOME_SETTINGS_SAVE_ATTEMPTS = 3;
 //@ chunk-e6aww6q8.js:1939761-1939808 placement
-function fZ(e) {
-  return Obr.includes(e) ? e : void 0;
+function normalizeHomeSettingsMode(remoteHomeSettingsMode) {
+  return IDE_KIND_LABELS.includes(remoteHomeSettingsMode) ? remoteHomeSettingsMode : undefined;
 }
 //@ chunk-e6aww6q8.js:1939808-1939884 placement
-function Rtr() {
+function currentForwardMode() {
   if (!canForwardHomeSettings(isSettingsToCloudEnabledCached())) return "unspecified";
-  return mwt() ?? "unspecified";
+  return storedForwardMode() ?? "unspecified";
 }
 //@ chunk-e6aww6q8.js:1939884-1939938 placement
-function mwt() {
-  return fZ(getGlobalConfig().remoteHomeSettingsMode);
+/**
+ * 取已保存的转发模式。
+ */
+function storedForwardMode() {
+  return normalizeHomeSettingsMode(getGlobalConfig().remoteHomeSettingsMode);
 }
+//@ chunk-e6aww6q8.js:1939938-1940718 placement
 /**
  * 保存家目录设置转发模式到全局配置（forward 前检查是否被阻止），记录先前值并上报事件。
  */
-//@ chunk-e6aww6q8.js:1939938-1940718 placement
 async function saveHomeSettingsMode(mode, n) {
   if (mode === "forward") {
-    let h = getHomeSettingsForwardingBlocker(await isSettingsToCloudEnabled());
-    if (h !== null) return (logFeatureBad("remote_home_settings_mode", h), "refused");
+    let homeSettingsForwardingBlocker = getHomeSettingsForwardingBlocker(await isSettingsToCloudEnabled());
+    if (homeSettingsForwardingBlocker !== null) {
+      logFeatureBad("remote_home_settings_mode", homeSettingsForwardingBlocker);
+      return "refused";
+    }
   }
-  let r = { previous: "unspecified" },
-    s = await saveGlobalConfigDurably(
-      (h) => (
-        (r.previous = fZ(h.remoteHomeSettingsMode) ?? "unspecified"),
-        { ...h, remoteHomeSettingsMode: mode }
-      ),
-      n,
-    );
+  let r = {
+    previous: "unspecified",
+  };
+  let s = await saveGlobalConfigDurably((h) => {
+    r.previous = normalizeHomeSettingsMode(h.remoteHomeSettingsMode) ?? "unspecified";
+    return {
+      ...h,
+      remoteHomeSettingsMode: mode,
+    };
+  }, n);
   if (r.previous !== mode)
     logEvent("tengu_home_settings_mode_set", {
       mode: fromEnum(mode),
@@ -111,57 +144,67 @@ async function saveHomeSettingsMode(mode, n) {
       persisted: s,
     });
   if (!s) {
-    let h = await readStoredHomeSettingsMode(n);
-    if (h !== null && h.mode !== mode) {
-      let mode_2 = h.mode;
-      for (let S = 0; S < vtr; S++) {
-        let w = mode_2,
-          L = !1;
+    let storedHomeSettingsMode = await readStoredHomeSettingsMode(n);
+    if (storedHomeSettingsMode !== null && storedHomeSettingsMode.mode !== mode) {
+      let mode_2 = storedHomeSettingsMode.mode;
+      for (let idx = 0; idx < MAX_HOME_SETTINGS_SAVE_ATTEMPTS; idx++) {
+        let remoteHomeSettingsMode = mode_2;
+        let L = false;
         saveGlobalConfig((q) => {
           if (L) return q;
-          return ((L = !0), { ...q, remoteHomeSettingsMode: w });
+          L = true;
+          return {
+            ...q,
+            remoteHomeSettingsMode,
+          };
         }, n);
-        let G = await readStoredHomeSettingsMode(n);
-        if (G === null || G.mode === mode_2) break;
-        mode_2 = G.mode;
+        let storedHomeSettingsMode = await readStoredHomeSettingsMode(n);
+        if (storedHomeSettingsMode === null || storedHomeSettingsMode.mode === mode_2) break;
+        mode_2 = storedHomeSettingsMode.mode;
       }
-      if (mode_2 !== mode) return (logFeatureBad("remote_home_settings_mode", "not_stored"), "not_stored");
+      if (mode_2 !== mode) {
+        logFeatureBad("remote_home_settings_mode", "not_stored");
+        return "not_stored";
+      }
     }
-    return (logFeatureSad("remote_home_settings_mode", "unconfirmed"), "unconfirmed");
+    logFeatureSad("remote_home_settings_mode", "unconfirmed");
+    return "unconfirmed";
   }
-  return (logFeatureOk("remote_home_settings_mode"), "written");
+  logFeatureOk("remote_home_settings_mode");
+  return "written";
 }
 //@ chunk-e6aww6q8.js:1940718-1940834 placement
 function shouldForwardHomeSettings(e) {
   return (
     canForwardHomeSettings(e.settingsToCloudEnabled) &&
     e.launchMayForward &&
-    !oN(e.launchConsent) &&
+    !isLaunchConsentBlocked(e.launchConsent) &&
     isForwardModeEffective(e.launchConsent)
   );
 }
 //@ chunk-e6aww6q8.js:1940834-1940975 placement
 function shouldPromptHomeSettingsMode(e) {
-  if (!canForwardHomeSettings(isSettingsToCloudEnabledCached())) return !1;
+  if (!canForwardHomeSettings(isSettingsToCloudEnabledCached())) return false;
   let n = homeSettingsPromptSkipReason(e);
-  if (n !== null) return (logEvent("tengu_home_settings_mode_prompt_skipped", { reason: fromEnum(n) }), !1);
-  return !0;
+  if (n !== null) {
+    logEvent("tengu_home_settings_mode_prompt_skipped", {
+      reason: fromEnum(n),
+    });
+    return false;
+  }
+  return true;
 }
+//@ chunk-e6aww6q8.js:1940975-1941312 placement
 /**
  * 判断为何跳过家目录设置模式询问：非交互、未保持附着、启动参数、已回答等。
  */
-//@ chunk-e6aww6q8.js:1940975-1941312 placement
-function homeSettingsPromptSkipReason({
-  staysAttached: staysAttached,
-  launchMayForward: launchMayForward,
-  launchConsent: launchConsent,
-}) {
+function homeSettingsPromptSkipReason({ staysAttached, launchMayForward, launchConsent }) {
   if (getIsNonInteractiveSession()) return "non_interactive";
   if (!staysAttached) return "not_attached";
   if (!launchMayForward) return "launch_flag";
-  if (launchConsent !== void 0) return launchConsent === "stored" ? "answered" : launchConsent;
+  if (launchConsent !== undefined) return launchConsent === "stored" ? "answered" : launchConsent;
   if (!getEnabledSettingSources().includes("userSettings")) return "user_settings_disabled";
-  if (fZ(getGlobalConfig().remoteHomeSettingsMode) !== void 0) return "answered";
+  if (normalizeHomeSettingsMode(getGlobalConfig().remoteHomeSettingsMode) !== undefined) return "answered";
   return null;
 }
 //@ chunk-e6aww6q8.js:1941312-1941496 placement
@@ -170,21 +213,22 @@ async function readStoredHomeSettingsMode(e) {
     return;
   });
   if (typeof n !== "object" || n === null) return null;
-  return { mode: fZ("remoteHomeSettingsMode" in n ? n.remoteHomeSettingsMode : void 0) };
+  return {
+    mode: normalizeHomeSettingsMode("remoteHomeSettingsMode" in n ? n.remoteHomeSettingsMode : undefined),
+  };
 }
-
 export {
-  hKe,
-  gbe,
-  oN,
+  resolveHostConsentMode,
+  storedHomeSettingsMode,
+  isLaunchConsentBlocked,
   shouldPromptHomeSettingsMode,
-  yKe,
+  noteHomeSettingsPrompt,
   shouldForwardHomeSettings,
-  mwt,
-  Rpn,
-  pwt,
+  storedForwardMode,
+  isHomeSettingsForwardConsent,
+  homeSettingsForwardingFeature,
   isForwardModeEffective,
-  bon,
-  kBo,
+  isRemoteHomeSettingsDisabled,
+  hostConsentToMode,
   saveHomeSettingsMode,
 };

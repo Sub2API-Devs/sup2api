@@ -9,7 +9,7 @@
  * attribution: placement 14
  */
 import { executeConfigChangeHooks, hasBlockingResult } from "../hooks.js";
-import { PROVIDER_ENV_FLAGS, Lt, Sv } from "./modelIds.js";
+import { PROVIDER_ENV_FLAGS, strip1mSuffix, sameModelSpelling } from "./modelIds.js";
 import { isEnvTruthy } from "../envUtils.js";
 import { isFirstPartyAnthropicHost } from "./providers.js";
 import { getEveryMachineAdminTierSettings, getSettingsForSource } from "../settings/settings.js";
@@ -22,7 +22,7 @@ import { getPreSettingsEnvSnapshot } from "../managedEnvApply.js";
 import { getCanonicalName, isRecognizedCanonical } from "./canonicalModelName.js";
 import { getCatalogEntry } from "./modelCatalog.js";
 import { anyModelDescribed } from "./modelCatalog/catalogCapabilities.js";
-import { UUe } from "./modelCatalog/servedCatalog.js";
+import { findEffectiveServedEntry } from "./modelCatalog/servedCatalog.js";
 import { getAdditionalModelOptionsCache } from "../auth.js";
 import { isTierDefaultModelEnv, getMainLoopModel } from "./model.js";
 import { getGatewayModelOptions } from "../../services/gateway/gatewayDiscovery.js";
@@ -32,33 +32,31 @@ import { getEntrypointKind } from "../entrypointKinds.js";
 import { resolveDefaultMainLoopModelSetting } from "./planModeModel.js";
 import { fromEnum, lit } from "../../services/analytics/safeMetadata.js";
 import { onPolicyVerdictChanged } from "../../services/policyLimits/policyState.js";
-import { eN } from "../claudeAiSync/skillsSync.js";
-import { Hce } from "../../services/skillsSync/skillsSync.js";
+import { refreshSkillsSyncVeto } from "../claudeAiSync/skillsSync.js";
+import { resetSkillSyncState } from "../../services/skillsSync/skillsSync.js";
 import { logError } from "../log.js";
 
 //@ chunk-3wek6r2k.js:71354-71436 placement
-function configChangeBlocker(e, o, n) {
-  return (r, u) =>
-    executeConfigChangeHooks(e, r, u, { storageV5: o, credentials: n }).then(hasBlockingResult);
+function configChangeBlocker(e, storageV5, credentials) {
+  return (r, filePath) =>
+    executeConfigChangeHooks(e, r, filePath, {
+      storageV5,
+      credentials,
+    }).then(hasBlockingResult);
 }
 //@ chunk-3wek6r2k.js:71436-71894 placement
-function providerEnvAttribution({
-  eligible: eligible,
-  reason: reason,
-  machineTiers: machineTiers,
-  launchEnv: launchEnv,
-  flagEnv: flagEnv,
-  servedEnv: servedEnv,
-  liveEnv: liveEnv,
-}) {
-  if (eligible === void 0) return "undecided";
+function providerEnvAttribution({ eligible, reason, machineTiers, launchEnv, flagEnv, servedEnv, liveEnv }) {
+  if (eligible === undefined) return "undecided";
   if (eligible) return "not_applicable";
-  let S = reason === void 0 ? void 0 : providerEnvMatcher(reason);
-  if (S === void 0) return "not_attributed";
-  if (machineTiers.some((y) => y.allowedProviders !== void 0 || S(y.env ?? {}))) return "machine_admin";
+  let S = reason === undefined ? undefined : providerEnvMatcher(reason);
+  if (S === undefined) return "not_attributed";
+  if (
+    machineTiers.some((machineTier) => machineTier.allowedProviders !== undefined || S(machineTier.env ?? {}))
+  )
+    return "machine_admin";
   if (S(launchEnv)) return "process_env";
-  if (flagEnv !== void 0 && S(flagEnv)) return "launch_flag";
-  if (servedEnv !== void 0 && S(servedEnv)) return "served_settings";
+  if (flagEnv !== undefined && S(flagEnv)) return "launch_flag";
+  if (servedEnv !== undefined && S(servedEnv)) return "served_settings";
   return S(liveEnv) ? "settings_file" : "not_attributed";
 }
 //@ chunk-3wek6r2k.js:71894-72431 placement
@@ -84,31 +82,33 @@ function providerEnvMatcher(e) {
 }
 //@ chunk-3wek6r2k.js:72431-72809 placement
 function machineProviderEnv() {
-  let e = getEveryMachineAdminTierSettings(),
-    o = {};
+  let everyMachineAdminTierSettings = getEveryMachineAdminTierSettings();
+  let o = {};
   for (let n of [...PROVIDER_ENV_FLAGS, "CLAUDE_CODE_USE_GATEWAY", "ANTHROPIC_BASE_URL"]) {
     let r = env[n];
-    o[n] = r === void 0 || r === !1 ? void 0 : String(r);
+    o[n] = r === undefined || r === false ? undefined : String(r);
   }
   return {
     author: providerEnvAttribution({
       eligible: getEligibilityMemo(),
       reason: getIneligibleReason(),
-      machineTiers: e,
+      machineTiers: everyMachineAdminTierSettings,
       launchEnv: getPreSettingsEnvSnapshot(),
       flagEnv: getSettingsForSource("flagSettings")?.env,
       servedEnv: getSettingsForSource("policySettings")?.env,
       liveEnv: o,
     }),
-    forcedRefreshFromMachine: e.some((n) => n.forceRemoteSettingsRefresh === !0),
+    forcedRefreshFromMachine: everyMachineAdminTierSettings.some(
+      (everyMachineAdminTierSetting) => everyMachineAdminTierSetting.forceRemoteSettingsRefresh === true,
+    ),
   };
 }
 //@ chunk-3wek6r2k.js:72809-72832 placement
-function xu() {
-  return !1;
+function isProviderAttributionEnabled() {
+  return false;
 }
 //@ chunk-3wek6r2k.js:72832-73499 placement
-function forcedRefreshAttribution({ author: author, forcedRefreshFromMachine: forcedRefreshFromMachine }) {
+function forcedRefreshAttribution({ author, forcedRefreshFromMachine }) {
   if (!forcedRefreshFromMachine) return;
   switch (author) {
     case "settings_file":
@@ -127,36 +127,47 @@ function forcedRefreshAttribution({ author: author, forcedRefreshFromMachine: fo
 }
 //@ chunk-3wek6r2k.js:73499-73546 placement
 function machineForcedRefresh() {
-  if (!xu()) return;
+  if (!isProviderAttributionEnabled()) return;
   return forcedRefreshAttribution(machineProviderEnv());
 }
 //@ chunk-3wek6r2k.js:73546-74062 placement
-function modelDefinitionSource(e) {
-  let o = getCanonicalName(e, { identity: !0 });
-  if (getCatalogEntry(Lt(o)) !== void 0) return "compiled_catalog";
-  if (isRecognizedCanonical(o)) return "compiled_legacy";
-  if (anyModelDescribed(e, o)) return "self_described_row";
-  if (UUe(e, o) !== void 0) return "served_catalog";
-  if (getAdditionalModelOptionsCache().some((r) => typeof r.value === "string" && Sv(r.value, e)))
+function modelDefinitionSource(mainLoopModel) {
+  let canonicalName = getCanonicalName(mainLoopModel, {
+    identity: true,
+  });
+  if (getCatalogEntry(strip1mSuffix(canonicalName)) !== undefined) return "compiled_catalog";
+  if (isRecognizedCanonical(canonicalName)) return "compiled_legacy";
+  if (anyModelDescribed(mainLoopModel, canonicalName)) return "self_described_row";
+  if (findEffectiveServedEntry(mainLoopModel, canonicalName) !== undefined) return "served_catalog";
+  if (
+    getAdditionalModelOptionsCache().some(
+      (r) => typeof r.value === "string" && sameModelSpelling(r.value, mainLoopModel),
+    )
+  )
     return "bootstrap_additional_option";
   let ANTHROPIC_CUSTOM_MODEL_OPTION = env.ANTHROPIC_CUSTOM_MODEL_OPTION;
-  if (ANTHROPIC_CUSTOM_MODEL_OPTION && Sv(ANTHROPIC_CUSTOM_MODEL_OPTION, e)) return "custom_option_env";
-  if (isTierDefaultModelEnv(e)) return "tier_pin_env";
-  if (getGatewayModelOptions().some((r) => typeof r.value === "string" && Sv(r.value, e)))
+  if (ANTHROPIC_CUSTOM_MODEL_OPTION && sameModelSpelling(ANTHROPIC_CUSTOM_MODEL_OPTION, mainLoopModel))
+    return "custom_option_env";
+  if (isTierDefaultModelEnv(mainLoopModel)) return "tier_pin_env";
+  if (
+    getGatewayModelOptions().some(
+      (r) => typeof r.value === "string" && sameModelSpelling(r.value, mainLoopModel),
+    )
+  )
     return "gateway_discovery";
   return "unrecognized";
 }
 //@ chunk-3wek6r2k.js:74062-74172 placement = getClientSurface (0.78)
 function getClientSurface() {
-  let e = getInitialModelSettingLayer();
-  switch (e) {
-    case void 0:
+  let initialModelSettingLayer = getInitialModelSettingLayer();
+  switch (initialModelSettingLayer) {
+    case undefined:
     case null:
       return modelSettingSource();
     case "cli":
       return getModelPickSource();
     default:
-      return e;
+      return initialModelSettingLayer;
   }
 }
 //@ chunk-3wek6r2k.js:74172-74336 placement
@@ -204,18 +215,18 @@ var RESUME_MODEL_ATTRIBUTION = {
 //@ chunk-3wek6r2k.js:74815-74928 placement
 function onSkillsSyncVetoChange() {
   return onPolicyVerdictChanged(() => {
-    let e = getSkillsSyncVetoed();
-    if ((eN(), getSkillsSyncVetoed() === e)) return;
+    let skillsSyncVetoed = getSkillsSyncVetoed();
+    refreshSkillsSyncVeto();
+    if (getSkillsSyncVetoed() === skillsSyncVetoed) return;
     queueMicrotask(() => {
       try {
-        Hce();
+        resetSkillSyncState();
       } catch (error) {
         logError(error);
       }
     });
   });
 }
-
 export {
   machineForcedRefresh,
   configChangeBlocker,

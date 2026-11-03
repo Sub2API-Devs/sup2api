@@ -9,7 +9,7 @@
  * attribution: placement 5, fingerprint 4, affinity 1, layout 4, callgraph-fingerprint 1
  */
 import { Re } from "../../runtime/bun-runtime.js";
-import { Vy } from "../../vendor/semver/index.js";
+import { require_semver_3 } from "../../vendor/semver/index.js";
 import { execFileNoThrow } from "./execFileNoThrow.js";
 import { COPY_DIR } from "../commands/copy/copy.js";
 import { EnvironmentVariablesSchema } from "./settings/types.js";
@@ -17,46 +17,50 @@ import { logForDebugging } from "./debug.js";
 import { printableName } from "./printableName.js";
 import { getFirstLine } from "./stringUtils.js";
 import { getOauthConfig } from "../constants/oauth.js";
-import { E_n } from "../services/promo/promoState.js";
+import { isRelativePromoPath } from "../services/promo/promoState.js";
 import { HTTPS_CLAUDE_AI } from "../constants/product.js";
-import { fi } from "./browser.js";
+import { openValidatedUrlSucceeded } from "./browser.js";
 
 //@ chunk-5nte8cwj.js:623-640 placement
-var m = Re(Vy(), 1);
+/**
+ * semver 模块的包装导入。
+ */
+var semverModuleForDesktop = Re(require_semver_3(), 1);
 //@ chunk-5nte8cwj.js:640-659 placement
-var dDr = "1.1.9669";
+/**
+ * 桌面端最低可用版本（1.1.9669），低于它需先更新。
+ */
+var MIN_DESKTOP_VERSION = "1.1.9669";
 //@ chunk-5nte8cwj.js:659-885 placement = isRunningFromBuildDirectory (0.964)
 function isRunningFromBuildDirectory() {
-  let mapped = [process.argv[1] || "", process.execPath || ""].map((o) => o.replaceAll("\\", "/")),
-    buildDirs = ["/build-ant/", "/build-ant-native/", "/build-external/", "/build-external-native/"];
+  let mapped = [process.argv[1] || "", process.execPath || ""].map((o) => o.replaceAll("\\", "/"));
+  let buildDirs = ["/build-ant/", "/build-ant-native/", "/build-external/", "/build-external-native/"];
   return mapped.some((path) => buildDirs.some((dir) => path.includes(dir)));
 }
 //@ chunk-5nte8cwj.js:885-1012 placement = ghIsDangerousCallback (0.784)
 function buildUrlWithParams(e, n, o = {}) {
   let r = new URL(`${e}://${n}`);
-  for (let [a, s] of Object.entries(o)) r.searchParams.set(a, s);
+  for (let [key, value] of Object.entries(o)) r.searchParams.set(key, value);
   return r.toString();
 }
 //@ chunk-5nte8cwj.js:1012-1184 placement
-function buildDesktopUrl(e, n) {
-  switch (e.kind) {
+function buildDesktopUrl(sessionId, scheme) {
+  switch (sessionId.kind) {
     case "resume":
-      return buildUrlWithParams(n, "resume", { session: e.sessionId });
+      return buildUrlWithParams(scheme, "resume", {
+        session: sessionId.sessionId,
+      });
     case "new-session":
-      return `${buildUrlWithParams(n, "code/new")}?folder=${encodeURIComponent(e.folder)}`;
+      return `${buildUrlWithParams(scheme, "code/new")}?folder=${encodeURIComponent(sessionId.folder)}`;
   }
 }
 //@ chunk-5nte8cwj.js:1251-1399 fingerprint = isDesktopInstalled (0.4)
 async function isDesktopInstalled(e) {
   {
-    let { code: code, stdout: stdout } = await execFileNoThrow("xdg-mime", [
-      "query",
-      "default",
-      `x-scheme-handler/${e}`,
-    ]);
+    let { code, stdout } = await execFileNoThrow("xdg-mime", ["query", "default", `x-scheme-handler/${e}`]);
     return code === 0 && stdout.trim().length > 0;
   }
-  return !1;
+  return false;
 }
 //@ chunk-5nte8cwj.js:1399-1501 fingerprint = buildDesktopDeepLink (0.662)
 async function buildDesktopDeepLink() {
@@ -72,118 +76,163 @@ async function getDesktopAppVersion() {
 //@ chunk-5nte8cwj.js:1615-2013 fingerprint = getDesktopInstallStatus (0.724)
 async function getDesktopInstallStatus() {
   let installed = await buildDesktopDeepLink();
-  if (installed === null) return { status: "not-installed" };
-  if (installed === "claude-dev") return { status: "ready", version: "unknown", scheme: installed };
-  let n, o;
+  if (installed === null)
+    return {
+      status: "not-installed",
+    };
+  if (installed === "claude-dev")
+    return {
+      status: "ready",
+      version: "unknown",
+      scheme: installed,
+    };
+  let version;
+  let macApp;
   try {
-    n = await getDesktopAppVersion();
+    version = await getDesktopAppVersion();
   } catch {
-    return { status: "ready", version: "unknown", scheme: installed };
+    return {
+      status: "ready",
+      version: "unknown",
+      scheme: installed,
+    };
   }
-  if (!n) return { status: "ready", version: "unknown", scheme: installed, macApp: o };
-  if (!EnvironmentVariablesSchema(n)) return { status: "version-too-old", version: n };
-  return { status: "ready", version: n, scheme: installed, macApp: o };
+  if (!version)
+    return {
+      status: "ready",
+      version: "unknown",
+      scheme: installed,
+      macApp,
+    };
+  if (!EnvironmentVariablesSchema(version))
+    return {
+      status: "version-too-old",
+      version,
+    };
+  return {
+    status: "ready",
+    version,
+    scheme: installed,
+    macApp,
+  };
 }
 //@ chunk-5nte8cwj.js:2013-2023 layout
-var P = 200;
+/**
+ * 桌面路径的最大长度（200）。
+ */
+var MAX_DESKTOP_PATH_CHARS = 200;
 //@ chunk-5nte8cwj.js:2023-2529 layout
 function describeOpenFailure(e, n) {
-  let {
-    code: code,
-    exitCode: exitCode,
-    stderr: stderr,
-    error: error,
-    timedOut: timedOut,
-    maxBufferExceeded: maxBufferExceeded,
-  } = n;
-  if (code === 0) return { opened: !0 };
+  let { code, exitCode, stderr, error, timedOut, maxBufferExceeded } = n;
+  if (code === 0)
+    return {
+      opened: true,
+    };
   let i = stderr || error;
-  if (
-    (logForDebugging(
-      `Deep link opener ${e} failed: code ${code}, exitCode ${exitCode ?? "undefined"}${i ? `: ${i}` : ""}`,
-    ),
-    timedOut)
-  )
-    return { opened: !1, detail: `\`${e}\` timed out` };
-  if (maxBufferExceeded) return { opened: !1, detail: `\`${e}\` printed too much output` };
-  let d = exitCode === void 0 ? `\`${e}\` failed` : `\`${e}\` exited ${exitCode}`,
-    replaced = printableName(
-      getFirstLine(stderr.trim()) || (exitCode === void 0 ? error : "") || "",
-      P,
-    ).replace(/\.+$/, "");
-  return { opened: !1, detail: replaced.length === 0 ? d : `${d}: ${replaced}` };
+  logForDebugging(
+    `Deep link opener ${e} failed: code ${code}, exitCode ${exitCode ?? "undefined"}${i ? `: ${i}` : ""}`,
+  );
+  if (timedOut)
+    return {
+      opened: false,
+      detail: `\`${e}\` timed out`,
+    };
+  if (maxBufferExceeded)
+    return {
+      opened: false,
+      detail: `\`${e}\` printed too much output`,
+    };
+  let d = exitCode === undefined ? `\`${e}\` failed` : `\`${e}\` exited ${exitCode}`;
+  let replaced = printableName(
+    getFirstLine(stderr.trim()) || (exitCode === undefined ? error : "") || "",
+    MAX_DESKTOP_PATH_CHARS,
+  ).replace(/\.+$/, "");
+  return {
+    opened: false,
+    detail: replaced.length === 0 ? d : `${d}: ${replaced}`,
+  };
 }
 //@ chunk-5nte8cwj.js:2529-2718 fingerprint = openDeepLink (0.355)
-async function openDeepLink(e, n) {
-  return (
-    logForDebugging(`Opening deep link: ${e}`),
-    describeOpenFailure(
-      "xdg-open",
-      await execFileNoThrow("xdg-open", [e], { useCwd: !0, useToolMemoryCgroup: !1 }),
-    )
+async function openDeepLink(e, macApp) {
+  logForDebugging(`Opening deep link: ${e}`);
+  return describeOpenFailure(
+    "xdg-open",
+    await execFileNoThrow("xdg-open", [e], {
+      useCwd: true,
+      useToolMemoryCgroup: false,
+    }),
   );
-  return { opened: !1, detail: "no deep link opener for linux" };
+  return {
+    opened: false,
+    detail: "no deep link opener for linux",
+  };
 }
+//@ chunk-5nte8cwj.js:2718-2875 layout
 /**
  * 拼 claude.ai 完整 URL（CLAUDE_AI_ORIGIN + 校验过的路径）。
  */
-//@ chunk-5nte8cwj.js:2718-2875 layout
-function getClaudeAiWebUrl(e) {
+function getClaudeAiWebUrl(webPath) {
   let CLAUDE_AI_ORIGIN = getOauthConfig().CLAUDE_AI_ORIGIN;
-  if (!E_n(e))
-    return (
-      logForDebugging("[desktop-deep-link] invalid claude.ai path; origin only", { level: "warn" }),
-      CLAUDE_AI_ORIGIN
-    );
-  return `${CLAUDE_AI_ORIGIN}${e}`;
+  if (!isRelativePromoPath(webPath)) {
+    logForDebugging("[desktop-deep-link] invalid claude.ai path; origin only", {
+      level: "warn",
+    });
+    return CLAUDE_AI_ORIGIN;
+  }
+  return `${CLAUDE_AI_ORIGIN}${webPath}`;
 }
+//@ chunk-5nte8cwj.js:2875-3111 layout
 /**
  * 打开 claude.ai 页面：生产环境优先尝试 Claude Desktop 深链，失败再用浏览器打开 web 路径，返回 desktop/browser/none。
  */
-//@ chunk-5nte8cwj.js:2875-3111 layout
-async function openInDesktopOrBrowser({ webPath: webPath, desktopPath: desktopPath }) {
-  if (!E_n(webPath) || !E_n(desktopPath)) return "none";
+async function openInDesktopOrBrowser({ webPath, desktopPath }) {
+  if (!isRelativePromoPath(webPath) || !isRelativePromoPath(desktopPath)) return "none";
   if (getOauthConfig().CLAUDE_AI_ORIGIN === HTTPS_CLAUDE_AI) {
-    let o = await buildDesktopDeepLink();
-    if (o !== null && (await openDeepLink(buildUrlWithParams(o, `claude.ai${desktopPath}`))).opened)
+    let desktopDeepLink = await buildDesktopDeepLink();
+    if (
+      desktopDeepLink !== null &&
+      (await openDeepLink(buildUrlWithParams(desktopDeepLink, `claude.ai${desktopPath}`))).opened
+    )
       return "desktop";
   }
-  return (await fi(getClaudeAiWebUrl(webPath))) ? "browser" : "none";
+  return (await openValidatedUrlSucceeded(getClaudeAiWebUrl(webPath))) ? "browser" : "none";
 }
 //@ chunk-5nte8cwj.js:3111-3680 callgraph-fingerprint = openCurrentSessionInDesktop (0.233)
-async function openCurrentSessionInDesktop(e) {
+async function openCurrentSessionInDesktop(sessionId) {
   let installed = await getDesktopInstallStatus();
   if (installed.status === "not-installed")
     return {
-      success: !1,
+      success: false,
       reason: "not_installed",
       error: "Claude Desktop is not installed. Install it from https://claude.ai/download",
     };
   if (installed.status === "version-too-old")
     return {
-      success: !1,
+      success: false,
       reason: "outdated",
-      error: `Claude Desktop ${installed.version} is too old. Update to ${dDr} or later.`,
+      error: `Claude Desktop ${installed.version} is too old. Update to ${MIN_DESKTOP_VERSION} or later.`,
     };
-  let o = buildDesktopUrl(e, installed.scheme),
-    r = await openDeepLink(o, installed.macApp);
-  if (!r.opened)
+  let deepLinkUrl = buildDesktopUrl(sessionId, installed.scheme);
+  let opened = await openDeepLink(deepLinkUrl, installed.macApp);
+  if (!opened.opened)
     return {
-      success: !1,
+      success: false,
       reason: "open_failed",
-      error: `Couldn't open Claude Desktop (${r.detail}). Open Claude Desktop and try again.`,
-      deepLinkUrl: o,
+      error: `Couldn't open Claude Desktop (${opened.detail}). Open Claude Desktop and try again.`,
+      deepLinkUrl,
     };
-  return { success: !0, deepLinkUrl: o };
+  return {
+    success: true,
+    deepLinkUrl,
+  };
 }
-
 export {
   isDesktopInstalled,
-  m,
-  dDr,
   buildDesktopDeepLink,
-  openCurrentSessionInDesktop,
+  semverModuleForDesktop,
+  MIN_DESKTOP_VERSION,
   getDesktopInstallStatus,
+  openCurrentSessionInDesktop,
   openInDesktopOrBrowser,
   getClaudeAiWebUrl,
 };

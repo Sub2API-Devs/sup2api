@@ -8,7 +8,7 @@
  * pieces: chunk-3sqbw5c7.js (12)
  * attribution: placement 12
  */
-import { op } from "../../utils/remoteEnvironment.js";
+import { isByocEnvironment } from "../../utils/remoteEnvironment.js";
 import { env } from "../../utils/env.js";
 import { getSessionIngressAuthToken } from "../../utils/sessionIngressAuth.js";
 import { buildMcpToolName } from "../mcp/mcpStringUtils.js";
@@ -17,18 +17,18 @@ import { hasLiveState, getLiveState } from "../liveReplica/liveReplica.js";
 import { ARTIFACT_FAMILY_TOOL_NAMES } from "../../tools/ArtifactTool/constants.js";
 
 //@ chunk-3sqbw5c7.js:445-620 placement
-var ARTIFACTS_MCP_READ_TOOL = "read_artifact",
-  ARTIFACTS_MCP_GET_TOOL = "get_artifact",
-  ARTIFACTS_MCP_READ_FILE_TOOL = "read_file",
-  ARTIFACTS_MCP_READ_SHARED_TOOL = "read_shared_artifact",
-  ARTIFACTS_MCP_READ_COMMENTS_TOOL = "read_comments",
-  ARTIFACTS_MCP_REPLY_COMMENT_TOOL = "reply_comment",
-  ARTIFACTS_MCP_RESOLVE_COMMENT_TOOL = "resolve_comment",
-  ARTIFACTS_MCP_REPLY_SHARED_COMMENT_TOOL = "reply_shared_comment";
+var ARTIFACTS_MCP_READ_TOOL = "read_artifact";
+var ARTIFACTS_MCP_GET_TOOL = "get_artifact";
+var ARTIFACTS_MCP_READ_FILE_TOOL = "read_file";
+var ARTIFACTS_MCP_READ_SHARED_TOOL = "read_shared_artifact";
+var ARTIFACTS_MCP_READ_COMMENTS_TOOL = "read_comments";
+var ARTIFACTS_MCP_REPLY_COMMENT_TOOL = "reply_comment";
+var ARTIFACTS_MCP_RESOLVE_COMMENT_TOOL = "resolve_comment";
+var ARTIFACTS_MCP_REPLY_SHARED_COMMENT_TOOL = "reply_shared_comment";
 //@ chunk-3sqbw5c7.js:620-721 placement = runFilePersistence (0.184)
 function artifactsMcpInCloudSession() {
   return (
-    !op() &&
+    !isByocEnvironment() &&
     (!!env.CLAUDE_CODE_REMOTE || !!env.CLAUDE_CODE_REMOTE_SESSION_ID || getSessionIngressAuthToken() !== null)
   );
 }
@@ -38,7 +38,13 @@ function artifactsMcpToolName(e) {
 }
 //@ chunk-3sqbw5c7.js:753-824 placement = getToolNameForPermissionCheck (1)
 function artifactsMcpToolRef(tool) {
-  return { name: artifactsMcpToolName(tool), mcpInfo: { serverName: CLAUDE_ARTIFACTS, toolName: tool } };
+  return {
+    name: artifactsMcpToolName(tool),
+    mcpInfo: {
+      serverName: CLAUDE_ARTIFACTS,
+      toolName: tool,
+    },
+  };
 }
 //@ chunk-3sqbw5c7.js:824-884 placement
 function isBuiltInArtifactHiddenForMcp() {
@@ -49,7 +55,7 @@ function isBuiltInArtifactReplacedByMcp(e) {
   let o = ARTIFACT_FAMILY_TOOL_NAMES;
   return (
     isBuiltInArtifactHiddenForMcp() &&
-    [e.name, e.underlyingV1ToolName, e.familyParentToolName].some((t) => t !== void 0 && o.includes(t))
+    [e.name, e.underlyingV1ToolName, e.familyParentToolName].some((t) => t !== undefined && o.includes(t))
   );
 }
 //@ chunk-3sqbw5c7.js:1014-1083 placement = getToolNameForPermissionCheck (1)
@@ -68,19 +74,18 @@ function mcpReadToolsForHiddenBuiltIn(e) {
   );
 }
 //@ chunk-3sqbw5c7.js:1212-1255 placement
-class n {
+class HiddenBuiltInArtifactToolSlot {
   tool = null;
-  register(e) {
-    this.tool = e;
+  register(tool) {
+    this.tool = tool;
   }
 }
 //@ chunk-3sqbw5c7.js:1255-1269 placement
-var hiddenBuiltInArtifactToolSlot = new n();
+var hiddenBuiltInArtifactToolSlot = new HiddenBuiltInArtifactToolSlot();
 //@ chunk-3sqbw5c7.js:1269-1320 placement
 function hiddenBuiltInArtifactTool() {
-  return isBuiltInArtifactHiddenForMcp() ? (hiddenBuiltInArtifactToolSlot.tool ?? void 0) : void 0;
+  return isBuiltInArtifactHiddenForMcp() ? (hiddenBuiltInArtifactToolSlot.tool ?? undefined) : undefined;
 }
-
 export {
   isBuiltInArtifactHiddenForMcp,
   hiddenBuiltInArtifactTool,

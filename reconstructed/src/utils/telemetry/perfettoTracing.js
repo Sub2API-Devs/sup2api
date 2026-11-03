@@ -16,46 +16,63 @@ import { isWebFetchSubagentContext } from "../../tools/WebFetchTool/harnessNotes
 import { TOOL_AND_BATCH_HOOK_EVENTS } from "../hooks/hookEvents.js";
 
 //@ chunk-a9ek44g8.js:7159-7182 placement
-class ft {
+class PerfettoState {
   recorder = null;
 }
 //@ chunk-a9ek44g8.js:7182-7207 placement
-var $t = new HostScoped(() => new ft());
+var perfettoStateByHost = new HostScoped(() => new PerfettoState());
 //@ chunk-a9ek44g8.js:7207-7252 placement
-function A() {
-  return $t.of(getRootSession().host).recorder;
+function perfettoRecorder() {
+  return perfettoStateByHost.of(getRootSession().host).recorder;
 }
+//@ chunk-a9ek44g8.js:7252-7368 fingerprint = initializePerfettoTracing (0.442)
 /**
  * Perfetto 追踪初始化（外部构建只记一行调试日志，CLAUDE_CODE_PERFETTO_TRACE）。
  */
-//@ chunk-a9ek44g8.js:7252-7368 fingerprint = initializePerfettoTracing (0.442)
 function initializePerfettoTracing() {
   let envValue = env.CLAUDE_CODE_PERFETTO_TRACE;
   logForDebugging(`[Perfetto] initializePerfettoTracing called, env value: ${envValue}`);
 }
 //@ chunk-a9ek44g8.js:7368-7401 placement
-function Rqe() {
-  return A() !== null;
+/**
+ * 是否正在做 Perfetto 追踪。
+ */
+function isPerfettoRecording() {
+  return perfettoRecorder() !== null;
 }
 //@ chunk-a9ek44g8.js:7401-7467 placement
-function Anr(n, e, r) {
-  let s = A();
+/**
+ * 注册 Perfetto 代理。
+ */
+function registerPerfettoAgent(agentId, e, r) {
+  let s = perfettoRecorder();
   if (!s) return;
-  s.registerAgent(n, e, r);
+  s.registerAgent(agentId, e, r);
 }
 //@ chunk-a9ek44g8.js:7467-7527 placement
-function xqe(n) {
-  let e = A();
+/**
+ * 注销 Perfetto 代理。
+ */
+function unregisterPerfettoAgent(agentId) {
+  let e = perfettoRecorder();
   if (!e) return;
-  e.unregisterAgent(n);
+  e.unregisterAgent(agentId);
 }
 //@ chunk-e6aww6q8.js:1291797-1291919 fingerprint = registerAgent (0.327)
 function registerAgent(agentId, agentName, parentAgentId) {
-  let s = agentId?.agentId ?? parentAgentId,
-    h = agentId?.agentContext;
-  return h !== void 0 && isWebFetchSubagentContext(h) && TOOL_AND_BATCH_HOOK_EVENTS.has(agentName)
-    ? [s, h.parentAgentId ?? parentAgentId]
-    : [s];
+  let agentId_2 = agentId?.agentId ?? parentAgentId;
+  let agentContext = agentId?.agentContext;
+  return agentContext !== undefined &&
+    isWebFetchSubagentContext(agentContext) &&
+    TOOL_AND_BATCH_HOOK_EVENTS.has(agentName)
+    ? [agentId_2, agentContext.parentAgentId ?? parentAgentId]
+    : [agentId_2];
 }
-
-export { registerAgent, Rqe, Anr, xqe, initializePerfettoTracing, A };
+export {
+  registerAgent,
+  isPerfettoRecording,
+  registerPerfettoAgent,
+  unregisterPerfettoAgent,
+  initializePerfettoTracing,
+  perfettoRecorder,
+};

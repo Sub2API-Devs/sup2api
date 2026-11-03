@@ -8,76 +8,107 @@
  * pieces: chunk-y162pn60.js (22)
  * attribution: placement 22
  */
-import { delimiter, isAbsolute, isAbsolute as isAbsolute_2 } from "path";
+import { delimiter, isAbsolute } from "path";
 import { ANY_CONTROL_CHAR_RE } from "../../utils/stringUtils.js";
 import { jsonStringify, jsonParse } from "../../utils/slowOperations.js";
-import { E, u, U, kt, o, Ir, T, A, M, pe, oe, Ue } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  E,
+  u,
+  _enum,
+  looseObject,
+  string,
+  discriminatedUnion,
+  literal,
+  array,
+  M,
+  record,
+  unknown,
+  union,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import { keepForwardableEnv, stripForwardedFlags } from "../../cli/forwardedFlags.js";
 import { stripLongPathPrefixes } from "../../utils/windowsUncPaths.js";
-import { RNe } from "../../utils/framedSocket.js";
+import { SOCKET_IDLE_TIMEOUT_MS } from "../../utils/framedSocket.js";
 import { isValidPipeOrPath } from "../../utils/peerAddress.js";
 
 //@ chunk-y162pn60.js:1832-1883 placement
-var Re = ["shell", "slash", "fleet", "spare", "respawn"];
+/**
+ * 后台租约的来源类型（shell、slash、fleet、spare、respawn）。
+ */
+var BG_LEASE_SOURCES = ["shell", "slash", "fleet", "spare", "respawn"];
 //@ chunk-y162pn60.js:1883-1921 placement
-function m7s(e) {
-  return Re.includes(e);
+/**
+ * 判断字符串是否属于租约来源。
+ */
+function isLeaseSource(e) {
+  return BG_LEASE_SOURCES.includes(e);
 }
 //@ chunk-y162pn60.js:1921-2051 placement
-var BG_PROTO = 1,
-  BG_PROTO_MIN = 1,
-  SHORT_RE = /^[a-f0-9]{8}$/,
-  TABS_KEY_RE = /^[a-f0-9]{32}$/,
-  ft = ["failed", "taken", "ended"],
-  CLOUD_SESSION_ID_RE = /^(?:cse|session)_[A-Za-z0-9_-]{1,128}$/;
+/**
+ * tabs 落点失败的原因枚举（failed、taken、ended）。
+ */
+var BG_PROTO = 1;
+var BG_PROTO_MIN = 1;
+var SHORT_RE = /^[a-f0-9]{8}$/;
+var TABS_KEY_RE = /^[a-f0-9]{32}$/;
+var TABS_LANDING_REASONS = ["failed", "taken", "ended"];
+var CLOUD_SESSION_ID_RE = /^(?:cse|session)_[A-Za-z0-9_-]{1,128}$/;
 //@ chunk-y162pn60.js:2051-2084 placement
-function De(e) {
+/**
+ * 判断字符串里没有控制字符。
+ */
+function hasNoControlChars(e) {
   return !ANY_CONTROL_CHAR_RE.test(e);
 }
 //@ chunk-y162pn60.js:2084-2191 placement
-var DAEMON_DETACH_APC = "\x1B_cc-daemon-detach\x1B\\",
-  ae = "\x1B\\",
-  ze = "\x1B_cc-detach-msg;",
-  DAEMON_HINT_APC = "\x1B_cc-daemon-hint\x1B\\";
+/**
+ * 分离消息的 APC 前缀 ESC_cc-detach-msg;。
+ */
+var DAEMON_DETACH_APC = "\x1B_cc-daemon-detach\x1B\\";
+var APC_ST = "\x1B\\";
+var DETACH_MSG_PREFIX = "\x1B_cc-detach-msg;";
+var DAEMON_HINT_APC = "\x1B_cc-daemon-hint\x1B\\";
 //@ chunk-y162pn60.js:2191-2224 placement
 function wrapDaemonHint(e) {
   return DAEMON_HINT_APC + e + DAEMON_HINT_APC;
 }
 //@ chunk-y162pn60.js:2224-2278 placement
-var fe = "\x1B_cc-d-imark;",
-  buffer = Buffer.from(fe, "latin1");
+/**
+ * 交互标记 APC 前缀 ESC_cc-d-imark;。
+ */
+var INTERACTIVE_MARK_PREFIX = "\x1B_cc-d-imark;";
+var buffer = Buffer.from(INTERACTIVE_MARK_PREFIX, "latin1");
 //@ chunk-y162pn60.js:2278-2312 placement
 function interactiveMarkApc(e) {
-  return fe + jsonStringify(e) + ae;
+  return INTERACTIVE_MARK_PREFIX + jsonStringify(e) + APC_ST;
 }
 //@ chunk-y162pn60.js:2312-3552 placement
 function extractInteractiveMarks(e, n, r) {
-  let s = r?.maxPayload ?? 512,
-    f = e.length > 0 ? Buffer.concat([e, n]) : n,
-    m = [],
-    g = [],
-    S = 0,
-    y = 0,
-    h = -1,
-    w = !1;
+  let maxPayload = r?.maxPayload ?? 512;
+  let f = e.length > 0 ? Buffer.concat([e, n]) : n;
+  let m = [];
+  let g = [];
+  let S = 0;
+  let y = 0;
+  let h = -1;
+  let w = false;
   for (;;) {
-    let index = f.indexOf(fe, y);
+    let index = f.indexOf(INTERACTIVE_MARK_PREFIX, y);
     if (index < 0) break;
-    let D = index + fe.length,
-      R = w ? -1 : h >= D ? h : (h = f.indexOf(ae, D));
+    let D = index + INTERACTIVE_MARK_PREFIX.length;
+    let R = w ? -1 : h >= D ? h : (h = f.indexOf(APC_ST, D));
     if (R < 0) {
-      w = !0;
+      w = true;
       let chunk = f.subarray(index);
-      if (chunk.length > fe.length + s) {
+      if (chunk.length > INTERACTIVE_MARK_PREFIX.length + maxPayload) {
         y = D;
         continue;
       }
-      let G = !1;
+      let G = false;
       for (let ie = D; ie < f.length; ie++) {
         let Ae = f[ie];
         if (Ae === 24 || Ae === 26 || (Ae === 27 && ie < f.length - 1)) {
-          G = !0;
+          G = true;
           break;
         }
       }
@@ -85,17 +116,20 @@ function extractInteractiveMarks(e, n, r) {
         y = D;
         continue;
       }
-      return (
-        g.push(f.subarray(S, index)),
-        { marks: m, carry: Buffer.from(chunk), cleaned: g.length === 1 ? g[0] : Buffer.concat(g) }
-      );
+      g.push(f.subarray(S, index));
+      return {
+        marks: m,
+        carry: Buffer.from(chunk),
+        cleaned: g.length === 1 ? g[0] : Buffer.concat(g),
+      };
     }
-    let L = !1;
-    if (R - D <= s)
+    let L = false;
+    if (R - D <= maxPayload)
       try {
         let j = jsonParse(f.subarray(D, R).toString("utf8"));
         if (j !== null && typeof j === "object" && (j.kind === "content_paint" || j.kind === "prompt_idle")) {
-          if (((L = !0), r?.requireNonce === void 0 || j.nonce === r.requireNonce))
+          L = true;
+          if (r?.requireNonce === undefined || j.nonce === r.requireNonce)
             m.push({
               kind: j.kind,
               msgsLoaded: boundedMarkCountOrUndefined(j.msgsLoaded),
@@ -104,338 +138,403 @@ function extractInteractiveMarks(e, n, r) {
             });
         }
       } catch {}
-    if (L) (g.push(f.subarray(S, index)), (S = R + ae.length));
-    y = L ? R + ae.length : D;
+    if (L) {
+      g.push(f.subarray(S, index));
+      S = R + APC_ST.length;
+    }
+    y = L ? R + APC_ST.length : D;
   }
-  let chunk = f.subarray(y),
-    F = buffer,
-    O = 0,
-    min = Math.min(chunk.length, F.length - 1);
+  let chunk = f.subarray(y);
+  let F = buffer;
+  let O = 0;
+  let min = Math.min(chunk.length, F.length - 1);
   e: for (let v = min; v > 0; v--) {
     let D = chunk.length - v;
-    for (let R = 0; R < v; R++) if (chunk[D + R] !== F[R]) continue e;
+    for (let j = 0; j < v; j++) if (chunk[D + j] !== F[j]) continue e;
     O = v;
     break;
   }
-  return (
-    g.push(f.subarray(S, f.length - O)),
-    {
-      marks: m,
-      carry: O > 0 ? Buffer.from(chunk.subarray(chunk.length - O)) : Buffer.alloc(0),
-      cleaned: g.length === 1 ? g[0] : Buffer.concat(g),
-    }
-  );
+  g.push(f.subarray(S, f.length - O));
+  return {
+    marks: m,
+    carry: O > 0 ? Buffer.from(chunk.subarray(chunk.length - O)) : Buffer.alloc(0),
+    cleaned: g.length === 1 ? g[0] : Buffer.concat(g),
+  };
 }
 //@ chunk-y162pn60.js:3552-3638 placement
 function boundedMarkCountOrUndefined(e) {
-  return typeof e === "number" && Number.isInteger(e) && e >= 0 && e <= MAX_MSG_COUNT ? e : void 0;
+  return typeof e === "number" && Number.isInteger(e) && e >= 0 && e <= MAX_MSG_COUNT ? e : undefined;
 }
 //@ chunk-y162pn60.js:3638-3936 placement
-var MAX_MSG_COUNT = 1e9,
-  optionalCount = () => E().int().nonnegative().max(MAX_MSG_COUNT).optional(),
-  interactiveMarkSchema = DoctorLazy(() =>
-    u({
-      kind: U(["content_paint", "prompt_idle"]),
-      msgsLoaded: optionalCount(),
-      msgsInJsonl: optionalCount(),
-      msgsRenderedAtFirstPaint: optionalCount(),
-    }),
-  ),
-  strictInteractiveMarkSchema = DoctorLazy(() =>
-    kt({
-      kind: U(["content_paint", "prompt_idle"]),
-      msgsLoaded: optionalCount(),
-      msgsInJsonl: optionalCount(),
-      msgsRenderedAtFirstPaint: optionalCount(),
-    }),
-  );
+var MAX_MSG_COUNT = 1e9;
+var optionalCount = () => E().int().nonnegative().max(MAX_MSG_COUNT).optional();
+var interactiveMarkSchema = DoctorLazy(() =>
+  u({
+    kind: _enum(["content_paint", "prompt_idle"]),
+    msgsLoaded: optionalCount(),
+    msgsInJsonl: optionalCount(),
+    msgsRenderedAtFirstPaint: optionalCount(),
+  }),
+);
+var strictInteractiveMarkSchema = DoctorLazy(() =>
+  looseObject({
+    kind: _enum(["content_paint", "prompt_idle"]),
+    msgsLoaded: optionalCount(),
+    msgsInJsonl: optionalCount(),
+    msgsRenderedAtFirstPaint: optionalCount(),
+  }),
+);
 //@ chunk-y162pn60.js:3936-4144 placement
 function parseInteractiveMarkRv(e) {
-  let safeParse = strictInteractiveMarkSchema().safeParse(e);
-  if (!safeParse.success) return null;
+  let n = strictInteractiveMarkSchema().safeParse(e);
+  if (!n.success) return null;
   return {
-    kind: safeParse.data.kind,
-    msgsLoaded: safeParse.data.msgsLoaded,
-    msgsInJsonl: safeParse.data.msgsInJsonl,
-    msgsRenderedAtFirstPaint: safeParse.data.msgsRenderedAtFirstPaint,
+    kind: n.data.kind,
+    msgsLoaded: n.data.msgsLoaded,
+    msgsInJsonl: n.data.msgsInJsonl,
+    msgsRenderedAtFirstPaint: n.data.msgsRenderedAtFirstPaint,
   };
 }
 //@ chunk-y162pn60.js:4144-4196 placement
 function daemonDetachApc(e) {
   if (!e) return DAEMON_DETACH_APC;
-  return ze + e + ae + DAEMON_DETACH_APC;
+  return DETACH_MSG_PREFIX + e + APC_ST + DAEMON_DETACH_APC;
 }
 //@ chunk-y162pn60.js:4196-4336 placement
 function parseDetachMsg(e) {
-  let index = e.indexOf(ze);
+  let index = e.indexOf(DETACH_MSG_PREFIX);
   if (index < 0) return;
-  let r = index + ze.length,
-    index_2 = e.indexOf(ae, r);
+  let r = index + DETACH_MSG_PREFIX.length;
+  let index_2 = e.indexOf(APC_ST, r);
   if (index_2 < 0) return;
   return e.subarray(r, index_2).toString("utf8");
 }
 //@ chunk-y162pn60.js:4336-4506 placement
 function normalizePluginDirsEnv(e, n) {
   let r = {};
-  for (let [s, f] of Object.entries(keepForwardableEnv(e, n)))
-    r[s] =
-      s.toUpperCase() === "CLAUDE_CODE_PLUGIN_DIRS"
-        ? f
+  for (let [key, value] of Object.entries(keepForwardableEnv(e, n)))
+    r[key] =
+      key.toUpperCase() === "CLAUDE_CODE_PLUGIN_DIRS"
+        ? value
             .split(delimiter)
             .map((m) => stripLongPathPrefixes(m.trim()))
             .join(delimiter)
-        : f;
+        : value;
   return r;
 }
 //@ chunk-y162pn60.js:4506-6241 placement
 var BgDispatchSchema = DoctorLazy(() =>
-    u({
-      proto: E().int().min(BG_PROTO_MIN).max(BG_PROTO),
-      short: o().regex(SHORT_RE),
-      nonce: o().regex(SHORT_RE).optional(),
-      sessionId: o().transform(stripLongPathPrefixes),
-      createdAt: E(),
-      source: U(Re).catch("fleet"),
-      cwd: o().transform(stripLongPathPrefixes),
-      launch: Ir("mode", [
-        u({
-          mode: T("prompt"),
-          args: A(o()).transform(stripForwardedFlags),
-          restoresTranscript: M().optional(),
-        }),
-        u({
-          mode: T("resume"),
-          sessionId: o().transform(stripLongPathPrefixes),
-          transcriptPath: o().transform(stripLongPathPrefixes).optional(),
-          fork: M(),
-          flagArgs: A(o()).transform(stripForwardedFlags),
-          restoresTranscript: M().optional(),
-        }),
-        u({
-          mode: T("exec"),
-          cmd: o().transform(stripLongPathPrefixes),
-          args: A(o()).transform((e) => e.map(stripLongPathPrefixes)),
-        }),
-      ]),
-      env: pe(o(), o())
-        .default({})
-        .transform((e) => normalizePluginDirsEnv(e, "the background job's launch request")),
-      reattachEnv: pe(o(), o())
-        .transform((e) => normalizePluginDirsEnv(e, "the launch request's reattach values"))
-        .optional(),
-      worktree: u({ path: o().transform(stripLongPathPrefixes), ownershipToken: o() }).optional(),
-      isolation: U(["none", "worktree"]).default("none"),
-      respawnFlags: A(o()).default([]).transform(stripForwardedFlags),
-      attachStallRespawns: E().int().optional(),
-      agent: o().optional(),
-      routine: o().optional(),
-      seed: u({ intent: o(), name: o().optional() }).optional(),
-      cols: E().int().positive().max(RNe).optional(),
-      rows: E().int().positive().max(RNe).optional(),
-    }),
-  ),
-  TRANSIENT_ATTACH_CODE = /ERESPAWNING|ESTARTING/,
-  RACED_SOCKET_GAP = /\bE(?:NOENT|CONNREFUSED|CONNRESET)\b|control socket closed/,
-  RESPAWNING_ATTACH_CODE = "ERESPAWNING",
-  RESPAWN_REASON_UPGRADE = "updated Claude Code",
-  RESPAWN_REASON_STALL = "stalled",
-  RESPAWN_REASON_LEGACY = "legacy",
-  HOST_DEAD_ATTACH_CODE = "EHOSTDEAD",
-  HOST_DIED_DETAIL = "terminal host process died \u2014 press Enter to restart",
-  HOST_DIED_ATTACH_MESSAGE = "This session's terminal host process died (the conversation is saved)",
-  HOST_DIED_EXEC_DETAIL =
-    "terminal host process died \u2014 its output is gone; the command was not run again",
-  HOST_DIED_EXEC_ATTACH_MESSAGE =
-    "This command's terminal host process died \u2014 its output is gone and the command was not run again",
-  FATAL_ATTACH_CODE = /ESTALLED|EUNVERIFIED|EHOSTDEAD/,
-  KICKED_ATTACH_CODE = /^EKICKED:\s*/,
-  KICKED_NOTICE = "Session opened in another window";
+  u({
+    proto: E().int().min(BG_PROTO_MIN).max(BG_PROTO),
+    short: string().regex(SHORT_RE),
+    nonce: string().regex(SHORT_RE).optional(),
+    sessionId: string().transform(stripLongPathPrefixes),
+    createdAt: E(),
+    source: _enum(BG_LEASE_SOURCES).catch("fleet"),
+    cwd: string().transform(stripLongPathPrefixes),
+    launch: discriminatedUnion("mode", [
+      u({
+        mode: literal("prompt"),
+        args: array(string()).transform(stripForwardedFlags),
+        restoresTranscript: M().optional(),
+      }),
+      u({
+        mode: literal("resume"),
+        sessionId: string().transform(stripLongPathPrefixes),
+        transcriptPath: string().transform(stripLongPathPrefixes).optional(),
+        fork: M(),
+        flagArgs: array(string()).transform(stripForwardedFlags),
+        restoresTranscript: M().optional(),
+      }),
+      u({
+        mode: literal("exec"),
+        cmd: string().transform(stripLongPathPrefixes),
+        args: array(string()).transform((e) => e.map(stripLongPathPrefixes)),
+      }),
+    ]),
+    env: record(string(), string())
+      .default({})
+      .transform((e) => normalizePluginDirsEnv(e, "the background job's launch request")),
+    reattachEnv: record(string(), string())
+      .transform((e) => normalizePluginDirsEnv(e, "the launch request's reattach values"))
+      .optional(),
+    worktree: u({
+      path: string().transform(stripLongPathPrefixes),
+      ownershipToken: string(),
+    }).optional(),
+    isolation: _enum(["none", "worktree"]).default("none"),
+    respawnFlags: array(string()).default([]).transform(stripForwardedFlags),
+    attachStallRespawns: E().int().optional(),
+    agent: string().optional(),
+    routine: string().optional(),
+    seed: u({
+      intent: string(),
+      name: string().optional(),
+    }).optional(),
+    cols: E().int().positive().max(SOCKET_IDLE_TIMEOUT_MS).optional(),
+    rows: E().int().positive().max(SOCKET_IDLE_TIMEOUT_MS).optional(),
+  }),
+);
+var TRANSIENT_ATTACH_CODE = /ERESPAWNING|ESTARTING/;
+var RACED_SOCKET_GAP = /\bE(?:NOENT|CONNREFUSED|CONNRESET)\b|control socket closed/;
+var RESPAWNING_ATTACH_CODE = "ERESPAWNING";
+var RESPAWN_REASON_UPGRADE = "updated Claude Code";
+var RESPAWN_REASON_STALL = "stalled";
+var RESPAWN_REASON_LEGACY = "legacy";
+var HOST_DEAD_ATTACH_CODE = "EHOSTDEAD";
+var HOST_DIED_DETAIL = "terminal host process died \u2014 press Enter to restart";
+var HOST_DIED_ATTACH_MESSAGE = "This session's terminal host process died (the conversation is saved)";
+var HOST_DIED_EXEC_DETAIL =
+  "terminal host process died \u2014 its output is gone; the command was not run again";
+var HOST_DIED_EXEC_ATTACH_MESSAGE =
+  "This command's terminal host process died \u2014 its output is gone and the command was not run again";
+var FATAL_ATTACH_CODE = /ESTALLED|EUNVERIFIED|EHOSTDEAD/;
+var KICKED_ATTACH_CODE = /^EKICKED:\s*/;
+var KICKED_NOTICE = "Session opened in another window";
 //@ chunk-y162pn60.js:6241-6323 placement
-function streamDetachMessage(e, n, r) {
-  return n !== void 0 && TABS_KEY_RE.test(n) ? `${e}:${n}: ${r}` : `${e}: ${r}`;
+function streamDetachMessage(e, sessionTabs, r) {
+  return sessionTabs !== undefined && TABS_KEY_RE.test(sessionTabs)
+    ? `${e}:${sessionTabs}: ${r}`
+    : `${e}: ${r}`;
 }
 //@ chunk-y162pn60.js:6323-6343 placement
 var SUPERVISOR_DETACH_CODE = /^E[A-Z]+:/;
 //@ chunk-y162pn60.js:6343-6397 placement
-function be() {
-  return o().refine(isValidPipeOrPath, "remote IPC path");
+/**
+ * 校验值是否为合法的管道/路径。
+ */
+function pipeOrPathSchema() {
+  return string().refine(isValidPipeOrPath, "remote IPC path");
 }
+//@ chunk-y162pn60.js:6397-7016 placement
 /**
  * 名册中单个后台 worker 的 schema：pid、会话 ID、各 socket、版本、尝试次数、cwd、派发信息、待重启、终端模式、交互标记与认证等。
  */
-//@ chunk-y162pn60.js:6397-7016 placement
 var rosterWorkerSchema = DoctorLazy(() =>
-  kt({
+  looseObject({
     pid: E(),
-    procStart: o().optional(),
-    sessionId: o().transform(stripLongPathPrefixes),
-    rendezvousSock: be(),
-    ptySock: be().optional(),
-    messagingSock: be().optional(),
-    cliVersion: o().optional(),
+    procStart: string().optional(),
+    sessionId: string().transform(stripLongPathPrefixes),
+    rendezvousSock: pipeOrPathSchema(),
+    ptySock: pipeOrPathSchema().optional(),
+    messagingSock: pipeOrPathSchema().optional(),
+    cliVersion: string().optional(),
     startedAt: E(),
     attempt: E(),
-    cwd: o().transform(stripLongPathPrefixes),
-    worktreePath: o().transform(stripLongPathPrefixes).optional(),
+    cwd: string().transform(stripLongPathPrefixes),
+    worktreePath: string().transform(stripLongPathPrefixes).optional(),
     dispatch: BgDispatchSchema(),
-    pendingRespawn: T("upgrade").optional(),
-    decModes: A(E()).optional(),
-    firedInteractiveMarks: A(oe())
+    pendingRespawn: literal("upgrade").optional(),
+    decModes: array(E()).optional(),
+    firedInteractiveMarks: array(unknown())
       .transform((e) => {
         let n = [];
         for (let r of e) {
-          let safeParse = interactiveMarkSchema().safeParse(r);
-          if (safeParse.success) n.push(safeParse.data);
+          let s = interactiveMarkSchema().safeParse(r);
+          if (s.success) n.push(s.data);
         }
         return n.slice(0, 2);
       })
       .optional()
-      .catch(void 0),
-    rvAuth: o().optional(),
-    ptyAuth: o().optional(),
+      .catch(undefined),
+    rvAuth: string().optional(),
+    ptyAuth: string().optional(),
     replPid: E().optional(),
-    replProcStart: o().optional(),
+    replProcStart: string().optional(),
   }),
 );
 //@ chunk-y162pn60.js:7016-7116 placement
 function rosterEntryExtras(e) {
-  let shape = rosterWorkerSchema().shape,
-    r = {};
-  for (let [s, f] of Object.entries(e)) if (!(s in shape)) r[s] = f;
+  let shape = rosterWorkerSchema().shape;
+  let r = {};
+  for (let [key, value] of Object.entries(e)) if (!(key in shape)) r[key] = value;
   return r;
 }
 //@ chunk-y162pn60.js:7116-9695 placement
+/**
+ * 租约关闭原因的取值列表。
+ */
 var RosterSchema = DoctorLazy(() =>
-    kt({
-      proto: E().int().min(BG_PROTO_MIN).max(BG_PROTO),
-      supervisorPid: E().catch(0),
-      updatedAt: E().catch(0),
-      workers: pe(o().regex(SHORT_RE), rosterWorkerSchema()),
-    }),
-  ),
-  ControlRequestSchema = DoctorLazy(() => {
-    let regex = o().regex(SHORT_RE),
-      max = E().int().min(BG_PROTO_MIN).max(BG_PROTO);
-    return Ir("op", [
-      u({ proto: max, op: T("ping") }),
-      u({ proto: max, op: T("nudge") }),
-      u({ proto: max, op: T("yield") }),
-      u({ proto: max, op: T("lease"), client: LeaseClientSchema().optional() }),
-      u({ proto: max, op: T("leases") }),
-      u({ proto: max, op: T("await-ack"), short: regex, nonce: regex.optional(), timeoutMs: E() }),
-      u({ proto: max, op: T("dispatch"), d: BgDispatchSchema(), timeoutMs: E(), auth: o().optional() }),
-      u({ proto: max, op: T("list") }),
-      u({ proto: max, op: T("has"), short: regex }),
-      u({
-        proto: max,
-        op: T("kill"),
-        short: regex,
-        signal: U(["SIGTERM", "SIGKILL"]).optional(),
-        handoff: M().optional(),
-        evict: M().optional(),
-      }),
-      u({
-        proto: max,
-        op: T("reply"),
-        short: regex,
-        text: o(),
-        auth: o().optional(),
-        nextTurn: M().optional(),
-      }),
-      u({ proto: max, op: T("subscribe"), short: regex, tail: E().optional() }),
-      u({
-        proto: max,
-        op: T("attach"),
-        short: regex,
-        auth: o().optional(),
-        cols: E().int().min(1).max(RNe),
-        rows: E().int().min(1).max(RNe),
-        attachId: o().optional(),
-        caps: u({
-          imark: M().optional(),
-          terminal: o().nullable(),
-          mux: U(["tmux", "screen", "zellij"]).nullable(),
-          ssh: M(),
-          wheelFlood: M().optional(),
-          hyperlinks: M().optional(),
-          progressReporting: M().optional(),
-          printsUnknownSequences: M().optional(),
-          wtSession: M().optional(),
-          isVscodeTerm: M().optional(),
-          keyDialect: U(["st", "rxvt"])
-            .nullable()
-            .optional()
-            .catch(void 0),
-          browser: o().nullable().optional(),
-          colorLevel: Ue([T(0), T(1), T(2), T(3)]).optional(),
-          syncOutput: M().optional(),
-          editor: o().nullable().optional(),
-          systemTheme: U(["dark", "light"]).optional(),
-          tmuxSocket: be()
-            .refine(isAbsolute)
-            .optional()
-            .catch(void 0),
-          sessionTabs: o()
-            .regex(TABS_KEY_RE)
-            .optional()
-            .catch(void 0),
-          cloudTabs: T(!0)
-            .optional()
-            .catch(void 0),
-          tabsLanding: u({ why: U(ft), from: o().regex(SHORT_RE) })
-            .optional()
-            .catch(void 0),
-        }).optional(),
-        holdingFrame: M().optional(),
-      }),
-      u({
-        proto: max,
-        op: T("resize"),
-        short: regex,
-        cols: E().int().min(1).max(RNe),
-        rows: E().int().min(1).max(RNe),
-        attachId: o().optional(),
-      }),
-      u({ proto: max, op: T("ensure-spare"), cwd: o() }),
-      u({
-        proto: max,
-        op: T("permission-response"),
-        short: regex,
-        requestId: o(),
-        allow: M(),
-        auth: o().optional(),
-      }),
-      u({ proto: max, op: T("respawn-stale"), short: regex }),
-      u({ proto: max, op: T("shutdown"), reapWorkers: M().optional() }),
-    ]);
+  looseObject({
+    proto: E().int().min(BG_PROTO_MIN).max(BG_PROTO),
+    supervisorPid: E().catch(0),
+    updatedAt: E().catch(0),
+    workers: record(string().regex(SHORT_RE), rosterWorkerSchema()),
   }),
-  LeaseClientSchema = DoctorLazy(() =>
+);
+var ControlRequestSchema = DoctorLazy(() => {
+  let e = string().regex(SHORT_RE);
+  let proto = E().int().min(BG_PROTO_MIN).max(BG_PROTO);
+  return discriminatedUnion("op", [
     u({
-      label: o().max(64).refine(De),
-      cwd: o().max(4096).refine(De).catch("(not shown)"),
-      pid: E().int().positive().catch(0),
-      cloudSessionId: o()
-        .regex(CLOUD_SESSION_ID_RE)
-        .optional()
-        .catch(void 0),
+      proto,
+      op: literal("ping"),
     }),
-  ),
-  LeaseAcknowledgementSchema = DoctorLazy(() => u({ ok: T(!0), op: T("lease") })),
-  bt = [
-    "upgrade",
-    "service_recall",
-    "displaced",
-    "yield",
-    "shutdown_op",
-    "idle_exit",
-    "bg_manager_failed",
-    "signal",
-    "unknown",
-  ],
-  LeaseClosingNoticeSchema = DoctorLazy(() => u({ op: T("lease"), closing: U(bt) })),
-  CLOUD_SESSION_LEASE_LABEL = "cloud session",
-  DAEMON_LEASE_LABELS = ["cli-bg-dispatch", "claude agents", CLOUD_SESSION_LEASE_LABEL];
-
+    u({
+      proto,
+      op: literal("nudge"),
+    }),
+    u({
+      proto,
+      op: literal("yield"),
+    }),
+    u({
+      proto,
+      op: literal("lease"),
+      client: LeaseClientSchema().optional(),
+    }),
+    u({
+      proto,
+      op: literal("leases"),
+    }),
+    u({
+      proto,
+      op: literal("await-ack"),
+      short: e,
+      nonce: e.optional(),
+      timeoutMs: E(),
+    }),
+    u({
+      proto,
+      op: literal("dispatch"),
+      d: BgDispatchSchema(),
+      timeoutMs: E(),
+      auth: string().optional(),
+    }),
+    u({
+      proto,
+      op: literal("list"),
+    }),
+    u({
+      proto,
+      op: literal("has"),
+      short: e,
+    }),
+    u({
+      proto,
+      op: literal("kill"),
+      short: e,
+      signal: _enum(["SIGTERM", "SIGKILL"]).optional(),
+      handoff: M().optional(),
+      evict: M().optional(),
+    }),
+    u({
+      proto,
+      op: literal("reply"),
+      short: e,
+      text: string(),
+      auth: string().optional(),
+      nextTurn: M().optional(),
+    }),
+    u({
+      proto,
+      op: literal("subscribe"),
+      short: e,
+      tail: E().optional(),
+    }),
+    u({
+      proto,
+      op: literal("attach"),
+      short: e,
+      auth: string().optional(),
+      cols: E().int().min(1).max(SOCKET_IDLE_TIMEOUT_MS),
+      rows: E().int().min(1).max(SOCKET_IDLE_TIMEOUT_MS),
+      attachId: string().optional(),
+      caps: u({
+        imark: M().optional(),
+        terminal: string().nullable(),
+        mux: _enum(["tmux", "screen", "zellij"]).nullable(),
+        ssh: M(),
+        wheelFlood: M().optional(),
+        hyperlinks: M().optional(),
+        progressReporting: M().optional(),
+        printsUnknownSequences: M().optional(),
+        wtSession: M().optional(),
+        isVscodeTerm: M().optional(),
+        keyDialect: _enum(["st", "rxvt"]).nullable().optional().catch(undefined),
+        browser: string().nullable().optional(),
+        colorLevel: union([literal(0), literal(1), literal(2), literal(3)]).optional(),
+        syncOutput: M().optional(),
+        editor: string().nullable().optional(),
+        systemTheme: _enum(["dark", "light"]).optional(),
+        tmuxSocket: pipeOrPathSchema().refine(isAbsolute).optional().catch(undefined),
+        sessionTabs: string().regex(TABS_KEY_RE).optional().catch(undefined),
+        cloudTabs: literal(true).optional().catch(undefined),
+        tabsLanding: u({
+          why: _enum(TABS_LANDING_REASONS),
+          from: string().regex(SHORT_RE),
+        })
+          .optional()
+          .catch(undefined),
+      }).optional(),
+      holdingFrame: M().optional(),
+    }),
+    u({
+      proto,
+      op: literal("resize"),
+      short: e,
+      cols: E().int().min(1).max(SOCKET_IDLE_TIMEOUT_MS),
+      rows: E().int().min(1).max(SOCKET_IDLE_TIMEOUT_MS),
+      attachId: string().optional(),
+    }),
+    u({
+      proto,
+      op: literal("ensure-spare"),
+      cwd: string(),
+    }),
+    u({
+      proto,
+      op: literal("permission-response"),
+      short: e,
+      requestId: string(),
+      allow: M(),
+      auth: string().optional(),
+    }),
+    u({
+      proto,
+      op: literal("respawn-stale"),
+      short: e,
+    }),
+    u({
+      proto,
+      op: literal("shutdown"),
+      reapWorkers: M().optional(),
+    }),
+  ]);
+});
+var LeaseClientSchema = DoctorLazy(() =>
+  u({
+    label: string().max(64).refine(hasNoControlChars),
+    cwd: string().max(4096).refine(hasNoControlChars).catch("(not shown)"),
+    pid: E().int().positive().catch(0),
+    cloudSessionId: string().regex(CLOUD_SESSION_ID_RE).optional().catch(undefined),
+  }),
+);
+var LeaseAcknowledgementSchema = DoctorLazy(() =>
+  u({
+    ok: literal(true),
+    op: literal("lease"),
+  }),
+);
+var CLOSING_REASONS = [
+  "upgrade",
+  "service_recall",
+  "displaced",
+  "yield",
+  "shutdown_op",
+  "idle_exit",
+  "bg_manager_failed",
+  "signal",
+  "unknown",
+];
+var LeaseClosingNoticeSchema = DoctorLazy(() =>
+  u({
+    op: literal("lease"),
+    closing: _enum(CLOSING_REASONS),
+  }),
+);
+var CLOUD_SESSION_LEASE_LABEL = "cloud session";
+var DAEMON_LEASE_LABELS = ["cli-bg-dispatch", "claude agents", CLOUD_SESSION_LEASE_LABEL];
 export {
   daemonDetachApc,
   BG_PROTO,
@@ -474,6 +573,6 @@ export {
   DAEMON_HINT_APC,
   extractInteractiveMarks,
   parseDetachMsg,
-  m7s,
+  isLeaseSource,
   RosterSchema,
 };

@@ -20,17 +20,21 @@ import {
 } from "../../memdir/paths.js";
 import { env } from "../../utils/env.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../analytics/growthbook.js";
-import { getOrgMemoryPolicyState, _r, Dn } from "../orgMemory/memoryStores.js";
+import {
+  getOrgMemoryPolicyState,
+  isOrgMemoryEligible,
+  isOrgMemoryPolicyOpen,
+} from "../orgMemory/memoryStores.js";
 import { isEssentialTrafficOnly } from "../../utils/privacyLevel.js";
 import { getCurrentProjectConfig } from "../../utils/config.js";
 import {
   getDecisionStores,
   getOrgMemoryDecision,
-  N2,
+  grantedModeFor,
   isOrgMemoryWriteOptedIn,
 } from "../orgMemory/orgMemoryDecision.js";
 import { hasOrgMemoryDecisionRunStarted } from "../orgMemory/discovery.js";
-import { Uo } from "../orgMemory/promptIndex.js";
+import { isMemoryPromptIndexEligible } from "../orgMemory/promptIndex.js";
 import {
   isPolicyVerdictUnobtainable,
   isPrincipalSeenUnderHipaa,
@@ -39,55 +43,69 @@ import {
 } from "../policyLimits/policyEvidence.js";
 
 //@ chunk-82kqcve8.js:63773-63801 placement
-function To() {
-  return getMemoryToolsShape(!1);
+/**
+ * 在宽松模式下取记忆工具的呈现形态（tools/files）。
+ */
+function memoryToolsShapeLoose() {
+  return getMemoryToolsShape(false);
 }
 //@ chunk-82kqcve8.js:63801-63829 placement
-function Cr() {
-  return getMemoryToolsShape(!0);
+/**
+ * 在严格模式下取记忆工具的呈现形态。
+ */
+function memoryToolsShapeStrict() {
+  return getMemoryToolsShape(true);
 }
 //@ chunk-82kqcve8.js:63829-63866 placement
-function _Pe() {
-  return To() === "tools";
+/**
+ * 自动记忆是否以 tools 形式提供。
+ */
+function areMemoryToolsEnabled() {
+  return memoryToolsShapeLoose() === "tools";
 }
+//@ chunk-82kqcve8.js:63866-64241 placement
 /**
  * 决定自动记忆以 tools 还是 files 形式提供：远程模式、自动记忆关闭、有目录覆盖等为 files；否则按开关与状态锁定结果。
  */
-//@ chunk-82kqcve8.js:63866-64241 placement
 function getMemoryToolsShape(e) {
   if (getIsRemoteMode()) return "files";
-  let n = getMemoryToolsShapeLatch();
+  let memoryToolsShapeLatch = getMemoryToolsShapeLatch();
   if (!isAutoMemoryEnabledIgnoringPause()) {
-    if (e && n === null) setMemoryToolsShapeLatch(!1);
+    if (e && memoryToolsShapeLatch === null) setMemoryToolsShapeLatch(false);
     return "files";
   }
-  if (n !== null) return n ? "tools" : "files";
+  if (memoryToolsShapeLatch !== null) return memoryToolsShapeLatch ? "tools" : "files";
   if (
-    (env.CLAUDE_CODE_REMOTE && env.CLAUDE_CODE_REMOTE_MEMORY_DIR !== void 0) ||
+    (env.CLAUDE_CODE_REMOTE && env.CLAUDE_CODE_REMOTE_MEMORY_DIR !== undefined) ||
     hasAutoMemPathOverride() ||
-    env.CLAUDE_COWORK_MEMORY_GUIDELINES !== void 0 ||
+    env.CLAUDE_COWORK_MEMORY_GUIDELINES !== undefined ||
     isStoreMountedRecall()
-  )
-    return (setMemoryToolsShapeLatch(!1), "files");
+  ) {
+    setMemoryToolsShapeLatch(false);
+    return "files";
+  }
   let r =
-    getFeatureValue_CACHED_MAY_BE_STALE("tengu_linen_orbit", !1) ||
+    getFeatureValue_CACHED_MAY_BE_STALE("tengu_linen_orbit", false) ||
     getOrgMemoryPolicyState() !== "closed" ||
-    _r();
+    isOrgMemoryEligible();
   if (r || e) setMemoryToolsShapeLatch(r);
   return r ? "tools" : "files";
 }
+//@ chunk-82kqcve8.js:64241-64341 placement
 /**
  * 组织记忆读取是否启用：功能开启、非仅必要流量、满足前置条件且项目配置未关闭。
  */
-//@ chunk-82kqcve8.js:64241-64341 placement
 function isOrgMemoryReadEnabled() {
-  if (!_Pe()) return !1;
-  if (isEssentialTrafficOnly()) return !1;
-  if (!Dn()) return !1;
-  return getCurrentProjectConfig().orgMemoryRead !== !1;
+  if (!areMemoryToolsEnabled()) return false;
+  if (isEssentialTrafficOnly()) return false;
+  if (!isOrgMemoryPolicyOpen()) return false;
+  return getCurrentProjectConfig().orgMemoryRead !== false;
 }
 //@ chunk-82kqcve8.js:64341-64418 placement
-function pa() {
+/**
+ * 是否已有待读取的组织记忆。
+ */
+function hasPendingOrgMemoryRead() {
   return (
     (getDecisionStores().length > 0 ||
       (hasOrgMemoryDecisionRunStarted() && getOrgMemoryDecision().state === "undecided")) &&
@@ -109,21 +127,30 @@ function memorySyncAvailability_2() {
   }
 }
 //@ chunk-82kqcve8.js:64618-64655 placement
-function Qpe() {
+/**
+ * 可读的组织记忆存储列表（未开启时为空）。
+ */
+function readableOrgMemoryStores() {
   return isOrgMemoryReadEnabled() ? getDecisionStores() : [];
 }
 //@ chunk-82kqcve8.js:64655-64725 placement
-function ha() {
-  let e = getOrgMemoryDecision();
-  return isOrgMemoryReadEnabled() && e.state === "on" ? e.identity : null;
+/**
+ * 组织记忆开启时的身份信息。
+ */
+function orgMemoryIdentity() {
+  let orgMemoryDecision = getOrgMemoryDecision();
+  return isOrgMemoryReadEnabled() && orgMemoryDecision.state === "on" ? orgMemoryDecision.identity : null;
 }
 //@ chunk-82kqcve8.js:64725-64788 placement
-function CAt(e) {
-  return e.mode === "rw" && N2(e.path) === "rw" && isOrgMemoryWriteOptedIn();
+/**
+ * 判断某存储是否可写（两端 rw 且用户已选择写入）。
+ */
+function isStoreWritable(e) {
+  return e.mode === "rw" && grantedModeFor(e.path) === "rw" && isOrgMemoryWriteOptedIn();
 }
 //@ chunk-82kqcve8.js:121650-121796 placement
 function memorySyncAvailability() {
-  if (!Uo()) return "closed";
+  if (!isMemoryPromptIndexEligible()) return "closed";
   if (isPolicyVerdictUnobtainable()) {
     if (isPrincipalSeenUnderHipaa()) return "closed";
   } else if (isPolicyVerdictAbsent()) return "held";
@@ -135,27 +162,26 @@ function isMultiStoreSyncAvailable() {
 }
 //@ chunk-82kqcve8.js:121833-121866 placement
 function memorySyncAwaitsVerdict() {
-  return Uo() && isPolicyVerdictAbsent();
+  return isMemoryPromptIndexEligible() && isPolicyVerdictAbsent();
 }
+//@ chunk-82kqcve8.js:121866-121911 placement = useFrustrationDetection (0.391)
 /**
  * 是否处于"挫败检测"可触发状态（功能开启且记忆同步状态为 closed）。
  */
-//@ chunk-82kqcve8.js:121866-121911 placement = useFrustrationDetection (0.391)
 function memorySyncClosedByPolicy() {
-  return Uo() && memorySyncAvailability() === "closed";
+  return isMemoryPromptIndexEligible() && memorySyncAvailability() === "closed";
 }
-
 export {
   isOrgMemoryReadEnabled,
-  Qpe,
+  readableOrgMemoryStores,
   memorySyncAvailability,
-  ha,
+  orgMemoryIdentity,
   isMultiStoreSyncAvailable,
-  To,
-  Cr,
-  CAt,
-  pa,
-  _Pe,
+  memoryToolsShapeLoose,
+  memoryToolsShapeStrict,
+  isStoreWritable,
+  hasPendingOrgMemoryRead,
+  areMemoryToolsEnabled,
   memorySyncAvailability_2,
   memorySyncAwaitsVerdict,
   memorySyncClosedByPolicy,

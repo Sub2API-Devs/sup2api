@@ -13,31 +13,38 @@ import { useTheme } from "../design-system/ThemeProvider.js";
 import { useIsScreenReaderEnabled } from "../../ink/components/ErrorBoundary.js";
 import { useTerminalSize } from "../../hooks/useTerminalSize.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
-import { r, e } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default_2,
+  jsxProd_default,
+} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Box } from "../../ink/components/Text.js";
 import { env } from "../../utils/env.js";
 
 //@ chunk-n1nr1qar.js:445-459 affinity
-var M = 58,
-  z = 30;
+var WELCOME_MAX_COLUMNS = 58;
+var WELCOME_MAX_ROWS = 30;
 //@ chunk-n1nr1qar.js:459-8150 fingerprint = WelcomeV2 (0.836)
 function WelcomeV2() {
-  let $ = w(39),
-    [O] = useTheme(),
-    T = useIsScreenReaderEnabled(),
-    { rows: rows } = useTerminalSize();
-  if (T || rows < z) {
+  let $ = w(39);
+  let [theme] = useTheme();
+  let isScreenReaderEnabled = useIsScreenReaderEnabled();
+  let { rows } = useTerminalSize();
+  if (isScreenReaderEnabled || rows < WELCOME_MAX_ROWS) {
     let o;
-    if ($[0] === MEMO_CACHE_SENTINEL)
-      ((o = r(Text, { color: "claude", children: ["Welcome to Claude Code", " "] })), ($[0] = o));
-    else o = $[0];
+    if ($[0] === MEMO_CACHE_SENTINEL) {
+      o = jsxProd_default_2(Text, {
+        color: "claude",
+        children: ["Welcome to Claude Code", " "],
+      });
+      $[0] = o;
+    } else o = $[0];
     let d;
-    if ($[1] === MEMO_CACHE_SENTINEL)
-      ((d = r(Text, {
+    if ($[1] === MEMO_CACHE_SENTINEL) {
+      d = jsxProd_default_2(Text, {
         children: [
           o,
-          r(Text, {
-            dimColor: !0,
+          jsxProd_default_2(Text, {
+            dimColor: true,
             children: [
               "v",
               {
@@ -55,32 +62,47 @@ function WelcomeV2() {
             ],
           }),
         ],
-      })),
-        ($[1] = d));
-    else d = $[1];
+      });
+      $[1] = d;
+    } else d = $[1];
     return d;
   }
   if (env.terminal === "Apple_Terminal") {
-    let o;
-    if ($[2] !== O)
-      ((o = e(AppleTerminalWelcomeV2, { theme: O, welcomeMessage: "Welcome to Claude Code" })),
-        ($[2] = O),
-        ($[3] = o));
-    else o = $[3];
-    return o;
+    let t0;
+    if ($[2] !== theme) {
+      t0 = jsxProd_default(AppleTerminalWelcomeV2, {
+        theme,
+        welcomeMessage: "Welcome to Claude Code",
+      });
+      $[2] = theme;
+      $[3] = t0;
+    } else t0 = $[3];
+    return t0;
   }
-  if (["light", "light-daltonized", "light-ansi"].includes(O)) {
+  if (["light", "light-daltonized", "light-ansi"].includes(theme)) {
     let o;
-    if ($[4] === MEMO_CACHE_SENTINEL)
-      ((o = r(Text, { color: "claude", children: ["Welcome to Claude Code", " "] })), ($[4] = o));
-    else o = $[4];
-    let d, a, c, t, m, b, g, C, u;
-    if ($[5] === MEMO_CACHE_SENTINEL)
-      ((d = r(Text, {
+    if ($[4] === MEMO_CACHE_SENTINEL) {
+      o = jsxProd_default_2(Text, {
+        color: "claude",
+        children: ["Welcome to Claude Code", " "],
+      });
+      $[4] = o;
+    } else o = $[4];
+    let d;
+    let a;
+    let c;
+    let t;
+    let m;
+    let b;
+    let g;
+    let C;
+    let u;
+    if ($[5] === MEMO_CACHE_SENTINEL) {
+      d = jsxProd_default_2(Text, {
         children: [
           o,
-          r(Text, {
-            dimColor: !0,
+          jsxProd_default_2(Text, {
+            dimColor: true,
             children: [
               "v",
               {
@@ -99,118 +121,139 @@ function WelcomeV2() {
             ],
           }),
         ],
-      })),
-        (a = e(Text, { children: ".........................................................." })),
-        (c = e(Text, { children: "                                                          " })),
-        (t = e(Text, { children: "                                                          " })),
-        (m = e(Text, { children: "                                                          " })),
-        (b = e(Text, {
-          children:
-            "            \u2591\u2591\u2591\u2591\u2591\u2591                                        ",
-        })),
-        (g = e(Text, {
-          children:
-            "    \u2591\u2591\u2591   \u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591                                      ",
-        })),
-        (C = e(Text, {
-          children:
-            "   \u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591                                    ",
-        })),
-        (u = e(Text, { children: "                                                          " })),
-        ($[5] = d),
-        ($[6] = a),
-        ($[7] = c),
-        ($[8] = t),
-        ($[9] = m),
-        ($[10] = b),
-        ($[11] = g),
-        ($[12] = C),
-        ($[13] = u));
-    else
-      ((d = $[5]),
-        (a = $[6]),
-        (c = $[7]),
-        (t = $[8]),
-        (m = $[9]),
-        (b = $[10]),
-        (g = $[11]),
-        (C = $[12]),
-        (u = $[13]));
-    let y;
-    if ($[14] === MEMO_CACHE_SENTINEL)
-      ((y = r(Text, {
+      });
+      a = jsxProd_default(Text, {
+        children: "..........................................................",
+      });
+      c = jsxProd_default(Text, {
+        children: "                                                          ",
+      });
+      t = jsxProd_default(Text, {
+        children: "                                                          ",
+      });
+      m = jsxProd_default(Text, {
+        children: "                                                          ",
+      });
+      b = jsxProd_default(Text, {
+        children: "            \u2591\u2591\u2591\u2591\u2591\u2591                                        ",
+      });
+      g = jsxProd_default(Text, {
+        children:
+          "    \u2591\u2591\u2591   \u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591                                      ",
+      });
+      C = jsxProd_default(Text, {
+        children:
+          "   \u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591                                    ",
+      });
+      u = jsxProd_default(Text, {
+        children: "                                                          ",
+      });
+      $[5] = d;
+      $[6] = a;
+      $[7] = c;
+      $[8] = t;
+      $[9] = m;
+      $[10] = b;
+      $[11] = g;
+      $[12] = C;
+      $[13] = u;
+    } else {
+      d = $[5];
+      a = $[6];
+      c = $[7];
+      t = $[8];
+      m = $[9];
+      b = $[10];
+      g = $[11];
+      C = $[12];
+      u = $[13];
+    }
+    let t9;
+    if ($[14] === MEMO_CACHE_SENTINEL) {
+      t9 = jsxProd_default_2(Text, {
         children: [
-          e(Text, { dimColor: !0, children: "                           \u2591\u2591\u2591\u2591" }),
-          e(Text, { children: "                     \u2588\u2588    " }),
+          jsxProd_default(Text, {
+            dimColor: true,
+            children: "                           \u2591\u2591\u2591\u2591",
+          }),
+          jsxProd_default(Text, {
+            children: "                     \u2588\u2588    ",
+          }),
         ],
-      })),
-        ($[14] = y));
-    else y = $[14];
-    let _, h;
-    if ($[15] === MEMO_CACHE_SENTINEL)
-      ((_ = r(Text, {
+      });
+      $[14] = t9;
+    } else t9 = $[14];
+    let t10;
+    let t11;
+    if ($[15] === MEMO_CACHE_SENTINEL) {
+      t10 = jsxProd_default_2(Text, {
         children: [
-          e(Text, {
-            dimColor: !0,
+          jsxProd_default(Text, {
+            dimColor: true,
             children: "                         \u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591",
           }),
-          e(Text, { children: "               \u2588\u2588\u2592\u2592\u2588\u2588  " }),
+          jsxProd_default(Text, {
+            children: "               \u2588\u2588\u2592\u2592\u2588\u2588  ",
+          }),
         ],
-      })),
-        (h = e(Text, {
-          children: "                                            \u2592\u2592      \u2588\u2588   \u2592",
-        })),
-        ($[15] = _),
-        ($[16] = h));
-    else ((_ = $[15]), (h = $[16]));
-    let R;
-    if ($[17] === MEMO_CACHE_SENTINEL)
-      ((R = r(Text, {
+      });
+      t11 = jsxProd_default(Text, {
+        children: "                                            \u2592\u2592      \u2588\u2588   \u2592",
+      });
+      $[15] = t10;
+      $[16] = t11;
+    } else {
+      t10 = $[15];
+      t11 = $[16];
+    }
+    let t12;
+    if ($[17] === MEMO_CACHE_SENTINEL) {
+      t12 = jsxProd_default_2(Text, {
         children: [
           "      ",
-          e(Text, {
+          jsxProd_default(Text, {
             color: "clawd_body",
             children: " \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588 ",
           }),
           "                         \u2592\u2592\u2591\u2591\u2592\u2592      \u2592 \u2592\u2592",
         ],
-      })),
-        ($[17] = R));
-    else R = $[17];
-    let k;
-    if ($[18] === MEMO_CACHE_SENTINEL)
-      ((k = r(Text, {
+      });
+      $[17] = t12;
+    } else t12 = $[17];
+    let t13;
+    if ($[18] === MEMO_CACHE_SENTINEL) {
+      t13 = jsxProd_default_2(Text, {
         children: [
           "      ",
-          e(Text, {
+          jsxProd_default(Text, {
             color: "clawd_body",
             backgroundColor: "clawd_background",
             children: "\u2588\u2588\u2584\u2588\u2588\u2588\u2588\u2588\u2584\u2588\u2588",
           }),
           "                           \u2592\u2592         \u2592\u2592 ",
         ],
-      })),
-        ($[18] = k));
-    else k = $[18];
-    let f;
-    if ($[19] === MEMO_CACHE_SENTINEL)
-      ((f = r(Text, {
+      });
+      $[18] = t13;
+    } else t13 = $[18];
+    let t14;
+    if ($[19] === MEMO_CACHE_SENTINEL) {
+      t14 = jsxProd_default_2(Text, {
         children: [
           "      ",
-          e(Text, {
+          jsxProd_default(Text, {
             color: "clawd_body",
             children: " \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588 ",
           }),
           "                          \u2591          \u2592   ",
         ],
-      })),
-        ($[19] = f));
-    else f = $[19];
-    let p;
-    if ($[20] === MEMO_CACHE_SENTINEL)
-      ((p = e(Box, {
-        width: M,
-        children: r(Box, {
+      });
+      $[19] = t14;
+    } else t14 = $[19];
+    let t15;
+    if ($[20] === MEMO_CACHE_SENTINEL) {
+      t15 = jsxProd_default(Box, {
+        width: WELCOME_MAX_COLUMNS,
+        children: jsxProd_default_2(Box, {
           flexDirection: "column",
           children: [
             d,
@@ -222,37 +265,50 @@ function WelcomeV2() {
             g,
             C,
             u,
-            y,
-            _,
-            h,
-            R,
-            k,
-            f,
-            r(Text, {
+            t9,
+            t10,
+            t11,
+            t12,
+            t13,
+            t14,
+            jsxProd_default_2(Text, {
               children: [
                 ".......",
-                e(Text, { color: "clawd_body", children: "\u2588 \u2588   \u2588 \u2588" }),
+                jsxProd_default(Text, {
+                  color: "clawd_body",
+                  children: "\u2588 \u2588   \u2588 \u2588",
+                }),
                 "..........................\u2591..........\u2592....",
               ],
             }),
           ],
         }),
-      })),
-        ($[20] = p));
-    else p = $[20];
-    return p;
+      });
+      $[20] = t15;
+    } else t15 = $[20];
+    return t15;
   }
   let o;
-  if ($[21] === MEMO_CACHE_SENTINEL)
-    ((o = r(Text, { color: "claude", children: ["Welcome to Claude Code", " "] })), ($[21] = o));
-  else o = $[21];
-  let d, a, c, t, m, b, g;
-  if ($[22] === MEMO_CACHE_SENTINEL)
-    ((d = r(Text, {
+  if ($[21] === MEMO_CACHE_SENTINEL) {
+    o = jsxProd_default_2(Text, {
+      color: "claude",
+      children: ["Welcome to Claude Code", " "],
+    });
+    $[21] = o;
+  } else o = $[21];
+  let d;
+  let t1;
+  let t2;
+  let t3;
+  let t4;
+  let t5;
+  let t6;
+  if ($[22] === MEMO_CACHE_SENTINEL) {
+    d = jsxProd_default_2(Text, {
       children: [
         o,
-        r(Text, {
-          dimColor: !0,
+        jsxProd_default_2(Text, {
+          dimColor: true,
           children: [
             "v",
             {
@@ -270,171 +326,216 @@ function WelcomeV2() {
           ],
         }),
       ],
-    })),
-      (a = e(Text, { children: ".........................................................." })),
-      (c = e(Text, { children: "                                                          " })),
-      (t = e(Text, {
-        children:
-          "     *                                       \u2588\u2588\u2588\u2588\u2588\u2593\u2593\u2591     ",
-      })),
-      (m = e(Text, {
-        children:
-          "                                 *         \u2588\u2588\u2588\u2593\u2591     \u2591\u2591   ",
-      })),
-      (b = e(Text, {
-        children:
-          "            \u2591\u2591\u2591\u2591\u2591\u2591                        \u2588\u2588\u2588\u2593\u2591           ",
-      })),
-      (g = e(Text, {
-        children:
-          "    \u2591\u2591\u2591   \u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591                      \u2588\u2588\u2588\u2593\u2591           ",
-      })),
-      ($[22] = d),
-      ($[23] = a),
-      ($[24] = c),
-      ($[25] = t),
-      ($[26] = m),
-      ($[27] = b),
-      ($[28] = g));
-  else ((d = $[22]), (a = $[23]), (c = $[24]), (t = $[25]), (m = $[26]), (b = $[27]), (g = $[28]));
-  let y, _, h, C, u;
-  if ($[29] === MEMO_CACHE_SENTINEL)
-    ((C = r(Text, {
+    });
+    t1 = jsxProd_default(Text, {
+      children: "..........................................................",
+    });
+    t2 = jsxProd_default(Text, {
+      children: "                                                          ",
+    });
+    t3 = jsxProd_default(Text, {
+      children:
+        "     *                                       \u2588\u2588\u2588\u2588\u2588\u2593\u2593\u2591     ",
+    });
+    t4 = jsxProd_default(Text, {
+      children:
+        "                                 *         \u2588\u2588\u2588\u2593\u2591     \u2591\u2591   ",
+    });
+    t5 = jsxProd_default(Text, {
+      children:
+        "            \u2591\u2591\u2591\u2591\u2591\u2591                        \u2588\u2588\u2588\u2593\u2591           ",
+    });
+    t6 = jsxProd_default(Text, {
+      children:
+        "    \u2591\u2591\u2591   \u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591                      \u2588\u2588\u2588\u2593\u2591           ",
+    });
+    $[22] = d;
+    $[23] = t1;
+    $[24] = t2;
+    $[25] = t3;
+    $[26] = t4;
+    $[27] = t5;
+    $[28] = t6;
+  } else {
+    d = $[22];
+    t1 = $[23];
+    t2 = $[24];
+    t3 = $[25];
+    t4 = $[26];
+    t5 = $[27];
+    t6 = $[28];
+  }
+  let y;
+  let _;
+  let h;
+  let C;
+  let u;
+  if ($[29] === MEMO_CACHE_SENTINEL) {
+    C = jsxProd_default_2(Text, {
       children: [
-        e(Text, {
+        jsxProd_default(Text, {
           children:
             "   \u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591    ",
         }),
-        e(Text, { bold: !0, children: "*" }),
-        e(Text, { children: "                \u2588\u2588\u2593\u2591\u2591      \u2593   " }),
+        jsxProd_default(Text, {
+          bold: true,
+          children: "*",
+        }),
+        jsxProd_default(Text, {
+          children: "                \u2588\u2588\u2593\u2591\u2591      \u2593   ",
+        }),
       ],
-    })),
-      (u = e(Text, {
-        children:
-          "                                             \u2591\u2593\u2593\u2588\u2588\u2588\u2593\u2593\u2591    ",
-      })),
-      (y = e(Text, {
-        dimColor: !0,
-        children: " *                                 \u2591\u2591\u2591\u2591                   ",
-      })),
-      (_ = e(Text, {
-        dimColor: !0,
-        children:
-          "                                 \u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591                 ",
-      })),
-      (h = e(Text, {
-        dimColor: !0,
-        children:
-          "                               \u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591           ",
-      })),
-      ($[29] = y),
-      ($[30] = _),
-      ($[31] = h),
-      ($[32] = C),
-      ($[33] = u));
-  else ((y = $[29]), (_ = $[30]), (h = $[31]), (C = $[32]), (u = $[33]));
-  let R;
-  if ($[34] === MEMO_CACHE_SENTINEL)
-    ((R = e(Text, {
+    });
+    u = jsxProd_default(Text, {
+      children:
+        "                                             \u2591\u2593\u2593\u2588\u2588\u2588\u2593\u2593\u2591    ",
+    });
+    y = jsxProd_default(Text, {
+      dimColor: true,
+      children: " *                                 \u2591\u2591\u2591\u2591                   ",
+    });
+    _ = jsxProd_default(Text, {
+      dimColor: true,
+      children:
+        "                                 \u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591                 ",
+    });
+    h = jsxProd_default(Text, {
+      dimColor: true,
+      children:
+        "                               \u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591           ",
+    });
+    $[29] = y;
+    $[30] = _;
+    $[31] = h;
+    $[32] = C;
+    $[33] = u;
+  } else {
+    y = $[29];
+    _ = $[30];
+    h = $[31];
+    C = $[32];
+    u = $[33];
+  }
+  let t12;
+  if ($[34] === MEMO_CACHE_SENTINEL) {
+    t12 = jsxProd_default(Text, {
       color: "clawd_body",
       children: " \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588 ",
-    })),
-      ($[34] = R));
-  else R = $[34];
-  let k;
-  if ($[35] === MEMO_CACHE_SENTINEL)
-    ((k = r(Text, {
+    });
+    $[34] = t12;
+  } else t12 = $[34];
+  let t13;
+  if ($[35] === MEMO_CACHE_SENTINEL) {
+    t13 = jsxProd_default_2(Text, {
       children: [
         "      ",
-        R,
+        t12,
         "                                       ",
-        e(Text, { dimColor: !0, children: "*" }),
-        e(Text, { children: " " }),
+        jsxProd_default(Text, {
+          dimColor: true,
+          children: "*",
+        }),
+        jsxProd_default(Text, {
+          children: " ",
+        }),
       ],
-    })),
-      ($[35] = k));
-  else k = $[35];
-  let f;
-  if ($[36] === MEMO_CACHE_SENTINEL)
-    ((f = r(Text, {
+    });
+    $[35] = t13;
+  } else t13 = $[35];
+  let t14;
+  if ($[36] === MEMO_CACHE_SENTINEL) {
+    t14 = jsxProd_default_2(Text, {
       children: [
         "      ",
-        e(Text, {
+        jsxProd_default(Text, {
           color: "clawd_body",
           children: "\u2588\u2588\u2584\u2588\u2588\u2588\u2588\u2588\u2584\u2588\u2588",
         }),
-        e(Text, { children: "                        " }),
-        e(Text, { bold: !0, children: "*" }),
-        e(Text, { children: "                " }),
+        jsxProd_default(Text, {
+          children: "                        ",
+        }),
+        jsxProd_default(Text, {
+          bold: true,
+          children: "*",
+        }),
+        jsxProd_default(Text, {
+          children: "                ",
+        }),
       ],
-    })),
-      ($[36] = f));
-  else f = $[36];
-  let p;
-  if ($[37] === MEMO_CACHE_SENTINEL)
-    ((p = r(Text, {
+    });
+    $[36] = t14;
+  } else t14 = $[36];
+  let t15;
+  if ($[37] === MEMO_CACHE_SENTINEL) {
+    t15 = jsxProd_default_2(Text, {
       children: [
         "      ",
-        e(Text, {
+        jsxProd_default(Text, {
           color: "clawd_body",
           children: " \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588 ",
         }),
         "     *                                   ",
       ],
-    })),
-      ($[37] = p));
-  else p = $[37];
-  let N;
-  if ($[38] === MEMO_CACHE_SENTINEL)
-    ((N = e(Box, {
-      width: M,
-      children: r(Box, {
+    });
+    $[37] = t15;
+  } else t15 = $[37];
+  let t16;
+  if ($[38] === MEMO_CACHE_SENTINEL) {
+    t16 = jsxProd_default(Box, {
+      width: WELCOME_MAX_COLUMNS,
+      children: jsxProd_default_2(Box, {
         flexDirection: "column",
         children: [
           d,
-          a,
-          c,
-          t,
-          m,
-          b,
-          g,
+          t1,
+          t2,
+          t3,
+          t4,
+          t5,
+          t6,
           C,
           u,
           y,
           _,
           h,
-          k,
-          f,
-          p,
-          r(Text, {
+          t13,
+          t14,
+          t15,
+          jsxProd_default_2(Text, {
             children: [
               ".......",
-              e(Text, { color: "clawd_body", children: "\u2588 \u2588   \u2588 \u2588" }),
+              jsxProd_default(Text, {
+                color: "clawd_body",
+                children: "\u2588 \u2588   \u2588 \u2588",
+              }),
               "..........................................",
             ],
           }),
         ],
       }),
-    })),
-      ($[38] = N));
-  else N = $[38];
-  return N;
+    });
+    $[38] = t16;
+  } else t16 = $[38];
+  return t16;
 }
 //@ chunk-n1nr1qar.js:8150-15429 fingerprint = AppleTerminalWelcomeV2 (0.832)
-function AppleTerminalWelcomeV2(t0) {
-  let $ = w(44),
-    { theme: theme, welcomeMessage: welcomeMessage } = t0;
+function AppleTerminalWelcomeV2(props) {
+  let $ = w(44);
+  let { theme, welcomeMessage } = props;
   if (["light", "light-daltonized", "light-ansi"].includes(theme)) {
-    let d;
-    if ($[0] !== welcomeMessage)
-      ((d = r(Text, { color: "claude", children: [welcomeMessage, " "] })),
-        ($[0] = welcomeMessage),
-        ($[1] = d));
-    else d = $[1];
-    let a;
-    if ($[2] === MEMO_CACHE_SENTINEL)
-      ((a = r(Text, {
-        dimColor: !0,
+    let t1;
+    if ($[0] !== welcomeMessage) {
+      t1 = jsxProd_default_2(Text, {
+        color: "claude",
+        children: [welcomeMessage, " "],
+      });
+      $[0] = welcomeMessage;
+      $[1] = t1;
+    } else t1 = $[1];
+    let t2;
+    if ($[2] === MEMO_CACHE_SENTINEL) {
+      t2 = jsxProd_default_2(Text, {
+        dimColor: true,
         children: [
           "v",
           {
@@ -450,141 +551,214 @@ function AppleTerminalWelcomeV2(t0) {
           }.VERSION,
           " ",
         ],
-      })),
-        ($[2] = a));
-    else a = $[2];
-    let c;
-    if ($[3] !== d) ((c = r(Text, { children: [d, a] })), ($[3] = d), ($[4] = c));
-    else c = $[4];
-    let t, m, b, g, C, u, y, _;
-    if ($[5] === MEMO_CACHE_SENTINEL)
-      ((b = e(Text, { children: ".........................................................." })),
-        (g = e(Text, { children: "                                                          " })),
-        (C = e(Text, { children: "                                                          " })),
-        (u = e(Text, { children: "                                                          " })),
-        (y = e(Text, {
-          children:
-            "            \u2591\u2591\u2591\u2591\u2591\u2591                                        ",
-        })),
-        (_ = e(Text, {
-          children:
-            "    \u2591\u2591\u2591   \u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591                                      ",
-        })),
-        (t = e(Text, {
-          children:
-            "   \u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591                                    ",
-        })),
-        (m = e(Text, { children: "                                                          " })),
-        ($[5] = t),
-        ($[6] = m),
-        ($[7] = b),
-        ($[8] = g),
-        ($[9] = C),
-        ($[10] = u),
-        ($[11] = y),
-        ($[12] = _));
-    else ((t = $[5]), (m = $[6]), (b = $[7]), (g = $[8]), (C = $[9]), (u = $[10]), (y = $[11]), (_ = $[12]));
-    let h;
-    if ($[13] === MEMO_CACHE_SENTINEL)
-      ((h = r(Text, {
+      });
+      $[2] = t2;
+    } else t2 = $[2];
+    let t3;
+    if ($[3] !== t1) {
+      t3 = jsxProd_default_2(Text, {
+        children: [t1, t2],
+      });
+      $[3] = t1;
+      $[4] = t3;
+    } else t3 = $[4];
+    let t10;
+    let t11;
+    let t4;
+    let t5;
+    let t6;
+    let t7;
+    let t8;
+    let t9;
+    if ($[5] === MEMO_CACHE_SENTINEL) {
+      t4 = jsxProd_default(Text, {
+        children: "..........................................................",
+      });
+      t5 = jsxProd_default(Text, {
+        children: "                                                          ",
+      });
+      t6 = jsxProd_default(Text, {
+        children: "                                                          ",
+      });
+      t7 = jsxProd_default(Text, {
+        children: "                                                          ",
+      });
+      t8 = jsxProd_default(Text, {
+        children: "            \u2591\u2591\u2591\u2591\u2591\u2591                                        ",
+      });
+      t9 = jsxProd_default(Text, {
+        children:
+          "    \u2591\u2591\u2591   \u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591                                      ",
+      });
+      t10 = jsxProd_default(Text, {
+        children:
+          "   \u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591                                    ",
+      });
+      t11 = jsxProd_default(Text, {
+        children: "                                                          ",
+      });
+      $[5] = t10;
+      $[6] = t11;
+      $[7] = t4;
+      $[8] = t5;
+      $[9] = t6;
+      $[10] = t7;
+      $[11] = t8;
+      $[12] = t9;
+    } else {
+      t10 = $[5];
+      t11 = $[6];
+      t4 = $[7];
+      t5 = $[8];
+      t6 = $[9];
+      t7 = $[10];
+      t8 = $[11];
+      t9 = $[12];
+    }
+    let t12;
+    if ($[13] === MEMO_CACHE_SENTINEL) {
+      t12 = jsxProd_default_2(Text, {
         children: [
-          e(Text, { dimColor: !0, children: "                           \u2591\u2591\u2591\u2591" }),
-          e(Text, { children: "                     \u2588\u2588    " }),
+          jsxProd_default(Text, {
+            dimColor: true,
+            children: "                           \u2591\u2591\u2591\u2591",
+          }),
+          jsxProd_default(Text, {
+            children: "                     \u2588\u2588    ",
+          }),
         ],
-      })),
-        ($[13] = h));
-    else h = $[13];
-    let R, k, f;
-    if ($[14] === MEMO_CACHE_SENTINEL)
-      ((R = r(Text, {
+      });
+      $[13] = t12;
+    } else t12 = $[13];
+    let t13;
+    let t14;
+    let t15;
+    if ($[14] === MEMO_CACHE_SENTINEL) {
+      t13 = jsxProd_default_2(Text, {
         children: [
-          e(Text, {
-            dimColor: !0,
+          jsxProd_default(Text, {
+            dimColor: true,
             children: "                         \u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591",
           }),
-          e(Text, { children: "               \u2588\u2588\u2592\u2592\u2588\u2588  " }),
+          jsxProd_default(Text, {
+            children: "               \u2588\u2588\u2592\u2592\u2588\u2588  ",
+          }),
         ],
-      })),
-        (k = e(Text, {
-          children: "                                            \u2592\u2592      \u2588\u2588   \u2592",
-        })),
-        (f = e(Text, {
-          children:
-            "                                          \u2592\u2592\u2591\u2591\u2592\u2592      \u2592 \u2592\u2592",
-        })),
-        ($[14] = R),
-        ($[15] = k),
-        ($[16] = f));
-    else ((R = $[14]), (k = $[15]), (f = $[16]));
-    let p;
-    if ($[17] === MEMO_CACHE_SENTINEL)
-      ((p = r(Text, {
+      });
+      t14 = jsxProd_default(Text, {
+        children: "                                            \u2592\u2592      \u2588\u2588   \u2592",
+      });
+      t15 = jsxProd_default(Text, {
+        children:
+          "                                          \u2592\u2592\u2591\u2591\u2592\u2592      \u2592 \u2592\u2592",
+      });
+      $[14] = t13;
+      $[15] = t14;
+      $[16] = t15;
+    } else {
+      t13 = $[14];
+      t14 = $[15];
+      t15 = $[16];
+    }
+    let t16;
+    if ($[17] === MEMO_CACHE_SENTINEL) {
+      t16 = jsxProd_default_2(Text, {
         children: [
           "      ",
-          e(Text, { color: "clawd_body", children: "\u2597" }),
-          r(Text, {
+          jsxProd_default(Text, {
+            color: "clawd_body",
+            children: "\u2597",
+          }),
+          jsxProd_default_2(Text, {
             color: "clawd_background",
             backgroundColor: "clawd_body",
             children: [" ", "\u2597", "     ", "\u2596", " "],
           }),
-          e(Text, { color: "clawd_body", children: "\u2596" }),
+          jsxProd_default(Text, {
+            color: "clawd_body",
+            children: "\u2596",
+          }),
           "                           \u2592\u2592         \u2592\u2592 ",
         ],
-      })),
-        ($[17] = p));
-    else p = $[17];
-    let N;
-    if ($[18] === MEMO_CACHE_SENTINEL)
-      ((N = r(Text, {
+      });
+      $[17] = t16;
+    } else t16 = $[17];
+    let t17;
+    if ($[18] === MEMO_CACHE_SENTINEL) {
+      t17 = jsxProd_default_2(Text, {
         children: [
           "       ",
-          e(Text, { backgroundColor: "clawd_body", children: " ".repeat(9) }),
+          jsxProd_default(Text, {
+            backgroundColor: "clawd_body",
+            children: " ".repeat(9),
+          }),
           "                           \u2591          \u2592   ",
         ],
-      })),
-        ($[18] = N));
-    else N = $[18];
-    let x;
-    if ($[19] === MEMO_CACHE_SENTINEL)
-      ((x = r(Text, {
+      });
+      $[18] = t17;
+    } else t17 = $[18];
+    let t18;
+    if ($[19] === MEMO_CACHE_SENTINEL) {
+      t18 = jsxProd_default_2(Text, {
         children: [
           ".......",
-          e(Text, { backgroundColor: "clawd_body", children: " " }),
-          e(Text, { children: " " }),
-          e(Text, { backgroundColor: "clawd_body", children: " " }),
-          e(Text, { children: "   " }),
-          e(Text, { backgroundColor: "clawd_body", children: " " }),
-          e(Text, { children: " " }),
-          e(Text, { backgroundColor: "clawd_body", children: " " }),
+          jsxProd_default(Text, {
+            backgroundColor: "clawd_body",
+            children: " ",
+          }),
+          jsxProd_default(Text, {
+            children: " ",
+          }),
+          jsxProd_default(Text, {
+            backgroundColor: "clawd_body",
+            children: " ",
+          }),
+          jsxProd_default(Text, {
+            children: "   ",
+          }),
+          jsxProd_default(Text, {
+            backgroundColor: "clawd_body",
+            children: " ",
+          }),
+          jsxProd_default(Text, {
+            children: " ",
+          }),
+          jsxProd_default(Text, {
+            backgroundColor: "clawd_body",
+            children: " ",
+          }),
           "..........................\u2591..........\u2592....",
         ],
-      })),
-        ($[19] = x));
-    else x = $[19];
-    let v;
-    if ($[20] !== c)
-      ((v = e(Box, {
-        width: M,
-        children: r(Box, {
+      });
+      $[19] = t18;
+    } else t18 = $[19];
+    let t19;
+    if ($[20] !== t3) {
+      t19 = jsxProd_default(Box, {
+        width: WELCOME_MAX_COLUMNS,
+        children: jsxProd_default_2(Box, {
           flexDirection: "column",
-          children: [c, b, g, C, u, y, _, t, m, h, R, k, f, p, N, x],
+          children: [t3, t4, t5, t6, t7, t8, t9, t10, t11, t12, t13, t14, t15, t16, t17, t18],
         }),
-      })),
-        ($[20] = c),
-        ($[21] = v));
-    else v = $[21];
-    return v;
+      });
+      $[20] = t3;
+      $[21] = t19;
+    } else t19 = $[21];
+    return t19;
   }
-  let d;
-  if ($[22] !== welcomeMessage)
-    ((d = r(Text, { color: "claude", children: [welcomeMessage, " "] })),
-      ($[22] = welcomeMessage),
-      ($[23] = d));
-  else d = $[23];
-  let a;
-  if ($[24] === MEMO_CACHE_SENTINEL)
-    ((a = r(Text, {
-      dimColor: !0,
+  let t1;
+  if ($[22] !== welcomeMessage) {
+    t1 = jsxProd_default_2(Text, {
+      color: "claude",
+      children: [welcomeMessage, " "],
+    });
+    $[22] = welcomeMessage;
+    $[23] = t1;
+  } else t1 = $[23];
+  let t2;
+  if ($[24] === MEMO_CACHE_SENTINEL) {
+    t2 = jsxProd_default_2(Text, {
+      dimColor: true,
       children: [
         "v",
         {
@@ -600,146 +774,220 @@ function AppleTerminalWelcomeV2(t0) {
         }.VERSION,
         " ",
       ],
-    })),
-      ($[24] = a));
-  else a = $[24];
-  let c;
-  if ($[25] !== d) ((c = r(Text, { children: [d, a] })), ($[25] = d), ($[26] = c));
-  else c = $[26];
-  let b, g, C, u, y, _;
-  if ($[27] === MEMO_CACHE_SENTINEL)
-    ((b = e(Text, { children: ".........................................................." })),
-      (g = e(Text, { children: "                                                          " })),
-      (C = e(Text, {
-        children:
-          "     *                                       \u2588\u2588\u2588\u2588\u2588\u2593\u2593\u2591     ",
-      })),
-      (u = e(Text, {
-        children:
-          "                                 *         \u2588\u2588\u2588\u2593\u2591     \u2591\u2591   ",
-      })),
-      (y = e(Text, {
-        children:
-          "            \u2591\u2591\u2591\u2591\u2591\u2591                        \u2588\u2588\u2588\u2593\u2591           ",
-      })),
-      (_ = e(Text, {
-        children:
-          "    \u2591\u2591\u2591   \u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591                      \u2588\u2588\u2588\u2593\u2591           ",
-      })),
-      ($[27] = b),
-      ($[28] = g),
-      ($[29] = C),
-      ($[30] = u),
-      ($[31] = y),
-      ($[32] = _));
-  else ((b = $[27]), (g = $[28]), (C = $[29]), (u = $[30]), (y = $[31]), (_ = $[32]));
-  let t, m, h, R, k;
-  if ($[33] === MEMO_CACHE_SENTINEL)
-    ((t = r(Text, {
+    });
+    $[24] = t2;
+  } else t2 = $[24];
+  let t3;
+  if ($[25] !== t1) {
+    t3 = jsxProd_default_2(Text, {
+      children: [t1, t2],
+    });
+    $[25] = t1;
+    $[26] = t3;
+  } else t3 = $[26];
+  let t4;
+  let t5;
+  let t6;
+  let t7;
+  let t8;
+  let t9;
+  if ($[27] === MEMO_CACHE_SENTINEL) {
+    t4 = jsxProd_default(Text, {
+      children: "..........................................................",
+    });
+    t5 = jsxProd_default(Text, {
+      children: "                                                          ",
+    });
+    t6 = jsxProd_default(Text, {
+      children:
+        "     *                                       \u2588\u2588\u2588\u2588\u2588\u2593\u2593\u2591     ",
+    });
+    t7 = jsxProd_default(Text, {
+      children:
+        "                                 *         \u2588\u2588\u2588\u2593\u2591     \u2591\u2591   ",
+    });
+    t8 = jsxProd_default(Text, {
+      children:
+        "            \u2591\u2591\u2591\u2591\u2591\u2591                        \u2588\u2588\u2588\u2593\u2591           ",
+    });
+    t9 = jsxProd_default(Text, {
+      children:
+        "    \u2591\u2591\u2591   \u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591                      \u2588\u2588\u2588\u2593\u2591           ",
+    });
+    $[27] = t4;
+    $[28] = t5;
+    $[29] = t6;
+    $[30] = t7;
+    $[31] = t8;
+    $[32] = t9;
+  } else {
+    t4 = $[27];
+    t5 = $[28];
+    t6 = $[29];
+    t7 = $[30];
+    t8 = $[31];
+    t9 = $[32];
+  }
+  let t10;
+  let t11;
+  let t12;
+  let t13;
+  let t14;
+  if ($[33] === MEMO_CACHE_SENTINEL) {
+    t10 = jsxProd_default_2(Text, {
       children: [
-        e(Text, {
+        jsxProd_default(Text, {
           children:
             "   \u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591    ",
         }),
-        e(Text, { bold: !0, children: "*" }),
-        e(Text, { children: "                \u2588\u2588\u2593\u2591\u2591      \u2593   " }),
+        jsxProd_default(Text, {
+          bold: true,
+          children: "*",
+        }),
+        jsxProd_default(Text, {
+          children: "                \u2588\u2588\u2593\u2591\u2591      \u2593   ",
+        }),
       ],
-    })),
-      (m = e(Text, {
-        children:
-          "                                             \u2591\u2593\u2593\u2588\u2588\u2588\u2593\u2593\u2591    ",
-      })),
-      (h = e(Text, {
-        dimColor: !0,
-        children: " *                                 \u2591\u2591\u2591\u2591                   ",
-      })),
-      (R = e(Text, {
-        dimColor: !0,
-        children:
-          "                                 \u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591                 ",
-      })),
-      (k = e(Text, {
-        dimColor: !0,
-        children:
-          "                               \u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591           ",
-      })),
-      ($[33] = t),
-      ($[34] = m),
-      ($[35] = h),
-      ($[36] = R),
-      ($[37] = k));
-  else ((t = $[33]), (m = $[34]), (h = $[35]), (R = $[36]), (k = $[37]));
-  let f;
-  if ($[38] === MEMO_CACHE_SENTINEL)
-    ((f = r(Text, {
+    });
+    t11 = jsxProd_default(Text, {
+      children:
+        "                                             \u2591\u2593\u2593\u2588\u2588\u2588\u2593\u2593\u2591    ",
+    });
+    t12 = jsxProd_default(Text, {
+      dimColor: true,
+      children: " *                                 \u2591\u2591\u2591\u2591                   ",
+    });
+    t13 = jsxProd_default(Text, {
+      dimColor: true,
+      children:
+        "                                 \u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591                 ",
+    });
+    t14 = jsxProd_default(Text, {
+      dimColor: true,
+      children:
+        "                               \u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591           ",
+    });
+    $[33] = t10;
+    $[34] = t11;
+    $[35] = t12;
+    $[36] = t13;
+    $[37] = t14;
+  } else {
+    t10 = $[33];
+    t11 = $[34];
+    t12 = $[35];
+    t13 = $[36];
+    t14 = $[37];
+  }
+  let t15;
+  if ($[38] === MEMO_CACHE_SENTINEL) {
+    t15 = jsxProd_default_2(Text, {
       children: [
         "                                                      ",
-        e(Text, { dimColor: !0, children: "*" }),
-        e(Text, { children: "   " }),
+        jsxProd_default(Text, {
+          dimColor: true,
+          children: "*",
+        }),
+        jsxProd_default(Text, {
+          children: "   ",
+        }),
       ],
-    })),
-      ($[38] = f));
-  else f = $[38];
-  let p;
-  if ($[39] === MEMO_CACHE_SENTINEL)
-    ((p = r(Text, {
+    });
+    $[38] = t15;
+  } else t15 = $[38];
+  let t16;
+  if ($[39] === MEMO_CACHE_SENTINEL) {
+    t16 = jsxProd_default_2(Text, {
       children: [
         "      ",
-        e(Text, { color: "clawd_body", children: "\u2597" }),
-        r(Text, {
+        jsxProd_default(Text, {
+          color: "clawd_body",
+          children: "\u2597",
+        }),
+        jsxProd_default_2(Text, {
           color: "clawd_background",
           backgroundColor: "clawd_body",
           children: [" ", "\u2597", "     ", "\u2596", " "],
         }),
-        e(Text, { color: "clawd_body", children: "\u2596" }),
-        e(Text, { children: "                       " }),
-        e(Text, { bold: !0, children: "*" }),
-        e(Text, { children: "                 " }),
+        jsxProd_default(Text, {
+          color: "clawd_body",
+          children: "\u2596",
+        }),
+        jsxProd_default(Text, {
+          children: "                       ",
+        }),
+        jsxProd_default(Text, {
+          bold: true,
+          children: "*",
+        }),
+        jsxProd_default(Text, {
+          children: "                 ",
+        }),
       ],
-    })),
-      ($[39] = p));
-  else p = $[39];
-  let N;
-  if ($[40] === MEMO_CACHE_SENTINEL)
-    ((N = r(Text, {
+    });
+    $[39] = t16;
+  } else t16 = $[39];
+  let t17;
+  if ($[40] === MEMO_CACHE_SENTINEL) {
+    t17 = jsxProd_default_2(Text, {
       children: [
         "       ",
-        e(Text, { backgroundColor: "clawd_body", children: " ".repeat(9) }),
+        jsxProd_default(Text, {
+          backgroundColor: "clawd_body",
+          children: " ".repeat(9),
+        }),
         "      *                                   ",
       ],
-    })),
-      ($[40] = N));
-  else N = $[40];
-  let x;
-  if ($[41] === MEMO_CACHE_SENTINEL)
-    ((x = r(Text, {
+    });
+    $[40] = t17;
+  } else t17 = $[40];
+  let t18;
+  if ($[41] === MEMO_CACHE_SENTINEL) {
+    t18 = jsxProd_default_2(Text, {
       children: [
         ".......",
-        e(Text, { backgroundColor: "clawd_body", children: " " }),
-        e(Text, { children: " " }),
-        e(Text, { backgroundColor: "clawd_body", children: " " }),
-        e(Text, { children: "   " }),
-        e(Text, { backgroundColor: "clawd_body", children: " " }),
-        e(Text, { children: " " }),
-        e(Text, { backgroundColor: "clawd_body", children: " " }),
+        jsxProd_default(Text, {
+          backgroundColor: "clawd_body",
+          children: " ",
+        }),
+        jsxProd_default(Text, {
+          children: " ",
+        }),
+        jsxProd_default(Text, {
+          backgroundColor: "clawd_body",
+          children: " ",
+        }),
+        jsxProd_default(Text, {
+          children: "   ",
+        }),
+        jsxProd_default(Text, {
+          backgroundColor: "clawd_body",
+          children: " ",
+        }),
+        jsxProd_default(Text, {
+          children: " ",
+        }),
+        jsxProd_default(Text, {
+          backgroundColor: "clawd_body",
+          children: " ",
+        }),
         "..........................................",
       ],
-    })),
-      ($[41] = x));
-  else x = $[41];
-  let v;
-  if ($[42] !== c)
-    ((v = e(Box, {
-      width: M,
-      children: r(Box, {
+    });
+    $[41] = t18;
+  } else t18 = $[41];
+  let t19;
+  if ($[42] !== t3) {
+    t19 = jsxProd_default(Box, {
+      width: WELCOME_MAX_COLUMNS,
+      children: jsxProd_default_2(Box, {
         flexDirection: "column",
-        children: [c, b, g, C, u, y, _, t, m, h, R, k, f, p, N, x],
+        children: [t3, t4, t5, t6, t7, t8, t9, t10, t11, t12, t13, t14, t15, t16, t17, t18],
       }),
-    })),
-      ($[42] = c),
-      ($[43] = v));
-  else v = $[43];
-  return v;
+    });
+    $[42] = t3;
+    $[43] = t19;
+  } else t19 = $[43];
+  return t19;
 }
-
 export { WelcomeV2 };

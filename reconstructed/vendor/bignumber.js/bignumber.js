@@ -8,1150 +8,1517 @@
 import { x } from "../../runtime/bun-runtime.js";
 
 //@ chunk-na3pph4p.js:18271-37695 cjs-fingerprint
-var Ir = x(function (en, Dt) {
-  (function (e) {
-    var t,
-      r = /^-?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i,
-      { ceil: ceil, floor: floor } = Math,
-      a = "[BigNumber Error] ",
-      h = a + "Number primitive has more than 15 significant digits: ",
-      g = 100000000000000,
-      E = 14,
-      k = 9007199254740991,
-      T = [
-        1, 10, 100, 1000, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9, 10000000000, 100000000000, 1000000000000,
-        10000000000000,
-      ],
-      j = 1e7,
-      I = 1e9;
-    function Y(D) {
-      var U,
-        L,
-        W,
-        C = (A.prototype = { constructor: A, toString: null, valueOf: null }),
-        ee = new A(1),
-        V = 20,
-        X = 4,
-        ce = -7,
-        de = 21,
-        Ze = -1e7,
-        ke = 1e7,
-        et = !1,
-        wt = 1,
-        Ge = 0,
-        Ar = {
-          prefix: "",
-          groupSize: 3,
-          secondaryGroupSize: 0,
-          groupSeparator: ",",
-          decimalSeparator: ".",
-          fractionGroupSize: 0,
-          fractionGroupSeparator: "\xA0",
-          suffix: "",
-        },
-        tt = "0123456789abcdefghijklmnopqrstuvwxyz",
-        Tr = !0;
-      function A(i, o) {
-        var c,
-          y,
-          l,
-          f,
-          m,
-          u,
-          d,
-          _,
-          p = this;
-        if (!(p instanceof A)) return new A(i, o);
-        if (o == null) {
-          if (i && i._isBigNumber === !0) {
-            if (((p.s = i.s), !i.c || i.e > ke)) p.c = p.e = null;
-            else if (i.e < Ze) p.c = [(p.e = 0)];
-            else ((p.e = i.e), (p.c = i.c.slice()));
+var require_bignumber = x(function (cjsExports, cjsModule) {
+  (function (globalObject) {
+    var BigNumber;
+    var isNumeric = /^-?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i;
+    var { ceil: mathceil, floor: mathfloor } = Math;
+    var bignumberError = "[BigNumber Error] ";
+    var tooManyDigits = bignumberError + "Number primitive has more than 15 significant digits: ";
+    var BASE = 100000000000000;
+    var LOG_BASE = 14;
+    var MAX_SAFE_INTEGER = 9007199254740991;
+    var POWS_TEN = [
+      1, 10, 100, 1000, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9, 10000000000, 100000000000, 1000000000000,
+      10000000000000,
+    ];
+    var SQRT_BASE = 1e7;
+    var MAX = 1e9;
+    function clone(configObject) {
+      var div;
+      var convertBase;
+      var parseNumeric;
+      var P_2 = (BigNumber.prototype = {
+        constructor: BigNumber,
+        toString: null,
+        valueOf: null,
+      });
+      var ONE = new BigNumber(1);
+      var DECIMAL_PLACES = 20;
+      var ROUNDING_MODE = 4;
+      var TO_EXP_NEG = -7;
+      var TO_EXP_POS = 21;
+      var MIN_EXP = -1e7;
+      var MAX_EXP = 1e7;
+      var CRYPTO = false;
+      var MODULO_MODE = 1;
+      var POW_PRECISION = 0;
+      var FORMAT = {
+        prefix: "",
+        groupSize: 3,
+        secondaryGroupSize: 0,
+        groupSeparator: ",",
+        decimalSeparator: ".",
+        fractionGroupSize: 0,
+        fractionGroupSeparator: "\xA0",
+        suffix: "",
+      };
+      var ALPHABET = "0123456789abcdefghijklmnopqrstuvwxyz";
+      var alphabetHasNormalDecimalDigits = true;
+      function BigNumber(v, b) {
+        var alphabet;
+        var c;
+        var caseChanged;
+        var e;
+        var i;
+        var isNum;
+        var len;
+        var str;
+        var x = this;
+        if (!(x instanceof BigNumber)) return new BigNumber(v, b);
+        if (b == null) {
+          if (v && v._isBigNumber === true) {
+            x.s = v.s;
+            if (!v.c || v.e > MAX_EXP) x.c = x.e = null;
+            else if (v.e < MIN_EXP) x.c = [(x.e = 0)];
+            else {
+              x.e = v.e;
+              x.c = v.c.slice();
+            }
             return;
           }
-          if ((u = typeof i == "number") && i * 0 == 0) {
-            if (((p.s = 1 / i < 0 ? ((i = -i), -1) : 1), i === ~~i)) {
-              for (f = 0, m = i; m >= 10; m /= 10, f++);
-              if (f > ke) p.c = p.e = null;
-              else ((p.e = f), (p.c = [i]));
+          if ((isNum = typeof v == "number") && v * 0 == 0) {
+            x.s = 1 / v < 0 ? ((v = -v), -1) : 1;
+            if (v === ~~v) {
+              for (e = 0, i = v; i >= 10; i /= 10, e++);
+              if (e > MAX_EXP) x.c = x.e = null;
+              else {
+                x.e = e;
+                x.c = [v];
+              }
               return;
             }
-            _ = String(i);
+            str = String(v);
           } else {
-            if (!r.test((_ = String(i)))) return W(p, _, u);
-            p.s = _.charCodeAt(0) == 45 ? ((_ = _.slice(1)), -1) : 1;
+            if (!isNumeric.test((str = String(v)))) return parseNumeric(x, str, isNum);
+            x.s = str.charCodeAt(0) == 45 ? ((str = str.slice(1)), -1) : 1;
           }
-          if ((f = _.indexOf(".")) > -1) _ = _.replace(".", "");
-          if ((m = _.search(/e/i)) > 0) {
-            if (f < 0) f = m;
-            ((f += +_.slice(m + 1)), (_ = _.substring(0, m)));
-          } else if (f < 0) f = _.length;
+          if ((e = str.indexOf(".")) > -1) str = str.replace(".", "");
+          if ((i = str.search(/e/i)) > 0) {
+            if (e < 0) e = i;
+            e += +str.slice(i + 1);
+            str = str.substring(0, i);
+          } else if (e < 0) e = str.length;
         } else {
-          if ((O(o, 2, tt.length, "Base"), o == 10 && Tr)) return ((p = new A(i)), pe(p, V + p.e + 1, X));
-          if (((_ = String(i)), (u = typeof i == "number"))) {
-            if (i * 0 != 0) return W(p, _, u, o);
-            if (
-              ((p.s = 1 / i < 0 ? ((_ = _.slice(1)), -1) : 1),
-              A.DEBUG && _.replace(/^0\.0*|\./, "").length > 15)
-            )
-              throw Error(h + i);
-          } else p.s = _.charCodeAt(0) === 45 ? ((_ = _.slice(1)), -1) : 1;
-          ((c = tt.slice(0, o)), (f = m = 0));
-          for (d = _.length; m < d; m++)
-            if (c.indexOf((y = _.charAt(m))) < 0) {
-              if (y == ".") {
-                if (m > f) {
-                  f = d;
+          intCheck(b, 2, ALPHABET.length, "Base");
+          if (b == 10 && alphabetHasNormalDecimalDigits) {
+            x = new BigNumber(v);
+            return round(x, DECIMAL_PLACES + x.e + 1, ROUNDING_MODE);
+          }
+          str = String(v);
+          if ((isNum = typeof v == "number")) {
+            if (v * 0 != 0) return parseNumeric(x, str, isNum, b);
+            x.s = 1 / v < 0 ? ((str = str.slice(1)), -1) : 1;
+            if (BigNumber.DEBUG && str.replace(/^0\.0*|\./, "").length > 15) throw Error(tooManyDigits + v);
+          } else x.s = str.charCodeAt(0) === 45 ? ((str = str.slice(1)), -1) : 1;
+          alphabet = ALPHABET.slice(0, b);
+          e = i = 0;
+          for (len = str.length; i < len; i++)
+            if (alphabet.indexOf((c = str.charAt(i))) < 0) {
+              if (c == ".") {
+                if (i > e) {
+                  e = len;
                   continue;
                 }
-              } else if (!l) {
+              } else if (!caseChanged) {
                 if (
-                  (_ == _.toUpperCase() && (_ = _.toLowerCase())) ||
-                  (_ == _.toLowerCase() && (_ = _.toUpperCase()))
+                  (str == str.toUpperCase() && (str = str.toLowerCase())) ||
+                  (str == str.toLowerCase() && (str = str.toUpperCase()))
                 ) {
-                  ((l = !0), (m = -1), (f = 0));
+                  caseChanged = true;
+                  i = -1;
+                  e = 0;
                   continue;
                 }
               }
-              return W(p, String(i), u, o);
+              return parseNumeric(x, String(v), isNum, b);
             }
-          if (((u = !1), (_ = L(_, o, 10, p.s)), (f = _.indexOf(".")) > -1)) _ = _.replace(".", "");
-          else f = _.length;
+          isNum = false;
+          str = convertBase(str, b, 10, x.s);
+          if ((e = str.indexOf(".")) > -1) str = str.replace(".", "");
+          else e = str.length;
         }
-        for (m = 0; _.charCodeAt(m) === 48; m++);
-        for (d = _.length; _.charCodeAt(--d) === 48;);
-        if ((_ = _.slice(m, ++d))) {
-          if (((d -= m), u && A.DEBUG && d > 15 && (i > k || i !== floor(i)))) throw Error(h + p.s * i);
-          if ((f = f - m - 1) > ke) p.c = p.e = null;
-          else if (f < Ze) p.c = [(p.e = 0)];
+        for (i = 0; str.charCodeAt(i) === 48; i++);
+        for (len = str.length; str.charCodeAt(--len) === 48;);
+        if ((str = str.slice(i, ++len))) {
+          len -= i;
+          if (isNum && BigNumber.DEBUG && len > 15 && (v > MAX_SAFE_INTEGER || v !== mathfloor(v)))
+            throw Error(tooManyDigits + x.s * v);
+          if ((e = e - i - 1) > MAX_EXP) x.c = x.e = null;
+          else if (e < MIN_EXP) x.c = [(x.e = 0)];
           else {
-            if (((p.e = f), (p.c = []), (m = (f + 1) % E), f < 0)) m += E;
-            if (m < d) {
-              if (m) p.c.push(+_.slice(0, m));
-              for (d -= E; m < d;) p.c.push(+_.slice(m, (m += E)));
-              m = E - (_ = _.slice(m)).length;
-            } else m -= d;
-            for (; m--; _ += "0");
-            p.c.push(+_);
+            x.e = e;
+            x.c = [];
+            i = (e + 1) % LOG_BASE;
+            if (e < 0) i += LOG_BASE;
+            if (i < len) {
+              if (i) x.c.push(+str.slice(0, i));
+              for (len -= LOG_BASE; i < len;) x.c.push(+str.slice(i, (i += LOG_BASE)));
+              i = LOG_BASE - (str = str.slice(i)).length;
+            } else i -= len;
+            for (; i--; str += "0");
+            x.c.push(+str);
           }
-        } else p.c = [(p.e = 0)];
+        } else x.c = [(x.e = 0)];
       }
-      ((A.clone = Y),
-        (A.ROUND_UP = 0),
-        (A.ROUND_DOWN = 1),
-        (A.ROUND_CEIL = 2),
-        (A.ROUND_FLOOR = 3),
-        (A.ROUND_HALF_UP = 4),
-        (A.ROUND_HALF_DOWN = 5),
-        (A.ROUND_HALF_EVEN = 6),
-        (A.ROUND_HALF_CEIL = 7),
-        (A.ROUND_HALF_FLOOR = 8),
-        (A.EUCLID = 9),
-        (A.config = A.set =
-          function (i) {
-            var o, c;
-            if (i != null)
-              if (typeof i == "object") {
-                if (i.hasOwnProperty((o = "DECIMAL_PLACES"))) ((c = i[o]), O(c, 0, I, o), (V = c));
-                if (i.hasOwnProperty((o = "ROUNDING_MODE"))) ((c = i[o]), O(c, 0, 8, o), (X = c));
-                if (i.hasOwnProperty((o = "EXPONENTIAL_AT")))
-                  if (((c = i[o]), c && c.pop))
-                    (O(c[0], -I, 0, o), O(c[1], 0, I, o), (ce = c[0]), (de = c[1]));
-                  else (O(c, -I, I, o), (ce = -(de = c < 0 ? -c : c)));
-                if (i.hasOwnProperty((o = "RANGE")))
-                  if (((c = i[o]), c && c.pop))
-                    (O(c[0], -I, -1, o), O(c[1], 1, I, o), (Ze = c[0]), (ke = c[1]));
-                  else if ((O(c, -I, I, o), c)) Ze = -(ke = c < 0 ? -c : c);
-                  else throw Error(a + o + " cannot be zero: " + c);
-                if (i.hasOwnProperty((o = "CRYPTO")))
-                  if (((c = i[o]), c === !!c))
-                    if (c)
-                      if (typeof crypto < "u" && crypto && (crypto.getRandomValues || crypto.randomBytes))
-                        et = c;
-                      else throw ((et = !c), Error(a + "crypto unavailable"));
-                    else et = c;
-                  else throw Error(a + o + " not true or false: " + c);
-                if (i.hasOwnProperty((o = "MODULO_MODE"))) ((c = i[o]), O(c, 0, 9, o), (wt = c));
-                if (i.hasOwnProperty((o = "POW_PRECISION"))) ((c = i[o]), O(c, 0, I, o), (Ge = c));
-                if (i.hasOwnProperty((o = "FORMAT")))
-                  if (((c = i[o]), typeof c == "object")) Ar = c;
-                  else throw Error(a + o + " not an object: " + c);
-                if (i.hasOwnProperty((o = "ALPHABET")))
-                  if (((c = i[o]), typeof c == "string" && !/^.?$|[+\-.\s]|(.).*\1/.test(c)))
-                    ((Tr = c.slice(0, 10) == "0123456789"), (tt = c));
-                  else throw Error(a + o + " invalid: " + c);
-              } else throw Error(a + "Object expected: " + i);
-            return {
-              DECIMAL_PLACES: V,
-              ROUNDING_MODE: X,
-              EXPONENTIAL_AT: [ce, de],
-              RANGE: [Ze, ke],
-              CRYPTO: et,
-              MODULO_MODE: wt,
-              POW_PRECISION: Ge,
-              FORMAT: Ar,
-              ALPHABET: tt,
-            };
-          }),
-        (A.isBigNumber = function (i) {
-          if (!i || i._isBigNumber !== !0) return !1;
-          if (!A.DEBUG) return !0;
-          var o,
-            c,
-            { c: y, e: l, s: f } = i;
-          e: if ({}.toString.call(y) == "[object Array]") {
-            if ((f === 1 || f === -1) && l >= -I && l <= I && l === floor(l)) {
-              if (y[0] === 0) {
-                if (l === 0 && y.length === 1) return !0;
-                break e;
-              }
-              if (((o = (l + 1) % E), o < 1)) o += E;
-              if (String(y[0]).length == o) {
-                for (o = 0; o < y.length; o++) if (((c = y[o]), c < 0 || c >= g || c !== floor(c))) break e;
-                if (c !== 0) return !0;
+      BigNumber.clone = clone;
+      BigNumber.ROUND_UP = 0;
+      BigNumber.ROUND_DOWN = 1;
+      BigNumber.ROUND_CEIL = 2;
+      BigNumber.ROUND_FLOOR = 3;
+      BigNumber.ROUND_HALF_UP = 4;
+      BigNumber.ROUND_HALF_DOWN = 5;
+      BigNumber.ROUND_HALF_EVEN = 6;
+      BigNumber.ROUND_HALF_CEIL = 7;
+      BigNumber.ROUND_HALF_FLOOR = 8;
+      BigNumber.EUCLID = 9;
+      BigNumber.config = BigNumber.set = function (obj) {
+        var p;
+        var v;
+        if (obj != null)
+          if (typeof obj == "object") {
+            if (obj.hasOwnProperty((p = "DECIMAL_PLACES"))) {
+              v = obj[p];
+              intCheck(v, 0, MAX, p);
+              DECIMAL_PLACES = v;
+            }
+            if (obj.hasOwnProperty((p = "ROUNDING_MODE"))) {
+              v = obj[p];
+              intCheck(v, 0, 8, p);
+              ROUNDING_MODE = v;
+            }
+            if (obj.hasOwnProperty((p = "EXPONENTIAL_AT"))) {
+              v = obj[p];
+              if (v && v.pop) {
+                intCheck(v[0], -MAX, 0, p);
+                intCheck(v[1], 0, MAX, p);
+                TO_EXP_NEG = v[0];
+                TO_EXP_POS = v[1];
+              } else {
+                intCheck(v, -MAX, MAX, p);
+                TO_EXP_NEG = -(TO_EXP_POS = v < 0 ? -v : v);
               }
             }
-          } else if (y === null && l === null && (f === null || f === 1 || f === -1)) return !0;
-          throw Error(a + "Invalid BigNumber: " + i);
-        }),
-        (A.maximum = A.max =
-          function () {
-            return bs(arguments, -1);
-          }),
-        (A.minimum = A.min =
-          function () {
-            return bs(arguments, 1);
-          }),
-        (A.random = (function () {
-          var i = 9007199254740992,
-            o =
-              (Math.random() * i) & 2097151
-                ? function () {
-                    return floor(Math.random() * i);
-                  }
-                : function () {
-                    return ((Math.random() * 1073741824) | 0) * 8388608 + ((Math.random() * 8388608) | 0);
-                  };
-          return function (c) {
-            var y,
-              l,
-              f,
-              m,
-              u,
-              d = 0,
-              _ = [],
-              p = new A(ee);
-            if (c == null) c = V;
-            else O(c, 0, I);
-            if (((m = ceil(c / E)), et))
-              if (crypto.getRandomValues) {
-                y = crypto.getRandomValues(new Uint32Array((m *= 2)));
-                for (; d < m;)
-                  if (((u = y[d] * 131072 + (y[d + 1] >>> 11)), u >= 9000000000000000))
-                    ((l = crypto.getRandomValues(new Uint32Array(2))), (y[d] = l[0]), (y[d + 1] = l[1]));
-                  else (_.push(u % 100000000000000), (d += 2));
-                d = m / 2;
-              } else if (crypto.randomBytes) {
-                y = crypto.randomBytes((m *= 7));
-                for (; d < m;)
+            if (obj.hasOwnProperty((p = "RANGE"))) {
+              v = obj[p];
+              if (v && v.pop) {
+                intCheck(v[0], -MAX, -1, p);
+                intCheck(v[1], 1, MAX, p);
+                MIN_EXP = v[0];
+                MAX_EXP = v[1];
+              } else {
+                intCheck(v, -MAX, MAX, p);
+                if (v) MIN_EXP = -(MAX_EXP = v < 0 ? -v : v);
+                else throw Error(bignumberError + p + " cannot be zero: " + v);
+              }
+            }
+            if (obj.hasOwnProperty((p = "CRYPTO"))) {
+              v = obj[p];
+              if (v === !!v) {
+                if (v) {
                   if (
-                    ((u =
-                      (y[d] & 31) * 281474976710656 +
-                      y[d + 1] * 1099511627776 +
-                      y[d + 2] * 4294967296 +
-                      y[d + 3] * 16777216 +
-                      (y[d + 4] << 16) +
-                      (y[d + 5] << 8) +
-                      y[d + 6]),
-                    u >= 9000000000000000)
+                    typeof crypto !== "undefined" &&
+                    crypto &&
+                    (crypto.getRandomValues || crypto.randomBytes)
                   )
-                    crypto.randomBytes(7).copy(y, d);
-                  else (_.push(u % 100000000000000), (d += 7));
-                d = m / 7;
-              } else throw ((et = !1), Error(a + "crypto unavailable"));
-            if (!et) {
-              for (; d < m;) if (((u = o()), u < 9000000000000000)) _[d++] = u % 100000000000000;
-            }
-            if (((m = _[--d]), (c %= E), m && c)) ((u = T[E - c]), (_[d] = floor(m / u) * u));
-            for (; _[d] === 0; _.pop(), d--);
-            if (d < 0) _ = [(f = 0)];
-            else {
-              for (f = -1; _[0] === 0; _.splice(0, 1), f -= E);
-              for (d = 1, u = _[0]; u >= 10; u /= 10, d++);
-              if (d < E) f -= E - d;
-            }
-            return ((p.e = f), (p.c = _), p);
-          };
-        })()),
-        (A.sum = function () {
-          var i = 1,
-            o = arguments,
-            c = new A(o[0]);
-          for (; i < o.length;) c = c.plus(o[i++]);
-          return c;
-        }),
-        (L = (function () {
-          var i = "0123456789";
-          function o(c, y, l, f) {
-            var m,
-              u = [0],
-              d,
-              _ = 0,
-              p = c.length;
-            for (; _ < p;) {
-              for (d = u.length; d--; u[d] *= y);
-              u[0] += f.indexOf(c.charAt(_++));
-              for (m = 0; m < u.length; m++)
-                if (u[m] > l - 1) {
-                  if (u[m + 1] == null) u[m + 1] = 0;
-                  ((u[m + 1] += (u[m] / l) | 0), (u[m] %= l));
-                }
-            }
-            return u.reverse();
-          }
-          return function (c, y, l, f, m) {
-            var u,
-              d,
-              _,
-              p,
-              w,
-              R,
-              b,
-              M,
-              index = c.indexOf("."),
-              te = V,
-              F = X;
-            if (index >= 0)
-              ((p = Ge),
-                (Ge = 0),
-                (c = c.replace(".", "")),
-                (M = new A(y)),
-                (R = M.pow(c.length - index)),
-                (Ge = p),
-                (M.c = o(ie(S(R.c), R.e, "0"), 10, l, i)),
-                (M.e = M.c.length));
-            ((b = o(c, y, l, m ? ((u = tt), i) : ((u = i), tt))), (_ = p = b.length));
-            for (; b[--p] == 0; b.pop());
-            if (!b[0]) return u.charAt(0);
-            if (index < 0) --_;
-            else ((R.c = b), (R.e = _), (R.s = f), (R = U(R, M, te, F, l)), (b = R.c), (w = R.r), (_ = R.e));
-            if (
-              ((d = _ + te + 1),
-              (index = b[d]),
-              (p = l / 2),
-              (w = w || d < 0 || b[d + 1] != null),
-              (w =
-                F < 4
-                  ? (index != null || w) && (F == 0 || F == (R.s < 0 ? 3 : 2))
-                  : index > p ||
-                    (index == p && (F == 4 || w || (F == 6 && b[d - 1] & 1) || F == (R.s < 0 ? 8 : 7)))),
-              d < 1 || !b[0])
-            )
-              c = w ? ie(u.charAt(1), -te, u.charAt(0)) : u.charAt(0);
-            else {
-              if (((b.length = d), w)) {
-                for (--l; ++b[--d] > l;) if (((b[d] = 0), !d)) (++_, (b = [1].concat(b)));
-              }
-              for (p = b.length; !b[--p];);
-              for (index = 0, c = ""; index <= p; c += u.charAt(b[index++]));
-              c = ie(c, _, u.charAt(0));
-            }
-            return c;
-          };
-        })()),
-        (U = (function () {
-          function i(y, l, f) {
-            var m,
-              u,
-              d,
-              _,
-              p = 0,
-              w = y.length,
-              R = l % j,
-              b = (l / j) | 0;
-            for (y = y.slice(); w--;)
-              ((d = y[w] % j),
-                (_ = (y[w] / j) | 0),
-                (m = b * d + _ * R),
-                (u = R * d + (m % j) * j + p),
-                (p = ((u / f) | 0) + ((m / j) | 0) + b * _),
-                (y[w] = u % f));
-            if (p) y = [p].concat(y);
-            return y;
-          }
-          function o(y, l, f, m) {
-            var u, d;
-            if (f != m) d = f > m ? 1 : -1;
-            else
-              for (u = d = 0; u < f; u++)
-                if (y[u] != l[u]) {
-                  d = y[u] > l[u] ? 1 : -1;
-                  break;
-                }
-            return d;
-          }
-          function c(y, l, f, m) {
-            var u = 0;
-            for (; f--;) ((y[f] -= u), (u = y[f] < l[f] ? 1 : 0), (y[f] = u * m + y[f] - l[f]));
-            for (; !y[0] && y.length > 1; y.splice(0, 1));
-          }
-          return function (y, l, f, m, u) {
-            var d,
-              _,
-              p,
-              w,
-              R,
-              b,
-              M,
-              z,
-              te,
-              F,
-              B,
-              ne,
-              Nt,
-              kr,
-              Or,
-              be,
-              At,
-              ge = y.s == l.s ? 1 : -1,
-              oe = y.c,
-              Q = l.c;
-            if (!oe || !oe[0] || !Q || !Q[0])
-              return new A(
-                !y.s || !l.s || (oe ? Q && oe[0] == Q[0] : !Q)
-                  ? NaN
-                  : (oe && oe[0] == 0) || !Q
-                    ? ge * 0
-                    : ge / 0,
-              );
-            if (((z = new A(ge)), (te = z.c = []), (_ = y.e - l.e), (ge = f + _ + 1), !u))
-              ((u = g), (_ = K(y.e / E) - K(l.e / E)), (ge = (ge / E) | 0));
-            for (p = 0; Q[p] == (oe[p] || 0); p++);
-            if (Q[p] > (oe[p] || 0)) _--;
-            if (ge < 0) (te.push(1), (w = !0));
-            else {
-              if (((kr = oe.length), (be = Q.length), (p = 0), (ge += 2), (R = floor(u / (Q[0] + 1))), R > 1))
-                ((Q = i(Q, R, u)), (oe = i(oe, R, u)), (be = Q.length), (kr = oe.length));
-              ((Nt = be), (F = oe.slice(0, be)), (B = F.length));
-              for (; B < be; F[B++] = 0);
-              if (((At = Q.slice()), (At = [0].concat(At)), (Or = Q[0]), Q[1] >= u / 2)) Or++;
-              do {
-                if (((R = 0), (d = o(Q, F, be, B)), d < 0)) {
-                  if (((ne = F[0]), be != B)) ne = ne * u + (F[1] || 0);
-                  if (((R = floor(ne / Or)), R > 1)) {
-                    if (R >= u) R = u - 1;
-                    ((b = i(Q, R, u)), (M = b.length), (B = F.length));
-                    while (o(b, F, M, B) == 1) (R--, c(b, be < M ? At : Q, M, u), (M = b.length), (d = 1));
-                  } else {
-                    if (R == 0) d = R = 1;
-                    ((b = Q.slice()), (M = b.length));
+                    CRYPTO = v;
+                  else {
+                    CRYPTO = !v;
+                    throw Error(bignumberError + "crypto unavailable");
                   }
-                  if (M < B) b = [0].concat(b);
-                  if ((c(F, b, B, u), (B = F.length), d == -1))
-                    while (o(Q, F, be, B) < 1) (R++, c(F, be < B ? At : Q, B, u), (B = F.length));
-                } else if (d === 0) (R++, (F = [0]));
-                if (((te[p++] = R), F[0])) F[B++] = oe[Nt] || 0;
-                else ((F = [oe[Nt]]), (B = 1));
-              } while ((Nt++ < kr || F[0] != null) && ge--);
-              if (((w = F[0] != null), !te[0])) te.splice(0, 1);
+                } else CRYPTO = v;
+              } else throw Error(bignumberError + p + " not true or false: " + v);
             }
-            if (u == g) {
-              for (p = 1, ge = te[0]; ge >= 10; ge /= 10, p++);
-              pe(z, f + (z.e = p + _ * E - 1) + 1, m, w);
-            } else ((z.e = _), (z.r = +w));
-            return z;
-          };
-        })()));
-      function Cr(i, o, c, y) {
-        var l, f, m, u, d;
-        if (c == null) c = X;
-        else O(c, 0, 8);
-        if (!i.c) return i.toString();
-        if (((l = i.c[0]), (m = i.e), o == null))
-          ((d = S(i.c)), (d = y == 1 || (y == 2 && (m <= ce || m >= de)) ? Z(d, m) : ie(d, m, "0")));
-        else if (
-          ((i = pe(new A(i), o, c)),
-          (f = i.e),
-          (d = S(i.c)),
-          (u = d.length),
-          y == 1 || (y == 2 && (o <= f || f <= ce)))
-        ) {
-          for (; u < o; d += "0", u++);
-          d = Z(d, f);
-        } else if (((o -= m), (d = ie(d, f, "0")), f + 1 > u)) {
-          if (--o > 0) for (d += "."; o--; d += "0");
-        } else if (((o += f - u), o > 0)) {
-          if (f + 1 == u) d += ".";
-          for (; o--; d += "0");
-        }
-        return i.s < 0 && l ? "-" + d : d;
-      }
-      function bs(i, o) {
-        var c,
-          y,
-          l = 1,
-          f = new A(i[0]);
-        for (; l < i.length; l++)
-          if (((y = new A(i[l])), !y.s || (c = P(f, y)) === o || (c === 0 && f.s === o))) f = y;
-        return f;
-      }
-      function vr(i, o, c) {
-        var y = 1,
-          l = o.length;
-        for (; !o[--l]; o.pop());
-        for (l = o[0]; l >= 10; l /= 10, y++);
-        if ((c = y + c * E - 1) > ke) i.c = i.e = null;
-        else if (c < Ze) i.c = [(i.e = 0)];
-        else ((i.e = c), (i.c = o));
-        return i;
-      }
-      W = (function () {
-        var i = /^(-?)0([xbo])(?=\w[\w.]*$)/i,
-          o = /^([^.]+)\.$/,
-          c = /^\.([^.]+)$/,
-          y = /^-?(Infinity|NaN)$/,
-          l = /^\s*\+(?=[\w.])|^\s+|\s+$/g;
-        return function (f, m, u, d) {
-          var _,
-            p = u ? m : m.replace(l, "");
-          if (y.test(p)) f.s = isNaN(p) ? null : p < 0 ? -1 : 1;
-          else {
-            if (!u) {
-              if (
-                ((p = p.replace(i, function (w, R, b) {
-                  return ((_ = (b = b.toLowerCase()) == "x" ? 16 : b == "b" ? 2 : 8), !d || d == _ ? R : w);
-                })),
-                d)
-              )
-                ((_ = d), (p = p.replace(o, "$1").replace(c, "0.$1")));
-              if (m != p) return new A(p, _);
+            if (obj.hasOwnProperty((p = "MODULO_MODE"))) {
+              v = obj[p];
+              intCheck(v, 0, 9, p);
+              MODULO_MODE = v;
             }
-            if (A.DEBUG) throw Error(a + "Not a" + (d ? " base " + d : "") + " number: " + m);
-            f.s = null;
+            if (obj.hasOwnProperty((p = "POW_PRECISION"))) {
+              v = obj[p];
+              intCheck(v, 0, MAX, p);
+              POW_PRECISION = v;
+            }
+            if (obj.hasOwnProperty((p = "FORMAT"))) {
+              v = obj[p];
+              if (typeof v == "object") FORMAT = v;
+              else throw Error(bignumberError + p + " not an object: " + v);
+            }
+            if (obj.hasOwnProperty((p = "ALPHABET"))) {
+              v = obj[p];
+              if (typeof v == "string" && !/^.?$|[+\-.\s]|(.).*\1/.test(v)) {
+                alphabetHasNormalDecimalDigits = v.slice(0, 10) == "0123456789";
+                ALPHABET = v;
+              } else throw Error(bignumberError + p + " invalid: " + v);
+            }
+          } else throw Error(bignumberError + "Object expected: " + obj);
+        return {
+          DECIMAL_PLACES,
+          ROUNDING_MODE,
+          EXPONENTIAL_AT: [TO_EXP_NEG, TO_EXP_POS],
+          RANGE: [MIN_EXP, MAX_EXP],
+          CRYPTO,
+          MODULO_MODE,
+          POW_PRECISION,
+          FORMAT,
+          ALPHABET,
+        };
+      };
+      BigNumber.isBigNumber = function (i) {
+        if (!i || i._isBigNumber !== true) return false;
+        if (!BigNumber.DEBUG) return true;
+        var i_2;
+        var n;
+        var { c, e, s } = i;
+        e: if ({}.toString.call(c) == "[object Array]") {
+          if ((s === 1 || s === -1) && e >= -MAX && e <= MAX && e === mathfloor(e)) {
+            if (c[0] === 0) {
+              if (e === 0 && c.length === 1) return true;
+              break e;
+            }
+            i_2 = (e + 1) % LOG_BASE;
+            if (i_2 < 1) i_2 += LOG_BASE;
+            if (String(c[0]).length == i_2) {
+              for (i_2 = 0; i_2 < c.length; i_2++) {
+                n = c[i_2];
+                if (n < 0 || n >= BASE || n !== mathfloor(n)) break e;
+              }
+              if (n !== 0) return true;
+            }
           }
-          f.c = f.e = null;
+        } else if (c === null && e === null && (s === null || s === 1 || s === -1)) return true;
+        throw Error(bignumberError + "Invalid BigNumber: " + i);
+      };
+      BigNumber.maximum = BigNumber.max = function () {
+        return maxOrMin(arguments, -1);
+      };
+      BigNumber.minimum = BigNumber.min = function () {
+        return maxOrMin(arguments, 1);
+      };
+      BigNumber.random = (function () {
+        var pow2_53 = 9007199254740992;
+        var random53bitInt =
+          (Math.random() * pow2_53) & 2097151
+            ? function () {
+                return mathfloor(Math.random() * pow2_53);
+              }
+            : function () {
+                return ((Math.random() * 1073741824) | 0) * 8388608 + ((Math.random() * 8388608) | 0);
+              };
+        return function (dp) {
+          var a;
+          var b;
+          var e;
+          var k;
+          var v;
+          var i = 0;
+          var c = [];
+          var rand = new BigNumber(ONE);
+          if (dp == null) dp = DECIMAL_PLACES;
+          else intCheck(dp, 0, MAX);
+          k = mathceil(dp / LOG_BASE);
+          if (CRYPTO)
+            if (crypto.getRandomValues) {
+              a = crypto.getRandomValues(new Uint32Array((k *= 2)));
+              for (; i < k;) {
+                v = a[i] * 131072 + (a[i + 1] >>> 11);
+                if (v >= 9000000000000000) {
+                  b = crypto.getRandomValues(new Uint32Array(2));
+                  a[i] = b[0];
+                  a[i + 1] = b[1];
+                } else {
+                  c.push(v % 100000000000000);
+                  i += 2;
+                }
+              }
+              i = k / 2;
+            } else if (crypto.randomBytes) {
+              a = crypto.randomBytes((k *= 7));
+              for (; i < k;) {
+                v =
+                  (a[i] & 31) * 281474976710656 +
+                  a[i + 1] * 1099511627776 +
+                  a[i + 2] * 4294967296 +
+                  a[i + 3] * 16777216 +
+                  (a[i + 4] << 16) +
+                  (a[i + 5] << 8) +
+                  a[i + 6];
+                if (v >= 9000000000000000) crypto.randomBytes(7).copy(a, i);
+                else {
+                  c.push(v % 100000000000000);
+                  i += 7;
+                }
+              }
+              i = k / 7;
+            } else {
+              CRYPTO = false;
+              throw Error(bignumberError + "crypto unavailable");
+            }
+          if (!CRYPTO) {
+            for (; i < k;) {
+              v = random53bitInt();
+              if (v < 9000000000000000) c[i++] = v % 100000000000000;
+            }
+          }
+          k = c[--i];
+          dp %= LOG_BASE;
+          if (k && dp) {
+            v = POWS_TEN[LOG_BASE - dp];
+            c[i] = mathfloor(k / v) * v;
+          }
+          for (; c[i] === 0; c.pop(), i--);
+          if (i < 0) c = [(e = 0)];
+          else {
+            for (e = -1; c[0] === 0; c.splice(0, 1), e -= LOG_BASE);
+            for (i = 1, v = c[0]; v >= 10; v /= 10, i++);
+            if (i < LOG_BASE) e -= LOG_BASE - i;
+          }
+          rand.e = e;
+          rand.c = c;
+          return rand;
         };
       })();
-      function pe(i, o, c, y) {
-        var l,
-          f,
-          m,
-          u,
-          d,
-          _,
-          p,
-          w = i.c,
-          R = T;
-        if (w) {
+      BigNumber.sum = function () {
+        var i = 1;
+        var args = arguments;
+        var sum = new BigNumber(args[0]);
+        for (; i < args.length;) sum = sum.plus(args[i++]);
+        return sum;
+      };
+      convertBase = (function () {
+        var decimal = "0123456789";
+        function toBaseOut(str, baseIn, baseOut, alphabet) {
+          var j;
+          var arr = [0];
+          var arrL;
+          var i = 0;
+          var len = str.length;
+          for (; i < len;) {
+            for (arrL = arr.length; arrL--; arr[arrL] *= baseIn);
+            arr[0] += alphabet.indexOf(str.charAt(i++));
+            for (j = 0; j < arr.length; j++)
+              if (arr[j] > baseOut - 1) {
+                if (arr[j + 1] == null) arr[j + 1] = 0;
+                arr[j + 1] += (arr[j] / baseOut) | 0;
+                arr[j] %= baseOut;
+              }
+          }
+          return arr.reverse();
+        }
+        return function (str, baseIn, baseOut, sign, callerIsToString) {
+          var alphabet;
+          var d;
+          var e;
+          var k;
+          var r;
+          var x;
+          var xc;
+          var y;
+          var i = str.indexOf(".");
+          var dp = DECIMAL_PLACES;
+          var rm = ROUNDING_MODE;
+          if (i >= 0) {
+            k = POW_PRECISION;
+            POW_PRECISION = 0;
+            str = str.replace(".", "");
+            y = new BigNumber(baseIn);
+            x = y.pow(str.length - i);
+            POW_PRECISION = k;
+            y.c = toBaseOut(toFixedPoint(coeffToString(x.c), x.e, "0"), 10, baseOut, decimal);
+            y.e = y.c.length;
+          }
+          xc = toBaseOut(
+            str,
+            baseIn,
+            baseOut,
+            callerIsToString ? ((alphabet = ALPHABET), decimal) : ((alphabet = decimal), ALPHABET),
+          );
+          e = k = xc.length;
+          for (; xc[--k] == 0; xc.pop());
+          if (!xc[0]) return alphabet.charAt(0);
+          if (i < 0) --e;
+          else {
+            x.c = xc;
+            x.e = e;
+            x.s = sign;
+            x = div(x, y, dp, rm, baseOut);
+            xc = x.c;
+            r = x.r;
+            e = x.e;
+          }
+          d = e + dp + 1;
+          i = xc[d];
+          k = baseOut / 2;
+          r = r || d < 0 || xc[d + 1] != null;
+          r =
+            rm < 4
+              ? (i != null || r) && (rm == 0 || rm == (x.s < 0 ? 3 : 2))
+              : i > k || (i == k && (rm == 4 || r || (rm == 6 && xc[d - 1] & 1) || rm == (x.s < 0 ? 8 : 7)));
+          if (d < 1 || !xc[0])
+            str = r ? toFixedPoint(alphabet.charAt(1), -dp, alphabet.charAt(0)) : alphabet.charAt(0);
+          else {
+            xc.length = d;
+            if (r) {
+              for (--baseOut; ++xc[--d] > baseOut;) {
+                xc[d] = 0;
+                if (!d) {
+                  ++e;
+                  xc = [1].concat(xc);
+                }
+              }
+            }
+            for (k = xc.length; !xc[--k];);
+            for (i = 0, str = ""; i <= k; str += alphabet.charAt(xc[i++]));
+            str = toFixedPoint(str, e, alphabet.charAt(0));
+          }
+          return str;
+        };
+      })();
+      div = (function () {
+        function multiply(x, k, base) {
+          var m;
+          var temp;
+          var xlo;
+          var xhi;
+          var carry = 0;
+          var i = x.length;
+          var klo = k % SQRT_BASE;
+          var khi = (k / SQRT_BASE) | 0;
+          for (x = x.slice(); i--;) {
+            xlo = x[i] % SQRT_BASE;
+            xhi = (x[i] / SQRT_BASE) | 0;
+            m = khi * xlo + xhi * klo;
+            temp = klo * xlo + (m % SQRT_BASE) * SQRT_BASE + carry;
+            carry = ((temp / base) | 0) + ((m / SQRT_BASE) | 0) + khi * xhi;
+            x[i] = temp % base;
+          }
+          if (carry) x = [carry].concat(x);
+          return x;
+        }
+        function compare(a, b, aL, bL) {
+          var i;
+          var cmp;
+          if (aL != bL) cmp = aL > bL ? 1 : -1;
+          else
+            for (i = cmp = 0; i < aL; i++)
+              if (a[i] != b[i]) {
+                cmp = a[i] > b[i] ? 1 : -1;
+                break;
+              }
+          return cmp;
+        }
+        function subtract(a, b, aL, base) {
+          var i = 0;
+          for (; aL--;) {
+            a[aL] -= i;
+            i = a[aL] < b[aL] ? 1 : 0;
+            a[aL] = i * base + a[aL] - b[aL];
+          }
+          for (; !a[0] && a.length > 1; a.splice(0, 1));
+        }
+        return function (x, y, dp, rm, base) {
+          var cmp;
+          var e;
+          var i;
+          var more;
+          var n;
+          var prod;
+          var prodL;
+          var q;
+          var qc;
+          var rem;
+          var remL;
+          var rem0;
+          var xi;
+          var xL;
+          var yc0;
+          var yL;
+          var yz;
+          var s = x.s == y.s ? 1 : -1;
+          var xc = x.c;
+          var yc = y.c;
+          if (!xc || !xc[0] || !yc || !yc[0])
+            return new BigNumber(
+              !x.s || !y.s || (xc ? yc && xc[0] == yc[0] : !yc)
+                ? NaN
+                : (xc && xc[0] == 0) || !yc
+                  ? s * 0
+                  : s / 0,
+            );
+          q = new BigNumber(s);
+          qc = q.c = [];
+          e = x.e - y.e;
+          s = dp + e + 1;
+          if (!base) {
+            base = BASE;
+            e = bitFloor(x.e / LOG_BASE) - bitFloor(y.e / LOG_BASE);
+            s = (s / LOG_BASE) | 0;
+          }
+          for (i = 0; yc[i] == (xc[i] || 0); i++);
+          if (yc[i] > (xc[i] || 0)) e--;
+          if (s < 0) {
+            qc.push(1);
+            more = true;
+          } else {
+            xL = xc.length;
+            yL = yc.length;
+            i = 0;
+            s += 2;
+            n = mathfloor(base / (yc[0] + 1));
+            if (n > 1) {
+              yc = multiply(yc, n, base);
+              xc = multiply(xc, n, base);
+              yL = yc.length;
+              xL = xc.length;
+            }
+            xi = yL;
+            rem = xc.slice(0, yL);
+            remL = rem.length;
+            for (; remL < yL; rem[remL++] = 0);
+            yz = yc.slice();
+            yz = [0].concat(yz);
+            yc0 = yc[0];
+            if (yc[1] >= base / 2) yc0++;
+            do {
+              n = 0;
+              cmp = compare(yc, rem, yL, remL);
+              if (cmp < 0) {
+                rem0 = rem[0];
+                if (yL != remL) rem0 = rem0 * base + (rem[1] || 0);
+                n = mathfloor(rem0 / yc0);
+                if (n > 1) {
+                  if (n >= base) n = base - 1;
+                  prod = multiply(yc, n, base);
+                  prodL = prod.length;
+                  remL = rem.length;
+                  while (compare(prod, rem, prodL, remL) == 1) {
+                    n--;
+                    subtract(prod, yL < prodL ? yz : yc, prodL, base);
+                    prodL = prod.length;
+                    cmp = 1;
+                  }
+                } else {
+                  if (n == 0) cmp = n = 1;
+                  prod = yc.slice();
+                  prodL = prod.length;
+                }
+                if (prodL < remL) prod = [0].concat(prod);
+                subtract(rem, prod, remL, base);
+                remL = rem.length;
+                if (cmp == -1)
+                  while (compare(yc, rem, yL, remL) < 1) {
+                    n++;
+                    subtract(rem, yL < remL ? yz : yc, remL, base);
+                    remL = rem.length;
+                  }
+              } else if (cmp === 0) {
+                n++;
+                rem = [0];
+              }
+              qc[i++] = n;
+              if (rem[0]) rem[remL++] = xc[xi] || 0;
+              else {
+                rem = [xc[xi]];
+                remL = 1;
+              }
+            } while ((xi++ < xL || rem[0] != null) && s--);
+            more = rem[0] != null;
+            if (!qc[0]) qc.splice(0, 1);
+          }
+          if (base == BASE) {
+            for (i = 1, s = qc[0]; s >= 10; s /= 10, i++);
+            round(q, dp + (q.e = i + e * LOG_BASE - 1) + 1, rm, more);
+          } else {
+            q.e = e;
+            q.r = +more;
+          }
+          return q;
+        };
+      })();
+      function format(n, i, rm, id) {
+        var c0;
+        var e;
+        var ne;
+        var len;
+        var str;
+        if (rm == null) rm = ROUNDING_MODE;
+        else intCheck(rm, 0, 8);
+        if (!n.c) return n.toString();
+        c0 = n.c[0];
+        ne = n.e;
+        if (i == null) {
+          str = coeffToString(n.c);
+          str =
+            id == 1 || (id == 2 && (ne <= TO_EXP_NEG || ne >= TO_EXP_POS))
+              ? toExponential(str, ne)
+              : toFixedPoint(str, ne, "0");
+        } else {
+          n = round(new BigNumber(n), i, rm);
+          e = n.e;
+          str = coeffToString(n.c);
+          len = str.length;
+          if (id == 1 || (id == 2 && (i <= e || e <= TO_EXP_NEG))) {
+            for (; len < i; str += "0", len++);
+            str = toExponential(str, e);
+          } else {
+            i -= ne;
+            str = toFixedPoint(str, e, "0");
+            if (e + 1 > len) {
+              if (--i > 0) for (str += "."; i--; str += "0");
+            } else {
+              i += e - len;
+              if (i > 0) {
+                if (e + 1 == len) str += ".";
+                for (; i--; str += "0");
+              }
+            }
+          }
+        }
+        return n.s < 0 && c0 ? "-" + str : str;
+      }
+      function maxOrMin(args, n) {
+        var k;
+        var y;
+        var i = 1;
+        var x = new BigNumber(args[0]);
+        for (; i < args.length; i++) {
+          y = new BigNumber(args[i]);
+          if (!y.s || (k = compare(x, y)) === n || (k === 0 && x.s === n)) x = y;
+        }
+        return x;
+      }
+      function normalise(n, c_2, e) {
+        var i = 1;
+        var j = c_2.length;
+        for (; !c_2[--j]; c_2.pop());
+        for (j = c_2[0]; j >= 10; j /= 10, i++);
+        if ((e = i + e * LOG_BASE - 1) > MAX_EXP) n.c = n.e = null;
+        else if (e < MIN_EXP) n.c = [(n.e = 0)];
+        else {
+          n.e = e;
+          n.c = c_2;
+        }
+        return n;
+      }
+      parseNumeric = (function () {
+        var basePrefix = /^(-?)0([xbo])(?=\w[\w.]*$)/i;
+        var dotAfter = /^([^.]+)\.$/;
+        var dotBefore = /^\.([^.]+)$/;
+        var isInfinityOrNaN = /^-?(Infinity|NaN)$/;
+        var whitespaceOrPlus = /^\s*\+(?=[\w.])|^\s+|\s+$/g;
+        return function (x, str, isNum, b_2) {
+          var base;
+          var s = isNum ? str : str.replace(whitespaceOrPlus, "");
+          if (isInfinityOrNaN.test(s)) x.s = isNaN(s) ? null : s < 0 ? -1 : 1;
+          else {
+            if (!isNum) {
+              s = s.replace(basePrefix, function (m, p1, p2) {
+                base = (p2 = p2.toLowerCase()) == "x" ? 16 : p2 == "b" ? 2 : 8;
+                return !b_2 || b_2 == base ? p1 : m;
+              });
+              if (b_2) {
+                base = b_2;
+                s = s.replace(dotAfter, "$1").replace(dotBefore, "0.$1");
+              }
+              if (str != s) return new BigNumber(s, base);
+            }
+            if (BigNumber.DEBUG)
+              throw Error(bignumberError + "Not a" + (b_2 ? " base " + b_2 : "") + " number: " + str);
+            x.s = null;
+          }
+          x.c = x.e = null;
+        };
+      })();
+      function round(x, sd, rm, r) {
+        var d_2;
+        var i;
+        var j;
+        var k;
+        var n;
+        var ni;
+        var rd;
+        var xc = x.c;
+        var pows10 = POWS_TEN;
+        if (xc) {
           e: {
-            for (l = 1, u = w[0]; u >= 10; u /= 10, l++);
-            if (((f = o - l), f < 0))
-              ((f += E), (m = o), (d = w[(_ = 0)]), (p = floor((d / R[l - m - 1]) % 10)));
-            else if (((_ = ceil((f + 1) / E)), _ >= w.length))
-              if (y) {
-                for (; w.length <= _; w.push(0));
-                ((d = p = 0), (l = 1), (f %= E), (m = f - E + 1));
-              } else break e;
-            else {
-              d = u = w[_];
-              for (l = 1; u >= 10; u /= 10, l++);
-              ((f %= E), (m = f - E + l), (p = m < 0 ? 0 : floor((d / R[l - m - 1]) % 10)));
+            for (d_2 = 1, k = xc[0]; k >= 10; k /= 10, d_2++);
+            i = sd - d_2;
+            if (i < 0) {
+              i += LOG_BASE;
+              j = sd;
+              n = xc[(ni = 0)];
+              rd = mathfloor((n / pows10[d_2 - j - 1]) % 10);
+            } else {
+              ni = mathceil((i + 1) / LOG_BASE);
+              if (ni >= xc.length) {
+                if (r) {
+                  for (; xc.length <= ni; xc.push(0));
+                  n = rd = 0;
+                  d_2 = 1;
+                  i %= LOG_BASE;
+                  j = i - LOG_BASE + 1;
+                } else break e;
+              } else {
+                n = k = xc[ni];
+                for (d_2 = 1; k >= 10; k /= 10, d_2++);
+                i %= LOG_BASE;
+                j = i - LOG_BASE + d_2;
+                rd = j < 0 ? 0 : mathfloor((n / pows10[d_2 - j - 1]) % 10);
+              }
             }
-            if (
-              ((y = y || o < 0 || w[_ + 1] != null || (m < 0 ? d : d % R[l - m - 1])),
-              (y =
-                c < 4
-                  ? (p || y) && (c == 0 || c == (i.s < 0 ? 3 : 2))
-                  : p > 5 ||
-                    (p == 5 &&
-                      (c == 4 ||
-                        y ||
-                        (c == 6 && ((f > 0 ? (m > 0 ? d / R[l - m] : 0) : w[_ - 1]) % 10) & 1) ||
-                        c == (i.s < 0 ? 8 : 7)))),
-              o < 1 || !w[0])
-            ) {
-              if (((w.length = 0), y)) ((o -= i.e + 1), (w[0] = R[(E - (o % E)) % E]), (i.e = -o || 0));
-              else w[0] = i.e = 0;
-              return i;
+            r = r || sd < 0 || xc[ni + 1] != null || (j < 0 ? n : n % pows10[d_2 - j - 1]);
+            r =
+              rm < 4
+                ? (rd || r) && (rm == 0 || rm == (x.s < 0 ? 3 : 2))
+                : rd > 5 ||
+                  (rd == 5 &&
+                    (rm == 4 ||
+                      r ||
+                      (rm == 6 && ((i > 0 ? (j > 0 ? n / pows10[d_2 - j] : 0) : xc[ni - 1]) % 10) & 1) ||
+                      rm == (x.s < 0 ? 8 : 7)));
+            if (sd < 1 || !xc[0]) {
+              xc.length = 0;
+              if (r) {
+                sd -= x.e + 1;
+                xc[0] = pows10[(LOG_BASE - (sd % LOG_BASE)) % LOG_BASE];
+                x.e = -sd || 0;
+              } else xc[0] = x.e = 0;
+              return x;
             }
-            if (f == 0) ((w.length = _), (u = 1), _--);
-            else ((w.length = _ + 1), (u = R[E - f]), (w[_] = m > 0 ? floor((d / R[l - m]) % R[m]) * u : 0));
-            if (y)
+            if (i == 0) {
+              xc.length = ni;
+              k = 1;
+              ni--;
+            } else {
+              xc.length = ni + 1;
+              k = pows10[LOG_BASE - i];
+              xc[ni] = j > 0 ? mathfloor((n / pows10[d_2 - j]) % pows10[j]) * k : 0;
+            }
+            if (r)
               for (;;)
-                if (_ == 0) {
-                  for (f = 1, m = w[0]; m >= 10; m /= 10, f++);
-                  m = w[0] += u;
-                  for (u = 1; m >= 10; m /= 10, u++);
-                  if (f != u) {
-                    if ((i.e++, w[0] == g)) w[0] = 1;
+                if (ni == 0) {
+                  for (i = 1, j = xc[0]; j >= 10; j /= 10, i++);
+                  j = xc[0] += k;
+                  for (k = 1; j >= 10; j /= 10, k++);
+                  if (i != k) {
+                    x.e++;
+                    if (xc[0] == BASE) xc[0] = 1;
                   }
                   break;
                 } else {
-                  if (((w[_] += u), w[_] != g)) break;
-                  ((w[_--] = 0), (u = 1));
+                  xc[ni] += k;
+                  if (xc[ni] != BASE) break;
+                  xc[ni--] = 0;
+                  k = 1;
                 }
-            for (f = w.length; w[--f] === 0; w.pop());
+            for (i = xc.length; xc[--i] === 0; xc.pop());
           }
-          if (i.e > ke) i.c = i.e = null;
-          else if (i.e < Ze) i.c = [(i.e = 0)];
+          if (x.e > MAX_EXP) x.c = x.e = null;
+          else if (x.e < MIN_EXP) x.c = [(x.e = 0)];
         }
-        return i;
+        return x;
       }
-      function De(i) {
-        var o,
-          c = i.e;
-        if (c === null) return i.toString();
-        return ((o = S(i.c)), (o = c <= ce || c >= de ? Z(o, c) : ie(o, c, "0")), i.s < 0 ? "-" + o : o);
+      function valueOf(n) {
+        var str;
+        var e = n.e;
+        if (e === null) return n.toString();
+        str = coeffToString(n.c);
+        str = e <= TO_EXP_NEG || e >= TO_EXP_POS ? toExponential(str, e) : toFixedPoint(str, e, "0");
+        return n.s < 0 ? "-" + str : str;
       }
-      if (
-        ((C.absoluteValue = C.abs =
-          function () {
-            var i = new A(this);
-            if (i.s < 0) i.s = 1;
-            return i;
-          }),
-        (C.comparedTo = function (i, o) {
-          return P(this, new A(i, o));
-        }),
-        (C.decimalPlaces = C.dp =
-          function (i, o) {
-            var c,
-              y,
-              l,
-              f = this;
-            if (i != null) {
-              if ((O(i, 0, I), o == null)) o = X;
-              else O(o, 0, 8);
-              return pe(new A(f), i + f.e + 1, o);
-            }
-            if (!(c = f.c)) return null;
-            if (((y = ((l = c.length - 1) - K(this.e / E)) * E), (l = c[l])))
-              for (; l % 10 == 0; l /= 10, y--);
-            if (y < 0) y = 0;
-            return y;
-          }),
-        (C.dividedBy = C.div =
-          function (i, o) {
-            return U(this, new A(i, o), V, X);
-          }),
-        (C.dividedToIntegerBy = C.idiv =
-          function (i, o) {
-            return U(this, new A(i, o), 0, 1);
-          }),
-        (C.exponentiatedBy = C.pow =
-          function (i, o) {
-            var c,
-              y,
-              l,
-              f,
-              m,
-              u,
-              d,
-              _,
-              p,
-              w = this;
-            if (((i = new A(i)), i.c && !i.isInteger())) throw Error(a + "Exponent not an integer: " + De(i));
-            if (o != null) o = new A(o);
-            if (
-              ((u = i.e > 14), !w.c || !w.c[0] || (w.c[0] == 1 && !w.e && w.c.length == 1) || !i.c || !i.c[0])
-            )
-              return ((p = new A(Math.pow(+De(w), u ? i.s * (2 - G(i)) : +De(i)))), o ? p.mod(o) : p);
-            if (((d = i.s < 0), o)) {
-              if (o.c ? !o.c[0] : !o.s) return new A(NaN);
-              if (((y = !d && w.isInteger() && o.isInteger()), y)) w = w.mod(o);
-            } else if (
-              i.e > 9 &&
-              (w.e > 0 ||
-                w.e < -1 ||
-                (w.e == 0
-                  ? w.c[0] > 1 || (u && w.c[1] >= 240000000)
-                  : w.c[0] < 80000000000000 || (u && w.c[0] <= 99999750000000)))
-            ) {
-              if (((f = w.s < 0 && G(i) ? -0 : 0), w.e > -1)) f = 1 / f;
-              return new A(d ? 1 / f : f);
-            } else if (Ge) f = ceil(Ge / E + 2);
-            if (u) {
-              if (((c = new A(0.5)), d)) i.s = 1;
-              _ = G(i);
-            } else ((l = Math.abs(+De(i))), (_ = l % 2));
-            p = new A(ee);
-            for (;;) {
-              if (_) {
-                if (((p = p.times(w)), !p.c)) break;
-                if (f) {
-                  if (p.c.length > f) p.c.length = f;
-                } else if (y) p = p.mod(o);
-              }
-              if (l) {
-                if (((l = floor(l / 2)), l === 0)) break;
-                _ = l % 2;
-              } else if (((i = i.times(c)), pe(i, i.e + 1, 1), i.e > 14)) _ = G(i);
-              else {
-                if (((l = +De(i)), l === 0)) break;
-                _ = l % 2;
-              }
-              if (((w = w.times(w)), f)) {
-                if (w.c && w.c.length > f) w.c.length = f;
-              } else if (y) w = w.mod(o);
-            }
-            if (y) return p;
-            if (d) p = ee.div(p);
-            return o ? p.mod(o) : f ? pe(p, Ge, X, m) : p;
-          }),
-        (C.integerValue = function (i) {
-          var o = new A(this);
-          if (i == null) i = X;
-          else O(i, 0, 8);
-          return pe(o, o.e + 1, i);
-        }),
-        (C.isEqualTo = C.eq =
-          function (i, o) {
-            return P(this, new A(i, o)) === 0;
-          }),
-        (C.isFinite = function () {
-          return !!this.c;
-        }),
-        (C.isGreaterThan = C.gt =
-          function (i, o) {
-            return P(this, new A(i, o)) > 0;
-          }),
-        (C.isGreaterThanOrEqualTo = C.gte =
-          function (i, o) {
-            return (o = P(this, new A(i, o))) === 1 || o === 0;
-          }),
-        (C.isInteger = function () {
-          return !!this.c && K(this.e / E) > this.c.length - 2;
-        }),
-        (C.isLessThan = C.lt =
-          function (i, o) {
-            return P(this, new A(i, o)) < 0;
-          }),
-        (C.isLessThanOrEqualTo = C.lte =
-          function (i, o) {
-            return (o = P(this, new A(i, o))) === -1 || o === 0;
-          }),
-        (C.isNaN = function () {
-          return !this.s;
-        }),
-        (C.isNegative = function () {
-          return this.s < 0;
-        }),
-        (C.isPositive = function () {
-          return this.s > 0;
-        }),
-        (C.isZero = function () {
-          return !!this.c && this.c[0] == 0;
-        }),
-        (C.minus = function (i, o) {
-          var c,
-            y,
-            l,
-            f,
-            m = this,
-            u = m.s;
-          if (((i = new A(i, o)), (o = i.s), !u || !o)) return new A(NaN);
-          if (u != o) return ((i.s = -o), m.plus(i));
-          var d = m.e / E,
-            _ = i.e / E,
-            p = m.c,
-            w = i.c;
-          if (!d || !_) {
-            if (!p || !w) return p ? ((i.s = -o), i) : new A(w ? m : NaN);
-            if (!p[0] || !w[0]) return w[0] ? ((i.s = -o), i) : new A(p[0] ? m : X == 3 ? -0 : 0);
+      P_2.absoluteValue = P_2.abs = function () {
+        var x = new BigNumber(this);
+        if (x.s < 0) x.s = 1;
+        return x;
+      };
+      P_2.comparedTo = function (y, b) {
+        return compare(this, new BigNumber(y, b));
+      };
+      P_2.decimalPlaces = P_2.dp = function (dp, rm) {
+        var c;
+        var n;
+        var v;
+        var x = this;
+        if (dp != null) {
+          intCheck(dp, 0, MAX);
+          if (rm == null) rm = ROUNDING_MODE;
+          else intCheck(rm, 0, 8);
+          return round(new BigNumber(x), dp + x.e + 1, rm);
+        }
+        if (!(c = x.c)) return null;
+        n = ((v = c.length - 1) - bitFloor(this.e / LOG_BASE)) * LOG_BASE;
+        if ((v = c[v])) for (; v % 10 == 0; v /= 10, n--);
+        if (n < 0) n = 0;
+        return n;
+      };
+      P_2.dividedBy = P_2.div = function (y, b) {
+        return div(this, new BigNumber(y, b), DECIMAL_PLACES, ROUNDING_MODE);
+      };
+      P_2.dividedToIntegerBy = P_2.idiv = function (y, b) {
+        return div(this, new BigNumber(y, b), 0, 1);
+      };
+      P_2.exponentiatedBy = P_2.pow = function (n, m_2) {
+        var half;
+        var isModExp;
+        var i;
+        var k;
+        var more;
+        var nIsBig;
+        var nIsNeg;
+        var nIsOdd;
+        var y;
+        var x = this;
+        n = new BigNumber(n);
+        if (n.c && !n.isInteger()) throw Error(bignumberError + "Exponent not an integer: " + valueOf(n));
+        if (m_2 != null) m_2 = new BigNumber(m_2);
+        nIsBig = n.e > 14;
+        if (!x.c || !x.c[0] || (x.c[0] == 1 && !x.e && x.c.length == 1) || !n.c || !n.c[0]) {
+          y = new BigNumber(Math.pow(+valueOf(x), nIsBig ? n.s * (2 - isOdd(n)) : +valueOf(n)));
+          return m_2 ? y.mod(m_2) : y;
+        }
+        nIsNeg = n.s < 0;
+        if (m_2) {
+          if (m_2.c ? !m_2.c[0] : !m_2.s) return new BigNumber(NaN);
+          isModExp = !nIsNeg && x.isInteger() && m_2.isInteger();
+          if (isModExp) x = x.mod(m_2);
+        } else if (
+          n.e > 9 &&
+          (x.e > 0 ||
+            x.e < -1 ||
+            (x.e == 0
+              ? x.c[0] > 1 || (nIsBig && x.c[1] >= 240000000)
+              : x.c[0] < 80000000000000 || (nIsBig && x.c[0] <= 99999750000000)))
+        ) {
+          k = x.s < 0 && isOdd(n) ? -0 : 0;
+          if (x.e > -1) k = 1 / k;
+          return new BigNumber(nIsNeg ? 1 / k : k);
+        } else if (POW_PRECISION) k = mathceil(POW_PRECISION / LOG_BASE + 2);
+        if (nIsBig) {
+          half = new BigNumber(0.5);
+          if (nIsNeg) n.s = 1;
+          nIsOdd = isOdd(n);
+        } else {
+          i = Math.abs(+valueOf(n));
+          nIsOdd = i % 2;
+        }
+        y = new BigNumber(ONE);
+        for (;;) {
+          if (nIsOdd) {
+            y = y.times(x);
+            if (!y.c) break;
+            if (k) {
+              if (y.c.length > k) y.c.length = k;
+            } else if (isModExp) y = y.mod(m_2);
           }
-          if (((d = K(d)), (_ = K(_)), (p = p.slice()), (u = d - _))) {
-            if ((f = u < 0)) ((u = -u), (l = p));
-            else ((_ = d), (l = w));
-            l.reverse();
-            for (o = u; o--; l.push(0));
-            l.reverse();
+          if (i) {
+            i = mathfloor(i / 2);
+            if (i === 0) break;
+            nIsOdd = i % 2;
           } else {
-            y = (f = (u = p.length) < (o = w.length)) ? u : o;
-            for (u = o = 0; o < y; o++)
-              if (p[o] != w[o]) {
-                f = p[o] < w[o];
-                break;
-              }
+            n = n.times(half);
+            round(n, n.e + 1, 1);
+            if (n.e > 14) nIsOdd = isOdd(n);
+            else {
+              i = +valueOf(n);
+              if (i === 0) break;
+              nIsOdd = i % 2;
+            }
           }
-          if (f) ((l = p), (p = w), (w = l), (i.s = -i.s));
-          if (((o = (y = w.length) - (c = p.length)), o > 0)) for (; o--; p[c++] = 0);
-          o = g - 1;
-          for (; y > u;) {
-            if (p[--y] < w[y]) {
-              for (c = y; c && !p[--c]; p[c] = o);
-              (--p[c], (p[y] += g));
-            }
-            p[y] -= w[y];
+          x = x.times(x);
+          if (k) {
+            if (x.c && x.c.length > k) x.c.length = k;
+          } else if (isModExp) x = x.mod(m_2);
+        }
+        if (isModExp) return y;
+        if (nIsNeg) y = ONE.div(y);
+        return m_2 ? y.mod(m_2) : k ? round(y, POW_PRECISION, ROUNDING_MODE, more) : y;
+      };
+      P_2.integerValue = function (rm) {
+        var n = new BigNumber(this);
+        if (rm == null) rm = ROUNDING_MODE;
+        else intCheck(rm, 0, 8);
+        return round(n, n.e + 1, rm);
+      };
+      P_2.isEqualTo = P_2.eq = function (y, b) {
+        return compare(this, new BigNumber(y, b)) === 0;
+      };
+      P_2.isFinite = function () {
+        return !!this.c;
+      };
+      P_2.isGreaterThan = P_2.gt = function (y, b) {
+        return compare(this, new BigNumber(y, b)) > 0;
+      };
+      P_2.isGreaterThanOrEqualTo = P_2.gte = function (y, b) {
+        return (b = compare(this, new BigNumber(y, b))) === 1 || b === 0;
+      };
+      P_2.isInteger = function () {
+        return !!this.c && bitFloor(this.e / LOG_BASE) > this.c.length - 2;
+      };
+      P_2.isLessThan = P_2.lt = function (y, b) {
+        return compare(this, new BigNumber(y, b)) < 0;
+      };
+      P_2.isLessThanOrEqualTo = P_2.lte = function (y, b) {
+        return (b = compare(this, new BigNumber(y, b))) === -1 || b === 0;
+      };
+      P_2.isNaN = function () {
+        return !this.s;
+      };
+      P_2.isNegative = function () {
+        return this.s < 0;
+      };
+      P_2.isPositive = function () {
+        return this.s > 0;
+      };
+      P_2.isZero = function () {
+        return !!this.c && this.c[0] == 0;
+      };
+      P_2.minus = function (y_2, b) {
+        var i;
+        var j;
+        var t;
+        var xLTy;
+        var x = this;
+        var a = x.s;
+        y_2 = new BigNumber(y_2, b);
+        b = y_2.s;
+        if (!a || !b) return new BigNumber(NaN);
+        if (a != b) {
+          y_2.s = -b;
+          return x.plus(y_2);
+        }
+        var xe = x.e / LOG_BASE;
+        var ye = y_2.e / LOG_BASE;
+        var xc = x.c;
+        var yc = y_2.c;
+        if (!xe || !ye) {
+          if (!xc || !yc) return xc ? ((y_2.s = -b), y_2) : new BigNumber(yc ? x : NaN);
+          if (!xc[0] || !yc[0])
+            return yc[0] ? ((y_2.s = -b), y_2) : new BigNumber(xc[0] ? x : ROUNDING_MODE == 3 ? -0 : 0);
+        }
+        xe = bitFloor(xe);
+        ye = bitFloor(ye);
+        xc = xc.slice();
+        if ((a = xe - ye)) {
+          if ((xLTy = a < 0)) {
+            a = -a;
+            t = xc;
+          } else {
+            ye = xe;
+            t = yc;
           }
-          for (; p[0] == 0; p.splice(0, 1), --_);
-          if (!p[0]) return ((i.s = X == 3 ? -1 : 1), (i.c = [(i.e = 0)]), i);
-          return vr(i, p, _);
-        }),
-        (C.modulo = C.mod =
-          function (i, o) {
-            var c,
-              y,
-              l = this;
-            if (((i = new A(i, o)), !l.c || !i.s || (i.c && !i.c[0]))) return new A(NaN);
-            else if (!i.c || (l.c && !l.c[0])) return new A(l);
-            if (wt == 9) ((y = i.s), (i.s = 1), (c = U(l, i, 0, 3)), (i.s = y), (c.s *= y));
-            else c = U(l, i, 0, wt);
-            if (((i = l.minus(c.times(i))), !i.c[0] && wt == 1)) i.s = l.s;
-            return i;
-          }),
-        (C.multipliedBy = C.times =
-          function (i, o) {
-            var c,
-              y,
-              l,
-              f,
-              m,
-              u,
-              d,
-              _,
-              p,
-              w,
-              R,
-              b,
-              M,
-              z,
-              te,
-              F = this,
-              B = F.c,
-              ne = (i = new A(i, o)).c;
-            if (!B || !ne || !B[0] || !ne[0]) {
-              if (!F.s || !i.s || (B && !B[0] && !ne) || (ne && !ne[0] && !B)) i.c = i.e = i.s = null;
-              else if (((i.s *= F.s), !B || !ne)) i.c = i.e = null;
-              else ((i.c = [0]), (i.e = 0));
-              return i;
+          t.reverse();
+          for (b = a; b--; t.push(0));
+          t.reverse();
+        } else {
+          j = (xLTy = (a = xc.length) < (b = yc.length)) ? a : b;
+          for (a = b = 0; b < j; b++)
+            if (xc[b] != yc[b]) {
+              xLTy = xc[b] < yc[b];
+              break;
             }
-            if (((y = K(F.e / E) + K(i.e / E)), (i.s *= F.s), (d = B.length), (w = ne.length), d < w))
-              ((M = B), (B = ne), (ne = M), (l = d), (d = w), (w = l));
-            for (l = d + w, M = []; l--; M.push(0));
-            ((z = g), (te = j));
-            for (l = w; --l >= 0;) {
-              ((c = 0), (R = ne[l] % te), (b = (ne[l] / te) | 0));
-              for (m = d, f = l + m; f > l;)
-                ((_ = B[--m] % te),
-                  (p = (B[m] / te) | 0),
-                  (u = b * _ + p * R),
-                  (_ = R * _ + (u % te) * te + M[f] + c),
-                  (c = ((_ / z) | 0) + ((u / te) | 0) + b * p),
-                  (M[f--] = _ % z));
-              M[f] = c;
-            }
-            if (c) ++y;
-            else M.splice(0, 1);
-            return vr(i, M, y);
-          }),
-        (C.negated = function () {
-          var i = new A(this);
-          return ((i.s = -i.s || null), i);
-        }),
-        (C.plus = function (i, o) {
-          var c,
-            y = this,
-            l = y.s;
-          if (((i = new A(i, o)), (o = i.s), !l || !o)) return new A(NaN);
-          if (l != o) return ((i.s = -o), y.minus(i));
-          var f = y.e / E,
-            m = i.e / E,
-            u = y.c,
-            d = i.c;
-          if (!f || !m) {
-            if (!u || !d) return new A(l / 0);
-            if (!u[0] || !d[0]) return d[0] ? i : new A(u[0] ? y : l * 0);
+        }
+        if (xLTy) {
+          t = xc;
+          xc = yc;
+          yc = t;
+          y_2.s = -y_2.s;
+        }
+        b = (j = yc.length) - (i = xc.length);
+        if (b > 0) for (; b--; xc[i++] = 0);
+        b = BASE - 1;
+        for (; j > a;) {
+          if (xc[--j] < yc[j]) {
+            for (i = j; i && !xc[--i]; xc[i] = b);
+            --xc[i];
+            xc[j] += BASE;
           }
-          if (((f = K(f)), (m = K(m)), (u = u.slice()), (l = f - m))) {
-            if (l > 0) ((m = f), (c = d));
-            else ((l = -l), (c = u));
-            c.reverse();
-            for (; l--; c.push(0));
-            c.reverse();
+          xc[j] -= yc[j];
+        }
+        for (; xc[0] == 0; xc.splice(0, 1), --ye);
+        if (!xc[0]) {
+          y_2.s = ROUNDING_MODE == 3 ? -1 : 1;
+          y_2.c = [(y_2.e = 0)];
+          return y_2;
+        }
+        return normalise(y_2, xc, ye);
+      };
+      P_2.modulo = P_2.mod = function (y_2, b) {
+        var q;
+        var s;
+        var x = this;
+        y_2 = new BigNumber(y_2, b);
+        if (!x.c || !y_2.s || (y_2.c && !y_2.c[0])) return new BigNumber(NaN);
+        else if (!y_2.c || (x.c && !x.c[0])) return new BigNumber(x);
+        if (MODULO_MODE == 9) {
+          s = y_2.s;
+          y_2.s = 1;
+          q = div(x, y_2, 0, 3);
+          y_2.s = s;
+          q.s *= s;
+        } else q = div(x, y_2, 0, MODULO_MODE);
+        y_2 = x.minus(q.times(y_2));
+        if (!y_2.c[0] && MODULO_MODE == 1) y_2.s = x.s;
+        return y_2;
+      };
+      P_2.multipliedBy = P_2.times = function (y_2, b_2) {
+        var c;
+        var e;
+        var i;
+        var j;
+        var k;
+        var m;
+        var xcL;
+        var xlo;
+        var xhi;
+        var ycL;
+        var ylo;
+        var yhi;
+        var zc;
+        var base;
+        var sqrtBase;
+        var x = this;
+        var xc = x.c;
+        var yc = (y_2 = new BigNumber(y_2, b_2)).c;
+        if (!xc || !yc || !xc[0] || !yc[0]) {
+          if (!x.s || !y_2.s || (xc && !xc[0] && !yc) || (yc && !yc[0] && !xc)) y_2.c = y_2.e = y_2.s = null;
+          else {
+            y_2.s *= x.s;
+            if (!xc || !yc) y_2.c = y_2.e = null;
+            else {
+              y_2.c = [0];
+              y_2.e = 0;
+            }
           }
-          if (((l = u.length), (o = d.length), l - o < 0)) ((c = d), (d = u), (u = c), (o = l));
-          for (l = 0; o;) ((l = ((u[--o] = u[o] + d[o] + l) / g) | 0), (u[o] = g === u[o] ? 0 : u[o] % g));
-          if (l) ((u = [l].concat(u)), ++m);
-          return vr(i, u, m);
-        }),
-        (C.precision = C.sd =
-          function (i, o) {
-            var c,
-              y,
-              l,
-              f = this;
-            if (i != null && i !== !!i) {
-              if ((O(i, 1, I), o == null)) o = X;
-              else O(o, 0, 8);
-              return pe(new A(f), i, o);
-            }
-            if (!(c = f.c)) return null;
-            if (((l = c.length - 1), (y = l * E + 1), (l = c[l]))) {
-              for (; l % 10 == 0; l /= 10, y--);
-              for (l = c[0]; l >= 10; l /= 10, y++);
-            }
-            if (i && f.e + 1 > y) y = f.e + 1;
-            return y;
-          }),
-        (C.shiftedBy = function (i) {
-          return (O(i, -k, k), this.times("1e" + i));
-        }),
-        (C.squareRoot = C.sqrt =
-          function () {
-            var i,
-              o,
-              c,
-              y,
-              l,
-              f = this,
-              { c: m, s: u, e: d } = f,
-              _ = V + 4,
-              p = new A("0.5");
-            if (u !== 1 || !m || !m[0]) return new A(!u || (u < 0 && (!m || m[0])) ? NaN : m ? f : 1 / 0);
-            if (((u = Math.sqrt(+De(f))), u == 0 || u == 1 / 0)) {
-              if (((o = S(m)), (o.length + d) % 2 == 0)) o += "0";
-              if (((u = Math.sqrt(+o)), (d = K((d + 1) / 2) - (d < 0 || d % 2)), u == 1 / 0)) o = "5e" + d;
-              else ((o = u.toExponential()), (o = o.slice(0, o.indexOf("e") + 1) + d));
-              c = new A(o);
-            } else c = new A(u + "");
-            if (c.c[0]) {
-              if (((d = c.e), (u = d + _), u < 3)) u = 0;
-              for (;;)
-                if (
-                  ((l = c),
-                  (c = p.times(l.plus(U(f, l, _, 1)))),
-                  S(l.c).slice(0, u) === (o = S(c.c)).slice(0, u))
-                ) {
-                  if (c.e < d) --u;
-                  if (((o = o.slice(u - 3, u + 1)), o == "9999" || (!y && o == "4999"))) {
-                    if (!y) {
-                      if ((pe(l, l.e + V + 2, 0), l.times(l).eq(f))) {
-                        c = l;
-                        break;
-                      }
-                    }
-                    ((_ += 4), (u += 4), (y = 1));
-                  } else {
-                    if (!+o || (!+o.slice(1) && o.charAt(0) == "5"))
-                      (pe(c, c.e + V + 2, 1), (i = !c.times(c).eq(f)));
+          return y_2;
+        }
+        e = bitFloor(x.e / LOG_BASE) + bitFloor(y_2.e / LOG_BASE);
+        y_2.s *= x.s;
+        xcL = xc.length;
+        ycL = yc.length;
+        if (xcL < ycL) {
+          zc = xc;
+          xc = yc;
+          yc = zc;
+          i = xcL;
+          xcL = ycL;
+          ycL = i;
+        }
+        for (i = xcL + ycL, zc = []; i--; zc.push(0));
+        base = BASE;
+        sqrtBase = SQRT_BASE;
+        for (i = ycL; --i >= 0;) {
+          c = 0;
+          ylo = yc[i] % sqrtBase;
+          yhi = (yc[i] / sqrtBase) | 0;
+          for (k = xcL, j = i + k; j > i;) {
+            xlo = xc[--k] % sqrtBase;
+            xhi = (xc[k] / sqrtBase) | 0;
+            m = yhi * xlo + xhi * ylo;
+            xlo = ylo * xlo + (m % sqrtBase) * sqrtBase + zc[j] + c;
+            c = ((xlo / base) | 0) + ((m / sqrtBase) | 0) + yhi * xhi;
+            zc[j--] = xlo % base;
+          }
+          zc[j] = c;
+        }
+        if (c) ++e;
+        else zc.splice(0, 1);
+        return normalise(y_2, zc, e);
+      };
+      P_2.negated = function () {
+        var x = new BigNumber(this);
+        x.s = -x.s || null;
+        return x;
+      };
+      P_2.plus = function (y_2, b) {
+        var t;
+        var x = this;
+        var a = x.s;
+        y_2 = new BigNumber(y_2, b);
+        b = y_2.s;
+        if (!a || !b) return new BigNumber(NaN);
+        if (a != b) {
+          y_2.s = -b;
+          return x.minus(y_2);
+        }
+        var xe = x.e / LOG_BASE;
+        var ye = y_2.e / LOG_BASE;
+        var xc = x.c;
+        var yc = y_2.c;
+        if (!xe || !ye) {
+          if (!xc || !yc) return new BigNumber(a / 0);
+          if (!xc[0] || !yc[0]) return yc[0] ? y_2 : new BigNumber(xc[0] ? x : a * 0);
+        }
+        xe = bitFloor(xe);
+        ye = bitFloor(ye);
+        xc = xc.slice();
+        if ((a = xe - ye)) {
+          if (a > 0) {
+            ye = xe;
+            t = yc;
+          } else {
+            a = -a;
+            t = xc;
+          }
+          t.reverse();
+          for (; a--; t.push(0));
+          t.reverse();
+        }
+        a = xc.length;
+        b = yc.length;
+        if (a - b < 0) {
+          t = yc;
+          yc = xc;
+          xc = t;
+          b = a;
+        }
+        for (a = 0; b;) {
+          a = ((xc[--b] = xc[b] + yc[b] + a) / BASE) | 0;
+          xc[b] = BASE === xc[b] ? 0 : xc[b] % BASE;
+        }
+        if (a) {
+          xc = [a].concat(xc);
+          ++ye;
+        }
+        return normalise(y_2, xc, ye);
+      };
+      P_2.precision = P_2.sd = function (sd, rm) {
+        var c;
+        var n;
+        var v;
+        var x = this;
+        if (sd != null && sd !== !!sd) {
+          intCheck(sd, 1, MAX);
+          if (rm == null) rm = ROUNDING_MODE;
+          else intCheck(rm, 0, 8);
+          return round(new BigNumber(x), sd, rm);
+        }
+        if (!(c = x.c)) return null;
+        v = c.length - 1;
+        n = v * LOG_BASE + 1;
+        if ((v = c[v])) {
+          for (; v % 10 == 0; v /= 10, n--);
+          for (v = c[0]; v >= 10; v /= 10, n++);
+        }
+        if (sd && x.e + 1 > n) n = x.e + 1;
+        return n;
+      };
+      P_2.shiftedBy = function (k) {
+        intCheck(k, -MAX_SAFE_INTEGER, MAX_SAFE_INTEGER);
+        return this.times("1e" + k);
+      };
+      P_2.squareRoot = P_2.sqrt = function () {
+        var m_2;
+        var n;
+        var r;
+        var rep;
+        var t;
+        var x = this;
+        var { c, s, e } = x;
+        var dp = DECIMAL_PLACES + 4;
+        var half = new BigNumber("0.5");
+        if (s !== 1 || !c || !c[0]) return new BigNumber(!s || (s < 0 && (!c || c[0])) ? NaN : c ? x : 1 / 0);
+        s = Math.sqrt(+valueOf(x));
+        if (s == 0 || s == 1 / 0) {
+          n = coeffToString(c);
+          if ((n.length + e) % 2 == 0) n += "0";
+          s = Math.sqrt(+n);
+          e = bitFloor((e + 1) / 2) - (e < 0 || e % 2);
+          if (s == 1 / 0) n = "5e" + e;
+          else {
+            n = s.toExponential();
+            n = n.slice(0, n.indexOf("e") + 1) + e;
+          }
+          r = new BigNumber(n);
+        } else r = new BigNumber(s + "");
+        if (r.c[0]) {
+          e = r.e;
+          s = e + dp;
+          if (s < 3) s = 0;
+          for (;;) {
+            t = r;
+            r = half.times(t.plus(div(x, t, dp, 1)));
+            if (coeffToString(t.c).slice(0, s) === (n = coeffToString(r.c)).slice(0, s)) {
+              if (r.e < e) --s;
+              n = n.slice(s - 3, s + 1);
+              if (n == "9999" || (!rep && n == "4999")) {
+                if (!rep) {
+                  round(t, t.e + DECIMAL_PLACES + 2, 0);
+                  if (t.times(t).eq(x)) {
+                    r = t;
                     break;
                   }
                 }
+                dp += 4;
+                s += 4;
+                rep = 1;
+              } else {
+                if (!+n || (!+n.slice(1) && n.charAt(0) == "5")) {
+                  round(r, r.e + DECIMAL_PLACES + 2, 1);
+                  m_2 = !r.times(r).eq(x);
+                }
+                break;
+              }
             }
-            return pe(c, c.e + V + 1, X, i);
-          }),
-        (C.toExponential = function (i, o) {
-          if (i != null) (O(i, 0, I), i++);
-          return Cr(this, i, o, 1);
-        }),
-        (C.toFixed = function (i, o) {
-          if (i != null) (O(i, 0, I), (i = i + this.e + 1));
-          return Cr(this, i, o);
-        }),
-        (C.toFormat = function (i, o, c) {
-          var y,
-            l = this;
-          if (c == null)
-            if (i != null && o && typeof o == "object") ((c = o), (o = null));
-            else if (i && typeof i == "object") ((c = i), (i = o = null));
-            else c = Ar;
-          else if (typeof c != "object") throw Error(a + "Argument not an object: " + c);
-          if (((y = l.toFixed(i, o)), l.c)) {
-            var f,
-              parts = y.split("."),
-              u = +c.groupSize,
-              d = +c.secondaryGroupSize,
-              _ = c.groupSeparator || "",
-              p = parts[0],
-              w = parts[1],
-              R = l.s < 0,
-              b = R ? p.slice(1) : p,
-              M = b.length;
-            if (d) ((f = u), (u = d), (d = f), (M -= f));
-            if (u > 0 && M > 0) {
-              ((f = M % u || u), (p = b.substr(0, f)));
-              for (; f < M; f += u) p += _ + b.substr(f, u);
-              if (d > 0) p += _ + b.slice(f);
-              if (R) p = "-" + p;
-            }
-            y = w
-              ? p +
-                (c.decimalSeparator || "") +
-                ((d = +c.fractionGroupSize)
-                  ? w.replace(new RegExp("\\d{" + d + "}\\B", "g"), "$&" + (c.fractionGroupSeparator || ""))
-                  : w)
-              : p;
           }
-          return (c.prefix || "") + y + (c.suffix || "");
-        }),
-        (C.toFraction = function (i) {
-          var o,
-            c,
-            y,
-            l,
-            f,
-            m,
-            u,
-            d,
-            _,
-            p,
-            w,
-            R,
-            b = this,
-            M = b.c;
-          if (i != null) {
-            if (((u = new A(i)), (!u.isInteger() && (u.c || u.s !== 1)) || u.lt(ee)))
-              throw Error(a + "Argument " + (u.isInteger() ? "out of range: " : "not an integer: ") + De(u));
+        }
+        return round(r, r.e + DECIMAL_PLACES + 1, ROUNDING_MODE, m_2);
+      };
+      P_2.toExponential = function (dp, rm) {
+        if (dp != null) {
+          intCheck(dp, 0, MAX);
+          dp++;
+        }
+        return format(this, dp, rm, 1);
+      };
+      P_2.toFixed = function (dp, rm) {
+        if (dp != null) {
+          intCheck(dp, 0, MAX);
+          dp = dp + this.e + 1;
+        }
+        return format(this, dp, rm);
+      };
+      P_2.toFormat = function (dp, rm, format) {
+        var str;
+        var x = this;
+        if (format == null) {
+          if (dp != null && rm && typeof rm == "object") {
+            format = rm;
+            rm = null;
+          } else if (dp && typeof dp == "object") {
+            format = dp;
+            dp = rm = null;
+          } else format = FORMAT;
+        } else if (typeof format != "object")
+          throw Error(bignumberError + "Argument not an object: " + format);
+        str = x.toFixed(dp, rm);
+        if (x.c) {
+          var i;
+          var arr = str.split(".");
+          var g1 = +format.groupSize;
+          var g2 = +format.secondaryGroupSize;
+          var groupSeparator = format.groupSeparator || "";
+          var intPart = arr[0];
+          var fractionPart = arr[1];
+          var isNeg = x.s < 0;
+          var intDigits = isNeg ? intPart.slice(1) : intPart;
+          var len = intDigits.length;
+          if (g2) {
+            i = g1;
+            g1 = g2;
+            g2 = i;
+            len -= i;
           }
-          if (!M) return new A(b);
-          ((o = new A(ee)),
-            (_ = c = new A(ee)),
-            (y = d = new A(ee)),
-            (R = S(M)),
-            (f = o.e = R.length - b.e - 1),
-            (o.c[0] = T[(m = f % E) < 0 ? E + m : m]),
-            (i = !i || u.comparedTo(o) > 0 ? (f > 0 ? o : _) : u),
-            (m = ke),
-            (ke = 1 / 0),
-            (u = new A(R)),
-            (d.c[0] = 0));
-          for (;;) {
-            if (((p = U(u, o, 0, 1)), (l = c.plus(p.times(y))), l.comparedTo(i) == 1)) break;
-            ((c = y),
-              (y = l),
-              (_ = d.plus(p.times((l = _)))),
-              (d = l),
-              (o = u.minus(p.times((l = o)))),
-              (u = l));
+          if (g1 > 0 && len > 0) {
+            i = len % g1 || g1;
+            intPart = intDigits.substr(0, i);
+            for (; i < len; i += g1) intPart += groupSeparator + intDigits.substr(i, g1);
+            if (g2 > 0) intPart += groupSeparator + intDigits.slice(i);
+            if (isNeg) intPart = "-" + intPart;
           }
-          return (
-            (l = U(i.minus(c), y, 0, 1)),
-            (d = d.plus(l.times(_))),
-            (c = c.plus(l.times(y))),
-            (d.s = _.s = b.s),
-            (f = f * 2),
-            (w =
-              U(_, y, f, X)
-                .minus(b)
-                .abs()
-                .comparedTo(U(d, c, f, X).minus(b).abs()) < 1
-                ? [_, y]
-                : [d, c]),
-            (ke = m),
-            w
-          );
-        }),
-        (C.toNumber = function () {
-          return +De(this);
-        }),
-        (C.toPrecision = function (i, o) {
-          if (i != null) O(i, 1, I);
-          return Cr(this, i, o, 2);
-        }),
-        (C.toString = function (i) {
-          var o,
-            c = this,
-            y = c.s,
-            l = c.e;
-          if (l === null)
-            if (y) {
-              if (((o = "Infinity"), y < 0)) o = "-" + o;
-            } else o = "NaN";
-          else {
-            if (i == null) o = l <= ce || l >= de ? Z(S(c.c), l) : ie(S(c.c), l, "0");
-            else if (i === 10 && Tr) ((c = pe(new A(c), V + l + 1, X)), (o = ie(S(c.c), c.e, "0")));
-            else (O(i, 2, tt.length, "Base"), (o = L(ie(S(c.c), l, "0"), 10, i, y, !0)));
-            if (y < 0 && c.c[0]) o = "-" + o;
+          str = fractionPart
+            ? intPart +
+              (format.decimalSeparator || "") +
+              ((g2 = +format.fractionGroupSize)
+                ? fractionPart.replace(
+                    new RegExp("\\d{" + g2 + "}\\B", "g"),
+                    "$&" + (format.fractionGroupSeparator || ""),
+                  )
+                : fractionPart)
+            : intPart;
+        }
+        return (format.prefix || "") + str + (format.suffix || "");
+      };
+      P_2.toFraction = function (md) {
+        var d_2;
+        var d0;
+        var d1;
+        var d2;
+        var e;
+        var exp;
+        var n;
+        var n0;
+        var n1;
+        var q;
+        var r;
+        var s;
+        var x = this;
+        var xc = x.c;
+        if (md != null) {
+          n = new BigNumber(md);
+          if ((!n.isInteger() && (n.c || n.s !== 1)) || n.lt(ONE))
+            throw Error(
+              bignumberError +
+                "Argument " +
+                (n.isInteger() ? "out of range: " : "not an integer: ") +
+                valueOf(n),
+            );
+        }
+        if (!xc) return new BigNumber(x);
+        d_2 = new BigNumber(ONE);
+        n1 = d0 = new BigNumber(ONE);
+        d1 = n0 = new BigNumber(ONE);
+        s = coeffToString(xc);
+        e = d_2.e = s.length - x.e - 1;
+        d_2.c[0] = POWS_TEN[(exp = e % LOG_BASE) < 0 ? LOG_BASE + exp : exp];
+        md = !md || n.comparedTo(d_2) > 0 ? (e > 0 ? d_2 : n1) : n;
+        exp = MAX_EXP;
+        MAX_EXP = 1 / 0;
+        n = new BigNumber(s);
+        n0.c[0] = 0;
+        for (;;) {
+          q = div(n, d_2, 0, 1);
+          d2 = d0.plus(q.times(d1));
+          if (d2.comparedTo(md) == 1) break;
+          d0 = d1;
+          d1 = d2;
+          n1 = n0.plus(q.times((d2 = n1)));
+          n0 = d2;
+          d_2 = n.minus(q.times((d2 = d_2)));
+          n = d2;
+        }
+        d2 = div(md.minus(d0), d1, 0, 1);
+        n0 = n0.plus(d2.times(n1));
+        d0 = d0.plus(d2.times(d1));
+        n0.s = n1.s = x.s;
+        e = e * 2;
+        r =
+          div(n1, d1, e, ROUNDING_MODE)
+            .minus(x)
+            .abs()
+            .comparedTo(div(n0, d0, e, ROUNDING_MODE).minus(x).abs()) < 1
+            ? [n1, d1]
+            : [n0, d0];
+        MAX_EXP = exp;
+        return r;
+      };
+      P_2.toNumber = function () {
+        return +valueOf(this);
+      };
+      P_2.toPrecision = function (sd, rm) {
+        if (sd != null) intCheck(sd, 1, MAX);
+        return format(this, sd, rm, 2);
+      };
+      P_2.toString = function (b) {
+        var str;
+        var n = this;
+        var s = n.s;
+        var e = n.e;
+        if (e === null) {
+          if (s) {
+            str = "Infinity";
+            if (s < 0) str = "-" + str;
+          } else str = "NaN";
+        } else {
+          if (b == null)
+            str =
+              e <= TO_EXP_NEG || e >= TO_EXP_POS
+                ? toExponential(coeffToString(n.c), e)
+                : toFixedPoint(coeffToString(n.c), e, "0");
+          else if (b === 10 && alphabetHasNormalDecimalDigits) {
+            n = round(new BigNumber(n), DECIMAL_PLACES + e + 1, ROUNDING_MODE);
+            str = toFixedPoint(coeffToString(n.c), n.e, "0");
+          } else {
+            intCheck(b, 2, ALPHABET.length, "Base");
+            str = convertBase(toFixedPoint(coeffToString(n.c), e, "0"), 10, b, s, true);
           }
-          return o;
-        }),
-        (C.valueOf = C.toJSON =
-          function () {
-            return De(this);
-          }),
-        (C._isBigNumber = !0),
-        D != null)
-      )
-        A.set(D);
-      return A;
+          if (s < 0 && n.c[0]) str = "-" + str;
+        }
+        return str;
+      };
+      P_2.valueOf = P_2.toJSON = function () {
+        return valueOf(this);
+      };
+      P_2._isBigNumber = true;
+      if (configObject != null) BigNumber.set(configObject);
+      return BigNumber;
     }
-    function K(D) {
-      var U = D | 0;
-      return D > 0 || D === U ? U : U - 1;
+    function bitFloor(n) {
+      var i = n | 0;
+      return n > 0 || n === i ? i : i - 1;
     }
-    function S(D) {
-      var U,
-        L,
-        W = 1,
-        C = D.length,
-        ee = D[0] + "";
-      for (; W < C;) {
-        ((U = D[W++] + ""), (L = E - U.length));
-        for (; L--; U = "0" + U);
-        ee += U;
+    function coeffToString(a) {
+      var s;
+      var z;
+      var i = 1;
+      var j = a.length;
+      var r = a[0] + "";
+      for (; i < j;) {
+        s = a[i++] + "";
+        z = LOG_BASE - s.length;
+        for (; z--; s = "0" + s);
+        r += s;
       }
-      for (C = ee.length; ee.charCodeAt(--C) === 48;);
-      return ee.slice(0, C + 1 || 1);
+      for (j = r.length; r.charCodeAt(--j) === 48;);
+      return r.slice(0, j + 1 || 1);
     }
-    function P(D, U) {
-      var L,
-        W,
-        C = D.c,
-        ee = U.c,
-        V = D.s,
-        X = U.s,
-        ce = D.e,
-        de = U.e;
-      if (!V || !X) return null;
-      if (((L = C && !C[0]), (W = ee && !ee[0]), L || W)) return L ? (W ? 0 : -X) : V;
-      if (V != X) return V;
-      if (((L = V < 0), (W = ce == de), !C || !ee)) return W ? 0 : !C ^ L ? 1 : -1;
-      if (!W) return (ce > de) ^ L ? 1 : -1;
-      X = (ce = C.length) < (de = ee.length) ? ce : de;
-      for (V = 0; V < X; V++) if (C[V] != ee[V]) return (C[V] > ee[V]) ^ L ? 1 : -1;
-      return ce == de ? 0 : (ce > de) ^ L ? 1 : -1;
+    function compare(x, y) {
+      var a;
+      var b;
+      var xc = x.c;
+      var yc = y.c;
+      var i = x.s;
+      var j = y.s;
+      var k = x.e;
+      var l = y.e;
+      if (!i || !j) return null;
+      a = xc && !xc[0];
+      b = yc && !yc[0];
+      if (a || b) return a ? (b ? 0 : -j) : i;
+      if (i != j) return i;
+      a = i < 0;
+      b = k == l;
+      if (!xc || !yc) return b ? 0 : !xc ^ a ? 1 : -1;
+      if (!b) return (k > l) ^ a ? 1 : -1;
+      j = (k = xc.length) < (l = yc.length) ? k : l;
+      for (i = 0; i < j; i++) if (xc[i] != yc[i]) return (xc[i] > yc[i]) ^ a ? 1 : -1;
+      return k == l ? 0 : (k > l) ^ a ? 1 : -1;
     }
-    function O(D, U, L, W) {
-      if (D < U || D > L || D !== floor(D))
+    function intCheck(n, min, max, name) {
+      if (n < min || n > max || n !== mathfloor(n))
         throw Error(
-          a +
-            (W || "Argument") +
-            (typeof D == "number"
-              ? D < U || D > L
+          bignumberError +
+            (name || "Argument") +
+            (typeof n == "number"
+              ? n < min || n > max
                 ? " out of range: "
                 : " not an integer: "
               : " not a primitive number: ") +
-            String(D),
+            String(n),
         );
     }
-    function G(D) {
-      var U = D.c.length - 1;
-      return K(D.e / E) == U && D.c[U] % 2 != 0;
+    function isOdd(n) {
+      var k = n.c.length - 1;
+      return bitFloor(n.e / LOG_BASE) == k && n.c[k] % 2 != 0;
     }
-    function Z(D, U) {
-      return (D.length > 1 ? D.charAt(0) + "." + D.slice(1) : D) + (U < 0 ? "e" : "e+") + U;
+    function toExponential(str, e) {
+      return (str.length > 1 ? str.charAt(0) + "." + str.slice(1) : str) + (e < 0 ? "e" : "e+") + e;
     }
-    function ie(D, U, L) {
-      var W, C;
-      if (U < 0) {
-        for (C = L + "."; ++U; C += L);
-        D = C + D;
-      } else if (((W = D.length), ++U > W)) {
-        for (C = L, U -= W; --U; C += L);
-        D += C;
-      } else if (U < W) D = D.slice(0, U) + "." + D.slice(U);
-      return D;
+    function toFixedPoint(str, e, z) {
+      var len;
+      var zs;
+      if (e < 0) {
+        for (zs = z + "."; ++e; zs += z);
+        str = zs + str;
+      } else {
+        len = str.length;
+        if (++e > len) {
+          for (zs = z, e -= len; --e; zs += z);
+          str += zs;
+        } else if (e < len) str = str.slice(0, e) + "." + str.slice(e);
+      }
+      return str;
     }
-    if (((t = Y()), (t.default = t.BigNumber = t), typeof define == "function" && define.amd))
+    BigNumber = clone();
+    BigNumber.default = BigNumber.BigNumber = BigNumber;
+    if (typeof define == "function" && define.amd)
       define(function () {
-        return t;
+        return BigNumber;
       });
-    else if (typeof Dt < "u" && Dt.exports) Dt.exports = t;
+    else if (typeof cjsModule !== "undefined" && cjsModule.exports) cjsModule.exports = BigNumber;
     else {
-      if (!e) e = typeof self < "u" && self ? self : window;
-      e.BigNumber = t;
+      if (!globalObject) globalObject = typeof self !== "undefined" && self ? self : window;
+      globalObject.BigNumber = BigNumber;
     }
-  })(en);
+  })(cjsExports);
 });
-
-export { Ir };
+export { require_bignumber };

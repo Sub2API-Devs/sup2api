@@ -8,11 +8,15 @@
  * pieces: chunk-vrb44rx7.js (3)
  * attribution: sole-consumer 2, fingerprint 1
  */
-import { j, ce, y } from "../../../vendor/react/cjs/react.production.js";
-import { r, e, Fragment } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { init_react_production, ce, y } from "../../../vendor/react/cjs/react.production.js";
+import {
+  jsxProd_default_2,
+  jsxProd_default,
+  Fragment,
+} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Box } from "../../ink/components/Text.js";
 import { color } from "../design-system/color.js";
-import { re } from "../../../vendor/@inquirer/figures/dist/esm/index.js";
+import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/index.js";
 import { StatusIcon } from "../design-system/StatusIcon.js";
 import { sanitizeTelemetryString } from "../../utils/sanitization.js";
 import { useAppStateSession, useAppState } from "../../state/AppState.js";
@@ -34,106 +38,174 @@ import { KeyboardShortcutHint } from "../design-system/KeyboardShortcutHint.js";
 import { ConfigurableShortcutHint } from "../ConfigurableShortcutHint.js";
 import { FlexDirectionRow } from "../design-system/Table.js";
 import { mcpTransportType } from "../../services/mcp/mcpServerEndpoint.js";
-import { HPe } from "../../services/mcp/mcpCallConstants.js";
+import { sanitizeCallMark } from "../../services/mcp/mcpCallConstants.js";
 import { getMcpConfigByName } from "../../services/mcp/config.js";
 import { isConnectedOrCached } from "../../skills/bundled/scheduleRemoteAgents.js";
 import { CapabilitiesSection } from "./CapabilitiesSection.js";
 import { ModelSelector } from "../agents/ModelSelector.js";
 
 //@ chunk-vrb44rx7.js:26810-26814 sole-consumer
-j();
+init_react_production();
+//@ chunk-vrb44rx7.js:26814-27437 sole-consumer
 /**
  * stdio 服务器状态文字：disabled / connected（工具获取失败、无工具）/ connecting / failed。
  */
-//@ chunk-vrb44rx7.js:26814-27437 sole-consumer
-function renderStdioServerStatus(i, h, k) {
-  if (i.type === "disabled") return r(Text, { children: [color("inactive", k)(re.radioOff), " disabled"] });
-  if (i.type === "connected") {
-    if (i.toolsListError)
-      return r(Text, {
-        children: [e(StatusIcon, { status: "warning", withSpace: !0 }), "connected \xB7 tools fetch failed"],
+function renderStdioServerStatus(client, serverToolsCount, k) {
+  if (client.type === "disabled")
+    return jsxProd_default_2(Text, {
+      children: [color("inactive", k)(figures_default.radioOff), " disabled"],
+    });
+  if (client.type === "connected") {
+    if (client.toolsListError)
+      return jsxProd_default_2(Text, {
+        children: [
+          jsxProd_default(StatusIcon, {
+            status: "warning",
+            withSpace: true,
+          }),
+          "connected \xB7 tools fetch failed",
+        ],
       });
-    if (i.capabilities?.tools && h === 0)
-      return r(Text, {
-        children: [e(StatusIcon, { status: "warning", withSpace: !0 }), "connected \xB7 no tools"],
+    if (client.capabilities?.tools && serverToolsCount === 0)
+      return jsxProd_default_2(Text, {
+        children: [
+          jsxProd_default(StatusIcon, {
+            status: "warning",
+            withSpace: true,
+          }),
+          "connected \xB7 no tools",
+        ],
       });
-    return r(Text, { children: [e(StatusIcon, { status: "success", withSpace: !0 }), "connected"] });
+    return jsxProd_default_2(Text, {
+      children: [
+        jsxProd_default(StatusIcon, {
+          status: "success",
+          withSpace: true,
+        }),
+        "connected",
+      ],
+    });
   }
-  if (i.type === "pending")
-    return r(Text, { children: [e(StatusIcon, { status: "pending", withSpace: !0 }), "connecting\u2026"] });
-  return r(Text, { children: [e(StatusIcon, { status: "error", withSpace: !0 }), "failed"] });
+  if (client.type === "pending")
+    return jsxProd_default_2(Text, {
+      children: [
+        jsxProd_default(StatusIcon, {
+          status: "pending",
+          withSpace: true,
+        }),
+        "connecting\u2026",
+      ],
+    });
+  return jsxProd_default_2(Text, {
+    children: [
+      jsxProd_default(StatusIcon, {
+        status: "error",
+        withSpace: true,
+      }),
+      "failed",
+    ],
+  });
 }
 //@ chunk-vrb44rx7.js:27437-30172 fingerprint = MCPStdioServerMenu (0.58)
 function MCPStdioServerMenu({
-  server: server,
-  serverToolsCount: serverToolsCount,
-  onViewTools: onViewTools,
-  onCancel: onCancel,
-  onComplete: onComplete,
-  borderless: borderless = !1,
+  server,
+  serverToolsCount,
+  onViewTools,
+  onCancel,
+  onComplete,
+  borderless = false,
 }) {
   let D = ce(
-      (he, ...W) => onComplete(typeof he === "string" ? sanitizeTelemetryString(he) : he, ...W),
-      [onComplete],
-    ),
-    exitState = useAppStateSession(),
-    [L] = useTheme(),
-    A = useIsScreenReaderEnabled(),
-    mcp = useAppState((he) => he.mcp),
-    reconnectMcpServer = useMcpReconnect(),
-    toggleMcpServer = useMcpToggleEnabled(),
-    [_, J] = y(!1),
-    pe = ce(async () => {
-      let wasEnabled = server.client.type !== "disabled";
-      try {
-        (await toggleMcpServer(server.name), onCancel());
-      } catch (err) {
-        D(
-          formatMcpOperationFailure(err, server.name, wasEnabled ? "disable" : "enable", {
-            config: server.config,
-            persistsOffBox: isBridgeOrTransport(exitState),
-          }),
-        );
-      }
-    }, [server.client.type, server.name, server.config, toggleMcpServer, onCancel, D, exitState]),
-    capitalizedServerName = capitalize(String(server.name)),
-    serverCommandsCount = filterMcpPromptsByServer(mcp.commands, server.name).length,
-    menuOptions = [];
+    (he, ...W) => onComplete(typeof he === "string" ? sanitizeTelemetryString(he) : he, ...W),
+    [onComplete],
+  );
+  let exitState = useAppStateSession();
+  let [L] = useTheme();
+  let isScreenReaderEnabled = useIsScreenReaderEnabled();
+  let mcp = useAppState((he) => he.mcp);
+  let reconnectMcpServer = useMcpReconnect();
+  let toggleMcpServer = useMcpToggleEnabled();
+  let [isReconnecting, setIsReconnecting] = y(false);
+  let handleToggleEnabled = ce(async () => {
+    let wasEnabled = server.client.type !== "disabled";
+    try {
+      await toggleMcpServer(server.name);
+      onCancel();
+    } catch (err) {
+      D(
+        formatMcpOperationFailure(err, server.name, wasEnabled ? "disable" : "enable", {
+          config: server.config,
+          persistsOffBox: isBridgeOrTransport(exitState),
+        }),
+      );
+    }
+  }, [server.client.type, server.name, server.config, toggleMcpServer, onCancel, D, exitState]);
+  let capitalizedServerName = capitalize(String(server.name));
+  let serverCommandsCount = filterMcpPromptsByServer(mcp.commands, server.name).length;
+  let menuOptions = [];
   if (server.client.type !== "disabled" && serverToolsCount > 0)
-    menuOptions.push({ label: "View tools", value: "tools" });
+    menuOptions.push({
+      label: "View tools",
+      value: "tools",
+    });
   if (server.client.type !== "disabled")
-    menuOptions.push({ label: "Reconnect", value: "reconnectMcpServer" });
-  if (
-    (menuOptions.push({
-      label: server.client.type !== "disabled" ? "Disable" : "Enable",
-      value: "toggle-enabled",
-    }),
-    _)
-  )
-    return r(Dialog, {
+    menuOptions.push({
+      label: "Reconnect",
+      value: "reconnectMcpServer",
+    });
+  menuOptions.push({
+    label: server.client.type !== "disabled" ? "Disable" : "Enable",
+    value: "toggle-enabled",
+  });
+  if (isReconnecting)
+    return jsxProd_default_2(Dialog, {
       title: `${capitalizedServerName} MCP Server`,
       onCancel: () => {},
-      exitOnCtrlCD: !0,
+      exitOnCtrlCD: true,
       hideBorder: borderless,
-      hideInputGuide: !0,
+      hideInputGuide: true,
       children: [
-        r(Text, {
+        jsxProd_default_2(Text, {
           color: "text",
-          children: ["Reconnecting to ", e(Text, { bold: !0, children: server.name })],
+          children: [
+            "Reconnecting to ",
+            jsxProd_default(Text, {
+              bold: true,
+              children: server.name,
+            }),
+          ],
         }),
-        r(Box, { children: [e(Spinner, {}), e(Text, { children: " Restarting MCP server process" })] }),
-        e(Text, { dimColor: !0, children: "This may take a few moments." }),
+        jsxProd_default_2(Box, {
+          children: [
+            jsxProd_default(Spinner, {}),
+            jsxProd_default(Text, {
+              children: " Restarting MCP server process",
+            }),
+          ],
+        }),
+        jsxProd_default(Text, {
+          dimColor: true,
+          children: "This may take a few moments.",
+        }),
       ],
     });
-  return r(Dialog, {
+  return jsxProd_default_2(Dialog, {
     title: `${capitalizedServerName} MCP Server`,
-    onCancel: onCancel,
+    onCancel,
     hideBorder: borderless,
-    inputGuide: r(Byline, {
+    inputGuide: jsxProd_default_2(Byline, {
       children: [
-        !A && e(KeyboardShortcutHint, { chord: ["up", "down"], action: "navigate" }),
-        !A && e(KeyboardShortcutHint, { chord: "enter", action: "select" }),
-        e(ConfigurableShortcutHint, {
+        !isScreenReaderEnabled &&
+          jsxProd_default(KeyboardShortcutHint, {
+            chord: ["up", "down"],
+            action: "navigate",
+          }),
+        !isScreenReaderEnabled &&
+          jsxProd_default(KeyboardShortcutHint, {
+            chord: "enter",
+            action: "select",
+          }),
+        jsxProd_default(ConfigurableShortcutHint, {
           action: "confirm:no",
           context: "Confirmation",
           fallback: "Esc",
@@ -142,40 +214,59 @@ function MCPStdioServerMenu({
       ],
     }),
     children: [
-      r(Box, {
+      jsxProd_default_2(Box, {
         flexDirection: "column",
         gap: 0,
         children: [
-          r(FlexDirectionRow, {
-            columns: [{ bold: !0 }, {}],
+          jsxProd_default_2(FlexDirectionRow, {
+            columns: [
+              {
+                bold: true,
+              },
+              {},
+            ],
             children: [
-              r(FlexDirectionRow.Row, {
+              jsxProd_default_2(FlexDirectionRow.Row, {
                 children: [
-                  e(Fragment, { children: "Status:" }),
+                  jsxProd_default(Fragment, {
+                    children: "Status:",
+                  }),
                   renderStdioServerStatus(server.client, serverToolsCount, L),
                 ],
               }),
               server.displayEndpoint !== mcpTransportType(server.config) &&
-                r(FlexDirectionRow.Row, {
+                jsxProd_default_2(FlexDirectionRow.Row, {
                   children: [
-                    e(Fragment, { children: "Command:" }),
-                    e(Text, { dimColor: !0, children: server.displayEndpoint }),
+                    jsxProd_default(Fragment, {
+                      children: "Command:",
+                    }),
+                    jsxProd_default(Text, {
+                      dimColor: true,
+                      children: server.displayEndpoint,
+                    }),
                   ],
                 }),
               server.client.type === "connected" &&
                 server.client.protocolEra === "modern" &&
                 server.client.negotiatedProtocolVersion &&
-                r(FlexDirectionRow.Row, {
+                jsxProd_default_2(FlexDirectionRow.Row, {
                   children: [
-                    e(Fragment, { children: "Protocol:" }),
-                    e(Text, { dimColor: !0, children: HPe(server.client.negotiatedProtocolVersion) }),
+                    jsxProd_default(Fragment, {
+                      children: "Protocol:",
+                    }),
+                    jsxProd_default(Text, {
+                      dimColor: true,
+                      children: sanitizeCallMark(server.client.negotiatedProtocolVersion),
+                    }),
                   ],
                 }),
-              r(FlexDirectionRow.Row, {
+              jsxProd_default_2(FlexDirectionRow.Row, {
                 children: [
-                  e(Fragment, { children: "Config location:" }),
-                  e(Text, {
-                    dimColor: !0,
+                  jsxProd_default(Fragment, {
+                    children: "Config location:",
+                  }),
+                  jsxProd_default(Text, {
+                    dimColor: true,
                     children: describeMcpConfigFilePath(getMcpConfigByName(server.name)?.scope ?? "dynamic"),
                   }),
                 ],
@@ -183,63 +274,71 @@ function MCPStdioServerMenu({
             ],
           }),
           isConnectedOrCached(server.client) &&
-            e(CapabilitiesSection, {
-              serverToolsCount: serverToolsCount,
+            jsxProd_default(CapabilitiesSection, {
+              serverToolsCount,
               serverPromptsCount: serverCommandsCount,
               serverResourcesCount: mcp.resources[server.name]?.length || 0,
             }),
           isConnectedOrCached(server.client) &&
             serverToolsCount > 0 &&
-            r(Box, {
+            jsxProd_default_2(Box, {
               children: [
-                e(Text, { bold: !0, children: "Tools: " }),
-                r(Text, {
-                  dimColor: !0,
+                jsxProd_default(Text, {
+                  bold: true,
+                  children: "Tools: ",
+                }),
+                jsxProd_default_2(Text, {
+                  dimColor: true,
                   children: [serverToolsCount, " ", plural(serverToolsCount, "tool")],
                 }),
               ],
             }),
           server.client.type === "connected" &&
             server.client.toolsListError &&
-            r(Box, {
+            jsxProd_default_2(Box, {
               flexDirection: "column",
               children: [
-                e(Text, { bold: !0, children: "Issue: " }),
-                e(Text, { dimColor: !0, children: server.client.toolsListError }),
+                jsxProd_default(Text, {
+                  bold: true,
+                  children: "Issue: ",
+                }),
+                jsxProd_default(Text, {
+                  dimColor: true,
+                  children: server.client.toolsListError,
+                }),
               ],
             }),
         ],
       }),
-      e(Box, {
-        children: e(ModelSelector, {
+      jsxProd_default(Box, {
+        children: jsxProd_default(ModelSelector, {
           options: menuOptions,
           onChange: async (value) => {
             if (value === "tools") onViewTools();
             else if (value === "reconnectMcpServer") {
-              J(!0);
+              setIsReconnecting(true);
               try {
-                let result = await reconnectMcpServer(server.name),
-                  { message: message } = handleReconnectResult(result, server.name, {
-                    persistsOffBox: isBridgeOrTransport(exitState),
-                  });
+                let result = await reconnectMcpServer(server.name);
+                let { message } = handleReconnectResult(result, server.name, {
+                  persistsOffBox: isBridgeOrTransport(exitState),
+                });
                 D?.(message);
-              } catch (err_0) {
+              } catch (err) {
                 D?.(
-                  handleReconnectError(err_0, server.name, {
+                  handleReconnectError(err, server.name, {
                     config: server.config,
                     persistsOffBox: isBridgeOrTransport(exitState),
                   }),
                 );
               } finally {
-                J(!1);
+                setIsReconnecting(false);
               }
-            } else if (value === "toggle-enabled") await pe();
+            } else if (value === "toggle-enabled") await handleToggleEnabled();
           },
-          onCancel: onCancel,
+          onCancel,
         }),
       }),
     ],
   });
 }
-
 export { MCPStdioServerMenu };

@@ -5,74 +5,104 @@
  * pieces: chunk-hwmsct5x.js (1)
  * attribution: esm-fingerprint 1
  */
-import { Y } from "../../../../../core/resource.mjs";
-import { lo } from "./workspaces.mjs";
-import { T } from "../../../../../internal/headers.mjs";
+import { APIResource } from "../../../../../core/resource.mjs";
+import { Workspaces } from "./workspaces.mjs";
+import { buildHeaders } from "../../../../../internal/headers.mjs";
 import { I } from "../../../../../internal/utils/path.mjs";
-import { ee } from "../../../../../core/pagination.mjs";
+import { TokenPage } from "../../../../../core/pagination.mjs";
 
 //@ chunk-hwmsct5x.js:123011-124222 esm-fingerprint
-var zs = (() => {
-  class e extends Y {
+var Rules = (() => {
+  class Rules extends APIResource {
     constructor() {
       super(...arguments);
-      this.workspaces = new lo(this._client);
+      this.workspaces = new Workspaces(this._client);
     }
-    create(n, r) {
-      let { betas: betas, ...h } = n;
+    create(params, options) {
+      let { betas, ...body } = params;
       return this._client.post("/v1/organizations/federation_rules?beta=true", {
-        body: h,
-        ...r,
-        headers: T([
-          { ...(betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0) },
-          r?.headers,
+        body,
+        ...options,
+        headers: buildHeaders([
+          {
+            ...(betas?.toString() != null
+              ? {
+                  "anthropic-beta": betas?.toString(),
+                }
+              : undefined),
+          },
+          options?.headers,
         ]),
       });
     }
-    retrieve(n, r = {}, s) {
-      let { betas: betas } = r ?? {};
-      return this._client.get(I`/v1/organizations/federation_rules/${n}?beta=true`, {
-        ...s,
-        headers: T([
-          { ...(betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0) },
-          s?.headers,
+    retrieve(federationRuleID, params = {}, options) {
+      let { betas } = params ?? {};
+      return this._client.get(I`/v1/organizations/federation_rules/${federationRuleID}?beta=true`, {
+        ...options,
+        headers: buildHeaders([
+          {
+            ...(betas?.toString() != null
+              ? {
+                  "anthropic-beta": betas?.toString(),
+                }
+              : undefined),
+          },
+          options?.headers,
         ]),
       });
     }
-    update(n, r, s) {
-      let { betas: betas, ...y } = r;
-      return this._client.post(I`/v1/organizations/federation_rules/${n}?beta=true`, {
-        body: y,
-        ...s,
-        headers: T([
-          { ...(betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0) },
-          s?.headers,
+    update(federationRuleID, params, options) {
+      let { betas, ...body } = params;
+      return this._client.post(I`/v1/organizations/federation_rules/${federationRuleID}?beta=true`, {
+        body,
+        ...options,
+        headers: buildHeaders([
+          {
+            ...(betas?.toString() != null
+              ? {
+                  "anthropic-beta": betas?.toString(),
+                }
+              : undefined),
+          },
+          options?.headers,
         ]),
       });
     }
-    list(n = {}, r) {
-      let { betas: betas, ...h } = n ?? {};
-      return this._client.getAPIList("/v1/organizations/federation_rules?beta=true", ee, {
-        query: h,
-        ...r,
-        headers: T([
-          { ...(betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0) },
-          r?.headers,
+    list(params = {}, options) {
+      let { betas, ...query } = params ?? {};
+      return this._client.getAPIList("/v1/organizations/federation_rules?beta=true", TokenPage, {
+        query,
+        ...options,
+        headers: buildHeaders([
+          {
+            ...(betas?.toString() != null
+              ? {
+                  "anthropic-beta": betas?.toString(),
+                }
+              : undefined),
+          },
+          options?.headers,
         ]),
       });
     }
-    archive(n, r = {}, s) {
-      let { betas: betas } = r ?? {};
-      return this._client.post(I`/v1/organizations/federation_rules/${n}/archive?beta=true`, {
-        ...s,
-        headers: T([
-          { ...(betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0) },
-          s?.headers,
+    archive(federationRuleID, params = {}, options) {
+      let { betas } = params ?? {};
+      return this._client.post(I`/v1/organizations/federation_rules/${federationRuleID}/archive?beta=true`, {
+        ...options,
+        headers: buildHeaders([
+          {
+            ...(betas?.toString() != null
+              ? {
+                  "anthropic-beta": betas?.toString(),
+                }
+              : undefined),
+          },
+          options?.headers,
         ]),
       });
     }
   }
-  return ((e.Workspaces = lo), e);
+  Rules.Workspaces = Workspaces;
+  return Rules;
 })();
-
-export { zs };
+export { Rules };

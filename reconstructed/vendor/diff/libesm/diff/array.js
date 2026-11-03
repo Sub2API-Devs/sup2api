@@ -5,25 +5,24 @@
  * pieces: chunk-7vb8p3zb.js (3)
  * attribution: esm-fingerprint 2, esm-layout 1
  */
-import { L } from "../../libcjs/diff/base.js";
+import { Diff } from "../../libcjs/diff/base.js";
 
 //@ chunk-7vb8p3zb.js:7298-7387 esm-fingerprint
-class ArrayDiff extends L {
-  tokenize(n) {
-    return n.slice();
+class ArrayDiff extends Diff {
+  tokenize(value) {
+    return value.slice();
   }
-  join(n) {
-    return n;
+  join(value) {
+    return value;
   }
-  removeEmpty(n) {
-    return n;
+  removeEmpty(value) {
+    return value;
   }
 }
 //@ chunk-7vb8p3zb.js:7387-7399 esm-layout
 var arrayDiff = new ArrayDiff();
 //@ chunk-7vb8p3zb.js:7399-7440 esm-fingerprint
-function diffArrays(n, e, t) {
-  return arrayDiff.diff(n, e, t);
+function diffArrays(oldArr, newArr, options) {
+  return arrayDiff.diff(oldArr, newArr, options);
 }
-
 export { diffArrays };

@@ -12,87 +12,98 @@ import { createSignal } from "../../utils/signal.js";
 import { HostScoped } from "../../utils/hostScoped.js";
 import { getRootSession } from "../../bootstrap/state.js";
 
+//@ chunk-3q7pey4p.js:297-2093 placement
 /**
  * Claude in Chrome 的会话级状态（桥接绑定、浏览器提示、标签页、断连回答、设置提示等），reset 清空并让浏览器列表版本加一。
  */
-//@ chunk-3q7pey4p.js:297-2093 placement
 class ClaudeInChromeSessionState {
-  bridgeBinding = void 0;
-  browserHints = void 0;
-  lastSentPreferredDeviceId = void 0;
+  bridgeBinding = undefined;
+  browserHints = undefined;
+  lastSentPreferredDeviceId = undefined;
   resolvedHostByToolUseId = new Map();
-  shouldAutoEnable = void 0;
-  wiredThisSession = !1;
+  shouldAutoEnable = undefined;
+  wiredThisSession = false;
   systemPromptSection = "";
   attachedInstructions = "";
-  installUpsellResolution = void 0;
-  installUpsellBypassSuppressionCounted = !1;
+  installUpsellResolution = undefined;
+  installUpsellBypassSuppressionCounted = false;
   trackedTabIds = new Set();
-  tabGroupCleanupRegistered = !1;
-  unsubscribeSessionSwitch = void 0;
-  unregisterExitCleanup = void 0;
+  tabGroupCleanupRegistered = false;
+  unsubscribeSessionSwitch = undefined;
+  unregisterExitCleanup = undefined;
   closesInFlight = new Map();
   lastExecutedTabUrlByScope = new Map();
   resolvedUrlByToolUseId = new Map();
   browserRosterVersion = 0;
   browserRosterChanged = createSignal();
-  noBrowserFound = void 0;
-  relayConnectFailed = void 0;
+  noBrowserFound = undefined;
+  relayConnectFailed = undefined;
   disconnectedAnswerCount = 0;
   disconnectedAnswerTexts = new Set();
-  notConnectedSeenByPriorWorker = !1;
-  notConnectedMirrored = !1;
-  chromeSetupOfferArm = void 0;
-  chromeSetupOfferArmMirrored = !1;
-  chromeSetupOfferStateUnread = !1;
-  lastTurnClientPlatform = void 0;
+  notConnectedSeenByPriorWorker = false;
+  notConnectedMirrored = false;
+  chromeSetupOfferArm = undefined;
+  chromeSetupOfferArmMirrored = false;
+  chromeSetupOfferStateUnread = false;
+  lastTurnClientPlatform = undefined;
   reset() {
-    ((this.bridgeBinding = void 0),
-      (this.browserHints = void 0),
-      (this.lastSentPreferredDeviceId = void 0),
-      (this.resolvedHostByToolUseId = new Map()),
-      (this.shouldAutoEnable = void 0),
-      (this.wiredThisSession = !1),
-      (this.systemPromptSection = ""),
-      (this.attachedInstructions = ""),
-      (this.installUpsellResolution = void 0),
-      (this.installUpsellBypassSuppressionCounted = !1),
-      (this.trackedTabIds = new Set()),
-      (this.tabGroupCleanupRegistered = !1),
-      this.unsubscribeSessionSwitch?.(),
-      (this.unsubscribeSessionSwitch = void 0),
-      this.unregisterExitCleanup?.(),
-      (this.unregisterExitCleanup = void 0),
-      (this.closesInFlight = new Map()),
-      (this.lastExecutedTabUrlByScope = new Map()),
-      (this.resolvedUrlByToolUseId = new Map()),
-      this.browserRosterVersion++,
-      (this.noBrowserFound = void 0),
-      (this.relayConnectFailed = void 0),
-      (this.disconnectedAnswerCount = 0),
-      (this.notConnectedSeenByPriorWorker = !1),
-      (this.notConnectedMirrored = !1),
-      (this.chromeSetupOfferArm = void 0),
-      (this.chromeSetupOfferArmMirrored = !1),
-      (this.chromeSetupOfferStateUnread = !1),
-      (this.lastTurnClientPlatform = void 0),
-      (this.disconnectedAnswerTexts = new Set()));
+    this.bridgeBinding = undefined;
+    this.browserHints = undefined;
+    this.lastSentPreferredDeviceId = undefined;
+    this.resolvedHostByToolUseId = new Map();
+    this.shouldAutoEnable = undefined;
+    this.wiredThisSession = false;
+    this.systemPromptSection = "";
+    this.attachedInstructions = "";
+    this.installUpsellResolution = undefined;
+    this.installUpsellBypassSuppressionCounted = false;
+    this.trackedTabIds = new Set();
+    this.tabGroupCleanupRegistered = false;
+    this.unsubscribeSessionSwitch?.();
+    this.unsubscribeSessionSwitch = undefined;
+    this.unregisterExitCleanup?.();
+    this.unregisterExitCleanup = undefined;
+    this.closesInFlight = new Map();
+    this.lastExecutedTabUrlByScope = new Map();
+    this.resolvedUrlByToolUseId = new Map();
+    this.browserRosterVersion++;
+    this.noBrowserFound = undefined;
+    this.relayConnectFailed = undefined;
+    this.disconnectedAnswerCount = 0;
+    this.notConnectedSeenByPriorWorker = false;
+    this.notConnectedMirrored = false;
+    this.chromeSetupOfferArm = undefined;
+    this.chromeSetupOfferArmMirrored = false;
+    this.chromeSetupOfferStateUnread = false;
+    this.lastTurnClientPlatform = undefined;
+    this.disconnectedAnswerTexts = new Set();
   }
 }
 //@ chunk-3q7pey4p.js:2093-2141 fingerprint = _temp2 (1)
-function Wvn(prev) {
+/**
+ * 判断持久化的平台是否为移动端（ios/android）。
+ */
+function isMobilePlatform(prev) {
   return prev === "ios" || prev === "android";
 }
 //@ chunk-3q7pey4p.js:2141-2166 placement
-var EXr = new HostScoped(() => new ClaudeInChromeSessionState());
+/**
+ * 按宿主缓存的 ClaudeInChromeSessionState。
+ */
+var CLAUDE_IN_CHROME_SESSION_SLOT = new HostScoped(() => new ClaudeInChromeSessionState());
 //@ chunk-3q7pey4p.js:2166-2204 placement
-function Yi() {
-  return EXr.of(getRootSession().host);
+/**
+ * 取当前会话的 ClaudeInChrome 会话状态（按 tool_use_id 记录已解析 host 等），50 多处调用。
+ */
+function claudeInChromeSession() {
+  return CLAUDE_IN_CHROME_SESSION_SLOT.of(getRootSession().host);
 }
 //@ chunk-3q7pey4p.js:2204-2293 placement
-function vfi(e) {
-  let n = Yi().resolvedHostByToolUseId.get(e);
-  if (n !== void 0) n.keepHostPin = !0;
+/**
+ * 把某 tool_use_id 已解析的 host 标记为 keepHostPin（保持宿主固定）。
+ */
+function keepResolvedHostPin(toolUseID) {
+  let n = claudeInChromeSession().resolvedHostByToolUseId.get(toolUseID);
+  if (n !== undefined) n.keepHostPin = true;
 }
-
-export { Yi, vfi, EXr, Wvn };
+export { claudeInChromeSession, keepResolvedHostPin, CLAUDE_IN_CHROME_SESSION_SLOT, isMobilePlatform };

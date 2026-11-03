@@ -11,10 +11,9 @@
 
 //@ chunk-0777tkjc.js:585-771 placement
 function isSafeRefName(e) {
-  if (!e || e.startsWith("-") || e.startsWith("/")) return !1;
-  if (e.includes("..")) return !1;
-  if (e.split("/").some((n) => n === "." || n === "")) return !1;
+  if (!e || e.startsWith("-") || e.startsWith("/")) return false;
+  if (e.includes("..")) return false;
+  if (e.split("/").some((n) => n === "." || n === "")) return false;
   return /^[a-zA-Z0-9/._+@-]+$/.test(e);
 }
-
 export { isSafeRefName };

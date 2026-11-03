@@ -8,44 +8,77 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:554094-556013 cjs-fingerprint
-var lc = x(function (Ib, cc) {
-  function __(e) {
-    let regex = e.regex,
-      combined = regex.concat(/[\p{L}_]/u, regex.optional(/[\p{L}0-9_.-]*:/u), /[\p{L}0-9_.-]*/u),
-      a = /[\p{L}0-9._:-]+/u,
-      s = { className: "symbol", begin: /&[a-z]+;|&#[0-9]+;|&#x[a-f0-9]+;/ },
-      o = { begin: /\s/, contains: [{ className: "keyword", begin: /#?[a-z_][a-z1-9_-]+/, illegal: /\n/ }] },
-      inherit = e.inherit(o, { begin: /\(/, end: /\)/ }),
-      inherit_2 = e.inherit(e.APOS_STRING_MODE, { className: "string" }),
-      inherit_3 = e.inherit(e.QUOTE_STRING_MODE, { className: "string" }),
-      l = {
-        endsWithParent: !0,
-        illegal: /</,
-        relevance: 0,
-        contains: [
-          { className: "attr", begin: a, relevance: 0 },
-          {
-            begin: /=\s*/,
-            relevance: 0,
-            contains: [
-              {
-                className: "string",
-                endsParent: !0,
-                variants: [
-                  { begin: /"/, end: /"/, contains: [s] },
-                  { begin: /'/, end: /'/, contains: [s] },
-                  { begin: /[^\s"'=<>`]+/ },
-                ],
-              },
-            ],
-          },
-        ],
-      };
+var require_xml = x(function (cjsExports, cjsModule) {
+  function xml(hljs) {
+    let regex = hljs.regex;
+    let TAG_NAME_RE = regex.concat(/[\p{L}_]/u, regex.optional(/[\p{L}0-9_.-]*:/u), /[\p{L}0-9_.-]*/u);
+    let XML_IDENT_RE = /[\p{L}0-9._:-]+/u;
+    let XML_ENTITIES = {
+      className: "symbol",
+      begin: /&[a-z]+;|&#[0-9]+;|&#x[a-f0-9]+;/,
+    };
+    let XML_META_KEYWORDS = {
+      begin: /\s/,
+      contains: [
+        {
+          className: "keyword",
+          begin: /#?[a-z_][a-z1-9_-]+/,
+          illegal: /\n/,
+        },
+      ],
+    };
+    let XML_META_PAR_KEYWORDS = hljs.inherit(XML_META_KEYWORDS, {
+      begin: /\(/,
+      end: /\)/,
+    });
+    let APOS_META_STRING_MODE = hljs.inherit(hljs.APOS_STRING_MODE, {
+      className: "string",
+    });
+    let QUOTE_META_STRING_MODE = hljs.inherit(hljs.QUOTE_STRING_MODE, {
+      className: "string",
+    });
+    let TAG_INTERNALS = {
+      endsWithParent: true,
+      illegal: /</,
+      relevance: 0,
+      contains: [
+        {
+          className: "attr",
+          begin: XML_IDENT_RE,
+          relevance: 0,
+        },
+        {
+          begin: /=\s*/,
+          relevance: 0,
+          contains: [
+            {
+              className: "string",
+              endsParent: true,
+              variants: [
+                {
+                  begin: /"/,
+                  end: /"/,
+                  contains: [XML_ENTITIES],
+                },
+                {
+                  begin: /'/,
+                  end: /'/,
+                  contains: [XML_ENTITIES],
+                },
+                {
+                  begin: /[^\s"'=<>`]+/,
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
     return {
       name: "HTML, XML",
       aliases: ["html", "xhtml", "rss", "atom", "xjb", "xsd", "xsl", "plist", "wsf", "svg"],
-      case_insensitive: !0,
-      unicodeRegex: !0,
+      case_insensitive: true,
+      unicodeRegex: true,
       contains: [
         {
           className: "meta",
@@ -53,10 +86,10 @@ var lc = x(function (Ib, cc) {
           end: />/,
           relevance: 10,
           contains: [
-            o,
-            inherit_3,
-            inherit_2,
-            inherit,
+            XML_META_KEYWORDS,
+            QUOTE_META_STRING_MODE,
+            APOS_META_STRING_MODE,
+            XML_META_PAR_KEYWORDS,
             {
               begin: /\[/,
               end: /\]/,
@@ -65,58 +98,107 @@ var lc = x(function (Ib, cc) {
                   className: "meta",
                   begin: /<![a-z]/,
                   end: />/,
-                  contains: [o, inherit, inherit_3, inherit_2],
+                  contains: [
+                    XML_META_KEYWORDS,
+                    XML_META_PAR_KEYWORDS,
+                    QUOTE_META_STRING_MODE,
+                    APOS_META_STRING_MODE,
+                  ],
                 },
               ],
             },
           ],
         },
-        e.COMMENT(/<!--/, /-->/, { relevance: 10 }),
-        { begin: /<!\[CDATA\[/, end: /\]\]>/, relevance: 10 },
-        s,
+        hljs.COMMENT(/<!--/, /-->/, {
+          relevance: 10,
+        }),
+        {
+          begin: /<!\[CDATA\[/,
+          end: /\]\]>/,
+          relevance: 10,
+        },
+        XML_ENTITIES,
         {
           className: "meta",
           end: /\?>/,
           variants: [
-            { begin: /<\?xml/, relevance: 10, contains: [inherit_3] },
-            { begin: /<\?[a-z][a-z0-9]+/ },
+            {
+              begin: /<\?xml/,
+              relevance: 10,
+              contains: [QUOTE_META_STRING_MODE],
+            },
+            {
+              begin: /<\?[a-z][a-z0-9]+/,
+            },
           ],
         },
         {
           className: "tag",
           begin: /<style(?=\s|>)/,
           end: />/,
-          keywords: { name: "style" },
-          contains: [l],
-          starts: { end: /<\/style>/, returnEnd: !0, subLanguage: ["css", "xml"] },
+          keywords: {
+            name: "style",
+          },
+          contains: [TAG_INTERNALS],
+          starts: {
+            end: /<\/style>/,
+            returnEnd: true,
+            subLanguage: ["css", "xml"],
+          },
         },
         {
           className: "tag",
           begin: /<script(?=\s|>)/,
           end: />/,
-          keywords: { name: "script" },
-          contains: [l],
-          starts: { end: /<\/script>/, returnEnd: !0, subLanguage: ["javascript", "handlebars", "xml"] },
+          keywords: {
+            name: "script",
+          },
+          contains: [TAG_INTERNALS],
+          starts: {
+            end: /<\/script>/,
+            returnEnd: true,
+            subLanguage: ["javascript", "handlebars", "xml"],
+          },
         },
-        { className: "tag", begin: /<>|<\/>/ },
         {
           className: "tag",
-          begin: regex.concat(/</, regex.lookahead(regex.concat(combined, regex.either(/\/>/, />/, /\s/)))),
+          begin: /<>|<\/>/,
+        },
+        {
+          className: "tag",
+          begin: regex.concat(
+            /</,
+            regex.lookahead(regex.concat(TAG_NAME_RE, regex.either(/\/>/, />/, /\s/))),
+          ),
           end: /\/?>/,
-          contains: [{ className: "name", begin: combined, relevance: 0, starts: l }],
+          contains: [
+            {
+              className: "name",
+              begin: TAG_NAME_RE,
+              relevance: 0,
+              starts: TAG_INTERNALS,
+            },
+          ],
         },
         {
           className: "tag",
-          begin: regex.concat(/<\//, regex.lookahead(regex.concat(combined, />/))),
+          begin: regex.concat(/<\//, regex.lookahead(regex.concat(TAG_NAME_RE, />/))),
           contains: [
-            { className: "name", begin: combined, relevance: 0 },
-            { begin: />/, relevance: 0, endsParent: !0 },
+            {
+              className: "name",
+              begin: TAG_NAME_RE,
+              relevance: 0,
+            },
+            {
+              begin: />/,
+              relevance: 0,
+              endsParent: true,
+            },
           ],
         },
       ],
     };
   }
-  cc.exports = __;
+  cjsModule.exports = xml;
 });
-
-export { lc };
+export { require_xml };

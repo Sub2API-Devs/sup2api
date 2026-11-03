@@ -10,8 +10,11 @@
  */
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import { getErrnoCode, errorMessage, StreamClosedAbortError } from "../../utils/errors.js";
-import { lqe, iie } from "../../services/remoteTools/backgroundCommands.js";
-import { AJ, iv } from "./callResults.js";
+import {
+  DEVICE_SYNC_FILES_TOOLS,
+  DEVICE_PASSTHROUGH_TOOL_NAMES,
+} from "../../services/remoteTools/backgroundCommands.js";
+import { clampToMaxPageSize, byteLengthOf } from "./callResults.js";
 import { callMcpTool } from "../../services/mcp/mcpWireUtils.js";
 import { readCallResult, buildPlumbingRequest } from "./toolDescriptors.js";
 import { normalizeMcpServerName } from "../../services/api/deferredToolsState.js";
@@ -27,7 +30,10 @@ import {
   parseRegistration,
   isRemoteToolCallMeta,
 } from "./protocolSchemas.js";
-import { CCR_NEEDS_APPROVAL_CODE, rY } from "../../services/mcp/mcpResultErrors.js";
+import {
+  CCR_NEEDS_APPROVAL_CODE,
+  classifyMcpErrorSourceCategory,
+} from "../../services/mcp/mcpResultErrors.js";
 import { recursivelySanitizeUnicode } from "../../utils/sanitization.js";
 import {
   mayBePassthroughTool,
@@ -38,14 +44,14 @@ import { count } from "../../utils/collections.js";
 import { normalizeNameForMCP } from "../../services/mcp/normalization.js";
 import { REMOTE_TOOL_PROTOCOL_VERSION } from "./protocolConstants.js";
 import { buildMcpToolName } from "../../services/mcp/mcpStringUtils.js";
-import { _4 } from "../../bridge/deviceRegistration.js";
+import { isValidMachineSlug } from "../../bridge/deviceRegistration.js";
 
 //@ chunk-25sm7c4g.js:1282-1351 placement
 function isBridgePlumbingEnabled() {
   try {
-    return getFeatureValue_CACHED_MAY_BE_STALE("tengu_violin_scroll", !1);
+    return getFeatureValue_CACHED_MAY_BE_STALE("tengu_violin_scroll", false);
   } catch {
-    return !1;
+    return false;
   }
 }
 //@ chunk-25sm7c4g.js:1351-1420 placement
@@ -61,18 +67,23 @@ class BridgeSessionRecovery {
     let r = mcpClientModule()
       .clearServerCache(e.name, e.config)
       .catch(() => {});
-    return (this.#e.set(e, r), r);
+    this.#e.set(e, r);
+    return r;
   }
 }
 //@ chunk-25sm7c4g.js:1579-1593 placement
-var Ae = -32000;
+var CONNECTION_CLOSED_ERROR_CODE = -32000;
 //@ chunk-25sm7c4g.js:1593-1815 placement
 async function callWithSessionRecovery(e, n, r) {
   let o = await callBridgeTool(e, n, r);
   if (o.kind !== "session_expired") return evictFailedConnectMemo(e, o);
   await n.recovery.reinitialize(o.connection);
   let u = await callBridgeTool(e, n, r);
-  return u.kind === "session_expired" ? { kind: "expired_twice" } : evictFailedConnectMemo(e, u);
+  return u.kind === "session_expired"
+    ? {
+        kind: "expired_twice",
+      }
+    : evictFailedConnectMemo(e, u);
 }
 //@ chunk-25sm7c4g.js:1815-1953 placement
 async function evictFailedConnectMemo(e, n) {
@@ -83,90 +94,145 @@ async function evictFailedConnectMemo(e, n) {
   return n;
 }
 //@ chunk-25sm7c4g.js:1953-2498 placement
-async function callBridgeTool(e, { deadlineAt: deadlineAt, signal: signal, idempotent: idempotent = !1 }, u) {
-  let s = mcpClientModule(),
-    m;
+async function callBridgeTool(e, { deadlineAt, signal, idempotent = false }, u) {
+  let s = mcpClientModule();
+  let m;
   try {
     m = await s.ensureConnectedClient(e, {
-      signal: signal,
+      signal,
       timeoutMs: Math.max(1, deadlineAt - Date.now()),
       context: "remote tool execution",
     });
   } catch (error) {
-    return { kind: "connect_failed", error: error };
+    return {
+      kind: "connect_failed",
+      error,
+    };
   }
   let p = deadlineAt - Date.now();
   if (p <= 0)
-    return { kind: "connect_failed", error: Error("deadline reached before the request could be sent") };
+    return {
+      kind: "connect_failed",
+      error: Error("deadline reached before the request could be sent"),
+    };
   try {
-    return { kind: "ok", value: await u(m, p) };
+    return {
+      kind: "ok",
+      value: await u(m, p),
+    };
   } catch (error) {
     return error instanceof Error &&
       (s.isMcpSessionExpiredError(error) || (idempotent && isHttpConnectionClosedError(error, m)))
-      ? { kind: "session_expired", connection: m }
-      : { kind: "failed", error: error };
+      ? {
+          kind: "session_expired",
+          connection: m,
+        }
+      : {
+          kind: "failed",
+          error,
+        };
   }
 }
 //@ chunk-25sm7c4g.js:2498-2678 placement
-function isHttpConnectionClosedError(e, n) {
+function isHttpConnectionClosedError(error, n) {
   return (
-    (("code" in e && e.code === Ae && e.message.includes("Connection closed")) ||
-      getErrnoCode(e) === "CONNECTION_CLOSED") &&
+    (("code" in error &&
+      error.code === CONNECTION_CLOSED_ERROR_CODE &&
+      error.message.includes("Connection closed")) ||
+      getErrnoCode(error) === "CONNECTION_CLOSED") &&
     (n.config.type === "http" || n.config.type === "claudeai-proxy")
   );
 }
 //@ chunk-25sm7c4g.js:2678-3084 placement
-var BRIDGE_CALL_LIMITS = { maxRequestBytes: 4128768, defaultDeadlineMs: 58000 },
-  Pe = -32001,
-  OFFICE_BRIDGE_KIND = "office_bridge.kind",
-  OFFICE_BRIDGE_BOUND_MISS = "office_bridge.bound_miss",
-  Le = new Set(["not_connected", "send_failed", "contested", "unsupported_on_bound"]),
-  He = new Set(["disconnected", "cancelled"]),
-  Ie = new Set(["timeout"]),
-  Be = /not connected|not reachable|offline/i,
-  xe = /disconnected before responding|connection may be closing/i,
-  Ne = /did not respond within/i,
-  Fe = 200;
+/**
+ * 远程调用/Office bridge 的错误归类表：请求超时与连接关闭错误码、bridge 状态码到 unreachable/dropped/timed_out 的分组、三类错误消息正则、可分类消息长度上限 200。
+ */
+var BRIDGE_CALL_LIMITS = {
+  maxRequestBytes: 4128768,
+  defaultDeadlineMs: 58000,
+};
+var REQUEST_TIMEOUT_ERROR_CODE = -32001;
+var OFFICE_BRIDGE_KIND = "office_bridge.kind";
+var OFFICE_BRIDGE_BOUND_MISS = "office_bridge.bound_miss";
+var UNREACHABLE_BRIDGE_KINDS = new Set(["not_connected", "send_failed", "contested", "unsupported_on_bound"]);
+var DROPPED_BRIDGE_KINDS = new Set(["disconnected", "cancelled"]);
+var TIMED_OUT_BRIDGE_KINDS = new Set(["timeout"]);
+var NOT_CONNECTED_MESSAGE_RE = /not connected|not reachable|offline/i;
+var DISCONNECTED_MESSAGE_RE = /disconnected before responding|connection may be closing/i;
+var TIMEOUT_MESSAGE_RE = /did not respond within/i;
+var MAX_CLASSIFIABLE_MESSAGE_LENGTH = 200;
 //@ chunk-25sm7c4g.js:3084-3201 placement
-function createBridgeTransport(e, n) {
+function createBridgeTransport(e, recovery) {
   return {
     kind: "bridge",
     limits: BRIDGE_CALL_LIMITS,
-    call: (r, o, u, s) => callRemoteToolOverBridge(e, n, r, o, u, s),
-    callPlumbing: (r, o, u) => callBridgePlumbingTool(e, n, r, o, u),
+    call: (name, o, u, s) => callRemoteToolOverBridge(e, recovery, name, o, u, s),
+    callPlumbing: (r, o, u) => callBridgePlumbingTool(e, recovery, r, o, u),
   };
 }
+//@ chunk-25sm7c4g.js:3201-4041 placement
 /**
  * 通过设备桥（office/device bridge）MCP 调用远程管道工具：超时、会话过期重初始化、结果信封解析。
  */
-//@ chunk-25sm7c4g.js:3201-4041 placement
-async function callBridgePlumbingTool(e, n, r, o, u) {
-  if (!lqe.has(r)) throw Error("callPlumbing: not a bridge plumbing tool");
-  let now = Date.now(),
-    m = AJ(u.deadlineMs),
-    p = await callWithSessionRecovery(
-      e,
-      { deadlineAt: now + m, recovery: n, signal: u.signal, idempotent: u.idempotent },
-      (f, _) => callMcpTool(f, { name: r, arguments: { ...o } }, { signal: u.signal, timeout: _ }),
-    );
+async function callBridgePlumbingTool(e, recovery, r, o, u) {
+  if (!DEVICE_SYNC_FILES_TOOLS.has(r)) throw Error("callPlumbing: not a bridge plumbing tool");
+  let now = Date.now();
+  let capMs = clampToMaxPageSize(u.deadlineMs);
+  let p = await callWithSessionRecovery(
+    e,
+    {
+      deadlineAt: now + capMs,
+      recovery,
+      signal: u.signal,
+      idempotent: u.idempotent,
+    },
+    (f, timeout) =>
+      callMcpTool(
+        f,
+        {
+          name: r,
+          arguments: {
+            ...o,
+          },
+        },
+        {
+          signal: u.signal,
+          timeout,
+        },
+      ),
+  );
   if (p.kind === "ok") {
-    let f = readCallResult(p.value),
-      _ = ce(f.content),
-      g = f.isError && f.envelope.status === "absent" ? classifyBridgeError(p.value, _, m) : void 0;
-    if (g !== void 0) return normalizeTransportFailure(g);
-    return { kind: "result", structuredContent: p.value.structuredContent, text: _, isError: f.isError };
+    let callResult = readCallResult(p.value);
+    let _ = flattenContentText(callResult.content);
+    let g =
+      callResult.isError && callResult.envelope.status === "absent"
+        ? classifyBridgeError(p.value, _, capMs)
+        : undefined;
+    if (g !== undefined) return normalizeTransportFailure(g);
+    return {
+      kind: "result",
+      structuredContent: p.value.structuredContent,
+      text: _,
+      isError: callResult.isError,
+    };
   }
-  if (u.signal.aborted) return { kind: "cancelled" };
+  if (u.signal.aborted)
+    return {
+      kind: "cancelled",
+    };
   switch (p.kind) {
     case "connect_failed":
-      return { kind: "unreachable", detail: normalizeMcpServerName(errorMessage(p.error)) };
+      return {
+        kind: "unreachable",
+        detail: normalizeMcpServerName(errorMessage(p.error)),
+      };
     case "expired_twice":
       return {
         kind: "unreachable",
         detail: "the device bridge rejected the session again right after re-initializing it; nothing ran",
       };
     case "failed":
-      return normalizeTransportFailure(classifyBridgeTransportError(p.error, m, void 0));
+      return normalizeTransportFailure(classifyBridgeTransportError(p.error, capMs, undefined));
   }
 }
 //@ chunk-25sm7c4g.js:4041-4237 placement
@@ -179,114 +245,191 @@ function normalizeTransportFailure(e) {
     case "cancelled":
       return e;
     default:
-      return { kind: "transport_error", detail: `unexpected: ${e.kind}` };
+      return {
+        kind: "transport_error",
+        detail: `unexpected: ${e.kind}`,
+      };
   }
 }
 //@ chunk-25sm7c4g.js:4237-4944 placement
-async function callRemoteToolOverBridge(e, n, r, o, u, s) {
-  let now = Date.now(),
-    p = AJ(s.deadlineMs),
-    f = encodeCallArgs(u),
-    _ = await callWithSessionRecovery(e, { deadlineAt: now + p, recovery: n, signal: s.signal }, (g, w) =>
+async function callRemoteToolOverBridge(e, recovery, name, o, u, s) {
+  let now = Date.now();
+  let capMs = clampToMaxPageSize(s.deadlineMs);
+  let f = encodeCallArgs(u);
+  let _ = await callWithSessionRecovery(
+    e,
+    {
+      deadlineAt: now + capMs,
+      recovery,
+      signal: s.signal,
+    },
+    (g, timeout) =>
       callMcpTool(
         g,
         {
-          name: r,
-          arguments: { ...o, [REMOTE_TOOL_CALL_META]: u },
+          name,
+          arguments: {
+            ...o,
+            [REMOTE_TOOL_CALL_META]: u,
+          },
           _meta: {
             [CLAUDECODE_TOOLUSEID]: s.toolUseId,
-            ...(f !== void 0 && { [CLAUDECODE_REMOTETOOLCALL]: f }),
+            ...(f !== undefined && {
+              [CLAUDECODE_REMOTETOOLCALL]: f,
+            }),
           },
         },
-        { signal: s.signal, timeout: w },
+        {
+          signal: s.signal,
+          timeout,
+        },
       ),
-    );
+  );
   if (_.kind === "ok") {
-    let g = readBridgeResultEnvelope(_.value, Date.now() - now, p);
-    return g.kind === "result" ? { ...g, metaCopy: f === void 0 ? "omitted" : "attached" } : g;
+    let bridgeResultEnvelope = readBridgeResultEnvelope(_.value, Date.now() - now, capMs);
+    return bridgeResultEnvelope.kind === "result"
+      ? {
+          ...bridgeResultEnvelope,
+          metaCopy: f === undefined ? "omitted" : "attached",
+        }
+      : bridgeResultEnvelope;
   }
-  if (s.signal.aborted) return { kind: "cancelled" };
+  if (s.signal.aborted)
+    return {
+      kind: "cancelled",
+    };
   switch (_.kind) {
     case "connect_failed":
-      return { kind: "unreachable", detail: normalizeMcpServerName(errorMessage(_.error)) };
+      return {
+        kind: "unreachable",
+        detail: normalizeMcpServerName(errorMessage(_.error)),
+      };
     case "expired_twice":
       return {
         kind: "unreachable",
         detail: "the device bridge rejected the session again right after re-initializing it; nothing ran",
       };
     case "failed":
-      return classifyBridgeTransportError(_.error, p, s.toolUseId);
+      return classifyBridgeTransportError(_.error, capMs, s.toolUseId);
   }
 }
 //@ chunk-25sm7c4g.js:4944-5423 placement
-function readBridgeResultEnvelope(e, n, r) {
-  let o = readCallResult(e);
-  switch (o.envelope.status) {
+function readBridgeResultEnvelope(e, elapsedMs, capMs) {
+  let callResult = readCallResult(e);
+  switch (callResult.envelope.status) {
     case "malformed":
-      return { kind: "transport_error", detail: "malformed result envelope", unreadableResult: !0 };
+      return {
+        kind: "transport_error",
+        detail: "malformed result envelope",
+        unreadableResult: true,
+      };
     case "present":
       return {
         kind: "result",
-        content: o.content,
-        isError: o.isError,
-        envelope: o.envelope.envelope,
-        elapsedMs: n,
-        responseBytes: iv(e),
+        content: callResult.content,
+        isError: callResult.isError,
+        envelope: callResult.envelope.envelope,
+        elapsedMs,
+        responseBytes: byteLengthOf(e),
         ...{},
       };
     case "absent": {
-      let u = o.isError ? classifyBridgeError(e, ce(o.content), r) : void 0;
+      let u = callResult.isError
+        ? classifyBridgeError(e, flattenContentText(callResult.content), capMs)
+        : undefined;
       if (u) return u;
       return {
         kind: "result",
-        content: o.content,
-        isError: o.isError,
-        envelope: void 0,
-        elapsedMs: n,
-        responseBytes: iv(e),
+        content: callResult.content,
+        isError: callResult.isError,
+        envelope: undefined,
+        elapsedMs,
+        responseBytes: byteLengthOf(e),
       };
     }
   }
 }
 //@ chunk-25sm7c4g.js:5423-6054 placement
-function classifyBridgeError(e, n, r) {
-  let o = readOfficeBridgeKind(e);
-  if (o !== void 0 && Ie.has(o)) return { kind: "timed_out", capMs: r };
-  if (o !== void 0 && He.has(o)) return { kind: "dropped", detail: `bridge: ${o}` };
-  if (o !== void 0 && Le.has(o))
+function classifyBridgeError(e, n, capMs) {
+  let officeBridgeKind = readOfficeBridgeKind(e);
+  if (officeBridgeKind !== undefined && TIMED_OUT_BRIDGE_KINDS.has(officeBridgeKind))
+    return {
+      kind: "timed_out",
+      capMs,
+    };
+  if (officeBridgeKind !== undefined && DROPPED_BRIDGE_KINDS.has(officeBridgeKind))
+    return {
+      kind: "dropped",
+      detail: `bridge: ${officeBridgeKind}`,
+    };
+  if (officeBridgeKind !== undefined && UNREACHABLE_BRIDGE_KINDS.has(officeBridgeKind))
     return {
       kind: "unreachable",
-      detail: `bridge: ${o}`,
-      ...(o === "not_connected" && { machineNotAnswering: !0 }),
+      detail: `bridge: ${officeBridgeKind}`,
+      ...(officeBridgeKind === "not_connected" && {
+        machineNotAnswering: true,
+      }),
     };
-  if (o === "malformed_result")
-    return { kind: "transport_error", detail: "bridge: malformed result", unreadableResult: !0 };
-  if (n.length > Fe) return;
-  if (Ne.test(n)) return { kind: "timed_out", capMs: r };
-  if (xe.test(n)) return { kind: "dropped", detail: "bridge: disconnected" };
-  if (Be.test(n)) return { kind: "unreachable", detail: "bridge: not connected", machineNotAnswering: !0 };
+  if (officeBridgeKind === "malformed_result")
+    return {
+      kind: "transport_error",
+      detail: "bridge: malformed result",
+      unreadableResult: true,
+    };
+  if (n.length > MAX_CLASSIFIABLE_MESSAGE_LENGTH) return;
+  if (TIMEOUT_MESSAGE_RE.test(n))
+    return {
+      kind: "timed_out",
+      capMs,
+    };
+  if (DISCONNECTED_MESSAGE_RE.test(n))
+    return {
+      kind: "dropped",
+      detail: "bridge: disconnected",
+    };
+  if (NOT_CONNECTED_MESSAGE_RE.test(n))
+    return {
+      kind: "unreachable",
+      detail: "bridge: not connected",
+      machineNotAnswering: true,
+    };
   return;
 }
 //@ chunk-25sm7c4g.js:6054-6266 placement
 function readOfficeBridgeKind(e) {
-  let n = e !== null && typeof e === "object" && "_meta" in e ? e._meta : void 0;
-  if (n === null || typeof n !== "object") return;
-  let r = n,
-    o = r[OFFICE_BRIDGE_KIND];
+  let _meta = e !== null && typeof e === "object" && "_meta" in e ? e._meta : undefined;
+  if (_meta === null || typeof _meta !== "object") return;
+  let r = _meta;
+  let o = r[OFFICE_BRIDGE_KIND];
   if (typeof o === "string") return o;
-  return r[OFFICE_BRIDGE_BOUND_MISS] !== void 0 ? "not_connected" : void 0;
+  return r[OFFICE_BRIDGE_BOUND_MISS] !== undefined ? "not_connected" : undefined;
 }
 //@ chunk-25sm7c4g.js:6266-6587 placement
-function classifyBridgeTransportError(e, n, r) {
-  if (getNumericErrorCode(e) === Pe || getErrnoCode(e) === "REQUEST_TIMEOUT")
-    return { kind: "timed_out", capMs: n };
-  let o = normalizeMcpServerName(errorMessage(e));
-  if (getNumericErrorCode(e) === CCR_NEEDS_APPROVAL_CODE && isArgsTooLargeError(e, r))
-    return { kind: "approval_unverified" };
-  if (rY(e) !== "downstream_unreachable") return { kind: "transport_error", detail: o };
-  return UNREACHABLE_ERROR_CODES.has(getErrnoCode(e) ?? "")
-    ? { kind: "unreachable", detail: o }
-    : { kind: "dropped", detail: o };
+function classifyBridgeTransportError(err, capMs, r) {
+  if (getNumericErrorCode(err) === REQUEST_TIMEOUT_ERROR_CODE || getErrnoCode(err) === "REQUEST_TIMEOUT")
+    return {
+      kind: "timed_out",
+      capMs,
+    };
+  let detail = normalizeMcpServerName(errorMessage(err));
+  if (getNumericErrorCode(err) === CCR_NEEDS_APPROVAL_CODE && isArgsTooLargeError(err, r))
+    return {
+      kind: "approval_unverified",
+    };
+  if (classifyMcpErrorSourceCategory(err) !== "downstream_unreachable")
+    return {
+      kind: "transport_error",
+      detail,
+    };
+  return UNREACHABLE_ERROR_CODES.has(getErrnoCode(err) ?? "")
+    ? {
+        kind: "unreachable",
+        detail,
+      }
+    : {
+        kind: "dropped",
+        detail,
+      };
 }
 //@ chunk-25sm7c4g.js:6587-6699 placement
 var UNREACHABLE_ERROR_CODES = new Set([
@@ -299,14 +442,14 @@ var UNREACHABLE_ERROR_CODES = new Set([
 ]);
 //@ chunk-25sm7c4g.js:6699-6962 placement
 function isArgsTooLargeError(e, n) {
-  let r = e !== null && typeof e === "object" && "data" in e ? e.data : void 0;
-  if (typeof r !== "object" || r === null) return !1;
+  let r = e !== null && typeof e === "object" && "data" in e ? e.data : undefined;
+  if (typeof r !== "object" || r === null) return false;
   let o = r;
   return (
     typeof o.args_sha256 === "string" &&
     typeof o.tool_name === "string" &&
     typeof o.tool_use_id === "string" &&
-    n !== void 0 &&
+    n !== undefined &&
     o.tool_use_id === n
   );
 }
@@ -314,184 +457,249 @@ function isArgsTooLargeError(e, n) {
 function getNumericErrorCode(err) {
   return err !== null && typeof err === "object" && "code" in err && typeof err.code === "number"
     ? err.code
-    : void 0;
+    : undefined;
 }
 //@ chunk-25sm7c4g.js:7066-7164 placement
-function ce(e) {
-  return typeof e === "string"
-    ? e
-    : e.flatMap((n) => (n.type === "text" ? [n.text] : [])).join(`
+function flattenContentText(content) {
+  return typeof content === "string"
+    ? content
+    : content.flatMap((n) => (n.type === "text" ? [n.text] : [])).join(`
 `);
 }
 //@ chunk-25sm7c4g.js:7164-7190 placement
 var ATTACHED_MACHINE = "attached-machine";
 //@ chunk-25sm7c4g.js:7190-8728 placement
-function adoptBridgeTargets(e, n, r) {
-  let mapped = n.map((h) => ({ ...h, name: recursivelySanitizeUnicode(h.name) })),
-    mapped_2 = mapped
-      .filter((h) => iie.has(h.name))
-      .map((h) => ({
-        toolName: h.name,
-        meta: readRemoteToolRegistration(h),
-        raw: h._meta?.[ANTHROPIC_REMOTETOOLEXECUTION],
-      })),
-    filtered = mapped.filter(
-      (h) => !iie.has(h.name) && mayBePassthroughTool(h.name) && h._meta?.[PASSTHROUGH_MARKER_KEY] !== void 0,
-    ),
-    flattened = filtered.flatMap((h) => {
-      let O = readPassthroughMarker(h);
-      return O === void 0 ? [] : [{ bridgeName: h.name, marker: O }];
-    }),
-    p = new Set(flattened.map((h) => h.bridgeName)),
-    f = new Set(filtered.filter((h) => !p.has(h.name)).map((h) => h.name)),
-    size = f.size,
-    g = count(mapped_2, (h) => h.meta === void 0),
-    w = new Set(mapped_2.map((h) => h.toolName)),
-    S = new Set(mapped.filter((h) => lqe.has(h.name)).map((h) => h.name)),
-    R = new Map(
-      flattened.map(({ bridgeName: bridgeName, marker: marker }) => [bridgeName, { localName: marker.tool }]),
-    ),
-    T = new Set([
-      ...mapped_2.flatMap((h) => (h.meta ? [h.meta.target.name] : [])),
-      ...flattened.map(({ marker: marker }) => marker.target.name),
+function adoptBridgeTargets(chromeClient, tools, recovery) {
+  let mapped = tools.map((h) => ({
+    ...h,
+    name: recursivelySanitizeUnicode(h.name),
+  }));
+  let mapped_2 = mapped
+    .filter((h) => DEVICE_PASSTHROUGH_TOOL_NAMES.has(h.name))
+    .map((h) => ({
+      toolName: h.name,
+      meta: readRemoteToolRegistration(h),
+      raw: h._meta?.[ANTHROPIC_REMOTETOOLEXECUTION],
+    }));
+  let filtered = mapped.filter(
+    (h) =>
+      !DEVICE_PASSTHROUGH_TOOL_NAMES.has(h.name) &&
+      mayBePassthroughTool(h.name) &&
+      h._meta?.[PASSTHROUGH_MARKER_KEY] !== undefined,
+  );
+  let flattened = filtered.flatMap((h) => {
+    let passthroughMarker = readPassthroughMarker(h);
+    return passthroughMarker === undefined
+      ? []
+      : [
+          {
+            bridgeName: h.name,
+            marker: passthroughMarker,
+          },
+        ];
+  });
+  let p = new Set(flattened.map((h) => h.bridgeName));
+  let f = new Set(filtered.filter((h) => !p.has(h.name)).map((h) => h.name));
+  let size = f.size;
+  let unreadable = count(mapped_2, (h) => h.meta === undefined);
+  let w = new Set(mapped_2.map((h) => h.toolName));
+  let plumbingTools = new Set(mapped.filter((h) => DEVICE_SYNC_FILES_TOOLS.has(h.name)).map((h) => h.name));
+  let passthroughTools = new Map(
+    flattened.map(({ bridgeName, marker }) => [
+      bridgeName,
+      {
+        localName: marker.tool,
+      },
     ]),
-    reduced = mapped.reduce((h, O) => {
-      let C = normalizeNameForMCP(O.name);
-      return (h.set(C, (h.get(C) ?? 0) + 1), h);
-    }, new Map()),
-    any = filtered.some((h) => (reduced.get(normalizeNameForMCP(h.name)) ?? 0) > 1),
-    y = T.size > 1 ? "two_names" : w.size < mapped_2.length || any ? "duplicate_tool" : void 0;
+  );
+  let T = new Set([
+    ...mapped_2.flatMap((h) => (h.meta ? [h.meta.target.name] : [])),
+    ...flattened.map(({ marker }) => marker.target.name),
+  ]);
+  let reduced = mapped.reduce((acc, O) => {
+    let C = normalizeNameForMCP(O.name);
+    acc.set(C, (acc.get(C) ?? 0) + 1);
+    return acc;
+  }, new Map());
+  let any = filtered.some((h) => (reduced.get(normalizeNameForMCP(h.name)) ?? 0) > 1);
+  let y = T.size > 1 ? "two_names" : w.size < mapped_2.length || any ? "duplicate_tool" : undefined;
   if (mapped_2.length === 0 && flattened.length === 0 && size === 0)
-    return { hosts: [], invalid: y, unreadable: 0, unreadableMarkers: size };
-  let x = mapped_2.find((h) => h.meta)?.meta,
-    q = x?.target ?? flattened[0]?.marker.target,
-    P = x === void 0 ? mapped_2.map((h) => h.raw) : [],
-    found = P.map(peerProtocolVersions).find((h) => h !== void 0),
-    found_2 = P.map(advertisedProtocolVersions).find((h) => h !== void 0);
+    return {
+      hosts: [],
+      invalid: y,
+      unreadable: 0,
+      unreadableMarkers: size,
+    };
+  let meta = mapped_2.find((h) => h.meta)?.meta;
+  let target = meta?.target ?? flattened[0]?.marker.target;
+  let P = meta === undefined ? mapped_2.map((h) => h.raw) : [];
+  let found = P.map(peerProtocolVersions).find((h) => h !== undefined);
+  let found_2 = P.map(advertisedProtocolVersions).find((h) => h !== undefined);
   return {
     hosts: [
       {
         kind: "remote",
         source: "bridge",
-        name: q?.name ?? ATTACHED_MACHINE,
-        status: y === void 0 ? "online" : "offline",
+        name: target?.name ?? ATTACHED_MACHINE,
+        status: y === undefined ? "online" : "offline",
         enforcement: "self",
-        description: q,
+        description: target,
         servedTools: w,
-        passthroughTools: R,
+        passthroughTools,
         rejectedPassthroughTools: f,
-        plumbingTools: S,
+        plumbingTools,
         protocol:
-          found !== void 0
-            ? { kind: "incompatible", announced: found }
+          found !== undefined
+            ? {
+                kind: "incompatible",
+                announced: found,
+              }
             : negotiateProtocol(
-                x?.protocol_versions ??
+                meta?.protocol_versions ??
                   found_2 ??
-                  (mapped_2.length === 0 ? [REMOTE_TOOL_PROTOCOL_VERSION] : void 0),
+                  (mapped_2.length === 0 ? [REMOTE_TOOL_PROTOCOL_VERSION] : undefined),
               ),
-        transport: createBridgeTransport(e, r),
+        transport: createBridgeTransport(chromeClient, recovery),
       },
     ],
     invalid: y,
-    unreadable: g,
+    unreadable,
     unreadableMarkers: size,
   };
 }
 //@ chunk-25sm7c4g.js:8728-8847 placement
 function readPassthroughMarker(e) {
-  let n = parsePassthroughMarker(recursivelySanitizeUnicode(e._meta?.[PASSTHROUGH_MARKER_KEY]));
-  return n !== void 0 && n.tool === buildMcpToolName(...Ge(e.name)) && _4(n.target.name) ? n : void 0;
+  let passthroughMarker = parsePassthroughMarker(
+    recursivelySanitizeUnicode(e._meta?.[PASSTHROUGH_MARKER_KEY]),
+  );
+  return passthroughMarker !== undefined &&
+    passthroughMarker.tool === buildMcpToolName(...splitBridgeToolName(e.name)) &&
+    isValidMachineSlug(passthroughMarker.target.name)
+    ? passthroughMarker
+    : undefined;
 }
 //@ chunk-25sm7c4g.js:8847-8930 placement
-function Ge(e) {
-  let index = e.indexOf("__");
-  return index < 0 ? ["", e] : [e.slice(0, index), e.slice(index + 2)];
+function splitBridgeToolName(name) {
+  let index = name.indexOf("__");
+  return index < 0 ? ["", name] : [name.slice(0, index), name.slice(index + 2)];
 }
 //@ chunk-25sm7c4g.js:8930-9037 placement
 function readRemoteToolRegistration(e) {
-  let n = parseRegistration(recursivelySanitizeUnicode(e._meta?.[ANTHROPIC_REMOTETOOLEXECUTION]));
-  return n !== void 0 && n.tool === e.name && _4(n.target.name) ? n : void 0;
+  let registration = parseRegistration(recursivelySanitizeUnicode(e._meta?.[ANTHROPIC_REMOTETOOLEXECUTION]));
+  return registration !== undefined &&
+    registration.tool === e.name &&
+    isValidMachineSlug(registration.target.name)
+    ? registration
+    : undefined;
 }
 //@ chunk-25sm7c4g.js:9037-9997 placement
-async function callPlumbingOverSession(e, n, r, o, u) {
-  if (!lqe.has(r)) throw Error("callPlumbing: not a plumbing tool");
-  if (u.signal.aborted) return { kind: "cancelled" };
-  let s = AJ(u.deadlineMs),
-    m = {
-      subtype: "remote_plumbing_call",
-      ...buildPlumbingRequest({
-        instanceId: n.instanceId,
-        host: n.host,
-        name: r,
-        args: o,
-        issuedAt: Date.now(),
-        deadlineMs: s,
-      }),
-    },
-    p;
+async function callPlumbingOverSession(sender, n, r, args, u) {
+  if (!DEVICE_SYNC_FILES_TOOLS.has(r)) throw Error("callPlumbing: not a plumbing tool");
+  if (u.signal.aborted)
+    return {
+      kind: "cancelled",
+    };
+  let s = clampToMaxPageSize(u.deadlineMs);
+  let request = {
+    subtype: "remote_plumbing_call",
+    ...buildPlumbingRequest({
+      instanceId: n.instanceId,
+      host: n.host,
+      name: r,
+      args,
+      issuedAt: Date.now(),
+      deadlineMs: s,
+    }),
+  };
+  let p;
   try {
-    p = e.sendServedCallRequest({ request: m, accepts: Je, signal: u.signal });
+    p = sender.sendServedCallRequest({
+      request,
+      accepts: acceptsServedCallResult,
+      signal: u.signal,
+    });
   } catch (error) {
-    return { kind: "transport_error", detail: `send failed: ${errorMessage(error)}` };
+    return {
+      kind: "transport_error",
+      detail: `send failed: ${errorMessage(error)}`,
+    };
   }
-  if (!p.sent)
-    return (
-      p.reply.catch(() => {}),
-      { kind: "unreachable", detail: "the session stream is closed; nothing was sent" }
-    );
-  let f = !1,
-    _ = setTimeout(() => {
-      ((f = !0), p.cancel());
-    }, s);
+  if (!p.sent) {
+    p.reply.catch(() => {});
+    return {
+      kind: "unreachable",
+      detail: "the session stream is closed; nothing was sent",
+    };
+  }
+  let f = false;
+  let timer = setTimeout(() => {
+    f = true;
+    p.cancel();
+  }, s);
   try {
     let reply = await p.reply;
     return (
-      toPlumbingCallResult(reply) ?? { kind: "transport_error", detail: "the answer was not a tool result" }
+      toPlumbingCallResult(reply) ?? {
+        kind: "transport_error",
+        detail: "the answer was not a tool result",
+      }
     );
   } catch (error) {
-    if (f) return { kind: "timed_out", capMs: s };
-    if (u.signal.aborted) return { kind: "cancelled" };
+    if (f)
+      return {
+        kind: "timed_out",
+        capMs: s,
+      };
+    if (u.signal.aborted)
+      return {
+        kind: "cancelled",
+      };
     if (error instanceof StreamClosedAbortError)
-      return { kind: "dropped", detail: "the session stream closed after the request left" };
-    return { kind: "transport_error", detail: errorMessage(error) };
+      return {
+        kind: "dropped",
+        detail: "the session stream closed after the request left",
+      };
+    return {
+      kind: "transport_error",
+      detail: errorMessage(error),
+    };
   } finally {
-    clearTimeout(_);
+    clearTimeout(timer);
   }
 }
+//@ chunk-25sm7c4g.js:9997-10159 placement = _temp (1)
 /**
  * 从对象里取出 result 字段，只有它是带 content 数组的对象时才返回。
  */
-//@ chunk-25sm7c4g.js:9997-10159 placement = _temp (1)
 function getMcpResultWithContent(r) {
-  let n = typeof r === "object" && r !== null && "result" in r ? r.result : void 0;
+  let n = typeof r === "object" && r !== null && "result" in r ? r.result : undefined;
   if (typeof n !== "object" || n === null) return;
-  return Array.isArray(n.content) ? n : void 0;
+  return Array.isArray(n.content) ? n : undefined;
 }
 //@ chunk-25sm7c4g.js:10159-10235 affinity
-function Je(e) {
+function acceptsServedCallResult(e) {
   try {
-    if (isRemoteToolCallMeta(e)) return !1;
-    return getMcpResultWithContent(e) !== void 0;
+    if (isRemoteToolCallMeta(e)) return false;
+    return getMcpResultWithContent(e) !== undefined;
   } catch {
-    return !1;
+    return false;
   }
 }
 //@ chunk-25sm7c4g.js:10235-10503 affinity
-function toPlumbingCallResult(e) {
-  let n = getMcpResultWithContent(e);
-  if (n === void 0) return;
-  let { content: content, structuredContent: structuredContent, isError: isError } = n;
+function toPlumbingCallResult(reply) {
+  let mcpResultWithContent = getMcpResultWithContent(reply);
+  if (mcpResultWithContent === undefined) return;
+  let { content, structuredContent, isError } = mcpResultWithContent;
   return {
     kind: "result",
-    structuredContent: structuredContent,
+    structuredContent,
     text: content.flatMap((s) =>
       typeof s === "object" && s !== null && s.type === "text" && typeof s.text === "string" ? [s.text] : [],
     ).join(`
 `),
-    isError: isError === !0,
+    isError: isError === true,
   };
 }
-
 export {
   callPlumbingOverSession,
   BridgeSessionRecovery,

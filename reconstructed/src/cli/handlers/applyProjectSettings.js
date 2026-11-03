@@ -8,13 +8,18 @@
  * pieces: chunk-4yx88wyy.js (2)
  * attribution: placement 2
  */
-
 //@ chunk-4yx88wyy.js:191-307 placement
-var APPLY_PROJECT_SETTINGS = "apply-project-settings",
-  Uhi = "Review and accept settings changes for cloud sessions that use this computer";
+/**
+ * claude apply-project-settings 子命令名与说明："Review and accept settings changes for cloud sessions that use this computer"。
+ */
+var APPLY_PROJECT_SETTINGS = "apply-project-settings";
+var APPLY_PROJECT_SETTINGS_DESCRIPTION =
+  "Review and accept settings changes for cloud sessions that use this computer";
 //@ chunk-4yx88wyy.js:307-375 placement
-function kcr(t = process.argv) {
+/**
+ * 判断 argv[2] 是否为 apply-project-settings 子命令。
+ */
+function isApplyProjectSettingsCommand(t = process.argv) {
   return t[2] === "apply-project-settings";
 }
-
-export { APPLY_PROJECT_SETTINGS, Uhi, kcr };
+export { APPLY_PROJECT_SETTINGS, APPLY_PROJECT_SETTINGS_DESCRIPTION, isApplyProjectSettingsCommand };

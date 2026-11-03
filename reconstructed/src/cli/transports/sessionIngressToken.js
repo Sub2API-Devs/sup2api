@@ -22,9 +22,12 @@ import { logForDiagnosticsNoPII } from "../../utils/diagLogs.js";
 import { getSessionIngressToken, setSessionIngressToken } from "../../bootstrap/state.js";
 
 //@ chunk-bdmhadbm.js:456-487 placement
-var wEo = [250, 500, 500, 750, 1000];
+/**
+ * 读取 session ingress 令牌文件的退避重试间隔 [250,500,500,750,1000] ms。
+ */
+var TOKEN_FILE_READ_BACKOFF_MS = [250, 500, 500, 750, 1000];
 //@ chunk-bdmhadbm.js:487-548 placement
-function g() {
+function sessionIngressTokenPath() {
   return env.CLAUDE_SESSION_INGRESS_TOKEN_FILE ?? CCR_SESSION_INGRESS_TOKEN_PATH;
 }
 //@ chunk-bdmhadbm.js:548-739 placement
@@ -38,57 +41,67 @@ function shouldWaitForSessionIngressToken(r) {
   );
 }
 //@ chunk-bdmhadbm.js:739-754 placement
-var I = 250,
-  w = 50;
+var SIBLING_CREDENTIAL_GRACE_MS = 250;
+var SIBLING_CREDENTIAL_STEP_MS = 50;
 //@ chunk-bdmhadbm.js:754-842 placement
-function d() {
+function hasAnyCredentialFile() {
   return (
     readWellKnownCredentialFile(CCR_OAUTH_TOKEN_PATH, "OAuth token").token !== null ||
     readWellKnownCredentialFile(CCR_API_KEY_PATH, "API key").token !== null
   );
 }
+//@ chunk-bdmhadbm.js:842-1721 placement
 /**
  * 轮询读取 session ingress 令牌文件，未就绪时间隔重试
  */
-//@ chunk-bdmhadbm.js:842-1721 placement
 async function waitForSessionIngressToken(
-  r,
-  { delaysMs: e = wEo, siblingGraceMs: o = I, siblingStepMs: f = w } = {},
+  argv,
+  {
+    delaysMs: e = TOKEN_FILE_READ_BACKOFF_MS,
+    siblingGraceMs: o = SIBLING_CREDENTIAL_GRACE_MS,
+    siblingStepMs: f = SIBLING_CREDENTIAL_STEP_MS,
+  } = {},
 ) {
-  if (!shouldWaitForSessionIngressToken(r)) return;
-  let startTime = performance.now(),
-    reduced = e.reduce((s, k) => s + k, 0),
-    E = g(),
-    { token: token, miss: miss } = readWellKnownCredentialFile(E, "session ingress token"),
-    n = 0;
+  if (!shouldWaitForSessionIngressToken(argv)) return;
+  let startTime = performance.now();
+  let reduced = e.reduce((acc, k) => acc + k, 0);
+  let E = sessionIngressTokenPath();
+  let { token, miss } = readWellKnownCredentialFile(E, "session ingress token");
+  let n = 0;
   while (!token && n < e.length) {
     let s = e[n];
-    (logForDebugging(
+    logForDebugging(
       `[spare-claim] session ingress token file not readable yet (${miss}), re-checking in ${s}ms (${n + 1}/${e.length})`,
-      { level: "warn" },
-    ),
-      await sleep(s),
-      n++,
-      ({ token: token, miss: miss } = readWellKnownCredentialFile(E, "session ingress token")));
+      {
+        level: "warn",
+      },
+    );
+    await sleep(s);
+    n++;
+    ({ token, miss } = readWellKnownCredentialFile(E, "session ingress token"));
   }
   if (!token) {
     logForDiagnosticsNoPII("error", "cli_worker_lifecycle_claim_token_wait", {
       attempts: n,
-      recovered: !1,
+      recovered: false,
       last_miss: miss ?? "other",
       waited_ms: Math.round(performance.now() - startTime),
     });
     return;
   }
-  let u = n > 0 ? Math.max(reduced - (performance.now() - startTime), o) : o,
-    startTime_2 = performance.now(),
-    c = 0,
-    m = d();
-  while (!m && performance.now() - startTime_2 < u) (await sleep(f), c++, (m = d()));
+  let u = n > 0 ? Math.max(reduced - (performance.now() - startTime), o) : o;
+  let startTime_2 = performance.now();
+  let c = 0;
+  let m = hasAnyCredentialFile();
+  while (!m && performance.now() - startTime_2 < u) {
+    await sleep(f);
+    c++;
+    m = hasAnyCredentialFile();
+  }
   if (n > 0 || c > 0)
     logForDiagnosticsNoPII("info", "cli_worker_lifecycle_claim_token_wait", {
       attempts: n,
-      recovered: !0,
+      recovered: true,
       sibling_attempts: c,
       sibling_present: m,
       waited_ms: Math.round(performance.now() - startTime),
@@ -96,15 +109,30 @@ async function waitForSessionIngressToken(
 }
 //@ chunk-bdmhadbm.js:1721-2072 placement
 function rereadSessionIngressToken() {
-  let r = !!env.CLAUDE_CODE_WEBSOCKET_AUTH_FILE_DESCRIPTOR;
-  if (getSessionIngressToken() !== null) return { recovered: !1, diag: { fd_env_set: r } };
-  let { token: token, miss: miss } = readWellKnownCredentialFile(g(), "session ingress token");
-  if (!token) return { recovered: !1, diag: { fd_env_set: r, last_miss: miss ?? "other" } };
-  return (
-    setSessionIngressToken(token),
-    logForDebugging("Session ingress token re-read from well-known file"),
-    { recovered: !0, diag: { fd_env_set: r } }
-  );
+  let fdEnvSet = !!env.CLAUDE_CODE_WEBSOCKET_AUTH_FILE_DESCRIPTOR;
+  if (getSessionIngressToken() !== null)
+    return {
+      recovered: false,
+      diag: {
+        fd_env_set: fdEnvSet,
+      },
+    };
+  let { token, miss } = readWellKnownCredentialFile(sessionIngressTokenPath(), "session ingress token");
+  if (!token)
+    return {
+      recovered: false,
+      diag: {
+        fd_env_set: fdEnvSet,
+        last_miss: miss ?? "other",
+      },
+    };
+  setSessionIngressToken(token);
+  logForDebugging("Session ingress token re-read from well-known file");
+  return {
+    recovered: true,
+    diag: {
+      fd_env_set: fdEnvSet,
+    },
+  };
 }
-
-export { rereadSessionIngressToken, waitForSessionIngressToken, wEo };
+export { rereadSessionIngressToken, waitForSessionIngressToken, TOKEN_FILE_READ_BACKOFF_MS };

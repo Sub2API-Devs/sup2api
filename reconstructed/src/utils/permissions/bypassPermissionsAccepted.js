@@ -12,10 +12,12 @@ import { hasVouchedSkipDangerousModePermissionPrompt } from "../settings/setting
 import { getGlobalConfig } from "../config.js";
 
 //@ chunk-8ryrpd67.js:264-337 placement
-function nHt() {
+/**
+ * isBypassPermissionsAccepted：bypass 权限是否已被接受。
+ */
+function isBypassPermissionsAccepted() {
   return (
     hasVouchedSkipDangerousModePermissionPrompt() || Boolean(getGlobalConfig().bypassPermissionsModeAccepted)
   );
 }
-
-export { nHt };
+export { isBypassPermissionsAccepted };

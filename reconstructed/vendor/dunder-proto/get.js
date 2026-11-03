@@ -6,31 +6,30 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../runtime/bun-runtime.js";
-import { Mo } from "../call-bind-apply-helpers/index.js";
-import { tr } from "../gopd/index.js";
+import { require_call_bind_apply_helpers_2 } from "../call-bind-apply-helpers/index.js";
+import { require_gopd } from "../gopd/index.js";
 
 //@ chunk-h6b7mazd.js:11418-11796 cjs-fingerprint
-var Go = x(function (mp, Wo) {
-  var hu = Mo(),
-    Ho = tr(),
-    $o;
+var require_get = x(function (cjsExports, cjsModule) {
+  var callBind = require_call_bind_apply_helpers_2();
+  var gOPD = require_gopd();
+  var hasProtoAccessor;
   try {
-    $o = [].__proto__ === Array.prototype;
+    hasProtoAccessor = [].__proto__ === Array.prototype;
   } catch (error) {
     if (!error || typeof error !== "object" || !("code" in error) || error.code !== "ERR_PROTO_ACCESS")
       throw error;
   }
-  var ir = !!$o && Ho && Ho(Object.prototype, "__proto__"),
-    Vo = Object,
-    getPrototypeOf = Vo.getPrototypeOf;
-  Wo.exports =
-    ir && typeof ir.get === "function"
-      ? hu([ir.get])
-      : typeof getPrototypeOf === "function"
-        ? function (t) {
-            return getPrototypeOf(t == null ? t : Vo(t));
+  var desc = !!hasProtoAccessor && gOPD && gOPD(Object.prototype, "__proto__");
+  var $Object = Object;
+  var $getPrototypeOf = $Object.getPrototypeOf;
+  cjsModule.exports =
+    desc && typeof desc.get === "function"
+      ? callBind([desc.get])
+      : typeof $getPrototypeOf === "function"
+        ? function (value) {
+            return $getPrototypeOf(value == null ? value : $Object(value));
           }
-        : !1;
+        : false;
 });
-
-export { Go };
+export { require_get };

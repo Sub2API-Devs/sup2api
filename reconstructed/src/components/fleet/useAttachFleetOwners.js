@@ -8,49 +8,69 @@
  * pieces: chunk-ejntaqp9.js (5)
  * attribution: placement 5
  */
-import { j, P } from "../../../vendor/react/cjs/react.production.js";
+import { init_react_production, P } from "../../../vendor/react/cjs/react.production.js";
 import { createSignal } from "../../utils/signal.js";
 import { lit } from "../../services/analytics/safeMetadata.js";
 import { createReducerStore } from "../../utils/killRing.js";
 
 //@ chunk-ejntaqp9.js:336-340 placement
-j();
+init_react_production();
 //@ chunk-ejntaqp9.js:340-349 placement
-var n = [];
+var EMPTY_OWNERS = [];
+//@ chunk-ejntaqp9.js:349-887 placement
 /**
  * FleetView 会话所有者附着状态存储
  */
-//@ chunk-ejntaqp9.js:349-887 placement
 class FleetOwnersStore {
   #n = createSignal();
-  #o = { entries: n, loading: !1 };
-  #t = !1;
+  #o = {
+    entries: EMPTY_OWNERS,
+    loading: false,
+  };
+  #t = false;
   #i = 0;
   #e = 0;
   getSnapshot = () => this.#o;
   subscribe = (e) => this.#n.subscribe(e);
   #r(e) {
-    let t = this.#o,
-      r = { ...t, ...e };
+    let t = this.#o;
+    let r = {
+      ...t,
+      ...e,
+    };
     if (r.entries === t.entries && r.loading === t.loading) return;
-    ((this.#o = r), this.#n.emit());
+    this.#o = r;
+    this.#n.emit();
   }
   get pending() {
     return this.#e !== 0;
   }
   clear() {
-    ((this.#t = !1), this.#r({ entries: n }));
+    this.#t = false;
+    this.#r({
+      entries: EMPTY_OWNERS,
+    });
   }
   beginLoad() {
-    if (((this.#e = ++this.#i), !this.#t)) this.#r({ loading: !0 });
+    this.#e = ++this.#i;
+    if (!this.#t)
+      this.#r({
+        loading: true,
+      });
     return this.#e;
   }
   endLoad(e) {
     if (e !== this.#e) return;
-    ((this.#e = 0), this.#r({ loading: !1 }));
+    this.#e = 0;
+    this.#r({
+      loading: false,
+    });
   }
   setEntries(e) {
-    ((this.#t = !0), this.#r({ entries: e.length === 0 ? n : e }));
+    this.#t = true;
+    this.#r({
+      entries: e.length === 0 ? EMPTY_OWNERS : e,
+    });
   }
   get known() {
     return this.#t;
@@ -66,31 +86,40 @@ function createFleetViewHost() {
     editor: null,
     deleteConfirm: null,
     earlier: new FleetOwnersStore(),
-    agentLastUsedMigrationDone: !1,
+    agentLastUsedMigrationDone: false,
     scope: null,
-    resultSeen: { entryChannel: lit("unknown"), openFinished: null, emitted: new Set() },
+    resultSeen: {
+      entryChannel: lit("unknown"),
+      openFinished: null,
+      emitted: new Set(),
+    },
     fleetNudgeStore: null,
     killRing: createReducerStore(),
   };
 }
+//@ chunk-ejntaqp9.js:1154-1438 placement
 /**
  * FleetView 附着会话所有者的 hook。
  */
-//@ chunk-ejntaqp9.js:1154-1438 placement
-function useAttachFleetOwners(
-  { selection: selection, view: view, attach: attach, editor: editor, deleteConfirm: deleteConfirm },
-  { clock: clock, groupsEnabled: groupsEnabled },
-) {
+function useAttachFleetOwners({ selection, view, attach, editor, deleteConfirm }, { clock, groupsEnabled }) {
   P(() => {
-    let attachView = selection.attachView({ clock: clock, onError: editor.setError }),
-      attachView_2 = view.attachView({ groupsEnabled: groupsEnabled }),
-      attachView_3 = attach.attachView(),
-      attachView_4 = editor.attachView(),
-      attachView_5 = deleteConfirm.attachView();
+    let d = selection.attachView({
+      clock,
+      onError: editor.setError,
+    });
+    let p = view.attachView({
+      groupsEnabled,
+    });
+    let c = attach.attachView();
+    let h = editor.attachView();
+    let S = deleteConfirm.attachView();
     return () => {
-      (attachView_5(), attachView_4(), attachView_3(), attachView_2(), attachView());
+      S();
+      h();
+      c();
+      p();
+      d();
     };
   }, [selection, view, attach, editor, deleteConfirm, clock]);
 }
-
 export { createFleetViewHost, useAttachFleetOwners };

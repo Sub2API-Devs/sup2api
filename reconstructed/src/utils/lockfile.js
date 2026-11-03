@@ -17,17 +17,19 @@ import { validateStateRef, stateGetForPlugin } from "../plugins/functionHooks/ap
 function requireProperLockfile() {
   return properLockfileIndex();
 }
+//@ chunk-bmbhxpfm.js:22165-22265 fingerprint = lock (0.659)
 /**
  * lock：proper-lockfile 加锁并让返回的释放函数支持 `await using`（Symbol.asyncDispose）。全局配置、history、OAuth 刷新等都用它。
  */
-//@ chunk-bmbhxpfm.js:22165-22265 fingerprint = lock (0.659)
 async function lock(file, options) {
-  let lock = await requireProperLockfile().lock(file, options);
-  return Object.assign(lock, { [Symbol.asyncDispose]: lock });
+  let n = await requireProperLockfile().lock(file, options);
+  return Object.assign(n, {
+    [Symbol.asyncDispose]: n,
+  });
 }
 //@ chunk-bmbhxpfm.js:22265-22306 placement
-function checkLockfile(e, r) {
-  return requireProperLockfile().check(e, r);
+function checkLockfile(resolvedPath, r) {
+  return requireProperLockfile().check(resolvedPath, r);
 }
 //@ chunk-bmbhxpfm.js:22306-22694 placement
 async function releaseLockQuietly(e, r) {
@@ -37,18 +39,22 @@ async function releaseLockQuietly(e, r) {
   } catch (error) {
     let i;
     try {
-      let u = getErrnoCode(error);
+      let errnoCode = getErrnoCode(error);
       i =
-        u === "ERELEASED" || u === "ENOTACQUIRED"
-          ? `lock was no longer held at release (${u}); the locked section may have run without exclusivity`
+        errnoCode === "ERELEASED" || errnoCode === "ENOTACQUIRED"
+          ? `lock was no longer held at release (${errnoCode}); the locked section may have run without exclusivity`
           : `lock directory could not be removed and is left to go stale: ${errorMessage(error)}`;
     } catch {
       i = "lock release rejected with a value that cannot be described";
     }
-    logForDebugging(`${r}: ${i}`, { level: "warn" });
+    logForDebugging(`${r}: ${i}`, {
+      level: "warn",
+    });
   }
 }
 //@ chunk-1tz177x8.js:39326-39353 fingerprint = check (0.689)
-var check = { check: validateStateRef, run: stateGetForPlugin };
-
+var check = {
+  check: validateStateRef,
+  run: stateGetForPlugin,
+};
 export { lock, releaseLockQuietly, check, checkLockfile };

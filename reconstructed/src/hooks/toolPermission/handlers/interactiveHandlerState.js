@@ -10,14 +10,13 @@
  */
 
 //@ chunk-w1sz837t.js:191-202 placement
-var e = null;
+var interactiveHandlerState = null;
 //@ chunk-w1sz837t.js:202-222 placement
 function setInteractiveHandlerHost(r) {
-  e = r;
+  interactiveHandlerState = r;
 }
 //@ chunk-w1sz837t.js:222-246 placement
 function getInteractiveHandlerHost() {
-  return e;
+  return interactiveHandlerState;
 }
-
 export { setInteractiveHandlerHost, getInteractiveHandlerHost };

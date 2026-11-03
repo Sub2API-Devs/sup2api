@@ -8,358 +8,357 @@
 import { c, E } from "../../lib/common/html.js";
 
 //@ chunk-6ja29j2n.js:65146-65152 esm-layout
-var u;
+var TAG_ID;
 //@ chunk-6ja29j2n.js:65152-67836 esm-fingerprint
-(function (e) {
-  ((e[(e.UNKNOWN = 0)] = "UNKNOWN"),
-    (e[(e.A = 1)] = "A"),
-    (e[(e.ADDRESS = 2)] = "ADDRESS"),
-    (e[(e.ANNOTATION_XML = 3)] = "ANNOTATION_XML"),
-    (e[(e.APPLET = 4)] = "APPLET"),
-    (e[(e.AREA = 5)] = "AREA"),
-    (e[(e.ARTICLE = 6)] = "ARTICLE"),
-    (e[(e.ASIDE = 7)] = "ASIDE"),
-    (e[(e.B = 8)] = "B"),
-    (e[(e.BASE = 9)] = "BASE"),
-    (e[(e.BASEFONT = 10)] = "BASEFONT"),
-    (e[(e.BGSOUND = 11)] = "BGSOUND"),
-    (e[(e.BIG = 12)] = "BIG"),
-    (e[(e.BLOCKQUOTE = 13)] = "BLOCKQUOTE"),
-    (e[(e.BODY = 14)] = "BODY"),
-    (e[(e.BR = 15)] = "BR"),
-    (e[(e.BUTTON = 16)] = "BUTTON"),
-    (e[(e.CAPTION = 17)] = "CAPTION"),
-    (e[(e.CENTER = 18)] = "CENTER"),
-    (e[(e.CODE = 19)] = "CODE"),
-    (e[(e.COL = 20)] = "COL"),
-    (e[(e.COLGROUP = 21)] = "COLGROUP"),
-    (e[(e.DD = 22)] = "DD"),
-    (e[(e.DESC = 23)] = "DESC"),
-    (e[(e.DETAILS = 24)] = "DETAILS"),
-    (e[(e.DIALOG = 25)] = "DIALOG"),
-    (e[(e.DIR = 26)] = "DIR"),
-    (e[(e.DIV = 27)] = "DIV"),
-    (e[(e.DL = 28)] = "DL"),
-    (e[(e.DT = 29)] = "DT"),
-    (e[(e.EM = 30)] = "EM"),
-    (e[(e.EMBED = 31)] = "EMBED"),
-    (e[(e.FIELDSET = 32)] = "FIELDSET"),
-    (e[(e.FIGCAPTION = 33)] = "FIGCAPTION"),
-    (e[(e.FIGURE = 34)] = "FIGURE"),
-    (e[(e.FONT = 35)] = "FONT"),
-    (e[(e.FOOTER = 36)] = "FOOTER"),
-    (e[(e.FOREIGN_OBJECT = 37)] = "FOREIGN_OBJECT"),
-    (e[(e.FORM = 38)] = "FORM"),
-    (e[(e.FRAME = 39)] = "FRAME"),
-    (e[(e.FRAMESET = 40)] = "FRAMESET"),
-    (e[(e.H1 = 41)] = "H1"),
-    (e[(e.H2 = 42)] = "H2"),
-    (e[(e.H3 = 43)] = "H3"),
-    (e[(e.H4 = 44)] = "H4"),
-    (e[(e.H5 = 45)] = "H5"),
-    (e[(e.H6 = 46)] = "H6"),
-    (e[(e.HEAD = 47)] = "HEAD"),
-    (e[(e.HEADER = 48)] = "HEADER"),
-    (e[(e.HGROUP = 49)] = "HGROUP"),
-    (e[(e.HR = 50)] = "HR"),
-    (e[(e.HTML = 51)] = "HTML"),
-    (e[(e.I = 52)] = "I"),
-    (e[(e.IMG = 53)] = "IMG"),
-    (e[(e.IMAGE = 54)] = "IMAGE"),
-    (e[(e.INPUT = 55)] = "INPUT"),
-    (e[(e.IFRAME = 56)] = "IFRAME"),
-    (e[(e.KEYGEN = 57)] = "KEYGEN"),
-    (e[(e.LABEL = 58)] = "LABEL"),
-    (e[(e.LI = 59)] = "LI"),
-    (e[(e.LINK = 60)] = "LINK"),
-    (e[(e.LISTING = 61)] = "LISTING"),
-    (e[(e.MAIN = 62)] = "MAIN"),
-    (e[(e.MALIGNMARK = 63)] = "MALIGNMARK"),
-    (e[(e.MARQUEE = 64)] = "MARQUEE"),
-    (e[(e.MATH = 65)] = "MATH"),
-    (e[(e.MENU = 66)] = "MENU"),
-    (e[(e.META = 67)] = "META"),
-    (e[(e.MGLYPH = 68)] = "MGLYPH"),
-    (e[(e.MI = 69)] = "MI"),
-    (e[(e.MO = 70)] = "MO"),
-    (e[(e.MN = 71)] = "MN"),
-    (e[(e.MS = 72)] = "MS"),
-    (e[(e.MTEXT = 73)] = "MTEXT"),
-    (e[(e.NAV = 74)] = "NAV"),
-    (e[(e.NOBR = 75)] = "NOBR"),
-    (e[(e.NOFRAMES = 76)] = "NOFRAMES"),
-    (e[(e.NOEMBED = 77)] = "NOEMBED"),
-    (e[(e.NOSCRIPT = 78)] = "NOSCRIPT"),
-    (e[(e.OBJECT = 79)] = "OBJECT"),
-    (e[(e.OL = 80)] = "OL"),
-    (e[(e.OPTGROUP = 81)] = "OPTGROUP"),
-    (e[(e.OPTION = 82)] = "OPTION"),
-    (e[(e.P = 83)] = "P"),
-    (e[(e.PARAM = 84)] = "PARAM"),
-    (e[(e.PLAINTEXT = 85)] = "PLAINTEXT"),
-    (e[(e.PRE = 86)] = "PRE"),
-    (e[(e.RB = 87)] = "RB"),
-    (e[(e.RP = 88)] = "RP"),
-    (e[(e.RT = 89)] = "RT"),
-    (e[(e.RTC = 90)] = "RTC"),
-    (e[(e.RUBY = 91)] = "RUBY"),
-    (e[(e.S = 92)] = "S"),
-    (e[(e.SCRIPT = 93)] = "SCRIPT"),
-    (e[(e.SEARCH = 94)] = "SEARCH"),
-    (e[(e.SECTION = 95)] = "SECTION"),
-    (e[(e.SELECT = 96)] = "SELECT"),
-    (e[(e.SOURCE = 97)] = "SOURCE"),
-    (e[(e.SMALL = 98)] = "SMALL"),
-    (e[(e.SPAN = 99)] = "SPAN"),
-    (e[(e.STRIKE = 100)] = "STRIKE"),
-    (e[(e.STRONG = 101)] = "STRONG"),
-    (e[(e.STYLE = 102)] = "STYLE"),
-    (e[(e.SUB = 103)] = "SUB"),
-    (e[(e.SUMMARY = 104)] = "SUMMARY"),
-    (e[(e.SUP = 105)] = "SUP"),
-    (e[(e.TABLE = 106)] = "TABLE"),
-    (e[(e.TBODY = 107)] = "TBODY"),
-    (e[(e.TEMPLATE = 108)] = "TEMPLATE"),
-    (e[(e.TEXTAREA = 109)] = "TEXTAREA"),
-    (e[(e.TFOOT = 110)] = "TFOOT"),
-    (e[(e.TD = 111)] = "TD"),
-    (e[(e.TH = 112)] = "TH"),
-    (e[(e.THEAD = 113)] = "THEAD"),
-    (e[(e.TITLE = 114)] = "TITLE"),
-    (e[(e.TR = 115)] = "TR"),
-    (e[(e.TRACK = 116)] = "TRACK"),
-    (e[(e.TT = 117)] = "TT"),
-    (e[(e.U = 118)] = "U"),
-    (e[(e.UL = 119)] = "UL"),
-    (e[(e.SVG = 120)] = "SVG"),
-    (e[(e.VAR = 121)] = "VAR"),
-    (e[(e.WBR = 122)] = "WBR"),
-    (e[(e.XMP = 123)] = "XMP"));
-})(u || (u = {}));
+(function (TAG_ID) {
+  TAG_ID[(TAG_ID.UNKNOWN = 0)] = "UNKNOWN";
+  TAG_ID[(TAG_ID.A = 1)] = "A";
+  TAG_ID[(TAG_ID.ADDRESS = 2)] = "ADDRESS";
+  TAG_ID[(TAG_ID.ANNOTATION_XML = 3)] = "ANNOTATION_XML";
+  TAG_ID[(TAG_ID.APPLET = 4)] = "APPLET";
+  TAG_ID[(TAG_ID.AREA = 5)] = "AREA";
+  TAG_ID[(TAG_ID.ARTICLE = 6)] = "ARTICLE";
+  TAG_ID[(TAG_ID.ASIDE = 7)] = "ASIDE";
+  TAG_ID[(TAG_ID.B = 8)] = "B";
+  TAG_ID[(TAG_ID.BASE = 9)] = "BASE";
+  TAG_ID[(TAG_ID.BASEFONT = 10)] = "BASEFONT";
+  TAG_ID[(TAG_ID.BGSOUND = 11)] = "BGSOUND";
+  TAG_ID[(TAG_ID.BIG = 12)] = "BIG";
+  TAG_ID[(TAG_ID.BLOCKQUOTE = 13)] = "BLOCKQUOTE";
+  TAG_ID[(TAG_ID.BODY = 14)] = "BODY";
+  TAG_ID[(TAG_ID.BR = 15)] = "BR";
+  TAG_ID[(TAG_ID.BUTTON = 16)] = "BUTTON";
+  TAG_ID[(TAG_ID.CAPTION = 17)] = "CAPTION";
+  TAG_ID[(TAG_ID.CENTER = 18)] = "CENTER";
+  TAG_ID[(TAG_ID.CODE = 19)] = "CODE";
+  TAG_ID[(TAG_ID.COL = 20)] = "COL";
+  TAG_ID[(TAG_ID.COLGROUP = 21)] = "COLGROUP";
+  TAG_ID[(TAG_ID.DD = 22)] = "DD";
+  TAG_ID[(TAG_ID.DESC = 23)] = "DESC";
+  TAG_ID[(TAG_ID.DETAILS = 24)] = "DETAILS";
+  TAG_ID[(TAG_ID.DIALOG = 25)] = "DIALOG";
+  TAG_ID[(TAG_ID.DIR = 26)] = "DIR";
+  TAG_ID[(TAG_ID.DIV = 27)] = "DIV";
+  TAG_ID[(TAG_ID.DL = 28)] = "DL";
+  TAG_ID[(TAG_ID.DT = 29)] = "DT";
+  TAG_ID[(TAG_ID.EM = 30)] = "EM";
+  TAG_ID[(TAG_ID.EMBED = 31)] = "EMBED";
+  TAG_ID[(TAG_ID.FIELDSET = 32)] = "FIELDSET";
+  TAG_ID[(TAG_ID.FIGCAPTION = 33)] = "FIGCAPTION";
+  TAG_ID[(TAG_ID.FIGURE = 34)] = "FIGURE";
+  TAG_ID[(TAG_ID.FONT = 35)] = "FONT";
+  TAG_ID[(TAG_ID.FOOTER = 36)] = "FOOTER";
+  TAG_ID[(TAG_ID.FOREIGN_OBJECT = 37)] = "FOREIGN_OBJECT";
+  TAG_ID[(TAG_ID.FORM = 38)] = "FORM";
+  TAG_ID[(TAG_ID.FRAME = 39)] = "FRAME";
+  TAG_ID[(TAG_ID.FRAMESET = 40)] = "FRAMESET";
+  TAG_ID[(TAG_ID.H1 = 41)] = "H1";
+  TAG_ID[(TAG_ID.H2 = 42)] = "H2";
+  TAG_ID[(TAG_ID.H3 = 43)] = "H3";
+  TAG_ID[(TAG_ID.H4 = 44)] = "H4";
+  TAG_ID[(TAG_ID.H5 = 45)] = "H5";
+  TAG_ID[(TAG_ID.H6 = 46)] = "H6";
+  TAG_ID[(TAG_ID.HEAD = 47)] = "HEAD";
+  TAG_ID[(TAG_ID.HEADER = 48)] = "HEADER";
+  TAG_ID[(TAG_ID.HGROUP = 49)] = "HGROUP";
+  TAG_ID[(TAG_ID.HR = 50)] = "HR";
+  TAG_ID[(TAG_ID.HTML = 51)] = "HTML";
+  TAG_ID[(TAG_ID.I = 52)] = "I";
+  TAG_ID[(TAG_ID.IMG = 53)] = "IMG";
+  TAG_ID[(TAG_ID.IMAGE = 54)] = "IMAGE";
+  TAG_ID[(TAG_ID.INPUT = 55)] = "INPUT";
+  TAG_ID[(TAG_ID.IFRAME = 56)] = "IFRAME";
+  TAG_ID[(TAG_ID.KEYGEN = 57)] = "KEYGEN";
+  TAG_ID[(TAG_ID.LABEL = 58)] = "LABEL";
+  TAG_ID[(TAG_ID.LI = 59)] = "LI";
+  TAG_ID[(TAG_ID.LINK = 60)] = "LINK";
+  TAG_ID[(TAG_ID.LISTING = 61)] = "LISTING";
+  TAG_ID[(TAG_ID.MAIN = 62)] = "MAIN";
+  TAG_ID[(TAG_ID.MALIGNMARK = 63)] = "MALIGNMARK";
+  TAG_ID[(TAG_ID.MARQUEE = 64)] = "MARQUEE";
+  TAG_ID[(TAG_ID.MATH = 65)] = "MATH";
+  TAG_ID[(TAG_ID.MENU = 66)] = "MENU";
+  TAG_ID[(TAG_ID.META = 67)] = "META";
+  TAG_ID[(TAG_ID.MGLYPH = 68)] = "MGLYPH";
+  TAG_ID[(TAG_ID.MI = 69)] = "MI";
+  TAG_ID[(TAG_ID.MO = 70)] = "MO";
+  TAG_ID[(TAG_ID.MN = 71)] = "MN";
+  TAG_ID[(TAG_ID.MS = 72)] = "MS";
+  TAG_ID[(TAG_ID.MTEXT = 73)] = "MTEXT";
+  TAG_ID[(TAG_ID.NAV = 74)] = "NAV";
+  TAG_ID[(TAG_ID.NOBR = 75)] = "NOBR";
+  TAG_ID[(TAG_ID.NOFRAMES = 76)] = "NOFRAMES";
+  TAG_ID[(TAG_ID.NOEMBED = 77)] = "NOEMBED";
+  TAG_ID[(TAG_ID.NOSCRIPT = 78)] = "NOSCRIPT";
+  TAG_ID[(TAG_ID.OBJECT = 79)] = "OBJECT";
+  TAG_ID[(TAG_ID.OL = 80)] = "OL";
+  TAG_ID[(TAG_ID.OPTGROUP = 81)] = "OPTGROUP";
+  TAG_ID[(TAG_ID.OPTION = 82)] = "OPTION";
+  TAG_ID[(TAG_ID.P = 83)] = "P";
+  TAG_ID[(TAG_ID.PARAM = 84)] = "PARAM";
+  TAG_ID[(TAG_ID.PLAINTEXT = 85)] = "PLAINTEXT";
+  TAG_ID[(TAG_ID.PRE = 86)] = "PRE";
+  TAG_ID[(TAG_ID.RB = 87)] = "RB";
+  TAG_ID[(TAG_ID.RP = 88)] = "RP";
+  TAG_ID[(TAG_ID.RT = 89)] = "RT";
+  TAG_ID[(TAG_ID.RTC = 90)] = "RTC";
+  TAG_ID[(TAG_ID.RUBY = 91)] = "RUBY";
+  TAG_ID[(TAG_ID.S = 92)] = "S";
+  TAG_ID[(TAG_ID.SCRIPT = 93)] = "SCRIPT";
+  TAG_ID[(TAG_ID.SEARCH = 94)] = "SEARCH";
+  TAG_ID[(TAG_ID.SECTION = 95)] = "SECTION";
+  TAG_ID[(TAG_ID.SELECT = 96)] = "SELECT";
+  TAG_ID[(TAG_ID.SOURCE = 97)] = "SOURCE";
+  TAG_ID[(TAG_ID.SMALL = 98)] = "SMALL";
+  TAG_ID[(TAG_ID.SPAN = 99)] = "SPAN";
+  TAG_ID[(TAG_ID.STRIKE = 100)] = "STRIKE";
+  TAG_ID[(TAG_ID.STRONG = 101)] = "STRONG";
+  TAG_ID[(TAG_ID.STYLE = 102)] = "STYLE";
+  TAG_ID[(TAG_ID.SUB = 103)] = "SUB";
+  TAG_ID[(TAG_ID.SUMMARY = 104)] = "SUMMARY";
+  TAG_ID[(TAG_ID.SUP = 105)] = "SUP";
+  TAG_ID[(TAG_ID.TABLE = 106)] = "TABLE";
+  TAG_ID[(TAG_ID.TBODY = 107)] = "TBODY";
+  TAG_ID[(TAG_ID.TEMPLATE = 108)] = "TEMPLATE";
+  TAG_ID[(TAG_ID.TEXTAREA = 109)] = "TEXTAREA";
+  TAG_ID[(TAG_ID.TFOOT = 110)] = "TFOOT";
+  TAG_ID[(TAG_ID.TD = 111)] = "TD";
+  TAG_ID[(TAG_ID.TH = 112)] = "TH";
+  TAG_ID[(TAG_ID.THEAD = 113)] = "THEAD";
+  TAG_ID[(TAG_ID.TITLE = 114)] = "TITLE";
+  TAG_ID[(TAG_ID.TR = 115)] = "TR";
+  TAG_ID[(TAG_ID.TRACK = 116)] = "TRACK";
+  TAG_ID[(TAG_ID.TT = 117)] = "TT";
+  TAG_ID[(TAG_ID.U = 118)] = "U";
+  TAG_ID[(TAG_ID.UL = 119)] = "UL";
+  TAG_ID[(TAG_ID.SVG = 120)] = "SVG";
+  TAG_ID[(TAG_ID.VAR = 121)] = "VAR";
+  TAG_ID[(TAG_ID.WBR = 122)] = "WBR";
+  TAG_ID[(TAG_ID.XMP = 123)] = "XMP";
+})(TAG_ID || (TAG_ID = {}));
 //@ chunk-6ja29j2n.js:67836-69980 esm-fingerprint
-var St = new Map([
-  [c.A, u.A],
-  [c.ADDRESS, u.ADDRESS],
-  [c.ANNOTATION_XML, u.ANNOTATION_XML],
-  [c.APPLET, u.APPLET],
-  [c.AREA, u.AREA],
-  [c.ARTICLE, u.ARTICLE],
-  [c.ASIDE, u.ASIDE],
-  [c.B, u.B],
-  [c.BASE, u.BASE],
-  [c.BASEFONT, u.BASEFONT],
-  [c.BGSOUND, u.BGSOUND],
-  [c.BIG, u.BIG],
-  [c.BLOCKQUOTE, u.BLOCKQUOTE],
-  [c.BODY, u.BODY],
-  [c.BR, u.BR],
-  [c.BUTTON, u.BUTTON],
-  [c.CAPTION, u.CAPTION],
-  [c.CENTER, u.CENTER],
-  [c.CODE, u.CODE],
-  [c.COL, u.COL],
-  [c.COLGROUP, u.COLGROUP],
-  [c.DD, u.DD],
-  [c.DESC, u.DESC],
-  [c.DETAILS, u.DETAILS],
-  [c.DIALOG, u.DIALOG],
-  [c.DIR, u.DIR],
-  [c.DIV, u.DIV],
-  [c.DL, u.DL],
-  [c.DT, u.DT],
-  [c.EM, u.EM],
-  [c.EMBED, u.EMBED],
-  [c.FIELDSET, u.FIELDSET],
-  [c.FIGCAPTION, u.FIGCAPTION],
-  [c.FIGURE, u.FIGURE],
-  [c.FONT, u.FONT],
-  [c.FOOTER, u.FOOTER],
-  [c.FOREIGN_OBJECT, u.FOREIGN_OBJECT],
-  [c.FORM, u.FORM],
-  [c.FRAME, u.FRAME],
-  [c.FRAMESET, u.FRAMESET],
-  [c.H1, u.H1],
-  [c.H2, u.H2],
-  [c.H3, u.H3],
-  [c.H4, u.H4],
-  [c.H5, u.H5],
-  [c.H6, u.H6],
-  [c.HEAD, u.HEAD],
-  [c.HEADER, u.HEADER],
-  [c.HGROUP, u.HGROUP],
-  [c.HR, u.HR],
-  [c.HTML, u.HTML],
-  [c.I, u.I],
-  [c.IMG, u.IMG],
-  [c.IMAGE, u.IMAGE],
-  [c.INPUT, u.INPUT],
-  [c.IFRAME, u.IFRAME],
-  [c.KEYGEN, u.KEYGEN],
-  [c.LABEL, u.LABEL],
-  [c.LI, u.LI],
-  [c.LINK, u.LINK],
-  [c.LISTING, u.LISTING],
-  [c.MAIN, u.MAIN],
-  [c.MALIGNMARK, u.MALIGNMARK],
-  [c.MARQUEE, u.MARQUEE],
-  [c.MATH, u.MATH],
-  [c.MENU, u.MENU],
-  [c.META, u.META],
-  [c.MGLYPH, u.MGLYPH],
-  [c.MI, u.MI],
-  [c.MO, u.MO],
-  [c.MN, u.MN],
-  [c.MS, u.MS],
-  [c.MTEXT, u.MTEXT],
-  [c.NAV, u.NAV],
-  [c.NOBR, u.NOBR],
-  [c.NOFRAMES, u.NOFRAMES],
-  [c.NOEMBED, u.NOEMBED],
-  [c.NOSCRIPT, u.NOSCRIPT],
-  [c.OBJECT, u.OBJECT],
-  [c.OL, u.OL],
-  [c.OPTGROUP, u.OPTGROUP],
-  [c.OPTION, u.OPTION],
-  [c.P, u.P],
-  [c.PARAM, u.PARAM],
-  [c.PLAINTEXT, u.PLAINTEXT],
-  [c.PRE, u.PRE],
-  [c.RB, u.RB],
-  [c.RP, u.RP],
-  [c.RT, u.RT],
-  [c.RTC, u.RTC],
-  [c.RUBY, u.RUBY],
-  [c.S, u.S],
-  [c.SCRIPT, u.SCRIPT],
-  [c.SEARCH, u.SEARCH],
-  [c.SECTION, u.SECTION],
-  [c.SELECT, u.SELECT],
-  [c.SOURCE, u.SOURCE],
-  [c.SMALL, u.SMALL],
-  [c.SPAN, u.SPAN],
-  [c.STRIKE, u.STRIKE],
-  [c.STRONG, u.STRONG],
-  [c.STYLE, u.STYLE],
-  [c.SUB, u.SUB],
-  [c.SUMMARY, u.SUMMARY],
-  [c.SUP, u.SUP],
-  [c.TABLE, u.TABLE],
-  [c.TBODY, u.TBODY],
-  [c.TEMPLATE, u.TEMPLATE],
-  [c.TEXTAREA, u.TEXTAREA],
-  [c.TFOOT, u.TFOOT],
-  [c.TD, u.TD],
-  [c.TH, u.TH],
-  [c.THEAD, u.THEAD],
-  [c.TITLE, u.TITLE],
-  [c.TR, u.TR],
-  [c.TRACK, u.TRACK],
-  [c.TT, u.TT],
-  [c.U, u.U],
-  [c.UL, u.UL],
-  [c.SVG, u.SVG],
-  [c.VAR, u.VAR],
-  [c.WBR, u.WBR],
-  [c.XMP, u.XMP],
+var TAG_NAME_TO_ID = new Map([
+  [c.A, TAG_ID.A],
+  [c.ADDRESS, TAG_ID.ADDRESS],
+  [c.ANNOTATION_XML, TAG_ID.ANNOTATION_XML],
+  [c.APPLET, TAG_ID.APPLET],
+  [c.AREA, TAG_ID.AREA],
+  [c.ARTICLE, TAG_ID.ARTICLE],
+  [c.ASIDE, TAG_ID.ASIDE],
+  [c.B, TAG_ID.B],
+  [c.BASE, TAG_ID.BASE],
+  [c.BASEFONT, TAG_ID.BASEFONT],
+  [c.BGSOUND, TAG_ID.BGSOUND],
+  [c.BIG, TAG_ID.BIG],
+  [c.BLOCKQUOTE, TAG_ID.BLOCKQUOTE],
+  [c.BODY, TAG_ID.BODY],
+  [c.BR, TAG_ID.BR],
+  [c.BUTTON, TAG_ID.BUTTON],
+  [c.CAPTION, TAG_ID.CAPTION],
+  [c.CENTER, TAG_ID.CENTER],
+  [c.CODE, TAG_ID.CODE],
+  [c.COL, TAG_ID.COL],
+  [c.COLGROUP, TAG_ID.COLGROUP],
+  [c.DD, TAG_ID.DD],
+  [c.DESC, TAG_ID.DESC],
+  [c.DETAILS, TAG_ID.DETAILS],
+  [c.DIALOG, TAG_ID.DIALOG],
+  [c.DIR, TAG_ID.DIR],
+  [c.DIV, TAG_ID.DIV],
+  [c.DL, TAG_ID.DL],
+  [c.DT, TAG_ID.DT],
+  [c.EM, TAG_ID.EM],
+  [c.EMBED, TAG_ID.EMBED],
+  [c.FIELDSET, TAG_ID.FIELDSET],
+  [c.FIGCAPTION, TAG_ID.FIGCAPTION],
+  [c.FIGURE, TAG_ID.FIGURE],
+  [c.FONT, TAG_ID.FONT],
+  [c.FOOTER, TAG_ID.FOOTER],
+  [c.FOREIGN_OBJECT, TAG_ID.FOREIGN_OBJECT],
+  [c.FORM, TAG_ID.FORM],
+  [c.FRAME, TAG_ID.FRAME],
+  [c.FRAMESET, TAG_ID.FRAMESET],
+  [c.H1, TAG_ID.H1],
+  [c.H2, TAG_ID.H2],
+  [c.H3, TAG_ID.H3],
+  [c.H4, TAG_ID.H4],
+  [c.H5, TAG_ID.H5],
+  [c.H6, TAG_ID.H6],
+  [c.HEAD, TAG_ID.HEAD],
+  [c.HEADER, TAG_ID.HEADER],
+  [c.HGROUP, TAG_ID.HGROUP],
+  [c.HR, TAG_ID.HR],
+  [c.HTML, TAG_ID.HTML],
+  [c.I, TAG_ID.I],
+  [c.IMG, TAG_ID.IMG],
+  [c.IMAGE, TAG_ID.IMAGE],
+  [c.INPUT, TAG_ID.INPUT],
+  [c.IFRAME, TAG_ID.IFRAME],
+  [c.KEYGEN, TAG_ID.KEYGEN],
+  [c.LABEL, TAG_ID.LABEL],
+  [c.LI, TAG_ID.LI],
+  [c.LINK, TAG_ID.LINK],
+  [c.LISTING, TAG_ID.LISTING],
+  [c.MAIN, TAG_ID.MAIN],
+  [c.MALIGNMARK, TAG_ID.MALIGNMARK],
+  [c.MARQUEE, TAG_ID.MARQUEE],
+  [c.MATH, TAG_ID.MATH],
+  [c.MENU, TAG_ID.MENU],
+  [c.META, TAG_ID.META],
+  [c.MGLYPH, TAG_ID.MGLYPH],
+  [c.MI, TAG_ID.MI],
+  [c.MO, TAG_ID.MO],
+  [c.MN, TAG_ID.MN],
+  [c.MS, TAG_ID.MS],
+  [c.MTEXT, TAG_ID.MTEXT],
+  [c.NAV, TAG_ID.NAV],
+  [c.NOBR, TAG_ID.NOBR],
+  [c.NOFRAMES, TAG_ID.NOFRAMES],
+  [c.NOEMBED, TAG_ID.NOEMBED],
+  [c.NOSCRIPT, TAG_ID.NOSCRIPT],
+  [c.OBJECT, TAG_ID.OBJECT],
+  [c.OL, TAG_ID.OL],
+  [c.OPTGROUP, TAG_ID.OPTGROUP],
+  [c.OPTION, TAG_ID.OPTION],
+  [c.P, TAG_ID.P],
+  [c.PARAM, TAG_ID.PARAM],
+  [c.PLAINTEXT, TAG_ID.PLAINTEXT],
+  [c.PRE, TAG_ID.PRE],
+  [c.RB, TAG_ID.RB],
+  [c.RP, TAG_ID.RP],
+  [c.RT, TAG_ID.RT],
+  [c.RTC, TAG_ID.RTC],
+  [c.RUBY, TAG_ID.RUBY],
+  [c.S, TAG_ID.S],
+  [c.SCRIPT, TAG_ID.SCRIPT],
+  [c.SEARCH, TAG_ID.SEARCH],
+  [c.SECTION, TAG_ID.SECTION],
+  [c.SELECT, TAG_ID.SELECT],
+  [c.SOURCE, TAG_ID.SOURCE],
+  [c.SMALL, TAG_ID.SMALL],
+  [c.SPAN, TAG_ID.SPAN],
+  [c.STRIKE, TAG_ID.STRIKE],
+  [c.STRONG, TAG_ID.STRONG],
+  [c.STYLE, TAG_ID.STYLE],
+  [c.SUB, TAG_ID.SUB],
+  [c.SUMMARY, TAG_ID.SUMMARY],
+  [c.SUP, TAG_ID.SUP],
+  [c.TABLE, TAG_ID.TABLE],
+  [c.TBODY, TAG_ID.TBODY],
+  [c.TEMPLATE, TAG_ID.TEMPLATE],
+  [c.TEXTAREA, TAG_ID.TEXTAREA],
+  [c.TFOOT, TAG_ID.TFOOT],
+  [c.TD, TAG_ID.TD],
+  [c.TH, TAG_ID.TH],
+  [c.THEAD, TAG_ID.THEAD],
+  [c.TITLE, TAG_ID.TITLE],
+  [c.TR, TAG_ID.TR],
+  [c.TRACK, TAG_ID.TRACK],
+  [c.TT, TAG_ID.TT],
+  [c.U, TAG_ID.U],
+  [c.UL, TAG_ID.UL],
+  [c.SVG, TAG_ID.SVG],
+  [c.VAR, TAG_ID.VAR],
+  [c.WBR, TAG_ID.WBR],
+  [c.XMP, TAG_ID.XMP],
 ]);
 //@ chunk-6ja29j2n.js:69980-70051 esm-fingerprint
-function x(e) {
-  var t;
-  return (t = St.get(e)) !== null && t !== void 0 ? t : u.UNKNOWN;
+function getTagID(tagName) {
+  var _a;
+  return (_a = TAG_NAME_TO_ID.get(tagName)) !== null && _a !== undefined ? _a : TAG_ID.UNKNOWN;
 }
 //@ chunk-6ja29j2n.js:70051-71013 esm-layout
-var T = u,
-  ge = {
-    [E.HTML]: new Set([
-      T.ADDRESS,
-      T.APPLET,
-      T.AREA,
-      T.ARTICLE,
-      T.ASIDE,
-      T.BASE,
-      T.BASEFONT,
-      T.BGSOUND,
-      T.BLOCKQUOTE,
-      T.BODY,
-      T.BR,
-      T.BUTTON,
-      T.CAPTION,
-      T.CENTER,
-      T.COL,
-      T.COLGROUP,
-      T.DD,
-      T.DETAILS,
-      T.DIR,
-      T.DIV,
-      T.DL,
-      T.DT,
-      T.EMBED,
-      T.FIELDSET,
-      T.FIGCAPTION,
-      T.FIGURE,
-      T.FOOTER,
-      T.FORM,
-      T.FRAME,
-      T.FRAMESET,
-      T.H1,
-      T.H2,
-      T.H3,
-      T.H4,
-      T.H5,
-      T.H6,
-      T.HEAD,
-      T.HEADER,
-      T.HGROUP,
-      T.HR,
-      T.HTML,
-      T.IFRAME,
-      T.IMG,
-      T.INPUT,
-      T.LI,
-      T.LINK,
-      T.LISTING,
-      T.MAIN,
-      T.MARQUEE,
-      T.MENU,
-      T.META,
-      T.NAV,
-      T.NOEMBED,
-      T.NOFRAMES,
-      T.NOSCRIPT,
-      T.OBJECT,
-      T.OL,
-      T.P,
-      T.PARAM,
-      T.PLAINTEXT,
-      T.PRE,
-      T.SCRIPT,
-      T.SECTION,
-      T.SELECT,
-      T.SOURCE,
-      T.STYLE,
-      T.SUMMARY,
-      T.TABLE,
-      T.TBODY,
-      T.TD,
-      T.TEMPLATE,
-      T.TEXTAREA,
-      T.TFOOT,
-      T.TH,
-      T.THEAD,
-      T.TITLE,
-      T.TR,
-      T.TRACK,
-      T.UL,
-      T.WBR,
-      T.XMP,
-    ]),
-    [E.MATHML]: new Set([T.MI, T.MO, T.MN, T.MS, T.MTEXT, T.ANNOTATION_XML]),
-    [E.SVG]: new Set([T.TITLE, T.FOREIGN_OBJECT, T.DESC]),
-    [E.XLINK]: new Set(),
-    [E.XML]: new Set(),
-    [E.XMLNS]: new Set(),
-  },
-  H = new Set([T.H1, T.H2, T.H3, T.H4, T.H5, T.H6]),
-  qa = new Set([c.STYLE, c.SCRIPT, c.XMP, c.IFRAME, c.NOEMBED, c.NOFRAMES, c.PLAINTEXT]);
-
-export { u, x, H, ge };
+var $ = TAG_ID;
+var SPECIAL_ELEMENTS = {
+  [E.HTML]: new Set([
+    $.ADDRESS,
+    $.APPLET,
+    $.AREA,
+    $.ARTICLE,
+    $.ASIDE,
+    $.BASE,
+    $.BASEFONT,
+    $.BGSOUND,
+    $.BLOCKQUOTE,
+    $.BODY,
+    $.BR,
+    $.BUTTON,
+    $.CAPTION,
+    $.CENTER,
+    $.COL,
+    $.COLGROUP,
+    $.DD,
+    $.DETAILS,
+    $.DIR,
+    $.DIV,
+    $.DL,
+    $.DT,
+    $.EMBED,
+    $.FIELDSET,
+    $.FIGCAPTION,
+    $.FIGURE,
+    $.FOOTER,
+    $.FORM,
+    $.FRAME,
+    $.FRAMESET,
+    $.H1,
+    $.H2,
+    $.H3,
+    $.H4,
+    $.H5,
+    $.H6,
+    $.HEAD,
+    $.HEADER,
+    $.HGROUP,
+    $.HR,
+    $.HTML,
+    $.IFRAME,
+    $.IMG,
+    $.INPUT,
+    $.LI,
+    $.LINK,
+    $.LISTING,
+    $.MAIN,
+    $.MARQUEE,
+    $.MENU,
+    $.META,
+    $.NAV,
+    $.NOEMBED,
+    $.NOFRAMES,
+    $.NOSCRIPT,
+    $.OBJECT,
+    $.OL,
+    $.P,
+    $.PARAM,
+    $.PLAINTEXT,
+    $.PRE,
+    $.SCRIPT,
+    $.SECTION,
+    $.SELECT,
+    $.SOURCE,
+    $.STYLE,
+    $.SUMMARY,
+    $.TABLE,
+    $.TBODY,
+    $.TD,
+    $.TEMPLATE,
+    $.TEXTAREA,
+    $.TFOOT,
+    $.TH,
+    $.THEAD,
+    $.TITLE,
+    $.TR,
+    $.TRACK,
+    $.UL,
+    $.WBR,
+    $.XMP,
+  ]),
+  [E.MATHML]: new Set([$.MI, $.MO, $.MN, $.MS, $.MTEXT, $.ANNOTATION_XML]),
+  [E.SVG]: new Set([$.TITLE, $.FOREIGN_OBJECT, $.DESC]),
+  [E.XLINK]: new Set(),
+  [E.XML]: new Set(),
+  [E.XMLNS]: new Set(),
+};
+var H = new Set([$.H1, $.H2, $.H3, $.H4, $.H5, $.H6]);
+var UNESCAPED_TEXT = new Set([c.STYLE, c.SCRIPT, c.XMP, c.IFRAME, c.NOEMBED, c.NOFRAMES, c.PLAINTEXT]);
+export { TAG_ID, getTagID, H, SPECIAL_ELEMENTS };

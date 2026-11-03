@@ -8,231 +8,274 @@
 import { x } from "../../runtime/bun-runtime.js";
 
 //@ chunk-82kqcve8.js:4002-8454 cjs-fingerprint
-var Vpe = x(function (_h, Sr) {
-  function as(e) {
-    return Array.isArray(e) ? e : [e];
+var require_ignore = x(function (cjsExports, cjsModule) {
+  function makeArray(subject) {
+    return Array.isArray(subject) ? subject : [subject];
   }
-  var xd = void 0,
-    po = "",
-    os = " ",
-    fo = "\\",
-    Od = /^\s+$/,
-    Dd = /(?:[^\\]|^)\\$/,
-    Td = /^\\!/,
-    Id = /^\\#/,
-    Fd = /\r?\n/g,
-    $d = /^\.{0,2}\/|^\.{1,2}$/,
-    Ld = /\/$/,
-    Zt = "/",
-    ls = "node-ignore";
-  if (typeof Symbol < "u") ls = Symbol.for("node-ignore");
-  var cs = ls,
-    Qt = (e, n, r) => (Object.defineProperty(e, n, { value: r }), r),
-    Nd = /([0-z])-([0-z])/g,
-    ds = () => !1,
-    Wd = (e) => e.replace(Nd, (n, r, s) => (r.charCodeAt(0) <= s.charCodeAt(0) ? n : po)),
-    Bd = (e) => {
-      let { length: n } = e;
-      return e.slice(0, n - (n % 2));
-    },
-    jd = [
-      [/^\uFEFF/, () => po],
-      [/((?:\\\\)*?)(\\?\s+)$/, (e, n, r) => n + (r.indexOf("\\") === 0 ? os : po)],
-      [
-        /(\\+?)\s/g,
-        (e, n) => {
-          let { length: r } = n;
-          return n.slice(0, r - (r % 2)) + os;
-        },
-      ],
-      [/[\\$.|*+(){^]/g, (e) => `\\${e}`],
-      [/(?!\\)\?/g, () => "[^/]"],
-      [/^\//, () => "^"],
-      [/\//g, () => "\\/"],
-      [/^\^*\\\*\\\*\\\//, () => "^(?:.*\\/)?"],
-      [
-        /^(?=[^^])/,
-        function () {
-          return !/\/(?!$)/.test(this) ? "(?:^|\\/)" : "^";
-        },
-      ],
-      [/\\\/\\\*\\\*(?=\\\/|$)/g, (e, n, r) => (n + 6 < r.length ? "(?:\\/[^\\/]+)*" : "\\/.+")],
-      [
-        /(^|[^\\]+)(\\\*)+(?=.+)/g,
-        (e, n, r) => {
-          let replaced = r.replace(/\\\*/g, "[^\\/]*");
-          return n + replaced;
-        },
-      ],
-      [/\\\\\\(?=[$.|*+(){^])/g, () => fo],
-      [/\\\\/g, () => fo],
-      [
-        /(\\)?\[([^\]/]*?)(\\*)($|\])/g,
-        (e, n, r, s, h) =>
-          n === fo
-            ? `\\[${r}${Bd(s)}${h}`
-            : h === "]"
-              ? s.length % 2 === 0
-                ? `[${Wd(r)}${s}]`
-                : "[]"
-              : "[]",
-      ],
-      [/(?:[^*])$/, (e) => (/\/$/.test(e) ? `${e}$` : `${e}(?=$|\\/$)`)],
+  var UNDEFINED = undefined;
+  var EMPTY = "";
+  var SPACE = " ";
+  var ESCAPE = "\\";
+  var REGEX_TEST_BLANK_LINE = /^\s+$/;
+  var REGEX_INVALID_TRAILING_BACKSLASH = /(?:[^\\]|^)\\$/;
+  var REGEX_REPLACE_LEADING_EXCAPED_EXCLAMATION = /^\\!/;
+  var REGEX_REPLACE_LEADING_EXCAPED_HASH = /^\\#/;
+  var REGEX_SPLITALL_CRLF = /\r?\n/g;
+  var REGEX_TEST_INVALID_PATH = /^\.{0,2}\/|^\.{1,2}$/;
+  var REGEX_TEST_TRAILING_SLASH = /\/$/;
+  var SLASH = "/";
+  var TMP_KEY_IGNORE = "node-ignore";
+  if (typeof Symbol !== "undefined") TMP_KEY_IGNORE = Symbol.for("node-ignore");
+  var KEY_IGNORE = TMP_KEY_IGNORE;
+  var define = (object, key, value) => {
+    Object.defineProperty(object, key, {
+      value,
+    });
+    return value;
+  };
+  var REGEX_REGEXP_RANGE = /([0-z])-([0-z])/g;
+  var RETURN_FALSE = () => false;
+  var sanitizeRange = (range) =>
+    range.replace(REGEX_REGEXP_RANGE, (match, from, to) =>
+      from.charCodeAt(0) <= to.charCodeAt(0) ? match : EMPTY,
+    );
+  var cleanRangeBackSlash = (slashes) => {
+    let { length } = slashes;
+    return slashes.slice(0, length - (length % 2));
+  };
+  var REPLACERS = [
+    [/^\uFEFF/, () => EMPTY],
+    [/((?:\\\\)*?)(\\?\s+)$/, (_, m1, m2) => m1 + (m2.indexOf("\\") === 0 ? SPACE : EMPTY)],
+    [
+      /(\\+?)\s/g,
+      (_, m1) => {
+        let { length } = m1;
+        return m1.slice(0, length - (length % 2)) + SPACE;
+      },
     ],
-    Ud = /(^|\\\/)?\\\*$/,
-    An = "regex",
-    wr = "checkRegex",
-    ss = "_",
-    Gd = {
-      [An](e, n) {
-        return `${n ? `${n}[^/]+` : "[^/]*"}(?=$|\\/$)`;
+    [/[\\$.|*+(){^]/g, (match) => `\\${match}`],
+    [/(?!\\)\?/g, () => "[^/]"],
+    [/^\//, () => "^"],
+    [/\//g, () => "\\/"],
+    [/^\^*\\\*\\\*\\\//, () => "^(?:.*\\/)?"],
+    [
+      /^(?=[^^])/,
+      function () {
+        return !/\/(?!$)/.test(this) ? "(?:^|\\/)" : "^";
       },
-      [wr](e, n) {
-        return `${n ? `${n}[^/]*` : "[^/]*"}(?=$|\\/$)`;
+    ],
+    [/\\\/\\\*\\\*(?=\\\/|$)/g, (_, index, str) => (index + 6 < str.length ? "(?:\\/[^\\/]+)*" : "\\/.+")],
+    [
+      /(^|[^\\]+)(\\\*)+(?=.+)/g,
+      (_, p1, p2) => {
+        let unescaped = p2.replace(/\\\*/g, "[^\\/]*");
+        return p1 + unescaped;
       },
+    ],
+    [/\\\\\\(?=[$.|*+(){^])/g, () => ESCAPE],
+    [/\\\\/g, () => ESCAPE],
+    [
+      /(\\)?\[([^\]/]*?)(\\*)($|\])/g,
+      (match, leadEscape, range, endEscape, close) =>
+        leadEscape === ESCAPE
+          ? `\\[${range}${cleanRangeBackSlash(endEscape)}${close}`
+          : close === "]"
+            ? endEscape.length % 2 === 0
+              ? `[${sanitizeRange(range)}${endEscape}]`
+              : "[]"
+            : "[]",
+    ],
+    [/(?:[^*])$/, (match) => (/\/$/.test(match) ? `${match}$` : `${match}(?=$|\\/$)`)],
+  ];
+  var REGEX_REPLACE_TRAILING_WILDCARD = /(^|\\\/)?\\\*$/;
+  var MODE_IGNORE = "regex";
+  var MODE_CHECK_IGNORE = "checkRegex";
+  var UNDERSCORE = "_";
+  var TRAILING_WILD_CARD_REPLACERS = {
+    [MODE_IGNORE](_, p1) {
+      return `${p1 ? `${p1}[^/]+` : "[^/]*"}(?=$|\\/$)`;
     },
-    Yd = (e) => jd.reduce((n, [r, s]) => n.replace(r, s.bind(e)), e),
-    br = (e) => typeof e === "string",
-    Vd = (e) => e && br(e) && !Od.test(e) && !Dd.test(e) && e.indexOf("#") !== 0,
-    Kd = (e) => e.split(Fd).filter(Boolean);
-  class us {
-    constructor(e, n, r, s, h, y) {
-      ((this.pattern = e),
-        (this.mark = n),
-        (this.negative = h),
-        Qt(this, "body", r),
-        Qt(this, "ignoreCase", s),
-        Qt(this, "regexPrefix", y));
+    [MODE_CHECK_IGNORE](_, p1) {
+      return `${p1 ? `${p1}[^/]*` : "[^/]*"}(?=$|\\/$)`;
+    },
+  };
+  var makeRegexPrefix = (pattern) =>
+    REPLACERS.reduce((prev, [matcher, replacer]) => prev.replace(matcher, replacer.bind(pattern)), pattern);
+  var isString = (subject) => typeof subject === "string";
+  var checkPattern = (pattern) =>
+    pattern &&
+    isString(pattern) &&
+    !REGEX_TEST_BLANK_LINE.test(pattern) &&
+    !REGEX_INVALID_TRAILING_BACKSLASH.test(pattern) &&
+    pattern.indexOf("#") !== 0;
+  var splitPattern = (pattern) => pattern.split(REGEX_SPLITALL_CRLF).filter(Boolean);
+  class IgnoreRule {
+    constructor(pattern, mark, body, ignoreCase, negative, prefix) {
+      this.pattern = pattern;
+      this.mark = mark;
+      this.negative = negative;
+      define(this, "body", body);
+      define(this, "ignoreCase", ignoreCase);
+      define(this, "regexPrefix", prefix);
     }
     get regex() {
-      let e = ss + An;
-      if (this[e]) return this[e];
-      return this._make(An, e);
+      let key = UNDERSCORE + MODE_IGNORE;
+      if (this[key]) return this[key];
+      return this._make(MODE_IGNORE, key);
     }
     get checkRegex() {
-      let e = ss + wr;
-      if (this[e]) return this[e];
-      return this._make(wr, e);
+      let key = UNDERSCORE + MODE_CHECK_IGNORE;
+      if (this[key]) return this[key];
+      return this._make(MODE_CHECK_IGNORE, key);
     }
-    _make(e, n) {
-      let replaced = this.regexPrefix.replace(Ud, Gd[e]),
-        s = this.ignoreCase ? new RegExp(replaced, "i") : new RegExp(replaced);
-      return Qt(this, n, s);
+    _make(mode, key) {
+      let str = this.regexPrefix.replace(REGEX_REPLACE_TRAILING_WILDCARD, TRAILING_WILD_CARD_REPLACERS[mode]);
+      let regex = this.ignoreCase ? new RegExp(str, "i") : new RegExp(str);
+      return define(this, key, regex);
     }
   }
-  var qd = ({ pattern: pattern, mark: mark }, r) => {
-    let s = !1,
-      h = pattern;
-    if (h.indexOf("!") === 0) ((s = !0), (h = h.substr(1)));
-    h = h.replace(Td, "!").replace(Id, "#");
-    let y = Yd(h);
-    return new us(pattern, mark, h, r, s, y);
-  };
-  class ms {
-    constructor(e) {
-      ((this._ignoreCase = e), (this._rules = []));
+  var createRule = ({ pattern, mark }, ignoreCase) => {
+    let negative = false;
+    let body = pattern;
+    if (body.indexOf("!") === 0) {
+      negative = true;
+      body = body.substr(1);
     }
-    _add(e) {
-      if (e && e[cs]) {
-        ((this._rules = this._rules.concat(e._rules._rules)), (this._added = !0));
+    body = body
+      .replace(REGEX_REPLACE_LEADING_EXCAPED_EXCLAMATION, "!")
+      .replace(REGEX_REPLACE_LEADING_EXCAPED_HASH, "#");
+    let regexPrefix = makeRegexPrefix(body);
+    return new IgnoreRule(pattern, mark, body, ignoreCase, negative, regexPrefix);
+  };
+  class RuleManager {
+    constructor(ignoreCase) {
+      this._ignoreCase = ignoreCase;
+      this._rules = [];
+    }
+    _add(pattern) {
+      if (pattern && pattern[KEY_IGNORE]) {
+        this._rules = this._rules.concat(pattern._rules._rules);
+        this._added = true;
         return;
       }
-      if (br(e)) e = { pattern: e };
-      if (Vd(e.pattern)) {
-        let n = qd(e, this._ignoreCase);
-        ((this._added = !0), this._rules.push(n));
+      if (isString(pattern))
+        pattern = {
+          pattern,
+        };
+      if (checkPattern(pattern.pattern)) {
+        let rule = createRule(pattern, this._ignoreCase);
+        this._added = true;
+        this._rules.push(rule);
       }
     }
-    add(e) {
-      return ((this._added = !1), as(br(e) ? Kd(e) : e).forEach(this._add, this), this._added);
+    add(pattern) {
+      this._added = false;
+      makeArray(isString(pattern) ? splitPattern(pattern) : pattern).forEach(this._add, this);
+      return this._added;
     }
-    test(e, n, r) {
-      let s = !1,
-        h = !1,
-        y;
-      this._rules.forEach((_rule) => {
-        let { negative: negative } = _rule;
-        if ((h === negative && s !== h) || (negative && !s && !h && !n)) return;
-        if (!_rule[r].test(e)) return;
-        ((s = !negative), (h = negative), (y = negative ? xd : _rule));
+    test(e, checkUnignored, mode) {
+      let ignored = false;
+      let unignored = false;
+      let matchedRule;
+      this._rules.forEach((rule) => {
+        let { negative } = rule;
+        if (
+          (unignored === negative && ignored !== unignored) ||
+          (negative && !ignored && !unignored && !checkUnignored)
+        )
+          return;
+        if (!rule[mode].test(e)) return;
+        ignored = !negative;
+        unignored = negative;
+        matchedRule = negative ? UNDEFINED : rule;
       });
-      let w = { ignored: s, unignored: h };
-      if (y) w.rule = y;
-      return w;
+      let ret = {
+        ignored,
+        unignored,
+      };
+      if (matchedRule) ret.rule = matchedRule;
+      return ret;
     }
   }
-  var Xd = (e, n) => {
-      throw new n(e);
-    },
-    lt = (e, n, r) => {
-      if (!br(e)) return r(`path must be a string, but got \`${n}\``, TypeError);
-      if (!e) return r("path must not be empty", TypeError);
-      if (lt.isNotRelative(e))
-        return r(`path should be a \`path.relative()\`d string, but got "${n}"`, RangeError);
-      return !0;
-    },
-    fs = (e) => $d.test(e);
-  lt.isNotRelative = fs;
-  lt.convert = (e) => e;
-  class gs {
-    constructor({ ignorecase: e = !0, ignoreCase: n = e, allowRelativePaths: r = !1 } = {}) {
-      (Qt(this, cs, !0), (this._rules = new ms(n)), (this._strictPathCheck = !r), this._initCache());
+  var throwError = (message, Ctor) => {
+    throw new Ctor(message);
+  };
+  var checkPath = (path, originalPath, doThrow) => {
+    if (!isString(path)) return doThrow(`path must be a string, but got \`${originalPath}\``, TypeError);
+    if (!path) return doThrow("path must not be empty", TypeError);
+    if (checkPath.isNotRelative(path))
+      return doThrow(`path should be a \`path.relative()\`d string, but got "${originalPath}"`, RangeError);
+    return true;
+  };
+  var isNotRelative = (path) => REGEX_TEST_INVALID_PATH.test(path);
+  checkPath.isNotRelative = isNotRelative;
+  checkPath.convert = (p) => p;
+  class Ignore {
+    constructor({ ignorecase = true, ignoreCase = ignorecase, allowRelativePaths = false } = {}) {
+      define(this, KEY_IGNORE, true);
+      this._rules = new RuleManager(ignoreCase);
+      this._strictPathCheck = !allowRelativePaths;
+      this._initCache();
     }
     _initCache() {
-      ((this._ignoreCache = Object.create(null)), (this._testCache = Object.create(null)));
+      this._ignoreCache = Object.create(null);
+      this._testCache = Object.create(null);
     }
-    add(e) {
-      if (this._rules.add(e)) this._initCache();
+    add(pattern) {
+      if (this._rules.add(pattern)) this._initCache();
       return this;
     }
-    addPattern(e) {
-      return this.add(e);
+    addPattern(pattern) {
+      return this.add(pattern);
     }
-    _test(e, n, r, s) {
-      let h = e && lt.convert(e);
-      return (lt(h, e, this._strictPathCheck ? Xd : ds), this._t(h, n, r, s));
+    _test(originalPath, cache, checkUnignored, slices) {
+      let path = originalPath && checkPath.convert(originalPath);
+      checkPath(path, originalPath, this._strictPathCheck ? throwError : RETURN_FALSE);
+      return this._t(path, cache, checkUnignored, slices);
     }
-    checkIgnore(e) {
-      if (!Ld.test(e)) return this.test(e);
-      let filtered = e.split(Zt).filter(Boolean);
-      if ((filtered.pop(), filtered.length)) {
-        let _t = this._t(filtered.join(Zt) + Zt, this._testCache, !0, filtered);
-        if (_t.ignored) return _t;
+    checkIgnore(path) {
+      if (!REGEX_TEST_TRAILING_SLASH.test(path)) return this.test(path);
+      let slices = path.split(SLASH).filter(Boolean);
+      slices.pop();
+      if (slices.length) {
+        let parent = this._t(slices.join(SLASH) + SLASH, this._testCache, true, slices);
+        if (parent.ignored) return parent;
       }
-      return this._rules.test(e, !1, wr);
+      return this._rules.test(path, false, MODE_CHECK_IGNORE);
     }
-    _t(e, n, r, s) {
-      if (e in n) return n[e];
-      if (!s) s = e.split(Zt).filter(Boolean);
-      if ((s.pop(), !s.length)) return (n[e] = this._rules.test(e, r, An));
-      let _t = this._t(s.join(Zt) + Zt, n, r, s);
-      return (n[e] = _t.ignored ? _t : this._rules.test(e, r, An));
+    _t(path, cache, checkUnignored, slices) {
+      if (path in cache) return cache[path];
+      if (!slices) slices = path.split(SLASH).filter(Boolean);
+      slices.pop();
+      if (!slices.length) return (cache[path] = this._rules.test(path, checkUnignored, MODE_IGNORE));
+      let parent = this._t(slices.join(SLASH) + SLASH, cache, checkUnignored, slices);
+      return (cache[path] = parent.ignored ? parent : this._rules.test(path, checkUnignored, MODE_IGNORE));
     }
-    ignores(e) {
-      return this._test(e, this._ignoreCache, !1).ignored;
+    ignores(path) {
+      return this._test(path, this._ignoreCache, false).ignored;
     }
     createFilter() {
-      return (e) => !this.ignores(e);
+      return (path) => !this.ignores(path);
     }
-    filter(e) {
-      return as(e).filter(this.createFilter());
+    filter(paths) {
+      return makeArray(paths).filter(this.createFilter());
     }
-    test(e) {
-      return this._test(e, this._testCache, !0);
+    test(path) {
+      return this._test(path, this._testCache, true);
     }
   }
-  var ho = (e) => new gs(e),
-    Zd = (e) => lt(e && lt.convert(e), e, ds),
-    Jd = () => {
-      let e = (r) => (/^\\\\\?\\/.test(r) || /["<>|\u0000-\u001F]+/u.test(r) ? r : r.replace(/\\/g, "/"));
-      lt.convert = e;
-      let n = /^[a-z]:\//i;
-      lt.isNotRelative = (r) => n.test(r) || fs(r);
-    };
-  Sr.exports = ho;
-  ho.default = ho;
-  Sr.exports.isPathValid = Zd;
-  Qt(Sr.exports, Symbol.for("setupWindows"), Jd);
+  var factory = (options) => new Ignore(options);
+  var isPathValid = (path) => checkPath(path && checkPath.convert(path), path, RETURN_FALSE);
+  var setupWindows = () => {
+    let makePosix = (str) =>
+      /^\\\\\?\\/.test(str) || /["<>|\u0000-\u001F]+/u.test(str) ? str : str.replace(/\\/g, "/");
+    checkPath.convert = makePosix;
+    let REGEX_TEST_WINDOWS_PATH_ABSOLUTE = /^[a-z]:\//i;
+    checkPath.isNotRelative = (path) => REGEX_TEST_WINDOWS_PATH_ABSOLUTE.test(path) || isNotRelative(path);
+  };
+  cjsModule.exports = factory;
+  factory.default = factory;
+  cjsModule.exports.isPathValid = isPathValid;
+  define(cjsModule.exports, Symbol.for("setupWindows"), setupWindows);
 });
-
-export { Vpe };
+export { require_ignore };

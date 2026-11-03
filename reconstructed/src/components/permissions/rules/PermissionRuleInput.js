@@ -8,13 +8,16 @@
  * pieces: chunk-p2qwpk2k.js (2)
  * attribution: placement 1, fingerprint 1
  */
-import { j, y } from "../../../../vendor/react/cjs/react.production.js";
+import { init_react_production, y } from "../../../../vendor/react/cjs/react.production.js";
 import { w } from "../../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../../runtime/bun-runtime.js";
 import { useKeybinding } from "../../../keybindings/useKeybinding.js";
 import { useTerminalSize } from "../../../hooks/useTerminalSize.js";
 import { permissionRuleValueFromString } from "../../../utils/permissions/permissionRuleParser.js";
-import { r, e } from "../../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default_2,
+  jsxProd_default,
+} from "../../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Byline } from "../../design-system/Byline.js";
 import { KeyboardShortcutHint } from "../../design-system/KeyboardShortcutHint.js";
 import { Newline } from "../../../ink/components/Input.js";
@@ -23,124 +26,150 @@ import { formatPermissionRule } from "../../../utils/permissions/disallowedTools
 import { WebFetchTool } from "../../../tools/WebFetchTool/WebFetchTool.js";
 import { BashTool } from "../../../tools/BashTool/BashTool.js";
 import { TextInput } from "../../TextInput.js";
-import { re } from "../../../../vendor/@inquirer/figures/dist/esm/index.js";
+import { figures_default } from "../../../../vendor/@inquirer/figures/dist/esm/index.js";
 import { Dialog } from "../../design-system/Dialog.js";
 
 //@ chunk-p2qwpk2k.js:24428-24432 placement
-j();
+init_react_production();
 //@ chunk-p2qwpk2k.js:24432-25922 fingerprint = PermissionRuleInput (0.585)
-function PermissionRuleInput(t0) {
-  let $ = w(18),
-    { onCancel: onCancel, onSubmit: onSubmit, ruleBehavior: ruleBehavior } = t0,
-    [f, g] = y(""),
-    [v, x] = y(0),
-    c;
-  if ($[0] === MEMO_CACHE_SENTINEL) ((c = { context: "Settings" }), ($[0] = c));
-  else c = $[0];
-  useKeybinding("confirm:no", onCancel, c);
-  let { columns: columns } = useTerminalSize(),
-    textInputColumns = columns - 6,
-    T;
-  if ($[1] !== onSubmit || $[2] !== ruleBehavior)
-    ((T = (value) => {
+function PermissionRuleInput(props) {
+  let $ = w(18);
+  let { onCancel, onSubmit, ruleBehavior } = props;
+  let [inputValue, setInputValue] = y("");
+  let [cursorOffset, setCursorOffset] = y(0);
+  let t1;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    t1 = {
+      context: "Settings",
+    };
+    $[0] = t1;
+  } else t1 = $[0];
+  useKeybinding("confirm:no", onCancel, t1);
+  let { columns } = useTerminalSize();
+  let textInputColumns = columns - 6;
+  let t2;
+  if ($[1] !== onSubmit || $[2] !== ruleBehavior) {
+    t2 = (value) => {
       let trimmedValue = value.trim();
       if (trimmedValue.length === 0) {
         return;
       }
       let ruleValue = permissionRuleValueFromString(trimmedValue);
       onSubmit(ruleValue, ruleBehavior);
-    }),
-      ($[1] = onSubmit),
-      ($[2] = ruleBehavior),
-      ($[3] = T));
-  else T = $[3];
-  let handleSubmit = T;
-  const L = `Add ${ruleBehavior} permission rule`;
-  let B;
-  if ($[4] === MEMO_CACHE_SENTINEL)
-    ((B = r(Byline, {
+    };
+    $[1] = onSubmit;
+    $[2] = ruleBehavior;
+    $[3] = t2;
+  } else t2 = $[3];
+  let handleSubmit = t2;
+  const title = `Add ${ruleBehavior} permission rule`;
+  let inputGuide;
+  if ($[4] === MEMO_CACHE_SENTINEL) {
+    inputGuide = jsxProd_default_2(Byline, {
       children: [
-        e(KeyboardShortcutHint, { chord: "enter", action: "submit" }),
-        e(KeyboardShortcutHint, { chord: "escape", action: "cancel" }),
-      ],
-    })),
-      ($[4] = B));
-  else B = $[4];
-  let Y;
-  if ($[5] === MEMO_CACHE_SENTINEL) ((Y = e(Newline, {})), ($[5] = Y));
-  else Y = $[5];
-  let se, Re;
-  if ($[6] === MEMO_CACHE_SENTINEL)
-    ((se = e(Text, { bold: !0, children: formatPermissionRule({ toolName: WebFetchTool.name }) })),
-      (Re = e(Text, { bold: !1, children: " or " })),
-      ($[6] = se),
-      ($[7] = Re));
-  else ((se = $[6]), (Re = $[7]));
-  let le;
-  if ($[8] === MEMO_CACHE_SENTINEL)
-    ((le = r(Text, {
-      children: [
-        "Permission rules are a tool name, optionally followed by a specifier in parentheses.",
-        Y,
-        "e.g.,",
-        " ",
-        se,
-        Re,
-        e(Text, {
-          bold: !0,
-          children: formatPermissionRule({ toolName: BashTool.name, ruleContent: "ls *" }),
+        jsxProd_default(KeyboardShortcutHint, {
+          chord: "enter",
+          action: "submit",
+        }),
+        jsxProd_default(KeyboardShortcutHint, {
+          chord: "escape",
+          action: "cancel",
         }),
       ],
-    })),
-      ($[8] = le));
-  else le = $[8];
-  let J;
-  if ($[9] !== v || $[10] !== handleSubmit || $[11] !== f || $[12] !== textInputColumns)
-    ((J = r(Box, {
-      flexDirection: "column",
+    });
+    $[4] = inputGuide;
+  } else inputGuide = $[4];
+  let t4;
+  if ($[5] === MEMO_CACHE_SENTINEL) {
+    t4 = jsxProd_default(Newline, {});
+    $[5] = t4;
+  } else t4 = $[5];
+  let t5;
+  let t6;
+  if ($[6] === MEMO_CACHE_SENTINEL) {
+    t5 = jsxProd_default(Text, {
+      bold: true,
+      children: formatPermissionRule({
+        toolName: WebFetchTool.name,
+      }),
+    });
+    t6 = jsxProd_default(Text, {
+      bold: false,
+      children: " or ",
+    });
+    $[6] = t5;
+    $[7] = t6;
+  } else {
+    t5 = $[6];
+    t6 = $[7];
+  }
+  let t7;
+  if ($[8] === MEMO_CACHE_SENTINEL) {
+    t7 = jsxProd_default_2(Text, {
       children: [
-        le,
-        e(Box, {
-          borderDimColor: !0,
-          borderStyle: "round",
-          marginY: 1,
-          paddingLeft: 1,
-          children: e(TextInput, {
-            showCursor: !0,
-            focus: !0,
-            value: f,
-            onChange: g,
-            onSubmit: handleSubmit,
-            placeholder: `Enter permission rule${re.ellipsis}`,
-            columns: textInputColumns,
-            cursorOffset: v,
-            onChangeCursorOffset: x,
+        "Permission rules are a tool name, optionally followed by a specifier in parentheses.",
+        t4,
+        "e.g.,",
+        " ",
+        t5,
+        t6,
+        jsxProd_default(Text, {
+          bold: true,
+          children: formatPermissionRule({
+            toolName: BashTool.name,
+            ruleContent: "ls *",
           }),
         }),
       ],
-    })),
-      ($[9] = v),
-      ($[10] = handleSubmit),
-      ($[11] = f),
-      ($[12] = textInputColumns),
-      ($[13] = J));
-  else J = $[13];
+    });
+    $[8] = t7;
+  } else t7 = $[8];
+  let children;
+  if ($[9] !== cursorOffset || $[10] !== handleSubmit || $[11] !== inputValue || $[12] !== textInputColumns) {
+    children = jsxProd_default_2(Box, {
+      flexDirection: "column",
+      children: [
+        t7,
+        jsxProd_default(Box, {
+          borderDimColor: true,
+          borderStyle: "round",
+          marginY: 1,
+          paddingLeft: 1,
+          children: jsxProd_default(TextInput, {
+            showCursor: true,
+            focus: true,
+            value: inputValue,
+            onChange: setInputValue,
+            onSubmit: handleSubmit,
+            placeholder: `Enter permission rule${figures_default.ellipsis}`,
+            columns: textInputColumns,
+            cursorOffset,
+            onChangeCursorOffset: setCursorOffset,
+          }),
+        }),
+      ],
+    });
+    $[9] = cursorOffset;
+    $[10] = handleSubmit;
+    $[11] = inputValue;
+    $[12] = textInputColumns;
+    $[13] = children;
+  } else children = $[13];
   let K;
-  if ($[14] !== onCancel || $[15] !== L || $[16] !== J)
-    ((K = e(Dialog, {
-      title: L,
-      onCancel: onCancel,
+  if ($[14] !== onCancel || $[15] !== title || $[16] !== children) {
+    K = jsxProd_default(Dialog, {
+      title,
+      onCancel,
       color: "permission",
-      isCancelActive: !1,
-      inputGuide: B,
-      children: J,
-    })),
-      ($[14] = onCancel),
-      ($[15] = L),
-      ($[16] = J),
-      ($[17] = K));
-  else K = $[17];
+      isCancelActive: false,
+      inputGuide,
+      children,
+    });
+    $[14] = onCancel;
+    $[15] = title;
+    $[16] = children;
+    $[17] = K;
+  } else K = $[17];
   return K;
 }
-
 export { PermissionRuleInput };

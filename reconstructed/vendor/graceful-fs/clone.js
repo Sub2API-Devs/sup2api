@@ -8,24 +8,24 @@
 import { x } from "../../runtime/bun-runtime.js";
 
 //@ chunk-bmbhxpfm.js:5806-6170 cjs-fingerprint
-var We = x(function (Zt, $e) {
-  $e.exports = dt;
-  var yt =
+var require_clone = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = clone;
+  var getPrototypeOf =
     Object.getPrototypeOf ||
-    function (e) {
-      return e.__proto__;
+    function (obj) {
+      return obj.__proto__;
     };
-  function dt(e) {
-    if (e === null || typeof e !== "object") return e;
-    if (e instanceof Object) var create = { __proto__: yt(e) };
-    else var create = Object.create(null);
-    return (
-      Object.getOwnPropertyNames(e).forEach(function (n) {
-        Object.defineProperty(create, n, Object.getOwnPropertyDescriptor(e, n));
-      }),
-      create
-    );
+  function clone(obj) {
+    if (obj === null || typeof obj !== "object") return obj;
+    if (obj instanceof Object)
+      var copy = {
+        __proto__: getPrototypeOf(obj),
+      };
+    else var copy = Object.create(null);
+    Object.getOwnPropertyNames(obj).forEach(function (key) {
+      Object.defineProperty(copy, key, Object.getOwnPropertyDescriptor(obj, key));
+    });
+    return copy;
   }
 });
-
-export { We };
+export { require_clone };

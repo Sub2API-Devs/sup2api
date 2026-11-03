@@ -8,7 +8,7 @@
  * pieces: chunk-rw1dvz2v.js (3)
  * attribution: placement 3
  */
-import { due } from "../../services/quotaAutoResume/quotaAutoResume.js";
+import { withQuotaResumeFire } from "../../services/quotaAutoResume/quotaAutoResume.js";
 import {
   isClaudeAISubscriber,
   getClaudeAIOAuthTokens,
@@ -17,9 +17,9 @@ import {
   credentialIsOwnStoredLogin,
 } from "../../utils/auth.js";
 import { getOauthProfileFromOauthToken } from "../../services/oauth/getOauthProfile.js";
-import { fi } from "../../utils/browser.js";
+import { openValidatedUrlSucceeded } from "../../utils/browser.js";
 import { getGatewayAuth } from "../../bootstrap/state.js";
-import { e } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Login, runPostLoginHooks, loginCompletion } from "../../services/oauth/postLoginHooks.js";
 import { logError } from "../../utils/log.js";
 
@@ -31,63 +31,76 @@ function getUpgradeUrl(a) {
 async function call(onDone, context) {
   return callUpgradeFromSurface(onDone, context, "upgrade_command");
 }
+//@ chunk-rw1dvz2v.js:634-2248 placement = call (0.541)
 /**
  * 从不同入口触发 /upgrade（打开升级页并重新登录）。
  */
-//@ chunk-rw1dvz2v.js:634-2248 placement = call (0.541)
-async function callUpgradeFromSurface(a, r, d) {
-  let u = due(a),
-    c = getUpgradeUrl(d);
+async function callUpgradeFromSurface(onDone, r, d) {
+  let u = withQuotaResumeFire(onDone);
+  let upgradeUrl = getUpgradeUrl(d);
   try {
     if (isClaudeAISubscriber()) {
-      let tokens = getClaudeAIOAuthTokens(),
-        s = !1;
+      let tokens = getClaudeAIOAuthTokens();
+      let isMax20x = false;
       if (tokens?.subscriptionType && tokens?.rateLimitTier)
-        s = tokens.subscriptionType === "max" && tokens.rateLimitTier === "default_claude_max_20x";
+        isMax20x = tokens.subscriptionType === "max" && tokens.rateLimitTier === "default_claude_max_20x";
       else if (tokens?.accessToken) {
         let profile = await getOauthProfileFromOauthToken(tokens.accessToken);
-        s =
+        isMax20x =
           profile?.organization?.organization_type === "claude_max" &&
           profile?.organization?.rate_limit_tier === "default_claude_max_20x";
       }
-      if (s) {
-        let o = getUsageCreditsCommand();
-        return (
-          setTimeout(
-            u,
-            0,
-            o
-              ? `You\u2019re already on the highest Max subscription plan. For additional usage, run ${o}.`
-              : "You are already on the highest Max subscription plan. For additional usage, run /login to switch to an API usage-billed account.",
-          ),
-          null
+      if (isMax20x) {
+        let usageCreditsCommand = getUsageCreditsCommand();
+        setTimeout(
+          u,
+          0,
+          usageCreditsCommand
+            ? `You\u2019re already on the highest Max subscription plan. For additional usage, run ${usageCreditsCommand}.`
+            : "You are already on the highest Max subscription plan. For additional usage, run /login to switch to an API usage-billed account.",
         );
+        return null;
       }
-      let i = getOauthAccountInfo()?.billingType;
-      if (credentialIsOwnStoredLogin() && (i === "apple_subscription" || i === "google_play_subscription")) {
-        let o = getUsageCreditsCommand(),
-          p =
-            i === "apple_subscription"
-              ? "Your plan is billed through the App Store. To change it, open Claude for iOS and go to Settings \u2192 Billing. After you change it, run /login here so the new plan takes effect."
-              : "Your plan is billed through Google Play. To change it, open Claude for Android and go to Settings. After you change it, run /login here so the new plan takes effect.";
-        return (setTimeout(u, 0, o ? `${p} For additional usage now, run ${o}.` : p), null);
+      let billingType = getOauthAccountInfo()?.billingType;
+      if (
+        credentialIsOwnStoredLogin() &&
+        (billingType === "apple_subscription" || billingType === "google_play_subscription")
+      ) {
+        let usageCreditsCommand = getUsageCreditsCommand();
+        let p =
+          billingType === "apple_subscription"
+            ? "Your plan is billed through the App Store. To change it, open Claude for iOS and go to Settings \u2192 Billing. After you change it, run /login here so the new plan takes effect."
+            : "Your plan is billed through Google Play. To change it, open Claude for Android and go to Settings. After you change it, run /login here so the new plan takes effect.";
+        setTimeout(
+          u,
+          0,
+          usageCreditsCommand ? `${p} For additional usage now, run ${usageCreditsCommand}.` : p,
+        );
+        return null;
       }
     }
-    await fi(c);
-    let n = getOauthAccountInfo(),
-      m = n && { accountUuid: n.accountUuid, organizationUuid: n.organizationUuid },
-      f = getGatewayAuth();
-    return e(Login, {
+    await openValidatedUrlSucceeded(upgradeUrl);
+    let oauthAccountInfo = getOauthAccountInfo();
+    let previousAccount = oauthAccountInfo && {
+      accountUuid: oauthAccountInfo.accountUuid,
+      organizationUuid: oauthAccountInfo.organizationUuid,
+    };
+    let previousGatewayAuth = getGatewayAuth();
+    return jsxProd_default(Login, {
       startingMessage: "Starting new login following /upgrade. Exit with Ctrl-C to use existing account.",
-      onDone: async (t, s, i) => {
-        let o = await runPostLoginHooks(r, t, { setAppState: i, previousAccount: m, previousGatewayAuth: f });
+      onDone: async (t, s, setAppState) => {
+        let o = await runPostLoginHooks(r, t, {
+          setAppState,
+          previousAccount,
+          previousGatewayAuth,
+        });
         u(...loginCompletion(r, t, o));
       },
     });
   } catch (error) {
-    (logError(error), setTimeout(u, 0, `Failed to open browser. Please visit ${c} to upgrade.`));
+    logError(error);
+    setTimeout(u, 0, `Failed to open browser. Please visit ${upgradeUrl} to upgrade.`);
   }
   return null;
 }
-
 export { callUpgradeFromSurface };

@@ -8,49 +8,57 @@
  * pieces: chunk-cg10fy59.js (6)
  * attribution: placement 3, fingerprint 2, callgraph-witnessed 1
  */
-import { j, qt, yt } from "../../../vendor/react/cjs/react.production.js";
+import { init_react_production, qt, yt } from "../../../vendor/react/cjs/react.production.js";
 import { w } from "../../../vendor/react/compiler-runtime.js";
 import { onTerminalFocusChanged, getTerminalFocused, getTerminalFocus } from "../terminal-focus-state.js";
-import { e } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 
 //@ chunk-cg10fy59.js:390-394 placement
-j();
+init_react_production();
 //@ chunk-cg10fy59.js:394-398 placement
-j();
+init_react_production();
 //@ chunk-cg10fy59.js:398-402 placement
-j();
+init_react_production();
+//@ chunk-cg10fy59.js:402-464 fingerprint = TerminalFocusContext (1)
 /**
  * 终端焦点上下文：isTerminalFocused 与 terminalFocusState。
  */
-//@ chunk-cg10fy59.js:402-464 fingerprint = TerminalFocusContext (1)
-var TerminalFocusContext = qt({ isTerminalFocused: !0, terminalFocusState: "unknown" });
+var TerminalFocusContext_2 = qt({
+  isTerminalFocused: true,
+  terminalFocusState: "unknown",
+});
 //@ chunk-cg10fy59.js:464-501 fingerprint
-TerminalFocusContext.displayName = "TerminalFocusContext";
+TerminalFocusContext_2.displayName = "TerminalFocusContext";
+//@ chunk-cg10fy59.js:501-784 callgraph-witnessed = TerminalFocusProvider (0.835)
 /**
  * 提供终端焦点上下文：订阅 DEC 1004 焦点事件得到的状态（focused/blurred/unknown）。
  */
-//@ chunk-cg10fy59.js:501-784 callgraph-witnessed = TerminalFocusProvider (0.835)
-function TerminalFocusProvider(t0) {
-  let l = w(6),
-    { children: children } = t0,
-    isTerminalFocused = yt(onTerminalFocusChanged, getTerminalFocused),
-    terminalFocusState = yt(onTerminalFocusChanged, getTerminalFocus),
-    i;
-  if (l[0] !== isTerminalFocused || l[1] !== terminalFocusState)
-    ((i = { isTerminalFocused: isTerminalFocused, terminalFocusState: terminalFocusState }),
-      (l[0] = isTerminalFocused),
-      (l[1] = terminalFocusState),
-      (l[2] = i));
-  else i = l[2];
-  let value = i,
-    a;
-  if (l[3] !== children || l[4] !== value)
-    ((a = e(TerminalFocusContext.Provider, { value: value, children: children })),
-      (l[3] = children),
-      (l[4] = value),
-      (l[5] = a));
-  else a = l[5];
-  return a;
+function TerminalFocusProvider(props) {
+  let $ = w(6);
+  let { children } = props;
+  let isTerminalFocused = yt(onTerminalFocusChanged, getTerminalFocused);
+  let terminalFocusState = yt(onTerminalFocusChanged, getTerminalFocus);
+  let t1;
+  if ($[0] !== isTerminalFocused || $[1] !== terminalFocusState) {
+    t1 = {
+      isTerminalFocused,
+      terminalFocusState,
+    };
+    $[0] = isTerminalFocused;
+    $[1] = terminalFocusState;
+    $[2] = t1;
+  } else t1 = $[2];
+  let value = t1;
+  let t2;
+  if ($[3] !== children || $[4] !== value) {
+    t2 = jsxProd_default(TerminalFocusContext_2.Provider, {
+      value,
+      children,
+    });
+    $[3] = children;
+    $[4] = value;
+    $[5] = t2;
+  } else t2 = $[5];
+  return t2;
 }
-
-export { TerminalFocusProvider, TerminalFocusContext };
+export { TerminalFocusProvider, TerminalFocusContext_2 };

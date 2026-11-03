@@ -8,31 +8,46 @@
  * pieces: chunk-e6aww6q8.js (3)
  * attribution: placement 3
  */
-import { isPlainObject as isPlainObject_4 } from "../../utils/isPlainObject.js";
+import { isPlainObject as isPlainObject_5 } from "../../utils/isPlainObject.js";
 
 //@ chunk-e6aww6q8.js:1778957-1779002 placement
-var J8o = ["id", "task_id"],
-  Z8o = ["active_form"];
+/**
+ * TaskUpdate 中任务 id 的别名字段（id、task_id）。
+ */
+var TASK_ID_ALIASES = ["id", "task_id"];
+var ACTIVE_FORM_ALIASES = ["active_form"];
 //@ chunk-e6aww6q8.js:1779002-1779060 placement
-function e7o(e) {
+/**
+ * 判断值是非空字符串（去空白后）。
+ */
+function isNonBlankString(e) {
   return typeof e === "string" && e.trim() !== "";
 }
+//@ chunk-e6aww6q8.js:1779060-1779327 placement
 /**
  * 把别名字段改为 taskId/activeForm。
  */
-//@ chunk-e6aww6q8.js:1779060-1779327 placement
 function normalizeTaskInputAliases(e) {
-  if (!isPlainObject_4(e)) return null;
-  let n = [],
-    r = { ...e },
-    s = [
-      [J8o, "taskId"],
-      [Z8o, "activeForm"],
-    ];
+  if (!isPlainObject_5(e)) return null;
+  let n = [];
+  let r = {
+    ...e,
+  };
+  let s = [
+    [TASK_ID_ALIASES, "taskId"],
+    [ACTIVE_FORM_ALIASES, "activeForm"],
+  ];
   for (let [h, y] of s)
-    for (let S of h) if (S in r && !(y in r) && e7o(r[S])) ((r[y] = r[S]), delete r[S], n.push(`alias_${S}`));
+    for (let S of h)
+      if (S in r && !(y in r) && isNonBlankString(r[S])) {
+        r[y] = r[S];
+        delete r[S];
+        n.push(`alias_${S}`);
+      }
   if (n.length === 0) return null;
-  return { input: r, shapeClass: n.join("+") };
+  return {
+    input: r,
+    shapeClass: n.join("+"),
+  };
 }
-
 export { normalizeTaskInputAliases };

@@ -10,7 +10,7 @@
  */
 import { logError } from "./log.js";
 import { logFeatureBad, logFeatureSad } from "../services/analytics/featureTelemetry.js";
-import { mGe } from "./crossSessionInbound/inboundGate.js";
+import { currentPolicyValue } from "./crossSessionInbound/inboundGate.js";
 import {
   ownMessagingSocket,
   registeredLivePeerForSocket,
@@ -19,7 +19,7 @@ import {
 import { canonicalSocketPath } from "./udsPaths.js";
 import { NOTIFY_IDLE_PEER_FEATURE } from "./concurrentSessions.js";
 import { canReplyToPeerSocket } from "./peerAddress.js";
-import { $ge, u8 } from "./peerMessageHeaders.js";
+import { isPeerAddress, udsAddressFromPath } from "./peerMessageHeaders.js";
 import { getPlatform } from "./platform.js";
 import { createMessageEnvelope } from "./udsMessaging/messageEnvelope.js";
 import {
@@ -33,93 +33,120 @@ import {
   classifyPeerSendError,
   isExpectedSendError,
   staleSocketHint,
-  tsr,
+  inboxFailureHint,
 } from "./udsMessaging/peerGuard.js";
-import { hLe } from "./crossSessionInbound/inboundMode.js";
+import { currentInboundSetting } from "./crossSessionInbound/inboundMode.js";
 import { getIsNonInteractiveSession } from "../bootstrap/state.js";
 import { getHostUid } from "./sandbox/userNamespace.js";
 
 //@ chunk-7bvr1kd2.js:11990-12161 placement
-async function subscribeToPeerIdle(e, r, s, i) {
+async function subscribeToPeerIdle(peerSocket, label, storage, fromMode) {
   try {
-    return await requestPeerIdleNotice(e, r, s, i);
+    return await requestPeerIdleNotice(peerSocket, label, storage, fromMode);
   } catch (error) {
-    return (
-      logError(error),
-      logFeatureBad("cross_session_notify_idle", "subscribe_internal_error"),
-      { ok: !1, reason: "send-failed", error: error }
-    );
+    logError(error);
+    logFeatureBad("cross_session_notify_idle", "subscribe_internal_error");
+    return {
+      ok: false,
+      reason: "send-failed",
+      error,
+    };
   }
 }
+//@ chunk-7bvr1kd2.js:12161-13343 placement
 /**
  * 订阅另一会话的下次空闲通知：检查本端入站策略、收件箱、命名空间、自身目标与对端能力，注册订阅后经 UDS 发送 notify_when_idle；按失败类型（对端不在、发送失败、结果不确定）返回原因。
  */
-//@ chunk-7bvr1kd2.js:12161-13343 placement
 async function requestPeerIdleNotice(peerSocket, label, storage, fromMode) {
-  if (mGe() === "refuse") return t("requester-refuses-inbound");
+  if (currentPolicyValue() === "refuse") return idleSubscribeFailure("requester-refuses-inbound");
   let ownSocket = ownMessagingSocket();
-  if (ownSocket === void 0) return t("no-inbox");
+  if (ownSocket === undefined) return idleSubscribeFailure("no-inbox");
   let namespace = canonicalSocketPath(peerSocket);
-  if (namespace === void 0) return t("unreachable-namespace");
-  if (namespace === canonicalSocketPath(ownSocket)) return t("self-target");
+  if (namespace === undefined) return idleSubscribeFailure("unreachable-namespace");
+  if (namespace === canonicalSocketPath(ownSocket)) return idleSubscribeFailure("self-target");
   let peer;
   try {
     peer = await registeredLivePeerForSocket(peerSocket);
   } catch {
-    peer = void 0;
+    peer = undefined;
   }
-  if (peer !== void 0 && !(peer.features?.includes(NOTIFY_IDLE_PEER_FEATURE) ?? !1))
-    return t("peer-unsupported");
-  if (!canReplyToPeerSocket(ownSocket, namespace, peer?.features, await k()) || !$ge(u8(ownSocket)))
-    return t("unreachable-namespace");
-  let peerPid = getPlatform() !== "windows" ? peer?.pid : void 0,
-    envelope = createMessageEnvelope(),
-    registration = registerIdleSubscription(envelope.msg_id, label, peerSocket);
-  if (!registration.ok) return t(registration.reason === "cap" ? "cap" : "unreachable-namespace");
+  if (peer !== undefined && !(peer.features?.includes(NOTIFY_IDLE_PEER_FEATURE) ?? false))
+    return idleSubscribeFailure("peer-unsupported");
+  if (
+    !canReplyToPeerSocket(ownSocket, namespace, peer?.features, await currentUserUids()) ||
+    !isPeerAddress(udsAddressFromPath(ownSocket))
+  )
+    return idleSubscribeFailure("unreachable-namespace");
+  let peerPid = getPlatform() !== "windows" ? peer?.pid : undefined;
+  let envelope = createMessageEnvelope();
+  let registration = registerIdleSubscription(envelope.msg_id, label, peerSocket);
+  if (!registration.ok)
+    return idleSubscribeFailure(registration.reason === "cap" ? "cap" : "unreachable-namespace");
   let priors = registration.priors;
   try {
-    return (
-      await sendStampedControlToUdsSocket(
-        peerSocket,
-        {
-          action: "notify_when_idle",
-          from: u8(ownSocket),
-          ...(fromMode !== void 0 && { from_mode: fromMode }),
-        },
-        envelope,
-        { ...(peerPid !== void 0 && { expectPeerPid: peerPid }), storageV5: storage },
-      ),
-      { ok: !0, peerKnownCapable: peer !== void 0 }
+    await sendStampedControlToUdsSocket(
+      peerSocket,
+      {
+        action: "notify_when_idle",
+        from: udsAddressFromPath(ownSocket),
+        ...(fromMode !== undefined && {
+          from_mode: fromMode,
+        }),
+      },
+      envelope,
+      {
+        ...(peerPid !== undefined && {
+          expectPeerPid: peerPid,
+        }),
+        storageV5: storage,
+      },
     );
+    return {
+      ok: true,
+      peerKnownCapable: peer !== undefined,
+    };
   } catch (error) {
     if (classifyPeerSendError(error) === "gone") {
       forgetIdleSubscription(envelope.msg_id);
-      for (let p of priors) forgetIdleSubscription(p);
-      return (
-        logFeatureBad("cross_session_notify_idle", "subscribe_peer_gone"),
-        { ok: !1, reason: "peer-gone", error: error }
-      );
+      for (let prior of priors) forgetIdleSubscription(prior);
+      logFeatureBad("cross_session_notify_idle", "subscribe_peer_gone");
+      return {
+        ok: false,
+        reason: "peer-gone",
+        error,
+      };
     }
     if (isExpectedSendError(error)) {
       forgetIdleSubscription(envelope.msg_id);
       let any = priors.some(hasOutstandingIdleSubscription);
-      return (
-        logFeatureBad("cross_session_notify_idle", "subscribe_send_failed"),
-        { ok: !1, reason: "send-failed", ...(any && { restoredEarlier: !0 }), error: error }
-      );
+      logFeatureBad("cross_session_notify_idle", "subscribe_send_failed");
+      return {
+        ok: false,
+        reason: "send-failed",
+        ...(any && {
+          restoredEarlier: true,
+        }),
+        error,
+      };
     }
-    return (
-      logFeatureSad("cross_session_notify_idle", "subscribe_send_uncertain"),
-      { ok: !1, reason: "send-uncertain", error: error }
-    );
+    logFeatureSad("cross_session_notify_idle", "subscribe_send_uncertain");
+    return {
+      ok: false,
+      reason: "send-uncertain",
+      error,
+    };
   }
 }
 //@ chunk-7bvr1kd2.js:13343-13417 placement
-function t(e) {
-  return (
-    logFeatureSad("cross_session_notify_idle", IDLE_SUBSCRIBE_FAILURE_EVENTS[e]),
-    { ok: !1, reason: e }
-  );
+/**
+ * 构造空闲订阅失败结果，并上报命中的失败原因。
+ */
+function idleSubscribeFailure(e) {
+  logFeatureSad("cross_session_notify_idle", IDLE_SUBSCRIBE_FAILURE_EVENTS[e]);
+  return {
+    ok: false,
+    reason: e,
+  };
 }
 //@ chunk-7bvr1kd2.js:13417-13551 placement
 function idleSelfTargetMessage(e) {
@@ -134,15 +161,15 @@ var IDLE_SUBSCRIBE_FAILURE_EVENTS = {
   "peer-unsupported": "subscribe_peer_unsupported",
   cap: "subscribe_cap",
 };
+//@ chunk-7bvr1kd2.js:13821-15391 placement
 /**
  * 生成订阅成功后给模型的说明：对端能力未知时提示可能收不到；按本端入站策略说明通知是直接送达、只记录还是展示给用户。
  */
-//@ chunk-7bvr1kd2.js:13821-15391 placement
-function describeIdleSubscription(peer, capabilityKnown = !0) {
+function describeIdleSubscription(peer, capabilityKnown = true) {
   let label = safeIdleLabel(peer);
   if (!capabilityKnown)
     return `Subscription sent to "${label}" \u2014 but whether it supports idle notices is unknown (no readable session-registry record vouches for it), so a notice may never come; you will be told if it lapses unheard. Do not rely on it.`;
-  let policy = hLe();
+  let policy = currentInboundSetting();
   if (policy === "accept")
     return `Subscribed \u2014 you will get one notice here when "${label}" is next idle (or exits). Do not poll or wait for it; carry on.`;
   let isNonInteractive = getIsNonInteractiveSession();
@@ -152,14 +179,14 @@ function describeIdleSubscription(peer, capabilityKnown = !0) {
       : `Subscribed \u2014 "${label}" will send one notice when it is next idle (or exits); this session holds ALL inbound peer traffic (crossSessionInbound: hold), so it will be shown to your user in the transcript, not delivered to you. Carry on; do not poll.`;
   let sameClassNote =
     "that session runs in the same permission class as this one (or is one this session spawned)";
-  return mGe() === "accept"
+  return currentPolicyValue() === "accept"
     ? `Subscribed \u2014 you will get one notice here when "${label}" is next idle (or exits), provided ${sameClassNote} or asserts none; otherwise it is ${isNonInteractive ? "only logged here" : "shown to your user in the transcript"}. Do not poll or wait for it; carry on.`
     : `Subscribed \u2014 "${label}" will send one notice when it is next idle (or exits). It is delivered to you if ${sameClassNote}; otherwise it is ${isNonInteractive ? "only logged here" : "shown to your user in the transcript"} (this session holds other inbound peer traffic). Carry on; do not poll.`;
 }
+//@ chunk-7bvr1kd2.js:15391-17127 placement
 /**
  * 按订阅失败原因生成给模型的说明（无收件箱、自身、拒收入站、命名空间不可达、对端不支持、超上限、对端不在、发送失败或不确定）。
  */
-//@ chunk-7bvr1kd2.js:15391-17127 placement
 function describeIdleSubscribeFailure(result, peer) {
   if (result.ok) return "";
   switch (result.reason) {
@@ -178,7 +205,7 @@ function describeIdleSubscribeFailure(result, peer) {
     case "peer-gone":
       return `notify_when_idle: no session is listening at that address any more; nothing was subscribed, and any earlier idle subscription to it is void${staleSocketHint(peer)}`;
     case "send-failed": {
-      let busyNote = classifyPeerSendError(result.error) === "busy" ? tsr(result.error) : ".";
+      let busyNote = classifyPeerSendError(result.error) === "busy" ? inboxFailureHint(result.error) : ".";
       return result.restoredEarlier
         ? `notify_when_idle: the re-subscribe could not be sent; your earlier idle subscription to that session still stands${busyNote}`
         : `notify_when_idle: the subscription could not be sent \u2014 no notice will arrive${busyNote}`;
@@ -187,10 +214,10 @@ function describeIdleSubscribeFailure(result, peer) {
       return "notify_when_idle: sending the subscription did not complete cleanly, so it is unknown whether that session recorded it \u2014 a notice may or may not arrive. Do not rely on it.";
   }
 }
+//@ chunk-7bvr1kd2.js:17127-18125 placement
 /**
  * 生成给用户看的空闲订阅结果说明：成功（对端能力已知或未知）或各类失败原因。
  */
-//@ chunk-7bvr1kd2.js:17127-18125 placement
 function describeIdleSubscribeForUser(peer, result) {
   let label = safeIdleLabel(peer);
   if (result.ok)
@@ -218,20 +245,28 @@ function describeIdleSubscribeForUser(peer, result) {
   }
 }
 //@ chunk-7bvr1kd2.js:18125-18335 placement
-function idleSubscriptionLines(e, r, s) {
+function idleSubscriptionLines(peer, result, peer_2) {
   try {
     return {
-      model: r.ok ? describeIdleSubscription(e, r.peerKnownCapable) : describeIdleSubscribeFailure(r, s),
-      display: describeIdleSubscribeForUser(e, r),
+      model: result.ok
+        ? describeIdleSubscription(peer, result.peerKnownCapable)
+        : describeIdleSubscribeFailure(result, peer_2),
+      display: describeIdleSubscribeForUser(peer, result),
     };
   } catch (error) {
     logError(error);
-    let n = r.ok ? "Idle subscription sent." : "The idle subscription could not be set up.";
-    return { model: n, display: n };
+    let n = result.ok ? "Idle subscription sent." : "The idle subscription could not be set up.";
+    return {
+      model: n,
+      display: n,
+    };
   }
 }
 //@ chunk-7bvr1kd2.js:18335-18417 placement
-async function k() {
+/**
+ * 返回当前用户的 uid 列表（宿主 uid 或进程 uid，取不到为空数组）。
+ */
+async function currentUserUids() {
   let e = (await getHostUid()) ?? process.getuid?.();
-  return e === void 0 ? [] : [e];
+  return e === undefined ? [] : [e];
 }

@@ -9,7 +9,7 @@
  * attribution: fingerprint 1
  */
 import { oauthExpiryWarning } from "./components/LogoV2/Notices.js";
-import { e } from "../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { jsxProd_default } from "../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { OAuthExpiryStatusRow } from "./utils/statusNoticeDefinitions.js";
 
 //@ chunk-ag5x7vhf.js:105590-105693 fingerprint = createRoot (0.306)
@@ -18,7 +18,6 @@ var createRoot = {
   tier: "warning",
   type: "warning",
   isActive: () => oauthExpiryWarning() !== null,
-  render: () => e(OAuthExpiryStatusRow, {}),
+  render: () => jsxProd_default(OAuthExpiryStatusRow, {}),
 };
-
 export { createRoot };

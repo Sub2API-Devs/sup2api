@@ -9,12 +9,12 @@
  * attribution: placement 9
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { Hve, U, o, u, M } from "../../../vendor/zod/v4/classic/schemas.js";
+import { partialRecord, _enum, string, u, M } from "../../../vendor/zod/v4/classic/schemas.js";
 
+//@ chunk-e6aww6q8.js:108297-108553 placement
 /**
  * 会话上下文附件注入原因的枚举（会话开始、压缩、策略刷新、目录添加、设置同步、账号变化、记忆暂停/恢复等）。
  */
-//@ chunk-e6aww6q8.js:108297-108553 placement
 var SESSION_CONTEXT_REASONS = [
   "session_start",
   "compaction",
@@ -31,12 +31,12 @@ var SESSION_CONTEXT_REASONS = [
   "auto_memory_off",
   "auto_memory_back_on",
 ];
+//@ chunk-e6aww6q8.js:108553-109589 placement
 /**
  * 说明会话上下文为何在此刻注入（会话开始、压缩后、托管设置变化等）。
  */
-//@ chunk-e6aww6q8.js:108553-109589 placement
-function describeSessionContextReason(e) {
-  switch (e) {
+function describeSessionContextReason(reason) {
+  switch (reason) {
     case "session_start":
       return "when this session started";
     case "compaction":
@@ -67,18 +67,24 @@ function describeSessionContextReason(e) {
       return "after auto-memory was turned back on for this session";
   }
 }
+//@ chunk-e6aww6q8.js:109589-109773 placement
 /**
  * 会话上下文字段名（用户邮箱、附加项目、git 状态、Perforce 模式）及字段值、原因、日期的 schema。
  */
-//@ chunk-e6aww6q8.js:109589-109773 placement
-var SESSION_CONTEXT_FIELDS = ["userEmail", "attachedProject", "gitStatus", "perforceMode"],
-  sessionContextValuesSchema = DoctorLazy(() => Hve(U(SESSION_CONTEXT_FIELDS), o())),
-  sessionContextReasonSchema = DoctorLazy(() => U(SESSION_CONTEXT_REASONS)),
-  sessionDateSchema = DoctorLazy(() => u({ date: o(), changed: M().optional(), assumedUtc: M().optional() }));
+var SESSION_CONTEXT_FIELDS = ["userEmail", "attachedProject", "gitStatus", "perforceMode"];
+var sessionContextValuesSchema = DoctorLazy(() => partialRecord(_enum(SESSION_CONTEXT_FIELDS), string()));
+var sessionContextReasonSchema = DoctorLazy(() => _enum(SESSION_CONTEXT_REASONS));
+var sessionDateSchema = DoctorLazy(() =>
+  u({
+    date: string(),
+    changed: M().optional(),
+    assumedUtc: M().optional(),
+  }),
+);
+//@ chunk-e6aww6q8.js:109773-110438 placement
 /**
  * 会话上下文重新读取后的提示，新值替换之前公告的值。
  */
-//@ chunk-e6aww6q8.js:109773-110438 placement
 function buildSessionContextRefreshNotice(e, n, r) {
   let flattened = SESSION_CONTEXT_FIELDS.flatMap((y) =>
     e[y]
@@ -98,10 +104,10 @@ ${flattened.join(`
 
 Claude Code attached this context automatically; it isn't part of the user's message. It describes the user's own account and workspace, so they don't need it reported back.`;
 }
+//@ chunk-e6aww6q8.js:110438-111146 placement
 /**
  * 生成日期提示：UTC 日期与用户本地日期可能不同。
  */
-//@ chunk-e6aww6q8.js:110438-111146 placement
 function buildDateNotice(e) {
   if (e.assumedUtc)
     return e.changed
@@ -112,25 +118,36 @@ function buildDateNotice(e) {
     : `Today's date is ${e.date}.`;
 }
 //@ chunk-e6aww6q8.js:111146-111199 placement
-function aVs(e, n) {
-  return SESSION_CONTEXT_FIELDS.every((r) => e[r] === n[r]);
+/**
+ * 判断两组会话上下文值是否完全相同。
+ */
+function sameSessionContextValues(sessionContextAttachmentData, n) {
+  return SESSION_CONTEXT_FIELDS.every((r) => sessionContextAttachmentData[r] === n[r]);
 }
 //@ chunk-e6aww6q8.js:111199-111283 placement
-function Hio(e) {
+/**
+ * 判断消息是否为会话上下文附件。
+ */
+function isSessionContextAttachment(e) {
   return e.type === "attachment" && e.attachment.type === "session_context";
 }
 //@ chunk-e6aww6q8.js:111283-111356 placement
-function Bio(e) {
+/**
+ * 判断消息是否为日期附件。
+ */
+function isDateAttachment(e) {
   return e.type === "attachment" && e.attachment.type === "date";
 }
 //@ chunk-e6aww6q8.js:111436-111514 placement
-function lVs(e) {
-  return sessionDateSchema().safeParse(e.findLast(Bio)?.attachment).data?.date;
+/**
+ * 取最近一次日期附件里的日期。
+ */
+function lastSessionDate(e) {
+  return sessionDateSchema().safeParse(e.findLast(isDateAttachment)?.attachment).data?.date;
 }
-
 export {
   sessionContextValuesSchema,
-  Hio,
+  isSessionContextAttachment,
   buildSessionContextRefreshNotice,
   sessionContextReasonSchema,
   sessionDateSchema,
@@ -138,6 +155,6 @@ export {
   SESSION_CONTEXT_REASONS,
   describeSessionContextReason,
   SESSION_CONTEXT_FIELDS,
-  aVs,
-  lVs,
+  sameSessionContextValues,
+  lastSessionDate,
 };

@@ -11,10 +11,10 @@
 import { isDiffPaneAvailable } from "../../plugins/bundled/diffPane/index.js";
 import { resolveRenderMode, isFullscreenEnvEnabled } from "../../utils/fullscreen.js";
 
+//@ chunk-e6aww6q8.js:1695347-1695654 fingerprint = default (0.51)
 /**
  * /diff 命令对象（local-jsx）；描述：{return m_n(wd()?"fullscreen":"inline")==="fullscreen"?"Toggle the diff panel showing uncommitted changes":"View uncommitted changes and per；isEnabled: ()=>!Q7n()；实现 chunk-19av2vh6.js 的 C。
  */
-//@ chunk-e6aww6q8.js:1695347-1695654 fingerprint = default (0.51)
 var diffCommand = {
   type: "local-jsx",
   name: "diff",
@@ -27,5 +27,4 @@ var diffCommand = {
   immediate: (args, presentation) => resolveRenderMode(presentation) === "fullscreen",
   thinClientDispatch: "control-request",
 };
-
 export { diffCommand };

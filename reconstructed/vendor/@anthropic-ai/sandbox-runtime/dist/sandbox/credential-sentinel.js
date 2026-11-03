@@ -5,61 +5,67 @@
  * pieces: chunk-fq0cr76a.js (3)
  * attribution: esm-fingerprint 3
  */
-import {
-  randomUUID,
-  randomUUID as randomUUID_2,
-  randomUUID as randomUUID_3,
-  randomBytes,
-  randomBytes as randomBytes_2,
-  randomBytes as randomBytes_3,
-  randomBytes as randomBytes_4,
-  randomBytes as randomBytes_5,
-} from "crypto";
+import { randomUUID, randomBytes } from "crypto";
 
 //@ chunk-fq0cr76a.js:705621-705686 esm-fingerprint
-var FAKE_VALUE = "fake_value_",
-  ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 = "abcdefghijklmnopqrstuvwxyz0123456789_-";
+var SENTINEL_PREFIX = "fake_value_";
+var SENTINEL_ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789_-";
 //@ chunk-fq0cr76a.js:705686-705819 esm-fingerprint
-function WH(e) {
-  let n = FAKE_VALUE + randomUUID(),
-    r = Buffer.byteLength(e) - n.length;
-  if (r <= 0) return n;
-  let s = n;
-  for (let h of randomBytes(r))
-    s += ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789[h % ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.length];
-  return s;
+function mintSentinel(realValue) {
+  let base = SENTINEL_PREFIX + randomUUID();
+  let pad = Buffer.byteLength(realValue) - base.length;
+  if (pad <= 0) return base;
+  let out = base;
+  for (let b of randomBytes(pad)) out += SENTINEL_ALPHABET[b % SENTINEL_ALPHABET.length];
+  return out;
 }
 //@ chunk-fq0cr76a.js:705819-707338 esm-fingerprint
-class RE {
+class SentinelRegistry {
   constructor() {
-    ((this.byName = new Map()), (this.bySentinel = new Map()), (this.allSentinelsPrefixed = !0));
+    this.byName = new Map();
+    this.bySentinel = new Map();
+    this.allSentinelsPrefixed = true;
   }
-  register(e, n, r) {
-    return this.registerWithSentinel(e, WH(n), n, r);
+  register(name, realValue, injectHosts) {
+    return this.registerWithSentinel(name, mintSentinel(realValue), realValue, injectHosts);
   }
-  registerWithSentinel(e, n, r, s) {
-    let h = this.byName.get(e);
-    if (h !== void 0) return ((h.realValue = r), (h.injectHosts = s), h.sentinel);
-    if (!n.startsWith(FAKE_VALUE)) this.allSentinelsPrefixed = !1;
-    let y = { name: e, sentinel: n, realValue: r, injectHosts: s };
-    return (this.byName.set(e, y), this.bySentinel.set(n, y), n);
-  }
-  lookupReal(e) {
-    return this.bySentinel.get(e)?.realValue;
-  }
-  namesInjectableAt(e, n) {
-    let r = [];
-    for (let s of this.byName.values())
-      if (s.injectHosts.some((injectHost) => n(e, injectHost))) r.push(s.name);
-    return r;
-  }
-  sentinelsForHost(e, n) {
-    let r = [];
-    for (let s of this.bySentinel.values()) {
-      if (!s.injectHosts.some((injectHost) => n(e, injectHost))) continue;
-      r.push({ sentinel: Buffer.from(s.sentinel), realValue: Buffer.from(s.realValue) });
+  registerWithSentinel(name, sentinel, realValue, injectHosts) {
+    let existing = this.byName.get(name);
+    if (existing !== undefined) {
+      existing.realValue = realValue;
+      existing.injectHosts = injectHosts;
+      return existing.sentinel;
     }
-    return r;
+    if (!sentinel.startsWith(SENTINEL_PREFIX)) this.allSentinelsPrefixed = false;
+    let entry = {
+      name,
+      sentinel,
+      realValue,
+      injectHosts,
+    };
+    this.byName.set(name, entry);
+    this.bySentinel.set(sentinel, entry);
+    return sentinel;
+  }
+  lookupReal(sentinel) {
+    return this.bySentinel.get(sentinel)?.realValue;
+  }
+  namesInjectableAt(destHost, matches) {
+    let names = [];
+    for (let e of this.byName.values())
+      if (e.injectHosts.some((p) => matches(destHost, p))) names.push(e.name);
+    return names;
+  }
+  sentinelsForHost(destHost, matches) {
+    let pairs = [];
+    for (let e of this.bySentinel.values()) {
+      if (!e.injectHosts.some((p) => matches(destHost, p))) continue;
+      pairs.push({
+        sentinel: Buffer.from(e.sentinel),
+        realValue: Buffer.from(e.realValue),
+      });
+    }
+    return pairs;
   }
   *entries() {
     for (let e of this.bySentinel.values()) yield [e.sentinel, e.realValue];
@@ -68,26 +74,29 @@ class RE {
     return this.bySentinel.size;
   }
   clear() {
-    (this.byName.clear(), this.bySentinel.clear(), (this.allSentinelsPrefixed = !0));
+    this.byName.clear();
+    this.bySentinel.clear();
+    this.allSentinelsPrefixed = true;
   }
-  substituteInHeaders(e, n, r) {
+  substituteInHeaders(headers, destHost, matches) {
     if (this.bySentinel.size === 0) return;
-    for (let [s, h] of Object.entries(e)) {
-      if (h === void 0) continue;
-      if (Array.isArray(h)) for (let y = 0; y < h.length; y++) h[y] = this.substituteInString(h[y], n, r);
-      else e[s] = this.substituteInString(h, n, r);
+    for (let [name, value] of Object.entries(headers)) {
+      if (value === undefined) continue;
+      if (Array.isArray(value))
+        for (let i = 0; i < value.length; i++)
+          value[i] = this.substituteInString(value[i], destHost, matches);
+      else headers[name] = this.substituteInString(value, destHost, matches);
     }
   }
-  substituteInString(e, n, r) {
-    if (this.allSentinelsPrefixed && !e.includes(FAKE_VALUE)) return e;
-    let s = e;
-    for (let h of this.bySentinel.values()) {
-      if (!s.includes(h.sentinel)) continue;
-      if (!h.injectHosts.some((injectHost) => r(n, injectHost))) continue;
-      s = s.split(h.sentinel).join(h.realValue);
+  substituteInString(s_2, destHost, matches) {
+    if (this.allSentinelsPrefixed && !s_2.includes(SENTINEL_PREFIX)) return s_2;
+    let out = s_2;
+    for (let e of this.bySentinel.values()) {
+      if (!out.includes(e.sentinel)) continue;
+      if (!e.injectHosts.some((p) => matches(destHost, p))) continue;
+      out = out.split(e.sentinel).join(e.realValue);
     }
-    return s;
+    return out;
   }
 }
-
-export { RE, FAKE_VALUE };
+export { SentinelRegistry, SENTINEL_PREFIX };

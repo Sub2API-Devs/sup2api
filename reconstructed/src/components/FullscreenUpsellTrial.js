@@ -8,11 +8,16 @@
  * pieces: chunk-47mye09a.js (7)
  * attribution: placement 7
  */
-import { j, P } from "../../vendor/react/cjs/react.production.js";
-import { Cr } from "../state/AppState.js";
-import { Nu } from "../context/QueuedMessageContext.js";
+import { init_react_production, P } from "../../vendor/react/cjs/react.production.js";
+import { useAppStoreDirect } from "../state/AppState.js";
+import { useCommandQueueOrDefault } from "../context/QueuedMessageContext.js";
 import { saveGlobalConfig, getGlobalConfig } from "../utils/config.js";
-import { I2t, SZn, P2t, isFullscreenEnvEnabled } from "../utils/fullscreen.js";
+import {
+  MAX_FULLSCREEN_UPSELL_SHOWS,
+  currentFullscreenTrialState,
+  resolveFullscreenMode,
+  isFullscreenEnvEnabled,
+} from "../utils/fullscreen.js";
 import { getInitialSettings_2, updateSettingsForSourceWithTransform } from "../utils/settings/settings.js";
 import { logForDebugging } from "../utils/debug.js";
 import { logError } from "../utils/log.js";
@@ -20,85 +25,108 @@ import { logFeatureSad, logFeatureOk } from "../services/analytics/featureTeleme
 import { logEvent } from "../services/analytics/index.js";
 
 //@ chunk-47mye09a.js:1004-1008 placement
-j();
+init_react_production();
 //@ chunk-47mye09a.js:1008-1063 placement
-function y$n() {
-  let e = Cr(),
-    r = Nu();
+/**
+ * 函数 noopTrialEffect（空 effect）。
+ */
+function noopTrialEffect() {
+  let appStoreDirect = useAppStoreDirect();
+  let commandQueueOrDefault = useCommandQueueOrDefault();
   P(() => {
     return;
-  }, [e, r]);
+  }, [appStoreDirect, commandQueueOrDefault]);
 }
 //@ chunk-47mye09a.js:1063-1108 placement
-var vRs = { CLAUDE_CODE_TUI_TRIAL: "fullscreen" };
+/**
+ * 导出值：TRIAL_ENV（CLAUDE_CODE_TUI_TRIAL=fullscreen）。
+ */
+var TRIAL_ENV = {
+  CLAUDE_CODE_TUI_TRIAL: "fullscreen",
+};
 //@ chunk-47mye09a.js:1108-1208 placement
 function recordUpsellSeenCount(e, r) {
   saveGlobalConfig(
-    (n) => ((n.fullscreenUpsellSeenCount ?? 0) >= e ? n : { ...n, fullscreenUpsellSeenCount: e }),
+    (n) =>
+      (n.fullscreenUpsellSeenCount ?? 0) >= e
+        ? n
+        : {
+            ...n,
+            fullscreenUpsellSeenCount: e,
+          },
     r,
   );
 }
 //@ chunk-47mye09a.js:1208-1233 placement
-function LTr(e) {
-  recordUpsellSeenCount(I2t, e);
+/**
+ * 函数 setTrialFlag（写入试用标记）。
+ */
+function setTrialFlag(storageV5) {
+  recordUpsellSeenCount(MAX_FULLSCREEN_UPSELL_SHOWS, storageV5);
 }
+//@ chunk-47mye09a.js:1233-1413 placement
 /**
  * 取本会话的全屏推荐展示序号（全局计数加一，受上限），首次计算时写回全局配置。
  */
-//@ chunk-47mye09a.js:1233-1413 placement
-function getFullscreenUpsellImpression(e) {
-  let r = SZn();
-  if (r.upsellImpression !== void 0) return r.upsellImpression;
-  let min = Math.min((getGlobalConfig().fullscreenUpsellSeenCount ?? 0) + 1, I2t);
-  return ((r.upsellImpression = min), recordUpsellSeenCount(min, e), min);
+function getFullscreenUpsellImpression(storageV5) {
+  let r = currentFullscreenTrialState();
+  if (r.upsellImpression !== undefined) return r.upsellImpression;
+  let min = Math.min((getGlobalConfig().fullscreenUpsellSeenCount ?? 0) + 1, MAX_FULLSCREEN_UPSELL_SHOWS);
+  r.upsellImpression = min;
+  recordUpsellSeenCount(min, storageV5);
+  return min;
 }
+//@ chunk-47mye09a.js:1413-2287 placement
 /**
  * 全屏试用正常时把 settings.tui=fullscreen 写入用户设置；试用期间用户已显式设置或本会话未全屏时不写。
  */
-//@ chunk-47mye09a.js:1413-2287 placement
-async function persistFullscreenTrial(e) {
-  let trialState = SZn();
-  if (trialState.persisted || P2t() !== "fullscreen") return !1;
-  if (getInitialSettings_2().tui !== void 0)
-    return (
-      logForDebugging(
-        "fullscreen trial: settings.tui was set explicitly during the trial \u2014 not persisting",
-      ),
-      !1
+async function persistFullscreenTrial(storageV5) {
+  let trialState = currentFullscreenTrialState();
+  if (trialState.persisted || resolveFullscreenMode() !== "fullscreen") return false;
+  if (getInitialSettings_2().tui !== undefined) {
+    logForDebugging(
+      "fullscreen trial: settings.tui was set explicitly during the trial \u2014 not persisting",
     );
-  if (!isFullscreenEnvEnabled())
-    return (
-      logForDebugging(
-        "fullscreen trial: renderer is not fullscreen this session (auto-off) \u2014 not persisting",
-      ),
-      !1
+    return false;
+  }
+  if (!isFullscreenEnvEnabled()) {
+    logForDebugging(
+      "fullscreen trial: renderer is not fullscreen this session (auto-off) \u2014 not persisting",
     );
-  let tuiAlreadySet = !1,
-    { error: error } = await updateSettingsForSourceWithTransform(
-      "userSettings",
-      (i) => ((tuiAlreadySet = i?.tui !== void 0), tuiAlreadySet ? null : { tui: "fullscreen" }),
-      void 0,
-      e,
-    );
-  if (error)
-    return (logError(error), logFeatureSad("tui_fullscreen_upsell_trial", "settings_write_failed"), !1);
-  if (tuiAlreadySet)
-    return (
-      logForDebugging(
-        "fullscreen trial: settings.tui was set explicitly during the trial (seen inside the queued write) \u2014 not persisting",
-      ),
-      !1
-    );
-  return (
-    LTr(e),
-    (trialState.persisted = !0),
-    logFeatureOk("tui_fullscreen_upsell_trial"),
-    logEvent("tengu_fullscreen_upsell_trial_persisted", {
-      session_age_ms: Math.round(process.uptime() * 1000),
-    }),
-    logForDebugging("fullscreen trial: healthy \u2014 persisted settings.tui=fullscreen"),
-    !0
+    return false;
+  }
+  let tuiAlreadySet = false;
+  let { error } = await updateSettingsForSourceWithTransform(
+    "userSettings",
+    (i) => {
+      tuiAlreadySet = i?.tui !== undefined;
+      return tuiAlreadySet
+        ? null
+        : {
+            tui: "fullscreen",
+          };
+    },
+    undefined,
+    storageV5,
   );
+  if (error) {
+    logError(error);
+    logFeatureSad("tui_fullscreen_upsell_trial", "settings_write_failed");
+    return false;
+  }
+  if (tuiAlreadySet) {
+    logForDebugging(
+      "fullscreen trial: settings.tui was set explicitly during the trial (seen inside the queued write) \u2014 not persisting",
+    );
+    return false;
+  }
+  setTrialFlag(storageV5);
+  trialState.persisted = true;
+  logFeatureOk("tui_fullscreen_upsell_trial");
+  logEvent("tengu_fullscreen_upsell_trial_persisted", {
+    session_age_ms: Math.round(process.uptime() * 1000),
+  });
+  logForDebugging("fullscreen trial: healthy \u2014 persisted settings.tui=fullscreen");
+  return true;
 }
-
-export { getFullscreenUpsellImpression, LTr, vRs, y$n, persistFullscreenTrial };
+export { getFullscreenUpsellImpression, setTrialFlag, TRIAL_ENV, noopTrialEffect, persistFullscreenTrial };

@@ -5,32 +5,34 @@
  * pieces: chunk-hwmsct5x.js (5)
  * attribution: esm-layout 2, esm-fingerprint 3
  */
-
 //@ chunk-hwmsct5x.js:17462-17589 esm-layout
-var abortListenerCleanups = new WeakMap(),
-  Gl =
-    typeof globalThis.FinalizationRegistry === "function"
-      ? new globalThis.FinalizationRegistry((e) => releaseAbortListener(e))
-      : null;
+var abortListenerCleanups = new WeakMap();
+var registry =
+  typeof globalThis.FinalizationRegistry === "function"
+    ? new globalThis.FinalizationRegistry((controller) => releaseAbortListener(controller))
+    : null;
 //@ chunk-hwmsct5x.js:17589-17649 esm-fingerprint
-function Oh(e, n) {
-  return () => e.removeEventListener("abort", n);
+function makeCleanup(signal, listener) {
+  return () => signal.removeEventListener("abort", listener);
 }
 //@ chunk-hwmsct5x.js:17649-17686 esm-layout
-function registerAbortListenerCleanup(e, n, r) {
-  abortListenerCleanups.set(e, Oh(n, r));
+function registerAbortListenerCleanup(controller, signal, listener) {
+  abortListenerCleanups.set(controller, makeCleanup(signal, listener));
 }
 //@ chunk-hwmsct5x.js:17686-17736 esm-fingerprint
-function registerFinalizerCleanup(e, n) {
-  if (abortListenerCleanups.has(n)) Gl?.register(e, n, n);
+function registerFinalizerCleanup(body, controller) {
+  if (abortListenerCleanups.has(controller)) registry?.register(body, controller, controller);
 }
+//@ chunk-hwmsct5x.js:17736-17807 esm-fingerprint
 /**
  * 执行并移除某对象登记的 abort 监听清理函数，同时注销 FinalizationRegistry 记录。
  */
-//@ chunk-hwmsct5x.js:17736-17807 esm-fingerprint
-function releaseAbortListener(e) {
-  let n = abortListenerCleanups.get(e);
-  if (n) (abortListenerCleanups.delete(e), Gl?.unregister(e), n());
+function releaseAbortListener(controller) {
+  let cleanup = abortListenerCleanups.get(controller);
+  if (cleanup) {
+    abortListenerCleanups.delete(controller);
+    registry?.unregister(controller);
+    cleanup();
+  }
 }
-
 export { releaseAbortListener, registerFinalizerCleanup, registerAbortListenerCleanup };

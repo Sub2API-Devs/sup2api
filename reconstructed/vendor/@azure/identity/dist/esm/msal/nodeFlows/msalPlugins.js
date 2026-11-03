@@ -5,32 +5,42 @@
  * pieces: chunk-mrx6y2r5.js (4)
  * attribution: esm-layout 2, esm-fingerprint 2
  */
-import { MSAL_CACHE, NOCAE, CAE } from "../../constants.js";
+import { DEFAULT_TOKEN_CACHE_NAME, CACHE_NON_CAE_SUFFIX, CAE } from "../../constants.js";
 
 //@ chunk-mrx6y2r5.js:22705-22719 esm-layout
-var Os = void 0;
+var persistenceProvider = undefined;
 //@ chunk-mrx6y2r5.js:22719-22733 esm-layout
-var Yc = void 0;
+var nativeBrokerInfo = undefined;
 //@ chunk-mrx6y2r5.js:22733-24316 esm-fingerprint
-function hm(e) {
-  var t, r, n, o, i, s, a;
-  let c = {
+function generatePluginConfiguration(options) {
+  var _a;
+  var _b;
+  var _c;
+  var _d;
+  var _e;
+  var _f;
+  var _g;
+  let config = {
     cache: {},
     broker: {
       isEnabled:
-        (r = (t = e.brokerOptions) === null || t === void 0 ? void 0 : t.enabled) !== null && r !== void 0
-          ? r
-          : !1,
+        (_b = (_a = options.brokerOptions) === null || _a === undefined ? undefined : _a.enabled) !== null &&
+        _b !== undefined
+          ? _b
+          : false,
       enableMsaPassthrough:
-        (o = (n = e.brokerOptions) === null || n === void 0 ? void 0 : n.legacyEnableMsaPassthrough) !==
-          null && o !== void 0
-          ? o
-          : !1,
-      parentWindowHandle: (i = e.brokerOptions) === null || i === void 0 ? void 0 : i.parentWindowHandle,
+        (_d =
+          (_c = options.brokerOptions) === null || _c === undefined
+            ? undefined
+            : _c.legacyEnableMsaPassthrough) !== null && _d !== undefined
+          ? _d
+          : false,
+      parentWindowHandle:
+        (_e = options.brokerOptions) === null || _e === undefined ? undefined : _e.parentWindowHandle,
     },
   };
-  if ((s = e.tokenCachePersistenceOptions) === null || s === void 0 ? void 0 : s.enabled) {
-    if (Os === void 0)
+  if ((_f = options.tokenCachePersistenceOptions) === null || _f === undefined ? undefined : _f.enabled) {
+    if (persistenceProvider === undefined)
       throw Error(
         [
           "Persistent token caching was requested, but no persistence provider was configured.",
@@ -39,12 +49,26 @@ function hm(e) {
           "`useIdentityPlugin(cachePersistencePlugin)` before using `tokenCachePersistenceOptions`.",
         ].join(" "),
       );
-    let l = e.tokenCachePersistenceOptions.name || MSAL_CACHE;
-    ((c.cache.cachePlugin = Os(Object.assign({ name: `${l}.${NOCAE}` }, e.tokenCachePersistenceOptions))),
-      (c.cache.cachePluginCae = Os(Object.assign({ name: `${l}.${CAE}` }, e.tokenCachePersistenceOptions))));
+    let cacheBaseName = options.tokenCachePersistenceOptions.name || DEFAULT_TOKEN_CACHE_NAME;
+    config.cache.cachePlugin = persistenceProvider(
+      Object.assign(
+        {
+          name: `${cacheBaseName}.${CACHE_NON_CAE_SUFFIX}`,
+        },
+        options.tokenCachePersistenceOptions,
+      ),
+    );
+    config.cache.cachePluginCae = persistenceProvider(
+      Object.assign(
+        {
+          name: `${cacheBaseName}.${CAE}`,
+        },
+        options.tokenCachePersistenceOptions,
+      ),
+    );
   }
-  if ((a = e.brokerOptions) === null || a === void 0 ? void 0 : a.enabled) {
-    if (Yc === void 0)
+  if ((_g = options.brokerOptions) === null || _g === undefined ? undefined : _g.enabled) {
+    if (nativeBrokerInfo === undefined)
       throw Error(
         [
           "Broker for WAM was requested to be enabled, but no native broker was configured.",
@@ -53,11 +77,12 @@ function hm(e) {
           "`useIdentityPlugin(createNativeBrokerPlugin())` before using `enableBroker`.",
         ].join(" "),
       );
-    c.broker.nativeBrokerPlugin = Yc.broker;
+    config.broker.nativeBrokerPlugin = nativeBrokerInfo.broker;
   }
-  return c;
+  return config;
 }
 //@ chunk-mrx6y2r5.js:24316-24356 esm-fingerprint
-var Wc = { generatePluginConfiguration: hm };
-
-export { Wc };
+var msalPlugins = {
+  generatePluginConfiguration,
+};
+export { msalPlugins };

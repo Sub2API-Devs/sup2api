@@ -9,10 +9,10 @@
  * attribution: placement 1
  */
 
+//@ chunk-1ny7cxrt.js:1457320-1509074 placement
 /**
  * 生成网关协议说明（登录、推理、托管设置等 wire contract）的 Markdown 文本。
  */
-//@ chunk-1ny7cxrt.js:1457320-1509074 placement
 function buildGatewayProtocolDoc(e) {
   let t = e.oidcConfigured
     ? `# Claude Code gateway protocol
@@ -906,5 +906,4 @@ this gateway.
 `
     : t;
 }
-
 export { buildGatewayProtocolDoc };

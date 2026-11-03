@@ -12,8 +12,14 @@ import __cc_resource_0 from "../../../../assets/chart.umd.min.js" with { type: "
 import { readEmbeddedText } from "../../../utils/embeddedAssets.js";
 
 //@ chunk-te2wpq39.js:299-321 placement
-var d = __cc_resource_0;
+/**
+ * 内嵌的图表打包资源
+ */
+var CHART_BUNDLE_RESOURCE = __cc_resource_0;
 //@ chunk-te2wpq39.js:321-368 placement
-function H() {
-  return readEmbeddedText(d, import.meta.dirname);
+/**
+ * 读取内嵌的图表运行时打包文本（chart 插件用）。
+ */
+function loadChartBundle() {
+  return readEmbeddedText(CHART_BUNDLE_RESOURCE, import.meta.dirname);
 }

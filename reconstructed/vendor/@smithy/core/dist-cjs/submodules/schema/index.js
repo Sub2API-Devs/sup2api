@@ -6,158 +6,219 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../../runtime/bun-runtime.js";
-import { Kg } from "../../../../protocol-http/dist-cjs/index.js";
-import { bD } from "../../../../util-middleware/dist-cjs/index.js";
+import { require_protocol_http } from "../../../../protocol-http/dist-cjs/index.js";
+import { require_util_middleware } from "../../../../util-middleware/dist-cjs/index.js";
 
 //@ chunk-wjd9n4jx.js:12581-22053 cjs-fingerprint
-var _D = x(function (ps) {
-  var ss = Kg(),
-    cr = bD(),
-    re = (e) => {
-      if (typeof e === "function") return e();
-      return e;
-    },
-    be = (e, t, r, s, n) => ({ name: t, namespace: e, traits: r, input: s, output: n }),
-    ns = (e) => (t, r) => async (s) => {
-      let { response: response } = await t(s),
-        { operationSchema: operationSchema } = cr.getSmithyContext(r),
-        [, a, o, c, u, h] = operationSchema ?? [];
-      try {
-        let deserializeResponse = await e.protocol.deserializeResponse(
-          be(a, o, c, u, h),
-          { ...e, ...r },
-          response,
-        );
-        return { response: response, output: deserializeResponse };
-      } catch (error) {
-        if (
-          (Object.defineProperty(error, "$response", {
-            value: response,
-            enumerable: !1,
-            writable: !1,
-            configurable: !1,
-          }),
-          !("$metadata" in error))
-        ) {
-          try {
-            error.message += `
+var require_schema = x(function (cjsExports) {
+  var HttpResponse = require_protocol_http();
+  var getSmithyContext = require_util_middleware();
+  var deref = (schemaRef) => {
+    if (typeof schemaRef === "function") return schemaRef();
+    return schemaRef;
+  };
+  var operation = (namespace, name, traits, input, output) => ({
+    name,
+    namespace,
+    traits,
+    input,
+    output,
+  });
+  var schemaDeserializationMiddleware = (config) => (next, context) => async (args) => {
+    let { response } = await next(args);
+    let { operationSchema } = getSmithyContext.getSmithyContext(context);
+    let [, ns, n, t, i, o] = operationSchema ?? [];
+    try {
+      let parsed = await config.protocol.deserializeResponse(
+        operation(ns, n, t, i, o),
+        {
+          ...config,
+          ...context,
+        },
+        response,
+      );
+      return {
+        response,
+        output: parsed,
+      };
+    } catch (error) {
+      Object.defineProperty(error, "$response", {
+        value: response,
+        enumerable: false,
+        writable: false,
+        configurable: false,
+      });
+      if (!("$metadata" in error)) {
+        try {
+          error.message += `
   Deserialization error: to see the raw response, inspect the hidden field {error}.$response on this object.`;
-          } catch (error) {
-            if (!r.logger || r.logger?.constructor?.name === "NoOpLogger")
-              console.warn(
-                "Deserialization error: to see the raw response, inspect the hidden field {error}.$response on this object.",
-              );
-            else
-              r.logger?.warn?.(
-                "Deserialization error: to see the raw response, inspect the hidden field {error}.$response on this object.",
-              );
-          }
-          if (typeof error.$responseBodyText < "u") {
-            if (error.$response) error.$response.body = error.$responseBodyText;
-          }
-          try {
-            if (ss.HttpResponse.isInstance(response)) {
-              let { headers: headers = {} } = response,
-                entries = Object.entries(headers);
-              error.$metadata = {
-                httpStatusCode: response.statusCode,
-                requestId: pe(/^x-[\w-]+-request-?id$/, entries),
-                extendedRequestId: pe(/^x-[\w-]+-id-2$/, entries),
-                cfId: pe(/^x-[\w-]+-cf-id$/, entries),
-              };
-            }
-          } catch (error) {}
+        } catch (ignored) {
+          if (!context.logger || context.logger?.constructor?.name === "NoOpLogger")
+            console.warn(
+              "Deserialization error: to see the raw response, inspect the hidden field {error}.$response on this object.",
+            );
+          else
+            context.logger?.warn?.(
+              "Deserialization error: to see the raw response, inspect the hidden field {error}.$response on this object.",
+            );
         }
-        throw error;
+        if (typeof error.$responseBodyText !== "undefined") {
+          if (error.$response) error.$response.body = error.$responseBodyText;
+        }
+        try {
+          if (HttpResponse.HttpResponse.isInstance(response)) {
+            let { headers = {} } = response;
+            let headerEntries = Object.entries(headers);
+            error.$metadata = {
+              httpStatusCode: response.statusCode,
+              requestId: findHeader(/^x-[\w-]+-request-?id$/, headerEntries),
+              extendedRequestId: findHeader(/^x-[\w-]+-id-2$/, headerEntries),
+              cfId: findHeader(/^x-[\w-]+-cf-id$/, headerEntries),
+            };
+          }
+        } catch (ignored) {}
       }
-    },
-    pe = (e, t) => (t.find(([r]) => r.match(e)) || [void 0, void 0])[1],
-    is = (e) => (t, r) => async (s) => {
-      let { operationSchema: operationSchema } = cr.getSmithyContext(r),
-        [, i, a, o, c, u] = operationSchema ?? [],
-        h = r.endpointV2?.url && e.urlParser ? async () => e.urlParser(r.endpointV2.url) : e.endpoint,
-        serializeRequest = await e.protocol.serializeRequest(be(i, a, o, c, u), s.input, {
-          ...e,
-          ...r,
-          endpoint: h,
-        });
-      return t({ ...s, request: serializeRequest });
-    },
-    ur = { name: "deserializerMiddleware", step: "deserialize", tags: ["DESERIALIZER"], override: !0 },
-    hr = { name: "serializerMiddleware", step: "serialize", tags: ["SERIALIZER"], override: !0 };
-  function os(e) {
+      throw error;
+    }
+  };
+  var findHeader = (pattern, headers) =>
+    (headers.find(([k]) => k.match(pattern)) || [undefined, undefined])[1];
+  var schemaSerializationMiddleware = (config) => (next, context) => async (args) => {
+    let { operationSchema } = getSmithyContext.getSmithyContext(context);
+    let [, ns, n, t, i, o] = operationSchema ?? [];
+    let endpoint =
+      context.endpointV2?.url && config.urlParser
+        ? async () => config.urlParser(context.endpointV2.url)
+        : config.endpoint;
+    let request = await config.protocol.serializeRequest(operation(ns, n, t, i, o), args.input, {
+      ...config,
+      ...context,
+      endpoint,
+    });
+    return next({
+      ...args,
+      request,
+    });
+  };
+  var deserializerMiddlewareOption = {
+    name: "deserializerMiddleware",
+    step: "deserialize",
+    tags: ["DESERIALIZER"],
+    override: true,
+  };
+  var serializerMiddlewareOption = {
+    name: "serializerMiddleware",
+    step: "serialize",
+    tags: ["SERIALIZER"],
+    override: true,
+  };
+  function getSchemaSerdePlugin(config) {
     return {
-      applyToStack: (t) => {
-        (t.add(is(e), hr), t.add(ns(e), ur), e.protocol.setSerdeContext(e));
+      applyToStack: (commandStack) => {
+        commandStack.add(schemaSerializationMiddleware(config), serializerMiddlewareOption);
+        commandStack.add(schemaDeserializationMiddleware(config), deserializerMiddlewareOption);
+        config.protocol.setSerdeContext(config);
       },
     };
   }
-  class w {
+  class Schema {
     name;
     namespace;
     traits;
-    static assign(e, t) {
-      return Object.assign(e, t);
+    static assign(instance, t) {
+      return Object.assign(instance, t);
     }
-    static [Symbol.hasInstance](e) {
-      let t = this.prototype.isPrototypeOf(e);
-      if (!t && typeof e === "object" && e !== null) return e.symbol === this.symbol;
-      return t;
+    static [Symbol.hasInstance](lhs) {
+      let isPrototype = this.prototype.isPrototypeOf(lhs);
+      if (!isPrototype && typeof lhs === "object" && lhs !== null) return lhs.symbol === this.symbol;
+      return isPrototype;
     }
     getName() {
       return this.namespace + "#" + this.name;
     }
   }
-  class se extends w {
+  class ListSchema extends Schema {
     static symbol = Symbol.for("@smithy/lis");
     name;
     traits;
     valueSchema;
-    symbol = se.symbol;
+    symbol = ListSchema.symbol;
   }
-  var as = (e, t, r, s) => w.assign(new se(), { name: t, namespace: e, traits: r, valueSchema: s });
-  class ne extends w {
+  var list = (namespace, name, traits, valueSchema) =>
+    Schema.assign(new ListSchema(), {
+      name,
+      namespace,
+      traits,
+      valueSchema,
+    });
+  class MapSchema extends Schema {
     static symbol = Symbol.for("@smithy/map");
     name;
     traits;
     keySchema;
     valueSchema;
-    symbol = ne.symbol;
+    symbol = MapSchema.symbol;
   }
-  var cs = (e, t, r, s, n) =>
-    w.assign(new ne(), { name: t, namespace: e, traits: r, keySchema: s, valueSchema: n });
-  class ie extends w {
+  var map = (namespace, name, traits, keySchema, valueSchema) =>
+    Schema.assign(new MapSchema(), {
+      name,
+      namespace,
+      traits,
+      keySchema,
+      valueSchema,
+    });
+  class OperationSchema extends Schema {
     static symbol = Symbol.for("@smithy/ope");
     name;
     traits;
     input;
     output;
-    symbol = ie.symbol;
+    symbol = OperationSchema.symbol;
   }
-  var us = (e, t, r, s, n) => w.assign(new ie(), { name: t, namespace: e, traits: r, input: s, output: n });
-  class F extends w {
+  var op = (namespace, name, traits, input, output) =>
+    Schema.assign(new OperationSchema(), {
+      name,
+      namespace,
+      traits,
+      input,
+      output,
+    });
+  class StructureSchema extends Schema {
     static symbol = Symbol.for("@smithy/str");
     name;
     traits;
     memberNames;
     memberList;
-    symbol = F.symbol;
+    symbol = StructureSchema.symbol;
   }
-  var hs = (e, t, r, s, n) =>
-    w.assign(new F(), { name: t, namespace: e, traits: r, memberNames: s, memberList: n });
-  class oe extends F {
+  var struct = (namespace, name, traits, memberNames, memberList) =>
+    Schema.assign(new StructureSchema(), {
+      name,
+      namespace,
+      traits,
+      memberNames,
+      memberList,
+    });
+  class ErrorSchema extends StructureSchema {
     static symbol = Symbol.for("@smithy/err");
     ctor;
-    symbol = oe.symbol;
+    symbol = ErrorSchema.symbol;
   }
-  var fs = (e, t, r, s, n, i) =>
-    w.assign(new oe(), { name: t, namespace: e, traits: r, memberNames: s, memberList: n, ctor: null });
-  function k(e) {
-    if (typeof e === "object") return e;
-    e = e | 0;
-    let t = {},
-      r = 0;
-    for (let s of [
+  var error = (namespace, name, traits, memberNames, memberList, _ctor) =>
+    Schema.assign(new ErrorSchema(), {
+      name,
+      namespace,
+      traits,
+      memberNames,
+      memberList,
+      ctor: null,
+    });
+  function translateTraits(indicator) {
+    if (typeof indicator === "object") return indicator;
+    indicator = indicator | 0;
+    let traits = {};
+    let i = 0;
+    for (let trait of [
       "httpLabel",
       "idempotent",
       "idempotencyToken",
@@ -166,75 +227,94 @@ var _D = x(function (ps) {
       "httpResponseCode",
       "httpQueryParams",
     ])
-      if (((e >> r++) & 1) === 1) t[s] = 1;
-    return t;
+      if (((indicator >> i++) & 1) === 1) traits[trait] = 1;
+    return traits;
   }
-  class C {
+  class NormalizedSchema {
     ref;
     memberName;
     static symbol = Symbol.for("@smithy/nor");
-    symbol = C.symbol;
+    symbol = NormalizedSchema.symbol;
     name;
     schema;
     _isMemberSchema;
     traits;
     memberTraits;
     normalizedTraits;
-    constructor(e, t) {
-      ((this.ref = e), (this.memberName = t));
-      let r = [],
-        s = e,
-        n = e;
-      this._isMemberSchema = !1;
-      while (ye(s)) (r.push(s[1]), (s = s[0]), (n = re(s)), (this._isMemberSchema = !0));
-      if (r.length > 0) {
+    constructor(ref, memberName) {
+      this.ref = ref;
+      this.memberName = memberName;
+      let traitStack = [];
+      let _ref = ref;
+      let schema = ref;
+      this._isMemberSchema = false;
+      while (isMemberSchema(_ref)) {
+        traitStack.push(_ref[1]);
+        _ref = _ref[0];
+        schema = deref(_ref);
+        this._isMemberSchema = true;
+      }
+      if (traitStack.length > 0) {
         this.memberTraits = {};
-        for (let i = r.length - 1; i >= 0; --i) {
-          let a = r[i];
-          Object.assign(this.memberTraits, k(a));
+        for (let i = traitStack.length - 1; i >= 0; --i) {
+          let traitSet = traitStack[i];
+          Object.assign(this.memberTraits, translateTraits(traitSet));
         }
       } else this.memberTraits = 0;
-      if (n instanceof C) {
-        let memberTraits = this.memberTraits;
-        (Object.assign(this, n),
-          (this.memberTraits = Object.assign({}, memberTraits, n.getMemberTraits(), this.getMemberTraits())),
-          (this.normalizedTraits = void 0),
-          (this.memberName = t ?? n.memberName));
+      if (schema instanceof NormalizedSchema) {
+        let computedMemberTraits = this.memberTraits;
+        Object.assign(this, schema);
+        this.memberTraits = Object.assign(
+          {},
+          computedMemberTraits,
+          schema.getMemberTraits(),
+          this.getMemberTraits(),
+        );
+        this.normalizedTraits = undefined;
+        this.memberName = memberName ?? schema.memberName;
         return;
       }
-      if (((this.schema = re(n)), fr(this.schema)))
-        ((this.name = `${this.schema[1]}#${this.schema[2]}`), (this.traits = this.schema[3]));
-      else ((this.name = this.memberName ?? String(n)), (this.traits = 0));
-      if (this._isMemberSchema && !t)
+      this.schema = deref(schema);
+      if (isStaticSchema(this.schema)) {
+        this.name = `${this.schema[1]}#${this.schema[2]}`;
+        this.traits = this.schema[3];
+      } else {
+        this.name = this.memberName ?? String(schema);
+        this.traits = 0;
+      }
+      if (this._isMemberSchema && !memberName)
         throw Error(
-          `@smithy/core/schema - NormalizedSchema member init ${this.getName(!0)} missing member name.`,
+          `@smithy/core/schema - NormalizedSchema member init ${this.getName(true)} missing member name.`,
         );
     }
-    static [Symbol.hasInstance](e) {
-      let t = this.prototype.isPrototypeOf(e);
-      if (!t && typeof e === "object" && e !== null) return e.symbol === this.symbol;
-      return t;
+    static [Symbol.hasInstance](lhs) {
+      let isPrototype = this.prototype.isPrototypeOf(lhs);
+      if (!isPrototype && typeof lhs === "object" && lhs !== null) return lhs.symbol === this.symbol;
+      return isPrototype;
     }
-    static of(e) {
-      let t = re(e);
-      if (t instanceof C) return t;
-      if (ye(t)) {
-        let [r, s] = t;
-        if (r instanceof C) return (Object.assign(r.getMergedTraits(), k(s)), r);
+    static of(ref) {
+      let sc = deref(ref);
+      if (sc instanceof NormalizedSchema) return sc;
+      if (isMemberSchema(sc)) {
+        let [ns, traits] = sc;
+        if (ns instanceof NormalizedSchema) {
+          Object.assign(ns.getMergedTraits(), translateTraits(traits));
+          return ns;
+        }
         throw Error(
-          `@smithy/core/schema - may not init unwrapped member schema=${JSON.stringify(e, null, 2)}.`,
+          `@smithy/core/schema - may not init unwrapped member schema=${JSON.stringify(ref, null, 2)}.`,
         );
       }
-      return new C(t);
+      return new NormalizedSchema(sc);
     }
     getSchema() {
-      let schema = this.schema;
-      if (schema[0] === 0) return schema[4];
-      return schema;
+      let sc = this.schema;
+      if (sc[0] === 0) return sc[4];
+      return sc;
     }
-    getName(e = !1) {
-      let { name: t } = this;
-      return !e && t && t.includes("#") ? t.split("#")[1] : t || void 0;
+    getName(withNamespace = false) {
+      let { name } = this;
+      return !withNamespace && name && name.includes("#") ? name.split("#")[1] : name || undefined;
     }
     getMemberName() {
       return this.memberName;
@@ -243,24 +323,24 @@ var _D = x(function (ps) {
       return this._isMemberSchema;
     }
     isListSchema() {
-      let schema = this.getSchema();
-      return typeof schema === "number" ? schema >= 64 && schema < 128 : schema[0] === 1;
+      let sc = this.getSchema();
+      return typeof sc === "number" ? sc >= 64 && sc < 128 : sc[0] === 1;
     }
     isMapSchema() {
-      let schema = this.getSchema();
-      return typeof schema === "number" ? schema >= 128 && schema <= 255 : schema[0] === 2;
+      let sc = this.getSchema();
+      return typeof sc === "number" ? sc >= 128 && sc <= 255 : sc[0] === 2;
     }
     isStructSchema() {
-      let schema = this.getSchema();
-      return schema[0] === 3 || schema[0] === -3;
+      let id = this.getSchema();
+      return id[0] === 3 || id[0] === -3;
     }
     isBlobSchema() {
-      let schema = this.getSchema();
-      return schema === 21 || schema === 42;
+      let sc = this.getSchema();
+      return sc === 21 || sc === 42;
     }
     isTimestampSchema() {
-      let schema = this.getSchema();
-      return typeof schema === "number" && schema >= 4 && schema <= 7;
+      let sc = this.getSchema();
+      return typeof sc === "number" && sc >= 4 && sc <= 7;
     }
     isUnitSchema() {
       return this.getSchema() === "unit";
@@ -284,183 +364,209 @@ var _D = x(function (ps) {
       return this.getSchema() === 19;
     }
     isStreaming() {
-      let { streaming: streaming } = this.getMergedTraits();
+      let { streaming } = this.getMergedTraits();
       return !!streaming || this.getSchema() === 42;
     }
     isIdempotencyToken() {
-      let e = (n) => (n & 4) === 4 || !!n?.idempotencyToken,
-        { normalizedTraits: normalizedTraits, traits: traits, memberTraits: memberTraits } = this;
+      let e = (n) => (n & 4) === 4 || !!n?.idempotencyToken;
+      let { normalizedTraits, traits, memberTraits } = this;
       return e(normalizedTraits) || e(traits) || e(memberTraits);
     }
     getMergedTraits() {
       return (
         this.normalizedTraits ??
-        (this.normalizedTraits = { ...this.getOwnTraits(), ...this.getMemberTraits() })
+        (this.normalizedTraits = {
+          ...this.getOwnTraits(),
+          ...this.getMemberTraits(),
+        })
       );
     }
     getMemberTraits() {
-      return k(this.memberTraits);
+      return translateTraits(this.memberTraits);
     }
     getOwnTraits() {
-      return k(this.traits);
+      return translateTraits(this.traits);
     }
     getKeySchema() {
-      let [e, t] = [this.isDocumentSchema(), this.isMapSchema()];
-      if (!e && !t) throw Error(`@smithy/core/schema - cannot get key for non-map: ${this.getName(!0)}`);
-      let schema = this.getSchema(),
-        s = e ? 15 : (schema[4] ?? 0);
-      return L([s, 0], "key");
+      let [isDoc, isMap] = [this.isDocumentSchema(), this.isMapSchema()];
+      if (!isDoc && !isMap)
+        throw Error(`@smithy/core/schema - cannot get key for non-map: ${this.getName(true)}`);
+      let schema = this.getSchema();
+      let memberSchema = isDoc ? 15 : (schema[4] ?? 0);
+      return member([memberSchema, 0], "key");
     }
     getValueSchema() {
-      let schema = this.getSchema(),
-        [t, r, s] = [this.isDocumentSchema(), this.isMapSchema(), this.isListSchema()],
-        n =
-          typeof schema === "number"
-            ? 63 & schema
-            : schema && typeof schema === "object" && (r || s)
-              ? schema[3 + schema[0]]
-              : t
-                ? 15
-                : void 0;
-      if (n != null) return L([n, 0], r ? "value" : "member");
-      throw Error(`@smithy/core/schema - ${this.getName(!0)} has no value member.`);
+      let sc = this.getSchema();
+      let [isDoc, isMap, isList] = [this.isDocumentSchema(), this.isMapSchema(), this.isListSchema()];
+      let memberSchema =
+        typeof sc === "number"
+          ? 63 & sc
+          : sc && typeof sc === "object" && (isMap || isList)
+            ? sc[3 + sc[0]]
+            : isDoc
+              ? 15
+              : undefined;
+      if (memberSchema != null) return member([memberSchema, 0], isMap ? "value" : "member");
+      throw Error(`@smithy/core/schema - ${this.getName(true)} has no value member.`);
     }
-    getMemberSchema(e) {
-      let schema = this.getSchema();
-      if (this.isStructSchema() && schema[4].includes(e)) {
-        let index = schema[4].indexOf(e),
-          s = schema[5][index];
-        return L(ye(s) ? s : [s, 0], e);
+    getMemberSchema(memberName) {
+      let struct = this.getSchema();
+      if (this.isStructSchema() && struct[4].includes(memberName)) {
+        let i = struct[4].indexOf(memberName);
+        let memberSchema = struct[5][i];
+        return member(isMemberSchema(memberSchema) ? memberSchema : [memberSchema, 0], memberName);
       }
-      if (this.isDocumentSchema()) return L([15, 0], e);
-      throw Error(`@smithy/core/schema - ${this.getName(!0)} has no no member=${e}.`);
+      if (this.isDocumentSchema()) return member([15, 0], memberName);
+      throw Error(`@smithy/core/schema - ${this.getName(true)} has no no member=${memberName}.`);
     }
     getMemberSchemas() {
-      let e = {};
+      let buffer = {};
       try {
-        for (let [t, r] of this.structIterator()) e[t] = r;
-      } catch (error) {}
-      return e;
+        for (let [k, v] of this.structIterator()) buffer[k] = v;
+      } catch (ignored) {}
+      return buffer;
     }
     getEventStreamMember() {
       if (this.isStructSchema()) {
-        for (let [e, t] of this.structIterator()) if (t.isStreaming() && t.isStructSchema()) return e;
+        for (let [memberName, memberSchema] of this.structIterator())
+          if (memberSchema.isStreaming() && memberSchema.isStructSchema()) return memberName;
       }
       return "";
     }
     *structIterator() {
       if (this.isUnitSchema()) return;
       if (!this.isStructSchema()) throw Error("@smithy/core/schema - cannot iterate non-struct schema.");
-      let schema = this.getSchema();
-      for (let t = 0; t < schema[4].length; ++t) yield [schema[4][t], L([schema[5][t], 0], schema[4][t])];
+      let struct = this.getSchema();
+      for (let i = 0; i < struct[4].length; ++i)
+        yield [struct[4][i], member([struct[5][i], 0], struct[4][i])];
     }
   }
-  function L(e, t) {
-    if (e instanceof C) return Object.assign(e, { memberName: t, _isMemberSchema: !0 });
-    return new C(e, t);
+  function member(memberSchema, memberName) {
+    if (memberSchema instanceof NormalizedSchema)
+      return Object.assign(memberSchema, {
+        memberName,
+        _isMemberSchema: true,
+      });
+    return new NormalizedSchema(memberSchema, memberName);
   }
-  var ye = (e) => Array.isArray(e) && e.length === 2,
-    fr = (e) => Array.isArray(e) && e.length >= 5;
-  class H extends w {
+  var isMemberSchema = (sc) => Array.isArray(sc) && sc.length === 2;
+  var isStaticSchema = (sc) => Array.isArray(sc) && sc.length >= 5;
+  class SimpleSchema extends Schema {
     static symbol = Symbol.for("@smithy/sim");
     name;
     schemaRef;
     traits;
-    symbol = H.symbol;
+    symbol = SimpleSchema.symbol;
   }
-  var ds = (e, t, r, s) => w.assign(new H(), { name: t, namespace: e, traits: s, schemaRef: r }),
-    ms = (e, t, r, s) => w.assign(new H(), { name: t, namespace: e, traits: r, schemaRef: s }),
-    ls = {
-      BLOB: 21,
-      STREAMING_BLOB: 42,
-      BOOLEAN: 2,
-      STRING: 0,
-      NUMERIC: 1,
-      BIG_INTEGER: 17,
-      BIG_DECIMAL: 19,
-      DOCUMENT: 15,
-      TIMESTAMP_DEFAULT: 4,
-      TIMESTAMP_DATE_TIME: 5,
-      TIMESTAMP_HTTP_DATE: 6,
-      TIMESTAMP_EPOCH_SECONDS: 7,
-      LIST_MODIFIER: 64,
-      MAP_MODIFIER: 128,
-    };
-  class M {
+  var sim = (namespace, name, schemaRef, traits) =>
+    Schema.assign(new SimpleSchema(), {
+      name,
+      namespace,
+      traits,
+      schemaRef,
+    });
+  var simAdapter = (namespace, name, traits, schemaRef) =>
+    Schema.assign(new SimpleSchema(), {
+      name,
+      namespace,
+      traits,
+      schemaRef,
+    });
+  var SCHEMA = {
+    BLOB: 21,
+    STREAMING_BLOB: 42,
+    BOOLEAN: 2,
+    STRING: 0,
+    NUMERIC: 1,
+    BIG_INTEGER: 17,
+    BIG_DECIMAL: 19,
+    DOCUMENT: 15,
+    TIMESTAMP_DEFAULT: 4,
+    TIMESTAMP_DATE_TIME: 5,
+    TIMESTAMP_HTTP_DATE: 6,
+    TIMESTAMP_EPOCH_SECONDS: 7,
+    LIST_MODIFIER: 64,
+    MAP_MODIFIER: 128,
+  };
+  class TypeRegistry {
     namespace;
     schemas;
     exceptions;
     static registries = new Map();
-    constructor(e, t = new Map(), r = new Map()) {
-      ((this.namespace = e), (this.schemas = t), (this.exceptions = r));
+    constructor(namespace, schemas = new Map(), exceptions = new Map()) {
+      this.namespace = namespace;
+      this.schemas = schemas;
+      this.exceptions = exceptions;
     }
-    static for(e) {
-      if (!M.registries.has(e)) M.registries.set(e, new M(e));
-      return M.registries.get(e);
+    static for(namespace) {
+      if (!TypeRegistry.registries.has(namespace))
+        TypeRegistry.registries.set(namespace, new TypeRegistry(namespace));
+      return TypeRegistry.registries.get(namespace);
     }
-    register(e, t) {
-      let normalizeShapeId = this.normalizeShapeId(e);
-      M.for(normalizeShapeId.split("#")[0]).schemas.set(normalizeShapeId, t);
+    register(shapeId, schema) {
+      let qualifiedName = this.normalizeShapeId(shapeId);
+      TypeRegistry.for(qualifiedName.split("#")[0]).schemas.set(qualifiedName, schema);
     }
-    getSchema(e) {
-      let normalizeShapeId = this.normalizeShapeId(e);
-      if (!this.schemas.has(normalizeShapeId))
-        throw Error(`@smithy/core/schema - schema not found for ${normalizeShapeId}`);
-      return this.schemas.get(normalizeShapeId);
+    getSchema(shapeId) {
+      let id = this.normalizeShapeId(shapeId);
+      if (!this.schemas.has(id)) throw Error(`@smithy/core/schema - schema not found for ${id}`);
+      return this.schemas.get(id);
     }
-    registerError(e, t) {
-      let r = e,
-        s = M.for(r[1]);
-      (s.schemas.set(r[1] + "#" + r[2], r), s.exceptions.set(r, t));
+    registerError(es, ctor) {
+      let $error = es;
+      let r = TypeRegistry.for($error[1]);
+      r.schemas.set($error[1] + "#" + $error[2], $error);
+      r.exceptions.set($error, ctor);
     }
     getErrorCtor(e) {
-      let t = e;
-      return M.for(t[1]).exceptions.get(t);
+      let $error = e;
+      return TypeRegistry.for($error[1]).exceptions.get($error);
     }
     getBaseException() {
-      for (let e of this.exceptions.keys())
-        if (Array.isArray(e)) {
-          let [, t, r] = e,
-            s = t + "#" + r;
-          if (s.startsWith("smithy.ts.sdk.synthetic.") && s.endsWith("ServiceException")) return e;
+      for (let exceptionKey of this.exceptions.keys())
+        if (Array.isArray(exceptionKey)) {
+          let [, ns, name] = exceptionKey;
+          let id = ns + "#" + name;
+          if (id.startsWith("smithy.ts.sdk.synthetic.") && id.endsWith("ServiceException"))
+            return exceptionKey;
         }
       return;
     }
-    find(e) {
-      return [...this.schemas.values()].find(e);
+    find(predicate) {
+      return [...this.schemas.values()].find(predicate);
     }
     clear() {
-      (this.schemas.clear(), this.exceptions.clear());
+      this.schemas.clear();
+      this.exceptions.clear();
     }
-    normalizeShapeId(e) {
-      if (e.includes("#")) return e;
-      return this.namespace + "#" + e;
+    normalizeShapeId(shapeId) {
+      if (shapeId.includes("#")) return shapeId;
+      return this.namespace + "#" + shapeId;
     }
   }
-  ps.ErrorSchema = oe;
-  ps.ListSchema = se;
-  ps.MapSchema = ne;
-  ps.NormalizedSchema = C;
-  ps.OperationSchema = ie;
-  ps.SCHEMA = ls;
-  ps.Schema = w;
-  ps.SimpleSchema = H;
-  ps.StructureSchema = F;
-  ps.TypeRegistry = M;
-  ps.deref = re;
-  ps.deserializerMiddlewareOption = ur;
-  ps.error = fs;
-  ps.getSchemaSerdePlugin = os;
-  ps.isStaticSchema = fr;
-  ps.list = as;
-  ps.map = cs;
-  ps.op = us;
-  ps.operation = be;
-  ps.serializerMiddlewareOption = hr;
-  ps.sim = ds;
-  ps.simAdapter = ms;
-  ps.struct = hs;
-  ps.translateTraits = k;
+  cjsExports.ErrorSchema = ErrorSchema;
+  cjsExports.ListSchema = ListSchema;
+  cjsExports.MapSchema = MapSchema;
+  cjsExports.NormalizedSchema = NormalizedSchema;
+  cjsExports.OperationSchema = OperationSchema;
+  cjsExports.SCHEMA = SCHEMA;
+  cjsExports.Schema = Schema;
+  cjsExports.SimpleSchema = SimpleSchema;
+  cjsExports.StructureSchema = StructureSchema;
+  cjsExports.TypeRegistry = TypeRegistry;
+  cjsExports.deref = deref;
+  cjsExports.deserializerMiddlewareOption = deserializerMiddlewareOption;
+  cjsExports.error = error;
+  cjsExports.getSchemaSerdePlugin = getSchemaSerdePlugin;
+  cjsExports.isStaticSchema = isStaticSchema;
+  cjsExports.list = list;
+  cjsExports.map = map;
+  cjsExports.op = op;
+  cjsExports.operation = operation;
+  cjsExports.serializerMiddlewareOption = serializerMiddlewareOption;
+  cjsExports.sim = sim;
+  cjsExports.simAdapter = simAdapter;
+  cjsExports.struct = struct;
+  cjsExports.translateTraits = translateTraits;
 });
-
-export { _D };
+export { require_schema };

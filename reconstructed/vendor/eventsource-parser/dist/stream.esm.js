@@ -5,30 +5,30 @@
  * pieces: chunk-j4cx2j3j.js (1)
  * attribution: esm-fingerprint 1
  */
-import { wTt } from "./index.js";
+import { createParser } from "./index.js";
 
 //@ chunk-j4cx2j3j.js:228-487 esm-fingerprint
-class gcn extends TransformStream {
-  constructor({ onError: t, onRetry: a, onComment: o } = {}) {
-    let s;
+class EventSourceParserStream extends TransformStream {
+  constructor({ onError, onRetry, onComment } = {}) {
+    let parser;
     super({
-      start(e) {
-        s = wTt({
-          onEvent: (r) => {
-            e.enqueue(r);
+      start(controller) {
+        parser = createParser({
+          onEvent: (event) => {
+            controller.enqueue(event);
           },
-          onError(r) {
-            t === "terminate" ? e.error(r) : typeof t == "function" && t(r);
+          onError(error) {
+            if (onError === "terminate") controller.error(error);
+            else if (typeof onError == "function") onError(error);
           },
-          onRetry: a,
-          onComment: o,
+          onRetry,
+          onComment,
         });
       },
-      transform(e) {
-        s.feed(e);
+      transform(chunk) {
+        parser.feed(chunk);
       },
     });
   }
 }
-
-export { gcn };
+export { EventSourceParserStream };

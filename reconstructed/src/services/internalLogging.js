@@ -9,16 +9,8 @@
  * attribution: sole-consumer 2, affinity 2, fingerprint 2
  */
 import { release } from "os";
-import {
-  open,
-  open as open_2,
-  open as open_3,
-  open as open_4,
-  open as open_5,
-  open as open_6,
-  open as open_7,
-} from "fs/promises";
-import { constants, constants as constants_2, constants as constants_3 } from "fs";
+import { open } from "fs/promises";
+import { constants } from "fs";
 import { READ_LIMITS } from "../utils/fsBoundRead.js";
 
 //@ chunk-e6aww6q8.js:2084953-2084986 sole-consumer
@@ -31,8 +23,8 @@ async function getContainerIdStub() {
 }
 //@ chunk-e6aww6q8.js:2085019-2085167 fingerprint = logPermissionContextForAnts (0.339)
 class PermissionContextLogState {
-  namespace = void 0;
-  containerId = void 0;
+  namespace = undefined;
+  containerId = undefined;
   kubernetesNamespace() {
     return (this.namespace ??= getKubernetesNamespace());
   }
@@ -51,20 +43,20 @@ async function getContainerId() {
 }
 //@ chunk-gjx0rh1b.js:13538-13793 sole-consumer = readJSONLFile (0.763)
 async function readJSONLFile(e, n) {
-  let r = await open_5(e, constants.O_RDONLY | READ_LIMITS);
+  let r = await open(e, constants.O_RDONLY | READ_LIMITS);
   try {
-    let o = [],
-      s = 0;
+    let o = [];
+    let s = 0;
     while (s < n) {
-      let buf = Buffer.allocUnsafe(65536),
-        { bytesRead: bytesRead } = await r.read(buf, 0, buf.length, null);
+      let buf = Buffer.allocUnsafe(65536);
+      let { bytesRead } = await r.read(buf, 0, buf.length, null);
       if (bytesRead === 0) break;
-      (o.push(buf.subarray(0, bytesRead)), (s += bytesRead));
+      o.push(buf.subarray(0, bytesRead));
+      s += bytesRead;
     }
     return Buffer.concat(o);
   } finally {
     await r.close();
   }
 }
-
 export { PermissionContextLogState, getContainerId };

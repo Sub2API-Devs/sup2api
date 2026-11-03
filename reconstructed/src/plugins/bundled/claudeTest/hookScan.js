@@ -10,10 +10,10 @@
  */
 import { x } from "../../../../runtime/bun-runtime.js";
 
+//@ chunk-ae5g0zb5.js:13304-24040 placement
 /**
  * Claude Test 插件声明的函数钩子能力清单（hooks: command.run、skill.prompt、tool.call、ui.render；calls: agent.list、fs.read、mcp.call 等）。
  */
-//@ chunk-ae5g0zb5.js:13304-24040 placement
 var CLAUDE_TEST_HOOK_SCAN = x(function (_y, Ma) {
   Ma.exports = {
     scan: {
@@ -135,5 +135,4 @@ plugin:claude-test:browser, or restart Claude Code".
     },
   };
 });
-
 export { CLAUDE_TEST_HOOK_SCAN };

@@ -8,12 +8,11 @@
 import { x } from "../../runtime/bun-runtime.js";
 
 //@ chunk-bzr73sfg.js:126116-126279 cjs-fingerprint
-var jg = x(function (GA, Yg) {
-  var G1 = /[|\\{}()[\]^$+*?.-]/g;
-  Yg.exports = (n) => {
-    if (typeof n !== "string") throw TypeError("Expected a string");
-    return n.replace(G1, "\\$&");
+var require_escape_string_regexp = x(function (cjsExports, cjsModule) {
+  var matchOperatorsRegex = /[|\\{}()[\]^$+*?.-]/g;
+  cjsModule.exports = (string) => {
+    if (typeof string !== "string") throw TypeError("Expected a string");
+    return string.replace(matchOperatorsRegex, "\\$&");
   };
 });
-
-export { jg };
+export { require_escape_string_regexp };

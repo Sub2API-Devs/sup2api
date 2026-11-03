@@ -14,13 +14,13 @@ function requireRunEngine(e) {
   if (!e.runEngine) throw Error("Artifact: this member needs the executor (call.runEngine)");
   return e.runEngine;
 }
+//@ chunk-8wvtd8sr.js:9471-10125 placement
 /**
  * 把旧式工具定义（call/checkPermissions/validateInput 直接在对象上）适配成 create() 工厂形式：调用经执行器 runEngine 转发到原方法。
  */
-//@ chunk-8wvtd8sr.js:9471-10125 placement
 function adaptLegacyToolDefinition(e) {
-  let n = e,
-    ownPropertyDescriptors = Object.getOwnPropertyDescriptors(e);
+  let n = e;
+  let ownPropertyDescriptors = Object.getOwnPropertyDescriptors(e);
   for (let h of ["call", "checkPermissions", "validateInput", "permissionCheckFailureDecision"])
     delete ownPropertyDescriptors[h];
   return Object.defineProperties(
@@ -28,26 +28,20 @@ function adaptLegacyToolDefinition(e) {
       create: () => ({
         call: (h, y) =>
           requireRunEngine(y)(
-            ({ toolUseContext: toolUseContext, canUseTool: canUseTool }) =>
+            ({ toolUseContext, canUseTool }) =>
               n.call(h, toolUseContext, canUseTool, y.parentMessage, y.onProgress),
             {},
           ),
         checkPermissions: (h, y) =>
-          requireRunEngine(y)(
-            ({ toolUseContext: toolUseContext }) => n.checkPermissions(h, toolUseContext),
-            {},
-          ),
-        ...(n.validateInput !== void 0 && {
+          requireRunEngine(y)(({ toolUseContext }) => n.checkPermissions(h, toolUseContext), {}),
+        ...(n.validateInput !== undefined && {
           validateInput: (h, y) =>
-            requireRunEngine(y)(
-              ({ toolUseContext: toolUseContext }) => n.validateInput(h, toolUseContext),
-              {},
-            ),
+            requireRunEngine(y)(({ toolUseContext }) => n.validateInput(h, toolUseContext), {}),
         }),
-        ...(n.permissionCheckFailureDecision !== void 0 && {
+        ...(n.permissionCheckFailureDecision !== undefined && {
           permissionCheckFailureDecision: (h, y) =>
             requireRunEngine(y)(
-              ({ toolUseContext: toolUseContext }) => n.permissionCheckFailureDecision(h, toolUseContext),
+              ({ toolUseContext }) => n.permissionCheckFailureDecision(h, toolUseContext),
               {},
             ),
         }),
@@ -56,5 +50,4 @@ function adaptLegacyToolDefinition(e) {
     ownPropertyDescriptors,
   );
 }
-
 export { adaptLegacyToolDefinition };

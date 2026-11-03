@@ -10,40 +10,48 @@
  */
 import { w } from "../../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../../runtime/bun-runtime.js";
-import { e, r } from "../../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+} from "../../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Box } from "../../../ink/components/Text.js";
 import { MessageResponse } from "../../MessageResponse.js";
 import { MarkdownText_2 } from "../../pluginUi/render/MarkdownBlock.js";
 
 //@ chunk-ah34pb7m.js:14788-15144 fingerprint = RejectedPlanMessage (0.802)
-function RejectedPlanMessage(t0) {
-  let $ = w(3),
-    { plan: plan } = t0,
-    g;
-  if ($[0] === MEMO_CACHE_SENTINEL)
-    ((g = e(Text, { color: "subtle", children: "User rejected Claude's plan:" })), ($[0] = g));
-  else g = $[0];
-  let f;
-  if ($[1] !== plan)
-    ((f = e(MessageResponse, {
-      children: r(Box, {
+function RejectedPlanMessage(props) {
+  let $ = w(3);
+  let { plan } = props;
+  let t1;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    t1 = jsxProd_default(Text, {
+      color: "subtle",
+      children: "User rejected Claude's plan:",
+    });
+    $[0] = t1;
+  } else t1 = $[0];
+  let t2;
+  if ($[1] !== plan) {
+    t2 = jsxProd_default(MessageResponse, {
+      children: jsxProd_default_2(Box, {
         flexDirection: "column",
         children: [
-          g,
-          e(Box, {
+          t1,
+          jsxProd_default(Box, {
             borderStyle: "round",
             borderColor: "planMode",
             paddingX: 1,
             overflow: "hidden",
-            children: e(MarkdownText_2, { children: plan }),
+            children: jsxProd_default(MarkdownText_2, {
+              children: plan,
+            }),
           }),
         ],
       }),
-    })),
-      ($[1] = plan),
-      ($[2] = f));
-  else f = $[2];
-  return f;
+    });
+    $[1] = plan;
+    $[2] = t2;
+  } else t2 = $[2];
+  return t2;
 }
-
 export { RejectedPlanMessage };

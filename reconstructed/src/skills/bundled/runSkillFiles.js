@@ -42,158 +42,169 @@ import __cc_resource_30 from "../../../assets/SKILL-7a3ab2a6.md.zst" with { type
 import __cc_resource_31 from "../../../assets/SKILL-33067c78.md.zst" with { type: "file" };
 import __cc_resource_32 from "../../../assets/SKILL-cc984d7e.md.zst" with { type: "file" };
 import { Ar } from "../../../runtime/bun-runtime.js";
-import { Et } from "../../utils/embeddedAssets.js";
+import { readEmbeddedTextSync } from "../../utils/embeddedAssets.js";
 
 //@ chunk-thddg15d.js:3016-3025 placement
-var e = {};
+/**
+ * run 技能模块的导出表。
+ */
+var runSkillExports = {};
 //@ chunk-thddg15d.js:3025-3086 placement
-Ar(e, { INSTALLED_FILES: () => RUN_SKILL_FILES, SKILL_MD: () => freeze, default: () => e });
+Ar(runSkillExports, {
+  INSTALLED_FILES: () => RUN_SKILL_FILES,
+  SKILL_MD: () => Ue,
+  default: () => runSkillExports,
+});
 //@ chunk-thddg15d.js:3086-3108 placement
-var t = __cc_resource_0;
+var claudePluginPlugin = __cc_resource_0;
 //@ chunk-thddg15d.js:3108-3130 placement
-var s = __cc_resource_1;
+var onboardingPath = __cc_resource_1;
 //@ chunk-thddg15d.js:3130-3162 placement
-var r = Et(s, import.meta.dirname);
+var runOnboarding = readEmbeddedTextSync(onboardingPath, import.meta.dirname);
 //@ chunk-thddg15d.js:3162-3184 placement
-var n = __cc_resource_2;
+var ctAuthPath = __cc_resource_2;
 //@ chunk-thddg15d.js:3184-3216 placement
-var o = Et(n, import.meta.dirname);
+var scriptsCtAuth = readEmbeddedTextSync(ctAuthPath, import.meta.dirname);
 //@ chunk-thddg15d.js:3216-3238 placement
-var i = __cc_resource_3;
+var ctPath = __cc_resource_3;
 //@ chunk-thddg15d.js:3238-3270 placement
-var a = Et(i, import.meta.dirname);
+var scriptsCt = readEmbeddedTextSync(ctPath, import.meta.dirname);
 //@ chunk-thddg15d.js:3270-3292 placement
-var l = __cc_resource_4;
+var ctbrowserPath = __cc_resource_4;
 //@ chunk-thddg15d.js:3292-3324 placement
-var d = Et(l, import.meta.dirname);
+var scriptsCtbrowser = readEmbeddedTextSync(ctbrowserPath, import.meta.dirname);
 //@ chunk-thddg15d.js:3324-3346 placement
-var p = __cc_resource_5;
+var scriptsInstallTools = __cc_resource_5;
 //@ chunk-thddg15d.js:3346-3368 placement
-var h = __cc_resource_6;
+var libNotice = __cc_resource_6;
 //@ chunk-thddg15d.js:3368-3390 placement
-var m = __cc_resource_7;
+var allowToolPath = __cc_resource_7;
 //@ chunk-thddg15d.js:3390-3422 placement
-var c = Et(m, import.meta.dirname);
+var libAllowTool = readEmbeddedTextSync(allowToolPath, import.meta.dirname);
 //@ chunk-thddg15d.js:3422-3444 placement
-var u = __cc_resource_8;
+var configPath = __cc_resource_8;
 //@ chunk-thddg15d.js:3444-3476 placement
-var f = Et(u, import.meta.dirname);
+var libConfig = readEmbeddedTextSync(configPath, import.meta.dirname);
 //@ chunk-thddg15d.js:3476-3498 placement
-var g = __cc_resource_9;
+var discoverPath = __cc_resource_9;
 //@ chunk-thddg15d.js:3498-3530 placement
-var b = Et(g, import.meta.dirname);
+var libDiscover = readEmbeddedTextSync(discoverPath, import.meta.dirname);
 //@ chunk-thddg15d.js:3530-3553 placement
-var y = __cc_resource_10;
+var envreportPath = __cc_resource_10;
 //@ chunk-thddg15d.js:3553-3585 placement
-var x = Et(y, import.meta.dirname);
+var libEnvreport = readEmbeddedTextSync(envreportPath, import.meta.dirname);
 //@ chunk-thddg15d.js:3585-3608 placement
-var w = __cc_resource_11;
+var fenceProxyPath = __cc_resource_11;
 //@ chunk-thddg15d.js:3608-3640 placement
-var T = Et(w, import.meta.dirname);
+var libFenceProxy = readEmbeddedTextSync(fenceProxyPath, import.meta.dirname);
 //@ chunk-thddg15d.js:3640-3663 placement
-var P = __cc_resource_12;
+var guardPath = __cc_resource_12;
 //@ chunk-thddg15d.js:3663-3695 placement
-var D = Et(P, import.meta.dirname);
+var libGuard = readEmbeddedTextSync(guardPath, import.meta.dirname);
 //@ chunk-thddg15d.js:3695-3718 placement
-var A = __cc_resource_13;
+var libHosts = __cc_resource_13;
 //@ chunk-thddg15d.js:3718-3741 placement
-var j = __cc_resource_14;
+var livePagePath = __cc_resource_14;
 //@ chunk-thddg15d.js:3741-3773 placement
-var E = Et(j, import.meta.dirname);
+var libLivePage = readEmbeddedTextSync(livePagePath, import.meta.dirname);
 //@ chunk-thddg15d.js:3773-3796 placement
-var H = __cc_resource_15;
+var libOpenPage = __cc_resource_15;
 //@ chunk-thddg15d.js:3796-3819 placement
-var M = __cc_resource_16;
+var pslDataPath = __cc_resource_16;
 //@ chunk-thddg15d.js:3819-3851 placement
-var L = Et(M, import.meta.dirname);
+var libPslData = readEmbeddedTextSync(pslDataPath, import.meta.dirname);
 //@ chunk-thddg15d.js:3851-3874 placement
-var S = __cc_resource_17;
+var runToolsPath = __cc_resource_17;
 //@ chunk-thddg15d.js:3874-3906 placement
-var R = Et(S, import.meta.dirname);
+var libRunTools = readEmbeddedTextSync(runToolsPath, import.meta.dirname);
 //@ chunk-thddg15d.js:3906-3929 placement
-var C = __cc_resource_18;
+var runsPath = __cc_resource_18;
 //@ chunk-thddg15d.js:3929-3961 placement
-var J = Et(C, import.meta.dirname);
+var libRuns = readEmbeddedTextSync(runsPath, import.meta.dirname);
 //@ chunk-thddg15d.js:3961-3984 placement
-var I = __cc_resource_19;
+var signinPath = __cc_resource_19;
 //@ chunk-thddg15d.js:3984-4016 placement
-var B = Et(I, import.meta.dirname);
+var libSignin = readEmbeddedTextSync(signinPath, import.meta.dirname);
 //@ chunk-thddg15d.js:4016-4039 placement
-var q = __cc_resource_20;
+var libToolsLock = __cc_resource_20;
 //@ chunk-thddg15d.js:4039-4062 placement
-var F = __cc_resource_21;
+var toolsPath = __cc_resource_21;
 //@ chunk-thddg15d.js:4062-4094 placement
-var Q = Et(F, import.meta.dirname);
+var libTools = readEmbeddedTextSync(toolsPath, import.meta.dirname);
 //@ chunk-thddg15d.js:4094-4117 placement
-var U = __cc_resource_22;
+var vetPath = __cc_resource_22;
 //@ chunk-thddg15d.js:4117-4149 placement
-var k = Et(U, import.meta.dirname);
+var libVet = readEmbeddedTextSync(vetPath, import.meta.dirname);
 //@ chunk-thddg15d.js:4149-4172 placement
-var X = __cc_resource_23;
+var playwrightMcpPath = __cc_resource_23;
 //@ chunk-thddg15d.js:4172-4204 placement
-var V = Et(X, import.meta.dirname);
+var scriptsPlaywrightMcp = readEmbeddedTextSync(playwrightMcpPath, import.meta.dirname);
 //@ chunk-thddg15d.js:4204-4227 placement
-var N = __cc_resource_24;
+var stopOnExitPath = __cc_resource_24;
 //@ chunk-thddg15d.js:4227-4259 placement
-var v = Et(N, import.meta.dirname);
+var scriptsStopOnExit = readEmbeddedTextSync(stopOnExitPath, import.meta.dirname);
 //@ chunk-thddg15d.js:4259-4282 placement
-var K = __cc_resource_25;
+var toolsJson517c5f68Path = __cc_resource_25;
 //@ chunk-thddg15d.js:4282-4314 placement
-var W = Et(K, import.meta.dirname);
+var scriptsToolsSnapshot = readEmbeddedTextSync(toolsJson517c5f68Path, import.meta.dirname);
 //@ chunk-thddg15d.js:4314-4337 placement
-var z = __cc_resource_26;
+var runSpecFormat = __cc_resource_26;
 //@ chunk-thddg15d.js:4337-4360 placement
-var Y = __cc_resource_27;
+var signInSkill = __cc_resource_27;
 //@ chunk-thddg15d.js:4360-4383 placement
-var Z = __cc_resource_28;
+var scriptsCheck = __cc_resource_28;
 //@ chunk-thddg15d.js:4383-4406 placement
-var O = __cc_resource_29;
+var signInPath = __cc_resource_29;
 //@ chunk-thddg15d.js:4406-4438 placement
-var G = Et(O, import.meta.dirname);
+var scriptsSignIn = readEmbeddedTextSync(signInPath, import.meta.dirname);
 //@ chunk-thddg15d.js:4438-5631 placement
 var RUN_SKILL_FILES = Object.freeze({
-  ".claude-plugin/plugin.json": t,
-  "skills/run/onboarding.md": r,
-  "skills/run/scripts/ct-auth.mjs": o,
-  "skills/run/scripts/ct.mjs": a,
-  "skills/run/scripts/ctbrowser.mjs": d,
-  "skills/run/scripts/install-tools.mjs": p,
-  "skills/run/scripts/lib/NOTICE": h,
-  "skills/run/scripts/lib/allow-tool.mjs": c,
-  "skills/run/scripts/lib/config.mjs": f,
-  "skills/run/scripts/lib/discover.mjs": b,
-  "skills/run/scripts/lib/envreport.mjs": x,
-  "skills/run/scripts/lib/fence-proxy.mjs": T,
-  "skills/run/scripts/lib/guard.mjs": D,
-  "skills/run/scripts/lib/hosts.mjs": A,
-  "skills/run/scripts/lib/live-page.mjs": E,
-  "skills/run/scripts/lib/open-page.mjs": H,
-  "skills/run/scripts/lib/psl-data.json": L,
-  "skills/run/scripts/lib/run-tools.mjs": R,
-  "skills/run/scripts/lib/runs.mjs": J,
-  "skills/run/scripts/lib/signin.mjs": B,
-  "skills/run/scripts/lib/tools-lock.json": q,
-  "skills/run/scripts/lib/tools.mjs": Q,
-  "skills/run/scripts/lib/vet.mjs": k,
-  "skills/run/scripts/playwright-mcp.mjs": V,
-  "skills/run/scripts/stop-on-exit.mjs": v,
-  "skills/run/scripts/tools-snapshot.json": W,
-  "skills/run/spec-format.md": z,
-  "skills/run/templates/sign-in/SKILL.md": Y,
-  "skills/run/templates/sign-in/scripts/check.mjs": Z,
-  "skills/run/templates/sign-in/scripts/sign-in.mjs": G,
+  ".claude-plugin/plugin.json": claudePluginPlugin,
+  "skills/run/onboarding.md": runOnboarding,
+  "skills/run/scripts/ct-auth.mjs": scriptsCtAuth,
+  "skills/run/scripts/ct.mjs": scriptsCt,
+  "skills/run/scripts/ctbrowser.mjs": scriptsCtbrowser,
+  "skills/run/scripts/install-tools.mjs": scriptsInstallTools,
+  "skills/run/scripts/lib/NOTICE": libNotice,
+  "skills/run/scripts/lib/allow-tool.mjs": libAllowTool,
+  "skills/run/scripts/lib/config.mjs": libConfig,
+  "skills/run/scripts/lib/discover.mjs": libDiscover,
+  "skills/run/scripts/lib/envreport.mjs": libEnvreport,
+  "skills/run/scripts/lib/fence-proxy.mjs": libFenceProxy,
+  "skills/run/scripts/lib/guard.mjs": libGuard,
+  "skills/run/scripts/lib/hosts.mjs": libHosts,
+  "skills/run/scripts/lib/live-page.mjs": libLivePage,
+  "skills/run/scripts/lib/open-page.mjs": libOpenPage,
+  "skills/run/scripts/lib/psl-data.json": libPslData,
+  "skills/run/scripts/lib/run-tools.mjs": libRunTools,
+  "skills/run/scripts/lib/runs.mjs": libRuns,
+  "skills/run/scripts/lib/signin.mjs": libSignin,
+  "skills/run/scripts/lib/tools-lock.json": libToolsLock,
+  "skills/run/scripts/lib/tools.mjs": libTools,
+  "skills/run/scripts/lib/vet.mjs": libVet,
+  "skills/run/scripts/playwright-mcp.mjs": scriptsPlaywrightMcp,
+  "skills/run/scripts/stop-on-exit.mjs": scriptsStopOnExit,
+  "skills/run/scripts/tools-snapshot.json": scriptsToolsSnapshot,
+  "skills/run/spec-format.md": runSpecFormat,
+  "skills/run/templates/sign-in/SKILL.md": signInSkill,
+  "skills/run/templates/sign-in/scripts/check.mjs": scriptsCheck,
+  "skills/run/templates/sign-in/scripts/sign-in.mjs": scriptsSignIn,
 });
 //@ chunk-thddg15d.js:5631-5654 placement
 var _ = __cc_resource_30;
 //@ chunk-thddg15d.js:5654-5687 placement
-var ee = Et(_, import.meta.dirname);
+var skill = readEmbeddedTextSync(_, import.meta.dirname);
 //@ chunk-thddg15d.js:5687-5711 placement
-var te = __cc_resource_31;
+var skillPath = __cc_resource_31;
 //@ chunk-thddg15d.js:5711-5745 placement
-var se = Et(te, import.meta.dirname);
+var skill2 = readEmbeddedTextSync(skillPath, import.meta.dirname);
 //@ chunk-thddg15d.js:5745-5769 placement
-var re = __cc_resource_32;
+var skillPath2 = __cc_resource_32;
 //@ chunk-thddg15d.js:5769-5803 placement
-var ne = Et(re, import.meta.dirname);
+var skill3 = readEmbeddedTextSync(skillPath2, import.meta.dirname);
 //@ chunk-thddg15d.js:5803-5854 placement
-var freeze = Object.freeze({ run: ne, execute: se, draft: ee });
+var Ue = Object.freeze({
+  run: skill3,
+  execute: skill2,
+  draft: skill,
+});

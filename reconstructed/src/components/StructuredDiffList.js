@@ -9,45 +9,43 @@
  * attribution: fingerprint 1
  */
 import { intersperse } from "../utils/collections.js";
-import { e } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { jsxProd_default } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Box, Text } from "../ink/components/Text.js";
 import { StructuredDiff } from "./StructuredDiff.js";
 import { NoSelect } from "../ink/components/Input.js";
 
 //@ chunk-887tgx6t.js:7247-7553 fingerprint = StructuredDiffList (0.768)
-function StructuredDiffList({
-  hunks: hunks,
-  dim: dim,
-  width: width,
-  filePath: filePath,
-  firstLine: firstLine,
-  fileContent: fileContent,
-}) {
+function StructuredDiffList({ hunks, dim, width, filePath, firstLine, fileContent }) {
   return intersperse(
-    hunks.map((l, f) =>
-      e(
+    hunks.map((hunk, f) =>
+      jsxProd_default(
         Box,
         {
           flexDirection: "column",
-          children: e(StructuredDiff, {
-            patch: l,
-            dim: dim,
-            width: width,
-            filePath: filePath,
-            firstLine: firstLine,
-            fileContent: fileContent,
+          children: jsxProd_default(StructuredDiff, {
+            patch: hunk,
+            dim,
+            width,
+            filePath,
+            firstLine,
+            fileContent,
           }),
         },
         `hunk-${f}`,
       ),
     ),
-    (hunk) =>
-      e(
+    (i) =>
+      jsxProd_default(
         NoSelect,
-        { fromLeftEdge: !0, children: e(Text, { dimColor: !0, children: "..." }) },
-        `ellipsis-${hunk}`,
+        {
+          fromLeftEdge: true,
+          children: jsxProd_default(Text, {
+            dimColor: true,
+            children: "...",
+          }),
+        },
+        `ellipsis-${i}`,
       ),
   );
 }
-
 export { StructuredDiffList };

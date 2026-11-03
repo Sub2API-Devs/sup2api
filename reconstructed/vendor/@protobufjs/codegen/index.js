@@ -8,75 +8,82 @@
 import { x } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-pwh5dx3n.js:76760-78091 cjs-fingerprint
-var ed = x(function (Zw, Zu) {
-  Zu.exports = Na;
-  var iE =
+var ed = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = codegen;
+  var reservedRe =
     /^(?:do|if|in|for|let|new|try|var|case|else|enum|eval|false|null|this|true|void|with|break|catch|class|const|super|throw|while|yield|delete|export|import|public|return|static|switch|typeof|default|extends|finally|package|private|continue|debugger|function|arguments|interface|protected|implements|instanceof)$/;
-  function Na(e, t) {
-    if (typeof e === "string") ((t = e), (e = void 0));
-    var r = [];
-    function i(n) {
-      if (typeof n !== "string") {
-        var a = s();
-        if (Na.verbose) console.log("codegen: " + a);
-        if (((a = "return " + a), n)) {
-          var keys = Object.keys(n),
-            l = Array(keys.length + 1),
-            c = Array(keys.length),
-            u = 0;
-          while (u < keys.length) ((l[u] = keys[u]), (c[u] = n[keys[u++]]));
-          return ((l[u] = a), Function.apply(null, l).apply(null, c));
-        }
-        return Function(a)();
-      }
-      var d = Array(arguments.length - 1),
-        h = 0;
-      while (h < d.length) d[h] = arguments[++h];
-      if (
-        ((h = 0),
-        (n = n.replace(/%([%dfijs])/g, function (f, y) {
-          var C = d[h++];
-          switch (y) {
-            case "d":
-            case "f":
-              return String(Number(C));
-            case "i":
-              return String(Math.floor(C));
-            case "j":
-              return JSON.stringify(C);
-            case "s":
-              return String(C);
-          }
-          return "%";
-        })),
-        h !== d.length)
-      )
-        throw Error("parameter count mismatch");
-      return (r.push(n), i);
+  function codegen(functionParams, functionName) {
+    if (typeof functionParams === "string") {
+      functionName = functionParams;
+      functionParams = undefined;
     }
-    function s(n) {
+    var body = [];
+    function Codegen(formatStringOrScope) {
+      if (typeof formatStringOrScope !== "string") {
+        var source = toString();
+        if (codegen.verbose) console.log("codegen: " + source);
+        source = "return " + source;
+        if (formatStringOrScope) {
+          var scopeKeys = Object.keys(formatStringOrScope);
+          var scopeParams = Array(scopeKeys.length + 1);
+          var scopeValues = Array(scopeKeys.length);
+          var scopeOffset = 0;
+          while (scopeOffset < scopeKeys.length) {
+            scopeParams[scopeOffset] = scopeKeys[scopeOffset];
+            scopeValues[scopeOffset] = formatStringOrScope[scopeKeys[scopeOffset++]];
+          }
+          scopeParams[scopeOffset] = source;
+          return Function.apply(null, scopeParams).apply(null, scopeValues);
+        }
+        return Function(source)();
+      }
+      var formatParams = Array(arguments.length - 1);
+      var formatOffset = 0;
+      while (formatOffset < formatParams.length) formatParams[formatOffset] = arguments[++formatOffset];
+      formatOffset = 0;
+      formatStringOrScope = formatStringOrScope.replace(/%([%dfijs])/g, function ($0, $1) {
+        var value = formatParams[formatOffset++];
+        switch ($1) {
+          case "d":
+          case "f":
+            return String(Number(value));
+          case "i":
+            return String(Math.floor(value));
+          case "j":
+            return JSON.stringify(value);
+          case "s":
+            return String(value);
+        }
+        return "%";
+      });
+      if (formatOffset !== formatParams.length) throw Error("parameter count mismatch");
+      body.push(formatStringOrScope);
+      return Codegen;
+    }
+    function toString(functionNameOverride) {
       return (
         "function " +
-        sE(n || t) +
+        safeFunctionName(functionNameOverride || functionName) +
         "(" +
-        ((e && e.join(",")) || "") +
+        ((functionParams && functionParams.join(",")) || "") +
         `){
   ` +
-        r.join(`
+        body.join(`
   `) +
         `
 }`
       );
     }
-    return ((i.toString = s), i);
+    Codegen.toString = toString;
+    return Codegen;
   }
-  Na.verbose = !1;
-  function sE(e) {
-    if (!e) return "";
-    if (((e = String(e).replace(/[^\w$]/g, "")), !e)) return "";
-    if (/^\d/.test(e)) e = "_" + e;
-    return iE.test(e) ? e + "_" : e;
+  codegen.verbose = false;
+  function safeFunctionName(name) {
+    if (!name) return "";
+    name = String(name).replace(/[^\w$]/g, "");
+    if (!name) return "";
+    if (/^\d/.test(name)) name = "_" + name;
+    return reservedRe.test(name) ? name + "_" : name;
   }
 });
-
 export { ed };

@@ -11,24 +11,24 @@
 import { getMcpPrefix, isToolFromMcpServer } from "../services/mcp/mcpStringUtils.js";
 import { sleep } from "../utils/sleep.js";
 import { isCoordinatorMode_2 } from "./coordinatorMode.js";
-import { Npe } from "../services/mcp/client.js";
+import { TRANSPORT_FALLBACK_TIMEOUT_MS } from "../services/mcp/client.js";
 
+//@ chunk-h4jqyaw4.js:338-439 placement
 /**
  * 判断 MCP 服务器是否仍在连接中且其工具尚未出现在工具列表里。
  */
-//@ chunk-h4jqyaw4.js:338-439 placement
-function isPendingServerWithoutTools(o, e) {
-  if (o.type !== "pending") return !1;
-  let n = getMcpPrefix(o.name);
-  return !e.some((t) => isToolFromMcpServer(t, o.name, n));
+function isPendingServerWithoutTools(o, tools) {
+  if (o.type !== "pending") return false;
+  let mcpPrefix = getMcpPrefix(o.name);
+  return !tools.some((t) => isToolFromMcpServer(t, o.name, mcpPrefix));
 }
+//@ chunk-h4jqyaw4.js:439-642 placement
 /**
  * 轮询等待 MCP 客户端状态：只要还有满足条件（如仍在连接）的客户端就继续等，直到超时或满足 until 条件。
  */
-//@ chunk-h4jqyaw4.js:439-642 placement
 async function waitForMcpClients(o, e, n) {
-  let { maxWaitMs: maxWaitMs, until: until, pollMs: pollMs = 50 } = n,
-    i = (r) => r.clients.some((client) => e(client, r));
+  let { maxWaitMs, until, pollMs = 50 } = n;
+  let i = (r) => r.clients.some((client) => e(client, r));
   if (!i(o())) return;
   let p = Date.now() + maxWaitMs;
   while (Date.now() < p) {
@@ -58,10 +58,9 @@ function excludeCoordinatorCommsMcpTools(o) {
 async function waitForCoordinatorSubagentMcpServers(o) {
   if (!isCoordinatorMode_2()) return;
   await waitForMcpClients(o, (e, n) => isPendingServerWithoutTools(e, n.tools) && !isCommsRoledServer(e), {
-    maxWaitMs: Npe,
+    maxWaitMs: TRANSPORT_FALLBACK_TIMEOUT_MS,
   });
 }
-
 export {
   excludeCoordinatorCommsMcpTools,
   waitForCoordinatorSubagentMcpServers,

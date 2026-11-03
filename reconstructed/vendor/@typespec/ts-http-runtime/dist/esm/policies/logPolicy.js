@@ -5,28 +5,29 @@
  * pieces: chunk-mrx6y2r5.js (2)
  * attribution: esm-fingerprint 2
  */
-import { Ve } from "../log.js";
-import { tt } from "../util/sanitizer.js";
+import { logger_2 } from "../log.js";
+import { Sanitizer } from "../util/sanitizer.js";
 
 //@ chunk-mrx6y2r5.js:49396-49415 esm-fingerprint
-var LOGPOLICY = "logPolicy";
+var logPolicyName = "logPolicy";
 //@ chunk-mrx6y2r5.js:49415-49828 esm-fingerprint
-function sa(e = {}) {
-  var t;
-  let r = (t = e.logger) !== null && t !== void 0 ? t : Ve.info,
-    n = new tt({
-      additionalAllowedHeaderNames: e.additionalAllowedHeaderNames,
-      additionalAllowedQueryParameters: e.additionalAllowedQueryParameters,
-    });
+function logPolicy(options = {}) {
+  var _a;
+  let logger = (_a = options.logger) !== null && _a !== undefined ? _a : logger_2.info;
+  let sanitizer = new Sanitizer({
+    additionalAllowedHeaderNames: options.additionalAllowedHeaderNames,
+    additionalAllowedQueryParameters: options.additionalAllowedQueryParameters,
+  });
   return {
-    name: LOGPOLICY,
-    async sendRequest(o, i) {
-      if (!r.enabled) return i(o);
-      r(`Request: ${n.sanitize(o)}`);
-      let s = await i(o);
-      return (r(`Response status code: ${s.status}`), r(`Headers: ${n.sanitize(s.headers)}`), s);
+    name: logPolicyName,
+    async sendRequest(request, next) {
+      if (!logger.enabled) return next(request);
+      logger(`Request: ${sanitizer.sanitize(request)}`);
+      let response = await next(request);
+      logger(`Response status code: ${response.status}`);
+      logger(`Headers: ${sanitizer.sanitize(response.headers)}`);
+      return response;
     },
   };
 }
-
-export { sa };
+export { logPolicy };

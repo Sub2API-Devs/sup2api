@@ -9,38 +9,31 @@
  * attribution: placement 3
  */
 
+//@ chunk-e6aww6q8.js:787844-789339 placement
 /**
  * 把内部的上下文用量数据复制为插件可见的形状：分类、网格、模型、记忆文件、MCP 工具、代理、斜杠命令、技能、自动压缩阈值与 API 用量。
  */
-//@ chunk-e6aww6q8.js:787844-789339 placement
 function toPluginContextData(e) {
-  let {
-      slashCommands: slashCommands,
-      skills: skills,
-      autoCompactThreshold: autoCompactThreshold,
-      apiUsage: apiUsage,
-    } = e,
-    y = slashCommands !== void 0,
-    S = skills !== void 0,
-    w = autoCompactThreshold !== void 0,
-    L = apiUsage !== null;
+  let { slashCommands, skills, autoCompactThreshold, apiUsage } = e;
+  let y = slashCommands !== undefined;
+  let S = skills !== undefined;
+  let w = autoCompactThreshold !== undefined;
+  let L = apiUsage !== null;
   return {
-    categories: e.categories.map(
-      ({ name: G, tokens: tokens, color: color, isDeferred: isDeferred = !1, kind: kind }) => ({
-        name: G,
-        tokens: tokens,
-        color: color,
-        isDeferred: isDeferred,
-        kind: kind,
-      }),
-    ),
+    categories: e.categories.map(({ name: G, tokens, color, isDeferred = false, kind }) => ({
+      name: G,
+      tokens,
+      color,
+      isDeferred,
+      kind,
+    })),
     totalTokens: e.totalTokens,
     maxTokens: e.maxTokens,
     rawMaxTokens: e.rawMaxTokens,
     autocompactSource: e.autocompactSource,
     percentage: e.percentage,
-    gridRows: e.gridRows.map((gridRow) =>
-      gridRow.map((q) => ({
+    gridRows: e.gridRows.map((G) =>
+      G.map((q) => ({
         color: q.color,
         isFilled: q.isFilled,
         categoryName: q.categoryName,
@@ -55,18 +48,16 @@ function toPluginContextData(e) {
       type: memoryFile.type,
       tokens: memoryFile.tokens,
     })),
-    mcpTools: e.mcpTools.map(
-      ({ name: G, serverName: serverName, tokens: tokens, isLoaded: isLoaded = !0 }) => ({
-        name: G,
-        serverName: serverName,
-        tokens: tokens,
-        isLoaded: isLoaded,
-      }),
-    ),
-    agents: e.agents.map(({ agentType: agentType, source: source, tokens: tokens }) => ({
-      agentType: agentType,
-      source: source,
-      tokens: tokens,
+    mcpTools: e.mcpTools.map(({ name: G, serverName, tokens, isLoaded = true }) => ({
+      name: G,
+      serverName,
+      tokens,
+      isLoaded,
+    })),
+    agents: e.agents.map(({ agentType, source, tokens }) => ({
+      agentType,
+      source,
+      tokens,
     })),
     ...(y && {
       slashCommands: {
@@ -80,17 +71,19 @@ function toPluginContextData(e) {
         totalSkills: skills.totalSkills,
         includedSkills: skills.includedSkills,
         tokens: skills.tokens,
-        skillFrontmatter: skills.skillFrontmatter.map(
-          ({ name: G, source: source, pluginName: pluginName, tokens: tokens }) => ({
-            name: G,
-            source: source,
-            ...(pluginName !== void 0 && { pluginName: pluginName }),
-            tokens: tokens,
+        skillFrontmatter: skills.skillFrontmatter.map(({ name: G, source, pluginName, tokens }) => ({
+          name: G,
+          source,
+          ...(pluginName !== undefined && {
+            pluginName,
           }),
-        ),
+          tokens,
+        })),
       },
     }),
-    ...(w && { autoCompactThreshold: autoCompactThreshold }),
+    ...(w && {
+      autoCompactThreshold,
+    }),
     isAutoCompactEnabled: e.isAutoCompactEnabled,
     apiUsage: L
       ? {
@@ -103,9 +96,19 @@ function toPluginContextData(e) {
   };
 }
 //@ chunk-e6aww6q8.js:789339-789430 placement
-var D0t = async (e, n) =>
-  toPluginContextData(await e.contextData({ detail: n.breakdown, terminalWidth: n.columns }));
+/**
+ * 读插件上下文数据
+ */
+var pluginContextData = async (e, n) =>
+  toPluginContextData(
+    await e.contextData({
+      detail: n.breakdown,
+      terminalWidth: n.columns,
+    }),
+  );
 //@ chunk-e6aww6q8.js:789491-789532 placement
-var xEo = /^[A-Za-z_][A-Za-z0-9_-]{0,31}$/;
-
-export { D0t, xEo };
+/**
+ * detail 键名格式
+ */
+var DETAIL_KEY_RE = /^[A-Za-z_][A-Za-z0-9_-]{0,31}$/;
+export { pluginContextData, DETAIL_KEY_RE };

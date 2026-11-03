@@ -6,120 +6,119 @@
  * attribution: esm-layout 1, esm-fingerprint 3
  */
 import { Re } from "../../../../../../runtime/bun-runtime.js";
-import { Dae } from "../../../../region-config-resolver/dist-cjs/index.js";
-import { Kg } from "../../../../../@smithy/protocol-http/dist-cjs/index.js";
-import { ff } from "../../../../../@smithy/core/dist-cjs/submodules/client/index.js";
+import { require_region_config_resolver } from "../../../../region-config-resolver/dist-cjs/index.js";
+import { require_protocol_http } from "../../../../../@smithy/protocol-http/dist-cjs/index.js";
+import { require_client } from "../../../../../@smithy/core/dist-cjs/submodules/client/index.js";
 import {
-  Le,
-  v,
-  D,
-  Me,
-  P,
-  Ne,
-  Q,
-  He,
-  Fe,
-  We,
-  Oe,
-  h,
-  q,
+  import_client,
+  import_middleware_user_agent,
+  import_retry,
+  import_index_native,
+  import_middleware_host_header,
+  import_middleware_endpoint,
+  resolveHttpAuthSchemeConfig,
+  import_schema,
+  import_middleware_host_header_2,
+  import_middleware_logger,
+  import_middleware_recursion_detection,
+  import_core,
+  defaultSTSHttpAuthSchemeParametersProvider,
 } from "../../../../client-sts/dist-cjs/auth/httpAuthSchemeProvider.js";
-import { Ge } from "../sts/runtimeConfig.js";
+import { getRuntimeConfig_2 } from "../sts/runtimeConfig.js";
 import { V } from "../../../../client-sts/dist-cjs/index.js";
 
 //@ chunk-heg39xxp.js:13020-13058 esm-layout
-var y = Re(Dae()),
-  T = Re(Kg()),
-  R = Re(ff());
+var import_region_config_resolver = Re(require_region_config_resolver());
+var import_protocol_http = Re(require_protocol_http());
+var import_client_5 = Re(require_client());
 //@ chunk-heg39xxp.js:13058-13525 esm-fingerprint
-var be = (e) => {
-    let {
-      httpAuthSchemes: httpAuthSchemes,
-      httpAuthSchemeProvider: httpAuthSchemeProvider,
-      credentials: credentials,
-    } = e;
-    return {
-      setHttpAuthScheme(i) {
-        let index = httpAuthSchemes.findIndex((E) => E.schemeId === i.schemeId);
-        if (index === -1) httpAuthSchemes.push(i);
-        else httpAuthSchemes.splice(index, 1, i);
-      },
-      httpAuthSchemes() {
-        return httpAuthSchemes;
-      },
-      setHttpAuthSchemeProvider(i) {
-        httpAuthSchemeProvider = i;
-      },
-      httpAuthSchemeProvider() {
-        return httpAuthSchemeProvider;
-      },
-      setCredentials(i) {
-        credentials = i;
-      },
-      credentials() {
-        return credentials;
-      },
-    };
-  },
-  ke = (e) => ({
-    httpAuthSchemes: e.httpAuthSchemes(),
-    httpAuthSchemeProvider: e.httpAuthSchemeProvider(),
-    credentials: e.credentials(),
-  });
+var getHttpAuthExtensionConfiguration = (config) => {
+  let {
+    httpAuthSchemes: _httpAuthSchemes,
+    httpAuthSchemeProvider: _httpAuthSchemeProvider,
+    credentials: _credentials,
+  } = config;
+  return {
+    setHttpAuthScheme(httpAuthScheme) {
+      let index = _httpAuthSchemes.findIndex((scheme) => scheme.schemeId === httpAuthScheme.schemeId);
+      if (index === -1) _httpAuthSchemes.push(httpAuthScheme);
+      else _httpAuthSchemes.splice(index, 1, httpAuthScheme);
+    },
+    httpAuthSchemes() {
+      return _httpAuthSchemes;
+    },
+    setHttpAuthSchemeProvider(httpAuthSchemeProvider) {
+      _httpAuthSchemeProvider = httpAuthSchemeProvider;
+    },
+    httpAuthSchemeProvider() {
+      return _httpAuthSchemeProvider;
+    },
+    setCredentials(credentials) {
+      _credentials = credentials;
+    },
+    credentials() {
+      return _credentials;
+    },
+  };
+};
+var resolveHttpAuthRuntimeConfig = (config) => ({
+  httpAuthSchemes: config.httpAuthSchemes(),
+  httpAuthSchemeProvider: config.httpAuthSchemeProvider(),
+  credentials: config.credentials(),
+});
 //@ chunk-heg39xxp.js:13525-13863 esm-fingerprint
-var we = (e, t) => {
-  let merged = Object.assign(
-    y.getAwsRegionExtensionConfiguration(e),
-    R.getDefaultExtensionConfiguration(e),
-    T.getHttpHandlerExtensionConfiguration(e),
-    be(e),
+var resolveRuntimeExtensions = (runtimeConfig, extensions) => {
+  let extensionConfiguration = Object.assign(
+    import_region_config_resolver.getAwsRegionExtensionConfiguration(runtimeConfig),
+    import_client_5.getDefaultExtensionConfiguration(runtimeConfig),
+    import_protocol_http.getHttpHandlerExtensionConfiguration(runtimeConfig),
+    getHttpAuthExtensionConfiguration(runtimeConfig),
   );
-  return (
-    t.forEach((d) => d.configure(merged)),
-    Object.assign(
-      e,
-      y.resolveAwsRegionExtensionConfiguration(merged),
-      R.resolveDefaultRuntimeConfig(merged),
-      T.resolveHttpHandlerRuntimeConfig(merged),
-      ke(merged),
-    )
+  extensions.forEach((extension) => extension.configure(extensionConfiguration));
+  return Object.assign(
+    runtimeConfig,
+    import_region_config_resolver.resolveAwsRegionExtensionConfiguration(extensionConfiguration),
+    import_client_5.resolveDefaultRuntimeConfig(extensionConfiguration),
+    import_protocol_http.resolveHttpHandlerRuntimeConfig(extensionConfiguration),
+    resolveHttpAuthRuntimeConfig(extensionConfiguration),
   );
 };
 //@ chunk-heg39xxp.js:13863-14920 esm-fingerprint
-class j extends Le.Client {
+class CognitoIdentityClient extends import_client.Client {
   config;
-  constructor(...[e]) {
-    let t = Ge(e || {});
-    super(t);
-    this.initConfig = t;
-    let o = V(t),
-      userAgentConfig = v.resolveUserAgentConfig(o),
-      retryConfig = D.resolveRetryConfig(userAgentConfig),
-      regionConfig = Me.resolveRegionConfig(retryConfig),
-      hostHeaderConfig = P.resolveHostHeaderConfig(regionConfig),
-      endpointConfig = Ne.resolveEndpointConfig(hostHeaderConfig),
-      $e = Q(endpointConfig),
-      Je = we($e, e?.extensions || []);
-    ((this.config = Je),
-      this.middlewareStack.use(He.getSchemaSerdePlugin(this.config)),
-      this.middlewareStack.use(v.getUserAgentPlugin(this.config)),
-      this.middlewareStack.use(D.getRetryPlugin(this.config)),
-      this.middlewareStack.use(Fe.getContentLengthPlugin(this.config)),
-      this.middlewareStack.use(P.getHostHeaderPlugin(this.config)),
-      this.middlewareStack.use(We.getLoggerPlugin(this.config)),
-      this.middlewareStack.use(Oe.getRecursionDetectionPlugin(this.config)),
-      this.middlewareStack.use(
-        h.getHttpAuthSchemeEndpointRuleSetPlugin(this.config, {
-          httpAuthSchemeParametersProvider: q,
-          identityProviderConfigProvider: async (Qe) =>
-            new h.DefaultIdentityProviderConfig({ "aws.auth#sigv4": Qe.credentials }),
-        }),
-      ),
-      this.middlewareStack.use(h.getHttpSigningPlugin(this.config)));
+  constructor(...[configuration]) {
+    let _config_0 = getRuntimeConfig_2(configuration || {});
+    super(_config_0);
+    this.initConfig = _config_0;
+    let _config_1 = V(_config_0);
+    let _config_2 = import_middleware_user_agent.resolveUserAgentConfig(_config_1);
+    let _config_3 = import_retry.resolveRetryConfig(_config_2);
+    let _config_4 = import_index_native.resolveRegionConfig(_config_3);
+    let _config_5 = import_middleware_host_header.resolveHostHeaderConfig(_config_4);
+    let _config_6 = import_middleware_endpoint.resolveEndpointConfig(_config_5);
+    let _config_7 = resolveHttpAuthSchemeConfig(_config_6);
+    let _config_8 = resolveRuntimeExtensions(_config_7, configuration?.extensions || []);
+    this.config = _config_8;
+    this.middlewareStack.use(import_schema.getSchemaSerdePlugin(this.config));
+    this.middlewareStack.use(import_middleware_user_agent.getUserAgentPlugin(this.config));
+    this.middlewareStack.use(import_retry.getRetryPlugin(this.config));
+    this.middlewareStack.use(import_middleware_host_header_2.getContentLengthPlugin(this.config));
+    this.middlewareStack.use(import_middleware_host_header.getHostHeaderPlugin(this.config));
+    this.middlewareStack.use(import_middleware_logger.getLoggerPlugin(this.config));
+    this.middlewareStack.use(import_middleware_recursion_detection.getRecursionDetectionPlugin(this.config));
+    this.middlewareStack.use(
+      import_core.getHttpAuthSchemeEndpointRuleSetPlugin(this.config, {
+        httpAuthSchemeParametersProvider: defaultSTSHttpAuthSchemeParametersProvider,
+        identityProviderConfigProvider: async (config) =>
+          new import_core.DefaultIdentityProviderConfig({
+            "aws.auth#sigv4": config.credentials,
+          }),
+      }),
+    );
+    this.middlewareStack.use(import_core.getHttpSigningPlugin(this.config));
   }
   destroy() {
     super.destroy();
   }
 }
-
-export { j };
+export { CognitoIdentityClient };

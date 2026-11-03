@@ -11,18 +11,17 @@
 import { READ_MCP_RESOURCE_DIR_TOOL_NAME } from "../tools/ReadMcpResourceDirTool/prompt.js";
 import { READMCPRESOURCETOOL } from "../tools/ReadMcpResourceTool/prompt.js";
 
+//@ chunk-e6aww6q8.js:3124230-3124614 placement
 /**
  * MCP 提供的技能说明：如何用 ReadMcpResource 读取相对路径的支持文件。
  */
-//@ chunk-e6aww6q8.js:3124230-3124614 placement
-function mcpSkillResourceHint(e) {
-  let n = e.directoryRead
-    ? ` Call ${READ_MCP_RESOURCE_DIR_TOOL_NAME} on "${e.uri}" or a subdirectory URI to list its contents.`
+function mcpSkillResourceHint(mcpResourceRoot) {
+  let n = mcpResourceRoot.directoryRead
+    ? ` Call ${READ_MCP_RESOURCE_DIR_TOOL_NAME} on "${mcpResourceRoot.uri}" or a subdirectory URI to list its contents.`
     : "";
   return (
-    `This skill is served by MCP server "${e.server}" at ${e.uri}. ` +
-    `To read a supporting file this skill references by a relative path \u2014 for example "templates/invoice.md" \u2014 call ${READMCPRESOURCETOOL} with server "${e.server}" and uri "${e.uri}/templates/invoice.md".${n}`
+    `This skill is served by MCP server "${mcpResourceRoot.server}" at ${mcpResourceRoot.uri}. ` +
+    `To read a supporting file this skill references by a relative path \u2014 for example "templates/invoice.md" \u2014 call ${READMCPRESOURCETOOL} with server "${mcpResourceRoot.server}" and uri "${mcpResourceRoot.uri}/templates/invoice.md".${n}`
   );
 }
-
 export { mcpSkillResourceHint };

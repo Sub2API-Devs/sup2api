@@ -9,62 +9,59 @@ import { x, importMetaRequire } from "../../../../../runtime/bun-runtime.js";
 import { base64Module } from "../../../../@aws-sdk/credential-provider-web-identity/dist-cjs/index.js";
 
 //@ chunk-wjd9n4jx.js:425-1456 cjs-fingerprint
-var me = x(function (Ue) {
-  Object.defineProperty(Ue, "__esModule", { value: !0 });
-  Ue.ChecksumStream = void 0;
-  var De = base64Module(),
-    qe = importMetaRequire("stream");
-  class je extends qe.Duplex {
+var require_ChecksumStream = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.ChecksumStream = undefined;
+  var util_base64_1 = base64Module();
+  var stream_1 = importMetaRequire("stream");
+  class ChecksumStream extends stream_1.Duplex {
     expectedChecksum;
     checksumSourceLocation;
     checksum;
     source;
     base64Encoder;
-    constructor({
-      expectedChecksum: e,
-      checksum: t,
-      source: r,
-      checksumSourceLocation: s,
-      base64Encoder: n,
-    }) {
+    constructor({ expectedChecksum, checksum, source, checksumSourceLocation, base64Encoder }) {
       super();
-      if (typeof r.pipe === "function") this.source = r;
+      if (typeof source.pipe === "function") this.source = source;
       else
         throw Error(
-          `@smithy/util-stream: unsupported source type ${r?.constructor?.name ?? r} in ChecksumStream.`,
+          `@smithy/util-stream: unsupported source type ${source?.constructor?.name ?? source} in ChecksumStream.`,
         );
-      ((this.base64Encoder = n ?? De.toBase64),
-        (this.expectedChecksum = e),
-        (this.checksum = t),
-        (this.checksumSourceLocation = s),
-        this.source.pipe(this));
+      this.base64Encoder = base64Encoder ?? util_base64_1.toBase64;
+      this.expectedChecksum = expectedChecksum;
+      this.checksum = checksum;
+      this.checksumSourceLocation = checksumSourceLocation;
+      this.source.pipe(this);
     }
-    _read(e) {}
-    _write(e, t, r) {
+    _read(size) {}
+    _write(chunk, encoding, callback) {
       try {
-        (this.checksum.update(e), this.push(e));
-      } catch (error) {
-        return r(error);
+        this.checksum.update(chunk);
+        this.push(chunk);
+      } catch (e) {
+        return callback(e);
       }
-      return r();
+      return callback();
     }
-    async _final(e) {
+    async _final(callback) {
       try {
-        let digest = await this.checksum.digest(),
-          base64Encoder = this.base64Encoder(digest);
-        if (this.expectedChecksum !== base64Encoder)
-          return e(
+        let digest = await this.checksum.digest();
+        let received = this.base64Encoder(digest);
+        if (this.expectedChecksum !== received)
+          return callback(
             Error(
-              `Checksum mismatch: expected "${this.expectedChecksum}" but received "${base64Encoder}" in response header "${this.checksumSourceLocation}".`,
+              `Checksum mismatch: expected "${this.expectedChecksum}" but received "${received}" in response header "${this.checksumSourceLocation}".`,
             ),
           );
-      } catch (error) {
-        return e(error);
+      } catch (e) {
+        return callback(e);
       }
-      return (this.push(null), e());
+      this.push(null);
+      return callback();
     }
   }
-  Ue.ChecksumStream = je;
+  cjsExports.ChecksumStream = ChecksumStream;
 });
-
-export { me };
+export { require_ChecksumStream };

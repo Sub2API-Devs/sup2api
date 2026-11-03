@@ -11,27 +11,32 @@
 import { getPlatform } from "./platform.js";
 import { getCachedPowerShellPath } from "./shell/powershellDetection.js";
 import { withDeadline } from "./sleep.js";
-import { j7s } from "./Shell.js";
-import { ZSr } from "./shell/shellPaths.js";
+import { resolveBashToolShellWithHost } from "./Shell.js";
+import { getResolvedBashShellPath } from "./shell/shellPaths.js";
 
 //@ chunk-4zx9mssv.js:372-383 placement
-var e = 2000;
+var WINDOWS_SETUP_TIMEOUT_MS = 2000;
 //@ chunk-4zx9mssv.js:383-474 placement
-async function rNt() {
+/**
+ * primeWindowsPlatform：预先准备 Windows 平台的 PowerShell。
+ */
+async function primeWindowsPlatform() {
   if (getPlatform() === "windows") {
     getCachedPowerShellPath();
     return;
   }
   await withDeadline(
-    j7s().catch(() => {
+    resolveBashToolShellWithHost().catch(() => {
       return;
     }),
-    e,
+    WINDOWS_SETUP_TIMEOUT_MS,
   );
 }
 //@ chunk-4zx9mssv.js:474-528 placement
-function cOs() {
-  return getPlatform() === "windows" || ZSr() !== void 0;
+/**
+ * isWindowsOrPowerShellHost：Windows 或已有 PowerShell 路径。
+ */
+function isWindowsOrPowerShellHost() {
+  return getPlatform() === "windows" || getResolvedBashShellPath() !== undefined;
 }
-
-export { rNt, cOs };
+export { primeWindowsPlatform, isWindowsOrPowerShellHost };

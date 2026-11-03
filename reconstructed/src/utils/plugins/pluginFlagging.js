@@ -10,7 +10,7 @@
  */
 import { join } from "path";
 import { readFile } from "fs/promises";
-import { getPluginsDirectory, Tet } from "./pluginDirectories.js";
+import { getPluginsDirectory, pluginRegistrySpace } from "./pluginDirectories.js";
 import { jsonParse, jsonStringify } from "../slowOperations.js";
 import { isStorageV5Enabled } from "../hoverRest.js";
 import { STORAGE_SPACES } from "../storage/storageSpaces.js";
@@ -23,8 +23,8 @@ import { getFsImplementation } from "../fsOperations.js";
 import { writeFileAtomic } from "../atomicPublishWrite.js";
 
 //@ chunk-rrq1mnv6.js:1040-1081 fingerprint = FLAGGED_PLUGINS_FILENAME (1)
-var FLAGGED_PLUGINS_FILENAME = "flagged-plugins.json",
-  FLAGGED_RETENTION_MS = 172800000;
+var FLAGGED_PLUGINS_FILENAME = "flagged-plugins.json";
+var FLAGGED_RETENTION_MS = 172800000;
 //@ chunk-rrq1mnv6.js:1081-1111 layout
 function getFlaggedPluginsPath() {
   return join(getPluginsDirectory(), FLAGGED_PLUGINS_FILENAME);
@@ -40,35 +40,37 @@ function parsePluginsData(content) {
     parsed.plugins === null
   )
     return {};
-  let plugins = parsed.plugins,
-    result = {};
-  for (let [o, n] of Object.entries(plugins))
-    if (n && typeof n === "object" && "flaggedAt" in n && typeof n.flaggedAt === "string") {
-      let parsed = { flaggedAt: n.flaggedAt };
-      if ("seenAt" in n && typeof n.seenAt === "string") parsed.seenAt = n.seenAt;
-      result[o] = parsed;
+  let plugins = parsed.plugins;
+  let result = {};
+  for (let [id, entry] of Object.entries(plugins))
+    if (entry && typeof entry === "object" && "flaggedAt" in entry && typeof entry.flaggedAt === "string") {
+      let parsed = {
+        flaggedAt: entry.flaggedAt,
+      };
+      if ("seenAt" in entry && typeof entry.seenAt === "string") parsed.seenAt = entry.seenAt;
+      result[id] = parsed;
     }
   return result;
 }
 //@ chunk-rrq1mnv6.js:1481-1613 layout
-var EXPECTED_FS_ERRORS = new Set(["ENOSPC", "EROFS", "EACCES", "ENOENT", "ENOTDIR"]),
-  EXPECTED_STORAGE_ERRORS = new Set([
-    ...EXPECTED_FS_ERRORS,
-    "EEXIST",
-    "EISDIR",
-    "AbsentParent",
-    "UnexpectedAbsent",
-  ]);
+var EXPECTED_FS_ERRORS = new Set(["ENOSPC", "EROFS", "EACCES", "ENOENT", "ENOTDIR"]);
+var EXPECTED_STORAGE_ERRORS = new Set([
+  ...EXPECTED_FS_ERRORS,
+  "EEXIST",
+  "EISDIR",
+  "AbsentParent",
+  "UnexpectedAbsent",
+]);
 //@ chunk-rrq1mnv6.js:1613-1682 layout
-function M(e) {
-  return isStorageV5Enabled() && e !== void 0 && Tet("flagged") !== null ? e : void 0;
+function flaggedPluginIdIfStored(e) {
+  return isStorageV5Enabled() && e !== undefined && pluginRegistrySpace("flagged") !== null ? e : undefined;
 }
 //@ chunk-rrq1mnv6.js:1682-2011 callgraph-witnessed = readFromDisk (0.395)
 async function readFromDisk(e) {
-  let r = M(e);
+  let r = flaggedPluginIdIfStored(e);
   if (r) {
-    let read = await r.read([STORAGE_SPACES.pluginRegistry("flagged")]),
-      o = read.ok ? read.value.items[0] : void 0;
+    let g = await r.read([STORAGE_SPACES.pluginRegistry("flagged")]);
+    let o = g.ok ? g.value.items[0] : undefined;
     if (!o?.found) return {};
     let n = o.value;
     try {
@@ -77,35 +79,43 @@ async function readFromDisk(e) {
       return {};
     }
   }
-  let s = getFlaggedPluginsPath();
+  let flaggedPluginsPath = getFlaggedPluginsPath();
   try {
-    let content = await readFile(s, { encoding: "utf-8" });
+    let content = await readFile(flaggedPluginsPath, {
+      encoding: "utf-8",
+    });
     return parsePluginsData(content);
   } catch {
     return {};
   }
 }
 //@ chunk-rrq1mnv6.js:2011-2670 callgraph-witnessed = writeToDisk (0.15)
-async function writeToDisk(e, r) {
-  let s = M(r);
+async function writeToDisk(updated, r) {
+  let s = flaggedPluginIdIfStored(r);
   if (s) {
-    let write = await s.write(
+    let o = await s.write(
       STORAGE_SPACES.pluginRegistry("flagged"),
-      jsonStringify({ plugins: e }, null, 2),
+      jsonStringify(
+        {
+          plugins: updated,
+        },
+        null,
+        2,
+      ),
     );
-    if (write.ok) {
-      getPluginRegistry().flaggedPlugins = e;
+    if (o.ok) {
+      getPluginRegistry().flaggedPlugins = updated;
       return;
     }
-    let n = "telemetryCode" in write.error ? write.error.telemetryCode : void 0;
-    if (n !== void 0 && EXPECTED_STORAGE_ERRORS.has(n))
-      logForDebugging(`Failed to persist flagged plugins: ${formatStorageError(write.error)}`, {
+    let telemetryCode = "telemetryCode" in o.error ? o.error.telemetryCode : undefined;
+    if (telemetryCode !== undefined && EXPECTED_STORAGE_ERRORS.has(telemetryCode))
+      logForDebugging(`Failed to persist flagged plugins: ${formatStorageError(o.error)}`, {
         level: "error",
       });
     else
       logError(
         new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          `Failed to persist flagged plugins: ${write.error.code}${n === void 0 ? "" : ` ${n}`}`,
+          `Failed to persist flagged plugins: ${o.error.code}${telemetryCode === undefined ? "" : ` ${telemetryCode}`}`,
           "flagged plugins v5 write failed",
         ),
       );
@@ -114,72 +124,99 @@ async function writeToDisk(e, r) {
   let filePath = getFlaggedPluginsPath();
   try {
     await getFsImplementation().mkdir(getPluginsDirectory());
-    let content = jsonStringify({ plugins: e }, null, 2);
-    (await writeFileAtomic(filePath, content, 384), (getPluginRegistry().flaggedPlugins = e));
+    let content = jsonStringify(
+      {
+        plugins: updated,
+      },
+      null,
+      2,
+    );
+    await writeFileAtomic(filePath, content, 384);
+    getPluginRegistry().flaggedPlugins = updated;
   } catch (error) {
-    let n = getErrnoCode(error);
-    if (n !== void 0 && EXPECTED_FS_ERRORS.has(n))
-      logForDebugging(`Failed to persist flagged plugins: ${error}`, { level: "error" });
+    let errnoCode = getErrnoCode(error);
+    if (errnoCode !== undefined && EXPECTED_FS_ERRORS.has(errnoCode))
+      logForDebugging(`Failed to persist flagged plugins: ${error}`, {
+        level: "error",
+      });
     else logError(error);
   }
 }
+//@ chunk-rrq1mnv6.js:2670-2862 fingerprint = loadFlaggedPlugins (0.77)
 /**
  * 读取 flagged-plugins.json（被下架强制卸载的插件），超过 48 小时且已看过的条目清掉。
  */
-//@ chunk-rrq1mnv6.js:2670-2862 fingerprint = loadFlaggedPlugins (0.77)
 async function loadFlaggedPlugins(e) {
-  let r = await readFromDisk(e),
-    now = Date.now(),
-    g = !1;
-  for (let [o, n] of Object.entries(r))
-    if (n.seenAt && now - new Date(n.seenAt).getTime() >= FLAGGED_RETENTION_MS) (delete r[o], (g = !0));
-  if (((getPluginRegistry().flaggedPlugins = r), g)) await writeToDisk(r, e);
+  let all = await readFromDisk(e);
+  let now = Date.now();
+  let changed = false;
+  for (let [id, entry] of Object.entries(all))
+    if (entry.seenAt && now - new Date(entry.seenAt).getTime() >= FLAGGED_RETENTION_MS) {
+      delete all[id];
+      changed = true;
+    }
+  getPluginRegistry().flaggedPlugins = all;
+  if (changed) await writeToDisk(all, e);
 }
+//@ chunk-rrq1mnv6.js:2862-2908 layout
 /**
  * 全局状态中的 flagged 插件表。
  */
-//@ chunk-rrq1mnv6.js:2862-2908 layout
 function getFlaggedPlugins() {
   return getPluginRegistry().flaggedPlugins ?? {};
 }
+//@ chunk-rrq1mnv6.js:2908-3104 fingerprint = addFlaggedPlugin (0.886)
 /**
  * 标记一个插件为 flagged（记录时间），持久化。
  */
-//@ chunk-rrq1mnv6.js:2908-3104 fingerprint = addFlaggedPlugin (0.886)
-async function addFlaggedPlugin(e, r) {
-  let s = getPluginRegistry();
-  if (s.flaggedPlugins === null) s.flaggedPlugins = await readFromDisk(r);
-  let g = { ...s.flaggedPlugins, [e]: { flaggedAt: new Date().toISOString() } };
-  (await writeToDisk(g, r), logForDebugging(`Flagged plugin: ${e}`));
+async function addFlaggedPlugin(pluginId, r) {
+  let pluginRegistry = getPluginRegistry();
+  if (pluginRegistry.flaggedPlugins === null) pluginRegistry.flaggedPlugins = await readFromDisk(r);
+  let updated = {
+    ...pluginRegistry.flaggedPlugins,
+    [pluginId]: {
+      flaggedAt: new Date().toISOString(),
+    },
+  };
+  await writeToDisk(updated, r);
+  logForDebugging(`Flagged plugin: ${pluginId}`);
 }
+//@ chunk-rrq1mnv6.js:3104-3341 fingerprint = markFlaggedPluginsSeen (0.762)
 /**
  * 把所有 flagged 插件标为已看过（/plugin 界面展示后）。
  */
-//@ chunk-rrq1mnv6.js:3104-3341 fingerprint = markFlaggedPluginsSeen (0.762)
-async function markFlaggedPluginsSeen(e, r) {
-  let s = getPluginRegistry();
-  if (s.flaggedPlugins === null) s.flaggedPlugins = await readFromDisk(r);
-  let now = new Date().toISOString(),
-    o = !1,
-    updated = { ...s.flaggedPlugins };
-  for (let id of e) {
+async function markFlaggedPluginsSeen(pluginIds, storageV5) {
+  let pluginRegistry = getPluginRegistry();
+  if (pluginRegistry.flaggedPlugins === null) pluginRegistry.flaggedPlugins = await readFromDisk(storageV5);
+  let now = new Date().toISOString();
+  let changed = false;
+  let updated = {
+    ...pluginRegistry.flaggedPlugins,
+  };
+  for (let id of pluginIds) {
     let entry = updated[id];
-    if (entry && !entry.seenAt) ((updated[id] = { ...entry, seenAt: now }), (o = !0));
+    if (entry && !entry.seenAt) {
+      updated[id] = {
+        ...entry,
+        seenAt: now,
+      };
+      changed = true;
+    }
   }
-  if (o) await writeToDisk(updated, r);
+  if (changed) await writeToDisk(updated, storageV5);
 }
+//@ chunk-rrq1mnv6.js:3341-3531 callgraph-witnessed = removeFlaggedPlugin (0)
 /**
  * 移除一个 flagged 标记。
  */
-//@ chunk-rrq1mnv6.js:3341-3531 callgraph-witnessed = removeFlaggedPlugin (0)
-async function removeFlaggedPlugin(e, r) {
-  let s = getPluginRegistry();
-  if (s.flaggedPlugins === null) s.flaggedPlugins = await readFromDisk(r);
-  if (!(e in s.flaggedPlugins)) return;
-  let { [e]: g, ...o } = s.flaggedPlugins;
-  ((s.flaggedPlugins = o), await writeToDisk(o, r));
+async function removeFlaggedPlugin(pluginId, storageV5) {
+  let pluginRegistry = getPluginRegistry();
+  if (pluginRegistry.flaggedPlugins === null) pluginRegistry.flaggedPlugins = await readFromDisk(storageV5);
+  if (!(pluginId in pluginRegistry.flaggedPlugins)) return;
+  let { [pluginId]: g, ...o } = pluginRegistry.flaggedPlugins;
+  pluginRegistry.flaggedPlugins = o;
+  await writeToDisk(o, storageV5);
 }
-
 export {
   getFlaggedPlugins,
   markFlaggedPluginsSeen,

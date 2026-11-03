@@ -8,7 +8,7 @@
  * pieces: chunk-18hwfzwa.js (3)
  * attribution: placement 1, layout 1, fingerprint 1
  */
-import { j } from "../../../vendor/react/cjs/react.production.js";
+import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
 import { w } from "../../../vendor/react/compiler-runtime.js";
 import { useTheme } from "../design-system/ThemeProvider.js";
 import { useAppState } from "../../state/AppState.js";
@@ -20,7 +20,11 @@ import { describeTeammateActivity, TaskDetailFooterHints } from "./taskStatusUti
 import { agentLabel } from "../../utils/transcriptDiagnostics.js";
 import { truncateToWidth, formatNumber } from "../../utils/format.js";
 import { toInkColor } from "../../utils/ink.js";
-import { r, Fragment, e } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default_2,
+  Fragment,
+  jsxProd_default,
+} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Box } from "../../ink/components/Text.js";
 import { KeyboardShortcutHint } from "../design-system/KeyboardShortcutHint.js";
 import { renderToolActivity } from "./renderToolActivity.js";
@@ -28,258 +32,345 @@ import { Dialog } from "../design-system/Dialog.js";
 import { FocusColumn } from "../design-system/FocusColumn.js";
 
 //@ chunk-18hwfzwa.js:704222-704226 placement
-j();
+init_react_production();
 //@ chunk-18hwfzwa.js:704226-704283 layout
 function selectAgentDefinitionsActiveAgents_2(cn) {
   return cn.agentDefinitions.activeAgents;
 }
+//@ chunk-18hwfzwa.js:704283-708595 fingerprint = InProcessTeammateDetailDialog (0.709)
 /**
  * 进程内队友详情：状态（运行/完成/被杀）、当前活动、token、最近消息与提示。
  */
-//@ chunk-18hwfzwa.js:704283-708595 fingerprint = InProcessTeammateDetailDialog (0.709)
-function InProcessTeammateDetailDialog(t0) {
-  let $ = w(71),
-    { teammate: teammate, onDone: onDone, onKill: onKill, onBack: onBack, onForeground: onForeground } = t0,
-    [Re] = useTheme(),
-    activeAgents = useAppState(selectAgentDefinitionsActiveAgents_2),
-    We;
-  if ($[0] === MEMO_CACHE_SENTINEL)
-    ((We = getTools(getEmptyToolPermissionContext(), { skipReplFilter: !0 })), ($[0] = We));
-  else We = $[0];
-  let ze = We,
-    Xe = useElapsedTicker(
-      teammate.startTime,
-      teammate.status === "running",
-      1000,
-      teammate.totalPausedMs ?? 0,
-      teammate.endTime,
-    );
-  const rt = teammate.status === "running" ? onKill : void 0;
+function InProcessTeammateDetailDialog(props) {
+  let $ = w(71);
+  let { teammate, onDone, onKill, onBack, onForeground } = props;
+  let [theme] = useTheme();
+  let activeAgents = useAppState(selectAgentDefinitionsActiveAgents_2);
+  let t1;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    t1 = getTools(getEmptyToolPermissionContext(), {
+      skipReplFilter: true,
+    });
+    $[0] = t1;
+  } else t1 = $[0];
+  let tools = t1;
+  let elapsedTicker = useElapsedTicker(
+    teammate.startTime,
+    teammate.status === "running",
+    1000,
+    teammate.totalPausedMs ?? 0,
+    teammate.endTime,
+  );
+  const onKill_2 = teammate.status === "running" ? onKill : undefined;
   let kt;
-  if ($[1] !== onBack || $[2] !== onDone || $[3] !== rt)
-    ((kt = { onClose: onDone, onBack: onBack, onKill: rt }),
-      ($[1] = onBack),
-      ($[2] = onDone),
-      ($[3] = rt),
-      ($[4] = kt));
-  else kt = $[4];
-  let At = useConfirmationKeys(kt),
-    It;
-  if ($[5] !== At || $[6] !== onForeground || $[7] !== teammate.status)
-    ((It = (Ot) => {
-      if (Ot.key === "f" && !Ot.ctrl && !Ot.meta && teammate.status === "running" && onForeground) {
-        (Ot.preventDefault(), onForeground());
+  if ($[1] !== onBack || $[2] !== onDone || $[3] !== onKill_2) {
+    kt = {
+      onClose: onDone,
+      onBack,
+      onKill: onKill_2,
+    };
+    $[1] = onBack;
+    $[2] = onDone;
+    $[3] = onKill_2;
+    $[4] = kt;
+  } else kt = $[4];
+  let confirmationKeys = useConfirmationKeys(kt);
+  let It;
+  if ($[5] !== confirmationKeys || $[6] !== onForeground || $[7] !== teammate.status) {
+    It = (e) => {
+      if (e.key === "f" && !e.ctrl && !e.meta && teammate.status === "running" && onForeground) {
+        e.preventDefault();
+        onForeground();
         return;
       }
-      At(Ot);
-    }),
-      ($[5] = At),
-      ($[6] = onForeground),
-      ($[7] = teammate.status),
-      ($[8] = It));
-  else It = $[8];
-  let Et = It,
-    Dt;
-  if ($[9] !== teammate) ((Dt = describeTeammateActivity(teammate)), ($[9] = teammate), ($[10] = Dt));
-  else Dt = $[10];
-  let Lt = Dt,
-    oo = teammate.result?.totalTokens ?? teammate.progress?.tokenCount,
-    Xt = teammate.result?.totalToolUseCount ?? teammate.progress?.toolUseCount,
-    io;
-  if ($[11] !== teammate.effort || $[12] !== teammate.model)
-    ((io = agentLabel(teammate.model, teammate.effort)),
-      ($[11] = teammate.effort),
-      ($[12] = teammate.model),
-      ($[13] = io));
-  else io = $[13];
-  let so = io,
-    po;
-  if ($[14] !== teammate.prompt)
-    ((po = truncateToWidth(teammate.prompt, 300)), ($[14] = teammate.prompt), ($[15] = po));
-  else po = $[15];
-  let ao = po,
-    co;
-  if ($[16] !== teammate.identity.color)
-    ((co = toInkColor(teammate.identity.color)), ($[16] = teammate.identity.color), ($[17] = co));
-  else co = $[17];
+      confirmationKeys(e);
+    };
+    $[5] = confirmationKeys;
+    $[6] = onForeground;
+    $[7] = teammate.status;
+    $[8] = It;
+  } else It = $[8];
+  let handleKeyDown = It;
+  let t5;
+  if ($[9] !== teammate) {
+    t5 = describeTeammateActivity(teammate);
+    $[9] = teammate;
+    $[10] = t5;
+  } else t5 = $[10];
+  let activity = t5;
+  let tokenCount = teammate.result?.totalTokens ?? teammate.progress?.tokenCount;
+  let toolUseCount = teammate.result?.totalToolUseCount ?? teammate.progress?.toolUseCount;
+  let io;
+  if ($[11] !== teammate.effort || $[12] !== teammate.model) {
+    io = agentLabel(teammate.model, teammate.effort);
+    $[11] = teammate.effort;
+    $[12] = teammate.model;
+    $[13] = io;
+  } else io = $[13];
+  let so = io;
+  let po;
+  if ($[14] !== teammate.prompt) {
+    po = truncateToWidth(teammate.prompt, 300);
+    $[14] = teammate.prompt;
+    $[15] = po;
+  } else po = $[15];
+  let displayPrompt = po;
+  let color;
+  if ($[16] !== teammate.identity.color) {
+    color = toInkColor(teammate.identity.color);
+    $[16] = teammate.identity.color;
+    $[17] = color;
+  } else color = $[17];
   let bo;
-  if ($[18] !== co || $[19] !== teammate.identity.agentName)
-    ((bo = r(Text, { color: co, children: ["@", teammate.identity.agentName] })),
-      ($[18] = co),
-      ($[19] = teammate.identity.agentName),
-      ($[20] = bo));
-  else bo = $[20];
+  if ($[18] !== color || $[19] !== teammate.identity.agentName) {
+    bo = jsxProd_default_2(Text, {
+      color,
+      children: ["@", teammate.identity.agentName],
+    });
+    $[18] = color;
+    $[19] = teammate.identity.agentName;
+    $[20] = bo;
+  } else bo = $[20];
   let Ao;
-  if ($[21] !== Lt)
-    ((Ao = Lt && r(Text, { dimColor: !0, children: [" (", Lt, ")"] })), ($[21] = Lt), ($[22] = Ao));
-  else Ao = $[22];
-  let Bo;
-  if ($[23] !== Ao || $[24] !== bo)
-    ((Bo = r(Text, { children: [bo, Ao] })), ($[23] = Ao), ($[24] = bo), ($[25] = Bo));
-  else Bo = $[25];
-  let Ro = Bo,
-    Ho;
-  if ($[26] !== teammate.status)
-    ((Ho =
+  if ($[21] !== activity) {
+    Ao =
+      activity &&
+      jsxProd_default_2(Text, {
+        dimColor: true,
+        children: [" (", activity, ")"],
+      });
+    $[21] = activity;
+    $[22] = Ao;
+  } else Ao = $[22];
+  let t10;
+  if ($[23] !== Ao || $[24] !== bo) {
+    t10 = jsxProd_default_2(Text, {
+      children: [bo, Ao],
+    });
+    $[23] = Ao;
+    $[24] = bo;
+    $[25] = t10;
+  } else t10 = $[25];
+  let title = t10;
+  let Ho;
+  if ($[26] !== teammate.status) {
+    Ho =
       teammate.status !== "running" &&
-      r(Text, {
+      jsxProd_default_2(Text, {
         color:
           teammate.status === "completed" ? "success" : teammate.status === "killed" ? "warning" : "error",
         children: [
           teammate.status === "completed" ? "Completed" : teammate.status === "failed" ? "Failed" : "Stopped",
           " \xB7 ",
         ],
-      })),
-      ($[26] = teammate.status),
-      ($[27] = Ho));
-  else Ho = $[27];
+      });
+    $[26] = teammate.status;
+    $[27] = Ho;
+  } else Ho = $[27];
   let Io;
-  if ($[28] !== oo)
-    ((Io = oo !== void 0 && oo > 0 && r(Fragment, { children: [" \xB7 ", formatNumber(oo), " tokens"] })),
-      ($[28] = oo),
-      ($[29] = Io));
-  else Io = $[29];
+  if ($[28] !== tokenCount) {
+    Io =
+      tokenCount !== undefined &&
+      tokenCount > 0 &&
+      jsxProd_default_2(Fragment, {
+        children: [" \xB7 ", formatNumber(tokenCount), " tokens"],
+      });
+    $[28] = tokenCount;
+    $[29] = Io;
+  } else Io = $[29];
   let Wo;
-  if ($[30] !== Xt)
-    ((Wo =
-      Xt !== void 0 &&
-      Xt > 0 &&
-      r(Fragment, { children: [" ", "\xB7 ", Xt, " ", Xt === 1 ? "tool" : "tools"] })),
-      ($[30] = Xt),
-      ($[31] = Wo));
-  else Wo = $[31];
+  if ($[30] !== toolUseCount) {
+    Wo =
+      toolUseCount !== undefined &&
+      toolUseCount > 0 &&
+      jsxProd_default_2(Fragment, {
+        children: [" ", "\xB7 ", toolUseCount, " ", toolUseCount === 1 ? "tool" : "tools"],
+      });
+    $[30] = toolUseCount;
+    $[31] = Wo;
+  } else Wo = $[31];
   let mn;
-  if ($[32] !== so) ((mn = so && r(Fragment, { children: [" \xB7 ", so] })), ($[32] = so), ($[33] = mn));
-  else mn = $[33];
+  if ($[32] !== so) {
+    mn =
+      so &&
+      jsxProd_default_2(Fragment, {
+        children: [" \xB7 ", so],
+      });
+    $[32] = so;
+    $[33] = mn;
+  } else mn = $[33];
   let Cn;
-  if ($[34] !== Xe || $[35] !== Io || $[36] !== Wo || $[37] !== mn)
-    ((Cn = r(Text, { dimColor: !0, children: [Xe, Io, Wo, mn] })),
-      ($[34] = Xe),
-      ($[35] = Io),
-      ($[36] = Wo),
-      ($[37] = mn),
-      ($[38] = Cn));
-  else Cn = $[38];
+  if ($[34] !== elapsedTicker || $[35] !== Io || $[36] !== Wo || $[37] !== mn) {
+    Cn = jsxProd_default_2(Text, {
+      dimColor: true,
+      children: [elapsedTicker, Io, Wo, mn],
+    });
+    $[34] = elapsedTicker;
+    $[35] = Io;
+    $[36] = Wo;
+    $[37] = mn;
+    $[38] = Cn;
+  } else Cn = $[38];
   let No;
-  if ($[39] !== Ho || $[40] !== Cn)
-    ((No = r(Text, { children: [Ho, Cn] })), ($[39] = Ho), ($[40] = Cn), ($[41] = No));
-  else No = $[41];
-  let vo = No;
-  const Yo = !!onBack,
-    kn = teammate.status === "running" && !!onKill;
-  let Fn;
-  if ($[42] !== onForeground || $[43] !== teammate.status)
-    ((Fn =
+  if ($[39] !== Ho || $[40] !== Cn) {
+    No = jsxProd_default_2(Text, {
+      children: [Ho, Cn],
+    });
+    $[39] = Ho;
+    $[40] = Cn;
+    $[41] = No;
+  } else No = $[41];
+  let subtitle = No;
+  const showBack = !!onBack;
+  const showStop = teammate.status === "running" && !!onKill;
+  let children;
+  if ($[42] !== onForeground || $[43] !== teammate.status) {
+    children =
       teammate.status === "running" &&
       onForeground &&
-      e(KeyboardShortcutHint, { chord: "f", action: "foreground" })),
-      ($[42] = onForeground),
-      ($[43] = teammate.status),
-      ($[44] = Fn));
-  else Fn = $[44];
-  let bn;
-  if ($[45] !== Yo || $[46] !== kn || $[47] !== Fn)
-    ((bn = e(TaskDetailFooterHints, { showBack: Yo, showStop: kn, children: Fn })),
-      ($[45] = Yo),
-      ($[46] = kn),
-      ($[47] = Fn),
-      ($[48] = bn));
-  else bn = $[48];
-  let Go;
-  if ($[49] !== activeAgents || $[50] !== teammate.progress || $[51] !== teammate.status || $[52] !== Re)
-    ((Go =
+      jsxProd_default(KeyboardShortcutHint, {
+        chord: "f",
+        action: "foreground",
+      });
+    $[42] = onForeground;
+    $[43] = teammate.status;
+    $[44] = children;
+  } else children = $[44];
+  let inputGuide;
+  if ($[45] !== showBack || $[46] !== showStop || $[47] !== children) {
+    inputGuide = jsxProd_default(TaskDetailFooterHints, {
+      showBack,
+      showStop,
+      children,
+    });
+    $[45] = showBack;
+    $[46] = showStop;
+    $[47] = children;
+    $[48] = inputGuide;
+  } else inputGuide = $[48];
+  let t17;
+  if ($[49] !== activeAgents || $[50] !== teammate.progress || $[51] !== teammate.status || $[52] !== theme) {
+    t17 =
       teammate.status === "running" &&
       teammate.progress?.recentActivities &&
       teammate.progress.recentActivities.length > 0 &&
-      r(Box, {
+      jsxProd_default_2(Box, {
         flexDirection: "column",
         children: [
-          e(Text, { bold: !0, dimColor: !0, children: "Progress" }),
-          teammate.progress.recentActivities.map((activity_0, Mn) =>
-            r(
+          jsxProd_default(Text, {
+            bold: true,
+            dimColor: true,
+            children: "Progress",
+          }),
+          teammate.progress.recentActivities.map((activity, i) =>
+            jsxProd_default_2(
               Text,
               {
-                dimColor: Mn < teammate.progress.recentActivities.length - 1,
+                dimColor: i < teammate.progress.recentActivities.length - 1,
                 wrap: "truncate-end",
                 children: [
-                  Mn === teammate.progress.recentActivities.length - 1 ? "\u203A " : "  ",
-                  renderToolActivity(activity_0, ze, Re, activeAgents),
+                  i === teammate.progress.recentActivities.length - 1 ? "\u203A " : "  ",
+                  renderToolActivity(activity, tools, theme, activeAgents),
                 ],
               },
-              Mn,
+              i,
             ),
           ),
         ],
-      })),
-      ($[49] = activeAgents),
-      ($[50] = teammate.progress),
-      ($[51] = teammate.status),
-      ($[52] = Re),
-      ($[53] = Go));
-  else Go = $[53];
-  let Xo;
-  if ($[54] === MEMO_CACHE_SENTINEL)
-    ((Xo = e(Text, { bold: !0, dimColor: !0, children: "Prompt" })), ($[54] = Xo));
-  else Xo = $[54];
-  let Sn;
-  if ($[55] !== ao)
-    ((Sn = r(Box, {
+      });
+    $[49] = activeAgents;
+    $[50] = teammate.progress;
+    $[51] = teammate.status;
+    $[52] = theme;
+    $[53] = t17;
+  } else t17 = $[53];
+  let t18;
+  if ($[54] === MEMO_CACHE_SENTINEL) {
+    t18 = jsxProd_default(Text, {
+      bold: true,
+      dimColor: true,
+      children: "Prompt",
+    });
+    $[54] = t18;
+  } else t18 = $[54];
+  let t19;
+  if ($[55] !== displayPrompt) {
+    t19 = jsxProd_default_2(Box, {
       flexDirection: "column",
       marginTop: 1,
-      children: [Xo, e(Text, { wrap: "wrap", children: ao })],
-    })),
-      ($[55] = ao),
-      ($[56] = Sn));
-  else Sn = $[56];
-  let $n;
-  if ($[57] !== teammate.error || $[58] !== teammate.status)
-    (($n =
+      children: [
+        t18,
+        jsxProd_default(Text, {
+          wrap: "wrap",
+          children: displayPrompt,
+        }),
+      ],
+    });
+    $[55] = displayPrompt;
+    $[56] = t19;
+  } else t19 = $[56];
+  let t20;
+  if ($[57] !== teammate.error || $[58] !== teammate.status) {
+    t20 =
       teammate.status === "failed" &&
       teammate.error &&
-      r(Box, {
+      jsxProd_default_2(Box, {
         flexDirection: "column",
         marginTop: 1,
         children: [
-          e(Text, { bold: !0, color: "error", children: "Error" }),
-          e(Text, { color: "error", wrap: "wrap", children: teammate.error }),
+          jsxProd_default(Text, {
+            bold: true,
+            color: "error",
+            children: "Error",
+          }),
+          jsxProd_default(Text, {
+            color: "error",
+            wrap: "wrap",
+            children: teammate.error,
+          }),
         ],
-      })),
-      ($[57] = teammate.error),
-      ($[58] = teammate.status),
-      ($[59] = $n));
-  else $n = $[59];
-  let on;
+      });
+    $[57] = teammate.error;
+    $[58] = teammate.status;
+    $[59] = t20;
+  } else t20 = $[59];
+  let children_2;
   if (
     $[60] !== onDone ||
-    $[61] !== vo ||
-    $[62] !== bn ||
-    $[63] !== Go ||
-    $[64] !== Sn ||
-    $[65] !== $n ||
-    $[66] !== Ro
-  )
-    ((on = r(Dialog, {
-      title: Ro,
-      subtitle: vo,
+    $[61] !== subtitle ||
+    $[62] !== inputGuide ||
+    $[63] !== t17 ||
+    $[64] !== t19 ||
+    $[65] !== t20 ||
+    $[66] !== title
+  ) {
+    children_2 = jsxProd_default_2(Dialog, {
+      title,
+      subtitle,
       onCancel: onDone,
       color: "background",
-      inputGuide: bn,
-      children: [Go, Sn, $n],
-    })),
-      ($[60] = onDone),
-      ($[61] = vo),
-      ($[62] = bn),
-      ($[63] = Go),
-      ($[64] = Sn),
-      ($[65] = $n),
-      ($[66] = Ro),
-      ($[67] = on));
-  else on = $[67];
-  let _o;
-  if ($[68] !== Et || $[69] !== on)
-    ((_o = e(FocusColumn, { onKeyDown: Et, children: on })), ($[68] = Et), ($[69] = on), ($[70] = _o));
-  else _o = $[70];
-  return _o;
+      inputGuide,
+      children: [t17, t19, t20],
+    });
+    $[60] = onDone;
+    $[61] = subtitle;
+    $[62] = inputGuide;
+    $[63] = t17;
+    $[64] = t19;
+    $[65] = t20;
+    $[66] = title;
+    $[67] = children_2;
+  } else children_2 = $[67];
+  let t22;
+  if ($[68] !== handleKeyDown || $[69] !== children_2) {
+    t22 = jsxProd_default(FocusColumn, {
+      onKeyDown: handleKeyDown,
+      children: children_2,
+    });
+    $[68] = handleKeyDown;
+    $[69] = children_2;
+    $[70] = t22;
+  } else t22 = $[70];
+  return t22;
 }
-
 export { InProcessTeammateDetailDialog };

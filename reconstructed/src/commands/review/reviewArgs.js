@@ -11,7 +11,7 @@
 import { isVerifySkillRolloutOn } from "../../services/projectsRelay/relayGates.js";
 import { isProactiveLevel, toolMatchesName } from "../../Tool.js";
 import { SKILL } from "../../tools/SkillTool/skillToolNames.js";
-import { smn } from "../../services/mcp/mcpAccountKey.js";
+import { getSessionSkillCommands } from "../../services/mcp/mcpAccountKey.js";
 import { getProjectRoot } from "../../bootstrap/state.js";
 import { VERIFY } from "../../skills/bundled/bundledSkillNames.js";
 import { AFTER_REVIEW_SECTION } from "./reviewPosting.js";
@@ -25,134 +25,142 @@ async function afterReviewSection(e) {
   if (e.options?.isSkillPreload) return "";
   if (!isVerifySkillRolloutOn()) return "";
   if (!isProactiveLevel(e.getProactivityLevel())) return "";
-  let n = e.options?.tools;
-  if (n && !n.some((r) => toolMatchesName(r, SKILL))) return "";
-  return (await smn(getProjectRoot(), e.storageV5)).some((r) => r.name === VERIFY)
+  let tools = e.options?.tools;
+  if (tools && !tools.some((tool) => toolMatchesName(tool, SKILL))) return "";
+  return (await getSessionSkillCommands(getProjectRoot(), e.storageV5)).some((r) => r.name === VERIFY)
     ? AFTER_REVIEW_SECTION
     : "";
 }
 //@ chunk-hantmvxa.js:83410-83564 placement
-var REVIEW_LEVELS = EFFORT_LEVELS,
-  LEVEL_PREFIX_RE = new RegExp(`^(${REVIEW_LEVELS.map((e) => e.slice(0, 3)).join("|")})[a-z]*$`, "i"),
-  MAX_FINDINGS_RE = /(^|\s)--max-findings(?:(?:\s*=\s*|\s+)(?!--)(\S+)|\s*=\S*)?(?=\s|$)/g;
+var REVIEW_LEVELS = EFFORT_LEVELS;
+var LEVEL_PREFIX_RE = new RegExp(`^(${REVIEW_LEVELS.map((e) => e.slice(0, 3)).join("|")})[a-z]*$`, "i");
+var MAX_FINDINGS_RE = /(^|\s)--max-findings(?:(?:\s*=\s*|\s+)(?!--)(\S+)|\s*=\S*)?(?=\s|$)/g;
 //@ chunk-hantmvxa.js:83564-83673 placement
 function normalizeTargetTokens(e) {
   let [n = "", ...s] = e;
   return [n.replaceAll("`", "").replace(/^#/, ""), ...s].filter(Boolean).join(" ");
 }
+//@ chunk-hantmvxa.js:83673-84619 placement
 /**
  * 解析 /code-review 参数：等级、--fix/--comment/--post、目标（PR 号/分支/路径）、--max-findings。
  */
-//@ chunk-hantmvxa.js:83673-84619 placement
 function parseReviewArgs(e) {
-  let { rawFirstToken: rawFirstToken } = extractFlags(e, []),
-    { flags: flags, rest: rest } = extractFlags(e.replace(MAX_FINDINGS_RE, "$1"), [
-      "comment",
-      "fix",
-      "post",
-      "no-post",
-    ]),
-    h = flags.has("comment"),
-    y = flags.has("fix"),
-    w = flags.has("post"),
-    at = [...e.matchAll(MAX_FINDINGS_RE)].at(-1),
-    k = at ? (at[2] ?? "").toLowerCase() : void 0,
-    C = k !== void 0 && /^\d+$/.test(k) ? Number(k) : 0,
-    S = k === "all" || k === "default" ? k : Number.isSafeInteger(C) && C > 0 ? C : void 0,
-    T = k !== void 0 && S === void 0,
-    filtered = rest.split(/\s+/).filter(Boolean),
-    L = filtered[0] ?? "";
+  let { rawFirstToken } = extractFlags(e, []);
+  let { flags, rest } = extractFlags(e.replace(MAX_FINDINGS_RE, "$1"), ["comment", "fix", "post", "no-post"]);
+  let comment = flags.has("comment");
+  let fix = flags.has("fix");
+  let post = flags.has("post");
+  let last = [...e.matchAll(MAX_FINDINGS_RE)].at(-1);
+  let k = last ? (last[2] ?? "").toLowerCase() : undefined;
+  let C = k !== undefined && /^\d+$/.test(k) ? Number(k) : 0;
+  let S = k === "all" || k === "default" ? k : Number.isSafeInteger(C) && C > 0 ? C : undefined;
+  let maxFindingsIgnored = k !== undefined && S === undefined;
+  let filtered = rest.split(/\s+/).filter(Boolean);
+  let L = filtered[0] ?? "";
   if (rawFirstToken.toLowerCase() === "ultra")
     return {
-      explicit: void 0,
+      explicit: undefined,
       target: normalizeTargetTokens(filtered.slice(1)),
-      comment: h,
-      fix: y,
-      post: w,
-      unrecognizedLevel: void 0,
-      ultraFallback: !0,
+      comment,
+      fix,
+      post,
+      unrecognizedLevel: undefined,
+      ultraFallback: true,
       maxFindings: S,
-      maxFindingsIgnored: T,
+      maxFindingsIgnored,
     };
-  let x = L.toLowerCase() === "ultra" ? void 0 : parseEffortLevel(L);
-  if (x !== void 0)
+  let x = L.toLowerCase() === "ultra" ? undefined : parseEffortLevel(L);
+  if (x !== undefined)
     return {
       explicit: x,
       target: normalizeTargetTokens(filtered.slice(1)),
-      comment: h,
-      fix: y,
-      post: w,
-      unrecognizedLevel: void 0,
-      ultraFallback: !1,
+      comment,
+      fix,
+      post,
+      unrecognizedLevel: undefined,
+      ultraFallback: false,
       maxFindings: S,
-      maxFindingsIgnored: T,
+      maxFindingsIgnored,
     };
   let matches = LEVEL_PREFIX_RE.test(L);
   return {
-    explicit: void 0,
+    explicit: undefined,
     target: normalizeTargetTokens(filtered),
-    comment: h,
-    fix: y,
-    post: w,
-    unrecognizedLevel: matches ? L : void 0,
-    ultraFallback: !1,
+    comment,
+    fix,
+    post,
+    unrecognizedLevel: matches ? L : undefined,
+    ultraFallback: false,
     maxFindings: S,
-    maxFindingsIgnored: T,
+    maxFindingsIgnored,
   };
 }
 //@ chunk-hantmvxa.js:84619-84699 placement
-function qs() {
+function lastReviewEffort() {
   let codeReviewLastEffort = getGlobalConfig().codeReviewLastEffort;
-  return codeReviewLastEffort !== void 0 && isEffortLevel(codeReviewLastEffort)
+  return codeReviewLastEffort !== undefined && isEffortLevel(codeReviewLastEffort)
     ? codeReviewLastEffort
-    : void 0;
+    : undefined;
 }
 //@ chunk-hantmvxa.js:84699-84786 placement
-function Ys(e, n) {
-  saveGlobalConfig((s) => (s.codeReviewLastEffort === e ? s : { ...s, codeReviewLastEffort: e }), n);
+function saveReviewEffort(explicit, storageV5) {
+  saveGlobalConfig(
+    (s) =>
+      s.codeReviewLastEffort === explicit
+        ? s
+        : {
+            ...s,
+            codeReviewLastEffort: explicit,
+          },
+    storageV5,
+  );
 }
 //@ chunk-hantmvxa.js:84786-84901 placement
-function defaultReviewLevel({ explicit: explicit, ultraFallback: ultraFallback }, s) {
+function defaultReviewLevel({ explicit, ultraFallback }, s) {
   if (s?.options?.isSkillPreload) return;
-  return explicit === void 0 && !ultraFallback ? qs() : void 0;
+  return explicit === undefined && !ultraFallback ? lastReviewEffort() : undefined;
 }
 //@ chunk-hantmvxa.js:84901-84911 placement
-var xe = 32;
+var MAX_REVIEW_FINDINGS = 32;
 //@ chunk-hantmvxa.js:84911-85253 placement
-function resolveMaxFindings({ maxFindings: maxFindings }, n, s, r) {
-  let codeReviewLastMaxFindings = getGlobalConfig().codeReviewLastMaxFindings,
-    y =
-      maxFindings === void 0 &&
-      n !== "low-sonnet5" &&
-      !r?.options?.isSkillPreload &&
-      (codeReviewLastMaxFindings === "all" ||
-        (typeof codeReviewLastMaxFindings === "number" &&
-          Number.isSafeInteger(codeReviewLastMaxFindings) &&
-          codeReviewLastMaxFindings > 0)),
-    w = y ? codeReviewLastMaxFindings : maxFindings === "default" ? void 0 : maxFindings,
-    k =
-      n === "low-sonnet5"
-        ? void 0
-        : (s || n === "o5-bmin") && (w === "all" || (w !== void 0 && w > xe))
-          ? xe
-          : w;
-  return { asked: w, stated: k, reused: y };
+function resolveMaxFindings({ maxFindings }, cell, s, r) {
+  let codeReviewLastMaxFindings = getGlobalConfig().codeReviewLastMaxFindings;
+  let y =
+    maxFindings === undefined &&
+    cell !== "low-sonnet5" &&
+    !r?.options?.isSkillPreload &&
+    (codeReviewLastMaxFindings === "all" ||
+      (typeof codeReviewLastMaxFindings === "number" &&
+        Number.isSafeInteger(codeReviewLastMaxFindings) &&
+        codeReviewLastMaxFindings > 0));
+  let w = y ? codeReviewLastMaxFindings : maxFindings === "default" ? undefined : maxFindings;
+  let stated =
+    cell === "low-sonnet5"
+      ? undefined
+      : (s || cell === "o5-bmin") && (w === "all" || (w !== undefined && w > MAX_REVIEW_FINDINGS))
+        ? MAX_REVIEW_FINDINGS
+        : w;
+  return {
+    asked: w,
+    stated,
+    reused: y,
+  };
 }
 //@ chunk-hantmvxa.js:85253-85992 placement
-function describeMaxFindings({ asked: asked, stated: stated, reused: reused, ignored: ignored }, h) {
+function describeMaxFindings({ asked, stated, reused, ignored }, h) {
   let y = [];
   if (ignored)
     y.push(
       `\`--max-findings\` was ignored: type a whole number above zero, \`all\`, or \`default\` after it.${reused ? "" : " Using the usual limit."}`,
     );
-  let w = `This review reports at most ${xe} findings, so the limit is ${xe} here.`;
-  if (asked !== void 0 && stated === void 0)
+  let w = `This review reports at most ${MAX_REVIEW_FINDINGS} findings, so the limit is ${MAX_REVIEW_FINDINGS} here.`;
+  if (asked !== undefined && stated === undefined)
     y.push("`--max-findings` does not change this review: low effort here has no maximum.");
   else if (stated !== asked)
     y.push(
       reused ? `${h === "you" ? "You" : "The user"} set \`--max-findings ${asked}\` last time. ${w}` : w,
     );
-  else if (reused && asked !== void 0)
+  else if (reused && asked !== undefined)
     y.push(
       asked === "all"
         ? `Reporting every finding, as ${h} chose last time with \`--max-findings all\`.`
@@ -160,7 +168,6 @@ function describeMaxFindings({ asked: asked, stated: stated, reused: reused, ign
     );
   return y.join(" ");
 }
-
 export {
   REVIEW_LEVELS,
   parseReviewArgs,
@@ -168,5 +175,5 @@ export {
   resolveMaxFindings,
   afterReviewSection,
   describeMaxFindings,
-  Ys,
+  saveReviewEffort,
 };

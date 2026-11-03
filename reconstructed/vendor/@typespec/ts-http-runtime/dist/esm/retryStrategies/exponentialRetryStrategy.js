@@ -5,47 +5,66 @@
  * pieces: chunk-mrx6y2r5.js (4)
  * attribution: esm-layout 2, esm-fingerprint 2
  */
-import { Cl } from "./throttlingRetryStrategy.js";
+import { isThrottlingRetryResponse } from "./throttlingRetryStrategy.js";
 import { Kn } from "../util/delay.js";
 
 //@ chunk-mrx6y2r5.js:44526-44547 esm-layout
-var Lm = 1000,
-  Hm = 64000;
+var DEFAULT_CLIENT_RETRY_INTERVAL = 1000;
+var DEFAULT_CLIENT_MAX_RETRY_INTERVAL = 64000;
 //@ chunk-mrx6y2r5.js:44547-44975 esm-fingerprint
-function Il(e = {}) {
-  var t, r;
-  let n = (t = e.retryDelayInMs) !== null && t !== void 0 ? t : Lm,
-    o = (r = e.maxRetryDelayInMs) !== null && r !== void 0 ? r : Hm;
+function exponentialRetryStrategy(options = {}) {
+  var _a;
+  var _b;
+  let retryInterval =
+    (_a = options.retryDelayInMs) !== null && _a !== undefined ? _a : DEFAULT_CLIENT_RETRY_INTERVAL;
+  let maxRetryInterval =
+    (_b = options.maxRetryDelayInMs) !== null && _b !== undefined ? _b : DEFAULT_CLIENT_MAX_RETRY_INTERVAL;
   return {
     name: "exponentialRetryStrategy",
-    retry({ retryCount: i, response: s, responseError: a }) {
-      let c = $m(a),
-        l = c && e.ignoreSystemErrors,
-        d = Fm(s),
-        u = d && e.ignoreHttpStatusCodes;
-      if ((s && (Cl(s) || !d)) || u || l) return { skipStrategy: !0 };
-      if (a && !c && !d) return { errorToThrow: a };
-      return Kn(i, { retryDelayInMs: n, maxRetryDelayInMs: o });
+    retry({ retryCount, response, responseError }) {
+      let matchedSystemError = isSystemError(responseError);
+      let ignoreSystemErrors = matchedSystemError && options.ignoreSystemErrors;
+      let isExponential = isExponentialRetryResponse(response);
+      let ignoreHttpStatusCodes = isExponential && options.ignoreHttpStatusCodes;
+      if (
+        (response && (isThrottlingRetryResponse(response) || !isExponential)) ||
+        ignoreHttpStatusCodes ||
+        ignoreSystemErrors
+      )
+        return {
+          skipStrategy: true,
+        };
+      if (responseError && !matchedSystemError && !isExponential)
+        return {
+          errorToThrow: responseError,
+        };
+      return Kn(retryCount, {
+        retryDelayInMs: retryInterval,
+        maxRetryDelayInMs: maxRetryInterval,
+      });
     },
   };
 }
 //@ chunk-mrx6y2r5.js:44975-45092 esm-layout
-function Fm(e) {
+function isExponentialRetryResponse(response) {
   return Boolean(
-    e && e.status !== void 0 && (e.status >= 500 || e.status === 408) && e.status !== 501 && e.status !== 505,
+    response &&
+    response.status !== undefined &&
+    (response.status >= 500 || response.status === 408) &&
+    response.status !== 501 &&
+    response.status !== 505,
   );
 }
 //@ chunk-mrx6y2r5.js:45092-45267 esm-fingerprint
-function $m(e) {
-  if (!e) return !1;
+function isSystemError(err) {
+  if (!err) return false;
   return (
-    e.code === "ETIMEDOUT" ||
-    e.code === "ESOCKETTIMEDOUT" ||
-    e.code === "ECONNREFUSED" ||
-    e.code === "ECONNRESET" ||
-    e.code === "ENOENT" ||
-    e.code === "ENOTFOUND"
+    err.code === "ETIMEDOUT" ||
+    err.code === "ESOCKETTIMEDOUT" ||
+    err.code === "ECONNREFUSED" ||
+    err.code === "ECONNRESET" ||
+    err.code === "ENOENT" ||
+    err.code === "ENOTFOUND"
   );
 }
-
-export { Il };
+export { exponentialRetryStrategy };

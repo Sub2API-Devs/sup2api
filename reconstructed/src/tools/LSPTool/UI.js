@@ -9,7 +9,10 @@
  * attribution: fingerprint 5, placement 1, callgraph-witnessed 1
  */
 import { w } from "../../../vendor/react/compiler-runtime.js";
-import { r, e } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default_2,
+  jsxProd_default,
+} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Box } from "../../ink/components/Text.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { CtrlOToExpand } from "../../components/CtrlOToExpand.js";
@@ -21,130 +24,215 @@ import { getDisplayPath } from "../../utils/file.js";
 
 //@ chunk-ah34pb7m.js:18778-19318 fingerprint = OPERATION_LABELS (1)
 var OPERATION_LABELS = {
-  goToDefinition: { singular: "definition", plural: "definitions" },
-  findReferences: { singular: "reference", plural: "references" },
-  documentSymbol: { singular: "symbol", plural: "symbols" },
-  workspaceSymbol: { singular: "symbol", plural: "symbols" },
-  hover: { singular: "hover info", plural: "hover info", special: "available" },
-  goToImplementation: { singular: "implementation", plural: "implementations" },
-  prepareCallHierarchy: { singular: "call item", plural: "call items" },
-  incomingCalls: { singular: "caller", plural: "callers" },
-  outgoingCalls: { singular: "callee", plural: "callees" },
+  goToDefinition: {
+    singular: "definition",
+    plural: "definitions",
+  },
+  findReferences: {
+    singular: "reference",
+    plural: "references",
+  },
+  documentSymbol: {
+    singular: "symbol",
+    plural: "symbols",
+  },
+  workspaceSymbol: {
+    singular: "symbol",
+    plural: "symbols",
+  },
+  hover: {
+    singular: "hover info",
+    plural: "hover info",
+    special: "available",
+  },
+  goToImplementation: {
+    singular: "implementation",
+    plural: "implementations",
+  },
+  prepareCallHierarchy: {
+    singular: "call item",
+    plural: "call items",
+  },
+  incomingCalls: {
+    singular: "caller",
+    plural: "callers",
+  },
+  outgoingCalls: {
+    singular: "callee",
+    plural: "callees",
+  },
 };
 //@ chunk-ah34pb7m.js:19318-20567 fingerprint = LSPResultSummary (0.7)
-function LSPResultSummary(t0) {
-  let M = w(24),
-    {
-      operation: operation,
-      resultCount: resultCount,
-      fileCount: fileCount,
-      content: content,
-      verbose: verbose,
-    } = t0,
-    T;
-  if (M[0] !== operation)
-    ((T = OPERATION_LABELS[operation] || { singular: "result", plural: "results" }),
-      (M[0] = operation),
-      (M[1] = T));
-  else T = M[1];
-  let x = T,
-    countLabel = resultCount === 1 ? x.singular : x.plural,
-    b;
-  if (M[2] !== countLabel || M[3] !== x.special || M[4] !== operation || M[5] !== resultCount)
-    ((b =
-      operation === "hover" && resultCount > 0 && x.special
-        ? r(Text, { children: ["Hover info ", x.special] })
-        : r(Text, { children: ["Found ", r(Text, { bold: !0, children: [resultCount, " "] }), countLabel] })),
-      (M[2] = countLabel),
-      (M[3] = x.special),
-      (M[4] = operation),
-      (M[5] = resultCount),
-      (M[6] = b));
-  else b = M[6];
-  let E = b,
-    B;
-  if (M[7] !== fileCount)
-    ((B =
+function LSPResultSummary(props) {
+  let $ = w(24);
+  let { operation, resultCount, fileCount, content, verbose } = props;
+  let t1;
+  if ($[0] !== operation) {
+    t1 = OPERATION_LABELS[operation] || {
+      singular: "result",
+      plural: "results",
+    };
+    $[0] = operation;
+    $[1] = t1;
+  } else t1 = $[1];
+  let labelConfig = t1;
+  let countLabel = resultCount === 1 ? labelConfig.singular : labelConfig.plural;
+  let t2;
+  if ($[2] !== countLabel || $[3] !== labelConfig.special || $[4] !== operation || $[5] !== resultCount) {
+    t2 =
+      operation === "hover" && resultCount > 0 && labelConfig.special
+        ? jsxProd_default_2(Text, {
+            children: ["Hover info ", labelConfig.special],
+          })
+        : jsxProd_default_2(Text, {
+            children: [
+              "Found ",
+              jsxProd_default_2(Text, {
+                bold: true,
+                children: [resultCount, " "],
+              }),
+              countLabel,
+            ],
+          });
+    $[2] = countLabel;
+    $[3] = labelConfig.special;
+    $[4] = operation;
+    $[5] = resultCount;
+    $[6] = t2;
+  } else t2 = $[6];
+  let primaryText = t2;
+  let t3;
+  if ($[7] !== fileCount) {
+    t3 =
       fileCount > 1
-        ? r(Text, { children: [" ", "across ", r(Text, { bold: !0, children: [fileCount, " "] }), "files"] })
-        : null),
-      (M[7] = fileCount),
-      (M[8] = B));
-  else B = M[8];
-  let L = B;
+        ? jsxProd_default_2(Text, {
+            children: [
+              " ",
+              "across ",
+              jsxProd_default_2(Text, {
+                bold: true,
+                children: [fileCount, " "],
+              }),
+              "files",
+            ],
+          })
+        : null;
+    $[7] = fileCount;
+    $[8] = t3;
+  } else t3 = $[8];
+  let secondaryText = t3;
   if (verbose) {
-    let N;
-    if (M[9] === MEMO_CACHE_SENTINEL)
-      ((N = e(Text, { dimColor: !0, children: "\xA0\xA0\u23BF \xA0" })), (M[9] = N));
-    else N = M[9];
-    let W;
-    if (M[10] !== E || M[11] !== L)
-      ((W = e(Box, { flexDirection: "row", children: r(Text, { children: [N, E, L] }) })),
-        (M[10] = E),
-        (M[11] = L),
-        (M[12] = W));
-    else W = M[12];
-    let U;
-    if (M[13] !== content)
-      ((U = e(Box, { marginLeft: 5, children: e(Text, { children: content }) })),
-        (M[13] = content),
-        (M[14] = U));
-    else U = M[14];
-    let K;
-    if (M[15] !== W || M[16] !== U)
-      ((K = r(Box, { flexDirection: "column", children: [W, U] })), (M[15] = W), (M[16] = U), (M[17] = K));
-    else K = M[17];
-    return K;
+    let t4;
+    if ($[9] === MEMO_CACHE_SENTINEL) {
+      t4 = jsxProd_default(Text, {
+        dimColor: true,
+        children: "\xA0\xA0\u23BF \xA0",
+      });
+      $[9] = t4;
+    } else t4 = $[9];
+    let t5;
+    if ($[10] !== primaryText || $[11] !== secondaryText) {
+      t5 = jsxProd_default(Box, {
+        flexDirection: "row",
+        children: jsxProd_default_2(Text, {
+          children: [t4, primaryText, secondaryText],
+        }),
+      });
+      $[10] = primaryText;
+      $[11] = secondaryText;
+      $[12] = t5;
+    } else t5 = $[12];
+    let t6;
+    if ($[13] !== content) {
+      t6 = jsxProd_default(Box, {
+        marginLeft: 5,
+        children: jsxProd_default(Text, {
+          children: content,
+        }),
+      });
+      $[13] = content;
+      $[14] = t6;
+    } else t6 = $[14];
+    let t7;
+    if ($[15] !== t5 || $[16] !== t6) {
+      t7 = jsxProd_default_2(Box, {
+        flexDirection: "column",
+        children: [t5, t6],
+      });
+      $[15] = t5;
+      $[16] = t6;
+      $[17] = t7;
+    } else t7 = $[17];
+    return t7;
   }
-  let N;
-  if (M[18] !== resultCount)
-    ((N = resultCount > 0 && e(CtrlOToExpand, {})), (M[18] = resultCount), (M[19] = N));
-  else N = M[19];
-  let W;
-  if (M[20] !== E || M[21] !== L || M[22] !== N)
-    ((W = e(MessageResponse, { height: 1, children: r(Text, { children: [E, L, " ", N] }) })),
-      (M[20] = E),
-      (M[21] = L),
-      (M[22] = N),
-      (M[23] = W));
-  else W = M[23];
-  return W;
+  let t4;
+  if ($[18] !== resultCount) {
+    t4 = resultCount > 0 && jsxProd_default(CtrlOToExpand, {});
+    $[18] = resultCount;
+    $[19] = t4;
+  } else t4 = $[19];
+  let t5;
+  if ($[20] !== primaryText || $[21] !== secondaryText || $[22] !== t4) {
+    t5 = jsxProd_default(MessageResponse, {
+      height: 1,
+      children: jsxProd_default_2(Text, {
+        children: [primaryText, secondaryText, " ", t4],
+      }),
+    });
+    $[20] = primaryText;
+    $[21] = secondaryText;
+    $[22] = t4;
+    $[23] = t5;
+  } else t5 = $[23];
+  return t5;
 }
+//@ chunk-ah34pb7m.js:20567-20796 placement = renderToolUseErrorMessage (0.509)
 /**
  * LSP 工具的错误渲染：非 verbose 时显示 "LSP operation failed"（归属疑似错误，应属 LSPTool/UI）。
  */
-//@ chunk-ah34pb7m.js:20567-20796 placement = renderToolUseErrorMessage (0.509)
-function renderToolUseErrorMessage_2(result, { verbose: verbose, toolDenialKind: toolDenialKind }) {
+function renderToolUseErrorMessage_2(result, { verbose, toolDenialKind }) {
   if (
     !verbose &&
     toolDenialKind !== "permission-rule" &&
     typeof result === "string" &&
     extractTag(result, "tool_use_error")
   )
-    return e(MessageResponse, { children: e(Text, { color: "error", children: "LSP operation failed" }) });
-  return e(FallbackToolUseErrorMessage, { result: result, verbose: verbose });
+    return jsxProd_default(MessageResponse, {
+      children: jsxProd_default(Text, {
+        color: "error",
+        children: "LSP operation failed",
+      }),
+    });
+  return jsxProd_default(FallbackToolUseErrorMessage, {
+    result,
+    verbose,
+  });
 }
+//@ chunk-ah34pb7m.js:20796-21034 fingerprint = renderToolResultMessage (1)
 /**
  * LSP 结果渲染：有计数时用 LSPResultSummary，否则原样显示文本。
  */
-//@ chunk-ah34pb7m.js:20796-21034 fingerprint = renderToolResultMessage (1)
-function renderToolResultMessage_4(output, _progressMessages, { verbose: verbose }) {
-  if (output.resultCount !== void 0 && output.fileCount !== void 0)
-    return e(LSPResultSummary, {
+function renderToolResultMessage_4(output, _progressMessages, { verbose }) {
+  if (output.resultCount !== undefined && output.fileCount !== undefined)
+    return jsxProd_default(LSPResultSummary, {
       operation: output.operation,
       resultCount: output.resultCount,
       fileCount: output.fileCount,
       content: output.result,
-      verbose: verbose,
+      verbose,
     });
-  return e(MessageResponse, { children: e(Text, { children: output.result }) });
+  return jsxProd_default(MessageResponse, {
+    children: jsxProd_default(Text, {
+      children: output.result,
+    }),
+  });
 }
+//@ chunk-hg2zbde4.js:1720-2980 fingerprint = userFacingName (1)
 /**
  * LSP 工具名 "LSP" 与工具描述（九种操作说明、行列 1 基）。
  */
-//@ chunk-hg2zbde4.js:1720-2980 fingerprint = userFacingName (1)
-var LSP_TOOL_NAME = "LSP",
-  LSP_TOOL_DESCRIPTION = `Interact with Language Server Protocol (LSP) servers to get code intelligence features.
+var LSP_TOOL_NAME = "LSP";
+var LSP_TOOL_DESCRIPTION = `Interact with Language Server Protocol (LSP) servers to get code intelligence features.
 
 Supported operations:
 - goToDefinition: Find where a symbol is defined
@@ -166,11 +254,11 @@ The workspaceSymbol operation also takes:
 - query: The symbol name or partial name to search for. Always provide it \u2014 most language servers return no results for an empty query.
 
 Note: LSP servers must be configured for the file type. If no server is available, an error will be returned.`;
+//@ chunk-kxyd0g16.js:105186-105853 fingerprint = renderToolUseMessage (1)
 /**
  * LSP 调用渲染：位置类操作显示光标处符号名与路径，其余显示操作名与参数。
  */
-//@ chunk-kxyd0g16.js:105186-105853 fingerprint = renderToolUseMessage (1)
-function renderToolUseMessage(input, { verbose: verbose }) {
+function renderToolUseMessage(input, { verbose }) {
   if (!input.operation) return null;
   let parts = [];
   if (
@@ -179,39 +267,48 @@ function renderToolUseMessage(input, { verbose: verbose }) {
       input.operation === "hover" ||
       input.operation === "goToImplementation") &&
     input.filePath &&
-    input.line !== void 0 &&
-    input.character !== void 0
+    input.line !== undefined &&
+    input.character !== undefined
   ) {
-    let symbol = getSymbolAtPosition(input.filePath, input.line - 1, input.character - 1),
-      f = verbose ? input.filePath : getDisplayPath(input.filePath);
-    if (symbol)
-      (parts.push(`operation: "${input.operation}"`),
-        parts.push(`symbol: "${symbol}"`),
-        parts.push(`in: "${f}"`));
-    else
-      (parts.push(`operation: "${input.operation}"`),
-        parts.push(`file: "${f}"`),
-        parts.push(`position: ${input.line}:${input.character}`));
+    let symbol = getSymbolAtPosition(input.filePath, input.line - 1, input.character - 1);
+    let displayPath = verbose ? input.filePath : getDisplayPath(input.filePath);
+    if (symbol) {
+      parts.push(`operation: "${input.operation}"`);
+      parts.push(`symbol: "${symbol}"`);
+      parts.push(`in: "${displayPath}"`);
+    } else {
+      parts.push(`operation: "${input.operation}"`);
+      parts.push(`file: "${displayPath}"`);
+      parts.push(`position: ${input.line}:${input.character}`);
+    }
     return parts.join(", ");
   }
-  if ((parts.push(`operation: "${input.operation}"`), input.filePath)) {
-    let s = verbose ? input.filePath : getDisplayPath(input.filePath);
-    parts.push(`file: "${s}"`);
+  parts.push(`operation: "${input.operation}"`);
+  if (input.filePath) {
+    let displayPath = verbose ? input.filePath : getDisplayPath(input.filePath);
+    parts.push(`file: "${displayPath}"`);
   }
   return parts.join(", ");
 }
 //@ chunk-q466qetm.js:9184-9415 callgraph-witnessed = renderToolUseErrorMessage (0.509)
-function renderToolUseErrorMessage(result, { verbose: verbose, toolDenialKind: toolDenialKind }) {
+function renderToolUseErrorMessage(result, { verbose, toolDenialKind }) {
   if (
     !verbose &&
     toolDenialKind !== "permission-rule" &&
     typeof result === "string" &&
     extractTag(result, "tool_use_error")
   )
-    return e(MessageResponse, { children: e(Text, { color: "error", children: "Error editing notebook" }) });
-  return e(FallbackToolUseErrorMessage, { result: result, verbose: verbose });
+    return jsxProd_default(MessageResponse, {
+      children: jsxProd_default(Text, {
+        color: "error",
+        children: "Error editing notebook",
+      }),
+    });
+  return jsxProd_default(FallbackToolUseErrorMessage, {
+    result,
+    verbose,
+  });
 }
-
 export {
   LSP_TOOL_NAME,
   renderToolResultMessage_4,

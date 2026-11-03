@@ -11,14 +11,14 @@
 import { HostScoped } from "./hostScoped.js";
 import { getRootSession } from "../bootstrap/state.js";
 
+//@ chunk-pqycqpxn.js:261-1563 placement
 /**
  * 会话路径缓存（临时目录、技能根、草稿目录等）。
  */
-//@ chunk-pqycqpxn.js:261-1563 placement
 class SessionPathsCache {
-  claudeTempDir = void 0;
-  childProcessTmpDir = void 0;
-  bundledSkillsRoot = void 0;
+  claudeTempDir = undefined;
+  childProcessTmpDir = undefined;
+  bundledSkillsRoot = undefined;
   scratchpadDirBySessionId = new Map();
   resolvedWorkingDirPaths = new Map();
   workingDirPathsHeldAsNamed = new Set();
@@ -28,48 +28,50 @@ class SessionPathsCache {
   giveUpProbes = new WeakMap();
   reportedGiveUps = new Set();
   reportedSecondRootMountMatches = new Set();
-  reportedSecondRootMountFlagThrow = !1;
+  reportedSecondRootMountFlagThrow = false;
   eventsLoggedOnce = new Set();
-  trustedSymlinkEquivalences = void 0;
-  userSkillsBaseSpellingsFolded = void 0;
+  trustedSymlinkEquivalences = undefined;
+  userSkillsBaseSpellingsFolded = undefined;
   resolvedSandboxConfigPaths = new Map();
   canonicalHomedirByHome = new Map();
   foldedSegmentsBySpelling = new Map();
-  settingsFileLinks = void 0;
+  settingsFileLinks = undefined;
   reset() {
-    (delete this.composedRepoRules.native,
-      delete this.composedRepoRules.upload,
-      (this.claudeTempDir = void 0),
-      (this.childProcessTmpDir = void 0),
-      (this.bundledSkillsRoot = void 0),
-      this.scratchpadDirBySessionId.clear(),
-      this.resolvedWorkingDirPaths.clear(),
-      this.workingDirPathsHeldAsNamed.clear(),
-      (this.trustedSymlinkEquivalences = void 0),
-      (this.userSkillsBaseSpellingsFolded = void 0),
-      this.resolvedSandboxConfigPaths.clear(),
-      this.canonicalHomedirByHome.clear(),
-      this.foldedSegmentsBySpelling.clear(),
-      this.physicalTwinsByPattern.clear(),
-      this.reportedGiveUps.clear(),
-      this.reportedSecondRootMountMatches.clear(),
-      (this.reportedSecondRootMountFlagThrow = !1),
-      this.eventsLoggedOnce.clear(),
-      (this.settingsFileLinks = void 0));
+    delete this.composedRepoRules.native;
+    delete this.composedRepoRules.upload;
+    this.claudeTempDir = undefined;
+    this.childProcessTmpDir = undefined;
+    this.bundledSkillsRoot = undefined;
+    this.scratchpadDirBySessionId.clear();
+    this.resolvedWorkingDirPaths.clear();
+    this.workingDirPathsHeldAsNamed.clear();
+    this.trustedSymlinkEquivalences = undefined;
+    this.userSkillsBaseSpellingsFolded = undefined;
+    this.resolvedSandboxConfigPaths.clear();
+    this.canonicalHomedirByHome.clear();
+    this.foldedSegmentsBySpelling.clear();
+    this.physicalTwinsByPattern.clear();
+    this.reportedGiveUps.clear();
+    this.reportedSecondRootMountMatches.clear();
+    this.reportedSecondRootMountFlagThrow = false;
+    this.eventsLoggedOnce.clear();
+    this.settingsFileLinks = undefined;
   }
 }
 //@ chunk-pqycqpxn.js:1563-1586 placement
-var n = new HostScoped(() => new SessionPathsCache());
+var sessionPathsCacheSlot = new HostScoped(() => new SessionPathsCache());
+//@ chunk-pqycqpxn.js:1586-1622 placement
 /**
  * 取当前宿主的会话路径缓存。
  */
-//@ chunk-pqycqpxn.js:1586-1622 placement
 function getSessionPathsCache() {
-  return n.of(getRootSession().host);
+  return sessionPathsCacheSlot.of(getRootSession().host);
 }
 //@ chunk-pqycqpxn.js:1622-1659 placement
-function Emi() {
+/**
+ * sessionClock：根会话的时钟。
+ */
+function sessionClock() {
   return getRootSession().host.clock;
 }
-
-export { getSessionPathsCache, Emi };
+export { getSessionPathsCache, sessionClock };

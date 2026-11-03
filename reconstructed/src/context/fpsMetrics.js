@@ -9,24 +9,26 @@
  * attribution: fingerprint 1
  */
 import { w } from "../../vendor/react/compiler-runtime.js";
-import { e } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
-import { ie } from "./stats.js";
+import { jsxProd_default } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { statsContext } from "./stats.js";
 
+//@ chunk-xe7zq1p4.js:1810-1971 fingerprint = FpsMetricsProvider (0.716)
 /**
  * 向子树提供 getFpsMetrics。
  */
-//@ chunk-xe7zq1p4.js:1810-1971 fingerprint = FpsMetricsProvider (0.716)
-function FpsMetricsProvider(t0) {
-  let o = w(3),
-    { getFpsMetrics: getFpsMetrics, children: children } = t0,
-    t1;
-  if (o[0] !== children || o[1] !== getFpsMetrics)
-    ((t1 = e(ie.Provider, { value: getFpsMetrics, children: children })),
-      (o[0] = children),
-      (o[1] = getFpsMetrics),
-      (o[2] = t1));
-  else t1 = o[2];
+function FpsMetricsProvider(props) {
+  let $ = w(3);
+  let { getFpsMetrics, children } = props;
+  let t1;
+  if ($[0] !== children || $[1] !== getFpsMetrics) {
+    t1 = jsxProd_default(statsContext.Provider, {
+      value: getFpsMetrics,
+      children,
+    });
+    $[0] = children;
+    $[1] = getFpsMetrics;
+    $[2] = t1;
+  } else t1 = $[2];
   return t1;
 }
-
 export { FpsMetricsProvider };

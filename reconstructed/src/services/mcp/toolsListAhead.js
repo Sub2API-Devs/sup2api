@@ -8,123 +8,165 @@
  * pieces: chunk-f4jsy3e7.js (13)
  * attribution: placement 13
  */
-import { ht } from "./cliOwnedClients.js";
+import { getCliOwnedState } from "./cliOwnedClients.js";
 import { officeBridgeListingState } from "./firstPartyServerIds.js";
 import { fromEnum } from "../analytics/safeMetadata.js";
-import { oa } from "../../types/ids.js";
+import { identityId2 } from "../../types/ids.js";
 
 //@ chunk-f4jsy3e7.js:335-346 placement
-var i = 5000;
+/**
+ * 提前发送的 tools/list 页的保留时长（5000 毫秒）。
+ */
+var AHEAD_PAGE_TTL_MS = 5000;
+//@ chunk-f4jsy3e7.js:346-522 placement
 /**
  * 为连接登记"提前发送 tools/list"的状态。
  */
-//@ chunk-f4jsy3e7.js:346-522 placement
-function armToolsListAhead(e, o, t, a) {
+function armToolsListAhead(client, flagSource, negotiationDenylisted, listed) {
   let s = {
-    sentAhead: !1,
-    flagSource: o,
-    negotiationDenylisted: t,
-    listed: a,
-    listChangedBeforeHandler: !1,
-    handlerRegistered: !1,
+    sentAhead: false,
+    flagSource,
+    negotiationDenylisted,
+    listed,
+    listChangedBeforeHandler: false,
+    handlerRegistered: false,
   };
-  return (ht().toolsListAhead.set(e, s), s);
+  getCliOwnedState().toolsListAhead.set(client, s);
+  return s;
 }
 //@ chunk-f4jsy3e7.js:522-568 placement
-function WGs(e, o, t) {
-  ((e.page = o), (e.pageSentAtMs = t));
+/**
+ * 登记提前发送的页与发送时间。
+ */
+function setAheadPage(e, page, pageSentAtMs) {
+  e.page = page;
+  e.pageSentAtMs = pageSentAtMs;
 }
 //@ chunk-f4jsy3e7.js:568-649 placement
-function GGs(e) {
-  if (e.page !== void 0) ((e.expiry = setTimeout(n, i, e)), e.expiry.unref?.());
+/**
+ * 为提前页设置过期清理定时器。
+ */
+function armAheadExpiry(e) {
+  if (e.page !== undefined) {
+    e.expiry = setTimeout(clearAheadPage, AHEAD_PAGE_TTL_MS, e);
+    e.expiry.unref?.();
+  }
 }
 //@ chunk-f4jsy3e7.js:649-670 placement
-function WDo(e) {
-  n(e);
+/**
+ * 直接清掉提前页。
+ */
+function takeAheadPage(e) {
+  clearAheadPage(e);
 }
+//@ chunk-f4jsy3e7.js:670-829 placement
 /**
  * 取出提前收到的工具列表页（与发送时间）并清除。
  */
-//@ chunk-f4jsy3e7.js:670-829 placement
-function takeAheadPage(e) {
-  let o = ht().toolsListAhead.get(e);
-  if (o?.page === void 0 || o.pageSentAtMs === void 0) return;
-  let t = { page: o.page, sentAtMs: o.pageSentAtMs };
-  return (n(o), t);
+function takeAheadPage_2(e) {
+  let o = getCliOwnedState().toolsListAhead.get(e);
+  if (o?.page === undefined || o.pageSentAtMs === undefined) return;
+  let t = {
+    page: o.page,
+    sentAtMs: o.pageSentAtMs,
+  };
+  clearAheadPage(o);
+  return t;
 }
+//@ chunk-f4jsy3e7.js:829-967 placement
 /**
  * 记录首个工具列表页的标记（office bridge 列表状态）。
  */
-//@ chunk-f4jsy3e7.js:829-967 placement
 function noteFirstPageMark(e, o) {
   try {
-    let t = ht().toolsListAhead.get(e);
-    if (t !== void 0 && t.firstPageMark === void 0)
+    let t = getCliOwnedState().toolsListAhead.get(e);
+    if (t !== undefined && t.firstPageMark === undefined)
       t.firstPageMark = officeBridgeListingState(o) ?? "unmarked";
   } catch {}
 }
 //@ chunk-f4jsy3e7.js:967-1048 placement
-function VGs(e, o) {
-  let t = ht().toolsListAhead.get(e);
-  if (t !== void 0) t.earlyAnswer = o;
+/**
+ * 记录“处理器注册前收到列表变化通知”。
+ */
+function noteListChangedAhead(e, earlyAnswer) {
+  let t = getCliOwnedState().toolsListAhead.get(e);
+  if (t !== undefined) t.earlyAnswer = earlyAnswer;
 }
+//@ chunk-f4jsy3e7.js:1048-1190 placement
 /**
  * 清除提前页；若在处理器注册前收到列表变化通知则做标记。
  */
-//@ chunk-f4jsy3e7.js:1048-1190 placement
-function noteListChangedAhead(e) {
-  let o = ht().toolsListAhead.get(e);
-  if (o === void 0) return;
-  if ((n(o), o.sentAhead && !o.handlerRegistered)) o.listChangedBeforeHandler = !0;
+function noteListChangedAhead_2(e) {
+  let o = getCliOwnedState().toolsListAhead.get(e);
+  if (o === undefined) return;
+  clearAheadPage(o);
+  if (o.sentAhead && !o.handlerRegistered) o.listChangedBeforeHandler = true;
 }
+//@ chunk-f4jsy3e7.js:1190-1357 placement
 /**
  * 标记列表变化处理器已注册，返回此前是否有遗漏的变化通知。
  */
-//@ chunk-f4jsy3e7.js:1190-1357 placement
 function markHandlerRegistered(e) {
-  let o = ht().toolsListAhead.get(e);
-  if (o === void 0) return !1;
-  o.handlerRegistered = !0;
+  let o = getCliOwnedState().toolsListAhead.get(e);
+  if (o === undefined) return false;
+  o.handlerRegistered = true;
   let listChangedBeforeHandler = o.listChangedBeforeHandler;
-  return ((o.listChangedBeforeHandler = !1), listChangedBeforeHandler);
+  o.listChangedBeforeHandler = false;
+  return listChangedBeforeHandler;
 }
+//@ chunk-f4jsy3e7.js:1357-1675 placement
 /**
  * 生成"提前发送工具列表"的遥测字段。
  */
-//@ chunk-f4jsy3e7.js:1357-1675 placement
 function toolsListAheadFields(e) {
-  if (e === void 0) return {};
+  if (e === undefined) return {};
   return {
     toolsListAhead: e.sentAhead,
     toolsListAheadListed: e.listed,
-    ...(e.flagSource !== void 0 && { toolsListAheadFlagSource: fromEnum(e.flagSource) }),
-    ...(e.earlyAnswer !== void 0 && { toolsListAheadEarlyAnswer: fromEnum(e.earlyAnswer) }),
-    ...(e.firstPageMark !== void 0 && { toolsListFirstPageMark: fromEnum(e.firstPageMark) }),
+    ...(e.flagSource !== undefined && {
+      toolsListAheadFlagSource: fromEnum(e.flagSource),
+    }),
+    ...(e.earlyAnswer !== undefined && {
+      toolsListAheadEarlyAnswer: fromEnum(e.earlyAnswer),
+    }),
+    ...(e.firstPageMark !== undefined && {
+      toolsListFirstPageMark: fromEnum(e.firstPageMark),
+    }),
   };
 }
+//@ chunk-f4jsy3e7.js:1675-1814 placement
 /**
  * 取某客户端的"提前发送工具列表"遥测字段（含协商黑名单标记）。
  */
-//@ chunk-f4jsy3e7.js:1675-1814 placement
 function toolsListAheadTelemetry(e) {
-  let o = ht().toolsListAhead.get(oa(e.client));
-  return o === void 0 ? {} : { ...toolsListAheadFields(o), negotiationDenylisted: o.negotiationDenylisted };
+  let o = getCliOwnedState().toolsListAhead.get(identityId2(e.client));
+  return o === undefined
+    ? {}
+    : {
+        ...toolsListAheadFields(o),
+        negotiationDenylisted: o.negotiationDenylisted,
+      };
 }
 //@ chunk-f4jsy3e7.js:1814-1903 placement
-function n(e) {
-  (clearTimeout(e.expiry), (e.page = void 0), (e.pageSentAtMs = void 0), (e.expiry = void 0));
+/**
+ * 清除提前页及其定时器。
+ */
+function clearAheadPage(e) {
+  clearTimeout(e.expiry);
+  e.page = undefined;
+  e.pageSentAtMs = undefined;
+  e.expiry = undefined;
 }
-
 export {
-  WGs,
-  WDo,
-  GGs,
-  noteListChangedAhead,
+  setAheadPage,
+  takeAheadPage,
+  armAheadExpiry,
+  noteListChangedAhead_2,
   armToolsListAhead,
   toolsListAheadFields,
   markHandlerRegistered,
-  VGs,
-  takeAheadPage,
+  noteListChangedAhead,
+  takeAheadPage_2,
   noteFirstPageMark,
   toolsListAheadTelemetry,
 };

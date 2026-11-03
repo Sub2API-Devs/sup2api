@@ -14,28 +14,31 @@ import { redactSshUserinfo } from "../redaction/urlRedaction.js";
 import { execFileNoThrowWithCwd } from "../execFileNoThrow.js";
 import { gitExe } from "../git.js";
 import { resolveGitDirsOrPlaceholder } from "./gitDirResolution.js";
-import { freeze } from "./gitSafeEnv.js";
+import { GIT_SAFE_GLOBAL_ARGS } from "./gitSafeEnv.js";
 import { getRemoteHostSessionCount } from "../../commands/insights.js";
 import { keepsRefsInReftable } from "./gitFilesystem.js";
 
 //@ chunk-8t9z960d.js:450-510 placement
-var T = /^filter\.(.*)\.(?:clean|smudge|process|required)$/is;
+var FILTER_DRIVER_CONFIG_KEY_RE = /^filter\.(.*)\.(?:clean|smudge|process|required)$/is;
 //@ chunk-8t9z960d.js:510-590 placement
-function Mwn(e) {
+/**
+ * 归一化用于比较的名字（NFKD 去重音、转小写）。
+ */
+function foldForCompare(e) {
   return e
     .normalize("NFKD")
     .replace(/\p{M}+/gu, "")
     .toLowerCase();
 }
+//@ chunk-8t9z960d.js:590-692 placement
 /**
  * 从 filter.<名>.* 键中取驱动名。
  */
-//@ chunk-8t9z960d.js:590-692 placement
 function filterDriverNames(e) {
   return uniq(
     Array.from(e).flatMap((n) => {
-      let r = T.exec(n)?.[1];
-      return r === void 0 ? [] : [r];
+      let r = FILTER_DRIVER_CONFIG_KEY_RE.exec(n)?.[1];
+      return r === undefined ? [] : [r];
     }),
   );
 }
@@ -49,28 +52,31 @@ function isFilterConfigKey(e) {
   ]);
 }
 //@ chunk-8t9z960d.js:844-1382 placement
-var GIT_TRACE_ENV_VARS = 1048576,
-  C = 5000,
-  fromEntries = Object.fromEntries(
-    [
-      "GIT_TRACE",
-      "GIT_TRACE_SETUP",
-      "GIT_TRACE_PACKET",
-      "GIT_TRACE_PACKFILE",
-      "GIT_TRACE_PACK_ACCESS",
-      "GIT_TRACE_PERFORMANCE",
-      "GIT_TRACE_SHALLOW",
-      "GIT_TRACE_CURL",
-      "GIT_TRACE_REFS",
-      "GIT_TRACE_FSMONITOR",
-      "GIT_TRACE_WORKING_TREE_ENCODING",
-      "GIT_TRACE2",
-      "GIT_TRACE2_EVENT",
-      "GIT_TRACE2_PERF",
-    ].map((e) => [e, "0"]),
-  ),
-  x8o =
-    "if that setting is yours, move it to your global git config; if you don't recognize it, remove it from the repository's config, since a tool or checkout you don't trust may have written it";
+/**
+ * git trace 输出上限、超时，以及强制关闭的 GIT_TRACE* 环境变量表。
+ */
+var GIT_TRACE_ENV_VARS = 1048576;
+var MAX_TRACE_OUTPUT_BYTES = 5000;
+var R8o = Object.fromEntries(
+  [
+    "GIT_TRACE",
+    "GIT_TRACE_SETUP",
+    "GIT_TRACE_PACKET",
+    "GIT_TRACE_PACKFILE",
+    "GIT_TRACE_PACK_ACCESS",
+    "GIT_TRACE_PERFORMANCE",
+    "GIT_TRACE_SHALLOW",
+    "GIT_TRACE_CURL",
+    "GIT_TRACE_REFS",
+    "GIT_TRACE_FSMONITOR",
+    "GIT_TRACE_WORKING_TREE_ENCODING",
+    "GIT_TRACE2",
+    "GIT_TRACE2_EVENT",
+    "GIT_TRACE2_PERF",
+  ].map((e) => [e, "0"]),
+);
+var UNSAFE_CONFIG_HINT =
+  "if that setting is yours, move it to your global git config; if you don't recognize it, remove it from the repository's config, since a tool or checkout you don't trust may have written it";
 //@ chunk-8t9z960d.js:1382-1911 placement
 function describeGitConfigUnreadable(e) {
   switch (e.reason) {
@@ -79,21 +85,25 @@ function describeGitConfigUnreadable(e) {
     case "conditional_include":
       return "the repository's own git config has a conditional include (includeIf), so what a spawn there would load cannot be determined";
     case "unsafe_key":
-      return `the repository's own git config sets ${e.lfsKey === void 0 ? e.key : `${e.key}, an entry git-lfs reads as ${e.lfsKey}`}, which names a program git-lfs would run for any LFS path, on checkout and on status alike (${x8o})`;
+      return `the repository's own git config sets ${e.lfsKey === undefined ? e.key : `${e.key}, an entry git-lfs reads as ${e.lfsKey}`}, which names a program git-lfs would run for any LFS path, on checkout and on status alike (${UNSAFE_CONFIG_HINT})`;
   }
 }
 //@ chunk-8t9z960d.js:1911-2054 placement = readHeadAndTail (0.802)
-var GIT_INCLUDEIF_PATH_PATTERN = /^includeif\..*\.path$/s,
-  m = /lfs.customtransfer..+?.path|^lfs\.(?:.*\.)?standalonetransferagent$|^lfs\.extension\./su,
-  w = { head: 60, tail: 40 };
+var GIT_INCLUDEIF_PATH_PATTERN = /^includeif\..*\.path$/s;
+var INCLUDEIF_PATH_RE =
+  /lfs.customtransfer..+?.path|^lfs\.(?:.*\.)?standalonetransferagent$|^lfs\.extension\./su;
+var LABEL_HEAD_TAIL = {
+  head: 60,
+  tail: 40,
+};
 //@ chunk-8t9z960d.js:2054-2090 placement
 function summarizeGitConfigKeys(e) {
-  return printableLabel(redactSshUserinfo(e), w);
+  return printableLabel(redactSshUserinfo(e), LABEL_HEAD_TAIL);
 }
+//@ chunk-8t9z960d.js:2090-2353 placement
 /**
  * 生成覆盖仓库 filter 驱动的 -c 参数。
  */
-//@ chunk-8t9z960d.js:2090-2353 placement
 async function buildFilterNeutralizingArgs(e, n = {}) {
   let r = await listGitFilters(e, n);
   if (!r.ok) return r;
@@ -106,80 +116,117 @@ async function buildFilterNeutralizingArgs(e, n = {}) {
 `),
     )
   )
-    return { ok: !1, reason: "filter_name_unrepresentable" };
-  return { ok: !0, args: isFilterConfigKey(o).flatMap(([i, u]) => ["-c", `${i}=${u}`]) };
+    return {
+      ok: false,
+      reason: "filter_name_unrepresentable",
+    };
+  return {
+    ok: true,
+    args: isFilterConfigKey(o).flatMap(([i, u]) => ["-c", `${i}=${u}`]),
+  };
 }
 //@ chunk-8t9z960d.js:2353-2411 placement
-function P8o(e, n) {
-  return execFileNoThrowWithCwd(gitExe(), e, { ...n, stdin: "ignore" });
+/**
+ * 运行 git（stdin 关闭）并返回结果。
+ */
+function runGitQuietStdin(e, n) {
+  return execFileNoThrowWithCwd(gitExe(), e, {
+    ...n,
+    stdin: "ignore",
+  });
 }
 //@ chunk-8t9z960d.js:2411-2980 placement
 async function listGitFilters(
-  e,
-  { repository: n = [], pin: r, envPins: o = {}, base: i, run: u = P8o } = {},
+  cwd,
+  { repository: n = [], pin: r, envPins: o = {}, base: i, run: u = runGitQuietStdin } = {},
 ) {
   let s = {
-      args: n,
-      envPins: o,
-      base: i,
-      pin: n.length > 0 ? void 0 : (r ?? resolveGitDirsOrPlaceholder(e)),
-      run: u,
-    },
-    t = await listGitConfig(e, "--local", s);
-  if (t === null) return { ok: !1, reason: "config_unreadable" };
-  let f = await listGitConfig(e, "--worktree", s);
-  if (f === null) return { ok: !1, reason: "config_unreadable" };
+    args: n,
+    envPins: o,
+    base: i,
+    pin: n.length > 0 ? undefined : (r ?? resolveGitDirsOrPlaceholder(cwd)),
+    run: u,
+  };
+  let t = await listGitConfig(cwd, "--local", s);
+  if (t === null)
+    return {
+      ok: false,
+      reason: "config_unreadable",
+    };
+  let f = await listGitConfig(cwd, "--worktree", s);
+  if (f === null)
+    return {
+      ok: false,
+      reason: "config_unreadable",
+    };
   let d = [...t, ...f];
   for (let c of d) {
     let [a] = c;
-    if (GIT_INCLUDEIF_PATH_PATTERN.test(Mwn(a))) return { ok: !1, reason: "conditional_include" };
+    if (GIT_INCLUDEIF_PATH_PATTERN.test(foldForCompare(a)))
+      return {
+        ok: false,
+        reason: "conditional_include",
+      };
     for (let l of uniq([a, ...gitConfigKeysOf(c)]))
-      if (m.test(l) || m.test(Mwn(l)))
+      if (INCLUDEIF_PATH_RE.test(l) || INCLUDEIF_PATH_RE.test(foldForCompare(l)))
         return {
-          ok: !1,
+          ok: false,
           reason: "unsafe_key",
           key: summarizeGitConfigKeys(a),
-          ...(l === a ? {} : { lfsKey: summarizeGitConfigKeys(l) }),
+          ...(l === a
+            ? {}
+            : {
+                lfsKey: summarizeGitConfigKeys(l),
+              }),
         };
   }
-  return { ok: !0, entries: d };
+  return {
+    ok: true,
+    entries: d,
+  };
 }
 //@ chunk-8t9z960d.js:2980-3646 placement
 async function readGitConfigScoped(
-  e,
+  dir,
   n,
   {
-    envPins: envPins,
-    base: base,
-    repository: repository,
-    buildInvocation: buildInvocation = (s, { dir: dir, env: env }) => ({
+    envPins,
+    base,
+    repository,
+    buildInvocation = (s, { dir, env }) => ({
       file: gitExe(),
       args: [...s],
       cwd: dir,
-      env: env,
+      env,
     }),
   },
 ) {
-  let s = buildInvocation([...freeze, "config", "--includes", "--null", "--show-scope", "--get-regexp", n], {
-      dir: e,
-      env: getRemoteHostSessionCount(envPins, { base: base, repository: repository }),
-    }),
-    t = await execFileNoThrowWithCwd(s.file, s.args, {
-      cwd: s.cwd,
-      env: s.env,
-      extendEnv: !1,
-      timeout: C,
-      preserveOutputOnError: !1,
-      stdin: "ignore",
-    });
+  let invocation = buildInvocation(
+    [...GIT_SAFE_GLOBAL_ARGS, "config", "--includes", "--null", "--show-scope", "--get-regexp", n],
+    {
+      dir,
+      env: getRemoteHostSessionCount(envPins, {
+        base,
+        repository,
+      }),
+    },
+  );
+  let t = await execFileNoThrowWithCwd(invocation.file, invocation.args, {
+    cwd: invocation.cwd,
+    env: invocation.env,
+    extendEnv: false,
+    timeout: MAX_TRACE_OUTPUT_BYTES,
+    preserveOutputOnError: false,
+    stdin: "ignore",
+  });
   if (t.code !== 0)
     return (t.exitCode === 1 || t.exitCode === 129) && !t.timedOut && !t.maxBufferExceeded ? [] : null;
-  let parts = t.stdout.split("\x00"),
-    d = [];
+  let parts = t.stdout.split("\x00");
+  let d = [];
   for (let c = 0; c + 1 < parts.length; c += 2) {
-    let a = parts[c],
-      l = parts[c + 1] ?? "",
-      index = l.indexOf(`
+    let a = parts[c];
+    let l = parts[c + 1] ?? "";
+    let index = l.indexOf(`
 `);
     if ((a === "system" || a === "global" || a === "command") && index !== -1)
       d.push([l.slice(0, index), l.slice(index + 1)]);
@@ -187,23 +234,32 @@ async function readGitConfigScoped(
   return d;
 }
 //@ chunk-8t9z960d.js:3646-4682 placement
-async function listGitConfig(e, n, { args: args, envPins: envPins, base: base, pin: pin, run: run }) {
-  let {
-    code: code,
-    stdout: stdout,
-    stderr: stderr,
-    maxBufferExceeded: maxBufferExceeded,
-  } = await run([...args, ...freeze, "config", n, "--includes", "-z", "--list"], {
-    cwd: e,
-    env: getRemoteHostSessionCount({ ...envPins, ...fromEntries }, { repository: pin, base: base }),
-    ...(base !== void 0 && { extendEnv: !1 }),
-    timeout: C,
-    maxBuffer: GIT_TRACE_ENV_VARS,
-  });
-  if (maxBufferExceeded === !0 || Buffer.byteLength(stdout) >= GIT_TRACE_ENV_VARS) return null;
-  let replaced = stderr.replace(/\n+$/, ""),
-    search = replaced.search(/^fatal: /m),
-    g = search === -1 ? replaced : replaced.slice(search);
+async function listGitConfig(cwd, n, { args, envPins, base, pin, run }) {
+  let { code, stdout, stderr, maxBufferExceeded } = await run(
+    [...args, ...GIT_SAFE_GLOBAL_ARGS, "config", n, "--includes", "-z", "--list"],
+    {
+      cwd,
+      env: getRemoteHostSessionCount(
+        {
+          ...envPins,
+          ...R8o,
+        },
+        {
+          repository: pin,
+          base,
+        },
+      ),
+      ...(base !== undefined && {
+        extendEnv: false,
+      }),
+      timeout: MAX_TRACE_OUTPUT_BYTES,
+      maxBuffer: GIT_TRACE_ENV_VARS,
+    },
+  );
+  if (maxBufferExceeded === true || Buffer.byteLength(stdout) >= GIT_TRACE_ENV_VARS) return null;
+  let replaced = stderr.replace(/\n+$/, "");
+  let l = replaced.search(/^fatal: /m);
+  let g = l === -1 ? replaced : replaced.slice(l);
   if (
     code === 128 &&
     /^fatal: unable to read config file '[^\n]*config(?:\.worktree)?': No such file or directory$/.test(g)
@@ -236,41 +292,43 @@ function gitConfigKeysOf([e, n]) {
       `
 `,
     )
-    .flatMap((r) => {
-      let index = r.indexOf("=");
-      return index === -1 ? [] : [r.slice(0, index).trim()];
+    .flatMap((line) => {
+      let index = line.indexOf("=");
+      return index === -1 ? [] : [line.slice(0, index).trim()];
     });
 }
 //@ chunk-8t9z960d.js:4818-4865 placement
-var qot = ["CHERRY_PICK_HEAD", "REVERT_HEAD"],
-  k = 2;
+/**
+ * 序列器状态文件名（CHERRY_PICK_HEAD、REVERT_HEAD）与相关计数上限。
+ */
+var SEQUENCER_STATE_FILES = ["CHERRY_PICK_HEAD", "REVERT_HEAD"];
+var SEQUENCER_STATE_COUNT = 2;
+//@ chunk-8t9z960d.js:4865-5111 placement
 /**
  * reftable 仓库中用 show-ref --exists 检查哪些 ref 存在。
  */
-//@ chunk-8t9z960d.js:4865-5111 placement
 async function findExistingRefs(e, n, r) {
   let o = new Set();
   if (n.length === 0 || !(await keepsRefsInReftable(e))) return o;
-  let results = await Promise.all(n.map((s) => r(["show-ref", "--exists", s]))),
-    u = !1;
+  let results = await Promise.all(n.map((s) => r(["show-ref", "--exists", s])));
+  let u = false;
   for (let [s, t] of results.entries())
     if (t === 0) o.add(n[s]);
-    else if (t !== k) u = !0;
+    else if (t !== SEQUENCER_STATE_COUNT) u = true;
   return o.size === 0 && u ? null : o;
 }
-
 export {
   buildFilterNeutralizingArgs,
   findExistingRefs,
-  qot,
+  SEQUENCER_STATE_FILES,
   listGitFilters,
   describeGitConfigUnreadable,
-  P8o,
+  runGitQuietStdin,
   isFilterConfigKey,
   filterDriverNames,
-  Mwn,
+  foldForCompare,
   summarizeGitConfigKeys,
-  x8o,
+  UNSAFE_CONFIG_HINT,
   readGitConfigScoped,
-  fromEntries,
+  R8o,
 };

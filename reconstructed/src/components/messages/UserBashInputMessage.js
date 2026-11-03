@@ -11,42 +11,58 @@
 import { w } from "../../../vendor/react/compiler-runtime.js";
 import { extractBashInput } from "../../utils/messages/apiNormalization.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
-import { e, r } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Box } from "../../ink/components/Text.js";
 
 //@ chunk-ah34pb7m.js:104523-105017 fingerprint = UserBashInputMessage (0.791)
-function UserBashInputMessage(t0) {
-  let $ = w(8),
-    { param: t1, addMargin: addMargin } = t0,
-    { text: text } = t1,
-    h;
-  if ($[0] !== text) ((h = extractBashInput(text)), ($[0] = text), ($[1] = h));
-  else h = $[1];
-  let input = h;
+function UserBashInputMessage(props) {
+  let $ = w(8);
+  let { param, addMargin } = props;
+  let { text } = param;
+  let t2;
+  if ($[0] !== text) {
+    t2 = extractBashInput(text);
+    $[0] = text;
+    $[1] = t2;
+  } else t2 = $[1];
+  let input = t2;
   if (!input) {
     return null;
   }
-  const t3 = addMargin ? 1 : 0;
-  let x;
-  if ($[2] === MEMO_CACHE_SENTINEL) ((x = e(Text, { color: "bashBorder", children: "! " })), ($[2] = x));
-  else x = $[2];
-  let k;
-  if ($[3] !== input) ((k = e(Text, { color: "text", children: input })), ($[3] = input), ($[4] = k));
-  else k = $[4];
-  let b;
-  if ($[5] !== t3 || $[6] !== k)
-    ((b = r(Box, {
+  const marginTop = addMargin ? 1 : 0;
+  let t4;
+  if ($[2] === MEMO_CACHE_SENTINEL) {
+    t4 = jsxProd_default(Text, {
+      color: "bashBorder",
+      children: "! ",
+    });
+    $[2] = t4;
+  } else t4 = $[2];
+  let t5;
+  if ($[3] !== input) {
+    t5 = jsxProd_default(Text, {
+      color: "text",
+      children: input,
+    });
+    $[3] = input;
+    $[4] = t5;
+  } else t5 = $[4];
+  let t6;
+  if ($[5] !== marginTop || $[6] !== t5) {
+    t6 = jsxProd_default_2(Box, {
       flexDirection: "row",
-      marginTop: t3,
+      marginTop,
       backgroundColor: "bashMessageBackgroundColor",
       paddingRight: 1,
-      children: [x, k],
-    })),
-      ($[5] = t3),
-      ($[6] = k),
-      ($[7] = b));
-  else b = $[7];
-  return b;
+      children: [t4, t5],
+    });
+    $[5] = marginTop;
+    $[6] = t5;
+    $[7] = t6;
+  } else t6 = $[7];
+  return t6;
 }
-
 export { UserBashInputMessage };

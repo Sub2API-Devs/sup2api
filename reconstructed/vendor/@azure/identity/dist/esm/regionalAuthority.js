@@ -7,76 +7,77 @@
  */
 
 //@ chunk-mrx6y2r5.js:290526-290533 esm-layout
-var Rc;
+var RegionalAuthority;
 //@ chunk-mrx6y2r5.js:290533-292141 esm-fingerprint
-(function (e) {
-  ((e.AutoDiscoverRegion = "AutoDiscoverRegion"),
-    (e.USWest = "westus"),
-    (e.USWest2 = "westus2"),
-    (e.USCentral = "centralus"),
-    (e.USEast = "eastus"),
-    (e.USEast2 = "eastus2"),
-    (e.USNorthCentral = "northcentralus"),
-    (e.USSouthCentral = "southcentralus"),
-    (e.USWestCentral = "westcentralus"),
-    (e.CanadaCentral = "canadacentral"),
-    (e.CanadaEast = "canadaeast"),
-    (e.BrazilSouth = "brazilsouth"),
-    (e.EuropeNorth = "northeurope"),
-    (e.EuropeWest = "westeurope"),
-    (e.UKSouth = "uksouth"),
-    (e.UKWest = "ukwest"),
-    (e.FranceCentral = "francecentral"),
-    (e.FranceSouth = "francesouth"),
-    (e.SwitzerlandNorth = "switzerlandnorth"),
-    (e.SwitzerlandWest = "switzerlandwest"),
-    (e.GermanyNorth = "germanynorth"),
-    (e.GermanyWestCentral = "germanywestcentral"),
-    (e.NorwayWest = "norwaywest"),
-    (e.NorwayEast = "norwayeast"),
-    (e.AsiaEast = "eastasia"),
-    (e.AsiaSouthEast = "southeastasia"),
-    (e.JapanEast = "japaneast"),
-    (e.JapanWest = "japanwest"),
-    (e.AustraliaEast = "australiaeast"),
-    (e.AustraliaSouthEast = "australiasoutheast"),
-    (e.AustraliaCentral = "australiacentral"),
-    (e.AustraliaCentral2 = "australiacentral2"),
-    (e.IndiaCentral = "centralindia"),
-    (e.IndiaSouth = "southindia"),
-    (e.IndiaWest = "westindia"),
-    (e.KoreaSouth = "koreasouth"),
-    (e.KoreaCentral = "koreacentral"),
-    (e.UAECentral = "uaecentral"),
-    (e.UAENorth = "uaenorth"),
-    (e.SouthAfricaNorth = "southafricanorth"),
-    (e.SouthAfricaWest = "southafricawest"),
-    (e.ChinaNorth = "chinanorth"),
-    (e.ChinaEast = "chinaeast"),
-    (e.ChinaNorth2 = "chinanorth2"),
-    (e.ChinaEast2 = "chinaeast2"),
-    (e.GermanyCentral = "germanycentral"),
-    (e.GermanyNorthEast = "germanynortheast"),
-    (e.GovernmentUSVirginia = "usgovvirginia"),
-    (e.GovernmentUSIowa = "usgoviowa"),
-    (e.GovernmentUSArizona = "usgovarizona"),
-    (e.GovernmentUSTexas = "usgovtexas"),
-    (e.GovernmentUSDodEast = "usdodeast"),
-    (e.GovernmentUSDodCentral = "usdodcentral"));
-})(Rc || (Rc = {}));
+(function (RegionalAuthority) {
+  RegionalAuthority.AutoDiscoverRegion = "AutoDiscoverRegion";
+  RegionalAuthority.USWest = "westus";
+  RegionalAuthority.USWest2 = "westus2";
+  RegionalAuthority.USCentral = "centralus";
+  RegionalAuthority.USEast = "eastus";
+  RegionalAuthority.USEast2 = "eastus2";
+  RegionalAuthority.USNorthCentral = "northcentralus";
+  RegionalAuthority.USSouthCentral = "southcentralus";
+  RegionalAuthority.USWestCentral = "westcentralus";
+  RegionalAuthority.CanadaCentral = "canadacentral";
+  RegionalAuthority.CanadaEast = "canadaeast";
+  RegionalAuthority.BrazilSouth = "brazilsouth";
+  RegionalAuthority.EuropeNorth = "northeurope";
+  RegionalAuthority.EuropeWest = "westeurope";
+  RegionalAuthority.UKSouth = "uksouth";
+  RegionalAuthority.UKWest = "ukwest";
+  RegionalAuthority.FranceCentral = "francecentral";
+  RegionalAuthority.FranceSouth = "francesouth";
+  RegionalAuthority.SwitzerlandNorth = "switzerlandnorth";
+  RegionalAuthority.SwitzerlandWest = "switzerlandwest";
+  RegionalAuthority.GermanyNorth = "germanynorth";
+  RegionalAuthority.GermanyWestCentral = "germanywestcentral";
+  RegionalAuthority.NorwayWest = "norwaywest";
+  RegionalAuthority.NorwayEast = "norwayeast";
+  RegionalAuthority.AsiaEast = "eastasia";
+  RegionalAuthority.AsiaSouthEast = "southeastasia";
+  RegionalAuthority.JapanEast = "japaneast";
+  RegionalAuthority.JapanWest = "japanwest";
+  RegionalAuthority.AustraliaEast = "australiaeast";
+  RegionalAuthority.AustraliaSouthEast = "australiasoutheast";
+  RegionalAuthority.AustraliaCentral = "australiacentral";
+  RegionalAuthority.AustraliaCentral2 = "australiacentral2";
+  RegionalAuthority.IndiaCentral = "centralindia";
+  RegionalAuthority.IndiaSouth = "southindia";
+  RegionalAuthority.IndiaWest = "westindia";
+  RegionalAuthority.KoreaSouth = "koreasouth";
+  RegionalAuthority.KoreaCentral = "koreacentral";
+  RegionalAuthority.UAECentral = "uaecentral";
+  RegionalAuthority.UAENorth = "uaenorth";
+  RegionalAuthority.SouthAfricaNorth = "southafricanorth";
+  RegionalAuthority.SouthAfricaWest = "southafricawest";
+  RegionalAuthority.ChinaNorth = "chinanorth";
+  RegionalAuthority.ChinaEast = "chinaeast";
+  RegionalAuthority.ChinaNorth2 = "chinanorth2";
+  RegionalAuthority.ChinaEast2 = "chinaeast2";
+  RegionalAuthority.GermanyCentral = "germanycentral";
+  RegionalAuthority.GermanyNorthEast = "germanynortheast";
+  RegionalAuthority.GovernmentUSVirginia = "usgovvirginia";
+  RegionalAuthority.GovernmentUSIowa = "usgoviowa";
+  RegionalAuthority.GovernmentUSArizona = "usgovarizona";
+  RegionalAuthority.GovernmentUSTexas = "usgovtexas";
+  RegionalAuthority.GovernmentUSDodEast = "usdodeast";
+  RegionalAuthority.GovernmentUSDodCentral = "usdodcentral";
+})(RegionalAuthority || (RegionalAuthority = {}));
 //@ chunk-mrx6y2r5.js:292141-292419 esm-fingerprint
-function Ss(e) {
-  var t, r;
-  let n = e;
+function calculateRegionalAuthority(regionalAuthority) {
+  var _a;
+  var _b;
+  let azureRegion = regionalAuthority;
   if (
-    n === void 0 &&
-    ((r = (t = globalThis.process) === null || t === void 0 ? void 0 : t.env) === null || r === void 0
-      ? void 0
-      : r.AZURE_REGIONAL_AUTHORITY_NAME) !== void 0
+    azureRegion === undefined &&
+    ((_b = (_a = globalThis.process) === null || _a === undefined ? undefined : _a.env) === null ||
+    _b === undefined
+      ? undefined
+      : _b.AZURE_REGIONAL_AUTHORITY_NAME) !== undefined
   )
-    n = process.env.AZURE_REGIONAL_AUTHORITY_NAME;
-  if (n === Rc.AutoDiscoverRegion) return "AUTO_DISCOVER";
-  return n;
+    azureRegion = process.env.AZURE_REGIONAL_AUTHORITY_NAME;
+  if (azureRegion === RegionalAuthority.AutoDiscoverRegion) return "AUTO_DISCOVER";
+  return azureRegion;
 }
-
-export { Ss };
+export { calculateRegionalAuthority };

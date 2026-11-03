@@ -8,16 +8,21 @@
 import { x } from "../../../../../../runtime/bun-runtime.js";
 
 //@ chunk-1r4fv9mg.js:10467-10855 cjs-fingerprint
-var ke = x(function (wr, Et) {
-  Et.exports = {
+var require_format_annotation = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = {
     $schema: "https://json-schema.org/draft/2020-12/schema",
     $id: "https://json-schema.org/draft/2020-12/meta/format-annotation",
-    $vocabulary: { "https://json-schema.org/draft/2020-12/vocab/format-annotation": !0 },
+    $vocabulary: {
+      "https://json-schema.org/draft/2020-12/vocab/format-annotation": true,
+    },
     $dynamicAnchor: "meta",
     title: "Format vocabulary meta-schema for annotation results",
     type: ["object", "boolean"],
-    properties: { format: { type: "string" } },
+    properties: {
+      format: {
+        type: "string",
+      },
+    },
   };
 });
-
-export { ke };
+export { require_format_annotation };

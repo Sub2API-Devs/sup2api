@@ -11,12 +11,12 @@
 import { generateSuggestion, SUGGESTION_PROMPT } from "./promptSuggestion.js";
 import { logFeatureOk } from "../analytics/featureTelemetry.js";
 
+//@ chunk-3sjj4q4c.js:7215-7745 affinity
 /**
  * 去掉建议外层的 suggestion/response 等标签与 "Suggestion:" 类前缀。
  */
-//@ chunk-3sjj4q4c.js:7215-7745 affinity
-function stripSuggestionWrapper(e) {
-  return e
+function stripSuggestionWrapper(candidate) {
+  return candidate
     .trim()
     .replace(/^<(suggestion|response|output|answer|result)>([\s\S]*)<\/\1>$/i, (n, t, o) =>
       o.includes(`</${t.toLowerCase()}>`) || o.includes(`</${t.toUpperCase()}>`) ? n : o,
@@ -27,28 +27,30 @@ function stripSuggestionWrapper(e) {
     )
     .trim();
 }
+//@ chunk-3sjj4q4c.js:7745-8009 fingerprint = generatePipelinedSuggestion (0.351)
 /**
  * 生成建议并取第一个非空候选。
  */
-//@ chunk-3sjj4q4c.js:7745-8009 fingerprint = generatePipelinedSuggestion (0.351)
-async function generatePipelinedSuggestion(e, n) {
-  let { candidates: candidates, generationRequestId: generationRequestId } = await generateSuggestion(
+async function generatePipelinedSuggestion(promptId, cacheSafeParams) {
+  let { candidates, generationRequestId } = await generateSuggestion(
     SUGGESTION_PROMPT,
-    e,
-    n,
+    promptId,
+    cacheSafeParams,
   );
-  for (let s of candidates) {
-    let suppressReason = stripSuggestionWrapper(s);
-    if (suppressReason)
-      return (
-        logFeatureOk("prompt_suggestion_generate"),
-        { suggestion: suppressReason, generationRequestId: generationRequestId }
-      );
+  for (let candidate of candidates) {
+    let suppressReason = stripSuggestionWrapper(candidate);
+    if (suppressReason) {
+      logFeatureOk("prompt_suggestion_generate");
+      return {
+        suggestion: suppressReason,
+        generationRequestId,
+      };
+    }
   }
-  return (
-    logFeatureOk("prompt_suggestion_generate"),
-    { suggestion: null, generationRequestId: generationRequestId }
-  );
+  logFeatureOk("prompt_suggestion_generate");
+  return {
+    suggestion: null,
+    generationRequestId,
+  };
 }
-
 export { generatePipelinedSuggestion };

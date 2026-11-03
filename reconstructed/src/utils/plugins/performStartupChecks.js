@@ -10,7 +10,7 @@
  */
 import { logForDebugging } from "../debug.js";
 import { checkHasTrustDialogAccepted } from "../config.js";
-import { kA } from "../../services/policyLimits/coldStartWaiter.js";
+import { awaitPolicyColdStartWaiter } from "../../services/policyLimits/coldStartWaiter.js";
 import { syncSeedMarketplaces } from "./marketplaceManager.js";
 import {
   updateMarketplaceStatus,
@@ -18,32 +18,31 @@ import {
 } from "../../services/plugins/PluginInstallationManager.js";
 import { clearPluginCache } from "./pluginLoader.js";
 
+//@ chunk-18hwfzwa.js:206503-207065 fingerprint = performStartupChecks (0.714)
 /**
  * 交互启动时的插件检查：工作区受信后执行后台市场/插件安装与官方市场自动安装。
  */
-//@ chunk-18hwfzwa.js:206503-207065 fingerprint = performStartupChecks (0.714)
-async function performStartupChecks(h, x) {
-  if ((logForDebugging("performStartupChecks called"), !checkHasTrustDialogAccepted())) {
+async function performStartupChecks(setAppState, storageV5) {
+  logForDebugging("performStartupChecks called");
+  if (!checkHasTrustDialogAccepted()) {
     logForDebugging("Trust not accepted for current directory - skipping plugin installations");
     return;
   }
   try {
-    if (
-      (await kA().catch((prev) => {
-        logForDebugging(
-          `Remote managed settings did not settle before the background plugin installations (${prev}); installing against the settings loaded so far`,
-        );
-      }),
-      logForDebugging("Starting background plugin installations"),
-      await syncSeedMarketplaces(x))
-    )
-      (updateMarketplaceStatus(),
-        clearPluginCache("performStartupChecks: seed marketplaces changed"),
-        h.markNeedsRefresh("not-loaded"));
-    await performBackgroundPluginInstallations(h, x);
+    await awaitPolicyColdStartWaiter().catch((prev) => {
+      logForDebugging(
+        `Remote managed settings did not settle before the background plugin installations (${prev}); installing against the settings loaded so far`,
+      );
+    });
+    logForDebugging("Starting background plugin installations");
+    if (await syncSeedMarketplaces(storageV5)) {
+      updateMarketplaceStatus();
+      clearPluginCache("performStartupChecks: seed marketplaces changed");
+      setAppState.markNeedsRefresh("not-loaded");
+    }
+    await performBackgroundPluginInstallations(setAppState, storageV5);
   } catch (error) {
     logForDebugging(`Error initiating background plugin installations: ${error}`);
   }
 }
-
 export { performStartupChecks };

@@ -13,12 +13,12 @@ import { getShellType } from "../localInstaller.js";
 import { logForDebugging } from "../debug.js";
 import { findLastContentTokenIndex, findTokenSplitOffset } from "../../components/Markdown.js";
 import { isBlankToken_2 } from "../markdownHeadings.js";
-import { Y } from "../doctorContextWarnings.js";
+import { MAX_WINDOW_BLOCKS } from "../doctorContextWarnings.js";
 import { countCharInString } from "../stringUtils.js";
 
 //@ chunk-18hwfzwa.js:548341-548361 callgraph-witnessed = MAX_SHELL_COMPLETIONS (0)
-var MAX_SHELL_COMPLETIONS = 15,
-  SHELL_COMPLETION_TIMEOUT_MS = 1000;
+var MAX_SHELL_COMPLETIONS = 15;
+var SHELL_COMPLETION_TIMEOUT_MS = 1000;
 //@ chunk-18hwfzwa.js:548361-548419 layout = singleQuoteForEval (1)
 function singleQuoteFirstArg(s) {
   return "'" + s[0].replaceAll("'", `'"'"'`) + "'";
@@ -29,19 +29,26 @@ function getCompletionTypeFromPrefix(prefix) {
   if (prefix.includes("/") || prefix.startsWith("~") || prefix.startsWith(".")) return "file";
   return "command";
 }
+//@ chunk-18hwfzwa.js:548559-548842 fingerprint = parseInputContext (0.892)
 /**
  * 从光标前文本取补全前缀与类型：$name→variable；含 / ~ . 的词→file；首词→command，其余→file。
  */
-//@ chunk-18hwfzwa.js:548559-548842 fingerprint = parseInputContext (0.892)
 function parseInputContext(input, cursorOffset) {
-  let beforeCursor = input.slice(0, cursorOffset),
-    varMatch = beforeCursor.match(/\$[a-zA-Z_][a-zA-Z0-9_]*$/);
-  if (varMatch) return { prefix: varMatch[0], completionType: "variable" };
-  let tokens = beforeCursor.split(/\s+/),
-    ke = tokens.at(-1) || "",
-    Re = tokens.length === 1 && !beforeCursor.includes(" "),
-    lastToken = getCompletionTypeFromPrefix(ke);
-  return { prefix: ke, completionType: lastToken !== "command" ? lastToken : Re ? "command" : "file" };
+  let beforeCursor = input.slice(0, cursorOffset);
+  let varMatch = beforeCursor.match(/\$[a-zA-Z_][a-zA-Z0-9_]*$/);
+  if (varMatch)
+    return {
+      prefix: varMatch[0],
+      completionType: "variable",
+    };
+  let tokens = beforeCursor.split(/\s+/);
+  let prefix = tokens.at(-1) || "";
+  let Re = tokens.length === 1 && !beforeCursor.includes(" ");
+  let lastToken = getCompletionTypeFromPrefix(prefix);
+  return {
+    prefix,
+    completionType: lastToken !== "command" ? lastToken : Re ? "command" : "file",
+  };
 }
 //@ chunk-18hwfzwa.js:548842-549134 fingerprint = getBashCompletionCommand (1)
 function getBashCompletionCommand(prefix, completionType) {
@@ -61,22 +68,22 @@ function getZshCompletionCommand(prefix, completionType) {
     return `for f in ${singleQuoteFirstArg([prefix])}*(N[1,${MAX_SHELL_COMPLETIONS}]); do [[ -d "$f" ]] && echo "$f/" || echo "$f "; done`;
   else return `print -rl -- \${(k)commands[(I)${singleQuoteFirstArg([prefix])}*]} 2>/dev/null`;
 }
+//@ chunk-18hwfzwa.js:549438-549795 fingerprint = getCompletionsForShell (0.862)
 /**
  * 按 shell 类型生成补全命令并通过 Shell.exec 运行，截取前 15 行转换成补全项。
  */
-//@ chunk-18hwfzwa.js:549438-549795 fingerprint = getCompletionsForShell (0.862)
-async function getCompletionsForShell(h, x, D, L, ee, ke) {
+async function getCompletionsForShell(host, shellType, prefix, completionType, ee, sessionEnvVars) {
   let command;
-  if (x === "bash") command = getBashCompletionCommand(D, L);
-  else if (x === "zsh") command = getZshCompletionCommand(D, L);
+  if (shellType === "bash") command = getBashCompletionCommand(prefix, completionType);
+  else if (shellType === "zsh") command = getZshCompletionCommand(prefix, completionType);
   else return [];
   return (
     await (
       await exec(command, ee, "bash", {
-        host: h,
+        host,
         timeout: SHELL_COMPLETION_TIMEOUT_MS,
-        sessionEnvVars: ke,
-        useToolMemoryCgroup: !1,
+        sessionEnvVars,
+        useToolMemoryCgroup: false,
       })
     ).result
   ).stdout
@@ -86,43 +93,56 @@ async function getCompletionsForShell(h, x, D, L, ee, ke) {
     )
     .filter((line) => line.trim())
     .slice(0, MAX_SHELL_COMPLETIONS)
-    .map((text) => ({ id: text, displayText: text, description: void 0, metadata: { completionType: L } }));
+    .map((text) => ({
+      id: text,
+      displayText: text,
+      description: undefined,
+      metadata: {
+        completionType,
+      },
+    }));
 }
+//@ chunk-18hwfzwa.js:549795-550092 fingerprint = getShellCompletions (1)
 /**
  * Prompt 输入框的 shell 补全：仅 bash/zsh；从光标前文本判断前缀与类型（变量/文件/命令），执行 compgen 或 zsh 参数展开命令（超时 1000ms，最多 15 条），返回补全项。
  */
-//@ chunk-18hwfzwa.js:549795-550092 fingerprint = getShellCompletions (1)
-async function getShellCompletions(h, x, D, L, ee) {
+async function getShellCompletions(host, x, cursorOffset, signal, sessionEnvVars) {
   let shellType = getShellType();
   if (shellType !== "bash" && shellType !== "zsh") return [];
   try {
-    let { prefix: prefix, completionType: completionType } = parseInputContext(x, D);
+    let { prefix, completionType } = parseInputContext(x, cursorOffset);
     if (!prefix) return [];
-    return (await getCompletionsForShell(h, shellType, prefix, completionType, L, ee)).map((suggestion) => ({
+    return (
+      await getCompletionsForShell(host, shellType, prefix, completionType, signal, sessionEnvVars)
+    ).map((suggestion) => ({
       ...suggestion,
-      metadata: { ...suggestion.metadata, inputSnapshot: x },
+      metadata: {
+        ...suggestion.metadata,
+        inputSnapshot: x,
+      },
     }));
   } catch (error) {
-    return (logForDebugging(`Shell completion failed: ${error}`), []);
+    logForDebugging(`Shell completion failed: ${error}`);
+    return [];
   }
 }
+//@ chunk-wj577vf9.js:5608-5806 fingerprint = findLastStringToken (0.53)
 /**
  * 在 token 序列中从末尾向前，在换行数预算内找可用的起始位置（不早于最后一个空白 token 之后），返回满足条件的下标。旧版名 findLastStringToken 存疑，与 shell 补全无直接关系。
  */
-//@ chunk-wj577vf9.js:5608-5806 fingerprint = findLastStringToken (0.53)
 function findLastStringToken(e, t) {
-  let n = findLastContentTokenIndex(e),
-    r = e.findLastIndex((l, a) => a < n && isBlankToken_2(l)) + 1,
-    o = n,
-    s = 0;
-  for (let l = e.length - 1; l >= r && s <= Y; l--)
-    ((s += countCharInString(
-      e[l]?.raw ?? "",
+  let lastContentTokenIndex = findLastContentTokenIndex(e);
+  let r = e.findLastIndex((l, a) => a < lastContentTokenIndex && isBlankToken_2(l)) + 1;
+  let o = lastContentTokenIndex;
+  let s = 0;
+  for (let k = e.length - 1; k >= r && s <= MAX_WINDOW_BLOCKS; k--) {
+    s += countCharInString(
+      e[k]?.raw ?? "",
       `
 `,
-    )),
-      (o = s <= Y ? Math.min(o, l) : o));
+    );
+    o = s <= MAX_WINDOW_BLOCKS ? Math.min(o, k) : o;
+  }
   return [r, o].find((l) => findTokenSplitOffset(e, l, t) > 0) ?? 0;
 }
-
 export { getShellCompletions, findLastStringToken };

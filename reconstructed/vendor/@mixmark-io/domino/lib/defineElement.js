@@ -6,64 +6,67 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { un } from "./attributes.js";
-import { Xr } from "./config.js";
+import { require_attributes } from "./attributes.js";
+import { require_config } from "./config.js";
 
 //@ chunk-vwj6ccer.js:83403-84376 cjs-fingerprint
-var jn = x(function (Bd, R0) {
-  var L0 = un(),
-    isApiWritable = Xr().isApiWritable;
-  R0.exports = function (e, t, r, a) {
-    var ctor = e.ctor;
-    if (ctor) {
-      var c = e.props || {};
-      if (e.attributes)
-        for (var key in e.attributes) {
-          var g = e.attributes[key];
-          if (typeof g !== "object" || Array.isArray(g)) g = { type: g };
-          if (!g.name) g.name = key.toLowerCase();
-          c[key] = L0.property(g);
+var require_defineElement = x(function (cjsExports, cjsModule) {
+  var attributes = require_attributes();
+  var isApiWritable = require_config().isApiWritable;
+  cjsModule.exports = function (spec, defaultConstructor, tagList, tagNameToImpl) {
+    var c_2 = spec.ctor;
+    if (c_2) {
+      var props = spec.props || {};
+      if (spec.attributes)
+        for (var n in spec.attributes) {
+          var attr = spec.attributes[n];
+          if (typeof attr !== "object" || Array.isArray(attr))
+            attr = {
+              type: attr,
+            };
+          if (!attr.name) attr.name = n.toLowerCase();
+          props[n] = attributes.property(attr);
         }
-      if (
-        ((c.constructor = { value: ctor, writable: isApiWritable }),
-        (ctor.prototype = Object.create((e.superclass || t).prototype, c)),
-        e.events)
-      )
-        Ex(ctor, e.events);
-      r[e.name] = ctor;
-    } else ctor = t;
-    return (
-      (e.tags || (e.tag && [e.tag]) || []).forEach(function (m) {
-        a[m] = ctor;
-      }),
-      ctor
-    );
+      props.constructor = {
+        value: c_2,
+        writable: isApiWritable,
+      };
+      c_2.prototype = Object.create((spec.superclass || defaultConstructor).prototype, props);
+      if (spec.events) addEventHandlers(c_2, spec.events);
+      tagList[spec.name] = c_2;
+    } else c_2 = defaultConstructor;
+    (spec.tags || (spec.tag && [spec.tag]) || []).forEach(function (tag) {
+      tagNameToImpl[tag] = c_2;
+    });
+    return c_2;
   };
-  function M0(e, t, r, a) {
-    ((this.body = e), (this.document = t), (this.form = r), (this.element = a));
+  function EventHandlerBuilder(body, t, form, element) {
+    this.body = body;
+    this.document = t;
+    this.form = form;
+    this.element = element;
   }
-  M0.prototype.build = function () {
+  EventHandlerBuilder.prototype.build = function () {
     return () => {};
   };
-  function bx(e, t, r, a) {
-    var s = e.ownerDocument || Object.create(null),
-      c = e.form || Object.create(null);
-    e[t] = new M0(a, s, c, e).build();
+  function EventHandlerChangeHandler(elt, name, oldval, newval) {
+    var doc = elt.ownerDocument || Object.create(null);
+    var form = elt.form || Object.create(null);
+    elt[name] = new EventHandlerBuilder(newval, doc, form, elt).build();
   }
-  function Ex(e, t) {
-    var r = e.prototype;
-    t.forEach(function (a) {
-      (Object.defineProperty(r, "on" + a, {
+  function addEventHandlers(c, eventHandlerTypes) {
+    var p = c.prototype;
+    eventHandlerTypes.forEach(function (type) {
+      Object.defineProperty(p, "on" + type, {
         get: function () {
-          return this._getEventHandler(a);
+          return this._getEventHandler(type);
         },
-        set: function (s) {
-          this._setEventHandler(a, s);
+        set: function (v) {
+          this._setEventHandler(type, v);
         },
-      }),
-        L0.registerChangeHandler(e, "on" + a, bx));
+      });
+      attributes.registerChangeHandler(c, "on" + type, EventHandlerChangeHandler);
     });
   }
 });
-
-export { jn };
+export { require_defineElement };

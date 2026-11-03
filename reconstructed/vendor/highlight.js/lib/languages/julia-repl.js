@@ -8,8 +8,8 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:219323-219540 cjs-fingerprint
-var ur = x(function (UE, _r) {
-  function Fd(e) {
+var require_julia_repl = x(function (cjsExports, cjsModule) {
+  function juliaRepl(hljs) {
     return {
       name: "Julia REPL",
       contains: [
@@ -17,13 +17,15 @@ var ur = x(function (UE, _r) {
           className: "meta.prompt",
           begin: /^julia>/,
           relevance: 10,
-          starts: { end: /^(?![ ]{6})/, subLanguage: "julia" },
+          starts: {
+            end: /^(?![ ]{6})/,
+            subLanguage: "julia",
+          },
         },
       ],
       aliases: ["jldoctest"],
     };
   }
-  _r.exports = Fd;
+  cjsModule.exports = juliaRepl;
 });
-
-export { ur };
+export { require_julia_repl };

@@ -14,25 +14,29 @@ import {
   ido,
 } from "../@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 import { ME } from "./toString.js";
-import { nn, rn, hasOwnProperty } from "../../src/services/mcpServe/callUtils.js";
-import { X8e } from "./_isPrototype.js";
+import { MAP_TAG, SET_TAG, hasOwnProperty } from "../../src/services/mcpServe/callUtils.js";
+import { isPrototype_default } from "./_isPrototype.js";
 
+//@ chunk-wy9dbk5f.js:17789-18055 placement
 /**
  * lodash isEmpty：null、空数组/字符串/arguments、空 Map/Set、无自有属性的对象为空。
  */
-//@ chunk-wy9dbk5f.js:17789-18055 placement
-function isEmpty(e) {
-  if (e == null) return !0;
+function isEmpty_2(value) {
+  if (value == null) return true;
   if (
-    Phe(e) &&
-    (ME(e) || typeof e == "string" || typeof e.splice == "function" || Xve(e) || Iut(e) || wMe(e))
+    Phe(value) &&
+    (ME(value) ||
+      typeof value == "string" ||
+      typeof value.splice == "function" ||
+      Xve(value) ||
+      Iut(value) ||
+      wMe(value))
   )
-    return !e.length;
-  var r = EMe(e);
-  if (r == nn || r == rn) return !e.size;
-  if (X8e(e)) return !ido(e).length;
-  for (var key in e) if (hasOwnProperty.call(e, key)) return !1;
-  return !0;
+    return !value.length;
+  var tag = EMe(value);
+  if (tag == MAP_TAG || tag == SET_TAG) return !value.size;
+  if (isPrototype_default(value)) return !ido(value).length;
+  for (var key in value) if (hasOwnProperty.call(value, key)) return false;
+  return true;
 }
-
-export { isEmpty };
+export { isEmpty_2 };

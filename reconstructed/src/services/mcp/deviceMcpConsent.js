@@ -11,7 +11,7 @@
 import {
   deviceMcpConsentAnswer,
   deviceMcpConsentStore,
-  ppt,
+  containsAll,
   readDeviceMcpNotNow,
   deviceMcpNotNowStore,
 } from "../deviceBridge/deviceMcpConsent.js";
@@ -29,28 +29,52 @@ import { lit } from "../analytics/safeMetadata.js";
 async function ensureDeviceMcpConsent(t) {
   let n = await deviceMcpConsentAnswer(deviceMcpConsentStore(t));
   if (n === "accepted") {
-    let e = await readDeviceMcpSnapshot(createSnapshotStore(t)),
-      r = e === "unreadable" ? {} : e.withheld;
-    if (Object.keys(r).length > 0) {
-      if ((await loadDeviceMcpSources(), isDeviceMcpDenied())) return { servers: [], withheld: {} };
+    let deviceMcpSnapshot = await readDeviceMcpSnapshot(createSnapshotStore(t));
+    let withheld = deviceMcpSnapshot === "unreadable" ? {} : deviceMcpSnapshot.withheld;
+    if (Object.keys(withheld).length > 0) {
+      await loadDeviceMcpSources();
+      if (isDeviceMcpDenied())
+        return {
+          servers: [],
+          withheld: {},
+        };
     }
-    return { servers: [], withheld: r };
+    return {
+      servers: [],
+      withheld,
+    };
   }
-  if (n !== "unset") return { servers: [], withheld: {} };
-  let i = await getDeviceBridgeMcpServers({ storageV5: t }),
-    mapped = Object.entries(i)
-      .filter(([e, r]) => isForwardableDeviceMcp(e, r))
-      .map(([e, r]) => ({ name: e, scope: r.scope }));
+  if (n !== "unset")
+    return {
+      servers: [],
+      withheld: {},
+    };
+  let deviceBridgeMcpServers = await getDeviceBridgeMcpServers({
+    storageV5: t,
+  });
+  let mapped = Object.entries(deviceBridgeMcpServers)
+    .filter(([key, value]) => isForwardableDeviceMcp(key, value))
+    .map(([key, value]) => ({
+      name: key,
+      scope: value.scope,
+    }));
   if (
     mapped.length > 0 &&
-    ppt(
+    containsAll(
       await readDeviceMcpNotNow(deviceMcpNotNowStore(t)),
       mapped.map((e) => e.name),
     )
-  )
-    return (
-      logEvent("tengu_device_mcp_consent_prompt", { choice: lit("suppressed_by_not_now") }),
-      { servers: [], withheld: {} }
-    );
-  return { servers: mapped, withheld: {} };
+  ) {
+    logEvent("tengu_device_mcp_consent_prompt", {
+      choice: lit("suppressed_by_not_now"),
+    });
+    return {
+      servers: [],
+      withheld: {},
+    };
+  }
+  return {
+    servers: mapped,
+    withheld: {},
+  };
 }

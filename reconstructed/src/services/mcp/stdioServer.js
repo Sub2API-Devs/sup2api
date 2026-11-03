@@ -10,10 +10,10 @@
  */
 import { StdioServerTransport } from "../../../vendor/@modelcontextprotocol/sdk/dist/esm/server/stdio.js";
 
+//@ chunk-54tq783x.js:228-363 placement
 /**
  * 继承 StdioServerTransport，把字符串数据统一转成 Buffer 再交给原处理器。
  */
-//@ chunk-54tq783x.js:228-363 placement
 class BufferedStdioServerTransport extends StdioServerTransport {
   constructor(t, e) {
     super(t, e);
@@ -21,5 +21,4 @@ class BufferedStdioServerTransport extends StdioServerTransport {
     this._ondata = (r) => _ondata(typeof r === "string" ? Buffer.from(r, "utf8") : r);
   }
 }
-
 export { BufferedStdioServerTransport };

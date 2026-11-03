@@ -6,80 +6,101 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { Kg } from "../../protocol-http/dist-cjs/index.js";
+import { require_protocol_http } from "../../protocol-http/dist-cjs/index.js";
 
 //@ chunk-83tv5s1x.js:339-2070 cjs-fingerprint
-var Yns = x(function (B) {
-  var N = Kg(),
-    g = (e, r) => (t, i) => async (n) => {
-      let { response: response } = await t(n);
-      try {
-        let s = await r(response, e);
-        return { response: response, output: s };
-      } catch (error) {
-        if (
-          (Object.defineProperty(error, "$response", {
-            value: response,
-            enumerable: !1,
-            writable: !1,
-            configurable: !1,
-          }),
-          !("$metadata" in error))
-        ) {
-          try {
-            error.message += `
+var require_middleware_serde = x(function (cjsExports) {
+  var protocolHttp = require_protocol_http();
+  var deserializerMiddleware = (options, deserializer) => (next, context) => async (args) => {
+    let { response } = await next(args);
+    try {
+      let parsed = await deserializer(response, options);
+      return {
+        response,
+        output: parsed,
+      };
+    } catch (error) {
+      Object.defineProperty(error, "$response", {
+        value: response,
+        enumerable: false,
+        writable: false,
+        configurable: false,
+      });
+      if (!("$metadata" in error)) {
+        try {
+          error.message += `
   Deserialization error: to see the raw response, inspect the hidden field {error}.$response on this object.`;
-          } catch (error) {
-            if (!i.logger || i.logger?.constructor?.name === "NoOpLogger")
-              console.warn(
-                "Deserialization error: to see the raw response, inspect the hidden field {error}.$response on this object.",
-              );
-            else
-              i.logger?.warn?.(
-                "Deserialization error: to see the raw response, inspect the hidden field {error}.$response on this object.",
-              );
-          }
-          if (typeof error.$responseBodyText < "u") {
-            if (error.$response) error.$response.body = error.$responseBodyText;
-          }
-          try {
-            if (N.HttpResponse.isInstance(response)) {
-              let { headers: headers = {} } = response,
-                entries = Object.entries(headers);
-              error.$metadata = {
-                httpStatusCode: response.statusCode,
-                requestId: m(/^x-[\w-]+-request-?id$/, entries),
-                extendedRequestId: m(/^x-[\w-]+-id-2$/, entries),
-                cfId: m(/^x-[\w-]+-cf-id$/, entries),
-              };
-            }
-          } catch (error) {}
+        } catch (e) {
+          if (!context.logger || context.logger?.constructor?.name === "NoOpLogger")
+            console.warn(
+              "Deserialization error: to see the raw response, inspect the hidden field {error}.$response on this object.",
+            );
+          else
+            context.logger?.warn?.(
+              "Deserialization error: to see the raw response, inspect the hidden field {error}.$response on this object.",
+            );
         }
-        throw error;
+        if (typeof error.$responseBodyText !== "undefined") {
+          if (error.$response) error.$response.body = error.$responseBodyText;
+        }
+        try {
+          if (protocolHttp.HttpResponse.isInstance(response)) {
+            let { headers = {} } = response;
+            let headerEntries = Object.entries(headers);
+            error.$metadata = {
+              httpStatusCode: response.statusCode,
+              requestId: findHeader(/^x-[\w-]+-request-?id$/, headerEntries),
+              extendedRequestId: findHeader(/^x-[\w-]+-id-2$/, headerEntries),
+              cfId: findHeader(/^x-[\w-]+-cf-id$/, headerEntries),
+            };
+          }
+        } catch (e) {}
       }
-    },
-    m = (e, r) => (r.find(([t]) => t.match(e)) || [void 0, void 0])[1],
-    S = (e, r) => (t, i) => async (n) => {
-      let o = e,
-        s = i.endpointV2?.url && o.urlParser ? async () => o.urlParser(i.endpointV2.url) : o.endpoint;
-      if (!s) throw Error("No valid endpoint provider available.");
-      let c = await r(n.input, { ...e, endpoint: s });
-      return t({ ...n, request: c });
-    },
-    A = { name: "deserializerMiddleware", step: "deserialize", tags: ["DESERIALIZER"], override: !0 },
-    v = { name: "serializerMiddleware", step: "serialize", tags: ["SERIALIZER"], override: !0 };
-  function j(e, r, t) {
+      throw error;
+    }
+  };
+  var findHeader = (pattern, headers) =>
+    (headers.find(([k]) => k.match(pattern)) || [undefined, undefined])[1];
+  var serializerMiddleware = (options, serializer) => (next, context) => async (args) => {
+    let endpointConfig = options;
+    let endpoint =
+      context.endpointV2?.url && endpointConfig.urlParser
+        ? async () => endpointConfig.urlParser(context.endpointV2.url)
+        : endpointConfig.endpoint;
+    if (!endpoint) throw Error("No valid endpoint provider available.");
+    let request = await serializer(args.input, {
+      ...options,
+      endpoint,
+    });
+    return next({
+      ...args,
+      request,
+    });
+  };
+  var deserializerMiddlewareOption = {
+    name: "deserializerMiddleware",
+    step: "deserialize",
+    tags: ["DESERIALIZER"],
+    override: true,
+  };
+  var serializerMiddlewareOption = {
+    name: "serializerMiddleware",
+    step: "serialize",
+    tags: ["SERIALIZER"],
+    override: true,
+  };
+  function getSerdePlugin(config, serializer, deserializer) {
     return {
-      applyToStack: (i) => {
-        (i.add(g(e, t), A), i.add(S(e, r), v));
+      applyToStack: (commandStack) => {
+        commandStack.add(deserializerMiddleware(config, deserializer), deserializerMiddlewareOption);
+        commandStack.add(serializerMiddleware(config, serializer), serializerMiddlewareOption);
       },
     };
   }
-  B.deserializerMiddleware = g;
-  B.deserializerMiddlewareOption = A;
-  B.getSerdePlugin = j;
-  B.serializerMiddleware = S;
-  B.serializerMiddlewareOption = v;
+  cjsExports.deserializerMiddleware = deserializerMiddleware;
+  cjsExports.deserializerMiddlewareOption = deserializerMiddlewareOption;
+  cjsExports.getSerdePlugin = getSerdePlugin;
+  cjsExports.serializerMiddleware = serializerMiddleware;
+  cjsExports.serializerMiddlewareOption = serializerMiddlewareOption;
 });
-
-export { Yns };
+export { require_middleware_serde };

@@ -8,13 +8,16 @@
 
 //@ chunk-mrx6y2r5.js:43109-43200 esm-layout
 function Ws(e, t) {
-  return ((e = Math.ceil(e)), (t = Math.floor(t)), Math.floor(Math.random() * (t - e + 1)) + e);
+  e = Math.ceil(e);
+  t = Math.floor(t);
+  return Math.floor(Math.random() * (t - e + 1)) + e;
 }
 //@ chunk-mrx6y2r5.js:43200-43325 esm-fingerprint
-function Kn(e, t) {
-  let r = t.retryDelayInMs * Math.pow(2, e),
-    min = Math.min(t.maxRetryDelayInMs, r);
-  return { retryAfterInMs: min / 2 + Ws(0, min / 2) };
+function Kn(e, config) {
+  let exponentialDelay = config.retryDelayInMs * Math.pow(2, e);
+  let clampedDelay = Math.min(config.maxRetryDelayInMs, exponentialDelay);
+  return {
+    retryAfterInMs: clampedDelay / 2 + Ws(0, clampedDelay / 2),
+  };
 }
-
 export { Kn };

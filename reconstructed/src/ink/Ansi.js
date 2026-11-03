@@ -10,18 +10,20 @@
  */
 import { Parser } from "./termio/parser.js";
 
+//@ chunk-x6v6jz2y.js:15379-15751 fingerprint = parseToSpans (0.926)
 /**
  * 用 termio Parser 把 ANSI 字符串转成 {text, props} 片段（相邻同样式合并，携带超链接）。
  */
-//@ chunk-x6v6jz2y.js:15379-15751 fingerprint = parseToSpans (0.926)
 function parseToSpans(input) {
-  let actions = new Parser({ stringsEndAtLineFeed: !0 }).feed(input),
-    spans = [],
-    currentHyperlink;
+  let actions = new Parser({
+    stringsEndAtLineFeed: true,
+  }).feed(input);
+  let spans = [];
+  let currentHyperlink;
   for (let action of actions) {
     if (action.type === "link") {
       if (action.action.type === "start") currentHyperlink = action.action.url;
-      else currentHyperlink = void 0;
+      else currentHyperlink = undefined;
       continue;
     }
     if (action.type === "text") {
@@ -29,28 +31,32 @@ function parseToSpans(input) {
       if (!text) continue;
       let props = textStyleToSpanProps(action.style);
       if (currentHyperlink) props.hyperlink = currentHyperlink;
-      let at = spans.at(-1);
-      if (at && propsEqual(at.props, props)) at.text += text;
-      else spans.push({ text: text, props: props });
+      let lastSpan = spans.at(-1);
+      if (lastSpan && propsEqual(lastSpan.props, props)) lastSpan.text += text;
+      else
+        spans.push({
+          text,
+          props,
+        });
     }
   }
   return spans;
 }
+//@ chunk-x6v6jz2y.js:15751-16008 fingerprint = textStyleToSpanProps (0.943)
 /**
  * 把解析出的 ANSI 文本样式转成 <Text> 的属性（颜色、粗体、暗、斜体、下划线、删除线、反显）。
  */
-//@ chunk-x6v6jz2y.js:15751-16008 fingerprint = textStyleToSpanProps (0.943)
 function textStyleToSpanProps(style) {
   return {
     color: colorToString(style.fg),
     backgroundColor: colorToString(style.bg),
-    dim: style.dim ? !0 : void 0,
-    bold: style.bold ? !0 : void 0,
-    italic: style.italic ? !0 : void 0,
-    underline: style.underline !== "none" ? !0 : void 0,
-    strikethrough: style.strikethrough ? !0 : void 0,
-    inverse: style.inverse ? !0 : void 0,
-    hyperlink: void 0,
+    dim: style.dim ? true : undefined,
+    bold: style.bold ? true : undefined,
+    italic: style.italic ? true : undefined,
+    underline: style.underline !== "none" ? true : undefined,
+    strikethrough: style.strikethrough ? true : undefined,
+    inverse: style.inverse ? true : undefined,
+    hyperlink: undefined,
   };
 }
 //@ chunk-x6v6jz2y.js:16008-16413 fingerprint = NAMED_COLOR_MAP (1)
@@ -102,15 +108,14 @@ function propsEqual(a, b) {
 //@ chunk-x6v6jz2y.js:16827-16990 fingerprint = hasAnyTextProps (1)
 function hasAnyTextProps(props) {
   return (
-    props.color !== void 0 ||
-    props.backgroundColor !== void 0 ||
-    props.dim === !0 ||
-    props.bold === !0 ||
-    props.italic === !0 ||
-    props.underline === !0 ||
-    props.strikethrough === !0 ||
-    props.inverse === !0
+    props.color !== undefined ||
+    props.backgroundColor !== undefined ||
+    props.dim === true ||
+    props.bold === true ||
+    props.italic === true ||
+    props.underline === true ||
+    props.strikethrough === true ||
+    props.inverse === true
   );
 }
-
 export { parseToSpans, hasAnyTextProps };

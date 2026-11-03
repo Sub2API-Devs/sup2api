@@ -35,52 +35,63 @@ import { En } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { isAwaySummaryEnabled } from "../../services/awaySummary.js";
 
 //@ chunk-pc1rmcr2.js:1032-1057 placement
-var e_o = new SessionRootSlot(() => createSignal());
+/**
+ * settingsChangedSignal：设置变更信号。
+ */
+var settingsChangedSignal = new SessionRootSlot(() => createSignal());
+//@ chunk-pc1rmcr2.js:1057-1784 fingerprint = applySettingsChange (0.366)
 /**
  * 设置变更后刷新 AppState 中依赖设置的部分（权限上下文、模型等），日志 Settings changed from <source>, updating app state。
  */
-//@ chunk-pc1rmcr2.js:1057-1784 fingerprint = applySettingsChange (0.366)
-function applySettingsChange(e, r, o, d, u) {
+function applySettingsChange(e, r, o, storageV5, u) {
   let newSettings = getInitialSettings_2();
-  (logForDebugging(`Settings changed from ${r}, updating app state`), resetLocalSettingsGitTrackedCache());
+  logForDebugging(`Settings changed from ${r}, updating app state`);
+  resetLocalSettingsGitTrackedCache();
   let updatedRules = loadAllPermissionRulesFromDisk();
-  (updateHooksConfigSnapshot({ userLayer: "retain" }), clearCommandMemoizationCaches());
-  let a = !1;
-  if (
-    (o((prev) => {
-      let newContext = syncPermissionRulesFromDisk(prev.toolPermissionContext, updatedRules);
-      newContext = rebuildAdditionalDirectories(
-        newContext,
-        prev.settings.permissions?.additionalDirectories,
-        loadTrustedAdditionalDirectoriesFromDisk(),
-        r,
-        u?.trustFlip === !0,
-        u?.prevCwd,
-        d,
-      );
-      let overlyBroad = refreshPermissionContext(newContext, updatedRules);
-      if (
-        ((newContext = overlyBroad.context),
-        (a = overlyBroad.exitedAutoMode),
-        newContext.blockReadsOutsideWorkingDirectories !== !0 && hasBlockReadsOutsideWorkingDirectories())
-      )
-        ((newContext = { ...newContext, blockReadsOutsideWorkingDirectories: !0 }), markReadBlockApplied());
-      if (newContext.blockWritesOutsideWorkingDirectories !== !0 && isWriteBlockOn())
-        newContext = withWriteBlockOn(newContext);
-      let g = readBlockExemptPathsInSettings();
-      if (!En(newContext.readBlockExemptPaths ?? [], g))
-        newContext = { ...newContext, readBlockExemptPaths: g };
-      let h = isAwaySummaryEnabled();
-      return {
-        ...prev,
-        settings: newSettings,
-        toolPermissionContext: newContext,
-        ...(prev.awaySummaryEnabled !== h && { awaySummaryEnabled: h }),
+  updateHooksConfigSnapshot({
+    userLayer: "retain",
+  });
+  clearCommandMemoizationCaches();
+  let a = false;
+  o((prev) => {
+    let newContext = syncPermissionRulesFromDisk(prev.toolPermissionContext, updatedRules);
+    newContext = rebuildAdditionalDirectories(
+      newContext,
+      prev.settings.permissions?.additionalDirectories,
+      loadTrustedAdditionalDirectoriesFromDisk(),
+      r,
+      u?.trustFlip === true,
+      u?.prevCwd,
+      storageV5,
+    );
+    let overlyBroad = refreshPermissionContext(newContext, updatedRules);
+    newContext = overlyBroad.context;
+    a = overlyBroad.exitedAutoMode;
+    if (newContext.blockReadsOutsideWorkingDirectories !== true && hasBlockReadsOutsideWorkingDirectories()) {
+      newContext = {
+        ...newContext,
+        blockReadsOutsideWorkingDirectories: true,
       };
-    }),
-    a && e !== void 0)
-  )
-    e_o.of(e).emit();
+      markReadBlockApplied();
+    }
+    if (newContext.blockWritesOutsideWorkingDirectories !== true && isWriteBlockOn())
+      newContext = withWriteBlockOn(newContext);
+    let blockExemptPathsInSettings = readBlockExemptPathsInSettings();
+    if (!En(newContext.readBlockExemptPaths ?? [], blockExemptPathsInSettings))
+      newContext = {
+        ...newContext,
+        readBlockExemptPaths: blockExemptPathsInSettings,
+      };
+    let h = isAwaySummaryEnabled();
+    return {
+      ...prev,
+      settings: newSettings,
+      toolPermissionContext: newContext,
+      ...(prev.awaySummaryEnabled !== h && {
+        awaySummaryEnabled: h,
+      }),
+    };
+  });
+  if (a && e !== undefined) settingsChangedSignal.of(e).emit();
 }
-
-export { e_o, applySettingsChange };
+export { settingsChangedSignal, applySettingsChange };

@@ -6,26 +6,27 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { vr } from "./common.js";
+import { require_common } from "./common.js";
 
 //@ chunk-h6b7mazd.js:30759-33381 cjs-fingerprint
-var Is = x(function (Tr, Ut) {
-  Tr.formatArgs = zc;
-  Tr.save = $c;
-  Tr.load = Vc;
-  Tr.useColors = Hc;
-  Tr.storage = Wc();
-  Tr.destroy = (() => {
-    let e = !1;
+var require_browser = x(function (cjsExports, cjsModule) {
+  cjsExports.formatArgs = formatArgs;
+  cjsExports.save = save;
+  cjsExports.load = load;
+  cjsExports.useColors = useColors;
+  cjsExports.storage = localstorage();
+  cjsExports.destroy = (() => {
+    let warned = false;
     return () => {
-      if (!e)
-        ((e = !0),
-          console.warn(
-            "Instance method `debug.destroy()` is deprecated and no longer does anything. It will be removed in the next major version of `debug`.",
-          ));
+      if (!warned) {
+        warned = true;
+        console.warn(
+          "Instance method `debug.destroy()` is deprecated and no longer does anything. It will be removed in the next major version of `debug`.",
+        );
+      }
     };
   })();
-  Tr.colors = [
+  cjsExports.colors = [
     "#0000CC",
     "#0000FF",
     "#0033CC",
@@ -103,89 +104,86 @@ var Is = x(function (Tr, Ut) {
     "#FFCC00",
     "#FFCC33",
   ];
-  function Hc() {
+  function useColors() {
     if (
-      typeof window < "u" &&
+      typeof window !== "undefined" &&
       window.process &&
       (window.process.type === "renderer" || window.process.__nwjs)
     )
-      return !0;
+      return true;
     if (
-      typeof navigator < "u" &&
+      typeof navigator !== "undefined" &&
       navigator.userAgent &&
       navigator.userAgent.toLowerCase().match(/(edge|trident)\/(\d+)/)
     )
-      return !1;
-    let e;
+      return false;
+    let m;
     return (
-      (typeof document < "u" &&
+      (typeof document !== "undefined" &&
         document.documentElement &&
         document.documentElement.style &&
         document.documentElement.style.WebkitAppearance) ||
-      (typeof window < "u" &&
+      (typeof window !== "undefined" &&
         window.console &&
         (window.console.firebug || (window.console.exception && window.console.table))) ||
-      (typeof navigator < "u" &&
+      (typeof navigator !== "undefined" &&
         navigator.userAgent &&
-        (e = navigator.userAgent.toLowerCase().match(/firefox\/(\d+)/)) &&
-        parseInt(e[1], 10) >= 31) ||
-      (typeof navigator < "u" &&
+        (m = navigator.userAgent.toLowerCase().match(/firefox\/(\d+)/)) &&
+        parseInt(m[1], 10) >= 31) ||
+      (typeof navigator !== "undefined" &&
         navigator.userAgent &&
         navigator.userAgent.toLowerCase().match(/applewebkit\/(\d+)/))
     );
   }
-  function zc(e) {
-    if (
-      ((e[0] =
-        (this.useColors ? "%c" : "") +
-        this.namespace +
-        (this.useColors ? " %c" : " ") +
-        e[0] +
-        (this.useColors ? "%c " : " ") +
-        "+" +
-        Ut.exports.humanize(this.diff)),
-      !this.useColors)
-    )
-      return;
-    let t = "color: " + this.color;
-    e.splice(1, 0, t, "color: inherit");
-    let r = 0,
-      n = 0;
-    (e[0].replace(/%[a-zA-Z%]/g, (o) => {
-      if (o === "%%") return;
-      if ((r++, o === "%c")) n = r;
-    }),
-      e.splice(n, 0, t));
+  function formatArgs(args) {
+    args[0] =
+      (this.useColors ? "%c" : "") +
+      this.namespace +
+      (this.useColors ? " %c" : " ") +
+      args[0] +
+      (this.useColors ? "%c " : " ") +
+      "+" +
+      cjsModule.exports.humanize(this.diff);
+    if (!this.useColors) return;
+    let c = "color: " + this.color;
+    args.splice(1, 0, c, "color: inherit");
+    let index = 0;
+    let lastC = 0;
+    args[0].replace(/%[a-zA-Z%]/g, (match) => {
+      if (match === "%%") return;
+      index++;
+      if (match === "%c") lastC = index;
+    });
+    args.splice(lastC, 0, c);
   }
-  Tr.log = console.debug || console.log || (() => {});
-  function $c(e) {
+  cjsExports.log = console.debug || console.log || (() => {});
+  function save(namespaces) {
     try {
-      if (e) Tr.storage.setItem("debug", e);
-      else Tr.storage.removeItem("debug");
+      if (namespaces) cjsExports.storage.setItem("debug", namespaces);
+      else cjsExports.storage.removeItem("debug");
     } catch (error) {}
   }
-  function Vc() {
-    let e;
+  function load() {
+    let r;
     try {
-      e = Tr.storage.getItem("debug");
+      r = cjsExports.storage.getItem("debug");
     } catch (error) {}
-    if (!e && typeof process < "u" && "env" in process) e = process.env.DEBUG;
-    return e;
+    if (!r && typeof process !== "undefined" && "env" in process) r = process.env.DEBUG;
+    return r;
   }
-  function Wc() {
+  function localstorage() {
     try {
       return localStorage;
     } catch (error) {}
   }
-  Ut.exports = vr()(Tr);
-  var { formatters: formatters } = Ut.exports;
-  formatters.j = function (e) {
+  cjsModule.exports = require_common()(cjsExports);
+  var { formatters } = cjsModule.exports;
+  formatters.j = function (v) {
     try {
-      return JSON.stringify(e);
+      return JSON.stringify(v);
     } catch (error) {
       return "[UnexpectedJSONParseError]: " + error.message;
     }
   };
 });
-
-export { Is };
+export { require_browser };

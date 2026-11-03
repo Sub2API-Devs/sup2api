@@ -10,17 +10,24 @@
  */
 
 //@ chunk-08945j39.js:4045-4170 fingerprint = emitTaskTerminatedSdk (0.565)
-function emitTaskTerminatedSdk(e, n) {
+function emitTaskTerminatedSdk(awaitingFinish, n) {
   return (
     n.type === "system" &&
     n.subtype === "task_notification" &&
     typeof n.task_id === "string" &&
-    e.delete(n.task_id)
+    awaitingFinish.delete(n.task_id)
   );
 }
 //@ chunk-54xbtc53.js:27546-27635 fingerprint = drainSdkEvents (0.429)
-function drainSdkEvents(e, t, s) {
-  return t === void 0 ? e : { ...e, session_id: t, ...(s !== void 0 && { session_url: s }) };
+function drainSdkEvents(result, cloudSessionId, viewUrl) {
+  return cloudSessionId === undefined
+    ? result
+    : {
+        ...result,
+        session_id: cloudSessionId,
+        ...(viewUrl !== undefined && {
+          session_url: viewUrl,
+        }),
+      };
 }
-
 export { emitTaskTerminatedSdk, drainSdkEvents };

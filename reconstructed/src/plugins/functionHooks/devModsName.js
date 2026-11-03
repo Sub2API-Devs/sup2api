@@ -12,6 +12,8 @@ import { join } from "path";
 import { getClaudeConfigDir } from "../../utils/envUtils.js";
 
 //@ chunk-2m7wmh13.js:255-286 placement
-var gte = () => join(getClaudeConfigDir(), "dev-mods");
-
-export { gte };
+/**
+ * <配置目录>/dev-mods
+ */
+var devModsDir = () => join(getClaudeConfigDir(), "dev-mods");
+export { devModsDir };

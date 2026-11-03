@@ -10,7 +10,10 @@
  */
 import { w } from "../../vendor/react/compiler-runtime.js";
 import { useTerminalSize } from "../hooks/useTerminalSize.js";
-import { r, e } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default_2,
+  jsxProd_default,
+} from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Box } from "../ink/components/Text.js";
 import { getDisplayPath } from "../utils/file.js";
 import { FilePathLink } from "./FilePathLink.js";
@@ -20,125 +23,175 @@ import { OverflowHint } from "./CtrlOToExpand.js";
 import { StructuredDiffList } from "./StructuredDiffList.js";
 
 //@ chunk-vnfdjr3f.js:627-636 affinity
-var D = 10;
+var MAX_DIFF_PREVIEW_LINES = 10;
+//@ chunk-vnfdjr3f.js:636-2341 fingerprint = FileEditToolUseRejectedMessage (0.879)
 /**
  * 编辑/写入被拒绝："User rejected update/write to <路径>"，写入显示被拒内容（高亮），编辑显示被拒 diff。
  */
-//@ chunk-vnfdjr3f.js:636-2341 fingerprint = FileEditToolUseRejectedMessage (0.879)
-function FileEditToolUseRejectedMessage(t0) {
-  let $ = w(39),
-    {
-      file_path: file_path,
-      operation: operation,
-      patch: patch,
-      firstLine: firstLine,
-      fileContent: fileContent,
-      content: content,
-      style: style,
-      verbose: verbose,
-    } = t0,
-    { columns: columns } = useTerminalSize(),
-    d;
-  if ($[0] !== operation)
-    ((d = r(Text, { color: "subtle", children: ["User rejected ", operation, " to "] })),
-      ($[0] = operation),
-      ($[1] = d));
-  else d = $[1];
-  let c;
-  if ($[2] !== file_path || $[3] !== verbose)
-    ((c = verbose ? file_path : getDisplayPath(file_path)), ($[2] = file_path), ($[3] = verbose), ($[4] = c));
-  else c = $[4];
-  let P;
-  if ($[5] !== file_path || $[6] !== c)
-    ((P = e(Text, {
-      bold: !0,
+function FileEditToolUseRejectedMessage(props) {
+  let $ = w(39);
+  let { file_path, operation, patch, firstLine, fileContent, content, style, verbose } = props;
+  let { columns } = useTerminalSize();
+  let t1;
+  if ($[0] !== operation) {
+    t1 = jsxProd_default_2(Text, {
       color: "subtle",
-      children: e(FilePathLink, { filePath: file_path, children: c }),
-    })),
-      ($[5] = file_path),
-      ($[6] = c),
-      ($[7] = P));
-  else P = $[7];
-  let H;
-  if ($[8] !== d || $[9] !== P)
-    ((H = r(Box, { flexDirection: "row", children: [d, P] })), ($[8] = d), ($[9] = P), ($[10] = H));
-  else H = $[10];
-  let i = H;
+      children: ["User rejected ", operation, " to "],
+    });
+    $[0] = operation;
+    $[1] = t1;
+  } else t1 = $[1];
+  let children;
+  if ($[2] !== file_path || $[3] !== verbose) {
+    children = verbose ? file_path : getDisplayPath(file_path);
+    $[2] = file_path;
+    $[3] = verbose;
+    $[4] = children;
+  } else children = $[4];
+  let P;
+  if ($[5] !== file_path || $[6] !== children) {
+    P = jsxProd_default(Text, {
+      bold: true,
+      color: "subtle",
+      children: jsxProd_default(FilePathLink, {
+        filePath: file_path,
+        children,
+      }),
+    });
+    $[5] = file_path;
+    $[6] = children;
+    $[7] = P;
+  } else P = $[7];
+  let t4;
+  if ($[8] !== t1 || $[9] !== P) {
+    t4 = jsxProd_default_2(Box, {
+      flexDirection: "row",
+      children: [t1, P],
+    });
+    $[8] = t1;
+    $[9] = P;
+    $[10] = t4;
+  } else t4 = $[10];
+  let text = t4;
   if (style === "condensed" && !verbose) {
-    let l;
-    if ($[11] !== i) ((l = e(MessageResponse, { children: i })), ($[11] = i), ($[12] = l));
-    else l = $[12];
-    return l;
+    let t5;
+    if ($[11] !== text) {
+      t5 = jsxProd_default(MessageResponse, {
+        children: text,
+      });
+      $[11] = text;
+      $[12] = t5;
+    } else t5 = $[12];
+    return t5;
   }
-  if (operation === "write" && content !== void 0) {
-    let a, l;
+  if (operation === "write" && content !== undefined) {
+    let plusLines;
+    let t5;
     if ($[13] !== content || $[14] !== verbose) {
-      let parts = content.split(`
+      let lines = content.split(`
 `);
-      a = parts.length - D;
-      l = verbose
+      plusLines = lines.length - MAX_DIFF_PREVIEW_LINES;
+      t5 = verbose
         ? content
-        : parts.slice(0, D).join(`
+        : lines.slice(0, MAX_DIFF_PREVIEW_LINES).join(`
 `);
-      (($[13] = content), ($[14] = verbose), ($[15] = a), ($[16] = l));
-    } else ((a = $[15]), (l = $[16]));
-    let x = l;
-    const t6 = x || "(No content)";
-    const b = columns - 12;
-    let _;
-    if ($[17] !== file_path || $[18] !== t6 || $[19] !== b)
-      ((_ = e(HighlightedCode, { code: t6, filePath: file_path, width: b, dim: !0 })),
-        ($[17] = file_path),
-        ($[18] = t6),
-        ($[19] = b),
-        ($[20] = _));
-    else _ = $[20];
+      $[13] = content;
+      $[14] = verbose;
+      $[15] = plusLines;
+      $[16] = t5;
+    } else {
+      plusLines = $[15];
+      t5 = $[16];
+    }
+    let truncatedContent = t5;
+    const code = truncatedContent || "(No content)";
+    const width = columns - 12;
+    let t8;
+    if ($[17] !== file_path || $[18] !== code || $[19] !== width) {
+      t8 = jsxProd_default(HighlightedCode, {
+        code,
+        filePath: file_path,
+        width,
+        dim: true,
+      });
+      $[17] = file_path;
+      $[18] = code;
+      $[19] = width;
+      $[20] = t8;
+    } else t8 = $[20];
     let A;
-    if ($[21] !== a || $[22] !== verbose)
-      ((A = !verbose && e(OverflowHint, { count: a })), ($[21] = a), ($[22] = verbose), ($[23] = A));
-    else A = $[23];
-    let z;
-    if ($[24] !== _ || $[25] !== A || $[26] !== i)
-      ((z = e(MessageResponse, { children: r(Box, { flexDirection: "column", children: [i, _, A] }) })),
-        ($[24] = _),
-        ($[25] = A),
-        ($[26] = i),
-        ($[27] = z));
-    else z = $[27];
-    return z;
+    if ($[21] !== plusLines || $[22] !== verbose) {
+      A =
+        !verbose &&
+        jsxProd_default(OverflowHint, {
+          count: plusLines,
+        });
+      $[21] = plusLines;
+      $[22] = verbose;
+      $[23] = A;
+    } else A = $[23];
+    let t10;
+    if ($[24] !== t8 || $[25] !== A || $[26] !== text) {
+      t10 = jsxProd_default(MessageResponse, {
+        children: jsxProd_default_2(Box, {
+          flexDirection: "column",
+          children: [text, t8, A],
+        }),
+      });
+      $[24] = t8;
+      $[25] = A;
+      $[26] = text;
+      $[27] = t10;
+    } else t10 = $[27];
+    return t10;
   }
   if (!patch || patch.length === 0) {
-    let l;
-    if ($[28] !== i) ((l = e(MessageResponse, { children: i })), ($[28] = i), ($[29] = l));
-    else l = $[29];
-    return l;
+    let t5;
+    if ($[28] !== text) {
+      t5 = jsxProd_default(MessageResponse, {
+        children: text,
+      });
+      $[28] = text;
+      $[29] = t5;
+    } else t5 = $[29];
+    return t5;
   }
-  const l = columns - 12;
-  let f;
-  if ($[30] !== fileContent || $[31] !== file_path || $[32] !== firstLine || $[33] !== patch || $[34] !== l)
-    ((f = e(StructuredDiffList, {
+  const width = columns - 12;
+  let t6;
+  if (
+    $[30] !== fileContent ||
+    $[31] !== file_path ||
+    $[32] !== firstLine ||
+    $[33] !== patch ||
+    $[34] !== width
+  ) {
+    t6 = jsxProd_default(StructuredDiffList, {
       hunks: patch,
-      dim: !0,
-      width: l,
+      dim: true,
+      width,
       filePath: file_path,
-      firstLine: firstLine,
-      fileContent: fileContent,
-    })),
-      ($[30] = fileContent),
-      ($[31] = file_path),
-      ($[32] = firstLine),
-      ($[33] = patch),
-      ($[34] = l),
-      ($[35] = f));
-  else f = $[35];
-  let b;
-  if ($[36] !== f || $[37] !== i)
-    ((b = e(MessageResponse, { children: r(Box, { flexDirection: "column", children: [i, f] }) })),
-      ($[36] = f),
-      ($[37] = i),
-      ($[38] = b));
-  else b = $[38];
-  return b;
+      firstLine,
+      fileContent,
+    });
+    $[30] = fileContent;
+    $[31] = file_path;
+    $[32] = firstLine;
+    $[33] = patch;
+    $[34] = width;
+    $[35] = t6;
+  } else t6 = $[35];
+  let t7;
+  if ($[36] !== t6 || $[37] !== text) {
+    t7 = jsxProd_default(MessageResponse, {
+      children: jsxProd_default_2(Box, {
+        flexDirection: "column",
+        children: [text, t6],
+      }),
+    });
+    $[36] = t6;
+    $[37] = text;
+    $[38] = t7;
+  } else t7 = $[38];
+  return t7;
 }
-
 export { FileEditToolUseRejectedMessage };

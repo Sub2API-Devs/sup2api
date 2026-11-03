@@ -11,5 +11,4 @@
 
 //@ chunk-jtfz0a2c.js:191-215 placement
 var CONNECTGITHUB = "ConnectGitHub";
-
 export { CONNECTGITHUB };

@@ -6,54 +6,53 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { tp } from "./constants.js";
+import { require_constants } from "./constants.js";
 
 //@ chunk-fq0cr76a.js:298160-299275 cjs-fingerprint
-var np = x(function (tq) {
-  var {
-    REGEX_BACKSLASH: REGEX_BACKSLASH,
-    REGEX_REMOVE_BACKSLASH: REGEX_REMOVE_BACKSLASH,
-    REGEX_SPECIAL_CHARS: REGEX_SPECIAL_CHARS,
-    REGEX_SPECIAL_CHARS_GLOBAL: REGEX_SPECIAL_CHARS_GLOBAL,
-  } = tp();
-  tq.isObject = (e) => e !== null && typeof e === "object" && !Array.isArray(e);
-  tq.hasRegexChars = (e) => REGEX_SPECIAL_CHARS.test(e);
-  tq.isRegexChar = (e) => e.length === 1 && tq.hasRegexChars(e);
-  tq.escapeRegex = (e) => e.replace(REGEX_SPECIAL_CHARS_GLOBAL, "\\$1");
-  tq.toPosixSlashes = (e) => e.replace(REGEX_BACKSLASH, "/");
-  tq.isWindows = () => {
-    if (typeof navigator < "u" && navigator.platform) {
-      let lower = navigator.platform.toLowerCase();
-      return lower === "win32" || lower === "windows";
+var require_utils = x(function (cjsExports) {
+  var { REGEX_BACKSLASH, REGEX_REMOVE_BACKSLASH, REGEX_SPECIAL_CHARS, REGEX_SPECIAL_CHARS_GLOBAL } =
+    require_constants();
+  cjsExports.isObject = (val) => val !== null && typeof val === "object" && !Array.isArray(val);
+  cjsExports.hasRegexChars = (str) => REGEX_SPECIAL_CHARS.test(str);
+  cjsExports.isRegexChar = (str) => str.length === 1 && cjsExports.hasRegexChars(str);
+  cjsExports.escapeRegex = (str) => str.replace(REGEX_SPECIAL_CHARS_GLOBAL, "\\$1");
+  cjsExports.toPosixSlashes = (str) => str.replace(REGEX_BACKSLASH, "/");
+  cjsExports.isWindows = () => {
+    if (typeof navigator !== "undefined" && navigator.platform) {
+      let platform = navigator.platform.toLowerCase();
+      return platform === "win32" || platform === "windows";
     }
-    if (typeof process < "u") return !1;
-    return !1;
+    if (typeof process !== "undefined") return false;
+    return false;
   };
-  tq.removeBackslashes = (e) => e.replace(REGEX_REMOVE_BACKSLASH, (n) => (n === "\\" ? "" : n));
-  tq.escapeLast = (e, n, r) => {
-    let index = e.lastIndexOf(n, r);
-    if (index === -1) return e;
-    if (e[index - 1] === "\\") return tq.escapeLast(e, n, index - 1);
-    return `${e.slice(0, index)}\\${e.slice(index)}`;
+  cjsExports.removeBackslashes = (str) =>
+    str.replace(REGEX_REMOVE_BACKSLASH, (match) => (match === "\\" ? "" : match));
+  cjsExports.escapeLast = (input, char, lastIdx) => {
+    let idx = input.lastIndexOf(char, lastIdx);
+    if (idx === -1) return input;
+    if (input[idx - 1] === "\\") return cjsExports.escapeLast(input, char, idx - 1);
+    return `${input.slice(0, idx)}\\${input.slice(idx)}`;
   };
-  tq.removePrefix = (e, n = {}) => {
-    let r = e;
-    if (r.startsWith("./")) ((r = r.slice(2)), (n.prefix = "./"));
-    return r;
+  cjsExports.removePrefix = (input, state = {}) => {
+    let output = input;
+    if (output.startsWith("./")) {
+      output = output.slice(2);
+      state.prefix = "./";
+    }
+    return output;
   };
-  tq.wrapOutput = (e, n = {}, r = {}) => {
-    let s = r.contains ? "" : "^",
-      h = r.contains ? "" : "$",
-      y = `${s}(?:${e})${h}`;
-    if (n.negated === !0) y = `(?:^(?!${y}).*$)`;
-    return y;
+  cjsExports.wrapOutput = (input, state = {}, options = {}) => {
+    let prepend = options.contains ? "" : "^";
+    let append = options.contains ? "" : "$";
+    let output = `${prepend}(?:${input})${append}`;
+    if (state.negated === true) output = `(?:^(?!${output}).*$)`;
+    return output;
   };
-  tq.basename = (e, { windows: n } = {}) => {
-    let parts = e.split(n ? /[\\/]/ : "/"),
-      s = parts[parts.length - 1];
-    if (s === "") return parts[parts.length - 2];
-    return s;
+  cjsExports.basename = (path, { windows } = {}) => {
+    let segs = path.split(windows ? /[\\/]/ : "/");
+    let last = segs[segs.length - 1];
+    if (last === "") return segs[segs.length - 2];
+    return last;
   };
 });
-
-export { np };
+export { require_utils };

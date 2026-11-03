@@ -10,22 +10,30 @@
  */
 
 //@ chunk-e6aww6q8.js:270582-270626 placement
-async function Hco(e, n) {
+async function environmentKindOf(e, n) {
   return "unspecified";
 }
 //@ chunk-e6aww6q8.js:270626-270691 placement
-async function O0e(e, n) {
-  return (await Hco(e, n)) === "container_sync";
+/**
+ * 环境是否是 container_sync。
+ */
+async function isContainerSyncEnvironment(e, gitRoot) {
+  return (await environmentKindOf(e, gitRoot)) === "container_sync";
 }
 //@ chunk-e6aww6q8.js:270691-270716 placement
-function Apn(e) {
-  return !1;
+/**
+ * 外部构建恒 false 的 cowork 判定桩。
+ */
+function isRemoteCoworkLet(e) {
+  return false;
 }
 //@ chunk-e6aww6q8.js:270716-270733 placement
-function OAt(e) {}
+function noopContainerCleanup(e) {}
 //@ chunk-e6aww6q8.js:270733-270764 placement
-async function N9n(e) {
-  return !1;
+/**
+ * 外部构建恒 false 的容器同步禁用判断桩。
+ */
+async function isContainerSyncDisabled(e) {
+  return false;
 }
-
-export { O0e, OAt, Apn, N9n };
+export { isContainerSyncEnvironment, noopContainerCleanup, isRemoteCoworkLet, isContainerSyncDisabled };

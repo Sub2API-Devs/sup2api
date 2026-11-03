@@ -6,147 +6,168 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../runtime/bun-runtime.js";
-import { uh } from "../codegen/index.js";
-import { DPe } from "../names.js";
-import { Q } from "../../vocabularies/code.js";
-import { ct } from "../errors.js";
+import { require_codegen_2 } from "../codegen/index.js";
+import { require_names } from "../names.js";
+import { require_code_2 } from "../../vocabularies/code.js";
+import { require_errors } from "../errors.js";
 
 //@ chunk-s82q9s4x.js:33752-36663 cjs-fingerprint
-var sn = x(function (tn) {
-  Object.defineProperty(tn, "__esModule", { value: !0 });
-  tn.validateKeywordUsage = tn.validSchemaType = tn.funcKeywordCode = tn.macroKeywordCode = void 0;
-  var I = uh(),
-    Ce = DPe(),
-    Ys = Q(),
-    Zs = ct();
-  function ku(e, t) {
-    let { gen: gen, keyword: keyword, schema: schema, parentSchema: parentSchema, it: it } = e,
-      a = t.macro.call(it.self, schema, parentSchema, it),
-      c = en(gen, keyword, a);
-    if (it.opts.validateSchema !== !1) it.self.validateSchema(a, !0);
-    let u = gen.name("valid");
-    (e.subschema(
+var require_keyword = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.validateKeywordUsage =
+    cjsExports.validSchemaType =
+    cjsExports.funcKeywordCode =
+    cjsExports.macroKeywordCode =
+      undefined;
+  var codegen_1 = require_codegen_2();
+  var names_1 = require_names();
+  var code_1 = require_code_2();
+  var errors_1 = require_errors();
+  function macroKeywordCode(cxt, def) {
+    let { gen, keyword, schema, parentSchema, it } = cxt;
+    let macroSchema = def.macro.call(it.self, schema, parentSchema, it);
+    let schemaRef = useKeyword(gen, keyword, macroSchema);
+    if (it.opts.validateSchema !== false) it.self.validateSchema(macroSchema, true);
+    let valid = gen.name("valid");
+    cxt.subschema(
       {
-        schema: a,
-        schemaPath: I.nil,
+        schema: macroSchema,
+        schemaPath: codegen_1.nil,
         errSchemaPath: `${it.errSchemaPath}/${keyword}`,
-        topSchemaRef: c,
-        compositeRule: !0,
+        topSchemaRef: schemaRef,
+        compositeRule: true,
       },
-      u,
-    ),
-      e.pass(u, () => e.error(!0)));
+      valid,
+    );
+    cxt.pass(valid, () => cxt.error(true));
   }
-  tn.macroKeywordCode = ku;
-  function qu(e, t) {
-    var r;
-    let { gen: gen, keyword: keyword, schema: schema, parentSchema: parentSchema, $data: $data, it: it } = e;
-    ju(it, t);
-    let u = !$data && t.compile ? t.compile.call(it.self, schema, parentSchema, it) : t.validate,
-      l = en(gen, keyword, u),
-      f = gen.let("valid");
-    (e.block$data(f, b), e.ok((r = t.valid) !== null && r !== void 0 ? r : f));
-    function b() {
-      if (t.errors === !1) {
-        if ((p(), t.modifying)) Xs(e);
-        y(() => e.error());
+  cjsExports.macroKeywordCode = macroKeywordCode;
+  function funcKeywordCode(cxt, def) {
+    var _a;
+    let { gen, keyword, schema, parentSchema, $data, it } = cxt;
+    checkAsyncKeyword(it, def);
+    let validate = !$data && def.compile ? def.compile.call(it.self, schema, parentSchema, it) : def.validate;
+    let validateRef = useKeyword(gen, keyword, validate);
+    let valid = gen.let("valid");
+    cxt.block$data(valid, validateKeyword);
+    cxt.ok((_a = def.valid) !== null && _a !== undefined ? _a : valid);
+    function validateKeyword() {
+      if (def.errors === false) {
+        assignValid();
+        if (def.modifying) modifyData(cxt);
+        reportErrs(() => cxt.error());
       } else {
-        let v = t.async ? _() : h();
-        if (t.modifying) Xs(e);
-        y(() => Ou(e, v));
+        let ruleErrs = def.async ? validateAsync() : validateSync();
+        if (def.modifying) modifyData(cxt);
+        reportErrs(() => addErrs(cxt, ruleErrs));
       }
     }
-    function _() {
-      let v = gen.let("ruleErrs", null);
-      return (
-        gen.try(
-          () => p(I._`await `),
-          (O) =>
-            gen.assign(f, !1).if(
-              I._`${O} instanceof ${it.ValidationError}`,
-              () => gen.assign(v, I._`${O}.errors`),
-              () => gen.throw(O),
-            ),
-        ),
-        v
+    function validateAsync() {
+      let ruleErrs = gen.let("ruleErrs", null);
+      gen.try(
+        () => assignValid(codegen_1._`await `),
+        (e) =>
+          gen.assign(valid, false).if(
+            codegen_1._`${e} instanceof ${it.ValidationError}`,
+            () => gen.assign(ruleErrs, codegen_1._`${e}.errors`),
+            () => gen.throw(e),
+          ),
+      );
+      return ruleErrs;
+    }
+    function validateSync() {
+      let validateErrs = codegen_1._`${validateRef}.errors`;
+      gen.assign(validateErrs, null);
+      assignValid(codegen_1.nil);
+      return validateErrs;
+    }
+    function assignValid(_await = def.async ? codegen_1._`await ` : codegen_1.nil) {
+      let passCxt = it.opts.passContext ? names_1.default.this : names_1.default.self;
+      let passSchema = !(("compile" in def && !$data) || def.schema === false);
+      gen.assign(
+        valid,
+        codegen_1._`${_await}${code_1.callValidateCode(cxt, validateRef, passCxt, passSchema)}`,
+        def.modifying,
       );
     }
-    function h() {
-      let v = I._`${l}.errors`;
-      return (gen.assign(v, null), p(I.nil), v);
-    }
-    function p(v = t.async ? I._`await ` : I.nil) {
-      let O = it.opts.passContext ? Ce.default.this : Ce.default.self,
-        q = !(("compile" in t && !$data) || t.schema === !1);
-      gen.assign(f, I._`${v}${Ys.callValidateCode(e, l, O, q)}`, t.modifying);
-    }
-    function y(v) {
-      var O;
-      gen.if(I.not((O = t.valid) !== null && O !== void 0 ? O : f), v);
+    function reportErrs(errors) {
+      var _a;
+      gen.if(codegen_1.not((_a = def.valid) !== null && _a !== undefined ? _a : valid), errors);
     }
   }
-  tn.funcKeywordCode = qu;
-  function Xs(e) {
-    let { gen: gen, data: r, it: it } = e;
-    gen.if(it.parentData, () => gen.assign(r, I._`${it.parentData}[${it.parentDataProperty}]`));
+  cjsExports.funcKeywordCode = funcKeywordCode;
+  function modifyData(cxt) {
+    let { gen, data, it } = cxt;
+    gen.if(it.parentData, () => gen.assign(data, codegen_1._`${it.parentData}[${it.parentDataProperty}]`));
   }
-  function Ou(e, t) {
-    let { gen: gen } = e;
+  function addErrs(cxt, errs) {
+    let { gen } = cxt;
     gen.if(
-      I._`Array.isArray(${t})`,
+      codegen_1._`Array.isArray(${errs})`,
       () => {
-        (gen
+        gen
           .assign(
-            Ce.default.vErrors,
-            I._`${Ce.default.vErrors} === null ? ${t} : ${Ce.default.vErrors}.concat(${t})`,
+            names_1.default.vErrors,
+            codegen_1._`${names_1.default.vErrors} === null ? ${errs} : ${names_1.default.vErrors}.concat(${errs})`,
           )
-          .assign(Ce.default.errors, I._`${Ce.default.vErrors}.length`),
-          Zs.extendErrors(e));
+          .assign(names_1.default.errors, codegen_1._`${names_1.default.vErrors}.length`);
+        errors_1.extendErrors(cxt);
       },
-      () => e.error(),
+      () => cxt.error(),
     );
   }
-  function ju({ schemaEnv: schemaEnv }, t) {
-    if (t.async && !schemaEnv.$async) throw Error("async keyword in sync schema");
+  function checkAsyncKeyword({ schemaEnv }, def) {
+    if (def.async && !schemaEnv.$async) throw Error("async keyword in sync schema");
   }
-  function en(e, t, r) {
-    if (r === void 0) throw Error(`keyword "${t}" failed to compile`);
-    return e.scopeValue("keyword", typeof r == "function" ? { ref: r } : { ref: r, code: I.stringify(r) });
+  function useKeyword(gen, keyword, result) {
+    if (result === undefined) throw Error(`keyword "${keyword}" failed to compile`);
+    return gen.scopeValue(
+      "keyword",
+      typeof result == "function"
+        ? {
+            ref: result,
+          }
+        : {
+            ref: result,
+            code: codegen_1.stringify(result),
+          },
+    );
   }
-  function xu(e, t, r = !1) {
+  function validSchemaType(schema, schemaType, allowUndefined = false) {
     return (
-      !t.length ||
-      t.some((s) =>
-        s === "array"
-          ? Array.isArray(e)
-          : s === "object"
-            ? e && typeof e == "object" && !Array.isArray(e)
-            : typeof e == s || (r && typeof e > "u"),
+      !schemaType.length ||
+      schemaType.some((st) =>
+        st === "array"
+          ? Array.isArray(schema)
+          : st === "object"
+            ? schema && typeof schema == "object" && !Array.isArray(schema)
+            : typeof schema == st || (allowUndefined && typeof schema === "undefined"),
       )
     );
   }
-  tn.validSchemaType = xu;
-  function Ru({ schema: schema, opts: opts, self: r, errSchemaPath: errSchemaPath }, n, o) {
-    if (Array.isArray(n.keyword) ? !n.keyword.includes(o) : n.keyword !== o)
+  cjsExports.validSchemaType = validSchemaType;
+  function validateKeywordUsage({ schema, opts, self: r, errSchemaPath }, def, keyword) {
+    if (Array.isArray(def.keyword) ? !def.keyword.includes(keyword) : def.keyword !== keyword)
       throw Error("ajv implementation error");
-    let dependencies = n.dependencies;
+    let deps = def.dependencies;
     if (
-      dependencies === null || dependencies === void 0
-        ? void 0
-        : dependencies.some((a) => !Object.prototype.hasOwnProperty.call(schema, a))
+      deps === null || deps === undefined
+        ? undefined
+        : deps.some((kwd) => !Object.prototype.hasOwnProperty.call(schema, kwd))
     )
-      throw Error(`parent schema must have dependencies of ${o}: ${dependencies.join(",")}`);
-    if (n.validateSchema) {
-      if (!n.validateSchema(schema[o])) {
-        let c =
-          `keyword "${o}" value is invalid at path "${errSchemaPath}": ` +
-          r.errorsText(n.validateSchema.errors);
-        if (opts.validateSchema === "log") r.logger.error(c);
-        else throw Error(c);
+      throw Error(`parent schema must have dependencies of ${keyword}: ${deps.join(",")}`);
+    if (def.validateSchema) {
+      if (!def.validateSchema(schema[keyword])) {
+        let msg =
+          `keyword "${keyword}" value is invalid at path "${errSchemaPath}": ` +
+          r.errorsText(def.validateSchema.errors);
+        if (opts.validateSchema === "log") r.logger.error(msg);
+        else throw Error(msg);
       }
     }
   }
-  tn.validateKeywordUsage = Ru;
+  cjsExports.validateKeywordUsage = validateKeywordUsage;
 });
-
-export { sn };
+export { require_keyword };

@@ -8,35 +8,38 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-798ashq9.js:7914-8495 cjs-fingerprint
-var ar = x(function (pc, cr) {
-  cr.exports = Nt;
-  function Nt() {
+var require_eventemitter = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = EventEmitter;
+  function EventEmitter() {
     this._listeners = {};
   }
-  Nt.prototype.on = function (u, f, d) {
-    return ((this._listeners[u] || (this._listeners[u] = [])).push({ fn: f, ctx: d || this }), this);
+  EventEmitter.prototype.on = function (evt, fn, ctx) {
+    (this._listeners[evt] || (this._listeners[evt] = [])).push({
+      fn,
+      ctx: ctx || this,
+    });
+    return this;
   };
-  Nt.prototype.off = function (u, f) {
-    if (u === void 0) this._listeners = {};
-    else if (f === void 0) this._listeners[u] = [];
+  EventEmitter.prototype.off = function (evt, fn) {
+    if (evt === undefined) this._listeners = {};
+    else if (fn === undefined) this._listeners[evt] = [];
     else {
-      var d = this._listeners[u];
-      for (var i = 0; i < d.length;)
-        if (d[i].fn === f) d.splice(i, 1);
+      var listeners = this._listeners[evt];
+      for (var i = 0; i < listeners.length;)
+        if (listeners[i].fn === fn) listeners.splice(i, 1);
         else ++i;
     }
     return this;
   };
-  Nt.prototype.emit = function (u) {
-    var f = this._listeners[u];
-    if (f) {
-      var d = [],
-        i = 1;
-      for (; i < arguments.length;) d.push(arguments[i++]);
-      for (i = 0; i < f.length;) f[i].fn.apply(f[i++].ctx, d);
+  EventEmitter.prototype.emit = function (evt) {
+    var listeners = this._listeners[evt];
+    if (listeners) {
+      var args = [];
+      var i = 1;
+      for (; i < arguments.length;) args.push(arguments[i++]);
+      for (i = 0; i < listeners.length;) listeners[i].fn.apply(listeners[i++].ctx, args);
     }
     return this;
   };
 });
-
-export { ar };
+export { require_eventemitter };

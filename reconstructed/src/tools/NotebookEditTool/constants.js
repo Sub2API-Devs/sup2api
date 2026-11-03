@@ -9,10 +9,9 @@
  * attribution: fingerprint 1
  */
 
+//@ chunk-aepeg2w5.js:682776-682798 fingerprint = NOTEBOOK_EDIT_TOOL_NAME (1)
 /**
  * NotebookEdit 工具名 "NotebookEdit"。
  */
-//@ chunk-aepeg2w5.js:682776-682798 fingerprint = NOTEBOOK_EDIT_TOOL_NAME (1)
 var NOTEBOOK_EDIT_TOOL_NAME = "NotebookEdit";
-
 export { NOTEBOOK_EDIT_TOOL_NAME };

@@ -23,17 +23,17 @@ import { safeOrigin } from "../../services/mcp/ccrMcpUrls.js";
 import { getLoggingSafeMcpBaseUrl } from "../../services/mcp/utils.js";
 import { fromEnum, lit as lit_2, fromEnumOpt } from "../../services/analytics/safeMetadata.js";
 import { languageForFilePath } from "../../utils/highlight/pluginLanguages.js";
-import { ye } from "../../utils/startupMarks.js";
+import { sanitizeMarkName } from "../../utils/startupMarks.js";
 import { SandboxManager } from "../../utils/sandbox/sandbox-adapter.js";
 import { BASH_TOOL_NAME } from "../../tools/BashTool/toolName.js";
 import { POWERSHELL_TOOL_NAME } from "../../tools/PowerShellTool/toolName.js";
 import {
-  XCe,
+  getDestructiveTargetCategory,
   classifyDestructiveTargetScope,
   classifyGitDestructiveTarget,
 } from "../../tools/BashTool/destructiveTargets.js";
-import { WSt } from "../../tools/PowerShellTool/destructiveCommandWarning.js";
-import { gl } from "../../utils/cwd.js";
+import { getPowerShellDestructiveCategory } from "../../tools/PowerShellTool/destructiveCommandWarning.js";
+import { getCwdOrNull } from "../../utils/cwd.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 import { isSubagentContext } from "../../utils/agentContext.js";
@@ -44,34 +44,40 @@ import { logOTelEvent } from "../../utils/telemetry/events.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { toExternalPermissionMode } from "../../utils/permissions/PermissionMode.js";
 
+//@ chunk-e6aww6q8.js:993627-993733 placement
 /**
  * 生成权限日志的 MCP 工具字段（非 MCP 工具返回空；出错记录日志并返回空）。
  */
-//@ chunk-e6aww6q8.js:993627-993733 placement
-function mcpToolLogFields(e, n) {
-  if (!e.isMcp || extractMcpToolDetails(e.name) === void 0) return {};
+function mcpToolLogFields(tool, mcpClients) {
+  if (!tool.isMcp || extractMcpToolDetails(tool.name) === undefined) return {};
   try {
-    return describeMcpToolForLog(e, n);
+    return describeMcpToolForLog(tool, mcpClients);
   } catch (error) {
-    return (logError(error), {});
+    logError(error);
+    return {};
   }
 }
+//@ chunk-e6aww6q8.js:993733-994061 placement
 /**
  * 生成权限日志中的 MCP 工具字段：服务器类型、可记录的基础 URL、readOnlyHint，以及（服务器可记录时）工具名细节。
  */
-//@ chunk-e6aww6q8.js:993733-994061 placement
 function describeMcpToolForLog(e, n) {
-  let { connection: connection, ambiguous: ambiguous } = resolveMcpConnectionForTool(e.name, n),
-    h = connection && isConnectedOrCached(connection) ? connection : void 0,
-    y = h ? (h.config.type ?? "stdio") : void 0,
-    S = h ? safeOrigin(getLoggingSafeMcpBaseUrl(h.config)) : void 0,
-    w =
-      !ambiguous &&
-      isMcpServerLoggableInAnalytics(extractMcpToolDetails(e.name)?.serverName ?? "", h?.config);
+  let { connection, ambiguous } = resolveMcpConnectionForTool(e.name, n);
+  let h = connection && isConnectedOrCached(connection) ? connection : undefined;
+  let y = h ? (h.config.type ?? "stdio") : undefined;
+  let S = h ? safeOrigin(getLoggingSafeMcpBaseUrl(h.config)) : undefined;
+  let w =
+    !ambiguous && isMcpServerLoggableInAnalytics(extractMcpToolDetails(e.name)?.serverName ?? "", h?.config);
   return {
-    ...(y && { mcpServerType: fromEnum(y) }),
-    ...(S && { mcpServerBaseUrl: S }),
-    ...(e.readOnlyHint !== void 0 && { readOnlyHint: e.readOnlyHint }),
+    ...(y && {
+      mcpServerType: fromEnum(y),
+    }),
+    ...(S && {
+      mcpServerBaseUrl: S,
+    }),
+    ...(e.readOnlyHint !== undefined && {
+      readOnlyHint: e.readOnlyHint,
+    }),
     ...mcpToolAnalyticsFields(e.name, w),
   };
 }
@@ -92,10 +98,12 @@ async function buildCodeEditToolAttributes(tool, input, decision, source) {
     }
   }
   return {
-    decision: decision,
-    source: source,
+    decision,
+    source,
     tool_name: tool.name,
-    ...(language && { language: language }),
+    ...(language && {
+      language,
+    }),
   };
 }
 //@ chunk-e6aww6q8.js:3761121-3761383 fingerprint = sourceToString (1)
@@ -115,218 +123,262 @@ function sourceToString(source) {
   }
 }
 //@ chunk-e6aww6q8.js:3761704-3761889 fingerprint = baseMetadata (0.921)
-function baseMetadata(e, n, r, s) {
+function baseMetadata(e, n, waitMs, s) {
   return {
-    messageID: ye(n),
-    isMcp: e.isMcp ?? !1,
+    messageID: sanitizeMarkName(n),
+    isMcp: e.isMcp ?? false,
     toolName: sanitizeToolNameForAnalytics(e.name),
     ...mcpToolLogFields(e, s),
     sandboxEnabled: SandboxManager.isSandboxingEnabled(),
-    ...(r !== void 0 && { waiting_for_user_permission_ms: r }),
+    ...(waitMs !== undefined && {
+      waiting_for_user_permission_ms: waitMs,
+    }),
   };
 }
+//@ chunk-e6aww6q8.js:3761889-3762233 layout
 /**
  * Bash/PowerShell 命令的破坏性分类遥测字段：破坏类别、目标范围、git 破坏目标与权限模式。
  */
-//@ chunk-e6aww6q8.js:3761889-3762233 layout
-function destructiveCommandFields(e, n, r) {
-  let s = e.name === BASH_TOOL_NAME;
-  if (!s && e.name !== POWERSHELL_TOOL_NAME) return;
+function destructiveCommandFields(tool, n, permissionMode) {
+  let s = tool.name === BASH_TOOL_NAME;
+  if (!s && tool.name !== POWERSHELL_TOOL_NAME) return;
   if (n === null || typeof n !== "object" || !("command" in n) || typeof n.command !== "string") return;
-  let h = s ? XCe(n.command) : WSt(n.command);
+  let h = s ? getDestructiveTargetCategory(n.command) : getPowerShellDestructiveCategory(n.command);
   return {
     destructive_category: fromEnum(h ?? "none"),
-    destructive_target_scope: fromEnum(classifyDestructiveTargetScope(n.command, gl(), h)),
+    destructive_target_scope: fromEnum(classifyDestructiveTargetScope(n.command, getCwdOrNull(), h)),
     git_destructive_target: fromEnum(classifyGitDestructiveTarget(n.command, h)),
-    permission_mode: fromEnum(r),
+    permission_mode: fromEnum(permissionMode),
   };
 }
 //@ chunk-e6aww6q8.js:3762233-3762841 fingerprint = logApprovalEvent (0.825)
-function logApprovalEvent(e, n, r, s, h, y, S) {
-  if (r === "config") {
-    (logEvent("tengu_tool_use_granted_in_config", { ...baseMetadata(e, n, void 0, y), ...h, ...S }),
-      logFeatureOk("permission_auto_approve_config"));
+function logApprovalEvent(tool, messageId, source, s, h, mcpClients, S) {
+  if (source === "config") {
+    logEvent("tengu_tool_use_granted_in_config", {
+      ...baseMetadata(tool, messageId, undefined, mcpClients),
+      ...h,
+      ...S,
+    });
+    logFeatureOk("permission_auto_approve_config");
     return;
   }
-  if (r.type === "classifier") {
-    logEvent("tengu_tool_use_granted_by_classifier", { ...baseMetadata(e, n, s, y), ...h });
+  if (source.type === "classifier") {
+    logEvent("tengu_tool_use_granted_by_classifier", {
+      ...baseMetadata(tool, messageId, s, mcpClients),
+      ...h,
+    });
     return;
   }
-  switch (r.type) {
+  switch (source.type) {
     case "user":
-      (logEvent(
-        r.permanent
+      logEvent(
+        source.permanent
           ? "tengu_tool_use_granted_in_prompt_permanent"
           : "tengu_tool_use_granted_in_prompt_temporary",
-        { ...baseMetadata(e, n, s, y), ...h, ...S },
-      ),
-        logFeatureOk("permission_user_grant"));
+        {
+          ...baseMetadata(tool, messageId, s, mcpClients),
+          ...h,
+          ...S,
+        },
+      );
+      logFeatureOk("permission_user_grant");
       break;
     case "hook":
-      (logEvent("tengu_tool_use_granted_by_permission_hook", {
-        ...baseMetadata(e, n, s, y),
+      logEvent("tengu_tool_use_granted_by_permission_hook", {
+        ...baseMetadata(tool, messageId, s, mcpClients),
         ...h,
         ...S,
-        permanent: r.permanent,
-      }),
-        logFeatureOk("permission_auto_approve_hook"));
+        permanent: source.permanent,
+      });
+      logFeatureOk("permission_auto_approve_hook");
       break;
     default:
       break;
   }
 }
 //@ chunk-e6aww6q8.js:3762841-3763211 fingerprint = logRejectionEvent (0.763)
-function logRejectionEvent(e, n, r, s, h, y, S) {
-  if (r === "config") {
-    (logEvent("tengu_tool_use_denied_in_config", { ...baseMetadata(e, n, void 0, y), ...h }),
-      logFeatureOk("permission_auto_deny_config"));
+function logRejectionEvent(tool, messageId, source, s, h, mcpClients, S) {
+  if (source === "config") {
+    logEvent("tengu_tool_use_denied_in_config", {
+      ...baseMetadata(tool, messageId, undefined, mcpClients),
+      ...h,
+    });
+    logFeatureOk("permission_auto_deny_config");
     return;
   }
-  (logEvent("tengu_tool_use_rejected_in_prompt", {
-    ...baseMetadata(e, n, s, y),
+  logEvent("tengu_tool_use_rejected_in_prompt", {
+    ...baseMetadata(tool, messageId, s, mcpClients),
     ...h,
     ...S,
-    ...(r.type === "hook" ? { isHook: !0 } : { hasFeedback: r.type === "user_reject" ? r.hasFeedback : !1 }),
-  }),
-    logFeatureOk(r.type === "hook" ? "permission_auto_deny_hook" : "permission_user_deny"));
+    ...(source.type === "hook"
+      ? {
+          isHook: true,
+        }
+      : {
+          hasFeedback: source.type === "user_reject" ? source.hasFeedback : false,
+        }),
+  });
+  logFeatureOk(source.type === "hook" ? "permission_auto_deny_hook" : "permission_user_deny");
 }
 //@ chunk-e6aww6q8.js:3763211-3763279 layout
-function iNn(e) {
-  return { toolUseID: ye(e), promptSurface: lit_2("sdk_host") };
+function sdkPermissionPromptFields(toolUseID) {
+  return {
+    toolUseID: sanitizeMarkName(toolUseID),
+    promptSurface: lit_2("sdk_host"),
+  };
 }
+//@ chunk-e6aww6q8.js:3763279-3763572 layout
 /**
  * 记录 tengu_tool_use_show_permission_request 事件：工具基础元数据、决策原因类型、权限模式、发起 agent 类型等。
  */
-//@ chunk-e6aww6q8.js:3763279-3763572 layout
-function logPermissionRequestShown(e, n) {
-  let {
-    tool: tool,
-    messageId: messageId,
-    toolUseID: toolUseID,
-    permissionMode: permissionMode,
-    agentContext: agentContext,
-  } = e;
+function logPermissionRequestShown(logContext, type) {
+  let { tool, messageId, toolUseID, permissionMode, agentContext } = logContext;
   try {
     logEvent("tengu_tool_use_show_permission_request", {
-      ...baseMetadata(tool, messageId, void 0, e.mcpClients),
-      decisionReasonType: fromEnumOpt(n),
+      ...baseMetadata(tool, messageId, undefined, logContext.mcpClients),
+      decisionReasonType: fromEnumOpt(type),
       permissionMode: fromEnum(permissionMode),
       originAgentType: fromEnum(
         isSubagentContext(agentContext) && agentContext.isMainSession ? "main" : agentContext.agentType,
       ),
-      ...iNn(toolUseID),
+      ...sdkPermissionPromptFields(toolUseID),
     });
   } catch {}
 }
+//@ chunk-e6aww6q8.js:3763572-3764214 layout
 /**
  * 把权限结果（宿主回答、回合中止、hook、复查）映射为 {decision, source}，宿主允许时判断是否为永久规则。
  */
-//@ chunk-e6aww6q8.js:3763572-3764214 layout
-function permissionOutcomeSource(e, n) {
+function permissionOutcomeSource(e, appliedAllowUpdates) {
   switch (e.kind) {
     case "host_answer": {
-      let { answer: answer } = e;
+      let { answer } = e;
       if (answer.behavior === "allow")
         return {
           decision: "accept",
           source: {
             type: "user",
             permanent:
-              answer.decisionClassification !== void 0
+              answer.decisionClassification !== undefined
                 ? answer.decisionClassification === "user_permanent"
-                : (n(answer.updatedPermissions) ?? []).some((h) => supportsPersistence_2(h.destination)),
+                : (appliedAllowUpdates(answer.updatedPermissions) ?? []).some((h) =>
+                    supportsPersistence_2(h.destination),
+                  ),
           },
         };
-      return { decision: "reject", source: { type: "user_reject", hasFeedback: answer.interrupt !== !0 } };
+      return {
+        decision: "reject",
+        source: {
+          type: "user_reject",
+          hasFeedback: answer.interrupt !== true,
+        },
+      };
     }
     case "turn_aborted":
-      return { decision: "reject", source: { type: "user_abort" } };
+      return {
+        decision: "reject",
+        source: {
+          type: "user_abort",
+        },
+      };
     case "hook":
       return e.behavior === "allow"
-        ? { decision: "accept", source: { type: "hook", permanent: e.permanent } }
-        : { decision: "reject", source: { type: "hook" } };
+        ? {
+            decision: "accept",
+            source: {
+              type: "hook",
+              permanent: e.permanent,
+            },
+          }
+        : {
+            decision: "reject",
+            source: {
+              type: "hook",
+            },
+          };
     case "recheck":
-      return { decision: "accept", source: "config" };
+      return {
+        decision: "accept",
+        source: "config",
+      };
   }
 }
+//@ chunk-e6aww6q8.js:3764214-3764485 layout
 /**
  * 记录权限决定事件：计算等待时长与来源，按接受/拒绝分别记批准或拒绝事件。
  */
-//@ chunk-e6aww6q8.js:3764214-3764485 layout
-function logPermissionDecision(e, n, r) {
-  let {
-    tool: tool,
-    input: input,
-    messageId: messageId,
-    toolUseID: toolUseID,
-    permissionMode: permissionMode,
-  } = e;
+function logPermissionDecision(logContext, n, shownAtMs) {
+  let { tool, input, messageId, toolUseID, permissionMode } = logContext;
   try {
-    let L = Date.now() - r,
-      G = destructiveCommandFields(tool, input, permissionMode),
-      q = iNn(toolUseID),
-      Z = permissionOutcomeSource(n, e.appliedAllowUpdates);
-    if (Z.decision === "accept") logApprovalEvent(tool, messageId, Z.source, L, G, e.mcpClients, q);
-    else logRejectionEvent(tool, messageId, Z.source, L, G, e.mcpClients, q);
+    let L = Date.now() - shownAtMs;
+    let G = destructiveCommandFields(tool, input, permissionMode);
+    let q = sdkPermissionPromptFields(toolUseID);
+    let Z = permissionOutcomeSource(n, logContext.appliedAllowUpdates);
+    if (Z.decision === "accept") logApprovalEvent(tool, messageId, Z.source, L, G, logContext.mcpClients, q);
+    else logRejectionEvent(tool, messageId, Z.source, L, G, logContext.mcpClients, q);
   } catch {}
 }
+//@ chunk-e6aww6q8.js:3764485-3765505 fingerprint = logPermissionDecision (0.585)
 /**
  * 记录一次权限决策：批准/拒绝事件、来源（config/classifier/hook/user_permanent/user_temporary/user_abort）、OTEL tool_decision。
  */
-//@ chunk-e6aww6q8.js:3764485-3765505 fingerprint = logPermissionDecision (0.585)
 function logPermissionDecision_2(ctx, args, permissionPromptStartTimeMs) {
-  let {
-      tool: tool,
-      input: input,
-      toolUseContext: toolUseContext,
-      messageId: messageId,
-      requestId: requestId,
-      toolUseID: toolUseID,
-      permissionMode: permissionMode,
-    } = ctx,
-    { decision: decision, source: source } = args,
-    Se = permissionPromptStartTimeMs !== void 0 ? Date.now() - permissionPromptStartTimeMs : void 0,
-    ke = destructiveCommandFields(tool, input, permissionMode),
-    mcpClients = toolUseContext.options.mcpClients;
-  if (args.decision === "accept") logApprovalEvent(tool, messageId, args.source, Se, ke, mcpClients);
-  else logRejectionEvent(tool, messageId, args.source, Se, ke, mcpClients);
-  let Ee = source === "config" ? "config" : sourceToString(source),
-    Ae =
-      args.decision === "accept" && args.source !== "config" && args.source.type === "user"
-        ? (args.scope ?? (args.source.permanent ? "always" : "once"))
-        : void 0,
-    Ie = source === "config" ? getClassifierVerdictAnalyticsFields(decision, args.decisionReason) : void 0;
+  let { tool, input, toolUseContext, messageId, requestId, toolUseID, permissionMode } = ctx;
+  let { decision, source } = args;
+  let waiting_for_user_permission_ms =
+    permissionPromptStartTimeMs !== undefined ? Date.now() - permissionPromptStartTimeMs : undefined;
+  let ke = destructiveCommandFields(tool, input, permissionMode);
+  let mcpClients = toolUseContext.options.mcpClients;
+  if (args.decision === "accept")
+    logApprovalEvent(tool, messageId, args.source, waiting_for_user_permission_ms, ke, mcpClients);
+  else logRejectionEvent(tool, messageId, args.source, waiting_for_user_permission_ms, ke, mcpClients);
+  let sourceString = source === "config" ? "config" : sourceToString(source);
+  let Ae =
+    args.decision === "accept" && args.source !== "config" && args.source.type === "user"
+      ? (args.scope ?? (args.source.permanent ? "always" : "once"))
+      : undefined;
+  let Ie =
+    source === "config" ? getClassifierVerdictAnalyticsFields(decision, args.decisionReason) : undefined;
   if (isCodeEditingTool(tool.name))
-    buildCodeEditToolAttributes(tool, input, decision, Ee).then((attributes) =>
+    buildCodeEditToolAttributes(tool, input, decision, sourceString).then((attributes) =>
       getCodeEditToolDecisionCounter()?.add(1, attributes),
     );
   toolUseContext.toolDecisions.set(toolUseID, {
-    source: Ee,
-    decision: decision,
+    source: sourceString,
+    decision,
     timestamp: Date.now(),
-    ...(args.decision === "accept" && args.surface !== void 0 && { surface: args.surface }),
-    ...(Ae !== void 0 && Ae !== "always" && { grantScope: Ae }),
+    ...(args.decision === "accept" &&
+      args.surface !== undefined && {
+        surface: args.surface,
+      }),
+    ...(Ae !== undefined &&
+      Ae !== "always" && {
+        grantScope: Ae,
+      }),
   });
-  let Me = extractToolInputDetailsForAnalytics(tool.name, input, tool.mcpInfo);
+  let toolInputDetailsForAnalytics = extractToolInputDetailsForAnalytics(tool.name, input, tool.mcpInfo);
   logOTelEvent(
     "tool_decision",
     {
-      decision: decision,
-      source: Ee,
+      decision,
+      source: sourceString,
       tool_name: sanitizeToolNameForAnalytics(tool.name),
       tool_use_id: toolUseID,
       ...toolSourceMetadata(tool.mcpInfo),
-      ...(Object.keys(Me).length > 0 && { tool_parameters: jsonStringify(Me) }),
+      ...(Object.keys(toolInputDetailsForAnalytics).length > 0 && {
+        tool_parameters: jsonStringify(toolInputDetailsForAnalytics),
+      }),
       ...Ie,
       permission_mode: toExternalPermissionMode(
         (args.decision === "accept" && args.modeAtRecheck) || permissionMode,
       ),
-      ...(requestId && { request_id: requestId }),
+      ...(requestId && {
+        request_id: requestId,
+      }),
     },
     toolUseContext.agentContext,
   );
 }
-
 export {
   mcpToolLogFields,
   logPermissionRequestShown,

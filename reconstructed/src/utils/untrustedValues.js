@@ -12,22 +12,28 @@ import { types } from "util";
 import { isContext } from "vm";
 
 //@ chunk-f640a6hn.js:251-336 placement
-var { isProxy: isProxy } = types,
-  d = isContext,
-  { add: r, has: p } = WeakSet.prototype,
-  { apply: e } = Reflect,
-  weakSet = new WeakSet();
+var { isProxy } = types;
+var isVmContext = isContext;
+var { add: weakSetAdd, has: weakSetHas } = WeakSet.prototype;
+var { apply: applyReflect } = Reflect;
+var weakSet = new WeakSet();
 //@ chunk-f640a6hn.js:336-390 placement
-function jSi(t, n) {
-  if ((e(r, weakSet, [t]), n !== void 0)) e(r, weakSet, [n]);
+/**
+ * 登记一个对象为不可信（可附带另一对象）。
+ */
+function markUntrusted(t, n) {
+  applyReflect(weakSetAdd, weakSet, [t]);
+  if (n !== undefined) applyReflect(weakSetAdd, weakSet, [n]);
 }
 //@ chunk-f640a6hn.js:390-422 placement
-function x(t) {
-  return e(p, weakSet, [t]);
+function wasMarkedUntrusted(t) {
+  return applyReflect(weakSetHas, weakSet, [t]);
 }
 //@ chunk-f640a6hn.js:422-492 placement
-function Pf(t) {
-  return isProxy(t) || x(t) || (typeof t === "object" && t !== null && d(t));
+/**
+ * 判断对象是否为 Proxy、vm 上下文中的对象或登记过的不可信对象。
+ */
+function isUntrustedObject(t) {
+  return isProxy(t) || wasMarkedUntrusted(t) || (typeof t === "object" && t !== null && isVmContext(t));
 }
-
-export { Pf, jSi };
+export { isUntrustedObject, markUntrusted };

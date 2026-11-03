@@ -12,28 +12,30 @@ import { resolveAutoNotificationChannel, sendToChannel } from "../services/notif
 import { resolveSetting } from "./settings/userIntentSettings.js";
 
 //@ chunk-q6rfp6n3.js:2370-2659 fingerprint = NOTIFICATION_CHANNELS (0.954)
-async function NOTIFICATION_CHANNELS(e, n, o) {
-  if (e === "auto") {
-    let s = await resolveAutoNotificationChannel();
-    return (sendToChannel(s, n, o), s);
+async function NOTIFICATION_CHANNELS(preferredChannel, opts, terminal) {
+  if (preferredChannel === "auto") {
+    let channel = await resolveAutoNotificationChannel();
+    sendToChannel(channel, opts, terminal);
+    return channel;
   }
-  let r;
-  switch (e) {
+  let channel;
+  switch (preferredChannel) {
     case "iterm2":
     case "iterm2_with_bell":
     case "kitty":
     case "ghostty":
     case "terminal_bell":
-      r = e;
+      channel = preferredChannel;
       break;
     case "notifications_disabled":
-      r = "disabled";
+      channel = "disabled";
       break;
     default:
-      r = "none";
+      channel = "none";
   }
   try {
-    return (sendToChannel(r, n, o), r);
+    sendToChannel(channel, opts, terminal);
+    return channel;
   } catch {
     return "error";
   }
@@ -42,5 +44,4 @@ async function NOTIFICATION_CHANNELS(e, n, o) {
 function EDITOR_MODES() {
   return resolveSetting("editorMode", "normal").value === "vim";
 }
-
 export { EDITOR_MODES, NOTIFICATION_CHANNELS };

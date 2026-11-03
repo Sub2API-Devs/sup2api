@@ -5,334 +5,504 @@
  * pieces: chunk-hwmsct5x.js (3)
  * attribution: esm-layout 1, esm-fingerprint 2
  */
-import { Kn, ke } from "../internal/tslib.mjs";
-import { Kje } from "../internal/errors.mjs";
-import { Lf, pr } from "../core/error.mjs";
-import { X_STAINLESS_HELPER_METHOD } from "../internal/stainless-helper-header.mjs";
-import { St } from "../core/streaming.mjs";
-import { Bt_hwms } from "../tools/agent-toolset/memories.mjs";
+import { __classPrivateFieldSet, __classPrivateFieldGet } from "../internal/tslib.mjs";
+import { isAbortError_2 } from "../internal/errors.mjs";
+import { APIUserAbortError, AnthropicError } from "../core/error.mjs";
+import { STAINLESS_HELPER_METHOD_HEADER } from "../internal/stainless-helper-header.mjs";
+import { Stream } from "../core/streaming.mjs";
+import { Bt } from "../tools/agent-toolset/memories.mjs";
 import { attachParsedOutput } from "./beta-parser.mjs";
-import { Gt, Is } from "../internal/message-stream-utils.mjs";
+import { JSON_BUF_PROPERTY, withLazyInput } from "../internal/message-stream-utils.mjs";
 
 //@ chunk-hwmsct5x.js:94397-94479 esm-layout
-var Xe, Yt, Nn, Gr, Ls, Yr, jr, Fs, Kr, Et, Vr, Ds, Us, ln, Ns, Bs, Hs, Xr, ga, id, Jr, _a, ya, Sa, ad, Ea;
+var _BetaMessageStream_instances;
+var _BetaMessageStream_currentMessageSnapshot;
+var _BetaMessageStream_params;
+var _BetaMessageStream_connectedPromise;
+var _BetaMessageStream_resolveConnectedPromise;
+var _BetaMessageStream_rejectConnectedPromise;
+var _BetaMessageStream_endPromise;
+var _BetaMessageStream_resolveEndPromise;
+var _BetaMessageStream_rejectEndPromise;
+var _BetaMessageStream_listeners;
+var _BetaMessageStream_ended;
+var _BetaMessageStream_errored;
+var _BetaMessageStream_aborted;
+var _BetaMessageStream_catchingPromiseCreated;
+var _BetaMessageStream_response;
+var _BetaMessageStream_request_id;
+var _BetaMessageStream_workspace_id;
+var _BetaMessageStream_logger;
+var _BetaMessageStream_getFinalMessage;
+var _BetaMessageStream_getFinalText;
+var _BetaMessageStream_handleError;
+var _BetaMessageStream_beginRequest;
+var _BetaMessageStream_addStreamEvent;
+var _BetaMessageStream_endRequest;
+var _BetaMessageStream_accumulateMessage;
+var _BetaMessageStream_toolInputParseError;
 //@ chunk-hwmsct5x.js:94479-94574 esm-fingerprint
-function va(e) {
-  return e.type === "tool_use" || e.type === "server_tool_use" || e.type === "mcp_tool_use";
+function tracksToolInput(content) {
+  return content.type === "tool_use" || content.type === "server_tool_use" || content.type === "mcp_tool_use";
 }
 //@ chunk-hwmsct5x.js:94574-104825 esm-fingerprint
-var ld = (() => {
-  class e {
-    constructor(n, r) {
-      (Xe.add(this),
-        (this.messages = []),
-        (this.receivedMessages = []),
-        Yt.set(this, void 0),
-        Nn.set(this, null),
-        (this.controller = new AbortController()),
-        Gr.set(this, void 0),
-        Ls.set(this, () => {}),
-        Yr.set(this, () => {}),
-        jr.set(this, void 0),
-        Fs.set(this, () => {}),
-        Kr.set(this, () => {}),
-        Et.set(this, {}),
-        Vr.set(this, !1),
-        Ds.set(this, !1),
-        Us.set(this, !1),
-        ln.set(this, !1),
-        Ns.set(this, void 0),
-        Bs.set(this, void 0),
-        Hs.set(this, void 0),
-        Xr.set(this, void 0),
-        Jr.set(this, (s) => {
-          if ((Kn(this, Ds, !0, "f"), Kje(s))) s = new Lf();
-          if (s instanceof Lf) return (Kn(this, Us, !0, "f"), this._emit("abort", s));
-          if (s instanceof pr) return this._emit("error", s);
-          if (s instanceof Error) {
-            let h = new pr(s.message);
-            return ((h.cause = s), this._emit("error", h));
-          }
-          return this._emit("error", new pr(String(s)));
+var BetaMessageStream = (() => {
+  class BetaMessageStream {
+    constructor(params, opts) {
+      _BetaMessageStream_instances.add(this);
+      this.messages = [];
+      this.receivedMessages = [];
+      _BetaMessageStream_currentMessageSnapshot.set(this, undefined);
+      _BetaMessageStream_params.set(this, null);
+      this.controller = new AbortController();
+      _BetaMessageStream_connectedPromise.set(this, undefined);
+      _BetaMessageStream_resolveConnectedPromise.set(this, () => {});
+      _BetaMessageStream_rejectConnectedPromise.set(this, () => {});
+      _BetaMessageStream_endPromise.set(this, undefined);
+      _BetaMessageStream_resolveEndPromise.set(this, () => {});
+      _BetaMessageStream_rejectEndPromise.set(this, () => {});
+      _BetaMessageStream_listeners.set(this, {});
+      _BetaMessageStream_ended.set(this, false);
+      _BetaMessageStream_errored.set(this, false);
+      _BetaMessageStream_aborted.set(this, false);
+      _BetaMessageStream_catchingPromiseCreated.set(this, false);
+      _BetaMessageStream_response.set(this, undefined);
+      _BetaMessageStream_request_id.set(this, undefined);
+      _BetaMessageStream_workspace_id.set(this, undefined);
+      _BetaMessageStream_logger.set(this, undefined);
+      _BetaMessageStream_handleError.set(this, (error) => {
+        __classPrivateFieldSet(this, _BetaMessageStream_errored, true, "f");
+        if (isAbortError_2(error)) error = new APIUserAbortError();
+        if (error instanceof APIUserAbortError) {
+          __classPrivateFieldSet(this, _BetaMessageStream_aborted, true, "f");
+          return this._emit("abort", error);
+        }
+        if (error instanceof AnthropicError) return this._emit("error", error);
+        if (error instanceof Error) {
+          let anthropicError = new AnthropicError(error.message);
+          anthropicError.cause = error;
+          return this._emit("error", anthropicError);
+        }
+        return this._emit("error", new AnthropicError(String(error)));
+      });
+      __classPrivateFieldSet(
+        this,
+        _BetaMessageStream_connectedPromise,
+        new Promise((resolve, reject) => {
+          __classPrivateFieldSet(this, _BetaMessageStream_resolveConnectedPromise, resolve, "f");
+          __classPrivateFieldSet(this, _BetaMessageStream_rejectConnectedPromise, reject, "f");
         }),
-        Kn(
-          this,
-          Gr,
-          new Promise((s, h) => {
-            (Kn(this, Ls, s, "f"), Kn(this, Yr, h, "f"));
-          }),
-          "f",
-        ),
-        Kn(
-          this,
-          jr,
-          new Promise((s, h) => {
-            (Kn(this, Fs, s, "f"), Kn(this, Kr, h, "f"));
-          }),
-          "f",
-        ),
-        ke(this, Gr, "f").catch(() => {}),
-        ke(this, jr, "f").catch(() => {}),
-        Kn(this, Nn, n, "f"),
-        Kn(this, Xr, r?.logger ?? console, "f"));
+        "f",
+      );
+      __classPrivateFieldSet(
+        this,
+        _BetaMessageStream_endPromise,
+        new Promise((resolve, reject) => {
+          __classPrivateFieldSet(this, _BetaMessageStream_resolveEndPromise, resolve, "f");
+          __classPrivateFieldSet(this, _BetaMessageStream_rejectEndPromise, reject, "f");
+        }),
+        "f",
+      );
+      __classPrivateFieldGet(this, _BetaMessageStream_connectedPromise, "f").catch(() => {});
+      __classPrivateFieldGet(this, _BetaMessageStream_endPromise, "f").catch(() => {});
+      __classPrivateFieldSet(this, _BetaMessageStream_params, params, "f");
+      __classPrivateFieldSet(this, _BetaMessageStream_logger, opts?.logger ?? console, "f");
     }
     get response() {
-      return ke(this, Ns, "f");
+      return __classPrivateFieldGet(this, _BetaMessageStream_response, "f");
     }
     get request_id() {
-      return ke(this, Bs, "f");
+      return __classPrivateFieldGet(this, _BetaMessageStream_request_id, "f");
     }
     get workspace_id() {
-      return ke(this, Hs, "f");
+      return __classPrivateFieldGet(this, _BetaMessageStream_workspace_id, "f");
     }
     async withResponse() {
-      Kn(this, ln, !0, "f");
-      let n = await ke(this, Gr, "f");
-      if (!n) throw Error("Could not resolve a `Response` object");
+      __classPrivateFieldSet(this, _BetaMessageStream_catchingPromiseCreated, true, "f");
+      let response = await __classPrivateFieldGet(this, _BetaMessageStream_connectedPromise, "f");
+      if (!response) throw Error("Could not resolve a `Response` object");
       return {
         data: this,
-        response: n,
-        request_id: n.headers.get("request-id"),
-        workspace_id: n.headers.get("anthropic-workspace-id"),
+        response,
+        request_id: response.headers.get("request-id"),
+        workspace_id: response.headers.get("anthropic-workspace-id"),
       };
     }
-    static fromReadableStream(n) {
-      let r = new e(null);
-      return (r._run(() => r._fromReadableStream(n)), r);
+    static fromReadableStream(stream) {
+      let runner = new BetaMessageStream(null);
+      runner._run(() => runner._fromReadableStream(stream));
+      return runner;
     }
-    static createMessage(n, r, s, { logger: h } = {}) {
-      let y = new e(r, { logger: h });
-      for (let message of r.messages) y._addMessageParam(message);
-      return (
-        Kn(y, Nn, { ...r, stream: !0 }, "f"),
-        y._run(() =>
-          y._createMessage(
-            n,
-            { ...r, stream: !0 },
-            { ...s, headers: { ...s?.headers, [X_STAINLESS_HELPER_METHOD]: "stream" } },
-          ),
-        ),
-        y
-      );
-    }
-    _run(n) {
-      n().then(
-        () => {
-          (this._emitFinal(), this._emit("end"));
+    static createMessage(messages, params, options, { logger } = {}) {
+      let runner = new BetaMessageStream(params, {
+        logger,
+      });
+      for (let message of params.messages) runner._addMessageParam(message);
+      __classPrivateFieldSet(
+        runner,
+        _BetaMessageStream_params,
+        {
+          ...params,
+          stream: true,
         },
-        ke(this, Jr, "f"),
+        "f",
+      );
+      runner._run(() =>
+        runner._createMessage(
+          messages,
+          {
+            ...params,
+            stream: true,
+          },
+          {
+            ...options,
+            headers: {
+              ...options?.headers,
+              [STAINLESS_HELPER_METHOD_HEADER]: "stream",
+            },
+          },
+        ),
+      );
+      return runner;
+    }
+    _run(executor) {
+      executor().then(
+        () => {
+          this._emitFinal();
+          this._emit("end");
+        },
+        __classPrivateFieldGet(this, _BetaMessageStream_handleError, "f"),
       );
     }
-    _addMessageParam(n) {
-      this.messages.push(n);
+    _addMessageParam(message) {
+      this.messages.push(message);
     }
-    _addMessage(n, r = !0) {
-      if ((this.receivedMessages.push(n), r)) this._emit("message", n);
+    _addMessage(message, emit = true) {
+      this.receivedMessages.push(message);
+      if (emit) this._emit("message", message);
     }
-    async _createMessage(n, r, s) {
-      let h = s?.signal,
-        y;
-      if (h) {
-        if (h.aborted) this.controller.abort();
-        ((y = this.controller.abort.bind(this.controller)), h.addEventListener("abort", y));
+    async _createMessage(messages, params, options) {
+      let signal = options?.signal;
+      let abortHandler;
+      if (signal) {
+        if (signal.aborted) this.controller.abort();
+        abortHandler = this.controller.abort.bind(this.controller);
+        signal.addEventListener("abort", abortHandler);
       }
       try {
-        ke(this, Xe, "m", _a).call(this);
-        let { response: response, data: S } = await n
-          .create({ ...r, stream: !0 }, { ...s, signal: this.controller.signal })
+        __classPrivateFieldGet(this, _BetaMessageStream_instances, "m", _BetaMessageStream_beginRequest).call(
+          this,
+        );
+        let { response, data: stream } = await messages
+          .create(
+            {
+              ...params,
+              stream: true,
+            },
+            {
+              ...options,
+              signal: this.controller.signal,
+            },
+          )
           .withResponse();
         this._connected(response);
-        for await (let E of S) ke(this, Xe, "m", ya).call(this, E);
-        if (S.controller.signal?.aborted) throw new Lf();
-        ke(this, Xe, "m", Sa).call(this);
+        for await (let event of stream)
+          __classPrivateFieldGet(
+            this,
+            _BetaMessageStream_instances,
+            "m",
+            _BetaMessageStream_addStreamEvent,
+          ).call(this, event);
+        if (stream.controller.signal?.aborted) throw new APIUserAbortError();
+        __classPrivateFieldGet(this, _BetaMessageStream_instances, "m", _BetaMessageStream_endRequest).call(
+          this,
+        );
       } finally {
-        if (h && y) h.removeEventListener("abort", y);
+        if (signal && abortHandler) signal.removeEventListener("abort", abortHandler);
       }
     }
-    _connected(n) {
+    _connected(response) {
       if (this.ended) return;
-      (Kn(this, Ns, n, "f"),
-        Kn(this, Bs, n?.headers.get("request-id"), "f"),
-        Kn(this, Hs, n?.headers.get("anthropic-workspace-id"), "f"),
-        ke(this, Ls, "f").call(this, n),
-        this._emit("connect"));
+      __classPrivateFieldSet(this, _BetaMessageStream_response, response, "f");
+      __classPrivateFieldSet(this, _BetaMessageStream_request_id, response?.headers.get("request-id"), "f");
+      __classPrivateFieldSet(
+        this,
+        _BetaMessageStream_workspace_id,
+        response?.headers.get("anthropic-workspace-id"),
+        "f",
+      );
+      __classPrivateFieldGet(this, _BetaMessageStream_resolveConnectedPromise, "f").call(this, response);
+      this._emit("connect");
     }
     get ended() {
-      return ke(this, Vr, "f");
+      return __classPrivateFieldGet(this, _BetaMessageStream_ended, "f");
     }
     get errored() {
-      return ke(this, Ds, "f");
+      return __classPrivateFieldGet(this, _BetaMessageStream_errored, "f");
     }
     get aborted() {
-      return ke(this, Us, "f");
+      return __classPrivateFieldGet(this, _BetaMessageStream_aborted, "f");
     }
     abort() {
       this.controller.abort();
     }
-    on(n, r) {
-      return ((ke(this, Et, "f")[n] || (ke(this, Et, "f")[n] = [])).push({ listener: r }), this);
-    }
-    off(n, r) {
-      let s = ke(this, Et, "f")[n];
-      if (!s) return this;
-      let index = s.findIndex((y) => y.listener === r);
-      if (index >= 0) s.splice(index, 1);
+    on(event, listener) {
+      (
+        __classPrivateFieldGet(this, _BetaMessageStream_listeners, "f")[event] ||
+        (__classPrivateFieldGet(this, _BetaMessageStream_listeners, "f")[event] = [])
+      ).push({
+        listener,
+      });
       return this;
     }
-    once(n, r) {
-      return ((ke(this, Et, "f")[n] || (ke(this, Et, "f")[n] = [])).push({ listener: r, once: !0 }), this);
+    off(event, listener) {
+      let listeners = __classPrivateFieldGet(this, _BetaMessageStream_listeners, "f")[event];
+      if (!listeners) return this;
+      let index = listeners.findIndex((l) => l.listener === listener);
+      if (index >= 0) listeners.splice(index, 1);
+      return this;
     }
-    emitted(n) {
-      return new Promise((r, s) => {
-        if ((Kn(this, ln, !0, "f"), n !== "error")) this.once("error", s);
-        this.once(n, r);
+    once(event, listener) {
+      (
+        __classPrivateFieldGet(this, _BetaMessageStream_listeners, "f")[event] ||
+        (__classPrivateFieldGet(this, _BetaMessageStream_listeners, "f")[event] = [])
+      ).push({
+        listener,
+        once: true,
+      });
+      return this;
+    }
+    emitted(event) {
+      return new Promise((resolve, reject) => {
+        __classPrivateFieldSet(this, _BetaMessageStream_catchingPromiseCreated, true, "f");
+        if (event !== "error") this.once("error", reject);
+        this.once(event, resolve);
       });
     }
     async done() {
-      (Kn(this, ln, !0, "f"), await ke(this, jr, "f"));
+      __classPrivateFieldSet(this, _BetaMessageStream_catchingPromiseCreated, true, "f");
+      await __classPrivateFieldGet(this, _BetaMessageStream_endPromise, "f");
     }
     get currentMessage() {
-      return ke(this, Yt, "f");
+      return __classPrivateFieldGet(this, _BetaMessageStream_currentMessageSnapshot, "f");
     }
     async finalMessage() {
-      return (await this.done(), ke(this, Xe, "m", ga).call(this));
+      await this.done();
+      return __classPrivateFieldGet(
+        this,
+        _BetaMessageStream_instances,
+        "m",
+        _BetaMessageStream_getFinalMessage,
+      ).call(this);
     }
     async finalText() {
-      return (await this.done(), ke(this, Xe, "m", id).call(this));
+      await this.done();
+      return __classPrivateFieldGet(
+        this,
+        _BetaMessageStream_instances,
+        "m",
+        _BetaMessageStream_getFinalText,
+      ).call(this);
     }
-    _emit(n, ...r) {
-      if (ke(this, Vr, "f")) return;
-      if (n === "end") (Kn(this, Vr, !0, "f"), ke(this, Fs, "f").call(this));
-      let s = ke(this, Et, "f")[n];
-      if (s)
-        ((ke(this, Et, "f")[n] = s.filter((h) => !h.once)),
-          s.forEach(({ listener: listener }) => listener(...r)));
-      if (n === "abort") {
-        let h = r[0];
-        if (!ke(this, ln, "f") && !s?.length) Promise.reject(h);
-        (ke(this, Yr, "f").call(this, h), ke(this, Kr, "f").call(this, h), this._emit("end"));
+    _emit(event, ...args) {
+      if (__classPrivateFieldGet(this, _BetaMessageStream_ended, "f")) return;
+      if (event === "end") {
+        __classPrivateFieldSet(this, _BetaMessageStream_ended, true, "f");
+        __classPrivateFieldGet(this, _BetaMessageStream_resolveEndPromise, "f").call(this);
+      }
+      let listeners = __classPrivateFieldGet(this, _BetaMessageStream_listeners, "f")[event];
+      if (listeners) {
+        __classPrivateFieldGet(this, _BetaMessageStream_listeners, "f")[event] = listeners.filter(
+          (l) => !l.once,
+        );
+        listeners.forEach(({ listener }) => listener(...args));
+      }
+      if (event === "abort") {
+        let error = args[0];
+        if (
+          !__classPrivateFieldGet(this, _BetaMessageStream_catchingPromiseCreated, "f") &&
+          !listeners?.length
+        )
+          Promise.reject(error);
+        __classPrivateFieldGet(this, _BetaMessageStream_rejectConnectedPromise, "f").call(this, error);
+        __classPrivateFieldGet(this, _BetaMessageStream_rejectEndPromise, "f").call(this, error);
+        this._emit("end");
         return;
       }
-      if (n === "error") {
-        let h = r[0];
-        if (!ke(this, ln, "f") && !s?.length) Promise.reject(h);
-        (ke(this, Yr, "f").call(this, h), ke(this, Kr, "f").call(this, h), this._emit("end"));
+      if (event === "error") {
+        let error = args[0];
+        if (
+          !__classPrivateFieldGet(this, _BetaMessageStream_catchingPromiseCreated, "f") &&
+          !listeners?.length
+        )
+          Promise.reject(error);
+        __classPrivateFieldGet(this, _BetaMessageStream_rejectConnectedPromise, "f").call(this, error);
+        __classPrivateFieldGet(this, _BetaMessageStream_rejectEndPromise, "f").call(this, error);
+        this._emit("end");
       }
     }
     _emitFinal() {
-      if (this.receivedMessages.at(-1)) this._emit("finalMessage", ke(this, Xe, "m", ga).call(this));
+      if (this.receivedMessages.at(-1))
+        this._emit(
+          "finalMessage",
+          __classPrivateFieldGet(
+            this,
+            _BetaMessageStream_instances,
+            "m",
+            _BetaMessageStream_getFinalMessage,
+          ).call(this),
+        );
     }
-    async _fromReadableStream(n, r) {
-      let s = r?.signal,
-        h;
-      if (s) {
-        if (s.aborted) this.controller.abort();
-        ((h = this.controller.abort.bind(this.controller)), s.addEventListener("abort", h));
+    async _fromReadableStream(readableStream, options) {
+      let signal = options?.signal;
+      let abortHandler;
+      if (signal) {
+        if (signal.aborted) this.controller.abort();
+        abortHandler = this.controller.abort.bind(this.controller);
+        signal.addEventListener("abort", abortHandler);
       }
       try {
-        (ke(this, Xe, "m", _a).call(this), this._connected(null));
-        let fromReadableStream = St.fromReadableStream(n, this.controller);
-        for await (let w of fromReadableStream) ke(this, Xe, "m", ya).call(this, w);
-        if (fromReadableStream.controller.signal?.aborted) throw new Lf();
-        ke(this, Xe, "m", Sa).call(this);
+        __classPrivateFieldGet(this, _BetaMessageStream_instances, "m", _BetaMessageStream_beginRequest).call(
+          this,
+        );
+        this._connected(null);
+        let stream = Stream.fromReadableStream(readableStream, this.controller);
+        for await (let event of stream)
+          __classPrivateFieldGet(
+            this,
+            _BetaMessageStream_instances,
+            "m",
+            _BetaMessageStream_addStreamEvent,
+          ).call(this, event);
+        if (stream.controller.signal?.aborted) throw new APIUserAbortError();
+        __classPrivateFieldGet(this, _BetaMessageStream_instances, "m", _BetaMessageStream_endRequest).call(
+          this,
+        );
       } finally {
-        if (s && h) s.removeEventListener("abort", h);
+        if (signal && abortHandler) signal.removeEventListener("abort", abortHandler);
       }
     }
-    [((Yt = new WeakMap()),
-    (Nn = new WeakMap()),
-    (Gr = new WeakMap()),
-    (Ls = new WeakMap()),
-    (Yr = new WeakMap()),
-    (jr = new WeakMap()),
-    (Fs = new WeakMap()),
-    (Kr = new WeakMap()),
-    (Et = new WeakMap()),
-    (Vr = new WeakMap()),
-    (Ds = new WeakMap()),
-    (Us = new WeakMap()),
-    (ln = new WeakMap()),
-    (Ns = new WeakMap()),
-    (Bs = new WeakMap()),
-    (Hs = new WeakMap()),
-    (Xr = new WeakMap()),
-    (Jr = new WeakMap()),
-    (Xe = new WeakSet()),
-    (ga = function () {
+    [((_BetaMessageStream_currentMessageSnapshot = new WeakMap()),
+    (_BetaMessageStream_params = new WeakMap()),
+    (_BetaMessageStream_connectedPromise = new WeakMap()),
+    (_BetaMessageStream_resolveConnectedPromise = new WeakMap()),
+    (_BetaMessageStream_rejectConnectedPromise = new WeakMap()),
+    (_BetaMessageStream_endPromise = new WeakMap()),
+    (_BetaMessageStream_resolveEndPromise = new WeakMap()),
+    (_BetaMessageStream_rejectEndPromise = new WeakMap()),
+    (_BetaMessageStream_listeners = new WeakMap()),
+    (_BetaMessageStream_ended = new WeakMap()),
+    (_BetaMessageStream_errored = new WeakMap()),
+    (_BetaMessageStream_aborted = new WeakMap()),
+    (_BetaMessageStream_catchingPromiseCreated = new WeakMap()),
+    (_BetaMessageStream_response = new WeakMap()),
+    (_BetaMessageStream_request_id = new WeakMap()),
+    (_BetaMessageStream_workspace_id = new WeakMap()),
+    (_BetaMessageStream_logger = new WeakMap()),
+    (_BetaMessageStream_handleError = new WeakMap()),
+    (_BetaMessageStream_instances = new WeakSet()),
+    (_BetaMessageStream_getFinalMessage = function () {
       if (this.receivedMessages.length === 0)
-        throw new pr("stream ended without producing a Message with role=assistant");
+        throw new AnthropicError("stream ended without producing a Message with role=assistant");
       return this.receivedMessages.at(-1);
     }),
-    (id = function () {
+    (_BetaMessageStream_getFinalText = function () {
       if (this.receivedMessages.length === 0)
-        throw new pr("stream ended without producing a Message with role=assistant");
-      let mapped = this.receivedMessages
+        throw new AnthropicError("stream ended without producing a Message with role=assistant");
+      let textBlocks = this.receivedMessages
         .at(-1)
-        .content.filter((s) => s.type === "text")
-        .map((s) => s.text);
-      if (mapped.length === 0) throw new pr("stream ended without producing a content block with type=text");
-      return mapped.join(" ");
+        .content.filter((block) => block.type === "text")
+        .map((block) => block.text);
+      if (textBlocks.length === 0)
+        throw new AnthropicError("stream ended without producing a content block with type=text");
+      return textBlocks.join(" ");
     }),
-    (_a = function () {
+    (_BetaMessageStream_beginRequest = function () {
       if (this.ended) return;
-      Kn(this, Yt, void 0, "f");
+      __classPrivateFieldSet(this, _BetaMessageStream_currentMessageSnapshot, undefined, "f");
     }),
-    (ya = function (r) {
+    (_BetaMessageStream_addStreamEvent = function (event) {
       if (this.ended) return;
-      let s = ke(this, Xe, "m", ad).call(this, r);
-      switch ((this._emit("streamEvent", r, s), r.type)) {
+      let messageSnapshot = __classPrivateFieldGet(
+        this,
+        _BetaMessageStream_instances,
+        "m",
+        _BetaMessageStream_accumulateMessage,
+      ).call(this, event);
+      switch ((this._emit("streamEvent", event, messageSnapshot), event.type)) {
         case "content_block_delta": {
-          let at = s.content.at(-1);
-          switch (r.delta.type) {
+          let content = messageSnapshot.content.at(-1);
+          switch (event.delta.type) {
             case "text_delta": {
-              if (at.type === "text") this._emit("text", r.delta.text, at.text || "");
+              if (content.type === "text") this._emit("text", event.delta.text, content.text || "");
               break;
             }
             case "citations_delta": {
-              if (at.type === "text") this._emit("citation", r.delta.citation, at.citations ?? []);
+              if (content.type === "text")
+                this._emit("citation", event.delta.citation, content.citations ?? []);
               break;
             }
             case "input_json_delta": {
-              if (va(at) && ke(this, Et, "f").inputJson?.length) {
-                let y;
+              if (
+                tracksToolInput(content) &&
+                __classPrivateFieldGet(this, _BetaMessageStream_listeners, "f").inputJson?.length
+              ) {
+                let jsonSnapshot;
                 try {
-                  y = at.input;
-                } catch (error) {
-                  ke(this, Jr, "f").call(this, ke(this, Xe, "m", Ea).call(this, at, error));
+                  jsonSnapshot = content.input;
+                } catch (err) {
+                  __classPrivateFieldGet(this, _BetaMessageStream_handleError, "f").call(
+                    this,
+                    __classPrivateFieldGet(
+                      this,
+                      _BetaMessageStream_instances,
+                      "m",
+                      _BetaMessageStream_toolInputParseError,
+                    ).call(this, content, err),
+                  );
                   break;
                 }
-                this._emit("inputJson", r.delta.partial_json, y);
+                this._emit("inputJson", event.delta.partial_json, jsonSnapshot);
               }
               break;
             }
             case "thinking_delta": {
-              if (at.type === "thinking") this._emit("thinking", r.delta.thinking, at.thinking);
+              if (content.type === "thinking") this._emit("thinking", event.delta.thinking, content.thinking);
               break;
             }
             case "signature_delta": {
-              if (at.type === "thinking") this._emit("signature", at.signature);
+              if (content.type === "thinking") this._emit("signature", content.signature);
               break;
             }
             case "compaction_delta": {
-              if (at.type === "compaction" && at.content) this._emit("compaction", at.content);
+              if (content.type === "compaction" && content.content) this._emit("compaction", content.content);
               break;
             }
             default:
-              Bt_hwms(r.delta);
+              Bt(event.delta);
           }
           break;
         }
         case "message_stop": {
-          (this._addMessageParam(s),
-            this._addMessage(attachParsedOutput(s, ke(this, Nn, "f"), { logger: ke(this, Xr, "f") }), !0));
+          this._addMessageParam(messageSnapshot);
+          this._addMessage(
+            attachParsedOutput(
+              messageSnapshot,
+              __classPrivateFieldGet(this, _BetaMessageStream_params, "f"),
+              {
+                logger: __classPrivateFieldGet(this, _BetaMessageStream_logger, "f"),
+              },
+            ),
+            true,
+          );
           break;
         }
         case "content_block_stop": {
-          this._emit("contentBlock", s.content.at(-1));
+          this._emit("contentBlock", messageSnapshot.content.at(-1));
           break;
         }
         case "message_start": {
-          Kn(this, Yt, s, "f");
+          __classPrivateFieldSet(this, _BetaMessageStream_currentMessageSnapshot, messageSnapshot, "f");
           break;
         }
         case "content_block_start":
@@ -340,157 +510,216 @@ var ld = (() => {
           break;
       }
     }),
-    (Sa = function () {
-      if (this.ended) throw new pr("stream has ended, this shouldn't happen");
-      let r = ke(this, Yt, "f");
-      if (!r) throw new pr("request ended without sending any chunks");
-      return (
-        Kn(this, Yt, void 0, "f"),
-        attachParsedOutput(r, ke(this, Nn, "f"), { logger: ke(this, Xr, "f") })
-      );
+    (_BetaMessageStream_endRequest = function () {
+      if (this.ended) throw new AnthropicError("stream has ended, this shouldn't happen");
+      let snapshot = __classPrivateFieldGet(this, _BetaMessageStream_currentMessageSnapshot, "f");
+      if (!snapshot) throw new AnthropicError("request ended without sending any chunks");
+      __classPrivateFieldSet(this, _BetaMessageStream_currentMessageSnapshot, undefined, "f");
+      return attachParsedOutput(snapshot, __classPrivateFieldGet(this, _BetaMessageStream_params, "f"), {
+        logger: __classPrivateFieldGet(this, _BetaMessageStream_logger, "f"),
+      });
     }),
-    (ad = function (r) {
-      let s = ke(this, Yt, "f");
-      if (r.type === "message_start") {
-        if (s) throw new pr(`Unexpected event order, got ${r.type} before receiving "message_stop"`);
-        return r.message;
+    (_BetaMessageStream_accumulateMessage = function (event) {
+      let snapshot = __classPrivateFieldGet(this, _BetaMessageStream_currentMessageSnapshot, "f");
+      if (event.type === "message_start") {
+        if (snapshot)
+          throw new AnthropicError(
+            `Unexpected event order, got ${event.type} before receiving "message_stop"`,
+          );
+        return event.message;
       }
-      if (!s) throw new pr(`Unexpected event order, got ${r.type} before "message_start"`);
-      switch (r.type) {
+      if (!snapshot)
+        throw new AnthropicError(`Unexpected event order, got ${event.type} before "message_start"`);
+      switch (event.type) {
         case "message_stop":
-          return s;
+          return snapshot;
         case "message_delta":
-          if (
-            ((s.stop_reason = r.delta.stop_reason),
-            (s.stop_sequence = r.delta.stop_sequence),
-            (s.stop_details = r.delta.stop_details),
-            (s.usage.output_tokens = r.usage.output_tokens),
-            r.delta.container != null)
-          )
-            s.container = r.delta.container;
-          if (r.context_management != null) s.context_management = r.context_management;
-          if (r.input_transformations != null) s.input_transformations = r.input_transformations;
-          if (r.usage.input_tokens != null) s.usage.input_tokens = r.usage.input_tokens;
-          if (r.usage.cache_creation_input_tokens != null)
-            s.usage.cache_creation_input_tokens = r.usage.cache_creation_input_tokens;
-          if (r.usage.cache_read_input_tokens != null)
-            s.usage.cache_read_input_tokens = r.usage.cache_read_input_tokens;
-          if (r.usage.server_tool_use != null) s.usage.server_tool_use = r.usage.server_tool_use;
-          if (r.usage.iterations != null) s.usage.iterations = r.usage.iterations;
-          if (r.usage.fallback_credit != null) s.usage.fallback_credit = r.usage.fallback_credit;
-          if (r.usage.output_tokens_details != null)
-            s.usage.output_tokens_details = r.usage.output_tokens_details;
-          return s;
+          snapshot.stop_reason = event.delta.stop_reason;
+          snapshot.stop_sequence = event.delta.stop_sequence;
+          snapshot.stop_details = event.delta.stop_details;
+          snapshot.usage.output_tokens = event.usage.output_tokens;
+          if (event.delta.container != null) snapshot.container = event.delta.container;
+          if (event.context_management != null) snapshot.context_management = event.context_management;
+          if (event.input_transformations != null)
+            snapshot.input_transformations = event.input_transformations;
+          if (event.usage.input_tokens != null) snapshot.usage.input_tokens = event.usage.input_tokens;
+          if (event.usage.cache_creation_input_tokens != null)
+            snapshot.usage.cache_creation_input_tokens = event.usage.cache_creation_input_tokens;
+          if (event.usage.cache_read_input_tokens != null)
+            snapshot.usage.cache_read_input_tokens = event.usage.cache_read_input_tokens;
+          if (event.usage.server_tool_use != null)
+            snapshot.usage.server_tool_use = event.usage.server_tool_use;
+          if (event.usage.iterations != null) snapshot.usage.iterations = event.usage.iterations;
+          if (event.usage.fallback_credit != null)
+            snapshot.usage.fallback_credit = event.usage.fallback_credit;
+          if (event.usage.output_tokens_details != null)
+            snapshot.usage.output_tokens_details = event.usage.output_tokens_details;
+          return snapshot;
         case "content_block_start":
-          if ((s.content.push(r.content_block), r.content_block.type === "fallback"))
-            s.model = r.content_block.to.model;
-          return s;
+          snapshot.content.push(event.content_block);
+          if (event.content_block.type === "fallback") snapshot.model = event.content_block.to.model;
+          return snapshot;
         case "content_block_delta": {
-          let at = s.content.at(r.index);
-          switch (r.delta.type) {
+          let snapshotContent = snapshot.content.at(event.index);
+          switch (event.delta.type) {
             case "text_delta": {
-              if (at?.type === "text") s.content[r.index] = { ...at, text: (at.text || "") + r.delta.text };
+              if (snapshotContent?.type === "text")
+                snapshot.content[event.index] = {
+                  ...snapshotContent,
+                  text: (snapshotContent.text || "") + event.delta.text,
+                };
               break;
             }
             case "citations_delta": {
-              if (at?.type === "text")
-                s.content[r.index] = { ...at, citations: [...(at.citations ?? []), r.delta.citation] };
+              if (snapshotContent?.type === "text")
+                snapshot.content[event.index] = {
+                  ...snapshotContent,
+                  citations: [...(snapshotContent.citations ?? []), event.delta.citation],
+                };
               break;
             }
             case "input_json_delta": {
-              if (at && va(at)) {
-                let y = (at[Gt] || "") + r.delta.partial_json;
-                s.content[r.index] = Is(at, y);
+              if (snapshotContent && tracksToolInput(snapshotContent)) {
+                let jsonBuf = (snapshotContent[JSON_BUF_PROPERTY] || "") + event.delta.partial_json;
+                snapshot.content[event.index] = withLazyInput(snapshotContent, jsonBuf);
               }
               break;
             }
             case "thinking_delta": {
-              if (at?.type === "thinking")
-                s.content[r.index] = { ...at, thinking: at.thinking + r.delta.thinking };
+              if (snapshotContent?.type === "thinking")
+                snapshot.content[event.index] = {
+                  ...snapshotContent,
+                  thinking: snapshotContent.thinking + event.delta.thinking,
+                };
               break;
             }
             case "signature_delta": {
-              if (at?.type === "thinking") s.content[r.index] = { ...at, signature: r.delta.signature };
+              if (snapshotContent?.type === "thinking")
+                snapshot.content[event.index] = {
+                  ...snapshotContent,
+                  signature: event.delta.signature,
+                };
               break;
             }
             case "compaction_delta": {
-              if (at?.type === "compaction") {
-                let y = { ...at, content: r.delta.content };
-                if ("encrypted_content" in r.delta) y.encrypted_content = r.delta.encrypted_content;
-                s.content[r.index] = y;
+              if (snapshotContent?.type === "compaction") {
+                let block = {
+                  ...snapshotContent,
+                  content: event.delta.content,
+                };
+                if ("encrypted_content" in event.delta)
+                  block.encrypted_content = event.delta.encrypted_content;
+                snapshot.content[event.index] = block;
               }
               break;
             }
             default:
-              Bt_hwms(r.delta);
+              Bt(event.delta);
           }
-          return s;
+          return snapshot;
         }
         case "content_block_stop": {
-          let at = s.content.at(r.index);
-          if (at && va(at) && Gt in at) {
-            let y;
+          let snapshotContent = snapshot.content.at(event.index);
+          if (snapshotContent && tracksToolInput(snapshotContent) && JSON_BUF_PROPERTY in snapshotContent) {
+            let input;
             try {
-              y = at.input;
-            } catch (error) {
-              ((y = {}), ke(this, Jr, "f").call(this, ke(this, Xe, "m", Ea).call(this, at, error)));
+              input = snapshotContent.input;
+            } catch (err) {
+              input = {};
+              __classPrivateFieldGet(this, _BetaMessageStream_handleError, "f").call(
+                this,
+                __classPrivateFieldGet(
+                  this,
+                  _BetaMessageStream_instances,
+                  "m",
+                  _BetaMessageStream_toolInputParseError,
+                ).call(this, snapshotContent, err),
+              );
             }
-            Object.defineProperty(at, "input", { value: y, enumerable: !0, configurable: !0, writable: !0 });
+            Object.defineProperty(snapshotContent, "input", {
+              value: input,
+              enumerable: true,
+              configurable: true,
+              writable: true,
+            });
           }
-          return s;
+          return snapshot;
         }
       }
     }),
-    (Ea = function (r, s) {
-      let h = r[Gt];
-      return new pr(
-        `Unable to parse tool parameter JSON from model. Please retry your request or adjust your prompt. Error: ${s}. JSON: ${h}`,
+    (_BetaMessageStream_toolInputParseError = function (block, err) {
+      let jsonBuf = block[JSON_BUF_PROPERTY];
+      return new AnthropicError(
+        `Unable to parse tool parameter JSON from model. Please retry your request or adjust your prompt. Error: ${err}. JSON: ${jsonBuf}`,
       );
     }),
     Symbol.asyncIterator)]() {
-      let n = [],
-        r = [],
-        s = !1;
-      return (
-        this.on("streamEvent", (h) => {
-          let y = r.shift();
-          if (y) y.resolve(h);
-          else n.push(h);
-        }),
-        this.on("end", () => {
-          s = !0;
-          for (let h of r) h.resolve(void 0);
-          r.length = 0;
-        }),
-        this.on("abort", (h) => {
-          s = !0;
-          for (let y of r) y.reject(h);
-          r.length = 0;
-        }),
-        this.on("error", (h) => {
-          s = !0;
-          for (let y of r) y.reject(h);
-          r.length = 0;
-        }),
-        {
-          next: async () => {
-            if (!n.length) {
-              if (s) return { value: void 0, done: !0 };
-              return new Promise((y, w) => r.push({ resolve: y, reject: w })).then((y) =>
-                y ? { value: y, done: !1 } : { value: void 0, done: !0 },
-              );
-            }
-            return { value: n.shift(), done: !1 };
-          },
-          return: async () => (this.abort(), { value: void 0, done: !0 }),
-        }
-      );
+      let pushQueue = [];
+      let readQueue = [];
+      let done = false;
+      this.on("streamEvent", (event) => {
+        let reader = readQueue.shift();
+        if (reader) reader.resolve(event);
+        else pushQueue.push(event);
+      });
+      this.on("end", () => {
+        done = true;
+        for (let reader of readQueue) reader.resolve(undefined);
+        readQueue.length = 0;
+      });
+      this.on("abort", (err) => {
+        done = true;
+        for (let reader of readQueue) reader.reject(err);
+        readQueue.length = 0;
+      });
+      this.on("error", (err) => {
+        done = true;
+        for (let reader of readQueue) reader.reject(err);
+        readQueue.length = 0;
+      });
+      return {
+        next: async () => {
+          if (!pushQueue.length) {
+            if (done)
+              return {
+                value: undefined,
+                done: true,
+              };
+            return new Promise((resolve, reject) =>
+              readQueue.push({
+                resolve,
+                reject,
+              }),
+            ).then((chunk) =>
+              chunk
+                ? {
+                    value: chunk,
+                    done: false,
+                  }
+                : {
+                    value: undefined,
+                    done: true,
+                  },
+            );
+          }
+          return {
+            value: pushQueue.shift(),
+            done: false,
+          };
+        },
+        return: async () => {
+          this.abort();
+          return {
+            value: undefined,
+            done: true,
+          };
+        },
+      };
     }
     toReadableStream() {
-      return new St(this[Symbol.asyncIterator].bind(this), this.controller).toReadableStream();
+      return new Stream(this[Symbol.asyncIterator].bind(this), this.controller).toReadableStream();
     }
   }
-  return e;
+  return BetaMessageStream;
 })();
-
-export { ld };
+export { BetaMessageStream };

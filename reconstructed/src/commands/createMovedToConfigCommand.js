@@ -10,42 +10,49 @@
  */
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../services/analytics/growthbook.js";
 
+//@ chunk-e6aww6q8.js:1694311-1694361 placement
 /**
  * isSettingsMovedToConfig：tengu_maple_sundial：vim/output-style 改到 /config。
  */
-//@ chunk-e6aww6q8.js:1694311-1694361 placement
 function isSettingsMovedToConfig() {
-  return getFeatureValue_CACHED_MAY_BE_STALE("tengu_maple_sundial", !1);
+  return getFeatureValue_CACHED_MAY_BE_STALE("tengu_maple_sundial", false);
 }
+//@ chunk-e6aww6q8.js:1694361-1694538 placement
 /**
  * createMovedToConfigCommand：生成 "X moved to /config" 的隐藏 local-jsx 命令。
  */
-//@ chunk-e6aww6q8.js:1694361-1694538 placement
 function createMovedToConfigCommand(name, label, extraRequires) {
   return {
     type: "local-jsx",
-    name: name,
+    name,
     description: `${label} moved to /config`,
-    isHidden: !0,
+    isHidden: true,
     isEnabled: () => isSettingsMovedToConfig(),
     immediate: (args, presentation) => presentation === "fullscreen",
-    requires: { ink: !0, ...extraRequires },
+    requires: {
+      ink: true,
+      ...extraRequires,
+    },
   };
 }
+//@ chunk-e6aww6q8.js:1694538-1694625 placement
 /**
  * vimMovedToConfigCommand：createMovedToConfigCommand("vim","Editor mode")。
  */
-//@ chunk-e6aww6q8.js:1694538-1694625 placement
-var vimMovedToConfigCommand = createMovedToConfigCommand("vim", "Editor mode"),
-  outputStyleMovedToConfigCommand = createMovedToConfigCommand("output-style", "Output style", {
-    workspace: !0,
-  });
+var vimMovedToConfigCommand = createMovedToConfigCommand("vim", "Editor mode");
+var outputStyleMovedToConfigCommand = createMovedToConfigCommand("output-style", "Output style", {
+  workspace: true,
+});
+//@ chunk-e6aww6q8.js:1694625-1694649 placement
 /**
  * isOutputStyleCommandForced：构建期常量 false。
  */
-//@ chunk-e6aww6q8.js:1694625-1694649 placement
-function ien() {
-  return !1;
+function isMovedToConfigCommandHidden() {
+  return false;
 }
-
-export { isSettingsMovedToConfig, vimMovedToConfigCommand, outputStyleMovedToConfigCommand, ien };
+export {
+  isSettingsMovedToConfig,
+  vimMovedToConfigCommand,
+  outputStyleMovedToConfigCommand,
+  isMovedToConfigCommandHidden,
+};

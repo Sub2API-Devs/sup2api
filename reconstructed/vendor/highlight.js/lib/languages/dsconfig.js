@@ -8,30 +8,58 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:123534-124117 cjs-fingerprint
-var Bn = x(function (Ju, Un) {
-  function Xl(e) {
+var require_dsconfig = x(function (cjsExports, cjsModule) {
+  function dsconfig(hljs) {
     return {
       keywords: "dsconfig",
       contains: [
-        { className: "keyword", begin: "^dsconfig", end: /\s/, excludeEnd: !0, relevance: 10 },
+        {
+          className: "keyword",
+          begin: "^dsconfig",
+          end: /\s/,
+          excludeEnd: true,
+          relevance: 10,
+        },
         {
           className: "built_in",
           begin: /(list|create|get|set|delete)-(\w+)/,
           end: /\s/,
-          excludeEnd: !0,
+          excludeEnd: true,
           illegal: "!@#$%^&*()",
           relevance: 10,
         },
-        { className: "built_in", begin: /--(\w+)/, end: /\s/, excludeEnd: !0 },
-        { className: "string", begin: /"/, end: /"/ },
-        { className: "string", begin: /'/, end: /'/ },
-        { className: "string", begin: /[\w\-?]+:\w+/, end: /\W/, relevance: 0 },
-        { className: "string", begin: /\w+(\-\w+)*/, end: /(?=\W)/, relevance: 0 },
-        e.HASH_COMMENT_MODE,
+        {
+          className: "built_in",
+          begin: /--(\w+)/,
+          end: /\s/,
+          excludeEnd: true,
+        },
+        {
+          className: "string",
+          begin: /"/,
+          end: /"/,
+        },
+        {
+          className: "string",
+          begin: /'/,
+          end: /'/,
+        },
+        {
+          className: "string",
+          begin: /[\w\-?]+:\w+/,
+          end: /\W/,
+          relevance: 0,
+        },
+        {
+          className: "string",
+          begin: /\w+(\-\w+)*/,
+          end: /(?=\W)/,
+          relevance: 0,
+        },
+        hljs.HASH_COMMENT_MODE,
       ],
     };
   }
-  Un.exports = Xl;
+  cjsModule.exports = dsconfig;
 });
-
-export { Bn };
+export { require_dsconfig };

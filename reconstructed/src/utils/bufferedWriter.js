@@ -9,89 +9,92 @@
  * attribution: fingerprint 1, affinity 1
  */
 
+//@ chunk-cgr0tezp.js:14556-15113 fingerprint = createBufferedWriter (0.778)
 /**
  * 批量写入器：缓冲条目，达到条数/字节上限或定时（默认 1 秒）时调用 writeBatch；immediateMode 时每条立即写。
  */
-//@ chunk-cgr0tezp.js:14556-15113 fingerprint = createBufferedWriter (0.778)
 function createBufferedWriter({
-  writeBatch: writeBatch,
-  sizeOf: sizeOf,
-  flushIntervalMs: flushIntervalMs = 1000,
-  maxBufferSize: maxBufferSize = 100,
-  maxBufferBytes: maxBufferBytes = 1 / 0,
-  immediateMode: immediateMode = !1,
+  writeBatch,
+  sizeOf,
+  flushIntervalMs = 1000,
+  maxBufferSize = 100,
+  maxBufferBytes = 1 / 0,
+  immediateMode = false,
 }) {
-  let buffer = [],
-    bufferBytes = 0,
-    flushTimer = null,
-    pendingOverflow = null;
+  let buffer = [];
+  let bufferBytes = 0;
+  let flushTimer = null;
+  let pendingOverflow = null;
   function clearTimer() {
-    if (flushTimer) (clearTimeout(flushTimer), (flushTimer = null));
+    if (flushTimer) {
+      clearTimeout(flushTimer);
+      flushTimer = null;
+    }
   }
-  function g(f) {
+  function writeFn(f) {
     try {
       writeBatch(f);
     } catch {}
   }
   function flush() {
-    if (pendingOverflow) (g(pendingOverflow), (pendingOverflow = null));
+    if (pendingOverflow) {
+      writeFn(pendingOverflow);
+      pendingOverflow = null;
+    }
     if (buffer.length === 0) return;
-    (g(buffer), (buffer = []), (bufferBytes = 0), clearTimer());
+    writeFn(buffer);
+    buffer = [];
+    bufferBytes = 0;
+    clearTimer();
   }
   function scheduleFlush() {
     if (!flushTimer) flushTimer = setTimeout(flush, flushIntervalMs);
   }
   function flushDeferred() {
     if (pendingOverflow) {
-      (pendingOverflow.push(...buffer), (buffer = []), (bufferBytes = 0), clearTimer());
+      pendingOverflow.push(...buffer);
+      buffer = [];
+      bufferBytes = 0;
+      clearTimer();
       return;
     }
-    let f = buffer;
-    ((buffer = []),
-      (bufferBytes = 0),
-      clearTimer(),
-      (pendingOverflow = f),
-      setImmediate(() => {
-        let m = pendingOverflow;
-        if (((pendingOverflow = null), m)) g(m);
-      }));
+    let detached = buffer;
+    buffer = [];
+    bufferBytes = 0;
+    clearTimer();
+    pendingOverflow = detached;
+    setImmediate(() => {
+      let toWrite = pendingOverflow;
+      pendingOverflow = null;
+      if (toWrite) writeFn(toWrite);
+    });
   }
   return {
-    write(f) {
+    write(content) {
       if (immediateMode) {
-        g([f]);
+        writeFn([content]);
         return;
       }
-      if (
-        (buffer.push(f),
-        (bufferBytes += sizeOf(f)),
-        scheduleFlush(),
-        buffer.length >= maxBufferSize || bufferBytes >= maxBufferBytes)
-      )
-        flushDeferred();
+      buffer.push(content);
+      bufferBytes += sizeOf(content);
+      scheduleFlush();
+      if (buffer.length >= maxBufferSize || bufferBytes >= maxBufferBytes) flushDeferred();
     },
-    flush: flush,
+    flush,
     dispose() {
       flush();
     },
   };
 }
 //@ chunk-cgr0tezp.js:15113-15337 affinity = createBufferedWriter (0.761)
-function createBufferedWriter_2({
-  writeFn: writeFn,
-  flushIntervalMs: flushIntervalMs,
-  maxBufferSize: maxBufferSize,
-  maxBufferBytes: maxBufferBytes,
-  immediateMode: immediateMode,
-}) {
+function createBufferedWriter_2({ writeFn, flushIntervalMs, maxBufferSize, maxBufferBytes, immediateMode }) {
   return createBufferedWriter({
     writeBatch: (o) => writeFn(o.join("")),
     sizeOf: (o) => o.length,
-    flushIntervalMs: flushIntervalMs,
-    maxBufferSize: maxBufferSize,
-    maxBufferBytes: maxBufferBytes,
-    immediateMode: immediateMode,
+    flushIntervalMs,
+    maxBufferSize,
+    maxBufferBytes,
+    immediateMode,
   });
 }
-
 export { createBufferedWriter, createBufferedWriter_2 };

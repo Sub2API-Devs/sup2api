@@ -8,13 +8,12 @@
  * pieces: chunk-kxyd0g16.js (1)
  * attribution: fingerprint 1
  */
-
+//@ chunk-kxyd0g16.js:141693-142476 fingerprint = DESCRIPTION (1)
 /**
  * TaskGet 描述与提示词。
  */
-//@ chunk-kxyd0g16.js:141693-142476 fingerprint = DESCRIPTION (1)
-var TASK_GET_DESCRIPTION = "Get a task by ID from the task list",
-  TASK_GET_PROMPT = `Use this tool to retrieve a task by its ID from the task list.
+var TASK_GET_DESCRIPTION = "Get a task by ID from the task list";
+var TASK_GET_PROMPT = `Use this tool to retrieve a task by its ID from the task list.
 
 ## When to Use This Tool
 
@@ -36,5 +35,4 @@ Returns full task details:
 - After fetching a task, verify its blockedBy list is empty before beginning work.
 - Use TaskList to see all tasks in summary form.
 `;
-
 export { TASK_GET_DESCRIPTION, TASK_GET_PROMPT };

@@ -8,19 +8,22 @@
  * pieces: chunk-jhrww53q.js (8)
  * attribution: fingerprint 1, layout 1, placement 6
  */
-import { delimiter, delimiter as delimiter_2, isAbsolute } from "path";
+import { delimiter, isAbsolute } from "path";
 
 //@ chunk-jhrww53q.js:49257-49296 fingerprint = bunWhich (0.601)
 function bunWhich(o) {
-  return y(o, Bun.which(o));
+  return identityPath(o, Bun.which(o));
 }
 //@ chunk-jhrww53q.js:49296-49321 layout
-function y(o, t) {
+function identityPath(o, t) {
   return t;
 }
 //@ chunk-jhrww53q.js:49321-49348 placement
-var whichAsync = async (o) => bunWhich(o),
-  w0 = bunWhich;
+/**
+ * Bun.which 的同步封装。
+ */
+var whichAsync = async (o) => bunWhich(o);
+var bunWhichSync = bunWhich;
 //@ chunk-jhrww53q.js:49348-49406 placement
 function whichOnPath(o, t) {
   let _ = sanitizePathEnv(t);
@@ -29,10 +32,10 @@ function whichOnPath(o, t) {
 //@ chunk-jhrww53q.js:49406-49485 placement
 function sanitizePathEnv(o) {
   return o
-    .split(delimiter_2)
+    .split(delimiter)
     .map((t) => stripPathQuotes(t))
     .filter((t) => isAbsolutePathEntry(t))
-    .join(delimiter_2);
+    .join(delimiter);
 }
 //@ chunk-jhrww53q.js:49485-49553 placement
 function stripPathQuotes(o, t = "linux") {
@@ -40,12 +43,24 @@ function stripPathQuotes(o, t = "linux") {
 }
 //@ chunk-jhrww53q.js:49553-49597 placement
 function isAbsolutePathEntry(o) {
-  if (!isAbsolute(o)) return !1;
-  return !0;
+  if (!isAbsolute(o)) return false;
+  return true;
 }
 //@ chunk-jhrww53q.js:49597-49649 placement
 function bunWhichOnPath(o, t) {
-  return y(o, Bun.which(o, { PATH: t }));
+  return identityPath(
+    o,
+    Bun.which(o, {
+      PATH: t,
+    }),
+  );
 }
-
-export { w0, whichAsync, isAbsolutePathEntry, whichOnPath, sanitizePathEnv, bunWhichOnPath, stripPathQuotes };
+export {
+  bunWhichSync,
+  whichAsync,
+  isAbsolutePathEntry,
+  whichOnPath,
+  sanitizePathEnv,
+  bunWhichOnPath,
+  stripPathQuotes,
+};

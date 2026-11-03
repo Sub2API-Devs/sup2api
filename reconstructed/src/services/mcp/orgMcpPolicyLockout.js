@@ -17,5 +17,4 @@ function isLockedOutByOrgMcpPolicy(e, o) {
     doesEnterpriseMcpConfigExist() || areSideloadFlagsDisabledByPolicy() || !isMcpServerAllowedByPolicy(e, o)
   );
 }
-
 export { isLockedOutByOrgMcpPolicy };

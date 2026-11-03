@@ -6,52 +6,58 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../runtime/bun-runtime.js";
-import { uh } from "../../compile/codegen/index.js";
-import { ew } from "../../compile/util.js";
-import { Lkn } from "../../runtime/equal.js";
+import { require_codegen_2 } from "../../compile/codegen/index.js";
+import { require_util_2 } from "../../compile/util.js";
+import { require_equal } from "../../runtime/equal.js";
 
 //@ chunk-s82q9s4x.js:90833-91741 cjs-fingerprint
-var Yo = x(function (Xo) {
-  Object.defineProperty(Xo, "__esModule", { value: !0 });
-  var le = uh(),
-    Qo = ew(),
-    Af = Lkn(),
-    Df = {
-      message: "must be equal to one of the allowed values",
-      params: ({ schemaCode: schemaCode }) => le._`{allowedValues: ${schemaCode}}`,
+var require_enum = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  var codegen_1 = require_codegen_2();
+  var util_1 = require_util_2();
+  var equal_1 = require_equal();
+  var error = {
+    message: "must be equal to one of the allowed values",
+    params: ({ schemaCode }) => codegen_1._`{allowedValues: ${schemaCode}}`,
+  };
+  var def = {
+    keyword: "enum",
+    schemaType: "array",
+    $data: true,
+    error,
+    code(cxt) {
+      let { gen, data, $data, schema, schemaCode, it } = cxt;
+      if (!$data && schema.length === 0) throw Error("enum must have non-empty array");
+      let useLoop = schema.length >= it.opts.loopEnum;
+      let eql;
+      let getEql = () =>
+        eql !== null && eql !== undefined ? eql : (eql = util_1.useFunc(gen, equal_1.default));
+      let valid;
+      if (useLoop || $data) {
+        valid = gen.let("valid");
+        cxt.block$data(valid, loopEnum);
+      } else {
+        if (!Array.isArray(schema)) throw Error("ajv implementation error");
+        let vSchema = gen.const("vSchema", schemaCode);
+        valid = codegen_1.or(...schema.map((_x, i) => equalCode(vSchema, i)));
+      }
+      cxt.pass(valid);
+      function loopEnum() {
+        gen.assign(valid, false);
+        gen.forOf("v", schemaCode, (v) =>
+          gen.if(codegen_1._`${getEql()}(${data}, ${v})`, () => gen.assign(valid, true).break()),
+        );
+      }
+      function equalCode(vSchema, i) {
+        let sch = schema[i];
+        return typeof sch === "object" && sch !== null
+          ? codegen_1._`${getEql()}(${data}, ${vSchema}[${i}])`
+          : codegen_1._`${data} === ${sch}`;
+      }
     },
-    Vf = {
-      keyword: "enum",
-      schemaType: "array",
-      $data: !0,
-      error: Df,
-      code(e) {
-        let { gen: gen, data: r, $data: $data, schema: schema, schemaCode: schemaCode, it: it } = e;
-        if (!$data && schema.length === 0) throw Error("enum must have non-empty array");
-        let a = schema.length >= it.opts.loopEnum,
-          c,
-          u = () => (c !== null && c !== void 0 ? c : (c = Qo.useFunc(gen, Af.default))),
-          l;
-        if (a || $data) ((l = gen.let("valid")), e.block$data(l, f));
-        else {
-          if (!Array.isArray(schema)) throw Error("ajv implementation error");
-          let _ = gen.const("vSchema", schemaCode);
-          l = le.or(...schema.map((h, p) => b(_, p)));
-        }
-        e.pass(l);
-        function f() {
-          (gen.assign(l, !1),
-            gen.forOf("v", schemaCode, (_) =>
-              gen.if(le._`${u()}(${r}, ${_})`, () => gen.assign(l, !0).break()),
-            ));
-        }
-        function b(_, h) {
-          let p = schema[h];
-          return typeof p === "object" && p !== null ? le._`${u()}(${r}, ${_}[${h}])` : le._`${r} === ${p}`;
-        }
-      },
-    };
-  Xo.default = Vf;
+  };
+  cjsExports.default = def;
 });
-
-export { Yo };
+export { require_enum };

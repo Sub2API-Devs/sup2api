@@ -10,14 +10,14 @@
  */
 import { getGlobalConfig, saveGlobalConfig } from "../../utils/config.js";
 import {
-  _,
-  WDr,
+  FOTW_DAY_MS,
+  canClaimPromoCreditFor,
   activePromo,
   promoCreditAmount,
   FEATURE_OF_THE_WEEK,
-  jDr,
+  isPromoCommand,
   refreshPromoEligibility,
-  BDr,
+  promoCommand,
 } from "./featureOfTheWeek.js";
 import { apiClient } from "../routines/routinesApi.js";
 import { logFeatureBad, logFeatureSad, logFeatureOk } from "../analytics/featureTelemetry.js";
@@ -28,138 +28,183 @@ import { isBgSession } from "../../utils/concurrentSessions.js";
 import { rosterAccountKey } from "../artifacts/capabilityRoster.js";
 import { encodePathSegment } from "./apiPath.js";
 
+//@ chunk-0ba63vr9.js:4406-4536 fingerprint = getCachedOverageCreditGrant (0.587)
 /**
  * 取未过期的资格缓存。
  */
-//@ chunk-0ba63vr9.js:4406-4536 fingerprint = getCachedOverageCreditGrant (0.587)
-function getCachedOverageCreditGrant(e, n) {
-  let orgId = getGlobalConfig().fotwEligibilityCache?.[e]?.[n];
-  if (!orgId) return null;
-  if (Date.now() - orgId.timestamp > _) return null;
-  return orgId.info;
+function getCachedOverageCreditGrant(orgId, feature) {
+  let cached = getGlobalConfig().fotwEligibilityCache?.[orgId]?.[feature];
+  if (!cached) return null;
+  if (Date.now() - cached.timestamp > FOTW_DAY_MS) return null;
+  return cached.info;
 }
+//@ chunk-0ba63vr9.js:4536-5596 layout
 /**
  * POST overage_credit_grant 领取并启用 overage。
  */
-//@ chunk-0ba63vr9.js:4536-5596 layout
-async function claimOverageCreditGrant(e, n) {
-  if (!WDr(e)) return { outcome: "skipped" };
+async function claimOverageCreditGrant(e, credentials) {
+  if (!canClaimPromoCreditFor(e))
+    return {
+      outcome: "skipped",
+    };
   let i = activePromo();
-  if (!i) return { outcome: "skipped" };
-  let { campaign: campaign, orgId: orgId } = i,
-    o = promoCreditAmount(),
-    l;
+  if (!i)
+    return {
+      outcome: "skipped",
+    };
+  let { campaign, orgId } = i;
+  let o = promoCreditAmount();
+  let l;
   try {
     l = await apiClient.post(
       "/api/oauth/organizations/:orgUUID/overage_credit_grant",
-      { campaign: FEATURE_OF_THE_WEEK, feature: campaign.feature, enable_overages: !0 },
-      { auth: "teleport-org", timeout: 60000, validateStatus: (s) => s < 500, credentials: n },
+      {
+        campaign: FEATURE_OF_THE_WEEK,
+        feature: campaign.feature,
+        enable_overages: true,
+      },
+      {
+        auth: "teleport-org",
+        timeout: 60000,
+        validateStatus: (s) => s < 500,
+        credentials,
+      },
     );
   } catch (error) {
-    return (
-      logFeatureBad("api_fotw_claim", "request_failed"),
-      logForDebugging(`FotW claim failed: ${error}`, { level: "warn" }),
-      { outcome: "failed" }
-    );
+    logFeatureBad("api_fotw_claim", "request_failed");
+    logForDebugging(`FotW claim failed: ${error}`, {
+      level: "warn",
+    });
+    return {
+      outcome: "failed",
+    };
   }
-  if (!l.ok) return { outcome: "failed" };
+  if (!l.ok)
+    return {
+      outcome: "failed",
+    };
   if (l.status >= 400) {
-    if (parseGrantErrorMessage(l.data) === "Failed to grant credit")
-      return (logFeatureBad("api_fotw_claim", "grant_failed"), { outcome: "failed" });
-    return (
-      logFeatureSad("api_fotw_claim", "not_available"),
-      refreshOverageCreditGrantCache(orgId, campaign.feature, {
-        available: !1,
-        eligible: !1,
-        granted: !1,
-        amount_minor_units: null,
-        currency: null,
-      }),
-      { outcome: "not_available" }
-    );
-  }
-  if (!l.data.success) return (logFeatureBad("api_fotw_claim", "grant_failed"), { outcome: "failed" });
-  return (
-    logFeatureOk("api_fotw_claim"),
-    markFeatureClaimed(orgId, campaign.feature),
-    {
-      outcome: "granted",
-      amountMinorUnits: l.data.amount_minor_units ?? o?.amountMinorUnits ?? 0,
-      currency: l.data.currency ?? o?.currency ?? "USD",
-      expiresAt: l.data.expires_at ?? null,
+    if (parseGrantErrorMessage(l.data) === "Failed to grant credit") {
+      logFeatureBad("api_fotw_claim", "grant_failed");
+      return {
+        outcome: "failed",
+      };
     }
-  );
+    logFeatureSad("api_fotw_claim", "not_available");
+    refreshOverageCreditGrantCache(orgId, campaign.feature, {
+      available: false,
+      eligible: false,
+      granted: false,
+      amount_minor_units: null,
+      currency: null,
+    });
+    return {
+      outcome: "not_available",
+    };
+  }
+  if (!l.data.success) {
+    logFeatureBad("api_fotw_claim", "grant_failed");
+    return {
+      outcome: "failed",
+    };
+  }
+  logFeatureOk("api_fotw_claim");
+  markFeatureClaimed(orgId, campaign.feature);
+  return {
+    outcome: "granted",
+    amountMinorUnits: l.data.amount_minor_units ?? o?.amountMinorUnits ?? 0,
+    currency: l.data.currency ?? o?.currency ?? "USD",
+    expiresAt: l.data.expires_at ?? null,
+  };
 }
+//@ chunk-0ba63vr9.js:5596-5640 layout
 /**
  * 错误响应 schema {error:{message}}。
  */
-//@ chunk-0ba63vr9.js:5596-5640 layout
-var grantErrorSchema = DoctorLazy(() => create({ error: create({ message: create_2() }) }));
+var grantErrorSchema = DoctorLazy(() =>
+  create({
+    error: create({
+      message: create_2(),
+    }),
+  }),
+);
+//@ chunk-0ba63vr9.js:5640-5722 layout
 /**
  * 取错误消息。
  */
-//@ chunk-0ba63vr9.js:5640-5722 layout
 function parseGrantErrorMessage(e) {
-  let safeParse = grantErrorSchema().safeParse(e);
-  return safeParse.success ? safeParse.data.error.message : void 0;
+  let n = grantErrorSchema().safeParse(e);
+  return n.success ? n.data.error.message : undefined;
 }
+//@ chunk-0ba63vr9.js:5722-5805 layout
 /**
  * 该组织是否已领取该功能的赠送。
  */
-//@ chunk-0ba63vr9.js:5722-5805 layout
-function hasClaimedFeature(e, n) {
+function hasClaimedFeature(organizationUuid, feature) {
   let fotwClaimedFeatures = getGlobalConfig().fotwClaimedFeatures;
-  return Boolean(fotwClaimedFeatures?.[e]?.includes(n));
+  return Boolean(fotwClaimedFeatures?.[organizationUuid]?.includes(feature));
 }
+//@ chunk-0ba63vr9.js:5805-5968 layout
 /**
  * 记录已领取。
  */
-//@ chunk-0ba63vr9.js:5805-5968 layout
-function markFeatureClaimed(e, n) {
+function markFeatureClaimed(orgId, feature) {
   saveGlobalConfig((i) => {
-    let r = i.fotwClaimedFeatures?.[e] ?? [];
-    if (r.includes(n)) return i;
-    return { ...i, fotwClaimedFeatures: { ...i.fotwClaimedFeatures, [e]: [...r, n] } };
+    let r = i.fotwClaimedFeatures?.[orgId] ?? [];
+    if (r.includes(feature)) return i;
+    return {
+      ...i,
+      fotwClaimedFeatures: {
+        ...i.fotwClaimedFeatures,
+        [orgId]: [...r, feature],
+      },
+    };
   });
 }
+//@ chunk-0ba63vr9.js:5968-6051 layout
 /**
  * 该组织是否已完成该功能的 upsell。
  */
-//@ chunk-0ba63vr9.js:5968-6051 layout
-function isUpsellFulfilled(e, n) {
+function isUpsellFulfilled(orgId, feature) {
   let fotwUpsellFulfilled = getGlobalConfig().fotwUpsellFulfilled;
-  return Boolean(fotwUpsellFulfilled?.[e]?.includes(n));
+  return Boolean(fotwUpsellFulfilled?.[orgId]?.includes(feature));
 }
+//@ chunk-0ba63vr9.js:6051-6311 layout
 /**
  * viewer 身份且满足条件时记录 upsell 已完成。
  */
-//@ chunk-0ba63vr9.js:6051-6311 layout
-function markUpsellFulfilled(e) {
+function markUpsellFulfilled(commandName) {
   let n = activePromo();
-  if (!n || n.audience !== "viewer" || !jDr(e)) return;
-  let { orgId: orgId, campaign: campaign } = n;
+  if (!n || n.audience !== "viewer" || !isPromoCommand(commandName)) return;
+  let { orgId, campaign } = n;
   saveGlobalConfig((a) => {
     let o = a.fotwUpsellFulfilled?.[orgId] ?? [];
     if (o.includes(campaign.feature)) return a;
-    return { ...a, fotwUpsellFulfilled: { ...a.fotwUpsellFulfilled, [orgId]: [...o, campaign.feature] } };
+    return {
+      ...a,
+      fotwUpsellFulfilled: {
+        ...a.fotwUpsellFulfilled,
+        [orgId]: [...o, campaign.feature],
+      },
+    };
   });
 }
+//@ chunk-0ba63vr9.js:6311-6770 fingerprint = refreshOverageCreditGrantCache (0.791)
 /**
  * 更新资格缓存（可只在缺失/过期时写）。
  */
-//@ chunk-0ba63vr9.js:6311-6770 fingerprint = refreshOverageCreditGrantCache (0.791)
-function refreshOverageCreditGrantCache(e, n, i, { onlyIfAbsent: r = !1 } = {}) {
+function refreshOverageCreditGrantCache(orgId, feature, info, { onlyIfAbsent: r = false } = {}) {
   saveGlobalConfig((prev) => {
-    let prevCached = prev.fotwEligibilityCache?.[e]?.[n],
-      dataUnchanged = prevCached && Date.now() - prevCached.timestamp <= _;
+    let prevCached = prev.fotwEligibilityCache?.[orgId]?.[feature];
+    let dataUnchanged = prevCached && Date.now() - prevCached.timestamp <= FOTW_DAY_MS;
     if (r && dataUnchanged) return prev;
     if (
       prevCached &&
-      prevCached.info.available === i.available &&
-      prevCached.info.eligible === i.eligible &&
-      prevCached.info.granted === i.granted &&
-      prevCached.info.amount_minor_units === i.amount_minor_units &&
-      prevCached.info.currency === i.currency &&
+      prevCached.info.available === info.available &&
+      prevCached.info.eligible === info.eligible &&
+      prevCached.info.granted === info.granted &&
+      prevCached.info.amount_minor_units === info.amount_minor_units &&
+      prevCached.info.currency === info.currency &&
       dataUnchanged
     )
       return prev;
@@ -167,38 +212,44 @@ function refreshOverageCreditGrantCache(e, n, i, { onlyIfAbsent: r = !1 } = {}) 
       ...prev,
       fotwEligibilityCache: {
         ...prev.fotwEligibilityCache,
-        [e]: { ...prev.fotwEligibilityCache?.[e], [n]: { info: i, timestamp: Date.now() } },
+        [orgId]: {
+          ...prev.fotwEligibilityCache?.[orgId],
+          [feature]: {
+            info,
+            timestamp: Date.now(),
+          },
+        },
       },
     };
   });
 }
+//@ chunk-3g0djq3w.js:5566-5968 placement
 /**
  * 运行特定命令后尝试领取超额额度赠送（交互主会话），必要时提示设置付款方式。
  */
-//@ chunk-3g0djq3w.js:5566-5968 placement
 function claimCommandOverageCredit({
-  commandName: commandName,
-  agentId: agentId,
-  isNonInteractiveSession: isNonInteractiveSession,
-  setAppState: setAppState,
-  credentials: credentials,
+  commandName,
+  agentId,
+  isNonInteractiveSession,
+  setAppState,
+  credentials,
 }) {
-  if (agentId !== void 0 || isNonInteractiveSession) return;
+  if (agentId !== undefined || isNonInteractiveSession) return;
   if (isBgSession()) return;
   markUpsellFulfilled(commandName);
   let T = refreshPromoEligibility(credentials);
-  if (!jDr(commandName)) return;
-  if (WDr(commandName)) {
+  if (!isPromoCommand(commandName)) return;
+  if (canClaimPromoCreditFor(commandName)) {
     startOverageClaim(commandName, setAppState, credentials);
     return;
   }
   T.then((p) => {
-    if (WDr(commandName)) {
+    if (canClaimPromoCreditFor(commandName)) {
       startOverageClaim(commandName, setAppState, credentials);
       return;
     }
     if (!p) return;
-    let h = BDr();
+    let h = promoCommand();
     if (!h) return;
     setAppState((y) => ({
       ...y,
@@ -211,46 +262,59 @@ function claimCommandOverageCredit({
     }));
   });
 }
+//@ chunk-3g0djq3w.js:5968-6432 placement
 /**
  * 开始领取超额额度：设置 pending 状态，完成后更新为 granted 或 failed。
  */
-//@ chunk-3g0djq3w.js:5968-6432 placement
-function startOverageClaim(e, n, o) {
-  let u = BDr(),
-    s = promoCreditAmount();
+function startOverageClaim(commandName, setAppState, credentials) {
+  let u = promoCommand();
+  let s = promoCreditAmount();
   if (!u || !s) return;
-  (n((T) => ({
+  setAppState((T) => ({
     ...T,
-    fotwClaim: { phase: "pending", command: u, amountMinorUnits: s.amountMinorUnits, currency: s.currency },
-  })),
-    claimOverageCreditGrant(e, o)
-      .catch(() => ({ outcome: "failed" }))
-      .then((T) => {
-        n((p) => {
-          let fotwClaim = p.fotwClaim;
-          if (!fotwClaim || fotwClaim.command !== u) return p;
-          if (T.outcome === "granted")
-            return {
-              ...p,
-              fotwClaim: {
-                phase: "granted",
-                command: fotwClaim.command,
-                amountMinorUnits: T.amountMinorUnits,
-                currency: T.currency,
-              },
-            };
-          return { ...p, fotwClaim: { ...fotwClaim, phase: "failed" } };
-        });
-      }));
+    fotwClaim: {
+      phase: "pending",
+      command: u,
+      amountMinorUnits: s.amountMinorUnits,
+      currency: s.currency,
+    },
+  }));
+  claimOverageCreditGrant(commandName, credentials)
+    .catch(() => ({
+      outcome: "failed",
+    }))
+    .then((T) => {
+      setAppState((p) => {
+        let fotwClaim = p.fotwClaim;
+        if (!fotwClaim || fotwClaim.command !== u) return p;
+        if (T.outcome === "granted")
+          return {
+            ...p,
+            fotwClaim: {
+              phase: "granted",
+              command: fotwClaim.command,
+              amountMinorUnits: T.amountMinorUnits,
+              currency: T.currency,
+            },
+          };
+        return {
+          ...p,
+          fotwClaim: {
+            ...fotwClaim,
+            phase: "failed",
+          },
+        };
+      });
+    });
 }
+//@ chunk-06y4szbn.js:3058-3214 fingerprint = invalidateOverageCreditGrantCache (0.667)
 /**
  * 缓存的赠送信息属于当前账号与组织时返回。旧版名 invalidateOverageCreditGrantCache 不准确。
  */
-//@ chunk-06y4szbn.js:3058-3214 fingerprint = invalidateOverageCreditGrantCache (0.667)
 function invalidateOverageCreditGrantCache(e) {
   let n = rosterAccountKey();
   if (
-    n === void 0 ||
+    n === undefined ||
     !e.success ||
     e.data.accountUuid !== n.accountUuid ||
     e.data.organizationUuid !== n.organizationUuid
@@ -258,19 +322,18 @@ function invalidateOverageCreditGrantCache(e) {
     return;
   return e.data;
 }
+//@ chunk-9cjx5pnm.js:14005-14069 fingerprint = fetchOverageCreditGrant (0.561)
 /**
  * /api/oauth/organizations/<orgId>。旧版名 fetchOverageCreditGrant 为错配。
  */
-//@ chunk-9cjx5pnm.js:14005-14069 fingerprint = fetchOverageCreditGrant (0.561)
 var organizationApiPath = (e) => `/api/oauth/organizations/${encodePathSegment(e.organization.id)}`;
+//@ chunk-zn8pzrw0.js:3581-3648 fingerprint = formatGrantAmount (0.582)
 /**
  * 旧版名 formatGrantAmount 为错配。
  */
-//@ chunk-zn8pzrw0.js:3581-3648 fingerprint = formatGrantAmount (0.582)
 function isUsdCurrency(info) {
   return typeof info === "string" && info.toUpperCase() === "USD";
 }
-
 export {
   invalidateOverageCreditGrantCache,
   hasClaimedFeature,

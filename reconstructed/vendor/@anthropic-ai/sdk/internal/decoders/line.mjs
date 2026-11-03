@@ -5,68 +5,121 @@
  * pieces: chunk-hwmsct5x.js (2)
  * attribution: esm-layout 1, esm-fingerprint 1
  */
-import { Kn, ke } from "../tslib.mjs";
-import { h4t, uu, decodeUtf8 } from "../utils/bytes.mjs";
+import { __classPrivateFieldSet, __classPrivateFieldGet } from "../tslib.mjs";
+import { encodeUTF8, concatBytes, decodeUtf8 } from "../utils/bytes.mjs";
 
 //@ chunk-hwmsct5x.js:27813-28807 esm-layout
-var et,
-  tt,
-  Vo = (() => {
-    class e {
-      constructor() {
-        (et.set(this, void 0),
-          tt.set(this, void 0),
-          Kn(this, et, new Uint8Array(), "f"),
-          Kn(this, tt, null, "f"));
-      }
-      decode(n) {
-        if (n == null) return [];
-        let r = n instanceof ArrayBuffer ? new Uint8Array(n) : typeof n === "string" ? h4t(n) : n;
-        Kn(this, et, uu([ke(this, et, "f"), r]), "f");
-        let s = [],
-          h;
-        while ((h = Nh(ke(this, et, "f"), ke(this, tt, "f"))) != null) {
-          if (h.carriage && ke(this, tt, "f") == null) {
-            Kn(this, tt, h.index, "f");
-            continue;
-          }
-          if (ke(this, tt, "f") != null && (h.index !== ke(this, tt, "f") + 1 || h.carriage)) {
-            (s.push(decodeUtf8(ke(this, et, "f").subarray(0, ke(this, tt, "f") - 1))),
-              Kn(this, et, ke(this, et, "f").subarray(ke(this, tt, "f")), "f"),
-              Kn(this, tt, null, "f"));
-            continue;
-          }
-          let y = ke(this, tt, "f") !== null ? h.preceding - 1 : h.preceding,
-            w = decodeUtf8(ke(this, et, "f").subarray(0, y));
-          (s.push(w), Kn(this, et, ke(this, et, "f").subarray(h.index), "f"), Kn(this, tt, null, "f"));
-        }
-        return s;
-      }
-      flush() {
-        if (!ke(this, et, "f").length) return [];
-        return this.decode(`
-`);
-      }
+var _LineDecoder_buffer;
+var _LineDecoder_carriageReturnIndex;
+var LineDecoder = (() => {
+  class LineDecoder {
+    constructor() {
+      _LineDecoder_buffer.set(this, undefined);
+      _LineDecoder_carriageReturnIndex.set(this, undefined);
+      __classPrivateFieldSet(this, _LineDecoder_buffer, new Uint8Array(), "f");
+      __classPrivateFieldSet(this, _LineDecoder_carriageReturnIndex, null, "f");
     }
-    return (
-      (et = new WeakMap()),
-      (tt = new WeakMap()),
-      (e.NEWLINE_CHARS = new Set([
-        `
+    decode(chunk) {
+      if (chunk == null) return [];
+      let binaryChunk =
+        chunk instanceof ArrayBuffer
+          ? new Uint8Array(chunk)
+          : typeof chunk === "string"
+            ? encodeUTF8(chunk)
+            : chunk;
+      __classPrivateFieldSet(
+        this,
+        _LineDecoder_buffer,
+        concatBytes([__classPrivateFieldGet(this, _LineDecoder_buffer, "f"), binaryChunk]),
+        "f",
+      );
+      let lines = [];
+      let patternIndex;
+      while (
+        (patternIndex = findNewlineIndex(
+          __classPrivateFieldGet(this, _LineDecoder_buffer, "f"),
+          __classPrivateFieldGet(this, _LineDecoder_carriageReturnIndex, "f"),
+        )) != null
+      ) {
+        if (
+          patternIndex.carriage &&
+          __classPrivateFieldGet(this, _LineDecoder_carriageReturnIndex, "f") == null
+        ) {
+          __classPrivateFieldSet(this, _LineDecoder_carriageReturnIndex, patternIndex.index, "f");
+          continue;
+        }
+        if (
+          __classPrivateFieldGet(this, _LineDecoder_carriageReturnIndex, "f") != null &&
+          (patternIndex.index !== __classPrivateFieldGet(this, _LineDecoder_carriageReturnIndex, "f") + 1 ||
+            patternIndex.carriage)
+        ) {
+          lines.push(
+            decodeUtf8(
+              __classPrivateFieldGet(this, _LineDecoder_buffer, "f").subarray(
+                0,
+                __classPrivateFieldGet(this, _LineDecoder_carriageReturnIndex, "f") - 1,
+              ),
+            ),
+          );
+          __classPrivateFieldSet(
+            this,
+            _LineDecoder_buffer,
+            __classPrivateFieldGet(this, _LineDecoder_buffer, "f").subarray(
+              __classPrivateFieldGet(this, _LineDecoder_carriageReturnIndex, "f"),
+            ),
+            "f",
+          );
+          __classPrivateFieldSet(this, _LineDecoder_carriageReturnIndex, null, "f");
+          continue;
+        }
+        let endIndex =
+          __classPrivateFieldGet(this, _LineDecoder_carriageReturnIndex, "f") !== null
+            ? patternIndex.preceding - 1
+            : patternIndex.preceding;
+        let line = decodeUtf8(__classPrivateFieldGet(this, _LineDecoder_buffer, "f").subarray(0, endIndex));
+        lines.push(line);
+        __classPrivateFieldSet(
+          this,
+          _LineDecoder_buffer,
+          __classPrivateFieldGet(this, _LineDecoder_buffer, "f").subarray(patternIndex.index),
+          "f",
+        );
+        __classPrivateFieldSet(this, _LineDecoder_carriageReturnIndex, null, "f");
+      }
+      return lines;
+    }
+    flush() {
+      if (!__classPrivateFieldGet(this, _LineDecoder_buffer, "f").length) return [];
+      return this.decode(`
+`);
+    }
+  }
+  _LineDecoder_buffer = new WeakMap();
+  _LineDecoder_carriageReturnIndex = new WeakMap();
+  LineDecoder.NEWLINE_CHARS = new Set([
+    `
 `,
-        "\r",
-      ])),
-      (e.NEWLINE_REGEXP = /\r\n|[\n\r]/g),
-      e
-    );
-  })();
+    "\r",
+  ]);
+  LineDecoder.NEWLINE_REGEXP = /\r\n|[\n\r]/g;
+  return LineDecoder;
+})();
 //@ chunk-hwmsct5x.js:28807-28977 esm-fingerprint
-function Nh(e, n) {
-  for (let h = n ?? 0; h < e.length; h++) {
-    if (e[h] === 10) return { preceding: h, index: h + 1, carriage: !1 };
-    if (e[h] === 13) return { preceding: h, index: h + 1, carriage: !0 };
+function findNewlineIndex(buffer, startIndex) {
+  for (let i = startIndex ?? 0; i < buffer.length; i++) {
+    if (buffer[i] === 10)
+      return {
+        preceding: i,
+        index: i + 1,
+        carriage: false,
+      };
+    if (buffer[i] === 13)
+      return {
+        preceding: i,
+        index: i + 1,
+        carriage: true,
+      };
   }
   return null;
 }
-
-export { Vo };
+export { LineDecoder };

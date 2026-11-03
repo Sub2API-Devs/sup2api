@@ -8,26 +8,29 @@
  * pieces: chunk-tyg7f3ek.js (12)
  * attribution: placement 12
  */
-import { $f } from "../../utils/messageQueueManager.js";
+import { isMainAgentCommand } from "../../utils/messageQueueManager.js";
 import { env } from "../../utils/env.js";
-import { VNn } from "./mcpControlRequests.js";
+import { MAX_MCP_RESOURCE_JSON_CHARS } from "./mcpControlRequests.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 
 //@ chunk-tyg7f3ek.js:622484-622802 placement
-var lazyPrintModules = () => require("./chunk-2wrddneh.js"),
-  gz = () => require("./chunk-kr06rpgd.js"),
-  Wx = require("./chunk-e321p3vc.js"),
-  bl = require("./chunk-yxywkh50.js"),
-  Qs = require("./chunk-dm6d31md.js"),
-  rg = require("./chunk-68szcwjr.js"),
-  sU = require("./chunk-n7djsch1.js"),
-  ic = require("./chunk-xd621t7b.js"),
-  sg = require("./chunk-w6rm7nhv.js");
+/**
+ * 按需 require 的打印侧模块句柄：会话导出、分类器摘要、协调者模式、收件箱指针、cron 调度/抖动/工具、自治循环；另有 MCP 调用结果过大文案与打印阶段计时参数。
+ */
+var lazyPrintModules = () => require("./chunk-2wrddneh.js");
+var lazyConversationExporter = () => require("./chunk-kr06rpgd.js");
+var lazyPostTurnSummary = require("./chunk-e321p3vc.js");
+var lazyCoordinatorMode = require("./chunk-yxywkh50.js");
+var lazySessionInboxPointers = require("./chunk-dm6d31md.js");
+var lazyCronScheduler = require("./chunk-68szcwjr.js");
+var lazyCronJitterConfig = require("./chunk-n7djsch1.js");
+var lazyCronTools = require("./chunk-xd621t7b.js");
+var lazyAutonomousLoop = require("./chunk-w6rm7nhv.js");
 //@ chunk-tyg7f3ek.js:622802-622942 placement
-var lazyPrintModules2 = require("./chunk-aghtagt4.js"),
-  sc = require("./chunk-qwf564hq.js"),
-  Zk = require("./chunk-1d5behve.js"),
-  qx = require("./chunk-z6qazjbc.js");
+var lazyPrintModules2 = require("./chunk-aghtagt4.js");
+var lazyTeleportRelayMarker = require("./chunk-qwf564hq.js");
+var lazyTeleportRelayEnv = require("./chunk-1d5behve.js");
+var lazyHandoffMarkerRelay = require("./chunk-z6qazjbc.js");
 //@ chunk-tyg7f3ek.js:622942-622994 placement
 function mcpModuleFacade() {
   return require("./chunk-asne9cp8.js");
@@ -60,58 +63,57 @@ The user cannot receive your response until the team is completely shut down.
 Shut down your team and prepare your final response for the user.`;
 //@ chunk-tyg7f3ek.js:623716-623758 placement
 function isTeamShutdownReminder(e) {
-  return $f(e) && e.value === TEAM_SHUTDOWN_REMINDER;
+  return isMainAgentCommand(e) && e.value === TEAM_SHUTDOWN_REMINDER;
 }
 //@ chunk-tyg7f3ek.js:623758-623828 placement
 function teamTeardownParkTimeoutMs() {
   return env.CLAUDE_CODE_TEAM_TEARDOWN_PARK_TIMEOUT_MS ?? 1e4;
 }
 //@ chunk-tyg7f3ek.js:623828-624102 placement
-var MCP_CALL_RESULT_LIMITS = 30000,
-  Kx = `The tool ran, but its result is over the ${VNn}-character limit of an mcp_call sent with result_not_for_model, so this mcp_call got no result. Check whether the call took effect before retrying mcp_call, and ask the tool for a smaller result if you retry.`;
+var MCP_CALL_RESULT_LIMITS = 30000;
+var MCP_CALL_RESULT_TOO_LARGE_TEXT = `The tool ran, but its result is over the ${MAX_MCP_RESOURCE_JSON_CHARS}-character limit of an mcp_call sent with result_not_for_model, so this mcp_call got no result. Check whether the call took effect before retrying mcp_call, and ask the tool for a smaller result if you retry.`;
 //@ chunk-tyg7f3ek.js:624102-624178 placement
 function isMcpCallResultTooLarge(e) {
-  return jsonStringify([e.content, e.structuredContent, e._meta]).length > VNn;
+  return jsonStringify([e.content, e.structuredContent, e._meta]).length > MAX_MCP_RESOURCE_JSON_CHARS;
 }
 //@ chunk-tyg7f3ek.js:624178-624262 placement
-var PRINT_TIMING_CONSTANTS = 5,
-  fa = 2000,
-  TENGU_ANCHORED_LANTERN = "tengu_anchored_lantern",
-  kz = 2000,
-  Gx = 20000,
-  zx = 30000,
-  wz = 5000,
-  vz = 4;
-
+var PRINT_TIMING_CONSTANTS = 5;
+var PRINT_TURN_FLUSH_DELAY_MS = 2000;
+var TENGU_ANCHORED_LANTERN = "tengu_anchored_lantern";
+var PRINT_TURN_RETRY_MS = 2000;
+var PRINT_TURN_WAIT_MS = 20000;
+var PRINT_TURN_TIMEOUT_MS = 30000;
+var PRINT_TURN_POLL_MS = 5000;
+var PRINT_TURN_MAX_ATTEMPTS = 4;
 export {
-  Zk,
-  Wx,
-  fa,
-  Gx,
+  lazyTeleportRelayEnv,
+  lazyPostTurnSummary,
+  PRINT_TURN_FLUSH_DELAY_MS,
+  PRINT_TURN_WAIT_MS,
   lazyPrintModules2,
-  ic,
-  Qs,
+  lazyCronTools,
+  lazySessionInboxPointers,
   getMcpClientModule,
-  qx,
+  lazyHandoffMarkerRelay,
   MCP_CALL_RESULT_LIMITS,
-  wz,
+  PRINT_TURN_POLL_MS,
   TEAM_SHUTDOWN_REMINDER,
   teamTeardownParkTimeoutMs,
   isTeamShutdownReminder,
-  sg,
-  rg,
-  sU,
-  vz,
-  zx,
+  lazyAutonomousLoop,
+  lazyCronScheduler,
+  lazyCronJitterConfig,
+  PRINT_TURN_MAX_ATTEMPTS,
+  PRINT_TURN_TIMEOUT_MS,
   lazyPrintModules,
-  gz,
+  lazyConversationExporter,
   isMcpCallResultTooLarge,
-  Kx,
+  MCP_CALL_RESULT_TOO_LARGE_TEXT,
   getMcpErrorClassificationModule,
   getMcpAuthModule,
   PRINT_TIMING_CONSTANTS,
-  kz,
+  PRINT_TURN_RETRY_MS,
   TENGU_ANCHORED_LANTERN,
-  bl,
-  sc,
+  lazyCoordinatorMode,
+  lazyTeleportRelayMarker,
 };

@@ -8,9 +8,9 @@
  * pieces: chunk-1mqwyc6a.js (1)
  * attribution: placement 1
  */
-import { xo } from "../../bootstrap/sessionSlices.js";
+import { getSessionProject } from "../../bootstrap/sessionSlices.js";
 import { permissionCheckedCwds, setCwd } from "../../utils/Shell.js";
-import { Yg } from "../../remote/remoteMode.js";
+import { runInRemoteCallFrameMain } from "../../remote/remoteMode.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { logFeatureSad, logFeatureOk } from "../analytics/featureTelemetry.js";
 import { errorMessage } from "../../utils/errors.js";
@@ -20,43 +20,46 @@ import { logError } from "../../utils/log.js";
 
 //@ chunk-1mqwyc6a.js:11848-12627 placement
 function createCallDirectoryScope(i, c) {
-  let cwd = xo(i).cwd,
-    withProject = i.withProject({ cwd: cwd });
-  permissionCheckedCwds.of(withProject).set(withProject, cwd);
-  let subscribe = withProject.subscribe(() => {
-      if (withProject.project?.cwd !== cwd) permissionCheckedCwds.of(withProject).set(withProject, "");
-    }),
-    n = !1,
-    subscribe_2 = i.subscribe(() => {
-      n ||= i.project?.cwd !== cwd;
-    });
+  let cwd = getSessionProject(i).cwd;
+  let e = i.withProject({
+    cwd,
+  });
+  permissionCheckedCwds.of(e).set(e, cwd);
+  let s = e.subscribe(() => {
+    if (e.project?.cwd !== cwd) permissionCheckedCwds.of(e).set(e, "");
+  });
+  let n = false;
+  let a = i.subscribe(() => {
+    n ||= i.project?.cwd !== cwd;
+  });
   return {
-    session: withProject,
-    run: (r) => Yg(xo(withProject).cwd, r),
-    bind: (r) => () => Yg(xo(withProject).cwd, r),
+    session: e,
+    run: (r) => runInRemoteCallFrameMain(getSessionProject(e).cwd, r),
+    bind: (r) => () => runInRemoteCallFrameMain(getSessionProject(e).cwd, r),
     [Symbol.dispose]() {
-      (subscribe_2(), subscribe());
-      let cwd_2 = xo(withProject).cwd;
+      a();
+      s();
+      let cwd_2 = getSessionProject(e).cwd;
       if (cwd_2 === cwd || c.aborted) return;
       if (n) {
-        (logForDebugging(
+        logForDebugging(
           `MCP server: a call ended in ${cwd_2}, but another call moved the working directory meanwhile, so the next call starts in ${i.project?.cwd}`,
-        ),
-          logFeatureSad("mcp_serve_call_directory", "moved_meanwhile"));
+        );
+        logFeatureSad("mcp_serve_call_directory", "moved_meanwhile");
         return;
       }
       try {
         setCwd(cwd_2, i);
       } catch (error) {
-        (logForDebugging(
+        logForDebugging(
           `MCP server: the directory a call ended in could not be adopted, so the next call starts in ${cwd}: ${errorMessage(error)}`,
-        ),
-          logFeatureSad("mcp_serve_call_directory", "end_directory_gone"));
+        );
+        logFeatureSad("mcp_serve_call_directory", "end_directory_gone");
         return;
       }
-      (invalidateSessionEnvCache(),
-        onCwdChanged(cwd, cwd_2).catch(logError),
-        logFeatureOk("mcp_serve_call_directory"));
+      invalidateSessionEnvCache();
+      onCwdChanged(cwd, cwd_2).catch(logError);
+      logFeatureOk("mcp_serve_call_directory");
     },
   };
 }

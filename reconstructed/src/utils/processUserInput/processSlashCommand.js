@@ -29,7 +29,7 @@ import {
   normalizeMessages,
   extractAgentIdsFromMessages_2,
   getLastAssistantMessage,
-  kCe,
+  hasToolResultBlock,
   createSyntheticUserCaveatMessage,
   formatCommandInputTags,
   getContentText,
@@ -98,10 +98,10 @@ import {
 import {
   resolveAgentTools,
   withWebFetchToolForAgent,
-  o7e,
+  isApiErrorDisplayMessage,
   adoptSubagentPublishArmsAsync,
 } from "../../tools/AgentTool/agentToolUtils.js";
-import { bN } from "../../services/accountMemory/memoryContext.js";
+import { memoryModeForSession } from "../../services/accountMemory/memoryContext.js";
 import {
   isAbortError,
   withTelemetryMessage,
@@ -111,7 +111,7 @@ import {
   TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
 } from "../errors.js";
 import { escapeXml_2 as escapeXml } from "../confusables.js";
-import { bP, forkedSkillLaunchTag } from "../xmlTagText.js";
+import { escapeForkedSkillTag, forkedSkillLaunchTag } from "../xmlTagText.js";
 import { sanitizeTelemetryString } from "../sanitization.js";
 import { transportStateByHost, isBridgeOrTransport } from "../../cli/transportState.js";
 import {
@@ -119,17 +119,21 @@ import {
   runAgent,
   filterIncompleteToolCalls_2,
 } from "../../tools/AgentTool/runAgent.js";
-import { i2n } from "../model/agentModelRestriction.js";
+import { agentModelRestrictedReporter } from "../model/agentModelRestriction.js";
 import { getAssistantMessageContentLength } from "../tokens.js";
 import { logError } from "../log.js";
-import { zPe } from "../messages/untrustedArtifactContent.js";
-import { e6e, D4, ALLOW_BUNDLED_SKILLS } from "../../skills/bundledSkillsGate.js";
+import { withUntrustedPreamble } from "../messages/untrustedArtifactContent.js";
+import {
+  isBundledSkillsPolicyDenied,
+  isSkillOutsideCorePolicy,
+  ALLOW_BUNDLED_SKILLS,
+} from "../../skills/bundledSkillsGate.js";
 import {
   getBundledSkills,
   getRegisteredBundledSkillsIgnoringKillSwitch,
   isShippedSkillExecutionBlocked,
 } from "../../skills/bundledSkills.js";
-import { xSi, epr } from "../plugins/managedPlugins.js";
+import { builtinPluginSkillCommands, availableBuiltinSkillCommands } from "../plugins/managedPlugins.js";
 import {
   isPolicyAllowed,
   policyDenyKind,
@@ -142,7 +146,7 @@ import {
 } from "../../services/policyLimits/policyMessages.js";
 import {
   commandSurfaceNotice,
-  vt,
+  isQuillKillswitchOff,
   unknownCommandFallback,
   hasSingleCommandRunHook,
   modCommandFollowUpNote,
@@ -153,22 +157,22 @@ import {
   isKilledHostCatalogSkill,
   getCommandRequirements,
   isHiddenFromModel,
-  rSt,
+  notifySetupGuideLoaded,
 } from "../commandPredicates.js";
-import { uo } from "../../services/api/deferredToolsState.js";
+import { normalizeServerNameShort } from "../../services/api/deferredToolsState.js";
 import {
   takeQueuedCommandWaiter,
   joinCommandRunDispatch,
   interruptedCommandResult,
   dispatchCommandRunHooks,
-  h0e,
-  MZ,
-  B1r,
+  lazyCommandRunSignal,
+  commandSetSignalA,
+  commandSetSignalB,
 } from "../../plugins/functionHooks/commandRunDispatch.js";
 import { getEffortLevelIfSupported } from "../effort.js";
 import { getOriginKindLabel } from "../messages/promptOrigin.js";
 import { promptTelemetryFields, promptOriginForHooks } from "../promptSource.js";
-import { dCt } from "../../tools/RefreshMcpToolsTool/RefreshMcpToolsTool.js";
+import { emptyObjectFactory } from "../../tools/RefreshMcpToolsTool/RefreshMcpToolsTool.js";
 import {
   logSlashPromptEvent,
   cloneContent,
@@ -181,20 +185,20 @@ import { CODE_REVIEW } from "../../skills/bundled/bundledSkillNames.js";
 import { ultrareviewAuthPrecondition } from "../../commands/review/ultrareviewPreconditions.js";
 import {
   checkCommandSyncedAccess,
-  qCe,
-  LZ,
-  gse,
+  syncedSkillRefusalReason,
+  isDefined,
+  logSyncedCommandRefused,
   findRefusedSyncedCommands,
   resolveSkillGitRoot,
 } from "../claudeAiSync/syncedSkillAccess.js";
 import { withTaskSuffix } from "../../tasks/endedByModel.js";
-import { hl } from "../networkPaths.js";
+import { isUntouchableSpelling } from "../networkPaths.js";
 import { getFsImplementation } from "../fsOperations.js";
 import { logOrgPolicyDenied } from "../../services/policyLimits/orgPolicyDeniedEvent.js";
 import { suggestClosestName, boundedEditDistance } from "../settings/managedEnvKeys.js";
 import { isToolDetailsLoggingEnabled, sanitizeVersion } from "../../services/analytics/metadata.js";
 import { isPromptHookObserved } from "../telemetry/sessionTracing.js";
-import { Zur } from "../abortErrors.js";
+import { swallowAbortError } from "../abortErrors.js";
 import { resolvePromptOrigin } from "../messageOrigin.js";
 import { viewportInfo } from "../../plugins/functionHooks/surfaceBinding.js";
 import { isHumanOrAutoContinuation } from "../messageProvenance.js";
@@ -213,7 +217,7 @@ import { unwrapPastedContentBlocks } from "../pastedContent.js";
 import { recordSkillInvoked } from "../suggestions/skillUsageTracking.js";
 import { claimCommandOverageCredit } from "../../services/api/overageCreditGrant.js";
 import { NO_CONTENT_MESSAGE } from "../../constants/messages.js";
-import { wt, cwr } from "../../remote/remoteMode.js";
+import { isRemoteSessionAvailable, REMOTE_STOPPED_WAITING_NOTICE } from "../../remote/remoteMode.js";
 import { raceWithAbortSignal } from "../sleep.js";
 import { buildPostCompactMessages } from "../../services/compact/compact.js";
 import { isCoordinatorMainThread } from "../../coordinator/coordinatorMode.js";
@@ -235,49 +239,53 @@ import {
 import { applySkillPromptHooks } from "../../plugins/functionHooks/skillPromptHooks.js";
 import { isRestrictedToPluginOnly, isSourceAdminTrusted } from "../settings/pluginOnlyPolicy.js";
 import { logSyncedSkillRestricted } from "../../services/plugins/accountSync/syncedPluginHooks.js";
-import { checkSkillHooksFit, yt } from "./_new/checkSkillHooksFit.js";
-import { registerSkillHooks } from "../hooks/registerSkillHooks.js";
-import { yyt } from "../hooks/registerFrontmatterHooks.js";
-import { exe } from "../attributionFileClasses.js";
-import { gl } from "../cwd.js";
+import {
+  checkSkillHooksFit,
+  registerSkillHooks,
+  SKILL_HOOKS_NOT_REGISTERED_TEXT,
+} from "../hooks/registerSkillHooks.js";
+import { isRepoFrontmatterHookRestricted } from "../hooks/registerFrontmatterHooks.js";
+import { slashTestPattern } from "../attributionFileClasses.js";
+import { getCwdOrNull } from "../cwd.js";
 import { setCommandDenyRules } from "../attachments/skillMentions.js";
 import { isSkillShownToModel } from "../../skills/skillSources.js";
 import { toArray_2 } from "../generators.js";
 import { isSoftSparkEnabled } from "../../services/compact/compactSettings.js";
 import { inlineSkillModelOverride } from "../model/model.js";
-import { hookedCommands } from "../../plugins/functionHooks/commandHooks.js";
-import { sre } from "../../plugins/functionHooks/hooksWorkerHost.js";
+import { hookedCommands_2 } from "../../plugins/functionHooks/commandHooks.js";
+import { hostOpsRoot } from "../../plugins/functionHooks/hooksWorkerHost.js";
 
 //@ chunk-3g0djq3w.js:9865-9925 affinity
 var NON_HISTORY_COMMANDS = new Set(["clear", "resume", "help", "exit", "feedback"]);
 //@ chunk-3g0djq3w.js:9925-10004 facade-exports = getValueFromInput (1)
-function isSlashCommandBlockedByEndedByModel(e, n) {
-  if (!n) return !1;
+function isSlashCommandBlockedByEndedByModel(e, endedByModel) {
+  if (!endedByModel) return false;
   return !(e && e.type !== "prompt" && NON_HISTORY_COMMANDS.has(e.name));
 }
+//@ chunk-3g0djq3w.js:10004-11339 layout
 /**
  * fork 命令结束时运行 Stop 钩子：收集系统消息、错误与附加上下文，决定是否需要继续查询；否则运行回合结束反应。
  */
-//@ chunk-3g0djq3w.js:10004-11339 layout
 async function runForkStopHooks(e, n, o) {
-  let messages = [],
-    requestQuery = !1,
-    T = e.agentId ? void 0 : e.getAppState().activeGoal;
+  let messages = [];
+  let requestQuery = false;
+  let activeGoal = e.agentId ? undefined : e.getAppState().activeGoal;
   try {
-    let executeStopHooks = o.executeStopHooks(
-        getToolPermissionContext(e).mode,
-        e.abortController.signal,
-        void 0,
-        !1,
-        e.agentId,
-        e,
-        [...e.messages, ...n],
-        void 0,
-        "fork_dispatch",
-      ),
-      h = [];
-    for await (let y of executeStopHooks) {
-      if (y.timedOut && T && y.hook?.prompt === T.condition) logFeatureSad("goal_met", "evaluator_timeout");
+    let p = o.executeStopHooks(
+      getToolPermissionContext(e).mode,
+      e.abortController.signal,
+      undefined,
+      false,
+      e.agentId,
+      e,
+      [...e.messages, ...n],
+      undefined,
+      "fork_dispatch",
+    );
+    let h = [];
+    for await (let y of p) {
+      if (y.timedOut && activeGoal && y.hook?.prompt === activeGoal.condition)
+        logFeatureSad("goal_met", "evaluator_timeout");
       if (y.message?.type === "attachment") {
         let attachment = y.message.attachment;
         if ("hookEvent" in attachment && attachment.hookEvent === "Stop") {
@@ -287,11 +295,17 @@ async function runForkStopHooks(e, n, o) {
           else if (attachment.type === "hook_system_message") messages.push(y.message);
         }
       }
-      if (y.blockingError)
-        (messages.push(createUserMessage({ content: o.getStopHookMessage(y.blockingError), isMeta: !0 })),
-          (requestQuery = !0));
-      if (y.additionalContexts && y.additionalContexts.length > 0)
-        (messages.push(
+      if (y.blockingError) {
+        messages.push(
+          createUserMessage({
+            content: o.getStopHookMessage(y.blockingError),
+            isMeta: true,
+          }),
+        );
+        requestQuery = true;
+      }
+      if (y.additionalContexts && y.additionalContexts.length > 0) {
+        messages.push(
           createAttachmentMessage({
             type: "hook_additional_context",
             content: y.additionalContexts,
@@ -299,262 +313,330 @@ async function runForkStopHooks(e, n, o) {
             toolUseID: `hook-${randomUUID()}`,
             hookEvent: "Stop",
           }),
-        ),
-          (requestQuery = !0));
+        );
+        requestQuery = true;
+      }
     }
     if (h.length > 0) messages.push(createSystemMessage(`Stop hook error: ${h.join("; ")}`, "warning"));
   } catch (error) {
-    logForDebugging(`Forked command Stop hooks failed: ${String(error)}`, { level: "error" });
+    logForDebugging(`Forked command Stop hooks failed: ${String(error)}`, {
+      level: "error",
+    });
   }
   if (!requestQuery)
     try {
-      let executeStopHooks = o.executeStopHooks(
+      let p = o.executeStopHooks(
         getToolPermissionContext(e).mode,
         e.abortController.signal,
-        void 0,
-        !1,
+        undefined,
+        false,
         e.agentId,
         e,
         [],
-        void 0,
+        undefined,
         "turn_end_reactions",
       );
-      for await (let h of executeStopHooks);
+      for await (let h of p);
     } catch (error) {
-      logForDebugging(`Forked command turn-end reactions failed: ${String(error)}`, { level: "error" });
+      logForDebugging(`Forked command turn-end reactions failed: ${String(error)}`, {
+        level: "error",
+      });
     }
-  return { messages: messages, requestQuery: requestQuery };
+  return {
+    messages,
+    requestQuery,
+  };
 }
+//@ chunk-3g0djq3w.js:11339-16950 fingerprint = executeForkedSlashCommand (0.467)
 /**
  * executeForkedSlashCommand：context: fork 的技能在子代理里运行。
  */
-//@ chunk-3g0djq3w.js:11339-16950 fingerprint = executeForkedSlashCommand (0.467)
-async function executeForkedSlashCommand(e, n, o, u, s, T, p, h = [], y, R, A, B, H) {
-  let agentId = makeSaltedName(),
-    { sanitizedName: sanitizedName, skillNameHash: skillNameHash } = sanitizeSkillNameForTelemetry({
-      rawName: e.name,
-      canonicalName: e.name,
-      isMcp: e.loadedFrom === "mcp",
-      isBuiltIn: builtInCommandNames().has(e.name),
-      isBundled: e.source === "bundled",
-      isOfficial: isOfficialMarketplaceSkill(e),
-    });
+async function executeForkedSlashCommand(
+  command,
+  n,
+  toolUseContext,
+  u,
+  s,
+  canUseTool,
+  p,
+  h = [],
+  y,
+  uuid,
+  A,
+  origin,
+  H,
+) {
+  let agentId = makeSaltedName();
+  let { sanitizedName, skillNameHash } = sanitizeSkillNameForTelemetry({
+    rawName: command.name,
+    canonicalName: command.name,
+    isMcp: command.loadedFrom === "mcp",
+    isBuiltIn: builtInCommandNames().has(command.name),
+    isBundled: command.source === "bundled",
+    isOfficial: isOfficialMarketplaceSkill(command),
+  });
   logEvent("tengu_slash_command_forked", {
     command_name: sanitizedName,
     ...skillNameHash,
-    _PROTO_skill_name: e.name,
+    _PROTO_skill_name: command.name,
     invocation_trigger: lit("user-slash"),
-    ...logSkillsLoaded(e.source, e.loadedFrom, e.kind, e.createdBy),
-    ...getTeamTipAttribution(e.source, e.name),
-    ...buildServerAttributionFields(e),
+    ...logSkillsLoaded(command.source, command.loadedFrom, command.kind, command.createdBy),
+    ...getTeamTipAttribution(command.source, command.name),
+    ...buildServerAttributionFields(command),
   });
-  let se = shouldBackgroundForkedSkill(e, o, y),
-    pe = se
-      ? {
-          agentId: agentId,
-          parentAgentId: o.agentId,
-          depth: getAgentDepth(o.agentContext) + 1,
-          agentType: "subagent",
-          isAsync: !1,
-          isBackgroundAgent:
-            o.agentContext && "isBackgroundAgent" in o.agentContext
-              ? o.agentContext.isBackgroundAgent
-              : void 0,
-          ...getWorkflowRunFields(o.agentContext),
-        }
-      : void 0,
-    {
-      skillContent: skillContent,
-      modifiedGetAppState: modifiedGetAppState,
-      contextLayers: contextLayers,
-      recordInvocation: recordInvocation,
-      baseAgent: baseAgent,
-      promptMessages: promptMessages,
-      forkReadFileState: forkReadFileState,
-      availableTools: availableTools,
-      webFetchReadmissionAllowed: webFetchReadmissionAllowed,
-      frozenCommandDenies: frozenCommandDenies,
-    } = await prepareForkedCommandContext(e, n, o, pe, {
-      forkAgentId: agentId,
-      extractAttachments: y ? void 0 : getAttachmentMessages,
-      replaceCommandRules: !0,
-      replaceDenyRules: !y,
-      deferInvocationRecording: se,
-    }),
-    k = contextLayers.length > 0 ? [...(o.permissionLayers ?? []), ...contextLayers] : o.permissionLayers;
+  let se = shouldBackgroundForkedSkill(command, toolUseContext, y);
+  let agentContext = se
+    ? {
+        agentId,
+        parentAgentId: toolUseContext.agentId,
+        depth: getAgentDepth(toolUseContext.agentContext) + 1,
+        agentType: "subagent",
+        isAsync: false,
+        isBackgroundAgent:
+          toolUseContext.agentContext && "isBackgroundAgent" in toolUseContext.agentContext
+            ? toolUseContext.agentContext.isBackgroundAgent
+            : undefined,
+        ...getWorkflowRunFields(toolUseContext.agentContext),
+      }
+    : undefined;
+  let {
+    skillContent,
+    modifiedGetAppState,
+    contextLayers,
+    recordInvocation,
+    baseAgent,
+    promptMessages,
+    forkReadFileState,
+    availableTools,
+    webFetchReadmissionAllowed,
+    frozenCommandDenies,
+  } = await prepareForkedCommandContext(command, n, toolUseContext, agentContext, {
+    forkAgentId: agentId,
+    extractAttachments: y ? undefined : getAttachmentMessages,
+    replaceCommandRules: true,
+    replaceDenyRules: !y,
+    deferInvocationRecording: se,
+  });
+  let permissionLayers =
+    contextLayers.length > 0
+      ? [...(toolUseContext.permissionLayers ?? []), ...contextLayers]
+      : toolUseContext.permissionLayers;
   if (s.length > 0 || u.length > 0)
     promptMessages.push(
-      withCommandTextBlocks(createUserMessage({ content: [...s, ...u], isMeta: !0 }), u, []),
+      withCommandTextBlocks(
+        createUserMessage({
+          content: [...s, ...u],
+          isMeta: true,
+        }),
+        u,
+        [],
+      ),
     );
   if (H && H.length > 0)
-    promptMessages.push(createAttachmentMessage({ type: "inlined_image_paths", paths: H }));
-  let P = await scopedSkillVariantNote(e, getProjectRoot(), {
+    promptMessages.push(
+      createAttachmentMessage({
+        type: "inlined_image_paths",
+        paths: H,
+      }),
+    );
+  let P = await scopedSkillVariantNote(command, getProjectRoot(), {
     options: {
       tools: resolveAgentTools(
         baseAgent,
         webFetchReadmissionAllowed
-          ? withWebFetchToolForAgent(baseAgent, availableTools, getToolPermissionContext(o), {
-              activeAgents: o.options.agentDefinitions.activeAgents,
+          ? withWebFetchToolForAgent(baseAgent, availableTools, getToolPermissionContext(toolUseContext), {
+              activeAgents: toolUseContext.options.agentDefinitions.activeAgents,
             })
           : availableTools,
         se,
-        !1,
-        !1,
+        false,
+        false,
         0,
-        bN(o).mode,
+        memoryModeForSession(toolUseContext).mode,
       ).resolvedTools,
-      spawnedBySkill: getBareCommandName(e),
+      spawnedBySkill: getBareCommandName(command),
     },
-    storageV5: o.storageV5,
-    session: o.session,
+    storageV5: toolUseContext.storageV5,
+    session: toolUseContext.session,
   });
   if (P) promptMessages.push(P);
   promptMessages.push(...h);
-  let U = e.getEffort?.(n, o) ?? e.getDefaultEffort?.(n, o)?.value ?? e.effort,
-    I = U !== void 0 ? { ...baseAgent, effort: U } : baseAgent,
-    commandName = createUserMessage({
-      content: prepareUserContent({
-        inputString: `/${getCommandName(e)} ${n}`.trim(),
-        precedingInputBlocks: s.length > 0 ? [...s, ...u] : u,
-      }),
-      uuid: R,
-      origin: B,
-    });
-  if (
-    (await o.makeFileHistorySnapshot?.(commandName.uuid),
-    logForDebugging(`Executing forked slash command /${e.name} with agent ${I.agentType}`),
-    se)
-  ) {
-    A?.markTurnActive(y ? void 0 : `/${getCommandName(e)} ${n}`.trim());
+  let U =
+    command.getEffort?.(n, toolUseContext) ??
+    command.getDefaultEffort?.(n, toolUseContext)?.value ??
+    command.effort;
+  let I =
+    U !== undefined
+      ? {
+          ...baseAgent,
+          effort: U,
+        }
+      : baseAgent;
+  let commandName = createUserMessage({
+    content: prepareUserContent({
+      inputString: `/${getCommandName(command)} ${n}`.trim(),
+      precedingInputBlocks: s.length > 0 ? [...s, ...u] : u,
+    }),
+    uuid,
+    origin,
+  });
+  await toolUseContext.makeFileHistorySnapshot?.(commandName.uuid);
+  logForDebugging(`Executing forked slash command /${command.name} with agent ${I.agentType}`);
+  if (se) {
+    A?.markTurnActive(y ? undefined : `/${getCommandName(command)} ${n}`.trim());
     let re;
     try {
       re = await runForkedAgent({
-        agentId: agentId,
+        agentId,
         agentDefinition: I,
-        command: e,
-        description: `/${getCommandName(e)} ${n}`.trim(),
+        command,
+        description: `/${getCommandName(command)} ${n}`.trim(),
         prompt: skillContent,
-        promptMessages: promptMessages,
-        context: o,
-        canUseTool: T,
+        promptMessages,
+        context: toolUseContext,
+        canUseTool,
         getAppState: modifiedGetAppState,
-        permissionLayers: k,
+        permissionLayers,
         readFileState: forkReadFileState,
-        availableTools: availableTools,
-        webFetchReadmissionAllowed: webFetchReadmissionAllowed,
-        spawnedBySkill: getBareCommandName(e),
+        availableTools,
+        webFetchReadmissionAllowed,
+        spawnedBySkill: getBareCommandName(command),
         recordInvocationOnSuccess: recordInvocation,
-        frozenCommandDenies: frozenCommandDenies,
+        frozenCommandDenies,
       });
     } catch (error) {
-      if ((await A?.settleTurnEnd(null), isAbortError(error)))
+      await A?.settleTurnEnd(null);
+      if (isAbortError(error))
         return {
-          messages: [commandName, createUserInterruptionMessage({ toolUse: !1 })],
-          shouldQuery: !1,
-          command: e,
-          aborted: !0,
-          forkDispatched: !0,
+          messages: [
+            commandName,
+            createUserInterruptionMessage({
+              toolUse: false,
+            }),
+          ],
+          shouldQuery: false,
+          command,
+          aborted: true,
+          forkDispatched: true,
         };
       return {
         messages: [
           commandName,
           createUserMessage({
-            content: `<local-command-stderr>${escapeXml(commandThrowTextForTranscript(error, e.name, o.session))}</local-command-stderr>`,
+            content: `<local-command-stderr>${escapeXml(commandThrowTextForTranscript(error, command.name, toolUseContext.session))}</local-command-stderr>`,
             localCommandOutput: "stderr",
           }),
         ],
-        shouldQuery: !1,
-        command: e,
-        threw: !0,
-        forkDispatched: !0,
+        shouldQuery: false,
+        command,
+        threw: true,
+        forkDispatched: true,
       };
     }
-    if (re)
-      return (
-        await A?.settleTurnEnd(null),
-        {
-          messages: [
-            commandName,
-            createCommandInputMessage(
-              `<local-command-stdout>Running in the background as @${bP(sanitizeTelemetryString(re.name))}</local-command-stdout>
+    if (re) {
+      await A?.settleTurnEnd(null);
+      return {
+        messages: [
+          commandName,
+          createCommandInputMessage(
+            `<local-command-stdout>Running in the background as @${escapeForkedSkillTag(sanitizeTelemetryString(re.name))}</local-command-stdout>
 ` +
-                forkedSkillLaunchTag({
-                  agentId: re.agentId,
-                  skillName: e.name,
-                  description: `/${getCommandName(e)} ${n}`.trim(),
-                }),
-            ),
-          ],
-          shouldQuery: !1,
-          command: e,
-          forkDispatched: !0,
-        }
-      );
+              forkedSkillLaunchTag({
+                agentId: re.agentId,
+                skillName: command.name,
+                description: `/${getCommandName(command)} ${n}`.trim(),
+              }),
+          ),
+        ],
+        shouldQuery: false,
+        command,
+        forkDispatched: true,
+      };
+    }
     recordInvocation();
   }
-  let J = [],
-    ie = [],
-    parentToolUseID = `forked-command-${e.name}`,
-    toolUseCounter = 0,
-    createProgressMessage = (message) => (
-      toolUseCounter++,
-      {
-        type: "progress",
-        data: {
-          message: message,
-          type: "agent_progress",
-          prompt: skillContent,
-          agentId: agentId,
-          agentType: I.agentType,
-          isBuiltIn: I.source === "built-in",
-          description: e.description,
-        },
-        parentToolUseID: parentToolUseID,
-        toolUseID: `${parentToolUseID}-${toolUseCounter}`,
-        timestamp: new Date().toISOString(),
-        uuid: randomUUID(),
-      }
-    ),
-    updateProgress = () => {
-      o.emitToolProgress?.({ kind: "agent_progress", toolUseId: parentToolUseID, progressMessages: [...ie] });
-    },
-    x = transportStateByHost.of(o.session).active !== void 0,
-    Me = !1;
-  A?.markTurnActive(y ? void 0 : `/${getCommandName(e)} ${n}`.trim());
+  let agentMessages = [];
+  let ie = [];
+  let parentToolUseID = `forked-command-${command.name}`;
+  let toolUseCounter = 0;
+  let createProgressMessage = (message) => {
+    toolUseCounter++;
+    return {
+      type: "progress",
+      data: {
+        message,
+        type: "agent_progress",
+        prompt: skillContent,
+        agentId,
+        agentType: I.agentType,
+        isBuiltIn: I.source === "built-in",
+        description: command.description,
+      },
+      parentToolUseID,
+      toolUseID: `${parentToolUseID}-${toolUseCounter}`,
+      timestamp: new Date().toISOString(),
+      uuid: randomUUID(),
+    };
+  };
+  let updateProgress = () => {
+    toolUseContext.emitToolProgress?.({
+      kind: "agent_progress",
+      toolUseId: parentToolUseID,
+      progressMessages: [...ie],
+    });
+  };
+  let x = transportStateByHost.of(toolUseContext.session).active !== undefined;
+  let Me = false;
+  A?.markTurnActive(y ? undefined : `/${getCommandName(command)} ${n}`.trim());
   let Te = registerForkedSkillTask({
-      agentId: agentId,
-      parentAgentId: o.agentId,
-      spawnDepth: getAgentDepth(o.agentContext) + 1,
-      skillName: getCommandName(e),
-      prompt: skillContent,
-      selectedAgent: I,
-      taskRegistry: o.taskRegistry,
-      callerAbortController: o.abortController,
-    }),
-    ke = "failed";
+    agentId,
+    parentAgentId: toolUseContext.agentId,
+    spawnDepth: getAgentDepth(toolUseContext.agentContext) + 1,
+    skillName: getCommandName(command),
+    prompt: skillContent,
+    selectedAgent: I,
+    taskRegistry: toolUseContext.taskRegistry,
+    callerAbortController: toolUseContext.abortController,
+  });
+  let ke = "failed";
   try {
-    if ((updateProgress(), x)) {
+    updateProgress();
+    if (x) {
       let found = normalizeMessages(promptMessages).find((ee) => ee.type === "user");
       if (found)
-        writeSubagentProgressToOutputSink(o, createProgressMessage({ ...found, isMeta: void 0 }), !1);
+        writeSubagentProgressToOutputSink(
+          toolUseContext,
+          createProgressMessage({
+            ...found,
+            isMeta: undefined,
+          }),
+          false,
+        );
     }
     for await (let message of runAgent({
       agentDefinition: I,
-      promptMessages: promptMessages,
+      promptMessages,
       turnPrompt: skillContent,
-      onModelRestricted: i2n(getBareCommandName(e), o.onQueryEvent),
-      toolUseContext: { ...o, getAppState: modifiedGetAppState, permissionLayers: k },
-      canUseTool: T,
-      isAsync: !1,
+      onModelRestricted: agentModelRestrictedReporter(
+        getBareCommandName(command),
+        toolUseContext.onQueryEvent,
+      ),
+      toolUseContext: {
+        ...toolUseContext,
+        getAppState: modifiedGetAppState,
+        permissionLayers,
+      },
+      canUseTool,
+      isAsync: false,
       querySource: "agent:custom",
-      spawnedBySkill: getBareCommandName(e),
-      spawnedByForkedSkill: !0,
-      model: e.model,
-      availableTools: availableTools,
-      webFetchReadmissionAllowed: webFetchReadmissionAllowed,
+      spawnedBySkill: getBareCommandName(command),
+      spawnedByForkedSkill: true,
+      model: command.model,
+      availableTools,
+      webFetchReadmissionAllowed,
       override: {
-        shareFileHistory: !0,
-        agentId: agentId,
+        shareFileHistory: true,
+        agentId,
         abortController: Te.abortController,
         readFileState: forkReadFileState,
       },
@@ -566,88 +648,108 @@ async function executeForkedSlashCommand(e, n, o, u, s, T, p, h = [], y, R, A, B
         message.type === "query_model_change"
       )
         continue;
-      if ((J.push(message), extractAgentIdsFromMessages_2(message))) {
-        if (x && filterIncompleteToolCalls_2(o, message)) writeSubagentProgressToOutputSink(o, message, !1);
+      agentMessages.push(message);
+      if (extractAgentIdsFromMessages_2(message)) {
+        if (x && filterIncompleteToolCalls_2(toolUseContext, message))
+          writeSubagentProgressToOutputSink(toolUseContext, message, false);
         continue;
       }
       let normalizedNew = normalizeMessages([message]);
       if (message.type === "assistant") {
         let contentLength = getAssistantMessageContentLength(message);
-        if (contentLength > 0) o.onQueryEvent?.({ type: "response_length", op: "add", delta: contentLength });
+        if (contentLength > 0)
+          toolUseContext.onQueryEvent?.({
+            type: "response_length",
+            op: "add",
+            delta: contentLength,
+          });
         let ve = normalizedNew[0];
         if (ve && ve.type === "assistant") {
-          let Ae = createProgressMessage(message);
-          if ((ie.push(Ae), updateProgress(), (Me = !0), x)) writeSubagentProgressToOutputSink(o, Ae, !0);
+          let progressMessage = createProgressMessage(message);
+          ie.push(progressMessage);
+          updateProgress();
+          Me = true;
+          if (x) writeSubagentProgressToOutputSink(toolUseContext, progressMessage, true);
         }
       }
       if (message.type === "user") {
-        let be = normalizedNew[0];
-        if (be && be.type === "user") {
-          let ve = createProgressMessage(be);
-          if ((ie.push(ve), updateProgress(), x && !(be.isMeta && !Me))) {
-            writeSubagentProgressToOutputSink(o, ve, !0);
+        let message = normalizedNew[0];
+        if (message && message.type === "user") {
+          let progressMessage = createProgressMessage(message);
+          ie.push(progressMessage);
+          updateProgress();
+          if (x && !(message.isMeta && !Me)) {
+            writeSubagentProgressToOutputSink(toolUseContext, progressMessage, true);
             for (let Ae of normalizedNew.slice(1))
-              if (Ae.type === "user") writeSubagentProgressToOutputSink(o, createProgressMessage(Ae), !0);
+              if (Ae.type === "user")
+                writeSubagentProgressToOutputSink(toolUseContext, createProgressMessage(Ae), true);
           }
         }
       }
     }
-    let re = o7e(getLastAssistantMessage(J));
-    if (!re) adoptSubagentPublishArmsAsync(agentId, o);
+    let re = isApiErrorDisplayMessage(getLastAssistantMessage(agentMessages));
+    if (!re) adoptSubagentPublishArmsAsync(agentId, toolUseContext);
     ke = re ? "failed" : "completed";
   } catch (error) {
-    if (isAbortError(error))
-      return (
-        await A?.settleTurnEnd(null),
-        {
-          messages: [commandName, createUserInterruptionMessage({ toolUse: !1 })],
-          shouldQuery: !1,
-          command: e,
-          aborted: !0,
-          forkDispatched: !0,
-        }
-      );
+    if (isAbortError(error)) {
+      await A?.settleTurnEnd(null);
+      return {
+        messages: [
+          commandName,
+          createUserInterruptionMessage({
+            toolUse: false,
+          }),
+        ],
+        shouldQuery: false,
+        command,
+        aborted: true,
+        forkDispatched: true,
+      };
+    }
     await A?.settleTurnEnd(null);
-    let q = await runForkStopHooks(o, J, p);
+    let q = await runForkStopHooks(toolUseContext, agentMessages, p);
     return {
       messages: [
         commandName,
         createUserMessage({
-          content: `<local-command-stderr>${escapeXml(commandThrowTextForTranscript(error, e.name, o.session))}</local-command-stderr>`,
+          content: `<local-command-stderr>${escapeXml(commandThrowTextForTranscript(error, command.name, toolUseContext.session))}</local-command-stderr>`,
           localCommandOutput: "stderr",
         }),
         ...q.messages,
       ],
       shouldQuery: q.requestQuery,
-      command: e,
-      threw: !0,
-      forkDispatched: !0,
+      command,
+      threw: true,
+      forkDispatched: true,
     };
   } finally {
-    (Te.remove(ke),
-      clearInvokedSkillsForAgent(agentId),
-      o.emitToolProgress?.({ kind: "clear", toolUseId: parentToolUseID }));
+    Te.remove(ke);
+    clearInvokedSkillsForAgent(agentId);
+    toolUseContext.emitToolProgress?.({
+      kind: "clear",
+      toolUseId: parentToolUseID,
+    });
   }
-  let resultText = extractResultText(J, "Command completed");
+  let resultText = extractResultText(agentMessages, "Command completed");
   try {
-    resultText = e.formatForegroundForkResult?.(resultText) ?? resultText;
+    resultText = command.formatForegroundForkResult?.(resultText) ?? resultText;
   } catch (error) {
     logError(withTelemetryMessage(toError(error), "fork result formatter threw"));
   }
-  let ye = zPe(J) + resultText;
-  (logForDebugging(`Forked slash command /${e.name} completed with agent ${agentId}`),
-    await A?.settleTurnEnd(J));
-  let Ce = await runForkStopHooks(o, J, p);
+  let ye = withUntrustedPreamble(agentMessages) + resultText;
+  logForDebugging(`Forked slash command /${command.name} completed with agent ${agentId}`);
+  await A?.settleTurnEnd(agentMessages);
+  let Ce = await runForkStopHooks(toolUseContext, agentMessages, p);
   return {
     messages: [
       commandName,
-      createCommandInputMessage(`<local-command-stdout>${bP(ye)}</local-command-stdout>`),
+      createCommandInputMessage(`<local-command-stdout>${escapeForkedSkillTag(ye)}</local-command-stdout>`),
       ...Ce.messages,
     ],
     shouldQuery: Ce.requestQuery,
-    command: e,
+    command,
     resultText: ye,
-    forkDispatched: !0,
+    forkDispatched: true,
   };
 }
 //@ chunk-3g0djq3w.js:16950-17085 layout
@@ -657,84 +759,105 @@ var COMMAND_POLICY_GATES = {
   "claude-in-chrome": "allow_claude_browser_extension",
 };
 //@ chunk-3g0djq3w.js:17085-17842 layout
-function resolveCommandPolicyGate(e, n, { interactive: interactive }) {
-  let u = getBuiltinCommands(),
-    s = e6e(),
-    T = getBundledSkills(),
-    p = s ? getRegisteredBundledSkillsIgnoringKillSwitch() : T,
-    h = s ? xSi() : epr(),
-    y = [n, u, p, h],
-    R,
-    A;
+function resolveCommandPolicyGate(commandName, commands, { interactive }) {
+  let builtinCommands = getBuiltinCommands();
+  let s = isBundledSkillsPolicyDenied();
+  let bundledSkills = getBundledSkills();
+  let p = s ? getRegisteredBundledSkillsIgnoringKillSwitch() : bundledSkills;
+  let h = s ? builtinPluginSkillCommands() : availableBuiltinSkillCommands();
+  let y = [commands, builtinCommands, p, h];
+  let R;
+  let A;
   for (let Z of y) {
-    let se = findCommand(e, Z);
-    if (!se) continue;
-    let pe = Z === u || Z === p,
-      oe = se.policyGate?.policy ?? (pe ? COMMAND_POLICY_GATES[se.name] : void 0);
+    let command = findCommand(commandName, Z);
+    if (!command) continue;
+    let pe = Z === builtinCommands || Z === p;
+    let oe = command.policyGate?.policy ?? (pe ? COMMAND_POLICY_GATES[command.name] : undefined);
     if (
       s &&
-      D4(se.name) &&
-      (Z === p ? findCommand(e, T) === void 0 : Z === h) &&
-      (oe === void 0 || isPolicyAllowed(oe))
+      isSkillOutsideCorePolicy(command.name) &&
+      (Z === p ? findCommand(commandName, bundledSkills) === undefined : Z === h) &&
+      (oe === undefined || isPolicyAllowed(oe))
     )
       oe = ALLOW_BUNDLED_SKILLS;
     if (oe) {
-      ((R = se), (A = oe));
+      R = command;
+      A = oe;
       break;
     }
   }
   if (!R || !A) return;
   if (!meetsAvailabilityRequirement(R)) return;
   if (isPolicyAllowed(A)) {
-    if (interactive && !getDisableSlashCommands() && isCommandEnabled(R) && findCommand(e, n) === void 0)
-      return { command: R, policy: A, reason: commandEnabledAfterStartMessage(R.name), kind: "stale_list" };
+    if (
+      interactive &&
+      !getDisableSlashCommands() &&
+      isCommandEnabled(R) &&
+      findCommand(commandName, commands) === undefined
+    )
+      return {
+        command: R,
+        policy: A,
+        reason: commandEnabledAfterStartMessage(R.name),
+        kind: "stale_list",
+      };
     return;
   }
   let B = policyDenyKind(A);
   if (!interactive) {
-    if (commandSurfaceNotice(e, getBuiltinCommands()) !== void 0) return;
+    if (commandSurfaceNotice(commandName, getBuiltinCommands()) !== undefined) return;
     if (
       B !== "org_denied" &&
-      getNonInteractiveCommands(y.flatMap((Z) => Z.filter((se) => hasCommand(e, [se])))).length === 0
+      getNonInteractiveCommands(y.flatMap((Z) => Z.filter((se) => hasCommand(commandName, [se])))).length ===
+        0
     )
       return;
   }
-  let { featureLabel: featureLabel, verb: verb } = policyKeyLabel(A),
-    j =
-      B === "cache_miss" ? couldNotVerifyPolicyFor(featureLabel) : policyDeniedReason(A, featureLabel, verb);
+  let { featureLabel, verb } = policyKeyLabel(A);
+  let j =
+    B === "cache_miss" ? couldNotVerifyPolicyFor(featureLabel) : policyDeniedReason(A, featureLabel, verb);
   if (j === null || B === null) return;
-  return { command: R, policy: A, reason: j, kind: B };
+  return {
+    command: R,
+    policy: A,
+    reason: j,
+    kind: B,
+  };
 }
+//@ chunk-3g0djq3w.js:17842-17904 facade-exports
 /**
  * 字符串是否像命令名（字母数字开头，可含 : _ -）。
  */
-//@ chunk-3g0djq3w.js:17842-17904 facade-exports
 function looksLikeCommand(commandName) {
   return /^[a-zA-Z0-9_][a-zA-Z0-9:_-]*$/.test(commandName);
 }
+//@ chunk-3g0djq3w.js:17904-18263 facade-exports
 /**
  * 命令执行抛错时写入会话记录的文本（中断/命令错误/其他）。
  */
-//@ chunk-3g0djq3w.js:17904-18263 facade-exports
-function commandThrowTextForTranscript(e, n, o) {
-  let u = uo(n, 200),
-    s = sanitizeTelemetryString(n);
-  if (isAbortError(e)) {
-    if (isBridgeOrTransport(o)) return (logForDebugging(`${s} aborted: ${String(e)}`), "Interrupted");
-    return bP(e instanceof Error ? e.message || "Interrupted" : "Interrupted");
+function commandThrowTextForTranscript(error, name, session) {
+  let u = normalizeServerNameShort(name, 200);
+  let s = sanitizeTelemetryString(name);
+  if (isAbortError(error)) {
+    if (isBridgeOrTransport(session)) {
+      logForDebugging(`${s} aborted: ${String(error)}`);
+      return "Interrupted";
+    }
+    return escapeForkedSkillTag(error instanceof Error ? error.message || "Interrupted" : "Interrupted");
   }
-  if (e instanceof MalformedCommandError) return bP(e.message);
-  if (isBridgeOrTransport(o))
-    return (
-      logForDebugging(`${s} threw: ${String(e)}`, { level: "error" }),
-      `${u} failed (detail withheld on this connection)`
-    );
-  return bP(String(e));
+  if (error instanceof MalformedCommandError) return escapeForkedSkillTag(error.message);
+  if (isBridgeOrTransport(session)) {
+    logForDebugging(`${s} threw: ${String(error)}`, {
+      level: "error",
+    });
+    return `${u} failed (detail withheld on this connection)`;
+  }
+  return escapeForkedSkillTag(String(error));
 }
+//@ chunk-3g0djq3w.js:18263-28569 facade-exports = processSlashCommand (0.357)
 /**
  * processSlashCommand：解析 /命令 参数、查找命令、策略检查，分派到本地命令、prompt 命令（技能）或 fork 子代理执行。
  */
-//@ chunk-3g0djq3w.js:18263-28569 facade-exports = processSlashCommand (0.357)
 async function processSlashCommand(
   e,
   n,
@@ -754,57 +877,84 @@ async function processSlashCommand(
   Z,
   se,
   pe,
-  oe,
-  r,
-  L,
+  permissionMode,
+  wakeupSource,
+  hostInitiator,
   ce,
-  E,
+  inboundOrigin,
   O,
 ) {
   using parsed = takeQueuedCommandWaiter(T ?? s.deferredSlashUuid);
-  using Q = joinCommandRunDispatch(T);
-  function W(w = [], Y = e, he = !1) {
-    let Pe = randomUUID(),
-      fe = kCe(n) ? void 0 : Pe;
-    if (fe !== void 0) setPromptId(fe);
-    let Fe = getEffortLevelIfSupported(
+  using ahead = joinCommandRunDispatch(T);
+  function W(w = [], Y = e, he = false) {
+    let Pe = randomUUID();
+    let fe = hasToolResultBlock(n) ? undefined : Pe;
+    if (fe !== undefined) setPromptId(fe);
+    let effortLevelIfSupported = getEffortLevelIfSupported(
       s.options.mainLoopModel,
       getEffortValue(s),
       getEffortLayerOverride(s.permissionLayers),
     );
     logEvent("tengu_input_prompt", {
-      ...(y && { prompt_source: fromEnum(y) }),
-      ...(Fe && { effort_level: fromEnum(Fe) }),
+      ...(y && {
+        prompt_source: fromEnum(y),
+      }),
+      ...(effortLevelIfSupported && {
+        effort_level: fromEnum(effortLevelIfSupported),
+      }),
       turn_origin: fromEnum(getOriginKindLabel(j)),
-      ...promptTelemetryFields({ wakeupSource: r, hostInitiator: L, inboundOrigin: E }),
-      ...dCt(),
+      ...promptTelemetryFields({
+        wakeupSource,
+        hostInitiator,
+        inboundOrigin,
+      }),
+      ...emptyObjectFactory(),
     });
     let He = T || randomUUID();
     logSlashPromptEvent(
-      { text: Y, attributes: { ...(fe && { "prompt.id": fe }), "message.uuid": He } },
+      {
+        text: Y,
+        attributes: {
+          ...(fe && {
+            "prompt.id": fe,
+          }),
+          "message.uuid": He,
+        },
+      },
       s.userPromptHold,
     );
-    let we = createUserMessage({
-        content: prepareUserContent({ inputString: Y, precedingInputBlocks: n }),
-        uuid: He,
-        permissionMode: oe,
-        isMeta: pe || void 0,
-        promptSource: y,
-        promptId: fe,
-        origin: j,
+    let userMessage = createUserMessage({
+      content: prepareUserContent({
+        inputString: Y,
+        precedingInputBlocks: n,
       }),
-      Le = cloneContent(we.message.content);
-    if (j) wrapNonUserMessage(we, j);
+      uuid: He,
+      permissionMode,
+      isMeta: pe || undefined,
+      promptSource: y,
+      promptId: fe,
+      origin: j,
+    });
+    let unframed = cloneContent(userMessage.message.content);
+    if (j) wrapNonUserMessage(userMessage, j);
     return {
-      messages: [we, ...u, ...w.map((Be) => createAttachmentMessage(Be))],
-      shouldQuery: !0,
-      ...(Y === e && { promptRow: { message: we, unframed: Le } }),
-      ...(he && { extractPromptAttachments: !0 }),
+      messages: [userMessage, ...u, ...w.map((Be) => createAttachmentMessage(Be))],
+      shouldQuery: true,
+      ...(Y === e && {
+        promptRow: {
+          message: userMessage,
+          unframed,
+        },
+      }),
+      ...(he && {
+        extractPromptAttachments: true,
+      }),
     };
   }
-  let M = parseSlashCommand(e);
-  if (!M) {
-    if ((logEvent("tengu_input_slash_missing", {}), s.options.isNonInteractiveSession)) return W();
+  let slashCommand = parseSlashCommand(e);
+  if (!slashCommand) {
+    logEvent("tengu_input_slash_missing", {});
+    if (s.options.isNonInteractiveSession) return W();
     logFeatureBad("cmd_dispatch", "cmd_parse_failed");
     let errorMessage = "Commands are in the form `/command [args]`";
     return {
@@ -812,36 +962,47 @@ async function processSlashCommand(
         createSyntheticUserCaveatMessage(),
         ...u,
         createUserMessage({
-          content: prepareUserContent({ inputString: errorMessage, precedingInputBlocks: n }),
+          content: prepareUserContent({
+            inputString: errorMessage,
+            precedingInputBlocks: n,
+          }),
         }),
       ],
-      shouldQuery: !1,
+      shouldQuery: false,
       resultText: errorMessage,
     };
   }
-  let { commandName: commandName, args: parsedArgs } = M,
-    { isMcp: isMcp } = M,
-    I;
-  if (B !== void 0) {
-    let w = parseSlashCommand(B);
-    I = w && w.commandName === M.commandName ? w.args : void 0;
+  let { commandName, args: parsedArgs } = slashCommand;
+  let { isMcp } = slashCommand;
+  let I;
+  if (B !== undefined) {
+    let slashCommand_2 = parseSlashCommand(B);
+    I =
+      slashCommand_2 && slashCommand_2.commandName === slashCommand.commandName
+        ? slashCommand_2.args
+        : undefined;
   }
-  let S = findCommand(commandName, s.options.commands);
-  if (S && !isCommandEnabled(S)) S = void 0;
-  if (!S && !isMcp && parsedArgs.trim()) {
-    let trimStart = parsedArgs.trimStart(),
-      search = trimStart.search(/\s/),
-      he = search === -1 ? trimStart : trimStart.slice(0, search),
-      unknownMessage = `${commandName}:${he}`,
-      fe = findCommand(unknownMessage, s.options.commands);
-    if (fe)
-      ((S = fe),
-        (commandName = unknownMessage),
-        (parsedArgs = search === -1 ? "" : trimStart.slice(search + 1).trimStart()));
+  let command = findCommand(commandName, s.options.commands);
+  if (command && !isCommandEnabled(command)) command = undefined;
+  if (!command && !isMcp && parsedArgs.trim()) {
+    let w = parsedArgs.trimStart();
+    let Y = w.search(/\s/);
+    let he = Y === -1 ? w : w.slice(0, Y);
+    let unknownMessage = `${commandName}:${he}`;
+    let command_2 = findCommand(unknownMessage, s.options.commands);
+    if (command_2) {
+      command = command_2;
+      commandName = unknownMessage;
+      parsedArgs = Y === -1 ? "" : w.slice(Y + 1).trimStart();
+    }
   }
-  if (!S && !isMcp && !getDisableSlashCommands()) {
-    let w = await findCommandAfterHooks(commandName, parsed.origin === void 0, s.abortController.signal);
-    if (!w && s.abortController.signal.aborted) {
+  if (!command && !isMcp && !getDisableSlashCommands()) {
+    let commandAfterHooks = await findCommandAfterHooks(
+      commandName,
+      parsed.origin === undefined,
+      s.abortController.signal,
+    );
+    if (!commandAfterHooks && s.abortController.signal.aborted) {
       let Y = findCommand(commandName, s.options.commands) ?? findCommand(commandName, getBuiltinCommands());
       return interruptedCommandResult({
         signal: s.abortController.signal,
@@ -858,89 +1019,104 @@ async function processSlashCommand(
             origin: j,
           }),
         ],
-        marker: createUserInterruptionMessage({ toolUse: !1 }),
-        isQueuedByPlugin: parsed.origin !== void 0,
+        marker: createUserInterruptionMessage({
+          toolUse: false,
+        }),
+        isQueuedByPlugin: parsed.origin !== undefined,
       });
     }
-    if (w) ((S = w), (s = { ...s, options: { ...s.options, commands: [...s.options.commands, w] } }));
+    if (commandAfterHooks) {
+      command = commandAfterHooks;
+      s = {
+        ...s,
+        options: {
+          ...s.options,
+          commands: [...s.options.commands, commandAfterHooks],
+        },
+      };
+    }
   }
-  let J, ie;
-  if (S && !isSkillOff(S)) {
-    let w = matchSubcommand(S, parsedArgs);
+  let J;
+  let ie;
+  if (command && !isSkillOff(command)) {
+    let w = matchSubcommand(command, parsedArgs);
     if (w) {
-      let Y = findCommand(w.targetName, s.options.commands);
-      if (Y && isCommandEnabled(Y))
-        ((ie = `${commandName} ${w.consumedToken}`),
-          (S = Y),
-          (commandName = w.targetName),
-          (parsedArgs = w.remainingArgs));
-      else if (S.name === CODE_REVIEW) {
+      let command_2 = findCommand(w.targetName, s.options.commands);
+      if (command_2 && isCommandEnabled(command_2)) {
+        ie = `${commandName} ${w.consumedToken}`;
+        command = command_2;
+        commandName = w.targetName;
+        parsedArgs = w.remainingArgs;
+      } else if (command.name === CODE_REVIEW) {
         let promptId = ultrareviewAuthPrecondition();
         if (promptId) J = createSystemMessage(`${promptId} Running a local review instead.`, "warning");
       }
     }
   }
-  if (S && O && !isSkillOff(S)) {
-    let w = await O(S, commandName, parsedArgs);
-    if (w) return emptyIfHandled(parsed.origin !== void 0, w);
+  if (command && O && !isSkillOff(command)) {
+    let w = await O(command, commandName, parsedArgs);
+    if (w) return emptyIfHandled(parsed.origin !== undefined, w);
   }
-  let de = S ? await checkCommandSyncedAccess(S) : void 0;
-  if (S && qCe(S)) S = void 0;
-  if (S && isShippedSkillExecutionBlocked(S)) S = void 0;
-  if (S && LZ(de)) (gse(S, de), (S = void 0));
+  let de = command ? await checkCommandSyncedAccess(command) : undefined;
+  if (command && syncedSkillRefusalReason(command)) command = undefined;
+  if (command && isShippedSkillExecutionBlocked(command)) command = undefined;
+  if (command && isDefined(de)) {
+    logSyncedCommandRefused(command, de);
+    command = undefined;
+  }
   let G = builtInCommandNames().has(commandName);
-  if (isSlashCommandBlockedByEndedByModel(S, s.getAppState().endedByModel)) {
+  if (isSlashCommandBlockedByEndedByModel(command, s.getAppState().endedByModel)) {
     let w = withTaskSuffix("Claude ended this conversation. Start a new session (or /clear) to continue.");
-    return emptyIfHandled(parsed.origin !== void 0, {
+    return emptyIfHandled(parsed.origin !== undefined, {
       messages: [createSystemMessage(w, "warning")],
-      shouldQuery: !1,
+      shouldQuery: false,
       resultText: w,
     });
   }
-  let me = S?.type === "prompt" && S.source === "bundled",
-    te = S?.type === "prompt" && isOfficialMarketplaceSkill(S),
-    x = isMcp || (S?.type === "prompt" && S.source === "mcp");
-  if (!S) {
+  let isBundled = command?.type === "prompt" && command.source === "bundled";
+  let isOfficial = command?.type === "prompt" && isOfficialMarketplaceSkill(command);
+  let x = isMcp || (command?.type === "prompt" && command.source === "mcp");
+  if (!command) {
     if (!looksLikeCommand(commandName)) return W();
-    let w = `/${commandName}`,
-      Y = !1;
-    if (!isDiskless() && !hl(w))
+    let w = `/${commandName}`;
+    let Y = false;
+    if (!isDiskless() && !isUntouchableSpelling(w))
       try {
-        (await getFsImplementation().stat(w), (Y = !0));
+        await getFsImplementation().stat(w);
+        Y = true;
       } catch {}
     if (!Y) {
-      let he = resolveCommandPolicyGate(commandName, s.options.commands, {
+      let commandPolicyGate = resolveCommandPolicyGate(commandName, s.options.commands, {
         interactive: !s.options.isNonInteractiveSession,
       });
-      if (he) {
-        let { command: command, policy: policy, reason: reason, kind: kind } = he;
-        if (
-          (logEvent("tengu_input_slash_invalid", {
-            input_length: commandName.length,
-            had_suggestion: !1,
-            policy_denied: kind !== "stale_list",
-          }),
-          logFeatureBad("cmd_dispatch", kind === "stale_list" ? "cmd_stale_list" : `cmd_policy_${kind}`),
-          kind !== "stale_list")
-        )
-          logOrgPolicyDenied(policy, "slash_command");
-        let isOfficial = bP(sanitizeTelemetryString(commandName)),
-          Qe = !parsedArgs
-            ? ""
-            : hasSensitiveArgs(command, parsedArgs)
-              ? "***"
-              : bP(redactSecrets(parsedArgs));
+      if (commandPolicyGate) {
+        let { command, policy, reason, kind } = commandPolicyGate;
+        logEvent("tengu_input_slash_invalid", {
+          input_length: commandName.length,
+          had_suggestion: false,
+          policy_denied: kind !== "stale_list",
+        });
+        logFeatureBad("cmd_dispatch", kind === "stale_list" ? "cmd_stale_list" : `cmd_policy_${kind}`);
+        if (kind !== "stale_list") logOrgPolicyDenied(policy, "slash_command");
+        let isOfficial = escapeForkedSkillTag(sanitizeTelemetryString(commandName));
+        let Qe = !parsedArgs
+          ? ""
+          : hasSensitiveArgs(command, parsedArgs)
+            ? "***"
+            : escapeForkedSkillTag(redactSecrets(parsedArgs));
         if (s.options.isNonInteractiveSession)
-          return emptyIfHandled(parsed.origin !== void 0, {
+          return emptyIfHandled(parsed.origin !== undefined, {
             messages: [
               ...u,
-              createCommandInputMessage(`/${isOfficial}${Qe ? ` ${Qe}` : ""}`, { submitUuid: T }),
+              createCommandInputMessage(`/${isOfficial}${Qe ? ` ${Qe}` : ""}`, {
+                submitUuid: T,
+              }),
               createCommandInputMessage(`<local-command-stdout>${reason}</local-command-stdout>`),
             ],
-            shouldQuery: !1,
+            shouldQuery: false,
             resultText: reason,
           });
-        return emptyIfHandled(parsed.origin !== void 0, {
+        return emptyIfHandled(parsed.origin !== undefined, {
           messages: [
             ...u,
             createSystemMessage(reason, "warning"),
@@ -948,97 +1124,115 @@ async function processSlashCommand(
               ? [createSystemMessage(`Args from /${isOfficial}: ${Qe}`, "warning")]
               : []),
           ],
-          shouldQuery: !1,
+          shouldQuery: false,
           resultText: reason,
         });
       }
       if (s.options.isNonInteractiveSession && builtInCommandNames().has(commandName)) {
-        let ne = getBuiltinCommands(),
-          Ve =
-            commandSurfaceNotice(commandName, ne) ??
-            `/${bP(sanitizeTelemetryString(commandName))} isn't available in this environment.`;
-        (logEvent("tengu_input_slash_invalid", { input_length: commandName.length, had_suggestion: !1 }),
-          logFeatureBad("cmd_dispatch", "cmd_unavailable_headless"));
-        let Ee = findCommand(commandName, ne),
-          $e = !parsedArgs
-            ? ""
-            : Ee !== void 0 && hasSensitiveArgs(Ee, parsedArgs)
-              ? "***"
-              : bP(redactSecrets(parsedArgs));
-        return emptyIfHandled(parsed.origin !== void 0, {
+        let builtinCommands = getBuiltinCommands();
+        let Ve =
+          commandSurfaceNotice(commandName, builtinCommands) ??
+          `/${escapeForkedSkillTag(sanitizeTelemetryString(commandName))} isn't available in this environment.`;
+        logEvent("tengu_input_slash_invalid", {
+          input_length: commandName.length,
+          had_suggestion: false,
+        });
+        logFeatureBad("cmd_dispatch", "cmd_unavailable_headless");
+        let command = findCommand(commandName, builtinCommands);
+        let $e = !parsedArgs
+          ? ""
+          : command !== undefined && hasSensitiveArgs(command, parsedArgs)
+            ? "***"
+            : escapeForkedSkillTag(redactSecrets(parsedArgs));
+        return emptyIfHandled(parsed.origin !== undefined, {
           messages: [
             ...u,
-            createCommandInputMessage(`/${bP(sanitizeTelemetryString(commandName))}${$e ? ` ${$e}` : ""}`, {
-              submitUuid: T,
-            }),
+            createCommandInputMessage(
+              `/${escapeForkedSkillTag(sanitizeTelemetryString(commandName))}${$e ? ` ${$e}` : ""}`,
+              {
+                submitUuid: T,
+              },
+            ),
             createCommandInputMessage(`<local-command-stdout>${Ve}</local-command-stdout>`, {
-              commandOutcome: { kind: "unavailable_headless" },
+              commandOutcome: {
+                kind: "unavailable_headless",
+              },
             }),
           ],
-          shouldQuery: !1,
+          shouldQuery: false,
           resultText: Ve,
         });
       }
-      let Pe = await findRefusedSyncedCommands(s.options.commands),
-        filtered = s.options.commands.filter(
-          (command) =>
-            !command.isHidden &&
-            !isSkillOff(command) &&
-            isCommandEnabled(command) &&
-            !(isSyncedSkill(command) && getSkillsSyncVetoed()) &&
-            !isKilledHostCatalogSkill(command) &&
-            !Pe.has(command),
-        ),
-        Fe = parsed.origin === void 0 && vt(s.options.isNonInteractiveSession),
-        He = Fe ? filtered.filter((ne) => ne.type === "prompt" && !ne.disableModelInvocation) : filtered,
-        we = suggestClosestName(
-          commandName,
-          He.map((ne) => ({ name: getCommandName(ne), aliases: ne.aliases })),
-          { maxEditDistance: 2 },
-        );
-      if (
-        (logEvent("tengu_input_slash_invalid", {
-          input_length: commandName.length,
-          had_suggestion: Boolean(we),
-          suggestion_distance: we ? boundedEditDistance(commandName, we, 2) : void 0,
-          fallback_to_model: Fe,
-        }),
-        Fe)
-      )
-        return (
-          logFeatureSad("cmd_dispatch", "cmd_unknown_model_fallback"),
-          W(
-            [
-              unknownCommandFallback({
-                commandName: commandName,
-                suggestion: we,
-                availableCommandNames: He.map((ne) => getCommandName(ne)),
-                availableCommandCount: filtered.length,
-              }),
-            ],
-            containsSecret(e) ? redactSecrets(e) : e,
-            !0,
-          )
-        );
-      logFeatureBad("cmd_dispatch", "cmd_unknown");
-      let Le = uo(commandName, 200),
-        Be = we ? uo(we, 200) : void 0,
-        Ke = we ? `Unknown command: /${Le}. Did you mean /${Be}?` : `Unknown command: /${Le}`;
-      if (s.options.isNonInteractiveSession)
-        return emptyIfHandled(parsed.origin !== void 0, {
-          messages: [
-            ...u,
-            createCommandInputMessage(`/${Le}${parsedArgs ? ` ${bP(redactSecrets(parsedArgs))}` : ""}`, {
-              submitUuid: T,
-            }),
-            createCommandInputMessage(`<local-command-stdout>${Ke}</local-command-stdout>`, {
-              commandOutcome: { kind: "unknown", ...(Be !== void 0 && { suggestion: Be }) },
+      let refusedSyncedCommands = await findRefusedSyncedCommands(s.options.commands);
+      let filtered = s.options.commands.filter(
+        (command) =>
+          !command.isHidden &&
+          !isSkillOff(command) &&
+          isCommandEnabled(command) &&
+          !(isSyncedSkill(command) && getSkillsSyncVetoed()) &&
+          !isKilledHostCatalogSkill(command) &&
+          !refusedSyncedCommands.has(command),
+      );
+      let Fe = parsed.origin === undefined && isQuillKillswitchOff(s.options.isNonInteractiveSession);
+      let He = Fe ? filtered.filter((ne) => ne.type === "prompt" && !ne.disableModelInvocation) : filtered;
+      let we = suggestClosestName(
+        commandName,
+        He.map((ne) => ({
+          name: getCommandName(ne),
+          aliases: ne.aliases,
+        })),
+        {
+          maxEditDistance: 2,
+        },
+      );
+      logEvent("tengu_input_slash_invalid", {
+        input_length: commandName.length,
+        had_suggestion: Boolean(we),
+        suggestion_distance: we ? boundedEditDistance(commandName, we, 2) : undefined,
+        fallback_to_model: Fe,
+      });
+      if (Fe) {
+        logFeatureSad("cmd_dispatch", "cmd_unknown_model_fallback");
+        return W(
+          [
+            unknownCommandFallback({
+              commandName,
+              suggestion: we,
+              availableCommandNames: He.map((ne) => getCommandName(ne)),
+              availableCommandCount: filtered.length,
             }),
           ],
-          shouldQuery: !1,
+          containsSecret(e) ? redactSecrets(e) : e,
+          true,
+        );
+      }
+      logFeatureBad("cmd_dispatch", "cmd_unknown");
+      let Le = normalizeServerNameShort(commandName, 200);
+      let Be = we ? normalizeServerNameShort(we, 200) : undefined;
+      let Ke = we ? `Unknown command: /${Le}. Did you mean /${Be}?` : `Unknown command: /${Le}`;
+      if (s.options.isNonInteractiveSession)
+        return emptyIfHandled(parsed.origin !== undefined, {
+          messages: [
+            ...u,
+            createCommandInputMessage(
+              `/${Le}${parsedArgs ? ` ${escapeForkedSkillTag(redactSecrets(parsedArgs))}` : ""}`,
+              {
+                submitUuid: T,
+              },
+            ),
+            createCommandInputMessage(`<local-command-stdout>${Ke}</local-command-stdout>`, {
+              commandOutcome: {
+                kind: "unknown",
+                ...(Be !== undefined && {
+                  suggestion: Be,
+                }),
+              },
+            }),
+          ],
+          shouldQuery: false,
           resultText: Ke,
         });
-      return emptyIfHandled(parsed.origin !== void 0, {
+      return emptyIfHandled(parsed.origin !== undefined, {
         messages: [
           ...u,
           createSystemMessage(Ke, "warning"),
@@ -1046,25 +1240,25 @@ async function processSlashCommand(
             ? [createSystemMessage(`Args from unknown skill: ${redactSecrets(parsedArgs)}`, "warning")]
             : []),
         ],
-        shouldQuery: !1,
+        shouldQuery: false,
         resultText: Ke,
       });
     }
     return W();
   }
   let Me =
-      x || S.loadedFrom === "mcp"
-        ? "mcp"
-        : G || (S.type === "prompt" && (S.source === "bundled" || S.source === "builtin"))
-          ? "builtin"
-          : "custom",
-    Te = hasSensitiveArgs(S, parsedArgs) ? `/${commandName} ***` : e,
-    ke = s.deferSlashToEngine?.(S) ?? !1;
+    x || command.loadedFrom === "mcp"
+      ? "mcp"
+      : G || (command.type === "prompt" && (command.source === "bundled" || command.source === "builtin"))
+        ? "builtin"
+        : "custom";
+  let text = hasSensitiveArgs(command, parsedArgs) ? `/${commandName} ***` : e;
+  let ke = s.deferSlashToEngine?.(command) ?? false;
   if (!ke) {
     let w = randomUUID();
     setPromptId(w);
     let Y = {
-      text: Te,
+      text,
       attributes: {
         "prompt.id": w,
         command_name: Me === "builtin" || isToolDetailsLoggingEnabled() ? commandName : Me,
@@ -1073,196 +1267,240 @@ async function processSlashCommand(
     };
     logSlashPromptEvent(Y, s.userPromptHold);
   }
-  if (S.type !== "prompt" && s.userPromptHold !== void 0) s.userPromptLine?.withheld();
-  let ue = S,
-    isOfficial = getCommandName(ue),
-    Ce = parsedArgs,
-    Se = new Map(),
-    re = 0,
-    q = async (w) => {
-      ((re += 1), (Ce = w), s.userPromptLine?.ranAs({ name: isOfficial, args: parsedArgs, argsRanWith: w }));
-      let Y = ke && isPromptHookObserved();
-      if (ue.type !== "prompt" && !Y) s.userPromptLine?.passed();
-      let he = await getMessagesForSlashCommand(
-        commandName,
-        w,
-        s,
-        n,
-        o,
-        p,
-        h,
-        T,
-        R,
-        A,
-        I,
-        ie,
-        H,
-        y,
-        D,
-        j,
-        Z,
-        se,
-        ce &&
-          (async () => {
-            let fe = Se.get(w) ?? ce({ name: isOfficial, args: parsedArgs, argsRanWith: w });
-            return (Se.set(w, fe), hasProceedsOutcome(await fe));
-          }),
-      );
-      if (he.ownPassCutShort) re -= 1;
-      let Pe = await Se.get(w);
-      return Pe === void 0 ? he : { ...he, lineCheck: Pe };
-    };
+  if (command.type !== "prompt" && s.userPromptHold !== undefined) s.userPromptLine?.withheld();
+  let ue = command;
+  let isOfficial_2 = getCommandName(ue);
+  let argsRanWith = parsedArgs;
+  let Se = new Map();
+  let re = 0;
+  let q = async (parsedArgs_2) => {
+    re += 1;
+    argsRanWith = parsedArgs_2;
+    s.userPromptLine?.ranAs({
+      name: isOfficial_2,
+      args: parsedArgs,
+      argsRanWith: parsedArgs_2,
+    });
+    let Y = ke && isPromptHookObserved();
+    if (ue.type !== "prompt" && !Y) s.userPromptLine?.passed();
+    let messagesForSlashCommand = await getMessagesForSlashCommand(
+      commandName,
+      parsedArgs_2,
+      s,
+      n,
+      o,
+      p,
+      h,
+      T,
+      R,
+      A,
+      I,
+      ie,
+      H,
+      y,
+      D,
+      j,
+      Z,
+      se,
+      ce &&
+        (async () => {
+          let fe =
+            Se.get(parsedArgs_2) ??
+            ce({
+              name: isOfficial_2,
+              args: parsedArgs,
+              argsRanWith: parsedArgs_2,
+            });
+          Se.set(parsedArgs_2, fe);
+          return hasProceedsOutcome(await fe);
+        }),
+    );
+    if (messagesForSlashCommand.ownPassCutShort) re -= 1;
+    let Pe = await Se.get(parsedArgs_2);
+    return Pe === undefined
+      ? messagesForSlashCommand
+      : {
+          ...messagesForSlashCommand,
+          lineCheck: Pe,
+        };
+  };
   if (ke) parsed.handOn(s.abortController.signal);
   let ee = ke
-      ? { kind: "engine", ran: await q(parsedArgs) }
-      : await Zur(
-          dispatchCommandRunHooks({
-            input: {
-              command: isOfficial,
-              args: parsedArgs,
-              origin: resolvePromptOrigin({
-                submissionOrigin: j,
-                dispatchedOverBridge: s.dispatchedOverBridge,
-                promptSource: y,
-              }),
-              presentation: viewportInfo(s.presentation),
-            },
-            engine: {
-              run: q,
-              textOf: (w) => w.resultText,
-              contextOf: (w) => w.metaTexts,
-              retell: attachCommandResultText,
-            },
-            queued: parsed,
-            ahead: Q,
-            signal: s.abortController.signal,
-          }),
-          s.abortController.signal,
-        ),
-    be = ee === void 0 ? await Promise.all(Se.values()) : [],
-    ve = be.some(hasProceedsOutcome) ? void 0 : be.at(-1),
-    Ae = (w) =>
-      createUserMessage({
-        content: prepareUserContent({
-          inputString: formatRedactedCommandInput(ue, w),
-          precedingInputBlocks: n,
+    ? {
+        kind: "engine",
+        ran: await q(parsedArgs),
+      }
+    : await swallowAbortError(
+        dispatchCommandRunHooks({
+          input: {
+            command: isOfficial_2,
+            args: parsedArgs,
+            origin: resolvePromptOrigin({
+              submissionOrigin: j,
+              dispatchedOverBridge: s.dispatchedOverBridge,
+              promptSource: y,
+            }),
+            presentation: viewportInfo(s.presentation),
+          },
+          engine: {
+            run: q,
+            textOf: (w) => w.resultText,
+            contextOf: (w) => w.metaTexts,
+            retell: attachCommandResultText,
+          },
+          queued: parsed,
+          ahead,
+          signal: s.abortController.signal,
         }),
-        uuid: T,
-        origin: j,
-      });
-  if (ve !== void 0)
-    return { messages: [Ae(ve.ran.argsRanWith)], shouldQuery: !0, ranCommand: ve.ran, lineCheck: ve };
-  if (ee === void 0) {
-    let w = s.userPromptLine?.isHeldForOrganization() ? void 0 : be.findLast(hasProceedsOutcome);
+        s.abortController.signal,
+      );
+  let be = ee === undefined ? await Promise.all(Se.values()) : [];
+  let ve = be.some(hasProceedsOutcome) ? undefined : be.at(-1);
+  let Ae = (w) =>
+    createUserMessage({
+      content: prepareUserContent({
+        inputString: formatRedactedCommandInput(ue, w),
+        precedingInputBlocks: n,
+      }),
+      uuid: T,
+      origin: j,
+    });
+  if (ve !== undefined)
+    return {
+      messages: [Ae(ve.ran.argsRanWith)],
+      shouldQuery: true,
+      ranCommand: ve.ran,
+      lineCheck: ve,
+    };
+  if (ee === undefined) {
+    let w = s.userPromptLine?.isHeldForOrganization() ? undefined : be.findLast(hasProceedsOutcome);
     return {
       ...interruptedCommandResult({
         signal: s.abortController.signal,
         typed: [...u, Ae(parsedArgs)],
-        marker: createUserInterruptionMessage({ toolUse: !1 }),
-        isQueuedByPlugin: parsed.origin !== void 0,
+        marker: createUserInterruptionMessage({
+          toolUse: false,
+        }),
+        isQueuedByPlugin: parsed.origin !== undefined,
       }),
-      ...(re === 0 && { ownPassCutShort: !0 }),
-      ...(w !== void 0 && { ranCommand: w.ran, lineCheck: w }),
+      ...(re === 0 && {
+        ownPassCutShort: true,
+      }),
+      ...(w !== undefined && {
+        ranCommand: w.ran,
+        lineCheck: w,
+      }),
     };
   }
   let Xe =
-      ee.kind !== "engine" &&
-      (!hasSingleCommandRunHook(getCommandName(ue)) || (s.userPromptLine?.isUnknownSinceDispatch() ?? !1)),
-    Lt = Xe ? "" : parsedArgs,
-    Bt =
-      ee.kind === "answered" &&
-      ee.text !== void 0 &&
-      !Xe &&
-      (ee.exitCode ?? 0) === 0 &&
-      isHumanOrAutoContinuation(j)
-        ? modCommandFollowUpNote(isOfficial, s.agentId)
-        : void 0;
+    ee.kind !== "engine" &&
+    (!hasSingleCommandRunHook(getCommandName(ue)) || (s.userPromptLine?.isUnknownSinceDispatch() ?? false));
+  let args = Xe ? "" : parsedArgs;
+  let offerTurn =
+    ee.kind === "answered" &&
+    ee.text !== undefined &&
+    !Xe &&
+    (ee.exitCode ?? 0) === 0 &&
+    isHumanOrAutoContinuation(j)
+      ? modCommandFollowUpNote(isOfficial_2, s.agentId)
+      : undefined;
   if (Xe) s.userPromptLine?.withheld();
   else if (ee.kind !== "engine" && ue.type !== "prompt") s.userPromptLine?.passed();
   let {
-    messages: messages,
-    shouldQuery: shouldQuery,
-    allowedTools: allowedTools,
-    disallowedTools: disallowedTools,
-    model: model,
-    effort: effort,
-    command: command,
-    resultText: resultText,
-    nextInput: nextInput,
-    submitNextInput: submitNextInput,
-    engineDeferredSlash: engineDeferredSlash,
-    forkDispatched: forkDispatched,
-    settledInPlace: settledInPlace,
-    screened: screened,
-    ownPassCutShort: ownPassCutShort,
-    lineCheck: lineCheck,
-    queriesAfterRun: queriesAfterRun,
+    messages,
+    shouldQuery,
+    allowedTools,
+    disallowedTools,
+    model,
+    effort,
+    command: command_2,
+    resultText,
+    nextInput,
+    submitNextInput,
+    engineDeferredSlash,
+    forkDispatched,
+    settledInPlace,
+    screened,
+    ownPassCutShort,
+    lineCheck,
+    queriesAfterRun,
   } = ee.kind === "engine"
     ? ee.ran
     : runLocalCommand(ee.text, ee.context, {
         plugin: ee.plugin,
         command: ue,
-        commandName: commandName,
-        args: Lt,
+        commandName,
+        args,
         precedingInputBlocks: n,
         uuid: T,
         submissionOrigin: j,
-        isNonInteractiveSession: s.options.isNonInteractiveSession === !0,
-        offerTurn: Bt,
+        isNonInteractiveSession: s.options.isNonInteractiveSession === true,
+        offerTurn,
       });
-  if (command.type === "prompt" && command.pluginInfo)
+  if (command_2.type === "prompt" && command_2.pluginInfo)
     recordPluginActivity(
-      command.pluginInfo.repository,
+      command_2.pluginInfo.repository,
       "command",
-      commandActivity(command, command.pluginInfo.pluginManifest.name),
+      commandActivity(command_2, command_2.pluginInfo.pluginManifest.name),
     );
-  let { sanitizedName: sanitizedName, skillNameHash: skillNameHash } = sanitizeSkillNameForTelemetry({
+  let { sanitizedName, skillNameHash } = sanitizeSkillNameForTelemetry({
     rawName: commandName,
-    canonicalName: command.name,
-    isMcp: x || command.loadedFrom === "mcp",
+    canonicalName: command_2.name,
+    isMcp: x || command_2.loadedFrom === "mcp",
     isBuiltIn: G,
-    isBundled: me,
-    isOfficial: te,
+    isBundled,
+    isOfficial,
   });
   function gt() {
-    let w = { input: sanitizedName, ...skillNameHash };
-    if (command.type === "prompt" && command.pluginInfo) {
-      Object.assign(w, getSkillPluginTelemetryFields(command));
-      let version = command.pluginInfo.pluginManifest.version;
-      if (version && isOfficialMarketplaceSkill(command)) w.plugin_version = sanitizeVersion(version);
+    let w = {
+      input: sanitizedName,
+      ...skillNameHash,
+    };
+    if (command_2.type === "prompt" && command_2.pluginInfo) {
+      Object.assign(w, getSkillPluginTelemetryFields(command_2));
+      let version = command_2.pluginInfo.pluginManifest.version;
+      if (version && isOfficialMarketplaceSkill(command_2)) w.plugin_version = sanitizeVersion(version);
     }
-    if (command.type === "prompt") Object.assign(w, buildServerAttributionFields(command));
+    if (command_2.type === "prompt") Object.assign(w, buildServerAttributionFields(command_2));
     logEvent("tengu_input_command", {
       ...w,
       invocation_trigger: lit("user-slash"),
-      ...promptTelemetryFields({ wakeupSource: r, hostInitiator: L, inboundOrigin: E }),
+      ...promptTelemetryFields({
+        wakeupSource,
+        hostInitiator,
+        inboundOrigin,
+      }),
       ...logSkillsLoaded(
-        command.type === "prompt" ? command.source : void 0,
-        command.loadedFrom,
-        command.kind,
-        command.type === "prompt" ? command.createdBy : void 0,
+        command_2.type === "prompt" ? command_2.source : undefined,
+        command_2.loadedFrom,
+        command_2.kind,
+        command_2.type === "prompt" ? command_2.createdBy : undefined,
       ),
-      ...getTeamTipAttribution(command.type === "prompt" ? command.source : void 0, commandName),
-      ...(command.type === "prompt" && { command_content_chars: command.contentLength }),
-      ...(command.type === "prompt" && { _PROTO_skill_name: command.name }),
-      ...!1,
+      ...getTeamTipAttribution(command_2.type === "prompt" ? command_2.source : undefined, commandName),
+      ...(command_2.type === "prompt" && {
+        command_content_chars: command_2.contentLength,
+      }),
+      ...(command_2.type === "prompt" && {
+        _PROTO_skill_name: command_2.name,
+      }),
+      ...false,
     });
   }
   if (messages.length === 0) {
     if (settledInPlace) logFeatureOk("cmd_dispatch");
-    return (
-      gt(),
-      {
-        messages: [],
-        shouldQuery: !1,
-        model: model,
-        resultText: resultText,
-        nextInput: nextInput,
-        submitNextInput: submitNextInput,
-        localCommand: sanitizedName,
-        ...(ee.exitCode !== void 0 && { commandExitCode: ee.exitCode }),
-      }
-    );
+    gt();
+    return {
+      messages: [],
+      shouldQuery: false,
+      model,
+      resultText,
+      nextInput,
+      submitNextInput,
+      localCommand: sanitizedName,
+      ...(ee.exitCode !== undefined && {
+        commandExitCode: ee.exitCode,
+      }),
+    };
   }
   if (
     messages.length === 2 &&
@@ -1270,511 +1508,698 @@ async function processSlashCommand(
     typeof messages[1].message.content === "string" &&
     messages[1].message.content.startsWith("Unknown command:")
   ) {
-    if (!(e.startsWith("/var") || e.startsWith("/tmp") || e.startsWith("/private")))
-      (logEvent("tengu_input_slash_invalid", { input_length: commandName.length, had_suggestion: !1 }),
-        logFeatureBad("cmd_dispatch", "cmd_unknown"));
+    if (!(e.startsWith("/var") || e.startsWith("/tmp") || e.startsWith("/private"))) {
+      logEvent("tengu_input_slash_invalid", {
+        input_length: commandName.length,
+        had_suggestion: false,
+      });
+      logFeatureBad("cmd_dispatch", "cmd_unknown");
+    }
     return {
       messages: [createSyntheticUserCaveatMessage(), ...messages],
-      shouldQuery: shouldQuery,
-      allowedTools: allowedTools,
-      disallowedTools: disallowedTools,
-      model: model,
-      ranCommand: { name: isOfficial, args: parsedArgs, argsRanWith: Ce },
+      shouldQuery,
+      allowedTools,
+      disallowedTools,
+      model,
+      ranCommand: {
+        name: isOfficial_2,
+        args: parsedArgs,
+        argsRanWith,
+      },
     };
   }
-  if (!engineDeferredSlash) (logFeatureOk("cmd_dispatch"), gt());
-  let Vt = messages.length > 0 && messages[0] && isCompactBoundaryMessage(messages[0]),
-    ht =
-      shouldQuery ||
-      messages.every(
-        (w) =>
-          isSystemLocalCommandMessage(w) ||
-          (w.type === "system" && w.subtype === "informational") ||
-          (w.type === "user" && w.isMeta),
-      ) ||
-      Vt ||
-      engineDeferredSlash
-        ? messages
-        : [createSyntheticUserCaveatMessage(), ...messages];
+  if (!engineDeferredSlash) {
+    logFeatureOk("cmd_dispatch");
+    gt();
+  }
+  let Vt = messages.length > 0 && messages[0] && isCompactBoundaryMessage(messages[0]);
+  let ht =
+    shouldQuery ||
+    messages.every(
+      (message) =>
+        isSystemLocalCommandMessage(message) ||
+        (message.type === "system" && message.subtype === "informational") ||
+        (message.type === "user" && message.isMeta),
+    ) ||
+    Vt ||
+    engineDeferredSlash
+      ? messages
+      : [createSyntheticUserCaveatMessage(), ...messages];
   return {
-    messages: J && shouldQuery && (lineCheck === void 0 || hasProceedsOutcome(lineCheck)) ? [...ht, J] : ht,
-    shouldQuery: shouldQuery,
-    allowedTools: allowedTools,
-    disallowedTools: disallowedTools,
-    model: model,
-    effort: effort,
-    resultText: resultText,
-    nextInput: nextInput,
-    submitNextInput: submitNextInput,
-    engineDeferredSlash: engineDeferredSlash,
-    forkDispatched: forkDispatched,
-    ...(screened !== void 0 && { screened: screened }),
-    ...(ownPassCutShort && { ownPassCutShort: ownPassCutShort }),
-    ...(queriesAfterRun && { queriesAfterRun: queriesAfterRun }),
-    ...(!engineDeferredSlash && { localCommand: sanitizedName }),
-    ...(ee.exitCode !== void 0 && { commandExitCode: ee.exitCode }),
-    ranCommand: lineCheck?.ran ?? { name: isOfficial, args: parsedArgs, argsRanWith: Ce },
-    ...(lineCheck !== void 0 && { lineCheck: lineCheck }),
+    messages:
+      J && shouldQuery && (lineCheck === undefined || hasProceedsOutcome(lineCheck)) ? [...ht, J] : ht,
+    shouldQuery,
+    allowedTools,
+    disallowedTools,
+    model,
+    effort,
+    resultText,
+    nextInput,
+    submitNextInput,
+    engineDeferredSlash,
+    forkDispatched,
+    ...(screened !== undefined && {
+      screened,
+    }),
+    ...(ownPassCutShort && {
+      ownPassCutShort,
+    }),
+    ...(queriesAfterRun && {
+      queriesAfterRun,
+    }),
+    ...(!engineDeferredSlash && {
+      localCommand: sanitizedName,
+    }),
+    ...(ee.exitCode !== undefined && {
+      commandExitCode: ee.exitCode,
+    }),
+    ranCommand: lineCheck?.ran ?? {
+      name: isOfficial_2,
+      args: parsedArgs,
+      argsRanWith,
+    },
+    ...(lineCheck !== undefined && {
+      lineCheck,
+    }),
   };
 }
 //@ chunk-3g0djq3w.js:28569-28620 layout
 function hasProceedsOutcome(e) {
-  return e.outcome?.proceeds !== void 0;
+  return e.outcome?.proceeds !== undefined;
 }
 //@ chunk-3g0djq3w.js:28620-29342 layout
 function runLocalCommand(
-  e,
-  n,
+  text,
+  context,
   {
-    plugin: plugin,
-    command: command,
-    commandName: commandName,
-    args: args,
-    precedingInputBlocks: precedingInputBlocks,
-    uuid: uuid,
-    submissionOrigin: submissionOrigin,
-    isNonInteractiveSession: isNonInteractiveSession,
-    offerTurn: offerTurn,
+    plugin,
+    command,
+    commandName,
+    args,
+    precedingInputBlocks,
+    uuid,
+    submissionOrigin,
+    isNonInteractiveSession,
+    offerTurn,
   },
 ) {
   let B = cmdFeature(shippedCommandNames().has(commandName) ? commandName : "custom");
   logFeatureOk(B, getTipAttribution(command.name));
   let H =
-      isNonInteractiveSession ||
-      precedingInputBlocks.length > 0 ||
-      !isHumanOrAutoContinuation(submissionOrigin),
-    D = n ?? [];
-  if (e === void 0 && D.length === 0 && !H) return { messages: [], shouldQuery: !1, command: command };
+    isNonInteractiveSession ||
+    precedingInputBlocks.length > 0 ||
+    !isHumanOrAutoContinuation(submissionOrigin);
+  let D = context ?? [];
+  if (text === undefined && D.length === 0 && !H)
+    return {
+      messages: [],
+      shouldQuery: false,
+      command,
+    };
   return {
     messages: [
       H
         ? createUserMessage({
             content: prepareUserContent({
               inputString: formatCommandInput(command, args),
-              precedingInputBlocks: precedingInputBlocks,
+              precedingInputBlocks,
             }),
-            uuid: uuid,
+            uuid,
             origin: submissionOrigin,
           })
         : createCommandInputMessage(formatCommandInput(command, args)),
-      ...(e === void 0
+      ...(text === undefined
         ? []
         : [
-            createCommandInputMessage(`<local-command-stdout>${bP(e)}</local-command-stdout>`, {
-              commandRun: buildCommandRunInfo(command, args, plugin),
+            createCommandInputMessage(
+              `<local-command-stdout>${escapeForkedSkillTag(text)}</local-command-stdout>`,
+              {
+                commandRun: buildCommandRunInfo(command, args, plugin),
+              },
+            ),
+          ]),
+      ...D.map((content) =>
+        createUserMessage({
+          content,
+          isMeta: true,
+        }),
+      ),
+      ...(offerTurn === undefined
+        ? []
+        : [
+            createUserMessage({
+              content: offerTurn,
+              isMeta: true,
             }),
           ]),
-      ...D.map((Z) => createUserMessage({ content: Z, isMeta: !0 })),
-      ...(offerTurn === void 0 ? [] : [createUserMessage({ content: offerTurn, isMeta: !0 })]),
     ],
-    shouldQuery: offerTurn !== void 0,
-    command: command,
-    resultText: e,
-    ...(D.length > 0 && { metaTexts: D }),
-    ...(offerTurn !== void 0 && { queriesAfterRun: !0 }),
+    shouldQuery: offerTurn !== undefined,
+    command,
+    resultText: text,
+    ...(D.length > 0 && {
+      metaTexts: D,
+    }),
+    ...(offerTurn !== undefined && {
+      queriesAfterRun: true,
+    }),
   };
 }
 //@ chunk-3g0djq3w.js:29342-30427 layout
-function attachCommandResultText(e, { text: text, plugin: plugin, context: context }) {
-  if (e.shouldQuery || e.nextInput !== void 0 || e.settledInPlace) return;
+function attachCommandResultText(e, { text, plugin, context }) {
+  if (e.shouldQuery || e.nextInput !== undefined || e.settledInPlace) return;
   let messages = e.messages;
-  if (text !== void 0) {
+  if (text !== undefined) {
     let T =
-      e.resultText === void 0
+      e.resultText === undefined
         ? -1
         : messages.findIndex(
-            (y) =>
-              isSystemLocalCommandMessage(y) &&
-              (y.content.startsWith(`<${LOCAL_COMMAND_STDOUT}>`) ||
-                y.content.startsWith(`<${LOCAL_COMMAND_STDERR}>`)),
+            (message) =>
+              isSystemLocalCommandMessage(message) &&
+              (message.content.startsWith(`<${LOCAL_COMMAND_STDOUT}>`) ||
+                message.content.startsWith(`<${LOCAL_COMMAND_STDERR}>`)),
           );
     if (T === -1) return;
-    let p = messages[T],
-      h =
-        p !== void 0 && isSystemLocalCommandMessage(p) && p.content.startsWith(`<${LOCAL_COMMAND_STDERR}>`)
-          ? LOCAL_COMMAND_STDERR
-          : LOCAL_COMMAND_STDOUT;
+    let p = messages[T];
+    let h =
+      p !== undefined && isSystemLocalCommandMessage(p) && p.content.startsWith(`<${LOCAL_COMMAND_STDERR}>`)
+        ? LOCAL_COMMAND_STDERR
+        : LOCAL_COMMAND_STDOUT;
     messages = messages.with(
       T,
       createCommandInputMessage(
-        `<${h}>${bP(text)}</${h}>`,
-        p !== void 0 && isSystemLocalCommandMessage(p)
+        `<${h}>${escapeForkedSkillTag(text)}</${h}>`,
+        p !== undefined && isSystemLocalCommandMessage(p)
           ? {
               commandRun:
-                p.commandRun !== void 0 && plugin !== void 0
-                  ? { ...p.commandRun, plugin: plugin }
+                p.commandRun !== undefined && plugin !== undefined
+                  ? {
+                      ...p.commandRun,
+                      plugin,
+                    }
                   : p.commandRun,
               commandOutcome: p.commandOutcome,
             }
-          : void 0,
+          : undefined,
       ),
     );
   }
-  if (context !== void 0) {
+  if (context !== undefined) {
     if (!(
-      e.metaTexts !== void 0 ||
+      e.metaTexts !== undefined ||
       messages.some(
-        (h) =>
-          isSystemLocalCommandMessage(h) &&
-          (h.content.startsWith(`<${LOCAL_COMMAND_STDOUT}>`) ||
-            h.content.startsWith(`<${LOCAL_COMMAND_STDERR}>`)),
+        (message) =>
+          isSystemLocalCommandMessage(message) &&
+          (message.content.startsWith(`<${LOCAL_COMMAND_STDOUT}>`) ||
+            message.content.startsWith(`<${LOCAL_COMMAND_STDERR}>`)),
       )
     ))
       return;
     let p = new Map();
     for (let h of e.metaTexts ?? []) p.set(h, (p.get(h) ?? 0) + 1);
     messages = [
-      ...messages.filter((h) => {
-        let y =
-            h.type === "user" && h.isMeta && typeof h.message.content === "string"
-              ? h.message.content
-              : void 0,
-          R = y === void 0 ? 0 : (p.get(y) ?? 0);
-        if (y === void 0 || R === 0) return !0;
-        return (p.set(y, R - 1), !1);
+      ...messages.filter((message) => {
+        let content =
+          message.type === "user" && message.isMeta && typeof message.message.content === "string"
+            ? message.message.content
+            : undefined;
+        let R = content === undefined ? 0 : (p.get(content) ?? 0);
+        if (content === undefined || R === 0) return true;
+        p.set(content, R - 1);
+        return false;
       }),
-      ...context.map((h) => createUserMessage({ content: h, isMeta: !0 })),
+      ...context.map((content) =>
+        createUserMessage({
+          content,
+          isMeta: true,
+        }),
+      ),
     ];
   }
   return {
     ...e,
-    messages: messages,
+    messages,
     resultText: text ?? e.resultText,
-    ...((context ?? e.metaTexts) !== void 0 && { metaTexts: context ?? e.metaTexts }),
+    ...((context ?? e.metaTexts) !== undefined && {
+      metaTexts: context ?? e.metaTexts,
+    }),
   };
 }
 //@ chunk-3g0djq3w.js:30427-30765 layout
-function headlessUnavailableResult(e, n, o) {
-  let u = `/${getCommandName(e)} opens an interactive panel and isn't available in this environment. Run it from the Claude Code terminal instead.`;
+function headlessUnavailableResult(command, n, submitUuid) {
+  let u = `/${getCommandName(command)} opens an interactive panel and isn't available in this environment. Run it from the Claude Code terminal instead.`;
   return {
     messages: [
-      createCommandInputMessage(formatRedactedCommandInput(e, n), { submitUuid: o }),
+      createCommandInputMessage(formatRedactedCommandInput(command, n), {
+        submitUuid,
+      }),
       createCommandInputMessage(`<local-command-stdout>${u}</local-command-stdout>`, {
-        commandOutcome: { kind: "unavailable_headless" },
+        commandOutcome: {
+          kind: "unavailable_headless",
+        },
       }),
     ],
-    shouldQuery: !1,
-    command: e,
+    shouldQuery: false,
+    command,
     resultText: u,
   };
 }
+//@ chunk-3g0djq3w.js:30765-42876 callgraph-witnessed = getMessagesForSlashCommand (0.288)
 /**
  * getMessagesForSlashCommand：执行具体斜杠命令并生成消息（local-jsx、local、prompt 三类）。
  */
-//@ chunk-3g0djq3w.js:30765-42876 callgraph-witnessed = getMessagesForSlashCommand (0.288)
-async function getMessagesForSlashCommand(e, n, o, u, s, T, p, h, y, R, A, B, H, D, j, Z, se, pe, oe) {
-  let command = getCommand(e, o.options.commands);
-  n = unwrapPastedContentBlocks(n);
-  let L = cmdFeature(shippedCommandNames().has(e) ? e : "custom"),
-    ce = getTipAttribution(command.name);
+async function getMessagesForSlashCommand(
+  commandName,
+  content,
+  context,
+  u,
+  s,
+  T,
+  p,
+  h,
+  y,
+  R,
+  A,
+  B,
+  H,
+  promptSource,
+  j,
+  origin,
+  se,
+  pe,
+  oe,
+) {
+  let command = getCommand(commandName, context.options.commands);
+  content = unwrapPastedContentBlocks(content);
+  let L = cmdFeature(shippedCommandNames().has(commandName) ? commandName : "custom");
+  let tipAttribution = getTipAttribution(command.name);
   if (!isCommandEnabled(command)) {
     logFeatureBad(L, "cmd_policy_disabled");
-    let E = `/${bP(sanitizeTelemetryString(e))} isn't available in this session.`;
-    if (o.options.isNonInteractiveSession)
+    let E = `/${escapeForkedSkillTag(sanitizeTelemetryString(commandName))} isn't available in this session.`;
+    if (context.options.isNonInteractiveSession)
       return {
         messages: [
-          createCommandInputMessage(formatRedactedCommandInput(command, n), { submitUuid: h }),
+          createCommandInputMessage(formatRedactedCommandInput(command, content), {
+            submitUuid: h,
+          }),
           createCommandInputMessage(`<local-command-stdout>${E}</local-command-stdout>`),
         ],
-        shouldQuery: !1,
-        command: command,
+        shouldQuery: false,
+        command,
         resultText: E,
       };
     return {
       messages: [createSystemMessage(E, "warning")],
-      shouldQuery: !1,
-      command: command,
+      shouldQuery: false,
+      command,
       resultText: E,
     };
   }
   if (isSkillOff(command)) {
     let E = describeSkillHiddenBehindPlugin(command);
-    if (
-      (logFeatureBad(L, E === void 0 ? "cmd_skill_override_off" : "cmd_skill_hidden_behind_plugin"),
-      o.options.isNonInteractiveSession)
-    ) {
+    logFeatureBad(L, E === undefined ? "cmd_skill_override_off" : "cmd_skill_hidden_behind_plugin");
+    if (context.options.isNonInteractiveSession) {
       let Q =
         E ??
-        `Skill "${uo(command.name, 200)}" is disabled via skillOverrides. Remove the override from your settings to run it.`;
+        `Skill "${normalizeServerNameShort(command.name, 200)}" is disabled via skillOverrides. Remove the override from your settings to run it.`;
       return {
         messages: [
-          createCommandInputMessage(formatRedactedCommandInput(command, n), { submitUuid: h }),
+          createCommandInputMessage(formatRedactedCommandInput(command, content), {
+            submitUuid: h,
+          }),
           createCommandInputMessage(`<local-command-stdout>${Q}</local-command-stdout>`),
         ],
-        shouldQuery: !1,
-        command: command,
+        shouldQuery: false,
+        command,
         resultText: Q,
       };
     }
     let O =
-        E ??
-        `Skill "${uo(command.name, 200)}" is disabled via skillOverrides. Re-enable it in /skills or remove the override from your settings to run it.`,
-      F = !n ? "" : hasSensitiveArgs(command, n) ? "***" : bP(redactSecrets(n));
+      E ??
+      `Skill "${normalizeServerNameShort(command.name, 200)}" is disabled via skillOverrides. Re-enable it in /skills or remove the override from your settings to run it.`;
+    let F = !content
+      ? ""
+      : hasSensitiveArgs(command, content)
+        ? "***"
+        : escapeForkedSkillTag(redactSecrets(content));
     return {
       messages: [
         createSystemMessage(O, "warning"),
-        ...(n ? [createSystemMessage(`Args from disabled skill: ${F}`, "warning")] : []),
+        ...(content ? [createSystemMessage(`Args from disabled skill: ${F}`, "warning")] : []),
       ],
-      shouldQuery: !1,
-      command: command,
+      shouldQuery: false,
+      command,
       resultText: O,
     };
   }
-  if (command.type === "prompt" && command.userInvocable !== !1)
-    recordSkillInvoked(o.session, command.name, o.storageV5);
+  if (command.type === "prompt" && command.userInvocable !== false)
+    recordSkillInvoked(context.session, command.name, context.storageV5);
   if (command.type === "prompt" && command.pluginInfo) recordPluginUsage(command.pluginInfo.repository);
-  if (!o.deferSlashToEngine?.(command))
+  if (!context.deferSlashToEngine?.(command))
     claimCommandOverageCredit({
       commandName: command.name,
-      agentId: o.agentId,
-      isNonInteractiveSession: Boolean(o.options.isNonInteractiveSession),
-      setAppState: o.setAppState,
-      credentials: o.credentials,
+      agentId: context.agentId,
+      isNonInteractiveSession: Boolean(context.options.isNonInteractiveSession),
+      setAppState: context.setAppState,
+      credentials: context.credentials,
     });
-  if (command.userInvocable === !1)
-    return (
-      logFeatureBad(L, "cmd_not_user_invocable"),
-      {
-        messages: [
-          createUserMessage({
-            content: prepareUserContent({
-              inputString: `/${sanitizeTelemetryString(e)}`,
-              precedingInputBlocks: u,
-            }),
-            uuid: h,
+  if (command.userInvocable === false) {
+    logFeatureBad(L, "cmd_not_user_invocable");
+    return {
+      messages: [
+        createUserMessage({
+          content: prepareUserContent({
+            inputString: `/${sanitizeTelemetryString(commandName)}`,
+            precedingInputBlocks: u,
           }),
-          createUserMessage({
-            content: `This skill can only be invoked by Claude, not directly by users. Ask Claude to use the "${sanitizeTelemetryString(e)}" skill for you.`,
-          }),
-        ],
-        shouldQuery: !1,
-        command: command,
-      }
-    );
-  if (command.type === "local-jsx" && o.options.isNonInteractiveSession)
-    return (logFeatureBad(L, "cmd_local_jsx_headless"), headlessUnavailableResult(command, n, h));
+          uuid: h,
+        }),
+        createUserMessage({
+          content: `This skill can only be invoked by Claude, not directly by users. Ask Claude to use the "${sanitizeTelemetryString(commandName)}" skill for you.`,
+        }),
+      ],
+      shouldQuery: false,
+      command,
+    };
+  }
+  if (command.type === "local-jsx" && context.options.isNonInteractiveSession) {
+    logFeatureBad(L, "cmd_local_jsx_headless");
+    return headlessUnavailableResult(command, content, h);
+  }
   try {
     switch (command.type) {
       case "local-jsx":
         return new Promise((resolve) => {
-          let O = !1,
-            onDone = (result, options) => {
-              if (O) return;
-              if (((O = !0), logFeatureOk(L, ce), options?.display === "skip")) {
-                resolve({
-                  messages: [],
-                  shouldQuery: !1,
-                  command: command,
-                  nextInput: options?.nextInput,
-                  submitNextInput: options?.submitNextInput,
-                });
-                return;
-              }
-              let metaMessages = (options?.metaMessages ?? []).map((content) =>
-                  createUserMessage({ content: content, isMeta: !0, origin: options?.metaMessagesOrigin }),
-                ),
-                U =
-                  o.presentation === "fullscreen" &&
-                  typeof result === "string" &&
-                  result.endsWith(" dismissed");
+          let O = false;
+          let onDone = (result, options) => {
+            if (O) return;
+            O = true;
+            logFeatureOk(L, tipAttribution);
+            if (options?.display === "skip") {
               resolve({
-                messages:
-                  options?.display === "system"
-                    ? U
-                      ? metaMessages
-                      : [
-                          createCommandInputMessage(formatCommandInput(command, n)),
-                          createCommandInputMessage(
-                            `<local-command-stdout>${bP(String(result))}</local-command-stdout>`,
-                            { commandRun: buildCommandRunInfo(command, n) },
-                          ),
-                          ...metaMessages,
-                        ]
-                    : [
-                        createUserMessage({
-                          content: prepareUserContent({
-                            inputString: formatCommandInput(command, n),
-                            precedingInputBlocks: u,
-                          }),
-                          uuid: h,
-                        }),
-                        createUserMessage({
-                          content: `<local-command-stdout>${result || NO_CONTENT_MESSAGE}</local-command-stdout>`,
-                          localCommandOutput: "stdout",
-                        }),
-                        ...metaMessages,
-                      ],
-                shouldQuery: options?.shouldQuery ?? !1,
-                command: command,
+                messages: [],
+                shouldQuery: false,
+                command,
                 nextInput: options?.nextInput,
                 submitNextInput: options?.submitNextInput,
-                ...(metaMessages.length > 0 && { metaTexts: options?.metaMessages }),
               });
-            },
-            Q = command.load ?? o.options.resolveCommandDialog?.(command);
+              return;
+            }
+            let metaMessages = (options?.metaMessages ?? []).map((content) =>
+              createUserMessage({
+                content,
+                isMeta: true,
+                origin: options?.metaMessagesOrigin,
+              }),
+            );
+            let skipTranscript =
+              context.presentation === "fullscreen" &&
+              typeof result === "string" &&
+              result.endsWith(" dismissed");
+            resolve({
+              messages:
+                options?.display === "system"
+                  ? skipTranscript
+                    ? metaMessages
+                    : [
+                        createCommandInputMessage(formatCommandInput(command, content)),
+                        createCommandInputMessage(
+                          `<local-command-stdout>${escapeForkedSkillTag(String(result))}</local-command-stdout>`,
+                          {
+                            commandRun: buildCommandRunInfo(command, content),
+                          },
+                        ),
+                        ...metaMessages,
+                      ]
+                  : [
+                      createUserMessage({
+                        content: prepareUserContent({
+                          inputString: formatCommandInput(command, content),
+                          precedingInputBlocks: u,
+                        }),
+                        uuid: h,
+                      }),
+                      createUserMessage({
+                        content: `<local-command-stdout>${result || NO_CONTENT_MESSAGE}</local-command-stdout>`,
+                        localCommandOutput: "stdout",
+                      }),
+                      ...metaMessages,
+                    ],
+              shouldQuery: options?.shouldQuery ?? false,
+              command,
+              nextInput: options?.nextInput,
+              submitNextInput: options?.submitNextInput,
+              ...(metaMessages.length > 0 && {
+                metaTexts: options?.metaMessages,
+              }),
+            });
+          };
+          let Q = command.load ?? context.options.resolveCommandDialog?.(command);
           if (!Q) {
-            (logFeatureBad(L, "cmd_local_jsx_no_dialog_resolution"),
-              resolve(headlessUnavailableResult(command, n)));
+            logFeatureBad(L, "cmd_local_jsx_no_dialog_resolution");
+            resolve(headlessUnavailableResult(command, content));
             return;
           }
-          let W = isImmediateCommand(command, n, o.presentation ?? "inline");
+          let W = isImmediateCommand(command, content, context.presentation ?? "inline");
           Q()
             .then((mod) =>
               mod.call(
                 onDone,
-                { ...o, canUseTool: p, dispatchedAsImmediate: W, submissionOrigin: Z, promptSource: D },
-                n,
-                B ?? e,
+                {
+                  ...context,
+                  canUseTool: p,
+                  dispatchedAsImmediate: W,
+                  submissionOrigin: origin,
+                  promptSource,
+                },
+                content,
+                B ?? commandName,
               ),
             )
             .then((jsx) => {
               if (jsx == null) return;
               if (O) return;
-              let localJsx = o.localJsx;
+              let localJsx = context.localJsx;
               if (!localJsx) {
-                (logFeatureBad(L, "cmd_local_jsx_no_panel_host"),
-                  (O = !0),
-                  resolve(headlessUnavailableResult(command, n)));
+                logFeatureBad(L, "cmd_local_jsx_no_panel_host");
+                O = true;
+                resolve(headlessUnavailableResult(command, content));
                 return;
               }
               localJsx
                 .show(jsx, {
                   commandName: getCommandName(command),
                   immediate: W,
-                  hidesPrompt: !0,
-                  retireAtTurnBoundary: !0,
+                  hidesPrompt: true,
+                  retireAtTurnBoundary: true,
                 })
                 .closed.then((U) => {
-                  if (U === "dismissed" && !O)
-                    ((O = !0),
-                      logFeatureBad(L, "cmd_local_jsx_dismissed"),
-                      resolve({ messages: [], shouldQuery: !1, command: command }));
+                  if (U === "dismissed" && !O) {
+                    O = true;
+                    logFeatureBad(L, "cmd_local_jsx_dismissed");
+                    resolve({
+                      messages: [],
+                      shouldQuery: false,
+                      command,
+                    });
+                  }
                 });
             })
-            .catch((M) => {
-              let k = isAbortError(M);
+            .catch((error) => {
+              let k = isAbortError(error);
               if (k)
-                logForDebugging(`local-jsx command aborted: ${M instanceof Error ? M.message : String(M)}`);
-              else logError(withTelemetryMessage(toError(M), "local-jsx slash command threw"));
-              if ((logFeatureBad(L, k ? "cmd_local_jsx_aborted" : "cmd_local_jsx_threw"), O)) return;
-              if (((O = !0), k)) {
-                resolve({ messages: [], shouldQuery: !1, command: command });
+                logForDebugging(
+                  `local-jsx command aborted: ${error instanceof Error ? error.message : String(error)}`,
+                );
+              else logError(withTelemetryMessage(toError(error), "local-jsx slash command threw"));
+              logFeatureBad(L, k ? "cmd_local_jsx_aborted" : "cmd_local_jsx_threw");
+              if (O) return;
+              O = true;
+              if (k) {
+                resolve({
+                  messages: [],
+                  shouldQuery: false,
+                  command,
+                });
                 return;
               }
               resolve({
                 messages: [
                   createUserMessage({
                     content: prepareUserContent({
-                      inputString: formatCommandInput(command, n),
+                      inputString: formatCommandInput(command, content),
                       precedingInputBlocks: u,
                     }),
                     uuid: h,
                   }),
                   createCommandInputMessage(
-                    `<local-command-stderr>${escapeXml(bP(commandThrowTextForTranscript(M, command.name, o.session)))}</local-command-stderr>`,
-                    { commandRun: buildCommandRunInfo(command, n), commandOutcome: { kind: "failed" } },
+                    `<local-command-stderr>${escapeXml(escapeForkedSkillTag(commandThrowTextForTranscript(error, command.name, context.session)))}</local-command-stderr>`,
+                    {
+                      commandRun: buildCommandRunInfo(command, content),
+                      commandOutcome: {
+                        kind: "failed",
+                      },
+                    },
                   ),
                 ],
-                shouldQuery: !1,
-                command: command,
+                shouldQuery: false,
+                command,
               });
             });
         });
       case "local": {
-        if (o.deferSlashToEngine?.(command)) {
-          let trimmed = `/${getCommandName(command)} ${n}`.trim(),
-            Q = createUserMessage({
-              content: prepareUserContent({ inputString: trimmed, precedingInputBlocks: u }),
-              uuid: h,
-            });
-          return {
-            messages: [Q],
-            shouldQuery: !1,
-            command: command,
-            engineDeferredSlash: { text: trimmed, messageUuid: Q.uuid, origin: Z },
-          };
-        }
-        let userMessage = createUserMessage({
+        if (context.deferSlashToEngine?.(command)) {
+          let trimmed = `/${getCommandName(command)} ${content}`.trim();
+          let userMessage = createUserMessage({
             content: prepareUserContent({
-              inputString: formatCommandInput(command, n),
+              inputString: trimmed,
               precedingInputBlocks: u,
             }),
             uuid: h,
+          });
+          return {
+            messages: [userMessage],
+            shouldQuery: false,
+            command,
+            engineDeferredSlash: {
+              text: trimmed,
+              messageUuid: userMessage.uuid,
+              origin,
+            },
+          };
+        }
+        let userMessage = createUserMessage({
+          content: prepareUserContent({
+            inputString: formatCommandInput(command, content),
+            precedingInputBlocks: u,
           }),
-          O = wt() && getCommandRequirements(command).workspace;
-        if (O) o.applyMessageOp({ type: "append", messages: [userMessage] });
+          uuid: h,
+        });
+        let workspace = isRemoteSessionAvailable() && getCommandRequirements(command).workspace;
+        if (workspace)
+          context.applyMessageOp({
+            type: "append",
+            messages: [userMessage],
+          });
         try {
-          let syntheticCaveatMessage = createSyntheticUserCaveatMessage(),
-            W = (await command.load()).call(
-              n,
-              { ...o, submissionOrigin: Z, promptSource: D, commandMessageUuid: userMessage.uuid },
-              B ?? e,
-            ),
-            M = O ? await raceWithAbortSignal(W, o.abortController.signal, () => new AbortError()) : await W;
+          let syntheticCaveatMessage = createSyntheticUserCaveatMessage();
+          let W = (await command.load()).call(
+            content,
+            {
+              ...context,
+              submissionOrigin: origin,
+              promptSource,
+              commandMessageUuid: userMessage.uuid,
+            },
+            B ?? commandName,
+          );
+          let M = workspace
+            ? await raceWithAbortSignal(W, context.abortController.signal, () => new AbortError())
+            : await W;
           if (M.type === "text" && M.level === "error") logFeatureBad(L, "cmd_returned_error");
-          else logFeatureOk(L, ce);
-          if (M.type === "skip") return { messages: [], shouldQuery: !1, command: command };
+          else logFeatureOk(L, tipAttribution);
+          if (M.type === "skip")
+            return {
+              messages: [],
+              shouldQuery: false,
+              command,
+            };
           if (M.type === "compact") {
             let slashCommandMessages = [
-                syntheticCaveatMessage,
-                userMessage,
-                ...(M.displayText
-                  ? [
-                      createUserMessage({
-                        content: `<local-command-stdout>${bP(M.displayText)}</local-command-stdout>`,
-                        localCommandOutput: M.displayTextIsHintOnly ? "terminal-hint" : "stdout",
-                        ...(M.displayRepeatsSummary === !0 && { repeatsCompactSummary: !0 }),
-                        timestamp: new Date(Date.now() + 100).toISOString(),
+              syntheticCaveatMessage,
+              userMessage,
+              ...(M.displayText
+                ? [
+                    createUserMessage({
+                      content: `<local-command-stdout>${escapeForkedSkillTag(M.displayText)}</local-command-stdout>`,
+                      localCommandOutput: M.displayTextIsHintOnly ? "terminal-hint" : "stdout",
+                      ...(M.displayRepeatsSummary === true && {
+                        repeatsCompactSummary: true,
                       }),
-                    ]
-                  : []),
-              ],
-              compactionResultWithSlashMessages = {
-                ...M.compactionResult,
-                messagesToKeep: [...M.compactionResult.messagesToKeep, ...slashCommandMessages],
-              },
-              S = buildPostCompactMessages(compactionResultWithSlashMessages);
-            return (setLastCacheSafeForkMessages(S), { messages: S, shouldQuery: !1, command: command });
+                      timestamp: new Date(Date.now() + 100).toISOString(),
+                    }),
+                  ]
+                : []),
+            ];
+            let compactionResultWithSlashMessages = {
+              ...M.compactionResult,
+              messagesToKeep: [...M.compactionResult.messagesToKeep, ...slashCommandMessages],
+            };
+            let postCompactMessages = buildPostCompactMessages(compactionResultWithSlashMessages);
+            setLastCacheSafeForkMessages(postCompactMessages);
+            return {
+              messages: postCompactMessages,
+              shouldQuery: false,
+              command,
+            };
           }
           if (M.type === "query")
             return {
               messages: [
                 userMessage,
-                createCommandInputMessage(`<local-command-stdout>${bP(M.value)}</local-command-stdout>`, {
-                  commandRun: buildCommandRunInfo(command, n),
+                createCommandInputMessage(
+                  `<local-command-stdout>${escapeForkedSkillTag(M.value)}</local-command-stdout>`,
+                  {
+                    commandRun: buildCommandRunInfo(command, content),
+                  },
+                ),
+                ...(M.metaMessages ?? []).map((content) =>
+                  createUserMessage({
+                    content,
+                    isMeta: true,
+                  }),
+                ),
+                createUserMessage({
+                  content: M.prompt,
+                  isMeta: true,
                 }),
-                ...(M.metaMessages ?? []).map((U) => createUserMessage({ content: U, isMeta: !0 })),
-                createUserMessage({ content: M.prompt, isMeta: !0 }),
               ],
-              shouldQuery: !0,
-              command: command,
+              shouldQuery: true,
+              command,
               resultText: M.value,
-              ...(M.metaMessages !== void 0 && { metaTexts: M.metaMessages }),
+              ...(M.metaMessages !== undefined && {
+                metaTexts: M.metaMessages,
+              }),
             };
-          let k = M.level === "error" ? "local-command-stderr" : "local-command-stdout",
-            P = createCommandInputMessage(`<${k}>${bP(M.value)}</${k}>`, {
+          let k = M.level === "error" ? "local-command-stderr" : "local-command-stdout";
+          let commandInputMessage = createCommandInputMessage(
+            `<${k}>${escapeForkedSkillTag(M.value)}</${k}>`,
+            {
               contextUsage: M.contextUsage,
               usageReport: M.usageReport,
-              commandRun: buildCommandRunInfo(command, n),
-              commandOutcome: M.outcome ?? (M.level === "error" ? { kind: "failed" } : void 0),
-            });
-          if (O)
-            return insertMessagesInPlace(o, userMessage, {
-              messages: [P],
-              shouldQuery: !1,
-              command: command,
+              commandRun: buildCommandRunInfo(command, content),
+              commandOutcome:
+                M.outcome ??
+                (M.level === "error"
+                  ? {
+                      kind: "failed",
+                    }
+                  : undefined),
+            },
+          );
+          if (workspace)
+            return insertMessagesInPlace(context, userMessage, {
+              messages: [commandInputMessage],
+              shouldQuery: false,
+              command,
               resultText: M.value,
             });
           return {
             messages: [
               userMessage,
-              P,
-              ...(M.metaMessages ?? []).map((U) => createUserMessage({ content: U, isMeta: !0 })),
+              commandInputMessage,
+              ...(M.metaMessages ?? []).map((content) =>
+                createUserMessage({
+                  content,
+                  isMeta: true,
+                }),
+              ),
             ],
-            shouldQuery: !1,
-            command: command,
+            shouldQuery: false,
+            command,
             resultText: M.value,
-            ...(M.metaMessages !== void 0 && { metaTexts: M.metaMessages }),
+            ...(M.metaMessages !== undefined && {
+              metaTexts: M.metaMessages,
+            }),
           };
         } catch (error) {
           if (isAbortError(error))
@@ -1783,96 +2208,125 @@ async function getMessagesForSlashCommand(e, n, o, u, s, T, p, h, y, R, A, B, H,
             );
           else logError(withTelemetryMessage(toError(error), "local slash command threw"));
           let Q = isAbortError(error);
-          if (Q && o.abortController.signal.aborted) logFeatureSad(L, "cmd_local_aborted");
+          if (Q && context.abortController.signal.aborted) logFeatureSad(L, "cmd_local_aborted");
           else logFeatureBad(L, Q ? "cmd_local_aborted" : "cmd_local_threw");
-          let W = Q ? "local-command-stdout" : "local-command-stderr",
-            M = O ? cwr : "Interrupted",
-            k = Q
-              ? isBridgeOrTransport(o.session)
-                ? M
-                : error instanceof Error
-                  ? error.message || M
-                  : M
-              : commandThrowTextForTranscript(error, command.name, o.session),
-            P = createCommandInputMessage(
-              `<${W}>${escapeXml(bP(k))}</${W}>`,
-              Q
-                ? void 0
-                : { commandRun: buildCommandRunInfo(command, n), commandOutcome: { kind: "failed" } },
-            );
-          if (O)
-            return insertMessagesInPlace(o, userMessage, {
-              messages: [P],
-              shouldQuery: !1,
-              command: command,
+          let W = Q ? "local-command-stdout" : "local-command-stderr";
+          let M = workspace ? REMOTE_STOPPED_WAITING_NOTICE : "Interrupted";
+          let k = Q
+            ? isBridgeOrTransport(context.session)
+              ? M
+              : error instanceof Error
+                ? error.message || M
+                : M
+            : commandThrowTextForTranscript(error, command.name, context.session);
+          let commandInputMessage = createCommandInputMessage(
+            `<${W}>${escapeXml(escapeForkedSkillTag(k))}</${W}>`,
+            Q
+              ? undefined
+              : {
+                  commandRun: buildCommandRunInfo(command, content),
+                  commandOutcome: {
+                    kind: "failed",
+                  },
+                },
+          );
+          if (workspace)
+            return insertMessagesInPlace(context, userMessage, {
+              messages: [commandInputMessage],
+              shouldQuery: false,
+              command,
             });
-          return { messages: [userMessage, P], shouldQuery: !1, command: command };
+          return {
+            messages: [userMessage, commandInputMessage],
+            shouldQuery: false,
+            command,
+          };
         }
       }
       case "prompt": {
-        let {
-            stacked: stacked,
-            trailingArgs: trailingArgs,
-            capped: capped,
-          } = command.context === "fork" ||
-          command.getContext !== void 0 ||
+        let { stacked, trailingArgs, capped } =
+          command.context === "fork" ||
+          command.getContext !== undefined ||
           command.argsMayContainSlashCommands
-            ? { stacked: [], trailingArgs: n, capped: !1 }
-            : splitStackedCommands(n, A, o.options.commands, y ? (R ?? (() => !0)) : void 0),
-          Q = trailingArgs,
-          W;
-        if (stacked.length > 0) logEvent("tengu_stacked_slash_commands", { stacked_count: stacked.length });
-        let M = !1;
-        try {
-          let k = getCommandContextMode(command, Q, o) === "fork" && !isCoordinatorMainThread(o);
-          if (!k && (await oe?.()) === !1)
-            return (
-              logFeatureBad(
-                L,
-                o.abortController.signal.aborted ? "cmd_prompt_aborted" : "cmd_prompt_submit_hook_blocked",
-              ),
-              {
-                messages: [
-                  createUserMessage({
-                    content: prepareUserContent({
-                      inputString: formatRedactedCommandInput(command, n),
-                      precedingInputBlocks: u,
-                    }),
-                    uuid: h,
-                    origin: Z,
-                  }),
-                ],
-                shouldQuery: !0,
-                command: command,
+            ? {
+                stacked: [],
+                trailingArgs: content,
+                capped: false,
               }
+            : splitStackedCommands(content, A, context.options.commands, y ? (R ?? (() => true)) : undefined);
+        let Q = trailingArgs;
+        let W;
+        if (stacked.length > 0)
+          logEvent("tengu_stacked_slash_commands", {
+            stacked_count: stacked.length,
+          });
+        let M = false;
+        try {
+          let k = getCommandContextMode(command, Q, context) === "fork" && !isCoordinatorMainThread(context);
+          if (!k && (await oe?.()) === false) {
+            logFeatureBad(
+              L,
+              context.abortController.signal.aborted
+                ? "cmd_prompt_aborted"
+                : "cmd_prompt_submit_hook_blocked",
             );
+            return {
+              messages: [
+                createUserMessage({
+                  content: prepareUserContent({
+                    inputString: formatRedactedCommandInput(command, content),
+                    precedingInputBlocks: u,
+                  }),
+                  uuid: h,
+                  origin,
+                }),
+              ],
+              shouldQuery: true,
+              command,
+            };
+          }
           if (!(command.isMcp && command.loadedFrom !== "mcp"))
             skillLoadedSource(command.name, command, "user-slash");
-          M = !0;
-          let P = await processUserInput_2(command, Q, o);
-          if (((M = o.abortController.signal.aborted), "blocked" in P))
-            return (
-              logFeatureBad(L, "cmd_hook_blocked"),
-              M && P.blocked.screened?.dropped !== !0 ? { ...P.blocked, ownPassCutShort: !0 } : P.blocked
-            );
-          if (!o.options.isNonInteractiveSession && !y) {
-            if ((command.onUserTypedArgs?.(Q, o), command.getEffort?.(Q, o) === void 0)) {
-              let I = command.getDefaultEffort?.(Q, o)?.notice;
-              if (I) W = createSystemMessage(I, "notice");
+          M = true;
+          let P = await processUserInput_2(command, Q, context);
+          M = context.abortController.signal.aborted;
+          if ("blocked" in P) {
+            logFeatureBad(L, "cmd_hook_blocked");
+            return M && P.blocked.screened?.dropped !== true
+              ? {
+                  ...P.blocked,
+                  ownPassCutShort: true,
+                }
+              : P.blocked;
+          }
+          if (!context.options.isNonInteractiveSession && !y) {
+            command.onUserTypedArgs?.(Q, context);
+            if (command.getEffort?.(Q, context) === undefined) {
+              let notice = command.getDefaultEffort?.(Q, context)?.notice;
+              if (notice) W = createSystemMessage(notice, "notice");
             }
           }
           if (k) {
-            let I = snapshotHookRegistration(),
-              trimmed = `/${e} ${n}`.trim(),
-              J = getContentText([...u, { type: "text", text: trimmed }]) ?? trimmed;
+            let I = snapshotHookRegistration();
+            let trimmed = `/${commandName} ${content}`.trim();
+            let J =
+              getContentText([
+                ...u,
+                {
+                  type: "text",
+                  text: trimmed,
+                },
+              ]) ?? trimmed;
             if (!j) throw Error("Forked dispatch requires forkDispatchHookExecutors");
-            let ie = [],
-              de = [];
+            let ie = [];
+            let de = [];
             for await (let te of j.executeUserPromptSubmitHooks(
               J,
-              getToolPermissionContext(o).mode,
-              o,
-              promptOriginForHooks({ promptSource: D ?? "typed" }),
+              getToolPermissionContext(context).mode,
+              context,
+              promptOriginForHooks({
+                promptSource: promptSource ?? "typed",
+              }),
             )) {
               if (te.message?.type === "progress") continue;
               if (te.message?.type === "attachment") {
@@ -1886,43 +2340,49 @@ async function getMessagesForSlashCommand(e, n, o, u, s, T, p, h, y, R, A, B, H,
               if (te.blockingError) {
                 logFeatureBad(L, "cmd_prompt_submit_hook_blocked");
                 let userPromptSubmitHookBlockingMessage = j.getUserPromptSubmitHookBlockingMessage(
-                    te.blockingError,
-                  ),
-                  Te =
-                    te.suppressOriginalPrompt === !0 ||
-                    (o.userPromptLine?.isUnknownSinceDispatch() ?? hasHookRegistrationChanged(I)) ||
-                    hasPromptSubmitHooks({ isRunReached: !1 })
-                      ? userPromptSubmitHookBlockingMessage
-                      : `${userPromptSubmitHookBlockingMessage}
+                  te.blockingError,
+                );
+                let Te =
+                  te.suppressOriginalPrompt === true ||
+                  (context.userPromptLine?.isUnknownSinceDispatch() ?? hasHookRegistrationChanged(I)) ||
+                  hasPromptSubmitHooks({
+                    isRunReached: false,
+                  })
+                    ? userPromptSubmitHookBlockingMessage
+                    : `${userPromptSubmitHookBlockingMessage}
 
 Original prompt: ${J}`;
                 return {
-                  messages: [createSystemMessage(Te, "warning", void 0, !0)],
-                  shouldQuery: !1,
+                  messages: [createSystemMessage(Te, "warning", undefined, true)],
+                  shouldQuery: false,
                   resultText: Te,
-                  command: command,
-                  forkDispatched: !0,
-                  screened: { dropped: !0 },
+                  command,
+                  forkDispatched: true,
+                  screened: {
+                    dropped: true,
+                  },
                 };
               }
               if (te.preventContinuation) {
                 let x = te.stopReason
                   ? `Operation stopped by hook: ${te.stopReason}`
                   : "Operation stopped by hook";
-                return (
-                  logFeatureBad(L, "cmd_prompt_submit_hook_stopped"),
-                  {
-                    messages: [
-                      createUserMessage({ content: x }),
-                      createSystemMessage(x, "warning", void 0, !0),
-                    ],
-                    shouldQuery: !1,
-                    resultText: x,
-                    command: command,
-                    forkDispatched: !0,
-                    ...(o.abortController.signal.aborted && { ownPassCutShort: !0 }),
-                  }
-                );
+                logFeatureBad(L, "cmd_prompt_submit_hook_stopped");
+                return {
+                  messages: [
+                    createUserMessage({
+                      content: x,
+                    }),
+                    createSystemMessage(x, "warning", undefined, true),
+                  ],
+                  shouldQuery: false,
+                  resultText: x,
+                  command,
+                  forkDispatched: true,
+                  ...(context.abortController.signal.aborted && {
+                    ownPassCutShort: true,
+                  }),
+                };
               }
               if (te.additionalContexts && te.additionalContexts.length > 0)
                 ie.push(
@@ -1935,23 +2395,30 @@ Original prompt: ${J}`;
                   }),
                 );
             }
-            let aborted = o.abortController.signal.aborted;
-            if (aborted && o.userPromptLine?.isHeldForOrganization())
-              return (
-                logFeatureBad(L, "cmd_prompt_aborted"),
-                {
-                  messages: [createUserInterruptionMessage({ toolUse: !1 })],
-                  shouldQuery: !1,
-                  command: command,
-                  forkDispatched: !0,
-                  ownPassCutShort: !0,
-                }
-              );
-            if (!aborted) o.userPromptLine?.forked();
+            let aborted = context.abortController.signal.aborted;
+            if (aborted && context.userPromptLine?.isHeldForOrganization()) {
+              logFeatureBad(L, "cmd_prompt_aborted");
+              return {
+                messages: [
+                  createUserInterruptionMessage({
+                    toolUse: false,
+                  }),
+                ],
+                shouldQuery: false,
+                command,
+                forkDispatched: true,
+                ownPassCutShort: true,
+              };
+            }
+            if (!aborted) context.userPromptLine?.forked();
             let me = await executeForkedSlashCommand(
               command,
               Q,
-              { ...o, userPromptHold: void 0, userPromptLine: void 0 },
+              {
+                ...context,
+                userPromptHold: undefined,
+                userPromptLine: undefined,
+              },
               u,
               s,
               p ?? evaluateAskingNoHost,
@@ -1960,7 +2427,7 @@ Original prompt: ${J}`;
               y,
               h,
               H,
-              Z,
+              origin,
               se,
             );
             if (de.length > 0)
@@ -1969,246 +2436,285 @@ Original prompt: ${J}`;
               );
             if (me.aborted) logFeatureBad(L, "cmd_prompt_aborted");
             else if (me.threw) logFeatureBad(L, "cmd_prompt_threw");
-            else if ((logFeatureOk(L, ce), W)) me.messages.splice(1, 0, W);
+            else {
+              logFeatureOk(L, tipAttribution);
+              if (W) me.messages.splice(1, 0, W);
+            }
             return me;
           }
-          let U = await getMessagesForPromptSlashCommand(
+          let messagesForPromptSlashCommand = await getMessagesForPromptSlashCommand(
             command,
             Q,
-            o,
+            context,
             u,
             s,
             h,
             P.hookMessages,
             y,
-            Z,
+            origin,
             pe,
-            !1,
-            !1,
-            D,
+            false,
+            false,
+            promptSource,
           );
-          if (stacked.length > 0 && A !== void 0) {
-            let I = U.messages[0];
+          if (stacked.length > 0 && A !== undefined) {
+            let I = messagesForPromptSlashCommand.messages[0];
             if (I?.type === "user" && !I.isMeta) I.stackedOriginalInput = `/${command.name} ${A}`;
           }
           for (let I of stacked)
             try {
-              let S = await processUserInput_2(I, trailingArgs, o);
+              let S = await processUserInput_2(I, trailingArgs, context);
               if ("blocked" in S) {
-                if (
-                  (U.messages.push(
-                    createSystemMessage(
-                      `Stacked skill /${sanitizeTelemetryString(I.name)} blocked by UserPromptExpansion hook`,
-                      "warning",
-                    ),
-                  ),
-                  S.blocked.screened?.dropped === !0)
-                )
-                  U.screened = { dropped: !0 };
-                continue;
-              }
-              if (!o.options.isNonInteractiveSession && !y) {
-                if ((I.onUserTypedArgs?.(trailingArgs, o), I.getEffort?.(trailingArgs, o) === void 0)) {
-                  let de = I.getDefaultEffort?.(trailingArgs, o)?.notice;
-                  if (de) U.messages.push(createSystemMessage(de, "notice"));
-                }
-              }
-              if (
-                (claimCommandOverageCredit({
-                  commandName: I.name,
-                  agentId: o.agentId,
-                  isNonInteractiveSession: Boolean(o.options.isNonInteractiveSession),
-                  setAppState: o.setAppState,
-                  credentials: o.credentials,
-                }),
-                recordSkillInvoked(o.session, I.name, o.storageV5),
-                I.pluginInfo)
-              )
-                (recordPluginUsage(I.pluginInfo.repository),
-                  recordPluginActivity(
-                    I.pluginInfo.repository,
-                    "command",
-                    commandActivity(I, I.pluginInfo.pluginManifest.name),
-                  ));
-              if (!(I.isMcp && I.loadedFrom !== "mcp")) skillLoadedSource(I.name, I, "user-slash");
-              let J = await getMessagesForPromptSlashCommand(
-                  I,
-                  trailingArgs,
-                  { ...o, messages: [...o.messages, ...U.messages] },
-                  [],
-                  [],
-                  void 0,
-                  S.hookMessages,
-                  y,
-                  Z,
-                  void 0,
-                  !1,
-                  !1,
-                  D,
-                ),
-                ie = J.messages[0];
-              if (ie?.type === "user" && !ie.isMeta) ie.stackedExpansion = !0;
-              (U.messages.push(...J.messages),
-                (U.allowedTools = [...(U.allowedTools ?? []), ...(J.allowedTools ?? [])]),
-                (U.disallowedTools = [...(U.disallowedTools ?? []), ...(J.disallowedTools ?? [])]),
-                (U.model = J.model ?? U.model),
-                (U.effort = J.effort ?? U.effort));
-            } catch (error) {
-              if (isAbortError(error)) throw error;
-              (logError(withTelemetryMessage(toError(error), "stacked slash command expansion threw")),
-                U.messages.push(
+                messagesForPromptSlashCommand.messages.push(
                   createSystemMessage(
-                    `Stacked skill /${sanitizeTelemetryString(I.name)} failed to load: ${commandThrowTextForTranscript(error, I.name, o.session)}`,
+                    `Stacked skill /${sanitizeTelemetryString(I.name)} blocked by UserPromptExpansion hook`,
                     "warning",
                   ),
-                ));
+                );
+                if (S.blocked.screened?.dropped === true)
+                  messagesForPromptSlashCommand.screened = {
+                    dropped: true,
+                  };
+                continue;
+              }
+              if (!context.options.isNonInteractiveSession && !y) {
+                I.onUserTypedArgs?.(trailingArgs, context);
+                if (I.getEffort?.(trailingArgs, context) === undefined) {
+                  let notice = I.getDefaultEffort?.(trailingArgs, context)?.notice;
+                  if (notice)
+                    messagesForPromptSlashCommand.messages.push(createSystemMessage(notice, "notice"));
+                }
+              }
+              claimCommandOverageCredit({
+                commandName: I.name,
+                agentId: context.agentId,
+                isNonInteractiveSession: Boolean(context.options.isNonInteractiveSession),
+                setAppState: context.setAppState,
+                credentials: context.credentials,
+              });
+              recordSkillInvoked(context.session, I.name, context.storageV5);
+              if (I.pluginInfo) {
+                recordPluginUsage(I.pluginInfo.repository);
+                recordPluginActivity(
+                  I.pluginInfo.repository,
+                  "command",
+                  commandActivity(I, I.pluginInfo.pluginManifest.name),
+                );
+              }
+              if (!(I.isMcp && I.loadedFrom !== "mcp")) skillLoadedSource(I.name, I, "user-slash");
+              let messagesForPromptSlashCommand_2 = await getMessagesForPromptSlashCommand(
+                I,
+                trailingArgs,
+                {
+                  ...context,
+                  messages: [...context.messages, ...messagesForPromptSlashCommand.messages],
+                },
+                [],
+                [],
+                undefined,
+                S.hookMessages,
+                y,
+                origin,
+                undefined,
+                false,
+                false,
+                promptSource,
+              );
+              let ie = messagesForPromptSlashCommand_2.messages[0];
+              if (ie?.type === "user" && !ie.isMeta) ie.stackedExpansion = true;
+              messagesForPromptSlashCommand.messages.push(...messagesForPromptSlashCommand_2.messages);
+              messagesForPromptSlashCommand.allowedTools = [
+                ...(messagesForPromptSlashCommand.allowedTools ?? []),
+                ...(messagesForPromptSlashCommand_2.allowedTools ?? []),
+              ];
+              messagesForPromptSlashCommand.disallowedTools = [
+                ...(messagesForPromptSlashCommand.disallowedTools ?? []),
+                ...(messagesForPromptSlashCommand_2.disallowedTools ?? []),
+              ];
+              messagesForPromptSlashCommand.model =
+                messagesForPromptSlashCommand_2.model ?? messagesForPromptSlashCommand.model;
+              messagesForPromptSlashCommand.effort =
+                messagesForPromptSlashCommand_2.effort ?? messagesForPromptSlashCommand.effort;
+            } catch (error) {
+              if (isAbortError(error)) throw error;
+              logError(withTelemetryMessage(toError(error), "stacked slash command expansion threw"));
+              messagesForPromptSlashCommand.messages.push(
+                createSystemMessage(
+                  `Stacked skill /${sanitizeTelemetryString(I.name)} failed to load: ${commandThrowTextForTranscript(error, I.name, context.session)}`,
+                  "warning",
+                ),
+              );
             }
           if (capped)
-            U.messages.push(
+            messagesForPromptSlashCommand.messages.push(
               createSystemMessage(
                 `Stacked command limit (${MAX_STACKED_COMMANDS}) reached \u2014 remaining input passed as arguments`,
                 "warning",
               ),
             );
-          if (W) U.messages.push(W);
-          return (logFeatureOk(L, ce), U);
+          if (W) messagesForPromptSlashCommand.messages.push(W);
+          logFeatureOk(L, tipAttribution);
+          return messagesForPromptSlashCommand;
         } catch (error) {
           if (isAbortError(error)) {
             logFeatureBad(L, "cmd_prompt_aborted");
             let P = [
               createUserMessage({
                 content: prepareUserContent({
-                  inputString: formatCommandInput(command, n),
+                  inputString: formatCommandInput(command, content),
                   precedingInputBlocks: u,
                 }),
                 uuid: h,
               }),
             ];
-            if (!isSilentAbortReason(o.abortController.signal.reason))
+            if (!isSilentAbortReason(context.abortController.signal.reason))
               P.push(
                 createUserInterruptionMessage({
-                  toolUse: !1,
-                  interruptedByShutdown: shutdownInterruptStamp(o.abortController.signal),
+                  toolUse: false,
+                  interruptedByShutdown: shutdownInterruptStamp(context.abortController.signal),
                 }),
               );
-            return { messages: P, shouldQuery: !1, command: command, ...(M && { ownPassCutShort: !0 }) };
+            return {
+              messages: P,
+              shouldQuery: false,
+              command,
+              ...(M && {
+                ownPassCutShort: true,
+              }),
+            };
           }
-          return (
-            logFeatureBad(L, "cmd_prompt_threw"),
-            {
-              messages: [
-                createUserMessage({
-                  content: prepareUserContent({
-                    inputString: formatCommandInput(command, n),
-                    precedingInputBlocks: u,
-                  }),
-                  uuid: h,
+          logFeatureBad(L, "cmd_prompt_threw");
+          return {
+            messages: [
+              createUserMessage({
+                content: prepareUserContent({
+                  inputString: formatCommandInput(command, content),
+                  precedingInputBlocks: u,
                 }),
-                createUserMessage({
-                  content: `<local-command-stderr>${escapeXml(commandThrowTextForTranscript(error, command.name, o.session))}</local-command-stderr>`,
-                  localCommandOutput: "stderr",
-                }),
-              ],
-              shouldQuery: !1,
-              command: command,
-            }
-          );
+                uuid: h,
+              }),
+              createUserMessage({
+                content: `<local-command-stderr>${escapeXml(commandThrowTextForTranscript(error, command.name, context.session))}</local-command-stderr>`,
+                localCommandOutput: "stderr",
+              }),
+            ],
+            shouldQuery: false,
+            command,
+          };
         }
       }
     }
   } catch (error) {
-    if (error instanceof MalformedCommandError)
-      return (
-        logFeatureBad(L, "cmd_malformed"),
-        {
-          messages: [
-            createUserMessage({
-              content: prepareUserContent({ inputString: error.message, precedingInputBlocks: u }),
+    if (error instanceof MalformedCommandError) {
+      logFeatureBad(L, "cmd_malformed");
+      return {
+        messages: [
+          createUserMessage({
+            content: prepareUserContent({
+              inputString: error.message,
+              precedingInputBlocks: u,
             }),
-          ],
-          shouldQuery: !1,
-          command: command,
-        }
-      );
+          }),
+        ],
+        shouldQuery: false,
+        command,
+      };
+    }
     throw error;
   }
 }
 //@ chunk-3g0djq3w.js:42876-42937 layout
-function formatCommandInput(e, n) {
-  let o = buildCommandRunInfo(e, n);
-  return formatCommandInputTags(o.command, o.args);
+function formatCommandInput(command, n) {
+  let commandRunInfo = buildCommandRunInfo(command, n);
+  return formatCommandInputTags(commandRunInfo.command, commandRunInfo.args);
 }
 //@ chunk-3g0djq3w.js:42937-42998 layout
-function formatRedactedCommandInput(e, n) {
+function formatRedactedCommandInput(command, args) {
   return formatCommandInputTags(
-    sanitizeTelemetryString(getCommandName(e)),
-    hasSensitiveArgs(e, n) ? "***" : redactSecrets(n),
+    sanitizeTelemetryString(getCommandName(command)),
+    hasSensitiveArgs(command, args) ? "***" : redactSecrets(args),
   );
 }
 //@ chunk-3g0djq3w.js:42998-43055 layout
 function emptyIfHandled(e, n) {
-  return e ? { messages: [], shouldQuery: !1 } : n;
+  return e
+    ? {
+        messages: [],
+        shouldQuery: false,
+      }
+    : n;
 }
 //@ chunk-3g0djq3w.js:43055-43064 layout
 var MAX_STACKED_COMMANDS = 5;
 //@ chunk-3g0djq3w.js:43064-43668 layout
-function splitStackedCommands(e, n, o, u) {
-  if (n === void 0 && u === void 0) return { stacked: [], trailingArgs: e, capped: !1 };
-  let s = [],
-    T = e,
-    p = n,
-    h = !1;
-  for (let y = 0; ; y++) {
-    let trimStart = T.trimStart();
-    if (!trimStart.startsWith("/")) break;
-    if (y >= MAX_STACKED_COMMANDS) {
-      h = !0;
+function splitStackedCommands(e, n, commands, u) {
+  if (n === undefined && u === undefined)
+    return {
+      stacked: [],
+      trailingArgs: e,
+      capped: false,
+    };
+  let s = [];
+  let T = e;
+  let p = n;
+  let capped = false;
+  for (let k = 0; ; k++) {
+    let R = T.trimStart();
+    if (!R.startsWith("/")) break;
+    if (k >= MAX_STACKED_COMMANDS) {
+      capped = true;
       break;
     }
-    let A = parseSlashCommand(trimStart);
-    if (!A) break;
+    let slashCommand = parseSlashCommand(R);
+    if (!slashCommand) break;
     let B = p;
-    if (p !== void 0) {
-      let trimStart = p.trimStart(),
-        j = trimStart.startsWith("/") ? parseSlashCommand(trimStart) : void 0;
-      if (!j || j.commandName !== A.commandName) break;
+    if (p !== undefined) {
+      let D = p.trimStart();
+      let j = D.startsWith("/") ? parseSlashCommand(D) : undefined;
+      if (!j || j.commandName !== slashCommand.commandName) break;
       B = j.args;
     }
-    let H = findCommand(A.commandName, o);
+    let command = findCommand(slashCommand.commandName, commands);
     if (
-      !H ||
-      H.type !== "prompt" ||
-      H.context === "fork" ||
-      H.getContext !== void 0 ||
-      H.argsMayContainSlashCommands ||
-      H.userInvocable === !1 ||
-      !isCommandEnabled(H) ||
-      isSkillOff(H)
+      !command ||
+      command.type !== "prompt" ||
+      command.context === "fork" ||
+      command.getContext !== undefined ||
+      command.argsMayContainSlashCommands ||
+      command.userInvocable === false ||
+      !isCommandEnabled(command) ||
+      isSkillOff(command)
     )
       break;
-    if (((T = A.args), (p = B), u?.(H))) continue;
-    s.push(H);
+    T = slashCommand.args;
+    p = B;
+    if (u?.(command)) continue;
+    s.push(command);
   }
-  return { stacked: s, trailingArgs: T, capped: h };
+  return {
+    stacked: s,
+    trailingArgs: T,
+    capped,
+  };
 }
+//@ chunk-3g0djq3w.js:43668-43782 facade-exports
 /**
  * 技能加载中的元数据标签文本（command-name/message 标签）。
  */
-//@ chunk-3g0djq3w.js:43668-43782 facade-exports
-function formatSkillLoadingMetadata(e, n = "loading") {
+function formatSkillLoadingMetadata(skillName, _progressMessage = "loading") {
   return [
-    `<${COMMAND_MESSAGE}>${e}</${COMMAND_MESSAGE}>`,
-    `<${COMMAND_NAME}>${e}</${COMMAND_NAME}>`,
+    `<${COMMAND_MESSAGE}>${skillName}</${COMMAND_MESSAGE}>`,
+    `<${COMMAND_NAME}>${skillName}</${COMMAND_NAME}>`,
     `<${SKILL_FORMAT}>true</${SKILL_FORMAT}>`,
   ].join(`
 `);
 }
+//@ chunk-3g0djq3w.js:43782-43818 facade-exports
 /**
  * 消息是否是技能加载中的元数据。
  */
-//@ chunk-3g0djq3w.js:43782-43818 facade-exports
-function isSkillLoadingMetadata(e, n) {
-  return e === formatSkillLoadingMetadata(n);
+function isSkillLoadingMetadata(e, skillName) {
+  return e === formatSkillLoadingMetadata(skillName);
 }
 //@ chunk-3g0djq3w.js:43818-43957 fingerprint = formatSlashCommandLoadingMetadata (1)
 function formatSlashCommandLoadingMetadata(commandName, args) {
@@ -2221,7 +2727,7 @@ function formatSlashCommandLoadingMetadata(commandName, args) {
 }
 //@ chunk-3g0djq3w.js:43957-44243 fingerprint = formatCommandLoadingMetadata (0.703)
 function formatCommandLoadingMetadata(command, args) {
-  if (command.userInvocable !== !1) return formatSlashCommandLoadingMetadata(command.name, args);
+  if (command.userInvocable !== false) return formatSlashCommandLoadingMetadata(command.name, args);
   if (
     command.loadedFrom === "skills" ||
     command.loadedFrom === "syncedSkills" ||
@@ -2233,72 +2739,87 @@ function formatCommandLoadingMetadata(command, args) {
     return formatSkillLoadingMetadata(command.name, command.progressMessage);
   return formatSlashCommandLoadingMetadata(command.name, args);
 }
+//@ chunk-3g0djq3w.js:45446-45742 facade-exports = processPromptSlashCommand (1)
 /**
  * processPromptSlashCommand：只处理 prompt 型命令，展开为消息。
  */
-//@ chunk-3g0djq3w.js:45446-45742 facade-exports = processPromptSlashCommand (1)
-async function processPromptSlashCommand(e, n, o, u, s = !1, T = !1) {
-  let command = findCommand(e, o);
-  if (!command) throw new MalformedCommandError(`Unknown command: ${sanitizeTelemetryString(e)}`);
+async function processPromptSlashCommand(commandName, args, commands, context, s = false, T = false) {
+  let command = findCommand(commandName, commands);
+  if (!command) throw new MalformedCommandError(`Unknown command: ${sanitizeTelemetryString(commandName)}`);
   if (command.type !== "prompt")
     throw Error(
-      `Unexpected ${command.type} command. Expected 'prompt' command. Use /${e} directly in the main conversation.`,
+      `Unexpected ${command.type} command. Expected 'prompt' command. Use /${commandName} directly in the main conversation.`,
     );
-  return getMessagesForPromptSlashCommand(command, n, u, [], [], void 0, [], void 0, void 0, void 0, s, T);
+  return getMessagesForPromptSlashCommand(
+    command,
+    args,
+    context,
+    [],
+    [],
+    undefined,
+    [],
+    undefined,
+    undefined,
+    undefined,
+    s,
+    T,
+  );
 }
+//@ chunk-3g0djq3w.js:45742-50793 fingerprint = getMessagesForPromptSlashCommand (0.431)
 /**
  * getMessagesForPromptSlashCommand：prompt 型命令/技能展开为消息（含 MCP prompt、禁止模型调用检查）。
  */
-//@ chunk-3g0djq3w.js:45742-50793 fingerprint = getMessagesForPromptSlashCommand (0.431)
 async function getMessagesForPromptSlashCommand(
-  e,
+  command,
   n,
   o,
   u = [],
   s = [],
-  T,
-  p = [],
+  uuid,
+  hookMessages = [],
   h,
   y,
   R,
-  A = !1,
-  B = !1,
-  H,
+  A = false,
+  B = false,
+  promptSource,
 ) {
-  let D = await checkCommandSyncedAccess(e);
-  if (qCe(e) || isShippedSkillExecutionBlocked(e))
-    throw new MalformedCommandError(`Unknown command: ${sanitizeTelemetryString(e.name)}`);
-  if (LZ(D))
-    throw (gse(e, D), new MalformedCommandError(`Unknown command: ${sanitizeTelemetryString(e.name)}`));
+  let D = await checkCommandSyncedAccess(command);
+  if (syncedSkillRefusalReason(command) || isShippedSkillExecutionBlocked(command))
+    throw new MalformedCommandError(`Unknown command: ${sanitizeTelemetryString(command.name)}`);
+  if (isDefined(D)) {
+    logSyncedCommandRefused(command, D);
+    throw new MalformedCommandError(`Unknown command: ${sanitizeTelemetryString(command.name)}`);
+  }
   if (isCoordinatorMainThread(o) && !A) {
-    let metadata = formatCommandLoadingMetadata(e, n),
-      me = e.isMcp && e.loadedFrom !== "mcp",
-      te = isHiddenFromModel(e);
-    if (e.disableModelInvocation || me || te) {
+    let metadata = formatCommandLoadingMetadata(command, n);
+    let me = command.isMcp && command.loadedFrom !== "mcp";
+    let te = isHiddenFromModel(command);
+    if (command.disableModelInvocation || me || te) {
       let parts = [
         me
-          ? `"/${sanitizeTelemetryString(e.name)}" is an MCP prompt and cannot run in coordinator mode: the coordinator does not load prompt content, and workers cannot invoke MCP prompts via the ${SKILL} tool.`
-          : `Skill "/${sanitizeTelemetryString(e.name)}" is user-invocable only (${e.disableModelInvocation ? "disable-model-invocation" : "disabled for model invocation in settings"}) and cannot run in coordinator mode: the coordinator does not load skill content, and workers cannot invoke it via the ${SKILL} tool.`,
+          ? `"/${sanitizeTelemetryString(command.name)}" is an MCP prompt and cannot run in coordinator mode: the coordinator does not load prompt content, and workers cannot invoke MCP prompts via the ${SKILL} tool.`
+          : `Skill "/${sanitizeTelemetryString(command.name)}" is user-invocable only (${command.disableModelInvocation ? "disable-model-invocation" : "disabled for model invocation in settings"}) and cannot run in coordinator mode: the coordinator does not load skill content, and workers cannot invoke it via the ${SKILL} tool.`,
       ];
-      if (e.description) parts.push(`Description: ${e.description}`);
-      let mapped = Object.entries(e.subcommands ?? {})
-        .filter(([, Ce]) => {
-          let Se = findCommand(Ce, o.options.commands);
+      if (command.description) parts.push(`Description: ${command.description}`);
+      let mapped = Object.entries(command.subcommands ?? {})
+        .filter(([, value]) => {
+          let command = findCommand(value, o.options.commands);
           return (
-            Se !== void 0 &&
-            isCommandEnabled(Se) &&
-            !Se.disableModelInvocation &&
-            !isHiddenFromModel(Se) &&
-            !(Se.isMcp && Se.loadedFrom !== "mcp")
+            command !== undefined &&
+            isCommandEnabled(command) &&
+            !command.disableModelInvocation &&
+            !isHiddenFromModel(command) &&
+            !(command.isMcp && command.loadedFrom !== "mcp")
           );
         })
-        .map(([Ce]) => Ce);
+        .map(([key]) => key);
       if (mapped.length > 0)
         parts.push(
-          `Note: the subcommands ${mapped.map((Ce) => `"/${sanitizeTelemetryString(e.name)} ${sanitizeTelemetryString(Ce)}"`).join(", ")} route to their own dedicated commands and DO still work when the user types them directly in the terminal (remote-control clients gate some commands separately).`,
+          `Note: the subcommands ${mapped.map((Ce) => `"/${sanitizeTelemetryString(command.name)} ${sanitizeTelemetryString(Ce)}"`).join(", ")} route to their own dedicated commands and DO still work when the user types them directly in the terminal (remote-control clients gate some commands separately).`,
         );
       parts.push(`
-Do not instruct workers to invoke this via the ${SKILL} tool \u2014 it will be refused. Tell the user that ${mapped.length > 0 ? `/${sanitizeTelemetryString(e.name)} itself (beyond the subcommands above) is` : `the /${sanitizeTelemetryString(e.name)} command is`} unavailable in coordinator mode. If \u2014 and only if \u2014 the underlying task is achievable with the tools workers actually hold, you may brief a worker to do that work directly; do not promise this otherwise.`);
+Do not instruct workers to invoke this via the ${SKILL} tool \u2014 it will be refused. Tell the user that ${mapped.length > 0 ? `/${sanitizeTelemetryString(command.name)} itself (beyond the subcommands above) is` : `the /${sanitizeTelemetryString(command.name)} command is`} unavailable in coordinator mode. If \u2014 and only if \u2014 the underlying task is achievable with the tools workers actually hold, you may brief a worker to do that work directly; do not promise this otherwise.`);
       let ye = [
         {
           type: "text",
@@ -2308,179 +2829,237 @@ Do not instruct workers to invoke this via the ${SKILL} tool \u2014 it will be r
       ];
       return {
         messages: [
-          createUserMessage({ content: metadata, uuid: T, origin: y }),
+          createUserMessage({
+            content: metadata,
+            uuid,
+            origin: y,
+          }),
           ...markTurnCompanions([
-            withCommandTextBlocks(createUserMessage({ content: concatIfAny(s, u, ye), isMeta: !0 }), u, ye),
-            ...p,
+            withCommandTextBlocks(
+              createUserMessage({
+                content: concatIfAny(s, u, ye),
+                isMeta: true,
+              }),
+              u,
+              ye,
+            ),
+            ...hookMessages,
           ]),
         ],
-        shouldQuery: !0,
-        disallowedTools: splitRuleList(e.disallowedTools ?? []),
-        command: e,
+        shouldQuery: true,
+        disallowedTools: splitRuleList(command.disallowedTools ?? []),
+        command,
       };
     }
-    let x = [`Skill "/${sanitizeTelemetryString(e.name)}" is available for workers.`];
-    if (e.description) x.push(`Description: ${e.description}`);
-    if (e.whenToUse) x.push(`When to use: ${e.whenToUse}`);
-    let Me = await armedAllowedToolsOf(e);
-    if (Me.length > 0)
-      x.push(
-        `This skill grants workers additional tool permissions: ${Me.map(sanitizeTelemetryString).join(", ")}`,
+    let parts = [`Skill "/${sanitizeTelemetryString(command.name)}" is available for workers.`];
+    if (command.description) parts.push(`Description: ${command.description}`);
+    if (command.whenToUse) parts.push(`When to use: ${command.whenToUse}`);
+    let skillAllowedTools = await armedAllowedToolsOf(command);
+    if (skillAllowedTools.length > 0)
+      parts.push(
+        `This skill grants workers additional tool permissions: ${skillAllowedTools.map(sanitizeTelemetryString).join(", ")}`,
       );
-    x.push(`
-Instruct a worker to use this skill by including "Use the /${sanitizeTelemetryString(e.name)} skill" in your Agent prompt. The worker has access to the Skill tool and will receive the skill's content and permissions when it invokes it.`);
+    parts.push(`
+Instruct a worker to use this skill by including "Use the /${sanitizeTelemetryString(command.name)} skill" in your Agent prompt. The worker has access to the Skill tool and will receive the skill's content and permissions when it invokes it.`);
     let Te = [
       {
         type: "text",
-        text: x.join(`
+        text: parts.join(`
 `),
       },
     ];
     return {
       messages: [
-        createUserMessage({ content: metadata, uuid: T, origin: y }),
+        createUserMessage({
+          content: metadata,
+          uuid,
+          origin: y,
+        }),
         ...markTurnCompanions([
-          withCommandTextBlocks(createUserMessage({ content: concatIfAny(s, u, Te), isMeta: !0 }), u, Te),
-          ...p,
+          withCommandTextBlocks(
+            createUserMessage({
+              content: concatIfAny(s, u, Te),
+              isMeta: true,
+            }),
+            u,
+            Te,
+          ),
+          ...hookMessages,
         ]),
       ],
-      shouldQuery: !0,
-      disallowedTools: splitRuleList(e.disallowedTools ?? []),
-      command: e,
+      shouldQuery: true,
+      disallowedTools: splitRuleList(command.disallowedTools ?? []),
+      command,
     };
   }
-  let j = [],
-    Z = [],
-    se = {
-      ...o,
-      submissionOrigin: y,
-      promptSource: H,
-      promptShellHandOff: j,
-      mcpSkillLoaded: Z,
-      ...((h || A) && {
-        options: {
-          ...o.options,
-          ...(h && { modelScheduledOrigin: !0 }),
-          ...(A && { isSkillPreload: !0, readOnlySkillLoad: !0 }),
-        },
-      }),
-    },
-    pe = await applySkillPromptHooks(e.name, await e.getPromptForCommand(n, se), e),
-    at = Z.at(-1);
-  if (e.loadedFrom === "mcp" && at === void 0)
+  let j = [];
+  let Z = [];
+  let se = {
+    ...o,
+    submissionOrigin: y,
+    promptSource,
+    promptShellHandOff: j,
+    mcpSkillLoaded: Z,
+    ...((h || A) && {
+      options: {
+        ...o.options,
+        ...(h && {
+          modelScheduledOrigin: true,
+        }),
+        ...(A && {
+          isSkillPreload: true,
+          readOnlySkillLoad: true,
+        }),
+      },
+    }),
+  };
+  let pe = await applySkillPromptHooks(command.name, await command.getPromptForCommand(n, se), command);
+  let last = Z.at(-1);
+  if (command.loadedFrom === "mcp" && last === undefined)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `The skill "${sanitizeTelemetryString(e.name)}" was not loaded because of a fault in Claude Code: it has no record of the files that the skill was verified against. Do not try again.`,
+      `The skill "${sanitizeTelemetryString(command.name)}" was not loaded because of a fault in Claude Code: it has no record of the files that the skill was verified against. Do not try again.`,
       "MCP skill body has no verified entry",
     );
-  let r = A ? [] : await armedAllowedToolsOf(e),
-    L = !A && (e.hooks !== void 0 || r.length > 0) ? await checkCommandSyncedAccess(e) : void 0,
-    ce = (!isRestrictedToPluginOnly("hooks") || isSourceAdminTrusted(e.source)) && !A,
-    E = e.hooks !== void 0 && !ce,
-    O;
-  if (L !== void 0) {
-    let G = { hooks: e.hooks !== void 0 && ce, grant: r.length > 0 };
-    if (G.hooks || G.grant) logSyncedSkillRestricted(sanitizeTelemetryString(e.name), L, G);
-  } else if (e.hooks && ce) {
+  let r = A ? [] : await armedAllowedToolsOf(command);
+  let L =
+    !A && (command.hooks !== undefined || r.length > 0) ? await checkCommandSyncedAccess(command) : undefined;
+  let ce = (!isRestrictedToPluginOnly("hooks") || isSourceAdminTrusted(command.source)) && !A;
+  let E = command.hooks !== undefined && !ce;
+  let O;
+  if (L !== undefined) {
+    let G = {
+      hooks: command.hooks !== undefined && ce,
+      grant: r.length > 0,
+    };
+    if (G.hooks || G.grant) logSyncedSkillRestricted(sanitizeTelemetryString(command.name), L, G);
+  } else if (command.hooks && ce) {
     let sessionId = getSessionId();
-    if (
-      ((O = checkSkillHooksFit(
-        o.sessionHooksRegistry,
-        sessionId,
-        e.source,
-        getCommandRepository(e),
-        e.name,
-        e.hooks,
-      )),
-      O === void 0)
-    )
+    O = checkSkillHooksFit(
+      o.sessionHooksRegistry,
+      sessionId,
+      command.source,
+      getCommandRepository(command),
+      command.name,
+      command.hooks,
+    );
+    if (O === undefined)
       registerSkillHooks(
         o.sessionHooksRegistry,
         sessionId,
-        e.hooks,
-        e.name,
-        e.type === "prompt" ? e.skillRoot : void 0,
-        areCommandHooksHeld(e),
-        yyt(e.source),
-        getCommandRepository(e),
+        command.hooks,
+        command.name,
+        command.type === "prompt" ? command.skillRoot : undefined,
+        areCommandHooksHeld(command),
+        isRepoFrontmatterHookRestricted(command.source),
+        getCommandRepository(command),
       );
   }
-  let F = e.source ? `${e.source}:${e.name}` : e.name,
-    joined = pe.filter((G) => G.type === "text").map((G) => G.text).join(`
+  let F = command.source ? `${command.source}:${command.name}` : command.name;
+  let joined = pe.filter((G) => G.type === "text").map((G) => G.text).join(`
 
 `);
-  rSt(joined, "skill", o.credentials, o.storageV5, o.appendSystemMessage);
-  let W = exe(getBareCommandNameUnlessSynced(e)),
-    M = A && W !== null;
-  if (!M) addInvokedSkill(e.name, F, joined, o.agentId ?? null, at !== void 0);
+  notifySetupGuideLoaded(joined, "skill", o.credentials, o.storageV5, o.appendSystemMessage);
+  let W = slashTestPattern(getBareCommandNameUnlessSynced(command));
+  let M = A && W !== null;
+  if (!M) addInvokedSkill(command.name, F, joined, o.agentId ?? null, last !== undefined);
   if (W && !A)
     o.applyAttributionOp({
       kind: "recordVerification",
       method: W,
-      checkout: await resolveSkillGitRoot(e, gl()),
+      checkout: await resolveSkillGitRoot(command, getCwdOrNull()),
     });
-  o.options.activeSkill = getBareCommandName(e);
-  let metadata = formatCommandLoadingMetadata(e, n),
-    P = L !== void 0 || O !== void 0 || E ? [] : splitRuleList(r),
-    additionalAllowedTools = splitRuleList(e.disallowedTools ?? []);
+  o.options.activeSkill = getBareCommandName(command);
+  let metadata = formatCommandLoadingMetadata(command, n);
+  let allowedTools = L !== undefined || O !== undefined || E ? [] : splitRuleList(r);
+  let additionalAllowedTools = splitRuleList(command.disallowedTools ?? []);
   if (additionalAllowedTools.length > 0)
     setCommandDenyRules(o.setToolPermissionContext, additionalAllowedTools, "union");
-  let I = concatIfAny(s, u, pe),
-    J =
-      isSkillShownToModel(e) || A || h || B
-        ? []
-        : await toArray_2(
-            getAttachmentMessages(
-              pe
-                .filter((block) => block.type === "text")
-                .map((block) => block.text)
-                .join(" "),
-              o,
-              R ?? null,
-              [],
-              { now: () => new Date().toISOString(), uuid: () => randomUUID() },
-              o.messages,
-              "repl_main_thread",
-              { planSlugSeed: n },
-            ),
+  let I = concatIfAny(s, u, pe);
+  let J =
+    isSkillShownToModel(command) || A || h || B
+      ? []
+      : await toArray_2(
+          getAttachmentMessages(
+            pe
+              .filter((block) => block.type === "text")
+              .map((block) => block.text)
+              .join(" "),
+            o,
+            R ?? null,
+            [],
+            {
+              now: () => new Date().toISOString(),
+              uuid: () => randomUUID(),
+            },
+            o.messages,
+            "repl_main_thread",
+            {
+              planSlugSeed: n,
+            },
           ),
-    ie = await scopedSkillVariantNote(e, getProjectRootOrNull(), o);
+        );
+  let ie = await scopedSkillVariantNote(command, getProjectRootOrNull(), o);
   return {
     messages: [
-      createUserMessage({ content: metadata, uuid: T, origin: y }),
+      createUserMessage({
+        content: metadata,
+        uuid,
+        origin: y,
+      }),
       ...markTurnCompanions([
         withCommandTextBlocks(
           createUserMessage({
             content: I,
-            isMeta: !0,
-            ...(j.length > 0 && { promptShellHandOff: { agentId: o.agentId ?? null, commands: j } }),
-            ...(at !== void 0 && { mcpSkill: { ...at, name: e.name } }),
+            isMeta: true,
+            ...(j.length > 0 && {
+              promptShellHandOff: {
+                agentId: o.agentId ?? null,
+                commands: j,
+              },
+            }),
+            ...(last !== undefined && {
+              mcpSkill: {
+                ...last,
+                name: command.name,
+              },
+            }),
             ...(isSoftSparkEnabled() &&
               !M &&
-              o.agentId === void 0 &&
-              I === pe && { invokedSkill: { name: e.name, path: F } }),
+              o.agentId === undefined &&
+              I === pe && {
+                invokedSkill: {
+                  name: command.name,
+                  path: F,
+                },
+              }),
           }),
           u,
           pe,
         ),
         ...(ie ? [ie] : []),
-        ...(O !== void 0 || (E && !A)
-          ? [createUserMessage({ content: wrapInSystemReminder(yt), isMeta: !0 })]
+        ...(O !== undefined || (E && !A)
+          ? [
+              createUserMessage({
+                content: wrapInSystemReminder(SKILL_HOOKS_NOT_REGISTERED_TEXT),
+                isMeta: true,
+              }),
+            ]
           : []),
         ...J,
-        ...p,
+        ...hookMessages,
       ]),
       createAttachmentMessage({
         type: "command_permissions",
-        allowedTools: P,
-        model: inlineSkillModelOverride(e.model),
+        allowedTools,
+        model: inlineSkillModelOverride(command.model),
       }),
     ],
-    shouldQuery: !0,
-    allowedTools: P,
+    shouldQuery: true,
+    allowedTools,
     disallowedTools: additionalAllowedTools,
-    model: inlineSkillModelOverride(e.model),
-    effort: e.getEffort?.(n, o) ?? e.getDefaultEffort?.(n, o)?.value ?? e.effort,
-    command: e,
+    model: inlineSkillModelOverride(command.model),
+    effort: command.getEffort?.(n, o) ?? command.getDefaultEffort?.(n, o)?.value ?? command.effort,
+    command,
   };
 }
 //@ chunk-3g0djq3w.js:50793-50861 affinity
@@ -2488,79 +3067,119 @@ function concatIfAny(e, n, o) {
   return e.length > 0 || n.length > 0 ? [...e, ...n, ...o] : o;
 }
 //@ chunk-3g0djq3w.js:50861-51001 affinity
-function insertMessagesInPlace(e, n, o) {
-  return (
-    e.applyMessageOp({ type: "insert-after-uuid", uuid: n.uuid, messages: o.messages }),
-    { ...o, messages: [], settledInPlace: !0 }
-  );
+function insertMessagesInPlace(e, userMessage, o) {
+  e.applyMessageOp({
+    type: "insert-after-uuid",
+    uuid: userMessage.uuid,
+    messages: o.messages,
+  });
+  return {
+    ...o,
+    messages: [],
+    settledInPlace: true,
+  };
 }
 //@ chunk-3g0djq3w.js:51001-51077 affinity
 function markTurnCompanions(e) {
-  return e.map((n) => (n.type === "user" ? { ...n, turnCompanion: !0 } : n));
+  return e.map((n) =>
+    n.type === "user"
+      ? {
+          ...n,
+          turnCompanion: true,
+        }
+      : n,
+  );
 }
+//@ chunk-e6aww6q8.js:5048489-5048750 placement
 /**
  * 为代理创建状态发射器：设置模式、重试状态与回合 effort。
  */
-//@ chunk-e6aww6q8.js:5048489-5048750 placement
-function createAgentStatusEmitter(e) {
+function createAgentStatusEmitter(agentId) {
   return {
-    setMode(n) {
-      h0e.emit({ kind: "agent-mode", agentId: e, mode: n });
+    setMode(mode) {
+      lazyCommandRunSignal.emit({
+        kind: "agent-mode",
+        agentId,
+        mode,
+      });
     },
-    setRetryStatus(n) {
-      h0e.emit({ kind: "agent-retry-status", agentId: e, retryStatus: n });
+    setRetryStatus(retryStatus) {
+      lazyCommandRunSignal.emit({
+        kind: "agent-retry-status",
+        agentId,
+        retryStatus,
+      });
     },
-    setTurnEffort(n, r = null) {
-      h0e.emit({ kind: "agent-turn-effort", agentId: e, turnEffort: n, turnModel: r });
+    setTurnEffort(turnEffort, turnModel = null) {
+      lazyCommandRunSignal.emit({
+        kind: "agent-turn-effort",
+        agentId,
+        turnEffort,
+        turnModel,
+      });
     },
   };
 }
+//@ chunk-e6aww6q8.js:5048750-5049005 placement
 /**
  * "Running SessionStart hooks…" 提示与主线程 spinner 状态发射器。
  */
-//@ chunk-e6aww6q8.js:5048750-5049005 placement
-var SESSION_START_HOOKS_MESSAGE = "Running SessionStart hooks\u2026",
-  pae = {
-    setSpinnerMessage(e) {
-      h0e.emit({ kind: "main-message", message: e });
-    },
-    setSpinnerColors(e, n) {
-      h0e.emit({ kind: "main-colors", color: e, shimmerColor: n });
-    },
-    setResponseHeld(e) {
-      h0e.emit({ kind: "main-response-held", held: e });
-    },
-  };
+var SESSION_START_HOOKS_MESSAGE = "Running SessionStart hooks\u2026";
+var sessionStartHooksUi = {
+  setSpinnerMessage(message) {
+    lazyCommandRunSignal.emit({
+      kind: "main-message",
+      message,
+    });
+  },
+  setSpinnerColors(color, shimmerColor) {
+    lazyCommandRunSignal.emit({
+      kind: "main-colors",
+      color,
+      shimmerColor,
+    });
+  },
+  setResponseHeld(held) {
+    lazyCommandRunSignal.emit({
+      kind: "main-response-held",
+      held,
+    });
+  },
+};
+//@ chunk-e6aww6q8.js:5049005-5049623 placement
 /**
  * 找不到命令时等待 SessionStart 钩子与插件命令注册完成后再找一次（期间显示 spinner）。
  */
-//@ chunk-e6aww6q8.js:5049005-5049623 placement
-async function findCommandAfterHooks(e, n, r) {
-  let s = findCommand(e, await hookedCommands([])),
-    h = n ? MZ.get() : void 0;
-  if (s || !h || r.aborted) return s;
-  let withResolvers = Promise.withResolvers();
-  return (
-    r.addEventListener("abort", withResolvers.resolve, { once: !0 }),
-    pae.setSpinnerColors("claudeBlue_FOR_SYSTEM_SPINNER", "claudeBlueShimmer_FOR_SYSTEM_SPINNER"),
-    pae.setSpinnerMessage(SESSION_START_HOOKS_MESSAGE),
-    (await Promise.race([
-      (B1r.get() ?? Promise.resolve())
-        .then(() => sre.get()?.read())
-        .then(() => (sre.get()?.mayRegisterCommands() ?? !0) && h.then(() => !0)),
-      withResolvers.promise.then(() => !1),
-    ]).finally(() => {
-      (r.removeEventListener("abort", withResolvers.resolve),
-        pae.setSpinnerMessage(null),
-        pae.setSpinnerColors(null, null));
-    }))
-      ? findCommand(e, await hookedCommands([]))
-      : void 0
+async function findCommandAfterHooks(commandName, n, signal) {
+  let command = findCommand(commandName, await hookedCommands_2([]));
+  let h = n ? commandSetSignalA.get() : undefined;
+  if (command || !h || signal.aborted) return command;
+  let deferred = Promise.withResolvers();
+  signal.addEventListener("abort", deferred.resolve, {
+    once: true,
+  });
+  sessionStartHooksUi.setSpinnerColors(
+    "claudeBlue_FOR_SYSTEM_SPINNER",
+    "claudeBlueShimmer_FOR_SYSTEM_SPINNER",
   );
+  sessionStartHooksUi.setSpinnerMessage(SESSION_START_HOOKS_MESSAGE);
+  return (await Promise.race([
+    (commandSetSignalB.get() ?? Promise.resolve())
+      .then(() => hostOpsRoot.get()?.read())
+      .then(() => (hostOpsRoot.get()?.mayRegisterCommands() ?? true) && h.then(() => true)),
+    deferred.promise.then(() => false),
+  ]).finally(() => {
+    signal.removeEventListener("abort", deferred.resolve);
+    sessionStartHooksUi.setSpinnerMessage(null);
+    sessionStartHooksUi.setSpinnerColors(null, null);
+  }))
+    ? findCommand(commandName, await hookedCommands_2([]))
+    : undefined;
 }
 //@ chunk-bc20zedk.js:33028-33069 fingerprint = formatSkillLoadingMetadata (0.84)
-var formatSkillLoadingMetadata_2 = Object.freeze({ status: "loading" });
-
+var formatSkillLoadingMetadata_2 = Object.freeze({
+  status: "loading",
+});
 export {
   createAgentStatusEmitter,
   commandThrowTextForTranscript,

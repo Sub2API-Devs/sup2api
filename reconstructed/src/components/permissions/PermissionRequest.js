@@ -11,8 +11,7 @@
 import { useNotifyAfterTimeout } from "../../hooks/useNotifyAfterTimeout.js";
 
 //@ chunk-18hwfzwa.js:1452925-1452984 fingerprint = PermissionRequest (0.307)
-function usePermissionPromptNotification(h, x) {
-  useNotifyAfterTimeout(h.text, h.type ?? "permission_prompt", x);
+function usePermissionPromptNotification(notification, x) {
+  useNotifyAfterTimeout(notification.text, notification.type ?? "permission_prompt", x);
 }
-
 export { usePermissionPromptNotification };

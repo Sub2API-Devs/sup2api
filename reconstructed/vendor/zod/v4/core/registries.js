@@ -7,46 +7,55 @@
  */
 
 //@ chunk-7vp249v4.js:50476-50483 esm-layout
-var $n;
+var _a;
 //@ chunk-7vp249v4.js:50483-51049 esm-fingerprint
-class zn {
+class $ZodRegistry {
   constructor() {
-    ((this._map = new WeakMap()), (this._idmap = new Map()));
+    this._map = new WeakMap();
+    this._idmap = new Map();
   }
-  add(e, ...t) {
-    let r = t[0];
-    if ((this._map.set(e, r), r && typeof r === "object" && "id" in r)) this._idmap.set(r.id, e);
+  add(schema, ..._meta) {
+    let meta = _meta[0];
+    this._map.set(schema, meta);
+    if (meta && typeof meta === "object" && "id" in meta) this._idmap.set(meta.id, schema);
     return this;
   }
   clear() {
-    return ((this._map = new WeakMap()), (this._idmap = new Map()), this);
+    this._map = new WeakMap();
+    this._idmap = new Map();
+    return this;
   }
-  remove(e) {
-    let t = this._map.get(e);
-    if (t && typeof t === "object" && "id" in t) this._idmap.delete(t.id);
-    return (this._map.delete(e), this);
+  remove(schema) {
+    let meta = this._map.get(schema);
+    if (meta && typeof meta === "object" && "id" in meta) this._idmap.delete(meta.id);
+    this._map.delete(schema);
+    return this;
   }
-  get(e) {
-    let parent = e._zod.parent;
-    if (parent) {
-      let r = { ...(this.get(parent) ?? {}) };
-      delete r.id;
-      let n = { ...r, ...this._map.get(e) };
-      return Object.keys(n).length ? n : void 0;
+  get(schema) {
+    let p = schema._zod.parent;
+    if (p) {
+      let pm = {
+        ...(this.get(p) ?? {}),
+      };
+      delete pm.id;
+      let f = {
+        ...pm,
+        ...this._map.get(schema),
+      };
+      return Object.keys(f).length ? f : undefined;
     }
-    return this._map.get(e);
+    return this._map.get(schema);
   }
-  has(e) {
-    return this._map.has(e);
+  has(schema) {
+    return this._map.has(schema);
   }
 }
 //@ chunk-7vp249v4.js:51049-51077 esm-layout
-function Cs() {
-  return new zn();
+function registry() {
+  return new $ZodRegistry();
 }
 //@ chunk-7vp249v4.js:51077-51146 esm-fingerprint
-($n = globalThis).__zod_globalRegistry ?? ($n.__zod_globalRegistry = Cs());
+(_a = globalThis).__zod_globalRegistry ?? (_a.__zod_globalRegistry = registry());
 //@ chunk-7vp249v4.js:51146-51186 esm-fingerprint
-var __zod_globalRegistry = globalThis.__zod_globalRegistry;
-
-export { __zod_globalRegistry };
+var globalRegistry = globalThis.__zod_globalRegistry;
+export { globalRegistry };

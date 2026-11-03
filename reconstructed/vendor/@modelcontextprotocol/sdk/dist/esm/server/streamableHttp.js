@@ -6,41 +6,43 @@
  * attribution: esm-fingerprint 1
  */
 import { WebStandardStreamableHTTPServerTransport } from "./webStandardStreamableHttp.js";
-import { G } from "../../../../../@hono/node-server/dist/index.mjs";
+import { getRequestListener } from "../../../../../@hono/node-server/dist/index.mjs";
 
 //@ chunk-k26nnqnx.js:24883-26047 esm-fingerprint
-class M {
-  constructor(e = {}) {
-    ((this._requestContext = new WeakMap()),
-      (this._webStandardTransport = new WebStandardStreamableHTTPServerTransport(e)),
-      (this._requestListener = G(
-        async (r) => {
-          let n = this._requestContext.get(r);
-          return this._webStandardTransport.handleRequest(r, {
-            authInfo: n?.authInfo,
-            parsedBody: n?.parsedBody,
-          });
-        },
-        { overrideGlobalObjects: !1 },
-      )));
+class StreamableHTTPServerTransport {
+  constructor(options = {}) {
+    this._requestContext = new WeakMap();
+    this._webStandardTransport = new WebStandardStreamableHTTPServerTransport(options);
+    this._requestListener = getRequestListener(
+      async (webRequest) => {
+        let context = this._requestContext.get(webRequest);
+        return this._webStandardTransport.handleRequest(webRequest, {
+          authInfo: context?.authInfo,
+          parsedBody: context?.parsedBody,
+        });
+      },
+      {
+        overrideGlobalObjects: false,
+      },
+    );
   }
   get sessionId() {
     return this._webStandardTransport.sessionId;
   }
-  set onclose(e) {
-    this._webStandardTransport.onclose = e;
+  set onclose(handler) {
+    this._webStandardTransport.onclose = handler;
   }
   get onclose() {
     return this._webStandardTransport.onclose;
   }
-  set onerror(e) {
-    this._webStandardTransport.onerror = e;
+  set onerror(handler) {
+    this._webStandardTransport.onerror = handler;
   }
   get onerror() {
     return this._webStandardTransport.onerror;
   }
-  set onmessage(e) {
-    this._webStandardTransport.onmessage = e;
+  set onmessage(handler) {
+    this._webStandardTransport.onmessage = handler;
   }
   get onmessage() {
     return this._webStandardTransport.onmessage;
@@ -51,21 +53,27 @@ class M {
   async close() {
     return this._webStandardTransport.close();
   }
-  async send(e, r) {
-    return this._webStandardTransport.send(e, r);
+  async send(message, options) {
+    return this._webStandardTransport.send(message, options);
   }
-  async handleRequest(e, r, n) {
-    let auth = e.auth;
-    await G(async (a) => this._webStandardTransport.handleRequest(a, { authInfo: auth, parsedBody: n }), {
-      overrideGlobalObjects: !1,
-    })(e, r);
+  async handleRequest(req, res, parsedBody) {
+    let authInfo = req.auth;
+    await getRequestListener(
+      async (webRequest) =>
+        this._webStandardTransport.handleRequest(webRequest, {
+          authInfo,
+          parsedBody,
+        }),
+      {
+        overrideGlobalObjects: false,
+      },
+    )(req, res);
   }
-  closeSSEStream(e) {
-    this._webStandardTransport.closeSSEStream(e);
+  closeSSEStream(requestId) {
+    this._webStandardTransport.closeSSEStream(requestId);
   }
   closeStandaloneSSEStream() {
     this._webStandardTransport.closeStandaloneSSEStream();
   }
 }
-
-export { M };
+export { StreamableHTTPServerTransport };

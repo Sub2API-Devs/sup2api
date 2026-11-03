@@ -8,31 +8,59 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-s82q9s4x.js:25072-25637 cjs-fingerprint
-var pr = x(function (qs) {
-  Object.defineProperty(qs, "__esModule", { value: !0 });
-  qs.getRules = qs.isJSONType = void 0;
-  var Ac = ["string", "number", "integer", "boolean", "null", "object", "array"],
-    Dc = new Set(Ac);
-  function Vc(e) {
-    return typeof e == "string" && Dc.has(e);
+var require_rules_2 = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.getRules = cjsExports.isJSONType = undefined;
+  var _jsonTypes = ["string", "number", "integer", "boolean", "null", "object", "array"];
+  var jsonTypes = new Set(_jsonTypes);
+  function isJSONType(x) {
+    return typeof x == "string" && jsonTypes.has(x);
   }
-  qs.isJSONType = Vc;
-  function zc() {
-    let e = {
-      number: { type: "number", rules: [] },
-      string: { type: "string", rules: [] },
-      array: { type: "array", rules: [] },
-      object: { type: "object", rules: [] },
+  cjsExports.isJSONType = isJSONType;
+  function getRules() {
+    let groups = {
+      number: {
+        type: "number",
+        rules: [],
+      },
+      string: {
+        type: "string",
+        rules: [],
+      },
+      array: {
+        type: "array",
+        rules: [],
+      },
+      object: {
+        type: "object",
+        rules: [],
+      },
     };
     return {
-      types: { ...e, integer: !0, boolean: !0, null: !0 },
-      rules: [{ rules: [] }, e.number, e.string, e.array, e.object],
-      post: { rules: [] },
+      types: {
+        ...groups,
+        integer: true,
+        boolean: true,
+        null: true,
+      },
+      rules: [
+        {
+          rules: [],
+        },
+        groups.number,
+        groups.string,
+        groups.array,
+        groups.object,
+      ],
+      post: {
+        rules: [],
+      },
       all: {},
       keywords: {},
     };
   }
-  qs.getRules = zc;
+  cjsExports.getRules = getRules;
 });
-
-export { pr };
+export { require_rules_2 };

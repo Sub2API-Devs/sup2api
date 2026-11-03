@@ -16,22 +16,22 @@ import { parseFrontmatter } from "../utils/frontmatterParser.js";
 import { parseSlashCommandToolsFromFrontmatter } from "../utils/markdownConfigLoader.js";
 import { executeShellCommandsInPrompt, withCommandAllowRules } from "../utils/promptShellExecution.js";
 
+//@ chunk-e6aww6q8.js:1750738-1762601 fingerprint = default (0.56)
 /**
  * SECURITY_REVIEW_PROMPT：带 frontmatter 的安全审查提示词。
  */
-//@ chunk-e6aww6q8.js:1750738-1762601 fingerprint = default (0.56)
 var SECURITY_REVIEW_GIT_COMMANDS = [
-    "git diff *",
-    "git status *",
-    "git log *",
-    "git show *",
-    "git remote show *",
-  ],
-  SECURITY_REVIEW_ALLOWED_TOOLS = SECURITY_REVIEW_GIT_COMMANDS.flatMap((e) => [
-    `Bash(${e})`,
-    `PowerShell(${e})`,
-  ]).join(", "),
-  SECURITY_REVIEW_PROMPT = `---
+  "git diff *",
+  "git status *",
+  "git log *",
+  "git show *",
+  "git remote show *",
+];
+var SECURITY_REVIEW_ALLOWED_TOOLS = SECURITY_REVIEW_GIT_COMMANDS.flatMap((e) => [
+  `Bash(${e})`,
+  `PowerShell(${e})`,
+]).join(", ");
+var SECURITY_REVIEW_PROMPT = `---
 allowed-tools: ${SECURITY_REVIEW_ALLOWED_TOOLS}, Read, Glob, Grep, LS, Task
 description: Complete a security review of the pending changes on the current branch
 ---
@@ -221,39 +221,43 @@ Begin your analysis now. Do this in 3 steps:
 2. Then for each vulnerability identified by the above sub-task, create a new sub-task to filter out false-positives. Launch these sub-tasks as parallel sub-tasks. In the prompt for these sub-tasks, include everything in the "FALSE POSITIVE FILTERING" instructions.
 3. Filter out any vulnerabilities where the sub-task reported a confidence less than 8.
 
-Your final reply must contain the markdown report and nothing else.`,
-  securityReviewCommand = createMovedToPluginCommand({
-    name: SECURITY_REVIEW,
-    description: "Complete a security review of the pending changes on the current branch",
-    progressMessage: "analyzing code changes for security risks",
-    pluginName: "security-review",
-    pluginCommand: "security-review",
-    async getPromptWhileMarketplaceIsPrivate(e, n) {
-      let r = getCwd();
-      if (!(await isInGitRepo(r)))
-        return [
-          {
-            type: "text",
-            text: `Tell the user: /security-review needs to run inside a git repository, but the current working directory (\`${r}\`) is not one.
+Your final reply must contain the markdown report and nothing else.`;
+var securityReviewCommand = createMovedToPluginCommand({
+  name: SECURITY_REVIEW,
+  description: "Complete a security review of the pending changes on the current branch",
+  progressMessage: "analyzing code changes for security risks",
+  pluginName: "security-review",
+  pluginCommand: "security-review",
+  async getPromptWhileMarketplaceIsPrivate(_args, n) {
+    let cwd = getCwd();
+    if (!(await isInGitRepo(cwd)))
+      return [
+        {
+          type: "text",
+          text: `Tell the user: /security-review needs to run inside a git repository, but the current working directory (\`${cwd}\`) is not one.
 
 If the repository is in a subdirectory, \`cd\` into it first and then re-run /security-review.
 
 If this is a self-hosted runner session created without a \`git_repository\` source, either add one at session creation so the runner clones it and sets the working directory, or \`cd\` into the cloned repo before running the review.`,
-          },
-        ];
-      let s = parseFrontmatter(SECURITY_REVIEW_PROMPT),
-        h = parseSlashCommandToolsFromFrontmatter(s.frontmatter["allowed-tools"]);
-      return [
-        {
-          type: "text",
-          text: await executeShellCommandsInPrompt(
-            s.content,
-            { ...n, getAppState: withCommandAllowRules(n, h) },
-            "security-review",
-          ),
         },
       ];
-    },
-  });
-
+    let frontmatter = parseFrontmatter(SECURITY_REVIEW_PROMPT);
+    let slashCommandToolsFromFrontmatter = parseSlashCommandToolsFromFrontmatter(
+      frontmatter.frontmatter["allowed-tools"],
+    );
+    return [
+      {
+        type: "text",
+        text: await executeShellCommandsInPrompt(
+          frontmatter.content,
+          {
+            ...n,
+            getAppState: withCommandAllowRules(n, slashCommandToolsFromFrontmatter),
+          },
+          "security-review",
+        ),
+      },
+    ];
+  },
+});
 export { securityReviewCommand };

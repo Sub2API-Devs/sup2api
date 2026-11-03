@@ -11,24 +11,32 @@
 import { fetchEnvironments } from "./environments.js";
 import { fetchSelfHostedPools } from "./selfHostedPools.js";
 import { errorMessage } from "../errors.js";
-import { getEnvironmentSelectionInfo, isCcpoolId, isSelfHostedPool, tPe } from "./environmentSelection.js";
+import {
+  getEnvironmentSelectionInfo,
+  isCcpoolId,
+  isSelfHostedPool,
+  findFirst,
+} from "./environmentSelection.js";
 
+//@ chunk-mdk550gj.js:281-1059 placement
 /**
  * 并行拉取云环境列表与自托管池，合并结果并校验当前选中的池是否仍存在、是否忽略了不可信池。
  */
-//@ chunk-mdk550gj.js:281-1059 placement
-async function fetchEnvironmentsAndPools(f, r) {
-  let [o, l] = await Promise.allSettled([fetchEnvironments(void 0, f, r), fetchSelfHostedPools(void 0, r)]),
-    s = o.status === "rejected" ? errorMessage(o.reason) : null,
-    i = o.status === "fulfilled" ? o.value : [],
-    a = l.status === "fulfilled" ? l.value : [],
-    environments = [...i, ...a],
-    selection = getEnvironmentSelectionInfo(),
-    u = selection.ignoredUntrustedPool ?? null;
+async function fetchEnvironmentsAndPools(storageV5, credentials) {
+  let [o, l] = await Promise.allSettled([
+    fetchEnvironments(undefined, storageV5, credentials),
+    fetchSelfHostedPools(undefined, credentials),
+  ]);
+  let environmentsError = o.status === "rejected" ? errorMessage(o.reason) : null;
+  let i = o.status === "fulfilled" ? o.value : [];
+  let a = l.status === "fulfilled" ? l.value : [];
+  let environments = [...i, ...a];
+  let selection = getEnvironmentSelectionInfo();
+  let ignoredUntrustedPool = selection.ignoredUntrustedPool ?? null;
   if (
-    selection.id !== void 0 &&
+    selection.id !== undefined &&
     isCcpoolId(selection.id) &&
-    !environments.some((n) => isSelfHostedPool(n) === selection.id)
+    !environments.some((environment) => isSelfHostedPool(environment) === selection.id)
   )
     environments.push({
       kind: "self_hosted_pool",
@@ -42,22 +50,24 @@ async function fetchEnvironmentsAndPools(f, r) {
       availableTargets: [],
       selectedTarget: null,
       selectedTargetSource: null,
-      environmentsError: s,
-      ignoredUntrustedPool: u,
+      environmentsError,
+      ignoredUntrustedPool,
     };
-  let c = tPe(i, (n) => n.kind !== "bridge") ?? a[0] ?? environments[0],
-    g = null;
-  if (selection.id !== void 0) {
-    let found = environments.find((m) => isSelfHostedPool(m) === selection.id);
-    if (found) ((c = found), (g = selection.source ?? null));
+  let selectedTarget = findFirst(i, (n) => n.kind !== "bridge") ?? a[0] ?? environments[0];
+  let selectedTargetSource = null;
+  if (selection.id !== undefined) {
+    let found = environments.find((environment) => isSelfHostedPool(environment) === selection.id);
+    if (found) {
+      selectedTarget = found;
+      selectedTargetSource = selection.source ?? null;
+    }
   }
   return {
     availableTargets: environments,
-    selectedTarget: c,
-    selectedTargetSource: g,
-    environmentsError: s,
-    ignoredUntrustedPool: u,
+    selectedTarget,
+    selectedTargetSource,
+    environmentsError,
+    ignoredUntrustedPool,
   };
 }
-
 export { fetchEnvironmentsAndPools };

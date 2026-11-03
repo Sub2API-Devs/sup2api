@@ -6,74 +6,98 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { nlr } from "../../ajv/dist/ajv.js";
-import { uh } from "../../ajv/dist/compile/codegen/index.js";
+import { require_ajv } from "../../ajv/dist/ajv.js";
+import { require_codegen_2 as require_codegen } from "../../ajv/dist/compile/codegen/index.js";
 
 //@ chunk-zykv69v4.js:8167-9708 cjs-fingerprint
-var re = x(function (te) {
-  Object.defineProperty(te, "__esModule", { value: !0 });
-  te.formatLimitDefinition = void 0;
-  var ee = nlr(),
-    l = uh(),
-    operators = l.operators,
-    I = {
-      formatMaximum: { okStr: "<=", ok: operators.LTE, fail: operators.GT },
-      formatMinimum: { okStr: ">=", ok: operators.GTE, fail: operators.LT },
-      formatExclusiveMaximum: { okStr: "<", ok: operators.LT, fail: operators.GTE },
-      formatExclusiveMinimum: { okStr: ">", ok: operators.GT, fail: operators.LTE },
+var require_limit = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.formatLimitDefinition = undefined;
+  var ajv_1 = require_ajv();
+  var codegen_1 = require_codegen();
+  var ops = codegen_1.operators;
+  var KWDs = {
+    formatMaximum: {
+      okStr: "<=",
+      ok: ops.LTE,
+      fail: ops.GT,
     },
-    Ee = {
-      message: ({ keyword: keyword, schemaCode: schemaCode }) =>
-        l.str`should be ${I[keyword].okStr} ${schemaCode}`,
-      params: ({ keyword: keyword, schemaCode: schemaCode }) =>
-        l._`{comparison: ${I[keyword].okStr}, limit: ${schemaCode}}`,
-    };
-  te.formatLimitDefinition = {
-    keyword: Object.keys(I),
+    formatMinimum: {
+      okStr: ">=",
+      ok: ops.GTE,
+      fail: ops.LT,
+    },
+    formatExclusiveMaximum: {
+      okStr: "<",
+      ok: ops.LT,
+      fail: ops.GTE,
+    },
+    formatExclusiveMinimum: {
+      okStr: ">",
+      ok: ops.GT,
+      fail: ops.LTE,
+    },
+  };
+  var error = {
+    message: ({ keyword, schemaCode }) => codegen_1.str`should be ${KWDs[keyword].okStr} ${schemaCode}`,
+    params: ({ keyword, schemaCode }) =>
+      codegen_1._`{comparison: ${KWDs[keyword].okStr}, limit: ${schemaCode}}`,
+  };
+  cjsExports.formatLimitDefinition = {
+    keyword: Object.keys(KWDs),
     type: "string",
     schemaType: "string",
-    $data: !0,
-    error: Ee,
-    code(e) {
-      let { gen: gen, data: r, schemaCode: schemaCode, keyword: keyword, it: it } = e,
-        { opts: opts, self: u } = it;
+    $data: true,
+    error,
+    code(cxt) {
+      let { gen, data, schemaCode, keyword, it } = cxt;
+      let { opts, self: u } = it;
       if (!opts.validateFormats) return;
-      let p = new ee.KeywordCxt(it, u.RULES.all.format.definition, "format");
-      if (p.$data) i();
-      else c();
-      function i() {
-        let scopeValue = gen.scopeValue("formats", { ref: u.formats, code: opts.code.formats }),
-          m = gen.const("fmt", l._`${scopeValue}[${p.schemaCode}]`);
-        e.fail$data(
-          l.or(
-            l._`typeof ${m} != "object"`,
-            l._`${m} instanceof RegExp`,
-            l._`typeof ${m}.compare != "function"`,
-            d(m),
+      let fCxt = new ajv_1.KeywordCxt(it, u.RULES.all.format.definition, "format");
+      if (fCxt.$data) validate$DataFormat();
+      else validateFormat();
+      function validate$DataFormat() {
+        let fmts = gen.scopeValue("formats", {
+          ref: u.formats,
+          code: opts.code.formats,
+        });
+        let fmt = gen.const("fmt", codegen_1._`${fmts}[${fCxt.schemaCode}]`);
+        cxt.fail$data(
+          codegen_1.or(
+            codegen_1._`typeof ${fmt} != "object"`,
+            codegen_1._`${fmt} instanceof RegExp`,
+            codegen_1._`typeof ${fmt}.compare != "function"`,
+            compareCode(fmt),
           ),
         );
       }
-      function c() {
-        let schema = p.schema,
-          m = u.formats[schema];
-        if (!m || m === !0) return;
-        if (typeof m != "object" || m instanceof RegExp || typeof m.compare != "function")
-          throw Error(`"${keyword}": format "${schema}" does not define "compare" function`);
-        let scopeValue = gen.scopeValue("formats", {
-          key: schema,
-          ref: m,
-          code: opts.code.formats ? l._`${opts.code.formats}${l.getProperty(schema)}` : void 0,
+      function validateFormat() {
+        let format = fCxt.schema;
+        let fmtDef = u.formats[format];
+        if (!fmtDef || fmtDef === true) return;
+        if (typeof fmtDef != "object" || fmtDef instanceof RegExp || typeof fmtDef.compare != "function")
+          throw Error(`"${keyword}": format "${format}" does not define "compare" function`);
+        let fmt = gen.scopeValue("formats", {
+          key: format,
+          ref: fmtDef,
+          code: opts.code.formats
+            ? codegen_1._`${opts.code.formats}${codegen_1.getProperty(format)}`
+            : undefined,
         });
-        e.fail$data(d(scopeValue));
+        cxt.fail$data(compareCode(fmt));
       }
-      function d(f) {
-        return l._`${f}.compare(${r}, ${schemaCode}) ${I[keyword].fail} 0`;
+      function compareCode(fmt) {
+        return codegen_1._`${fmt}.compare(${data}, ${schemaCode}) ${KWDs[keyword].fail} 0`;
       }
     },
     dependencies: ["format"],
   };
-  var Me = (e) => (e.addKeyword(te.formatLimitDefinition), e);
-  te.default = Me;
+  var formatLimitPlugin = (ajv) => {
+    ajv.addKeyword(cjsExports.formatLimitDefinition);
+    return ajv;
+  };
+  cjsExports.default = formatLimitPlugin;
 });
-
-export { re };
+export { require_limit };

@@ -9,152 +9,189 @@
  * attribution: placement 1, fingerprint 2
  */
 import { w } from "../../../vendor/react/compiler-runtime.js";
-import { e } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Box } from "../../ink/components/Text.js";
 import { segmentTextByHighlights } from "../../utils/textHighlighting.js";
-import { usePrefersReducedMotion, VDe } from "../Spinner/spinnerFlags.js";
+import { usePrefersReducedMotion, SPINNER_FLAG_PRIORITY } from "../Spinner/spinnerFlags.js";
 import { useAnimationFrame } from "../../ink/components/Input.js";
 import { Ansi } from "../../ink/components/AnsiText.js";
 
 //@ chunk-81qqq1aq.js:2338-2572 placement = ShimmerChar (1)
-function ShimmerChar(t0) {
-  let $ = w(3),
-    {
-      char: char,
-      index: index,
-      glimmerIndex: glimmerIndex,
-      messageColor: messageColor,
-      shimmerColor: shimmerColor,
-    } = t0,
-    c = index === glimmerIndex,
-    o = Math.abs(index - glimmerIndex) === 1;
-  const t1 = c || o ? shimmerColor : messageColor;
+function ShimmerChar(props) {
+  let $ = w(3);
+  let { char, index, glimmerIndex, messageColor, shimmerColor } = props;
+  let isHighlighted = index === glimmerIndex;
+  let isNearHighlight = Math.abs(index - glimmerIndex) === 1;
+  const color = isHighlighted || isNearHighlight ? shimmerColor : messageColor;
   let t2;
-  if ($[0] !== char || $[1] !== t1)
-    ((t2 = e(Text, { color: t1, children: char })), ($[0] = char), ($[1] = t1), ($[2] = t2));
-  else t2 = $[2];
+  if ($[0] !== char || $[1] !== color) {
+    t2 = jsxProd_default(Text, {
+      color,
+      children: char,
+    });
+    $[0] = char;
+    $[1] = color;
+    $[2] = t2;
+  } else t2 = $[2];
   return t2;
 }
 //@ chunk-81qqq1aq.js:2572-2609 fingerprint = _temp (1)
-function Nt(h) {
+function selectShimmerColor(h) {
   return h.shimmerColor;
 }
 //@ chunk-81qqq1aq.js:2609-4298 fingerprint = HighlightedInput (0.819)
-function HighlightedInput(t0) {
-  let $ = w(21),
-    { text: text, highlights: highlights } = t0,
-    d;
+function HighlightedInput(props) {
+  let $ = w(21);
+  let { text, highlights } = props;
+  let lines;
   if ($[0] !== highlights || $[1] !== text) {
     let segments = segmentTextByHighlights(text, highlights);
-    d = [[]];
-    let c = 0;
+    lines = [[]];
+    let pos = 0;
     for (const segment of segments) {
       let parts = segment.text.split(`
 `);
-      for (let u = 0; u < parts.length; u++) {
-        if (u > 0) (d.push([]), (c = c + 1));
-        let part = parts[u];
-        if (part.length > 0) d.at(-1).push({ text: part, highlight: segment.highlight, start: c });
-        c = c + part.length;
+      for (let i = 0; i < parts.length; i++) {
+        if (i > 0) {
+          lines.push([]);
+          pos = pos + 1;
+        }
+        let part = parts[i];
+        if (part.length > 0)
+          lines.at(-1).push({
+            text: part,
+            highlight: segment.highlight,
+            start: pos,
+          });
+        pos = pos + part.length;
       }
     }
-    (($[0] = highlights), ($[1] = text), ($[2] = d));
-  } else d = $[2];
-  let N;
-  if ($[3] !== highlights) ((N = highlights.some(Nt)), ($[3] = highlights), ($[4] = N));
-  else N = $[4];
-  let E = N,
-    H = 0,
-    cycleLength = 1;
-  if (E) {
-    let M = Infinity;
+    $[0] = highlights;
+    $[1] = text;
+    $[2] = lines;
+  } else lines = $[2];
+  let t1;
+  if ($[3] !== highlights) {
+    t1 = highlights.some(selectShimmerColor);
+    $[3] = highlights;
+    $[4] = t1;
+  } else t1 = $[4];
+  let hasShimmer = t1;
+  let sweepStart = 0;
+  let cycleLength = 1;
+  if (hasShimmer) {
+    let lo = Infinity;
     let hi = -Infinity;
     if ($[5] !== highlights) {
       for (const h_0 of highlights) {
-        if (h_0.shimmerColor) ((M = Math.min(M, h_0.start)), (hi = Math.max(hi, h_0.end)));
+        if (h_0.shimmerColor) {
+          lo = Math.min(lo, h_0.start);
+          hi = Math.max(hi, h_0.end);
+        }
       }
-      (($[5] = highlights), ($[6] = M), ($[7] = hi));
-    } else ((M = $[6]), (hi = $[7]));
-    ((H = M - 10), (cycleLength = hi - M + 20));
+      $[5] = highlights;
+      $[6] = lo;
+      $[7] = hi;
+    } else {
+      lo = $[6];
+      hi = $[7];
+    }
+    sweepStart = lo - 10;
+    cycleLength = hi - lo + 20;
   }
-  let q;
-  if ($[8] !== cycleLength || $[9] !== E || $[10] !== d || $[11] !== H)
-    ((q = { lines: d, hasShimmer: E, sweepStart: H, cycleLength: cycleLength }),
-      ($[8] = cycleLength),
-      ($[9] = E),
-      ($[10] = d),
-      ($[11] = H),
-      ($[12] = q));
-  else q = $[12];
-  let { lines: lines_0, hasShimmer: hasShimmer_0, sweepStart: sweepStart_0, cycleLength: cycleLength_0 } = q,
-    Re = usePrefersReducedMotion(),
-    V = hasShimmer_0 && !Re,
-    [B, ne] = useAnimationFrame(V ? 50 : null),
-    glimmerIndex = V ? sweepStart_0 + (Math.floor(ne / 50) % cycleLength_0) : VDe,
-    W;
-  if ($[13] !== glimmerIndex || $[14] !== lines_0) {
-    let O;
-    if ($[16] !== glimmerIndex)
-      ((O = (lineParts, lineIndex) =>
-        e(
+  let t2;
+  if ($[8] !== cycleLength || $[9] !== hasShimmer || $[10] !== lines || $[11] !== sweepStart) {
+    t2 = {
+      lines,
+      hasShimmer,
+      sweepStart,
+      cycleLength,
+    };
+    $[8] = cycleLength;
+    $[9] = hasShimmer;
+    $[10] = lines;
+    $[11] = sweepStart;
+    $[12] = t2;
+  } else t2 = $[12];
+  let { lines: lines_2, hasShimmer: hasShimmer_0, sweepStart: sweepStart_2, cycleLength: cycleLength_2 } = t2;
+  let prefersReducedMotion = usePrefersReducedMotion();
+  let V = hasShimmer_0 && !prefersReducedMotion;
+  let [ref, time] = useAnimationFrame(V ? 50 : null);
+  let glimmerIndex = V ? sweepStart_2 + (Math.floor(time / 50) % cycleLength_2) : SPINNER_FLAG_PRIORITY;
+  let children;
+  if ($[13] !== glimmerIndex || $[14] !== lines_2) {
+    let t4;
+    if ($[16] !== glimmerIndex) {
+      t4 = (lineParts, lineIndex) =>
+        jsxProd_default(
           Box,
           {
             children:
               lineParts.length === 0
-                ? e(Text, { children: " " })
-                : lineParts.map((part_0, partIndex) => {
-                    if (part_0.highlight?.shimmerColor && part_0.highlight.color) {
-                      return e(
+                ? jsxProd_default(Text, {
+                    children: " ",
+                  })
+                : lineParts.map((part, partIndex) => {
+                    if (part.highlight?.shimmerColor && part.highlight.color) {
+                      return jsxProd_default(
                         Text,
                         {
-                          children: part_0.text
-                            .split("")
-                            .map((char, charIndex) =>
-                              e(
-                                ShimmerChar,
-                                {
-                                  char: char,
-                                  index: part_0.start + charIndex,
-                                  glimmerIndex: glimmerIndex,
-                                  messageColor: part_0.highlight.color,
-                                  shimmerColor: part_0.highlight.shimmerColor,
-                                },
-                                charIndex,
-                              ),
+                          children: part.text.split("").map((char, charIndex) =>
+                            jsxProd_default(
+                              ShimmerChar,
+                              {
+                                char,
+                                index: part.start + charIndex,
+                                glimmerIndex,
+                                messageColor: part.highlight.color,
+                                shimmerColor: part.highlight.shimmerColor,
+                              },
+                              charIndex,
                             ),
+                          ),
                         },
                         partIndex,
                       );
                     }
-                    return e(
+                    return jsxProd_default(
                       Text,
                       {
-                        color: part_0.highlight?.color,
-                        backgroundColor: part_0.highlight?.backgroundColor,
-                        dimColor: part_0.highlight?.dimColor,
-                        bold: part_0.highlight?.bold,
-                        italic: part_0.highlight?.italic,
-                        underline: part_0.highlight?.underline,
-                        strikethrough: part_0.highlight?.strikethrough,
-                        children: e(Ansi, { children: part_0.text }),
+                        color: part.highlight?.color,
+                        backgroundColor: part.highlight?.backgroundColor,
+                        dimColor: part.highlight?.dimColor,
+                        bold: part.highlight?.bold,
+                        italic: part.highlight?.italic,
+                        underline: part.highlight?.underline,
+                        strikethrough: part.highlight?.strikethrough,
+                        children: jsxProd_default(Ansi, {
+                          children: part.text,
+                        }),
                       },
                       partIndex,
                     );
                   }),
           },
           lineIndex,
-        )),
-        ($[16] = glimmerIndex),
-        ($[17] = O));
-    else O = $[17];
-    W = lines_0.map(O);
-    (($[13] = glimmerIndex), ($[14] = lines_0), ($[15] = W));
-  } else W = $[15];
-  let O;
-  if ($[18] !== B || $[19] !== W)
-    ((O = e(Box, { ref: B, flexDirection: "column", children: W })), ($[18] = B), ($[19] = W), ($[20] = O));
-  else O = $[20];
-  return O;
+        );
+      $[16] = glimmerIndex;
+      $[17] = t4;
+    } else t4 = $[17];
+    children = lines_2.map(t4);
+    $[13] = glimmerIndex;
+    $[14] = lines_2;
+    $[15] = children;
+  } else children = $[15];
+  let t4;
+  if ($[18] !== ref || $[19] !== children) {
+    t4 = jsxProd_default(Box, {
+      ref,
+      flexDirection: "column",
+      children,
+    });
+    $[18] = ref;
+    $[19] = children;
+    $[20] = t4;
+  } else t4 = $[20];
+  return t4;
 }
-
 export { HighlightedInput, ShimmerChar };

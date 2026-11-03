@@ -8,8 +8,8 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:119920-121731 cjs-fingerprint
-var Ln = x(function (Xu, Dn) {
-  function Vl(e) {
+var require_dns = x(function (cjsExports, cjsModule) {
+  function dns(hljs) {
     return {
       name: "DNS Zone",
       aliases: ["bind", "zone"],
@@ -54,8 +54,13 @@ var Ln = x(function (Xu, Dn) {
         "TXT",
       ],
       contains: [
-        e.COMMENT(";", "$", { relevance: 0 }),
-        { className: "meta", begin: /^\$(TTL|GENERATE|INCLUDE|ORIGIN)\b/ },
+        hljs.COMMENT(";", "$", {
+          relevance: 0,
+        }),
+        {
+          className: "meta",
+          begin: /^\$(TTL|GENERATE|INCLUDE|ORIGIN)\b/,
+        },
         {
           className: "number",
           begin:
@@ -66,11 +71,12 @@ var Ln = x(function (Xu, Dn) {
           begin:
             "((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9]).){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\b",
         },
-        e.inherit(e.NUMBER_MODE, { begin: /\b\d+[dhwm]?/ }),
+        hljs.inherit(hljs.NUMBER_MODE, {
+          begin: /\b\d+[dhwm]?/,
+        }),
       ],
     };
   }
-  Dn.exports = Vl;
+  cjsModule.exports = dns;
 });
-
-export { Ln };
+export { require_dns };

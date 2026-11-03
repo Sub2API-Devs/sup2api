@@ -8,7 +8,7 @@
  * pieces: chunk-bwbq4xvm.js (4)
  * attribution: placement 4
  */
-import { isAxiosError, Dt } from "../../../vendor/axios/dist/esm/axios.js";
+import { isAxiosError, axios_default } from "../../../vendor/axios/dist/esm/axios.js";
 import { isAnthropicHost } from "../../utils/anthropicHosts.js";
 import { noteExternalHttpUse } from "../../utils/testNetworkGuard.js";
 
@@ -29,12 +29,12 @@ var AXIOS_NON_TRANSPORT_CODES = new Set([
 ]);
 //@ chunk-bwbq4xvm.js:162897-162967 placement
 function isTransportError(e) {
-  return isAxiosError(e) && e.response === void 0 && !AXIOS_NON_TRANSPORT_CODES.has(e.code ?? "");
+  return isAxiosError(e) && e.response === undefined && !AXIOS_NON_TRANSPORT_CODES.has(e.code ?? "");
 }
+//@ chunk-bwbq4xvm.js:162967-163183 placement
 /**
  * externalHttp 的守卫：目标或 baseURL 是 Anthropic 自营域名时抛错，要求改用 firstPartyApi。
  */
-//@ chunk-bwbq4xvm.js:162967-163183 placement
 function assertNotAnthropicHost(e, s) {
   for (let n of [e, s?.baseURL])
     if (n && isAnthropicHost(n))
@@ -43,29 +43,40 @@ function assertNotAnthropicHost(e, s) {
           "src/services/http/firstParty \u2014 it enforces the 3P data-residency gate.",
       );
 }
+//@ chunk-bwbq4xvm.js:163183-163476 placement
 /**
  * externalHttp：给第三方地址用的 axios 门面（get/head/post/put/delete…），每次调用先拒绝 Anthropic 自营域名。
  */
-//@ chunk-bwbq4xvm.js:163183-163476 placement
 var externalHttp = {
   get(e, s) {
-    return (assertNotAnthropicHost(e, s), noteExternalHttpUse(), Dt.get(e, s));
+    assertNotAnthropicHost(e, s);
+    noteExternalHttpUse();
+    return axios_default.get(e, s);
   },
   head(e, s) {
-    return (assertNotAnthropicHost(e, s), noteExternalHttpUse(), Dt.head(e, s));
+    assertNotAnthropicHost(e, s);
+    noteExternalHttpUse();
+    return axios_default.head(e, s);
   },
   post(e, s, n) {
-    return (assertNotAnthropicHost(e, n), noteExternalHttpUse(), Dt.post(e, s, n));
+    assertNotAnthropicHost(e, n);
+    noteExternalHttpUse();
+    return axios_default.post(e, s, n);
   },
   put(e, s, n) {
-    return (assertNotAnthropicHost(e, n), noteExternalHttpUse(), Dt.put(e, s, n));
+    assertNotAnthropicHost(e, n);
+    noteExternalHttpUse();
+    return axios_default.put(e, s, n);
   },
   patch(e, s, n) {
-    return (assertNotAnthropicHost(e, n), noteExternalHttpUse(), Dt.patch(e, s, n));
+    assertNotAnthropicHost(e, n);
+    noteExternalHttpUse();
+    return axios_default.patch(e, s, n);
   },
   delete(e, s) {
-    return (assertNotAnthropicHost(e, s), noteExternalHttpUse(), Dt.delete(e, s));
+    assertNotAnthropicHost(e, s);
+    noteExternalHttpUse();
+    return axios_default.delete(e, s);
   },
 };
-
 export { isTransportError, externalHttp };

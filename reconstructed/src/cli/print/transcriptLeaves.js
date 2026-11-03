@@ -8,7 +8,7 @@
  * pieces: chunk-tyg7f3ek.js (5)
  * attribution: placement 5
  */
-import { stat, stat as stat_2, stat as stat_3 } from "fs/promises";
+import { stat } from "fs/promises";
 import { findMessageIndex, isHeldMessageRecognitionOn } from "./queuedMessageUtils.js";
 import {
   nextTurnStartIndex,
@@ -39,35 +39,35 @@ import { logError } from "../../utils/log.js";
 
 //@ chunk-tyg7f3ek.js:50620-51236 placement
 function foldedFollowUpEnd(e, n) {
-  let r = findMessageIndex(e, n);
-  if (e[r]?.type !== "attachment") return;
-  let s = nextTurnStartIndex(e, r),
-    filtered = e
-      .slice(r + 1, s === -1 ? void 0 : s)
-      .filter((w) => !("isSidechain" in w && w.isSidechain === !0)),
-    filtered_2 = filtered.filter(
-      (w) =>
-        (w.type === "user" || w.type === "assistant") &&
-        !isSyntheticApiErrorMessage(w) &&
-        !isSyntheticUserMessage(w),
-    ),
-    lastIndex = filtered.findLastIndex((w) => isSyntheticApiErrorMessage(w) || isInterruptMarkerRow(w)),
-    at = filtered_2.at(-1);
+  let messageIndex = findMessageIndex(e, n);
+  if (e[messageIndex]?.type !== "attachment") return;
+  let s = nextTurnStartIndex(e, messageIndex);
+  let filtered = e
+    .slice(messageIndex + 1, s === -1 ? undefined : s)
+    .filter((w) => !("isSidechain" in w && w.isSidechain === true));
+  let filtered_2 = filtered.filter(
+    (w) =>
+      (w.type === "user" || w.type === "assistant") &&
+      !isSyntheticApiErrorMessage(w) &&
+      !isSyntheticUserMessage(w),
+  );
+  let lastIndex = filtered.findLastIndex((w) => isSyntheticApiErrorMessage(w) || isInterruptMarkerRow(w));
+  let last = filtered_2.at(-1);
   return {
     badEnd:
-      at === void 0
-        ? void 0
+      last === undefined
+        ? undefined
         : isStopInterruption(filtered_2, filtered_2.length - 1)
           ? "stopped"
-          : isPartialAssistantRow(at)
+          : isPartialAssistantRow(last)
             ? "reply_failed"
-            : at.type === "assistant" && at.isApiErrorMessage === !0
+            : last.type === "assistant" && last.isApiErrorMessage === true
               ? "reply_refused"
-              : void 0,
+              : undefined,
     failedTransiently:
-      at?.type === "assistant" &&
-      isPartialAssistantRow(at) &&
-      (isTransientApiError(at) || at.streamWatchdogGaveUp === !0),
+      last?.type === "assistant" &&
+      isPartialAssistantRow(last) &&
+      (isTransientApiError(last) || last.streamWatchdogGaveUp === true),
     claudesRowBehind: filtered_2.some(isRealAssistantReply),
     reRunsRowBehind:
       lastIndex !== -1 &&
@@ -75,62 +75,68 @@ function foldedFollowUpEnd(e, n) {
   };
 }
 //@ chunk-tyg7f3ek.js:51236-51413 placement
-async function loadSessionTranscriptRows(e, n) {
-  let r = getTranscriptPathForSession(e),
-    s = getTranscriptStorageKey(r, n),
-    { messages: messages } = await loadTranscriptFile(r, {
-      keepAllLeaves:
-        !isDiskless() &&
-        (await stat(r).then(
-          (y) => y.size <= MAX_TRANSCRIPT_READ_BYTES,
-          () => !1,
-        )),
-      ...(s && { storageV5: s }),
-    });
+async function loadSessionTranscriptRows(sessionId, storageV5) {
+  let transcriptPathForSession = getTranscriptPathForSession(sessionId);
+  let transcriptStorageKey = getTranscriptStorageKey(transcriptPathForSession, storageV5);
+  let { messages } = await loadTranscriptFile(transcriptPathForSession, {
+    keepAllLeaves:
+      !isDiskless() &&
+      (await stat(transcriptPathForSession).then(
+        (y) => y.size <= MAX_TRANSCRIPT_READ_BYTES,
+        () => false,
+      )),
+    ...(transcriptStorageKey && {
+      storageV5: transcriptStorageKey,
+    }),
+  });
   return [...messages.values()];
 }
 //@ chunk-tyg7f3ek.js:51413-51950 placement
-function createPersistenceChecker({ storageV5: storageV5, heldInMemory: heldInMemory }) {
+function createPersistenceChecker({ storageV5, heldInMemory }) {
   return () => {
-    let r = getSessionId(),
-      s = (S) => doesMessageExistInSession(r, S, storageV5),
-      h = async (S) => heldInMemory(S) && !(await s(S)),
-      y = async (S) => {
-        try {
-          return S(await loadSessionTranscriptRows(r, storageV5));
-        } catch (error) {
-          return (
-            logForDebugging(
-              `could not read the transcript for a message stored inside another row; it reads unanswered: ${error instanceof Error ? error.message : String(error)}`,
-              { level: "error" },
-            ),
-            !0
-          );
-        }
-      };
+    let sessionId = getSessionId();
+    let s = (S) => doesMessageExistInSession(sessionId, S, storageV5);
+    let h = async (S) => heldInMemory(S) && !(await s(S));
+    let y = async (S) => {
+      try {
+        return S(await loadSessionTranscriptRows(sessionId, storageV5));
+      } catch (error) {
+        logForDebugging(
+          `could not read the transcript for a message stored inside another row; it reads unanswered: ${error instanceof Error ? error.message : String(error)}`,
+          {
+            level: "error",
+          },
+        );
+        return true;
+      }
+    };
     return {
       persisted: (S) => (isHeldMessageRecognitionOn() ? s(S).then((R) => R || heldInMemory(S)) : s(S)),
       turnUnanswered: (S) =>
         isHeldMessageRecognitionOn()
           ? h(S).then((R) =>
-              R ? y((w) => isOpenerUnanswered(w, S)) : isMessageTurnUnanswered(r, S, storageV5),
+              R ? y((w) => isOpenerUnanswered(w, S)) : isMessageTurnUnanswered(sessionId, S, storageV5),
             )
-          : isMessageTurnUnanswered(r, S, storageV5),
-      holdersTurnUnanswered: async (S) => ((await h(S)) ? y((R) => isTurnOpen(R, S) ?? !0) : void 0),
+          : isMessageTurnUnanswered(sessionId, S, storageV5),
+      holdersTurnUnanswered: async (S) => ((await h(S)) ? y((R) => isTurnOpen(R, S) ?? true) : undefined),
     };
   };
 }
 //@ chunk-tyg7f3ek.js:51950-51996 placement
 function chatOriginField() {
-  return isClaudeAiChatOrigin() ? { chat_origin: !0 } : {};
+  return isClaudeAiChatOrigin()
+    ? {
+        chat_origin: true,
+      }
+    : {};
 }
 //@ chunk-tyg7f3ek.js:51996-52052 placement
 function tryOr(e, n) {
   try {
     return e();
   } catch (error) {
-    return (logError(error), n);
+    logError(error);
+    return n;
   }
 }
-
 export { createPersistenceChecker, loadSessionTranscriptRows, tryOr, chatOriginField, foldedFollowUpEnd };

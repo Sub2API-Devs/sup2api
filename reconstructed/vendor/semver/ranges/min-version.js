@@ -6,51 +6,48 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { G } from "../classes/semver.js";
-import { ee } from "../classes/range.js";
-import { Tt } from "../functions/eq.js";
+import { require_semver } from "../classes/semver.js";
+import { require_range } from "../classes/range.js";
+import { require_eq } from "../functions/eq.js";
 
 //@ chunk-bwbq4xvm.js:22380-22962 cjs-fingerprint
-var kl = x(function (k2, vl) {
-  var Ln = G(),
-    jk = ee(),
-    Rl = Tt(),
-    Bk = (e, s) => {
-      e = new jk(e, s);
-      let n = new Ln("0.0.0");
-      if (e.test(n)) return n;
-      if (((n = new Ln("0.0.0-0")), e.test(n))) return n;
-      n = null;
-      for (let r = 0; r < e.set.length; ++r) {
-        let a = e.set[r],
-          l = null;
-        if (
-          (a.forEach((c) => {
-            let h = new Ln(c.semver.version);
-            switch (c.operator) {
-              case ">":
-                if (h.prerelease.length === 0) h.patch++;
-                else h.prerelease.push(0);
-                h.raw = h.format();
-              case "":
-              case ">=":
-                if (!l || Rl(h, l)) l = h;
-                break;
-              case "<":
-              case "<=":
-                break;
-              default:
-                throw Error(`Unexpected operation: ${c.operator}`);
-            }
-          }),
-          l && (!n || Rl(n, l)))
-        )
-          n = l;
-      }
-      if (n && e.test(n)) return n;
-      return null;
-    };
-  vl.exports = Bk;
+var require_min_version = x(function (cjsExports, cjsModule) {
+  var SemVer = require_semver();
+  var Range = require_range();
+  var gt = require_eq();
+  var minVersion = (range, loose) => {
+    range = new Range(range, loose);
+    let minver = new SemVer("0.0.0");
+    if (range.test(minver)) return minver;
+    minver = new SemVer("0.0.0-0");
+    if (range.test(minver)) return minver;
+    minver = null;
+    for (let i = 0; i < range.set.length; ++i) {
+      let comparators = range.set[i];
+      let setMin = null;
+      comparators.forEach((comparator) => {
+        let compver = new SemVer(comparator.semver.version);
+        switch (comparator.operator) {
+          case ">":
+            if (compver.prerelease.length === 0) compver.patch++;
+            else compver.prerelease.push(0);
+            compver.raw = compver.format();
+          case "":
+          case ">=":
+            if (!setMin || gt(compver, setMin)) setMin = compver;
+            break;
+          case "<":
+          case "<=":
+            break;
+          default:
+            throw Error(`Unexpected operation: ${comparator.operator}`);
+        }
+      });
+      if (setMin && (!minver || gt(minver, setMin))) minver = setMin;
+    }
+    if (minver && range.test(minver)) return minver;
+    return null;
+  };
+  cjsModule.exports = minVersion;
 });
-
-export { kl };
+export { require_min_version };

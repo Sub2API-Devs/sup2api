@@ -6,54 +6,69 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { Ue } from "./can-promise.js";
-import { it } from "./core/qrcode.js";
-import { jn } from "./renderer/canvas.js";
-import { Bt } from "./renderer/svg-tag.js";
+import { require_can_promise } from "./can-promise.js";
+import { require_qrcode } from "./core/qrcode.js";
+import { require_canvas } from "./renderer/canvas.js";
+import { require_svg_tag } from "./renderer/svg-tag.js";
 
 //@ chunk-spjgqa4y.js:57046-57866 cjs-fingerprint
-var Qn = x(function (sl) {
-  var ol = Ue(),
-    ae = it(),
-    Me = jn(),
-    Jn = Bt();
-  function It(t, e, r, n, i) {
-    let o = [].slice.call(arguments, 1),
-      s = o.length,
-      l = typeof o[s - 1] === "function";
-    if (!l && !ol()) throw Error("Callback required as last argument");
-    if (l) {
-      if (s < 2) throw Error("Too few arguments provided");
-      if (s === 2) ((i = r), (r = e), (e = n = void 0));
-      else if (s === 3)
-        if (e.getContext && typeof i > "u") ((i = n), (n = void 0));
-        else ((i = n), (n = r), (r = e), (e = void 0));
+var require_browser = x(function (cjsExports) {
+  var canPromise = require_can_promise();
+  var QRCode = require_qrcode();
+  var CanvasRenderer = require_canvas();
+  var SvgRenderer = require_svg_tag();
+  function renderCanvas(renderFunc, canvas, text, opts, cb) {
+    let args = [].slice.call(arguments, 1);
+    let argsNum = args.length;
+    let isLastArgCb = typeof args[argsNum - 1] === "function";
+    if (!isLastArgCb && !canPromise()) throw Error("Callback required as last argument");
+    if (isLastArgCb) {
+      if (argsNum < 2) throw Error("Too few arguments provided");
+      if (argsNum === 2) {
+        cb = text;
+        text = canvas;
+        canvas = opts = undefined;
+      } else if (argsNum === 3)
+        if (canvas.getContext && typeof cb === "undefined") {
+          cb = opts;
+          opts = undefined;
+        } else {
+          cb = opts;
+          opts = text;
+          text = canvas;
+          canvas = undefined;
+        }
     } else {
-      if (s < 1) throw Error("Too few arguments provided");
-      if (s === 1) ((r = e), (e = n = void 0));
-      else if (s === 2 && !e.getContext) ((n = r), (r = e), (e = void 0));
-      return new Promise(function (u, f) {
+      if (argsNum < 1) throw Error("Too few arguments provided");
+      if (argsNum === 1) {
+        text = canvas;
+        canvas = opts = undefined;
+      } else if (argsNum === 2 && !canvas.getContext) {
+        opts = text;
+        text = canvas;
+        canvas = undefined;
+      }
+      return new Promise(function (resolve, reject) {
         try {
-          let create = ae.create(r, n);
-          u(t(create, e, n));
-        } catch (error) {
-          f(error);
+          let data = QRCode.create(text, opts);
+          resolve(renderFunc(data, canvas, opts));
+        } catch (e) {
+          reject(e);
         }
       });
     }
     try {
-      let create = ae.create(r, n);
-      i(null, t(create, e, n));
-    } catch (error) {
-      i(error);
+      let data = QRCode.create(text, opts);
+      cb(null, renderFunc(data, canvas, opts));
+    } catch (e) {
+      cb(e);
     }
   }
-  sl.create = ae.create;
-  sl.toCanvas = It.bind(null, Me.render);
-  sl.toDataURL = It.bind(null, Me.renderToDataURL);
-  sl.toString = It.bind(null, function (t, e, r) {
-    return Jn.render(t, r);
+  cjsExports.create = QRCode.create;
+  cjsExports.toCanvas = renderCanvas.bind(null, CanvasRenderer.render);
+  cjsExports.toDataURL = renderCanvas.bind(null, CanvasRenderer.renderToDataURL);
+  cjsExports.toString = renderCanvas.bind(null, function (data, _, opts) {
+    return SvgRenderer.render(data, opts);
   });
 });
-
-export { Qn };
+export { require_browser };

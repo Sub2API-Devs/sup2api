@@ -6,49 +6,57 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../runtime/bun-runtime.js";
-import { ct } from "../errors.js";
-import { uh } from "../codegen/index.js";
-import { DPe } from "../names.js";
+import { require_errors } from "../errors.js";
+import { require_codegen_2 } from "../codegen/index.js";
+import { require_names } from "../names.js";
 
 //@ chunk-s82q9s4x.js:24395-25072 cjs-fingerprint
-var ks = x(function (Ps) {
-  Object.defineProperty(Ps, "__esModule", { value: !0 });
-  Ps.boolOrEmptySchema = Ps.topBoolOrEmptySchema = void 0;
-  var bs = ct(),
-    Es = uh(),
-    Rc = DPe(),
-    Ic = { message: "boolean schema is false" };
-  function Tc(e) {
-    let { gen: gen, schema: schema, validateName: validateName } = e;
-    if (schema === !1) Ss(e, !1);
-    else if (typeof schema == "object" && schema.$async === !0) gen.return(Rc.default.data);
-    else (gen.assign(Es._`${validateName}.errors`, null), gen.return(!0));
+var require_boolSchema = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.boolOrEmptySchema = cjsExports.topBoolOrEmptySchema = undefined;
+  var bs = require_errors();
+  var codegen_1 = require_codegen_2();
+  var names_1 = require_names();
+  var boolError = {
+    message: "boolean schema is false",
+  };
+  function topBoolOrEmptySchema(it) {
+    let { gen, schema, validateName } = it;
+    if (schema === false) falseSchemaError(it, false);
+    else if (typeof schema == "object" && schema.$async === true) gen.return(names_1.default.data);
+    else {
+      gen.assign(codegen_1._`${validateName}.errors`, null);
+      gen.return(true);
+    }
   }
-  Ps.topBoolOrEmptySchema = Tc;
-  function Cc(e, t) {
-    let { gen: gen, schema: schema } = e;
-    if (schema === !1) (gen.var(t, !1), Ss(e));
-    else gen.var(t, !0);
+  cjsExports.topBoolOrEmptySchema = topBoolOrEmptySchema;
+  function boolOrEmptySchema(it, valid) {
+    let { gen, schema } = it;
+    if (schema === false) {
+      gen.var(valid, false);
+      falseSchemaError(it);
+    } else gen.var(valid, true);
   }
-  Ps.boolOrEmptySchema = Cc;
-  function Ss(e, t) {
-    let { gen: gen, data: s } = e;
+  cjsExports.boolOrEmptySchema = boolOrEmptySchema;
+  function falseSchemaError(it, overrideAllErrors) {
+    let { gen, data } = it;
     bs.reportError(
       {
-        gen: gen,
+        gen,
         keyword: "false schema",
-        data: s,
-        schema: !1,
-        schemaCode: !1,
-        schemaValue: !1,
+        data,
+        schema: false,
+        schemaCode: false,
+        schemaValue: false,
         params: {},
-        it: e,
+        it,
       },
-      Ic,
-      void 0,
-      t,
+      boolError,
+      undefined,
+      overrideAllErrors,
     );
   }
 });
-
-export { ks };
+export { require_boolSchema };

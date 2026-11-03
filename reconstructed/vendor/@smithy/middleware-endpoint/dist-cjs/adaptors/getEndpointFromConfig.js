@@ -6,17 +6,19 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../runtime/bun-runtime.js";
-import { wD } from "../../../node-config-provider/dist-cjs/index.js";
-import { an } from "./getEndpointUrlConfig.js";
+import { require_node_config_provider } from "../../../node-config-provider/dist-cjs/index.js";
+import { require_getEndpointUrlConfig } from "./getEndpointUrlConfig.js";
 
 //@ chunk-edce4vxq.js:116280-116495 cjs-fingerprint
-var hn = x(function (ln) {
-  Object.defineProperty(ln, "__esModule", { value: !0 });
-  ln.getEndpointFromConfig = void 0;
-  var cn = wD(),
-    un = an(),
-    uu = async (e) => cn.loadConfig(un.getEndpointUrlConfig(e ?? ""))();
-  ln.getEndpointFromConfig = uu;
+var require_getEndpointFromConfig = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.getEndpointFromConfig = undefined;
+  var node_config_provider_1 = require_node_config_provider();
+  var getEndpointUrlConfig_1 = require_getEndpointUrlConfig();
+  var getEndpointFromConfig = async (serviceId) =>
+    node_config_provider_1.loadConfig(getEndpointUrlConfig_1.getEndpointUrlConfig(serviceId ?? ""))();
+  cjsExports.getEndpointFromConfig = getEndpointFromConfig;
 });
-
-export { hn };
+export { require_getEndpointFromConfig };

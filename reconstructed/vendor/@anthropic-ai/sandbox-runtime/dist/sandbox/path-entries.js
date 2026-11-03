@@ -5,193 +5,260 @@
  * pieces: chunk-fq0cr76a.js (19)
  * attribution: esm-fingerprint 19
  */
-import * as pathModule from "path";
 import * as pathModule_2 from "path";
-import * as pathModule_3 from "path";
-import * as pathModule_4 from "path";
-import * as pathModule_5 from "path";
-import * as fsModule from "fs";
+import "path";
+import "path";
+import "path";
+import "path";
+import "fs";
 import * as fsModule_2 from "fs";
-import * as fsModule_3 from "fs";
-import * as fsModule_4 from "fs";
-import * as fsModule_5 from "fs";
-import * as fsModule_6 from "fs";
-import * as fsModule_7 from "fs";
-import { Lqt, oD, Kot, Hqt, Nqt, $qt, S8o, R4e, PTt, uy, Ad, sS } from "./sandbox-utils.js";
-import { zv } from "../utils/platform.js";
+import "fs";
+import "fs";
+import "fs";
+import "fs";
+import "fs";
+import {
+  markedLiteralPath,
+  stripExtendedPathPrefix,
+  expandWindowsEnvRefs,
+  isUncPath,
+  Nqt,
+  toForwardSlashes,
+  collapseInteriorSpellings,
+  isAbsenceErrno,
+  containsGlobCharsForPlatform,
+  removeTrailingGlobSuffix,
+  containsGlobChars,
+  normalizePathForSandbox,
+} from "./sandbox-utils.js";
+import { getPlatform as getPlatform_2 } from "../utils/platform.js";
 
 //@ chunk-fq0cr76a.js:639960-640088 esm-fingerprint
-function Jc(e) {
-  let n = [],
-    r = [];
-  for (let s of e ?? [])
-    if (typeof s === "string") n.push(s);
-    else r.push(Lqt(s));
-  return { spelled: n, marked: r };
+function splitPathEntries(entries) {
+  let spelled = [];
+  let marked = [];
+  for (let entry of entries ?? [])
+    if (typeof entry === "string") spelled.push(entry);
+    else marked.push(markedLiteralPath(entry));
+  return {
+    spelled,
+    marked,
+  };
 }
 //@ chunk-fq0cr76a.js:640088-640124 esm-fingerprint
-function Ph(e) {
-  return Jc(e).spelled;
+function spelledOf(entries) {
+  return splitPathEntries(entries).spelled;
 }
 //@ chunk-fq0cr76a.js:640124-640284 esm-fingerprint
-function Qc(e, n) {
-  let r = (h) => (typeof h === "string" ? `s:${h}` : `l:${Lqt(h)}`);
-  if (e.length !== n.length) return !1;
-  let s = new Set(e.map(r));
-  return n.every((h) => s.has(r(h)));
+function samePathEntries(a, b) {
+  let key = (entry) => (typeof entry === "string" ? `s:${entry}` : `l:${markedLiteralPath(entry)}`);
+  if (a.length !== b.length) return false;
+  let keys = new Set(a.map(key));
+  return b.every((entry) => keys.has(key(entry)));
 }
 //@ chunk-fq0cr76a.js:640284-640455 esm-fingerprint
-function JV(e) {
-  let n = zv() === "windows",
-    r = e;
-  if (n) {
-    if (((r = oD(Kot(r))), Hqt(r))) return;
+function spelledAbsolute(spelling) {
+  let onWindows = getPlatform_2() === "windows";
+  let spelled = spelling;
+  if (onWindows) {
+    spelled = stripExtendedPathPrefix(expandWindowsEnvRefs(spelled));
+    if (isUncPath(spelled)) return;
   }
-  let s = Nqt(r),
-    h = s === r && !pathModule.isAbsolute(r) ? pathModule.resolve(process.cwd(), r) : s;
-  return n ? $qt(h) : S8o(h);
+  let expanded = Nqt(spelled);
+  let absolute =
+    expanded === spelled && !pathModule_2.isAbsolute(spelled)
+      ? pathModule_2.resolve(process.cwd(), spelled)
+      : expanded;
+  return onWindows ? toForwardSlashes(absolute) : collapseInteriorSpellings(absolute);
 }
 //@ chunk-fq0cr76a.js:640455-640524 esm-fingerprint
-function QV(e) {
+function mayBeThere(p) {
   try {
-    return (fsModule.lstatSync(e), !0);
-  } catch (error) {
-    return !R4e(error);
+    fsModule_2.lstatSync(p);
+    return true;
+  } catch (err) {
+    return !isAbsenceErrno(err);
   }
 }
 //@ chunk-fq0cr76a.js:640524-640599 esm-fingerprint
-function e3(e) {
+function isThereUnlinked(p) {
   try {
-    return !fsModule.lstatSync(e).isSymbolicLink();
+    return !fsModule_2.lstatSync(p).isSymbolicLink();
   } catch {
-    return !1;
+    return false;
   }
 }
 //@ chunk-fq0cr76a.js:640599-640735 esm-fingerprint
-function t3(e, n) {
+function isDirectoryFor(kind, p) {
   try {
-    return e === "allow" ? fsModule.lstatSync(n).isDirectory() : fsModule.statSync(n).isDirectory();
-  } catch (error) {
-    return e === "deny" && !R4e(error);
+    return kind === "allow" ? fsModule_2.lstatSync(p).isDirectory() : fsModule_2.statSync(p).isDirectory();
+  } catch (err) {
+    return kind === "deny" && !isAbsenceErrno(err);
   }
 }
 //@ chunk-fq0cr76a.js:640735-641471 esm-fingerprint
-function nc(e, n, r = {}) {
-  let s = r.isPattern ?? PTt,
-    h = uy(e);
-  if (!s(h)) {
-    if (h === e || !Ad(h)) return [];
-    h = e;
+function literalReadings(spelling, kind, opts = {}) {
+  let isPattern = opts.isPattern ?? containsGlobCharsForPlatform;
+  let stripped = removeTrailingGlobSuffix(spelling);
+  if (!isPattern(stripped)) {
+    if (stripped === spelling || !containsGlobChars(stripped)) return [];
+    stripped = spelling;
   }
-  let y = JV(h);
-  if (y === void 0) return [];
-  let parts = y.split("/"),
-    flattened = parts.flatMap((q, Z) => (Ad(q) ? [Z] : [])),
-    w = flattened[0],
-    R = flattened[flattened.length - 1];
-  if (w === void 0 || R === void 0) return [];
-  let D = (q) => parts.slice(0, q + 1).join("/") || "/",
-    O = n === "deny" ? QV : e3,
-    L = w - 1;
-  while (L < R && O(D(L + 1))) L++;
-  if (L < w) return [];
-  let V = [];
-  if (L === R && (n === "deny" || Yw(R, parts.length - 1, D)))
-    V.push({ glob: !1, path: sS(h, { literal: !0 }) });
-  let K = h === e ? "" : "/**";
-  for (let q = flattened.length - 2; q >= 0; q--) {
-    let Z = flattened[q];
-    if (Z > L) continue;
-    let J = flattened[q + 1],
-      min = Math.min(J - 1, L);
-    while (min >= Z && !t3(n, D(min))) min--;
-    if (min < Z) continue;
-    if (n === "allow" && !Yw(min, J - 1, D)) continue;
-    let ae = sS(D(min), { literal: !0 });
-    V.push({ glob: !0, anchor: ae, path: ae + y.slice(D(min).length) + K });
+  let spelled = spelledAbsolute(stripped);
+  if (spelled === undefined) return [];
+  let parts = spelled.split("/");
+  let globAt = parts.flatMap((part, i) => (containsGlobChars(part) ? [i] : []));
+  let first = globAt[0];
+  let last = globAt[globAt.length - 1];
+  if (first === undefined || last === undefined) return [];
+  let prefix = (i) => parts.slice(0, i + 1).join("/") || "/";
+  let isThere = kind === "deny" ? mayBeThere : isThereUnlinked;
+  let reach = first - 1;
+  while (reach < last && isThere(prefix(reach + 1))) reach++;
+  if (reach < first) return [];
+  let readings = [];
+  if (reach === last && (kind === "deny" || restIsUnlinked(last, parts.length - 1, prefix)))
+    readings.push({
+      glob: false,
+      path: normalizePathForSandbox(stripped, {
+        literal: true,
+      }),
+    });
+  let setAside = stripped === spelling ? "" : "/**";
+  for (let n = globAt.length - 2; n >= 0; n--) {
+    let at = globAt[n];
+    if (at > reach) continue;
+    let next = globAt[n + 1];
+    let end = Math.min(next - 1, reach);
+    while (end >= at && !isDirectoryFor(kind, prefix(end))) end--;
+    if (end < at) continue;
+    if (kind === "allow" && !restIsUnlinked(end, next - 1, prefix)) continue;
+    let anchor = normalizePathForSandbox(prefix(end), {
+      literal: true,
+    });
+    readings.push({
+      glob: true,
+      anchor,
+      path: anchor + spelled.slice(prefix(end).length) + setAside,
+    });
   }
-  return V;
+  return readings;
 }
 //@ chunk-fq0cr76a.js:641471-641597 esm-fingerprint
-function Yw(e, n, r) {
-  for (let s = e + 1; s <= n; s++)
+function restIsUnlinked(from, to, prefix) {
+  for (let i = from + 1; i <= to; i++)
     try {
-      if (fsModule.lstatSync(r(s)).isSymbolicLink()) return !1;
-    } catch (error) {
-      return R4e(error);
+      if (fsModule_2.lstatSync(prefix(i)).isSymbolicLink()) return false;
+    } catch (err) {
+      return isAbsenceErrno(err);
     }
-  return !0;
+  return true;
 }
 //@ chunk-fq0cr76a.js:641597-641648 esm-fingerprint
-function Gb(e, n) {
-  return nc(e, n).some((r) => !r.glob);
+function hasNameReading(spelling, kind) {
+  return literalReadings(spelling, kind).some((reading) => !reading.glob);
 }
 //@ chunk-fq0cr76a.js:641648-641843 esm-fingerprint
-function* Zw(e, n, r, s) {
-  let h = yield* s(e),
-    y = new Set(h),
-    b = [];
-  for (let S of nc(e, r)) {
-    let w = S.glob ? yield* s(S.path, S.anchor) : [n];
-    for (let R of w) {
-      if (y.has(R)) continue;
-      (y.add(R), b.push(R));
+function* withOtherReadings(spelling, name, kind, expandGlob) {
+  let expansion = yield* expandGlob(spelling);
+  let seen = new Set(expansion);
+  let added = [];
+  for (let reading of literalReadings(spelling, kind)) {
+    let found = reading.glob ? yield* expandGlob(reading.path, reading.anchor) : [name];
+    for (let p of found) {
+      if (seen.has(p)) continue;
+      seen.add(p);
+      added.push(p);
     }
   }
-  return [...h, ...b];
+  return [...expansion, ...added];
 }
 //@ chunk-fq0cr76a.js:641843-642044 esm-fingerprint
-function Hb(e, n, r) {
-  let s = (h, y) => [
-    ...h,
-    ...Ph(h).flatMap((b) => nc(b, y).flatMap((S) => (S.glob ? [] : [{ path: S.path, literal: !0 }]))),
+function readRulesOf(denyRead, allowRead, credentialDenies) {
+  let withNames = (entries, kind) => [
+    ...entries,
+    ...spelledOf(entries).flatMap((spelling) =>
+      literalReadings(spelling, kind).flatMap((reading) =>
+        reading.glob
+          ? []
+          : [
+              {
+                path: reading.path,
+                literal: true,
+              },
+            ],
+      ),
+    ),
   ];
-  return { denyRead: s([...e, ...r], "deny"), allowRead: n === void 0 ? void 0 : s(n, "allow") };
+  return {
+    denyRead: withNames([...denyRead, ...credentialDenies], "deny"),
+    allowRead: allowRead === undefined ? undefined : withNames(allowRead, "allow"),
+  };
 }
 //@ chunk-fq0cr76a.js:642044-642131 esm-fingerprint
-function zw(e) {
-  return Object.fromEntries(Object.entries(e).filter(([, n]) => n.length > 0));
+function nonEmptyLists(lists) {
+  return Object.fromEntries(Object.entries(lists).filter(([, list]) => list.length > 0));
 }
 //@ chunk-fq0cr76a.js:642131-642226 esm-fingerprint
-function qb(e, n) {
-  return zw({ literalDenyOnly: Jc(e).marked, literalAllowWithinDeny: Jc(n).marked });
+function literalReadLists(denyRead, allowRead) {
+  return nonEmptyLists({
+    literalDenyOnly: splitPathEntries(denyRead).marked,
+    literalAllowWithinDeny: splitPathEntries(allowRead).marked,
+  });
 }
 //@ chunk-fq0cr76a.js:642226-642322 esm-fingerprint
-function jb(e, n) {
-  return zw({ literalAllowOnly: Jc(e).marked, literalDenyWithinAllow: Jc(n).marked });
+function literalWriteLists(allowWrite, denyWrite) {
+  return nonEmptyLists({
+    literalAllowOnly: splitPathEntries(allowWrite).marked,
+    literalDenyWithinAllow: splitPathEntries(denyWrite).marked,
+  });
 }
 //@ chunk-fq0cr76a.js:642322-642390 esm-fingerprint
-function eu(e) {
-  return [...(e.allowOnly || []), ...(e.literalAllowOnly ?? [])];
+function writeRootsOf(config) {
+  return [...(config.allowOnly || []), ...(config.literalAllowOnly ?? [])];
 }
 //@ chunk-fq0cr76a.js:642390-642447 esm-fingerprint
-function Yb(e, n, r) {
-  return [...e, ...Jc(n).marked, ...eu(r)];
+function reExposedBy(expandedAllowRead, allowRead, writeConfig) {
+  return [...expandedAllowRead, ...splitPathEntries(allowRead).marked, ...writeRootsOf(writeConfig)];
 }
 //@ chunk-fq0cr76a.js:642447-642664 esm-fingerprint
-function Xw(e) {
-  if (!e) return e;
-  let { literalDenyOnly: literalDenyOnly, literalAllowWithinDeny: literalAllowWithinDeny, ...s } = e;
+function readNamesOf(config) {
+  if (!config) return config;
+  let { literalDenyOnly, literalAllowWithinDeny, ...rest } = config;
   return {
-    ...s,
-    denyOnly: [...(e.denyOnly || []), ...(literalDenyOnly ?? [])],
-    ...(e.allowWithinDeny || literalAllowWithinDeny
-      ? { allowWithinDeny: [...(e.allowWithinDeny ?? []), ...(literalAllowWithinDeny ?? [])] }
+    ...rest,
+    denyOnly: [...(config.denyOnly || []), ...(literalDenyOnly ?? [])],
+    ...(config.allowWithinDeny || literalAllowWithinDeny
+      ? {
+          allowWithinDeny: [...(config.allowWithinDeny ?? []), ...(literalAllowWithinDeny ?? [])],
+        }
       : {}),
   };
 }
 //@ chunk-fq0cr76a.js:642664-642913 esm-fingerprint
-function Jw(e) {
-  if (!e) return e;
-  let { literalAllowOnly: literalAllowOnly, literalDenyWithinAllow: literalDenyWithinAllow, ...s } = e;
+function writeNamesOf(config) {
+  if (!config) return config;
+  let { literalAllowOnly, literalDenyWithinAllow, ...rest } = config;
   return {
-    ...s,
-    allowOnly: eu({
-      allowOnly: (e.allowOnly || []).filter((h) => !Ad(h) || Gb(h, "allow")),
-      literalAllowOnly: literalAllowOnly,
+    ...rest,
+    allowOnly: writeRootsOf({
+      allowOnly: (config.allowOnly || []).filter((p) => !containsGlobChars(p) || hasNameReading(p, "allow")),
+      literalAllowOnly,
     }),
-    denyWithinAllow: [...(e.denyWithinAllow || []), ...(literalDenyWithinAllow ?? [])],
+    denyWithinAllow: [...(config.denyWithinAllow || []), ...(literalDenyWithinAllow ?? [])],
   };
 }
-
-export { eu, Hb, Ph, Zw, Gb, Yb, qb, jb, Qc, Xw, Jw, nc };
+export {
+  writeRootsOf,
+  readRulesOf,
+  spelledOf,
+  withOtherReadings,
+  hasNameReading,
+  reExposedBy,
+  literalReadLists,
+  literalWriteLists,
+  samePathEntries,
+  readNamesOf,
+  writeNamesOf,
+  literalReadings,
+};

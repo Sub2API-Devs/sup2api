@@ -21,27 +21,32 @@ function setAwaitingPlanApproval(r, e, n) {
   e.update(r, (s) => ({
     ...s,
     awaitingPlanApproval: n !== null,
-    pendingPlanApproval: n ? { requestId: n.requestId, answered: !1 } : void 0,
+    pendingPlanApproval: n
+      ? {
+          requestId: n.requestId,
+          answered: false,
+        }
+      : undefined,
   }));
 }
+//@ chunk-fnhsh6ng.js:1323-2095 placement
 /**
  * 处理同进程 teammate 收到的计划审批响应：校验响应与待审批请求是否匹配，不匹配则清除等待状态并返回拒绝结果。
  */
-//@ chunk-fnhsh6ng.js:1323-2095 placement
-function applyPlanApprovalResponse(taskId, response, tasks, s) {
+function applyPlanApprovalResponse(taskId, response, tasks, storage) {
   let task = tasks.get(taskId);
   if (!task || !isInProcessTeammateTask(task) || !task.awaitingPlanApproval) return null;
   switch (planVerdictBinding(task.pendingPlanApproval, response)) {
     case "mismatch":
-      return (
-        logForDebugging(
-          `[InProcessTeammate] Plan approval response ${jsonStringify(response.requestId)} does not name the pending plan request ${jsonStringify(task.pendingPlanApproval?.requestId)}; resolving the wait as a rejection`,
-          { level: "warn" },
-        ),
-        logFeatureSad("plan_approval", "request_binding_mismatch"),
-        setAwaitingPlanApproval(taskId, tasks, null),
-        planVerdictMismatchRejection(response)
+      logForDebugging(
+        `[InProcessTeammate] Plan approval response ${jsonStringify(response.requestId)} does not name the pending plan request ${jsonStringify(task.pendingPlanApproval?.requestId)}; resolving the wait as a rejection`,
+        {
+          level: "warn",
+        },
       );
+      logFeatureSad("plan_approval", "request_binding_mismatch");
+      setAwaitingPlanApproval(taskId, tasks, null);
+      return planVerdictMismatchRejection(response);
     case "unbound":
       logFeatureSad("plan_approval", "verdict_unbound");
       break;
@@ -51,19 +56,19 @@ function applyPlanApprovalResponse(taskId, response, tasks, s) {
     case "already_answered":
       return null;
   }
-  if (!response.approved) return (setAwaitingPlanApproval(taskId, tasks, null), response);
-  let h = resolveAvailablePermissionMode(response.permissionMode);
-  return (
-    tasks.update(taskId, (m) => ({
-      ...m,
-      awaitingPlanApproval: !1,
-      pendingPlanApproval: void 0,
-      permissionMode: h,
-      planHeldAfterSpawn: !1,
-    })),
-    setMemberMode(task.identity.teamName, task.identity.agentName, h, s),
-    response
-  );
+  if (!response.approved) {
+    setAwaitingPlanApproval(taskId, tasks, null);
+    return response;
+  }
+  let mode = resolveAvailablePermissionMode(response.permissionMode);
+  tasks.update(taskId, (m) => ({
+    ...m,
+    awaitingPlanApproval: false,
+    pendingPlanApproval: undefined,
+    permissionMode: mode,
+    planHeldAfterSpawn: false,
+  }));
+  setMemberMode(task.identity.teamName, task.identity.agentName, mode, storage);
+  return response;
 }
-
 export { applyPlanApprovalResponse, setAwaitingPlanApproval };

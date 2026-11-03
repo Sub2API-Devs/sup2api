@@ -12,18 +12,21 @@ import { createFieldAccessor } from "../../state/sliceHelpers.js";
 import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
 
 //@ chunk-2n9gagn7.js:264-304 placement
-var r = createFieldAccessor("computerUseMcpState", void 0);
 /**
  * 包装 AppState 中 Computer Use MCP 状态的读写单元。
  */
+var computerUseMcpStateAccessor = createFieldAccessor("computerUseMcpState", undefined);
 //@ chunk-2n9gagn7.js:304-451 placement
+/**
+ * 包装 AppState 中 Computer Use MCP 状态的读写单元。
+ */
 class ComputerUseStateCell {
   #e;
   constructor(e) {
     this.#e = e;
   }
   static over(e) {
-    return new ComputerUseStateCell(r(e.getState, e.setState));
+    return new ComputerUseStateCell(computerUseMcpStateAccessor(e.getState, e.setState));
   }
   get() {
     return this.#e.get();
@@ -34,22 +37,25 @@ class ComputerUseStateCell {
 }
 //@ chunk-2n9gagn7.js:451-573 placement
 class SingleOwnerLock {
-  owner = void 0;
+  owner = undefined;
   acquire(e) {
     if (this.owner) return () => {};
-    return (
-      (this.owner = e),
-      () => {
-        if (this.owner === e) this.owner = void 0;
-      }
-    );
+    this.owner = e;
+    return () => {
+      if (this.owner === e) this.owner = undefined;
+    };
   }
 }
 //@ chunk-2n9gagn7.js:573-599 placement
-var fNt = new SessionRootSlot(() => new SingleOwnerLock());
+/**
+ * 按会话根保存的 Computer Use 独占锁。
+ */
+var computerUseOwnerLock = new SessionRootSlot(() => new SingleOwnerLock());
 //@ chunk-2n9gagn7.js:599-638 placement
-function bMs(e) {
-  return fNt.of(e).owner;
+/**
+ * 读取 Computer Use 的当前持有者。
+ */
+function getComputerUseOwner(session) {
+  return computerUseOwnerLock.of(session).owner;
 }
-
-export { fNt, ComputerUseStateCell, bMs };
+export { computerUseOwnerLock, ComputerUseStateCell, getComputerUseOwner };

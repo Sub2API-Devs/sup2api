@@ -8,11 +8,15 @@
  * pieces: chunk-zef67v87.js (10)
  * attribution: placement 5, layout 1, callgraph-fingerprint 1, fingerprint 3
  */
-import { j, y, R, P } from "../../vendor/react/cjs/react.production.js";
+import { init_react_production, y, R, P } from "../../vendor/react/cjs/react.production.js";
 import { w } from "../../vendor/react/compiler-runtime.js";
 import { useAppState } from "../state/AppState.js";
-import { gye } from "../hooks/useTasksV2.js";
-import { e, r, Fragment } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { useTaskListSnapshot } from "../hooks/useTasksV2.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+  Fragment,
+} from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Box, Text } from "../ink/components/Text.js";
 import { useTerminalSize } from "../hooks/useTerminalSize.js";
 import { useClock } from "../ink/components/ClockContext.js";
@@ -22,310 +26,392 @@ import { AGENT_COLOR_TO_THEME_COLOR } from "../tools/AgentTool/agentColorManager
 import { isInProcessTeammateTask } from "../tasks/InProcessTeammateTask/types.js";
 import { summarizeRecentActivities } from "../utils/collapseReadSearch.js";
 import { count } from "../utils/collections.js";
-import { re } from "../../vendor/@inquirer/figures/dist/esm/index.js";
+import { figures_default } from "../../vendor/@inquirer/figures/dist/esm/index.js";
 import { bunStringWidth } from "../ink/stringWidth.js";
 import { truncateToWidth } from "../utils/format.js";
 
 //@ chunk-zef67v87.js:778-782 placement
-j();
+init_react_production();
 //@ chunk-zef67v87.js:782-819 placement = _temp4 (1)
 function selectExpandedView(s_1) {
   return s_1.expandedView;
 }
 //@ chunk-zef67v87.js:819-873 placement
-function Be(T, U) {
+function compareNumbers(T, U) {
   return parseInt(T, 10) - parseInt(U, 10);
 }
 //@ chunk-zef67v87.js:873-904 placement
-function Ie(ee) {
+function taskNumberLabel(ee) {
   return `#${ee}`;
 }
+//@ chunk-zef67v87.js:904-1150 placement
 /**
  * 展开视图为 tasks 时显示完整任务列表。
  */
-//@ chunk-zef67v87.js:904-1150 placement
-function ExpandedTaskList(i) {
-  let x = w(2),
-    { hidden: hidden } = i,
-    f = useAppState(selectExpandedView) === "tasks",
-    d = gye();
-  if (hidden || !f || !d || d.length === 0) {
+function ExpandedTaskList(props) {
+  let x = w(2);
+  let { hidden } = props;
+  let f = useAppState(selectExpandedView) === "tasks";
+  let taskListSnapshot = useTaskListSnapshot();
+  if (hidden || !f || !taskListSnapshot || taskListSnapshot.length === 0) {
     return null;
   }
   let z;
-  if (x[0] !== d)
-    ((z = e(Box, {
+  if (x[0] !== taskListSnapshot) {
+    z = jsxProd_default(Box, {
       width: "100%",
       flexDirection: "column",
-      children: e(TaskListV2, { tasks: d, isStandalone: !0 }),
-    })),
-      (x[0] = d),
-      (x[1] = z));
-  else z = x[1];
+      children: jsxProd_default(TaskListV2, {
+        tasks: taskListSnapshot,
+        isStandalone: true,
+      }),
+    });
+    x[0] = taskListSnapshot;
+    x[1] = z;
+  } else z = x[1];
   return z;
 }
 //@ chunk-zef67v87.js:1150-1163 layout
-var te = 30000;
+var TASK_REFRESH_MS = 30000;
 //@ chunk-zef67v87.js:1163-1290 callgraph-fingerprint = byIdAsc (1)
 function byIdAsc(a, b) {
-  let aNum = parseInt(a.id, 10),
-    bNum = parseInt(b.id, 10);
+  let aNum = parseInt(a.id, 10);
+  let bNum = parseInt(b.id, 10);
   if (!isNaN(aNum) && !isNaN(bNum)) return aNum - bNum;
   return a.id.localeCompare(b.id);
 }
 //@ chunk-zef67v87.js:1290-3878 fingerprint = TaskListV2 (0.943)
-function TaskListV2({ tasks: tasks, isStandalone: isStandalone = !1 }) {
-  let teamContext = useAppState((t) => t.teamContext),
-    appStateTasks = useAppState((s_0) => s_0.tasks),
-    [x, z] = y(0),
-    { rows: rows, columns: columns } = useTerminalSize(),
-    A = useClock(),
-    C = R(null);
-  C.current ??= new Map(tasks.filter((t) => t.status === "completed").map((t_0) => [t_0.id, null]));
-  let a = C.current,
-    maxDisplay = rows <= 10 ? 0 : Math.min(5, Math.max(3, rows - 14)),
-    currentCompletedIds = new Set(tasks.filter((t_1) => t_1.status === "completed").map((t_2) => t_2.id)),
-    now = Date.now();
+function TaskListV2({ tasks, isStandalone = false }) {
+  let teamContext = useAppState((t) => t.teamContext);
+  let appStateTasks = useAppState((s_0) => s_0.tasks);
+  let [x, z] = y(0);
+  let { rows, columns } = useTerminalSize();
+  let clock = useClock();
+  let previousCompletedIdsRef = R(null);
+  previousCompletedIdsRef.current ??= new Map(
+    tasks.filter((task) => task.status === "completed").map((t_0) => [t_0.id, null]),
+  );
+  let a = previousCompletedIdsRef.current;
+  let maxDisplay = rows <= 10 ? 0 : Math.min(5, Math.max(3, rows - 14));
+  let currentCompletedIds = new Set(tasks.filter((t_1) => t_1.status === "completed").map((t_2) => t_2.id));
+  let now = Date.now();
   for (let id of currentCompletedIds) if (!a.has(id)) a.set(id, now);
   for (let id_0 of a.keys()) if (!currentCompletedIds.has(id_0)) a.delete(id_0);
-  if (
-    (P(() => {
-      let currentNow = Date.now(),
-        o = 1 / 0;
-      for (let ts of a.values()) {
-        if (ts === null) continue;
-        let m = ts + te;
-        if (m > currentNow && m < o) o = m;
-      }
-      if (o === 1 / 0) return;
-      return A.setTimeout(() => z((forceUpdate_0) => forceUpdate_0 + 1), o - currentNow);
-    }, [tasks, A, a, x]),
-    !isTaskToolsEnabled())
-  )
-    return null;
+  P(() => {
+    let currentNow = Date.now();
+    let earliestExpiry = 1 / 0;
+    for (let ts of a.values()) {
+      if (ts === null) continue;
+      let expiry = ts + TASK_REFRESH_MS;
+      if (expiry > currentNow && expiry < earliestExpiry) earliestExpiry = expiry;
+    }
+    if (earliestExpiry === 1 / 0) return;
+    return clock.setTimeout(() => z((n) => n + 1), earliestExpiry - currentNow);
+  }, [tasks, clock, a, x]);
+  if (!isTaskToolsEnabled()) return null;
   if (tasks.length === 0) return null;
-  let _ = {};
+  let teammateColors = {};
   if (isAgentSwarmsEnabled() && teamContext?.teammates) {
     for (let teammate of Object.values(teamContext.teammates))
       if (teammate.color) {
         let themeColor = AGENT_COLOR_TO_THEME_COLOR[teammate.color];
-        if (themeColor) _[teammate.name] = themeColor;
+        if (themeColor) teammateColors[teammate.name] = themeColor;
       }
   }
-  let g = {},
-    activeTeammates = new Set();
+  let teammateActivity = {};
+  let activeTeammates = new Set();
   if (isAgentSwarmsEnabled()) {
     for (let bgTask of Object.values(appStateTasks))
       if (isInProcessTeammateTask(bgTask) && bgTask.status === "running") {
-        (activeTeammates.add(bgTask.identity.agentName), activeTeammates.add(bgTask.identity.agentId));
-        let activities = bgTask.progress?.recentActivities,
-          desc =
-            (activities && summarizeRecentActivities(activities)) ??
-            bgTask.progress?.lastActivity?.activityDescription;
-        if (desc) ((g[bgTask.identity.agentName] = desc), (g[bgTask.identity.agentId] = desc));
+        activeTeammates.add(bgTask.identity.agentName);
+        activeTeammates.add(bgTask.identity.agentId);
+        let activities = bgTask.progress?.recentActivities;
+        let desc =
+          (activities && summarizeRecentActivities(activities)) ??
+          bgTask.progress?.lastActivity?.activityDescription;
+        if (desc) {
+          teammateActivity[bgTask.identity.agentName] = desc;
+          teammateActivity[bgTask.identity.agentId] = desc;
+        }
       }
   }
-  let completedCount = count(tasks, (t_3) => t_3.status === "completed"),
-    pendingCount = count(tasks, (t_4) => t_4.status === "pending"),
-    q = tasks.length - completedCount - pendingCount,
-    unresolvedTaskIds = new Set(tasks.filter((t_5) => t_5.status !== "completed").map((t_6) => t_6.id)),
-    V = tasks.length > maxDisplay,
-    M,
-    h;
-  if (V) {
-    let t = [],
-      o = [];
+  let completedCount = count(tasks, (t_3) => t_3.status === "completed");
+  let pendingCount = count(tasks, (t_4) => t_4.status === "pending");
+  let inProgressCount = tasks.length - completedCount - pendingCount;
+  let unresolvedTaskIds = new Set(tasks.filter((t_5) => t_5.status !== "completed").map((t_6) => t_6.id));
+  let needsTruncation = tasks.length > maxDisplay;
+  let visibleTasks;
+  let hiddenTasks;
+  if (needsTruncation) {
+    let recentCompleted = [];
+    let olderCompleted = [];
     for (let task of tasks.filter((t_7) => t_7.status === "completed")) {
       let ts_0 = a.get(task.id);
-      if (typeof ts_0 === "number" && now - ts_0 < te) t.push(task);
-      else o.push(task);
+      if (typeof ts_0 === "number" && now - ts_0 < TASK_REFRESH_MS) recentCompleted.push(task);
+      else olderCompleted.push(task);
     }
-    (t.sort(byIdAsc), o.sort(byIdAsc));
-    let inProgress = tasks.filter((t_8) => t_8.status === "in_progress").sort(byIdAsc),
-      pending = tasks
-        .filter((t_9) => t_9.status === "pending")
-        .sort((u, T) => {
-          let aBlocked = u.blockedBy.some((id_1) => unresolvedTaskIds.has(id_1)),
-            bBlocked = T.blockedBy.some((id_2) => unresolvedTaskIds.has(id_2));
-          if (aBlocked !== bBlocked) return aBlocked ? 1 : -1;
-          return byIdAsc(u, T);
-        }),
-      prioritized = [...t, ...inProgress, ...pending, ...o];
-    ((M = prioritized.slice(0, maxDisplay)), (h = prioritized.slice(maxDisplay)));
-  } else ((M = [...tasks].sort(byIdAsc)), (h = []));
-  let hiddenSummary = "";
-  if (h.length > 0) {
-    let t = [],
-      hiddenPending = count(h, (t_10) => t_10.status === "pending"),
-      hiddenInProgress = count(h, (t_11) => t_11.status === "in_progress"),
-      hiddenCompleted = count(h, (t_12) => t_12.status === "completed");
-    if (hiddenInProgress > 0) t.push(`${hiddenInProgress} in progress`);
-    if (hiddenPending > 0) t.push(`${hiddenPending} pending`);
-    if (hiddenCompleted > 0) t.push(`${hiddenCompleted} completed`);
-    hiddenSummary = ` \u2026 +${t.join(", ")}`;
+    recentCompleted.sort(byIdAsc);
+    olderCompleted.sort(byIdAsc);
+    let inProgress = tasks.filter((t_8) => t_8.status === "in_progress").sort(byIdAsc);
+    let pending = tasks
+      .filter((t_9) => t_9.status === "pending")
+      .sort((u, T) => {
+        let aBlocked = u.blockedBy.some((id_1) => unresolvedTaskIds.has(id_1));
+        let bBlocked = T.blockedBy.some((id_2) => unresolvedTaskIds.has(id_2));
+        if (aBlocked !== bBlocked) return aBlocked ? 1 : -1;
+        return byIdAsc(u, T);
+      });
+    let prioritized = [...recentCompleted, ...inProgress, ...pending, ...olderCompleted];
+    visibleTasks = prioritized.slice(0, maxDisplay);
+    hiddenTasks = prioritized.slice(maxDisplay);
+  } else {
+    visibleTasks = [...tasks].sort(byIdAsc);
+    hiddenTasks = [];
   }
-  let L = r(Fragment, {
+  let hiddenSummary = "";
+  if (hiddenTasks.length > 0) {
+    let parts = [];
+    let hiddenPending = count(hiddenTasks, (t_10) => t_10.status === "pending");
+    let hiddenInProgress = count(hiddenTasks, (t_11) => t_11.status === "in_progress");
+    let hiddenCompleted = count(hiddenTasks, (t_12) => t_12.status === "completed");
+    if (hiddenInProgress > 0) parts.push(`${hiddenInProgress} in progress`);
+    if (hiddenPending > 0) parts.push(`${hiddenPending} pending`);
+    if (hiddenCompleted > 0) parts.push(`${hiddenCompleted} completed`);
+    hiddenSummary = ` \u2026 +${parts.join(", ")}`;
+  }
+  let content = jsxProd_default_2(Fragment, {
     children: [
-      M.map((task_0) =>
-        e(
+      visibleTasks.map((task) =>
+        jsxProd_default(
           TaskItem,
           {
-            task: task_0,
-            ownerColor: task_0.owner ? _[task_0.owner] : void 0,
-            openBlockers: task_0.blockedBy.filter((id_3) => unresolvedTaskIds.has(id_3)),
-            activity: task_0.owner ? g[task_0.owner] : void 0,
-            ownerActive: task_0.owner ? activeTeammates.has(task_0.owner) : !1,
-            columns: columns,
+            task,
+            ownerColor: task.owner ? teammateColors[task.owner] : undefined,
+            openBlockers: task.blockedBy.filter((id_3) => unresolvedTaskIds.has(id_3)),
+            activity: task.owner ? teammateActivity[task.owner] : undefined,
+            ownerActive: task.owner ? activeTeammates.has(task.owner) : false,
+            columns,
           },
-          task_0.id,
+          task.id,
         ),
       ),
-      maxDisplay > 0 && hiddenSummary && e(Text, { dimColor: !0, children: hiddenSummary }),
+      maxDisplay > 0 &&
+        hiddenSummary &&
+        jsxProd_default(Text, {
+          dimColor: true,
+          children: hiddenSummary,
+        }),
     ],
   });
   if (isStandalone)
-    return r(Box, {
+    return jsxProd_default_2(Box, {
       flexDirection: "column",
       marginTop: 1,
       marginLeft: 2,
       children: [
-        e(Box, {
-          children: r(Text, {
-            dimColor: !0,
+        jsxProd_default(Box, {
+          children: jsxProd_default_2(Text, {
+            dimColor: true,
             children: [
-              e(Text, { bold: !0, children: tasks.length }),
+              jsxProd_default(Text, {
+                bold: true,
+                children: tasks.length,
+              }),
               " tasks (",
-              e(Text, { bold: !0, children: completedCount }),
+              jsxProd_default(Text, {
+                bold: true,
+                children: completedCount,
+              }),
               " done, ",
-              q > 0 && r(Fragment, { children: [e(Text, { bold: !0, children: q }), " in progress, "] }),
-              e(Text, { bold: !0, children: pendingCount }),
+              inProgressCount > 0 &&
+                jsxProd_default_2(Fragment, {
+                  children: [
+                    jsxProd_default(Text, {
+                      bold: true,
+                      children: inProgressCount,
+                    }),
+                    " in progress, ",
+                  ],
+                }),
+              jsxProd_default(Text, {
+                bold: true,
+                children: pendingCount,
+              }),
               " open)",
             ],
           }),
         }),
-        L,
+        content,
       ],
     });
-  return e(Box, { flexDirection: "column", children: L });
+  return jsxProd_default(Box, {
+    flexDirection: "column",
+    children: content,
+  });
 }
 //@ chunk-zef67v87.js:3878-4080 fingerprint = getTaskIcon (1)
 function getTaskIcon(status) {
   switch (status) {
     case "completed":
-      return { icon: re.tick, color: "success" };
+      return {
+        icon: figures_default.tick,
+        color: "success",
+      };
     case "in_progress":
-      return { icon: re.squareSmallFilled, color: "claude" };
+      return {
+        icon: figures_default.squareSmallFilled,
+        color: "claude",
+      };
     case "pending":
-      return { icon: re.squareSmall, color: void 0 };
+      return {
+        icon: figures_default.squareSmall,
+        color: undefined,
+      };
   }
 }
 //@ chunk-zef67v87.js:4080-5736 fingerprint = TaskItem (0.926)
-function TaskItem(t0) {
-  let $ = w(37),
-    {
-      task: task,
-      ownerColor: ownerColor,
-      openBlockers: openBlockers,
-      activity: activity,
-      ownerActive: ownerActive,
-      columns: columns,
-    } = t0,
-    I = task.status === "completed",
-    A = task.status === "in_progress",
-    C = openBlockers.length > 0,
-    S;
-  if ($[0] !== task.status) ((S = getTaskIcon(task.status)), ($[0] = task.status), ($[1] = S));
-  else S = $[1];
-  let { icon: icon, color: color } = S,
-    _ = A && !C && activity,
-    g = columns >= 60 && task.owner && ownerActive,
-    O;
-  if ($[2] !== g || $[3] !== task.owner)
-    ((O = g ? bunStringWidth(` (@${task.owner})`) : 0), ($[2] = g), ($[3] = task.owner), ($[4] = O));
-  else O = $[4];
-  let H = O,
-    maxSubjectWidth = Math.max(15, columns - 15 - H),
-    q;
-  if ($[5] !== maxSubjectWidth || $[6] !== task.subject)
-    ((q = truncateToWidth(task.subject, maxSubjectWidth)),
-      ($[5] = maxSubjectWidth),
-      ($[6] = task.subject),
-      ($[7] = q));
-  else q = $[7];
-  let B = q,
-    maxActivityWidth = Math.max(15, columns - 15),
-    M;
-  if ($[8] !== activity || $[9] !== maxActivityWidth)
-    ((M = activity ? truncateToWidth(activity, maxActivityWidth) : void 0),
-      ($[8] = activity),
-      ($[9] = maxActivityWidth),
-      ($[10] = M));
-  else M = $[10];
-  let h = M,
-    b;
-  if ($[11] !== color || $[12] !== icon)
-    ((b = r(Text, { color: color, children: [icon, " "] })), ($[11] = color), ($[12] = icon), ($[13] = b));
-  else b = $[13];
-  const L = I || C;
-  let t;
-  if ($[14] !== B || $[15] !== I || $[16] !== A || $[17] !== L)
-    ((t = e(Text, { bold: A, strikethrough: I, dimColor: L, children: B })),
-      ($[14] = B),
-      ($[15] = I),
-      ($[16] = A),
-      ($[17] = L),
-      ($[18] = t));
-  else t = $[18];
-  let o;
-  if ($[19] !== ownerColor || $[20] !== g || $[21] !== task.owner)
-    ((o =
-      g &&
-      r(Text, {
-        dimColor: !0,
+function TaskItem(props) {
+  let $ = w(37);
+  let { task, ownerColor, openBlockers, activity, ownerActive, columns } = props;
+  let isCompleted = task.status === "completed";
+  let isInProgress = task.status === "in_progress";
+  let isBlocked = openBlockers.length > 0;
+  let t1;
+  if ($[0] !== task.status) {
+    t1 = getTaskIcon(task.status);
+    $[0] = task.status;
+    $[1] = t1;
+  } else t1 = $[1];
+  let { icon, color } = t1;
+  let showActivity = isInProgress && !isBlocked && activity;
+  let showOwner = columns >= 60 && task.owner && ownerActive;
+  let t2;
+  if ($[2] !== showOwner || $[3] !== task.owner) {
+    t2 = showOwner ? bunStringWidth(` (@${task.owner})`) : 0;
+    $[2] = showOwner;
+    $[3] = task.owner;
+    $[4] = t2;
+  } else t2 = $[4];
+  let ownerWidth = t2;
+  let maxSubjectWidth = Math.max(15, columns - 15 - ownerWidth);
+  let t3;
+  if ($[5] !== maxSubjectWidth || $[6] !== task.subject) {
+    t3 = truncateToWidth(task.subject, maxSubjectWidth);
+    $[5] = maxSubjectWidth;
+    $[6] = task.subject;
+    $[7] = t3;
+  } else t3 = $[7];
+  let displaySubject = t3;
+  let maxActivityWidth = Math.max(15, columns - 15);
+  let t4;
+  if ($[8] !== activity || $[9] !== maxActivityWidth) {
+    t4 = activity ? truncateToWidth(activity, maxActivityWidth) : undefined;
+    $[8] = activity;
+    $[9] = maxActivityWidth;
+    $[10] = t4;
+  } else t4 = $[10];
+  let displayActivity = t4;
+  let t5;
+  if ($[11] !== color || $[12] !== icon) {
+    t5 = jsxProd_default_2(Text, {
+      color,
+      children: [icon, " "],
+    });
+    $[11] = color;
+    $[12] = icon;
+    $[13] = t5;
+  } else t5 = $[13];
+  const dimColor = isCompleted || isBlocked;
+  let t7;
+  if ($[14] !== displaySubject || $[15] !== isCompleted || $[16] !== isInProgress || $[17] !== dimColor) {
+    t7 = jsxProd_default(Text, {
+      bold: isInProgress,
+      strikethrough: isCompleted,
+      dimColor,
+      children: displaySubject,
+    });
+    $[14] = displaySubject;
+    $[15] = isCompleted;
+    $[16] = isInProgress;
+    $[17] = dimColor;
+    $[18] = t7;
+  } else t7 = $[18];
+  let t8;
+  if ($[19] !== ownerColor || $[20] !== showOwner || $[21] !== task.owner) {
+    t8 =
+      showOwner &&
+      jsxProd_default_2(Text, {
+        dimColor: true,
         children: [
           " (",
-          ownerColor ? r(Text, { color: ownerColor, children: ["@", task.owner] }) : `@${task.owner}`,
+          ownerColor
+            ? jsxProd_default_2(Text, {
+                color: ownerColor,
+                children: ["@", task.owner],
+              })
+            : `@${task.owner}`,
           ")",
         ],
-      })),
-      ($[19] = ownerColor),
-      ($[20] = g),
-      ($[21] = task.owner),
-      ($[22] = o));
-  else o = $[22];
-  let l;
-  if ($[23] !== C || $[24] !== openBlockers)
-    ((l =
-      C &&
-      r(Text, {
-        dimColor: !0,
-        children: [" ", re.pointerSmall, " blocked by", " ", [...openBlockers].sort(Be).map(Ie).join(", ")],
-      })),
-      ($[23] = C),
-      ($[24] = openBlockers),
-      ($[25] = l));
-  else l = $[25];
-  let m;
-  if ($[26] !== b || $[27] !== t || $[28] !== o || $[29] !== l)
-    ((m = r(Box, { children: [b, t, o, l] })),
-      ($[26] = b),
-      ($[27] = t),
-      ($[28] = o),
-      ($[29] = l),
-      ($[30] = m));
-  else m = $[30];
-  let p;
-  if ($[31] !== h || $[32] !== _)
-    ((p = _ && h && e(Box, { children: r(Text, { dimColor: !0, children: ["  ", h, re.ellipsis] }) })),
-      ($[31] = h),
-      ($[32] = _),
-      ($[33] = p));
-  else p = $[33];
-  let u;
-  if ($[34] !== m || $[35] !== p)
-    ((u = r(Box, { flexDirection: "column", children: [m, p] })), ($[34] = m), ($[35] = p), ($[36] = u));
-  else u = $[36];
-  return u;
+      });
+    $[19] = ownerColor;
+    $[20] = showOwner;
+    $[21] = task.owner;
+    $[22] = t8;
+  } else t8 = $[22];
+  let t9;
+  if ($[23] !== isBlocked || $[24] !== openBlockers) {
+    t9 =
+      isBlocked &&
+      jsxProd_default_2(Text, {
+        dimColor: true,
+        children: [
+          " ",
+          figures_default.pointerSmall,
+          " blocked by",
+          " ",
+          [...openBlockers].sort(compareNumbers).map(taskNumberLabel).join(", "),
+        ],
+      });
+    $[23] = isBlocked;
+    $[24] = openBlockers;
+    $[25] = t9;
+  } else t9 = $[25];
+  let t10;
+  if ($[26] !== t5 || $[27] !== t7 || $[28] !== t8 || $[29] !== t9) {
+    t10 = jsxProd_default_2(Box, {
+      children: [t5, t7, t8, t9],
+    });
+    $[26] = t5;
+    $[27] = t7;
+    $[28] = t8;
+    $[29] = t9;
+    $[30] = t10;
+  } else t10 = $[30];
+  let t11;
+  if ($[31] !== displayActivity || $[32] !== showActivity) {
+    t11 =
+      showActivity &&
+      displayActivity &&
+      jsxProd_default(Box, {
+        children: jsxProd_default_2(Text, {
+          dimColor: true,
+          children: ["  ", displayActivity, figures_default.ellipsis],
+        }),
+      });
+    $[31] = displayActivity;
+    $[32] = showActivity;
+    $[33] = t11;
+  } else t11 = $[33];
+  let t12;
+  if ($[34] !== t10 || $[35] !== t11) {
+    t12 = jsxProd_default_2(Box, {
+      flexDirection: "column",
+      children: [t10, t11],
+    });
+    $[34] = t10;
+    $[35] = t11;
+    $[36] = t12;
+  } else t12 = $[36];
+  return t12;
 }
-
 export { ExpandedTaskList, TaskListV2, getTaskIcon };

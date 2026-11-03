@@ -8,17 +8,21 @@
 import { x } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-pwh5dx3n.js:1752-4533 cjs-fingerprint
-var ia = x(function (bw, qy) {
-  qy.exports = {
+var ia = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = {
     name: "@grpc/grpc-js",
     version: "1.14.4",
     description: "gRPC Library for Node - pure JS implementation",
     homepage: "https://grpc.io/",
     repository: "https://github.com/grpc/grpc-node/tree/master/packages/grpc-js",
     main: "build/src/index.js",
-    engines: { node: ">=12.10.0" },
+    engines: {
+      node: ">=12.10.0",
+    },
     keywords: [],
-    author: { name: "Google Inc." },
+    author: {
+      name: "Google Inc.",
+    },
     types: "build/src/index.d.ts",
     license: "Apache-2.0",
     devDependencies: {
@@ -53,7 +57,11 @@ var ia = x(function (bw, qy) {
       "ts-node": "^10.9.2",
       typescript: "^5.3.3",
     },
-    contributors: [{ name: "Google Inc." }],
+    contributors: [
+      {
+        name: "Google Inc.",
+      },
+    ],
     scripts: {
       build: "npm run compile",
       clean: "rimraf ./build",
@@ -74,7 +82,10 @@ var ia = x(function (bw, qy) {
         "proto-loader-gen-types --keepCase --longs String --enums String --defaults --oneofs --includeComments --include-dirs test/fixtures/ -O test/generated/ --grpcLib ../../src/index test_service.proto echo_service.proto",
       "copy-protos": "node ./copy-protos",
     },
-    dependencies: { "@grpc/proto-loader": "^0.8.0", "@js-sdsl/ordered-map": "^4.4.2" },
+    dependencies: {
+      "@grpc/proto-loader": "^0.8.0",
+      "@js-sdsl/ordered-map": "^4.4.2",
+    },
     files: [
       "src/**/*.ts",
       "build/src/**/*.{js,d.ts,js.map}",
@@ -92,5 +103,4 @@ var ia = x(function (bw, qy) {
     ],
   };
 });
-
 export { ia };

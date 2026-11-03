@@ -6,101 +6,157 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { kr } from "./utils.js";
+import { require_utils } from "./utils.js";
 
 //@ chunk-s82q9s4x.js:61437-63889 cjs-fingerprint
-var Xn = x(function (pm, Qn) {
-  var { isUUID: isUUID } = kr(),
-    Zl = /([\da-z][\d\-a-z]{0,31}):((?:[\w!$'()*+,\-.:;=@]|%[\da-f]{2})+)/iu,
-    ed = ["http", "https", "ws", "wss", "urn", "urn:uuid"];
-  function td(e) {
-    return ed.indexOf(e) !== -1;
+var require_schemes = x(function (cjsExports, cjsModule) {
+  var { isUUID } = require_utils();
+  var URN_REG = /([\da-z][\d\-a-z]{0,31}):((?:[\w!$'()*+,\-.:;=@]|%[\da-f]{2})+)/iu;
+  var supportedSchemeNames = ["http", "https", "ws", "wss", "urn", "urn:uuid"];
+  function isValidSchemeName(name) {
+    return supportedSchemeNames.indexOf(name) !== -1;
   }
-  function qr(e) {
-    if (e.secure === !0) return !0;
-    else if (e.secure === !1) return !1;
-    else if (e.scheme)
+  function wsIsSecure(wsComponent) {
+    if (wsComponent.secure === true) return true;
+    else if (wsComponent.secure === false) return false;
+    else if (wsComponent.scheme)
       return (
-        e.scheme.length === 3 &&
-        (e.scheme[0] === "w" || e.scheme[0] === "W") &&
-        (e.scheme[1] === "s" || e.scheme[1] === "S") &&
-        (e.scheme[2] === "s" || e.scheme[2] === "S")
+        wsComponent.scheme.length === 3 &&
+        (wsComponent.scheme[0] === "w" || wsComponent.scheme[0] === "W") &&
+        (wsComponent.scheme[1] === "s" || wsComponent.scheme[1] === "S") &&
+        (wsComponent.scheme[2] === "s" || wsComponent.scheme[2] === "S")
       );
-    else return !1;
+    else return false;
   }
-  function Jn(e) {
-    if (!e.host) e.error = e.error || "HTTP URIs must have a host.";
-    return e;
+  function httpParse(component) {
+    if (!component.host) component.error = component.error || "HTTP URIs must have a host.";
+    return component;
   }
-  function Wn(e) {
-    let t = String(e.scheme).toLowerCase() === "https";
-    if (e.port === (t ? 443 : 80) || e.port === "") e.port = void 0;
-    if (!e.path) e.path = "/";
-    return e;
+  function httpSerialize(component) {
+    let secure = String(component.scheme).toLowerCase() === "https";
+    if (component.port === (secure ? 443 : 80) || component.port === "") component.port = undefined;
+    if (!component.path) component.path = "/";
+    return component;
   }
-  function rd(e) {
-    return (
-      (e.secure = qr(e)),
-      (e.resourceName = (e.path || "/") + (e.query ? "?" + e.query : "")),
-      (e.path = void 0),
-      (e.query = void 0),
-      e
-    );
+  function wsParse(wsComponent) {
+    wsComponent.secure = wsIsSecure(wsComponent);
+    wsComponent.resourceName = (wsComponent.path || "/") + (wsComponent.query ? "?" + wsComponent.query : "");
+    wsComponent.path = undefined;
+    wsComponent.query = undefined;
+    return wsComponent;
   }
-  function sd(e) {
-    if (e.port === (qr(e) ? 443 : 80) || e.port === "") e.port = void 0;
-    if (typeof e.secure === "boolean") ((e.scheme = e.secure ? "wss" : "ws"), (e.secure = void 0));
-    if (e.resourceName) {
-      let [t, r] = e.resourceName.split("?");
-      ((e.path = t && t !== "/" ? t : void 0), (e.query = r), (e.resourceName = void 0));
+  function wsSerialize(wsComponent) {
+    if (wsComponent.port === (wsIsSecure(wsComponent) ? 443 : 80) || wsComponent.port === "")
+      wsComponent.port = undefined;
+    if (typeof wsComponent.secure === "boolean") {
+      wsComponent.scheme = wsComponent.secure ? "wss" : "ws";
+      wsComponent.secure = undefined;
     }
-    return ((e.fragment = void 0), e);
+    if (wsComponent.resourceName) {
+      let [path, query] = wsComponent.resourceName.split("?");
+      wsComponent.path = path && path !== "/" ? path : undefined;
+      wsComponent.query = query;
+      wsComponent.resourceName = undefined;
+    }
+    wsComponent.fragment = undefined;
+    return wsComponent;
   }
-  function nd(e, t) {
-    if (!e.path) return ((e.error = "URN can not be parsed"), e);
-    let match = e.path.match(Zl);
-    if (match) {
-      let s = t.scheme || e.scheme || "urn";
-      ((e.nid = match[1].toLowerCase()), (e.nss = match[2]));
-      let n = `${s}:${t.nid || e.nid}`,
-        o = Or(n);
-      if (((e.path = void 0), o)) e = o.parse(e, t);
-    } else e.error = e.error || "URN can not be parsed.";
-    return e;
+  function urnParse(urnComponent, options) {
+    if (!urnComponent.path) {
+      urnComponent.error = "URN can not be parsed";
+      return urnComponent;
+    }
+    let matches = urnComponent.path.match(URN_REG);
+    if (matches) {
+      let scheme = options.scheme || urnComponent.scheme || "urn";
+      urnComponent.nid = matches[1].toLowerCase();
+      urnComponent.nss = matches[2];
+      let urnScheme = `${scheme}:${options.nid || urnComponent.nid}`;
+      let schemeHandler = getSchemeHandler(urnScheme);
+      urnComponent.path = undefined;
+      if (schemeHandler) urnComponent = schemeHandler.parse(urnComponent, options);
+    } else urnComponent.error = urnComponent.error || "URN can not be parsed.";
+    return urnComponent;
   }
-  function od(e, t) {
-    if (e.nid === void 0) throw Error("URN without nid cannot be serialized");
-    let r = t.scheme || e.scheme || "urn",
-      lower = e.nid.toLowerCase(),
-      n = `${r}:${t.nid || lower}`,
-      o = Or(n);
-    if (o) e = o.serialize(e, t);
-    let i = e,
-      nss = e.nss;
-    return ((i.path = `${lower || t.nid}:${nss}`), (t.skipEscape = !0), i);
+  function urnSerialize(urnComponent, options) {
+    if (urnComponent.nid === undefined) throw Error("URN without nid cannot be serialized");
+    let scheme = options.scheme || urnComponent.scheme || "urn";
+    let nid = urnComponent.nid.toLowerCase();
+    let urnScheme = `${scheme}:${options.nid || nid}`;
+    let schemeHandler = getSchemeHandler(urnScheme);
+    if (schemeHandler) urnComponent = schemeHandler.serialize(urnComponent, options);
+    let uriComponent = urnComponent;
+    let nss = urnComponent.nss;
+    uriComponent.path = `${nid || options.nid}:${nss}`;
+    options.skipEscape = true;
+    return uriComponent;
   }
-  function id(e, t) {
-    let r = e;
-    if (((r.uuid = r.nss), (r.nss = void 0), !t.tolerant && (!r.uuid || !isUUID(r.uuid))))
-      r.error = r.error || "UUID is not valid.";
-    return r;
+  function urnuuidParse(urnComponent, options) {
+    let uuidComponent = urnComponent;
+    uuidComponent.uuid = uuidComponent.nss;
+    uuidComponent.nss = undefined;
+    if (!options.tolerant && (!uuidComponent.uuid || !isUUID(uuidComponent.uuid)))
+      uuidComponent.error = uuidComponent.error || "UUID is not valid.";
+    return uuidComponent;
   }
-  function ad(e) {
-    let t = e;
-    return ((t.nss = (e.uuid || "").toLowerCase()), t);
+  function urnuuidSerialize(uuidComponent) {
+    let urnComponent = uuidComponent;
+    urnComponent.nss = (uuidComponent.uuid || "").toLowerCase();
+    return urnComponent;
   }
-  var Bn = { scheme: "http", domainHost: !0, parse: Jn, serialize: Wn },
-    cd = { scheme: "https", domainHost: Bn.domainHost, parse: Jn, serialize: Wn },
-    Rt = { scheme: "ws", domainHost: !0, parse: rd, serialize: sd },
-    ud = { scheme: "wss", domainHost: Rt.domainHost, parse: Rt.parse, serialize: Rt.serialize },
-    ld = { scheme: "urn", parse: nd, serialize: od, skipNormalize: !0 },
-    dd = { scheme: "urn:uuid", parse: id, serialize: ad, skipNormalize: !0 },
-    It = { http: Bn, https: cd, ws: Rt, wss: ud, urn: ld, "urn:uuid": dd };
-  Object.setPrototypeOf(It, null);
-  function Or(e) {
-    return (e && (It[e] || It[e.toLowerCase()])) || void 0;
+  var http = {
+    scheme: "http",
+    domainHost: true,
+    parse: httpParse,
+    serialize: httpSerialize,
+  };
+  var https = {
+    scheme: "https",
+    domainHost: http.domainHost,
+    parse: httpParse,
+    serialize: httpSerialize,
+  };
+  var ws = {
+    scheme: "ws",
+    domainHost: true,
+    parse: wsParse,
+    serialize: wsSerialize,
+  };
+  var wss = {
+    scheme: "wss",
+    domainHost: ws.domainHost,
+    parse: ws.parse,
+    serialize: ws.serialize,
+  };
+  var urn = {
+    scheme: "urn",
+    parse: urnParse,
+    serialize: urnSerialize,
+    skipNormalize: true,
+  };
+  var urnuuid = {
+    scheme: "urn:uuid",
+    parse: urnuuidParse,
+    serialize: urnuuidSerialize,
+    skipNormalize: true,
+  };
+  var SCHEMES = {
+    http,
+    https,
+    ws,
+    wss,
+    urn,
+    "urn:uuid": urnuuid,
+  };
+  Object.setPrototypeOf(SCHEMES, null);
+  function getSchemeHandler(scheme) {
+    return (scheme && (SCHEMES[scheme] || SCHEMES[scheme.toLowerCase()])) || undefined;
   }
-  Qn.exports = { wsIsSecure: qr, SCHEMES: It, isValidSchemeName: td, getSchemeHandler: Or };
+  cjsModule.exports = {
+    wsIsSecure,
+    SCHEMES,
+    isValidSchemeName,
+    getSchemeHandler,
+  };
 });
-
-export { Xn };
+export { require_schemes };

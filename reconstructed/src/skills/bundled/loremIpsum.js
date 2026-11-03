@@ -9,12 +9,12 @@
  * attribution: fingerprint 1, callgraph-fingerprint 2
  */
 import { registerBundledSkill } from "../bundledSkills.js";
-import { l, buildArtifactTypeAliasPrompt } from "./artifactTypeAlias.js";
+import { isArtifactTypeAliasReady, buildArtifactTypeAliasPrompt } from "./artifactTypeAlias.js";
 
+//@ chunk-hantmvxa.js:181559-182847 fingerprint = ONE_TOKEN_WORDS (1)
 /**
  * lorem-ipsum skill 用的「一个 token 的英文单词」表，用于生成指定 token 数的填充文本。
  */
-//@ chunk-hantmvxa.js:181559-182847 fingerprint = ONE_TOKEN_WORDS (1)
 var ONE_TOKEN_WORDS = [
   "the",
   "a",
@@ -207,40 +207,47 @@ var ONE_TOKEN_WORDS = [
 ];
 //@ chunk-hantmvxa.js:182847-183105 callgraph-fingerprint = generateLoremIpsum (1)
 function generateLoremIpsum(targetTokens) {
-  let n = 0,
-    result = "";
-  while (n < targetTokens) {
-    let sentenceLength = 10 + Math.floor(Math.random() * 11),
-      h = 0;
-    for (let y = 0; y < sentenceLength && n < targetTokens; y++) {
+  let tokens = 0;
+  let result = "";
+  while (tokens < targetTokens) {
+    let sentenceLength = 10 + Math.floor(Math.random() * 11);
+    let wordsInSentence = 0;
+    for (let i = 0; i < sentenceLength && tokens < targetTokens; i++) {
       let word = ONE_TOKEN_WORDS[Math.floor(Math.random() * ONE_TOKEN_WORDS.length)];
-      if (((result += word), n++, h++, y === sentenceLength - 1 || n >= targetTokens)) result += ". ";
+      result += word;
+      tokens++;
+      wordsInSentence++;
+      if (i === sentenceLength - 1 || tokens >= targetTokens) result += ". ";
       else result += " ";
     }
-    if (h > 0 && Math.random() < 0.2 && n < targetTokens)
+    if (wordsInSentence > 0 && Math.random() < 0.2 && tokens < targetTokens)
       result += `
 
 `;
   }
   return result.trim();
 }
+//@ chunk-p583jsvp.js:4803-5032 callgraph-fingerprint = registerLoremIpsumSkill (0.389)
 /**
  * 通用注册器：按传入定义注册一个只能用户调用的内置 skill（例如 lorem-ipsum 测试 skill），isEnabled 由调用方给出。
  */
-//@ chunk-p583jsvp.js:4803-5032 callgraph-fingerprint = registerLoremIpsumSkill (0.389)
-function registerLoremIpsumSkill(t, r) {
+function registerLoremIpsumSkill(t, policyGate) {
   registerBundledSkill({
     name: t.name,
     description: t.description,
     argumentHint: t.argumentHint,
-    policyGate: r,
-    isEnabled: () => l(t),
-    userInvocable: !0,
-    disableModelInvocation: !0,
+    policyGate,
+    isEnabled: () => isArtifactTypeAliasReady(t),
+    userInvocable: true,
+    disableModelInvocation: true,
     async getPromptForCommand(e) {
-      return [{ type: "text", text: buildArtifactTypeAliasPrompt(t, e) }];
+      return [
+        {
+          type: "text",
+          text: buildArtifactTypeAliasPrompt(t, e),
+        },
+      ];
     },
   });
 }
-
 export { registerLoremIpsumSkill };

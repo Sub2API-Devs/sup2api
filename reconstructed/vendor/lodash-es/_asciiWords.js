@@ -5,15 +5,14 @@
  * pieces: chunk-8nhse09v.js (3)
  * attribution: esm-layout 2, esm-fingerprint 1
  */
-import { q } from "./deburr.js";
+import { deburr } from "./deburr.js";
 
 //@ chunk-8nhse09v.js:3103-3111 esm-layout
-var p = q;
+var deburr_default = deburr;
 //@ chunk-8nhse09v.js:3111-3161 esm-fingerprint
 var K = /[^\x00-\x2f\x3a-\x40\x5b-\x60\x7b-\x7f]+/g;
 //@ chunk-8nhse09v.js:3161-3197 esm-layout
-function Q(e) {
-  return e.match(K) || [];
+function asciiWords(string) {
+  return string.match(K) || [];
 }
-
-export { Q, p };
+export { asciiWords, deburr_default };

@@ -18,28 +18,27 @@ class WriteQueueDrains {
     this.drains.add(e);
   }
   async drainAll() {
-    await Promise.all([...this.drains].map((e) => e().catch(() => {})));
+    await Promise.all([...this.drains].map((drain) => drain().catch(() => {})));
   }
 }
 //@ chunk-dcmhvw5a.js:514685-514699 placement
-var qg = new WriteQueueDrains();
+var writeQueueDrains = new WriteQueueDrains();
 //@ chunk-dcmhvw5a.js:514699-514730 placement
 function registerWriteQueueDrain(e) {
-  qg.register(e);
+  writeQueueDrains.register(e);
 }
 //@ chunk-dcmhvw5a.js:514730-514765 placement
 function drainRegisteredWriteQueues() {
-  return qg.drainAll();
+  return writeQueueDrains.drainAll();
 }
+//@ chunk-dcmhvw5a.js:514814-514899 placement
 /**
  * 去除控制字符（保留制表与换行）。
  */
-//@ chunk-dcmhvw5a.js:514814-514899 placement
 function stripControlChars(e) {
   return stripVTControlCharacters(toWellFormedString(e)).replace(
     /(?![\t\n])[\p{Cc}\p{Cf}\u2028\u2029]/gu,
     "",
   );
 }
-
 export { registerWriteQueueDrain, drainRegisteredWriteQueues, stripControlChars };

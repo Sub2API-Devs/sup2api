@@ -11,7 +11,6 @@
 
 //@ chunk-jd7h5dfe.js:260-291 placement
 async function inExcludedRepository(o) {
-  return !1;
+  return false;
 }
-
 export { inExcludedRepository };

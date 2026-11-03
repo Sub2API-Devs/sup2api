@@ -16,26 +16,33 @@ import { getTaskRunState } from "../utils/task/taskNotifications.js";
 import { isTerminalTaskStatus } from "./taskStatus.js";
 
 //@ chunk-6vnxsn99.js:23110-23121 placement
-var AVr = 50;
+/**
+ * 追加列表（消息等）保留的条数上限。
+ */
+var MAX_APPENDED_ENTRIES = 50;
+//@ chunk-6vnxsn99.js:23121-23253 placement
 /**
  * 追加并保留最近若干项。
  */
-//@ chunk-6vnxsn99.js:23121-23253 placement
-function appendBounded(e, n) {
-  if (e === void 0 || e.length === 0) return [n];
-  if (e.length >= AVr) {
-    let sliced = e.slice(-(AVr - 1));
-    return (sliced.push(n), sliced);
+function appendBounded(messages, n) {
+  if (messages === undefined || messages.length === 0) return [n];
+  if (messages.length >= MAX_APPENDED_ENTRIES) {
+    let sliced = messages.slice(-(MAX_APPENDED_ENTRIES - 1));
+    sliced.push(n);
+    return sliced;
   }
-  return [...e, n];
+  return [...messages, n];
 }
+//@ chunk-6vnxsn99.js:23253-23368 placement
 /**
  * 去掉同 uuid 项后追加。
  */
-//@ chunk-6vnxsn99.js:23253-23368 placement
-function appendReplacingUuid(e, n) {
-  let r = e === void 0 || e.every((o) => o.uuid !== n.uuid) ? e : e.filter((o) => o.uuid !== n.uuid);
-  return appendBounded(r, n);
+function appendReplacingUuid(messages, message) {
+  let r =
+    messages === undefined || messages.every((o) => o.uuid !== message.uuid)
+      ? messages
+      : messages.filter((o) => o.uuid !== message.uuid);
+  return appendBounded(r, message);
 }
 //@ chunk-6vnxsn99.js:23368-23682 placement
 var TASK_KIND_LABELS = {
@@ -53,32 +60,39 @@ var TASK_KIND_LABELS = {
   remote_agent: "cloud session",
 };
 //@ chunk-6vnxsn99.js:23682-23715 placement
-function taskKindLabel(e) {
-  return TASK_KIND_LABELS[e] ?? e;
+function taskKindLabel(type) {
+  return TASK_KIND_LABELS[type] ?? type;
 }
 //@ chunk-6vnxsn99.js:23797-24238 placement
-function isTaskOwnedBy(e, n, r, o) {
-  if (o !== void 0 && "agentId" in e && typeof e.agentId === "string" && o(e.agentId)) return !1;
-  let s = new Set(),
-    a = "parentAgentId" in e && typeof e.parentAgentId === "string" ? e.parentAgentId : void 0;
-  while (a && !s.has(a)) {
-    if (a === n) return !0;
-    if (o?.(a)) return !1;
-    s.add(a);
-    let u = r[a];
-    a =
-      u !== void 0 &&
+function isTaskOwnedBy(e, n, r, isCascadeStopExempt) {
+  if (
+    isCascadeStopExempt !== undefined &&
+    "agentId" in e &&
+    typeof e.agentId === "string" &&
+    isCascadeStopExempt(e.agentId)
+  )
+    return false;
+  let s = new Set();
+  let parentAgentId =
+    "parentAgentId" in e && typeof e.parentAgentId === "string" ? e.parentAgentId : undefined;
+  while (parentAgentId && !s.has(parentAgentId)) {
+    if (parentAgentId === n) return true;
+    if (isCascadeStopExempt?.(parentAgentId)) return false;
+    s.add(parentAgentId);
+    let u = r[parentAgentId];
+    parentAgentId =
+      u !== undefined &&
       u.type === "local_agent" &&
-      !("forkWorker" in u && u.forkWorker === !0) &&
+      !("forkWorker" in u && u.forkWorker === true) &&
       "parentAgentId" in u &&
       typeof u.parentAgentId === "string"
         ? u.parentAgentId
-        : void 0;
+        : undefined;
   }
-  return !1;
+  return false;
 }
 //@ chunk-6vnxsn99.js:24238-24535 placement
-function taskParentAgentId(e, n) {
+function taskParentAgentId(e, tasks) {
   let r;
   switch (e.type) {
     case "local_agent":
@@ -95,26 +109,29 @@ function taskParentAgentId(e, n) {
     default:
       return;
   }
-  if (r === void 0) return;
-  let o = ownProperty(n, r);
-  return o?.type === "local_agent" && !isObserverAgentTask(o) ? o.id : void 0;
+  if (r === undefined) return;
+  let o = ownProperty(tasks, r);
+  return o?.type === "local_agent" && !isObserverAgentTask(o) ? o.id : undefined;
 }
 //@ chunk-6vnxsn99.js:24535-24622 placement
-function Lq(e) {
+/**
+ * 该任务是可等待的本地代理（非观察者）或本地工作流。
+ */
+function isWaitableAgentOrWorkflow(e) {
   if (e.type === "local_agent") return !isObserverAgentTask(e);
   return e.type === "local_workflow";
 }
 //@ chunk-6vnxsn99.js:24772-24842 placement
 function isAwaitedAgentTask(e) {
-  return e.type === "local_agent" && e.awaitedByCaller === !0;
+  return e.type === "local_agent" && e.awaitedByCaller === true;
 }
 //@ chunk-6vnxsn99.js:24842-24900 placement
 function isParkedMcpTask(e) {
-  return e.type === "mcp_task" && e.parked === !0;
+  return e.type === "mcp_task" && e.parked === true;
 }
 //@ chunk-6vnxsn99.js:24900-24962 placement
-function isHoldCappedMcpTask(e) {
-  return e.type === "mcp_task" && e.holdCapped === !0;
+function isHoldCappedMcpTask(task) {
+  return task.type === "mcp_task" && task.holdCapped === true;
 }
 //@ chunk-6vnxsn99.js:24962-25000 placement
 function isHeldMcpTask(e) {
@@ -125,42 +142,50 @@ function isMonitorShellTask(e) {
   return (
     (e.type === "local_bash" && e.kind === "monitor") ||
     e.type === "monitor_mcp" ||
-    (e.type === "monitor_ws" && e.ambient !== !0)
+    (e.type === "monitor_ws" && e.ambient !== true)
   );
 }
 //@ chunk-6vnxsn99.js:25128-25236 placement
 function isBackgroundedShellTask(e) {
-  return e.type === "local_bash" && e.isBackgrounded === !0 && e.kind !== "monitor" && e.agentId === void 0;
+  return (
+    e.type === "local_bash" && e.isBackgrounded === true && e.kind !== "monitor" && e.agentId === undefined
+  );
 }
 //@ chunk-6vnxsn99.js:25236-25324 placement
-function Jn(e) {
-  return e.type === "monitor_ws" && e.ambient === !0 && e.frameLive?.explicit !== !0;
+/**
+ * 环境监视任务且帧不是显式开启。
+ */
+function isAmbientFrameTask(e) {
+  return e.type === "monitor_ws" && e.ambient === true && e.frameLive?.explicit !== true;
 }
 //@ chunk-6vnxsn99.js:25324-25353 placement
-function SNe(e) {
-  return Jn(e);
+/**
+ * 即 isAmbientFrameTask（对外别名）。
+ */
+function isAmbientTask(e) {
+  return isAmbientFrameTask(e);
 }
 //@ chunk-6vnxsn99.js:25353-25436 placement
 function skipsTranscript(e) {
-  return e.skipTranscript === !0 || (e.type === "monitor_ws" && e.ambient === !0);
+  return e.skipTranscript === true || (e.type === "monitor_ws" && e.ambient === true);
 }
 //@ chunk-6vnxsn99.js:25436-25501 placement = getSelectableBackgroundTasks (0.813)
-function getSelectableBackgroundTasks(e) {
-  return e.type === "local_agent" ? e.agentType : void 0;
+function getSelectableBackgroundTasks(task) {
+  return task.type === "local_agent" ? task.agentType : undefined;
 }
 //@ chunk-6vnxsn99.js:25501-25574 placement = _temp6 (0.765)
 function isIdleTeammateTask(t_1) {
   return t_1.type === "in_process_teammate" && t_1.isIdle && !isTeammateAwaitingInput(t_1);
 }
 //@ chunk-6vnxsn99.js:25574-25770 placement
-function taskAbortController(e) {
-  switch (e.type) {
+function taskAbortController(task) {
+  switch (task.type) {
     case "local_agent":
-      return e.abortController?.signal.aborted === !0;
+      return task.abortController?.signal.aborted === true;
     case "in_process_teammate":
-      return e.currentWorkAbortController?.signal.aborted === !0;
+      return task.currentWorkAbortController?.signal.aborted === true;
     default:
-      return !1;
+      return false;
   }
 }
 //@ chunk-6vnxsn99.js:25770-25820 placement
@@ -183,18 +208,18 @@ function isCompletedBackgroundAgent(e) {
     "agentType" in e &&
     e.agentType !== "main-session" &&
     "isBackgrounded" in e &&
-    e.isBackgrounded === !0 &&
-    !("isObserver" in e && e.isObserver === !0) &&
+    e.isBackgrounded === true &&
+    !("isObserver" in e && e.isObserver === true) &&
     !("evictAfter" in e && e.evictAfter === 0) &&
     "chatEngaged" in e &&
-    e.chatEngaged === !0 &&
-    !("chatPinForfeited" in e && e.chatPinForfeited === !0)
+    e.chatEngaged === true &&
+    !("chatPinForfeited" in e && e.chatPinForfeited === true)
   );
 }
+//@ chunk-6vnxsn99.js:70426-70499 placement = isPanelAgentTask (0.819)
 /**
  * 是否是面板子代理任务：本地代理、非 main-session、非 fork worker。
  */
-//@ chunk-6vnxsn99.js:70426-70499 placement = isPanelAgentTask (0.819)
 function isPanelAgentTask(task) {
   return isLocalAgent(task) && task.agentType !== "main-session" && !task.forkWorker;
 }
@@ -207,63 +232,75 @@ function isForegroundAgentTask(e, n) {
   return isLocalAgent(e) && e.status === "running" && !e.isBackgrounded && e.parentAgentId === n;
 }
 //@ chunk-6vnxsn99.js:70639-70676 placement
-function Ghn(e) {
-  return isForegroundAgentTask(e, void 0);
+/**
+ * 主线程前台代理任务（无 parentAgentId）。
+ */
+function isMainThreadForegroundAgent(e) {
+  return isForegroundAgentTask(e, undefined);
 }
 //@ chunk-6vnxsn99.js:70676-70753 placement
-function fQs(e) {
-  return Ghn(e) && e.autoBackgroundArmed === !0 && e.directCall === !0;
+/**
+ * 主线程前台、已武装自动转后台且为直接调用的代理任务。
+ */
+function isArmedDirectForegroundAgent(e) {
+  return isMainThreadForegroundAgent(e) && e.autoBackgroundArmed === true && e.directCall === true;
 }
+//@ chunk-6vnxsn99.js:70753-70902 placement
 /**
  * 本地代理任务是否可接收通知。
  */
-//@ chunk-6vnxsn99.js:70753-70902 placement
-function canReceiveNotification(e, { userInitiated: n = !1 } = {}) {
-  if (!isLocalAgent(e)) return !1;
-  if (n) return !0;
-  return e.stoppedByUser !== !0 && (e.status === "running" || e.status === "completed");
+function canReceiveNotification(e, { userInitiated: n = false } = {}) {
+  if (!isLocalAgent(e)) return false;
+  if (n) return true;
+  return e.stoppedByUser !== true && (e.status === "running" || e.status === "completed");
 }
 //@ chunk-6vnxsn99.js:70902-70952 placement
 function userStopCount(e) {
   return isLocalAgent(e) ? (e.userStopCount ?? 0) : 0;
 }
+//@ chunk-6vnxsn99.js:70952-71064 placement
 /**
  * 有当前用户停止计数下发起的待处理消息。
  */
-//@ chunk-6vnxsn99.js:70952-71064 placement
 function hasUserInitiatedPending(e, n) {
-  if (!isLocalAgent(e)) return !1;
+  if (!isLocalAgent(e)) return false;
   let r = userStopCount(e);
   return (n ?? e.pendingMessages).some((o) => o.userInitiatedAt === r);
 }
 //@ chunk-6vnxsn99.js:71064-71089 placement
 var KILL_UNSETTLED = "kill-unsettled";
 //@ chunk-6vnxsn99.js:71089-71114 placement
-function Z2o(e) {
-  return !1;
+/**
+ * 恒返回 false 的占位判断。
+ */
+function neverTrue(e) {
+  return false;
 }
+//@ chunk-6vnxsn99.js:71114-71236 placement
 /**
  * 释放主线程上下文并执行挂起的清理。
  */
-//@ chunk-6vnxsn99.js:71114-71236 placement
 function releaseMainThreadContext(e) {
-  let { parkedTeardowns: parkedTeardowns, mainThreadContexts: mainThreadContexts } = getTaskRunState();
+  let { parkedTeardowns, mainThreadContexts } = getTaskRunState();
   mainThreadContexts.delete(e);
   let o = parkedTeardowns.get(e);
-  if (o !== void 0) (parkedTeardowns.delete(e), o());
+  if (o !== undefined) {
+    parkedTeardowns.delete(e);
+    o();
+  }
 }
+//@ chunk-6vnxsn99.js:71236-71351 placement
 /**
  * 本地代理已结束且无保活原因时释放。
  */
-//@ chunk-6vnxsn99.js:71236-71351 placement
-function releaseIfFinished(e, n) {
-  let r = n.get(e);
+function releaseIfFinished(e, taskRegistry) {
+  let r = taskRegistry.get(e);
   if (
     isLocalAgent(r) &&
     keepaliveReasons(r).size === 0 &&
     isTerminalTaskStatus(r.status) &&
-    r.resuming !== !0 &&
-    r.finalizing !== !0
+    r.resuming !== true &&
+    r.finalizing !== true
   )
     releaseMainThreadContext(e);
 }
@@ -271,18 +308,20 @@ function releaseIfFinished(e, n) {
 function keepaliveReasons(e) {
   return e.keepaliveReasons ?? new Set();
 }
+//@ chunk-6vnxsn99.js:71401-71537 placement = clearMcpClientConfig (0.39)
 /**
  * 给本地代理任务的 keepaliveReasons 集合添加一个原因（已存在或不是本地代理任务则不变），防止任务被回收。与 MCP 无关，旧版名 clearMcpClientConfig 配错。
  */
-//@ chunk-6vnxsn99.js:71401-71537 placement = clearMcpClientConfig (0.39)
-function addAgentKeepaliveReason(e, n, r) {
+function addAgentKeepaliveReason(e, n, taskRegistry) {
   if (!e) return;
-  r.update(e, (o) => {
+  taskRegistry.update(e, (o) => {
     if (!isLocalAgent(o) || keepaliveReasons(o).has(n)) return o;
-    return { ...o, keepaliveReasons: new Set(keepaliveReasons(o)).add(n) };
+    return {
+      ...o,
+      keepaliveReasons: new Set(keepaliveReasons(o)).add(n),
+    };
   });
 }
-
 export {
   addAgentKeepaliveReason,
   keepaliveReasons,
@@ -300,7 +339,7 @@ export {
   taskAbortController,
   KILL_UNSETTLED,
   getSelectableBackgroundTasks,
-  SNe,
+  isAmbientTask,
   appendBounded,
   isIdleTeammateTask,
   isWorkflowTask,
@@ -309,14 +348,14 @@ export {
   taskParentAgentId,
   skipsTranscript,
   isAwaitedAgentTask,
-  AVr,
+  MAX_APPENDED_ENTRIES,
   appendReplacingUuid,
   isMonitorShellTask,
-  Z2o,
-  Lq,
+  neverTrue,
+  isWaitableAgentOrWorkflow,
   TASK_KIND_LABELS,
-  Ghn,
-  fQs,
+  isMainThreadForegroundAgent,
+  isArmedDirectForegroundAgent,
   isHeldMcpTask,
   isBackgroundedShellTask,
   isParkedMcpTask,

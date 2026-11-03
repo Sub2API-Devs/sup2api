@@ -10,61 +10,84 @@
  */
 
 //@ chunk-yxnffbzs.js:919-930 placement
-var S = null;
+var activeFeatureReader = null;
 //@ chunk-yxnffbzs.js:930-967 placement
-function qAi(e) {
-  let n = S;
-  return ((S = e), n);
+/**
+ * 临时替换功能读取器（返回恢复函数），用于策略探测。
+ */
+function swapFeatureReader(getFeatureValue_SESSION_PINNED) {
+  let n = activeFeatureReader;
+  activeFeatureReader = getFeatureValue_SESSION_PINNED;
+  return n;
 }
 //@ chunk-yxnffbzs.js:967-1031 placement
-function zhr() {
-  return S?.("tengu_cobalt_plinth_lovage", !1) === !0;
+/**
+ * 读 cobolt 策略开关（allow_cobalt_* 系列）。
+ */
+function isCobaltGateOn() {
+  return activeFeatureReader?.("tengu_cobalt_plinth_lovage", false) === true;
 }
+//@ chunk-yxnffbzs.js:1031-1494 placement
 /**
  * 能力阻断的种类（MCP 需认证、认证过期、沙箱违规、策略拒绝等）。
  */
-//@ chunk-yxnffbzs.js:1031-1494 placement
 var CAPABILITY_BLOCK_KINDS = [
-    "mcp_needs_auth",
-    "mcp_disabled",
-    "mcp_required_missing",
-    "auth_expired",
-    "auth_overridden",
-    "auth_missing_scope",
-    "design_needs_authorization",
-    "sandbox_violation",
-    "outside_reads_blocked",
-    "memory_paused",
-    "feature_disabled",
-    "policy_denied",
-    "spawn_arg_limit",
-    "staged_for_review",
-  ],
-  XAi = ["claude_ai", "claude_design"],
-  JAi = ["workflows", "artifacts"],
-  QAi = ["managed_settings", "org_policy", "unavailable", "user_setting", "unsupported_runtime"],
-  ZAi = ["org_denied", "latched"];
+  "mcp_needs_auth",
+  "mcp_disabled",
+  "mcp_required_missing",
+  "auth_expired",
+  "auth_overridden",
+  "auth_missing_scope",
+  "design_needs_authorization",
+  "sandbox_violation",
+  "outside_reads_blocked",
+  "memory_paused",
+  "feature_disabled",
+  "policy_denied",
+  "spawn_arg_limit",
+  "staged_for_review",
+];
+var AUTH_PROVIDER_VALUES = ["claude_ai", "claude_design"];
+var BLOCKABLE_FEATURES = ["workflows", "artifacts"];
+var FEATURE_DISABLED_CAUSES = [
+  "managed_settings",
+  "org_policy",
+  "unavailable",
+  "user_setting",
+  "unsupported_runtime",
+];
+var POLICY_DENIAL_KINDS = ["org_denied", "latched"];
+//@ chunk-yxnffbzs.js:1494-1558 placement
 /**
  * 认证过期的阻断描述。
  */
-//@ chunk-yxnffbzs.js:1494-1558 placement
 function authExpiredBlock() {
-  return { kind: "auth_expired", provider: "claude_ai" };
+  return {
+    kind: "auth_expired",
+    provider: "claude_ai",
+  };
 }
 //@ chunk-yxnffbzs.js:1558-1636 placement
-function bdt(e) {
-  return { kind: "auth_overridden", provider: "claude_ai", managed: e };
+/**
+ * 认证提供方被覆盖时对应的功能屏蔽说明。
+ */
+function authOverriddenBlock(managed) {
+  return {
+    kind: "auth_overridden",
+    provider: "claude_ai",
+    managed,
+  };
 }
+//@ chunk-yxnffbzs.js:1636-1748 placement
 /**
  * 按令牌来源给出认证过期阻断。
  */
-//@ chunk-yxnffbzs.js:1636-1748 placement
-function authExpiredBlockFor(e) {
-  switch (e) {
+function authExpiredBlockFor(claudeAIOAuthTokenOrigin) {
+  switch (claudeAIOAuthTokenOrigin) {
     case "env":
-      return bdt(!1);
+      return authOverriddenBlock(false);
     case "fd":
-      return bdt(!0);
+      return authOverriddenBlock(true);
     case "store":
     case "none":
       return authExpiredBlock();
@@ -72,30 +95,33 @@ function authExpiredBlockFor(e) {
 }
 //@ chunk-yxnffbzs.js:1748-1766 placement
 var weakMap = new WeakMap();
+//@ chunk-yxnffbzs.js:1766-1803 placement
 /**
  * 给对象打标记（弱映射）。
  */
-//@ chunk-yxnffbzs.js:1766-1803 placement
 function tagObject(e, n) {
-  return (weakMap.set(e, n), e);
+  weakMap.set(e, n);
+  return e;
 }
 //@ chunk-yxnffbzs.js:1803-1875 placement
-function eCi(e) {
+/**
+ * 取对象上带类型标记的字段。
+ */
+function getTaggedObject(e) {
   if (e === null || typeof e !== "object") return;
   return weakMap.get(e);
 }
-
 export {
   CAPABILITY_BLOCK_KINDS,
-  XAi,
-  JAi,
-  QAi,
-  ZAi,
+  AUTH_PROVIDER_VALUES,
+  BLOCKABLE_FEATURES,
+  FEATURE_DISABLED_CAUSES,
+  POLICY_DENIAL_KINDS,
   tagObject,
   authExpiredBlockFor,
   authExpiredBlock,
-  zhr,
-  bdt,
-  qAi,
-  eCi,
+  isCobaltGateOn,
+  authOverriddenBlock,
+  swapFeatureReader,
+  getTaggedObject,
 };

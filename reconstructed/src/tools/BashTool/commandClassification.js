@@ -12,2065 +12,2258 @@ import { lit, fromEnum, fromEnumArr } from "../../services/analytics/safeMetadat
 import { SPLIT_MAX_LEN } from "../../utils/bash/commands.js";
 import { getParserModule } from "../../utils/bash/bashParser.js";
 
-/**
- * Bash 命令分类表：按命令名/子命令把 shell 命令归入 vcs、github_cli、network、包管理、测试等类别，用于遥测与权限提示。
- */
 //@ chunk-fym4r1th.js:11663-37722 placement
+/**
+ * Bash 命令分类表：把命令名归到 vcs/network/包管理/测试等类别，并给出类别下的程序清单、子命令表、包装命令与测试范围规则；classifyBashCommand 用它生成遥测字段。
+ */
 var COMMAND_CLASSES = [
-    "vcs",
-    "github_cli",
-    "network",
-    "lang_runtime",
-    "package_manager",
-    "build_test",
-    "file_read",
-    "file_search",
-    "text_transform",
-    "fs_mutation",
-    "shell_builtin",
-    "process_system",
-    "container_infra",
-    "document_media",
-    "db_client",
-    "claude_cli",
-    "other",
-    "unparsed",
-  ],
-  ae = {
-    vcs: ["git", "hg", "svn"],
-    github_cli: ["gh"],
-    network: ["curl", "wget", "ssh", "scp", "rsync", "ping", "nc", "dig", "nslookup"],
-    lang_runtime: [
-      "python",
-      "node",
-      "bun",
-      "deno",
-      "ruby",
-      "perl",
-      "php",
-      "java",
-      "Rscript",
-      "swift",
-      "tsx",
-      "ts-node",
-      "bash",
-      "sh",
-      "zsh",
-      "pwsh",
-    ],
-    package_manager: [
-      "npm",
-      "npx",
-      "bunx",
-      "pip",
-      "uv",
-      "uvx",
-      "poetry",
-      "yarn",
-      "pnpm",
-      "cargo",
-      "go",
-      "gradle",
-      "gradlew",
-      "mvn",
-      "nuget",
-      "brew",
-      "apt",
-      "apt-get",
-      "apk",
-      "conda",
-      "gem",
-      "composer",
-      "nix",
-      "nix-shell",
-      "nix-build",
-      "nix-env",
-    ],
-    build_test: [
-      "make",
-      "cmake",
-      "bazel",
-      "tsc",
-      "jest",
-      "vitest",
-      "pytest",
-      "eslint",
-      "prettier",
-      "ruff",
-      "mypy",
-      "vite",
-      "webpack",
-      "nx",
-      "turbo",
-      "xcodebuild",
-      "dotnet",
-      "msbuild",
-      "gcc",
-      "clang",
-      "rustc",
-    ],
-    file_read: [
-      "cat",
-      "head",
-      "tail",
-      "less",
-      "more",
-      "wc",
-      "stat",
-      "file",
-      "strings",
-      "od",
-      "hexdump",
-      "xxd",
-      "base64",
-      "sha256sum",
-      "sha1sum",
-      "md5sum",
-      "shasum",
-      "diff",
-      "cmp",
-      "comm",
-      "readlink",
-      "realpath",
-      "basename",
-      "dirname",
-    ],
-    file_search: [
-      "ls",
-      "find",
-      "fd",
-      "tree",
-      "grep",
-      "egrep",
-      "fgrep",
-      "rg",
-      "ag",
-      "which",
-      "whereis",
-      "locate",
-      "du",
-    ],
-    text_transform: [
-      "sed",
-      "awk",
-      "gawk",
-      "jq",
-      "yq",
-      "cut",
-      "tr",
-      "sort",
-      "uniq",
-      "paste",
-      "column",
-      "fold",
-      "fmt",
-      "rev",
-      "tac",
-      "nl",
-      "expand",
-      "unexpand",
-      "numfmt",
-      "iconv",
-      "xargs",
-    ],
-    fs_mutation: [
-      "mkdir",
-      "touch",
-      "rm",
-      "rmdir",
-      "mv",
-      "cp",
-      "ln",
-      "chmod",
-      "chown",
-      "chgrp",
-      "tar",
-      "zip",
-      "unzip",
-      "gzip",
-      "gunzip",
-      "tee",
-      "install",
-      "truncate",
-      "patch",
-    ],
-    shell_builtin: [
-      "echo",
-      "printf",
-      "cd",
-      "pwd",
-      "export",
-      "source",
-      "true",
-      "false",
-      "test",
-      "sleep",
-      "date",
-      "env",
-      "set",
-      "unset",
-      "read",
-      "exit",
-      "wait",
-      "eval",
-      "exec",
-      "trap",
-      "alias",
-      "type",
-      "seq",
-      "yes",
-      "printenv",
-    ],
-    process_system: [
-      "ps",
-      "pgrep",
-      "pkill",
-      "kill",
-      "killall",
-      "lsof",
-      "netstat",
-      "ss",
-      "df",
-      "free",
-      "uname",
-      "id",
-      "whoami",
-      "hostname",
-      "uptime",
-      "nproc",
-      "top",
-      "htop",
-      "timeout",
-      "nohup",
-      "sudo",
-      "time",
-      "watch",
-      "crontab",
-      "systemctl",
-      "ulimit",
-    ],
-    container_infra: [
-      "docker",
-      "docker-compose",
-      "podman",
-      "kubectl",
-      "helm",
-      "terraform",
-      "aws",
-      "gcloud",
-      "gsutil",
-      "az",
-      "vercel",
-      "flyctl",
-      "heroku",
-    ],
-    document_media: [
-      "libreoffice",
-      "soffice",
-      "pandoc",
-      "ffmpeg",
-      "ffprobe",
-      "convert",
-      "magick",
-      "pdftotext",
-      "qpdf",
-    ],
-    db_client: ["sqlite3", "psql", "mysql", "mongosh", "redis-cli", "duckdb"],
-    claude_cli: ["claude"],
-  },
-  fromEntries = Object.fromEntries(
-    COMMAND_CLASSES.flatMap((e) =>
-      (Object.hasOwn(ae, e) ? ae[e] : []).map((n) => [n, { argv0: n, commandClass: e }]),
-    ),
-  ),
-  keys = Object.keys(fromEntries),
-  ve = {
-    python3: "python",
-    python2: "python",
-    pip3: "pip",
-    nodejs: "node",
-    gmake: "make",
-    gsed: "sed",
-    ggrep: "grep",
-    ".": "source",
-  },
-  we = {
-    git: [
-      "status",
-      "diff",
-      "log",
-      "show",
-      "add",
-      "commit",
-      "push",
-      "pull",
-      "fetch",
-      "checkout",
-      "switch",
-      "branch",
-      "merge",
-      "rebase",
-      "stash",
-      "clone",
-      "remote",
-      "tag",
-      "reset",
-      "restore",
-      "rev-parse",
-      "config",
-      "worktree",
-      "cherry-pick",
-      "blame",
-      "grep",
-      "ls-files",
-      "apply",
-      "am",
-      "init",
-      "mv",
-      "rm",
-      "describe",
-      "submodule",
-      "bisect",
-      "revert",
-      "clean",
-      "ls-remote",
-      "symbolic-ref",
-      "merge-base",
-      "cat-file",
-      "format-patch",
-    ],
-    gh: [
-      "pr",
-      "issue",
-      "repo",
-      "run",
-      "workflow",
-      "release",
-      "api",
-      "auth",
-      "search",
-      "gist",
-      "label",
-      "secret",
-      "variable",
-      "codespace",
-      "browse",
-      "status",
-      "extension",
-      "cache",
-    ],
-    npm: [
-      "install",
-      "ci",
-      "run",
-      "test",
-      "start",
-      "build",
-      "exec",
-      "publish",
-      "init",
-      "ls",
-      "list",
-      "view",
-      "outdated",
-      "update",
-      "uninstall",
-      "link",
-      "pack",
-      "audit",
-      "version",
-    ],
-    pnpm: ["install", "add", "run", "test", "exec", "dlx", "build", "update", "remove", "list"],
-    yarn: ["install", "add", "run", "test", "build", "remove", "upgrade", "workspace", "workspaces", "dlx"],
-    pip: ["install", "uninstall", "list", "show", "freeze", "download", "wheel", "check", "index"],
-    uv: [
-      "run",
-      "pip",
-      "sync",
-      "lock",
-      "add",
-      "remove",
-      "venv",
-      "tool",
-      "python",
-      "init",
-      "build",
-      "publish",
-      "tree",
-    ],
-    cargo: [
-      "build",
-      "test",
-      "run",
-      "check",
-      "clippy",
-      "fmt",
-      "add",
-      "install",
-      "update",
-      "doc",
-      "bench",
-      "clean",
-      "publish",
-      "tree",
-      "metadata",
-      "nextest",
-    ],
-    go: [
-      "build",
-      "test",
-      "run",
-      "mod",
-      "get",
-      "vet",
-      "fmt",
-      "install",
-      "generate",
-      "env",
-      "list",
-      "tool",
-      "version",
-      "work",
-    ],
-    docker: [
-      "build",
-      "run",
-      "exec",
-      "ps",
-      "images",
-      "pull",
-      "push",
-      "compose",
-      "logs",
-      "stop",
-      "rm",
-      "rmi",
-      "inspect",
-      "tag",
-      "login",
-      "system",
-      "volume",
-      "network",
-      "cp",
-      "start",
-      "kill",
-    ],
-    kubectl: [
-      "get",
-      "describe",
-      "apply",
-      "delete",
-      "logs",
-      "exec",
-      "port-forward",
-      "rollout",
-      "scale",
-      "config",
-      "create",
-      "patch",
-      "edit",
-      "top",
-      "cp",
-      "wait",
-      "annotate",
-      "label",
-      "explain",
-      "api-resources",
-      "version",
-      "cluster-info",
-      "auth",
-      "debug",
-      "events",
-      "diff",
-      "kustomize",
-      "replace",
-      "expose",
-      "run",
-      "set",
-      "cordon",
-      "drain",
-      "taint",
-      "uncordon",
-      "attach",
-      "proxy",
-      "certificate",
-      "completion",
-      "plugin",
-    ],
-  },
-  ft = [
-    "view",
-    "list",
-    "create",
-    "edit",
-    "comment",
-    "checks",
-    "status",
-    "diff",
-    "merge",
-    "close",
-    "reopen",
-    "review",
-    "checkout",
-    "ready",
-    "download",
-    "upload",
-    "watch",
-    "rerun",
-    "cancel",
-    "delete",
-    "clone",
-    "fork",
-    "sync",
-    "login",
-    "logout",
-    "token",
-    "set",
-    "get",
-  ],
-  Fe = {
-    sudo: ["-u", "-g", "-U", "-p", "-C", "-D", "-h", "-r", "-t"],
-    doas: ["-u", "-C"],
-    env: ["-u", "-C", "-S", "--unset", "--chdir"],
-    time: ["-f", "-o", "--format", "--output"],
-    nice: ["-n", "--adjustment"],
-    nohup: [],
-    timeout: ["-k", "-s", "--kill-after", "--signal"],
-    command: [],
-    builtin: [],
-    noglob: [],
-    xargs: [
-      "-n",
-      "-I",
-      "-P",
-      "-d",
-      "-L",
-      "-s",
-      "-a",
-      "-E",
-      "--max-args",
-      "--max-procs",
-      "--delimiter",
-      "--arg-file",
-      "--replace",
-    ],
-    stdbuf: ["-i", "-o", "-e", "--input", "--output", "--error"],
-    caffeinate: ["-w", "-t"],
-  },
-  ht = 4,
-  gt = {
-    git: ["-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path"],
-    gh: ["-R", "--repo"],
-    docker: ["-H", "--host", "--context", "-c", "--config", "-l", "--log-level"],
-    kubectl: ["-n", "--namespace", "--context", "--kubeconfig", "--cluster", "-o"],
-    npm: ["--prefix", "-w", "--workspace"],
-    cargo: ["--manifest-path", "--config", "-Z"],
-    go: ["-C"],
-    uv: ["--directory", "--project", "--python"],
-  },
-  ue = ["runs_tests", "builds", "lints", "installs_packages", "serves_or_watches"],
-  Kbn = [
+  "vcs",
+  "github_cli",
+  "network",
+  "lang_runtime",
+  "package_manager",
+  "build_test",
+  "file_read",
+  "file_search",
+  "text_transform",
+  "fs_mutation",
+  "shell_builtin",
+  "process_system",
+  "container_infra",
+  "document_media",
+  "db_client",
+  "claude_cli",
+  "other",
+  "unparsed",
+];
+var PROGRAM_NAMES_BY_CLASS = {
+  vcs: ["git", "hg", "svn"],
+  github_cli: ["gh"],
+  network: ["curl", "wget", "ssh", "scp", "rsync", "ping", "nc", "dig", "nslookup"],
+  lang_runtime: [
     "python",
     "node",
-    "shell_script",
-    "other_runtime",
-    "compiled_lang",
-    "os_packages",
-    "browser",
-    "office",
-    "typeset",
-    "pdf",
-    "ocr",
-    "image",
-    "audio_video",
-    "archive",
-    "file_change",
+    "bun",
+    "deno",
+    "ruby",
+    "perl",
+    "php",
+    "java",
+    "Rscript",
+    "swift",
+    "tsx",
+    "ts-node",
+    "bash",
+    "sh",
+    "zsh",
+    "pwsh",
+  ],
+  package_manager: [
+    "npm",
+    "npx",
+    "bunx",
+    "pip",
+    "uv",
+    "uvx",
+    "poetry",
+    "yarn",
+    "pnpm",
+    "cargo",
+    "go",
+    "gradle",
+    "gradlew",
+    "mvn",
+    "nuget",
+    "brew",
+    "apt",
+    "apt-get",
+    "apk",
+    "conda",
+    "gem",
+    "composer",
+    "nix",
+    "nix-shell",
+    "nix-build",
+    "nix-env",
+  ],
+  build_test: [
+    "make",
+    "cmake",
+    "bazel",
+    "tsc",
+    "jest",
+    "vitest",
+    "pytest",
+    "eslint",
+    "prettier",
+    "ruff",
+    "mypy",
+    "vite",
+    "webpack",
+    "nx",
+    "turbo",
+    "xcodebuild",
+    "dotnet",
+    "msbuild",
+    "gcc",
+    "clang",
+    "rustc",
+  ],
+  file_read: [
+    "cat",
+    "head",
+    "tail",
+    "less",
+    "more",
+    "wc",
+    "stat",
+    "file",
+    "strings",
+    "od",
+    "hexdump",
+    "xxd",
+    "base64",
+    "sha256sum",
+    "sha1sum",
+    "md5sum",
+    "shasum",
+    "diff",
+    "cmp",
+    "comm",
+    "readlink",
+    "realpath",
+    "basename",
+    "dirname",
+  ],
+  file_search: [
+    "ls",
+    "find",
+    "fd",
+    "tree",
+    "grep",
+    "egrep",
+    "fgrep",
+    "rg",
+    "ag",
+    "which",
+    "whereis",
+    "locate",
+    "du",
+  ],
+  text_transform: [
+    "sed",
+    "awk",
+    "gawk",
+    "jq",
+    "yq",
+    "cut",
+    "tr",
+    "sort",
+    "uniq",
+    "paste",
+    "column",
+    "fold",
+    "fmt",
+    "rev",
+    "tac",
+    "nl",
+    "expand",
+    "unexpand",
+    "numfmt",
+    "iconv",
+    "xargs",
+  ],
+  fs_mutation: [
+    "mkdir",
+    "touch",
+    "rm",
+    "rmdir",
+    "mv",
+    "cp",
+    "ln",
+    "chmod",
+    "chown",
+    "chgrp",
+    "tar",
+    "zip",
+    "unzip",
+    "gzip",
+    "gunzip",
+    "tee",
+    "install",
+    "truncate",
+    "patch",
+  ],
+  shell_builtin: [
+    "echo",
+    "printf",
+    "cd",
+    "pwd",
+    "export",
+    "source",
+    "true",
+    "false",
+    "test",
+    "sleep",
+    "date",
+    "env",
+    "set",
+    "unset",
+    "read",
+    "exit",
     "wait",
-    "shell_word",
-    "vcs",
-    "github_cli",
+    "eval",
+    "exec",
+    "trap",
+    "alias",
+    "type",
+    "seq",
+    "yes",
+    "printenv",
+  ],
+  process_system: [
+    "ps",
+    "pgrep",
+    "pkill",
+    "kill",
+    "killall",
+    "lsof",
+    "netstat",
+    "ss",
+    "df",
+    "free",
+    "uname",
+    "id",
+    "whoami",
+    "hostname",
+    "uptime",
+    "nproc",
+    "top",
+    "htop",
+    "timeout",
+    "nohup",
+    "sudo",
+    "time",
+    "watch",
+    "crontab",
+    "systemctl",
+    "ulimit",
+  ],
+  container_infra: [
+    "docker",
+    "docker-compose",
+    "podman",
+    "kubectl",
+    "helm",
+    "terraform",
+    "aws",
+    "gcloud",
+    "gsutil",
+    "az",
+    "vercel",
+    "flyctl",
+    "heroku",
+  ],
+  document_media: [
+    "libreoffice",
+    "soffice",
+    "pandoc",
+    "ffmpeg",
+    "ffprobe",
+    "convert",
+    "magick",
+    "pdftotext",
+    "qpdf",
+  ],
+  db_client: ["sqlite3", "psql", "mysql", "mongosh", "redis-cli", "duckdb"],
+  claude_cli: ["claude"],
+};
+var ie = Object.fromEntries(
+  COMMAND_CLASSES.flatMap((e) =>
+    (Object.hasOwn(PROGRAM_NAMES_BY_CLASS, e) ? PROGRAM_NAMES_BY_CLASS[e] : []).map((n) => [
+      n,
+      {
+        argv0: n,
+        commandClass: e,
+      },
+    ]),
+  ),
+);
+var keys = Object.keys(ie);
+var PROGRAM_ALIASES = {
+  python3: "python",
+  python2: "python",
+  pip3: "pip",
+  nodejs: "node",
+  gmake: "make",
+  gsed: "sed",
+  ggrep: "grep",
+  ".": "source",
+};
+var SUBCOMMANDS_BY_PROGRAM = {
+  git: [
+    "status",
+    "diff",
+    "log",
+    "show",
+    "add",
+    "commit",
+    "push",
+    "pull",
+    "fetch",
+    "checkout",
+    "switch",
+    "branch",
+    "merge",
+    "rebase",
+    "stash",
+    "clone",
+    "remote",
+    "tag",
+    "reset",
+    "restore",
+    "rev-parse",
+    "config",
+    "worktree",
+    "cherry-pick",
+    "blame",
+    "grep",
+    "ls-files",
+    "apply",
+    "am",
+    "init",
+    "mv",
+    "rm",
+    "describe",
+    "submodule",
+    "bisect",
+    "revert",
+    "clean",
+    "ls-remote",
+    "symbolic-ref",
+    "merge-base",
+    "cat-file",
+    "format-patch",
+  ],
+  gh: [
+    "pr",
+    "issue",
+    "repo",
+    "run",
+    "workflow",
+    "release",
+    "api",
+    "auth",
+    "search",
+    "gist",
+    "label",
+    "secret",
+    "variable",
+    "codespace",
+    "browse",
+    "status",
+    "extension",
+    "cache",
+  ],
+  npm: [
+    "install",
+    "ci",
+    "run",
+    "test",
+    "start",
+    "build",
+    "exec",
+    "publish",
+    "init",
+    "ls",
+    "list",
+    "view",
+    "outdated",
+    "update",
+    "uninstall",
+    "link",
+    "pack",
+    "audit",
+    "version",
+  ],
+  pnpm: ["install", "add", "run", "test", "exec", "dlx", "build", "update", "remove", "list"],
+  yarn: ["install", "add", "run", "test", "build", "remove", "upgrade", "workspace", "workspaces", "dlx"],
+  pip: ["install", "uninstall", "list", "show", "freeze", "download", "wheel", "check", "index"],
+  uv: [
+    "run",
+    "pip",
+    "sync",
+    "lock",
+    "add",
+    "remove",
+    "venv",
+    "tool",
+    "python",
+    "init",
+    "build",
+    "publish",
+    "tree",
+  ],
+  cargo: [
+    "build",
+    "test",
+    "run",
+    "check",
+    "clippy",
+    "fmt",
+    "add",
+    "install",
+    "update",
+    "doc",
+    "bench",
+    "clean",
+    "publish",
+    "tree",
+    "metadata",
+    "nextest",
+  ],
+  go: [
+    "build",
+    "test",
+    "run",
+    "mod",
+    "get",
+    "vet",
+    "fmt",
+    "install",
+    "generate",
+    "env",
+    "list",
+    "tool",
+    "version",
+    "work",
+  ],
+  docker: [
+    "build",
+    "run",
+    "exec",
+    "ps",
+    "images",
+    "pull",
+    "push",
+    "compose",
+    "logs",
+    "stop",
+    "rm",
+    "rmi",
+    "inspect",
+    "tag",
+    "login",
+    "system",
+    "volume",
     "network",
-    "file_read",
-    "file_search",
-    "text_transform",
-    "process_system",
-    "container_infra",
-    "db_client",
-    "claude_cli",
-    "other",
-    ...ue,
-    "starts_background_job",
-    "python_inline",
-    "incomplete",
-    "unparsed",
+    "cp",
+    "start",
+    "kill",
   ],
-  _t = {
-    vcs: "vcs",
-    github_cli: "github_cli",
-    network: "network",
-    file_read: "file_read",
-    file_search: "file_search",
-    text_transform: "text_transform",
-    fs_mutation: "file_change",
-    shell_builtin: "shell_word",
-    process_system: "process_system",
-    container_infra: "container_infra",
-    db_client: "db_client",
-    claude_cli: "claude_cli",
-  },
-  je = {
-    python: [
-      "python",
-      "ipython",
-      "pip",
-      "pipx",
-      "uv",
-      "uvx",
-      "poetry",
-      "pipenv",
-      "pdm",
-      "hatch",
-      "conda",
-      "mamba",
-      "micromamba",
-      "virtualenv",
-      "pytest",
-      "py.test",
-      "tox",
-      "nox",
-      "coverage",
-      "ruff",
-      "mypy",
-      "pyright",
-      "black",
-      "flake8",
-      "pylint",
-      "isort",
-      "pre-commit",
-      "jupyter",
-      "uvicorn",
-      "gunicorn",
-      "streamlit",
-      "flask",
-      "pyinstaller",
-      "ty",
-      "basedpyright",
-      "dmypy",
-      "behave",
-      "django-admin",
-      "fastapi",
-      "maturin",
-    ],
-    node: [
-      "node",
-      "bun",
-      "deno",
-      "tsx",
-      "ts-node",
-      "npm",
-      "npx",
-      "bunx",
-      "yarn",
-      "pnpm",
-      "corepack",
-      "tsc",
-      "jest",
-      "vitest",
-      "mocha",
-      "cypress",
-      "eslint",
-      "prettier",
-      "biome",
-      "stylelint",
-      "vite",
-      "webpack",
-      "esbuild",
-      "rollup",
-      "parcel",
-      "swc",
-      "babel",
-      "tsup",
-      "tailwindcss",
-      "next",
-      "ng",
-      "nuxt",
-      "astro",
-      "remix",
-      "gatsby",
-      "expo",
-      "svelte-kit",
-      "react-scripts",
-      "vue-cli-service",
-      "storybook",
-      "nx",
-      "turbo",
-      "nodemon",
-      "pm2",
-      "http-server",
-      "serve",
-      "tsgo",
-      "vue-tsc",
-      "svelte-check",
-      "oxlint",
-      "knip",
-      "ava",
-      "jasmine",
-      "karma",
-      "tap",
-      "nyc",
-      "c8",
-      "rspack",
-      "rsbuild",
-      "tsdown",
-    ],
-    shell_script: ["bash", "sh", "zsh", "dash", "ksh", "fish", "pwsh", "shellcheck"],
-    other_runtime: [
-      "ruby",
-      "perl",
-      "php",
-      "Rscript",
-      "R",
-      "julia",
-      "gem",
-      "bundle",
-      "rake",
-      "rails",
-      "rspec",
-      "rubocop",
-      "composer",
-      "phpunit",
-      "pest",
-      "phpstan",
-      "php-cs-fixer",
-      "elixir",
-      "mix",
-    ],
-    compiled_lang: [
-      "gcc",
-      "g++",
-      "cc",
-      "c++",
-      "clang",
-      "clang++",
-      "ld",
-      "make",
-      "cmake",
-      "ctest",
-      "ninja",
-      "meson",
-      "bazel",
-      "clang-format",
-      "clang-tidy",
-      "rustc",
-      "cargo",
-      "rustup",
-      "rustfmt",
-      "go",
-      "gofmt",
-      "golangci-lint",
-      "java",
-      "javac",
-      "kotlin",
-      "kotlinc",
-      "scala",
-      "scalac",
-      "sbt",
-      "mvn",
-      "mvnw",
-      "gradle",
-      "gradlew",
-      "swift",
-      "swiftc",
-      "xcodebuild",
-      "dotnet",
-      "msbuild",
-      "nuget",
-      "configure",
-      "just",
-      "task",
-      "conan",
-      "bazelisk",
-      "zig",
-      "dart",
-      "flutter",
-      "protoc",
-      "buf",
-      "wasm-pack",
-      "valgrind",
-      "cppcheck",
-      "gotestsum",
-      "ginkgo",
-      "staticcheck",
-      "ktlint",
-      "swiftlint",
-    ],
-    os_packages: [
-      "apt",
-      "apt-get",
-      "apt-cache",
-      "dpkg",
-      "apk",
-      "brew",
-      "dnf",
-      "yum",
-      "pacman",
-      "snap",
-      "rpm",
-      "nix",
-      "nix-shell",
-      "nix-build",
-      "nix-env",
-    ],
-    browser: [
-      "chromium",
-      "chromium-browser",
-      "chrome",
-      "google-chrome",
-      "google-chrome-stable",
-      "chrome-headless-shell",
-      "headless_shell",
-      "msedge",
-      "firefox",
-      "chromedriver",
-      "geckodriver",
-      "playwright",
-      "puppeteer",
-      "lighthouse",
-      "mmdc",
-    ],
-    office: [
-      "soffice",
-      "soffice.bin",
-      "libreoffice",
-      "lowriter",
-      "localc",
-      "loimpress",
-      "unoconv",
-      "unoconvert",
-      "unoserver",
-    ],
-    typeset: [
-      "pandoc",
-      "quarto",
-      "markitdown",
-      "extract-text",
-      "latex",
-      "pdflatex",
-      "xelatex",
-      "lualatex",
-      "latexmk",
-      "tectonic",
-      "bibtex",
-      "biber",
-      "typst",
-      "weasyprint",
-      "asciidoctor",
-      "mkdocs",
-      "sphinx-build",
-      "hugo",
-    ],
-    pdf: [
-      "pdftotext",
-      "pdftoppm",
-      "pdftocairo",
-      "pdftohtml",
-      "pdfimages",
-      "pdfinfo",
-      "pdffonts",
-      "pdfunite",
-      "pdfseparate",
-      "pdfdetach",
-      "pdftk",
-      "pdfgrep",
-      "pdfcrop",
-      "pdf2ps",
-      "ps2pdf",
-      "qpdf",
-      "mutool",
-      "gs",
-      "img2pdf",
-      "wkhtmltopdf",
-    ],
-    ocr: ["tesseract", "ocrmypdf"],
-    image: [
-      "convert",
-      "magick",
-      "identify",
-      "mogrify",
-      "composite",
-      "montage",
-      "gm",
-      "vips",
-      "vipsthumbnail",
-      "exiftool",
-      "cwebp",
-      "dwebp",
-      "optipng",
-      "pngquant",
-      "jpegoptim",
-      "gifsicle",
-      "inkscape",
-      "rsvg-convert",
-      "dot",
-      "wkhtmltoimage",
-    ],
-    audio_video: [
-      "ffmpeg",
-      "ffprobe",
-      "ffplay",
-      "avconv",
-      "sox",
-      "lame",
-      "flac",
-      "mediainfo",
-      "mkvmerge",
-      "MP4Box",
-      "yt-dlp",
-      "whisper",
-    ],
-    archive: [
-      "tar",
-      "zip",
-      "unzip",
-      "zipinfo",
-      "gzip",
-      "gunzip",
-      "zcat",
-      "pigz",
-      "bzip2",
-      "bunzip2",
-      "xz",
-      "unxz",
-      "zstd",
-      "unzstd",
-      "lz4",
-      "brotli",
-      "7z",
-      "7za",
-      "7zr",
-      "unrar",
-      "unar",
-      "cpio",
-    ],
-    wait: ["sleep", "wait"],
-    shell_word: [
-      ":",
-      "command",
-      "builtin",
-      "pushd",
-      "popd",
-      "shopt",
-      "let",
-      "shift",
-      "return",
-      "break",
-      "continue",
-      "umask",
-      "hash",
-      "jobs",
-      "fg",
-      "bg",
-      "disown",
-    ],
-  },
-  bt = {
-    runs_tests: [
-      "pytest",
-      "py.test",
-      "tox",
-      "nox",
-      "coverage",
-      "jest",
-      "vitest",
-      "mocha",
-      "cypress",
-      "ctest",
-      "rspec",
-      "phpunit",
-      "ava",
-      "jasmine",
-      "karma",
-      "tap",
-      "nyc",
-      "c8",
-      "behave",
-      "pest",
-      "gotestsum",
-      "ginkgo",
-    ],
-    builds: [
-      "gcc",
-      "g++",
-      "cc",
-      "c++",
-      "clang",
-      "clang++",
-      "ld",
-      "cmake",
-      "ninja",
-      "meson",
-      "rustc",
-      "javac",
-      "kotlinc",
-      "scalac",
-      "swiftc",
-      "xcodebuild",
-      "msbuild",
-      "tsc",
-      "webpack",
-      "esbuild",
-      "rollup",
-      "parcel",
-      "swc",
-      "babel",
-      "tsup",
-      "tailwindcss",
-      "pyinstaller",
-      "sphinx-build",
-      "tsgo",
-      "rspack",
-      "tsdown",
-      "maturin",
-      "configure",
-      "protoc",
-    ],
-    lints: [
-      "ruff",
-      "mypy",
-      "pyright",
-      "black",
-      "flake8",
-      "pylint",
-      "isort",
-      "pre-commit",
-      "eslint",
-      "prettier",
-      "biome",
-      "stylelint",
-      "clang-format",
-      "clang-tidy",
-      "rustfmt",
-      "gofmt",
-      "golangci-lint",
-      "rubocop",
-      "shellcheck",
-      "ty",
-      "basedpyright",
-      "dmypy",
-      "vue-tsc",
-      "svelte-check",
-      "oxlint",
-      "knip",
-      "phpstan",
-      "php-cs-fixer",
-      "cppcheck",
-      "staticcheck",
-      "ktlint",
-      "swiftlint",
-    ],
-    installs_packages: ["virtualenv", "rustup", "corepack"],
-    serves_or_watches: ["vite", "nodemon", "pm2", "http-server", "serve", "uvicorn", "gunicorn", "streamlit"],
-  },
-  yt = je,
-  kt = new Map(Kbn.flatMap((e) => (yt[e] ?? []).map((s) => [s, e]))),
-  vt = new Map(ue.flatMap((e) => bt[e].map((s) => [s, e]))),
-  We = new Map([...Object.values(ae), ...Object.values(je)].flatMap((e) => e.map((s) => [s, s]))),
-  wt = {
-    runs_tests: ["test", "tests", "e2e"],
-    builds: ["build", "compile", "bundle"],
-    lints: ["lint", "typecheck", "type-check", "format", "check"],
-    serves_or_watches: ["dev", "develop", "start", "serve", "server", "watch", "preview", "storybook"],
-  },
-  X = {
-    verbs: {
-      installs_packages: [
-        "install",
-        "i",
-        "ci",
-        "add",
-        "update",
-        "upgrade",
-        "up",
-        "remove",
-        "rm",
-        "uninstall",
-        "link",
-        "rebuild",
-        "dedupe",
-        "prune",
-      ],
-      runs_tests: ["t"],
-    },
-    scriptAfter: ["run", "run-script"],
-    commandAfter: ["exec", "dlx", "x"],
-    verbMayBeScript: !0,
-    valueFlags: ["--prefix", "-w", "--workspace", "workspace", "-C", "--cwd", "--dir", "--filter", "-F"],
-  },
-  C = { scriptAfter: ["run"], verbMayBeScript: !0, verbIsTarget: !0 },
-  D = {
-    verbs: {
-      installs_packages: [
-        "install",
-        "add",
-        "update",
-        "upgrade",
-        "lock",
-        "sync",
-        "remove",
-        "uninstall",
-        "create",
-        "env",
-        "venv",
-        "pip",
-        "tool",
-        "python",
-        "inject",
-      ],
-      builds: ["build"],
-    },
-    commandAfter: ["run"],
-    valueFlags: [
-      "-n",
-      "--name",
-      "-p",
-      "--prefix",
-      "--cwd",
-      "--directory",
-      "--project",
-      "--python",
-      "--with",
-      "--with-requirements",
-      "--extra",
-      "--group",
-      "--env-file",
-    ],
-  },
-  K = {
-    anywhere: {
-      runs_tests: ["test", "verify", "check", "integration-test"],
-      builds: ["compile", "package", "install", "build", "assemble", "jar", "bootJar"],
-    },
-    valueFlags: ["-x", "--exclude-task"],
-  },
-  W = {
-    verbs: {
-      installs_packages: [
-        "install",
-        "reinstall",
-        "add",
-        "update",
-        "upgrade",
-        "dist-upgrade",
-        "full-upgrade",
-        "remove",
-        "purge",
-        "autoremove",
-      ],
-    },
-  },
-  Se = [
-    "-r",
-    "--reporter",
-    "-x",
-    "--exclude",
+  kubectl: [
+    "get",
+    "describe",
+    "apply",
+    "delete",
+    "logs",
+    "exec",
+    "port-forward",
+    "rollout",
+    "scale",
+    "config",
+    "create",
+    "patch",
+    "edit",
+    "top",
+    "cp",
+    "wait",
+    "annotate",
+    "label",
+    "explain",
+    "api-resources",
+    "version",
+    "cluster-info",
+    "auth",
+    "debug",
+    "events",
+    "diff",
+    "kustomize",
+    "replace",
+    "expose",
+    "run",
+    "set",
+    "cordon",
+    "drain",
+    "taint",
+    "uncordon",
+    "attach",
+    "proxy",
+    "certificate",
+    "completion",
+    "plugin",
+  ],
+};
+var GH_SUBCOMMANDS = [
+  "view",
+  "list",
+  "create",
+  "edit",
+  "comment",
+  "checks",
+  "status",
+  "diff",
+  "merge",
+  "close",
+  "reopen",
+  "review",
+  "checkout",
+  "ready",
+  "download",
+  "upload",
+  "watch",
+  "rerun",
+  "cancel",
+  "delete",
+  "clone",
+  "fork",
+  "sync",
+  "login",
+  "logout",
+  "token",
+  "set",
+  "get",
+];
+var WRAPPER_VALUE_FLAGS = {
+  sudo: ["-u", "-g", "-U", "-p", "-C", "-D", "-h", "-r", "-t"],
+  doas: ["-u", "-C"],
+  env: ["-u", "-C", "-S", "--unset", "--chdir"],
+  time: ["-f", "-o", "--format", "--output"],
+  nice: ["-n", "--adjustment"],
+  nohup: [],
+  timeout: ["-k", "-s", "--kill-after", "--signal"],
+  command: [],
+  builtin: [],
+  noglob: [],
+  xargs: [
     "-n",
-    "--include",
-    "--branches",
-    "--functions",
-    "--lines",
-    "--statements",
+    "-I",
+    "-P",
+    "-d",
+    "-L",
+    "-s",
+    "-a",
+    "-E",
+    "--max-args",
+    "--max-procs",
+    "--delimiter",
+    "--arg-file",
+    "--replace",
   ],
-  xe = { anywhere: { lints: ["--noEmit"], serves_or_watches: ["-w"] } },
-  Te = { verbs: { runs_tests: ["test", "coverage"], builds: ["build"] } },
-  Ae = {
-    npm: X,
-    pnpm: X,
-    bun: X,
-    yarn: { ...X, bare: "installs_packages" },
-    npx: { runsTheRest: !0, valueFlags: ["-p", "--package", "-c", "--call"] },
-    bunx: { runsTheRest: !0 },
-    nx: C,
-    turbo: C,
-    vite: C,
-    next: C,
-    ng: C,
-    nuxt: C,
-    astro: C,
-    remix: C,
-    gatsby: C,
-    expo: C,
-    "svelte-kit": C,
-    "react-scripts": C,
-    "vue-cli-service": C,
-    storybook: C,
-    mkdocs: C,
-    hugo: C,
-    rspack: C,
-    rsbuild: C,
-    nyc: {
-      runsTheRest: !0,
-      ownVerbs: ["report", "check-coverage", "instrument", "merge"],
-      valueFlags: [
-        ...Se,
-        "-e",
-        "--extension",
-        "-t",
-        "--temp-dir",
-        "--cwd",
-        "--nycrc-path",
-        "--report-dir",
-        "-i",
-        "--require",
-      ],
-    },
-    c8: {
-      runsTheRest: !0,
-      ownVerbs: ["report", "check-coverage"],
-      valueFlags: [...Se, "-o", "--reports-dir", "--temp-directory", "-c", "--config", "--src"],
-    },
-    node: { anywhere: { runs_tests: ["--test"] } },
-    tsx: { verbs: { serves_or_watches: ["watch"] } },
-    deno: {
-      verbs: {
-        runs_tests: ["test", "bench"],
-        lints: ["lint", "fmt", "check"],
-        installs_packages: ["install", "add", "cache"],
-        builds: ["compile", "bundle"],
-        serves_or_watches: ["serve"],
-      },
-      scriptAfter: ["task"],
-    },
-    tsc: xe,
-    tsgo: xe,
-    webpack: { verbs: { serves_or_watches: ["serve", "watch"] }, anywhere: { serves_or_watches: ["-w"] } },
-    playwright: { verbs: { runs_tests: ["test"], installs_packages: ["install", "install-deps"] } },
-    pip: { verbs: { installs_packages: ["install", "uninstall", "download", "wheel"] } },
-    uv: D,
-    poetry: D,
-    pipenv: D,
-    pdm: D,
-    hatch: D,
-    pipx: D,
-    conda: D,
-    mamba: D,
-    micromamba: D,
-    uvx: { runsTheRest: !0, valueFlags: ["--from", "--with", "--python", "-p"] },
-    jupyter: { verbs: { serves_or_watches: ["notebook", "lab", "server"] } },
-    flask: { verbs: { serves_or_watches: ["run"] } },
-    fastapi: { verbs: { serves_or_watches: ["dev", "run"] } },
-    "django-admin": { verbs: { runs_tests: ["test"], serves_or_watches: ["runserver"] } },
-    cargo: {
-      verbs: {
-        runs_tests: ["test", "nextest", "bench"],
-        builds: ["build", "doc", "rustc"],
-        lints: ["check", "clippy", "fmt"],
-        installs_packages: ["install", "add", "update", "fetch"],
-        serves_or_watches: ["watch"],
-      },
-      valueFlags: ["--manifest-path", "--config", "-Z"],
-    },
-    go: {
-      verbs: {
-        runs_tests: ["test"],
-        builds: ["build", "generate"],
-        lints: ["vet", "fmt"],
-        installs_packages: ["get", "install", "mod"],
-      },
-      valueFlags: ["-C"],
-    },
-    dotnet: {
-      verbs: {
-        runs_tests: ["test"],
-        builds: ["build", "publish", "pack"],
-        lints: ["format"],
-        installs_packages: ["restore", "add"],
-      },
-    },
-    bazel: Te,
-    bazelisk: Te,
-    make: {
-      bare: "builds",
-      verbs: { builds: ["all", "install"], runs_tests: ["check"] },
-      verbMayBeScript: !0,
-      verbIsTarget: !0,
-      valueFlags: ["-C", "-f", "-j"],
-    },
-    just: {
-      verbMayBeScript: !0,
-      verbIsTarget: !0,
-      valueFlags: ["-f", "--justfile", "-d", "--working-directory"],
-    },
-    task: { verbMayBeScript: !0, verbIsTarget: !0, valueFlags: ["-t", "--taskfile", "-d", "--dir"] },
-    mvn: K,
-    mvnw: K,
-    gradle: K,
-    gradlew: K,
-    sbt: K,
-    swift: { verbs: { runs_tests: ["test"], builds: ["build"] } },
-    zig: {
-      verbs: {
-        runs_tests: ["test"],
-        lints: ["fmt"],
-        builds: ["build-exe", "build-lib", "build-obj", "cc", "c++"],
-      },
-      scriptAfter: ["build"],
-      anywhere: { builds: ["build"] },
-    },
-    dart: {
-      verbs: {
-        runs_tests: ["test"],
-        builds: ["compile"],
-        lints: ["analyze", "format", "fix"],
-        installs_packages: ["pub"],
-      },
-    },
-    flutter: {
-      verbs: {
-        runs_tests: ["test", "drive"],
-        builds: ["build"],
-        lints: ["analyze"],
-        installs_packages: ["pub", "upgrade", "precache"],
-        serves_or_watches: ["run"],
-      },
-    },
-    conan: {
-      verbs: {
-        runs_tests: ["test"],
-        builds: ["build", "create"],
-        installs_packages: ["install", "download"],
-      },
-    },
-    buf: { verbs: { builds: ["build", "generate"], lints: ["lint", "format", "breaking"] } },
-    "wasm-pack": { verbs: { runs_tests: ["test"], builds: ["build", "pack"] } },
-    valgrind: { runsTheRest: !0 },
-    apt: W,
-    "apt-get": W,
-    apk: W,
-    brew: W,
-    dnf: W,
-    yum: W,
-    snap: W,
-    gem: { verbs: { installs_packages: ["install", "update"] } },
-    composer: { verbs: { installs_packages: ["install", "update", "require"] } },
-    bundle: { verbs: { installs_packages: ["install", "update", "add"] }, commandAfter: ["exec"] },
-    rake: { verbs: { runs_tests: ["spec"] }, verbMayBeScript: !0, verbIsTarget: !0 },
-    rails: { verbs: { runs_tests: ["test", "t"], serves_or_watches: ["server", "s"] } },
-    mix: {
-      verbs: {
-        runs_tests: ["test"],
-        builds: ["compile", "release"],
-        lints: ["format", "credo", "dialyzer"],
-        installs_packages: ["deps.get", "deps.update", "local.hex", "local.rebar"],
-        serves_or_watches: ["phx.server"],
-      },
-    },
+  stdbuf: ["-i", "-o", "-e", "--input", "--output", "--error"],
+  caffeinate: ["-w", "-t"],
+};
+var MAX_WRAPPER_DEPTH = 4;
+var PROGRAM_GLOBAL_VALUE_FLAGS = {
+  git: ["-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path"],
+  gh: ["-R", "--repo"],
+  docker: ["-H", "--host", "--context", "-c", "--config", "-l", "--log-level"],
+  kubectl: ["-n", "--namespace", "--context", "--kubeconfig", "--cluster", "-o"],
+  npm: ["--prefix", "-w", "--workspace"],
+  cargo: ["--manifest-path", "--config", "-Z"],
+  go: ["-C"],
+  uv: ["--directory", "--project", "--python"],
+};
+var TEST_SCOPES = ["runs_tests", "builds", "lints", "installs_packages", "serves_or_watches"];
+var PROGRAM_CATEGORIES = [
+  "python",
+  "node",
+  "shell_script",
+  "other_runtime",
+  "compiled_lang",
+  "os_packages",
+  "browser",
+  "office",
+  "typeset",
+  "pdf",
+  "ocr",
+  "image",
+  "audio_video",
+  "archive",
+  "file_change",
+  "wait",
+  "shell_word",
+  "vcs",
+  "github_cli",
+  "network",
+  "file_read",
+  "file_search",
+  "text_transform",
+  "process_system",
+  "container_infra",
+  "db_client",
+  "claude_cli",
+  "other",
+  ...TEST_SCOPES,
+  "starts_background_job",
+  "python_inline",
+  "incomplete",
+  "unparsed",
+];
+var CATEGORY_KIND_ALIASES = {
+  vcs: "vcs",
+  github_cli: "github_cli",
+  network: "network",
+  file_read: "file_read",
+  file_search: "file_search",
+  text_transform: "text_transform",
+  fs_mutation: "file_change",
+  shell_builtin: "shell_word",
+  process_system: "process_system",
+  container_infra: "container_infra",
+  db_client: "db_client",
+  claude_cli: "claude_cli",
+};
+var PROGRAMS_BY_CATEGORY = {
+  python: [
+    "python",
+    "ipython",
+    "pip",
+    "pipx",
+    "uv",
+    "uvx",
+    "poetry",
+    "pipenv",
+    "pdm",
+    "hatch",
+    "conda",
+    "mamba",
+    "micromamba",
+    "virtualenv",
+    "pytest",
+    "py.test",
+    "tox",
+    "nox",
+    "coverage",
+    "ruff",
+    "mypy",
+    "pyright",
+    "black",
+    "flake8",
+    "pylint",
+    "isort",
+    "pre-commit",
+    "jupyter",
+    "uvicorn",
+    "gunicorn",
+    "streamlit",
+    "flask",
+    "pyinstaller",
+    "ty",
+    "basedpyright",
+    "dmypy",
+    "behave",
+    "django-admin",
+    "fastapi",
+    "maturin",
+  ],
+  node: [
+    "node",
+    "bun",
+    "deno",
+    "tsx",
+    "ts-node",
+    "npm",
+    "npx",
+    "bunx",
+    "yarn",
+    "pnpm",
+    "corepack",
+    "tsc",
+    "jest",
+    "vitest",
+    "mocha",
+    "cypress",
+    "eslint",
+    "prettier",
+    "biome",
+    "stylelint",
+    "vite",
+    "webpack",
+    "esbuild",
+    "rollup",
+    "parcel",
+    "swc",
+    "babel",
+    "tsup",
+    "tailwindcss",
+    "next",
+    "ng",
+    "nuxt",
+    "astro",
+    "remix",
+    "gatsby",
+    "expo",
+    "svelte-kit",
+    "react-scripts",
+    "vue-cli-service",
+    "storybook",
+    "nx",
+    "turbo",
+    "nodemon",
+    "pm2",
+    "http-server",
+    "serve",
+    "tsgo",
+    "vue-tsc",
+    "svelte-check",
+    "oxlint",
+    "knip",
+    "ava",
+    "jasmine",
+    "karma",
+    "tap",
+    "nyc",
+    "c8",
+    "rspack",
+    "rsbuild",
+    "tsdown",
+  ],
+  shell_script: ["bash", "sh", "zsh", "dash", "ksh", "fish", "pwsh", "shellcheck"],
+  other_runtime: [
+    "ruby",
+    "perl",
+    "php",
+    "Rscript",
+    "R",
+    "julia",
+    "gem",
+    "bundle",
+    "rake",
+    "rails",
+    "rspec",
+    "rubocop",
+    "composer",
+    "phpunit",
+    "pest",
+    "phpstan",
+    "php-cs-fixer",
+    "elixir",
+    "mix",
+  ],
+  compiled_lang: [
+    "gcc",
+    "g++",
+    "cc",
+    "c++",
+    "clang",
+    "clang++",
+    "ld",
+    "make",
+    "cmake",
+    "ctest",
+    "ninja",
+    "meson",
+    "bazel",
+    "clang-format",
+    "clang-tidy",
+    "rustc",
+    "cargo",
+    "rustup",
+    "rustfmt",
+    "go",
+    "gofmt",
+    "golangci-lint",
+    "java",
+    "javac",
+    "kotlin",
+    "kotlinc",
+    "scala",
+    "scalac",
+    "sbt",
+    "mvn",
+    "mvnw",
+    "gradle",
+    "gradlew",
+    "swift",
+    "swiftc",
+    "xcodebuild",
+    "dotnet",
+    "msbuild",
+    "nuget",
+    "configure",
+    "just",
+    "task",
+    "conan",
+    "bazelisk",
+    "zig",
+    "dart",
+    "flutter",
+    "protoc",
+    "buf",
+    "wasm-pack",
+    "valgrind",
+    "cppcheck",
+    "gotestsum",
+    "ginkgo",
+    "staticcheck",
+    "ktlint",
+    "swiftlint",
+  ],
+  os_packages: [
+    "apt",
+    "apt-get",
+    "apt-cache",
+    "dpkg",
+    "apk",
+    "brew",
+    "dnf",
+    "yum",
+    "pacman",
+    "snap",
+    "rpm",
+    "nix",
+    "nix-shell",
+    "nix-build",
+    "nix-env",
+  ],
+  browser: [
+    "chromium",
+    "chromium-browser",
+    "chrome",
+    "google-chrome",
+    "google-chrome-stable",
+    "chrome-headless-shell",
+    "headless_shell",
+    "msedge",
+    "firefox",
+    "chromedriver",
+    "geckodriver",
+    "playwright",
+    "puppeteer",
+    "lighthouse",
+    "mmdc",
+  ],
+  office: [
+    "soffice",
+    "soffice.bin",
+    "libreoffice",
+    "lowriter",
+    "localc",
+    "loimpress",
+    "unoconv",
+    "unoconvert",
+    "unoserver",
+  ],
+  typeset: [
+    "pandoc",
+    "quarto",
+    "markitdown",
+    "extract-text",
+    "latex",
+    "pdflatex",
+    "xelatex",
+    "lualatex",
+    "latexmk",
+    "tectonic",
+    "bibtex",
+    "biber",
+    "typst",
+    "weasyprint",
+    "asciidoctor",
+    "mkdocs",
+    "sphinx-build",
+    "hugo",
+  ],
+  pdf: [
+    "pdftotext",
+    "pdftoppm",
+    "pdftocairo",
+    "pdftohtml",
+    "pdfimages",
+    "pdfinfo",
+    "pdffonts",
+    "pdfunite",
+    "pdfseparate",
+    "pdfdetach",
+    "pdftk",
+    "pdfgrep",
+    "pdfcrop",
+    "pdf2ps",
+    "ps2pdf",
+    "qpdf",
+    "mutool",
+    "gs",
+    "img2pdf",
+    "wkhtmltopdf",
+  ],
+  ocr: ["tesseract", "ocrmypdf"],
+  image: [
+    "convert",
+    "magick",
+    "identify",
+    "mogrify",
+    "composite",
+    "montage",
+    "gm",
+    "vips",
+    "vipsthumbnail",
+    "exiftool",
+    "cwebp",
+    "dwebp",
+    "optipng",
+    "pngquant",
+    "jpegoptim",
+    "gifsicle",
+    "inkscape",
+    "rsvg-convert",
+    "dot",
+    "wkhtmltoimage",
+  ],
+  audio_video: [
+    "ffmpeg",
+    "ffprobe",
+    "ffplay",
+    "avconv",
+    "sox",
+    "lame",
+    "flac",
+    "mediainfo",
+    "mkvmerge",
+    "MP4Box",
+    "yt-dlp",
+    "whisper",
+  ],
+  archive: [
+    "tar",
+    "zip",
+    "unzip",
+    "zipinfo",
+    "gzip",
+    "gunzip",
+    "zcat",
+    "pigz",
+    "bzip2",
+    "bunzip2",
+    "xz",
+    "unxz",
+    "zstd",
+    "unzstd",
+    "lz4",
+    "brotli",
+    "7z",
+    "7za",
+    "7zr",
+    "unrar",
+    "unar",
+    "cpio",
+  ],
+  wait: ["sleep", "wait"],
+  shell_word: [
+    ":",
+    "command",
+    "builtin",
+    "pushd",
+    "popd",
+    "shopt",
+    "let",
+    "shift",
+    "return",
+    "break",
+    "continue",
+    "umask",
+    "hash",
+    "jobs",
+    "fg",
+    "bg",
+    "disown",
+  ],
+};
+var TEST_PROGRAMS_BY_SCOPE = {
+  runs_tests: [
+    "pytest",
+    "py.test",
+    "tox",
+    "nox",
+    "coverage",
+    "jest",
+    "vitest",
+    "mocha",
+    "cypress",
+    "ctest",
+    "rspec",
+    "phpunit",
+    "ava",
+    "jasmine",
+    "karma",
+    "tap",
+    "nyc",
+    "c8",
+    "behave",
+    "pest",
+    "gotestsum",
+    "ginkgo",
+  ],
+  builds: [
+    "gcc",
+    "g++",
+    "cc",
+    "c++",
+    "clang",
+    "clang++",
+    "ld",
+    "cmake",
+    "ninja",
+    "meson",
+    "rustc",
+    "javac",
+    "kotlinc",
+    "scalac",
+    "swiftc",
+    "xcodebuild",
+    "msbuild",
+    "tsc",
+    "webpack",
+    "esbuild",
+    "rollup",
+    "parcel",
+    "swc",
+    "babel",
+    "tsup",
+    "tailwindcss",
+    "pyinstaller",
+    "sphinx-build",
+    "tsgo",
+    "rspack",
+    "tsdown",
+    "maturin",
+    "configure",
+    "protoc",
+  ],
+  lints: [
+    "ruff",
+    "mypy",
+    "pyright",
+    "black",
+    "flake8",
+    "pylint",
+    "isort",
+    "pre-commit",
+    "eslint",
+    "prettier",
+    "biome",
+    "stylelint",
+    "clang-format",
+    "clang-tidy",
+    "rustfmt",
+    "gofmt",
+    "golangci-lint",
+    "rubocop",
+    "shellcheck",
+    "ty",
+    "basedpyright",
+    "dmypy",
+    "vue-tsc",
+    "svelte-check",
+    "oxlint",
+    "knip",
+    "phpstan",
+    "php-cs-fixer",
+    "cppcheck",
+    "staticcheck",
+    "ktlint",
+    "swiftlint",
+  ],
+  installs_packages: ["virtualenv", "rustup", "corepack"],
+  serves_or_watches: ["vite", "nodemon", "pm2", "http-server", "serve", "uvicorn", "gunicorn", "streamlit"],
+};
+var PROGRAMS_BY_CATEGORY_ALIAS = PROGRAMS_BY_CATEGORY;
+var PROGRAM_TO_CATEGORY = new Map(
+  PROGRAM_CATEGORIES.flatMap((e) => (PROGRAMS_BY_CATEGORY_ALIAS[e] ?? []).map((s) => [s, e])),
+);
+var PROGRAM_TO_TEST_SCOPE = new Map(TEST_SCOPES.flatMap((e) => TEST_PROGRAMS_BY_SCOPE[e].map((s) => [s, e])));
+var KNOWN_PROGRAM_NAMES = new Map(
+  [...Object.values(PROGRAM_NAMES_BY_CLASS), ...Object.values(PROGRAMS_BY_CATEGORY)].flatMap((e) =>
+    e.map((s) => [s, s]),
+  ),
+);
+var BARE_SCRIPT_CATEGORIES = {
+  runs_tests: ["test", "tests", "e2e"],
+  builds: ["build", "compile", "bundle"],
+  lints: ["lint", "typecheck", "type-check", "format", "check"],
+  serves_or_watches: ["dev", "develop", "start", "serve", "server", "watch", "preview", "storybook"],
+};
+var NPM_LIKE_RULES = {
+  verbs: {
+    installs_packages: [
+      "install",
+      "i",
+      "ci",
+      "add",
+      "update",
+      "upgrade",
+      "up",
+      "remove",
+      "rm",
+      "uninstall",
+      "link",
+      "rebuild",
+      "dedupe",
+      "prune",
+    ],
+    runs_tests: ["t"],
   },
-  Ee = {
-    unittest: "runs_tests",
-    doctest: "runs_tests",
-    venv: "installs_packages",
-    ensurepip: "installs_packages",
-    "http.server": "serves_or_watches",
-    build: "builds",
-    compileall: "builds",
-    py_compile: "builds",
+  scriptAfter: ["run", "run-script"],
+  commandAfter: ["exec", "dlx", "x"],
+  verbMayBeScript: true,
+  valueFlags: ["--prefix", "-w", "--workspace", "workspace", "-C", "--cwd", "--dir", "--filter", "-F"],
+};
+var SCRIPT_RUNNER_RULES = {
+  scriptAfter: ["run"],
+  verbMayBeScript: true,
+  verbIsTarget: true,
+};
+var PYTHON_PACKAGE_RULES = {
+  verbs: {
+    installs_packages: [
+      "install",
+      "add",
+      "update",
+      "upgrade",
+      "lock",
+      "sync",
+      "remove",
+      "uninstall",
+      "create",
+      "env",
+      "venv",
+      "pip",
+      "tool",
+      "python",
+      "inject",
+    ],
+    builds: ["build"],
   },
-  Ue = ["unittest", "doctest"],
-  Ls = [...We.keys(), ...Ue, "other", "none", "incomplete", "unparsed"],
-  St = ["markitdown", "weasyprint", "ocrmypdf", "whisper"],
-  Re = {
-    "@playwright/test": "playwright",
-    "@puppeteer/browsers": "puppeteer",
-    "@mermaid-js/mermaid-cli": "mmdc",
-    "@angular/cli": "ng",
-    "@biomejs/biome": "biome",
+  commandAfter: ["run"],
+  valueFlags: [
+    "-n",
+    "--name",
+    "-p",
+    "--prefix",
+    "--cwd",
+    "--directory",
+    "--project",
+    "--python",
+    "--with",
+    "--with-requirements",
+    "--extra",
+    "--group",
+    "--env-file",
+  ],
+};
+var JVM_BUILD_RULES = {
+  anywhere: {
+    runs_tests: ["test", "verify", "check", "integration-test"],
+    builds: ["compile", "package", "install", "build", "assemble", "jar", "bootJar"],
   },
-  Oe = {
-    py: "python",
-    js: "node",
-    mjs: "node",
-    cjs: "node",
-    ts: "node",
-    sh: "shell_script",
-    bash: "shell_script",
-    rb: "other_runtime",
-    pl: "other_runtime",
-    php: "other_runtime",
+  valueFlags: ["-x", "--exclude-task"],
+};
+var OS_PACKAGE_RULES = {
+  verbs: {
+    installs_packages: [
+      "install",
+      "reinstall",
+      "add",
+      "update",
+      "upgrade",
+      "dist-upgrade",
+      "full-upgrade",
+      "remove",
+      "purge",
+      "autoremove",
+    ],
   },
-  xt = {
-    ...Fe,
-    exec: ["-a"],
-    coproc: [],
-    setsid: [],
-    unbuffer: [],
-    ionice: ["-c", "-n", "--class", "--classdata"],
-    taskset: ["-c", "--cpu-list"],
-    strace: ["-o", "-e", "-p", "-s"],
-    parallel: ["-j", "--jobs"],
-    "xvfb-run": [
-      "-n",
-      "-s",
+};
+var COVERAGE_VALUE_FLAGS = [
+  "-r",
+  "--reporter",
+  "-x",
+  "--exclude",
+  "-n",
+  "--include",
+  "--branches",
+  "--functions",
+  "--lines",
+  "--statements",
+];
+var TSC_RULES = {
+  anywhere: {
+    lints: ["--noEmit"],
+    serves_or_watches: ["-w"],
+  },
+};
+var BAZEL_RULES = {
+  verbs: {
+    runs_tests: ["test", "coverage"],
+    builds: ["build"],
+  },
+};
+var PROGRAM_RULES = {
+  npm: NPM_LIKE_RULES,
+  pnpm: NPM_LIKE_RULES,
+  bun: NPM_LIKE_RULES,
+  yarn: {
+    ...NPM_LIKE_RULES,
+    bare: "installs_packages",
+  },
+  npx: {
+    runsTheRest: true,
+    valueFlags: ["-p", "--package", "-c", "--call"],
+  },
+  bunx: {
+    runsTheRest: true,
+  },
+  nx: SCRIPT_RUNNER_RULES,
+  turbo: SCRIPT_RUNNER_RULES,
+  vite: SCRIPT_RUNNER_RULES,
+  next: SCRIPT_RUNNER_RULES,
+  ng: SCRIPT_RUNNER_RULES,
+  nuxt: SCRIPT_RUNNER_RULES,
+  astro: SCRIPT_RUNNER_RULES,
+  remix: SCRIPT_RUNNER_RULES,
+  gatsby: SCRIPT_RUNNER_RULES,
+  expo: SCRIPT_RUNNER_RULES,
+  "svelte-kit": SCRIPT_RUNNER_RULES,
+  "react-scripts": SCRIPT_RUNNER_RULES,
+  "vue-cli-service": SCRIPT_RUNNER_RULES,
+  storybook: SCRIPT_RUNNER_RULES,
+  mkdocs: SCRIPT_RUNNER_RULES,
+  hugo: SCRIPT_RUNNER_RULES,
+  rspack: SCRIPT_RUNNER_RULES,
+  rsbuild: SCRIPT_RUNNER_RULES,
+  nyc: {
+    runsTheRest: true,
+    ownVerbs: ["report", "check-coverage", "instrument", "merge"],
+    valueFlags: [
+      ...COVERAGE_VALUE_FLAGS,
       "-e",
-      "-f",
-      "-p",
-      "-w",
-      "--server-num",
-      "--server-args",
-      "--error-file",
-      "--auth-file",
-      "--wait",
+      "--extension",
+      "-t",
+      "--temp-dir",
+      "--cwd",
+      "--nycrc-path",
+      "--report-dir",
+      "-i",
+      "--require",
     ],
   },
-  Tt = ["bash", "sh", "zsh", "dash", "ksh"],
-  At = ["-exec", "-execdir", "-ok", "-okdir"],
-  Et = ["nohup", "setsid"],
-  Rt = ["--version", "--help", "-v", "-V", "-h", "-n", "-q"],
-  Ot = ["--watch", "--watchAll", "--reload"],
-  Ct = 6,
-  Pt = 24,
-  Mt = 2,
-  Bt = 2000,
-  It = 20,
-  Lt = ["whole", "unknown", "narrowed_to_folders", "narrowed", "changed_or_failed_only", "runs_no_tests"],
-  Dt = [
-    "runs_no_tests",
-    "changed_or_failed_only",
-    "narrowed",
-    "narrowed_to_folders",
-    "takes_expression",
-    "takes_value",
-    "says_nothing",
-  ],
-  F = ["", ".", "test", "tests", "spec", "specs", "__tests__"],
-  Nt = ["src", "lib", "app", "apps", "packages", "e2e", "integration", "unit"],
-  Ft = /\.\w+$|:\w/,
-  ze = {
-    runs_no_tests: ["--listTests", "--list", "--showConfig", "--clearCache"],
-    changed_or_failed_only: [
-      "--onlyChanged",
+  c8: {
+    runsTheRest: true,
+    ownVerbs: ["report", "check-coverage"],
+    valueFlags: [
+      ...COVERAGE_VALUE_FLAGS,
       "-o",
-      "--changedSince",
-      "--changed",
-      "--lastCommit",
-      "--changedFilesWithAncestor",
-      "--findRelatedTests",
-      "--onlyFailures",
-      "-f",
-      "--last-failed",
-      "--only-changed",
-      "--affected",
-    ],
-    narrowed: [
-      "-t",
-      "--testNamePattern",
-      "--testPathPattern",
-      "--testPathPatterns",
-      "--runTestsByPath",
-      "--testMatch",
-      "--testRegex",
-      "--testFile",
-      "--include",
-      "-g",
-      "--grep",
-      "--shard",
-      "--only",
-      "--test-name-pattern",
-      "--test-only",
-      "--test-shard",
-    ],
-    takes_value: [
-      "--prefix",
-      "-w",
-      "--workspace",
-      "-C",
-      "--cwd",
-      "--dir",
-      "--filter",
-      "-F",
-      "--loglevel",
+      "--reports-dir",
+      "--temp-directory",
       "-c",
       "--config",
-      "--project",
-      "--projects",
-      "--selectProjects",
-      "--ignoreProjects",
-      "--root",
-      "--rootDir",
-      "--roots",
-      "--reporter",
-      "--reporters",
-      "--outputFile",
-      "--output",
-      "--coverageDirectory",
-      "--coverageReporters",
-      "--coverageProvider",
-      "--collectCoverageFrom",
-      "--coverage-reporter",
-      "--coverage-dir",
-      "--setupFiles",
-      "--setupFilesAfterEnv",
-      "--env",
-      "--environment",
-      "--testEnvironment",
-      "--tsconfig",
+      "--src",
+    ],
+  },
+  node: {
+    anywhere: {
+      runs_tests: ["--test"],
+    },
+  },
+  tsx: {
+    verbs: {
+      serves_or_watches: ["watch"],
+    },
+  },
+  deno: {
+    verbs: {
+      runs_tests: ["test", "bench"],
+      lints: ["lint", "fmt", "check"],
+      installs_packages: ["install", "add", "cache"],
+      builds: ["compile", "bundle"],
+      serves_or_watches: ["serve"],
+    },
+    scriptAfter: ["task"],
+  },
+  tsc: TSC_RULES,
+  tsgo: TSC_RULES,
+  webpack: {
+    verbs: {
+      serves_or_watches: ["serve", "watch"],
+    },
+    anywhere: {
+      serves_or_watches: ["-w"],
+    },
+  },
+  playwright: {
+    verbs: {
+      runs_tests: ["test"],
+      installs_packages: ["install", "install-deps"],
+    },
+  },
+  pip: {
+    verbs: {
+      installs_packages: ["install", "uninstall", "download", "wheel"],
+    },
+  },
+  uv: PYTHON_PACKAGE_RULES,
+  poetry: PYTHON_PACKAGE_RULES,
+  pipenv: PYTHON_PACKAGE_RULES,
+  pdm: PYTHON_PACKAGE_RULES,
+  hatch: PYTHON_PACKAGE_RULES,
+  pipx: PYTHON_PACKAGE_RULES,
+  conda: PYTHON_PACKAGE_RULES,
+  mamba: PYTHON_PACKAGE_RULES,
+  micromamba: PYTHON_PACKAGE_RULES,
+  uvx: {
+    runsTheRest: true,
+    valueFlags: ["--from", "--with", "--python", "-p"],
+  },
+  jupyter: {
+    verbs: {
+      serves_or_watches: ["notebook", "lab", "server"],
+    },
+  },
+  flask: {
+    verbs: {
+      serves_or_watches: ["run"],
+    },
+  },
+  fastapi: {
+    verbs: {
+      serves_or_watches: ["dev", "run"],
+    },
+  },
+  "django-admin": {
+    verbs: {
+      runs_tests: ["test"],
+      serves_or_watches: ["runserver"],
+    },
+  },
+  cargo: {
+    verbs: {
+      runs_tests: ["test", "nextest", "bench"],
+      builds: ["build", "doc", "rustc"],
+      lints: ["check", "clippy", "fmt"],
+      installs_packages: ["install", "add", "update", "fetch"],
+      serves_or_watches: ["watch"],
+    },
+    valueFlags: ["--manifest-path", "--config", "-Z"],
+  },
+  go: {
+    verbs: {
+      runs_tests: ["test"],
+      builds: ["build", "generate"],
+      lints: ["vet", "fmt"],
+      installs_packages: ["get", "install", "mod"],
+    },
+    valueFlags: ["-C"],
+  },
+  dotnet: {
+    verbs: {
+      runs_tests: ["test"],
+      builds: ["build", "publish", "pack"],
+      lints: ["format"],
+      installs_packages: ["restore", "add"],
+    },
+  },
+  bazel: BAZEL_RULES,
+  bazelisk: BAZEL_RULES,
+  make: {
+    bare: "builds",
+    verbs: {
+      builds: ["all", "install"],
+      runs_tests: ["check"],
+    },
+    verbMayBeScript: true,
+    verbIsTarget: true,
+    valueFlags: ["-C", "-f", "-j"],
+  },
+  just: {
+    verbMayBeScript: true,
+    verbIsTarget: true,
+    valueFlags: ["-f", "--justfile", "-d", "--working-directory"],
+  },
+  task: {
+    verbMayBeScript: true,
+    verbIsTarget: true,
+    valueFlags: ["-t", "--taskfile", "-d", "--dir"],
+  },
+  mvn: JVM_BUILD_RULES,
+  mvnw: JVM_BUILD_RULES,
+  gradle: JVM_BUILD_RULES,
+  gradlew: JVM_BUILD_RULES,
+  sbt: JVM_BUILD_RULES,
+  swift: {
+    verbs: {
+      runs_tests: ["test"],
+      builds: ["build"],
+    },
+  },
+  zig: {
+    verbs: {
+      runs_tests: ["test"],
+      lints: ["fmt"],
+      builds: ["build-exe", "build-lib", "build-obj", "cc", "c++"],
+    },
+    scriptAfter: ["build"],
+    anywhere: {
+      builds: ["build"],
+    },
+  },
+  dart: {
+    verbs: {
+      runs_tests: ["test"],
+      builds: ["compile"],
+      lints: ["analyze", "format", "fix"],
+      installs_packages: ["pub"],
+    },
+  },
+  flutter: {
+    verbs: {
+      runs_tests: ["test", "drive"],
+      builds: ["build"],
+      lints: ["analyze"],
+      installs_packages: ["pub", "upgrade", "precache"],
+      serves_or_watches: ["run"],
+    },
+  },
+  conan: {
+    verbs: {
+      runs_tests: ["test"],
+      builds: ["build", "create"],
+      installs_packages: ["install", "download"],
+    },
+  },
+  buf: {
+    verbs: {
+      builds: ["build", "generate"],
+      lints: ["lint", "format", "breaking"],
+    },
+  },
+  "wasm-pack": {
+    verbs: {
+      runs_tests: ["test"],
+      builds: ["build", "pack"],
+    },
+  },
+  valgrind: {
+    runsTheRest: true,
+  },
+  apt: OS_PACKAGE_RULES,
+  "apt-get": OS_PACKAGE_RULES,
+  apk: OS_PACKAGE_RULES,
+  brew: OS_PACKAGE_RULES,
+  dnf: OS_PACKAGE_RULES,
+  yum: OS_PACKAGE_RULES,
+  snap: OS_PACKAGE_RULES,
+  gem: {
+    verbs: {
+      installs_packages: ["install", "update"],
+    },
+  },
+  composer: {
+    verbs: {
+      installs_packages: ["install", "update", "require"],
+    },
+  },
+  bundle: {
+    verbs: {
+      installs_packages: ["install", "update", "add"],
+    },
+    commandAfter: ["exec"],
+  },
+  rake: {
+    verbs: {
+      runs_tests: ["spec"],
+    },
+    verbMayBeScript: true,
+    verbIsTarget: true,
+  },
+  rails: {
+    verbs: {
+      runs_tests: ["test", "t"],
+      serves_or_watches: ["server", "s"],
+    },
+  },
+  mix: {
+    verbs: {
+      runs_tests: ["test"],
+      builds: ["compile", "release"],
+      lints: ["format", "credo", "dialyzer"],
+      installs_packages: ["deps.get", "deps.update", "local.hex", "local.rebar"],
+      serves_or_watches: ["phx.server"],
+    },
+  },
+};
+var PYTHON_MODULE_KINDS = {
+  unittest: "runs_tests",
+  doctest: "runs_tests",
+  venv: "installs_packages",
+  ensurepip: "installs_packages",
+  "http.server": "serves_or_watches",
+  build: "builds",
+  compileall: "builds",
+  py_compile: "builds",
+};
+var PYTHON_TEST_MODULES = ["unittest", "doctest"];
+var TEST_SCOPE_ORDER = [
+  ...KNOWN_PROGRAM_NAMES.keys(),
+  ...PYTHON_TEST_MODULES,
+  "other",
+  "none",
+  "incomplete",
+  "unparsed",
+];
+var PYTHON_WRAPPER_PROGRAMS = ["markitdown", "weasyprint", "ocrmypdf", "whisper"];
+var PACKAGE_NAME_ALIASES = {
+  "@playwright/test": "playwright",
+  "@puppeteer/browsers": "puppeteer",
+  "@mermaid-js/mermaid-cli": "mmdc",
+  "@angular/cli": "ng",
+  "@biomejs/biome": "biome",
+};
+var EXTENSION_CATEGORIES = {
+  py: "python",
+  js: "node",
+  mjs: "node",
+  cjs: "node",
+  ts: "node",
+  sh: "shell_script",
+  bash: "shell_script",
+  rb: "other_runtime",
+  pl: "other_runtime",
+  php: "other_runtime",
+};
+var WRAPPER_COMMAND_RULES = {
+  ...WRAPPER_VALUE_FLAGS,
+  exec: ["-a"],
+  coproc: [],
+  setsid: [],
+  unbuffer: [],
+  ionice: ["-c", "-n", "--class", "--classdata"],
+  taskset: ["-c", "--cpu-list"],
+  strace: ["-o", "-e", "-p", "-s"],
+  parallel: ["-j", "--jobs"],
+  "xvfb-run": [
+    "-n",
+    "-s",
+    "-e",
+    "-f",
+    "-p",
+    "-w",
+    "--server-num",
+    "--server-args",
+    "--error-file",
+    "--auth-file",
+    "--wait",
+  ],
+};
+var SHELL_PROGRAMS = ["bash", "sh", "zsh", "dash", "ksh"];
+var FIND_EXEC_FLAGS = ["-exec", "-execdir", "-ok", "-okdir"];
+var BACKGROUNDING_PROGRAMS = ["nohup", "setsid"];
+var NOOP_FLAGS = ["--version", "--help", "-v", "-V", "-h", "-n", "-q"];
+var SERVE_FLAGS = ["--watch", "--watchAll", "--reload"];
+var MAX_NESTING_DEPTH = 6;
+var MAX_PROGRAM_NAMES = 24;
+var MAX_SCRIPT_NESTING = 2;
+var SCRIPT_CHAR_BUDGET = 2000;
+var PARSE_TIME_BUDGET_MS = 20;
+var TEST_SCOPE_OUTPUT_VALUES = [
+  "whole",
+  "unknown",
+  "narrowed_to_folders",
+  "narrowed",
+  "changed_or_failed_only",
+  "runs_no_tests",
+];
+var FLAG_EFFECT_KEYS = [
+  "runs_no_tests",
+  "changed_or_failed_only",
+  "narrowed",
+  "narrowed_to_folders",
+  "takes_expression",
+  "takes_value",
+  "says_nothing",
+];
+var WHOLE_SUITE_OPERANDS = ["", ".", "test", "tests", "spec", "specs", "__tests__"];
+var FOLDER_OPERAND_NAMES = ["src", "lib", "app", "apps", "packages", "e2e", "integration", "unit"];
+var TEST_PATH_OR_NAME_RE = /\.\w+$|:\w/;
+var JEST_LIKE_FLAG_RULES = {
+  runs_no_tests: ["--listTests", "--list", "--showConfig", "--clearCache"],
+  changed_or_failed_only: [
+    "--onlyChanged",
+    "-o",
+    "--changedSince",
+    "--changed",
+    "--lastCommit",
+    "--changedFilesWithAncestor",
+    "--findRelatedTests",
+    "--onlyFailures",
+    "-f",
+    "--last-failed",
+    "--only-changed",
+    "--affected",
+  ],
+  narrowed: [
+    "-t",
+    "--testNamePattern",
+    "--testPathPattern",
+    "--testPathPatterns",
+    "--runTestsByPath",
+    "--testMatch",
+    "--testRegex",
+    "--testFile",
+    "--include",
+    "-g",
+    "--grep",
+    "--shard",
+    "--only",
+    "--test-name-pattern",
+    "--test-only",
+    "--test-shard",
+  ],
+  takes_value: [
+    "--prefix",
+    "-w",
+    "--workspace",
+    "-C",
+    "--cwd",
+    "--dir",
+    "--filter",
+    "-F",
+    "--loglevel",
+    "-c",
+    "--config",
+    "--project",
+    "--projects",
+    "--selectProjects",
+    "--ignoreProjects",
+    "--root",
+    "--rootDir",
+    "--roots",
+    "--reporter",
+    "--reporters",
+    "--outputFile",
+    "--output",
+    "--coverageDirectory",
+    "--coverageReporters",
+    "--coverageProvider",
+    "--collectCoverageFrom",
+    "--coverage-reporter",
+    "--coverage-dir",
+    "--setupFiles",
+    "--setupFilesAfterEnv",
+    "--env",
+    "--environment",
+    "--testEnvironment",
+    "--tsconfig",
+    "-r",
+    "--require",
+    "--import",
+    "--loader",
+    "--preload",
+    "--maxWorkers",
+    "--workers",
+    "-j",
+    "--pool",
+    "--mode",
+    "--browser",
+    "--trace",
+    "--exclude",
+    "--testPathIgnorePatterns",
+    "--grep-invert",
+    "--test-skip-pattern",
+    "--test-reporter",
+    "--test-reporter-destination",
+  ],
+  says_nothing: [
+    "--coverage",
+    "--collectCoverage",
+    "--ci",
+    "--silent",
+    "--verbose",
+    "--quiet",
+    "--run",
+    "--watch",
+    "--watchAll",
+    "--passWithNoTests",
+    "--pass-with-no-tests",
+    "--forceExit",
+    "--detectOpenHandles",
+    "--runInBand",
+    "--fully-parallel",
+    "--bail",
+    "--headed",
+    "--ui",
+    "--debug",
+    "--update",
+    "--updateSnapshot",
+    "--colors",
+    "--expand",
+    "--json",
+    "--all",
+    "--test",
+    "--if-present",
+    "--recursive",
+    "--experimental-vm-modules",
+    "--experimental-strip-types",
+    "--experimental-test-coverage",
+  ],
+};
+var TEST_TOOL_RULES = {
+  flags: JEST_LIKE_FLAG_RULES,
+  operands: "name_tests",
+  bareOperands: "folders_by_form",
+  wholeOperands: WHOLE_SUITE_OPERANDS,
+};
+var NPM_TEST_RULES = {
+  ...TEST_TOOL_RULES,
+  verbs: {
+    runs_no_tests: ["list"],
+    changed_or_failed_only: ["related"],
+    says_nothing: ["run", "watch", "dev", "bench"],
+  },
+};
+var NX_LIKE_TEST_RULES = {
+  flags: JEST_LIKE_FLAG_RULES,
+  operands: "name_tests_after_dashes",
+  bareOperands: "folders_by_form",
+  wholeOperands: WHOLE_SUITE_OPERANDS,
+};
+var PYTEST_FLAG_RULES = {
+  flags: {
+    runs_no_tests: [
+      "--collect-only",
+      "--co",
+      "--fixtures",
+      "--fixtures-per-test",
+      "--markers",
+      "--setup-plan",
+      "--setup-only",
+      "--cache-show",
+    ],
+    changed_or_failed_only: ["--lf", "--last-failed", "--testmon", "--picked"],
+    takes_expression: ["-k", "-m"],
+    takes_value: [
+      "-c",
+      "--rootdir",
+      "--confcutdir",
+      "--basetemp",
+      "-p",
+      "-o",
+      "--override-ini",
+      "-n",
+      "--numprocesses",
+      "--dist",
+      "--cov",
+      "--cov-report",
+      "--cov-config",
+      "--junitxml",
+      "--junit-xml",
+      "--html",
+      "--ignore",
+      "--ignore-glob",
+      "--deselect",
+      "--tb",
+      "-W",
+      "--pythonwarnings",
+      "--log-file",
+      "--log-level",
+      "--log-cli-level",
+      "--color",
+      "--capture",
+      "--show-capture",
+      "--import-mode",
+      "--asyncio-mode",
+      "--ds",
+      "--lfnf",
+      "--last-failed-no-failures",
       "-r",
-      "--require",
-      "--import",
-      "--loader",
-      "--preload",
-      "--maxWorkers",
-      "--workers",
-      "-j",
-      "--pool",
-      "--mode",
-      "--browser",
-      "--trace",
-      "--exclude",
-      "--testPathIgnorePatterns",
-      "--grep-invert",
-      "--test-skip-pattern",
-      "--test-reporter",
-      "--test-reporter-destination",
     ],
     says_nothing: [
-      "--coverage",
-      "--collectCoverage",
-      "--ci",
-      "--silent",
+      "--ff",
+      "--failed-first",
+      "--nf",
+      "--new-first",
+      "--sw",
+      "--stepwise",
       "--verbose",
       "--quiet",
-      "--run",
-      "--watch",
-      "--watchAll",
-      "--passWithNoTests",
-      "--pass-with-no-tests",
-      "--forceExit",
-      "--detectOpenHandles",
-      "--runInBand",
-      "--fully-parallel",
-      "--bail",
-      "--headed",
-      "--ui",
-      "--debug",
-      "--update",
-      "--updateSnapshot",
-      "--colors",
-      "--expand",
-      "--json",
-      "--all",
-      "--test",
-      "--if-present",
-      "--recursive",
-      "--experimental-vm-modules",
-      "--experimental-strip-types",
-      "--experimental-test-coverage",
+      "--exitfirst",
+      "--disable-warnings",
+      "--showlocals",
+      "--full-trace",
+      "--strict-markers",
+      "--strict-config",
+      "--cache-clear",
+      "--cov-branch",
+      "--cov-append",
+      "--forked",
+      "--pdb",
+      "--runxfail",
+      "--doctest-modules",
+      "--create-db",
+      "--reuse-db",
+      "--nomigrations",
+      "--self-contained-html",
     ],
   },
-  z = { flags: ze, operands: "name_tests", bareOperands: "folders_by_form", wholeOperands: F },
-  Z = {
-    ...z,
-    verbs: {
-      runs_no_tests: ["list"],
-      changed_or_failed_only: ["related"],
-      says_nothing: ["run", "watch", "dev", "bench"],
-    },
+  operands: "name_tests",
+  bareOperands: "folders",
+  wholeOperands: WHOLE_SUITE_OPERANDS,
+};
+var MAVEN_FLAG_RULES = {
+  flags: {
+    runs_no_tests: ["-DskipTests", "-Dmaven.test.skip", "--dry-run"],
+    narrowed: ["-Dtest", "-Dit.test", "--tests"],
   },
-  re = { flags: ze, operands: "name_tests_after_dashes", bareOperands: "folders_by_form", wholeOperands: F },
-  U = {
+};
+var BAZEL_FLAG_RULES = {
+  flags: {
+    narrowed: ["--test_filter", "--test_tag_filters", "--test_size_filters", "--test_lang_filters"],
+    says_nothing: [
+      "--keep_going",
+      "--nocache_test_results",
+      "--cache_test_results",
+      "--verbose_failures",
+      "--build_tests_only",
+      "--test_keep_going",
+      "--sandbox_debug",
+      "--announce_rc",
+      "--collect_code_coverage",
+      "--check_tests_up_to_date",
+      "--test_verbose_timeout_warnings",
+    ],
+  },
+  wholeOperands: [
+    "//...",
+    "//...:all",
+    "//...:*",
+    "//...:all-targets",
+    "...",
+    "...:all",
+    "...:*",
+    "...:all-targets",
+  ],
+  wholeNeedsOperand: true,
+  lessThanPackage: /:(?!all$|all-targets$)\w|^@?[\w.-]*\/\/(?![^:]*\.\.\.$)[^:]*$/,
+};
+var PHPUNIT_FLAG_RULES = {
+  flags: {
+    runs_no_tests: ["--list-tests", "--list-suites", "--list-groups"],
+    changed_or_failed_only: ["--dirty"],
+    narrowed: ["--filter", "--group", "--testsuite", "--covers", "--uses"],
+    takes_value: [
+      "-c",
+      "--configuration",
+      "--bootstrap",
+      "-d",
+      "--exclude-group",
+      "--coverage-html",
+      "--coverage-clover",
+      "--log-junit",
+      "--order-by",
+      "--cache-directory",
+    ],
+    says_nothing: [
+      "--testdox",
+      "--stop-on-failure",
+      "--stop-on-error",
+      "--debug",
+      "--verbose",
+      "--display-warnings",
+      "--display-deprecations",
+      "--parallel",
+    ],
+  },
+  operands: "name_tests",
+  bareOperands: "folders",
+  wholeOperands: WHOLE_SUITE_OPERANDS,
+};
+var NO_FLAG_RULES = {};
+var TEST_COMMAND_RULES = {
+  npm: NPM_TEST_RULES,
+  pnpm: NPM_TEST_RULES,
+  yarn: NPM_TEST_RULES,
+  vitest: NPM_TEST_RULES,
+  bun: TEST_TOOL_RULES,
+  node: TEST_TOOL_RULES,
+  jest: TEST_TOOL_RULES,
+  playwright: TEST_TOOL_RULES,
+  "react-scripts": TEST_TOOL_RULES,
+  "vue-cli-service": TEST_TOOL_RULES,
+  nx: NX_LIKE_TEST_RULES,
+  turbo: NX_LIKE_TEST_RULES,
+  ng: NX_LIKE_TEST_RULES,
+  mocha: {
     flags: {
-      runs_no_tests: [
-        "--collect-only",
-        "--co",
-        "--fixtures",
-        "--fixtures-per-test",
-        "--markers",
-        "--setup-plan",
-        "--setup-only",
-        "--cache-show",
-      ],
-      changed_or_failed_only: ["--lf", "--last-failed", "--testmon", "--picked"],
-      takes_expression: ["-k", "-m"],
+      runs_no_tests: ["--dry-run"],
+      narrowed: ["-g", "--grep", "-f", "--fgrep", "--spec"],
       takes_value: [
-        "-c",
-        "--rootdir",
-        "--confcutdir",
-        "--basetemp",
-        "-p",
-        "-o",
-        "--override-ini",
-        "-n",
-        "--numprocesses",
-        "--dist",
-        "--cov",
-        "--cov-report",
-        "--cov-config",
-        "--junitxml",
-        "--junit-xml",
-        "--html",
-        "--ignore",
-        "--ignore-glob",
-        "--deselect",
-        "--tb",
-        "-W",
-        "--pythonwarnings",
-        "--log-file",
-        "--log-level",
-        "--log-cli-level",
-        "--color",
-        "--capture",
-        "--show-capture",
-        "--import-mode",
-        "--asyncio-mode",
-        "--ds",
-        "--lfnf",
-        "--last-failed-no-failures",
+        "-t",
+        "--timeout",
+        "-s",
+        "--slow",
+        "-R",
+        "--reporter",
+        "-u",
+        "--ui",
         "-r",
+        "--require",
+        "--import",
+        "--loader",
+        "--config",
+        "--extension",
+        "--file",
+        "--ignore",
+        "--exclude",
+        "-n",
+        "--node-option",
+        "-j",
+        "--jobs",
       ],
       says_nothing: [
-        "--ff",
-        "--failed-first",
-        "--nf",
-        "--new-first",
-        "--sw",
-        "--stepwise",
+        "--recursive",
+        "--exit",
+        "--bail",
+        "--parallel",
+        "--watch",
+        "--check-leaks",
+        "--forbid-only",
+        "--color",
+      ],
+    },
+    operands: "name_tests",
+    bareOperands: "folders",
+    wholeOperands: WHOLE_SUITE_OPERANDS,
+  },
+  cypress: {
+    verbs: {
+      runs_no_tests: ["open", "install", "verify", "info", "cache", "version", "help"],
+    },
+    flags: {
+      narrowed: ["-s", "--spec"],
+    },
+  },
+  deno: {
+    flags: {
+      runs_no_tests: ["--no-run"],
+      narrowed: ["--filter"],
+      takes_value: ["-c", "--config", "--import-map", "--reporter", "--junit-path", "--ignore"],
+      says_nothing: [
+        "--allow-all",
+        "--allow-read",
+        "--allow-write",
+        "--allow-net",
+        "--allow-env",
+        "--allow-run",
+        "--parallel",
+        "--fail-fast",
+        "--quiet",
+        "--watch",
+        "--doc",
+        "--coverage",
+        "--shuffle",
+        "--trace-leaks",
+        "--permit-no-files",
+      ],
+    },
+    operands: "name_tests",
+    bareOperands: "folders",
+    wholeOperands: WHOLE_SUITE_OPERANDS,
+  },
+  pytest: PYTEST_FLAG_RULES,
+  "py.test": PYTEST_FLAG_RULES,
+  uv: PYTEST_FLAG_RULES,
+  poetry: PYTEST_FLAG_RULES,
+  pipenv: PYTEST_FLAG_RULES,
+  pdm: PYTEST_FLAG_RULES,
+  hatch: PYTEST_FLAG_RULES,
+  coverage: {
+    verbs: {
+      runs_no_tests: [
+        "report",
+        "html",
+        "xml",
+        "json",
+        "lcov",
+        "annotate",
+        "combine",
+        "erase",
+        "debug",
+        "help",
+      ],
+    },
+  },
+  unittest: {
+    verbs: {
+      says_nothing: ["discover"],
+    },
+    flags: {
+      narrowed: ["-k"],
+      takes_value: ["-p", "--pattern", "-t", "--top-level-directory"],
+      says_nothing: [
+        "--start-directory",
         "--verbose",
         "--quiet",
-        "--exitfirst",
-        "--disable-warnings",
-        "--showlocals",
-        "--full-trace",
-        "--strict-markers",
-        "--strict-config",
-        "--cache-clear",
-        "--cov-branch",
-        "--cov-append",
-        "--forked",
-        "--pdb",
-        "--runxfail",
-        "--doctest-modules",
-        "--create-db",
-        "--reuse-db",
-        "--nomigrations",
-        "--self-contained-html",
+        "--failfast",
+        "--buffer",
+        "--catch",
+        "--locals",
       ],
     },
     operands: "name_tests",
-    bareOperands: "folders",
-    wholeOperands: F,
+    bareOperands: "folders_by_form",
+    wholeOperands: WHOLE_SUITE_OPERANDS,
   },
-  G = {
+  doctest: {
+    operands: "name_tests",
+  },
+  go: {
     flags: {
-      runs_no_tests: ["-DskipTests", "-Dmaven.test.skip", "--dry-run"],
-      narrowed: ["-Dtest", "-Dit.test", "--tests"],
+      runs_no_tests: ["-list", "--list", "-c"],
+      narrowed: ["-run", "--run"],
+      takes_value: ["-coverpkg"],
     },
+    wholeOperands: ["..."],
+    wholeNeedsOperand: true,
+    lessThanPackage: /\.go$/,
   },
-  Ce = {
+  cargo: {
+    verbs: {
+      runs_no_tests: ["list"],
+      says_nothing: ["run"],
+    },
+    verbsOnlyAfter: "nextest",
     flags: {
-      narrowed: ["--test_filter", "--test_tag_filters", "--test_size_filters", "--test_lang_filters"],
-      says_nothing: [
-        "--keep_going",
-        "--nocache_test_results",
-        "--cache_test_results",
-        "--verbose_failures",
-        "--build_tests_only",
-        "--test_keep_going",
-        "--sandbox_debug",
-        "--announce_rc",
-        "--collect_code_coverage",
-        "--check_tests_up_to_date",
-        "--test_verbose_timeout_warnings",
+      runs_no_tests: ["--no-run", "--list"],
+      narrowed_to_folders: ["-p", "--package"],
+      narrowed: [
+        "--test",
+        "--lib",
+        "--doc",
+        "--bin",
+        "--bins",
+        "--example",
+        "--examples",
+        "--bench",
+        "--benches",
+        "--ignored",
+        "--partition",
       ],
-    },
-    wholeOperands: [
-      "//...",
-      "//...:all",
-      "//...:*",
-      "//...:all-targets",
-      "...",
-      "...:all",
-      "...:*",
-      "...:all-targets",
-    ],
-    wholeNeedsOperand: !0,
-    lessThanPackage: /:(?!all$|all-targets$)\w|^@?[\w.-]*\/\/(?![^:]*\.\.\.$)[^:]*$/,
-  },
-  Pe = {
-    flags: {
-      runs_no_tests: ["--list-tests", "--list-suites", "--list-groups"],
-      changed_or_failed_only: ["--dirty"],
-      narrowed: ["--filter", "--group", "--testsuite", "--covers", "--uses"],
+      takes_expression: ["-E", "--filter-expr", "--filterset"],
       takes_value: [
-        "-c",
-        "--configuration",
-        "--bootstrap",
-        "-d",
-        "--exclude-group",
-        "--coverage-html",
-        "--coverage-clover",
-        "--log-junit",
-        "--order-by",
-        "--cache-directory",
+        "--manifest-path",
+        "--config",
+        "-Z",
+        "--features",
+        "-F",
+        "--target",
+        "--target-dir",
+        "--profile",
+        "-P",
+        "--cargo-profile",
+        "--color",
+        "--message-format",
+        "--exclude",
+        "--skip",
+        "--format",
+        "-j",
+        "--jobs",
+        "--test-threads",
+        "--run-ignored",
+        "--failure-output",
+        "--success-output",
+        "--status-level",
+        "--final-status-level",
       ],
       says_nothing: [
-        "--testdox",
-        "--stop-on-failure",
-        "--stop-on-error",
-        "--debug",
+        "--workspace",
+        "--all",
+        "--all-features",
+        "--all-targets",
+        "--release",
+        "--tests",
+        "--exact",
+        "--nocapture",
+        "--show-output",
+        "--include-ignored",
+        "--fail-fast",
+        "--quiet",
         "--verbose",
-        "--display-warnings",
-        "--display-deprecations",
-        "--parallel",
+        "--locked",
+        "--offline",
+        "--frozen",
       ],
     },
     operands: "name_tests",
+  },
+  mvn: MAVEN_FLAG_RULES,
+  mvnw: MAVEN_FLAG_RULES,
+  gradle: MAVEN_FLAG_RULES,
+  gradlew: MAVEN_FLAG_RULES,
+  sbt: MAVEN_FLAG_RULES,
+  dotnet: {
+    flags: {
+      runs_no_tests: ["-t", "--list-tests"],
+      narrowed: ["--filter"],
+    },
+  },
+  bazel: BAZEL_FLAG_RULES,
+  bazelisk: BAZEL_FLAG_RULES,
+  make: NO_FLAG_RULES,
+  rake: NO_FLAG_RULES,
+  just: {
+    operands: "go_to_recipe",
+  },
+  task: {
+    operands: "go_to_recipe",
+  },
+  ctest: {
+    flags: {
+      runs_no_tests: ["-N", "--show-only"],
+      changed_or_failed_only: ["--rerun-failed"],
+      narrowed: ["-R", "--tests-regex", "-L", "--label-regex", "-I", "--tests-information"],
+    },
+  },
+  swift: {
+    verbs: {
+      runs_no_tests: ["list"],
+    },
+    flags: {
+      runs_no_tests: ["--list-tests", "-l"],
+      narrowed: ["--filter"],
+    },
+  },
+  rspec: {
+    flags: {
+      runs_no_tests: ["--dry-run"],
+      changed_or_failed_only: ["--only-failures", "--next-failure", "-n"],
+      narrowed: ["-e", "--example", "-E", "--example-matches", "-P", "--pattern"],
+      takes_expression: ["-t", "--tag"],
+      takes_value: [
+        "-f",
+        "--format",
+        "-o",
+        "--out",
+        "-r",
+        "--require",
+        "-I",
+        "-O",
+        "--options",
+        "--order",
+        "--default-path",
+        "--exclude-pattern",
+      ],
+      says_nothing: ["--fail-fast", "--color", "--backtrace", "--profile", "--warnings", "--bisect"],
+    },
+    operands: "name_tests",
     bareOperands: "folders",
-    wholeOperands: F,
+    wholeOperands: WHOLE_SUITE_OPERANDS,
   },
-  Me = {},
-  Be = {
-    npm: Z,
-    pnpm: Z,
-    yarn: Z,
-    vitest: Z,
-    bun: z,
-    node: z,
-    jest: z,
-    playwright: z,
-    "react-scripts": z,
-    "vue-cli-service": z,
-    nx: re,
-    turbo: re,
-    ng: re,
-    mocha: {
-      flags: {
-        runs_no_tests: ["--dry-run"],
-        narrowed: ["-g", "--grep", "-f", "--fgrep", "--spec"],
-        takes_value: [
-          "-t",
-          "--timeout",
-          "-s",
-          "--slow",
-          "-R",
-          "--reporter",
-          "-u",
-          "--ui",
-          "-r",
-          "--require",
-          "--import",
-          "--loader",
-          "--config",
-          "--extension",
-          "--file",
-          "--ignore",
-          "--exclude",
-          "-n",
-          "--node-option",
-          "-j",
-          "--jobs",
-        ],
-        says_nothing: [
-          "--recursive",
-          "--exit",
-          "--bail",
-          "--parallel",
-          "--watch",
-          "--check-leaks",
-          "--forbid-only",
-          "--color",
-        ],
-      },
-      operands: "name_tests",
-      bareOperands: "folders",
-      wholeOperands: F,
-    },
-    cypress: {
-      verbs: { runs_no_tests: ["open", "install", "verify", "info", "cache", "version", "help"] },
-      flags: { narrowed: ["-s", "--spec"] },
-    },
-    deno: {
-      flags: {
-        runs_no_tests: ["--no-run"],
-        narrowed: ["--filter"],
-        takes_value: ["-c", "--config", "--import-map", "--reporter", "--junit-path", "--ignore"],
-        says_nothing: [
-          "--allow-all",
-          "--allow-read",
-          "--allow-write",
-          "--allow-net",
-          "--allow-env",
-          "--allow-run",
-          "--parallel",
-          "--fail-fast",
-          "--quiet",
-          "--watch",
-          "--doc",
-          "--coverage",
-          "--shuffle",
-          "--trace-leaks",
-          "--permit-no-files",
-        ],
-      },
-      operands: "name_tests",
-      bareOperands: "folders",
-      wholeOperands: F,
-    },
-    pytest: U,
-    "py.test": U,
-    uv: U,
-    poetry: U,
-    pipenv: U,
-    pdm: U,
-    hatch: U,
-    coverage: {
-      verbs: {
-        runs_no_tests: [
-          "report",
-          "html",
-          "xml",
-          "json",
-          "lcov",
-          "annotate",
-          "combine",
-          "erase",
-          "debug",
-          "help",
-        ],
-      },
-    },
-    unittest: {
-      verbs: { says_nothing: ["discover"] },
-      flags: {
-        narrowed: ["-k"],
-        takes_value: ["-p", "--pattern", "-t", "--top-level-directory"],
-        says_nothing: [
-          "--start-directory",
-          "--verbose",
-          "--quiet",
-          "--failfast",
-          "--buffer",
-          "--catch",
-          "--locals",
-        ],
-      },
-      operands: "name_tests",
-      bareOperands: "folders_by_form",
-      wholeOperands: F,
-    },
-    doctest: { operands: "name_tests" },
-    go: {
-      flags: {
-        runs_no_tests: ["-list", "--list", "-c"],
-        narrowed: ["-run", "--run"],
-        takes_value: ["-coverpkg"],
-      },
-      wholeOperands: ["..."],
-      wholeNeedsOperand: !0,
-      lessThanPackage: /\.go$/,
-    },
-    cargo: {
-      verbs: { runs_no_tests: ["list"], says_nothing: ["run"] },
-      verbsOnlyAfter: "nextest",
-      flags: {
-        runs_no_tests: ["--no-run", "--list"],
-        narrowed_to_folders: ["-p", "--package"],
-        narrowed: [
-          "--test",
-          "--lib",
-          "--doc",
-          "--bin",
-          "--bins",
-          "--example",
-          "--examples",
-          "--bench",
-          "--benches",
-          "--ignored",
-          "--partition",
-        ],
-        takes_expression: ["-E", "--filter-expr", "--filterset"],
-        takes_value: [
-          "--manifest-path",
-          "--config",
-          "-Z",
-          "--features",
-          "-F",
-          "--target",
-          "--target-dir",
-          "--profile",
-          "-P",
-          "--cargo-profile",
-          "--color",
-          "--message-format",
-          "--exclude",
-          "--skip",
-          "--format",
-          "-j",
-          "--jobs",
-          "--test-threads",
-          "--run-ignored",
-          "--failure-output",
-          "--success-output",
-          "--status-level",
-          "--final-status-level",
-        ],
-        says_nothing: [
-          "--workspace",
-          "--all",
-          "--all-features",
-          "--all-targets",
-          "--release",
-          "--tests",
-          "--exact",
-          "--nocapture",
-          "--show-output",
-          "--include-ignored",
-          "--fail-fast",
-          "--quiet",
-          "--verbose",
-          "--locked",
-          "--offline",
-          "--frozen",
-        ],
-      },
-      operands: "name_tests",
-    },
-    mvn: G,
-    mvnw: G,
-    gradle: G,
-    gradlew: G,
-    sbt: G,
-    dotnet: { flags: { runs_no_tests: ["-t", "--list-tests"], narrowed: ["--filter"] } },
-    bazel: Ce,
-    bazelisk: Ce,
-    make: Me,
-    rake: Me,
-    just: { operands: "go_to_recipe" },
-    task: { operands: "go_to_recipe" },
-    ctest: {
-      flags: {
-        runs_no_tests: ["-N", "--show-only"],
-        changed_or_failed_only: ["--rerun-failed"],
-        narrowed: ["-R", "--tests-regex", "-L", "--label-regex", "-I", "--tests-information"],
-      },
-    },
-    swift: {
-      verbs: { runs_no_tests: ["list"] },
-      flags: { runs_no_tests: ["--list-tests", "-l"], narrowed: ["--filter"] },
-    },
-    rspec: {
-      flags: {
-        runs_no_tests: ["--dry-run"],
-        changed_or_failed_only: ["--only-failures", "--next-failure", "-n"],
-        narrowed: ["-e", "--example", "-E", "--example-matches", "-P", "--pattern"],
-        takes_expression: ["-t", "--tag"],
-        takes_value: [
-          "-f",
-          "--format",
-          "-o",
-          "--out",
-          "-r",
-          "--require",
-          "-I",
-          "-O",
-          "--options",
-          "--order",
-          "--default-path",
-          "--exclude-pattern",
-        ],
-        says_nothing: ["--fail-fast", "--color", "--backtrace", "--profile", "--warnings", "--bisect"],
-      },
-      operands: "name_tests",
-      bareOperands: "folders",
-      wholeOperands: F,
-    },
-    phpunit: Pe,
-    pest: Pe,
-  },
-  jt = ["--help", "-h", "--version"],
-  Wt = ["xargs", "parallel"],
-  Q = /^[A-Za-z_]\w*=/,
-  Ut = {
-    bash_command_class: lit("unparsed"),
-    bash_argv0: lit("other"),
-    bash_last_argv0: lit("other"),
-    bash_command_kinds: lit("unparsed"),
-    bash_programs: lit("unparsed"),
-    has_pipe: !1,
-    has_redirect: !1,
-    has_chain: !1,
-    has_subshell: !1,
-    has_heredoc: !1,
-    simple_command_count: 0,
-  },
-  zt = new Set([
-    "&&",
-    "||",
-    ";",
-    "&",
-    `
+  phpunit: PHPUNIT_FLAG_RULES,
+  pest: PHPUNIT_FLAG_RULES,
+};
+var HELP_FLAGS = ["--help", "-h", "--version"];
+var ARG_FEEDING_PROGRAMS = ["xargs", "parallel"];
+var ENV_ASSIGNMENT_RE = /^[A-Za-z_]\w*=/;
+var UNPARSED_COMMAND_INFO = {
+  bash_command_class: lit("unparsed"),
+  bash_argv0: lit("other"),
+  bash_last_argv0: lit("other"),
+  bash_command_kinds: lit("unparsed"),
+  bash_programs: lit("unparsed"),
+  has_pipe: false,
+  has_redirect: false,
+  has_chain: false,
+  has_subshell: false,
+  has_heredoc: false,
+  simple_command_count: 0,
+};
+var CHAIN_OPERATORS = new Set([
+  "&&",
+  "||",
+  ";",
+  "&",
+  `
 `,
-  ]),
-  $t = new Set(["subshell", "command_substitution", "process_substitution"]),
-  Ht = /^\d*>&\d+$|^&?\d*>{1,2}\s*\/dev\/null$/;
+]);
+var SUBSHELL_NODE_TYPES = new Set(["subshell", "command_substitution", "process_substitution"]);
+var HARMLESS_REDIRECT_RE = /^\d*>&\d+$|^&?\d*>{1,2}\s*\/dev\/null$/;
+//@ chunk-fym4r1th.js:37722-38121 placement
 /**
  * 遍历语法树收集命令形状：各简单命令，以及是否有管道、重定向、heredoc、链式/后台、子 shell。
  */
-//@ chunk-fym4r1th.js:37722-38121 placement
 function collectCommandShape(e, s) {
   switch (e.type) {
     case "command":
       s.commands.push(e);
       break;
     case "pipeline":
-      s.has_pipe = !0;
+      s.has_pipe = true;
       break;
     case "file_redirect":
-      if (!Ht.test(e.text.trim())) s.has_redirect = !0;
+      if (!HARMLESS_REDIRECT_RE.test(e.text.trim())) s.has_redirect = true;
       break;
     case "heredoc_redirect":
     case "herestring_redirect":
-      s.has_heredoc = !0;
+      s.has_heredoc = true;
       break;
     default:
-      if (zt.has(e.type)) ((s.has_chain = !0), (s.has_background_job ||= e.type === "&"));
-      else if ($t.has(e.type)) s.has_subshell = !0;
+      if (CHAIN_OPERATORS.has(e.type)) {
+        s.has_chain = true;
+        s.has_background_job ||= e.type === "&";
+      } else if (SUBSHELL_NODE_TYPES.has(e.type)) s.has_subshell = true;
   }
-  for (let n of e.children) collectCommandShape(n, s);
+  for (let child of e.children) collectCommandShape(child, s);
 }
 //@ chunk-fym4r1th.js:38121-38188 placement
-function ee(e) {
+/**
+ * 取程序名的最后一段（去掉目录部分）。
+ */
+function baseNameOfProgram(e) {
   let index = e.lastIndexOf("/");
   return index >= 0 ? e.slice(index + 1) : e;
 }
 //@ chunk-fym4r1th.js:38188-38325 placement
 function normalizeProgramName(e) {
-  let s = ee(e);
+  let s = baseNameOfProgram(e);
   return (
-    (Object.hasOwn(ve, s) ? ve[s] : void 0) ??
+    (Object.hasOwn(PROGRAM_ALIASES, s) ? PROGRAM_ALIASES[s] : undefined) ??
     (/^python[0-9.]+$/.test(s) ? "python" : /^pip[0-9.]+$/.test(s) ? "pip" : s)
   );
 }
 //@ chunk-fym4r1th.js:38325-38413 placement
-function le(e) {
-  if (e === void 0) return;
+/**
+ * 按规范化后的程序名查出类别与 argv0 记录。
+ */
+function lookupProgramCategory(e) {
+  if (e === undefined) return;
   let s = normalizeProgramName(e);
-  return Object.hasOwn(fromEntries, s) ? fromEntries[s] : void 0;
+  return Object.hasOwn(ie, s) ? ie[s] : undefined;
 }
 //@ chunk-fym4r1th.js:38413-38532 placement
 function stripLeadingWrappers(e) {
   let filtered = e.trim().split(/\s+/).filter(Boolean);
-  while (filtered.length > 0 && Q.test(filtered[0])) filtered = filtered.slice(1);
-  return skipWrapperCommands(filtered, Fe);
+  while (filtered.length > 0 && ENV_ASSIGNMENT_RE.test(filtered[0])) filtered = filtered.slice(1);
+  return skipWrapperCommands(filtered, WRAPPER_VALUE_FLAGS);
 }
+//@ chunk-fym4r1th.js:38532-38937 placement
 /**
  * 跳过 argv 开头的包装命令（timeout、nice 等）及其选项与参数（有次数上限），返回实际执行的命令部分。
  */
-//@ chunk-fym4r1th.js:38532-38937 placement
 function skipWrapperCommands(e, s) {
   let n = e;
-  for (let a = 0; a < ht; a++) {
-    let r = n[0] === void 0 ? void 0 : ee(n[0]),
-      d = r !== void 0 && Object.hasOwn(s, r) ? s[r] : void 0;
-    if (d === void 0 || n.length < 2) break;
+  for (let j = 0; j < MAX_WRAPPER_DEPTH; j++) {
+    let r = n[0] === undefined ? undefined : baseNameOfProgram(n[0]);
+    let d = r !== undefined && Object.hasOwn(s, r) ? s[r] : undefined;
+    if (d === undefined || n.length < 2) break;
     let f = 1;
     while (f < n.length) {
       let m = n[f];
@@ -2079,7 +2272,7 @@ function skipWrapperCommands(e, s) {
         break;
       }
       if (d.includes(m)) f += 2;
-      else if (m.startsWith("-") || Q.test(m)) f++;
+      else if (m.startsWith("-") || ENV_ASSIGNMENT_RE.test(m)) f++;
       else if ((r === "timeout" || r === "nice") && /^[0-9.]+[smhd]?$/.test(m)) f++;
       else break;
     }
@@ -2095,101 +2288,125 @@ function nextOperand(e, s, n) {
     let r = e[a];
     if (n.includes(r)) a += 2;
     else if (r.startsWith("-")) a++;
-    else return { token: r, index: a };
+    else
+      return {
+        token: r,
+        index: a,
+      };
   }
-  return { token: void 0, index: a };
+  return {
+    token: undefined,
+    index: a,
+  };
 }
+//@ chunk-fym4r1th.js:39102-39404 placement
 /**
  * 对已知程序取子命令分类（gh 还取第二级子命令），不在列表中的记为 other。
  */
-//@ chunk-fym4r1th.js:39102-39404 placement
-function classifySubcommand(e, s) {
-  if (e === void 0 || !Object.hasOwn(we, e)) return {};
-  let n = we[e],
-    a = gt[e] ?? [],
-    r = nextOperand(s, 1, a),
-    found = n.find((m) => m === r.token),
-    f = { bash_subcommand: found !== void 0 ? fromEnum(found) : lit("other") };
-  if (e === "gh" && found !== void 0) {
-    let m = nextOperand(s, r.index + 1, a),
-      found = ft.find((g) => g === m.token);
-    f.bash_subcommand2 = found !== void 0 ? fromEnum(found) : lit("other");
+function classifySubcommand(argv0, s) {
+  if (argv0 === undefined || !Object.hasOwn(SUBCOMMANDS_BY_PROGRAM, argv0)) return {};
+  let n = SUBCOMMANDS_BY_PROGRAM[argv0];
+  let a = PROGRAM_GLOBAL_VALUE_FLAGS[argv0] ?? [];
+  let r = nextOperand(s, 1, a);
+  let found = n.find((m) => m === r.token);
+  let f = {
+    bash_subcommand: found !== undefined ? fromEnum(found) : lit("other"),
+  };
+  if (argv0 === "gh" && found !== undefined) {
+    let m = nextOperand(s, r.index + 1, a);
+    let found = GH_SUBCOMMANDS.find((g) => g === m.token);
+    f.bash_subcommand2 = found !== undefined ? fromEnum(found) : lit("other");
   }
   return f;
 }
 //@ chunk-fym4r1th.js:39404-39553 placement
 function normalizePackageName(e) {
-  let index = e.indexOf("@", e.lastIndexOf("/") + 2),
-    n = index < 0 ? e : e.slice(0, index);
+  let index = e.indexOf("@", e.lastIndexOf("/") + 2);
+  let n = index < 0 ? e : e.slice(0, index);
   if (!n.startsWith("@")) return normalizeProgramName(n);
-  return Object.hasOwn(Re, n) ? Re[n] : "";
+  return Object.hasOwn(PACKAGE_NAME_ALIASES, n) ? PACKAGE_NAME_ALIASES[n] : "";
 }
 //@ chunk-fym4r1th.js:39553-39655 placement
-function nextNonAssignmentOperand(e, s, n) {
-  let a = nextOperand(e, s, n);
-  while (a.token !== void 0 && Q.test(a.token)) a = nextOperand(e, a.index + 1, n);
+function nextNonAssignmentOperand(e, s, valueFlags) {
+  let a = nextOperand(e, s, valueFlags);
+  while (a.token !== undefined && ENV_ASSIGNMENT_RE.test(a.token))
+    a = nextOperand(e, a.index + 1, valueFlags);
   return a;
 }
 //@ chunk-fym4r1th.js:39655-39710 placement
-function ce(e, s) {
-  return e && ue.find((n) => e[n]?.some(s));
+/**
+ * 在测试范围表里找第一个满足谓词的范围名。
+ */
+function findScopeForPredicate(e, s) {
+  return e && TEST_SCOPES.find((n) => e[n]?.some(s));
 }
 //@ chunk-fym4r1th.js:39710-39830 placement
-function matchKnownScriptPrefix(e) {
-  return e === void 0
-    ? void 0
-    : ce(wt, (s) => e.startsWith(s) && (e.length === s.length || ":-_".includes(e[s.length])));
+function matchKnownScriptPrefix(token) {
+  return token === undefined
+    ? undefined
+    : findScopeForPredicate(
+        BARE_SCRIPT_CATEGORIES,
+        (s) => token.startsWith(s) && (token.length === s.length || ":-_".includes(token[s.length])),
+      );
 }
 //@ chunk-fym4r1th.js:39830-39889 placement
-function De(e, s) {
-  return e && Dt.find((n) => e[n]?.includes(s));
+/**
+ * 在选项效果表里找该选项对应的效果名。
+ */
+function findFlagEffect(e, s) {
+  return e && FLAG_EFFECT_KEYS.find((n) => e[n]?.includes(s));
 }
 //@ chunk-fym4r1th.js:39889-41456 placement
-function classifyTestCommand(e, s, n, a) {
-  let r = Object.hasOwn(Be, e) ? Be[e] : void 0,
-    d = !1,
-    f = !1,
-    m = !1,
-    h = r === void 0 || a,
-    g = !1,
-    k = !1,
-    P = r?.verbsOnlyAfter === void 0 || r.verbsOnlyAfter === s[n - 1],
-    x = !1,
-    j = !1;
+function classifyTestCommand(e, s, n, fedMoreWords) {
+  let r = Object.hasOwn(TEST_COMMAND_RULES, e) ? TEST_COMMAND_RULES[e] : undefined;
+  let d = false;
+  let f = false;
+  let m = false;
+  let h = r === undefined || fedMoreWords;
+  let g = false;
+  let k = false;
+  let P = r?.verbsOnlyAfter === undefined || r.verbsOnlyAfter === s[n - 1];
+  let x = false;
+  let j = false;
   for (let R = n; R < s.length; R++) {
-    let S = s[R],
-      B = j;
-    if (((j = !1), /^\d+$/.test(S))) continue;
+    let S = s[R];
+    let B = j;
+    j = false;
+    if (/^\d+$/.test(S)) continue;
     let O;
     if (S.length > 1 && S.startsWith("-")) {
-      let index = S.indexOf("="),
-        I = index < 0 ? S : S.slice(0, index),
-        te = index < 0 ? s[R + 1] : S.slice(index + 1);
-      if (((O = jt.includes(I) ? "runs_no_tests" : De(r?.flags, I)), index >= 0 && te === "false"))
-        O = "says_nothing";
+      let index = S.indexOf("=");
+      let I = index < 0 ? S : S.slice(0, index);
+      let te = index < 0 ? s[R + 1] : S.slice(index + 1);
+      O = HELP_FLAGS.includes(I) ? "runs_no_tests" : findFlagEffect(r?.flags, I);
+      if (index >= 0 && te === "false") O = "says_nothing";
       else if (O === "takes_expression") O = /^['"]?(not |~|!)/.test(te ?? "") ? "takes_value" : "narrowed";
-      if (O !== void 0 && O !== "says_nothing" && index < 0 && !te?.startsWith("-")) R++;
-      ((x ||= S === "--"), (j = O === void 0 && index < 0 && /^--(?!no-)[^-]/.test(S)));
-    } else ((O = P ? De(r?.verbs, S) : void 0), (P = !1));
+      if (O !== undefined && O !== "says_nothing" && index < 0 && !te?.startsWith("-")) R++;
+      x ||= S === "--";
+      j = O === undefined && index < 0 && /^--(?!no-)[^-]/.test(S);
+    } else {
+      O = P ? findFlagEffect(r?.verbs, S) : undefined;
+      P = false;
+    }
     if (O === "runs_no_tests") return "runs_no_tests";
-    if (
-      ((d ||= O === "changed_or_failed_only"),
-      (f ||= O === "narrowed"),
-      (m ||= O === "narrowed_to_folders"),
-      O !== void 0 || S.startsWith("-"))
-    )
-      continue;
+    d ||= O === "changed_or_failed_only";
+    f ||= O === "narrowed";
+    m ||= O === "narrowed_to_folders";
+    if (O !== undefined || S.startsWith("-")) continue;
     let replaced = S.replace(/^\.\//, "").replace(/\/$/, "");
-    if (r?.wholeOperands?.includes(replaced)) g = !0;
-    else if (Q.test(S)) h ||= !s[R - 1].startsWith("-");
-    else if (/^[$`]|\*|^\{\}$/.test(S) || r?.operands === "go_to_recipe") h = !0;
+    if (r?.wholeOperands?.includes(replaced)) g = true;
+    else if (ENV_ASSIGNMENT_RE.test(S)) h ||= !s[R - 1].startsWith("-");
+    else if (/^[$`]|\*|^\{\}$/.test(S) || r?.operands === "go_to_recipe") h = true;
     else if (r?.operands === "name_tests" || (r?.operands === "name_tests_after_dashes" && x)) {
-      let w = B || a || (r.wholeOperands?.includes(ee(replaced)) ?? !1),
-        I =
-          !Ft.test(S) &&
-          (r.bareOperands === "folders" ||
-            (r.bareOperands === "folders_by_form" && (S.includes("/") || Nt.includes(replaced))));
-      ((h ||= w), (m ||= !w && I), (f ||= !w && !I));
+      let w = B || fedMoreWords || (r.wholeOperands?.includes(baseNameOfProgram(replaced)) ?? false);
+      let I =
+        !TEST_PATH_OR_NAME_RE.test(S) &&
+        (r.bareOperands === "folders" ||
+          (r.bareOperands === "folders_by_form" &&
+            (S.includes("/") || FOLDER_OPERAND_NAMES.includes(replaced))));
+      h ||= w;
+      m ||= !w && I;
+      f ||= !w && !I;
     } else if (r?.lessThanPackage?.test(replaced)) k ||= !B;
   }
   if (d) return "changed_or_failed_only";
@@ -2199,15 +2416,15 @@ function classifyTestCommand(e, s, n, a) {
   if (!r?.wholeNeedsOperand || g) return "whole";
   return k ? "narrowed" : "narrowed_to_folders";
 }
+//@ chunk-fym4r1th.js:41456-41852 placement
 /**
  * 对解析出的每条命令去掉赋值与重定向、解开引号后进行分类，并记录是否启动后台任务。
  */
-//@ chunk-fym4r1th.js:41456-41852 placement
 function classifyParsedCommands(e, s) {
   if (e.has_background_job) s.kinds.add("starts_background_job");
   for (let command of e.commands) {
     let a = [];
-    for (let { type: r, text: text } of command.children) {
+    for (let { type: r, text } of command.children) {
       if (r === "variable_assignment" || r.endsWith("_redirect")) continue;
       let f = text.length >= 2 && text.at(-1) === text[0] ? text[0] : "";
       a.push(
@@ -2220,85 +2437,94 @@ function classifyParsedCommands(e, s) {
               : text,
       );
     }
-    ((s.fedMoreWords = !1), classifyShellCommand(a, s, 0));
+    s.fedMoreWords = false;
+    classifyShellCommand(a, s, 0);
   }
 }
 //@ chunk-fym4r1th.js:41852-42142 placement
 function classifyScriptText(e, s) {
-  s.scriptTextDeadline ??= performance.now() + It;
+  s.scriptTextDeadline ??= performance.now() + PARSE_TIME_BUDGET_MS;
   let max = Math.max(0, s.scriptTextDeadline - performance.now());
   s.scriptTextCharsLeft -= e.length;
-  let a = s.scriptTextDepth < Mt && s.scriptTextCharsLeft >= 0 ? parseCommandShape(e, max) : null;
+  let a =
+    s.scriptTextDepth < MAX_SCRIPT_NESTING && s.scriptTextCharsLeft >= 0 ? parseCommandShape(e, max) : null;
   if (!a) {
-    s.gaveUp = !0;
+    s.gaveUp = true;
     return;
   }
-  (s.scriptTextDepth++, classifyParsedCommands(a, s), s.scriptTextDepth--);
+  s.scriptTextDepth++;
+  classifyParsedCommands(a, s);
+  s.scriptTextDepth--;
 }
 //@ chunk-fym4r1th.js:42142-42424 placement
 function classifyShellInvocation(e, s) {
-  for (let n = 1; n < e.length; n++) {
-    let a = e[n];
+  for (let j = 1; j < e.length; j++) {
+    let a = e[j];
     if (/^-[A-Za-z]+$/.test(a) && a.includes("c")) {
-      let r = e[n + 1] === "--" ? e[n + 2] : e[n + 1];
+      let r = e[j + 1] === "--" ? e[j + 2] : e[j + 1];
       if (r) {
         classifyScriptText(r, s);
         return;
       }
       break;
     }
-    if (/^[-+][A-Za-z]*[oO]$|^--(rcfile|init-file)$/.test(a)) n++;
+    if (/^[-+][A-Za-z]*[oO]$|^--(rcfile|init-file)$/.test(a)) j++;
     else if (!a.startsWith("-")) break;
   }
   s.kinds.add("shell_script");
 }
+//@ chunk-fym4r1th.js:42424-43010 placement
 /**
  * 分类 python 调用：-m 模块按已知模块表归类（含测试框架），-c 为内联代码，其他递归分类；--version/-h 不计。
  */
-//@ chunk-fym4r1th.js:42424-43010 placement
 function classifyPythonInvocation(e, s, n) {
-  for (let a = 1; a < e.length && e[a] !== "-"; a++) {
-    let r = e[a];
+  for (let j = 1; j < e.length && e[j] !== "-"; j++) {
+    let r = e[j];
     if (!r.startsWith("-") || /^--(version|help)/.test(r)) return;
-    let d = r.startsWith("--") ? -1 : r.search(/[Vh?cmWX]/),
-      f = r[d],
-      sliced = r.slice(d + 1);
+    let d = r.startsWith("--") ? -1 : r.search(/[Vh?cmWX]/);
+    let f = r[d];
+    let sliced = r.slice(d + 1);
     if (f === "V" || f === "h" || f === "?") return;
     if (f === "c") break;
     if (f === "m") {
-      let h = sliced ? [sliced, ...e.slice(a + 1)] : e.slice(a + 1),
-        g = h[0] ?? "";
-      if (Object.hasOwn(Ee, g)) {
-        s.kinds.add(Ee[g]);
-        let found = Ue.find((P) => P === g);
-        if (found !== void 0)
-          (s.programs.add(found), s.testScopes.add(classifyTestCommand(found, h, 1, s.fedMoreWords)));
-      } else if (St.includes(g)) classifyShellCommand(h, s, n + 1);
+      let h = sliced ? [sliced, ...e.slice(j + 1)] : e.slice(j + 1);
+      let g = h[0] ?? "";
+      if (Object.hasOwn(PYTHON_MODULE_KINDS, g)) {
+        s.kinds.add(PYTHON_MODULE_KINDS[g]);
+        let found = PYTHON_TEST_MODULES.find((P) => P === g);
+        if (found !== undefined) {
+          s.programs.add(found);
+          s.testScopes.add(classifyTestCommand(found, h, 1, s.fedMoreWords));
+        }
+      } else if (PYTHON_WRAPPER_PROGRAMS.includes(g)) classifyShellCommand(h, s, n + 1);
       else classifyShellCommand(h, s, n + 1, "python");
       return;
     }
-    if ((f === "W" || f === "X") && !sliced) a++;
+    if ((f === "W" || f === "X") && !sliced) j++;
   }
   s.kinds.add("python_inline");
 }
 //@ chunk-fym4r1th.js:43010-44872 placement
-function classifyShellCommand(e, s, n, a, r) {
-  if (n > Ct) s.gaveUp = !0;
+function classifyShellCommand(e, s, n, a, verbIsTarget) {
+  if (n > MAX_NESTING_DEPTH) s.gaveUp = true;
   if (s.gaveUp) return;
-  let { kinds: kinds, programs: programs } = s;
+  let { kinds, programs } = s;
   if (e[0] === "command" && /^-[vV]$/.test(e[1] ?? "")) {
-    (kinds.add("shell_word"), programs.add("command"));
+    kinds.add("shell_word");
+    programs.add("command");
     return;
   }
-  let m = skipWrapperCommands(e, xt);
-  if (m[0] === void 0) return;
-  let h = normalizePackageName(m[0]),
-    g = kt.get(h);
-  if (a !== void 0 && g !== a && g !== "browser") return;
-  if (!r) programs.add(We.get(h) ?? "other");
-  let mapped = e.slice(0, e.length - m.length).map(ee);
-  if (h === "disown" || mapped.some((y) => Et.includes(y))) kinds.add("starts_background_job");
-  if (((s.fedMoreWords ||= mapped.some((y) => Wt.includes(y))), Tt.includes(h))) {
+  let m = skipWrapperCommands(e, WRAPPER_COMMAND_RULES);
+  if (m[0] === undefined) return;
+  let h = normalizePackageName(m[0]);
+  let g = PROGRAM_TO_CATEGORY.get(h);
+  if (a !== undefined && g !== a && g !== "browser") return;
+  if (!verbIsTarget) programs.add(KNOWN_PROGRAM_NAMES.get(h) ?? "other");
+  let mapped = e.slice(0, e.length - m.length).map(baseNameOfProgram);
+  if (h === "disown" || mapped.some((y) => BACKGROUNDING_PROGRAMS.includes(y)))
+    kinds.add("starts_background_job");
+  s.fedMoreWords ||= mapped.some((y) => ARG_FEEDING_PROGRAMS.includes(y));
+  if (SHELL_PROGRAMS.includes(h)) {
     classifyShellInvocation(m, s);
     return;
   }
@@ -2308,49 +2534,62 @@ function classifyShellCommand(e, s, n, a, r) {
     return;
   }
   if (h === "find") {
-    for (let y = 1; y < m.length; y++)
-      if (At.includes(m[y])) {
-        let w = y + 1;
+    for (let idx = 1; idx < m.length; idx++)
+      if (FIND_EXEC_FLAGS.includes(m[idx])) {
+        let w = idx + 1;
         while (w < m.length && m[w] !== ";" && m[w] !== "+") w++;
-        (classifyShellCommand(m.slice(y + 1, w), s, n + 1), (y = w));
+        classifyShellCommand(m.slice(idx + 1, w), s, n + 1);
+        idx = w;
       }
   }
-  if (g === void 0) {
-    let y = le(h)?.commandClass,
-      index = h.lastIndexOf("."),
-      I = index > 0 ? h.slice(index + 1) : "";
-    kinds.add((y && _t[y]) ?? (Object.hasOwn(Oe, I) ? Oe[I] : "other"));
+  if (g === undefined) {
+    let commandClass = lookupProgramCategory(h)?.commandClass;
+    let index = h.lastIndexOf(".");
+    let I = index > 0 ? h.slice(index + 1) : "";
+    kinds.add(
+      (commandClass && CATEGORY_KIND_ALIASES[commandClass]) ??
+        (Object.hasOwn(EXTENSION_CATEGORIES, I) ? EXTENSION_CATEGORIES[I] : "other"),
+    );
     return;
   }
-  if ((kinds.add(g), h === "python")) classifyPythonInvocation(m, s, n);
+  kinds.add(g);
+  if (h === "python") classifyPythonInvocation(m, s, n);
   else if (h === "coverage" && m[1] === "run") classifyPythonInvocation(m.slice(1), s, n);
-  let x = Object.hasOwn(Ae, h) ? Ae[h] : {},
-    j = x.valueFlags ?? [],
-    R = nextNonAssignmentOperand(m, 1, j),
-    S = nextNonAssignmentOperand(m, R.index + 1, j);
-  if (R.token !== void 0 && x.ownVerbs?.includes(R.token)) return;
-  let B = ce(x.verbs, (y) => y === R.token),
-    O = R.index + 1;
+  let x = Object.hasOwn(PROGRAM_RULES, h) ? PROGRAM_RULES[h] : {};
+  let valueFlags = x.valueFlags ?? [];
+  let R = nextNonAssignmentOperand(m, 1, valueFlags);
+  let S = nextNonAssignmentOperand(m, R.index + 1, valueFlags);
+  if (R.token !== undefined && x.ownVerbs?.includes(R.token)) return;
+  let scopeForPredicate = findScopeForPredicate(x.verbs, (y) => y === R.token);
+  let O = R.index + 1;
   if (x.runsTheRest) classifyShellCommand(m.slice(R.index), s, n + 1);
-  else if (R.token === void 0) {
-    if (!Rt.some((y) => m.includes(y, 1))) B = x.bare;
-  } else if (x.scriptAfter?.includes(R.token)) ((B = matchKnownScriptPrefix(S.token)), (O = S.index + 1));
-  else if (x.commandAfter?.includes(R.token)) {
-    if (((B = matchKnownScriptPrefix(S.token)), (O = S.index + 1), B === void 0)) {
+  else if (R.token === undefined) {
+    if (!NOOP_FLAGS.some((y) => m.includes(y, 1))) scopeForPredicate = x.bare;
+  } else if (x.scriptAfter?.includes(R.token)) {
+    scopeForPredicate = matchKnownScriptPrefix(S.token);
+    O = S.index + 1;
+  } else if (x.commandAfter?.includes(R.token)) {
+    scopeForPredicate = matchKnownScriptPrefix(S.token);
+    O = S.index + 1;
+    if (scopeForPredicate === undefined) {
       classifyShellCommand(m.slice(S.index), s, n + 1);
       return;
     }
-  } else if (B === void 0 && x.verbMayBeScript) {
-    if (((B = matchKnownScriptPrefix(R.token)), B === void 0))
-      classifyShellCommand(m.slice(R.index), s, n + 1, g, x.verbIsTarget);
+  } else if (scopeForPredicate === undefined && x.verbMayBeScript) {
+    scopeForPredicate = matchKnownScriptPrefix(R.token);
+    if (scopeForPredicate === undefined) classifyShellCommand(m.slice(R.index), s, n + 1, g, x.verbIsTarget);
   }
-  if (B === void 0)
-    ((B = ce(x.anywhere, (y) => m.some((w, I) => I > 0 && w === y && !j.includes(m[I - 1]))) ?? vt.get(h)),
-      (O = 1));
-  if (B !== void 0) kinds.add(B);
-  if (B === "runs_tests" && !x.runsTheRest && !(h === "coverage" && m[1] === "run"))
+  if (scopeForPredicate === undefined) {
+    scopeForPredicate =
+      findScopeForPredicate(x.anywhere, (y) =>
+        m.some((w, I) => I > 0 && w === y && !valueFlags.includes(m[I - 1])),
+      ) ?? PROGRAM_TO_TEST_SCOPE.get(h);
+    O = 1;
+  }
+  if (scopeForPredicate !== undefined) kinds.add(scopeForPredicate);
+  if (scopeForPredicate === "runs_tests" && !x.runsTheRest && !(h === "coverage" && m[1] === "run"))
     s.testScopes.add(classifyTestCommand(h, m, O, s.fedMoreWords));
-  if (Ot.some((y) => m.includes(y, 1))) kinds.add("serves_or_watches");
+  if (SERVE_FLAGS.some((y) => m.includes(y, 1))) kinds.add("serves_or_watches");
 }
 //@ chunk-fym4r1th.js:44872-45117 placement
 function parseCommandShape(e, s) {
@@ -2364,56 +2603,59 @@ function parseCommandShape(e, s) {
   if (!n) return null;
   let a = {
     commands: [],
-    has_background_job: !1,
-    has_pipe: !1,
-    has_redirect: !1,
-    has_chain: !1,
-    has_subshell: !1,
-    has_heredoc: !1,
+    has_background_job: false,
+    has_pipe: false,
+    has_redirect: false,
+    has_chain: false,
+    has_subshell: false,
+    has_heredoc: false,
   };
-  return (collectCommandShape(n, a), a);
+  collectCommandShape(n, a);
+  return a;
 }
 //@ chunk-fym4r1th.js:45117-46066 placement
 function classifyBashCommand(e) {
-  let s = parseCommandShape(e);
-  if (!s) return Ut;
-  let n = stripLeadingWrappers(s.commands[0]?.text ?? ""),
-    a = le(n[0]),
-    r = le(stripLeadingWrappers(s.commands.at(-1)?.text ?? "")[0]),
-    d = {
-      kinds: new Set(),
-      programs: new Set(),
-      testScopes: new Set(),
-      fedMoreWords: !1,
-      scriptTextDepth: 0,
-      scriptTextCharsLeft: Bt,
-      scriptTextDeadline: void 0,
-      gaveUp: !1,
-    };
-  if ((classifyParsedCommands(s, d), d.kinds.size === 0)) d.kinds.add("shell_word");
+  let commandShape = parseCommandShape(e);
+  if (!commandShape) return UNPARSED_COMMAND_INFO;
+  let n = stripLeadingWrappers(commandShape.commands[0]?.text ?? "");
+  let programCategory = lookupProgramCategory(n[0]);
+  let programCategory_2 = lookupProgramCategory(
+    stripLeadingWrappers(commandShape.commands.at(-1)?.text ?? "")[0],
+  );
+  let d = {
+    kinds: new Set(),
+    programs: new Set(),
+    testScopes: new Set(),
+    fedMoreWords: false,
+    scriptTextDepth: 0,
+    scriptTextCharsLeft: SCRIPT_CHAR_BUDGET,
+    scriptTextDeadline: undefined,
+    gaveUp: false,
+  };
+  classifyParsedCommands(commandShape, d);
+  if (d.kinds.size === 0) d.kinds.add("shell_word");
   return {
-    bash_command_class: a !== void 0 ? fromEnum(a.commandClass) : lit("other"),
-    bash_argv0: a !== void 0 ? fromEnum(a.argv0) : lit("other"),
-    bash_last_argv0: r !== void 0 ? fromEnum(r.argv0) : lit("other"),
-    ...classifySubcommand(a?.argv0, n),
+    bash_command_class: programCategory !== undefined ? fromEnum(programCategory.commandClass) : lit("other"),
+    bash_argv0: programCategory !== undefined ? fromEnum(programCategory.argv0) : lit("other"),
+    bash_last_argv0: programCategory_2 !== undefined ? fromEnum(programCategory_2.argv0) : lit("other"),
+    ...classifySubcommand(programCategory?.argv0, n),
     bash_command_kinds: d.gaveUp ? lit("incomplete") : fromEnumArr([...d.kinds]),
     bash_programs:
-      d.gaveUp || d.programs.size > Pt
+      d.gaveUp || d.programs.size > MAX_PROGRAM_NAMES
         ? lit("incomplete")
         : d.programs.size === 0
           ? lit("none")
           : fromEnumArr([...d.programs]),
     ...(!d.gaveUp &&
       d.kinds.has("runs_tests") && {
-        bash_test_scope: fromEnum(Lt.find((f) => d.testScopes.has(f)) ?? "unknown"),
+        bash_test_scope: fromEnum(TEST_SCOPE_OUTPUT_VALUES.find((f) => d.testScopes.has(f)) ?? "unknown"),
       }),
-    has_pipe: s.has_pipe,
-    has_redirect: s.has_redirect,
-    has_chain: s.has_chain,
-    has_subshell: s.has_subshell,
-    has_heredoc: s.has_heredoc,
-    simple_command_count: s.commands.length,
+    has_pipe: commandShape.has_pipe,
+    has_redirect: commandShape.has_redirect,
+    has_chain: commandShape.has_chain,
+    has_subshell: commandShape.has_subshell,
+    has_heredoc: commandShape.has_heredoc,
+    simple_command_count: commandShape.commands.length,
   };
 }
-
-export { classifyBashCommand, Kbn };
+export { classifyBashCommand, PROGRAM_CATEGORIES };

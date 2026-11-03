@@ -8,260 +8,313 @@
  * pieces: chunk-s61vbvea.js (15)
  * attribution: placement 15
  */
+import { join, isAbsolute } from "path";
+import { homedir } from "os";
+import { lstat, open } from "fs/promises";
+import { constants } from "fs";
 import {
-  join,
-  join as join_2,
-  join as join_3,
-  join as join_4,
-  join as join_5,
-  join as join_6,
-  join as join_7,
-  join as join_8,
-  join as join_9,
-  join as join_10,
-  join as join_11,
-  join as join_12,
-  join as join_13,
-  join as join_14,
-  join as join_15,
-  join as join_16,
-  join as join_17,
-  join as join_18,
-  join as join_19,
-  join as join_20,
-  isAbsolute,
-  isAbsolute as isAbsolute_2,
-  isAbsolute as isAbsolute_3,
-  isAbsolute as isAbsolute_4,
-  isAbsolute as isAbsolute_5,
-  isAbsolute as isAbsolute_6,
-  isAbsolute as isAbsolute_7,
-  isAbsolute as isAbsolute_8,
-  isAbsolute as isAbsolute_9,
-  isAbsolute as isAbsolute_10,
-  isAbsolute as isAbsolute_11,
-  isAbsolute as isAbsolute_12,
-  isAbsolute as isAbsolute_13,
-  isAbsolute as isAbsolute_14,
-  isAbsolute as isAbsolute_15,
-} from "path";
-import {
-  homedir,
-  homedir as homedir_2,
-  homedir as homedir_3,
-  homedir as homedir_4,
-  homedir as homedir_5,
-  homedir as homedir_6,
-  homedir as homedir_7,
-} from "os";
-import {
-  lstat,
-  lstat as lstat_2,
-  lstat as lstat_3,
-  lstat as lstat_4,
-  lstat as lstat_5,
-  lstat as lstat_6,
-  lstat as lstat_7,
-  open,
-  open as open_2,
-  open as open_3,
-  open as open_4,
-  open as open_5,
-  open as open_6,
-  open as open_7,
-} from "fs/promises";
-import {
-  constants,
-  constants as constants_2,
-  constants as constants_3,
-  constants as constants_4,
-  constants as constants_5,
-} from "fs";
-import {
-  Za,
+  repoAncestorsBelowHome,
   resolvePathSpellings,
   collectRepoSettingsReachRoots,
-  xyn,
-  Cvt,
+  settingsReachRoots,
+  checkoutDirOfGitDir,
   resolveRealPathLoose,
   findHeldCheckout,
-  eI,
+  MAX_CONFIG_WALK_BYTES,
 } from "./sandboxReach.js";
 import { uniq } from "../../collections.js";
 import {
   resolveForeignSpellingAsync,
-  classifyPathSpelling_2,
+  classifyPathSpelling_3,
   spellingsToCheck,
   isPathInside as isPathInside_2,
   isWindowsNonDrivePath,
   getGitConfigPaths,
-  Jii,
+  isWritableSharedFile,
 } from "../../permissions/protectedEnvAndGitPaths.js";
 import { protectedHomeRoots } from "../../permissions/protectedSettingsPaths.js";
 import { checkSessionTempRoot } from "./gitDirIdentity.js";
-import { Eh } from "../../pathClassification.js";
+import { hasDotDotSegment } from "../../pathClassification.js";
 import { buildGitEnv } from "./gitEnv.js";
-import { resolveIncludePaths, QZn } from "./gitConfigAudit.js";
+import { resolveIncludePaths, MAX_INCLUDE_FILES } from "./gitConfigAudit.js";
 import { getEnvCaseInsensitive } from "../../plugins/securityDefaultPlugin.js";
 import { getPlatform as getPlatform_2 } from "../../platform.js";
-import { $c } from "../../platformTargets.js";
+import { readOnlyNoFollowFlags } from "../../platformTargets.js";
 import { getErrnoCode } from "../../errors.js";
 import { hasNulByte, parseGitConfig } from "../gitConfigParser.js";
 import { firstLineOf } from "../../stringUtils.js";
 
+//@ chunk-s61vbvea.js:267395-270729 placement
 /**
  * 读取检出内的 git 配置与 config.worktree，判断能否安全使用
  */
-//@ chunk-s61vbvea.js:267395-270729 placement
-async function readInTreeGitConfig(e, n, r) {
+async function readInTreeGitConfig(repository, cwd, r) {
   for (let se of ["config", "config.worktree"]) {
-    let re = join_7(e, se),
-      he = await readGitConfigFile(re, !1);
-    if (he.kind === "unread") return { kind: "unread", file: re };
-    if (he.kind === "shared") return { kind: "second_name", file: re };
-    if (he.kind === "read" && he.hasInclude) return { kind: "includes", file: re };
-    if (he.kind === "read" && he.coreWorktree) return { kind: "work_tree", file: re };
-    if (he.kind === "read" && r && he.worktreeConfigOn) return { kind: "worktree_config", file: re };
+    let re = join(repository, se);
+    let gitConfigFile = await readGitConfigFile(re, false);
+    if (gitConfigFile.kind === "unread")
+      return {
+        kind: "unread",
+        file: re,
+      };
+    if (gitConfigFile.kind === "shared")
+      return {
+        kind: "second_name",
+        file: re,
+      };
+    if (gitConfigFile.kind === "read" && gitConfigFile.hasInclude)
+      return {
+        kind: "includes",
+        file: re,
+      };
+    if (gitConfigFile.kind === "read" && gitConfigFile.coreWorktree)
+      return {
+        kind: "work_tree",
+        file: re,
+      };
+    if (gitConfigFile.kind === "read" && r && gitConfigFile.worktreeConfigOn)
+      return {
+        kind: "worktree_config",
+        file: re,
+      };
   }
-  let s = Za(n),
-    h = s.length === 0 ? [] : uniq([homedir(), ...s].flatMap((se) => [se, ...resolvePathSpellings(se, n)])),
-    y = collectRepoSettingsReachRoots(n);
-  if (y === "unreadable") return { kind: "settings_unreadable", file: join_7(n, ".claude") };
-  let flat = (
-      await Promise.all(
-        uniq([...xyn(n), ...y]).map(async (se) => {
-          let re = await resolveForeignSpellingAsync(
-            await classifyPathSpelling_2(se, n),
-            n,
-            protectedHomeRoots(),
-          );
-          return re.verdict === "local"
-            ? await dropSpecialFiles(uniq([se, re.spelling, ...resolvePathSpellings(re.spelling, n)]))
-            : spellingsToCheck(re.verdict === "foreign" ? { ...re, verdict: "opaque" } : re, n);
-        }),
-      )
-    ).flat(),
-    w = uniq([
-      ...[n, e, Cvt(e)].flatMap((se) => [se, ...resolvePathSpellings(se, n)]),
-      ...flat,
-      ...(await orderLocalRootsFirst(await checkSessionTempRoot(n), n)),
-      ...h,
+  let s = repoAncestorsBelowHome(cwd);
+  let h =
+    s.length === 0 ? [] : uniq([homedir(), ...s].flatMap((se) => [se, ...resolvePathSpellings(se, cwd)]));
+  let repoSettingsReachRoots = collectRepoSettingsReachRoots(cwd);
+  if (repoSettingsReachRoots === "unreadable")
+    return {
+      kind: "settings_unreadable",
+      file: join(cwd, ".claude"),
+    };
+  let S = (
+    await Promise.all(
+      uniq([...settingsReachRoots(cwd), ...repoSettingsReachRoots]).map(async (se) => {
+        let foreignSpelling = await resolveForeignSpellingAsync(
+          await classifyPathSpelling_3(se, cwd),
+          cwd,
+          protectedHomeRoots(),
+        );
+        return foreignSpelling.verdict === "local"
+          ? await dropSpecialFiles(
+              uniq([se, foreignSpelling.spelling, ...resolvePathSpellings(foreignSpelling.spelling, cwd)]),
+            )
+          : spellingsToCheck(
+              foreignSpelling.verdict === "foreign"
+                ? {
+                    ...foreignSpelling,
+                    verdict: "opaque",
+                  }
+                : foreignSpelling,
+              cwd,
+            );
+      }),
+    )
+  ).flat();
+  let w = uniq([
+    ...[cwd, repository, checkoutDirOfGitDir(repository)].flatMap((se) => [
+      se,
+      ...resolvePathSpellings(se, cwd),
     ]),
-    R = async (se, re) => {
-      if (Eh(re)) return !0;
-      let he = await resolveForeignSpellingAsync(
-        await classifyPathSpelling_2(re, n),
-        n,
-        protectedHomeRoots(),
-      );
-      if (he.verdict !== "local") return !0;
-      let Se = resolveRealPathLoose(he.spelling, n);
-      return Se === null || se.some((ce) => isPathInside_2(ce, re) || isPathInside_2(ce, Se));
-    },
-    x = (se) => R(w, se),
-    P = (se) => findHeldCheckout(se, n),
-    j = async (se) => {
-      for (let re of se) if (await x(re)) return re;
-      return;
-    },
-    G = buildGitEnv(void 0),
-    L = 0,
-    q = async (se, re, he) => {
-      for (let Se of se) {
-        let match = /^%\(prefix\)\/(.*)$/s.exec(Se);
-        if (match !== null && !isAbsolute_6(match[1] ?? "") && Se.split(/[/\\]/).includes(".."))
-          return "includes";
-        let we = match !== null && isAbsolute_6(match[1] ?? "") ? (match[1] ?? Se) : Se,
-          ie = resolveIncludePaths(we, re, n);
-        if (ie.some((Ee) => Ee.includes("\uFFFD") || isWindowsNonDrivePath(Ee))) return "unread";
-        if ((await j(ie)) !== void 0) return "includes";
-        for (let Ee of ie) {
-          let Ie = await P(Ee);
-          if (Ie?.kind === "unvouched") return "unread";
-          if (Ie !== null) return { kind: "config_in_checkout", checkout: Ie.checkout };
-        }
-        for (let Ee of ie) {
-          if ((L++, he >= nI || L > QZn)) return "unread";
-          let Ie = await readGitConfigFile(Ee, !0);
-          if (Ie.kind === "unread") return "unread";
-          if (Ie.kind === "shared") return "second_name";
-          if (Ie.kind === "read") {
-            let ke = Z(Ie);
-            if (ke !== "clear") return ke;
-            let Me = await q(Ie.includes, `file:${Ee}`, he + 1);
-            if (Me !== "clear") return Me;
-          }
+    ...S,
+    ...(await orderLocalRootsFirst(await checkSessionTempRoot(cwd), cwd)),
+    ...h,
+  ]);
+  let R = async (se, re) => {
+    if (hasDotDotSegment(re)) return true;
+    let foreignSpelling = await resolveForeignSpellingAsync(
+      await classifyPathSpelling_3(re, cwd),
+      cwd,
+      protectedHomeRoots(),
+    );
+    if (foreignSpelling.verdict !== "local") return true;
+    let realPathLoose = resolveRealPathLoose(foreignSpelling.spelling, cwd);
+    return (
+      realPathLoose === null || se.some((ce) => isPathInside_2(ce, re) || isPathInside_2(ce, realPathLoose))
+    );
+  };
+  let x = (se) => R(w, se);
+  let P = (se) => findHeldCheckout(se, cwd);
+  let j = async (includePaths) => {
+    for (let re of includePaths) if (await x(re)) return re;
+    return;
+  };
+  let gitEnv = buildGitEnv(undefined);
+  let L = 0;
+  let q = async (includes, re, he) => {
+    for (let Se of includes) {
+      let match = /^%\(prefix\)\/(.*)$/s.exec(Se);
+      if (match !== null && !isAbsolute(match[1] ?? "") && Se.split(/[/\\]/).includes(".."))
+        return "includes";
+      let we = match !== null && isAbsolute(match[1] ?? "") ? (match[1] ?? Se) : Se;
+      let includePaths = resolveIncludePaths(we, re, cwd);
+      if (
+        includePaths.some(
+          (includePath) => includePath.includes("\uFFFD") || isWindowsNonDrivePath(includePath),
+        )
+      )
+        return "unread";
+      if ((await j(includePaths)) !== undefined) return "includes";
+      for (let includePath of includePaths) {
+        let Ie = await P(includePath);
+        if (Ie?.kind === "unvouched") return "unread";
+        if (Ie !== null)
+          return {
+            kind: "config_in_checkout",
+            checkout: Ie.checkout,
+          };
+      }
+      for (let includePath of includePaths) {
+        L++;
+        if (he >= MAX_INCLUDE_DEPTH || L > MAX_INCLUDE_FILES) return "unread";
+        let gitConfigFile = await readGitConfigFile(includePath, true);
+        if (gitConfigFile.kind === "unread") return "unread";
+        if (gitConfigFile.kind === "shared") return "second_name";
+        if (gitConfigFile.kind === "read") {
+          let ke = Z(gitConfigFile);
+          if (ke !== "clear") return ke;
+          let Me = await q(gitConfigFile.includes, `file:${includePath}`, he + 1);
+          if (Me !== "clear") return Me;
         }
       }
-      return "clear";
-    },
-    Q = (se, re) =>
-      typeof se === "string"
-        ? { kind: se, file: re }
-        : { kind: "config_in_checkout", file: re, checkout: se.checkout },
-    Z = (se) => (se.coreWorktree ? "work_tree" : r && se.worktreeConfigOn ? "worktree_config" : "clear"),
-    ee = readGitConfigFromEnv(G);
-  if (ee === null) return { kind: "unread", file: Dyn };
-  for (let { key: key, value: re } of ee) {
+    }
+    return "clear";
+  };
+  let Q = (se, file) =>
+    typeof se === "string"
+      ? {
+          kind: se,
+          file,
+        }
+      : {
+          kind: "config_in_checkout",
+          file,
+          checkout: se.checkout,
+        };
+  let Z = (gitConfigFile) =>
+    gitConfigFile.coreWorktree
+      ? "work_tree"
+      : r && gitConfigFile.worktreeConfigOn
+        ? "worktree_config"
+        : "clear";
+  let gitConfigFromEnv = readGitConfigFromEnv(gitEnv);
+  if (gitConfigFromEnv === null)
+    return {
+      kind: "unread",
+      file: LAUNCH_ENV_CONFIG_NOTE,
+    };
+  for (let { key, value: envVar } of gitConfigFromEnv) {
     let lower = key.toLowerCase();
-    if (lower === "core.worktree") return { kind: "work_tree", file: Dyn };
-    if (r && lower === "extensions.worktreeconfig" && (re === void 0 || isEnvDefinedFalsy(re)))
-      return { kind: "worktree_config", file: Dyn };
-    if (uS(lower) && re !== void 0) {
-      let Se = await q([re], "command line:", 0);
-      if (Se !== "clear") return Q(Se, Dyn);
+    if (lower === "core.worktree")
+      return {
+        kind: "work_tree",
+        file: LAUNCH_ENV_CONFIG_NOTE,
+      };
+    if (r && lower === "extensions.worktreeconfig" && (envVar === undefined || isEnvDefinedFalsy(envVar)))
+      return {
+        kind: "worktree_config",
+        file: LAUNCH_ENV_CONFIG_NOTE,
+      };
+    if (inTreeConfigFileKeys(lower) && envVar !== undefined) {
+      let Se = await q([envVar], "command line:", 0);
+      if (Se !== "clear") return Q(Se, LAUNCH_ENV_CONFIG_NOTE);
     }
   }
-  let ae = uniq(getGitConfigPaths([], n, null, G));
+  let ae = uniq(getGitConfigPaths([], cwd, null, gitEnv));
   for (let se of ae) {
-    if (se.includes("\uFFFD") || isWindowsNonDrivePath(se)) return { kind: "unread", file: se };
-    if (s.length > 0 && (await R(h, se))) return { kind: "home_checkout", file: se, checkout: s[0] };
-    if (await x(se)) return { kind: "includes", file: se };
+    if (se.includes("\uFFFD") || isWindowsNonDrivePath(se))
+      return {
+        kind: "unread",
+        file: se,
+      };
+    if (s.length > 0 && (await R(h, se)))
+      return {
+        kind: "home_checkout",
+        file: se,
+        checkout: s[0],
+      };
+    if (await x(se))
+      return {
+        kind: "includes",
+        file: se,
+      };
     let re = await P(se);
-    if (re?.kind === "unvouched") return { kind: "unread", file: se };
-    if (re !== null) return { kind: "config_in_checkout", file: se, checkout: re.checkout };
-    if (resolveRealPathLoose(se, n) === se && (await iI(se))) continue;
-    let he = await readGitConfigFile(se, !0);
-    if (he.kind === "device") continue;
-    if (he.kind === "unread") return { kind: "unread", file: se };
-    if (he.kind === "shared") return { kind: "second_name", file: se };
-    if (he.kind === "read") {
-      let Se = Z(he);
-      if (Se !== "clear") return { kind: Se, file: se };
-      let ce = await q(he.includes, `file:${se}`, 0);
+    if (re?.kind === "unvouched")
+      return {
+        kind: "unread",
+        file: se,
+      };
+    if (re !== null)
+      return {
+        kind: "config_in_checkout",
+        file: se,
+        checkout: re.checkout,
+      };
+    if (resolveRealPathLoose(se, cwd) === se && (await readInTreeConfig(se))) continue;
+    let gitConfigFile = await readGitConfigFile(se, true);
+    if (gitConfigFile.kind === "device") continue;
+    if (gitConfigFile.kind === "unread")
+      return {
+        kind: "unread",
+        file: se,
+      };
+    if (gitConfigFile.kind === "shared")
+      return {
+        kind: "second_name",
+        file: se,
+      };
+    if (gitConfigFile.kind === "read") {
+      let Se = Z(gitConfigFile);
+      if (Se !== "clear")
+        return {
+          kind: Se,
+          file: se,
+        };
+      let ce = await q(gitConfigFile.includes, `file:${se}`, 0);
       if (ce !== "clear") return Q(ce, se);
     }
   }
-  return { kind: "clear" };
+  return {
+    kind: "clear",
+  };
 }
 //@ chunk-s61vbvea.js:270729-270782 placement
-var Dyn = "the launch environment (GIT_CONFIG_*)",
-  nI = 4;
+/**
+ * 说明这些配置来自启动环境的提示文本，以及 include 深度上限。
+ */
+var LAUNCH_ENV_CONFIG_NOTE = "the launch environment (GIT_CONFIG_*)";
+var MAX_INCLUDE_DEPTH = 4;
 //@ chunk-s61vbvea.js:270782-270872 placement
-function uS(e) {
+/**
+ * 判断配置键是否为 include.path / includeIf.*.path。
+ */
+function inTreeConfigFileKeys(e) {
   return e === "include.path" || (e.startsWith("includeif.") && e.endsWith(".path"));
 }
+//@ chunk-s61vbvea.js:270872-271267 placement
 /**
  * 解析 GIT_CONFIG_COUNT/KEY_n/VALUE_n 与 GIT_CONFIG_PARAMETERS。
  */
-//@ chunk-s61vbvea.js:270872-271267 placement
 function readGitConfigFromEnv(e) {
-  let n = [],
-    r = getEnvCaseInsensitive(e, "GIT_CONFIG_COUNT");
-  if (r !== void 0 && r !== "") {
-    if (!/^\d+$/.test(r.trim())) return null;
-    for (let h = 0; h < Number(r); h++) {
-      let y = getEnvCaseInsensitive(e, `GIT_CONFIG_KEY_${h}`),
-        S = getEnvCaseInsensitive(e, `GIT_CONFIG_VALUE_${h}`);
-      if (y === void 0 || S === void 0) return null;
-      n.push({ key: y, value: S });
+  let n = [];
+  let envCaseInsensitive = getEnvCaseInsensitive(e, "GIT_CONFIG_COUNT");
+  if (envCaseInsensitive !== undefined && envCaseInsensitive !== "") {
+    if (!/^\d+$/.test(envCaseInsensitive.trim())) return null;
+    for (let j = 0; j < Number(envCaseInsensitive); j++) {
+      let envCaseInsensitive = getEnvCaseInsensitive(e, `GIT_CONFIG_KEY_${j}`);
+      let envCaseInsensitive_2 = getEnvCaseInsensitive(e, `GIT_CONFIG_VALUE_${j}`);
+      if (envCaseInsensitive === undefined || envCaseInsensitive_2 === undefined) return null;
+      n.push({
+        key: envCaseInsensitive,
+        value: envCaseInsensitive_2,
+      });
     }
   }
-  let s = getEnvCaseInsensitive(e, "GIT_CONFIG_PARAMETERS");
-  if (s !== void 0 && s.trim() !== "") {
-    let h = parseGitConfigParameters(s);
-    if (h === null) return null;
-    n.push(...h);
+  let envCaseInsensitive_2 = getEnvCaseInsensitive(e, "GIT_CONFIG_PARAMETERS");
+  if (envCaseInsensitive_2 !== undefined && envCaseInsensitive_2.trim() !== "") {
+    let gitConfigParameters = parseGitConfigParameters(envCaseInsensitive_2);
+    if (gitConfigParameters === null) return null;
+    n.push(...gitConfigParameters);
   }
   return n;
 }
@@ -271,13 +324,13 @@ async function orderLocalRootsFirst(e, n) {
     e.map(async (s) => ({
       root: s,
       local:
-        (await resolveForeignSpellingAsync(await classifyPathSpelling_2(s, n), n, protectedHomeRoots()))
+        (await resolveForeignSpellingAsync(await classifyPathSpelling_3(s, n), n, protectedHomeRoots()))
           .verdict === "local",
     })),
   );
   return [
-    ...(await dropSpecialFiles(results.filter(({ local: local }) => local).map(({ root: root }) => root))),
-    ...results.filter(({ local: local }) => !local).map(({ root: root }) => root),
+    ...(await dropSpecialFiles(results.filter(({ local }) => local).map(({ root }) => root))),
+    ...results.filter(({ local }) => !local).map(({ root }) => root),
   ];
 }
 //@ chunk-s61vbvea.js:271516-271727 placement
@@ -285,9 +338,9 @@ async function dropSpecialFiles(e) {
   return (
     await Promise.all(
       e.map(async (r) => {
-        if (!isAbsolute_6(r)) return null;
+        if (!isAbsolute(r)) return null;
         try {
-          let s = await lstat_2(r);
+          let s = await lstat(r);
           return s.isCharacterDevice() || s.isFIFO() || s.isSocket() ? null : r;
         } catch {
           return r;
@@ -297,149 +350,205 @@ async function dropSpecialFiles(e) {
   ).filter((r) => r !== null);
 }
 //@ chunk-s61vbvea.js:271727-271746 placement
-var ud = /[ \t\n\r]/;
+var CONFIG_VALUE_WHITESPACE_RE = /[ \t\n\r]/;
+//@ chunk-s61vbvea.js:271746-272399 placement
 /**
  * 解析 GIT_CONFIG_PARAMETERS 的单引号键值列表。
  */
-//@ chunk-s61vbvea.js:271746-272399 placement
-function parseGitConfigParameters(e) {
-  let n = [],
-    r = 0,
-    s = () => {
-      if (e[r] !== "'") return null;
-      let h = "";
-      r++;
-      for (;;) {
-        let index = e.indexOf("'", r);
-        if (index === -1) return null;
-        if (
-          ((h += e.slice(r, index)), (r = index + 1), e[r] === "\\" && r + 2 < e.length && e[r + 2] === "'")
-        ) {
-          ((h += e[r + 1]), (r += 3));
-          continue;
-        }
-        return h;
+function parseGitConfigParameters(envCaseInsensitive) {
+  let n = [];
+  let r = 0;
+  let s = () => {
+    if (envCaseInsensitive[r] !== "'") return null;
+    let h = "";
+    r++;
+    for (;;) {
+      let index = envCaseInsensitive.indexOf("'", r);
+      if (index === -1) return null;
+      h += envCaseInsensitive.slice(r, index);
+      r = index + 1;
+      if (
+        envCaseInsensitive[r] === "\\" &&
+        r + 2 < envCaseInsensitive.length &&
+        envCaseInsensitive[r + 2] === "'"
+      ) {
+        h += envCaseInsensitive[r + 1];
+        r += 3;
+        continue;
       }
-    };
-  while (r < e.length) {
-    while (r < e.length && ud.test(e[r] ?? "")) r++;
-    if (r >= e.length) break;
+      return h;
+    }
+  };
+  while (r < envCaseInsensitive.length) {
+    while (r < envCaseInsensitive.length && CONFIG_VALUE_WHITESPACE_RE.test(envCaseInsensitive[r] ?? "")) r++;
+    if (r >= envCaseInsensitive.length) break;
     let h = s();
     if (h === null) return null;
-    if (e[r] === "=") {
-      if ((r++, r >= e.length || ud.test(e[r] ?? ""))) {
-        n.push({ key: h, value: void 0 });
+    if (envCaseInsensitive[r] === "=") {
+      r++;
+      if (r >= envCaseInsensitive.length || CONFIG_VALUE_WHITESPACE_RE.test(envCaseInsensitive[r] ?? "")) {
+        n.push({
+          key: h,
+          value: undefined,
+        });
         continue;
       }
       let y = s();
       if (y === null) return null;
-      n.push({ key: h, value: y });
+      n.push({
+        key: h,
+        value: y,
+      });
     } else {
       let index = h.indexOf("=");
       n.push(
         index === -1
-          ? { key: h, value: void 0 }
-          : { key: h.slice(0, index).trim(), value: h.slice(index + 1) },
+          ? {
+              key: h,
+              value: undefined,
+            }
+          : {
+              key: h.slice(0, index).trim(),
+              value: h.slice(index + 1),
+            },
       );
     }
-    if (r < e.length && !ud.test(e[r] ?? "")) return null;
+    if (r < envCaseInsensitive.length && !CONFIG_VALUE_WHITESPACE_RE.test(envCaseInsensitive[r] ?? ""))
+      return null;
   }
   return n;
 }
 //@ chunk-s61vbvea.js:272399-272480 placement
-async function iI(e) {
+async function readInTreeConfig(e) {
   try {
-    return (await lstat_2(e)).isCharacterDevice();
+    return (await lstat(e)).isCharacterDevice();
   } catch {
-    return !1;
+    return false;
   }
 }
 //@ chunk-s61vbvea.js:272480-273100 placement
 async function readGitConfigFile(e, n) {
   let r;
   try {
-    if (!n && getPlatform_2() === "windows" && !(await lstat_2(e)).isFile()) return { kind: "unread" };
-    r = await open_4(e, n ? constants_4.O_RDONLY | aI() : $c());
+    if (!n && getPlatform_2() === "windows" && !(await lstat(e)).isFile())
+      return {
+        kind: "unread",
+      };
+    r = await open(e, n ? constants.O_RDONLY | OPEN_CONFIG_FLAGS() : readOnlyNoFollowFlags());
   } catch (error) {
-    let h = getErrnoCode(error);
-    return h === "ENOENT" || h === "ENOTDIR" ? { kind: "absent" } : { kind: "unread" };
+    let errnoCode = getErrnoCode(error);
+    return errnoCode === "ENOENT" || errnoCode === "ENOTDIR"
+      ? {
+          kind: "absent",
+        }
+      : {
+          kind: "unread",
+        };
   }
   try {
     let stats = await r.stat();
-    if (stats.isCharacterDevice()) return { kind: "device" };
-    if (!stats.isFile() || stats.size > eI) return { kind: "unread" };
-    if (await Jii(e, stats)) return { kind: "shared" };
-    let alloc = Buffer.alloc(stats.size),
-      { bytesRead: bytesRead } = await r.read(alloc, 0, stats.size, 0);
-    if (bytesRead !== stats.size) return { kind: "unread" };
-    let str = alloc.toString("utf8");
-    return hasNulByte(str) ? { kind: "unread" } : auditWorktreeConfigKeys(str);
+    if (stats.isCharacterDevice())
+      return {
+        kind: "device",
+      };
+    if (!stats.isFile() || stats.size > MAX_CONFIG_WALK_BYTES)
+      return {
+        kind: "unread",
+      };
+    if (await isWritableSharedFile(e, stats))
+      return {
+        kind: "shared",
+      };
+    let h = Buffer.alloc(stats.size);
+    let { bytesRead } = await r.read(h, 0, stats.size, 0);
+    if (bytesRead !== stats.size)
+      return {
+        kind: "unread",
+      };
+    let str = h.toString("utf8");
+    return hasNulByte(str)
+      ? {
+          kind: "unread",
+        }
+      : auditWorktreeConfigKeys(str);
   } catch {
-    return { kind: "unread" };
+    return {
+      kind: "unread",
+    };
   } finally {
     await r.close().catch(() => {});
   }
 }
 //@ chunk-s61vbvea.js:273100-273153 placement
-function aI() {
-  return getPlatform_2() === "windows" ? 0 : constants_4.O_NONBLOCK;
+function OPEN_CONFIG_FLAGS() {
+  return getPlatform_2() === "windows" ? 0 : constants.O_NONBLOCK;
 }
 //@ chunk-s61vbvea.js:273153-273767 placement
 function auditWorktreeConfigKeys(e) {
-  let n = [],
-    r = !1,
-    s = !1,
-    h = !1,
-    y = !1,
-    S = !0,
-    w = !1;
-  return (
-    parseGitConfig(
-      e,
-      {
-        header(R) {
-          ((r ||= ky(R.name)), (S &&= R.name === "core" && !R.quoted));
-        },
-        entry(R, x, P) {
-          if (((S &&= R?.name === "core" && !R.quoted && uI.has(x)), R === null)) return;
-          if (ky(R.name) && x === "path")
-            if (P === void 0) w = !0;
-            else n.push(P);
-          if (R.name === "core" && !R.quoted && x === "worktree") s = !0;
-          if (R.name === "extensions" && !R.quoted && x === "worktreeconfig")
-            h = P === void 0 || isEnvDefinedFalsy(P);
-          if (R.name === "core" && !R.quoted && x === "bare") y ||= P === void 0 || isEnvDefinedFalsy(P);
-        },
-        malformed() {
-          w = !0;
-        },
+  let n = [];
+  let hasInclude = false;
+  let coreWorktree = false;
+  let worktreeConfigOn = false;
+  let saysBare = false;
+  let S = true;
+  let w = false;
+  parseGitConfig(
+    e,
+    {
+      header(R) {
+        hasInclude ||= includesConfigKey(R.name);
+        S &&= R.name === "core" && !R.quoted;
       },
-      { maxLines: 1 / 0 },
-    ),
-    w
-      ? { kind: "unread" }
-      : {
-          kind: "read",
-          includes: n,
-          hasInclude: r,
-          coreWorktree: s,
-          worktreeConfigOn: h,
-          saysBare: y,
-          inertWorktreeKeysOnly: S,
-        }
+      entry(R, x, envVar) {
+        S &&= R?.name === "core" && !R.quoted && KNOWN_SAFE_EXTENSIONS.has(x);
+        if (R === null) return;
+        if (includesConfigKey(R.name) && x === "path")
+          if (envVar === undefined) w = true;
+          else n.push(envVar);
+        if (R.name === "core" && !R.quoted && x === "worktree") coreWorktree = true;
+        if (R.name === "extensions" && !R.quoted && x === "worktreeconfig")
+          worktreeConfigOn = envVar === undefined || isEnvDefinedFalsy(envVar);
+        if (R.name === "core" && !R.quoted && x === "bare")
+          saysBare ||= envVar === undefined || isEnvDefinedFalsy(envVar);
+      },
+      malformed() {
+        w = true;
+      },
+    },
+    {
+      maxLines: 1 / 0,
+    },
   );
+  return w
+    ? {
+        kind: "unread",
+      }
+    : {
+        kind: "read",
+        includes: n,
+        hasInclude,
+        coreWorktree,
+        worktreeConfigOn,
+        saysBare,
+        inertWorktreeKeysOnly: S,
+      };
 }
 //@ chunk-s61vbvea.js:273767-273826 placement
-var uI = new Set(["hookspath", "untrackedcache", "longpaths"]);
+var KNOWN_SAFE_EXTENSIONS = new Set(["hookspath", "untrackedcache", "longpaths"]);
 //@ chunk-s61vbvea.js:273826-273947 placement = isEnvDefinedFalsy (1)
 function isEnvDefinedFalsy(envVar) {
   let lower = envVar.trim().toLowerCase();
   return !(["false", "no", "off", ""].includes(lower) || /^[-+]?(0x)?0+[kmg]?$/.test(lower));
 }
 //@ chunk-s61vbvea.js:273947-274016 placement
-function ky(e) {
-  let n = firstLineOf(e, ".");
+function includesConfigKey(name) {
+  let n = firstLineOf(name, ".");
   return n === "include" || n === "includeif";
 }
-
-export { readInTreeGitConfig, Dyn, readGitConfigFromEnv, uS, readGitConfigFile };
+export {
+  readInTreeGitConfig,
+  LAUNCH_ENV_CONFIG_NOTE,
+  readGitConfigFromEnv,
+  inTreeConfigFileKeys,
+  readGitConfigFile,
+};

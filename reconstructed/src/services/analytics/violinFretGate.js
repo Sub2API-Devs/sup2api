@@ -14,20 +14,19 @@ import { isViolinWoodEnabled } from "./violinGates.js";
 
 //@ chunk-4qkxr5m3.js:300-326 placement
 var TENGU_VIOLIN_FRET = "tengu_violin_fret";
+//@ chunk-4qkxr5m3.js:326-386 placement
 /**
  * tengu_violin_fret 开关：无人值守服务同意闸门。
  */
-//@ chunk-4qkxr5m3.js:326-386 placement
 async function isViolinFretEnabled() {
   try {
     return await checkGate_CACHED_OR_BLOCKING(TENGU_VIOLIN_FRET);
   } catch {
-    return !1;
+    return false;
   }
 }
 //@ chunk-4qkxr5m3.js:386-445 placement
 async function isUnattendedServingConsentGateOn() {
   return isViolinWillowEnabledCached() && (await isViolinWoodEnabled()) && (await isViolinFretEnabled());
 }
-
 export { isUnattendedServingConsentGateOn };

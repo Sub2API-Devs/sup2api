@@ -13,26 +13,30 @@ import { loadAllPluginsCacheOnly } from "../utils/plugins/pluginLoader.js";
 import { isProjectLocalPlugin } from "../utils/plugins/pluginIdentifier.js";
 import { getPluginMcpServers } from "../utils/plugins/mcpPluginIntegration.js";
 
+//@ chunk-20skp6hd.js:4564-4885 fingerprint = handleMcpjsonServerApprovals (0.524)
 /**
  * collectProjectMcpServerNames：收集 project 作用域（.mcp.json）与已启用、需审批插件提供的服务器名，返回 {serverNames, pluginServerNames, rootServers}，供 .mcp.json 审批对话框使用。
  */
-//@ chunk-20skp6hd.js:4564-4885 fingerprint = handleMcpjsonServerApprovals (0.524)
 async function collectProjectMcpServerNames(root) {
-  let { servers: projectServers } = getMcpConfigsByScope("project"),
-    keys = Object.keys(projectServers),
-    o = new Set(keys),
-    l = new Set(),
-    { enabled: enabled } = await loadAllPluginsCacheOnly(root),
-    pendingServers = enabled.filter(isProjectLocalPlugin);
-  for (let b of pendingServers) {
-    let v = await getPluginMcpServers(b, [], root);
-    if (!v) continue;
-    for (let h of Object.keys(v)) {
-      if (o.has(h) || l.has(h)) continue;
-      (keys.push(h), l.add(h));
+  let { servers: projectServers } = getMcpConfigsByScope("project");
+  let keys = Object.keys(projectServers);
+  let o = new Set(keys);
+  let l = new Set();
+  let { enabled } = await loadAllPluginsCacheOnly(root);
+  let pendingServers = enabled.filter(isProjectLocalPlugin);
+  for (let pendingServer of pendingServers) {
+    let pluginMcpServers = await getPluginMcpServers(pendingServer, [], root);
+    if (!pluginMcpServers) continue;
+    for (let key of Object.keys(pluginMcpServers)) {
+      if (o.has(key) || l.has(key)) continue;
+      keys.push(key);
+      l.add(key);
     }
   }
-  return { serverNames: keys, pluginServerNames: l, rootServers: projectServers };
+  return {
+    serverNames: keys,
+    pluginServerNames: l,
+    rootServers: projectServers,
+  };
 }
-
 export { collectProjectMcpServerNames };

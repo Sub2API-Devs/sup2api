@@ -23,27 +23,27 @@ import { isGithubDotCom, githubApiBase } from "../git/githubUrl.js";
 import { getGitHostKind } from "../gitHosts.js";
 import { isTelemetryDisabled } from "../privacyLevel.js";
 import { isPolicyAllowed } from "../../services/policyLimits/policyEvidence.js";
-import { rk } from "./ghToken.js";
+import { ghTokenOrNull } from "./ghToken.js";
 import { externalHttp } from "../../services/http/externalHttp.js";
 import { claudeCodeUserAgent } from "../http.js";
 
+//@ chunk-s61vbvea.js:525349-525507 placement
 /**
  * 自动模式是否检查仓库可见性（环境变量或配置 repoVisibility）。
  */
-//@ chunk-s61vbvea.js:525349-525507 placement
 function isRepoVisibilityCheckEnabled() {
-  if (env.CLAUDE_CODE_EVAL_CONFINED) return !1;
+  if (env.CLAUDE_CODE_EVAL_CONFINED) return false;
   let CLAUDE_CODE_AUTO_MODE_REPO_VISIBILITY = antEnv.CLAUDE_CODE_AUTO_MODE_REPO_VISIBILITY;
-  if (CLAUDE_CODE_AUTO_MODE_REPO_VISIBILITY !== void 0) return CLAUDE_CODE_AUTO_MODE_REPO_VISIBILITY;
-  return getAutoModeConfigOrDefault()?.repoVisibility === !0;
+  if (CLAUDE_CODE_AUTO_MODE_REPO_VISIBILITY !== undefined) return CLAUDE_CODE_AUTO_MODE_REPO_VISIBILITY;
+  return getAutoModeConfigOrDefault()?.repoVisibility === true;
 }
 //@ chunk-s61vbvea.js:525507-525535 placement
-var A$ = "2022-11-28",
-  ok = 3000;
+var VISIBILITY_API_VERSION = "2022-11-28";
+var VISIBILITY_LOOKUP_TIMEOUT_MS = 3000;
+//@ chunk-s61vbvea.js:525535-526415 placement
 /**
  * 按 主机/仓库 缓存可见性、正在进行的查询与已记录的策略拒绝。
  */
-//@ chunk-s61vbvea.js:525535-526415 placement
 class RepoVisibilityCache {
   visibilityByHostSlug = new Map();
   policyDeniedLogged = new Set();
@@ -53,8 +53,9 @@ class RepoVisibilityCache {
   }
   markPolicyDenied(e, n) {
     let r = `${e}/${n}`;
-    if (this.policyDeniedLogged.has(r)) return !1;
-    return (this.policyDeniedLogged.add(r), !0);
+    if (this.policyDeniedLogged.has(r)) return false;
+    this.policyDeniedLogged.add(r);
+    return true;
   }
   record(e, n, r) {
     this.visibilityByHostSlug.set(`${e}/${n}`, r);
@@ -63,46 +64,56 @@ class RepoVisibilityCache {
     return this.inFlightByHostSlug.get(`${e}/${n}`);
   }
   track(e, n, r, s) {
-    let h = `${e}/${n}`,
-      y = r
-        .then((S) => {
-          if (this.inFlightByHostSlug.get(h) === y) s(S);
-          return S;
-        })
-        .finally(() => {
-          if (this.inFlightByHostSlug.get(h) === y) this.inFlightByHostSlug.delete(h);
-        });
-    return (this.inFlightByHostSlug.set(h, y), y);
+    let h = `${e}/${n}`;
+    let y = r
+      .then((S) => {
+        if (this.inFlightByHostSlug.get(h) === y) s(S);
+        return S;
+      })
+      .finally(() => {
+        if (this.inFlightByHostSlug.get(h) === y) this.inFlightByHostSlug.delete(h);
+      });
+    this.inFlightByHostSlug.set(h, y);
+    return y;
   }
   entries() {
     return Array.from(this.visibilityByHostSlug, ([e, n]) => {
       let index = e.indexOf("/");
-      return { host: e.slice(0, index), slug: e.slice(index + 1), visibility: n };
+      return {
+        host: e.slice(0, index),
+        slug: e.slice(index + 1),
+        visibility: n,
+      };
     });
   }
   clear() {
-    (this.visibilityByHostSlug.clear(), this.policyDeniedLogged.clear(), this.inFlightByHostSlug.clear());
+    this.visibilityByHostSlug.clear();
+    this.policyDeniedLogged.clear();
+    this.inFlightByHostSlug.clear();
   }
 }
 //@ chunk-s61vbvea.js:526415-526440 placement
-var P$ = new HostScoped(() => new RepoVisibilityCache());
+var repoVisibilityCacheRegistry = new HostScoped(() => new RepoVisibilityCache());
 //@ chunk-s61vbvea.js:526440-526477 placement
-function Oi() {
-  return P$.of(getRootSession().host);
+function currentRepoVisibilityCache() {
+  return repoVisibilityCacheRegistry.of(getRootSession().host);
 }
+//@ chunk-s61vbvea.js:526477-526603 placement
 /**
  * 可见性缓存的外部访问接口。
  */
-//@ chunk-s61vbvea.js:526477-526603 placement
 var repoVisibilityStore = {
-  lookup: (e, n) => Oi().lookup(e, n),
-  record: (e, n, r) => Oi().record(e, n, r),
-  entries: () => Oi().entries(),
-  clear: () => Oi().clear(),
+  lookup: (e, n) => currentRepoVisibilityCache().lookup(e, n),
+  record: (e, n, r) => currentRepoVisibilityCache().record(e, n, r),
+  entries: () => currentRepoVisibilityCache().entries(),
+  clear: () => currentRepoVisibilityCache().clear(),
 };
 //@ chunk-s61vbvea.js:526603-526673 placement
-function oqe(e) {
-  return e.replace(/[^a-zA-Z0-9._/-]/g, "").slice(0, 128);
+/**
+ * 清洗用作缓存键的字符串（只留字母数字与 ._/-，截断 128）。
+ */
+function sanitizeCacheKey(slug) {
+  return slug.replace(/[^a-zA-Z0-9._/-]/g, "").slice(0, 128);
 }
 //@ chunk-s61vbvea.js:526673-526775 placement
 var REPO_VISIBILITY_RESPONSE_SCHEMA = DoctorLazy(() =>
@@ -111,52 +122,72 @@ var REPO_VISIBILITY_RESPONSE_SCHEMA = DoctorLazy(() =>
     private: create_6().optional(),
   }),
 );
+//@ chunk-s61vbvea.js:526775-526929 placement
 /**
  * 有效可见性（internal 等按私有主机规则判断为 private）。
  */
-//@ chunk-s61vbvea.js:526775-526929 placement
 function effectiveVisibility(e) {
   if (e.visibility === "public" || e.visibility === "private") return e.visibility;
   return isAllowedGitRemote(`https://${e.host}/${e.slug}`) ? "private" : e.visibility;
 }
+//@ chunk-s61vbvea.js:526929-527039 placement
 /**
  * 检测当前目录的仓库并查询其可见性。
  */
-//@ chunk-s61vbvea.js:526929-527039 placement
 async function checkCurrentRepoVisibility(e, n) {
-  let r = await detectCurrentRepositoryWithHost(e, { skipCache: !0 });
-  if (!r) return null;
-  return checkRepoVisibility(r.host, r.owner, r.name, n);
+  let currentRepositoryWithHost = await detectCurrentRepositoryWithHost(e, {
+    skipCache: true,
+  });
+  if (!currentRepositoryWithHost) return null;
+  return checkRepoVisibility(
+    currentRepositoryWithHost.host,
+    currentRepositoryWithHost.owner,
+    currentRepositoryWithHost.name,
+    n,
+  );
 }
 //@ chunk-s61vbvea.js:527039-527507 placement
-async function checkRepoVisibility(e, n, r, s) {
-  let h = `${n}/${r}`,
-    y = Oi(),
-    lookup = y.lookup(e, h);
-  if (lookup !== void 0) {
-    if (s !== void 0) s.lookup = "hit";
-    return { slug: h, host: e, visibility: lookup };
+async function checkRepoVisibility(host, owner, name, s) {
+  let h = `${owner}/${name}`;
+  let y = currentRepoVisibilityCache();
+  let S = y.lookup(host, h);
+  if (S !== undefined) {
+    if (s !== undefined) s.lookup = "hit";
+    return {
+      slug: h,
+      host,
+      visibility: S,
+    };
   }
-  let running = y.running(e, h);
-  if (running !== void 0) {
-    if (s !== void 0) s.lookup = "joined";
-    return { slug: h, host: e, visibility: await running };
+  let w = y.running(host, h);
+  if (w !== undefined) {
+    if (s !== undefined) s.lookup = "joined";
+    return {
+      slug: h,
+      host,
+      visibility: await w,
+    };
   }
-  if (s !== void 0) s.lookup = "fetched";
-  let R = {},
-    track = await y.track(e, h, classifyGitHost(e, n, r, R), (P) => {
-      if ((logVisibilityLookupTiming(R), P === "unverified")) {
-        if (y.markPolicyDenied(e, h)) Ii("policy_denied");
-      } else y.record(e, h, P);
-    });
-  return { slug: h, host: e, visibility: track };
+  if (s !== undefined) s.lookup = "fetched";
+  let R = {};
+  let visibility = await y.track(host, h, classifyGitHost(host, owner, name, R), (P) => {
+    logVisibilityLookupTiming(R);
+    if (P === "unverified") {
+      if (y.markPolicyDenied(host, h)) logVisibilityLookupFailed("policy_denied");
+    } else y.record(host, h, P);
+  });
+  return {
+    slug: h,
+    host,
+    visibility,
+  };
 }
+//@ chunk-s61vbvea.js:527507-527685 placement
 /**
  * 记录可见性查询耗时（令牌、请求）。
  */
-//@ chunk-s61vbvea.js:527507-527685 placement
 function logVisibilityLookupTiming(e) {
-  if (e.tokenMs === void 0) return;
+  if (e.tokenMs === undefined) return;
   try {
     logEvent("tengu_auto_mode_repo_visibility_lookup_timed", {
       token_ms: e.tokenMs,
@@ -168,54 +199,69 @@ function logVisibilityLookupTiming(e) {
   }
 }
 //@ chunk-s61vbvea.js:527685-527765 placement
-function Ii(e) {
-  logEvent("tengu_auto_mode_repo_visibility_lookup_failed", { reason: fromEnum(e) });
+function logVisibilityLookupFailed(e) {
+  logEvent("tengu_auto_mode_repo_visibility_lookup_failed", {
+    reason: fromEnum(e),
+  });
 }
 //@ chunk-s61vbvea.js:527765-528763 placement
 async function classifyGitHost(e, n, r, s) {
   if (!isGithubDotCom(e)) {
-    let w = getGitHostKind(e);
-    return (Ii(w === "gitlab" || w === "bitbucket" ? w : "other_host"), "unknown");
+    let gitHostKind = getGitHostKind(e);
+    logVisibilityLookupFailed(
+      gitHostKind === "gitlab" || gitHostKind === "bitbucket" ? gitHostKind : "other_host",
+    );
+    return "unknown";
   }
   let h = `${githubApiBase(e)}/repos/${encodeURIComponent(n)}/${encodeURIComponent(r)}`;
   if (isTelemetryDisabled()) return "unknown";
   if (!isPolicyAllowed("allow_repo_visibility_probe")) return "unverified";
-  let y,
-    S = () => {
-      if (s !== void 0 && y !== void 0) s.requestMs ??= Date.now() - y;
-    };
+  let y;
+  let S = () => {
+    if (s !== undefined && y !== undefined) s.requestMs ??= Date.now() - y;
+  };
   try {
-    let now = Date.now(),
-      R = await rk(e);
-    if (s !== void 0) ((s.tokenMs = Date.now() - now), (s.hadToken = R !== null));
+    let now = Date.now();
+    let R = await ghTokenOrNull(e);
+    if (s !== undefined) {
+      s.tokenMs = Date.now() - now;
+      s.hadToken = R !== null;
+    }
     y = Date.now();
     let { data: x } = await externalHttp.get(h, {
       headers: {
-        ...(R && { Authorization: `Bearer ${R}` }),
+        ...(R && {
+          Authorization: `Bearer ${R}`,
+        }),
         Accept: "application/vnd.github+json",
-        "X-GitHub-Api-Version": A$,
+        "X-GitHub-Api-Version": VISIBILITY_API_VERSION,
         "User-Agent": claudeCodeUserAgent(),
       },
-      timeout: ok,
-      signal: AbortSignal.timeout(ok),
+      timeout: VISIBILITY_LOOKUP_TIMEOUT_MS,
+      signal: AbortSignal.timeout(VISIBILITY_LOOKUP_TIMEOUT_MS),
       maxRedirects: 0,
     });
     S();
-    let safeParse = REPO_VISIBILITY_RESPONSE_SCHEMA().safeParse(x);
-    if (!safeParse.success) return (Ii("parse_error"), "unknown");
-    let visibility = safeParse.data.visibility;
+    let P = REPO_VISIBILITY_RESPONSE_SCHEMA().safeParse(x);
+    if (!P.success) {
+      logVisibilityLookupFailed("parse_error");
+      return "unknown";
+    }
+    let visibility = P.data.visibility;
     if (visibility === "public") return "public";
     if (visibility === "private" || visibility === "internal") return "private";
-    if (safeParse.data.private === !0) return "private";
-    if (safeParse.data.private === !1) return "public";
-    return (Ii("missing_fields"), "unknown");
+    if (P.data.private === true) return "private";
+    if (P.data.private === false) return "public";
+    logVisibilityLookupFailed("missing_fields");
+    return "unknown";
   } catch {
-    return (S(), Ii("http_error"), "unknown");
+    S();
+    logVisibilityLookupFailed("http_error");
+    return "unknown";
   }
 }
-
 export {
-  oqe,
+  sanitizeCacheKey,
   effectiveVisibility,
   repoVisibilityStore,
   isRepoVisibilityCheckEnabled,

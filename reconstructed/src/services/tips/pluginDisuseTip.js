@@ -8,64 +8,70 @@
  * pieces: chunk-4r6qcn1a.js (4)
  * attribution: placement 4
  */
-import { ypr } from "../../utils/plugins/pluginLoadState.js";
+import { isPluginLoadCacheOnly } from "../../utils/plugins/pluginLoadState.js";
 import { getStrictKnownMarketplaces } from "../../utils/plugins/marketplacePolicy.js";
-import { af } from "../../utils/plugins/pluginPolicy.js";
+import { policyEnabledPluginNameSet } from "../../utils/plugins/pluginPolicy.js";
 import { getPluginSeedDirs } from "../../utils/plugins/pluginDirectories.js";
 import { getGlobalConfig } from "../../utils/config.js";
 import { parsePluginIdentifier, isOfficialMarketplace } from "../../utils/plugins/pluginIdentifier.js";
-import { getEnabledVia, Qtr, eYo, disuseStats } from "../../utils/telemetry/pluginTelemetry.js";
+import {
+  getEnabledVia,
+  pluginUsageRecord,
+  hasPendingUsage,
+  disuseStats,
+} from "../../utils/telemetry/pluginTelemetry.js";
 import { logForDebugging } from "../../utils/debug.js";
 
 //@ chunk-4r6qcn1a.js:462-476 placement
-var d = 14,
-  f = 10;
+var MIN_DISUSE_DAYS = 14;
+var MIN_DISUSE_SESSIONS = 10;
 //@ chunk-4r6qcn1a.js:476-1160 placement
 async function computeDisusedPlugins() {
   try {
-    let e = ypr();
-    if (e === void 0) return [];
+    let e = isPluginLoadCacheOnly();
+    if (e === undefined) return [];
     if (getStrictKnownMarketplaces() !== null) return [];
-    let { enabled: enabled } = await e;
+    let { enabled } = await e;
     if (enabled.length === 0) return [];
-    let u = af(),
-      l = getPluginSeedDirs(),
-      numStartups = getGlobalConfig().numStartups,
-      now = Date.now(),
-      r = [];
+    let managedNames = policyEnabledPluginNameSet();
+    let seedDirs = getPluginSeedDirs();
+    let numStartups = getGlobalConfig().numStartups;
+    let now = Date.now();
+    let r = [];
     for (let n of enabled) {
-      let { marketplace: marketplace } = parsePluginIdentifier(n.repository);
+      let { marketplace } = parsePluginIdentifier(n.repository);
       if (!marketplace || isOfficialMarketplace(marketplace)) continue;
-      if (getEnabledVia(n, u, l) !== "user-install") continue;
+      if (getEnabledVia(n, managedNames, seedDirs) !== "user-install") continue;
       if (hasNonSkillComponents(n)) continue;
-      let i = Qtr(n.repository);
+      let i = pluginUsageRecord(n.repository);
       if (!i) continue;
-      if (eYo(n.repository)) continue;
-      let { sessionsSinceLastUse: sessionsSinceLastUse, daysSinceLastUse: daysSinceLastUse } = disuseStats(
-        i,
-        numStartups,
-        now,
-      );
-      if (daysSinceLastUse >= d && sessionsSinceLastUse >= f)
-        r.push({ pluginId: n.repository, name: n.name, daysSinceLastUse: daysSinceLastUse });
+      if (hasPendingUsage(n.repository)) continue;
+      let { sessionsSinceLastUse, daysSinceLastUse } = disuseStats(i, numStartups, now);
+      if (daysSinceLastUse >= MIN_DISUSE_DAYS && sessionsSinceLastUse >= MIN_DISUSE_SESSIONS)
+        r.push({
+          pluginId: n.repository,
+          name: n.name,
+          daysSinceLastUse,
+        });
     }
-    return (r.sort((n, o) => o.daysSinceLastUse - n.daysSinceLastUse), r);
+    r.sort((n, o) => o.daysSinceLastUse - n.daysSinceLastUse);
+    return r;
   } catch (error) {
-    return (
-      logForDebugging(`plugin-disuse tip: failed to compute disused plugins: ${error}`, { level: "error" }),
-      []
-    );
+    logForDebugging(`plugin-disuse tip: failed to compute disused plugins: ${error}`, {
+      level: "error",
+    });
+    return [];
   }
 }
+//@ chunk-4r6qcn1a.js:1160-1312 placement
 /**
  * 返回插件距上次使用的天数（没有严格市场限制时）：找不到记录返回 null，当前正在使用返回 0。
  */
-//@ chunk-4r6qcn1a.js:1160-1312 placement
-function getPluginDaysSinceUse(e) {
+function getPluginDaysSinceUse(repository) {
   if (getStrictKnownMarketplaces() !== null) return null;
-  let s = Qtr(e);
+  let s = pluginUsageRecord(repository);
   if (!s) return null;
-  if (eYo(e)) return 0;
+  if (hasPendingUsage(repository)) return 0;
   return disuseStats(s, getGlobalConfig().numStartups, Date.now()).daysSinceLastUse;
 }
 //@ chunk-4r6qcn1a.js:1312-1490 placement
@@ -80,5 +86,4 @@ function hasNonSkillComponents(e) {
     e.workflowsPaths?.length,
   );
 }
-
 export { computeDisusedPlugins, getPluginDaysSinceUse };

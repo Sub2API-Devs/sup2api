@@ -8,13 +8,14 @@
 import { x } from "../../../../../../runtime/bun-runtime.js";
 
 //@ chunk-fq0cr76a.js:515173-515339 cjs-fingerprint
-var nU = x(function (tU) {
-  Object.defineProperty(tU, "__esModule", { value: !0 });
-  tU.serviceDesc = cie;
-  function cie(e, n, ...r) {
-    if (r.length > 0) throw Error();
-    return e.services[n];
+var require_service = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.serviceDesc = serviceDesc;
+  function serviceDesc(file, path, ...paths) {
+    if (paths.length > 0) throw Error();
+    return file.services[path];
   }
 });
-
-export { nU };
+export { require_service };

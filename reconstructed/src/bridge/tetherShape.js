@@ -12,10 +12,14 @@ import { Ar } from "../../runtime/bun-runtime.js";
 import { ENV_PARSERS } from "../utils/envSchema.js";
 
 //@ chunk-hy3czzmn.js:486-495 placement
-var e = {};
+var TETHER_SHAPE_EXPORTS = {};
 //@ chunk-hy3czzmn.js:495-533 placement
-Ar(e, { CLAUDE_CODE_TETHER_LIVE: () => triBool });
+Ar(TETHER_SHAPE_EXPORTS, {
+  CLAUDE_CODE_TETHER_LIVE: () => t,
+});
 //@ chunk-hy3czzmn.js:533-551 placement
-var triBool = ENV_PARSERS.triBool();
+var t = ENV_PARSERS.triBool();
 //@ chunk-hy3czzmn.js:551-564 placement
-var o = { ...e };
+var tetherShapeCopy = {
+  ...TETHER_SHAPE_EXPORTS,
+};

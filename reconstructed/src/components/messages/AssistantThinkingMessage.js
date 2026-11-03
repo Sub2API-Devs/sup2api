@@ -10,105 +10,137 @@
  */
 import { w } from "../../../vendor/react/compiler-runtime.js";
 import { EARLY_RETURN_SENTINEL, MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
-import { Cb } from "../../services/orgMemory/promptIndex.js";
+import { stripMemoryTags } from "../../services/orgMemory/promptIndex.js";
 import { Box, Text } from "../../ink/components/Text.js";
-import { e, r } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { THEREFORE } from "../../utils/permissions/autoModeRulesPrompt.js";
 import { MarkdownText_2 } from "../pluginUi/render/MarkdownBlock.js";
 
+//@ chunk-ah34pb7m.js:63074-64176 fingerprint = AssistantThinkingMessage (0.517)
 /**
  * 思考块：非 verbose/transcript 时显示 "✻ Thinking…"（可 ctrl+o 展开），否则显示全文。
  */
-//@ chunk-ah34pb7m.js:63074-64176 fingerprint = AssistantThinkingMessage (0.517)
-function AssistantThinkingMessage(t0) {
-  let $ = w(27),
-    { param: t1, addMargin: t2, isTranscriptMode: isTranscriptMode, verbose: verbose } = t0,
-    { thinking: thinking } = t1,
-    M = t2 === void 0 ? !1 : t2,
-    x,
-    k,
-    b,
-    E,
-    B,
-    L,
-    N,
-    W,
-    U,
-    K;
+function AssistantThinkingMessage(props) {
+  let $ = w(27);
+  let { param, addMargin, isTranscriptMode, verbose } = props;
+  let { thinking } = param;
+  let M = addMargin === undefined ? false : addMargin;
+  let x;
+  let k;
+  let b;
+  let flexDirection;
+  let flexGrow;
+  let children;
+  let flexDirection_2;
+  let marginTop;
+  let width;
+  let K;
   if ($[0] !== M || $[1] !== isTranscriptMode || $[2] !== thinking || $[3] !== verbose) {
     b = EARLY_RETURN_SENTINEL;
     Y: {
-      let V = Cb(thinking);
+      let V = stripMemoryTags(thinking);
       if (!V) {
         b = null;
         break Y;
       }
       let X = isTranscriptMode || verbose;
       k = Box;
-      N = "row";
-      W = M ? 1 : 0;
-      U = "100%";
-      if ($[14] === MEMO_CACHE_SENTINEL)
-        ((K = e(Box, {
+      flexDirection_2 = "row";
+      marginTop = M ? 1 : 0;
+      width = "100%";
+      if ($[14] === MEMO_CACHE_SENTINEL) {
+        K = jsxProd_default(Box, {
           minWidth: 2,
-          children: e(Text, { "aria-label": "thinking:", dimColor: !0, italic: !0, children: THEREFORE }),
-        })),
-          ($[14] = K));
-      else K = $[14];
+          children: jsxProd_default(Text, {
+            "aria-label": "thinking:",
+            dimColor: true,
+            italic: true,
+            children: THEREFORE,
+          }),
+        });
+        $[14] = K;
+      } else K = $[14];
       x = Box;
-      E = "column";
-      B = 1;
-      L = X
-        ? e(MarkdownText_2, { dimColor: !0, capProseWidth: !0, children: V.trim() })
-        : e(Text, { dimColor: !0, italic: !0, children: V.trim().replace(/\s+/g, " ") });
+      flexDirection = "column";
+      flexGrow = 1;
+      children = X
+        ? jsxProd_default(MarkdownText_2, {
+            dimColor: true,
+            capProseWidth: true,
+            children: V.trim(),
+          })
+        : jsxProd_default(Text, {
+            dimColor: true,
+            italic: true,
+            children: V.trim().replace(/\s+/g, " "),
+          });
     }
-    (($[0] = M),
-      ($[1] = isTranscriptMode),
-      ($[2] = thinking),
-      ($[3] = verbose),
-      ($[4] = x),
-      ($[5] = k),
-      ($[6] = b),
-      ($[7] = E),
-      ($[8] = B),
-      ($[9] = L),
-      ($[10] = N),
-      ($[11] = W),
-      ($[12] = U),
-      ($[13] = K));
-  } else
-    ((x = $[4]),
-      (k = $[5]),
-      (b = $[6]),
-      (E = $[7]),
-      (B = $[8]),
-      (L = $[9]),
-      (N = $[10]),
-      (W = $[11]),
-      (U = $[12]),
-      (K = $[13]));
+    $[0] = M;
+    $[1] = isTranscriptMode;
+    $[2] = thinking;
+    $[3] = verbose;
+    $[4] = x;
+    $[5] = k;
+    $[6] = b;
+    $[7] = flexDirection;
+    $[8] = flexGrow;
+    $[9] = children;
+    $[10] = flexDirection_2;
+    $[11] = marginTop;
+    $[12] = width;
+    $[13] = K;
+  } else {
+    x = $[4];
+    k = $[5];
+    b = $[6];
+    flexDirection = $[7];
+    flexGrow = $[8];
+    children = $[9];
+    flexDirection_2 = $[10];
+    marginTop = $[11];
+    width = $[12];
+    K = $[13];
+  }
   if (b !== EARLY_RETURN_SENTINEL) return b;
   let z;
-  if ($[15] !== x || $[16] !== E || $[17] !== B || $[18] !== L)
-    ((z = e(x, { flexDirection: E, flexGrow: B, children: L })),
-      ($[15] = x),
-      ($[16] = E),
-      ($[17] = B),
-      ($[18] = L),
-      ($[19] = z));
-  else z = $[19];
+  if ($[15] !== x || $[16] !== flexDirection || $[17] !== flexGrow || $[18] !== children) {
+    z = jsxProd_default(x, {
+      flexDirection,
+      flexGrow,
+      children,
+    });
+    $[15] = x;
+    $[16] = flexDirection;
+    $[17] = flexGrow;
+    $[18] = children;
+    $[19] = z;
+  } else z = $[19];
   let ee;
-  if ($[20] !== k || $[21] !== z || $[22] !== N || $[23] !== W || $[24] !== U || $[25] !== K)
-    ((ee = r(k, { flexDirection: N, marginTop: W, width: U, children: [K, z] })),
-      ($[20] = k),
-      ($[21] = z),
-      ($[22] = N),
-      ($[23] = W),
-      ($[24] = U),
-      ($[25] = K),
-      ($[26] = ee));
-  else ee = $[26];
+  if (
+    $[20] !== k ||
+    $[21] !== z ||
+    $[22] !== flexDirection_2 ||
+    $[23] !== marginTop ||
+    $[24] !== width ||
+    $[25] !== K
+  ) {
+    ee = jsxProd_default_2(k, {
+      flexDirection: flexDirection_2,
+      marginTop,
+      width,
+      children: [K, z],
+    });
+    $[20] = k;
+    $[21] = z;
+    $[22] = flexDirection_2;
+    $[23] = marginTop;
+    $[24] = width;
+    $[25] = K;
+    $[26] = ee;
+  } else ee = $[26];
   return ee;
 }
-
 export { AssistantThinkingMessage };

@@ -8,82 +8,100 @@
 import { x } from "../../runtime/bun-runtime.js";
 
 //@ chunk-na3pph4p.js:55402-56876 cjs-fingerprint
-var Un = x(function (vu) {
-  vu.byteLength = mu;
-  vu.toByteArray = wu;
-  vu.fromByteArray = Cu;
-  var Ne = [],
-    _e = [],
-    _u = typeof Uint8Array < "u" ? Uint8Array : Array,
-    Lr = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-  for (He = 0, Gr = Lr.length; He < Gr; ++He) ((Ne[He] = Lr[He]), (_e[Lr.charCodeAt(He)] = He));
-  var He, Gr;
-  _e[45] = 62;
-  _e[95] = 63;
-  function In(e) {
-    var t = e.length;
-    if (t % 4 > 0) throw Error("Invalid string. Length must be a multiple of 4");
-    var index = e.indexOf("=");
-    if (index === -1) index = t;
-    var s = index === t ? 0 : 4 - (index % 4);
-    return [index, s];
+var require_base64_js = x(function (cjsExports) {
+  cjsExports.byteLength = byteLength;
+  cjsExports.toByteArray = toByteArray;
+  cjsExports.fromByteArray = fromByteArray;
+  var lookup = [];
+  var revLookup = [];
+  var Arr = typeof Uint8Array !== "undefined" ? Uint8Array : Array;
+  var code = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  for (i = 0, len = code.length; i < len; ++i) {
+    lookup[i] = code[i];
+    revLookup[code.charCodeAt(i)] = i;
   }
-  function mu(e) {
-    var t = In(e),
-      r = t[0],
-      s = t[1];
-    return ((r + s) * 3) / 4 - s;
+  var i;
+  var len;
+  revLookup[45] = 62;
+  revLookup[95] = 63;
+  function getLens(b64) {
+    var len = b64.length;
+    if (len % 4 > 0) throw Error("Invalid string. Length must be a multiple of 4");
+    var validLen = b64.indexOf("=");
+    if (validLen === -1) validLen = len;
+    var placeHoldersLen = validLen === len ? 0 : 4 - (validLen % 4);
+    return [validLen, placeHoldersLen];
   }
-  function Eu(e, t, r) {
-    return ((t + r) * 3) / 4 - r;
+  function byteLength(b64) {
+    var lens = getLens(b64);
+    var validLen = lens[0];
+    var placeHoldersLen = lens[1];
+    return ((validLen + placeHoldersLen) * 3) / 4 - placeHoldersLen;
   }
-  function wu(e) {
-    var t,
-      r = In(e),
-      s = r[0],
-      n = r[1],
-      a = new _u(Eu(e, s, n)),
-      h = 0,
-      g = n > 0 ? s - 4 : s,
-      E;
-    for (E = 0; E < g; E += 4)
-      ((t =
-        (_e[e.charCodeAt(E)] << 18) |
-        (_e[e.charCodeAt(E + 1)] << 12) |
-        (_e[e.charCodeAt(E + 2)] << 6) |
-        _e[e.charCodeAt(E + 3)]),
-        (a[h++] = (t >> 16) & 255),
-        (a[h++] = (t >> 8) & 255),
-        (a[h++] = t & 255));
-    if (n === 2) ((t = (_e[e.charCodeAt(E)] << 2) | (_e[e.charCodeAt(E + 1)] >> 4)), (a[h++] = t & 255));
-    if (n === 1)
-      ((t = (_e[e.charCodeAt(E)] << 10) | (_e[e.charCodeAt(E + 1)] << 4) | (_e[e.charCodeAt(E + 2)] >> 2)),
-        (a[h++] = (t >> 8) & 255),
-        (a[h++] = t & 255));
-    return a;
+  function _byteLength(b64, validLen, placeHoldersLen) {
+    return ((validLen + placeHoldersLen) * 3) / 4 - placeHoldersLen;
   }
-  function Au(e) {
-    return Ne[(e >> 18) & 63] + Ne[(e >> 12) & 63] + Ne[(e >> 6) & 63] + Ne[e & 63];
+  function toByteArray(b64) {
+    var tmp;
+    var lens = getLens(b64);
+    var validLen = lens[0];
+    var placeHoldersLen = lens[1];
+    var arr = new Arr(_byteLength(b64, validLen, placeHoldersLen));
+    var curByte = 0;
+    var len = placeHoldersLen > 0 ? validLen - 4 : validLen;
+    var i;
+    for (i = 0; i < len; i += 4) {
+      tmp =
+        (revLookup[b64.charCodeAt(i)] << 18) |
+        (revLookup[b64.charCodeAt(i + 1)] << 12) |
+        (revLookup[b64.charCodeAt(i + 2)] << 6) |
+        revLookup[b64.charCodeAt(i + 3)];
+      arr[curByte++] = (tmp >> 16) & 255;
+      arr[curByte++] = (tmp >> 8) & 255;
+      arr[curByte++] = tmp & 255;
+    }
+    if (placeHoldersLen === 2) {
+      tmp = (revLookup[b64.charCodeAt(i)] << 2) | (revLookup[b64.charCodeAt(i + 1)] >> 4);
+      arr[curByte++] = tmp & 255;
+    }
+    if (placeHoldersLen === 1) {
+      tmp =
+        (revLookup[b64.charCodeAt(i)] << 10) |
+        (revLookup[b64.charCodeAt(i + 1)] << 4) |
+        (revLookup[b64.charCodeAt(i + 2)] >> 2);
+      arr[curByte++] = (tmp >> 8) & 255;
+      arr[curByte++] = tmp & 255;
+    }
+    return arr;
   }
-  function Tu(e, t, r) {
-    var s,
-      n = [];
-    for (var a = t; a < r; a += 3)
-      ((s = ((e[a] << 16) & 16711680) + ((e[a + 1] << 8) & 65280) + (e[a + 2] & 255)), n.push(Au(s)));
-    return n.join("");
+  function tripletToBase64(num) {
+    return lookup[(num >> 18) & 63] + lookup[(num >> 12) & 63] + lookup[(num >> 6) & 63] + lookup[num & 63];
   }
-  function Cu(e) {
-    var t,
-      r = e.length,
-      s = r % 3,
-      n = [],
-      a = 16383;
-    for (var h = 0, g = r - s; h < g; h += a) n.push(Tu(e, h, h + a > g ? g : h + a));
-    if (s === 1) ((t = e[r - 1]), n.push(Ne[t >> 2] + Ne[(t << 4) & 63] + "=="));
-    else if (s === 2)
-      ((t = (e[r - 2] << 8) + e[r - 1]), n.push(Ne[t >> 10] + Ne[(t >> 4) & 63] + Ne[(t << 2) & 63] + "="));
-    return n.join("");
+  function encodeChunk(uint8, start, end) {
+    var tmp;
+    var output = [];
+    for (var i = start; i < end; i += 3) {
+      tmp = ((uint8[i] << 16) & 16711680) + ((uint8[i + 1] << 8) & 65280) + (uint8[i + 2] & 255);
+      output.push(tripletToBase64(tmp));
+    }
+    return output.join("");
+  }
+  function fromByteArray(uint8) {
+    var tmp;
+    var len = uint8.length;
+    var extraBytes = len % 3;
+    var parts = [];
+    var maxChunkLength = 16383;
+    for (var i = 0, len2 = len - extraBytes; i < len2; i += maxChunkLength)
+      parts.push(encodeChunk(uint8, i, i + maxChunkLength > len2 ? len2 : i + maxChunkLength));
+    if (extraBytes === 1) {
+      tmp = uint8[len - 1];
+      parts.push(lookup[tmp >> 2] + lookup[(tmp << 4) & 63] + "==");
+    } else if (extraBytes === 2) {
+      tmp = (uint8[len - 2] << 8) + uint8[len - 1];
+      parts.push(lookup[tmp >> 10] + lookup[(tmp >> 4) & 63] + lookup[(tmp << 2) & 63] + "=");
+    }
+    return parts.join("");
   }
 });
-
-export { Un };
+export { require_base64_js };

@@ -16,49 +16,53 @@ import {
 } from "../../tools/SkillTool/prompt.js";
 
 //@ chunk-vqq8wr5t.js:240-327 placement
-function h(e, o) {
-  let p = getCommandDescription(e),
-    min = Math.min(p.length, getSkillDescMaxChars());
+function skillDescriptionBudget(e, o) {
+  let commandDescription = getCommandDescription(e);
+  let min = Math.min(commandDescription.length, getSkillDescMaxChars());
   return 2 + getSkillListingLabel(e, o).length + 2 + min + 1;
 }
+//@ chunk-vqq8wr5t.js:327-965 placement
 /**
  * 统计各插件可被模型调用的技能占用的描述预算。
  */
-//@ chunk-vqq8wr5t.js:327-965 placement
 function pluginSkillBudgetUsage(e, o, p) {
   let s = new Map();
   for (let n of e) {
     if (n.type !== "prompt" || n.disableModelInvocation) continue;
     let t = n.pluginInfo?.pluginManifest.name;
     if (!t) continue;
-    let a = h(n, e),
-      r = s.get(t) ?? [];
-    (r.push({ name: n.name, chars: a, approxTokens: Math.round(a / o) }), s.set(t, r));
+    let a = skillDescriptionBudget(n, e);
+    let r = s.get(t) ?? [];
+    r.push({
+      name: n.name,
+      chars: a,
+      approxTokens: Math.round(a / o),
+    });
+    s.set(t, r);
   }
   let sorted = [...s.entries()]
-      .map(([n, t]) => {
-        t.sort((r, u) => u.chars - r.chars);
-        let reduced = t.reduce((r, u) => r + u.chars, 0);
-        return {
-          pluginName: n,
-          skillCount: t.length,
-          chars: reduced,
-          approxTokens: Math.round(reduced / o),
-          skills: t,
-        };
-      })
-      .sort((n, t) => t.chars - n.chars),
-    reduced = sorted.reduce((n, t) => n + t.chars, 0),
-    i = getCharBudget(p, o),
-    l = reduced > i,
-    g = l ? i : reduced;
+    .map(([n, t]) => {
+      t.sort((r, u) => u.chars - r.chars);
+      let reduced = t.reduce((acc, u) => acc + u.chars, 0);
+      return {
+        pluginName: n,
+        skillCount: t.length,
+        chars: reduced,
+        approxTokens: Math.round(reduced / o),
+        skills: t,
+      };
+    })
+    .sort((n, t) => t.chars - n.chars);
+  let reduced = sorted.reduce((acc, t) => acc + t.chars, 0);
+  let charBudget = getCharBudget(p, o);
+  let l = reduced > charBudget;
+  let g = l ? charBudget : reduced;
   return {
     byPlugin: sorted,
     totalChars: g,
     totalTokens: Math.round(g / o),
     overBudget: l,
-    budgetTokens: Math.round(i / o),
+    budgetTokens: Math.round(charBudget / o),
   };
 }
-
 export { pluginSkillBudgetUsage };

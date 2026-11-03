@@ -313,8 +313,9 @@ for (const [file, o] of outputs) {
     }
     const dp = declPath.get(id);
     const mm = match.get(id);
-    if (declDocs.has(id)) body.push(jsdoc(declDocs.get(id)));
     body.push('//@ ' + d.file + ':' + d.start + '-' + d.end + ' ' + (dp?.method ?? '') + (mm ? ' = ' + mm.refName + (mm.score !== undefined ? ' (' + mm.score + ')' : '') : ''));
+    // the JSDoc sits directly above its declaration, under the provenance line
+    if (declDocs.has(id)) body.push(jsdoc(declDocs.get(id)));
     body.push(declText.get(d) ?? '/* missing */');
   }
   body.push(...aliasLines);
@@ -383,7 +384,9 @@ for (const [file, info] of Object.entries(manifest)) {
     d.names.forEach((n, k) => {
       const t = topByMin.get(d.file)?.get(n);
       const name = t?.rec.name ?? n;
-      let line = i + 2;
+      let first = i + 1; // first line after the provenance line and its JSDoc
+      if (lines[first]?.startsWith('/**')) { while (first < lines.length && !lines[first].includes('*/')) first++; first++; }
+      let line = first + 1;
       if (d.names.length > 1) {
         const re = new RegExp('^\\s*(?:export\\s+)?(?:var|let|const|class|(?:async\\s+)?function\\*?)\\s+' + escRe(name) + '(?![\\w$])');
         for (let j = i + 1; j < lines.length && !lines[j].startsWith('//@ '); j++) if (re.test(lines[j])) { line = j + 1; break; }

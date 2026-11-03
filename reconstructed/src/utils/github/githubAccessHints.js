@@ -9,7 +9,7 @@
  * attribution: placement 5
  */
 import { connectGithubUrl } from "../../services/cloudSessions/webSetup.js";
-import { B4e } from "../../bridge/githubPrSubscription.js";
+import { GITHUB_APP_INSTALL_URL } from "../../bridge/githubPrSubscription.js";
 import { isEssentialTrafficOnly } from "../privacyLevel.js";
 import { isFirstPartyProvider } from "../model/providers.js";
 import { checkAndRefreshOAuthTokenIfNeeded } from "../auth.js";
@@ -28,48 +28,54 @@ function noAccessText(e) {
 }
 //@ chunk-ee3471fv.js:840-1294 placement
 function installAppHint(e) {
-  let r = e.apostrophe ?? "'",
-    o = `install the app at ${B4e}`,
-    webSetupHint = e.webSetupHint,
-    i =
-      webSetupHint && e.leadWithWebSetup
-        ? `${webSetupHint}, or ${o}`
-        : `${o}${webSetupHint ? `, or ${webSetupHint}` : ""}`;
-  return `Your connected GitHub account can${r}t see ${e.owner}/${e.name} \u2014 usually the Claude GitHub app isn${r}t installed on ${e.owner} or wasn${r}t granted this repo (web-connected accounts need it for private repos), or a different GitHub account is connected. To fix: ${i} \u2014 ${e.rerun}.`;
+  let apostrophe = e.apostrophe ?? "'";
+  let o = `install the app at ${GITHUB_APP_INSTALL_URL}`;
+  let webSetupHint = e.webSetupHint;
+  let i =
+    webSetupHint && e.leadWithWebSetup
+      ? `${webSetupHint}, or ${o}`
+      : `${o}${webSetupHint ? `, or ${webSetupHint}` : ""}`;
+  return `Your connected GitHub account can${apostrophe}t see ${e.owner}/${e.name} \u2014 usually the Claude GitHub app isn${apostrophe}t installed on ${e.owner} or wasn${apostrophe}t granted this repo (web-connected accounts need it for private repos), or a different GitHub account is connected. To fix: ${i} \u2014 ${e.rerun}.`;
 }
 //@ chunk-ee3471fv.js:1294-1318 placement
-var b = 5000,
-  l = 2147483647;
+var PROBE_TIMEOUT_MS = 5000;
+var MAX_TIMEOUT_MS = 2147483647;
+//@ chunk-ee3471fv.js:1318-1921 placement
 /**
  * 探测连接的 GitHub 账号能否访问仓库，返回结论与 HTTP 状态（非第一方或仅必要流量时直接不确定）。
  */
-//@ chunk-ee3471fv.js:1318-1921 placement
-async function probeGithubRepoAccess(e, r, o = b) {
-  let n = { verdict: "inconclusive", httpStatus: null };
+async function probeGithubRepoAccess(owner, name, accessProbeBudgetMs = PROBE_TIMEOUT_MS) {
+  let n = {
+    verdict: "inconclusive",
+    httpStatus: null,
+  };
   if (isEssentialTrafficOnly() || !isFirstPartyProvider()) return n;
-  let i = Number.isSafeInteger(o) && o > 0 ? Math.min(o, l) : 0;
+  let i =
+    Number.isSafeInteger(accessProbeBudgetMs) && accessProbeBudgetMs > 0
+      ? Math.min(accessProbeBudgetMs, MAX_TIMEOUT_MS)
+      : 0;
   if (i === 0) return n;
-  let timeout = AbortSignal.timeout(i),
-    a = (async () => {
-      if ((await checkAndRefreshOAuthTokenIfNeeded(), timeout.aborted)) return n;
-      let { linkedAccountAccess: linkedAccountAccess, httpStatus: httpStatus } =
-        await checkGithubAppInstalled(e, r, timeout, { resyncUndetermined: !1 });
-      return { verdict: linkedAccountAccess, httpStatus: httpStatus };
-    })(),
-    u = await raceWithAbortSignal(a, timeout, () => Error("budget expired")).catch(
-      (s) => (
-        logForDebugging(
-          `linked GitHub account access probe gave up, treating as inconclusive: ${errorMessage(s)}`,
-        ),
-        n
-      ),
-    );
-  return (
+  let c = AbortSignal.timeout(i);
+  let a = (async () => {
+    await checkAndRefreshOAuthTokenIfNeeded();
+    if (c.aborted) return n;
+    let { linkedAccountAccess, httpStatus } = await checkGithubAppInstalled(owner, name, c, {
+      resyncUndetermined: false,
+    });
+    return {
+      verdict: linkedAccountAccess,
+      httpStatus,
+    };
+  })();
+  let u = await raceWithAbortSignal(a, c, () => Error("budget expired")).catch((error) => {
     logForDebugging(
-      `linked GitHub account access to ${e}/${r}: ${u.verdict} (HTTP ${u.httpStatus ?? "none"})`,
-    ),
-    u
+      `linked GitHub account access probe gave up, treating as inconclusive: ${errorMessage(error)}`,
+    );
+    return n;
+  });
+  logForDebugging(
+    `linked GitHub account access to ${owner}/${name}: ${u.verdict} (HTTP ${u.httpStatus ?? "none"})`,
   );
+  return u;
 }
-
 export { probeGithubRepoAccess, noAccessText, installAppHint, connectAccountHint };

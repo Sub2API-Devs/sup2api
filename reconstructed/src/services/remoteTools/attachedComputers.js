@@ -10,10 +10,10 @@
  */
 import { RemoteBackgroundCommands } from "./backgroundCommands.js";
 
+//@ chunk-xssqvf8d.js:4427-4571 placement
 /**
  * 判断会话是否有已附加的电脑。
  */
-//@ chunk-xssqvf8d.js:4427-4571 placement
 function hasAttachedComputers(o) {
   let entries = o.get(RemoteBackgroundCommands).entries();
   if (!Array.isArray(entries)) throw TypeError("the record of attached computers gave no list");

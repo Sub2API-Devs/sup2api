@@ -8,29 +8,31 @@
  * pieces: chunk-18hwfzwa.js (12), chunk-fpjsca9n.js (1)
  * attribution: fingerprint 2, placement 11
  */
-import { unlink, unlink as unlink_2 } from "fs/promises";
-import {
-  join,
-  join as join_2,
-  join as join_3,
-  join as join_4,
-  join as join_5,
-  join as join_6,
-  join as join_7,
-  join as join_8,
-  join as join_9,
-  join as join_10,
-  join as join_11,
-  join as join_12,
-} from "path";
+import { unlink } from "fs/promises";
+import { join } from "path";
 import { isToolUseResultMessage, createAwaySummaryMessage } from "../utils/messages.js";
-import { noe, xGo, AGo, mRt, vGo, RGo, MGo, CGo, TGo, _Go, pRt } from "./notifs/startupNotificationSpecs.js";
+import {
+  isRealUserMessage,
+  STARTUP_GRACE_TURNS,
+  STARTUP_GRACE_TURNS_MIN,
+  STARTUP_FLAG_TTL_MS,
+  STARTUP_MIN_INTERVAL_MS,
+  MAX_STARTUP_NOTICES,
+  STARTUP_GRACE_TURNS_MAX,
+  STARTUP_MAX_INTERVAL_MS,
+  STARTUP_BACKOFF_MS,
+  STARTUP_SESSION_BUDGET_MS,
+  STARTUP_CHECK_STEP_MS,
+} from "./notifs/startupNotificationSpecs.js";
 import { countToolCallsSince_2 } from "../tools/SyntheticOutputTool/SyntheticOutputTool.js";
 import { isStorageV5Enabled } from "../utils/hoverRest.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../services/analytics/growthbook.js";
-import { e, r } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+} from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { logForDebugging } from "../utils/debug.js";
-import { o, u, T, M, A } from "../../vendor/zod/v4/classic/schemas.js";
+import { string, u, literal, M, array } from "../../vendor/zod/v4/classic/schemas.js";
 import { Text, Box } from "../ink/components/Text.js";
 import { fromEnum, lit as lit_2 } from "../services/analytics/safeMetadata.js";
 import { env } from "../utils/env.js";
@@ -44,7 +46,7 @@ import {
 import { logFeatureBad, logFeatureSad, logFeatureOk } from "../services/analytics/featureTelemetry.js";
 import { DoctorLazy } from "../cli/handlers/util.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
-import { y, R, P, j } from "../../vendor/react/cjs/react.production.js";
+import { y, R, P, init_react_production } from "../../vendor/react/cjs/react.production.js";
 import {
   getLastMainThreadCacheTtlMs,
   getLastMainThreadCacheRenewedAt,
@@ -60,16 +62,16 @@ import { jobKeyFor } from "../services/daemon/jobState.js";
 import { useRenderMode } from "../ink/renderModeContext.js";
 import { useClock } from "../ink/components/ClockContext.js";
 import { useSession } from "../context/session.js";
-import { Cr, useAppState } from "../state/AppState.js";
-import { Nu } from "../context/QueuedMessageContext.js";
-import { Me } from "../components/design-system/ThemeProvider.js";
+import { useAppStoreDirect, useAppState } from "../state/AppState.js";
+import { useCommandQueueOrDefault } from "../context/QueuedMessageContext.js";
+import { useTheme_2 } from "../components/design-system/ThemeProvider.js";
 import {
   getTerminalFocus as getTerminalFocus_2,
   onTerminalFocusChanged,
 } from "../ink/terminal-focus-state.js";
 import { generateAwaySummary } from "../services/awaySummary.js";
 import { countPendingBackgroundWork } from "../components/messages/SystemTextMessage.js";
-import { bM } from "../state/promptInputStore.js";
+import { promptInputStoreFor } from "../state/promptInputStore.js";
 import { fileHistoryEnabled, fileHistoryRestoreStateFromLog } from "../utils/fileHistory.js";
 import { HostScoped } from "../utils/hostScoped.js";
 import { getPlatform } from "../utils/platform.js";
@@ -77,53 +79,54 @@ import { uiSignals } from "../state/uiSignals.js";
 
 //@ chunk-18hwfzwa.js:1792115-1792200 fingerprint = hasSummarySinceLastUserTurn (0.725)
 function hasSummarySinceLastUserTurn(messages) {
-  let at = messages.at(-1);
-  return at?.type === "system" && at.subtype === "away_summary";
+  let last = messages.at(-1);
+  return last?.type === "system" && last.subtype === "away_summary";
 }
+//@ chunk-18hwfzwa.js:1792200-1792532 placement
 /**
  * 最近一轮是否以工具错误收尾
  */
-//@ chunk-18hwfzwa.js:1792200-1792532 placement
 function isLastTurnFailing(h) {
-  let x = new Set();
-  for (let D = h.length - 1; D >= 0; D--) {
-    let L = h[D];
+  let sinceUuid = new Set();
+  for (let idx = h.length - 1; idx >= 0; idx--) {
+    let L = h[idx];
     if (L.type === "user") {
       if (isToolUseResultMessage(L)) {
-        for (let ee of L.message.content) if (ee.type === "tool_result" && ee.is_error) x.add(ee.tool_use_id);
-      } else if (noe(L)) return !1;
+        for (let ee of L.message.content)
+          if (ee.type === "tool_result" && ee.is_error) sinceUuid.add(ee.tool_use_id);
+      } else if (isRealUserMessage(L)) return false;
       continue;
     }
     if (L.type !== "assistant") continue;
-    for (let ee of L.message.content) if (countToolCallsSince_2(ee, x) !== null) return !0;
+    for (let ee of L.message.content) if (countToolCallsSince_2(ee, sinceUuid) !== null) return true;
   }
-  return !1;
+  return false;
 }
+//@ chunk-18hwfzwa.js:1792532-1792785 placement
 /**
  * 自上次摘要以来人类回合是否足够
  */
-//@ chunk-18hwfzwa.js:1792532-1792785 placement
 function hasEnoughTurnsForAwaySummary(h) {
-  let x = 0,
-    D = -1;
-  for (let ee = 0; ee < h.length; ee++) {
-    let ke = h[ee];
-    if (noe(ke)) x++;
-    if (ke.type === "system" && ke.subtype === "away_summary") D = ee;
+  let x = 0;
+  let D = -1;
+  for (let idx = 0; idx < h.length; idx++) {
+    let ke = h[idx];
+    if (isRealUserMessage(ke)) x++;
+    if (ke.type === "system" && ke.subtype === "away_summary") D = idx;
   }
-  if (x < xGo) return !1;
-  if (D === -1) return !0;
+  if (x < STARTUP_GRACE_TURNS) return false;
+  if (D === -1) return true;
   let L = 0;
-  for (let ee = D + 1; ee < h.length; ee++) if (noe(h[ee])) L++;
-  return L >= AGo;
+  for (let idx = D + 1; idx < h.length; idx++) if (isRealUserMessage(h[idx])) L++;
+  return L >= STARTUP_GRACE_TURNS_MIN;
 }
+//@ chunk-18hwfzwa.js:1792785-1792985 placement
 /**
  * 删除离开摘要标记后强制刷新
  */
-//@ chunk-18hwfzwa.js:1792785-1792985 placement
 async function clearAwaySummaryMarker(h, x, D, L) {
   if (x()) return;
-  if (isStorageV5Enabled() && L !== void 0)
+  if (isStorageV5Enabled() && L !== undefined)
     try {
       let ee = await L.backend.delete(L.key);
       if (!ee.ok || !ee.value.existed) return;
@@ -132,29 +135,35 @@ async function clearAwaySummaryMarker(h, x, D, L) {
     }
   else
     try {
-      await unlink_2(h);
+      await unlink(h);
     } catch {
       return;
     }
-  D({ force: !0 });
+  D({
+    force: true,
+  });
 }
 //@ chunk-18hwfzwa.js:1792985-1793128 placement
 function getAwaySummaryDelayMs() {
-  let h = getFeatureValue_CACHED_MAY_BE_STALE("tengu_sedge_lantern_config", { delayMs: mRt })?.delayMs;
-  return typeof h === "number" && Number.isFinite(h) ? Math.max(vGo, h) : mRt;
+  let delayMs = getFeatureValue_CACHED_MAY_BE_STALE("tengu_sedge_lantern_config", {
+    delayMs: STARTUP_FLAG_TTL_MS,
+  })?.delayMs;
+  return typeof delayMs === "number" && Number.isFinite(delayMs)
+    ? Math.max(STARTUP_MIN_INTERVAL_MS, delayMs)
+    : STARTUP_FLAG_TTL_MS;
 }
+//@ chunk-18hwfzwa.js:1793128-1796873 placement
 /**
  * 离开摘要的状态机：判定跳过原因、生成与追加摘要
  */
-//@ chunk-18hwfzwa.js:1793128-1796873 placement
 class AwaySummaryController {
   #e;
-  #t = !1;
-  #o = !1;
+  #t = false;
+  #o = false;
   #n = null;
   #s = null;
   #r = null;
-  #c = !1;
+  #c = false;
   #i = 0;
   #a = 0;
   #l = 0;
@@ -166,33 +175,42 @@ class AwaySummaryController {
   #S = null;
   #h = null;
   #y = null;
-  #b = !1;
-  #g = !1;
+  #b = false;
+  #g = false;
   constructor(h) {
     this.#e = h;
   }
-  setInputs({ enabled: h, isLoading: x }) {
-    let D = x !== this.#o;
-    if (!this.#o && x && !this.#c) this.#T();
-    if (this.#o && !x) ((this.#n = this.#e.now()), (this.#i = 0), (this.#s = getLastMainThreadCacheTtlMs()));
-    this.#o = x;
-    let L = h !== this.#t;
-    if (L)
-      if (((this.#t = h), h)) this.#C();
+  setInputs({ enabled, isLoading }) {
+    let D = isLoading !== this.#o;
+    if (!this.#o && isLoading && !this.#c) this.#T();
+    if (this.#o && !isLoading) {
+      this.#n = this.#e.now();
+      this.#i = 0;
+      this.#s = getLastMainThreadCacheTtlMs();
+    }
+    this.#o = isLoading;
+    let L = enabled !== this.#t;
+    if (L) {
+      this.#t = enabled;
+      if (enabled) this.#C();
       else this.#w();
+    }
     if (D || L) this.#k();
   }
   markUserScrolled() {
     this.#l = this.#e.now();
   }
   dispose() {
-    if (this.#t) ((this.#t = !1), this.#w());
+    if (this.#t) {
+      this.#t = false;
+      this.#w();
+    }
     this.#M();
   }
   async #v(h) {
     if (!this.#t) return;
-    let x = this.#n,
-      D = this.#s;
+    let x = this.#n;
+    let D = this.#s;
     if (x === null || D === null) {
       logForDebugging("[awaySummary] skipped: cache age unknown");
       return;
@@ -202,7 +220,7 @@ class AwaySummaryController {
       logForDebugging("[awaySummary] skipped: cache stale");
       return;
     }
-    if (!h?.force && !0 && getCurrentLimits().status !== "allowed") {
+    if (!h?.force && true && getCurrentLimits().status !== "allowed") {
       logForDebugging("[awaySummary] skipped: at or near rate limit");
       return;
     }
@@ -211,8 +229,7 @@ class AwaySummaryController {
       return;
     }
     if (!h?.force) {
-      let { pendingAgents: pendingAgents, pendingWorkflows: pendingWorkflows } =
-        this.#e.getPendingBackgroundWork();
+      let { pendingAgents, pendingWorkflows } = this.#e.getPendingBackgroundWork();
       if (pendingAgents > 0 || pendingWorkflows > 0) {
         logForDebugging("[awaySummary] skipped: background work pending");
         return;
@@ -226,189 +243,224 @@ class AwaySummaryController {
       logForDebugging("[awaySummary] skipped: generation in flight");
       return;
     }
-    if (!h?.force && this.#i >= RGo) {
+    if (!h?.force && this.#i >= MAX_STARTUP_NOTICES) {
       logForDebugging("[awaySummary] skipped: failing repeatedly this turn");
       return;
     }
-    let snapshot = this.#e.transcript.getSnapshot();
-    if (!h?.force && !hasEnoughTurnsForAwaySummary(snapshot)) return;
-    if (hasSummarySinceLastUserTurn(snapshot)) return;
-    if (isLastTurnFailing(snapshot)) {
+    let messages = this.#e.transcript.getSnapshot();
+    if (!h?.force && !hasEnoughTurnsForAwaySummary(messages)) return;
+    if (hasSummarySinceLastUserTurn(messages)) return;
+    if (isLastTurnFailing(messages)) {
       logForDebugging("[awaySummary] skipped: StructuredOutput recap present");
       return;
     }
     this.#T();
     let abortController = new AbortController();
-    ((this.#r = abortController), (this.#c = h?.force === !0));
+    this.#r = abortController;
+    this.#c = h?.force === true;
     let Re;
     try {
       Re = await this.#e.generate(abortController.signal);
     } finally {
-      if (this.#r === abortController) ((this.#r = null), (this.#c = !1));
+      if (this.#r === abortController) {
+        this.#r = null;
+        this.#c = false;
+      }
     }
     if (abortController.signal.aborted) return;
     if (Re.kind !== "ok") {
-      (this.#i++, logFeatureBad("away_summary_generate", "generate_failed"));
+      this.#i++;
+      logFeatureBad("away_summary_generate", "generate_failed");
       return;
     }
-    let Be = this.#a < MGo ? `${Re.text} (disable recaps in /config)` : Re.text;
-    if (
-      (this.#a++,
-      this.#e.transcript.apply({ type: "append", messages: [createAwaySummaryMessage(Be)] }),
-      Re.capped)
-    )
-      logFeatureSad("away_summary_generate", "capped");
+    let content = this.#a < STARTUP_GRACE_TURNS_MAX ? `${Re.text} (disable recaps in /config)` : Re.text;
+    this.#a++;
+    this.#e.transcript.apply({
+      type: "append",
+      messages: [createAwaySummaryMessage(content)],
+    });
+    if (Re.capped) logFeatureSad("away_summary_generate", "capped");
     else logFeatureOk("away_summary_generate");
   }
   #C() {
-    ((this.#p = this.#e.focus.subscribe(this.#R)),
-      (this.#u = this.#e.transcript.subscribe(this.#P)),
-      this.#R(),
-      this.#A());
+    this.#p = this.#e.focus.subscribe(this.#R);
+    this.#u = this.#e.transcript.subscribe(this.#P);
+    this.#R();
+    this.#A();
   }
   #w() {
-    (this.#p?.(),
-      (this.#p = null),
-      this.#u?.(),
-      (this.#u = null),
-      this.#m?.(),
-      (this.#m = null),
-      this.#T(),
-      (this.#i = 0),
-      (this.#S = null),
-      this.#_());
+    this.#p?.();
+    this.#p = null;
+    this.#u?.();
+    this.#u = null;
+    this.#m?.();
+    this.#m = null;
+    this.#T();
+    this.#i = 0;
+    this.#S = null;
+    this.#_();
   }
   #T() {
-    (this.#r?.abort(), (this.#r = null), (this.#c = !1));
+    this.#r?.abort();
+    this.#r = null;
+    this.#c = false;
   }
   #x() {
-    let h = this.#s ?? CGo;
+    let h = this.#s ?? STARTUP_MAX_INTERVAL_MS;
     return Math.min(getAwaySummaryDelayMs(), h * 0.8);
   }
   #k() {
-    if ((this.#M(), !this.#t || this.#o)) return;
+    this.#M();
+    if (!this.#t || this.#o) return;
     let h = this.#n;
     if (h === null) return;
-    let now = this.#e.now(),
-      D = this.#S,
-      max = Math.max(0, this.#x() - (now - h), D === null ? 0 : TGo - (now - D));
+    let x = this.#e.now();
+    let D = this.#S;
+    let max = Math.max(0, this.#x() - (x - h), D === null ? 0 : STARTUP_BACKOFF_MS - (x - D));
     this.#d = this.#e.clock.setTimeout(() => {
-      if (((this.#d = null), this.#e.focus.getSnapshot() === "blurred" && !this.#o)) this.#v();
+      this.#d = null;
+      if (this.#e.focus.getSnapshot() === "blurred" && !this.#o) this.#v();
     }, max);
   }
   #M() {
-    (this.#d?.(), (this.#d = null));
+    this.#d?.();
+    this.#d = null;
   }
   #R = () => {
     let snapshot = this.#e.focus.getSnapshot();
     if (snapshot === "blurred") {
-      let now = this.#e.now();
-      ((this.#f = now), (this.#S ??= now), this.#k());
+      let x = this.#e.now();
+      this.#f = x;
+      this.#S ??= x;
+      this.#k();
       return;
     }
     if (snapshot === "focused") {
-      if (((this.#S = null), this.#M(), this.#T(), this.#f === null)) return;
-      let now = this.#e.now(),
-        D = now - this.#f;
-      if (D >= _Go) {
-        ((this.#h = now), (this.#y = D), (this.#b = !0));
-        let snapshot = this.#e.transcript.getSnapshot();
-        this.#g = hasSummarySinceLastUserTurn(snapshot) || isLastTurnFailing(snapshot);
+      this.#S = null;
+      this.#M();
+      this.#T();
+      if (this.#f === null) return;
+      let x = this.#e.now();
+      let D = x - this.#f;
+      if (D >= STARTUP_SESSION_BUDGET_MS) {
+        this.#h = x;
+        this.#y = D;
+        this.#b = true;
+        let messages = this.#e.transcript.getSnapshot();
+        this.#g = hasSummarySinceLastUserTurn(messages) || isLastTurnFailing(messages);
       }
       this.#f = null;
     }
   };
   #P = () => {
     if (!this.#b) return;
-    let at = this.#e.transcript.getSnapshot().at(-1);
-    if (!at || !noe(at)) return;
+    let last = this.#e.transcript.getSnapshot().at(-1);
+    if (!last || !isRealUserMessage(last)) return;
     let x = this.#h;
     if (x === null) return;
-    (logEvent("tengu_return_to_session", {
+    logEvent("tengu_return_to_session", {
       msSinceFocus: this.#e.now() - x,
       blurDurationMs: this.#y ?? 0,
       hadRecap: this.#g,
       scrolledBeforeSubmit: this.#l > x,
       isFullscreen: this.#e.presentation === "fullscreen",
-    }),
-      this.#_());
+    });
+    this.#_();
   };
   #_() {
-    ((this.#b = !1), (this.#h = null), (this.#f = null), (this.#y = null), (this.#g = !1));
+    this.#b = false;
+    this.#h = null;
+    this.#f = null;
+    this.#y = null;
+    this.#g = false;
   }
   #A() {
     {
       if (!isBgSession()) return;
       let CLAUDE_JOB_DIR = env.CLAUDE_JOB_DIR;
       if (!CLAUDE_JOB_DIR) return;
-      let x = join_12(CLAUDE_JOB_DIR, RECAP_TRIGGER_FILE),
-        D = () => this.#o,
-        L = (We) => this.#v(We),
-        { clock: clock, storageV5: storageV5 } = this.#e,
-        Re =
-          isStorageV5Enabled() && storageV5 !== void 0
-            ? jobKeyFor(CLAUDE_JOB_DIR, [RECAP_TRIGGER_FILE])
-            : void 0,
-        Be = storageV5 !== void 0 && Re !== void 0 ? { backend: storageV5, key: Re } : void 0,
-        He = clock.setTimeout(function We() {
-          try {
-            clearAwaySummaryMarker(x, D, L, Be);
-          } finally {
-            He = clock.setTimeout(We, pRt);
-          }
-        }, pRt);
+      let x = join(CLAUDE_JOB_DIR, RECAP_TRIGGER_FILE);
+      let D = () => this.#o;
+      let L = (We) => this.#v(We);
+      let { clock, storageV5 } = this.#e;
+      let Re =
+        isStorageV5Enabled() && storageV5 !== undefined
+          ? jobKeyFor(CLAUDE_JOB_DIR, [RECAP_TRIGGER_FILE])
+          : undefined;
+      let Be =
+        storageV5 !== undefined && Re !== undefined
+          ? {
+              backend: storageV5,
+              key: Re,
+            }
+          : undefined;
+      let He = clock.setTimeout(function We() {
+        try {
+          clearAwaySummaryMarker(x, D, L, Be);
+        } finally {
+          He = clock.setTimeout(We, STARTUP_CHECK_STEP_MS);
+        }
+      }, STARTUP_CHECK_STEP_MS);
       this.#m = () => He();
     }
   }
 }
+//@ chunk-18hwfzwa.js:1796873-1797385 placement
 /**
  * 离开摘要控制器 hook，连接焦点、时钟与存储
  */
-//@ chunk-18hwfzwa.js:1796873-1797385 placement
-function useAwaySummaryController(h, x, D = !0) {
-  let L = useRenderMode(),
-    ee = useClock(),
-    ke = useSession(),
-    Re = Cr(),
-    Be = Nu(),
-    { storageV5: storageV5 } = Me(),
-    We = useAppState((rt) => rt.awaySummaryEnabled),
-    ze = D && We,
-    [Xe] = y(
-      () =>
-        new AwaySummaryController({
-          presentation: L,
-          transcript: h,
-          focus: { getSnapshot: () => getTerminalFocus_2(), subscribe: (rt) => onTerminalFocusChanged(rt) },
-          clock: ee,
-          now: () => Date.now(),
-          generate: (rt) => generateAwaySummary(rt),
-          getPendingBackgroundWork: () =>
-            countPendingBackgroundWork({ tasks: Re.getState().tasks, queuedCommands: Be.getCommandQueue() }),
-          promptInput: bM(ke),
-          storageV5: storageV5,
-        }),
-    );
-  return (
-    P(() => {
-      Xe.setInputs({ enabled: ze, isLoading: x });
-    }, [Xe, ze, x]),
-    P(() => () => Xe.dispose(), [Xe]),
-    Xe
+function useAwaySummaryController(transcript, isLoading, D = true) {
+  let presentation = useRenderMode();
+  let clock = useClock();
+  let session = useSession();
+  let appStoreDirect = useAppStoreDirect();
+  let commandQueueOrDefault = useCommandQueueOrDefault();
+  let { storageV5 } = useTheme_2();
+  let We = useAppState((rt) => rt.awaySummaryEnabled);
+  let ze = D && We;
+  let [Xe] = y(
+    () =>
+      new AwaySummaryController({
+        presentation,
+        transcript,
+        focus: {
+          getSnapshot: () => getTerminalFocus_2(),
+          subscribe: (rt) => onTerminalFocusChanged(rt),
+        },
+        clock,
+        now: () => Date.now(),
+        generate: (rt) => generateAwaySummary(rt),
+        getPendingBackgroundWork: () =>
+          countPendingBackgroundWork({
+            tasks: appStoreDirect.getState().tasks,
+            queuedCommands: commandQueueOrDefault.getCommandQueue(),
+          }),
+        promptInput: promptInputStoreFor(session),
+        storageV5,
+      }),
   );
+  P(() => {
+    Xe.setInputs({
+      enabled: ze,
+      isLoading,
+    });
+  }, [Xe, ze, isLoading]);
+  P(() => () => Xe.dispose(), [Xe]);
+  return Xe;
 }
 //@ chunk-18hwfzwa.js:1797385-1797389 placement
-j();
+init_react_production();
 //@ chunk-18hwfzwa.js:1797389-1797488 placement
-function useAwaySummaryOnce(h, x) {
-  let D = R(!1);
+function useAwaySummaryOnce(fileHistorySnapshots, onUpdateState) {
+  let D = R(false);
   P(() => {
     if (!fileHistoryEnabled() || D.current) return;
-    if (((D.current = !0), h)) fileHistoryRestoreStateFromLog(h, x);
-  }, [h, x]);
+    D.current = true;
+    if (fileHistorySnapshots) fileHistoryRestoreStateFromLog(fileHistorySnapshots, onUpdateState);
+  }, [fileHistorySnapshots, onUpdateState]);
 }
 //@ chunk-18hwfzwa.js:1797521-1797525 placement
-j();
+init_react_production();
 //@ chunk-18hwfzwa.js:1797558-1797664 placement
 class InstalledSummaryRegistry {
   installed = new Map();
@@ -420,16 +472,15 @@ class InstalledSummaryRegistry {
   }
 }
 //@ chunk-18hwfzwa.js:1797664-1797785 placement
-var installedSummaries = new HostScoped(() => new InstalledSummaryRegistry()),
-  NGo =
-    getPlatform() === "windows" ? /^[A-Za-z0-9/\\][A-Za-z0-9_.+:\\?/-]*$/ : /^[A-Za-z0-9/][A-Za-z0-9_.+/-]*$/;
+var installedSummaries = new HostScoped(() => new InstalledSummaryRegistry());
+var SAFE_PATH_RE =
+  getPlatform() === "windows" ? /^[A-Za-z0-9/\\][A-Za-z0-9_.+:\\?/-]*$/ : /^[A-Za-z0-9/][A-Za-z0-9_.+/-]*$/;
 //@ chunk-fpjsca9n.js:264-441 fingerprint = useAwaySummary (0.66)
 function useAwaySummary(e) {
   if (e) uiSignals.terminalFocusGainedAt = Date.now();
   if (!e && uiSignals.terminalFocus === "blurred") return;
-  ((uiSignals.terminalFocus = e ? "focused" : "blurred"),
-    setTerminalFocusForState(e),
-    uiSignals.terminalFocusChanged.emit());
+  uiSignals.terminalFocus = e ? "focused" : "blurred";
+  setTerminalFocusForState(e);
+  uiSignals.terminalFocusChanged.emit();
 }
-
-export { useAwaySummaryController, useAwaySummaryOnce, NGo, installedSummaries, useAwaySummary };
+export { useAwaySummaryController, useAwaySummaryOnce, SAFE_PATH_RE, installedSummaries, useAwaySummary };

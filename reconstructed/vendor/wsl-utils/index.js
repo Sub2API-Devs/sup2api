@@ -5,31 +5,36 @@
  * pieces: chunk-20ppca50.js (1)
  * attribution: esm-fingerprint 1
  */
-import fsPromises, { constants, constants as constants_2, default as fsPromises_2 } from "fs/promises";
-import N, { default as I, default as T, default as E, default as ee, default as te } from "process";
-import { c } from "../is-wsl/index.js";
+import fsPromises, { constants } from "fs/promises";
+import { default as E } from "process";
+import { is_wsl_default } from "../is-wsl/index.js";
 
 //@ chunk-20ppca50.js:1182-1739 esm-fingerprint
 var getWslDrivesMountPoint = (() => {
-    let r;
-    return async function () {
-      if (r) return r;
-      let o = "/etc/wsl.conf",
-        n = !1;
-      try {
-        (await fsPromises_2.access(o, constants_2.F_OK), (n = !0));
-      } catch {}
-      if (!n) return "/mnt/";
-      let content = await fsPromises_2.readFile(o, { encoding: "utf8" }),
-        match = /(?<!#.*)root\s*=\s*(?<mountPoint>.*)/g.exec(content);
-      if (!match) return "/mnt/";
-      return ((r = match.groups.mountPoint.trim()), (r = r.endsWith("/") ? r : `${r}/`), r);
-    };
-  })(),
-  V = async () => `${await getWslDrivesMountPoint()}c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe`,
-  v = async () => {
-    if (c) return V();
-    return `${I.env.SYSTEMROOT || I.env.windir || String.raw`C:\Windows`}\\System32\\WindowsPowerShell\\v1.0\\powershell.exe`;
+  let mountPoint;
+  return async function () {
+    if (mountPoint) return mountPoint;
+    let configFilePath = "/etc/wsl.conf";
+    let isConfigFileExists = false;
+    try {
+      await fsPromises.access(configFilePath, constants.F_OK);
+      isConfigFileExists = true;
+    } catch {}
+    if (!isConfigFileExists) return "/mnt/";
+    let configContent = await fsPromises.readFile(configFilePath, {
+      encoding: "utf8",
+    });
+    let configMountPoint = /(?<!#.*)root\s*=\s*(?<mountPoint>.*)/g.exec(configContent);
+    if (!configMountPoint) return "/mnt/";
+    mountPoint = configMountPoint.groups.mountPoint.trim();
+    mountPoint = mountPoint.endsWith("/") ? mountPoint : `${mountPoint}/`;
+    return mountPoint;
   };
-
-export { v };
+})();
+var powerShellPathFromWsl = async () =>
+  `${await getWslDrivesMountPoint()}c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe`;
+var powerShellPath = async () => {
+  if (is_wsl_default) return powerShellPathFromWsl();
+  return `${E.env.SYSTEMROOT || E.env.windir || String.raw`C:\Windows`}\\System32\\WindowsPowerShell\\v1.0\\powershell.exe`;
+};
+export { powerShellPath };

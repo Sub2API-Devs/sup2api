@@ -13,14 +13,15 @@ import { remoteToolsState } from "../../remote/tools/callResults.js";
 import { stripInvisibleChars, syncedItemPath } from "../../utils/plugins/syncedItems.js";
 import { getSkillOwnership } from "../../skills/hostSkillMounts.js";
 
+//@ chunk-g6806zjs.js:344-667 placement
 /**
  * 记录技能列表中各技能（按清洗后的目录名）的归属、原名与是否从聊天保存，并把列表状态标为已获取。
  */
-//@ chunk-g6806zjs.js:344-667 placement
 function recordListedSkillOwnerships(s) {
-  let e = remoteToolsState(),
-    { listedOwnerships: listedOwnerships } = e;
-  (listedOwnerships.clear(), (e.listedSkillsAnswer = "none_yet"));
+  let e = remoteToolsState();
+  let { listedOwnerships } = e;
+  listedOwnerships.clear();
+  e.listedSkillsAnswer = "none_yet";
   for (let t of s) {
     let l;
     try {
@@ -35,11 +36,14 @@ function recordListedSkillOwnerships(s) {
         savedFromAChat: typeof t.backing_plugin_id === "string",
       });
   }
-  ((e.listedSkillsAnswer = "a_list"), (e.lastRoundCouldNotAsk = !1));
+  e.listedSkillsAnswer = "a_list";
+  e.lastRoundCouldNotAsk = false;
 }
 //@ chunk-g6806zjs.js:667-723 placement
-function I0r(s) {
+/**
+ * 取列表里某技能的归属。
+ */
+function listedSkillOwnershipOf(s) {
   return remoteToolsState().listedOwnerships.get(stripInvisibleChars(s));
 }
-
-export { I0r, recordListedSkillOwnerships };
+export { listedSkillOwnershipOf, recordListedSkillOwnerships };

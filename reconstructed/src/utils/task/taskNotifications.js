@@ -8,24 +8,7 @@
  * pieces: chunk-aepeg2w5.js (30)
  * attribution: placement 30
  */
-import {
-  randomBytes,
-  randomBytes as randomBytes_2,
-  randomBytes as randomBytes_3,
-  randomBytes as randomBytes_4,
-  randomBytes as randomBytes_5,
-  randomBytes as randomBytes_6,
-  randomUUID,
-  randomUUID as randomUUID_2,
-  randomUUID as randomUUID_3,
-  randomUUID as randomUUID_4,
-  randomUUID as randomUUID_5,
-  randomUUID as randomUUID_6,
-  randomUUID as randomUUID_7,
-  randomUUID as randomUUID_8,
-  randomUUID as randomUUID_9,
-  randomUUID as randomUUID_10,
-} from "crypto";
+import { randomBytes, randomUUID } from "crypto";
 import { createSignal } from "../signal.js";
 import { HostScoped } from "../hostScoped.js";
 import {
@@ -37,56 +20,62 @@ import {
 import { logFeatureSad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 import { isDiagLogging, isInDiagScope } from "../diagLogs.js";
 
+//@ chunk-aepeg2w5.js:345356-345820 placement
 /**
  * 任务错误状态表。
  */
-//@ chunk-aepeg2w5.js:345356-345820 placement
 var TASK_ERROR_STATUSES = {
-    stalled: !0,
-    error: !0,
-    api_error: !0,
-    "api_error:authentication_failed": !0,
-    "api_error:oauth_org_not_allowed": !0,
-    "api_error:account_on_hold": !0,
-    "api_error:verification_required": !0,
-    "api_error:billing_error": !0,
-    "api_error:rate_limit": !0,
-    "api_error:overloaded": !0,
-    "api_error:invalid_request": !0,
-    "api_error:model_not_found": !0,
-    "api_error:server_error": !0,
-    "api_error:unknown": !0,
-    "api_error:max_output_tokens": !0,
-    "api_error:cloud_credential_error": !0,
-  },
-  weakMap_2 = new WeakMap();
+  stalled: true,
+  error: true,
+  api_error: true,
+  "api_error:authentication_failed": true,
+  "api_error:oauth_org_not_allowed": true,
+  "api_error:account_on_hold": true,
+  "api_error:verification_required": true,
+  "api_error:billing_error": true,
+  "api_error:rate_limit": true,
+  "api_error:overloaded": true,
+  "api_error:invalid_request": true,
+  "api_error:model_not_found": true,
+  "api_error:server_error": true,
+  "api_error:unknown": true,
+  "api_error:max_output_tokens": true,
+  "api_error:cloud_credential_error": true,
+};
+var weakMap_2 = new WeakMap();
 //@ chunk-aepeg2w5.js:345820-345873 placement
-function Uxt(e, n) {
-  if (n !== void 0) weakMap_2.set(e, n);
+/**
+ * 给任务对象挂上失败类型。
+ */
+function withFailureKind(e, failureKind) {
+  if (failureKind !== undefined) weakMap_2.set(e, failureKind);
   return e;
 }
 //@ chunk-aepeg2w5.js:345873-345971 placement
-function Jpr(e) {
-  let n = e === void 0 ? void 0 : weakMap_2.get(e);
-  return n !== void 0 && Object.hasOwn(TASK_ERROR_STATUSES, n) ? n : void 0;
+/**
+ * 取任务挂着的失败类型。
+ */
+function failureKindOf(e) {
+  let n = e === undefined ? undefined : weakMap_2.get(e);
+  return n !== undefined && Object.hasOwn(TASK_ERROR_STATUSES, n) ? n : undefined;
 }
 //@ chunk-aepeg2w5.js:346009-346068 placement
-var TE = 200,
-  KU = 64,
-  GU = 64,
-  CE = Date.now() - process.uptime() * 1000;
+var MAX_BASH_TASK_SNAPSHOTS = 200;
+var MAX_BASH_TASK_GETS = 64;
+var MAX_EVICTED_RUN_IDS = 64;
+var LINKS_INHERITED_BEFORE = Date.now() - process.uptime() * 1000;
+//@ chunk-aepeg2w5.js:346068-349666 placement
 /**
  * 任务输出目录与链接记录。
  */
-//@ chunk-aepeg2w5.js:346068-349666 placement
 class TaskOutputLinks {
-  outputDir = void 0;
+  outputDir = undefined;
   linkedOutputs = new Map();
-  linksInheritedBefore = CE;
+  linksInheritedBefore = LINKS_INHERITED_BEFORE;
   inheritedLinkLines = new Map();
   inheritPredecessorLinks(e, n) {
     if (!Number.isFinite(n)) return;
-    this.inheritedLinkLines.set(e, Math.max(CE, Math.min(Date.now(), n)));
+    this.inheritedLinkLines.set(e, Math.max(LINKS_INHERITED_BEFORE, Math.min(Date.now(), n)));
   }
   linksInheritedBeforeFor(e) {
     return Math.max(this.linksInheritedBefore, this.inheritedLinkLines.get(e) ?? 0);
@@ -108,18 +97,18 @@ class TaskOutputLinks {
   lastPressureReapAt = 0;
   quietShellOwners = new Map();
   bashTaskGetsByResponse = new Map();
-  withdrawShellNotification = void 0;
-  onSubagentResume = void 0;
+  withdrawShellNotification = undefined;
+  onSubagentResume = undefined;
   mainThreadContexts = new Map();
   spawnedByMainThread = new Set();
   parkedTeardowns = new Map();
-  killAgentMonitors = void 0;
-  autoReactHumanTurnObserver = void 0;
-  frameLiveUserStopObserver = void 0;
-  liveDocUserStopObserver = void 0;
-  autoReactDeliberateStopObserver = void 0;
-  artifactRoomStopObserver = void 0;
-  artifactPresenceStopObserver = void 0;
+  killAgentMonitors = undefined;
+  autoReactHumanTurnObserver = undefined;
+  frameLiveUserStopObserver = undefined;
+  liveDocUserStopObserver = undefined;
+  autoReactDeliberateStopObserver = undefined;
+  artifactRoomStopObserver = undefined;
+  artifactPresenceStopObserver = undefined;
   agentIdleWindowTimers = new Map();
   agentBackgroundSignalResolvers = new Map();
   exclusiveCallQueuedBehind = new Map();
@@ -136,190 +125,214 @@ class TaskOutputLinks {
   cascadeSpared = createSignal();
   constructor() {
     this.taskEvicted.subscribe((e) => {
-      (this.remoteSessionLogs.delete(e), this.retireRunId(e));
+      this.remoteSessionLogs.delete(e);
+      this.retireRunId(e);
     });
   }
   retireRunId(e) {
     let n = this.runIds.get(e);
-    if (n === void 0) return;
-    if (
-      (this.runIds.delete(e),
-      this.evictedRunIds.delete(e),
-      this.evictedRunIds.set(e, n),
-      this.evictedRunIds.size > GU)
-    ) {
+    if (n === undefined) return;
+    this.runIds.delete(e);
+    this.evictedRunIds.delete(e);
+    this.evictedRunIds.set(e, n);
+    if (this.evictedRunIds.size > MAX_EVICTED_RUN_IDS) {
       let r = this.evictedRunIds.keys().next().value;
-      if (r !== void 0) this.evictedRunIds.delete(r);
+      if (r !== undefined) this.evictedRunIds.delete(r);
     }
   }
-  rememberBashTaskSnapshot(e, n, r) {
-    if (
-      (this.bashTaskSnapshots.delete(e),
-      this.bashTaskSnapshots.set(e, { snapshot: n, agentId: r, fetched: !1 }),
-      this.bashTaskSnapshots.size > TE)
-    ) {
+  rememberBashTaskSnapshot(e, snapshot, agentId) {
+    this.bashTaskSnapshots.delete(e);
+    this.bashTaskSnapshots.set(e, {
+      snapshot,
+      agentId,
+      fetched: false,
+    });
+    if (this.bashTaskSnapshots.size > MAX_BASH_TASK_SNAPSHOTS) {
       let s = this.bashTaskSnapshots.keys().next().value;
-      if (s !== void 0) this.bashTaskSnapshots.delete(s);
+      if (s !== undefined) this.bashTaskSnapshots.delete(s);
     }
   }
   countBashTaskGet(e) {
     let n = (this.bashTaskGetCounts.get(e) ?? 0) + 1;
-    if (
-      (this.bashTaskGetCounts.delete(e), this.bashTaskGetCounts.set(e, n), this.bashTaskGetCounts.size > TE)
-    ) {
+    this.bashTaskGetCounts.delete(e);
+    this.bashTaskGetCounts.set(e, n);
+    if (this.bashTaskGetCounts.size > MAX_BASH_TASK_SNAPSHOTS) {
       let r = this.bashTaskGetCounts.keys().next().value;
-      if (r !== void 0) this.bashTaskGetCounts.delete(r);
+      if (r !== undefined) this.bashTaskGetCounts.delete(r);
     }
     return n;
   }
   countBashTaskGetInResponse(e, n, r) {
     let s = this.bashTaskGetsByResponse.get(e) ?? new Map();
-    if (
-      (this.bashTaskGetsByResponse.delete(e),
-      this.bashTaskGetsByResponse.set(e, s),
-      this.bashTaskGetsByResponse.size > KU)
-    ) {
+    this.bashTaskGetsByResponse.delete(e);
+    this.bashTaskGetsByResponse.set(e, s);
+    if (this.bashTaskGetsByResponse.size > MAX_BASH_TASK_GETS) {
       let S = this.bashTaskGetsByResponse.keys().next().value;
-      if (S !== void 0) this.bashTaskGetsByResponse.delete(S);
+      if (S !== undefined) this.bashTaskGetsByResponse.delete(S);
     }
-    let h = s.get(n),
-      y = h?.statusKey === r ? h.count + 1 : 1;
-    return (s.set(n, { count: y, statusKey: r }), y);
+    let h = s.get(n);
+    let y = h?.statusKey === r ? h.count + 1 : 1;
+    s.set(n, {
+      count: y,
+      statusKey: r,
+    });
+    return y;
   }
   markBashTaskSnapshotFetched(e) {
     let n = this.bashTaskSnapshots.get(e);
-    if (n) this.bashTaskSnapshots.set(e, { ...n, fetched: !0 });
+    if (n)
+      this.bashTaskSnapshots.set(e, {
+        ...n,
+        fetched: true,
+      });
   }
   reset() {
-    ((this.outputDir = void 0), this.linkedOutputs.clear(), this.outputPathBindings.clear());
-    for (let e of this.diskOutputs.values()) e.cancel();
-    (this.diskOutputs.clear(),
-      this.terminalEmitClaims.clear(),
-      this.runIds.clear(),
-      this.evictedRunIds.clear(),
-      this.remoteSessionLogs.clear(),
-      this.bashTaskSnapshots.clear(),
-      this.bashTaskGetCounts.clear(),
-      (this.lastPressureReapAt = 0),
-      this.quietShellOwners.clear(),
-      this.bashTaskGetsByResponse.clear(),
-      this.reportedBashTaskDeliveries.clear(),
-      this.bashTaskDeliveryOutcomes.clear());
+    this.outputDir = undefined;
+    this.linkedOutputs.clear();
+    this.outputPathBindings.clear();
+    for (let diskOutput of this.diskOutputs.values()) diskOutput.cancel();
+    this.diskOutputs.clear();
+    this.terminalEmitClaims.clear();
+    this.runIds.clear();
+    this.evictedRunIds.clear();
+    this.remoteSessionLogs.clear();
+    this.bashTaskSnapshots.clear();
+    this.bashTaskGetCounts.clear();
+    this.lastPressureReapAt = 0;
+    this.quietShellOwners.clear();
+    this.bashTaskGetsByResponse.clear();
+    this.reportedBashTaskDeliveries.clear();
+    this.bashTaskDeliveryOutcomes.clear();
   }
   async drainDiskOutputs() {
-    for (let e of this.diskOutputs.values()) e.cancel();
+    for (let diskOutput of this.diskOutputs.values()) diskOutput.cancel();
     while (this.pendingOutputOps.size > 0) await Promise.allSettled([...this.pendingOutputOps]);
     this.diskOutputs.clear();
   }
 }
 //@ chunk-aepeg2w5.js:349666-349691 placement
-var $U = new HostScoped(() => new TaskOutputLinks());
+var taskOutputLinksByHost = new HostScoped(() => new TaskOutputLinks());
+//@ chunk-aepeg2w5.js:349691-349728 placement
 /**
  * 任务运行 id 存储（按 host）。
  */
-//@ chunk-aepeg2w5.js:349691-349728 placement
 function getTaskRunState() {
-  return $U.of(getRootSession().host);
+  return taskOutputLinksByHost.of(getRootSession().host);
 }
 //@ chunk-aepeg2w5.js:349728-349770 placement
-var VU = 9,
-  YU = /^([0-9a-z]{9})-[0-9a-f]{8}$/;
+var RUN_ID_SEQ_WIDTH = 9;
+var RUN_ID_RE = /^([0-9a-z]{9})-[0-9a-f]{8}$/;
+//@ chunk-aepeg2w5.js:349770-349846 placement
 /**
  * 取任务的运行 id。
  */
-//@ chunk-aepeg2w5.js:349770-349846 placement
 function getRunId(e) {
-  let { runIds: runIds, evictedRunIds: evictedRunIds } = getTaskRunState();
+  let { runIds, evictedRunIds } = getTaskRunState();
   return runIds.get(e) ?? evictedRunIds.get(e);
 }
 //@ chunk-aepeg2w5.js:349846-349905 placement
-function qU(e) {
-  let n = getRunId(e);
-  return n === void 0 ? void 0 : nss(n);
+function previousRunSeq(e) {
+  let runId = getRunId(e);
+  return runId === undefined ? undefined : runSeqOf(runId);
 }
 //@ chunk-aepeg2w5.js:349905-349983 placement
-function nss(e) {
-  let n = YU.exec(e)?.[1];
-  return n === void 0 ? void 0 : parseInt(n, 36);
+/**
+ * 从运行 id 解析出 36 进制的序号。
+ */
+function runSeqOf(runId) {
+  let n = RUN_ID_RE.exec(runId)?.[1];
+  return n === undefined ? undefined : parseInt(n, 36);
 }
 //@ chunk-aepeg2w5.js:349983-350028 placement
-function Qpr(e, n = makeTimeOrderedId(e)) {
-  getTaskRunState().runIds.set(e, n);
+/**
+ * 为任务登记运行 id。
+ */
+function setTaskRunId(e, runId = makeTimeOrderedId(e)) {
+  getTaskRunState().runIds.set(e, runId);
 }
 //@ chunk-aepeg2w5.js:350028-350144 placement = generatePlaceholders (0.758)
 function makeTimeOrderedId(e) {
-  return `${Math.max(Date.now(), (qU(e) ?? -1) + 1)
+  return `${Math.max(Date.now(), (previousRunSeq(e) ?? -1) + 1)
     .toString(36)
-    .padStart(VU, "0")}-${randomBytes_2(4).toString("hex")}`;
+    .padStart(RUN_ID_SEQ_WIDTH, "0")}-${randomBytes(4).toString("hex")}`;
 }
+//@ chunk-aepeg2w5.js:350144-350244 placement
 /**
  * 认领某任务的终态通知发送权（每个任务只能认领一次）。
  */
-//@ chunk-aepeg2w5.js:350144-350244 placement
-function claimTerminalEmit(e) {
-  if (getTaskRunState().terminalEmitClaims.has(e)) return !1;
-  return (getTaskRunState().terminalEmitClaims.add(e), !0);
+function claimTerminalEmit_2(e) {
+  if (getTaskRunState().terminalEmitClaims.has(e)) return false;
+  getTaskRunState().terminalEmitClaims.add(e);
+  return true;
 }
 //@ chunk-aepeg2w5.js:350244-350301 placement
-function rss(e) {
-  return getTaskRunState().terminalEmitClaims.delete(e);
+/**
+ * 取消任务的终态通知认领。
+ */
+function claimTerminalEmit(id) {
+  return getTaskRunState().terminalEmitClaims.delete(id);
 }
 //@ chunk-aepeg2w5.js:350301-350331 placement = getClientSurface (0.78)
-var QU = 1000,
-  CLI = "cli",
-  ZU = 1000;
+var MAX_QUEUED_NOTIFICATIONS = 1000;
+var CLIENT_SURFACE_ID = "cli";
+var MAX_EVICTED_KEYS = 1000;
+//@ chunk-aepeg2w5.js:350331-353341 placement
 /**
  * 任务通知队列（按 key 分组、驱逐、级别持有）。
  */
-//@ chunk-aepeg2w5.js:350331-353341 placement
 class TaskNotificationQueue {
-  queueKey = () => CLI;
+  queueKey = () => CLIENT_SURFACE_ID;
   queuesByKey = new Map();
   evictedKeys = new Set();
   enqueueListener = null;
-  queueUsedReported = !1;
-  nonbookendEvictionReported = !1;
-  bookendEvictionReported = !1;
+  queueUsedReported = false;
+  nonbookendEvictionReported = false;
+  bookendEvictionReported = false;
   levelHolds = 0;
   heldLevels = new Map();
-  redactsPersistedLane = () => !1;
-  setQueueKey(e) {
-    this.queueKey = e;
+  redactsPersistedLane = () => false;
+  setQueueKey(queueKey) {
+    this.queueKey = queueKey;
   }
   currentKey() {
     return this.queueKey();
   }
-  setEnqueueListener(e) {
-    this.enqueueListener = e;
+  setEnqueueListener(enqueueListener) {
+    this.enqueueListener = enqueueListener;
   }
   queueCount() {
     return this.queuesByKey.size;
   }
   reset() {
-    (this.queuesByKey.clear(),
-      this.evictedKeys.clear(),
-      (this.queueKey = () => CLI),
-      (this.enqueueListener = null),
-      (this.redactsPersistedLane = () => !1),
-      (this.queueUsedReported = !1),
-      (this.nonbookendEvictionReported = !1),
-      (this.bookendEvictionReported = !1),
-      (this.levelHolds = 0),
-      this.heldLevels.clear());
+    this.queuesByKey.clear();
+    this.evictedKeys.clear();
+    this.queueKey = () => CLIENT_SURFACE_ID;
+    this.enqueueListener = null;
+    this.redactsPersistedLane = () => false;
+    this.queueUsedReported = false;
+    this.nonbookendEvictionReported = false;
+    this.bookendEvictionReported = false;
+    this.levelHolds = 0;
+    this.heldLevels.clear();
   }
   currentQueueOrCreate(e) {
     if (this.evictedKeys.has(e)) return null;
     let n = this.queuesByKey.get(e);
-    if (!n) ((n = []), this.queuesByKey.set(e, n));
+    if (!n) {
+      n = [];
+      this.queuesByKey.set(e, n);
+    }
     return n;
   }
   currentQueueOrNull() {
     return this.queuesByKey.get(this.queueKey()) ?? null;
   }
   evictKey(e) {
-    if ((this.queuesByKey.delete(e), this.evictedKeys.add(e), this.evictedKeys.size > ZU)) {
+    this.queuesByKey.delete(e);
+    this.evictedKeys.add(e);
+    if (this.evictedKeys.size > MAX_EVICTED_KEYS) {
       let n = this.evictedKeys.values().next().value;
-      if (n !== void 0) this.evictedKeys.delete(n);
+      if (n !== undefined) this.evictedKeys.delete(n);
     }
   }
   enqueue(e, n = this.queueKey()) {
@@ -329,11 +342,11 @@ class TaskNotificationQueue {
     }
     if (!getIsNonInteractiveSession() && !isReplBridgeActive()) return;
     if (e.type === "stream_event" && !getIsNonInteractiveSession() && this.enqueueListener === null) return;
-    let currentQueueOrCreate = this.currentQueueOrCreate(n);
-    if (!currentQueueOrCreate) return;
-    if (currentQueueOrCreate.length >= QU) {
+    let r = this.currentQueueOrCreate(n);
+    if (!r) return;
+    if (r.length >= MAX_QUEUED_NOTIFICATIONS) {
       if (e.type === "stream_event") return;
-      let index = currentQueueOrCreate.findIndex(
+      let index = r.findIndex(
         (h) =>
           h.type !== "conversation_reset" &&
           (h.type !== "system" ||
@@ -344,13 +357,15 @@ class TaskNotificationQueue {
               !(h.subtype === "permission_check_status" && h.status === "done"))),
       );
       if (index === -1)
-        index = currentQueueOrCreate.findIndex(
+        index = r.findIndex(
           (h) => h.type === "system" && h.subtype === "permission_check_status" && h.status === "done",
         );
       if (index === -1) {
-        if (!this.bookendEvictionReported)
-          ((this.bookendEvictionReported = !0), logFeatureSad("task_event_queue", "bookend_evicted"));
-        let index = currentQueueOrCreate.findIndex(
+        if (!this.bookendEvictionReported) {
+          this.bookendEvictionReported = true;
+          logFeatureSad("task_event_queue", "bookend_evicted");
+        }
+        let index = r.findIndex(
           (y) =>
             y.type !== "conversation_reset" &&
             !(
@@ -358,36 +373,49 @@ class TaskNotificationQueue {
               ((y.subtype === "status" && y.status === null) || y.subtype === "dev_intent")
             ),
         );
-        if (index === -1) currentQueueOrCreate.shift();
-        else currentQueueOrCreate.splice(index, 1);
+        if (index === -1) r.shift();
+        else r.splice(index, 1);
       } else {
-        if (!this.nonbookendEvictionReported)
-          ((this.nonbookendEvictionReported = !0), logFeatureSad("task_event_queue", "nonbookend_evicted"));
-        currentQueueOrCreate.splice(index, 1);
+        if (!this.nonbookendEvictionReported) {
+          this.nonbookendEvictionReported = true;
+          logFeatureSad("task_event_queue", "nonbookend_evicted");
+        }
+        r.splice(index, 1);
       }
     }
-    if ((currentQueueOrCreate.push(e), !this.queueUsedReported))
-      ((this.queueUsedReported = !0), logFeatureOk("task_event_queue"));
+    r.push(e);
+    if (!this.queueUsedReported) {
+      this.queueUsedReported = true;
+      logFeatureOk("task_event_queue");
+    }
     this.enqueueListener?.();
   }
   holdLevels() {
     this.levelHolds++;
-    let e = !1,
-      n = () => {
-        if (e) return;
-        if (((e = !0), this.levelHolds--, this.levelHolds > 0)) return;
-        for (let [r, s] of this.heldLevels) (this.heldLevels.delete(r), this.enqueue(s, r));
-      };
-    return { release: n, [Symbol.dispose]: n };
+    let e = false;
+    let n = () => {
+      if (e) return;
+      e = true;
+      this.levelHolds--;
+      if (this.levelHolds > 0) return;
+      for (let [r, s] of this.heldLevels) {
+        this.heldLevels.delete(r);
+        this.enqueue(s, r);
+      }
+    };
+    return {
+      release: n,
+      [Symbol.dispose]: n,
+    };
   }
   hasQueued(e) {
-    let currentQueueOrNull = this.currentQueueOrNull();
-    return currentQueueOrNull !== null && currentQueueOrNull.some(e);
+    let n = this.currentQueueOrNull();
+    return n !== null && n.some(e);
   }
   drain() {
-    let currentQueueOrNull = this.currentQueueOrNull();
-    if (!currentQueueOrNull || currentQueueOrNull.length === 0) return [];
-    return this.stamp(currentQueueOrNull.splice(0), getSessionId());
+    let e = this.currentQueueOrNull();
+    if (!e || e.length === 0) return [];
+    return this.stamp(e.splice(0), getSessionId());
   }
   hasQueuedForSession(e) {
     return (this.queuesByKey.get(e)?.length ?? 0) > 0;
@@ -397,12 +425,12 @@ class TaskNotificationQueue {
     if (!n || n.length === 0) return [];
     return this.stamp(n.splice(0), e);
   }
-  stamp(e, n) {
-    let redactsPersistedLane = this.redactsPersistedLane();
+  stamp(e, sessionId) {
+    let r = this.redactsPersistedLane();
     return e.map((s) => ({
-      ...(redactsPersistedLane ? redactTaskEventForSdk(s) : s),
-      uuid: s.type === "conversation_reset" ? s.uuid : randomUUID_5(),
-      session_id: n,
+      ...(r ? redactTaskEventForSdk(s) : s),
+      uuid: s.type === "conversation_reset" ? s.uuid : randomUUID(),
+      session_id: sessionId,
     }));
   }
 }
@@ -410,113 +438,148 @@ class TaskNotificationQueue {
 function redactTaskEventForSdk(e) {
   if (e.type !== "system") return e;
   if (e.subtype === "task_notification")
-    return { ...e, output_file: "", ...(e.status === "failed" && { summary: Jpr(e) ?? "error" }) };
-  if (e.subtype === "task_updated" && e.patch.error !== void 0)
-    return { ...e, patch: { ...e.patch, error: Jpr(e) ?? "error" } };
+    return {
+      ...e,
+      output_file: "",
+      ...(e.status === "failed" && {
+        summary: failureKindOf(e) ?? "error",
+      }),
+    };
+  if (e.subtype === "task_updated" && e.patch.error !== undefined)
+    return {
+      ...e,
+      patch: {
+        ...e.patch,
+        error: failureKindOf(e) ?? "error",
+      },
+    };
   return e;
 }
 //@ chunk-aepeg2w5.js:353616-353641 placement
-var t0 = new HostScoped(() => new TaskNotificationQueue());
+var taskNotificationQueueByHost = new HostScoped(() => new TaskNotificationQueue());
 //@ chunk-aepeg2w5.js:353641-353678 placement
-function nr() {
-  return t0.of(getRootSession().host);
+function taskNotificationQueue() {
+  return taskNotificationQueueByHost.of(getRootSession().host);
 }
 //@ chunk-aepeg2w5.js:353678-353717 placement
-function n0() {
-  return nr().currentKey();
+function currentNotificationKey() {
+  return taskNotificationQueue().currentKey();
 }
 //@ chunk-aepeg2w5.js:353717-353728 placement
-var Ywi = n0;
+/**
+ * 取当前通知 key 的别名导出。
+ */
+var currentNotificationKeyAlias = currentNotificationKey;
+//@ chunk-aepeg2w5.js:353728-353771 placement
 /**
  * 设置入队监听。
  */
-//@ chunk-aepeg2w5.js:353728-353771 placement
 function setTaskNotificationListener(e) {
-  nr().setEnqueueListener(e);
+  taskNotificationQueue().setEnqueueListener(e);
 }
+//@ chunk-aepeg2w5.js:353771-353802 placement
 /**
  * 入队一条任务通知。
  */
-//@ chunk-aepeg2w5.js:353771-353802 placement
 function enqueueTaskNotification(e) {
-  nr().enqueue(e);
+  taskNotificationQueue().enqueue(e);
 }
+//@ chunk-aepeg2w5.js:353802-353910 placement
 /**
  * 暂时保持诊断日志级别不变（诊断范围外时返回空操作句柄）。
  */
-//@ chunk-aepeg2w5.js:353802-353910 placement
 function holdDiagLevels() {
   if (isDiagLogging() && !isInDiagScope()) {
     let e = () => {};
-    return { release: e, [Symbol.dispose]: e };
+    return {
+      release: e,
+      [Symbol.dispose]: e,
+    };
   }
-  return nr().holdLevels();
+  return taskNotificationQueue().holdLevels();
 }
+//@ chunk-aepeg2w5.js:353910-353951 placement
 /**
  * 是否有排队的任务通知。
  */
-//@ chunk-aepeg2w5.js:353910-353951 placement
 function hasQueuedTaskNotification(e) {
-  return nr().hasQueued(e);
+  return taskNotificationQueue().hasQueued(e);
 }
+//@ chunk-aepeg2w5.js:353951-353986 placement
 /**
  * 取出全部排队的任务通知。
  */
-//@ chunk-aepeg2w5.js:353951-353986 placement
 function drainTaskNotifications() {
-  return nr().drain();
+  return taskNotificationQueue().drain();
 }
 //@ chunk-aepeg2w5.js:353986-354033 placement
-function oss(e) {
-  return nr().drainForSession(e);
+/**
+ * 取出某会话排队中的通知。
+ */
+function drainNotificationsForSession(sessionId) {
+  return taskNotificationQueue().drainForSession(sessionId);
 }
 //@ chunk-aepeg2w5.js:354033-354084 placement
-function Jwi(e) {
-  return nr().hasQueuedForSession(e);
+/**
+ * 某会话是否有排队通知。
+ */
+function hasQueuedNotificationsForSession(sessionId) {
+  return taskNotificationQueue().hasQueuedForSession(sessionId);
 }
+//@ chunk-aepeg2w5.js:354084-354620 placement
 /**
  * 发出 task_notification 系统事件（状态、摘要、输出文件）。
  */
-//@ chunk-aepeg2w5.js:354084-354620 placement
-function emitTaskNotification(e, n, r) {
-  if (!claimTerminalEmit(e)) return;
+function emitTaskNotification(e, status, r) {
+  if (!claimTerminalEmit_2(e)) return;
   let s = {
     type: "system",
     subtype: "task_notification",
     task_id: e,
     run_id: getRunId(e),
     tool_use_id: r?.toolUseId,
-    status: n,
-    ...(r?.reason !== void 0 && { reason: r.reason }),
+    status,
+    ...(r?.reason !== undefined && {
+      reason: r.reason,
+    }),
     output_file: r?.outputFile ?? "",
     summary: r?.summary ?? "",
     usage: r?.usage,
-    ...(r?.resourceLinks && { resource_links: [...r.resourceLinks] }),
-    ...(r?.handback !== void 0 && { handback: r.handback }),
-    ...(r?.handbackReport && { handback_report: r.handbackReport }),
-    ...(r?.skipTranscript !== void 0 && { skip_transcript: r.skipTranscript }),
-    ...(r?.ambient && { ambient: !0 }),
+    ...(r?.resourceLinks && {
+      resource_links: [...r.resourceLinks],
+    }),
+    ...(r?.handback !== undefined && {
+      handback: r.handback,
+    }),
+    ...(r?.handbackReport && {
+      handback_report: r.handbackReport,
+    }),
+    ...(r?.skipTranscript !== undefined && {
+      skip_transcript: r.skipTranscript,
+    }),
+    ...(r?.ambient && {
+      ambient: true,
+    }),
   };
-  enqueueTaskNotification(Uxt(s, r?.failureKind));
+  enqueueTaskNotification(withFailureKind(s, r?.failureKind));
 }
-
 export {
   getTaskRunState,
   emitTaskNotification,
   getRunId,
-  Uxt,
+  withFailureKind,
   enqueueTaskNotification,
-  nss,
-  Qpr,
-  claimTerminalEmit,
+  runSeqOf,
+  setTaskRunId,
+  claimTerminalEmit_2,
   drainTaskNotifications,
   setTaskNotificationListener,
   hasQueuedTaskNotification,
   holdDiagLevels,
-  Jpr,
-  rss,
-  Ywi,
-  CLI,
-  oss,
-  Jwi,
+  failureKindOf,
+  claimTerminalEmit,
+  currentNotificationKeyAlias,
+  CLIENT_SURFACE_ID,
+  drainNotificationsForSession,
+  hasQueuedNotificationsForSession,
 };

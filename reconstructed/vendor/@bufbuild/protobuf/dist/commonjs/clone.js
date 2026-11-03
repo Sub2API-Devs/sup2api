@@ -6,48 +6,50 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../runtime/bun-runtime.js";
-import { Ns } from "../cjs/descriptors.js";
-import { Po } from "../cjs/reflect/reflect.js";
-import { Uu } from "../cjs/reflect/guard.js";
+import { require_descriptors } from "../cjs/descriptors.js";
+import { require_reflect } from "../cjs/reflect/reflect.js";
+import { require_guard } from "../cjs/reflect/guard.js";
 
 //@ chunk-fq0cr76a.js:359538-360236 cjs-fingerprint
-var n_ = x(function (Wk) {
-  Object.defineProperty(Wk, "__esModule", { value: !0 });
-  Wk.clone = qY;
-  var Fk = Ns(),
-    Vg = Po(),
-    $k = Uu();
-  function qY(e, n) {
-    return Vk(Vg.reflect(e, n)).message;
+var require_clone = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.clone = clone;
+  var descriptors_js_1 = require_descriptors();
+  var reflect_js_1 = require_reflect();
+  var guard_js_1 = require_guard();
+  function clone(schema, message) {
+    return cloneReflect(reflect_js_1.reflect(schema, message)).message;
   }
-  function Vk(e) {
-    let reflect = Vg.reflect(e.desc);
-    for (let field of e.fields) {
-      if (!e.isSet(field)) continue;
-      switch (field.fieldKind) {
+  function cloneReflect(i) {
+    let o = reflect_js_1.reflect(i.desc);
+    for (let f of i.fields) {
+      if (!i.isSet(f)) continue;
+      switch (f.fieldKind) {
         case "list":
-          let h = reflect.get(field);
-          for (let b of e.get(field)) h.add(e_(field, b));
+          let list = o.get(f);
+          for (let item of i.get(f)) list.add(cloneSingular(f, item));
           break;
         case "map":
-          let y = reflect.get(field);
-          for (let b of e.get(field).entries()) y.set(b[0], e_(field, b[1]));
+          let map = o.get(f);
+          for (let entry of i.get(f).entries()) map.set(entry[0], cloneSingular(f, entry[1]));
           break;
         default: {
-          reflect.set(field, e_(field, e.get(field)));
+          o.set(f, cloneSingular(f, i.get(f)));
           break;
         }
       }
     }
-    let unknown = e.getUnknown();
-    if (unknown && unknown.length > 0) reflect.setUnknown([...unknown]);
-    return reflect;
+    let unknown = i.getUnknown();
+    if (unknown && unknown.length > 0) o.setUnknown([...unknown]);
+    return o;
   }
-  function e_(e, n) {
-    if (e.message !== void 0 && $k.isReflectMessage(n)) return Vk(n);
-    if (e.scalar == Fk.ScalarType.BYTES && n instanceof Uint8Array) return n.slice();
-    return n;
+  function cloneSingular(field, value) {
+    if (field.message !== undefined && guard_js_1.isReflectMessage(value)) return cloneReflect(value);
+    if (field.scalar == descriptors_js_1.ScalarType.BYTES && value instanceof Uint8Array)
+      return value.slice();
+    return value;
   }
 });
-
-export { n_ };
+export { require_clone };

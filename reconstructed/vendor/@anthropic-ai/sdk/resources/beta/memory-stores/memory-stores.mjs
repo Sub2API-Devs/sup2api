@@ -5,103 +5,129 @@
  * pieces: chunk-hwmsct5x.js (1)
  * attribution: esm-fingerprint 1
  */
-import { Y } from "../../../core/resource.mjs";
-import { qr } from "./memories.mjs";
-import { Wr } from "./memory-versions.mjs";
-import { T } from "../../../internal/headers.mjs";
+import { APIResource } from "../../../core/resource.mjs";
+import { Memories } from "./memories.mjs";
+import { MemoryVersions } from "./memory-versions.mjs";
+import { buildHeaders } from "../../../internal/headers.mjs";
 import { I } from "../../../internal/utils/path.mjs";
-import { ee } from "../../../core/pagination.mjs";
+import { TokenPage } from "../../../core/pagination.mjs";
 
 //@ chunk-hwmsct5x.js:86357-88120 esm-fingerprint
-var Os = (() => {
-  class e extends Y {
+var MemoryStores = (() => {
+  class MemoryStores extends APIResource {
     constructor() {
       super(...arguments);
-      ((this.memories = new qr(this._client)), (this.memoryVersions = new Wr(this._client)));
+      this.memories = new Memories(this._client);
+      this.memoryVersions = new MemoryVersions(this._client);
     }
-    create(n, r) {
-      let { betas: betas, workspace_id: workspace_id, ...y } = n;
+    create(params, options) {
+      let { betas, workspace_id, ...body } = params;
       return this._client.post("/v1/memory_stores?beta=true", {
-        body: y,
-        ...r,
-        headers: T([
+        body,
+        ...options,
+        headers: buildHeaders([
           {
             "anthropic-beta": [...(betas ?? []), "agent-memory-2026-07-22"].toString(),
-            ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0),
+            ...(workspace_id != null
+              ? {
+                  "anthropic-workspace-id": workspace_id,
+                }
+              : undefined),
           },
-          r?.headers,
+          options?.headers,
         ]),
       });
     }
-    retrieve(n, r = {}, s) {
-      let { betas: betas, workspace_id: workspace_id } = r ?? {};
-      return this._client.get(I`/v1/memory_stores/${n}?beta=true`, {
-        ...s,
-        headers: T([
+    retrieve(memoryStoreID, params = {}, options) {
+      let { betas, workspace_id } = params ?? {};
+      return this._client.get(I`/v1/memory_stores/${memoryStoreID}?beta=true`, {
+        ...options,
+        headers: buildHeaders([
           {
             "anthropic-beta": [...(betas ?? []), "agent-memory-2026-07-22"].toString(),
-            ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0),
+            ...(workspace_id != null
+              ? {
+                  "anthropic-workspace-id": workspace_id,
+                }
+              : undefined),
           },
-          s?.headers,
+          options?.headers,
         ]),
       });
     }
-    update(n, r, s) {
-      let { betas: betas, workspace_id: workspace_id, ...w } = r;
-      return this._client.post(I`/v1/memory_stores/${n}?beta=true`, {
-        body: w,
-        ...s,
-        headers: T([
+    update(memoryStoreID, params, options) {
+      let { betas, workspace_id, ...body } = params;
+      return this._client.post(I`/v1/memory_stores/${memoryStoreID}?beta=true`, {
+        body,
+        ...options,
+        headers: buildHeaders([
           {
             "anthropic-beta": [...(betas ?? []), "agent-memory-2026-07-22"].toString(),
-            ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0),
+            ...(workspace_id != null
+              ? {
+                  "anthropic-workspace-id": workspace_id,
+                }
+              : undefined),
           },
-          s?.headers,
+          options?.headers,
         ]),
       });
     }
-    list(n = {}, r) {
-      let { betas: betas, workspace_id: workspace_id, ...y } = n ?? {};
-      return this._client.getAPIList("/v1/memory_stores?beta=true", ee, {
-        query: y,
-        ...r,
-        headers: T([
+    list(params = {}, options) {
+      let { betas, workspace_id, ...query } = params ?? {};
+      return this._client.getAPIList("/v1/memory_stores?beta=true", TokenPage, {
+        query,
+        ...options,
+        headers: buildHeaders([
           {
             "anthropic-beta": [...(betas ?? []), "agent-memory-2026-07-22"].toString(),
-            ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0),
+            ...(workspace_id != null
+              ? {
+                  "anthropic-workspace-id": workspace_id,
+                }
+              : undefined),
           },
-          r?.headers,
+          options?.headers,
         ]),
       });
     }
-    delete(n, r = {}, s) {
-      let { betas: betas, workspace_id: workspace_id } = r ?? {};
-      return this._client.delete(I`/v1/memory_stores/${n}?beta=true`, {
-        ...s,
-        headers: T([
+    delete(memoryStoreID, params = {}, options) {
+      let { betas, workspace_id } = params ?? {};
+      return this._client.delete(I`/v1/memory_stores/${memoryStoreID}?beta=true`, {
+        ...options,
+        headers: buildHeaders([
           {
             "anthropic-beta": [...(betas ?? []), "agent-memory-2026-07-22"].toString(),
-            ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0),
+            ...(workspace_id != null
+              ? {
+                  "anthropic-workspace-id": workspace_id,
+                }
+              : undefined),
           },
-          s?.headers,
+          options?.headers,
         ]),
       });
     }
-    archive(n, r = {}, s) {
-      let { betas: betas, workspace_id: workspace_id } = r ?? {};
-      return this._client.post(I`/v1/memory_stores/${n}/archive?beta=true`, {
-        ...s,
-        headers: T([
+    archive(memoryStoreID, params = {}, options) {
+      let { betas, workspace_id } = params ?? {};
+      return this._client.post(I`/v1/memory_stores/${memoryStoreID}/archive?beta=true`, {
+        ...options,
+        headers: buildHeaders([
           {
             "anthropic-beta": [...(betas ?? []), "agent-memory-2026-07-22"].toString(),
-            ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0),
+            ...(workspace_id != null
+              ? {
+                  "anthropic-workspace-id": workspace_id,
+                }
+              : undefined),
           },
-          s?.headers,
+          options?.headers,
         ]),
       });
     }
   }
-  return ((e.Memories = qr), (e.MemoryVersions = Wr), e);
+  MemoryStores.Memories = Memories;
+  MemoryStores.MemoryVersions = MemoryVersions;
+  return MemoryStores;
 })();
-
-export { Os };
+export { MemoryStores };

@@ -6,329 +6,371 @@
  * attribution: cjs-fingerprint 1
  */
 import { x, importMetaRequire } from "../../../runtime/bun-runtime.js";
-import { H } from "./argument.js";
-import { b } from "./error.js";
-import { k } from "./help.js";
-import { D } from "./option.js";
-import { U } from "./suggestSimilar.js";
+import { require_argument } from "./argument.js";
+import { require_error } from "./error.js";
+import { require_help } from "./help.js";
+import { require_option } from "./option.js";
+import { require_suggestSimilar } from "./suggestSimilar.js";
 
 //@ chunk-b7dyevzy.js:9832-34778 cjs-fingerprint
-var B = x(function (vt) {
-  var EventEmitter = importMetaRequire("events").EventEmitter,
-    C = importMetaRequire("child_process"),
-    f = importMetaRequire("path"),
-    A = importMetaRequire("fs"),
-    l = importMetaRequire("process"),
-    { Argument: Argument, humanReadableArgName: humanReadableArgName } = H(),
-    { CommanderError: CommanderError } = b(),
-    { Help: Help } = k(),
-    { Option: Option, DualOptions: DualOptions } = D(),
-    { suggestSimilar: suggestSimilar } = U();
-  class I extends EventEmitter {
-    constructor(t) {
+var require_command = x(function (cjsExports) {
+  var EventEmitter = importMetaRequire("events").EventEmitter;
+  var childProcess = importMetaRequire("child_process");
+  var path = importMetaRequire("path");
+  var fs = importMetaRequire("fs");
+  var l = importMetaRequire("process");
+  var { Argument, humanReadableArgName } = require_argument();
+  var { CommanderError } = require_error();
+  var { Help } = require_help();
+  var { Option, DualOptions } = require_option();
+  var { suggestSimilar } = require_suggestSimilar();
+  class Command extends EventEmitter {
+    constructor(name) {
       super();
-      ((this.commands = []),
-        (this.options = []),
-        (this.parent = null),
-        (this._allowUnknownOption = !1),
-        (this._allowExcessArguments = !0),
-        (this.registeredArguments = []),
-        (this._args = this.registeredArguments),
-        (this.args = []),
-        (this.rawArgs = []),
-        (this.processedArgs = []),
-        (this._scriptPath = null),
-        (this._name = t || ""),
-        (this._optionValues = {}),
-        (this._optionValueSources = {}),
-        (this._storeOptionsAsProperties = !1),
-        (this._actionHandler = null),
-        (this._executableHandler = !1),
-        (this._executableFile = null),
-        (this._executableDir = null),
-        (this._defaultCommandName = null),
-        (this._exitCallback = null),
-        (this._aliases = []),
-        (this._combineFlagAndOptionalValue = !0),
-        (this._description = ""),
-        (this._summary = ""),
-        (this._argsDescription = void 0),
-        (this._enablePositionalOptions = !1),
-        (this._passThroughOptions = !1),
-        (this._lifeCycleHooks = {}),
-        (this._showHelpAfterError = !1),
-        (this._showSuggestionAfterError = !0),
-        (this._outputConfiguration = {
-          writeOut: (e) => l.stdout.write(e),
-          writeErr: (e) => l.stderr.write(e),
-          getOutHelpWidth: () => (l.stdout.isTTY ? l.stdout.columns : void 0),
-          getErrHelpWidth: () => (l.stderr.isTTY ? l.stderr.columns : void 0),
-          outputError: (e, i) => i(e),
-        }),
-        (this._hidden = !1),
-        (this._helpOption = void 0),
-        (this._addImplicitHelpCommand = void 0),
-        (this._helpCommand = void 0),
-        (this._helpConfiguration = {}));
+      this.commands = [];
+      this.options = [];
+      this.parent = null;
+      this._allowUnknownOption = false;
+      this._allowExcessArguments = true;
+      this.registeredArguments = [];
+      this._args = this.registeredArguments;
+      this.args = [];
+      this.rawArgs = [];
+      this.processedArgs = [];
+      this._scriptPath = null;
+      this._name = name || "";
+      this._optionValues = {};
+      this._optionValueSources = {};
+      this._storeOptionsAsProperties = false;
+      this._actionHandler = null;
+      this._executableHandler = false;
+      this._executableFile = null;
+      this._executableDir = null;
+      this._defaultCommandName = null;
+      this._exitCallback = null;
+      this._aliases = [];
+      this._combineFlagAndOptionalValue = true;
+      this._description = "";
+      this._summary = "";
+      this._argsDescription = undefined;
+      this._enablePositionalOptions = false;
+      this._passThroughOptions = false;
+      this._lifeCycleHooks = {};
+      this._showHelpAfterError = false;
+      this._showSuggestionAfterError = true;
+      this._outputConfiguration = {
+        writeOut: (str) => l.stdout.write(str),
+        writeErr: (str) => l.stderr.write(str),
+        getOutHelpWidth: () => (l.stdout.isTTY ? l.stdout.columns : undefined),
+        getErrHelpWidth: () => (l.stderr.isTTY ? l.stderr.columns : undefined),
+        outputError: (str, write) => write(str),
+      };
+      this._hidden = false;
+      this._helpOption = undefined;
+      this._addImplicitHelpCommand = undefined;
+      this._helpCommand = undefined;
+      this._helpConfiguration = {};
     }
-    copyInheritedSettings(t) {
-      return (
-        (this._outputConfiguration = t._outputConfiguration),
-        (this._helpOption = t._helpOption),
-        (this._helpCommand = t._helpCommand),
-        (this._helpConfiguration = t._helpConfiguration),
-        (this._exitCallback = t._exitCallback),
-        (this._storeOptionsAsProperties = t._storeOptionsAsProperties),
-        (this._combineFlagAndOptionalValue = t._combineFlagAndOptionalValue),
-        (this._allowExcessArguments = t._allowExcessArguments),
-        (this._enablePositionalOptions = t._enablePositionalOptions),
-        (this._showHelpAfterError = t._showHelpAfterError),
-        (this._showSuggestionAfterError = t._showSuggestionAfterError),
-        this
-      );
+    copyInheritedSettings(sourceCommand) {
+      this._outputConfiguration = sourceCommand._outputConfiguration;
+      this._helpOption = sourceCommand._helpOption;
+      this._helpCommand = sourceCommand._helpCommand;
+      this._helpConfiguration = sourceCommand._helpConfiguration;
+      this._exitCallback = sourceCommand._exitCallback;
+      this._storeOptionsAsProperties = sourceCommand._storeOptionsAsProperties;
+      this._combineFlagAndOptionalValue = sourceCommand._combineFlagAndOptionalValue;
+      this._allowExcessArguments = sourceCommand._allowExcessArguments;
+      this._enablePositionalOptions = sourceCommand._enablePositionalOptions;
+      this._showHelpAfterError = sourceCommand._showHelpAfterError;
+      this._showSuggestionAfterError = sourceCommand._showSuggestionAfterError;
+      return this;
     }
     _getCommandAndAncestors() {
-      let t = [];
-      for (let e = this; e; e = e.parent) t.push(e);
-      return t;
+      let result = [];
+      for (let command = this; command; command = command.parent) result.push(command);
+      return result;
     }
-    command(t, e, i) {
-      let n = e,
-        s = i;
-      if (typeof n === "object" && n !== null) ((s = n), (n = null));
-      s = s || {};
-      let [, r, a] = t.match(/([^ ]+) *(.*)/),
-        command = this.createCommand(r);
-      if (n) (command.description(n), (command._executableHandler = !0));
-      if (s.isDefault) this._defaultCommandName = command._name;
-      if (
-        ((command._hidden = !!(s.noHelp || s.hidden)),
-        (command._executableFile = s.executableFile || null),
-        a)
-      )
-        command.arguments(a);
-      if ((this._registerCommand(command), (command.parent = this), command.copyInheritedSettings(this), n))
-        return this;
-      return command;
+    command(nameAndArgs, actionOptsOrExecDesc, execOpts) {
+      let desc = actionOptsOrExecDesc;
+      let opts = execOpts;
+      if (typeof desc === "object" && desc !== null) {
+        opts = desc;
+        desc = null;
+      }
+      opts = opts || {};
+      let [, name, args] = nameAndArgs.match(/([^ ]+) *(.*)/);
+      let cmd = this.createCommand(name);
+      if (desc) {
+        cmd.description(desc);
+        cmd._executableHandler = true;
+      }
+      if (opts.isDefault) this._defaultCommandName = cmd._name;
+      cmd._hidden = !!(opts.noHelp || opts.hidden);
+      cmd._executableFile = opts.executableFile || null;
+      if (args) cmd.arguments(args);
+      this._registerCommand(cmd);
+      cmd.parent = this;
+      cmd.copyInheritedSettings(this);
+      if (desc) return this;
+      return cmd;
     }
-    createCommand(t) {
-      return new I(t);
+    createCommand(name) {
+      return new Command(name);
     }
     createHelp() {
       return Object.assign(new Help(), this.configureHelp());
     }
-    configureHelp(t) {
-      if (t === void 0) return this._helpConfiguration;
-      return ((this._helpConfiguration = t), this);
+    configureHelp(configuration) {
+      if (configuration === undefined) return this._helpConfiguration;
+      this._helpConfiguration = configuration;
+      return this;
     }
-    configureOutput(t) {
-      if (t === void 0) return this._outputConfiguration;
-      return (Object.assign(this._outputConfiguration, t), this);
+    configureOutput(configuration) {
+      if (configuration === undefined) return this._outputConfiguration;
+      Object.assign(this._outputConfiguration, configuration);
+      return this;
     }
-    showHelpAfterError(t = !0) {
-      if (typeof t !== "string") t = !!t;
-      return ((this._showHelpAfterError = t), this);
+    showHelpAfterError(displayHelp = true) {
+      if (typeof displayHelp !== "string") displayHelp = !!displayHelp;
+      this._showHelpAfterError = displayHelp;
+      return this;
     }
-    showSuggestionAfterError(t = !0) {
-      return ((this._showSuggestionAfterError = !!t), this);
+    showSuggestionAfterError(displaySuggestion = true) {
+      this._showSuggestionAfterError = !!displaySuggestion;
+      return this;
     }
-    addCommand(t, e) {
-      if (!t._name)
+    addCommand(cmd, opts) {
+      if (!cmd._name)
         throw Error(`Command passed to .addCommand() must have a name
 - specify the name in Command constructor or using .name()`);
-      if (((e = e || {}), e.isDefault)) this._defaultCommandName = t._name;
-      if (e.noHelp || e.hidden) t._hidden = !0;
-      return (this._registerCommand(t), (t.parent = this), t._checkForBrokenPassThrough(), this);
+      opts = opts || {};
+      if (opts.isDefault) this._defaultCommandName = cmd._name;
+      if (opts.noHelp || opts.hidden) cmd._hidden = true;
+      this._registerCommand(cmd);
+      cmd.parent = this;
+      cmd._checkForBrokenPassThrough();
+      return this;
     }
-    createArgument(t, e) {
-      return new Argument(t, e);
+    createArgument(name, description) {
+      return new Argument(name, description);
     }
-    argument(t, e, i, n) {
-      let argument = this.createArgument(t, e);
-      if (typeof i === "function") argument.default(n).argParser(i);
-      else argument.default(i);
-      return (this.addArgument(argument), this);
+    argument(name, description, fn, defaultValue) {
+      let argument = this.createArgument(name, description);
+      if (typeof fn === "function") argument.default(defaultValue).argParser(fn);
+      else argument.default(fn);
+      this.addArgument(argument);
+      return this;
     }
-    arguments(t) {
-      return (
-        t
-          .trim()
-          .split(/ +/)
-          .forEach((e) => {
-            this.argument(e);
-          }),
-        this
-      );
+    arguments(names) {
+      names
+        .trim()
+        .split(/ +/)
+        .forEach((detail) => {
+          this.argument(detail);
+        });
+      return this;
     }
-    addArgument(t) {
-      let e = this.registeredArguments.slice(-1)[0];
-      if (e && e.variadic) throw Error(`only the last argument can be variadic '${e.name()}'`);
-      if (t.required && t.defaultValue !== void 0 && t.parseArg === void 0)
-        throw Error(`a default value for a required argument is never used: '${t.name()}'`);
-      return (this.registeredArguments.push(t), this);
+    addArgument(argument) {
+      let previousArgument = this.registeredArguments.slice(-1)[0];
+      if (previousArgument && previousArgument.variadic)
+        throw Error(`only the last argument can be variadic '${previousArgument.name()}'`);
+      if (argument.required && argument.defaultValue !== undefined && argument.parseArg === undefined)
+        throw Error(`a default value for a required argument is never used: '${argument.name()}'`);
+      this.registeredArguments.push(argument);
+      return this;
     }
-    helpCommand(t, e) {
-      if (typeof t === "boolean") return ((this._addImplicitHelpCommand = t), this);
-      t = t ?? "help [command]";
-      let [, i, n] = t.match(/([^ ]+) *(.*)/),
-        s = e ?? "display help for command",
-        command = this.createCommand(i);
-      if ((command.helpOption(!1), n)) command.arguments(n);
-      if (s) command.description(s);
-      return ((this._addImplicitHelpCommand = !0), (this._helpCommand = command), this);
+    helpCommand(enableOrNameAndArgs, description) {
+      if (typeof enableOrNameAndArgs === "boolean") {
+        this._addImplicitHelpCommand = enableOrNameAndArgs;
+        return this;
+      }
+      enableOrNameAndArgs = enableOrNameAndArgs ?? "help [command]";
+      let [, helpName, helpArgs] = enableOrNameAndArgs.match(/([^ ]+) *(.*)/);
+      let helpDescription = description ?? "display help for command";
+      let helpCommand = this.createCommand(helpName);
+      helpCommand.helpOption(false);
+      if (helpArgs) helpCommand.arguments(helpArgs);
+      if (helpDescription) helpCommand.description(helpDescription);
+      this._addImplicitHelpCommand = true;
+      this._helpCommand = helpCommand;
+      return this;
     }
-    addHelpCommand(t, e) {
-      if (typeof t !== "object") return (this.helpCommand(t, e), this);
-      return ((this._addImplicitHelpCommand = !0), (this._helpCommand = t), this);
+    addHelpCommand(helpCommand, deprecatedDescription) {
+      if (typeof helpCommand !== "object") {
+        this.helpCommand(helpCommand, deprecatedDescription);
+        return this;
+      }
+      this._addImplicitHelpCommand = true;
+      this._helpCommand = helpCommand;
+      return this;
     }
     _getHelpCommand() {
       if (
         this._addImplicitHelpCommand ??
         (this.commands.length && !this._actionHandler && !this._findCommand("help"))
       ) {
-        if (this._helpCommand === void 0) this.helpCommand(void 0, void 0);
+        if (this._helpCommand === undefined) this.helpCommand(undefined, undefined);
         return this._helpCommand;
       }
       return null;
     }
-    hook(t, e) {
-      let i = ["preSubcommand", "preAction", "postAction"];
-      if (!i.includes(t))
-        throw Error(`Unexpected value for event passed to hook : '${t}'.
-Expecting one of '${i.join("', '")}'`);
-      if (this._lifeCycleHooks[t]) this._lifeCycleHooks[t].push(e);
-      else this._lifeCycleHooks[t] = [e];
+    hook(event, listener) {
+      let allowedValues = ["preSubcommand", "preAction", "postAction"];
+      if (!allowedValues.includes(event))
+        throw Error(`Unexpected value for event passed to hook : '${event}'.
+Expecting one of '${allowedValues.join("', '")}'`);
+      if (this._lifeCycleHooks[event]) this._lifeCycleHooks[event].push(listener);
+      else this._lifeCycleHooks[event] = [listener];
       return this;
     }
-    exitOverride(t) {
-      if (t) this._exitCallback = t;
+    exitOverride(fn) {
+      if (fn) this._exitCallback = fn;
       else
-        this._exitCallback = (e) => {
-          if (e.code !== "commander.executeSubCommandAsync") throw e;
+        this._exitCallback = (err) => {
+          if (err.code !== "commander.executeSubCommandAsync") throw err;
         };
       return this;
     }
-    _exit(t, e, i) {
-      if (this._exitCallback) this._exitCallback(new CommanderError(t, e, i));
-      l.exit(t);
+    _exit(exitCode, code, message) {
+      if (this._exitCallback) this._exitCallback(new CommanderError(exitCode, code, message));
+      l.exit(exitCode);
     }
-    action(t) {
-      let e = (i) => {
-        let n = this.registeredArguments.length,
-          sliced = i.slice(0, n);
-        if (this._storeOptionsAsProperties) sliced[n] = this;
-        else sliced[n] = this.opts();
-        return (sliced.push(this), t.apply(this, sliced));
+    action(fn) {
+      let listener = (args) => {
+        let expectedArgsCount = this.registeredArguments.length;
+        let actionArgs = args.slice(0, expectedArgsCount);
+        if (this._storeOptionsAsProperties) actionArgs[expectedArgsCount] = this;
+        else actionArgs[expectedArgsCount] = this.opts();
+        actionArgs.push(this);
+        return fn.apply(this, actionArgs);
       };
-      return ((this._actionHandler = e), this);
+      this._actionHandler = listener;
+      return this;
     }
-    createOption(t, e) {
-      return new Option(t, e);
+    createOption(flags, description) {
+      return new Option(flags, description);
     }
-    _callParseArg(t, e, i, n) {
+    _callParseArg(target, value, previous, invalidArgumentMessage) {
       try {
-        return t.parseArg(e, i);
-      } catch (error) {
-        if (error.code === "commander.invalidArgument") {
-          let r = `${n} ${error.message}`;
-          this.error(r, { exitCode: error.exitCode, code: error.code });
+        return target.parseArg(value, previous);
+      } catch (err) {
+        if (err.code === "commander.invalidArgument") {
+          let message = `${invalidArgumentMessage} ${err.message}`;
+          this.error(message, {
+            exitCode: err.exitCode,
+            code: err.code,
+          });
         }
-        throw error;
+        throw err;
       }
     }
-    _registerOption(t) {
-      let e = (t.short && this._findOption(t.short)) || (t.long && this._findOption(t.long));
-      if (e) {
-        let i = t.long && this._findOption(t.long) ? t.long : t.short;
-        throw Error(`Cannot add option '${t.flags}'${this._name && ` to command '${this._name}'`} due to conflicting flag '${i}'
--  already used by option '${e.flags}'`);
+    _registerOption(option) {
+      let matchingOption =
+        (option.short && this._findOption(option.short)) || (option.long && this._findOption(option.long));
+      if (matchingOption) {
+        let matchingFlag = option.long && this._findOption(option.long) ? option.long : option.short;
+        throw Error(`Cannot add option '${option.flags}'${this._name && ` to command '${this._name}'`} due to conflicting flag '${matchingFlag}'
+-  already used by option '${matchingOption.flags}'`);
       }
-      this.options.push(t);
+      this.options.push(option);
     }
-    _registerCommand(t) {
-      let e = (n) => [n.name()].concat(n.aliases()),
-        found = e(t).find((n) => this._findCommand(n));
-      if (found) {
-        let joined = e(this._findCommand(found)).join("|"),
-          joined_2 = e(t).join("|");
-        throw Error(`cannot add command '${joined_2}' as already have command '${joined}'`);
+    _registerCommand(command) {
+      let knownBy = (cmd) => [cmd.name()].concat(cmd.aliases());
+      let alreadyUsed = knownBy(command).find((name) => this._findCommand(name));
+      if (alreadyUsed) {
+        let existingCmd = knownBy(this._findCommand(alreadyUsed)).join("|");
+        let newCmd = knownBy(command).join("|");
+        throw Error(`cannot add command '${newCmd}' as already have command '${existingCmd}'`);
       }
-      this.commands.push(t);
+      this.commands.push(command);
     }
-    addOption(t) {
-      this._registerOption(t);
-      let e = t.name(),
-        attributeName = t.attributeName();
-      if (t.negate) {
-        let replaced = t.long.replace(/^--no-/, "--");
-        if (!this._findOption(replaced))
+    addOption(option) {
+      this._registerOption(option);
+      let oname = option.name();
+      let name = option.attributeName();
+      if (option.negate) {
+        let positiveLongFlag = option.long.replace(/^--no-/, "--");
+        if (!this._findOption(positiveLongFlag))
           this.setOptionValueWithSource(
-            attributeName,
-            t.defaultValue === void 0 ? !0 : t.defaultValue,
+            name,
+            option.defaultValue === undefined ? true : option.defaultValue,
             "default",
           );
-      } else if (t.defaultValue !== void 0)
-        this.setOptionValueWithSource(attributeName, t.defaultValue, "default");
-      let n = (s, r, a) => {
-        if (s == null && t.presetArg !== void 0) s = t.presetArg;
-        let optionValue = this.getOptionValue(attributeName);
-        if (s !== null && t.parseArg) s = this._callParseArg(t, s, optionValue, r);
-        else if (s !== null && t.variadic) s = t._concatValue(s, optionValue);
-        if (s == null)
-          if (t.negate) s = !1;
-          else if (t.isBoolean() || t.optional) s = !0;
-          else s = "";
-        this.setOptionValueWithSource(attributeName, s, a);
+      } else if (option.defaultValue !== undefined)
+        this.setOptionValueWithSource(name, option.defaultValue, "default");
+      let handleOptionValue = (val, invalidValueMessage, valueSource) => {
+        if (val == null && option.presetArg !== undefined) val = option.presetArg;
+        let oldValue = this.getOptionValue(name);
+        if (val !== null && option.parseArg)
+          val = this._callParseArg(option, val, oldValue, invalidValueMessage);
+        else if (val !== null && option.variadic) val = option._concatValue(val, oldValue);
+        if (val == null)
+          if (option.negate) val = false;
+          else if (option.isBoolean() || option.optional) val = true;
+          else val = "";
+        this.setOptionValueWithSource(name, val, valueSource);
       };
-      if (
-        (this.on("option:" + e, (s) => {
-          let r = `error: option '${t.flags}' argument '${s}' is invalid.`;
-          n(s, r, "cli");
-        }),
-        t.envVar)
-      )
-        this.on("optionEnv:" + e, (s) => {
-          let r = `error: option '${t.flags}' value '${s}' from env '${t.envVar}' is invalid.`;
-          n(s, r, "env");
+      this.on("option:" + oname, (val) => {
+        let invalidValueMessage = `error: option '${option.flags}' argument '${val}' is invalid.`;
+        handleOptionValue(val, invalidValueMessage, "cli");
+      });
+      if (option.envVar)
+        this.on("optionEnv:" + oname, (val) => {
+          let invalidValueMessage = `error: option '${option.flags}' value '${val}' from env '${option.envVar}' is invalid.`;
+          handleOptionValue(val, invalidValueMessage, "env");
         });
       return this;
     }
-    _optionEx(t, e, i, n, s) {
-      if (typeof e === "object" && e instanceof Option)
+    _optionEx(config, flags, description, fn, defaultValue) {
+      if (typeof flags === "object" && flags instanceof Option)
         throw Error("To add an Option object use addOption() instead of option() or requiredOption()");
-      let option = this.createOption(e, i);
-      if ((option.makeOptionMandatory(!!t.mandatory), typeof n === "function"))
-        option.default(s).argParser(n);
-      else if (n instanceof RegExp) {
-        let a = n;
-        ((n = (o, h) => {
-          let match = a.exec(o);
-          return match ? match[0] : h;
-        }),
-          option.default(s).argParser(n));
-      } else option.default(n);
+      let option = this.createOption(flags, description);
+      option.makeOptionMandatory(!!config.mandatory);
+      if (typeof fn === "function") option.default(defaultValue).argParser(fn);
+      else if (fn instanceof RegExp) {
+        let regex = fn;
+        fn = (val, def) => {
+          let m = regex.exec(val);
+          return m ? m[0] : def;
+        };
+        option.default(defaultValue).argParser(fn);
+      } else option.default(fn);
       return this.addOption(option);
     }
-    option(t, e, i, n) {
-      return this._optionEx({}, t, e, i, n);
+    option(flags, description, parseArg, defaultValue) {
+      return this._optionEx({}, flags, description, parseArg, defaultValue);
     }
-    requiredOption(t, e, i, n) {
-      return this._optionEx({ mandatory: !0 }, t, e, i, n);
+    requiredOption(flags, description, parseArg, defaultValue) {
+      return this._optionEx(
+        {
+          mandatory: true,
+        },
+        flags,
+        description,
+        parseArg,
+        defaultValue,
+      );
     }
-    combineFlagAndOptionalValue(t = !0) {
-      return ((this._combineFlagAndOptionalValue = !!t), this);
+    combineFlagAndOptionalValue(combine = true) {
+      this._combineFlagAndOptionalValue = !!combine;
+      return this;
     }
-    allowUnknownOption(t = !0) {
-      return ((this._allowUnknownOption = !!t), this);
+    allowUnknownOption(allowUnknown = true) {
+      this._allowUnknownOption = !!allowUnknown;
+      return this;
     }
-    allowExcessArguments(t = !0) {
-      return ((this._allowExcessArguments = !!t), this);
+    allowExcessArguments(allowExcess = true) {
+      this._allowExcessArguments = !!allowExcess;
+      return this;
     }
-    enablePositionalOptions(t = !0) {
-      return ((this._enablePositionalOptions = !!t), this);
+    enablePositionalOptions(positional = true) {
+      this._enablePositionalOptions = !!positional;
+      return this;
     }
-    passThroughOptions(t = !0) {
-      return ((this._passThroughOptions = !!t), this._checkForBrokenPassThrough(), this);
+    passThroughOptions(passThrough = true) {
+      this._passThroughOptions = !!passThrough;
+      this._checkForBrokenPassThrough();
+      return this;
     }
     _checkForBrokenPassThrough() {
       if (this.parent && this._passThroughOptions && !this.parent._enablePositionalOptions)
@@ -336,440 +378,503 @@ Expecting one of '${i.join("', '")}'`);
           `passThroughOptions cannot be used for '${this._name}' without turning on enablePositionalOptions for parent command(s)`,
         );
     }
-    storeOptionsAsProperties(t = !0) {
+    storeOptionsAsProperties(storeAsProperties = true) {
       if (this.options.length) throw Error("call .storeOptionsAsProperties() before adding options");
       if (Object.keys(this._optionValues).length)
         throw Error("call .storeOptionsAsProperties() before setting option values");
-      return ((this._storeOptionsAsProperties = !!t), this);
+      this._storeOptionsAsProperties = !!storeAsProperties;
+      return this;
     }
-    getOptionValue(t) {
-      if (this._storeOptionsAsProperties) return this[t];
-      return this._optionValues[t];
+    getOptionValue(key) {
+      if (this._storeOptionsAsProperties) return this[key];
+      return this._optionValues[key];
     }
-    setOptionValue(t, e) {
-      return this.setOptionValueWithSource(t, e, void 0);
+    setOptionValue(key, value) {
+      return this.setOptionValueWithSource(key, value, undefined);
     }
-    setOptionValueWithSource(t, e, i) {
-      if (this._storeOptionsAsProperties) this[t] = e;
-      else this._optionValues[t] = e;
-      return ((this._optionValueSources[t] = i), this);
+    setOptionValueWithSource(key, value, source) {
+      if (this._storeOptionsAsProperties) this[key] = value;
+      else this._optionValues[key] = value;
+      this._optionValueSources[key] = source;
+      return this;
     }
-    getOptionValueSource(t) {
-      return this._optionValueSources[t];
+    getOptionValueSource(key) {
+      return this._optionValueSources[key];
     }
-    getOptionValueSourceWithGlobals(t) {
-      let e;
-      return (
-        this._getCommandAndAncestors().forEach((i) => {
-          if (i.getOptionValueSource(t) !== void 0) e = i.getOptionValueSource(t);
-        }),
-        e
-      );
+    getOptionValueSourceWithGlobals(key) {
+      let source;
+      this._getCommandAndAncestors().forEach((cmd) => {
+        if (cmd.getOptionValueSource(key) !== undefined) source = cmd.getOptionValueSource(key);
+      });
+      return source;
     }
-    _prepareUserArgs(t, e) {
-      if (t !== void 0 && !Array.isArray(t))
+    _prepareUserArgs(argv, parseOptions) {
+      if (argv !== undefined && !Array.isArray(argv))
         throw Error("first parameter to parse must be array or undefined");
-      if (((e = e || {}), t === void 0 && e.from === void 0)) {
-        if (l.versions?.electron) e.from = "electron";
-        let n = l.execArgv ?? [];
-        if (n.includes("-e") || n.includes("--eval") || n.includes("-p") || n.includes("--print"))
-          e.from = "eval";
+      parseOptions = parseOptions || {};
+      if (argv === undefined && parseOptions.from === undefined) {
+        if (l.versions?.electron) parseOptions.from = "electron";
+        let execArgv = l.execArgv ?? [];
+        if (
+          execArgv.includes("-e") ||
+          execArgv.includes("--eval") ||
+          execArgv.includes("-p") ||
+          execArgv.includes("--print")
+        )
+          parseOptions.from = "eval";
       }
-      if (t === void 0) t = l.argv;
-      this.rawArgs = t.slice();
-      let i;
-      switch (e.from) {
-        case void 0:
+      if (argv === undefined) argv = l.argv;
+      this.rawArgs = argv.slice();
+      let userArgs;
+      switch (parseOptions.from) {
+        case undefined:
         case "node":
-          ((this._scriptPath = t[1]), (i = t.slice(2)));
+          this._scriptPath = argv[1];
+          userArgs = argv.slice(2);
           break;
         case "electron":
-          if (l.defaultApp) ((this._scriptPath = t[1]), (i = t.slice(2)));
-          else i = t.slice(1);
+          if (l.defaultApp) {
+            this._scriptPath = argv[1];
+            userArgs = argv.slice(2);
+          } else userArgs = argv.slice(1);
           break;
         case "user":
-          i = t.slice(0);
+          userArgs = argv.slice(0);
           break;
         case "eval":
-          i = t.slice(1);
+          userArgs = argv.slice(1);
           break;
         default:
-          throw Error(`unexpected parse option { from: '${e.from}' }`);
+          throw Error(`unexpected parse option { from: '${parseOptions.from}' }`);
       }
       if (!this._name && this._scriptPath) this.nameFromFilename(this._scriptPath);
-      return ((this._name = this._name || "program"), i);
+      this._name = this._name || "program";
+      return userArgs;
     }
-    parse(t, e) {
-      let _prepareUserArgs = this._prepareUserArgs(t, e);
-      return (this._parseCommand([], _prepareUserArgs), this);
+    parse(argv, parseOptions) {
+      let userArgs = this._prepareUserArgs(argv, parseOptions);
+      this._parseCommand([], userArgs);
+      return this;
     }
-    async parseAsync(t, e) {
-      let _prepareUserArgs = this._prepareUserArgs(t, e);
-      return (await this._parseCommand([], _prepareUserArgs), this);
+    async parseAsync(argv, parseOptions) {
+      let userArgs = this._prepareUserArgs(argv, parseOptions);
+      await this._parseCommand([], userArgs);
+      return this;
     }
-    _executeSubCommand(t, e) {
-      e = e.slice();
-      let i = !1,
-        n = [".js", ".ts", ".tsx", ".mjs", ".cjs"];
-      function s(u, c) {
-        let resolved = f.resolve(u, c);
-        if (A.existsSync(resolved)) return resolved;
-        if (n.includes(f.extname(c))) return;
-        let found = n.find((p) => A.existsSync(`${resolved}${p}`));
-        if (found) return `${resolved}${found}`;
+    _executeSubCommand(subcommand, args) {
+      args = args.slice();
+      let launchWithNode = false;
+      let sourceExt = [".js", ".ts", ".tsx", ".mjs", ".cjs"];
+      function findFile(baseDir, baseName) {
+        let localBin = path.resolve(baseDir, baseName);
+        if (fs.existsSync(localBin)) return localBin;
+        if (sourceExt.includes(path.extname(baseName))) return;
+        let foundExt = sourceExt.find((ext) => fs.existsSync(`${localBin}${ext}`));
+        if (foundExt) return `${localBin}${foundExt}`;
         return;
       }
-      (this._checkForMissingMandatoryOptions(), this._checkForConflictingOptions());
-      let r = t._executableFile || `${this._name}-${t._name}`,
-        a = this._executableDir || "";
+      this._checkForMissingMandatoryOptions();
+      this._checkForConflictingOptions();
+      let executableFile = subcommand._executableFile || `${this._name}-${subcommand._name}`;
+      let executableDir = this._executableDir || "";
       if (this._scriptPath) {
-        let u;
+        let resolvedScriptPath;
         try {
-          u = A.realpathSync(this._scriptPath);
-        } catch (error) {
-          u = this._scriptPath;
+          resolvedScriptPath = fs.realpathSync(this._scriptPath);
+        } catch (err) {
+          resolvedScriptPath = this._scriptPath;
         }
-        a = f.resolve(f.dirname(u), a);
+        executableDir = path.resolve(path.dirname(resolvedScriptPath), executableDir);
       }
-      if (a) {
-        let u = s(a, r);
-        if (!u && !t._executableFile && this._scriptPath) {
-          let base = f.basename(this._scriptPath, f.extname(this._scriptPath));
-          if (base !== this._name) u = s(a, `${base}-${t._name}`);
+      if (executableDir) {
+        let localFile = findFile(executableDir, executableFile);
+        if (!localFile && !subcommand._executableFile && this._scriptPath) {
+          let legacyName = path.basename(this._scriptPath, path.extname(this._scriptPath));
+          if (legacyName !== this._name)
+            localFile = findFile(executableDir, `${legacyName}-${subcommand._name}`);
         }
-        r = u || r;
+        executableFile = localFile || executableFile;
       }
-      i = n.includes(f.extname(r));
-      let o;
-      if (l.platform !== "win32")
-        if (i)
-          (e.unshift(r), (e = G(l.execArgv).concat(e)), (o = C.spawn(l.argv[0], e, { stdio: "inherit" })));
-        else o = C.spawn(r, e, { stdio: "inherit" });
-      else (e.unshift(r), (e = G(l.execArgv).concat(e)), (o = C.spawn(l.execPath, e, { stdio: "inherit" })));
-      if (!o.killed)
-        ["SIGUSR1", "SIGUSR2", "SIGTERM", "SIGINT", "SIGHUP"].forEach((c) => {
-          l.on(c, () => {
-            if (o.killed === !1 && o.exitCode === null) o.kill(c);
+      launchWithNode = sourceExt.includes(path.extname(executableFile));
+      let proc;
+      if (l.platform !== "win32") {
+        if (launchWithNode) {
+          args.unshift(executableFile);
+          args = incrementNodeInspectorPort(l.execArgv).concat(args);
+          proc = childProcess.spawn(l.argv[0], args, {
+            stdio: "inherit",
+          });
+        } else
+          proc = childProcess.spawn(executableFile, args, {
+            stdio: "inherit",
+          });
+      } else {
+        args.unshift(executableFile);
+        args = incrementNodeInspectorPort(l.execArgv).concat(args);
+        proc = childProcess.spawn(l.execPath, args, {
+          stdio: "inherit",
+        });
+      }
+      if (!proc.killed)
+        ["SIGUSR1", "SIGUSR2", "SIGTERM", "SIGINT", "SIGHUP"].forEach((signal) => {
+          l.on(signal, () => {
+            if (proc.killed === false && proc.exitCode === null) proc.kill(signal);
           });
         });
-      let _exitCallback = this._exitCallback;
-      (o.on("close", (u) => {
-        if (((u = u ?? 1), !_exitCallback)) l.exit(u);
-        else _exitCallback(new CommanderError(u, "commander.executeSubCommandAsync", "(close)"));
-      }),
-        o.on("error", (u) => {
-          if (u.code === "ENOENT") {
-            let c = a
-                ? `searched for local subcommand relative to directory '${a}'`
-                : "no directory for search for local subcommand, use .executableDir() to supply a custom directory",
-              d = `'${r}' does not exist
- - if '${t._name}' is not meant to be an executable command, remove description parameter from '.command()' and use '.description()' instead
+      let exitCallback = this._exitCallback;
+      proc.on("close", (code) => {
+        code = code ?? 1;
+        if (!exitCallback) l.exit(code);
+        else exitCallback(new CommanderError(code, "commander.executeSubCommandAsync", "(close)"));
+      });
+      proc.on("error", (err) => {
+        if (err.code === "ENOENT") {
+          let executableDirMessage = executableDir
+            ? `searched for local subcommand relative to directory '${executableDir}'`
+            : "no directory for search for local subcommand, use .executableDir() to supply a custom directory";
+          let executableMissing = `'${executableFile}' does not exist
+ - if '${subcommand._name}' is not meant to be an executable command, remove description parameter from '.command()' and use '.description()' instead
  - if the default executable name is not suitable, use the executableFile option to supply a custom name or path
- - ${c}`;
-            throw Error(d);
-          } else if (u.code === "EACCES") throw Error(`'${r}' not executable`);
-          if (!_exitCallback) l.exit(1);
-          else {
-            let c = new CommanderError(1, "commander.executeSubCommandAsync", "(error)");
-            ((c.nestedError = u), _exitCallback(c));
-          }
-        }),
-        (this.runningCommand = o));
+ - ${executableDirMessage}`;
+          throw Error(executableMissing);
+        } else if (err.code === "EACCES") throw Error(`'${executableFile}' not executable`);
+        if (!exitCallback) l.exit(1);
+        else {
+          let wrappedError = new CommanderError(1, "commander.executeSubCommandAsync", "(error)");
+          wrappedError.nestedError = err;
+          exitCallback(wrappedError);
+        }
+      });
+      this.runningCommand = proc;
     }
-    _dispatchSubcommand(t, e, i) {
-      let _findCommand = this._findCommand(t);
-      if (!_findCommand) this.help({ error: !0 });
-      let s;
-      return (
-        (s = this._chainOrCallSubCommandHook(s, _findCommand, "preSubcommand")),
-        (s = this._chainOrCall(s, () => {
-          if (_findCommand._executableHandler) this._executeSubCommand(_findCommand, e.concat(i));
-          else return _findCommand._parseCommand(e, i);
-        })),
-        s
-      );
+    _dispatchSubcommand(commandName, operands, unknown) {
+      let subCommand = this._findCommand(commandName);
+      if (!subCommand)
+        this.help({
+          error: true,
+        });
+      let promiseChain;
+      promiseChain = this._chainOrCallSubCommandHook(promiseChain, subCommand, "preSubcommand");
+      promiseChain = this._chainOrCall(promiseChain, () => {
+        if (subCommand._executableHandler) this._executeSubCommand(subCommand, operands.concat(unknown));
+        else return subCommand._parseCommand(operands, unknown);
+      });
+      return promiseChain;
     }
-    _dispatchHelpCommand(t) {
-      if (!t) this.help();
-      let _findCommand = this._findCommand(t);
-      if (_findCommand && !_findCommand._executableHandler) _findCommand.help();
+    _dispatchHelpCommand(subcommandName) {
+      if (!subcommandName) this.help();
+      let subCommand = this._findCommand(subcommandName);
+      if (subCommand && !subCommand._executableHandler) subCommand.help();
       return this._dispatchSubcommand(
-        t,
+        subcommandName,
         [],
         [this._getHelpOption()?.long ?? this._getHelpOption()?.short ?? "--help"],
       );
     }
     _checkNumberOfArguments() {
+      this.registeredArguments.forEach((arg, i) => {
+        if (arg.required && this.args[i] == null) this.missingArgument(arg.name());
+      });
       if (
-        (this.registeredArguments.forEach((registeredArgument, e) => {
-          if (registeredArgument.required && this.args[e] == null)
-            this.missingArgument(registeredArgument.name());
-        }),
         this.registeredArguments.length > 0 &&
-          this.registeredArguments[this.registeredArguments.length - 1].variadic)
+        this.registeredArguments[this.registeredArguments.length - 1].variadic
       )
         return;
       if (this.args.length > this.registeredArguments.length) this._excessArguments(this.args);
     }
     _processArguments() {
-      let t = (i, n, s) => {
-        let r = n;
-        if (n !== null && i.parseArg) {
-          let a = `error: command-argument value '${n}' is invalid for argument '${i.name()}'.`;
-          r = this._callParseArg(i, n, s, a);
+      let myParseArg = (argument, value, previous) => {
+        let parsedValue = value;
+        if (value !== null && argument.parseArg) {
+          let invalidValueMessage = `error: command-argument value '${value}' is invalid for argument '${argument.name()}'.`;
+          parsedValue = this._callParseArg(argument, value, previous, invalidValueMessage);
         }
-        return r;
+        return parsedValue;
       };
       this._checkNumberOfArguments();
-      let e = [];
-      (this.registeredArguments.forEach((registeredArgument, n) => {
-        let defaultValue = registeredArgument.defaultValue;
-        if (registeredArgument.variadic) {
-          if (n < this.args.length) {
-            if (((defaultValue = this.args.slice(n)), registeredArgument.parseArg))
-              defaultValue = defaultValue.reduce(
-                (r, a) => t(registeredArgument, a, r),
-                registeredArgument.defaultValue,
+      let processedArgs = [];
+      this.registeredArguments.forEach((declaredArg, index) => {
+        let value = declaredArg.defaultValue;
+        if (declaredArg.variadic) {
+          if (index < this.args.length) {
+            value = this.args.slice(index);
+            if (declaredArg.parseArg)
+              value = value.reduce(
+                (processed, v) => myParseArg(declaredArg, v, processed),
+                declaredArg.defaultValue,
               );
-          } else if (defaultValue === void 0) defaultValue = [];
-        } else if (n < this.args.length) {
-          if (((defaultValue = this.args[n]), registeredArgument.parseArg))
-            defaultValue = t(registeredArgument, defaultValue, registeredArgument.defaultValue);
+          } else if (value === undefined) value = [];
+        } else if (index < this.args.length) {
+          value = this.args[index];
+          if (declaredArg.parseArg) value = myParseArg(declaredArg, value, declaredArg.defaultValue);
         }
-        e[n] = defaultValue;
-      }),
-        (this.processedArgs = e));
+        processedArgs[index] = value;
+      });
+      this.processedArgs = processedArgs;
     }
-    _chainOrCall(t, e) {
-      if (t && t.then && typeof t.then === "function") return t.then(() => e());
-      return e();
+    _chainOrCall(promise, fn) {
+      if (promise && promise.then && typeof promise.then === "function") return promise.then(() => fn());
+      return fn();
     }
-    _chainOrCallHooks(t, e) {
-      let i = t,
-        n = [];
-      if (
-        (this._getCommandAndAncestors()
-          .reverse()
-          .filter((s) => s._lifeCycleHooks[e] !== void 0)
-          .forEach((s) => {
-            s._lifeCycleHooks[e].forEach((r) => {
-              n.push({ hookedCommand: s, callback: r });
+    _chainOrCallHooks(promise, event) {
+      let result = promise;
+      let hooks = [];
+      this._getCommandAndAncestors()
+        .reverse()
+        .filter((cmd) => cmd._lifeCycleHooks[event] !== undefined)
+        .forEach((hookedCommand) => {
+          hookedCommand._lifeCycleHooks[event].forEach((callback) => {
+            hooks.push({
+              hookedCommand,
+              callback,
             });
-          }),
-        e === "postAction")
-      )
-        n.reverse();
-      return (
-        n.forEach((s) => {
-          i = this._chainOrCall(i, () => s.callback(s.hookedCommand, this));
-        }),
-        i
-      );
-    }
-    _chainOrCallSubCommandHook(t, e, i) {
-      let n = t;
-      if (this._lifeCycleHooks[i] !== void 0)
-        this._lifeCycleHooks[i].forEach((s) => {
-          n = this._chainOrCall(n, () => s(this, e));
-        });
-      return n;
-    }
-    _parseCommand(t, e) {
-      let options = this.parseOptions(e);
-      if (
-        (this._parseOptionsEnv(),
-        this._parseOptionsImplied(),
-        (t = t.concat(options.operands)),
-        (e = options.unknown),
-        (this.args = t.concat(e)),
-        t && this._findCommand(t[0]))
-      )
-        return this._dispatchSubcommand(t[0], t.slice(1), e);
-      if (this._getHelpCommand() && t[0] === this._getHelpCommand().name())
-        return this._dispatchHelpCommand(t[1]);
-      if (this._defaultCommandName)
-        return (this._outputHelpIfRequested(e), this._dispatchSubcommand(this._defaultCommandName, t, e));
-      if (this.commands.length && this.args.length === 0 && !this._actionHandler && !this._defaultCommandName)
-        this.help({ error: !0 });
-      (this._outputHelpIfRequested(options.unknown),
-        this._checkForMissingMandatoryOptions(),
-        this._checkForConflictingOptions());
-      let n = () => {
-          if (options.unknown.length > 0) this.unknownOption(options.unknown[0]);
-        },
-        s = `command:${this.name()}`;
-      if (this._actionHandler) {
-        (n(), this._processArguments());
-        let r;
-        if (
-          ((r = this._chainOrCallHooks(r, "preAction")),
-          (r = this._chainOrCall(r, () => this._actionHandler(this.processedArgs))),
-          this.parent)
-        )
-          r = this._chainOrCall(r, () => {
-            this.parent.emit(s, t, e);
           });
-        return ((r = this._chainOrCallHooks(r, "postAction")), r);
+        });
+      if (event === "postAction") hooks.reverse();
+      hooks.forEach((hookDetail) => {
+        result = this._chainOrCall(result, () => hookDetail.callback(hookDetail.hookedCommand, this));
+      });
+      return result;
+    }
+    _chainOrCallSubCommandHook(promise, subCommand, event) {
+      let result = promise;
+      if (this._lifeCycleHooks[event] !== undefined)
+        this._lifeCycleHooks[event].forEach((hook) => {
+          result = this._chainOrCall(result, () => hook(this, subCommand));
+        });
+      return result;
+    }
+    _parseCommand(operands, unknown) {
+      let parsed = this.parseOptions(unknown);
+      this._parseOptionsEnv();
+      this._parseOptionsImplied();
+      operands = operands.concat(parsed.operands);
+      unknown = parsed.unknown;
+      this.args = operands.concat(unknown);
+      if (operands && this._findCommand(operands[0]))
+        return this._dispatchSubcommand(operands[0], operands.slice(1), unknown);
+      if (this._getHelpCommand() && operands[0] === this._getHelpCommand().name())
+        return this._dispatchHelpCommand(operands[1]);
+      if (this._defaultCommandName) {
+        this._outputHelpIfRequested(unknown);
+        return this._dispatchSubcommand(this._defaultCommandName, operands, unknown);
       }
-      if (this.parent && this.parent.listenerCount(s))
-        (n(), this._processArguments(), this.parent.emit(s, t, e));
-      else if (t.length) {
-        if (this._findCommand("*")) return this._dispatchSubcommand("*", t, e);
-        if (this.listenerCount("command:*")) this.emit("command:*", t, e);
+      if (this.commands.length && this.args.length === 0 && !this._actionHandler && !this._defaultCommandName)
+        this.help({
+          error: true,
+        });
+      this._outputHelpIfRequested(parsed.unknown);
+      this._checkForMissingMandatoryOptions();
+      this._checkForConflictingOptions();
+      let checkForUnknownOptions = () => {
+        if (parsed.unknown.length > 0) this.unknownOption(parsed.unknown[0]);
+      };
+      let commandEvent = `command:${this.name()}`;
+      if (this._actionHandler) {
+        checkForUnknownOptions();
+        this._processArguments();
+        let promiseChain;
+        promiseChain = this._chainOrCallHooks(promiseChain, "preAction");
+        promiseChain = this._chainOrCall(promiseChain, () => this._actionHandler(this.processedArgs));
+        if (this.parent)
+          promiseChain = this._chainOrCall(promiseChain, () => {
+            this.parent.emit(commandEvent, operands, unknown);
+          });
+        promiseChain = this._chainOrCallHooks(promiseChain, "postAction");
+        return promiseChain;
+      }
+      if (this.parent && this.parent.listenerCount(commandEvent)) {
+        checkForUnknownOptions();
+        this._processArguments();
+        this.parent.emit(commandEvent, operands, unknown);
+      } else if (operands.length) {
+        if (this._findCommand("*")) return this._dispatchSubcommand("*", operands, unknown);
+        if (this.listenerCount("command:*")) this.emit("command:*", operands, unknown);
         else if (this.commands.length) this.unknownCommand();
-        else (n(), this._processArguments());
-      } else if (this.commands.length) (n(), this.help({ error: !0 }));
-      else (n(), this._processArguments());
+        else {
+          checkForUnknownOptions();
+          this._processArguments();
+        }
+      } else if (this.commands.length) {
+        checkForUnknownOptions();
+        this.help({
+          error: true,
+        });
+      } else {
+        checkForUnknownOptions();
+        this._processArguments();
+      }
     }
-    _findCommand(t) {
-      if (!t) return;
-      return this.commands.find((command) => command._name === t || command._aliases.includes(t));
+    _findCommand(name) {
+      if (!name) return;
+      return this.commands.find((cmd) => cmd._name === name || cmd._aliases.includes(name));
     }
-    _findOption(t) {
-      return this.options.find((option) => option.is(t));
+    _findOption(arg) {
+      return this.options.find((option) => option.is(arg));
     }
     _checkForMissingMandatoryOptions() {
-      this._getCommandAndAncestors().forEach((t) => {
-        t.options.forEach((option) => {
-          if (option.mandatory && t.getOptionValue(option.attributeName()) === void 0)
-            t.missingMandatoryOptionValue(option);
+      this._getCommandAndAncestors().forEach((cmd) => {
+        cmd.options.forEach((anOption) => {
+          if (anOption.mandatory && cmd.getOptionValue(anOption.attributeName()) === undefined)
+            cmd.missingMandatoryOptionValue(anOption);
         });
       });
     }
     _checkForConflictingLocalOptions() {
-      let filtered = this.options.filter((option) => {
-        let attributeName = option.attributeName();
-        if (this.getOptionValue(attributeName) === void 0) return !1;
-        return this.getOptionValueSource(attributeName) !== "default";
+      let definedNonDefaultOptions = this.options.filter((option) => {
+        let optionKey = option.attributeName();
+        if (this.getOptionValue(optionKey) === undefined) return false;
+        return this.getOptionValueSource(optionKey) !== "default";
       });
-      filtered
-        .filter((i) => i.conflictsWith.length > 0)
-        .forEach((i) => {
-          let found = filtered.find((s) => i.conflictsWith.includes(s.attributeName()));
-          if (found) this._conflictingOption(i, found);
+      definedNonDefaultOptions
+        .filter((option) => option.conflictsWith.length > 0)
+        .forEach((option) => {
+          let conflictingAndDefined = definedNonDefaultOptions.find((defined) =>
+            option.conflictsWith.includes(defined.attributeName()),
+          );
+          if (conflictingAndDefined) this._conflictingOption(option, conflictingAndDefined);
         });
     }
     _checkForConflictingOptions() {
-      this._getCommandAndAncestors().forEach((t) => {
-        t._checkForConflictingLocalOptions();
+      this._getCommandAndAncestors().forEach((cmd) => {
+        cmd._checkForConflictingLocalOptions();
       });
     }
-    parseOptions(t) {
-      let e = [],
-        i = [],
-        n = e,
-        sliced = t.slice();
-      function r(o) {
-        return o.length > 1 && o[0] === "-";
+    parseOptions(argv) {
+      let operands = [];
+      let unknown = [];
+      let dest = operands;
+      let args = argv.slice();
+      function maybeOption(arg) {
+        return arg.length > 1 && arg[0] === "-";
       }
-      let a = null;
-      while (sliced.length) {
-        let o = sliced.shift();
-        if (o === "--") {
-          if (n === i) n.push(o);
-          n.push(...sliced);
+      let activeVariadicOption = null;
+      while (args.length) {
+        let arg = args.shift();
+        if (arg === "--") {
+          if (dest === unknown) dest.push(arg);
+          dest.push(...args);
           break;
         }
-        if (a && !r(o)) {
-          this.emit(`option:${a.name()}`, o);
+        if (activeVariadicOption && !maybeOption(arg)) {
+          this.emit(`option:${activeVariadicOption.name()}`, arg);
           continue;
         }
-        if (((a = null), r(o))) {
-          let _findOption = this._findOption(o);
-          if (_findOption) {
-            if (_findOption.required) {
-              let u = sliced.shift();
-              if (u === void 0) this.optionMissingArgument(_findOption);
-              this.emit(`option:${_findOption.name()}`, u);
-            } else if (_findOption.optional) {
-              let u = null;
-              if (sliced.length > 0 && !r(sliced[0])) u = sliced.shift();
-              this.emit(`option:${_findOption.name()}`, u);
-            } else this.emit(`option:${_findOption.name()}`);
-            a = _findOption.variadic ? _findOption : null;
+        activeVariadicOption = null;
+        if (maybeOption(arg)) {
+          let option = this._findOption(arg);
+          if (option) {
+            if (option.required) {
+              let value = args.shift();
+              if (value === undefined) this.optionMissingArgument(option);
+              this.emit(`option:${option.name()}`, value);
+            } else if (option.optional) {
+              let value = null;
+              if (args.length > 0 && !maybeOption(args[0])) value = args.shift();
+              this.emit(`option:${option.name()}`, value);
+            } else this.emit(`option:${option.name()}`);
+            activeVariadicOption = option.variadic ? option : null;
             continue;
           }
         }
-        if (o.length > 2 && o[0] === "-" && o[1] !== "-") {
-          let _findOption = this._findOption(`-${o[1]}`);
-          if (_findOption) {
-            if (_findOption.required || (_findOption.optional && this._combineFlagAndOptionalValue))
-              this.emit(`option:${_findOption.name()}`, o.slice(2));
-            else (this.emit(`option:${_findOption.name()}`), sliced.unshift(`-${o.slice(2)}`));
+        if (arg.length > 2 && arg[0] === "-" && arg[1] !== "-") {
+          let option = this._findOption(`-${arg[1]}`);
+          if (option) {
+            if (option.required || (option.optional && this._combineFlagAndOptionalValue))
+              this.emit(`option:${option.name()}`, arg.slice(2));
+            else {
+              this.emit(`option:${option.name()}`);
+              args.unshift(`-${arg.slice(2)}`);
+            }
             continue;
           }
         }
-        if (/^--[^=]+=/.test(o)) {
-          let index = o.indexOf("="),
-            _findOption = this._findOption(o.slice(0, index));
-          if (_findOption && (_findOption.required || _findOption.optional)) {
-            this.emit(`option:${_findOption.name()}`, o.slice(index + 1));
+        if (/^--[^=]+=/.test(arg)) {
+          let index = arg.indexOf("=");
+          let option = this._findOption(arg.slice(0, index));
+          if (option && (option.required || option.optional)) {
+            this.emit(`option:${option.name()}`, arg.slice(index + 1));
             continue;
           }
         }
-        if (r(o)) n = i;
-        if ((this._enablePositionalOptions || this._passThroughOptions) && e.length === 0 && i.length === 0) {
-          if (this._findCommand(o)) {
-            if ((e.push(o), sliced.length > 0)) i.push(...sliced);
+        if (maybeOption(arg)) dest = unknown;
+        if (
+          (this._enablePositionalOptions || this._passThroughOptions) &&
+          operands.length === 0 &&
+          unknown.length === 0
+        ) {
+          if (this._findCommand(arg)) {
+            operands.push(arg);
+            if (args.length > 0) unknown.push(...args);
             break;
-          } else if (this._getHelpCommand() && o === this._getHelpCommand().name()) {
-            if ((e.push(o), sliced.length > 0)) e.push(...sliced);
+          } else if (this._getHelpCommand() && arg === this._getHelpCommand().name()) {
+            operands.push(arg);
+            if (args.length > 0) operands.push(...args);
             break;
           } else if (this._defaultCommandName) {
-            if ((i.push(o), sliced.length > 0)) i.push(...sliced);
+            unknown.push(arg);
+            if (args.length > 0) unknown.push(...args);
             break;
           }
         }
         if (this._passThroughOptions) {
-          if ((n.push(o), sliced.length > 0)) n.push(...sliced);
+          dest.push(arg);
+          if (args.length > 0) dest.push(...args);
           break;
         }
-        n.push(o);
+        dest.push(arg);
       }
-      return { operands: e, unknown: i };
+      return {
+        operands,
+        unknown,
+      };
     }
     opts() {
       if (this._storeOptionsAsProperties) {
-        let t = {},
-          e = this.options.length;
-        for (let i = 0; i < e; i++) {
-          let attributeName = this.options[i].attributeName();
-          t[attributeName] = attributeName === this._versionOptionName ? this._version : this[attributeName];
+        let result = {};
+        let len = this.options.length;
+        for (let i = 0; i < len; i++) {
+          let key = this.options[i].attributeName();
+          result[key] = key === this._versionOptionName ? this._version : this[key];
         }
-        return t;
+        return result;
       }
       return this._optionValues;
     }
     optsWithGlobals() {
-      return this._getCommandAndAncestors().reduce((t, e) => Object.assign(t, e.opts()), {});
+      return this._getCommandAndAncestors().reduce(
+        (combinedOptions, cmd) => Object.assign(combinedOptions, cmd.opts()),
+        {},
+      );
     }
-    error(t, e) {
-      if (
-        (this._outputConfiguration.outputError(
-          `${t}
+    error(message, errorOptions) {
+      this._outputConfiguration.outputError(
+        `${message}
 `,
-          this._outputConfiguration.writeErr,
-        ),
-        typeof this._showHelpAfterError === "string")
-      )
+        this._outputConfiguration.writeErr,
+      );
+      if (typeof this._showHelpAfterError === "string")
         this._outputConfiguration.writeErr(`${this._showHelpAfterError}
 `);
-      else if (this._showHelpAfterError)
-        (this._outputConfiguration.writeErr(`
-`),
-          this.outputHelp({ error: !0 }));
-      let i = e || {},
-        n = i.exitCode || 1,
-        s = i.code || "commander.error";
-      this._exit(n, s, t);
+      else if (this._showHelpAfterError) {
+        this._outputConfiguration.writeErr(`
+`);
+        this.outputHelp({
+          error: true,
+        });
+      }
+      let config = errorOptions || {};
+      let exitCode = config.exitCode || 1;
+      let code = config.code || "commander.error";
+      this._exit(exitCode, code, message);
     }
     _parseOptionsEnv() {
       this.options.forEach((option) => {
         if (option.envVar && option.envVar in l.env) {
-          let attributeName = option.attributeName();
+          let optionKey = option.attributeName();
           if (
-            this.getOptionValue(attributeName) === void 0 ||
-            ["default", "config", "env"].includes(this.getOptionValueSource(attributeName))
+            this.getOptionValue(optionKey) === undefined ||
+            ["default", "config", "env"].includes(this.getOptionValueSource(optionKey))
           )
             if (option.required || option.optional)
               this.emit(`optionEnv:${option.name()}`, l.env[option.envVar]);
@@ -778,278 +883,315 @@ Expecting one of '${i.join("', '")}'`);
       });
     }
     _parseOptionsImplied() {
-      let t = new DualOptions(this.options),
-        e = (i) =>
-          this.getOptionValue(i) !== void 0 && !["default", "implied"].includes(this.getOptionValueSource(i));
+      let dualHelper = new DualOptions(this.options);
+      let hasCustomOptionValue = (optionKey) =>
+        this.getOptionValue(optionKey) !== undefined &&
+        !["default", "implied"].includes(this.getOptionValueSource(optionKey));
       this.options
         .filter(
           (option) =>
-            option.implied !== void 0 &&
-            e(option.attributeName()) &&
-            t.valueFromOption(this.getOptionValue(option.attributeName()), option),
+            option.implied !== undefined &&
+            hasCustomOptionValue(option.attributeName()) &&
+            dualHelper.valueFromOption(this.getOptionValue(option.attributeName()), option),
         )
-        .forEach((i) => {
-          Object.keys(i.implied)
-            .filter((n) => !e(n))
-            .forEach((n) => {
-              this.setOptionValueWithSource(n, i.implied[n], "implied");
+        .forEach((option) => {
+          Object.keys(option.implied)
+            .filter((impliedKey) => !hasCustomOptionValue(impliedKey))
+            .forEach((impliedKey) => {
+              this.setOptionValueWithSource(impliedKey, option.implied[impliedKey], "implied");
             });
         });
     }
-    missingArgument(t) {
-      let e = `error: missing required argument '${t}'`;
-      this.error(e, { code: "commander.missingArgument" });
+    missingArgument(name) {
+      let message = `error: missing required argument '${name}'`;
+      this.error(message, {
+        code: "commander.missingArgument",
+      });
     }
-    optionMissingArgument(t) {
-      let e = `error: option '${t.flags}' argument missing`;
-      this.error(e, { code: "commander.optionMissingArgument" });
+    optionMissingArgument(option) {
+      let message = `error: option '${option.flags}' argument missing`;
+      this.error(message, {
+        code: "commander.optionMissingArgument",
+      });
     }
-    missingMandatoryOptionValue(t) {
-      let e = `error: required option '${t.flags}' not specified`;
-      this.error(e, { code: "commander.missingMandatoryOptionValue" });
+    missingMandatoryOptionValue(option) {
+      let message = `error: required option '${option.flags}' not specified`;
+      this.error(message, {
+        code: "commander.missingMandatoryOptionValue",
+      });
     }
-    _conflictingOption(t, e) {
-      let i = (r) => {
-          let attributeName = r.attributeName(),
-            optionValue = this.getOptionValue(attributeName),
-            found = this.options.find((option) => option.negate && attributeName === option.attributeName()),
-            found_2 = this.options.find(
-              (option) => !option.negate && attributeName === option.attributeName(),
-            );
-          if (
-            found &&
-            ((found.presetArg === void 0 && optionValue === !1) ||
-              (found.presetArg !== void 0 && optionValue === found.presetArg))
-          )
-            return found;
-          return found_2 || r;
-        },
-        n = (r) => {
-          let a = i(r),
-            attributeName = a.attributeName();
-          if (this.getOptionValueSource(attributeName) === "env") return `environment variable '${a.envVar}'`;
-          return `option '${a.flags}'`;
-        },
-        s = `error: ${n(t)} cannot be used with ${n(e)}`;
-      this.error(s, { code: "commander.conflictingOption" });
+    _conflictingOption(option, conflictingOption) {
+      let findBestOptionFromValue = (option) => {
+        let optionKey = option.attributeName();
+        let optionValue = this.getOptionValue(optionKey);
+        let negativeOption = this.options.find(
+          (target) => target.negate && optionKey === target.attributeName(),
+        );
+        let positiveOption = this.options.find(
+          (target) => !target.negate && optionKey === target.attributeName(),
+        );
+        if (
+          negativeOption &&
+          ((negativeOption.presetArg === undefined && optionValue === false) ||
+            (negativeOption.presetArg !== undefined && optionValue === negativeOption.presetArg))
+        )
+          return negativeOption;
+        return positiveOption || option;
+      };
+      let getErrorMessage = (option) => {
+        let bestOption = findBestOptionFromValue(option);
+        let o = bestOption.attributeName();
+        if (this.getOptionValueSource(o) === "env") return `environment variable '${bestOption.envVar}'`;
+        return `option '${bestOption.flags}'`;
+      };
+      let message = `error: ${getErrorMessage(option)} cannot be used with ${getErrorMessage(conflictingOption)}`;
+      this.error(message, {
+        code: "commander.conflictingOption",
+      });
     }
-    unknownOption(t) {
+    unknownOption(flag) {
       if (this._allowUnknownOption) return;
-      let e = "";
-      if (t.startsWith("--") && this._showSuggestionAfterError) {
-        let n = [],
-          s = this;
+      let suggestion = "";
+      if (flag.startsWith("--") && this._showSuggestionAfterError) {
+        let candidateFlags = [];
+        let command = this;
         do {
-          let mapped = s
+          let moreFlags = command
             .createHelp()
-            .visibleOptions(s)
-            .filter((a) => a.long)
-            .map((a) => a.long);
-          ((n = n.concat(mapped)), (s = s.parent));
-        } while (s && !s._enablePositionalOptions);
-        e = suggestSimilar(t, n);
+            .visibleOptions(command)
+            .filter((option) => option.long)
+            .map((option) => option.long);
+          candidateFlags = candidateFlags.concat(moreFlags);
+          command = command.parent;
+        } while (command && !command._enablePositionalOptions);
+        suggestion = suggestSimilar(flag, candidateFlags);
       }
-      let i = `error: unknown option '${t}'${e}`;
-      this.error(i, { code: "commander.unknownOption" });
+      let message = `error: unknown option '${flag}'${suggestion}`;
+      this.error(message, {
+        code: "commander.unknownOption",
+      });
     }
-    _excessArguments(t) {
+    _excessArguments(receivedArgs) {
       if (this._allowExcessArguments) return;
-      let e = this.registeredArguments.length,
-        i = e === 1 ? "" : "s",
-        s = `error: too many arguments${this.parent ? ` for '${this.name()}'` : ""}. Expected ${e} argument${i} but got ${t.length}.`;
-      this.error(s, { code: "commander.excessArguments" });
+      let expected = this.registeredArguments.length;
+      let s_2 = expected === 1 ? "" : "s";
+      let s = `error: too many arguments${this.parent ? ` for '${this.name()}'` : ""}. Expected ${expected} argument${s_2} but got ${receivedArgs.length}.`;
+      this.error(s, {
+        code: "commander.excessArguments",
+      });
     }
     unknownCommand() {
-      let t = this.args[0],
-        e = "";
+      let unknownName = this.args[0];
+      let suggestion = "";
       if (this._showSuggestionAfterError) {
-        let n = [];
-        (this.createHelp()
+        let candidateNames = [];
+        this.createHelp()
           .visibleCommands(this)
-          .forEach((s) => {
-            if ((n.push(s.name()), s.alias())) n.push(s.alias());
-          }),
-          (e = suggestSimilar(t, n)));
+          .forEach((command) => {
+            candidateNames.push(command.name());
+            if (command.alias()) candidateNames.push(command.alias());
+          });
+        suggestion = suggestSimilar(unknownName, candidateNames);
       }
-      let i = `error: unknown command '${t}'${e}`;
-      this.error(i, { code: "commander.unknownCommand" });
+      let message = `error: unknown command '${unknownName}'${suggestion}`;
+      this.error(message, {
+        code: "commander.unknownCommand",
+      });
     }
-    version(t, e, i) {
-      if (t === void 0) return this._version;
-      ((this._version = t), (e = e || "-V, --version"), (i = i || "output the version number"));
-      let option = this.createOption(e, i);
-      return (
-        (this._versionOptionName = option.attributeName()),
-        this._registerOption(option),
-        this.on("option:" + option.name(), () => {
-          (this._outputConfiguration.writeOut(`${t}
-`),
-            this._exit(0, "commander.version", t));
-        }),
-        this
-      );
-    }
-    description(t, e) {
-      if (t === void 0 && e === void 0) return this._description;
-      if (((this._description = t), e)) this._argsDescription = e;
+    version(str, flags, description) {
+      if (str === undefined) return this._version;
+      this._version = str;
+      flags = flags || "-V, --version";
+      description = description || "output the version number";
+      let versionOption = this.createOption(flags, description);
+      this._versionOptionName = versionOption.attributeName();
+      this._registerOption(versionOption);
+      this.on("option:" + versionOption.name(), () => {
+        this._outputConfiguration.writeOut(`${str}
+`);
+        this._exit(0, "commander.version", str);
+      });
       return this;
     }
-    summary(t) {
-      if (t === void 0) return this._summary;
-      return ((this._summary = t), this);
+    description(str, argsDescription) {
+      if (str === undefined && argsDescription === undefined) return this._description;
+      this._description = str;
+      if (argsDescription) this._argsDescription = argsDescription;
+      return this;
     }
-    alias(t) {
-      if (t === void 0) return this._aliases[0];
-      let e = this;
+    summary(str) {
+      if (str === undefined) return this._summary;
+      this._summary = str;
+      return this;
+    }
+    alias(alias) {
+      if (alias === undefined) return this._aliases[0];
+      let command = this;
       if (this.commands.length !== 0 && this.commands[this.commands.length - 1]._executableHandler)
-        e = this.commands[this.commands.length - 1];
-      if (t === e._name) throw Error("Command alias can't be the same as its name");
-      let i = this.parent?._findCommand(t);
-      if (i) {
-        let joined = [i.name()].concat(i.aliases()).join("|");
+        command = this.commands[this.commands.length - 1];
+      if (alias === command._name) throw Error("Command alias can't be the same as its name");
+      let matchingCommand = this.parent?._findCommand(alias);
+      if (matchingCommand) {
+        let existingCmd = [matchingCommand.name()].concat(matchingCommand.aliases()).join("|");
         throw Error(
-          `cannot add alias '${t}' to command '${this.name()}' as already have command '${joined}'`,
+          `cannot add alias '${alias}' to command '${this.name()}' as already have command '${existingCmd}'`,
         );
       }
-      return (e._aliases.push(t), this);
+      command._aliases.push(alias);
+      return this;
     }
-    aliases(t) {
-      if (t === void 0) return this._aliases;
-      return (t.forEach((e) => this.alias(e)), this);
+    aliases(aliases) {
+      if (aliases === undefined) return this._aliases;
+      aliases.forEach((alias) => this.alias(alias));
+      return this;
     }
-    usage(t) {
-      if (t === void 0) {
+    usage(str) {
+      if (str === undefined) {
         if (this._usage) return this._usage;
-        let mapped = this.registeredArguments.map((registeredArgument) =>
-          humanReadableArgName(registeredArgument),
-        );
+        let args = this.registeredArguments.map((arg) => humanReadableArgName(arg));
         return []
           .concat(
             this.options.length || this._helpOption !== null ? "[options]" : [],
             this.commands.length ? "[command]" : [],
-            this.registeredArguments.length ? mapped : [],
+            this.registeredArguments.length ? args : [],
           )
           .join(" ");
       }
-      return ((this._usage = t), this);
+      this._usage = str;
+      return this;
     }
-    name(t) {
-      if (t === void 0) return this._name;
-      return ((this._name = t), this);
+    name(str) {
+      if (str === undefined) return this._name;
+      this._name = str;
+      return this;
     }
-    nameFromFilename(t) {
-      return ((this._name = f.basename(t, f.extname(t))), this);
+    nameFromFilename(filename) {
+      this._name = path.basename(filename, path.extname(filename));
+      return this;
     }
-    executableDir(t) {
-      if (t === void 0) return this._executableDir;
-      return ((this._executableDir = t), this);
+    executableDir(path) {
+      if (path === undefined) return this._executableDir;
+      this._executableDir = path;
+      return this;
     }
-    helpInformation(t) {
-      let help = this.createHelp();
-      if (help.helpWidth === void 0)
-        help.helpWidth =
-          t && t.error
+    helpInformation(contextOptions) {
+      let helper = this.createHelp();
+      if (helper.helpWidth === undefined)
+        helper.helpWidth =
+          contextOptions && contextOptions.error
             ? this._outputConfiguration.getErrHelpWidth()
             : this._outputConfiguration.getOutHelpWidth();
-      return help.formatHelp(this, help);
+      return helper.formatHelp(this, helper);
     }
-    _getHelpContext(t) {
-      t = t || {};
-      let e = { error: !!t.error },
-        i;
-      if (e.error) i = (n) => this._outputConfiguration.writeErr(n);
-      else i = (n) => this._outputConfiguration.writeOut(n);
-      return ((e.write = t.write || i), (e.command = this), e);
+    _getHelpContext(contextOptions) {
+      contextOptions = contextOptions || {};
+      let context = {
+        error: !!contextOptions.error,
+      };
+      let write;
+      if (context.error) write = (arg) => this._outputConfiguration.writeErr(arg);
+      else write = (arg) => this._outputConfiguration.writeOut(arg);
+      context.write = contextOptions.write || write;
+      context.command = this;
+      return context;
     }
-    outputHelp(t) {
-      let e;
-      if (typeof t === "function") ((e = t), (t = void 0));
-      let _getHelpContext = this._getHelpContext(t);
-      (this._getCommandAndAncestors()
+    outputHelp(contextOptions) {
+      let deprecatedCallback;
+      if (typeof contextOptions === "function") {
+        deprecatedCallback = contextOptions;
+        contextOptions = undefined;
+      }
+      let context = this._getHelpContext(contextOptions);
+      this._getCommandAndAncestors()
         .reverse()
-        .forEach((s) => s.emit("beforeAllHelp", _getHelpContext)),
-        this.emit("beforeHelp", _getHelpContext));
-      let helpInformation = this.helpInformation(_getHelpContext);
-      if (e) {
-        if (
-          ((helpInformation = e(helpInformation)),
-          typeof helpInformation !== "string" && !Buffer.isBuffer(helpInformation))
-        )
+        .forEach((command) => command.emit("beforeAllHelp", context));
+      this.emit("beforeHelp", context);
+      let helpInformation = this.helpInformation(context);
+      if (deprecatedCallback) {
+        helpInformation = deprecatedCallback(helpInformation);
+        if (typeof helpInformation !== "string" && !Buffer.isBuffer(helpInformation))
           throw Error("outputHelp callback must return a string or a Buffer");
       }
-      if ((_getHelpContext.write(helpInformation), this._getHelpOption()?.long))
-        this.emit(this._getHelpOption().long);
-      (this.emit("afterHelp", _getHelpContext),
-        this._getCommandAndAncestors().forEach((s) => s.emit("afterAllHelp", _getHelpContext)));
+      context.write(helpInformation);
+      if (this._getHelpOption()?.long) this.emit(this._getHelpOption().long);
+      this.emit("afterHelp", context);
+      this._getCommandAndAncestors().forEach((command) => command.emit("afterAllHelp", context));
     }
-    helpOption(t, e) {
-      if (typeof t === "boolean") {
-        if (t) this._helpOption = this._helpOption ?? void 0;
+    helpOption(flags, description) {
+      if (typeof flags === "boolean") {
+        if (flags) this._helpOption = this._helpOption ?? undefined;
         else this._helpOption = null;
         return this;
       }
-      return (
-        (t = t ?? "-h, --help"),
-        (e = e ?? "display help for command"),
-        (this._helpOption = this.createOption(t, e)),
-        this
-      );
+      flags = flags ?? "-h, --help";
+      description = description ?? "display help for command";
+      this._helpOption = this.createOption(flags, description);
+      return this;
     }
     _getHelpOption() {
-      if (this._helpOption === void 0) this.helpOption(void 0, void 0);
+      if (this._helpOption === undefined) this.helpOption(undefined, undefined);
       return this._helpOption;
     }
-    addHelpOption(t) {
-      return ((this._helpOption = t), this);
+    addHelpOption(option) {
+      this._helpOption = option;
+      return this;
     }
-    help(t) {
-      this.outputHelp(t);
-      let e = l.exitCode || 0;
-      if (e === 0 && t && typeof t !== "function" && t.error) e = 1;
-      this._exit(e, "commander.help", "(outputHelp)");
+    help(contextOptions) {
+      this.outputHelp(contextOptions);
+      let exitCode = l.exitCode || 0;
+      if (exitCode === 0 && contextOptions && typeof contextOptions !== "function" && contextOptions.error)
+        exitCode = 1;
+      this._exit(exitCode, "commander.help", "(outputHelp)");
     }
-    addHelpText(t, e) {
-      let i = ["beforeAll", "before", "after", "afterAll"];
-      if (!i.includes(t))
+    addHelpText(position, text) {
+      let allowedValues = ["beforeAll", "before", "after", "afterAll"];
+      if (!allowedValues.includes(position))
         throw Error(`Unexpected value for position to addHelpText.
-Expecting one of '${i.join("', '")}'`);
-      let n = `${t}Help`;
-      return (
-        this.on(n, (s) => {
-          let r;
-          if (typeof e === "function") r = e({ error: s.error, command: s.command });
-          else r = e;
-          if (r)
-            s.write(`${r}
+Expecting one of '${allowedValues.join("', '")}'`);
+      let helpEvent = `${position}Help`;
+      this.on(helpEvent, (context) => {
+        let helpStr;
+        if (typeof text === "function")
+          helpStr = text({
+            error: context.error,
+            command: context.command,
+          });
+        else helpStr = text;
+        if (helpStr)
+          context.write(`${helpStr}
 `);
-        }),
-        this
-      );
+      });
+      return this;
     }
-    _outputHelpIfRequested(t) {
-      let _getHelpOption = this._getHelpOption();
-      if (_getHelpOption && t.find((n) => _getHelpOption.is(n)))
-        (this.outputHelp(), this._exit(0, "commander.helpDisplayed", "(outputHelp)"));
+    _outputHelpIfRequested(args) {
+      let helpOption = this._getHelpOption();
+      if (helpOption && args.find((arg) => helpOption.is(arg))) {
+        this.outputHelp();
+        this._exit(0, "commander.helpDisplayed", "(outputHelp)");
+      }
     }
   }
-  function G(t) {
-    return t.map((e) => {
-      if (!e.startsWith("--inspect")) return e;
-      let i,
-        n = "127.0.0.1",
-        s = "9229",
-        r;
-      if ((r = e.match(/^(--inspect(-brk)?)$/)) !== null) i = r[1];
-      else if ((r = e.match(/^(--inspect(-brk|-port)?)=([^:]+)$/)) !== null)
-        if (((i = r[1]), /^\d+$/.test(r[3]))) s = r[3];
-        else n = r[3];
-      else if ((r = e.match(/^(--inspect(-brk|-port)?)=([^:]+):(\d+)$/)) !== null)
-        ((i = r[1]), (n = r[3]), (s = r[4]));
-      if (i && s !== "0") return `${i}=${n}:${parseInt(s) + 1}`;
-      return e;
+  function incrementNodeInspectorPort(args) {
+    return args.map((arg) => {
+      if (!arg.startsWith("--inspect")) return arg;
+      let debugOption;
+      let debugHost = "127.0.0.1";
+      let debugPort = "9229";
+      let match;
+      if ((match = arg.match(/^(--inspect(-brk)?)$/)) !== null) debugOption = match[1];
+      else if ((match = arg.match(/^(--inspect(-brk|-port)?)=([^:]+)$/)) !== null) {
+        debugOption = match[1];
+        if (/^\d+$/.test(match[3])) debugPort = match[3];
+        else debugHost = match[3];
+      } else if ((match = arg.match(/^(--inspect(-brk|-port)?)=([^:]+):(\d+)$/)) !== null) {
+        debugOption = match[1];
+        debugHost = match[3];
+        debugPort = match[4];
+      }
+      if (debugOption && debugPort !== "0") return `${debugOption}=${debugHost}:${parseInt(debugPort) + 1}`;
+      return arg;
     });
   }
-  vt.Command = I;
+  cjsExports.Command = Command;
 });
-
-export { B };
+export { require_command };

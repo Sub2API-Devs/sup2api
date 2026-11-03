@@ -8,38 +8,40 @@
 import { x } from "../../../../../runtime/bun-runtime.js";
 
 //@ chunk-fq0cr76a.js:469618-470154 cjs-fingerprint
-var ld = x(function (yL) {
-  Object.defineProperty(yL, "__esModule", { value: !0 });
-  yL.setEvalContext = mL;
-  yL.getEvalContext = gL;
-  yL.withEvalContext = hQ;
-  yL.getMsgDesc = mQ;
-  var Ep = [];
-  function mL(e) {
-    return (Ep.push(e), () => Ep.pop());
+var require_eval = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.setEvalContext = setEvalContext;
+  cjsExports.getEvalContext = getEvalContext;
+  cjsExports.withEvalContext = withEvalContext;
+  cjsExports.getMsgDesc = getMsgDesc;
+  var contextStack = [];
+  function setEvalContext(context) {
+    contextStack.push(context);
+    return () => contextStack.pop();
   }
-  function gL() {
-    if (Ep.length === 0) throw Error("cannot use `getEvalContext` outside of an evaluation");
-    return Ep[Ep.length - 1];
+  function getEvalContext() {
+    if (contextStack.length === 0) throw Error("cannot use `getEvalContext` outside of an evaluation");
+    return contextStack[contextStack.length - 1];
   }
-  function hQ(e, n) {
+  function withEvalContext(context, next) {
     return {
-      id: n.id,
-      eval(r) {
-        let s = mL(e);
+      id: next.id,
+      eval(ctx) {
+        let unset = setEvalContext(context);
         try {
-          return n.eval(r);
+          return next.eval(ctx);
         } finally {
-          s();
+          unset();
         }
       },
     };
   }
-  function mQ(e) {
-    let message = gL().registry.getMessage(e);
-    if (!message) throw Error(`Message ${e} not found in registry`);
-    return message;
+  function getMsgDesc(typeName) {
+    let schema = getEvalContext().registry.getMessage(typeName);
+    if (!schema) throw Error(`Message ${typeName} not found in registry`);
+    return schema;
   }
 });
-
-export { ld };
+export { require_eval };

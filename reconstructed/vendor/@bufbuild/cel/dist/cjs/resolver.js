@@ -6,59 +6,67 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../runtime/bun-runtime.js";
-import { wa } from "./value.js";
+import { require_value } from "./value.js";
 
 //@ chunk-fq0cr76a.js:478784-479776 cjs-fingerprint
-var ZL = x(function (YL) {
-  Object.defineProperty(YL, "__esModule", { value: !0 });
-  YL.createResolver = zQ;
-  var HL = wa(),
-    KL = Symbol.for("@bufbuild/cel/resolver");
-  function zQ(...e) {
-    let n = new Map();
-    for (let r of e) {
-      let s = XQ(r) || Array.isArray(r) ? r : [r];
-      for (let h of s) {
-        let y = n.get(h.name);
-        if (y === void 0) ((y = []), n.set(h.name, y));
-        y.push(h);
+var require_resolver = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.createResolver = createResolver;
+  var value_js_1 = require_value();
+  var privateSymbol = Symbol.for("@bufbuild/cel/resolver");
+  function createResolver(...inputs) {
+    let groups = new Map();
+    for (let input of inputs) {
+      let funcs = isFuncResolver(input) || Array.isArray(input) ? input : [input];
+      for (let func of funcs) {
+        let group = groups.get(func.name);
+        if (group === undefined) {
+          group = [];
+          groups.set(func.name, group);
+        }
+        group.push(func);
       }
     }
-    return new qL(new Map(Array(...n.entries()).map(([r, s]) => [r, JQ(r, s)])));
+    return new Resolver(
+      new Map(Array(...groups.entries()).map(([name, funcs]) => [name, createFuncGroup(name, funcs)])),
+    );
   }
-  function XQ(e) {
-    return typeof e === "object" && e !== null && KL in e;
+  function isFuncResolver(v) {
+    return typeof v === "object" && v !== null && privateSymbol in v;
   }
-  class qL {
+  class Resolver {
     _groups;
-    [KL] = {};
-    constructor(e) {
-      this._groups = e;
+    [privateSymbol] = {};
+    constructor(_groups) {
+      this._groups = _groups;
     }
     *[Symbol.iterator]() {
-      for (let e of this._groups.values()) yield* e;
+      for (let group of this._groups.values()) yield* group;
     }
-    find(e) {
-      return this._groups.get(e);
+    find(name) {
+      return this._groups.get(name);
     }
   }
-  function JQ(e, n) {
-    let r = [];
-    for (let s of n) {
-      for (let h = 0; h < r.length; h++)
-        if (s.id === r[h].id) {
-          r.splice(h, 1);
+  function createFuncGroup(name, funcs) {
+    let set = [];
+    for (let func of funcs) {
+      for (let i = 0; i < set.length; i++)
+        if (func.id === set[i].id) {
+          set.splice(i, 1);
           break;
         }
-      r.push(s);
+      set.push(func);
     }
-    return new jL(e, r);
+    return new Group(name, set);
   }
-  class jL {
+  class Group {
     _name;
     _funcs;
-    constructor(e, n) {
-      ((this._name = e), (this._funcs = n));
+    constructor(_name, _funcs) {
+      this._name = _name;
+      this._funcs = _funcs;
     }
     *[Symbol.iterator]() {
       yield* this._funcs;
@@ -66,15 +74,14 @@ var ZL = x(function (YL) {
     get name() {
       return this._name;
     }
-    call(e, n, r) {
-      r = r.map((s) => HL.unwrapAny(s));
-      for (let _func of this._funcs) {
-        let h = _func.call(e, n, r);
-        if (h !== void 0) return h;
+    call(id, target, args) {
+      args = args.map((arg) => value_js_1.unwrapAny(arg));
+      for (let func of this._funcs) {
+        let result = func.call(id, target, args);
+        if (result !== undefined) return result;
       }
       return;
     }
   }
 });
-
-export { ZL };
+export { require_resolver };

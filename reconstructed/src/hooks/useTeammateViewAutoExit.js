@@ -10,8 +10,8 @@
  */
 
 //@ chunk-fym4r1th.js:6681-6843 fingerprint = useTeammateViewAutoExit (0.626)
-function useTeammateViewAutoExit(e) {
-  switch (e) {
+function useTeammateViewAutoExit(status) {
+  switch (status) {
     case "pending":
     case "running":
     case "paused":
@@ -23,5 +23,4 @@ function useTeammateViewAutoExit(e) {
       return "cancelled";
   }
 }
-
 export { useTeammateViewAutoExit };

@@ -8,20 +8,24 @@
  * pieces: chunk-s3fw2t2g.js (2), chunk-td6byj4s.js (6)
  * attribution: affinity 1, fingerprint 4, file-local 1, layout 2
  */
-import { e, r } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+} from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { TreeConnectors } from "./design-system/TreeConnectors.js";
 import { Text, Box } from "../ink/components/Text.js";
 import { LearnMoreLink } from "./LearnMoreLink.js";
 import { w } from "../../vendor/react/compiler-runtime.js";
-import { ql } from "../utils/stringUtils.js";
+import { cleanForDisplay } from "../utils/stringUtils.js";
 import { createHyperlink } from "../utils/hyperlink.js";
 import { OSC8_PREFIX } from "../ink/screen.js";
 
 //@ chunk-td6byj4s.js:13677-13770 fingerprint = _temp (1)
-function te(acc, error) {
+function groupErrorsByFile(acc, error) {
   let file = error.file || "(file not specified)";
   if (!acc[file]) acc[file] = [];
-  return (acc[file].push(error), acc);
+  acc[file].push(error);
+  return acc;
 }
 //@ chunk-td6byj4s.js:13770-13890 file-local
 function compareByPath(a, b) {
@@ -34,101 +38,139 @@ function compareByPath(a, b) {
   return (a.path || "").localeCompare(b.path || "");
 }
 //@ chunk-td6byj4s.js:13890-14052 layout = createYogaLayoutNode (1)
-function renderErrorNode(k, F) {
-  let C = buildNestedTree(k);
-  return e(
+function renderErrorNode(errors, F) {
+  let nestedTree = buildNestedTree(errors);
+  return jsxProd_default(
     TreeConnectors.Node,
     {
-      children: C
-        ? r(Text, { children: [C, ": ", e(Text, { dimColor: !0, children: k.message })] })
-        : e(Text, { dimColor: !0, children: k.message }),
+      children: nestedTree
+        ? jsxProd_default_2(Text, {
+            children: [
+              nestedTree,
+              ": ",
+              jsxProd_default(Text, {
+                dimColor: true,
+                children: errors.message,
+              }),
+            ],
+          })
+        : jsxProd_default(Text, {
+            dimColor: true,
+            children: errors.message,
+          }),
     },
     F,
   );
 }
 //@ chunk-td6byj4s.js:14052-14255 fingerprint = _temp3 (1)
 function renderSuggestionPair(pair, index) {
-  return r(
+  return jsxProd_default_2(
     Box,
     {
       flexDirection: "column",
       marginBottom: 1,
       children: [
-        pair.suggestion && e(Text, { dimColor: !0, wrap: "wrap", children: pair.suggestion }),
-        pair.docLink && e(LearnMoreLink, { url: pair.docLink }),
+        pair.suggestion &&
+          jsxProd_default(Text, {
+            dimColor: true,
+            wrap: "wrap",
+            children: pair.suggestion,
+          }),
+        pair.docLink &&
+          jsxProd_default(LearnMoreLink, {
+            url: pair.docLink,
+          }),
       ],
     },
     `suggestion-pair-${index}`,
   );
 }
+//@ chunk-td6byj4s.js:14255-15007 layout
 /**
  * 校验错误列表：按文件分组、按路径排序，以树形显示错误，并汇总去重后的修复建议与文档链接。
  */
-//@ chunk-td6byj4s.js:14255-15007 layout
-function ValidationErrorsList(o) {
-  let $ = w(8),
-    { errors: errors } = o;
+function ValidationErrorsList(props) {
+  let $ = w(8);
+  let { errors } = props;
   if (errors.length === 0) {
     return null;
   }
-  let Container, direction, fileGroups;
+  let Container;
+  let direction;
+  let fileGroups;
   if ($[0] !== errors) {
-    let reduced = errors.reduce(te, {});
-    let sorted = Object.keys(reduced).sort();
+    let errorsByFile = errors.reduce(groupErrorsByFile, {});
+    let sortedFiles = Object.keys(errorsByFile).sort();
     Container = Box;
     direction = "column";
-    fileGroups = sorted.map((file) => {
-      let fileErrors = reduced[file] || [];
+    fileGroups = sortedFiles.map((file) => {
+      let fileErrors = errorsByFile[file] || [];
       fileErrors.sort(compareByPath);
       let suggestions = new Map();
-      return (
-        fileErrors.forEach((error) => {
-          if (error.suggestion || error.docLink) {
-            let suggestionKey = `${error.suggestion || ""}|${error.docLink || ""}`;
-            if (!suggestions.has(suggestionKey))
-              suggestions.set(suggestionKey, { suggestion: error.suggestion, docLink: error.docLink });
-          }
-        }),
-        r(
-          Box,
-          {
-            flexDirection: "column",
-            children: [
-              e(Text, { children: ql(file) }),
-              e(TreeConnectors, { variant: "tree", children: fileErrors.map(renderErrorNode) }),
-              suggestions.size > 0 &&
-                e(Box, {
-                  flexDirection: "column",
-                  marginTop: 1,
-                  children: Array.from(suggestions.values()).map(renderSuggestionPair),
-                }),
-            ],
-          },
-          file,
-        )
+      fileErrors.forEach((error) => {
+        if (error.suggestion || error.docLink) {
+          let suggestionKey = `${error.suggestion || ""}|${error.docLink || ""}`;
+          if (!suggestions.has(suggestionKey))
+            suggestions.set(suggestionKey, {
+              suggestion: error.suggestion,
+              docLink: error.docLink,
+            });
+        }
+      });
+      return jsxProd_default_2(
+        Box,
+        {
+          flexDirection: "column",
+          children: [
+            jsxProd_default(Text, {
+              children: cleanForDisplay(file),
+            }),
+            jsxProd_default(TreeConnectors, {
+              variant: "tree",
+              children: fileErrors.map(renderErrorNode),
+            }),
+            suggestions.size > 0 &&
+              jsxProd_default(Box, {
+                flexDirection: "column",
+                marginTop: 1,
+                children: Array.from(suggestions.values()).map(renderSuggestionPair),
+              }),
+          ],
+        },
+        file,
       );
     });
-    (($[0] = errors), ($[1] = Container), ($[2] = direction), ($[3] = fileGroups));
-  } else ((Container = $[1]), (direction = $[2]), (fileGroups = $[3]));
+    $[0] = errors;
+    $[1] = Container;
+    $[2] = direction;
+    $[3] = fileGroups;
+  } else {
+    Container = $[1];
+    direction = $[2];
+    fileGroups = $[3];
+  }
   let content;
-  if ($[4] !== Container || $[5] !== direction || $[6] !== fileGroups)
-    ((content = e(Container, { flexDirection: direction, children: fileGroups })),
-      ($[4] = Container),
-      ($[5] = direction),
-      ($[6] = fileGroups),
-      ($[7] = content));
-  else content = $[7];
+  if ($[4] !== Container || $[5] !== direction || $[6] !== fileGroups) {
+    content = jsxProd_default(Container, {
+      flexDirection: direction,
+      children: fileGroups,
+    });
+    $[4] = Container;
+    $[5] = direction;
+    $[6] = fileGroups;
+    $[7] = content;
+  } else content = $[7];
   return content;
 }
 //@ chunk-td6byj4s.js:15007-15306 fingerprint = buildNestedTree (0.35)
 function buildNestedTree(errors) {
   if (!errors.path) return null;
-  let pathParts = errors.path.split("."),
-    part = pathParts[pathParts.length - 1];
+  let pathParts = errors.path.split(".");
+  let part = pathParts[pathParts.length - 1];
   if (
     errors.invalidValue !== null &&
-    errors.invalidValue !== void 0 &&
-    part !== void 0 &&
+    errors.invalidValue !== undefined &&
+    part !== undefined &&
     !isNaN(parseInt(part, 10))
   ) {
     let l =
@@ -138,12 +180,17 @@ function buildNestedTree(errors) {
   return errors.path;
 }
 //@ chunk-s3fw2t2g.js:1056-1104 affinity
-var A = /https?:\/\/[^\s"'<>\\\x00-\x1f]+/g,
-  C = 1e5;
+var URL_RE = /https?:\/\/[^\s"'<>\\\x00-\x1f]+/g;
+var MAX_VALIDATION_TEXT = 1e5;
 //@ chunk-s3fw2t2g.js:1104-1296 fingerprint = ValidationErrorsList (0.308)
-function ValidationErrorsList_2(r, t) {
-  if (r.length > C) return r;
-  let s = (o) => o.replace(A, (file_0) => createHyperlink(file_0, void 0, { themeName: t }));
+function ValidationErrorsList_2(r, themeName) {
+  if (r.length > MAX_VALIDATION_TEXT) return r;
+  let s = (o) =>
+    o.replace(URL_RE, (file_0) =>
+      createHyperlink(file_0, undefined, {
+        themeName,
+      }),
+    );
   if (!r.includes(OSC8_PREFIX)) return s(r);
   return r
     .split(
@@ -153,5 +200,4 @@ function ValidationErrorsList_2(r, t) {
     .map((error_0) => (error_0.includes(OSC8_PREFIX) ? error_0 : s(error_0))).join(`
 `);
 }
-
 export { ValidationErrorsList_2, ValidationErrorsList };

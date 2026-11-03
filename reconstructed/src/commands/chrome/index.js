@@ -11,18 +11,19 @@
 import { getIsNonInteractiveSession } from "../../bootstrap/state.js";
 import { isClaudeInChromeAllowed } from "../../utils/claudeInChrome/setup.js";
 
+//@ chunk-e6aww6q8.js:2034576-2034776 fingerprint = command (0.668)
 /**
  * /chrome 命令对象（local-jsx）；描述：Open Claude in Chrome settings；availability ["claude-ai"]；isEnabled: ()=>!_e()&&ox()；实现 chunk-1ztfztfw.js 的 Uo。
  */
-//@ chunk-e6aww6q8.js:2034576-2034776 fingerprint = command (0.668)
 var chromeCommandDefinition = {
-    name: "chrome",
-    description: "Open Claude in Chrome settings",
-    availability: ["claude-ai"],
-    isEnabled: () => !getIsNonInteractiveSession() && isClaudeInChromeAllowed(),
-    policyGate: { policy: "allow_claude_browser_extension" },
-    type: "local-jsx",
+  name: "chrome",
+  description: "Open Claude in Chrome settings",
+  availability: ["claude-ai"],
+  isEnabled: () => !getIsNonInteractiveSession() && isClaudeInChromeAllowed(),
+  policyGate: {
+    policy: "allow_claude_browser_extension",
   },
-  chromeCommand = chromeCommandDefinition;
-
+  type: "local-jsx",
+};
+var chromeCommand = chromeCommandDefinition;
 export { chromeCommand };

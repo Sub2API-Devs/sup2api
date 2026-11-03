@@ -5,45 +5,38 @@
  * pieces: chunk-20ppca50.js (3)
  * attribution: esm-layout 2, esm-fingerprint 1
  */
-import {
-  promisify,
-  promisify as promisify_2,
-  promisify as promisify_3,
-  promisify as promisify_4,
-  promisify as promisify_5,
-} from "util";
-import {
-  execFile,
-  execFile as execFile_2,
-  execFile as execFile_3,
-  execFile as execFile_4,
-} from "child_process";
-import N, { default as I, default as T, default as E, default as ee, default as te } from "process";
+import { promisify } from "util";
+import { execFile } from "child_process";
+import { default as E } from "process";
 
 //@ chunk-20ppca50.js:1739-1943 esm-layout
-function m(e, r, o) {
-  let n = (t) => Object.defineProperty(e, r, { value: t, enumerable: !0, writable: !0 });
-  return (
-    Object.defineProperty(e, r, {
-      configurable: !0,
-      enumerable: !0,
-      get() {
-        let t = o();
-        return (n(t), t);
-      },
-      set(t) {
-        n(t);
-      },
-    }),
-    e
-  );
+function m(apps, r, o) {
+  let n = (value) =>
+    Object.defineProperty(apps, r, {
+      value,
+      enumerable: true,
+      writable: true,
+    });
+  Object.defineProperty(apps, r, {
+    configurable: true,
+    enumerable: true,
+    get() {
+      let t = o();
+      n(t);
+      return t;
+    },
+    set(t) {
+      n(t);
+    },
+  });
+  return apps;
 }
 //@ chunk-20ppca50.js:2141-2154 esm-layout
-var oe = promisify_3(execFile_2);
+var oe = promisify(execFile);
 //@ chunk-20ppca50.js:2154-2469 esm-fingerprint
-async function S() {
-  if (ee.platform !== "darwin") throw Error("macOS only");
-  let { stdout: stdout } = await oe("defaults", [
+async function defaultBrowserId() {
+  if (E.platform !== "darwin") throw Error("macOS only");
+  let { stdout } = await oe("defaults", [
     "read",
     "com.apple.LaunchServices/com.apple.launchservices.secure",
     "LSHandlers",
@@ -53,5 +46,4 @@ async function S() {
       .id ?? "com.apple.Safari"
   );
 }
-
-export { S, m };
+export { defaultBrowserId, m };

@@ -8,25 +8,35 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-t4ksmxzx.js:8540-13140 cjs-fingerprint
-var mt = x(function (Rr) {
-  var _r;
-  Object.defineProperty(Rr, "__esModule", { value: !0 });
-  Rr.LRUCache = Rr.LinkedMap = Rr.Touch = void 0;
-  var U;
-  (function (e) {
-    ((e.None = 0), (e.First = 1), (e.AsOld = e.First), (e.Last = 2), (e.AsNew = e.Last));
-  })(U || (Rr.Touch = U = {}));
-  class pt {
+var require_linkedMap = x(function (cjsExports) {
+  var _a;
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.LRUCache = cjsExports.LinkedMap = cjsExports.Touch = undefined;
+  var Touch;
+  (function (Touch) {
+    Touch.None = 0;
+    Touch.First = 1;
+    Touch.AsOld = Touch.First;
+    Touch.Last = 2;
+    Touch.AsNew = Touch.Last;
+  })(Touch || (cjsExports.Touch = Touch = {}));
+  class LinkedMap {
     constructor() {
-      ((this[_r] = "LinkedMap"),
-        (this._map = new Map()),
-        (this._head = void 0),
-        (this._tail = void 0),
-        (this._size = 0),
-        (this._state = 0));
+      this[_a] = "LinkedMap";
+      this._map = new Map();
+      this._head = undefined;
+      this._tail = undefined;
+      this._size = 0;
+      this._state = 0;
     }
     clear() {
-      (this._map.clear(), (this._head = void 0), (this._tail = void 0), (this._size = 0), this._state++);
+      this._map.clear();
+      this._head = undefined;
+      this._tail = undefined;
+      this._size = 0;
+      this._state++;
     }
     isEmpty() {
       return !this._head && !this._tail;
@@ -40,220 +50,293 @@ var mt = x(function (Rr) {
     get last() {
       return this._tail?.value;
     }
-    has(e) {
-      return this._map.has(e);
+    has(key) {
+      return this._map.has(key);
     }
-    get(e, r = U.None) {
-      let n = this._map.get(e);
-      if (!n) return;
-      if (r !== U.None) this.touch(n, r);
-      return n.value;
+    get(key, touch = Touch.None) {
+      let item = this._map.get(key);
+      if (!item) return;
+      if (touch !== Touch.None) this.touch(item, touch);
+      return item.value;
     }
-    set(e, r, n = U.None) {
-      let s = this._map.get(e);
-      if (s) {
-        if (((s.value = r), n !== U.None)) this.touch(s, n);
+    set(key, value, touch = Touch.None) {
+      let item = this._map.get(key);
+      if (item) {
+        item.value = value;
+        if (touch !== Touch.None) this.touch(item, touch);
       } else {
-        switch (((s = { key: e, value: r, next: void 0, previous: void 0 }), n)) {
-          case U.None:
-            this.addItemLast(s);
+        switch (
+          ((item = {
+            key,
+            value,
+            next: undefined,
+            previous: undefined,
+          }),
+          touch)
+        ) {
+          case Touch.None:
+            this.addItemLast(item);
             break;
-          case U.First:
-            this.addItemFirst(s);
+          case Touch.First:
+            this.addItemFirst(item);
             break;
-          case U.Last:
-            this.addItemLast(s);
+          case Touch.Last:
+            this.addItemLast(item);
             break;
           default:
-            this.addItemLast(s);
+            this.addItemLast(item);
             break;
         }
-        (this._map.set(e, s), this._size++);
+        this._map.set(key, item);
+        this._size++;
       }
       return this;
     }
-    delete(e) {
-      return !!this.remove(e);
+    delete(key) {
+      return !!this.remove(key);
     }
-    remove(e) {
-      let r = this._map.get(e);
-      if (!r) return;
-      return (this._map.delete(e), this.removeItem(r), this._size--, r.value);
+    remove(key) {
+      let item = this._map.get(key);
+      if (!item) return;
+      this._map.delete(key);
+      this.removeItem(item);
+      this._size--;
+      return item.value;
     }
     shift() {
       if (!this._head && !this._tail) return;
       if (!this._head || !this._tail) throw Error("Invalid list");
-      let _head = this._head;
-      return (this._map.delete(_head.key), this.removeItem(_head), this._size--, _head.value);
+      let item = this._head;
+      this._map.delete(item.key);
+      this.removeItem(item);
+      this._size--;
+      return item.value;
     }
-    forEach(e, r) {
-      let _state = this._state,
-        _head = this._head;
-      while (_head) {
-        if (r) e.bind(r)(_head.value, _head.key, this);
-        else e(_head.value, _head.key, this);
-        if (this._state !== _state) throw Error("LinkedMap got modified during iteration.");
-        _head = _head.next;
+    forEach(callbackfn, thisArg) {
+      let state = this._state;
+      let current = this._head;
+      while (current) {
+        if (thisArg) callbackfn.bind(thisArg)(current.value, current.key, this);
+        else callbackfn(current.value, current.key, this);
+        if (this._state !== state) throw Error("LinkedMap got modified during iteration.");
+        current = current.next;
       }
     }
     keys() {
-      let _state = this._state,
-        _head = this._head,
-        n = {
-          [Symbol.iterator]: () => n,
-          next: () => {
-            if (this._state !== _state) throw Error("LinkedMap got modified during iteration.");
-            if (_head) {
-              let s = { value: _head.key, done: !1 };
-              return ((_head = _head.next), s);
-            } else return { value: void 0, done: !0 };
-          },
-        };
-      return n;
+      let state = this._state;
+      let current = this._head;
+      let iterator = {
+        [Symbol.iterator]: () => iterator,
+        next: () => {
+          if (this._state !== state) throw Error("LinkedMap got modified during iteration.");
+          if (current) {
+            let result = {
+              value: current.key,
+              done: false,
+            };
+            current = current.next;
+            return result;
+          } else
+            return {
+              value: undefined,
+              done: true,
+            };
+        },
+      };
+      return iterator;
     }
     values() {
-      let _state = this._state,
-        _head = this._head,
-        n = {
-          [Symbol.iterator]: () => n,
-          next: () => {
-            if (this._state !== _state) throw Error("LinkedMap got modified during iteration.");
-            if (_head) {
-              let s = { value: _head.value, done: !1 };
-              return ((_head = _head.next), s);
-            } else return { value: void 0, done: !0 };
-          },
-        };
-      return n;
+      let state = this._state;
+      let current = this._head;
+      let iterator = {
+        [Symbol.iterator]: () => iterator,
+        next: () => {
+          if (this._state !== state) throw Error("LinkedMap got modified during iteration.");
+          if (current) {
+            let result = {
+              value: current.value,
+              done: false,
+            };
+            current = current.next;
+            return result;
+          } else
+            return {
+              value: undefined,
+              done: true,
+            };
+        },
+      };
+      return iterator;
     }
     entries() {
-      let _state = this._state,
-        _head = this._head,
-        n = {
-          [Symbol.iterator]: () => n,
-          next: () => {
-            if (this._state !== _state) throw Error("LinkedMap got modified during iteration.");
-            if (_head) {
-              let s = { value: [_head.key, _head.value], done: !1 };
-              return ((_head = _head.next), s);
-            } else return { value: void 0, done: !0 };
-          },
-        };
-      return n;
+      let state = this._state;
+      let current = this._head;
+      let iterator = {
+        [Symbol.iterator]: () => iterator,
+        next: () => {
+          if (this._state !== state) throw Error("LinkedMap got modified during iteration.");
+          if (current) {
+            let result = {
+              value: [current.key, current.value],
+              done: false,
+            };
+            current = current.next;
+            return result;
+          } else
+            return {
+              value: undefined,
+              done: true,
+            };
+        },
+      };
+      return iterator;
     }
-    [((_r = Symbol.toStringTag), Symbol.iterator)]() {
+    [((_a = Symbol.toStringTag), Symbol.iterator)]() {
       return this.entries();
     }
-    trimOld(e) {
-      if (e >= this.size) return;
-      if (e === 0) {
+    trimOld(newSize) {
+      if (newSize >= this.size) return;
+      if (newSize === 0) {
         this.clear();
         return;
       }
-      let _head = this._head,
-        size = this.size;
-      while (_head && size > e) (this._map.delete(_head.key), (_head = _head.next), size--);
-      if (((this._head = _head), (this._size = size), _head)) _head.previous = void 0;
+      let current = this._head;
+      let currentSize = this.size;
+      while (current && currentSize > newSize) {
+        this._map.delete(current.key);
+        current = current.next;
+        currentSize--;
+      }
+      this._head = current;
+      this._size = currentSize;
+      if (current) current.previous = undefined;
       this._state++;
     }
-    addItemFirst(e) {
-      if (!this._head && !this._tail) this._tail = e;
+    addItemFirst(item) {
+      if (!this._head && !this._tail) this._tail = item;
       else if (!this._head) throw Error("Invalid list");
-      else ((e.next = this._head), (this._head.previous = e));
-      ((this._head = e), this._state++);
-    }
-    addItemLast(e) {
-      if (!this._head && !this._tail) this._head = e;
-      else if (!this._tail) throw Error("Invalid list");
-      else ((e.previous = this._tail), (this._tail.next = e));
-      ((this._tail = e), this._state++);
-    }
-    removeItem(e) {
-      if (e === this._head && e === this._tail) ((this._head = void 0), (this._tail = void 0));
-      else if (e === this._head) {
-        if (!e.next) throw Error("Invalid list");
-        ((e.next.previous = void 0), (this._head = e.next));
-      } else if (e === this._tail) {
-        if (!e.previous) throw Error("Invalid list");
-        ((e.previous.next = void 0), (this._tail = e.previous));
-      } else {
-        let { next: r, previous: previous } = e;
-        if (!r || !previous) throw Error("Invalid list");
-        ((r.previous = previous), (previous.next = r));
+      else {
+        item.next = this._head;
+        this._head.previous = item;
       }
-      ((e.next = void 0), (e.previous = void 0), this._state++);
+      this._head = item;
+      this._state++;
     }
-    touch(e, r) {
+    addItemLast(item) {
+      if (!this._head && !this._tail) this._head = item;
+      else if (!this._tail) throw Error("Invalid list");
+      else {
+        item.previous = this._tail;
+        this._tail.next = item;
+      }
+      this._tail = item;
+      this._state++;
+    }
+    removeItem(item) {
+      if (item === this._head && item === this._tail) {
+        this._head = undefined;
+        this._tail = undefined;
+      } else if (item === this._head) {
+        if (!item.next) throw Error("Invalid list");
+        item.next.previous = undefined;
+        this._head = item.next;
+      } else if (item === this._tail) {
+        if (!item.previous) throw Error("Invalid list");
+        item.previous.next = undefined;
+        this._tail = item.previous;
+      } else {
+        let { next, previous } = item;
+        if (!next || !previous) throw Error("Invalid list");
+        next.previous = previous;
+        previous.next = next;
+      }
+      item.next = undefined;
+      item.previous = undefined;
+      this._state++;
+    }
+    touch(item, touch) {
       if (!this._head || !this._tail) throw Error("Invalid list");
-      if (r !== U.First && r !== U.Last) return;
-      if (r === U.First) {
-        if (e === this._head) return;
-        let { next: n, previous: previous } = e;
-        if (e === this._tail) ((previous.next = void 0), (this._tail = previous));
-        else ((n.previous = previous), (previous.next = n));
-        ((e.previous = void 0),
-          (e.next = this._head),
-          (this._head.previous = e),
-          (this._head = e),
-          this._state++);
-      } else if (r === U.Last) {
-        if (e === this._tail) return;
-        let { next: n, previous: previous } = e;
-        if (e === this._head) ((n.previous = void 0), (this._head = n));
-        else ((n.previous = previous), (previous.next = n));
-        ((e.next = void 0),
-          (e.previous = this._tail),
-          (this._tail.next = e),
-          (this._tail = e),
-          this._state++);
+      if (touch !== Touch.First && touch !== Touch.Last) return;
+      if (touch === Touch.First) {
+        if (item === this._head) return;
+        let { next, previous } = item;
+        if (item === this._tail) {
+          previous.next = undefined;
+          this._tail = previous;
+        } else {
+          next.previous = previous;
+          previous.next = next;
+        }
+        item.previous = undefined;
+        item.next = this._head;
+        this._head.previous = item;
+        this._head = item;
+        this._state++;
+      } else if (touch === Touch.Last) {
+        if (item === this._tail) return;
+        let { next, previous } = item;
+        if (item === this._head) {
+          next.previous = undefined;
+          this._head = next;
+        } else {
+          next.previous = previous;
+          previous.next = next;
+        }
+        item.next = undefined;
+        item.previous = this._tail;
+        this._tail.next = item;
+        this._tail = item;
+        this._state++;
       }
     }
     toJSON() {
-      let e = [];
-      return (
-        this.forEach((r, n) => {
-          e.push([n, r]);
-        }),
-        e
-      );
+      let data = [];
+      this.forEach((value, key) => {
+        data.push([key, value]);
+      });
+      return data;
     }
-    fromJSON(e) {
+    fromJSON(data) {
       this.clear();
-      for (let [r, n] of e) this.set(r, n);
+      for (let [key, value] of data) this.set(key, value);
     }
   }
-  Rr.LinkedMap = pt;
-  class Sr extends pt {
-    constructor(e, r = 1) {
+  cjsExports.LinkedMap = LinkedMap;
+  class LRUCache extends LinkedMap {
+    constructor(limit, ratio = 1) {
       super();
-      ((this._limit = e), (this._ratio = Math.min(Math.max(0, r), 1)));
+      this._limit = limit;
+      this._ratio = Math.min(Math.max(0, ratio), 1);
     }
     get limit() {
       return this._limit;
     }
-    set limit(e) {
-      ((this._limit = e), this.checkTrim());
+    set limit(limit) {
+      this._limit = limit;
+      this.checkTrim();
     }
     get ratio() {
       return this._ratio;
     }
-    set ratio(e) {
-      ((this._ratio = Math.min(Math.max(0, e), 1)), this.checkTrim());
+    set ratio(ratio) {
+      this._ratio = Math.min(Math.max(0, ratio), 1);
+      this.checkTrim();
     }
-    get(e, r = U.AsNew) {
-      return super.get(e, r);
+    get(key, touch = Touch.AsNew) {
+      return super.get(key, touch);
     }
-    peek(e) {
-      return super.get(e, U.None);
+    peek(key) {
+      return super.get(key, Touch.None);
     }
-    set(e, r) {
-      return (super.set(e, r, U.Last), this.checkTrim(), this);
+    set(key, value) {
+      super.set(key, value, Touch.Last);
+      this.checkTrim();
+      return this;
     }
     checkTrim() {
       if (this.size > this._limit) this.trimOld(Math.round(this._limit * this._ratio));
     }
   }
-  Rr.LRUCache = Sr;
+  cjsExports.LRUCache = LRUCache;
 });
-
-export { mt };
+export { require_linkedMap };

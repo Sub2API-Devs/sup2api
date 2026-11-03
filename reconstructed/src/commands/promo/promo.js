@@ -11,18 +11,18 @@
 import { isDeepStrictEqual } from "util";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, o, M, E } from "../../../vendor/zod/v4/classic/schemas.js";
+import { u, string, M, E } from "../../../vendor/zod/v4/classic/schemas.js";
 import { getGlobalConfig, saveGlobalConfig } from "../../utils/config.js";
 import {
-  V4r,
-  vtr,
+  isPromoStale,
+  isAbsolutePromoPath,
   DEFAULT_PROMO_STATUS_MAX_AGE_SECONDS,
   parsePromoState,
-  promoConfigSchema,
+  promoConfigSchema_2,
   TENGU_SWIFT_LYNX,
-  a4o,
-  ktr,
-  ani,
+  appendOrgIdIfUuid,
+  readPromoConfigFromGate,
+  appendPromoSubpath,
 } from "../../services/promo/promoState.js";
 import { logError } from "../../utils/log.js";
 import { toError } from "../../utils/errors.js";
@@ -40,223 +40,260 @@ import { openInDesktopOrBrowser, getClaudeAiWebUrl } from "../../utils/desktopDe
 import { withDeadline } from "../../utils/sleep.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
-import { wt } from "../../remote/remoteMode.js";
+import { isRemoteSessionAvailable } from "../../remote/remoteMode.js";
 import { isWebSetupOfferable } from "../../services/cloudSessions/webSetup.js";
 import { getGhAuthStatus } from "../../utils/github/ghAuthStatus.js";
-import { ZV } from "../remote-setup/api.js";
+import { GITHUB_CONNECTION_STATUS_CACHE } from "../remote-setup/api.js";
 
 //@ chunk-ndsajhew.js:4209-4238 placement
 var TENGU_SMOOTH_FOREST = "tengu_smooth_forest";
 //@ chunk-ndsajhew.js:4238-4272 placement
-function K() {
-  return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_SMOOTH_FOREST, !1) === !0;
+function isSmoothForestEnabled() {
+  return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_SMOOTH_FOREST, false) === true;
 }
 //@ chunk-ndsajhew.js:4314-4433 placement
 var promoStatusCacheSchema = DoctorLazy(() =>
   u({
-    accountUuid: o().min(1),
-    endpoint: o(),
+    accountUuid: string().min(1),
+    endpoint: string(),
     eligible: M(),
     claimed: M(),
-    checkedAt: E()
-      .optional()
-      .catch(void 0),
+    checkedAt: E().optional().catch(undefined),
   }),
 );
 //@ chunk-ndsajhew.js:4433-4717 placement
-function readPromoStatusCache(e, s, n, r) {
+function readPromoStatusCache(accountUuid, endpoint, maxAgeSeconds, now) {
   try {
     let S = promoStatusCacheSchema().safeParse(getGlobalConfig().promoStartupStatusCache).data;
-    if (S?.accountUuid !== e || S.endpoint !== s || S.checkedAt === void 0 || V4r(S.checkedAt, n, r)) return;
-    let { eligible: eligible, claimed: claimed, checkedAt: checkedAt } = S;
-    return { status: { eligible: eligible, claimed: claimed }, checkedAt: checkedAt };
+    if (
+      S?.accountUuid !== accountUuid ||
+      S.endpoint !== endpoint ||
+      S.checkedAt === undefined ||
+      isPromoStale(S.checkedAt, maxAgeSeconds, now)
+    )
+      return;
+    let { eligible, claimed, checkedAt } = S;
+    return {
+      status: {
+        eligible,
+        claimed,
+      },
+      checkedAt,
+    };
   } catch (error) {
     logError(toError(error));
     return;
   }
 }
 //@ chunk-ndsajhew.js:4717-4853 placement
-function writePromoStatusCache(e, s) {
+function writePromoStatusCache(e, storage) {
   try {
     saveGlobalConfig(
-      (n) => (isDeepStrictEqual(n.promoStartupStatusCache, e) ? n : { ...n, promoStartupStatusCache: e }),
-      s,
-    ).catch((n) => logError(toError(n)));
+      (n) =>
+        isDeepStrictEqual(n.promoStartupStatusCache, e)
+          ? n
+          : {
+              ...n,
+              promoStartupStatusCache: e,
+            },
+      storage,
+    ).catch((error) => logError(toError(error)));
   } catch (error) {
     logError(toError(error));
   }
 }
 //@ chunk-ndsajhew.js:4853-4911 placement
-var pe = 1e4,
-  ge = 3,
-  freeze = Object.freeze({ eligible: !1, claimed: !1 });
+var PROMO_CLAIM_TIMEOUT_MS = 1e4;
+var MAX_FAILED_STATUS_ASKS = 3;
+var w = Object.freeze({
+  eligible: false,
+  claimed: false,
+});
 //@ chunk-ndsajhew.js:4911-4962 placement
-function Se() {
-  return { entries: new Map(), changed: createSignal() };
+function createPromoState() {
+  return {
+    entries: new Map(),
+    changed: createSignal(),
+  };
 }
 //@ chunk-ndsajhew.js:4962-4979 placement
-var _e = new HostScoped(Se);
+var PROMO_STATE_SLOT = new HostScoped(createPromoState);
 //@ chunk-ndsajhew.js:4979-5015 placement
-function O() {
-  return _e.of(getRootSession().host);
+function promoState() {
+  return PROMO_STATE_SLOT.of(getRootSession().host);
 }
 //@ chunk-ndsajhew.js:5015-5079 placement
-function Q(e) {
-  let s = getOauthAccountInfo()?.accountUuid;
-  return s
-    ? `${s}
+function promoEntryKey(e) {
+  let accountUuid = getOauthAccountInfo()?.accountUuid;
+  return accountUuid
+    ? `${accountUuid}
 ${e}`
     : null;
 }
 //@ chunk-ndsajhew.js:5079-5146 placement
-function V(e) {
-  let s = Q(e);
-  return s === null ? void 0 : O().entries.get(s);
+function promoEntryOf(e) {
+  let s = promoEntryKey(e);
+  return s === null ? undefined : promoState().entries.get(s);
 }
 //@ chunk-ndsajhew.js:5146-5357 placement
 function getPromoEntry(e) {
-  let s = Q(e);
+  let s = promoEntryKey(e);
   if (s === null) return null;
-  let entries = O().entries,
-    r = entries.get(s);
-  if (r === void 0)
-    ((r = {
-      status: void 0,
+  let entries = promoState().entries;
+  let r = entries.get(s);
+  if (r === undefined) {
+    r = {
+      status: undefined,
       checkedAt: null,
       pendingStatus: null,
       failedStatusAsks: 0,
       askBudgetWall: null,
-      taken: !1,
-    }),
-      entries.set(s, r));
+      taken: false,
+    };
+    entries.set(s, r);
+  }
   return r;
 }
 //@ chunk-ndsajhew.js:5357-5471 placement
-function isPromoOfferable(e) {
-  if (!vtr(e) || !arePromoOffersAllowed()) return !1;
-  let s = V(e);
-  return s?.status?.eligible === !0 && !s.status.claimed && !s.taken;
+function isPromoOfferable(endpoint) {
+  if (!isAbsolutePromoPath(endpoint) || !arePromoOffersAllowed()) return false;
+  let s = promoEntryOf(endpoint);
+  return s?.status?.eligible === true && !s.status.claimed && !s.taken;
 }
 //@ chunk-ndsajhew.js:5471-5509 placement
-function J(e) {
-  return V(e)?.taken === !0;
+function isPromoTaken(endpoint) {
+  return promoEntryOf(endpoint)?.taken === true;
 }
+//@ chunk-ndsajhew.js:5509-6545 placement
 /**
  * 获取促销资格状态：内存有效则直接用；否则读全局配置缓存；再否则发起请求（失败计数受限），成功后写入缓存并通知变化。
  */
-//@ chunk-ndsajhew.js:5509-6545 placement
 async function getPromoStatus(
   endpoint,
   credentials,
   askBudgetWall,
   {
-    refresh: refresh = !1,
-    maxAgeSeconds: maxAgeSeconds = DEFAULT_PROMO_STATUS_MAX_AGE_SECONDS,
-    now: now = Date.now(),
+    refresh = false,
+    maxAgeSeconds = DEFAULT_PROMO_STATUS_MAX_AGE_SECONDS,
+    now = Date.now(),
     storageV5: storage,
   } = {},
 ) {
-  if (!vtr(endpoint) || !arePromoOffersAllowed()) return;
-  let accountUuid = getOauthAccountInfo()?.accountUuid,
-    entry = getPromoEntry(endpoint);
+  if (!isAbsolutePromoPath(endpoint) || !arePromoOffersAllowed()) return;
+  let accountUuid = getOauthAccountInfo()?.accountUuid;
+  let entry = getPromoEntry(endpoint);
   if (entry === null || !accountUuid) {
     logForDebugging("[promo] account not known yet; status not asked");
     return;
   }
-  let isStale = entry.checkedAt !== null && !entry.taken && V4r(entry.checkedAt, maxAgeSeconds, now);
-  if (entry.status !== void 0 && !refresh && !isStale) return entry.status;
-  let useCache = maxAgeSeconds !== 0,
-    cached =
-      useCache && !refresh && entry.pendingStatus === null
-        ? readPromoStatusCache(accountUuid, endpoint, maxAgeSeconds, now)
-        : void 0;
-  if (cached !== void 0)
-    return (
-      (entry.status = cached.status),
-      (entry.checkedAt = cached.checkedAt),
-      (entry.failedStatusAsks = 0),
-      F(O().changed),
-      entry.status
-    );
-  if (askBudgetWall !== void 0 && askBudgetWall !== entry.askBudgetWall)
-    ((entry.askBudgetWall = askBudgetWall), (entry.failedStatusAsks = 0));
-  if (entry.pendingStatus === null) {
-    if (entry.failedStatusAsks >= ge) return entry.status;
-    let x = O(),
-      k = fetchPromoStatus(endpoint, credentials).then((P) => {
-        if (((entry.pendingStatus = null), P === void 0)) entry.failedStatusAsks++;
-        else {
-          if (
-            ((entry.failedStatusAsks = 0), (entry.checkedAt = now), P !== freeze || entry.status === void 0)
-          )
-            entry.status = P;
-          let I = P.eligible && !P.claimed;
-          if (useCache && P !== freeze && !(entry.taken && I) && arePromoOffersAllowed()) {
-            let { eligible: eligible, claimed: claimed } = P;
-            writePromoStatusCache(
-              {
-                accountUuid: accountUuid,
-                endpoint: endpoint,
-                eligible: eligible,
-                claimed: claimed,
-                checkedAt: now,
-              },
-              storage,
-            );
-          }
-        }
-        F(x.changed);
-      });
-    entry.pendingStatus = k;
+  let isStale = entry.checkedAt !== null && !entry.taken && isPromoStale(entry.checkedAt, maxAgeSeconds, now);
+  if (entry.status !== undefined && !refresh && !isStale) return entry.status;
+  let useCache = maxAgeSeconds !== 0;
+  let cached =
+    useCache && !refresh && entry.pendingStatus === null
+      ? readPromoStatusCache(accountUuid, endpoint, maxAgeSeconds, now)
+      : undefined;
+  if (cached !== undefined) {
+    entry.status = cached.status;
+    entry.checkedAt = cached.checkedAt;
+    entry.failedStatusAsks = 0;
+    emitSignalSafely(promoState().changed);
+    return entry.status;
   }
-  return (await entry.pendingStatus, entry.status);
+  if (askBudgetWall !== undefined && askBudgetWall !== entry.askBudgetWall) {
+    entry.askBudgetWall = askBudgetWall;
+    entry.failedStatusAsks = 0;
+  }
+  if (entry.pendingStatus === null) {
+    if (entry.failedStatusAsks >= MAX_FAILED_STATUS_ASKS) return entry.status;
+    let x = promoState();
+    let pendingStatus = fetchPromoStatus(endpoint, credentials).then((promoStatus) => {
+      entry.pendingStatus = null;
+      if (promoStatus === undefined) entry.failedStatusAsks++;
+      else {
+        entry.failedStatusAsks = 0;
+        entry.checkedAt = now;
+        if (promoStatus !== w || entry.status === undefined) entry.status = promoStatus;
+        let I = promoStatus.eligible && !promoStatus.claimed;
+        if (useCache && promoStatus !== w && !(entry.taken && I) && arePromoOffersAllowed()) {
+          let { eligible, claimed } = promoStatus;
+          writePromoStatusCache(
+            {
+              accountUuid,
+              endpoint,
+              eligible,
+              claimed,
+              checkedAt: now,
+            },
+            storage,
+          );
+        }
+      }
+      emitSignalSafely(x.changed);
+    });
+    entry.pendingStatus = pendingStatus;
+  }
+  await entry.pendingStatus;
+  return entry.status;
 }
 //@ chunk-ndsajhew.js:6545-6590 placement
-function F(e) {
+function emitSignalSafely(changed) {
   try {
-    e.emit();
+    changed.emit();
   } catch (error) {
     logError(toError(error));
   }
 }
+//@ chunk-ndsajhew.js:6590-7604 placement
 /**
  * 查询促销状态，无登录或 teleport 组织时跳过
  */
-//@ chunk-ndsajhew.js:6590-7604 placement
-async function fetchPromoStatus(e, s) {
+async function fetchPromoStatus(endpoint, credentials) {
   try {
-    let n = await apiClient.get(e, {
+    let n = await apiClient.get(endpoint, {
       auth: "teleport-org",
-      timeout: pe,
+      timeout: PROMO_CLAIM_TIMEOUT_MS,
       maxRedirects: 0,
-      validateStatus: () => !0,
-      credentials: s,
+      validateStatus: () => true,
+      credentials,
     });
     if (!n.ok) {
       if (n.reason === "no-auth") {
         logFeatureSad("promo_status", "no_auth");
         return;
       }
-      return (logFeatureSad("promo_status", "refused"), freeze);
+      logFeatureSad("promo_status", "refused");
+      return w;
     }
-    let r = parsePromoState({ httpStatus: n.status, body: n.data });
-    if (r.kind === "answered") return (logFeatureOk("promo_status"), r.status);
-    if (r.reason === "body") {
-      if (r.kind === "no_answer") {
-        (logForDebugging("[promo] status response carried neither field (in-band error)", { level: "warn" }),
-          logFeatureSad("promo_status", "in_band_error"));
+    let promoState = parsePromoState({
+      httpStatus: n.status,
+      body: n.data,
+    });
+    if (promoState.kind === "answered") {
+      logFeatureOk("promo_status");
+      return promoState.status;
+    }
+    if (promoState.reason === "body") {
+      if (promoState.kind === "no_answer") {
+        logForDebugging("[promo] status response carried neither field (in-band error)", {
+          level: "warn",
+        });
+        logFeatureSad("promo_status", "in_band_error");
         return;
       }
-      return (
-        logForDebugging("[promo] status response had an unknown shape", { level: "warn" }),
-        logFeatureSad("promo_status", "bad_shape"),
-        freeze
-      );
+      logForDebugging("[promo] status response had an unknown shape", {
+        level: "warn",
+      });
+      logFeatureSad("promo_status", "bad_shape");
+      return w;
     }
-    if (
-      (logForDebugging(`[promo] status returned ${n.status}`, { level: "warn" }), r.kind === "not_eligible")
-    )
-      return (logFeatureSad("promo_status", "http_4xx"), freeze);
+    logForDebugging(`[promo] status returned ${n.status}`, {
+      level: "warn",
+    });
+    if (promoState.kind === "not_eligible") {
+      logFeatureSad("promo_status", "http_4xx");
+      return w;
+    }
     if (n.status === 408 || n.status === 429) {
       logFeatureSad("promo_status", n.status === 408 ? "http_408" : "http_429");
       return;
@@ -264,34 +301,45 @@ async function fetchPromoStatus(e, s) {
     logFeatureSad("promo_status", n.status >= 500 ? "http_5xx" : "http_3xx");
     return;
   } catch (error) {
-    (logForDebugging(`[promo] status request failed: ${toError(error).message}`, { level: "warn" }),
-      logFeatureSad("promo_status", "request_failed"));
+    logForDebugging(`[promo] status request failed: ${toError(error).message}`, {
+      level: "warn",
+    });
+    logFeatureSad("promo_status", "request_failed");
     return;
   }
 }
 //@ chunk-ndsajhew.js:7604-7615 placement
-var ke = 1e4;
+var PROMO_OPEN_TIMEOUT_MS = 1e4;
+//@ chunk-ndsajhew.js:7615-8237 placement
 /**
  * 打开优惠领取页，组织策略禁止时不打开
  */
-//@ chunk-ndsajhew.js:7615-8237 placement
-async function openPromoClaimPage(e, s) {
-  if (!isPolicyAllowed(ALLOW_PROMO_OFFERS))
-    return (logForDebugging("[promo] claim page not opened: org policy denies it"), null);
-  let n = O(),
-    r = getPromoEntry(e),
-    m =
-      promoConfigSchema().safeParse(getFeatureValue_CACHED_MAY_BE_STALE(TENGU_SWIFT_LYNX, null)).data
-        ?.claimLinkIncludesOrganization === !0
-        ? env.CLAUDE_CODE_ORGANIZATION_UUID || getOauthAccountInfo()?.organizationUuid
-        : void 0,
-    _ = openInDesktopOrBrowser({ webPath: a4o(s.webPath, m), desktopPath: a4o(s.desktopPath, m) }).catch(
-      (d) => (logError(toError(d)), "none"),
-    ),
-    h = await withDeadline(_, ke);
-  if (r !== null) ((r.taken = !0), F(n.changed));
+async function openPromoClaimPage(endpoint, s) {
+  if (!isPolicyAllowed(ALLOW_PROMO_OFFERS)) {
+    logForDebugging("[promo] claim page not opened: org policy denies it");
+    return null;
+  }
+  let n = promoState();
+  let promoEntry = getPromoEntry(endpoint);
+  let m =
+    promoConfigSchema_2().safeParse(getFeatureValue_CACHED_MAY_BE_STALE(TENGU_SWIFT_LYNX, null)).data
+      ?.claimLinkIncludesOrganization === true
+      ? env.CLAUDE_CODE_ORGANIZATION_UUID || getOauthAccountInfo()?.organizationUuid
+      : undefined;
+  let _ = openInDesktopOrBrowser({
+    webPath: appendOrgIdIfUuid(s.webPath, m),
+    desktopPath: appendOrgIdIfUuid(s.desktopPath, m),
+  }).catch((error) => {
+    logError(toError(error));
+    return "none";
+  });
+  let h = await withDeadline(_, PROMO_OPEN_TIMEOUT_MS);
+  if (promoEntry !== null) {
+    promoEntry.taken = true;
+    emitSignalSafely(n.changed);
+  }
   switch (h) {
-    case void 0:
+    case undefined:
       logFeatureSad("promo_claim_page", "deadline");
       break;
     case "none":
@@ -302,260 +350,339 @@ async function openPromoClaimPage(e, s) {
       logFeatureOk("promo_claim_page");
       break;
   }
-  return { opened: h ?? "none", httpsUrl: getClaudeAiWebUrl(s.webPath) };
+  return {
+    opened: h ?? "none",
+    httpsUrl: getClaudeAiWebUrl(s.webPath),
+  };
 }
+//@ chunk-ndsajhew.js:8237-8809 placement
 /**
  * /claim-credit 促销的文案与常量：入口编号、各种不可用/已领取/处理中提示、帮助链接、/web-setup 提示与打开延时。
  */
-//@ chunk-ndsajhew.js:8237-8809 placement
-var PROMO_ENTRY_POINT = "6",
-  OFFER_UNAVAILABLE_TEXT = "This offer isn't available right now.",
-  OFFER_OPENING_TEXT = "The offer page is already opening",
-  OFFER_OPEN_FAILED_TEXT = "The offer page didn't open.",
-  OFFER_PAGE_LABEL = "Offer page",
-  CLAIM_PENDING_TEXT = "Your claim is being processed.",
-  OFFER_EXPIRED_TEXT = "This offer has expired.",
-  CLAIMED_ELSEWHERE_TEXT = "This offer was already claimed in another organization.",
-  ALREADY_CLAIMED_TEXT = "You've already claimed this offer.",
-  SEE_OFFER_TEXT = "See the offer at",
-  NOT_ELIGIBLE_TEXT = "This offer isn't available for this account.",
-  LEARN_MORE_TEXT = "Learn more at",
-  PROMO_SUPPORT_URL = "https://support.claude.com/en/articles/17152539",
-  WEB_SETUP_HINT = "Set up GitHub for cloud sessions automatically by running /web-setup",
-  OPEN_DELAY_MS = 750,
-  STATUS_CHECK_FAILED_TEXT = "Couldn't check this offer right now.";
+var PROMO_ENTRY_POINT = "6";
+var OFFER_UNAVAILABLE_TEXT = "This offer isn't available right now.";
+var OFFER_OPENING_TEXT = "The offer page is already opening";
+var OFFER_OPEN_FAILED_TEXT = "The offer page didn't open.";
+var OFFER_PAGE_LABEL = "Offer page";
+var CLAIM_PENDING_TEXT = "Your claim is being processed.";
+var OFFER_EXPIRED_TEXT = "This offer has expired.";
+var CLAIMED_ELSEWHERE_TEXT = "This offer was already claimed in another organization.";
+var ALREADY_CLAIMED_TEXT = "You've already claimed this offer.";
+var SEE_OFFER_TEXT = "See the offer at";
+var NOT_ELIGIBLE_TEXT = "This offer isn't available for this account.";
+var LEARN_MORE_TEXT = "Learn more at";
+var PROMO_SUPPORT_URL = "https://support.claude.com/en/articles/17152539";
+var WEB_SETUP_HINT = "Set up GitHub for cloud sessions automatically by running /web-setup";
+var OPEN_DELAY_MS = 750;
+var STATUS_CHECK_FAILED_TEXT = "Couldn't check this offer right now.";
 //@ chunk-ndsajhew.js:8809-8883 placement
-function Ie() {
-  return { exposureLogged: !1, commandInFlight: !1, keptParse: null };
+function createPromoStatus() {
+  return {
+    exposureLogged: false,
+    commandInFlight: false,
+    keptParse: null,
+  };
 }
 //@ chunk-ndsajhew.js:8883-8900 placement
-var Fe = new HostScoped(Ie);
+var PROMO_STATUS_SLOT = new HostScoped(createPromoStatus);
 //@ chunk-ndsajhew.js:8900-8936 placement
-function X() {
-  return Fe.of(getRootSession().host);
+function promoStatus() {
+  return PROMO_STATUS_SLOT.of(getRootSession().host);
 }
 //@ chunk-ndsajhew.js:8936-9016 placement
-var He = DoctorLazy(() => u({ accountUuid: o().min(1), endpoint: o(), eligible: M(), claimed: M() }));
+var promoStatusSchema = DoctorLazy(() =>
+  u({
+    accountUuid: string().min(1),
+    endpoint: string(),
+    eligible: M(),
+    claimed: M(),
+  }),
+);
 //@ chunk-ndsajhew.js:9016-9062 placement
-function G() {
-  return getOauthAccountInfo()?.accountUuid || void 0;
+function currentAccountUuid() {
+  return getOauthAccountInfo()?.accountUuid || undefined;
 }
 //@ chunk-ndsajhew.js:9062-9263 placement
-function parseKeptPromoCache(e) {
-  let s = X();
-  if (s.keptParse === null || s.keptParse.raw !== e) {
-    let safeParse = He().safeParse(e);
+function parseKeptPromoCache(promoStartupStatusCache) {
+  let s = promoStatus();
+  if (s.keptParse === null || s.keptParse.raw !== promoStartupStatusCache) {
+    let n = promoStatusSchema().safeParse(promoStartupStatusCache);
     s.keptParse = {
-      raw: e,
-      kept:
-        safeParse.success && (safeParse.data.claimed || safeParse.data.eligible) ? safeParse.data : void 0,
+      raw: promoStartupStatusCache,
+      kept: n.success && (n.data.claimed || n.data.eligible) ? n.data : undefined,
     };
   }
   return s.keptParse.kept;
 }
 //@ chunk-ndsajhew.js:9263-9369 placement
-function getCachedPromoForAccount(e, s, n) {
-  let r = parseKeptPromoCache(e.promoStartupStatusCache);
-  return r?.accountUuid === s && r.endpoint === n ? r : void 0;
+function getCachedPromoForAccount(e, accountUuid, endpoint) {
+  let keptPromoCache = parseKeptPromoCache(e.promoStartupStatusCache);
+  return keptPromoCache?.accountUuid === accountUuid && keptPromoCache.endpoint === endpoint
+    ? keptPromoCache
+    : undefined;
 }
+//@ chunk-ndsajhew.js:9369-9930 placement
 /**
  * 刷新促销状态并同步全局配置中的启动缓存：不再符合时清除，状态变化时更新。
  */
-//@ chunk-ndsajhew.js:9369-9930 placement
 async function refreshPromoStartupStatus(promo, credentials, storage, refresh) {
-  let accountUuid = G(),
-    status = await getPromoStatus(promo.endpoint, credentials, void 0, {
-      refresh: refresh,
-      maxAgeSeconds: promo.statusMaxAgeSeconds,
-      storageV5: storage,
-    });
-  if (status === void 0 || accountUuid === void 0) return status;
+  let accountUuid = currentAccountUuid();
+  let status = await getPromoStatus(promo.endpoint, credentials, undefined, {
+    refresh,
+    maxAgeSeconds: promo.statusMaxAgeSeconds,
+    storageV5: storage,
+  });
+  if (status === undefined || accountUuid === undefined) return status;
   if (status.eligible && !status.claimed && !isPromoOfferable(promo.endpoint)) return status;
-  return (
-    saveGlobalConfig((_) => {
-      let h = getCachedPromoForAccount(_, accountUuid, promo.endpoint);
-      if (!status.eligible && !status.claimed)
-        return h?.claimed === !1 ? { ..._, promoStartupStatusCache: void 0 } : _;
-      if (
-        promo.statusMaxAgeSeconds !== 0 ||
-        (h !== void 0 && h.eligible === status.eligible && h.claimed === status.claimed)
-      )
-        return _;
-      return {
-        ..._,
-        promoStartupStatusCache: {
-          accountUuid: accountUuid,
-          endpoint: promo.endpoint,
-          eligible: status.eligible,
-          claimed: status.claimed,
-        },
-      };
-    }, storage),
-    status
-  );
+  saveGlobalConfig((_) => {
+    let cachedPromoForAccount = getCachedPromoForAccount(_, accountUuid, promo.endpoint);
+    if (!status.eligible && !status.claimed)
+      return cachedPromoForAccount?.claimed === false
+        ? {
+            ..._,
+            promoStartupStatusCache: undefined,
+          }
+        : _;
+    if (
+      promo.statusMaxAgeSeconds !== 0 ||
+      (cachedPromoForAccount !== undefined &&
+        cachedPromoForAccount.eligible === status.eligible &&
+        cachedPromoForAccount.claimed === status.claimed)
+    )
+      return _;
+    return {
+      ..._,
+      promoStartupStatusCache: {
+        accountUuid,
+        endpoint: promo.endpoint,
+        eligible: status.eligible,
+        claimed: status.claimed,
+      },
+    };
+  }, storage);
+  return status;
 }
 //@ chunk-ndsajhew.js:9930-9983 placement
-function ne() {
+function isPromoOfferedHere() {
   return !isPromoOffersBlocked() && isPolicyAllowed("allow_promo_offers");
 }
 //@ chunk-ndsajhew.js:9983-10142 placement
 function logPromoExposureOnce(e, s) {
-  let n = K(),
-    r = X();
-  if (!r.exposureLogged)
-    ((r.exposureLogged = !0),
-      logEvent("tengu_promo_exposure", { surface: fromEnum(e), exposed: n, config_version: s.version }));
+  let n = isSmoothForestEnabled();
+  let r = promoStatus();
+  if (!r.exposureLogged) {
+    r.exposureLogged = true;
+    logEvent("tengu_promo_exposure", {
+      surface: fromEnum(e),
+      exposed: n,
+      config_version: s.version,
+    });
+  }
   return n;
 }
 //@ chunk-ndsajhew.js:10142-11554 placement
-async function resolvePromoCommandState(e, s, n) {
-  if (!ne()) return OFFER_UNAVAILABLE_TEXT;
-  let r = ktr();
-  if (r === null) return OFFER_UNAVAILABLE_TEXT;
-  let S = X();
+async function resolvePromoCommandState(host, credentials, storage) {
+  if (!isPromoOfferedHere()) return OFFER_UNAVAILABLE_TEXT;
+  let promo = readPromoConfigFromGate();
+  if (promo === null) return OFFER_UNAVAILABLE_TEXT;
+  let S = promoStatus();
   if (S.commandInFlight) return OFFER_OPENING_TEXT;
-  let m = ani(r, PROMO_ENTRY_POINT);
-  S.commandInFlight = !0;
+  let m = appendPromoSubpath(promo, PROMO_ENTRY_POINT);
+  S.commandInFlight = true;
   try {
-    let _ = G(),
-      h = await refreshPromoStartupStatus(r, s, n, !0);
-    if (!ne()) return (logPromoNotOffered(r, "policy_denied"), OFFER_UNAVAILABLE_TEXT);
-    if (!isPromoOfferable(r.endpoint)) {
-      let k = G() === _ ? describePromoState(h, J(r.endpoint)) : { reason: "account_switched", text: void 0 },
-        P = k.reason === "taken_this_session" && !logPromoExposureOnce("command", r) ? "held_out" : k.reason;
-      if (P !== "taken_this_session" && P !== "pending" && P !== "already_claimed") {
-        logPromoNotOffered(r, P);
+    let _ = currentAccountUuid();
+    let status = await refreshPromoStartupStatus(promo, credentials, storage, true);
+    if (!isPromoOfferedHere()) {
+      logPromoNotOffered(promo, "policy_denied");
+      return OFFER_UNAVAILABLE_TEXT;
+    }
+    if (!isPromoOfferable(promo.endpoint)) {
+      let k =
+        currentAccountUuid() === _
+          ? describePromoState(status, isPromoTaken(promo.endpoint))
+          : {
+              reason: "account_switched",
+              text: undefined,
+            };
+      let reason =
+        k.reason === "taken_this_session" && !logPromoExposureOnce("command", promo) ? "held_out" : k.reason;
+      if (reason !== "taken_this_session" && reason !== "pending" && reason !== "already_claimed") {
+        logPromoNotOffered(promo, reason);
         let R =
-          P === "not_eligible"
+          reason === "not_eligible"
             ? `${LEARN_MORE_TEXT} ${PROMO_SUPPORT_URL}`
             : `${OFFER_PAGE_LABEL} \xB7 ${getClaudeAiWebUrl(m.webPath)}`;
-        return k.text === void 0 ? R : `${k.text} ${R}`;
+        return k.text === undefined ? R : `${k.text} ${R}`;
       }
-      let I = shouldSuggestWebSetup(e, s, n),
-        C = await openPromoClaimPage(r.endpoint, m);
-      if (C === null) return (logPromoNotOffered(r, "policy_denied"), OFFER_UNAVAILABLE_TEXT);
-      return (
-        logPromoNotOffered(r, P, C.opened),
-        ae(
-          P === "taken_this_session" ? re(r, C) : `${k.text} ${SEE_OFFER_TEXT} ${C.httpsUrl}`,
-          (await withDeadline(I, OPEN_DELAY_MS)) === !0 && j(),
-        )
+      let I = shouldSuggestWebSetup(host, credentials, storage);
+      let promoClaimPage = await openPromoClaimPage(promo.endpoint, m);
+      if (promoClaimPage === null) {
+        logPromoNotOffered(promo, "policy_denied");
+        return OFFER_UNAVAILABLE_TEXT;
+      }
+      logPromoNotOffered(promo, reason, promoClaimPage.opened);
+      return offerLineWithSetupHint(
+        reason === "taken_this_session"
+          ? offerLine(promo, promoClaimPage)
+          : `${k.text} ${SEE_OFFER_TEXT} ${promoClaimPage.httpsUrl}`,
+        (await withDeadline(I, OPEN_DELAY_MS)) === true && canOfferWebSetup(),
       );
     }
-    if (!logPromoExposureOnce("command", r))
-      return (logPromoNotOffered(r, "held_out"), `${OFFER_PAGE_LABEL} \xB7 ${getClaudeAiWebUrl(m.webPath)}`);
+    if (!logPromoExposureOnce("command", promo)) {
+      logPromoNotOffered(promo, "held_out");
+      return `${OFFER_PAGE_LABEL} \xB7 ${getClaudeAiWebUrl(m.webPath)}`;
+    }
     logEvent("tengu_promo_banner_clicked", {
       surface: fromEnum("command"),
       entry_point: fromEnum(PROMO_ENTRY_POINT),
-      config_version: r.version,
+      config_version: promo.version,
     });
-    let d = shouldSuggestWebSetup(e, s, n),
-      now = Date.now(),
-      b = await openPromoClaimPage(r.endpoint, m),
-      A = Date.now() - now;
-    if (b === null) return (logPromoNotOffered(r, "policy_denied"), OFFER_UNAVAILABLE_TEXT);
+    let d = shouldSuggestWebSetup(host, credentials, storage);
+    let now = Date.now();
+    let promoClaimPage = await openPromoClaimPage(promo.endpoint, m);
+    let latencyMs = Date.now() - now;
+    if (promoClaimPage === null) {
+      logPromoNotOffered(promo, "policy_denied");
+      return OFFER_UNAVAILABLE_TEXT;
+    }
     saveGlobalConfig(
-      (k) => (k.promoStartupStatusCache === void 0 ? k : { ...k, promoStartupStatusCache: void 0 }),
-      n,
+      (k) =>
+        k.promoStartupStatusCache === undefined
+          ? k
+          : {
+              ...k,
+              promoStartupStatusCache: undefined,
+            },
+      storage,
     );
-    let x = (await withDeadline(d, OPEN_DELAY_MS)) === !0 && j();
-    return (
-      logEvent("tengu_promo_open_result", {
-        surface: fromEnum("command"),
-        entry_point: fromEnum(PROMO_ENTRY_POINT),
-        opened: fromEnum(b.opened),
-        latency_ms: A,
-        config_version: r.version,
-        web_setup_hint: x,
-      }),
-      ae(re(r, b), x)
-    );
+    let x = (await withDeadline(d, OPEN_DELAY_MS)) === true && canOfferWebSetup();
+    logEvent("tengu_promo_open_result", {
+      surface: fromEnum("command"),
+      entry_point: fromEnum(PROMO_ENTRY_POINT),
+      opened: fromEnum(promoClaimPage.opened),
+      latency_ms: latencyMs,
+      config_version: promo.version,
+      web_setup_hint: x,
+    });
+    return offerLineWithSetupHint(offerLine(promo, promoClaimPage), x);
   } catch (error) {
-    return (logError(toError(error)), de(r, getClaudeAiWebUrl(m.webPath)));
+    logError(toError(error));
+    return claimPageLine(promo, getClaudeAiWebUrl(m.webPath));
   } finally {
-    S.commandInFlight = !1;
+    S.commandInFlight = false;
   }
 }
 //@ chunk-ndsajhew.js:11554-11611 placement
-function de(e, s) {
+function claimPageLine(e, s) {
   return `${e.claimPageLine ?? OFFER_PAGE_LABEL} \xB7 ${s}`;
 }
 //@ chunk-ndsajhew.js:11611-11695 placement
-function re(e, { opened: opened, httpsUrl: httpsUrl }) {
-  let r = de(e, httpsUrl);
+function offerLine(e, { opened, httpsUrl }) {
+  let r = claimPageLine(e, httpsUrl);
   return opened === "none" ? `${OFFER_OPEN_FAILED_TEXT} ${r}` : r;
 }
 //@ chunk-ndsajhew.js:11695-11856 placement
-function logPromoNotOffered(e, s, n) {
+function logPromoNotOffered(e, s, opened) {
   logEvent("tengu_promo_command_not_offered", {
     surface: fromEnum("command"),
     entry_point: fromEnum(PROMO_ENTRY_POINT),
     config_version: e.version,
     reason: fromEnum(s),
-    ...(n !== void 0 && { opened: fromEnum(n) }),
+    ...(opened !== undefined && {
+      opened: fromEnum(opened),
+    }),
   });
 }
 //@ chunk-ndsajhew.js:11856-11897 placement
-function ae(e, s) {
+function offerLineWithSetupHint(e, s) {
   return s
     ? `${e}
 ${WEB_SETUP_HINT}`
     : e;
 }
 //@ chunk-ndsajhew.js:11897-11961 placement
-function j() {
+function canOfferWebSetup() {
   try {
-    return !wt() && isWebSetupOfferable();
+    return !isRemoteSessionAvailable() && isWebSetupOfferable();
   } catch (error) {
-    return (logError(toError(error)), !1);
+    logError(toError(error));
+    return false;
   }
 }
 //@ chunk-ndsajhew.js:11961-12182 placement
 async function shouldSuggestWebSetup(e, s, n) {
   try {
-    if (!j()) return !1;
-    let [r, S] = await Promise.all([
-      getGhAuthStatus({ allowNetworkFallbackForOldGh: !1 }),
-      ZV.of(e).readLive(s, n),
+    if (!canOfferWebSetup()) return false;
+    let [ghAuthStatus, S] = await Promise.all([
+      getGhAuthStatus({
+        allowNetworkFallbackForOldGh: false,
+      }),
+      GITHUB_CONNECTION_STATUS_CACHE.of(e).readLive(s, n),
     ]);
-    return r.status === "authenticated" && S === "not_connected";
+    return ghAuthStatus.status === "authenticated" && S === "not_connected";
   } catch (error) {
-    return (logError(toError(error)), !1);
+    logError(toError(error));
+    return false;
   }
 }
+//@ chunk-ndsajhew.js:12182-12712 placement
 /**
  * 根据促销状态给出不可提供的原因与提示文字：未知、本会话已领取、不符合、处理中、已过期、在其他组织领取、已领取。
  */
-//@ chunk-ndsajhew.js:12182-12712 placement
 function describePromoState(status, takenThisSession) {
-  if (status === void 0) return { reason: "status_unknown", text: STATUS_CHECK_FAILED_TEXT };
+  if (status === undefined)
+    return {
+      reason: "status_unknown",
+      text: STATUS_CHECK_FAILED_TEXT,
+    };
   if (!status.claimed) {
     if (status.eligible)
-      return { reason: takenThisSession ? "taken_this_session" : "not_offerable", text: void 0 };
+      return {
+        reason: takenThisSession ? "taken_this_session" : "not_offerable",
+        text: undefined,
+      };
     return status.state === "not_claimed"
-      ? { reason: "not_eligible", text: NOT_ELIGIBLE_TEXT }
-      : { reason: "answer_unusable", text: void 0 };
+      ? {
+          reason: "not_eligible",
+          text: NOT_ELIGIBLE_TEXT,
+        }
+      : {
+          reason: "answer_unusable",
+          text: undefined,
+        };
   }
   switch (status.state) {
     case "pending":
-      return { reason: "pending", text: CLAIM_PENDING_TEXT };
+      return {
+        reason: "pending",
+        text: CLAIM_PENDING_TEXT,
+      };
     case "expired":
-      return { reason: "expired", text: OFFER_EXPIRED_TEXT };
+      return {
+        reason: "expired",
+        text: OFFER_EXPIRED_TEXT,
+      };
     case "claimed_elsewhere":
-      return { reason: "claimed_elsewhere", text: CLAIMED_ELSEWHERE_TEXT };
+      return {
+        reason: "claimed_elsewhere",
+        text: CLAIMED_ELSEWHERE_TEXT,
+      };
     case "active":
     case "not_claimed":
-    case void 0:
-      return { reason: "already_claimed", text: ALREADY_CLAIMED_TEXT };
+    case undefined:
+      return {
+        reason: "already_claimed",
+        text: ALREADY_CLAIMED_TEXT,
+      };
   }
 }
+//@ chunk-ndsajhew.js:12712-12818 placement
 /**
  * /claim-credit 命令实现：返回解析后的促销命令状态文本。
  */
-//@ chunk-ndsajhew.js:12712-12818 placement
-async function claimCreditCommand(
-  args,
-  { credentials: credentials, session: session, storageV5: storageV5 },
-) {
-  return { type: "text", value: await resolvePromoCommandState(session.host, credentials, storageV5) };
+async function claimCreditCommand(args, { credentials, session, storageV5 }) {
+  return {
+    type: "text",
+    value: await resolvePromoCommandState(session.host, credentials, storageV5),
+  };
 }

@@ -8,15 +8,16 @@
 import { x } from "../../../../../runtime/bun-runtime.js";
 
 //@ chunk-s82q9s4x.js:81111-81297 cjs-fingerprint
-var go = x(function (_o) {
-  Object.defineProperty(_o, "__esModule", { value: !0 });
-  var Bd = {
+var require_id = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  var def = {
     keyword: "id",
     code() {
       throw Error('NOT SUPPORTED: keyword "id", use "$id" for schema ID');
     },
   };
-  _o.default = Bd;
+  cjsExports.default = def;
 });
-
-export { go };
+export { require_id };

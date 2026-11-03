@@ -9,7 +9,7 @@
  * attribution: fingerprint 1
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { zodStrictObject, u, A, o, M, E } from "../../../vendor/zod/v4/classic/schemas.js";
+import { zodStrictObject, u, array, string, M, E } from "../../../vendor/zod/v4/classic/schemas.js";
 import {
   NEXT_FIRE_AT_DESCRIPTION,
   CRON_LIST_TOOL_NAME,
@@ -26,95 +26,101 @@ import { cronToHuman } from "../../utils/cron.js";
 import { formatCronFireTime } from "../../hooks/useScheduledTasks.js";
 import { truncate } from "../../utils/format.js";
 
+//@ chunk-8985aafb.js:4785-6031 fingerprint = CronListTool (0.865)
 /**
  * CronList 工具（只读可并发）：列出任务（代理上下文中只列本代理的），附人类可读时间表与下次触发时间。
  */
-//@ chunk-8985aafb.js:4785-6031 fingerprint = CronListTool (0.865)
-var cronListInputSchema = DoctorLazy(() => zodStrictObject({})),
-  cronListOutputSchema = DoctorLazy(() =>
-    u({
-      jobs: A(
-        u({
-          id: o(),
-          cron: o(),
-          humanSchedule: o(),
-          prompt: o(),
-          recurring: M().optional(),
-          durable: M().optional(),
-          nextFireAt: E().optional().describe(NEXT_FIRE_AT_DESCRIPTION),
-        }),
-      ),
-    }),
-  ),
-  CronListTool = buildTool({
-    name: CRON_LIST_TOOL_NAME,
-    searchHint: "list active cron jobs",
-    backgrounding: "never",
-    maxResultSizeChars: 1e5,
-    shouldDefer: !0,
-    get inputSchema() {
-      return cronListInputSchema();
-    },
-    get outputSchema() {
-      return cronListOutputSchema();
-    },
-    isEnabled() {
-      return isKairosCronEnabled();
-    },
-    isConcurrencySafe() {
-      return !0;
-    },
-    isReadOnly() {
-      return !0;
-    },
-    async description() {
-      return CRON_LIST_DESCRIPTION;
-    },
-    async prompt() {
-      return buildCronListPrompt(isDurableCronEnabled());
-    },
-    create() {
-      return {
-        async call() {
-          let r = await listAllCronTasks(),
-            n = getTeammateContext(),
-            t = n ? r.filter((e) => e.agentId === n.agentId) : r,
-            i = getCronJitterConfig(),
-            now = Date.now();
-          return {
-            data: {
-              jobs: t.map((e) => {
-                let a = e.nextFireAt ?? nextFireTimeForTask(e, i);
-                return {
-                  id: e.id,
-                  cron: e.cron,
-                  humanSchedule: cronToHuman(e.cron),
-                  prompt: e.prompt,
-                  ...(e.recurring && { recurring: !0 }),
-                  ...(e.durable === !1 && { durable: !1 }),
-                  ...(a !== null && { nextFireAt: Math.max(a, now) }),
-                };
-              }),
-            },
-          };
-        },
-      };
-    },
-    mapToolResultToToolResultBlockParam(r, n) {
-      return {
-        tool_use_id: n,
-        type: "tool_result",
-        content:
-          r.jobs.length > 0
-            ? r.jobs.map(
-                (job) =>
-                  `${job.id} \u2014 ${job.humanSchedule}${job.recurring ? " (recurring)" : " (one-shot)"}${job.durable === !1 ? " [session-only]" : ""}${job.nextFireAt === void 0 ? "" : `, next run ${formatCronFireTime(roundToMinute(job.nextFireAt))}`}: ${truncate(job.prompt, 80, !0)}`,
-              ).join(`
+var cronListInputSchema = DoctorLazy(() => zodStrictObject({}));
+var cronListOutputSchema = DoctorLazy(() =>
+  u({
+    jobs: array(
+      u({
+        id: string(),
+        cron: string(),
+        humanSchedule: string(),
+        prompt: string(),
+        recurring: M().optional(),
+        durable: M().optional(),
+        nextFireAt: E().optional().describe(NEXT_FIRE_AT_DESCRIPTION),
+      }),
+    ),
+  }),
+);
+var CronListTool = buildTool({
+  name: CRON_LIST_TOOL_NAME,
+  searchHint: "list active cron jobs",
+  backgrounding: "never",
+  maxResultSizeChars: 1e5,
+  shouldDefer: true,
+  get inputSchema() {
+    return cronListInputSchema();
+  },
+  get outputSchema() {
+    return cronListOutputSchema();
+  },
+  isEnabled() {
+    return isKairosCronEnabled();
+  },
+  isConcurrencySafe() {
+    return true;
+  },
+  isReadOnly() {
+    return true;
+  },
+  async description() {
+    return CRON_LIST_DESCRIPTION;
+  },
+  async prompt() {
+    return buildCronListPrompt(isDurableCronEnabled());
+  },
+  create() {
+    return {
+      async call() {
+        let allTasks = await listAllCronTasks();
+        let ctx = getTeammateContext();
+        let tasks = ctx ? allTasks.filter((t) => t.agentId === ctx.agentId) : allTasks;
+        let jitterConfig = getCronJitterConfig();
+        let now = Date.now();
+        return {
+          data: {
+            jobs: tasks.map((t) => {
+              let a = t.nextFireAt ?? nextFireTimeForTask(t, jitterConfig);
+              return {
+                id: t.id,
+                cron: t.cron,
+                humanSchedule: cronToHuman(t.cron),
+                prompt: t.prompt,
+                ...(t.recurring && {
+                  recurring: true,
+                }),
+                ...(t.durable === false && {
+                  durable: false,
+                }),
+                ...(a !== null && {
+                  nextFireAt: Math.max(a, now),
+                }),
+              };
+            }),
+          },
+        };
+      },
+    };
+  },
+  mapToolResultToToolResultBlockParam(output, toolUseID) {
+    return {
+      tool_use_id: toolUseID,
+      type: "tool_result",
+      content:
+        output.jobs.length > 0
+          ? output.jobs.map(
+              (j) =>
+                `${j.id} \u2014 ${j.humanSchedule}${j.recurring ? " (recurring)" : " (one-shot)"}${j.durable === false ? " [session-only]" : ""}${j.nextFireAt === undefined ? "" : `, next run ${formatCronFireTime(roundToMinute(j.nextFireAt))}`}: ${truncate(j.prompt, 80, true)}`,
+            ).join(`
 `)
-            : "No scheduled jobs.",
-      };
-    },
-    renderToolUseMessage() {
-      return "";
-    },
-  });
+          : "No scheduled jobs.",
+    };
+  },
+  renderToolUseMessage() {
+    return "";
+  },
+});

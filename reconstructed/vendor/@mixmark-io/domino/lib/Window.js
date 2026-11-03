@@ -6,31 +6,41 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { Er } from "./DOMImplementation.js";
-import { Ka } from "./EventTarget.js";
-import { Cc } from "./Location.js";
-import { ee } from "./utils.js";
-import { kc } from "./NavigatorID.js";
-import { Mc } from "./WindowTimers.js";
-import { ni } from "./impl.js";
+import { require_DOMImplementation } from "./DOMImplementation.js";
+import { require_EventTarget } from "./EventTarget.js";
+import { require_Location } from "./Location.js";
+import { require_utils } from "./utils.js";
+import { require_NavigatorID } from "./NavigatorID.js";
+import { require_WindowTimers } from "./WindowTimers.js";
+import { require_impl } from "./impl.js";
 
 //@ chunk-vwj6ccer.js:236322-237189 cjs-fingerprint
-var ii = x(function (Jd, Ic) {
-  var Tf = Er(),
-    yf = Ka(),
-    Nf = Cc(),
-    vr = ee();
-  Ic.exports = ya;
-  function ya(e) {
-    ((this.document = e || new Tf(null).createHTMLDocument("")),
-      (this.document._scripting_enabled = !0),
-      (this.document.defaultView = this),
-      (this.location = new Nf(this, this.document._address || "about:blank")));
+var require_Window = x(function (cjsExports, cjsModule) {
+  var DOMImplementation = require_DOMImplementation();
+  var yf = require_EventTarget();
+  var Location = require_Location();
+  var utils = require_utils();
+  cjsModule.exports = Window;
+  function Window(e) {
+    this.document = e || new DOMImplementation(null).createHTMLDocument("");
+    this.document._scripting_enabled = true;
+    this.document.defaultView = this;
+    this.location = new Location(this, this.document._address || "about:blank");
   }
-  ya.prototype = Object.create(yf.prototype, {
-    console: { value: console },
-    history: { value: { back: vr.nyi, forward: vr.nyi, go: vr.nyi } },
-    navigator: { value: kc() },
+  Window.prototype = Object.create(yf.prototype, {
+    console: {
+      value: console,
+    },
+    history: {
+      value: {
+        back: utils.nyi,
+        forward: utils.nyi,
+        go: utils.nyi,
+      },
+    },
+    navigator: {
+      value: require_NavigatorID(),
+    },
     window: {
       get: function () {
         return this;
@@ -56,25 +66,30 @@ var ii = x(function (Jd, Ic) {
         return this;
       },
     },
-    length: { value: 0 },
-    frameElement: { value: null },
-    opener: { value: null },
+    length: {
+      value: 0,
+    },
+    frameElement: {
+      value: null,
+    },
+    opener: {
+      value: null,
+    },
     onload: {
       get: function () {
         return this._getEventHandler("load");
       },
-      set: function (e) {
-        this._setEventHandler("load", e);
+      set: function (v) {
+        this._setEventHandler("load", v);
       },
     },
     getComputedStyle: {
-      value: function (t) {
-        return t.style;
+      value: function (elt) {
+        return elt.style;
       },
     },
   });
-  vr.expose(Mc(), ya);
-  vr.expose(ni(), ya);
+  utils.expose(require_WindowTimers(), Window);
+  utils.expose(require_impl(), Window);
 });
-
-export { ii };
+export { require_Window };

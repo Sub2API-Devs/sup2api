@@ -9,27 +9,30 @@
  * attribution: placement 9
  */
 import { getOauthConfig } from "./oauth.js";
-import { pw } from "../utils/localhost.js";
+import { isLoopbackHost } from "../utils/localhost.js";
 
+//@ chunk-yxnffbzs.js:1875-1955 placement
 /**
  * 当前 claude.ai 是 staging 还是 prod。
  */
-//@ chunk-yxnffbzs.js:1875-1955 placement
 function claudeAiEnvironment() {
   return getOauthConfig().CLAUDE_AI_ORIGIN.includes("staging") ? "staging" : "prod";
 }
 //@ chunk-yxnffbzs.js:1955-2005 placement
-function aCi() {
-  return de() ?? getOauthConfig().CLAUDE_AI_ORIGIN;
+/**
+ * 函数 getClaudeAiOrigin（claude.ai 源（可被覆盖））。
+ */
+function getClaudeAiOrigin() {
+  return getClaudeAiOriginOverride() ?? getOauthConfig().CLAUDE_AI_ORIGIN;
 }
 //@ chunk-yxnffbzs.js:2005-2026 placement
-function de() {
+function getClaudeAiOriginOverride() {
   return;
 }
+//@ chunk-yxnffbzs.js:2026-2338 placement
 /**
  * 规范化 URL 的源（https/wss、本地 http）。
  */
-//@ chunk-yxnffbzs.js:2026-2338 placement
 function normalizeOriginUrl(e) {
   let n;
   try {
@@ -37,8 +40,8 @@ function normalizeOriginUrl(e) {
   } catch {
     return;
   }
-  let r = pw(n.hostname),
-    o;
+  let r = isLoopbackHost(n.hostname);
+  let o;
   switch (n.protocol) {
     case "https:":
     case "wss:":
@@ -57,24 +60,42 @@ function normalizeOriginUrl(e) {
   return `${o}//${n.host}`;
 }
 //@ chunk-yxnffbzs.js:2338-2362 placement
-function lCi() {
-  return !1;
+/**
+ * 函数 isClaudeAiCpOverride（恒 false 的 cp 覆盖开关）。
+ */
+function isClaudeAiCpOverride() {
+  return false;
 }
 //@ chunk-yxnffbzs.js:2362-2408 placement
-function dCi() {
-  return _e() ?? getOauthConfig().BASE_API_URL;
+/**
+ * 函数 getBaseApiUrl（BASE_API_URL（可被覆盖））。
+ */
+function getBaseApiUrl() {
+  return getBaseApiUrlOverride() ?? getOauthConfig().BASE_API_URL;
 }
 //@ chunk-yxnffbzs.js:2408-2429 placement
-function _e() {
+function getBaseApiUrlOverride() {
   return;
 }
 //@ chunk-yxnffbzs.js:2429-2453 placement
-function cCi() {
-  return !1;
+/**
+ * 函数 isBaseApiCpOverride（恒 false 的 cp 覆盖开关）。
+ */
+function isBaseApiCpOverride() {
+  return false;
 }
 //@ chunk-yxnffbzs.js:2453-2475 placement
-function HBe() {
+/**
+ * 函数 getArtifactHostOverride（artifact 主机覆盖（当前恒为 undefined））。
+ */
+function getArtifactHostOverride() {
   return;
 }
-
-export { HBe, claudeAiEnvironment, lCi, dCi, cCi, aCi };
+export {
+  getArtifactHostOverride,
+  claudeAiEnvironment,
+  isClaudeAiCpOverride,
+  getBaseApiUrl,
+  isBaseApiCpOverride,
+  getClaudeAiOrigin,
+};

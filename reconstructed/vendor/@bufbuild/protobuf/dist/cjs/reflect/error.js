@@ -8,21 +8,28 @@
 import { x } from "../../../../../../runtime/bun-runtime.js";
 
 //@ chunk-fq0cr76a.js:321068-321485 cjs-require-graph
-var op = x(function (EN) {
-  Object.defineProperty(EN, "__esModule", { value: !0 });
-  EN.FieldError = void 0;
-  EN.isFieldError = $q;
-  var Mq = ["FieldValueInvalidError", "FieldListRangeError", "ForeignFieldError"];
-  class SN extends Error {
-    constructor(e, n, r = "FieldValueInvalidError") {
-      super(n);
-      ((this.name = r), (this.field = () => e));
+var require_error_2 = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.FieldError = undefined;
+  cjsExports.isFieldError = isFieldError;
+  var errorNames = ["FieldValueInvalidError", "FieldListRangeError", "ForeignFieldError"];
+  class FieldError extends Error {
+    constructor(fieldOrOneof, message, name = "FieldValueInvalidError") {
+      super(message);
+      this.name = name;
+      this.field = () => fieldOrOneof;
     }
   }
-  EN.FieldError = SN;
-  function $q(e) {
-    return e instanceof Error && Mq.includes(e.name) && "field" in e && typeof e.field == "function";
+  cjsExports.FieldError = FieldError;
+  function isFieldError(arg) {
+    return (
+      arg instanceof Error &&
+      errorNames.includes(arg.name) &&
+      "field" in arg &&
+      typeof arg.field == "function"
+    );
   }
 });
-
-export { op };
+export { require_error_2 };

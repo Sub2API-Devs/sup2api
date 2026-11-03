@@ -26,21 +26,21 @@ ${sliced.join(`
 //@ chunk-wyqg6m3h.js:11748-11820 placement
 var ASK_CUT_NOTE = "(The rest of this diff was cut: it did not fit in the prompt.)";
 //@ chunk-wyqg6m3h.js:11820-12004 placement
-function fittedAskTextOf(e, o) {
-  if (e.length <= o) return e;
-  let r = [],
-    s = ASK_CUT_NOTE.length;
-  for (let a of e.split(`
+function fittedAskTextOf(text, o) {
+  if (text.length <= o) return text;
+  let r = [];
+  let s = ASK_CUT_NOTE.length;
+  for (let line of text.split(`
 `)) {
-    let i = a.length + 1;
+    let i = line.length + 1;
     if (s + i > o) break;
-    (r.push(a), (s += i));
+    r.push(line);
+    s += i;
   }
   return r.length > 1
     ? `${r.join(`
 `)}
 ${ASK_CUT_NOTE}`
-    : void 0;
+    : undefined;
 }
-
 export { ASK_CUT_NOTE, armedAskOf, fittedAskTextOf };

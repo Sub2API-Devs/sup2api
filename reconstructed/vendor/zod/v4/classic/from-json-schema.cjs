@@ -6,71 +6,607 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { Ju } from "../core/registries.cjs";
-import { Ee } from "../core/util.cjs";
-import { Ah } from "./checks.cjs";
-import { zh } from "./iso.cjs";
-import { ra } from "./schemas.cjs";
+import { require_registries } from "../core/registries.cjs";
+import { require_util } from "../core/util.cjs";
+import { require_checks_2 } from "./checks.cjs";
+import { require_iso } from "./iso.cjs";
+import { require_schemas_2 } from "./schemas.cjs";
 
 //@ chunk-1ny7cxrt.js:630542-644420 cjs-fingerprint
-var FT = x(function (ci) {
-  var aQ =
-      (ci && ci.__createBinding) ||
-      (Object.create
-        ? function (e, t, n, o) {
-            if (o === void 0) o = n;
-            var ownPropertyDescriptor = Object.getOwnPropertyDescriptor(t, n);
-            if (
-              !ownPropertyDescriptor ||
-              ("get" in ownPropertyDescriptor
-                ? !t.__esModule
-                : ownPropertyDescriptor.writable || ownPropertyDescriptor.configurable)
-            )
-              ownPropertyDescriptor = {
-                enumerable: !0,
-                get: function () {
-                  return t[n];
-                },
-              };
-            Object.defineProperty(e, o, ownPropertyDescriptor);
-          }
-        : function (e, t, n, o) {
-            if (o === void 0) o = n;
-            e[o] = t[n];
-          }),
-    lQ =
-      (ci && ci.__setModuleDefault) ||
-      (Object.create
-        ? function (e, t) {
-            Object.defineProperty(e, "default", { enumerable: !0, value: t });
-          }
-        : function (e, t) {
-            e.default = t;
-          }),
-    pb =
-      (ci && ci.__importStar) ||
-      function (e) {
-        if (e && e.__esModule) return e;
-        var t = {};
-        if (e != null) {
-          for (var key in e)
-            if (key !== "default" && Object.prototype.hasOwnProperty.call(e, key)) aQ(t, e, key);
+var require_from_json_schema = x(function (cjsExports) {
+  var __createBinding =
+    (cjsExports && cjsExports.__createBinding) ||
+    (Object.create
+      ? function (o_2, m, k, k2) {
+          if (k2 === undefined) k2 = k;
+          var desc = Object.getOwnPropertyDescriptor(m, k);
+          if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable))
+            desc = {
+              enumerable: true,
+              get: function () {
+                return m[k];
+              },
+            };
+          Object.defineProperty(o_2, k2, desc);
         }
-        return (lQ(t, e), t);
-      };
-  Object.defineProperty(ci, "__esModule", { value: !0 });
-  ci.fromJSONSchema = wQ;
-  var UT = Ju(),
-    ac = Ee(),
-    cQ = pb(Ah()),
-    uQ = pb(zh()),
-    dQ = pb(ra()),
-    $e = { ...dQ, ...cQ, iso: uQ },
-    fQ = new Set([
-      "$schema",
-      "$ref",
-      "$defs",
-      "definitions",
+      : function (o_2, m, k, k2) {
+          if (k2 === undefined) k2 = k;
+          o_2[k2] = m[k];
+        });
+  var __setModuleDefault =
+    (cjsExports && cjsExports.__setModuleDefault) ||
+    (Object.create
+      ? function (o, v) {
+          Object.defineProperty(o, "default", {
+            enumerable: true,
+            value: v,
+          });
+        }
+      : function (o, v) {
+          o.default = v;
+        });
+  var __importStar =
+    (cjsExports && cjsExports.__importStar) ||
+    function (mod) {
+      if (mod && mod.__esModule) return mod;
+      var result = {};
+      if (mod != null) {
+        for (var k in mod)
+          if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k))
+            __createBinding(result, mod, k);
+      }
+      __setModuleDefault(result, mod);
+      return result;
+    };
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.fromJSONSchema = fromJSONSchema;
+  var registries_js_1 = require_registries();
+  var util_js_1 = require_util();
+  var _checks = __importStar(require_checks_2());
+  var _iso = __importStar(require_iso());
+  var _schemas = __importStar(require_schemas_2());
+  var z = {
+    ..._schemas,
+    ..._checks,
+    iso: _iso,
+  };
+  var RECOGNIZED_KEYS = new Set([
+    "$schema",
+    "$ref",
+    "$defs",
+    "definitions",
+    "$id",
+    "id",
+    "$comment",
+    "$anchor",
+    "$vocabulary",
+    "$dynamicRef",
+    "$dynamicAnchor",
+    "type",
+    "enum",
+    "const",
+    "anyOf",
+    "oneOf",
+    "allOf",
+    "not",
+    "properties",
+    "required",
+    "additionalProperties",
+    "patternProperties",
+    "propertyNames",
+    "minProperties",
+    "maxProperties",
+    "items",
+    "prefixItems",
+    "additionalItems",
+    "minItems",
+    "maxItems",
+    "uniqueItems",
+    "contains",
+    "minContains",
+    "maxContains",
+    "minLength",
+    "maxLength",
+    "pattern",
+    "format",
+    "minimum",
+    "maximum",
+    "exclusiveMinimum",
+    "exclusiveMaximum",
+    "multipleOf",
+    "description",
+    "default",
+    "contentEncoding",
+    "contentMediaType",
+    "contentSchema",
+    "unevaluatedItems",
+    "unevaluatedProperties",
+    "if",
+    "then",
+    "else",
+    "dependentSchemas",
+    "dependentRequired",
+    "nullable",
+    "readOnly",
+  ]);
+  function detectVersion(schema, defaultTarget) {
+    let $schema = schema.$schema;
+    if ($schema === "https://json-schema.org/draft/2020-12/schema") return "draft-2020-12";
+    if ($schema === "http://json-schema.org/draft-07/schema#") return "draft-7";
+    if ($schema === "http://json-schema.org/draft-04/schema#") return "draft-4";
+    return defaultTarget ?? "draft-2020-12";
+  }
+  function applyMinItems(items, minItems) {
+    return items.map((item, index) => (index < minItems ? item : item.optional()));
+  }
+  function decodeJSONPointerSegment(segment) {
+    return segment.replace(/~1/g, "/").replace(/~0/g, "~");
+  }
+  function resolveRef(ref, ctx) {
+    if (!ref.startsWith("#"))
+      throw Error("External $ref is not supported, only local refs (#/...) are allowed");
+    let path = ref.slice(1).split("/").filter(Boolean);
+    if (path.length === 0) return ctx.rootSchema;
+    let defsKey = ctx.version === "draft-2020-12" ? "$defs" : "definitions";
+    if (path[0] === defsKey) {
+      let key = path[1] === undefined ? undefined : decodeJSONPointerSegment(path[1]);
+      if (!key || !ctx.defs[key]) throw Error(`Reference not found: ${ref}`);
+      return ctx.defs[key];
+    }
+    throw Error(`Reference not found: ${ref}`);
+  }
+  function checkObjectGuards(objectSchema, guards) {
+    return z
+      .transform((value) => value)
+      .check((payload) => {
+        let value = payload.value;
+        if (typeof value !== "object" || value === null || Array.isArray(value)) return;
+        let keys = Object.getOwnPropertyNames(value);
+        if (guards.minProperties !== undefined && keys.length < guards.minProperties)
+          payload.issues.push({
+            origin: "object",
+            code: "too_small",
+            minimum: guards.minProperties,
+            inclusive: true,
+            message: `Too small: expected object to have >=${guards.minProperties} properties`,
+            input: value,
+            inst: objectSchema,
+            continue: true,
+          });
+        if (guards.maxProperties !== undefined && keys.length > guards.maxProperties)
+          payload.issues.push({
+            origin: "object",
+            code: "too_big",
+            maximum: guards.maxProperties,
+            inclusive: true,
+            message: `Too big: expected object to have <=${guards.maxProperties} properties`,
+            input: value,
+            inst: objectSchema,
+            continue: true,
+          });
+        if (guards.keySchema)
+          for (let key of keys) {
+            let result = guards.keySchema.safeParse(key);
+            if (result.success) continue;
+            payload.issues.push({
+              code: "invalid_key",
+              origin: "record",
+              issues: result.error.issues,
+              input: key,
+              path: [key],
+              continue: true,
+            });
+          }
+      })
+      .pipe(objectSchema);
+  }
+  function canonicalKey(value, seen) {
+    if (value === null) return "z";
+    let type = typeof value;
+    if (type !== "object") {
+      if (type === "number" && Number.isNaN(value)) return null;
+      let raw = String(value);
+      return `${type[0]}${raw.length}:${raw}`;
+    }
+    if (seen.has(value)) return null;
+    seen.add(value);
+    try {
+      if (Array.isArray(value)) {
+        let parts = [];
+        for (let item of value) {
+          let key = canonicalKey(item, seen);
+          if (key === null) return null;
+          parts.push(key);
+        }
+        return `a${parts.length}:[${parts.join(",")}]`;
+      }
+      let keys = Object.keys(value).sort();
+      let parts = [];
+      for (let k of keys) {
+        let key = canonicalKey(value[k], seen);
+        if (key === null) return null;
+        parts.push(`${k.length}:${k}=${key}`);
+      }
+      return `o${parts.length}:{${parts.join(",")}}`;
+    } finally {
+      seen.delete(value);
+    }
+  }
+  var SCHEMA_KEYWORDS = new Set([
+    "items",
+    "prefixItems",
+    "additionalItems",
+    "additionalProperties",
+    "contains",
+    "propertyNames",
+    "not",
+    "if",
+    "then",
+    "else",
+    "allOf",
+    "anyOf",
+    "oneOf",
+    "unevaluatedItems",
+    "unevaluatedProperties",
+    "contentSchema",
+  ]);
+  var SCHEMA_MAP_KEYWORDS = new Set([
+    "properties",
+    "patternProperties",
+    "dependentSchemas",
+    "dependencies",
+    "$defs",
+    "definitions",
+  ]);
+  function containsRef(value) {
+    if (typeof value !== "object" || value === null) return false;
+    if (Array.isArray(value)) return value.some(containsRef);
+    if (typeof value.$ref === "string") return true;
+    return Object.entries(value).some(([key, sub]) => {
+      if (SCHEMA_KEYWORDS.has(key)) return containsRef(sub);
+      if (!SCHEMA_MAP_KEYWORDS.has(key) || typeof sub !== "object" || sub === null) return false;
+      return Object.values(sub).some(containsRef);
+    });
+  }
+  function plural(n) {
+    return n === 1 ? "element" : "elements";
+  }
+  function checkArrayGuards(arraySchema, guards) {
+    return z
+      .transform((value) => value)
+      .check((payload) => {
+        let items = payload.value;
+        if (!Array.isArray(items)) return;
+        if (guards.uniqueItems === true) {
+          let firstSeen = new Map();
+          for (let i = 0; i < items.length; i++) {
+            let key = canonicalKey(items[i], new Set());
+            if (key === null) continue;
+            let first = firstSeen.get(key);
+            if (first === undefined) {
+              firstSeen.set(key, i);
+              continue;
+            }
+            payload.issues.push({
+              code: "custom",
+              message: `Array items must be unique: element at index ${i} duplicates the one at index ${first}`,
+              input: items,
+              path: [i],
+              continue: true,
+            });
+          }
+        }
+        if (guards.containsSchema) {
+          let minContains = guards.minContains ?? 1;
+          let ceiling = guards.maxContains !== undefined ? guards.maxContains + 1 : Number.POSITIVE_INFINITY;
+          let matches = 0;
+          for (let item of items)
+            if (guards.containsSchema.safeParse(item).success && ++matches >= ceiling) break;
+          if (matches < minContains)
+            payload.issues.push({
+              code: "custom",
+              message: `Array must contain at least ${minContains} matching ${plural(minContains)}; found ${matches}`,
+              input: items,
+              continue: true,
+            });
+          if (guards.maxContains !== undefined && matches > guards.maxContains)
+            payload.issues.push({
+              code: "custom",
+              message: `Array must contain at most ${guards.maxContains} matching ${plural(guards.maxContains)}`,
+              input: items,
+              continue: true,
+            });
+        }
+      })
+      .pipe(arraySchema);
+  }
+  function getTupleRest(restSchema, ctx) {
+    if (restSchema === false) return;
+    if (restSchema === undefined || restSchema === true) return z.any();
+    return convertSchema(restSchema, ctx);
+  }
+  var fullTime = /^(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/;
+  function convertBaseSchema(schema, ctx) {
+    if (schema.not !== undefined) {
+      if (typeof schema.not === "object" && Object.keys(schema.not).length === 0) return z.never();
+      throw Error("not is not supported in Zod (except { not: {} } for never)");
+    }
+    if (schema.unevaluatedItems !== undefined) throw Error("unevaluatedItems is not supported");
+    if (schema.unevaluatedProperties !== undefined) throw Error("unevaluatedProperties is not supported");
+    if (schema.if !== undefined || schema.then !== undefined || schema.else !== undefined)
+      throw Error("Conditional schemas (if/then/else) are not supported");
+    if (schema.dependentSchemas !== undefined || schema.dependentRequired !== undefined)
+      throw Error("dependentSchemas and dependentRequired are not supported");
+    if (schema.$ref) {
+      let refPath = schema.$ref;
+      if (ctx.refs.has(refPath)) return ctx.refs.get(refPath);
+      if (ctx.processing.has(refPath))
+        return z.lazy(() => {
+          if (!ctx.refs.has(refPath)) throw Error(`Circular reference not resolved: ${refPath}`);
+          return ctx.refs.get(refPath);
+        });
+      ctx.processing.add(refPath);
+      let resolved = resolveRef(refPath, ctx);
+      let zodSchema = convertSchema(resolved, ctx);
+      ctx.refs.set(refPath, zodSchema);
+      ctx.processing.delete(refPath);
+      return zodSchema;
+    }
+    if (schema.enum !== undefined) {
+      let enumValues = schema.enum;
+      if (
+        ctx.version === "openapi-3.0" &&
+        schema.nullable === true &&
+        enumValues.length === 1 &&
+        enumValues[0] === null
+      )
+        return z.null();
+      if (enumValues.length === 0) return z.never();
+      if (enumValues.length === 1) return z.literal(enumValues[0]);
+      if (enumValues.every((v) => typeof v === "string")) return z.enum(enumValues);
+      let literalSchemas = enumValues.map((v) => z.literal(v));
+      if (literalSchemas.length < 2) return literalSchemas[0];
+      return z.union([literalSchemas[0], literalSchemas[1], ...literalSchemas.slice(2)]);
+    }
+    if (schema.const !== undefined) return z.literal(schema.const);
+    let type = schema.type;
+    if (Array.isArray(type)) {
+      let typeSchemas = type.map((t) => {
+        let typeSchema = {
+          ...schema,
+          type: t,
+        };
+        return convertBaseSchema(typeSchema, ctx);
+      });
+      if (typeSchemas.length === 0) return z.never();
+      if (typeSchemas.length === 1) return typeSchemas[0];
+      return z.union(typeSchemas);
+    }
+    if (!type) return z.any();
+    let zodSchema;
+    switch (type) {
+      case "string": {
+        let stringSchema = z.string();
+        if (schema.format) {
+          let format = schema.format;
+          if (format === "email") stringSchema = stringSchema.check(z.email());
+          else if (format === "uri" || format === "uri-reference") stringSchema = stringSchema.check(z.url());
+          else if (format === "uuid" || format === "guid") stringSchema = stringSchema.check(z.uuid());
+          else if (format === "date-time")
+            stringSchema = stringSchema.check(
+              z.iso.datetime({
+                offset: true,
+              }),
+            );
+          else if (format === "date") stringSchema = stringSchema.check(z.iso.date());
+          else if (format === "time") stringSchema = stringSchema.check(z.regex(fullTime));
+          else if (format === "duration") stringSchema = stringSchema.check(z.iso.duration());
+          else if (format === "hostname") stringSchema = stringSchema.check(z.hostname());
+          else if (format === "ipv4") stringSchema = stringSchema.check(z.ipv4());
+          else if (format === "ipv6") stringSchema = stringSchema.check(z.ipv6());
+          else if (format === "mac") stringSchema = stringSchema.check(z.mac());
+          else if (format === "cidr") stringSchema = stringSchema.check(z.cidrv4());
+          else if (format === "cidr-v6") stringSchema = stringSchema.check(z.cidrv6());
+          else if (format === "base64") stringSchema = stringSchema.check(z.base64());
+          else if (format === "base64url") stringSchema = stringSchema.check(z.base64url());
+          else if (format === "e164") stringSchema = stringSchema.check(z.e164());
+          else if (format === "credit_card") stringSchema = stringSchema.check(z.creditCard());
+          else if (format === "iban") stringSchema = stringSchema.check(z.iban());
+          else if (format === "jwt") stringSchema = stringSchema.check(z.jwt());
+          else if (format === "emoji") stringSchema = stringSchema.check(z.emoji());
+          else if (format === "nanoid") stringSchema = stringSchema.check(z.nanoid());
+          else if (format === "cuid") stringSchema = stringSchema.check(z.cuid());
+          else if (format === "cuid2") stringSchema = stringSchema.check(z.cuid2());
+          else if (format === "ulid") stringSchema = stringSchema.check(z.ulid());
+          else if (format === "xid") stringSchema = stringSchema.check(z.xid());
+          else if (format === "ksuid") stringSchema = stringSchema.check(z.ksuid());
+        }
+        if (typeof schema.minLength === "number") stringSchema = stringSchema.min(schema.minLength);
+        if (typeof schema.maxLength === "number") stringSchema = stringSchema.max(schema.maxLength);
+        if (schema.pattern) stringSchema = stringSchema.regex(new RegExp(schema.pattern));
+        zodSchema = stringSchema;
+        break;
+      }
+      case "number":
+      case "integer": {
+        let numberSchema = type === "integer" ? z.number().int() : z.number();
+        if (typeof schema.minimum === "number" && schema.exclusiveMinimum !== true)
+          numberSchema = numberSchema.min(schema.minimum);
+        if (typeof schema.maximum === "number" && schema.exclusiveMaximum !== true)
+          numberSchema = numberSchema.max(schema.maximum);
+        if (typeof schema.exclusiveMinimum === "number")
+          numberSchema = numberSchema.gt(schema.exclusiveMinimum);
+        else if (schema.exclusiveMinimum === true && typeof schema.minimum === "number")
+          numberSchema = numberSchema.gt(schema.minimum);
+        if (typeof schema.exclusiveMaximum === "number")
+          numberSchema = numberSchema.lt(schema.exclusiveMaximum);
+        else if (schema.exclusiveMaximum === true && typeof schema.maximum === "number")
+          numberSchema = numberSchema.lt(schema.maximum);
+        if (typeof schema.multipleOf === "number") numberSchema = numberSchema.multipleOf(schema.multipleOf);
+        zodSchema = numberSchema;
+        break;
+      }
+      case "boolean": {
+        zodSchema = z.boolean();
+        break;
+      }
+      case "null": {
+        zodSchema = z.null();
+        break;
+      }
+      case "object": {
+        let shape = {};
+        let properties = schema.properties || {};
+        let requiredSet = new Set(schema.required || []);
+        let additionalSchema =
+          typeof schema.additionalProperties === "object"
+            ? convertSchema(schema.additionalProperties, ctx)
+            : undefined;
+        for (let [key, propSchema] of Object.entries(properties)) {
+          let propZodSchema = convertSchema(propSchema, ctx);
+          util_js_1.assignProp(shape, key, requiredSet.has(key) ? propZodSchema : propZodSchema.optional());
+        }
+        if (schema.patternProperties) {
+          let patternProps = schema.patternProperties;
+          let patternKeys = Object.keys(patternProps);
+          let looseRecords = [];
+          for (let pattern of patternKeys) {
+            let patternValue = convertSchema(patternProps[pattern], ctx);
+            let keySchema = z.string().regex(new RegExp(pattern));
+            looseRecords.push(z.looseRecord(keySchema, patternValue));
+          }
+          let schemasToIntersect = [];
+          if (Object.keys(shape).length > 0) schemasToIntersect.push(z.object(shape).passthrough());
+          schemasToIntersect.push(...looseRecords);
+          if (schemasToIntersect.length === 0) zodSchema = z.object({}).passthrough();
+          else if (schemasToIntersect.length === 1) zodSchema = schemasToIntersect[0];
+          else {
+            let result = z.intersection(schemasToIntersect[0], schemasToIntersect[1]);
+            for (let i = 2; i < schemasToIntersect.length; i++)
+              result = z.intersection(result, schemasToIntersect[i]);
+            zodSchema = result;
+          }
+          if (schema.additionalProperties === false) {
+            let propertyKeys = Object.keys(shape);
+            let patterns = patternKeys.map((p) => new RegExp(p));
+            let basePatternSchema = zodSchema;
+            zodSchema = zodSchema.check((payload) => {
+              if (!util_js_1.isPlainObject(payload.value)) return;
+              let unrecognized = [];
+              for (let key of Object.keys(payload.value)) {
+                if (propertyKeys.includes(key)) continue;
+                if (patterns.some((regex) => regex.test(key))) continue;
+                unrecognized.push(key);
+              }
+              if (unrecognized.length)
+                payload.issues.push({
+                  code: "unrecognized_keys",
+                  keys: unrecognized,
+                  input: payload.value,
+                  inst: basePatternSchema,
+                });
+            });
+          }
+        } else {
+          let objectSchema = z.object(shape);
+          if (schema.additionalProperties === false) zodSchema = objectSchema.strict();
+          else if (additionalSchema) zodSchema = objectSchema.catchall(additionalSchema);
+          else zodSchema = objectSchema.passthrough();
+        }
+        let hasKeyGuard = schema.propertyNames !== undefined && schema.propertyNames !== true;
+        let minProperties = typeof schema.minProperties === "number" ? schema.minProperties : undefined;
+        let maxProperties = typeof schema.maxProperties === "number" ? schema.maxProperties : undefined;
+        if (hasKeyGuard || minProperties !== undefined || maxProperties !== undefined) {
+          let keySchema;
+          if (hasKeyGuard) {
+            let keyJSONSchema =
+              typeof schema.propertyNames === "object" && schema.propertyNames.type === undefined
+                ? {
+                    type: "string",
+                    ...schema.propertyNames,
+                  }
+                : schema.propertyNames;
+            keySchema = convertSchema(keyJSONSchema, ctx);
+          }
+          zodSchema = checkObjectGuards(zodSchema, {
+            keySchema,
+            minProperties,
+            maxProperties,
+          });
+        }
+        break;
+      }
+      case "array": {
+        let { prefixItems, items } = schema;
+        if (prefixItems && Array.isArray(prefixItems)) {
+          let minItems = typeof schema.minItems === "number" ? schema.minItems : 0;
+          let tupleItems = prefixItems.map((item) => convertSchema(item, ctx));
+          let positionalItems = applyMinItems(tupleItems, minItems);
+          let rest = !Array.isArray(items) ? getTupleRest(items, ctx) : undefined;
+          let tupleSchema = z.tuple(positionalItems);
+          zodSchema = rest ? tupleSchema.rest(rest) : tupleSchema;
+          if (typeof schema.minItems === "number") zodSchema = zodSchema.check(z.minLength(schema.minItems));
+          if (typeof schema.maxItems === "number") zodSchema = zodSchema.check(z.maxLength(schema.maxItems));
+        } else if (Array.isArray(items)) {
+          let minItems = typeof schema.minItems === "number" ? schema.minItems : 0;
+          let tupleItems = items.map((item) => convertSchema(item, ctx));
+          let positionalItems = applyMinItems(tupleItems, minItems);
+          let rest = getTupleRest(schema.additionalItems, ctx);
+          let tupleSchema = z.tuple(positionalItems);
+          zodSchema = rest ? tupleSchema.rest(rest) : tupleSchema;
+          if (typeof schema.minItems === "number") zodSchema = zodSchema.check(z.minLength(schema.minItems));
+          if (typeof schema.maxItems === "number") zodSchema = zodSchema.check(z.maxLength(schema.maxItems));
+        } else if (items !== undefined) {
+          let element = convertSchema(items, ctx);
+          let arraySchema = z.array(element);
+          if (typeof schema.minItems === "number") arraySchema = arraySchema.min(schema.minItems);
+          if (typeof schema.maxItems === "number") arraySchema = arraySchema.max(schema.maxItems);
+          zodSchema = arraySchema;
+        } else zodSchema = z.array(z.any());
+        if (schema.uniqueItems === true || schema.contains !== undefined)
+          zodSchema = checkArrayGuards(zodSchema, {
+            uniqueItems: schema.uniqueItems === true,
+            containsSchema: schema.contains !== undefined ? convertSchema(schema.contains, ctx) : undefined,
+            minContains: typeof schema.minContains === "number" ? schema.minContains : undefined,
+            maxContains: typeof schema.maxContains === "number" ? schema.maxContains : undefined,
+          });
+        break;
+      }
+      default:
+        throw Error(`Unsupported type: ${type}`);
+    }
+    return zodSchema;
+  }
+  function convertSchema(schema, ctx) {
+    if (typeof schema === "boolean") return schema ? z.any() : z.never();
+    let baseSchema = convertBaseSchema(schema, ctx);
+    let hasExplicitType = schema.type || schema.enum !== undefined || schema.const !== undefined;
+    if (schema.anyOf && Array.isArray(schema.anyOf)) {
+      let options = schema.anyOf.map((s) => convertSchema(s, ctx));
+      let anyOfUnion = z.union(options);
+      baseSchema = hasExplicitType ? z.intersection(baseSchema, anyOfUnion) : anyOfUnion;
+    }
+    if (schema.oneOf && Array.isArray(schema.oneOf)) {
+      let options = schema.oneOf.map((s) => convertSchema(s, ctx));
+      let oneOfUnion = z.xor(options);
+      baseSchema = hasExplicitType ? z.intersection(baseSchema, oneOfUnion) : oneOfUnion;
+    }
+    if (schema.allOf && Array.isArray(schema.allOf))
+      if (schema.allOf.length === 0) baseSchema = hasExplicitType ? baseSchema : z.any();
+      else {
+        let result = hasExplicitType ? baseSchema : convertSchema(schema.allOf[0], ctx);
+        let startIdx = hasExplicitType ? 0 : 1;
+        for (let i = startIdx; i < schema.allOf.length; i++)
+          result = z.intersection(result, convertSchema(schema.allOf[i], ctx));
+        baseSchema = result;
+      }
+    if (schema.nullable === true && ctx.version === "openapi-3.0") baseSchema = z.nullable(baseSchema);
+    if (schema.readOnly === true) baseSchema = z.readonly(baseSchema);
+    if (schema.default !== undefined) baseSchema = baseSchema.default(schema.default);
+    let extraMeta = {};
+    let coreMetadataKeys = [
       "$id",
       "id",
       "$comment",
@@ -78,548 +614,70 @@ var FT = x(function (ci) {
       "$vocabulary",
       "$dynamicRef",
       "$dynamicAnchor",
-      "type",
-      "enum",
-      "const",
-      "anyOf",
-      "oneOf",
-      "allOf",
-      "not",
-      "properties",
-      "required",
-      "additionalProperties",
-      "patternProperties",
-      "propertyNames",
-      "minProperties",
-      "maxProperties",
-      "items",
-      "prefixItems",
-      "additionalItems",
-      "minItems",
-      "maxItems",
-      "uniqueItems",
-      "contains",
-      "minContains",
-      "maxContains",
-      "minLength",
-      "maxLength",
-      "pattern",
-      "format",
-      "minimum",
-      "maximum",
-      "exclusiveMinimum",
-      "exclusiveMaximum",
-      "multipleOf",
-      "description",
-      "default",
-      "contentEncoding",
-      "contentMediaType",
-      "contentSchema",
-      "unevaluatedItems",
-      "unevaluatedProperties",
-      "if",
-      "then",
-      "else",
-      "dependentSchemas",
-      "dependentRequired",
-      "nullable",
-      "readOnly",
-    ]);
-  function pQ(e, t) {
-    let $schema = e.$schema;
-    if ($schema === "https://json-schema.org/draft/2020-12/schema") return "draft-2020-12";
-    if ($schema === "http://json-schema.org/draft-07/schema#") return "draft-7";
-    if ($schema === "http://json-schema.org/draft-04/schema#") return "draft-4";
-    return t ?? "draft-2020-12";
-  }
-  function xT(e, t) {
-    return e.map((n, o) => (o < t ? n : n.optional()));
-  }
-  function hQ(e) {
-    return e.replace(/~1/g, "/").replace(/~0/g, "~");
-  }
-  function mQ(e, t) {
-    if (!e.startsWith("#"))
-      throw Error("External $ref is not supported, only local refs (#/...) are allowed");
-    let filtered = e.slice(1).split("/").filter(Boolean);
-    if (filtered.length === 0) return t.rootSchema;
-    let o = t.version === "draft-2020-12" ? "$defs" : "definitions";
-    if (filtered[0] === o) {
-      let r = filtered[1] === void 0 ? void 0 : hQ(filtered[1]);
-      if (!r || !t.defs[r]) throw Error(`Reference not found: ${e}`);
-      return t.defs[r];
+    ];
+    for (let key of coreMetadataKeys) if (key in schema) extraMeta[key] = schema[key];
+    let contentMetadataKeys = ["contentEncoding", "contentMediaType", "contentSchema"];
+    for (let key of contentMetadataKeys) if (key in schema) extraMeta[key] = schema[key];
+    if (schema.type === "object" && schema.$ref === undefined) {
+      if (schema.propertyNames !== undefined && !containsRef(schema.propertyNames))
+        extraMeta.propertyNames = schema.propertyNames;
+      for (let key of ["minProperties", "maxProperties"])
+        if (schema[key] !== undefined) extraMeta[key] = schema[key];
     }
-    throw Error(`Reference not found: ${e}`);
-  }
-  function gQ(e, t) {
-    return $e
-      .transform((o) => o)
-      .check((o) => {
-        let r = o.value;
-        if (typeof r !== "object" || r === null || Array.isArray(r)) return;
-        let ownPropertyNames = Object.getOwnPropertyNames(r);
-        if (t.minProperties !== void 0 && ownPropertyNames.length < t.minProperties)
-          o.issues.push({
-            origin: "object",
-            code: "too_small",
-            minimum: t.minProperties,
-            inclusive: !0,
-            message: `Too small: expected object to have >=${t.minProperties} properties`,
-            input: r,
-            inst: e,
-            continue: !0,
-          });
-        if (t.maxProperties !== void 0 && ownPropertyNames.length > t.maxProperties)
-          o.issues.push({
-            origin: "object",
-            code: "too_big",
-            maximum: t.maxProperties,
-            inclusive: !0,
-            message: `Too big: expected object to have <=${t.maxProperties} properties`,
-            input: r,
-            inst: e,
-            continue: !0,
-          });
-        if (t.keySchema)
-          for (let a of ownPropertyNames) {
-            let safeParse = t.keySchema.safeParse(a);
-            if (safeParse.success) continue;
-            o.issues.push({
-              code: "invalid_key",
-              origin: "record",
-              issues: safeParse.error.issues,
-              input: a,
-              path: [a],
-              continue: !0,
-            });
-          }
-      })
-      .pipe(e);
-  }
-  function fb(e, t) {
-    if (e === null) return "z";
-    let n = typeof e;
-    if (n !== "object") {
-      if (n === "number" && Number.isNaN(e)) return null;
-      let o = String(e);
-      return `${n[0]}${o.length}:${o}`;
+    if (schema.type === "array" && schema.$ref === undefined) {
+      if (schema.contains !== undefined && !containsRef(schema.contains))
+        extraMeta.contains = schema.contains;
+      for (let key of ["uniqueItems", "minContains", "maxContains"])
+        if (schema[key] !== undefined) extraMeta[key] = schema[key];
     }
-    if (t.has(e)) return null;
-    t.add(e);
+    for (let key of Object.keys(schema))
+      if (!RECOGNIZED_KEYS.has(key)) util_js_1.assignProp(extraMeta, key, schema[key]);
+    if (Object.keys(extraMeta).length > 0) ctx.registry.add(baseSchema, extraMeta);
+    if (schema.description) baseSchema = baseSchema.describe(schema.description);
+    return baseSchema;
+  }
+  function fromJSONSchema(schema, params) {
+    if (typeof schema === "boolean") return schema ? z.any() : z.never();
+    let normalized;
     try {
-      if (Array.isArray(e)) {
-        let s = [];
-        for (let a of e) {
-          let l = fb(a, t);
-          if (l === null) return null;
-          s.push(l);
-        }
-        return `a${s.length}:[${s.join(",")}]`;
-      }
-      let sorted = Object.keys(e).sort(),
-        r = [];
-      for (let s of sorted) {
-        let a = fb(e[s], t);
-        if (a === null) return null;
-        r.push(`${s.length}:${s}=${a}`);
-      }
-      return `o${r.length}:{${r.join(",")}}`;
-    } finally {
-      t.delete(e);
-    }
-  }
-  var yQ = new Set([
-      "items",
-      "prefixItems",
-      "additionalItems",
-      "additionalProperties",
-      "contains",
-      "propertyNames",
-      "not",
-      "if",
-      "then",
-      "else",
-      "allOf",
-      "anyOf",
-      "oneOf",
-      "unevaluatedItems",
-      "unevaluatedProperties",
-      "contentSchema",
-    ]),
-    _Q = new Set([
-      "properties",
-      "patternProperties",
-      "dependentSchemas",
-      "dependencies",
-      "$defs",
-      "definitions",
-    ]);
-  function rd(e) {
-    if (typeof e !== "object" || e === null) return !1;
-    if (Array.isArray(e)) return e.some(rd);
-    if (typeof e.$ref === "string") return !0;
-    return Object.entries(e).some(([t, n]) => {
-      if (yQ.has(t)) return rd(n);
-      if (!_Q.has(t) || typeof n !== "object" || n === null) return !1;
-      return Object.values(n).some(rd);
-    });
-  }
-  function LT(e) {
-    return e === 1 ? "element" : "elements";
-  }
-  function bQ(e, t) {
-    return $e
-      .transform((o) => o)
-      .check((o) => {
-        let r = o.value;
-        if (!Array.isArray(r)) return;
-        if (t.uniqueItems === !0) {
-          let s = new Map();
-          for (let a = 0; a < r.length; a++) {
-            let l = fb(r[a], new Set());
-            if (l === null) continue;
-            let c = s.get(l);
-            if (c === void 0) {
-              s.set(l, a);
-              continue;
-            }
-            o.issues.push({
-              code: "custom",
-              message: `Array items must be unique: element at index ${a} duplicates the one at index ${c}`,
-              input: r,
-              path: [a],
-              continue: !0,
-            });
-          }
-        }
-        if (t.containsSchema) {
-          let s = t.minContains ?? 1,
-            a = t.maxContains !== void 0 ? t.maxContains + 1 : Number.POSITIVE_INFINITY,
-            l = 0;
-          for (let c of r) if (t.containsSchema.safeParse(c).success && ++l >= a) break;
-          if (l < s)
-            o.issues.push({
-              code: "custom",
-              message: `Array must contain at least ${s} matching ${LT(s)}; found ${l}`,
-              input: r,
-              continue: !0,
-            });
-          if (t.maxContains !== void 0 && l > t.maxContains)
-            o.issues.push({
-              code: "custom",
-              message: `Array must contain at most ${t.maxContains} matching ${LT(t.maxContains)}`,
-              input: r,
-              continue: !0,
-            });
-        }
-      })
-      .pipe(e);
-  }
-  function NT(e, t) {
-    if (e === !1) return;
-    if (e === void 0 || e === !0) return $e.any();
-    return Fr(e, t);
-  }
-  var vQ = /^(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/;
-  function zT(e, t) {
-    if (e.not !== void 0) {
-      if (typeof e.not === "object" && Object.keys(e.not).length === 0) return $e.never();
-      throw Error("not is not supported in Zod (except { not: {} } for never)");
-    }
-    if (e.unevaluatedItems !== void 0) throw Error("unevaluatedItems is not supported");
-    if (e.unevaluatedProperties !== void 0) throw Error("unevaluatedProperties is not supported");
-    if (e.if !== void 0 || e.then !== void 0 || e.else !== void 0)
-      throw Error("Conditional schemas (if/then/else) are not supported");
-    if (e.dependentSchemas !== void 0 || e.dependentRequired !== void 0)
-      throw Error("dependentSchemas and dependentRequired are not supported");
-    if (e.$ref) {
-      let $ref = e.$ref;
-      if (t.refs.has($ref)) return t.refs.get($ref);
-      if (t.processing.has($ref))
-        return $e.lazy(() => {
-          if (!t.refs.has($ref)) throw Error(`Circular reference not resolved: ${$ref}`);
-          return t.refs.get($ref);
-        });
-      t.processing.add($ref);
-      let s = mQ($ref, t),
-        a = Fr(s, t);
-      return (t.refs.set($ref, a), t.processing.delete($ref), a);
-    }
-    if (e.enum !== void 0) {
-      let r = e.enum;
-      if (t.version === "openapi-3.0" && e.nullable === !0 && r.length === 1 && r[0] === null)
-        return $e.null();
-      if (r.length === 0) return $e.never();
-      if (r.length === 1) return $e.literal(r[0]);
-      if (r.every((a) => typeof a === "string")) return $e.enum(r);
-      let mapped = r.map((a) => $e.literal(a));
-      if (mapped.length < 2) return mapped[0];
-      return $e.union([mapped[0], mapped[1], ...mapped.slice(2)]);
-    }
-    if (e.const !== void 0) return $e.literal(e.const);
-    let n = e.type;
-    if (Array.isArray(n)) {
-      let mapped = n.map((s) => {
-        let a = { ...e, type: s };
-        return zT(a, t);
-      });
-      if (mapped.length === 0) return $e.never();
-      if (mapped.length === 1) return mapped[0];
-      return $e.union(mapped);
-    }
-    if (!n) return $e.any();
-    let o;
-    switch (n) {
-      case "string": {
-        let string = $e.string();
-        if (e.format) {
-          let format = e.format;
-          if (format === "email") string = string.check($e.email());
-          else if (format === "uri" || format === "uri-reference") string = string.check($e.url());
-          else if (format === "uuid" || format === "guid") string = string.check($e.uuid());
-          else if (format === "date-time") string = string.check($e.iso.datetime({ offset: !0 }));
-          else if (format === "date") string = string.check($e.iso.date());
-          else if (format === "time") string = string.check($e.regex(vQ));
-          else if (format === "duration") string = string.check($e.iso.duration());
-          else if (format === "hostname") string = string.check($e.hostname());
-          else if (format === "ipv4") string = string.check($e.ipv4());
-          else if (format === "ipv6") string = string.check($e.ipv6());
-          else if (format === "mac") string = string.check($e.mac());
-          else if (format === "cidr") string = string.check($e.cidrv4());
-          else if (format === "cidr-v6") string = string.check($e.cidrv6());
-          else if (format === "base64") string = string.check($e.base64());
-          else if (format === "base64url") string = string.check($e.base64url());
-          else if (format === "e164") string = string.check($e.e164());
-          else if (format === "credit_card") string = string.check($e.creditCard());
-          else if (format === "iban") string = string.check($e.iban());
-          else if (format === "jwt") string = string.check($e.jwt());
-          else if (format === "emoji") string = string.check($e.emoji());
-          else if (format === "nanoid") string = string.check($e.nanoid());
-          else if (format === "cuid") string = string.check($e.cuid());
-          else if (format === "cuid2") string = string.check($e.cuid2());
-          else if (format === "ulid") string = string.check($e.ulid());
-          else if (format === "xid") string = string.check($e.xid());
-          else if (format === "ksuid") string = string.check($e.ksuid());
-        }
-        if (typeof e.minLength === "number") string = string.min(e.minLength);
-        if (typeof e.maxLength === "number") string = string.max(e.maxLength);
-        if (e.pattern) string = string.regex(new RegExp(e.pattern));
-        o = string;
-        break;
-      }
-      case "number":
-      case "integer": {
-        let r = n === "integer" ? $e.number().int() : $e.number();
-        if (typeof e.minimum === "number" && e.exclusiveMinimum !== !0) r = r.min(e.minimum);
-        if (typeof e.maximum === "number" && e.exclusiveMaximum !== !0) r = r.max(e.maximum);
-        if (typeof e.exclusiveMinimum === "number") r = r.gt(e.exclusiveMinimum);
-        else if (e.exclusiveMinimum === !0 && typeof e.minimum === "number") r = r.gt(e.minimum);
-        if (typeof e.exclusiveMaximum === "number") r = r.lt(e.exclusiveMaximum);
-        else if (e.exclusiveMaximum === !0 && typeof e.maximum === "number") r = r.lt(e.maximum);
-        if (typeof e.multipleOf === "number") r = r.multipleOf(e.multipleOf);
-        o = r;
-        break;
-      }
-      case "boolean": {
-        o = $e.boolean();
-        break;
-      }
-      case "null": {
-        o = $e.null();
-        break;
-      }
-      case "object": {
-        let r = {},
-          s = e.properties || {},
-          a = new Set(e.required || []),
-          l = typeof e.additionalProperties === "object" ? Fr(e.additionalProperties, t) : void 0;
-        for (let [h, m] of Object.entries(s)) {
-          let y = Fr(m, t);
-          ac.assignProp(r, h, a.has(h) ? y : y.optional());
-        }
-        if (e.patternProperties) {
-          let patternProperties = e.patternProperties,
-            keys = Object.keys(patternProperties),
-            y = [];
-          for (let w of keys) {
-            let S = Fr(patternProperties[w], t),
-              regex = $e.string().regex(new RegExp(w));
-            y.push($e.looseRecord(regex, S));
-          }
-          let b = [];
-          if (Object.keys(r).length > 0) b.push($e.object(r).passthrough());
-          if ((b.push(...y), b.length === 0)) o = $e.object({}).passthrough();
-          else if (b.length === 1) o = b[0];
-          else {
-            let intersection = $e.intersection(b[0], b[1]);
-            for (let S = 2; S < b.length; S++) intersection = $e.intersection(intersection, b[S]);
-            o = intersection;
-          }
-          if (e.additionalProperties === !1) {
-            let keys_2 = Object.keys(r),
-              mapped = keys.map((M) => new RegExp(M)),
-              j = o;
-            o = o.check((M) => {
-              if (!ac.isPlainObject(M.value)) return;
-              let N = [];
-              for (let Z of Object.keys(M.value)) {
-                if (keys_2.includes(Z)) continue;
-                if (mapped.some((F) => F.test(Z))) continue;
-                N.push(Z);
-              }
-              if (N.length) M.issues.push({ code: "unrecognized_keys", keys: N, input: M.value, inst: j });
-            });
-          }
-        } else {
-          let object = $e.object(r);
-          if (e.additionalProperties === !1) o = object.strict();
-          else if (l) o = object.catchall(l);
-          else o = object.passthrough();
-        }
-        let c = e.propertyNames !== void 0 && e.propertyNames !== !0,
-          u = typeof e.minProperties === "number" ? e.minProperties : void 0,
-          f = typeof e.maxProperties === "number" ? e.maxProperties : void 0;
-        if (c || u !== void 0 || f !== void 0) {
-          let h;
-          if (c) {
-            let m =
-              typeof e.propertyNames === "object" && e.propertyNames.type === void 0
-                ? { type: "string", ...e.propertyNames }
-                : e.propertyNames;
-            h = Fr(m, t);
-          }
-          o = gQ(o, { keySchema: h, minProperties: u, maxProperties: f });
-        }
-        break;
-      }
-      case "array": {
-        let { prefixItems: prefixItems, items: items } = e;
-        if (prefixItems && Array.isArray(prefixItems)) {
-          let a = typeof e.minItems === "number" ? e.minItems : 0,
-            mapped = prefixItems.map((h) => Fr(h, t)),
-            c = xT(mapped, a),
-            u = !Array.isArray(items) ? NT(items, t) : void 0,
-            tuple = $e.tuple(c);
-          if (((o = u ? tuple.rest(u) : tuple), typeof e.minItems === "number"))
-            o = o.check($e.minLength(e.minItems));
-          if (typeof e.maxItems === "number") o = o.check($e.maxLength(e.maxItems));
-        } else if (Array.isArray(items)) {
-          let a = typeof e.minItems === "number" ? e.minItems : 0,
-            mapped = items.map((h) => Fr(h, t)),
-            c = xT(mapped, a),
-            u = NT(e.additionalItems, t),
-            tuple = $e.tuple(c);
-          if (((o = u ? tuple.rest(u) : tuple), typeof e.minItems === "number"))
-            o = o.check($e.minLength(e.minItems));
-          if (typeof e.maxItems === "number") o = o.check($e.maxLength(e.maxItems));
-        } else if (items !== void 0) {
-          let a = Fr(items, t),
-            array = $e.array(a);
-          if (typeof e.minItems === "number") array = array.min(e.minItems);
-          if (typeof e.maxItems === "number") array = array.max(e.maxItems);
-          o = array;
-        } else o = $e.array($e.any());
-        if (e.uniqueItems === !0 || e.contains !== void 0)
-          o = bQ(o, {
-            uniqueItems: e.uniqueItems === !0,
-            containsSchema: e.contains !== void 0 ? Fr(e.contains, t) : void 0,
-            minContains: typeof e.minContains === "number" ? e.minContains : void 0,
-            maxContains: typeof e.maxContains === "number" ? e.maxContains : void 0,
-          });
-        break;
-      }
-      default:
-        throw Error(`Unsupported type: ${n}`);
-    }
-    return o;
-  }
-  function Fr(e, t) {
-    if (typeof e === "boolean") return e ? $e.any() : $e.never();
-    let n = zT(e, t),
-      o = e.type || e.enum !== void 0 || e.const !== void 0;
-    if (e.anyOf && Array.isArray(e.anyOf)) {
-      let mapped = e.anyOf.map((u) => Fr(u, t)),
-        union = $e.union(mapped);
-      n = o ? $e.intersection(n, union) : union;
-    }
-    if (e.oneOf && Array.isArray(e.oneOf)) {
-      let mapped = e.oneOf.map((u) => Fr(u, t)),
-        xor = $e.xor(mapped);
-      n = o ? $e.intersection(n, xor) : xor;
-    }
-    if (e.allOf && Array.isArray(e.allOf))
-      if (e.allOf.length === 0) n = o ? n : $e.any();
-      else {
-        let l = o ? n : Fr(e.allOf[0], t),
-          c = o ? 0 : 1;
-        for (let u = c; u < e.allOf.length; u++) l = $e.intersection(l, Fr(e.allOf[u], t));
-        n = l;
-      }
-    if (e.nullable === !0 && t.version === "openapi-3.0") n = $e.nullable(n);
-    if (e.readOnly === !0) n = $e.readonly(n);
-    if (e.default !== void 0) n = n.default(e.default);
-    let r = {},
-      s = ["$id", "id", "$comment", "$anchor", "$vocabulary", "$dynamicRef", "$dynamicAnchor"];
-    for (let l of s) if (l in e) r[l] = e[l];
-    let a = ["contentEncoding", "contentMediaType", "contentSchema"];
-    for (let l of a) if (l in e) r[l] = e[l];
-    if (e.type === "object" && e.$ref === void 0) {
-      if (e.propertyNames !== void 0 && !rd(e.propertyNames)) r.propertyNames = e.propertyNames;
-      for (let l of ["minProperties", "maxProperties"]) if (e[l] !== void 0) r[l] = e[l];
-    }
-    if (e.type === "array" && e.$ref === void 0) {
-      if (e.contains !== void 0 && !rd(e.contains)) r.contains = e.contains;
-      for (let l of ["uniqueItems", "minContains", "maxContains"]) if (e[l] !== void 0) r[l] = e[l];
-    }
-    for (let l of Object.keys(e)) if (!fQ.has(l)) ac.assignProp(r, l, e[l]);
-    if (Object.keys(r).length > 0) t.registry.add(n, r);
-    if (e.description) n = n.describe(e.description);
-    return n;
-  }
-  function wQ(e, t) {
-    if (typeof e === "boolean") return e ? $e.any() : $e.never();
-    let n;
-    try {
-      n = JSON.parse(JSON.stringify(e));
+      normalized = JSON.parse(JSON.stringify(schema));
     } catch {
       throw Error(
         "fromJSONSchema input is not valid JSON (possibly cyclic); use $defs/$ref for recursive schemas",
       );
     }
-    let o = pQ(n, t?.defaultTarget),
-      r = n.$defs || n.definitions || {},
-      s = {
-        version: o,
-        defs: r,
-        refs: new Map(),
-        processing: new Set(),
-        rootSchema: n,
-        registry: t?.registry ?? UT.globalRegistry,
-      };
-    return Fr(n, s);
+    let version = detectVersion(normalized, params?.defaultTarget);
+    let defs = normalized.$defs || normalized.definitions || {};
+    let ctx = {
+      version,
+      defs,
+      refs: new Map(),
+      processing: new Set(),
+      rootSchema: normalized,
+      registry: params?.registry ?? registries_js_1.globalRegistry,
+    };
+    return convertSchema(normalized, ctx);
   }
   (function () {
-    var ownPropertyNames = Object.getOwnPropertyNames(ci);
-    for (var t = 0; t < ownPropertyNames.length; t++) {
-      var ownPropertyDescriptor = Object.getOwnPropertyDescriptor(ci, ownPropertyNames[t]);
-      if (!ownPropertyDescriptor || !ownPropertyDescriptor.get || !ownPropertyDescriptor.configurable)
-        continue;
-      var o;
+    var keys = Object.getOwnPropertyNames(cjsExports);
+    for (var i = 0; i < keys.length; i++) {
+      var desc = Object.getOwnPropertyDescriptor(cjsExports, keys[i]);
+      if (!desc || !desc.get || !desc.configurable) continue;
+      var value;
       try {
-        o = ownPropertyDescriptor.get();
-      } catch (error) {
+        value = desc.get();
+      } catch (e) {
         continue;
       }
-      if (o === void 0) continue;
-      Object.defineProperty(ci, ownPropertyNames[t], {
-        value: o,
-        writable: !1,
-        enumerable: ownPropertyDescriptor.enumerable,
-        configurable: !1,
+      if (value === undefined) continue;
+      Object.defineProperty(cjsExports, keys[i], {
+        value,
+        writable: false,
+        enumerable: desc.enumerable,
+        configurable: false,
       });
     }
-    Object.freeze(ci);
+    Object.freeze(cjsExports);
   })();
 });
-
-export { FT };
+export { require_from_json_schema };

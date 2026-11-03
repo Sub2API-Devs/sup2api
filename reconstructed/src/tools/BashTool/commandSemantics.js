@@ -9,65 +9,76 @@
  * attribution: fingerprint 2, layout 3, file-local 1, placement 3
  */
 import { findToolResultBlock } from "../../services/tools/toolHooks.js";
-import { Brs } from "../../plugins/functionHooks/sites/toolSites.js";
+import { toolInputText } from "../../plugins/functionHooks/sites/toolSites.js";
 import { splitCommand, lastCommandIsAndGated } from "../../utils/bash/commands.js";
 
 //@ chunk-e6aww6q8.js:3777431-3777561 fingerprint = interpretCommandResult (0.67)
-function interpretCommandResult_2(e, n) {
-  for (let r of e) {
-    let s = findToolResultBlock(r, n);
-    if (s) return { text: Brs(s.content), ...(s.is_error === !0 && { isError: !0 }) };
+function interpretCommandResult_2(messages, toolUseId) {
+  for (let r of messages) {
+    let toolResultBlock = findToolResultBlock(r, toolUseId);
+    if (toolResultBlock)
+      return {
+        text: toolInputText(toolResultBlock.content),
+        ...(toolResultBlock.is_error === true && {
+          isError: true,
+        }),
+      };
   }
-  return { text: "" };
+  return {
+    text: "",
+  };
 }
+//@ chunk-e6aww6q8.js:4740100-4740536 fingerprint = COMMAND_SEMANTICS (0.845)
 /**
  * 命令退出码语义表：默认非 0 即错误；grep/rg/egrep/fgrep/find/diff/test/[ 的退出码 1 只是"无匹配/不同/条件为假"，≥2 才算错误。
  */
-//@ chunk-e6aww6q8.js:4740100-4740536 fingerprint = COMMAND_SEMANTICS (0.845)
-var DEFAULT_SEMANTIC = (e, n, r) => ({
-    isError: e !== 0,
-    message: e !== 0 ? `Command failed with exit code ${e}` : void 0,
-  }),
-  exitOneIsNotError = (e) => (n, r, s) => ({ isError: n >= 2, message: n === 1 ? e : void 0 }),
-  COMMAND_SEMANTICS = new Map([
-    ["grep", exitOneIsNotError("No matches found")],
-    ["rg", exitOneIsNotError("No matches found")],
-    ["egrep", exitOneIsNotError("No matches found")],
-    ["fgrep", exitOneIsNotError("No matches found")],
-    ["find", exitOneIsNotError("Some directories were inaccessible")],
-    ["diff", exitOneIsNotError("Files differ")],
-    ["test", exitOneIsNotError("Condition is false")],
-    ["[", exitOneIsNotError("Condition is false")],
-  ]);
+var DEFAULT_SEMANTIC = (exitCode, _stdout, _stderr) => ({
+  isError: exitCode !== 0,
+  message: exitCode !== 0 ? `Command failed with exit code ${exitCode}` : undefined,
+});
+var exitOneIsNotError = (e) => (exitCode, r, s) => ({
+  isError: exitCode >= 2,
+  message: exitCode === 1 ? e : undefined,
+});
+var COMMAND_SEMANTICS = new Map([
+  ["grep", exitOneIsNotError("No matches found")],
+  ["rg", exitOneIsNotError("No matches found")],
+  ["egrep", exitOneIsNotError("No matches found")],
+  ["fgrep", exitOneIsNotError("No matches found")],
+  ["find", exitOneIsNotError("Some directories were inaccessible")],
+  ["diff", exitOneIsNotError("Files differ")],
+  ["test", exitOneIsNotError("Condition is false")],
+  ["[", exitOneIsNotError("Condition is false")],
+]);
+//@ chunk-e6aww6q8.js:4740536-4740729 layout
 /**
  * 取最后一个子命令的基础命令查语义表；git diff / git grep 也按 diff/grep 语义处理。
  */
-//@ chunk-e6aww6q8.js:4740536-4740729 layout
-function getCommandSemantic(e) {
-  let n = extractBaseCommand(splitCommand(e).at(-1) || e);
-  if (n === "git") {
-    let s = getLastSegmentGitSubcommand(e);
-    if (s === "diff" || s === "grep")
-      return exitOneIsNotError(s === "grep" ? "No matches found" : "Files differ");
+function getCommandSemantic(command) {
+  let baseCommand = extractBaseCommand(splitCommand(command).at(-1) || command);
+  if (baseCommand === "git") {
+    let lastSegmentGitSubcommand = getLastSegmentGitSubcommand(command);
+    if (lastSegmentGitSubcommand === "diff" || lastSegmentGitSubcommand === "grep")
+      return exitOneIsNotError(lastSegmentGitSubcommand === "grep" ? "No matches found" : "Files differ");
   }
-  let r = COMMAND_SEMANTICS.get(n);
-  return r !== void 0 ? r : DEFAULT_SEMANTIC;
+  let r = COMMAND_SEMANTICS.get(baseCommand);
+  return r !== undefined ? r : DEFAULT_SEMANTIC;
 }
 //@ chunk-e6aww6q8.js:4740729-4740801 layout
 function getLastSegmentGitSubcommand(e) {
   let r = splitCommand(e).at(-1) || e;
   return getGitSubcommand(r.trim().split(/\s+/));
 }
+//@ chunk-e6aww6q8.js:4740801-4740952 layout
 /**
  * 从 argv 取 git 子命令（跳过 -C/-c 及其参数和其他选项）；非 git 返回 undefined。
  */
-//@ chunk-e6aww6q8.js:4740801-4740952 layout
 function getGitSubcommand(e) {
   if (e[0] !== "git") return;
-  for (let n = 1; n < e.length; n++) {
-    let r = e[n];
+  for (let idx = 1; idx < e.length; idx++) {
+    let r = e[idx];
     if (r.startsWith("-")) {
-      if (r === "-C" || r === "-c") n++;
+      if (r === "-C" || r === "-c") idx++;
       continue;
     }
     return r;
@@ -79,17 +90,34 @@ function extractBaseCommand(command) {
   return command.trim().split(/\s+/)[0] || "";
 }
 //@ chunk-e6aww6q8.js:4741004-4741090 placement
-function DEFAULT_SEMANTIC_2(e, n, r, s) {
-  let y = getCommandSemantic(e)(n, r, s);
-  return { isError: y.isError, message: y.message };
+function DEFAULT_SEMANTIC_2(command, exitCode, stdout, stderr) {
+  let y = getCommandSemantic(command)(exitCode, stdout, stderr);
+  return {
+    isError: y.isError,
+    message: y.message,
+  };
 }
 //@ chunk-e6aww6q8.js:4741090-4741177 placement
-function dVn(e, n, r, s) {
-  let h = DEFAULT_SEMANTIC_2(e, n, r, s);
-  return n !== 0 && !h.isError && lastCommandIsAndGated(e) ? DEFAULT_SEMANTIC(n, r, s) : h;
+/**
+ * 先按默认语义解释结果；当退出码非 0、无错误且命令以 && 链结尾时，改用最后一条命令重新解释。
+ */
+function interpretWithAndGatedRetry(command, exitCode, stdout, stderr) {
+  let h = DEFAULT_SEMANTIC_2(command, exitCode, stdout, stderr);
+  return exitCode !== 0 && !h.isError && lastCommandIsAndGated(command)
+    ? DEFAULT_SEMANTIC(exitCode, stdout, stderr)
+    : h;
 }
 //@ chunk-e6aww6q8.js:4741213-4741231 placement
-var uVn = 0.1,
-  cVn = 4;
-
-export { DEFAULT_SEMANTIC_2, interpretCommandResult_2, uVn, cVn, dVn, getGitSubcommand };
+/**
+ * 内存紧张判定阈值：可用内存低于总内存的 10% 且低于 4 GiB（memoryPressure.js 使用）。
+ */
+var MEMORY_SCARCE_RATIO = 0.1;
+var MEMORY_SCARCE_GB = 4;
+export {
+  DEFAULT_SEMANTIC_2,
+  interpretCommandResult_2,
+  MEMORY_SCARCE_RATIO,
+  MEMORY_SCARCE_GB,
+  interpretWithAndGatedRetry,
+  getGitSubcommand,
+};

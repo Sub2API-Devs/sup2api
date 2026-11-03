@@ -13,51 +13,88 @@ import { getToolNameForPermissionCheck as getToolNameForPermissionCheck_4 } from
 import { mcpRuleMatchesToolAny } from "../services/mcp/serverIdentity.js";
 
 //@ chunk-e6aww6q8.js:3260736-3260805 placement
-function y3s(e) {
-  return e !== void 0 && e !== "" && e !== WEB_HUMAN && e !== "api_direct";
+/**
+ * 判断单个工具名是否算作"本回合被禁用"：空/网页等特例排除，其余按名字判断。
+ */
+function isTurnDisallowedToolName(inboundOrigin) {
+  return (
+    inboundOrigin !== undefined &&
+    inboundOrigin !== "" &&
+    inboundOrigin !== WEB_HUMAN &&
+    inboundOrigin !== "api_direct"
+  );
 }
+//@ chunk-e6aww6q8.js:3260805-3261126 placement
 /**
  * 筛选回合级禁用工具名：已在禁用列表或总被允许的保留；对匹配到的工具按 costOf（free/costly）判断，MCP 类名字（含 "__"）没有匹配工具时按规则处理。
  */
-//@ chunk-e6aww6q8.js:3260805-3261126 placement
 function filterTurnDisallowedTools(names, turnDisallowed, getTools, isAlwaysAllowed, costOf) {
-  return names.filter((y) => {
-    if (turnDisallowed.includes(y) || isAlwaysAllowed(y)) return !0;
-    let S = getTools(),
-      filtered = S.filter((G) => TRn(y, G));
+  return names.filter((name) => {
+    if (turnDisallowed.includes(name) || isAlwaysAllowed(name)) return true;
+    let tools = getTools();
+    let filtered = tools.filter((tool) => turnDisallowRuleMatchesTool(name, tool));
     if (filtered.length === 0)
-      return WXn({ turnDisallowedTools: turnDisallowed }, { name: y }) || !y.includes("__", 5);
-    let any = filtered.some((G) => y === getToolNameForPermissionCheck_4(G));
+      return (
+        isToolDisallowedThisTurn(
+          {
+            turnDisallowedTools: turnDisallowed,
+          },
+          {
+            name,
+          },
+        ) || !name.includes("__", 5)
+      );
+    let any = filtered.some((G) => name === getToolNameForPermissionCheck_4(G));
     return filtered.every((G) => {
-      if (isAlwaysAllowed(G.name)) return !0;
-      let q = costOf(G, S);
+      if (isAlwaysAllowed(G.name)) return true;
+      let q = costOf(G, tools);
       return q === "free" || (q === "costly" && !any);
     });
   });
 }
 //@ chunk-e6aww6q8.js:3261126-3261171 placement
-function TRn(e, n) {
+function turnDisallowRuleMatchesTool(e, n) {
   return e === getToolNameForPermissionCheck_4(n) || mcpRuleMatchesToolAny(e, n);
 }
 //@ chunk-e6aww6q8.js:3261171-3261243 placement
-function WXn(e, n) {
-  return e.turnDisallowedTools?.some((r) => TRn(r, n)) ?? !1;
+/**
+ * 判断某工具是否被本回合禁用（turnDisallowedTools 里任一规则命中）。
+ */
+function isToolDisallowedThisTurn(e, n) {
+  return (
+    e.turnDisallowedTools?.some((turnDisallowedTool) => turnDisallowRuleMatchesTool(turnDisallowedTool, n)) ??
+    false
+  );
 }
+//@ chunk-e6aww6q8.js:3261243-3261557 placement
 /**
  * 把回合级禁用工具写进 AppState：替换 turnDisallowedTools，并在 alwaysDenyRules.command 里去掉旧的、加上新的；未变化时不更新。
  */
-//@ chunk-e6aww6q8.js:3261243-3261557 placement
 function applyTurnDisallowedTools(setAppState, toolNames) {
   setAppState((r) => {
-    let s = r.turnDisallowedTools ?? [];
-    if (s.length === toolNames.length && s.every((y, S) => y === toolNames[S])) return r;
-    let h = [...(r.alwaysDenyRules.command ?? []).filter((y) => !s.includes(y)), ...toolNames];
+    let turnDisallowedTools = r.turnDisallowedTools ?? [];
+    if (
+      turnDisallowedTools.length === toolNames.length &&
+      turnDisallowedTools.every((turnDisallowedTool, S) => turnDisallowedTool === toolNames[S])
+    )
+      return r;
+    let h = [
+      ...(r.alwaysDenyRules.command ?? []).filter((y) => !turnDisallowedTools.includes(y)),
+      ...toolNames,
+    ];
     return {
       ...r,
-      turnDisallowedTools: toolNames.length > 0 ? toolNames : void 0,
-      alwaysDenyRules: { ...r.alwaysDenyRules, command: h.length > 0 ? h : void 0 },
+      turnDisallowedTools: toolNames.length > 0 ? toolNames : undefined,
+      alwaysDenyRules: {
+        ...r.alwaysDenyRules,
+        command: h.length > 0 ? h : undefined,
+      },
     };
   });
 }
-
-export { y3s, applyTurnDisallowedTools, filterTurnDisallowedTools, WXn };
+export {
+  isTurnDisallowedToolName,
+  applyTurnDisallowedTools,
+  filterTurnDisallowedTools,
+  isToolDisallowedThisTurn,
+};

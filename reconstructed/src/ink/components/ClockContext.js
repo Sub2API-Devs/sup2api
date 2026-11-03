@@ -8,153 +8,192 @@
  * pieces: chunk-cg10fy59.js (5), chunk-x6v6jz2y.js (4)
  * attribution: placement 8, fingerprint 1
  */
-import { Xh } from "../scrollConstants.js";
-import { qt, y, P, j, Se } from "../../../vendor/react/cjs/react.production.js";
+import { SCROLL_JUMP_LINES } from "../scrollConstants.js";
+import { qt, y, P, init_react_production, Se } from "../../../vendor/react/cjs/react.production.js";
 import { w } from "../../../vendor/react/compiler-runtime.js";
 import { useTerminalFocus } from "../hooks/use-terminal-focus.js";
-import { e } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { BaseText } from "./Text.js";
 
 //@ chunk-cg10fy59.js:902-928 placement
-function R() {
-  return ClockProvider_2(Xh);
+function useClockTick() {
+  return ClockProvider_2(SCROLL_JUMP_LINES);
 }
 //@ chunk-cg10fy59.js:928-1020 placement
-var $L = (c, r) => {
-    let t = setTimeout(c, r);
-    return () => clearTimeout(t);
-  },
-  bTe = () => () => {},
-  exr = () => null;
+/**
+ * 导出值：同一声明里的多个绑定：defaultSetTimeout（setTimeout 包装）；noopClock（空时钟）；nullClock（恒 null）；位于「并入时钟上下文 useClock 与 StyledText」模块。
+ */
+var defaultSetTimeout = (c, r) => {
+  let timer = setTimeout(c, r);
+  return () => clearTimeout(timer);
+};
+var noopClock = () => () => {};
+var nullClock = () => null;
 //@ chunk-cg10fy59.js:1020-1614 placement
-function ClockProvider_2(t0) {
-  let r = new Map(),
-    t = null,
-    n = t0,
-    startTime = performance.now(),
-    i = 0;
-  function s() {
-    i = performance.now() - startTime;
-    for (let o of r.keys()) o();
+function ClockProvider_2(tickIntervalMs) {
+  let subscribers = new Map();
+  let interval = null;
+  let currentTickIntervalMs = tickIntervalMs;
+  let startTime = performance.now();
+  let tickTime = 0;
+  function tick() {
+    tickTime = performance.now() - startTime;
+    for (let onChange of subscribers.keys()) onChange();
   }
-  function a() {
-    if ([...r.values()].some(Boolean)) {
-      if (t !== null) clearInterval(t);
-      else i = performance.now() - startTime;
-      t = setInterval(s, n);
-    } else if (t !== null) (clearInterval(t), (t = null));
+  function updateInterval() {
+    if ([...subscribers.values()].some(Boolean)) {
+      if (interval !== null) clearInterval(interval);
+      else tickTime = performance.now() - startTime;
+      interval = setInterval(tick, currentTickIntervalMs);
+    } else if (interval !== null) {
+      clearInterval(interval);
+      interval = null;
+    }
   }
-  function f(o, m) {
-    return (
-      r.set(o, m),
-      a(),
-      () => {
-        (r.delete(o), a());
-      }
-    );
+  function f(onChange, keepAlive) {
+    subscribers.set(onChange, keepAlive);
+    updateInterval();
+    return () => {
+      subscribers.delete(onChange);
+      updateInterval();
+    };
   }
   return {
-    subscribeKeepAlive(o) {
-      return f(o, !0);
+    subscribeKeepAlive(onChange) {
+      return f(onChange, true);
     },
-    subscribeFollower(o) {
-      return f(o, !1);
+    subscribeFollower(onChange) {
+      return f(onChange, false);
     },
     now() {
-      if (t !== null) return i;
+      if (interval !== null) return tickTime;
       return performance.now() - startTime;
     },
-    setTickInterval(o) {
-      if (o === n) return;
-      ((n = o), a());
+    setTickInterval(ms) {
+      if (ms === currentTickIntervalMs) return;
+      currentTickIntervalMs = ms;
+      updateInterval();
     },
     setTimeout(o, m) {
-      let b = setTimeout(o, m);
-      return () => clearTimeout(b);
+      let timer = setTimeout(o, m);
+      return () => clearTimeout(timer);
     },
   };
 }
 //@ chunk-cg10fy59.js:1614-1637 placement
-var _T = qt(null),
-  T = Xh * 2;
+/**
+ * 导出值：同一声明里的多个绑定：clockContext（时钟上下文）；CLOCK_INTERVAL_MS（tick 的两倍）；位于「并入时钟上下文 useClock 与 StyledText」模块。
+ */
+var clockContext = qt(null);
+var CLOCK_INTERVAL_MS = SCROLL_JUMP_LINES * 2;
+//@ chunk-cg10fy59.js:1637-1925 fingerprint = createClock (0.744)
 /**
  * 动画时钟 Provider：终端有焦点时按正常帧间隔滴答，失焦时放慢，供 useAnimationFrame 等订阅。
  */
-//@ chunk-cg10fy59.js:1637-1925 fingerprint = createClock (0.744)
 function ClockProvider(props) {
-  let l = w(7),
-    { children: children } = props,
-    [clock] = y(R),
-    isFocused = useTerminalFocus(),
-    i,
-    s;
-  if (l[0] !== clock || l[1] !== isFocused)
-    ((i = () => {
-      clock.setTickInterval(isFocused ? Xh : T);
-    }),
-      (s = [clock, isFocused]),
-      (l[0] = clock),
-      (l[1] = isFocused),
-      (l[2] = i),
-      (l[3] = s));
-  else ((i = l[2]), (s = l[3]));
-  P(i, s);
-  let a;
-  if (l[4] !== children || l[5] !== clock)
-    ((a = e(_T.Provider, { value: clock, children: children })),
-      (l[4] = children),
-      (l[5] = clock),
-      (l[6] = a));
-  else a = l[6];
-  return a;
+  let $ = w(7);
+  let { children } = props;
+  let [clock] = y(useClockTick);
+  let isFocused = useTerminalFocus();
+  let t1;
+  let t2;
+  if ($[0] !== clock || $[1] !== isFocused) {
+    t1 = () => {
+      clock.setTickInterval(isFocused ? SCROLL_JUMP_LINES : CLOCK_INTERVAL_MS);
+    };
+    t2 = [clock, isFocused];
+    $[0] = clock;
+    $[1] = isFocused;
+    $[2] = t1;
+    $[3] = t2;
+  } else {
+    t1 = $[2];
+    t2 = $[3];
+  }
+  P(t1, t2);
+  let t3;
+  if ($[4] !== children || $[5] !== clock) {
+    t3 = jsxProd_default(clockContext.Provider, {
+      value: clock,
+      children,
+    });
+    $[4] = children;
+    $[5] = clock;
+    $[6] = t3;
+  } else t3 = $[6];
+  return t3;
 }
+//@ chunk-x6v6jz2y.js:16990-17463 placement = StyledText (1)
 /**
  * <Ansi> 渲染每个样式段用的小组件：粗体与暗不能同时生效时优先暗，否则粗体，再否则普通 <Text>。
  */
-//@ chunk-x6v6jz2y.js:16990-17463 placement = StyledText (1)
 function StyledText(t0) {
-  let r = w(14),
-    l,
-    u,
-    d,
-    p;
-  if (r[0] !== t0)
-    (({ bold: l, dim: d, children: u, ...p } = t0),
-      (r[0] = t0),
-      (r[1] = l),
-      (r[2] = u),
-      (r[3] = d),
-      (r[4] = p));
-  else ((l = r[1]), (u = r[2]), (d = r[3]), (p = r[4]));
-  if (d) {
-    let m;
-    if (r[5] !== u || r[6] !== p)
-      ((m = e(BaseText, { ...p, dim: !0, children: u })), (r[5] = u), (r[6] = p), (r[7] = m));
-    else m = r[7];
-    return m;
+  let $ = w(14);
+  let bold;
+  let children;
+  let dim;
+  let rest;
+  if ($[0] !== t0) {
+    ({ bold, dim, children, ...rest } = t0);
+    $[0] = t0;
+    $[1] = bold;
+    $[2] = children;
+    $[3] = dim;
+    $[4] = rest;
+  } else {
+    bold = $[1];
+    children = $[2];
+    dim = $[3];
+    rest = $[4];
   }
-  if (l) {
-    let m;
-    if (r[8] !== u || r[9] !== p)
-      ((m = e(BaseText, { ...p, bold: !0, children: u })), (r[8] = u), (r[9] = p), (r[10] = m));
-    else m = r[10];
-    return m;
+  if (dim) {
+    let t1;
+    if ($[5] !== children || $[6] !== rest) {
+      t1 = jsxProd_default(BaseText, {
+        ...rest,
+        dim: true,
+        children,
+      });
+      $[5] = children;
+      $[6] = rest;
+      $[7] = t1;
+    } else t1 = $[7];
+    return t1;
   }
-  let m;
-  if (r[11] !== u || r[12] !== p)
-    ((m = e(BaseText, { ...p, children: u })), (r[11] = u), (r[12] = p), (r[13] = m));
-  else m = r[13];
-  return m;
+  if (bold) {
+    let t1;
+    if ($[8] !== children || $[9] !== rest) {
+      t1 = jsxProd_default(BaseText, {
+        ...rest,
+        bold: true,
+        children,
+      });
+      $[8] = children;
+      $[9] = rest;
+      $[10] = t1;
+    } else t1 = $[10];
+    return t1;
+  }
+  let t1;
+  if ($[11] !== children || $[12] !== rest) {
+    t1 = jsxProd_default(BaseText, {
+      ...rest,
+      children,
+    });
+    $[11] = children;
+    $[12] = rest;
+    $[13] = t1;
+  } else t1 = $[13];
+  return t1;
 }
 //@ chunk-x6v6jz2y.js:17463-17467 placement
-j();
+init_react_production();
 //@ chunk-x6v6jz2y.js:17467-17471 placement
-j();
+init_react_production();
 //@ chunk-x6v6jz2y.js:17471-17573 placement
 function useClock() {
-  let o = Se(_T);
+  let o = Se(clockContext);
   if (!o) throw Error("useClock must be used within a ClockProvider");
   return o;
 }
-
-export { useClock, _T, $L, ClockProvider, bTe, StyledText, exr };
+export { useClock, clockContext, defaultSetTimeout, ClockProvider, noopClock, StyledText, nullClock };

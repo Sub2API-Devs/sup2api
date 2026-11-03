@@ -7,20 +7,20 @@
  */
 
 //@ chunk-5h78gfwc.js:1250-1445 esm-fingerprint
-function Ce(e) {
-  if (Uint8Array.prototype.toBase64) return e.toBase64();
-  let t = 32768,
-    r = [];
-  for (let n = 0; n < e.length; n += t) r.push(String.fromCharCode.apply(null, e.subarray(n, n + t)));
-  return btoa(r.join(""));
+function encodeBase64(input) {
+  if (Uint8Array.prototype.toBase64) return input.toBase64();
+  let CHUNK_SIZE = 32768;
+  let arr = [];
+  for (let i = 0; i < input.length; i += CHUNK_SIZE)
+    arr.push(String.fromCharCode.apply(null, input.subarray(i, i + CHUNK_SIZE)));
+  return btoa(arr.join(""));
 }
 //@ chunk-5h78gfwc.js:1445-1615 esm-fingerprint
-function ue(e) {
-  if (Uint8Array.fromBase64) return Uint8Array.fromBase64(e);
-  let t = atob(e),
-    uint8Array = new Uint8Array(t.length);
-  for (let n = 0; n < t.length; n++) uint8Array[n] = t.charCodeAt(n);
-  return uint8Array;
+function decodeBase64(encoded) {
+  if (Uint8Array.fromBase64) return Uint8Array.fromBase64(encoded);
+  let binary = atob(encoded);
+  let bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
 }
-
-export { ue, Ce };
+export { decodeBase64, encodeBase64 };

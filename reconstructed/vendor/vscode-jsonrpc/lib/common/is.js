@@ -8,37 +8,45 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-t4ksmxzx.js:4056-4638 cjs-fingerprint
-var we = x(function (Jt) {
-  Object.defineProperty(Jt, "__esModule", { value: !0 });
-  Jt.stringArray = Jt.array = Jt.func = Jt.error = Jt.number = Jt.string = Jt.boolean = void 0;
-  function ti(e) {
-    return e === !0 || e === !1;
+var require_is = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.stringArray =
+    cjsExports.array =
+    cjsExports.func =
+    cjsExports.error =
+    cjsExports.number =
+    cjsExports.string =
+    cjsExports.boolean =
+      undefined;
+  function boolean(value) {
+    return value === true || value === false;
   }
-  Jt.boolean = ti;
-  function Ut(e) {
-    return typeof e === "string" || e instanceof String;
+  cjsExports.boolean = boolean;
+  function string(value) {
+    return typeof value === "string" || value instanceof String;
   }
-  Jt.string = Ut;
-  function ri(e) {
-    return typeof e === "number" || e instanceof Number;
+  cjsExports.string = string;
+  function number(value) {
+    return typeof value === "number" || value instanceof Number;
   }
-  Jt.number = ri;
-  function ni(e) {
-    return e instanceof Error;
+  cjsExports.number = number;
+  function error(value) {
+    return value instanceof Error;
   }
-  Jt.error = ni;
-  function ii(e) {
-    return typeof e === "function";
+  cjsExports.error = error;
+  function func(value) {
+    return typeof value === "function";
   }
-  Jt.func = ii;
-  function Vt(e) {
-    return Array.isArray(e);
+  cjsExports.func = func;
+  function array(value) {
+    return Array.isArray(value);
   }
-  Jt.array = Vt;
-  function si(e) {
-    return Vt(e) && e.every((r) => Ut(r));
+  cjsExports.array = array;
+  function stringArray(value) {
+    return array(value) && value.every((elem) => string(elem));
   }
-  Jt.stringArray = si;
+  cjsExports.stringArray = stringArray;
 });
-
-export { we };
+export { require_is };

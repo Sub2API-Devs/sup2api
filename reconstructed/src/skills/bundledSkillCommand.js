@@ -12,71 +12,69 @@ import { getHostState } from "../utils/hostEnvironment.js";
 import { tagHooksWithSource } from "../utils/hooks/sessionHooks.js";
 import { defineLazyGetter, defineLazyGetterAlt, definePolicyGate } from "./skillPropertyGetters.js";
 
+//@ chunk-bfnfj4kx.js:78223-80118 placement
 /**
  * 把内置插件的技能包装为提示命令（提取技能文件）。
  */
-//@ chunk-bfnfj4kx.js:78223-80118 placement
-function builtinPluginSkillCommand(e, o) {
-  let builtinPluginWiredSkills = getHostState().builtinPluginWiredSkills,
-    r = builtinPluginWiredSkills.get(e);
+function builtinPluginSkillCommand(skill, o) {
+  let builtinPluginWiredSkills = getHostState().builtinPluginWiredSkills;
+  let r = builtinPluginWiredSkills.get(skill);
   if (!r) {
-    let { wireSkillFilesExtraction: wireSkillFilesExtraction } = require("./chunk-et4cgz1y.js");
-    ((r = wireSkillFilesExtraction(e)), builtinPluginWiredSkills.set(e, r));
+    let { wireSkillFilesExtraction } = require("./chunk-et4cgz1y.js");
+    r = wireSkillFilesExtraction(skill);
+    builtinPluginWiredSkills.set(skill, r);
   }
-  let { skillRoot: skillRoot, getPromptForCommand: getPromptForCommand } = r;
-  tagHooksWithSource(e.hooks ?? {}, o);
+  let { skillRoot, getPromptForCommand } = r;
+  tagHooksWithSource(skill.hooks ?? {}, o);
   let p = {
     type: "prompt",
-    name: e.name,
-    description: typeof e.description === "function" ? "" : e.description,
-    menuDescription: typeof e.menuDescription === "function" ? void 0 : e.menuDescription,
-    aliases: e.aliases,
-    hasUserSpecifiedDescription: !0,
-    allowedTools: e.allowedTools ?? [],
-    getAllowedTools: e.getAllowedTools,
-    disallowedTools: e.disallowedTools ?? [],
-    argumentHint: typeof e.argumentHint === "function" ? void 0 : e.argumentHint,
-    whenToUse: typeof e.whenToUse === "function" ? void 0 : e.whenToUse,
-    subcommands: e.subcommands,
-    subcommandsBareOnly: e.subcommandsBareOnly,
-    model: e.model,
+    name: skill.name,
+    description: typeof skill.description === "function" ? "" : skill.description,
+    menuDescription: typeof skill.menuDescription === "function" ? undefined : skill.menuDescription,
+    aliases: skill.aliases,
+    hasUserSpecifiedDescription: true,
+    allowedTools: skill.allowedTools ?? [],
+    getAllowedTools: skill.getAllowedTools,
+    disallowedTools: skill.disallowedTools ?? [],
+    argumentHint: typeof skill.argumentHint === "function" ? undefined : skill.argumentHint,
+    whenToUse: typeof skill.whenToUse === "function" ? undefined : skill.whenToUse,
+    subcommands: skill.subcommands,
+    subcommandsBareOnly: skill.subcommandsBareOnly,
+    model: skill.model,
     disableModelInvocation:
-      typeof e.disableModelInvocation === "function" ? !0 : (e.disableModelInvocation ?? !1),
-    disableBridgeInvocation: e.disableBridgeInvocation,
-    userInvocable: e.userInvocable ?? !0,
-    terminalOriented: e.terminalOriented,
-    argsMayContainSlashCommands: e.argsMayContainSlashCommands,
+      typeof skill.disableModelInvocation === "function" ? true : (skill.disableModelInvocation ?? false),
+    disableBridgeInvocation: skill.disableBridgeInvocation,
+    userInvocable: skill.userInvocable ?? true,
+    terminalOriented: skill.terminalOriented,
+    argsMayContainSlashCommands: skill.argsMayContainSlashCommands,
     contentLength: 0,
     source: "bundled",
     loadedFrom: "bundled",
-    hooks: e.hooks,
-    context: e.context,
-    getContext: e.getContext,
-    agent: e.agent,
-    background: e.background,
-    formatForegroundForkResult: e.formatForegroundForkResult,
-    skillRoot: skillRoot,
-    isEnabled: e.isEnabled ?? (() => !0),
-    policyGate: typeof e.policyGate === "function" ? void 0 : e.policyGate,
-    requires: e.requires,
-    isHidden: !(e.userInvocable ?? !0),
-    progressMessage: e.progressMessage ?? "running",
-    getPromptForCommand: getPromptForCommand,
-    getEffort: e.getEffort,
-    getDefaultEffort: e.getDefaultEffort,
-    onUserTypedArgs: e.onUserTypedArgs,
-    getArgumentCompletions: e.getArgumentCompletions,
-    enterTakesArgumentCompletion: e.enterTakesArgumentCompletion,
+    hooks: skill.hooks,
+    context: skill.context,
+    getContext: skill.getContext,
+    agent: skill.agent,
+    background: skill.background,
+    formatForegroundForkResult: skill.formatForegroundForkResult,
+    skillRoot,
+    isEnabled: skill.isEnabled ?? (() => true),
+    policyGate: typeof skill.policyGate === "function" ? undefined : skill.policyGate,
+    requires: skill.requires,
+    isHidden: !(skill.userInvocable ?? true),
+    progressMessage: skill.progressMessage ?? "running",
+    getPromptForCommand,
+    getEffort: skill.getEffort,
+    getDefaultEffort: skill.getDefaultEffort,
+    onUserTypedArgs: skill.onUserTypedArgs,
+    getArgumentCompletions: skill.getArgumentCompletions,
+    enterTakesArgumentCompletion: skill.enterTakesArgumentCompletion,
   };
-  return (
-    defineLazyGetter(p, "description", e.description),
-    defineLazyGetter(p, "menuDescription", e.menuDescription),
-    defineLazyGetter(p, "argumentHint", e.argumentHint),
-    defineLazyGetter(p, "whenToUse", e.whenToUse),
-    defineLazyGetterAlt(p, "disableModelInvocation", e.disableModelInvocation),
-    definePolicyGate(p, e.policyGate),
-    p
-  );
+  defineLazyGetter(p, "description", skill.description);
+  defineLazyGetter(p, "menuDescription", skill.menuDescription);
+  defineLazyGetter(p, "argumentHint", skill.argumentHint);
+  defineLazyGetter(p, "whenToUse", skill.whenToUse);
+  defineLazyGetterAlt(p, "disableModelInvocation", skill.disableModelInvocation);
+  definePolicyGate(p, skill.policyGate);
+  return p;
 }
-
 export { builtinPluginSkillCommand };

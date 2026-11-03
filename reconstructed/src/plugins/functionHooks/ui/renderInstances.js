@@ -10,74 +10,127 @@
  */
 import { getPluginRegistry } from "../../../utils/plugins/pluginLoadState.js";
 import { RENDER_EVENT, renderPluginsFor } from "./renderSites.js";
-import { ge } from "../../../utils/identity.js";
-import { to } from "../../../utils/valueSlot.js";
-import { hxt } from "../../../utils/hooks/functionHookMatchers.js";
+import { identity as identity_2 } from "../../../utils/identity.js";
+import { createValueSlot } from "../../../utils/valueSlot.js";
+import { matchesField } from "../../../utils/hooks/functionHookMatchers.js";
 import { isModuleAdmitted } from "../../../utils/plugins/functionHooks/admission.js";
-import { ul } from "../panes.js";
+import { paneRegistry } from "../panes.js";
 
 //@ chunk-s61vbvea.js:297633-297664 placement
-var JB = () => getPluginRegistry().renderVersions;
+/**
+ * 渲染版本表
+ */
+var renderVersions = () => getPluginRegistry().renderVersions;
 //@ chunk-s61vbvea.js:297664-297752 placement
-function tl(e) {
-  JB().setState((n) => {
+/**
+ * 递增渲染版本
+ */
+function bumpRenderVersion(e) {
+  renderVersions().setState((n) => {
     let r = new Map(n);
-    return (r.set(e, (n.get(e) ?? 0) + 1), r);
+    r.set(e, (n.get(e) ?? 0) + 1);
+    return r;
   });
 }
 //@ chunk-s61vbvea.js:297752-297798 placement
-function MS({ bump: bump, plugin: plugin, now: now }) {
+/**
+ * 定时递增渲染版本
+ */
+function bumpViaTimer({ bump, plugin, now }) {
   bump(plugin, now());
 }
 //@ chunk-s61vbvea.js:297798-297813 placement
-var nl = " live";
+/**
+ * " live"
+ */
+var LIVE_SUFFIX = " live";
 //@ chunk-s61vbvea.js:297813-297840 placement
-var SM = (e) => e.endsWith(nl);
+/**
+ * 是否 live 键
+ */
+var isLiveKey = (e) => e.endsWith(LIVE_SUFFIX);
 //@ chunk-s61vbvea.js:297840-297857 placement
-var _M = (e) => e + nl;
+/**
+ * 加 live 后缀
+ */
+var asLiveKey = (e) => e + LIVE_SUFFIX;
 //@ chunk-s61vbvea.js:297857-297890 placement
-var ol = (e, n) => (n === "live" ? _M(e) : e);
+/**
+ * 按节奏生成键
+ */
+var pacedKey = (e, n) => (n === "live" ? asLiveKey(e) : e);
 //@ chunk-s61vbvea.js:297890-297943 placement
-function $yn(e, n = "steady") {
-  tl(e === void 0 ? RENDER_EVENT : ol(e, n));
+/**
+ * 按节奏递增渲染版本
+ */
+function bumpRenderPaced(plugin, n = "steady") {
+  bumpRenderVersion(plugin === undefined ? RENDER_EVENT : pacedKey(plugin, n));
 }
+//@ chunk-s61vbvea.js:297943-298479 placement
 /**
  * 按插件节流渲染版本递增：间隔内的调用延后到期再递增。
  */
-//@ chunk-s61vbvea.js:297943-298479 placement
-function createRenderBumper({ pace: pace, now: now, intervalMs: intervalMs, onBump: onBump }) {
+function createRenderBumper({ pace, now, intervalMs, onBump }) {
   let h = new Map();
   function y(S, w) {
-    let R = h.get(S)?.pending;
-    if (R !== void 0) clearTimeout(R);
-    (h.set(S, { lastAt: w, pending: void 0 }), $yn(S, pace), onBump?.(S, w));
+    let pending = h.get(S)?.pending;
+    if (pending !== undefined) clearTimeout(pending);
+    h.set(S, {
+      lastAt: w,
+      pending: undefined,
+    });
+    bumpRenderPaced(S, pace);
+    onBump?.(S, w);
   }
   return {
     bump: y,
     call: (S) => {
-      let w = h.get(S) ?? { lastAt: Number.NEGATIVE_INFINITY, pending: void 0 };
-      if (w.pending) return !1;
-      let R = now(),
-        x = intervalMs - Math.max(0, R - w.lastAt);
-      if (x <= 0) return (y(S, R), !0);
-      let P = setTimeout(MS, x, { bump: y, plugin: S, now: now });
-      return (P.unref(), h.set(S, { lastAt: w.lastAt, pending: P }), !1);
+      let w = h.get(S) ?? {
+        lastAt: Number.NEGATIVE_INFINITY,
+        pending: undefined,
+      };
+      if (w.pending) return false;
+      let R = now();
+      let x = intervalMs - Math.max(0, R - w.lastAt);
+      if (x <= 0) {
+        y(S, R);
+        return true;
+      }
+      let timer = setTimeout(bumpViaTimer, x, {
+        bump: y,
+        plugin: S,
+        now,
+      });
+      timer.unref();
+      h.set(S, {
+        lastAt: w.lastAt,
+        pending: timer,
+      });
+      return false;
     },
     drop: () => {
-      for (let { pending: pending } of h.values()) clearTimeout(pending);
+      for (let { pending } of h.values()) clearTimeout(pending);
       h.clear();
     },
   };
 }
 //@ chunk-s61vbvea.js:298479-298515 placement
-var Fyn = ge(to(), (e) => e.set(void 0));
+/**
+ * 渲染突发槽
+ */
+var renderBurstSlot = identity_2(createValueSlot(), (e) => e.set(undefined));
 //@ chunk-s61vbvea.js:298515-298541 placement
-var sl = () => Fyn.get() !== !0;
+/**
+ * 是否允许渲染
+ */
+var isRenderAllowed = () => renderBurstSlot.get() !== true;
 //@ chunk-s61vbvea.js:298541-298686 placement
 var maySelectInstance = (e, n) =>
   Array.isArray(e)
     ? e.some((r) => maySelectInstance(r, n))
-    : hxt(e, "surface", n.surface) && hxt(e, "component", n.component) && hxt(e, "requestId", n.requestId);
+    : matchesField(e, "surface", n.surface) &&
+      matchesField(e, "component", n.component) &&
+      matchesField(e, "requestId", n.requestId);
 //@ chunk-s61vbvea.js:298686-298775 placement
 var renderModulesForInstance = (e) =>
   getPluginRegistry().loadedModules.filter(
@@ -90,81 +143,131 @@ var renderModulesForInstance = (e) =>
 var renderPluginsForInstance = (e) => renderModulesForInstance(e).map((n) => n.name);
 //@ chunk-s61vbvea.js:298812-299022 placement
 function pluginDrawsLive(e) {
-  let shownId = ul().getState().shownId,
-    r = sl() && renderPluginsFor("AbovePrompt").includes(e),
-    s =
-      shownId !== null &&
-      renderPluginsForInstance({ surface: "terminal", component: "Pane", requestId: shownId }).includes(e),
-    included = renderPluginsFor("PromptHint").includes(e);
+  let shownId = paneRegistry().getState().shownId;
+  let r = isRenderAllowed() && renderPluginsFor("AbovePrompt").includes(e);
+  let s =
+    shownId !== null &&
+    renderPluginsForInstance({
+      surface: "terminal",
+      component: "Pane",
+      requestId: shownId,
+    }).includes(e);
+  let included = renderPluginsFor("PromptHint").includes(e);
   return r || s || included;
 }
 //@ chunk-s61vbvea.js:299022-299056 placement
-var il = ge(new Map(), (e) => e.clear());
+/**
+ * 节流截止表
+ */
+var throttleUntil = identity_2(new Map(), (e) => e.clear());
 //@ chunk-s61vbvea.js:299056-299068 placement
-var DS = 1000;
+/**
+ * 1000
+ */
+var RENDER_THROTTLE_WINDOW_MS = 1000;
 //@ chunk-s61vbvea.js:299068-299126 placement
-function al(e, n = Date.now()) {
-  for (let r of e) il.set(r, n + DS);
+/**
+ * 节流若干键
+ */
+function throttleKeys(e, n = Date.now()) {
+  for (let r of e) throttleUntil.set(r, n + RENDER_THROTTLE_WINDOW_MS);
 }
 //@ chunk-s61vbvea.js:299126-299182 placement
-function NS(e, n) {
-  let r = il.get(e);
-  return r !== void 0 && n < r;
+/**
+ * 是否仍在节流
+ */
+function isThrottled(e, n) {
+  let r = throttleUntil.get(e);
+  return r !== undefined && n < r;
 }
 //@ chunk-s61vbvea.js:299182-299192 placement
-var ll = 34;
+/**
+ * 34
+ */
+var LIVE_THROTTLE_LIMIT = 34;
 //@ chunk-s61vbvea.js:299192-299238 placement
-function NM(e, n, r = Date.now()) {
-  if (n > ll) al(e, r);
+/**
+ * live 节奏节流
+ */
+function throttleLive(e, n, r = Date.now()) {
+  if (n > LIVE_THROTTLE_LIMIT) throttleKeys(e, r);
 }
 //@ chunk-s61vbvea.js:299238-299248 placement
-var LS = 16;
+/**
+ * 16
+ */
+var STEADY_THROTTLE_LIMIT = 16;
 //@ chunk-s61vbvea.js:299248-299294 placement
-function FM(e, n, r = Date.now()) {
-  if (n > LS) al(e, r);
+/**
+ * steady 节奏节流
+ */
+function throttleSteady(e, n, r = Date.now()) {
+  if (n > STEADY_THROTTLE_LIMIT) throttleKeys(e, r);
 }
+//@ chunk-s61vbvea.js:299294-299501 placement
 /**
  * 渲染实例的节奏：终端上的 AbovePrompt、PromptHint 与当前显示的 Pane 为 live，其余 steady。
  */
-//@ chunk-s61vbvea.js:299294-299501 placement
 function renderPaceOf(e) {
-  let n = e.surface === "terminal",
-    r = e.component === "AbovePrompt" && sl(),
-    s = e.component === "PromptHint",
-    h = e.component === "Pane" && ul().getState().shownId === e.requestId;
+  let n = e.surface === "terminal";
+  let r = e.component === "AbovePrompt" && isRenderAllowed();
+  let s = e.component === "PromptHint";
+  let h = e.component === "Pane" && paneRegistry().getState().shownId === e.requestId;
   return n && (r || s || h) ? "live" : "steady";
 }
 //@ chunk-s61vbvea.js:299501-299513 placement
-var cKt = 100;
+/**
+ * steady 节奏下重绘的最小间隔 100 毫秒，低于间隔的失效请求合并到下一次。
+ */
+var STEADY_REDRAW_INTERVAL_MS = 100;
+//@ chunk-s61vbvea.js:299513-299741 placement
 /**
  * $.ui.invalidate 的渲染失效器：steady 节流后，若插件画 live 组件再走 live 节流。
  */
-//@ chunk-s61vbvea.js:299513-299741 placement
 function createRenderInvalidator(e = Date.now, n = pluginDrawsLive) {
-  let r = createRenderBumper({ pace: "live", now: e, intervalMs: ll }),
-    s = createRenderBumper({ pace: "steady", now: e, intervalMs: cKt, onBump: r.bump });
+  let renderBumper = createRenderBumper({
+    pace: "live",
+    now: e,
+    intervalMs: LIVE_THROTTLE_LIMIT,
+  });
+  let renderBumper_2 = createRenderBumper({
+    pace: "steady",
+    now: e,
+    intervalMs: STEADY_REDRAW_INTERVAL_MS,
+    onBump: renderBumper.bump,
+  });
   return {
     invalidate: (h) => {
-      if (!s.call(h) && !NS(h, e()) && n(h)) r.call(h);
+      if (!renderBumper_2.call(h) && !isThrottled(h, e()) && n(h)) renderBumper.call(h);
     },
     drop: () => {
-      (s.drop(), r.drop());
+      renderBumper_2.drop();
+      renderBumper.drop();
     },
   };
 }
 //@ chunk-s61vbvea.js:299741-299760 placement
-var pl = "\x00state";
+/**
+ * "\0state"
+ */
+var STATE_KEY_SUFFIX = "\x00state";
 //@ chunk-s61vbvea.js:299760-299777 placement
-var Zd = (e) => e + pl;
+/**
+ * 加 state 后缀
+ */
+var stateKeyOf = (e) => e + STATE_KEY_SUFFIX;
 //@ chunk-s61vbvea.js:299777-299804 placement
-var FS = (e) => e.endsWith(pl);
+/**
+ * 是否 state 键
+ */
+var isStateKey = (e) => e.endsWith(STATE_KEY_SUFFIX);
+//@ chunk-s61vbvea.js:299804-299962 placement
 /**
  * 清除所有状态类渲染版本。
  */
-//@ chunk-s61vbvea.js:299804-299962 placement
 function clearStateRenderVersions() {
-  let e = JB(),
-    filtered = [...e.getState().keys()].filter(FS);
+  let e = renderVersions();
+  let filtered = [...e.getState().keys()].filter(isStateKey);
   if (filtered.length === 0) return;
   e.setState((r) => {
     let s = new Map(r);
@@ -172,13 +275,13 @@ function clearStateRenderVersions() {
     return s;
   });
 }
+//@ chunk-s61vbvea.js:299962-300128 placement
 /**
  * 删除指定状态的渲染版本。
  */
-//@ chunk-s61vbvea.js:299962-300128 placement
 function dropStateRenderVersions(e) {
-  let n = JB(),
-    filtered = e.map(Zd).filter((s) => n.getState().has(s));
+  let n = renderVersions();
+  let filtered = e.map(stateKeyOf).filter((s) => n.getState().has(s));
   if (filtered.length === 0) return;
   n.setState((s) => {
     let h = new Map(s);
@@ -187,67 +290,82 @@ function dropStateRenderVersions(e) {
   });
 }
 //@ chunk-s61vbvea.js:300128-300146 placement
-var ser = () => $yn();
+/**
+ * 全量失效
+ */
+var invalidateAll = () => bumpRenderPaced();
 //@ chunk-s61vbvea.js:300146-300171 placement
-var ier = `${RENDER_EVENT} viewport`;
+/**
+ * renderEvent 的视口键（"<renderEvent> viewport"），视口相关失效都打到它上面。
+ */
+var VIEWPORT_KEY = `${RENDER_EVENT} viewport`;
 //@ chunk-s61vbvea.js:300171-300191 placement
-var rFi = () => tl(ier);
+/**
+ * 视口失效
+ */
+var invalidateViewport = () => bumpRenderVersion(VIEWPORT_KEY);
+//@ chunk-s61vbvea.js:300191-300416 placement
 /**
  * 由渲染版本表算出版本键（全局或指定插件列表、节奏）。
  */
-//@ chunk-s61vbvea.js:300191-300416 placement
-function renderVersionKey(e, n, r = "steady") {
-  if (n === void 0) {
+function renderVersionKey(state, n, r = "steady") {
+  if (n === undefined) {
     let h = "";
-    for (let [y, S] of e) if (y !== ier && !SM(y) && !FS(y)) h += `${y}\x00${S}\x00`;
+    for (let [y, S] of state)
+      if (y !== VIEWPORT_KEY && !isLiveKey(y) && !isStateKey(y)) h += `${y}\x00${S}\x00`;
     return h;
   }
-  let s = String(e.get(RENDER_EVENT) ?? 0);
+  let s = String(state.get(RENDER_EVENT) ?? 0);
   for (let h of n) {
-    let y = e.get(ol(h, r)) ?? 0;
+    let y = state.get(pacedKey(h, r)) ?? 0;
     s += `\x00${h}\x00${y}`;
   }
   return s;
 }
+//@ chunk-s61vbvea.js:300416-300527 placement
 /**
  * 订阅渲染版本变化（全局键变化时回调）。
  */
-//@ chunk-s61vbvea.js:300416-300527 placement
 function subscribeRenderVersions(e) {
-  let n = JB(),
-    r = renderVersionKey(n.getState());
+  let n = renderVersions();
+  let r = renderVersionKey(n.getState());
   return n.subscribe(() => {
     let s = renderVersionKey(n.getState());
-    if (s !== r) ((r = s), e());
+    if (s !== r) {
+      r = s;
+      e();
+    }
   });
 }
 //@ chunk-s61vbvea.js:300527-300604 placement
-function rD(e, n, r) {
-  let s = n.get(Zd(r));
-  return s === void 0 ? e : `${e}\x00\x00${s}`;
+/**
+ * 附上各插件版本
+ */
+function withPluginVersions(e, n, r) {
+  let s = n.get(stateKeyOf(r));
+  return s === undefined ? e : `${e}\x00\x00${s}`;
 }
-
 export {
   renderModulesForInstance,
-  Fyn,
-  cKt,
-  rFi,
-  JB,
-  $yn,
-  ser,
-  ier,
+  renderBurstSlot,
+  STEADY_REDRAW_INTERVAL_MS,
+  invalidateViewport,
+  renderVersions,
+  bumpRenderPaced,
+  invalidateAll,
+  VIEWPORT_KEY,
   createRenderInvalidator,
-  Zd,
+  stateKeyOf,
   dropStateRenderVersions,
-  ll,
-  NS,
+  LIVE_THROTTLE_LIMIT,
+  isThrottled,
   renderPaceOf,
   clearStateRenderVersions,
   maySelectInstance,
   renderPluginsForInstance,
-  rD,
+  withPluginVersions,
   renderVersionKey,
-  NM,
-  FM,
+  throttleLive,
+  throttleSteady,
   subscribeRenderVersions,
 };

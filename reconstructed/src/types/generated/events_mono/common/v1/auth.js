@@ -11,70 +11,74 @@
 
 //@ chunk-aepeg2w5.js:660599-660671 fingerprint = createBasePublicApiAuth (1)
 function createBasePublicApiAuth() {
-  return { account_id: 0, organization_uuid: "", account_uuid: "" };
+  return {
+    account_id: 0,
+    organization_uuid: "",
+    account_uuid: "",
+  };
 }
 //@ chunk-aepeg2w5.js:660671-661320 fingerprint = PublicApiAuth (1)
 var PublicApiAuth = {
-  fromJSON(e) {
+  fromJSON(object) {
     return {
-      account_id: isSet(e.account_id) ? globalThis.Number(e.account_id) : 0,
-      organization_uuid: isSet(e.organization_uuid) ? globalThis.String(e.organization_uuid) : "",
-      account_uuid: isSet(e.account_uuid) ? globalThis.String(e.account_uuid) : "",
+      account_id: isSet(object.account_id) ? globalThis.Number(object.account_id) : 0,
+      organization_uuid: isSet(object.organization_uuid) ? globalThis.String(object.organization_uuid) : "",
+      account_uuid: isSet(object.account_uuid) ? globalThis.String(object.account_uuid) : "",
     };
   },
-  toJSON(e) {
-    let n = {};
-    if (e.account_id !== void 0) n.account_id = Math.round(e.account_id);
-    if (e.organization_uuid !== void 0) n.organization_uuid = e.organization_uuid;
-    if (e.account_uuid !== void 0) n.account_uuid = e.account_uuid;
-    return n;
+  toJSON(message) {
+    let obj = {};
+    if (message.account_id !== undefined) obj.account_id = Math.round(message.account_id);
+    if (message.organization_uuid !== undefined) obj.organization_uuid = message.organization_uuid;
+    if (message.account_uuid !== undefined) obj.account_uuid = message.account_uuid;
+    return obj;
   },
-  create(e) {
-    return PublicApiAuth.fromPartial(e ?? {});
+  create(base) {
+    return PublicApiAuth.fromPartial(base ?? {});
   },
-  fromPartial(e) {
-    let n = createBasePublicApiAuth();
-    return (
-      (n.account_id = e.account_id ?? 0),
-      (n.organization_uuid = e.organization_uuid ?? ""),
-      (n.account_uuid = e.account_uuid ?? ""),
-      n
-    );
+  fromPartial(object) {
+    let message = createBasePublicApiAuth();
+    message.account_id = object.account_id ?? 0;
+    message.organization_uuid = object.organization_uuid ?? "";
+    message.account_uuid = object.account_uuid ?? "";
+    return message;
   },
 };
 //@ chunk-aepeg2w5.js:661320-661387 layout = createBasePublicApiAuth (0.771)
 function createBasePublicApiAuth_2() {
-  return { account_uuid: void 0, organization_uuid: void 0 };
+  return {
+    account_uuid: undefined,
+    organization_uuid: undefined,
+  };
 }
 //@ chunk-aepeg2w5.js:661387-661898 layout = PublicApiAuth (0.837)
 var PublicApiAuth_2 = {
-  fromJSON(e) {
+  fromJSON(object) {
     return {
-      account_uuid: isSet(e.account_uuid) ? globalThis.String(e.account_uuid) : void 0,
-      organization_uuid: isSet(e.organization_uuid) ? globalThis.String(e.organization_uuid) : void 0,
+      account_uuid: isSet(object.account_uuid) ? globalThis.String(object.account_uuid) : undefined,
+      organization_uuid: isSet(object.organization_uuid)
+        ? globalThis.String(object.organization_uuid)
+        : undefined,
     };
   },
-  toJSON(e) {
-    let n = {};
-    if (e.account_uuid !== void 0) n.account_uuid = e.account_uuid;
-    if (e.organization_uuid !== void 0) n.organization_uuid = e.organization_uuid;
-    return n;
+  toJSON(message) {
+    let obj = {};
+    if (message.account_uuid !== undefined) obj.account_uuid = message.account_uuid;
+    if (message.organization_uuid !== undefined) obj.organization_uuid = message.organization_uuid;
+    return obj;
   },
-  create(e) {
-    return PublicApiAuth_2.fromPartial(e ?? {});
+  create(base) {
+    return PublicApiAuth_2.fromPartial(base ?? {});
   },
-  fromPartial(e) {
-    let n = createBasePublicApiAuth_2();
-    return (
-      (n.account_uuid = e.account_uuid ?? void 0),
-      (n.organization_uuid = e.organization_uuid ?? void 0),
-      n
-    );
+  fromPartial(object) {
+    let message = createBasePublicApiAuth_2();
+    message.account_uuid = object.account_uuid ?? undefined;
+    message.organization_uuid = object.organization_uuid ?? undefined;
+    return message;
   },
 };
 //@ chunk-aepeg2w5.js:661898-661941 callgraph-witnessed = isSet (0)
 function isSet(value) {
-  return value !== null && value !== void 0;
+  return value !== null && value !== undefined;
 }
-
 export { PublicApiAuth, PublicApiAuth_2 };

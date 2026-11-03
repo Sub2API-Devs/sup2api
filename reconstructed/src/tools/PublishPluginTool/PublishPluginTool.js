@@ -9,25 +9,31 @@
  * attribution: placement 2
  */
 import { buildTool } from "../../services/tools/permissionCheckGuard.js";
-import { PUBLISH_PLUGIN_TOOL_NAME, Csi, joined } from "./prompt.js";
-import { ze, PUBLISH_PLUGIN_INPUT_SCHEMA, PUBLISH_PLUGIN_OUTPUT_SCHEMA, aTo, Ce } from "./constants.js";
+import { PUBLISH_PLUGIN_TOOL_NAME, PUBLISH_PLUGIN_DESCRIPTION, joined } from "./prompt.js";
+import {
+  MAX_PUBLISH_OUTPUT_LINE_CHARS,
+  PUBLISH_PLUGIN_INPUT_SCHEMA,
+  PUBLISH_PLUGIN_OUTPUT_SCHEMA,
+  publishRefusalDenial,
+  publishResultToToolOutput,
+} from "./constants.js";
 import { isPluginPublishAllowed } from "../../services/plugins/publish/publishGate.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 
 //@ chunk-hcckvqyb.js:11744-11853 placement = getErrnoPath (1)
 function getErrnoPath(e) {
-  let s = typeof e === "object" && e !== null && "path" in e ? e.path : void 0;
-  return typeof s === "string" ? s : "";
+  let path = typeof e === "object" && e !== null && "path" in e ? e.path : undefined;
+  return typeof path === "string" ? path : "";
 }
 //@ chunk-hcckvqyb.js:11853-12930 placement
 var PublishPluginTool = buildTool({
   name: PUBLISH_PLUGIN_TOOL_NAME,
   searchHint: "publish or share a plugin or mod with the team or organization library",
-  shouldDefer: !0,
+  shouldDefer: true,
   backgrounding: "never",
-  maxResultSizeChars: ze,
+  maxResultSizeChars: MAX_PUBLISH_OUTPUT_LINE_CHARS,
   async description() {
-    return Csi;
+    return PUBLISH_PLUGIN_DESCRIPTION;
   },
   async prompt() {
     return joined;
@@ -45,13 +51,13 @@ var PublishPluginTool = buildTool({
     return isPluginPublishAllowed();
   },
   isConcurrencySafe() {
-    return !1;
+    return false;
   },
   isReadOnly() {
-    return !1;
+    return false;
   },
   requiresUserInteraction() {
-    return !0;
+    return true;
   },
   toAutoClassifierInput(e) {
     return jsonStringify(e);
@@ -66,10 +72,13 @@ var PublishPluginTool = buildTool({
     return e.path ?? "";
   },
   create(e) {
-    let t = { ...e, tool: PublishPluginTool };
+    let t = {
+      ...e,
+      tool: PublishPluginTool,
+    };
     return {
       permissionCheckFailureDecision() {
-        return aTo("failed");
+        return publishRefusalDenial("failed");
       },
       async checkPermissions(s, r) {
         let { default: n } = await import("./chunk-xkt86s08.js");
@@ -77,18 +86,21 @@ var PublishPluginTool = buildTool({
       },
       async call(s, r) {
         let { default: n } = await import("./chunk-wm1cd8qt.js");
-        return { data: Ce(await n.run(s, r, t)) };
+        return {
+          data: publishResultToToolOutput(await n.run(s, r, t)),
+        };
       },
     };
   },
-  mapToolResultToToolResultBlockParam(e, t) {
+  mapToolResultToToolResultBlockParam(e, toolUseId) {
     return {
       type: "tool_result",
-      tool_use_id: t,
-      ...(e.state === "refused" && { is_error: !0 }),
+      tool_use_id: toolUseId,
+      ...(e.state === "refused" && {
+        is_error: true,
+      }),
       content: jsonStringify(e),
     };
   },
 });
-
 export { PublishPluginTool };

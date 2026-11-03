@@ -15,7 +15,7 @@ import { matchesSingleKeyFilter } from "../../utils/hooks/functionHookMatchers.j
 import { isHookRegistrationPending } from "../../utils/plugins/loadPluginHooks.js";
 import { logError } from "../../utils/log.js";
 import { toError, isAbortError, withTelemetryMessage } from "../../utils/errors.js";
-import { iUo, dispatchCommandRunHooks } from "../../plugins/functionHooks/commandRunDispatch.js";
+import { commandRunEvent, dispatchCommandRunHooks } from "../../plugins/functionHooks/commandRunDispatch.js";
 import { getCommandName, shippedCommandNames, buildCommandRunInfo } from "../../commands.js";
 import { cmdFeature, logFeatureBad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 import { shouldEscapeNdjsonForBridge } from "../../cli/ndjsonSafeStringify.js";
@@ -33,19 +33,19 @@ import { logForDebugging } from "../../utils/debug.js";
 import { commandThrowTextForTranscript } from "../../utils/processUserInput/processSlashCommand.js";
 
 //@ chunk-18hwfzwa.js:309809-310198 placement
-function isCommandHookedByPlugins(h) {
+function isCommandHookedByPlugins(command) {
   try {
-    let filtered = getPluginRegistry().loadedModules.filter((loadedModule) => !hasLink(loadedModule)),
-      D = new Set(
-        filtered
-          .filter(
-            (L) =>
-              L.hooks("command.run") &&
-              isModuleAdmitted(L) &&
-              matchesSingleKeyFilter(L.matcherFor("command.run"), "command", h),
-          )
-          .map((L) => L.name),
-      );
+    let filtered = getPluginRegistry().loadedModules.filter((loadedModule) => !hasLink(loadedModule));
+    let D = new Set(
+      filtered
+        .filter(
+          (L) =>
+            L.hooks("command.run") &&
+            isModuleAdmitted(L) &&
+            matchesSingleKeyFilter(L.matcherFor("command.run"), "command", command),
+        )
+        .map((L) => L.name),
+    );
     return (
       !isHookRegistrationPending() &&
       filtered.some((L) => D.has(L.name)) &&
@@ -61,134 +61,145 @@ function isCommandHookedByPlugins(h) {
       )
     );
   } catch (error) {
-    return (logError(toError(error)), !1);
+    logError(toError(error));
+    return false;
   }
 }
 //@ chunk-18hwfzwa.js:310198-310397 placement
-async function runLocalCommandFromRepl({
-  command: command,
-  commandName: commandName,
-  args: args,
-  context: context,
-  printRows: printRows,
-  ranAs: ranAs,
-}) {
+async function runLocalCommandFromRepl({ command, commandName, args, context, printRows, ranAs }) {
   await runLocalCommand({
-    command: command,
-    input: iUo(command, args, context.presentation),
+    command,
+    input: commandRunEvent(command, args, context.presentation),
     displayName: getCommandName(command),
     invokedAs: commandName,
-    context: context,
-    printRows: printRows,
-    ranAs: ranAs,
+    context,
+    printRows,
+    ranAs,
   });
 }
 //@ chunk-18hwfzwa.js:310397-311842 placement
-async function runLocalCommand({
-  command: command,
-  input: input,
-  displayName: displayName,
-  invokedAs: invokedAs,
-  context: context,
-  printRows: printRows,
-  ranAs: ranAs,
-}) {
-  let Be = cmdFeature(shippedCommandNames().has(command.name) ? command.name : "custom"),
-    He =
-      context.dispatchedOverBridge === !0 &&
-      shouldEscapeNdjsonForBridge() &&
-      !isCommandHookedByPlugins(input.command),
-    We = isPromptHookObserved() || He ? "" : input.args,
-    ze = snapshotHookRegistration(),
-    Xe = () => createCommandInputMessage(formatCommandInputTags(displayName, We));
+async function runLocalCommand({ command, input, displayName, invokedAs, context, printRows, ranAs }) {
+  let Be = cmdFeature(shippedCommandNames().has(command.name) ? command.name : "custom");
+  let He =
+    context.dispatchedOverBridge === true &&
+    shouldEscapeNdjsonForBridge() &&
+    !isCommandHookedByPlugins(input.command);
+  let args = isPromptHookObserved() || He ? "" : input.args;
+  let ze = snapshotHookRegistration();
+  let Xe = () => createCommandInputMessage(formatCommandInputTags(displayName, args));
   try {
-    let rt,
-      kt = await dispatchCommandRunHooks({
-        input: input,
-        engine: {
-          run: async (Dt) => {
-            if (!He && !hasHookRegistrationChanged(ze)) We = Dt;
-            return (
-              ranAs?.(Dt),
-              (await command.load()).call(
-                Dt,
-                { ...context, rowCommit: (await import("./chunk-7qydycm2.js")).ROW_COMMIT },
-                invokedAs,
-              )
-            );
-          },
-          textOf: DUe,
-          contextOf: T0t,
-          retell: (Dt, Lt) => {
-            let oo = withCommandText(Dt, Lt);
-            return ((rt = oo && Lt.plugin), oo);
-          },
+    let rt;
+    let kt = await dispatchCommandRunHooks({
+      input,
+      engine: {
+        run: async (Dt) => {
+          if (!He && !hasHookRegistrationChanged(ze)) args = Dt;
+          ranAs?.(Dt);
+          return (await command.load()).call(
+            Dt,
+            {
+              ...context,
+              rowCommit: (await import("./chunk-7qydycm2.js")).ROW_COMMIT,
+            },
+            invokedAs,
+          );
         },
-        queued: void 0,
-        signal: context.abortController.signal,
-      });
+        textOf: localCommandText,
+        contextOf: localCommandMetaMessages,
+        retell: (Dt, Lt) => {
+          let oo = withCommandText(Dt, Lt);
+          rt = oo && Lt.plugin;
+          return oo;
+        },
+      },
+      queued: undefined,
+      signal: context.abortController.signal,
+    });
     if (kt.kind === "answered" && hasSingleCommandRunHook(input.command)) {
-      if (!He && !hasHookRegistrationChanged(ze)) We = input.args;
+      if (!He && !hasHookRegistrationChanged(ze)) args = input.args;
       ranAs?.(input.args);
     }
-    let At = kt.kind === "engine" ? kt.ran : void 0,
-      It = kt.kind === "engine" ? DUe(kt.ran) : kt.text,
-      Ot = At?.type === "text" && At.level === "error";
-    if (
-      (Ot ? logFeatureBad(Be, "cmd_returned_error") : logFeatureOk(Be, getTipAttribution(command.name)),
-      kt.kind === "answered" && It === void 0)
-    )
-      return;
+    let ran = kt.kind === "engine" ? kt.ran : undefined;
+    let It = kt.kind === "engine" ? localCommandText(kt.ran) : kt.text;
+    let Ot = ran?.type === "text" && ran.level === "error";
+    if (Ot) logFeatureBad(Be, "cmd_returned_error");
+    else logFeatureOk(Be, getTipAttribution(command.name));
+    if (kt.kind === "answered" && It === undefined) return;
     let Et = Ot ? LOCAL_COMMAND_STDERR : LOCAL_COMMAND_STDOUT;
     printRows([
       Xe(),
       ...(It
         ? [
             createCommandInputMessage(`<${Et}>${escapeXml(It)}</${Et}>`, {
-              ...(At?.type === "text" && {
-                contextUsage: At.contextUsage,
-                usageReport: At.usageReport,
-                commandOutcome: At.outcome ?? (Ot ? { kind: "failed" } : void 0),
+              ...(ran?.type === "text" && {
+                contextUsage: ran.contextUsage,
+                usageReport: ran.usageReport,
+                commandOutcome:
+                  ran.outcome ??
+                  (Ot
+                    ? {
+                        kind: "failed",
+                      }
+                    : undefined),
               }),
-              commandRun: buildCommandRunInfo(command, We, kt.kind === "engine" ? rt : kt.plugin),
+              commandRun: buildCommandRunInfo(command, args, kt.kind === "engine" ? rt : kt.plugin),
             }),
           ]
         : []),
     ]);
   } catch (error) {
     let kt = isAbortError(error);
-    (kt
-      ? logForDebugging(`immediate command aborted: ${String(error)}`)
-      : logError(withTelemetryMessage(toError(error), "immediate command threw")),
-      logFeatureBad(Be, kt ? "cmd_local_aborted" : "cmd_local_threw"));
-    let At = kt ? LOCAL_COMMAND_STDOUT : LOCAL_COMMAND_STDERR,
-      It = escapeXml(commandThrowTextForTranscript(error, command.name, context.session));
+    if (kt) logForDebugging(`immediate command aborted: ${String(error)}`);
+    else logError(withTelemetryMessage(toError(error), "immediate command threw"));
+    logFeatureBad(Be, kt ? "cmd_local_aborted" : "cmd_local_threw");
+    let At = kt ? LOCAL_COMMAND_STDOUT : LOCAL_COMMAND_STDERR;
+    let It = escapeXml(commandThrowTextForTranscript(error, command.name, context.session));
     printRows([
       Xe(),
       createCommandInputMessage(
         `<${At}>${It}</${At}>`,
-        kt ? void 0 : { commandRun: buildCommandRunInfo(command, We), commandOutcome: { kind: "failed" } },
+        kt
+          ? undefined
+          : {
+              commandRun: buildCommandRunInfo(command, args),
+              commandOutcome: {
+                kind: "failed",
+              },
+            },
       ),
     ]);
   }
 }
 //@ chunk-18hwfzwa.js:311842-311914 placement
-function DUe(h) {
-  return h.type === "text" || h.type === "query" ? h.value : void 0;
+function localCommandText(h) {
+  return h.type === "text" || h.type === "query" ? h.value : undefined;
 }
 //@ chunk-18hwfzwa.js:311914-311993 placement
-function T0t(h) {
-  return h.type === "text" || h.type === "query" ? h.metaMessages : void 0;
+function localCommandMetaMessages(h) {
+  return h.type === "text" || h.type === "query" ? h.metaMessages : undefined;
 }
+//@ chunk-18hwfzwa.js:311993-312194 placement
 /**
  * 本地命令结果补上文本或上下文 meta 消息。
  */
-//@ chunk-18hwfzwa.js:311993-312194 placement
-function withCommandText(h, { text: text, context: context }) {
+function withCommandText(h, { text, context }) {
   if (h.type !== "text" && h.type !== "query") return;
-  let L = context ?? h.metaMessages,
-    ee = L === void 0 ? {} : { metaMessages: [...L] };
-  return text === void 0 ? { ...h, ...ee } : { type: "text", value: text, ...ee };
+  let L = context ?? h.metaMessages;
+  let ee =
+    L === undefined
+      ? {}
+      : {
+          metaMessages: [...L],
+        };
+  return text === undefined
+    ? {
+        ...h,
+        ...ee,
+      }
+    : {
+        type: "text",
+        value: text,
+        ...ee,
+      };
 }
-
 export { runLocalCommand, runLocalCommandFromRepl };

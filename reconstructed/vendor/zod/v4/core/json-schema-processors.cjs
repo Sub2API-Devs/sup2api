@@ -6,798 +6,990 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { Ul } from "./regexes.cjs";
-import { Bl } from "./schemas.cjs";
-import { td } from "./to-json-schema.cjs";
-import { Ee } from "./util.cjs";
+import { require_regexes } from "./regexes.cjs";
+import { require_schemas } from "./schemas.cjs";
+import { require_to_json_schema } from "./to-json-schema.cjs";
+import { require_util } from "./util.cjs";
 
 //@ chunk-1ny7cxrt.js:566438-584049 cjs-fingerprint
-var nd = x(function (G) {
-  var P8 =
-      (G && G.__createBinding) ||
-      (Object.create
-        ? function (e, t, n, o) {
-            if (o === void 0) o = n;
-            var ownPropertyDescriptor = Object.getOwnPropertyDescriptor(t, n);
-            if (
-              !ownPropertyDescriptor ||
-              ("get" in ownPropertyDescriptor
-                ? !t.__esModule
-                : ownPropertyDescriptor.writable || ownPropertyDescriptor.configurable)
-            )
-              ownPropertyDescriptor = {
-                enumerable: !0,
-                get: function () {
-                  return t[n];
-                },
-              };
-            Object.defineProperty(e, o, ownPropertyDescriptor);
-          }
-        : function (e, t, n, o) {
-            if (o === void 0) o = n;
-            e[o] = t[n];
-          }),
-    A8 =
-      (G && G.__setModuleDefault) ||
-      (Object.create
-        ? function (e, t) {
-            Object.defineProperty(e, "default", { enumerable: !0, value: t });
-          }
-        : function (e, t) {
-            e.default = t;
-          }),
-    I8 =
-      (G && G.__importStar) ||
-      function (e) {
-        if (e && e.__esModule) return e;
-        var t = {};
-        if (e != null) {
-          for (var key in e)
-            if (key !== "default" && Object.prototype.hasOwnProperty.call(e, key)) P8(t, e, key);
+var require_json_schema_processors = x(function (cjsExports) {
+  var __createBinding =
+    (cjsExports && cjsExports.__createBinding) ||
+    (Object.create
+      ? function (o_2, m, k, k2) {
+          if (k2 === undefined) k2 = k;
+          var desc = Object.getOwnPropertyDescriptor(m, k);
+          if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable))
+            desc = {
+              enumerable: true,
+              get: function () {
+                return m[k];
+              },
+            };
+          Object.defineProperty(o_2, k2, desc);
         }
-        return (A8(t, e), t);
-      };
-  Object.defineProperty(G, "__esModule", { value: !0 });
-  G.allProcessors =
-    G.lazyProcessor =
-    G.optionalProcessor =
-    G.promiseProcessor =
-    G.readonlyProcessor =
-    G.pipeProcessor =
-    G.catchProcessor =
-    G.prefaultProcessor =
-    G.defaultProcessor =
-    G.nonoptionalProcessor =
-    G.nullableProcessor =
-    G.recordProcessor =
-    G.tupleProcessor =
-    G.intersectionProcessor =
-    G.unionProcessor =
-    G.propertiesProcessor =
-    G.objectProcessor =
-    G.arrayProcessor =
-    G.setProcessor =
-    G.mapProcessor =
-    G.transformProcessor =
-    G.functionProcessor =
-    G.customProcessor =
-    G.successProcessor =
-    G.fileProcessor =
-    G.templateLiteralProcessor =
-    G.nanProcessor =
-    G.literalProcessor =
-    G.enumProcessor =
-    G.dateProcessor =
-    G.unknownProcessor =
-    G.anyProcessor =
-    G.neverProcessor =
-    G.voidProcessor =
-    G.undefinedProcessor =
-    G.nullProcessor =
-    G.symbolProcessor =
-    G.bigintProcessor =
-    G.booleanProcessor =
-    G.numberProcessor =
-    G.stringProcessor =
-      void 0;
-  G.aggregateChecks = il;
-  G.toJSONSchema = bX;
-  var kh = I8(Ul()),
-    Eh = Bl(),
-    ae = td(),
-    Gr = Ee(),
-    ec = (e, t, n) => {
-      if (e[t] === void 0 || n > e[t]) e[t] = n;
-    },
-    tc = (e, t, n) => {
-      if (e[t] === void 0 || n < e[t]) e[t] = n;
-    },
-    qC = (e, t) => {
-      (ec(e, "minimum", t), tc(e, "maximum", t));
-    },
-    JC = (e, t) => {
-      if ((e.multipleOf ?? (e.multipleOf = []), !e.multipleOf.includes(t))) e.multipleOf.push(t);
-    },
-    XC = (e, t) => {
-      (e.patterns ?? (e.patterns = new Set()), e.patterns.add(t));
-    },
-    QC = (e, t) => {
-      e.mime = e.mime ? e.mime.filter((n) => t.includes(n)) : [...t];
-    },
-    eT = (e, t) => {
-      if (((e.format = t), t.includes("int"))) e.isInt = !0;
-    },
-    GC = (e, t) => ec(e, "minimum", t.minimum),
-    WC = (e, t) => tc(e, "maximum", t.maximum),
-    YC = (e) => (t, n) => {
-      eT(t, n.format);
-      let [o, r] = e[n.format];
-      (ec(t, "minimum", o), tc(t, "maximum", r));
-    },
-    C8 = {
-      greater_than: (e, t) => ec(e, t.inclusive ? "minimum" : "exclusiveMinimum", t.value),
-      less_than: (e, t) => tc(e, t.inclusive ? "maximum" : "exclusiveMaximum", t.value),
-      multiple_of: (e, t) => JC(e, t.value),
-      number_format: YC(Gr.NUMBER_FORMAT_RANGES),
-      bigint_format: YC(Gr.BIGINT_FORMAT_RANGES),
-      min_length: GC,
-      max_length: WC,
-      length_equals: (e, t) => qC(e, t.length),
-      min_size: GC,
-      max_size: WC,
-      size_equals: (e, t) => qC(e, t.size),
-      string_format: (e, t) => {
-        if ((eT(e, t.format), t.pattern)) XC(e, t.pattern);
-        if (t.format === "base64" || t.format === "base64url") e.contentEncoding = t.format;
-        if (t.local || t.precision === -1) e.laxFormat = !0;
-      },
-      mime_type: (e, t) => QC(e, t.mime),
+      : function (o_2, m, k, k2) {
+          if (k2 === undefined) k2 = k;
+          o_2[k2] = m[k];
+        });
+  var __setModuleDefault =
+    (cjsExports && cjsExports.__setModuleDefault) ||
+    (Object.create
+      ? function (o, v) {
+          Object.defineProperty(o, "default", {
+            enumerable: true,
+            value: v,
+          });
+        }
+      : function (o, v) {
+          o.default = v;
+        });
+  var __importStar =
+    (cjsExports && cjsExports.__importStar) ||
+    function (mod) {
+      if (mod && mod.__esModule) return mod;
+      var result = {};
+      if (mod != null) {
+        for (var k in mod)
+          if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k))
+            __createBinding(result, mod, k);
+      }
+      __setModuleDefault(result, mod);
+      return result;
     };
-  function il(e) {
-    let t = {},
-      def = e._zod.def,
-      o = e._zod.traits.has("$ZodCheck") ? [e, ...(def.checks ?? [])] : (def.checks ?? []);
-    for (let s of o) C8[s._zod.def.check]?.(t, s._zod.def);
-    let bag = e._zod.bag;
-    if (bag.minimum !== void 0) ec(t, "minimum", bag.minimum);
-    if (bag.exclusiveMinimum !== void 0) ec(t, "exclusiveMinimum", bag.exclusiveMinimum);
-    if (bag.maximum !== void 0) tc(t, "maximum", bag.maximum);
-    if (bag.exclusiveMaximum !== void 0) tc(t, "exclusiveMaximum", bag.exclusiveMaximum);
-    if (bag.multipleOf !== void 0) JC(t, bag.multipleOf);
-    if (bag.format !== void 0) {
-      if ((t.format ?? (t.format = bag.format), bag.format.includes("int"))) t.isInt = !0;
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.allProcessors =
+    cjsExports.lazyProcessor =
+    cjsExports.optionalProcessor =
+    cjsExports.promiseProcessor =
+    cjsExports.readonlyProcessor =
+    cjsExports.pipeProcessor =
+    cjsExports.catchProcessor =
+    cjsExports.prefaultProcessor =
+    cjsExports.defaultProcessor =
+    cjsExports.nonoptionalProcessor =
+    cjsExports.nullableProcessor =
+    cjsExports.recordProcessor =
+    cjsExports.tupleProcessor =
+    cjsExports.intersectionProcessor =
+    cjsExports.unionProcessor =
+    cjsExports.propertiesProcessor =
+    cjsExports.objectProcessor =
+    cjsExports.arrayProcessor =
+    cjsExports.setProcessor =
+    cjsExports.mapProcessor =
+    cjsExports.transformProcessor =
+    cjsExports.functionProcessor =
+    cjsExports.customProcessor =
+    cjsExports.successProcessor =
+    cjsExports.fileProcessor =
+    cjsExports.templateLiteralProcessor =
+    cjsExports.nanProcessor =
+    cjsExports.literalProcessor =
+    cjsExports.enumProcessor =
+    cjsExports.dateProcessor =
+    cjsExports.unknownProcessor =
+    cjsExports.anyProcessor =
+    cjsExports.neverProcessor =
+    cjsExports.voidProcessor =
+    cjsExports.undefinedProcessor =
+    cjsExports.nullProcessor =
+    cjsExports.symbolProcessor =
+    cjsExports.bigintProcessor =
+    cjsExports.booleanProcessor =
+    cjsExports.numberProcessor =
+    cjsExports.stringProcessor =
+      undefined;
+  cjsExports.aggregateChecks = aggregateChecks;
+  cjsExports.toJSONSchema = toJSONSchema;
+  var regexes = __importStar(require_regexes());
+  var schemas_js_1 = require_schemas();
+  var to_json_schema_js_1 = require_to_json_schema();
+  var util_js_1 = require_util();
+  var narrowMin = (agg, key, value) => {
+    if (agg[key] === undefined || value > agg[key]) agg[key] = value;
+  };
+  var narrowMax = (agg, key, value) => {
+    if (agg[key] === undefined || value < agg[key]) agg[key] = value;
+  };
+  var narrowBoth = (agg, value) => {
+    narrowMin(agg, "minimum", value);
+    narrowMax(agg, "maximum", value);
+  };
+  var addDivisor = (agg, value) => {
+    agg.multipleOf ?? (agg.multipleOf = []);
+    if (!agg.multipleOf.includes(value)) agg.multipleOf.push(value);
+  };
+  var addPattern = (agg, pattern) => {
+    agg.patterns ?? (agg.patterns = new Set());
+    agg.patterns.add(pattern);
+  };
+  var intersectMime = (agg, mime) => {
+    agg.mime = agg.mime ? agg.mime.filter((m) => mime.includes(m)) : [...mime];
+  };
+  var setFormat = (agg, format) => {
+    agg.format = format;
+    if (format.includes("int")) agg.isInt = true;
+  };
+  var minContributor = (agg, def) => narrowMin(agg, "minimum", def.minimum);
+  var maxContributor = (agg, def) => narrowMax(agg, "maximum", def.maximum);
+  var formatContributor = (ranges) => (agg, def) => {
+    setFormat(agg, def.format);
+    let [minimum, maximum] = ranges[def.format];
+    narrowMin(agg, "minimum", minimum);
+    narrowMax(agg, "maximum", maximum);
+  };
+  var contributors = {
+    greater_than: (agg, def) => narrowMin(agg, def.inclusive ? "minimum" : "exclusiveMinimum", def.value),
+    less_than: (agg, def) => narrowMax(agg, def.inclusive ? "maximum" : "exclusiveMaximum", def.value),
+    multiple_of: (agg, def) => addDivisor(agg, def.value),
+    number_format: formatContributor(util_js_1.NUMBER_FORMAT_RANGES),
+    bigint_format: formatContributor(util_js_1.BIGINT_FORMAT_RANGES),
+    min_length: minContributor,
+    max_length: maxContributor,
+    length_equals: (agg, def) => narrowBoth(agg, def.length),
+    min_size: minContributor,
+    max_size: maxContributor,
+    size_equals: (agg, def) => narrowBoth(agg, def.size),
+    string_format: (agg, def) => {
+      setFormat(agg, def.format);
+      if (def.pattern) addPattern(agg, def.pattern);
+      if (def.format === "base64" || def.format === "base64url") agg.contentEncoding = def.format;
+      if (def.local || def.precision === -1) agg.laxFormat = true;
+    },
+    mime_type: (agg, def) => intersectMime(agg, def.mime),
+  };
+  function aggregateChecks(schema) {
+    let agg = {};
+    let def = schema._zod.def;
+    let list = schema._zod.traits.has("$ZodCheck") ? [schema, ...(def.checks ?? [])] : (def.checks ?? []);
+    for (let ch of list) contributors[ch._zod.def.check]?.(agg, ch._zod.def);
+    let bag = schema._zod.bag;
+    if (bag.minimum !== undefined) narrowMin(agg, "minimum", bag.minimum);
+    if (bag.exclusiveMinimum !== undefined) narrowMin(agg, "exclusiveMinimum", bag.exclusiveMinimum);
+    if (bag.maximum !== undefined) narrowMax(agg, "maximum", bag.maximum);
+    if (bag.exclusiveMaximum !== undefined) narrowMax(agg, "exclusiveMaximum", bag.exclusiveMaximum);
+    if (bag.multipleOf !== undefined) addDivisor(agg, bag.multipleOf);
+    if (bag.format !== undefined) {
+      agg.format ?? (agg.format = bag.format);
+      if (bag.format.includes("int")) agg.isInt = true;
     }
-    if (bag.mime) QC(t, bag.mime);
-    for (let s of bag.patterns ?? []) XC(t, s);
-    return t;
+    if (bag.mime) intersectMime(agg, bag.mime);
+    for (let pattern of bag.patterns ?? []) addPattern(agg, pattern);
+    return agg;
   }
-  var T8 = { guid: "uuid", url: "uri", datetime: "date-time", json_string: "json-string", regex: "" },
-    $8 = new Map([
-      [Eh.base64Charset, kh.base64],
-      [Eh.base64urlCharset, kh.base64url],
-    ]),
-    tT = (e) => $8.get(e) ?? e,
-    R8 = (e, t, n, o) => {
-      let r = n;
-      r.type = "string";
-      let {
-        minimum: minimum,
-        maximum: maximum,
-        format: format,
-        patterns: patterns,
-        contentEncoding: contentEncoding,
-        laxFormat: laxFormat,
-      } = il(e);
-      if (typeof minimum === "number") r.minLength = minimum;
-      if (typeof maximum === "number") r.maxLength = maximum;
-      if (format) {
-        if (((r.format = T8[format] ?? format), r.format === "")) delete r.format;
-        if (format === "time" || laxFormat) delete r.format;
-      }
-      if (contentEncoding) r.contentEncoding = contentEncoding;
-      if (patterns && patterns.size > 0) {
-        let mapped = [...patterns].map(tT);
-        if (mapped.length === 1) r.pattern = mapped[0].source;
-        else if (mapped.length > 1)
-          r.allOf = [
-            ...mapped.map((m) => ({
-              ...(t.target === "draft-07" || t.target === "draft-04" || t.target === "openapi-3.0"
-                ? { type: "string" }
-                : {}),
-              pattern: m.source,
-            })),
-          ];
-      }
-    };
-  G.stringProcessor = R8;
-  var D8 = (e, t, n, o) => {
-    let r = n,
-      {
-        minimum: minimum,
-        maximum: maximum,
-        multipleOf: multipleOf,
-        exclusiveMaximum: exclusiveMaximum,
-        exclusiveMinimum: exclusiveMinimum,
-        isInt: isInt,
-      } = il(e);
-    r.type = isInt ? "integer" : "number";
-    let h = typeof exclusiveMinimum === "number" && exclusiveMinimum >= (minimum ?? Number.NEGATIVE_INFINITY),
-      m = typeof exclusiveMaximum === "number" && exclusiveMaximum <= (maximum ?? Number.POSITIVE_INFINITY),
-      y = t.target === "draft-04" || t.target === "openapi-3.0";
-    if (h)
-      if (y) ((r.minimum = exclusiveMinimum), (r.exclusiveMinimum = !0));
-      else r.exclusiveMinimum = exclusiveMinimum;
-    else if (typeof minimum === "number") r.minimum = minimum;
-    if (m)
-      if (y) ((r.maximum = exclusiveMaximum), (r.exclusiveMaximum = !0));
-      else r.exclusiveMaximum = exclusiveMaximum;
-    else if (typeof maximum === "number") r.maximum = maximum;
+  var formatMap = {
+    guid: "uuid",
+    url: "uri",
+    datetime: "date-time",
+    json_string: "json-string",
+    regex: "",
+  };
+  var exactPatterns = new Map([
+    [schemas_js_1.base64Charset, regexes.base64],
+    [schemas_js_1.base64urlCharset, regexes.base64url],
+  ]);
+  var exactPattern = (p) => exactPatterns.get(p) ?? p;
+  var stringProcessor = (schema, ctx, _json, _params) => {
+    let json = _json;
+    json.type = "string";
+    let { minimum, maximum, format, patterns, contentEncoding, laxFormat } = aggregateChecks(schema);
+    if (typeof minimum === "number") json.minLength = minimum;
+    if (typeof maximum === "number") json.maxLength = maximum;
+    if (format) {
+      json.format = formatMap[format] ?? format;
+      if (json.format === "") delete json.format;
+      if (format === "time" || laxFormat) delete json.format;
+    }
+    if (contentEncoding) json.contentEncoding = contentEncoding;
+    if (patterns && patterns.size > 0) {
+      let patternList = [...patterns].map(exactPattern);
+      if (patternList.length === 1) json.pattern = patternList[0].source;
+      else if (patternList.length > 1)
+        json.allOf = [
+          ...patternList.map((regex) => ({
+            ...(ctx.target === "draft-07" || ctx.target === "draft-04" || ctx.target === "openapi-3.0"
+              ? {
+                  type: "string",
+                }
+              : {}),
+            pattern: regex.source,
+          })),
+        ];
+    }
+  };
+  cjsExports.stringProcessor = stringProcessor;
+  var numberProcessor = (schema, ctx, _json, params) => {
+    let json = _json;
+    let { minimum, maximum, multipleOf, exclusiveMaximum, exclusiveMinimum, isInt } = aggregateChecks(schema);
+    json.type = isInt ? "integer" : "number";
+    let exMin =
+      typeof exclusiveMinimum === "number" && exclusiveMinimum >= (minimum ?? Number.NEGATIVE_INFINITY);
+    let exMax =
+      typeof exclusiveMaximum === "number" && exclusiveMaximum <= (maximum ?? Number.POSITIVE_INFINITY);
+    let legacy = ctx.target === "draft-04" || ctx.target === "openapi-3.0";
+    if (exMin) {
+      if (legacy) {
+        json.minimum = exclusiveMinimum;
+        json.exclusiveMinimum = true;
+      } else json.exclusiveMinimum = exclusiveMinimum;
+    } else if (typeof minimum === "number") json.minimum = minimum;
+    if (exMax) {
+      if (legacy) {
+        json.maximum = exclusiveMaximum;
+        json.exclusiveMaximum = true;
+      } else json.exclusiveMaximum = exclusiveMaximum;
+    } else if (typeof maximum === "number") json.maximum = maximum;
     if (multipleOf) {
-      let b = new Set();
-      for (let j of multipleOf)
-        if (Number.isFinite(j) && j !== 0) b.add(Math.abs(j));
+      let divisors = new Set();
+      for (let divisor of multipleOf)
+        if (Number.isFinite(divisor) && divisor !== 0) divisors.add(Math.abs(divisor));
         else
-          ae.handleUnrepresentable(
-            e,
-            t,
-            r,
-            o,
-            `A multipleOf divisor of ${j} cannot be represented in JSON Schema`,
+          to_json_schema_js_1.handleUnrepresentable(
+            schema,
+            ctx,
+            json,
+            params,
+            `A multipleOf divisor of ${divisor} cannot be represented in JSON Schema`,
           );
-      let [w, ...S] = b;
-      if (w !== void 0) r.multipleOf = w;
-      if (S.length) r.allOf = [...(r.allOf ?? []), ...S.map((j) => ({ multipleOf: j }))];
+      let [first, ...rest] = divisors;
+      if (first !== undefined) json.multipleOf = first;
+      if (rest.length)
+        json.allOf = [
+          ...(json.allOf ?? []),
+          ...rest.map((m) => ({
+            multipleOf: m,
+          })),
+        ];
     }
   };
-  G.numberProcessor = D8;
-  var M8 = (e, t, n, o) => {
-    n.type = "boolean";
+  cjsExports.numberProcessor = numberProcessor;
+  var booleanProcessor = (_schema, _ctx, json, _params) => {
+    json.type = "boolean";
   };
-  G.booleanProcessor = M8;
-  var j8 = (e, t, n, o) => {
-    ae.handleUnrepresentable(e, t, n, o, "BigInt cannot be represented in JSON Schema");
+  cjsExports.booleanProcessor = booleanProcessor;
+  var bigintProcessor = (schema, ctx, json, params) => {
+    to_json_schema_js_1.handleUnrepresentable(
+      schema,
+      ctx,
+      json,
+      params,
+      "BigInt cannot be represented in JSON Schema",
+    );
   };
-  G.bigintProcessor = j8;
-  var x8 = (e, t, n, o) => {
-    ae.handleUnrepresentable(e, t, n, o, "Symbols cannot be represented in JSON Schema");
+  cjsExports.bigintProcessor = bigintProcessor;
+  var symbolProcessor = (schema, ctx, json, params) => {
+    to_json_schema_js_1.handleUnrepresentable(
+      schema,
+      ctx,
+      json,
+      params,
+      "Symbols cannot be represented in JSON Schema",
+    );
   };
-  G.symbolProcessor = x8;
-  var L8 = (e, t, n, o) => {
-    if (t.target === "openapi-3.0") ((n.type = "string"), (n.nullable = !0), (n.enum = [null]));
-    else n.type = "null";
+  cjsExports.symbolProcessor = symbolProcessor;
+  var nullProcessor = (_schema, ctx, json, _params) => {
+    if (ctx.target === "openapi-3.0") {
+      json.type = "string";
+      json.nullable = true;
+      json.enum = [null];
+    } else json.type = "null";
   };
-  G.nullProcessor = L8;
-  var N8 = (e, t, n, o) => {
-    ae.handleUnrepresentable(e, t, n, o, "Undefined cannot be represented in JSON Schema");
+  cjsExports.nullProcessor = nullProcessor;
+  var undefinedProcessor = (schema, ctx, json, params) => {
+    to_json_schema_js_1.handleUnrepresentable(
+      schema,
+      ctx,
+      json,
+      params,
+      "Undefined cannot be represented in JSON Schema",
+    );
   };
-  G.undefinedProcessor = N8;
-  var U8 = (e, t, n, o) => {
-    ae.handleUnrepresentable(e, t, n, o, "Void cannot be represented in JSON Schema");
+  cjsExports.undefinedProcessor = undefinedProcessor;
+  var voidProcessor = (schema, ctx, json, params) => {
+    to_json_schema_js_1.handleUnrepresentable(
+      schema,
+      ctx,
+      json,
+      params,
+      "Void cannot be represented in JSON Schema",
+    );
   };
-  G.voidProcessor = U8;
-  var z8 = (e, t, n, o) => {
-    n.not = {};
+  cjsExports.voidProcessor = voidProcessor;
+  var neverProcessor = (_schema, _ctx, json, _params) => {
+    json.not = {};
   };
-  G.neverProcessor = z8;
-  var F8 = (e, t, n, o) => {};
-  G.anyProcessor = F8;
-  var B8 = (e, t, n, o) => {};
-  G.unknownProcessor = B8;
-  var H8 = (e, t, n, o) => {
-    ae.handleUnrepresentable(e, t, n, o, "Date cannot be represented in JSON Schema");
+  cjsExports.neverProcessor = neverProcessor;
+  var anyProcessor = (_schema, _ctx, _json, _params) => {};
+  cjsExports.anyProcessor = anyProcessor;
+  var unknownProcessor = (_schema, _ctx, _json, _params) => {};
+  cjsExports.unknownProcessor = unknownProcessor;
+  var dateProcessor = (schema, ctx, json, params) => {
+    to_json_schema_js_1.handleUnrepresentable(
+      schema,
+      ctx,
+      json,
+      params,
+      "Date cannot be represented in JSON Schema",
+    );
   };
-  G.dateProcessor = H8;
-  var K8 = (e, t, n, o) => {
-    let def = e._zod.def,
-      enumValues = Gr.getEnumValues(def.entries);
-    if (enumValues.length === 0) {
-      n.not = {};
+  cjsExports.dateProcessor = dateProcessor;
+  var enumProcessor = (schema, _ctx, json, _params) => {
+    let def = schema._zod.def;
+    let values = util_js_1.getEnumValues(def.entries);
+    if (values.length === 0) {
+      json.not = {};
       return;
     }
-    if (enumValues.every((a) => typeof a === "number")) n.type = "number";
-    if (enumValues.every((a) => typeof a === "string")) n.type = "string";
-    n.enum = enumValues;
+    if (values.every((v) => typeof v === "number")) json.type = "number";
+    if (values.every((v) => typeof v === "string")) json.type = "string";
+    json.enum = values;
   };
-  G.enumProcessor = K8;
-  var Z8 = (e, t, n, o) => {
-    let def = e._zod.def;
+  cjsExports.enumProcessor = enumProcessor;
+  var literalProcessor = (schema, ctx, json, params) => {
+    let def = schema._zod.def;
     if (def.values.length === 0) {
-      n.not = {};
+      json.not = {};
       return;
     }
-    let s = [];
-    for (let a of def.values)
-      if (a === void 0) {
-        if (ae.handleUnrepresentable(e, t, n, o, "Literal `undefined` cannot be represented in JSON Schema"))
+    let vals = [];
+    for (let val of def.values)
+      if (val === undefined) {
+        if (
+          to_json_schema_js_1.handleUnrepresentable(
+            schema,
+            ctx,
+            json,
+            params,
+            "Literal `undefined` cannot be represented in JSON Schema",
+          )
+        )
           return;
-      } else if (typeof a === "bigint") {
-        if (ae.handleUnrepresentable(e, t, n, o, "BigInt literals cannot be represented in JSON Schema"))
+      } else if (typeof val === "bigint") {
+        if (
+          to_json_schema_js_1.handleUnrepresentable(
+            schema,
+            ctx,
+            json,
+            params,
+            "BigInt literals cannot be represented in JSON Schema",
+          )
+        )
           return;
-        s.push(Number(a));
-      } else s.push(a);
-    if (s.length === 0);
-    else if (s.length === 1) {
-      let a = s[0];
-      if (((n.type = a === null ? "null" : typeof a), t.target === "draft-04" || t.target === "openapi-3.0"))
-        n.enum = [a];
-      else n.const = a;
+        vals.push(Number(val));
+      } else vals.push(val);
+    if (vals.length === 0);
+    else if (vals.length === 1) {
+      let val = vals[0];
+      json.type = val === null ? "null" : typeof val;
+      if (ctx.target === "draft-04" || ctx.target === "openapi-3.0") json.enum = [val];
+      else json.const = val;
     } else {
-      if (s.every((a) => typeof a === "number")) n.type = "number";
-      if (s.every((a) => typeof a === "string")) n.type = "string";
-      if (s.every((a) => typeof a === "boolean")) n.type = "boolean";
-      if (s.every((a) => a === null)) n.type = "null";
-      n.enum = s;
+      if (vals.every((v) => typeof v === "number")) json.type = "number";
+      if (vals.every((v) => typeof v === "string")) json.type = "string";
+      if (vals.every((v) => typeof v === "boolean")) json.type = "boolean";
+      if (vals.every((v) => v === null)) json.type = "null";
+      json.enum = vals;
     }
   };
-  G.literalProcessor = Z8;
-  var V8 = (e, t, n, o) => {
-    ae.handleUnrepresentable(e, t, n, o, "NaN cannot be represented in JSON Schema");
+  cjsExports.literalProcessor = literalProcessor;
+  var nanProcessor = (schema, ctx, json, params) => {
+    to_json_schema_js_1.handleUnrepresentable(
+      schema,
+      ctx,
+      json,
+      params,
+      "NaN cannot be represented in JSON Schema",
+    );
   };
-  G.nanProcessor = V8;
-  var q8 = (e, t, n, o) => {
-    let r = n,
-      pattern = e._zod.pattern;
+  cjsExports.nanProcessor = nanProcessor;
+  var templateLiteralProcessor = (schema, _ctx, json, _params) => {
+    let _json = json;
+    let pattern = schema._zod.pattern;
     if (!pattern) throw Error("Pattern not found in template literal");
-    ((r.type = "string"), (r.pattern = pattern.source));
+    _json.type = "string";
+    _json.pattern = pattern.source;
   };
-  G.templateLiteralProcessor = q8;
-  var G8 = (e, t, n, o) => {
-    let r = n;
-    ((r.type = "string"), (r.format = "binary"), (r.contentEncoding = "binary"));
-    let { minimum: minimum, maximum: maximum, mime: mime } = il(e);
-    if (minimum !== void 0) r.minLength = minimum;
-    if (maximum !== void 0) r.maxLength = maximum;
+  cjsExports.templateLiteralProcessor = templateLiteralProcessor;
+  var fileProcessor = (schema, _ctx, json, _params) => {
+    let _json = json;
+    _json.type = "string";
+    _json.format = "binary";
+    _json.contentEncoding = "binary";
+    let { minimum, maximum, mime } = aggregateChecks(schema);
+    if (minimum !== undefined) _json.minLength = minimum;
+    if (maximum !== undefined) _json.maxLength = maximum;
     if (!mime) return;
-    if (mime.length === 0) r.not = {};
-    else if (mime.length === 1) r.contentMediaType = mime[0];
-    else r.anyOf = mime.map((c) => ({ contentMediaType: c }));
+    if (mime.length === 0) _json.not = {};
+    else if (mime.length === 1) _json.contentMediaType = mime[0];
+    else
+      _json.anyOf = mime.map((m) => ({
+        contentMediaType: m,
+      }));
   };
-  G.fileProcessor = G8;
-  var W8 = (e, t, n, o) => {
-    n.type = "boolean";
+  cjsExports.fileProcessor = fileProcessor;
+  var successProcessor = (_schema, _ctx, json, _params) => {
+    json.type = "boolean";
   };
-  G.successProcessor = W8;
-  var Y8 = (e, t, n, o) => {
-    ae.handleUnrepresentable(e, t, n, o, "Custom types cannot be represented in JSON Schema");
+  cjsExports.successProcessor = successProcessor;
+  var customProcessor = (schema, ctx, json, params) => {
+    to_json_schema_js_1.handleUnrepresentable(
+      schema,
+      ctx,
+      json,
+      params,
+      "Custom types cannot be represented in JSON Schema",
+    );
   };
-  G.customProcessor = Y8;
-  var J8 = (e, t, n, o) => {
-    ae.handleUnrepresentable(e, t, n, o, "Function types cannot be represented in JSON Schema");
+  cjsExports.customProcessor = customProcessor;
+  var functionProcessor = (schema, ctx, json, params) => {
+    to_json_schema_js_1.handleUnrepresentable(
+      schema,
+      ctx,
+      json,
+      params,
+      "Function types cannot be represented in JSON Schema",
+    );
   };
-  G.functionProcessor = J8;
-  var X8 = (e, t, n, o) => {
-    ae.handleUnrepresentable(e, t, n, o, "Transforms cannot be represented in JSON Schema");
+  cjsExports.functionProcessor = functionProcessor;
+  var transformProcessor = (schema, ctx, json, params) => {
+    to_json_schema_js_1.handleUnrepresentable(
+      schema,
+      ctx,
+      json,
+      params,
+      "Transforms cannot be represented in JSON Schema",
+    );
   };
-  G.transformProcessor = X8;
-  var Q8 = (e, t, n, o) => {
-    ae.handleUnrepresentable(e, t, n, o, "Map cannot be represented in JSON Schema");
+  cjsExports.transformProcessor = transformProcessor;
+  var mapProcessor = (schema, ctx, json, params) => {
+    to_json_schema_js_1.handleUnrepresentable(
+      schema,
+      ctx,
+      json,
+      params,
+      "Map cannot be represented in JSON Schema",
+    );
   };
-  G.mapProcessor = Q8;
-  var eX = (e, t, n, o) => {
-    ae.handleUnrepresentable(e, t, n, o, "Set cannot be represented in JSON Schema");
+  cjsExports.mapProcessor = mapProcessor;
+  var setProcessor = (schema, ctx, json, params) => {
+    to_json_schema_js_1.handleUnrepresentable(
+      schema,
+      ctx,
+      json,
+      params,
+      "Set cannot be represented in JSON Schema",
+    );
   };
-  G.setProcessor = eX;
-  var tX = (e, t, n, o) => {
-    let r = n,
-      def = e._zod.def,
-      { minimum: minimum, maximum: maximum } = il(e);
-    if (typeof minimum === "number") r.minItems = minimum;
-    if (typeof maximum === "number") r.maxItems = maximum;
-    ((r.type = "array"), (r.items = ae.processSchema(def.element, t, { ...o, path: [...o.path, "items"] })));
+  cjsExports.setProcessor = setProcessor;
+  var arrayProcessor = (schema, ctx, _json, params) => {
+    let json = _json;
+    let def = schema._zod.def;
+    let { minimum, maximum } = aggregateChecks(schema);
+    if (typeof minimum === "number") json.minItems = minimum;
+    if (typeof maximum === "number") json.maxItems = maximum;
+    json.type = "array";
+    json.items = to_json_schema_js_1.processSchema(def.element, ctx, {
+      ...params,
+      path: [...params.path, "items"],
+    });
   };
-  G.arrayProcessor = tX;
-  function nc(e) {
-    let def = e._zod.def;
-    if (def.type === "pipe" && def.in._zod.traits.has("$ZodTransform")) return nc(def.out);
-    if (def.type === "catch") return nc(def.innerType);
-    return e._zod.optin;
+  cjsExports.arrayProcessor = arrayProcessor;
+  function inputOptin(schema) {
+    let def = schema._zod.def;
+    if (def.type === "pipe" && def.in._zod.traits.has("$ZodTransform")) return inputOptin(def.out);
+    if (def.type === "catch") return inputOptin(def.innerType);
+    return schema._zod.optin;
   }
-  var nX = (e, t, n, o) => {
-    let r = n,
-      def = e._zod.def,
-      shape = def.shape;
+  var objectProcessor = (schema, ctx, _json, params) => {
+    let json = _json;
+    let def = schema._zod.def;
+    let shape = def.shape;
     if (
       Object.getOwnPropertySymbols(shape).length &&
-      ae.handleUnrepresentable(e, t, r, o, "Symbol keys cannot be represented in JSON Schema")
+      to_json_schema_js_1.handleUnrepresentable(
+        schema,
+        ctx,
+        json,
+        params,
+        "Symbol keys cannot be represented in JSON Schema",
+      )
     )
       return;
-    ((r.type = "object"), (r.properties = {}));
+    json.type = "object";
+    json.properties = {};
     for (let key in shape)
-      Gr.assignProp(
-        r.properties,
+      util_js_1.assignProp(
+        json.properties,
         key,
-        ae.processSchema(shape[key], t, { ...o, path: [...o.path, "properties", key] }),
-      );
-    let c = new Set(Object.keys(shape)),
-      u = new Set(
-        [...c].filter((f) => {
-          let h = def.shape[f];
-          if (t.io === "input") return nc(h) === void 0;
-          else return h._zod.optout === void 0;
+        to_json_schema_js_1.processSchema(shape[key], ctx, {
+          ...params,
+          path: [...params.path, "properties", key],
         }),
       );
-    if (u.size > 0) r.required = Array.from(u);
-    if (def.catchall?._zod.def.type === "never") r.additionalProperties = !1;
+    let allKeys = new Set(Object.keys(shape));
+    let requiredKeys = new Set(
+      [...allKeys].filter((key) => {
+        let field = def.shape[key];
+        if (ctx.io === "input") return inputOptin(field) === undefined;
+        else return field._zod.optout === undefined;
+      }),
+    );
+    if (requiredKeys.size > 0) json.required = Array.from(requiredKeys);
+    if (def.catchall?._zod.def.type === "never") json.additionalProperties = false;
     else if (!def.catchall) {
-      if (t.io === "output") r.additionalProperties = !1;
+      if (ctx.io === "output") json.additionalProperties = false;
     } else if (def.catchall)
-      r.additionalProperties = ae.processSchema(def.catchall, t, {
-        ...o,
-        path: [...o.path, "additionalProperties"],
+      json.additionalProperties = to_json_schema_js_1.processSchema(def.catchall, ctx, {
+        ...params,
+        path: [...params.path, "additionalProperties"],
       });
   };
-  G.objectProcessor = nX;
-  var rX = (e, t, n, o) => {
-    let r = n,
-      def = e._zod.def;
+  cjsExports.objectProcessor = objectProcessor;
+  var propertiesProcessor = (schema, ctx, _json, params) => {
+    let json = _json;
+    let def = schema._zod.def;
     if (
       Object.getOwnPropertySymbols(def.shape).length &&
-      ae.handleUnrepresentable(e, t, r, o, "Symbol keys cannot be represented in JSON Schema")
+      to_json_schema_js_1.handleUnrepresentable(
+        schema,
+        ctx,
+        json,
+        params,
+        "Symbol keys cannot be represented in JSON Schema",
+      )
     )
       return;
-    if (t.io === "output") {
+    if (ctx.io === "output") {
       for (let key in def.shape)
         if (
-          ae.isTransforming(def.shape[key]) &&
-          ae.handleUnrepresentable(
-            e,
-            t,
-            r,
-            o,
+          to_json_schema_js_1.isTransforming(def.shape[key]) &&
+          to_json_schema_js_1.handleUnrepresentable(
+            schema,
+            ctx,
+            json,
+            params,
             `z.properties() returns its input, so the output of a transforming schema at key "${key}" cannot be represented in JSON Schema`,
           )
         )
           return;
     }
-    ((r.type = "object"), (r.properties = {}));
+    json.type = "object";
+    json.properties = {};
     for (let key in def.shape)
-      Gr.assignProp(
-        r.properties,
+      util_js_1.assignProp(
+        json.properties,
         key,
-        ae.processSchema(def.shape[key], t, { ...o, path: [...o.path, "properties", key] }),
+        to_json_schema_js_1.processSchema(def.shape[key], ctx, {
+          ...params,
+          path: [...params.path, "properties", key],
+        }),
       );
-    let filtered = Object.keys(def.shape).filter((l) => nc(def.shape[l]) === void 0);
-    if (filtered.length > 0) r.required = filtered;
+    let required = Object.keys(def.shape).filter((key) => inputOptin(def.shape[key]) === undefined);
+    if (required.length > 0) json.required = required;
   };
-  G.propertiesProcessor = rX;
-  var iX = (e, t, n, o) => {
-    let def = e._zod.def,
-      s = def.inclusive === !1,
-      mapped = def.options.map((option, c) =>
-        ae.processSchema(option, t, { ...o, path: [...o.path, s ? "oneOf" : "anyOf", c] }),
-      );
-    if (s) n.oneOf = mapped;
-    else n.anyOf = mapped;
+  cjsExports.propertiesProcessor = propertiesProcessor;
+  var unionProcessor = (schema, ctx, json, params) => {
+    let def = schema._zod.def;
+    let isExclusive = def.inclusive === false;
+    let options = def.options.map((x, i) =>
+      to_json_schema_js_1.processSchema(x, ctx, {
+        ...params,
+        path: [...params.path, isExclusive ? "oneOf" : "anyOf", i],
+      }),
+    );
+    if (isExclusive) json.oneOf = options;
+    else json.anyOf = options;
   };
-  G.unionProcessor = iX;
-  var oX = (e, t, n, o) => {
-    let def = e._zod.def,
-      processSchema = ae.processSchema(def.left, t, { ...o, path: [...o.path, "allOf", 0] }),
-      processSchema_2 = ae.processSchema(def.right, t, { ...o, path: [...o.path, "allOf", 1] }),
-      l = (u) => "allOf" in u && Object.keys(u).length === 1,
-      c = [
-        ...(l(processSchema) ? processSchema.allOf : [processSchema]),
-        ...(l(processSchema_2) ? processSchema_2.allOf : [processSchema_2]),
-      ];
-    ((n.allOf = c), t.intersections.push(c));
+  cjsExports.unionProcessor = unionProcessor;
+  var intersectionProcessor = (schema, ctx, json, params) => {
+    let def = schema._zod.def;
+    let a_2 = to_json_schema_js_1.processSchema(def.left, ctx, {
+      ...params,
+      path: [...params.path, "allOf", 0],
+    });
+    let b = to_json_schema_js_1.processSchema(def.right, ctx, {
+      ...params,
+      path: [...params.path, "allOf", 1],
+    });
+    let isSimpleIntersection = (val) => "allOf" in val && Object.keys(val).length === 1;
+    let allOf = [
+      ...(isSimpleIntersection(a_2) ? a_2.allOf : [a_2]),
+      ...(isSimpleIntersection(b) ? b.allOf : [b]),
+    ];
+    json.allOf = allOf;
+    ctx.intersections.push(allOf);
   };
-  G.intersectionProcessor = oX;
-  var sX = (e, t, n, o) => {
-    let r = n,
-      def = e._zod.def;
-    r.type = "array";
-    let a = t.target === "draft-2020-12" ? "prefixItems" : "items",
-      l = t.target === "draft-2020-12" ? "items" : t.target === "openapi-3.0" ? "items" : "additionalItems",
-      mapped = def.items.map((item, S) => ae.processSchema(item, t, { ...o, path: [...o.path, a, S] })),
-      u = def.rest
-        ? ae.processSchema(def.rest, t, {
-            ...o,
-            path: [...o.path, l, ...(t.target === "openapi-3.0" ? [def.items.length] : [])],
-          })
-        : null,
-      f = def.items.length;
-    while (f > 0) {
-      let w = def.items[f - 1];
-      if (!(t.io === "input" ? nc(w) !== void 0 : w._zod.optout === "optional")) break;
-      f--;
+  cjsExports.intersectionProcessor = intersectionProcessor;
+  var tupleProcessor = (schema, ctx, _json, params) => {
+    let json = _json;
+    let def = schema._zod.def;
+    json.type = "array";
+    let prefixPath = ctx.target === "draft-2020-12" ? "prefixItems" : "items";
+    let restPath =
+      ctx.target === "draft-2020-12" ? "items" : ctx.target === "openapi-3.0" ? "items" : "additionalItems";
+    let prefixItems = def.items.map((x, i) =>
+      to_json_schema_js_1.processSchema(x, ctx, {
+        ...params,
+        path: [...params.path, prefixPath, i],
+      }),
+    );
+    let rest = def.rest
+      ? to_json_schema_js_1.processSchema(def.rest, ctx, {
+          ...params,
+          path: [...params.path, restPath, ...(ctx.target === "openapi-3.0" ? [def.items.length] : [])],
+        })
+      : null;
+    let minItems = def.items.length;
+    while (minItems > 0) {
+      let item = def.items[minItems - 1];
+      if (!(ctx.io === "input" ? inputOptin(item) !== undefined : item._zod.optout === "optional")) break;
+      minItems--;
     }
-    let h = def.items.length,
-      m = !def.rest;
-    if (t.target === "draft-2020-12") {
-      if (((r.prefixItems = mapped), m)) r.items = !1;
-      else if (u) r.items = u;
-      if (f > 0) r.minItems = f;
-      if (m) r.maxItems = h;
-    } else if (t.target === "openapi-3.0") {
-      if (((r.items = { anyOf: mapped }), u)) r.items.anyOf.push(u);
-      if (f > 0) r.minItems = f;
-      if (m) r.maxItems = h;
+    let maxItems = def.items.length;
+    let isClosed = !def.rest;
+    if (ctx.target === "draft-2020-12") {
+      json.prefixItems = prefixItems;
+      if (isClosed) json.items = false;
+      else if (rest) json.items = rest;
+      if (minItems > 0) json.minItems = minItems;
+      if (isClosed) json.maxItems = maxItems;
+    } else if (ctx.target === "openapi-3.0") {
+      json.items = {
+        anyOf: prefixItems,
+      };
+      if (rest) json.items.anyOf.push(rest);
+      if (minItems > 0) json.minItems = minItems;
+      if (isClosed) json.maxItems = maxItems;
     } else {
-      if (((r.items = mapped), m)) r.additionalItems = !1;
-      else if (u) r.additionalItems = u;
-      if (f > 0) r.minItems = f;
-      if (m) r.maxItems = h;
+      json.items = prefixItems;
+      if (isClosed) json.additionalItems = false;
+      else if (rest) json.additionalItems = rest;
+      if (minItems > 0) json.minItems = minItems;
+      if (isClosed) json.maxItems = maxItems;
     }
-    let { minimum: minimum, maximum: maximum } = il(e);
-    if (typeof minimum === "number") r.minItems = minimum;
-    if (typeof maximum === "number") r.maxItems = maximum;
+    let { minimum, maximum } = aggregateChecks(schema);
+    if (typeof minimum === "number") json.minItems = minimum;
+    if (typeof maximum === "number") json.maxItems = maximum;
   };
-  G.tupleProcessor = sX;
-  function tb(e, t, n) {
-    if (t.$ref) {
-      if (n.has(t)) return t;
-      n.add(t);
-      let b = e.get(t)?.def;
-      if (!b) return t;
-      let w = tb(e, b, n);
-      return w === b ? t : w;
+  cjsExports.tupleProcessor = tupleProcessor;
+  function stringifyKeyNames(bySchema, json, visited) {
+    if (json.$ref) {
+      if (visited.has(json)) return json;
+      visited.add(json);
+      let def = bySchema.get(json)?.def;
+      if (!def) return json;
+      let inlined = stringifyKeyNames(bySchema, def, visited);
+      return inlined === def ? json : inlined;
     }
-    for (let b of ["anyOf", "oneOf"]) {
-      let w = t[b];
-      if (!Array.isArray(w)) continue;
-      let mapped = w.map((j) => tb(e, j, n));
-      if (mapped.some((j, M) => j !== w[M])) t = { ...t, [b]: mapped };
+    for (let keyword of ["anyOf", "oneOf"]) {
+      let branches = json[keyword];
+      if (!Array.isArray(branches)) continue;
+      let mapped = branches.map((branch) => stringifyKeyNames(bySchema, branch, visited));
+      if (mapped.some((branch, i) => branch !== branches[i]))
+        json = {
+          ...json,
+          [keyword]: mapped,
+        };
     }
-    let o = Array.isArray(t.type) ? t.type : [t.type],
-      r = !o.includes("string") && o.some((b) => b === "number" || b === "integer"),
-      s = t.enum ?? (t.const !== void 0 ? [t.const] : void 0);
-    if (!r && !s?.some((b) => typeof b === "number")) return t;
-    let {
-      minimum: minimum,
-      maximum: maximum,
-      exclusiveMinimum: exclusiveMinimum,
-      exclusiveMaximum: exclusiveMaximum,
-      multipleOf: multipleOf,
-      format: format,
-      id: id,
-      ...y
-    } = t;
-    if (y.enum) y.enum = y.enum.map((b) => (typeof b === "number" ? String(b) : b));
-    else if (typeof y.const === "number") y.const = String(y.const);
-    if (!r) return y;
-    if (((y.type = "string"), !s)) y.pattern = (o.includes("number") ? kh.number : kh.integer).source;
-    return y;
+    let types = Array.isArray(json.type) ? json.type : [json.type];
+    let numericType = !types.includes("string") && types.some((t) => t === "number" || t === "integer");
+    let values = json.enum ?? (json.const !== undefined ? [json.const] : undefined);
+    if (!numericType && !values?.some((v) => typeof v === "number")) return json;
+    let { minimum, maximum, exclusiveMinimum, exclusiveMaximum, multipleOf, format, id, ...rest } = json;
+    if (rest.enum) rest.enum = rest.enum.map((v) => (typeof v === "number" ? String(v) : v));
+    else if (typeof rest.const === "number") rest.const = String(rest.const);
+    if (!numericType) return rest;
+    rest.type = "string";
+    if (!values) rest.pattern = (types.includes("number") ? regexes.number : regexes.integer).source;
+    return rest;
   }
-  var weakMap = new WeakMap();
-  function aX(e) {
-    let t = new Map();
-    for (let o of e.seen.values()) if (o.def && !t.has(o.schema)) t.set(o.schema, o);
-    let n = new Map();
-    for (let o of weakMap.get(e) ?? []) {
-      let r = e.seen.get(o),
-        s = (r?.def ?? r?.schema)?.propertyNames;
-      if (!s || s === !0 || n.has(s)) continue;
-      let a = tb(t, s, new Set());
-      if (a !== s) n.set(s, a);
+  var pendingRecords = new WeakMap();
+  function rewriteKeyNames(ctx) {
+    let bySchema = new Map();
+    for (let entry of ctx.seen.values())
+      if (entry.def && !bySchema.has(entry.schema)) bySchema.set(entry.schema, entry);
+    let rewrites = new Map();
+    for (let record of pendingRecords.get(ctx) ?? []) {
+      let seen = ctx.seen.get(record);
+      let names = (seen?.def ?? seen?.schema)?.propertyNames;
+      if (!names || names === true || rewrites.has(names)) continue;
+      let rewritten = stringifyKeyNames(bySchema, names, new Set());
+      if (rewritten !== names) rewrites.set(names, rewritten);
     }
-    if (!n.size) return;
-    for (let o of e.seen.values())
-      for (let r of [o.schema, o.def]) {
-        let s = r && n.get(r.propertyNames);
-        if (s) r.propertyNames = s;
+    if (!rewrites.size) return;
+    for (let entry of ctx.seen.values())
+      for (let carrier of [entry.schema, entry.def]) {
+        let rewritten = carrier && rewrites.get(carrier.propertyNames);
+        if (rewritten) carrier.propertyNames = rewritten;
       }
   }
-  var lX = (e, t, n, o) => {
-    let r = n,
-      def = e._zod.def;
-    r.type = "object";
-    let keyType = def.keyType,
-      patterns = il(keyType).patterns;
+  var recordProcessor = (schema, ctx, _json, params) => {
+    let json = _json;
+    let def = schema._zod.def;
+    json.type = "object";
+    let keyType = def.keyType;
+    let patterns = aggregateChecks(keyType).patterns;
     if (def.mode === "loose" && patterns && patterns.size > 0) {
-      let processSchema = ae.processSchema(def.valueType, t, {
-        ...o,
-        path: [...o.path, "patternProperties", "*"],
+      let valueSchema = to_json_schema_js_1.processSchema(def.valueType, ctx, {
+        ...params,
+        path: [...params.path, "patternProperties", "*"],
       });
-      r.patternProperties = {};
-      for (let h of patterns) Gr.assignProp(r.patternProperties, tT(h).source, processSchema);
+      json.patternProperties = {};
+      for (let pattern of patterns)
+        util_js_1.assignProp(json.patternProperties, exactPattern(pattern).source, valueSchema);
     } else {
-      if (t.target === "draft-07" || t.target === "draft-2020-12") {
-        r.propertyNames = ae.processSchema(def.keyType, t, { ...o, path: [...o.path, "propertyNames"] });
-        let f = weakMap.get(t);
-        if (!f) ((f = []), weakMap.set(t, f), t.deferred.push(() => aX(t)));
-        f.push(e);
+      if (ctx.target === "draft-07" || ctx.target === "draft-2020-12") {
+        json.propertyNames = to_json_schema_js_1.processSchema(def.keyType, ctx, {
+          ...params,
+          path: [...params.path, "propertyNames"],
+        });
+        let pending = pendingRecords.get(ctx);
+        if (!pending) {
+          pending = [];
+          pendingRecords.set(ctx, pending);
+          ctx.deferred.push(() => rewriteKeyNames(ctx));
+        }
+        pending.push(schema);
       }
-      r.additionalProperties = ae.processSchema(def.valueType, t, {
-        ...o,
-        path: [...o.path, "additionalProperties"],
+      json.additionalProperties = to_json_schema_js_1.processSchema(def.valueType, ctx, {
+        ...params,
+        path: [...params.path, "additionalProperties"],
       });
     }
-    let values = keyType._zod.values,
-      u = t.io === "input" && nc(def.valueType) !== void 0;
-    if (values && !def.partial && !u) {
-      let filtered = [...values].filter((h) => typeof h === "string" || typeof h === "number");
-      if (filtered.length > 0) r.required = filtered.map(String);
+    let keyValues = keyType._zod.values;
+    let omittableOnInput = ctx.io === "input" && inputOptin(def.valueType) !== undefined;
+    if (keyValues && !def.partial && !omittableOnInput) {
+      let validKeyValues = [...keyValues].filter((v) => typeof v === "string" || typeof v === "number");
+      if (validKeyValues.length > 0) json.required = validKeyValues.map(String);
     }
   };
-  G.recordProcessor = lX;
-  var cX = (e, t, n, o) => {
-    let def = e._zod.def,
-      processSchema = ae.processSchema(def.innerType, t, o),
-      a = t.seen.get(e);
-    if (t.target === "openapi-3.0") ((a.ref = def.innerType), (n.nullable = !0));
-    else n.anyOf = [processSchema, { type: "null" }];
+  cjsExports.recordProcessor = recordProcessor;
+  var nullableProcessor = (schema, ctx, json, params) => {
+    let def = schema._zod.def;
+    let inner = to_json_schema_js_1.processSchema(def.innerType, ctx, params);
+    let seen = ctx.seen.get(schema);
+    if (ctx.target === "openapi-3.0") {
+      seen.ref = def.innerType;
+      json.nullable = true;
+    } else
+      json.anyOf = [
+        inner,
+        {
+          type: "null",
+        },
+      ];
   };
-  G.nullableProcessor = cX;
-  var uX = (e, t, n, o) => {
-    let def = e._zod.def;
-    ae.processSchema(def.innerType, t, o);
-    let s = t.seen.get(e);
-    s.ref = def.innerType;
+  cjsExports.nullableProcessor = nullableProcessor;
+  var nonoptionalProcessor = (schema, ctx, _json, params) => {
+    let def = schema._zod.def;
+    to_json_schema_js_1.processSchema(def.innerType, ctx, params);
+    let seen = ctx.seen.get(schema);
+    seen.ref = def.innerType;
   };
-  G.nonoptionalProcessor = uX;
-  var rb = Symbol();
-  function nT(e, t, n, o, r) {
-    let s = !1,
-      json = JSON.stringify(e, (l, c) => {
-        if (typeof c !== "bigint") return c;
-        return ((s = !0), null);
-      });
-    if (!s) return JSON.parse(json);
-    return (ae.handleUnrepresentable(t, n, o, r, "BigInt defaults cannot be represented in JSON Schema"), rb);
+  cjsExports.nonoptionalProcessor = nonoptionalProcessor;
+  var UNREPRESENTABLE_DEFAULT = Symbol();
+  function serializeDefaultValue(value, schema, ctx, json, params) {
+    let unrepresentable = false;
+    let serialized = JSON.stringify(value, (_, val) => {
+      if (typeof val !== "bigint") return val;
+      unrepresentable = true;
+      return null;
+    });
+    if (!unrepresentable) return JSON.parse(serialized);
+    to_json_schema_js_1.handleUnrepresentable(
+      schema,
+      ctx,
+      json,
+      params,
+      "BigInt defaults cannot be represented in JSON Schema",
+    );
+    return UNREPRESENTABLE_DEFAULT;
   }
-  var dX = (e, t, n, o) => {
-    let def = e._zod.def;
-    ae.processSchema(def.innerType, t, o);
-    let s = t.seen.get(e);
-    s.ref = def.innerType;
-    let a = nT(def.defaultValue, e, t, n, o);
-    if (a !== rb) n.default = a;
+  var defaultProcessor = (schema, ctx, json, params) => {
+    let def = schema._zod.def;
+    to_json_schema_js_1.processSchema(def.innerType, ctx, params);
+    let seen = ctx.seen.get(schema);
+    seen.ref = def.innerType;
+    let value = serializeDefaultValue(def.defaultValue, schema, ctx, json, params);
+    if (value !== UNREPRESENTABLE_DEFAULT) json.default = value;
   };
-  G.defaultProcessor = dX;
-  var fX = (e, t, n, o) => {
-    let def = e._zod.def;
-    ae.processSchema(def.innerType, t, o);
-    let s = t.seen.get(e);
-    if (((s.ref = def.innerType), t.io !== "input")) return;
-    let a = nT(def.defaultValue, e, t, n, o);
-    if (a !== rb) n._prefault = a;
+  cjsExports.defaultProcessor = defaultProcessor;
+  var prefaultProcessor = (schema, ctx, json, params) => {
+    let def = schema._zod.def;
+    to_json_schema_js_1.processSchema(def.innerType, ctx, params);
+    let seen = ctx.seen.get(schema);
+    seen.ref = def.innerType;
+    if (ctx.io !== "input") return;
+    let value = serializeDefaultValue(def.defaultValue, schema, ctx, json, params);
+    if (value !== UNREPRESENTABLE_DEFAULT) json._prefault = value;
   };
-  G.prefaultProcessor = fX;
-  var pX = (e, t, n, o) => {
-    let def = e._zod.def;
-    ae.processSchema(def.innerType, t, o);
-    let s = t.seen.get(e);
-    s.ref = def.innerType;
-    let a;
+  cjsExports.prefaultProcessor = prefaultProcessor;
+  var catchProcessor = (schema, ctx, json, params) => {
+    let def = schema._zod.def;
+    to_json_schema_js_1.processSchema(def.innerType, ctx, params);
+    let seen = ctx.seen.get(schema);
+    seen.ref = def.innerType;
+    let catchValue;
     try {
-      a = def.catchValue(void 0);
+      catchValue = def.catchValue(undefined);
     } catch {
-      ae.handleUnrepresentable(e, t, n, o, "Dynamic catch values are not supported in JSON Schema");
+      to_json_schema_js_1.handleUnrepresentable(
+        schema,
+        ctx,
+        json,
+        params,
+        "Dynamic catch values are not supported in JSON Schema",
+      );
       return;
     }
-    n.default = a;
+    json.default = catchValue;
   };
-  G.catchProcessor = pX;
-  var hX = (e, t, n, o) => {
-    let def = e._zod.def,
-      s = def.in._zod.traits.has("$ZodTransform"),
-      a = t.io === "input" ? (s ? def.out : def.in) : def.out;
-    ae.processSchema(a, t, o);
-    let l = t.seen.get(e);
-    l.ref = a;
+  cjsExports.catchProcessor = catchProcessor;
+  var pipeProcessor = (schema, ctx, _json, params) => {
+    let def = schema._zod.def;
+    let inIsTransform = def.in._zod.traits.has("$ZodTransform");
+    let innerType = ctx.io === "input" ? (inIsTransform ? def.out : def.in) : def.out;
+    to_json_schema_js_1.processSchema(innerType, ctx, params);
+    let seen = ctx.seen.get(schema);
+    seen.ref = innerType;
   };
-  G.pipeProcessor = hX;
-  var mX = (e, t, n, o) => {
-    let def = e._zod.def;
-    ae.processSchema(def.innerType, t, o);
-    let s = t.seen.get(e);
-    ((s.ref = def.innerType), (n.readOnly = !0));
+  cjsExports.pipeProcessor = pipeProcessor;
+  var readonlyProcessor = (schema, ctx, json, params) => {
+    let def = schema._zod.def;
+    to_json_schema_js_1.processSchema(def.innerType, ctx, params);
+    let seen = ctx.seen.get(schema);
+    seen.ref = def.innerType;
+    json.readOnly = true;
   };
-  G.readonlyProcessor = mX;
-  var gX = (e, t, n, o) => {
-    let def = e._zod.def;
-    ae.processSchema(def.innerType, t, o);
-    let s = t.seen.get(e);
-    s.ref = def.innerType;
+  cjsExports.readonlyProcessor = readonlyProcessor;
+  var promiseProcessor = (schema, ctx, _json, params) => {
+    let def = schema._zod.def;
+    to_json_schema_js_1.processSchema(def.innerType, ctx, params);
+    let seen = ctx.seen.get(schema);
+    seen.ref = def.innerType;
   };
-  G.promiseProcessor = gX;
-  var yX = (e, t, n, o) => {
-    let def = e._zod.def;
-    ae.processSchema(def.innerType, t, o);
-    let s = t.seen.get(e);
-    s.ref = def.innerType;
+  cjsExports.promiseProcessor = promiseProcessor;
+  var optionalProcessor = (schema, ctx, _json, params) => {
+    let def = schema._zod.def;
+    to_json_schema_js_1.processSchema(def.innerType, ctx, params);
+    let seen = ctx.seen.get(schema);
+    seen.ref = def.innerType;
   };
-  G.optionalProcessor = yX;
-  var _X = (e, t, n, o) => {
-    let innerType = e._zod.innerType;
-    ae.processSchema(innerType, t, o);
-    let s = t.seen.get(e);
-    s.ref = innerType;
+  cjsExports.optionalProcessor = optionalProcessor;
+  var lazyProcessor = (schema, ctx, _json, params) => {
+    let innerType = schema._zod.innerType;
+    to_json_schema_js_1.processSchema(innerType, ctx, params);
+    let seen = ctx.seen.get(schema);
+    seen.ref = innerType;
   };
-  G.lazyProcessor = _X;
-  G.allProcessors = {
-    string: G.stringProcessor,
-    number: G.numberProcessor,
-    boolean: G.booleanProcessor,
-    bigint: G.bigintProcessor,
-    symbol: G.symbolProcessor,
-    null: G.nullProcessor,
-    undefined: G.undefinedProcessor,
-    void: G.voidProcessor,
-    never: G.neverProcessor,
-    any: G.anyProcessor,
-    unknown: G.unknownProcessor,
-    date: G.dateProcessor,
-    enum: G.enumProcessor,
-    literal: G.literalProcessor,
-    nan: G.nanProcessor,
-    template_literal: G.templateLiteralProcessor,
-    file: G.fileProcessor,
-    success: G.successProcessor,
-    custom: G.customProcessor,
-    properties: G.propertiesProcessor,
-    function: G.functionProcessor,
-    transform: G.transformProcessor,
-    map: G.mapProcessor,
-    set: G.setProcessor,
-    array: G.arrayProcessor,
-    object: G.objectProcessor,
-    union: G.unionProcessor,
-    intersection: G.intersectionProcessor,
-    tuple: G.tupleProcessor,
-    record: G.recordProcessor,
-    nullable: G.nullableProcessor,
-    nonoptional: G.nonoptionalProcessor,
-    default: G.defaultProcessor,
-    prefault: G.prefaultProcessor,
-    catch: G.catchProcessor,
-    pipe: G.pipeProcessor,
-    readonly: G.readonlyProcessor,
-    promise: G.promiseProcessor,
-    optional: G.optionalProcessor,
-    lazy: G.lazyProcessor,
+  cjsExports.lazyProcessor = lazyProcessor;
+  cjsExports.allProcessors = {
+    string: cjsExports.stringProcessor,
+    number: cjsExports.numberProcessor,
+    boolean: cjsExports.booleanProcessor,
+    bigint: cjsExports.bigintProcessor,
+    symbol: cjsExports.symbolProcessor,
+    null: cjsExports.nullProcessor,
+    undefined: cjsExports.undefinedProcessor,
+    void: cjsExports.voidProcessor,
+    never: cjsExports.neverProcessor,
+    any: cjsExports.anyProcessor,
+    unknown: cjsExports.unknownProcessor,
+    date: cjsExports.dateProcessor,
+    enum: cjsExports.enumProcessor,
+    literal: cjsExports.literalProcessor,
+    nan: cjsExports.nanProcessor,
+    template_literal: cjsExports.templateLiteralProcessor,
+    file: cjsExports.fileProcessor,
+    success: cjsExports.successProcessor,
+    custom: cjsExports.customProcessor,
+    properties: cjsExports.propertiesProcessor,
+    function: cjsExports.functionProcessor,
+    transform: cjsExports.transformProcessor,
+    map: cjsExports.mapProcessor,
+    set: cjsExports.setProcessor,
+    array: cjsExports.arrayProcessor,
+    object: cjsExports.objectProcessor,
+    union: cjsExports.unionProcessor,
+    intersection: cjsExports.intersectionProcessor,
+    tuple: cjsExports.tupleProcessor,
+    record: cjsExports.recordProcessor,
+    nullable: cjsExports.nullableProcessor,
+    nonoptional: cjsExports.nonoptionalProcessor,
+    default: cjsExports.defaultProcessor,
+    prefault: cjsExports.prefaultProcessor,
+    catch: cjsExports.catchProcessor,
+    pipe: cjsExports.pipeProcessor,
+    readonly: cjsExports.readonlyProcessor,
+    promise: cjsExports.promiseProcessor,
+    optional: cjsExports.optionalProcessor,
+    lazy: cjsExports.lazyProcessor,
   };
-  function bX(e, t) {
-    if ("_idmap" in e) {
-      let o = e,
-        initializeContext = ae.initializeContext({ ...t, processors: G.allProcessors }),
-        s = {};
-      for (let c of o._idmap.entries()) {
-        let [u, f] = c;
-        ae.processSchema(f, initializeContext);
+  function toJSONSchema(input, params) {
+    if ("_idmap" in input) {
+      let registry = input;
+      let ctx = to_json_schema_js_1.initializeContext({
+        ...params,
+        processors: cjsExports.allProcessors,
+      });
+      let defs = {};
+      for (let entry of registry._idmap.entries()) {
+        let [_, schema] = entry;
+        to_json_schema_js_1.processSchema(schema, ctx);
       }
-      let a = {},
-        l = { registry: o, uri: t?.uri, defs: s };
-      initializeContext.external = l;
-      for (let c of o._idmap.entries()) {
-        let [u, f] = c;
-        (ae.extractDefs(initializeContext, f), Gr.assignProp(a, u, ae.finalize(initializeContext, f)));
+      let schemas = {};
+      let external = {
+        registry,
+        uri: params?.uri,
+        defs,
+      };
+      ctx.external = external;
+      for (let entry of registry._idmap.entries()) {
+        let [key, schema] = entry;
+        to_json_schema_js_1.extractDefs(ctx, schema);
+        util_js_1.assignProp(schemas, key, to_json_schema_js_1.finalize(ctx, schema));
       }
-      if (Object.keys(s).length > 0) {
-        let c = initializeContext.target === "draft-2020-12" ? "$defs" : "definitions";
-        a.__shared = { [c]: s };
+      if (Object.keys(defs).length > 0) {
+        let defsSegment = ctx.target === "draft-2020-12" ? "$defs" : "definitions";
+        schemas.__shared = {
+          [defsSegment]: defs,
+        };
       }
-      return { schemas: a };
+      return {
+        schemas,
+      };
     }
-    let initializeContext = ae.initializeContext({ ...t, processors: G.allProcessors });
-    return (
-      ae.processSchema(e, initializeContext),
-      ae.extractDefs(initializeContext, e),
-      ae.finalize(initializeContext, e)
-    );
+    let ctx = to_json_schema_js_1.initializeContext({
+      ...params,
+      processors: cjsExports.allProcessors,
+    });
+    to_json_schema_js_1.processSchema(input, ctx);
+    to_json_schema_js_1.extractDefs(ctx, input);
+    return to_json_schema_js_1.finalize(ctx, input);
   }
   (function () {
-    var ownPropertyNames = Object.getOwnPropertyNames(G);
-    for (var t = 0; t < ownPropertyNames.length; t++) {
-      var ownPropertyDescriptor = Object.getOwnPropertyDescriptor(G, ownPropertyNames[t]);
-      if (!ownPropertyDescriptor || !ownPropertyDescriptor.get || !ownPropertyDescriptor.configurable)
-        continue;
-      var o;
+    var keys = Object.getOwnPropertyNames(cjsExports);
+    for (var i = 0; i < keys.length; i++) {
+      var desc = Object.getOwnPropertyDescriptor(cjsExports, keys[i]);
+      if (!desc || !desc.get || !desc.configurable) continue;
+      var value;
       try {
-        o = ownPropertyDescriptor.get();
-      } catch (error) {
+        value = desc.get();
+      } catch (e) {
         continue;
       }
-      if (o === void 0) continue;
-      Object.defineProperty(G, ownPropertyNames[t], {
-        value: o,
-        writable: !1,
-        enumerable: ownPropertyDescriptor.enumerable,
-        configurable: !1,
+      if (value === undefined) continue;
+      Object.defineProperty(cjsExports, keys[i], {
+        value,
+        writable: false,
+        enumerable: desc.enumerable,
+        configurable: false,
       });
     }
-    Object.freeze(G);
+    Object.freeze(cjsExports);
   })();
 });
-
-export { nd };
+export { require_json_schema_processors };

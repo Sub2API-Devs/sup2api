@@ -9,22 +9,32 @@
  * attribution: placement 2
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, T, o } from "../../../vendor/zod/v4/classic/schemas.js";
+import { u, literal, string } from "../../../vendor/zod/v4/classic/schemas.js";
 
 //@ chunk-e6aww6q8.js:3252265-3252343 placement
-var PAr = DoctorLazy(() => u({ type: T("nested_memory"), path: o(), content: u({ content: o() }) }));
+/**
+ * 嵌套记忆附件的 schema，collectNestedMemoryContents 用它解析消息里的附件。
+ */
+var nestedMemoryAttachmentSchema = DoctorLazy(() =>
+  u({
+    type: literal("nested_memory"),
+    path: string(),
+    content: u({
+      content: string(),
+    }),
+  }),
+);
+//@ chunk-e6aww6q8.js:3252343-3252567 placement
 /**
  * 从消息中收集嵌套记忆附件，按路径返回其内容。
  */
-//@ chunk-e6aww6q8.js:3252343-3252567 placement
 function collectNestedMemoryContents(e) {
   let n = new Map();
   for (let r of e) {
     if (r.type !== "attachment" || r.attachment.type !== "nested_memory") continue;
-    let safeParse = PAr().safeParse(r.attachment);
-    if (safeParse.success) n.set(safeParse.data.path, safeParse.data.content.content.trim());
+    let s = nestedMemoryAttachmentSchema().safeParse(r.attachment);
+    if (s.success) n.set(s.data.path, s.data.content.content.trim());
   }
   return n;
 }
-
 export { collectNestedMemoryContents };

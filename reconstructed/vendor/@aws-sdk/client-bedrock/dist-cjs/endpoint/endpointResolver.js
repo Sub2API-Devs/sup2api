@@ -5,13 +5,21 @@
  * pieces: chunk-0dmzgg46.js (2)
  * attribution: esm-fingerprint 2
  */
-import { p, re } from "../index.js";
+import { import_index_browser_2, import_util_endpoints } from "../index.js";
 import { se } from "./ruleset.js";
 
 //@ chunk-0dmzgg46.js:7771-7947 esm-fingerprint
-var Ke = new p.EndpointCache({ size: 50, params: ["Endpoint", "Region", "UseDualStack", "UseFIPS"] }),
-  ae = (e, o = {}) => Ke.get(e, () => p.resolveEndpoint(se, { endpointParams: e, logger: o.logger }));
+var Ke = new import_index_browser_2.EndpointCache({
+  size: 50,
+  params: ["Endpoint", "Region", "UseDualStack", "UseFIPS"],
+});
+var defaultEndpointResolver = (endpointParams, context = {}) =>
+  Ke.get(endpointParams, () =>
+    import_index_browser_2.resolveEndpoint(se, {
+      endpointParams,
+      logger: context.logger,
+    }),
+  );
 //@ chunk-0dmzgg46.js:7947-8001 esm-fingerprint
-p.customEndpointFunctions.aws = re.awsEndpointFunctions;
-
-export { ae };
+import_index_browser_2.customEndpointFunctions.aws = import_util_endpoints.awsEndpointFunctions;
+export { defaultEndpointResolver };

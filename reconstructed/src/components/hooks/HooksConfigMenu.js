@@ -9,11 +9,11 @@
  * attribution: sole-consumer 5, callgraph-fingerprint 1, file-local 2, affinity 1, fingerprint 1
  */
 import { getSettings_DEPRECATED, getSettingsForSource } from "../../utils/settings/settings.js";
-import { Ei, SelectHookMode } from "./SelectHookMode.js";
+import { hasAnyPluginHook, SelectHookMode } from "./SelectHookMode.js";
 import { w } from "../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { y } from "../../../vendor/react/cjs/react.production.js";
-import { Me } from "../design-system/ThemeProvider.js";
+import { useTheme_2 } from "../design-system/ThemeProvider.js";
 import { useHost } from "../../context/session.js";
 import { getCaps, getOriginalCwd } from "../../bootstrap/state.js";
 import { deviceHooksProcessMemories } from "../../utils/hooks/deviceHooks/cloudRegistration.js";
@@ -23,17 +23,20 @@ import {
   HooksOverview,
   describeWhereHookRuns,
 } from "./cloudHooks.js";
-import { kJe, useAppState, useSessionHooksRegistry } from "../../state/AppState.js";
+import { useSettingsSyncEffect, useAppState, useSessionHooksRegistry } from "../../state/AppState.js";
 import {
   getHookEventMetadata,
   groupHooksByEventAndMatcher,
   getSortedMatchersForEvent,
-  Dyo,
+  hooksForSourceAndEvent,
 } from "../../utils/hooks/hooksConfigManager.js";
 import { useKeybinding } from "../../keybindings/useKeybinding.js";
 import { count } from "../../utils/collections.js";
 import { plural } from "../../utils/stringUtils.js";
-import { e, r } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { KeyboardShortcutHint } from "../design-system/KeyboardShortcutHint.js";
 import { ModelSelector } from "../agents/ModelSelector.js";
 import { Text, Box } from "../../ink/components/Text.js";
@@ -41,10 +44,10 @@ import { hasPolicySettings } from "../../utils/plugins/managedPluginSeating.js";
 import { Dialog } from "../design-system/Dialog.js";
 import { isSafeMode, getSafeModeExitHint } from "../../utils/envUtils.js";
 import { SelectEventMode } from "./SelectEventMode.js";
-import { hr } from "../../utils/invisibleChars.js";
+import { stripInvisibleChars } from "../../utils/invisibleChars.js";
 import {
-  $Ne,
-  zVo,
+  deviceHooksConsentPath,
+  setConsentFromGiven,
   emitConsentChangedSafe,
   writeDeviceHooksConsent,
   readDeviceHooksConsent,
@@ -55,300 +58,387 @@ import { SelectMatcherMode } from "./SelectMatcherMode.js";
 import { ViewHookMode } from "./ViewHookMode.js";
 
 //@ chunk-bajxb7bf.js:48218-48310 sole-consumer = _temp (1)
-function fi() {
+function areAllHooksDisabled() {
   return (
-    getSettings_DEPRECATED()?.disableAllHooks === !0 &&
-    getSettingsForSource("policySettings")?.disableAllHooks === !0
+    getSettings_DEPRECATED()?.disableAllHooks === true &&
+    getSettingsForSource("policySettings")?.disableAllHooks === true
   );
 }
 //@ chunk-bajxb7bf.js:48310-48380 sole-consumer = _temp2 (1)
-function ki() {
-  return getSettingsForSource("policySettings")?.allowManagedHooksOnly === !0;
+function areOnlyManagedHooksAllowed() {
+  return getSettingsForSource("policySettings")?.allowManagedHooksOnly === true;
 }
 //@ chunk-bajxb7bf.js:48380-48410 callgraph-fingerprint = _temp3 (1)
 function selectMcp(s) {
   return s.mcp;
 }
 //@ chunk-bajxb7bf.js:48410-48441 file-local
-function vi(tool) {
+function hookName(tool) {
   return tool.name;
 }
 //@ chunk-bajxb7bf.js:48441-48480 file-local
-function yi(sum, hooks) {
+function sumWithCount(sum, hooks) {
   return sum + hooks.length;
 }
 //@ chunk-bajxb7bf.js:48563-48613 sole-consumer
-function wi(Wi) {
-  return Object.values(Wi).some(Ei);
+function hasPluginHook(Wi) {
+  return Object.values(Wi).some(hasAnyPluginHook);
 }
 //@ chunk-bajxb7bf.js:48613-48654 sole-consumer
-function Si(ji) {
+function isHereHook(ji) {
   return ji.where === "here";
 }
 //@ chunk-bajxb7bf.js:48654-48696 sole-consumer
-function Hi(Oi) {
+function isCloudHook(Oi) {
   return Oi.where === "cloud";
 }
 //@ chunk-bajxb7bf.js:48696-48728 affinity
-function Ci(Ui) {
+function hookLabel(Ui) {
   return Ui.label;
 }
+//@ chunk-bajxb7bf.js:48728-57815 fingerprint = HooksConfigMenu (0.495)
 /**
  * /hooks 菜单：选择事件 → 匹配器 → hook → 详情；hooks 来自 user/project/local/policy/插件/会话，远程会话中标注哪些不会运行；只读，提示通过编辑 settings.json 或让 Claude 修改。
  */
-//@ chunk-bajxb7bf.js:48728-57815 fingerprint = HooksConfigMenu (0.495)
-function HooksConfigMenu(t0) {
-  let $ = w(133),
-    { toolNames: toolNames, onExit: onExit } = t0,
-    d;
-  if ($[0] === MEMO_CACHE_SENTINEL) ((d = { mode: "list" }), ($[0] = d));
-  else d = $[0];
-  let [u, t] = y(d),
-    [f, k] = y(0),
-    { storageV5: storageV5 } = Me(),
-    D = useHost(),
-    M;
-  if ($[1] !== D)
-    ((M = () => {
-      let g = getCaps();
-      if (g.workspace !== "remote") {
+function HooksConfigMenu(props) {
+  let $ = w(133);
+  let { toolNames, onExit } = props;
+  let t1;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    t1 = {
+      mode: "list",
+    };
+    $[0] = t1;
+  } else t1 = $[0];
+  let [modeState, setModeState] = y(t1);
+  let [f, k] = y(0);
+  let { storageV5 } = useTheme_2();
+  let host = useHost();
+  let M;
+  if ($[1] !== host) {
+    M = () => {
+      let caps = getCaps();
+      if (caps.workspace !== "remote") {
         return null;
       }
-      return g.transcriptSource !== "ccr-api"
+      return caps.transcriptSource !== "ccr-api"
         ? "remote_host"
-        : deviceHooksProcessMemories.of(D).isAttached(getOriginalCwd())
+        : deviceHooksProcessMemories.of(host).isAttached(getOriginalCwd())
           ? "cloud"
           : "off";
-    }),
-      ($[1] = D),
-      ($[2] = M));
-  else M = $[2];
-  let [v] = y(M),
-    P;
-  if ($[3] !== v || $[4] !== D || $[5] !== storageV5)
-    ((P = () => {
+    };
+    $[1] = host;
+    $[2] = M;
+  } else M = $[2];
+  let [v] = y(M);
+  let P;
+  if ($[3] !== v || $[4] !== host || $[5] !== storageV5) {
+    P = () => {
       if (v === null) {
         return null;
       }
-      let of = deviceHooksProcessMemories.of(D);
+      let _ = deviceHooksProcessMemories.of(host);
       return buildCloudHookRows({
         launchDir: getOriginalCwd(),
-        storageV5: storageV5,
-        consentPin: of.consentPin,
-        senderMemory: of.senderFor(getOriginalCwd()),
-        processMemory: of,
+        storageV5,
+        consentPin: _.consentPin,
+        senderMemory: _.senderFor(getOriginalCwd()),
+        processMemory: _,
         forwarding: v,
       });
-    }),
-      ($[3] = v),
-      ($[4] = D),
-      ($[5] = storageV5),
-      ($[6] = P));
-  else P = $[6];
-  let b = P,
-    [E, B] = y(b),
-    [N, L] = y(null),
-    [x, Y] = y(fi),
-    [W, X] = y(ki),
-    ne;
-  if ($[7] === MEMO_CACHE_SENTINEL)
-    ((ne = (source) => {
+    };
+    $[3] = v;
+    $[4] = host;
+    $[5] = storageV5;
+    $[6] = P;
+  } else P = $[6];
+  let b = P;
+  let [E, B] = y(b);
+  let [N, L] = y(null);
+  let [x, Y] = y(areAllHooksDisabled);
+  let [restrictedByPolicy, setRestrictedByPolicy] = y(areOnlyManagedHooksAllowed);
+  let t2;
+  if ($[7] === MEMO_CACHE_SENTINEL) {
+    t2 = (source) => {
       if (source === "policySettings") {
-        let ue = getSettings_DEPRECATED()?.disableAllHooks === !0;
-        (Y(ue && getSettingsForSource("policySettings")?.disableAllHooks === !0),
-          X(getSettingsForSource("policySettings")?.allowManagedHooksOnly === !0));
+        let ue = getSettings_DEPRECATED()?.disableAllHooks === true;
+        Y(ue && getSettingsForSource("policySettings")?.disableAllHooks === true);
+        setRestrictedByPolicy(getSettingsForSource("policySettings")?.allowManagedHooksOnly === true);
       }
-    }),
-      ($[7] = ne));
-  else ne = $[7];
-  kJe(ne);
-  let mode = u.mode,
-    se = "event" in u ? u.event : "PreToolUse",
-    ke = "matcher" in u ? u.matcher : null,
-    mcp = useAppState(selectMcp),
-    appStateStore = useSessionHooksRegistry(),
-    ie;
-  if ($[8] !== mcp.tools || $[9] !== toolNames)
-    ((ie = [...toolNames, ...mcp.tools.map(vi)]), ($[8] = mcp.tools), ($[9] = toolNames), ($[10] = ie));
-  else ie = $[10];
-  let V = ie,
-    Le;
-  if ($[11] !== V) ((Le = getHookEventMetadata(V)), ($[11] = V), ($[12] = Le));
-  else Le = $[12];
-  let p = Le,
-    J;
-  if ($[13] !== V || $[14] !== appStateStore)
-    ((J = groupHooksByEventAndMatcher(appStateStore, V)), ($[13] = V), ($[14] = appStateStore), ($[15] = J));
-  else J = $[15];
-  let U = J,
-    ge;
-  if ($[16] !== U || $[17] !== se)
-    ((ge = getSortedMatchersForEvent(U, se)), ($[16] = U), ($[17] = se), ($[18] = ge));
-  else ge = $[18];
-  let I = ge,
-    pe;
-  if ($[19] !== U || $[20] !== se || $[21] !== ke)
-    ((pe = Dyo(U, se, ke)), ($[19] = U), ($[20] = se), ($[21] = ke), ($[22] = pe));
-  else pe = $[22];
-  let Se = pe,
-    He;
-  if ($[23] !== onExit)
-    ((He = () => {
-      onExit("Hooks dialog dismissed", { display: "system" });
-    }),
-      ($[23] = onExit),
-      ($[24] = He));
-  else He = $[24];
+    };
+    $[7] = t2;
+  } else t2 = $[7];
+  useSettingsSyncEffect(t2);
+  let mode = modeState.mode;
+  let selectedEvent = "event" in modeState ? modeState.event : "PreToolUse";
+  let selectedMatcher = "matcher" in modeState ? modeState.matcher : null;
+  let mcp = useAppState(selectMcp);
+  let appStateStore = useSessionHooksRegistry();
+  let t3;
+  if ($[8] !== mcp.tools || $[9] !== toolNames) {
+    t3 = [...toolNames, ...mcp.tools.map(hookName)];
+    $[8] = mcp.tools;
+    $[9] = toolNames;
+    $[10] = t3;
+  } else t3 = $[10];
+  let toolNames_2 = t3;
+  let Le;
+  if ($[11] !== toolNames_2) {
+    Le = getHookEventMetadata(toolNames_2);
+    $[11] = toolNames_2;
+    $[12] = Le;
+  } else Le = $[12];
+  let p = Le;
+  let J;
+  if ($[13] !== toolNames_2 || $[14] !== appStateStore) {
+    J = groupHooksByEventAndMatcher(appStateStore, toolNames_2);
+    $[13] = toolNames_2;
+    $[14] = appStateStore;
+    $[15] = J;
+  } else J = $[15];
+  let hooksByEventAndMatcher = J;
+  let t5;
+  if ($[16] !== hooksByEventAndMatcher || $[17] !== selectedEvent) {
+    t5 = getSortedMatchersForEvent(hooksByEventAndMatcher, selectedEvent);
+    $[16] = hooksByEventAndMatcher;
+    $[17] = selectedEvent;
+    $[18] = t5;
+  } else t5 = $[18];
+  let sortedMatchersForSelectedEvent = t5;
+  let t6;
+  if ($[19] !== hooksByEventAndMatcher || $[20] !== selectedEvent || $[21] !== selectedMatcher) {
+    t6 = hooksForSourceAndEvent(hooksByEventAndMatcher, selectedEvent, selectedMatcher);
+    $[19] = hooksByEventAndMatcher;
+    $[20] = selectedEvent;
+    $[21] = selectedMatcher;
+    $[22] = t6;
+  } else t6 = $[22];
+  let hooksForSelectedMatcher = t6;
+  let He;
+  if ($[23] !== onExit) {
+    He = () => {
+      onExit("Hooks dialog dismissed", {
+        display: "system",
+      });
+    };
+    $[23] = onExit;
+    $[24] = He;
+  } else He = $[24];
   let he = He;
-  const xe = mode === "list";
+  const isActive = mode === "list";
   let Mo;
-  if ($[25] !== xe) ((Mo = { context: "Confirmation", isActive: xe }), ($[25] = xe), ($[26] = Mo));
-  else Mo = $[26];
+  if ($[25] !== isActive) {
+    Mo = {
+      context: "Confirmation",
+      isActive,
+    };
+    $[25] = isActive;
+    $[26] = Mo;
+  } else Mo = $[26];
   useKeybinding("confirm:no", he, Mo);
   let Ce;
-  if ($[27] === MEMO_CACHE_SENTINEL)
-    ((Ce = () => {
-      t({ mode: "list" });
-    }),
-      ($[27] = Ce));
-  else Ce = $[27];
-  const ao = mode === "select-event";
-  let We;
-  if ($[28] !== ao) ((We = { context: "Confirmation", isActive: ao }), ($[28] = ao), ($[29] = We));
-  else We = $[29];
-  useKeybinding("confirm:no", Ce, We);
-  let je;
-  if ($[30] === MEMO_CACHE_SENTINEL)
-    ((je = () => {
-      t({ mode: "select-event" });
-    }),
-      ($[30] = je));
-  else je = $[30];
-  const co = mode === "select-matcher";
-  let vt;
-  if ($[31] !== co) ((vt = { context: "Confirmation", isActive: co }), ($[31] = co), ($[32] = vt));
-  else vt = $[32];
-  useKeybinding("confirm:no", je, vt);
-  let Wn;
-  if ($[33] !== p || $[34] !== u)
-    ((Wn = () => {
-      if ("event" in u) {
-        if (p[u.event].matcherMetadata !== void 0) t({ mode: "select-matcher", event: u.event });
-        else t({ mode: "select-event" });
+  if ($[27] === MEMO_CACHE_SENTINEL) {
+    Ce = () => {
+      setModeState({
+        mode: "list",
+      });
+    };
+    $[27] = Ce;
+  } else Ce = $[27];
+  const isActive_2 = mode === "select-event";
+  let t9;
+  if ($[28] !== isActive_2) {
+    t9 = {
+      context: "Confirmation",
+      isActive: isActive_2,
+    };
+    $[28] = isActive_2;
+    $[29] = t9;
+  } else t9 = $[29];
+  useKeybinding("confirm:no", Ce, t9);
+  let t10;
+  if ($[30] === MEMO_CACHE_SENTINEL) {
+    t10 = () => {
+      setModeState({
+        mode: "select-event",
+      });
+    };
+    $[30] = t10;
+  } else t10 = $[30];
+  const isActive_3 = mode === "select-matcher";
+  let t12;
+  if ($[31] !== isActive_3) {
+    t12 = {
+      context: "Confirmation",
+      isActive: isActive_3,
+    };
+    $[31] = isActive_3;
+    $[32] = t12;
+  } else t12 = $[32];
+  useKeybinding("confirm:no", t10, t12);
+  let t13;
+  if ($[33] !== p || $[34] !== modeState) {
+    t13 = () => {
+      if ("event" in modeState) {
+        if (p[modeState.event].matcherMetadata !== undefined)
+          setModeState({
+            mode: "select-matcher",
+            event: modeState.event,
+          });
+        else
+          setModeState({
+            mode: "select-event",
+          });
       }
-    }),
-      ($[33] = p),
-      ($[34] = u),
-      ($[35] = Wn));
-  else Wn = $[35];
-  const yt = mode === "select-hook";
-  let jn;
-  if ($[36] !== yt) ((jn = { context: "Confirmation", isActive: yt }), ($[36] = yt), ($[37] = jn));
-  else jn = $[37];
-  useKeybinding("confirm:no", Wn, jn);
+    };
+    $[33] = p;
+    $[34] = modeState;
+    $[35] = t13;
+  } else t13 = $[35];
+  const isActive_4 = mode === "select-hook";
+  let t15;
+  if ($[36] !== isActive_4) {
+    t15 = {
+      context: "Confirmation",
+      isActive: isActive_4,
+    };
+    $[36] = isActive_4;
+    $[37] = t15;
+  } else t15 = $[37];
+  useKeybinding("confirm:no", t13, t15);
   let On;
-  if ($[38] !== p || $[39] !== u)
-    ((On = () => {
-      if (u.mode !== "view-hook") {
+  if ($[38] !== p || $[39] !== modeState) {
+    On = () => {
+      if (modeState.mode !== "view-hook") {
         return;
       }
-      let { event: event, hook: hook, from: from } = u;
+      let { event, hook, from } = modeState;
       if (from === "list") {
-        t({ mode: "list" });
+        setModeState({
+          mode: "list",
+        });
         return;
       }
-      let Mi = p[event].matcherMetadata !== void 0;
-      t({ mode: "select-hook", event: event, matcher: Mi ? hook.matcher || "" : "" });
-    }),
-      ($[38] = p),
-      ($[39] = u),
-      ($[40] = On));
-  else On = $[40];
+      let Mi = p[event].matcherMetadata !== undefined;
+      setModeState({
+        mode: "select-hook",
+        event,
+        matcher: Mi ? hook.matcher || "" : "",
+      });
+    };
+    $[38] = p;
+    $[39] = modeState;
+    $[40] = On;
+  } else On = $[40];
   let Po = On;
-  const wt = mode === "view-hook";
-  let Gn;
-  if ($[41] !== wt) ((Gn = { context: "Confirmation", isActive: wt }), ($[41] = wt), ($[42] = Gn));
-  else Gn = $[42];
-  useKeybinding("confirm:no", Po, Gn);
+  const isActive_5 = mode === "view-hook";
+  let t18;
+  if ($[41] !== isActive_5) {
+    t18 = {
+      context: "Confirmation",
+      isActive: isActive_5,
+    };
+    $[41] = isActive_5;
+    $[42] = t18;
+  } else t18 = $[42];
+  useKeybinding("confirm:no", Po, t18);
   let zn;
-  if ($[43] === MEMO_CACHE_SENTINEL) ((zn = getSettings_DEPRECATED()), ($[43] = zn));
-  else zn = $[43];
-  let Yn = zn?.disableAllHooks === !0,
-    Vn;
-  if ($[44] !== U) {
+  if ($[43] === MEMO_CACHE_SENTINEL) {
+    zn = getSettings_DEPRECATED();
+    $[43] = zn;
+  } else zn = $[43];
+  let Yn = zn?.disableAllHooks === true;
+  let t20;
+  if ($[44] !== hooksByEventAndMatcher) {
     let byEvent = {};
     let total = 0;
-    for (const [Pi, _i] of Object.entries(U)) {
-      let eventCount = Object.values(_i).reduce(yi, 0);
-      ((byEvent[Pi] = eventCount), (total = total + eventCount));
+    for (const [event, matchers] of Object.entries(hooksByEventAndMatcher)) {
+      let eventCount = Object.values(matchers).reduce(sumWithCount, 0);
+      byEvent[event] = eventCount;
+      total = total + eventCount;
     }
-    Vn = { hooksByEvent: byEvent, totalHooksCount: total };
-    (($[44] = U), ($[45] = Vn));
-  } else Vn = $[45];
-  let { hooksByEvent: hooksByEvent, totalHooksCount: totalHooksCount } = Vn,
-    any = Object.values(U).some(wi),
-    Jn;
-  if ($[46] !== v || $[47] !== E)
-    ((Jn =
+    t20 = {
+      hooksByEvent: byEvent,
+      totalHooksCount: total,
+    };
+    $[44] = hooksByEventAndMatcher;
+    $[45] = t20;
+  } else t20 = $[45];
+  let { hooksByEvent, totalHooksCount } = t20;
+  let hasPluginHooks = Object.values(hooksByEventAndMatcher).some(hasPluginHook);
+  let Jn;
+  if ($[46] !== v || $[47] !== E) {
+    Jn =
       E === null || v !== "cloud"
-        ? void 0
+        ? undefined
         : () => {
             E.then((Oe) => {
               if (Oe.consent === "off" || Oe.consent === "remote_host") {
                 return;
               }
-              t((Ct) =>
+              setModeState((Ct) =>
                 Ct.mode === "cloud-consent" || (Ct.mode !== "list" && !Yn)
                   ? Ct
                   : {
                       mode: "cloud-consent",
-                      offer: { forwarded: count(Oe.rows, Si), templateNames: Oe.rows.filter(Hi).map(Ci) },
+                      offer: {
+                        forwarded: count(Oe.rows, isHereHook),
+                        templateNames: Oe.rows.filter(isCloudHook).map(hookLabel),
+                      },
                       ...((Oe.consent === "accepted" || Oe.consent === "declined") && {
                         current: Oe.consent,
                       }),
                     },
               );
             });
-          }),
-      ($[46] = v),
-      ($[47] = E),
-      ($[48] = Jn));
-  else Jn = $[48];
+          };
+    $[46] = v;
+    $[47] = E;
+    $[48] = Jn;
+  } else Jn = $[48];
   let Ue = Jn;
-  if (Yn && u.mode !== "cloud-consent") {
+  if (Yn && modeState.mode !== "cloud-consent") {
     let _o = x ? "disabled by your organization" : "disabled";
-    let A;
-    if ($[49] !== _o || $[50] !== totalHooksCount)
-      ((A =
+    let subtitle;
+    if ($[49] !== _o || $[50] !== totalHooksCount) {
+      subtitle =
         totalHooksCount > 0
           ? `${_o} \xB7 ${totalHooksCount} ${plural(totalHooksCount, "hook")} not running`
-          : _o),
-        ($[49] = _o),
-        ($[50] = totalHooksCount),
-        ($[51] = A));
-    else A = $[51];
-    let z;
-    if ($[52] === MEMO_CACHE_SENTINEL)
-      ((z = e(KeyboardShortcutHint, { chord: "escape", action: "close" })), ($[52] = z));
-    else z = $[52];
+          : _o;
+      $[49] = _o;
+      $[50] = totalHooksCount;
+      $[51] = subtitle;
+    } else subtitle = $[51];
+    let inputGuide;
+    if ($[52] === MEMO_CACHE_SENTINEL) {
+      inputGuide = jsxProd_default(KeyboardShortcutHint, {
+        chord: "escape",
+        action: "close",
+      });
+      $[52] = inputGuide;
+    } else inputGuide = $[52];
     let K;
-    if ($[53] !== N || $[54] !== E || $[55] !== any)
-      ((K =
+    if ($[53] !== N || $[54] !== E || $[55] !== hasPluginHooks) {
+      K =
         E !== null &&
-        e(renderCloudSessionBadge, { summaryPromise: E, savedLine: N ?? void 0, hasPluginHooks: any })),
-        ($[53] = N),
-        ($[54] = E),
-        ($[55] = any),
-        ($[56] = K));
-    else K = $[56];
+        jsxProd_default(renderCloudSessionBadge, {
+          summaryPromise: E,
+          savedLine: N ?? undefined,
+          hasPluginHooks,
+        });
+      $[53] = N;
+      $[54] = E;
+      $[55] = hasPluginHooks;
+      $[56] = K;
+    } else K = $[56];
     let oe;
-    if ($[57] !== Ue || $[58] !== he)
-      ((oe =
-        Ue !== void 0 &&
-        e(ModelSelector, {
+    if ($[57] !== Ue || $[58] !== he) {
+      oe =
+        Ue !== undefined &&
+        jsxProd_default(ModelSelector, {
           options: [
             {
-              label: e(Text, {
+              label: jsxProd_default(Text, {
                 color: "suggestion",
                 children: "Decide whether cloud sessions run this machine's hooks\u2026",
               }),
@@ -356,310 +446,380 @@ function HooksConfigMenu(t0) {
               description: "Saved for this machine; change the answer here any time",
             },
           ],
-          hideIndexes: !0,
+          hideIndexes: true,
           onChange: () => Ue(),
           onCancel: he,
-        })),
-        ($[57] = Ue),
-        ($[58] = he),
-        ($[59] = oe));
-    else oe = $[59];
+        });
+      $[57] = Ue;
+      $[58] = he;
+      $[59] = oe;
+    } else oe = $[59];
     let ye;
-    if ($[60] !== x)
-      ((ye = !x && hasPolicySettings() && " Hooks set by your organization still run."),
-        ($[60] = x),
-        ($[61] = ye));
-    else ye = $[61];
+    if ($[60] !== x) {
+      ye = !x && hasPolicySettings() && " Hooks set by your organization still run.";
+      $[60] = x;
+      $[61] = ye;
+    } else ye = $[61];
     let Ge;
-    if ($[62] !== ye)
-      ((Ge = r(Text, {
+    if ($[62] !== ye) {
+      Ge = jsxProd_default_2(Text, {
         children: [
           "While hooks are disabled no hook command runs, the status line isn't shown, and tools run without hook checks.",
           ye,
         ],
-      })),
-        ($[62] = ye),
-        ($[63] = Ge));
-    else Ge = $[63];
+      });
+      $[62] = ye;
+      $[63] = Ge;
+    } else Ge = $[63];
     let Io;
-    if ($[64] !== x)
-      ((Io =
+    if ($[64] !== x) {
+      Io =
         !x &&
-        e(Text, {
-          dimColor: !0,
+        jsxProd_default(Text, {
+          dimColor: true,
           children: 'To turn hooks back on, remove "disableAllHooks" from settings.json or ask Claude.',
-        })),
-        ($[64] = x),
-        ($[65] = Io));
-    else Io = $[65];
-    let Do;
-    if ($[66] !== K || $[67] !== oe || $[68] !== Ge || $[69] !== Io)
-      ((Do = r(Box, { flexDirection: "column", gap: 1, children: [K, oe, Ge, Io] })),
-        ($[66] = K),
-        ($[67] = oe),
-        ($[68] = Ge),
-        ($[69] = Io),
-        ($[70] = Do));
-    else Do = $[70];
-    let Qn;
-    if ($[71] !== he || $[72] !== A || $[73] !== Do)
-      ((Qn = e(Dialog, { title: "Hooks", subtitle: A, onCancel: he, inputGuide: z, children: Do })),
-        ($[71] = he),
-        ($[72] = A),
-        ($[73] = Do),
-        ($[74] = Qn));
-    else Qn = $[74];
-    return Qn;
+        });
+      $[64] = x;
+      $[65] = Io;
+    } else Io = $[65];
+    let children;
+    if ($[66] !== K || $[67] !== oe || $[68] !== Ge || $[69] !== Io) {
+      children = jsxProd_default_2(Box, {
+        flexDirection: "column",
+        gap: 1,
+        children: [K, oe, Ge, Io],
+      });
+      $[66] = K;
+      $[67] = oe;
+      $[68] = Ge;
+      $[69] = Io;
+      $[70] = children;
+    } else children = $[70];
+    let t34;
+    if ($[71] !== he || $[72] !== subtitle || $[73] !== children) {
+      t34 = jsxProd_default(Dialog, {
+        title: "Hooks",
+        subtitle,
+        onCancel: he,
+        inputGuide,
+        children,
+      });
+      $[71] = he;
+      $[72] = subtitle;
+      $[73] = children;
+      $[74] = t34;
+    } else t34 = $[74];
+    return t34;
   }
-  switch (u.mode) {
+  switch (modeState.mode) {
     case "list": {
-      let A;
-      if ($[75] === MEMO_CACHE_SENTINEL)
-        ((A = isSafeMode()
-          ? { exitHint: getSafeModeExitHint(), managedHooksStillApply: hasPolicySettings() }
-          : void 0),
-          ($[75] = A));
-      else A = $[75];
-      let z;
-      if ($[76] !== N || $[77] !== E || $[78] !== any)
-        ((z =
+      let suspendedBySafeMode;
+      if ($[75] === MEMO_CACHE_SENTINEL) {
+        suspendedBySafeMode = isSafeMode()
+          ? {
+              exitHint: getSafeModeExitHint(),
+              managedHooksStillApply: hasPolicySettings(),
+            }
+          : undefined;
+        $[75] = suspendedBySafeMode;
+      } else suspendedBySafeMode = $[75];
+      let cloudSessionPanel;
+      if ($[76] !== N || $[77] !== E || $[78] !== hasPluginHooks) {
+        cloudSessionPanel =
           E === null
-            ? void 0
-            : e(renderCloudSessionBadge, { summaryPromise: E, savedLine: N ?? void 0, hasPluginHooks: any })),
-          ($[76] = N),
-          ($[77] = E),
-          ($[78] = any),
-          ($[79] = z));
-      else z = $[79];
-      let K, oe;
-      if ($[80] === MEMO_CACHE_SENTINEL)
-        ((K = (Zn) => {
-          t({ mode: "view-hook", event: Zn.event, hook: Zn, from: "list" });
-        }),
-          (oe = () => {
-            t({ mode: "select-event" });
-          }),
-          ($[80] = K),
-          ($[81] = oe));
-      else ((K = $[80]), (oe = $[81]));
+            ? undefined
+            : jsxProd_default(renderCloudSessionBadge, {
+                summaryPromise: E,
+                savedLine: N ?? undefined,
+                hasPluginHooks,
+              });
+        $[76] = N;
+        $[77] = E;
+        $[78] = hasPluginHooks;
+        $[79] = cloudSessionPanel;
+      } else cloudSessionPanel = $[79];
+      let onSelectHook;
+      let onOpenEvents;
+      if ($[80] === MEMO_CACHE_SENTINEL) {
+        onSelectHook = (Zn) => {
+          setModeState({
+            mode: "view-hook",
+            event: Zn.event,
+            hook: Zn,
+            from: "list",
+          });
+        };
+        onOpenEvents = () => {
+          setModeState({
+            mode: "select-event",
+          });
+        };
+        $[80] = onSelectHook;
+        $[81] = onOpenEvents;
+      } else {
+        onSelectHook = $[80];
+        onOpenEvents = $[81];
+      }
       let ye;
       if (
         $[82] !== Ue ||
         $[83] !== he ||
         $[84] !== p ||
-        $[85] !== U ||
+        $[85] !== hooksByEventAndMatcher ||
         $[86] !== f ||
-        $[87] !== W ||
-        $[88] !== z
-      )
-        ((ye = e(HooksOverview, {
+        $[87] !== restrictedByPolicy ||
+        $[88] !== cloudSessionPanel
+      ) {
+        ye = jsxProd_default(HooksOverview, {
           hookEventMetadata: p,
-          hooksByEventAndMatcher: U,
-          restrictedByPolicy: W,
-          suspendedBySafeMode: A,
-          cloudSessionPanel: z,
+          hooksByEventAndMatcher,
+          restrictedByPolicy,
+          suspendedBySafeMode,
+          cloudSessionPanel,
           onDecideCloudHooks: Ue,
           defaultFocusIndex: f,
           onFocusRow: k,
-          onSelectHook: K,
-          onOpenEvents: oe,
+          onSelectHook,
+          onOpenEvents,
           onCancel: he,
-        })),
-          ($[82] = Ue),
-          ($[83] = he),
-          ($[84] = p),
-          ($[85] = U),
-          ($[86] = f),
-          ($[87] = W),
-          ($[88] = z),
-          ($[89] = ye));
-      else ye = $[89];
+        });
+        $[82] = Ue;
+        $[83] = he;
+        $[84] = p;
+        $[85] = hooksByEventAndMatcher;
+        $[86] = f;
+        $[87] = restrictedByPolicy;
+        $[88] = cloudSessionPanel;
+        $[89] = ye;
+      } else ye = $[89];
       return ye;
     }
     case "select-event": {
-      let A;
-      if ($[90] !== p)
-        ((A = (bt) => {
-          if (p[bt].matcherMetadata !== void 0) t({ mode: "select-matcher", event: bt });
-          else t({ mode: "select-hook", event: bt, matcher: "" });
-        }),
-          ($[90] = p),
-          ($[91] = A));
-      else A = $[91];
-      let z;
-      if ($[92] === MEMO_CACHE_SENTINEL)
-        ((z = () => {
-          t({ mode: "list" });
-        }),
-          ($[92] = z));
-      else z = $[92];
+      let onSelectEvent;
+      if ($[90] !== p) {
+        onSelectEvent = (event) => {
+          if (p[event].matcherMetadata !== undefined)
+            setModeState({
+              mode: "select-matcher",
+              event,
+            });
+          else
+            setModeState({
+              mode: "select-hook",
+              event,
+              matcher: "",
+            });
+        };
+        $[90] = p;
+        $[91] = onSelectEvent;
+      } else onSelectEvent = $[91];
+      let onCancel;
+      if ($[92] === MEMO_CACHE_SENTINEL) {
+        onCancel = () => {
+          setModeState({
+            mode: "list",
+          });
+        };
+        $[92] = onCancel;
+      } else onCancel = $[92];
       let K;
-      if ($[93] !== p || $[94] !== hooksByEvent || $[95] !== A)
-        ((K = e(SelectEventMode, {
+      if ($[93] !== p || $[94] !== hooksByEvent || $[95] !== onSelectEvent) {
+        K = jsxProd_default(SelectEventMode, {
           hookEventMetadata: p,
-          hooksByEvent: hooksByEvent,
-          onSelectEvent: A,
-          onCancel: z,
-        })),
-          ($[93] = p),
-          ($[94] = hooksByEvent),
-          ($[95] = A),
-          ($[96] = K));
-      else K = $[96];
+          hooksByEvent,
+          onSelectEvent,
+          onCancel,
+        });
+        $[93] = p;
+        $[94] = hooksByEvent;
+        $[95] = onSelectEvent;
+        $[96] = K;
+      } else K = $[96];
       return K;
     }
     case "cloud-consent": {
-      const forwarded = u.offer.forwarded;
-      const templateNames = u.offer.templateNames;
-      const K = u.current;
-      let oe;
-      if ($[97] === MEMO_CACHE_SENTINEL) ((oe = hr($Ne())), ($[97] = oe));
-      else oe = $[97];
-      let ye;
-      if ($[98] !== D || $[99] !== b || $[100] !== storageV5)
-        ((ye = (event_2) => {
-          if (
-            (t({ mode: "list" }),
-            logEvent("tengu_device_hooks_consent", { choice: fromEnum(event_2) }),
-            event_2 === "not_now")
-          ) {
+      const forwarded = modeState.offer.forwarded;
+      const templateNames = modeState.offer.templateNames;
+      const K = modeState.current;
+      let consentLocation;
+      if ($[97] === MEMO_CACHE_SENTINEL) {
+        consentLocation = stripInvisibleChars(deviceHooksConsentPath());
+        $[97] = consentLocation;
+      } else consentLocation = $[97];
+      let onDone;
+      if ($[98] !== host || $[99] !== b || $[100] !== storageV5) {
+        onDone = (event_2) => {
+          setModeState({
+            mode: "list",
+          });
+          logEvent("tengu_device_hooks_consent", {
+            choice: fromEnum(event_2),
+          });
+          if (event_2 === "not_now") {
             return;
           }
-          let of = deviceHooksProcessMemories.of(D);
-          (zVo(of.consentPin, event_2),
-            emitConsentChangedSafe(of.consentAnnounced, event_2),
-            writeDeviceHooksConsent(event_2, readDeviceHooksConsent(storageV5)).then((Ii) => {
-              (L(
-                `${Ii ? "Saved" : "For this session only (the answer could not be written to disk)"}: ${event_2 === "accepted" ? "cloud sessions started from this machine may run its hooks" : "this machine's hooks stay on this machine"}.`,
-              ),
-                B(b()));
-            }));
-        }),
-          ($[98] = D),
-          ($[99] = b),
-          ($[100] = storageV5),
-          ($[101] = ye));
-      else ye = $[101];
+          let Kn = deviceHooksProcessMemories.of(host);
+          setConsentFromGiven(Kn.consentPin, event_2);
+          emitConsentChangedSafe(Kn.consentAnnounced, event_2);
+          writeDeviceHooksConsent(event_2, readDeviceHooksConsent(storageV5)).then((Ii) => {
+            L(
+              `${Ii ? "Saved" : "For this session only (the answer could not be written to disk)"}: ${event_2 === "accepted" ? "cloud sessions started from this machine may run its hooks" : "this machine's hooks stay on this machine"}.`,
+            );
+            B(b());
+          });
+        };
+        $[98] = host;
+        $[99] = b;
+        $[100] = storageV5;
+        $[101] = onDone;
+      } else onDone = $[101];
       let Ge;
       if (
-        $[102] !== u.current ||
-        $[103] !== u.offer.forwarded ||
-        $[104] !== u.offer.templateNames ||
-        $[105] !== oe ||
-        $[106] !== ye
-      )
-        ((Ge = e(describeWhereHookRuns, {
-          forwarded: forwarded,
-          templateNames: templateNames,
+        $[102] !== modeState.current ||
+        $[103] !== modeState.offer.forwarded ||
+        $[104] !== modeState.offer.templateNames ||
+        $[105] !== consentLocation ||
+        $[106] !== onDone
+      ) {
+        Ge = jsxProd_default(describeWhereHookRuns, {
+          forwarded,
+          templateNames,
           current: K,
-          consentLocation: oe,
-          onDone: ye,
-        })),
-          ($[102] = u.current),
-          ($[103] = u.offer.forwarded),
-          ($[104] = u.offer.templateNames),
-          ($[105] = oe),
-          ($[106] = ye),
-          ($[107] = Ge));
-      else Ge = $[107];
+          consentLocation,
+          onDone,
+        });
+        $[102] = modeState.current;
+        $[103] = modeState.offer.forwarded;
+        $[104] = modeState.offer.templateNames;
+        $[105] = consentLocation;
+        $[106] = onDone;
+        $[107] = Ge;
+      } else Ge = $[107];
       return Ge;
     }
     case "select-matcher": {
-      const A = p[u.event];
-      let z;
-      if ($[108] !== u.event)
-        ((z = (matcher) => {
-          t({ mode: "select-hook", event: u.event, matcher: matcher });
-        }),
-          ($[108] = u.event),
-          ($[109] = z));
-      else z = $[109];
-      let K;
-      if ($[110] === MEMO_CACHE_SENTINEL)
-        ((K = () => {
-          t({ mode: "select-event" });
-        }),
-          ($[110] = K));
-      else K = $[110];
-      let oe;
-      if ($[111] !== U || $[112] !== u.event || $[113] !== I || $[114] !== A.description || $[115] !== z)
-        ((oe = e(SelectMatcherMode, {
-          selectedEvent: u.event,
-          matchersForSelectedEvent: I,
-          hooksByEventAndMatcher: U,
-          eventDescription: A.description,
-          onSelect: z,
-          onCancel: K,
-        })),
-          ($[111] = U),
-          ($[112] = u.event),
-          ($[113] = I),
-          ($[114] = A.description),
-          ($[115] = z),
-          ($[116] = oe));
-      else oe = $[116];
-      return oe;
+      const t21 = p[modeState.event];
+      let onSelect;
+      if ($[108] !== modeState.event) {
+        onSelect = (matcher) => {
+          setModeState({
+            mode: "select-hook",
+            event: modeState.event,
+            matcher,
+          });
+        };
+        $[108] = modeState.event;
+        $[109] = onSelect;
+      } else onSelect = $[109];
+      let onCancel;
+      if ($[110] === MEMO_CACHE_SENTINEL) {
+        onCancel = () => {
+          setModeState({
+            mode: "select-event",
+          });
+        };
+        $[110] = onCancel;
+      } else onCancel = $[110];
+      let t24;
+      if (
+        $[111] !== hooksByEventAndMatcher ||
+        $[112] !== modeState.event ||
+        $[113] !== sortedMatchersForSelectedEvent ||
+        $[114] !== t21.description ||
+        $[115] !== onSelect
+      ) {
+        t24 = jsxProd_default(SelectMatcherMode, {
+          selectedEvent: modeState.event,
+          matchersForSelectedEvent: sortedMatchersForSelectedEvent,
+          hooksByEventAndMatcher,
+          eventDescription: t21.description,
+          onSelect,
+          onCancel,
+        });
+        $[111] = hooksByEventAndMatcher;
+        $[112] = modeState.event;
+        $[113] = sortedMatchersForSelectedEvent;
+        $[114] = t21.description;
+        $[115] = onSelect;
+        $[116] = t24;
+      } else t24 = $[116];
+      return t24;
     }
     case "select-hook": {
-      const A = p[u.event];
-      let z;
-      if ($[117] !== u.event)
-        ((z = (hook_1) => {
-          t({ mode: "view-hook", event: u.event, hook: hook_1, from: "events" });
-        }),
-          ($[117] = u.event),
-          ($[118] = z));
-      else z = $[118];
-      let K;
-      if ($[119] !== p || $[120] !== u.event)
-        ((K = () => {
-          if (p[u.event].matcherMetadata !== void 0) t({ mode: "select-matcher", event: u.event });
-          else t({ mode: "select-event" });
-        }),
-          ($[119] = p),
-          ($[120] = u.event),
-          ($[121] = K));
-      else K = $[121];
-      let oe;
+      const hookEventMetadata = p[modeState.event];
+      let onSelect;
+      if ($[117] !== modeState.event) {
+        onSelect = (hook) => {
+          setModeState({
+            mode: "view-hook",
+            event: modeState.event,
+            hook,
+            from: "events",
+          });
+        };
+        $[117] = modeState.event;
+        $[118] = onSelect;
+      } else onSelect = $[118];
+      let onCancel;
+      if ($[119] !== p || $[120] !== modeState.event) {
+        onCancel = () => {
+          if (p[modeState.event].matcherMetadata !== undefined)
+            setModeState({
+              mode: "select-matcher",
+              event: modeState.event,
+            });
+          else
+            setModeState({
+              mode: "select-event",
+            });
+        };
+        $[119] = p;
+        $[120] = modeState.event;
+        $[121] = onCancel;
+      } else onCancel = $[121];
+      let t24;
       if (
-        $[122] !== Se ||
-        $[123] !== u.event ||
-        $[124] !== u.matcher ||
-        $[125] !== A ||
-        $[126] !== z ||
-        $[127] !== K
-      )
-        ((oe = e(SelectHookMode, {
-          selectedEvent: u.event,
-          selectedMatcher: u.matcher,
-          hooksForSelectedMatcher: Se,
-          hookEventMetadata: A,
-          onSelect: z,
-          onCancel: K,
-        })),
-          ($[122] = Se),
-          ($[123] = u.event),
-          ($[124] = u.matcher),
-          ($[125] = A),
-          ($[126] = z),
-          ($[127] = K),
-          ($[128] = oe));
-      else oe = $[128];
-      return oe;
+        $[122] !== hooksForSelectedMatcher ||
+        $[123] !== modeState.event ||
+        $[124] !== modeState.matcher ||
+        $[125] !== hookEventMetadata ||
+        $[126] !== onSelect ||
+        $[127] !== onCancel
+      ) {
+        t24 = jsxProd_default(SelectHookMode, {
+          selectedEvent: modeState.event,
+          selectedMatcher: modeState.matcher,
+          hooksForSelectedMatcher,
+          hookEventMetadata,
+          onSelect,
+          onCancel,
+        });
+        $[122] = hooksForSelectedMatcher;
+        $[123] = modeState.event;
+        $[124] = modeState.matcher;
+        $[125] = hookEventMetadata;
+        $[126] = onSelect;
+        $[127] = onCancel;
+        $[128] = t24;
+      } else t24 = $[128];
+      return t24;
     }
     case "view-hook": {
-      const A = p[u.event].matcherMetadata !== void 0;
+      const eventSupportsMatcher = p[modeState.event].matcherMetadata !== undefined;
       let z;
-      if ($[129] !== Po || $[130] !== u.hook || $[131] !== A)
-        ((z = e(ViewHookMode, { selectedHook: u.hook, eventSupportsMatcher: A, onCancel: Po })),
-          ($[129] = Po),
-          ($[130] = u.hook),
-          ($[131] = A),
-          ($[132] = z));
-      else z = $[132];
+      if ($[129] !== Po || $[130] !== modeState.hook || $[131] !== eventSupportsMatcher) {
+        z = jsxProd_default(ViewHookMode, {
+          selectedHook: modeState.hook,
+          eventSupportsMatcher,
+          onCancel: Po,
+        });
+        $[129] = Po;
+        $[130] = modeState.hook;
+        $[131] = eventSupportsMatcher;
+        $[132] = z;
+      } else z = $[132];
       return z;
     }
   }
 }
-
 export { HooksConfigMenu };

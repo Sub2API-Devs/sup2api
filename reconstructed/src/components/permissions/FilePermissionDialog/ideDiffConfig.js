@@ -17,14 +17,16 @@ function quoteKind(e) {
 }
 //@ chunk-s67vc0kc.js:1196-1510 fingerprint = createSingleEditDiffConfig (0.38)
 function createSingleEditDiffConfig(e) {
-  let t = "",
-    n = null;
-  for (let r = 0; r < e.length; r++) {
-    let a = e[r];
+  let t = "";
+  let n = null;
+  for (let idx = 0; idx < e.length; idx++) {
+    let a = e[idx];
     if (a === "`") {
       if (n === "single") t += "``";
-      else if (r + 1 < e.length) ((t += a + e[r + 1]), r++);
-      else t += a;
+      else if (idx + 1 < e.length) {
+        t += a + e[idx + 1];
+        idx++;
+      } else t += a;
       continue;
     }
     let s = quoteKind(a);
@@ -35,8 +37,9 @@ function createSingleEditDiffConfig(e) {
       }
       t += a;
     } else if (s === n) {
-      if (r + 1 < e.length && quoteKind(e[r + 1]) === s) {
-        ((t += e[r + 1]), r++);
+      if (idx + 1 < e.length && quoteKind(e[idx + 1]) === s) {
+        t += e[idx + 1];
+        idx++;
         continue;
       }
       n = null;
@@ -44,5 +47,4 @@ function createSingleEditDiffConfig(e) {
   }
   return t;
 }
-
 export { createSingleEditDiffConfig };

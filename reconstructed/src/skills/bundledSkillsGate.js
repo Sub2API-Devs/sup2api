@@ -18,39 +18,71 @@ import {
 import { BUILTIN_SKILL_NAMES } from "./bundled/builtinSkillNames.js";
 
 //@ chunk-9acpp0pb.js:342-438 placement
-function I3(e) {
-  return env.CLAUDE_CODE_DISABLE_BUNDLED_SKILLS || (e ?? getInitialSettings_2()).disableBundledSkills === !0;
+/**
+ * 判断内置技能是否被环境变量或设置关闭。
+ */
+function isBundledSkillsDisabled(initialSettings) {
+  return (
+    env.CLAUDE_CODE_DISABLE_BUNDLED_SKILLS ||
+    (initialSettings ?? getInitialSettings_2()).disableBundledSkills === true
+  );
 }
 //@ chunk-9acpp0pb.js:438-469 placement
 var ALLOW_BUNDLED_SKILLS = "allow_bundled_skills";
 //@ chunk-9acpp0pb.js:469-499 placement
-function e6e() {
+/**
+ * 判断组织策略是否禁止内置技能。
+ */
+function isBundledSkillsPolicyDenied() {
   return !isPolicyAllowed(ALLOW_BUNDLED_SKILLS);
 }
 //@ chunk-9acpp0pb.js:499-530 placement
-function n() {
+function coreSkillNames() {
   return rememberedCoreSkills() ?? BUILTIN_SKILL_NAMES;
 }
 //@ chunk-9acpp0pb.js:530-576 placement
-function D4(e) {
-  return e6e() && !n().includes(e);
+/**
+ * 判断某技能名是否在策略生效时被排除（不在核心名单）。
+ */
+function isSkillOutsideCorePolicy(name) {
+  return isBundledSkillsPolicyDenied() && !coreSkillNames().includes(name);
 }
 //@ chunk-9acpp0pb.js:576-614 placement
-function Jme(e, t) {
-  return I3(t) || D4(e);
+/**
+ * 内置技能的综合门控判断（全局关闭或按名被挡）。
+ */
+function isBundledSkillGatedOff(e, t) {
+  return isBundledSkillsDisabled(t) || isSkillOutsideCorePolicy(e);
 }
 //@ chunk-9acpp0pb.js:614-667 placement
-function WSi() {
+/**
+ * 组织策略拒绝内置技能时给用户的说明。
+ */
+function bundledSkillsDeniedReason() {
   return policyDeniedReason(ALLOW_BUNDLED_SKILLS, "Bundled skills", "are");
 }
 //@ chunk-9acpp0pb.js:667-739 placement
-function ppr(e) {
-  let t = e6e();
-  return `${I3(e)}:${t}:${t ? n().join(",") : ""}`;
+/**
+ * 由关闭状态与核心名单拼出的门控缓存键。
+ */
+function bundledSkillsGateKey(e) {
+  let t = isBundledSkillsPolicyDenied();
+  return `${isBundledSkillsDisabled(e)}:${t}:${t ? coreSkillNames().join(",") : ""}`;
 }
 //@ chunk-9acpp0pb.js:739-819 placement
-function eto(e, t) {
-  return e.type === "prompt" && e.source === "builtin" && Jme(e.name, t);
+/**
+ * 判断某内置技能条目是否被门控关闭。
+ */
+function isBuiltinSkillGated(e, t) {
+  return e.type === "prompt" && e.source === "builtin" && isBundledSkillGatedOff(e.name, t);
 }
-
-export { I3, D4, e6e, ALLOW_BUNDLED_SKILLS, Jme, eto, ppr, WSi };
+export {
+  isBundledSkillsDisabled,
+  isSkillOutsideCorePolicy,
+  isBundledSkillsPolicyDenied,
+  ALLOW_BUNDLED_SKILLS,
+  isBundledSkillGatedOff,
+  isBuiltinSkillGated,
+  bundledSkillsGateKey,
+  bundledSkillsDeniedReason,
+};

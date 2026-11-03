@@ -12,81 +12,92 @@ import { jsonParse } from "./slowOperations.js";
 import { logForDebugging } from "./debug.js";
 import { registerCleanup } from "./cleanupRegistry.js";
 
+//@ chunk-tyg7f3ek.js:394375-394399 fingerprint = STDOUT_GUARD_MARKER (1)
 /**
  * 被拦截行在 stderr 上的前缀 "[stdout-guard]"。
  */
-//@ chunk-tyg7f3ek.js:394375-394399 fingerprint = STDOUT_GUARD_MARKER (1)
 var STDOUT_GUARD_MARKER = "[stdout-guard]";
+//@ chunk-tyg7f3ek.js:394399-394475 file-local
 /**
  * 空行或可 JSON 解析的行。
  */
-//@ chunk-tyg7f3ek.js:394399-394475 file-local
 function isJsonLine(line) {
-  if (line.length === 0) return !0;
+  if (line.length === 0) return true;
   try {
-    return (jsonParse(line), !0);
+    jsonParse(line);
+    return true;
   } catch {
-    return !1;
+    return false;
   }
 }
+//@ chunk-tyg7f3ek.js:394475-395444 fingerprint = installStreamJsonStdoutGuard (0.619)
 /**
  * StdoutGuard：按行缓冲 stdout 写入，JSON 行原样输出，其余转 stderr；可卸载并冲刷缓冲。
  */
-//@ chunk-tyg7f3ek.js:394475-395444 fingerprint = installStreamJsonStdoutGuard (0.619)
 class installStreamJsonStdoutGuard {
   buffer = "";
   originalWrite = null;
   install() {
     if (this.originalWrite !== null) return;
-    let textDecoder = new TextDecoder("utf-8"),
-      n = process.stdout.write.bind(process.stdout);
+    let textDecoder = new TextDecoder("utf-8");
+    let n = process.stdout.write.bind(process.stdout);
     this.originalWrite = n;
     let r = this;
-    ((process.stdout.write = function (s, h, y) {
-      let S = typeof s === "string" ? s : textDecoder.decode(s, { stream: !0 });
-      r.buffer += S;
-      let R,
-        w = "";
+    process.stdout.write = function (chunk, encodingOrCb, cb) {
+      let text =
+        typeof chunk === "string"
+          ? chunk
+          : textDecoder.decode(chunk, {
+              stream: true,
+            });
+      r.buffer += text;
+      let newlineIdx;
+      let w = "";
       while (
-        (R = r.buffer.indexOf(`
+        (newlineIdx = r.buffer.indexOf(`
 `)) !== -1
       ) {
-        let sliced = r.buffer.slice(0, R);
-        if (((r.buffer = r.buffer.slice(R + 1)), isJsonLine(sliced)))
+        let line = r.buffer.slice(0, newlineIdx);
+        r.buffer = r.buffer.slice(newlineIdx + 1);
+        if (isJsonLine(line))
           w +=
-            sliced +
+            line +
             `
 `;
-        else
-          (process.stderr.write(`${STDOUT_GUARD_MARKER} ${sliced}
-`),
-            logForDebugging(`streamJsonStdoutGuard diverted non-JSON stdout line: ${sliced.slice(0, 200)}`));
+        else {
+          process.stderr.write(`${STDOUT_GUARD_MARKER} ${line}
+`);
+          logForDebugging(`streamJsonStdoutGuard diverted non-JSON stdout line: ${line.slice(0, 200)}`);
+        }
       }
-      let P = typeof h === "function" ? h : y;
+      let P = typeof encodingOrCb === "function" ? encodingOrCb : cb;
       if (w.length > 0) return P ? n(w, P) : n(w);
       if (P) queueMicrotask(() => P());
-      return !0;
-    }),
-      registerCleanup(async () => {
-        if (((this.buffer += textDecoder.decode()), this.buffer.length > 0)) {
-          if (this.originalWrite && isJsonLine(this.buffer))
-            this.originalWrite(
-              this.buffer +
-                `
+      return true;
+    };
+    registerCleanup(async () => {
+      this.buffer += textDecoder.decode();
+      if (this.buffer.length > 0) {
+        if (this.originalWrite && isJsonLine(this.buffer))
+          this.originalWrite(
+            this.buffer +
+              `
 `,
-            );
-          else
-            process.stderr.write(`${STDOUT_GUARD_MARKER} ${this.buffer}
+          );
+        else
+          process.stderr.write(`${STDOUT_GUARD_MARKER} ${this.buffer}
 `);
-          this.buffer = "";
-        }
-        this.restore();
-      }));
+        this.buffer = "";
+      }
+      this.restore();
+    });
   }
   restore() {
-    if (this.originalWrite) ((process.stdout.write = this.originalWrite), (this.originalWrite = null));
+    if (this.originalWrite) {
+      process.stdout.write = this.originalWrite;
+      this.originalWrite = null;
+    }
     this.buffer = "";
   }
 }
-
 export { installStreamJsonStdoutGuard };

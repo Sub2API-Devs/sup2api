@@ -6,33 +6,35 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { Gr } from "./recursionDetectionMiddleware.js";
+import { require_recursionDetectionMiddleware } from "./recursionDetectionMiddleware.js";
 
 //@ chunk-edce4vxq.js:4991-5421 cjs-fingerprint
-var Dme = x(function (Ct) {
-  var _t = Gr(),
-    bo = {
-      step: "build",
-      tags: ["RECURSION_DETECTION"],
-      name: "recursionDetectionMiddleware",
-      override: !0,
-      priority: "low",
+var require_middleware_recursion_detection = x(function (cjsExports) {
+  var recursionDetectionMiddleware = require_recursionDetectionMiddleware();
+  var recursionDetectionMiddlewareOptions = {
+    step: "build",
+    tags: ["RECURSION_DETECTION"],
+    name: "recursionDetectionMiddleware",
+    override: true,
+    priority: "low",
+  };
+  var getRecursionDetectionPlugin = (options) => ({
+    applyToStack: (clientStack) => {
+      clientStack.add(
+        recursionDetectionMiddleware.recursionDetectionMiddleware(),
+        recursionDetectionMiddlewareOptions,
+      );
     },
-    No = (e) => ({
-      applyToStack: (t) => {
-        t.add(_t.recursionDetectionMiddleware(), bo);
-      },
-    });
-  Ct.getRecursionDetectionPlugin = No;
-  Object.keys(_t).forEach(function (e) {
-    if (e !== "default" && !Object.prototype.hasOwnProperty.call(Ct, e))
-      Object.defineProperty(Ct, e, {
-        enumerable: !0,
+  });
+  cjsExports.getRecursionDetectionPlugin = getRecursionDetectionPlugin;
+  Object.keys(recursionDetectionMiddleware).forEach(function (k) {
+    if (k !== "default" && !Object.prototype.hasOwnProperty.call(cjsExports, k))
+      Object.defineProperty(cjsExports, k, {
+        enumerable: true,
         get: function () {
-          return _t[e];
+          return recursionDetectionMiddleware[k];
         },
       });
   });
 });
-
-export { Dme };
+export { require_middleware_recursion_detection };

@@ -22,13 +22,13 @@ import { DescriptionStep } from "./wizard-steps/DescriptionStep.js";
 import { BedrockSaveStep } from "../../providerSetup/bedrock/BedrockSaveStep.js";
 import { w } from "../../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../../runtime/bun-runtime.js";
-import { e } from "../../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { jsxProd_default } from "../../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { WizardProvider } from "../../wizard/WizardProvider.js";
 
 //@ chunk-sx9xc5ee.js:23427-23442 file-last-pair
-function Mo() {}
+function noop_3() {}
 //@ chunk-sx9xc5ee.js:23442-23475 layout
-var fr = [
+var BEDROCK_SETUP_STEPS = [
   BedrockAuthMethodStep,
   BedrockProfileStep,
   GenerateStep,
@@ -39,33 +39,39 @@ var fr = [
   BedrockSaveStep,
 ];
 //@ chunk-sx9xc5ee.js:23475-23866 fingerprint = CreateAgentWizard (0.552)
-function CreateAgentWizard(t0) {
-  let $ = w(7),
-    { onComplete: onComplete, onCancel: onCancel, exitOnCtrlCD: exitOnCtrlCD } = t0,
-    m;
-  if ($[0] !== onComplete) ((m = { onComplete: onComplete }), ($[0] = onComplete), ($[1] = m));
-  else m = $[1];
-  let g;
-  if ($[2] === MEMO_CACHE_SENTINEL) ((g = {}), ($[2] = g));
-  else g = $[2];
+function CreateAgentWizard(props) {
+  let $ = w(7);
+  let { onComplete, onCancel, exitOnCtrlCD } = props;
+  let stepProps;
+  if ($[0] !== onComplete) {
+    stepProps = {
+      onComplete,
+    };
+    $[0] = onComplete;
+    $[1] = stepProps;
+  } else stepProps = $[1];
+  let initialData;
+  if ($[2] === MEMO_CACHE_SENTINEL) {
+    initialData = {};
+    $[2] = initialData;
+  } else initialData = $[2];
   let h;
-  if ($[3] !== exitOnCtrlCD || $[4] !== onCancel || $[5] !== m)
-    ((h = e(WizardProvider, {
-      steps: fr,
-      stepProps: m,
-      initialData: g,
-      onComplete: Mo,
-      onCancel: onCancel,
-      exitOnCtrlCD: exitOnCtrlCD,
+  if ($[3] !== exitOnCtrlCD || $[4] !== onCancel || $[5] !== stepProps) {
+    h = jsxProd_default(WizardProvider, {
+      steps: BEDROCK_SETUP_STEPS,
+      stepProps,
+      initialData,
+      onComplete: noop_3,
+      onCancel,
+      exitOnCtrlCD,
       title: "Set up Amazon Bedrock",
-      showStepCounter: !1,
-    })),
-      ($[3] = exitOnCtrlCD),
-      ($[4] = onCancel),
-      ($[5] = m),
-      ($[6] = h));
-  else h = $[6];
+      showStepCounter: false,
+    });
+    $[3] = exitOnCtrlCD;
+    $[4] = onCancel;
+    $[5] = stepProps;
+    $[6] = h;
+  } else h = $[6];
   return h;
 }
-
 export { CreateAgentWizard };

@@ -7,6 +7,5 @@
  */
 
 //@ chunk-e7naa6k8.js:1720-1734 esm-fingerprint
-var I = "0.2.0";
-
-export { I };
+var VERSION = "0.2.0";
+export { VERSION };

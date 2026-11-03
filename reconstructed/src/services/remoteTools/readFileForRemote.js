@@ -9,16 +9,16 @@
  * attribution: placement 4
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, o, E, U, M, T } from "../../../vendor/zod/v4/classic/schemas.js";
+import { u, string, E, _enum, M, literal } from "../../../vendor/zod/v4/classic/schemas.js";
 import {
   MAX_DIRECTORY_PATH_LENGTH,
   safeSerializedPermissionContextSchema,
-  PV,
+  exceedsSerializedContextLimit,
 } from "../../utils/permissions/permissionContextSerialization.js";
 import { isPlainObject } from "../../utils/objectUtils.js";
 import { readFileForRemote } from "./remoteFileRead.js";
-import { buildNativeDoctorDiagnostics, Lgt } from "../../screens/Doctor.js";
-import { xo } from "../../bootstrap/sessionSlices.js";
+import { buildNativeDoctorDiagnostics, isReportableDiagnostic } from "../../screens/Doctor.js";
+import { getSessionProject } from "../../bootstrap/sessionSlices.js";
 import {
   getPolicySettingsLoadErrors,
   getSettingsForSource,
@@ -31,7 +31,7 @@ import {
   settingsJsonToRules,
 } from "../../utils/permissions/permissionsLoader.js";
 import { logSkippedInvalidSetting } from "../../utils/settings/settingsErrorsHeadless.js";
-import { Avr } from "./runPluginHook.js";
+import { policyLoadFailureRefusesPluginHooks } from "./runPluginHook.js";
 import {
   applyPermissionRulesToPermissionContext,
   getDenyRuleForTool,
@@ -41,81 +41,106 @@ import { READ_PATH_PROBE } from "../../utils/permissions/filesystem.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 
 //@ chunk-q2swdab7.js:804-1124 placement
-var READFILEFORREMOTE = "ReadFileForRemote",
-  pZt = 4194304,
-  g = 3000000,
-  d = DoctorLazy(() =>
-    u({
-      path: o().max(MAX_DIRECTORY_PATH_LENGTH),
-      max_bytes: E().optional(),
-      encoding: U(["utf-8", "base64"]).optional(),
-    }),
-  ),
-  f = DoctorLazy(() => d().extend({ permission_context: safeSerializedPermissionContextSchema() }).strict()),
-  D = DoctorLazy(() =>
-    u({
-      file: u({
-        contents: o().refine(m),
-        truncated: M().optional(),
-        encoding: T("base64").optional(),
-      }).optional(),
-    }),
-  );
+/**
+ * 远程读文件（ReadFileForRemote）的工具名、大小上限与三个 schema（输入、带权限上下文、结果）。
+ */
+var READFILEFORREMOTE = "ReadFileForRemote";
+var MAX_REMOTE_READ_BYTES = 4194304;
+var MAX_REMOTE_READ_SERVE_BYTES = 3000000;
+var remoteReadInputSchema = DoctorLazy(() =>
+  u({
+    path: string().max(MAX_DIRECTORY_PATH_LENGTH),
+    max_bytes: E().optional(),
+    encoding: _enum(["utf-8", "base64"]).optional(),
+  }),
+);
+var remoteReadWithContextInputSchema = DoctorLazy(() =>
+  remoteReadInputSchema()
+    .extend({
+      permission_context: safeSerializedPermissionContextSchema(),
+    })
+    .strict(),
+);
+var remoteReadResultSchema = DoctorLazy(() =>
+  u({
+    file: u({
+      contents: string().refine(isWithinSizeLimit),
+      truncated: M().optional(),
+      encoding: literal("base64").optional(),
+    }).optional(),
+  }),
+);
+//@ chunk-q2swdab7.js:1124-1746 placement
 /**
  * 远程调用"读文件"：用启动时权限上下文合并当前策略/用户/项目设置的拒绝与询问规则，在这些规则与工作目录限制下读取文件（有大小上限），返回文本或"read denied"。
  */
-//@ chunk-q2swdab7.js:1124-1746 placement
 async function serveReadFileForRemote(input, c, context) {
-  if (isPlainObject(input) && PV(input.permission_context)) throw Error("permission_context is too large");
+  if (isPlainObject(input) && exceedsSerializedContextLimit(input.permission_context))
+    throw Error("permission_context is too large");
   let {
-      permission_context: permission_context,
-      path: path,
-      max_bytes: max_bytes,
-      encoding: encoding,
-    } = f().parse(input),
-    i = context.launchPermissionContext && remoteReadPermissionContext(context.launchPermissionContext),
-    s =
-      i &&
-      (await readFileForRemote(
-        path,
-        max_bytes && Math.min(max_bytes, g),
-        {
-          ...buildNativeDoctorDiagnostics(permission_context, i, xo(context.session).originalCwd),
-          ...(i.blockReadsOutsideWorkingDirectories && { blockReadsOutsideWorkingDirectories: !0 }),
-        },
-        { encoding: encoding, telemetrySource: "headless_stream" },
-      ).catch(() => {
-        return;
-      }));
-  if (s && !m(s.contents)) throw Error("the file is too large to send back as text");
-  return { summary: s ? `${s.contents.length} characters` : "read denied", output: { file: s } };
+    permission_context: permissionContext,
+    path,
+    max_bytes: maxBytes,
+    encoding,
+  } = remoteReadWithContextInputSchema().parse(input);
+  let i = context.launchPermissionContext && remoteReadPermissionContext(context.launchPermissionContext);
+  let s =
+    i &&
+    (await readFileForRemote(
+      path,
+      maxBytes && Math.min(maxBytes, MAX_REMOTE_READ_SERVE_BYTES),
+      {
+        ...buildNativeDoctorDiagnostics(permissionContext, i, getSessionProject(context.session).originalCwd),
+        ...(i.blockReadsOutsideWorkingDirectories && {
+          blockReadsOutsideWorkingDirectories: true,
+        }),
+      },
+      {
+        encoding,
+        telemetrySource: "headless_stream",
+      },
+    ).catch(() => {
+      return;
+    }));
+  if (s && !isWithinSizeLimit(s.contents)) throw Error("the file is too large to send back as text");
+  return {
+    summary: s ? `${s.contents.length} characters` : "read denied",
+    output: {
+      file: s,
+    },
+  };
 }
+//@ chunk-q2swdab7.js:1746-2323 placement
 /**
  * 构造远程读文件所用的权限上下文：从各来源设置文件重新读取规则（只取 deny/ask），若对读探针存在拒绝或询问规则则返回 undefined（不允许远程读）。
  */
-//@ chunk-q2swdab7.js:1746-2323 placement
 function remoteReadPermissionContext(launchContext) {
-  let c = [...getPolicySettingsLoadErrors()],
-    r = getPermissionRulesForSource("policySettings"),
-    l = [getSettingsForSource("policySettings")];
+  let error = [...getPolicySettingsLoadErrors()];
+  let permissionRulesForSource = getPermissionRulesForSource("policySettings");
+  let l = [getSettingsForSource("policySettings")];
   for (let [t, a] of [
     ["userSettings", getSettingsFilePathForSource("userSettings")],
     ["projectSettings", getSettingsFilePathForSource("projectSettings")],
     ["localSettings", getSettingsFilePathForSource("localSettings")],
     ["localSettings", getLegacyLocalSettingsFilePath()],
   ])
-    if (a !== void 0) {
-      let i = parseSettingsFileUncached(a);
-      (c.push(...i.errors), r.push(...settingsJsonToRules(i.settings, t)), l.push(i.settings));
+    if (a !== undefined) {
+      let settingsFileUncached = parseSettingsFileUncached(a);
+      error.push(...settingsFileUncached.errors);
+      permissionRulesForSource.push(...settingsJsonToRules(settingsFileUncached.settings, t));
+      l.push(settingsFileUncached.settings);
     }
-  if ((logSkippedInvalidSetting(Lgt(c).slice(0, 10)), Avr())) return;
+  logSkippedInvalidSetting(isReportableDiagnostic(error).slice(0, 10));
+  if (policyLoadFailureRefusesPluginHooks()) return;
   let n = applyPermissionRulesToPermissionContext(
     launchContext,
-    r.filter((t) => t.ruleBehavior !== "allow"),
-    { announce: !1 },
+    permissionRulesForSource.filter((t) => t.ruleBehavior !== "allow"),
+    {
+      announce: false,
+    },
   );
   return getDenyRuleForTool(n, READ_PATH_PROBE) || getAskRuleForTool(n, READ_PATH_PROBE)
-    ? void 0
+    ? undefined
     : {
         ...n,
         blockReadsOutsideWorkingDirectories: l.some(
@@ -124,8 +149,13 @@ function remoteReadPermissionContext(launchContext) {
       };
 }
 //@ chunk-q2swdab7.js:2323-2388 placement
-function m(e) {
-  return e.length <= pZt && Buffer.byteLength(jsonStringify(e)) <= pZt;
+/**
+ * 判断文本长度与其 JSON 字节数是否都在远程读上限内。
+ */
+function isWithinSizeLimit(contents) {
+  return (
+    contents.length <= MAX_REMOTE_READ_BYTES &&
+    Buffer.byteLength(jsonStringify(contents)) <= MAX_REMOTE_READ_BYTES
+  );
 }
-
-export { remoteReadPermissionContext, pZt, READFILEFORREMOTE, serveReadFileForRemote };
+export { remoteReadPermissionContext, MAX_REMOTE_READ_BYTES, READFILEFORREMOTE, serveReadFileForRemote };

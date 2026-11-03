@@ -11,102 +11,107 @@ import { zn } from "./error.js";
 //@ chunk-mrx6y2r5.js:34990-35007 esm-layout
 var custom = inspect.custom;
 //@ chunk-mrx6y2r5.js:35007-35792 esm-fingerprint
-var REDACTED = "REDACTED",
-  wm = [
-    "x-ms-client-request-id",
-    "x-ms-return-client-request-id",
-    "x-ms-useragent",
-    "x-ms-correlation-request-id",
-    "x-ms-request-id",
-    "client-request-id",
-    "ms-cv",
-    "return-client-request-id",
-    "traceparent",
-    "Access-Control-Allow-Credentials",
-    "Access-Control-Allow-Headers",
-    "Access-Control-Allow-Methods",
-    "Access-Control-Allow-Origin",
-    "Access-Control-Expose-Headers",
-    "Access-Control-Max-Age",
-    "Access-Control-Request-Headers",
-    "Access-Control-Request-Method",
-    "Origin",
-    "Accept",
-    "Accept-Encoding",
-    "Cache-Control",
-    "Connection",
-    "Content-Length",
-    "Content-Type",
-    "Date",
-    "ETag",
-    "Expires",
-    "If-Match",
-    "If-Modified-Since",
-    "If-None-Match",
-    "If-Unmodified-Since",
-    "Last-Modified",
-    "Pragma",
-    "Request-Id",
-    "Retry-After",
-    "Server",
-    "Transfer-Encoding",
-    "User-Agent",
-    "WWW-Authenticate",
-  ],
-  vm = ["api-version"];
+var RedactedString = "REDACTED";
+var defaultAllowedHeaderNames = [
+  "x-ms-client-request-id",
+  "x-ms-return-client-request-id",
+  "x-ms-useragent",
+  "x-ms-correlation-request-id",
+  "x-ms-request-id",
+  "client-request-id",
+  "ms-cv",
+  "return-client-request-id",
+  "traceparent",
+  "Access-Control-Allow-Credentials",
+  "Access-Control-Allow-Headers",
+  "Access-Control-Allow-Methods",
+  "Access-Control-Allow-Origin",
+  "Access-Control-Expose-Headers",
+  "Access-Control-Max-Age",
+  "Access-Control-Request-Headers",
+  "Access-Control-Request-Method",
+  "Origin",
+  "Accept",
+  "Accept-Encoding",
+  "Cache-Control",
+  "Connection",
+  "Content-Length",
+  "Content-Type",
+  "Date",
+  "ETag",
+  "Expires",
+  "If-Match",
+  "If-Modified-Since",
+  "If-None-Match",
+  "If-Unmodified-Since",
+  "Last-Modified",
+  "Pragma",
+  "Request-Id",
+  "Retry-After",
+  "Server",
+  "Transfer-Encoding",
+  "User-Agent",
+  "WWW-Authenticate",
+];
+var defaultAllowedQueryParameters = ["api-version"];
 //@ chunk-mrx6y2r5.js:35792-37067 esm-fingerprint
-class tt {
-  constructor({ additionalAllowedHeaderNames: e = [], additionalAllowedQueryParameters: t = [] } = {}) {
-    ((e = wm.concat(e)),
-      (t = vm.concat(t)),
-      (this.allowedHeaderNames = new Set(e.map((r) => r.toLowerCase()))),
-      (this.allowedQueryParameters = new Set(t.map((r) => r.toLowerCase()))));
+class Sanitizer {
+  constructor({
+    additionalAllowedHeaderNames: allowedHeaderNames = [],
+    additionalAllowedQueryParameters: allowedQueryParameters = [],
+  } = {}) {
+    allowedHeaderNames = defaultAllowedHeaderNames.concat(allowedHeaderNames);
+    allowedQueryParameters = defaultAllowedQueryParameters.concat(allowedQueryParameters);
+    this.allowedHeaderNames = new Set(allowedHeaderNames.map((n) => n.toLowerCase()));
+    this.allowedQueryParameters = new Set(allowedQueryParameters.map((p) => p.toLowerCase()));
   }
-  sanitize(e) {
-    let t = new Set();
+  sanitize(obj) {
+    let seen = new Set();
     return JSON.stringify(
-      e,
-      (r, n) => {
-        if (n instanceof Error)
-          return Object.assign(Object.assign({}, n), { name: n.name, message: n.message });
-        if (r === "headers") return this.sanitizeHeaders(n);
-        else if (r === "url") return this.sanitizeUrl(n);
-        else if (r === "query") return this.sanitizeQuery(n);
-        else if (r === "body") return;
-        else if (r === "response") return;
-        else if (r === "operationSpec") return;
-        else if (Array.isArray(n) || zn(n)) {
-          if (t.has(n)) return "[Circular]";
-          t.add(n);
+      obj,
+      (key, value) => {
+        if (value instanceof Error)
+          return Object.assign(Object.assign({}, value), {
+            name: value.name,
+            message: value.message,
+          });
+        if (key === "headers") return this.sanitizeHeaders(value);
+        else if (key === "url") return this.sanitizeUrl(value);
+        else if (key === "query") return this.sanitizeQuery(value);
+        else if (key === "body") return;
+        else if (key === "response") return;
+        else if (key === "operationSpec") return;
+        else if (Array.isArray(value) || zn(value)) {
+          if (seen.has(value)) return "[Circular]";
+          seen.add(value);
         }
-        return n;
+        return value;
       },
       2,
     );
   }
-  sanitizeUrl(e) {
-    if (typeof e !== "string" || e === null || e === "") return e;
-    let t = new URL(e);
-    if (!t.search) return e;
-    for (let [r] of t.searchParams)
-      if (!this.allowedQueryParameters.has(r.toLowerCase())) t.searchParams.set(r, REDACTED);
-    return t.toString();
+  sanitizeUrl(value) {
+    if (typeof value !== "string" || value === null || value === "") return value;
+    let url = new URL(value);
+    if (!url.search) return value;
+    for (let [key] of url.searchParams)
+      if (!this.allowedQueryParameters.has(key.toLowerCase())) url.searchParams.set(key, RedactedString);
+    return url.toString();
   }
-  sanitizeHeaders(e) {
-    let t = {};
-    for (let r of Object.keys(e))
-      if (this.allowedHeaderNames.has(r.toLowerCase())) t[r] = e[r];
-      else t[r] = REDACTED;
-    return t;
+  sanitizeHeaders(obj) {
+    let sanitized = {};
+    for (let key of Object.keys(obj))
+      if (this.allowedHeaderNames.has(key.toLowerCase())) sanitized[key] = obj[key];
+      else sanitized[key] = RedactedString;
+    return sanitized;
   }
-  sanitizeQuery(e) {
-    if (typeof e !== "object" || e === null) return e;
-    let t = {};
-    for (let r of Object.keys(e))
-      if (this.allowedQueryParameters.has(r.toLowerCase())) t[r] = e[r];
-      else t[r] = REDACTED;
-    return t;
+  sanitizeQuery(value) {
+    if (typeof value !== "object" || value === null) return value;
+    let sanitized = {};
+    for (let k of Object.keys(value))
+      if (this.allowedQueryParameters.has(k.toLowerCase())) sanitized[k] = value[k];
+      else sanitized[k] = RedactedString;
+    return sanitized;
   }
 }
-
-export { tt, custom };
+export { Sanitizer, custom };

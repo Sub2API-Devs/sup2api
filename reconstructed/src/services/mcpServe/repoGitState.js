@@ -9,68 +9,83 @@
  * attribution: placement 3
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u as u_2, pe, o, A, Ir, T, M } from "../../../vendor/zod/v4/classic/schemas.js";
-import { L8e } from "../../utils/detectRepository.js";
+import {
+  u,
+  record,
+  string,
+  array,
+  discriminatedUnion,
+  literal,
+  M,
+} from "../../../vendor/zod/v4/classic/schemas.js";
+import { MAX_REPO_URL_CHARS } from "../../utils/detectRepository.js";
 import {
   SDKSystemCodeChangePublishedMessageSchema,
   SDKSystemVcsStateChangedMessageSchema,
 } from "../../entrypoints/sdk/coreSchemas.js";
-import { isSafeBranchName, Gvt } from "../../tools/shared/gitOperationTracking.js";
+import { isSafeBranchName, settlePendingPrLinks } from "../../tools/shared/gitOperationTracking.js";
 import { getRepoCheckouts, resolveCheckoutPath } from "../../utils/git/repoCheckouts.js";
 import { refreshGitDir, readGitHead } from "../../utils/git/gitFilesystem.js";
 import { drainTaskNotifications } from "../../utils/task/taskNotifications.js";
 
 //@ chunk-wy9dbk5f.js:50401-50887 placement
-var READREPOGITSTATE = "ReadRepoGitState",
-  Ge = 32,
-  $e = 64,
-  Io = 256,
-  Fo = 4096,
-  xr = 255,
-  No = /^\/[^\p{C}\p{Zl}\p{Zp}]*$/u,
-  ru = DoctorLazy(() =>
-    u_2({
-      branches: pe(o().max(Io), o().max(xr).nullable()).refine(Tr),
-      events: A(
-        Ir("subtype", [
-          u_2({
-            subtype: T("code_change_published"),
-            url: o().max(L8e),
-            action: SDKSystemCodeChangePublishedMessageSchema().shape.action.unwrap(),
-            branch: o().refine(isSafeBranchName).optional(),
-          }),
-          u_2({
-            subtype: T("vcs_state_changed"),
-            kind: SDKSystemVcsStateChangedMessageSchema().shape.kind,
-            cwd: o().max(Fo).regex(No),
-            branch: o().refine(isSafeBranchName).optional(),
-          }),
-        ])
-          .nullable()
-          .catch(null),
-      ).max($e),
-      cut: M().optional(),
-    }),
-  );
+/**
+ * 读取 git 状态结果的 schema。
+ */
+var READREPOGITSTATE = "ReadRepoGitState";
+var MAX_BRANCHES = 32;
+var MAX_EVENTS = 64;
+var MAX_BRANCH_NAME_CHARS = 256;
+var MAX_CWD_CHARS = 4096;
+var MAX_REF_CHARS = 255;
+var SAFE_ABSOLUTE_PATH_RE = /^\/[^\p{C}\p{Zl}\p{Zp}]*$/u;
+var readRepoGitStateResultSchema = DoctorLazy(() =>
+  u({
+    branches: record(string().max(MAX_BRANCH_NAME_CHARS), string().max(MAX_REF_CHARS).nullable()).refine(
+      isBranchesMapSmallEnough,
+    ),
+    events: array(
+      discriminatedUnion("subtype", [
+        u({
+          subtype: literal("code_change_published"),
+          url: string().max(MAX_REPO_URL_CHARS),
+          action: SDKSystemCodeChangePublishedMessageSchema().shape.action.unwrap(),
+          branch: string().refine(isSafeBranchName).optional(),
+        }),
+        u({
+          subtype: literal("vcs_state_changed"),
+          kind: SDKSystemVcsStateChangedMessageSchema().shape.kind,
+          cwd: string().max(MAX_CWD_CHARS).regex(SAFE_ABSOLUTE_PATH_RE),
+          branch: string().refine(isSafeBranchName).optional(),
+        }),
+      ])
+        .nullable()
+        .catch(null),
+    ).max(MAX_EVENTS),
+    cut: M().optional(),
+  }),
+);
 //@ chunk-wy9dbk5f.js:50887-51776 placement
-async function serveReadRepoGitState(e, r, { callerGone: callerGone }) {
-  let s = [...getRepoCheckouts()],
-    a = s.length > Ge,
-    c = [];
-  for (let [h, S] of s.slice(0, Ge)) {
-    if (h.length > Io) {
-      a = !0;
+async function serveReadRepoGitState(e, r, { callerGone }) {
+  let s = [...getRepoCheckouts()];
+  let a = s.length > MAX_BRANCHES;
+  let c = [];
+  for (let [h, S] of s.slice(0, MAX_BRANCHES)) {
+    if (h.length > MAX_BRANCH_NAME_CHARS) {
+      a = true;
       continue;
     }
-    let C = resolveCheckoutPath(S);
-    if (C === null) continue;
-    let b = await refreshGitDir(C);
+    let checkoutPath = resolveCheckoutPath(S);
+    if (checkoutPath === null) continue;
+    let b = await refreshGitDir(checkoutPath);
     if (b !== null) {
-      let R = await readGitHead(b);
-      c.push([h, R?.type === "branch" && isSafeBranchName(R.name) ? R.name : null]);
+      let gitHead = await readGitHead(b);
+      c.push([h, gitHead?.type === "branch" && isSafeBranchName(gitHead.name) ? gitHead.name : null]);
     }
   }
-  (await Gvt(), r.throwIfAborted(), callerGone?.throwIfAborted());
+  await settlePendingPrLinks();
+  r.throwIfAborted();
+  callerGone?.throwIfAborted();
   let y = [];
   for (let h of drainTaskNotifications()) {
     if (h.type !== "system") continue;
@@ -79,31 +94,45 @@ async function serveReadRepoGitState(e, r, { callerGone: callerGone }) {
         subtype: h.subtype,
         url: h.url,
         action: h.action,
-        ...(h.branch !== void 0 && { branch: h.branch }),
+        ...(h.branch !== undefined && {
+          branch: h.branch,
+        }),
       });
     else if (h.subtype === "vcs_state_changed") {
-      if (h.cwd.length > Fo || !No.test(h.cwd)) {
-        a = !0;
+      if (h.cwd.length > MAX_CWD_CHARS || !SAFE_ABSOLUTE_PATH_RE.test(h.cwd)) {
+        a = true;
         continue;
       }
       y.push({
         subtype: h.subtype,
         kind: h.kind,
         cwd: h.cwd,
-        ...("branch" in h && h.branch !== void 0 && isSafeBranchName(h.branch) && { branch: h.branch }),
+        ...("branch" in h &&
+          h.branch !== undefined &&
+          isSafeBranchName(h.branch) && {
+            branch: h.branch,
+          }),
       });
     }
   }
-  a ||= y.length > $e;
-  let sliced = y.slice(-$e);
+  a ||= y.length > MAX_EVENTS;
+  let sliced = y.slice(-MAX_EVENTS);
   return {
     summary: `${c.length} checkouts, ${sliced.length} events`,
-    output: { branches: Object.fromEntries(c), events: sliced, ...(a && { cut: a }) },
+    output: {
+      branches: Object.fromEntries(c),
+      events: sliced,
+      ...(a && {
+        cut: a,
+      }),
+    },
   };
 }
 //@ chunk-wy9dbk5f.js:51776-51824 placement
-function Tr(e) {
-  return Object.keys(e).length <= Ge;
+/**
+ * 判断分支表条数是否在上限内。
+ */
+function isBranchesMapSmallEnough(e) {
+  return Object.keys(e).length <= MAX_BRANCHES;
 }
-
 export { READREPOGITSTATE, serveReadRepoGitState };

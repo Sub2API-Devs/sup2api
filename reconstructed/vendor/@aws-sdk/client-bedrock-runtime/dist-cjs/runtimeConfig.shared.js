@@ -6,36 +6,39 @@
  * attribution: esm-fingerprint 1
  */
 import { G, He, qe, je, Ve, $e, k } from "../../../_unknown/bedrockRuntimeConfig.js";
-import { Ne } from "./endpoint/endpointResolver.js";
-import { Se } from "./auth/httpAuthSchemeProvider.js";
+import { defaultEndpointResolver } from "./endpoint/endpointResolver.js";
+import { defaultBedrockRuntimeHttpAuthSchemeProvider } from "./auth/httpAuthSchemeProvider.js";
 
 //@ chunk-3cddmtk7.js:23411-24302 esm-fingerprint
-var Xe = (e) => ({
+var getRuntimeConfig = (config) => ({
   apiVersion: "2023-09-30",
-  base64Decoder: e?.base64Decoder ?? G.fromBase64,
-  base64Encoder: e?.base64Encoder ?? G.toBase64,
-  disableHostPrefix: e?.disableHostPrefix ?? !1,
-  endpointProvider: e?.endpointProvider ?? Ne,
-  extensions: e?.extensions ?? [],
-  httpAuthSchemeProvider: e?.httpAuthSchemeProvider ?? Se,
-  httpAuthSchemes: e?.httpAuthSchemes ?? [
+  base64Decoder: config?.base64Decoder ?? G.fromBase64,
+  base64Encoder: config?.base64Encoder ?? G.toBase64,
+  disableHostPrefix: config?.disableHostPrefix ?? false,
+  endpointProvider: config?.endpointProvider ?? defaultEndpointResolver,
+  extensions: config?.extensions ?? [],
+  httpAuthSchemeProvider: config?.httpAuthSchemeProvider ?? defaultBedrockRuntimeHttpAuthSchemeProvider,
+  httpAuthSchemes: config?.httpAuthSchemes ?? [
     {
       schemeId: "aws.auth#sigv4",
-      identityProvider: (t) => t.getIdentityProvider("aws.auth#sigv4"),
+      identityProvider: (ipc) => ipc.getIdentityProvider("aws.auth#sigv4"),
       signer: new He.AwsSdkSigV4Signer(),
     },
     {
       schemeId: "smithy.api#httpBearerAuth",
-      identityProvider: (t) => t.getIdentityProvider("smithy.api#httpBearerAuth"),
+      identityProvider: (ipc) => ipc.getIdentityProvider("smithy.api#httpBearerAuth"),
       signer: new qe.HttpBearerAuthSigner(),
     },
   ],
-  logger: e?.logger ?? new je.NoOpLogger(),
-  protocol: e?.protocol ?? new Ve.AwsRestJsonProtocol({ defaultNamespace: "com.amazonaws.bedrockruntime" }),
-  serviceId: e?.serviceId ?? "Bedrock Runtime",
-  urlParser: e?.urlParser ?? $e.parseUrl,
-  utf8Decoder: e?.utf8Decoder ?? k.fromUtf8,
-  utf8Encoder: e?.utf8Encoder ?? k.toUtf8,
+  logger: config?.logger ?? new je.NoOpLogger(),
+  protocol:
+    config?.protocol ??
+    new Ve.AwsRestJsonProtocol({
+      defaultNamespace: "com.amazonaws.bedrockruntime",
+    }),
+  serviceId: config?.serviceId ?? "Bedrock Runtime",
+  urlParser: config?.urlParser ?? $e.parseUrl,
+  utf8Decoder: config?.utf8Decoder ?? k.fromUtf8,
+  utf8Encoder: config?.utf8Encoder ?? k.toUtf8,
 });
-
-export { Xe };
+export { getRuntimeConfig };

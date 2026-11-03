@@ -13,21 +13,32 @@ import {
   injectUserMessageToTeammate,
   findTeammateTaskByAgentId,
 } from "../../tasks/InProcessTeammateTask/InProcessTeammateTask.js";
-import { MG } from "./teammateIds.js";
+import { agentAddress } from "./teammateIds.js";
 
 //@ chunk-phrnybk8.js:874-1123 placement
-function exitTeammatePlanMode(e, a) {
-  let s = a.get(e);
+function exitTeammatePlanMode(taskId, taskRegistry) {
+  let s = taskRegistry.get(taskId);
   if (!isInProcessTeammateTask(s) || !s.awaitingPlanApproval) return;
-  (a.update(e, (n) => ({ ...n, awaitingPlanApproval: !1, pendingPlanApproval: void 0 })),
-    injectUserMessageToTeammate(e, "The person moved you out of plan mode. Continue your work.", a, {
+  taskRegistry.update(taskId, (n) => ({
+    ...n,
+    awaitingPlanApproval: false,
+    pendingPlanApproval: undefined,
+  }));
+  injectUserMessageToTeammate(
+    taskId,
+    "The person moved you out of plan mode. Continue your work.",
+    taskRegistry,
+    {
       kind: "task-notification",
-    }));
+    },
+  );
 }
 //@ chunk-phrnybk8.js:1123-1209 placement
-function rTo(e, a, s) {
-  let n = findTeammateTaskByAgentId(MG(a, s), e);
-  if (n?.status === "running") n.retryWake?.emit();
+/**
+ * 计划批准后唤醒仍在运行的队友任务。
+ */
+function wakeTeammateOnPlanApproval(tasks, a, teamName) {
+  let teammateTaskByAgentId = findTeammateTaskByAgentId(agentAddress(a, teamName), tasks);
+  if (teammateTaskByAgentId?.status === "running") teammateTaskByAgentId.retryWake?.emit();
 }
-
-export { exitTeammatePlanMode, rTo };
+export { exitTeammatePlanMode, wakeTeammateOnPlanApproval };

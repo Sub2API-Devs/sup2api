@@ -7,23 +7,23 @@
  */
 
 //@ chunk-6ja29j2n.js:8620-8626 esm-layout
-var f;
+var TokenType;
 //@ chunk-6ja29j2n.js:8626-8925 esm-fingerprint
-(function (e) {
-  ((e[(e.CHARACTER = 0)] = "CHARACTER"),
-    (e[(e.NULL_CHARACTER = 1)] = "NULL_CHARACTER"),
-    (e[(e.WHITESPACE_CHARACTER = 2)] = "WHITESPACE_CHARACTER"),
-    (e[(e.START_TAG = 3)] = "START_TAG"),
-    (e[(e.END_TAG = 4)] = "END_TAG"),
-    (e[(e.COMMENT = 5)] = "COMMENT"),
-    (e[(e.DOCTYPE = 6)] = "DOCTYPE"),
-    (e[(e.EOF = 7)] = "EOF"),
-    (e[(e.HIBERNATION = 8)] = "HIBERNATION"));
-})(f || (f = {}));
+(function (TokenType) {
+  TokenType[(TokenType.CHARACTER = 0)] = "CHARACTER";
+  TokenType[(TokenType.NULL_CHARACTER = 1)] = "NULL_CHARACTER";
+  TokenType[(TokenType.WHITESPACE_CHARACTER = 2)] = "WHITESPACE_CHARACTER";
+  TokenType[(TokenType.START_TAG = 3)] = "START_TAG";
+  TokenType[(TokenType.END_TAG = 4)] = "END_TAG";
+  TokenType[(TokenType.COMMENT = 5)] = "COMMENT";
+  TokenType[(TokenType.DOCTYPE = 6)] = "DOCTYPE";
+  TokenType[(TokenType.EOF = 7)] = "EOF";
+  TokenType[(TokenType.HIBERNATION = 8)] = "HIBERNATION";
+})(TokenType || (TokenType = {}));
 //@ chunk-6ja29j2n.js:8925-9036 esm-fingerprint
-function z(e, t) {
-  for (let a = e.attrs.length - 1; a >= 0; a--) if (e.attrs[a].name === t) return e.attrs[a].value;
+function getTokenAttr(token, attrName) {
+  for (let i = token.attrs.length - 1; i >= 0; i--)
+    if (token.attrs[i].name === attrName) return token.attrs[i].value;
   return null;
 }
-
-export { f, z };
+export { TokenType, getTokenAttr };

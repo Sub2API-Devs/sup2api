@@ -6,74 +6,78 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { ee } from "./utils.js";
-import { xe } from "./Node.js";
-import { lr } from "./CharacterData.js";
+import { require_utils } from "./utils.js";
+import { require_Node } from "./Node.js";
+import { require_CharacterData } from "./CharacterData.js";
 
 //@ chunk-vwj6ccer.js:63701-64873 cjs-fingerprint
-var Sn = x(function (Nd, Ws) {
-  Ws.exports = wn;
-  var js = ee(),
-    Gs = xe(),
-    zs = lr();
-  function wn(e, t) {
-    (zs.call(this),
-      (this.nodeType = Gs.TEXT_NODE),
-      (this.ownerDocument = e),
-      (this._data = t),
-      (this._index = void 0));
+var require_Text = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = Text;
+  var utils = require_utils();
+  var Node = require_Node();
+  var CharacterData = require_CharacterData();
+  function Text(doc, data) {
+    CharacterData.call(this);
+    this.nodeType = Node.TEXT_NODE;
+    this.ownerDocument = doc;
+    this._data = data;
+    this._index = undefined;
   }
-  var xr = {
+  var nodeValue = {
     get: function () {
       return this._data;
     },
-    set: function (e) {
-      if (e === null || e === void 0) e = "";
-      else e = String(e);
-      if (e === this._data) return;
-      if (((this._data = e), this.rooted)) this.ownerDocument.mutateValue(this);
+    set: function (v) {
+      if (v === null || v === undefined) v = "";
+      else v = String(v);
+      if (v === this._data) return;
+      this._data = v;
+      if (this.rooted) this.ownerDocument.mutateValue(this);
       if (this.parentNode && this.parentNode._textchangehook) this.parentNode._textchangehook(this);
     },
   };
-  wn.prototype = Object.create(zs.prototype, {
-    nodeName: { value: "#text" },
-    nodeValue: xr,
-    textContent: xr,
-    innerText: xr,
+  Text.prototype = Object.create(CharacterData.prototype, {
+    nodeName: {
+      value: "#text",
+    },
+    nodeValue,
+    textContent: nodeValue,
+    innerText: nodeValue,
     data: {
-      get: xr.get,
-      set: function (e) {
-        xr.set.call(this, e === null ? "" : String(e));
+      get: nodeValue.get,
+      set: function (v) {
+        nodeValue.set.call(this, v === null ? "" : String(v));
       },
     },
     splitText: {
-      value: function (t) {
-        if (t > this._data.length || t < 0) js.IndexSizeError();
-        var substring = this._data.substring(t),
-          textNode = this.ownerDocument.createTextNode(substring);
-        this.data = this.data.substring(0, t);
-        var parentNode = this.parentNode;
-        if (parentNode !== null) parentNode.insertBefore(textNode, this.nextSibling);
-        return textNode;
+      value: function (offset) {
+        if (offset > this._data.length || offset < 0) utils.IndexSizeError();
+        var newdata = this._data.substring(offset);
+        var newnode = this.ownerDocument.createTextNode(newdata);
+        this.data = this.data.substring(0, offset);
+        var parent = this.parentNode;
+        if (parent !== null) parent.insertBefore(newnode, this.nextSibling);
+        return newnode;
       },
     },
     wholeText: {
       get: function () {
-        var textContent = this.textContent;
-        for (var nextSibling = this.nextSibling; nextSibling; nextSibling = nextSibling.nextSibling) {
-          if (nextSibling.nodeType !== Gs.TEXT_NODE) break;
-          textContent += nextSibling.textContent;
+        var result = this.textContent;
+        for (var next = this.nextSibling; next; next = next.nextSibling) {
+          if (next.nodeType !== Node.TEXT_NODE) break;
+          result += next.textContent;
         }
-        return textContent;
+        return result;
       },
     },
-    replaceWholeText: { value: js.nyi },
+    replaceWholeText: {
+      value: utils.nyi,
+    },
     clone: {
       value: function () {
-        return new wn(this.ownerDocument, this._data);
+        return new Text(this.ownerDocument, this._data);
       },
     },
   });
 });
-
-export { Sn };
+export { require_Text };

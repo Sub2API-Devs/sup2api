@@ -10,25 +10,30 @@
  */
 import { w } from "../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
-import { r, e } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default_2,
+  jsxProd_default,
+} from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Link } from "../ink/components/Text.js";
 
 //@ chunk-20skp6hd.js:1144-1427 fingerprint = MCPServerDialogCopy (0.356)
 function MCPServerDialogCopy() {
-  let $ = w(1),
-    t0;
-  if ($[0] === MEMO_CACHE_SENTINEL)
-    ((t0 = r(Text, {
+  let $ = w(1);
+  let t0;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    t0 = jsxProd_default_2(Text, {
       children: [
         "MCP servers may execute code or access system resources. All tool calls require approval. Learn more in the",
         " ",
-        e(Link, { url: "https://code.claude.com/docs/en/mcp", children: "MCP documentation" }),
+        jsxProd_default(Link, {
+          url: "https://code.claude.com/docs/en/mcp",
+          children: "MCP documentation",
+        }),
         ".",
       ],
-    })),
-      ($[0] = t0));
-  else t0 = $[0];
+    });
+    $[0] = t0;
+  } else t0 = $[0];
   return t0;
 }
-
 export { MCPServerDialogCopy };

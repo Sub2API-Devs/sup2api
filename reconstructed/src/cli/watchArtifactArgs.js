@@ -15,49 +15,68 @@ import { ARTIFACT_SLUG_RE, parseArtifactUrlAnyCase } from "../tools/ArtifactTool
 import { getReplConfigArgv, setReplConfigArgv } from "../bootstrap/state.js";
 import { syncRespawnFlag } from "../services/daemon/jobState.js";
 
+//@ chunk-mbd4s9s4.js:316-752 placement
 /**
  * 解析 --watch-artifact 的值（artifact id 或 claude.ai URL），校验与当前登录环境一致。
  */
-//@ chunk-mbd4s9s4.js:316-752 placement
 function parseWatchArtifactArg(a) {
-  let trimmed = a.trim(),
-    r = claudeAiEnvironment(),
-    t = decodeBase58Uuid(trimmed);
-  if (t !== null) return { slug: t, url: artifactViewerUrlFor({ slug: t, env: r }) };
+  let trimmed = a.trim();
+  let r = claudeAiEnvironment();
+  let t = decodeBase58Uuid(trimmed);
+  if (t !== null)
+    return {
+      slug: t,
+      url: artifactViewerUrlFor({
+        slug: t,
+        env: r,
+      }),
+    };
   let lower = trimmed.toLowerCase();
   if (ARTIFACT_SLUG_RE.test(lower))
-    return { slug: lower, url: artifactViewerUrlFor({ slug: lower, env: r }) };
-  let o = parseArtifactUrlAnyCase(trimmed);
-  if (o === null)
-    return { error: "Error: --watch-artifact expects an artifact id or a claude.ai artifact URL" };
-  if (o.env !== r)
     return {
-      error: `Error: --watch-artifact got a ${o.env} artifact URL, but this session is signed in to ${r}`,
+      slug: lower,
+      url: artifactViewerUrlFor({
+        slug: lower,
+        env: r,
+      }),
     };
-  return { slug: o.slug, url: artifactViewerUrlFor(o) };
+  let artifactUrlAnyCase = parseArtifactUrlAnyCase(trimmed);
+  if (artifactUrlAnyCase === null)
+    return {
+      error: "Error: --watch-artifact expects an artifact id or a claude.ai artifact URL",
+    };
+  if (artifactUrlAnyCase.env !== r)
+    return {
+      error: `Error: --watch-artifact got a ${artifactUrlAnyCase.env} artifact URL, but this session is signed in to ${r}`,
+    };
+  return {
+    slug: artifactUrlAnyCase.slug,
+    url: artifactViewerUrlFor(artifactUrlAnyCase),
+  };
 }
 //@ chunk-mbd4s9s4.js:752-763 placement
-var s = null;
+var pendingWatchArtifact = null;
 //@ chunk-mbd4s9s4.js:763-783 placement
 function setPendingWatchArtifact(a) {
-  s = a;
+  pendingWatchArtifact = a;
 }
 //@ chunk-mbd4s9s4.js:783-822 placement
 function takePendingWatchArtifact() {
-  let a = s;
-  return ((s = null), a);
+  let a = pendingWatchArtifact;
+  pendingWatchArtifact = null;
+  return a;
 }
 //@ chunk-mbd4s9s4.js:822-846 placement
 function peekPendingWatchArtifact() {
-  return s;
+  return pendingWatchArtifact;
 }
 //@ chunk-mbd4s9s4.js:846-1100 placement
-function stripWatchArtifactArgs(a) {
+function stripWatchArtifactArgs(replConfigArgv) {
   let e = [];
-  for (let r = 0; r < a.length; r++) {
-    let t = a[r];
+  for (let i = 0; i < replConfigArgv.length; i++) {
+    let t = replConfigArgv[i];
     if (t === "--watch-artifact" || t === "--watch-artifact-no-autoreact") {
-      r++;
+      i++;
       continue;
     }
     if (t.startsWith("--watch-artifact=") || t.startsWith("--watch-artifact-no-autoreact=")) continue;
@@ -66,42 +85,45 @@ function stripWatchArtifactArgs(a) {
   return e;
 }
 //@ chunk-mbd4s9s4.js:1100-1466 placement
-function hasWatchArtifactArg(a, e) {
+function hasWatchArtifactArg(a, storageV5) {
   a = a.toLowerCase();
-  let r = ["--watch-artifact", "--watch-artifact-no-autoreact"],
-    t = getReplConfigArgv(),
-    n = [],
-    o = !1;
-  for (let i = 0; i < t.length; i++) {
-    let c = t[i];
-    if (r.some((u) => (c === u && t[i + 1]?.toLowerCase() === a) || c.toLowerCase() === `${u}=${a}`)) {
+  let r = ["--watch-artifact", "--watch-artifact-no-autoreact"];
+  let replConfigArgv = getReplConfigArgv();
+  let n = [];
+  let o = false;
+  for (let i = 0; i < replConfigArgv.length; i++) {
+    let c = replConfigArgv[i];
+    if (
+      r.some(
+        (u) => (c === u && replConfigArgv[i + 1]?.toLowerCase() === a) || c.toLowerCase() === `${u}=${a}`,
+      )
+    ) {
       if (c.indexOf("=") === -1) i++;
-      o = !0;
+      o = true;
       continue;
     }
     n.push(c);
   }
-  if (o)
-    (setReplConfigArgv(n),
-      syncRespawnFlag("--watch-artifact", ["--watch-artifact-no-autoreact"], null, void 0, e));
+  if (o) {
+    setReplConfigArgv(n);
+    syncRespawnFlag("--watch-artifact", ["--watch-artifact-no-autoreact"], null, undefined, storageV5);
+  }
 }
 //@ chunk-mbd4s9s4.js:1466-1825 placement
-function getWatchArtifactNoAutoreact(a) {
-  let e = getReplConfigArgv(),
-    r;
-  for (let t = 0; t < e.length; t++) {
-    let n = e[t];
-    if (n === "--watch-artifact" && e[t + 1] !== void 0) r = e[t + 1].toLowerCase();
+function getWatchArtifactNoAutoreact(storageV5) {
+  let replConfigArgv = getReplConfigArgv();
+  let r;
+  for (let i = 0; i < replConfigArgv.length; i++) {
+    let n = replConfigArgv[i];
+    if (n === "--watch-artifact" && replConfigArgv[i + 1] !== undefined)
+      r = replConfigArgv[i + 1].toLowerCase();
     else if (n.startsWith("--watch-artifact=")) r = n.slice(17).toLowerCase();
   }
-  if (r === void 0) return !1;
-  return (
-    setReplConfigArgv([...stripWatchArtifactArgs(getReplConfigArgv()), "--watch-artifact-no-autoreact", r]),
-    syncRespawnFlag("--watch-artifact-no-autoreact", ["--watch-artifact"], r, void 0, a),
-    !0
-  );
+  if (r === undefined) return false;
+  setReplConfigArgv([...stripWatchArtifactArgs(getReplConfigArgv()), "--watch-artifact-no-autoreact", r]);
+  syncRespawnFlag("--watch-artifact-no-autoreact", ["--watch-artifact"], r, undefined, storageV5);
+  return true;
 }
-
 export {
   stripWatchArtifactArgs,
   peekPendingWatchArtifact,

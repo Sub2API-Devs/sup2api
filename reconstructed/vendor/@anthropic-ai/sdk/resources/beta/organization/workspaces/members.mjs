@@ -5,36 +5,44 @@
  * pieces: chunk-hwmsct5x.js (1)
  * attribution: esm-fingerprint 1
  */
-import { Y } from "../../../../core/resource.mjs";
+import { APIResource } from "../../../../core/resource.mjs";
 import { I } from "../../../../internal/utils/path.mjs";
-import { Be } from "../../../../core/pagination.mjs";
+import { Page } from "../../../../core/pagination.mjs";
 
 //@ chunk-hwmsct5x.js:126331-126969 esm-fingerprint
-class co extends Y {
-  retrieve(e, n, r) {
-    let { workspace_id: workspace_id } = n;
-    return this._client.get(I`/v1/organizations/workspaces/${workspace_id}/members/${e}?beta=true`, r);
+class Members extends APIResource {
+  retrieve(userID, params, options) {
+    let { workspace_id } = params;
+    return this._client.get(
+      I`/v1/organizations/workspaces/${workspace_id}/members/${userID}?beta=true`,
+      options,
+    );
   }
-  update(e, n, r) {
-    let { workspace_id: workspace_id, ...h } = n;
-    return this._client.post(I`/v1/organizations/workspaces/${workspace_id}/members/${e}?beta=true`, {
-      body: h,
-      ...r,
+  update(userID, params, options) {
+    let { workspace_id, ...body } = params;
+    return this._client.post(I`/v1/organizations/workspaces/${workspace_id}/members/${userID}?beta=true`, {
+      body,
+      ...options,
     });
   }
-  list(e, n = {}, r) {
-    return this._client.getAPIList(I`/v1/organizations/workspaces/${e}/members?beta=true`, Be, {
-      query: n,
-      ...r,
+  list(workspaceID, query = {}, options) {
+    return this._client.getAPIList(I`/v1/organizations/workspaces/${workspaceID}/members?beta=true`, Page, {
+      query,
+      ...options,
     });
   }
-  add(e, n, r) {
-    return this._client.post(I`/v1/organizations/workspaces/${e}/members?beta=true`, { body: n, ...r });
+  add(workspaceID, body, options) {
+    return this._client.post(I`/v1/organizations/workspaces/${workspaceID}/members?beta=true`, {
+      body,
+      ...options,
+    });
   }
-  remove(e, n, r) {
-    let { workspace_id: workspace_id } = n;
-    return this._client.delete(I`/v1/organizations/workspaces/${workspace_id}/members/${e}?beta=true`, r);
+  remove(userID, params, options) {
+    let { workspace_id } = params;
+    return this._client.delete(
+      I`/v1/organizations/workspaces/${workspace_id}/members/${userID}?beta=true`,
+      options,
+    );
   }
 }
-
-export { co };
+export { Members };

@@ -17,7 +17,7 @@ import {
   getOAuthRequestHeaders,
 } from "./api.js";
 import { getOauthConfig } from "../../constants/oauth.js";
-import { Dt } from "../../../vendor/axios/dist/esm/axios.js";
+import { axios_default } from "../../../vendor/axios/dist/esm/axios.js";
 import { logForDebugging } from "../debug.js";
 import { logFeatureSad, withFeatureTelemetry } from "../../services/analytics/featureTelemetry.js";
 import { toError, isExpectedApiError } from "../errors.js";
@@ -25,10 +25,10 @@ import { isCloudSessionAccessError } from "./environments.js";
 import { logError } from "../log.js";
 
 //@ chunk-f25sswmp.js:19007-19944 placement
-async function fetchSelfHostedPools(e, n) {
+async function fetchSelfHostedPools(e, credentials) {
   if (getAPIProvider() !== "firstParty") return [];
-  let r = isConsoleProfileSessionsCredential(),
-    s = e ?? (await sessionsApiAccessToken(r));
+  let r = isConsoleProfileSessionsCredential();
+  let s = e ?? (await sessionsApiAccessToken(r));
   if (!s) return [];
   let i = await sessionsApiOrganizationUUID(r);
   if (!i) return [];
@@ -36,7 +36,7 @@ async function fetchSelfHostedPools(e, n) {
   try {
     let h = await withSessionsApiBearer401Retry(
       (E) =>
-        Dt.get(y, {
+        axios_default.get(y, {
           headers: {
             ...getOAuthRequestHeaders(E),
             "anthropic-beta": "ccr-byoc-2025-07-29",
@@ -44,14 +44,19 @@ async function fetchSelfHostedPools(e, n) {
           },
           timeout: 15000,
         }),
-      { profile: r, fallbackToken: s, credentials: n },
+      {
+        profile: r,
+        fallbackToken: s,
+        credentials,
+      },
     );
-    if (h.status !== 200)
-      return (
-        logForDebugging(`fetchSelfHostedPools: ${h.status} ${h.statusText}`, { level: "error" }),
-        logFeatureSad("teleport_self_hosted_pool_list", "non_200"),
-        []
-      );
+    if (h.status !== 200) {
+      logForDebugging(`fetchSelfHostedPools: ${h.status} ${h.statusText}`, {
+        level: "error",
+      });
+      logFeatureSad("teleport_self_hosted_pool_list", "non_200");
+      return [];
+    }
     return withFeatureTelemetry("teleport_self_hosted_pool_list", async () =>
       (h.data.pools ?? []).map((E) => ({
         kind: "self_hosted_pool",
@@ -62,13 +67,17 @@ async function fetchSelfHostedPools(e, n) {
       })),
     );
   } catch (error) {
-    let E = toError(error);
-    if (isExpectedApiError(error, isCloudSessionAccessError))
-      (logForDebugging(`fetchSelfHostedPools failed: ${E.message}`, { level: "error" }),
-        logFeatureSad("teleport_self_hosted_pool_list", "api_error"));
-    else (logError(E), logFeatureSad("teleport_self_hosted_pool_list", "unexpected"));
+    let error_2 = toError(error);
+    if (isExpectedApiError(error, isCloudSessionAccessError)) {
+      logForDebugging(`fetchSelfHostedPools failed: ${error_2.message}`, {
+        level: "error",
+      });
+      logFeatureSad("teleport_self_hosted_pool_list", "api_error");
+    } else {
+      logError(error_2);
+      logFeatureSad("teleport_self_hosted_pool_list", "unexpected");
+    }
     return [];
   }
 }
-
 export { fetchSelfHostedPools };

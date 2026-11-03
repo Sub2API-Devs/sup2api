@@ -8,32 +8,36 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-wjd9n4jx.js:6573-7005 cjs-fingerprint
-var Et = x(function (Tt) {
-  Object.defineProperty(Tt, "__esModule", { value: !0 });
-  Tt.headStream = Vr;
-  async function Vr(e, t) {
-    let r = 0,
-      s = [],
-      reader = e.getReader(),
-      i = !1;
-    while (!i) {
-      let { done: c, value: u } = await reader.read();
-      if (u) (s.push(u), (r += u?.byteLength ?? 0));
-      if (r >= t) break;
-      i = c;
+var require_headStream_browser = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.headStream = headStream;
+  async function headStream(stream, bytes) {
+    let byteLengthCounter = 0;
+    let chunks = [];
+    let reader = stream.getReader();
+    let isDone = false;
+    while (!isDone) {
+      let { done, value } = await reader.read();
+      if (value) {
+        chunks.push(value);
+        byteLengthCounter += value?.byteLength ?? 0;
+      }
+      if (byteLengthCounter >= bytes) break;
+      isDone = done;
     }
     reader.releaseLock();
-    let uint8Array = new Uint8Array(Math.min(t, r)),
-      o = 0;
-    for (let c of s) {
-      if (c.byteLength > uint8Array.byteLength - o) {
-        uint8Array.set(c.subarray(0, uint8Array.byteLength - o), o);
+    let collected = new Uint8Array(Math.min(bytes, byteLengthCounter));
+    let offset = 0;
+    for (let chunk of chunks) {
+      if (chunk.byteLength > collected.byteLength - offset) {
+        collected.set(chunk.subarray(0, collected.byteLength - offset), offset);
         break;
-      } else uint8Array.set(c, o);
-      o += c.length;
+      } else collected.set(chunk, offset);
+      offset += chunk.length;
     }
-    return uint8Array;
+    return collected;
   }
 });
-
-export { Et };
+export { require_headStream_browser };

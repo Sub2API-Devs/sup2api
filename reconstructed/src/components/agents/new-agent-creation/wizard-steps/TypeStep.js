@@ -8,12 +8,15 @@
  * pieces: chunk-y6fv30yg.js (2)
  * attribution: placement 1, fingerprint 1
  */
-import { j, y } from "../../../../../vendor/react/cjs/react.production.js";
+import { init_react_production, y } from "../../../../../vendor/react/cjs/react.production.js";
 import { w } from "../../../../../vendor/react/compiler-runtime.js";
 import { useWizard } from "../../../wizard/useWizard.js";
 import { MEMO_CACHE_SENTINEL } from "../../../../../runtime/bun-runtime.js";
 import { useKeybinding } from "../../../../keybindings/useKeybinding.js";
-import { r, e } from "../../../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default_2,
+  jsxProd_default,
+} from "../../../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Byline } from "../../../design-system/Byline.js";
 import { KeyboardShortcutHint } from "../../../design-system/KeyboardShortcutHint.js";
 import { ConfigurableShortcutHint } from "../../../ConfigurableShortcutHint.js";
@@ -23,102 +26,125 @@ import { ErrorText } from "../../../ErrorText.js";
 import { WizardDialogLayout } from "../../../wizard/WizardDialogLayout.js";
 
 //@ chunk-y6fv30yg.js:14249-14253 placement
-j();
+init_react_production();
 //@ chunk-y6fv30yg.js:14253-15626 fingerprint = TypeStep (0.652)
 function TypeStep() {
-  let $ = w(17),
-    {
-      goBack: goBack,
-      goNext: goNext,
-      updateWizardData: updateWizardData,
-      wizardData: wizardData,
-    } = useWizard(),
-    [t, h] = y(wizardData.region ?? "global"),
-    [p, f] = y(t.length),
-    [u, k] = y(null),
-    _;
-  if ($[0] === MEMO_CACHE_SENTINEL) ((_ = { context: "Settings" }), ($[0] = _));
-  else _ = $[0];
-  useKeybinding("confirm:no", goBack, _);
-  let A;
-  if ($[1] !== goNext || $[2] !== updateWizardData || $[3] !== t)
-    ((A = () => {
-      let trimmedValue = t.trim();
+  let $ = w(17);
+  let { goBack, goNext, updateWizardData, wizardData } = useWizard();
+  let [region, setAgentType] = y(wizardData.region ?? "global");
+  let [p, f] = y(region.length);
+  let [u, k] = y(null);
+  let t0;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    t0 = {
+      context: "Settings",
+    };
+    $[0] = t0;
+  } else t0 = $[0];
+  useKeybinding("confirm:no", goBack, t0);
+  let t1;
+  if ($[1] !== goNext || $[2] !== updateWizardData || $[3] !== region) {
+    t1 = () => {
+      let trimmedValue = region.trim();
       if (!trimmedValue) {
         k("Region is required");
         return;
       }
-      (k(null), updateWizardData({ region: trimmedValue }), goNext());
-    }),
-      ($[1] = goNext),
-      ($[2] = updateWizardData),
-      ($[3] = t),
-      ($[4] = A));
-  else A = $[4];
-  let handleSubmit = A,
-    x;
-  if ($[5] === MEMO_CACHE_SENTINEL)
-    ((x = r(Byline, {
+      k(null);
+      updateWizardData({
+        region: trimmedValue,
+      });
+      goNext();
+    };
+    $[1] = goNext;
+    $[2] = updateWizardData;
+    $[3] = region;
+    $[4] = t1;
+  } else t1 = $[4];
+  let handleSubmit = t1;
+  let footerText;
+  if ($[5] === MEMO_CACHE_SENTINEL) {
+    footerText = jsxProd_default_2(Byline, {
       children: [
-        e(KeyboardShortcutHint, { chord: "enter", action: "continue" }),
-        e(ConfigurableShortcutHint, {
+        jsxProd_default(KeyboardShortcutHint, {
+          chord: "enter",
+          action: "continue",
+        }),
+        jsxProd_default(ConfigurableShortcutHint, {
           action: "confirm:no",
           context: "Settings",
           fallback: "Esc",
           description: "go back",
         }),
       ],
-    })),
-      ($[5] = x));
-  else x = $[5];
-  let T, C;
-  if ($[6] === MEMO_CACHE_SENTINEL)
-    ((T = e(Text, { children: "Where Claude models are served from." })),
-      (C = e(Text, {
-        dimColor: !0,
-        children:
-          "Use 'global', 'us', or 'eu' for a multi-region endpoint (recommended), or a specific location like us-east5 if you have regional quota.",
-      })),
-      ($[6] = T),
-      ($[7] = C));
-  else ((T = $[6]), (C = $[7]));
-  let E;
-  if ($[8] !== p || $[9] !== handleSubmit || $[10] !== t)
-    ((E = e(Box, {
+    });
+    $[5] = footerText;
+  } else footerText = $[5];
+  let T;
+  let C;
+  if ($[6] === MEMO_CACHE_SENTINEL) {
+    T = jsxProd_default(Text, {
+      children: "Where Claude models are served from.",
+    });
+    C = jsxProd_default(Text, {
+      dimColor: true,
+      children:
+        "Use 'global', 'us', or 'eu' for a multi-region endpoint (recommended), or a specific location like us-east5 if you have regional quota.",
+    });
+    $[6] = T;
+    $[7] = C;
+  } else {
+    T = $[6];
+    C = $[7];
+  }
+  let t4;
+  if ($[8] !== p || $[9] !== handleSubmit || $[10] !== region) {
+    t4 = jsxProd_default(Box, {
       marginTop: 1,
-      children: e(TextInput, {
-        value: t,
-        onChange: h,
+      children: jsxProd_default(TextInput, {
+        value: region,
+        onChange: setAgentType,
         onSubmit: handleSubmit,
         placeholder: "global",
         columns: 40,
         cursorOffset: p,
         onChangeCursorOffset: f,
-        focus: !0,
-        showCursor: !0,
+        focus: true,
+        showCursor: true,
       }),
-    })),
-      ($[8] = p),
-      ($[9] = handleSubmit),
-      ($[10] = t),
-      ($[11] = E));
-  else E = $[11];
-  let v;
-  if ($[12] !== u)
-    ((v = u && e(Box, { marginTop: 1, children: e(ErrorText, { error: u }) })), ($[12] = u), ($[13] = v));
-  else v = $[13];
-  let b;
-  if ($[14] !== E || $[15] !== v)
-    ((b = e(WizardDialogLayout, {
+    });
+    $[8] = p;
+    $[9] = handleSubmit;
+    $[10] = region;
+    $[11] = t4;
+  } else t4 = $[11];
+  let t5;
+  if ($[12] !== u) {
+    t5 =
+      u &&
+      jsxProd_default(Box, {
+        marginTop: 1,
+        children: jsxProd_default(ErrorText, {
+          error: u,
+        }),
+      });
+    $[12] = u;
+    $[13] = t5;
+  } else t5 = $[13];
+  let t6;
+  if ($[14] !== t4 || $[15] !== t5) {
+    t6 = jsxProd_default(WizardDialogLayout, {
       subtitle: "Vertex AI region",
-      footerText: x,
-      children: r(Box, { flexDirection: "column", children: [T, C, E, v] }),
-    })),
-      ($[14] = E),
-      ($[15] = v),
-      ($[16] = b));
-  else b = $[16];
-  return b;
+      footerText,
+      children: jsxProd_default_2(Box, {
+        flexDirection: "column",
+        children: [T, C, t4, t5],
+      }),
+    });
+    $[14] = t4;
+    $[15] = t5;
+    $[16] = t6;
+  } else t6 = $[16];
+  return t6;
 }
-
 export { TypeStep };

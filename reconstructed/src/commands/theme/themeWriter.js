@@ -8,16 +8,19 @@
  * pieces: chunk-zj72psg9.js (1)
  * attribution: placement 1
  */
-import { skt } from "../../utils/theme.js";
+import { isSelectableThemeName } from "../../utils/theme.js";
 import { commitThroughConfigSet } from "../config/configShorthand.js";
 import { themeSettingRow } from "../config/configSettings.js";
 
 //@ chunk-zj72psg9.js:269-412 placement
 var themeWriter = (t) => (e) => {
-    if (!skt(e)) return { error: Error("Theme takes the name of a theme") };
-    t(e);
-    return;
-  },
-  commitTheme = (t, e, r) => commitThroughConfigSet(themeSettingRow(e), t, themeWriter(e.setTheme), r);
-
+  if (!isSelectableThemeName(e))
+    return {
+      error: Error("Theme takes the name of a theme"),
+    };
+  t(e);
+  return;
+};
+var commitTheme = (t, e, signal) =>
+  commitThroughConfigSet(themeSettingRow(e), t, themeWriter(e.setTheme), signal);
 export { commitTheme, themeWriter };

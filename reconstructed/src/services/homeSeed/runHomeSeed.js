@@ -8,14 +8,20 @@
  * pieces: chunk-mxpjbr4y.js (36)
  * attribution: placement 36
  */
-import { SEED_READY_TIMEOUTS, Et, awaitSeedReadiness } from "./seedReadiness.js";
+import { SEED_READY_TIMEOUTS, SEED_READY_TIMEOUT_MS, awaitSeedReadiness } from "./seedReadiness.js";
 import { createNoticeBacklog } from "../../utils/noticeBacklog.js";
 import { createSyncedFileLane, canUseSyncedFileLane } from "./syncedFileLane.js";
 import { createBoundDeviceSigner } from "./syncedFileSigner.js";
 import { withDeadline } from "../../utils/sleep.js";
 import { isAbortError } from "../../utils/errors.js";
 import { logError } from "../../utils/log.js";
-import { homeSeedNoticeLines, homeSeedSummary, HOME_SEED_FAILURE_TEXT, zt, $t } from "./homeSeedMessages.js";
+import {
+  homeSeedNoticeLines,
+  homeSeedSummary,
+  HOME_SEED_FAILURE_TEXT,
+  CLOCK_SKEW_REASON,
+  SEED_REFUSAL_REASONS,
+} from "./homeSeedMessages.js";
 import { createSeedSendHandle } from "./writeHomeSettings.js";
 import { logEvent } from "../analytics/index.js";
 import { fromEnum, fromEnumOpt } from "../analytics/safeMetadata.js";
@@ -30,11 +36,11 @@ import {
   SETTINGS_STAY,
 } from "./planHomeSeed.js";
 import { logFeatureOk, logFeatureSad, logFeatureBad } from "../analytics/featureTelemetry.js";
-import { X0 } from "../../utils/abortSignalUtils.js";
+import { isAborted } from "../../utils/abortSignalUtils.js";
 import { joined_5 } from "../../utils/teleport/seedPaths.js";
 import { decodeHomePack, encodeHomePack, readHomePackGeneration, MAX_PACK_GENERATION } from "./homePack.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { kt, A, o } from "../../../vendor/zod/v4/classic/schemas.js";
+import { looseObject, array, string } from "../../../vendor/zod/v4/classic/schemas.js";
 import { plural } from "../../utils/stringUtils.js";
 import { claimOnce } from "../api/verificationRequired.js";
 import { sessionIdBody } from "../../bridge/sessionIdCompat.js";
@@ -46,55 +52,66 @@ import { getSettingsFilePathForSource } from "../../utils/settings/settings.js";
 function runHomeSeed(e) {
   return createHomeSeedRun(e).pendingSeed(Promise.resolve());
 }
+//@ chunk-mxpjbr4y.js:14464-16215 placement
 /**
  * 创建一次 home seed 运行：打包本地设置、上传到会话存储、等待就绪，并在会话结束时收尾。
  */
-//@ chunk-mxpjbr4y.js:14464-16215 placement
 function createHomeSeedRun({
-  sessionId: sessionId,
-  plan: plan,
-  bound: bound,
-  boundDeviceUuid: boundDeviceUuid,
-  held: held,
-  trigger: trigger,
-  launchConsent: launchConsent,
-  isProjectStillSynced: isProjectStillSynced,
-  signal: signal,
-  credentials: credentials,
-  storageV5: storageV5,
-  client: client,
-  deadlineMs: deadlineMs = SEED_READY_TIMEOUTS,
-  planDeadlineMs: planDeadlineMs = Et,
+  sessionId,
+  plan,
+  bound,
+  boundDeviceUuid,
+  held,
+  trigger,
+  launchConsent,
+  isProjectStillSynced,
+  signal,
+  credentials,
+  storageV5,
+  client,
+  deadlineMs = SEED_READY_TIMEOUTS,
+  planDeadlineMs = SEED_READY_TIMEOUT_MS,
 }) {
-  let P = createNoticeBacklog(),
-    N = Promise.resolve(boundDeviceUuid).catch(() => {
-      return;
-    }),
-    E = client === void 0 ? void 0 : Promise.resolve(client),
-    v = () =>
-      (E ??= N.then((y) =>
-        createSyncedFileLane({
-          sessionId: sessionId,
-          credentials: credentials,
-          ...(y !== void 0 && {
-            signer: createBoundDeviceSigner({
-              sessionId: sessionId,
-              boundDeviceUuid: y,
-              credentials: credentials,
-              ...(held !== void 0 && { held: held }),
+  let noticeBacklog = createNoticeBacklog();
+  let N = Promise.resolve(boundDeviceUuid).catch(() => {
+    return;
+  });
+  let E = client === undefined ? undefined : Promise.resolve(client);
+  let v = () =>
+    (E ??= N.then((y) =>
+      createSyncedFileLane({
+        sessionId,
+        credentials,
+        ...(y !== undefined && {
+          signer: createBoundDeviceSigner({
+            sessionId,
+            boundDeviceUuid: y,
+            credentials,
+            ...(held !== undefined && {
+              held,
             }),
-            signedOnly: !0,
           }),
+          signedOnly: true,
         }),
-      )),
-    H = withDeadline(
-      Promise.resolve(plan).catch((y) => {
-        if (!isAbortError(y)) logError(y);
-        return { kind: "none", reason: isAbortError(y) ? "aborted" : "failed" };
       }),
-      planDeadlineMs,
-    ).then((y) => y ?? { kind: "none", reason: "too_slow" }),
-    T;
+    ));
+  let H = withDeadline(
+    Promise.resolve(plan).catch((error) => {
+      if (!isAbortError(error)) logError(error);
+      return {
+        kind: "none",
+        reason: isAbortError(error) ? "aborted" : "failed",
+      };
+    }),
+    planDeadlineMs,
+  ).then(
+    (y) =>
+      y ?? {
+        kind: "none",
+        reason: "too_slow",
+      },
+  );
+  let T;
   H.then((y) => {
     T = y.kind === "ready" ? y.description : null;
   });
@@ -104,82 +121,102 @@ function createHomeSeedRun({
           plan: y,
           attempts: createPackForwarder(
             {
-              sessionId: sessionId,
-              storageV5: storageV5,
+              sessionId,
+              storageV5,
               plan: y,
-              bound: bound,
-              trigger: trigger,
-              signal: signal,
+              bound,
+              trigger,
+              signal,
               getStoreClient: v,
-              deadlineMs: deadlineMs,
+              deadlineMs,
             },
             () => canUseSyncedFileLane(launchConsent, isProjectStillSynced),
           ),
         }
-      : { plan: y, attempts: null },
+      : {
+          plan: y,
+          attempts: null,
+        },
   );
   return {
-    ensureUploaded: (y) => x.then(({ attempts: attempts }) => attempts?.ensureUploaded(y) ?? "done"),
+    ensureUploaded: (y) => x.then(({ attempts }) => attempts?.ensureUploaded(y) ?? "done"),
     pendingSeed: (y) => {
-      let L = x.then(({ plan: plan, attempts: attempts }) =>
+      let L = x.then(({ plan, attempts }) =>
         (attempts === null
           ? Promise.resolve().then(() => {
               for (let M of homeSeedNoticeLines(plan, trigger, planDeadlineMs))
-                P.publish(M, homeSeedSummary(plan));
-              return (
-                logHomeSeedOutcome(classifyCreateOutcome(plan.reason, trigger), trigger, "plan_"),
-                { outcome: { kind: "none", reason: plan.reason, ...describeKeptFiles(plan) }, written: null }
-              );
+                noticeBacklog.publish(M, homeSeedSummary(plan));
+              logHomeSeedOutcome(classifyCreateOutcome(plan.reason, trigger), trigger, "plan_");
+              return {
+                outcome: {
+                  kind: "none",
+                  reason: plan.reason,
+                  ...describeKeptFiles(plan),
+                },
+                written: null,
+              };
             })
-          : attempts
-              .endedOnce(y)
-              .then((M) =>
-                recordHomeSeedOutcome(
-                  P,
-                  { sessionId: sessionId, plan: plan, bound: bound, trigger: trigger },
-                  M,
-                ),
-              )
-        ).catch(
-          (M) => (
-            logError(M),
-            logHomeSeedOutcome({ is: "bad", code: "unexpected" }, trigger, ""),
+          : attempts.endedOnce(y).then((M) =>
+              recordHomeSeedOutcome(
+                noticeBacklog,
+                {
+                  sessionId,
+                  plan,
+                  bound,
+                  trigger,
+                },
+                M,
+              ),
+            )
+        ).catch((error) => {
+          logError(error);
+          logHomeSeedOutcome(
             {
-              outcome:
-                plan.kind === "ready"
-                  ? {
-                      kind: "uploaded",
-                      outcome: "failed",
-                      summary: plan.summary,
-                      bound: bound,
-                      ...describeSettingsRefusal(plan),
-                      ...describeKeptFiles(plan),
-                    }
-                  : { kind: "none", reason: plan.reason, ...describeKeptFiles(plan) },
-              written: null,
-            }
-          ),
-        ),
+              is: "bad",
+              code: "unexpected",
+            },
+            trigger,
+            "",
+          );
+          return {
+            outcome:
+              plan.kind === "ready"
+                ? {
+                    kind: "uploaded",
+                    outcome: "failed",
+                    summary: plan.summary,
+                    bound,
+                    ...describeSettingsRefusal(plan),
+                    ...describeKeptFiles(plan),
+                  }
+                : {
+                    kind: "none",
+                    reason: plan.reason,
+                    ...describeKeptFiles(plan),
+                  },
+            written: null,
+          };
+        }),
       );
       return createSeedSendHandle({
-        completion: L.then(({ outcome: outcome }) => outcome),
-        status: P,
+        completion: L.then(({ outcome }) => outcome),
+        status: noticeBacklog,
         description: () => T,
-        afterFirstReply: (k, q) =>
-          L.then(({ outcome: outcome, written: written }) =>
+        afterFirstReply: (signal, onReadBack) =>
+          L.then(({ outcome, written }) =>
             written === null
               ? "skipped"
-              : v().then((je) =>
+              : v().then((client) =>
                   awaitSeedReadiness({
-                    client: je,
+                    client,
                     pack: written.pack,
                     generation: written.generation,
                     uploaded: outcome,
-                    status: P,
-                    launchConsent: launchConsent,
-                    isProjectStillSynced: isProjectStillSynced,
-                    signal: k,
-                    onReadBack: q,
+                    status: noticeBacklog,
+                    launchConsent,
+                    isProjectStillSynced,
+                    signal,
+                    onReadBack,
                   }),
                 ),
           ),
@@ -188,54 +225,69 @@ function createHomeSeedRun({
   };
 }
 //@ chunk-mxpjbr4y.js:16215-16580 placement
-function createPackForwarder(e, n) {
-  let r = uploadSettingsPack(e, 1),
-    i = {
-      packUpload: e,
-      mayStillForwardNow: n,
-      ended: Promise.withResolvers(),
-      isEnded: !1,
-      attemptsMade: 1,
-      latest: r,
-      call: void 0,
-    };
-  return (
-    i.ended.promise.catch(() => {}),
-    De(i, r, null),
-    {
-      endedOnce: (_) => (
-        _.then(() => ((i.isEnded = !0), i.latest)).then(
-          (s) => fe(i, s),
-          (s) => me(i, s),
-        ),
-        i.ended.promise
-      ),
-      ensureUploaded: (_) =>
-        (i.call ??= forwardLatestPack(i, _).finally(() => {
-          i.call = void 0;
-        })),
-    }
-  );
+function createPackForwarder(e, mayStillForwardNow) {
+  let r = uploadSettingsPack(e, 1);
+  let i = {
+    packUpload: e,
+    mayStillForwardNow,
+    ended: Promise.withResolvers(),
+    isEnded: false,
+    attemptsMade: 1,
+    latest: r,
+    call: undefined,
+  };
+  i.ended.promise.catch(() => {});
+  trackSeedPromise(i, r, null);
+  return {
+    endedOnce: (_) => {
+      _.then(() => {
+        i.isEnded = true;
+        return i.latest;
+      }).then(
+        (s) => resolveSeedDone(i, s),
+        (error) => rejectSeedDone(i, error),
+      );
+      return i.ended.promise;
+    },
+    ensureUploaded: (_) =>
+      (i.call ??= forwardLatestPack(i, _).finally(() => {
+        i.call = undefined;
+      })),
+  };
 }
 //@ chunk-mxpjbr4y.js:16580-16629 placement
-function fe(e, n) {
-  ((e.isEnded = !0), e.ended.resolve(n));
+/**
+ * 把 seed 标记为结束并解析结果。
+ */
+function resolveSeedDone(e, n) {
+  e.isEnded = true;
+  e.ended.resolve(n);
 }
 //@ chunk-mxpjbr4y.js:16629-16677 placement
-function me(e, n) {
-  ((e.isEnded = !0), e.ended.reject(n));
+/**
+ * 把 seed 标记为结束并带错误拒绝。
+ */
+function rejectSeedDone(e, error) {
+  e.isEnded = true;
+  e.ended.reject(error);
 }
 //@ chunk-mxpjbr4y.js:16677-16748 placement
-function De(e, n, r) {
+/**
+ * 跟踪一个 seed promise，成功/失败都反映到结束状态。
+ */
+function trackSeedPromise(e, n, r) {
   n.then(
     (i) => {
-      if (!homeSeedFailureKind(i)) fe(e, Fe(r, i));
+      if (!homeSeedFailureKind(i)) resolveSeedDone(e, preferWrittenOutcome(r, i));
     },
-    (i) => me(e, i),
+    (error) => rejectSeedDone(e, error),
   );
 }
 //@ chunk-mxpjbr4y.js:16748-16842 placement
-function Fe(e, n) {
+/**
+ * 保留更“有进展”的结果（优先已写入的）。
+ */
+function preferWrittenOutcome(e, n) {
   return e !== null && e.written !== null && n.written === null && n.outcome !== "raced" ? e : n;
 }
 //@ chunk-mxpjbr4y.js:16842-17364 placement
@@ -243,45 +295,61 @@ async function forwardLatestPack(e, n) {
   try {
     let latest = await e.latest;
     if (e.isEnded) return "done";
-    let i = await e.mayStillForwardNow().catch((h) => (logError(h), !1));
+    let i = await e.mayStillForwardNow().catch((error) => {
+      logError(error);
+      return false;
+    });
     if (e.isEnded) return "done";
-    if (!i)
-      return (
-        logEvent("tengu_home_seed_upload_no_longer_allowed", {
-          trigger: fromEnum(e.packUpload.trigger),
-          attempts_made: e.attemptsMade,
-        }),
-        fe(e, latest),
-        "done"
-      );
+    if (!i) {
+      logEvent("tengu_home_seed_upload_no_longer_allowed", {
+        trigger: fromEnum(e.packUpload.trigger),
+        attempts_made: e.attemptsMade,
+      });
+      resolveSeedDone(e, latest);
+      return "done";
+    }
     if (n.aborted) return buildSendFailure(latest);
     e.attemptsMade += 1;
-    let _ = uploadSettingsPack({ ...e.packUpload, cut: n }, e.attemptsMade);
-    (De(e, _, latest), (e.latest = _.then((h) => Fe(latest, h))), e.latest.catch(() => {}));
+    let _ = uploadSettingsPack(
+      {
+        ...e.packUpload,
+        cut: n,
+      },
+      e.attemptsMade,
+    );
+    trackSeedPromise(e, _, latest);
+    e.latest = _.then((h) => preferWrittenOutcome(latest, h));
+    e.latest.catch(() => {});
     let s = await _;
     return homeSeedFailureKind(s) ? buildSendFailure(s) : "done";
   } catch (error) {
-    return (me(e, error), "done");
+    rejectSeedDone(e, error);
+    return "done";
   }
 }
 //@ chunk-mxpjbr4y.js:17364-17548 placement
-function buildSendFailure({ outcome: outcome, cause: cause, httpStatus: httpStatus }) {
+function buildSendFailure({ outcome, cause, httpStatus }) {
   return {
     kind: "failed",
-    ...(httpStatus !== void 0 && httpStatus >= 400 && { httpStatus: httpStatus }),
-    ...(outcome === "unauthorized" && { remedy: cause === "write_signature_refused" ? "clock" : "login" }),
+    ...(httpStatus !== undefined &&
+      httpStatus >= 400 && {
+        httpStatus,
+      }),
+    ...(outcome === "unauthorized" && {
+      remedy: cause === "write_signature_refused" ? "clock" : "login",
+    }),
   };
 }
 //@ chunk-mxpjbr4y.js:17548-17848 placement
-function homeSeedFailureKind({ outcome: outcome, cause: cause, isRefusedAsSent: isRefusedAsSent }) {
+function homeSeedFailureKind({ outcome, cause, isRefusedAsSent }) {
   switch (outcome) {
     case "deadline":
     case "unauthorized":
-      return !0;
+      return true;
     case "unavailable":
-      return cause === void 0;
+      return cause === undefined;
     case "failed":
-      return isRefusedAsSent !== !0;
+      return isRefusedAsSent !== true;
     case "sent":
     case "unchanged":
     case "conflict_resolved":
@@ -289,119 +357,120 @@ function homeSeedFailureKind({ outcome: outcome, cause: cause, isRefusedAsSent: 
     case "not_forwarded_at_create":
     case "lane_full":
     case "aborted":
-      return !1;
+      return false;
   }
 }
 //@ chunk-mxpjbr4y.js:17848-18414 placement
 async function uploadSettingsPack(
-  {
-    sessionId: sessionId,
-    storageV5: storageV5,
-    plan: plan,
-    bound: bound,
-    trigger: trigger,
-    signal: signal,
-    cut: cut,
-    getStoreClient: getStoreClient,
-    deadlineMs: deadlineMs,
-  },
+  { sessionId, storageV5, plan, bound, trigger, signal, cut, getStoreClient, deadlineMs },
   w,
 ) {
-  let now = Date.now(),
-    U = (w === 1 || trigger !== "create") && readHomeSeedRecord(sessionId)?.tried === !0,
-    D = await sendSettingsPack(
-      getStoreClient,
-      plan.pack,
-      trigger,
-      { sessionId: sessionId, storageV5: storageV5 },
-      signal,
-      cut,
-      deadlineMs,
-    );
-  return (
-    logEvent("tengu_home_seed_upload", {
-      trigger: fromEnum(trigger),
-      outcome: fromEnum(D.outcome),
-      attempt: w,
-      bytes: D.written?.pack.length ?? plan.pack.length,
-      generation: D.generation,
-      bound: bound,
-      row_standing: D.standing === !0,
-      allow_rules_cut: D.allowRulesCut ?? 0,
-      allow_rules_recorded: readHomeSeedRecord(sessionId)?.allow.length ?? 0,
-      after_failed_create: U,
-      cause: fromEnumOpt(D.cause),
-      duration_ms: Date.now() - now,
-    }),
-    D
+  let now = Date.now();
+  let afterFailedCreate = (w === 1 || trigger !== "create") && readHomeSeedRecord(sessionId)?.tried === true;
+  let D = await sendSettingsPack(
+    getStoreClient,
+    plan.pack,
+    trigger,
+    {
+      sessionId,
+      storageV5,
+    },
+    signal,
+    cut,
+    deadlineMs,
   );
+  logEvent("tengu_home_seed_upload", {
+    trigger: fromEnum(trigger),
+    outcome: fromEnum(D.outcome),
+    attempt: w,
+    bytes: D.written?.pack.length ?? plan.pack.length,
+    generation: D.generation,
+    bound,
+    row_standing: D.standing === true,
+    allow_rules_cut: D.allowRulesCut ?? 0,
+    allow_rules_recorded: readHomeSeedRecord(sessionId)?.allow.length ?? 0,
+    after_failed_create: afterFailedCreate,
+    cause: fromEnumOpt(D.cause),
+    duration_ms: Date.now() - now,
+  });
+  return D;
 }
 //@ chunk-mxpjbr4y.js:18414-18781 placement
 function recordHomeSeedOutcome(
-  e,
-  { sessionId: sessionId, plan: plan, bound: bound, trigger: trigger },
-  { outcome: outcome, written: written, standing: standing, allowRulesCut: allowRulesCut, cause: cause },
+  noticeBacklog,
+  { sessionId, plan, bound, trigger },
+  { outcome, written, standing, allowRulesCut, cause },
 ) {
   logHomeSeedOutcome(classifyResendOutcome(outcome, cause), trigger, "");
-  let R = readHomeSeedRecord(sessionId);
-  return (
-    homeSeedResultSummary(
-      e,
-      plan,
-      outcome,
-      {
-        sessionId: sessionId,
-        trigger: trigger,
-        bound: bound,
-        didCreateCarryAllowRules: (R?.allow.length ?? 0) > 0,
-      },
-      R?.tried === !0 && standing !== !0 ? !1 : (standing ?? !1),
-      allowRulesCut ?? 0,
-      cause,
-    ),
+  let homeSeedRecord = readHomeSeedRecord(sessionId);
+  homeSeedResultSummary(
+    noticeBacklog,
+    plan,
+    outcome,
     {
-      outcome: {
-        kind: "uploaded",
-        outcome: outcome,
-        summary: plan.summary,
-        bound: bound,
-        ...describeSettingsRefusal(plan),
-        ...describeKeptFiles(plan),
-      },
-      written: written,
-    }
+      sessionId,
+      trigger,
+      bound,
+      didCreateCarryAllowRules: (homeSeedRecord?.allow.length ?? 0) > 0,
+    },
+    homeSeedRecord?.tried === true && standing !== true ? false : (standing ?? false),
+    allowRulesCut ?? 0,
+    cause,
   );
+  return {
+    outcome: {
+      kind: "uploaded",
+      outcome,
+      summary: plan.summary,
+      bound,
+      ...describeSettingsRefusal(plan),
+      ...describeKeptFiles(plan),
+    },
+    written,
+  };
 }
 //@ chunk-mxpjbr4y.js:18781-18963 placement
-function describeKeptFiles(e) {
-  if (e.kind === "none") return {};
-  let n = filesKeptForCredential(e.leftBehind),
-    r = filesKeptAsLinks(e.leftBehind);
+function describeKeptFiles(plan) {
+  if (plan.kind === "none") return {};
+  let n = filesKeptForCredential(plan.leftBehind);
+  let r = filesKeptAsLinks(plan.leftBehind);
   return {
-    ...((n.claudeMd || n.others > 0) && { keptForCredential: n }),
-    ...(r.names.length > 0 && { keptAsLinks: r }),
+    ...((n.claudeMd || n.others > 0) && {
+      keptForCredential: n,
+    }),
+    ...(r.names.length > 0 && {
+      keptAsLinks: r,
+    }),
   };
 }
 //@ chunk-mxpjbr4y.js:18963-19126 placement
-function describeSettingsRefusal(e) {
-  let settings = e.settings;
+function describeSettingsRefusal(plan) {
+  let settings = plan.settings;
   return settings === "schema_rejected" ||
     settings === "settings_too_large" ||
     settings === "settings_unreadable" ||
     settings === "self_hosted_runner"
-    ? { settingsRefused: settings }
+    ? {
+        settingsRefused: settings,
+      }
     : {};
 }
 //@ chunk-mxpjbr4y.js:19126-19458 placement
-function classifyCreateOutcome(e, n) {
-  switch (e) {
+function classifyCreateOutcome(reason, trigger) {
+  switch (reason) {
     case "failed":
     case "home_unvettable":
     case "rules_unreadable":
-      return { is: "bad", code: e };
+      return {
+        is: "bad",
+        code: reason,
+      };
     case "nothing_to_send":
     case "too_slow":
-      return { is: "sad", code: e };
+      return {
+        is: "sad",
+        code: reason,
+      };
     case "unbound":
     case "flag_off":
     case "no_consent":
@@ -414,239 +483,409 @@ function classifyCreateOutcome(e, n) {
   }
 }
 //@ chunk-mxpjbr4y.js:19458-19777 placement
-function classifyResendOutcome(e, n) {
-  switch (e) {
+function classifyResendOutcome(outcome, cause) {
+  switch (outcome) {
     case "sent":
     case "unchanged":
     case "conflict_resolved":
-      return { is: "ok" };
+      return {
+        is: "ok",
+      };
     case "aborted":
     case "not_forwarded_at_create":
       return null;
     case "unavailable":
-      return { is: "sad", code: n ?? e };
+      return {
+        is: "sad",
+        code: cause ?? outcome,
+      };
     case "lane_full":
     case "unauthorized":
     case "deadline":
     case "raced":
-      return { is: "sad", code: e };
+      return {
+        is: "sad",
+        code: outcome,
+      };
     case "failed":
-      return { is: "bad", code: e };
+      return {
+        is: "bad",
+        code: outcome,
+      };
   }
 }
 //@ chunk-mxpjbr4y.js:19777-20115 placement
-function logHomeSeedOutcome(e, n, r) {
+function logHomeSeedOutcome(e, trigger, r) {
   if (e === null) return;
-  let i = n === "create";
+  let i = trigger === "create";
   switch (e.is) {
     case "ok":
-      if ((logFeatureOk("ccr_home_seed"), i)) logFeatureOk("ccr_home_seed_create_upload");
+      logFeatureOk("ccr_home_seed");
+      if (i) logFeatureOk("ccr_home_seed_create_upload");
       return;
     case "sad":
-      if ((logFeatureSad("ccr_home_seed", e.code), i))
-        logFeatureSad("ccr_home_seed_create_upload", `${r}${e.code}`);
+      logFeatureSad("ccr_home_seed", e.code);
+      if (i) logFeatureSad("ccr_home_seed_create_upload", `${r}${e.code}`);
       return;
     case "bad":
-      if ((logFeatureBad("ccr_home_seed", e.code), i))
-        logFeatureBad("ccr_home_seed_create_upload", `${r}${e.code}`);
+      logFeatureBad("ccr_home_seed", e.code);
+      if (i) logFeatureBad("ccr_home_seed_create_upload", `${r}${e.code}`);
       return;
   }
 }
 //@ chunk-mxpjbr4y.js:20115-20761 placement
-async function sendSettingsPack(e, n, r, i, _, s, h) {
-  if (X0(_)) return { outcome: "aborted", generation: 0, written: null };
-  let abortController = new AbortController(),
-    b = () => abortController.abort();
-  (_?.addEventListener("abort", b, { once: !0 }), s?.addEventListener("abort", b, { once: !0 }));
+async function sendSettingsPack(getStoreClient, pack, trigger, i, signal, s, deadlineMs) {
+  if (isAborted(signal))
+    return {
+      outcome: "aborted",
+      generation: 0,
+      written: null,
+    };
+  let abortController = new AbortController();
+  let b = () => abortController.abort();
+  signal?.addEventListener("abort", b, {
+    once: true,
+  });
+  s?.addEventListener("abort", b, {
+    once: true,
+  });
   try {
     let w = await withDeadline(
-      e().then((R) => resendSettingsPack(R, n, r, i, abortController.signal)),
-      h,
+      getStoreClient().then((R) => resendSettingsPack(R, pack, trigger, i, abortController.signal)),
+      deadlineMs,
     );
-    if (w === void 0 || w.outcome === "aborted") {
-      if (X0(_)) return { outcome: "aborted", generation: 0, written: null };
-      if (r === "create")
-        return (
-          writeSeedRecord(i, n, 1, void 0),
-          { outcome: "deadline", generation: 0, written: { pack: n, generation: 1 } }
-        );
-      return { outcome: "deadline", generation: 0, written: null, standing: "unknown" };
-    }
-    return w;
-  } finally {
-    (abortController.abort(), _?.removeEventListener("abort", b), s?.removeEventListener("abort", b));
-  }
-}
-//@ chunk-mxpjbr4y.js:20761-21779 placement
-async function resendSettingsPack(e, n, r, i, _) {
-  if (r !== "create") {
-    let h = readHomeSeedRecord(i.sessionId);
-    if (h === void 0) return { outcome: "not_forwarded_at_create", generation: 0, written: null };
-    let storeRow = await e.getStoreRow(joined_5, _);
-    if (storeRow.kind !== "ok" && storeRow.kind !== "not_found")
+    if (w === undefined || w.outcome === "aborted") {
+      if (isAborted(signal))
+        return {
+          outcome: "aborted",
+          generation: 0,
+          written: null,
+        };
+      if (trigger === "create") {
+        writeSeedRecord(i, pack, 1, undefined);
+        return {
+          outcome: "deadline",
+          generation: 0,
+          written: {
+            pack,
+            generation: 1,
+          },
+        };
+      }
       return {
-        outcome: mapRowError(storeRow),
+        outcome: "deadline",
         generation: 0,
         written: null,
         standing: "unknown",
-        ...storeErrorCause(storeRow),
       };
-    let b = repackForResend(n, h),
-      w = (U) =>
-        writeHomeSeedRecord(i.sessionId, { ...h, generation: U, etag: void 0, at: Date.now() }, i.storageV5),
-      R =
-        storeRow.kind === "ok"
-          ? await putMergedSettingsPack(e, b.pack, storeRow, _, w)
-          : {
-              ...(await putSettingsPack(e, bumpPackGeneration(b.pack, h.generation), _, w)),
-              standing: "gone",
-            };
-    if (storeRow.kind === "not_found")
+    }
+    return w;
+  } finally {
+    abortController.abort();
+    signal?.removeEventListener("abort", b);
+    s?.removeEventListener("abort", b);
+  }
+}
+//@ chunk-mxpjbr4y.js:20761-21779 placement
+async function resendSettingsPack(e, n, r, i, signal) {
+  if (r !== "create") {
+    let homeSeedRecord = readHomeSeedRecord(i.sessionId);
+    if (homeSeedRecord === undefined)
+      return {
+        outcome: "not_forwarded_at_create",
+        generation: 0,
+        written: null,
+      };
+    let S = await e.getStoreRow(joined_5, signal);
+    if (S.kind !== "ok" && S.kind !== "not_found")
+      return {
+        outcome: mapRowError(S),
+        generation: 0,
+        written: null,
+        standing: "unknown",
+        ...storeErrorCause(S),
+      };
+    let b = repackForResend(n, homeSeedRecord);
+    let w = (generation) =>
+      writeHomeSeedRecord(
+        i.sessionId,
+        {
+          ...homeSeedRecord,
+          generation,
+          etag: undefined,
+          at: Date.now(),
+        },
+        i.storageV5,
+      );
+    let R =
+      S.kind === "ok"
+        ? await putMergedSettingsPack(e, b.pack, S, signal, w)
+        : {
+            ...(await putSettingsPack(e, bumpPackGeneration(b.pack, homeSeedRecord.generation), signal, w)),
+            standing: "gone",
+          };
+    if (S.kind === "not_found")
       logEvent("tengu_home_seed_stored_pack_gone", {
         outcome: fromEnum(R.outcome),
         generation: R.generation,
-        record_generation: h.generation,
-        after_failed_create: h.tried === !0,
+        record_generation: homeSeedRecord.generation,
+        after_failed_create: homeSeedRecord.tried === true,
       });
     if (R.written !== null)
       writeHomeSeedRecord(
         i.sessionId,
-        { ...h, generation: R.generation, etag: R.etag, at: Date.now() },
+        {
+          ...homeSeedRecord,
+          generation: R.generation,
+          etag: R.etag,
+          at: Date.now(),
+        },
         i.storageV5,
       );
-    return b.cut === 0 ? R : { ...R, allowRulesCut: b.cut };
+    return b.cut === 0
+      ? R
+      : {
+          ...R,
+          allowRulesCut: b.cut,
+        };
   }
-  let s = await putSettingsPack(e, { pack: n, generation: 1 }, _, async (h) => {
-    if (h > 1) writeSeedRecord(i, n, h, void 0);
-  });
+  let s = await putSettingsPack(
+    e,
+    {
+      pack: n,
+      generation: 1,
+    },
+    signal,
+    async (h) => {
+      if (h > 1) writeSeedRecord(i, n, h, undefined);
+    },
+  );
   if (s.written !== null) writeSeedRecord(i, s.written.pack, s.generation, s.etag);
-  else if (s.outcome in HOME_SEED_FAILURE_TEXT) writeSeedRecord(i, n, 1, void 0, { tried: !0 });
+  else if (s.outcome in HOME_SEED_FAILURE_TEXT)
+    writeSeedRecord(i, n, 1, undefined, {
+      tried: true,
+    });
   return s;
 }
 //@ chunk-mxpjbr4y.js:21779-22204 placement
-async function putSettingsPack(e, { pack: pack, generation: generation }, i, _) {
+async function putSettingsPack(e, { pack, generation }, signal, _) {
   await _?.(generation);
-  let putStoreRow = await e.putStoreRow(joined_5, pack, { signal: i });
-  if (putStoreRow.kind !== "conflict") {
-    if (putStoreRow.kind !== "ok")
+  let s = await e.putStoreRow(joined_5, pack, {
+    signal,
+  });
+  if (s.kind !== "conflict") {
+    if (s.kind !== "ok")
       return {
-        outcome: storeRowOutcome(putStoreRow, "sent"),
+        outcome: storeRowOutcome(s, "sent"),
         generation: 0,
         written: null,
-        ...storeErrorCause(putStoreRow),
+        ...storeErrorCause(s),
       };
     return {
       outcome: "sent",
-      generation: generation,
-      written: { pack: pack, generation: generation },
-      etag: putStoreRow.etag,
+      generation,
+      written: {
+        pack,
+        generation,
+      },
+      etag: s.etag,
     };
   }
-  let storeRow = await e.getStoreRow(joined_5, i);
-  if (storeRow.kind !== "ok")
+  let h = await e.getStoreRow(joined_5, signal);
+  if (h.kind !== "ok")
     return {
-      outcome: mapRowError(storeRow),
+      outcome: mapRowError(h),
       generation: 0,
       written: null,
-      standing: !0,
-      ...storeErrorCause(storeRow),
+      standing: true,
+      ...storeErrorCause(h),
     };
-  return putMergedSettingsPack(e, pack, storeRow, i, _);
+  return putMergedSettingsPack(e, pack, h, signal, _);
 }
 //@ chunk-mxpjbr4y.js:22204-22380 placement
-function writeSeedRecord(e, n, r, i, _ = {}) {
-  let s = decodeHomePack(n),
-    h = s.ok ? (xt(s.pack.settings) ?? []) : [];
+function writeSeedRecord(e, n, generation, i, _ = {}) {
+  let s = decodeHomePack(n);
+  let h = s.ok ? (allowedPermissions(s.pack.settings) ?? []) : [];
   writeHomeSeedRecord(
     e.sessionId,
-    { generation: r, ...(i !== void 0 && { etag: i }), ..._, allow: h.map(shortSha256), at: Date.now() },
+    {
+      generation,
+      ...(i !== undefined && {
+        etag: i,
+      }),
+      ..._,
+      allow: h.map(shortSha256),
+      at: Date.now(),
+    },
     e.storageV5,
   );
 }
 //@ chunk-mxpjbr4y.js:22380-22812 placement
-async function putMergedSettingsPack(e, n, r, i, _) {
-  let s = mergePackGeneration(n, r.content);
+async function putMergedSettingsPack(e, pack, r, signal, _) {
+  let s = mergePackGeneration(pack, r.content);
   await _?.(s.generation);
-  let putStoreRow = await e.putStoreRow(joined_5, s.pack, { ifMatchSha256: r.etag, signal: i }),
-    S =
-      putStoreRow.kind === "conflict"
-        ? "raced"
-        : storeRowOutcome(putStoreRow, s.unchanged ? "unchanged" : "conflict_resolved");
-  return putStoreRow.kind === "ok"
+  let h = await e.putStoreRow(joined_5, s.pack, {
+    ifMatchSha256: r.etag,
+    signal,
+  });
+  let outcome =
+    h.kind === "conflict" ? "raced" : storeRowOutcome(h, s.unchanged ? "unchanged" : "conflict_resolved");
+  return h.kind === "ok"
     ? {
-        outcome: S,
+        outcome,
         generation: s.generation,
-        written: { pack: s.pack, generation: s.generation },
-        standing: !0,
-        ...(putStoreRow.etag !== void 0 && { etag: putStoreRow.etag }),
+        written: {
+          pack: s.pack,
+          generation: s.generation,
+        },
+        standing: true,
+        ...(h.etag !== undefined && {
+          etag: h.etag,
+        }),
       }
-    : { outcome: S, generation: 0, written: null, standing: !0, ...storeErrorCause(putStoreRow) };
+    : {
+        outcome,
+        generation: 0,
+        written: null,
+        standing: true,
+        ...storeErrorCause(h),
+      };
 }
 //@ chunk-mxpjbr4y.js:22812-23139 placement
 function storeErrorCause(e) {
   switch (e.kind) {
     case "lane_unavailable":
     case "unauthorized":
-      return e.cause !== void 0 ? { cause: e.cause } : {};
+      return e.cause !== undefined
+        ? {
+            cause: e.cause,
+          }
+        : {};
     case "path_too_long":
     case "too_large":
-      return { isRefusedAsSent: !0 };
+      return {
+        isRefusedAsSent: true,
+      };
     case "failed":
-      return e.status === void 0
+      return e.status === undefined
         ? {}
         : {
             httpStatus: e.status,
-            ...(e.status >= 400 && e.status < 500 && e.status !== 429 && { isRefusedAsSent: !0 }),
+            ...(e.status >= 400 &&
+              e.status < 500 &&
+              e.status !== 429 && {
+                isRefusedAsSent: true,
+              }),
           };
     default:
       return {};
   }
 }
 //@ chunk-mxpjbr4y.js:23139-23687 placement
-function repackForResend(e, n) {
+function repackForResend(e, homeSeedRecord) {
   let r = decodeHomePack(e);
   if (!r.ok) throw Error("the settings pack to re-send does not parse");
-  if (r.pack.settings === null || r.pack.settings.permissions === void 0) return { pack: e, cut: 0 };
-  let safeParse = pe().safeParse(r.pack.settings.permissions);
-  if (!safeParse.success) throw Error("the settings pack to re-send carries permissions of an unknown shape");
-  let allow = safeParse.data.allow;
-  if (allow === void 0) return { pack: e, cut: 0 };
-  let s = new Set(n.allow),
-    filtered = allow.filter((b) => s.has(shortSha256(b))),
-    S = allow.length - filtered.length;
+  if (r.pack.settings === null || r.pack.settings.permissions === undefined)
+    return {
+      pack: e,
+      cut: 0,
+    };
+  let i = permissionsAllowSchema().safeParse(r.pack.settings.permissions);
+  if (!i.success) throw Error("the settings pack to re-send carries permissions of an unknown shape");
+  let allow = i.data.allow;
+  if (allow === undefined)
+    return {
+      pack: e,
+      cut: 0,
+    };
+  let s = new Set(homeSeedRecord.allow);
+  let filtered = allow.filter((b) => s.has(shortSha256(b)));
+  let S = allow.length - filtered.length;
   return S === 0
-    ? { pack: e, cut: S }
-    : { pack: encodeHomePack({ ...r.pack, settings: withAllowRules(r.pack.settings, filtered) }), cut: S };
+    ? {
+        pack: e,
+        cut: S,
+      }
+    : {
+        pack: encodeHomePack({
+          ...r.pack,
+          settings: withAllowRules(r.pack.settings, filtered),
+        }),
+        cut: S,
+      };
 }
 //@ chunk-mxpjbr4y.js:23687-23731 placement
-var pe = DoctorLazy(() => kt({ allow: A(o()).optional() }));
+/**
+ * 只含 allow 的 permissions schema。
+ */
+var permissionsAllowSchema = DoctorLazy(() =>
+  looseObject({
+    allow: array(string()).optional(),
+  }),
+);
 //@ chunk-mxpjbr4y.js:23731-23820 placement
-function xt(e) {
-  let safeParse = pe().safeParse(e?.permissions);
-  return safeParse.success ? safeParse.data.allow : void 0;
+/**
+ * 取 settings 里 permissions.allow（没有时 undefined）。
+ */
+function allowedPermissions(settings) {
+  let n = permissionsAllowSchema().safeParse(settings?.permissions);
+  return n.success ? n.data.allow : undefined;
 }
 //@ chunk-mxpjbr4y.js:23820-23936 placement
-function withAllowRules(e, n) {
-  let safeParse = pe().safeParse(e.permissions);
-  return { ...e, permissions: { ...(safeParse.success ? safeParse.data : {}), allow: [...n] } };
+function withAllowRules(settings, n) {
+  let r = permissionsAllowSchema().safeParse(settings.permissions);
+  return {
+    ...settings,
+    permissions: {
+      ...(r.success ? r.data : {}),
+      allow: [...n],
+    },
+  };
 }
 //@ chunk-mxpjbr4y.js:23936-24202 placement
-function mergePackGeneration(e, n) {
-  let r = decodeHomePack(e),
-    i = decodeHomePack(n);
+function mergePackGeneration(e, content) {
+  let r = decodeHomePack(e);
+  let i = decodeHomePack(content);
   if (r.ok && i.ok) {
-    if (encodeHomePack({ ...r.pack, generation: i.pack.generation }).equals(n))
-      return { pack: n, generation: i.pack.generation, unchanged: !0 };
+    if (
+      encodeHomePack({
+        ...r.pack,
+        generation: i.pack.generation,
+      }).equals(content)
+    )
+      return {
+        pack: content,
+        generation: i.pack.generation,
+        unchanged: true,
+      };
   }
-  if (n.equals(e)) return { pack: n, generation: 1, unchanged: !0 };
-  return { ...bumpPackGeneration(e, readHomePackGeneration(n) ?? 0), unchanged: !1 };
+  if (content.equals(e))
+    return {
+      pack: content,
+      generation: 1,
+      unchanged: true,
+    };
+  return {
+    ...bumpPackGeneration(e, readHomePackGeneration(content) ?? 0),
+    unchanged: false,
+  };
 }
 //@ chunk-mxpjbr4y.js:24202-24349 placement
 function bumpPackGeneration(e, n) {
   let r = decodeHomePack(e);
-  if (!r.ok) return { pack: e, generation: 1 };
-  let min = Math.min(n + 1, MAX_PACK_GENERATION);
-  return { pack: encodeHomePack({ ...r.pack, generation: min }), generation: min };
+  if (!r.ok)
+    return {
+      pack: e,
+      generation: 1,
+    };
+  let generation = Math.min(n + 1, MAX_PACK_GENERATION);
+  return {
+    pack: encodeHomePack({
+      ...r.pack,
+      generation,
+    }),
+    generation,
+  };
 }
 //@ chunk-mxpjbr4y.js:24349-24626 placement
 function storeRowOutcome(e, n) {
@@ -685,49 +924,42 @@ function mapRowError(e) {
 //@ chunk-mxpjbr4y.js:24814-26589 placement
 function homeSeedResultSummary(
   e,
-  n,
-  r,
-  {
-    sessionId: sessionId,
-    trigger: trigger,
-    bound: bound,
-    didCreateCarryAllowRules: didCreateCarryAllowRules,
-  },
+  plan,
+  outcome,
+  { sessionId, trigger, bound, didCreateCarryAllowRules },
   S,
   b,
-  w,
+  cause,
 ) {
-  let R = r === "unavailable" && w !== "device_key_unavailable" ? "" : START_NEW_SESSION_HINT;
-  switch (r) {
+  let wayOut = outcome === "unavailable" && cause !== "device_key_unavailable" ? "" : START_NEW_SESSION_HINT;
+  switch (outcome) {
     case "sent":
     case "unchanged":
     case "conflict_resolved": {
-      if (
-        (e.publish(
-          r === "unchanged" && trigger !== "create"
-            ? "Settings from this machine are already in this session"
-            : formatHomeSeedSentLine({
-                ...n.description,
-                permissionRules: n.description.permissionRules - b,
-              }) + (bound ? "" : " (this session cannot run commands on this machine)"),
-          "debug",
-        ),
-        b > 0)
-      )
+      e.publish(
+        outcome === "unchanged" && trigger !== "create"
+          ? "Settings from this machine are already in this session"
+          : formatHomeSeedSentLine({
+              ...plan.description,
+              permissionRules: plan.description.permissionRules - b,
+            }) + (bound ? "" : " (this session cannot run commands on this machine)"),
+        "debug",
+      );
+      if (b > 0)
         e.publish(
           `${b} ${plural(b, "permission allow rule")} ${b === 1 ? "stays" : "stay"} on this machine, because ${b === 1 ? "it was" : "they were"} not in the settings prepared when this cloud session was created; a new session takes ${b === 1 ? "it" : "them"}`,
           "debug",
         );
-      let U = formatHomeSeedLeftBehindLine(n, {
+      let U = formatHomeSeedLeftBehindLine(plan, {
         launch:
           trigger === "create"
             ? "create"
             : didCreateCarryAllowRules
               ? "reopen_sent"
               : "reopen_sent_no_allow_recorded",
-        settingsFile: userSettingsDisplayPath(n.configHome),
+        settingsFile: userSettingsDisplayPath(plan.configHome),
       });
-      if (U !== null) e.publish(U, leftBehindSummary(n));
+      if (U !== null) e.publish(U, leftBehindSummary(plan));
       return;
     }
     case "aborted":
@@ -738,7 +970,7 @@ function homeSeedResultSummary(
           ifNoneStood: RULES_MAY_NOT_BE_IN_FORCE,
           otherwise: "The cloud session may not have your latest settings",
           why: "sending your settings took too long",
-          wayOut: R,
+          wayOut,
         }),
         "warning",
       );
@@ -760,18 +992,18 @@ function homeSeedResultSummary(
     case "unavailable":
     case "unauthorized":
     case "failed": {
-      let U =
-        w === "write_signature_refused"
-          ? zt
-          : r === "unavailable" && w !== void 0
-            ? $t[w]
-            : HOME_SEED_FAILURE_TEXT[r];
+      let why =
+        cause === "write_signature_refused"
+          ? CLOCK_SKEW_REASON
+          : outcome === "unavailable" && cause !== undefined
+            ? SEED_REFUSAL_REASONS[cause]
+            : HOME_SEED_FAILURE_TEXT[outcome];
       e.publish(
         formatRulesNotInForce(S, {
           ifNoneStood: RULES_NOT_IN_FORCE,
           otherwise: SETTINGS_STAY,
-          why: U,
-          wayOut: R,
+          why,
+          wayOut,
         }),
         "warning",
       );
@@ -781,12 +1013,12 @@ function homeSeedResultSummary(
 }
 //@ chunk-mxpjbr4y.js:26589-26876 placement
 function leftBehindSummary(e) {
-  let n = e.summary.overCap + e.unreadable + count(e.leftBehind, (_) => _.reason === "undefusable"),
-    r =
-      e.settings === "schema_rejected" ||
-      e.settings === "settings_too_large" ||
-      e.settings === "settings_unreadable",
-    i = e.summary.droppedRules.credentialRestrictions > 0;
+  let n = e.summary.overCap + e.unreadable + count(e.leftBehind, (_) => _.reason === "undefusable");
+  let r =
+    e.settings === "schema_rejected" ||
+    e.settings === "settings_too_large" ||
+    e.settings === "settings_unreadable";
+  let i = e.summary.droppedRules.credentialRestrictions > 0;
   return n > 0 || r || i ? "warning" : "debug";
 }
 //@ chunk-mxpjbr4y.js:26876-26926 placement
@@ -796,13 +1028,9 @@ function userSettingsDisplayPath(a_0) {
   return tildify(getSettingsFilePathForSource("userSettings") ?? a_0);
 }
 //@ chunk-mxpjbr4y.js:26974-27091 placement
-function formatRulesNotInForce(
-  e,
-  { ifNoneStood: ifNoneStood, otherwise: otherwise, why: why, wayOut: wayOut },
-) {
-  return e === !1
+function formatRulesNotInForce(e, { ifNoneStood, otherwise, why, wayOut }) {
+  return e === false
     ? `${ifNoneStood}: ${why}${wayOut}`
     : `${e === "gone" ? RULES_MAY_NOT_BE_IN_FORCE : otherwise}: ${why}`;
 }
-
 export { runHomeSeed, leftBehindSummary, userSettingsDisplayPath, START_NEW_SESSION_HINT };

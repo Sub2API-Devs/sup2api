@@ -8,28 +8,39 @@
  * pieces: chunk-cefm4bvm.js (1), chunk-zsxk930s.js (1)
  * attribution: placement 2
  */
-import { hkt } from "../../context/replRootContext.js";
+import { getRootSessionOverride } from "../../context/replRootContext.js";
 import { stopBackgroundSession } from "../../utils/background/stopBackgroundSession.js";
-import { tce } from "../../screens/repl/backgroundConfirm.js";
+import { noopBackgroundConfirm } from "../../screens/repl/backgroundConfirm.js";
 
+//@ chunk-cefm4bvm.js:302-432 placement
 /**
  * /stop 命令入口。
  */
-//@ chunk-cefm4bvm.js:302-432 placement
 async function call(onDone, context) {
   onDone();
-  let o = hkt();
-  if (o !== null) return (o.close(), null);
-  return (await stopBackgroundSession("stop_command", context.storageV5, tce()), null);
+  let rootSessionOverride = getRootSessionOverride();
+  if (rootSessionOverride !== null) {
+    rootSessionOverride.close();
+    return null;
+  }
+  await stopBackgroundSession("stop_command", context.storageV5, noopBackgroundConfirm());
+  return null;
 }
+//@ chunk-zsxk930s.js:11857-11987 placement
 /**
  * 停止命令：关闭当前桥接，或停止 bridge 服务。
  */
-//@ chunk-zsxk930s.js:11857-11987 placement
 async function callStopCommand(args, context) {
-  let o = hkt();
-  if (o !== null) return (o.close(), { type: "skip" });
-  return (await stopBackgroundSession("bridge", context.storageV5), { type: "skip" });
+  let rootSessionOverride = getRootSessionOverride();
+  if (rootSessionOverride !== null) {
+    rootSessionOverride.close();
+    return {
+      type: "skip",
+    };
+  }
+  await stopBackgroundSession("bridge", context.storageV5);
+  return {
+    type: "skip",
+  };
 }
-
 export { call };

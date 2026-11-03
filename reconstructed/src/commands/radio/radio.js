@@ -8,14 +8,20 @@
  * pieces: chunk-03rvwpge.js (1)
  * attribution: placement 1
  */
-import { fi } from "../../utils/browser.js";
+import { openValidatedUrlSucceeded } from "../../utils/browser.js";
 
+//@ chunk-03rvwpge.js:1039-1251 placement
 /**
  * /radio：在浏览器打开 Claude FM（https://clau.de/radio）
  */
-//@ chunk-03rvwpge.js:1039-1251 placement
 async function openClaudeRadio() {
-  if (await fi("https://clau.de/radio"))
-    return { type: "text", value: "Opening Claude FM in your browser\u2026" };
-  return { type: "text", value: "Couldn't open the browser. Listen at: https://clau.de/radio" };
+  if (await openValidatedUrlSucceeded("https://clau.de/radio"))
+    return {
+      type: "text",
+      value: "Opening Claude FM in your browser\u2026",
+    };
+  return {
+    type: "text",
+    value: "Couldn't open the browser. Listen at: https://clau.de/radio",
+  };
 }

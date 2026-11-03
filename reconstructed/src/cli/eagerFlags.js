@@ -9,22 +9,22 @@
  * attribution: placement 4
  */
 
+//@ chunk-c5gdqf78.js:191-471 placement
 /**
  * 判断本次启动是否进入远程/附着会话：非交互时看 headlessCloud；--continue 为否；否则有 remote、助手聊天会话或发现、connect URL 或 SSH 主机即为真。
  */
-//@ chunk-c5gdqf78.js:191-471 placement
 function isRemoteSessionLaunch({
-  remote: remote,
-  isNonInteractiveSession: isNonInteractiveSession,
-  headlessCloud: headlessCloud,
-  headlessCloudPrint: headlessCloudPrint = !1,
-  isContinue: isContinue,
-  pendingAssistantChat: pendingAssistantChat,
-  pendingConnectUrl: pendingConnectUrl,
-  pendingSSHHost: pendingSSHHost,
+  remote,
+  isNonInteractiveSession,
+  headlessCloud,
+  headlessCloudPrint = false,
+  isContinue,
+  pendingAssistantChat,
+  pendingConnectUrl,
+  pendingSSHHost,
 }) {
   if (isNonInteractiveSession) return headlessCloud || headlessCloudPrint;
-  if (isContinue) return !1;
+  if (isContinue) return false;
   return (
     remote !== null ||
     Boolean(pendingAssistantChat?.sessionId) ||
@@ -34,21 +34,23 @@ function isRemoteSessionLaunch({
   );
 }
 //@ chunk-c5gdqf78.js:471-505 placement
-function IMi(e, n) {
-  return e ? null : n;
+/**
+ * e 为真返回 null，否则返回 n；语义不确定的占位辅助。
+ */
+function nullIfTruthy(e, initialMessage) {
+  return e ? null : initialMessage;
 }
 //@ chunk-c5gdqf78.js:505-545 placement
-var l = /^(?:session|cse)_[A-Za-z0-9_]+$/;
+var SESSION_ID_PATTERN = /^(?:session|cse)_[A-Za-z0-9_]+$/;
+//@ chunk-c5gdqf78.js:545-682 placement
 /**
  * 从参数（可能是 URL/路径）里抽出合法的仓库名片段。
  */
-//@ chunk-c5gdqf78.js:545-682 placement
 function extractRepoSlug(e) {
-  if (l.test(e)) return e;
+  if (SESSION_ID_PATTERN.test(e)) return e;
   if (e.includes("/") && !/\s/.test(e)) {
-    for (let n of e.split(/[/?#]/)) if (l.test(n)) return n;
+    for (let n of e.split(/[/?#]/)) if (SESSION_ID_PATTERN.test(n)) return n;
   }
   return null;
 }
-
-export { extractRepoSlug, IMi, isRemoteSessionLaunch };
+export { extractRepoSlug, nullIfTruthy, isRemoteSessionLaunch };

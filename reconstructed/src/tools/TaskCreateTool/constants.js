@@ -9,10 +9,9 @@
  * attribution: fingerprint 1
  */
 
+//@ chunk-3e7edr38.js:191-211 fingerprint = TASK_CREATE_TOOL_NAME (1)
 /**
  * "TaskCreate"。
  */
-//@ chunk-3e7edr38.js:191-211 fingerprint = TASK_CREATE_TOOL_NAME (1)
 var TASK_CREATE_TOOL_NAME = "TaskCreate";
-
 export { TASK_CREATE_TOOL_NAME };

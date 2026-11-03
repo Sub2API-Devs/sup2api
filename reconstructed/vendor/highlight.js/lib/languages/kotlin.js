@@ -8,160 +8,255 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:219540-222890 cjs-fingerprint
-var gr = x(function (BE, Er) {
-  var ue = "[0-9](_*[0-9])*",
-    ye = `\\.(${ue})`,
-    he = "[0-9a-fA-F](_*[0-9a-fA-F])*",
-    qd = {
-      className: "number",
-      variants: [
-        { begin: `(\\b(${ue})((${ye})|\\.)?|(${ye}))[eE][+-]?(${ue})[fFdD]?\\b` },
-        { begin: `\\b(${ue})((${ye})[fFdD]?\\b|\\.([fFdD]\\b)?)` },
-        { begin: `(${ye})[fFdD]?\\b` },
-        { begin: `\\b(${ue})[fFdD]\\b` },
-        { begin: `\\b0[xX]((${he})\\.?|(${he})?\\.(${he}))[pP][+-]?(${ue})[fFdD]?\\b` },
-        { begin: "\\b(0|[1-9](_*[0-9])*)[lL]?\\b" },
-        { begin: `\\b0[xX](${he})[lL]?\\b` },
-        { begin: "\\b0(_*[0-7])*[lL]?\\b" },
-        { begin: "\\b0[bB][01](_*[01])*[lL]?\\b" },
-      ],
-      relevance: 0,
-    };
-  function Hd(e) {
-    let t = {
-        keyword:
-          "abstract as val var vararg get set class object open private protected public noinline crossinline dynamic final enum if else do while for when throw try catch finally import package is in fun override companion reified inline lateinit init interface annotation data sealed internal infix operator out by constructor super tailrec where const inner suspend typealias external expect actual",
-        built_in: "Byte Short Char Int Long Boolean Float Double Void Unit Nothing",
-        literal: "true false null",
-      },
-      n = {
-        className: "keyword",
-        begin: /\b(break|continue|return|this)\b/,
-        starts: { contains: [{ className: "symbol", begin: /@\w+/ }] },
-      },
-      a = { className: "symbol", begin: e.UNDERSCORE_IDENT_RE + "@" },
-      s = { className: "subst", begin: /\$\{/, end: /\}/, contains: [e.C_NUMBER_MODE] },
-      o = { className: "variable", begin: "\\$" + e.UNDERSCORE_IDENT_RE },
-      r = {
-        className: "string",
-        variants: [
-          { begin: '"""', end: '"""(?=[^"])', contains: [o, s] },
-          { begin: "'", end: "'", illegal: /\n/, contains: [e.BACKSLASH_ESCAPE] },
-          { begin: '"', end: '"', illegal: /\n/, contains: [e.BACKSLASH_ESCAPE, o, s] },
-        ],
-      };
-    s.contains.push(r);
-    let i = {
-        className: "meta",
-        begin:
-          "@(?:file|property|field|get|set|receiver|param|setparam|delegate)\\s*:(?:\\s*" +
-          e.UNDERSCORE_IDENT_RE +
-          ")?",
-      },
-      c = {
-        className: "meta",
-        begin: "@" + e.UNDERSCORE_IDENT_RE,
-        contains: [{ begin: /\(/, end: /\)/, contains: [e.inherit(r, { className: "string" }), "self"] }],
-      },
-      l = qd,
-      COMMENT = e.COMMENT("/\\*", "\\*/", { contains: [e.C_BLOCK_COMMENT_MODE] }),
-      m = {
-        variants: [
-          { className: "type", begin: e.UNDERSCORE_IDENT_RE },
-          { begin: /\(/, end: /\)/, contains: [] },
-        ],
-      },
-      p = m;
-    return (
-      (p.variants[1].contains = [m]),
-      (m.variants[1].contains = [p]),
+var require_kotlin = x(function (cjsExports, cjsModule) {
+  var decimalDigits = "[0-9](_*[0-9])*";
+  var frac = `\\.(${decimalDigits})`;
+  var hexDigits = "[0-9a-fA-F](_*[0-9a-fA-F])*";
+  var NUMERIC = {
+    className: "number",
+    variants: [
       {
-        name: "Kotlin",
-        aliases: ["kt", "kts"],
-        keywords: t,
+        begin: `(\\b(${decimalDigits})((${frac})|\\.)?|(${frac}))[eE][+-]?(${decimalDigits})[fFdD]?\\b`,
+      },
+      {
+        begin: `\\b(${decimalDigits})((${frac})[fFdD]?\\b|\\.([fFdD]\\b)?)`,
+      },
+      {
+        begin: `(${frac})[fFdD]?\\b`,
+      },
+      {
+        begin: `\\b(${decimalDigits})[fFdD]\\b`,
+      },
+      {
+        begin: `\\b0[xX]((${hexDigits})\\.?|(${hexDigits})?\\.(${hexDigits}))[pP][+-]?(${decimalDigits})[fFdD]?\\b`,
+      },
+      {
+        begin: "\\b(0|[1-9](_*[0-9])*)[lL]?\\b",
+      },
+      {
+        begin: `\\b0[xX](${hexDigits})[lL]?\\b`,
+      },
+      {
+        begin: "\\b0(_*[0-7])*[lL]?\\b",
+      },
+      {
+        begin: "\\b0[bB][01](_*[01])*[lL]?\\b",
+      },
+    ],
+    relevance: 0,
+  };
+  function kotlin(hljs) {
+    let KEYWORDS = {
+      keyword:
+        "abstract as val var vararg get set class object open private protected public noinline crossinline dynamic final enum if else do while for when throw try catch finally import package is in fun override companion reified inline lateinit init interface annotation data sealed internal infix operator out by constructor super tailrec where const inner suspend typealias external expect actual",
+      built_in: "Byte Short Char Int Long Boolean Float Double Void Unit Nothing",
+      literal: "true false null",
+    };
+    let KEYWORDS_WITH_LABEL = {
+      className: "keyword",
+      begin: /\b(break|continue|return|this)\b/,
+      starts: {
         contains: [
-          e.COMMENT("/\\*\\*", "\\*/", {
-            relevance: 0,
-            contains: [{ className: "doctag", begin: "@[A-Za-z]+" }],
-          }),
-          e.C_LINE_COMMENT_MODE,
-          COMMENT,
-          n,
-          a,
-          i,
-          c,
           {
-            className: "function",
-            beginKeywords: "fun",
-            end: "[(]|$",
-            returnBegin: !0,
-            excludeEnd: !0,
-            keywords: t,
-            relevance: 5,
-            contains: [
-              {
-                begin: e.UNDERSCORE_IDENT_RE + "\\s*\\(",
-                returnBegin: !0,
-                relevance: 0,
-                contains: [e.UNDERSCORE_TITLE_MODE],
-              },
-              { className: "type", begin: /</, end: />/, keywords: "reified", relevance: 0 },
-              {
-                className: "params",
-                begin: /\(/,
-                end: /\)/,
-                endsParent: !0,
-                keywords: t,
-                relevance: 0,
-                contains: [
-                  {
-                    begin: /:/,
-                    end: /[=,\/]/,
-                    endsWithParent: !0,
-                    contains: [m, e.C_LINE_COMMENT_MODE, COMMENT],
-                    relevance: 0,
-                  },
-                  e.C_LINE_COMMENT_MODE,
-                  COMMENT,
-                  i,
-                  c,
-                  r,
-                  e.C_NUMBER_MODE,
-                ],
-              },
-              COMMENT,
-            ],
+            className: "symbol",
+            begin: /@\w+/,
           },
-          {
-            begin: [/class|interface|trait/, /\s+/, e.UNDERSCORE_IDENT_RE],
-            beginScope: { 3: "title.class" },
-            keywords: "class interface trait",
-            end: /[:\{(]|$/,
-            excludeEnd: !0,
-            illegal: "extends implements",
-            contains: [
-              { beginKeywords: "public protected internal private constructor" },
-              e.UNDERSCORE_TITLE_MODE,
-              { className: "type", begin: /</, end: />/, excludeBegin: !0, excludeEnd: !0, relevance: 0 },
-              { className: "type", begin: /[,:]\s*/, end: /[<\(,){\s]|$/, excludeBegin: !0, returnEnd: !0 },
-              i,
-              c,
-            ],
-          },
-          r,
-          {
-            className: "meta",
-            begin: "^#!/usr/bin/env",
-            end: "$",
-            illegal: `
-`,
-          },
-          l,
         ],
-      }
-    );
+      },
+    };
+    let LABEL = {
+      className: "symbol",
+      begin: hljs.UNDERSCORE_IDENT_RE + "@",
+    };
+    let SUBST = {
+      className: "subst",
+      begin: /\$\{/,
+      end: /\}/,
+      contains: [hljs.C_NUMBER_MODE],
+    };
+    let VARIABLE = {
+      className: "variable",
+      begin: "\\$" + hljs.UNDERSCORE_IDENT_RE,
+    };
+    let STRING = {
+      className: "string",
+      variants: [
+        {
+          begin: '"""',
+          end: '"""(?=[^"])',
+          contains: [VARIABLE, SUBST],
+        },
+        {
+          begin: "'",
+          end: "'",
+          illegal: /\n/,
+          contains: [hljs.BACKSLASH_ESCAPE],
+        },
+        {
+          begin: '"',
+          end: '"',
+          illegal: /\n/,
+          contains: [hljs.BACKSLASH_ESCAPE, VARIABLE, SUBST],
+        },
+      ],
+    };
+    SUBST.contains.push(STRING);
+    let ANNOTATION_USE_SITE = {
+      className: "meta",
+      begin:
+        "@(?:file|property|field|get|set|receiver|param|setparam|delegate)\\s*:(?:\\s*" +
+        hljs.UNDERSCORE_IDENT_RE +
+        ")?",
+    };
+    let ANNOTATION = {
+      className: "meta",
+      begin: "@" + hljs.UNDERSCORE_IDENT_RE,
+      contains: [
+        {
+          begin: /\(/,
+          end: /\)/,
+          contains: [
+            hljs.inherit(STRING, {
+              className: "string",
+            }),
+            "self",
+          ],
+        },
+      ],
+    };
+    let KOTLIN_NUMBER_MODE = NUMERIC;
+    let KOTLIN_NESTED_COMMENT = hljs.COMMENT("/\\*", "\\*/", {
+      contains: [hljs.C_BLOCK_COMMENT_MODE],
+    });
+    let KOTLIN_PAREN_TYPE = {
+      variants: [
+        {
+          className: "type",
+          begin: hljs.UNDERSCORE_IDENT_RE,
+        },
+        {
+          begin: /\(/,
+          end: /\)/,
+          contains: [],
+        },
+      ],
+    };
+    let KOTLIN_PAREN_TYPE2 = KOTLIN_PAREN_TYPE;
+    KOTLIN_PAREN_TYPE2.variants[1].contains = [KOTLIN_PAREN_TYPE];
+    KOTLIN_PAREN_TYPE.variants[1].contains = [KOTLIN_PAREN_TYPE2];
+    return {
+      name: "Kotlin",
+      aliases: ["kt", "kts"],
+      keywords: KEYWORDS,
+      contains: [
+        hljs.COMMENT("/\\*\\*", "\\*/", {
+          relevance: 0,
+          contains: [
+            {
+              className: "doctag",
+              begin: "@[A-Za-z]+",
+            },
+          ],
+        }),
+        hljs.C_LINE_COMMENT_MODE,
+        KOTLIN_NESTED_COMMENT,
+        KEYWORDS_WITH_LABEL,
+        LABEL,
+        ANNOTATION_USE_SITE,
+        ANNOTATION,
+        {
+          className: "function",
+          beginKeywords: "fun",
+          end: "[(]|$",
+          returnBegin: true,
+          excludeEnd: true,
+          keywords: KEYWORDS,
+          relevance: 5,
+          contains: [
+            {
+              begin: hljs.UNDERSCORE_IDENT_RE + "\\s*\\(",
+              returnBegin: true,
+              relevance: 0,
+              contains: [hljs.UNDERSCORE_TITLE_MODE],
+            },
+            {
+              className: "type",
+              begin: /</,
+              end: />/,
+              keywords: "reified",
+              relevance: 0,
+            },
+            {
+              className: "params",
+              begin: /\(/,
+              end: /\)/,
+              endsParent: true,
+              keywords: KEYWORDS,
+              relevance: 0,
+              contains: [
+                {
+                  begin: /:/,
+                  end: /[=,\/]/,
+                  endsWithParent: true,
+                  contains: [KOTLIN_PAREN_TYPE, hljs.C_LINE_COMMENT_MODE, KOTLIN_NESTED_COMMENT],
+                  relevance: 0,
+                },
+                hljs.C_LINE_COMMENT_MODE,
+                KOTLIN_NESTED_COMMENT,
+                ANNOTATION_USE_SITE,
+                ANNOTATION,
+                STRING,
+                hljs.C_NUMBER_MODE,
+              ],
+            },
+            KOTLIN_NESTED_COMMENT,
+          ],
+        },
+        {
+          begin: [/class|interface|trait/, /\s+/, hljs.UNDERSCORE_IDENT_RE],
+          beginScope: {
+            3: "title.class",
+          },
+          keywords: "class interface trait",
+          end: /[:\{(]|$/,
+          excludeEnd: true,
+          illegal: "extends implements",
+          contains: [
+            {
+              beginKeywords: "public protected internal private constructor",
+            },
+            hljs.UNDERSCORE_TITLE_MODE,
+            {
+              className: "type",
+              begin: /</,
+              end: />/,
+              excludeBegin: true,
+              excludeEnd: true,
+              relevance: 0,
+            },
+            {
+              className: "type",
+              begin: /[,:]\s*/,
+              end: /[<\(,){\s]|$/,
+              excludeBegin: true,
+              returnEnd: true,
+            },
+            ANNOTATION_USE_SITE,
+            ANNOTATION,
+          ],
+        },
+        STRING,
+        {
+          className: "meta",
+          begin: "^#!/usr/bin/env",
+          end: "$",
+          illegal: `
+`,
+        },
+        KOTLIN_NUMBER_MODE,
+      ],
+    };
   }
-  Er.exports = Hd;
+  cjsModule.exports = kotlin;
 });
-
-export { gr };
+export { require_kotlin };

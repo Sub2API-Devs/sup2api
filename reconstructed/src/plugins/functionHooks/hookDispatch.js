@@ -12,19 +12,19 @@ import { isDeepStrictEqual } from "util";
 import { AsyncLocalStorage } from "async_hooks";
 import {
   pluginStorageKey,
-  dkt,
-  EYr,
+  joinLabels,
+  labeledOriginChain,
   lentModulesByChain,
-  Qo,
+  splitCallerChain,
   registrationsOfPlugin,
   moduleCatchesEvent,
-  Re,
+  deadModulesFor,
   liveModulesForDispatch,
   reportPluginProblem,
-  ye,
+  dispatchModules,
   moduleMatcherAdmits,
   warnMatcherMiss,
-  he,
+  modulesFromMatcher,
   originPlugin,
 } from "./hooksWorkerClient.js";
 import { marketplaceSource } from "../../utils/plugins/pluginOptionsStorage.js";
@@ -35,83 +35,97 @@ import { errorMessage } from "../../utils/errors.js";
 import { HooksError } from "./hooksErrors.js";
 import { findBypassingFloor } from "./dispatch/valueSizing.js";
 import { isPlainObject } from "../../utils/isPlainObject.js";
-import { isNextToUserTarget, eos } from "./vm/moduleLoader.js";
-import { appendNextToStep, abortErrorFor, freeze_6 } from "./dispatch/chain.js";
+import { isNextToUserTarget, hasRegisteredEnv } from "./vm/moduleLoader.js";
+import { appendNextToStep, abortErrorFor, N5e } from "./dispatch/chain.js";
 import { forwardGeneratorWithErrorHook } from "./dispatch/streamChain.js";
 import { pushToKillRing } from "../../utils/Cursor.js";
-import { gxt, isPlainDataObject, opr } from "../../utils/hooks/functionHookMatchers.js";
+import {
+  matchesRegExpMatcher,
+  isPlainDataObject,
+  matchesFields,
+} from "../../utils/hooks/functionHookMatchers.js";
 import { lookupPathTable } from "../../utils/pathTable.js";
 import { raceWithAbortSignal } from "../../utils/sleep.js";
-import { Teo } from "./api/operations.js";
+import { asHooksError } from "./api/operations.js";
 
+//@ chunk-vr8smdd9.js:30936-30996 placement
 /**
  * 生成插件的 hooks 标签（名称 + 存储 id）。
  */
-//@ chunk-vr8smdd9.js:30936-30996 placement
-var hookPluginLabel = (e) => pluginStorageKey({ pluginName: e.name, pluginStorageId: marketplaceSource(e) });
+var hookPluginLabel = (e) =>
+  pluginStorageKey({
+    pluginName: e.name,
+    pluginStorageId: marketplaceSource(e),
+  });
 //@ chunk-vr8smdd9.js:30996-31055 placement
-var qni = (e, r, n) => `${e}: ${r} did not answer within ${n}ms`;
+/**
+ * 某插件在 N 毫秒内未回答
+ */
+var hookTimeoutText = (e, r, n) => `${e}: ${r} did not answer within ${n}ms`;
 //@ chunk-vr8smdd9.js:31055-31120 placement
-var Yni = "the plugin is unloaded; /reload-plugins brings it back";
+/**
+ * 插件已卸载
+ */
+var PLUGIN_UNLOADED_TEXT = "the plugin is unloaded; /reload-plugins brings it back";
+//@ chunk-vr8smdd9.js:31120-31646 placement
 /**
  * 为一次事件分发组装参与插件链（嵌套检查、排除项、层级、截止）。
  */
-//@ chunk-vr8smdd9.js:31120-31646 placement
-function buildHookChain({
-  members: members,
-  event: event,
-  e: n,
-  hookOrigin: hookOrigin,
-  origin: origin,
-  raise: raise,
-  floors: floors,
-  cutAt: cutAt,
-  gestureAt: gestureAt,
-  kind: kind,
-}) {
+function buildHookChain({ members, event, e: n, hookOrigin, origin, raise, floors, cutAt, gestureAt, kind }) {
   let [x] = members;
   if (hookOrigin)
-    logForDebugging(`hooks module ${dkt(members)}: ${event}${kind} nested in ${EYr(hookOrigin)}`);
-  let flattened = members.flatMap((y) => {
-    let S = [...(y.leftOut ?? [])],
-      { environmentId: environmentId } = y;
-    return S.length > 0 ? [{ environmentId: environmentId, registrations: S }] : [];
+    logForDebugging(
+      `hooks module ${joinLabels(members)}: ${event}${kind} nested in ${labeledOriginChain(hookOrigin)}`,
+    );
+  let flattened = members.flatMap((member) => {
+    let S = [...(member.leftOut ?? [])];
+    let { environmentId } = member;
+    return S.length > 0
+      ? [
+          {
+            environmentId,
+            registrations: S,
+          },
+        ]
+      : [];
   });
   return {
     id: x ? x.hopKey.nextDispatchId() : 0,
-    event: event,
+    event,
     payload: n,
-    environments: members.map((y) => y.environmentId),
-    leftOut: flattened.length === 0 ? void 0 : flattened,
-    origin: origin,
-    hookOrigin: hookOrigin,
-    raise: raise,
-    floors: floors.length === 0 ? void 0 : floors,
-    cutAt: cutAt,
-    ...(gestureAt !== void 0 && { gestureAt: gestureAt }),
+    environments: members.map((member) => member.environmentId),
+    leftOut: flattened.length === 0 ? undefined : flattened,
+    origin,
+    hookOrigin,
+    raise,
+    floors: floors.length === 0 ? undefined : floors,
+    cutAt,
+    ...(gestureAt !== undefined && {
+      gestureAt,
+    }),
   };
 }
+//@ chunk-vr8smdd9.js:31646-32524 placement
 /**
  * 按调用者链与借出状态筛出某模块对事件的有效视图。
  */
-//@ chunk-vr8smdd9.js:31646-32524 placement
 function scopeModuleForEvent(e, r, n) {
   if (!n || n.length === 0) return e;
-  let s = lentModulesByChain().get(n) ?? [],
-    now = Date.now(),
-    f = (S) => s[S]?.isLent !== !0 || s[S].isHeld === !0,
-    { caller: caller, above: above } = Qo(
-      n.filter((S, b) => f(b) || now < (s[b]?.until ?? 0)),
-      e.name,
-    ),
-    g = (S, b) => S === "every" || S.includes(b),
-    h = registrationsOfPlugin(
-      n.slice(0, -1).filter((S, b) => f(b)),
-      e.name,
-    ),
-    filtered = e.registrationsFor(r).filter((S) => g(caller, S) || g(h, S));
+  let s = lentModulesByChain().get(n) ?? [];
+  let now = Date.now();
+  let f = (S) => s[S]?.isLent !== true || s[S].isHeld === true;
+  let { caller, above } = splitCallerChain(
+    n.filter((S, b) => f(b) || now < (s[b]?.until ?? 0)),
+    e.name,
+  );
+  let g = (S, b) => S === "every" || S.includes(b);
+  let h = registrationsOfPlugin(
+    n.slice(0, -1).filter((S, b) => f(b)),
+    e.name,
+  );
+  let filtered = e.registrationsFor(r).filter((S) => g(caller, S) || g(h, S));
   if (filtered.length === 0) return e;
-  let y = `origin ${EYr(n)}`;
+  let y = `origin ${labeledOriginChain(n)}`;
   if (!e.hooks(r, filtered)) {
     let S = caller === "every" || above === "every";
     logForDebugging(
@@ -120,131 +134,145 @@ function scopeModuleForEvent(e, r, n) {
     );
     return;
   }
-  return (
-    logForDebugging(
-      `hooks module ${e.label} ${r}: hooks ${filtered.join(", ")} left out for re-entry (${y})`,
-    ),
-    {
-      ...e,
-      leftOut: filtered,
-      hooks: (S, b = []) => e.hooks(S, [...filtered, ...b]),
-      catches: (S, b = [], M) => e.catches(S, [...filtered, ...b], M),
-      matcherFor: (S, b = []) => e.matcherFor(S, [...filtered, ...b]),
-      standingFor: (S, b = []) => e.standingFor(S, [...filtered, ...b]),
-    }
-  );
+  logForDebugging(`hooks module ${e.label} ${r}: hooks ${filtered.join(", ")} left out for re-entry (${y})`);
+  return {
+    ...e,
+    leftOut: filtered,
+    hooks: (S, b = []) => e.hooks(S, [...filtered, ...b]),
+    catches: (S, b = [], M) => e.catches(S, [...filtered, ...b], M),
+    matcherFor: (S, b = []) => e.matcherFor(S, [...filtered, ...b]),
+    standingFor: (S, b = []) => e.standingFor(S, [...filtered, ...b]),
+  };
 }
+//@ chunk-vr8smdd9.js:32524-33087 placement
 /**
  * hooks worker 死亡时等待替换的 worker 后再分发。
  */
-//@ chunk-vr8smdd9.js:32524-33087 placement
-async function awaitWorkerReplacement({
-  members: members,
-  event: event,
-  hookOrigin: hookOrigin,
-  signal: signal,
-}) {
-  let a = members.find((f) => f.status().kind === "dead")?.hopKey.replaced?.();
-  if (a === void 0) return members;
-  return (
-    logForDebugging(
-      `hooks module ${members.map((f) => f.label).join(", ")}: ${event} waits for the hooks worker's replacement`,
-    ),
-    await new Promise((f) => {
-      (signal.addEventListener("abort", () => f(), { once: !0 }), a.then(f, f));
-    }),
-    members.flatMap((f) => {
-      let found = getPluginRegistry().loadedModules.find((loadedModule) => loadedModule.name === f.name);
-      if (!(f.status().kind !== "live" && found !== void 0 && found.environmentId !== f.environmentId))
-        return [f];
-      let g =
-        found.hooks(event) && isModuleAdmitted(found)
-          ? scopeModuleForEvent(found, event, hookOrigin)
-          : void 0;
-      return g === void 0 ? [] : [g];
-    })
+async function awaitWorkerReplacement({ members, event, hookOrigin, signal }) {
+  let a = members.find((member) => member.status().kind === "dead")?.hopKey.replaced?.();
+  if (a === undefined) return members;
+  logForDebugging(
+    `hooks module ${members.map((member) => member.label).join(", ")}: ${event} waits for the hooks worker's replacement`,
   );
+  await new Promise((resolve) => {
+    signal.addEventListener("abort", () => resolve(), {
+      once: true,
+    });
+    a.then(resolve, resolve);
+  });
+  return members.flatMap((member) => {
+    let found = getPluginRegistry().loadedModules.find((loadedModule) => loadedModule.name === member.name);
+    if (!(
+      member.status().kind !== "live" &&
+      found !== undefined &&
+      found.environmentId !== member.environmentId
+    ))
+      return [member];
+    let g =
+      found.hooks(event) && isModuleAdmitted(found)
+        ? scopeModuleForEvent(found, event, hookOrigin)
+        : undefined;
+    return g === undefined ? [] : [g];
+  });
 }
+//@ chunk-vr8smdd9.js:33087-34400 placement
 /**
  * worker 在分发中途死亡时，用替换 worker 重试剩余插件。
  */
-//@ chunk-vr8smdd9.js:33087-34400 placement
-async function retryAfterWorkerDeath({
-  hop: hop,
-  dispatchId: dispatchId,
-  members: members,
-  error: error,
-  called: called,
-  beneath: beneath,
-}) {
-  let { event: event, e: c, signal: signal } = hop,
-    h = (b) => b.filter((M) => moduleCatchesEvent(M, event, c)),
-    x = errorMessage(error),
-    w = Re(h(members), x),
-    y = w[0]?.hopKey,
-    S = y?.kept;
+async function retryAfterWorkerDeath({ hop, dispatchId, members, error, called, beneath }) {
+  let { event, e: c, signal } = hop;
+  let h = (b) => b.filter((M) => moduleCatchesEvent(M, event, c));
+  let x = errorMessage(error);
+  let w = deadModulesFor(h(members), x);
+  let hopKey = w[0]?.hopKey;
+  let kept = hopKey?.kept;
   while (w.length > 0 && !signal.aborted) {
-    let b = h(liveModulesForDispatch(await awaitWorkerReplacement({ ...hop, members: w }), event)),
-      M = b[0]?.hopKey,
-      found = b.find((O) => O.name === S?.plugin);
-    if (M === void 0 || signal.aborted) break;
+    let b = h(
+      liveModulesForDispatch(
+        await awaitWorkerReplacement({
+          ...hop,
+          members: w,
+        }),
+        event,
+      ),
+    );
+    let hopKey_2 = b[0]?.hopKey;
+    let found = b.find((O) => O.name === kept?.plugin);
+    if (hopKey_2 === undefined || signal.aborted) break;
     logForDebugging(
-      `hooks module ${dkt(b)}: .catch asked in the replacement after the hooks worker ended during ${event}`,
+      `hooks module ${joinLabels(b)}: .catch asked in the replacement after the hooks worker ended during ${event}`,
     );
     for (let O of b) O.enter();
     try {
-      let dispatch = await M.dispatch(
-          {
-            ...buildHookChain({ ...hop, members: b, kind: "" }),
-            ended: { reason: x, called: called(), ...(found !== void 0 && { kept: found.environmentId }) },
+      let O = await hopKey_2.dispatch(
+        {
+          ...buildHookChain({
+            ...hop,
+            members: b,
+            kind: "",
+          }),
+          ended: {
+            reason: x,
+            called: called(),
+            ...(found !== undefined && {
+              kept: found.environmentId,
+            }),
           },
-          beneath,
-          signal,
-        ),
-        F =
-          found !== void 0 &&
-          S !== void 0 &&
-          y?.isKeptVerdict?.(dispatchId, dispatch.unmatched !== !0) === !0;
+        },
+        beneath,
+        signal,
+      );
+      let F =
+        found !== undefined &&
+        kept !== undefined &&
+        hopKey?.isKeptVerdict?.(dispatchId, O.unmatched !== true) === true;
       for (let v of b)
-        if (dispatch.answered?.includes(v.environmentId) === !0)
+        if (O.answered?.includes(v.environmentId) === true)
           reportPluginProblem(
             v.name,
             `the hooks worker was replaced during ${event}; ${v.name}'s .catch answered in place of its hook`,
           );
-      if (F) M.unloadCrashed?.(found.environmentId, S);
-      return dispatch;
+      if (F) hopKey_2.unloadCrashed?.(found.environmentId, kept);
+      return O;
     } catch (error) {
-      ((x = errorMessage(error)),
-        (w = Re(b, x)),
-        logForDebugging(
-          `hooks module ${dkt(b)}: .catch not heard after the hooks worker ended during ${event}: ${x}` +
-            (w.length > 0 ? "; asked again of whoever stands" : ""),
-          { level: "error" },
-        ));
+      x = errorMessage(error);
+      w = deadModulesFor(b, x);
+      logForDebugging(
+        `hooks module ${joinLabels(b)}: .catch not heard after the hooks worker ended during ${event}: ${x}` +
+          (w.length > 0 ? "; asked again of whoever stands" : ""),
+        {
+          level: "error",
+        },
+      );
     } finally {
       for (let O of b) O.leave();
     }
   }
   if (w.length > 0)
     logForDebugging(
-      `hooks module ${dkt(w)}: no .catch is asked after the hooks worker ended during ${event}: ` +
+      `hooks module ${joinLabels(w)}: no .catch is asked after the hooks worker ended during ${event}: ` +
         (signal.aborted ? "its caller is gone" : "no replacement that may be waited for holds its hook"),
-      { level: "error" },
+      {
+        level: "error",
+      },
     );
   return;
 }
 //@ chunk-vr8smdd9.js:34400-34576 placement
 function invalidFloorsError(e) {
   let r = new HooksError(
-    `${dkt(e)}: next refused: the floors handed back are not ones a next.to of these plugins leaves (host rule)`,
+    `${joinLabels(e)}: next refused: the floors handed back are not ones a next.to of these plugins leaves (host rule)`,
   );
-  return (logForDebugging(r.message, { level: "error" }), r);
+  logForDebugging(r.message, {
+    level: "error",
+  });
+  return r;
 }
+//@ chunk-vr8smdd9.js:34618-35011 placement
 /**
  * 按插件声明的 nextTo 扩展分发链。
  */
-//@ chunk-vr8smdd9.js:34618-35011 placement
-function extendChainWithNextTo(e, r, n, s, a) {
+function extendChainWithNextTo(e, r, n, s, raised) {
   return r.some((m) => isDeepStrictEqual(m, n))
     ? r
     : e
@@ -254,106 +282,127 @@ function extendChainWithNextTo(e, r, n, s, a) {
             0,
           ),
         )
-        .filter((m) => findBypassingFloor(r, m.tier, m.name) === void 0)
+        .filter((m) => findBypassingFloor(r, m.tier, m.name) === undefined)
         .flatMap((m) =>
           (m.args.scan.nextTo ?? [])
             .filter(
               (c) =>
                 c !== "user" ||
                 (isPlainObject(n) &&
-                  n.isPastPeers === !0 &&
-                  isNextToUserTarget({ clauses: m.standingFor(s), scan: m.args.scan, event: s, raised: a })),
+                  n.isPastPeers === true &&
+                  isNextToUserTarget({
+                    clauses: m.standingFor(s),
+                    scan: m.args.scan,
+                    event: s,
+                    raised,
+                  })),
             )
-            .map((c) => appendNextToStep(r, { from: m.tier, to: c, plugin: m.name })),
+            .map((to) =>
+              appendNextToStep(r, {
+                from: m.tier,
+                to,
+                plugin: m.name,
+              }),
+            ),
         )
         .find((m) => isDeepStrictEqual(m.at(-1), n));
 }
 //@ chunk-vr8smdd9.js:35011-35131 placement
-function extendChainForFloors(e, r, n, s, a) {
+function extendChainForFloors(floors, r, n, event, raised) {
   if (!Array.isArray(n)) return;
-  let f = e;
-  for (let m of n) if (((f = extendChainWithNextTo(r, f, m, s, a)), f === void 0)) return;
+  let f = floors;
+  for (let m of n) {
+    f = extendChainWithNextTo(r, f, m, event, raised);
+    if (f === undefined) return;
+  }
   return f;
 }
+//@ chunk-vr8smdd9.js:35131-35986 placement
 /**
  * 跨 worker 分发一次 hook 调用（层级 floors、跳转、错误处理）。
  */
-//@ chunk-vr8smdd9.js:35131-35986 placement
 async function dispatchHookCall(e) {
-  let { event: event, e: n, call: s, signal: signal, floors: floors } = e,
-    m = ye(e.members, event, n),
-    c = m[0]?.hopKey;
-  if (!c) return s(n, void 0, floors);
-  let g,
-    h = (M, T, O) => {
-      let F = extendChainForFloors(floors, m, O, event, n);
-      if (F === void 0) return Promise.reject(invalidFloorsError(m));
-      return ((g = s(M, T, F)), g);
-    },
-    x = buildHookChain({ ...e, members: m, kind: "" }),
-    startTime = performance.now();
+  let { event, e: n, call: s, signal, floors } = e;
+  let m = dispatchModules(e.members, event, n);
+  let hopKey = m[0]?.hopKey;
+  if (!hopKey) return s(n, undefined, floors);
+  let g;
+  let h = (M, T, O) => {
+    let F = extendChainForFloors(floors, m, O, event, n);
+    if (F === undefined) return Promise.reject(invalidFloorsError(m));
+    g = s(M, T, F);
+    return g;
+  };
+  let hookChain = buildHookChain({
+    ...e,
+    members: m,
+    kind: "",
+  });
+  let startTime = performance.now();
   for (let M of m) M.enter();
   let y;
   try {
-    y = await c.dispatch(
-      { ...x, caughtBy: m.filter((M) => moduleCatchesEvent(M, event, n)).map((M) => M.environmentId) },
+    y = await hopKey.dispatch(
+      {
+        ...hookChain,
+        caughtBy: m.filter((M) => moduleCatchesEvent(M, event, n)).map((M) => M.environmentId),
+      },
       h,
       signal,
     );
   } catch (error) {
     let T = await retryAfterWorkerDeath({
       hop: e,
-      dispatchId: x.id,
+      dispatchId: hookChain.id,
       members: m,
-      error: error,
-      called: () => g !== void 0,
+      error,
+      called: () => g !== undefined,
       beneath: (O, F, v) => g ?? h(O, F, v),
     });
-    if (T === void 0) throw error;
+    if (T === undefined) throw error;
     y = T;
   } finally {
     for (let M of m) M.leave();
   }
   let b =
     typeof n === "object" && "requestId" in n && typeof n.requestId === "string" ? ` key=${n.requestId}` : "";
-  if (
-    (logForDebugging(
-      `hooks module ${dkt(m)} ${event} settled in ${(performance.now() - startTime).toFixed(1)}ms (${c.kind} hop, next() included)${b}`,
-    ),
-    y.withheld === !0)
-  )
-    e.withheld?.();
-  return po(y.result);
+  logForDebugging(
+    `hooks module ${joinLabels(m)} ${event} settled in ${(performance.now() - startTime).toFixed(1)}ms (${hopKey.kind} hop, next() included)${b}`,
+  );
+  if (y.withheld === true) e.withheld?.();
+  return identityPo(y.result);
 }
 //@ chunk-vr8smdd9.js:35986-36129 placement
-function logNativeSettled(e, r, n) {
-  (e.leave(),
-    logForDebugging(
-      `hooks module ${e.label} ${r} settled in ${(performance.now() - n).toFixed(1)}ms (native link, next() included)`,
-    ));
+function logNativeSettled(loaded, event, n) {
+  loaded.leave();
+  logForDebugging(
+    `hooks module ${loaded.label} ${event} settled in ${(performance.now() - n).toFixed(1)}ms (native link, next() included)`,
+  );
 }
 //@ chunk-vr8smdd9.js:36129-36289 placement
-function isNativeLinkable({ loaded: loaded, event: event, origin: origin }, s) {
+function isNativeLinkable({ loaded, event, origin }, s) {
   let a = liveModulesForDispatch([loaded], event).length === 1 && moduleMatcherAdmits(loaded, event, s);
   if (a && origin)
-    logForDebugging(`hooks module ${loaded.label} (native): ${event} nested in ` + EYr(origin));
+    logForDebugging(
+      `hooks module ${loaded.label} (native): ${event} nested in ` + labeledOriginChain(origin),
+    );
   return a;
 }
+//@ chunk-vr8smdd9.js:36289-36808 placement
 /**
  * 对原生（进程内）模块建立 hook 链接，非原生模块报错。
  */
-//@ chunk-vr8smdd9.js:36289-36808 placement
 function linkNativeHook(e) {
-  let { loaded: loaded, event: event, origin: origin } = e;
-  if (loaded.link === void 0)
+  let { loaded, event, origin } = e;
+  if (loaded.link === undefined)
     throw new HooksError(`${loaded.name}: ${event}: not a native module; it runs in a hop`);
-  let link = loaded.link({
-      event: event,
-      leftOut: loaded.leftOut,
-      hookOrigin: origin,
-      gestureAt: e.gestureAt,
-    }),
-    f = link.catch;
+  let a = loaded.link({
+    event,
+    leftOut: loaded.leftOut,
+    hookOrigin: origin,
+    gestureAt: e.gestureAt,
+  });
+  let f = a.catch;
   async function m(h) {
     let startTime = performance.now();
     loaded.enter();
@@ -371,124 +420,156 @@ function linkNativeHook(e) {
       loaded.leave();
     }
   }
-  let g = (h, x, w) =>
-    isNativeLinkable({ loaded: loaded, event: event, origin: origin }, h) ? m(() => link.run(h, x, w)) : x(h);
-  return Yt({ ...link, run: g, ...(f !== void 0 && { catch: c }) });
+  let run = (h, x, w) =>
+    isNativeLinkable(
+      {
+        loaded,
+        event,
+        origin,
+      },
+      h,
+    )
+      ? m(() => a.run(h, x, w))
+      : x(h);
+  return identityYt({
+    ...a,
+    run,
+    ...(f !== undefined && {
+      catch: c,
+    }),
+  });
 }
+//@ chunk-vr8smdd9.js:36808-37341 placement
 /**
  * 分发流式 hook（open），逐个插件包裹。
  */
-//@ chunk-vr8smdd9.js:36808-37341 placement
 function dispatchHookOpen(e) {
-  let { event: event, e: n, open: open, signal: signal, floors: floors } = e,
-    m = ye(e.members, event, n),
-    c = m[0]?.hopKey;
-  if (!c) return open(n, void 0, floors);
+  let { event, e: n, open, signal, floors } = e;
+  let m = dispatchModules(e.members, event, n);
+  let hopKey = m[0]?.hopKey;
+  if (!hopKey) return open(n, undefined, floors);
   let g = (w, y, S) => {
-      let b = extendChainForFloors(floors, m, S, event, n);
-      if (b === void 0) throw invalidFloorsError(m);
-      return forwardGeneratorWithErrorHook(open(w, y, b));
-    },
-    startTime = performance.now();
+    let b = extendChainForFloors(floors, m, S, event, n);
+    if (b === undefined) throw invalidFloorsError(m);
+    return forwardGeneratorWithErrorHook(open(w, y, b));
+  };
+  let startTime = performance.now();
   for (let w of m) w.enter();
-  let dispatchStream = c.dispatchStream(buildHookChain({ ...e, members: m, kind: " stream" }), g, signal);
+  let x = hopKey.dispatchStream(
+    buildHookChain({
+      ...e,
+      members: m,
+      kind: " stream",
+    }),
+    g,
+    signal,
+  );
   return (async function* () {
     try {
-      let w = yield* forwardGeneratorWithErrorHook(dispatchStream);
-      return po(w);
+      let w = yield* forwardGeneratorWithErrorHook(x);
+      return identityPo(w);
     } finally {
       for (let w of m) w.leave();
       logForDebugging(
-        `hooks module ${dkt(m)} ${event} stream settled in ${(performance.now() - startTime).toFixed(1)}ms (${c.kind} hop, next() included)`,
+        `hooks module ${joinLabels(m)} ${event} stream settled in ${(performance.now() - startTime).toFixed(1)}ms (${hopKey.kind} hop, next() included)`,
       );
     }
   })();
 }
+//@ chunk-vr8smdd9.js:37341-37836 placement
 /**
  * 对原生模块建立流式 hook 链接。
  */
-//@ chunk-vr8smdd9.js:37341-37836 placement
 function linkNativeStreamHook(e) {
-  let { loaded: loaded, event: event, origin: origin } = e;
-  if (loaded.streamLinks === void 0)
+  let { loaded, event, origin } = e;
+  if (loaded.streamLinks === undefined)
     throw new HooksError(`${loaded.name}: ${event}: not a native module; it runs in a hop`);
   function a(f) {
     let startTime = performance.now();
-    return (
-      loaded.enter(),
-      (async function* () {
-        try {
-          return yield* f;
-        } finally {
-          logNativeSettled(loaded, event, startTime);
-        }
-      })()
-    );
+    loaded.enter();
+    return (async function* () {
+      try {
+        return yield* f;
+      } finally {
+        logNativeSettled(loaded, event, startTime);
+      }
+    })();
   }
-  return loaded.streamLinks({ event: event, leftOut: loaded.leftOut, hookOrigin: origin }).map((f) => {
-    let m = f.catch;
-    return {
-      ...f,
-      run: async (c, g, h) =>
-        isNativeLinkable({ loaded: loaded, event: event, origin: origin }, c)
-          ? a(await f.run(c, g, h))
-          : g(c),
-      ...(m !== void 0 && { catch: async (c, g, h) => a(await m(c, g, h)) }),
-    };
-  });
+  return loaded
+    .streamLinks({
+      event,
+      leftOut: loaded.leftOut,
+      hookOrigin: origin,
+    })
+    .map((f) => {
+      let m = f.catch;
+      return {
+        ...f,
+        run: async (c, g, h) =>
+          isNativeLinkable(
+            {
+              loaded,
+              event,
+              origin,
+            },
+            c,
+          )
+            ? a(await f.run(c, g, h))
+            : g(c),
+        ...(m !== undefined && {
+          catch: async (c, g, h) => a(await m(c, g, h)),
+        }),
+      };
+    });
 }
 //@ chunk-vr8smdd9.js:37836-37968 placement
-var hopMembers = (e, r, n) =>
-  e.map((s) => {
+var hopMembers = (members, r, event) =>
+  members.map((s) => {
     let a = r.get(s);
-    if (a === void 0) throw new HooksError(`${n}: a hop member is not one of these handlers`);
+    if (a === undefined) throw new HooksError(`${event}: a hop member is not one of these handlers`);
     return a;
   });
+//@ chunk-vr8smdd9.js:37968-38503 placement
 /**
  * 把已加载模块包装成分发链成员（名称、层级、run）。
  */
-//@ chunk-vr8smdd9.js:37968-38503 placement
-var toHookMember = ({
-  loaded: loaded,
-  event: event,
-  origin: origin,
-  raise: raise,
-  gestureAt: gestureAt,
-  owners: owners,
-  withheld: withheld,
-}) => ({
+var toHookMember = ({ loaded, event, origin, raise, gestureAt, owners, withheld }) => ({
   name: loaded.name,
   tier: loaded.tier,
-  ...(eos(loaded.args.modulePath) && { answersForEngine: !0 }),
-  ...(withheld && { withheld: withheld }),
-  run: (c, g, { call: h, floors: floors, cutAt: cutAt }) =>
+  ...(hasRegisteredEnv(loaded.args.modulePath) && {
+    answersForEngine: true,
+  }),
+  ...(withheld && {
+    withheld,
+  }),
+  run: (c, g, { call: h, floors, cutAt }) =>
     dispatchHookCall({
       members: [loaded],
-      event: event,
+      event,
       e: c,
       call: h,
       signal: g.signal,
       hookOrigin: origin,
-      raise: raise,
-      gestureAt: gestureAt,
-      withheld: withheld,
+      raise,
+      gestureAt,
+      withheld,
       origin: g.origin,
-      floors: floors,
-      cutAt: cutAt,
+      floors,
+      cutAt,
     }),
   hop: {
     key: loaded.hopKey,
     run: (c) =>
       dispatchHookCall({
         members: hopMembers(c.members, owners, event),
-        event: event,
+        event,
         e: c.e,
         call: c.call,
         signal: c.signal,
         hookOrigin: origin,
-        raise: raise,
-        gestureAt: gestureAt,
-        withheld: withheld,
+        raise,
+        gestureAt,
+        withheld,
         origin: c.origin,
         floors: c.floors,
         cutAt: c.cutAt,
@@ -496,144 +577,187 @@ var toHookMember = ({
   },
 });
 //@ chunk-vr8smdd9.js:38503-38560 placement
-function uo(e) {
-  return e.loaded.link !== void 0 ? linkNativeHook(e) : toHookMember(e);
+/**
+ * 链接或包装成钩子成员
+ */
+function toHookMemberOrLink(e) {
+  return e.loaded.link !== undefined ? linkNativeHook(e) : toHookMember(e);
 }
 //@ chunk-vr8smdd9.js:38560-38670 placement
 function pluginTierOf(e) {
-  let { loadedModules: loadedModules, moduleSeats: moduleSeats } = getPluginRegistry();
-  return loadedModules.find((s) => s.name === e)?.tier ?? moduleSeats.get(e) ?? "user";
+  let { loadedModules, moduleSeats } = getPluginRegistry();
+  return loadedModules.find((loadedModule) => loadedModule.name === e)?.tier ?? moduleSeats.get(e) ?? "user";
 }
+//@ chunk-vr8smdd9.js:38670-38708 placement
 /**
  * 插件层级是否属于策略层。
  */
-//@ chunk-vr8smdd9.js:38670-38708 placement
 var isPolicyTier = (e) => pushToKillRing.some((r) => r === pluginTierOf(e));
+//@ chunk-vr8smdd9.js:38708-38937 placement
 /**
  * 判断模块对某事件的 matcher 是否接受该载荷（无 matcher 为真；matcher 抛错时交由 hop 决定）。
  */
-//@ chunk-vr8smdd9.js:38708-38937 placement
 function matcherAdmits(e, r, n) {
-  let matcherFor = e.matcherFor(r);
-  if (matcherFor === void 0) return !0;
+  let s = e.matcherFor(r);
+  if (s === undefined) return true;
   try {
-    if (gxt(matcherFor, n, lookupPathTable(r))) return !0;
+    if (matchesRegExpMatcher(s, n, lookupPathTable(r))) return true;
   } catch (error) {
-    return (
-      logForDebugging(
-        `hooks module ${e.label}: on('${r}') matcher threw on the host (${errorMessage(error)}); the hop decides`,
-      ),
-      !0
+    logForDebugging(
+      `hooks module ${e.label}: on('${r}') matcher threw on the host (${errorMessage(error)}); the hop decides`,
     );
+    return true;
   }
-  return (warnMatcherMiss(e, r, n), !1);
+  warnMatcherMiss(e, r, n);
+  return false;
 }
 //@ chunk-vr8smdd9.js:38937-39230 placement
-function pinnedKeysRejected(e, r, { keys: keys, e: s }) {
-  let matcherFor = e.matcherFor(r);
-  if (matcherFor === void 0 || !isPlainDataObject(s)) return !1;
+function pinnedKeysRejected(e, r, { keys, e: s }) {
+  let a = e.matcherFor(r);
+  if (a === undefined || !isPlainDataObject(s)) return false;
   try {
-    let m = lookupPathTable(r),
-      any = keys.some((g) => Object.hasOwn(s, g) && !opr(matcherFor, { [g]: s[g] }, m));
+    let pathTable = lookupPathTable(r);
+    let any = keys.some(
+      (key) =>
+        Object.hasOwn(s, key) &&
+        !matchesFields(
+          a,
+          {
+            [key]: s[key],
+          },
+          pathTable,
+        ),
+    );
     if (any) warnMatcherMiss(e, r, s);
     return any;
   } catch (error) {
-    return (
-      logForDebugging(
-        `hooks module ${e.label}: on('${r}') matcher threw on the host (${errorMessage(error)}); the hop decides`,
-      ),
-      !1
+    logForDebugging(
+      `hooks module ${e.label}: on('${r}') matcher threw on the host (${errorMessage(error)}); the hop decides`,
     );
+    return false;
   }
 }
+//@ chunk-vr8smdd9.js:39230-39532 placement
 /**
  * 列出监听某事件且策略允许的已加载模块（可限定插件、范围、固定项）。
  */
-//@ chunk-vr8smdd9.js:39230-39532 placement
 function modulesHookingEvent(e, r, { only: n, e: s, among: a, pinned: f } = {}) {
   let flattened = (a ?? getPluginRegistry().loadedModules).flatMap((g) => {
     if (!(g.hooks(e) && g.name === (n ?? g.name) && isModuleAdmitted(g))) return [];
     let x = scopeModuleForEvent(g, e, r);
-    return x === void 0 || (f !== void 0 && pinnedKeysRejected(x, e, f)) ? [] : [x];
+    return x === undefined || (f !== undefined && pinnedKeysRejected(x, e, f)) ? [] : [x];
   });
-  if (s === void 0) return flattened;
+  if (s === undefined) return flattened;
   let index = flattened.findIndex((g) => matcherAdmits(g, e, s));
   return index === -1 ? [] : flattened.slice(index);
 }
+//@ chunk-vr8smdd9.js:39532-39875 placement
 /**
  * hooks worker 不可用时生成拒绝错误。
  */
-//@ chunk-vr8smdd9.js:39532-39875 placement
-function refuseIfWorkerMissing({ event: event, e: r, origin: origin, only: only }) {
-  let mapped = he(modulesHookingEvent(event, origin, { only: only }), event, r)
+function refuseIfWorkerMissing({ event, e: r, origin, only }) {
+  let mapped = modulesFromMatcher(
+    modulesHookingEvent(event, origin, {
+      only,
+    }),
+    event,
+    r,
+  )
     .filter(
-      (m) => m.link === void 0 && m.hopKey.isDeclared?.(m.name) !== !1 && moduleCatchesEvent(m, event, r),
+      (m) =>
+        m.link === undefined && m.hopKey.isDeclared?.(m.name) !== false && moduleCatchesEvent(m, event, r),
     )
     .map((m) => m.name);
   return mapped.length === 0
-    ? void 0
+    ? undefined
     : new HooksError(
         `${event} refused: the hooks worker is being replaced, and a hook on it with a .catch (${mapped.join(", ")}) cannot be asked until the reload is in`,
       );
 }
 //@ chunk-vr8smdd9.js:39924-39939 placement
-var K_n = new AsyncLocalStorage();
+/**
+ * 分发帧 ALS
+ */
+var dispatchFrameStorage = new AsyncLocalStorage();
 //@ chunk-vr8smdd9.js:39939-40029 placement
-function TYr(e, r) {
-  let n = { isOver: !1 },
-    run = e.run(n, r),
-    a = () => {
-      n.isOver = !0;
-    };
-  return (run.then(a, a), run);
+/**
+ * 分发帧执行
+ */
+function runDispatchFrame(e, r) {
+  let n = {
+    isOver: false,
+  };
+  let s = e.run(n, r);
+  let a = () => {
+    n.isOver = true;
+  };
+  s.then(a, a);
+  return s;
 }
 //@ chunk-vr8smdd9.js:40029-40053 placement
-var HFi = (e) => TYr(K_n, e);
+/**
+ * 在分发帧里执行
+ */
+var inDispatchFrame = (e) => runDispatchFrame(dispatchFrameStorage, e);
 //@ chunk-vr8smdd9.js:40053-40093 placement
-var X4o = () => K_n.getStore()?.isOver === !1;
+/**
+ * 分发帧是否未结束
+ */
+var isDispatchFrameOpen = () => dispatchFrameStorage.getStore()?.isOver === false;
+//@ chunk-vr8smdd9.js:40093-40371 placement
 /**
  * 若有 hooks worker 正在重启，等待其全部就绪（可被中止）后再检查一次；重启进行中而 worker 缺失则拒绝。
  */
-//@ chunk-vr8smdd9.js:40093-40371 placement
-function waitForHooksRespawn(e, r) {
-  let n = [...getPluginRegistry().hooksRespawns],
-    s = n.length > 0 && X4o(),
-    a = s ? refuseIfWorkerMissing(e) : void 0;
-  if (a !== void 0) return (logForDebugging(a.message, { level: "error" }), Promise.reject(a));
+function waitForHooksRespawn(e, signal) {
+  let n = [...getPluginRegistry().hooksRespawns];
+  let s = n.length > 0 && isDispatchFrameOpen();
+  let a = s ? refuseIfWorkerMissing(e) : undefined;
+  if (a !== undefined) {
+    logForDebugging(a.message, {
+      level: "error",
+    });
+    return Promise.reject(a);
+  }
   if (n.length === 0 || s) return;
   let f = Promise.all(n).then(() => {
     return;
   });
-  return (r !== void 0 ? raceWithAbortSignal(f, r, () => Teo(r)) : f).then(() => waitForHooksRespawn(e, r));
+  return (signal !== undefined ? raceWithAbortSignal(f, signal, () => asHooksError(signal)) : f).then(() =>
+    waitForHooksRespawn(e, signal),
+  );
 }
+//@ chunk-vr8smdd9.js:40371-40508 placement
 /**
  * 有 worker 正在重启且模块监听该事件时等待其就绪。
  */
-//@ chunk-vr8smdd9.js:40371-40508 placement
-function awaitHooksRespawn(e, r) {
-  let n = getPluginRegistry();
-  return n.hooksRespawns.size > 0 &&
-    n.loadedModules.some((loadedModule) => loadedModule.link === void 0 && loadedModule.hooks(e.event))
-    ? waitForHooksRespawn(e, r)
-    : void 0;
+function awaitHooksRespawn(e, signal) {
+  let pluginRegistry = getPluginRegistry();
+  return pluginRegistry.hooksRespawns.size > 0 &&
+    pluginRegistry.loadedModules.some(
+      (loadedModule) => loadedModule.link === undefined && loadedModule.hooks(e.event),
+    )
+    ? waitForHooksRespawn(e, signal)
+    : undefined;
 }
+//@ chunk-vr8smdd9.js:40508-40660 placement
 /**
  * 同上，但 SessionEnd 不等待；中止时改抛中止错误。
  */
-//@ chunk-vr8smdd9.js:40508-40660 placement
-function awaitHooksRespawnUnlessSessionEnd(e, r) {
-  let s = e.event === "classic.SessionEnd" ? void 0 : awaitHooksRespawn(e, r);
-  return s !== void 0 && r !== void 0 ? s.catch((f) => Promise.reject(r.aborted ? abortErrorFor(r) : f)) : s;
+function awaitHooksRespawnUnlessSessionEnd(e, signal) {
+  let s = e.event === "classic.SessionEnd" ? undefined : awaitHooksRespawn(e, signal);
+  return s !== undefined && signal !== undefined
+    ? s.catch((error) => Promise.reject(signal.aborted ? abortErrorFor(signal) : error))
+    : s;
 }
+//@ chunk-vr8smdd9.js:40660-40874 placement
 /**
  * 为事件生成分发链成员列表。
  */
-//@ chunk-vr8smdd9.js:40660-40874 placement
 function hookMembersFor(e, r, n = {}) {
-  let s = [],
-    a = new Map();
+  let s = [];
+  let a = new Map();
   for (let f of modulesHookingEvent(e, r, n)) {
-    let m = uo({
+    let hookMemberOrLink = toHookMemberOrLink({
       loaded: f,
       event: e,
       origin: r,
@@ -642,130 +766,165 @@ function hookMembersFor(e, r, n = {}) {
       owners: a,
       withheld: n.withheld,
     });
-    (a.set(m, f), s.push(m), n.drawn?.(m, f));
+    a.set(hookMemberOrLink, f);
+    s.push(hookMemberOrLink);
+    n.drawn?.(hookMemberOrLink, f);
   }
   return s;
 }
+//@ chunk-vr8smdd9.js:40874-41060 placement
 /**
  * 列出匹配某事件和匹配器的插件名。
  */
-//@ chunk-vr8smdd9.js:40874-41060 placement
 function pluginsMatchingEvent(e, r, n) {
-  let s = lookupPathTable(e);
+  let pathTable = lookupPathTable(e);
   return getPluginRegistry()
     .loadedModules.filter((loadedModule) => {
       let f =
         loadedModule.hooks(e) && isModuleAdmitted(loadedModule)
           ? scopeModuleForEvent(loadedModule, e, n)
-          : void 0;
-      if (f === void 0) return !1;
-      return opr(f.matcherFor(e), r, s);
+          : undefined;
+      if (f === undefined) return false;
+      return matchesFields(f.matcherFor(e), r, pathTable);
     })
-    .map((a) => a.name);
+    .map((loadedModule) => loadedModule.name);
 }
 //@ chunk-vr8smdd9.js:41060-41074 placement
-var po = (e) => e;
+/**
+ * 原样返回
+ */
+var identityPo = (e) => e;
 //@ chunk-vr8smdd9.js:41074-41088 placement
-var Yt = (e) => e;
+/**
+ * 原样返回
+ */
+var identityYt = (e) => e;
 //@ chunk-vr8smdd9.js:41088-41107 placement
-var ko = (e) => [...e];
+/**
+ * 拷贝成数组
+ */
+var toArray = (e) => [...e];
+//@ chunk-vr8smdd9.js:41107-41235 placement
 /**
  * 从调用者栈取 hook 来源插件与层级。
  */
-//@ chunk-vr8smdd9.js:41107-41235 placement
 function hookOriginFromStack(e) {
-  let r = e?.map(originPlugin).findLast((n) => n !== void 0);
-  if (r === void 0) return freeze_6;
-  return Object.freeze({ plugin: r, tier: pluginTierOf(r) });
+  let last = e?.map(originPlugin).findLast((n) => n !== undefined);
+  if (last === undefined) return N5e;
+  return Object.freeze({
+    plugin: last,
+    tier: pluginTierOf(last),
+  });
 }
+//@ chunk-vr8smdd9.js:41235-41357 placement
 /**
  * 登记一次 hooks 重生：返回重生 Promise 与加载完成时的回调。
  */
-//@ chunk-vr8smdd9.js:41235-41357 placement
-function registerRespawn(e) {
-  let { promise: promise, resolve: resolve } = Promise.withResolvers();
-  return (
-    e.add(promise),
-    {
-      respawn: promise,
-      loaded: () => {
-        (e.delete(promise), resolve());
-      },
-    }
-  );
+function registerRespawn(hooksRespawns) {
+  let { promise, resolve } = Promise.withResolvers();
+  hooksRespawns.add(promise);
+  return {
+    respawn: promise,
+    loaded: () => {
+      hooksRespawns.delete(promise);
+      resolve();
+    },
+  };
 }
+//@ chunk-vr8smdd9.js:41357-41766 placement
 /**
  * 把已加载模块包装成流式分发成员。
  */
-//@ chunk-vr8smdd9.js:41357-41766 placement
 var toStreamHookMember = (e, r) => ({
   name: e.loaded.name,
   tier: e.loaded.tier,
-  run: (n, s, { open: open, floors: floors }) =>
+  run: (n, s, { open, floors }) =>
     dispatchHookOpen({
       members: [e.loaded],
       event: e.event,
       e: n,
-      open: open,
+      open,
       signal: s.signal,
       hookOrigin: e.origin,
       raise: e.raise,
       origin: s.origin,
-      floors: floors,
+      floors,
     }),
   hop: {
     key: e.loaded.hopKey,
-    run: ({ members: members, e: s, open: open, signal: signal, origin: origin, floors: floors }) =>
+    run: ({ members, e: s, open, signal, origin, floors }) =>
       dispatchHookOpen({
         members: hopMembers(members, r, e.event),
         event: e.event,
         e: s,
-        open: open,
-        signal: signal,
+        open,
+        signal,
         hookOrigin: e.origin,
         raise: e.raise,
-        origin: origin,
-        floors: floors,
+        origin,
+        floors,
       }),
   },
 });
+//@ chunk-vr8smdd9.js:41766-41999 placement
 /**
  * 列出监听某流式事件的模块并转为流式链成员（原生模块直接链接）。
  */
-//@ chunk-vr8smdd9.js:41766-41999 placement
-function streamMembersFor(e, r, n = {}) {
+function streamMembersFor(event, origin, n = {}) {
   let s = new Map();
-  return modulesHookingEvent(e, r, n).flatMap((a) => {
-    if (a.streamLinks !== void 0) return ko(linkNativeStreamHook({ loaded: a, event: e, origin: r }));
-    let f = toStreamHookMember({ loaded: a, event: e, origin: r, raise: n.raise, gestureAt: void 0 }, s);
-    return (s.set(f, a), [f]);
+  return modulesHookingEvent(event, origin, n).flatMap((a) => {
+    if (a.streamLinks !== undefined)
+      return toArray(
+        linkNativeStreamHook({
+          loaded: a,
+          event,
+          origin,
+        }),
+      );
+    let streamHookMember = toStreamHookMember(
+      {
+        loaded: a,
+        event,
+        origin,
+        raise: n.raise,
+        gestureAt: undefined,
+      },
+      s,
+    );
+    s.set(streamHookMember, a);
+    return [streamHookMember];
   });
 }
 //@ chunk-vr8smdd9.js:41999-42009 placement
-var NFi = 3;
+/**
+ * 无法归因到具体插件的崩溃累计 3 次后不再重启 hooks worker，改为整体报错。
+ */
+var MAX_UNATTRIBUTED_CRASHES = 3;
 //@ chunk-vr8smdd9.js:42009-42088 placement
-var Qni = (e) => `${e}: the op was aborted: the plugin's environment was unloaded`;
-
+/**
+ * 环境卸载导致中止
+ */
+var envUnloadedAbortText = (e) => `${e}: the op was aborted: the plugin's environment was unloaded`;
 export {
   hookMembersFor,
   pluginsMatchingEvent,
   isPolicyTier,
   hookOriginFromStack,
   awaitHooksRespawnUnlessSessionEnd,
+  modulesHookingEvent,
   hookPluginLabel,
   waitForHooksRespawn,
   awaitHooksRespawn,
-  modulesHookingEvent,
   streamMembersFor,
   dispatchHookCall,
-  Yni,
-  TYr,
-  Qni,
-  qni,
-  NFi,
+  PLUGIN_UNLOADED_TEXT,
+  runDispatchFrame,
+  envUnloadedAbortText,
+  hookTimeoutText,
+  MAX_UNATTRIBUTED_CRASHES,
   registerRespawn,
-  X4o,
-  K_n,
-  HFi,
+  isDispatchFrameOpen,
+  dispatchFrameStorage,
+  inDispatchFrame,
   matcherAdmits,
 };

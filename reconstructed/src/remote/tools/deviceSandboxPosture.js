@@ -13,21 +13,42 @@ import { getPlatform as getPlatform_2 } from "../../utils/platform.js";
 import { isScrubEnabled } from "../../utils/subprocessEnv.js";
 import { vor } from "../../../vendor/@anthropic-ai/sandbox-runtime/dist/sandbox/generate-seccomp-filter.js";
 import { weakensSandboxIsolation } from "./servedCallLog.js";
-import { readPolicySandboxSetting, bqt } from "../../utils/sandbox/sandboxSettingsSources.js";
+import {
+  readPolicySandboxSetting,
+  sandboxSettingsChain,
+} from "../../utils/sandbox/sandboxSettingsSources.js";
 
 //@ chunk-s61vbvea.js:535191-535471 placement
-function classifyDeviceSandboxPosture(e, { requireStarted: requireStarted }) {
+function classifyDeviceSandboxPosture(e, { requireStarted }) {
   let r = sandboxUnavailableReason(e);
-  if (r !== void 0) return { confined: !1, reason: r };
-  if (!requireStarted) return { confined: !0 };
-  if (e.started !== !0 || e.config === void 0) return { confined: !1, reason: "sandbox_failed_to_start" };
+  if (r !== undefined)
+    return {
+      confined: false,
+      reason: r,
+    };
+  if (!requireStarted)
+    return {
+      confined: true,
+    };
+  if (e.started !== true || e.config === undefined)
+    return {
+      confined: false,
+      reason: "sandbox_failed_to_start",
+    };
   let s = sandboxWeaknessReason(e.config);
-  return s === void 0 ? { confined: !0 } : { confined: !1, reason: s };
+  return s === undefined
+    ? {
+        confined: true,
+      }
+    : {
+        confined: false,
+        reason: s,
+      };
 }
+//@ chunk-s61vbvea.js:535471-535714 placement
 /**
  * 根据设备沙箱快照判断本机能否安全地提供远程工具：未启用时区分 unavailable/failed_to_start/unsupported，文件系统策略非 strict 或 scrub 模式为 unconfined，其他返回 undefined。
  */
-//@ chunk-s61vbvea.js:535471-535714 placement
 function sandboxUnavailableReason(e) {
   if (!e.sandboxingEnabled) {
     if (!e.enabledInSettings) return "sandbox_unavailable";
@@ -37,44 +58,44 @@ function sandboxUnavailableReason(e) {
   return;
 }
 //@ chunk-s61vbvea.js:535714-535983 placement
-function sandboxWeaknessReason(e) {
-  if (e.weakensIsolation || e.ripgrepOverridden) return "sandbox_weakened";
-  if (e.allowsUnixSockets) return "sandbox_allows_unix_sockets";
-  if (e.seccompUnavailable) return "sandbox_seccomp_unavailable";
-  if (e.injectsCredentials) return "sandbox_injects_credentials";
+function sandboxWeaknessReason(config) {
+  if (config.weakensIsolation || config.ripgrepOverridden) return "sandbox_weakened";
+  if (config.allowsUnixSockets) return "sandbox_allows_unix_sockets";
+  if (config.seccompUnavailable) return "sandbox_seccomp_unavailable";
+  if (config.injectsCredentials) return "sandbox_injects_credentials";
   return;
 }
 //@ chunk-s61vbvea.js:535983-536737 placement
 function readDeviceSandboxSnapshot() {
-  let isSandboxingEnabled = SandboxManager.isSandboxingEnabled(),
-    config = SandboxManager.getConfig(),
-    r = getPlatform_2();
+  let e = SandboxManager.isSandboxingEnabled();
+  let config = SandboxManager.getConfig();
+  let platform = getPlatform_2();
   return {
-    sandboxingEnabled: isSandboxingEnabled,
+    sandboxingEnabled: e,
     enabledInSettings: SandboxManager.isSandboxEnabledInSettings(),
     supportedHere: SandboxManager.passesCheapSandboxGates(),
     filesystemPolicy: getEffectiveFilesystemPolicy(),
     scrubMode: isScrubEnabled(),
-    ...(config !== void 0 && {
+    ...(config !== undefined && {
       config: {
         allowsUnixSockets:
-          config.network?.allowAllUnixSockets === !0 || (config.network?.allowUnixSockets?.length ?? 0) > 0,
+          config.network?.allowAllUnixSockets === true || (config.network?.allowUnixSockets?.length ?? 0) > 0,
         seccompUnavailable:
-          isSandboxingEnabled &&
-          r !== "macos" &&
-          r !== "windows" &&
+          e &&
+          platform !== "macos" &&
+          platform !== "windows" &&
           !config.seccomp?.argv0 &&
           vor(config.seccomp?.applyPath) === null,
         injectsCredentials: [
           ...(config.credentials?.envVars ?? []),
           ...(config.credentials?.files ?? []),
-        ].some((s) => s.mode === "mask" && (s.injectHosts === void 0 || s.injectHosts.length > 0)),
-        weakensIsolation: weakensSandboxIsolation(config, r),
+        ].some((s) => s.mode === "mask" && (s.injectHosts === undefined || s.injectHosts.length > 0)),
+        weakensIsolation: weakensSandboxIsolation(config, platform),
         ripgrepOverridden:
-          r !== "macos" &&
-          r !== "windows" &&
-          readPolicySandboxSetting(["ripgrep"]) === void 0 &&
-          bqt().some((s) => s?.sandbox?.ripgrep !== void 0),
+          platform !== "macos" &&
+          platform !== "windows" &&
+          readPolicySandboxSetting(["ripgrep"]) === undefined &&
+          sandboxSettingsChain().some((s) => s?.sandbox?.ripgrep !== undefined),
       },
     }),
   };
@@ -82,18 +103,27 @@ function readDeviceSandboxSnapshot() {
 //@ chunk-s61vbvea.js:536737-536856 placement
 async function warmDeviceSandbox() {
   if (!SandboxManager.isSandboxingEnabled()) return;
-  (await SandboxManager.initialize(), await SandboxManager.waitForNetworkInitialization());
+  await SandboxManager.initialize();
+  await SandboxManager.waitForNetworkInitialization();
 }
 //@ chunk-s61vbvea.js:536856-537057 placement
 async function ensureDeviceSandboxPosture() {
   let e = sandboxUnavailableReason(readDeviceSandboxSnapshot());
-  if (e !== void 0) return { confined: !1, reason: e };
+  if (e !== undefined)
+    return {
+      confined: false,
+      reason: e,
+    };
   await SandboxManager.initialize();
-  let waitForNetworkInitialization = await SandboxManager.waitForNetworkInitialization();
+  let started = await SandboxManager.waitForNetworkInitialization();
   return classifyDeviceSandboxPosture(
-    { ...readDeviceSandboxSnapshot(), started: waitForNetworkInitialization },
-    { requireStarted: !0 },
+    {
+      ...readDeviceSandboxSnapshot(),
+      started,
+    },
+    {
+      requireStarted: true,
+    },
   );
 }
-
 export { ensureDeviceSandboxPosture, warmDeviceSandbox };

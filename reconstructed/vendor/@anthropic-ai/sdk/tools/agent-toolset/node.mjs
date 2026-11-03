@@ -11,669 +11,851 @@ import * as cryptoModule from "crypto";
 import * as fsModule from "fs";
 import * as pathModule from "path";
 import * as readlineModule from "readline";
-import { pr } from "../../core/error.mjs";
-import { Ie, ue, P, z, pe, q, te } from "./fs-util.mjs";
-import { Kn, ke } from "../../internal/tslib.mjs";
+import { AnthropicError } from "../../core/error.mjs";
+import {
+  confineToRoot,
+  containingRoot,
+  fsErrorMessage,
+  DIR_CREATE_MODE,
+  atomicWriteFile,
+  canonicalize,
+  isWithin,
+} from "./fs-util.mjs";
+import { __classPrivateFieldSet, __classPrivateFieldGet } from "../../internal/tslib.mjs";
 import { SEn } from "../../internal/utils/promise.mjs";
-import { R } from "../../helpers/beta/json-schema.mjs";
-import { ch } from "../../lib/tools/ToolError.mjs";
+import { betaTool } from "../../helpers/beta/json-schema.mjs";
+import { ToolError } from "../../lib/tools/ToolError.mjs";
 
 //@ chunk-2cw52qnf.js:26431-26563 esm-fingerprint
-var le,
-  _,
-  S,
-  K,
-  A,
-  b,
-  Me,
-  fe,
-  V,
-  de,
-  he,
-  D,
-  C,
-  Y,
-  x,
-  X,
-  N,
-  tt,
-  Je,
-  Ze = 102400,
-  nt = 120000,
-  Yt = 262144,
-  qt = 65536,
-  buffer = Buffer.from(`
-`),
-  J = 102400,
-  zt = 2000,
-  Gt = 200;
+var _BashSession_instances;
+var _BashSession_proc;
+var _BashSession_buf;
+var _BashSession_truncated;
+var _BashSession_closed;
+var _BashSession_waiting;
+var _BashSession_append;
+var _LineRangeCollector_instances;
+var _LineRangeCollector_filePath;
+var _LineRangeCollector_startLine;
+var _LineRangeCollector_endLine;
+var _LineRangeCollector_start;
+var _LineRangeCollector_end;
+var _LineRangeCollector_limit;
+var _LineRangeCollector_line;
+var _LineRangeCollector_collected;
+var _LineRangeCollector_collectedBytes;
+var _LineRangeCollector_collect;
+var _LineRangeCollector_overLimitError;
+var BASH_OUTPUT_LIMIT = 102400;
+var BASH_DEFAULT_TIMEOUT_MS = 120000;
+var DEFAULT_MAX_FILE_BYTES = 262144;
+var READ_STREAM_CHUNK_BYTES = 65536;
+var NEWLINE = Buffer.from(`
+`);
+var GREP_OUTPUT_LIMIT = 102400;
+var GREP_MAX_LINE_LENGTH = 2000;
+var GLOB_RESULT_LIMIT = 200;
 //@ chunk-2cw52qnf.js:26563-26690 esm-fingerprint
-class BashTimeoutError extends pr {
-  constructor(r) {
-    super(`bash command timed out after ${r}ms`);
-    ((this.name = "BashTimeoutError"), (this.timeoutMs = r));
+class BashTimeoutError extends AnthropicError {
+  constructor(timeoutMs) {
+    super(`bash command timed out after ${timeoutMs}ms`);
+    this.name = "BashTimeoutError";
+    this.timeoutMs = timeoutMs;
   }
 }
 //@ chunk-2cw52qnf.js:26690-26736 esm-fingerprint
-var Ht = /\x1b\[[0-9;?]*[ -/]*[@-~]/g,
-  glob = fsPromisesModule.glob;
+var ANSI_RE = /\x1b\[[0-9;?]*[ -/]*[@-~]/g;
+var fsGlob = fsPromisesModule.glob;
 //@ chunk-2cw52qnf.js:26736-26774 esm-layout
-function st(r) {
-  return r === void 0 ? Yt : r;
+function resolveMaxBytes(configured) {
+  return configured === undefined ? DEFAULT_MAX_FILE_BYTES : configured;
 }
 //@ chunk-2cw52qnf.js:26774-27205 esm-layout
-function F(r) {
-  if (r === void 0) return;
-  throw new pr(
+function rejectUnrestrictedPaths(value) {
+  if (value === undefined) return;
+  throw new AnthropicError(
     "The `unrestrictedPaths` option you passed to the agent toolset (AgentToolContext) is no longer supported. The toolset's file tools (read, write, edit, glob, grep) are now always confined to the working directory plus the directories listed in `allowedRoots`. Remove `unrestrictedPaths` from your context; to let the file tools reach any other directory, add it to `allowedRoots`.",
   );
 }
 //@ chunk-2cw52qnf.js:27205-27264 esm-layout
-function Wr(r) {
-  return [Jt(r), Zt(r), er(r), tr(r), ir(r), nr(r)];
+function Wr(ctx) {
+  return [
+    betaBashTool(ctx),
+    betaReadTool(ctx),
+    betaWriteTool(ctx),
+    betaEditTool(ctx),
+    betaGlobTool(ctx),
+    betaGrepTool(ctx),
+  ];
 }
 //@ chunk-2cw52qnf.js:27264-27366 esm-fingerprint
-async function Q(r, e) {
-  return (F(r.unrestrictedPaths), Ie(r.workdir, e, { allowedRoots: r.allowedRoots ?? [] }));
+async function resolvePath(ctx, p) {
+  rejectUnrestrictedPaths(ctx.unrestrictedPaths);
+  return confineToRoot(ctx.workdir, p, {
+    allowedRoots: ctx.allowedRoots ?? [],
+  });
 }
 //@ chunk-2cw52qnf.js:27366-27416 esm-fingerprint
-function at(r, e) {
-  return ue(r.readOnlyRoots ?? [], e);
+function readOnlyRootFor(ctx, target) {
+  return containingRoot(ctx.readOnlyRoots ?? [], target);
 }
 //@ chunk-2cw52qnf.js:27416-27538 esm-fingerprint
-function Vt() {
-  let r = {};
-  for (let [e, t] of Object.entries(process.env)) {
-    if (e.startsWith("ANTHROPIC_")) continue;
-    r[e] = t;
+function scrubbedShellEnv() {
+  let env = {};
+  for (let [key, value] of Object.entries(process.env)) {
+    if (key.startsWith("ANTHROPIC_")) continue;
+    env[key] = value;
   }
-  return r;
+  return env;
 }
 //@ chunk-2cw52qnf.js:27538-29892 esm-fingerprint
-var Xt = (() => {
-  class r {
-    constructor(e, t = Vt()) {
-      (le.add(this),
-        _.set(this, void 0),
-        S.set(this, ""),
-        K.set(this, !1),
-        A.set(this, !1),
-        b.set(this, null),
-        Kn(
-          this,
-          _,
-          child_processModule.spawn("/bin/bash", ["--noprofile", "--norc"], {
-            cwd: e,
-            env: { ...t, PS1: "", PS2: "", TERM: "dumb" },
-            stdio: ["pipe", "pipe", "pipe"],
-            detached: !0,
-          }),
-          "f",
-        ),
-        ke(this, _, "f").stdout.setEncoding("utf8"),
-        ke(this, _, "f").stderr.setEncoding("utf8"),
-        ke(this, _, "f").stdout.on("data", (n) => ke(this, le, "m", Me).call(this, n)),
-        ke(this, _, "f").stderr.on("data", (n) => ke(this, le, "m", Me).call(this, n)),
-        ke(this, _, "f").once("close", () => {
-          Kn(this, A, !0, "f");
-          let n = ke(this, b, "f");
-          (Kn(this, b, null, "f"), n?.resolve());
-        }));
+var BashSession = (() => {
+  class BashSession {
+    constructor(dir, env = scrubbedShellEnv()) {
+      _BashSession_instances.add(this);
+      _BashSession_proc.set(this, undefined);
+      _BashSession_buf.set(this, "");
+      _BashSession_truncated.set(this, false);
+      _BashSession_closed.set(this, false);
+      _BashSession_waiting.set(this, null);
+      __classPrivateFieldSet(
+        this,
+        _BashSession_proc,
+        child_processModule.spawn("/bin/bash", ["--noprofile", "--norc"], {
+          cwd: dir,
+          env: {
+            ...env,
+            PS1: "",
+            PS2: "",
+            TERM: "dumb",
+          },
+          stdio: ["pipe", "pipe", "pipe"],
+          detached: true,
+        }),
+        "f",
+      );
+      __classPrivateFieldGet(this, _BashSession_proc, "f").stdout.setEncoding("utf8");
+      __classPrivateFieldGet(this, _BashSession_proc, "f").stderr.setEncoding("utf8");
+      __classPrivateFieldGet(this, _BashSession_proc, "f").stdout.on("data", (d) =>
+        __classPrivateFieldGet(this, _BashSession_instances, "m", _BashSession_append).call(this, d),
+      );
+      __classPrivateFieldGet(this, _BashSession_proc, "f").stderr.on("data", (d) =>
+        __classPrivateFieldGet(this, _BashSession_instances, "m", _BashSession_append).call(this, d),
+      );
+      __classPrivateFieldGet(this, _BashSession_proc, "f").once("close", () => {
+        __classPrivateFieldSet(this, _BashSession_closed, true, "f");
+        let w = __classPrivateFieldGet(this, _BashSession_waiting, "f");
+        __classPrivateFieldSet(this, _BashSession_waiting, null, "f");
+        w?.resolve();
+      });
     }
     get closed() {
-      return ke(this, A, "f");
+      return __classPrivateFieldGet(this, _BashSession_closed, "f");
     }
-    async exec(e, t = {}) {
-      if (ke(this, A, "f")) throw new pr("bash session terminated");
-      let n = t.timeoutMs ?? nt,
-        signal = t.signal;
-      (signal?.throwIfAborted(), Kn(this, S, "", "f"), Kn(this, K, !1, "f"));
-      let o = `__ANT_CMD_${cryptoModule.randomUUID()}_DONE__`,
-        s = `${o.slice(0, 8)}''${o.slice(8)}`,
-        a = `{ ${e}
-} </dev/null 2>&1; printf '\\n${s}%d\\n' $?
+    async exec(command, opts = {}) {
+      if (__classPrivateFieldGet(this, _BashSession_closed, "f"))
+        throw new AnthropicError("bash session terminated");
+      let timeoutMs = opts.timeoutMs ?? BASH_DEFAULT_TIMEOUT_MS;
+      let signal = opts.signal;
+      signal?.throwIfAborted();
+      __classPrivateFieldSet(this, _BashSession_buf, "", "f");
+      __classPrivateFieldSet(this, _BashSession_truncated, false, "f");
+      let sentinel = `__ANT_CMD_${cryptoModule.randomUUID()}_DONE__`;
+      let sentinelSplit = `${sentinel.slice(0, 8)}''${sentinel.slice(8)}`;
+      let wrapped = `{ ${command}
+} </dev/null 2>&1; printf '\\n${sentinelSplit}%d\\n' $?
 `;
-      if ((ke(this, _, "f").stdin.write(a), ke(this, S, "f").indexOf(o) < 0)) {
-        let { promise: promise, resolve: resolve } = SEn();
-        Kn(this, b, { sentinel: o, resolve: resolve }, "f");
-        let M, ee;
+      __classPrivateFieldGet(this, _BashSession_proc, "f").stdin.write(wrapped);
+      if (__classPrivateFieldGet(this, _BashSession_buf, "f").indexOf(sentinel) < 0) {
+        let { promise: sentinelSeen, resolve } = SEn();
+        __classPrivateFieldSet(
+          this,
+          _BashSession_waiting,
+          {
+            sentinel,
+            resolve,
+          },
+          "f",
+        );
+        let timer;
+        let onAbort;
         try {
           await Promise.race([
-            promise,
-            new Promise((ft, me) => {
-              M = setTimeout(() => me(new BashTimeoutError(n)), n);
+            sentinelSeen,
+            new Promise((_, reject) => {
+              timer = setTimeout(() => reject(new BashTimeoutError(timeoutMs)), timeoutMs);
             }),
-            new Promise((ft, me) => {
+            new Promise((_, reject) => {
               if (!signal) return;
-              ((ee = () => me(signal.reason)), signal.addEventListener("abort", ee, { once: !0 }));
+              onAbort = () => reject(signal.reason);
+              signal.addEventListener("abort", onAbort, {
+                once: true,
+              });
             }),
           ]);
         } finally {
-          if (M) clearTimeout(M);
-          if (ee && signal) signal.removeEventListener("abort", ee);
-          Kn(this, b, null, "f");
+          if (timer) clearTimeout(timer);
+          if (onAbort && signal) signal.removeEventListener("abort", onAbort);
+          __classPrivateFieldSet(this, _BashSession_waiting, null, "f");
         }
       }
-      let index = ke(this, S, "f").indexOf(o);
-      if (index < 0) throw new pr("bash session terminated");
-      let match = ke(this, S, "f")
-          .slice(index + o.length)
-          .match(/^(-?\d+)/),
-        h = match ? parseInt(match[1], 10) : -1,
-        replaced = ke(this, S, "f").slice(0, index).replace(Ht, "").replace(/\n+$/, "");
-      if (ke(this, K, "f"))
-        replaced = `[output truncated]
-${replaced}`;
-      return { output: replaced, exitCode: h };
+      let idx = __classPrivateFieldGet(this, _BashSession_buf, "f").indexOf(sentinel);
+      if (idx < 0) throw new AnthropicError("bash session terminated");
+      let m = __classPrivateFieldGet(this, _BashSession_buf, "f")
+        .slice(idx + sentinel.length)
+        .match(/^(-?\d+)/);
+      let exitCode = m ? parseInt(m[1], 10) : -1;
+      let out = __classPrivateFieldGet(this, _BashSession_buf, "f")
+        .slice(0, idx)
+        .replace(ANSI_RE, "")
+        .replace(/\n+$/, "");
+      if (__classPrivateFieldGet(this, _BashSession_truncated, "f"))
+        out = `[output truncated]
+${out}`;
+      return {
+        output: out,
+        exitCode,
+      };
     }
     close() {
-      if (ke(this, A, "f")) return;
-      Kn(this, A, !0, "f");
-      let e = ke(this, b, "f");
-      (Kn(this, b, null, "f"),
-        e?.resolve(),
-        ke(this, _, "f").stdout.destroy(),
-        ke(this, _, "f").stderr.destroy(),
-        ke(this, _, "f").stdin.destroy());
+      if (__classPrivateFieldGet(this, _BashSession_closed, "f")) return;
+      __classPrivateFieldSet(this, _BashSession_closed, true, "f");
+      let w = __classPrivateFieldGet(this, _BashSession_waiting, "f");
+      __classPrivateFieldSet(this, _BashSession_waiting, null, "f");
+      w?.resolve();
+      __classPrivateFieldGet(this, _BashSession_proc, "f").stdout.destroy();
+      __classPrivateFieldGet(this, _BashSession_proc, "f").stderr.destroy();
+      __classPrivateFieldGet(this, _BashSession_proc, "f").stdin.destroy();
       try {
-        process.kill(-ke(this, _, "f").pid, "SIGKILL");
+        process.kill(-__classPrivateFieldGet(this, _BashSession_proc, "f").pid, "SIGKILL");
       } catch {
-        ke(this, _, "f").kill("SIGKILL");
+        __classPrivateFieldGet(this, _BashSession_proc, "f").kill("SIGKILL");
       }
-      ke(this, _, "f").unref();
+      __classPrivateFieldGet(this, _BashSession_proc, "f").unref();
     }
   }
-  return (
-    (_ = new WeakMap()),
-    (S = new WeakMap()),
-    (K = new WeakMap()),
-    (A = new WeakMap()),
-    (b = new WeakMap()),
-    (le = new WeakSet()),
-    (Me = function (t) {
-      if ((Kn(this, S, ke(this, S, "f") + t, "f"), ke(this, S, "f").length > Ze))
-        (Kn(this, S, ke(this, S, "f").slice(ke(this, S, "f").length - Ze), "f"), Kn(this, K, !0, "f"));
-      if (ke(this, b, "f") && ke(this, S, "f").indexOf(ke(this, b, "f").sentinel) >= 0) {
-        let n = ke(this, b, "f");
-        (Kn(this, b, null, "f"), n.resolve());
-      }
-    }),
-    r
-  );
+  _BashSession_proc = new WeakMap();
+  _BashSession_buf = new WeakMap();
+  _BashSession_truncated = new WeakMap();
+  _BashSession_closed = new WeakMap();
+  _BashSession_waiting = new WeakMap();
+  _BashSession_instances = new WeakSet();
+  _BashSession_append = function (d) {
+    __classPrivateFieldSet(
+      this,
+      _BashSession_buf,
+      __classPrivateFieldGet(this, _BashSession_buf, "f") + d,
+      "f",
+    );
+    if (__classPrivateFieldGet(this, _BashSession_buf, "f").length > BASH_OUTPUT_LIMIT) {
+      __classPrivateFieldSet(
+        this,
+        _BashSession_buf,
+        __classPrivateFieldGet(this, _BashSession_buf, "f").slice(
+          __classPrivateFieldGet(this, _BashSession_buf, "f").length - BASH_OUTPUT_LIMIT,
+        ),
+        "f",
+      );
+      __classPrivateFieldSet(this, _BashSession_truncated, true, "f");
+    }
+    if (
+      __classPrivateFieldGet(this, _BashSession_waiting, "f") &&
+      __classPrivateFieldGet(this, _BashSession_buf, "f").indexOf(
+        __classPrivateFieldGet(this, _BashSession_waiting, "f").sentinel,
+      ) >= 0
+    ) {
+      let w = __classPrivateFieldGet(this, _BashSession_waiting, "f");
+      __classPrivateFieldSet(this, _BashSession_waiting, null, "f");
+      w.resolve();
+    }
+  };
+  return BashSession;
 })();
 //@ chunk-2cw52qnf.js:29892-30880 esm-fingerprint
-function Jt(r) {
-  F(r.unrestrictedPaths);
-  let e,
-    resolved = Promise.resolve();
-  return R({
+function betaBashTool(ctx) {
+  rejectUnrestrictedPaths(ctx.unrestrictedPaths);
+  let session;
+  let tail = Promise.resolve();
+  return betaTool({
     name: "bash",
     description: "Run a bash command in a persistent shell. State (cwd, env vars) persists across calls.",
     inputSchema: {
       type: "object",
       properties: {
-        command: { type: "string", description: "The command to run" },
-        restart: { type: "boolean", description: "Restart the persistent shell before running" },
-        timeout_ms: { type: "integer", description: "Per-call timeout in milliseconds" },
+        command: {
+          type: "string",
+          description: "The command to run",
+        },
+        restart: {
+          type: "boolean",
+          description: "Restart the persistent shell before running",
+        },
+        timeout_ms: {
+          type: "integer",
+          description: "Per-call timeout in milliseconds",
+        },
       },
     },
-    run: async ({ command: command, restart: restart, timeout_ms: timeout_ms }, s) => {
-      let a = resolved,
-        l = SEn();
-      resolved = l.promise;
+    run: async ({ command, restart, timeout_ms }, context) => {
+      let prev = tail;
+      let gate = SEn();
+      tail = gate.promise;
       try {
-        await a;
+        await prev;
       } catch {}
       try {
-        if (restart) (e?.close(), (e = void 0));
+        if (restart) {
+          session?.close();
+          session = undefined;
+        }
         if (!command) {
           if (restart) return "bash session restarted";
-          throw new ch("bash: command is required");
+          throw new ToolError("bash: command is required");
         }
-        e ?? (e = new Xt(r.workdir, r.env));
+        session ?? (session = new BashSession(ctx.workdir, ctx.env));
         try {
-          let { output: output, exitCode: exitCode } = await e.exec(command, {
-            timeoutMs: timeout_ms ?? nt,
-            signal: s?.signal,
+          let { output, exitCode } = await session.exec(command, {
+            timeoutMs: timeout_ms ?? BASH_DEFAULT_TIMEOUT_MS,
+            signal: context?.signal,
           });
-          if (exitCode !== 0) throw new ch(output || `exit ${exitCode}`);
+          if (exitCode !== 0) throw new ToolError(output || `exit ${exitCode}`);
           return output;
-        } catch (error) {
-          if (error instanceof ch) throw error;
-          throw (
-            e.close(),
-            (e = void 0),
-            new ch(`bash: ${error instanceof Error ? error.message : String(error)}`)
-          );
+        } catch (e) {
+          if (e instanceof ToolError) throw e;
+          session.close();
+          session = undefined;
+          throw new ToolError(`bash: ${e instanceof Error ? e.message : String(e)}`);
         }
       } finally {
-        l.resolve();
+        gate.resolve();
       }
     },
     close: () => {
-      (e?.close(), (e = void 0));
+      session?.close();
+      session = undefined;
     },
   });
 }
 //@ chunk-2cw52qnf.js:30880-31966 esm-fingerprint
-function Zt(r) {
-  return (
-    F(r.unrestrictedPaths),
-    R({
-      name: "read",
-      description: "Read a UTF-8 text file relative to the workdir.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          file_path: { type: "string" },
-          view_range: {
-            type: "array",
-            items: { type: "integer" },
-            description: "[start_line, end_line] 1-indexed inclusive",
-          },
+function betaReadTool(ctx) {
+  rejectUnrestrictedPaths(ctx.unrestrictedPaths);
+  return betaTool({
+    name: "read",
+    description: "Read a UTF-8 text file relative to the workdir.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        file_path: {
+          type: "string",
         },
-        required: ["file_path"],
+        view_range: {
+          type: "array",
+          items: {
+            type: "integer",
+          },
+          description: "[start_line, end_line] 1-indexed inclusive",
+        },
       },
-      run: async ({ file_path: file_path, view_range: view_range }) => {
-        if (!file_path) throw new ch("read: file_path is required");
-        let n = await Q(r, file_path);
-        if (view_range?.length && view_range.length !== 2)
-          throw new ch("read: view_range must be [start_line, end_line]");
-        let i;
-        try {
-          let stats = await fsPromisesModule.stat(n);
-          if (!stats.isFile()) throw new ch(`read: ${file_path} is not a regular file`);
-          let h = st(r.maxFileBytes);
-          if (h !== null && stats.size > h) {
-            if (!view_range?.length)
-              throw new ch(
-                `read: ${file_path} is ${stats.size} bytes, exceeds ${h}-byte limit. Use the view_range parameter to read specific line ranges, e.g. view_range: [1, 500].`,
-              );
-            let [y, O] = view_range;
-            return await Qt(n, file_path, y, O, h);
-          }
-          i = await fsPromisesModule.readFile(n, "utf8");
-        } catch (error) {
-          if (error instanceof ch) throw error;
-          throw new ch(`read: ${P(error, file_path)}`);
+      required: ["file_path"],
+    },
+    run: async ({ file_path, view_range }) => {
+      if (!file_path) throw new ToolError("read: file_path is required");
+      let abs = await resolvePath(ctx, file_path);
+      if (view_range?.length && view_range.length !== 2)
+        throw new ToolError("read: view_range must be [start_line, end_line]");
+      let data;
+      try {
+        let st = await fsPromisesModule.stat(abs);
+        if (!st.isFile()) throw new ToolError(`read: ${file_path} is not a regular file`);
+        let limit = resolveMaxBytes(ctx.maxFileBytes);
+        if (limit !== null && st.size > limit) {
+          if (!view_range?.length)
+            throw new ToolError(
+              `read: ${file_path} is ${st.size} bytes, exceeds ${limit}-byte limit. Use the view_range parameter to read specific line ranges, e.g. view_range: [1, 500].`,
+            );
+          let [startLine, endLine] = view_range;
+          return await readRangeStreaming(abs, file_path, startLine, endLine, limit);
         }
-        if (!view_range?.length) return i;
-        let [o, s] = view_range,
-          parts = i.split(`
-`),
-          max = Math.max(0, o - 1),
-          f = s > 0 ? s : parts.length;
-        return parts.slice(max, f).join(`
+        data = await fsPromisesModule.readFile(abs, "utf8");
+      } catch (e) {
+        if (e instanceof ToolError) throw e;
+        throw new ToolError(`read: ${fsErrorMessage(e, file_path)}`);
+      }
+      if (!view_range?.length) return data;
+      let [startLine, endLine] = view_range;
+      let lines = data.split(`
 `);
-      },
-    })
-  );
+      let start = Math.max(0, startLine - 1);
+      let end = endLine > 0 ? endLine : lines.length;
+      return lines.slice(start, end).join(`
+`);
+    },
+  });
 }
 //@ chunk-2cw52qnf.js:31966-32201 esm-fingerprint
-async function Qt(r, e, t, n, i) {
-  let o = new ct(e, t, n, i);
-  if (o.rangeIsEmpty()) return "";
-  let readStream = fsModule.createReadStream(r, { highWaterMark: qt });
+async function readRangeStreaming(abs, filePath, startLine, endLine, limit) {
+  let lines = new LineRangeCollector(filePath, startLine, endLine, limit);
+  if (lines.rangeIsEmpty()) return "";
+  let stream = fsModule.createReadStream(abs, {
+    highWaterMark: READ_STREAM_CHUNK_BYTES,
+  });
   try {
-    for await (let a of readStream) if ((o.collectFrom(a), o.rangeIsCollected())) break;
+    for await (let chunk of stream) {
+      lines.collectFrom(chunk);
+      if (lines.rangeIsCollected()) break;
+    }
   } finally {
-    readStream.destroy();
+    stream.destroy();
   }
-  return o.text();
+  return lines.text();
 }
 //@ chunk-2cw52qnf.js:32201-32973 esm-fingerprint
-class ct {
-  constructor(r, e, t, n) {
-    (fe.add(this),
-      V.set(this, void 0),
-      de.set(this, void 0),
-      he.set(this, void 0),
-      D.set(this, void 0),
-      C.set(this, void 0),
-      Y.set(this, void 0),
-      x.set(this, 0),
-      X.set(this, []),
-      N.set(this, 0),
-      Kn(this, V, r, "f"),
-      Kn(this, de, e, "f"),
-      Kn(this, he, t, "f"),
-      Kn(this, D, Math.max(0, e - 1), "f"),
-      Kn(this, C, t > 0 ? t : 1 / 0, "f"),
-      Kn(this, Y, n, "f"));
+class LineRangeCollector {
+  constructor(filePath, startLine, endLine, limit) {
+    _LineRangeCollector_instances.add(this);
+    _LineRangeCollector_filePath.set(this, undefined);
+    _LineRangeCollector_startLine.set(this, undefined);
+    _LineRangeCollector_endLine.set(this, undefined);
+    _LineRangeCollector_start.set(this, undefined);
+    _LineRangeCollector_end.set(this, undefined);
+    _LineRangeCollector_limit.set(this, undefined);
+    _LineRangeCollector_line.set(this, 0);
+    _LineRangeCollector_collected.set(this, []);
+    _LineRangeCollector_collectedBytes.set(this, 0);
+    __classPrivateFieldSet(this, _LineRangeCollector_filePath, filePath, "f");
+    __classPrivateFieldSet(this, _LineRangeCollector_startLine, startLine, "f");
+    __classPrivateFieldSet(this, _LineRangeCollector_endLine, endLine, "f");
+    __classPrivateFieldSet(this, _LineRangeCollector_start, Math.max(0, startLine - 1), "f");
+    __classPrivateFieldSet(this, _LineRangeCollector_end, endLine > 0 ? endLine : 1 / 0, "f");
+    __classPrivateFieldSet(this, _LineRangeCollector_limit, limit, "f");
   }
   rangeIsEmpty() {
-    return ke(this, C, "f") <= ke(this, D, "f");
+    return (
+      __classPrivateFieldGet(this, _LineRangeCollector_end, "f") <=
+      __classPrivateFieldGet(this, _LineRangeCollector_start, "f")
+    );
   }
   rangeIsCollected() {
-    return ke(this, x, "f") >= ke(this, C, "f");
+    return (
+      __classPrivateFieldGet(this, _LineRangeCollector_line, "f") >=
+      __classPrivateFieldGet(this, _LineRangeCollector_end, "f")
+    );
   }
-  collectFrom(r) {
-    var e;
-    let t = 0;
-    while (t < r.length && !this.rangeIsCollected()) {
-      let index = r.indexOf(10, t),
-        i = index < 0 ? r.length : index;
-      if (ke(this, x, "f") >= ke(this, D, "f"))
-        ke(this, fe, "m", tt).call(this, r.subarray(t, i), index >= 0);
-      if (index < 0) break;
-      (Kn(this, x, ((e = ke(this, x, "f")), e++, e), "f"), (t = index + 1));
+  collectFrom(chunk) {
+    var _a;
+    let lineStart = 0;
+    while (lineStart < chunk.length && !this.rangeIsCollected()) {
+      let newline = chunk.indexOf(10, lineStart);
+      let lineEnd = newline < 0 ? chunk.length : newline;
+      if (
+        __classPrivateFieldGet(this, _LineRangeCollector_line, "f") >=
+        __classPrivateFieldGet(this, _LineRangeCollector_start, "f")
+      )
+        __classPrivateFieldGet(this, _LineRangeCollector_instances, "m", _LineRangeCollector_collect).call(
+          this,
+          chunk.subarray(lineStart, lineEnd),
+          newline >= 0,
+        );
+      if (newline < 0) break;
+      __classPrivateFieldSet(
+        this,
+        _LineRangeCollector_line,
+        ((_a = __classPrivateFieldGet(this, _LineRangeCollector_line, "f")), _a++, _a),
+        "f",
+      );
+      lineStart = newline + 1;
     }
   }
   text() {
-    return Buffer.concat(ke(this, X, "f"), ke(this, N, "f")).toString("utf8");
+    return Buffer.concat(
+      __classPrivateFieldGet(this, _LineRangeCollector_collected, "f"),
+      __classPrivateFieldGet(this, _LineRangeCollector_collectedBytes, "f"),
+    ).toString("utf8");
   }
 }
 //@ chunk-2cw52qnf.js:32973-33801 esm-fingerprint
-((V = new WeakMap()),
-  (de = new WeakMap()),
-  (he = new WeakMap()),
-  (D = new WeakMap()),
-  (C = new WeakMap()),
-  (Y = new WeakMap()),
-  (x = new WeakMap()),
-  (X = new WeakMap()),
-  (N = new WeakMap()),
-  (fe = new WeakSet()),
-  (tt = function (e, t) {
-    if (
-      (ke(this, X, "f").push(e),
-      Kn(this, N, ke(this, N, "f") + e.length, "f"),
-      t && ke(this, x, "f") + 1 < ke(this, C, "f"))
-    )
-      (ke(this, X, "f").push(buffer), Kn(this, N, ke(this, N, "f") + buffer.length, "f"));
-    if (ke(this, N, "f") > ke(this, Y, "f")) throw ke(this, fe, "m", Je).call(this);
-  }),
-  (Je = function () {
-    if (ke(this, C, "f") - ke(this, D, "f") === 1)
-      return new ch(
-        `read: line ${ke(this, D, "f") + 1} of ${ke(this, V, "f")} alone exceeds ${ke(this, Y, "f")}-byte limit. The read tool cannot return part of a line, so view_range cannot narrow this further.`,
-      );
-    return new ch(
-      `read: view_range [${ke(this, de, "f")}, ${ke(this, he, "f")}] of ${ke(this, V, "f")} exceeds ${ke(this, Y, "f")}-byte limit. Narrow the view_range to read a smaller portion.`,
-    );
-  }));
-//@ chunk-2cw52qnf.js:33801-34461 esm-fingerprint
-function er(r) {
-  return (
-    F(r.unrestrictedPaths),
-    R({
-      name: "write",
-      description: "Write a UTF-8 text file relative to the workdir, creating parent directories as needed.",
-      inputSchema: {
-        type: "object",
-        properties: { file_path: { type: "string" }, content: { type: "string" } },
-        required: ["file_path", "content"],
-      },
-      run: async ({ file_path: file_path, content: content }) => {
-        if (!file_path) throw new ch("write: file_path is required");
-        let n = await Q(r, file_path),
-          i = await at(r, n);
-        if (i !== void 0) throw new ch(`write: ${file_path} is inside read-only directory ${i}`);
-        try {
-          (await fsPromisesModule.mkdir(pathModule.dirname(n), { recursive: !0, mode: z }),
-            await pe(n, content ?? ""));
-        } catch (error) {
-          throw new ch(`write: ${P(error, file_path)}`);
-        }
-        return `wrote ${Buffer.byteLength(content ?? "")} bytes to ${file_path}`;
-      },
-    })
+_LineRangeCollector_filePath = new WeakMap();
+_LineRangeCollector_startLine = new WeakMap();
+_LineRangeCollector_endLine = new WeakMap();
+_LineRangeCollector_start = new WeakMap();
+_LineRangeCollector_end = new WeakMap();
+_LineRangeCollector_limit = new WeakMap();
+_LineRangeCollector_line = new WeakMap();
+_LineRangeCollector_collected = new WeakMap();
+_LineRangeCollector_collectedBytes = new WeakMap();
+_LineRangeCollector_instances = new WeakSet();
+_LineRangeCollector_collect = function (lineBytes, newlineTerminated) {
+  __classPrivateFieldGet(this, _LineRangeCollector_collected, "f").push(lineBytes);
+  __classPrivateFieldSet(
+    this,
+    _LineRangeCollector_collectedBytes,
+    __classPrivateFieldGet(this, _LineRangeCollector_collectedBytes, "f") + lineBytes.length,
+    "f",
   );
+  if (
+    newlineTerminated &&
+    __classPrivateFieldGet(this, _LineRangeCollector_line, "f") + 1 <
+      __classPrivateFieldGet(this, _LineRangeCollector_end, "f")
+  ) {
+    __classPrivateFieldGet(this, _LineRangeCollector_collected, "f").push(NEWLINE);
+    __classPrivateFieldSet(
+      this,
+      _LineRangeCollector_collectedBytes,
+      __classPrivateFieldGet(this, _LineRangeCollector_collectedBytes, "f") + NEWLINE.length,
+      "f",
+    );
+  }
+  if (
+    __classPrivateFieldGet(this, _LineRangeCollector_collectedBytes, "f") >
+    __classPrivateFieldGet(this, _LineRangeCollector_limit, "f")
+  )
+    throw __classPrivateFieldGet(
+      this,
+      _LineRangeCollector_instances,
+      "m",
+      _LineRangeCollector_overLimitError,
+    ).call(this);
+};
+_LineRangeCollector_overLimitError = function () {
+  if (
+    __classPrivateFieldGet(this, _LineRangeCollector_end, "f") -
+      __classPrivateFieldGet(this, _LineRangeCollector_start, "f") ===
+    1
+  )
+    return new ToolError(
+      `read: line ${__classPrivateFieldGet(this, _LineRangeCollector_start, "f") + 1} of ${__classPrivateFieldGet(this, _LineRangeCollector_filePath, "f")} alone exceeds ${__classPrivateFieldGet(this, _LineRangeCollector_limit, "f")}-byte limit. The read tool cannot return part of a line, so view_range cannot narrow this further.`,
+    );
+  return new ToolError(
+    `read: view_range [${__classPrivateFieldGet(this, _LineRangeCollector_startLine, "f")}, ${__classPrivateFieldGet(this, _LineRangeCollector_endLine, "f")}] of ${__classPrivateFieldGet(this, _LineRangeCollector_filePath, "f")} exceeds ${__classPrivateFieldGet(this, _LineRangeCollector_limit, "f")}-byte limit. Narrow the view_range to read a smaller portion.`,
+  );
+};
+//@ chunk-2cw52qnf.js:33801-34461 esm-fingerprint
+function betaWriteTool(ctx) {
+  rejectUnrestrictedPaths(ctx.unrestrictedPaths);
+  return betaTool({
+    name: "write",
+    description: "Write a UTF-8 text file relative to the workdir, creating parent directories as needed.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        file_path: {
+          type: "string",
+        },
+        content: {
+          type: "string",
+        },
+      },
+      required: ["file_path", "content"],
+    },
+    run: async ({ file_path, content }) => {
+      if (!file_path) throw new ToolError("write: file_path is required");
+      let abs = await resolvePath(ctx, file_path);
+      let ro = await readOnlyRootFor(ctx, abs);
+      if (ro !== undefined) throw new ToolError(`write: ${file_path} is inside read-only directory ${ro}`);
+      try {
+        await fsPromisesModule.mkdir(pathModule.dirname(abs), {
+          recursive: true,
+          mode: DIR_CREATE_MODE,
+        });
+        await atomicWriteFile(abs, content ?? "");
+      } catch (e) {
+        throw new ToolError(`write: ${fsErrorMessage(e, file_path)}`);
+      }
+      return `wrote ${Buffer.byteLength(content ?? "")} bytes to ${file_path}`;
+    },
+  });
 }
 //@ chunk-2cw52qnf.js:34461-35832 esm-fingerprint
-function tr(r) {
-  return (
-    F(r.unrestrictedPaths),
-    R({
-      name: "edit",
-      description:
-        "Replace old_string with new_string in a file. old_string must be unique unless replace_all.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          file_path: { type: "string" },
-          old_string: { type: "string" },
-          new_string: { type: "string" },
-          replace_all: { type: "boolean" },
+function betaEditTool(ctx) {
+  rejectUnrestrictedPaths(ctx.unrestrictedPaths);
+  return betaTool({
+    name: "edit",
+    description:
+      "Replace old_string with new_string in a file. old_string must be unique unless replace_all.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        file_path: {
+          type: "string",
         },
-        required: ["file_path", "old_string", "new_string"],
+        old_string: {
+          type: "string",
+        },
+        new_string: {
+          type: "string",
+        },
+        replace_all: {
+          type: "boolean",
+        },
       },
-      run: async ({
-        file_path: file_path,
-        old_string: old_string,
-        new_string: new_string,
-        replace_all: replace_all,
-      }) => {
-        if (!file_path) throw new ch("edit: file_path is required");
-        if (!old_string) throw new ch("edit: old_string is required");
-        let o = await Q(r, file_path),
-          s = await at(r, o);
-        if (s !== void 0) throw new ch(`edit: ${file_path} is inside read-only directory ${s}`);
-        let a;
-        try {
-          let stats = await fsPromisesModule.stat(o);
-          if (!stats.isFile()) throw new ch(`edit: ${file_path} is not a regular file`);
-          let h = st(r.maxFileBytes);
-          if (h !== null && stats.size > h)
-            throw new ch(
-              `edit: ${file_path} is ${stats.size} bytes, exceeds ${h}-byte limit. The edit tool loads the whole file and cannot modify a file this large.`,
-            );
-          a = await fsPromisesModule.readFile(o, "utf8");
-        } catch (error) {
-          if (error instanceof ch) throw error;
-          throw new ch(`edit: ${P(error, file_path)}`);
-        }
-        let l = a.split(old_string).length - 1;
-        if (l === 0) throw new ch(`edit: old_string not found in ${file_path}`);
-        let f;
-        if (replace_all) f = a.split(old_string).join(new_string);
-        else {
-          if (l > 1) throw new ch(`edit: old_string appears ${l} times in ${file_path} (must be unique)`);
-          f = a.replace(old_string, () => new_string);
-        }
-        try {
-          await pe(o, f);
-        } catch (error) {
-          throw new ch(`edit: write: ${P(error, file_path)}`);
-        }
-        return `edited ${file_path} (${replace_all ? l : 1} replacement(s))`;
-      },
-    })
-  );
+      required: ["file_path", "old_string", "new_string"],
+    },
+    run: async ({ file_path, old_string, new_string, replace_all }) => {
+      if (!file_path) throw new ToolError("edit: file_path is required");
+      if (!old_string) throw new ToolError("edit: old_string is required");
+      let abs = await resolvePath(ctx, file_path);
+      let ro = await readOnlyRootFor(ctx, abs);
+      if (ro !== undefined) throw new ToolError(`edit: ${file_path} is inside read-only directory ${ro}`);
+      let data;
+      try {
+        let st = await fsPromisesModule.stat(abs);
+        if (!st.isFile()) throw new ToolError(`edit: ${file_path} is not a regular file`);
+        let limit = resolveMaxBytes(ctx.maxFileBytes);
+        if (limit !== null && st.size > limit)
+          throw new ToolError(
+            `edit: ${file_path} is ${st.size} bytes, exceeds ${limit}-byte limit. The edit tool loads the whole file and cannot modify a file this large.`,
+          );
+        data = await fsPromisesModule.readFile(abs, "utf8");
+      } catch (e) {
+        if (e instanceof ToolError) throw e;
+        throw new ToolError(`edit: ${fsErrorMessage(e, file_path)}`);
+      }
+      let count = data.split(old_string).length - 1;
+      if (count === 0) throw new ToolError(`edit: old_string not found in ${file_path}`);
+      let updated;
+      if (replace_all) updated = data.split(old_string).join(new_string);
+      else {
+        if (count > 1)
+          throw new ToolError(`edit: old_string appears ${count} times in ${file_path} (must be unique)`);
+        updated = data.replace(old_string, () => new_string);
+      }
+      try {
+        await atomicWriteFile(abs, updated);
+      } catch (e) {
+        throw new ToolError(`edit: write: ${fsErrorMessage(e, file_path)}`);
+      }
+      return `edited ${file_path} (${replace_all ? count : 1} replacement(s))`;
+    },
+  });
 }
 //@ chunk-2cw52qnf.js:35832-35889 esm-fingerprint
-function rr(r) {
-  return r.split(/[\\/{},]/).includes("..");
+function patternCanAscend(pattern) {
+  return pattern.split(/[\\/{},]/).includes("..");
 }
 //@ chunk-2cw52qnf.js:35889-37073 esm-fingerprint
-function ir(r) {
-  return (
-    F(r.unrestrictedPaths),
-    R({
-      name: "glob",
-      description:
-        "Match files under the workdir against a glob pattern. Results are mtime-sorted, newest first.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          pattern: { type: "string" },
-          path: { type: "string", description: "Directory to search in. Defaults to the workdir." },
+function betaGlobTool(ctx) {
+  rejectUnrestrictedPaths(ctx.unrestrictedPaths);
+  return betaTool({
+    name: "glob",
+    description:
+      "Match files under the workdir against a glob pattern. Results are mtime-sorted, newest first.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        pattern: {
+          type: "string",
         },
-        required: ["pattern"],
+        path: {
+          type: "string",
+          description: "Directory to search in. Defaults to the workdir.",
+        },
       },
-      run: async ({ pattern: pattern, path: path }) => {
-        if (!pattern) throw new ch("glob: pattern is required");
-        if (pathModule.isAbsolute(pattern))
-          throw new ch("glob: absolute pattern not permitted; pass a relative pattern (and optionally path)");
-        if (rr(pattern)) throw new ch('glob: ".." is not permitted in the pattern');
-        let n = path ? await Q(r, path) : pathModule.resolve(r.workdir),
-          i = path ? n : await q(n),
-          o = [],
-          s = lt;
-        try {
-          for await (let a of glob(pattern, {
-            cwd: n,
-            withFileTypes: !0,
-            exclude: (l) => l.name === ".git" || l.name === "node_modules",
-          })) {
-            if (s-- <= 0) break;
-            if (!a.isFile()) continue;
-            let joined = pathModule.join(a.parentPath, a.name),
-              f;
-            try {
-              f = await fsPromisesModule.realpath(joined);
-            } catch {
-              continue;
-            }
-            if (!te(i, f)) continue;
-            let c = 0;
-            try {
-              c = (await fsPromisesModule.stat(joined)).mtimeMs;
-            } catch {}
-            o.push({ path: joined, mtime: c });
-          }
-        } catch (error) {
-          throw new ch(`glob: ${error instanceof Error ? error.message : String(error)}`);
-        }
-        if (o.length === 0) return "no matches";
-        return (
-          o.sort((a, l) => l.mtime - a.mtime),
-          o.slice(0, Gt).map((a) => a.path).join(`
-`)
+      required: ["pattern"],
+    },
+    run: async ({ pattern, path: searchPath }) => {
+      if (!pattern) throw new ToolError("glob: pattern is required");
+      if (pathModule.isAbsolute(pattern))
+        throw new ToolError(
+          "glob: absolute pattern not permitted; pass a relative pattern (and optionally path)",
         );
-      },
-    })
-  );
+      if (patternCanAscend(pattern)) throw new ToolError('glob: ".." is not permitted in the pattern');
+      let root = searchPath ? await resolvePath(ctx, searchPath) : pathModule.resolve(ctx.workdir);
+      let realRoot = searchPath ? root : await canonicalize(root);
+      let matches = [];
+      let remaining = WALK_MAX_ENTRIES;
+      try {
+        for await (let entry of fsGlob(pattern, {
+          cwd: root,
+          withFileTypes: true,
+          exclude: (d) => d.name === ".git" || d.name === "node_modules",
+        })) {
+          if (remaining-- <= 0) break;
+          if (!entry.isFile()) continue;
+          let full = pathModule.join(entry.parentPath, entry.name);
+          let real;
+          try {
+            real = await fsPromisesModule.realpath(full);
+          } catch {
+            continue;
+          }
+          if (!isWithin(realRoot, real)) continue;
+          let mtime = 0;
+          try {
+            mtime = (await fsPromisesModule.stat(full)).mtimeMs;
+          } catch {}
+          matches.push({
+            path: full,
+            mtime,
+          });
+        }
+      } catch (e) {
+        throw new ToolError(`glob: ${e instanceof Error ? e.message : String(e)}`);
+      }
+      if (matches.length === 0) return "no matches";
+      matches.sort((a, b) => b.mtime - a.mtime);
+      return matches.slice(0, GLOB_RESULT_LIMIT).map((m) => m.path).join(`
+`);
+    },
+  });
 }
 //@ chunk-2cw52qnf.js:37073-37540 esm-fingerprint
-function nr(r) {
-  return (
-    F(r.unrestrictedPaths),
-    R({
-      name: "grep",
-      description:
-        "Search file contents for a regex. Uses ripgrep if available, otherwise a built-in walker.",
-      inputSchema: {
-        type: "object",
-        properties: { pattern: { type: "string" }, path: { type: "string" } },
-        required: ["pattern"],
+function betaGrepTool(ctx) {
+  rejectUnrestrictedPaths(ctx.unrestrictedPaths);
+  return betaTool({
+    name: "grep",
+    description: "Search file contents for a regex. Uses ripgrep if available, otherwise a built-in walker.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        pattern: {
+          type: "string",
+        },
+        path: {
+          type: "string",
+        },
       },
-      run: async ({ pattern: pattern, path: path }, n) => {
-        if (!pattern) throw new ch("grep: pattern is required");
-        let resolved = pathModule.resolve(r.workdir);
-        if (path) resolved = await Q(r, path);
-        let o = await lr();
-        return o ? or(o, pattern, resolved, n?.signal) : sr(pattern, resolved, n?.signal);
-      },
-    })
-  );
+      required: ["pattern"],
+    },
+    run: async ({ pattern, path: p }, context) => {
+      if (!pattern) throw new ToolError("grep: pattern is required");
+      let searchPath = pathModule.resolve(ctx.workdir);
+      if (p) searchPath = await resolvePath(ctx, p);
+      let rg = await findRg();
+      return rg
+        ? runRipgrep(rg, pattern, searchPath, context?.signal)
+        : runWalkGrep(pattern, searchPath, context?.signal);
+    },
+  });
 }
 //@ chunk-2cw52qnf.js:37540-38141 esm-fingerprint
-function or(r, e, t, n) {
-  return new Promise((i, o) => {
-    let child = child_processModule.spawn(r, ["-n", "--no-heading", "-e", e, "--", t], {
-        ...(n ? { signal: n } : {}),
-      }),
-      a = "",
-      l = "",
-      f = !1;
-    (child.stdout.on("data", (c) => {
-      if (f) return;
-      if (((a += c), a.length > J)) ((f = !0), (a = a.slice(0, J)), child.kill("SIGKILL"));
-    }),
-      child.stderr.on("data", (c) => (l += c)),
-      child.on("close", (c) => {
-        if (n?.aborted) return o(new ch("grep: aborted"));
-        if (f)
-          return i(
-            a +
-              `
-[output truncated at ${J} bytes]`,
-          );
-        if (c === 0) return i(a);
-        if (c === 1) return i("no matches");
-        o(new ch(`grep: rg failed: ${l || `exit ${c}`}`));
-      }),
-      child.on("error", (c) => {
-        if (n?.aborted) return o(new ch("grep: aborted"));
-        o(new ch(`grep: rg failed: ${c.message}`));
-      }));
+function runRipgrep(rg, pattern, searchPath, signal) {
+  return new Promise((resolve, reject) => {
+    let proc = child_processModule.spawn(rg, ["-n", "--no-heading", "-e", pattern, "--", searchPath], {
+      ...(signal
+        ? {
+            signal,
+          }
+        : {}),
+    });
+    let out = "";
+    let errOut = "";
+    let truncated = false;
+    proc.stdout.on("data", (d) => {
+      if (truncated) return;
+      out += d;
+      if (out.length > GREP_OUTPUT_LIMIT) {
+        truncated = true;
+        out = out.slice(0, GREP_OUTPUT_LIMIT);
+        proc.kill("SIGKILL");
+      }
+    });
+    proc.stderr.on("data", (d) => (errOut += d));
+    proc.on("close", (code) => {
+      if (signal?.aborted) return reject(new ToolError("grep: aborted"));
+      if (truncated)
+        return resolve(
+          out +
+            `
+[output truncated at ${GREP_OUTPUT_LIMIT} bytes]`,
+        );
+      if (code === 0) return resolve(out);
+      if (code === 1) return resolve("no matches");
+      reject(new ToolError(`grep: rg failed: ${errOut || `exit ${code}`}`));
+    });
+    proc.on("error", (e) => {
+      if (signal?.aborted) return reject(new ToolError("grep: aborted"));
+      reject(new ToolError(`grep: rg failed: ${e.message}`));
+    });
   });
 }
 //@ chunk-2cw52qnf.js:38141-38604 esm-fingerprint
-async function sr(r, e, t) {
-  let n;
+async function runWalkGrep(pattern, root, signal) {
+  let re;
   try {
-    n = new RegExp(r);
-  } catch (error) {
-    throw new ch(`grep: invalid regex: ${error instanceof Error ? error.message : String(error)}`);
+    re = new RegExp(pattern);
+  } catch (e) {
+    throw new ToolError(`grep: invalid regex: ${e instanceof Error ? e.message : String(e)}`);
   }
-  let i = [],
-    o = J,
-    s = (l) => {
-      if (((o -= l.length + 1), o < 0)) return (i.push(`[output truncated at ${J} bytes]`), !1);
-      return (i.push(l), !0);
-    };
-  if ((await fsPromisesModule.stat(e).catch(() => null))?.isFile()) await et(e, n, s);
-  else await cr(e, "", (l) => et(pathModule.join(e, l), n, s), t);
-  if (t?.aborted) throw new ch("grep: aborted");
-  if (i.length === 0) return "no matches";
-  return i.join(`
+  let hits = [];
+  let budget = GREP_OUTPUT_LIMIT;
+  let push = (line) => {
+    budget -= line.length + 1;
+    if (budget < 0) {
+      hits.push(`[output truncated at ${GREP_OUTPUT_LIMIT} bytes]`);
+      return false;
+    }
+    hits.push(line);
+    return true;
+  };
+  if ((await fsPromisesModule.stat(root).catch(() => null))?.isFile()) await grepFile(root, re, push);
+  else await walk_2(root, "", (rel) => grepFile(pathModule.join(root, rel), re, push), signal);
+  if (signal?.aborted) throw new ToolError("grep: aborted");
+  if (hits.length === 0) return "no matches";
+  return hits.join(`
 `);
 }
 //@ chunk-2cw52qnf.js:38604-38860 esm-fingerprint
-async function et(r, e, t) {
-  let readStream = fsModule.createReadStream(r, { encoding: "utf8" }),
-    rl = readlineModule.createInterface({ input: readStream, crlfDelay: 1 / 0 }),
-    o = 0;
+async function grepFile(file, re, push) {
+  let stream = fsModule.createReadStream(file, {
+    encoding: "utf8",
+  });
+  let rl = readlineModule.createInterface({
+    input: stream,
+    crlfDelay: 1 / 0,
+  });
+  let i = 0;
   try {
-    for await (let s of rl) {
-      if ((o++, s.length > zt)) continue;
-      if (e.test(s) && !t(`${r}:${o}:${s}`)) return !1;
+    for await (let line of rl) {
+      i++;
+      if (line.length > GREP_MAX_LINE_LENGTH) continue;
+      if (re.test(line) && !push(`${file}:${i}:${line}`)) return false;
     }
   } catch {
   } finally {
-    readStream.destroy();
+    stream.destroy();
   }
-  return !0;
+  return true;
 }
 //@ chunk-2cw52qnf.js:38860-38879 esm-layout
-var ar = 40,
-  lt = 50000;
+var WALK_MAX_DEPTH = 40;
+var WALK_MAX_ENTRIES = 50000;
 //@ chunk-2cw52qnf.js:38879-39314 esm-fingerprint
-async function cr(r, e, t, n) {
-  let i = lt;
-  async function o(s, a) {
-    if (a > ar) return !0;
-    if (n?.aborted) return !1;
-    let l;
+async function walk_2(root, rel, fn, signal) {
+  let remaining = WALK_MAX_ENTRIES;
+  async function inner(rel, depth) {
+    if (depth > WALK_MAX_DEPTH) return true;
+    if (signal?.aborted) return false;
+    let entries;
     try {
-      l = await fsPromisesModule.readdir(pathModule.join(r, s), { withFileTypes: !0 });
+      entries = await fsPromisesModule.readdir(pathModule.join(root, rel), {
+        withFileTypes: true,
+      });
     } catch {
-      return !0;
+      return true;
     }
-    for (let f of l) {
-      if (f.name === ".git" || f.name === "node_modules") continue;
-      if (i-- <= 0) return !1;
-      if (n?.aborted) return !1;
-      let c = s ? pathModule.join(s, f.name) : f.name;
-      if (f.isDirectory()) {
-        if (!(await o(c, a + 1))) return !1;
-      } else if (f.isFile()) {
-        if ((await t(c)) === !1) return !1;
+    for (let e of entries) {
+      if (e.name === ".git" || e.name === "node_modules") continue;
+      if (remaining-- <= 0) return false;
+      if (signal?.aborted) return false;
+      let childRel = rel ? pathModule.join(rel, e.name) : e.name;
+      if (e.isDirectory()) {
+        if (!(await inner(childRel, depth + 1))) return false;
+      } else if (e.isFile()) {
+        if ((await fn(childRel)) === false) return false;
       }
     }
-    return !0;
+    return true;
   }
-  await o(e, 0);
+  await inner(rel, 0);
 }
 //@ chunk-2cw52qnf.js:39314-39487 esm-fingerprint
-async function lr() {
-  let parts = (process.env.PATH ?? "").split(pathModule.delimiter);
-  for (let e of parts) {
-    let joined = pathModule.join(e, "rg");
+async function findRg() {
+  let dirs = (process.env.PATH ?? "").split(pathModule.delimiter);
+  for (let d of dirs) {
+    let candidate = pathModule.join(d, "rg");
     try {
-      return (await fsPromisesModule.access(joined, fsModule.constants.X_OK), joined);
+      await fsPromisesModule.access(candidate, fsModule.constants.X_OK);
+      return candidate;
     } catch {}
   }
   return null;

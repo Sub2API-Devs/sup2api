@@ -5,156 +5,221 @@
  * pieces: chunk-hwmsct5x.js (1)
  * attribution: esm-fingerprint 1
  */
-
 //@ chunk-hwmsct5x.js:91960-94109 esm-fingerprint
-var Xm = (e) => {
-    let n = 0,
-      r = [];
-    while (n < e.length) {
-      let s = e[n];
-      if (s === "\\") {
-        n++;
-        continue;
-      }
-      if (s === "{") {
-        (r.push({ type: "brace", value: "{" }), n++);
-        continue;
-      }
-      if (s === "}") {
-        (r.push({ type: "brace", value: "}" }), n++);
-        continue;
-      }
-      if (s === "[") {
-        (r.push({ type: "paren", value: "[" }), n++);
-        continue;
-      }
-      if (s === "]") {
-        (r.push({ type: "paren", value: "]" }), n++);
-        continue;
-      }
-      if (s === ":") {
-        (r.push({ type: "separator", value: ":" }), n++);
-        continue;
-      }
-      if (s === ",") {
-        (r.push({ type: "delimiter", value: "," }), n++);
-        continue;
-      }
-      if (s === '"') {
-        let S = "",
-          E = !1;
-        s = e[++n];
-        while (s !== '"') {
-          if (n === e.length) {
-            E = !0;
+var tokenize = (input) => {
+  let current = 0;
+  let tokens = [];
+  while (current < input.length) {
+    let char = input[current];
+    if (char === "\\") {
+      current++;
+      continue;
+    }
+    if (char === "{") {
+      tokens.push({
+        type: "brace",
+        value: "{",
+      });
+      current++;
+      continue;
+    }
+    if (char === "}") {
+      tokens.push({
+        type: "brace",
+        value: "}",
+      });
+      current++;
+      continue;
+    }
+    if (char === "[") {
+      tokens.push({
+        type: "paren",
+        value: "[",
+      });
+      current++;
+      continue;
+    }
+    if (char === "]") {
+      tokens.push({
+        type: "paren",
+        value: "]",
+      });
+      current++;
+      continue;
+    }
+    if (char === ":") {
+      tokens.push({
+        type: "separator",
+        value: ":",
+      });
+      current++;
+      continue;
+    }
+    if (char === ",") {
+      tokens.push({
+        type: "delimiter",
+        value: ",",
+      });
+      current++;
+      continue;
+    }
+    if (char === '"') {
+      let value = "";
+      let danglingQuote = false;
+      char = input[++current];
+      while (char !== '"') {
+        if (current === input.length) {
+          danglingQuote = true;
+          break;
+        }
+        if (char === "\\") {
+          current++;
+          if (current === input.length) {
+            danglingQuote = true;
             break;
           }
-          if (s === "\\") {
-            if ((n++, n === e.length)) {
-              E = !0;
-              break;
-            }
-            ((S += s + e[n]), (s = e[++n]));
-          } else ((S += s), (s = e[++n]));
+          value += char + input[current];
+          char = input[++current];
+        } else {
+          value += char;
+          char = input[++current];
         }
-        if (((s = e[++n]), !E)) r.push({ type: "string", value: S });
-        continue;
       }
-      if (s && /\s/.test(s)) {
-        n++;
-        continue;
-      }
-      let y = /[0-9]/;
-      if ((s && y.test(s)) || s === "-" || s === ".") {
-        let S = "";
-        if (s === "-") ((S += s), (s = e[++n]));
-        while (
-          s &&
-          (y.test(s) ||
-            s === "." ||
-            s === "e" ||
-            s === "E" ||
-            ((s === "-" || s === "+") && (S[S.length - 1] === "e" || S[S.length - 1] === "E")))
-        )
-          ((S += s), (s = e[++n]));
-        r.push({ type: "number", value: S });
-        continue;
-      }
-      let w = /[a-z]/i;
-      if (s && w.test(s)) {
-        let S = "";
-        while (s && w.test(s)) {
-          if (n === e.length) break;
-          ((S += s), (s = e[++n]));
-        }
-        if (S == "true" || S == "false" || S === "null") r.push({ type: "name", value: S });
-        else {
-          n++;
-          continue;
-        }
-        continue;
-      }
-      n++;
+      char = input[++current];
+      if (!danglingQuote)
+        tokens.push({
+          type: "string",
+          value,
+        });
+      continue;
     }
-    return r;
-  },
-  Un = (e) => {
-    if (e.length === 0) return e;
-    let n = e[e.length - 1];
-    switch (n.type) {
-      case "separator":
-        return ((e = e.slice(0, e.length - 1)), Un(e));
-        break;
-      case "number":
-        let r = n.value[n.value.length - 1];
-        if (r === "." || r === "-" || r === "+" || r === "e" || r === "E")
-          return ((e = e.slice(0, e.length - 1)), Un(e));
-      case "string":
-        let s = e[e.length - 2];
-        if (s?.type === "delimiter") return ((e = e.slice(0, e.length - 1)), Un(e));
-        else if (s?.type === "brace" && s.value === "{") return ((e = e.slice(0, e.length - 1)), Un(e));
-        break;
-      case "delimiter":
-        return ((e = e.slice(0, e.length - 1)), Un(e));
-        break;
+    if (char && /\s/.test(char)) {
+      current++;
+      continue;
     }
-    return e;
-  },
-  Qm = (e) => {
-    let n = [];
-    if (
-      (e.map((r) => {
-        if (r.type === "brace")
-          if (r.value === "{") n.push("}");
-          else n.splice(n.lastIndexOf("}"), 1);
-        if (r.type === "paren")
-          if (r.value === "[") n.push("]");
-          else n.splice(n.lastIndexOf("]"), 1);
-      }),
-      n.length > 0)
-    )
-      n.reverse().map((r) => {
-        if (r === "}") e.push({ type: "brace", value: "}" });
-        else if (r === "]") e.push({ type: "paren", value: "]" });
+    let NUMBERS = /[0-9]/;
+    if ((char && NUMBERS.test(char)) || char === "-" || char === ".") {
+      let value = "";
+      if (char === "-") {
+        value += char;
+        char = input[++current];
+      }
+      while (
+        char &&
+        (NUMBERS.test(char) ||
+          char === "." ||
+          char === "e" ||
+          char === "E" ||
+          ((char === "-" || char === "+") &&
+            (value[value.length - 1] === "e" || value[value.length - 1] === "E")))
+      ) {
+        value += char;
+        char = input[++current];
+      }
+      tokens.push({
+        type: "number",
+        value,
       });
-    return e;
-  },
-  Zm = (e) => {
-    let n = "";
-    return (
-      e.map((r) => {
-        switch (r.type) {
-          case "string":
-            n += '"' + r.value + '"';
-            break;
-          default:
-            n += r.value;
-            break;
-        }
-      }),
-      n
-    );
-  },
-  sd = (e) => JSON.parse(Zm(Qm(Un(Xm(e)))));
-
-export { sd };
+      continue;
+    }
+    let LETTERS = /[a-z]/i;
+    if (char && LETTERS.test(char)) {
+      let value = "";
+      while (char && LETTERS.test(char)) {
+        if (current === input.length) break;
+        value += char;
+        char = input[++current];
+      }
+      if (value == "true" || value == "false" || value === "null")
+        tokens.push({
+          type: "name",
+          value,
+        });
+      else {
+        current++;
+        continue;
+      }
+      continue;
+    }
+    current++;
+  }
+  return tokens;
+};
+var strip = (tokens) => {
+  if (tokens.length === 0) return tokens;
+  let lastToken = tokens[tokens.length - 1];
+  switch (lastToken.type) {
+    case "separator":
+      tokens = tokens.slice(0, tokens.length - 1);
+      return strip(tokens);
+      break;
+    case "number":
+      let lastCharacterOfLastToken = lastToken.value[lastToken.value.length - 1];
+      if (
+        lastCharacterOfLastToken === "." ||
+        lastCharacterOfLastToken === "-" ||
+        lastCharacterOfLastToken === "+" ||
+        lastCharacterOfLastToken === "e" ||
+        lastCharacterOfLastToken === "E"
+      ) {
+        tokens = tokens.slice(0, tokens.length - 1);
+        return strip(tokens);
+      }
+    case "string":
+      let tokenBeforeTheLastToken = tokens[tokens.length - 2];
+      if (tokenBeforeTheLastToken?.type === "delimiter") {
+        tokens = tokens.slice(0, tokens.length - 1);
+        return strip(tokens);
+      } else if (tokenBeforeTheLastToken?.type === "brace" && tokenBeforeTheLastToken.value === "{") {
+        tokens = tokens.slice(0, tokens.length - 1);
+        return strip(tokens);
+      }
+      break;
+    case "delimiter":
+      tokens = tokens.slice(0, tokens.length - 1);
+      return strip(tokens);
+      break;
+  }
+  return tokens;
+};
+var unstrip = (tokens) => {
+  let tail = [];
+  tokens.map((token) => {
+    if (token.type === "brace")
+      if (token.value === "{") tail.push("}");
+      else tail.splice(tail.lastIndexOf("}"), 1);
+    if (token.type === "paren")
+      if (token.value === "[") tail.push("]");
+      else tail.splice(tail.lastIndexOf("]"), 1);
+  });
+  if (tail.length > 0)
+    tail.reverse().map((item) => {
+      if (item === "}")
+        tokens.push({
+          type: "brace",
+          value: "}",
+        });
+      else if (item === "]")
+        tokens.push({
+          type: "paren",
+          value: "]",
+        });
+    });
+  return tokens;
+};
+var generate = (tokens) => {
+  let output = "";
+  tokens.map((token) => {
+    switch (token.type) {
+      case "string":
+        output += '"' + token.value + '"';
+        break;
+      default:
+        output += token.value;
+        break;
+    }
+  });
+  return output;
+};
+var partialParse = (input) => JSON.parse(generate(unstrip(strip(tokenize(input)))));
+export { partialParse };

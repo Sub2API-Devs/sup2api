@@ -11,7 +11,6 @@
 
 //@ chunk-0e8j1zzj.js:25686-25753 callgraph-fingerprint = ShowInIDEPrompt (0.18)
 function ShowInIDEPrompt(t0) {
-  return t0 === "yes" ? "accept" : t0 === "no" ? "reject" : void 0;
+  return t0 === "yes" ? "accept" : t0 === "no" ? "reject" : undefined;
 }
-
 export { ShowInIDEPrompt };

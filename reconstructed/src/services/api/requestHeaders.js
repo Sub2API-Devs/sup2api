@@ -10,105 +10,112 @@
  */
 import { isIP } from "net";
 import {
-  np,
-  Rl,
-  Jf,
-  tp,
-  Qf,
-  ap,
-  lp,
-  up,
-  Ti,
+  wigglyDoveFieldCodeLr,
+  wigglyDoveFieldCodeNg,
+  wigglyDoveFieldCodeKi,
+  wigglyDoveFieldCodeTn,
+  wigglyDoveFieldCodeNy,
+  wigglyDoveFieldCodeAx,
+  wigglyDoveFieldCodeMz,
+  wigglyDoveFieldCodeIa,
+  isWigglyDoveHeader,
   TENGU_WIGGLY_DOVE,
-  vl,
-  tn,
-  op,
-  ip,
-  Al,
-  kl,
-  dp,
-  cp,
-  Tl,
-  sp,
-  xl,
-  fp,
-  Uf,
-  Nf,
-  rp,
-  xi,
-  pp,
-  hp,
-  mp,
-  gp_2,
-  Hf,
-  _p_2,
-  wp,
-  Sp_2,
-  Ep,
-  vp,
-  Rp,
-  Ap,
-  kp,
-  xp,
-  Tp,
-  Mp,
-  Op,
-  Pp,
-  Cp,
-  Ip,
-  Lp,
-  Fp,
-  Dp,
-  Up,
-  Np,
-  Bp,
-  Hp,
-  $p,
-  qp,
-  Wp,
-  zp,
-  Gp,
-  Yp,
-  jp,
-  Tf,
-  Mf,
-  Gf,
-  Kf,
-  Yf,
-  Of,
-  Pf,
-  Xf,
-  Vf,
-  Cf,
-  If,
-  Ff,
-  Df,
-  $f,
-  qf,
-  bp_2,
-  yp,
-  Wf,
-  zf,
-  Lo,
+  wigglyDoveFieldCodeTt,
+  wigglyDoveFieldCodeBf,
+  wigglyDoveFieldCodeOh,
+  wigglyDoveFieldCodeOz,
+  wigglyDoveFieldCodeFy,
+  wigglyDoveFieldCodeRl,
+  wigglyDoveFieldCodeYb,
+  wigglyDoveFieldCodeNv,
+  wigglyDoveFieldCodeZb,
+  wigglyDoveFieldCodeVt,
+  wigglyDoveFieldCodeFs,
+  wigglyDoveFieldCodePh,
+  wigglyDoveFieldCodeVd,
+  wigglyDoveFieldCodeXf,
+  wigglyDoveFieldCodeZr,
+  wigglyDoveFieldCodeZx,
+  wigglyDoveFieldCodeIi,
+  wigglyDoveFieldCodeFz,
+  wigglyDoveFieldCodeVy,
+  wigglyDoveFieldCodeBm,
+  wigglyDoveFieldCodeZi,
+  wigglyDoveFieldCodeKb,
+  wigglyDoveFieldCodeWb,
+  wigglyDoveFieldCodeSw,
+  wigglyDoveFieldCodeWj,
+  wigglyDoveFieldCodeXu,
+  wigglyDoveFieldCodeUm,
+  wigglyDoveFieldCodeSa,
+  wigglyDoveFieldCodeSu,
+  wigglyDoveFieldCodeHo,
+  wigglyDoveFieldCodeZg,
+  wigglyDoveFieldCodeXb,
+  wigglyDoveFieldCodeKh,
+  wigglyDoveFieldCodeZl,
+  wigglyDoveFieldCodeXs,
+  wigglyDoveFieldCodeYm,
+  wigglyDoveFieldCodeNp,
+  wigglyDoveFieldCodeOm,
+  wigglyDoveFieldCodePf,
+  wigglyDoveFieldCodeBt,
+  wigglyDoveFieldCodeVo,
+  wigglyDoveFieldCodeIy,
+  wigglyDoveFieldCodeZz,
+  wigglyDoveFieldCodeBo,
+  wigglyDoveFieldCodeQl,
+  wigglyDoveFieldCodeMb,
+  wigglyDoveFieldCodePd,
+  wigglyDoveFieldCodeBq,
+  wigglyDoveFieldCodeTg,
+  wigglyDoveFieldCodeVr,
+  wigglyDoveFieldCodeV,
+  wigglyDoveFieldCodeYw,
+  wigglyDoveFieldCodeJm,
+  wigglyDoveFieldCodeYi,
+  wigglyDoveFieldCodeWm,
+  wigglyDoveFieldCodeHg,
+  wigglyDoveFieldCodeYl,
+  wigglyDoveFieldCodeBx,
+  wigglyDoveFieldCodeQi,
+  wigglyDoveFieldCodeOb,
+  wigglyDoveFieldCodeSk,
+  wigglyDoveFieldCodeRf,
+  wigglyDoveFieldCodeWl,
+  wigglyDoveFieldCodeFu,
+  wigglyDoveFieldCodeRt,
+  wigglyDoveFieldCodeVb,
+  wigglyDoveFieldCodeMa,
+  wigglyDoveFieldCodeMo,
+  wigglyDoveFieldCodeJy,
+  wigglyDoveHeaderName,
 } from "./wigglyDove.js";
 import { logError } from "../../utils/log.js";
 import { isAntBuild, isEnvTruthy } from "../../utils/envUtils.js";
 import { env } from "../../utils/env.js";
-import { gl } from "../../utils/cwd.js";
+import { getCwdOrNull } from "../../utils/cwd.js";
 import { findGitRoot, findCanonicalGitRoot, findRepoRemoteSlug } from "../../utils/git.js";
-import { getSessionFlags, Rf } from "./sessionFlags.js";
+import { getSessionFlags, getSessionFlagReaders } from "./sessionFlags.js";
 import { envDynamic } from "../../utils/envDynamic.js";
 import { getEntrypointOnRequests, isCcsTenant, getPromptId, getSessionId } from "../../bootstrap/state.js";
-import { CLI } from "../../utils/entrypointKinds.js";
+import { CLI_ENTRYPOINT } from "../../utils/entrypointKinds.js";
 import { isAutoModeActive } from "../../utils/permissions/autoModeState.js";
 import { getComputerUseSession } from "../../utils/computerUse/session.js";
 import { getCustomHeaders as getCustomHeaders_3 } from "./client.js";
-import { cte } from "../../utils/settings/envSources.js";
+import { effectiveEnvSnapshot } from "../../utils/settings/envSources.js";
 import { isFirstPartyApiBackend, assumesFirstPartyBaseUrl } from "../../utils/model/providers.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../analytics/growthbook.js";
 import { isFirstPartyBaseUrl } from "../../utils/model/firstPartyBaseUrl.js";
-import { Ae, _n, Ai, isTextField, yf, serializeSfDictionary } from "../../utils/structuredFields.js";
-import { Ws } from "./streamFallbackWarning.js";
+import {
+  sfToken,
+  sfString,
+  sfInnerList,
+  isTextField,
+  sfBoolean,
+  serializeSfDictionary,
+} from "../../utils/structuredFields.js";
+import { streamFallbackWarning } from "./streamFallbackWarning.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { turnAttributionKeyFor } from "../../utils/agentContext.js";
 import { apiClient } from "../routines/routinesApi.js";
@@ -122,105 +129,124 @@ import { getUserAgent } from "../../utils/http.js";
 import { customHeaderNames } from "./customHeaders.js";
 import { wi } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { checkValueChars, describeUnsafeValue } from "../../utils/settings/managedSettingsKeys.js";
-import { ge } from "../../utils/identity.js";
+import { identity } from "../../utils/identity.js";
 import { RETRY_ON_529_QUERY_SOURCES } from "./withRetry.js";
 import { textLengthAndLines } from "../../utils/auth.js";
 
 //@ chunk-hwmsct5x.js:257395-257434 placement
-var Jp = 32,
-  Sy = 128,
-  Qp = 128,
-  Ey = 20,
-  OL = Jp - Ey;
+/**
+ * 请求头 SF 字典（键值对头）的限额：最多 32 项、键 128、值 128，另留键长余量。
+ */
+var MAX_HEADER_DICT_MEMBERS = 32;
+var MAX_HEADER_KEY_LENGTH = 128;
+var MAX_HEADER_VALUE_LENGTH = 128;
+var HEADER_KEY_RESERVE = 20;
+var MAX_URL_PATH_CHARS = MAX_HEADER_DICT_MEMBERS - HEADER_KEY_RESERVE;
 //@ chunk-hwmsct5x.js:257434-257461 placement
-function Xp(e) {
-  return np();
+function senderAddressHeaderValue(e) {
+  return wigglyDoveFieldCodeLr();
 }
 //@ chunk-hwmsct5x.js:257461-257669 placement
 var SUMMARY_QUERY_SOURCES = new Set([
-    "compact",
-    "agent_summary",
-    "away_summary",
-    "tool_use_summary_generation",
-  ]),
-  CLASSIFIER_QUERY_SOURCES = new Set([
-    "auto_mode",
-    "auto_mode_investigator",
-    "compact_fab_check",
-    "agent_classifier",
-    "subagent_config_classifier",
-  ]);
+  "compact",
+  "agent_summary",
+  "away_summary",
+  "tool_use_summary_generation",
+]);
+var CLASSIFIER_QUERY_SOURCES = new Set([
+  "auto_mode",
+  "auto_mode_investigator",
+  "compact_fab_check",
+  "agent_classifier",
+  "subagent_config_classifier",
+]);
 //@ chunk-hwmsct5x.js:257669-257715 placement
-function ky(e) {
-  if (CLASSIFIER_QUERY_SOURCES.has(e)) return !0;
-  return !1;
+function isClassifierQuerySource(e) {
+  if (CLASSIFIER_QUERY_SOURCES.has(e)) return true;
+  return false;
 }
 //@ chunk-hwmsct5x.js:257715-257880 placement
-function querySourceFlag(e) {
-  let n = classifyQuerySource(e);
-  if (e === void 0 || n === void 0) return Rl();
-  if (n === "main" || n === "subagent") return Jf();
-  if (ky(e)) return tp();
-  if (SUMMARY_QUERY_SOURCES.has(e)) return Qf();
-  return Rl();
+function querySourceFlag(querySource) {
+  let n = classifyQuerySource(querySource);
+  if (querySource === undefined || n === undefined) return wigglyDoveFieldCodeNg();
+  if (n === "main" || n === "subagent") return wigglyDoveFieldCodeKi();
+  if (isClassifierQuerySource(querySource)) return wigglyDoveFieldCodeTn();
+  if (SUMMARY_QUERY_SOURCES.has(querySource)) return wigglyDoveFieldCodeNy();
+  return wigglyDoveFieldCodeNg();
 }
 //@ chunk-hwmsct5x.js:257880-258372 placement
-function getSandboxPosture(e, n, r) {
-  if (e === null) return null;
-  let s = n === void 0 || n === "bypassPermissions" || (n === "plan" && r),
-    h = !1;
+function getSandboxPosture(sessionFlagReaders, n, r) {
+  if (sessionFlagReaders === null) return null;
+  let s = n === undefined || n === "bypassPermissions" || (n === "plan" && r);
+  let h = false;
   try {
-    h = e.areUnsandboxedCommandsAllowed() === !1;
+    h = sessionFlagReaders.areUnsandboxedCommandsAllowed() === false;
   } catch (error) {
     logError(error);
   }
-  if (s && !h) return { toolSandboxActive: !1, egressRestricted: !1, hostAllowlistEnforced: !1 };
-  try {
-    let isEgressRestricted = e.isEgressRestricted();
+  if (s && !h)
     return {
-      toolSandboxActive: e.isToolSandboxActive(),
-      egressRestricted: isEgressRestricted,
-      hostAllowlistEnforced: isEgressRestricted && e.isHostAllowlistEnforced(),
+      toolSandboxActive: false,
+      egressRestricted: false,
+      hostAllowlistEnforced: false,
+    };
+  try {
+    let y = sessionFlagReaders.isEgressRestricted();
+    return {
+      toolSandboxActive: sessionFlagReaders.isToolSandboxActive(),
+      egressRestricted: y,
+      hostAllowlistEnforced: y && sessionFlagReaders.isHostAllowlistEnforced(),
     };
   } catch (error) {
-    return (logError(error), { toolSandboxActive: !1, egressRestricted: !1, hostAllowlistEnforced: !1 });
+    logError(error);
+    return {
+      toolSandboxActive: false,
+      egressRestricted: false,
+      hostAllowlistEnforced: false,
+    };
   }
 }
 //@ chunk-hwmsct5x.js:258372-258494 placement
 function runtimeEnvironmentFlag() {
-  if (isAntBuild()) return ap();
-  if (env.KUBERNETES_SERVICE_HOST) return lp();
-  if (env.isCI || env.GITHUB_ACTIONS) return up();
+  if (isAntBuild()) return wigglyDoveFieldCodeAx();
+  if (env.KUBERNETES_SERVICE_HOST) return wigglyDoveFieldCodeMz();
+  if (env.isCI || env.GITHUB_ACTIONS) return wigglyDoveFieldCodeIa();
   return;
 }
 //@ chunk-hwmsct5x.js:258494-258708 placement
 function repoSlugForHeader() {
   try {
-    let e = gl(),
-      n = e === null ? null : findGitRoot(e),
-      r = n === null ? null : findCanonicalGitRoot(n),
-      s = r === null ? null : findRepoRemoteSlug(r);
-    if (s === null || !Iy.test(s)) return;
-    let sliced = s.split(/[?#]/, 1)[0].slice(0, Qp - 2);
-    return sliced === "" ? void 0 : sliced;
+    let cwdOrNull = getCwdOrNull();
+    let n = cwdOrNull === null ? null : findGitRoot(cwdOrNull);
+    let r = n === null ? null : findCanonicalGitRoot(n);
+    let s = r === null ? null : findRepoRemoteSlug(r);
+    if (s === null || !PRINTABLE_ASCII_RE.test(s)) return;
+    let sliced = s.split(/[?#]/, 1)[0].slice(0, MAX_HEADER_VALUE_LENGTH - 2);
+    return sliced === "" ? undefined : sliced;
   } catch (error) {
     logError(error);
     return;
   }
 }
+//@ chunk-hwmsct5x.js:258708-259918 placement
 /**
  * 收集查询源、权限模式、bypass 可用性、沙箱姿态等，组成随请求发送的客户端上下文。
  */
-//@ chunk-hwmsct5x.js:258708-259918 placement
-async function buildRequestContextHeaders(e, n, r, s = !1) {
-  let h = getSessionFlags(),
-    y = await envDynamic(),
-    w = n?.mode ?? h?.currentPermissionMode ?? h?.permissionMode,
-    S = n?.isBypassPermissionsModeAvailable ?? h?.bypassPermissionsAvailable !== !1,
-    E = getEntrypointOnRequests(),
-    R = !1;
+async function buildRequestContextHeaders(
+  querySource,
+  permissionContext,
+  toolNames,
+  classifierJudgesServedCall = false,
+) {
+  let sessionFlags = getSessionFlags();
+  let containerRuntime = await envDynamic();
+  let w = permissionContext?.mode ?? sessionFlags?.currentPermissionMode ?? sessionFlags?.permissionMode;
+  let S =
+    permissionContext?.isBypassPermissionsModeAvailable ?? sessionFlags?.bypassPermissionsAvailable !== false;
+  let entrypointOnRequests = getEntrypointOnRequests();
+  let R = false;
   return {
-    querySource: e,
+    querySource,
     clientVersion: {
       ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
       PACKAGE_URL: "@anthropic-ai/claude-code",
@@ -232,229 +258,362 @@ async function buildRequestContextHeaders(e, n, r, s = !1) {
       HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
       DD_SOURCEMAP_GROUP: "default",
     }.VERSION,
-    entrypoint: E !== void 0 && (isCcsTenant() || (nh(E) && E !== CLI)) ? E : env.CLAUDE_CODE_ENTRYPOINT,
-    claudeCodeServerTenant: !1,
-    ...!1,
+    entrypoint:
+      entrypointOnRequests !== undefined &&
+      (isCcsTenant() || (isKnownEntrypoint(entrypointOnRequests) && entrypointOnRequests !== CLI_ENTRYPOINT))
+        ? entrypointOnRequests
+        : env.CLAUDE_CODE_ENTRYPOINT,
+    claudeCodeServerTenant: false,
+    ...false,
     permissionMode: w,
     bypassPermissionsAvailable: S,
     autoModeActive: isAutoModeActive(),
     ...{},
-    classifierJudgesServedCall: s,
-    computerUseActive: getComputerUseSession().binding !== void 0,
-    containerRuntime: y,
-    posture: getSandboxPosture(Rf(), w, S),
+    classifierJudgesServedCall,
+    computerUseActive: getComputerUseSession().binding !== undefined,
+    containerRuntime,
+    posture: getSandboxPosture(getSessionFlagReaders(), w, S),
     platform: "linux",
     hostEnvironment: runtimeEnvironmentFlag(),
-    monorepoCheckout: !1,
+    monorepoCheckout: false,
     gitOrigin: repoSlugForHeader(),
     githubHostedRunner: isEnvTruthy(env.GITHUB_ACTIONS) && env.RUNNER_ENVIRONMENT === "github-hosted",
-    internetReachable: void 0,
-    overrides: { extensions: [] },
+    internetReachable: undefined,
+    overrides: {
+      extensions: [],
+    },
   };
 }
 //@ chunk-hwmsct5x.js:259918-259965 placement
-var Cy = /^[a-z][a-z0-9_]*$/,
-  Iy = /^[\x20-\x7E]*$/;
+var SAFE_HEADER_NAME_RE = /^[a-z][a-z0-9_]*$/;
+var PRINTABLE_ASCII_RE = /^[\x20-\x7E]*$/;
 //@ chunk-hwmsct5x.js:259965-260152 placement = getCustomHeaders (1)
 function getCustomHeaders() {
   let customHeadersEnv = env.ANTHROPIC_CUSTOM_HEADERS;
-  if (!getCustomHeaders_3(customHeadersEnv ?? "").some(([r, s]) => Ti(r) && s !== "")) return !1;
+  if (!getCustomHeaders_3(customHeadersEnv ?? "").some(([r, s]) => isWigglyDoveHeader(r) && s !== ""))
+    return false;
   try {
-    return customHeadersEnv?.trim() === cte().ANTHROPIC_CUSTOM_HEADERS?.trim();
+    return customHeadersEnv?.trim() === effectiveEnvSnapshot().ANTHROPIC_CUSTOM_HEADERS?.trim();
   } catch (error) {
-    return (logError(error), !1);
+    logError(error);
+    return false;
   }
 }
 //@ chunk-hwmsct5x.js:260152-260218 placement
-function eh() {
-  if (!isFirstPartyApiBackend()) return !1;
-  if (!getFeatureValue_CACHED_MAY_BE_STALE(TENGU_WIGGLY_DOVE, !1)) return !1;
-  return Ly();
+function isWigglyDoveHeaderEnabled() {
+  if (!isFirstPartyApiBackend()) return false;
+  if (!getFeatureValue_CACHED_MAY_BE_STALE(TENGU_WIGGLY_DOVE, false)) return false;
+  return isFirstPartyBaseUrlSafe();
 }
 //@ chunk-hwmsct5x.js:260218-260291 placement
-function Ly() {
-  if (assumesFirstPartyBaseUrl()) return !0;
+function isFirstPartyBaseUrlSafe() {
+  if (assumesFirstPartyBaseUrl()) return true;
   try {
     return isFirstPartyBaseUrl();
   } catch (error) {
-    return (logError(error), !1);
+    logError(error);
+    return false;
   }
 }
 //@ chunk-hwmsct5x.js:260291-260325 placement
-function Nci() {
-  return eh() && !getCustomHeaders();
+/**
+ * 导出函数 `canSendWigglyDoveHeader`：返回 eh() && !getCustomHeaders()。
+ */
+function canSendWigglyDoveHeader() {
+  return isWigglyDoveHeaderEnabled() && !getCustomHeaders();
 }
 //@ chunk-hwmsct5x.js:260325-260370 placement
-function Fy(e) {
-  return Cy.test(e) ? Ae(e) : _n(e);
+function headerNameOrRedacted(e) {
+  return SAFE_HEADER_NAME_RE.test(e) ? sfToken(e) : sfString(e);
 }
 //@ chunk-hwmsct5x.js:260370-260633 placement
 function autoModeFlags(e) {
-  if (e.classifierJudgesServedCall === !0) return [{ key: vl(), value: Ai([Ae(Xp(e))]) }];
+  if (e.classifierJudgesServedCall === true)
+    return [
+      {
+        key: wigglyDoveFieldCodeTt(),
+        value: sfInnerList([sfToken(senderAddressHeaderValue(e))]),
+      },
+    ];
   let permissionMode = e.permissionMode;
-  if (permissionMode === void 0) return [];
+  if (permissionMode === undefined) return [];
   let r =
     permissionMode === "auto" ||
     (permissionMode === "plan" && e.autoModeActive && !e.bypassPermissionsAvailable);
-  return [{ key: vl(), value: Ai(r ? [Ae(Xp(e))] : []) }];
+  return [
+    {
+      key: wigglyDoveFieldCodeTt(),
+      value: sfInnerList(r ? [sfToken(senderAddressHeaderValue(e))] : []),
+    },
+  ];
 }
 //@ chunk-hwmsct5x.js:260633-261384 placement
 function encodeEnvironmentFlags(e) {
-  let { overrides: overrides } = e,
-    r = [],
-    s,
-    h;
-  if (!1);
-  else if (e.containerRuntime !== void 0) r.push({ key: tn(), value: Ae(Ny(e.containerRuntime)) });
-  else if (e.githubHostedRunner) r.push({ key: tn(), value: Ae(op()) });
-  else if (e.posture === null) r.push({ key: tn(), value: Ae(ip()) });
+  let { overrides } = e;
+  let r = [];
+  let s;
+  let h;
+  if (false);
+  else if (e.containerRuntime !== undefined)
+    r.push({
+      key: wigglyDoveFieldCodeBf(),
+      value: sfToken(containerRuntimeLabel(e.containerRuntime)),
+    });
+  else if (e.githubHostedRunner)
+    r.push({
+      key: wigglyDoveFieldCodeBf(),
+      value: sfToken(wigglyDoveFieldCodeOh()),
+    });
+  else if (e.posture === null)
+    r.push({
+      key: wigglyDoveFieldCodeBf(),
+      value: sfToken(wigglyDoveFieldCodeOz()),
+    });
   else if (e.posture.toolSandboxActive)
     switch (e.platform) {
       case "linux":
-        r.push({ key: tn(), value: Ae(Al()) });
+        r.push({
+          key: wigglyDoveFieldCodeBf(),
+          value: sfToken(wigglyDoveFieldCodeFy()),
+        });
         break;
       case "darwin":
-        (r.push({ key: tn(), value: Ae(kl()) }), (h = dp()));
+        r.push({
+          key: wigglyDoveFieldCodeBf(),
+          value: sfToken(wigglyDoveFieldCodeRl()),
+        });
+        h = wigglyDoveFieldCodeYb();
         break;
       default:
-        (r.push({ key: tn(), value: Ae(kl()) }), (h = e.platform === "win32" ? cp() : Tl()));
+        r.push({
+          key: wigglyDoveFieldCodeBf(),
+          value: sfToken(wigglyDoveFieldCodeRl()),
+        });
+        h = e.platform === "win32" ? wigglyDoveFieldCodeNv() : wigglyDoveFieldCodeZb();
         break;
     }
-  else if (
-    (r.push({ key: tn(), value: Ae(sp()) }), (s = e.hostEnvironment ?? xl()), e.hostEnvironment === void 0)
-  )
-    h = e.platform === "linux" ? fp() : Tl();
+  else {
+    r.push({
+      key: wigglyDoveFieldCodeBf(),
+      value: sfToken(wigglyDoveFieldCodeVt()),
+    });
+    s = e.hostEnvironment ?? wigglyDoveFieldCodeFs();
+    if (e.hostEnvironment === undefined)
+      h = e.platform === "linux" ? wigglyDoveFieldCodePh() : wigglyDoveFieldCodeZb();
+  }
   let w = s;
-  if (w !== void 0) r.push({ key: Uf(), value: Ae(w) });
+  if (w !== undefined)
+    r.push({
+      key: wigglyDoveFieldCodeVd(),
+      value: sfToken(w),
+    });
   let S = h;
-  if (S !== void 0) r.push({ key: Nf(), value: _n(S) });
+  if (S !== undefined)
+    r.push({
+      key: wigglyDoveFieldCodeXf(),
+      value: sfString(S),
+    });
   return r;
 }
 //@ chunk-hwmsct5x.js:261384-261433 placement
-function Ny(e) {
-  return e === "bubblewrap" ? Al() : rp();
+function containerRuntimeLabel(containerRuntime) {
+  return containerRuntime === "bubblewrap" ? wigglyDoveFieldCodeFy() : wigglyDoveFieldCodeZr();
 }
 //@ chunk-hwmsct5x.js:261433-261664 placement
 function egressPostureFlags(e) {
-  if (e.posture === null) return [{ key: xi(), value: Ae(pp()) }];
-  if (!e.posture.egressRestricted) return [{ key: xi(), value: Ae(hp()) }];
+  if (e.posture === null)
+    return [
+      {
+        key: wigglyDoveFieldCodeZx(),
+        value: sfToken(wigglyDoveFieldCodeIi()),
+      },
+    ];
+  if (!e.posture.egressRestricted)
+    return [
+      {
+        key: wigglyDoveFieldCodeZx(),
+        value: sfToken(wigglyDoveFieldCodeFz()),
+      },
+    ];
   return [
-    { key: xi(), value: Ae(e.posture.hostAllowlistEnforced ? mp() : gp_2()) },
-    { key: Hf(), value: Ae(_p_2()) },
+    {
+      key: wigglyDoveFieldCodeZx(),
+      value: sfToken(e.posture.hostAllowlistEnforced ? wigglyDoveFieldCodeVy() : wigglyDoveFieldCodeBm()),
+    },
+    {
+      key: wigglyDoveFieldCodeZi(),
+      value: sfToken(wigglyDoveFieldCodeKb()),
+    },
   ];
 }
 //@ chunk-hwmsct5x.js:261664-261686 placement
-function Hy(e) {
+function noopSenderHeader(e) {
   return;
 }
 //@ chunk-hwmsct5x.js:261686-262168 placement
 var ENTRYPOINT_CODES = {
-  cli: wp,
-  mcp: Sp_2,
-  "sdk-cli": Ep,
-  "sdk-ts": vp,
-  "sdk-py": Rp,
-  bench: Ap,
-  "claude-vscode": kp,
-  "claude-code-github-action": xp,
-  "local-agent": Tp,
-  local_agent: Mp,
-  "claude-desktop": Op,
-  remote: Pp,
-  remote_baku: Cp,
-  remote_cowork: Ip,
-  remote_trigger: Lp,
-  remote_cowork_trigger: Fp,
-  remote_desktop: Dp,
-  remote_mobile: Up,
-  remote_projects: Np,
-  claude_in_slack: Bp,
-  "claude-in-slack": Hp,
-  "claude-in-teams": $p,
-  "claude-desktop-3p": qp,
-  "claude-security": Wp,
-  "ssh-remote": zp,
-  "claude-coworker": Gp,
-  "claude-coworker-terminal": Yp,
+  cli: wigglyDoveFieldCodeWb,
+  mcp: wigglyDoveFieldCodeSw,
+  "sdk-cli": wigglyDoveFieldCodeWj,
+  "sdk-ts": wigglyDoveFieldCodeXu,
+  "sdk-py": wigglyDoveFieldCodeUm,
+  bench: wigglyDoveFieldCodeSa,
+  "claude-vscode": wigglyDoveFieldCodeSu,
+  "claude-code-github-action": wigglyDoveFieldCodeHo,
+  "local-agent": wigglyDoveFieldCodeZg,
+  local_agent: wigglyDoveFieldCodeXb,
+  "claude-desktop": wigglyDoveFieldCodeKh,
+  remote: wigglyDoveFieldCodeZl,
+  remote_baku: wigglyDoveFieldCodeXs,
+  remote_cowork: wigglyDoveFieldCodeYm,
+  remote_trigger: wigglyDoveFieldCodeNp,
+  remote_cowork_trigger: wigglyDoveFieldCodeOm,
+  remote_desktop: wigglyDoveFieldCodePf,
+  remote_mobile: wigglyDoveFieldCodeBt,
+  remote_projects: wigglyDoveFieldCodeVo,
+  claude_in_slack: wigglyDoveFieldCodeIy,
+  "claude-in-slack": wigglyDoveFieldCodeZz,
+  "claude-in-teams": wigglyDoveFieldCodeBo,
+  "claude-desktop-3p": wigglyDoveFieldCodeQl,
+  "claude-security": wigglyDoveFieldCodeMb,
+  "ssh-remote": wigglyDoveFieldCodePd,
+  "claude-coworker": wigglyDoveFieldCodeBq,
+  "claude-coworker-terminal": wigglyDoveFieldCodeTg,
 };
 //@ chunk-hwmsct5x.js:262168-262210 placement
-function nh(e) {
+function isKnownEntrypoint(e) {
   return Object.hasOwn(ENTRYPOINT_CODES, e);
 }
 //@ chunk-hwmsct5x.js:262210-262251 placement
-function $y(e) {
-  return nh(e) ? ENTRYPOINT_CODES[e]() : jp();
+function entrypointCodeValue(entrypoint) {
+  return isKnownEntrypoint(entrypoint) ? ENTRYPOINT_CODES[entrypoint]() : wigglyDoveFieldCodeVr();
 }
 //@ chunk-hwmsct5x.js:262251-263203 placement
-function encodeClientIdentityFlags(e) {
-  let { overrides: overrides } = e,
-    r = !e.claudeCodeServerTenant && (e.entrypoint === "sdk-ts" || e.entrypoint === "sdk-py"),
-    s = [
-      { key: Tf(), value: isTextField(1) },
-      { key: Mf(), value: Ae(Gf()) },
-    ],
-    h = void 0,
-    y = e.claudeCodeServerTenant ? Kf() : (h ?? (r ? void 0 : Yf()));
-  if (y !== void 0) s.push({ key: Of(), value: Fy(y) });
-  if (
-    (s.push({ key: Pf(), value: Ae(r ? Xf() : Vf()) }, { key: Cf(), value: _n(e.clientVersion) }),
-    e.entrypoint !== void 0 && e.entrypoint !== "")
-  ) {
-    let R = $y(e.entrypoint);
-    if (R !== void 0) s.push({ key: If(), value: _n(R) });
+function encodeClientIdentityFlags(requestContextHeaders) {
+  let { overrides } = requestContextHeaders;
+  let r =
+    !requestContextHeaders.claudeCodeServerTenant &&
+    (requestContextHeaders.entrypoint === "sdk-ts" || requestContextHeaders.entrypoint === "sdk-py");
+  let s = [
+    {
+      key: wigglyDoveFieldCodeV(),
+      value: isTextField(1),
+    },
+    {
+      key: wigglyDoveFieldCodeYw(),
+      value: sfToken(wigglyDoveFieldCodeJm()),
+    },
+  ];
+  let h = undefined;
+  let y = requestContextHeaders.claudeCodeServerTenant
+    ? wigglyDoveFieldCodeYi()
+    : (h ?? (r ? undefined : wigglyDoveFieldCodeWm()));
+  if (y !== undefined)
+    s.push({
+      key: wigglyDoveFieldCodeHg(),
+      value: headerNameOrRedacted(y),
+    });
+  s.push(
+    {
+      key: wigglyDoveFieldCodeYl(),
+      value: sfToken(r ? wigglyDoveFieldCodeBx() : wigglyDoveFieldCodeQi()),
+    },
+    {
+      key: wigglyDoveFieldCodeOb(),
+      value: sfString(requestContextHeaders.clientVersion),
+    },
+  );
+  if (requestContextHeaders.entrypoint !== undefined && requestContextHeaders.entrypoint !== "") {
+    let R = entrypointCodeValue(requestContextHeaders.entrypoint);
+    if (R !== undefined)
+      s.push({
+        key: wigglyDoveFieldCodeSk(),
+        value: sfString(R),
+      });
   }
-  let w = void 0;
-  if (w !== void 0) s.push({ key: Ff(), value: _n(w) });
-  (s.push({ key: Df(), value: Ae(querySourceFlag(e.querySource)) }), s.push(...autoModeFlags(e)));
-  let S = Hy(e);
-  if (
-    (s.push(...(S?.members ?? [...encodeEnvironmentFlags(e), ...egressPostureFlags(e)])), e.computerUseActive)
-  )
-    s.push({ key: $f(), value: yf(!0) }, { key: qf(), value: Ae(e.hostEnvironment ?? xl()) });
+  let w = undefined;
+  if (w !== undefined)
+    s.push({
+      key: wigglyDoveFieldCodeRf(),
+      value: sfString(w),
+    });
+  s.push({
+    key: wigglyDoveFieldCodeWl(),
+    value: sfToken(querySourceFlag(requestContextHeaders.querySource)),
+  });
+  s.push(...autoModeFlags(requestContextHeaders));
+  let S = noopSenderHeader(requestContextHeaders);
+  s.push(
+    ...(S?.members ?? [
+      ...encodeEnvironmentFlags(requestContextHeaders),
+      ...egressPostureFlags(requestContextHeaders),
+    ]),
+  );
+  if (requestContextHeaders.computerUseActive)
+    s.push(
+      {
+        key: wigglyDoveFieldCodeFu(),
+        value: sfBoolean(true),
+      },
+      {
+        key: wigglyDoveFieldCodeRt(),
+        value: sfToken(requestContextHeaders.hostEnvironment ?? wigglyDoveFieldCodeFs()),
+      },
+    );
   let E = [];
-  if (e.monorepoCheckout) E.push(Ae(bp_2()));
-  if (e.internetReachable === !0) E.push(Ae(yp()));
-  if (E.length > 0) s.push({ key: Wf(), value: Ai(E) });
-  if (e.gitOrigin !== void 0) s.push({ key: zf(), value: _n(e.gitOrigin) });
+  if (requestContextHeaders.monorepoCheckout) E.push(sfToken(wigglyDoveFieldCodeVb()));
+  if (requestContextHeaders.internetReachable === true) E.push(sfToken(wigglyDoveFieldCodeMa()));
+  if (E.length > 0)
+    s.push({
+      key: wigglyDoveFieldCodeMo(),
+      value: sfInnerList(E),
+    });
+  if (requestContextHeaders.gitOrigin !== undefined)
+    s.push({
+      key: wigglyDoveFieldCodeJy(),
+      value: sfString(requestContextHeaders.gitOrigin),
+    });
   return s;
 }
 //@ chunk-hwmsct5x.js:263203-263291 placement
-function Wy(e) {
+function serializeHeadersSfDictionary(e) {
   return serializeSfDictionary(e, {
-    maxMembers: Jp,
-    maxKeyLength: Sy,
-    maxValueLength: Qp,
+    maxMembers: MAX_HEADER_DICT_MEMBERS,
+    maxKeyLength: MAX_HEADER_KEY_LENGTH,
+    maxValueLength: MAX_HEADER_VALUE_LENGTH,
     onDrop: noteHeaderMemberDropped,
   });
 }
 //@ chunk-hwmsct5x.js:263291-263451 placement
 function noteHeaderMemberDropped(e, n) {
-  let headerMemberDropsNoted = Ws().headerMemberDropsNoted;
+  let headerMemberDropsNoted = streamFallbackWarning().headerMemberDropsNoted;
   if (headerMemberDropsNoted.has(e)) return;
-  (headerMemberDropsNoted.add(e),
-    logForDebugging(`${Lo()}: dropped ${e} (${n}); the rest of the header is sent`, { level: "warn" }));
+  headerMemberDropsNoted.add(e);
+  logForDebugging(`${wigglyDoveHeaderName()}: dropped ${e} (${n}); the rest of the header is sent`, {
+    level: "warn",
+  });
 }
 //@ chunk-hwmsct5x.js:263451-263632 placement = getCustomHeaders (1)
 function getCustomHeaders_2() {
-  let customHeaders = {},
-    n = Lo();
-  for (let r of (env.ANTHROPIC_CUSTOM_HEADERS ?? "").split(/\n|\r\n/)) {
-    let colonIdx = r.indexOf(":"),
-      h = colonIdx >= 0 ? r.slice(0, colonIdx).trim() : "";
-    if (h !== n && Ti(h)) customHeaders[h] = void 0;
+  let customHeaders = {};
+  let n = wigglyDoveHeaderName();
+  for (let line of (env.ANTHROPIC_CUSTOM_HEADERS ?? "").split(/\n|\r\n/)) {
+    let colonIdx = line.indexOf(":");
+    let h = colonIdx >= 0 ? line.slice(0, colonIdx).trim() : "";
+    if (h !== n && isWigglyDoveHeader(h)) customHeaders[h] = undefined;
   }
   return customHeaders;
 }
 //@ chunk-hwmsct5x.js:263632-263803 placement
 async function buildClientIdentityHeader({
-  querySource: querySource,
-  permissionContext: permissionContext,
-  toolNames: toolNames,
-  classifierJudgesServedCall: classifierJudgesServedCall,
+  querySource,
+  permissionContext,
+  toolNames,
+  classifierJudgesServedCall,
 }) {
-  if (!eh()) return;
+  if (!isWigglyDoveHeaderEnabled()) return;
   try {
-    return Wy(
+    return serializeHeadersSfDictionary(
       encodeClientIdentityFlags(
         await buildRequestContextHeaders(
           querySource,
@@ -470,146 +629,178 @@ async function buildClientIdentityHeader({
   }
 }
 //@ chunk-hwmsct5x.js:263803-264069 placement
-function identityHeaders(e, n) {
-  if (e === void 0) return {};
+function identityHeaders(permissionContextHeaderValue, n) {
+  if (permissionContextHeaderValue === undefined) return {};
   let r = {};
-  for (let s of Object.keys(n)) if (Ti(s)) r[s] = void 0;
+  for (let key of Object.keys(n)) if (isWigglyDoveHeader(key)) r[key] = undefined;
   if (getCustomHeaders()) {
-    for (let [s, h] of getCustomHeaders_3(env.ANTHROPIC_CUSTOM_HEADERS ?? "")) if (Ti(s)) r[s] = h;
+    for (let [s, h] of getCustomHeaders_3(env.ANTHROPIC_CUSTOM_HEADERS ?? ""))
+      if (isWigglyDoveHeader(s)) r[s] = h;
     return r;
   }
-  if (Ws().once("own_header_logged")) logForDebugging(`${Lo()}: ${e}`);
-  return { ...r, ...getCustomHeaders_2(), [Lo()]: e };
+  if (streamFallbackWarning().once("own_header_logged"))
+    logForDebugging(`${wigglyDoveHeaderName()}: ${permissionContextHeaderValue}`);
+  return {
+    ...r,
+    ...getCustomHeaders_2(),
+    [wigglyDoveHeaderName()]: permissionContextHeaderValue,
+  };
 }
 //@ chunk-hwmsct5x.js:264097-264240 placement
-var SENDER_ADDR_PATH = "/worker/sender_addr",
-  SENDER_ADDR_WAIT_MS = 500,
-  SENDER_ADDR_TTL_MS = 45000,
-  TENGU_JAUNTY_PIKE = "tengu_jaunty_pike",
-  TENGU_SUNNY_GARDEN = "tengu_sunny_garden",
-  SENDER_ADDR_RETRIES = 3,
-  X_SSR_CLIENT_IP = "x-ssr-client-ip",
-  X_SSR_CLIENT_IP_SIG = "x-ssr-client-ip-sig";
+var SENDER_ADDR_PATH = "/worker/sender_addr";
+var SENDER_ADDR_WAIT_MS = 500;
+var SENDER_ADDR_TTL_MS = 45000;
+var TENGU_JAUNTY_PIKE = "tengu_jaunty_pike";
+var TENGU_SUNNY_GARDEN = "tengu_sunny_garden";
+var SENDER_ADDR_RETRIES = 3;
+var X_SSR_CLIENT_IP = "x-ssr-client-ip";
+var X_SSR_CLIENT_IP_SIG = "x-ssr-client-ip-sig";
 //@ chunk-hwmsct5x.js:264240-264358 placement
 function getCcrSenderAddressKey(e, n) {
   if (!isCcsTenant()) return;
-  let r = turnAttributionKeyFor(e),
-    s = n ?? getPromptId() ?? void 0;
-  return r !== void 0 && s !== void 0 ? { event: r, run: s } : void 0;
+  let r = turnAttributionKeyFor(e);
+  let s = n ?? getPromptId() ?? undefined;
+  return r !== undefined && s !== undefined
+    ? {
+        event: r,
+        run: s,
+      }
+    : undefined;
 }
 //@ chunk-hwmsct5x.js:264358-264587 placement
-async function attachSenderAddress(e, n) {
+async function attachSenderAddress(headers, n) {
   try {
-    let startTime = performance.now(),
-      s = await fetchCcrSenderAddress(n, !1),
-      { waits: waits } = Ws().ccsSenderAddr;
-    if (((waits.firstMs ??= performance.now() - startTime), (waits.unsignedCalls += s ? 0 : 1), s))
-      (e.set(X_SSR_CLIENT_IP, s.ip), e.set(X_SSR_CLIENT_IP_SIG, s.sig));
+    let startTime = performance.now();
+    let ccrSenderAddress = await fetchCcrSenderAddress(n, false);
+    let { waits } = streamFallbackWarning().ccsSenderAddr;
+    waits.firstMs ??= performance.now() - startTime;
+    waits.unsignedCalls += ccrSenderAddress ? 0 : 1;
+    if (ccrSenderAddress) {
+      headers.set(X_SSR_CLIENT_IP, ccrSenderAddress.ip);
+      headers.set(X_SSR_CLIENT_IP_SIG, ccrSenderAddress.sig);
+    }
   } catch (error) {
-    (e.delete(X_SSR_CLIENT_IP), e.delete(X_SSR_CLIENT_IP_SIG), logError(error));
+    headers.delete(X_SSR_CLIENT_IP);
+    headers.delete(X_SSR_CLIENT_IP_SIG);
+    logError(error);
   }
 }
+//@ chunk-hwmsct5x.js:264587-265488 placement
 /**
  * 向 CCR 查询当前事件/运行的发送方地址（x-ssr-client-ip 及签名），带缓存与并发去重。
  */
-//@ chunk-hwmsct5x.js:264587-265488 placement
 async function fetchCcrSenderAddress(e, n) {
-  let { asking: asking, held: held } = Ws().ccsSenderAddr,
-    h = `${e.event}|${e.run}`,
-    y = held.get(h);
-  if (y !== void 0 && Date.now() - y.at < SENDER_ADDR_TTL_MS) return y.pair;
+  let { asking, held } = streamFallbackWarning().ccsSenderAddr;
+  let h = `${e.event}|${e.run}`;
+  let y = held.get(h);
+  if (y !== undefined && Date.now() - y.at < SENDER_ADDR_TTL_MS) return y.pair;
   let w = asking.get(h);
-  if (w === void 0) {
-    let R = !0,
-      uRLSearchParams = new URLSearchParams({ event: e.event, run: e.run }),
-      timeout = AbortSignal.timeout(SENDER_ADDR_WAIT_MS);
-    ((w = {
+  if (w === undefined) {
+    let R = true;
+    let uRLSearchParams = new URLSearchParams({
+      event: e.event,
+      run: e.run,
+    });
+    let O = AbortSignal.timeout(SENDER_ADDR_WAIT_MS);
+    w = {
       answer: apiClient
         .get(`${SENDER_ADDR_PATH}?${uRLSearchParams}`, {
           host: "ccr-session",
           auth: "session-jwt",
-          signal: timeout,
+          signal: O,
         })
         .then((P) => {
           R = P.ok;
-          let H = P.ok && P.status === 200 ? P.data : void 0,
-            j = H?.[X_SSR_CLIENT_IP],
-            z = H?.[X_SSR_CLIENT_IP_SIG];
+          let H = P.ok && P.status === 200 ? P.data : undefined;
+          let j = H?.[X_SSR_CLIENT_IP];
+          let z = H?.[X_SSR_CLIENT_IP_SIG];
           return typeof j === "string" &&
             j.length <= 45 &&
             isIP(j) !== 0 &&
             typeof z === "string" &&
             /^[\x21-\x7e]{1,256}$/.test(z)
-            ? { ip: j, sig: z }
-            : void 0;
+            ? {
+                ip: j,
+                sig: z,
+              }
+            : undefined;
         })
-        .catch((P) => {
+        .catch((error) => {
           logForDebugging(
-            `No sender address from CCR: ${timeout.aborted ? `no answer in ${SENDER_ADDR_WAIT_MS} ms` : errorMessage(P)}`,
+            `No sender address from CCR: ${O.aborted ? `no answer in ${SENDER_ADDR_WAIT_MS} ms` : errorMessage(error)}`,
           );
           return;
         })
         .finally(() => {
-          (asking.delete(h), (Ws().ccsSenderAddr.waits.asks += R ? 1 : 0));
+          asking.delete(h);
+          streamFallbackWarning().ccsSenderAddr.waits.asks += R ? 1 : 0;
         }),
       mayBeTooSoon: n,
-    }),
-      asking.set(h, w));
+    };
+    asking.set(h, w);
   }
   let answer = await w.answer;
-  if (answer === void 0 && w.mayBeTooSoon) return n ? void 0 : fetchCcrSenderAddress(e, !1);
+  if (answer === undefined && w.mayBeTooSoon) return n ? undefined : fetchCcrSenderAddress(e, false);
   let now = Date.now();
   for (let [R, L] of held) if (now - L.at >= SENDER_ADDR_TTL_MS) held.delete(R);
-  return (held.set(h, { pair: answer, at: now }), answer);
+  held.set(h, {
+    pair: answer,
+    at: now,
+  });
+  return answer;
 }
 //@ chunk-hwmsct5x.js:265488-265683 placement
-async function prefetchCcrSenderAddress(e, n = !1) {
+async function prefetchCcrSenderAddress(e, n = false) {
   try {
-    let { asking: asking } = Ws().ccsSenderAddr,
-      s = `${e.event}|${e.run}`,
-      h = asking.get(s);
-    if (
-      (fetchCcrSenderAddress(e, n).catch(logError),
-      asking.get(s) !== h && (n || getFeatureValue_CACHED_MAY_BE_STALE(TENGU_JAUNTY_PIKE, !1)))
-    )
-      for (let y = 0; y < SENDER_ADDR_RETRIES; y++) await yieldToEventLoop();
+    let { asking } = streamFallbackWarning().ccsSenderAddr;
+    let s = `${e.event}|${e.run}`;
+    let h = asking.get(s);
+    fetchCcrSenderAddress(e, n).catch(logError);
+    if (asking.get(s) !== h && (n || getFeatureValue_CACHED_MAY_BE_STALE(TENGU_JAUNTY_PIKE, false)))
+      for (let j = 0; j < SENDER_ADDR_RETRIES; j++) await yieldToEventLoop();
   } catch (error) {
     logSenderAddressFailure(error);
   }
 }
 //@ chunk-hwmsct5x.js:265683-265807 placement
-function logSenderAddressFailure(e) {
+function logSenderAddressFailure(error) {
   logError(
     new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `the early ask for a sender's address threw: ${errorMessage(e)}`,
+      `the early ask for a sender's address threw: ${errorMessage(error)}`,
       "the early ask for a sender's address threw",
     ),
   );
 }
 //@ chunk-hwmsct5x.js:265807-265880 placement
-function $ci() {
+/**
+ * 导出函数 `isSunnyGardenSenderAddress`：返回 ( isCcsTenant() && isFirstPartyApiBackend() && getFeatureValue_CACHED_MAY_BE_STALE(TENGU_SUNNY_GARDEN, !1) ); …。
+ */
+function isSunnyGardenSenderAddress() {
   try {
     return (
-      isCcsTenant() && isFirstPartyApiBackend() && getFeatureValue_CACHED_MAY_BE_STALE(TENGU_SUNNY_GARDEN, !1)
+      isCcsTenant() &&
+      isFirstPartyApiBackend() &&
+      getFeatureValue_CACHED_MAY_BE_STALE(TENGU_SUNNY_GARDEN, false)
     );
   } catch (error) {
-    return (logSenderAddressFailure(error), !1);
+    logSenderAddressFailure(error);
+    return false;
   }
 }
+//@ chunk-hwmsct5x.js:265880-265990 placement
 /**
  * 按会话预取 CCR 发送方地址，失败只记录。
  */
-//@ chunk-hwmsct5x.js:265880-265990 placement
 async function prefetchSenderAddressFor(e) {
   try {
-    let n = e === void 0 ? void 0 : getCcrSenderAddressKey(void 0, e);
-    if (n !== void 0) await prefetchCcrSenderAddress(n, !0);
+    let n = e === undefined ? undefined : getCcrSenderAddressKey(undefined, e);
+    if (n !== undefined) await prefetchCcrSenderAddress(n, true);
   } catch (error) {
     logSenderAddressFailure(error);
   }
 }
 //@ chunk-hwmsct5x.js:265990-266068 placement
-function Fl() {
+function baseRequestHeaders() {
   return {
     "x-app": isBgSession() ? "cli-bg" : "cli",
     "User-Agent": getUserAgent(),
@@ -619,107 +810,122 @@ function Fl() {
 //@ chunk-hwmsct5x.js:266068-266151 placement
 function getForwardableEnvHeaders() {
   let e = new Set(customHeaderNames());
-  return wi(Fl(), (n, r) => e.has(r) || checkValueChars(n) !== null);
+  return wi(baseRequestHeaders(), (n, r) => e.has(r) || checkValueChars(n) !== null);
 }
 //@ chunk-hwmsct5x.js:266151-266416 placement
-var HELD_REPLY_SOURCES = new Set(["subagent", "auxiliary", "compaction"]),
-  CONTENT_BLOCK_DELTA_EVENT_BYTES = Buffer.from(`event: content_block_delta
-`),
-  PING_EVENT_BYTES = Buffer.from(`event: ping
-`),
-  EVENT_PREFIX_BYTES = Buffer.from("event"),
-  NEWLINE_EVENT_BYTES = Buffer.from(`
-event`),
-  LF = 10,
-  CR = 13,
-  UTF8_BOM_BYTES = Buffer.from("\uFEFF"),
-  MAX_HELD_BYTES = 262144,
-  heldReplyState = ge({ isSent: !1 }, (e) => {
-    e.isSent = !1;
-  });
+/**
+ * 未监视回复暂存流的常量：哪些查询来源的回复要暂存（subagent/auxiliary/compaction）、脉冲/增量事件字节前缀、LF/CR/BOM 字节、最多暂存 256 KB 与发送状态。
+ */
+var HELD_REPLY_SOURCES = new Set(["subagent", "auxiliary", "compaction"]);
+var CONTENT_BLOCK_DELTA_EVENT_BYTES = Buffer.from(`event: content_block_delta
+`);
+var PING_EVENT_BYTES = Buffer.from(`event: ping
+`);
+var EVENT_PREFIX_BYTES = Buffer.from("event");
+var NEWLINE_EVENT_BYTES = Buffer.from(`
+event`);
+var LF = 10;
+var CR = 13;
+var UTF8_BOM_BYTES = Buffer.from("\uFEFF");
+var MAX_HELD_BYTES = 262144;
+var heldReplyState = identity(
+  {
+    isSent: false,
+  },
+  (e) => {
+    e.isSent = false;
+  },
+);
 //@ chunk-hwmsct5x.js:266416-266503 placement
-function fh(e) {
-  return e !== void 0 && HELD_REPLY_SOURCES.has(e) ? (env.CLAUDE_CODE_UNWATCHED_REPLY_HOLD_MS ?? 0) : 0;
+function heldReplyHoldMs(e) {
+  return e !== undefined && HELD_REPLY_SOURCES.has(e) ? (env.CLAUDE_CODE_UNWATCHED_REPLY_HOLD_MS ?? 0) : 0;
 }
+//@ chunk-aepeg2w5.js:378332-378423 placement
 /**
  * 查询来源是否为主线程或代理。
  */
-//@ chunk-aepeg2w5.js:378332-378423 placement
-function isMainOrAgentQuerySource(e) {
-  if (e === void 0) return !0;
-  if (e.startsWith("agent:")) return !0;
-  return RETRY_ON_529_QUERY_SOURCES.has(e);
+function isMainOrAgentQuerySource(querySource) {
+  if (querySource === undefined) return true;
+  if (querySource.startsWith("agent:")) return true;
+  return RETRY_ON_529_QUERY_SOURCES.has(querySource);
 }
 //@ chunk-aepeg2w5.js:378423-378511 placement
-function MEi(e) {
-  if (e === void 0) return !1;
+/**
+ * 导出函数 `isRetryOn529Source`：参数 e，返回 !1; let n = RETRY_ON_529_QUERY_SOURCES; return e.startsWith("agent:") || n.has(e)。
+ */
+function isRetryOn529Source(querySource) {
+  if (querySource === undefined) return false;
   let n = RETRY_ON_529_QUERY_SOURCES;
-  return e.startsWith("agent:") || n.has(e);
+  return querySource.startsWith("agent:") || n.has(querySource);
 }
+//@ chunk-aepeg2w5.js:378511-378686 placement
 /**
  * 把查询来源分为 main/subagent/auxiliary。
  */
-//@ chunk-aepeg2w5.js:378511-378686 placement
-function classifyQuerySource(e) {
-  if (e === void 0) return;
-  if (e.startsWith("repl_main_thread") || e === "sdk") return "main";
-  if (e.startsWith("agent:") || e === "hook_agent") return "subagent";
+function classifyQuerySource(querySource) {
+  if (querySource === undefined) return;
+  if (querySource.startsWith("repl_main_thread") || querySource === "sdk") return "main";
+  if (querySource.startsWith("agent:") || querySource === "hook_agent") return "subagent";
   return "auxiliary";
 }
+//@ chunk-aepeg2w5.js:378686-378736 placement
 /**
  * 是否为主线程查询。
  */
-//@ chunk-aepeg2w5.js:378686-378736 placement
-function isMainQuerySource(e) {
-  return e === void 0 || classifyQuerySource(e) === "main";
+function isMainQuerySource(querySource) {
+  return querySource === undefined || classifyQuerySource(querySource) === "main";
 }
+//@ chunk-aepeg2w5.js:378736-378808 placement
 /**
  * 是否为 auto mode 分类器查询。
  */
-//@ chunk-aepeg2w5.js:378736-378808 placement
-function isAutoModeQuerySource(e) {
-  return e === "auto_mode" || e === "auto_mode_investigator" || !1;
+function isAutoModeQuerySource(querySource) {
+  return querySource === "auto_mode" || querySource === "auto_mode_investigator" || false;
 }
 //@ chunk-aepeg2w5.js:378808-378875 placement
-function gp(e) {
+function querySourceFamily(e) {
   let index = e.indexOf(":");
-  return index > 0 ? e.slice(0, index) : void 0;
+  return index > 0 ? e.slice(0, index) : undefined;
 }
+//@ chunk-aepeg2w5.js:378875-378955 placement
 /**
  * 自定义 agent 来源归一为 agent:custom。
  */
-//@ chunk-aepeg2w5.js:378875-378955 placement
-function normalizeAgentQuerySource(e) {
-  if (e?.startsWith("agent:custom:")) return "agent:custom";
-  return e;
+function normalizeAgentQuerySource(querySource) {
+  if (querySource?.startsWith("agent:custom:")) return "agent:custom";
+  return querySource;
 }
 //@ chunk-aepeg2w5.js:378955-379097 placement
-var X_CLAUDE_CODE_REQUEST_CLASS = "x-claude-code-request-class",
-  X_CLAUDE_CODE_AGENT_TYPE = "x-claude-code-agent-type",
-  DEi = ["main", "subagent", "workflow", "compaction", "auxiliary", "side_reply"];
+/**
+ * 请求分类请求头 x-claude-code-request-class 与 x-claude-code-agent-type，及允许的请求类别列表。
+ */
+var X_CLAUDE_CODE_REQUEST_CLASS = "x-claude-code-request-class";
+var X_CLAUDE_CODE_AGENT_TYPE = "x-claude-code-agent-type";
+var REQUEST_CLASSES = ["main", "subagent", "workflow", "compaction", "auxiliary", "side_reply"];
+//@ chunk-aepeg2w5.js:379097-379296 placement
 /**
  * 由查询来源确定请求通道（compaction、workflow、subagent 等），可被显式指定覆盖。
  */
-//@ chunk-aepeg2w5.js:379097-379296 placement
-function requestLaneFor(e, n, r) {
-  if (e === void 0) return;
-  if (r !== void 0) return r;
-  if (e === "compact") return "compaction";
-  let s = classifyQuerySource(e);
-  if (s === "subagent" && n.agentType === "subagent" && n.workflowRunId) return "workflow";
+function requestLaneFor(source, agentContext, requestClass) {
+  if (source === undefined) return;
+  if (requestClass !== undefined) return requestClass;
+  if (source === "compact") return "compaction";
+  let s = classifyQuerySource(source);
+  if (s === "subagent" && agentContext.agentType === "subagent" && agentContext.workflowRunId)
+    return "workflow";
   return s;
 }
 //@ chunk-aepeg2w5.js:379296-379320 placement
 var AGENT_BUILTIN = "agent:builtin:";
+//@ chunk-aepeg2w5.js:379320-379537 placement
 /**
  * 由 agent:* 查询来源得出代理种类（teammate、内置代理名、custom）。
  */
-//@ chunk-aepeg2w5.js:379320-379537 placement
-function agentKindFor(e, n) {
-  if (e === void 0 || !e.startsWith("agent:")) return;
-  if (n.agentType === "teammate") return "teammate";
-  if (e.startsWith(AGENT_BUILTIN)) return e.slice(AGENT_BUILTIN.length) || void 0;
-  if (e.startsWith("agent:custom")) return "custom";
+function agentKindFor(source, agentContext) {
+  if (source === undefined || !source.startsWith("agent:")) return;
+  if (agentContext.agentType === "teammate") return "teammate";
+  if (source.startsWith(AGENT_BUILTIN)) return source.slice(AGENT_BUILTIN.length) || undefined;
+  if (source.startsWith("agent:custom")) return "custom";
   return;
 }
 //@ chunk-aepeg2w5.js:379537-379571 placement
@@ -730,209 +936,214 @@ var X_COWORK_ENROLLMENT = "x-cowork-enrollment";
 var X_CLAUDE_REMOTE_SESSION_ORIGIN = "x-claude-remote-session-origin";
 //@ chunk-aepeg2w5.js:379642-379677 placement
 var X_CLAUDE_CODE_SESSION_ID = "X-Claude-Code-Session-Id";
+//@ chunk-aepeg2w5.js:379677-379941 placement
 /**
  * 请求头值非法（发送前拒绝）的错误。
  */
-//@ chunk-aepeg2w5.js:379677-379941 placement
 class InvalidRequestHeaderValueError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS {
   header;
   source;
-  constructor(e, n, r) {
+  constructor(e, header, source) {
     super(e, "request header value rejected before send: not a valid HTTP header value");
-    this.header = n;
-    this.source = r;
+    this.header = header;
+    this.source = source;
     this.name = "InvalidRequestHeaderValueError";
   }
   get isUserSupplied() {
     return this.source !== "claude-code";
   }
 }
+//@ chunk-aepeg2w5.js:379941-381099 placement
 /**
  * 保留的请求头名与环境变量到请求头的映射。
  */
-//@ chunk-aepeg2w5.js:379941-381099 placement
 var RESERVED_REQUEST_HEADERS = new Set([
-    "x-app",
-    X_CLAUDE_CODE_SESSION_ID,
-    "x-claude-code-agent-id",
-    "x-claude-code-parent-agent-id",
-    X_CLAUDE_CODE_PROMPT_ID,
-    X_CLAUDE_CODE_REQUEST_CLASS,
-    X_CLAUDE_CODE_AGENT_TYPE,
-    "x-anthropic-additional-protection",
-    X_CLAUDE_REMOTE_SESSION_ORIGIN,
-    X_COWORK_ENROLLMENT,
-  ]),
-  x0 = {
-    "x-client-app": "CLAUDE_AGENT_SDK_CLIENT_APP",
-    "x-claude-remote-container-id": "CLAUDE_CODE_CONTAINER_ID",
-    "x-claude-remote-session-id": "CLAUDE_CODE_REMOTE_SESSION_ID",
-    "User-Agent": "User-Agent environment",
-  },
-  Ni = {
-    ANTHROPIC_API_KEY: " from ANTHROPIC_API_KEY",
-    apiKeyHelper: " from apiKeyHelper",
-    "/login managed key": " from the saved /login API key",
-    ANTHROPIC_AUTH_TOKEN: " from ANTHROPIC_AUTH_TOKEN",
-    CLAUDE_CODE_OAUTH_TOKEN: " from CLAUDE_CODE_OAUTH_TOKEN",
-    CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR: " from the OAuth token file descriptor",
-    CCR_OAUTH_TOKEN_FILE: " from the OAuth token file",
-    "claude.ai": " from the saved claude.ai login",
-    ANTHROPIC_CUSTOM_HEADERS: " from ANTHROPIC_CUSTOM_HEADERS",
-    CLAUDE_AGENT_SDK_CLIENT_APP: " from CLAUDE_AGENT_SDK_CLIENT_APP",
-    CLAUDE_CODE_CONTAINER_ID: " from CLAUDE_CODE_CONTAINER_ID",
-    CLAUDE_CODE_REMOTE_SESSION_ID: " from CLAUDE_CODE_REMOTE_SESSION_ID",
-    "User-Agent environment":
-      " from CLAUDE_CODE_ENTRYPOINT / CLAUDE_AGENT_SDK_VERSION / CLAUDE_AGENT_SDK_CLIENT_APP",
-    unknown: "",
-    "claude-code": "",
-  };
+  "x-app",
+  X_CLAUDE_CODE_SESSION_ID,
+  "x-claude-code-agent-id",
+  "x-claude-code-parent-agent-id",
+  X_CLAUDE_CODE_PROMPT_ID,
+  X_CLAUDE_CODE_REQUEST_CLASS,
+  X_CLAUDE_CODE_AGENT_TYPE,
+  "x-anthropic-additional-protection",
+  X_CLAUDE_REMOTE_SESSION_ORIGIN,
+  X_COWORK_ENROLLMENT,
+]);
+var RESERVED_HEADER_SOURCE_ENV = {
+  "x-client-app": "CLAUDE_AGENT_SDK_CLIENT_APP",
+  "x-claude-remote-container-id": "CLAUDE_CODE_CONTAINER_ID",
+  "x-claude-remote-session-id": "CLAUDE_CODE_REMOTE_SESSION_ID",
+  "User-Agent": "User-Agent environment",
+};
+var CREDENTIAL_SOURCE_LABELS = {
+  ANTHROPIC_API_KEY: " from ANTHROPIC_API_KEY",
+  apiKeyHelper: " from apiKeyHelper",
+  "/login managed key": " from the saved /login API key",
+  ANTHROPIC_AUTH_TOKEN: " from ANTHROPIC_AUTH_TOKEN",
+  CLAUDE_CODE_OAUTH_TOKEN: " from CLAUDE_CODE_OAUTH_TOKEN",
+  CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR: " from the OAuth token file descriptor",
+  CCR_OAUTH_TOKEN_FILE: " from the OAuth token file",
+  "claude.ai": " from the saved claude.ai login",
+  ANTHROPIC_CUSTOM_HEADERS: " from ANTHROPIC_CUSTOM_HEADERS",
+  CLAUDE_AGENT_SDK_CLIENT_APP: " from CLAUDE_AGENT_SDK_CLIENT_APP",
+  CLAUDE_CODE_CONTAINER_ID: " from CLAUDE_CODE_CONTAINER_ID",
+  CLAUDE_CODE_REMOTE_SESSION_ID: " from CLAUDE_CODE_REMOTE_SESSION_ID",
+  "User-Agent environment":
+    " from CLAUDE_CODE_ENTRYPOINT / CLAUDE_AGENT_SDK_VERSION / CLAUDE_AGENT_SDK_CLIENT_APP",
+  unknown: "",
+  "claude-code": "",
+};
+//@ chunk-aepeg2w5.js:381099-382670 placement
 /**
  * 校验 x-api-key/Authorization/自定义头的值，非法时抛出带来源的错误。
  */
-//@ chunk-aepeg2w5.js:381099-382670 placement
 function validateAuthHeaders({
-  apiKey: apiKey,
-  getApiKeySource: getApiKeySource,
-  authToken: authToken,
-  getAuthTokenSource: getAuthTokenSource,
-  defaultHeaders: defaultHeaders,
-  authorizationSource: authorizationSource,
-  customHeaderNames: customHeaderNames,
-  envSuppliedHeaderNames: envSuppliedHeaderNames,
+  apiKey,
+  getApiKeySource,
+  authToken,
+  getAuthTokenSource,
+  defaultHeaders,
+  authorizationSource,
+  customHeaderNames,
+  envSuppliedHeaderNames,
 }) {
-  if (apiKey !== null && _p("x-api-key", apiKey)) {
-    let R = getApiKeySource();
+  if (apiKey !== null && isInvalidHeaderPair("x-api-key", apiKey)) {
+    let apiKeySource = getApiKeySource();
     throw new InvalidRequestHeaderValueError(
-      `Invalid X-Api-Key header value${Ni[R]}: ${describeInvalidHeaderValue(apiKey)}.`,
+      `Invalid X-Api-Key header value${CREDENTIAL_SOURCE_LABELS[apiKeySource]}: ${describeInvalidHeaderValue(apiKey)}.`,
       "X-Api-Key",
-      R,
+      apiKeySource,
     );
   }
-  for (let [R, x] of Object.entries(defaultHeaders)) {
-    if (typeof x !== "string" || !_p(R, x)) continue;
-    let index = customHeaderNames.indexOf(R),
-      F = `distinct header ${index + 1} of ${customHeaderNames.length} parsed from ANTHROPIC_CUSTOM_HEADERS`;
-    if (O0(R))
+  for (let [key, value] of Object.entries(defaultHeaders)) {
+    if (typeof value !== "string" || !isInvalidHeaderPair(key, value)) continue;
+    let index = customHeaderNames.indexOf(key);
+    let F = `distinct header ${index + 1} of ${customHeaderNames.length} parsed from ANTHROPIC_CUSTOM_HEADERS`;
+    if (isInvalidHeaderName(key))
       throw new InvalidRequestHeaderValueError(
         index === -1
-          ? `Invalid request header name: the HTTP runtime does not accept it (${bp(R.length)}).`
-          : `Invalid name for ${F}: the HTTP runtime does not accept it (${bp(R.length)}).`,
+          ? `Invalid request header name: the HTTP runtime does not accept it (${characterCount(key.length)}).`
+          : `Invalid name for ${F}: the HTTP runtime does not accept it (${characterCount(key.length)}).`,
         "other",
         index === -1 ? "claude-code" : "ANTHROPIC_CUSTOM_HEADERS",
       );
-    let L = x0[R];
-    if (L !== void 0 && envSuppliedHeaderNames.has(R))
+    let L = RESERVED_HEADER_SOURCE_ENV[key];
+    if (L !== undefined && envSuppliedHeaderNames.has(key))
       throw new InvalidRequestHeaderValueError(
-        `Invalid ${R} header value${Ni[L]}: ${describeInvalidHeaderValue(x)}.`,
+        `Invalid ${key} header value${CREDENTIAL_SOURCE_LABELS[L]}: ${describeInvalidHeaderValue(value)}.`,
         "other",
         L,
       );
-    let G = R === "Authorization" && authorizationSource !== null;
-    if (R.toLowerCase() === "authorization") {
-      let j = G ? authorizationSource : index === -1 ? "unknown" : "ANTHROPIC_CUSTOM_HEADERS",
-        ee = G && x.startsWith("Bearer ") ? x.slice(7) : x;
+    let G = key === "Authorization" && authorizationSource !== null;
+    if (key.toLowerCase() === "authorization") {
+      let j = G ? authorizationSource : index === -1 ? "unknown" : "ANTHROPIC_CUSTOM_HEADERS";
+      let ee = G && value.startsWith("Bearer ") ? value.slice(7) : value;
       throw new InvalidRequestHeaderValueError(
-        `Invalid Authorization header value${Ni[j]}: ${describeInvalidHeaderValue(ee)}.`,
+        `Invalid Authorization header value${CREDENTIAL_SOURCE_LABELS[j]}: ${describeInvalidHeaderValue(ee)}.`,
         "Authorization",
         j,
       );
     }
     if (index !== -1)
       throw new InvalidRequestHeaderValueError(
-        `Invalid value for ${F}: ${describeInvalidHeaderValue(x)}.`,
-        R.toLowerCase() === "x-api-key" ? "X-Api-Key" : "other",
+        `Invalid value for ${F}: ${describeInvalidHeaderValue(value)}.`,
+        key.toLowerCase() === "x-api-key" ? "X-Api-Key" : "other",
         "ANTHROPIC_CUSTOM_HEADERS",
       );
-    if (L !== void 0)
+    if (L !== undefined)
       throw new InvalidRequestHeaderValueError(
-        `Invalid ${R} header value${Ni[L]}: ${describeInvalidHeaderValue(x)}.`,
+        `Invalid ${key} header value${CREDENTIAL_SOURCE_LABELS[L]}: ${describeInvalidHeaderValue(value)}.`,
         "other",
         L,
       );
     throw new InvalidRequestHeaderValueError(
-      RESERVED_REQUEST_HEADERS.has(R)
-        ? `Invalid ${R} header value: ${describeInvalidHeaderValue(x)}.`
-        : `Invalid request header value: ${describeInvalidHeaderValue(x)}.`,
+      RESERVED_REQUEST_HEADERS.has(key)
+        ? `Invalid ${key} header value: ${describeInvalidHeaderValue(value)}.`
+        : `Invalid request header value: ${describeInvalidHeaderValue(value)}.`,
       "other",
       "claude-code",
     );
   }
-  if (authToken !== null && _p("authorization", `Bearer ${authToken}`)) {
-    let R = getAuthTokenSource();
+  if (authToken !== null && isInvalidHeaderPair("authorization", `Bearer ${authToken}`)) {
+    let authTokenSource = getAuthTokenSource();
     throw new InvalidRequestHeaderValueError(
-      `Invalid Authorization header value${Ni[R]}: ${describeInvalidHeaderValue(authToken)}.`,
+      `Invalid Authorization header value${CREDENTIAL_SOURCE_LABELS[authTokenSource]}: ${describeInvalidHeaderValue(authToken)}.`,
       "Authorization",
-      R,
+      authTokenSource,
     );
   }
 }
 //@ chunk-aepeg2w5.js:382670-382738 placement
-function _p(e, n) {
+function isInvalidHeaderPair(e, n) {
   try {
-    return (new Headers([[e, n]]), !1);
+    new Headers([[e, n]]);
+    return false;
   } catch {
-    return !0;
+    return true;
   }
 }
 //@ chunk-aepeg2w5.js:382738-382806 placement
-function O0(e) {
+function isInvalidHeaderName(e) {
   try {
-    return (new Headers([[e, "x"]]), !1);
+    new Headers([[e, "x"]]);
+    return false;
   } catch {
-    return !0;
+    return true;
   }
 }
 //@ chunk-aepeg2w5.js:382806-382945 placement
 function describeInvalidHeaderValue(e) {
-  let n = checkValueChars(e),
-    r = textLengthAndLines(e);
+  let n = checkValueChars(e);
+  let r = textLengthAndLines(e);
   return n === null
-    ? `it contains a character the HTTP runtime does not accept (${bp(r.length)})`
+    ? `it contains a character the HTTP runtime does not accept (${characterCount(r.length)})`
     : describeUnsafeValue(n, r);
 }
 //@ chunk-aepeg2w5.js:382945-383005 placement
-function bp(e) {
+function characterCount(e) {
   return e === 1 ? "1 character" : `${e} characters`;
 }
+//@ chunk-aepeg2w5.js:383035-383607 placement
 /**
  * 已知内容块类型集合。
  */
-//@ chunk-aepeg2w5.js:383035-383607 placement
 var KNOWN_CONTENT_BLOCK_TYPES = {
-    advisor_tool_result: !0,
-    bash_code_execution_tool_result: !0,
-    code_execution_tool_result: !0,
-    compaction: !0,
-    container_upload: !0,
-    document: !0,
-    fallback: !0,
-    image: !0,
-    mcp_tool_listing: !0,
-    mcp_tool_result: !0,
-    mcp_tool_use: !0,
-    redacted_thinking: !0,
-    search_result: !0,
-    server_tool_use: !0,
-    text: !0,
-    text_editor_code_execution_tool_result: !0,
-    thinking: !0,
-    tool_result: !0,
-    tool_search_tool_result: !0,
-    tool_addition: !0,
-    tool_removal: !0,
-    tool_use: !0,
-    web_fetch_tool_result: !0,
-    web_search_tool_result: !0,
-  },
-  M0 = ["connector_text", "mid_conv_system", "tool_reference"],
-  Sp = new Set([...Object.keys(KNOWN_CONTENT_BLOCK_TYPES), ...M0]);
+  advisor_tool_result: true,
+  bash_code_execution_tool_result: true,
+  code_execution_tool_result: true,
+  compaction: true,
+  container_upload: true,
+  document: true,
+  fallback: true,
+  image: true,
+  mcp_tool_listing: true,
+  mcp_tool_result: true,
+  mcp_tool_use: true,
+  redacted_thinking: true,
+  search_result: true,
+  server_tool_use: true,
+  text: true,
+  text_editor_code_execution_tool_result: true,
+  thinking: true,
+  tool_result: true,
+  tool_search_tool_result: true,
+  tool_addition: true,
+  tool_removal: true,
+  tool_use: true,
+  web_fetch_tool_result: true,
+  web_search_tool_result: true,
+};
+var EXTRA_ALLOWLISTED_BLOCK_TYPES = ["connector_text", "mid_conv_system", "tool_reference"];
+var ALLOWLISTED_BLOCK_TYPES = new Set([
+  ...Object.keys(KNOWN_CONTENT_BLOCK_TYPES),
+  ...EXTRA_ALLOWLISTED_BLOCK_TYPES,
+]);
+//@ chunk-aepeg2w5.js:383607-383661 placement
 /**
  * 是否为已知内容块类型。
  */
-//@ chunk-aepeg2w5.js:383607-383661 placement
-function isKnownContentBlockType(e) {
-  return typeof e === "string" && Sp.has(e);
+function isKnownContentBlockType(type) {
+  return typeof type === "string" && ALLOWLISTED_BLOCK_TYPES.has(type);
 }
 //@ chunk-aepeg2w5.js:383661-383855 placement
 var KNOWN_BLOCK_TYPES = new Set([
@@ -953,56 +1164,58 @@ var KNOWN_BLOCK_TYPES = new Set([
   "video_url",
 ]);
 //@ chunk-aepeg2w5.js:383855-383928 placement
-function NEi(e) {
-  return Sp.has(e) ? e : `non-allowlisted (${e.length} chars)`;
+/**
+ * 导出函数 `allowlistedBlockType`：参数 e，返回 Sp.has(e) ? e : `non-allowlisted (${e.length} chars)`。
+ */
+function allowlistedBlockType(e) {
+  return ALLOWLISTED_BLOCK_TYPES.has(e) ? e : `non-allowlisted (${e.length} chars)`;
 }
 //@ chunk-aepeg2w5.js:383928-384083 placement
 var KNOWN_ENUM_VALUES = new Set([
-    "adaptive",
-    "any",
-    "auto",
-    "base64",
-    "content",
-    "disabled",
-    "enabled",
-    "ephemeral",
-    "none",
-    "tool",
-    "url",
-  ]),
-  NON_ALLOWLISTED_PATTERN = /^non-allowlisted \(\d{1,4} chars\)$/;
+  "adaptive",
+  "any",
+  "auto",
+  "base64",
+  "content",
+  "disabled",
+  "enabled",
+  "ephemeral",
+  "none",
+  "tool",
+  "url",
+]);
+var NON_ALLOWLISTED_PATTERN = /^non-allowlisted \(\d{1,4} chars\)$/;
 //@ chunk-aepeg2w5.js:384083-384163 placement
-function YE(e) {
-  return F0(e) || NON_ALLOWLISTED_PATTERN.test(e) ? e : `non-allowlisted (${e.length} chars)`;
+function redactUnknownBlockType(e) {
+  return isKnownBlockType(e) || NON_ALLOWLISTED_PATTERN.test(e) ? e : `non-allowlisted (${e.length} chars)`;
 }
 //@ chunk-aepeg2w5.js:384163-384217 placement
-function F0(e) {
-  return Sp.has(e) || KNOWN_BLOCK_TYPES.has(e) || KNOWN_ENUM_VALUES.has(e);
+function isKnownBlockType(e) {
+  return ALLOWLISTED_BLOCK_TYPES.has(e) || KNOWN_BLOCK_TYPES.has(e) || KNOWN_ENUM_VALUES.has(e);
 }
-
 export {
   isKnownContentBlockType,
   isAutoModeQuerySource,
-  $ci,
+  isSunnyGardenSenderAddress,
   prefetchSenderAddressFor,
   classifyQuerySource,
-  gp,
+  querySourceFamily,
   normalizeAgentQuerySource,
   InvalidRequestHeaderValueError,
   getCcrSenderAddressKey,
   prefetchCcrSenderAddress,
-  Nci,
+  canSendWigglyDoveHeader,
   isMainOrAgentQuerySource,
   getForwardableEnvHeaders,
   isMainQuerySource,
-  YE,
+  redactUnknownBlockType,
   validateAuthHeaders,
-  NEi,
+  allowlistedBlockType,
   requestLaneFor,
   agentKindFor,
-  MEi,
+  isRetryOn529Source,
   buildClientIdentityHeader,
-  Fl,
+  baseRequestHeaders,
   X_CLAUDE_REMOTE_SESSION_ORIGIN,
   X_CLAUDE_CODE_REQUEST_CLASS,
   X_CLAUDE_CODE_AGENT_TYPE,
@@ -1010,7 +1223,7 @@ export {
   identityHeaders,
   X_COWORK_ENROLLMENT,
   attachSenderAddress,
-  fh,
+  heldReplyHoldMs,
   LF,
   CR,
   UTF8_BOM_BYTES,
@@ -1020,6 +1233,6 @@ export {
   MAX_HELD_BYTES,
   heldReplyState,
   NEWLINE_EVENT_BYTES,
-  DEi,
+  REQUEST_CLASSES,
   X_CLAUDE_CODE_SESSION_ID,
 };

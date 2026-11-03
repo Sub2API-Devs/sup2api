@@ -11,10 +11,10 @@
 import { Ar } from "../../../../runtime/bun-runtime.js";
 import {
   defineMermaidPlugin,
-  Ue,
-  Xe,
-  $e,
-  Xt,
+  MAX_RENDER_MS,
+  MIN_PLOT_WIDTH,
+  MAX_MERMAID_SOURCE_CHARS,
+  registerMermaidPlugin,
   registerMermaidRenderHook,
   renderMermaidSource,
   renderMermaidFencesInText,
@@ -35,20 +35,23 @@ Ar(mermaidPluginModule, {
   registerPlugin: () => defineMermaidPlugin,
 });
 //@ chunk-yb0ajcmt.js:4083-4092 placement
-var Z = {};
+/**
+ * 空对象
+ */
+var EMPTY_OBJECT = {};
 //@ chunk-yb0ajcmt.js:4092-4261 placement
-Ar(Z, {
-  MAX_REWRITTEN_LENGTH: () => Ue,
-  MAX_ROWS: () => Xe,
-  MAX_SOURCE_LENGTH: () => $e,
-  default: () => Z,
-  register: () => Xt,
+Ar(EMPTY_OBJECT, {
+  MAX_REWRITTEN_LENGTH: () => MAX_RENDER_MS,
+  MAX_ROWS: () => MIN_PLOT_WIDTH,
+  MAX_SOURCE_LENGTH: () => MAX_MERMAID_SOURCE_CHARS,
+  default: () => EMPTY_OBJECT,
+  register: () => registerMermaidPlugin,
   registerHooks: () => registerMermaidRenderHook,
   renderMermaid: () => renderMermaidSource,
   withDiagrams: () => renderMermaidFencesInText,
 });
 //@ chunk-yb0ajcmt.js:4261-4271 placement
-var MERMAID_PLUGIN_DEFAULT_ON = !1;
+var MERMAID_PLUGIN_DEFAULT_ON = false;
 //@ chunk-yb0ajcmt.js:4271-4322 placement
 var isMermaidPluginAvailable = () =>
   areHooksModulesAllowed() &&
@@ -59,19 +62,26 @@ var MERMAID_PLUGIN_DESCRIPTION =
   "Mermaid diagrams in the terminal: flowcharts and sequence diagrams in a reply's mermaid code fences are drawn in place as box-drawing text";
 //@ chunk-yb0ajcmt.js:4470-4497 placement
 var CC_PLUGIN_MERMAID = "cc-plugin-mermaid";
+//@ chunk-yb0ajcmt.js:4497-4703 placement
 /**
  * 缓存渲染结果（单项与总量有上限，超出时淘汰最旧的）。
  */
-//@ chunk-yb0ajcmt.js:4497-4703 placement
 function cacheRenderedDiagram(e, t, n) {
-  if ((e.delete(t), t.length + n.length > 50000)) return;
+  e.delete(t);
+  if (t.length + n.length > 50000) return;
   e.set(t, n);
   let o = 0;
   for (let [i, u] of e) o += i.length + u.length;
   for (let [i, u] of e) {
     if (e.size <= 32 && o <= 250000) return;
-    (e.delete(i), (o -= i.length + u.length));
+    e.delete(i);
+    o -= i.length + u.length;
   }
 }
-
-export { cacheRenderedDiagram, CC_PLUGIN_MERMAID, MERMAID_PLUGIN_DESCRIPTION, isMermaidPluginAvailable, Z };
+export {
+  cacheRenderedDiagram,
+  CC_PLUGIN_MERMAID,
+  MERMAID_PLUGIN_DESCRIPTION,
+  isMermaidPluginAvailable,
+  EMPTY_OBJECT,
+};

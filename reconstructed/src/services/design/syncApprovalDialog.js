@@ -10,13 +10,13 @@
  */
 import { isAbsolute } from "path";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, T, o, A } from "../../../vendor/zod/v4/classic/schemas.js";
+import { u, literal, string, array } from "../../../vendor/zod/v4/classic/schemas.js";
 import {
   fitsLabelLimit,
   hasVisibleText,
   hasSuspiciousText,
   listLabel,
-  HH,
+  MAX_RAW_DISPLAY_CHARS,
   MAX_DISPLAY_UNITS,
   uniqueLabels,
   displayField,
@@ -25,34 +25,42 @@ import { bunStringWidth } from "../../ink/stringWidth.js";
 import { wrapAnsi } from "../../ink/wrapAnsi.js";
 import { countCharInString, plural } from "../../utils/stringUtils.js";
 import { uniq } from "../../utils/collections.js";
-import { XL, WBt } from "../mcp/designPlanGate.js";
+import { normalizePlanPath, hasGlobChars } from "../mcp/designPlanGate.js";
 import { STANDALONE_DESIGN_CLOSING_NOTICE } from "../../tools/DesignSyncTool/DesignSyncTool.js";
 
+//@ chunk-98n6ge4d.js:9063-9550 placement
 /**
  * Design 同步审批对话框的提示文字、宽度上限，以及 finalize_plan 与 create_project 的输入结构。
  */
-//@ chunk-98n6ge4d.js:9063-9550 placement
-var REVIEW_UPLOAD_NOTE = "Review what will be uploaded or deleted before continuing.",
-  NEW_PROJECT_NOTE = "This creates a new project on your claude.ai account.",
-  WRITE_GRANT_NOTE = "Approving also grants Claude ongoing write access to your design projects.",
-  UNSHOWABLE_NAME = "(can't be shown here)",
-  UNLISTED_FILES_HINT = "To see the files not listed here, answer No and ask Claude.",
-  MAX_DIALOG_WIDTH = 720,
-  FINALIZE_PLAN_INPUT_SCHEMA = DoctorLazy(() =>
-    u({
-      method: T("finalize_plan"),
-      projectId: o(),
-      localDir: o().default("."),
-      writes: A(o()).default([]),
-      deletes: A(o()).default([]),
-    }),
-  ),
-  CREATE_PROJECT_INPUT_SCHEMA = DoctorLazy(() => u({ method: T("create_project"), name: o() }));
+var REVIEW_UPLOAD_NOTE = "Review what will be uploaded or deleted before continuing.";
+var NEW_PROJECT_NOTE = "This creates a new project on your claude.ai account.";
+var WRITE_GRANT_NOTE = "Approving also grants Claude ongoing write access to your design projects.";
+var UNSHOWABLE_NAME = "(can't be shown here)";
+var UNLISTED_FILES_HINT = "To see the files not listed here, answer No and ask Claude.";
+var MAX_DIALOG_WIDTH = 720;
+var FINALIZE_PLAN_INPUT_SCHEMA = DoctorLazy(() =>
+  u({
+    method: literal("finalize_plan"),
+    projectId: string(),
+    localDir: string().default("."),
+    writes: array(string()).default([]),
+    deletes: array(string()).default([]),
+  }),
+);
+var CREATE_PROJECT_INPUT_SCHEMA = DoctorLazy(() =>
+  u({
+    method: literal("create_project"),
+    name: string(),
+  }),
+);
 //@ chunk-98n6ge4d.js:9550-9637 placement
-function q(e, n) {
+/**
+ * 把文本整理成可展示的标签（长度、可见字符、可疑内容都过关才返回）。
+ */
+function labelIfShowable(e, n) {
   if (!fitsLabelLimit(e) || !hasVisibleText(e) || hasSuspiciousText(e)) return;
   let s = listLabel(e);
-  return bunStringWidth(s) <= n ? s : void 0;
+  return bunStringWidth(s) <= n ? s : undefined;
 }
 //@ chunk-98n6ge4d.js:9637-9791 placement
 function revealWhitespace(e) {
@@ -61,15 +69,18 @@ function revealWhitespace(e) {
   );
 }
 //@ chunk-98n6ge4d.js:9791-9844 placement
-function x(e, n) {
-  return e.length > HH ? void 0 : q(revealWhitespace(e), n);
+/**
+ * 先去长度上限再走 q 的版本。
+ */
+function labelIfShowableLong(e, n) {
+  return e.length > MAX_RAW_DISPLAY_CHARS ? undefined : labelIfShowable(revealWhitespace(e), n);
 }
 //@ chunk-98n6ge4d.js:9844-10130 placement
 function formatPathList(paths) {
   let joined = paths.join(", ");
   if (joined.length > MAX_DISPLAY_UNITS || bunStringWidth(joined) > MAX_DIALOG_WIDTH) return;
-  let filtered = paths.map(revealWhitespace).filter((i) => q(i, 1 / 0) !== void 0),
-    r = paths.length - filtered.length;
+  let filtered = paths.map(revealWhitespace).filter((i) => labelIfShowable(i, 1 / 0) !== undefined);
+  let r = paths.length - filtered.length;
   if (r > 0 && filtered.length === 0) return;
   return {
     text: [
@@ -81,12 +92,20 @@ function formatPathList(paths) {
 }
 //@ chunk-98n6ge4d.js:10130-10422 placement
 function fitsDialog(lines, { minColumns: n = 60, maxRows: s = 12 } = {}) {
-  let mapped = lines.map((a) => displayField(a).text);
-  if (lines.some((a) => a.length > MAX_DISPLAY_UNITS) || bunStringWidth(mapped.join("")) > MAX_DIALOG_WIDTH)
-    return !1;
+  let mapped = lines.map((line) => displayField(line).text);
+  if (
+    lines.some((line) => line.length > MAX_DISPLAY_UNITS) ||
+    bunStringWidth(mapped.join("")) > MAX_DIALOG_WIDTH
+  )
+    return false;
   let max = Math.max(...mapped.map((a) => bunStringWidth(a)));
   for (let a = n; a <= Math.max(n, max); a++) {
-    let joined = mapped.map((l) => wrapAnsi(l, a, { trim: !0, hard: !0 })).join(`
+    let joined = mapped.map((l) =>
+      wrapAnsi(l, a, {
+        trim: true,
+        hard: true,
+      }),
+    ).join(`
 `);
     if (
       countCharInString(
@@ -95,49 +114,71 @@ function fitsDialog(lines, { minColumns: n = 60, maxRows: s = 12 } = {}) {
 `,
       ) >= s
     )
-      return !1;
+      return false;
   }
-  return !0;
+  return true;
 }
 //@ chunk-98n6ge4d.js:10422-10438 placement
-var Be = 50,
-  Se = 34;
+/**
+ * 审批对话框的最小列数（34）。
+ */
+var MAX_NAME_COLUMNS = 50;
+var MIN_DIALOG_COLUMNS = 34;
 //@ chunk-98n6ge4d.js:10438-10492 placement
-function We(e) {
-  return fitsDialog(e, { minColumns: Se, maxRows: 11 });
+/**
+ * 多行内容能否放进审批对话框（最小列数、最多 11 行）。
+ */
+function fitsApprovalText(lines) {
+  return fitsDialog(lines, {
+    minColumns: MIN_DIALOG_COLUMNS,
+    maxRows: 11,
+  });
 }
 //@ chunk-98n6ge4d.js:10492-10639 placement
 function uploadPlanTitle(e) {
-  let n = (e.writes?.length ?? 0) > 0,
-    s = (e.deletes?.length ?? 0) > 0;
+  let n = (e.writes?.length ?? 0) > 0;
+  let s = (e.deletes?.length ?? 0) > 0;
   return `${n && s ? "Upload and delete" : s ? "Delete" : "Upload"} design system files`;
 }
 //@ chunk-98n6ge4d.js:10639-10738 placement
-function Z(e) {
+/**
+ * 生成 “From folder / To project” 两行。
+ */
+function buildSyncTargetLines(e) {
   return [
-    `From folder: ${x(e.localDir, 1 / 0) ?? UNSHOWABLE_NAME}`,
-    `To project: ${x(e.projectId, 48) ?? UNSHOWABLE_NAME}`,
+    `From folder: ${labelIfShowableLong(e.localDir, 1 / 0) ?? UNSHOWABLE_NAME}`,
+    `To project: ${labelIfShowableLong(e.projectId, 48) ?? UNSHOWABLE_NAME}`,
   ];
 }
+//@ chunk-98n6ge4d.js:10738-11336 placement
 /**
  * 为审批对话框生成文件变更描述的候选（按完整列表、匹配模式、仅计数逐级简化），每个候选标明是否列全。
  */
-//@ chunk-98n6ge4d.js:10738-11336 placement
 function describeFileChanges(verb, paths) {
-  let filtered = uniq(paths.map(XL)).filter((f) => f !== ""),
-    filtered_2 = filtered.filter((f) => !WBt(f)),
-    filtered_3 = filtered.filter(WBt),
-    a = formatPathList(filtered_2),
-    c = formatPathList(filtered_3),
-    l = verb === "Delete" ? "project file" : "file",
-    h = filtered_2.length > 0 ? [`${verb} ${filtered_2.length} ${plural(filtered_2.length, l)}`] : [],
-    g = filtered_3.length > 0 ? [`${verb} ${l}s matching: ${c?.text}`] : [];
+  let filtered = uniq(paths.map(normalizePlanPath)).filter((f) => f !== "");
+  let paths_2 = filtered.filter((f) => !hasGlobChars(f));
+  let paths_3 = filtered.filter(hasGlobChars);
+  let a = formatPathList(paths_2);
+  let c = formatPathList(paths_3);
+  let l = verb === "Delete" ? "project file" : "file";
+  let h = paths_2.length > 0 ? [`${verb} ${paths_2.length} ${plural(paths_2.length, l)}`] : [];
+  let g = paths_3.length > 0 ? [`${verb} ${l}s matching: ${c?.text}`] : [];
   return [
-    ...(c !== void 0 && a !== void 0
-      ? [{ lines: [...g, ...h.map((f) => `${f}: ${a.text}`)], whole: c.whole && a.whole }]
+    ...(c !== undefined && a !== undefined
+      ? [
+          {
+            lines: [...g, ...h.map((f) => `${f}: ${a.text}`)],
+            whole: c.whole && a.whole,
+          },
+        ]
       : []),
-    ...(c !== void 0 && filtered_3.length > 0 && filtered_2.length > 0
-      ? [{ lines: [...g, ...h], whole: !1 }]
+    ...(c !== undefined && paths_3.length > 0 && paths_2.length > 0
+      ? [
+          {
+            lines: [...g, ...h],
+            whole: false,
+          },
+        ]
       : []),
     ...(filtered.length > 0
       ? [
@@ -145,68 +186,90 @@ function describeFileChanges(verb, paths) {
             lines: [
               [
                 ...h,
-                ...(filtered_3.length > 0
+                ...(paths_3.length > 0
                   ? [
-                      `${filtered_2.length > 0 ? "files" : `${verb} ${l}s`} matching ${filtered_3.length} ${plural(filtered_3.length, "pattern")}`,
+                      `${paths_2.length > 0 ? "files" : `${verb} ${l}s`} matching ${paths_3.length} ${plural(paths_3.length, "pattern")}`,
                     ]
                   : []),
               ].join(" and "),
             ],
-            whole: !1,
+            whole: false,
           },
         ]
       : []),
   ];
 }
 //@ chunk-98n6ge4d.js:11336-11494 placement
-function createProjectLines(e, n) {
+function createProjectLines(name, n) {
   return [
-    `Name: ${q(e, n) ?? x(e, 1 / 0) ?? UNSHOWABLE_NAME}`,
+    `Name: ${labelIfShowable(name, n) ?? labelIfShowableLong(name, 1 / 0) ?? UNSHOWABLE_NAME}`,
     "Everyone in your organization can see the new project. You can change that from its Share menu.",
     STANDALONE_DESIGN_CLOSING_NOTICE,
   ];
 }
 //@ chunk-98n6ge4d.js:11494-11554 placement
-var B = "Create a design system project on claude.ai/design?";
+/**
+ * 创建 Design 项目时询问用户的固定问题。
+ */
+var CREATE_PROJECT_QUESTION = "Create a design system project on claude.ai/design?";
 //@ chunk-98n6ge4d.js:11554-11594 placement
-function Ie(e) {
-  return x(e, 1 / 0) !== void 0;
+/**
+ * 名称是否足够短可以被展示。
+ */
+function isShowableName(name) {
+  return labelIfShowableLong(name, 1 / 0) !== undefined;
 }
+//@ chunk-98n6ge4d.js:11594-12288 placement
 /**
  * 为 Claude Design 同步构造审批问题：finalize_plan 列出上传/删除的文件（选能放进对话框的最详细版本），create_project 显示项目名与可见性说明；放不下时返回 undefined。
  */
-//@ chunk-98n6ge4d.js:11594-12288 placement
 function buildSyncApprovalQuestion(input, notice) {
-  let s = notice === WRITE_GRANT_NOTE ? [notice] : [],
-    r = FINALIZE_PLAN_INPUT_SCHEMA().safeParse(input).data;
-  if (r !== void 0 && isAbsolute(r.localDir) && (s.length > 0 || notice === REVIEW_UPLOAD_NOTE)) {
-    let a = `${uploadPlanTitle(r)} ${r.deletes.length === 0 ? "to" : r.writes.length === 0 ? "from" : "on"} claude.ai/design?`,
-      c = describeFileChanges("Upload", r.writes),
-      flattened = describeFileChanges("Delete", r.deletes).flatMap((f) =>
-        c.map((m) => [...f.lines, ...m.lines, ...(f.whole && m.whole ? [] : [UNLISTED_FILES_HINT])]),
-      ),
-      h = [...s, ...Z(r)],
-      found = flattened.find((f) => fitsDialog([a, ...h, ...f]));
-    return found === void 0 || !We([a, ...h]) ? void 0 : { question: a, lines: [...h, ...found], values: [] };
+  let s = notice === WRITE_GRANT_NOTE ? [notice] : [];
+  let r = FINALIZE_PLAN_INPUT_SCHEMA().safeParse(input).data;
+  if (r !== undefined && isAbsolute(r.localDir) && (s.length > 0 || notice === REVIEW_UPLOAD_NOTE)) {
+    let a = `${uploadPlanTitle(r)} ${r.deletes.length === 0 ? "to" : r.writes.length === 0 ? "from" : "on"} claude.ai/design?`;
+    let c = describeFileChanges("Upload", r.writes);
+    let flattened = describeFileChanges("Delete", r.deletes).flatMap((f) =>
+      c.map((m) => [...f.lines, ...m.lines, ...(f.whole && m.whole ? [] : [UNLISTED_FILES_HINT])]),
+    );
+    let h = [...s, ...buildSyncTargetLines(r)];
+    let found = flattened.find((f) => fitsDialog([a, ...h, ...f]));
+    return found === undefined || !fitsApprovalText([a, ...h])
+      ? undefined
+      : {
+          question: a,
+          lines: [...h, ...found],
+          values: [],
+        };
   }
   let i = CREATE_PROJECT_INPUT_SCHEMA().safeParse(input).data;
-  if (i !== void 0 && (s.length > 0 || notice === NEW_PROJECT_NOTE)) {
+  if (i !== undefined && (s.length > 0 || notice === NEW_PROJECT_NOTE)) {
     let a = [...s, ...createProjectLines(i.name, 28)];
-    return fitsDialog([B, ...a]) &&
-      (bunStringWidth(q(i.name, 28) ?? x(i.name, 1 / 0) ?? "") <= Be ||
-        fitsDialog([B, ...a], { minColumns: Se }))
-      ? { question: B, lines: a, values: [] }
-      : void 0;
+    return fitsDialog([CREATE_PROJECT_QUESTION, ...a]) &&
+      (bunStringWidth(labelIfShowable(i.name, 28) ?? labelIfShowableLong(i.name, 1 / 0) ?? "") <=
+        MAX_NAME_COLUMNS ||
+        fitsDialog([CREATE_PROJECT_QUESTION, ...a], {
+          minColumns: MIN_DIALOG_COLUMNS,
+        }))
+      ? {
+          question: CREATE_PROJECT_QUESTION,
+          lines: a,
+          values: [],
+        }
+      : undefined;
   }
   return;
 }
 //@ chunk-98n6ge4d.js:12288-12545 placement
 function syncApprovalSummary(e) {
   let n = FINALIZE_PLAN_INPUT_SCHEMA().safeParse(e).data;
-  if (n !== void 0)
-    return [...Z(n), "Files aren't listed here. To see them, answer No and ask Claude."].join("; ");
+  if (n !== undefined)
+    return [
+      ...buildSyncTargetLines(n),
+      "Files aren't listed here. To see them, answer No and ask Claude.",
+    ].join("; ");
   let s = CREATE_PROJECT_INPUT_SCHEMA().safeParse(e).data;
-  if (s !== void 0) {
+  if (s !== undefined) {
     let [r, ...i] = createProjectLines(s.name, 0);
     return `${r}; ${i.join(" ")}`;
   }
@@ -216,25 +279,27 @@ function syncApprovalSummary(e) {
 function syncApprovalLines(e) {
   let [n, s] = [describeFileChanges("Delete", e.deletes)[0], describeFileChanges("Upload", e.writes)[0]];
   return [
-    ...Z(e),
+    ...buildSyncTargetLines(e),
     ...(n?.lines ?? []),
     ...(s?.lines ?? []),
-    ...((n?.whole ?? !0) && (s?.whole ?? !0) ? [] : [UNLISTED_FILES_HINT]),
+    ...((n?.whole ?? true) && (s?.whole ?? true) ? [] : [UNLISTED_FILES_HINT]),
   ];
 }
 //@ chunk-98n6ge4d.js:12710-12747 placement
-function Ee(e) {
-  return [B, ...createProjectLines(e, 28)];
+/**
+ * 创建项目问题的完整正文（问题 + 项目信息行）。
+ */
+function buildCreateProjectQuestionLines(e) {
+  return [CREATE_PROJECT_QUESTION, ...createProjectLines(e, 28)];
 }
-
 export {
   uploadPlanTitle,
   syncApprovalSummary,
   buildSyncApprovalQuestion,
-  Ie,
+  isShowableName,
   syncApprovalLines,
   WRITE_GRANT_NOTE,
   REVIEW_UPLOAD_NOTE,
-  Ee,
+  buildCreateProjectQuestionLines,
   NEW_PROJECT_NOTE,
 };

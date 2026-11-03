@@ -5,7 +5,7 @@
  * pieces: chunk-m61cyfw5.js (1)
  * attribution: placement 1
  */
-import { wD } from "./dist-cjs/index.js";
+import { require_node_config_provider } from "./dist-cjs/index.js";
 
 //@ chunk-m61cyfw5.js:255-275 placement
-export default wD();
+export default require_node_config_provider();

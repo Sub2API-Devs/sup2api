@@ -9,22 +9,28 @@ import { retryPolicy } from "../../../../../core-rest-pipeline/dist/esm/policies
 import { Xl } from "../../../../../core-rest-pipeline/dist/esm/util/file.js";
 
 //@ chunk-mrx6y2r5.js:288839-288852 esm-layout
-var tC = 64000;
+var DEFAULT_CLIENT_MAX_RETRY_INTERVAL_2 = 64000;
 //@ chunk-mrx6y2r5.js:288852-289108 esm-fingerprint
-function Yf(e) {
+function imdsRetryPolicy(msiRetryConfig) {
   return retryPolicy(
     [
       {
         name: "imdsRetryPolicy",
-        retry: ({ retryCount: retryCount, response: response }) => {
-          if ((response === null || response === void 0 ? void 0 : response.status) !== 404)
-            return { skipStrategy: !0 };
-          return Xl(retryCount, { retryDelayInMs: e.startDelayInMs, maxRetryDelayInMs: tC });
+        retry: ({ retryCount, response }) => {
+          if ((response === null || response === undefined ? undefined : response.status) !== 404)
+            return {
+              skipStrategy: true,
+            };
+          return Xl(retryCount, {
+            retryDelayInMs: msiRetryConfig.startDelayInMs,
+            maxRetryDelayInMs: DEFAULT_CLIENT_MAX_RETRY_INTERVAL_2,
+          });
         },
       },
     ],
-    { maxRetries: e.maxRetries },
+    {
+      maxRetries: msiRetryConfig.maxRetries,
+    },
   );
 }
-
-export { Yf };
+export { imdsRetryPolicy };

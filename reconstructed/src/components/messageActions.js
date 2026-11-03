@@ -8,20 +8,20 @@
  * pieces: chunk-0e8j1zzj.js (1), chunk-ag5x7vhf.js (2), chunk-e6aww6q8.js (10), chunk-hyjyj8hj.js (1), chunk-mketzrwm.js (1), chunk-tyg7f3ek.js (1), chunk-yzt83vwd.js (1)
  * attribution: fingerprint 9, sole-consumer 2, file-local 1, layout 1, placement 3, affinity 1
  */
-import { PQs } from "../utils/hooks/hookEvents.js";
-import { kxn } from "../utils/model/modelSwitchHooks.js";
+import { HOOK_RESPONSE_POLL_MS } from "../utils/hooks/hookEvents.js";
+import { postSwitchSlot } from "../utils/model/modelSwitchHooks.js";
 import { withDeadline } from "../utils/sleep.js";
 import { jsonStringify } from "../utils/slowOperations.js";
 import { DoctorLazy } from "../cli/handlers/util.js";
-import { u, A, o } from "../../vendor/zod/v4/classic/schemas.js";
+import { u, array, string } from "../../vendor/zod/v4/classic/schemas.js";
 import { uniq, count } from "../utils/collections.js";
 import {
   isCollapsibleToolResult,
   shouldSkipMessage,
   isTextBreaker,
   isPlaceholderAssistantMessage,
-  FWt,
-  Cie,
+  isSignedThinkingMessage,
+  memorySaveHooks,
   ARTIFACT_TOOL_NAME,
   isPublishShapedArtifactAction,
 } from "../utils/collapseReadSearch.js";
@@ -29,32 +29,35 @@ import { collapsedNotificationKind } from "../utils/queuedCommandDisplay.js";
 import { findToolByName } from "../Tool.js";
 import { getValidHookLabel } from "../utils/collapseHookSummaries.js";
 import { AGENT, TASK } from "../tools/AgentTool/constants.js";
-import { truncateToLength, Dr } from "../utils/stringUtils.js";
+import { truncateToLength, collapseWhitespace as collapseWhitespace_2 } from "../utils/stringUtils.js";
 import { deviceToolDisplayInfo } from "../utils/toolUseDisplay.js";
-import { bKe, countEditLines } from "../tools/AgentTool/agentLaunch.js";
-import { $Ys } from "../services/api/errors.js";
+import { FILE_EDITING_TOOL_NAMES, countEditLines } from "../tools/AgentTool/agentLaunch.js";
+import { asSafePathKey } from "../services/api/errors.js";
 import { isKnownContentBlockType } from "../services/api/requestHeaders.js";
 import { w } from "../../vendor/react/compiler-runtime.js";
 import { EARLY_RETURN_SENTINEL } from "../../runtime/bun-runtime.js";
 import { wrapAnsi } from "../ink/wrapAnsi.js";
-import { e, r } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+} from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Box } from "../ink/components/Text.js";
 import { logError } from "../utils/log.js";
 import { useKeybindingContext } from "../keybindings/KeybindingContext.js";
 import { y, zt, P } from "../../vendor/react/cjs/react.production.js";
 
 //@ chunk-e6aww6q8.js:3427430-3427980 fingerprint = copyTextOf (0.33)
-async function copyTextOf(e, n = PQs) {
-  let of = kxn.of(e);
-  if (of.inFlight.size > 0 && of.landedOn?.sessionId === e.id)
-    await withDeadline(Promise.all([...of.inFlight]), n);
-  let pending = of.pending;
-  of.pending = [];
-  let filtered = pending.filter((w) => w.sessionId === e.id),
-    y = of.landedOn?.sessionId === e.id ? of.landedOn.toModel : void 0,
-    S = new Set();
+async function copyTextOf(session, n = HOOK_RESPONSE_POLL_MS) {
+  let r = postSwitchSlot.of(session);
+  if (r.inFlight.size > 0 && r.landedOn?.sessionId === session.id)
+    await withDeadline(Promise.all([...r.inFlight]), n);
+  let pending = r.pending;
+  r.pending = [];
+  let filtered = pending.filter((w) => w.sessionId === session.id);
+  let toModel = r.landedOn?.sessionId === session.id ? r.landedOn.toModel : undefined;
+  let S = new Set();
   return filtered.filter((w) => {
-    if (w.toModel !== y) return !1;
+    if (w.toModel !== toModel) return false;
     let tc = jsonStringify([
       w.contexts,
       w.messages.map((message) =>
@@ -67,20 +70,27 @@ async function copyTextOf(e, n = PQs) {
           : message.type,
       ),
     ]);
-    if (S.has(tc)) return !1;
-    return (S.add(tc), !0);
+    if (S.has(tc)) return false;
+    S.add(tc);
+    return true;
   });
 }
 //@ chunk-e6aww6q8.js:4152232-4152286 fingerprint = isApplicable (0.461)
-var isApplicable = DoctorLazy(() => u({ compilerOptions: u({ types: A(o()) }) }));
+var isApplicable = DoctorLazy(() =>
+  u({
+    compilerOptions: u({
+      types: array(string()),
+    }),
+  }),
+);
 //@ chunk-e6aww6q8.js:4686545-4686715 file-local
-function toolResultText(e, n) {
-  if (e.type !== "user") return !1;
-  let r = !1;
+function toolResultText(e, toolUseIds) {
+  if (e.type !== "user") return false;
+  let r = false;
   for (let s of e.message.content) {
     if (s.type !== "tool_result") continue;
-    if (!n.has(s.tool_use_id)) return !1;
-    r = !0;
+    if (!toolUseIds.has(s.tool_use_id)) return false;
+    r = true;
   }
   return r;
 }
@@ -100,29 +110,33 @@ function toolCallOf_3(msg) {
   return [];
 }
 //@ chunk-e6aww6q8.js:4686968-4687044 placement
-function ife(e) {
+/**
+ * 函数 collectToolUseIds（收集消息组的工具调用 id）；位于「消息操作：可导航消息判定、复制文本、工具调用/结果提取、消息操作栏与 MessageActionsKeybindings」模块。
+ */
+function collectToolUseIds(message) {
   let n = [];
-  for (let message of e.messages) n.push(...toolCallOf_3(message));
+  for (let message_2 of message.messages) n.push(...toolCallOf_3(message_2));
   return n;
 }
 //@ chunk-e6aww6q8.js:4687044-4687096 placement
-function Z9n(e, n) {
-  return ife(e).some((r) => n.has(r));
+/**
+ * 函数 hasAnyToolUseId（是否有任一 id 在集合内）；位于「消息操作：可导航消息判定、复制文本、工具调用/结果提取、消息操作栏与 MessageActionsKeybindings」模块。
+ */
+function hasAnyToolUseId(msg, inProgressToolUseIDs) {
+  return collectToolUseIds(msg).some((r) => inProgressToolUseIDs.has(r));
 }
+//@ chunk-e6aww6q8.js:4700121-4702980 placement
 /**
  * 把一个折叠的读/搜组的各项计数（搜索、读取、记忆、MCP、Bash、编辑行数、提交、钩子、思考时长等）累加进另一个组，并追加消息。
  */
-//@ chunk-e6aww6q8.js:4700121-4702980 placement
 function mergeCollapsedReadSearch(target, source) {
-  if (
-    ((target.searchCount += source.searchCount),
-    (target.readCount += source.readCount),
-    (target.listCount += source.listCount),
-    (target.memorySearchCount += source.memorySearchCount),
-    (target.memoryReadCount += source.memoryReadCount),
-    (target.memoryWriteCount += source.memoryWriteCount),
-    source.teamMemorySearchCount)
-  )
+  target.searchCount += source.searchCount;
+  target.readCount += source.readCount;
+  target.listCount += source.listCount;
+  target.memorySearchCount += source.memorySearchCount;
+  target.memoryReadCount += source.memoryReadCount;
+  target.memoryWriteCount += source.memoryWriteCount;
+  if (source.teamMemorySearchCount)
     target.teamMemorySearchCount = (target.teamMemorySearchCount ?? 0) + source.teamMemorySearchCount;
   if (source.teamMemoryReadCount)
     target.teamMemoryReadCount = (target.teamMemoryReadCount ?? 0) + source.teamMemoryReadCount;
@@ -138,22 +152,25 @@ function mergeCollapsedReadSearch(target, source) {
       (target.accountMemorySearchCount ?? 0) + source.accountMemorySearchCount;
   if (source.accountMemoryRecalls?.length)
     target.accountMemoryRecalls = [...(target.accountMemoryRecalls ?? []), ...source.accountMemoryRecalls];
-  if (source.scratchpadWriteCount)
-    ((target.scratchpadWriteCount = (target.scratchpadWriteCount ?? 0) + source.scratchpadWriteCount),
-      (target.scratchpadLinesAdded = (target.scratchpadLinesAdded ?? 0) + (source.scratchpadLinesAdded ?? 0)),
-      (target.scratchpadLinesRemoved =
-        (target.scratchpadLinesRemoved ?? 0) + (source.scratchpadLinesRemoved ?? 0)));
+  if (source.scratchpadWriteCount) {
+    target.scratchpadWriteCount = (target.scratchpadWriteCount ?? 0) + source.scratchpadWriteCount;
+    target.scratchpadLinesAdded = (target.scratchpadLinesAdded ?? 0) + (source.scratchpadLinesAdded ?? 0);
+    target.scratchpadLinesRemoved =
+      (target.scratchpadLinesRemoved ?? 0) + (source.scratchpadLinesRemoved ?? 0);
+  }
   if (source.relevantMemories?.length)
     target.relevantMemories = [...(target.relevantMemories ?? []), ...source.relevantMemories];
   if (source.memorySaves?.length) target.memorySaves = [...(target.memorySaves ?? []), ...source.memorySaves];
-  if (source.mcpCallCount)
-    ((target.mcpCallCount = (target.mcpCallCount ?? 0) + source.mcpCallCount),
-      (target.mcpCallLabels = uniq([...(target.mcpCallLabels ?? []), ...(source.mcpCallLabels ?? [])])));
+  if (source.mcpCallCount) {
+    target.mcpCallCount = (target.mcpCallCount ?? 0) + source.mcpCallCount;
+    target.mcpCallLabels = uniq([...(target.mcpCallLabels ?? []), ...(source.mcpCallLabels ?? [])]);
+  }
   if (source.bashCount) target.bashCount = (target.bashCount ?? 0) + source.bashCount;
   if (source.gitOpBashCount) target.gitOpBashCount = (target.gitOpBashCount ?? 0) + source.gitOpBashCount;
   if (source.otherToolCount) target.otherToolCount = (target.otherToolCount ?? 0) + source.otherToolCount;
   if (source.agentCount) {
-    if (((target.agentCount = (target.agentCount ?? 0) + source.agentCount), source.agentDescriptions))
+    target.agentCount = (target.agentCount ?? 0) + source.agentCount;
+    if (source.agentDescriptions)
       target.agentDescriptions = [...(target.agentDescriptions ?? []), ...source.agentDescriptions];
   }
   if (source.frameCount) target.frameCount = (target.frameCount ?? 0) + source.frameCount;
@@ -167,94 +184,98 @@ function mergeCollapsedReadSearch(target, source) {
   if (source.readFilePaths?.length)
     target.readFilePaths = [...(target.readFilePaths ?? []), ...source.readFilePaths];
   if (source.searchArgs?.length) target.searchArgs = [...(target.searchArgs ?? []), ...source.searchArgs];
-  if (source.hookCount)
-    ((target.hookCount = (target.hookCount ?? 0) + source.hookCount),
-      (target.hookTotalMs = (target.hookTotalMs ?? 0) + (source.hookTotalMs ?? 0)),
-      (target.hookInfos = [...(target.hookInfos ?? []), ...(source.hookInfos ?? [])]));
-  if (
-    ((target.latestDisplayHint = source.latestDisplayHint ?? target.latestDisplayHint), source.thoughtForMs)
-  )
-    target.thoughtForMs = (target.thoughtForMs ?? 0) + source.thoughtForMs;
-  ((target.latestThinkingSummary = source.latestThinkingSummary ?? target.latestThinkingSummary),
-    target.messages.push(...source.messages));
+  if (source.hookCount) {
+    target.hookCount = (target.hookCount ?? 0) + source.hookCount;
+    target.hookTotalMs = (target.hookTotalMs ?? 0) + (source.hookTotalMs ?? 0);
+    target.hookInfos = [...(target.hookInfos ?? []), ...(source.hookInfos ?? [])];
+  }
+  target.latestDisplayHint = source.latestDisplayHint ?? target.latestDisplayHint;
+  if (source.thoughtForMs) target.thoughtForMs = (target.thoughtForMs ?? 0) + source.thoughtForMs;
+  target.latestThinkingSummary = source.latestThinkingSummary ?? target.latestThinkingSummary;
+  target.messages.push(...source.messages);
 }
 //@ chunk-e6aww6q8.js:4703309-4707177 fingerprint = isNavigableMessage (0.31)
-function isNavigableMessage(e, n, r, s = !1, h = {}) {
-  if (h.transcriptV2) return e;
-  let y = [],
-    S = h.keepAllText !== !0,
-    w = 0;
-  while (w < e.length) {
-    let L = e[w];
+function isNavigableMessage(collapsedBase, tools, r, isLoading = false, h = {}) {
+  if (h.transcriptV2) return collapsedBase;
+  let y = [];
+  let S = h.keepAllText !== true;
+  let w = 0;
+  while (w < collapsedBase.length) {
+    let L = collapsedBase[w];
     if (!isCollapsibleToolResult(L)) {
-      (y.push(L), w++);
+      y.push(L);
+      w++;
       continue;
     }
-    let G = w,
-      q = 0,
-      Z = 0,
-      Se = [];
+    let G = w;
+    let q = 0;
+    let Z = 0;
+    let Se = [];
     if (S)
-      while (w < e.length) {
-        let yt = e[w];
+      while (w < collapsedBase.length) {
+        let yt = collapsedBase[w];
         if (yt.type !== "user") break;
         let gt = collapsedNotificationKind(yt);
         if (gt === null) break;
         if (gt.kind === "agent") q += gt.count;
         else Z += gt.count;
-        (Se.push(yt), w++);
+        Se.push(yt);
+        w++;
       }
-    if (Se.length === 0) (y.push(L), w++);
+    if (Se.length === 0) {
+      y.push(L);
+      w++;
+    }
     let ke = w;
-    while (ke < e.length && !isCollapsibleToolResult(e[ke])) ke++;
-    let we = s && ke === e.length;
+    while (ke < collapsedBase.length && !isCollapsibleToolResult(collapsedBase[ke])) ke++;
+    let we = isLoading && ke === collapsedBase.length;
     if (we) {
       let yt = ke - 1;
-      while (yt >= w && shouldSkipMessage(e[yt])) yt--;
-      let gt = yt >= w ? e[yt] : void 0;
+      while (yt >= w && shouldSkipMessage(collapsedBase[yt])) yt--;
+      let msg = yt >= w ? collapsedBase[yt] : undefined;
       if (
-        gt?.type === "assistant" &&
-        gt.message.stop_reason !== null &&
-        (isTextBreaker(gt) || isPlaceholderAssistantMessage(gt))
+        msg?.type === "assistant" &&
+        msg.message.stop_reason !== null &&
+        (isTextBreaker(msg) || isPlaceholderAssistantMessage(msg))
       )
-        we = !1;
+        we = false;
     }
     let Ee = -1;
     if (!we) {
-      for (let yt = ke - 1; yt >= w; yt--)
-        if (isTextBreaker(e[yt])) {
-          Ee = yt;
+      for (let idx = ke - 1; idx >= w; idx--)
+        if (isTextBreaker(collapsedBase[idx])) {
+          Ee = idx;
           break;
         }
     }
     let Ae = new Set();
-    if (h.keepAllText === !0) {
+    if (h.keepAllText === true) {
       let yt = new Set();
       for (let gt = w; gt < ke; gt++) {
-        let At = e[gt];
+        let At = collapsedBase[gt];
         if (At.type !== "user") continue;
         for (let It of At.message.content)
-          if (typeof It === "object" && It !== null && It.type === "tool_result" && It.is_error === !0)
+          if (typeof It === "object" && It !== null && It.type === "tool_result" && It.is_error === true)
             yt.add(It.tool_use_id);
       }
       for (let gt = w; gt < ke; gt++) {
-        let At = e[gt];
-        if (isTextBreaker(At)) {
+        let msg = collapsedBase[gt];
+        if (isTextBreaker(msg)) {
           Ae.add(gt);
           continue;
         }
-        if (At.type === "assistant") {
-          let It = At.message.content[0];
+        if (msg.type === "assistant") {
+          let It = msg.message.content[0];
           if (It?.type === "tool_use" && yt.has(It.id)) Ae.add(gt);
           continue;
         }
-        if (At.type !== "user") continue;
-        for (let It of At.message.content)
+        if (msg.type !== "user") continue;
+        for (let It of msg.message.content)
           if (
             typeof It === "object" &&
             It !== null &&
             It.type === "tool_result" &&
-            It.is_error === !0 &&
+            It.is_error === true &&
             yt.has(It.tool_use_id)
           ) {
             Ae.add(gt);
@@ -262,105 +283,129 @@ function isNavigableMessage(e, n, r, s = !1, h = {}) {
           }
       }
     }
-    let Ie = new Set(),
-      Me = new Set();
-    for (let yt = ke - 1; !we && yt >= w; yt--) {
-      let gt = e[yt];
+    let Ie = new Set();
+    let Me = new Set();
+    for (let idx = ke - 1; !we && idx >= w; idx--) {
+      let gt = collapsedBase[idx];
       if (gt.type !== "assistant") continue;
       let At = gt.message.content[0];
       if (At?.type !== "tool_use" || Me.has(At.name)) continue;
-      if ((Me.add(At.name), findToolByName(n, At.name)?.briefStandalone)) {
-        Ie.add(yt);
-        for (let It = yt + 1; It < ke; It++) {
-          let Yt = e[It];
+      Me.add(At.name);
+      if (findToolByName(tools, At.name)?.briefStandalone) {
+        Ie.add(idx);
+        for (let idx_2 = idx + 1; idx_2 < ke; idx_2++) {
+          let Yt = collapsedBase[idx_2];
           if (Yt.type === "assistant") break;
           if (Yt.type !== "user") continue;
           let qt = Yt.message.content[0];
           if (qt?.type === "tool_result" && qt.tool_use_id === At.id) {
-            Ie.add(It);
+            Ie.add(idx_2);
             break;
           }
         }
       }
     }
-    let We = null,
-      ze = ke;
+    let target = null;
+    let ze = ke;
     if (Se.length > 0) {
-      if (((We = createCollapsedReadSearchGroup(Se[0])), (We.messages = [...Se]), q > 0)) We.agentCount = q;
-      if (Z > 0) We.bashCount = Z;
+      target = createCollapsedReadSearchGroup(Se[0]);
+      target.messages = [...Se];
+      if (q > 0) target.agentCount = q;
+      if (Z > 0) target.bashCount = Z;
       ze = G;
     }
-    let lt = [],
-      Je = () => {
-        if (We) (lt.push([ze, We]), (We = null), (ze = ke));
-      },
-      nt = 0;
+    let lt = [];
+    let Je = () => {
+      if (target) {
+        lt.push([ze, target]);
+        target = null;
+        ze = ke;
+      }
+    };
+    let nt = 0;
     for (let yt = w; yt < ke; yt++) {
       if (yt === Ee || Ae.has(yt) || Ie.has(yt)) {
-        if (h.keepAllText === !0 && (Ae.has(yt) || yt === Ee) && isTextBreaker(e[yt])) Je();
+        if (h.keepAllText === true && (Ae.has(yt) || yt === Ee) && isTextBreaker(collapsedBase[yt])) Je();
         continue;
       }
-      let gt = e[yt];
-      if (gt.type === "system") {
-        if (gt.subtype === "informational" && gt.level === "info") nt++;
-        else if (gt.subtype === "stop_hook_summary" && getValidHookLabel(gt) !== void 0);
+      let message = collapsedBase[yt];
+      if (message.type === "system") {
+        if (message.subtype === "informational" && message.level === "info") nt++;
+        else if (message.subtype === "stop_hook_summary" && getValidHookLabel(message) !== undefined);
         else Ie.add(yt);
         continue;
       }
-      let At = null;
-      if (gt.type === "collapsed_read_search") At = gt;
-      else if (gt.type === "grouped_tool_use")
-        At = createCollapsedToolGroup(
-          gt,
-          gt.toolName,
-          gt.messages.map((message) => message.message.content[0]?.input),
-          n,
+      let source = null;
+      if (message.type === "collapsed_read_search") source = message;
+      else if (message.type === "grouped_tool_use")
+        source = createCollapsedToolGroup(
+          message,
+          message.toolName,
+          message.messages.map((message) => message.message.content[0]?.input),
+          tools,
         );
-      else if (gt.type === "assistant") {
-        let It = gt.message.content[0];
-        if (It?.type === "tool_use") At = createCollapsedToolGroup(gt, It.name, [It.input], n);
-        else if (isPlaceholderAssistantMessage(gt)) nt++;
-        else if ((It?.type === "thinking" || It?.type === "redacted_thinking") && !FWt(gt)) nt++;
-      } else if (gt.type === "user") {
-        if (We) {
-          We.messages.push(gt);
-          let toolUseResult = gt.toolUseResult,
-            Yt =
-              toolUseResult?.toolStats ??
-              (toolUseResult?.status === "async_launched" && toolUseResult.agentId
-                ? r?.(toolUseResult.agentId)
-                : void 0);
+      else if (message.type === "assistant") {
+        let It = message.message.content[0];
+        if (It?.type === "tool_use") source = createCollapsedToolGroup(message, It.name, [It.input], tools);
+        else if (isPlaceholderAssistantMessage(message)) nt++;
+        else if (
+          (It?.type === "thinking" || It?.type === "redacted_thinking") &&
+          !isSignedThinkingMessage(message)
+        )
+          nt++;
+      } else if (message.type === "user") {
+        if (target) {
+          target.messages.push(message);
+          let toolUseResult = message.toolUseResult;
+          let Yt =
+            toolUseResult?.toolStats ??
+            (toolUseResult?.status === "async_launched" && toolUseResult.agentId
+              ? r?.(toolUseResult.agentId)
+              : undefined);
           if (Yt) {
-            if (((We.readCount += Yt.readCount), (We.searchCount += Yt.searchCount), Yt.bashCount))
-              We.bashCount = (We.bashCount ?? 0) + Yt.bashCount;
-            if (Yt.editFileCount) We.editFileCount = (We.editFileCount ?? 0) + Yt.editFileCount;
-            if (Yt.linesAdded) We.linesAdded = (We.linesAdded ?? 0) + Yt.linesAdded;
-            if (Yt.linesRemoved) We.linesRemoved = (We.linesRemoved ?? 0) + Yt.linesRemoved;
-            if (Yt.otherToolCount) We.otherToolCount = (We.otherToolCount ?? 0) + Yt.otherToolCount;
-            if (Yt.frameCount) We.frameCount = (We.frameCount ?? 0) + Yt.frameCount;
+            target.readCount += Yt.readCount;
+            target.searchCount += Yt.searchCount;
+            if (Yt.bashCount) target.bashCount = (target.bashCount ?? 0) + Yt.bashCount;
+            if (Yt.editFileCount) target.editFileCount = (target.editFileCount ?? 0) + Yt.editFileCount;
+            if (Yt.linesAdded) target.linesAdded = (target.linesAdded ?? 0) + Yt.linesAdded;
+            if (Yt.linesRemoved) target.linesRemoved = (target.linesRemoved ?? 0) + Yt.linesRemoved;
+            if (Yt.otherToolCount) target.otherToolCount = (target.otherToolCount ?? 0) + Yt.otherToolCount;
+            if (Yt.frameCount) target.frameCount = (target.frameCount ?? 0) + Yt.frameCount;
           }
         }
       }
-      if (gt.type === "attachment") nt++;
-      if (At)
-        if (We) mergeCollapsedReadSearch(We, At);
-        else ((We = { ...At, messages: [...At.messages] }), (ze = yt));
+      if (message.type === "attachment") nt++;
+      if (source)
+        if (target) mergeCollapsedReadSearch(target, source);
+        else {
+          target = {
+            ...source,
+            messages: [...source.messages],
+          };
+          ze = yt;
+        }
     }
     if (Ee !== -1) Ie.add(Ee);
     for (let yt of Ae) Ie.add(yt);
-    let mapped = [...Ie].map((yt) => [yt, e[yt]]);
+    let mapped = [...Ie].map((yt) => [yt, collapsedBase[yt]]);
     Je();
     for (let [yt, gt] of lt) {
-      if (((gt.uuid = `brief-${gt.uuid}`), we && h.keepAllText !== !0 && gt === lt.at(-1)?.[1]))
-        gt.isLiveBriefTurn = !0;
-      ((gt.hookCount = void 0), (gt.hookTotalMs = void 0), (gt.hookInfos = void 0), mapped.push([yt, gt]));
+      gt.uuid = `brief-${gt.uuid}`;
+      if (we && h.keepAllText !== true && gt === lt.at(-1)?.[1]) gt.isLiveBriefTurn = true;
+      gt.hookCount = undefined;
+      gt.hookTotalMs = undefined;
+      gt.hookInfos = undefined;
+      mapped.push([yt, gt]);
     }
     mapped.sort((yt, gt) => yt[0] - gt[0]);
-    let Et = we || h.keepAllText === !0 ? 0 : ke - w + Se.length - mapped.length - nt;
+    let Et = we || h.keepAllText === true ? 0 : ke - w + Se.length - mapped.length - nt;
     for (let [, yt] of mapped)
       y.push(
         Et > 0 && yt.type === "system" && yt.subtype === "turn_duration"
-          ? { ...yt, briefHiddenCount: Et }
+          ? {
+              ...yt,
+              briefHiddenCount: Et,
+            }
           : yt,
       );
     w = ke;
@@ -368,7 +413,7 @@ function isNavigableMessage(e, n, r, s = !1, h = {}) {
   return y;
 }
 //@ chunk-e6aww6q8.js:4707177-4707389 affinity
-function createCollapsedReadSearchGroup(e) {
+function createCollapsedReadSearchGroup(message) {
   return {
     type: "collapsed_read_search",
     searchCount: 0,
@@ -377,49 +422,51 @@ function createCollapsedReadSearchGroup(e) {
     memorySearchCount: 0,
     memoryReadCount: 0,
     memoryWriteCount: 0,
-    messages: [e],
-    displayMessage: e,
-    uuid: e.uuid,
-    timestamp: e.timestamp,
+    messages: [message],
+    displayMessage: message,
+    uuid: message.uuid,
+    timestamp: message.timestamp,
   };
 }
+//@ chunk-e6aww6q8.js:4707389-4708167 sole-consumer
 /**
  * 为一组同名工具调用创建折叠组并按工具类型计数：Agent/Task 记描述，MCP/记忆保存记服务器名，编辑类累加增删行，Artifact 计帧数，其他计入 otherToolCount。
  */
-//@ chunk-e6aww6q8.js:4707389-4708167 sole-consumer
 function createCollapsedToolGroup(message, toolName, inputs, tools) {
-  let count_2 = inputs.length,
-    group = createCollapsedReadSearchGroup(message);
+  let count_2 = inputs.length;
+  let group = createCollapsedReadSearchGroup(message);
   if (toolName === AGENT || toolName === TASK) {
     group.agentCount = count_2;
-    let flattened = inputs.flatMap((G) => {
-      let q = G?.description;
-      if (typeof q !== "string") return [];
-      let Z = truncateToLength(Dr(q), 300);
+    let flattened = inputs.flatMap((input) => {
+      let description = input?.description;
+      if (typeof description !== "string") return [];
+      let Z = truncateToLength(collapseWhitespace_2(description), 300);
       return Z !== "" ? [Z] : [];
     });
     if (flattened.length > 0) group.agentDescriptions = flattened;
     return group;
   }
-  let tool = findToolByName(tools, toolName),
-    w = tool === void 0 ? deviceToolDisplayInfo(toolName) : void 0;
+  let tool = findToolByName(tools, toolName);
+  let w = tool === undefined ? deviceToolDisplayInfo(toolName) : undefined;
   if (tool?.isMcp) {
-    if (((group.mcpCallCount = count_2), tool.mcpInfo?.serverName))
-      group.mcpCallLabels = [tool.mcpInfo.serverName];
-  } else if (w !== void 0 && Cie?.isMemorySaveCall(w))
-    ((group.mcpCallCount = count_2), (group.mcpCallLabels = [w.serverName]));
-  else if (bKe.has(toolName)) {
+    group.mcpCallCount = count_2;
+    if (tool.mcpInfo?.serverName) group.mcpCallLabels = [tool.mcpInfo.serverName];
+  } else if (w !== undefined && memorySaveHooks?.isMemorySaveCall(w)) {
+    group.mcpCallCount = count_2;
+    group.mcpCallLabels = [w.serverName];
+  } else if (FILE_EDITING_TOOL_NAMES.has(toolName)) {
     group.editFileCount = count_2;
-    let L = 0,
-      G = 0;
-    for (let q of inputs) {
-      let Z = countEditLines(toolName, q);
-      ((L += Z.added), (G += Z.removed));
+    let L = 0;
+    let G = 0;
+    for (let input of inputs) {
+      let Z = countEditLines(toolName, input);
+      L += Z.added;
+      G += Z.removed;
     }
     if (L > 0) group.linesAdded = L;
     if (G > 0) group.linesRemoved = G;
   } else if (toolName === ARTIFACT_TOOL_NAME) {
-    let L = count(inputs, (G) => isPublishShapedArtifactAction?.(G) === !0);
+    let L = count(inputs, (G) => isPublishShapedArtifactAction?.(G) === true);
     if (L > 0) group.frameCount = L;
     if (count_2 - L > 0) group.otherToolCount = (group.otherToolCount ?? 0) + (count_2 - L);
   } else group.otherToolCount = count_2;
@@ -448,240 +495,300 @@ function NAVIGABLE_TYPES(m) {
     default:
       h = String(m.type);
   }
-  return $Ys(h);
+  return asSafePathKey(h);
 }
 //@ chunk-ag5x7vhf.js:175697-175824 sole-consumer = extractErrorTypeFromData (1)
 function messageTypeLabel(data) {
-  if (data === void 0) return "?";
-  let h = typeof data === "object" && data !== null && "type" in data ? data.type : void 0;
+  if (data === undefined) return "?";
+  let h = typeof data === "object" && data !== null && "type" in data ? data.type : undefined;
   return isKnownContentBlockType(h) ? h : "unknown";
 }
 //@ chunk-0e8j1zzj.js:40067-41402 fingerprint = MessageActionsBar (0.516)
-function MessageActionsBar(t0) {
-  let $ = w(38),
-    { keyText: keyText, contentColumns: contentColumns } = t0,
-    m,
-    u,
-    i,
-    h,
-    k,
-    f,
-    g,
-    M,
-    N,
-    x,
-    A,
-    T,
-    v,
-    I,
-    L,
-    b;
+function MessageActionsBar(props) {
+  let $ = w(38);
+  let { keyText, contentColumns } = props;
+  let m;
+  let u;
+  let i;
+  let dimColor;
+  let paddingLeft;
+  let flexDirection;
+  let g;
+  let M;
+  let children;
+  let marginLeft;
+  let borderStyle;
+  let borderLeft;
+  let borderRight;
+  let borderTop;
+  let borderBottom;
+  let borderDimColor;
   if ($[0] !== contentColumns || $[1] !== keyText) {
     M = EARLY_RETURN_SENTINEL;
     le: {
-      let E = wrapAnsi(`${keyText}:`, Math.max(10, contentColumns - 2), { hard: !0, trim: !1 });
+      let E = wrapAnsi(`${keyText}:`, Math.max(10, contentColumns - 2), {
+        hard: true,
+        trim: false,
+      });
       let index = E.indexOf(`
 `);
       if (index === -1) {
-        M = e(Text, { dimColor: !0, children: E });
+        M = jsxProd_default(Text, {
+          dimColor: true,
+          children: E,
+        });
         break le;
       }
       i = Box;
-      f = "column";
-      g = e(Text, { dimColor: !0, children: E.slice(0, index) });
+      flexDirection = "column";
+      g = jsxProd_default(Text, {
+        dimColor: true,
+        children: E.slice(0, index),
+      });
       u = Box;
-      x = 2;
-      A = "single";
-      T = !0;
-      v = !1;
-      I = !1;
-      L = !1;
-      b = !0;
-      k = 1;
+      marginLeft = 2;
+      borderStyle = "single";
+      borderLeft = true;
+      borderRight = false;
+      borderTop = false;
+      borderBottom = false;
+      borderDimColor = true;
+      paddingLeft = 1;
       m = Text;
-      h = !0;
-      N = wrapAnsi(E.slice(index + 1).replace(/\n/g, ""), Math.max(10, contentColumns - 4), {
-        hard: !0,
-        trim: !1,
+      dimColor = true;
+      children = wrapAnsi(E.slice(index + 1).replace(/\n/g, ""), Math.max(10, contentColumns - 4), {
+        hard: true,
+        trim: false,
       });
     }
-    (($[0] = contentColumns),
-      ($[1] = keyText),
-      ($[2] = m),
-      ($[3] = u),
-      ($[4] = i),
-      ($[5] = h),
-      ($[6] = k),
-      ($[7] = f),
-      ($[8] = g),
-      ($[9] = M),
-      ($[10] = N),
-      ($[11] = x),
-      ($[12] = A),
-      ($[13] = T),
-      ($[14] = v),
-      ($[15] = I),
-      ($[16] = L),
-      ($[17] = b));
-  } else
-    ((m = $[2]),
-      (u = $[3]),
-      (i = $[4]),
-      (h = $[5]),
-      (k = $[6]),
-      (f = $[7]),
-      (g = $[8]),
-      (M = $[9]),
-      (N = $[10]),
-      (x = $[11]),
-      (A = $[12]),
-      (T = $[13]),
-      (v = $[14]),
-      (I = $[15]),
-      (L = $[16]),
-      (b = $[17]));
+    $[0] = contentColumns;
+    $[1] = keyText;
+    $[2] = m;
+    $[3] = u;
+    $[4] = i;
+    $[5] = dimColor;
+    $[6] = paddingLeft;
+    $[7] = flexDirection;
+    $[8] = g;
+    $[9] = M;
+    $[10] = children;
+    $[11] = marginLeft;
+    $[12] = borderStyle;
+    $[13] = borderLeft;
+    $[14] = borderRight;
+    $[15] = borderTop;
+    $[16] = borderBottom;
+    $[17] = borderDimColor;
+  } else {
+    m = $[2];
+    u = $[3];
+    i = $[4];
+    dimColor = $[5];
+    paddingLeft = $[6];
+    flexDirection = $[7];
+    g = $[8];
+    M = $[9];
+    children = $[10];
+    marginLeft = $[11];
+    borderStyle = $[12];
+    borderLeft = $[13];
+    borderRight = $[14];
+    borderTop = $[15];
+    borderBottom = $[16];
+    borderDimColor = $[17];
+  }
   if (M !== EARLY_RETURN_SENTINEL) return M;
-  let V;
-  if ($[18] !== m || $[19] !== h || $[20] !== N)
-    ((V = e(m, { dimColor: h, children: N })), ($[18] = m), ($[19] = h), ($[20] = N), ($[21] = V));
-  else V = $[21];
+  let children_2;
+  if ($[18] !== m || $[19] !== dimColor || $[20] !== children) {
+    children_2 = jsxProd_default(m, {
+      dimColor,
+      children,
+    });
+    $[18] = m;
+    $[19] = dimColor;
+    $[20] = children;
+    $[21] = children_2;
+  } else children_2 = $[21];
   let X;
   if (
     $[22] !== u ||
-    $[23] !== k ||
-    $[24] !== V ||
-    $[25] !== x ||
-    $[26] !== A ||
-    $[27] !== T ||
-    $[28] !== v ||
-    $[29] !== I ||
-    $[30] !== L ||
-    $[31] !== b
-  )
-    ((X = e(u, {
-      marginLeft: x,
-      borderStyle: A,
-      borderLeft: T,
-      borderRight: v,
-      borderTop: I,
-      borderBottom: L,
-      borderDimColor: b,
-      paddingLeft: k,
-      children: V,
-    })),
-      ($[22] = u),
-      ($[23] = k),
-      ($[24] = V),
-      ($[25] = x),
-      ($[26] = A),
-      ($[27] = T),
-      ($[28] = v),
-      ($[29] = I),
-      ($[30] = L),
-      ($[31] = b),
-      ($[32] = X));
-  else X = $[32];
+    $[23] !== paddingLeft ||
+    $[24] !== children_2 ||
+    $[25] !== marginLeft ||
+    $[26] !== borderStyle ||
+    $[27] !== borderLeft ||
+    $[28] !== borderRight ||
+    $[29] !== borderTop ||
+    $[30] !== borderBottom ||
+    $[31] !== borderDimColor
+  ) {
+    X = jsxProd_default(u, {
+      marginLeft,
+      borderStyle,
+      borderLeft,
+      borderRight,
+      borderTop,
+      borderBottom,
+      borderDimColor,
+      paddingLeft,
+      children: children_2,
+    });
+    $[22] = u;
+    $[23] = paddingLeft;
+    $[24] = children_2;
+    $[25] = marginLeft;
+    $[26] = borderStyle;
+    $[27] = borderLeft;
+    $[28] = borderRight;
+    $[29] = borderTop;
+    $[30] = borderBottom;
+    $[31] = borderDimColor;
+    $[32] = X;
+  } else X = $[32];
   let Y;
-  if ($[33] !== i || $[34] !== f || $[35] !== g || $[36] !== X)
-    ((Y = r(i, { flexDirection: f, children: [g, X] })),
-      ($[33] = i),
-      ($[34] = f),
-      ($[35] = g),
-      ($[36] = X),
-      ($[37] = Y));
-  else Y = $[37];
+  if ($[33] !== i || $[34] !== flexDirection || $[35] !== g || $[36] !== X) {
+    Y = jsxProd_default_2(i, {
+      flexDirection,
+      children: [g, X],
+    });
+    $[33] = i;
+    $[34] = flexDirection;
+    $[35] = g;
+    $[36] = X;
+    $[37] = Y;
+  } else Y = $[37];
   return Y;
 }
+//@ chunk-hyjyj8hj.js:1107-2074 fingerprint = PRIMARY_INPUT (0.377)
 /**
  * 各内置工具的输入路径字段与响应中路径字段的表，供钩子输入路径处理用；同一声明派生 responseMembers 与 responseNested 集合。
  */
-//@ chunk-hyjyj8hj.js:1107-2074 fingerprint = PRIMARY_INPUT (0.377)
 var HOOK_TOOL_PATH_FIELDS = {
-    Read: {
-      input: "file_path",
-      responseNested: [
-        ["file", "filePath"],
-        ["file", "outputDir"],
-      ],
-    },
-    Write: { input: "file_path", responseMembers: ["filePath"] },
-    Edit: { input: "file_path", responseMembers: ["filePath"] },
-    MultiEdit: { input: "file_path", responseMembers: ["filePath"] },
-    NotebookEdit: { input: "notebook_path", responseMembers: ["notebook_path"] },
-    Glob: { input: "path", responseArrays: ["filenames"] },
-    Grep: { input: "path", responseArrays: ["filenames"] },
-    LSP: { input: "filePath", responseMembers: ["filePath"] },
-    Bash: { responseMembers: ["rawOutputPath", "persistedOutputPath"] },
-    Agent: { input: "cwd", responseMembers: ["worktreePath", "outputFile"] },
-    Workflow: { input: "scriptPath", responseMembers: ["scriptPath", "transcriptDir"] },
-    EnterWorktree: { input: "path", responseMembers: ["worktreePath"] },
-    ExitWorktree: { responseMembers: ["worktreePath", "originalCwd"] },
+  Read: {
+    input: "file_path",
+    responseNested: [
+      ["file", "filePath"],
+      ["file", "outputDir"],
+    ],
   },
-  HOOK_RESPONSE_PATH_MEMBERS = new Set(
-    Object.values(HOOK_TOOL_PATH_FIELDS).flatMap((e) => e.responseMembers ?? []),
-  ),
-  HOOK_RESPONSE_NESTED_PATHS = new Set(
-    Object.values(HOOK_TOOL_PATH_FIELDS).flatMap((e) =>
-      (e.responseNested ?? []).map(([o, n]) => `${o}/${n}`),
-    ),
-  );
+  Write: {
+    input: "file_path",
+    responseMembers: ["filePath"],
+  },
+  Edit: {
+    input: "file_path",
+    responseMembers: ["filePath"],
+  },
+  MultiEdit: {
+    input: "file_path",
+    responseMembers: ["filePath"],
+  },
+  NotebookEdit: {
+    input: "notebook_path",
+    responseMembers: ["notebook_path"],
+  },
+  Glob: {
+    input: "path",
+    responseArrays: ["filenames"],
+  },
+  Grep: {
+    input: "path",
+    responseArrays: ["filenames"],
+  },
+  LSP: {
+    input: "filePath",
+    responseMembers: ["filePath"],
+  },
+  Bash: {
+    responseMembers: ["rawOutputPath", "persistedOutputPath"],
+  },
+  Agent: {
+    input: "cwd",
+    responseMembers: ["worktreePath", "outputFile"],
+  },
+  Workflow: {
+    input: "scriptPath",
+    responseMembers: ["scriptPath", "transcriptDir"],
+  },
+  EnterWorktree: {
+    input: "path",
+    responseMembers: ["worktreePath"],
+  },
+  ExitWorktree: {
+    responseMembers: ["worktreePath", "originalCwd"],
+  },
+};
+var HOOK_RESPONSE_PATH_MEMBERS = new Set(
+  Object.values(HOOK_TOOL_PATH_FIELDS).flatMap((e) => e.responseMembers ?? []),
+);
+var HOOK_RESPONSE_NESTED_PATHS = new Set(
+  Object.values(HOOK_TOOL_PATH_FIELDS).flatMap((e) => (e.responseNested ?? []).map(([o, n]) => `${o}/${n}`)),
+);
 //@ chunk-mketzrwm.js:6314-6704 fingerprint = stripSystemReminders (0.873)
 function stripSystemReminders(text) {
-  let trimStart = text.trimStart(),
-    s = !1;
-  while (trimStart.startsWith("<system-reminder>")) {
-    let index = trimStart.indexOf("</system-reminder>");
-    if (index < 0) break;
-    ((trimStart = trimStart.slice(index + 18).trimStart()), (s = !0));
+  let i = text.trimStart();
+  let s = false;
+  while (i.startsWith("<system-reminder>")) {
+    let end = i.indexOf("</system-reminder>");
+    if (end < 0) break;
+    i = i.slice(end + 18).trimStart();
+    s = true;
   }
-  let trimEnd = (s ? trimStart : text).trimEnd();
-  while (trimEnd.endsWith("</system-reminder>")) {
-    let index = trimEnd.lastIndexOf(`
+  let d = (s ? i : text).trimEnd();
+  while (d.endsWith("</system-reminder>")) {
+    let index = d.lastIndexOf(`
 `);
-    if (!(index < 0 ? trimEnd : trimEnd.slice(index + 1)).startsWith("<system-reminder>")) break;
-    ((trimEnd = (index < 0 ? "" : trimEnd.slice(0, index)).trimEnd()), (s = !0));
+    if (!(index < 0 ? d : d.slice(index + 1)).startsWith("<system-reminder>")) break;
+    d = (index < 0 ? "" : d.slice(0, index)).trimEnd();
+    s = true;
   }
   if (!s) return text;
-  return trimEnd === "" ? text : trimEnd;
+  return d === "" ? text : d;
 }
 //@ chunk-tyg7f3ek.js:448270-448342 fingerprint = useMessageActions (0.347)
-function useMessageActions(e, n, r) {
-  if (e === void 0) return;
+function useMessageActions(turnStartClock, n, r) {
+  if (turnStartClock === undefined) return;
   try {
-    e.enter(n, r);
+    turnStartClock.enter(n, r);
   } catch (error) {
     logError(error);
   }
 }
 //@ chunk-yzt83vwd.js:598-940 fingerprint = MessageActionsKeybindings (0.41)
 function MessageActionsKeybindings(e, t = {}) {
-  let { context: context = "Global", isActive: isActive = !0 } = t,
-    o = useKeybindingContext(),
-    [s] = y(() => ({ handlers: e })),
-    joined = Object.keys(e).sort().join("|");
-  (zt(() => {
+  let { context = "Global", isActive = true } = t;
+  let keybindingContext = useKeybindingContext();
+  let [s] = y(() => ({
+    handlers: e,
+  }));
+  let joined = Object.keys(e).sort().join("|");
+  zt(() => {
     s.handlers = e;
-  }),
-    P(() => {
-      if (!o || !isActive) return;
-      let mapped = Object.keys(s.handlers).map((u) =>
-        o.registerHandler({ action: u, context: context, handler: () => s.handlers[u]?.(), singleKey: !0 }),
-      );
-      return () => {
-        for (let u of mapped) u();
-      };
-    }, [context, joined, o, isActive, s]));
+  });
+  P(() => {
+    if (!keybindingContext || !isActive) return;
+    let mapped = Object.keys(s.handlers).map((key) =>
+      keybindingContext.registerHandler({
+        action: key,
+        context,
+        handler: () => s.handlers[key]?.(),
+        singleKey: true,
+      }),
+    );
+    return () => {
+      for (let u of mapped) u();
+    };
+  }, [context, joined, keybindingContext, isActive, s]);
 }
-
 export {
   MessageActionsKeybindings,
-  ife,
+  collectToolUseIds,
   MessageActionsBar,
   isNavigableMessage,
   stripSystemReminders,
   useMessageActions,
   copyTextOf,
-  Z9n,
+  hasAnyToolUseId,
   NAVIGABLE_TYPES,
   isApplicable,
   toolCallOf_3,

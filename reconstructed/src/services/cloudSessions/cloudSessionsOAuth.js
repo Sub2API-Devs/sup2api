@@ -28,54 +28,69 @@ import { logError } from "../../utils/log.js";
 import { env } from "../../utils/env.js";
 
 //@ chunk-4r7nqnx2.js:842-894 placement
-var U = ".cloud_sessions_oauth_refresh.lock",
-  z = 300000;
+/**
+ * 云会话 OAuth 授权流程的等待上限（5 分钟，导出给 consoleSignIn 用）。
+ */
+var OAUTH_REFRESH_LOCK_NAME = ".cloud_sessions_oauth_refresh.lock";
+var OAUTH_FLOW_TIMEOUT_MS = 300000;
 //@ chunk-4r7nqnx2.js:894-1083 placement
-async function readCloudSessionsOAuthAsync(e) {
+async function readCloudSessionsOAuthAsync(credentials) {
   try {
-    return (await getSecureStorage().readAsync(e))?.cloudSessionsOauth ?? null;
+    return (await getSecureStorage().readAsync(credentials))?.cloudSessionsOauth ?? null;
   } catch (error) {
-    return (
-      logForDebugging(`Failed to read the cloud-sessions OAuth tokens: ${errorMessage(error)}`, {
-        level: "error",
-      }),
-      "unreadable"
-    );
+    logForDebugging(`Failed to read the cloud-sessions OAuth tokens: ${errorMessage(error)}`, {
+      level: "error",
+    });
+    return "unreadable";
   }
 }
 //@ chunk-4r7nqnx2.js:1083-1302 placement
 function hasCloudSessionsTokenForOrg(e) {
   try {
-    let s = getSecureStorage().read()?.cloudSessionsOauth;
-    return s !== void 0 && s.organizationUuid === e && Boolean(s.accessToken);
-  } catch (error) {
+    let cloudSessionsOauth = getSecureStorage().read()?.cloudSessionsOauth;
     return (
-      logForDebugging(`Failed to read the cloud-sessions OAuth tokens: ${errorMessage(error)}`, {
-        level: "error",
-      }),
-      !1
+      cloudSessionsOauth !== undefined &&
+      cloudSessionsOauth.organizationUuid === e &&
+      Boolean(cloudSessionsOauth.accessToken)
     );
+  } catch (error) {
+    logForDebugging(`Failed to read the cloud-sessions OAuth tokens: ${errorMessage(error)}`, {
+      level: "error",
+    });
+    return false;
   }
 }
+//@ chunk-4r7nqnx2.js:1302-1650 placement
 /**
  * 保存云会话 OAuth 令牌（条件写入、竞争检测）。
  */
-//@ chunk-4r7nqnx2.js:1302-1650 placement
-async function saveCloudSessionsOAuth(e, s) {
+async function saveCloudSessionsOAuth(cloudSessionsOauth, s) {
   try {
-    let k = !1,
-      mutate = await getSecureStorage().mutate((r) => {
-        if (s?.onlyIf && !s.onlyIf(r.cloudSessionsOauth)) return ((k = !0), r);
-        return { ...r, cloudSessionsOauth: e };
-      });
-    return k ? { ...mutate, raced: !0 } : mutate;
+    let k = false;
+    let u = await getSecureStorage().mutate((r) => {
+      if (s?.onlyIf && !s.onlyIf(r.cloudSessionsOauth)) {
+        k = true;
+        return r;
+      }
+      return {
+        ...r,
+        cloudSessionsOauth,
+      };
+    });
+    return k
+      ? {
+          ...u,
+          raced: true,
+        }
+      : u;
   } catch (error) {
-    return (
-      logForDebugging(`Failed to save the cloud-sessions OAuth tokens: ${errorMessage(error)}`, {
-        level: "error",
-      }),
-      { success: !1, warning: "Failed to save the cloud-sessions OAuth tokens" }
-    );
+    logForDebugging(`Failed to save the cloud-sessions OAuth tokens: ${errorMessage(error)}`, {
+      level: "error",
+    });
+    return {
+      success: false,
+      warning: "Failed to save the cloud-sessions OAuth tokens",
+    };
   }
 }
 //@ chunk-4r7nqnx2.js:1650-1898 placement
@@ -83,8 +98,11 @@ async function clearCloudSessionsOAuthIf(e) {
   try {
     await getSecureStorage().mutate((s) => {
       if (!s.cloudSessionsOauth || !e(s.cloudSessionsOauth)) return s;
-      let k = { ...s };
-      return (delete k.cloudSessionsOauth, k);
+      let k = {
+        ...s,
+      };
+      delete k.cloudSessionsOauth;
+      return k;
     });
   } catch (error) {
     logForDebugging(`Failed to clear the cloud-sessions OAuth tokens: ${errorMessage(error)}`, {
@@ -94,137 +112,209 @@ async function clearCloudSessionsOAuthIf(e) {
 }
 //@ chunk-4r7nqnx2.js:1898-2005 placement
 async function readFreshCloudSessionsOAuth() {
-  let e = getSecureStorage();
-  return (e.invalidateCache?.(), (await e.readAsync())?.cloudSessionsOauth ?? null);
+  let secureStorage = getSecureStorage();
+  secureStorage.invalidateCache?.();
+  return (await secureStorage.readAsync())?.cloudSessionsOauth ?? null;
 }
+//@ chunk-4r7nqnx2.js:2005-5005 placement
 /**
  * 刷新云会话 OAuth 令牌（文件锁、无盘会话处理）。
  */
-//@ chunk-4r7nqnx2.js:2005-5005 placement
-async function refreshCloudSessionsOAuth({
-  organizationUuid: organizationUuid,
-  refusedAccessToken: refusedAccessToken,
-  credentials: credentials,
-}) {
-  let u = await readCloudSessionsOAuthAsync(credentials);
-  if (u === "unreadable")
-    return { ok: !1, reason: "refresh_failed", detail: "the credential store could not be read" };
-  if (!u?.accessToken || u.organizationUuid !== organizationUuid) return { ok: !1, reason: "needs_sign_in" };
-  if (!isOAuthTokenExpired(u.expiresAt) && u.accessToken !== refusedAccessToken)
-    return { ok: !0, accessToken: u.accessToken };
-  if (isDiskless())
-    return (
-      logFeatureBad("oauth_token_refresh", "cloud_sessions_oauth_refresh_diskless"),
-      { ok: !1, reason: "needs_sign_in" }
-    );
+async function refreshCloudSessionsOAuth({ organizationUuid, refusedAccessToken, credentials }) {
+  let cloudSessionsOAuth = await readCloudSessionsOAuthAsync(credentials);
+  if (cloudSessionsOAuth === "unreadable")
+    return {
+      ok: false,
+      reason: "refresh_failed",
+      detail: "the credential store could not be read",
+    };
+  if (!cloudSessionsOAuth?.accessToken || cloudSessionsOAuth.organizationUuid !== organizationUuid)
+    return {
+      ok: false,
+      reason: "needs_sign_in",
+    };
+  if (
+    !isOAuthTokenExpired(cloudSessionsOAuth.expiresAt) &&
+    cloudSessionsOAuth.accessToken !== refusedAccessToken
+  )
+    return {
+      ok: true,
+      accessToken: cloudSessionsOAuth.accessToken,
+    };
+  if (isDiskless()) {
+    logFeatureBad("oauth_token_refresh", "cloud_sessions_oauth_refresh_diskless");
+    return {
+      ok: false,
+      reason: "needs_sign_in",
+    };
+  }
   try {
-    return await withOauthSlotRefreshLock(U, async (r) => {
-      let o = await readFreshCloudSessionsOAuth();
-      if (!o?.accessToken || o.organizationUuid !== organizationUuid)
-        return { ok: !1, reason: "needs_sign_in" };
-      if (!isOAuthTokenExpired(o.expiresAt) && o.accessToken !== refusedAccessToken)
-        return { ok: !0, accessToken: o.accessToken };
-      if (!o.refreshToken || !Array.isArray(o.scopes) || o.scopes.length === 0) {
-        let refreshToken = o.refreshToken;
-        return (
-          await clearCloudSessionsOAuthIf((c) => c.refreshToken === refreshToken),
-          { ok: !1, reason: "needs_sign_in" }
-        );
+    return await withOauthSlotRefreshLock(OAUTH_REFRESH_LOCK_NAME, async (r) => {
+      let freshCloudSessionsOAuth = await readFreshCloudSessionsOAuth();
+      if (
+        !freshCloudSessionsOAuth?.accessToken ||
+        freshCloudSessionsOAuth.organizationUuid !== organizationUuid
+      )
+        return {
+          ok: false,
+          reason: "needs_sign_in",
+        };
+      if (
+        !isOAuthTokenExpired(freshCloudSessionsOAuth.expiresAt) &&
+        freshCloudSessionsOAuth.accessToken !== refusedAccessToken
+      )
+        return {
+          ok: true,
+          accessToken: freshCloudSessionsOAuth.accessToken,
+        };
+      if (
+        !freshCloudSessionsOAuth.refreshToken ||
+        !Array.isArray(freshCloudSessionsOAuth.scopes) ||
+        freshCloudSessionsOAuth.scopes.length === 0
+      ) {
+        let refreshToken = freshCloudSessionsOAuth.refreshToken;
+        await clearCloudSessionsOAuthIf((c) => c.refreshToken === refreshToken);
+        return {
+          ok: false,
+          reason: "needs_sign_in",
+        };
       }
-      if (r.isCompromised())
-        return (
-          logFeatureSad("oauth_token_refresh", "cloud_sessions_oauth_refresh_lock_compromised"),
-          { ok: !1, reason: "refresh_failed", detail: "another Claude Code process is renewing it right now" }
-        );
-      let refreshToken = o.refreshToken;
+      if (r.isCompromised()) {
+        logFeatureSad("oauth_token_refresh", "cloud_sessions_oauth_refresh_lock_compromised");
+        return {
+          ok: false,
+          reason: "refresh_failed",
+          detail: "another Claude Code process is renewing it right now",
+        };
+      }
+      let refreshToken = freshCloudSessionsOAuth.refreshToken;
       try {
         let n = await refreshOAuthToken(refreshToken, {
-          clientId: o.clientId,
-          scopes: o.scopes,
-          skipProfileFetch: !0,
+          clientId: freshCloudSessionsOAuth.clientId,
+          scopes: freshCloudSessionsOAuth.scopes,
+          skipProfileFetch: true,
         });
         if (!n.refreshToken || !n.expiresAt) {
           if (n.refreshToken && n.refreshToken !== refreshToken)
-            await revokeOAuthToken(n.refreshToken, o.clientId);
+            await revokeOAuthToken(n.refreshToken, freshCloudSessionsOAuth.clientId);
           return {
-            ok: !1,
+            ok: false,
             reason: "refresh_failed",
             detail: "the server's reply had no refresh token or expiry",
           };
         }
-        if (!n.scopes.includes(CLAUDE_AI_SESSIONS_SCOPE))
-          return (
-            await revokeOAuthToken(n.refreshToken, o.clientId),
-            await clearCloudSessionsOAuthIf((h) => h.refreshToken === refreshToken),
-            { ok: !1, reason: "needs_sign_in", detail: "refresh response missing the sessions scope" }
-          );
+        if (!n.scopes.includes(CLAUDE_AI_SESSIONS_SCOPE)) {
+          await revokeOAuthToken(n.refreshToken, freshCloudSessionsOAuth.clientId);
+          await clearCloudSessionsOAuthIf((h) => h.refreshToken === refreshToken);
+          return {
+            ok: false,
+            reason: "needs_sign_in",
+            detail: "refresh response missing the sessions scope",
+          };
+        }
         let c = await saveCloudSessionsOAuth(
           {
             accessToken: n.accessToken,
             refreshToken: n.refreshToken,
             expiresAt: n.expiresAt,
             scopes: n.scopes.filter((scope) => CLOUD_SESSIONS_OAUTH_SCOPES.some((p) => p === scope)),
-            clientId: o.clientId,
-            organizationUuid: o.organizationUuid,
+            clientId: freshCloudSessionsOAuth.clientId,
+            organizationUuid: freshCloudSessionsOAuth.organizationUuid,
           },
-          { onlyIf: (h) => h?.refreshToken === refreshToken },
+          {
+            onlyIf: (h) => h?.refreshToken === refreshToken,
+          },
         );
         if (c.raced) {
-          await revokeOAuthToken(n.refreshToken, o.clientId);
-          let h = await readFreshCloudSessionsOAuth();
-          return h?.accessToken &&
-            h.organizationUuid === organizationUuid &&
-            !isOAuthTokenExpired(h.expiresAt)
-            ? { ok: !0, accessToken: h.accessToken }
-            : { ok: !1, reason: "needs_sign_in" };
+          await revokeOAuthToken(n.refreshToken, freshCloudSessionsOAuth.clientId);
+          let freshCloudSessionsOAuth_2 = await readFreshCloudSessionsOAuth();
+          return freshCloudSessionsOAuth_2?.accessToken &&
+            freshCloudSessionsOAuth_2.organizationUuid === organizationUuid &&
+            !isOAuthTokenExpired(freshCloudSessionsOAuth_2.expiresAt)
+            ? {
+                ok: true,
+                accessToken: freshCloudSessionsOAuth_2.accessToken,
+              }
+            : {
+                ok: false,
+                reason: "needs_sign_in",
+              };
         }
         if (!c.success)
           logForDebugging(
             "Cloud-sessions OAuth refresh succeeded but the new token could not be saved; using it for this session only.",
-            { level: "error" },
+            {
+              level: "error",
+            },
           );
-        return { ok: !0, accessToken: n.accessToken };
+        return {
+          ok: true,
+          accessToken: n.accessToken,
+        };
       } catch (error) {
         if (r.isCompromised()) {
-          let c = await readFreshCloudSessionsOAuth();
-          if (c?.accessToken && c.organizationUuid === organizationUuid && !isOAuthTokenExpired(c.expiresAt))
-            return { ok: !0, accessToken: c.accessToken };
+          let freshCloudSessionsOAuth = await readFreshCloudSessionsOAuth();
+          if (
+            freshCloudSessionsOAuth?.accessToken &&
+            freshCloudSessionsOAuth.organizationUuid === organizationUuid &&
+            !isOAuthTokenExpired(freshCloudSessionsOAuth.expiresAt)
+          )
+            return {
+              ok: true,
+              accessToken: freshCloudSessionsOAuth.accessToken,
+            };
           if (!isInvalidGrantError(error))
             logFeatureSad("oauth_token_refresh", "cloud_sessions_oauth_refresh_lock_compromised");
           return {
-            ok: !1,
+            ok: false,
             reason: "refresh_failed",
             detail: "another Claude Code process is renewing it right now",
           };
         }
-        if (isInvalidGrantError(error))
-          return (
-            await clearCloudSessionsOAuthIf((c) => c.refreshToken === refreshToken),
-            { ok: !1, reason: "needs_sign_in", detail: "cloud-sessions authorization expired" }
-          );
-        return (
-          logForDebugging(`Cloud-sessions OAuth refresh failed: ${errorMessage(error)}`, { level: "error" }),
-          { ok: !1, reason: "refresh_failed", detail: "the renewal request failed" }
-        );
+        if (isInvalidGrantError(error)) {
+          await clearCloudSessionsOAuthIf((c) => c.refreshToken === refreshToken);
+          return {
+            ok: false,
+            reason: "needs_sign_in",
+            detail: "cloud-sessions authorization expired",
+          };
+        }
+        logForDebugging(`Cloud-sessions OAuth refresh failed: ${errorMessage(error)}`, {
+          level: "error",
+        });
+        return {
+          ok: false,
+          reason: "refresh_failed",
+          detail: "the renewal request failed",
+        };
       }
     });
   } catch (error) {
     if (error instanceof OauthSlotLockContendedError)
       logFeatureSad("oauth_token_refresh", "cloud_sessions_oauth_refresh_lock_contention");
-    else (logError(error), logFeatureBad("oauth_token_refresh", "cloud_sessions_oauth_refresh_lock_error"));
-    return { ok: !1, reason: "refresh_failed", detail: "the renewal could not run; wait a moment" };
+    else {
+      logError(error);
+      logFeatureBad("oauth_token_refresh", "cloud_sessions_oauth_refresh_lock_error");
+    }
+    return {
+      ok: false,
+      reason: "refresh_failed",
+      detail: "the renewal could not run; wait a moment",
+    };
   }
 }
 //@ chunk-4r7nqnx2.js:5005-5057 placement
-function D() {
-  return !getIsNonInteractiveSession() && env.CLAUDE_CODE_REMOTE !== !0;
+/**
+ * 是否当前是交互式本地会话（用于决定能否走浏览器授权）。
+ */
+function isInteractiveLocalSession() {
+  return !getIsNonInteractiveSession() && env.CLAUDE_CODE_REMOTE !== true;
 }
-
 export {
-  z,
+  OAUTH_FLOW_TIMEOUT_MS,
   readFreshCloudSessionsOAuth,
   saveCloudSessionsOAuth,
   hasCloudSessionsTokenForOrg,
-  D,
+  isInteractiveLocalSession,
   refreshCloudSessionsOAuth,
 };

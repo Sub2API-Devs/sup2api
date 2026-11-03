@@ -18,5 +18,4 @@ function toInkColor(color) {
   if (isAgentColorName(color)) return AGENT_COLOR_TO_THEME_COLOR[color];
   return `ansi:${color}`;
 }
-
 export { toInkColor };

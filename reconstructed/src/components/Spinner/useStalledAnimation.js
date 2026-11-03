@@ -11,42 +11,58 @@
 import { R } from "../../../vendor/react/cjs/react.production.js";
 
 //@ chunk-3mec1atf.js:7371-7948 fingerprint = useStalledAnimation (0.835)
-function useStalledAnimation(l, t, u = !1, o = !1, m) {
-  let lastTokenTime = R(l),
-    lastResponseLength = R(t),
-    mountTime = R(0),
-    stalledIntensityRef = R(l),
-    lastSmoothTime = R(m);
-  if (t > lastResponseLength.current || lastSmoothTime.current !== m)
-    ((lastSmoothTime.current = m),
-      (lastTokenTime.current = l),
-      (lastResponseLength.current = t),
-      (mountTime.current = 0),
-      (stalledIntensityRef.current = l));
-  else if (t < lastResponseLength.current) lastResponseLength.current = t;
+function useStalledAnimation(
+  time,
+  currentResponseLength,
+  hasActiveTools = false,
+  reducedMotion = false,
+  agentId,
+) {
+  let lastTokenTime = R(time);
+  let lastResponseLength = R(currentResponseLength);
+  let stalledIntensityRef = R(0);
+  let lastSmoothTime = R(time);
+  let lastSmoothTime_2 = R(agentId);
+  if (currentResponseLength > lastResponseLength.current || lastSmoothTime_2.current !== agentId) {
+    lastSmoothTime_2.current = agentId;
+    lastTokenTime.current = time;
+    lastResponseLength.current = currentResponseLength;
+    stalledIntensityRef.current = 0;
+    lastSmoothTime.current = time;
+  } else if (currentResponseLength < lastResponseLength.current)
+    lastResponseLength.current = currentResponseLength;
   let timeSinceLastToken;
-  if (u) ((timeSinceLastToken = 0), (lastTokenTime.current = l));
-  else timeSinceLastToken = l - lastTokenTime.current;
-  let isStalled = timeSinceLastToken > 1e4 && !u,
-    f = isStalled ? Math.min((timeSinceLastToken - 1e4) / 1e4, 1) : 0;
-  if (!o && (f > 0 || mountTime.current > 0)) {
-    let W = l - stalledIntensityRef.current;
+  if (hasActiveTools) {
+    timeSinceLastToken = 0;
+    lastTokenTime.current = time;
+  } else timeSinceLastToken = time - lastTokenTime.current;
+  let isStalled = timeSinceLastToken > 1e4 && !hasActiveTools;
+  let intensity = isStalled ? Math.min((timeSinceLastToken - 1e4) / 1e4, 1) : 0;
+  if (!reducedMotion && (intensity > 0 || stalledIntensityRef.current > 0)) {
+    let W = time - lastSmoothTime.current;
     if (W >= 50) {
-      let steps = Math.floor(W / 50),
-        current = mountTime.current;
-      for (let k = 0; k < steps; k++) {
-        let L = f - current;
-        if (Math.abs(L) < 0.01) {
-          current = f;
+      let steps = Math.floor(W / 50);
+      let current = stalledIntensityRef.current;
+      for (let i = 0; i < steps; i++) {
+        let diff = intensity - current;
+        if (Math.abs(diff) < 0.01) {
+          current = intensity;
           break;
         }
-        current += L * 0.1;
+        current += diff * 0.1;
       }
-      ((mountTime.current = current), (stalledIntensityRef.current = l));
+      stalledIntensityRef.current = current;
+      lastSmoothTime.current = time;
     }
-  } else ((mountTime.current = f), (stalledIntensityRef.current = l));
-  let b = o ? f : mountTime.current;
-  return { isStalled: isStalled, stalledIntensity: b, timeSinceLastToken: timeSinceLastToken };
+  } else {
+    stalledIntensityRef.current = intensity;
+    lastSmoothTime.current = time;
+  }
+  let effectiveIntensity = reducedMotion ? intensity : stalledIntensityRef.current;
+  return {
+    isStalled,
+    stalledIntensity: effectiveIntensity,
+    timeSinceLastToken,
+  };
 }
-
 export { useStalledAnimation };

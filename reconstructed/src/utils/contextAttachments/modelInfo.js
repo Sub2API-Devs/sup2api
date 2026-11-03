@@ -9,22 +9,40 @@
  * attribution: placement 3
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, o } from "../../../vendor/zod/v4/classic/schemas.js";
+import { u, string } from "../../../vendor/zod/v4/classic/schemas.js";
 import { getCatalogEntry as getCatalogEntry_2 } from "../model/modelCatalog.js";
 import { getCanonicalName } from "../model/canonicalModelName.js";
 import { getMarketingNameForModel } from "../model/model.js";
 
 //@ chunk-e6aww6q8.js:105191-105341 placement
-var ENV_INFO_MODEL = "env_info_model",
-  fFe = DoctorLazy(() => u({ modelId: o(), marketingName: o().nullable(), knowledgeCutoff: o().nullable() })),
-  Eio = DoctorLazy(() => o().nullable().optional());
+/**
+ * 环境信息里的模型 schema（id、展示名、训练截止）。
+ */
+var ENV_INFO_MODEL = "env_info_model";
+var modelInfoSchema = DoctorLazy(() =>
+  u({
+    modelId: string(),
+    marketingName: string().nullable(),
+    knowledgeCutoff: string().nullable(),
+  }),
+);
+var modelInfoNullableSchema = DoctorLazy(() => string().nullable().optional());
 //@ chunk-e6aww6q8.js:105341-105398 placement
-function Rio(e) {
+/**
+ * 从模型目录取训练截止时间。
+ */
+function knowledgeCutoffForModel(e) {
   return getCatalogEntry_2(getCanonicalName(e))?.knowledge_cutoff ?? null;
 }
 //@ chunk-e6aww6q8.js:105398-105481 placement
-function Pkt(e) {
-  return { modelId: e, marketingName: getMarketingNameForModel(e) ?? null, knowledgeCutoff: Rio(e) };
+/**
+ * 构造模型信息（id、展示名与训练截止时间）。
+ */
+function modelInfoForModel(runtimeMainLoopModel) {
+  return {
+    modelId: runtimeMainLoopModel,
+    marketingName: getMarketingNameForModel(runtimeMainLoopModel) ?? null,
+    knowledgeCutoff: knowledgeCutoffForModel(runtimeMainLoopModel),
+  };
 }
-
-export { ENV_INFO_MODEL, Eio, fFe, Pkt };
+export { ENV_INFO_MODEL, modelInfoNullableSchema, modelInfoSchema, modelInfoForModel };

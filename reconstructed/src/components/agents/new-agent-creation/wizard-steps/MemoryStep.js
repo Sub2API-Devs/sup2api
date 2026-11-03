@@ -11,11 +11,18 @@
 import { w } from "../../../../../vendor/react/compiler-runtime.js";
 import { Qr, y } from "../../../../../vendor/react/cjs/react.production.js";
 import { useWizard } from "../../../wizard/useWizard.js";
-import { Le, listItem, MANUAL_PROJECT_VALUE } from "../../../vertexSetup/vertexCredentials.js";
+import {
+  MAX_ACCOUNT_OPTIONS,
+  listItem,
+  MANUAL_PROJECT_VALUE,
+} from "../../../vertexSetup/vertexCredentials.js";
 import { useKeybinding } from "../../../../keybindings/useKeybinding.js";
-import { VERTEX_WIZARD_STEPS } from "../../../vertexSetup/VertexSetupWizard.js";
+import { VERTEX_WIZARD_STEPS_2 } from "../../../vertexSetup/VertexSetupWizard.js";
 import { plural } from "../../../../utils/stringUtils.js";
-import { r, e } from "../../../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default_2,
+  jsxProd_default,
+} from "../../../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Box } from "../../../../ink/components/Text.js";
 import { MEMO_CACHE_SENTINEL } from "../../../../../runtime/bun-runtime.js";
 import { OrderedListWithItem } from "../../../CustomSelect/selectTable.js";
@@ -27,188 +34,239 @@ import { TextInput } from "../../../TextInput.js";
 import { ErrorText } from "../../../ErrorText.js";
 
 //@ chunk-y6fv30yg.js:11359-14249 callgraph-fingerprint = MemoryStep (0.315)
-function MemoryStep(o) {
-  let $ = w(48),
-    { projectsPromise: projectsPromise } = o,
-    c = Qr(projectsPromise),
-    {
-      goBack: goBack,
-      goToStep: goToStep,
-      updateWizardData: updateWizardData,
-      wizardData: wizardData,
-    } = useWizard(),
-    f = c.length > Le,
-    k;
-  if ($[0] !== c || $[1] !== wizardData.projectId)
-    ((k = wizardData.projectId && !c.includes(wizardData.projectId)),
-      ($[0] = c),
-      ($[1] = wizardData.projectId),
-      ($[2] = k));
-  else k = $[2];
-  let g = Boolean(k),
-    [_, A] = y(c.length === 0 || f || g),
-    [d, D] = y(wizardData.projectId ?? ""),
-    [x, T] = y(d.length),
-    [C, E] = y(null);
-  const v = _ ? "Settings" : "Confirmation";
+function MemoryStep(props) {
+  let $ = w(48);
+  let { projectsPromise } = props;
+  let c = Qr(projectsPromise);
+  let { goBack, goToStep, updateWizardData, wizardData } = useWizard();
+  let f = c.length > MAX_ACCOUNT_OPTIONS;
+  let k;
+  if ($[0] !== c || $[1] !== wizardData.projectId) {
+    k = wizardData.projectId && !c.includes(wizardData.projectId);
+    $[0] = c;
+    $[1] = wizardData.projectId;
+    $[2] = k;
+  } else k = $[2];
+  let g = Boolean(k);
+  let [_, A] = y(c.length === 0 || f || g);
+  let [projectId, setProjectId] = y(wizardData.projectId ?? "");
+  let [x, T] = y(projectId.length);
+  let [C, E] = y(null);
+  const context = _ ? "Settings" : "Confirmation";
   let b;
-  if ($[3] !== v) ((b = { context: v }), ($[3] = v), ($[4] = b));
-  else b = $[4];
+  if ($[3] !== context) {
+    b = {
+      context,
+    };
+    $[3] = context;
+    $[4] = b;
+  } else b = $[4];
   useKeybinding("confirm:no", goBack, b);
   let W;
-  if ($[5] !== goToStep || $[6] !== updateWizardData)
-    ((W = (Y) => {
-      (updateWizardData({ projectId: Y }), goToStep(VERTEX_WIZARD_STEPS.REGION));
-    }),
-      ($[5] = goToStep),
-      ($[6] = updateWizardData),
-      ($[7] = W));
-  else W = $[7];
+  if ($[5] !== goToStep || $[6] !== updateWizardData) {
+    W = (projectId) => {
+      updateWizardData({
+        projectId,
+      });
+      goToStep(VERTEX_WIZARD_STEPS_2.REGION);
+    };
+    $[5] = goToStep;
+    $[6] = updateWizardData;
+    $[7] = W;
+  } else W = $[7];
   let F = W;
   if (!_) {
     const J = c.length;
     let N;
-    if ($[8] !== c.length) ((N = plural(c.length, "project")), ($[8] = c.length), ($[9] = N));
-    else N = $[9];
+    if ($[8] !== c.length) {
+      N = plural(c.length, "project");
+      $[8] = c.length;
+      $[9] = N;
+    } else N = $[9];
     let G;
-    if ($[10] !== c.length || $[11] !== N)
-      ((G = r(Text, { dimColor: !0, children: ["Found ", J, " ", N, " in your gcloud configurations."] })),
-        ($[10] = c.length),
-        ($[11] = N),
-        ($[12] = G));
-    else G = $[12];
+    if ($[10] !== c.length || $[11] !== N) {
+      G = jsxProd_default_2(Text, {
+        dimColor: true,
+        children: ["Found ", J, " ", N, " in your gcloud configurations."],
+      });
+      $[10] = c.length;
+      $[11] = N;
+      $[12] = G;
+    } else G = $[12];
     let B;
-    if ($[13] !== c || $[14] !== wizardData.projectId)
-      ((B = c.indexOf(wizardData.projectId ?? "")), ($[13] = c), ($[14] = wizardData.projectId), ($[15] = B));
-    else B = $[15];
-    const max = Math.max(0, B);
-    let z;
-    if ($[16] !== c || $[17] !== F)
-      ((z = (value) => {
+    if ($[13] !== c || $[14] !== wizardData.projectId) {
+      B = c.indexOf(wizardData.projectId ?? "");
+      $[13] = c;
+      $[14] = wizardData.projectId;
+      $[15] = B;
+    } else B = $[15];
+    const defaultFocusIndex = Math.max(0, B);
+    let onSelect;
+    if ($[16] !== c || $[17] !== F) {
+      onSelect = (value) => {
         let it = c[value];
-        if (it === void 0) A(!0);
+        if (it === undefined) A(true);
         else F(it);
-      }),
-        ($[16] = c),
-        ($[17] = F),
-        ($[18] = z));
-    else z = $[18];
+      };
+      $[16] = c;
+      $[17] = F;
+      $[18] = onSelect;
+    } else onSelect = $[18];
     let M;
-    if ($[19] !== c) ((M = c.map(listItem)), ($[19] = c), ($[20] = M));
-    else M = $[20];
+    if ($[19] !== c) {
+      M = c.map(listItem);
+      $[19] = c;
+      $[20] = M;
+    } else M = $[20];
     let X;
-    if ($[21] === MEMO_CACHE_SENTINEL)
-      ((X = e(OrderedListWithItem.Item, { label: "Type a different project\u2026" }, MANUAL_PROJECT_VALUE)),
-        ($[21] = X));
-    else X = $[21];
+    if ($[21] === MEMO_CACHE_SENTINEL) {
+      X = jsxProd_default(
+        OrderedListWithItem.Item,
+        {
+          label: "Type a different project\u2026",
+        },
+        MANUAL_PROJECT_VALUE,
+      );
+      $[21] = X;
+    } else X = $[21];
     let Z;
-    if ($[22] !== z || $[23] !== M || $[24] !== max)
-      ((Z = r(OrderedListWithItem, { defaultFocusIndex: max, onSelect: z, children: [M, X] })),
-        ($[22] = z),
-        ($[23] = M),
-        ($[24] = max),
-        ($[25] = Z));
-    else Z = $[25];
+    if ($[22] !== onSelect || $[23] !== M || $[24] !== defaultFocusIndex) {
+      Z = jsxProd_default_2(OrderedListWithItem, {
+        defaultFocusIndex,
+        onSelect,
+        children: [M, X],
+      });
+      $[22] = onSelect;
+      $[23] = M;
+      $[24] = defaultFocusIndex;
+      $[25] = Z;
+    } else Z = $[25];
     let nt;
-    if ($[26] !== Z || $[27] !== G)
-      ((nt = e(WizardDialogLayout, {
+    if ($[26] !== Z || $[27] !== G) {
+      nt = jsxProd_default(WizardDialogLayout, {
         subtitle: "GCP project",
-        children: r(Box, { flexDirection: "column", gap: 1, children: [G, Z] }),
-      })),
-        ($[26] = Z),
-        ($[27] = G),
-        ($[28] = nt));
-    else nt = $[28];
+        children: jsxProd_default_2(Box, {
+          flexDirection: "column",
+          gap: 1,
+          children: [G, Z],
+        }),
+      });
+      $[26] = Z;
+      $[27] = G;
+      $[28] = nt;
+    } else nt = $[28];
     return nt;
   }
   let J;
-  if ($[29] !== F || $[30] !== d)
-    ((J = () => {
-      let trimmed = d.trim();
+  if ($[29] !== F || $[30] !== projectId) {
+    J = () => {
+      let trimmed = projectId.trim();
       if (!trimmed) {
         E("Project ID is required");
         return;
       }
-      (E(null), F(trimmed));
-    }),
-      ($[29] = F),
-      ($[30] = d),
-      ($[31] = J));
-  else J = $[31];
-  let Ae = J,
-    N;
-  if ($[32] === MEMO_CACHE_SENTINEL)
-    ((N = r(Byline, {
+      E(null);
+      F(trimmed);
+    };
+    $[29] = F;
+    $[30] = projectId;
+    $[31] = J;
+  } else J = $[31];
+  let onSubmit = J;
+  let footerText;
+  if ($[32] === MEMO_CACHE_SENTINEL) {
+    footerText = jsxProd_default_2(Byline, {
       children: [
-        e(KeyboardShortcutHint, { chord: "enter", action: "continue" }),
-        e(ConfigurableShortcutHint, {
+        jsxProd_default(KeyboardShortcutHint, {
+          chord: "enter",
+          action: "continue",
+        }),
+        jsxProd_default(ConfigurableShortcutHint, {
           action: "confirm:no",
           context: "Settings",
           fallback: "Esc",
           description: "go back",
         }),
       ],
-    })),
-      ($[32] = N));
-  else N = $[32];
+    });
+    $[32] = footerText;
+  } else footerText = $[32];
   let G;
-  if ($[33] === MEMO_CACHE_SENTINEL)
-    ((G = e(Text, { children: "The project where Vertex AI is enabled." })), ($[33] = G));
-  else G = $[33];
+  if ($[33] === MEMO_CACHE_SENTINEL) {
+    G = jsxProd_default(Text, {
+      children: "The project where Vertex AI is enabled.",
+    });
+    $[33] = G;
+  } else G = $[33];
   let B;
-  if ($[34] !== c.length || $[35] !== f)
-    ((B =
-      f && r(Text, { dimColor: !0, children: ["Found ", c.length, " projects \u2014 too many to list."] })),
-      ($[34] = c.length),
-      ($[35] = f),
-      ($[36] = B));
-  else B = $[36];
+  if ($[34] !== c.length || $[35] !== f) {
+    B =
+      f &&
+      jsxProd_default_2(Text, {
+        dimColor: true,
+        children: ["Found ", c.length, " projects \u2014 too many to list."],
+      });
+    $[34] = c.length;
+    $[35] = f;
+    $[36] = B;
+  } else B = $[36];
   let H;
-  if ($[37] === MEMO_CACHE_SENTINEL)
-    ((H = e(Text, {
-      dimColor: !0,
+  if ($[37] === MEMO_CACHE_SENTINEL) {
+    H = jsxProd_default(Text, {
+      dimColor: true,
       children: "Find it with `gcloud config get-value project` or in the GCP console header.",
-    })),
-      ($[37] = H));
-  else H = $[37];
+    });
+    $[37] = H;
+  } else H = $[37];
   let z;
-  if ($[38] !== x || $[39] !== Ae || $[40] !== d)
-    ((z = e(Box, {
+  if ($[38] !== x || $[39] !== onSubmit || $[40] !== projectId) {
+    z = jsxProd_default(Box, {
       marginTop: 1,
-      children: e(TextInput, {
-        value: d,
-        onChange: D,
-        onSubmit: Ae,
+      children: jsxProd_default(TextInput, {
+        value: projectId,
+        onChange: setProjectId,
+        onSubmit,
         placeholder: "my-gcp-project",
         columns: 60,
         cursorOffset: x,
         onChangeCursorOffset: T,
-        focus: !0,
-        showCursor: !0,
+        focus: true,
+        showCursor: true,
       }),
-    })),
-      ($[38] = x),
-      ($[39] = Ae),
-      ($[40] = d),
-      ($[41] = z));
-  else z = $[41];
+    });
+    $[38] = x;
+    $[39] = onSubmit;
+    $[40] = projectId;
+    $[41] = z;
+  } else z = $[41];
   let M;
-  if ($[42] !== C)
-    ((M = C && e(Box, { marginTop: 1, children: e(ErrorText, { error: C }) })), ($[42] = C), ($[43] = M));
-  else M = $[43];
+  if ($[42] !== C) {
+    M =
+      C &&
+      jsxProd_default(Box, {
+        marginTop: 1,
+        children: jsxProd_default(ErrorText, {
+          error: C,
+        }),
+      });
+    $[42] = C;
+    $[43] = M;
+  } else M = $[43];
   let X;
-  if ($[44] !== z || $[45] !== M || $[46] !== B)
-    ((X = e(WizardDialogLayout, {
+  if ($[44] !== z || $[45] !== M || $[46] !== B) {
+    X = jsxProd_default(WizardDialogLayout, {
       subtitle: "GCP project ID",
-      footerText: N,
-      children: r(Box, { flexDirection: "column", children: [G, B, H, z, M] }),
-    })),
-      ($[44] = z),
-      ($[45] = M),
-      ($[46] = B),
-      ($[47] = X));
-  else X = $[47];
+      footerText,
+      children: jsxProd_default_2(Box, {
+        flexDirection: "column",
+        children: [G, B, H, z, M],
+      }),
+    });
+    $[44] = z;
+    $[45] = M;
+    $[46] = B;
+    $[47] = X;
+  } else X = $[47];
   return X;
 }
-
 export { MemoryStep };

@@ -5,92 +5,127 @@
  * pieces: chunk-hwmsct5x.js (1)
  * attribution: esm-fingerprint 1
  */
-import { Y } from "../../core/resource.mjs";
-import { T } from "../../internal/headers.mjs";
+import { APIResource } from "../../core/resource.mjs";
+import { buildHeaders } from "../../internal/headers.mjs";
 import { I } from "../../internal/utils/path.mjs";
-import { Be } from "../../core/pagination.mjs";
-import { pr } from "../../core/error.mjs";
-import { Ps } from "../../internal/decoders/jsonl.mjs";
+import { Page } from "../../core/pagination.mjs";
+import { AnthropicError } from "../../core/error.mjs";
+import { JSONLDecoder } from "../../internal/decoders/jsonl.mjs";
 
 //@ chunk-hwmsct5x.js:156923-158362 esm-fingerprint
-class Ao extends Y {
-  create(e, n) {
-    let { user_profile_id: user_profile_id, workspace_id: workspace_id, ...h } = e;
+class Batches_2 extends APIResource {
+  create(params, options) {
+    let { user_profile_id, workspace_id, ...body } = params;
     return this._client.post("/v1/messages/batches", {
-      body: h,
-      ...n,
-      headers: T([
+      body,
+      ...options,
+      headers: buildHeaders([
         {
-          ...(user_profile_id != null ? { "anthropic-user-profile-id": user_profile_id } : void 0),
-          ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0),
+          ...(user_profile_id != null
+            ? {
+                "anthropic-user-profile-id": user_profile_id,
+              }
+            : undefined),
+          ...(workspace_id != null
+            ? {
+                "anthropic-workspace-id": workspace_id,
+              }
+            : undefined),
         },
-        n?.headers,
+        options?.headers,
       ]),
     });
   }
-  retrieve(e, n = {}, r) {
-    let { workspace_id: workspace_id } = n ?? {};
-    return this._client.get(I`/v1/messages/batches/${e}`, {
-      ...r,
-      headers: T([
-        { ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0) },
-        r?.headers,
+  retrieve(messageBatchID, params = {}, options) {
+    let { workspace_id } = params ?? {};
+    return this._client.get(I`/v1/messages/batches/${messageBatchID}`, {
+      ...options,
+      headers: buildHeaders([
+        {
+          ...(workspace_id != null
+            ? {
+                "anthropic-workspace-id": workspace_id,
+              }
+            : undefined),
+        },
+        options?.headers,
       ]),
     });
   }
-  list(e = {}, n) {
-    let { workspace_id: workspace_id, ...s } = e ?? {};
-    return this._client.getAPIList("/v1/messages/batches", Be, {
-      query: s,
-      ...n,
-      headers: T([
-        { ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0) },
-        n?.headers,
+  list(params = {}, options) {
+    let { workspace_id, ...query } = params ?? {};
+    return this._client.getAPIList("/v1/messages/batches", Page, {
+      query,
+      ...options,
+      headers: buildHeaders([
+        {
+          ...(workspace_id != null
+            ? {
+                "anthropic-workspace-id": workspace_id,
+              }
+            : undefined),
+        },
+        options?.headers,
       ]),
     });
   }
-  delete(e, n = {}, r) {
-    let { workspace_id: workspace_id } = n ?? {};
-    return this._client.delete(I`/v1/messages/batches/${e}`, {
-      ...r,
-      headers: T([
-        { ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0) },
-        r?.headers,
+  delete(messageBatchID, params = {}, options) {
+    let { workspace_id } = params ?? {};
+    return this._client.delete(I`/v1/messages/batches/${messageBatchID}`, {
+      ...options,
+      headers: buildHeaders([
+        {
+          ...(workspace_id != null
+            ? {
+                "anthropic-workspace-id": workspace_id,
+              }
+            : undefined),
+        },
+        options?.headers,
       ]),
     });
   }
-  cancel(e, n = {}, r) {
-    let { workspace_id: workspace_id } = n ?? {};
-    return this._client.post(I`/v1/messages/batches/${e}/cancel`, {
-      ...r,
-      headers: T([
-        { ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0) },
-        r?.headers,
+  cancel(messageBatchID, params = {}, options) {
+    let { workspace_id } = params ?? {};
+    return this._client.post(I`/v1/messages/batches/${messageBatchID}/cancel`, {
+      ...options,
+      headers: buildHeaders([
+        {
+          ...(workspace_id != null
+            ? {
+                "anthropic-workspace-id": workspace_id,
+              }
+            : undefined),
+        },
+        options?.headers,
       ]),
     });
   }
-  async results(e, n = {}, r) {
-    let retrieve = await this.retrieve(e, n, r);
-    if (!retrieve.results_url)
-      throw new pr(
-        `No batch \`results_url\`; Has it finished processing? ${retrieve.processing_status} - ${retrieve.id}`,
+  async results(messageBatchID, params = {}, options) {
+    let batch = await this.retrieve(messageBatchID, params, options);
+    if (!batch.results_url)
+      throw new AnthropicError(
+        `No batch \`results_url\`; Has it finished processing? ${batch.processing_status} - ${batch.id}`,
       );
-    let { workspace_id: workspace_id } = n ?? {};
+    let { workspace_id } = params ?? {};
     return this._client
-      .get(retrieve.results_url, {
-        ...r,
-        headers: T([
+      .get(batch.results_url, {
+        ...options,
+        headers: buildHeaders([
           {
             Accept: "application/binary",
-            ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0),
+            ...(workspace_id != null
+              ? {
+                  "anthropic-workspace-id": workspace_id,
+                }
+              : undefined),
           },
-          r?.headers,
+          options?.headers,
         ]),
-        stream: !0,
-        __binaryResponse: !0,
+        stream: true,
+        __binaryResponse: true,
       })
-      ._thenUnwrap((y, w) => Ps.fromResponse(w.response, w.controller));
+      ._thenUnwrap((_, props) => JSONLDecoder.fromResponse(props.response, props.controller));
   }
 }
-
-export { Ao };
+export { Batches_2 };

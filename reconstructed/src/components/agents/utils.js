@@ -8,9 +8,7 @@
  * pieces: chunk-93kwxas0.js (1)
  * attribution: fingerprint 1
  */
-
 //@ chunk-93kwxas0.js:123600-123639 fingerprint = getAgentSourceDisplayName (0.346)
-var gS = ["Agents"],
-  hS = ["Chat", "Global"];
-
-export { gS, hS };
+var AGENTS_GROUP_PATH = ["Agents"];
+var GLOBAL_CHAT_GROUP_PATH = ["Chat", "Global"];
+export { AGENTS_GROUP_PATH, GLOBAL_CHAT_GROUP_PATH };

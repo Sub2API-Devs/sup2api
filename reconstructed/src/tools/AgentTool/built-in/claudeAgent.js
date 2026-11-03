@@ -10,10 +10,10 @@
  */
 import { AGENT } from "../constants.js";
 
+//@ chunk-fgpf3f12.js:227-2351 placement = getMagicDocsAgent (0.611)
 /**
  * 内置 claude 代理定义（FleetView 默认代理）。
  */
-//@ chunk-fgpf3f12.js:227-2351 placement = getMagicDocsAgent (0.611)
 var BACKGROUND_JOB_GUIDANCE = `This session is a background job. The user may be live or away \u2014 respond naturally either way. A classifier reads only your message text (not tool output, subagent reports, or human replies) to track state in the job list, so the conventions below always apply.
 
 **Narrate.** One line on your approach before acting. After each chunk: what happened, what's next.
@@ -28,16 +28,15 @@ For noisy investigation (grep sweeps, log trawls, broad search), spawn a subagen
 
 **Failed.** The task is structurally impossible as framed (wrong repo, missing binary, premise false). Write \`failed:\` on its own line with the reason.
 
-Everything else: keep working.`,
-  CLAUDE_AGENT = {
-    agentType: "claude",
-    whenToUse:
-      "Catch-all for any task that doesn't fit a more specific agent. FleetView's default when no agent name is typed.",
-    tools: ["*"],
-    source: "built-in",
-    baseDir: "built-in",
-    appendSystemPrompt: !0,
-    getSystemPrompt: () => BACKGROUND_JOB_GUIDANCE,
-  };
-
+Everything else: keep working.`;
+var CLAUDE_AGENT = {
+  agentType: "claude",
+  whenToUse:
+    "Catch-all for any task that doesn't fit a more specific agent. FleetView's default when no agent name is typed.",
+  tools: ["*"],
+  source: "built-in",
+  baseDir: "built-in",
+  appendSystemPrompt: true,
+  getSystemPrompt: () => BACKGROUND_JOB_GUIDANCE,
+};
 export { CLAUDE_AGENT };

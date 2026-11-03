@@ -6,45 +6,51 @@
  * attribution: cjs-fingerprint 1
  */
 import { x, importMetaRequire } from "../../../../runtime/bun-runtime.js";
-import { bt } from "../../../which/which.js";
+import { require_which } from "../../../which/which.js";
 import { Et } from "../../../unresolved-cjs/index.js";
 
 //@ chunk-m4p5zn6n.js:3917-4564 cjs-fingerprint
-var It = x(function (hi, Pt) {
-  var J = importMetaRequire("path"),
-    Tt = bt(),
-    Jn = Et();
-  function wt(e, n) {
-    let r = e.options.env || process.env,
-      cwd = process.cwd(),
-      s = e.options.cwd != null,
-      u = s && process.chdir !== void 0 && !process.chdir.disabled;
-    if (u)
+var require_resolveCommand = x(function (cjsExports, cjsModule) {
+  var path = importMetaRequire("path");
+  var Tt = require_which();
+  var Jn = Et();
+  function resolveCommandAttempt(parsed, withoutPathExt) {
+    let env = parsed.options.env || process.env;
+    let cwd = process.cwd();
+    let hasCustomCwd = parsed.options.cwd != null;
+    let shouldSwitchCwd = hasCustomCwd && process.chdir !== undefined && !process.chdir.disabled;
+    if (shouldSwitchCwd)
       try {
-        process.chdir(e.options.cwd);
+        process.chdir(parsed.options.cwd);
       } catch (error) {}
-    let d;
+    let resolved;
     try {
-      d = Tt.sync(e.command, { path: r[Jn({ env: r })], pathExt: n ? J.delimiter : void 0 });
+      resolved = Tt.sync(parsed.command, {
+        path: env[
+          Jn({
+            env,
+          })
+        ],
+        pathExt: withoutPathExt ? path.delimiter : undefined,
+      });
     } catch (error) {
     } finally {
-      if (u)
+      if (shouldSwitchCwd)
         try {
           process.chdir(cwd);
         } catch (error) {
-          let f =
+          let code =
             error !== null && typeof error === "object" && typeof error.code === "string" ? error.code : "";
-          if (!(/^E[A-Z0-9]+$/.test(f) || f === "UNKNOWN" || f.startsWith("Unknown system error")))
+          if (!(/^E[A-Z0-9]+$/.test(code) || code === "UNKNOWN" || code.startsWith("Unknown system error")))
             throw error;
         }
     }
-    if (d) d = J.resolve(s ? e.options.cwd : "", d);
-    return d;
+    if (resolved) resolved = path.resolve(hasCustomCwd ? parsed.options.cwd : "", resolved);
+    return resolved;
   }
-  function er(e) {
-    return wt(e) || wt(e, !0);
+  function resolveCommand(parsed) {
+    return resolveCommandAttempt(parsed) || resolveCommandAttempt(parsed, true);
   }
-  Pt.exports = er;
+  cjsModule.exports = resolveCommand;
 });
-
-export { It };
+export { require_resolveCommand };

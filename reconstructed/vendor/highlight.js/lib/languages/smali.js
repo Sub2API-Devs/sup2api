@@ -8,91 +8,116 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:435762-436855 cjs-fingerprint
-var Vs = x(function (Jg, Ks) {
-  function Rm(e) {
-    let t = [
-        "add",
-        "and",
-        "cmp",
-        "cmpg",
-        "cmpl",
-        "const",
-        "div",
-        "double",
-        "float",
-        "goto",
-        "if",
-        "int",
-        "long",
-        "move",
-        "mul",
-        "neg",
-        "new",
-        "nop",
-        "not",
-        "or",
-        "rem",
-        "return",
-        "shl",
-        "shr",
-        "sput",
-        "sub",
-        "throw",
-        "ushr",
-        "xor",
-      ],
-      n = [
-        "aget",
-        "aput",
-        "array",
-        "check",
-        "execute",
-        "fill",
-        "filled",
-        "goto/16",
-        "goto/32",
-        "iget",
-        "instance",
-        "invoke",
-        "iput",
-        "monitor",
-        "packed",
-        "sget",
-        "sparse",
-      ],
-      a = [
-        "transient",
-        "constructor",
-        "abstract",
-        "final",
-        "synthetic",
-        "public",
-        "private",
-        "protected",
-        "static",
-        "bridge",
-        "system",
-      ];
+var require_smali = x(function (cjsExports, cjsModule) {
+  function smali(hljs) {
+    let smali_instr_low_prio = [
+      "add",
+      "and",
+      "cmp",
+      "cmpg",
+      "cmpl",
+      "const",
+      "div",
+      "double",
+      "float",
+      "goto",
+      "if",
+      "int",
+      "long",
+      "move",
+      "mul",
+      "neg",
+      "new",
+      "nop",
+      "not",
+      "or",
+      "rem",
+      "return",
+      "shl",
+      "shr",
+      "sput",
+      "sub",
+      "throw",
+      "ushr",
+      "xor",
+    ];
+    let smali_instr_high_prio = [
+      "aget",
+      "aput",
+      "array",
+      "check",
+      "execute",
+      "fill",
+      "filled",
+      "goto/16",
+      "goto/32",
+      "iget",
+      "instance",
+      "invoke",
+      "iput",
+      "monitor",
+      "packed",
+      "sget",
+      "sparse",
+    ];
+    let smali_keywords = [
+      "transient",
+      "constructor",
+      "abstract",
+      "final",
+      "synthetic",
+      "public",
+      "private",
+      "protected",
+      "static",
+      "bridge",
+      "system",
+    ];
     return {
       name: "Smali",
       contains: [
-        { className: "string", begin: '"', end: '"', relevance: 0 },
-        e.COMMENT("#", "$", { relevance: 0 }),
+        {
+          className: "string",
+          begin: '"',
+          end: '"',
+          relevance: 0,
+        },
+        hljs.COMMENT("#", "$", {
+          relevance: 0,
+        }),
         {
           className: "keyword",
           variants: [
-            { begin: "\\s*\\.end\\s[a-zA-Z0-9]*" },
-            { begin: "^[ ]*\\.[a-zA-Z]*", relevance: 0 },
-            { begin: "\\s:[a-zA-Z_0-9]*", relevance: 0 },
-            { begin: "\\s(" + a.join("|") + ")" },
+            {
+              begin: "\\s*\\.end\\s[a-zA-Z0-9]*",
+            },
+            {
+              begin: "^[ ]*\\.[a-zA-Z]*",
+              relevance: 0,
+            },
+            {
+              begin: "\\s:[a-zA-Z_0-9]*",
+              relevance: 0,
+            },
+            {
+              begin: "\\s(" + smali_keywords.join("|") + ")",
+            },
           ],
         },
         {
           className: "built_in",
           variants: [
-            { begin: "\\s(" + t.join("|") + ")\\s" },
-            { begin: "\\s(" + t.join("|") + ")((-|/)[a-zA-Z0-9]+)+\\s", relevance: 10 },
-            { begin: "\\s(" + n.join("|") + ")((-|/)[a-zA-Z0-9]+)*\\s", relevance: 10 },
+            {
+              begin: "\\s(" + smali_instr_low_prio.join("|") + ")\\s",
+            },
+            {
+              begin: "\\s(" + smali_instr_low_prio.join("|") + ")((-|/)[a-zA-Z0-9]+)+\\s",
+              relevance: 10,
+            },
+            {
+              begin: "\\s(" + smali_instr_high_prio.join("|") + ")((-|/)[a-zA-Z0-9]+)*\\s",
+              relevance: 10,
+            },
           ],
         },
         {
@@ -101,11 +126,12 @@ var Vs = x(function (Jg, Ks) {
 ]*;`,
           relevance: 0,
         },
-        { begin: "[vp][0-9]+" },
+        {
+          begin: "[vp][0-9]+",
+        },
       ],
     };
   }
-  Ks.exports = Rm;
+  cjsModule.exports = smali;
 });
-
-export { Vs };
+export { require_smali };

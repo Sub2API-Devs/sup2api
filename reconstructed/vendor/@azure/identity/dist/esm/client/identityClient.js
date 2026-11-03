@@ -5,211 +5,235 @@
  * pieces: chunk-mrx6y2r5.js (3)
  * attribution: esm-fingerprint 3
  */
-import { Qo } from "../../../../core-rest-pipeline/dist/esm/util/file.js";
-import { AzurePublicCloud, SDK_VERSION } from "../constants.js";
-import { ti } from "../../../../core-client/dist/esm/serviceClient.js";
-import { $e } from "../util/logging.js";
-import { Ld, Hd } from "../credentials/managedIdentityCredential/utils.js";
-import { $n, AUTHENTICATIONERROR } from "../../index.js";
-import { Z } from "../util/tracing.js";
-import { Dd } from "../util/identityTokenEndpoint.js";
+import { isNodeLike_default } from "../../../../core-rest-pipeline/dist/esm/util/file.js";
+import { DefaultAuthorityHost, SDK_VERSION } from "../constants.js";
+import { ServiceClient } from "../../../../core-client/dist/esm/serviceClient.js";
+import { logger } from "../util/logging.js";
+import {
+  parseExpirationTimestamp,
+  parseRefreshTimestamp,
+} from "../credentials/managedIdentityCredential/utils.js";
+import { $n, AuthenticationErrorName } from "../../index.js";
+import { tracingClient } from "../util/tracing.js";
+import { getIdentityTokenEndpointSuffix } from "../util/identityTokenEndpoint.js";
 import { je, rr } from "../../../../core-rest-pipeline/dist/esm/policies/retryPolicy.js";
 
 //@ chunk-mrx6y2r5.js:83557-83582 esm-fingerprint
-var NOCORRELATIONID = "noCorrelationId";
+var noCorrelationId = "noCorrelationId";
 //@ chunk-mrx6y2r5.js:83582-83744 esm-fingerprint
-function fg(e) {
-  let t = e === null || e === void 0 ? void 0 : e.authorityHost;
-  if (Qo) t = t !== null && t !== void 0 ? t : process.env.AZURE_AUTHORITY_HOST;
-  return t !== null && t !== void 0 ? t : AzurePublicCloud;
+function getIdentityClientAuthorityHost(options) {
+  let authorityHost = options === null || options === undefined ? undefined : options.authorityHost;
+  if (isNodeLike_default)
+    authorityHost =
+      authorityHost !== null && authorityHost !== undefined
+        ? authorityHost
+        : process.env.AZURE_AUTHORITY_HOST;
+  return authorityHost !== null && authorityHost !== undefined ? authorityHost : DefaultAuthorityHost;
 }
 //@ chunk-mrx6y2r5.js:83744-88341 esm-fingerprint
-class Qr extends ti {
-  constructor(e) {
-    var t, r;
-    let n = `azsdk-js-identity/${SDK_VERSION}`,
-      o = (
-        (t = e === null || e === void 0 ? void 0 : e.userAgentOptions) === null || t === void 0
-          ? void 0
-          : t.userAgentPrefix
-      )
-        ? `${e.userAgentOptions.userAgentPrefix} ${n}`
-        : `${n}`,
-      i = fg(e);
-    if (!i.startsWith("https:")) throw Error("The authorityHost address must use the 'https' protocol.");
+class IdentityClient extends ServiceClient {
+  constructor(options) {
+    var _a;
+    var _b;
+    let packageDetails = `azsdk-js-identity/${SDK_VERSION}`;
+    let userAgentPrefix = (
+      (_a = options === null || options === undefined ? undefined : options.userAgentOptions) === null ||
+      _a === undefined
+        ? undefined
+        : _a.userAgentPrefix
+    )
+      ? `${options.userAgentOptions.userAgentPrefix} ${packageDetails}`
+      : `${packageDetails}`;
+    let baseUri = getIdentityClientAuthorityHost(options);
+    if (!baseUri.startsWith("https:"))
+      throw Error("The authorityHost address must use the 'https' protocol.");
     super(
       Object.assign(
         Object.assign(
-          { requestContentType: "application/json; charset=utf-8", retryOptions: { maxRetries: 3 } },
-          e,
+          {
+            requestContentType: "application/json; charset=utf-8",
+            retryOptions: {
+              maxRetries: 3,
+            },
+          },
+          options,
         ),
-        { userAgentOptions: { userAgentPrefix: o }, baseUri: i },
+        {
+          userAgentOptions: {
+            userAgentPrefix,
+          },
+          baseUri,
+        },
       ),
     );
-    if (
-      ((this.allowInsecureConnection = !1),
-      (this.authorityHost = i),
-      (this.abortControllers = new Map()),
-      (this.allowLoggingAccountIdentifiers =
-        (r = e === null || e === void 0 ? void 0 : e.loggingOptions) === null || r === void 0
-          ? void 0
-          : r.allowLoggingAccountIdentifiers),
-      (this.tokenCredentialOptions = Object.assign({}, e)),
-      e === null || e === void 0 ? void 0 : e.allowInsecureConnection)
-    )
-      this.allowInsecureConnection = e.allowInsecureConnection;
+    this.allowInsecureConnection = false;
+    this.authorityHost = baseUri;
+    this.abortControllers = new Map();
+    this.allowLoggingAccountIdentifiers =
+      (_b = options === null || options === undefined ? undefined : options.loggingOptions) === null ||
+      _b === undefined
+        ? undefined
+        : _b.allowLoggingAccountIdentifiers;
+    this.tokenCredentialOptions = Object.assign({}, options);
+    if (options === null || options === undefined ? undefined : options.allowInsecureConnection)
+      this.allowInsecureConnection = options.allowInsecureConnection;
   }
-  async sendTokenRequest(e) {
-    $e.info(`IdentityClient: sending token request to [${e.url}]`);
-    let sendRequest = await this.sendRequest(e);
-    if (sendRequest.bodyAsText && (sendRequest.status === 200 || sendRequest.status === 201)) {
-      let parsed = JSON.parse(sendRequest.bodyAsText);
-      if (!parsed.access_token) return null;
-      this.logIdentifiers(sendRequest);
-      let n = {
+  async sendTokenRequest(request) {
+    logger.info(`IdentityClient: sending token request to [${request.url}]`);
+    let response = await this.sendRequest(request);
+    if (response.bodyAsText && (response.status === 200 || response.status === 201)) {
+      let parsedBody = JSON.parse(response.bodyAsText);
+      if (!parsedBody.access_token) return null;
+      this.logIdentifiers(response);
+      let token = {
         accessToken: {
-          token: parsed.access_token,
-          expiresOnTimestamp: Ld(parsed),
-          refreshAfterTimestamp: Hd(parsed),
+          token: parsedBody.access_token,
+          expiresOnTimestamp: parseExpirationTimestamp(parsedBody),
+          refreshAfterTimestamp: parseRefreshTimestamp(parsedBody),
           tokenType: "Bearer",
         },
-        refreshToken: parsed.refresh_token,
+        refreshToken: parsedBody.refresh_token,
       };
-      return (
-        $e.info(`IdentityClient: [${e.url}] token acquired, expires on ${n.accessToken.expiresOnTimestamp}`),
-        n
+      logger.info(
+        `IdentityClient: [${request.url}] token acquired, expires on ${token.accessToken.expiresOnTimestamp}`,
       );
+      return token;
     } else {
-      let r = new $n(sendRequest.status, sendRequest.bodyAsText);
-      throw (
-        $e.warning(
-          `IdentityClient: authentication error. HTTP status: ${sendRequest.status}, ${r.errorResponse.errorDescription}`,
-        ),
-        r
+      let error = new $n(response.status, response.bodyAsText);
+      logger.warning(
+        `IdentityClient: authentication error. HTTP status: ${response.status}, ${error.errorResponse.errorDescription}`,
       );
+      throw error;
     }
   }
-  async refreshAccessToken(e, t, r, n, o, i = {}) {
-    if (n === void 0) return null;
-    $e.info(`IdentityClient: refreshing access token with client ID: ${t}, scopes: ${r} started`);
-    let s = { grant_type: "refresh_token", client_id: t, refresh_token: n, scope: r };
-    if (o !== void 0) s.client_secret = o;
-    let uRLSearchParams = new URLSearchParams(s);
-    return Z.withSpan("IdentityClient.refreshAccessToken", i, async (c) => {
+  async refreshAccessToken(tenantId, clientId, scopes, refreshToken, clientSecret, options = {}) {
+    if (refreshToken === undefined) return null;
+    logger.info(
+      `IdentityClient: refreshing access token with client ID: ${clientId}, scopes: ${scopes} started`,
+    );
+    let refreshParams = {
+      grant_type: "refresh_token",
+      client_id: clientId,
+      refresh_token: refreshToken,
+      scope: scopes,
+    };
+    if (clientSecret !== undefined) refreshParams.client_secret = clientSecret;
+    let query = new URLSearchParams(refreshParams);
+    return tracingClient.withSpan("IdentityClient.refreshAccessToken", options, async (updatedOptions) => {
       try {
-        let l = Dd(e),
-          d = je({
-            url: `${this.authorityHost}/${e}/${l}`,
-            method: "POST",
-            body: uRLSearchParams.toString(),
-            abortSignal: i.abortSignal,
-            headers: rr({ Accept: "application/json", "Content-Type": "application/x-www-form-urlencoded" }),
-            tracingOptions: c.tracingOptions,
+        let urlSuffix = getIdentityTokenEndpointSuffix(tenantId);
+        let request = je({
+          url: `${this.authorityHost}/${tenantId}/${urlSuffix}`,
+          method: "POST",
+          body: query.toString(),
+          abortSignal: options.abortSignal,
+          headers: rr({
+            Accept: "application/json",
+            "Content-Type": "application/x-www-form-urlencoded",
           }),
-          sendTokenRequest = await this.sendTokenRequest(d);
-        return ($e.info(`IdentityClient: refreshed token for client ID: ${t}`), sendTokenRequest);
-      } catch (error) {
-        if (error.name === AUTHENTICATIONERROR && error.errorResponse.error === "interaction_required")
-          return ($e.info(`IdentityClient: interaction required for client ID: ${t}`), null);
-        else
-          throw ($e.warning(`IdentityClient: failed refreshing token for client ID: ${t}: ${error}`), error);
+          tracingOptions: updatedOptions.tracingOptions,
+        });
+        let response = await this.sendTokenRequest(request);
+        logger.info(`IdentityClient: refreshed token for client ID: ${clientId}`);
+        return response;
+      } catch (err) {
+        if (err.name === AuthenticationErrorName && err.errorResponse.error === "interaction_required") {
+          logger.info(`IdentityClient: interaction required for client ID: ${clientId}`);
+          return null;
+        } else {
+          logger.warning(`IdentityClient: failed refreshing token for client ID: ${clientId}: ${err}`);
+          throw err;
+        }
       }
     });
   }
-  generateAbortSignal(e) {
-    let abortController = new AbortController(),
-      r = this.abortControllers.get(e) || [];
-    (r.push(abortController), this.abortControllers.set(e, r));
-    let onabort = abortController.signal.onabort;
-    return (
-      (abortController.signal.onabort = (...o) => {
-        if ((this.abortControllers.set(e, void 0), onabort)) onabort.apply(abortController.signal, o);
-      }),
-      abortController.signal
-    );
+  generateAbortSignal(correlationId) {
+    let controller = new AbortController();
+    let controllers = this.abortControllers.get(correlationId) || [];
+    controllers.push(controller);
+    this.abortControllers.set(correlationId, controllers);
+    let existingOnAbort = controller.signal.onabort;
+    controller.signal.onabort = (...params) => {
+      this.abortControllers.set(correlationId, undefined);
+      if (existingOnAbort) existingOnAbort.apply(controller.signal, params);
+    };
+    return controller.signal;
   }
-  abortRequests(e) {
-    let t = e || NOCORRELATIONID,
-      r = [...(this.abortControllers.get(t) || []), ...(this.abortControllers.get(NOCORRELATIONID) || [])];
-    if (!r.length) return;
-    for (let n of r) n.abort();
-    this.abortControllers.set(t, void 0);
+  abortRequests(correlationId) {
+    let key = correlationId || noCorrelationId;
+    let controllers = [
+      ...(this.abortControllers.get(key) || []),
+      ...(this.abortControllers.get(noCorrelationId) || []),
+    ];
+    if (!controllers.length) return;
+    for (let controller of controllers) controller.abort();
+    this.abortControllers.set(key, undefined);
   }
-  getCorrelationId(e) {
-    var t;
-    let r =
-      (t = e === null || e === void 0 ? void 0 : e.body) === null || t === void 0
-        ? void 0
-        : t
+  getCorrelationId(options) {
+    var _a;
+    let parameter =
+      (_a = options === null || options === undefined ? undefined : options.body) === null || _a === undefined
+        ? undefined
+        : _a
             .split("&")
-            .map((n) => n.split("="))
-            .find(([n]) => n === "client-request-id");
-    return r && r.length ? r[1] || NOCORRELATIONID : NOCORRELATIONID;
+            .map((part) => part.split("="))
+            .find(([key]) => key === "client-request-id");
+    return parameter && parameter.length ? parameter[1] || noCorrelationId : noCorrelationId;
   }
-  async sendGetRequestAsync(e, t) {
-    let r = je({
-        url: e,
-        method: "GET",
-        body: t === null || t === void 0 ? void 0 : t.body,
-        allowInsecureConnection: this.allowInsecureConnection,
-        headers: rr(t === null || t === void 0 ? void 0 : t.headers),
-        abortSignal: this.generateAbortSignal(NOCORRELATIONID),
-      }),
-      sendRequest = await this.sendRequest(r);
-    return (
-      this.logIdentifiers(sendRequest),
-      {
-        body: sendRequest.bodyAsText ? JSON.parse(sendRequest.bodyAsText) : void 0,
-        headers: sendRequest.headers.toJSON(),
-        status: sendRequest.status,
-      }
-    );
+  async sendGetRequestAsync(url, options) {
+    let request = je({
+      url,
+      method: "GET",
+      body: options === null || options === undefined ? undefined : options.body,
+      allowInsecureConnection: this.allowInsecureConnection,
+      headers: rr(options === null || options === undefined ? undefined : options.headers),
+      abortSignal: this.generateAbortSignal(noCorrelationId),
+    });
+    let response = await this.sendRequest(request);
+    this.logIdentifiers(response);
+    return {
+      body: response.bodyAsText ? JSON.parse(response.bodyAsText) : undefined,
+      headers: response.headers.toJSON(),
+      status: response.status,
+    };
   }
-  async sendPostRequestAsync(e, t) {
-    let r = je({
-        url: e,
-        method: "POST",
-        body: t === null || t === void 0 ? void 0 : t.body,
-        headers: rr(t === null || t === void 0 ? void 0 : t.headers),
-        allowInsecureConnection: this.allowInsecureConnection,
-        abortSignal: this.generateAbortSignal(this.getCorrelationId(t)),
-      }),
-      sendRequest = await this.sendRequest(r);
-    return (
-      this.logIdentifiers(sendRequest),
-      {
-        body: sendRequest.bodyAsText ? JSON.parse(sendRequest.bodyAsText) : void 0,
-        headers: sendRequest.headers.toJSON(),
-        status: sendRequest.status,
-      }
-    );
+  async sendPostRequestAsync(url, options) {
+    let request = je({
+      url,
+      method: "POST",
+      body: options === null || options === undefined ? undefined : options.body,
+      headers: rr(options === null || options === undefined ? undefined : options.headers),
+      allowInsecureConnection: this.allowInsecureConnection,
+      abortSignal: this.generateAbortSignal(this.getCorrelationId(options)),
+    });
+    let response = await this.sendRequest(request);
+    this.logIdentifiers(response);
+    return {
+      body: response.bodyAsText ? JSON.parse(response.bodyAsText) : undefined,
+      headers: response.headers.toJSON(),
+      status: response.status,
+    };
   }
   getTokenCredentialOptions() {
     return this.tokenCredentialOptions;
   }
-  logIdentifiers(e) {
-    if (!this.allowLoggingAccountIdentifiers || !e.bodyAsText) return;
-    let t = "No User Principal Name available";
+  logIdentifiers(response) {
+    if (!this.allowLoggingAccountIdentifiers || !response.bodyAsText) return;
+    let unavailableUpn = "No User Principal Name available";
     try {
-      let access_token = (e.parsedBody || JSON.parse(e.bodyAsText)).access_token;
-      if (!access_token) return;
-      let o = access_token.split(".")[1],
-        {
-          appid: appid,
-          upn: upn,
-          tid: tid,
-          oid: oid,
-        } = JSON.parse(Buffer.from(o, "base64").toString("utf8"));
-      $e.info(
-        `[Authenticated account] Client ID: ${appid}. Tenant ID: ${tid}. User Principal Name: ${upn || t}. Object ID (user): ${oid}`,
+      let accessToken = (response.parsedBody || JSON.parse(response.bodyAsText)).access_token;
+      if (!accessToken) return;
+      let base64Metadata = accessToken.split(".")[1];
+      let { appid, upn, tid, oid } = JSON.parse(Buffer.from(base64Metadata, "base64").toString("utf8"));
+      logger.info(
+        `[Authenticated account] Client ID: ${appid}. Tenant ID: ${tid}. User Principal Name: ${upn || unavailableUpn}. Object ID (user): ${oid}`,
       );
-    } catch (error) {
-      $e.warning(
+    } catch (e) {
+      logger.warning(
         "allowLoggingAccountIdentifiers was set, but we couldn't log the account information. Error:",
-        error.message,
+        e.message,
       );
     }
   }
 }
-
-export { Qr };
+export { IdentityClient };

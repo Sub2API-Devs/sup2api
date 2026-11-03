@@ -7,16 +7,15 @@
  */
 
 //@ chunk-29pqxdaf.js:1524-1635 placement
-function baseZipObject(e, n, o) {
-  var r = -1,
-    s = e.length,
-    l = n.length,
-    i = {};
-  while (++r < s) {
-    var d = r < l ? n[r] : void 0;
-    o(i, e[r], d);
+function baseZipObject(props, values, assignFunc) {
+  var index = -1;
+  var length = props.length;
+  var valsLength = values.length;
+  var result = {};
+  while (++index < length) {
+    var value = index < valsLength ? values[index] : undefined;
+    assignFunc(result, props[index], value);
   }
-  return i;
+  return result;
 }
-
 export { baseZipObject };

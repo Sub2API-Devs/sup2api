@@ -6,55 +6,55 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { Er } from "./DOMImplementation.js";
-import { va } from "./HTMLParser.js";
-import { ii } from "./Window.js";
-import { ni } from "./impl.js";
+import { require_DOMImplementation } from "./DOMImplementation.js";
+import { require_HTMLParser } from "./HTMLParser.js";
+import { require_Window } from "./Window.js";
+import { require_impl } from "./impl.js";
 
 //@ chunk-vwj6ccer.js:237189-237838 cjs-fingerprint
-var Bc = x(function (wf) {
-  var Oc = Er(),
-    qc = va(),
-    eh = ii(),
-    Hc = ni();
-  wf.createDOMImplementation = function () {
-    return new Oc(null);
+var require_domino = x(function (cjsExports) {
+  var DOMImplementation = require_DOMImplementation();
+  var HTMLParser = require_HTMLParser();
+  var eh = require_Window();
+  var impl = require_impl();
+  cjsExports.createDOMImplementation = function () {
+    return new DOMImplementation(null);
   };
-  wf.createDocument = function (e, t) {
-    if (e || t) {
-      var r = new qc();
-      return (r.parse(e || "", !0), r.document());
+  cjsExports.createDocument = function (html, force) {
+    if (html || force) {
+      var parser = new HTMLParser();
+      parser.parse(html || "", true);
+      return parser.document();
     }
-    return new Oc(null).createHTMLDocument("");
+    return new DOMImplementation(null).createHTMLDocument("");
   };
-  wf.createIncrementalHTMLParser = function () {
-    var e = new qc();
+  cjsExports.createIncrementalHTMLParser = function () {
+    var parser = new HTMLParser();
     return {
-      write: function (t) {
-        if (t.length > 0)
-          e.parse(t, !1, function () {
-            return !0;
+      write: function (s) {
+        if (s.length > 0)
+          parser.parse(s, false, function () {
+            return true;
           });
       },
-      end: function (t) {
-        e.parse(t || "", !0, function () {
-          return !0;
+      end: function (s) {
+        parser.parse(s || "", true, function () {
+          return true;
         });
       },
-      process: function (t) {
-        return e.parse("", !1, t);
+      process: function (shouldPauseFunc) {
+        return parser.parse("", false, shouldPauseFunc);
       },
       document: function () {
-        return e.document();
+        return parser.document();
       },
     };
   };
-  wf.createWindow = function (e, t) {
-    var r = wf.createDocument(e);
-    if (t !== void 0) r._address = t;
-    return new Hc.Window(r);
+  cjsExports.createWindow = function (html, address) {
+    var r = cjsExports.createDocument(html);
+    if (address !== undefined) r._address = address;
+    return new impl.Window(r);
   };
-  wf.impl = Hc;
+  cjsExports.impl = impl;
 });
-
-export { Bc };
+export { require_domino };

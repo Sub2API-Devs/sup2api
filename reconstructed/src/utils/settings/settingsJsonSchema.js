@@ -8,25 +8,28 @@
  * pieces: chunk-y162pn60.js (1)
  * attribution: placement 1
  */
-import { nut } from "../../../vendor/zod/v4/core/json-schema-processors.js";
-import { $e } from "../../services/daemon/sessionCron.js";
+import { toJSONSchema } from "../../../vendor/zod/v4/core/json-schema-processors.js";
+import { identity } from "../../services/daemon/sessionCron.js";
 
 //@ chunk-y162pn60.js:11062-11350 placement = generateSettingsJSONSchema (0.88)
 function generateSettingsJSONSchema(e) {
-  let n = new Set(),
-    r = (s) => {
-      if (Array.isArray(s)) s.forEach(r);
-      else if (typeof s === "object" && s !== null) {
-        let { properties: properties } = s;
-        if (typeof properties === "object" && properties !== null)
-          for (let m of Object.keys(properties)) n.add(m);
-        Object.values(s).forEach(r);
-      }
-    };
+  let n = new Set();
+  let r = (jsonSchema) => {
+    if (Array.isArray(jsonSchema)) jsonSchema.forEach(r);
+    else if (typeof jsonSchema === "object" && jsonSchema !== null) {
+      let { properties } = jsonSchema;
+      if (typeof properties === "object" && properties !== null)
+        for (let key of Object.keys(properties)) n.add(key);
+      Object.values(jsonSchema).forEach(r);
+    }
+  };
   try {
-    r(nut(e, { unrepresentable: "any" }));
+    r(
+      toJSONSchema(e, {
+        unrepresentable: "any",
+      }),
+    );
   } catch {}
-  return $e(n);
+  return identity(n);
 }
-
 export { generateSettingsJSONSchema };

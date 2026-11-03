@@ -10,17 +10,17 @@
  */
 import { isCrossSessionMessagingEnabled } from "../../utils/crossSessionMessagingGate.js";
 
+//@ chunk-yxzqxbzv.js:3363-3592 placement
 /**
  * /list-agents 命令对象（local）；描述：List subagents, teammates, and other Claude sessions you can message；别名 ["peers"]；isEnabled: ()=>Pa()；实现 chunk-kq21a1r9.js 的 u。
  */
-//@ chunk-yxzqxbzv.js:3363-3592 placement
 var listAgentsCommandDefinition = {
-    type: "local",
-    name: "list-agents",
-    aliases: ["peers"],
-    description: "List subagents, teammates, and other Claude sessions you can message",
-    supportsNonInteractive: !0,
-    isEnabled: () => isCrossSessionMessagingEnabled(),
-    load: () => import("./chunk-kq21a1r9.js"),
-  },
-  listAgentsCommand = listAgentsCommandDefinition;
+  type: "local",
+  name: "list-agents",
+  aliases: ["peers"],
+  description: "List subagents, teammates, and other Claude sessions you can message",
+  supportsNonInteractive: true,
+  isEnabled: () => isCrossSessionMessagingEnabled(),
+  load: () => import("./chunk-kq21a1r9.js"),
+};
+var listAgentsCommand = listAgentsCommandDefinition;

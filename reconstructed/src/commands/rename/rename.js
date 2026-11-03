@@ -15,14 +15,14 @@ import { isTeammate } from "../../utils/teammate.js";
 import { generateSessionName } from "./generateSessionName.js";
 import { renameSession } from "../../utils/sessionTitle.js";
 import { updateStandaloneAgentContext } from "../../utils/standaloneAgent.js";
-import { Jn } from "../../remote/remoteMode.js";
+import { getRemoteCaps } from "../../remote/remoteMode.js";
 
 //@ chunk-zmqmnh19.js:2624-2966 placement
-function renameSystemReminder(s, e = s) {
-  let o = escapeXmlText(s),
-    a = escapeXmlText(e);
+function renameSystemReminder(newName, requestedName = newName) {
+  let o = escapeXmlText(newName);
+  let a = escapeXmlText(requestedName);
   return wrapInSystemReminder(
-    e === s
+    requestedName === newName
       ? `The user named this session "${o}". This may indicate the session's focus or intent.`
       : `The user asked to name this session "${a}"; another live session on this machine already holds that name, so this session is "${o}". The requested name may indicate the session's focus or intent.`,
   );
@@ -31,27 +31,29 @@ function renameSystemReminder(s, e = s) {
 function sessionNameYieldedNotice(s, e) {
   return `Another live session on this machine goes by "${sanitizeSessionTitle(s)}", so this session is now "${sanitizeSessionTitle(e)}". Use /rename to pick a different name.`;
 }
+//@ chunk-zmqmnh19.js:3122-4366 placement = call (0.291)
 /**
  * 执行会话改名，名字冲突时让出。
  */
-//@ chunk-zmqmnh19.js:3122-4366 placement = call (0.291)
 async function performRename(onDone, context, args) {
   if (isTeammate())
     return {
       message: "Cannot rename: This session is a teammate. Teammate names are set by the team leader.",
     };
-  let a = !onDone || onDone.trim() === "",
-    newName;
+  let a = !onDone || onDone.trim() === "";
+  let newName;
   if (a) {
-    let m = await generateSessionName(context.messages, context.abortController.signal, {
-      preferFork: !0,
+    let generated = await generateSessionName(context.messages, context.abortController.signal, {
+      preferFork: true,
       credentials: context.credentials,
     });
-    if (!m)
-      return { message: "Could not generate a name: no conversation context yet. Usage: /rename <name>" };
-    newName = m;
+    if (!generated)
+      return {
+        message: "Could not generate a name: no conversation context yet. Usage: /rename <name>",
+      };
+    newName = generated;
   } else newName = onDone.trim();
-  let r = await renameSession(newName, "user", context.storageV5, args && !a, !0, context.credentials);
+  let r = await renameSession(newName, "user", context.storageV5, args && !a, true, context.credentials);
   if (r === null)
     return {
       message: a
@@ -59,15 +61,27 @@ async function performRename(onDone, context, args) {
         : "That name is empty once invisible characters are removed. Usage: /rename <name>",
     };
   let i = r.name;
-  if ((context.setAppState((m) => updateStandaloneAgentContext(m, { name: i })), Jn()?.sessionId !== void 0))
-    context.setAppState((prev) => (prev.remoteSessionName === i ? prev : { ...prev, remoteSessionName: i }));
-  let l = sanitizeSessionTitle(newName),
-    c =
-      r.outcome === "yielded"
-        ? `Session renamed to: ${i} ("${l}" is held by another live session on this machine)`
-        : r.outcome === "superseded"
-          ? `Session is named: ${i} (a newer rename landed first)`
-          : `Session renamed to: ${i}`;
+  context.setAppState((m) =>
+    updateStandaloneAgentContext(m, {
+      name: i,
+    }),
+  );
+  if (getRemoteCaps()?.sessionId !== undefined)
+    context.setAppState((prev) =>
+      prev.remoteSessionName === i
+        ? prev
+        : {
+            ...prev,
+            remoteSessionName: i,
+          },
+    );
+  let l = sanitizeSessionTitle(newName);
+  let c =
+    r.outcome === "yielded"
+      ? `Session renamed to: ${i} ("${l}" is held by another live session on this machine)`
+      : r.outcome === "superseded"
+        ? `Session is named: ${i} (a newer rename landed first)`
+        : `Session renamed to: ${i}`;
   return {
     message: r.registryUpdated
       ? c
@@ -79,19 +93,11 @@ async function performRename(onDone, context, args) {
 }
 //@ chunk-zmqmnh19.js:4366-4538 placement
 async function call(onDone, context, args) {
-  let {
-    message: message,
-    newName: newName,
-    requestedName: requestedName,
-    isGenerated: isGenerated,
-  } = await performRename(args, context, !0);
-  return (
-    onDone(message, {
-      display: "system",
-      metaMessages: newName && !isGenerated ? [renameSystemReminder(newName, requestedName)] : void 0,
-    }),
-    null
-  );
+  let { message, newName, requestedName, isGenerated } = await performRename(args, context, true);
+  onDone(message, {
+    display: "system",
+    metaMessages: newName && !isGenerated ? [renameSystemReminder(newName, requestedName)] : undefined,
+  });
+  return null;
 }
-
 export { sessionNameYieldedNotice, performRename };

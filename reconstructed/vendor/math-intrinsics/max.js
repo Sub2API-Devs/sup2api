@@ -8,8 +8,7 @@
 import { x } from "../../runtime/bun-runtime.js";
 
 //@ chunk-h6b7mazd.js:7913-7960 cjs-require-graph
-var ao = x(function (Kl, io) {
-  io.exports = Math.max;
+var require_max = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = Math.max;
 });
-
-export { ao };
+export { require_max };

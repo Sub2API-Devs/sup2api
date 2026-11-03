@@ -9,92 +9,165 @@
  * attribution: placement 7
  */
 import { getCanonicalName } from "../../utils/model/canonicalModelName.js";
-import { Lt } from "../../utils/model/modelIds.js";
-import { Vt, Kt, buildMediumReviewPrompt, Jt, Zt, to } from "./reviewPhases.js";
-import { no, lo, co, ho, buildMinimalReviewPrompt } from "./cleanupAngles.js";
+import { strip1mSuffix } from "../../utils/model/modelIds.js";
+import {
+  buildLowEffortPrompt,
+  buildLowEffortInlinePrompt,
+  buildMediumReviewPrompt,
+  buildHighEffortPrompt,
+  buildXhighEffortPrompt,
+  buildMaxEffortPrompt,
+} from "./reviewPhases.js";
+import {
+  REVIEW_REUSE_ANGLE_LOW_EFFORT,
+  REVIEW_ANGLE_E,
+  REVIEW_MINIMAL_PROMPT,
+  REVIEW_ANGLE_I,
+  buildMinimalReviewPrompt,
+} from "./cleanupAngles.js";
 
 //@ chunk-hantmvxa.js:77878-77920 placement
-function Is(e) {
-  return Object.hasOwn(de, e);
+function isKnownReviewModelKey(e) {
+  return Object.hasOwn(REVIEW_LEVEL_TABLE_BY_MODEL, e);
 }
 //@ chunk-hantmvxa.js:77920-77988 placement
-function Ae(e) {
-  let n = e ? getCanonicalName(Lt(e)) : void 0;
-  return n && Is(n) ? n : "default";
+function normalizeReviewModelKey(e) {
+  let n = e ? getCanonicalName(strip1mSuffix(e)) : undefined;
+  return n && isKnownReviewModelKey(n) ? n : "default";
 }
 //@ chunk-hantmvxa.js:77988-78963 placement
-var REVIEW_LEVEL_TABLE = { cell: "low", modelEffort: "typed", finderBudgetHint: !1 },
-  F = (e) => ({ cell: e, modelEffort: "typed", finderBudgetHint: !1 }),
-  Rs = new Set(["claude-opus-4-8", "claude-opus-5"]),
-  Ls = { "claude-sonnet-5": "sonnet5", "claude-opus-4-8": "hc10" },
-  po = {
-    low: REVIEW_LEVEL_TABLE,
-    medium: { ...F("o48-high-v1"), measuredExternal: !0 },
-    high: { ...F("o48-high-v1"), measuredExternal: !0 },
-    xhigh: { ...F("o48-xhigh-v1"), measuredExternal: !0 },
-    max: F("max"),
+/**
+ * 按模型与 effort 档位查评审单元与 modelEffort 的映射表（default/sonnet5/opus4-8/opus5），含冻结。
+ */
+var REVIEW_LEVEL_TABLE = {
+  cell: "low",
+  modelEffort: "typed",
+  finderBudgetHint: false,
+};
+var reviewLevel = (cell) => ({
+  cell,
+  modelEffort: "typed",
+  finderBudgetHint: false,
+});
+var MODELS_WITH_MAX_CELL = new Set(["claude-opus-4-8", "claude-opus-5"]);
+var REVIEW_CELL_OVERRIDES = {
+  "claude-sonnet-5": "sonnet5",
+  "claude-opus-4-8": "hc10",
+};
+var DEFAULT_REVIEW_LEVELS = {
+  low: REVIEW_LEVEL_TABLE,
+  medium: {
+    ...reviewLevel("o48-high-v1"),
+    measuredExternal: true,
   },
-  Os = {
-    ...po,
-    medium: { ...F("o5-bmin"), measuredExternal: !0 },
-    high: { ...F("o5-bmin"), measuredExternal: !0 },
+  high: {
+    ...reviewLevel("o48-high-v1"),
+    measuredExternal: true,
   },
-  de = {
-    default: po,
-    "claude-sonnet-5": {
-      low: { cell: "low-sonnet5", modelEffort: "medium", finderBudgetHint: !1 },
-      medium: F("medium"),
-      high: { ...F("high"), finderBudgetHint: !0 },
-      xhigh: { ...F("xhigh"), finderBudgetHint: !0 },
-      max: { ...F("max"), finderBudgetHint: !0 },
+  xhigh: {
+    ...reviewLevel("o48-xhigh-v1"),
+    measuredExternal: true,
+  },
+  max: reviewLevel("max"),
+};
+var OPUS5_REVIEW_LEVELS = {
+  ...DEFAULT_REVIEW_LEVELS,
+  medium: {
+    ...reviewLevel("o5-bmin"),
+    measuredExternal: true,
+  },
+  high: {
+    ...reviewLevel("o5-bmin"),
+    measuredExternal: true,
+  },
+};
+var REVIEW_LEVEL_TABLE_BY_MODEL = {
+  default: DEFAULT_REVIEW_LEVELS,
+  "claude-sonnet-5": {
+    low: {
+      cell: "low-sonnet5",
+      modelEffort: "medium",
+      finderBudgetHint: false,
     },
-    "claude-opus-4-8": {
-      low: { ...F("o48-low-v1"), measuredExternal: !0 },
-      medium: { ...F("o48-med-v1"), measuredExternal: !0 },
-      high: { ...F("o48-high-v1"), measuredExternal: !0 },
-      xhigh: { ...F("o48-xhigh-v1"), measuredExternal: !0 },
-      max: F("max"),
+    medium: reviewLevel("medium"),
+    high: {
+      ...reviewLevel("high"),
+      finderBudgetHint: true,
     },
-    "claude-opus-5": Os,
-  };
+    xhigh: {
+      ...reviewLevel("xhigh"),
+      finderBudgetHint: true,
+    },
+    max: {
+      ...reviewLevel("max"),
+      finderBudgetHint: true,
+    },
+  },
+  "claude-opus-4-8": {
+    low: {
+      ...reviewLevel("o48-low-v1"),
+      measuredExternal: true,
+    },
+    medium: {
+      ...reviewLevel("o48-med-v1"),
+      measuredExternal: true,
+    },
+    high: {
+      ...reviewLevel("o48-high-v1"),
+      measuredExternal: true,
+    },
+    xhigh: {
+      ...reviewLevel("o48-xhigh-v1"),
+      measuredExternal: true,
+    },
+    max: reviewLevel("max"),
+  },
+  "claude-opus-5": OPUS5_REVIEW_LEVELS,
+};
 //@ chunk-hantmvxa.js:78963-79059 placement
-for (let e of Object.values(de)) {
+for (let e of Object.values(REVIEW_LEVEL_TABLE_BY_MODEL)) {
   for (let n of Object.values(e)) Object.freeze(n);
   Object.freeze(e);
 }
 //@ chunk-hantmvxa.js:79059-79077 placement
-Object.freeze(de);
+Object.freeze(REVIEW_LEVEL_TABLE_BY_MODEL);
 //@ chunk-hantmvxa.js:79077-79156 placement
-function tt(e, n) {
-  let s = de[e][n];
+function resolveLevelEffort(e, n) {
+  let s = REVIEW_LEVEL_TABLE_BY_MODEL[e][n];
   return s.modelEffort === "typed" ? n : s.modelEffort;
 }
 //@ chunk-hantmvxa.js:79156-79524 placement
-function buildReviewPromptForLevel(e, n, s = !0, r = !1, h) {
-  switch (e) {
+function buildReviewPromptForLevel(cell, n, s = true, r = false, stated) {
+  switch (cell) {
     case "low":
-      return Vt(r, h);
+      return buildLowEffortPrompt(r, stated);
     case "low-sonnet5":
-      return Kt(r);
+      return buildLowEffortInlinePrompt(r);
     case "medium":
-      return buildMediumReviewPrompt(n, s, h);
+      return buildMediumReviewPrompt(n, s, stated);
     case "high":
-      return Jt(n, s, h);
+      return buildHighEffortPrompt(n, s, stated);
     case "xhigh":
-      return Zt(n, s, h);
+      return buildXhighEffortPrompt(n, s, stated);
     case "max":
-      return to(n, s, h);
+      return buildMaxEffortPrompt(n, s, stated);
     case "o48-low-v1":
-      return no(r, h);
+      return REVIEW_REUSE_ANGLE_LOW_EFFORT(r, stated);
     case "o48-med-v1":
-      return lo(n, h);
+      return REVIEW_ANGLE_E(n, stated);
     case "o48-high-v1":
-      return co(n, h);
+      return REVIEW_MINIMAL_PROMPT(n, stated);
     case "o48-xhigh-v1":
-      return ho(n, h);
+      return REVIEW_ANGLE_I(n, stated);
     case "o5-bmin":
-      return buildMinimalReviewPrompt(h);
+      return buildMinimalReviewPrompt(stated);
   }
 }
-
-export { Ae, Rs, de, Ls, tt, buildReviewPromptForLevel };
+export {
+  normalizeReviewModelKey,
+  MODELS_WITH_MAX_CELL,
+  REVIEW_LEVEL_TABLE_BY_MODEL,
+  REVIEW_CELL_OVERRIDES,
+  resolveLevelEffort,
+  buildReviewPromptForLevel,
+};

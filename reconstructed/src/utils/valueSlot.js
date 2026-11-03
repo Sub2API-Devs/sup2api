@@ -10,7 +10,10 @@
  */
 
 //@ chunk-6k13djcn.js:191-244 placement
-function to() {
+/**
+ * 创建一个简单值槽（set/get）。
+ */
+function createValueSlot() {
   let t;
   return {
     set: (o) => {
@@ -19,5 +22,4 @@ function to() {
     get: () => t,
   };
 }
-
-export { to };
+export { createValueSlot };

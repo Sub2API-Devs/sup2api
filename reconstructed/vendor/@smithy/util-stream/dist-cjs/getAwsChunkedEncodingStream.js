@@ -8,52 +8,46 @@
 import { x, importMetaRequire } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-wjd9n4jx.js:5983-6573 cjs-fingerprint
-var xt = x(function (St) {
-  Object.defineProperty(St, "__esModule", { value: !0 });
-  St.getAwsChunkedEncodingStream = void 0;
-  var gt = importMetaRequire("stream"),
-    Wr = (e, t) => {
-      let {
-          base64Encoder: base64Encoder,
-          bodyLengthChecker: bodyLengthChecker,
-          checksumAlgorithmFn: checksumAlgorithmFn,
-          checksumLocationName: checksumLocationName,
-          streamHasher: streamHasher,
-        } = t,
-        o =
-          base64Encoder !== void 0 &&
-          checksumAlgorithmFn !== void 0 &&
-          checksumLocationName !== void 0 &&
-          streamHasher !== void 0,
-        c = o ? streamHasher(checksumAlgorithmFn, e) : void 0,
-        u = new gt.Readable({ read: () => {} });
-      return (
-        e.on("data", (h) => {
-          let f = bodyLengthChecker(h) || 0;
-          (u.push(`${f.toString(16)}\r
-`),
-            u.push(h),
-            u.push(`\r
-`));
-        }),
-        e.on("end", async () => {
-          if (
-            (u.push(`0\r
-`),
-            o)
-          ) {
-            let h = base64Encoder(await c);
-            (u.push(`${checksumLocationName}:${h}\r
-`),
-              u.push(`\r
-`));
-          }
-          u.push(null);
-        }),
-        u
-      );
-    };
-  St.getAwsChunkedEncodingStream = Wr;
+var require_getAwsChunkedEncodingStream = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.getAwsChunkedEncodingStream = undefined;
+  var stream_1 = importMetaRequire("stream");
+  var getAwsChunkedEncodingStream = (readableStream, options) => {
+    let { base64Encoder, bodyLengthChecker, checksumAlgorithmFn, checksumLocationName, streamHasher } =
+      options;
+    let checksumRequired =
+      base64Encoder !== undefined &&
+      checksumAlgorithmFn !== undefined &&
+      checksumLocationName !== undefined &&
+      streamHasher !== undefined;
+    let digest = checksumRequired ? streamHasher(checksumAlgorithmFn, readableStream) : undefined;
+    let awsChunkedEncodingStream = new stream_1.Readable({
+      read: () => {},
+    });
+    readableStream.on("data", (data) => {
+      let length = bodyLengthChecker(data) || 0;
+      awsChunkedEncodingStream.push(`${length.toString(16)}\r
+`);
+      awsChunkedEncodingStream.push(data);
+      awsChunkedEncodingStream.push(`\r
+`);
+    });
+    readableStream.on("end", async () => {
+      awsChunkedEncodingStream.push(`0\r
+`);
+      if (checksumRequired) {
+        let checksum = base64Encoder(await digest);
+        awsChunkedEncodingStream.push(`${checksumLocationName}:${checksum}\r
+`);
+        awsChunkedEncodingStream.push(`\r
+`);
+      }
+      awsChunkedEncodingStream.push(null);
+    });
+    return awsChunkedEncodingStream;
+  };
+  cjsExports.getAwsChunkedEncodingStream = getAwsChunkedEncodingStream;
 });
-
-export { xt };
+export { require_getAwsChunkedEncodingStream };

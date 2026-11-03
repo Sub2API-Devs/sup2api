@@ -8,11 +8,14 @@
  * pieces: chunk-18hwfzwa.js (2)
  * attribution: placement 2
  */
-import { e, r } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { logForDebugging } from "../../utils/debug.js";
-import { o } from "../../../vendor/zod/v4/classic/schemas.js";
+import { string } from "../../../vendor/zod/v4/classic/schemas.js";
 import { Text, Box } from "../../ink/components/Text.js";
-import { A_o, readProcessStartTicks, killIfSameProcess } from "../../daemon/deadProbe.js";
+import { fireDeadProbe, readProcessStartTicks, killIfSameProcess } from "../../daemon/deadProbe.js";
 import { TaskOutput } from "../../utils/task/TaskOutput.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { isSameProcessAsync } from "../../utils/processIdentity.js";
@@ -20,7 +23,7 @@ import { env } from "../../utils/env.js";
 import { openTaskOutputForAppend } from "../../utils/task/diskOutput.js";
 
 //@ chunk-18hwfzwa.js:343157-343170 placement
-var xBt = 1000;
+var DETACHED_SHELL_POLL_MS = 1000;
 //@ chunk-18hwfzwa.js:343170-344654 placement
 class DetachedShellProcess {
   taskOutput;
@@ -32,60 +35,61 @@ class DetachedShellProcess {
   #r;
   result;
   constructor(h) {
-    if (
-      ((this.#e = h.pid),
-      (this.#t = h.procStart),
-      (this.#o = h.startTimeTicks),
-      this.#t === void 0 && this.#o !== void 0)
-    )
-      A_o("liveness");
-    ((this.taskOutput = new TaskOutput(h.taskId, null, !0)),
-      (this.result = new Promise((x) => {
-        this.#r = x;
-      })),
-      (this.#s = setInterval(() => void this.#c(), xBt)),
-      this.#s.unref());
+    this.#e = h.pid;
+    this.#t = h.procStart;
+    this.#o = h.startTimeTicks;
+    if (this.#t === undefined && this.#o !== undefined) fireDeadProbe("liveness");
+    this.taskOutput = new TaskOutput(h.taskId, null, true);
+    this.result = new Promise((resolve) => {
+      this.#r = resolve;
+    });
+    this.#s = setInterval(() => void this.#c(), DETACHED_SHELL_POLL_MS);
+    this.#s.unref();
   }
   async #c() {
     if (this.#n !== "backgrounded") return;
-    let h = !0;
+    let h = true;
     try {
-      if ((process.kill(this.#e, 0), this.#t !== void 0)) {
-        if (!(await isSameProcessAsync(this.#e, this.#t))) h = !1;
-      } else if (this.#o !== void 0) {
-        let x = await readProcessStartTicks(this.#e);
-        if (x !== null && x !== this.#o) h = !1;
+      process.kill(this.#e, 0);
+      if (this.#t !== undefined) {
+        if (!(await isSameProcessAsync(this.#e, this.#t))) h = false;
+      } else if (this.#o !== undefined) {
+        let processStartTicks = await readProcessStartTicks(this.#e);
+        if (processStartTicks !== null && processStartTicks !== this.#o) h = false;
       }
     } catch {
-      h = !1;
+      h = false;
     }
-    if (!h) await this.#i(!1);
+    if (!h) await this.#i(false);
   }
   async #i(h) {
     if (this.#n !== "backgrounded") return;
-    if (this.#s) (clearInterval(this.#s), (this.#s = null));
+    if (this.#s) {
+      clearInterval(this.#s);
+      this.#s = null;
+    }
     this.#n = h ? "killed" : "completed";
-    let x = this.#t !== void 0 || this.#o !== void 0,
-      D = h
-        ? x
-          ? "[SIGTERM requested for detached process tree (sent if identity still matched) \u2014 adopted handle released]"
-          : "[detached process still running \u2014 adopted handle released]"
-        : "[process exited while detached; exit code unknown]";
+    let x = this.#t !== undefined || this.#o !== undefined;
+    let D = h
+      ? x
+        ? "[SIGTERM requested for detached process tree (sent if identity still matched) \u2014 adopted handle released]"
+        : "[detached process still running \u2014 adopted handle released]"
+      : "[process exited while detached; exit code unknown]";
     await openTaskOutputForAppend(this.taskOutput.path)
-      .then(async (ee) => {
+      .then(async (taskOutputForAppend) => {
         try {
-          await ee.appendFile(`
+          await taskOutputForAppend.appendFile(`
 ${D}
 `);
         } finally {
-          await ee.close();
+          await taskOutputForAppend.close();
         }
       })
       .catch(() => {});
     let stdout = await this.taskOutput.getStdout();
     this.#r({
       code: -1,
-      stdout: stdout,
+      stdout,
       stderr: "",
       interrupted: h,
       backgroundTaskId: this.taskOutput.taskId,
@@ -95,18 +99,21 @@ ${D}
     return this.#n;
   }
   background() {
-    return !0;
+    return true;
   }
   async kill() {
-    (killIfSameProcess(this.#e, this.#o, this.#t), await this.#i(!0));
+    killIfSameProcess(this.#e, this.#o, this.#t);
+    await this.#i(true);
   }
   cleanup() {
-    if (this.#s) (clearInterval(this.#s), (this.#s = null));
+    if (this.#s) {
+      clearInterval(this.#s);
+      this.#s = null;
+    }
     this.taskOutput.clear();
   }
   detach() {
     return Promise.resolve(this.#e);
   }
 }
-
 export { DetachedShellProcess };

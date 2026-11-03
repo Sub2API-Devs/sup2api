@@ -5,187 +5,205 @@
  * pieces: chunk-640x3zn9.js (10)
  * attribution: esm-fingerprint 10
  */
-import { pr } from "../../core/error.mjs";
+import { AnthropicError } from "../../core/error.mjs";
 import { classifyOAuthErrorResponse } from "../../../../../src/services/oauth/oauthErrors.js";
 
 //@ chunk-640x3zn9.js:2962-3145 esm-fingerprint
-var aIi = "urn:ietf:params:oauth:grant-type:jwt-bearer",
-  REFRESH_TOKEN = "refresh_token",
-  Xao = "/v1/oauth/token",
-  OAUTH_2025_04_20 = "oauth-2025-04-20",
-  OIDC_FEDERATION_2026_04_01 = "oidc-federation-2026-04-01",
-  cIi = 120,
-  hMt = 30,
-  uIi = 5,
-  C = 1048576;
+var GRANT_TYPE_JWT_BEARER = "urn:ietf:params:oauth:grant-type:jwt-bearer";
+var GRANT_TYPE_REFRESH_TOKEN = "refresh_token";
+var TOKEN_ENDPOINT = "/v1/oauth/token";
+var OAUTH_API_BETA_HEADER = "oauth-2025-04-20";
+var FEDERATION_BETA_HEADER = "oidc-federation-2026-04-01";
+var ADVISORY_REFRESH_THRESHOLD_IN_SECONDS = 120;
+var hMt = 30;
+var uIi = 5;
+var MAX_TOKEN_RESPONSE_BYTES = 1048576;
 //@ chunk-640x3zn9.js:3145-3512 esm-fingerprint
-function Jao(e) {
-  if (!e) return;
-  let n;
+function Jao(baseURL) {
+  if (!baseURL) return;
+  let u;
   try {
-    n = new URL(e);
-  } catch (error) {
-    throw new rp(`Invalid token endpoint base URL "${e}": ${error}`);
+    u = new URL(baseURL);
+  } catch (err) {
+    throw new WorkloadIdentityError(`Invalid token endpoint base URL "${baseURL}": ${err}`);
   }
-  if (n.protocol === "https:") return;
-  let replaced = n.hostname.toLowerCase().replace(/^\[|\]$/g, "");
-  if (n.protocol === "http:" && (replaced === "localhost" || replaced === "127.0.0.1" || replaced === "::1"))
-    return;
-  throw new rp(`Refusing to send credential over non-https token endpoint "${e}"`);
+  if (u.protocol === "https:") return;
+  let host = u.hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  if (u.protocol === "http:" && (host === "localhost" || host === "127.0.0.1" || host === "::1")) return;
+  throw new WorkloadIdentityError(`Refusing to send credential over non-https token endpoint "${baseURL}"`);
 }
 //@ chunk-640x3zn9.js:3512-3982 esm-fingerprint
-async function Qao(e, n) {
-  let r = await re(e),
-    s;
+async function parseTokenResponse(resp, requestId) {
+  let text = await readLimitedText(resp);
+  let data;
   try {
-    s = JSON.parse(r);
+    data = JSON.parse(text);
   } catch {
-    throw new rp(`Token endpoint returned non-JSON response (status ${e.status})`, e.status, _he(r), n);
+    throw new WorkloadIdentityError(
+      `Token endpoint returned non-JSON response (status ${resp.status})`,
+      resp.status,
+      redactSensitive(text),
+      requestId,
+    );
   }
-  if (!s.access_token)
-    throw new rp(
-      `Token endpoint response missing access_token: ${JSON.stringify(_he(s))}`,
-      e.status,
-      _he(s),
-      n,
+  if (!data.access_token)
+    throw new WorkloadIdentityError(
+      `Token endpoint response missing access_token: ${JSON.stringify(redactSensitive(data))}`,
+      resp.status,
+      redactSensitive(data),
+      requestId,
     );
-  if (s.token_type && s.token_type.toLowerCase() !== "bearer")
-    throw new rp(
-      `Token endpoint response: unsupported token_type "${s.token_type}" (want Bearer)`,
-      e.status,
-      _he(s),
-      n,
+  if (data.token_type && data.token_type.toLowerCase() !== "bearer")
+    throw new WorkloadIdentityError(
+      `Token endpoint response: unsupported token_type "${data.token_type}" (want Bearer)`,
+      resp.status,
+      redactSensitive(data),
+      requestId,
     );
-  return s;
+  return data;
 }
 //@ chunk-640x3zn9.js:3982-4047 esm-fingerprint
-var R = 2000,
-  ne = new Set(["error", "error_description", "error_uri"]);
+var MAX_ERROR_BODY_CHARS = 2000;
+var SAFE_ERROR_KEYS = new Set(["error", "error_description", "error_uri"]);
 //@ chunk-640x3zn9.js:4047-4372 esm-fingerprint
-function _he(e) {
-  if (e == null) return e;
-  if (typeof e === "string") {
-    let n;
+function redactSensitive(body) {
+  if (body == null) return body;
+  if (typeof body === "string") {
+    let parsed;
     try {
-      n = JSON.parse(e);
+      parsed = JSON.parse(body);
     } catch {
-      if (e.length <= R) return e;
-      return e.slice(0, R) + `... <${e.length - R} more chars>`;
+      if (body.length <= MAX_ERROR_BODY_CHARS) return body;
+      return body.slice(0, MAX_ERROR_BODY_CHARS) + `... <${body.length - MAX_ERROR_BODY_CHARS} more chars>`;
     }
-    return JSON.stringify(_he(n));
+    return JSON.stringify(redactSensitive(parsed));
   }
-  if (typeof e === "object" && !Array.isArray(e)) {
-    let n = {};
-    for (let [r, s] of Object.entries(e)) if (ne.has(r)) n[r] = s;
-    return n;
+  if (typeof body === "object" && !Array.isArray(body)) {
+    let out = {};
+    for (let [k, v] of Object.entries(body)) if (SAFE_ERROR_KEYS.has(k)) out[k] = v;
+    return out;
   }
   return null;
 }
 //@ chunk-640x3zn9.js:4372-5111 esm-fingerprint
-async function rMn(e, n = (r) => console.warn(`anthropic-sdk: ${r}`)) {
-  if (typeof process > "u") return;
-  let { fs: fs } = await import("./chunk-a60jm9e8.js"),
-    s = e,
-    c;
+async function checkCredentialsFileSafety(path, onWarn = (m) => console.warn(`anthropic-sdk: ${m}`)) {
+  if (typeof process === "undefined") return;
+  let { fs } = await import("./chunk-a60jm9e8.js");
+  let resolved = path;
+  let st;
   try {
-    ((s = await fs.promises.realpath(e)), (c = await fs.promises.stat(s)));
+    resolved = await fs.promises.realpath(path);
+    st = await fs.promises.stat(resolved);
   } catch {
     return;
   }
-  let a = c.mode & 511;
-  if (a & 18)
-    throw new rp(
-      `Credentials file at ${s} is group/world-writable (mode 0o${a.toString(8)}); this allows other local users to plant tokens. Run \`chmod 600 ${s}\`.`,
+  let mode = st.mode & 511;
+  if (mode & 18)
+    throw new WorkloadIdentityError(
+      `Credentials file at ${resolved} is group/world-writable (mode 0o${mode.toString(8)}); this allows other local users to plant tokens. Run \`chmod 600 ${resolved}\`.`,
     );
-  if (a & 36)
-    throw new rp(
-      `Credentials file at ${s} is group/world-readable (mode 0o${a.toString(8)}); run \`chmod 600 ${s}\` before retrying.`,
+  if (mode & 36)
+    throw new WorkloadIdentityError(
+      `Credentials file at ${resolved} is group/world-readable (mode 0o${mode.toString(8)}); run \`chmod 600 ${resolved}\` before retrying.`,
     );
-  if (typeof process.getuid === "function" && c.uid !== process.getuid())
-    n(
-      `credentials file at ${s} is owned by uid ${c.uid} (current process uid ${process.getuid()}); verify this is intentional.`,
+  if (typeof process.getuid === "function" && st.uid !== process.getuid())
+    onWarn(
+      `credentials file at ${resolved} is owned by uid ${st.uid} (current process uid ${process.getuid()}); verify this is intentional.`,
     );
 }
 //@ chunk-640x3zn9.js:5111-5632 esm-fingerprint
-async function v8e(e, n) {
-  let { fs: fs, path: path } = await import("./chunk-a60jm9e8.js"),
-    dir = path.dirname(e);
-  await fs.promises.mkdir(dir, { recursive: !0, mode: 448 });
-  let a = `${e}.${process.pid}.${Math.random().toString(36).slice(2)}.tmp`;
+async function writeCredentialsFileAtomic(targetPath, data) {
+  let { fs, path } = await import("./chunk-a60jm9e8.js");
+  let dir = path.dirname(targetPath);
+  await fs.promises.mkdir(dir, {
+    recursive: true,
+    mode: 448,
+  });
+  let tmpPath = `${targetPath}.${process.pid}.${Math.random().toString(36).slice(2)}.tmp`;
   try {
-    let open = await fs.promises.open(a, "w", 384);
+    let fh = await fs.promises.open(tmpPath, "w", 384);
     try {
-      (await open.writeFile(JSON.stringify(n, null, 2)), await open.sync());
+      await fh.writeFile(JSON.stringify(data, null, 2));
+      await fh.sync();
     } finally {
-      await open.close();
+      await fh.close();
     }
-    await fs.promises.rename(a, e);
-  } catch (error) {
-    throw (await fs.promises.unlink(a).catch(() => {}), error);
+    await fs.promises.rename(tmpPath, targetPath);
+  } catch (err) {
+    await fs.promises.unlink(tmpPath).catch(() => {});
+    throw err;
   }
   try {
-    let open = await fs.promises.open(dir, "r");
+    let dirFh = await fs.promises.open(dir, "r");
     try {
-      await open.sync();
+      await dirFh.sync();
     } finally {
-      await open.close();
+      await dirFh.close();
     }
   } catch {}
 }
 //@ chunk-640x3zn9.js:5632-6034 esm-fingerprint
-async function re(e) {
-  if (!e.body) return "";
-  let reader = e.body.getReader(),
-    r = [],
-    s = 0;
+async function readLimitedText(resp) {
+  if (!resp.body) return "";
+  let reader = resp.body.getReader();
+  let chunks = [];
+  let received = 0;
   for (;;) {
-    let { done: a, value: l } = await reader.read();
-    if (a) break;
-    if (s + l.length > C) {
-      let h = C - s;
-      if (h > 0) r.push(l.subarray(0, h));
+    let { done, value } = await reader.read();
+    if (done) break;
+    if (received + value.length > MAX_TOKEN_RESPONSE_BYTES) {
+      let remaining = MAX_TOKEN_RESPONSE_BYTES - received;
+      if (remaining > 0) chunks.push(value.subarray(0, remaining));
       await reader.cancel();
       break;
     }
-    (r.push(l), (s += l.length));
+    chunks.push(value);
+    received += value.length;
   }
-  let c;
-  if (r.length === 1) c = r[0];
+  let merged;
+  if (chunks.length === 1) merged = chunks[0];
   else {
-    c = new Uint8Array(r.reduce((l, h) => l + h.length, 0));
-    let a = 0;
-    for (let l of r) (c.set(l, a), (a += l.length));
+    merged = new Uint8Array(chunks.reduce((n, c) => n + c.length, 0));
+    let offset = 0;
+    for (let c of chunks) {
+      merged.set(c, offset);
+      offset += c.length;
+    }
   }
-  return new TextDecoder("utf-8").decode(c);
+  return new TextDecoder("utf-8").decode(merged);
 }
 //@ chunk-640x3zn9.js:6034-6147 esm-fingerprint
-class rp extends pr {
-  constructor(e, n = null, r = null, s = null) {
-    super(e);
-    ((this.statusCode = n), (this.body = r), (this.requestId = s));
+class WorkloadIdentityError extends AnthropicError {
+  constructor(message, statusCode = null, body = null, requestId = null) {
+    super(message);
+    this.statusCode = statusCode;
+    this.body = body;
+    this.requestId = requestId;
   }
 }
 //@ chunk-640x3zn9.js:6356-6485 esm-fingerprint
-function getWIFAccountOnHold(e) {
-  if (!(e instanceof rp) || (e.statusCode !== 400 && e.statusCode !== 401 && e.statusCode !== 403))
+function getWIFAccountOnHold(error) {
+  if (
+    !(error instanceof WorkloadIdentityError) ||
+    (error.statusCode !== 400 && error.statusCode !== 401 && error.statusCode !== 403)
+  )
     return null;
-  return classifyOAuthErrorResponse(e.body);
+  return classifyOAuthErrorResponse(error.body);
 }
-
 export {
-  cIi,
+  ADVISORY_REFRESH_THRESHOLD_IN_SECONDS,
   hMt,
   uIi,
   Jao,
-  rp,
-  aIi,
-  Xao,
-  OAUTH_2025_04_20,
-  OIDC_FEDERATION_2026_04_01,
-  _he,
-  Qao,
-  rMn,
-  REFRESH_TOKEN,
-  v8e,
+  WorkloadIdentityError,
+  GRANT_TYPE_JWT_BEARER,
+  TOKEN_ENDPOINT,
+  OAUTH_API_BETA_HEADER,
+  FEDERATION_BETA_HEADER,
+  redactSensitive,
+  parseTokenResponse,
+  checkCredentialsFileSafety,
+  GRANT_TYPE_REFRESH_TOKEN,
+  writeCredentialsFileAtomic,
   getWIFAccountOnHold,
 };

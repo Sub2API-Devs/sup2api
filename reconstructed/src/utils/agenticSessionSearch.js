@@ -8,7 +8,16 @@
  * pieces: chunk-dz3q485w.js (3)
  * attribution: fingerprint 1, layout 1, callgraph-witnessed 1
  */
-import { en, tn, Qo, ln, es, ts, Te, countMcpCallsByServer } from "../services/projects/toolsUsedSummary.js";
+import {
+  SESSION_HEAD_CHARS,
+  SESSION_TAIL_CHARS,
+  MAX_SESSIONS_SCANNED,
+  normalizeNewlinesAndPaths,
+  USER_TEXT_CHARS_PER_TURN,
+  ASSISTANT_TEXT_CHARS_PER_TURN,
+  emptyCallCounts,
+  countMcpCallsByServer,
+} from "../services/projects/toolsUsedSummary.js";
 import { truncateToLength, takeLastChars } from "./stringUtils.js";
 import { resolveSessionFilePath_2 } from "./sessionStoragePortable.js";
 import { scanTranscriptForSuppression, loadFullLog } from "./sessionStorage.js";
@@ -19,10 +28,10 @@ import { stripAnsiAndControls } from "./printableName.js";
 import { localIsoDate } from "../services/projects/contextFile.js";
 import { tagUntrustedArtifactContent } from "./messages/untrustedArtifactContent.js";
 
+//@ chunk-dz3q485w.js:25436-25549 fingerprint = logContainsQuery (0.517)
 /**
  * 会话标题：自定义标题 > AI 标题 > 摘要 > 首条提示 > "untitled session"。
  */
-//@ chunk-dz3q485w.js:25436-25549 fingerprint = logContainsQuery (0.517)
 function getSessionDisplayTitle(log) {
   return (
     log.customTitle ??
@@ -33,71 +42,79 @@ function getSessionDisplayTitle(log) {
 }
 //@ chunk-dz3q485w.js:25549-25692 layout
 function elideMiddle(text) {
-  if (text.length <= en + tn) return text;
-  return `${truncateToLength(text, en).trimEnd()}
+  if (text.length <= SESSION_HEAD_CHARS + SESSION_TAIL_CHARS) return text;
+  return `${truncateToLength(text, SESSION_HEAD_CHARS).trimEnd()}
 [\u2026 middle of the session omitted \u2026]
-${takeLastChars(text, tn).trimStart()}`;
+${takeLastChars(text, SESSION_TAIL_CHARS).trimStart()}`;
 }
+//@ chunk-dz3q485w.js:25692-26683 callgraph-witnessed = agenticSessionSearch (0.059)
 /**
  * 读取最近的会话日志（只取通过检查的），生成标题/日期/分支/转写摘要列表，汇总 MCP 调用、使用过的工具与时间跨度。
  */
-//@ chunk-dz3q485w.js:25692-26683 callgraph-witnessed = agenticSessionSearch (0.059)
 async function collectSessionsForProject(context, storageV5) {
-  let sliced = context.sessions.logs.filter(resolveSessionFilePath_2).slice(0, Qo),
-    results = await Promise.all(
-      sliced.map((S) =>
-        S.fullPath === void 0
-          ? null
-          : scanTranscriptForSuppression(S.fullPath, {}, storageV5).catch(() => null),
-      ),
-    ),
-    matchingLogs = sliced.filter((S, P) => results[P] === "clean"),
-    nonMatchingLogs = (
-      await Promise.all(
-        matchingLogs.map((log) =>
-          loadFullLog(log, { storageV5: storageV5 }).catch(
-            (P) => (
-              logForDebugging(`send-to-project: could not load a session transcript: ${errorMessage(P)}`),
-              log
-            ),
-          ),
-        ),
-      )
-    )
-      .map((log) => ({
-        log: log,
-        transcript: ln(
-          elideMiddle(
-            formatTranscriptForFacets(log.messages, { userTextChars: es, assistantTextChars: ts }).join(`
-`),
-          ),
-        ),
-      }))
-      .filter((S) => S.transcript !== ""),
-    model = Te();
-  for (let { log: log } of nonMatchingLogs) countMcpCallsByServer(log.messages, model);
-  let mapped = nonMatchingLogs.map(({ log: log, transcript: transcript }) => ({
-      title: truncateToLength(stripAnsiAndControls(getSessionDisplayTitle(log)).replace(/\s+/g, " "), 120),
-      date: localIsoDate(log.modified),
-      branch: log.gitBranch === void 0 ? null : stripAnsiAndControls(log.gitBranch),
-      transcript: transcript,
-    })),
-    relevantLogs = nonMatchingLogs.map(({ log: log }) => log.modified.getTime()),
-    y =
-      relevantLogs.length === 0
+  let sliced = context.sessions.logs.filter(resolveSessionFilePath_2).slice(0, MAX_SESSIONS_SCANNED);
+  let results = await Promise.all(
+    sliced.map((S) =>
+      S.fullPath === undefined
         ? null
-        : { oldest: new Date(Math.min(...relevantLogs)), newest: new Date(Math.max(...relevantLogs)) },
-    j = new Set();
-  for (let { log: log } of nonMatchingLogs)
-    for (let P of [...(log.toolsUsed ?? []), ...tagUntrustedArtifactContent(log.messages, void 0, !0, !0)])
+        : scanTranscriptForSuppression(S.fullPath, {}, storageV5).catch(() => null),
+    ),
+  );
+  let matchingLogs = sliced.filter((S, P) => results[P] === "clean");
+  let nonMatchingLogs = (
+    await Promise.all(
+      matchingLogs.map((log) =>
+        loadFullLog(log, {
+          storageV5,
+        }).catch((error) => {
+          logForDebugging(`send-to-project: could not load a session transcript: ${errorMessage(error)}`);
+          return log;
+        }),
+      ),
+    )
+  )
+    .map((log) => ({
+      log,
+      transcript: normalizeNewlinesAndPaths(
+        elideMiddle(
+          formatTranscriptForFacets(log.messages, {
+            userTextChars: USER_TEXT_CHARS_PER_TURN,
+            assistantTextChars: ASSISTANT_TEXT_CHARS_PER_TURN,
+          }).join(`
+`),
+        ),
+      ),
+    }))
+    .filter((S) => S.transcript !== "");
+  let model = emptyCallCounts();
+  for (let { log } of nonMatchingLogs) countMcpCallsByServer(log.messages, model);
+  let sessions = nonMatchingLogs.map(({ log, transcript }) => ({
+    title: truncateToLength(stripAnsiAndControls(getSessionDisplayTitle(log)).replace(/\s+/g, " "), 120),
+    date: localIsoDate(log.modified),
+    branch: log.gitBranch === undefined ? null : stripAnsiAndControls(log.gitBranch),
+    transcript,
+  }));
+  let relevantLogs = nonMatchingLogs.map(({ log }) => log.modified.getTime());
+  let span =
+    relevantLogs.length === 0
+      ? null
+      : {
+          oldest: new Date(Math.min(...relevantLogs)),
+          newest: new Date(Math.max(...relevantLogs)),
+        };
+  let j = new Set();
+  for (let { log } of nonMatchingLogs)
+    for (let P of [
+      ...(log.toolsUsed ?? []),
+      ...tagUntrustedArtifactContent(log.messages, undefined, true, true),
+    ])
       j.add(P);
   return {
-    sessions: mapped,
+    sessions,
     mcpCalls: model,
     toolsUsed: [...j],
     sessionsParsed: nonMatchingLogs.length,
-    span: y,
+    span,
   };
 }
-
 export { collectSessionsForProject };

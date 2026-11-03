@@ -22,55 +22,60 @@ import { getShareEntry, entryContentByOthers } from "../../../services/artifacts
 //@ chunk-8wvtd8sr.js:94022-94119 placement = extractErrorTypeFromData (1)
 function parseTypePrefixedValue(data) {
   let index = data.indexOf(":");
-  return index > 0 && data.slice(0, index).trim() === "type" ? data.slice(index + 1) : void 0;
+  return index > 0 && data.slice(0, index).trim() === "type" ? data.slice(index + 1) : undefined;
 }
 //@ chunk-8wvtd8sr.js:94119-94302 placement = urlPatternToRegex (1)
-function matchesWildcardPattern(e, n) {
+function matchesWildcardPattern(e, agentType) {
   let s = typeRuleMatchKeys(e);
-  if (s === void 0) return !1;
+  if (s === undefined) return false;
   let regExp = new RegExp(`^${s.map((h) => h.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join(".*")}$`, "su");
-  return n.some((h) => h !== "" && regExp.test(h));
+  return agentType.some((h) => h !== "" && regExp.test(h));
 }
 //@ chunk-8wvtd8sr.js:94519-94579 placement
-function getDenyAndAskUrlRules(e, n) {
-  return [...getUrlRulesForTool(e, n, "deny"), ...getUrlRulesForTool(e, n, "ask")];
+function getDenyAndAskUrlRules(context, agentToolName) {
+  return [
+    ...getUrlRulesForTool(context, agentToolName, "deny"),
+    ...getUrlRulesForTool(context, agentToolName, "ask"),
+  ];
 }
 //@ chunk-8wvtd8sr.js:94579-94740 placement
-function findTypeRule(e, n, s, r) {
-  let h = typeof s === "object" && s !== null ? s.type : void 0;
+function findTypeRule(toolPermissionContext, tool, s, r) {
+  let h = typeof s === "object" && s !== null ? s.type : undefined;
   if (typeof h !== "string") return null;
   let y = typeNameMatchKey(h);
-  return y === "" ? null : (filterRulesMatchingUrls(e, n, [y], r)[0] ?? null);
+  return y === "" ? null : (filterRulesMatchingUrls(toolPermissionContext, tool, [y], r)[0] ?? null);
 }
 //@ chunk-8wvtd8sr.js:94740-94912 placement = getDenyRuleForAgent (1)
 function getUrlRulesForTool(context, agentToolName, agentType) {
   return (agentType === "deny" ? getDenyRules(context) : getAskRules(context)).filter(
     (rule) =>
-      rule.ruleValue.ruleContent !== void 0 &&
-      typeRuleMatchKeys(rule.ruleValue.ruleContent) !== void 0 &&
+      rule.ruleValue.ruleContent !== undefined &&
+      typeRuleMatchKeys(rule.ruleValue.ruleContent) !== undefined &&
       !hasWildcard(rule.ruleValue.toolName) &&
       toolMatchesRule(context, agentToolName, rule),
   );
 }
 //@ chunk-8wvtd8sr.js:94912-95033 placement
 function typeRuleMatchKeys(e) {
-  let n = parseTypePrefixedValue(e);
-  if (n === void 0) return;
-  let mapped = typeNameWithoutQuotes(n).split("*").map(typeNameMatchKey);
-  return mapped.length === 1 && mapped[0] === "" ? void 0 : mapped;
+  let typePrefixedValue = parseTypePrefixedValue(e);
+  if (typePrefixedValue === undefined) return;
+  let mapped = typeNameWithoutQuotes(typePrefixedValue).split("*").map(typeNameMatchKey);
+  return mapped.length === 1 && mapped[0] === "" ? undefined : mapped;
 }
 //@ chunk-8wvtd8sr.js:95033-95118 placement
-function Rl(e) {
-  let n = parseArtifactUrlInput(e)?.slug,
-    s = n === void 0 ? void 0 : getShareEntry(n);
-  return s !== void 0 && entryContentByOthers(s);
+/**
+ * 判断 Artifact 链接是否指向他人共享的内容。
+ */
+function isUrlOfOthersContent(url) {
+  let slug = parseArtifactUrlInput(url)?.slug;
+  let s = slug === undefined ? undefined : getShareEntry(slug);
+  return s !== undefined && entryContentByOthers(s);
 }
-
 export {
   parseTypePrefixedValue,
   getUrlRulesForTool,
   matchesWildcardPattern,
-  Rl,
+  isUrlOfOthersContent,
   findTypeRule,
   getDenyAndAskUrlRules,
 };

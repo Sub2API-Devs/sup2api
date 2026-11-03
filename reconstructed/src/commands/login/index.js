@@ -9,15 +9,15 @@
  * attribution: fingerprint 1
  */
 import { hasAnthropicApiKeyAuth } from "../../utils/auth.js";
-import { Jn } from "../../remote/remoteMode.js";
+import { getRemoteCaps } from "../../remote/remoteMode.js";
 import { env } from "../../utils/env.js";
 import { isCommandEnabled } from "../../commands.js";
 import { getLoginAvailability } from "./loginAvailability.js";
 
+//@ chunk-e6aww6q8.js:1731476-1731822 fingerprint = default (0.788)
 /**
  * /login 命令对象：描述随是否已用 API key 登录变化，可用 DISABLE_LOGIN_COMMAND 禁用，登录被拒时隐藏。
  */
-//@ chunk-e6aww6q8.js:1731476-1731822 fingerprint = default (0.788)
 var loginCommand_2 = () => ({
   type: "local-jsx",
   name: "login",
@@ -25,14 +25,15 @@ var loginCommand_2 = () => ({
     return hasAnthropicApiKeyAuth() ? "Switch Anthropic accounts" : "Sign in with your Anthropic account";
   },
   isEnabled: () => {
-    let e = Jn();
-    return !env.DISABLE_LOGIN_COMMAND && (e === null || e.sessionId !== void 0);
+    let remoteCaps = getRemoteCaps();
+    return !env.DISABLE_LOGIN_COMMAND && (remoteCaps === null || remoteCaps.sessionId !== undefined);
   },
   get isHidden() {
     return !isCommandEnabled(this) || getLoginAvailability().kind === "refused";
   },
-  requires: { ink: !0 },
-  fleetHostCall: async ({ login: login }) => login(),
+  requires: {
+    ink: true,
+  },
+  fleetHostCall: async ({ login }) => login(),
 });
-
 export { loginCommand_2 };

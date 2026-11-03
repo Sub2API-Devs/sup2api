@@ -9,7 +9,7 @@
  * attribution: sole-consumer 4, fingerprint 1
  */
 import { logForDebugging } from "../debug.js";
-import { o, u } from "../../../vendor/zod/v4/classic/schemas.js";
+import { string, u } from "../../../vendor/zod/v4/classic/schemas.js";
 import { HostScoped } from "../hostScoped.js";
 import { getRootSession, isDiskless } from "../../bootstrap/state.js";
 import { env } from "../env.js";
@@ -34,13 +34,13 @@ import { getMaxOutputLength } from "../shell/outputLimits.js";
 import { readFileRange as readFileRange_2 } from "../fsOperations.js";
 
 //@ chunk-e6aww6q8.js:252979-253013 sole-consumer
-var gco = 8388608,
-  hco = 1000,
-  yco = 4096;
+var MEMORY_LIMIT_BYTES = 8388608;
+var SIZE_CHECK_INTERVAL_MS = 1000;
+var TAIL_READ_BYTES = 4096;
+//@ chunk-e6aww6q8.js:253013-253502 sole-consumer
 /**
  * 后台任务输出实例的注册表：按 taskId 注册/注销/查询 TaskOutput，并维护相关的辅助映射与定时器状态。
  */
-//@ chunk-e6aww6q8.js:253013-253502 sole-consumer
 class TaskOutputRegistry {
   #e = new Map();
   #t = new Map();
@@ -55,30 +55,39 @@ class TaskOutputRegistry {
     return this.#e.get(e);
   }
   startPolling(e) {
-    if ((this.#t.set(e.taskId, e), !this.#n))
-      ((this.#n = setInterval(() => this.#o(), hco)), this.#n.unref());
+    this.#t.set(e.taskId, e);
+    if (!this.#n) {
+      this.#n = setInterval(() => this.#o(), SIZE_CHECK_INTERVAL_MS);
+      this.#n.unref();
+    }
   }
   stopPolling(e) {
-    if ((this.#t.delete(e), this.#t.size === 0 && this.#n)) (clearInterval(this.#n), (this.#n = null));
+    this.#t.delete(e);
+    if (this.#t.size === 0 && this.#n) {
+      clearInterval(this.#n);
+      this.#n = null;
+    }
   }
   #o() {
     for (let [, e] of this.#t) e.pollProgress();
   }
   reset() {
     if (this.#n) clearInterval(this.#n);
-    ((this.#n = null), this.#e.clear(), this.#t.clear());
+    this.#n = null;
+    this.#e.clear();
+    this.#t.clear();
   }
 }
 //@ chunk-e6aww6q8.js:253502-253529 sole-consumer
-var _co = new HostScoped(() => new TaskOutputRegistry());
+var taskOutputRegistryByHost = new HostScoped(() => new TaskOutputRegistry());
 //@ chunk-e6aww6q8.js:253529-253568 sole-consumer
-function Lue() {
-  return _co.of(getRootSession().host);
+function taskOutputRegistry() {
+  return taskOutputRegistryByHost.of(getRootSession().host);
 }
+//@ chunk-e6aww6q8.js:253568-257176 fingerprint = TaskOutput (0.786)
 /**
  * 后台任务输出缓冲：内存保存最近输出、超限时落盘到 .output 文件并给出截断提示。
  */
-//@ chunk-e6aww6q8.js:253568-257176 fingerprint = TaskOutput (0.786)
 class TaskOutput {
   taskId;
   stdoutToFile;
@@ -86,116 +95,123 @@ class TaskOutput {
   #t = "";
   #n = "";
   #o = null;
-  #r = !1;
+  #r = false;
   #i = new CircularBuffer(1000);
   #s = 0;
   #a = 0;
   #d = 0;
   #c;
   #l;
-  #u = !1;
+  #u = false;
   #m = 0;
-  constructor(e, n, r = !1, s = gco) {
-    if (
-      ((this.taskId = e),
-      (this.#e = r ? bindTaskOutputPath(e) : isDiskless() ? void 0 : getTaskOutputPath(e)),
-      (this.stdoutToFile = r),
-      (this.#c = s),
-      (this.#l = n),
-      r && n)
-    )
-      Lue().register(this);
+  constructor(taskId, onProgress, stdoutToFile = false, maxMemory = MEMORY_LIMIT_BYTES) {
+    this.taskId = taskId;
+    this.#e = stdoutToFile
+      ? bindTaskOutputPath(taskId)
+      : isDiskless()
+        ? undefined
+        : getTaskOutputPath(taskId);
+    this.stdoutToFile = stdoutToFile;
+    this.#c = maxMemory;
+    this.#l = onProgress;
+    if (stdoutToFile && onProgress) taskOutputRegistry().register(this);
   }
   get path() {
     return this.#e ?? getTaskOutputPath(this.taskId);
   }
   static startPolling(e) {
-    let n = Lue(),
-      registeredInstance = n.registeredInstance(e);
-    if (!registeredInstance || !registeredInstance.#l) return;
-    n.startPolling(registeredInstance);
+    let n = taskOutputRegistry();
+    let r = n.registeredInstance(e);
+    if (!r || !r.#l) return;
+    n.startPolling(r);
   }
   static stopPolling(e) {
-    Lue().stopPolling(e);
+    taskOutputRegistry().stopPolling(e);
   }
   pollProgress() {
     if (!this.#l) return;
-    tailTaskOutput(this.path, yco).then(
-      ({ content: content, bytesRead: bytesRead, bytesTotal: bytesTotal }) => {
+    tailTaskOutput(this.path, TAIL_READ_BYTES).then(
+      ({ content, bytesRead, bytesTotal }) => {
         if (!this.#l) return;
         if (!content) {
-          this.#l("", "", this.#s, bytesTotal, !1);
+          this.#l("", "", this.#s, bytesTotal, false);
           return;
         }
-        let s = content.length,
-          h = 0,
-          y = 0,
-          S = 0;
-        while (s > 0) {
-          if (
-            ((s = content.lastIndexOf(
-              `
+        let pos = content.length;
+        let h = 0;
+        let n100 = 0;
+        let lineCount = 0;
+        while (pos > 0) {
+          pos = content.lastIndexOf(
+            `
 `,
-              s - 1,
-            )),
-            S++,
-            S === 5)
-          )
-            h = s <= 0 ? 0 : s + 1;
-          if (S === 100) y = s <= 0 ? 0 : s + 1;
+            pos - 1,
+          );
+          lineCount++;
+          if (lineCount === 5) h = pos <= 0 ? 0 : pos + 1;
+          if (lineCount === 100) n100 = pos <= 0 ? 0 : pos + 1;
         }
-        let w = bytesRead >= bytesTotal ? S : Math.max(this.#s, Math.round((bytesTotal / bytesRead) * S));
-        ((this.#s = w),
-          (this.#a = bytesTotal),
-          this.#l(content.slice(h), content.slice(y), w, bytesTotal, bytesRead < bytesTotal));
+        let totalLines =
+          bytesRead >= bytesTotal
+            ? lineCount
+            : Math.max(this.#s, Math.round((bytesTotal / bytesRead) * lineCount));
+        this.#s = totalLines;
+        this.#a = bytesTotal;
+        this.#l(content.slice(h), content.slice(n100), totalLines, bytesTotal, bytesRead < bytesTotal);
       },
       () => {},
     );
   }
-  writeStdout(e) {
-    this.#g(e, !1);
+  writeStdout(data) {
+    this.#g(data, false);
   }
-  writeStderr(e) {
-    this.#g(e, !0);
+  writeStderr(data) {
+    this.#g(data, true);
   }
-  #g(e, n) {
-    if (((this.#a += e.length), !n)) this.#d += e.length;
-    if ((this.#S(e), this.#o)) {
-      this.#o.append(n ? `[stderr] ${e}` : e);
+  #g(data, isStderr) {
+    this.#a += data.length;
+    if (!isStderr) this.#d += data.length;
+    this.#S(data);
+    if (this.#o) {
+      this.#o.append(isStderr ? `[stderr] ${data}` : data);
       return;
     }
     if (this.#r) return;
-    if (this.#t.length + this.#n.length + e.length > this.#c) {
-      this.#y(n ? e : null, n ? null : e);
+    if (this.#t.length + this.#n.length + data.length > this.#c) {
+      this.#y(isStderr ? data : null, isStderr ? null : data);
       return;
     }
-    if (n) this.#n += e;
-    else this.#t += e;
+    if (isStderr) this.#n += data;
+    else this.#t += data;
   }
-  #S(e) {
-    let s = 0,
-      h = [],
-      y = 0,
-      S = e.length;
-    while (S > 0) {
-      let index = e.lastIndexOf(
+  #S(data) {
+    let s = 0;
+    let lines = [];
+    let extractedBytes = 0;
+    let pos = data.length;
+    while (pos > 0) {
+      let prev = data.lastIndexOf(
         `
 `,
-        S - 1,
+        pos - 1,
       );
-      if (index === -1) break;
-      if ((s++, h.length < 100 && y < 4096)) {
-        let L = S - index - 1;
-        if (L > 0 && L <= 4096 - y) {
-          let sliced = e.slice(index + 1, S);
-          if (sliced.trim()) (h.push(Buffer.from(sliced).toString()), (y += L));
+      if (prev === -1) break;
+      s++;
+      if (lines.length < 100 && extractedBytes < 4096) {
+        let lineLen = pos - prev - 1;
+        if (lineLen > 0 && lineLen <= 4096 - extractedBytes) {
+          let line = data.slice(prev + 1, pos);
+          if (line.trim()) {
+            lines.push(Buffer.from(line).toString());
+            extractedBytes += lineLen;
+          }
         }
       }
-      S = index;
+      pos = prev;
     }
     this.#s += s;
-    for (let w = h.length - 1; w >= 0; w--) this.#i.add(h[w]);
-    if (this.#l && h.length > 0) {
+    for (let i = lines.length - 1; i >= 0; i--) this.#i.add(lines[i]);
+    if (this.#l && lines.length > 0) {
       let recent = this.#i.getRecent(5);
       this.#l(
         safeJoinLines(
@@ -214,34 +230,40 @@ class TaskOutput {
       );
     }
   }
-  #y(e, n) {
+  #y(stderrChunk, stdoutChunk) {
     if (isDiskless()) {
-      if (n !== null || e !== null) this.#r = !0;
+      if (stdoutChunk !== null || stderrChunk !== null) this.#r = true;
       return;
     }
-    if (((this.#o = new DiskTaskOutput(this.taskId, this.path)), this.#t))
-      (this.#o.append(this.#t), (this.#t = ""));
-    if (this.#n) (this.#o.append(`[stderr] ${this.#n}`), (this.#n = ""));
-    if (n) this.#o.append(n);
-    if (e) this.#o.append(`[stderr] ${e}`);
+    this.#o = new DiskTaskOutput(this.taskId, this.path);
+    if (this.#t) {
+      this.#o.append(this.#t);
+      this.#t = "";
+    }
+    if (this.#n) {
+      this.#o.append(`[stderr] ${this.#n}`);
+      this.#n = "";
+    }
+    if (stdoutChunk) this.#o.append(stdoutChunk);
+    if (stderrChunk) this.#o.append(`[stderr] ${stderrChunk}`);
   }
   async getStdout(e) {
     if (this.stdoutToFile) return this.#p(e ?? getMaxOutputLength());
     if (this.#o) {
-      let recent = this.#i.getRecent(5),
-        r = safeJoinLines(
-          recent,
-          `
+      let recent = this.#i.getRecent(5);
+      let tail = safeJoinLines(
+        recent,
+        `
 `,
-        ),
-        rounded = Math.round(this.#a / 1024),
-        h =
-          this.#o.failing || this.#o.lostOutput
-            ? `
-Output truncated (${rounded}KB total). The full output could not all be saved to ${this.path}; that file may be missing or incomplete.`
-            : `
-Output truncated (${rounded}KB total). Full output saved to: ${this.path}`;
-      return r ? r + h : h.trimStart();
+      );
+      let sizeKB = Math.round(this.#a / 1024);
+      let notice =
+        this.#o.failing || this.#o.lostOutput
+          ? `
+Output truncated (${sizeKB}KB total). The full output could not all be saved to ${this.path}; that file may be missing or incomplete.`
+          : `
+Output truncated (${sizeKB}KB total). Full output saved to: ${this.path}`;
+      return tail ? tail + notice : notice.trimStart();
     }
     if (this.#r) {
       let r = `
@@ -252,22 +274,24 @@ Output truncated (${Math.round(this.#a / 1024)}KB total): later output was disca
   }
   async #p(e) {
     try {
-      let n = await openTaskOutputForRead(this.path);
-      if (n === null)
-        return (
-          logForDebugging(`TaskOutput.#readStdoutFromFile: ${this.path} is gone (ENOENT)`),
-          this.#h("ENOENT")
-        );
-      let r = await readFileRange_2(n, 0, e).finally(() => n.close());
-      if (!r) return ((this.#u = !0), "");
-      let { content: content, bytesRead: bytesRead, bytesTotal: bytesTotal } = r;
-      return ((this.#m = bytesTotal), (this.#u = bytesTotal <= bytesRead), content);
-    } catch (error) {
-      let r = error instanceof Error && "code" in error ? String(error.code) : "unknown";
-      return (
-        logForDebugging(`TaskOutput.#readStdoutFromFile: failed to read ${this.path} (${r}): ${error}`),
-        this.#h(r)
-      );
+      let taskOutputForRead = await openTaskOutputForRead(this.path);
+      if (taskOutputForRead === null) {
+        logForDebugging(`TaskOutput.#readStdoutFromFile: ${this.path} is gone (ENOENT)`);
+        return this.#h("ENOENT");
+      }
+      let result = await readFileRange_2(taskOutputForRead, 0, e).finally(() => taskOutputForRead.close());
+      if (!result) {
+        this.#u = true;
+        return "";
+      }
+      let { content, bytesRead, bytesTotal } = result;
+      this.#m = bytesTotal;
+      this.#u = bytesTotal <= bytesRead;
+      return content;
+    } catch (err) {
+      let code = err instanceof Error && "code" in err ? String(err.code) : "unknown";
+      logForDebugging(`TaskOutput.#readStdoutFromFile: failed to read ${this.path} (${code}): ${err}`);
+      return this.#h(code);
     }
   }
   #h(e) {
@@ -304,15 +328,14 @@ Output truncated (${Math.round(this.#a / 1024)}KB total): later output was disca
     } catch {}
   }
   clear() {
-    (releaseConvergentTaskOutputBinding(this.taskId),
-      (this.#t = ""),
-      (this.#n = ""),
-      this.#i.clear(),
-      (this.#l = null),
-      this.#o?.cancel(),
-      TaskOutput.stopPolling(this.taskId),
-      Lue().unregister(this.taskId));
+    releaseConvergentTaskOutputBinding(this.taskId);
+    this.#t = "";
+    this.#n = "";
+    this.#i.clear();
+    this.#l = null;
+    this.#o?.cancel();
+    TaskOutput.stopPolling(this.taskId);
+    taskOutputRegistry().unregister(this.taskId);
   }
 }
-
 export { TaskOutput };

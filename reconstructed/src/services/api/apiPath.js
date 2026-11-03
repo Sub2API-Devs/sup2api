@@ -9,12 +9,13 @@
  * attribution: placement 1
  */
 
+//@ chunk-9cjx5pnm.js:13895-14005 placement
 /**
  * 路径段编码（. 与 .. 特别处理）。
  */
-//@ chunk-9cjx5pnm.js:13895-14005 placement
-function encodePathSegment(e) {
-  return e === "." || e === ".." ? e.replaceAll(".", "%252E") : encodeURIComponent(e).replaceAll(".", "%2E");
+function encodePathSegment(id) {
+  return id === "." || id === ".."
+    ? id.replaceAll(".", "%252E")
+    : encodeURIComponent(id).replaceAll(".", "%2E");
 }
-
 export { encodePathSegment };

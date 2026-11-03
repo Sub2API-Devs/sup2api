@@ -6,133 +6,163 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../runtime/bun-runtime.js";
-import { it } from "./code.js";
+import { require_code } from "./code.js";
 
 //@ chunk-s82q9s4x.js:2859-5426 cjs-fingerprint
-var or = x(function (Lr) {
-  Object.defineProperty(Lr, "__esModule", { value: !0 });
-  Lr.ValueScope = Lr.ValueScopeName = Lr.Scope = Lr.varKinds = Lr.UsedValueState = void 0;
-  var T = it();
-  class Kr extends Error {
-    constructor(e) {
-      super(`CodeGen: "code" for ${e} not defined`);
-      this.value = e.value;
+var require_scope = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.ValueScope =
+    cjsExports.ValueScopeName =
+    cjsExports.Scope =
+    cjsExports.varKinds =
+    cjsExports.UsedValueState =
+      undefined;
+  var code_1 = require_code();
+  class ValueError extends Error {
+    constructor(name) {
+      super(`CodeGen: "code" for ${name} not defined`);
+      this.value = name.value;
     }
   }
-  var yt;
-  (function (e) {
-    ((e[(e.Started = 0)] = "Started"), (e[(e.Completed = 1)] = "Completed"));
-  })(yt || (Lr.UsedValueState = yt = {}));
-  Lr.varKinds = { const: new T.Name("const"), let: new T.Name("let"), var: new T.Name("var") };
-  class sr {
-    constructor({ prefixes: e, parent: t } = {}) {
-      ((this._names = {}), (this._prefixes = e), (this._parent = t));
+  var UsedValueState;
+  (function (UsedValueState) {
+    UsedValueState[(UsedValueState.Started = 0)] = "Started";
+    UsedValueState[(UsedValueState.Completed = 1)] = "Completed";
+  })(UsedValueState || (cjsExports.UsedValueState = UsedValueState = {}));
+  cjsExports.varKinds = {
+    const: new code_1.Name("const"),
+    let: new code_1.Name("let"),
+    var: new code_1.Name("var"),
+  };
+  class Scope {
+    constructor({ prefixes, parent } = {}) {
+      this._names = {};
+      this._prefixes = prefixes;
+      this._parent = parent;
     }
-    toName(e) {
-      return e instanceof T.Name ? e : this.name(e);
+    toName(nameOrPrefix) {
+      return nameOrPrefix instanceof code_1.Name ? nameOrPrefix : this.name(nameOrPrefix);
     }
-    name(e) {
-      return new T.Name(this._newName(e));
+    name(prefix) {
+      return new code_1.Name(this._newName(prefix));
     }
-    _newName(e) {
-      let t = this._names[e] || this._nameGroup(e);
-      return `${e}${t.index++}`;
+    _newName(prefix) {
+      let ng = this._names[prefix] || this._nameGroup(prefix);
+      return `${prefix}${ng.index++}`;
     }
-    _nameGroup(e) {
-      var t, r;
+    _nameGroup(prefix) {
+      var _a;
+      var _b;
       if (
-        ((r = (t = this._parent) === null || t === void 0 ? void 0 : t._prefixes) === null || r === void 0
-          ? void 0
-          : r.has(e)) ||
-        (this._prefixes && !this._prefixes.has(e))
+        ((_b = (_a = this._parent) === null || _a === undefined ? undefined : _a._prefixes) === null ||
+        _b === undefined
+          ? undefined
+          : _b.has(prefix)) ||
+        (this._prefixes && !this._prefixes.has(prefix))
       )
-        throw Error(`CodeGen: prefix "${e}" is not allowed in this scope`);
-      return (this._names[e] = { prefix: e, index: 0 });
+        throw Error(`CodeGen: prefix "${prefix}" is not allowed in this scope`);
+      return (this._names[prefix] = {
+        prefix,
+        index: 0,
+      });
     }
   }
-  Lr.Scope = sr;
-  class nr extends T.Name {
-    constructor(e, t) {
-      super(t);
-      this.prefix = e;
+  cjsExports.Scope = Scope;
+  class ValueScopeName extends code_1.Name {
+    constructor(prefix, nameStr) {
+      super(nameStr);
+      this.prefix = prefix;
     }
-    setValue(e, { property: t, itemIndex: r }) {
-      ((this.value = e), (this.scopePath = T._`.${new T.Name(t)}[${r}]`));
+    setValue(value, { property, itemIndex }) {
+      this.value = value;
+      this.scopePath = code_1._`.${new code_1.Name(property)}[${itemIndex}]`;
     }
   }
-  Lr.ValueScopeName = nr;
-  var Ta = T._`\n`;
-  class Fr extends sr {
-    constructor(e) {
-      super(e);
-      ((this._values = {}), (this._scope = e.scope), (this.opts = { ...e, _n: e.lines ? Ta : T.nil }));
+  cjsExports.ValueScopeName = ValueScopeName;
+  var line = code_1._`\n`;
+  class ValueScope extends Scope {
+    constructor(opts) {
+      super(opts);
+      this._values = {};
+      this._scope = opts.scope;
+      this.opts = {
+        ...opts,
+        _n: opts.lines ? line : code_1.nil,
+      };
     }
     get() {
       return this._scope;
     }
-    name(e) {
-      return new nr(e, this._newName(e));
+    name(prefix) {
+      return new ValueScopeName(prefix, this._newName(prefix));
     }
-    value(e, t) {
-      var r;
-      if (t.ref === void 0) throw Error("CodeGen: ref must be passed in value");
-      let toName = this.toName(e),
-        { prefix: prefix } = toName,
-        o = (r = t.key) !== null && r !== void 0 ? r : t.ref,
-        i = this._values[prefix];
-      if (i) {
-        let u = i.get(o);
-        if (u) return u;
-      } else i = this._values[prefix] = new Map();
-      i.set(o, toName);
-      let a = this._scope[prefix] || (this._scope[prefix] = []),
-        c = a.length;
-      return ((a[c] = t.ref), toName.setValue(t, { property: prefix, itemIndex: c }), toName);
+    value(nameOrPrefix, value) {
+      var _a;
+      if (value.ref === undefined) throw Error("CodeGen: ref must be passed in value");
+      let name = this.toName(nameOrPrefix);
+      let { prefix } = name;
+      let valueKey = (_a = value.key) !== null && _a !== undefined ? _a : value.ref;
+      let vs = this._values[prefix];
+      if (vs) {
+        let _name = vs.get(valueKey);
+        if (_name) return _name;
+      } else vs = this._values[prefix] = new Map();
+      vs.set(valueKey, name);
+      let s = this._scope[prefix] || (this._scope[prefix] = []);
+      let itemIndex = s.length;
+      s[itemIndex] = value.ref;
+      name.setValue(value, {
+        property: prefix,
+        itemIndex,
+      });
+      return name;
     }
-    getValue(e, t) {
-      let r = this._values[e];
-      if (!r) return;
-      return r.get(t);
+    getValue(prefix, keyOrRef) {
+      let vs = this._values[prefix];
+      if (!vs) return;
+      return vs.get(keyOrRef);
     }
-    scopeRefs(e, t = this._values) {
-      return this._reduceValues(t, (r) => {
-        if (r.scopePath === void 0) throw Error(`CodeGen: name "${r}" has no value`);
-        return T._`${e}${r.scopePath}`;
+    scopeRefs(scopeName, values = this._values) {
+      return this._reduceValues(values, (name) => {
+        if (name.scopePath === undefined) throw Error(`CodeGen: name "${name}" has no value`);
+        return code_1._`${scopeName}${name.scopePath}`;
       });
     }
-    scopeCode(e = this._values, t, r) {
+    scopeCode(values = this._values, usedValues, getCode) {
       return this._reduceValues(
-        e,
-        (s) => {
-          if (s.value === void 0) throw Error(`CodeGen: name "${s}" has no value`);
-          return s.value.code;
+        values,
+        (name) => {
+          if (name.value === undefined) throw Error(`CodeGen: name "${name}" has no value`);
+          return name.value.code;
         },
-        t,
-        r,
+        usedValues,
+        getCode,
       );
     }
-    _reduceValues(e, t, r = {}, s) {
-      let nil = T.nil;
-      for (let key in e) {
-        let i = e[key];
-        if (!i) continue;
-        let a = (r[key] = r[key] || new Map());
-        i.forEach((c) => {
-          if (a.has(c)) return;
-          a.set(c, yt.Started);
-          let u = t(c);
-          if (u) {
-            let l = this.opts.es5 ? Lr.varKinds.var : Lr.varKinds.const;
-            nil = T._`${nil}${l} ${c} = ${u};${this.opts._n}`;
-          } else if ((u = s === null || s === void 0 ? void 0 : s(c))) nil = T._`${nil}${u}${this.opts._n}`;
-          else throw new Kr(c);
-          a.set(c, yt.Completed);
+    _reduceValues(values, valueCode, usedValues = {}, getCode) {
+      let code = code_1.nil;
+      for (let prefix in values) {
+        let vs = values[prefix];
+        if (!vs) continue;
+        let nameSet = (usedValues[prefix] = usedValues[prefix] || new Map());
+        vs.forEach((name) => {
+          if (nameSet.has(name)) return;
+          nameSet.set(name, UsedValueState.Started);
+          let c = valueCode(name);
+          if (c) {
+            let def = this.opts.es5 ? cjsExports.varKinds.var : cjsExports.varKinds.const;
+            code = code_1._`${code}${def} ${name} = ${c};${this.opts._n}`;
+          } else if ((c = getCode === null || getCode === undefined ? undefined : getCode(name)))
+            code = code_1._`${code}${c}${this.opts._n}`;
+          else throw new ValueError(name);
+          nameSet.set(name, UsedValueState.Completed);
         });
       }
-      return nil;
+      return code;
     }
   }
-  Lr.ValueScope = Fr;
+  cjsExports.ValueScope = ValueScope;
 });
-
-export { or };
+export { require_scope };

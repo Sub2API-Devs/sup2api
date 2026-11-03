@@ -248,10 +248,10 @@ import { hasComplianceTaint } from "../../../services/policyLimits/complianceTai
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../../services/analytics/growthbook.js";
 import { registerBuiltinPlugin, builtinHooksModuleRef } from "../../builtinPlugins.js";
 
+//@ chunk-bss4k1z9.js:3576-4211 placement
 /**
  * youShouldKnow 插件扫描清单。
  */
-//@ chunk-bss4k1z9.js:3576-4211 placement
 var YOU_SHOULD_KNOW_MANIFEST = x(function (aO, ss) {
   ss.exports = {
     scan: {
@@ -277,10 +277,23 @@ var YOU_SHOULD_KNOW_MANIFEST = x(function (aO, ss) {
         "ui.toast",
       ],
       runCommands: ["plugin"],
-      env: { reads: ["CLAUDE_CODE_YOU_SHOULD_KNOW_DEBUG", "USER_TYPE"], writes: [] },
+      env: {
+        reads: ["CLAUDE_CODE_YOU_SHOULD_KNOW_DEBUG", "USER_TYPE"],
+        writes: [],
+      },
       state: {
-        reads: [{ plugin: "cc-plugin-you-should-know", key: "aboutOpen" }],
-        writes: [{ plugin: "cc-plugin-you-should-know", key: "aboutOpen" }],
+        reads: [
+          {
+            plugin: "cc-plugin-you-should-know",
+            key: "aboutOpen",
+          },
+        ],
+        writes: [
+          {
+            plugin: "cc-plugin-you-should-know",
+            key: "aboutOpen",
+          },
+        ],
       },
     },
     files: {},
@@ -756,10 +769,10 @@ Ar(indexNamespace2, {
 //@ chunk-bss4k1z9.js:13009-13042 placement
 var availabilityFlag = () => "tengu_jolly_dewdrop";
 //@ chunk-bss4k1z9.js:84337-84347 placement
-var isOnByDefault = !1;
+var isOnByDefault = false;
 //@ chunk-bss4k1z9.js:84347-84420 placement
 var isAvailable = () =>
-  (complianceTaintsSettled() || !1) &&
+  (complianceTaintsSettled() || false) &&
   !hasComplianceTaint("hipaa") &&
   !hasComplianceTaint("zdr") &&
   !hasComplianceTaint("ldr") &&
@@ -769,12 +782,12 @@ var PLUGIN_LISTING = {
   name: CC_PLUGIN_YOU_SHOULD_KNOW,
   description:
     "You should know: a side agent watches your back while Claude works on longer tasks. It looks for things worth knowing that you might miss, and surfaces them above the prompt.",
-  isAvailable: isAvailable,
+  isAvailable,
 };
 //@ chunk-bss4k1z9.js:84642-84727 placement
 var registerPlugin = () =>
   registerBuiltinPlugin({
     ...PLUGIN_LISTING,
-    defaultEnabled: !1,
+    defaultEnabled: false,
     hooksModule: builtinHooksModuleRef(import.meta.dir, indexNamespace2, () => YOU_SHOULD_KNOW_MANIFEST()),
   });

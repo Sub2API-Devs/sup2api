@@ -8,10 +8,9 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-spjgqa4y.js:7990-8067 cjs-fingerprint
-var ze = x(function (Pi) {
-  Pi.isValid = function (e) {
-    return !isNaN(e) && e >= 1 && e <= 40;
+var require_version_check = x(function (cjsExports) {
+  cjsExports.isValid = function (version) {
+    return !isNaN(version) && version >= 1 && version <= 40;
   };
 });
-
-export { ze };
+export { require_version_check };

@@ -11,12 +11,18 @@
 import { COMMON_INFO_ARGS } from "../constants/xml.js";
 
 //@ chunk-bbtre4r8.js:10335-10377 placement
-function vDi(t) {
+/**
+ * 判断参数是否属于常见 info 级参数。
+ */
+function isCommonInfoArg(t) {
   return COMMON_INFO_ARGS.some((e) => e === t);
 }
 //@ chunk-bbtre4r8.js:10377-10396 placement
-var Uwr = 64,
-  WDn = 100;
+/**
+ * 日志行最大字符数（64）。
+ */
+var MAX_LOG_LINE_CHARS = 64;
+var MAX_LOGS = 100;
 //@ chunk-bbtre4r8.js:10396-10549 fingerprint = sortLogs (1)
 function sortLogs(logs) {
   return logs.sort((e, r) => {
@@ -25,5 +31,4 @@ function sortLogs(logs) {
     return r.created.getTime() - e.created.getTime();
   });
 }
-
-export { WDn, sortLogs, vDi, Uwr };
+export { MAX_LOGS, sortLogs, isCommonInfoArg, MAX_LOG_LINE_CHARS };

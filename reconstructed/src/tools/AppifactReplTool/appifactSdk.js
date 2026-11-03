@@ -9,9 +9,12 @@
  * attribution: placement 2
  */
 import __cc_resource_0 from "../../../assets/appifact_sdk.js-852e8bcb.txt.zst" with { type: "file" };
-import { Et } from "../../utils/embeddedAssets.js";
+import { readEmbeddedTextSync } from "../../utils/embeddedAssets.js";
 
 //@ chunk-s578kt3t.js:314-336 placement
-var m = __cc_resource_0;
+var appifactSdkPath = __cc_resource_0;
 //@ chunk-s578kt3t.js:336-368 placement
-var r = Et(m, import.meta.dirname);
+/**
+ * Appifact REPL 使用的 SDK 资源文本。
+ */
+var appifactSdk = readEmbeddedTextSync(appifactSdkPath, import.meta.dirname);

@@ -8,11 +8,11 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:96657-97184 cjs-fingerprint
-var fn = x(function (Hu, bn) {
-  function Dl(e) {
+var require_csp = x(function (cjsExports, cjsModule) {
+  function csp(e) {
     return {
       name: "CSP",
-      case_insensitive: !1,
+      case_insensitive: false,
       keywords: {
         $pattern: "[a-zA-Z][a-zA-Z0-9_-]*",
         keyword: [
@@ -39,12 +39,20 @@ var fn = x(function (Hu, bn) {
         ],
       },
       contains: [
-        { className: "string", begin: "'", end: "'" },
-        { className: "attribute", begin: "^Content", end: ":", excludeEnd: !0 },
+        {
+          className: "string",
+          begin: "'",
+          end: "'",
+        },
+        {
+          className: "attribute",
+          begin: "^Content",
+          end: ":",
+          excludeEnd: true,
+        },
       ],
     };
   }
-  bn.exports = Dl;
+  cjsModule.exports = csp;
 });
-
-export { fn };
+export { require_csp };

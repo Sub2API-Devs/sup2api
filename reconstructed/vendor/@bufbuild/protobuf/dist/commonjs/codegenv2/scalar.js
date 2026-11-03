@@ -6,57 +6,58 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../../runtime/bun-runtime.js";
-import { Ns } from "../../cjs/descriptors.js";
+import { require_descriptors } from "../../cjs/descriptors.js";
 
 //@ chunk-fq0cr76a.js:518581-519597 cjs-fingerprint
-var aU = x(function (oU) {
-  Object.defineProperty(oU, "__esModule", { value: !0 });
-  oU.scalarTypeScriptType = fie;
-  oU.scalarJsonType = pie;
-  var hn = Ns();
-  function fie(e, n) {
-    switch (e) {
-      case hn.ScalarType.STRING:
+var require_scalar_2 = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.scalarTypeScriptType = scalarTypeScriptType;
+  cjsExports.scalarJsonType = scalarJsonType;
+  var descriptors_js_1 = require_descriptors();
+  function scalarTypeScriptType(scalar, longAsString) {
+    switch (scalar) {
+      case descriptors_js_1.ScalarType.STRING:
         return "string";
-      case hn.ScalarType.BOOL:
+      case descriptors_js_1.ScalarType.BOOL:
         return "boolean";
-      case hn.ScalarType.UINT64:
-      case hn.ScalarType.SFIXED64:
-      case hn.ScalarType.FIXED64:
-      case hn.ScalarType.SINT64:
-      case hn.ScalarType.INT64:
-        return n ? "string" : "bigint";
-      case hn.ScalarType.BYTES:
+      case descriptors_js_1.ScalarType.UINT64:
+      case descriptors_js_1.ScalarType.SFIXED64:
+      case descriptors_js_1.ScalarType.FIXED64:
+      case descriptors_js_1.ScalarType.SINT64:
+      case descriptors_js_1.ScalarType.INT64:
+        return longAsString ? "string" : "bigint";
+      case descriptors_js_1.ScalarType.BYTES:
         return "Uint8Array";
       default:
         return "number";
     }
   }
-  function pie(e) {
-    switch (e) {
-      case hn.ScalarType.DOUBLE:
-      case hn.ScalarType.FLOAT:
+  function scalarJsonType(scalar) {
+    switch (scalar) {
+      case descriptors_js_1.ScalarType.DOUBLE:
+      case descriptors_js_1.ScalarType.FLOAT:
         return 'number | "NaN" | "Infinity" | "-Infinity"';
-      case hn.ScalarType.UINT64:
-      case hn.ScalarType.SFIXED64:
-      case hn.ScalarType.FIXED64:
-      case hn.ScalarType.SINT64:
-      case hn.ScalarType.INT64:
+      case descriptors_js_1.ScalarType.UINT64:
+      case descriptors_js_1.ScalarType.SFIXED64:
+      case descriptors_js_1.ScalarType.FIXED64:
+      case descriptors_js_1.ScalarType.SINT64:
+      case descriptors_js_1.ScalarType.INT64:
         return "string";
-      case hn.ScalarType.INT32:
-      case hn.ScalarType.FIXED32:
-      case hn.ScalarType.UINT32:
-      case hn.ScalarType.SFIXED32:
-      case hn.ScalarType.SINT32:
+      case descriptors_js_1.ScalarType.INT32:
+      case descriptors_js_1.ScalarType.FIXED32:
+      case descriptors_js_1.ScalarType.UINT32:
+      case descriptors_js_1.ScalarType.SFIXED32:
+      case descriptors_js_1.ScalarType.SINT32:
         return "number";
-      case hn.ScalarType.STRING:
+      case descriptors_js_1.ScalarType.STRING:
         return "string";
-      case hn.ScalarType.BOOL:
+      case descriptors_js_1.ScalarType.BOOL:
         return "boolean";
-      case hn.ScalarType.BYTES:
+      case descriptors_js_1.ScalarType.BYTES:
         return "string";
     }
   }
 });
-
-export { aU };
+export { require_scalar_2 };

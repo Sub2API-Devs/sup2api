@@ -8,7 +8,7 @@
  * pieces: chunk-n501v0b7.js (5)
  * attribution: placement 5
  */
-import { BH } from "../state/sliceHelpers.js";
+import { setSliceField } from "../state/sliceHelpers.js";
 import { logForDebugging } from "../utils/debug.js";
 import { errorMessage } from "../utils/errors.js";
 import { decodeHearthWorkerBinding } from "./hearthBinding.js";
@@ -29,61 +29,61 @@ import {
 } from "../utils/permissions/mcpMountRules.js";
 
 //@ chunk-n501v0b7.js:755-824 placement
-function j() {
+function mcpClientModule() {
   return require("./chunk-asne9cp8.js").mcpClientModule();
 }
 //@ chunk-n501v0b7.js:824-858 placement
-var Y = [500, 1500, 4000, 15000, 60000];
+var MOUNT_RETRY_BACKOFF_MS = [500, 1500, 4000, 15000, 60000];
+//@ chunk-n501v0b7.js:858-5889 placement
 /**
  * 无头会话为项目线程回复挂载 MCP 服务，随绑定变化收敛。
  */
-//@ chunk-n501v0b7.js:858-5889 placement
 function createHeadlessHearthMount(s) {
-  let {
-      getAppState: getAppState,
-      setAppState: setAppState,
-      getDynamicMcpState: getDynamicMcpState,
-    } = s.stores,
-    A = BH(setAppState, "toolPermissionContext"),
-    n = null,
-    resolved = Promise.resolve(),
-    p = !1,
-    u = !1,
-    M = 0,
-    c = null;
+  let { getAppState, setAppState, getDynamicMcpState } = s.stores;
+  let A = setSliceField(setAppState, "toolPermissionContext");
+  let n = null;
+  let resolved = Promise.resolve();
+  let p = false;
+  let u = false;
+  let M = 0;
+  let c = null;
   function B() {
-    if (u) return !1;
-    if (c !== null) return !0;
-    let e = Y[M];
-    if (e === void 0)
-      return (
-        logForDebugging(
-          "[bridge:projects] reply mount retries exhausted \u2014 the mount stays as it is until the binding changes",
-          { level: "warn" },
-        ),
-        !1
+    if (u) return false;
+    if (c !== null) return true;
+    let e = MOUNT_RETRY_BACKOFF_MS[M];
+    if (e === undefined) {
+      logForDebugging(
+        "[bridge:projects] reply mount retries exhausted \u2014 the mount stays as it is until the binding changes",
+        {
+          level: "warn",
+        },
       );
-    return (
-      M++,
-      (c = setTimeout(() => {
-        ((c = null), E("retry"));
-      }, e)),
-      c.unref(),
-      !0
-    );
+      return false;
+    }
+    M++;
+    c = setTimeout(() => {
+      c = null;
+      E("retry");
+    }, e);
+    c.unref();
+    return true;
   }
   function y() {
-    if (((M = 0), c !== null)) (clearTimeout(c), (c = null));
+    M = 0;
+    if (c !== null) {
+      clearTimeout(c);
+      c = null;
+    }
   }
   function E(e) {
-    return (
-      (resolved = resolved
-        .then(() => N(e))
-        .catch((o) => {
-          logForDebugging(`[bridge:projects] converge (${e}) threw: ${errorMessage(o)}`, { level: "warn" });
-        })),
-      resolved
-    );
+    resolved = resolved
+      .then(() => N(e))
+      .catch((error) => {
+        logForDebugging(`[bridge:projects] converge (${e}) threw: ${errorMessage(error)}`, {
+          level: "warn",
+        });
+      });
+    return resolved;
   }
   async function N(e) {
     if (u) return;
@@ -91,118 +91,149 @@ function createHeadlessHearthMount(s) {
     let hearthBinding = await s.readHearthBinding();
     if (u) return;
     if (!hearthBinding.read) {
-      if (
-        (logForDebugging(`[bridge:projects] binding read did not answer (${e}) \u2014 mount left as is`, {
-          level: "warn",
-        }),
-        !n || C(n))
-      )
-        B();
+      logForDebugging(`[bridge:projects] binding read did not answer (${e}) \u2014 mount left as is`, {
+        level: "warn",
+      });
+      if (!n || C(n)) B();
       return;
     }
     let r = decodeHearthWorkerBinding(
-      { hearth: hearthBinding.assertion },
-      { apiBaseUrl: s.apiBaseUrl, sessionId: s.sessionId },
+      {
+        hearth: hearthBinding.assertion,
+      },
+      {
+        apiBaseUrl: s.apiBaseUrl,
+        sessionId: s.sessionId,
+      },
     );
     if (!r.binding) {
-      if ((y(), n)) {
+      y();
+      if (n) {
         logForDebugging(`[bridge:projects] binding gone (${r.reason}, ${e}) \u2014 dropping the reply mount`);
         let i = n;
-        ((n = null), await h(i));
+        n = null;
+        await h(i);
       }
       return;
     }
-    if ((S(), n && n.binding.mountUrl === r.binding.mountUrl)) {
+    S();
+    if (n && n.binding.mountUrl === r.binding.mountUrl) {
       if (C(n)) {
         logForDebugging(`[bridge:projects] the reply mount's dial had failed \u2014 dialing again (${e})`);
         let i = n;
-        if (((n = null), await h(i), u)) return;
+        n = null;
+        await h(i);
+        if (u) return;
         await T(r.binding);
         return;
       }
-      (P(n, r.binding), (n.binding = r.binding));
+      P(n, r.binding);
+      n.binding = r.binding;
       return;
     }
-    (logForDebugging(`[bridge:projects] joined to a project thread (${e}) \u2014 mounting the reply server`),
-      await T(r.binding));
+    logForDebugging(`[bridge:projects] joined to a project thread (${e}) \u2014 mounting the reply server`);
+    await T(r.binding);
   }
-  async function T(e) {
+  async function T(binding) {
     if (
       getAppState().mcp.clients.some((client) => client.name === HEARTHBOT) ||
       HEARTHBOT in getDynamicMcpState().configs ||
       k()
     ) {
-      (logForDebugging(
+      logForDebugging(
         `[bridge:projects] reply mount skipped: a server named ${HEARTHBOT} is already configured`,
-        { level: "warn" },
-      ),
-        logFeatureSad("bridge_projects_mcp_mount", "name_taken"));
+        {
+          level: "warn",
+        },
+      );
+      logFeatureSad("bridge_projects_mcp_mount", "name_taken");
       return;
     }
-    let o = registerCliOwnedConfig(
-        { ...hearthMcpServerConfig(e.mountUrl, s.sessionId), scope: "dynamic", role: "comms" },
-        { getBearerToken: s.getBearerToken },
-      ),
-      r = { binding: e, config: o, allowRules: [] };
-    if (
-      ((n = r),
-      setAppState((i) =>
-        setMcpClientInAppState(i, HEARTHBOT, {
-          client: { name: HEARTHBOT, type: "pending", config: o },
-          tools: [],
-          commands: [],
-        }),
-      ),
-      !p)
-    )
+    let config = registerCliOwnedConfig(
+      {
+        ...hearthMcpServerConfig(binding.mountUrl, s.sessionId),
+        scope: "dynamic",
+        role: "comms",
+      },
+      {
+        getBearerToken: s.getBearerToken,
+      },
+    );
+    let r = {
+      binding,
+      config,
+      allowRules: [],
+    };
+    n = r;
+    setAppState((i) =>
+      setMcpClientInAppState(i, HEARTHBOT, {
+        client: {
+          name: HEARTHBOT,
+          type: "pending",
+          config,
+        },
+        tools: [],
+        commands: [],
+      }),
+    );
+    if (!p)
       r.allowRules = O(
-        e.autoAllowTools.map((autoAllowTool) =>
-          formatPermissionRule({ toolName: buildMcpToolName(HEARTHBOT, autoAllowTool) }),
+        binding.autoAllowTools.map((autoAllowTool) =>
+          formatPermissionRule({
+            toolName: buildMcpToolName(HEARTHBOT, autoAllowTool),
+          }),
         ),
       );
     await U(r);
   }
   async function U(e) {
-    let o = identityEpoch(),
-      r;
+    let attemptEpoch = identityEpoch();
+    let r;
     try {
       r = {
-        ...(await j().reconnectMcpServerImpl(HEARTHBOT, e.config, s.storageV5, s.credentials)),
-        attemptEpoch: o,
+        ...(await mcpClientModule().reconnectMcpServerImpl(HEARTHBOT, e.config, s.storageV5, s.credentials)),
+        attemptEpoch,
       };
     } catch (error) {
-      (logForDebugging(`[bridge:projects] reply mount connect threw: ${errorMessage(error)}`, {
+      logForDebugging(`[bridge:projects] reply mount connect threw: ${errorMessage(error)}`, {
         level: "warn",
-      }),
-        (r = {
-          client: { name: HEARTHBOT, type: "failed", config: e.config, error: "Connection failed" },
-          tools: [],
-          commands: [],
-          attemptEpoch: o,
-        }));
+      });
+      r = {
+        client: {
+          name: HEARTHBOT,
+          type: "failed",
+          config: e.config,
+          error: "Connection failed",
+        },
+        tools: [],
+        commands: [],
+        attemptEpoch,
+      };
     }
     if (n !== e) {
-      if (r.client.type === "connected") await j().detachAndCloseConnection(r.client);
+      if (r.client.type === "connected") await mcpClientModule().detachAndCloseConnection(r.client);
       return;
     }
     let i = applyMcpReconnect(s.stores, HEARTHBOT, r);
     if (i !== "applied") {
-      (logFeatureSad("bridge_projects_mcp_mount", i), S());
+      logFeatureSad("bridge_projects_mcp_mount", i);
+      S();
       return;
     }
-    if (r.client.type === "connected")
-      (y(), noteHearthDegraded(HEARTHBOT, void 0), logFeatureOk("bridge_projects_mcp_mount"));
-    else if (F(r.client))
-      if (
-        (noteHearthDegraded(
-          HEARTHBOT,
-          Object.assign(Error("reply mount dial failed"), { mcpErrorSource: "downstream_unreachable" }),
-        ),
-        B())
-      )
-        logFeatureSad("bridge_projects_mcp_mount", "settled_failed_retrying");
+    if (r.client.type === "connected") {
+      y();
+      noteHearthDegraded(HEARTHBOT, undefined);
+      logFeatureOk("bridge_projects_mcp_mount");
+    } else if (isRetryableMountFailure(r.client)) {
+      noteHearthDegraded(
+        HEARTHBOT,
+        Object.assign(Error("reply mount dial failed"), {
+          mcpErrorSource: "downstream_unreachable",
+        }),
+      );
+      if (B()) logFeatureSad("bridge_projects_mcp_mount", "settled_failed_retrying");
       else logFeatureBad("bridge_projects_mcp_mount", "settled_failed");
-    else
+    } else
       logFeatureBad(
         "bridge_projects_mcp_mount",
         r.client.type === "failed"
@@ -212,7 +243,7 @@ function createHeadlessHearthMount(s) {
   }
   function C(e) {
     let found = getAppState().mcp.clients.find((client) => client.name === HEARTHBOT);
-    return found !== void 0 && found.config === e.config && F(found);
+    return found !== undefined && found.config === e.config && isRetryableMountFailure(found);
   }
   async function h(e) {
     _(e.allowRules);
@@ -221,23 +252,23 @@ function createHeadlessHearthMount(s) {
       await D(e.config);
       return;
     }
-    let r = getMcpPrefix(HEARTHBOT);
-    (setAppState((i) => {
-      let { [HEARTHBOT]: R, ...b } = i.mcp.resources,
-        { [HEARTHBOT]: I, ...H } = i.mcp.resourceTemplates;
+    let mcpPrefix = getMcpPrefix(HEARTHBOT);
+    setAppState((i) => {
+      let { [HEARTHBOT]: R, ...b } = i.mcp.resources;
+      let { [HEARTHBOT]: I, ...H } = i.mcp.resourceTemplates;
       return {
         ...i,
         mcp: {
           ...i.mcp,
           clients: i.mcp.clients.filter((client) => client !== found),
-          tools: i.mcp.tools.filter((tool) => !isToolFromMcpServer(tool, HEARTHBOT, r)),
+          tools: i.mcp.tools.filter((tool) => !isToolFromMcpServer(tool, HEARTHBOT, mcpPrefix)),
           commands: i.mcp.commands.filter((command) => !commandBelongsToServer(command, HEARTHBOT)),
           resources: b,
           resourceTemplates: H,
         },
       };
-    }),
-      await D(e.config));
+    });
+    await D(e.config);
   }
   function S() {
     if (!n) return;
@@ -248,71 +279,84 @@ function createHeadlessHearthMount(s) {
     }
     logForDebugging(
       "[bridge:projects] the reply mount\u2019s name is no longer held by its own row \u2014 retracting its pre-approvals",
-      { level: "warn" },
+      {
+        level: "warn",
+      },
     );
     let o = n;
-    ((n = null), h(o));
+    n = null;
+    h(o);
   }
   function k() {
     return Object.hasOwn(s.sdkHostConfigs(), HEARTHBOT);
   }
   function x(e) {
     if (!Object.hasOwn(e, HEARTHBOT)) return;
-    if (((p = !0), !n)) return;
+    p = true;
+    if (!n) return;
     let allowRules = n.allowRules;
-    ((n.allowRules = []), _(allowRules));
+    n.allowRules = [];
+    _(allowRules);
   }
   function L() {
-    ((p = !1), S());
+    p = false;
+    S();
   }
-  function P(e, o) {
+  function P(e, binding) {
     if (p) return;
-    let mapped = o.autoAllowTools.map((autoAllowTool) =>
-        formatPermissionRule({ toolName: buildMcpToolName(HEARTHBOT, autoAllowTool) }),
-      ),
-      i = new Set(mapped),
-      R = new Set(e.allowRules),
-      filtered = e.allowRules.filter((allowRule) => !i.has(allowRule));
+    let mapped = binding.autoAllowTools.map((autoAllowTool) =>
+      formatPermissionRule({
+        toolName: buildMcpToolName(HEARTHBOT, autoAllowTool),
+      }),
+    );
+    let i = new Set(mapped);
+    let R = new Set(e.allowRules);
+    let filtered = e.allowRules.filter((allowRule) => !i.has(allowRule));
     if (filtered.length > 0) _(filtered);
-    let filtered_2 = e.allowRules.filter((allowRule) => i.has(allowRule)),
-      H = O(mapped.filter((l) => !R.has(l)));
+    let filtered_2 = e.allowRules.filter((allowRule) => i.has(allowRule));
+    let H = O(mapped.filter((l) => !R.has(l)));
     e.allowRules = [...filtered_2, ...H];
   }
   function O(e) {
     if (u) return [];
-    let o = buildSessionAllowRuleUpdates(e);
-    return (A((r) => applyMcpMountAllowRules(r, o)), o);
+    let sessionAllowRuleUpdates = buildSessionAllowRuleUpdates(e);
+    A((r) => applyMcpMountAllowRules(r, sessionAllowRuleUpdates));
+    return sessionAllowRuleUpdates;
   }
-  function _(e) {
-    A((o) => replaceMcpMountRules(o, e, "one"));
+  function _(allowRules) {
+    A((o) => replaceMcpMountRules(o, allowRules, "one"));
   }
-  function D(e) {
-    return j()
-      .clearServerCache(HEARTHBOT, e)
-      .catch((o) => {
-        logForDebugging(`[bridge:projects] reply mount cleanup failed: ${errorMessage(o)}`, {
+  function D(config) {
+    return mcpClientModule()
+      .clearServerCache(HEARTHBOT, config)
+      .catch((error) => {
+        logForDebugging(`[bridge:projects] reply mount cleanup failed: ${errorMessage(error)}`, {
           level: "warn",
         });
       });
   }
   function V() {
-    if (((u = !0), y(), n)) {
+    u = true;
+    y();
+    if (n) {
       let allowRules = n.allowRules;
-      ((n.allowRules = []), _(allowRules));
+      n.allowRules = [];
+      _(allowRules);
     }
-    return (
-      (resolved = resolved
-        .then(async () => {
-          if (!n) return;
-          logForDebugging("[bridge:projects] dropping the reply mount");
-          let e = n;
-          ((n = null), await h(e));
-        })
-        .catch((e) => {
-          logForDebugging(`[bridge:projects] drop threw: ${errorMessage(e)}`, { level: "warn" });
-        })),
-      resolved
-    );
+    resolved = resolved
+      .then(async () => {
+        if (!n) return;
+        logForDebugging("[bridge:projects] dropping the reply mount");
+        let e = n;
+        n = null;
+        await h(e);
+      })
+      .catch((error) => {
+        logForDebugging(`[bridge:projects] drop threw: ${errorMessage(error)}`, {
+          level: "warn",
+        });
+      });
+    return resolved;
   }
   return {
     sync: E,
@@ -334,13 +378,13 @@ function createHeadlessHearthMount(s) {
   };
 }
 //@ chunk-n501v0b7.js:5889-5953 placement
-function F(s) {
+function isRetryableMountFailure(s) {
   return s.type === "failed" && !NON_RETRYABLE_MOUNT_CODES.has(s.errorCode ?? "");
 }
+//@ chunk-n501v0b7.js:5953-6081 placement
 /**
  * 挂载失败中不应重试的错误码集合（凭证被拒、策略阻止、需审批、禁用、身份变化、正在关闭）。
  */
-//@ chunk-n501v0b7.js:5953-6081 placement
 var NON_RETRYABLE_MOUNT_CODES = new Set([
   "CLI_OWNED_BEARER_REJECTED",
   "POLICY_BLOCKED",
@@ -349,5 +393,4 @@ var NON_RETRYABLE_MOUNT_CODES = new Set([
   "IDENTITY_CHANGED",
   "SHUTTING_DOWN",
 ]);
-
 export { createHeadlessHearthMount };

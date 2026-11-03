@@ -10,16 +10,15 @@
  */
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "./growthbook.js";
 
+//@ chunk-xdxvr4je.js:226-298 placement
 /**
  * tengu_violin_tip 开关（缓存值）。
  */
-//@ chunk-xdxvr4je.js:226-298 placement
 function isSleepNoticeOnCached() {
   try {
-    return getFeatureValue_CACHED_MAY_BE_STALE("tengu_violin_tip", !1) === !0;
+    return getFeatureValue_CACHED_MAY_BE_STALE("tengu_violin_tip", false) === true;
   } catch {
-    return !1;
+    return false;
   }
 }
-
 export { isSleepNoticeOnCached };

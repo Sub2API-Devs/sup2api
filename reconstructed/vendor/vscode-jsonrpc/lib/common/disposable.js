@@ -8,16 +8,19 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-t4ksmxzx.js:13140-13327 cjs-fingerprint
-var xr = x(function (Er) {
-  Object.defineProperty(Er, "__esModule", { value: !0 });
-  Er.Disposable = void 0;
-  var Tr;
-  (function (e) {
-    function r(n) {
-      return { dispose: n };
+var require_disposable = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.Disposable = undefined;
+  var Disposable;
+  (function (Disposable) {
+    function create(func) {
+      return {
+        dispose: func,
+      };
     }
-    e.create = r;
-  })(Tr || (Er.Disposable = Tr = {}));
+    Disposable.create = create;
+  })(Disposable || (cjsExports.Disposable = Disposable = {}));
 });
-
-export { xr };
+export { require_disposable };

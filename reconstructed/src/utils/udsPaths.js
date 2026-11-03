@@ -11,22 +11,21 @@
 import { resolve } from "path";
 import { createHash } from "crypto";
 import { parseNamedPipeName, asciiLowerCase } from "./peerAddress.js";
-import { Eh } from "./pathClassification.js";
+import { hasDotDotSegment } from "./pathClassification.js";
 
+//@ chunk-e7z1g8a9.js:4216-4318 placement
 /**
  * 规范化 socket 路径：命名管道转为小写管道路径，否则解析为绝对路径（特殊地址为 undefined）。
  */
-//@ chunk-e7z1g8a9.js:4216-4318 placement
 function canonicalSocketPath(e) {
-  let n = parseNamedPipeName(e);
-  if (n !== void 0) return `\\\\.\\pipe\\${asciiLowerCase(n)}`;
-  if (Eh(e)) return;
+  let namedPipeName = parseNamedPipeName(e);
+  if (namedPipeName !== undefined) return `\\\\.\\pipe\\${asciiLowerCase(namedPipeName)}`;
+  if (hasDotDotSegment(e)) return;
   return resolve(e);
 }
 //@ chunk-e7z1g8a9.js:4318-4406 placement
 function hashCanonicalSocketPath(e) {
   let n = canonicalSocketPath(e);
-  return n === void 0 ? void 0 : createHash("sha256").update(n).digest("hex");
+  return n === undefined ? undefined : createHash("sha256").update(n).digest("hex");
 }
-
 export { canonicalSocketPath, hashCanonicalSocketPath };

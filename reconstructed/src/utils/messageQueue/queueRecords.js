@@ -9,65 +9,72 @@
  * attribution: placement 7
  */
 import { isPromptHookObserved } from "../telemetry/sessionTracing.js";
-import { Znt } from "../historyFile.js";
-import { ge } from "../identity.js";
+import { isScreeningPendingEntry } from "../historyFile.js";
+import { identity as identity_2 } from "../identity.js";
 import { pu } from "../../../vendor/@growthbook/growthbook/dist/bundles/esm.js";
 import { isAbortError } from "../errors.js";
 import { logForDebugging } from "../debug.js";
 import { logError } from "../log.js";
 import { registerCleanup, isCleanupStarted } from "../cleanupRegistry.js";
 
+//@ chunk-e6aww6q8.js:548224-548377 placement
 /**
  * 队列记录的文本：提交过的取提交文本，否则在不被钩子观察时取原值。
  */
-//@ chunk-e6aww6q8.js:548224-548377 placement
 function queueRecordText(e) {
-  let { promptSubmitted: promptSubmitted, value: r } = e,
-    s = e.mode === "prompt" && isPromptHookObserved("queue-record"),
-    h = typeof r === "string" && !Znt(e) && !s;
-  return promptSubmitted?.text ?? (h ? r : void 0);
+  let { promptSubmitted, value: r } = e;
+  let s = e.mode === "prompt" && isPromptHookObserved("queue-record");
+  let h = typeof r === "string" && !isScreeningPendingEntry(e) && !s;
+  return promptSubmitted?.text ?? (h ? r : undefined);
 }
 //@ chunk-e6aww6q8.js:548377-548410 placement
-var y0 = ge(pu(), (e) => e.set(null));
+var currentQueueRecordChain = identity_2(pu(), (e) => e.set(null));
 //@ chunk-e6aww6q8.js:548410-548489 placement
-function kXs(e) {
+/**
+ * 登记队列记录链并在完成（成功或失败）后自动清除。
+ */
+function trackQueueRecordChain(e) {
   let n = () => {
-    if (y0.get() === e) y0.set(null);
+    if (currentQueueRecordChain.get() === e) currentQueueRecordChain.set(null);
   };
-  (y0.set(e), e.then(n, n));
+  currentQueueRecordChain.set(e);
+  e.then(n, n);
 }
 //@ chunk-e6aww6q8.js:548489-548523 placement
-var FKr = ge(pu(), (e) => e.set(null));
+/**
+ * 宿主隔离的队列记录文本构造器存储。
+ */
+var queueRecordTextBuilder = identity_2(pu(), (e) => e.set(null));
 //@ chunk-e6aww6q8.js:548523-548536 placement
-var RIt = 1000;
+var RECORD_VISIBILITY_TTL_MS = 1000;
 //@ chunk-e6aww6q8.js:548536-548676 placement
-function logQueueRecordError(e) {
+function logQueueRecordError(error) {
   try {
-    if (isAbortError(e)) {
+    if (isAbortError(error)) {
       logForDebugging("A queue record's chain was aborted");
       return;
     }
-    logError(e);
+    logError(error);
   } catch {
     logForDebugging("A queue record failed with an unreadable error");
   }
 }
+//@ chunk-e6aww6q8.js:548676-549847 placement
 /**
  * 创建队列记录写入器：需经钩子改写的记录按序等待（最多 1 秒），之后按原顺序写出。
  */
-//@ chunk-e6aww6q8.js:548676-549847 placement
-function createQueueRecorder(e) {
-  let n = [],
-    r = new Map(),
-    s = new Map(),
-    h = !1,
-    y = !1;
+function createQueueRecorder(recordQueueOperation) {
+  let n = [];
+  let r = new Map();
+  let s = new Map();
+  let h = false;
+  let y = false;
   function S() {
     let Se = n[0];
-    while (Se !== void 0 && !r.has(Se) && !s.has(Se)) {
+    while (Se !== undefined && !r.has(Se) && !s.has(Se)) {
       n.shift();
       try {
-        e(Se);
+        recordQueueOperation(Se);
       } catch (error) {
         logQueueRecordError(error);
       }
@@ -75,8 +82,8 @@ function createQueueRecorder(e) {
     }
   }
   function w(Se) {
-    let ke = y0.get(),
-      we = ke === null || ke === Se;
+    let ke = currentQueueRecordChain.get();
+    let we = ke === null || ke === Se;
     for (let [Ee, Ae] of we ? s : []) {
       s.delete(Ee);
       try {
@@ -89,63 +96,78 @@ function createQueueRecorder(e) {
   }
   function L(Se, ke) {
     let we = r.get(Se);
-    if (we === void 0) return;
-    (clearTimeout(we), r.delete(Se), (n[n.indexOf(Se)] = ke), w());
+    if (we === undefined) return;
+    clearTimeout(we);
+    r.delete(Se);
+    n[n.indexOf(Se)] = ke;
+    w();
   }
   function G() {
-    y = !0;
+    y = true;
     for (let Se of r.values()) clearTimeout(Se);
-    (r.clear(), s.clear(), S());
+    r.clear();
+    s.clear();
+    S();
   }
   function q() {
-    if (!h) ((h = !0), registerCleanup(G));
+    if (!h) {
+      h = true;
+      registerCleanup(G);
+    }
   }
-  function Z(Se, ke, we) {
-    let Ee = FKr.get()?.(ke, we);
-    if (Ee === void 0) return !1;
-    return (
-      q(),
-      r.set(Se, setTimeout(L, RIt, Se, Se).unref()),
-      Promise.resolve(Ee).then(
-        (Ae) => {
-          if (typeof Ae === "string") {
-            L(Se, { ...Se, content: Ae });
-            return;
-          }
-          (logQueueRecordError(Error("A queue record came back from its hooks no text")), L(Se, Se));
-        },
-        (Ae) => {
-          (logQueueRecordError(Ae), L(Se, Se));
-        },
-      ),
-      !0
+  function Z(Se, content, we) {
+    let Ee = queueRecordTextBuilder.get()?.(content, we);
+    if (Ee === undefined) return false;
+    q();
+    r.set(Se, setTimeout(L, RECORD_VISIBILITY_TTL_MS, Se, Se).unref());
+    Promise.resolve(Ee).then(
+      (Ae) => {
+        if (typeof Ae === "string") {
+          L(Se, {
+            ...Se,
+            content: Ae,
+          });
+          return;
+        }
+        logQueueRecordError(Error("A queue record came back from its hooks no text"));
+        L(Se, Se);
+      },
+      (error) => {
+        logQueueRecordError(error);
+        L(Se, Se);
+      },
     );
+    return true;
   }
   return (Se, ke) => {
-    let { content: content } = Se,
-      Ee = typeof content === "string" && !y && !isCleanupStarted(),
-      Ae = y0.get();
+    let { content } = Se;
+    let Ee = typeof content === "string" && !y && !isCleanupStarted();
+    let Ae = currentQueueRecordChain.get();
     if (Ee && (Ae !== null || s.size > 0)) {
-      if ((n.push(Se), s.set(Se, () => Z(Se, content, ke)), q(), Ae !== null && s.size === 1))
+      n.push(Se);
+      s.set(Se, () => Z(Se, content, ke));
+      q();
+      if (Ae !== null && s.size === 1)
         Ae.then(
           () => w(Ae),
           () => w(Ae),
         );
       return;
     }
-    let Ie = !1;
+    let Ie = false;
     try {
       Ie = Ee && Z(Se, content, ke);
     } catch (error) {
-      (logQueueRecordError(error), n.push(Se), S());
+      logQueueRecordError(error);
+      n.push(Se);
+      S();
       return;
     }
     if (!Ie && n.length === 0) {
-      e(Se);
+      recordQueueOperation(Se);
       return;
     }
     n.push(Se);
   };
 }
-
-export { createQueueRecorder, queueRecordText, FKr, kXs };
+export { createQueueRecorder, queueRecordText, queueRecordTextBuilder, trackQueueRecordChain };

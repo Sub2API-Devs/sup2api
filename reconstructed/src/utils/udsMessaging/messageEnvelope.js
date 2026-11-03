@@ -11,20 +11,22 @@
 import { randomUUID as Ude } from "crypto";
 
 //@ chunk-0xhrb5qv.js:228-236 placement
-var n = 1;
+var ENVELOPE_VERSION = 1;
 //@ chunk-0xhrb5qv.js:236-262 placement
-function r() {
+function newMessageId() {
   return Ude();
 }
 //@ chunk-0xhrb5qv.js:262-334 placement
-var s = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+var UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 //@ chunk-0xhrb5qv.js:334-388 placement
 function isUuid(t) {
-  return typeof t === "string" && s.test(t);
+  return typeof t === "string" && UUID_RE.test(t);
 }
 //@ chunk-0xhrb5qv.js:388-428 placement
 function createMessageEnvelope() {
-  return { msgV: n, msg_id: r() };
+  return {
+    msgV: ENVELOPE_VERSION,
+    msg_id: newMessageId(),
+  };
 }
-
 export { isUuid, createMessageEnvelope };

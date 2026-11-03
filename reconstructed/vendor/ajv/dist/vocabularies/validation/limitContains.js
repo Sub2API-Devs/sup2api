@@ -6,21 +6,23 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../runtime/bun-runtime.js";
-import { ew } from "../../compile/util.js";
+import { require_util_2 as require_util } from "../../compile/util.js";
 
 //@ chunk-1r4fv9mg.js:2999-3298 cjs-fingerprint
-var pe = x(function (fe) {
-  Object.defineProperty(fe, "__esModule", { value: !0 });
-  var le = ew(),
-    nt = {
-      keyword: ["maxContains", "minContains"],
-      type: "array",
-      schemaType: "number",
-      code({ keyword: e, parentSchema: r, it: a }) {
-        if (r.contains === void 0) le.checkStrictMode(a, `"${e}" without "contains" is ignored`);
-      },
-    };
-  fe.default = nt;
+var require_limitContains = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  var util_1 = require_util();
+  var def = {
+    keyword: ["maxContains", "minContains"],
+    type: "array",
+    schemaType: "number",
+    code({ keyword, parentSchema, it }) {
+      if (parentSchema.contains === undefined)
+        util_1.checkStrictMode(it, `"${keyword}" without "contains" is ignored`);
+    },
+  };
+  cjsExports.default = def;
 });
-
-export { pe };
+export { require_limitContains };

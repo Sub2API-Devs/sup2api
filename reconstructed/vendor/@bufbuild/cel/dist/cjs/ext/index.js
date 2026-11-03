@@ -6,19 +6,20 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../../runtime/bun-runtime.js";
-import { aM } from "./strings.js";
+import { require_strings } from "./strings.js";
 
 //@ chunk-fq0cr76a.js:638468-638660 cjs-fingerprint
-var lM = x(function (bv) {
-  Object.defineProperty(bv, "__esModule", { value: !0 });
-  bv.strings = void 0;
-  var Mae = aM();
-  Object.defineProperty(bv, "strings", {
-    enumerable: !0,
+var require_ext = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.strings = undefined;
+  var strings_js_1 = require_strings();
+  Object.defineProperty(cjsExports, "strings", {
+    enumerable: true,
     get: function () {
-      return Mae.default;
+      return strings_js_1.default;
     },
   });
 });
-
-export { lM };
+export { require_ext };

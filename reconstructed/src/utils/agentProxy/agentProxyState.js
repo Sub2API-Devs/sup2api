@@ -12,25 +12,39 @@ import { HostScoped } from "../hostScoped.js";
 import { getRootSession } from "../../bootstrap/state.js";
 
 //@ chunk-551t875q.js:261-309 placement
-class n {
-  endpoint = void 0;
-  set(e) {
-    this.endpoint = e;
+/**
+ * 保存 agent 代理端点的小状态类。
+ */
+class AgentProxyEndpointState {
+  endpoint = undefined;
+  set(endpoint) {
+    this.endpoint = endpoint;
   }
 }
 //@ chunk-551t875q.js:309-332 placement
-var t = new HostScoped(() => new n());
+/**
+ * 按宿主隔离的 agent 代理端点状态。
+ */
+var agentProxyStateByHost = new HostScoped(() => new AgentProxyEndpointState());
 //@ chunk-551t875q.js:332-367 placement
-function d() {
-  return t.of(getRootSession().host);
+/**
+ * 取出当前宿主的 agent 代理端点状态。
+ */
+function getAgentProxyEndpointState() {
+  return agentProxyStateByHost.of(getRootSession().host);
 }
 //@ chunk-551t875q.js:367-394 placement
-function Mir(e) {
-  d().set(e);
+/**
+ * 设置当前 agent 代理端点。
+ */
+function setAgentProxyEndpoint(e) {
+  getAgentProxyEndpointState().set(e);
 }
 //@ chunk-551t875q.js:394-429 placement
-function Wci() {
-  return d().endpoint;
+/**
+ * 读取当前 agent 代理端点。
+ */
+function getAgentProxyEndpoint() {
+  return getAgentProxyEndpointState().endpoint;
 }
-
-export { Mir, Wci };
+export { setAgentProxyEndpoint, getAgentProxyEndpoint };

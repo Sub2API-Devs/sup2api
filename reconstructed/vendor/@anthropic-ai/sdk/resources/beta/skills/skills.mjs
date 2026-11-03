@@ -5,83 +5,115 @@
  * pieces: chunk-hwmsct5x.js (1)
  * attribution: esm-fingerprint 1
  */
-import { Y } from "../../../core/resource.mjs";
-import { go } from "./versions.mjs";
+import { APIResource } from "../../../core/resource.mjs";
+import { Versions_2 } from "./versions.mjs";
 import { ut } from "../../../internal/uploads.mjs";
-import { T } from "../../../internal/headers.mjs";
+import { buildHeaders } from "../../../internal/headers.mjs";
 import { I } from "../../../internal/utils/path.mjs";
-import { ee } from "../../../core/pagination.mjs";
+import { TokenPage } from "../../../core/pagination.mjs";
 
 //@ chunk-hwmsct5x.js:136978-138134 esm-fingerprint
-var ti = (() => {
-  class e extends Y {
+var Skills = (() => {
+  class Skills extends APIResource {
     constructor() {
       super(...arguments);
-      this.versions = new go(this._client);
+      this.versions = new Versions_2(this._client);
     }
-    create(n, r) {
-      let { betas: betas, workspace_id: workspace_id, ...y } = n;
+    create(params, options) {
+      let { betas, workspace_id, ...body } = params;
       return this._client.post(
         "/v1/skills?beta=true",
         ut(
           {
-            body: y,
-            ...r,
-            headers: T([
+            body,
+            ...options,
+            headers: buildHeaders([
               {
-                ...(betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0),
-                ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0),
+                ...(betas?.toString() != null
+                  ? {
+                      "anthropic-beta": betas?.toString(),
+                    }
+                  : undefined),
+                ...(workspace_id != null
+                  ? {
+                      "anthropic-workspace-id": workspace_id,
+                    }
+                  : undefined),
               },
-              r?.headers,
+              options?.headers,
             ]),
           },
           this._client,
-          !1,
+          false,
         ),
       );
     }
-    retrieve(n, r = {}, s) {
-      let { betas: betas, workspace_id: workspace_id } = r ?? {};
-      return this._client.get(I`/v1/skills/${n}?beta=true`, {
-        ...s,
-        headers: T([
+    retrieve(skillID, params = {}, options) {
+      let { betas, workspace_id } = params ?? {};
+      return this._client.get(I`/v1/skills/${skillID}?beta=true`, {
+        ...options,
+        headers: buildHeaders([
           {
-            ...(betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0),
-            ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0),
+            ...(betas?.toString() != null
+              ? {
+                  "anthropic-beta": betas?.toString(),
+                }
+              : undefined),
+            ...(workspace_id != null
+              ? {
+                  "anthropic-workspace-id": workspace_id,
+                }
+              : undefined),
           },
-          s?.headers,
+          options?.headers,
         ]),
       });
     }
-    list(n = {}, r) {
-      let { betas: betas, workspace_id: workspace_id, ...y } = n ?? {};
-      return this._client.getAPIList("/v1/skills?beta=true", ee, {
-        query: y,
-        ...r,
-        headers: T([
+    list(params = {}, options) {
+      let { betas, workspace_id, ...query } = params ?? {};
+      return this._client.getAPIList("/v1/skills?beta=true", TokenPage, {
+        query,
+        ...options,
+        headers: buildHeaders([
           {
-            ...(betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0),
-            ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0),
+            ...(betas?.toString() != null
+              ? {
+                  "anthropic-beta": betas?.toString(),
+                }
+              : undefined),
+            ...(workspace_id != null
+              ? {
+                  "anthropic-workspace-id": workspace_id,
+                }
+              : undefined),
           },
-          r?.headers,
+          options?.headers,
         ]),
       });
     }
-    delete(n, r = {}, s) {
-      let { betas: betas, workspace_id: workspace_id } = r ?? {};
-      return this._client.delete(I`/v1/skills/${n}?beta=true`, {
-        ...s,
-        headers: T([
+    delete(skillID, params = {}, options) {
+      let { betas, workspace_id } = params ?? {};
+      return this._client.delete(I`/v1/skills/${skillID}?beta=true`, {
+        ...options,
+        headers: buildHeaders([
           {
-            ...(betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0),
-            ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0),
+            ...(betas?.toString() != null
+              ? {
+                  "anthropic-beta": betas?.toString(),
+                }
+              : undefined),
+            ...(workspace_id != null
+              ? {
+                  "anthropic-workspace-id": workspace_id,
+                }
+              : undefined),
           },
-          s?.headers,
+          options?.headers,
         ]),
       });
     }
   }
-  return ((e.Versions = go), e);
+  Skills.Versions = Versions_2;
+  return Skills;
 })();
-
-export { ti };
+export { Skills };

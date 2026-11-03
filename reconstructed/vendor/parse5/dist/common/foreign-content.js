@@ -6,226 +6,326 @@
  * attribution: esm-fingerprint 9
  */
 import { E, g } from "../../lib/common/html.js";
-import { u, x } from "./html.js";
+import { TAG_ID, getTagID } from "./html.js";
 
 //@ chunk-6ja29j2n.js:129218-131766 esm-fingerprint
-var We = { TEXT_HTML: "text/html", APPLICATION_XML: "application/xhtml+xml" },
-  DEFINITIONURL = "definitionurl",
-  DEFINITIONURL_2 = "definitionURL",
-  Gt = new Map(
-    [
-      "attributeName",
-      "attributeType",
-      "baseFrequency",
-      "baseProfile",
-      "calcMode",
-      "clipPathUnits",
-      "diffuseConstant",
-      "edgeMode",
-      "filterUnits",
-      "glyphRef",
-      "gradientTransform",
-      "gradientUnits",
-      "kernelMatrix",
-      "kernelUnitLength",
-      "keyPoints",
-      "keySplines",
-      "keyTimes",
-      "lengthAdjust",
-      "limitingConeAngle",
-      "markerHeight",
-      "markerUnits",
-      "markerWidth",
-      "maskContentUnits",
-      "maskUnits",
-      "numOctaves",
-      "pathLength",
-      "patternContentUnits",
-      "patternTransform",
-      "patternUnits",
-      "pointsAtX",
-      "pointsAtY",
-      "pointsAtZ",
-      "preserveAlpha",
-      "preserveAspectRatio",
-      "primitiveUnits",
-      "refX",
-      "refY",
-      "repeatCount",
-      "repeatDur",
-      "requiredExtensions",
-      "requiredFeatures",
-      "specularConstant",
-      "specularExponent",
-      "spreadMethod",
-      "startOffset",
-      "stdDeviation",
-      "stitchTiles",
-      "surfaceScale",
-      "systemLanguage",
-      "tableValues",
-      "targetX",
-      "targetY",
-      "textLength",
-      "viewBox",
-      "viewTarget",
-      "xChannelSelector",
-      "yChannelSelector",
-      "zoomAndPan",
-    ].map((e) => [e.toLowerCase(), e]),
-  ),
-  Wt = new Map([
-    ["xlink:actuate", { prefix: "xlink", name: "actuate", namespace: E.XLINK }],
-    ["xlink:arcrole", { prefix: "xlink", name: "arcrole", namespace: E.XLINK }],
-    ["xlink:href", { prefix: "xlink", name: "href", namespace: E.XLINK }],
-    ["xlink:role", { prefix: "xlink", name: "role", namespace: E.XLINK }],
-    ["xlink:show", { prefix: "xlink", name: "show", namespace: E.XLINK }],
-    ["xlink:title", { prefix: "xlink", name: "title", namespace: E.XLINK }],
-    ["xlink:type", { prefix: "xlink", name: "type", namespace: E.XLINK }],
-    ["xml:lang", { prefix: "xml", name: "lang", namespace: E.XML }],
-    ["xml:space", { prefix: "xml", name: "space", namespace: E.XML }],
-    ["xmlns", { prefix: "", name: "xmlns", namespace: E.XMLNS }],
-    ["xmlns:xlink", { prefix: "xmlns", name: "xlink", namespace: E.XMLNS }],
-  ]),
-  qt = new Map(
-    [
-      "altGlyph",
-      "altGlyphDef",
-      "altGlyphItem",
-      "animateColor",
-      "animateMotion",
-      "animateTransform",
-      "clipPath",
-      "feBlend",
-      "feColorMatrix",
-      "feComponentTransfer",
-      "feComposite",
-      "feConvolveMatrix",
-      "feDiffuseLighting",
-      "feDisplacementMap",
-      "feDistantLight",
-      "feFlood",
-      "feFuncA",
-      "feFuncB",
-      "feFuncG",
-      "feFuncR",
-      "feGaussianBlur",
-      "feImage",
-      "feMerge",
-      "feMergeNode",
-      "feMorphology",
-      "feOffset",
-      "fePointLight",
-      "feSpecularLighting",
-      "feSpotLight",
-      "feTile",
-      "feTurbulence",
-      "foreignObject",
-      "glyphRef",
-      "linearGradient",
-      "radialGradient",
-      "textPath",
-    ].map((e) => [e.toLowerCase(), e]),
-  ),
-  Xt = new Set([
-    u.B,
-    u.BIG,
-    u.BLOCKQUOTE,
-    u.BODY,
-    u.BR,
-    u.CENTER,
-    u.CODE,
-    u.DD,
-    u.DIV,
-    u.DL,
-    u.DT,
-    u.EM,
-    u.EMBED,
-    u.H1,
-    u.H2,
-    u.H3,
-    u.H4,
-    u.H5,
-    u.H6,
-    u.HEAD,
-    u.HR,
-    u.I,
-    u.IMG,
-    u.LI,
-    u.LISTING,
-    u.MENU,
-    u.META,
-    u.NOBR,
-    u.OL,
-    u.P,
-    u.PRE,
-    u.RUBY,
-    u.S,
-    u.SMALL,
-    u.SPAN,
-    u.STRONG,
-    u.STRIKE,
-    u.SUB,
-    u.SUP,
-    u.TABLE,
-    u.TT,
-    u.U,
-    u.UL,
-    u.VAR,
-  ]);
+var MIME_TYPES = {
+  TEXT_HTML: "text/html",
+  APPLICATION_XML: "application/xhtml+xml",
+};
+var DEFINITION_URL_ATTR = "definitionurl";
+var ADJUSTED_DEFINITION_URL_ATTR = "definitionURL";
+var SVG_ATTRS_ADJUSTMENT_MAP = new Map(
+  [
+    "attributeName",
+    "attributeType",
+    "baseFrequency",
+    "baseProfile",
+    "calcMode",
+    "clipPathUnits",
+    "diffuseConstant",
+    "edgeMode",
+    "filterUnits",
+    "glyphRef",
+    "gradientTransform",
+    "gradientUnits",
+    "kernelMatrix",
+    "kernelUnitLength",
+    "keyPoints",
+    "keySplines",
+    "keyTimes",
+    "lengthAdjust",
+    "limitingConeAngle",
+    "markerHeight",
+    "markerUnits",
+    "markerWidth",
+    "maskContentUnits",
+    "maskUnits",
+    "numOctaves",
+    "pathLength",
+    "patternContentUnits",
+    "patternTransform",
+    "patternUnits",
+    "pointsAtX",
+    "pointsAtY",
+    "pointsAtZ",
+    "preserveAlpha",
+    "preserveAspectRatio",
+    "primitiveUnits",
+    "refX",
+    "refY",
+    "repeatCount",
+    "repeatDur",
+    "requiredExtensions",
+    "requiredFeatures",
+    "specularConstant",
+    "specularExponent",
+    "spreadMethod",
+    "startOffset",
+    "stdDeviation",
+    "stitchTiles",
+    "surfaceScale",
+    "systemLanguage",
+    "tableValues",
+    "targetX",
+    "targetY",
+    "textLength",
+    "viewBox",
+    "viewTarget",
+    "xChannelSelector",
+    "yChannelSelector",
+    "zoomAndPan",
+  ].map((attr) => [attr.toLowerCase(), attr]),
+);
+var XML_ATTRS_ADJUSTMENT_MAP = new Map([
+  [
+    "xlink:actuate",
+    {
+      prefix: "xlink",
+      name: "actuate",
+      namespace: E.XLINK,
+    },
+  ],
+  [
+    "xlink:arcrole",
+    {
+      prefix: "xlink",
+      name: "arcrole",
+      namespace: E.XLINK,
+    },
+  ],
+  [
+    "xlink:href",
+    {
+      prefix: "xlink",
+      name: "href",
+      namespace: E.XLINK,
+    },
+  ],
+  [
+    "xlink:role",
+    {
+      prefix: "xlink",
+      name: "role",
+      namespace: E.XLINK,
+    },
+  ],
+  [
+    "xlink:show",
+    {
+      prefix: "xlink",
+      name: "show",
+      namespace: E.XLINK,
+    },
+  ],
+  [
+    "xlink:title",
+    {
+      prefix: "xlink",
+      name: "title",
+      namespace: E.XLINK,
+    },
+  ],
+  [
+    "xlink:type",
+    {
+      prefix: "xlink",
+      name: "type",
+      namespace: E.XLINK,
+    },
+  ],
+  [
+    "xml:lang",
+    {
+      prefix: "xml",
+      name: "lang",
+      namespace: E.XML,
+    },
+  ],
+  [
+    "xml:space",
+    {
+      prefix: "xml",
+      name: "space",
+      namespace: E.XML,
+    },
+  ],
+  [
+    "xmlns",
+    {
+      prefix: "",
+      name: "xmlns",
+      namespace: E.XMLNS,
+    },
+  ],
+  [
+    "xmlns:xlink",
+    {
+      prefix: "xmlns",
+      name: "xlink",
+      namespace: E.XMLNS,
+    },
+  ],
+]);
+var SVG_TAG_NAMES_ADJUSTMENT_MAP = new Map(
+  [
+    "altGlyph",
+    "altGlyphDef",
+    "altGlyphItem",
+    "animateColor",
+    "animateMotion",
+    "animateTransform",
+    "clipPath",
+    "feBlend",
+    "feColorMatrix",
+    "feComponentTransfer",
+    "feComposite",
+    "feConvolveMatrix",
+    "feDiffuseLighting",
+    "feDisplacementMap",
+    "feDistantLight",
+    "feFlood",
+    "feFuncA",
+    "feFuncB",
+    "feFuncG",
+    "feFuncR",
+    "feGaussianBlur",
+    "feImage",
+    "feMerge",
+    "feMergeNode",
+    "feMorphology",
+    "feOffset",
+    "fePointLight",
+    "feSpecularLighting",
+    "feSpotLight",
+    "feTile",
+    "feTurbulence",
+    "foreignObject",
+    "glyphRef",
+    "linearGradient",
+    "radialGradient",
+    "textPath",
+  ].map((tn) => [tn.toLowerCase(), tn]),
+);
+var EXITS_FOREIGN_CONTENT = new Set([
+  TAG_ID.B,
+  TAG_ID.BIG,
+  TAG_ID.BLOCKQUOTE,
+  TAG_ID.BODY,
+  TAG_ID.BR,
+  TAG_ID.CENTER,
+  TAG_ID.CODE,
+  TAG_ID.DD,
+  TAG_ID.DIV,
+  TAG_ID.DL,
+  TAG_ID.DT,
+  TAG_ID.EM,
+  TAG_ID.EMBED,
+  TAG_ID.H1,
+  TAG_ID.H2,
+  TAG_ID.H3,
+  TAG_ID.H4,
+  TAG_ID.H5,
+  TAG_ID.H6,
+  TAG_ID.HEAD,
+  TAG_ID.HR,
+  TAG_ID.I,
+  TAG_ID.IMG,
+  TAG_ID.LI,
+  TAG_ID.LISTING,
+  TAG_ID.MENU,
+  TAG_ID.META,
+  TAG_ID.NOBR,
+  TAG_ID.OL,
+  TAG_ID.P,
+  TAG_ID.PRE,
+  TAG_ID.RUBY,
+  TAG_ID.S,
+  TAG_ID.SMALL,
+  TAG_ID.SPAN,
+  TAG_ID.STRONG,
+  TAG_ID.STRIKE,
+  TAG_ID.SUB,
+  TAG_ID.SUP,
+  TAG_ID.TABLE,
+  TAG_ID.TT,
+  TAG_ID.U,
+  TAG_ID.UL,
+  TAG_ID.VAR,
+]);
 //@ chunk-6ja29j2n.js:131766-131887 esm-fingerprint
-function qe(e) {
-  let tagID = e.tagID;
+function causesExit(startTagToken) {
+  let tn = startTagToken.tagID;
   return (
-    (tagID === u.FONT && e.attrs.some(({ name: n }) => n === g.COLOR || n === g.SIZE || n === g.FACE)) ||
-    Xt.has(tagID)
+    (tn === TAG_ID.FONT &&
+      startTagToken.attrs.some(({ name }) => name === g.COLOR || name === g.SIZE || name === g.FACE)) ||
+    EXITS_FOREIGN_CONTENT.has(tn)
   );
 }
 //@ chunk-6ja29j2n.js:131887-131986 esm-fingerprint
-function fe(e) {
-  for (let t = 0; t < e.attrs.length; t++)
-    if (e.attrs[t].name === DEFINITIONURL) {
-      e.attrs[t].name = DEFINITIONURL_2;
+function adjustTokenMathMLAttrs(token) {
+  for (let i = 0; i < token.attrs.length; i++)
+    if (token.attrs[i].name === DEFINITION_URL_ATTR) {
+      token.attrs[i].name = ADJUSTED_DEFINITION_URL_ATTR;
       break;
     }
 }
 //@ chunk-6ja29j2n.js:131986-132095 esm-fingerprint
-function me(e) {
-  for (let t = 0; t < e.attrs.length; t++) {
-    let a = Gt.get(e.attrs[t].name);
-    if (a != null) e.attrs[t].name = a;
+function adjustTokenSVGAttrs(token) {
+  for (let i = 0; i < token.attrs.length; i++) {
+    let adjustedAttrName = SVG_ATTRS_ADJUSTMENT_MAP.get(token.attrs[i].name);
+    if (adjustedAttrName != null) token.attrs[i].name = adjustedAttrName;
   }
 }
 //@ chunk-6ja29j2n.js:132095-132263 esm-fingerprint
-function te(e) {
-  for (let t = 0; t < e.attrs.length; t++) {
-    let a = Wt.get(e.attrs[t].name);
-    if (a) ((e.attrs[t].prefix = a.prefix), (e.attrs[t].name = a.name), (e.attrs[t].namespace = a.namespace));
+function adjustTokenXMLAttrs(token) {
+  for (let i = 0; i < token.attrs.length; i++) {
+    let adjustedAttrEntry = XML_ATTRS_ADJUSTMENT_MAP.get(token.attrs[i].name);
+    if (adjustedAttrEntry) {
+      token.attrs[i].prefix = adjustedAttrEntry.prefix;
+      token.attrs[i].name = adjustedAttrEntry.name;
+      token.attrs[i].namespace = adjustedAttrEntry.namespace;
+    }
   }
 }
 //@ chunk-6ja29j2n.js:132263-132346 esm-fingerprint
-function Xe(e) {
-  let t = qt.get(e.tagName);
-  if (t != null) ((e.tagName = t), (e.tagID = x(e.tagName)));
+function adjustTokenSVGTagName(token) {
+  let adjustedTagName = SVG_TAG_NAMES_ADJUSTMENT_MAP.get(token.tagName);
+  if (adjustedTagName != null) {
+    token.tagName = adjustedTagName;
+    token.tagID = getTagID(token.tagName);
+  }
 }
 //@ chunk-6ja29j2n.js:132346-132438 esm-fingerprint
-function Kt(e, t) {
-  return t === E.MATHML && (e === u.MI || e === u.MO || e === u.MN || e === u.MS || e === u.MTEXT);
+function isMathMLTextIntegrationPoint(tn, ns) {
+  return (
+    ns === E.MATHML &&
+    (tn === TAG_ID.MI || tn === TAG_ID.MO || tn === TAG_ID.MN || tn === TAG_ID.MS || tn === TAG_ID.MTEXT)
+  );
 }
 //@ chunk-6ja29j2n.js:132438-132696 esm-fingerprint
-function Vt(e, t, a) {
-  if (t === E.MATHML && e === u.ANNOTATION_XML) {
-    for (let n = 0; n < a.length; n++)
-      if (a[n].name === g.ENCODING) {
-        let lower = a[n].value.toLowerCase();
-        return lower === We.TEXT_HTML || lower === We.APPLICATION_XML;
+function isHtmlIntegrationPoint(tn, ns, attrs) {
+  if (ns === E.MATHML && tn === TAG_ID.ANNOTATION_XML) {
+    for (let i = 0; i < attrs.length; i++)
+      if (attrs[i].name === g.ENCODING) {
+        let value = attrs[i].value.toLowerCase();
+        return value === MIME_TYPES.TEXT_HTML || value === MIME_TYPES.APPLICATION_XML;
       }
   }
-  return t === E.SVG && (e === u.FOREIGN_OBJECT || e === u.DESC || e === u.TITLE);
+  return ns === E.SVG && (tn === TAG_ID.FOREIGN_OBJECT || tn === TAG_ID.DESC || tn === TAG_ID.TITLE);
 }
 //@ chunk-6ja29j2n.js:132696-132780 esm-fingerprint
-function Ke(e, t, a, n) {
-  return ((!n || n === E.HTML) && Vt(e, t, a)) || ((!n || n === E.MATHML) && Kt(e, t));
+function isIntegrationPoint(tn, ns, attrs, foreignNS) {
+  return (
+    ((!foreignNS || foreignNS === E.HTML) && isHtmlIntegrationPoint(tn, ns, attrs)) ||
+    ((!foreignNS || foreignNS === E.MATHML) && isMathMLTextIntegrationPoint(tn, ns))
+  );
 }
-
-export { Ke, fe, te, me, qe, Xe };
+export {
+  isIntegrationPoint,
+  adjustTokenMathMLAttrs,
+  adjustTokenXMLAttrs,
+  adjustTokenSVGAttrs,
+  causesExit,
+  adjustTokenSVGTagName,
+};

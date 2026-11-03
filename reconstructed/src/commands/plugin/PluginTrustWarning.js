@@ -11,40 +11,45 @@
 import { w } from "../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { getPluginTrustMessage } from "../../utils/plugins/marketplacePolicy.js";
-import { r } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { jsxProd_default_2 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Box } from "../../ink/components/Text.js";
-import { re } from "../../../vendor/@inquirer/figures/dist/esm/index.js";
+import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/index.js";
 
 //@ chunk-vrb44rx7.js:52001-52587 fingerprint = PluginTrustWarning (0.578)
 function PluginTrustWarning() {
-  let i = w(3),
-    h;
-  if (i[0] === MEMO_CACHE_SENTINEL) ((h = getPluginTrustMessage()), (i[0] = h));
-  else h = i[0];
-  let customMessage = h,
-    C;
-  if (i[1] === MEMO_CACHE_SENTINEL)
-    ((C = r(Text, { color: "claude", children: [re.warning, " "] })), (i[1] = C));
-  else C = i[1];
-  let x;
-  if (i[2] === MEMO_CACHE_SENTINEL)
-    ((x = r(Box, {
+  let $ = w(3);
+  let t0;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    t0 = getPluginTrustMessage();
+    $[0] = t0;
+  } else t0 = $[0];
+  let customMessage = t0;
+  let t1;
+  if ($[1] === MEMO_CACHE_SENTINEL) {
+    t1 = jsxProd_default_2(Text, {
+      color: "claude",
+      children: [figures_default.warning, " "],
+    });
+    $[1] = t1;
+  } else t1 = $[1];
+  let t2;
+  if ($[2] === MEMO_CACHE_SENTINEL) {
+    t2 = jsxProd_default_2(Box, {
       marginBottom: 1,
       children: [
-        C,
-        r(Text, {
-          dimColor: !0,
-          italic: !0,
+        t1,
+        jsxProd_default_2(Text, {
+          dimColor: true,
+          italic: true,
           children: [
             "Make sure you trust a plugin before installing, updating, or using it. Anthropic does not control what MCP servers, files, or other software are included in plugins and cannot verify that they will work as intended or that they won't change. See each plugin's homepage for more information.",
             customMessage ? ` ${customMessage}` : "",
           ],
         }),
       ],
-    })),
-      (i[2] = x));
-  else x = i[2];
-  return x;
+    });
+    $[2] = t2;
+  } else t2 = $[2];
+  return t2;
 }
-
 export { PluginTrustWarning };

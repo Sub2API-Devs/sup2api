@@ -9,43 +9,27 @@
  * attribution: placement 9
  */
 import { createWriteStream, fchmod } from "fs";
-import {
-  mkdir,
-  mkdir as mkdir_2,
-  mkdir as mkdir_3,
-  mkdir as mkdir_4,
-  lstat,
-  lstat as lstat_2,
-  lstat as lstat_3,
-  readFile,
-  readFile as readFile_2,
-  readFile as readFile_3,
-  rm,
-  rm as rm_2,
-  rm as rm_3,
-  writeFile,
-  writeFile as writeFile_2,
-} from "fs/promises";
-import { hostname, hostname as hostname_2, homedir, homedir as homedir_2, homedir as homedir_3 } from "os";
-import { join, join as join_2, join as join_3, join as join_4, join as join_5, join as join_6 } from "path";
+import { mkdir, lstat, readFile, rm, writeFile } from "fs/promises";
+import { hostname, homedir } from "os";
+import { join } from "path";
 import {
   HTTPS_API_ANTHROPIC_COM,
-  Ou,
-  Iu,
-  Gt,
-  Au,
-  Ai,
-  Ci,
-  Du,
-  $i,
-  ko,
-  Di,
-  Nu,
-  $u,
+  DEFAULT_SESSION_CAPACITY,
+  DEFAULT_BASE_DIR,
+  MAX_KILL_AFTER_MINUTES,
+  TRUST_WORKSPACE_DEFAULT,
+  REMOVE_SESSION_STATE_DEFAULT,
+  DIFF_FINDS_NESTED_REPO_DEFAULT,
+  DEFAULT_HEALTH_PORT,
+  MIN_TIMESTAMP_SECONDS,
+  DEFAULT_POST_SESSION_ALLOWANCE_MS,
+  HOLD_IDLE_MTIME_FRESH_MS,
+  LEFTOVER_HOLD_LOOK_TIMEOUT_MS,
+  DEFAULT_MAX_HOLD_MS,
   parseRunnerOptions,
   requireBaseDirOnWindows,
   readEnvironmentSecretFile,
-  Ni,
+  RELEASE_IN_FLIGHT_WAIT_MS,
   holdIdleFile,
   getMaxHoldMs,
   runnerExecPath,
@@ -57,32 +41,37 @@ import {
   runnerRetireAtMs,
   drainMarkerFile,
   readRegularFileSafe,
-  _h,
+  DRAIN_MARKER_READ_TIMEOUT_MS,
   checkPathNotOnNetworkLocation,
-  wh,
-  Ch,
-  Th,
+  RETIRE_RELEASE_RETRY_MS,
+  ENV_SECRET_READ_TIMEOUT_MS_2,
+  MAX_HEALTH_PROBE_BACKOFF_MS,
   HEALTH_PROBE_INTERVAL_MS,
-  To,
-  Oh,
-  mh,
-  Sh,
-  hh,
-  ph,
-  gh,
-  yh,
-  ku,
-  bh,
+  DEFAULT_POLL_INTERVAL_MS,
+  LEASE_5XX_RETRY_DELAY_MS,
+  SHUTDOWN_LEASE_HEARTBEAT_MS,
+  MAX_LISTED_SESSION_IDS,
+  MIN_POLL_INTERVAL_MS,
+  MAX_POLL_INTERVAL_MS,
+  MIN_BACKOFF_MS,
+  MAX_POLL_DELAY_MS,
+  HEALTH_PROBE_BACKOFF_BASE_MS,
+  LEASE_EXPIRY_POLL_MARGIN_MS,
 } from "./runnerConfig.js";
-import { Tjn, Ajn, proxyAuthorizationConfig, startRunnerEgressProxy } from "./egressProxy.js";
 import {
-  Us,
-  Ss,
-  Es,
-  wo,
-  Ls,
-  Lr,
-  Ti,
+  PROXY_AUTHORIZATION_COMMAND_ENV_VAR,
+  RUNNER_PROXY_AUTHORIZATION_FILE_ENV,
+  proxyAuthorizationConfig,
+  startRunnerEgressProxy,
+} from "./egressProxy.js";
+import {
+  SIGKILL_TIMEOUT_DEFAULT_MS,
+  POST_SESSION_HOOK_TIMEOUT_MS,
+  CHECKOUT_HOOK_TIMEOUT_MS,
+  BG_RESULT_GRACE_MS,
+  POST_TURN_SETTLE_MS,
+  SIGKILL_GRACE_BASE_MS,
+  graceSeconds,
   retryWithBackoff,
   getCheckoutHookTimeoutMs,
   handleSelfHostedSession,
@@ -105,7 +94,7 @@ import { lockCurrentVersion } from "../../utils/nativeInstaller/installer.js";
 import {
   checkBaseDirWritable,
   CODE_REVIEW_TOKEN_HANDOFF,
-  Oa,
+  gitSearchDirs,
   startClockSkewMonitor,
   startRunnerTokenRefresher,
   captureHostConfigSnapshot,
@@ -114,9 +103,9 @@ import { withBoundedTimeout, BoundedTimeoutError } from "../../utils/boundedTime
 import {
   envPositiveMs,
   getDrainWaitMs,
-  _s,
-  vi,
-  si,
+  PUSH_ON_RELEASE_TIMEOUT_MS,
+  noHybridToken,
+  DEFAULT_STARTUP_TIMEOUT_MS,
   snapshotOperatorGitConfig,
   getStartupTimeoutMs,
 } from "./launcherHooks.js";
@@ -126,16 +115,16 @@ import { createDefaultEnvironment } from "../../commands/remote-setup/api.js";
 import { NO_ALLOW } from "../../selfHostedRunner/serverAutoMode.js";
 import {
   isRetryableRunnerError,
-  NHn,
+  emptyErrorCategoryCounts,
   classifyRunnerError,
   retryReleaseSession,
 } from "../../selfHostedRunner/runnerApiErrors.js";
 import {
   describeServerAuthRejection,
-  vo,
+  WORK_ORDER_SINGLE_USE_TEXT,
   PollWaker,
   streamWorkHints,
-  wu,
+  MAX_SERVER_MESSAGE_CHARS,
   POLL_WAKE_SOURCES,
 } from "./workOrder.js";
 import { count } from "../../utils/collections.js";
@@ -150,22 +139,22 @@ import {
 import { execFileNoThrow } from "../../utils/execFileNoThrow.js";
 import {
   UNKNOWN,
-  xks,
-  Wuo,
+  createHistogram,
+  METRIC_NAME_RE,
   escapeMetricValue,
-  Pks,
+  observeHistogram,
   dropSessionMetrics,
 } from "../../entrypoints/selfHostedRunner/metrics.js";
-import { Aa, sleep } from "../../utils/sleep.js";
+import { systemClock, sleep } from "../../utils/sleep.js";
 import { startHealthServer } from "../../selfHostedRunner/healthServer.js";
 import { isEnvTruthy } from "../../utils/envUtils.js";
 import { fromEnum } from "../analytics/safeMetadata.js";
-import { Mln } from "../../selfHostedRunner/git/fetchErrors.js";
+import { rewriteContractionError } from "../../selfHostedRunner/git/fetchErrors.js";
 
+//@ chunk-hm0ce8vc.js:236182-288822 placement
 /**
  * claude self-hosted-runner 入口：解析参数、检查 base-dir、捕获宿主配置、注册 runner 并进入运行循环（约 52 KB，含 --help 文本）。
  */
-//@ chunk-hm0ce8vc.js:236182-288822 placement
 async function selfHostedRunnerMain(e) {
   let now = Date.now();
   if (e.includes("--help") || e.includes("-h")) {
@@ -196,11 +185,11 @@ Connection:
                               rewritten for child processes, other proxy variables incl. ALL_PROXY
                               are cleared for them; NO_PROXY is unchanged). The value is never
                               logged. Not supported with the orchestrator subcommand yet.
-                              [env: ${Tjn}]
+                              [env: ${PROXY_AUTHORIZATION_COMMAND_ENV_VAR}]
   --proxy-authorization-file <path>
                               Same, but the header value is read from a file (re-read for each new
                               connection, so a file rotated in place is picked up). Set only one of
-                              the two. [env: ${Ajn}]
+                              the two. [env: ${RUNNER_PROXY_AUTHORIZATION_FILE_ENV}]
   --agent-proxy-url <url>     Route every session this runner runs through the agent proxy at <url>
                               (https:// only, no user name or password). Anthropic-managed git
                               sessions go through it too, except on Windows and when the server
@@ -217,8 +206,8 @@ Connection:
                               [env: SELF_HOSTED_RUNNER_AGENT_PROXY_URL]
 
 Runtime:
-  --capacity <n>              Max concurrent sessions (default: ${Ou})
-  --base-dir <path>           Base directory for repo checkouts (default: ${Iu};
+  --capacity <n>              Max concurrent sessions (default: ${DEFAULT_SESSION_CAPACITY})
+  --base-dir <path>           Base directory for repo checkouts (default: ${DEFAULT_BASE_DIR};
                               required on Windows, which has no default)
                               [env: SELF_HOSTED_RUNNER_BASE_DIR]
   --exec-path <path>          Binary to spawn for child sessions. Default: this process's own binary.
@@ -229,17 +218,17 @@ Runtime:
   --session-stop-grace-sec <n>
                               How long to wait for the Claude process to exit cleanly after a
                               session ends, before force-killing it. The post-session hook runs
-                              after this. Default: ${Us / 1000}.
+                              after this. Default: ${SIGKILL_TIMEOUT_DEFAULT_MS / 1000}.
                               [env: SELF_HOSTED_RUNNER_SESSION_STOP_GRACE_MS, in ms]
   --post-session-hook-timeout-sec <n>
                               SIGTERM budget for the post-session lifecycle hook, on every session
-                              end including runner shutdown. Default: ${Ss / 1000}.
+                              end including runner shutdown. Default: ${POST_SESSION_HOOK_TIMEOUT_MS / 1000}.
                               [env: SELF_HOSTED_RUNNER_POST_SESSION_HOOK_TIMEOUT_MS, in ms]
   --checkout-hook-timeout-min <n>
                               Wall-clock budget for each run of the checkout lifecycle hook. A hook
                               still running at the budget is stopped (SIGTERM, then SIGKILL) and the
                               session fails setup with a "checkout hook timed out" error instead of
-                              staying at "Preparing\u2026". Default: ${Es / 60000}. 0 disables. Max: ${Gt}.
+                              staying at "Preparing\u2026". Default: ${CHECKOUT_HOOK_TIMEOUT_MS / 60000}. 0 disables. Max: ${MAX_KILL_AFTER_MINUTES}.
                               [env: SELF_HOSTED_RUNNER_CHECKOUT_HOOK_TIMEOUT_MS, in ms]
   --drain-wait-sec <n>        On SIGTERM/SIGINT, wait up to N seconds for each session's in-flight
                               turn (a foreground tool call) and running background tasks to finish
@@ -248,11 +237,11 @@ Runtime:
                               A background task that has JUST finished also counts as
                               in-flight until the follow-up turn that reads its result starts
                               (bounded by SELF_HOSTED_RUNNER_BG_RESULT_GRACE_MS, in ms;
-                              default: ${wo / 1000}s; 0 or an unusable value falls back
+                              default: ${BG_RESULT_GRACE_MS / 1000}s; 0 or an unusable value falls back
                               to the default \u2014 the hold cannot be disabled).
                               A turn that has JUST finished likewise counts as in flight until
                               the session process has reported its end to the server (bounded by
-                              SELF_HOSTED_RUNNER_POST_TURN_SETTLE_MS, in ms; default: ${Ls / 1000}s;
+                              SELF_HOSTED_RUNNER_POST_TURN_SETTLE_MS, in ms; default: ${POST_TURN_SETTLE_MS / 1000}s;
                               normally about two seconds), so its result is not lost to the SIGTERM.
                               Default: 0 (send SIGTERM immediately). Max: 86400.
                               [env: SELF_HOSTED_RUNNER_DRAIN_WAIT_MS, in ms]
@@ -318,7 +307,7 @@ Runtime:
                               [env: SELF_HOSTED_RUNNER_PUSH_OUTCOME_ON_RELEASE=1]
   --trust-workspace [bool]    Seed persisted trust for each session's repo paths so repo-level
                               .claude/settings.json permissions.allow and additionalDirectories
-                              are honored by the child. Default: ${Au}.
+                              are honored by the child. Default: ${TRUST_WORKSPACE_DEFAULT}.
                               Set to false for cli#44151's stricter gate: repo-committed grants
                               are dropped with an "Ignoring N permissions.allow" stderr
                               diagnostic; configure host-level grants via the host-config dir's
@@ -330,7 +319,7 @@ Runtime:
                               directory (local transcript copy, shell snapshots, session env,
                               file history, debug log), staged uploads, per-session gitconfig
                               and session working directory (worktrees, hook checkouts, no-repo
-                              cwd). Default: ${Ai}. Off: they stay on disk until you recycle it,
+                              cwd). Default: ${REMOVE_SESSION_STATE_DEFAULT}. Off: they stay on disk until you recycle it,
                               readable by any later session this --base-dir serves (same Unix
                               user). Best-effort: a runner killed before its cleanup leaves
                               them; canonical clones and files written elsewhere (temp dir) are
@@ -373,7 +362,7 @@ Runtime:
                               _sessions/<session id>.diff-copies) can hold a secret from the
                               repository's settings. If the session's process is killed the copy
                               stays behind; the runner removes it when the session ends.
-                              Default: ${Ci}.
+                              Default: ${DIFF_FINDS_NESTED_REPO_DEFAULT}.
                               [env: SELF_HOSTED_RUNNER_DIFF_FINDS_NESTED_REPOSITORY=1]
   --confine-repo-settings <mode>
                               Repo-committed-settings confine guard mode: warn (default) logs
@@ -404,7 +393,7 @@ Runtime:
                               the heap, limited to 64 MiB in total (over that, sessions start
                               without host config and say so).
                               [env: SELF_HOSTED_RUNNER_HOST_CONFIG_SNAPSHOT]
-  --health-port <port>        Port for /healthz HTTP listener (default: ${Du}). 0 disables.
+  --health-port <port>        Port for /healthz HTTP listener (default: ${DEFAULT_HEALTH_PORT}). 0 disables.
                               [env: SELF_HOSTED_RUNNER_HEALTH_PORT]
   --log-level <level>         Log level: info or debug (default: info)
   --log-file <path>           Tee runner logs to a file in append mode. Stdout is unchanged.
@@ -412,13 +401,13 @@ Runtime:
 
 Runner lifecycle:
   --exit-if-unused-min <n>    Exit the runner if never assigned work for N min (autoscaler scale-down).
-                              Default: never. Max: ${Gt}.
+                              Default: never. Max: ${MAX_KILL_AFTER_MINUTES}.
                               [env: SELF_HOSTED_RUNNER_IDLE_SHUTDOWN_MS, in ms]
   --drain-grace-sec <n>       Default: 0 \u2014 exit immediately after active sessions finish, WITHOUT
                               polling for more (one-shot when --capacity=1).
                               Set a positive value (e.g. 30) to keep the runner warm and re-poll the
                               locked account's queue for that many seconds before exiting.
-                              Max: ${$i}. [env: SELF_HOSTED_RUNNER_DRAIN_GRACE_MS, in ms]
+                              Max: ${MIN_TIMESTAMP_SECONDS}. [env: SELF_HOSTED_RUNNER_DRAIN_GRACE_MS, in ms]
   --retire-at <epoch-seconds> Retire the runner at the given wall-clock time (absolute Unix timestamp, in
                               seconds): release every active session through the ReleaseSession path that
                               --release-idle-session-min uses (the session parks server-side and a fresh
@@ -445,7 +434,7 @@ Runner lifecycle:
                               stays attached. M minutes after the first signal every session still attached
                               is released through that same park path at once regardless of idle time (one
                               mid-turn as soon as its turn ends; background work a finished turn left running
-                              gets up to 60s), and anything STILL attached ${(ko + Lr) / 1000}s later (that 60s + a 15s
+                              gets up to 60s), and anything STILL attached ${(DEFAULT_POST_SESSION_ALLOWANCE_MS + SIGKILL_GRACE_BASE_MS) / 1000}s later (that 60s + a 15s
                               margin; --drain-wait-sec + 15s if longer) is drained as on a second signal \u2014
                               the one path that requeues instead of parking. The runner exits 0 as soon as
                               it holds no session, before or after M. A SECOND signal drains immediately, as
@@ -455,29 +444,29 @@ Runner lifecycle:
                               every still-attached session is killed WITHOUT its post-session hook or
                               deregister and is requeued to another runner about a minute later \u2014 strictly
                               worse than the default drain. So set the stop timeout
-                              (terminationGracePeriodSeconds etc.) to at least M minutes + ${(ko + Lr) / 1000}s (that post-ceiling
+                              (terminationGracePeriodSeconds etc.) to at least M minutes + ${(DEFAULT_POST_SESSION_ALLOWANCE_MS + SIGKILL_GRACE_BASE_MS) / 1000}s (that post-ceiling
                               grace; --drain-wait-sec + 15s if longer) + the shutdown budget above \u2014 the runner
                               prints this sum at startup when the flag is set. --startup-timeout-min and
                               --kill-session-after-min keep working unchanged during the wait. Fractional
                               minutes are accepted. Default: 0 (off \u2014 drain on the first signal).
-                              Max: ${Gt}. [env: SELF_HOSTED_RUNNER_DEFER_SHUTDOWN_MAX_MS, in ms]
+                              Max: ${MAX_KILL_AFTER_MINUTES}. [env: SELF_HOSTED_RUNNER_DEFER_SHUTDOWN_MAX_MS, in ms]
 
 Per-session watchdogs:
   --release-idle-session-min <n>  Release a session slot after N min of no user input (turn finished,
                                   or parked at a permission prompt, user idle). Runner exits if this
                                   drops it to zero active sessions.
-                                  Default: never. Max: ${Gt}.
+                                  Default: never. Max: ${MAX_KILL_AFTER_MINUTES}.
                                   [env: SELF_HOSTED_RUNNER_SESSION_IDLE_MS, in ms]
   --hold-idle-file <path>         Do not release an idle session (--release-idle-session-min) while
-                                  <path> is a regular file changed in the last ${Di / 1000}s: your host
+                                  <path> is a regular file changed in the last ${HOLD_IDLE_MTIME_FRESH_MS / 1000}s: your host
                                   keeps it fresh while a process the session left running (nohup,
-                                  tmux) lives. Looked at again every ${Nu / 1000}s. Does not hold a
+                                  tmux) lives. Looked at again every ${LEFTOVER_HOLD_LOOK_TIMEOUT_MS / 1000}s. Does not hold a
                                   session at startup, at --retire-at, at the --defer-shutdown-max-min
                                   ceiling or at --kill-session-after-min. Default: off.
                                   [env: SELF_HOSTED_RUNNER_HOLD_IDLE_FILE]
   --max-hold-min <n>              With --hold-idle-file: release the session anyway N min after it
-                                  went idle. Default: ${$u / 60000}. 0 disables the hold.
-                                  Max: ${Gt}. [env: SELF_HOSTED_RUNNER_MAX_HOLD_MS, in ms]
+                                  went idle. Default: ${DEFAULT_MAX_HOLD_MS / 60000}. 0 disables the hold.
+                                  Max: ${MAX_KILL_AFTER_MINUTES}. [env: SELF_HOSTED_RUNNER_MAX_HOLD_MS, in ms]
   --startup-timeout-min <n>       Release a session slot if the child has not finished starting up
                                   N min after spawn \u2014 covers a child hung during --resume hydration or
                                   MCP connect, and a session assigned with no pending input. Output the
@@ -489,7 +478,7 @@ Per-session watchdogs:
                                   wrapper (a pinned older Claude Code version: the N min run until
                                   system:init). Cleared at system:init, after which
                                   --release-idle-session-min takes over. Default: 15. 0 disables.
-                                  Max: ${Gt}.
+                                  Max: ${MAX_KILL_AFTER_MINUTES}.
                                   [env: SELF_HOSTED_RUNNER_STARTUP_TIMEOUT_MS, in ms]
   --kill-session-after-min <n>    Cap a session child's wall-clock life at N min (runaway backstop).
                                   At the deadline a session that is waiting on its user (idle, parked
@@ -498,7 +487,7 @@ Per-session watchdogs:
                                   when it next parks or finishes; a turn still running (or a release
                                   the server keeps declining) is SIGTERMed at the hard cap, 15 min past
                                   the deadline (override: SELF_HOSTED_RUNNER_MAX_LIFETIME_GRACE_MS, in
-                                  ms). Default: never. Max: ${Gt}.
+                                  ms). Default: never. Max: ${MAX_KILL_AFTER_MINUTES}.
                                   [env: SELF_HOSTED_RUNNER_MAX_LIFETIME_MS, in ms]
 
 Debug:
@@ -509,176 +498,206 @@ Debug:
     return;
   }
   configureGlobalAgents();
-  let r = () => new Date().toISOString(),
-    s,
-    a = openStdioWriter({
-      stamp: (P) => `${r()} [self-hosted-runner] ${redactSecretsInText(P)}`,
-      onOwnLine: (P) =>
-        s?.write(
-          P +
-            `
+  let r = () => new Date().toISOString();
+  let s;
+  let stdioWriter = openStdioWriter({
+    stamp: (P) => `${r()} [self-hosted-runner] ${redactSecretsInText(P)}`,
+    onOwnLine: (P) =>
+      s?.write(
+        P +
+          `
 `,
-        ),
-    }),
-    o,
-    l,
-    u,
-    h;
+      ),
+  });
+  let o;
+  let l;
+  let u;
+  let h;
   try {
-    ((o = parseRunnerOptions(e)),
-      (u = proxyAuthorizationConfig({
-        command: o.proxyAuthorizationCommand,
-        file: o.proxyAuthorizationFile,
-      })));
+    o = parseRunnerOptions(e);
+    u = proxyAuthorizationConfig({
+      command: o.proxyAuthorizationCommand,
+      file: o.proxyAuthorizationFile,
+    });
     let P = o.envSetByFlag.has("SELF_HOSTED_RUNNER_AGENT_PROXY_URL")
       ? "--agent-proxy-url"
       : "SELF_HOSTED_RUNNER_AGENT_PROXY_URL";
-    if (
-      ((h = checkRunnerAgentProxyStandaloneUrl(env.SELF_HOSTED_RUNNER_AGENT_PROXY_URL, P)),
-      h !== void 0 && u !== void 0)
-    )
+    h = checkRunnerAgentProxyStandaloneUrl(env.SELF_HOSTED_RUNNER_AGENT_PROXY_URL, P);
+    if (h !== undefined && u !== undefined)
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
         `${P} cannot be combined with --proxy-authorization-command / --proxy-authorization-file: sessions would reach that proxy without the egress listener. Remove one of the two.`,
         "runner agent proxy URL paired with a --proxy-authorization-* egress listener",
       );
     if (process.env.SELF_HOSTED_RUNNER_HOOKS_DIR) assertLifecycleHooksSupported("--hooks-dir");
-    (requireBaseDirOnWindows(o.baseDirSource),
-      lockCurrentVersion(),
-      (l = await readEnvironmentSecretFile(o, (Z) => a.write("stderr", Z))),
-      await checkBaseDirWritable(o.baseDir, void 0, (Z) => a.write("stderr", Z)));
+    requireBaseDirOnWindows(o.baseDirSource);
+    lockCurrentVersion();
+    l = await readEnvironmentSecretFile(o, (Z) => stdioWriter.write("stderr", Z));
+    await checkBaseDirWritable(o.baseDir, undefined, (Z) => stdioWriter.write("stderr", Z));
   } catch (error) {
-    (a.write(
+    stdioWriter.write(
       "stderr",
       `error: ${redactSecretsInText(errorMessage(error))}
 Run 'claude self-hosted-runner --help' for usage.`,
-    ),
-      process.exit(2));
+    );
+    process.exit(2);
   }
   let p = o.logLevel === "debug";
-  if (o.logFile)
-    ((s = createWriteStream(o.logFile, { flags: "a", mode: 384 })),
-      s.on("open", (P) => {
-        fchmod(P, 384, () => {});
-      }),
-      s.on("error", (P) => {
-        (a.write(
-          "stderr",
-          `${r()} [runner:warn] log-file write failed (${errorMessage(P)}); continuing stdout-only`,
-        ),
-          (s = void 0));
-      }));
-  let S = (P) => {
-      s?.write(
-        P +
-          `
-`,
+  if (o.logFile) {
+    s = createWriteStream(o.logFile, {
+      flags: "a",
+      mode: 384,
+    });
+    s.on("open", (P) => {
+      fchmod(P, 384, () => {});
+    });
+    s.on("error", (P) => {
+      stdioWriter.write(
+        "stderr",
+        `${r()} [runner:warn] log-file write failed (${errorMessage(P)}); continuing stdout-only`,
       );
-    },
-    T = async () => {
-      if (!s) return;
-      let P = s;
-      ((s = void 0),
-        await withBoundedTimeout(new Promise((Z) => P.end(Z)), 500, "[runner:exit] log-file flush").catch(
-          () => {},
-        ));
-    },
-    y = (P) => {
-      if (p) {
-        let Z = `${r()} [DEBUG] ${redactSecretsInText(P)}`;
-        (a.write("stderr", Z), S(Z));
-      }
-    },
-    v = (P) => {
-      let Z = `${r()} [self-hosted-runner] ${redactSecretsInText(P)}`;
-      (a.write("stdout", Z), S(Z));
-    };
-  if ((y(`[runner:log] ${a.describe()}`), process.env.SELF_HOSTED_RUNNER_SIGKILL_TIMEOUT_MS !== void 0))
-    (v(
+      s = undefined;
+    });
+  }
+  let S = (P) => {
+    s?.write(
+      P +
+        `
+`,
+    );
+  };
+  let T = async () => {
+    if (!s) return;
+    let P = s;
+    s = undefined;
+    await withBoundedTimeout(
+      new Promise((resolve) => P.end(resolve)),
+      500,
+      "[runner:exit] log-file flush",
+    ).catch(() => {});
+  };
+  let y = (P) => {
+    if (p) {
+      let Z = `${r()} [DEBUG] ${redactSecretsInText(P)}`;
+      stdioWriter.write("stderr", Z);
+      S(Z);
+    }
+  };
+  let v = (P) => {
+    let Z = `${r()} [self-hosted-runner] ${redactSecretsInText(P)}`;
+    stdioWriter.write("stdout", Z);
+    S(Z);
+  };
+  y(`[runner:log] ${stdioWriter.describe()}`);
+  if (process.env.SELF_HOSTED_RUNNER_SIGKILL_TIMEOUT_MS !== undefined) {
+    v(
       "[runner:fatal] SELF_HOSTED_RUNNER_SIGKILL_TIMEOUT_MS was renamed to SELF_HOSTED_RUNNER_SESSION_STOP_GRACE_MS. It controls how long to wait for the Claude process to exit cleanly after a session ends, before force-killing it. The post-session hook runs after this.",
-    ),
-      await T(),
-      process.exit(1));
+    );
+    await T();
+    process.exit(1);
+  }
   for (let P of [
     "RUNNER_RELEASE_IDLE_SESSION_MIN",
     "SELF_HOSTED_RUNNER_RELEASE_IDLE_SESSION_MIN",
     "SELF_HOSTED_RUNNER_SESSION_IDLE_MIN",
     "SELF_HOSTED_RUNNER_SESSION_IDLE_SEC",
   ])
-    if (process.env[P] !== void 0)
+    if (process.env[P] !== undefined)
       v(
         `[runner:warn] ${P} is set but is not a setting this runner ` +
           "reads \u2014 it is being IGNORED. The session idle-release window " +
           "is configured with --release-idle-session-min <minutes> (or env SELF_HOSTED_RUNNER_SESSION_IDLE_MS, in milliseconds).",
       );
-  let w = Ti(
-      envPositiveMs("SELF_HOSTED_RUNNER_SESSION_STOP_GRACE_MS") || Us,
-      envPositiveMs("SELF_HOSTED_RUNNER_POST_SESSION_HOOK_TIMEOUT_MS") || Ss,
-      getDrainWaitMs(),
-      o.pushOutcomeOnRelease ? _s : 0,
-      vi(),
-    ),
-    E = `[runner] This runner needs up to ${w}s to stop the Claude process and run the post-session hook on shutdown, and force-exits after ${w}s (a session release already in flight when shutdown begins can add up to ${Ni / 1000}s, normally well under 1s, before the runner deregisters). Configure your process supervisor's stop timeout to at least ${w}s (e.g. terminationGracePeriodSeconds on Kubernetes, stop_grace_period on Docker Compose, TimeoutStopSec on systemd, or your platform's equivalent).`;
+  let w = graceSeconds(
+    envPositiveMs("SELF_HOSTED_RUNNER_SESSION_STOP_GRACE_MS") || SIGKILL_TIMEOUT_DEFAULT_MS,
+    envPositiveMs("SELF_HOSTED_RUNNER_POST_SESSION_HOOK_TIMEOUT_MS") || POST_SESSION_HOOK_TIMEOUT_MS,
+    getDrainWaitMs(),
+    o.pushOutcomeOnRelease ? PUSH_ON_RELEASE_TIMEOUT_MS : 0,
+    noHybridToken(),
+  );
+  let E = `[runner] This runner needs up to ${w}s to stop the Claude process and run the post-session hook on shutdown, and force-exits after ${w}s (a session release already in flight when shutdown begins can add up to ${RELEASE_IN_FLIGHT_WAIT_MS / 1000}s, normally well under 1s, before the runner deregisters). Configure your process supervisor's stop timeout to at least ${w}s (e.g. terminationGracePeriodSeconds on Kubernetes, stop_grace_period on Docker Compose, TimeoutStopSec on systemd, or your platform's equivalent).`;
   v(E);
-  let A = envPositiveMs("SELF_HOSTED_RUNNER_DEFER_SHUTDOWN_MAX_MS"),
-    G = envPositiveMs("SELF_HOSTED_RUNNER_SESSION_IDLE_MS"),
-    K = Math.max(getDrainWaitMs(), ko) + Lr,
-    L =
-      A > 0
-        ? `[runner] --defer-shutdown-max-min is set (${formatDuration(A, { hideTrailingZeros: !0 })}): the FIRST shutdown signal does not start that ${w}s budget \u2014 the runner stops ` +
-          "taking work but keeps serving the attached sessions; " +
-          (G > 0
-            ? `each is released (parked, resumable) once its user has been idle ${formatDuration(G, { hideTrailingZeros: !0 })} (--release-idle-session-min)`
-            : "none is released early (--release-idle-session-min is not set)") +
-          `, and the runner exits as soon as it holds no session; ${formatDuration(A, { hideTrailingZeros: !0 })} after the signal every remaining session is released at once and anything still attached ${formatDuration(K, { hideTrailingZeros: !0 })} later is drained. If your supervisor's stop timeout ends first, every still-attached session is killed WITHOUT its post-session hook or deregister and is requeued to another runner about a minute later. Size the stop timeout to at least ${Math.ceil((A + K) / 1000) + w}s (M + post-ceiling grace + the budget above). A second signal drains immediately.`
-        : void 0;
-  if (L !== void 0) v(L);
-  let D = (P, Z, re, be = !1) => {
-      let ee = process.env[P];
-      if (ee === void 0 || ee === "")
-        return re !== void 0 && re > 0
-          ? `${formatDuration(re, { hideTrailingZeros: !0 })} (default)`
-          : "disabled (not configured)";
-      let Re = o.envSetByFlag.has(P) ? Z : `env ${P}`,
-        Ue = envPositiveMs(P);
-      if (Ue > 0) return `${formatDuration(Ue, { hideTrailingZeros: !0 })} (from ${Re})`;
-      let ht = Number(ee) === 0 && (be !== "unless-zero" || ee.trim() !== "");
-      if ((be === !0 || (be === "unless-zero" && !ht)) && re !== void 0 && re > 0) {
-        let wn = ht ? "0 is not accepted" : "not a usable ms duration";
-        return `${formatDuration(re, { hideTrailingZeros: !0 })} ` + `(default \u2014 ${Re} ignored: ${wn})`;
-      }
-      return ht
-        ? `disabled (from ${Re})`
-        : `disabled (from ${Re} \u2014 not a usable ms duration, treated as 0)`;
-    },
-    oe = () => {
-      let P = holdIdleFile();
-      if (P === void 0) return "off (--hold-idle-file not set)";
-      let envSelfHostedRunnerMaxHoldMs = process.env.SELF_HOSTED_RUNNER_MAX_HOLD_MS,
-        re =
-          envSelfHostedRunnerMaxHoldMs === void 0 || envSelfHostedRunnerMaxHoldMs.trim() === ""
-            ? "default"
-            : o.envSetByFlag.has("SELF_HOSTED_RUNNER_MAX_HOLD_MS")
-              ? "from --max-hold-min"
-              : "from env SELF_HOSTED_RUNNER_MAX_HOLD_MS",
-        be = getMaxHoldMs();
-      if (be === 0)
-        return re === "from --max-hold-min"
-          ? "off (--max-hold-min is 0)"
-          : "off (env SELF_HOSTED_RUNNER_MAX_HOLD_MS is 0 or not a usable ms duration)";
-      let ee = envPositiveMs("SELF_HOSTED_RUNNER_SESSION_IDLE_MS"),
-        Re =
-          ee === 0
-            ? ", but holds nothing while --release-idle-session-min is off"
-            : be <= ee
-              ? ", but holds nothing: the cap is not longer than --release-idle-session-min"
-              : "";
-      return `${P}, cap ${formatDuration(be, { hideTrailingZeros: !0 })} (${re})${Re}`;
-    };
+  let A = envPositiveMs("SELF_HOSTED_RUNNER_DEFER_SHUTDOWN_MAX_MS");
+  let G = envPositiveMs("SELF_HOSTED_RUNNER_SESSION_IDLE_MS");
+  let K = Math.max(getDrainWaitMs(), DEFAULT_POST_SESSION_ALLOWANCE_MS) + SIGKILL_GRACE_BASE_MS;
+  let L =
+    A > 0
+      ? `[runner] --defer-shutdown-max-min is set (${formatDuration(A, {
+          hideTrailingZeros: true,
+        })}): the FIRST shutdown signal does not start that ${w}s budget \u2014 the runner stops ` +
+        "taking work but keeps serving the attached sessions; " +
+        (G > 0
+          ? `each is released (parked, resumable) once its user has been idle ${formatDuration(G, {
+              hideTrailingZeros: true,
+            })} (--release-idle-session-min)`
+          : "none is released early (--release-idle-session-min is not set)") +
+        `, and the runner exits as soon as it holds no session; ${formatDuration(A, {
+          hideTrailingZeros: true,
+        })} after the signal every remaining session is released at once and anything still attached ${formatDuration(
+          K,
+          {
+            hideTrailingZeros: true,
+          },
+        )} later is drained. If your supervisor's stop timeout ends first, every still-attached session is killed WITHOUT its post-session hook or deregister and is requeued to another runner about a minute later. Size the stop timeout to at least ${Math.ceil((A + K) / 1000) + w}s (M + post-ceiling grace + the budget above). A second signal drains immediately.`
+      : undefined;
+  if (L !== undefined) v(L);
+  let D = (P, Z, re, be = false) => {
+    let ee = process.env[P];
+    if (ee === undefined || ee === "")
+      return re !== undefined && re > 0
+        ? `${formatDuration(re, {
+            hideTrailingZeros: true,
+          })} (default)`
+        : "disabled (not configured)";
+    let Re = o.envSetByFlag.has(P) ? Z : `env ${P}`;
+    let Ue = envPositiveMs(P);
+    if (Ue > 0)
+      return `${formatDuration(Ue, {
+        hideTrailingZeros: true,
+      })} (from ${Re})`;
+    let ht = Number(ee) === 0 && (be !== "unless-zero" || ee.trim() !== "");
+    if ((be === true || (be === "unless-zero" && !ht)) && re !== undefined && re > 0) {
+      let wn = ht ? "0 is not accepted" : "not a usable ms duration";
+      return (
+        `${formatDuration(re, {
+          hideTrailingZeros: true,
+        })} ` + `(default \u2014 ${Re} ignored: ${wn})`
+      );
+    }
+    return ht
+      ? `disabled (from ${Re})`
+      : `disabled (from ${Re} \u2014 not a usable ms duration, treated as 0)`;
+  };
+  let oe = () => {
+    let P = holdIdleFile();
+    if (P === undefined) return "off (--hold-idle-file not set)";
+    let envSelfHostedRunnerMaxHoldMs = process.env.SELF_HOSTED_RUNNER_MAX_HOLD_MS;
+    let re =
+      envSelfHostedRunnerMaxHoldMs === undefined || envSelfHostedRunnerMaxHoldMs.trim() === ""
+        ? "default"
+        : o.envSetByFlag.has("SELF_HOSTED_RUNNER_MAX_HOLD_MS")
+          ? "from --max-hold-min"
+          : "from env SELF_HOSTED_RUNNER_MAX_HOLD_MS";
+    let maxHoldMs = getMaxHoldMs();
+    if (maxHoldMs === 0)
+      return re === "from --max-hold-min"
+        ? "off (--max-hold-min is 0)"
+        : "off (env SELF_HOSTED_RUNNER_MAX_HOLD_MS is 0 or not a usable ms duration)";
+    let ee = envPositiveMs("SELF_HOSTED_RUNNER_SESSION_IDLE_MS");
+    let Re =
+      ee === 0
+        ? ", but holds nothing while --release-idle-session-min is off"
+        : maxHoldMs <= ee
+          ? ", but holds nothing: the cap is not longer than --release-idle-session-min"
+          : "";
+    return `${P}, cap ${formatDuration(maxHoldMs, {
+      hideTrailingZeros: true,
+    })} (${re})${Re}`;
+  };
   v(
-    `[runner] watchdog config: idle-release=${D("SELF_HOSTED_RUNNER_SESSION_IDLE_MS", "--release-idle-session-min")}; startup-timeout=${D("SELF_HOSTED_RUNNER_STARTUP_TIMEOUT_MS", "--startup-timeout-min", si)}; kill-session-after=${D("SELF_HOSTED_RUNNER_MAX_LIFETIME_MS", "--kill-session-after-min")}; exit-if-unused=${D("SELF_HOSTED_RUNNER_IDLE_SHUTDOWN_MS", "--exit-if-unused-min")}; defer-shutdown-max=${D("SELF_HOSTED_RUNNER_DEFER_SHUTDOWN_MAX_MS", "--defer-shutdown-max-min")}; checkout-hook-timeout=${D("SELF_HOSTED_RUNNER_CHECKOUT_HOOK_TIMEOUT_MS", "--checkout-hook-timeout-min", Es, "unless-zero")}; bg-result-grace=${D("SELF_HOSTED_RUNNER_BG_RESULT_GRACE_MS", "SELF_HOSTED_RUNNER_BG_RESULT_GRACE_MS", wo, !0)}; post-turn-settle=${D("SELF_HOSTED_RUNNER_POST_TURN_SETTLE_MS", "SELF_HOSTED_RUNNER_POST_TURN_SETTLE_MS", Ls, !0)}; leftover-hold=${oe()}; drain-marker-file=${process.env.SELF_HOSTED_RUNNER_DRAIN_MARKER_FILE || "unset"}`,
+    `[runner] watchdog config: idle-release=${D("SELF_HOSTED_RUNNER_SESSION_IDLE_MS", "--release-idle-session-min")}; startup-timeout=${D("SELF_HOSTED_RUNNER_STARTUP_TIMEOUT_MS", "--startup-timeout-min", DEFAULT_STARTUP_TIMEOUT_MS)}; kill-session-after=${D("SELF_HOSTED_RUNNER_MAX_LIFETIME_MS", "--kill-session-after-min")}; exit-if-unused=${D("SELF_HOSTED_RUNNER_IDLE_SHUTDOWN_MS", "--exit-if-unused-min")}; defer-shutdown-max=${D("SELF_HOSTED_RUNNER_DEFER_SHUTDOWN_MAX_MS", "--defer-shutdown-max-min")}; checkout-hook-timeout=${D("SELF_HOSTED_RUNNER_CHECKOUT_HOOK_TIMEOUT_MS", "--checkout-hook-timeout-min", CHECKOUT_HOOK_TIMEOUT_MS, "unless-zero")}; bg-result-grace=${D("SELF_HOSTED_RUNNER_BG_RESULT_GRACE_MS", "SELF_HOSTED_RUNNER_BG_RESULT_GRACE_MS", BG_RESULT_GRACE_MS, true)}; post-turn-settle=${D("SELF_HOSTED_RUNNER_POST_TURN_SETTLE_MS", "SELF_HOSTED_RUNNER_POST_TURN_SETTLE_MS", POST_TURN_SETTLE_MS, true)}; leftover-hold=${oe()}; drain-marker-file=${process.env.SELF_HOSTED_RUNNER_DRAIN_MARKER_FILE || "unset"}`,
   );
   let ge =
-    o.removeSessionState === Ai
+    o.removeSessionState === REMOVE_SESSION_STATE_DEFAULT
       ? "default"
       : "--remove-session-state / SELF_HOSTED_RUNNER_REMOVE_SESSION_STATE";
   v(
@@ -687,7 +706,7 @@ Run 'claude self-hosted-runner --help' for usage.`,
       : `[runner] per-session state: KEPT at session end (${ge}) \u2014 each session's _sessions/<id>.claude-config, .tool-server-config, .uploads, .gitconfig and <id>/ stay under ${o.baseDir} until the disk is recycled`,
   );
   let Ne =
-    o.diffFindsNestedRepository === Ci
+    o.diffFindsNestedRepository === DIFF_FINDS_NESTED_REPO_DEFAULT
       ? "the default"
       : "--diff-finds-nested-repository / SELF_HOSTED_RUNNER_DIFF_FINDS_NESTED_REPOSITORY";
   v(
@@ -695,22 +714,25 @@ Run 'claude self-hosted-runner --help' for usage.`,
       ? `[runner] changes in a repository cloned into a sub-folder: SHOWN (${Ne}) \u2014 for a session started with no repository, the web session's Changes pane may show one repository under the session's working folder, only while the session's tool sandbox is off; while a repository is in that folder itself or in a folder above it the pane stays empty, sandbox on or off; a refusal is reported, with the session's id and the reason, in a "[changes pane] repository not shown" line in this log`
       : `[runner] changes in a repository cloned into a sub-folder: NOT SHOWN (${Ne}) \u2014 for a session started with no repository, the web session's Changes pane may show only a repository in the session's working folder itself or in a folder above it; --diff-finds-nested-repository shows one in a sub-folder instead; its --help entry says what that costs`,
   );
-  let envSelfHostedRunnerHooksDir = process.env.SELF_HOSTED_RUNNER_HOOKS_DIR,
-    execPath = o.execPath;
+  let envSelfHostedRunnerHooksDir = process.env.SELF_HOSTED_RUNNER_HOOKS_DIR;
+  let execPath = o.execPath;
   if (!execPath) {
-    let P = await findHook(envSelfHostedRunnerHooksDir, "command");
-    if (P) ((execPath = P), v(`[runner:hook] using command hook ${P}`));
+    let hook = await findHook(envSelfHostedRunnerHooksDir, "command");
+    if (hook) {
+      execPath = hook;
+      v(`[runner:hook] using command hook ${hook}`);
+    }
   }
-  let { execPath: execPath_2, execArgs: execArgs } = runnerExecPath(execPath),
-    ae = warnDiffFindsNestedRepository(o.diffFindsNestedRepository, execPath);
+  let { execPath: execPath_2, execArgs } = runnerExecPath(execPath);
+  let ae = warnDiffFindsNestedRepository(o.diffFindsNestedRepository, execPath);
   if (ae) v(ae);
-  let fe = !1;
+  let freshMachinePerSession = false;
   v(
     `Connecting to ${o.apiUrl} (capacity=${o.capacity}, baseDir=${o.baseDir}, execPath=${[execPath_2, ...execArgs].join(" ")})`,
   );
   let $e = warnCapacityOnSessionBoundRunner(l, o.capacity);
   if ($e !== null) v($e);
-  if (h !== void 0)
+  if (h !== undefined)
     v(
       `[runner:warn] Every session on this runner goes through the agent proxy at ${h.protocol}//${h.host}. Anthropic-managed git (governed git) sessions go through it too, except on Windows and when the server sends no git setup for them, which are refused. This runner refuses sessions that the environment's relay mode sends through Anthropic's relay. Run refused sessions on a runner started without a proxy URL (--agent-proxy-url / SELF_HOSTED_RUNNER_AGENT_PROXY_URL).` +
         (execPath
@@ -718,28 +740,39 @@ Run 'claude self-hosted-runner --help' for usage.`,
           : ""),
     );
   if (o.debugTokenDir)
-    await mkdir(o.debugTokenDir, { recursive: !0, mode: 448 })
+    await mkdir(o.debugTokenDir, {
+      recursive: true,
+      mode: 448,
+    })
       .then(() => {
         v(`[runner:debug] debug token dir ready: ${o.debugTokenDir}`);
       })
-      .catch((P) => {
-        v(`[runner:debug] failed to create debug token dir (best-effort): ${P}`);
+      .catch((error) => {
+        v(`[runner:debug] failed to create debug token dir (best-effort): ${error}`);
       });
   let Ve;
   if (u)
     try {
-      ((Ve = await startRunnerEgressProxy(u, { onStatus: v, onDebug: y })),
-        logFeatureOk("self_hosted_egress_proxy_auth"));
+      Ve = await startRunnerEgressProxy(u, {
+        onStatus: v,
+        onDebug: y,
+      });
+      logFeatureOk("self_hosted_egress_proxy_auth");
     } catch (error) {
-      (logFeatureBad("self_hosted_egress_proxy_auth", "listener_start_failed"),
-        v(`[runner:fatal] could not start the proxy-authorization listener: ${errorMessage(error)}`),
-        await T(),
-        process.exit(1));
+      logFeatureBad("self_hosted_egress_proxy_auth", "listener_start_failed");
+      v(`[runner:fatal] could not start the proxy-authorization listener: ${errorMessage(error)}`);
+      await T();
+      process.exit(1);
     }
-  let Be = o.capacity === 1 && o.debugTokenDir === void 0 && !execPath ? [CODE_REVIEW_TOKEN_HANDOFF] : [];
+  let Be = o.capacity === 1 && o.debugTokenDir === undefined && !execPath ? [CODE_REVIEW_TOKEN_HANDOFF] : [];
   y(`[runner] capabilities reported to the server: ${Be.join(", ") || "none"}`);
-  let Fe = createDefaultEnvironment({ baseUrl: o.apiUrl, poolSecret: l, onDebug: y, capabilities: Be }),
-    ve = o.clientLabel ?? hostname();
+  let defaultEnvironment = createDefaultEnvironment({
+    baseUrl: o.apiUrl,
+    poolSecret: l,
+    onDebug: y,
+    capabilities: Be,
+  });
+  let clientLabel = o.clientLabel ?? hostname();
   if (o.lockToAccountId) v(`Registering locked to account: ${o.lockToAccountId}`);
   if (o.useAnthropicGitProxy)
     v("Registering as opted in to Anthropic-managed git (--use-anthropic-git-proxy)");
@@ -747,12 +780,14 @@ Run 'claude self-hosted-runner --help' for usage.`,
     v(
       `Registering with --server-auto-mode-lists ${o.serverAutoModeLists}: ${SERVER_AUTO_MODE_LISTS_DESCRIPTIONS[o.serverAutoModeLists]}`,
     );
-  let Ae, Ht, Mt;
+  let Ae;
+  let Ht;
+  let Mt;
   try {
-    ((Mt = await retryWithBackoff(
+    Mt = await retryWithBackoff(
       () =>
-        Fe.registerRunner({
-          clientLabel: ve,
+        defaultEnvironment.registerRunner({
+          clientLabel,
           lockToAccountId: o.lockToAccountId,
           useAnthropicGitProxy: o.useAnthropicGitProxy,
           serverAutoModeLists: o.serverAutoModeLists,
@@ -768,205 +803,217 @@ Run 'claude self-hosted-runner --help' for usage.`,
           );
         },
       },
-    )),
-      (Ae = Mt.runner_id),
-      (Ht = Mt.runner_token),
-      logFeatureOk("self_hosted_register"));
+    );
+    Ae = Mt.runner_id;
+    Ht = Mt.runner_token;
+    logFeatureOk("self_hosted_register");
   } catch (error) {
-    let Z = error instanceof Error ? error.message : String(error),
-      re = describeServerAuthRejection(error, l);
-    if (re !== null)
-      (logFeatureBad("self_hosted_register", "self_hosted_register_work_order_refused"),
-        v(`[runner:fatal] ${re}`));
-    else if (
+    let Z = error instanceof Error ? error.message : String(error);
+    let re = describeServerAuthRejection(error, l);
+    if (re !== null) {
+      logFeatureBad("self_hosted_register", "self_hosted_register_work_order_refused");
+      v(`[runner:fatal] ${re}`);
+    } else if (
       error instanceof Error &&
       "isSelfHostedDisabledByOrg" in error &&
-      error.isSelfHostedDisabledByOrg === !0
-    )
-      (logFeatureBad("self_hosted_register", "self_hosted_register_disabled_by_org"),
-        v(
-          `[runner:fatal] RegisterRunner refused because self-hosted environments are not enabled for this organization. Usually the 'Allow self-hosted environments' setting on the Cloud environments admin page (claude.ai/admin-settings/cloud-environments) is off, and an organization Owner can turn it on. Self-hosted environments also need a Team or Enterprise plan, and the setting usually applies within a few minutes. If this message still appears after that, contact your Anthropic account team. The environment secret was accepted, so do not rotate it. (${Z})`,
-        ));
-    else if (isAuthFailure(error))
-      (logFeatureBad("self_hosted_register", "self_hosted_register_auth_failed"),
-        v(
-          `[runner:fatal] RegisterRunner auth failed \u2014 environment secret invalid or revoked. Check --environment-secret-file or SELF_HOSTED_RUNNER_ENVIRONMENT_SECRET. (${Z})`,
-        ));
-    else {
+      error.isSelfHostedDisabledByOrg === true
+    ) {
+      logFeatureBad("self_hosted_register", "self_hosted_register_disabled_by_org");
+      v(
+        `[runner:fatal] RegisterRunner refused because self-hosted environments are not enabled for this organization. Usually the 'Allow self-hosted environments' setting on the Cloud environments admin page (claude.ai/admin-settings/cloud-environments) is off, and an organization Owner can turn it on. Self-hosted environments also need a Team or Enterprise plan, and the setting usually applies within a few minutes. If this message still appears after that, contact your Anthropic account team. The environment secret was accepted, so do not rotate it. (${Z})`,
+      );
+    } else if (isAuthFailure(error)) {
+      logFeatureBad("self_hosted_register", "self_hosted_register_auth_failed");
+      v(
+        `[runner:fatal] RegisterRunner auth failed \u2014 environment secret invalid or revoked. Check --environment-secret-file or SELF_HOSTED_RUNNER_ENVIRONMENT_SECRET. (${Z})`,
+      );
+    } else {
       logFeatureBad("self_hosted_register", "self_hosted_register_failed");
       let be = validateLockToAccount(Z);
       v(`[runner:fatal] RegisterRunner failed: ${Z}${be}`);
     }
-    (await T(), process.exit(1));
+    await T();
+    process.exit(1);
   }
   v(`Registered: runner_id=${Ae}`);
-  let _n = void 0,
-    abortController = new AbortController(),
-    sr = void 0,
-    Gn = Fe,
-    kn = Gn,
-    abortController_2 = new AbortController(),
-    an = "running",
-    or = !0,
-    br = {},
-    Tn = {},
-    On = (P) => {
-      let Z = br.current,
-        re =
-          Z === void 0
-            ? "session counts not yet initialized (startup in progress)"
-            : `${Z.sessionIdle.size} active session(s), ${count([...Z.sessionIdle.values()], (be) => be !== null)} of them idle`;
-      return `(${P}; uptime ${formatDuration(process.uptime() * 1000)}; ${re})`;
-    },
-    dn = (P) => {
-      if (an === "running" && A > 0 && or) {
-        if (
-          ((an = "deferring"),
-          v(
-            `Received shutdown signal, deferring drain: refusing new work, serving the attached sessions until they are released or ${formatDuration(A, { hideTrailingZeros: !0 })} passes; a second signal drains immediately ${On(P)}`,
-          ),
-          v(E),
-          L !== void 0)
-        )
-          v(L);
-        abortController_2.abort(Date.now());
-        return;
-      }
-      An(P);
-    },
-    An = (P, Z = "signal") => {
-      if (an === "draining") {
-        let be = postSessionHooksRunning();
-        if (be > 0)
-          v(
-            `[runner] Forced shutdown with ${be} post-session hook(s) still running \u2014 they continue in their own process group, but their output is no longer captured and the runner's timeout budget no longer applies.`,
-          );
-        else v("Forced shutdown");
-        T().finally(() => process.exit(1));
-        return;
-      }
-      ((an = "draining"),
+  let startCommandPhases = undefined;
+  let abortController = new AbortController();
+  let sr = undefined;
+  let Gn = defaultEnvironment;
+  let apiClient = Gn;
+  let abortController_2 = new AbortController();
+  let an = "running";
+  let or = true;
+  let br = {};
+  let Tn = {};
+  let On = (P) => {
+    let Z = br.current;
+    let re =
+      Z === undefined
+        ? "session counts not yet initialized (startup in progress)"
+        : `${Z.sessionIdle.size} active session(s), ${count([...Z.sessionIdle.values()], (be) => be !== null)} of them idle`;
+    return `(${P}; uptime ${formatDuration(process.uptime() * 1000)}; ${re})`;
+  };
+  let dn = (P) => {
+    if (an === "running" && A > 0 && or) {
+      an = "deferring";
+      v(
+        `Received shutdown signal, deferring drain: refusing new work, serving the attached sessions until they are released or ${formatDuration(
+          A,
+          {
+            hideTrailingZeros: true,
+          },
+        )} passes; a second signal drains immediately ${On(P)}`,
+      );
+      v(E);
+      if (L !== undefined) v(L);
+      abortController_2.abort(Date.now());
+      return;
+    }
+    An(P);
+  };
+  let An = (P, Z = "signal") => {
+    if (an === "draining") {
+      let be = postSessionHooksRunning();
+      if (be > 0)
         v(
-          Z === "signal"
-            ? "Received shutdown signal, draining active sessions... " + On(P)
-            : `[runner:shutdown] ${P} \u2014 draining active sessions... ` + On("no new signal"),
-        ),
-        v(E));
-      let re = postSessionHooksRunning();
-      if (re > 0)
-        v(
-          `[runner] ${re} post-session hook(s) still running \u2014 waiting for them within the budget above. Another SIGTERM force-exits the runner immediately; make sure your supervisor's stop timeout covers the full budget so hooks are not cut short.`,
+          `[runner] Forced shutdown with ${be} post-session hook(s) still running \u2014 they continue in their own process group, but their output is no longer captured and the runner's timeout budget no longer applies.`,
         );
-      abortController.abort();
-    },
-    Bt = () => dn("SIGTERM"),
-    kt = () => dn("SIGINT");
-  (process.on("SIGTERM", Bt), process.on("SIGINT", kt));
-  let Cn = { runnerToken: Ht };
+      else v("Forced shutdown");
+      T().finally(() => process.exit(1));
+      return;
+    }
+    an = "draining";
+    v(
+      Z === "signal"
+        ? "Received shutdown signal, draining active sessions... " + On(P)
+        : `[runner:shutdown] ${P} \u2014 draining active sessions... ` + On("no new signal"),
+    );
+    v(E);
+    let re = postSessionHooksRunning();
+    if (re > 0)
+      v(
+        `[runner] ${re} post-session hook(s) still running \u2014 waiting for them within the budget above. Another SIGTERM force-exits the runner immediately; make sure your supervisor's stop timeout covers the full budget so hooks are not cut short.`,
+      );
+    abortController.abort();
+  };
+  let Bt = () => dn("SIGTERM");
+  let kt = () => dn("SIGINT");
+  process.on("SIGTERM", Bt);
+  process.on("SIGINT", kt);
+  let Cn = {
+    runnerToken: Ht,
+  };
   if (o.debugTokenDir) await writeRunnerFileBestEffort(o.debugTokenDir, "runner_token.jwt", Ht, v);
   let Fr = (P) => {
-      if (o.debugTokenDir) writeRunnerFileBestEffort(o.debugTokenDir, "runner_token.jwt", P, v);
-      ((Cn.runnerToken = P), y("[runner:main] runner_token refreshed"));
+    if (o.debugTokenDir) writeRunnerFileBestEffort(o.debugTokenDir, "runner_token.jwt", P, v);
+    Cn.runnerToken = P;
+    y("[runner:main] runner_token refreshed");
+  };
+  let jwtExpiry = getJwtExpiry({
+    getAccessToken: async () => {
+      let { token } = await Gn.refreshToken(Cn.runnerToken);
+      return token;
     },
-    hr = getJwtExpiry({
-      getAccessToken: async () => {
-        let { token: token } = await Gn.refreshToken(Cn.runnerToken);
-        return token;
-      },
-      onRefresh: (P, Z) => Fr(Z),
-      label: "self-hosted-runner",
-    });
-  hr.schedule(RUNNER_KIND, Ht);
-  let Nn = void 0;
+    onRefresh: (P, Z) => Fr(Z),
+    label: "self-hosted-runner",
+  });
+  jwtExpiry.schedule(RUNNER_KIND, Ht);
+  let Nn = undefined;
   Tn.current = Nn;
   let zn;
   if (o.useAnthropicGitProxy) {
-    if (o.capacity > 1)
-      (v(
+    if (o.capacity > 1) {
+      v(
         "[runner:fatal] --use-anthropic-git-proxy requires --capacity 1 (the proxy URL is per-session and linked worktrees share origin). Omit --use-anthropic-git-proxy or set --capacity 1.",
-      ),
-        await T(),
-        process.exit(1));
+      );
+      await T();
+      process.exit(1);
+    }
     if (
       antEnv.CLAUDE_RUNNER_TRUST_CANONICAL_PREWARM &&
       envPositiveMs("SELF_HOSTED_RUNNER_DRAIN_GRACE_MS") > 0
-    )
-      (v(
+    ) {
+      v(
         "[runner:fatal] CLAUDE_RUNNER_TRUST_CANONICAL_PREWARM requires --drain-grace-sec 0 (one-shot). With drain-grace > 0 a second session could reuse this VM after the first's child wrote to the canonical .git/, and the skip would bypass the cross-session-isolation sanitize for an untrusted canonical. Unset the env var or set --drain-grace-sec 0.",
-      ),
-        await T(),
-        process.exit(1));
-    let { parseGitVersion: parseGitVersion, readGitVersion: readGitVersion } =
-        await import("./chunk-nxsqxhv4.js"),
-      re = await readGitVersion(),
-      be = parseGitVersion(re);
-    if (!be || be[0] < 2 || (be[0] === 2 && be[1] < 32))
-      (v(
-        `[runner:fatal] --use-anthropic-git-proxy requires git >= 2.32 (found ${re.trim() || "<none>"}). Older git silently ignores GIT_CONFIG_GLOBAL, which this mode relies on for cross-session isolation.`,
-      ),
-        await T(),
-        process.exit(1));
+      );
+      await T();
+      process.exit(1);
+    }
+    let { parseGitVersion, readGitVersion } = await import("./chunk-nxsqxhv4.js");
+    let gitVersion = await readGitVersion();
+    let gitVersion_2 = parseGitVersion(gitVersion);
+    if (!gitVersion_2 || gitVersion_2[0] < 2 || (gitVersion_2[0] === 2 && gitVersion_2[1] < 32)) {
+      v(
+        `[runner:fatal] --use-anthropic-git-proxy requires git >= 2.32 (found ${gitVersion.trim() || "<none>"}). Older git silently ignores GIT_CONFIG_GLOBAL, which this mode relies on for cross-session isolation.`,
+      );
+      await T();
+      process.exit(1);
+    }
     zn = process.env.GIT_CONFIG_GLOBAL || join(homedir(), ".gitconfig");
-    let ee = zn,
-      Re = await lstat(ee).catch(() => {
-        return;
-      });
-    if (Re && (Re.isCharacterDevice() || Re.isBlockDevice()))
-      (v(
+    let ee = zn;
+    let Re = await lstat(ee).catch(() => {
+      return;
+    });
+    if (Re && (Re.isCharacterDevice() || Re.isBlockDevice())) {
+      v(
         `[runner:fatal] --use-anthropic-git-proxy requires a writable global git config, but GIT_CONFIG_GLOBAL resolves to ${ee} which is not a regular file. The proxy flag writes its credential helper there and restores it at each session start. Unset GIT_CONFIG_GLOBAL or point it at a regular file path.`,
-      ),
-        await T(),
-        process.exit(1));
-    let Ue = process.env.XDG_CONFIG_HOME || join(homedir(), ".config"),
-      ht = Oa(Ue, homedir());
-    (v(
+      );
+      await T();
+      process.exit(1);
+    }
+    let Ue = process.env.XDG_CONFIG_HOME || join(homedir(), ".config");
+    let ht = gitSearchDirs(Ue, homedir());
+    v(
       `[runner:git] --use-anthropic-git-proxy: wiping HOME-level git config (${ee}, ${ht.join(", ")}, ${join(o.baseDir, ".runner")}) for cross-session isolation. Operator-provisioned git config must live in system config (/etc/gitconfig) or via --configure-git; see "Git authentication" in the self-hosted runners guide.`,
-    ),
-      await resetRunnerHome({
-        globalCfgPath: ee,
-        homeGitconfigPath: join(homedir(), ".gitconfig"),
-        xdgGitDirs: ht,
-        runnerDir: join(o.baseDir, ".runner"),
-      }));
+    );
+    await resetRunnerHome({
+      globalCfgPath: ee,
+      homeGitconfigPath: join(homedir(), ".gitconfig"),
+      xdgGitDirs: ht,
+      runnerDir: join(o.baseDir, ".runner"),
+    });
   }
   let {
-      operatorGitSnapshotWarnings: operatorGitSnapshotWarnings,
-      quoteConfigValueForLog: quoteConfigValueForLog,
-      readOperatorGitSnapshot: readOperatorGitSnapshot,
-      resolveHookGitPrograms: resolveHookGitPrograms,
-      parseGitVersion: parseGitVersion,
-      readGitVersion: readGitVersion,
-    } = await import("./chunk-nxsqxhv4.js"),
-    Kt = await readOperatorGitSnapshot({
-      baseDir: o.baseDir,
-      lifecycleHooks: Boolean(envSelfHostedRunnerHooksDir),
-    }),
-    Mn = await resolveHookGitPrograms({ baseDir: o.baseDir }),
-    ir = !1;
+    operatorGitSnapshotWarnings,
+    quoteConfigValueForLog,
+    readOperatorGitSnapshot,
+    resolveHookGitPrograms,
+    parseGitVersion,
+    readGitVersion,
+  } = await import("./chunk-nxsqxhv4.js");
+  let operatorGitSnapshot = await readOperatorGitSnapshot({
+    baseDir: o.baseDir,
+    lifecycleHooks: Boolean(envSelfHostedRunnerHooksDir),
+  });
+  let hookGitPrograms = await resolveHookGitPrograms({
+    baseDir: o.baseDir,
+  });
+  let hookGitLegacyParams = false;
   if (envSelfHostedRunnerHooksDir) {
     let {
-        envHasGitConfigKey: envHasGitConfigKey,
-        lifecycleHookAskpassSource: lifecycleHookAskpassSource,
-        operatorGitConfigPairStatus: operatorGitConfigPairStatus,
-        withLifecycleHookGitEnv: withLifecycleHookGitEnv,
-        LIFECYCLE_HOOK_GIT_ENV: LIFECYCLE_HOOK_GIT_ENV,
-      } = await import("./chunk-1k90kvy4.js"),
-      GIT_ALLOW_PROTOCOL = LIFECYCLE_HOOK_GIT_ENV.GIT_ALLOW_PROTOCOL,
-      Ue = envHasGitConfigKey("core.hooksPath"),
-      ht = withLifecycleHookGitEnv(),
-      wn = ht.GIT_ALLOW_PROTOCOL !== GIT_ALLOW_PROTOCOL;
-    for (let St of operatorGitSnapshotWarnings(Kt, {
+      envHasGitConfigKey,
+      lifecycleHookAskpassSource,
+      operatorGitConfigPairStatus,
+      withLifecycleHookGitEnv,
+      LIFECYCLE_HOOK_GIT_ENV,
+    } = await import("./chunk-1k90kvy4.js");
+    let GIT_ALLOW_PROTOCOL = LIFECYCLE_HOOK_GIT_ENV.GIT_ALLOW_PROTOCOL;
+    let Ue = envHasGitConfigKey("core.hooksPath");
+    let ht = withLifecycleHookGitEnv();
+    let wn = ht.GIT_ALLOW_PROTOCOL !== GIT_ALLOW_PROTOCOL;
+    for (let St of operatorGitSnapshotWarnings(operatorGitSnapshot, {
       isRoot: process.getuid?.() === 0,
       operatorSshInEnv: ht.GIT_SSH_COMMAND !== LIFECYCLE_HOOK_GIT_ENV.GIT_SSH_COMMAND,
       askpassSource: lifecycleHookAskpassSource(),
       postSessionHook:
-        Kt.lfsFilterScopes !== void 0 &&
+        operatorGitSnapshot.lfsFilterScopes !== undefined &&
         (await findHook(envSelfHostedRunnerHooksDir, "post-session")) !== null,
       envHooksPath: Ue,
     }))
       v(St);
     let et = operatorGitConfigPairStatus();
-    if (et.discarded !== void 0)
+    if (et.discarded !== undefined)
       v(
         `[runner:warn] GIT_CONFIG_COUNT=${et.announced} in the runner environment is ${et.discarded === "sparse" ? "not backed by that many GIT_CONFIG_KEY_n pairs" : "above the supported maximum"}; the lifecycle hooks' git will NOT receive those operator pairs (only the runner's pins). Fix the count/pairs to have them applied.`,
       );
@@ -974,172 +1021,198 @@ Run 'claude self-hosted-runner --help' for usage.`,
       "[runner:git] lifecycle hooks: core.hooksPath " +
         (Ue
           ? "taken from the GIT_CONFIG_KEY_n pair in the runner's environment"
-          : `pinned to ${quoteConfigValueForLog(Kt.hooksPath ?? "/dev/null")}${Kt.hooksPath ? " (system git config)" : " (no repository or global hooks run inside lifecycle-hook git)"}`) +
-        `; fsmonitor/askpass/templates off${ht.GIT_ASKPASS !== void 0 && ht.GIT_ASKPASS === ht.SSH_ASKPASS ? " (GIT_ASKPASS set from the runner environment's SSH_ASKPASS)" : ""}; GIT_ALLOW_PROTOCOL=${ht.GIT_ALLOW_PROTOCOL ?? "(unset)"} for hook git${wn ? " (from the runner environment)" : " (runner default \u2014 local-path/file://, git://, bundle and external-helper remotes refused)"}; gpg programs ${Mn.gpg}/${Mn.gpgsm}${Mn.skipped.length ? ` (skipped session-writable ${Mn.skipped.length} PATH entries)` : ""}; ` +
+          : `pinned to ${quoteConfigValueForLog(operatorGitSnapshot.hooksPath ?? "/dev/null")}${operatorGitSnapshot.hooksPath ? " (system git config)" : " (no repository or global hooks run inside lifecycle-hook git)"}`) +
+        `; fsmonitor/askpass/templates off${ht.GIT_ASKPASS !== undefined && ht.GIT_ASKPASS === ht.SSH_ASKPASS ? " (GIT_ASKPASS set from the runner environment's SSH_ASKPASS)" : ""}; GIT_ALLOW_PROTOCOL=${ht.GIT_ALLOW_PROTOCOL ?? "(unset)"} for hook git${wn ? " (from the runner environment)" : " (runner default \u2014 local-path/file://, git://, bundle and external-helper remotes refused)"}; gpg programs ${hookGitPrograms.gpg}/${hookGitPrograms.gpgsm}${hookGitPrograms.skipped.length ? ` (skipped session-writable ${hookGitPrograms.skipped.length} PATH entries)` : ""}; ` +
         (o.configureGit
           ? "hook-made commits signed per session (--configure-git), not co-authored"
           : "commit/tag signing off for hook-made commits (no --configure-git)"),
     );
-    let Ct = parseGitVersion(await readGitVersion());
-    if (Ct !== null && (Ct[0] < 2 || (Ct[0] === 2 && Ct[1] < 31)))
-      ((ir = !0),
-        v(
-          `[runner:warn] git ${Ct[0]}.${Ct[1]} ignores GIT_CONFIG_COUNT; exporting the lifecycle-hook git configuration pins (and any GIT_CONFIG_KEY_n pairs from the runner environment, after them) via GIT_CONFIG_PARAMETERS instead (upgrade to git >= 2.31 for the documented behaviour).`,
-        ));
+    let gitVersion = parseGitVersion(await readGitVersion());
+    if (gitVersion !== null && (gitVersion[0] < 2 || (gitVersion[0] === 2 && gitVersion[1] < 31))) {
+      hookGitLegacyParams = true;
+      v(
+        `[runner:warn] git ${gitVersion[0]}.${gitVersion[1]} ignores GIT_CONFIG_COUNT; exporting the lifecycle-hook git configuration pins (and any GIT_CONFIG_KEY_n pairs from the runner environment, after them) via GIT_CONFIG_PARAMETERS instead (upgrade to git >= 2.31 for the documented behaviour).`,
+      );
+    }
   }
   if (o.configureGit)
     try {
-      let { configureGitForSigning: configureGitForSigning } = await import("./chunk-nxsqxhv4.js");
-      await configureGitForSigning({ baseDir: o.baseDir, execPath: process.execPath, onStatus: v });
+      let { configureGitForSigning } = await import("./chunk-nxsqxhv4.js");
+      await configureGitForSigning({
+        baseDir: o.baseDir,
+        execPath: process.execPath,
+        onStatus: v,
+      });
     } catch (error) {
-      (v(
+      v(
         `[runner:fatal] --configure-git failed: ${errorMessage(error)}. Check git is on PATH and ~/.gitconfig is writable.`,
-      ),
-        await T(),
-        process.exit(1));
+      );
+      await T();
+      process.exit(1);
     }
   if (o.pushOutcomeOnRelease)
     try {
-      let { parseGitVersion: parseGitVersion } = await import("./chunk-nxsqxhv4.js"),
-        Z = await execFileNoThrow("git", ["--version"], {
-          timeout: 5000,
-          useCwd: !1,
-          stdin: "ignore",
-          stderr: "pipe",
-          maxBuffer: 1048576,
-        });
-      if (Z.stderr.trim() !== "") a.write("stderr", redactSecretsInText(Z.stderr.trimEnd()));
+      let { parseGitVersion } = await import("./chunk-nxsqxhv4.js");
+      let Z = await execFileNoThrow("git", ["--version"], {
+        timeout: 5000,
+        useCwd: false,
+        stdin: "ignore",
+        stderr: "pipe",
+        maxBuffer: 1048576,
+      });
+      if (Z.stderr.trim() !== "") stdioWriter.write("stderr", redactSecretsInText(Z.stderr.trimEnd()));
       let re = Z.code === 0 ? parseGitVersion(Z.stdout) : null;
       if (re !== null && (re[0] < 2 || (re[0] === 2 && re[1] < 29)))
         v(
           `[runner:warn] --push-outcome-on-release: git ${re[0]}.${re[1]} detected. The drain-push works on any version, but resuming from the preserved branch requires git >= 2.29 (--no-write-fetch-head). Upgrade git for full behavior.`,
         );
     } catch {}
-  let Hn, de;
+  let configureGitHookStubs;
+  let configureGitSigningArtifacts;
   if (o.configureGit) {
-    let { coauthorHookStubs: coauthorHookStubs, codeSignArtifacts: codeSignArtifacts } =
-      await import("./chunk-nxsqxhv4.js");
-    ((Hn = coauthorHookStubs(o.baseDir)), (de = codeSignArtifacts(o.baseDir, process.execPath)));
+    let { coauthorHookStubs, codeSignArtifacts } = await import("./chunk-nxsqxhv4.js");
+    configureGitHookStubs = coauthorHookStubs(o.baseDir);
+    configureGitSigningArtifacts = codeSignArtifacts(o.baseDir, process.execPath);
   }
-  let Yt, qn;
+  let gitProxyGlobalConfigSnapshot;
+  let gitProxyCredHelper;
   if (o.useAnthropicGitProxy)
     try {
-      let {
-        configureGitProxyCredential: configureGitProxyCredential,
-        GIT_PROXY_CRED_HELPER_CONTENT: GIT_PROXY_CRED_HELPER_CONTENT,
-        gitProxyCredHelperPath: gitProxyCredHelperPath,
-      } = await import("./chunk-nxsqxhv4.js");
-      (await configureGitProxyCredential({ baseDir: o.baseDir, apiBaseUrl: o.apiUrl, onStatus: v }),
-        (Yt = await readFile(zn, "utf-8").catch(() => "")),
-        (qn = { path: gitProxyCredHelperPath(o.baseDir), content: GIT_PROXY_CRED_HELPER_CONTENT }));
+      let { configureGitProxyCredential, GIT_PROXY_CRED_HELPER_CONTENT, gitProxyCredHelperPath } =
+        await import("./chunk-nxsqxhv4.js");
+      await configureGitProxyCredential({
+        baseDir: o.baseDir,
+        apiBaseUrl: o.apiUrl,
+        onStatus: v,
+      });
+      gitProxyGlobalConfigSnapshot = await readFile(zn, "utf-8").catch(() => "");
+      gitProxyCredHelper = {
+        path: gitProxyCredHelperPath(o.baseDir),
+        content: GIT_PROXY_CRED_HELPER_CONTENT,
+      };
     } catch (error) {
-      (v(
+      v(
         `[runner:fatal] --use-anthropic-git-proxy failed: ${errorMessage(error)}. Check git is on PATH and ~/.gitconfig is writable.`,
-      ),
-        await T(),
-        process.exit(1));
+      );
+      await T();
+      process.exit(1);
     }
-  let q = {
-      apiUrl: o.apiUrl,
-      capacity: o.capacity,
-      baseDir: o.baseDir,
-      logLevel: o.logLevel,
-      gitSshRewriteHosts: o.gitSshRewriteHosts,
-      gitHostRewrites: o.gitHostRewrites,
-      useAnthropicGitProxy: o.useAnthropicGitProxy ? o.apiUrl : void 0,
-      gitProxyGlobalConfigPath: zn,
-      gitProxyGlobalConfigSnapshot: Yt,
-      gitProxyCredHelper: qn,
-      configureGitHookStubs: Hn,
-      configureGitSigningArtifacts: de,
-      operatorGitSnapshot: Kt,
-      hookGitPrograms: Mn,
-      hookGitLegacyParams: ir,
-      configureGit: o.configureGit,
-      pushOutcomeOnRelease: o.pushOutcomeOnRelease,
-      trustWorkspace: o.trustWorkspace,
-      removeSessionState: o.removeSessionState,
-      diffFindsNestedRepository: o.diffFindsNestedRepository,
-      freshMachinePerSession: fe,
-      confineRepoSettings: o.confineRepoSettings,
-      serverAutoModeLists: o.serverAutoModeLists,
-    },
-    Pe = {
-      runnerId: Ae,
-      activeSessions: 0,
-      sessionsStarted: new Map([[UNKNOWN, 0]]),
-      sessionsCompleted: new Map([[UNKNOWN, 0]]),
-      sessionsFailed: new Map([[UNKNOWN, 0]]),
-      sessionsInterrupted: new Map([[UNKNOWN, 0]]),
-      sessionClientPlatform: new Map(),
-      lastPollAt: 0,
-      version: {
-        ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
-        PACKAGE_URL: "@anthropic-ai/claude-code",
-        README_URL: "https://code.claude.com/docs/en/overview",
-        VERSION: "2.1.316",
-        FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-        BUILD_TIME: "2026-10-30T23:28:13Z",
-        GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
-        HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
-        DD_SOURCEMAP_GROUP: "default",
-      }.VERSION,
-      clientLabel: ve,
-      capacity: o.capacity,
-      claimVisibility: new Map(),
-      lockedAccountEmail: null,
-      initializingSessions: 0,
-      sessionInitErrors: 0,
-      sessionInitDurations: xks(),
-      sessionStartHookErrors: 0,
-      pollErrors: NHn(),
-      sessionIdle: new Map(),
-    };
+  let config = {
+    apiUrl: o.apiUrl,
+    capacity: o.capacity,
+    baseDir: o.baseDir,
+    logLevel: o.logLevel,
+    gitSshRewriteHosts: o.gitSshRewriteHosts,
+    gitHostRewrites: o.gitHostRewrites,
+    useAnthropicGitProxy: o.useAnthropicGitProxy ? o.apiUrl : undefined,
+    gitProxyGlobalConfigPath: zn,
+    gitProxyGlobalConfigSnapshot,
+    gitProxyCredHelper,
+    configureGitHookStubs,
+    configureGitSigningArtifacts,
+    operatorGitSnapshot,
+    hookGitPrograms,
+    hookGitLegacyParams,
+    configureGit: o.configureGit,
+    pushOutcomeOnRelease: o.pushOutcomeOnRelease,
+    trustWorkspace: o.trustWorkspace,
+    removeSessionState: o.removeSessionState,
+    diffFindsNestedRepository: o.diffFindsNestedRepository,
+    freshMachinePerSession,
+    confineRepoSettings: o.confineRepoSettings,
+    serverAutoModeLists: o.serverAutoModeLists,
+  };
+  let Pe = {
+    runnerId: Ae,
+    activeSessions: 0,
+    sessionsStarted: new Map([[UNKNOWN, 0]]),
+    sessionsCompleted: new Map([[UNKNOWN, 0]]),
+    sessionsFailed: new Map([[UNKNOWN, 0]]),
+    sessionsInterrupted: new Map([[UNKNOWN, 0]]),
+    sessionClientPlatform: new Map(),
+    lastPollAt: 0,
+    version: {
+      ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
+      PACKAGE_URL: "@anthropic-ai/claude-code",
+      README_URL: "https://code.claude.com/docs/en/overview",
+      VERSION: "2.1.316",
+      FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
+      BUILD_TIME: "2026-10-30T23:28:13Z",
+      GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+      HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
+      DD_SOURCEMAP_GROUP: "default",
+    }.VERSION,
+    clientLabel,
+    capacity: o.capacity,
+    claimVisibility: new Map(),
+    lockedAccountEmail: null,
+    initializingSessions: 0,
+    sessionInitErrors: 0,
+    sessionInitDurations: createHistogram(),
+    sessionStartHookErrors: 0,
+    pollErrors: emptyErrorCategoryCounts(),
+    sessionIdle: new Map(),
+  };
   br.current = Pe;
-  let En = startClockSkewMonitor({ clock: Aa, onStatus: v }),
-    ft =
-      o.healthPort > 0
-        ? startRunnerTokenRefresher({
-            baseUrl: o.apiUrl,
-            getRunnerToken: () => Cn.runnerToken,
-            renewRunnerToken: () =>
-              notAvailableInThisBuild({ tokenState: Cn, refreshToken: (P) => Fe.refreshToken(P), adopt: Fr }),
-            renewSessionTokens: () => En?.renewSessionTokens() ?? Promise.resolve(),
-            isThawing: () => !1,
-            getRetireAtMs: () => runnerRetireAtMs(),
-            isStopping: () => an !== "running" || !or,
-            isHeldOff: () => En?.isHeldOff() ?? !1,
-            onGranted: (P) => En?.onGranted(P),
-            clock: Aa,
-            onStatus: v,
-            onDebug: y,
-          })
-        : void 0,
-    he = o.healthPort > 0 ? startHealthServer(o.healthPort, Pe, v, ft, void 0) : void 0,
-    De = await captureHostConfigSnapshot(v, {
-      storage: o.hostConfigSnapshot === "disk" ? { mode: "disk", baseDir: o.baseDir } : { mode: "memory" },
-    }),
-    Vt = await snapshotOperatorGitConfig(y);
+  let clockSkewMonitor = startClockSkewMonitor({
+    clock: systemClock,
+    onStatus: v,
+  });
+  let ft =
+    o.healthPort > 0
+      ? startRunnerTokenRefresher({
+          baseUrl: o.apiUrl,
+          getRunnerToken: () => Cn.runnerToken,
+          renewRunnerToken: () =>
+            notAvailableInThisBuild({
+              tokenState: Cn,
+              refreshToken: (P) => defaultEnvironment.refreshToken(P),
+              adopt: Fr,
+            }),
+          renewSessionTokens: () => clockSkewMonitor?.renewSessionTokens() ?? Promise.resolve(),
+          isThawing: () => false,
+          getRetireAtMs: () => runnerRetireAtMs(),
+          isStopping: () => an !== "running" || !or,
+          isHeldOff: () => clockSkewMonitor?.isHeldOff() ?? false,
+          onGranted: (P) => clockSkewMonitor?.onGranted(P),
+          clock: systemClock,
+          onStatus: v,
+          onDebug: y,
+        })
+      : undefined;
+  let he = o.healthPort > 0 ? startHealthServer(o.healthPort, Pe, v, ft, undefined) : undefined;
+  let De = await captureHostConfigSnapshot(v, {
+    storage:
+      o.hostConfigSnapshot === "disk"
+        ? {
+            mode: "disk",
+            baseDir: o.baseDir,
+          }
+        : {
+            mode: "memory",
+          },
+  });
+  let governedGitConfigSeed = await snapshotOperatorGitConfig(y);
   try {
     await runRunnerLoop(
       {
-        apiClient: kn,
+        apiClient,
         runnerId: Ae,
         tokenState: Cn,
-        config: q,
+        config,
         execPath: execPath_2,
-        execArgs: execArgs,
+        execArgs,
         startedFromWorkOrder: isPoolSpawnJwt(l),
         onDebug: y,
         onStatus: v,
         flushLogSink: T,
         healthState: Pe,
         hostConfig: De,
-        governedGitConfigSeed: Vt,
+        governedGitConfigSeed,
         debugTokenDir: o.debugTokenDir,
-        startCommandPhases: _n,
-        moveWatch: En,
-        ...!1,
+        startCommandPhases,
+        moveWatch: clockSkewMonitor,
+        ...false,
         deferShutdown: {
           signal: abortController_2.signal,
           maxMs: A,
@@ -1147,33 +1220,41 @@ Run 'claude self-hosted-runner --help' for usage.`,
             if (an !== "draining") An(P, "loop");
           },
           onClosed: () => {
-            or = !1;
+            or = false;
           },
         },
       },
       abortController.signal,
     );
   } finally {
-    if ((hr.cancelAll(), he?.close(), En?.stop(), De?.snapshot?.storage.mode === "disk")) {
+    jwtExpiry.cancelAll();
+    he?.close();
+    clockSkewMonitor?.stop();
+    if (De?.snapshot?.storage.mode === "disk") {
       let snapshotDir = De.snapshot.storage.snapshotDir;
       await withBoundedTimeout(
-        rm(snapshotDir, { recursive: !0, force: !0 }),
+        rm(snapshotDir, {
+          recursive: true,
+          force: true,
+        }),
         1e4,
         `[runner:exit] remove host config snapshot ${snapshotDir}`,
       ).catch(() => {});
     }
     if (Ve) await withBoundedTimeout(Ve.close(), 2000, "[runner:exit] egress proxy close").catch(() => {});
-    (process.removeListener("SIGTERM", Bt), process.removeListener("SIGINT", kt), await T());
+    process.removeListener("SIGTERM", Bt);
+    process.removeListener("SIGINT", kt);
+    await T();
   }
 }
 //@ chunk-hm0ce8vc.js:288822-288906 placement
-function isAuthFailure(e) {
-  return e instanceof Error && "isAuthFailure" in e && e.isAuthFailure === !0;
+function isAuthFailure(error) {
+  return error instanceof Error && "isAuthFailure" in error && error.isAuthFailure === true;
 }
+//@ chunk-hm0ce8vc.js:288906-289263 placement
 /**
  * 校验 --lock-to-account：必须是组织成员的 user_<id> 或邮箱。
  */
-//@ chunk-hm0ce8vc.js:288906-289263 placement
 function validateLockToAccount(e) {
   if (!e.includes("lock_to_account_id")) return "";
   let n = "lock_to_account_id is the value of --lock-to-account / SELF_HOSTED_RUNNER_LOCK_TO_ACCOUNT";
@@ -1181,265 +1262,289 @@ function validateLockToAccount(e) {
     return ` (${n}; it must be the user_<id> or email address of a member of the organization that owns this environment)`;
   return ` (${n})`;
 }
+//@ chunk-hm0ce8vc.js:289263-320208 placement
 /**
  * runner 主循环：轮询/兑现工单、跑会话、处理 401/epoch 失配、排空与重启（约 31 KB）。
  */
-//@ chunk-hm0ce8vc.js:289263-320208 placement
-async function runRunnerLoop(e, n) {
+async function runRunnerLoop(e, signal) {
   let {
-      apiClient: apiClient,
-      tokenState: tokenState,
-      config: config,
-      execPath: execPath,
-      execArgs: execArgs,
-      startedFromWorkOrder: startedFromWorkOrder,
-      onDebug: onDebug,
-      onStatus: onStatus,
-      healthState: healthState,
-    } = e,
-    runnerId = e.runnerId,
-    y = e.retireAtMsOverride ?? runnerRetireAtMs(),
-    v = startedFromWorkOrder ? `Draining and exiting. ${vo}` : "Draining and exiting for clean restart.",
-    w = startedFromWorkOrder ? vo : "Orchestrator will restart.",
-    E = new Map(),
-    A = envPositiveMs("SELF_HOSTED_RUNNER_SESSION_STOP_GRACE_MS") || Us,
-    G = envPositiveMs("SELF_HOSTED_RUNNER_POST_SESSION_HOOK_TIMEOUT_MS") || Ss,
-    K = getCheckoutHookTimeoutMs(),
-    L = getDrainWaitMs(),
-    D = drainMarkerFile(),
-    oe = !1,
-    ge = !1,
-    Ne = e.readDrainMarkerOverride ?? readRegularFileSafe,
-    me = e.drainMarkerReadTimeoutMs ?? _h,
-    resolved = Promise.resolve(void 0),
-    Ye = !1,
-    He = () => {
-      if (Ye || D === void 0) return;
-      ((Ye = !0),
-        (resolved = withBoundedTimeout(Ne(D), me, "drain-marker read")
-          .then(
-            (se) => {
-              if (se.present)
-                onStatus(
-                  `[runner] drain: host-drain marker ${D} present` +
-                    (se.unreadable !== void 0
-                      ? ` but unreadable (${se.unreadable}) \u2014 reporting a host drain with no deadline`
-                      : se.deadlineMs !== void 0
-                        ? ` (host deadline ${new Date(se.deadlineMs).toISOString()})`
-                        : " (no deadline on its first line)"),
-                );
-              return se;
-            },
-            (se) => {
-              onStatus(
-                `[runner] drain: host-drain marker ${D} could not be read (${errorMessage(se)}) \u2014 reporting a plain shutdown signal`,
-              );
-              return;
-            },
-          )
-          .catch(() => {
-            return;
-          })));
-    };
-  if (n.aborted) He();
-  else n.addEventListener("abort", He, { once: !0 });
-  let ae,
-    fe = new Set(),
-    $e = new Map(),
-    Ve = new Set(),
-    Be = 0,
-    Fe = 0,
-    ve,
-    Ae,
-    Ht = new Set(),
-    Mt = new Map(),
-    _n = new Set(),
-    Sn = 0,
-    now = Date.now(),
-    Gn = !1,
-    kn = !0,
-    Er = 0,
-    now_2 = Date.now(),
-    startCommandPhases = e.startCommandPhases,
-    br = () => {
-      let se = startCommandPhases;
-      return ((startCommandPhases = void 0), se);
-    },
-    Tn = !1,
-    On = null,
-    dn = envPositiveMs("SELF_HOSTED_RUNNER_IDLE_SHUTDOWN_MS"),
-    An = envPositiveMs("SELF_HOSTED_RUNNER_DRAIN_GRACE_MS"),
-    Bt = envPositiveMs("SELF_HOSTED_RUNNER_SESSION_IDLE_MS"),
-    kt = holdIdleFile(),
-    Cn = getMaxHoldMs(),
-    Fr = e.leftoverHoldLookOverride ?? checkPathNotOnNetworkLocation,
-    hr = e.leftoverHoldRecheckMsOverride ?? Nu,
-    Nn = e.leftoverHoldLookTimeoutMsOverride ?? wh,
-    zn = getStartupTimeoutMs(),
-    ze = e.retireReleaseRetryMsOverride ?? Ch,
-    Xn = e.retireDeferredGraceMsOverride ?? ko,
-    Pt = !1,
-    Wt,
-    $n,
-    deferShutdown = e.deferShutdown,
-    Kt = deferShutdown !== void 0 && deferShutdown.maxMs > 0,
-    Mn = deferShutdown?.ceilingGraceMsOverride ?? Math.max(L, Xn),
-    ir =
-      deferShutdown?.ceilingGraceMsOverride !== void 0
-        ? Math.max(10, Math.floor(deferShutdown.ceilingGraceMsOverride / 10))
-        : 1000,
-    Hn = deferShutdown?.ceilingGraceMsOverride ?? Lr,
-    de,
-    Yt,
-    qn = !1,
-    q = () => count([...E.entries()], ([se, ke]) => !ke.controller.signal.aborted && !ft.has(se)),
-    Pe = () =>
-      count([...E.entries()], ([se, ke]) => !ke.controller.signal.aborted && ft.has(se) && !De.has(se)),
-    En = () =>
-      $n === "shutdown"
-        ? "[runner:exit] shutdown requested and every attached session has been released \u2014 exiting."
-        : "[runner:exit] retire time passed and no active sessions \u2014 exiting before the host kills this runner.",
-    ft = new Set(),
-    he = new Map(),
-    De = new Map(),
-    abortController = new AbortController(),
-    P = new Set(),
-    Z = new Map(),
-    re = new Set(),
-    be = void 0,
-    ee,
-    Re = () => {
-      let size = E.size;
-      for (let ke of De.keys()) if (!E.has(ke)) size++;
-      for (let ke of P) if (!E.has(ke) && !De.has(ke)) size++;
-      return size;
-    },
-    Ue = new Set(),
-    ht = 10,
-    wn = e.sseHintsEnabledOverride ?? isEnvTruthy(process.env.CCR_SHR_SSE_HINTS),
-    et = new PollWaker(),
-    Ct = e.moveWatch?.moved.subscribe(() => et.wake("LOCAL")),
-    St = e.openWorkHintsStream ?? streamWorkHints,
-    Or;
-  (() => {
-    if (wn)
-      (onDebug("[runner:hints] CCR_SHR_SSE_HINTS enabled \u2014 opening stream"),
-        (Or = St({
-          baseUrl: config.apiUrl,
-          runnerId: runnerId,
-          tokenState: tokenState,
-          onWake: () => et.wake("SSE"),
-          onDebug: onDebug,
-          signal: n,
-        })));
-  })();
-  let Gr = !1,
-    pr = !1,
-    Bn = () => {
-      Wt = void 0;
-      let se = y - Date.now();
-      if (se > 0) {
-        Wt = setTimeout(Bn, Math.min(se, 2147483647));
-        return;
-      }
-      ((Pt = !0), ($n = "retire"));
-      let size = P.size;
-      if (
-        (P.clear(),
-        logFeatureOk("self_hosted_retire"),
-        onStatus(
-          `[runner:retire] retire time reached \u2014 releasing ${E.size} active session(s), refusing new work; exiting once the slots are empty`,
-        ),
-        size > 0)
-      )
-        onStatus(
-          `[runner:retire] ${size} declined session(s) held for re-spawn dropped at the retire deadline \u2014 requeued at exit instead`,
-        );
-      for (let jt of E.values()) jt.releaseForRetire();
-      et.wake("LOCAL");
-    },
-    un = () => {
-      if (!Kt || deferShutdown === void 0) return;
-      He();
-      let se = typeof deferShutdown.signal.reason === "number" ? deferShutdown.signal.reason : Date.now();
-      if (de === void 0) {
-        let ke = se + deferShutdown.maxMs - Date.now();
-        de = setTimeout(We, Math.min(Math.max(0, ke), 2147483647));
-      }
-      if ((logFeatureOk("self_hosted_defer_shutdown"), Pt)) {
-        onStatus(
-          "[runner:shutdown] shutdown requested while already retiring \u2014 sessions are already being released",
-        );
-        return;
-      }
-      ((Pt = !0),
-        ($n = "shutdown"),
-        onStatus(
-          `[runner:shutdown] shutdown requested \u2014 deferring drain: ${E.size} active session(s), refusing new work; ` +
-            (Bt > 0
-              ? `each is released once its user has been idle ${formatDuration(Bt, { hideTrailingZeros: !0 })} (--release-idle-session-min) or when it ends`
-              : "none is released early (--release-idle-session-min is not set)") +
-            `; ${formatDuration(deferShutdown.maxMs, { hideTrailingZeros: !0 })} after the signal every session still attached is released at once; exiting as soon as the slots are empty`,
-        ),
-        et.wake("LOCAL"));
-    },
-    We = () => {
-      if (((de = void 0), deferShutdown === void 0 || n.aborted)) return;
-      qn = !0;
-      let size = P.size;
-      if (size > 0) (P.clear(), et.wake("LOCAL"));
-      let ke = q(),
-        jt = () => {
-          if (size > 0)
+    apiClient,
+    tokenState,
+    config,
+    execPath,
+    execArgs,
+    startedFromWorkOrder,
+    onDebug,
+    onStatus,
+    healthState,
+  } = e;
+  let runnerId = e.runnerId;
+  let y = e.retireAtMsOverride ?? runnerRetireAtMs();
+  let v = startedFromWorkOrder
+    ? `Draining and exiting. ${WORK_ORDER_SINGLE_USE_TEXT}`
+    : "Draining and exiting for clean restart.";
+  let w = startedFromWorkOrder ? WORK_ORDER_SINGLE_USE_TEXT : "Orchestrator will restart.";
+  let E = new Map();
+  let A = envPositiveMs("SELF_HOSTED_RUNNER_SESSION_STOP_GRACE_MS") || SIGKILL_TIMEOUT_DEFAULT_MS;
+  let G = envPositiveMs("SELF_HOSTED_RUNNER_POST_SESSION_HOOK_TIMEOUT_MS") || POST_SESSION_HOOK_TIMEOUT_MS;
+  let checkoutHookTimeoutMs = getCheckoutHookTimeoutMs();
+  let drainWaitMs = getDrainWaitMs();
+  let D = drainMarkerFile();
+  let oe = false;
+  let ge = false;
+  let readDrainMarkerOverride = e.readDrainMarkerOverride ?? readRegularFileSafe;
+  let drainMarkerReadTimeoutMs = e.drainMarkerReadTimeoutMs ?? DRAIN_MARKER_READ_TIMEOUT_MS;
+  let resolved = Promise.resolve(undefined);
+  let Ye = false;
+  let He = () => {
+    if (Ye || D === undefined) return;
+    Ye = true;
+    resolved = withBoundedTimeout(readDrainMarkerOverride(D), drainMarkerReadTimeoutMs, "drain-marker read")
+      .then(
+        (se) => {
+          if (se.present)
             onStatus(
-              `[runner:shutdown] ${size} declined session(s) held for re-spawn dropped at the ceiling \u2014 requeued at exit instead`,
+              `[runner] drain: host-drain marker ${D} present` +
+                (se.unreadable !== undefined
+                  ? ` but unreadable (${se.unreadable}) \u2014 reporting a host drain with no deadline`
+                  : se.deadlineMs !== undefined
+                    ? ` (host deadline ${new Date(se.deadlineMs).toISOString()})`
+                    : " (no deadline on its first line)"),
             );
-        };
-      if (ke === 0 && Pe() === 0) {
-        jt();
+          return se;
+        },
+        (error) => {
+          onStatus(
+            `[runner] drain: host-drain marker ${D} could not be read (${errorMessage(error)}) \u2014 reporting a plain shutdown signal`,
+          );
+          return;
+        },
+      )
+      .catch(() => {
+        return;
+      });
+  };
+  if (signal.aborted) He();
+  else
+    signal.addEventListener("abort", He, {
+      once: true,
+    });
+  let ae;
+  let fe = new Set();
+  let $e = new Map();
+  let Ve = new Set();
+  let Be = 0;
+  let Fe = 0;
+  let ve;
+  let Ae;
+  let Ht = new Set();
+  let canonicalLocks = new Map();
+  let spawnedSessionIds = new Set();
+  let Sn = 0;
+  let now = Date.now();
+  let Gn = false;
+  let kn = true;
+  let Er = 0;
+  let now_2 = Date.now();
+  let startCommandPhases = e.startCommandPhases;
+  let takeStartCommandPhases = () => {
+    let se = startCommandPhases;
+    startCommandPhases = undefined;
+    return se;
+  };
+  let Tn = false;
+  let On = null;
+  let dn = envPositiveMs("SELF_HOSTED_RUNNER_IDLE_SHUTDOWN_MS");
+  let An = envPositiveMs("SELF_HOSTED_RUNNER_DRAIN_GRACE_MS");
+  let Bt = envPositiveMs("SELF_HOSTED_RUNNER_SESSION_IDLE_MS");
+  let kt = holdIdleFile();
+  let maxHoldMs = getMaxHoldMs();
+  let leftoverHoldLookOverride = e.leftoverHoldLookOverride ?? checkPathNotOnNetworkLocation;
+  let leftoverHoldRecheckMsOverride = e.leftoverHoldRecheckMsOverride ?? LEFTOVER_HOLD_LOOK_TIMEOUT_MS;
+  let leftoverHoldLookTimeoutMsOverride = e.leftoverHoldLookTimeoutMsOverride ?? RETIRE_RELEASE_RETRY_MS;
+  let startupTimeoutMs = getStartupTimeoutMs();
+  let retireReleaseRetryMsOverride = e.retireReleaseRetryMsOverride ?? ENV_SECRET_READ_TIMEOUT_MS_2;
+  let retireDeferredGraceMsOverride = e.retireDeferredGraceMsOverride ?? DEFAULT_POST_SESSION_ALLOWANCE_MS;
+  let Pt = false;
+  let Wt;
+  let $n;
+  let deferShutdown = e.deferShutdown;
+  let Kt = deferShutdown !== undefined && deferShutdown.maxMs > 0;
+  let Mn = deferShutdown?.ceilingGraceMsOverride ?? Math.max(drainWaitMs, retireDeferredGraceMsOverride);
+  let ir =
+    deferShutdown?.ceilingGraceMsOverride !== undefined
+      ? Math.max(10, Math.floor(deferShutdown.ceilingGraceMsOverride / 10))
+      : 1000;
+  let ceilingGraceMsOverride = deferShutdown?.ceilingGraceMsOverride ?? SIGKILL_GRACE_BASE_MS;
+  let de;
+  let Yt;
+  let qn = false;
+  let q = () => count([...E.entries()], ([se, ke]) => !ke.controller.signal.aborted && !ft.has(se));
+  let Pe = () =>
+    count([...E.entries()], ([se, ke]) => !ke.controller.signal.aborted && ft.has(se) && !De.has(se));
+  let En = () =>
+    $n === "shutdown"
+      ? "[runner:exit] shutdown requested and every attached session has been released \u2014 exiting."
+      : "[runner:exit] retire time passed and no active sessions \u2014 exiting before the host kills this runner.";
+  let ft = new Set();
+  let he = new Map();
+  let De = new Map();
+  let abortController = new AbortController();
+  let P = new Set();
+  let Z = new Map();
+  let re = new Set();
+  let be = undefined;
+  let ee;
+  let Re = () => {
+    let size = E.size;
+    for (let key of De.keys()) if (!E.has(key)) size++;
+    for (let ke of P) if (!E.has(ke) && !De.has(ke)) size++;
+    return size;
+  };
+  let Ue = new Set();
+  let ht = 10;
+  let wn = e.sseHintsEnabledOverride ?? isEnvTruthy(process.env.CCR_SHR_SSE_HINTS);
+  let et = new PollWaker();
+  let Ct = e.moveWatch?.moved.subscribe(() => et.wake("LOCAL"));
+  let openWorkHintsStream = e.openWorkHintsStream ?? streamWorkHints;
+  let Or;
+  (() => {
+    if (wn) {
+      onDebug("[runner:hints] CCR_SHR_SSE_HINTS enabled \u2014 opening stream");
+      Or = openWorkHintsStream({
+        baseUrl: config.apiUrl,
+        runnerId,
+        tokenState,
+        onWake: () => et.wake("SSE"),
+        onDebug,
+        signal,
+      });
+    }
+  })();
+  let Gr = false;
+  let pr = false;
+  let Bn = () => {
+    Wt = undefined;
+    let se = y - Date.now();
+    if (se > 0) {
+      Wt = setTimeout(Bn, Math.min(se, 2147483647));
+      return;
+    }
+    Pt = true;
+    $n = "retire";
+    let size = P.size;
+    P.clear();
+    logFeatureOk("self_hosted_retire");
+    onStatus(
+      `[runner:retire] retire time reached \u2014 releasing ${E.size} active session(s), refusing new work; exiting once the slots are empty`,
+    );
+    if (size > 0)
+      onStatus(
+        `[runner:retire] ${size} declined session(s) held for re-spawn dropped at the retire deadline \u2014 requeued at exit instead`,
+      );
+    for (let jt of E.values()) jt.releaseForRetire();
+    et.wake("LOCAL");
+  };
+  let un = () => {
+    if (!Kt || deferShutdown === undefined) return;
+    He();
+    let se = typeof deferShutdown.signal.reason === "number" ? deferShutdown.signal.reason : Date.now();
+    if (de === undefined) {
+      let ke = se + deferShutdown.maxMs - Date.now();
+      de = setTimeout(We, Math.min(Math.max(0, ke), 2147483647));
+    }
+    logFeatureOk("self_hosted_defer_shutdown");
+    if (Pt) {
+      onStatus(
+        "[runner:shutdown] shutdown requested while already retiring \u2014 sessions are already being released",
+      );
+      return;
+    }
+    Pt = true;
+    $n = "shutdown";
+    onStatus(
+      `[runner:shutdown] shutdown requested \u2014 deferring drain: ${E.size} active session(s), refusing new work; ` +
+        (Bt > 0
+          ? `each is released once its user has been idle ${formatDuration(Bt, {
+              hideTrailingZeros: true,
+            })} (--release-idle-session-min) or when it ends`
+          : "none is released early (--release-idle-session-min is not set)") +
+        `; ${formatDuration(deferShutdown.maxMs, {
+          hideTrailingZeros: true,
+        })} after the signal every session still attached is released at once; exiting as soon as the slots are empty`,
+    );
+    et.wake("LOCAL");
+  };
+  let We = () => {
+    de = undefined;
+    if (deferShutdown === undefined || signal.aborted) return;
+    qn = true;
+    let size = P.size;
+    if (size > 0) {
+      P.clear();
+      et.wake("LOCAL");
+    }
+    let ke = q();
+    let jt = () => {
+      if (size > 0)
+        onStatus(
+          `[runner:shutdown] ${size} declined session(s) held for re-spawn dropped at the ceiling \u2014 requeued at exit instead`,
+        );
+    };
+    if (ke === 0 && Pe() === 0) {
+      jt();
+      return;
+    }
+    logFeatureOk("self_hosted_defer_ceiling");
+    onStatus(
+      `[runner:shutdown] defer ceiling reached (${formatDuration(deferShutdown.maxMs, {
+        hideTrailingZeros: true,
+      })}) \u2014 ` +
+        (ke > 0
+          ? `releasing the remaining ${ke} session(s) now`
+          : `waiting on ${Pe()} in-flight release(s)`) +
+        `; any still attached after ${formatDuration(Mn + ceilingGraceMsOverride, {
+          hideTrailingZeros: true,
+        })} will be drained`,
+    );
+    jt();
+    for (let Jt of E.values()) Jt.releaseForShutdown();
+    let cn = ceilingGraceMsOverride;
+    let Pn = () => {
+      Yt = undefined;
+      if (signal.aborted) return;
+      let Jt = q();
+      let In = Pe();
+      if (Jt === 0 && In === 0) return;
+      if (cn > 0) {
+        cn -= ir;
+        Yt = setTimeout(Pn, ir);
         return;
       }
-      (logFeatureOk("self_hosted_defer_ceiling"),
-        onStatus(
-          `[runner:shutdown] defer ceiling reached (${formatDuration(deferShutdown.maxMs, { hideTrailingZeros: !0 })}) \u2014 ` +
-            (ke > 0
-              ? `releasing the remaining ${ke} session(s) now`
-              : `waiting on ${Pe()} in-flight release(s)`) +
-            `; any still attached after ${formatDuration(Mn + Hn, { hideTrailingZeros: !0 })} will be drained`,
-        ),
-        jt());
-      for (let Jt of E.values()) Jt.releaseForShutdown();
-      let cn = Hn,
-        Pn = () => {
-          if (((Yt = void 0), n.aborted)) return;
-          let Jt = q(),
-            In = Pe();
-          if (Jt === 0 && In === 0) return;
-          if (cn > 0) {
-            ((cn -= ir), (Yt = setTimeout(Pn, ir)));
-            return;
-          }
-          (onStatus(
-            `[runner:shutdown] ${Jt + In} session(s) still attached after the post-ceiling grace \u2014 falling back to a drain`,
-          ),
-            deferShutdown.requestDrain("post-ceiling grace expired with sessions still attached"));
-        };
-      Yt = setTimeout(Pn, Mn);
+      onStatus(
+        `[runner:shutdown] ${Jt + In} session(s) still attached after the post-ceiling grace \u2014 falling back to a drain`,
+      );
+      deferShutdown.requestDrain("post-ceiling grace expired with sessions still attached");
     };
+    Yt = setTimeout(Pn, Mn);
+  };
   if (y > 0) {
     let se = y - Date.now();
-    (onStatus(
+    onStatus(
       se > 0
         ? `[runner:retire] retire time set for ${new Date(y).toISOString()} (in ${formatDuration(se)}) \u2014 sessions will be released and the runner will exit then`
         : `[runner:retire] retire time ${new Date(y).toISOString()} is already in the past \u2014 refusing work and exiting`,
-    ),
-      Bn());
+    );
+    Bn();
   }
-  if (Kt && deferShutdown !== void 0)
+  if (Kt && deferShutdown !== undefined)
     if (deferShutdown.signal.aborted) un();
-    else deferShutdown.signal.addEventListener("abort", un, { once: !0 });
+    else
+      deferShutdown.signal.addEventListener("abort", un, {
+        once: true,
+      });
   try {
-    while (!n.aborted) {
+    while (!signal.aborted) {
       if (Pt && Re() === 0) {
         onStatus(En());
         return;
@@ -1448,80 +1553,98 @@ async function runRunnerLoop(e, n) {
         onStatus(`[runner:exit] account workload drained \u2014 exiting (grace=0, no re-poll). ${w}`);
         return;
       }
-      let se = Pt ? 0 : Math.max(0, config.capacity - Re()),
-        consume = et.consume();
-      if (consume === "SSE") {
-        if ((await sleep(Math.floor(Math.random() * wu), n), n.aborted)) break;
+      let se = Pt ? 0 : Math.max(0, config.capacity - Re());
+      let ke = et.consume();
+      if (ke === "SSE") {
+        await sleep(Math.floor(Math.random() * MAX_SERVER_MESSAGE_CHARS), signal);
+        if (signal.aborted) break;
       }
-      let jt = now,
-        cn;
+      let jt = now;
+      let cn;
       try {
-        let pollWork = await apiClient.pollWork(
+        let R = await apiClient.pollWork(
           tokenState.runnerToken,
           runnerId,
           se,
-          n,
-          wn ? POLL_WAKE_SOURCES[consume] : void 0,
+          signal,
+          wn ? POLL_WAKE_SOURCES[ke] : undefined,
         );
-        ((cn = pollWork.assignment_ids), $e.clear());
-        for (let pe of pollWork.session_assignments ?? []) {
+        cn = R.assignment_ids;
+        $e.clear();
+        for (let pe of R.session_assignments ?? []) {
           if (!pe || typeof pe.session_id !== "string" || !pe.session_id) continue;
-          if (typeof pe.client_platform === "string" && pe.client_platform && Wuo.test(pe.client_platform))
+          if (
+            typeof pe.client_platform === "string" &&
+            pe.client_platform &&
+            METRIC_NAME_RE.test(pe.client_platform)
+          )
             $e.set(pe.session_id, pe.client_platform);
           else if (typeof pe.client_platform === "string" && pe.client_platform && !Ve.has(pe.session_id)) {
             if (Ve.size > 256) Ve.clear();
-            (Ve.add(pe.session_id),
-              onDebug(
-                `[runner:session] assignment client_platform rejected by the charset gate (label falls back to "unknown"): "${escapeMetricValue(pe.client_platform)}" (len=${pe.client_platform.length}, session=${escapeMetricValue(pe.session_id)})`,
-              ));
+            Ve.add(pe.session_id);
+            onDebug(
+              `[runner:session] assignment client_platform rejected by the charset gate (label falls back to "unknown"): "${escapeMetricValue(pe.client_platform)}" (len=${pe.client_platform.length}, session=${escapeMetricValue(pe.session_id)})`,
+            );
           }
         }
-        if (
-          ((ve = pollWork.lease_expires_at),
-          (Ae = pollWork.suggested_poll_interval),
-          (now = Date.now()),
-          (Be = 0),
-          (Fe = 0),
-          kn || Gn)
-        )
-          (logFeatureOk("self_hosted_poll"), (kn = !1), (Gn = !1));
-        if (healthState) ((healthState.lastPollAt = now), (healthState.activeSessions = E.size));
+        ve = R.lease_expires_at;
+        Ae = R.suggested_poll_interval;
+        now = Date.now();
+        Be = 0;
+        Fe = 0;
+        if (kn || Gn) {
+          logFeatureOk("self_hosted_poll");
+          kn = false;
+          Gn = false;
+        }
+        if (healthState) {
+          healthState.lastPollAt = now;
+          healthState.activeSessions = E.size;
+        }
       } catch (error) {
-        if (n.aborted) break;
+        if (signal.aborted) break;
         let pe = classifyRunnerError(error);
         if (healthState) healthState.pollErrors[pe]++;
         let It = error instanceof Error ? error.message : String(error);
         if (isAuthFailure(error)) {
-          (logFeatureBad("self_hosted_poll", "self_hosted_poll_auth_failed"),
-            onStatus(`[runner:fatal] poll auth failed \u2014 token expired or revoked. ${v}`),
-            (ge = !0));
+          logFeatureBad("self_hosted_poll", "self_hosted_poll_auth_failed");
+          onStatus(`[runner:fatal] poll auth failed \u2014 token expired or revoked. ${v}`);
+          ge = true;
           break;
         }
         if (isNotFoundError(error)) {
-          if ((Be++, Be >= 3)) {
-            (logFeatureBad("self_hosted_poll", "self_hosted_poll_runner_not_found"),
-              onStatus(
-                `[runner:fatal] poll returned 404 ${Be}\xD7 \u2014 runner record gone server-side. ${v}`,
-              ),
-              (ge = !0));
+          Be++;
+          if (Be >= 3) {
+            logFeatureBad("self_hosted_poll", "self_hosted_poll_runner_not_found");
+            onStatus(
+              `[runner:fatal] poll returned 404 ${Be}\xD7 \u2014 runner record gone server-side. ${v}`,
+            );
+            ge = true;
             break;
           }
-          let min = Math.min(Th, HEALTH_PROBE_INTERVAL_MS * 2 ** (Be - 1)),
-            floored = Math.floor(Math.random() * min);
-          (onStatus(
+          let min = Math.min(MAX_HEALTH_PROBE_BACKOFF_MS, HEALTH_PROBE_INTERVAL_MS * 2 ** (Be - 1));
+          let floored = Math.floor(Math.random() * min);
+          onStatus(
             `Poll failed: ${It} \u2014 confirming 404 (${Be}/3), retrying in ${(floored / 1000).toFixed(1)}s`,
-          ),
-            await sleep(e.pollIntervalOverrideMs ?? floored, n));
+          );
+          await sleep(e.pollIntervalOverrideMs ?? floored, signal);
           continue;
         }
-        if (((Be = 0), kn || !Gn))
-          (logFeatureSad("self_hosted_poll", "self_hosted_poll_failed"), (kn = !1), (Gn = !0));
+        Be = 0;
+        if (kn || !Gn) {
+          logFeatureSad("self_hosted_poll", "self_hosted_poll_failed");
+          kn = false;
+          Gn = true;
+        }
         let Ie;
-        if (pe === "timeout" || pe === "transport") (Fe++, (Ie = backoffDelayMs(Fe, ve, Ae)));
-        else if (pe === "5xx") Ie = clampToLeaseExpiry(To, ve, Oh, Ae);
-        else Ie = To;
-        (onStatus(`Poll failed: ${It} \u2014 retrying in ${(Ie / 1000).toFixed(1)}s`),
-          await sleep(e.pollIntervalOverrideMs ?? Ie, n));
+        if (pe === "timeout" || pe === "transport") {
+          Fe++;
+          Ie = backoffDelayMs(Fe, ve, Ae);
+        } else if (pe === "5xx")
+          Ie = clampToLeaseExpiry(DEFAULT_POLL_INTERVAL_MS, ve, LEASE_5XX_RETRY_DELAY_MS, Ae);
+        else Ie = DEFAULT_POLL_INTERVAL_MS;
+        onStatus(`Poll failed: ${It} \u2014 retrying in ${(Ie / 1000).toFixed(1)}s`);
+        await sleep(e.pollIntervalOverrideMs ?? Ie, signal);
         continue;
       }
       let filtered = cn.filter((R) => !fe.has(R));
@@ -1547,27 +1670,28 @@ async function runRunnerLoop(e, n) {
         }
       } else On = null;
       let In = An === 0 && Tn && Re() === 0;
-      if (filtered.length > 0) Tn = !0;
+      if (filtered.length > 0) Tn = true;
       let nn = new Set(cn);
       for (let [R, pe] of E)
-        if (!nn.has(R))
-          (onStatus(
+        if (!nn.has(R)) {
+          onStatus(
             `[runner:session] ${R} deassigned by server (deleted/archived/requeued) \u2014 aborting child`,
-          ),
-            pe.controller.abort(ft.has(R) ? "idle-release" : "deassign"));
+          );
+          pe.controller.abort(ft.has(R) ? "idle-release" : "deassign");
+        }
       for (let R of ft) if (!nn.has(R)) ft.delete(R);
-      for (let R of he.keys()) if (!nn.has(R)) he.delete(R);
+      for (let key of he.keys()) if (!nn.has(key)) he.delete(key);
       for (let R of P) if (!nn.has(R) || fe.has(R)) P.delete(R);
       for (let R of re) if (!nn.has(R)) re.delete(R);
-      for (let R of Z.keys()) if (!E.has(R) && !P.has(R) && !De.has(R) && !re.has(R)) Z.delete(R);
+      for (let key of Z.keys()) if (!E.has(key) && !P.has(key) && !De.has(key) && !re.has(key)) Z.delete(key);
       for (let R of filtered) {
         if (E.has(R)) {
           onDebug(`[runner:main] Ignoring duplicate assignment for ${R}`);
           continue;
         }
         if (fe.has(R)) {
-          (P.delete(R),
-            onDebug(`[runner:main] Ignoring stuck session ${R} \u2014 already failed, not re-spawning`));
+          P.delete(R);
+          onDebug(`[runner:main] Ignoring stuck session ${R} \u2014 already failed, not re-spawning`);
           continue;
         }
         if (Ht.has(R)) {
@@ -1587,7 +1711,10 @@ async function runRunnerLoop(e, n) {
               ? `[runner:shutdown] not starting session ${R} \u2014 shutdown requested and the defer ceiling has passed; it will be requeued when this runner exits`
               : `[runner:retire] not starting session ${R} \u2014 retire time has passed; it will be requeued when this runner exits`;
           if (Ue.has(R)) onDebug(N);
-          else (Ue.add(R), onStatus(N));
+          else {
+            Ue.add(R);
+            onStatus(N);
+          }
           P.delete(R);
           continue;
         }
@@ -1599,14 +1726,18 @@ async function runRunnerLoop(e, n) {
           );
         let It = P.delete(R);
         if (!re.delete(R) && !It) Z.delete(R);
-        (Er++, onStatus(`Picked up session ${R} (${E.size + 1}/${config.capacity} active)`));
-        let abortController_2 = new AbortController(),
-          replaced = R.replace(/^cse_/, "session_"),
-          Xe = $e.get(R) ?? UNKNOWN;
-        (healthState?.sessionIdle.set(replaced, null), healthState?.sessionClientPlatform.set(replaced, Xe));
+        Er++;
+        onStatus(`Picked up session ${R} (${E.size + 1}/${config.capacity} active)`);
+        let abortController_2 = new AbortController();
+        let replaced = R.replace(/^cse_/, "session_");
+        let Xe = $e.get(R) ?? UNKNOWN;
+        healthState?.sessionIdle.set(replaced, null);
+        healthState?.sessionClientPlatform.set(replaced, Xe);
         let now = Date.now();
-        healthState?.claimVisibility?.set(replaced, { pickedUpAt: now });
-        let Nt = E.size === 0 ? now - now_2 : void 0;
+        healthState?.claimVisibility?.set(replaced, {
+          pickedUpAt: now,
+        });
+        let standbyIdleMs = E.size === 0 ? now - now_2 : undefined;
         if (healthState) {
           for (let N of [
             healthState.sessionsStarted,
@@ -1616,477 +1747,574 @@ async function runRunnerLoop(e, n) {
           ])
             if (!N.has(Xe)) N.set(Xe, 0);
         }
-        let Je,
-          fn = !1,
-          Wn = Z.get(R),
-          Dn,
-          Zt = !1,
-          hn = !1,
-          Ln = !1,
-          Dt = !1,
-          Cr = (N) => {
-            Dt = N;
-            let x = E.get(R);
-            if (x !== void 0) x.turnInFlight = N;
-            ae?.();
-          },
-          pt = !1,
-          Lt,
-          Ke = !1,
-          Ut = "retire",
-          V = () =>
-            Ut === "shutdown"
-              ? "defer ceiling passed"
-              : Ut === "max-age"
-                ? "max session age reached"
-                : "retire time passed",
-          ue = () =>
-            Ut === "shutdown"
-              ? "while shutting down"
-              : Ut === "max-age"
-                ? "while at max session age"
-                : "while retiring",
-          U = () =>
-            Ut === "shutdown"
-              ? "shutdown grace"
-              : Ut === "max-age"
-                ? "max-session-age grace"
-                : "retire grace",
-          nt = 0,
-          Tt = 0,
-          xn,
-          Kn = () => {
-            if (xn !== void 0) (clearTimeout(xn), (xn = void 0));
-          },
-          wr = !1,
-          Jn = () => Ln || abortController_2.signal.aborted || wr,
-          es = !1,
-          ts = () => {},
-          yo = (N) => {},
-          Hr,
-          vs = [1800000, 7200000, 28800000],
-          Br = () => {
-            if (Hr !== void 0) (clearTimeout(Hr), (Hr = void 0));
-          },
-          Nr = (N, x) => {
-            let xe = N?.liveTasks ?? 0,
-              joined = (N?.liveTaskIds ?? []).slice(0, 5).join(","),
-              Yn = N?.wakeupInMs !== void 0 ? `wakeup pending in ${formatDuration(N.wakeupInMs)}` : void 0,
-              Zn = N?.bgResultAwaitingFollowup
-                ? "finished background task awaiting the follow-up turn"
-                : void 0,
-              filtered = [
-                xe > 0 ? `${xe} background task(s) live [${joined}${xe > 5 ? ",\u2026" : ""}]` : void 0,
-                Yn,
-                Zn,
-              ].filter(Boolean),
-              ne = filtered.length > 0 ? filtered.join(" / ") : "planned resumption",
-              mt = x > 0 ? " still" : "";
-            if (
-              (onStatus(`[runner:session] ${R} turn ended with ${ne} \u2014 idle clock${mt} deferred`),
-              x < vs.length)
-            )
-              Hr = setTimeout(Nr, vs[x], N, x + 1);
-          },
-          pn = (N, x) => {
-            if (N === "startup" && x?.childAlive === !0 && Lt !== "startup") {
-              onDebug(
-                `[runner:session] ${R} ignoring child output as a startup-clock restart: the startup phase is over`,
-              );
-              return;
+        let Je;
+        let fn = false;
+        let Wn = Z.get(R);
+        let Dn;
+        let Zt = false;
+        let hn = false;
+        let Ln = false;
+        let Dt = false;
+        let Cr = (N) => {
+          Dt = N;
+          let x = E.get(R);
+          if (x !== undefined) x.turnInFlight = N;
+          ae?.();
+        };
+        let pt = false;
+        let Lt;
+        let Ke = false;
+        let Ut = "retire";
+        let V = () =>
+          Ut === "shutdown"
+            ? "defer ceiling passed"
+            : Ut === "max-age"
+              ? "max session age reached"
+              : "retire time passed";
+        let ue = () =>
+          Ut === "shutdown"
+            ? "while shutting down"
+            : Ut === "max-age"
+              ? "while at max session age"
+              : "while retiring";
+        let U = () =>
+          Ut === "shutdown" ? "shutdown grace" : Ut === "max-age" ? "max-session-age grace" : "retire grace";
+        let nt = 0;
+        let Tt = 0;
+        let xn;
+        let Kn = () => {
+          if (xn !== undefined) {
+            clearTimeout(xn);
+            xn = undefined;
+          }
+        };
+        let wr = false;
+        let Jn = () => Ln || abortController_2.signal.aborted || wr;
+        let es = false;
+        let ts = () => {};
+        let yo = (N) => {};
+        let Hr;
+        let vs = [1800000, 7200000, 28800000];
+        let Br = () => {
+          if (Hr !== undefined) {
+            clearTimeout(Hr);
+            Hr = undefined;
+          }
+        };
+        let Nr = (N, x) => {
+          let liveTasks = N?.liveTasks ?? 0;
+          let joined = (N?.liveTaskIds ?? []).slice(0, 5).join(",");
+          let Yn =
+            N?.wakeupInMs !== undefined ? `wakeup pending in ${formatDuration(N.wakeupInMs)}` : undefined;
+          let Zn = N?.bgResultAwaitingFollowup
+            ? "finished background task awaiting the follow-up turn"
+            : undefined;
+          let filtered = [
+            liveTasks > 0
+              ? `${liveTasks} background task(s) live [${joined}${liveTasks > 5 ? ",\u2026" : ""}]`
+              : undefined,
+            Yn,
+            Zn,
+          ].filter(Boolean);
+          let ne = filtered.length > 0 ? filtered.join(" / ") : "planned resumption";
+          let mt = x > 0 ? " still" : "";
+          onStatus(`[runner:session] ${R} turn ended with ${ne} \u2014 idle clock${mt} deferred`);
+          if (x < vs.length) Hr = setTimeout(Nr, vs[x], N, x + 1);
+        };
+        let pn = (N, x) => {
+          if (N === "startup" && x?.childAlive === true && Lt !== "startup") {
+            onDebug(
+              `[runner:session] ${R} ignoring child output as a startup-clock restart: the startup phase is over`,
+            );
+            return;
+          }
+          let xe = N === "startup" && x?.childSilent === true;
+          if (xe && ft.has(R)) {
+            onDebug(
+              `[runner:session] ${R} no child output for ${formatDuration(startupTimeoutMs)}, but a release is already in flight: leaving it to that one`,
+            );
+            return;
+          }
+          if (Je !== undefined) {
+            clearTimeout(Je);
+            Je = undefined;
+          }
+          Dn = undefined;
+          if (!Ln && healthState)
+            if (N === "turn-end" || (N === "awaiting-action" && !pt)) {
+              if (healthState.sessionIdle.get(replaced) === null)
+                healthState.sessionIdle.set(replaced, Date.now());
+            } else healthState.sessionIdle.set(replaced, null);
+          if (N === "init-observed") {
+            if (Ke && Lt !== undefined) pn(Lt);
+            return;
+          }
+          if (N === "activity") {
+            if (Lt !== "startup") {
+              Wn = undefined;
+              Z.delete(R);
+              Zt = false;
+              hn = false;
             }
-            let xe = N === "startup" && x?.childSilent === !0;
-            if (xe && ft.has(R)) {
-              onDebug(
-                `[runner:session] ${R} no child output for ${formatDuration(zn)}, but a release is already in flight: leaving it to that one`,
-              );
-              return;
-            }
-            if (Je !== void 0) (clearTimeout(Je), (Je = void 0));
-            if (((Dn = void 0), !Ln && healthState))
-              if (N === "turn-end" || (N === "awaiting-action" && !pt)) {
-                if (healthState.sessionIdle.get(replaced) === null)
-                  healthState.sessionIdle.set(replaced, Date.now());
-              } else healthState.sessionIdle.set(replaced, null);
-            if (N === "init-observed") {
-              if (Ke && Lt !== void 0) pn(Lt);
-              return;
-            }
-            if (N === "activity") {
-              if (Lt !== "startup") ((Wn = void 0), Z.delete(R), (Zt = !1), (hn = !1));
-              (Cr(!0), (pt = !1), (Lt = void 0), (nt = 0), Br(), Kn(), he.delete(R));
-              return;
-            }
-            if (N === "turn-end-deferred") {
-              if ((Cr(!1), (pt = !0), (Lt = void 0), Br(), ts(), Jn())) return;
-              if (Bt > 0) Nr(x, 0);
-              if (Ke) ns();
-              return;
-            }
-            if (N === "awaiting-action" && pt) {
-              Lt = void 0;
-              return;
-            }
-            if ((Br(), Kn(), Cr(!1), (pt = !1), (Lt = N), ts(), Jn())) return;
-            let xt = xe ? 0 : Ke ? (nt === 0 ? 0 : ze) : N === "startup" ? zn : Bt,
-              Yn = Ke ? ze : xt,
-              Zn = () => (Ke ? (nt === 0 ? "now" : `in ${formatDuration(ze)}`) : `in ${formatDuration(Yn)}`),
-              yn = Ke
-                ? V()
-                : N === "startup"
-                  ? `no child output for ${formatDuration(zn)}`
-                  : N === "awaiting-action"
-                    ? `awaiting user action ${formatDuration(xt)}`
-                    : `user idle ${formatDuration(xt)}`;
-            if (!Ke && !xe && xt <= 0) return;
+            Cr(true);
+            pt = false;
+            Lt = undefined;
+            nt = 0;
+            Br();
+            Kn();
+            he.delete(R);
+            return;
+          }
+          if (N === "turn-end-deferred") {
+            Cr(false);
+            pt = true;
+            Lt = undefined;
+            Br();
+            ts();
             if (Jn()) return;
-            if (
-              N === "awaiting-action" &&
-              x !== void 0 &&
-              (x.liveTasks > 0 || x.wakeupInMs !== void 0 || x.bgResultAwaitingFollowup === !0)
-            ) {
-              let joined = x.liveTaskIds.slice(0, 5).join(","),
-                filtered = [
-                  x.liveTasks > 0
-                    ? `${x.liveTasks} background task(s) live [${joined}${x.liveTasks > 5 ? ",\u2026" : ""}]`
-                    : void 0,
-                  x.wakeupInMs !== void 0 ? `wakeup pending in ${formatDuration(x.wakeupInMs)}` : void 0,
-                  x.bgResultAwaitingFollowup === !0
-                    ? "finished background task awaiting the follow-up turn"
-                    : void 0,
-                ].filter(Boolean);
-              onStatus(
-                `[runner:session] ${R} awaiting user action overrides deferral (${filtered.join(" / ")}) \u2014 idle clock armed`,
-              );
+            if (Bt > 0) Nr(x, 0);
+            if (Ke) ns();
+            return;
+          }
+          if (N === "awaiting-action" && pt) {
+            Lt = undefined;
+            return;
+          }
+          Br();
+          Kn();
+          Cr(false);
+          pt = false;
+          Lt = N;
+          ts();
+          if (Jn()) return;
+          let xt = xe
+            ? 0
+            : Ke
+              ? nt === 0
+                ? 0
+                : retireReleaseRetryMsOverride
+              : N === "startup"
+                ? startupTimeoutMs
+                : Bt;
+          let Yn = Ke ? retireReleaseRetryMsOverride : xt;
+          let Zn = () =>
+            Ke
+              ? nt === 0
+                ? "now"
+                : `in ${formatDuration(retireReleaseRetryMsOverride)}`
+              : `in ${formatDuration(Yn)}`;
+          let yn = Ke
+            ? V()
+            : N === "startup"
+              ? `no child output for ${formatDuration(startupTimeoutMs)}`
+              : N === "awaiting-action"
+                ? `awaiting user action ${formatDuration(xt)}`
+                : `user idle ${formatDuration(xt)}`;
+          if (!Ke && !xe && xt <= 0) return;
+          if (Jn()) return;
+          if (
+            N === "awaiting-action" &&
+            x !== undefined &&
+            (x.liveTasks > 0 || x.wakeupInMs !== undefined || x.bgResultAwaitingFollowup === true)
+          ) {
+            let joined = x.liveTaskIds.slice(0, 5).join(",");
+            let filtered = [
+              x.liveTasks > 0
+                ? `${x.liveTasks} background task(s) live [${joined}${x.liveTasks > 5 ? ",\u2026" : ""}]`
+                : undefined,
+              x.wakeupInMs !== undefined ? `wakeup pending in ${formatDuration(x.wakeupInMs)}` : undefined,
+              x.bgResultAwaitingFollowup === true
+                ? "finished background task awaiting the follow-up turn"
+                : undefined,
+            ].filter(Boolean);
+            onStatus(
+              `[runner:session] ${R} awaiting user action overrides deferral (${filtered.join(" / ")}) \u2014 idle clock armed`,
+            );
+          }
+          if (!Ke && !xe) {
+            let mt = N === "startup" && x?.childAlive === true;
+            let rn = `[runner:session] ${R} idle clock armed (${mt ? "startup, restarted by child output" : N}): releases in ${formatDuration(
+              xt,
+              {
+                hideTrailingZeros: true,
+              },
+            )} at ${new Date(Date.now() + xt).toISOString()} unless new activity arrives`;
+            if (!mt) onStatus(rn);
+            else if (fn) onDebug(rn);
+            else {
+              fn = true;
+              onStatus(`${rn} (later restarts are logged at debug)`);
             }
-            if (!Ke && !xe) {
-              let mt = N === "startup" && x?.childAlive === !0,
-                rn = `[runner:session] ${R} idle clock armed (${mt ? "startup, restarted by child output" : N}): releases in ${formatDuration(xt, { hideTrailingZeros: !0 })} at ${new Date(Date.now() + xt).toISOString()} unless new activity arrives`;
-              if (!mt) onStatus(rn);
-              else if (fn) onDebug(rn);
-              else ((fn = !0), onStatus(`${rn} (later restarts are logged at debug)`));
-            }
-            if (Ke && nt === 0 && E.get(R)?.postTurnSettling === !0) {
+          }
+          if (Ke && nt === 0 && E.get(R)?.postTurnSettling === true) {
+            onStatus(
+              `[runner:session] ${R} ${V()} \u2014 release held until the finished turn has been reported to the server (at most SELF_HOSTED_RUNNER_POST_TURN_SETTLE_MS, default ${POST_TURN_SETTLE_MS / 1000}s)`,
+            );
+            return;
+          }
+          if (!Ke && N !== "startup") {
+            Wn ??= Date.now();
+            Z.set(R, Wn);
+          }
+          let ne = (mt = false) => {
+            Je = undefined;
+            if (Jn()) return;
+            if (ft.has(R)) return;
+            if (Dt) {
               onStatus(
-                `[runner:session] ${R} ${V()} \u2014 release held until the finished turn has been reported to the server (at most SELF_HOSTED_RUNNER_POST_TURN_SETTLE_MS, default ${Ls / 1000}s)`,
+                `[runner:session] ${R} idle timer fired mid-turn \u2014 skipping release (stdout-tee likely broken)`,
               );
               return;
             }
-            if (!Ke && N !== "startup") ((Wn ??= Date.now()), Z.set(R, Wn));
-            let ne = (mt = !1) => {
-              if (((Je = void 0), Jn())) return;
-              if (ft.has(R)) return;
-              if (Dt) {
-                onStatus(
-                  `[runner:session] ${R} idle timer fired mid-turn \u2014 skipping release (stdout-tee likely broken)`,
-                );
-                return;
-              }
-              if (!mt && kt !== void 0 && Cn > 0 && !Ke && N !== "startup" && Wn !== void 0) {
-                let _t = kt,
-                  bt = Wn + Cn;
-                if (Date.now() < bt) {
-                  let en = {};
-                  ((Dn = en),
-                    withBoundedTimeout(Fr(_t, Date.now()), Nn, "hold-idle-file look")
-                      .catch((Me) =>
-                        Me instanceof BoundedTimeoutError
-                          ? "timed out"
-                          : { failed: Me instanceof Error ? Me.message : String(Me) },
-                      )
-                      .then((Me) => {
-                        if (Dn !== en || Je !== void 0 || Jn() || Dt || pt || Ke) return;
-                        Dn = void 0;
-                        let max = Math.max(0, Math.min(hr, bt - Date.now()));
-                        if (Me === !0) {
-                          if (((hn = !1), !Zt))
-                            ((Zt = !0),
-                              onStatus(
-                                `[runner:session] ${R} idle release held: ${_t} says a process the session left running still lives \u2014 looking again every ${formatDuration(hr, { hideTrailingZeros: !0 })}, until ${new Date(bt).toISOString()} at most (--max-hold-min)`,
-                              ));
-                          Je = setTimeout(ne, max, !1);
-                          return;
-                        }
-                        let er =
-                          Me === "timed out"
-                            ? `looking at ${_t} took longer than ${formatDuration(Nn, { hideTrailingZeros: !0 })}`
-                            : typeof Me === "object"
-                              ? `the look at ${_t} failed (${Me.failed})`
-                              : `${_t} is gone, not a regular file, or has not changed in ${formatDuration(Di, { hideTrailingZeros: !0 })}`;
-                        if (Zt && !hn) {
-                          ((hn = !0),
-                            onStatus(
-                              `[runner:session] ${R} idle release still held: ${er} \u2014 looking once more before releasing`,
-                            ),
-                            (Je = setTimeout(ne, max, !1)));
-                          return;
-                        }
-                        if (Zt) onStatus(`[runner:session] ${R} idle release no longer held: ${er}`);
-                        else if (Me !== !1)
-                          onStatus(`[runner:session] ${R} idle release not held: ${er} \u2014 releasing`);
-                        ((Zt = !1), (hn = !1), ne(!0));
-                      })
-                      .catch((Me) => {
-                        onStatus(
-                          `[runner:session] ${R} idle release after a look at ${_t} failed: ${Me instanceof Error ? Me.message : String(Me)}; the release may not have gone out, and the next turn end or a forced release tries again`,
-                        );
-                      }));
-                  return;
-                }
-                if (Zt)
-                  ((Zt = !1),
-                    onStatus(
-                      `[runner:session] ${R} idle release no longer held: ${formatDuration(Cn, { hideTrailingZeros: !0 })} have passed since the session went idle (--max-hold-min)`,
-                    ));
-              }
-              if (Ke) nt++;
-              if (
-                (onStatus(`[runner:session] ${R} ${yn} \u2014 releasing`), ft.add(R), N !== "awaiting-action")
-              ) {
-                let _t = E.get(R)?.liveBgTasks ?? 0,
-                  en = (E.get(R)?.task ?? Promise.resolve())
-                    .then(() =>
-                      retryReleaseSession({
-                        release: () => apiClient.releaseSession(tokenState.runnerToken, R),
-                        sessionId: R,
-                        onStatus: onStatus,
-                        stop: abortController.signal,
-                      }),
-                    )
-                    .then(({ released: released }) => {
-                      if ((De.delete(R), ft.delete(R), he.delete(R), Z.delete(R), Pt)) et.wake("LOCAL");
-                      if (released) {
-                        if (
-                          (onStatus(
-                            `[runner:session] ${R} released after post-session hook \u2014 parked server-side`,
-                          ),
-                          xe)
-                        )
-                          logFeatureSad("self_hosted_release_session", "released_true_child_silent");
-                        else if (Dt || pt || _t > 0)
-                          logFeatureSad("self_hosted_release_session", "released_true_mid_work");
-                        else logFeatureOk("self_hosted_release_session");
-                        return;
-                      }
-                      if ($n === "shutdown") {
-                        let er = !qn;
-                        if (er) P.add(R);
-                        (onStatus(
-                          er
-                            ? `[runner:session] ${R} released=false after post-session hook (pending user event) while shutting down \u2014 the next poll re-spawns it to serve that event (its --release-idle-session-min window, if set, starts over; otherwise it stays until the ceiling)`
-                            : `[runner:session] ${R} released=false after post-session hook (pending user event) after the defer ceiling \u2014 not re-spawned; it is requeued, snapshot complete, when this runner exits`,
-                        ),
-                          logFeatureSad("self_hosted_release_session", "released_false_shutting_down"));
-                        return;
-                      }
-                      let gr = Ke && Ut === "max-age";
-                      (onStatus(
-                        Pt
-                          ? `[runner:session] ${R} released=false after post-session hook (pending user event) while retiring \u2014 not re-spawned; it is requeued, snapshot complete, when this runner exits`
-                          : `[runner:session] ${R} released=false after post-session hook (pending user event)${gr ? " at max session age" : ""} \u2014 respawns on the next poll, or is requeued by this runner's exit if it is draining (grace=0) or retiring`,
-                      ),
-                        logFeatureSad(
-                          "self_hosted_release_session",
-                          Pt
-                            ? "released_false_retiring"
-                            : gr
-                              ? "released_false_max_age"
-                              : xe
-                                ? "released_false_child_silent"
-                                : "released_false",
-                        ));
-                    })
-                    .catch((Me) => {
-                      if ((De.delete(R), ft.delete(R), re.add(R), $n === "shutdown" && !qn)) P.add(R);
-                      if (Pt) et.wake("LOCAL");
-                      let gr = Me instanceof Error ? Me.message : String(Me);
-                      (onStatus(
-                        `[runner:session] ${R} ordered release failed after the post-session hook: ${gr} \u2014 keeping session; respawns on the next poll, or is requeued by this runner's exit if it is draining (grace=0) or retiring`,
-                      ),
-                        logFeatureBad("self_hosted_release_session", "rpc_failed"));
-                    });
-                (De.set(R, en), abortController_2.abort("idle-release"));
-                return;
-              }
-              let rn = (_t, bt) => {
-                let en = Jn(),
-                  Me = !en && !Dt && !pt;
-                if (
-                  (onStatus(
-                    `[runner:session] ${R} ${_t} \u2014 ${en ? "not retried, the session is ending on this runner" : `keeping session${Me ? `, ${bt}` : ""}`}`,
-                  ),
-                  Me)
+            if (!mt && kt !== undefined && maxHoldMs > 0 && !Ke && N !== "startup" && Wn !== undefined) {
+              let _t = kt;
+              let bt = Wn + maxHoldMs;
+              if (Date.now() < bt) {
+                let en = {};
+                Dn = en;
+                withBoundedTimeout(
+                  leftoverHoldLookOverride(_t, Date.now()),
+                  leftoverHoldLookTimeoutMsOverride,
+                  "hold-idle-file look",
                 )
-                  pn(N);
-              };
-              apiClient
-                .releaseSession(tokenState.runnerToken, R)
-                .then(({ released: released }) => {
-                  if (((Tt = 0), released)) {
-                    if (Ln || abortController_2.signal.aborted) return;
-                    (he.delete(R), onStatus(`[runner:session] ${R} released \u2014 aborting child`));
-                    let en = E.get(R)?.liveBgTasks ?? 0;
-                    if ((abortController_2.abort("idle-release"), Dt || pt || en > 0))
+                  .catch((error) =>
+                    error instanceof BoundedTimeoutError
+                      ? "timed out"
+                      : {
+                          failed: error instanceof Error ? error.message : String(error),
+                        },
+                  )
+                  .then((Me) => {
+                    if (Dn !== en || Je !== undefined || Jn() || Dt || pt || Ke) return;
+                    Dn = undefined;
+                    let max = Math.max(0, Math.min(leftoverHoldRecheckMsOverride, bt - Date.now()));
+                    if (Me === true) {
+                      hn = false;
+                      if (!Zt) {
+                        Zt = true;
+                        onStatus(
+                          `[runner:session] ${R} idle release held: ${_t} says a process the session left running still lives \u2014 looking again every ${formatDuration(
+                            leftoverHoldRecheckMsOverride,
+                            {
+                              hideTrailingZeros: true,
+                            },
+                          )}, until ${new Date(bt).toISOString()} at most (--max-hold-min)`,
+                        );
+                      }
+                      Je = setTimeout(ne, max, false);
+                      return;
+                    }
+                    let er =
+                      Me === "timed out"
+                        ? `looking at ${_t} took longer than ${formatDuration(
+                            leftoverHoldLookTimeoutMsOverride,
+                            {
+                              hideTrailingZeros: true,
+                            },
+                          )}`
+                        : typeof Me === "object"
+                          ? `the look at ${_t} failed (${Me.failed})`
+                          : `${_t} is gone, not a regular file, or has not changed in ${formatDuration(
+                              HOLD_IDLE_MTIME_FRESH_MS,
+                              {
+                                hideTrailingZeros: true,
+                              },
+                            )}`;
+                    if (Zt && !hn) {
+                      hn = true;
+                      onStatus(
+                        `[runner:session] ${R} idle release still held: ${er} \u2014 looking once more before releasing`,
+                      );
+                      Je = setTimeout(ne, max, false);
+                      return;
+                    }
+                    if (Zt) onStatus(`[runner:session] ${R} idle release no longer held: ${er}`);
+                    else if (Me !== false)
+                      onStatus(`[runner:session] ${R} idle release not held: ${er} \u2014 releasing`);
+                    Zt = false;
+                    hn = false;
+                    ne(true);
+                  })
+                  .catch((error) => {
+                    onStatus(
+                      `[runner:session] ${R} idle release after a look at ${_t} failed: ${error instanceof Error ? error.message : String(error)}; the release may not have gone out, and the next turn end or a forced release tries again`,
+                    );
+                  });
+                return;
+              }
+              if (Zt) {
+                Zt = false;
+                onStatus(
+                  `[runner:session] ${R} idle release no longer held: ${formatDuration(maxHoldMs, {
+                    hideTrailingZeros: true,
+                  })} have passed since the session went idle (--max-hold-min)`,
+                );
+              }
+            }
+            if (Ke) nt++;
+            onStatus(`[runner:session] ${R} ${yn} \u2014 releasing`);
+            ft.add(R);
+            if (N !== "awaiting-action") {
+              let liveBgTasks = E.get(R)?.liveBgTasks ?? 0;
+              let en = (E.get(R)?.task ?? Promise.resolve())
+                .then(() =>
+                  retryReleaseSession({
+                    release: () => apiClient.releaseSession(tokenState.runnerToken, R),
+                    sessionId: R,
+                    onStatus,
+                    stop: abortController.signal,
+                  }),
+                )
+                .then(({ released }) => {
+                  De.delete(R);
+                  ft.delete(R);
+                  he.delete(R);
+                  Z.delete(R);
+                  if (Pt) et.wake("LOCAL");
+                  if (released) {
+                    onStatus(
+                      `[runner:session] ${R} released after post-session hook \u2014 parked server-side`,
+                    );
+                    if (xe) logFeatureSad("self_hosted_release_session", "released_true_child_silent");
+                    else if (Dt || pt || liveBgTasks > 0)
                       logFeatureSad("self_hosted_release_session", "released_true_mid_work");
                     else logFeatureOk("self_hosted_release_session");
                     return;
                   }
-                  if (Ln || abortController_2.signal.aborted) return;
-                  if ((ft.delete(R), Ke)) {
-                    let en =
-                      N === "awaiting-action"
-                        ? "queued event behind the parked prompt"
-                        : "pending user event";
-                    (logFeatureSad(
-                      "self_hosted_release_session",
-                      Ut === "shutdown"
-                        ? N === "awaiting-action"
-                          ? "released_false_shutting_down_parked"
-                          : "released_false_shutting_down"
-                        : Ut === "max-age"
-                          ? N === "awaiting-action"
-                            ? "released_false_max_age_parked"
-                            : "released_false_max_age"
-                          : N === "awaiting-action"
-                            ? "released_false_retiring_parked"
-                            : "released_false_retiring",
-                    ),
-                      rn(`release declined (${en}) ${ue()}`, `retrying ${Zn()}`));
+                  if ($n === "shutdown") {
+                    let er = !qn;
+                    if (er) P.add(R);
+                    onStatus(
+                      er
+                        ? `[runner:session] ${R} released=false after post-session hook (pending user event) while shutting down \u2014 the next poll re-spawns it to serve that event (its --release-idle-session-min window, if set, starts over; otherwise it stays until the ceiling)`
+                        : `[runner:session] ${R} released=false after post-session hook (pending user event) after the defer ceiling \u2014 not re-spawned; it is requeued, snapshot complete, when this runner exits`,
+                    );
+                    logFeatureSad("self_hosted_release_session", "released_false_shutting_down");
                     return;
                   }
-                  if (N === "awaiting-action") {
-                    (logFeatureSad("self_hosted_release_session", "released_false_parked"),
-                      rn("released=false while parked at prompt (queued event behind prompt)", "re-arming"));
-                    return;
-                  }
-                  let bt = (he.get(R) ?? 0) + 1;
-                  if ((he.set(R, bt), bt >= 3)) {
-                    (he.delete(R),
-                      onStatus(`[runner:session] ${R} released=false ${bt}x \u2014 aborting as backstop`),
-                      abortController_2.abort(),
-                      logFeatureBad("self_hosted_release_session", "released_false_backstop"));
-                    return;
-                  }
-                  if (
-                    (onStatus(
-                      `[runner:session] ${R} released=false (pending user event) \u2014 keeping session${Dt || pt ? "" : ", re-arming"}`,
-                    ),
-                    logFeatureSad("self_hosted_release_session", "released_false"),
-                    !Dt && !pt)
-                  )
-                    pn?.(N);
-                })
-                .catch((_t) => {
-                  (ft.delete(R), Tt++);
-                  let bt = _t instanceof Error ? _t.message : String(_t);
-                  (logFeatureBad("self_hosted_release_session", "rpc_failed"),
-                    rn(
-                      `releaseSession failed: ${bt}${Tt > 1 ? ` (${Tt} failures in a row)` : ""}`,
-                      `retrying ${Zn()}`,
-                    ));
-                });
-            };
-            Je = setTimeout(ne, xt, !1);
-          },
-          ns = () => {
-            if (Jn() || !pt) return;
-            let N = E.get(R)?.liveBgTasks ?? 0;
-            if (N === 0 && E.get(R)?.bgResultPendingFollowup === !0) {
-              onStatus(
-                `[runner:session] ${R} ${V()} while a finished background task's follow-up turn is pending \u2014 waiting for it before releasing`,
-              );
-              return;
-            }
-            if (N === 0) {
-              (onStatus(
-                `[runner:session] ${R} ${V()} with only perpetual monitor task(s) / a scheduled wakeup holding the turn \u2014 releasing now`,
-              ),
-                (pt = !1),
-                Kn(),
-                pn("turn-end"));
-              return;
-            }
-            if (xn !== void 0) return;
-            (onStatus(
-              `[runner:session] ${R} ${V()} with ${N} background task(s) live \u2014 allowing ${formatDuration(Xn)} to finish before releasing`,
-            ),
-              (xn = setTimeout(() => {
-                if (((xn = void 0), Jn() || !pt)) return;
-                let x = E.get(R)?.liveBgTasks ?? 0,
-                  xe = E.get(R)?.bgResultPendingFollowup === !0;
-                if (x === 0 && xe) {
+                  let gr = Ke && Ut === "max-age";
                   onStatus(
-                    `[runner:session] ${R} ${U()} elapsed but a finished background task's follow-up turn is pending \u2014 waiting for it before releasing`,
+                    Pt
+                      ? `[runner:session] ${R} released=false after post-session hook (pending user event) while retiring \u2014 not re-spawned; it is requeued, snapshot complete, when this runner exits`
+                      : `[runner:session] ${R} released=false after post-session hook (pending user event)${gr ? " at max session age" : ""} \u2014 respawns on the next poll, or is requeued by this runner's exit if it is draining (grace=0) or retiring`,
                   );
+                  logFeatureSad(
+                    "self_hosted_release_session",
+                    Pt
+                      ? "released_false_retiring"
+                      : gr
+                        ? "released_false_max_age"
+                        : xe
+                          ? "released_false_child_silent"
+                          : "released_false",
+                  );
+                })
+                .catch((error) => {
+                  De.delete(R);
+                  ft.delete(R);
+                  re.add(R);
+                  if ($n === "shutdown" && !qn) P.add(R);
+                  if (Pt) et.wake("LOCAL");
+                  let gr = error instanceof Error ? error.message : String(error);
+                  onStatus(
+                    `[runner:session] ${R} ordered release failed after the post-session hook: ${gr} \u2014 keeping session; respawns on the next poll, or is requeued by this runner's exit if it is draining (grace=0) or retiring`,
+                  );
+                  logFeatureBad("self_hosted_release_session", "rpc_failed");
+                });
+              De.set(R, en);
+              abortController_2.abort("idle-release");
+              return;
+            }
+            let rn = (_t, bt) => {
+              let en = Jn();
+              let Me = !en && !Dt && !pt;
+              onStatus(
+                `[runner:session] ${R} ${_t} \u2014 ${en ? "not retried, the session is ending on this runner" : `keeping session${Me ? `, ${bt}` : ""}`}`,
+              );
+              if (Me) pn(N);
+            };
+            apiClient
+              .releaseSession(tokenState.runnerToken, R)
+              .then(({ released }) => {
+                Tt = 0;
+                if (released) {
+                  if (Ln || abortController_2.signal.aborted) return;
+                  he.delete(R);
+                  onStatus(`[runner:session] ${R} released \u2014 aborting child`);
+                  let liveBgTasks = E.get(R)?.liveBgTasks ?? 0;
+                  abortController_2.abort("idle-release");
+                  if (Dt || pt || liveBgTasks > 0)
+                    logFeatureSad("self_hosted_release_session", "released_true_mid_work");
+                  else logFeatureOk("self_hosted_release_session");
                   return;
                 }
-                (onStatus(
-                  x === 0
-                    ? `[runner:session] ${R} background work finished during the ${U()}; only perpetual monitor task(s) / a scheduled wakeup still hold the turn \u2014 releasing now`
-                    : `[runner:session] ${R} ${x} background task(s) still live after the ${U()} \u2014 releasing anyway (a parked session beats a lost worker)`,
-                ),
-                  (pt = !1),
-                  pn("turn-end"));
-              }, Xn)));
-          },
-          rs = (N) => {
-            if (Ln || abortController_2.signal.aborted) return;
-            if (wr) {
-              onDebug(
-                `[runner:session] ${R} ${N} release request while the child is being terminated \u2014 ignored`,
+                if (Ln || abortController_2.signal.aborted) return;
+                ft.delete(R);
+                if (Ke) {
+                  let en =
+                    N === "awaiting-action" ? "queued event behind the parked prompt" : "pending user event";
+                  logFeatureSad(
+                    "self_hosted_release_session",
+                    Ut === "shutdown"
+                      ? N === "awaiting-action"
+                        ? "released_false_shutting_down_parked"
+                        : "released_false_shutting_down"
+                      : Ut === "max-age"
+                        ? N === "awaiting-action"
+                          ? "released_false_max_age_parked"
+                          : "released_false_max_age"
+                        : N === "awaiting-action"
+                          ? "released_false_retiring_parked"
+                          : "released_false_retiring",
+                  );
+                  rn(`release declined (${en}) ${ue()}`, `retrying ${Zn()}`);
+                  return;
+                }
+                if (N === "awaiting-action") {
+                  logFeatureSad("self_hosted_release_session", "released_false_parked");
+                  rn("released=false while parked at prompt (queued event behind prompt)", "re-arming");
+                  return;
+                }
+                let bt = (he.get(R) ?? 0) + 1;
+                he.set(R, bt);
+                if (bt >= 3) {
+                  he.delete(R);
+                  onStatus(`[runner:session] ${R} released=false ${bt}x \u2014 aborting as backstop`);
+                  abortController_2.abort();
+                  logFeatureBad("self_hosted_release_session", "released_false_backstop");
+                  return;
+                }
+                onStatus(
+                  `[runner:session] ${R} released=false (pending user event) \u2014 keeping session${Dt || pt ? "" : ", re-arming"}`,
+                );
+                logFeatureSad("self_hosted_release_session", "released_false");
+                if (!Dt && !pt) pn?.(N);
+              })
+              .catch((error) => {
+                ft.delete(R);
+                Tt++;
+                let bt = error instanceof Error ? error.message : String(error);
+                logFeatureBad("self_hosted_release_session", "rpc_failed");
+                rn(
+                  `releaseSession failed: ${bt}${Tt > 1 ? ` (${Tt} failures in a row)` : ""}`,
+                  `retrying ${Zn()}`,
+                );
+              });
+          };
+          Je = setTimeout(ne, xt, false);
+        };
+        let ns = () => {
+          if (Jn() || !pt) return;
+          let liveBgTasks = E.get(R)?.liveBgTasks ?? 0;
+          if (liveBgTasks === 0 && E.get(R)?.bgResultPendingFollowup === true) {
+            onStatus(
+              `[runner:session] ${R} ${V()} while a finished background task's follow-up turn is pending \u2014 waiting for it before releasing`,
+            );
+            return;
+          }
+          if (liveBgTasks === 0) {
+            onStatus(
+              `[runner:session] ${R} ${V()} with only perpetual monitor task(s) / a scheduled wakeup holding the turn \u2014 releasing now`,
+            );
+            pt = false;
+            Kn();
+            pn("turn-end");
+            return;
+          }
+          if (xn !== undefined) return;
+          onStatus(
+            `[runner:session] ${R} ${V()} with ${liveBgTasks} background task(s) live \u2014 allowing ${formatDuration(retireDeferredGraceMsOverride)} to finish before releasing`,
+          );
+          xn = setTimeout(() => {
+            xn = undefined;
+            if (Jn() || !pt) return;
+            let liveBgTasks = E.get(R)?.liveBgTasks ?? 0;
+            let xe = E.get(R)?.bgResultPendingFollowup === true;
+            if (liveBgTasks === 0 && xe) {
+              onStatus(
+                `[runner:session] ${R} ${U()} elapsed but a finished background task's follow-up turn is pending \u2014 waiting for it before releasing`,
               );
               return;
             }
-            if (Ke) {
-              onDebug(
-                `[runner:session] ${R} ${N} release request adds nothing to the standing ${Ut} request \u2014 ignored`,
-              );
+            onStatus(
+              liveBgTasks === 0
+                ? `[runner:session] ${R} background work finished during the ${U()}; only perpetual monitor task(s) / a scheduled wakeup still hold the turn \u2014 releasing now`
+                : `[runner:session] ${R} ${liveBgTasks} background task(s) still live after the ${U()} \u2014 releasing anyway (a parked session beats a lost worker)`,
+            );
+            pt = false;
+            pn("turn-end");
+          }, retireDeferredGraceMsOverride);
+        };
+        let rs = (N) => {
+          if (Ln || abortController_2.signal.aborted) return;
+          if (wr) {
+            onDebug(
+              `[runner:session] ${R} ${N} release request while the child is being terminated \u2014 ignored`,
+            );
+            return;
+          }
+          if (Ke) {
+            onDebug(
+              `[runner:session] ${R} ${N} release request adds nothing to the standing ${Ut} request \u2014 ignored`,
+            );
+            return;
+          }
+          Ke = true;
+          Ut = N;
+          if (Lt === undefined) {
+            if (pt && !Dt) {
+              ns();
               return;
             }
-            if (((Ke = !0), (Ut = N), Lt === void 0)) {
-              if (pt && !Dt) {
-                ns();
-                return;
-              }
-              let x = Dt
-                ? "mid-turn \u2014 releasing as soon as the current turn finishes"
-                : "before the child reported an idle state \u2014 releasing on its first idle transition";
-              onStatus(`[runner:session] ${R} ${V()} ${x}`);
-              return;
-            }
-            (onStatus(`[runner:session] ${R} ${V()} while idle \u2014 releasing now`), pn(Lt));
-          },
-          Qe = () => rs("retire"),
-          gt = () => rs("shutdown"),
-          Qt = () => {
-            if (Ln || abortController_2.signal.aborted) return "kill";
-            let N = Lt !== void 0 || (pt && !Dt) ? "release" : "wait";
-            return (logFeatureOk("self_hosted_max_lifetime", { decision: fromEnum(N) }), rs("max-age"), N);
-          },
-          yt = () => {
-            if (wr) return;
-            wr = !0;
-            let N = Je !== void 0 || xn !== void 0;
-            if (Je !== void 0) (clearTimeout(Je), (Je = void 0));
-            if ((Kn(), N || Ke))
-              onDebug(`[runner:session] ${R} child is being terminated \u2014 release clock stood down`);
-          },
-          $r = It && ee?.id === R,
-          ar = $r && ee?.onUpdateBuild === !0 ? be : void 0;
-        ee = void 0;
-        let Q = (e.handleSession ?? handleSelfHostedSession)(
+            let x = Dt
+              ? "mid-turn \u2014 releasing as soon as the current turn finishes"
+              : "before the child reported an idle state \u2014 releasing on its first idle transition";
+            onStatus(`[runner:session] ${R} ${V()} ${x}`);
+            return;
+          }
+          onStatus(`[runner:session] ${R} ${V()} while idle \u2014 releasing now`);
+          pn(Lt);
+        };
+        let releaseForRetire = () => rs("retire");
+        let releaseForShutdown = () => rs("shutdown");
+        let onMaxLifetime = () => {
+          if (Ln || abortController_2.signal.aborted) return "kill";
+          let N = Lt !== undefined || (pt && !Dt) ? "release" : "wait";
+          logFeatureOk("self_hosted_max_lifetime", {
+            decision: fromEnum(N),
+          });
+          rs("max-age");
+          return N;
+        };
+        let onChildTerminating = () => {
+          if (wr) return;
+          wr = true;
+          let N = Je !== undefined || xn !== undefined;
+          if (Je !== undefined) {
+            clearTimeout(Je);
+            Je = undefined;
+          }
+          Kn();
+          if (N || Ke)
+            onDebug(`[runner:session] ${R} child is being terminated \u2014 release clock stood down`);
+        };
+        let $r = It && ee?.id === R;
+        let ar = $r && ee?.onUpdateBuild === true ? be : undefined;
+        ee = undefined;
+        let task = (e.handleSession ?? handleSelfHostedSession)(
           R,
           {
-            apiClient: apiClient,
+            apiClient,
             getRunnerToken: () => tokenState.runnerToken,
             baseDir: config.baseDir,
-            execPath: ar !== void 0 && execPath === process.execPath ? ar : execPath,
-            execArgs: ar !== void 0 ? [] : execArgs,
+            execPath: ar !== undefined && execPath === process.execPath ? ar : execPath,
+            execArgs: ar !== undefined ? [] : execArgs,
             updatedChildBin: ar,
             restartedHere: $r,
             childUpdateBin: be,
             onChildUpdateReady: () => {
-              ((es = !0), ts());
+              es = true;
+              ts();
             },
             capacity: config.capacity,
             healthPort: healthState?.listeningOn,
@@ -2103,11 +2331,11 @@ async function runRunnerLoop(e, n) {
             hookGitLegacyParams: config.hookGitLegacyParams,
             hostConfig: e.hostConfig,
             governedGitConfigSeed: e.governedGitConfigSeed,
-            onDebug: onDebug,
-            onStatus: onStatus,
+            onDebug,
+            onStatus,
             onSessionActivity: pn,
-            onMaxLifetime: Qt,
-            onChildTerminating: yt,
+            onMaxLifetime,
+            onChildTerminating,
             clientPlatform: Xe,
             onChildLifecycle: healthState
               ? (N) => {
@@ -2121,7 +2349,7 @@ async function runRunnerLoop(e, n) {
                           : healthState.sessionsInterrupted;
                   x.set(Xe, (x.get(Xe) ?? 0) + 1);
                 }
-              : void 0,
+              : undefined,
             onInitPhase: healthState
               ? (N) => {
                   switch (N.kind) {
@@ -2129,36 +2357,37 @@ async function runRunnerLoop(e, n) {
                       healthState.initializingSessions++;
                       break;
                     case "end":
-                      (healthState.initializingSessions--,
-                        Pks(healthState.sessionInitDurations, N.durationSec));
+                      healthState.initializingSessions--;
+                      observeHistogram(healthState.sessionInitDurations, N.durationSec);
                       break;
                     case "exit-before-init":
-                      if ((healthState.initializingSessions--, N.failed)) healthState.sessionInitErrors++;
+                      healthState.initializingSessions--;
+                      if (N.failed) healthState.sessionInitErrors++;
                       break;
                     default:
                   }
                 }
-              : void 0,
+              : undefined,
             onSessionStartHookError: healthState
               ? () => {
                   healthState.sessionStartHookErrors++;
                 }
-              : void 0,
-            standbyIdleMs: Nt,
-            takeStartCommandPhases: br,
+              : undefined,
+            standbyIdleMs,
+            takeStartCommandPhases,
             getHealthzClaimVisibleMs: () => healthState?.claimVisibility?.get(replaced)?.visibleMs,
             moveWatch: e.moveWatch,
-            ...!1,
+            ...false,
             onSessionTokenIssued: (N) => {
               if (healthState && healthState.lockedAccountEmail === null) {
-                let x = getSessionIdFromJwt(N);
-                if (x !== null) healthState.lockedAccountEmail = x;
+                let sessionIdFromJwt = getSessionIdFromJwt(N);
+                if (sessionIdFromJwt !== null) healthState.lockedAccountEmail = sessionIdFromJwt;
               }
             },
-            canonicalLocks: Mt,
-            spawnedSessionIds: _n,
+            canonicalLocks,
+            spawnedSessionIds,
             postSessionHookTimeoutMs: G,
-            checkoutHookTimeoutMs: K,
+            checkoutHookTimeoutMs,
             pushOutcomeOnRelease: config.pushOutcomeOnRelease,
             trustWorkspace: config.trustWorkspace,
             removeSessionState: config.removeSessionState,
@@ -2166,37 +2395,34 @@ async function runRunnerLoop(e, n) {
             freshMachinePerSession: config.freshMachinePerSession,
             confineRepoSettings: config.confineRepoSettings,
             serverAutoModeLists: config.serverAutoModeLists,
-            onBgTaskLedger: (N) => {
+            onBgTaskLedger: (liveBgTasks) => {
               let x = E.get(R);
-              if (x) x.liveBgTasks = N;
+              if (x) x.liveBgTasks = liveBgTasks;
               ae?.();
             },
             onBgFollowupPending: (N, x) => {
               let xe = E.get(R);
               if (xe) xe.bgResultPendingFollowup = N;
-              if ((ae?.(), !N && !x && Ke && pt)) ns();
+              ae?.();
+              if (!N && !x && Ke && pt) ns();
             },
             onPostTurnSettle: (N, x) => {
               let xe = E.get(R);
               if (xe) xe.postTurnSettling = N;
-              if ((ae?.(), !N && !x)) ts();
-              if (!N && !x && Ke && nt === 0 && Lt !== void 0) pn(Lt);
+              ae?.();
+              if (!N && !x) ts();
+              if (!N && !x && Ke && nt === 0 && Lt !== undefined) pn(Lt);
             },
             debugTokenDir: e.debugTokenDir,
           },
           abortController_2.signal,
         )
           .then((N) => {
-            let {
-              result: x,
-              failureReason: failureReason,
-              setupFailureKind: setupFailureKind,
-              failureKind: failureKind,
-            } = N;
+            let { result: x, failureReason, setupFailureKind, failureKind } = N;
             if (failureReason) onStatus(`Session ${R} finished: ${x} \u2014 reason: ${failureReason}`);
             else onStatus(`Session ${R} finished: ${x}`);
             let Zn = x === "failed" || (x === "interrupted" && !abortController_2.signal.aborted);
-            if (Zn && N.failedOnUpdateBuild === !0) {
+            if (Zn && N.failedOnUpdateBuild === true) {
               yo("build_failed");
               return;
             }
@@ -2207,292 +2433,329 @@ async function runRunnerLoop(e, n) {
                 .reportSessionFailure(
                   tokenState.runnerToken,
                   R,
-                  setupFailureKind === "SETUP_FAILURE_KIND_SOURCE_REF_NOT_FOUND" ? yn : Mln(yn),
+                  setupFailureKind === "SETUP_FAILURE_KIND_SOURCE_REF_NOT_FOUND"
+                    ? yn
+                    : rewriteContractionError(yn),
                   setupFailureKind,
                   failureKind,
                 )
                 .then((ne) => {
-                  if (
-                    (onStatus(
-                      `[runner:session] ${R} failure reported \xB7 excluded_count=${ne.excluded_count} stuck=${ne.stuck}`,
-                    ),
-                    ne.stuck)
-                  )
-                    (fe.add(R),
-                      onStatus(
-                        `[runner:session] ${R} marked stuck \u2014 will not re-spawn on future polls`,
-                      ));
+                  onStatus(
+                    `[runner:session] ${R} failure reported \xB7 excluded_count=${ne.excluded_count} stuck=${ne.stuck}`,
+                  );
+                  if (ne.stuck) {
+                    fe.add(R);
+                    onStatus(`[runner:session] ${R} marked stuck \u2014 will not re-spawn on future polls`);
+                  }
                   logFeatureOk("self_hosted_failure_report");
                 })
-                .catch((ne) => {
-                  let mt = ne instanceof Error ? ne.message : String(ne);
-                  (onStatus(
+                .catch((error) => {
+                  let mt = error instanceof Error ? error.message : String(error);
+                  onStatus(
                     `[runner:session] ${R} reportSessionFailure failed: ${mt} \u2014 marking stuck to bound respawn`,
-                  ),
-                    fe.add(R),
-                    logFeatureSad("self_hosted_failure_report", "rpc_failed"));
+                  );
+                  fe.add(R);
+                  logFeatureSad("self_hosted_failure_report", "rpc_failed");
                 })
                 .finally(() => {
                   Ht.delete(R);
                 });
             }
           })
-          .catch((N) => {
-            let x = N instanceof Error ? N.message : String(N);
+          .catch((error) => {
+            let x = error instanceof Error ? error.message : String(error);
             onStatus(`Session ${R} handler threw: ${x}`);
           })
           .finally(() => {
-            if (((Ln = !0), Je !== void 0)) (clearTimeout(Je), (Je = void 0));
-            if ((Br(), Kn(), !De.has(R))) ft.delete(R);
-            if ((he.delete(R), !P.has(R) && !De.has(R))) Z.delete(R);
-            if (healthState)
-              (healthState.sessionIdle.delete(replaced),
-                healthState.sessionClientPlatform.delete(replaced),
-                healthState.claimVisibility?.delete(replaced),
-                dropSessionMetrics(healthState, replaced));
+            Ln = true;
+            if (Je !== undefined) {
+              clearTimeout(Je);
+              Je = undefined;
+            }
+            Br();
+            Kn();
+            if (!De.has(R)) ft.delete(R);
+            he.delete(R);
+            if (!P.has(R) && !De.has(R)) Z.delete(R);
+            if (healthState) {
+              healthState.sessionIdle.delete(replaced);
+              healthState.sessionClientPlatform.delete(replaced);
+              healthState.claimVisibility?.delete(replaced);
+              dropSessionMetrics(healthState, replaced);
+            }
             let N = E.size >= config.capacity;
-            if (
-              ((oe =
-                abortController_2.signal.aborted &&
-                abortController_2.signal.reason === "idle-release" &&
-                !Ke),
-              E.delete(R),
-              ae?.(),
-              healthState)
-            )
-              healthState.activeSessions = E.size;
+            oe =
+              abortController_2.signal.aborted && abortController_2.signal.reason === "idle-release" && !Ke;
+            E.delete(R);
+            ae?.();
+            if (healthState) healthState.activeSessions = E.size;
             if (E.size === 0) {
-              if (((now_2 = Date.now()), Pt)) et.wake("LOCAL");
+              now_2 = Date.now();
+              if (Pt) et.wake("LOCAL");
             }
             if (wn && N) et.wake("LOCAL");
           });
-        if (
-          (E.set(R, {
-            task: Q,
-            controller: abortController_2,
-            liveBgTasks: 0,
-            bgResultPendingFollowup: !1,
-            postTurnSettling: !1,
-            turnInFlight: !1,
-            releaseForRetire: Qe,
-            releaseForShutdown: gt,
-          }),
-          healthState)
-        )
-          healthState.activeSessions = E.size;
+        E.set(R, {
+          task,
+          controller: abortController_2,
+          liveBgTasks: 0,
+          bgResultPendingFollowup: false,
+          postTurnSettling: false,
+          turnInFlight: false,
+          releaseForRetire,
+          releaseForShutdown,
+        });
+        if (healthState) healthState.activeSessions = E.size;
       }
       let tt = e.pollIntervalOverrideMs ?? nextPollDelayMs(ve, Ae);
-      if ((Sn++, Sn % ht === 0)) {
-        let size = E.size,
-          pe = decodeSessionJwt(tokenState.runnerToken),
-          now = Date.now(),
-          Ie = now - jt,
-          ye = pe !== null ? pe * 1000 - now : null,
-          Xe =
-            ye !== null
-              ? `${ye < 0 ? "-" : ""}${formatDuration(Math.abs(ye), { mostSignificantOnly: !0 })}`
-              : "unknown",
-          qe = healthState?.lockedAccountEmail ?? (Tn ? "yes" : "no");
+      Sn++;
+      if (Sn % ht === 0) {
+        let size = E.size;
+        let pe = decodeSessionJwt(tokenState.runnerToken);
+        let now = Date.now();
+        let Ie = now - jt;
+        let ye = pe !== null ? pe * 1000 - now : null;
+        let Xe =
+          ye !== null
+            ? `${ye < 0 ? "-" : ""}${formatDuration(Math.abs(ye), {
+                mostSignificantOnly: true,
+              })}`
+            : "unknown";
+        let qe = healthState?.lockedAccountEmail ?? (Tn ? "yes" : "no");
         onStatus(
           `[runner:health] polling ok \xB7 ${size}/${config.capacity} slots \xB7 last_poll=${Ie}ms ago \xB7 locked_account=${qe} \xB7 runner_token expires in ${Xe} \xB7 ${Er} sessions handled`,
         );
       }
       if (wn) et.atCapacity = Pt || E.size >= config.capacity;
-      await et.wait(tt, n);
+      await et.wait(tt, signal);
     }
   } finally {
-    if (((pr = !0), Wt !== void 0)) (clearTimeout(Wt), (Wt = void 0));
-    if (de !== void 0) (clearTimeout(de), (de = void 0));
-    if (Yt !== void 0) (clearTimeout(Yt), (Yt = void 0));
-    (deferShutdown?.signal.removeEventListener("abort", un),
-      n.removeEventListener("abort", He),
-      deferShutdown?.onClosed?.(),
-      Or?.close(),
-      Ct?.());
-    let aborted = n.aborted;
+    pr = true;
+    if (Wt !== undefined) {
+      clearTimeout(Wt);
+      Wt = undefined;
+    }
+    if (de !== undefined) {
+      clearTimeout(de);
+      de = undefined;
+    }
+    if (Yt !== undefined) {
+      clearTimeout(Yt);
+      Yt = undefined;
+    }
+    deferShutdown?.signal.removeEventListener("abort", un);
+    signal.removeEventListener("abort", He);
+    deferShutdown?.onClosed?.();
+    Or?.close();
+    Ct?.();
+    let aborted = signal.aborted;
     if ($n === "shutdown") He();
-    let ke,
-      jt = e.drainTimeoutMs ?? Ti(A, G, 0, config.pushOutcomeOnRelease ? _s : 0, vi()) * 1000,
-      cn = !1,
-      Pn = setInterval(() => {
-        if (cn) return;
-        ((cn = !0),
-          apiClient
-            .pollWork(tokenState.runnerToken, runnerId, 0)
-            .then(() => {
-              if (healthState) healthState.lastPollAt = Date.now();
-            })
-            .catch((tt) => {
-              if (healthState) healthState.pollErrors[classifyRunnerError(tt)]++;
-              onDebug(`[runner] shutdown: lease heartbeat failed (best-effort): ${tt}`);
-            })
-            .finally(() => {
-              cn = !1;
-            }));
-      }, e.shutdownLeaseHeartbeatMs ?? mh);
+    let ke;
+    let jt =
+      e.drainTimeoutMs ??
+      graceSeconds(A, G, 0, config.pushOutcomeOnRelease ? PUSH_ON_RELEASE_TIMEOUT_MS : 0, noHybridToken()) *
+        1000;
+    let cn = false;
+    let interval = setInterval(() => {
+      if (cn) return;
+      cn = true;
+      apiClient
+        .pollWork(tokenState.runnerToken, runnerId, 0)
+        .then(() => {
+          if (healthState) healthState.lastPollAt = Date.now();
+        })
+        .catch((error) => {
+          if (healthState) healthState.pollErrors[classifyRunnerError(error)]++;
+          onDebug(`[runner] shutdown: lease heartbeat failed (best-effort): ${error}`);
+        })
+        .finally(() => {
+          cn = false;
+        });
+    }, e.shutdownLeaseHeartbeatMs ?? SHUTDOWN_LEASE_HEARTBEAT_MS);
     try {
-      if (L > 0 && aborted) {
-        let tt = () => [...E.values()].reduce((qe, Nt) => qe + Nt.liveBgTasks, 0),
-          R = () => [...E.values()].reduce((qe, Nt) => qe + (Nt.turnInFlight ? 1 : 0), 0),
-          pe = () => [...E.values()].reduce((qe, Nt) => qe + (Nt.bgResultPendingFollowup ? 1 : 0), 0),
-          It = () => [...E.values()].reduce((qe, Nt) => qe + (Nt.postTurnSettling ? 1 : 0), 0),
-          Ie = () =>
-            (pe() > 0 ? `, ${pe()} finished background task(s) awaiting the follow-up turn` : "") +
-            (It() > 0 ? `, ${It()} finished turn(s) still being reported to the server` : ""),
-          ye = () =>
-            [...E.entries()]
-              .filter(([, qe]) => qe.turnInFlight || qe.liveBgTasks > 0 || qe.bgResultPendingFollowup)
-              .map(([qe]) => qe),
-          Xe = () => ye().length > 0 || It() > 0;
-        if (
-          ((ke = {
-            outcome: "RUNNER_DRAIN_HOLD_OUTCOME_NOT_NEEDED",
-            cap_ms: Math.round(L),
-            held_ms: 0,
-            busy_session_ids_at_release: [],
-          }),
-          Xe())
-        ) {
-          let now = Date.now(),
-            Nt = !1;
-          (onStatus(
+      if (drainWaitMs > 0 && aborted) {
+        let tt = () => [...E.values()].reduce((acc, Nt) => acc + Nt.liveBgTasks, 0);
+        let R = () => [...E.values()].reduce((acc, Nt) => acc + (Nt.turnInFlight ? 1 : 0), 0);
+        let pe = () => [...E.values()].reduce((acc, Nt) => acc + (Nt.bgResultPendingFollowup ? 1 : 0), 0);
+        let It = () => [...E.values()].reduce((acc, Nt) => acc + (Nt.postTurnSettling ? 1 : 0), 0);
+        let Ie = () =>
+          (pe() > 0 ? `, ${pe()} finished background task(s) awaiting the follow-up turn` : "") +
+          (It() > 0 ? `, ${It()} finished turn(s) still being reported to the server` : "");
+        let ye = () =>
+          [...E.entries()]
+            .filter(([, qe]) => qe.turnInFlight || qe.liveBgTasks > 0 || qe.bgResultPendingFollowup)
+            .map(([qe]) => qe);
+        let Xe = () => ye().length > 0 || It() > 0;
+        ke = {
+          outcome: "RUNNER_DRAIN_HOLD_OUTCOME_NOT_NEEDED",
+          cap_ms: Math.round(drainWaitMs),
+          held_ms: 0,
+          busy_session_ids_at_release: [],
+        };
+        if (Xe()) {
+          let now = Date.now();
+          let Nt = false;
+          onStatus(
             `[runner] drain-wait: ${R()} turn(s) in flight, ${tt()} background task(s) live${Ie()} across ${E.size} session(s) \u2014 waiting up to ` +
-              `${L / 1000}s before stopping session(s)`,
-          ),
-            await new Promise((fn) => {
-              let Wn = () => {
-                  ((ae = void 0), fn());
-                },
-                Dn = setTimeout(() => {
-                  ((Nt = !0), Wn());
-                }, L);
-              ae = () => {
-                if (!Xe()) (clearTimeout(Dn), Wn());
-              };
-            }));
+              `${drainWaitMs / 1000}s before stopping session(s)`,
+          );
+          await new Promise((resolve) => {
+            let Wn = () => {
+              ae = undefined;
+              resolve();
+            };
+            let timer = setTimeout(() => {
+              Nt = true;
+              Wn();
+            }, drainWaitMs);
+            ae = () => {
+              if (!Xe()) {
+                clearTimeout(timer);
+                Wn();
+              }
+            };
+          });
           let Je = ye();
-          ((ke = {
+          ke = {
             ...ke,
             outcome: Nt ? "RUNNER_DRAIN_HOLD_OUTCOME_CAP_EXPIRED" : "RUNNER_DRAIN_HOLD_OUTCOME_FINISHED",
             held_ms: Date.now() - now,
-            busy_session_ids_at_release: Je.slice(0, Sh),
-          }),
-            onStatus(
-              !Nt
-                ? "[runner] drain-wait: in-flight work finished \u2014 stopping session(s)"
-                : `[runner] drain-wait: timed out with ${R()} turn(s) in flight, ${tt()} task(s) still live${Ie()} \u2014 stopping session(s)`,
-            ));
+            busy_session_ids_at_release: Je.slice(0, MAX_LISTED_SESSION_IDS),
+          };
+          onStatus(
+            !Nt
+              ? "[runner] drain-wait: in-flight work finished \u2014 stopping session(s)"
+              : `[runner] drain-wait: timed out with ${R()} turn(s) in flight, ${tt()} task(s) still live${Ie()} \u2014 stopping session(s)`,
+          );
         }
       }
-      for (let { controller: controller } of E.values()) controller.abort();
+      for (let { controller } of E.values()) controller.abort();
       if (E.size > 0) {
         onStatus(`Draining ${E.size} active session(s)...`);
         try {
-          (await withBoundedTimeout(
+          await withBoundedTimeout(
             Promise.allSettled([...E.values()].map((tt) => tt.task)),
             jt,
             "[runner:stuck] drain",
-          ),
-            onStatus("Drain complete"),
-            logFeatureOk("self_hosted_drain"));
+          );
+          onStatus("Drain complete");
+          logFeatureOk("self_hosted_drain");
         } catch {
-          (logFeatureBad("self_hosted_drain", "shutdown_budget_exceeded"),
-            onStatus(
-              `[runner] shutdown exceeded ${jt}ms (session-stop-grace + post-session-hook-timeout` +
-                (config.pushOutcomeOnRelease ? " + push-on-release window" : "") +
-                ` + ${Lr / 1000}s); force-exiting. The post-session hook had its full budget; post-hook cleanup may have been cut short. ${E.size} session(s) still active.`,
-            ),
-            await e.flushLogSink?.(),
-            process.exit(1));
+          logFeatureBad("self_hosted_drain", "shutdown_budget_exceeded");
+          onStatus(
+            `[runner] shutdown exceeded ${jt}ms (session-stop-grace + post-session-hook-timeout` +
+              (config.pushOutcomeOnRelease ? " + push-on-release window" : "") +
+              ` + ${SIGKILL_GRACE_BASE_MS / 1000}s); force-exiting. The post-session hook had its full budget; post-hook cleanup may have been cut short. ${E.size} session(s) still active.`,
+          );
+          await e.flushLogSink?.();
+          process.exit(1);
         }
       }
-      if (De.size > 0)
-        (onStatus(
+      if (De.size > 0) {
+        onStatus(
           `[runner] shutdown: waiting for ${De.size} in-flight session release(s) to settle before deregistering`,
-        ),
-          await withBoundedTimeout(
-            Promise.allSettled([...De.values()]),
-            Ni,
-            "[runner:exit] release settle",
-          ).catch(() => {
-            (abortController.abort(),
-              onStatus(
-                `[runner] shutdown: ${De.size} session release(s) did not settle within ${Ni / 1000}s \u2014 deregistering anyway (those sessions are requeued rather than parked)`,
-              ));
-          }));
+        );
+        await withBoundedTimeout(
+          Promise.allSettled([...De.values()]),
+          RELEASE_IN_FLIGHT_WAIT_MS,
+          "[runner:exit] release settle",
+        ).catch(() => {
+          abortController.abort();
+          onStatus(
+            `[runner] shutdown: ${De.size} session release(s) did not settle within ${RELEASE_IN_FLIGHT_WAIT_MS / 1000}s \u2014 deregistering anyway (those sessions are requeued rather than parked)`,
+          );
+        });
+      }
       await resolved;
     } finally {
-      clearInterval(Pn);
+      clearInterval(interval);
     }
-    let Jt = !1,
-      In = await resolved,
-      nn =
-        aborted || $n === "shutdown"
-          ? In?.present
-            ? "host_drain"
-            : "shutdown_signal"
-          : Pt
-            ? "retire_at"
-            : oe && !ge
-              ? "idle_release"
-              : "";
-    if (ke !== void 0 && In?.deadlineMs !== void 0)
+    let Jt = false;
+    let In = await resolved;
+    let reason =
+      aborted || $n === "shutdown"
+        ? In?.present
+          ? "host_drain"
+          : "shutdown_signal"
+        : Pt
+          ? "retire_at"
+          : oe && !ge
+            ? "idle_release"
+            : "";
+    if (ke !== undefined && In?.deadlineMs !== undefined)
       ke.host_deadline_unix_s = Math.round(In.deadlineMs / 1000);
     await withBoundedTimeout(
       apiClient
-        .deregisterRunner(tokenState.runnerToken, { reason: nn, drain_hold: ke })
-        .then(() => {
-          if ((onStatus("[runner:exit] Deregistered"), !Jt))
-            ((Jt = !0), logFeatureOk("self_hosted_deregister"));
+        .deregisterRunner(tokenState.runnerToken, {
+          reason,
+          drain_hold: ke,
         })
-        .catch((tt) => {
-          if ((onDebug(`[runner:exit] deregisterRunner failed (best-effort): ${tt}`), !Jt))
-            ((Jt = !0), logFeatureSad("self_hosted_deregister", "rpc_failed"));
+        .then(() => {
+          onStatus("[runner:exit] Deregistered");
+          if (!Jt) {
+            Jt = true;
+            logFeatureOk("self_hosted_deregister");
+          }
+        })
+        .catch((error) => {
+          onDebug(`[runner:exit] deregisterRunner failed (best-effort): ${error}`);
+          if (!Jt) {
+            Jt = true;
+            logFeatureSad("self_hosted_deregister", "rpc_failed");
+          }
         }),
       5000,
       "[runner:exit] deregister",
     ).catch(() => {
-      if (
-        (onDebug("[runner:exit] deregisterRunner timed out (best-effort) \u2014 lease expiry will requeue"),
-        !Jt)
-      )
-        ((Jt = !0), logFeatureSad("self_hosted_deregister", "timeout"));
+      onDebug("[runner:exit] deregisterRunner timed out (best-effort) \u2014 lease expiry will requeue");
+      if (!Jt) {
+        Jt = true;
+        logFeatureSad("self_hosted_deregister", "timeout");
+      }
     });
   }
 }
 //@ chunk-hm0ce8vc.js:320208-320369 placement
 function nextPollDelayMs(e, n) {
-  let r = e ? Date.parse(e) : NaN,
-    s = Number.isNaN(r) ? To : Math.max(hh, Math.min(ph, Math.floor((r - Date.now()) / 3))),
-    a = parseDurationSeconds(n);
-  return a === void 0 ? s : Math.min(s, a);
+  let r = e ? Date.parse(e) : NaN;
+  let s = Number.isNaN(r)
+    ? DEFAULT_POLL_INTERVAL_MS
+    : Math.max(MIN_POLL_INTERVAL_MS, Math.min(MAX_POLL_INTERVAL_MS, Math.floor((r - Date.now()) / 3)));
+  let durationSeconds = parseDurationSeconds(n);
+  return durationSeconds === undefined ? s : Math.min(s, durationSeconds);
 }
 //@ chunk-hm0ce8vc.js:320369-320570 placement
 function parseDurationSeconds(e) {
-  let n = e === void 0 ? null : /^(\d{1,15})(?:\.(\d{1,9}))?s$/.exec(e);
+  let n = e === undefined ? null : /^(\d{1,15})(?:\.(\d{1,9}))?s$/.exec(e);
   if (!n) return;
-  let r = n[2] ? Number(n[2].padEnd(9, "0")) : 0,
-    s = Number(n[1]) * 1000 + Math.floor(r / 1e6);
-  return s > 0 ? Math.max(gh, s) : void 0;
+  let r = n[2] ? Number(n[2].padEnd(9, "0")) : 0;
+  let s = Number(n[1]) * 1000 + Math.floor(r / 1e6);
+  return s > 0 ? Math.max(MIN_BACKOFF_MS, s) : undefined;
 }
 //@ chunk-hm0ce8vc.js:320570-320688 placement
 function backoffDelayMs(e, n, r) {
-  let min = Math.min(yh, ku * 2 ** Math.max(0, e - 1)),
-    floored = Math.floor(min / 2 + Math.random() * (min / 2));
-  return clampToLeaseExpiry(floored, n, ku, r);
+  let min = Math.min(MAX_POLL_DELAY_MS, HEALTH_PROBE_BACKOFF_BASE_MS * 2 ** Math.max(0, e - 1));
+  let floored = Math.floor(min / 2 + Math.random() * (min / 2));
+  return clampToLeaseExpiry(floored, n, HEALTH_PROBE_BACKOFF_BASE_MS, r);
 }
 //@ chunk-hm0ce8vc.js:320688-320839 placement
 function clampToLeaseExpiry(e, n, r, s) {
-  let a = n === void 0 ? NaN : Date.parse(n) - Date.now();
+  let a = n === undefined ? NaN : Date.parse(n) - Date.now();
   if (!(a > 0)) return e;
-  let min = Math.min(a - bh, parseDurationSeconds(s) ?? 1 / 0);
+  let min = Math.min(a - LEASE_EXPIRY_POLL_MARGIN_MS, parseDurationSeconds(s) ?? 1 / 0);
   return Math.min(e, Math.max(r, min));
 }
 //@ chunk-hm0ce8vc.js:320839-321020 placement
-async function writeRunnerFileBestEffort(e, n, r, s) {
+async function writeRunnerFileBestEffort(debugTokenDir, n, r, s) {
   try {
-    (await mkdir(e, { recursive: !0, mode: 448 }), await writeFile(`${e}/${n}`, r, { mode: 384 }));
+    await mkdir(debugTokenDir, {
+      recursive: true,
+      mode: 448,
+    });
+    await writeFile(`${debugTokenDir}/${n}`, r, {
+      mode: 384,
+    });
   } catch (error) {
-    s(`[runner:debug] failed to write ${n} to ${e} (best-effort): ${error}`);
+    s(`[runner:debug] failed to write ${n} to ${debugTokenDir} (best-effort): ${error}`);
   }
 }

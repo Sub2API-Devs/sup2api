@@ -9,7 +9,7 @@
  * attribution: placement 3
  */
 import { awaitPolicyLimitsColdStart } from "../policyLimits/PolicyLimitsClient.js";
-import { UW } from "../../tools/DesignSyncTool/DesignSyncTool.js";
+import { isDesignSyncAllowed } from "../../tools/DesignSyncTool/DesignSyncTool.js";
 import {
   readDesignOAuth,
   isDesignOAuthConfigured,
@@ -20,31 +20,49 @@ import { logFeatureBadAsync, logFeatureOkAsync } from "../analytics/featureTelem
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { safeParseJSON } from "../../utils/json.js";
 
+//@ chunk-fbn843tx.js:3839-4066 placement
 /**
  * 返回 Claude Design 登录状态：是否可用、是否已登录、能否在此登录及原因。
  */
-//@ chunk-fbn843tx.js:3839-4066 placement
 async function designLoginStatus(credentials) {
   await awaitPolicyLimitsColdStart();
-  let t = UW(),
-    l = (await readDesignOAuth(credentials)) !== null,
-    i = isDesignOAuthConfigured() ? void 0 : "The Claude Design sign-in is not configured in this build.";
-  return { available: t, signed_in: l, can_sign_in_here: i === void 0, ...(i !== void 0 && { reason: i }) };
+  let available = isDesignSyncAllowed();
+  let signedIn = (await readDesignOAuth(credentials)) !== null;
+  let i = isDesignOAuthConfigured()
+    ? undefined
+    : "The Claude Design sign-in is not configured in this build.";
+  return {
+    available,
+    signed_in: signedIn,
+    can_sign_in_here: i === undefined,
+    ...(i !== undefined && {
+      reason: i,
+    }),
+  };
 }
+//@ chunk-fbn843tx.js:4066-5126 placement
 /**
  * 宿主侧的 Claude Design 登录：从 stdin 逐行读取手工粘贴的授权码（code#state），运行浏览器登录流程，把授权 URL 事件与最终结果以 JSON 行写出，并记录特性遥测。
  */
-//@ chunk-fbn843tx.js:4066-5126 placement
-async function runDesignLoginHost({ stdin: stdin, write: write, signal: signal }) {
-  if ((await awaitPolicyLimitsColdStart(), !UW())) {
+async function runDesignLoginHost({ stdin, write, signal }) {
+  await awaitPolicyLimitsColdStart();
+  if (!isDesignSyncAllowed()) {
     await logFeatureBadAsync("design_login_host", "not_enabled");
-    let e = { event: "done", ok: !1, message: "Claude Design sync is not available in this session." };
-    return (await write(jsonStringify(e)), e);
+    let e = {
+      event: "done",
+      ok: false,
+      message: "Claude Design sync is not available in this session.",
+    };
+    await write(jsonStringify(e));
+    return e;
   }
-  let submitCode,
-    abortController = new AbortController();
+  let submitCode;
+  let abortController = new AbortController();
   if (signal.aborted) abortController.abort();
-  else signal.addEventListener("abort", () => abortController.abort(), { once: !0 });
+  else
+    signal.addEventListener("abort", () => abortController.abort(), {
+      once: true,
+    });
   (async () => {
     let e = "";
     for await (let a of stdin) {
@@ -53,21 +71,15 @@ async function runDesignLoginHost({ stdin: stdin, write: write, signal: signal }
 `);
       while (index >= 0) {
         let trimmed = e.slice(0, index).trim();
-        if (
-          ((e = e.slice(index + 1)),
-          (index = e.indexOf(`
-`)),
-          trimmed === "")
-        )
-          continue;
-        let parsed = safeParseJSON(trimmed, !1),
-          code =
-            parsed !== null &&
-            typeof parsed === "object" &&
-            "code" in parsed &&
-            typeof parsed.code === "string"
-              ? parsed.code.trim()
-              : void 0;
+        e = e.slice(index + 1);
+        index = e.indexOf(`
+`);
+        if (trimmed === "") continue;
+        let parsed = safeParseJSON(trimmed, false);
+        let code =
+          parsed !== null && typeof parsed === "object" && "code" in parsed && typeof parsed.code === "string"
+            ? parsed.code.trim()
+            : undefined;
         if (code && submitCode) {
           let index = code.indexOf("#");
           submitCode(index >= 0 ? code.slice(0, index) : code, index >= 0 ? code.slice(index + 1) : "");
@@ -77,25 +89,38 @@ async function runDesignLoginHost({ stdin: stdin, write: write, signal: signal }
     abortController.abort();
   })().catch(() => abortController.abort());
   let result = await runDesignLogin(abortController.signal, {
-      onAuthUrl: (e, a) => {
-        let o = { event: "pages", url: e, manual_url: a, manual_first: isRemoteEnvironment() };
-        write(jsonStringify(o));
-      },
-      onManualCode: (e) => {
-        submitCode = e;
-      },
-    }),
-    doneEvent = result.ok
-      ? { event: "done", ok: !0 }
-      : { event: "done", ok: !1, message: designLoginFailureText(result) };
+    onAuthUrl: (url, manualUrl) => {
+      let o = {
+        event: "pages",
+        url,
+        manual_url: manualUrl,
+        manual_first: isRemoteEnvironment(),
+      };
+      write(jsonStringify(o));
+    },
+    onManualCode: (e) => {
+      submitCode = e;
+    },
+  });
+  let doneEvent = result.ok
+    ? {
+        event: "done",
+        ok: true,
+      }
+    : {
+        event: "done",
+        ok: false,
+        message: designLoginFailureText(result),
+      };
   if (result.ok) await logFeatureOkAsync("design_login_host");
   else await logFeatureBadAsync("design_login_host", result.reason);
-  return (await write(jsonStringify(doneEvent)), doneEvent);
+  await write(jsonStringify(doneEvent));
+  return doneEvent;
 }
+//@ chunk-fbn843tx.js:5126-5782 placement
 /**
  * 把 Design 登录失败原因转为提示文字。
  */
-//@ chunk-fbn843tx.js:5126-5782 placement
 function designLoginFailureText(result) {
   switch (result.reason) {
     case "interrupted":

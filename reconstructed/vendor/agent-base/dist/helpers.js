@@ -8,80 +8,89 @@
 import { x, importMetaRequire } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-hq88884p.js:17045-18297 cjs-fingerprint
-var Qt = x(function (U) {
-  var Zn =
-      (U && U.__createBinding) ||
-      (Object.create
-        ? function (e, r, n, o) {
-            if (o === void 0) o = n;
-            var ownPropertyDescriptor = Object.getOwnPropertyDescriptor(r, n);
-            if (
-              !ownPropertyDescriptor ||
-              ("get" in ownPropertyDescriptor
-                ? !r.__esModule
-                : ownPropertyDescriptor.writable || ownPropertyDescriptor.configurable)
-            )
-              ownPropertyDescriptor = {
-                enumerable: !0,
-                get: function () {
-                  return r[n];
-                },
-              };
-            Object.defineProperty(e, o, ownPropertyDescriptor);
-          }
-        : function (e, r, n, o) {
-            if (o === void 0) o = n;
-            e[o] = r[n];
-          }),
-    eo =
-      (U && U.__setModuleDefault) ||
-      (Object.create
-        ? function (e, r) {
-            Object.defineProperty(e, "default", { enumerable: !0, value: r });
-          }
-        : function (e, r) {
-            e.default = r;
-          }),
-    Gt =
-      (U && U.__importStar) ||
-      function (e) {
-        if (e && e.__esModule) return e;
-        var r = {};
-        if (e != null) {
-          for (var key in e)
-            if (key !== "default" && Object.prototype.hasOwnProperty.call(e, key)) Zn(r, e, key);
+var require_helpers = x(function (cjsExports) {
+  var __createBinding =
+    (cjsExports && cjsExports.__createBinding) ||
+    (Object.create
+      ? function (o_2, m, k, k2) {
+          if (k2 === undefined) k2 = k;
+          var desc = Object.getOwnPropertyDescriptor(m, k);
+          if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable))
+            desc = {
+              enumerable: true,
+              get: function () {
+                return m[k];
+              },
+            };
+          Object.defineProperty(o_2, k2, desc);
         }
-        return (eo(r, e), r);
-      };
-  Object.defineProperty(U, "__esModule", { value: !0 });
-  U.req = U.json = U.toBuffer = void 0;
-  var to = Gt(importMetaRequire("http")),
-    ro = Gt(importMetaRequire("https"));
-  async function Vt(e) {
-    let r = 0,
-      n = [];
-    for await (let o of e) ((r += o.length), n.push(o));
-    return Buffer.concat(n, r);
+      : function (o_2, m, k, k2) {
+          if (k2 === undefined) k2 = k;
+          o_2[k2] = m[k];
+        });
+  var __setModuleDefault =
+    (cjsExports && cjsExports.__setModuleDefault) ||
+    (Object.create
+      ? function (o, v) {
+          Object.defineProperty(o, "default", {
+            enumerable: true,
+            value: v,
+          });
+        }
+      : function (o, v) {
+          o.default = v;
+        });
+  var __importStar =
+    (cjsExports && cjsExports.__importStar) ||
+    function (mod) {
+      if (mod && mod.__esModule) return mod;
+      var result = {};
+      if (mod != null) {
+        for (var k in mod)
+          if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k))
+            __createBinding(result, mod, k);
+      }
+      __setModuleDefault(result, mod);
+      return result;
+    };
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.req = cjsExports.json = cjsExports.toBuffer = undefined;
+  var http = __importStar(importMetaRequire("http"));
+  var https = __importStar(importMetaRequire("https"));
+  async function toBuffer(stream) {
+    let length = 0;
+    let chunks = [];
+    for await (let chunk of stream) {
+      length += chunk.length;
+      chunks.push(chunk);
+    }
+    return Buffer.concat(chunks, length);
   }
-  U.toBuffer = Vt;
-  async function no(e) {
-    let str = (await Vt(e)).toString("utf8");
+  cjsExports.toBuffer = toBuffer;
+  async function json(stream) {
+    let str = (await toBuffer(stream)).toString("utf8");
     try {
       return JSON.parse(str);
-    } catch (error) {
-      let s = error;
-      throw ((s.message += ` (input: ${str})`), s);
+    } catch (_err) {
+      let err = _err;
+      err.message += ` (input: ${str})`;
+      throw err;
     }
   }
-  U.json = no;
-  function oo(e, r = {}) {
-    let request = ((typeof e === "string" ? e : e.href).startsWith("https:") ? ro : to).request(e, r),
-      promise = new Promise((c, a) => {
-        request.once("response", c).once("error", a).end();
-      });
-    return ((request.then = promise.then.bind(promise)), request);
+  cjsExports.json = json;
+  function req(url, opts = {}) {
+    let req = ((typeof url === "string" ? url : url.href).startsWith("https:") ? https : http).request(
+      url,
+      opts,
+    );
+    let promise = new Promise((resolve, reject) => {
+      req.once("response", resolve).once("error", reject).end();
+    });
+    req.then = promise.then.bind(promise);
+    return req;
   }
-  U.req = oo;
+  cjsExports.req = req;
 });
-
-export { Qt };
+export { require_helpers };

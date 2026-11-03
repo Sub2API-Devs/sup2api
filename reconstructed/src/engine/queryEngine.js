@@ -8,16 +8,11 @@
  * pieces: chunk-xx1vmpsq.js (8)
  * attribution: placement 8
  */
+import { randomUUID } from "crypto";
+import { stat, readFile } from "fs/promises";
 import {
-  randomUUID,
-  randomUUID as randomUUID_2,
-  randomUUID as randomUUID_3,
-  randomUUID as randomUUID_4,
-} from "crypto";
-import { stat, stat as stat_2, readFile } from "fs/promises";
-import {
-  Ozo,
-  UQn,
+  thinkingTokenEstimate as thinkingTokenEstimate_2,
+  signatureTokenEstimate,
   SYNTHETIC_MESSAGES,
   createSystemMessage,
   isHarnessMetaMessage,
@@ -27,7 +22,7 @@ import {
   MSG_LIFECYCLE_V1,
   ASK_USER_QUESTION_UNANSWERED_V1,
   buildSystemInitMessage,
-  fon,
+  toolNameForInit,
 } from "../utils/messages/systemInit.js";
 import { processUserInput } from "../utils/processUserInput/processUserInput.js";
 import { isCompactBoundaryMessage } from "../services/projects/threadRows.js";
@@ -45,9 +40,18 @@ import {
   getSafetyStops,
   setAutoModeUnavailableStopNotice,
 } from "../bootstrap/state.js";
-import { Ywi, CLI, oss, Jwi } from "../utils/task/taskNotifications.js";
+import {
+  currentNotificationKeyAlias,
+  CLIENT_SURFACE_ID,
+  drainNotificationsForSession,
+  hasQueuedNotificationsForSession,
+} from "../utils/task/taskNotifications.js";
 import { logForDebugging, getMinDebugLogLevel } from "../utils/debug.js";
-import { nv, ZC, __ } from "../utils/remoteFileState.js";
+import {
+  createRemoteFileState,
+  READ_FILE_STATE_CACHE_SIZE,
+  stripBomAndCarriageReturn,
+} from "../utils/remoteFileState.js";
 import { logError, getInMemoryErrors } from "../utils/log.js";
 import {
   withResultExtras,
@@ -56,7 +60,7 @@ import {
 } from "../entrypoints/sdk/coreSchemas.js";
 import { buildFileHistorySnapshotChain, saveAiGeneratedTitle } from "../utils/sessionStorage.js";
 import { getRunningTasks } from "../utils/task/framework.js";
-import { Lq } from "../tasks/taskKinds.js";
+import { isWaitableAgentOrWorkflow } from "../tasks/taskKinds.js";
 import { waitForTaskCompletion } from "../tools/TaskOutputTool/TaskOutputTool.js";
 import { rearmCreditsExhaustedNotice } from "../utils/fastMode.js";
 import { errorMessage, isFsInaccessible } from "../utils/errors.js";
@@ -71,9 +75,9 @@ import {
 import { serializeDecisionReason } from "../utils/permissions/decisionReasons.js";
 import { guardGoalCheck } from "../query/goalCheckIn.js";
 import { STRUCTUREDOUTPUT } from "../tools/SyntheticOutputTool/SyntheticOutputTool.js";
-import { MESSAGE_MARK_SYMBOLS } from "../utils/messageKinds.js";
+import { MESSAGE_MARK_SYMBOLS_2 } from "../utils/messageKinds.js";
 import { yj } from "../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
-import { Cb } from "../services/orgMemory/promptIndex.js";
+import { stripMemoryTags } from "../services/orgMemory/promptIndex.js";
 import { reduceCompactResponseLength } from "../services/compact/reactiveCompact.js";
 import {
   toSDKCompactMetadata,
@@ -86,9 +90,12 @@ import { LOCAL_COMMAND_STDOUT, LOCAL_COMMAND_STDERR } from "../constants/xml.js"
 import { BASH_TOOL_NAME } from "../tools/BashTool/toolName.js";
 import { POWERSHELL_TOOL_NAME } from "../tools/PowerShellTool/toolName.js";
 import { AGENT } from "../tools/AgentTool/constants.js";
-import { uN, maxBudgetReachedMessage } from "../cost-tracker.js";
+import { hasReachedBudget, maxBudgetReachedMessage } from "../cost-tracker.js";
 import { logFeatureOk, logFeatureBad } from "../services/analytics/featureTelemetry.js";
-import { getNoServerCheckStoppedNotice, ntt } from "../utils/permissions/serverClassifier/fallbackNotice.js";
+import {
+  getNoServerCheckStoppedNotice,
+  gatewayDisplayName,
+} from "../utils/permissions/serverClassifier/fallbackNotice.js";
 import { buildUserUnavailableNotice } from "../utils/permissions/serverClassifier/results.js";
 import {
   formatResultDiagnostic,
@@ -98,27 +105,27 @@ import {
 } from "../utils/queryHelpers.js";
 import { logEvent } from "../services/analytics/index.js";
 import { lit, fromEnum } from "../services/analytics/safeMetadata.js";
-import { zsr } from "../bridge/inboundMessageOrigin.js";
+import { turnOutcomeLabel } from "../bridge/inboundMessageOrigin.js";
 import { sleep } from "../utils/sleep.js";
 import { stopAllRunningTasks, stopObserverAgents, stopTask } from "../tasks/stopTask.js";
-import { Gvt } from "../tools/shared/gitOperationTracking.js";
+import { settlePendingPrLinks } from "../tools/shared/gitOperationTracking.js";
 import { killAutoReactSubscriptions } from "../services/artifacts/frameLive.js";
 import {
   drainQueuedTaskNotifications,
   artifactWatchStopNotice,
 } from "../tasks/MonitorWsTask/MonitorWsTask.js";
-import { mg } from "../utils/messageQueueManager.js";
+import { commandQueueManager } from "../utils/messageQueueManager.js";
 import {
   isBypassPermissionsModeDisabled,
   isAutoModeGateEnabled,
 } from "../utils/permissions/permissionSetup.js";
 import { expandPath } from "../utils/path.js";
 import { collectContextData } from "../commands/context/context-noninteractive.js";
-import { uf } from "../tools/AgentTool/backgroundGates.js";
+import { isBackgroundTasksOff } from "../tools/AgentTool/backgroundGates.js";
 import { backgroundTaskByToolUseId, backgroundAll } from "../tasks/LocalShellTask/LocalShellTask.js";
-import { Eyt, requestSessionTitle } from "../utils/sessionTitle.js";
+import { requestAndPickSessionTitle, requestSessionTitle } from "../utils/sessionTitle.js";
 import { isPolicyAllowed } from "../services/policyLimits/policyEvidence.js";
-import { ye } from "../utils/startupMarks.js";
+import { sanitizeMarkName } from "../utils/startupMarks.js";
 import {
   feedbackMode,
   feedbackUnavailableReason,
@@ -129,181 +136,233 @@ import { readFileForRemote } from "../services/remoteTools/remoteFileRead.js";
 import { EMPTY_USAGE } from "../services/api/emptyUsage.js";
 
 //@ chunk-xx1vmpsq.js:61407-62090 placement
-function thinkingTokenEstimate(e, s) {
-  if (s.type === "content_block_start") return { estimate: 0, emission: null };
-  if (s.type !== "content_block_delta") return { estimate: e, emission: null };
-  let { delta: delta } = s;
+function thinkingTokenEstimate(e, event) {
+  if (event.type === "content_block_start")
+    return {
+      estimate: 0,
+      emission: null,
+    };
+  if (event.type !== "content_block_delta")
+    return {
+      estimate: e,
+      emission: null,
+    };
+  let { delta } = event;
   if (delta.type === "thinking_delta") {
     let y;
     if ("estimated_tokens" in delta && typeof delta.estimated_tokens === "number") y = delta.estimated_tokens;
-    else if (typeof delta.thinking === "string" && delta.thinking.length > 0) y = Ozo(delta.thinking);
-    if (y === void 0) return { estimate: e, emission: null };
+    else if (typeof delta.thinking === "string" && delta.thinking.length > 0)
+      y = thinkingTokenEstimate_2(delta.thinking);
+    if (y === undefined)
+      return {
+        estimate: e,
+        emission: null,
+      };
     let r = e + y;
-    return { estimate: r, emission: { estimatedTokens: r, estimatedTokensDelta: y } };
+    return {
+      estimate: r,
+      emission: {
+        estimatedTokens: r,
+        estimatedTokensDelta: y,
+      },
+    };
   }
   if (delta.type === "signature_delta" && e > 0) {
-    let ceil = Math.ceil(UQn(delta.signature.length) / 4);
-    if (ceil > e)
-      return { estimate: ceil, emission: { estimatedTokens: ceil, estimatedTokensDelta: ceil - e } };
+    let y = Math.ceil(signatureTokenEstimate(delta.signature.length) / 4);
+    if (y > e)
+      return {
+        estimate: y,
+        emission: {
+          estimatedTokens: y,
+          estimatedTokensDelta: y - e,
+        },
+      };
   }
-  return { estimate: e, emission: null };
+  return {
+    estimate: e,
+    emission: null,
+  };
 }
 //@ chunk-xx1vmpsq.js:62090-62140 placement
-var Mt = { level: "verbose" },
-  to = 1000,
-  so = [INTERRUPT_RECEIPT_V1, MSG_LIFECYCLE_V1, ASK_USER_QUESTION_UNANSWERED_V1];
+var VERBOSE_LOG_OPTIONS = {
+  level: "verbose",
+};
+var LOG_FLUSH_MS = 1000;
+var LOG_SINKS = [INTERRUPT_RECEIPT_V1, MSG_LIFECYCLE_V1, ASK_USER_QUESTION_UNANSWERED_V1];
 //@ chunk-xx1vmpsq.js:62140-62205 placement
 function cancelScopeFor(e) {
-  return e === "remote" ? void 0 : { scope: "turn-cancel" };
+  return e === "remote"
+    ? undefined
+    : {
+        scope: "turn-cancel",
+      };
 }
 //@ chunk-xx1vmpsq.js:62205-62244 placement = getSettingsWithSources (0.85)
-var emptySettingsWithSources = () => ({ effective: {}, sources: [] });
+var emptySettingsWithSources = () => ({
+  effective: {},
+  sources: [],
+});
 //@ chunk-xx1vmpsq.js:62244-62917 placement
-async function* runDeferredSlashCommand(e, s, n) {
-  let filtered = s.messages.filter((message) => message.uuid !== e.messageUuid),
-    { messages: messages } = await processUserInput({
-      input: e.text,
-      mode: "prompt",
-      context: {
-        ...s.toolUseContext,
-        abortController: n,
-        messages: filtered,
-        canUseTool: s.canUseTool,
-        setMessages: () => {},
-        applyMessageOp: () => {},
-        onChangeAPIKey: () => {},
-        deferredSlashUuid: e.messageUuid,
-        options: { ...s.toolUseContext.options, ideInstallationStatus: null, theme: "dark" },
+async function* runDeferredSlashCommand(engineDeferredSlash, s, abortController) {
+  let messages = s.messages.filter((message) => message.uuid !== engineDeferredSlash.messageUuid);
+  let { messages: messages_2 } = await processUserInput({
+    input: engineDeferredSlash.text,
+    mode: "prompt",
+    context: {
+      ...s.toolUseContext,
+      abortController,
+      messages,
+      canUseTool: s.canUseTool,
+      setMessages: () => {},
+      applyMessageOp: () => {},
+      onChangeAPIKey: () => {},
+      deferredSlashUuid: engineDeferredSlash.messageUuid,
+      options: {
+        ...s.toolUseContext.options,
+        ideInstallationStatus: null,
+        theme: "dark",
       },
-      messages: filtered,
-      querySource: s.querySource,
-      origin: e.origin,
-      onScreened: e.lineScreened,
-      interactionPrompt: e.interactionPrompt,
-      ownWordUuids: [],
-    }),
-    T = messages.find(isCompactBoundaryMessage)?.compactMetadata.preservedMessages,
-    C = new Set(T?.allUuids ?? T?.uuids ?? []);
-  for (let I of messages) if (!C.has(I.uuid)) yield I;
-  return { reason: "completed" };
+    },
+    messages,
+    querySource: s.querySource,
+    origin: engineDeferredSlash.origin,
+    onScreened: engineDeferredSlash.lineScreened,
+    interactionPrompt: engineDeferredSlash.interactionPrompt,
+    ownWordUuids: [],
+  });
+  let preservedMessages = messages_2.find(isCompactBoundaryMessage)?.compactMetadata.preservedMessages;
+  let C = new Set(preservedMessages?.allUuids ?? preservedMessages?.uuids ?? []);
+  for (let message of messages_2) if (!C.has(message.uuid)) yield message;
+  return {
+    reason: "completed",
+  };
 }
+//@ chunk-xx1vmpsq.js:62917-88547 placement
 /**
  * 2.1.316 的查询引擎（SDK/print/REPL 共用）：接收 run 回调与命令、模型、工具、MCP、插件等环境，产出 system/init、stream_event、result 等 SDK 消息并处理中断与命令生命周期。
  */
-//@ chunk-xx1vmpsq.js:62917-88547 placement
 function createQueryEngine({
-  run: run,
-  queryParams: queryParams,
-  commands: commands = [],
-  models: models = [],
-  unavailableModels: unavailableModels = [],
-  agents: agents = [],
-  account: account = {},
-  outputStyle: outputStyle,
-  availableOutputStyles: availableOutputStyles,
-  mcpServers: mcpServers = () => [],
-  mcpDelegate: mcpDelegate,
-  excludeDynamicSections: excludeDynamicSections,
-  settings: settings = emptySettingsWithSources(),
-  authDelegate: authDelegate,
-  mcpAuthDelegate: mcpAuthDelegate,
-  ambient: ambient,
-  tools: tools = [],
-  skills: skills = [],
-  plugins: plugins = [],
-  pluginErrors: pluginErrors = [],
-  pluginWarnings: pluginWarnings = [],
-  mcpServerErrors: mcpServerErrors = [],
-  initialModel: initialModel,
-  initialPermissionMode: initialPermissionMode,
-  fastModeState: fastModeState,
-  fastModeDisabledReason: fastModeDisabledReason,
-  hostOwnsPermissionMode: hostOwnsPermissionMode = !1,
-  hostOwnsModel: hostOwnsModel = !1,
-  sdkResultVerdict: sdkResultVerdict = !1,
-  onCommandLifecycle: onCommandLifecycle,
-  onTurnThrow: onTurnThrow,
+  run,
+  queryParams,
+  commands = [],
+  models = [],
+  unavailableModels = [],
+  agents = [],
+  account = {},
+  outputStyle,
+  availableOutputStyles,
+  mcpServers = () => [],
+  mcpDelegate,
+  excludeDynamicSections,
+  settings = emptySettingsWithSources(),
+  authDelegate,
+  mcpAuthDelegate,
+  ambient,
+  tools = [],
+  skills = [],
+  plugins = [],
+  pluginErrors = [],
+  pluginWarnings = [],
+  mcpServerErrors = [],
+  initialModel,
+  initialPermissionMode,
+  fastModeState,
+  fastModeDisabledReason,
+  hostOwnsPermissionMode = false,
+  hostOwnsModel = false,
+  sdkResultVerdict = false,
+  onCommandLifecycle,
+  onTurnThrow,
 }) {
-  let de = buildInitMessageFields({
-      commands: typeof commands === "function" ? commands() : commands,
-      models: typeof models === "function" ? models() : models,
-      unavailableModels: typeof unavailableModels === "function" ? unavailableModels() : unavailableModels,
-      agents: typeof agents === "function" ? agents() : agents,
-      account: account,
-      outputStyle: outputStyle,
-      availableOutputStyles: availableOutputStyles,
-    }),
-    gt = new Stream(),
-    Be = [],
-    dt = 0,
-    Re = null,
-    Yt = () => (Re && !Re.signal.aborted ? Re : new AbortController()).signal,
-    Ye = null,
-    kt = null,
-    Je = null,
-    ut = null,
-    Ze = getSessionId(),
-    q = Ywi();
-  if (q !== Ze && q !== CLI)
+  let initMessageFields = buildInitMessageFields({
+    commands: typeof commands === "function" ? commands() : commands,
+    models: typeof models === "function" ? models() : models,
+    unavailableModels: typeof unavailableModels === "function" ? unavailableModels() : unavailableModels,
+    agents: typeof agents === "function" ? agents() : agents,
+    account,
+    outputStyle,
+    availableOutputStyles,
+  });
+  let gt = new Stream();
+  let Be = [];
+  let dt = 0;
+  let Re = null;
+  let Yt = () => (Re && !Re.signal.aborted ? Re : new AbortController()).signal;
+  let Ye = null;
+  let kt = null;
+  let Je = null;
+  let ut = null;
+  let sessionId = getSessionId();
+  let q = currentNotificationKeyAlias();
+  if (q !== sessionId && q !== CLIENT_SURFACE_ID)
     logForDebugging(
-      `[engine] sdkEventQueue push key '${q}' \u2260 engine sessionId '${Ze}' \u2014 host ALS wiring likely incorrect; enqueued SdkEvents will not drain here`,
+      `[engine] sdkEventQueue push key '${q}' \u2260 engine sessionId '${sessionId}' \u2014 host ALS wiring likely incorrect; enqueued SdkEvents will not drain here`,
     );
   let se = (h) => ({
+    ...h,
+    session_id: sessionId,
+    uuid: "uuid" in h && typeof h.uuid === "string" ? h.uuid : randomUUID(),
+  });
+  let he = (h) => (typeof h === "function" ? h() : h);
+  let Wt = () => {
+    let h = he(ambient);
+    if (!h) return null;
+    let commands_2 = typeof commands === "function" ? commands() : commands;
+    let D = typeof agents === "function" ? agents() : agents;
+    return buildSystemInitMessage({
       ...h,
-      session_id: Ze,
-      uuid: "uuid" in h && typeof h.uuid === "string" ? h.uuid : randomUUID(),
-    }),
-    he = (h) => (typeof h === "function" ? h() : h),
-    Wt = () => {
-      let h = he(ambient);
-      if (!h) return null;
-      let P = typeof commands === "function" ? commands() : commands,
-        D = typeof agents === "function" ? agents() : agents;
-      return buildSystemInitMessage({
-        ...h,
-        sessionId: Ze,
-        tools: tools,
-        mcpClients: mcpServers().map((O) => ({ name: O.name, type: O.status, source: O.source })),
-        model: Ye ?? he(initialModel) ?? "",
-        permissionMode: kt ?? he(initialPermissionMode) ?? "default",
-        commands: P,
-        agents: D.map((O) => ({ agentType: O.name })),
-        skills: skills,
-        plugins: plugins,
-        pluginErrors: pluginErrors,
-        pluginWarnings: pluginWarnings,
-        mcpServerErrors: mcpServerErrors,
-        additionalDirectories: void 0,
-        fastModeState: he(fastModeState) ?? "off",
-        fastModeDisabledReason: he(fastModeDisabledReason),
-        capabilities: so,
-      });
-    },
-    lt = !1,
-    Jt = 0,
-    L = null,
-    pe = !1,
-    Ie = nv(ZC),
-    Xe = [],
-    Et = !1,
-    be = [],
-    Ee = !1,
-    Ne = (h) => {
-      if (Xe.length >= to) {
-        if ((Xe.shift(), !Et))
-          ((Et = !0),
-            logError(
-              Error(
-                "[engine] pendingDenialFrames buffer is full; dropping oldest permission_denied advisory frames",
-              ),
-            ));
+      sessionId,
+      tools,
+      mcpClients: mcpServers().map((O) => ({
+        name: O.name,
+        type: O.status,
+        source: O.source,
+      })),
+      model: Ye ?? he(initialModel) ?? "",
+      permissionMode: kt ?? he(initialPermissionMode) ?? "default",
+      commands: commands_2,
+      agents: D.map((O) => ({
+        agentType: O.name,
+      })),
+      skills,
+      plugins,
+      pluginErrors,
+      pluginWarnings,
+      mcpServerErrors,
+      additionalDirectories: undefined,
+      fastModeState: he(fastModeState) ?? "off",
+      fastModeDisabledReason: he(fastModeDisabledReason),
+      capabilities: LOG_SINKS,
+    });
+  };
+  let lt = false;
+  let Jt = 0;
+  let L = null;
+  let pe = false;
+  let remoteFileState = createRemoteFileState(READ_FILE_STATE_CACHE_SIZE);
+  let Xe = [];
+  let Et = false;
+  let be = [];
+  let Ee = false;
+  let Ne = (h) => {
+    if (Xe.length >= LOG_FLUSH_MS) {
+      Xe.shift();
+      if (!Et) {
+        Et = true;
+        logError(
+          Error(
+            "[engine] pendingDenialFrames buffer is full; dropping oldest permission_denied advisory frames",
+          ),
+        );
       }
-      Xe.push(h);
-    };
+    }
+    Xe.push(h);
+  };
   function* qt() {
     while (Xe.length > 0) {
       let h = Xe.shift();
-      (logForDebugging(`[engine] yield ${h.type}/${h.subtype}`, Mt), yield se(h));
+      logForDebugging(`[engine] yield ${h.type}/${h.subtype}`, VERBOSE_LOG_OPTIONS);
+      yield se(h);
     }
   }
   let Se = [];
@@ -314,25 +373,37 @@ function createQueryEngine({
       logError(error);
     }
   }
-  function zt(h) {
+  function zt(error) {
     try {
-      onTurnThrow?.({ error: h });
+      onTurnThrow?.({
+        error,
+      });
     } catch (error) {
       logError(error);
     }
   }
-  function je(h, P) {
-    return (Kt(h, P), { type: "command_lifecycle", command_uuid: h, state: P });
+  function je(uuid, P) {
+    Kt(uuid, P);
+    return {
+      type: "command_lifecycle",
+      command_uuid: uuid,
+      state: P,
+    };
   }
   function* We() {
     while (Se.length > 0) {
       let h = Se.shift();
-      (logForDebugging(`[engine] yield command_lifecycle/${h.state}`, Mt), yield se(h));
+      logForDebugging(`[engine] yield command_lifecycle/${h.state}`, VERBOSE_LOG_OPTIONS);
+      yield se(h);
     }
   }
   function* Me() {
-    (yield* qt(), yield* We());
-    for (let h of oss(Ze)) (logForDebugging(`[engine] yield sdk-queue system/${h.subtype}`, Mt), yield se(h));
+    yield* qt();
+    yield* We();
+    for (let h of drainNotificationsForSession(sessionId)) {
+      logForDebugging(`[engine] yield sdk-queue system/${h.subtype}`, VERBOSE_LOG_OPTIONS);
+      yield se(h);
+    }
   }
   function* et() {
     while (be.length > 0)
@@ -346,50 +417,65 @@ function createQueryEngine({
       });
   }
   let xe = () => {
-    if (!Ee) return !1;
-    let h = L?.toolUseContext?.getAppState;
-    return h !== void 0 && getRunningTasks(h()).some((P) => Lq(P) && waitForTaskCompletion(P));
+    if (!Ee) return false;
+    let getAppState = L?.toolUseContext?.getAppState;
+    return (
+      getAppState !== undefined &&
+      getRunningTasks(getAppState()).some((P) => isWaitableAgentOrWorkflow(P) && waitForTaskCompletion(P))
+    );
   };
   function* pt(h, P) {
     if (xe()) be.push(h);
-    else (yield* et(), yield h);
+    else {
+      yield* et();
+      yield h;
+    }
     if (P) yield se(P);
   }
   async function* xt() {
-    lt = !1;
+    lt = false;
     let h = Wt();
-    if (h) (logForDebugging("[engine] yield system/init (first)"), yield se(h));
+    if (h) {
+      logForDebugging("[engine] yield system/init (first)");
+      yield se(h);
+    }
     for await (let P of gt) {
       if (lt) {
-        lt = !1;
+        lt = false;
         let ie = Wt();
-        if (ie) (logForDebugging("[engine] yield system/init (re-emit)"), yield se(ie));
+        if (ie) {
+          logForDebugging("[engine] yield system/init (re-emit)");
+          yield se(ie);
+        }
       }
-      (yield* Me(), rearmCreditsExhaustedNotice());
-      let startTime = performance.now(),
-        O = {
-          parent_tool_use_id: P.parent_tool_use_id,
-          priority: P.priority,
-          shouldQuery: P.shouldQuery,
-          timestamp: P.timestamp,
-        },
-        G;
+      yield* Me();
+      rearmCreditsExhaustedNotice();
+      let startTime = performance.now();
+      let O = {
+        parent_tool_use_id: P.parent_tool_use_id,
+        priority: P.priority,
+        shouldQuery: P.shouldQuery,
+        timestamp: P.timestamp,
+      };
+      let G;
       try {
         G = await queryParams(P);
       } catch (error) {
-        (logError(error), zt(error), Be.shift());
-        let S = P.uuid !== void 0 ? je(P.uuid, "cancelled") : void 0;
-        if (sdkResultVerdict) setAutoModeUnavailableStopNotice(void 0);
+        logError(error);
+        zt(error);
+        Be.shift();
+        let S = P.uuid !== undefined ? je(P.uuid, "cancelled") : undefined;
+        if (sdkResultVerdict) setAutoModeUnavailableStopNotice(undefined);
         yield* Me();
         let V = {
           ...buildResultMessage({
             startedAt: startTime,
             common: {
-              is_error: !0,
+              is_error: true,
               duration_api_ms: 0,
               num_turns: 0,
               stop_reason: null,
-              session_id: Ze,
+              session_id: sessionId,
               total_cost_usd: getTotalCostUSD(),
               usage: aggregateModelUsage(),
               modelUsage: getModelUsage(),
@@ -404,7 +490,7 @@ function createQueryEngine({
             variant: {
               subtype: "error_during_execution",
               errors: [`queryParams builder failed: ${errorMessage(error)}`],
-              user_message_uuid: void 0,
+              user_message_uuid: undefined,
             },
           }),
           ...O,
@@ -412,194 +498,255 @@ function createQueryEngine({
         yield* pt(V, S);
         continue;
       }
-      (dt++, (L = G));
+      dt++;
+      L = G;
       let abortController = new AbortController();
       Re = abortController;
       let Ce = Be[0];
-      if (Ce !== void 0) Ce.status = "armed";
-      if (P.uuid !== void 0) Se.push(je(P.uuid, "started"));
-      let Ae = G.toolUseContext?.abortController?.signal,
-        rt = () => abortController.abort(Ae?.reason);
-      if (Ae?.aborted) abortController.abort(Ae.reason);
-      else Ae?.addEventListener("abort", rt, { once: !0 });
-      let Z = G.toolUseContext?.abortController,
-        Dt = () => {
-          if (
-            unwrapAbortReason(abortController.signal.reason) === "refusal-fallback-edit" &&
-            Z &&
-            !Z.signal.aborted
-          )
-            Z.abort(abortController.signal.reason);
-        };
-      (abortController.signal.addEventListener("abort", Dt, { once: !0 }),
-        logForDebugging(`[engine] turn ${dt} start`));
-      let yt = getMinDebugLogLevel() === "verbose",
-        Xt = [],
-        rs = (ie, S, V) => {
-          if (Xt.some((Ke) => Ke.tool_use_id === S)) return;
-          Xt.push({ tool_name: fon(ie.name), tool_use_id: S, tool_input: V });
-        },
-        canUseTool = G.canUseTool,
-        X = async (ie, S, V, Ke, Pt, At) => {
-          let Oe = await canUseTool(ie, S, V, Ke, Pt, At);
-          if (isRecordableDenial(Oe, At)) rs(ie, Pt, S);
-          if (Oe.behavior === "deny" && isPreAskDeny(Oe) && !isInvalidInputDeny(Oe))
-            Ne({
-              type: "system",
-              subtype: "permission_denied",
-              tool_name: ie.name,
-              tool_use_id: Pt,
-              agent_id: V.agentId,
-              decision_reason_type: Oe.decisionReason?.type,
-              decision_reason_code: decisionReasonCode(Oe.decisionReason),
-              decision_reason: serializeDecisionReason(Oe.decisionReason),
-              message: Oe.message,
-            });
-          return Oe;
-        };
-      if (Ie.size > 0 && G.toolUseContext?.readFileState) {
-        for (let [ie, S] of Ie.entries()) {
+      if (Ce !== undefined) Ce.status = "armed";
+      if (P.uuid !== undefined) Se.push(je(P.uuid, "started"));
+      let signal = G.toolUseContext?.abortController?.signal;
+      let rt = () => abortController.abort(signal?.reason);
+      if (signal?.aborted) abortController.abort(signal.reason);
+      else
+        signal?.addEventListener("abort", rt, {
+          once: true,
+        });
+      let abortController_2 = G.toolUseContext?.abortController;
+      let Dt = () => {
+        if (
+          unwrapAbortReason(abortController.signal.reason) === "refusal-fallback-edit" &&
+          abortController_2 &&
+          !abortController_2.signal.aborted
+        )
+          abortController_2.abort(abortController.signal.reason);
+      };
+      abortController.signal.addEventListener("abort", Dt, {
+        once: true,
+      });
+      logForDebugging(`[engine] turn ${dt} start`);
+      let yt = getMinDebugLogLevel() === "verbose";
+      let Xt = [];
+      let rs = (ie, S, toolInput) => {
+        if (Xt.some((Ke) => Ke.tool_use_id === S)) return;
+        Xt.push({
+          tool_name: toolNameForInit(ie.name),
+          tool_use_id: S,
+          tool_input: toolInput,
+        });
+      };
+      let canUseTool = G.canUseTool;
+      let canUseTool_2 = async (ie, toolInput, V, Ke, Pt, At) => {
+        let Oe = await canUseTool(ie, toolInput, V, Ke, Pt, At);
+        if (isRecordableDenial(Oe, At)) rs(ie, Pt, toolInput);
+        if (Oe.behavior === "deny" && isPreAskDeny(Oe) && !isInvalidInputDeny(Oe))
+          Ne({
+            type: "system",
+            subtype: "permission_denied",
+            tool_name: ie.name,
+            tool_use_id: Pt,
+            agent_id: V.agentId,
+            decision_reason_type: Oe.decisionReason?.type,
+            decision_reason_code: decisionReasonCode(Oe.decisionReason),
+            decision_reason: serializeDecisionReason(Oe.decisionReason),
+            message: Oe.message,
+          });
+        return Oe;
+      };
+      if (remoteFileState.size > 0 && G.toolUseContext?.readFileState) {
+        for (let [ie, S] of remoteFileState.entries()) {
           let V = G.toolUseContext.readFileState.get(ie);
           if (!V || S.timestamp > V.timestamp) G.toolUseContext.readFileState.set(ie, S);
         }
-        Ie.clear();
+        remoteFileState.clear();
       }
       let ce = G.engineDeferredSlash
-          ? runDeferredSlashCommand(G.engineDeferredSlash, G, abortController)
-          : run({
-              ...G,
-              canUseTool: X,
-              keepPartialMessageOnAbort: !0,
-              takePlainDelta:
-                G.takePlainDelta === void 0 || G.toolUseContext?.options?.maxBudgetUsd !== void 0
-                  ? void 0
-                  : guardGoalCheck(
-                      "engine",
-                      () => Xe.length === 0 && Se.length === 0 && !Jwi(Ze),
-                      G.takePlainDelta,
-                    ),
-              toolUseContext: {
-                ...G.toolUseContext,
-                abortController: abortController,
-                onPermissionDenial: rs,
-                permissionLayers:
-                  (!hostOwnsModel && Ye !== null) ||
-                  (!hostOwnsPermissionMode && kt !== null) ||
-                  Je !== null ||
-                  ut !== null
-                    ? [
-                        ...(G.toolUseContext?.permissionLayers ?? []),
-                        ...(!hostOwnsModel && Ye !== null ? [{ kind: "model", mainLoopModel: Ye }] : []),
-                        ...(!hostOwnsPermissionMode && kt !== null
-                          ? [{ kind: "permission_mode", mode: kt }]
-                          : []),
-                        ...(Je !== null ? [{ kind: "max_thinking_tokens", maxThinkingTokens: Je }] : []),
-                        ...(ut !== null ? [{ kind: "flag_settings", settings: ut }] : []),
-                      ]
-                    : G.toolUseContext?.permissionLayers,
-              },
-            }),
-        me = null,
-        ht = !1,
-        ot = G.engineDeferredSlash ? 0 : 1,
-        Ue = null,
-        qe = [],
-        $t,
-        es = "",
-        bt = !1,
-        os = null,
-        ts,
-        ss,
-        ns,
-        is = "",
-        Vt = [],
-        cs = new Set(),
-        Ps = null,
-        as,
-        ps,
-        Hs = G.toolUseContext?.options?.maxBudgetUsd,
-        at = getInMemoryErrors().at(-1),
-        Zt;
+        ? runDeferredSlashCommand(G.engineDeferredSlash, G, abortController)
+        : run({
+            ...G,
+            canUseTool: canUseTool_2,
+            keepPartialMessageOnAbort: true,
+            takePlainDelta:
+              G.takePlainDelta === undefined || G.toolUseContext?.options?.maxBudgetUsd !== undefined
+                ? undefined
+                : guardGoalCheck(
+                    "engine",
+                    () => Xe.length === 0 && Se.length === 0 && !hasQueuedNotificationsForSession(sessionId),
+                    G.takePlainDelta,
+                  ),
+            toolUseContext: {
+              ...G.toolUseContext,
+              abortController,
+              onPermissionDenial: rs,
+              permissionLayers:
+                (!hostOwnsModel && Ye !== null) ||
+                (!hostOwnsPermissionMode && kt !== null) ||
+                Je !== null ||
+                ut !== null
+                  ? [
+                      ...(G.toolUseContext?.permissionLayers ?? []),
+                      ...(!hostOwnsModel && Ye !== null
+                        ? [
+                            {
+                              kind: "model",
+                              mainLoopModel: Ye,
+                            },
+                          ]
+                        : []),
+                      ...(!hostOwnsPermissionMode && kt !== null
+                        ? [
+                            {
+                              kind: "permission_mode",
+                              mode: kt,
+                            },
+                          ]
+                        : []),
+                      ...(Je !== null
+                        ? [
+                            {
+                              kind: "max_thinking_tokens",
+                              maxThinkingTokens: Je,
+                            },
+                          ]
+                        : []),
+                      ...(ut !== null
+                        ? [
+                            {
+                              kind: "flag_settings",
+                              settings: ut,
+                            },
+                          ]
+                        : []),
+                    ]
+                  : G.toolUseContext?.permissionLayers,
+            },
+          });
+      let me = null;
+      let ht = false;
+      let ot = G.engineDeferredSlash ? 0 : 1;
+      let stopReason = null;
+      let qe = [];
+      let $t;
+      let es = "";
+      let bt = false;
+      let os = null;
+      let ts;
+      let ss;
+      let ns;
+      let is = "";
+      let Vt = [];
+      let cs = new Set();
+      let Ps = null;
+      let as;
+      let ps;
+      let maxBudgetUsd = G.toolUseContext?.options?.maxBudgetUsd;
+      let last = getInMemoryErrors().at(-1);
+      let Zt;
       try {
         let ie = await ce.next();
         while (!ie.done) {
           let S = ie.value;
           if (S.type === "user") {
             if (!G.engineDeferredSlash) ot++;
-            (qe.push(S),
-              (es = ""),
-              (bt = !1),
-              (os = null),
-              (ts = void 0),
-              (ss = void 0),
-              (ns = void 0),
-              (is = ""));
+            qe.push(S);
+            es = "";
+            bt = false;
+            os = null;
+            ts = undefined;
+            ss = undefined;
+            ns = undefined;
+            is = "";
           } else if (S.type === "tombstone") {
             {
-              let V = S.message?.uuid,
-                Ke = V !== void 0 ? qe.findLastIndex((Pt) => Pt.uuid === V) : qe.length - 1;
+              let uuid = S.message?.uuid;
+              let Ke = uuid !== undefined ? qe.findLastIndex((Pt) => Pt.uuid === uuid) : qe.length - 1;
               if (Ke >= 0) qe.splice(Ke, 1);
             }
             {
               let message = S.message;
               if (message?.type === "assistant") {
-                let content = message.message.content,
-                  Pt = Array.isArray(content)
-                    ? content.flatMap((At) =>
-                        At.type === "tool_use" && At.name === STRUCTUREDOUTPUT ? [At.id] : [],
-                      )
-                    : [];
+                let content = message.message.content;
+                let Pt = Array.isArray(content)
+                  ? content.flatMap((At) =>
+                      At.type === "tool_use" && At.name === STRUCTUREDOUTPUT ? [At.id] : [],
+                    )
+                  : [];
                 if (Pt.length > 0) {
                   for (let Oe of Pt) cs.add(Oe);
-                  let At = (Oe) => Oe.toolUseID === void 0 || Pt.includes(Oe.toolUseID);
+                  let At = (Oe) => Oe.toolUseID === undefined || Pt.includes(Oe.toolUseID);
                   Vt = Vt.filter((Oe) => !At(Oe));
                 }
               }
             }
-            ((es = ""), (bt = !1), (os = null), (ts = void 0), (ss = void 0), (ns = void 0), (is = ""));
+            es = "";
+            bt = false;
+            os = null;
+            ts = undefined;
+            ss = undefined;
+            ns = undefined;
+            is = "";
           } else if (S.type === "assistant") {
-            if (((Ps ??= performance.now()), qe.push(S), S.message.stop_reason != null))
-              Ue = S.message.stop_reason;
-            ((bt = S.isApiErrorMessage === !0),
-              (os = S.apiErrorStatus ?? null),
-              (ts = S.apiErrorCode),
-              (ss = S[MESSAGE_MARK_SYMBOLS]),
-              (ns = bt ? S.apiError : void 0));
-            let V = yj(S.message.content),
-              Ke = V?.type === "text" ? V.text : "";
-            if (bt) ((is = SYNTHETIC_MESSAGES.has(Ke) ? "" : Cb(Ke)), (es = ""));
-            else es = SYNTHETIC_MESSAGES.has(Ke) ? "" : Cb(Ke);
+            Ps ??= performance.now();
+            qe.push(S);
+            if (S.message.stop_reason != null) stopReason = S.message.stop_reason;
+            bt = S.isApiErrorMessage === true;
+            os = S.apiErrorStatus ?? null;
+            ts = S.apiErrorCode;
+            ss = S[MESSAGE_MARK_SYMBOLS_2];
+            ns = bt ? S.apiError : undefined;
+            let V = yj(S.message.content);
+            let text = V?.type === "text" ? V.text : "";
+            if (bt) {
+              is = SYNTHETIC_MESSAGES.has(text) ? "" : stripMemoryTags(text);
+              es = "";
+            } else es = SYNTHETIC_MESSAGES.has(text) ? "" : stripMemoryTags(text);
           } else if (
             S.type === "stream_event" &&
             S.event.type === "message_delta" &&
             S.event.delta.stop_reason != null
           )
-            Ue = S.event.delta.stop_reason;
+            stopReason = S.event.delta.stop_reason;
           else if (S.type === "attachment" && S.attachment.type === "structured_output") {
-            if (!(S.attachment.toolUseID !== void 0 ? cs.has(S.attachment.toolUseID) : cs.size > 0))
-              Vt = [...Vt, { toolUseID: S.attachment.toolUseID, data: S.attachment.data }];
+            if (!(S.attachment.toolUseID !== undefined ? cs.has(S.attachment.toolUseID) : cs.size > 0))
+              Vt = [
+                ...Vt,
+                {
+                  toolUseID: S.attachment.toolUseID,
+                  data: S.attachment.data,
+                },
+              ];
           } else if (S.type === "attachment" && S.attachment.type === "max_turns_reached")
-            $t = { turnCount: S.attachment.turnCount, maxTurns: S.attachment.maxTurns };
+            $t = {
+              turnCount: S.attachment.turnCount,
+              maxTurns: S.attachment.maxTurns,
+            };
           else if (S.type === "attachment" && S.attachment.type === "hook_deferred_tool")
-            as = { id: S.attachment.toolUseID, name: S.attachment.toolName, input: S.attachment.toolInput };
+            as = {
+              id: S.attachment.toolUseID,
+              name: S.attachment.toolName,
+              input: S.attachment.toolInput,
+            };
           if (Xe.length > 0) yield* qt();
           if (Se.length > 0) yield* We();
-          if (((ps = reduceCompactResponseLength(ps, S)), S.type === "stream_event")) {
+          ps = reduceCompactResponseLength(ps, S);
+          if (S.type === "stream_event") {
             let V = thinkingTokenEstimate(Jt, S.event);
-            if (((Jt = V.estimate), V.emission)) {
-              if (
-                (yield se({
-                  type: "system",
-                  subtype: "thinking_tokens",
-                  estimated_tokens: V.emission.estimatedTokens,
-                  estimated_tokens_delta: V.emission.estimatedTokensDelta,
-                }),
-                yt)
-              )
-                logForDebugging("[engine] yield-twin system/thinking_tokens", Mt);
+            Jt = V.estimate;
+            if (V.emission) {
+              yield se({
+                type: "system",
+                subtype: "thinking_tokens",
+                estimated_tokens: V.emission.estimatedTokens,
+                estimated_tokens_delta: V.emission.estimatedTokensDelta,
+              });
+              if (yt) logForDebugging("[engine] yield-twin system/thinking_tokens", VERBOSE_LOG_OPTIONS);
             }
           }
-          if (yt) logForDebugging(`[engine] yield ${S.type}/${"subtype" in S ? S.subtype : "-"}`, Mt);
+          if (yt)
+            logForDebugging(
+              `[engine] yield ${S.type}/${"subtype" in S ? S.subtype : "-"}`,
+              VERBOSE_LOG_OPTIONS,
+            );
           if (S.type === "command_lifecycle") yield se(je(S.uuid, S.state));
           else if (S.type === "notification") {
             let notification = S.notification;
@@ -609,27 +756,43 @@ function createQueryEngine({
               key: notification.key,
               text: notification.text,
               priority: notification.priority,
-              ...(notification.color !== void 0 && { color: notification.color }),
-              ...(notification.timeoutMs !== void 0 && { timeout_ms: notification.timeoutMs }),
+              ...(notification.color !== undefined && {
+                color: notification.color,
+              }),
+              ...(notification.timeoutMs !== undefined && {
+                timeout_ms: notification.timeoutMs,
+              }),
             });
           } else if (S.type === "sdk_status")
             yield se({
               type: "system",
               subtype: "status",
               status: S.status,
-              ...(ps !== void 0 && { compact_output_chars: ps }),
-              ...(S.metadata?.compactResult !== void 0 && { compact_result: S.metadata.compactResult }),
-              ...(S.metadata?.compactError !== void 0 && { compact_error: S.metadata.compactError }),
+              ...(ps !== undefined && {
+                compact_output_chars: ps,
+              }),
+              ...(S.metadata?.compactResult !== undefined && {
+                compact_result: S.metadata.compactResult,
+              }),
+              ...(S.metadata?.compactError !== undefined && {
+                compact_error: S.metadata.compactError,
+              }),
             });
           else if (S.type === "stream_request_start")
-            yield se({ type: "system", subtype: "status", status: "requesting" });
+            yield se({
+              type: "system",
+              subtype: "status",
+              status: "requesting",
+            });
           else if (S.type === "system" && S.subtype === "compact_boundary")
             yield se({
               type: "system",
               subtype: "compact_boundary",
               uuid: S.uuid,
               compact_metadata: toSDKCompactMetadata(S.compactMetadata),
-              ...(S.logicalParentUuid !== void 0 && { logical_parent_uuid: S.logicalParentUuid }),
+              ...(S.logicalParentUuid !== undefined && {
+                logical_parent_uuid: S.logicalParentUuid,
+              }),
             });
           else if (S.type === "system" && S.subtype === "model_refusal_fallback")
             yield se({
@@ -638,17 +801,25 @@ function createQueryEngine({
               uuid: S.uuid,
               trigger: S.trigger,
               direction: S.direction,
-              ...(S.scope !== void 0 && { scope: S.scope }),
+              ...(S.scope !== undefined && {
+                scope: S.scope,
+              }),
               original_model: S.originalModel,
               fallback_model: S.fallbackModel,
               request_id: S.requestId,
               api_refusal_category: S.apiRefusalCategory ?? null,
               api_refusal_explanation: S.apiRefusalExplanation ?? null,
-              ...(S.retractedMessageUuids !== void 0 && { retracted_message_uuids: S.retractedMessageUuids }),
+              ...(S.retractedMessageUuids !== undefined && {
+                retracted_message_uuids: S.retractedMessageUuids,
+              }),
               refused_user_message_uuid: S.refusedUserMessageUuid ?? null,
               content: S.content,
-              ...(S.sawCyberRefusal && { saw_cyber_refusal: !0 }),
-              ...(S.provisional && { provisional: S.provisional }),
+              ...(S.sawCyberRefusal && {
+                saw_cyber_refusal: true,
+              }),
+              ...(S.provisional && {
+                provisional: S.provisional,
+              }),
             });
           else if (S.type === "system" && S.subtype === "model_refusal_no_fallback")
             yield se({
@@ -673,9 +844,15 @@ function createQueryEngine({
               content: S.content,
             });
           else if (S.type === "system" && S.subtype === "model_consent_fallback")
-            yield se({ ...toSDKModelConsentFallbackMessage(S), uuid: S.uuid });
+            yield se({
+              ...toSDKModelConsentFallbackMessage(S),
+              uuid: S.uuid,
+            });
           else if (S.type === "tool_use_summary")
-            yield se({ ...createToolUseSummaryMessage(S), uuid: S.uuid });
+            yield se({
+              ...createToolUseSummaryMessage(S),
+              uuid: S.uuid,
+            });
           else if (S.type === "system" && S.subtype === "read_divider");
           else yield se(S);
           if (S.type === "system" && S.subtype === "api_error")
@@ -697,7 +874,7 @@ function createQueryEngine({
           if (S.type === "attachment" && S.attachment.type === "relevant_memories") {
             let V = memoryRecallMessage(S.attachment.memories);
             if (V) {
-              let { uuid: uuid, session_id: session_id, ...At } = V;
+              let { uuid, session_id: sessionId, ...At } = V;
               yield se(At);
             }
           }
@@ -717,40 +894,45 @@ function createQueryEngine({
               S.usageReport,
               S.commandOutcome,
             );
-            if (V) (yield se(V), logForDebugging("[engine] yield-twin assistant (local_command)", Mt));
+            if (V) {
+              yield se(V);
+              logForDebugging("[engine] yield-twin assistant (local_command)", VERBOSE_LOG_OPTIONS);
+            }
           }
           if (
             S.type === "progress" &&
             (S.data.type === "bash_progress" || S.data.type === "powershell_progress")
-          )
-            (yield se({
+          ) {
+            yield se({
               type: "tool_progress",
               tool_use_id: S.toolUseID,
               tool_name: S.data.type === "bash_progress" ? BASH_TOOL_NAME : POWERSHELL_TOOL_NAME,
               parent_tool_use_id: S.parentToolUseID || null,
               elapsed_time_seconds: S.data.elapsedTimeSeconds,
               task_id: S.data.taskId,
-            }),
-              logForDebugging("[engine] yield-twin tool_progress", Mt));
-          if (S.type === "progress" && S.data.type === "tool_heartbeat")
-            (yield se({
+            });
+            logForDebugging("[engine] yield-twin tool_progress", VERBOSE_LOG_OPTIONS);
+          }
+          if (S.type === "progress" && S.data.type === "tool_heartbeat") {
+            yield se({
               type: "tool_progress",
               tool_use_id: S.toolUseID,
               tool_name: S.data.toolName,
               parent_tool_use_id: S.parentToolUseID || null,
               elapsed_time_seconds: S.data.elapsedTimeSeconds,
-              heartbeat: !0,
-            }),
-              logForDebugging("[engine] yield-twin tool_progress heartbeat", Mt));
-          if (S.type === "progress" && S.data.type === "agent_api_retry")
-            (yield se({
+              heartbeat: true,
+            });
+            logForDebugging("[engine] yield-twin tool_progress heartbeat", VERBOSE_LOG_OPTIONS);
+          }
+          if (S.type === "progress" && S.data.type === "agent_api_retry") {
+            yield se({
               type: "tool_progress",
               tool_use_id: S.toolUseID,
               tool_name: AGENT,
               parent_tool_use_id: S.parentToolUseID || null,
               elapsed_time_seconds: 0,
               subagent_type: S.data.agentType,
-              ...(S.data.resolved !== !0 && {
+              ...(S.data.resolved !== true && {
                 subagent_retry: {
                   agent_id: S.data.agentId,
                   attempt: S.data.attempt,
@@ -760,184 +942,234 @@ function createQueryEngine({
                   error_category: S.data.errorCategory,
                 },
               }),
-            }),
-              logForDebugging("[engine] yield-twin tool_progress subagent_retry", Mt));
-          for (let V of oss(Ze))
-            (logForDebugging(`[engine] yield sdk-queue system/${V.subtype}`, Mt), yield se(V));
+            });
+            logForDebugging("[engine] yield-twin tool_progress subagent_retry", VERBOSE_LOG_OPTIONS);
+          }
+          for (let V of drainNotificationsForSession(sessionId)) {
+            logForDebugging(`[engine] yield sdk-queue system/${V.subtype}`, VERBOSE_LOG_OPTIONS);
+            yield se(V);
+          }
           if (
-            $t === void 0 &&
+            $t === undefined &&
             S.type !== "sdk_status" &&
             S.type !== "compact_progress" &&
             S.type !== "stream_mode" &&
             S.type !== "response_length" &&
-            uN(Hs)
+            hasReachedBudget(maxBudgetUsd)
           ) {
             Zt = "budget_exhausted";
             break;
           }
           ie = await ce.next();
         }
-        if ((logFeatureOk("shoji_engine"), ie.done)) Zt = ie.value ? ie.value.reason : void 0;
+        logFeatureOk("shoji_engine");
+        if (ie.done) Zt = ie.value ? ie.value.reason : undefined;
       } catch (error) {
-        ((me = errorMessage(error)), zt(error));
+        me = errorMessage(error);
+        zt(error);
       } finally {
-        ((ht = abortController.signal.aborted),
-          await ce.return(void 0).catch(() => {}),
-          Ae?.removeEventListener("abort", rt),
-          abortController.signal.removeEventListener("abort", Dt));
+        ht = abortController.signal.aborted;
+        await ce.return(undefined).catch(() => {});
+        signal?.removeEventListener("abort", rt);
+        abortController.signal.removeEventListener("abort", Dt);
         let ie = aggregateModelUsage();
         logForDebugging(
-          `[engine] turn ${dt} end (turns=${ot} usage in=${ie.input_tokens} out=${ie.output_tokens} cost=$${getTotalCostUSD().toFixed(4)} api=${getTotalAPIDuration()}ms stop=${Ue} resultLen=${es.length})`,
+          `[engine] turn ${dt} end (turns=${ot} usage in=${ie.input_tokens} out=${ie.output_tokens} cost=$${getTotalCostUSD().toFixed(4)} api=${getTotalAPIDuration()}ms stop=${stopReason} resultLen=${es.length})`,
         );
       }
-      let fs = qe.findLast((ie) => !isHarnessCompanionMessage(ie)) ??
-          qe.at(-1) ?? { type: "user", message: P.message },
-        On = sdkResultVerdict ? G.engineDeferredSlash === void 0 : isAbortedTerminalReason(Zt),
-        ds =
-          unwrapAbortReason(abortController.signal.reason) === "permission-stop"
-            ? (getNoServerCheckStoppedNotice() ?? buildUserUnavailableNotice(ntt()))
-            : void 0,
-        js =
-          me !== null
-            ? [me]
-            : sdkResultVerdict && ds !== void 0
-              ? [formatResultDiagnostic(fs, Ue), ds]
-              : On && as === void 0 && !isResultSuccessful(fs, Ue)
-                ? buildEmptyResultDiagnostics(fs, Ue, at)
-                : null,
-        Cs = Ue === "refusal" && Vt.length > 0,
-        As = Cs ? void 0 : Vt.at(-1)?.data;
+      let message = qe.findLast((ie) => !isHarnessCompanionMessage(ie)) ??
+        qe.at(-1) ?? {
+          type: "user",
+          message: P.message,
+        };
+      let On = sdkResultVerdict ? G.engineDeferredSlash === undefined : isAbortedTerminalReason(Zt);
+      let ds =
+        unwrapAbortReason(abortController.signal.reason) === "permission-stop"
+          ? (getNoServerCheckStoppedNotice() ?? buildUserUnavailableNotice(gatewayDisplayName()))
+          : undefined;
+      let js =
+        me !== null
+          ? [me]
+          : sdkResultVerdict && ds !== undefined
+            ? [formatResultDiagnostic(message, stopReason), ds]
+            : On && as === undefined && !isResultSuccessful(message, stopReason)
+              ? buildEmptyResultDiagnostics(message, stopReason, last)
+              : null;
+      let Cs = stopReason === "refusal" && Vt.length > 0;
+      let As = Cs ? undefined : Vt.at(-1)?.data;
       try {
         if (
           bt &&
           isRecoverableTrailingServerError({
-            trailing: fs,
+            trailing: message,
             preceding: qe.at(-2),
             terminalReason: Zt,
             retractionExhausted: Vt.length === 0 && cs.size > 0,
           })
-        )
-          ((bt = !1),
-            (os = null),
-            (ts = void 0),
-            (ss = void 0),
-            (ns = void 0),
-            (is = ""),
-            (Ue = "tool_use"),
-            logEvent("tengu_trailing_api_error_notice_skipped", {
-              engine: lit("session_engine"),
-              has_structured_output: Vt.length > 0,
-            }));
+        ) {
+          bt = false;
+          os = null;
+          ts = undefined;
+          ss = undefined;
+          ns = undefined;
+          is = "";
+          stopReason = "tool_use";
+          logEvent("tengu_trailing_api_error_notice_skipped", {
+            engine: lit("session_engine"),
+            has_structured_output: Vt.length > 0,
+          });
+        }
       } catch (error) {
         logError(error);
       }
       let Rs = bt ? is : es;
-      if (Rs === "" && As !== void 0) Rs = JSON.stringify(As);
+      if (Rs === "" && As !== undefined) Rs = JSON.stringify(As);
       let gs = {
-          duration_api_ms: getTotalAPIDuration(),
-          stop_reason: Ue,
-          session_id: Ze,
-          total_cost_usd: getTotalCostUSD(),
-          usage: aggregateModelUsage(),
-          modelUsage: getModelUsage(),
-          permission_denials: Xt,
-          terminal_reason: Zt,
-          fast_mode_state: he(fastModeState),
-          fast_mode_disabled_reason: he(fastModeDisabledReason),
-          origin: P.origin,
-          subagent_stats: buildFileHistorySnapshotChain(G.toolUseContext?.session),
-          safety_stops: getSafetyStops(),
-        },
-        Ws =
-          Zt === "budget_exhausted"
+        duration_api_ms: getTotalAPIDuration(),
+        stop_reason: stopReason,
+        session_id: sessionId,
+        total_cost_usd: getTotalCostUSD(),
+        usage: aggregateModelUsage(),
+        modelUsage: getModelUsage(),
+        permission_denials: Xt,
+        terminal_reason: Zt,
+        fast_mode_state: he(fastModeState),
+        fast_mode_disabled_reason: he(fastModeDisabledReason),
+        origin: P.origin,
+        subagent_stats: buildFileHistorySnapshotChain(G.toolUseContext?.session),
+        safety_stops: getSafetyStops(),
+      };
+      let Ws =
+        Zt === "budget_exhausted"
+          ? {
+              ...buildResultMessage({
+                startedAt: startTime,
+                common: {
+                  ...gs,
+                  is_error: true,
+                  num_turns: ot,
+                },
+                variant: {
+                  subtype: "error_max_budget_usd",
+                  errors: [maxBudgetReachedMessage(maxBudgetUsd)],
+                  user_message_uuid: undefined,
+                },
+              }),
+              ...O,
+            }
+          : me === null && as === undefined && $t
             ? {
                 ...buildResultMessage({
                   startedAt: startTime,
-                  common: { ...gs, is_error: !0, num_turns: ot },
+                  common: {
+                    ...gs,
+                    is_error: true,
+                    num_turns: $t.turnCount,
+                  },
                   variant: {
-                    subtype: "error_max_budget_usd",
-                    errors: [maxBudgetReachedMessage(Hs)],
-                    user_message_uuid: void 0,
+                    subtype: "error_max_turns",
+                    errors: [`Reached maximum number of turns (${$t.maxTurns})`],
+                    user_message_uuid: undefined,
                   },
                 }),
                 ...O,
               }
-            : me === null && as === void 0 && $t
+            : js !== null
               ? {
                   ...buildResultMessage({
                     startedAt: startTime,
-                    common: { ...gs, is_error: !0, num_turns: $t.turnCount },
+                    common: {
+                      ...gs,
+                      is_error: true,
+                      num_turns: ot,
+                    },
                     variant: {
-                      subtype: "error_max_turns",
-                      errors: [`Reached maximum number of turns (${$t.maxTurns})`],
-                      user_message_uuid: void 0,
+                      subtype: "error_during_execution",
+                      errors: js,
+                      user_message_uuid: undefined,
                     },
                   }),
                   ...O,
                 }
-              : js !== null
-                ? {
-                    ...buildResultMessage({
-                      startedAt: startTime,
-                      common: { ...gs, is_error: !0, num_turns: ot },
-                      variant: { subtype: "error_during_execution", errors: js, user_message_uuid: void 0 },
-                    }),
-                    ...O,
-                  }
-                : {
-                    ...buildResultMessage({
-                      startedAt: startTime,
-                      common: {
-                        ...gs,
-                        ...(as !== void 0 && { stop_reason: "tool_deferred" }),
-                        is_error: bt || Cs,
-                        num_turns: ot,
-                      },
-                      variant: {
-                        subtype: "success",
-                        api_error_status: os,
-                        ...(ts !== void 0 && { api_error_code: ts }),
-                        ...(ss !== void 0 && { api_error_origin: ss }),
-                        ...(ns !== void 0 && { api_error: ns }),
-                        result: Rs,
-                        structured_output: As,
-                        ttft_ms: !bt && Ps !== null ? Math.max(0, Math.round(Ps - startTime)) : void 0,
-                        deferred_tool_use: as,
-                      },
-                    }),
-                    ...O,
-                  };
+              : {
+                  ...buildResultMessage({
+                    startedAt: startTime,
+                    common: {
+                      ...gs,
+                      ...(as !== undefined && {
+                        stop_reason: "tool_deferred",
+                      }),
+                      is_error: bt || Cs,
+                      num_turns: ot,
+                    },
+                    variant: {
+                      subtype: "success",
+                      api_error_status: os,
+                      ...(ts !== undefined && {
+                        api_error_code: ts,
+                      }),
+                      ...(ss !== undefined && {
+                        api_error_origin: ss,
+                      }),
+                      ...(ns !== undefined && {
+                        api_error: ns,
+                      }),
+                      result: Rs,
+                      structured_output: As,
+                      ttft_ms: !bt && Ps !== null ? Math.max(0, Math.round(Ps - startTime)) : undefined,
+                      deferred_tool_use: as,
+                    },
+                  }),
+                  ...O,
+                };
       if (Cs && Ws.subtype === "success")
         try {
-          logEvent("tengu_structured_output_refusal_dropped", { api_error_latched: bt });
+          logEvent("tengu_structured_output_refusal_dropped", {
+            api_error_latched: bt,
+          });
         } catch (error) {
           logError(error);
         }
       let qs;
-      if (P.uuid !== void 0) qs = je(P.uuid, me !== null ? "cancelled" : zsr(Zt, ht));
-      if ((Be.shift(), sdkResultVerdict)) setAutoModeUnavailableStopNotice(ds);
-      else if (ds !== void 0) yield se(createSystemMessage(ds, "warning"));
-      (yield* Me(), yield* pt(Ws, qs));
+      if (P.uuid !== undefined) qs = je(P.uuid, me !== null ? "cancelled" : turnOutcomeLabel(Zt, ht));
+      Be.shift();
+      if (sdkResultVerdict) setAutoModeUnavailableStopNotice(ds);
+      else if (ds !== undefined) yield se(createSystemMessage(ds, "warning"));
+      yield* Me();
+      yield* pt(Ws, qs);
     }
-    while (be.length > 0 && !Re?.signal.aborted && xe()) (yield* Me(), await sleep(100));
+    while (be.length > 0 && !Re?.signal.aborted && xe()) {
+      yield* Me();
+      await sleep(100);
+    }
     if (be.length > 0 && Re?.signal.aborted && L?.toolUseContext?.taskRegistry) {
-      let { taskRegistry: taskRegistry, setAppState: setAppState, storageV5: storageV5 } = L.toolUseContext;
-      stopAllRunningTasks({ taskRegistry: taskRegistry, setAppState: setAppState, storageV5: storageV5 });
+      let { taskRegistry, setAppState, storageV5 } = L.toolUseContext;
+      stopAllRunningTasks({
+        taskRegistry,
+        setAppState,
+        storageV5,
+      });
     }
-    (await Gvt(), yield* Me(), yield* et());
+    await settlePendingPrLinks();
+    yield* Me();
+    yield* et();
   }
   function Tt() {
     try {
       we();
-      for (let { intent: intent, status: status } of Be.splice(0))
-        if (intent.uuid !== void 0) Kt(intent.uuid, status === "armed" ? "cancelled" : "discarded");
+      for (let { intent, status } of Be.splice(0))
+        if (intent.uuid !== undefined) Kt(intent.uuid, status === "armed" ? "cancelled" : "discarded");
     } catch (error) {
-      logError(Error("[engine] abandonment sweep failed", { cause: error }));
+      logError(
+        Error("[engine] abandonment sweep failed", {
+          cause: error,
+        }),
+      );
     }
   }
-  let Ut = !1;
+  let Ut = false;
   async function* x() {
-    Ut = !0;
+    Ut = true;
     try {
       yield* xt();
     } finally {
@@ -948,455 +1180,534 @@ function createQueryEngine({
     switch (h.type) {
       case "turn":
         if (Ee) {
-          logForDebugging("[engine] dropped turn intent received after close()", { level: "warn" });
+          logForDebugging("[engine] dropped turn intent received after close()", {
+            level: "warn",
+          });
           break;
         }
-        if ((Be.push({ intent: h, status: "queued" }), h.uuid !== void 0)) Se.push(je(h.uuid, "queued"));
+        Be.push({
+          intent: h,
+          status: "queued",
+        });
+        if (h.uuid !== undefined) Se.push(je(h.uuid, "queued"));
         gt.enqueue(h);
         break;
       case "interrupt": {
-        if (
-          (Re?.abort(h.reason !== void 0 ? new DOMException(h.reason, "AbortError") : void 0),
-          h.scope !== "turn-cancel")
-        ) {
-          let P = L?.toolUseContext?.taskRegistry,
-            D = 0;
-          if (L?.toolUseContext !== void 0 && P !== void 0) {
-            D = killAutoReactSubscriptions(P, { durable: !1 });
-            let { setAppState: setAppState } = L.toolUseContext;
-            stopObserverAgents({ taskRegistry: P, setAppState: setAppState });
+        Re?.abort(h.reason !== undefined ? new DOMException(h.reason, "AbortError") : undefined);
+        if (h.scope !== "turn-cancel") {
+          let taskRegistry = L?.toolUseContext?.taskRegistry;
+          let D = 0;
+          if (L?.toolUseContext !== undefined && taskRegistry !== undefined) {
+            D = killAutoReactSubscriptions(taskRegistry, {
+              durable: false,
+            });
+            let { setAppState } = L.toolUseContext;
+            stopObserverAgents({
+              taskRegistry,
+              setAppState,
+            });
           }
-          let O = drainQueuedTaskNotifications(mg(), { leaveArtifactRooms: !0 });
+          let O = drainQueuedTaskNotifications(commandQueueManager(), {
+            leaveArtifactRooms: true,
+          });
           artifactWatchStopNotice(D, O);
         }
         break;
       }
       case "set_model":
-        ((Ye = h.model ?? null), (lt = !0), logForDebugging(`[engine] send set_model model=${h.model}`));
+        Ye = h.model ?? null;
+        lt = true;
+        logForDebugging(`[engine] send set_model model=${h.model}`);
         break;
       case "set_permission_mode": {
-        let P = parsePermissionMode(h.mode);
-        if (P === void 0) {
+        let permissionMode = parsePermissionMode(h.mode);
+        if (permissionMode === undefined) {
           logForDebugging("[engine] set_permission_mode rejected \u2014 unrecognized mode");
           break;
         }
-        if (P === "bypassPermissions" && isBypassPermissionsModeDisabled()) {
+        if (permissionMode === "bypassPermissions" && isBypassPermissionsModeDisabled()) {
           logForDebugging(
             "[engine] set_permission_mode:bypassPermissions rejected \u2014 disabled by settings",
           );
           break;
         }
-        if (P === "auto" && !isAutoModeGateEnabled()) {
+        if (permissionMode === "auto" && !isAutoModeGateEnabled()) {
           logForDebugging("[engine] set_permission_mode:auto rejected \u2014 gate not enabled");
           break;
         }
-        ((kt = P), (lt = !0));
+        kt = permissionMode;
+        lt = true;
         break;
       }
       case "set_max_thinking_tokens":
-        ((Je = h.max_thinking_tokens),
-          logForDebugging(`[engine] send set_max_thinking_tokens max=${h.max_thinking_tokens}`));
+        Je = h.max_thinking_tokens;
+        logForDebugging(`[engine] send set_max_thinking_tokens max=${h.max_thinking_tokens}`);
         break;
       case "apply_flag_settings":
-        ((ut = { ...(ut ?? {}), ...h.settings }),
-          logForDebugging(`[engine] send apply_flag_settings keys=${Object.keys(h.settings).join(",")}`));
+        ut = {
+          ...(ut ?? {}),
+          ...h.settings,
+        };
+        logForDebugging(`[engine] send apply_flag_settings keys=${Object.keys(h.settings).join(",")}`);
         break;
       case "seed_read_state":
-        (Ie.set(h.path, h.seed), logForDebugging(`[engine] send seed_read_state path=${h.path}`));
+        remoteFileState.set(h.path, h.seed);
+        logForDebugging(`[engine] send seed_read_state path=${h.path}`);
         break;
     }
   }
   function we() {
-    ((Ee = !0), gt.done());
+    Ee = true;
+    gt.done();
   }
-  let Pe = x(),
-    B = Pe.return.bind(Pe),
-    H = Pe.throw.bind(Pe);
+  let Pe = x();
+  let B = Pe.return.bind(Pe);
+  let H = Pe.throw.bind(Pe);
   function oe() {
-    if ((we(), !Ut)) Tt();
+    we();
+    if (!Ut) Tt();
   }
-  return (
-    (Pe.return = (h) => (oe(), B(h))),
-    (Pe.throw = (h) => (oe(), H(h))),
-    Object.assign(Pe, {
-      interrupt: async (h, P) => (
-        ke({ type: "interrupt", reason: h, scope: P?.scope }),
-        {
-          still_queued: Be.flatMap(({ intent: intent, status: status }) =>
-            status === "queued" && intent.uuid !== void 0 ? [intent.uuid] : [],
-          ),
-        }
-      ),
-      setModel: async (h) => ke({ type: "set_model", model: h }),
-      setPermissionMode: async (h) => ke({ type: "set_permission_mode", mode: h }),
-      setMaxThinkingTokens: async (h) => ke({ type: "set_max_thinking_tokens", max_thinking_tokens: h }),
-      applyFlagSettings: (h) => (ke({ type: "apply_flag_settings", settings: h }), Promise.resolve()),
-      seedReadState: async (h, P, D) => {
-        try {
-          let O = expandPath(h);
-          if (D !== void 0) {
-            if (D.length <= 10485760)
-              ke({
-                type: "seed_read_state",
-                path: O,
-                seed: {
-                  content: __(D),
-                  timestamp: P,
-                  offset: void 0,
-                  limit: void 0,
-                  contentNotInModelContext: !0,
-                },
-              });
-            return;
-          }
-          let G = await stat(O);
-          if (G.size > 10485760) return;
-          let floored = Math.floor(G.mtimeMs);
-          if (floored <= P) {
-            let Ce = await readFile(O, "utf-8"),
-              Ae = __(Ce);
+  Pe.return = (h) => {
+    oe();
+    return B(h);
+  };
+  Pe.throw = (h) => {
+    oe();
+    return H(h);
+  };
+  return Object.assign(Pe, {
+    interrupt: async (reason, P) => {
+      ke({
+        type: "interrupt",
+        reason,
+        scope: P?.scope,
+      });
+      return {
+        still_queued: Be.flatMap(({ intent, status }) =>
+          status === "queued" && intent.uuid !== undefined ? [intent.uuid] : [],
+        ),
+      };
+    },
+    setModel: async (model) =>
+      ke({
+        type: "set_model",
+        model,
+      }),
+    setPermissionMode: async (mode) =>
+      ke({
+        type: "set_permission_mode",
+        mode,
+      }),
+    setMaxThinkingTokens: async (maxThinkingTokens) =>
+      ke({
+        type: "set_max_thinking_tokens",
+        max_thinking_tokens: maxThinkingTokens,
+      }),
+    applyFlagSettings: (settings) => {
+      ke({
+        type: "apply_flag_settings",
+        settings,
+      });
+      return Promise.resolve();
+    },
+    seedReadState: async (h, P, D) => {
+      try {
+        let O = expandPath(h);
+        if (D !== undefined) {
+          if (D.length <= 10485760)
             ke({
               type: "seed_read_state",
               path: O,
               seed: {
-                content: Ae,
-                timestamp: floored,
-                offset: void 0,
-                limit: void 0,
-                contentNotInModelContext: !0,
+                content: stripBomAndCarriageReturn(D),
+                timestamp: P,
+                offset: undefined,
+                limit: undefined,
+                contentNotInModelContext: true,
               },
             });
-          }
-        } catch {}
-      },
-      turnCount: () => dt,
-      initializationResult: () => Promise.resolve(de),
-      accountInfo: () => Promise.resolve(de.account),
-      claudeAuthenticate: async (h) => {
-        if (!authDelegate) throw Error("claudeAuthenticate: no authDelegate wired");
-        return authDelegate.authenticate(h);
-      },
-      claudeOAuthCallback: async (h, P) => {
-        if (!authDelegate) throw Error("claudeOAuthCallback: no authDelegate wired");
-        return authDelegate.oauthCallback(h, P);
-      },
-      claudeOAuthWaitForCompletion: async () => {
-        if (!authDelegate) throw Error("claudeOAuthWaitForCompletion: no authDelegate wired");
-        return authDelegate.oauthWaitForCompletion();
-      },
-      supportedModels: () => Promise.resolve(typeof models === "function" ? models() : de.models),
-      supportedCommands: () => Promise.resolve(typeof commands === "function" ? commands() : de.commands),
-      supportedAgents: () => Promise.resolve(typeof agents === "function" ? agents() : de.agents),
-      mcpServerStatus: () => Promise.resolve(mcpServers()),
-      reconnectMcpServer: async (h) => {
-        if (!mcpDelegate) throw Error(`reconnectMcpServer: no mcpDelegate wired (server: ${h})`);
-        await mcpDelegate.reconnect(h);
-      },
-      toggleMcpServer: async (h, P) => {
-        if (!mcpDelegate) throw Error(`toggleMcpServer: no mcpDelegate wired (server: ${h})`);
-        await mcpDelegate.toggle(h, P);
-      },
-      setMcpServers: async (h) => {
-        if (!mcpDelegate)
-          throw Error(`setMcpServers: no mcpDelegate wired (${Object.keys(h).length} server(s))`);
-        return mcpDelegate.setServers(h);
-      },
-      reloadPlugins: async () => {
-        if (!mcpDelegate) throw Error("reloadPlugins: no mcpDelegate wired");
-        return mcpDelegate.reloadPlugins();
-      },
-      mcpAuthenticate: async (h, P) => {
-        if (!mcpAuthDelegate) throw Error(`mcpAuthenticate: no mcpAuthDelegate wired (server: ${h})`);
-        return mcpAuthDelegate.authenticate(h, P);
-      },
-      mcpClearAuth: async (h) => {
-        if (!mcpAuthDelegate) throw Error(`mcpClearAuth: no mcpAuthDelegate wired (server: ${h})`);
-        return mcpAuthDelegate.clearAuth(h);
-      },
-      mcpSubmitOAuthCallbackUrl: async (h, P) => {
-        if (!mcpAuthDelegate)
-          throw Error(`mcpSubmitOAuthCallbackUrl: no mcpAuthDelegate wired (server: ${h})`);
-        return mcpAuthDelegate.submitOAuthCallbackUrl(h, P);
-      },
-      getContextUsage: async (h) => {
-        if (L === null) throw Error("getContextUsage: no turn received yet");
-        let { messages: messages, toolUseContext: toolUseContext } = L;
-        return await collectContextData({
-          session: toolUseContext.session,
-          messages: messages,
-          getAppState: toolUseContext.getAppState,
-          getMcp: toolUseContext.getMcp,
-          storageV5: toolUseContext.storageV5,
-          credentials: toolUseContext.credentials,
-          options: {
-            mainLoopModel: toolUseContext.options.mainLoopModel,
-            tools: toolUseContext.options.tools,
-            agentDefinitions: toolUseContext.options.agentDefinitions,
-            customSystemPrompt: toolUseContext.options.customSystemPrompt,
-            appendSystemPrompt: toolUseContext.options.appendSystemPrompt,
-            systemPromptSnapshot: toolUseContext.options.systemPromptSnapshot,
-            excludeDynamicSections: excludeDynamicSections,
-            mcpClients: toolUseContext.options.mcpClients,
-          },
-          detail: h?.detail,
-        });
-      },
-      stopTask: async (h) => {
-        if (L === null) throw Error("stopTask: no turn received yet");
-        let {
-          taskRegistry: taskRegistry,
-          setAppState: setAppState,
-          getAppState: getAppState,
-          session: session,
-          storageV5: storageV5,
-        } = L.toolUseContext;
-        await stopTask(h, {
-          taskRegistry: taskRegistry,
-          setAppState: setAppState,
-          session: session,
-          getAppState: getAppState,
-          source: "client",
-          storageV5: storageV5,
-        });
-      },
-      backgroundTasks: async (h) => {
-        if (uf())
-          throw (
-            logFeatureBad("task_local_shell_background_all", "disabled"),
-            Error("Background tasks are disabled in this session.")
-          );
-        if (L === null) return !h;
-        let { taskRegistry: taskRegistry } = L.toolUseContext;
-        if (h) return backgroundTaskByToolUseId(h, taskRegistry);
-        return (backgroundAll(taskRegistry), !0);
-      },
-      getSettings: () => Promise.resolve(settings),
-      generateSessionTitle: async (h, P) => {
-        if (P?.persist) pe = !0;
-        let D = await Eyt(h, Yt(), P?.credentials);
-        if (D && P?.persist)
-          try {
-            saveAiGeneratedTitle(getSessionId(), D, L?.toolUseContext.storageV5);
-          } catch (error) {
-            if (isFsInaccessible(error)) logForDebugging(`saveAiGeneratedTitle failed: ${error}`);
-            else logError(error);
-          }
-        return D;
-      },
-      requestSessionTitle: (h, P) => requestSessionTitle(h, Yt(), P?.credentials),
-      messageRated: async ({
-        messageUuid: messageUuid,
-        sentiment: sentiment,
-        surface: surface = "tool_use",
-        cleared: cleared = !1,
-      }) => {
-        if (isPolicyAllowed("allow_product_feedback"))
-          logEvent("tengu_message_rated", {
-            message_uuid: ye(messageUuid),
-            sentiment: fromEnum(sentiment),
-            surface: fromEnum(surface),
-            cleared: cleared,
-          });
-      },
-      askSideQuestion: async (h, P) => {
-        let { getLastCacheSafeParams: getLastCacheSafeParams } = await import("./chunk-qnggsbt9.js"),
-          O = getLastCacheSafeParams();
-        if (O === null) return null;
-        let { runSideQuestion: runSideQuestion } = await import("./chunk-4ycax738.js"),
-          { createAbortController: createAbortController } = await import("./chunk-t8denxed.js"),
-          Ce = await runSideQuestion({
-            question: h,
-            cacheSafeParams: {
-              ...O,
-              toolUseContext: { ...O.toolUseContext, abortController: createAbortController() },
+          return;
+        }
+        let G = await stat(O);
+        if (G.size > 10485760) return;
+        let floored = Math.floor(G.mtimeMs);
+        if (floored <= P) {
+          let file = await readFile(O, "utf-8");
+          let content = stripBomAndCarriageReturn(file);
+          ke({
+            type: "seed_read_state",
+            path: O,
+            seed: {
+              content,
+              timestamp: floored,
+              offset: undefined,
+              limit: undefined,
+              contentNotInModelContext: true,
             },
-            threadHistory: !1,
-            ...(P?.history?.length && {
-              history: P.history.map((Ae) => ({
-                question: Ae.question,
-                response: Ae.response,
-                ...(Ae.fallback_notice && { fallbackNotice: Ae.fallback_notice }),
-              })),
-            }),
           });
-        return Ce.response === null
-          ? null
-          : {
-              response: Ce.response,
-              synthetic: Ce.synthetic,
-              ...(Ce.refusalFallback && { refusalFallback: Ce.refusalFallback }),
-            };
-      },
-      rewindFiles: async (h, P) => {
-        if (L === null) return { canRewind: !1, error: "rewindFiles: no turn received yet" };
-        let {
-            fileHistoryEnabled: fileHistoryEnabled,
-            fileHistoryCanRestore: fileHistoryCanRestore,
-            fileHistoryGetDiffStats: fileHistoryGetDiffStats,
-            fileHistoryRewind: fileHistoryRewind,
-          } = await import("./chunk-4skjwhe2.js"),
-          appState = L.toolUseContext.getAppState();
-        if (!fileHistoryEnabled()) return { canRewind: !1, error: "File rewinding is not enabled." };
-        if (!fileHistoryCanRestore(appState.fileHistory, h))
-          return { canRewind: !1, error: "No file checkpoint found for this message." };
-        if (P?.dryRun ?? !1) {
-          let rt = await fileHistoryGetDiffStats(appState.fileHistory, h);
-          return {
-            canRewind: !0,
-            filesChanged: rt?.filesChanged,
-            insertions: rt?.insertions,
-            deletions: rt?.deletions,
-          };
         }
-        let Ae;
+      } catch {}
+    },
+    turnCount: () => dt,
+    initializationResult: () => Promise.resolve(initMessageFields),
+    accountInfo: () => Promise.resolve(initMessageFields.account),
+    claudeAuthenticate: async (h) => {
+      if (!authDelegate) throw Error("claudeAuthenticate: no authDelegate wired");
+      return authDelegate.authenticate(h);
+    },
+    claudeOAuthCallback: async (h, P) => {
+      if (!authDelegate) throw Error("claudeOAuthCallback: no authDelegate wired");
+      return authDelegate.oauthCallback(h, P);
+    },
+    claudeOAuthWaitForCompletion: async () => {
+      if (!authDelegate) throw Error("claudeOAuthWaitForCompletion: no authDelegate wired");
+      return authDelegate.oauthWaitForCompletion();
+    },
+    supportedModels: () =>
+      Promise.resolve(typeof models === "function" ? models() : initMessageFields.models),
+    supportedCommands: () =>
+      Promise.resolve(typeof commands === "function" ? commands() : initMessageFields.commands),
+    supportedAgents: () =>
+      Promise.resolve(typeof agents === "function" ? agents() : initMessageFields.agents),
+    mcpServerStatus: () => Promise.resolve(mcpServers()),
+    reconnectMcpServer: async (h) => {
+      if (!mcpDelegate) throw Error(`reconnectMcpServer: no mcpDelegate wired (server: ${h})`);
+      await mcpDelegate.reconnect(h);
+    },
+    toggleMcpServer: async (h, P) => {
+      if (!mcpDelegate) throw Error(`toggleMcpServer: no mcpDelegate wired (server: ${h})`);
+      await mcpDelegate.toggle(h, P);
+    },
+    setMcpServers: async (h) => {
+      if (!mcpDelegate)
+        throw Error(`setMcpServers: no mcpDelegate wired (${Object.keys(h).length} server(s))`);
+      return mcpDelegate.setServers(h);
+    },
+    reloadPlugins: async () => {
+      if (!mcpDelegate) throw Error("reloadPlugins: no mcpDelegate wired");
+      return mcpDelegate.reloadPlugins();
+    },
+    mcpAuthenticate: async (h, P) => {
+      if (!mcpAuthDelegate) throw Error(`mcpAuthenticate: no mcpAuthDelegate wired (server: ${h})`);
+      return mcpAuthDelegate.authenticate(h, P);
+    },
+    mcpClearAuth: async (h) => {
+      if (!mcpAuthDelegate) throw Error(`mcpClearAuth: no mcpAuthDelegate wired (server: ${h})`);
+      return mcpAuthDelegate.clearAuth(h);
+    },
+    mcpSubmitOAuthCallbackUrl: async (h, P) => {
+      if (!mcpAuthDelegate) throw Error(`mcpSubmitOAuthCallbackUrl: no mcpAuthDelegate wired (server: ${h})`);
+      return mcpAuthDelegate.submitOAuthCallbackUrl(h, P);
+    },
+    getContextUsage: async (h) => {
+      if (L === null) throw Error("getContextUsage: no turn received yet");
+      let { messages, toolUseContext } = L;
+      return await collectContextData({
+        session: toolUseContext.session,
+        messages,
+        getAppState: toolUseContext.getAppState,
+        getMcp: toolUseContext.getMcp,
+        storageV5: toolUseContext.storageV5,
+        credentials: toolUseContext.credentials,
+        options: {
+          mainLoopModel: toolUseContext.options.mainLoopModel,
+          tools: toolUseContext.options.tools,
+          agentDefinitions: toolUseContext.options.agentDefinitions,
+          customSystemPrompt: toolUseContext.options.customSystemPrompt,
+          appendSystemPrompt: toolUseContext.options.appendSystemPrompt,
+          systemPromptSnapshot: toolUseContext.options.systemPromptSnapshot,
+          excludeDynamicSections,
+          mcpClients: toolUseContext.options.mcpClients,
+        },
+        detail: h?.detail,
+      });
+    },
+    stopTask: async (h) => {
+      if (L === null) throw Error("stopTask: no turn received yet");
+      let { taskRegistry, setAppState, getAppState, session, storageV5 } = L.toolUseContext;
+      await stopTask(h, {
+        taskRegistry,
+        setAppState,
+        session,
+        getAppState,
+        source: "client",
+        storageV5,
+      });
+    },
+    backgroundTasks: async (toolUseId) => {
+      if (isBackgroundTasksOff()) {
+        logFeatureBad("task_local_shell_background_all", "disabled");
+        throw Error("Background tasks are disabled in this session.");
+      }
+      if (L === null) return !toolUseId;
+      let { taskRegistry } = L.toolUseContext;
+      if (toolUseId) return backgroundTaskByToolUseId(toolUseId, taskRegistry);
+      backgroundAll(taskRegistry);
+      return true;
+    },
+    getSettings: () => Promise.resolve(settings),
+    generateSessionTitle: async (h, P) => {
+      if (P?.persist) pe = true;
+      let D = await requestAndPickSessionTitle(h, Yt(), P?.credentials);
+      if (D && P?.persist)
         try {
-          Ae = await fileHistoryRewind(() => appState.fileHistory, h);
+          saveAiGeneratedTitle(getSessionId(), D, L?.toolUseContext.storageV5);
         } catch (error) {
-          return { canRewind: !1, error: `Failed to rewind: ${errorMessage(error)}` };
+          if (isFsInaccessible(error)) logForDebugging(`saveAiGeneratedTitle failed: ${error}`);
+          else logError(error);
         }
-        return { canRewind: !0, skippedLinks: Ae?.skippedLinks };
-      },
-      submitFeedback: async (h, P) => {
-        if (P?.draft_id == null) {
-          if (L === null)
-            return {
-              feedback_id: null,
-              unavailable_reason:
-                (feedbackMode().kind === "disabled" ? feedbackUnavailableReason() : null) ??
-                "no turn received yet",
-            };
-          if (P?.save_locally === !0)
-            return submitHeadlessFeedback({
-              messages: L.messages,
-              description: h,
-              surface: P?.surface ?? "sdk",
-              storageV5: L.toolUseContext.storageV5,
-              host: L.toolUseContext.session?.host,
-            });
-        }
-        let D = feedbackUnavailableReason();
-        if (D) return { feedback_id: null, unavailable_reason: D };
-        if (P?.draft_id != null) {
-          let { submitDraftFromRequest: submitDraftFromRequest } = await import("./chunk-4mbryacy.js");
-          return submitDraftFromRequest({
-            draftId: P.draft_id,
-            description: h,
-            type: P.type,
-            title: P.title,
-            area: P.area,
-            attachTranscript: P.attach_transcript,
-            surface: P.surface,
-            messages: L?.messages ?? [],
-            storageV5: L?.toolUseContext.storageV5,
-            host: L?.toolUseContext.session?.host,
-            credentials: L?.toolUseContext.credentials,
+      return D;
+    },
+    requestSessionTitle: (text, P) => requestSessionTitle(text, Yt(), P?.credentials),
+    messageRated: async ({ messageUuid, sentiment, surface = "tool_use", cleared = false }) => {
+      if (isPolicyAllowed("allow_product_feedback"))
+        logEvent("tengu_message_rated", {
+          message_uuid: sanitizeMarkName(messageUuid),
+          sentiment: fromEnum(sentiment),
+          surface: fromEnum(surface),
+          cleared,
+        });
+    },
+    askSideQuestion: async (question, P) => {
+      let { getLastCacheSafeParams } = await import("./chunk-qnggsbt9.js");
+      let lastCacheSafeParams = getLastCacheSafeParams();
+      if (lastCacheSafeParams === null) return null;
+      let { runSideQuestion } = await import("./chunk-4ycax738.js");
+      let { createAbortController } = await import("./chunk-t8denxed.js");
+      let Ce = await runSideQuestion({
+        question,
+        cacheSafeParams: {
+          ...lastCacheSafeParams,
+          toolUseContext: {
+            ...lastCacheSafeParams.toolUseContext,
+            abortController: createAbortController(),
+          },
+        },
+        threadHistory: false,
+        ...(P?.history?.length && {
+          history: P.history.map((Ae) => ({
+            question: Ae.question,
+            response: Ae.response,
+            ...(Ae.fallback_notice && {
+              fallbackNotice: Ae.fallback_notice,
+            }),
+          })),
+        }),
+      });
+      return Ce.response === null
+        ? null
+        : {
+            response: Ce.response,
+            synthetic: Ce.synthetic,
+            ...(Ce.refusalFallback && {
+              refusalFallback: Ce.refusalFallback,
+            }),
+          };
+    },
+    rewindFiles: async (h, P) => {
+      if (L === null)
+        return {
+          canRewind: false,
+          error: "rewindFiles: no turn received yet",
+        };
+      let { fileHistoryEnabled, fileHistoryCanRestore, fileHistoryGetDiffStats, fileHistoryRewind } =
+        await import("./chunk-4skjwhe2.js");
+      let appState = L.toolUseContext.getAppState();
+      if (!fileHistoryEnabled())
+        return {
+          canRewind: false,
+          error: "File rewinding is not enabled.",
+        };
+      if (!fileHistoryCanRestore(appState.fileHistory, h))
+        return {
+          canRewind: false,
+          error: "No file checkpoint found for this message.",
+        };
+      if (P?.dryRun ?? false) {
+        let rt = await fileHistoryGetDiffStats(appState.fileHistory, h);
+        return {
+          canRewind: true,
+          filesChanged: rt?.filesChanged,
+          insertions: rt?.insertions,
+          deletions: rt?.deletions,
+        };
+      }
+      let Ae;
+      try {
+        Ae = await fileHistoryRewind(() => appState.fileHistory, h);
+      } catch (error) {
+        return {
+          canRewind: false,
+          error: `Failed to rewind: ${errorMessage(error)}`,
+        };
+      }
+      return {
+        canRewind: true,
+        skippedLinks: Ae?.skippedLinks,
+      };
+    },
+    submitFeedback: async (description, P) => {
+      if (P?.draft_id == null) {
+        if (L === null)
+          return {
+            feedback_id: null,
+            unavailable_reason:
+              (feedbackMode().kind === "disabled" ? feedbackUnavailableReason() : null) ??
+              "no turn received yet",
+          };
+        if (P?.save_locally === true)
+          return submitHeadlessFeedback({
+            messages: L.messages,
+            description,
+            surface: P?.surface ?? "sdk",
+            storageV5: L.toolUseContext.storageV5,
+            host: L.toolUseContext.session?.host,
+          });
+      }
+      let D = feedbackUnavailableReason();
+      if (D)
+        return {
+          feedback_id: null,
+          unavailable_reason: D,
+        };
+      if (P?.draft_id != null) {
+        let { submitDraftFromRequest } = await import("./chunk-4mbryacy.js");
+        return submitDraftFromRequest({
+          draftId: P.draft_id,
+          description,
+          type: P.type,
+          title: P.title,
+          area: P.area,
+          attachTranscript: P.attach_transcript,
+          surface: P.surface,
+          messages: L?.messages ?? [],
+          storageV5: L?.toolUseContext.storageV5,
+          host: L?.toolUseContext.session?.host,
+          credentials: L?.toolUseContext.credentials,
+        });
+      }
+      if (L === null)
+        return {
+          feedback_id: null,
+          unavailable_reason: "no turn received yet",
+        };
+      let O = await postFeedbackSubmission({
+        messages: L.messages,
+        description,
+        surface: P?.surface ?? "sdk",
+        storageV5: L.toolUseContext.storageV5,
+        host: L.toolUseContext.session?.host,
+        credentials: L.toolUseContext.credentials,
+      });
+      return O.success
+        ? {
+            feedback_id: O.feedbackId,
+          }
+        : {
+            feedback_id: null,
+            is_zdr_org: O.isZdrOrg,
+            failure_reason: O.failureReason,
+            status_code: O.statusCode,
+            unavailable_reason: orgFeedbackRefusalMessage(O),
+          };
+    },
+    submitSurveyFeedback: async (request) => {
+      if (L === null)
+        return {
+          feedback_id: null,
+          unavailable_reason: "no turn received yet",
+        };
+      let { submitSurveyFeedbackForSdk } = await import("./chunk-25hrjv6b.js");
+      return submitSurveyFeedbackForSdk({
+        request,
+        messages: L.messages,
+        storageV5: L.toolUseContext.storageV5,
+        host: L.toolUseContext.session?.host,
+        credentials: L.toolUseContext.credentials,
+      });
+    },
+    streamInput: async (h) => {
+      try {
+        for await (let P of h) {
+          let { type: D, ...O } = P;
+          ke({
+            type: "turn",
+            ...O,
           });
         }
-        if (L === null) return { feedback_id: null, unavailable_reason: "no turn received yet" };
-        let O = await postFeedbackSubmission({
-          messages: L.messages,
-          description: h,
-          surface: P?.surface ?? "sdk",
-          storageV5: L.toolUseContext.storageV5,
-          host: L.toolUseContext.session?.host,
-          credentials: L.toolUseContext.credentials,
+      } finally {
+        we();
+      }
+    },
+    readFile: async (h, P) => {
+      if (L === null) return null;
+      try {
+        return await readFileForRemote(h, P?.maxBytes, L.toolUseContext.getAppState().toolPermissionContext, {
+          encoding: P?.encoding,
         });
-        return O.success
-          ? { feedback_id: O.feedbackId }
-          : {
-              feedback_id: null,
-              is_zdr_org: O.isZdrOrg,
-              failure_reason: O.failureReason,
-              status_code: O.statusCode,
-              unavailable_reason: orgFeedbackRefusalMessage(O),
-            };
-      },
-      submitSurveyFeedback: async (h) => {
-        if (L === null) return { feedback_id: null, unavailable_reason: "no turn received yet" };
-        let { submitSurveyFeedbackForSdk: submitSurveyFeedbackForSdk } = await import("./chunk-25hrjv6b.js");
-        return submitSurveyFeedbackForSdk({
-          request: h,
-          messages: L.messages,
-          storageV5: L.toolUseContext.storageV5,
-          host: L.toolUseContext.session?.host,
-          credentials: L.toolUseContext.credentials,
-        });
-      },
-      streamInput: async (h) => {
-        try {
-          for await (let P of h) {
-            let { type: D, ...O } = P;
-            ke({ type: "turn", ...O });
-          }
-        } finally {
-          we();
-        }
-      },
-      readFile: async (h, P) => {
-        if (L === null) return null;
-        try {
-          return await readFileForRemote(
-            h,
-            P?.maxBytes,
-            L.toolUseContext.getAppState().toolPermissionContext,
-            { encoding: P?.encoding },
-          );
-        } catch {
-          return null;
-        }
-      },
-      launchUltrareview: async (h, P) => {
-        if (L === null) return { status: "error", message: "launchUltrareview: no turn received yet" };
-        let { runUltrareviewHeadless: runUltrareviewHeadless } = await import("./chunk-vvrhw27g.js"),
-          { createAbortController: createAbortController } = await import("./chunk-t8denxed.js"),
-          {
-            taskRegistry: taskRegistry,
-            isUltrareviewOverageConfirmed: isUltrareviewOverageConfirmed,
-            markUltrareviewOverageConfirmed: markUltrareviewOverageConfirmed,
-            storageV5: storageV5,
-            credentials: credentials,
-          } = L.toolUseContext;
-        return await runUltrareviewHeadless(h, {
-          confirm: P?.confirm ?? !1,
-          confirmsBeforeLaunch: !0,
-          overageConfirmed: isUltrareviewOverageConfirmed(),
-          markOverageConfirmed: markUltrareviewOverageConfirmed,
-          context: {
-            abortController: createAbortController(),
-            taskRegistry: taskRegistry,
-            storageV5: storageV5,
-            credentials: credentials,
-          },
-        });
-      },
-      close: we,
-    })
-  );
+      } catch {
+        return null;
+      }
+    },
+    launchUltrareview: async (h, P) => {
+      if (L === null)
+        return {
+          status: "error",
+          message: "launchUltrareview: no turn received yet",
+        };
+      let { runUltrareviewHeadless } = await import("./chunk-vvrhw27g.js");
+      let { createAbortController } = await import("./chunk-t8denxed.js");
+      let {
+        taskRegistry,
+        isUltrareviewOverageConfirmed,
+        markUltrareviewOverageConfirmed,
+        storageV5,
+        credentials,
+      } = L.toolUseContext;
+      return await runUltrareviewHeadless(h, {
+        confirm: P?.confirm ?? false,
+        confirmsBeforeLaunch: true,
+        overageConfirmed: isUltrareviewOverageConfirmed(),
+        markOverageConfirmed: markUltrareviewOverageConfirmed,
+        context: {
+          abortController: createAbortController(),
+          taskRegistry,
+          storageV5,
+          credentials,
+        },
+      });
+    },
+    close: we,
+  });
 }
 //@ chunk-xx1vmpsq.js:88547-89147 placement
 function aggregateModelUsage() {
-  let values = Object.values(getModelUsage()),
-    s = (n) => values.reduce((y, r) => y + n(r), 0);
+  let values = Object.values(getModelUsage());
+  let s = (n) => values.reduce((acc, r) => acc + n(r), 0);
   return {
     ...EMPTY_USAGE,
     input_tokens: s((n) => n.inputTokens),
     output_tokens: s((n) => n.outputTokens),
-    output_tokens_details: { thinking_tokens: s((n) => n.thinkingTokens ?? 0) },
+    output_tokens_details: {
+      thinking_tokens: s((n) => n.thinkingTokens ?? 0),
+    },
     cache_read_input_tokens: s((n) => n.cacheReadInputTokens),
     cache_creation_input_tokens: s((n) => n.cacheCreationInputTokens),
     cache_creation: {
       ephemeral_5m_input_tokens: s((n) => n.cacheCreationEphemeral5mInputTokens ?? 0),
       ephemeral_1h_input_tokens: s((n) => n.cacheCreationEphemeral1hInputTokens ?? 0),
     },
-    server_tool_use: { ...EMPTY_USAGE.server_tool_use, web_search_requests: s((n) => n.webSearchRequests) },
+    server_tool_use: {
+      ...EMPTY_USAGE.server_tool_use,
+      web_search_requests: s((n) => n.webSearchRequests),
+    },
   };
 }
 //@ chunk-xx1vmpsq.js:89147-89330 placement
 function isHarnessCompanionMessage(e) {
-  if (isHarnessMetaMessage(e)) return !0;
-  if (e.type !== "user" || e.turnCompanion !== !0) return !1;
+  if (isHarnessMetaMessage(e)) return true;
+  if (e.type !== "user" || e.turnCompanion !== true) return false;
   let content = e.message.content;
   return !(Array.isArray(content) && content.length > 0 && content.every((n) => n.type === "tool_result"));
 }
-
 export { createQueryEngine, cancelScopeFor };

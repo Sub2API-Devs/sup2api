@@ -8,28 +8,32 @@
  * pieces: chunk-v9tcvh08.js (9)
  * attribution: placement 9
  */
-import { No } from "./modelCatalog.js";
+import { catalogEntriesByFirstPartyId } from "./modelCatalog.js";
 import { createSignal } from "../signal.js";
 import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
 import { getRootSession } from "../../bootstrap/state.js";
 
+//@ chunk-v9tcvh08.js:28064-28227 placement
 /**
  * 按任一提供商的模型 id 查找内置模型配置。
  */
-//@ chunk-v9tcvh08.js:28064-28227 placement
 function findModelConfigById(e) {
   let lower = e.toLowerCase();
-  for (let a of Object.values(No))
+  for (let a of Object.values(catalogEntriesByFirstPartyId))
     for (let n of Object.values(a)) if (typeof n === "string" && n.toLowerCase() === lower) return a;
   return null;
 }
 //@ chunk-v9tcvh08.js:28227-28242 placement
-var FXt = 600000;
+/**
+ * 被推翻的权益拒绝记录的保留时长（10 分钟）。
+ */
+var OVERTURNED_DENY_TTL_MS = 600000;
 //@ chunk-v9tcvh08.js:28242-28364 placement
 function pruneOverturnedEntitlementDenies() {
-  let overturnedEntitlementDenies = getProviderState().providerCache.overturnedEntitlementDenies,
-    now = Date.now();
-  for (let [a, n] of overturnedEntitlementDenies) if (now - n >= FXt) overturnedEntitlementDenies.delete(a);
+  let overturnedEntitlementDenies = getProviderState().providerCache.overturnedEntitlementDenies;
+  let now = Date.now();
+  for (let [a, n] of overturnedEntitlementDenies)
+    if (now - n >= OVERTURNED_DENY_TTL_MS) overturnedEntitlementDenies.delete(a);
 }
 //@ chunk-v9tcvh08.js:28364-28706 placement
 function createProviderCache() {
@@ -37,14 +41,14 @@ function createProviderCache() {
     validatedModels: new Set(),
     confirmedEntitlementDenies: new Map(),
     overturnedEntitlementDenies: new Map(),
-    bedrockInferenceProfiles: void 0,
-    settledBedrockInferenceProfiles: void 0,
+    bedrockInferenceProfiles: undefined,
+    settledBedrockInferenceProfiles: undefined,
     inferenceProfileBackingModels: new Map(),
     modelConfigs: new Map(),
     clientDataFetches: new Map(),
     capabilityOverrides: new Map(),
     probeResults: new Map(),
-    preconnectFired: !1,
+    preconnectFired: false,
   };
 }
 //@ chunk-v9tcvh08.js:28706-28836 placement
@@ -56,23 +60,23 @@ function createModelBetaCaches() {
     midConversationSystem: new Map(),
   };
 }
+//@ chunk-v9tcvh08.js:28836-28990 placement
 /**
  * 删除提供商缓存中满足条件的模型 beta 记录。
  */
-//@ chunk-v9tcvh08.js:28836-28990 placement
 function clearModelBetas(e) {
-  let { betas: betas, betasCompiledOnly: betasCompiledOnly } = getProviderState();
+  let { betas, betasCompiledOnly } = getProviderState();
   for (let n of [...Object.values(betas), ...Object.values(betasCompiledOnly)])
-    for (let r of [...n.keys()]) if (e(r)) n.delete(r);
+    for (let key of [...n.keys()]) if (e(key)) n.delete(key);
 }
 //@ chunk-v9tcvh08.js:28990-30559 placement
 function createProviderState() {
   return {
     providerCache: createProviderCache(),
-    fetchesClientData: !1,
-    includeUnsupportedModels: !1,
+    fetchesClientData: false,
+    includeUnsupportedModels: false,
     sessionModelDenyReprobe: {
-      reprobe: void 0,
+      reprobe: undefined,
       honoredModels: new Set(),
       contestedDenies: new Map(),
       refusedModels: new Set(),
@@ -81,61 +85,67 @@ function createProviderState() {
     },
     betas: createModelBetaCaches(),
     betasCompiledOnly: createModelBetaCaches(),
-    usageCreditsOnlyModelFlags: { fableBilling: null, creditsOnlyTiers: null },
+    usageCreditsOnlyModelFlags: {
+      fableBilling: null,
+      creditsOnlyTiers: null,
+    },
     warnedEnforcementMessages: new Set(),
-    resolvingBestModel: !1,
+    resolvingBestModel: false,
     modelCapabilitiesByCachePath: new Map(),
     gatewayModelsByCachePath: new Map(),
-    modelCapabilitiesStorageV5: void 0,
-    gatewayModelsStorageV5: void 0,
+    modelCapabilitiesStorageV5: undefined,
+    gatewayModelsStorageV5: undefined,
     servedCatalogByKey: new Map(),
     servedCatalogRefreshes: new Map(),
     servedCatalogSettledRefreshes: new WeakSet(),
-    servedCatalogRefusal: void 0,
-    servedCatalogPostLoginRun: void 0,
+    servedCatalogRefusal: undefined,
+    servedCatalogPostLoginRun: undefined,
     publishedCatalogByKey: new Map(),
     publishedCatalogRefreshes: new Map(),
     publishedCatalogSettledRefreshes: new WeakSet(),
     publishedCatalogFloorMarks: new Map(),
-    publishedCatalogFloorRead: void 0,
-    publishedCatalogFloorWrite: void 0,
-    publishedRowNames: void 0,
+    publishedCatalogFloorRead: undefined,
+    publishedCatalogFloorWrite: undefined,
+    publishedRowNames: undefined,
     publishedDenyDocuments: [],
-    clientDataUrl: { pending: void 0, document: void 0, assumesFirstPartyBaseUrl: !1 },
-    servedCatalogShadowStarted: !1,
-    servedCatalogActive: void 0,
+    clientDataUrl: {
+      pending: undefined,
+      document: undefined,
+      assumesFirstPartyBaseUrl: false,
+    },
+    servedCatalogShadowStarted: false,
+    servedCatalogActive: undefined,
     servedCatalogMaskedIds: new Set(),
-    servedCatalogMasksEveryId: !1,
+    servedCatalogMasksEveryId: false,
     servedCatalogPublicIds: new Map(),
-    servedCatalogMaskHydrated: !1,
-    servedCatalogMaskHydration: void 0,
+    servedCatalogMaskHydrated: false,
+    servedCatalogMaskHydration: undefined,
     servedCatalogMaskRetryAt: 0,
-    servedCatalogPersistedMaskedIds: void 0,
-    servedCatalogMaskWrite: void 0,
+    servedCatalogPersistedMaskedIds: undefined,
+    servedCatalogMaskWrite: undefined,
     servedCatalogSuppressDepth: 0,
-    servedCatalogDeactivatedRows: void 0,
+    servedCatalogDeactivatedRows: undefined,
     familySpellingVerdicts: new Map(),
-    behavesAsMemo: void 0,
-    publishedWireIds: void 0,
-    unservedModelDrop: void 0,
-    modelMix: void 0,
-    servedCatalogOffBeforeAsking: void 0,
-    catalogDecision: void 0,
+    behavesAsMemo: undefined,
+    publishedWireIds: undefined,
+    unservedModelDrop: undefined,
+    modelMix: undefined,
+    servedCatalogOffBeforeAsking: undefined,
+    catalogDecision: undefined,
   };
 }
 //@ chunk-v9tcvh08.js:30559-30581 placement
-var H = new SessionRootSlot(() => createProviderState());
+var providerStateSlot = new SessionRootSlot(() => createProviderState());
 //@ chunk-v9tcvh08.js:30581-30612 placement
 function getProviderState() {
-  return H.of(getRootSession());
+  return providerStateSlot.of(getRootSession());
 }
-
 export {
   getProviderState,
   findModelConfigById,
   pruneOverturnedEntitlementDenies,
   clearModelBetas,
-  FXt,
+  OVERTURNED_DENY_TTL_MS,
   createModelBetaCaches,
   createProviderCache,
 };

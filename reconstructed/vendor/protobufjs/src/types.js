@@ -9,38 +9,37 @@ import { x } from "../../../runtime/bun-runtime.js";
 import { de } from "./util.js";
 
 //@ chunk-pwh5dx3n.js:114753-115253 cjs-fingerprint
-var Cr = x(function (Md) {
-  var Mi = Md,
-    IE = de(),
-    xE = [
-      "double",
-      "float",
-      "int32",
-      "uint32",
-      "sint32",
-      "fixed32",
-      "sfixed32",
-      "int64",
-      "uint64",
-      "sint64",
-      "fixed64",
-      "sfixed64",
-      "bool",
-      "string",
-      "bytes",
-    ];
-  function Ii(e, t) {
-    var r = 0,
-      create = Object.create(null);
-    t |= 0;
-    while (r < e.length) create[xE[r + t]] = e[r++];
-    return create;
+var Cr = x(function (cjsExports) {
+  var types = cjsExports;
+  var util = de();
+  var s = [
+    "double",
+    "float",
+    "int32",
+    "uint32",
+    "sint32",
+    "fixed32",
+    "sfixed32",
+    "int64",
+    "uint64",
+    "sint64",
+    "fixed64",
+    "sfixed64",
+    "bool",
+    "string",
+    "bytes",
+  ];
+  function bake(values, offset) {
+    var i_2 = 0;
+    var o = Object.create(null);
+    offset |= 0;
+    while (i_2 < values.length) o[s[i_2 + offset]] = values[i_2++];
+    return o;
   }
-  Mi.basic = Ii([1, 5, 0, 0, 0, 5, 5, 0, 0, 0, 1, 1, 0, 2, 2]);
-  Mi.defaults = Ii([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, !1, "", IE.emptyArray, null]);
-  Mi.long = Ii([0, 0, 0, 1, 1], 7);
-  Mi.mapKey = Ii([0, 0, 0, 5, 5, 0, 0, 0, 1, 1, 0, 2], 2);
-  Mi.packed = Ii([1, 5, 0, 0, 0, 5, 5, 0, 0, 0, 1, 1, 0]);
+  types.basic = bake([1, 5, 0, 0, 0, 5, 5, 0, 0, 0, 1, 1, 0, 2, 2]);
+  types.defaults = bake([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, false, "", util.emptyArray, null]);
+  types.long = bake([0, 0, 0, 1, 1], 7);
+  types.mapKey = bake([0, 0, 0, 5, 5, 0, 0, 0, 1, 1, 0, 2], 2);
+  types.packed = bake([1, 5, 0, 0, 0, 5, 5, 0, 0, 0, 1, 1, 0]);
 });
-
 export { Cr };

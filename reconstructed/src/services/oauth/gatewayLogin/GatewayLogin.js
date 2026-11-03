@@ -18,11 +18,11 @@ import {
   pinnedAgentFor,
   readGatewayTrust,
 } from "../../gateway/vouching.js";
-import { truncateToLength, wh, ql } from "../../../utils/stringUtils.js";
+import { truncateToLength, printableText, cleanForDisplay } from "../../../utils/stringUtils.js";
 import { DoctorLazy } from "../../../cli/handlers/util.js";
 import { create, create_2, create_3 } from "../../../../vendor/zod/lib/index.mjs";
 import {
-  gno,
+  sameOriginUrl,
   oauthErrorCode,
   gatewayTokenResponseSchema,
   replaceGatewayCredential,
@@ -40,58 +40,61 @@ import { saveGatewayCredential } from "../../gateway/gatewayCredentialStore.js";
 import { logAuthEvent } from "../../../utils/telemetry/thirdPartyEventRecords.js";
 
 //@ chunk-5v6dfhf4.js:691-2133 placement
-var GATEWAY_LOGIN_CONSTANTS = "urn:ietf:params:oauth:grant-type:device_code",
-  CLAUDE_CODE = "claude_code",
-  R = new Set([
-    "UNABLE_TO_VERIFY_LEAF_SIGNATURE",
-    "UNABLE_TO_GET_ISSUER_CERT",
-    "UNABLE_TO_GET_ISSUER_CERT_LOCALLY",
-    "DEPTH_ZERO_SELF_SIGNED_CERT",
-    "SELF_SIGNED_CERT_IN_CHAIN",
-    "CERT_UNTRUSTED",
-  ]),
-  w = 254,
-  G = "Sign-in timed out while waiting for you to continue. Try again.",
-  rnn =
-    "Gateway login is required by your organization's policy, but no gateway URL is configured. Contact your IT administrator.",
-  onn =
-    "You haven't connected to this gateway before. Once trusted, it can push settings to this machine that execute commands and change your environment. Only continue if this is your organization's gateway.",
-  snn =
-    "The TLS certificate for this gateway has changed since you last connected. Only continue if your administrator has confirmed a certificate rotation.",
-  inn = "Certificate fingerprint (SHA-256):",
-  ann = "Yes, trust this gateway",
-  lnn =
-    "A browser window should have opened. After signing in with your identity provider, confirm this code on the verification page:",
-  dnn = "Browser didn't open? Visit:",
-  cnn =
-    "Continue only if this is your account; that organization's settings will then apply to this machine. Otherwise go back: nothing is saved, and you can sign in again.",
-  unn = "Yes, continue",
-  y =
-    "The gateway's TLS certificate changed during sign-in: it no longer matches the one you trusted. Aborting without storing credentials; start the sign-in again to review the new certificate.";
+/**
+ * 登录未完成的说明。
+ */
+var GATEWAY_LOGIN_CONSTANTS = "urn:ietf:params:oauth:grant-type:device_code";
+var CLAUDE_CODE = "claude_code";
+var TLS_TRUST_ERRORS = new Set([
+  "UNABLE_TO_VERIFY_LEAF_SIGNATURE",
+  "UNABLE_TO_GET_ISSUER_CERT",
+  "UNABLE_TO_GET_ISSUER_CERT_LOCALLY",
+  "DEPTH_ZERO_SELF_SIGNED_CERT",
+  "SELF_SIGNED_CERT_IN_CHAIN",
+  "CERT_UNTRUSTED",
+]);
+var MAX_CERT_TEXT_CHARS = 254;
+var SIGNIN_TIMEOUT_MESSAGE = "Sign-in timed out while waiting for you to continue. Try again.";
+var NO_GATEWAY_URL_MESSAGE =
+  "Gateway login is required by your organization's policy, but no gateway URL is configured. Contact your IT administrator.";
+var FIRST_TRUST_MESSAGE =
+  "You haven't connected to this gateway before. Once trusted, it can push settings to this machine that execute commands and change your environment. Only continue if this is your organization's gateway.";
+var CERT_ROTATED_MESSAGE =
+  "The TLS certificate for this gateway has changed since you last connected. Only continue if your administrator has confirmed a certificate rotation.";
+var FINGERPRINT_LABEL = "Certificate fingerprint (SHA-256):";
+var TRUST_ACCEPT_LABEL = "Yes, trust this gateway";
+var TRUST_DECLINE_LABEL =
+  "A browser window should have opened. After signing in with your identity provider, confirm this code on the verification page:";
+var TRUST_REJECTED_MESSAGE = "Browser didn't open? Visit:";
+var PIN_MISMATCH_MESSAGE =
+  "Continue only if this is your account; that organization's settings will then apply to this machine. Otherwise go back: nothing is saved, and you can sign in again.";
+var LOGIN_FAILED_MESSAGE = "Yes, continue";
+var LOGIN_INCOMPLETE_MESSAGE =
+  "The gateway's TLS certificate changed during sign-in: it no longer matches the one you trusted. Aborting without storing credentials; start the sign-in again to review the new certificate.";
 //@ chunk-5v6dfhf4.js:2133-2543 placement
-function credentialsFileErrorText(e) {
-  let i = errorMessage(e);
+function credentialsFileErrorText(error) {
+  let i = errorMessage(error);
   if (i.includes(PIN_STORE_SYMLINK_MESSAGE))
     return "Claude Code's credentials file (where a gateway's TLS pin is kept) is a symlink, which it does not follow. Replace the link with the file itself and try again.";
   if (i.includes(PIN_STORE_UNREADABLE_MESSAGE))
     return "Claude Code's credentials file (where a gateway's TLS pin is kept) could not be read. Try again; if it keeps failing, check the file.";
-  if (pinMismatchFromError(e) !== void 0) return y;
+  if (pinMismatchFromError(error) !== undefined) return LOGIN_INCOMPLETE_MESSAGE;
   return i;
 }
 //@ chunk-5v6dfhf4.js:2543-2713 placement
-function oauthErrorDescription(e) {
-  let i = e?.response?.data;
+function oauthErrorDescription(error) {
+  let i = error?.response?.data;
   if (typeof i !== "object" || i === null) return;
-  let error_description = i.error_description;
-  if (typeof error_description !== "string") return;
-  return truncateToLength(wh(error_description), 300).trim() || void 0;
+  let errorDescription = i.error_description;
+  if (typeof errorDescription !== "string") return;
+  return truncateToLength(printableText(errorDescription), 300).trim() || undefined;
 }
 //@ chunk-5v6dfhf4.js:2713-3454 placement
-function tlsErrorHint(e) {
-  let i = getErrnoCode(e) ?? getErrnoCode(e?.cause),
-    n = errorMessage(e);
+function tlsErrorHint(error) {
+  let i = getErrnoCode(error) ?? getErrnoCode(error?.cause);
+  let n = errorMessage(error);
   if (!(
-    (i !== void 0 && R.has(i)) ||
+    (i !== undefined && TLS_TRUST_ERRORS.has(i)) ||
     /self[- ]?signed certificate|unable to (verify the first|get (local )?issuer) certificate|certificate not trusted/i.test(
       n,
     )
@@ -111,14 +114,12 @@ var GATEWAY_DISCOVERY_SCHEMA = DoctorLazy(() =>
   create({
     device_authorization_endpoint: create_2().optional(),
     token_endpoint: create_2().optional(),
-    revocation_endpoint: create_2()
-      .nullish()
-      .catch(void 0),
+    revocation_endpoint: create_2().nullish().catch(undefined),
   }),
 );
 //@ chunk-5v6dfhf4.js:3599-3763 placement
 function sameOriginEndpoint(e, i, n) {
-  let r = gno(e, i);
+  let r = sameOriginUrl(e, i);
   if (r) return r;
   if (i)
     logForDebugging(
@@ -137,33 +138,41 @@ var DEVICE_AUTHORIZATION_SCHEMA = DoctorLazy(() =>
     interval: create_3().optional(),
   }),
 );
+//@ chunk-5v6dfhf4.js:3919-9825 placement
 /**
  * 网关登录流程状态机：输入地址、设备码授权、轮询令牌、保存凭证。
  */
-//@ chunk-5v6dfhf4.js:3919-9825 placement
 class GatewayLoginFlow {
   credentials;
   openPage;
-  store = createStore({ state: "url_input" });
+  store = createStore({
+    state: "url_input",
+  });
   status = this.store;
   generation = 0;
-  vouchedAtLogin = !1;
+  vouchedAtLogin = false;
   revoking = Promise.resolve();
-  constructor(e, i) {
-    this.credentials = e;
-    this.openPage = i;
+  constructor(credentials, openPage) {
+    this.credentials = credentials;
+    this.openPage = openPage;
   }
   moveTo(e) {
     this.store.setState(() => e);
   }
   restart() {
-    let { state: state } = this.store.getState();
+    let { state } = this.store.getState();
     if (state === "saving" || state === "done" || state === "cancelled") return;
-    ((this.generation += 1), this.moveTo({ state: "url_input" }));
+    this.generation += 1;
+    this.moveTo({
+      state: "url_input",
+    });
   }
   cancel() {
     if (this.store.getState().state === "done") return;
-    ((this.generation += 1), this.moveTo({ state: "cancelled" }));
+    this.generation += 1;
+    this.moveTo({
+      state: "cancelled",
+    });
   }
   trust() {
     let state = this.store.getState();
@@ -174,16 +183,22 @@ class GatewayLoginFlow {
         if (generation !== this.generation) return;
         return this.startDeviceAuth(state.url, state.endpoints, state.fingerprint, state.allowlistEntry);
       })
-      .catch((n) => {
+      .catch((error) => {
         if (generation !== this.generation) return;
-        this.moveTo({ state: "error", message: errorMessage(n) });
+        this.moveTo({
+          state: "error",
+          message: errorMessage(error),
+        });
       });
   }
   confirmAccount() {
     let state = this.store.getState();
     if (state.state !== "confirm_account") return;
     if (state.auth.expiresAt <= Date.now() && !state.auth.idpRefreshToken) {
-      this.moveTo({ state: "error", message: G });
+      this.moveTo({
+        state: "error",
+        message: SIGNIN_TIMEOUT_MESSAGE,
+      });
       return;
     }
     this.completeLogin(state.auth, state.allowlistEntry, this.generation);
@@ -191,105 +206,125 @@ class GatewayLoginFlow {
   async connect(e) {
     if (this.store.getState().state !== "url_input") return;
     let i = ++this.generation;
-    this.moveTo({ state: "connecting" });
+    this.moveTo({
+      state: "connecting",
+    });
     try {
-      let n = normalizeGatewayUrl(e.url),
-        r = await resolveGatewayTrustBasis(n, e.internalNetworks, e.namedBy);
+      let n = normalizeGatewayUrl(e.url);
+      let gatewayTrustBasis = await resolveGatewayTrustBasis(n, e.internalNetworks, e.namedBy);
       if (i !== this.generation) return;
-      this.vouchedAtLogin = r.basis === "vouched";
-      let o = r.basis === "network" ? r.network : void 0,
-        c = r.basis === "allowlisted" ? r.entry : void 0,
-        l = r.basis === "allowlisted" ? r.judged : o ? await fetchGatewayCertificate(n, 1e4, o) : void 0;
+      this.vouchedAtLogin = gatewayTrustBasis.basis === "vouched";
+      let network = gatewayTrustBasis.basis === "network" ? gatewayTrustBasis.network : undefined;
+      let entry = gatewayTrustBasis.basis === "allowlisted" ? gatewayTrustBasis.entry : undefined;
+      let l =
+        gatewayTrustBasis.basis === "allowlisted"
+          ? gatewayTrustBasis.judged
+          : network
+            ? await fetchGatewayCertificate(n, 1e4, network)
+            : undefined;
       if (i !== this.generation) return;
       let g = await externalHttp.get(`${n}/.well-known/oauth-authorization-server`, {
-        headers: { "User-Agent": claudeCodeUserAgent() },
+        headers: {
+          "User-Agent": claudeCodeUserAgent(),
+        },
         timeout: 1e4,
-        ...(r.basis === "allowlisted" && {
-          httpsAgent: pinnedAgentFor(r.judged.fingerprint, n, !0),
+        ...(gatewayTrustBasis.basis === "allowlisted" && {
+          httpsAgent: pinnedAgentFor(gatewayTrustBasis.judged.fingerprint, n, true),
           maxRedirects: 0,
         }),
       });
       if (i !== this.generation) return;
-      let safeParse = GATEWAY_DISCOVERY_SCHEMA().safeParse(g.data),
-        a = safeParse.success ? safeParse.data : void 0,
-        u = gno(n, a?.revocation_endpoint);
+      let s = GATEWAY_DISCOVERY_SCHEMA().safeParse(g.data);
+      let a = s.success ? s.data : undefined;
+      let u = sameOriginUrl(n, a?.revocation_endpoint);
       if (a?.revocation_endpoint && !u)
         logForDebugging(
           `[gateway-login] ignoring advertised revocation endpoint ${a.revocation_endpoint} (not same-origin with ${n}); sign-out will not revoke`,
         );
       let h = {
-          deviceAuthorizationEndpoint: sameOriginEndpoint(
-            n,
-            a?.device_authorization_endpoint,
-            "/oauth/device_authorization",
-          ),
-          tokenEndpoint: sameOriginEndpoint(n, a?.token_endpoint, "/oauth/token"),
-          ...(u && { revocationEndpoint: u }),
-        },
-        {
-          hostname: hostname,
-          fingerprint: fingerprint,
-          localAddress: localAddress,
-          remoteAddress: remoteAddress,
-        } = l ?? (await fetchGatewayCertificate(n));
+        deviceAuthorizationEndpoint: sameOriginEndpoint(
+          n,
+          a?.device_authorization_endpoint,
+          "/oauth/device_authorization",
+        ),
+        tokenEndpoint: sameOriginEndpoint(n, a?.token_endpoint, "/oauth/token"),
+        ...(u && {
+          revocationEndpoint: u,
+        }),
+      };
+      let { hostname, fingerprint, localAddress, remoteAddress } = l ?? (await fetchGatewayCertificate(n));
       if (i !== this.generation) return;
-      let _ = await readGatewayTrust(hostname, this.credentials);
+      let gatewayTrust = await readGatewayTrust(hostname, this.credentials);
       if (i !== this.generation) return;
-      if (_ === fingerprint) await this.startDeviceAuth(n, h, fingerprint, c);
+      if (gatewayTrust === fingerprint) await this.startDeviceAuth(n, h, fingerprint, entry);
       else
         this.moveTo({
           state: "trust_prompt",
           url: n,
-          hostname: hostname,
-          fingerprint: fingerprint,
-          previouslyPinned: _,
+          hostname,
+          fingerprint,
+          previouslyPinned: gatewayTrust,
           endpoints: h,
-          allowlistEntry: c,
-          ...(o && { route: `from ${localAddress} to ${remoteAddress}, both inside declared ${o}` }),
+          allowlistEntry: entry,
+          ...(network && {
+            route: `from ${localAddress} to ${remoteAddress}, both inside declared ${network}`,
+          }),
         });
     } catch (error) {
       if (i !== this.generation) return;
       let r = tlsErrorHint(error);
       this.moveTo(
         r
-          ? { state: "error", message: r, detail: errorMessage(error) }
-          : { state: "error", message: credentialsFileErrorText(error) },
+          ? {
+              state: "error",
+              message: r,
+              detail: errorMessage(error),
+            }
+          : {
+              state: "error",
+              message: credentialsFileErrorText(error),
+            },
       );
     }
   }
   async startDeviceAuth(e, i, n, r) {
     let o = ++this.generation;
-    this.moveTo({ state: "connecting" });
+    this.moveTo({
+      state: "connecting",
+    });
     try {
-      let c = pinnedAgentFor(n, i.deviceAuthorizationEndpoint),
-        { data: l } = await externalHttp.post(
-          i.deviceAuthorizationEndpoint,
-          new URLSearchParams({ surface: CLAUDE_CODE }).toString(),
-          {
-            headers: {
-              "Content-Type": "application/x-www-form-urlencoded",
-              "User-Agent": claudeCodeUserAgent(),
-            },
-            timeout: 1e4,
-            maxRedirects: 0,
-            ...(c && { httpsAgent: c }),
+      let c = pinnedAgentFor(n, i.deviceAuthorizationEndpoint);
+      let { data: l } = await externalHttp.post(
+        i.deviceAuthorizationEndpoint,
+        new URLSearchParams({
+          surface: CLAUDE_CODE,
+        }).toString(),
+        {
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+            "User-Agent": claudeCodeUserAgent(),
           },
-        );
+          timeout: 1e4,
+          maxRedirects: 0,
+          ...(c && {
+            httpsAgent: c,
+          }),
+        },
+      );
       if (o !== this.generation) return;
-      let safeParse = DEVICE_AUTHORIZATION_SCHEMA().safeParse(l);
-      if (!safeParse.success)
-        throw Error("gateway device authorization endpoint returned malformed response");
-      let s = safeParse.data,
-        a = s.verification_uri_complete ?? s.verification_uri;
-      (this.openPage(a),
-        this.moveTo({
-          state: "polling",
-          url: e,
-          userCode: s.user_code,
-          verificationUri: s.verification_uri,
-          browserUrl: a,
-        }),
-        await this.pollForToken(e, i, s.device_code, s.interval ?? 5, o, n, r));
+      let g = DEVICE_AUTHORIZATION_SCHEMA().safeParse(l);
+      if (!g.success) throw Error("gateway device authorization endpoint returned malformed response");
+      let s = g.data;
+      let a = s.verification_uri_complete ?? s.verification_uri;
+      this.openPage(a);
+      this.moveTo({
+        state: "polling",
+        url: e,
+        userCode: s.user_code,
+        verificationUri: s.verification_uri,
+        browserUrl: a,
+      });
+      await this.pollForToken(e, i, s.device_code, s.interval ?? 5, o, n, r);
     } catch (error) {
       if (o !== this.generation) return;
       if (oauthErrorCode(error) === "slow_down") {
@@ -300,33 +335,42 @@ class GatewayLoginFlow {
         });
         return;
       }
-      this.moveTo({ state: "error", message: credentialsFileErrorText(error) });
+      this.moveTo({
+        state: "error",
+        message: credentialsFileErrorText(error),
+      });
     }
   }
-  async pollForToken(e, i, n, r, o, c, l) {
-    let { tokenEndpoint: tokenEndpoint } = i,
-      max = Math.max(1, r);
+  async pollForToken(e, i, deviceCode, r, o, c, l) {
+    let { tokenEndpoint } = i;
+    let max = Math.max(1, r);
     while (o === this.generation) {
-      if ((await sleep(max * 1000), o !== this.generation)) return;
+      await sleep(max * 1000);
+      if (o !== this.generation) return;
       try {
-        let a = pinnedAgentFor(c, tokenEndpoint),
-          { data: u } = await externalHttp.post(
-            tokenEndpoint,
-            new URLSearchParams({ grant_type: GATEWAY_LOGIN_CONSTANTS, device_code: n }).toString(),
-            {
-              headers: {
-                "Content-Type": "application/x-www-form-urlencoded",
-                "User-Agent": claudeCodeUserAgent(),
-              },
-              timeout: 1e4,
-              maxRedirects: 0,
-              ...(a && { httpsAgent: a }),
+        let a = pinnedAgentFor(c, tokenEndpoint);
+        let { data: u } = await externalHttp.post(
+          tokenEndpoint,
+          new URLSearchParams({
+            grant_type: GATEWAY_LOGIN_CONSTANTS,
+            device_code: deviceCode,
+          }).toString(),
+          {
+            headers: {
+              "Content-Type": "application/x-www-form-urlencoded",
+              "User-Agent": claudeCodeUserAgent(),
             },
-          );
+            timeout: 1e4,
+            maxRedirects: 0,
+            ...(a && {
+              httpsAgent: a,
+            }),
+          },
+        );
         if (o !== this.generation) return;
-        let safeParse = gatewayTokenResponseSchema().safeParse(u);
-        if (!safeParse.success) throw Error("gateway token endpoint returned malformed response");
-        await this.finishLogin(e, i, safeParse.data, o, l);
+        let h = gatewayTokenResponseSchema().safeParse(u);
+        if (!h.success) throw Error("gateway token endpoint returned malformed response");
+        await this.finishLogin(e, i, h.data, o, l);
         return;
       } catch (error) {
         if (o !== this.generation) return;
@@ -344,60 +388,107 @@ class GatewayLoginFlow {
           return;
         }
         if (u === "access_denied") {
-          this.moveTo({ state: "error", message: "Sign-in was denied in the browser." });
+          this.moveTo({
+            state: "error",
+            message: "Sign-in was denied in the browser.",
+          });
           return;
         }
-        this.moveTo({ state: "error", message: credentialsFileErrorText(error) });
+        this.moveTo({
+          state: "error",
+          message: credentialsFileErrorText(error),
+        });
         return;
       }
     }
   }
   async finishLogin(e, i, n, r, o) {
-    let c = n.email ?? "",
-      l = truncateToLength(c, 16 * w),
-      g = ql(l),
-      s = l.length < c.length || g.length > w ? `${truncateToLength(g, w)}\u2026` : g,
-      a = {
-        url: e,
-        jwt: n.access_token,
-        expiresAt: Date.now() + n.expires_in * 1000,
-        tokenEndpoint: i.tokenEndpoint,
-        ...(i.revocationEndpoint && { revocationEndpoint: i.revocationEndpoint }),
-        ...(n.refresh_token && { idpRefreshToken: n.refresh_token }),
-        ...(s && { email: s }),
-        vouchedAtLogin: this.vouchedAtLogin,
-      },
-      { hostname: hostname, fingerprint: fingerprint } = await fetchGatewayCertificate(e);
+    let email = n.email ?? "";
+    let l = truncateToLength(email, 16 * MAX_CERT_TEXT_CHARS);
+    let g = cleanForDisplay(l);
+    let s =
+      l.length < email.length || g.length > MAX_CERT_TEXT_CHARS
+        ? `${truncateToLength(g, MAX_CERT_TEXT_CHARS)}\u2026`
+        : g;
+    let a = {
+      url: e,
+      jwt: n.access_token,
+      expiresAt: Date.now() + n.expires_in * 1000,
+      tokenEndpoint: i.tokenEndpoint,
+      ...(i.revocationEndpoint && {
+        revocationEndpoint: i.revocationEndpoint,
+      }),
+      ...(n.refresh_token && {
+        idpRefreshToken: n.refresh_token,
+      }),
+      ...(s && {
+        email: s,
+      }),
+      vouchedAtLogin: this.vouchedAtLogin,
+    };
+    let { hostname, fingerprint } = await fetchGatewayCertificate(e);
     if (r !== this.generation) return;
-    let f = await readGatewayTrust(hostname, this.credentials);
+    let gatewayTrust = await readGatewayTrust(hostname, this.credentials);
     if (r !== this.generation) return;
-    if (f !== fingerprint) {
-      this.moveTo({ state: "error", message: y });
+    if (gatewayTrust !== fingerprint) {
+      this.moveTo({
+        state: "error",
+        message: LOGIN_INCOMPLETE_MESSAGE,
+      });
       return;
     }
     if (s) {
-      this.moveTo({ state: "confirm_account", auth: a, allowlistEntry: o, email: s });
+      this.moveTo({
+        state: "confirm_account",
+        auth: a,
+        allowlistEntry: o,
+        email: s,
+      });
       return;
     }
     await this.completeLogin(a, o, r);
   }
   async completeLogin(e, i, n) {
-    this.moveTo({ state: "saving", email: e.email });
-    let r = getGatewayAuth(),
-      o = await saveGatewayCredential(e, this.credentials, i);
+    this.moveTo({
+      state: "saving",
+      email: e.email,
+    });
+    let gatewayAuth = getGatewayAuth();
+    let o = await saveGatewayCredential(e, this.credentials, i);
     if (o.outcome !== "saved" || n !== this.generation) {
-      if (
-        (await replaceGatewayCredential(e, r, this.credentials, o),
-        (this.revoking = revokeUndoneSignIn(e, r, this.credentials, o)),
-        o.outcome !== "saved" && n === this.generation)
-      )
-        (logForDebugging(`[gateway-login] secureStorage write failed: ${o.message}`, { level: "error" }),
-          this.moveTo({ state: "error", message: o.message }));
+      await replaceGatewayCredential(e, gatewayAuth, this.credentials, o);
+      this.revoking = revokeUndoneSignIn(e, gatewayAuth, this.credentials, o);
+      if (o.outcome !== "saved" && n === this.generation) {
+        logForDebugging(`[gateway-login] secureStorage write failed: ${o.message}`, {
+          level: "error",
+        });
+        this.moveTo({
+          state: "error",
+          message: o.message,
+        });
+      }
       return;
     }
-    (logAuthEvent({ action: "login", success: !0, authMethod: "oauth" }),
-      this.moveTo({ state: "done", email: e.email }));
+    logAuthEvent({
+      action: "login",
+      success: true,
+      authMethod: "oauth",
+    });
+    this.moveTo({
+      state: "done",
+      email: e.email,
+    });
   }
 }
-
-export { inn, snn, onn, ann, cnn, unn, lnn, dnn, GatewayLoginFlow, rnn };
+export {
+  FINGERPRINT_LABEL,
+  CERT_ROTATED_MESSAGE,
+  FIRST_TRUST_MESSAGE,
+  TRUST_ACCEPT_LABEL,
+  PIN_MISMATCH_MESSAGE,
+  LOGIN_FAILED_MESSAGE,
+  TRUST_DECLINE_LABEL,
+  TRUST_REJECTED_MESSAGE,
+  GatewayLoginFlow,
+  NO_GATEWAY_URL_MESSAGE,
+};

@@ -10,18 +10,20 @@
  */
 import { isXtermJs } from "../../ink/terminal.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
-import { rs } from "../../state/AppState.js";
+import { useAppStateSlice } from "../../state/AppState.js";
 
 //@ chunk-9rmf152v.js:298-366 placement
-function isReducedMotion(e) {
-  if (e) return !0;
-  return isXtermJs() && getFeatureValue_CACHED_MAY_BE_STALE("tengu_cedar_marsh", !1);
+function isReducedMotion(prefersReducedMotion) {
+  if (prefersReducedMotion) return true;
+  return isXtermJs() && getFeatureValue_CACHED_MAY_BE_STALE("tengu_cedar_marsh", false);
 }
 //@ chunk-9rmf152v.js:366-379 placement
-var VDe = -100;
+/**
+ * 导出值：SPINNER_FLAG_PRIORITY（-100）。
+ */
+var SPINNER_FLAG_PRIORITY = -100;
 //@ chunk-9rmf152v.js:379-445 placement
 function usePrefersReducedMotion() {
-  return isReducedMotion(rs((e) => e.settings.prefersReducedMotion));
+  return isReducedMotion(useAppStateSlice((e) => e.settings.prefersReducedMotion));
 }
-
-export { isReducedMotion, usePrefersReducedMotion, VDe };
+export { isReducedMotion, usePrefersReducedMotion, SPINNER_FLAG_PRIORITY };

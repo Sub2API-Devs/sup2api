@@ -8,55 +8,84 @@
 import { x } from "../../runtime/bun-runtime.js";
 
 //@ chunk-spjgqa4y.js:13686-14833 cjs-fingerprint
-var Er = x(function (ql, Qe) {
-  var _e = {
-    single_source_shortest_paths: function (t, e, r) {
-      var n = {},
-        i = {};
-      i[e] = 0;
-      var make = _e.PriorityQueue.make();
-      make.push(e, 0);
-      var s, l, u, f, a, h, c, p, _;
-      while (!make.empty()) {
-        ((s = make.pop()), (l = s.value), (f = s.cost), (a = t[l] || {}));
-        for (u in a)
-          if (a.hasOwnProperty(u)) {
-            if (((h = a[u]), (c = f + h), (p = i[u]), (_ = typeof i[u] > "u"), _ || p > c))
-              ((i[u] = c), make.push(u, c), (n[u] = l));
+var require_dijkstra = x(function (cjsExports, cjsModule) {
+  var dijkstra = {
+    single_source_shortest_paths: function (graph, s_2, d) {
+      var predecessors = {};
+      var costs = {};
+      costs[s_2] = 0;
+      var open = dijkstra.PriorityQueue.make();
+      open.push(s_2, 0);
+      var closest;
+      var u_2;
+      var v;
+      var cost_of_s_to_u;
+      var adjacent_nodes;
+      var cost_of_e;
+      var cost_of_s_to_u_plus_cost_of_e;
+      var cost_of_s_to_v;
+      var first_visit;
+      while (!open.empty()) {
+        closest = open.pop();
+        u_2 = closest.value;
+        cost_of_s_to_u = closest.cost;
+        adjacent_nodes = graph[u_2] || {};
+        for (v in adjacent_nodes)
+          if (adjacent_nodes.hasOwnProperty(v)) {
+            cost_of_e = adjacent_nodes[v];
+            cost_of_s_to_u_plus_cost_of_e = cost_of_s_to_u + cost_of_e;
+            cost_of_s_to_v = costs[v];
+            first_visit = typeof costs[v] === "undefined";
+            if (first_visit || cost_of_s_to_v > cost_of_s_to_u_plus_cost_of_e) {
+              costs[v] = cost_of_s_to_u_plus_cost_of_e;
+              open.push(v, cost_of_s_to_u_plus_cost_of_e);
+              predecessors[v] = u_2;
+            }
           }
       }
-      if (typeof r < "u" && typeof i[r] > "u") {
-        var joined = ["Could not find a path from ", e, " to ", r, "."].join("");
-        throw Error(joined);
+      if (typeof d !== "undefined" && typeof costs[d] === "undefined") {
+        var msg = ["Could not find a path from ", s_2, " to ", d, "."].join("");
+        throw Error(msg);
       }
-      return n;
+      return predecessors;
     },
-    extract_shortest_path_from_predecessor_list: function (t, e) {
-      var r = [],
-        n = e,
-        i;
-      while (n) (r.push(n), (i = t[n]), (n = t[n]));
-      return (r.reverse(), r);
+    extract_shortest_path_from_predecessor_list: function (predecessors, d) {
+      var nodes = [];
+      var u = d;
+      var predecessor;
+      while (u) {
+        nodes.push(u);
+        predecessor = predecessors[u];
+        u = predecessors[u];
+      }
+      nodes.reverse();
+      return nodes;
     },
-    find_path: function (t, e, r) {
-      var single_source_shortest_paths = _e.single_source_shortest_paths(t, e, r);
-      return _e.extract_shortest_path_from_predecessor_list(single_source_shortest_paths, r);
+    find_path: function (graph, s, d) {
+      var predecessors = dijkstra.single_source_shortest_paths(graph, s, d);
+      return dijkstra.extract_shortest_path_from_predecessor_list(predecessors, d);
     },
     PriorityQueue: {
-      make: function (t) {
-        var PriorityQueue = _e.PriorityQueue,
-          r = {},
-          n;
-        t = t || {};
-        for (n in PriorityQueue) if (PriorityQueue.hasOwnProperty(n)) r[n] = PriorityQueue[n];
-        return ((r.queue = []), (r.sorter = t.sorter || PriorityQueue.default_sorter), r);
+      make: function (opts) {
+        var T = dijkstra.PriorityQueue;
+        var t = {};
+        var key;
+        opts = opts || {};
+        for (key in T) if (T.hasOwnProperty(key)) t[key] = T[key];
+        t.queue = [];
+        t.sorter = opts.sorter || T.default_sorter;
+        return t;
       },
-      default_sorter: function (t, e) {
-        return t.cost - e.cost;
+      default_sorter: function (a, b) {
+        return a.cost - b.cost;
       },
-      push: function (t, e) {
-        var r = { value: t, cost: e };
-        (this.queue.push(r), this.queue.sort(this.sorter));
+      push: function (value, cost) {
+        var item = {
+          value,
+          cost,
+        };
+        this.queue.push(item);
+        this.queue.sort(this.sorter);
       },
       pop: function () {
         return this.queue.shift();
@@ -66,7 +95,6 @@ var Er = x(function (ql, Qe) {
       },
     },
   };
-  if (typeof Qe < "u") Qe.exports = _e;
+  if (typeof cjsModule !== "undefined") cjsModule.exports = dijkstra;
 });
-
-export { Er };
+export { require_dijkstra };

@@ -6,139 +6,161 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { Ee } from "./util.cjs";
+import { require_util } from "./util.cjs";
 
 //@ chunk-1ny7cxrt.js:104048-106489 cjs-fingerprint
-var Xs = x(function (Ll) {
-  var tP;
-  Object.defineProperty(Ll, "__esModule", { value: !0 });
-  Ll.globalConfig = Ll.$ZodEncodeError = Ll.$ZodAsyncError = Ll.$brand = Ll.NEVER = void 0;
-  Ll.$constructor = U6;
-  Ll.config = z6;
-  var rP = Ee();
-  Ll.NEVER = Object.freeze({ status: "aborted" });
-  var S_ = { value: void 0, enumerable: !1 },
-    nP = "captureStackTrace" in Error ? Error : null;
-  function N6(e) {
-    let t = nP;
-    if (t) {
-      let stackTraceLimit = t.stackTraceLimit;
-      if (typeof stackTraceLimit === "number") {
+var require_core = x(function (cjsExports) {
+  var _a;
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.globalConfig =
+    cjsExports.$ZodEncodeError =
+    cjsExports.$ZodAsyncError =
+    cjsExports.$brand =
+    cjsExports.NEVER =
+      undefined;
+  cjsExports.$constructor = $constructor;
+  cjsExports.config = config;
+  var util_js_1 = require_util();
+  cjsExports.NEVER = Object.freeze({
+    status: "aborted",
+  });
+  var _zodDesc = {
+    value: undefined,
+    enumerable: false,
+  };
+  var _E = "captureStackTrace" in Error ? Error : null;
+  function newError(Definition) {
+    let E = _E;
+    if (E) {
+      let saved = E.stackTraceLimit;
+      if (typeof saved === "number") {
         try {
-          t.stackTraceLimit = 0;
+          E.stackTraceLimit = 0;
         } catch {
-          return ((nP = null), new e());
+          _E = null;
+          return new Definition();
         }
         try {
-          return new e();
+          return new Definition();
         } finally {
-          t.stackTraceLimit = stackTraceLimit;
+          E.stackTraceLimit = saved;
         }
       }
     }
-    return new e();
+    return new Definition();
   }
-  function U6(e, t, n, o) {
-    let r = {};
-    function s(m) {
-      ((this.def = m), (this.constr = h), (this.traits = new Set()));
+  function $constructor(name, initializer, proto, params) {
+    let zodProto = {};
+    function Internals(def) {
+      this.def = def;
+      this.constr = _;
+      this.traits = new Set();
     }
-    s.prototype = r;
-    let a = n,
-      l = a && new WeakSet();
-    function c(m, y) {
-      if (!m._zod) {
-        S_.value = new s(y);
+    Internals.prototype = zodProto;
+    let protoMembers = proto;
+    let initialized = protoMembers && new WeakSet();
+    function init(inst, def) {
+      if (!inst._zod) {
+        _zodDesc.value = new Internals(def);
         try {
-          Object.defineProperty(m, "_zod", S_);
+          Object.defineProperty(inst, "_zod", _zodDesc);
         } finally {
-          S_.value = void 0;
+          _zodDesc.value = undefined;
         }
       }
-      if (m._zod.traits.has(e)) return;
-      if ((m._zod.traits.add(e), t(m, y), l)) {
-        let prototypeOf = Object.getPrototypeOf(m),
-          S = m._zod.constr.prototype,
-          j = prototypeOf;
-        while (j && j !== S) j = Object.getPrototypeOf(j);
-        let M = j ?? prototypeOf;
-        if (!l.has(M)) (l.add(M), rP.members(M, a));
+      if (inst._zod.traits.has(name)) return;
+      inst._zod.traits.add(name);
+      initializer(inst, def);
+      if (initialized) {
+        let own = Object.getPrototypeOf(inst);
+        let ctorProto = inst._zod.constr.prototype;
+        let up = own;
+        while (up && up !== ctorProto) up = Object.getPrototypeOf(up);
+        let target = up ?? own;
+        if (!initialized.has(target)) {
+          initialized.add(target);
+          util_js_1.members(target, protoMembers);
+        }
       }
-      let b = h.prototype;
-      for (let key in b) {
-        if (!Object.prototype.hasOwnProperty.call(b, key)) continue;
-        if (!(key in m)) m[key] = b[key].bind(m);
+      let proto = _.prototype;
+      for (let k in proto) {
+        if (!Object.prototype.hasOwnProperty.call(proto, k)) continue;
+        if (!(k in inst)) inst[k] = proto[k].bind(inst);
       }
     }
-    let u = o?.Parent ?? Object;
-    class f extends u {}
-    Object.defineProperty(f, "name", { value: e });
-    function h(m) {
-      let y = o?.Parent ? N6(f) : this;
-      c(y, m);
-      let deferred = y._zod.deferred;
+    let Parent = params?.Parent ?? Object;
+    class Definition extends Parent {}
+    Object.defineProperty(Definition, "name", {
+      value: name,
+    });
+    function _(def) {
+      let inst = params?.Parent ? newError(Definition) : this;
+      init(inst, def);
+      let deferred = inst._zod.deferred;
       if (deferred) {
-        for (let S of deferred) S();
-        y._zod.deferred = void 0;
+        for (let fn of deferred) fn();
+        inst._zod.deferred = undefined;
       }
-      let w = globalThis.__zod_globalConfig?.postProcessor;
-      if (w) w(y);
-      return y;
+      let pp = globalThis.__zod_globalConfig?.postProcessor;
+      if (pp) pp(inst);
+      return inst;
     }
-    return (
-      Object.defineProperty(h, "init", { value: c }),
-      Object.defineProperty(h, Symbol.hasInstance, {
-        value: (m) => {
-          if (o?.Parent && m instanceof o.Parent) return !0;
-          return m?._zod?.traits?.has(e);
-        },
-      }),
-      Object.defineProperty(h, "name", { value: e }),
-      h
-    );
+    Object.defineProperty(_, "init", {
+      value: init,
+    });
+    Object.defineProperty(_, Symbol.hasInstance, {
+      value: (inst) => {
+        if (params?.Parent && inst instanceof params.Parent) return true;
+        return inst?._zod?.traits?.has(name);
+      },
+    });
+    Object.defineProperty(_, "name", {
+      value: name,
+    });
+    return _;
   }
-  Ll.$brand = Symbol("zod_brand");
-  class iP extends Error {
+  cjsExports.$brand = Symbol("zod_brand");
+  class $ZodAsyncError extends Error {
     constructor() {
       super("Encountered Promise during synchronous parse. Use .parseAsync() instead.");
     }
   }
-  Ll.$ZodAsyncError = iP;
-  class ZodEncodeError extends Error {
-    constructor(e) {
-      super(`Encountered unidirectional transform during encode: ${e}`);
+  cjsExports.$ZodAsyncError = $ZodAsyncError;
+  class $ZodEncodeError extends Error {
+    constructor(name) {
+      super(`Encountered unidirectional transform during encode: ${name}`);
       this.name = "ZodEncodeError";
     }
   }
-  Ll.$ZodEncodeError = ZodEncodeError;
-  (tP = globalThis).__zod_globalConfig ?? (tP.__zod_globalConfig = {});
-  Ll.globalConfig = globalThis.__zod_globalConfig;
-  function z6(e) {
-    if (e) Object.assign(Ll.globalConfig, e);
-    return Ll.globalConfig;
+  cjsExports.$ZodEncodeError = $ZodEncodeError;
+  (_a = globalThis).__zod_globalConfig ?? (_a.__zod_globalConfig = {});
+  cjsExports.globalConfig = globalThis.__zod_globalConfig;
+  function config(newConfig) {
+    if (newConfig) Object.assign(cjsExports.globalConfig, newConfig);
+    return cjsExports.globalConfig;
   }
   (function () {
-    var ownPropertyNames = Object.getOwnPropertyNames(Ll);
-    for (var t = 0; t < ownPropertyNames.length; t++) {
-      var ownPropertyDescriptor = Object.getOwnPropertyDescriptor(Ll, ownPropertyNames[t]);
-      if (!ownPropertyDescriptor || !ownPropertyDescriptor.get || !ownPropertyDescriptor.configurable)
-        continue;
-      var o;
+    var keys = Object.getOwnPropertyNames(cjsExports);
+    for (var i = 0; i < keys.length; i++) {
+      var desc = Object.getOwnPropertyDescriptor(cjsExports, keys[i]);
+      if (!desc || !desc.get || !desc.configurable) continue;
+      var value;
       try {
-        o = ownPropertyDescriptor.get();
-      } catch (error) {
+        value = desc.get();
+      } catch (e) {
         continue;
       }
-      if (o === void 0) continue;
-      Object.defineProperty(Ll, ownPropertyNames[t], {
-        value: o,
-        writable: !1,
-        enumerable: ownPropertyDescriptor.enumerable,
-        configurable: !1,
+      if (value === undefined) continue;
+      Object.defineProperty(cjsExports, keys[i], {
+        value,
+        writable: false,
+        enumerable: desc.enumerable,
+        configurable: false,
       });
     }
-    Object.freeze(Ll);
+    Object.freeze(cjsExports);
   })();
 });
-
-export { Xs };
+export { require_core };

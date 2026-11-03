@@ -8,27 +8,33 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:56486-56769 cjs-fingerprint
-var Ut = x(function (vu, Pt) {
-  function cl(e) {
+var require_bnf = x(function (cjsExports, cjsModule) {
+  function bnf(hljs) {
     return {
       name: "Backus\u2013Naur Form",
       contains: [
-        { className: "attribute", begin: /</, end: />/ },
+        {
+          className: "attribute",
+          begin: /</,
+          end: />/,
+        },
         {
           begin: /::=/,
           end: /$/,
           contains: [
-            { begin: /</, end: />/ },
-            e.C_LINE_COMMENT_MODE,
-            e.C_BLOCK_COMMENT_MODE,
-            e.APOS_STRING_MODE,
-            e.QUOTE_STRING_MODE,
+            {
+              begin: /</,
+              end: />/,
+            },
+            hljs.C_LINE_COMMENT_MODE,
+            hljs.C_BLOCK_COMMENT_MODE,
+            hljs.APOS_STRING_MODE,
+            hljs.QUOTE_STRING_MODE,
           ],
         },
       ],
     };
   }
-  Pt.exports = cl;
+  cjsModule.exports = bnf;
 });
-
-export { Ut };
+export { require_bnf };

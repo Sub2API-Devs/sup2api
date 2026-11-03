@@ -30,8 +30,7 @@ var NOOP_FUNCTION_HOOK_REGISTRY = {
     return;
   },
   has() {
-    return !1;
+    return false;
   },
 };
-
 export { NOOP_FUNCTION_HOOK_REGISTRY };

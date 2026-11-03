@@ -6,148 +6,172 @@
  * attribution: cjs-fingerprint 1
  */
 import { x, importMetaRequire } from "../../../runtime/bun-runtime.js";
-import { gn } from "../../delayed-stream/lib/delayed_stream.js";
+import { require_delayed_stream } from "../../delayed-stream/lib/delayed_stream.js";
 
 //@ chunk-h6b7mazd.js:1799-4742 cjs-fingerprint
-var xn = x(function (Cl, wn) {
-  var Ca = importMetaRequire("util"),
-    Stream = importMetaRequire("stream").Stream,
-    En = gn();
-  wn.exports = L;
-  function L() {
-    ((this.writable = !1),
-      (this.readable = !0),
-      (this.dataSize = 0),
-      (this.maxDataSize = 2097152),
-      (this.pauseStreams = !0),
-      (this._released = !1),
-      (this._streams = []),
-      (this._currentStream = null),
-      (this._insideLoop = !1),
-      (this._pendingNext = !1));
+var require_combined_stream = x(function (cjsExports, cjsModule) {
+  var util = importMetaRequire("util");
+  var Stream = importMetaRequire("stream").Stream;
+  var DelayedStream = require_delayed_stream();
+  cjsModule.exports = CombinedStream;
+  function CombinedStream() {
+    this.writable = false;
+    this.readable = true;
+    this.dataSize = 0;
+    this.maxDataSize = 2097152;
+    this.pauseStreams = true;
+    this._released = false;
+    this._streams = [];
+    this._currentStream = null;
+    this._insideLoop = false;
+    this._pendingNext = false;
   }
-  Ca.inherits(L, Stream);
-  L.create = function (e) {
-    var t = new this();
-    e = e || {};
-    for (var key in e) t[key] = e[key];
-    return t;
+  util.inherits(CombinedStream, Stream);
+  CombinedStream.create = function (options) {
+    var combinedStream = new this();
+    options = options || {};
+    for (var option in options) combinedStream[option] = options[option];
+    return combinedStream;
   };
-  L.isStreamLike = function (e) {
+  CombinedStream.isStreamLike = function (stream) {
     return (
-      typeof e !== "function" &&
-      typeof e !== "string" &&
-      typeof e !== "boolean" &&
-      typeof e !== "number" &&
-      !Buffer.isBuffer(e)
+      typeof stream !== "function" &&
+      typeof stream !== "string" &&
+      typeof stream !== "boolean" &&
+      typeof stream !== "number" &&
+      !Buffer.isBuffer(stream)
     );
   };
-  L.prototype.append = function (e) {
-    var isStreamLike = L.isStreamLike(e);
+  CombinedStream.prototype.append = function (stream) {
+    var isStreamLike = CombinedStream.isStreamLike(stream);
     if (isStreamLike) {
-      if (!(e instanceof En)) {
-        var create = En.create(e, { maxDataSize: 1 / 0, pauseStream: this.pauseStreams });
-        (e.on("data", this._checkDataSize.bind(this)), (e = create));
+      if (!(stream instanceof DelayedStream)) {
+        var newStream = DelayedStream.create(stream, {
+          maxDataSize: 1 / 0,
+          pauseStream: this.pauseStreams,
+        });
+        stream.on("data", this._checkDataSize.bind(this));
+        stream = newStream;
       }
-      if ((this._handleErrors(e), this.pauseStreams)) e.pause();
+      this._handleErrors(stream);
+      if (this.pauseStreams) stream.pause();
     }
-    return (this._streams.push(e), this);
+    this._streams.push(stream);
+    return this;
   };
-  L.prototype.pipe = function (e, t) {
-    return (Stream.prototype.pipe.call(this, e, t), this.resume(), e);
+  CombinedStream.prototype.pipe = function (dest, options) {
+    Stream.prototype.pipe.call(this, dest, options);
+    this.resume();
+    return dest;
   };
-  L.prototype._getNext = function () {
-    if (((this._currentStream = null), this._insideLoop)) {
-      this._pendingNext = !0;
+  CombinedStream.prototype._getNext = function () {
+    this._currentStream = null;
+    if (this._insideLoop) {
+      this._pendingNext = true;
       return;
     }
-    this._insideLoop = !0;
+    this._insideLoop = true;
     try {
-      do ((this._pendingNext = !1), this._realGetNext());
-      while (this._pendingNext);
+      do {
+        this._pendingNext = false;
+        this._realGetNext();
+      } while (this._pendingNext);
     } finally {
-      this._insideLoop = !1;
+      this._insideLoop = false;
     }
   };
-  L.prototype._realGetNext = function () {
-    var e = this._streams.shift();
-    if (typeof e > "u") {
+  CombinedStream.prototype._realGetNext = function () {
+    var stream = this._streams.shift();
+    if (typeof stream === "undefined") {
       this.end();
       return;
     }
-    if (typeof e !== "function") {
-      this._pipeNext(e);
+    if (typeof stream !== "function") {
+      this._pipeNext(stream);
       return;
     }
-    var t = e;
-    t(
-      function (r) {
-        var isStreamLike = L.isStreamLike(r);
-        if (isStreamLike) (r.on("data", this._checkDataSize.bind(this)), this._handleErrors(r));
-        this._pipeNext(r);
+    var getStream = stream;
+    getStream(
+      function (stream) {
+        var isStreamLike = CombinedStream.isStreamLike(stream);
+        if (isStreamLike) {
+          stream.on("data", this._checkDataSize.bind(this));
+          this._handleErrors(stream);
+        }
+        this._pipeNext(stream);
       }.bind(this),
     );
   };
-  L.prototype._pipeNext = function (e) {
-    this._currentStream = e;
-    var isStreamLike = L.isStreamLike(e);
+  CombinedStream.prototype._pipeNext = function (stream) {
+    this._currentStream = stream;
+    var isStreamLike = CombinedStream.isStreamLike(stream);
     if (isStreamLike) {
-      (e.on("end", this._getNext.bind(this)), e.pipe(this, { end: !1 }));
+      stream.on("end", this._getNext.bind(this));
+      stream.pipe(this, {
+        end: false,
+      });
       return;
     }
-    var r = e;
-    (this.write(r), this._getNext());
+    var value = stream;
+    this.write(value);
+    this._getNext();
   };
-  L.prototype._handleErrors = function (e) {
+  CombinedStream.prototype._handleErrors = function (stream) {
     var t = this;
-    e.on("error", function (r) {
-      t._emitError(r);
+    stream.on("error", function (err) {
+      t._emitError(err);
     });
   };
-  L.prototype.write = function (e) {
-    this.emit("data", e);
+  CombinedStream.prototype.write = function (data) {
+    this.emit("data", data);
   };
-  L.prototype.pause = function () {
+  CombinedStream.prototype.pause = function () {
     if (!this.pauseStreams) return;
     if (this.pauseStreams && this._currentStream && typeof this._currentStream.pause == "function")
       this._currentStream.pause();
     this.emit("pause");
   };
-  L.prototype.resume = function () {
-    if (!this._released) ((this._released = !0), (this.writable = !0), this._getNext());
+  CombinedStream.prototype.resume = function () {
+    if (!this._released) {
+      this._released = true;
+      this.writable = true;
+      this._getNext();
+    }
     if (this.pauseStreams && this._currentStream && typeof this._currentStream.resume == "function")
       this._currentStream.resume();
     this.emit("resume");
   };
-  L.prototype.end = function () {
-    (this._reset(), this.emit("end"));
+  CombinedStream.prototype.end = function () {
+    this._reset();
+    this.emit("end");
   };
-  L.prototype.destroy = function () {
-    (this._reset(), this.emit("close"));
+  CombinedStream.prototype.destroy = function () {
+    this._reset();
+    this.emit("close");
   };
-  L.prototype._reset = function () {
-    ((this.writable = !1), (this._streams = []), (this._currentStream = null));
+  CombinedStream.prototype._reset = function () {
+    this.writable = false;
+    this._streams = [];
+    this._currentStream = null;
   };
-  L.prototype._checkDataSize = function () {
-    if ((this._updateDataSize(), this.dataSize <= this.maxDataSize)) return;
-    var e = "DelayedStream#maxDataSize of " + this.maxDataSize + " bytes exceeded.";
-    this._emitError(Error(e));
+  CombinedStream.prototype._checkDataSize = function () {
+    this._updateDataSize();
+    if (this.dataSize <= this.maxDataSize) return;
+    var message = "DelayedStream#maxDataSize of " + this.maxDataSize + " bytes exceeded.";
+    this._emitError(Error(message));
   };
-  L.prototype._updateDataSize = function () {
+  CombinedStream.prototype._updateDataSize = function () {
     this.dataSize = 0;
     var e = this;
-    if (
-      (this._streams.forEach(function (_stream) {
-        if (!_stream.dataSize) return;
-        e.dataSize += _stream.dataSize;
-      }),
-      this._currentStream && this._currentStream.dataSize)
-    )
-      this.dataSize += this._currentStream.dataSize;
+    this._streams.forEach(function (stream) {
+      if (!stream.dataSize) return;
+      e.dataSize += stream.dataSize;
+    });
+    if (this._currentStream && this._currentStream.dataSize) this.dataSize += this._currentStream.dataSize;
   };
-  L.prototype._emitError = function (e) {
-    (this._reset(), this.emit("error", e));
+  CombinedStream.prototype._emitError = function (err) {
+    this._reset();
+    this.emit("error", err);
   };
 });
-
-export { xn };
+export { require_combined_stream };

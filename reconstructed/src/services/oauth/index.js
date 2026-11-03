@@ -12,7 +12,7 @@ import {
   generateCodeVerifier,
   AuthCodeListener,
   CallbackListenerUnavailableError,
-  y,
+  generateState,
   AuthCodeRefusedError,
 } from "./auth-code-listener.js";
 import { logForDebugging } from "../../utils/debug.js";
@@ -27,160 +27,190 @@ import {
   isInvalidGrantError,
   resolveRefreshTokenExpiresAt,
 } from "./client.js";
-import { fi } from "../../utils/browser.js";
+import { openValidatedUrlSucceeded } from "../../utils/browser.js";
 import { logEvent } from "../analytics/index.js";
 import { logFeatureSad, logFeatureOk, logFeatureBad } from "../analytics/featureTelemetry.js";
 import { logAuthEvent } from "../../utils/telemetry/thirdPartyEventRecords.js";
 
+//@ chunk-b8krr1px.js:5448-8992 fingerprint = OAuthService (0.65)
 /**
  * OAuth 登录服务：生成 code verifier，启动本地回调监听（失败时可退回手动粘贴授权码），打开浏览器授权，换取令牌后清理监听器。
  */
-//@ chunk-b8krr1px.js:5448-8992 fingerprint = OAuthService (0.65)
 class OAuthService {
   codeVerifier;
   authCodeListener = null;
   manualAuthCodeResolver = null;
-  authorizationCodeReceived = !1;
+  authorizationCodeReceived = false;
   constructor() {
     this.codeVerifier = generateCodeVerifier();
   }
-  async startOAuthFlow(e, r) {
-    this.authorizationCodeReceived = !1;
+  async startOAuthFlow(authURLHandler, r) {
+    this.authorizationCodeReceived = false;
     let i = null;
     this.authCodeListener = new AuthCodeListener();
     try {
       i = await this.authCodeListener.start();
     } catch (error) {
-      ((this.authCodeListener = null),
-        logForDebugging(`OAuth callback listener could not start: ${errorMessage(error)}`, {
-          level: "error",
-        }));
-      let u = error instanceof Error ? getErrnoCode(error.cause) : void 0;
+      this.authCodeListener = null;
+      logForDebugging(`OAuth callback listener could not start: ${errorMessage(error)}`, {
+        level: "error",
+      });
+      let u = error instanceof Error ? getErrnoCode(error.cause) : undefined;
       if (!r?.onCallbackListenerUnavailable || u === "EMFILE" || u === "ENFILE")
         throw new CallbackListenerUnavailableError(error);
       r.onCallbackListenerUnavailable();
     }
-    let o = generateCodeChallenge(this.codeVerifier),
-      n = y(),
-      s = {
-        codeChallenge: o,
-        state: n,
-        port: i ?? 0,
-        loginWithClaudeAi: r?.loginWithClaudeAi,
-        inferenceOnly: r?.inferenceOnly,
-        orgUUID: r?.orgUUID,
-        loginHint: r?.loginHint,
-        loginMethod: r?.loginMethod,
-        oauthClient: r?.oauthClient,
-        alsoRequestScope: r?.settingsOnlyGrant?.scope,
-      },
-      v = buildAuthUrl({ ...s, isManual: !0 }),
-      C = i === null ? void 0 : buildAuthUrl({ ...s, isManual: !1 }),
-      waitForAuthorizationCode = await this.waitForAuthorizationCode(n, async () => {
-        if (C === void 0) await e(v);
-        else if (r?.skipBrowserOpen) await e(v, C);
-        else (await e(v), await fi(C));
-      }),
-      h = this.authCodeListener?.hasPendingResponse() ?? !1;
-    logEvent("tengu_oauth_auth_code_received", { automatic: h });
+    let codeChallenge = generateCodeChallenge(this.codeVerifier);
+    let state = generateState();
+    let opts = {
+      codeChallenge,
+      state,
+      port: i ?? 0,
+      loginWithClaudeAi: r?.loginWithClaudeAi,
+      inferenceOnly: r?.inferenceOnly,
+      orgUUID: r?.orgUUID,
+      loginHint: r?.loginHint,
+      loginMethod: r?.loginMethod,
+      oauthClient: r?.oauthClient,
+      alsoRequestScope: r?.settingsOnlyGrant?.scope,
+    };
+    let manualFlowUrl = buildAuthUrl({
+      ...opts,
+      isManual: true,
+    });
+    let automaticFlowUrl =
+      i === null
+        ? undefined
+        : buildAuthUrl({
+            ...opts,
+            isManual: false,
+          });
+    let authorizationCode = await this.waitForAuthorizationCode(state, async () => {
+      if (automaticFlowUrl === undefined) await authURLHandler(manualFlowUrl);
+      else if (r?.skipBrowserOpen) await authURLHandler(manualFlowUrl, automaticFlowUrl);
+      else {
+        await authURLHandler(manualFlowUrl);
+        await openValidatedUrlSucceeded(automaticFlowUrl);
+      }
+    });
+    let h = this.authCodeListener?.hasPendingResponse() ?? false;
+    logEvent("tengu_oauth_auth_code_received", {
+      automatic: h,
+    });
     try {
-      let c = await exchangeCodeForTokens(waitForAuthorizationCode, {
-        state: n,
+      let c = await exchangeCodeForTokens(authorizationCode, {
+        state,
         codeVerifier: this.codeVerifier,
-        port: s.port,
+        port: opts.port,
         useManualRedirect: !h,
         expiresIn: r?.expiresIn,
         clientId: r?.oauthClient?.clientId,
       });
       if (h) {
-        let p = parseScopes(c.scope),
-          R = r?.settingsOnlyGrant,
-          b =
-            R && p.includes(R.scope) && !shouldUseClaudeAIAuth(p)
-              ? R.successRedirectUrl
-              : r?.successRedirectUrl;
-        if (b)
-          this.authCodeListener?.handleSuccessRedirect(p, (w) => {
-            (w.writeHead(302, { Location: b }), w.end());
+        let scopes = parseScopes(c.scope);
+        let settingsOnlyGrant = r?.settingsOnlyGrant;
+        let successRedirectUrl =
+          settingsOnlyGrant && scopes.includes(settingsOnlyGrant.scope) && !shouldUseClaudeAIAuth(scopes)
+            ? settingsOnlyGrant.successRedirectUrl
+            : r?.successRedirectUrl;
+        if (successRedirectUrl)
+          this.authCodeListener?.handleSuccessRedirect(scopes, (w) => {
+            w.writeHead(302, {
+              Location: successRedirectUrl,
+            });
+            w.end();
           });
-        else this.authCodeListener?.handleSuccessRedirect(p);
+        else this.authCodeListener?.handleSuccessRedirect(scopes);
       }
       let u = r?.skipProfileFetch ? null : await fetchProfileInfo(c.access_token);
       if (i === null) logFeatureSad("oauth_login", "callback_listener_unavailable");
       else logFeatureOk("oauth_login");
       return this.formatTokens(c, {
         subscriptionType: u?.subscriptionType ?? null,
-        unconfirmedPlan: u?.originStamped !== !0,
+        unconfirmedPlan: u?.originStamped !== true,
         rateLimitTier: u?.rateLimitTier ?? null,
         profile: u?.rawProfile,
         clientId: r?.oauthClient?.clientId,
       });
     } catch (error) {
       let u = !h && isInvalidGrantError(error);
-      if ((logFeatureBad("oauth_login", u ? "oauth_pasted_code_refused" : "oauth_login_failed"), h))
-        this.authCodeListener?.handleErrorRedirect();
+      logFeatureBad("oauth_login", u ? "oauth_pasted_code_refused" : "oauth_login_failed");
+      if (h) this.authCodeListener?.handleErrorRedirect();
       if (!r?.inferenceOnly && !r?.oauthClient)
-        logAuthEvent({ action: "login", success: !1, authMethod: "oauth", error: error });
+        logAuthEvent({
+          action: "login",
+          success: false,
+          authMethod: "oauth",
+          error,
+        });
       throw u ? new AuthCodeRefusedError() : error;
     } finally {
       this.authCodeListener?.close();
     }
   }
-  async waitForAuthorizationCode(e, r) {
-    return new Promise((i, o) => {
-      if (((this.manualAuthCodeResolver = i), !this.authCodeListener)) {
-        r().catch((n) => {
-          ((this.manualAuthCodeResolver = null), o(n));
+  async waitForAuthorizationCode(state, onReady) {
+    return new Promise((resolve, reject) => {
+      this.manualAuthCodeResolver = resolve;
+      if (!this.authCodeListener) {
+        onReady().catch((error) => {
+          this.manualAuthCodeResolver = null;
+          reject(error);
         });
         return;
       }
       this.authCodeListener
-        .waitForAuthorization(e, r)
-        .then((n) => {
-          ((this.manualAuthCodeResolver = null), (this.authorizationCodeReceived = !0), i(n));
+        .waitForAuthorization(state, onReady)
+        .then((authorizationCode) => {
+          this.manualAuthCodeResolver = null;
+          this.authorizationCodeReceived = true;
+          resolve(authorizationCode);
         })
-        .catch((n) => {
-          ((this.manualAuthCodeResolver = null), o(n));
+        .catch((error) => {
+          this.manualAuthCodeResolver = null;
+          reject(error);
         });
     });
   }
-  handleManualAuthCodeInput(e) {
-    if (this.manualAuthCodeResolver)
-      ((this.authorizationCodeReceived = !0),
-        this.manualAuthCodeResolver(e.authorizationCode),
-        (this.manualAuthCodeResolver = null),
-        this.authCodeListener?.close());
+  handleManualAuthCodeInput(params) {
+    if (this.manualAuthCodeResolver) {
+      this.authorizationCodeReceived = true;
+      this.manualAuthCodeResolver(params.authorizationCode);
+      this.manualAuthCodeResolver = null;
+      this.authCodeListener?.close();
+    }
   }
-  formatTokens(e, { subscriptionType: r, unconfirmedPlan: i, rateLimitTier: o, profile: n, clientId: s }) {
+  formatTokens(response, { subscriptionType, unconfirmedPlan, rateLimitTier, profile, clientId }) {
     return {
-      accessToken: e.access_token,
-      refreshToken: e.refresh_token,
-      expiresAt: Date.now() + e.expires_in * 1000,
-      refreshTokenExpiresAt: resolveRefreshTokenExpiresAt(e.refresh_token_expires_in, !0),
-      scopes: parseScopes(e.scope),
-      subscriptionType: r,
-      ...(r !== null && { subscriptionTypeSource: i ? "profile" : "sign_in" }),
-      rateLimitTier: o,
-      profile: n,
-      clientId: s,
-      tokenAccount: e.account
+      accessToken: response.access_token,
+      refreshToken: response.refresh_token,
+      expiresAt: Date.now() + response.expires_in * 1000,
+      refreshTokenExpiresAt: resolveRefreshTokenExpiresAt(response.refresh_token_expires_in, true),
+      scopes: parseScopes(response.scope),
+      subscriptionType,
+      ...(subscriptionType !== null && {
+        subscriptionTypeSource: unconfirmedPlan ? "profile" : "sign_in",
+      }),
+      rateLimitTier,
+      profile,
+      clientId,
+      tokenAccount: response.account
         ? {
-            uuid: e.account.uuid,
-            emailAddress: e.account.email_address,
-            organizationUuid: e.organization?.uuid,
-            organizationName: e.organization?.name,
-            workspaceId: e.workspace?.id,
-            workspaceName: e.workspace?.name,
+            uuid: response.account.uuid,
+            emailAddress: response.account.email_address,
+            organizationUuid: response.organization?.uuid,
+            organizationName: response.organization?.name,
+            workspaceId: response.workspace?.id,
+            workspaceName: response.workspace?.name,
           }
-        : void 0,
+        : undefined,
     };
   }
   hasReceivedAuthorizationCode() {
     return this.authorizationCodeReceived;
   }
   cleanup() {
-    (this.authCodeListener?.close(), (this.manualAuthCodeResolver = null));
+    this.authCodeListener?.close();
+    this.manualAuthCodeResolver = null;
   }
 }
-
 export { OAuthService };

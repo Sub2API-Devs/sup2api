@@ -9,10 +9,9 @@
  * attribution: fingerprint 1
  */
 
+//@ chunk-ykab7xp3.js:11796-11811 fingerprint = SKILL_TOOL_NAME (1)
 /**
  * Skill 工具名常量 "Skill"。
  */
-//@ chunk-ykab7xp3.js:11796-11811 fingerprint = SKILL_TOOL_NAME (1)
 var SKILL_TOOL_NAME = "Skill";
-
 export { SKILL_TOOL_NAME };

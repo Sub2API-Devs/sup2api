@@ -8,100 +8,107 @@
  * pieces: chunk-18hwfzwa.js (7)
  * attribution: placement 7
  */
-import { j, y, P } from "../../../vendor/react/cjs/react.production.js";
+import { init_react_production, y, P } from "../../../vendor/react/cjs/react.production.js";
 import { useStdin } from "../../components/design-system/ThemeProvider.js";
 import { useSession } from "../../context/session.js";
-import { Cr, useSessionHooksRegistry, useAppStateSession } from "../../state/AppState.js";
+import { useAppStoreDirect, useSessionHooksRegistry, useAppStateSession } from "../../state/AppState.js";
 import { useSpinnerStore } from "../../components/Spinner/spinnerStatus.js";
-import { njt, LVs, onSpinnerStateChange, setInteractive } from "../../services/api/cacheKeepalive.js";
-import { fzn } from "../../services/artifacts/artifactPresence.js";
+import {
+  isDapperDawnEnabled,
+  isKeepaliveArmed,
+  onSpinnerStateChange,
+  setInteractive,
+} from "../../services/api/cacheKeepalive.js";
+import { isWorking } from "../../services/artifacts/artifactPresence.js";
 import { hasActiveAgentTasks } from "../../tasks/taskStatus.js";
-import { oRo, $Fs } from "../../services/artifacts/presenceSocket.js";
+import { waitingFor, subscribeWaiting } from "../../services/artifacts/presenceSocket.js";
 import { logError } from "../../utils/log.js";
 import { getRipgrepStatus } from "../../utils/ripgrep.js";
-import { ptt } from "../../utils/model/modelSwitchHooks.js";
+import { sessionHooksRegistrySlot } from "../../utils/model/modelSwitchHooks.js";
 
 //@ chunk-18hwfzwa.js:1739793-1739797 placement
-j();
+init_react_production();
 //@ chunk-18hwfzwa.js:1739797-1740165 placement
 function useSuspendResume() {
-  let { internal_eventEmitter: internal_eventEmitter } = useStdin(),
-    [x, D] = y(0);
-  return (
-    P(() => {
-      let L = () => {
-          process.stdout.write(`
+  let { internal_eventEmitter } = useStdin();
+  let [x, D] = y(0);
+  P(() => {
+    let L = () => {
+      process.stdout.write(`
 Claude Code has been suspended. Run \`fg\` to bring Claude Code back.
 Note: ctrl + z now suspends Claude Code, ctrl + _ undoes input.
 `);
-        },
-        ee = () => {
-          D((ke) => ke + 1);
-        };
-      return (
-        internal_eventEmitter?.on("suspend", L),
-        internal_eventEmitter?.on("resume", ee),
-        () => {
-          (internal_eventEmitter?.off("suspend", L), internal_eventEmitter?.off("resume", ee));
-        }
-      );
-    }, [internal_eventEmitter]),
-    x
-  );
+    };
+    let ee = () => {
+      D((ke) => ke + 1);
+    };
+    internal_eventEmitter?.on("suspend", L);
+    internal_eventEmitter?.on("resume", ee);
+    return () => {
+      internal_eventEmitter?.off("suspend", L);
+      internal_eventEmitter?.off("resume", ee);
+    };
+  }, [internal_eventEmitter]);
+  return x;
 }
 //@ chunk-18hwfzwa.js:1740165-1740169 placement
-j();
+init_react_production();
+//@ chunk-18hwfzwa.js:1740169-1740549 placement
 /**
  * 后台会话中同步工作状态（旋转模式、压缩、子任务、等待）。
  */
-//@ chunk-18hwfzwa.js:1740169-1740549 placement
 function useBackgroundStatusSync() {
-  let h = useSession(),
-    x = Cr(),
-    D = useSpinnerStore();
+  let session = useSession();
+  let appStoreDirect = useAppStoreDirect();
+  let spinnerStore = useSpinnerStore();
   P(() => {
     function L() {
       try {
-        if (!njt() && !LVs()) return;
-        let { mode: mode, isCompacting: isCompacting } = D.get();
+        if (!isDapperDawnEnabled() && !isKeepaliveArmed()) return;
+        let { mode, isCompacting } = spinnerStore.get();
         onSpinnerStateChange({
-          working: fzn(h),
+          working: isWorking(session),
           spinnerMode: mode,
-          isCompacting: isCompacting,
-          delegatedWorkRunning: hasActiveAgentTasks(x.getState().tasks),
-          waitingFor: oRo(h),
+          isCompacting,
+          delegatedWorkRunning: hasActiveAgentTasks(appStoreDirect.getState().tasks),
+          waitingFor: waitingFor(session),
         });
       } catch (error) {
         logError(error);
       }
     }
-    (setInteractive(!0), L());
-    let ee = [D.subscribe(L), getRipgrepStatus(h, L), $Fs(h, L), x.subscribe(L)];
+    setInteractive(true);
+    L();
+    let ee = [
+      spinnerStore.subscribe(L),
+      getRipgrepStatus(session, L),
+      subscribeWaiting(session, L),
+      appStoreDirect.subscribe(L),
+    ];
     return () => {
       for (let ke of ee) ke();
-      setInteractive(!1);
+      setInteractive(false);
     };
-  }, [h, x, D]);
+  }, [session, appStoreDirect, spinnerStore]);
 }
 //@ chunk-18hwfzwa.js:1740549-1740553 placement
-j();
+init_react_production();
+//@ chunk-18hwfzwa.js:1740553-1740766 placement
 /**
  * 挂载期间替换相关实例的注册表，卸载时恢复。
  */
-//@ chunk-18hwfzwa.js:1740553-1740766 placement
-function useRegistryOverride(h) {
-  let x = useSessionHooksRegistry(),
-    D = useAppStateSession();
+function useRegistryOverride(session) {
+  let sessionHooksRegistry = useSessionHooksRegistry();
+  let appStateSession = useAppStateSession();
   P(() => {
-    let L = new Set([ptt.of(h), ptt.of(D)]),
-      ee = new Map([...L].map((ke) => [ke, ke.registry]));
-    for (let ke of L) ke.registry = x;
+    let L = new Set([sessionHooksRegistrySlot.of(session), sessionHooksRegistrySlot.of(appStateSession)]);
+    let ee = new Map([...L].map((ke) => [ke, ke.registry]));
+    for (let ke of L) ke.registry = sessionHooksRegistry;
     return () => {
       for (let [ke, Re] of ee) ke.registry = Re;
     };
-  }, [h, D, x]);
+  }, [session, appStateSession, sessionHooksRegistry]);
 }
 //@ chunk-18hwfzwa.js:1740766-1740770 placement
-j();
-
+init_react_production();
 export { useRegistryOverride, useBackgroundStatusSync, useSuspendResume };

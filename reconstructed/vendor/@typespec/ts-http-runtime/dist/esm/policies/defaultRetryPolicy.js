@@ -5,20 +5,20 @@
  * pieces: chunk-mrx6y2r5.js (2)
  * attribution: esm-fingerprint 2
  */
-import { jn, Vn } from "./retryPolicy.js";
-import { Al } from "../retryStrategies/throttlingRetryStrategy.js";
-import { Il } from "../retryStrategies/exponentialRetryStrategy.js";
+import { retryPolicy_2, Vn } from "./retryPolicy.js";
+import { throttlingRetryStrategy } from "../retryStrategies/throttlingRetryStrategy.js";
+import { exponentialRetryStrategy } from "../retryStrategies/exponentialRetryStrategy.js";
 
 //@ chunk-mrx6y2r5.js:46988-47016 esm-fingerprint
-var DEFAULTRETRYPOLICY = "defaultRetryPolicy";
+var defaultRetryPolicyName = "defaultRetryPolicy";
 //@ chunk-mrx6y2r5.js:47016-47151 esm-fingerprint
-function Xs(e = {}) {
-  var t;
+function defaultRetryPolicy(options = {}) {
+  var _a;
   return {
-    name: DEFAULTRETRYPOLICY,
-    sendRequest: jn([Al(), Il(e)], { maxRetries: (t = e.maxRetries) !== null && t !== void 0 ? t : Vn })
-      .sendRequest,
+    name: defaultRetryPolicyName,
+    sendRequest: retryPolicy_2([throttlingRetryStrategy(), exponentialRetryStrategy(options)], {
+      maxRetries: (_a = options.maxRetries) !== null && _a !== undefined ? _a : Vn,
+    }).sendRequest,
   };
 }
-
-export { Xs };
+export { defaultRetryPolicy };

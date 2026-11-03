@@ -10,10 +10,13 @@
  */
 import { performSetColor } from "./setColor.js";
 
+//@ chunk-evjaj4jh.js:11848-11911 placement
 /**
  * /color 的 local call(args, context, invokedName) 实现入口（由命令对象 load() 返回）。
  */
-//@ chunk-evjaj4jh.js:11848-11911 placement
-async function a(args, context) {
-  return { type: "text", value: await performSetColor(args, context) };
+async function setColorCall(args, context) {
+  return {
+    type: "text",
+    value: await performSetColor(args, context),
+  };
 }

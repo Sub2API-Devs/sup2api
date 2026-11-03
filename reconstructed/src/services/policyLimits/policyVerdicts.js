@@ -16,7 +16,7 @@ function registerPolicyVerdict(t) {
 }
 //@ chunk-1rckdhfn.js:1665-1723 placement
 function isPolicyAllowed(t) {
-  return complianceTaintState().verdict?.isPolicyAllowed(t) ?? !1;
+  return complianceTaintState().verdict?.isPolicyAllowed(t) ?? false;
 }
 //@ chunk-1rckdhfn.js:1723-1793 placement
 function rememberedCoreSkills() {
@@ -24,18 +24,18 @@ function rememberedCoreSkills() {
   return verdict ? verdict.rememberedCoreSkills() : [];
 }
 //@ chunk-1rckdhfn.js:1793-1880 placement
-function commandPolicyGateAllows(t) {
+function commandPolicyGateAllows(policy) {
   try {
-    return complianceTaintState().verdict?.commandPolicyGateAllows(t) ?? !1;
+    return complianceTaintState().verdict?.commandPolicyGateAllows(policy) ?? false;
   } catch {
-    return !1;
+    return false;
   }
 }
 //@ chunk-1rckdhfn.js:1880-1967 placement
-function policyDenyKind(t) {
+function policyDenyKind(policyKey) {
   let verdict = complianceTaintState().verdict;
   if (!verdict) return "unregistered";
-  return verdict.policyDenyKind(t);
+  return verdict.policyDenyKind(policyKey);
 }
 //@ chunk-1rckdhfn.js:1967-2038 placement
 function policyDeniedReason(t, r, i) {
@@ -43,22 +43,22 @@ function policyDeniedReason(t, r, i) {
 }
 //@ chunk-1rckdhfn.js:2038-2103 placement
 function complianceTaintsSettled() {
-  return complianceTaintState().verdict?.complianceTaintsSettled() ?? !1;
+  return complianceTaintState().verdict?.complianceTaintsSettled() ?? false;
 }
 //@ chunk-1rckdhfn.js:2103-2213 placement
 function isPolicyLimitsCacheMissing() {
   let verdict = complianceTaintState().verdict;
-  if (verdict === void 0) return !1;
+  if (verdict === undefined) return false;
   try {
     return !verdict.policyLimitsCacheLoaded();
   } catch {
-    return !0;
+    return true;
   }
 }
 //@ chunk-1rckdhfn.js:2213-2337 placement
 function autoDefaultVerdictState() {
   let verdict = complianceTaintState().verdict;
-  if (verdict === void 0) return "loaded";
+  if (verdict === undefined) return "loaded";
   try {
     return verdict.autoDefaultVerdictState();
   } catch {
@@ -68,21 +68,21 @@ function autoDefaultVerdictState() {
 //@ chunk-1rckdhfn.js:2337-2443 placement
 function isPolicyVerdictAbsent() {
   let verdict = complianceTaintState().verdict;
-  if (verdict === void 0) return !1;
+  if (verdict === undefined) return false;
   try {
     return verdict.policyVerdictAbsent();
   } catch {
-    return !0;
+    return true;
   }
 }
 //@ chunk-1rckdhfn.js:2443-2557 placement
 function isSessionVerdictUnattributed() {
   let verdict = complianceTaintState().verdict;
-  if (verdict === void 0) return !1;
+  if (verdict === undefined) return false;
   try {
     return verdict.sessionVerdictUnattributed();
   } catch {
-    return !0;
+    return true;
   }
 }
 //@ chunk-1rckdhfn.js:2557-2578 placement
@@ -98,24 +98,23 @@ function rowPrincipalStamp() {
 //@ chunk-1rckdhfn.js:2661-2772 placement
 function isRowOfAnotherPrincipal(t) {
   let verdict = complianceTaintState().verdict;
-  if (verdict === void 0) return !1;
+  if (verdict === undefined) return false;
   try {
     return verdict.rowOfAnotherPrincipal(t);
   } catch {
-    return !0;
+    return true;
   }
 }
 //@ chunk-1rckdhfn.js:2772-2883 placement
 function principalSeenUnderHipaa() {
   let verdict = complianceTaintState().verdict;
-  if (verdict === void 0) return !1;
+  if (verdict === undefined) return false;
   try {
     return verdict.principalSeenUnderHipaa();
   } catch {
-    return !0;
+    return true;
   }
 }
-
 export {
   isPolicyAllowed,
   policyDeniedReason,

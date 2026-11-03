@@ -11,5 +11,4 @@ import { x } from "../../runtime/bun-runtime.js";
 var irs = x(function (L, H) {
   H.exports = require("./clipboard-napi.node");
 });
-
 export { irs };

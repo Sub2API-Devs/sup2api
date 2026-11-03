@@ -8,7 +8,7 @@
  * pieces: chunk-dmpxe2vf.js (2)
  * attribution: facade-exports 2
  */
-import { getSystemPrompt, W6s } from "../constants/prompts.js";
+import { getSystemPrompt, buildMemoryDirectorySection } from "../constants/prompts.js";
 import { getOrBuildUserContext, getCachedSystemContext } from "../context.js";
 import { getRuntimeMainLoopModel } from "./model/planModeModel.js";
 import { getMainLoopModel } from "./model/model.js";
@@ -18,155 +18,181 @@ import { baseSystemPromptOf } from "./systemPromptBoundary.js";
 import { mainAgentContext } from "./agentContext.js";
 import { isBetaHeaderAllowed } from "./betas.js";
 import { createAbortController } from "./abortController.js";
-import { freeze_2, createColorAssigner } from "../services/artifacts/artifactReadConsent.js";
+import { Jce, createColorAssigner } from "../services/artifacts/artifactReadConsent.js";
 import { createAppStateAccessors } from "../state/appStateSetters.js";
 import { createNotificationDrain } from "../services/queuedNotifications/queuedNotifications.js";
 import { createTaskFramework } from "./task/framework.js";
-import { wIe } from "../state/sliceHelpers.js";
+import { fieldAccessor } from "../state/sliceHelpers.js";
 
+//@ chunk-dmpxe2vf.js:583-1110 facade-exports = fetchSystemPromptParts (0.661)
 /**
  * 获取系统提示的各部分（默认提示、用户上下文、系统上下文），供旁路问题等复用。
  */
-//@ chunk-dmpxe2vf.js:583-1110 facade-exports = fetchSystemPromptParts (0.661)
 async function fetchSystemPromptParts({
-  session: session,
-  tools: tools,
-  mainLoopModel: mainLoopModel,
-  customSystemPrompt: customSystemPrompt,
-  excludeDynamicSections: excludeDynamicSections,
-  cacheBreakerPhrase: cacheBreakerPhrase,
-  analysisOnly: analysisOnly,
-  storageV5: storageV5,
-  credentials: credentials,
+  session,
+  tools,
+  mainLoopModel,
+  customSystemPrompt,
+  excludeDynamicSections,
+  cacheBreakerPhrase,
+  analysisOnly,
+  storageV5,
+  credentials,
 }) {
-  let [m, l, e, t] = await Promise.all([
-    customSystemPrompt !== void 0
+  let [defaultSystemPrompt, userContext, systemContext, t] = await Promise.all([
+    customSystemPrompt !== undefined
       ? Promise.resolve([])
       : getSystemPrompt(tools, mainLoopModel, {
-          excludeDynamicSections: excludeDynamicSections,
-          analysisOnly: analysisOnly,
+          excludeDynamicSections,
+          analysisOnly,
         }),
     getOrBuildUserContext(session, storageV5, credentials),
-    customSystemPrompt !== void 0 ? Promise.resolve({}) : getCachedSystemContext(session, cacheBreakerPhrase),
-    excludeDynamicSections && customSystemPrompt === void 0
-      ? W6s(mainLoopModel, { analysisOnly: analysisOnly })
+    customSystemPrompt !== undefined
+      ? Promise.resolve({})
+      : getCachedSystemContext(session, cacheBreakerPhrase),
+    excludeDynamicSections && customSystemPrompt === undefined
+      ? buildMemoryDirectorySection(mainLoopModel, {
+          analysisOnly,
+        })
       : Promise.resolve({}),
   ]);
   if (excludeDynamicSections)
-    return { defaultSystemPrompt: m, userContext: { ...e, ...l, ...t }, systemContext: {} };
-  return { defaultSystemPrompt: m, userContext: l, systemContext: e };
+    return {
+      defaultSystemPrompt,
+      userContext: {
+        ...systemContext,
+        ...userContext,
+        ...t,
+      },
+      systemContext: {},
+    };
+  return {
+    defaultSystemPrompt,
+    userContext,
+    systemContext,
+  };
 }
 //@ chunk-dmpxe2vf.js:1110-2919 facade-exports = buildSideQuestionFallbackParams (0.628)
 async function buildSideQuestionFallbackParams({
-  session: session,
-  messageQueue: messageQueue,
-  tools: tools,
-  toolCatalog: toolCatalog,
-  commands: commands,
-  mcpClients: mcpClients,
-  messages: messages,
-  turnInProgress: turnInProgress,
-  readFileState: readFileState,
-  toolState: toolState,
-  sessionHooks: sessionHooks,
-  getAppState: getAppState,
-  setAppState: setAppState,
-  customSystemPrompt: customSystemPrompt,
-  appendSystemPrompt: appendSystemPrompt,
-  excludeDynamicSections: excludeDynamicSections,
-  thinkingConfig: thinkingConfig,
-  agents: agents,
-  storageV5: storageV5,
-  credentials: credentials,
-  runQuery: runQuery,
+  session,
+  messageQueue,
+  tools,
+  toolCatalog,
+  commands,
+  mcpClients,
+  messages,
+  turnInProgress,
+  readFileState,
+  toolState,
+  sessionHooks,
+  getAppState,
+  setAppState,
+  customSystemPrompt,
+  appendSystemPrompt,
+  excludeDynamicSections,
+  thinkingConfig,
+  agents,
+  storageV5,
+  credentials,
+  runQuery,
 }) {
-  let mainLoopModel = getAppState(),
-    u = getRuntimeMainLoopModel({
-      permissionMode: mainLoopModel.toolPermissionContext.mode,
-      mainLoopModel: getMainLoopModel(),
+  let mainLoopModel = getAppState();
+  let mainLoopModel_2 = getRuntimeMainLoopModel({
+    permissionMode: mainLoopModel.toolPermissionContext.mode,
+    mainLoopModel: getMainLoopModel(),
+  });
+  let { defaultSystemPrompt, userContext, systemContext } = await fetchSystemPromptParts({
+    session,
+    tools,
+    mainLoopModel: mainLoopModel_2,
+    customSystemPrompt,
+    excludeDynamicSections,
+    cacheBreakerPhrase: mainLoopModel.cacheBreakerPhrase,
+    analysisOnly: true,
+    storageV5,
+    credentials,
+  });
+  let systemPrompt = asSystemPrompt(
+    withCliSections(baseSystemPromptOf(customSystemPrompt, defaultSystemPrompt), {
+      tools,
+      appendSystemPrompt,
     }),
-    {
-      defaultSystemPrompt: defaultSystemPrompt,
-      userContext: userContext,
-      systemContext: systemContext,
-    } = await fetchSystemPromptParts({
-      session: session,
-      tools: tools,
-      mainLoopModel: u,
-      customSystemPrompt: customSystemPrompt,
-      excludeDynamicSections: excludeDynamicSections,
-      cacheBreakerPhrase: mainLoopModel.cacheBreakerPhrase,
-      analysisOnly: !0,
-      storageV5: storageV5,
-      credentials: credentials,
-    }),
-    systemPrompt = asSystemPrompt(
-      withCliSections(baseSystemPromptOf(customSystemPrompt, defaultSystemPrompt), {
-        tools: tools,
-        appendSystemPrompt: appendSystemPrompt,
+  );
+  let last = messages.at(-1);
+  let forkContextMessages =
+    turnInProgress && last?.type === "assistant" && last.message.stop_reason === null
+      ? messages.slice(0, -1)
+      : messages;
+  let toolUseContext = {
+    messageQueue,
+    session,
+    storageV5,
+    credentials,
+    agentContext: mainAgentContext(),
+    options: {
+      commands,
+      debug: false,
+      mainLoopModel: mainLoopModel_2,
+      tools,
+      toolCatalog,
+      verbose: false,
+      thinkingConfig:
+        thinkingConfig ??
+        (isBetaHeaderAllowed() !== false
+          ? {
+              type: "adaptive",
+            }
+          : {
+              type: "disabled",
+            }),
+      mcpClients,
+      mcpResources: {},
+      isNonInteractiveSession: true,
+      runQuery,
+      agentDefinitions: {
+        activeAgents: agents,
+        allAgents: [],
+      },
+      customSystemPrompt,
+      ...(customSystemPrompt !== undefined && {
+        omitGitStatus: true,
       }),
-    ),
-    last = messages.at(-1),
-    forkContextMessages =
-      turnInProgress && last?.type === "assistant" && last.message.stop_reason === null
-        ? messages.slice(0, -1)
-        : messages,
-    H = {
-      messageQueue: messageQueue,
-      session: session,
-      storageV5: storageV5,
-      credentials: credentials,
-      agentContext: mainAgentContext(),
-      options: {
-        commands: commands,
-        debug: !1,
-        mainLoopModel: u,
-        tools: tools,
-        toolCatalog: toolCatalog,
-        verbose: !1,
-        thinkingConfig:
-          thinkingConfig ?? (isBetaHeaderAllowed() !== !1 ? { type: "adaptive" } : { type: "disabled" }),
-        mcpClients: mcpClients,
-        mcpResources: {},
-        isNonInteractiveSession: !0,
-        runQuery: runQuery,
-        agentDefinitions: { activeAgents: agents, allAgents: [] },
-        customSystemPrompt: customSystemPrompt,
-        ...(customSystemPrompt !== void 0 && { omitGitStatus: !0 }),
-        appendSystemPrompt: appendSystemPrompt,
-        autoCompactWindow: mainLoopModel.autoCompactWindow,
-        fastMode: mainLoopModel.fastMode,
-        cacheBreakerPhrase: mainLoopModel.cacheBreakerPhrase,
-      },
-      abortController: createAbortController(),
-      readFileState: readFileState,
-      toolState: toolState,
-      toolDecisions: new Map(),
-      permissionRelays: freeze_2,
-      getAppState: getAppState,
-      setAppState: setAppState,
-      ...createAppStateAccessors(getAppState, setAppState),
-      queuedNotificationsRegistry: createNotificationDrain(getAppState, setAppState, session),
-      taskRegistry: createTaskFramework(getAppState, setAppState),
-      sessionHooksRegistry: sessionHooks,
-      teammateColors: createColorAssigner(wIe(getAppState, setAppState, "teammateColors")),
-      rootToolSurface: { tools: tools, mainLoopModel: u },
-      messages: forkContextMessages,
-      turnStartIndex: 0,
-      getFileHistoryState: () => {
-        return;
-      },
-      applyFileHistoryOp: () => {},
-      applyAttributionOp: () => {},
-    };
+      appendSystemPrompt,
+      autoCompactWindow: mainLoopModel.autoCompactWindow,
+      fastMode: mainLoopModel.fastMode,
+      cacheBreakerPhrase: mainLoopModel.cacheBreakerPhrase,
+    },
+    abortController: createAbortController(),
+    readFileState,
+    toolState,
+    toolDecisions: new Map(),
+    permissionRelays: Jce,
+    getAppState,
+    setAppState,
+    ...createAppStateAccessors(getAppState, setAppState),
+    queuedNotificationsRegistry: createNotificationDrain(getAppState, setAppState, session),
+    taskRegistry: createTaskFramework(getAppState, setAppState),
+    sessionHooksRegistry: sessionHooks,
+    teammateColors: createColorAssigner(fieldAccessor(getAppState, setAppState, "teammateColors")),
+    rootToolSurface: {
+      tools,
+      mainLoopModel: mainLoopModel_2,
+    },
+    messages: forkContextMessages,
+    turnStartIndex: 0,
+    getFileHistoryState: () => {
+      return;
+    },
+    applyFileHistoryOp: () => {},
+    applyAttributionOp: () => {},
+  };
   return {
-    systemPrompt: systemPrompt,
-    userContext: userContext,
-    systemContext: systemContext,
-    toolUseContext: H,
-    forkContextMessages: forkContextMessages,
+    systemPrompt,
+    userContext,
+    systemContext,
+    toolUseContext,
+    forkContextMessages,
     advisorModel: mainLoopModel.advisorModel,
   };
 }
-
 export { buildSideQuestionFallbackParams, fetchSystemPromptParts };

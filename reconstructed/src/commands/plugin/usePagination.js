@@ -14,80 +14,85 @@ import { R, y, Q, ce } from "../../../vendor/react/cjs/react.production.js";
 var DEFAULT_MAX_VISIBLE = 5;
 //@ chunk-vrb44rx7.js:69915-71007 fingerprint = usePagination (0.7)
 function usePagination({
-  totalItems: totalItems,
-  maxVisible: maxVisible = DEFAULT_MAX_VISIBLE,
-  selectedIndex: selectedIndex = 0,
-  firstSelectableIndex: firstSelectableIndex = 0,
-  onScroll: onScroll,
+  totalItems,
+  maxVisible = DEFAULT_MAX_VISIBLE,
+  selectedIndex = 0,
+  firstSelectableIndex = 0,
+  onScroll,
 }) {
-  let T = totalItems > maxVisible,
-    scrollOffsetRef = R(0),
-    [U, L] = y(0),
-    scrollOffset = Q(() => {
-      if (!T) return 0;
-      let prevOffset = scrollOffsetRef.current;
-      if (selectedIndex < prevOffset) {
-        let Oe = selectedIndex <= firstSelectableIndex ? 0 : selectedIndex;
-        return ((scrollOffsetRef.current = Oe), Oe);
-      }
-      if (selectedIndex >= prevOffset + maxVisible) {
-        let Oe = selectedIndex - maxVisible + 1;
-        return ((scrollOffsetRef.current = Oe), Oe);
-      }
-      let maxOffset = Math.max(0, totalItems - maxVisible),
-        clampedOffset = Math.min(prevOffset, maxOffset);
-      return ((scrollOffsetRef.current = clampedOffset), clampedOffset);
-    }, [selectedIndex, maxVisible, T, totalItems, firstSelectableIndex, U]),
-    startIndex = scrollOffset,
-    endIndex = Math.min(scrollOffset + maxVisible, totalItems),
-    getVisibleItems = ce(
-      (items) => {
-        if (!T) return items;
-        return items.slice(startIndex, endIndex);
-      },
-      [T, startIndex, endIndex],
-    ),
-    toActualIndex = ce((visibleIndex) => startIndex + visibleIndex, [startIndex]),
-    isOnCurrentPage = ce(
-      (ne, he) => {
-        let max = Math.max(0, Math.min(ne, totalItems - 1));
-        he(max);
-      },
-      [totalItems],
-    );
+  let needsPagination = totalItems > maxVisible;
+  let scrollOffsetRef = R(0);
+  let [U, L] = y(0);
+  let scrollOffset = Q(() => {
+    if (!needsPagination) return 0;
+    let prevOffset = scrollOffsetRef.current;
+    if (selectedIndex < prevOffset) {
+      let Oe = selectedIndex <= firstSelectableIndex ? 0 : selectedIndex;
+      scrollOffsetRef.current = Oe;
+      return Oe;
+    }
+    if (selectedIndex >= prevOffset + maxVisible) {
+      let newOffset = selectedIndex - maxVisible + 1;
+      scrollOffsetRef.current = newOffset;
+      return newOffset;
+    }
+    let maxOffset = Math.max(0, totalItems - maxVisible);
+    let clampedOffset = Math.min(prevOffset, maxOffset);
+    scrollOffsetRef.current = clampedOffset;
+    return clampedOffset;
+  }, [selectedIndex, maxVisible, needsPagination, totalItems, firstSelectableIndex, U]);
+  let startIndex = scrollOffset;
+  let endIndex = Math.min(scrollOffset + maxVisible, totalItems);
+  let getVisibleItems = ce(
+    (items) => {
+      if (!needsPagination) return items;
+      return items.slice(startIndex, endIndex);
+    },
+    [needsPagination, startIndex, endIndex],
+  );
+  let toActualIndex = ce((visibleIndex) => startIndex + visibleIndex, [startIndex]);
+  let isOnCurrentPage = ce(
+    (newIndex, setSelectedIndex) => {
+      let clampedIndex = Math.max(0, Math.min(newIndex, totalItems - 1));
+      setSelectedIndex(clampedIndex);
+    },
+    [totalItems],
+  );
   function pe(actualIndex) {
-    ((scrollOffsetRef.current = actualIndex), L((he) => he + 1), onScroll?.(actualIndex));
+    scrollOffsetRef.current = actualIndex;
+    L((he) => he + 1);
+    onScroll?.(actualIndex);
   }
   function fe(ne) {
     let clampedIndex = Math.max(0, Math.min(ne, totalItems - maxVisible));
     pe(clampedIndex <= firstSelectableIndex ? 0 : clampedIndex);
   }
-  function me(ne) {
-    if (ne.deltaY === 0) return;
-    let he = ne.deltaY > 0,
-      W = scrollOffsetRef.current,
-      Oe = totalItems - maxVisible,
-      totalPages = Math.max(0, Math.min(W + (he ? 1 : -1), Oe)),
-      min = Math.min(firstSelectableIndex + 1, Oe),
-      je = he ? min : 0,
-      ae = totalPages > firstSelectableIndex ? totalPages : je;
-    if (ae !== W) pe(ae);
-    ne.stopImmediatePropagation();
+  function me(event) {
+    if (event.deltaY === 0) return;
+    let he = event.deltaY > 0;
+    let W = scrollOffsetRef.current;
+    let Oe = totalItems - maxVisible;
+    let totalPages = Math.max(0, Math.min(W + (he ? 1 : -1), Oe));
+    let min = Math.min(firstSelectableIndex + 1, Oe);
+    let je = he ? min : 0;
+    let actualIndex = totalPages > firstSelectableIndex ? totalPages : je;
+    if (actualIndex !== W) pe(actualIndex);
+    event.stopImmediatePropagation();
   }
   return {
-    startIndex: startIndex,
-    endIndex: endIndex,
-    needsPagination: T,
-    getVisibleItems: getVisibleItems,
-    toActualIndex: toActualIndex,
+    startIndex,
+    endIndex,
+    needsPagination,
+    getVisibleItems,
+    toActualIndex,
     handleSelectionChange: isOnCurrentPage,
     bar: {
       offset: startIndex,
       visible: endIndex - startIndex,
       total: totalItems,
-      onScrollTo: T ? fe : void 0,
+      onScrollTo: needsPagination ? fe : undefined,
     },
-    onWheel: T ? me : void 0,
+    onWheel: needsPagination ? me : undefined,
     scrollPosition: {
       current: selectedIndex + 1,
       total: totalItems,
@@ -96,5 +101,4 @@ function usePagination({
     },
   };
 }
-
 export { usePagination };

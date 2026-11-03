@@ -8,7 +8,7 @@
  * pieces: chunk-khcb6nvd.js (1)
  * attribution: placement 1
  */
-import { dD, endLowPriority } from "../../services/lowPriority/lowPriorityMode.js";
+import { isLowPriorityActive, endLowPriority } from "../../services/lowPriority/lowPriorityMode.js";
 import {
   lowPriorityOffMessage,
   enableLowPriorityMode,
@@ -16,13 +16,26 @@ import {
   lowPriorityOnMessage,
 } from "../../services/lowPriorityMode.js";
 
+//@ chunk-khcb6nvd.js:11955-12133 placement
 /**
  * /low-priority 的 local call(args, context, invokedName) 实现入口（由命令对象 load() 返回）。
  */
-//@ chunk-khcb6nvd.js:11955-12133 placement
 async function callStatuslineCommand() {
-  if (dD()) return (endLowPriority("user"), { type: "text", value: lowPriorityOffMessage() });
+  if (isLowPriorityActive()) {
+    endLowPriority("user");
+    return {
+      type: "text",
+      value: lowPriorityOffMessage(),
+    };
+  }
   let t = enableLowPriorityMode("command");
-  if (t === "unavailable") return { type: "text", value: lowPriorityUnavailableMessage() };
-  return { type: "text", value: lowPriorityOnMessage(t) };
+  if (t === "unavailable")
+    return {
+      type: "text",
+      value: lowPriorityUnavailableMessage(),
+    };
+  return {
+    type: "text",
+    value: lowPriorityOnMessage(t),
+  };
 }

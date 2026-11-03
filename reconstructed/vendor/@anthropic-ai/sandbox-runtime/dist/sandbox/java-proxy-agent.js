@@ -5,86 +5,67 @@
  * pieces: chunk-fq0cr76a.js (7)
  * attribution: esm-fingerprint 6, esm-layout 1
  */
-import {
-  join,
-  join as join_2,
-  join as join_3,
-  join as join_4,
-  join as join_5,
-  join as join_6,
-  join as join_7,
-  join as join_8,
-  join as join_9,
-  join as join_10,
-  join as join_11,
-  dirname,
-  dirname as dirname_2,
-  dirname as dirname_3,
-  dirname as dirname_4,
-  dirname as dirname_5,
-  dirname as dirname_6,
-  dirname as dirname_7,
-  dirname as dirname_8,
-} from "path";
+import { join, dirname } from "path";
 import { existsSync } from "fs";
-import {
-  fileURLToPath,
-  fileURLToPath as fileURLToPath_2,
-  fileURLToPath as fileURLToPath_3,
-  fileURLToPath as fileURLToPath_4,
-} from "url";
+import { fileURLToPath } from "url";
 import { getSandboxRuntimeCandidates } from "./generate-seccomp-filter.js";
-import { At } from "../utils/debug.js";
+import { logForDebugging as logForDebugging_2 } from "../utils/debug.js";
 
 //@ chunk-fq0cr76a.js:722629-722669 esm-fingerprint
-var SRT_PROXY_AGENT_JAR = "srt-proxy-agent.jar",
-  VR = new Map();
+var JAVA_PROXY_AGENT_JAR_NAME = "srt-proxy-agent.jar";
+var jarPathCache = new Map();
 //@ chunk-fq0cr76a.js:722669-722786 esm-fingerprint
-async function HR(e) {
-  let n = e ?? "",
-    r = VR.get(n);
-  if (r !== void 0) return r;
-  let s = o8(e) ?? a8(await getSandboxRuntimeCandidates());
-  return (VR.set(n, s), s);
+async function HR(explicitPath) {
+  let key = explicitPath ?? "";
+  let cached = jarPathCache.get(key);
+  if (cached !== undefined) return cached;
+  let found = findLocalJar(explicitPath) ?? findGlobalJar(await getSandboxRuntimeCandidates());
+  jarPathCache.set(key, found);
+  return found;
 }
 //@ chunk-fq0cr76a.js:722786-722828 esm-fingerprint
-var jm = join_6("vendor", "java-proxy-agent", SRT_PROXY_AGENT_JAR);
+var JAR_REL_PATH = join("vendor", "java-proxy-agent", JAVA_PROXY_AGENT_JAR_NAME);
 //@ chunk-fq0cr76a.js:722828-723037 esm-fingerprint
-function o8(e) {
-  if (e) {
-    if (existsSync(e)) return e;
-    At(`[java-proxy-agent] javaAgentJarPath not found: ${e}`, { level: "warn" });
+function findLocalJar(explicitPath) {
+  if (explicitPath) {
+    if (existsSync(explicitPath)) return explicitPath;
+    logForDebugging_2(`[java-proxy-agent] javaAgentJarPath not found: ${explicitPath}`, {
+      level: "warn",
+    });
   }
-  let n = dirname_4(fileURLToPath(import.meta.url));
-  return [join_6(n, jm), join_6(n, "..", "..", jm), join_6(n, "..", jm)].find((s) => existsSync(s));
+  let baseDir = dirname(fileURLToPath(import.meta.url));
+  return [
+    join(baseDir, JAR_REL_PATH),
+    join(baseDir, "..", "..", JAR_REL_PATH),
+    join(baseDir, "..", JAR_REL_PATH),
+  ].find((p) => existsSync(p));
 }
 //@ chunk-fq0cr76a.js:723037-723258 esm-layout
-function a8(e) {
-  for (let n of e) {
-    let r = join_6(n, jm);
-    if (existsSync(r)) return r;
+function findGlobalJar(globalBases) {
+  for (let base of globalBases) {
+    let p = join(base, JAR_REL_PATH);
+    if (existsSync(p)) return p;
   }
-  return (
-    At(
-      `[java-proxy-agent] ${SRT_PROXY_AGENT_JAR} not found; JVMs in the sandbox will not be pointed at the proxy (run \`npm run build:java-agent\`)`,
-      { level: "warn" },
-    ),
-    null
+  logForDebugging_2(
+    `[java-proxy-agent] ${JAVA_PROXY_AGENT_JAR_NAME} not found; JVMs in the sandbox will not be pointed at the proxy (run \`npm run build:java-agent\`)`,
+    {
+      level: "warn",
+    },
   );
+  return null;
 }
 //@ chunk-fq0cr76a.js:723258-723520 esm-fingerprint
-function Ym(e) {
-  let r = (e.unsetEnvVars ?? []).includes("JAVA_TOOL_OPTIONS") ? "" : (e.inherited ?? ""),
-    s = [];
-  if (e.agentJarPath) s.push(l8(e.agentJarPath));
-  if (r) s.push(r);
-  for (let h of e.flags ?? []) if (!r.includes(h) && !s.includes(h)) s.push(h);
-  return s.length > 0 ? s.join(" ") : void 0;
+function buildJavaToolOptions(opts) {
+  let inherited = (opts.unsetEnvVars ?? []).includes("JAVA_TOOL_OPTIONS") ? "" : (opts.inherited ?? "");
+  let parts = [];
+  if (opts.agentJarPath) parts.push(javaAgentFlag(opts.agentJarPath));
+  if (inherited) parts.push(inherited);
+  for (let flag of opts.flags ?? []) if (!inherited.includes(flag) && !parts.includes(flag)) parts.push(flag);
+  return parts.length > 0 ? parts.join(" ") : undefined;
 }
 //@ chunk-fq0cr76a.js:723520-723589 esm-fingerprint
-function l8(e) {
-  let n = `-javaagent:${e}`;
-  return /\s/.test(e) ? `"${n}"` : n;
+function javaAgentFlag(jarPath) {
+  let flag = `-javaagent:${jarPath}`;
+  return /\s/.test(jarPath) ? `"${flag}"` : flag;
 }
-
-export { HR, Ym };
+export { HR, buildJavaToolOptions };

@@ -9,10 +9,14 @@
  * attribution: placement 22
  */
 import { DoctorLazy } from "../handlers/util.js";
-import { u, o, A } from "../../../vendor/zod/v4/classic/schemas.js";
-import { tRe, processQueuedCommands_2, isMachineOriginPrompt } from "../../utils/transcript/deserialize.js";
+import { u, string, array } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  isNonPromptUserRow,
+  processQueuedCommands_2,
+  isMachineOriginPrompt,
+} from "../../utils/transcript/deserialize.js";
 import { isBareTaskNotificationOrigin } from "../../utils/backgroundSessionResume.js";
-import { SDi } from "../../constants/xml.js";
+import { artifactHeaderBlock } from "../../constants/xml.js";
 import { isUserQueuedCommandAttachment, isUserPromptAt } from "../../utils/messages.js";
 import { READNOTIFICATIONS } from "../../tools/ReadNotificationsTool/ReadNotificationsTool.js";
 import {
@@ -25,11 +29,11 @@ import {
 } from "../../services/claudeAiLimits.js";
 import { createRateLimitEvent } from "../../entrypoints/sdk/coreSchemas.js";
 import { getSessionId } from "../../bootstrap/state.js";
-import { lD } from "../../utils/planTiers.js";
+import { isUsageBasedBilling } from "../../utils/planTiers.js";
 import { credentialIsOwnStoredLogin, getOauthAccountInfo } from "../../utils/auth.js";
 import { getAPIProvider } from "../../utils/model/providers.js";
 import { En } from "../../../vendor/lodash-es/_inlinedHelpers.js";
-import { ao } from "../../bridge/bridgeHostState.js";
+import { bridgeHostState } from "../../bridge/bridgeHostState.js";
 import { isBridgeRateLimitEventEnabled } from "../../bridge/bridgeGates.js";
 import { toRateLimitInfo } from "../../remote/sdkMessageAdapter.js";
 import { logForDebugging } from "../../utils/debug.js";
@@ -45,7 +49,7 @@ function hasCronToolUse(messages, sinceUuid) {
     Array.isArray(r.message.content) &&
     r.message.content.some((h) => h?.type === "tool_result")
   )
-    return !0;
+    return true;
   let s = new Set();
   for (let toolCallCount = 0; toolCallCount < sinceUuid; toolCallCount++) {
     let y = messages[toolCallCount];
@@ -53,45 +57,59 @@ function hasCronToolUse(messages, sinceUuid) {
       for (let _ of y.message.content) if (_?.type === "tool_use") s.add(_.id);
     }
   }
-  if (s.size === 0) return !1;
+  if (s.size === 0) return false;
   for (let h = sinceUuid; h < messages.length; h++) {
     let y = messages[h];
     if (y?.type === "user" && Array.isArray(y.message.content)) {
-      for (let _ of y.message.content) if (_?.type === "tool_result" && s.has(_.tool_use_id)) return !0;
+      for (let _ of y.message.content) if (_?.type === "tool_result" && s.has(_.tool_use_id)) return true;
     }
   }
-  return !1;
+  return false;
 }
+//@ chunk-0sfjpx19.js:21087-21218 placement
 /**
  * 限额转发用的 schema：通知锚点（锚点 uuid 与 uuid 列表）与通知结果（notification_id 列表）。
  */
-//@ chunk-0sfjpx19.js:21087-21218 placement
 var notificationAnchorSchema = DoctorLazy(() =>
-    u({ anchorUuid: o(), uuids: A(o()), allUuids: A(o()).optional() }),
-  ),
-  notificationsResultSchema = DoctorLazy(() => u({ notifications: A(u({ notification_id: o() })) }));
+  u({
+    anchorUuid: string(),
+    uuids: array(string()),
+    allUuids: array(string()).optional(),
+  }),
+);
+var notificationsResultSchema = DoctorLazy(() =>
+  u({
+    notifications: array(
+      u({
+        notification_id: string(),
+      }),
+    ),
+  }),
+);
 //@ chunk-0sfjpx19.js:21218-21677 placement = sanitizeFileName (0.752)
 function findSingleToolCallPromptIndex(messages, toolName) {
-  let r = countToolCallsSince_2(messages),
-    lastIndex = messages.findLastIndex((b) => {
-      let k = notificationIdsFromToolResult(b, r);
-      return k !== null && k !== "unknown" && k.includes(toolName);
-    });
+  let r = countToolCallsSince_2(messages);
+  let lastIndex = messages.findLastIndex((message) => {
+    let k = notificationIdsFromToolResult(message, r);
+    return k !== null && k !== "unknown" && k.includes(toolName);
+  });
   if (lastIndex < 0) return -1;
-  let lastIndex_2 = messages.findLastIndex((b, k) => k < lastIndex && b.type === "user" && !tRe(b)),
-    y = messages[lastIndex_2];
+  let lastIndex_2 = messages.findLastIndex(
+    (message, k) => k < lastIndex && message.type === "user" && !isNonPromptUserRow(message),
+  );
+  let y = messages[lastIndex_2];
   if (
     y?.type !== "user" ||
     !isBareTaskNotificationOrigin(y.origin) ||
     !processQueuedCommands_2(y) ||
-    !textContentOf(y.message.content)?.startsWith(SDi())
+    !textContentOf(y.message.content)?.startsWith(artifactHeaderBlock())
   )
     return -1;
   let _ = 0;
-  for (let b = lastIndex_2 + 1; b < messages.length; b++) {
-    let k = messages[b];
-    if (k.type === "attachment" && isUserQueuedCommandAttachment(k)) return -1;
-    let w = notificationIdsFromToolResult(k, r);
+  for (let j = lastIndex_2 + 1; j < messages.length; j++) {
+    let msg = messages[j];
+    if (msg.type === "attachment" && isUserQueuedCommandAttachment(msg)) return -1;
+    let w = notificationIdsFromToolResult(msg, r);
     if (w === "unknown") return -1;
     _ += w?.length ?? 0;
   }
@@ -99,8 +117,8 @@ function findSingleToolCallPromptIndex(messages, toolName) {
 }
 //@ chunk-0sfjpx19.js:21677-21828 placement
 function collectReadNotificationsResultIds(e) {
-  let n = countToolCallsSince_2(e),
-    r = new Set();
+  let n = countToolCallsSince_2(e);
+  let r = new Set();
   if (n.size === 0) return r;
   for (let s of e) {
     let h = notificationIdsFromToolResult(s, n);
@@ -126,20 +144,18 @@ function notificationIdsFromToolResult(e, n) {
     !e.message.content.some((s) => s?.type === "tool_result" && n.has(s.tool_use_id))
   )
     return null;
-  let safeParse = notificationsResultSchema().safeParse(e.toolUseResult);
-  return safeParse.success
-    ? safeParse.data.notifications.map((notification) => notification.notification_id)
-    : "unknown";
+  let r = notificationsResultSchema().safeParse(e.toolUseResult);
+  return r.success ? r.data.notifications.map((notification) => notification.notification_id) : "unknown";
 }
 //@ chunk-0sfjpx19.js:22304-22373 placement
-function Gn(e, n) {
+function machineOriginPromptAt(e, n) {
   let r = e[n];
-  return r !== void 0 && (isUserPromptAt(e, n, !0) || isMachineOriginPrompt(r));
+  return r !== undefined && (isUserPromptAt(e, n, true) || isMachineOriginPrompt(r));
 }
+//@ chunk-0sfjpx19.js:22373-22546 placement
 /**
  * 取消息内容中的文本：字符串直接返回，数组拼接全部 text 块，没有文本返回 null。
  */
-//@ chunk-0sfjpx19.js:22373-22546 placement
 function textContentOf(e) {
   if (typeof e === "string") return e;
   if (!Array.isArray(e)) return null;
@@ -150,144 +166,187 @@ function textContentOf(e) {
 `)
     : null;
 }
+//@ chunk-0sfjpx19.js:22546-22644 placement = extractQuotaStatusFromError (0.772)
 /**
  * 被拒状态且重置时间已过。旧版名错配。
  */
-//@ chunk-0sfjpx19.js:22546-22644 placement = extractQuotaStatusFromError (0.772)
-function isRejectedAndResetPassed(e, n = Date.now()) {
-  return e.status === "rejected" && e.resetsAt !== void 0 && e.resetsAt * 1000 <= n;
+function isRejectedAndResetPassed(currentLimits, n = Date.now()) {
+  return (
+    currentLimits.status === "rejected" &&
+    currentLimits.resetsAt !== undefined &&
+    currentLimits.resetsAt * 1000 <= n
+  );
 }
+//@ chunk-0sfjpx19.js:22644-22984 placement
 /**
  * 从读数中挑出 five_hour/seven_day/seven_day_overage_included 转成 {utilization,resetsAt,status?,surpassedThreshold?}。
  */
-//@ chunk-0sfjpx19.js:22644-22984 placement
-function toUtilizationSnapshot(e, n) {
-  let r = isValidUtilization(e.five_hour) ? e.five_hour : void 0,
-    s = isValidUtilization(e.seven_day) ? e.seven_day : void 0,
-    h = isValidUtilization(e.seven_day_overage_included) ? e.seven_day_overage_included : void 0;
-  if (!r && !s && !h) return;
+function toUtilizationSnapshot(rawUtilization, rawWindowLevels) {
+  let fiveHour = isValidUtilization(rawUtilization.five_hour) ? rawUtilization.five_hour : undefined;
+  let sevenDay = isValidUtilization(rawUtilization.seven_day) ? rawUtilization.seven_day : undefined;
+  let sevenDayOverageIncluded = isValidUtilization(rawUtilization.seven_day_overage_included)
+    ? rawUtilization.seven_day_overage_included
+    : undefined;
+  if (!fiveHour && !sevenDay && !sevenDayOverageIncluded) return;
   return {
-    ...(r && { five_hour: toWindowUtilization(r, n.five_hour) }),
-    ...(s && { seven_day: toWindowUtilization(s, n.seven_day) }),
-    ...(h && { seven_day_overage_included: toWindowUtilization(h, n.seven_day_overage_included) }),
+    ...(fiveHour && {
+      five_hour: toWindowUtilization(fiveHour, rawWindowLevels.five_hour),
+    }),
+    ...(sevenDay && {
+      seven_day: toWindowUtilization(sevenDay, rawWindowLevels.seven_day),
+    }),
+    ...(sevenDayOverageIncluded && {
+      seven_day_overage_included: toWindowUtilization(
+        sevenDayOverageIncluded,
+        rawWindowLevels.seven_day_overage_included,
+      ),
+    }),
   };
 }
+//@ chunk-0sfjpx19.js:22984-23174 placement
 /**
  * 窗口读数转 {utilization, resetsAt, status?, surpassedThreshold?}。
  */
-//@ chunk-0sfjpx19.js:22984-23174 placement
 function toWindowUtilization(e, n) {
   return {
     utilization: e.utilization,
     resetsAt: e.resets_at,
-    ...(n?.status !== void 0 && { status: n.status }),
-    ...(n?.surpassedThreshold !== void 0 && { surpassedThreshold: n.surpassedThreshold }),
+    ...(n?.status !== undefined && {
+      status: n.status,
+    }),
+    ...(n?.surpassedThreshold !== undefined && {
+      surpassedThreshold: n.surpassedThreshold,
+    }),
   };
 }
 //@ chunk-0sfjpx19.js:23174-23652 placement
-function buildRateLimitInfo(e, n, r) {
-  let s = e.rateLimitGraceActive === !0 ? getWrapUpZone() : null;
+function buildRateLimitInfo(currentLimits, n, r) {
+  let s = currentLimits.rateLimitGraceActive === true ? getWrapUpZone() : null;
   return createRateLimitEvent(
     {
-      ...e,
+      ...currentLimits,
       rateLimitGraceActive: s !== null,
-      ...(s?.extraUsageStatus !== void 0 &&
-        e.status !== "rejected" &&
-        e.overageStatus === void 0 && { overageStatus: s.extraUsageStatus }),
+      ...(s?.extraUsageStatus !== undefined &&
+        currentLimits.status !== "rejected" &&
+        currentLimits.overageStatus === undefined && {
+          overageStatus: s.extraUsageStatus,
+        }),
     },
     getSessionId(),
     {
-      includeOverageInUse: !lD(),
+      includeOverageInUse: !isUsageBasedBilling(),
       unifiedWindows: toUtilizationSnapshot(getRawUtilization(), getRawWindowLevels()),
-      ...(e.status === "allowed_warning" &&
-        e.rateLimitType !== "overage" &&
-        credentialIsOwnStoredLogin() && { overageEnabled: getOauthAccountInfo()?.hasExtraUsageEnabled }),
-      ...(n !== void 0 && { usageCreditOffer: n }),
-      ...(r !== void 0 && { adminRequestOffer: r }),
+      ...(currentLimits.status === "allowed_warning" &&
+        currentLimits.rateLimitType !== "overage" &&
+        credentialIsOwnStoredLogin() && {
+          overageEnabled: getOauthAccountInfo()?.hasExtraUsageEnabled,
+        }),
+      ...(n !== undefined && {
+        usageCreditOffer: n,
+      }),
+      ...(r !== undefined && {
+        adminRequestOffer: r,
+      }),
     },
   );
 }
 //@ chunk-0sfjpx19.js:23652-23665 placement
-var li = 30000;
+var RATE_LIMIT_EVENT_MIN_INTERVAL_MS = 30000;
+//@ chunk-0sfjpx19.js:23665-23980 placement
 /**
  * 生成 rate_limit_event 节流判定函数：网关提供方不发；限额未变化时只记录；已拒绝且已过重置时间不发；同一重置时刻在最小间隔内只发一次。
  */
-//@ chunk-0sfjpx19.js:23665-23980 placement
-function createRateLimitEventThrottle({ minimumIntervalMs: e = li, now: n = Date.now } = {}) {
+function createRateLimitEventThrottle({
+  minimumIntervalMs: e = RATE_LIMIT_EVENT_MIN_INTERVAL_MS,
+  now: n = Date.now,
+} = {}) {
   let r = new Map();
   return function (h) {
-    if (getAPIProvider() === "gateway") return !1;
-    let y = n(),
-      _ = h.resetsAt ?? 0;
-    if (!En(getCurrentLimits(), h)) return (r.set(_, y), !1);
-    if (isRejectedAndResetPassed(h, y)) return !1;
+    if (getAPIProvider() === "gateway") return false;
+    let y = n();
+    let resetsAt = h.resetsAt ?? 0;
+    if (!En(getCurrentLimits(), h)) {
+      r.set(resetsAt, y);
+      return false;
+    }
+    if (isRejectedAndResetPassed(h, y)) return false;
     for (let [k] of r) if (k !== 0 && k * 1000 <= y) r.delete(k);
-    let b = r.get(_);
-    if (b !== void 0 && y - b < e) return !1;
-    return (r.set(_, y), !0);
+    let b = r.get(resetsAt);
+    if (b !== undefined && y - b < e) return false;
+    r.set(resetsAt, y);
+    return true;
   };
 }
 //@ chunk-0sfjpx19.js:23980-24026 placement
-function di() {
-  ao().lastRateLimitMirror = void 0;
+function clearRateLimitMirror() {
+  bridgeHostState().lastRateLimitMirror = undefined;
 }
 //@ chunk-0sfjpx19.js:24026-24206 placement
 function rateLimitMirrorPayload(e, n) {
-  let r = ao(),
-    lastRateLimitMirror = r.lastRateLimitMirror;
+  let r = bridgeHostState();
+  let lastRateLimitMirror = r.lastRateLimitMirror;
   if (lastRateLimitMirror && lastRateLimitMirror.target.deref() === e && En(lastRateLimitMirror.info, n))
     return;
-  return ((r.lastRateLimitMirror = { target: new WeakRef(e), info: n }), { rate_limit_info: n });
+  r.lastRateLimitMirror = {
+    target: new WeakRef(e),
+    info: n,
+  };
+  return {
+    rate_limit_info: n,
+  };
 }
 //@ chunk-0sfjpx19.js:24206-24277 placement
-function Ikr(e, n) {
+/**
+ * 把 rate_limit_event 转发给桥并镜像到会话元数据；桥接事件开关关闭时直接返回。
+ */
+function forwardRateLimitEvent(e, rateLimitInfo) {
   if (!isBridgeRateLimitEventEnabled()) return;
-  return rateLimitMirrorPayload(e, toRateLimitInfo(n.rate_limit_info));
+  return rateLimitMirrorPayload(e, toRateLimitInfo(rateLimitInfo.rate_limit_info));
 }
+//@ chunk-0sfjpx19.js:24277-24572 placement
 /**
  * 把 rate_limit_event 写给桥并镜像到会话元数据，失败只记录。
  */
-//@ chunk-0sfjpx19.js:24277-24572 placement
-function forwardRateLimitEventToBridge(e, n) {
-  if (!isBridgeRateLimitEventEnabled()) return !1;
+function forwardRateLimitEventToBridge(e, rateLimitInfo) {
+  if (!isBridgeRateLimitEventEnabled()) return false;
   try {
-    e.writeSdkMessages([n]);
+    e.writeSdkMessages([rateLimitInfo]);
   } catch (error) {
-    return (
-      logForDebugging(`[bridge] rate_limit_event forward failed: ${errorMessage(error)}`, { level: "error" }),
-      !1
-    );
+    logForDebugging(`[bridge] rate_limit_event forward failed: ${errorMessage(error)}`, {
+      level: "error",
+    });
+    return false;
   }
   try {
-    let r = Ikr(e, n);
+    let r = forwardRateLimitEvent(e, rateLimitInfo);
     if (r) e.reportMetadata(r);
   } catch (error) {
     logForDebugging(`[bridge] rate_limit_info metadata mirror failed: ${errorMessage(error)}`, {
       level: "error",
     });
   }
-  return !0;
+  return true;
 }
+//@ chunk-0sfjpx19.js:24572-24733 placement
 /**
  * 把当前额度限制状态转发给桥接端：被拒且已过重置时间时清除，否则构建限额信息并上报元数据。
  */
-//@ chunk-0sfjpx19.js:24572-24733 placement
 function forwardRateLimitToBridge() {
   if (!isBridgeRateLimitEventEnabled() || !areLimitsObserved()) return;
   let e = getReplBridgeHandle() ?? getSdkHostedBridgeHandle();
   if (!e) return;
-  di();
-  let n = getCurrentLimits();
-  if (isRejectedAndResetPassed(n)) {
-    jn(e);
+  clearRateLimitMirror();
+  let currentLimits = getCurrentLimits();
+  if (isRejectedAndResetPassed(currentLimits)) {
+    reportRateLimitMirrorCleared(e);
     return;
   }
-  let r = buildRateLimitInfo(n),
-    s = r && Ikr(e, r);
+  let rateLimitInfo = buildRateLimitInfo(currentLimits);
+  let s = rateLimitInfo && forwardRateLimitEvent(e, rateLimitInfo);
   if (s) e.reportMetadata(s);
 }
 //@ chunk-0sfjpx19.js:24733-24807 placement
-function jn(e) {
+function reportRateLimitMirrorCleared(e) {
   if (!isBridgeRateLimitEventEnabled()) return;
   let n = rateLimitMirrorPayload(e, null);
   if (n) e.reportMetadata(n);
@@ -295,23 +354,27 @@ function jn(e) {
 //@ chunk-0sfjpx19.js:24807-24933 placement
 function logBridgeRateLimitForward(e) {
   if (!areLimitsObserved()) return;
-  let n = getCurrentLimits();
-  if (isRejectedAndResetPassed(n)) {
-    jn(e);
+  let currentLimits = getCurrentLimits();
+  if (isRejectedAndResetPassed(currentLimits)) {
+    reportRateLimitMirrorCleared(e);
     return;
   }
-  let r = buildRateLimitInfo(n);
-  if (r && forwardRateLimitEventToBridge(e, r)) logFeatureOk("bridge_rate_limit_forward");
+  let rateLimitInfo = buildRateLimitInfo(currentLimits);
+  if (rateLimitInfo && forwardRateLimitEventToBridge(e, rateLimitInfo))
+    logFeatureOk("bridge_rate_limit_forward");
 }
 //@ chunk-0sfjpx19.js:24933-25022 placement
-function gNn(e, n, r = Date.now()) {
+/**
+ * 从 Map 取出并删除某键，同时判断其时间戳是否在 120 秒内。
+ */
+function takeRecentWithin(e, n, r = Date.now()) {
   let s = e.get(n);
-  return (e.delete(n), s !== void 0 && r - s <= 120000);
+  e.delete(n);
+  return s !== undefined && r - s <= 120000;
 }
-
 export {
   findSingleToolCallPromptIndex,
-  Gn,
+  machineOriginPromptAt,
   textContentOf,
   notificationAnchorSchema,
   hasCronToolUse,
@@ -319,8 +382,8 @@ export {
   logBridgeRateLimitForward,
   buildRateLimitInfo,
   forwardRateLimitEventToBridge,
-  gNn,
-  Ikr,
+  takeRecentWithin,
+  forwardRateLimitEvent,
   createRateLimitEventThrottle,
   collectReadNotificationsResultIds,
 };

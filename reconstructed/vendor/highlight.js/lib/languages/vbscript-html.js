@@ -8,15 +8,20 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:512446-512608 cjs-fingerprint
-var Wo = x(function (fb, Vo) {
-  function i_(e) {
+var require_vbscript_html = x(function (cjsExports, cjsModule) {
+  function vbscriptHtml(hljs) {
     return {
       name: "VBScript in HTML",
       subLanguage: "xml",
-      contains: [{ begin: "<%", end: "%>", subLanguage: "vbscript" }],
+      contains: [
+        {
+          begin: "<%",
+          end: "%>",
+          subLanguage: "vbscript",
+        },
+      ],
     };
   }
-  Vo.exports = i_;
+  cjsModule.exports = vbscriptHtml;
 });
-
-export { Wo };
+export { require_vbscript_html };

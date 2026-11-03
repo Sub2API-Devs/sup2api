@@ -6,113 +6,137 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { de } from "./ral.js";
-import { we } from "./is.js";
-import { vt } from "./semaphore.js";
-import { _e } from "./events.js";
+import { require_ral } from "./ral.js";
+import { require_is } from "./is.js";
+import { require_semaphore } from "./semaphore.js";
+import { require_events } from "./events.js";
 
 //@ chunk-t4ksmxzx.js:22660-24791 cjs-fingerprint
-var un = x(function (an) {
-  Object.defineProperty(an, "__esModule", { value: !0 });
-  an.WriteableStreamMessageWriter = an.AbstractMessageWriter = an.MessageWriter = void 0;
-  var tn = de(),
-    ie = we(),
-    sn = vt(),
-    Je = _e(),
-    Gi = "Content-Length: ",
-    rn = `\r
-`,
-    nn;
-  (function (e) {
-    function r(n) {
-      let s = n;
-      return s && ie.func(s.dispose) && ie.func(s.onClose) && ie.func(s.onError) && ie.func(s.write);
+var require_messageWriter = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.WriteableStreamMessageWriter =
+    cjsExports.AbstractMessageWriter =
+    cjsExports.MessageWriter =
+      undefined;
+  var ral_1 = require_ral();
+  var Is = require_is();
+  var semaphore_1 = require_semaphore();
+  var events_1 = require_events();
+  var ContentLength = "Content-Length: ";
+  var CRLF = `\r
+`;
+  var MessageWriter;
+  (function (MessageWriter) {
+    function is(value) {
+      let candidate = value;
+      return (
+        candidate &&
+        Is.func(candidate.dispose) &&
+        Is.func(candidate.onClose) &&
+        Is.func(candidate.onError) &&
+        Is.func(candidate.write)
+      );
     }
-    e.is = r;
-  })(nn || (an.MessageWriter = nn = {}));
-  class Pt {
+    MessageWriter.is = is;
+  })(MessageWriter || (cjsExports.MessageWriter = MessageWriter = {}));
+  class AbstractMessageWriter {
     constructor() {
-      ((this.errorEmitter = new Je.Emitter()), (this.closeEmitter = new Je.Emitter()));
+      this.errorEmitter = new events_1.Emitter();
+      this.closeEmitter = new events_1.Emitter();
     }
     dispose() {
-      (this.errorEmitter.dispose(), this.closeEmitter.dispose());
+      this.errorEmitter.dispose();
+      this.closeEmitter.dispose();
     }
     get onError() {
       return this.errorEmitter.event;
     }
-    fireError(e, r, n) {
-      this.errorEmitter.fire([this.asError(e), r, n]);
+    fireError(error, message, count) {
+      this.errorEmitter.fire([this.asError(error), message, count]);
     }
     get onClose() {
       return this.closeEmitter.event;
     }
     fireClose() {
-      this.closeEmitter.fire(void 0);
+      this.closeEmitter.fire(undefined);
     }
-    asError(e) {
-      if (e instanceof Error) return e;
-      else return Error(`Writer received error. Reason: ${ie.string(e.message) ? e.message : "unknown"}`);
+    asError(error) {
+      if (error instanceof Error) return error;
+      else
+        return Error(
+          `Writer received error. Reason: ${Is.string(error.message) ? error.message : "unknown"}`,
+        );
     }
   }
-  an.AbstractMessageWriter = Pt;
-  var Rt;
-  (function (e) {
-    function r(n) {
-      if (n === void 0 || typeof n === "string")
-        return { charset: n ?? "utf-8", contentTypeEncoder: (0, tn.default)().applicationJson.encoder };
+  cjsExports.AbstractMessageWriter = AbstractMessageWriter;
+  var ResolvedMessageWriterOptions;
+  (function (ResolvedMessageWriterOptions) {
+    function fromOptions(options) {
+      if (options === undefined || typeof options === "string")
+        return {
+          charset: options ?? "utf-8",
+          contentTypeEncoder: (0, ral_1.default)().applicationJson.encoder,
+        };
       else
         return {
-          charset: n.charset ?? "utf-8",
-          contentEncoder: n.contentEncoder,
-          contentTypeEncoder: n.contentTypeEncoder ?? (0, tn.default)().applicationJson.encoder,
+          charset: options.charset ?? "utf-8",
+          contentEncoder: options.contentEncoder,
+          contentTypeEncoder: options.contentTypeEncoder ?? (0, ral_1.default)().applicationJson.encoder,
         };
     }
-    e.fromOptions = r;
-  })(Rt || (Rt = {}));
-  class on extends Pt {
-    constructor(e, r) {
+    ResolvedMessageWriterOptions.fromOptions = fromOptions;
+  })(ResolvedMessageWriterOptions || (ResolvedMessageWriterOptions = {}));
+  class WriteableStreamMessageWriter extends AbstractMessageWriter {
+    constructor(writable, options) {
       super();
-      ((this.writable = e),
-        (this.options = Rt.fromOptions(r)),
-        (this.errorCount = 0),
-        (this.writeSemaphore = new sn.Semaphore(1)),
-        this.writable.onError((n) => this.fireError(n)),
-        this.writable.onClose(() => this.fireClose()));
+      this.writable = writable;
+      this.options = ResolvedMessageWriterOptions.fromOptions(options);
+      this.errorCount = 0;
+      this.writeSemaphore = new semaphore_1.Semaphore(1);
+      this.writable.onError((error) => this.fireError(error));
+      this.writable.onClose(() => this.fireClose());
     }
-    async write(e) {
+    async write(msg) {
       return this.writeSemaphore.lock(async () =>
         this.options.contentTypeEncoder
-          .encode(e, this.options)
-          .then((n) => {
-            if (this.options.contentEncoder !== void 0) return this.options.contentEncoder.encode(n);
-            else return n;
+          .encode(msg, this.options)
+          .then((buffer) => {
+            if (this.options.contentEncoder !== undefined) return this.options.contentEncoder.encode(buffer);
+            else return buffer;
           })
           .then(
-            (n) => {
-              let s = [];
-              return (s.push(Gi, n.byteLength.toString(), rn), s.push(rn), this.doWrite(e, s, n));
+            (buffer) => {
+              let headers = [];
+              headers.push(ContentLength, buffer.byteLength.toString(), CRLF);
+              headers.push(CRLF);
+              return this.doWrite(msg, headers, buffer);
             },
-            (n) => {
-              throw (this.fireError(n), n);
+            (error) => {
+              this.fireError(error);
+              throw error;
             },
           ),
       );
     }
-    async doWrite(e, r, n) {
+    async doWrite(msg, headers, data) {
       try {
-        return (await this.writable.write(r.join(""), "ascii"), this.writable.write(n));
+        await this.writable.write(headers.join(""), "ascii");
+        return this.writable.write(data);
       } catch (error) {
-        return (this.handleError(error, e), Promise.reject(error));
+        this.handleError(error, msg);
+        return Promise.reject(error);
       }
     }
-    handleError(e, r) {
-      (this.errorCount++, this.fireError(e, r, this.errorCount));
+    handleError(error, msg) {
+      this.errorCount++;
+      this.fireError(error, msg, this.errorCount);
     }
     end() {
       this.writable.end();
     }
   }
-  an.WriteableStreamMessageWriter = on;
+  cjsExports.WriteableStreamMessageWriter = WriteableStreamMessageWriter;
 });
-
-export { un };
+export { require_messageWriter };

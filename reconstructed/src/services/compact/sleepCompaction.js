@@ -9,10 +9,10 @@
  * attribution: placement 6
  */
 import { env } from "../../utils/env.js";
-import { uie } from "../../utils/startupFlagWait.js";
+import { isRemoteNonInteractiveSession } from "../../utils/startupFlagWait.js";
 import { getLastMainThreadRequestAt, getLastMainThreadContextTokens } from "../../bootstrap/state.js";
 import { getPromptCacheSummary } from "../api/promptCacheBreakDetection.js";
-import { mn } from "../../utils/remoteEnvironment.js";
+import { isRemoteManagedEnvironment } from "../../utils/remoteEnvironment.js";
 import { logEvent } from "../analytics/index.js";
 import { logFeatureBad, logFeatureOk } from "../analytics/featureTelemetry.js";
 import { logError } from "../../utils/log.js";
@@ -21,39 +21,48 @@ import { isAutoCompactEnabled, isIdleCompactionEnabled } from "./compactSettings
 import { getCurrentLimits } from "../claudeAiLimits.js";
 
 //@ chunk-bbwtdypr.js:4682-4743 placement
-var d = 150000,
-  f = 60000,
-  _ = 0.9,
-  h = 30000,
-  A = 150000,
-  b = 60000,
-  E = 210000;
+/**
+ * 回合结束后等待的最大毫秒数（210 秒）。
+ */
+var IDLE_COMPACT_MIN_TOKENS = 150000;
+var MIN_IDLE_COMPACT_TOKENS = 60000;
+var _ = 0.9;
+var EXIT_DELAY_GUARD_MS = 30000;
+var DEFAULT_AFTER_TURN_MS = 150000;
+var MIN_AFTER_TURN_MS = 60000;
+var MAX_AFTER_TURN_MS = 210000;
 //@ chunk-bbwtdypr.js:4743-4798 placement
-function q() {
-  return env.CLAUDE_CODE_SLEEP_COMPACT && uie();
+/**
+ * 睡眠压缩是否开启（CLAUDE_CODE_SLEEP_COMPACT 且相关开关允许）。
+ */
+function isSleepCompactionEnabled() {
+  return env.CLAUDE_CODE_SLEEP_COMPACT && isRemoteNonInteractiveSession();
 }
 //@ chunk-bbwtdypr.js:4798-4868 placement
-function T(e) {
-  if (e === void 0) return A;
-  return Math.min(E, Math.max(b, e));
+/**
+ * 把环境变量给出的等待时间夹在 [b, E] 之间，缺省用 A。
+ */
+function resolveAfterTurnMs(e) {
+  if (e === undefined) return DEFAULT_AFTER_TURN_MS;
+  return Math.min(MAX_AFTER_TURN_MS, Math.max(MIN_AFTER_TURN_MS, e));
 }
+//@ chunk-bbwtdypr.js:4868-5101 placement
 /**
  * 计算空闲压缩触发时间（缓存过期前的比例点、回合结束后、退出延迟）。
  */
-//@ chunk-bbwtdypr.js:4868-5101 placement
 function computeSleepCompactAt({
-  cacheActivityAt: cacheActivityAt,
-  cacheExpiresAt: cacheExpiresAt,
-  lastRequestAt: lastRequestAt,
-  turnEndedAt: turnEndedAt,
-  afterTurnMs: afterTurnMs,
-  exitDelayMs: exitDelayMs,
-  fireAtFraction: fireAtFraction,
+  cacheActivityAt,
+  cacheExpiresAt,
+  lastRequestAt,
+  turnEndedAt,
+  afterTurnMs,
+  exitDelayMs,
+  fireAtFraction,
 }) {
   let u = cacheActivityAt + (cacheExpiresAt - cacheActivityAt) * fireAtFraction;
-  if (exitDelayMs === void 0 || exitDelayMs <= 0)
-    return afterTurnMs === void 0 ? u : Math.min(u, turnEndedAt + afterTurnMs);
-  return Math.min(u, lastRequestAt + Math.max(0, exitDelayMs - h));
+  if (exitDelayMs === undefined || exitDelayMs <= 0)
+    return afterTurnMs === undefined ? u : Math.min(u, turnEndedAt + afterTurnMs);
+  return Math.min(u, lastRequestAt + Math.max(0, exitDelayMs - EXIT_DELAY_GUARD_MS));
 }
 //@ chunk-bbwtdypr.js:5101-6548 placement
 class SleepCompaction {
@@ -65,47 +74,80 @@ class SleepCompaction {
   #i;
   #s;
   #u;
-  constructor({ isIdle: e, isStopping: t, isPermissionPending: r, enqueueCompact: n, exitDelayMs: o }) {
-    ((this.#r = e), (this.#o = t), (this.#i = r), (this.#s = n), (this.#u = o));
+  constructor({ isIdle, isStopping, isPermissionPending, enqueueCompact, exitDelayMs }) {
+    this.#r = isIdle;
+    this.#o = isStopping;
+    this.#i = isPermissionPending;
+    this.#s = enqueueCompact;
+    this.#u = exitDelayMs;
   }
   arm() {
     this.cancel();
     try {
-      let e = getLastMainThreadRequestAt(),
-        t = getPromptCacheSummary();
-      if (e === null || e === this.#n || t.lastActivityAt === null || t.expiresAt === null) return;
-      if (this.#t?.requestAt !== e) this.#t = { requestAt: e, at: Date.now() };
-      let r = computeSleepCompactAt({
-        cacheActivityAt: t.lastActivityAt,
-        cacheExpiresAt: t.expiresAt,
-        lastRequestAt: e,
+      let lastMainThreadRequestAt = getLastMainThreadRequestAt();
+      let promptCacheSummary = getPromptCacheSummary();
+      if (
+        lastMainThreadRequestAt === null ||
+        lastMainThreadRequestAt === this.#n ||
+        promptCacheSummary.lastActivityAt === null ||
+        promptCacheSummary.expiresAt === null
+      )
+        return;
+      if (this.#t?.requestAt !== lastMainThreadRequestAt)
+        this.#t = {
+          requestAt: lastMainThreadRequestAt,
+          at: Date.now(),
+        };
+      let sleepCompactAt = computeSleepCompactAt({
+        cacheActivityAt: promptCacheSummary.lastActivityAt,
+        cacheExpiresAt: promptCacheSummary.expiresAt,
+        lastRequestAt: lastMainThreadRequestAt,
         turnEndedAt: this.#t.at,
-        afterTurnMs: mn() ? T(env.CLAUDE_CODE_SLEEP_COMPACT_AFTER_MS) : void 0,
+        afterTurnMs: isRemoteManagedEnvironment()
+          ? resolveAfterTurnMs(env.CLAUDE_CODE_SLEEP_COMPACT_AFTER_MS)
+          : undefined,
         exitDelayMs: this.#u,
         fireAtFraction: _,
       });
-      ((this.#e = setTimeout((n) => this.#a(n), Math.max(0, r - Date.now()), e)), this.#e.unref?.());
+      this.#e = setTimeout(
+        (n) => this.#a(n),
+        Math.max(0, sleepCompactAt - Date.now()),
+        lastMainThreadRequestAt,
+      );
+      this.#e.unref?.();
     } catch (error) {
-      (logFeatureBad("compact_sleep", "arm_failed"), logError(error));
+      logFeatureBad("compact_sleep", "arm_failed");
+      logError(error);
     }
   }
   cancel() {
-    if (this.#e !== null) (clearTimeout(this.#e), (this.#e = null));
+    if (this.#e !== null) {
+      clearTimeout(this.#e);
+      this.#e = null;
+    }
   }
   #a(e) {
     this.#e = null;
     try {
-      let max = Math.max(f, env.CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS ?? d),
-        r = getLastMainThreadContextTokens() ?? 0,
-        n = this.#m(max, e, r);
-      if (
-        (logEvent("tengu_sleep_compact_fired", { outcome: fromEnum(n), contextTokens: r, minTokens: max }),
-        n !== "busy" && n !== "permission_pending" && n !== "newer_request")
-      )
-        this.#n = e;
-      if (n === "started") (this.#s(), logFeatureOk("compact_sleep"));
+      let max = Math.max(
+        MIN_IDLE_COMPACT_TOKENS,
+        env.CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS ?? IDLE_COMPACT_MIN_TOKENS,
+      );
+      let r = getLastMainThreadContextTokens() ?? 0;
+      let n = this.#m(max, e, r);
+      logEvent("tengu_sleep_compact_fired", {
+        outcome: fromEnum(n),
+        contextTokens: r,
+        minTokens: max,
+      });
+      if (n !== "busy" && n !== "permission_pending" && n !== "newer_request") this.#n = e;
+      if (n === "started") {
+        this.#s();
+        logFeatureOk("compact_sleep");
+      }
     } catch (error) {
-      (logFeatureBad("compact_sleep", "fire_failed"), logError(error));
+      logFeatureBad("compact_sleep", "fire_failed");
+      logError(error);
     }
   }
   #m(e, t, r) {
@@ -121,18 +163,20 @@ class SleepCompaction {
     return "started";
   }
 }
+//@ chunk-bbwtdypr.js:6548-6648 placement
 /**
  * 给控制器附加计时器的 start/stop。
  */
-//@ chunk-bbwtdypr.js:6548-6648 placement
 function withSleepTimer(e, t) {
   if (t === null) return e;
   return {
     start() {
-      (e.start(), t.arm());
+      e.start();
+      t.arm();
     },
     stop() {
-      (t.cancel(), e.stop());
+      t.cancel();
+      e.stop();
     },
   };
 }

@@ -5,31 +5,31 @@
  * pieces: chunk-mrx6y2r5.js (3)
  * attribution: esm-layout 2, esm-fingerprint 1
  */
-import { pa, Zl } from "../util/file.js";
+import { isNodeReadableStream, rawContent } from "../util/file.js";
 import {
-  MULTIPARTPOLICY,
-  ca,
+  multipartPolicyName,
+  multipartPolicy,
 } from "../../../../../@typespec/ts-http-runtime/dist/esm/policies/multipartPolicy.js";
 
 //@ chunk-mrx6y2r5.js:57028-57081 esm-layout
-function ed(e) {
-  if (pa(e)) return e[Zl]();
-  else return e;
+function ed(body) {
+  if (isNodeReadableStream(body)) return body[rawContent]();
+  else return body;
 }
 //@ chunk-mrx6y2r5.js:57081-57091 esm-layout
-var ga = MULTIPARTPOLICY;
+var multipartPolicyName_2 = multipartPolicyName;
 //@ chunk-mrx6y2r5.js:57091-57271 esm-fingerprint
 function td() {
-  let e = ca();
+  let tspPolicy = multipartPolicy();
   return {
-    name: ga,
-    sendRequest: async (t, r) => {
-      if (t.multipartBody) {
-        for (let part of t.multipartBody.parts) if (pa(part.body)) part.body = ed(part.body);
+    name: multipartPolicyName_2,
+    sendRequest: async (request, next) => {
+      if (request.multipartBody) {
+        for (let part of request.multipartBody.parts)
+          if (isNodeReadableStream(part.body)) part.body = ed(part.body);
       }
-      return e.sendRequest(t, r);
+      return tspPolicy.sendRequest(request, next);
     },
   };
 }
-
-export { ga, td };
+export { multipartPolicyName_2, td };

@@ -21,41 +21,44 @@ import { getResolvedWIFBaseUrlSnapshot } from "../../services/oauth/wifCredentia
 import { getWIFProfileBaseUrl } from "../wifProfile.js";
 
 //@ chunk-w7m8zp6e.js:387-472 placement = logEventTo1P (1)
-function isOfficialFirstPartyEndpoint(r = getAPIProvider()) {
-  if (r !== "firstParty" || !isFirstPartyAnthropicBaseUrl_2()) return !1;
-  if (assumesFirstPartyBaseUrl()) return !0;
+function isOfficialFirstPartyEndpoint(apiProvider = getAPIProvider()) {
+  if (apiProvider !== "firstParty" || !isFirstPartyAnthropicBaseUrl_2()) return false;
+  if (assumesFirstPartyBaseUrl()) return true;
   return isFirstPartyAnthropicBaseUrl();
 }
+//@ chunk-w7m8zp6e.js:472-647 placement
 /**
  * 第一方提供商下 base URL 是否指向 Anthropic 官方。
  */
-//@ chunk-w7m8zp6e.js:472-647 placement
 function isFirstPartyBaseUrl(r = getAPIProvider()) {
-  if (r !== "firstParty" || !isActualFirstPartyAnthropicBaseUrl()) return !1;
-  if (env.ANTHROPIC_BASE_URL !== void 0 || !shouldUseWIFAuth() || !isWIFDispatchAuth()) return !0;
-  let t = getResolvedWIFBaseUrlSnapshot(),
-    e = t === void 0 ? (getWIFProfileBaseUrl() ?? null) : t;
+  if (r !== "firstParty" || !isActualFirstPartyAnthropicBaseUrl()) return false;
+  if (env.ANTHROPIC_BASE_URL !== undefined || !shouldUseWIFAuth() || !isWIFDispatchAuth()) return true;
+  let resolvedWIFBaseUrlSnapshot = getResolvedWIFBaseUrlSnapshot();
+  let e =
+    resolvedWIFBaseUrlSnapshot === undefined ? (getWIFProfileBaseUrl() ?? null) : resolvedWIFBaseUrlSnapshot;
   return e === null || isFirstPartyAnthropicHost(e);
 }
 //@ chunk-w7m8zp6e.js:647-756 placement
 function isFirstPartyAnthropicBaseUrl() {
-  if (env.ANTHROPIC_BASE_URL !== void 0 || !isWIFDispatchAuth()) return !0;
-  let r = getResolvedWIFBaseUrlSnapshot();
-  return r === null || (r !== void 0 && isFirstPartyAnthropicHost(r));
+  if (env.ANTHROPIC_BASE_URL !== undefined || !isWIFDispatchAuth()) return true;
+  let resolvedWIFBaseUrlSnapshot = getResolvedWIFBaseUrlSnapshot();
+  return (
+    resolvedWIFBaseUrlSnapshot === null ||
+    (resolvedWIFBaseUrlSnapshot !== undefined && isFirstPartyAnthropicHost(resolvedWIFBaseUrlSnapshot))
+  );
 }
+//@ chunk-w7m8zp6e.js:756-931 placement = getDefaultApiBaseUrl (0.82)
 /**
  * ANTHROPIC_BASE_URL，或第一方自定义端点，否则 api.anthropic.com。
  */
-//@ chunk-w7m8zp6e.js:756-931 placement = getDefaultApiBaseUrl (0.82)
 function getApiBaseUrl() {
-  if (env.ANTHROPIC_BASE_URL !== void 0) return env.ANTHROPIC_BASE_URL;
+  if (env.ANTHROPIC_BASE_URL !== undefined) return env.ANTHROPIC_BASE_URL;
   try {
     if (isWIFDispatchAuth()) {
-      let r = getResolvedWIFBaseUrlSnapshot();
-      if (typeof r === "string") return r;
+      let resolvedWIFBaseUrlSnapshot = getResolvedWIFBaseUrlSnapshot();
+      if (typeof resolvedWIFBaseUrlSnapshot === "string") return resolvedWIFBaseUrlSnapshot;
     }
   } catch {}
   return "https://api.anthropic.com";
 }
-
 export { isFirstPartyBaseUrl, getApiBaseUrl, isOfficialFirstPartyEndpoint };

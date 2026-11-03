@@ -6,119 +6,146 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { rN } from "./scan.js";
-import { lN } from "./parse.js";
-import { np } from "./utils.js";
-import { tp } from "./constants.js";
+import { require_scan } from "./scan.js";
+import { require_parse } from "./parse.js";
+import { require_utils } from "./utils.js";
+import { require_constants } from "./constants.js";
 
 //@ chunk-fq0cr76a.js:317963-320219 cjs-fingerprint
-var uN = x(function (Kge, cN) {
-  var Cq = rN(),
-    xg = lN(),
-    _g = np(),
-    Rq = tp(),
-    Iq = (e) => e && typeof e === "object" && !Array.isArray(e),
-    Jr = (e, n, r = !1) => {
-      if (Array.isArray(e)) {
-        let mapped = e.map((L) => Jr(L, n, r));
-        return (L) => {
-          for (let V of mapped) {
-            let K = V(L);
-            if (K) return K;
-          }
-          return !1;
-        };
-      }
-      let s = Iq(e) && e.tokens && e.input;
-      if (e === "" || (typeof e !== "string" && !s))
-        throw TypeError("Expected pattern to be a non-empty string");
-      let h = n || {},
-        windows = h.windows,
-        b = s ? Jr.compileRe(e, n) : Jr.makeRe(e, n, !1, !0),
-        state = b.state;
-      delete b.state;
-      let w = () => !1;
-      if (h.ignore) {
-        let D = { ...n, ignore: null, onMatch: null, onResult: null };
-        w = Jr(h.ignore, D, r);
-      }
-      let R = (D, O = !1) => {
-        let {
-            isMatch: isMatch,
-            match: match,
-            output: output,
-          } = Jr.test(D, b, n, { glob: e, posix: windows }),
-          q = {
-            glob: e,
-            state: state,
-            regex: b,
-            posix: windows,
-            input: D,
-            output: output,
-            match: match,
-            isMatch: isMatch,
-          };
-        if (typeof h.onResult === "function") h.onResult(q);
-        if (isMatch === !1) return ((q.isMatch = !1), O ? q : !1);
-        if (w(D)) {
-          if (typeof h.onIgnore === "function") h.onIgnore(q);
-          return ((q.isMatch = !1), O ? q : !1);
+var require_picomatch = x(function (cjsExports, cjsModule) {
+  var scan = require_scan();
+  var parse = require_parse();
+  var utils = require_utils();
+  var constants = require_constants();
+  var isObject = (val) => val && typeof val === "object" && !Array.isArray(val);
+  var picomatch = (glob, options, returnState = false) => {
+    if (Array.isArray(glob)) {
+      let fns = glob.map((input) => picomatch(input, options, returnState));
+      return (str) => {
+        for (let isMatch of fns) {
+          let state = isMatch(str);
+          if (state) return state;
         }
-        if (typeof h.onMatch === "function") h.onMatch(q);
-        return O ? q : !0;
+        return false;
       };
-      if (r) R.state = state;
-      return R;
+    }
+    let isState = isObject(glob) && glob.tokens && glob.input;
+    if (glob === "" || (typeof glob !== "string" && !isState))
+      throw TypeError("Expected pattern to be a non-empty string");
+    let opts = options || {};
+    let posix = opts.windows;
+    let regex = isState ? picomatch.compileRe(glob, options) : picomatch.makeRe(glob, options, false, true);
+    let state = regex.state;
+    delete regex.state;
+    let isIgnored = () => false;
+    if (opts.ignore) {
+      let ignoreOpts = {
+        ...options,
+        ignore: null,
+        onMatch: null,
+        onResult: null,
+      };
+      isIgnored = picomatch(opts.ignore, ignoreOpts, returnState);
+    }
+    let matcher = (input, returnObject = false) => {
+      let { isMatch, match, output } = picomatch.test(input, regex, options, {
+        glob,
+        posix,
+      });
+      let result = {
+        glob,
+        state,
+        regex,
+        posix,
+        input,
+        output,
+        match,
+        isMatch,
+      };
+      if (typeof opts.onResult === "function") opts.onResult(result);
+      if (isMatch === false) {
+        result.isMatch = false;
+        return returnObject ? result : false;
+      }
+      if (isIgnored(input)) {
+        if (typeof opts.onIgnore === "function") opts.onIgnore(result);
+        result.isMatch = false;
+        return returnObject ? result : false;
+      }
+      if (typeof opts.onMatch === "function") opts.onMatch(result);
+      return returnObject ? result : true;
     };
-  Jr.test = (e, n, r, { glob: s, posix: h } = {}) => {
-    if (typeof e !== "string") throw TypeError("Expected input to be a string");
-    if (e === "") return { isMatch: !1, output: "" };
-    let y = r || {},
-      b = y.format || (h ? _g.toPosixSlashes : null),
-      S = e === s,
-      w = S && b ? b(e) : e;
-    if (S === !1) ((w = b ? b(e) : e), (S = w === s));
-    if (S === !1 || y.capture === !0)
-      if (y.matchBase === !0 || y.basename === !0) S = Jr.matchBase(e, n, r, h);
-      else S = n.exec(w);
-    return { isMatch: Boolean(S), match: S, output: w };
+    if (returnState) matcher.state = state;
+    return matcher;
   };
-  Jr.matchBase = (e, n, r) => (n instanceof RegExp ? n : Jr.makeRe(n, r)).test(_g.basename(e));
-  Jr.isMatch = (e, n, r) => Jr(n, r)(e);
-  Jr.parse = (e, n) => {
-    if (Array.isArray(e)) return e.map((r) => Jr.parse(r, n));
-    return xg(e, { ...n, fastpaths: !1 });
+  picomatch.test = (input, regex, options, { glob, posix } = {}) => {
+    if (typeof input !== "string") throw TypeError("Expected input to be a string");
+    if (input === "")
+      return {
+        isMatch: false,
+        output: "",
+      };
+    let opts = options || {};
+    let format = opts.format || (posix ? utils.toPosixSlashes : null);
+    let match = input === glob;
+    let output = match && format ? format(input) : input;
+    if (match === false) {
+      output = format ? format(input) : input;
+      match = output === glob;
+    }
+    if (match === false || opts.capture === true)
+      if (opts.matchBase === true || opts.basename === true)
+        match = picomatch.matchBase(input, regex, options, posix);
+      else match = regex.exec(output);
+    return {
+      isMatch: Boolean(match),
+      match,
+      output,
+    };
   };
-  Jr.scan = (e, n) => Cq(e, n);
-  Jr.compileRe = (e, n, r = !1, s = !1) => {
-    if (r === !0) return e.output;
-    let h = n || {},
-      y = h.contains ? "" : "^",
-      b = h.contains ? "" : "$",
-      S = `${y}(?:${e.output})${b}`;
-    if (e && e.negated === !0) S = `^(?!${S}).*$`;
-    let toRegex = Jr.toRegex(S, n);
-    if (s === !0) toRegex.state = e;
-    return toRegex;
+  picomatch.matchBase = (input, glob, r) =>
+    (glob instanceof RegExp ? glob : picomatch.makeRe(glob, r)).test(utils.basename(input));
+  picomatch.isMatch = (str, patterns, options) => picomatch(patterns, options)(str);
+  picomatch.parse = (pattern, options) => {
+    if (Array.isArray(pattern)) return pattern.map((p) => picomatch.parse(p, options));
+    return parse(pattern, {
+      ...options,
+      fastpaths: false,
+    });
   };
-  Jr.makeRe = (e, n = {}, r = !1, s = !1) => {
-    if (!e || typeof e !== "string") throw TypeError("Expected a non-empty string");
-    let h = { negated: !1, fastpaths: !0 };
-    if (n.fastpaths !== !1 && (e[0] === "." || e[0] === "*")) h.output = xg.fastpaths(e, n);
-    if (!h.output) h = xg(e, n);
-    return Jr.compileRe(h, n, r, s);
+  picomatch.scan = (input, options) => scan(input, options);
+  picomatch.compileRe = (state, options, returnOutput = false, returnState = false) => {
+    if (returnOutput === true) return state.output;
+    let opts = options || {};
+    let prepend = opts.contains ? "" : "^";
+    let append = opts.contains ? "" : "$";
+    let source = `${prepend}(?:${state.output})${append}`;
+    if (state && state.negated === true) source = `^(?!${source}).*$`;
+    let regex = picomatch.toRegex(source, options);
+    if (returnState === true) regex.state = state;
+    return regex;
   };
-  Jr.toRegex = (e, n) => {
+  picomatch.makeRe = (input, options = {}, returnOutput = false, returnState = false) => {
+    if (!input || typeof input !== "string") throw TypeError("Expected a non-empty string");
+    let parsed = {
+      negated: false,
+      fastpaths: true,
+    };
+    if (options.fastpaths !== false && (input[0] === "." || input[0] === "*"))
+      parsed.output = parse.fastpaths(input, options);
+    if (!parsed.output) parsed = parse(input, options);
+    return picomatch.compileRe(parsed, options, returnOutput, returnState);
+  };
+  picomatch.toRegex = (source, options) => {
     try {
-      let r = n || {};
-      return new RegExp(e, r.flags || (r.nocase ? "i" : ""));
-    } catch (error) {
-      if (n && n.debug === !0) throw error;
+      let opts = options || {};
+      return new RegExp(source, opts.flags || (opts.nocase ? "i" : ""));
+    } catch (err) {
+      if (options && options.debug === true) throw err;
       return /$^/;
     }
   };
-  Jr.constants = Rq;
-  cN.exports = Jr;
+  picomatch.constants = constants;
+  cjsModule.exports = picomatch;
 });
-
-export { uN };
+export { require_picomatch };

@@ -9,7 +9,7 @@
  * attribution: placement 10
  */
 import { LANE_REQUEST_TIMEOUT_MS, canUseSyncedFileLane } from "./syncedFileLane.js";
-import { X0 } from "../../utils/abortSignalUtils.js";
+import { isAborted } from "../../utils/abortSignalUtils.js";
 import { withDeadline } from "../../utils/sleep.js";
 import { logEvent } from "../analytics/index.js";
 import { fromEnum } from "../analytics/safeMetadata.js";
@@ -22,49 +22,56 @@ import { extractRestrictivePermissions } from "../../utils/permissions/permissio
 import { HOME_SEED_PARTIAL_REASONS } from "./notices.js";
 import { capitalize } from "../../utils/stringUtils.js";
 
+//@ chunk-mxpjbr4y.js:10234-11346 placement
 /**
  * 等待云端会话确认已读取推送的设置（ready 状态），超时后给出说明。
  */
-//@ chunk-mxpjbr4y.js:10234-11346 placement
 async function awaitSeedReadiness({
-  client: client,
-  pack: pack,
-  generation: generation,
-  uploaded: uploaded,
-  status: status,
-  launchConsent: launchConsent,
-  isProjectStillSynced: isProjectStillSynced,
-  signal: signal,
-  onReadBack: onReadBack,
-  deadlineMs: deadlineMs = LANE_REQUEST_TIMEOUT_MS,
+  client,
+  pack,
+  generation,
+  uploaded,
+  status,
+  launchConsent,
+  isProjectStillSynced,
+  signal,
+  onReadBack,
+  deadlineMs = LANE_REQUEST_TIMEOUT_MS,
 }) {
   if (
     uploaded.kind !== "uploaded" ||
     !isSendOutcomeSettled(uploaded.outcome) ||
-    X0(signal) ||
+    isAborted(signal) ||
     !(await canUseSyncedFileLane(launchConsent, isProjectStillSynced))
   )
     return "skipped";
-  let abortController = new AbortController(),
-    U = () => abortController.abort();
-  signal?.addEventListener("abort", U, { once: !0 });
+  let abortController = new AbortController();
+  let U = () => abortController.abort();
+  signal?.addEventListener("abort", U, {
+    once: true,
+  });
   try {
-    let D,
-      P = (await withDeadline(
-        pollSeedStatus({
-          client: client,
-          pack: pack,
-          generation: generation,
-          uploaded: uploaded.outcome,
-          signal: abortController.signal,
-          onRead: (H) => {
-            D = H;
-          },
-        }),
-        deadlineMs,
-      )) ??
-        D ?? { verdict: "unreadable", heal: "none", got: "deadline", ready: null };
-    if (X0(signal) || P.got === "aborted") return "skipped";
+    let D;
+    let P = (await withDeadline(
+      pollSeedStatus({
+        client,
+        pack,
+        generation,
+        uploaded: uploaded.outcome,
+        signal: abortController.signal,
+        onRead: (H) => {
+          D = H;
+        },
+      }),
+      deadlineMs,
+    )) ??
+      D ?? {
+        verdict: "unreadable",
+        heal: "none",
+        got: "deadline",
+        ready: null,
+      };
+    if (isAborted(signal) || P.got === "aborted") return "skipped";
     let N = isPartialWithRestrictiveRules(P.ready, generation, pack);
     logEvent("tengu_home_seed_ready_seen", {
       outcome: fromEnum(P.verdict),
@@ -72,111 +79,164 @@ async function awaitSeedReadiness({
       heal: fromEnum(P.heal),
       ready_outcome: fromEnum(P.ready?.outcome ?? "none"),
       deny_or_ask_rules_missing: N,
-      generation: generation,
+      generation,
     });
     let E =
       P.verdict === "applied_before_first_ask" || P.verdict === "applied_late"
-        ? { verdict: P.verdict, left: getPartialApplyKind(P.ready, St(pack), N) }
-        : { verdict: P.verdict, left: null };
+        ? {
+            verdict: P.verdict,
+            left: getPartialApplyKind(P.ready, packHasSettings(pack), N),
+          }
+        : {
+            verdict: P.verdict,
+            left: null,
+          };
     onReadBack?.(E);
-    let v = seedReadinessNotice(P.verdict, uploaded.outcome, E.left, uploaded.settingsRefused !== void 0, N);
+    let v = seedReadinessNotice(
+      P.verdict,
+      uploaded.outcome,
+      E.left,
+      uploaded.settingsRefused !== undefined,
+      N,
+    );
     if (v !== null) status.publish(v.text, v.level);
     return P.verdict;
   } catch (error) {
-    if (isAbortError(error) || X0(signal)) return "skipped";
-    return (logError(error), "unreadable");
+    if (isAbortError(error) || isAborted(signal)) return "skipped";
+    logError(error);
+    return "unreadable";
   } finally {
-    (abortController.abort(), signal?.removeEventListener("abort", U));
+    abortController.abort();
+    signal?.removeEventListener("abort", U);
   }
 }
 //@ chunk-mxpjbr4y.js:11346-12169 placement
-async function pollSeedStatus({
-  client: client,
-  pack: pack,
-  generation: generation,
-  uploaded: uploaded,
-  signal: signal,
-  onRead: onRead,
-}) {
-  let h = parseSeedStatus(await client.getStoreRow(joined_6, signal));
-  switch (h.kind) {
+async function pollSeedStatus({ client, pack, generation, uploaded, signal, onRead }) {
+  let seedStatus = parseSeedStatus(await client.getStoreRow(joined_6, signal));
+  switch (seedStatus.kind) {
     case "aborted":
-      return { verdict: "unreadable", got: "aborted", heal: "none", ready: null };
+      return {
+        verdict: "unreadable",
+        got: "aborted",
+        heal: "none",
+        ready: null,
+      };
     case "unreadable":
-      return { verdict: "unreadable", got: h.got, heal: "none", ready: null };
+      return {
+        verdict: "unreadable",
+        got: seedStatus.got,
+        heal: "none",
+        ready: null,
+      };
     case "ready":
       return {
         verdict:
-          h.ready.generation < generation
+          seedStatus.ready.generation < generation
             ? uploaded === "deadline"
               ? "not_seen"
               : "behind"
-            : h.ready.generation !== generation
+            : seedStatus.ready.generation !== generation
               ? "stale"
-              : bt(h.ready)
+              : isApplyWithoutEffect(seedStatus.ready)
                 ? "not_applied"
-                : h.ready.appliedBeforeFirstAsk
+                : seedStatus.ready.appliedBeforeFirstAsk
                   ? "applied_before_first_ask"
                   : "applied_late",
         got: "ready",
         heal: "none",
-        ready: h.ready,
+        ready: seedStatus.ready,
       };
     case "absent": {
-      if (uploaded === "deadline") return { verdict: "not_seen", got: "absent", heal: "none", ready: null };
-      return (
-        onRead({ verdict: "not_seen", got: "absent", heal: "failed", ready: null }),
-        {
+      if (uploaded === "deadline")
+        return {
           verdict: "not_seen",
           got: "absent",
-          heal:
-            (await client.putStoreRow(joined_5, pack, { signal: signal })).kind === "ok" ? "ok" : "failed",
+          heal: "none",
           ready: null,
-        }
-      );
+        };
+      onRead({
+        verdict: "not_seen",
+        got: "absent",
+        heal: "failed",
+        ready: null,
+      });
+      return {
+        verdict: "not_seen",
+        got: "absent",
+        heal:
+          (
+            await client.putStoreRow(joined_5, pack, {
+              signal,
+            })
+          ).kind === "ok"
+            ? "ok"
+            : "failed",
+        ready: null,
+      };
     }
   }
 }
 //@ chunk-mxpjbr4y.js:12169-12472 placement
-function parseSeedStatus(e) {
-  switch (e.kind) {
+function parseSeedStatus(storeRow) {
+  switch (storeRow.kind) {
     case "ok": {
-      let n = parseHomeReadyRow(e.content);
-      return n.ok ? { kind: "ready", ready: n.ready } : { kind: "unreadable", got: n.reason };
+      let homeReadyRow = parseHomeReadyRow(storeRow.content);
+      return homeReadyRow.ok
+        ? {
+            kind: "ready",
+            ready: homeReadyRow.ready,
+          }
+        : {
+            kind: "unreadable",
+            got: homeReadyRow.reason,
+          };
     }
     case "not_found":
-      return { kind: "absent" };
+      return {
+        kind: "absent",
+      };
     case "aborted":
-      return { kind: "aborted" };
+      return {
+        kind: "aborted",
+      };
     case "failed":
     case "lane_unavailable":
     case "unauthorized":
-      return { kind: "unreadable", got: e.kind };
+      return {
+        kind: "unreadable",
+        got: storeRow.kind,
+      };
   }
 }
 //@ chunk-mxpjbr4y.js:12472-12536 placement
-function St(e) {
-  let n = decodeHomePack(e);
+/**
+ * 解出的包里是否带 settings。
+ */
+function packHasSettings(pack) {
+  let n = decodeHomePack(pack);
   return n.ok && n.pack.settings !== null;
 }
 //@ chunk-mxpjbr4y.js:12536-12705 placement
-function isPartialWithRestrictiveRules(e, n, r) {
-  if (e?.generation !== n || e.outcome !== "partial" || e.settingsWritten) return !1;
-  let i = decodeHomePack(r);
+function isPartialWithRestrictiveRules(ready, generation, pack) {
+  if (ready?.generation !== generation || ready.outcome !== "partial" || ready.settingsWritten) return false;
+  let i = decodeHomePack(pack);
   return i.ok && i.pack.settings !== null && extractRestrictivePermissions(i.pack.settings) !== null;
 }
 //@ chunk-mxpjbr4y.js:12705-12789 placement
-function bt(e) {
-  return e.outcome === "partial" && e.filesApplied === 0 && !e.settingsWritten;
+/**
+ * 判断应用是否“部分成功但没有应用任何内容”。
+ */
+function isApplyWithoutEffect(ready) {
+  return ready.outcome === "partial" && ready.filesApplied === 0 && !ready.settingsWritten;
 }
 //@ chunk-mxpjbr4y.js:12789-13021 placement
-function isSendOutcomeSettled(e) {
-  switch (e) {
+function isSendOutcomeSettled(outcome) {
+  switch (outcome) {
     case "sent":
     case "unchanged":
     case "conflict_resolved":
     case "deadline":
-      return !0;
+      return true;
     case "raced":
     case "not_forwarded_at_create":
     case "lane_full":
@@ -184,20 +244,20 @@ function isSendOutcomeSettled(e) {
     case "unauthorized":
     case "failed":
     case "aborted":
-      return !1;
+      return false;
   }
 }
 //@ chunk-mxpjbr4y.js:13021-13162 placement
-function getPartialApplyKind(e, n, r) {
-  if (e === null || e.outcome !== "partial") return null;
-  return !r && e.filesRefused > 0 ? "files" : n && !e.settingsWritten ? "settings" : "part";
+function getPartialApplyKind(ready, n, r) {
+  if (ready === null || ready.outcome !== "partial") return null;
+  return !r && ready.filesRefused > 0 ? "files" : n && !ready.settingsWritten ? "settings" : "part";
 }
 //@ chunk-mxpjbr4y.js:13162-14382 placement
-function seedReadinessNotice(e, n, r, i, _) {
-  let s = i ? "the rest of your settings" : "your settings",
-    h = r === null ? "" : ` (${HOME_SEED_PARTIAL_REASONS[r]})`,
-    S = n === "deadline" || _;
-  switch (e) {
+function seedReadinessNotice(verdict, outcome, r, i, _) {
+  let s = i ? "the rest of your settings" : "your settings";
+  let h = r === null ? "" : ` (${HOME_SEED_PARTIAL_REASONS[r]})`;
+  let S = outcome === "deadline" || _;
+  switch (verdict) {
     case "applied_before_first_ask":
       return {
         text: `The cloud session applied ${s} before its first reply${h}`,
@@ -214,12 +274,15 @@ function seedReadinessNotice(e, n, r, i, _) {
         level: S ? "warning" : "debug",
       };
     case "not_seen":
-      return n === "deadline"
+      return outcome === "deadline"
         ? {
             text: `The cloud session has not confirmed ${s} (the upload may not have reached it in time)`,
             level: "warning",
           }
-        : { text: `The cloud session has not confirmed ${s} and may be running without them`, level: "info" };
+        : {
+            text: `The cloud session has not confirmed ${s} and may be running without them`,
+            level: "info",
+          };
     case "behind":
       return {
         text: "The cloud session still ran with the settings it had for this reply; the ones just sent apply from the next turn (no /clear needed)",
@@ -231,11 +294,16 @@ function seedReadinessNotice(e, n, r, i, _) {
         level: "warning",
       };
     case "unreadable":
-      return { text: `The cloud session's answer about ${s} could not be read`, level: "warning" };
+      return {
+        text: `The cloud session's answer about ${s} could not be read`,
+        level: "warning",
+      };
   }
 }
 //@ chunk-mxpjbr4y.js:14382-14404 placement
-var SEED_READY_TIMEOUTS = 15000,
-  Et = 30000;
-
-export { SEED_READY_TIMEOUTS, Et, awaitSeedReadiness };
+/**
+ * 等待 seed 就绪的超时（30 秒）。
+ */
+var SEED_READY_TIMEOUTS = 15000;
+var SEED_READY_TIMEOUT_MS = 30000;
+export { SEED_READY_TIMEOUTS, SEED_READY_TIMEOUT_MS, awaitSeedReadiness };

@@ -75,7 +75,7 @@ Ar(clawdCookingNamespace, {
 //@ chunk-sc72x544.js:4802-4832 placement
 var availabilityFlag = () => "tengu_linen_acorn";
 //@ chunk-sc72x544.js:4832-4841 placement
-var isOnByDefault = !1;
+var isOnByDefault = false;
 //@ chunk-sc72x544.js:4841-4868 placement
 var isAvailable = () =>
   !isScreenReaderMode() && getFeatureValue_SESSION_PINNED(availabilityFlag(), isOnByDefault);
@@ -87,10 +87,10 @@ var PLUGIN_NAME = "cc-plugin-mods-guide";
 //@ chunk-sc72x544.js:5047-5065 placement
 var ENGINE_ASK_ID = /^confirm_/;
 //@ chunk-sc72x544.js:5065-5251 placement
-function isExplained(i) {
-  let [r] = i,
-    e = typeof r === "object" && r !== null ? Reflect.get(r, "question") : void 0;
-  if (typeof e !== "string") return !1;
+function isExplained(questions) {
+  let [r] = questions;
+  let e = typeof r === "object" && r !== null ? Reflect.get(r, "question") : undefined;
+  if (typeof e !== "string") return false;
   let [, ...f] = e.split(`
 
 `);
@@ -147,45 +147,64 @@ var SCENE_ROWS = 9;
 //@ chunk-sc72x544.js:5518-5802 placement
 function cellsOf(i) {
   let uint32Array = new Uint32Array(SCENE_COLUMNS * SCENE_ROWS * CELL_WORDS);
-  for (let t = 0; t < SCENE_ROWS; t++)
-    for (let e = 0; e < SCENE_COLUMNS; e++) {
-      let f = PALETTE[i[t + t]?.[e] ?? "."],
-        o = PALETTE[i[t + t + 1]?.[e] ?? "."],
-        n = f === void 0 && o === void 0,
-        s = f === void 0 && o !== void 0;
+  for (let k = 0; k < SCENE_ROWS; k++)
+    for (let k_2 = 0; k_2 < SCENE_COLUMNS; k_2++) {
+      let f = PALETTE[i[k + k]?.[k_2] ?? "."];
+      let o = PALETTE[i[k + k + 1]?.[k_2] ?? "."];
+      let n = f === undefined && o === undefined;
+      let s = f === undefined && o !== undefined;
       uint32Array.set(
         [
           n ? SPACE : s ? LOWER_HALF : UPPER_HALF,
           (s ? o : f) ?? TERMINAL_DEFAULT,
-          (s ? void 0 : o) ?? TERMINAL_DEFAULT,
+          (s ? undefined : o) ?? TERMINAL_DEFAULT,
         ],
-        (t * SCENE_COLUMNS + e) * CELL_WORDS,
+        (k * SCENE_COLUMNS + k_2) * CELL_WORDS,
       );
     }
   return new Uint8Array(uint32Array.buffer).toBase64();
 }
 //@ chunk-sc72x544.js:5802-5874 placement
-var blankGrid = (i, r) => Array.from({ length: r }, () => Array.from({ length: i }, () => "."));
+var blankGrid = (i, r) =>
+  Array.from(
+    {
+      length: r,
+    },
+    () =>
+      Array.from(
+        {
+          length: i,
+        },
+        () => ".",
+      ),
+  );
 //@ chunk-sc72x544.js:5874-5949 placement
 function put(i, r, t) {
-  let [e, f] = r,
-    o = i[f];
-  if (o !== void 0 && e >= 0 && e < o.length) o[e] = t;
+  let [e, f] = r;
+  let o = i[f];
+  if (o !== undefined && e >= 0 && e < o.length) o[e] = t;
 }
 //@ chunk-sc72x544.js:5949-6154 placement
 function plot(i, r) {
-  let [t, e] = r.end,
-    [f, o] = r.start,
-    abs = Math.abs(t - f),
-    s = -Math.abs(e - o),
-    l = f < t ? 1 : -1,
-    a = o < e ? 1 : -1,
-    p = abs + s;
+  let [t, e] = r.end;
+  let [f, o] = r.start;
+  let n = Math.abs(t - f);
+  let s = -Math.abs(e - o);
+  let l = f < t ? 1 : -1;
+  let a = o < e ? 1 : -1;
+  let p = n + s;
   for (;;) {
-    if ((put(i, [f, o], r.letter), f === t && o === e)) return;
+    put(i, [f, o], r.letter);
+    if (f === t && o === e) return;
     let u = 2 * p;
-    if (u >= s) ((p += s), (f += l));
-    if (u <= abs) ((p += abs), (o += a));
+    if (u >= s) {
+      p += s;
+      f += l;
+    }
+    if (u <= n) {
+      p += n;
+      o += a;
+    }
   }
 }
 //@ chunk-sc72x544.js:6154-6269 placement
@@ -387,43 +406,49 @@ var SPOON = [
 ];
 //@ chunk-sc72x544.js:8689-9051 placement
 function frameOf(i) {
-  let r = i % FRAME_COUNT,
-    t = blankGrid(SCENE_COLUMNS, PIXEL_ROWS),
-    [, e] = POT_AT;
-  (stamp(t, COUNTER, COUNTER_AT), stamp(t, FLAMES[r] ?? [], FLAMES_AT));
+  let r = i % FRAME_COUNT;
+  let t = blankGrid(SCENE_COLUMNS, PIXEL_ROWS);
+  let [, e] = POT_AT;
+  stamp(t, COUNTER, COUNTER_AT);
+  stamp(t, FLAMES[r] ?? [], FLAMES_AT);
   for (let [a, p] of PUFF_STARTS) {
     let c = PUFF_TRACK[(r + p) % FRAME_COUNT];
-    if (c !== void 0) {
-      let [u, H, S] = c,
-        C = PUFFS[S] ?? [];
+    if (c !== undefined) {
+      let [u, H, S] = c;
+      let C = PUFFS[S] ?? [];
       stamp(t, C, [a + u, e - H - C.length]);
     }
   }
   let [f, o] = SPOON[r] ?? SPOON[0];
-  (plot(t, { start: f, end: o, letter: "W" }),
-    stamp(t, POT, POT_AT),
-    stamp(t, [BUBBLES[r] ?? ""], BUBBLES_AT));
-  let n = CLAWD_POSES[POSES[r] ?? 0],
-    l = r === BLINK_FRAME ? n.map((a) => a.replaceAll("E", "C")) : n;
-  return (stamp(t, l, CLAWD_AT), t.map((a) => a.join("")));
+  plot(t, {
+    start: f,
+    end: o,
+    letter: "W",
+  });
+  stamp(t, POT, POT_AT);
+  stamp(t, [BUBBLES[r] ?? ""], BUBBLES_AT);
+  let n = CLAWD_POSES[POSES[r] ?? 0];
+  let l = r === BLINK_FRAME ? n.map((a) => a.replaceAll("E", "C")) : n;
+  stamp(t, l, CLAWD_AT);
+  return t.map((a) => a.join(""));
 }
 //@ chunk-sc72x544.js:9051-9206 placement
 function playScene(i, r) {
-  let t = 0,
-    e = 0,
-    f = r(FRAME_MS, () => void o());
+  let t = 0;
+  let e = 0;
+  let f = r(FRAME_MS, () => void o());
   async function o() {
-    if (
-      ((t += 1),
-      (e = (await i.paint(cellsOf(frameOf(t))).catch(() => !1)) ? 0 : e + 1),
-      t >= PLAY_FRAMES || e >= MISSED_FRAMES_MAX)
-    )
-      (f.cancel(), i.ended());
+    t += 1;
+    e = (await i.paint(cellsOf(frameOf(t))).catch(() => false)) ? 0 : e + 1;
+    if (t >= PLAY_FRAMES || e >= MISSED_FRAMES_MAX) {
+      f.cancel();
+      i.ended();
+    }
   }
 }
 //@ chunk-sc72x544.js:9206-9290 placement
 var isPlainTerminal = (i) =>
-  (i.noColor !== void 0 && i.noColor !== "") || i.forceColor === "0" || i.term === "dumb";
+  (i.noColor !== undefined && i.noColor !== "") || i.forceColor === "0" || i.term === "dumb";
 //@ chunk-sc72x544.js:9290-12648 placement
 var CLAWD_COOKING_STILL_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 352 144" width="352" height="144" shape-rendering="crispEdges" role="img"><title>Clawd stirs a steaming pot</title><rect x="0" y="136" width="352" height="8" fill="#6b7280"/><g><rect x="208" y="128" width="8" height="8" fill="#f59e0b"/><rect x="224" y="128" width="8" height="8" fill="#f59e0b"/><rect x="240" y="128" width="8" height="8" fill="#f59e0b"/><rect x="256" y="128" width="8" height="8" fill="#f59e0b"/><rect x="272" y="128" width="8" height="8" fill="#f59e0b"/><rect x="288" y="128" width="8" height="8" fill="#f59e0b"/><rect x="216" y="128" width="8" height="8" fill="#ef4444"/><rect x="232" y="128" width="8" height="8" fill="#ef4444"/><rect x="248" y="128" width="8" height="8" fill="#ef4444"/><rect x="264" y="128" width="8" height="8" fill="#ef4444"/><rect x="280" y="128" width="8" height="8" fill="#ef4444"/><rect x="296" y="128" width="8" height="8" fill="#ef4444"/></g><g><rect x="224" y="120" width="8" height="8" fill="#fde047"/><rect x="256" y="120" width="8" height="8" fill="#fde047"/><rect x="280" y="120" width="8" height="8" fill="#fde047"/></g><g opacity="0.85" transform="translate(0 0)"><g transform="translate(208 48)"><path fill="#9aa3ad" d="M8 0h16v8h-16zM0 8h32v8h-32zM8 16h16v8h-16z"/></g></g><g opacity="0.6" transform="translate(-8 -36)"><g transform="translate(240 48)"><path fill="#9aa3ad" d="M8 0h16v8h-16zM0 8h32v8h-32zM8 16h16v8h-16z"/></g></g><g opacity="0.3" transform="translate(-10 -76)"><g transform="translate(272 48)"><path fill="#9aa3ad" d="M8 0h16v8h-16zM0 8h32v8h-32zM8 16h16v8h-16z"/></g></g><g><g><path fill="none" stroke="#be8e5c" stroke-width="8" stroke-linecap="square" d="M161.0 24.8L273.9 91.2"/></g></g><path fill="#94a0b0" d="M184 72h16v8h-16zM312 72h16v8h-16zM192 80h8v8h-8zM184 88h16v8h-16zM320 88h8v8h-8zM192 96h8v8h-8zM192 104h8v8h-8z"/><path fill="#e9b44c" d="M200 72h112v8h-112z"/><path fill="#5f6b7a" d="M200 80h112v8h-112zM200 88h112v8h-112zM200 96h112v8h-112zM200 104h112v8h-112zM200 112h104v8h-104z"/><path fill="#465160" d="M312 80h8v8h-8zM312 88h8v8h-8zM312 96h8v8h-8zM312 104h8v8h-8zM304 112h8v8h-8z"/><rect x="256" y="64" width="8" height="8" fill="#e9b44c"></rect><g><path fill="#d77757" d="M32 56h104v8h-104zM32 64h104v8h-104zM32 72h104v8h-104zM32 80h104v8h-104zM16 88h120v8h-120zM16 96h120v8h-120zM32 104h104v8h-104zM32 112h104v8h-104zM32 120h8v8h-8zM48 120h8v8h-8zM112 120h8v8h-8zM128 120h8v8h-8zM32 128h8v8h-8zM48 128h8v8h-8zM112 128h8v8h-8zM128 128h8v8h-8z"/><rect x="56" y="72" width="8" height="16" fill="#141414"></rect><rect x="120" y="72" width="8" height="16" fill="#141414"></rect><g><rect x="136" y="80" width="16" height="8" fill="#d77757"/><rect x="136" y="72" width="16" height="8" fill="#d77757"/><rect x="144" y="72" width="16" height="8" fill="#d77757"/><rect x="144" y="64" width="16" height="8" fill="#d77757"/><rect x="152" y="64" width="16" height="8" fill="#d77757"/><rect x="152" y="56" width="16" height="8" fill="#d77757"/><rect x="160" y="56" width="16" height="8" fill="#d77757"/><rect x="160" y="48" width="16" height="8" fill="#d77757"/><rect x="168" y="48" width="16" height="8" fill="#d77757"/><rect x="168" y="40" width="16" height="8" fill="#d77757"/><rect x="176" y="40" width="16" height="8" fill="#d77757"/><rect x="176" y="32" width="16" height="8" fill="#d77757"/></g></g></svg>';
@@ -440,14 +465,25 @@ var SCENE_KEY = "clawd-cooking";
 var SVG_WIDTH = 440;
 //@ chunk-sc72x544.js:19377-19578 placement
 function remoteGuide(i, r, t) {
-  let { Box: Box, Svg: Svg, Text: Text } = i;
+  let { Box, Svg, Text } = i;
   return h(
     Box,
-    { flexDirection: "column" },
+    {
+      flexDirection: "column",
+    },
     h(
       Box,
-      { flexDirection: "column", marginBottom: 1 },
-      h(Text, { bold: !0 }, HEADING),
+      {
+        flexDirection: "column",
+        marginBottom: 1,
+      },
+      h(
+        Text,
+        {
+          bold: true,
+        },
+        HEADING,
+      ),
       h(Svg, {
         source: t ? CLAWD_COOKING_STILL_SVG : CLAWD_COOKING_SVG,
         alt: SCENE_ALT,
@@ -459,16 +495,32 @@ function remoteGuide(i, r, t) {
   );
 }
 //@ chunk-sc72x544.js:19578-19765 placement
-function terminalGuide(i, r, t) {
-  let { Box: Box, Raster: Raster, Text: Text } = i;
+function terminalGuide(i, r, cells) {
+  let { Box, Raster, Text } = i;
   return h(
     Box,
-    { flexDirection: "column" },
+    {
+      flexDirection: "column",
+    },
     h(
       Box,
-      { flexDirection: "column", marginBottom: 1 },
-      h(Text, { bold: !0 }, HEADING),
-      h(Raster, { key: SCENE_KEY, columns: SCENE_COLUMNS, rows: SCENE_ROWS, cells: t }),
+      {
+        flexDirection: "column",
+        marginBottom: 1,
+      },
+      h(
+        Text,
+        {
+          bold: true,
+        },
+        HEADING,
+      ),
+      h(Raster, {
+        key: SCENE_KEY,
+        columns: SCENE_COLUMNS,
+        rows: SCENE_ROWS,
+        cells,
+      }),
     ),
     r,
   );
@@ -481,7 +533,6 @@ var MOVING_COLUMNS_MIN = 60;
 var PANEL_ROWS_MIN = 36;
 //@ chunk-sc72x544.js:19793-19803 placement
 var UNMEASURED_COLUMNS = 80;
-
 export {
   PLUGIN_DESCRIPTION,
   PLUGIN_NAME,

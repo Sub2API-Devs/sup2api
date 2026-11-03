@@ -8,49 +8,74 @@
  * pieces: chunk-hqdsrzb2.js (14)
  * attribution: placement 14
  */
-import { ge } from "../../utils/identity.js";
-import { Dt, AxiosHeaders } from "../../../vendor/axios/dist/esm/axios.js";
+import { identity } from "../../utils/identity.js";
+import { axios_default, AxiosHeaders } from "../../../vendor/axios/dist/esm/axios.js";
 import { uniq } from "../../utils/collections.js";
 import { getOauthConfig } from "../../constants/oauth.js";
 import { getBridgeBaseUrlOverride } from "../../bridge/bridgeConfig.js";
 
 //@ chunk-hqdsrzb2.js:338-372 placement
-var p = /^req_[A-Za-z0-9_-]{1,36}$/;
+/**
+ * 会话令牌（req_ 前缀）的正则。
+ */
+var SESSIONS_TOKEN_RE = /^req_[A-Za-z0-9_-]{1,36}$/;
 //@ chunk-hqdsrzb2.js:372-425 placement
 function isSessionsToken(e) {
-  return typeof e === "string" && p.test(e);
+  return typeof e === "string" && SESSIONS_TOKEN_RE.test(e);
 }
 //@ chunk-hqdsrzb2.js:446-674 placement
-var sessionsBearerInterceptors = ge({ request: null, response: null, holder: null }, (e) => {
-  if (e.request !== null) (Dt.interceptors.request.eject(e.request), (e.request = null));
-  if (e.response !== null) (Dt.interceptors.response.eject(e.response), (e.response = null));
-  e.holder = null;
-});
+var sessionsBearerInterceptors = identity(
+  {
+    request: null,
+    response: null,
+    holder: null,
+  },
+  (e) => {
+    if (e.request !== null) {
+      axios_default.interceptors.request.eject(e.request);
+      e.request = null;
+    }
+    if (e.response !== null) {
+      axios_default.interceptors.response.eject(e.response);
+      e.response = null;
+    }
+    e.holder = null;
+  },
+);
 //@ chunk-hqdsrzb2.js:674-1170 placement
-function installSessionsBearerHooks(e, r) {
+function installSessionsBearerHooks(recoverHostSessionsBearer, sendableHostSessionsBearer) {
   if (sessionsBearerInterceptors.request !== null) return;
-  ((sessionsBearerInterceptors.holder = { report: e, sendable: r }),
-    (sessionsBearerInterceptors.request = Dt.interceptors.request.use((n) => {
-      let t = decideBearerSend(n.headers.get("Authorization"), r, () => isSessionsApiRequest(n));
-      switch (t.send) {
-        case "asItCame":
-          break;
-        case "held":
-          n.headers.set("Authorization", t.value);
-          break;
-        case "none":
-          n.headers.delete("Authorization");
-          break;
-      }
+  sessionsBearerInterceptors.holder = {
+    report: recoverHostSessionsBearer,
+    sendable: sendableHostSessionsBearer,
+  };
+  sessionsBearerInterceptors.request = axios_default.interceptors.request.use((n) => {
+    let t = decideBearerSend(n.headers.get("Authorization"), sendableHostSessionsBearer, () =>
+      isSessionsApiRequest(n),
+    );
+    switch (t.send) {
+      case "asItCame":
+        break;
+      case "held":
+        n.headers.set("Authorization", t.value);
+        break;
+      case "none":
+        n.headers.delete("Authorization");
+        break;
+    }
+    return n;
+  });
+  sessionsBearerInterceptors.response = axios_default.interceptors.response.use(
+    (n) => {
+      reportSessions401(n.status, n.config, recoverHostSessionsBearer);
       return n;
-    })),
-    (sessionsBearerInterceptors.response = Dt.interceptors.response.use(
-      (n) => (reportSessions401(n.status, n.config, e), n),
-      (n) => {
-        if (Dt.isAxiosError(n) && n.response) reportSessions401(n.response.status, n.config, e);
-        return Promise.reject(n);
-      },
-    )));
+    },
+    (n) => {
+      if (axios_default.isAxiosError(n) && n.response)
+        reportSessions401(n.response.status, n.config, recoverHostSessionsBearer);
+      return Promise.reject(n);
+    },
+  );
 }
 //@ chunk-hqdsrzb2.js:1170-1368 placement
 function decideBearerSend(e, r, n) {
@@ -58,17 +83,26 @@ function decideBearerSend(e, r, n) {
     let s = r(t);
     if (s === t) continue;
     return s !== null && typeof e === "string" && !e.includes(",") && n()
-      ? { send: "held", value: `Bearer ${s}` }
-      : { send: "none" };
+      ? {
+          send: "held",
+          value: `Bearer ${s}`,
+        }
+      : {
+          send: "none",
+        };
   }
-  return { send: "asItCame" };
+  return {
+    send: "asItCame",
+  };
 }
 //@ chunk-hqdsrzb2.js:1368-1636 placement
-function withVettedSessionsBearer(e, r) {
+function withVettedSessionsBearer(e, url) {
   let headers = new Headers(e);
   if (sessionsBearerInterceptors.holder === null) return headers;
   let t = decideBearerSend(headers.get("Authorization"), sessionsBearerInterceptors.holder.sendable, () =>
-    isSessionsApiRequest({ url: r }),
+    isSessionsApiRequest({
+      url,
+    }),
   );
   switch (t.send) {
     case "asItCame":
@@ -83,11 +117,14 @@ function withVettedSessionsBearer(e, r) {
   return headers;
 }
 //@ chunk-hqdsrzb2.js:1636-1738 placement
-function reportSessionsBearerAnswer(e, r, n) {
+function reportSessionsBearerAnswer(status, r, url) {
   if (sessionsBearerInterceptors.holder !== null)
     reportBearer401(
-      e,
-      () => isSessionsApiRequest({ url: n }),
+      status,
+      () =>
+        isSessionsApiRequest({
+          url,
+        }),
       () => r.get("Authorization"),
       sessionsBearerInterceptors.holder.report,
     );
@@ -111,16 +148,16 @@ function collectBearerTokens(e) {
 //@ chunk-hqdsrzb2.js:2044-2197 placement
 function isSessionsApiRequest(e) {
   try {
-    if (e === void 0) return !1;
-    let r = originOf(Dt.getUri(e));
+    if (e === undefined) return false;
+    let r = originOf(axios_default.getUri(e));
     return (
       r !== null &&
       [getOauthConfig().BASE_API_URL, getBridgeBaseUrlOverride()].some(
-        (n) => n !== void 0 && originOf(n) === r,
+        (n) => n !== undefined && originOf(n) === r,
       )
     );
   } catch {
-    return !1;
+    return false;
   }
 }
 //@ chunk-hqdsrzb2.js:2197-2316 placement
@@ -133,11 +170,11 @@ function originOf(e) {
   }
 }
 //@ chunk-hqdsrzb2.js:2316-2419 placement
-function reportSessions401(e, r, n) {
+function reportSessions401(status, config, n) {
   reportBearer401(
-    e,
-    () => !r?.skipSessionsBearerReport && isSessionsApiRequest(r),
-    () => r?.headers?.get?.("Authorization"),
+    status,
+    () => !config?.skipSessionsBearerReport && isSessionsApiRequest(config),
+    () => config?.headers?.get?.("Authorization"),
     n,
   );
 }
@@ -150,11 +187,10 @@ function reportBearer401(e, r, n, t) {
   } catch {}
 }
 //@ chunk-hqdsrzb2.js:2521-2602 placement
-function lacksAuthorizationHeader(e) {
-  let r = e?.headers;
-  return r instanceof AxiosHeaders && !r.has("Authorization");
+function lacksAuthorizationHeader(config) {
+  let headers = config?.headers;
+  return headers instanceof AxiosHeaders && !headers.has("Authorization");
 }
-
 export {
   lacksAuthorizationHeader,
   isSessionsToken,

@@ -8,9 +8,9 @@
  * pieces: chunk-etrfk54v.js (6)
  * attribution: placement 6
  */
-import { aBr } from "../../utils/plugins/mcpPluginIntegration.js";
+import { recursiveLobsterOn } from "../../utils/plugins/mcpPluginIntegration.js";
 import { isDcrRejection } from "./sdkAuth.js";
-import { ht } from "./cliOwnedClients.js";
+import { getCliOwnedState } from "./cliOwnedClients.js";
 import { needsClientRegistration } from "./registrationStatus.js";
 import { readMcpOAuthStore } from "./credentialStoreRead.js";
 import { isPluginServerConfig } from "./types.js";
@@ -31,74 +31,125 @@ import {
   logFeatureSad,
 } from "../analytics/featureTelemetry.js";
 import { getMcpServerSignature, filterMcpServersByPolicy, isMcpServerDisabled } from "./config.js";
-import { Do } from "../../utils/git/gitSafeEnv.js";
+import { pickByHelper } from "../../utils/git/gitSafeEnv.js";
 
 //@ chunk-etrfk54v.js:630-716 placement
-var k = new Set(["id_jag_with_auto_connect", "auto_connect", "auth_allows_auto_connect"]);
+/**
+ * 表示“组织会自动连接”的资格原因集合。
+ */
+var CONNECTOR_AUTO_CONNECT_REASONS = new Set([
+  "id_jag_with_auto_connect",
+  "auto_connect",
+  "auth_allows_auto_connect",
+]);
+//@ chunk-etrfk54v.js:716-2222 placement
 /**
  * 对新添加的 sse/http MCP 服务器检查是否应改用 claude.ai 连接器，并给出建议。
  */
-//@ chunk-etrfk54v.js:716-2222 placement
-async function adviseMcpRegistration(t, r, e, s) {
-  if (!aBr() || (e.type !== "sse" && e.type !== "http") || !(await isDcrRejection(t, r, e))) return;
-  let n = ht(),
-    a = needsClientRegistration(r, { ...e, redialToRelearnRegistration: void 0 }, await readMcpOAuthStore())
-      ? n.claudeAiConfigsFetch
-      : null,
+async function adviseMcpRegistration(error, serverName, config, s) {
+  if (
+    !recursiveLobsterOn() ||
+    (config.type !== "sse" && config.type !== "http") ||
+    !(await isDcrRejection(error, serverName, config))
+  )
+    return;
+  let cliOwnedState = getCliOwnedState();
+  let claudeAiConfigsFetch = needsClientRegistration(
+    serverName,
     {
-      listed: listed,
-      connectorNames: connectorNames,
-      connectors: connectors,
-    } = matchingConnectorsFor(a === null ? {} : await a, e),
-    i;
-  switch (e.scope) {
+      ...config,
+      redialToRelearnRegistration: undefined,
+    },
+    await readMcpOAuthStore(),
+  )
+    ? cliOwnedState.claudeAiConfigsFetch
+    : null;
+  let { listed, connectorNames, connectors } = matchingConnectorsFor(
+    claudeAiConfigsFetch === null ? {} : await claudeAiConfigsFetch,
+    config,
+  );
+  let i;
+  switch (config.scope) {
     case "local":
     case "user":
     case "project":
-      i = { kind: "register-app", fixer: "you" };
+      i = {
+        kind: "register-app",
+        fixer: "you",
+      };
       break;
     case "enterprise":
     case "managed":
-      i = { kind: "register-app", fixer: "administrator" };
+      i = {
+        kind: "register-app",
+        fixer: "administrator",
+      };
       break;
     case "dynamic":
     case "agent":
     case "claudeai":
-      i = { kind: "register-app", fixer: isPluginServerConfig(e) ? "plugin-author" : "configurer" };
+      i = {
+        kind: "register-app",
+        fixer: isPluginServerConfig(config) ? "plugin-author" : "configurer",
+      };
       break;
   }
   let [o] = connectors;
-  if (connectors.some((u) => u.ineligibleReason === "connected"))
-    i = { kind: "connected", connectorNames: connectorNames };
-  else if (connectors.some((u) => k.has(u.ineligibleReason ?? ""))) i = { kind: "organization-connects" };
-  else if (o !== void 0)
+  if (connectors.some((connector) => connector.ineligibleReason === "connected"))
+    i = {
+      kind: "connected",
+      connectorNames,
+    };
+  else if (
+    connectors.some((connector) => CONNECTOR_AUTO_CONNECT_REASONS.has(connector.ineligibleReason ?? ""))
+  )
+    i = {
+      kind: "organization-connects",
+    };
+  else if (o !== undefined)
     i = {
       kind: "connect",
-      connectorNames: connectorNames,
+      connectorNames,
       url:
         (connectors.length === 1 && o.ineligibleReason ? claudeAiConnectorAuthUrl(o) : null) ??
         getConnectorsSettingsUrl(),
     };
-  else if (!listed && a !== null && n.claudeAiConnectorListSettledSeq === n.claudeAiConnectorListFetchSeq) {
-    if (n.officialUrls === void 0 && (s === "mcp_login" || n.officialUrlsFetchAwaitsLookup))
+  else if (
+    !listed &&
+    claudeAiConfigsFetch !== null &&
+    cliOwnedState.claudeAiConnectorListSettledSeq === cliOwnedState.claudeAiConnectorListFetchSeq
+  ) {
+    if (
+      cliOwnedState.officialUrls === undefined &&
+      (s === "mcp_login" || cliOwnedState.officialUrlsFetchAwaitsLookup)
+    )
       await fetchOfficialMcpUrlsOnce();
-    await n.officialUrlsFetch;
-    let u = getLoggingSafeMcpBaseUrl(e);
-    if (u !== void 0 && isOfficialMcpUrl(u))
+    await cliOwnedState.officialUrlsFetch;
+    let loggingSafeMcpBaseUrl = getLoggingSafeMcpBaseUrl(config);
+    if (loggingSafeMcpBaseUrl !== undefined && isOfficialMcpUrl(loggingSafeMcpBaseUrl))
       switch (getSubscriptionType()) {
         case "pro":
         case "max":
-          i = { kind: "connect", url: getConnectorsSettingsUrl(), connectorNames: connectorNames };
+          i = {
+            kind: "connect",
+            url: getConnectorsSettingsUrl(),
+            connectorNames,
+          };
           break;
         case "team":
         case "enterprise":
-          i = { kind: "ask-admin" };
+          i = {
+            kind: "ask-admin",
+          };
           break;
         case null:
           break;
       }
   }
-  let h = { advice: fromEnum(i.kind), site: fromEnum(s) };
+  let h = {
+    advice: fromEnum(i.kind),
+    site: fromEnum(s),
+  };
   switch (i.kind) {
     case "connected":
     case "connect":
@@ -113,21 +164,25 @@ async function adviseMcpRegistration(t, r, e, s) {
   return i;
 }
 //@ chunk-etrfk54v.js:2222-2844 placement
-async function findMatchingConnector(t, r, { storageV5: storageV5, credentials: credentials }) {
-  let n = ht();
-  if (n.claudeAiConnectorListStatus !== "settled") return logHandoffOutcome("list_unavailable", r);
-  let claudeAiConfigsFetch = n.claudeAiConfigsFetch;
+async function findMatchingConnector(config, r, { storageV5, credentials }) {
+  let cliOwnedState = getCliOwnedState();
+  if (cliOwnedState.claudeAiConnectorListStatus !== "settled")
+    return logHandoffOutcome("list_unavailable", r);
+  let claudeAiConfigsFetch = cliOwnedState.claudeAiConfigsFetch;
   clearClaudeAiConfigsFetch();
-  let { connectorNames: connectorNames, connectors: connectors } = matchingConnectorsFor(
+  let { connectorNames, connectors } = matchingConnectorsFor(
     await fetchClaudeAiConfigsOnce(credentials),
-    t,
+    config,
   );
-  if (n.claudeAiConnectorListSettledSeq !== n.claudeAiConnectorListFetchSeq)
-    return ((n.claudeAiConfigsFetch ??= claudeAiConfigsFetch), logHandoffOutcome("list_unavailable", r));
-  let any = connectors.some((o) => o.ineligibleReason === "connected");
-  if (!any && connectors.every((o) => o.eligible === !1)) return logHandoffOutcome("not_connected", r);
-  let mcpClientModule = require("./chunk-asne9cp8.js").mcpClientModule();
-  for (let o of connectorNames) await mcpClientModule.removeMcpAuthCacheEntry(o, storageV5);
+  if (cliOwnedState.claudeAiConnectorListSettledSeq !== cliOwnedState.claudeAiConnectorListFetchSeq) {
+    cliOwnedState.claudeAiConfigsFetch ??= claudeAiConfigsFetch;
+    return logHandoffOutcome("list_unavailable", r);
+  }
+  let any = connectors.some((connector) => connector.ineligibleReason === "connected");
+  if (!any && connectors.every((connector) => connector.eligible === false))
+    return logHandoffOutcome("not_connected", r);
+  let i = require("./chunk-asne9cp8.js").mcpClientModule();
+  for (let connectorName of connectorNames) await i.removeMcpAuthCacheEntry(connectorName, storageV5);
   return logHandoffOutcome(any ? "connected" : "state_unknown", r);
 }
 //@ chunk-etrfk54v.js:2844-4437 placement
@@ -156,11 +211,16 @@ function registrationAdviceText(t) {
 }
 //@ chunk-etrfk54v.js:4437-4670 placement
 function logHandoffOutcome(t, r) {
-  let e = { waited_ms: Date.now() - r };
+  let e = {
+    waited_ms: Date.now() - r,
+  };
   switch (t) {
     case "connected":
     case "not_connected":
-      logFeatureOk("mcp_claudeai_handoff", { ...e, outcome: fromEnum(t) });
+      logFeatureOk("mcp_claudeai_handoff", {
+        ...e,
+        outcome: fromEnum(t),
+      });
       break;
     case "state_unknown":
     case "list_unavailable":
@@ -171,14 +231,16 @@ function logHandoffOutcome(t, r) {
 }
 //@ chunk-etrfk54v.js:4670-4909 placement
 function matchingConnectorsFor(t, r) {
-  let e = getMcpServerSignature(r),
-    s = Do(t, (a) => e !== null && getMcpServerSignature(a) === e),
-    n = Do(filterMcpServersByPolicy(s).allowed, (a, p) => !isMcpServerDisabled(p));
+  let mcpServerSignature = getMcpServerSignature(r);
+  let s = pickByHelper(
+    t,
+    (a) => mcpServerSignature !== null && getMcpServerSignature(a) === mcpServerSignature,
+  );
+  let n = pickByHelper(filterMcpServersByPolicy(s).allowed, (a, p) => !isMcpServerDisabled(p));
   return {
     listed: Object.keys(s).length > 0,
     connectorNames: Object.keys(n),
     connectors: Object.values(n).flatMap((a) => (a.type === "claudeai-proxy" ? [a] : [])),
   };
 }
-
 export { adviseMcpRegistration, registrationAdviceText, findMatchingConnector };

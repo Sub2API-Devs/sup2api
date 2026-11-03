@@ -5,18 +5,18 @@
  * pieces: chunk-hwmsct5x.js (12)
  * attribution: esm-layout 4, esm-fingerprint 8
  */
-import { Kn, ke } from "../../internal/tslib.mjs";
-import { oa, wr, X_STAINLESS_HELPER } from "../../internal/stainless-helper-header.mjs";
-import { T } from "../../internal/headers.mjs";
+import { __classPrivateFieldSet, __classPrivateFieldGet } from "../../internal/tslib.mjs";
+import { collectStainlessHelpers, wr, X_STAINLESS_HELPER } from "../../internal/stainless-helper-header.mjs";
+import { buildHeaders } from "../../internal/headers.mjs";
 import { SEn } from "../../internal/utils/promise.mjs";
-import { pr } from "../../core/error.mjs";
-import { Tb } from "../../internal/utils/log.mjs";
-import { ch } from "./ToolError.mjs";
-import { Bt_hwms } from "../../tools/agent-toolset/memories.mjs";
+import { AnthropicError } from "../../core/error.mjs";
+import { loggerFor } from "../../internal/utils/log.mjs";
+import { ToolError } from "./ToolError.mjs";
+import { Bt } from "../../tools/agent-toolset/memories.mjs";
 
 //@ chunk-hwmsct5x.js:104913-106258 esm-layout
-var ud = 1e5,
-  dd = `You have been working on the task described above but have not yet completed it. Write a continuation summary that will allow you (or another instance of yourself) to resume work efficiently in a future context window where the conversation history will be replaced with this summary. Your summary should be structured, concise, and actionable. Include:
+var DEFAULT_TOKEN_THRESHOLD = 1e5;
+var dd = `You have been working on the task described above but have not yet completed it. Write a continuation summary that will allow you (or another instance of yourself) to resume work efficiently in a future context window where the conversation history will be replaced with this summary. Your summary should be structured, concise, and actionable. Include:
 1. Task Overview
 The user's core request and success criteria
 Any clarifications or constraints they specified
@@ -40,413 +40,714 @@ Any promises made to the user
 Be concise but complete\u2014err on the side of including information that would prevent duplicate work or repeated mistakes. Write in a way that enables immediate resumption of the task.
 Wrap your summary in <summary></summary> tags.`;
 //@ chunk-hwmsct5x.js:106258-114576 esm-layout
-var xe,
-  Hn,
-  un,
-  fe,
-  Je,
-  je,
-  dn,
-  Rt,
-  jt,
-  Qr,
-  st,
-  cn,
-  $n,
-  fn,
-  cd,
-  Ra,
-  ka,
-  $s,
-  xa,
-  Ta,
-  Ma,
-  Oa,
-  fd,
-  Pa,
-  Ia = (() => {
-    class e {
-      constructor(n, r, s) {
-        (xe.add(this),
-          (this.client = n),
-          Hn.set(this, !1),
-          un.set(this, !1),
-          fe.set(this, void 0),
-          Je.set(this, void 0),
-          je.set(this, void 0),
-          dn.set(this, void 0),
-          Rt.set(this, void 0),
-          jt.set(this, void 0),
-          Qr.set(this, 0),
-          st.set(this, { status: "idle" }),
-          cn.set(this, null),
-          $n.set(this, new Map()),
-          fn.set(this, []),
-          pd(r),
-          Kn(this, fe, { params: { ...r, messages: JSON.parse(JSON.stringify(r.messages)) } }, "f"));
-        let h = oa(r.tools, r.messages);
-        if (
-          (Kn(
-            this,
-            Je,
-            {
-              ...s,
-              headers: T([
-                wr("BetaToolRunner"),
-                h.length ? { [X_STAINLESS_HELPER]: h.join(", ") } : void 0,
-                s?.headers,
-              ]),
-            },
-            "f",
-          ),
-          Kn(this, jt, SEn(), "f"),
-          r.compactionControl?.enabled)
-        )
-          console.warn(
-            'Anthropic: The `compactionControl` parameter is deprecated and will be removed in a future version. Use server-side compaction instead by passing `edits: [{ type: "compact_20260112" }]` in the params passed to `toolRunner()`. See https://platform.claude.com/docs/en/build-with-claude/compaction',
-          );
-      }
-      async *[((Hn = new WeakMap()),
-      (un = new WeakMap()),
-      (fe = new WeakMap()),
-      (Je = new WeakMap()),
-      (je = new WeakMap()),
-      (dn = new WeakMap()),
-      (Rt = new WeakMap()),
-      (jt = new WeakMap()),
-      (Qr = new WeakMap()),
-      (st = new WeakMap()),
-      (cn = new WeakMap()),
-      ($n = new WeakMap()),
-      (fn = new WeakMap()),
-      (xe = new WeakSet()),
-      (cd = async function () {
-        let compactionControl = ke(this, fe, "f").params.compactionControl;
-        if (!compactionControl || !compactionControl.enabled) return !1;
-        let s = 0;
-        if (ke(this, je, "f") !== void 0)
-          try {
-            let R = await ke(this, je, "f");
-            s =
-              R.usage.input_tokens +
-              (R.usage.cache_creation_input_tokens ?? 0) +
-              (R.usage.cache_read_input_tokens ?? 0) +
-              R.usage.output_tokens;
-          } catch {
-            return !1;
-          }
-        let h = compactionControl.contextTokenThreshold ?? ud;
-        if (s < h) return !1;
-        let y = compactionControl.model ?? ke(this, fe, "f").params.model,
-          w = compactionControl.summaryPrompt ?? dd,
-          messages = ke(this, fe, "f").params.messages;
-        if (messages[messages.length - 1].role === "assistant") {
-          let R = messages[messages.length - 1];
-          if (Array.isArray(R.content)) {
-            let filtered = R.content.filter((O) => O.type !== "tool_use");
-            if (filtered.length === 0) messages.pop();
-            else R.content = filtered;
-          }
-        }
-        let create = await this.client.beta.messages.create(
-          {
-            model: y,
-            messages: [...messages, { role: "user", content: [{ type: "text", text: w }] }],
-            max_tokens: ke(this, fe, "f").params.max_tokens,
+var _BetaToolRunner_instances;
+var _BetaToolRunner_consumed;
+var _BetaToolRunner_mutated;
+var _BetaToolRunner_state;
+var _BetaToolRunner_options;
+var _BetaToolRunner_message;
+var _BetaToolRunner_stream;
+var _BetaToolRunner_toolResponse;
+var _BetaToolRunner_completion;
+var _BetaToolRunner_iterationCount;
+var _BetaToolRunner_compaction;
+var _BetaToolRunner_lastStopReason;
+var _BetaToolRunner_toolOverrides;
+var _BetaToolRunner_pendingToolChanges;
+var _BetaToolRunner_checkAndCompact;
+var _BetaToolRunner_send;
+var _BetaToolRunner_compact;
+var _BetaToolRunner_runnableTools;
+var _BetaToolRunner_availableToolNames;
+var _BetaToolRunner_recordRemovalsFromHistory;
+var _BetaToolRunner_compactAfterFinalTurn;
+var _BetaToolRunner_generateToolResponse;
+var _BetaToolRunner_flushPendingToolChanges;
+var _BetaToolRunner_pendingToolChangesMessage;
+var BetaToolRunner = (() => {
+  class BetaToolRunner {
+    constructor(client, params, options) {
+      _BetaToolRunner_instances.add(this);
+      this.client = client;
+      _BetaToolRunner_consumed.set(this, false);
+      _BetaToolRunner_mutated.set(this, false);
+      _BetaToolRunner_state.set(this, undefined);
+      _BetaToolRunner_options.set(this, undefined);
+      _BetaToolRunner_message.set(this, undefined);
+      _BetaToolRunner_stream.set(this, undefined);
+      _BetaToolRunner_toolResponse.set(this, undefined);
+      _BetaToolRunner_completion.set(this, undefined);
+      _BetaToolRunner_iterationCount.set(this, 0);
+      _BetaToolRunner_compaction.set(this, {
+        status: "idle",
+      });
+      _BetaToolRunner_lastStopReason.set(this, null);
+      _BetaToolRunner_toolOverrides.set(this, new Map());
+      _BetaToolRunner_pendingToolChanges.set(this, []);
+      rejectCompactionParam(params);
+      __classPrivateFieldSet(
+        this,
+        _BetaToolRunner_state,
+        {
+          params: {
+            ...params,
+            messages: JSON.parse(JSON.stringify(params.messages)),
           },
-          { signal: ke(this, Je, "f").signal, headers: T([ke(this, Je, "f").headers, wr("compaction")]) },
+        },
+        "f",
+      );
+      let collected = collectStainlessHelpers(params.tools, params.messages);
+      __classPrivateFieldSet(
+        this,
+        _BetaToolRunner_options,
+        {
+          ...options,
+          headers: buildHeaders([
+            wr("BetaToolRunner"),
+            collected.length
+              ? {
+                  [X_STAINLESS_HELPER]: collected.join(", "),
+                }
+              : undefined,
+            options?.headers,
+          ]),
+        },
+        "f",
+      );
+      __classPrivateFieldSet(this, _BetaToolRunner_completion, SEn(), "f");
+      if (params.compactionControl?.enabled)
+        console.warn(
+          'Anthropic: The `compactionControl` parameter is deprecated and will be removed in a future version. Use server-side compaction instead by passing `edits: [{ type: "compact_20260112" }]` in the params passed to `toolRunner()`. See https://platform.claude.com/docs/en/build-with-claude/compaction',
         );
-        if (create.content[0]?.type !== "text") throw new pr("Expected text response for compaction");
-        return (
-          ke(this, xe, "m", Ta).call(this),
-          Kn(this, cn, null, "f"),
-          (ke(this, fe, "f").params.messages = [{ role: "user", content: hd(create.content) }]),
-          !0
-        );
-      }),
-      Symbol.asyncIterator)]() {
-        var n;
-        if (ke(this, Hn, "f")) throw new pr("Cannot iterate over a consumed stream");
-        (Kn(this, Hn, !0, "f"), Kn(this, un, !0, "f"), Kn(this, Rt, void 0, "f"));
+    }
+    async *[((_BetaToolRunner_consumed = new WeakMap()),
+    (_BetaToolRunner_mutated = new WeakMap()),
+    (_BetaToolRunner_state = new WeakMap()),
+    (_BetaToolRunner_options = new WeakMap()),
+    (_BetaToolRunner_message = new WeakMap()),
+    (_BetaToolRunner_stream = new WeakMap()),
+    (_BetaToolRunner_toolResponse = new WeakMap()),
+    (_BetaToolRunner_completion = new WeakMap()),
+    (_BetaToolRunner_iterationCount = new WeakMap()),
+    (_BetaToolRunner_compaction = new WeakMap()),
+    (_BetaToolRunner_lastStopReason = new WeakMap()),
+    (_BetaToolRunner_toolOverrides = new WeakMap()),
+    (_BetaToolRunner_pendingToolChanges = new WeakMap()),
+    (_BetaToolRunner_instances = new WeakSet()),
+    (_BetaToolRunner_checkAndCompact = async function () {
+      let compactionControl = __classPrivateFieldGet(this, _BetaToolRunner_state, "f").params
+        .compactionControl;
+      if (!compactionControl || !compactionControl.enabled) return false;
+      let tokensUsed = 0;
+      if (__classPrivateFieldGet(this, _BetaToolRunner_message, "f") !== undefined)
         try {
-          while (!0)
-            try {
-              if (
-                ke(this, fe, "f").params.max_iterations &&
-                ke(this, Qr, "f") >= ke(this, fe, "f").params.max_iterations
-              )
-                break;
-              if (
-                (ke(this, xe, "m", fd).call(this),
-                ke(this, st, "f").status === "scheduled" && gd(ke(this, cn, "f")) !== "resume")
-              ) {
-                yield* ke(this, xe, "m", ka).call(this, ke(this, st, "f").config);
-                continue;
-              }
-              (Kn(this, un, !1, "f"),
-                Kn(this, Rt, void 0, "f"),
-                Kn(this, Qr, ((n = ke(this, Qr, "f")), n++, n), "f"),
-                Kn(this, je, void 0, "f"));
-              let {
-                max_iterations: max_iterations,
-                compactionControl: compactionControl,
-                ...h
-              } = ke(this, fe, "f").params;
-              if ((yield* ke(this, xe, "m", Ra).call(this, h), !(await ke(this, xe, "m", cd).call(this)))) {
-                if (!ke(this, un, "f")) {
-                  let S = await ke(this, je, "f"),
-                    E = gd(S.stop_reason);
-                  (Kn(this, cn, S.stop_reason, "f"),
-                    ke(this, fe, "f").params.messages.push({ role: S.role, content: hd(S.content) }));
-                  let { container: container } = ke(this, fe, "f").params;
-                  if (S.container) {
-                    if (container == null) ke(this, fe, "f").params.container = S.container.id;
-                    else if (typeof container === "object" && container.id == null)
-                      ke(this, fe, "f").params.container = { ...container, id: S.container.id };
-                  }
-                  if (E === "stop") {
-                    yield* ke(this, xe, "m", Ma).call(this);
-                    break;
-                  }
-                  if (E === "resume") continue;
-                } else Kn(this, cn, null, "f");
-                let w = await ke(this, xe, "m", Oa).call(this, ke(this, fe, "f").params.messages.at(-1));
-                if (w) ke(this, fe, "f").params.messages.push(w);
-                else if (!ke(this, un, "f")) {
-                  yield* ke(this, xe, "m", Ma).call(this);
+          let message = await __classPrivateFieldGet(this, _BetaToolRunner_message, "f");
+          tokensUsed =
+            message.usage.input_tokens +
+            (message.usage.cache_creation_input_tokens ?? 0) +
+            (message.usage.cache_read_input_tokens ?? 0) +
+            message.usage.output_tokens;
+        } catch {
+          return false;
+        }
+      let threshold = compactionControl.contextTokenThreshold ?? DEFAULT_TOKEN_THRESHOLD;
+      if (tokensUsed < threshold) return false;
+      let model =
+        compactionControl.model ?? __classPrivateFieldGet(this, _BetaToolRunner_state, "f").params.model;
+      let summaryPrompt = compactionControl.summaryPrompt ?? dd;
+      let messages = __classPrivateFieldGet(this, _BetaToolRunner_state, "f").params.messages;
+      if (messages[messages.length - 1].role === "assistant") {
+        let lastMessage = messages[messages.length - 1];
+        if (Array.isArray(lastMessage.content)) {
+          let nonToolBlocks = lastMessage.content.filter((block) => block.type !== "tool_use");
+          if (nonToolBlocks.length === 0) messages.pop();
+          else lastMessage.content = nonToolBlocks;
+        }
+      }
+      let response = await this.client.beta.messages.create(
+        {
+          model,
+          messages: [
+            ...messages,
+            {
+              role: "user",
+              content: [
+                {
+                  type: "text",
+                  text: summaryPrompt,
+                },
+              ],
+            },
+          ],
+          max_tokens: __classPrivateFieldGet(this, _BetaToolRunner_state, "f").params.max_tokens,
+        },
+        {
+          signal: __classPrivateFieldGet(this, _BetaToolRunner_options, "f").signal,
+          headers: buildHeaders([
+            __classPrivateFieldGet(this, _BetaToolRunner_options, "f").headers,
+            wr("compaction"),
+          ]),
+        },
+      );
+      if (response.content[0]?.type !== "text")
+        throw new AnthropicError("Expected text response for compaction");
+      __classPrivateFieldGet(
+        this,
+        _BetaToolRunner_instances,
+        "m",
+        _BetaToolRunner_recordRemovalsFromHistory,
+      ).call(this);
+      __classPrivateFieldSet(this, _BetaToolRunner_lastStopReason, null, "f");
+      __classPrivateFieldGet(this, _BetaToolRunner_state, "f").params.messages = [
+        {
+          role: "user",
+          content: asContentParam(response.content),
+        },
+      ];
+      return true;
+    }),
+    Symbol.asyncIterator)]() {
+      var _a;
+      if (__classPrivateFieldGet(this, _BetaToolRunner_consumed, "f"))
+        throw new AnthropicError("Cannot iterate over a consumed stream");
+      __classPrivateFieldSet(this, _BetaToolRunner_consumed, true, "f");
+      __classPrivateFieldSet(this, _BetaToolRunner_mutated, true, "f");
+      __classPrivateFieldSet(this, _BetaToolRunner_toolResponse, undefined, "f");
+      try {
+        while (true)
+          try {
+            if (
+              __classPrivateFieldGet(this, _BetaToolRunner_state, "f").params.max_iterations &&
+              __classPrivateFieldGet(this, _BetaToolRunner_iterationCount, "f") >=
+                __classPrivateFieldGet(this, _BetaToolRunner_state, "f").params.max_iterations
+            )
+              break;
+            __classPrivateFieldGet(
+              this,
+              _BetaToolRunner_instances,
+              "m",
+              _BetaToolRunner_flushPendingToolChanges,
+            ).call(this);
+            if (
+              __classPrivateFieldGet(this, _BetaToolRunner_compaction, "f").status === "scheduled" &&
+              determineNextStepFromStopReason(
+                __classPrivateFieldGet(this, _BetaToolRunner_lastStopReason, "f"),
+              ) !== "resume"
+            ) {
+              yield* __classPrivateFieldGet(
+                this,
+                _BetaToolRunner_instances,
+                "m",
+                _BetaToolRunner_compact,
+              ).call(this, __classPrivateFieldGet(this, _BetaToolRunner_compaction, "f").config);
+              continue;
+            }
+            __classPrivateFieldSet(this, _BetaToolRunner_mutated, false, "f");
+            __classPrivateFieldSet(this, _BetaToolRunner_toolResponse, undefined, "f");
+            __classPrivateFieldSet(
+              this,
+              _BetaToolRunner_iterationCount,
+              ((_a = __classPrivateFieldGet(this, _BetaToolRunner_iterationCount, "f")), _a++, _a),
+              "f",
+            );
+            __classPrivateFieldSet(this, _BetaToolRunner_message, undefined, "f");
+            let { max_iterations, compactionControl, ...params } = __classPrivateFieldGet(
+              this,
+              _BetaToolRunner_state,
+              "f",
+            ).params;
+            yield* __classPrivateFieldGet(this, _BetaToolRunner_instances, "m", _BetaToolRunner_send).call(
+              this,
+              params,
+            );
+            if (
+              !(await __classPrivateFieldGet(
+                this,
+                _BetaToolRunner_instances,
+                "m",
+                _BetaToolRunner_checkAndCompact,
+              ).call(this))
+            ) {
+              if (!__classPrivateFieldGet(this, _BetaToolRunner_mutated, "f")) {
+                let message = await __classPrivateFieldGet(this, _BetaToolRunner_message, "f");
+                let nextStep = determineNextStepFromStopReason(message.stop_reason);
+                __classPrivateFieldSet(this, _BetaToolRunner_lastStopReason, message.stop_reason, "f");
+                __classPrivateFieldGet(this, _BetaToolRunner_state, "f").params.messages.push({
+                  role: message.role,
+                  content: asContentParam(message.content),
+                });
+                let { container } = __classPrivateFieldGet(this, _BetaToolRunner_state, "f").params;
+                if (message.container) {
+                  if (container == null)
+                    __classPrivateFieldGet(this, _BetaToolRunner_state, "f").params.container =
+                      message.container.id;
+                  else if (typeof container === "object" && container.id == null)
+                    __classPrivateFieldGet(this, _BetaToolRunner_state, "f").params.container = {
+                      ...container,
+                      id: message.container.id,
+                    };
+                }
+                if (nextStep === "stop") {
+                  yield* __classPrivateFieldGet(
+                    this,
+                    _BetaToolRunner_instances,
+                    "m",
+                    _BetaToolRunner_compactAfterFinalTurn,
+                  ).call(this);
                   break;
                 }
+                if (nextStep === "resume") continue;
+              } else __classPrivateFieldSet(this, _BetaToolRunner_lastStopReason, null, "f");
+              let toolMessage = await __classPrivateFieldGet(
+                this,
+                _BetaToolRunner_instances,
+                "m",
+                _BetaToolRunner_generateToolResponse,
+              ).call(this, __classPrivateFieldGet(this, _BetaToolRunner_state, "f").params.messages.at(-1));
+              if (toolMessage)
+                __classPrivateFieldGet(this, _BetaToolRunner_state, "f").params.messages.push(toolMessage);
+              else if (!__classPrivateFieldGet(this, _BetaToolRunner_mutated, "f")) {
+                yield* __classPrivateFieldGet(
+                  this,
+                  _BetaToolRunner_instances,
+                  "m",
+                  _BetaToolRunner_compactAfterFinalTurn,
+                ).call(this);
+                break;
               }
-            } finally {
-              (ke(this, dn, "f")?.abort(), Kn(this, dn, void 0, "f"));
             }
-          if (!ke(this, je, "f")) throw new pr("ToolRunner concluded without a message from the server");
-          ke(this, jt, "f").resolve(await ke(this, je, "f"));
-        } catch (error) {
-          throw (
-            Kn(this, Hn, !1, "f"),
-            ke(this, jt, "f").promise.catch(() => {}),
-            ke(this, jt, "f").reject(error),
-            Kn(this, jt, SEn(), "f"),
-            error
-          );
-        }
-      }
-      setMessagesParams(n) {
-        let r = typeof n === "function" ? n(ke(this, fe, "f").params) : n;
-        if ((pd(r), ke(this, st, "f").status !== "idle")) Ca(r);
-        if (ke(this, st, "f").status === "in_flight" && r.messages !== ke(this, fe, "f").params.messages)
-          throw new pr(
-            "Message params can't be changed while the conversation is being compacted, because the compaction response is about to replace them. Change them after this iteration instead.",
-          );
-        ((ke(this, fe, "f").params = r), Kn(this, un, !0, "f"), Kn(this, Rt, void 0, "f"));
-      }
-      setRequestOptions(n) {
-        if (typeof n === "function") Kn(this, Je, n(ke(this, Je, "f")), "f");
-        else Kn(this, Je, { ...ke(this, Je, "f"), ...n }, "f");
-      }
-      async generateToolResponse(n = ke(this, Je, "f").signal) {
-        let r = (await ke(this, je, "f")) ?? this.params.messages.at(-1);
-        if (!r) return null;
-        return ke(this, xe, "m", Oa).call(this, r, n);
-      }
-      done() {
-        return ke(this, jt, "f").promise;
-      }
-      async runUntilDone() {
-        if (!ke(this, Hn, "f")) for await (let n of this);
-        return this.done();
-      }
-      get params() {
-        return ke(this, fe, "f").params;
-      }
-      pushMessages(...n) {
-        this.setMessagesParams((r) => ({ ...r, messages: [...r.messages, ...n] }));
-      }
-      compactBeforeNextTurn(n) {
-        if (ke(this, st, "f").status === "in_flight") return;
-        (Ca(ke(this, fe, "f").params),
-          Kn(this, st, { status: "scheduled", config: n ?? { type: "summarize" } }, "f"));
-      }
-      addTools(...n) {
-        for (let r of n) {
-          if ("name" in r) ke(this, $n, "f").set(r.name, "run" in r ? r : null);
-          ke(this, fn, "f").push({ type: "addition", tool: r });
-        }
-      }
-      removeTools(...n) {
-        for (let r of n) {
-          let s = typeof r === "string" ? r : r.name;
-          (ke(this, $n, "f").set(s, null), ke(this, fn, "f").push({ type: "removal", name: s }));
-        }
-      }
-      then(n, r) {
-        return this.runUntilDone().then(n, r);
+          } finally {
+            __classPrivateFieldGet(this, _BetaToolRunner_stream, "f")?.abort();
+            __classPrivateFieldSet(this, _BetaToolRunner_stream, undefined, "f");
+          }
+        if (!__classPrivateFieldGet(this, _BetaToolRunner_message, "f"))
+          throw new AnthropicError("ToolRunner concluded without a message from the server");
+        __classPrivateFieldGet(this, _BetaToolRunner_completion, "f").resolve(
+          await __classPrivateFieldGet(this, _BetaToolRunner_message, "f"),
+        );
+      } catch (error) {
+        __classPrivateFieldSet(this, _BetaToolRunner_consumed, false, "f");
+        __classPrivateFieldGet(this, _BetaToolRunner_completion, "f").promise.catch(() => {});
+        __classPrivateFieldGet(this, _BetaToolRunner_completion, "f").reject(error);
+        __classPrivateFieldSet(this, _BetaToolRunner_completion, SEn(), "f");
+        throw error;
       }
     }
-    return (
-      (Ra = async function* (r) {
-        if (r.stream)
-          (Kn(this, dn, this.client.beta.messages.stream({ ...r }, ke(this, Je, "f")), "f"),
-            Kn(this, je, ke(this, dn, "f").finalMessage(), "f"),
-            ke(this, je, "f").catch(() => {}),
-            yield ke(this, dn, "f"));
-        else
-          (Kn(this, je, this.client.beta.messages.create({ ...r, stream: !1 }, ke(this, Je, "f")), "f"),
-            yield ke(this, je, "f"));
-      }),
-      (ka = async function* (r) {
-        Ca(ke(this, fe, "f").params);
-        let {
-            max_iterations: max_iterations,
-            compactionControl: compactionControl,
-            ...y
-          } = ke(this, fe, "f").params,
-          w = eg(y);
-        (Kn(this, st, { status: "in_flight" }, "f"), Kn(this, Rt, void 0, "f"));
-        let S = ke(this, je, "f");
-        try {
-          yield* ke(this, xe, "m", Ra).call(this, { ...w, compaction: r });
-          let E = await ke(this, je, "f");
-          if (E.content.some((R) => R.type === "compaction" && R.content))
-            (ke(this, xe, "m", Ta).call(this),
-              (ke(this, fe, "f").params.messages = [{ role: E.role, content: E.content }]));
-          else
-            (Tb(this.client).warn("Compaction produced no summary; keeping the conversation as it is."),
-              Kn(this, je, S, "f"));
-        } finally {
-          Kn(this, st, { status: "idle" }, "f");
-        }
-      }),
-      ($s = function () {
-        let r = new Map();
-        for (let tool of ke(this, fe, "f").params.tools) if ("run" in tool) r.set(tool.name, tool);
-        for (let [s, h] of ke(this, $n, "f"))
-          if (h) r.set(s, h);
-          else r.delete(s);
-        return r;
-      }),
-      (xa = function () {
-        let r = new Set(ke(this, xe, "m", $s).call(this).keys());
-        for (let s of [...ke(this, fe, "f").params.messages, ke(this, xe, "m", Pa).call(this)]) {
-          if (typeof s.content === "string") continue;
-          for (let h of s.content)
-            if (s.role === "system") md(h, r);
-            else if (s.role === "assistant" && h.type === "compaction")
-              for (let y of h.tool_changes ?? []) md(y, r);
-        }
-        return r;
-      }),
-      (Ta = function () {
-        let r = ke(this, xe, "m", xa).call(this);
-        for (let s of ke(this, xe, "m", $s).call(this).keys()) if (!r.has(s)) ke(this, $n, "f").set(s, null);
-      }),
-      (Ma = async function* () {
-        if (ke(this, st, "f").status !== "scheduled") return;
-        let r = ke(this, fe, "f").params.messages.at(-1)?.content;
-        if (Array.isArray(r) && r.some((s) => s.type === "tool_use")) {
-          (Tb(this.client).warn(
-            "The pending compaction was skipped because the last turn ended with tool calls that were not run. Call `compactBeforeNextTurn()` again if you continue the conversation.",
-          ),
-            Kn(this, st, { status: "idle" }, "f"));
-          return;
-        }
-        yield* ke(this, xe, "m", ka).call(this, ke(this, st, "f").config);
-      }),
-      (Oa = async function (r, s = ke(this, Je, "f").signal) {
-        if (ke(this, Rt, "f") !== void 0) return ke(this, Rt, "f");
-        return (
-          Kn(
-            this,
-            Rt,
-            tg(ke(this, xe, "m", $s).call(this), ke(this, xe, "m", xa).call(this), r, {
-              ...ke(this, Je, "f"),
-              signal: s,
-            }),
-            "f",
-          ),
-          ke(this, Rt, "f")
+    setMessagesParams(paramsOrMutator) {
+      let params =
+        typeof paramsOrMutator === "function"
+          ? paramsOrMutator(__classPrivateFieldGet(this, _BetaToolRunner_state, "f").params)
+          : paramsOrMutator;
+      rejectCompactionParam(params);
+      if (__classPrivateFieldGet(this, _BetaToolRunner_compaction, "f").status !== "idle")
+        rejectCompactionEdit(params);
+      if (
+        __classPrivateFieldGet(this, _BetaToolRunner_compaction, "f").status === "in_flight" &&
+        params.messages !== __classPrivateFieldGet(this, _BetaToolRunner_state, "f").params.messages
+      )
+        throw new AnthropicError(
+          "Message params can't be changed while the conversation is being compacted, because the compaction response is about to replace them. Change them after this iteration instead.",
         );
-      }),
-      (fd = function () {
-        if (ke(this, cn, "f") === "pause_turn" || ke(this, fn, "f").length === 0) return;
-        (ke(this, fe, "f").params.messages.push(ke(this, xe, "m", Pa).call(this)), Kn(this, fn, [], "f"));
-      }),
-      (Pa = function () {
-        let r = [];
-        for (let s of ke(this, fn, "f")) {
-          if (s.type === "removal") {
-            r.push({ type: "tool_removal", tool: { type: "tool_reference", name: s.name } });
-            continue;
-          }
-          let tool = s.tool;
-          if ("run" in s.tool) {
-            let { run: run, parse: parse, close: close, ...E } = s.tool;
-            tool = E;
-          }
-          r.push({ type: "tool_addition", tool: { type: "tool_definition", definition: tool } });
-        }
-        return { role: "system", content: r };
-      }),
-      e
+      __classPrivateFieldGet(this, _BetaToolRunner_state, "f").params = params;
+      __classPrivateFieldSet(this, _BetaToolRunner_mutated, true, "f");
+      __classPrivateFieldSet(this, _BetaToolRunner_toolResponse, undefined, "f");
+    }
+    setRequestOptions(optionsOrMutator) {
+      if (typeof optionsOrMutator === "function")
+        __classPrivateFieldSet(
+          this,
+          _BetaToolRunner_options,
+          optionsOrMutator(__classPrivateFieldGet(this, _BetaToolRunner_options, "f")),
+          "f",
+        );
+      else
+        __classPrivateFieldSet(
+          this,
+          _BetaToolRunner_options,
+          {
+            ...__classPrivateFieldGet(this, _BetaToolRunner_options, "f"),
+            ...optionsOrMutator,
+          },
+          "f",
+        );
+    }
+    async generateToolResponse(signal = __classPrivateFieldGet(this, _BetaToolRunner_options, "f").signal) {
+      let message =
+        (await __classPrivateFieldGet(this, _BetaToolRunner_message, "f")) ?? this.params.messages.at(-1);
+      if (!message) return null;
+      return __classPrivateFieldGet(
+        this,
+        _BetaToolRunner_instances,
+        "m",
+        _BetaToolRunner_generateToolResponse,
+      ).call(this, message, signal);
+    }
+    done() {
+      return __classPrivateFieldGet(this, _BetaToolRunner_completion, "f").promise;
+    }
+    async runUntilDone() {
+      if (!__classPrivateFieldGet(this, _BetaToolRunner_consumed, "f")) for await (let _ of this);
+      return this.done();
+    }
+    get params() {
+      return __classPrivateFieldGet(this, _BetaToolRunner_state, "f").params;
+    }
+    pushMessages(...messages) {
+      this.setMessagesParams((params) => ({
+        ...params,
+        messages: [...params.messages, ...messages],
+      }));
+    }
+    compactBeforeNextTurn(compaction) {
+      if (__classPrivateFieldGet(this, _BetaToolRunner_compaction, "f").status === "in_flight") return;
+      rejectCompactionEdit(__classPrivateFieldGet(this, _BetaToolRunner_state, "f").params);
+      __classPrivateFieldSet(
+        this,
+        _BetaToolRunner_compaction,
+        {
+          status: "scheduled",
+          config: compaction ?? {
+            type: "summarize",
+          },
+        },
+        "f",
+      );
+    }
+    addTools(...tools) {
+      for (let tool of tools) {
+        if ("name" in tool)
+          __classPrivateFieldGet(this, _BetaToolRunner_toolOverrides, "f").set(
+            tool.name,
+            "run" in tool ? tool : null,
+          );
+        __classPrivateFieldGet(this, _BetaToolRunner_pendingToolChanges, "f").push({
+          type: "addition",
+          tool,
+        });
+      }
+    }
+    removeTools(...tools) {
+      for (let tool of tools) {
+        let name = typeof tool === "string" ? tool : tool.name;
+        __classPrivateFieldGet(this, _BetaToolRunner_toolOverrides, "f").set(name, null);
+        __classPrivateFieldGet(this, _BetaToolRunner_pendingToolChanges, "f").push({
+          type: "removal",
+          name,
+        });
+      }
+    }
+    then(onfulfilled, onrejected) {
+      return this.runUntilDone().then(onfulfilled, onrejected);
+    }
+  }
+  _BetaToolRunner_send = async function* (params) {
+    if (params.stream) {
+      __classPrivateFieldSet(
+        this,
+        _BetaToolRunner_stream,
+        this.client.beta.messages.stream(
+          {
+            ...params,
+          },
+          __classPrivateFieldGet(this, _BetaToolRunner_options, "f"),
+        ),
+        "f",
+      );
+      __classPrivateFieldSet(
+        this,
+        _BetaToolRunner_message,
+        __classPrivateFieldGet(this, _BetaToolRunner_stream, "f").finalMessage(),
+        "f",
+      );
+      __classPrivateFieldGet(this, _BetaToolRunner_message, "f").catch(() => {});
+      yield __classPrivateFieldGet(this, _BetaToolRunner_stream, "f");
+    } else {
+      __classPrivateFieldSet(
+        this,
+        _BetaToolRunner_message,
+        this.client.beta.messages.create(
+          {
+            ...params,
+            stream: false,
+          },
+          __classPrivateFieldGet(this, _BetaToolRunner_options, "f"),
+        ),
+        "f",
+      );
+      yield __classPrivateFieldGet(this, _BetaToolRunner_message, "f");
+    }
+  };
+  _BetaToolRunner_compact = async function* (compaction) {
+    rejectCompactionEdit(__classPrivateFieldGet(this, _BetaToolRunner_state, "f").params);
+    let { max_iterations, compactionControl, ...requestParams } = __classPrivateFieldGet(
+      this,
+      _BetaToolRunner_state,
+      "f",
+    ).params;
+    let params = withoutCompactionIncompatibleParams(requestParams);
+    __classPrivateFieldSet(
+      this,
+      _BetaToolRunner_compaction,
+      {
+        status: "in_flight",
+      },
+      "f",
     );
-  })();
+    __classPrivateFieldSet(this, _BetaToolRunner_toolResponse, undefined, "f");
+    let lastMessage = __classPrivateFieldGet(this, _BetaToolRunner_message, "f");
+    try {
+      yield* __classPrivateFieldGet(this, _BetaToolRunner_instances, "m", _BetaToolRunner_send).call(this, {
+        ...params,
+        compaction,
+      });
+      let message = await __classPrivateFieldGet(this, _BetaToolRunner_message, "f");
+      if (message.content.some((block) => block.type === "compaction" && block.content)) {
+        __classPrivateFieldGet(
+          this,
+          _BetaToolRunner_instances,
+          "m",
+          _BetaToolRunner_recordRemovalsFromHistory,
+        ).call(this);
+        __classPrivateFieldGet(this, _BetaToolRunner_state, "f").params.messages = [
+          {
+            role: message.role,
+            content: message.content,
+          },
+        ];
+      } else {
+        loggerFor(this.client).warn("Compaction produced no summary; keeping the conversation as it is.");
+        __classPrivateFieldSet(this, _BetaToolRunner_message, lastMessage, "f");
+      }
+    } finally {
+      __classPrivateFieldSet(
+        this,
+        _BetaToolRunner_compaction,
+        {
+          status: "idle",
+        },
+        "f",
+      );
+    }
+  };
+  _BetaToolRunner_runnableTools = function () {
+    let runnable = new Map();
+    for (let tool of __classPrivateFieldGet(this, _BetaToolRunner_state, "f").params.tools)
+      if ("run" in tool) runnable.set(tool.name, tool);
+    for (let [name, tool] of __classPrivateFieldGet(this, _BetaToolRunner_toolOverrides, "f"))
+      if (tool) runnable.set(name, tool);
+      else runnable.delete(name);
+    return runnable;
+  };
+  _BetaToolRunner_availableToolNames = function () {
+    let available = new Set(
+      __classPrivateFieldGet(this, _BetaToolRunner_instances, "m", _BetaToolRunner_runnableTools)
+        .call(this)
+        .keys(),
+    );
+    for (let message of [
+      ...__classPrivateFieldGet(this, _BetaToolRunner_state, "f").params.messages,
+      __classPrivateFieldGet(
+        this,
+        _BetaToolRunner_instances,
+        "m",
+        _BetaToolRunner_pendingToolChangesMessage,
+      ).call(this),
+    ]) {
+      if (typeof message.content === "string") continue;
+      for (let block of message.content)
+        if (message.role === "system") applyToolChange(block, available);
+        else if (message.role === "assistant" && block.type === "compaction")
+          for (let change of block.tool_changes ?? []) applyToolChange(change, available);
+    }
+    return available;
+  };
+  _BetaToolRunner_recordRemovalsFromHistory = function () {
+    let available = __classPrivateFieldGet(
+      this,
+      _BetaToolRunner_instances,
+      "m",
+      _BetaToolRunner_availableToolNames,
+    ).call(this);
+    for (let name of __classPrivateFieldGet(
+      this,
+      _BetaToolRunner_instances,
+      "m",
+      _BetaToolRunner_runnableTools,
+    )
+      .call(this)
+      .keys())
+      if (!available.has(name))
+        __classPrivateFieldGet(this, _BetaToolRunner_toolOverrides, "f").set(name, null);
+  };
+  _BetaToolRunner_compactAfterFinalTurn = async function* () {
+    if (__classPrivateFieldGet(this, _BetaToolRunner_compaction, "f").status !== "scheduled") return;
+    let lastContent = __classPrivateFieldGet(this, _BetaToolRunner_state, "f").params.messages.at(
+      -1,
+    )?.content;
+    if (Array.isArray(lastContent) && lastContent.some((block) => block.type === "tool_use")) {
+      loggerFor(this.client).warn(
+        "The pending compaction was skipped because the last turn ended with tool calls that were not run. Call `compactBeforeNextTurn()` again if you continue the conversation.",
+      );
+      __classPrivateFieldSet(
+        this,
+        _BetaToolRunner_compaction,
+        {
+          status: "idle",
+        },
+        "f",
+      );
+      return;
+    }
+    yield* __classPrivateFieldGet(this, _BetaToolRunner_instances, "m", _BetaToolRunner_compact).call(
+      this,
+      __classPrivateFieldGet(this, _BetaToolRunner_compaction, "f").config,
+    );
+  };
+  _BetaToolRunner_generateToolResponse = async function (
+    lastMessage,
+    signal = __classPrivateFieldGet(this, _BetaToolRunner_options, "f").signal,
+  ) {
+    if (__classPrivateFieldGet(this, _BetaToolRunner_toolResponse, "f") !== undefined)
+      return __classPrivateFieldGet(this, _BetaToolRunner_toolResponse, "f");
+    __classPrivateFieldSet(
+      this,
+      _BetaToolRunner_toolResponse,
+      generateToolResponse(
+        __classPrivateFieldGet(this, _BetaToolRunner_instances, "m", _BetaToolRunner_runnableTools).call(
+          this,
+        ),
+        __classPrivateFieldGet(this, _BetaToolRunner_instances, "m", _BetaToolRunner_availableToolNames).call(
+          this,
+        ),
+        lastMessage,
+        {
+          ...__classPrivateFieldGet(this, _BetaToolRunner_options, "f"),
+          signal,
+        },
+      ),
+      "f",
+    );
+    return __classPrivateFieldGet(this, _BetaToolRunner_toolResponse, "f");
+  };
+  _BetaToolRunner_flushPendingToolChanges = function () {
+    if (
+      __classPrivateFieldGet(this, _BetaToolRunner_lastStopReason, "f") === "pause_turn" ||
+      __classPrivateFieldGet(this, _BetaToolRunner_pendingToolChanges, "f").length === 0
+    )
+      return;
+    __classPrivateFieldGet(this, _BetaToolRunner_state, "f").params.messages.push(
+      __classPrivateFieldGet(
+        this,
+        _BetaToolRunner_instances,
+        "m",
+        _BetaToolRunner_pendingToolChangesMessage,
+      ).call(this),
+    );
+    __classPrivateFieldSet(this, _BetaToolRunner_pendingToolChanges, [], "f");
+  };
+  _BetaToolRunner_pendingToolChangesMessage = function () {
+    let content = [];
+    for (let change of __classPrivateFieldGet(this, _BetaToolRunner_pendingToolChanges, "f")) {
+      if (change.type === "removal") {
+        content.push({
+          type: "tool_removal",
+          tool: {
+            type: "tool_reference",
+            name: change.name,
+          },
+        });
+        continue;
+      }
+      let definition = change.tool;
+      if ("run" in change.tool) {
+        let { run, parse, close, ...rest } = change.tool;
+        definition = rest;
+      }
+      content.push({
+        type: "tool_addition",
+        tool: {
+          type: "tool_definition",
+          definition,
+        },
+      });
+    }
+    return {
+      role: "system",
+      content,
+    };
+  };
+  return BetaToolRunner;
+})();
 //@ chunk-hwmsct5x.js:114576-114828 esm-layout
-function pd(e) {
-  if ("compaction" in e && e.compaction != null)
-    throw new pr(
+function rejectCompactionParam(params) {
+  if ("compaction" in params && params.compaction != null)
+    throw new AnthropicError(
       "`compaction` cannot be set on a tool runner: every request in the loop would compact again. Call `runner.compactBeforeNextTurn()` when the conversation should be compacted instead.",
     );
 }
 //@ chunk-hwmsct5x.js:114828-115114 esm-fingerprint
-function Ca(e) {
-  if (e.context_management?.edits?.some((n) => n.type.startsWith("compact_")))
-    throw new pr(
+function rejectCompactionEdit(params) {
+  if (params.context_management?.edits?.some((edit) => edit.type.startsWith("compact_")))
+    throw new AnthropicError(
       "`compactBeforeNextTurn()` can't be used while `context_management` has a compaction edit, because the API doesn't accept a compaction block together with one. Remove the edit first.",
     );
 }
 //@ chunk-hwmsct5x.js:115114-115485 esm-fingerprint
-function eg(e) {
-  let {
-      context_management: context_management,
-      stop_sequences: stop_sequences,
-      output_format: output_format,
-      ...h
-    } = e,
-    y = ({ format: format, ...S }) => S;
-  if (h.tool_choice?.type === "any" || h.tool_choice?.type === "tool") delete h.tool_choice;
-  if (h.output_config) h.output_config = y(h.output_config);
-  if (Array.isArray(h.fallbacks))
-    h.fallbacks = h.fallbacks.map((fallback) =>
-      fallback.output_config ? { ...fallback, output_config: y(fallback.output_config) } : fallback,
+function withoutCompactionIncompatibleParams(params) {
+  let { context_management, stop_sequences, output_format, ...kept } = params;
+  let withoutFormat = ({ format, ...outputConfig }) => outputConfig;
+  if (kept.tool_choice?.type === "any" || kept.tool_choice?.type === "tool") delete kept.tool_choice;
+  if (kept.output_config) kept.output_config = withoutFormat(kept.output_config);
+  if (Array.isArray(kept.fallbacks))
+    kept.fallbacks = kept.fallbacks.map((fallback) =>
+      fallback.output_config
+        ? {
+            ...fallback,
+            output_config: withoutFormat(fallback.output_config),
+          }
+        : fallback,
     );
-  return h;
+  return kept;
 }
 //@ chunk-hwmsct5x.js:115485-116121 esm-fingerprint
-async function tg(e, n, r, s) {
-  if (!r || r.role !== "assistant" || !r.content || typeof r.content === "string") return null;
-  let filtered = r.content.filter((w) => w.type === "tool_use");
-  if (filtered.length === 0) return null;
+async function generateToolResponse(runnable, available, lastMessage, requestOptions) {
+  if (
+    !lastMessage ||
+    lastMessage.role !== "assistant" ||
+    !lastMessage.content ||
+    typeof lastMessage.content === "string"
+  )
+    return null;
+  let toolUseBlocks = lastMessage.content.filter((content) => content.type === "tool_use");
+  if (toolUseBlocks.length === 0) return null;
   return {
     role: "user",
     content: await Promise.all(
-      filtered.map(async (w) => {
-        let S = n.has(w.name) ? e.get(w.name) : void 0;
-        if (!S) return ng(w);
+      toolUseBlocks.map(async (toolUse) => {
+        let tool = available.has(toolUse.name) ? runnable.get(toolUse.name) : undefined;
+        if (!tool) return toolNotFoundResult(toolUse);
         try {
-          let input = w.input;
-          if ("parse" in S && S.parse) input = S.parse(input);
-          let run = await S.run(input, { toolUse: w, toolUseBlock: w, signal: s?.signal });
-          return { type: "tool_result", tool_use_id: w.id, content: run };
+          let input = toolUse.input;
+          if ("parse" in tool && tool.parse) input = tool.parse(input);
+          let result = await tool.run(input, {
+            toolUse,
+            toolUseBlock: toolUse,
+            signal: requestOptions?.signal,
+          });
+          return {
+            type: "tool_result",
+            tool_use_id: toolUse.id,
+            content: result,
+          };
         } catch (error) {
           return {
             type: "tool_result",
-            tool_use_id: w.id,
+            tool_use_id: toolUse.id,
             content:
-              error instanceof ch
+              error instanceof ToolError
                 ? error.content
                 : `Error: ${error instanceof Error ? error.message : String(error)}`,
-            is_error: !0,
+            is_error: true,
           };
         }
       }),
@@ -454,49 +755,49 @@ async function tg(e, n, r, s) {
   };
 }
 //@ chunk-hwmsct5x.js:116121-116145 esm-layout
-function hd(e) {
-  return e;
+function asContentParam(content) {
+  return content;
 }
 //@ chunk-hwmsct5x.js:116145-116260 esm-fingerprint
-function ng(e) {
+function toolNotFoundResult(toolUse) {
   return {
     type: "tool_result",
-    tool_use_id: e.id,
-    content: `Error: Tool '${e.name}' not found`,
-    is_error: !0,
+    tool_use_id: toolUse.id,
+    content: `Error: Tool '${toolUse.name}' not found`,
+    is_error: true,
   };
 }
 //@ chunk-hwmsct5x.js:116260-116346 esm-fingerprint
-function md(e, n) {
-  switch (e.type) {
+function applyToolChange(block, available) {
+  switch (block.type) {
     case "tool_removal":
     case "tool_addition":
-      rg(e, n);
+      applyToolReference(block, available);
       break;
   }
 }
 //@ chunk-hwmsct5x.js:116346-116454 esm-fingerprint
-function rg(e, n) {
-  let r = og(e.tool);
-  if (r === void 0) return;
-  if (e.type === "tool_removal") n.delete(r);
-  else n.add(r);
+function applyToolReference(block, available) {
+  let name = changedToolName(block.tool);
+  if (name === undefined) return;
+  if (block.type === "tool_removal") available.delete(name);
+  else available.add(name);
 }
 //@ chunk-hwmsct5x.js:116454-116610 esm-fingerprint
-function og(e) {
-  switch (e.type) {
+function changedToolName(tool) {
+  switch (tool.type) {
     case "tool_reference":
-      return e.name;
+      return tool.name;
     case "tool_definition":
-      return "name" in e.definition ? e.definition.name : void 0;
+      return "name" in tool.definition ? tool.definition.name : undefined;
     default:
       return;
   }
 }
 //@ chunk-hwmsct5x.js:116610-116886 esm-fingerprint
-function gd(e) {
-  if (e === null) return "stop";
-  switch (e) {
+function determineNextStepFromStopReason(stopReason) {
+  if (stopReason === null) return "stop";
+  switch (stopReason) {
     case "tool_use":
       return "run_tools";
     case "pause_turn":
@@ -509,8 +810,8 @@ function gd(e) {
     case "refusal":
       return "stop";
     default:
-      return (Bt_hwms(e), "stop");
+      Bt(stopReason);
+      return "stop";
   }
 }
-
-export { Ia };
+export { BetaToolRunner };

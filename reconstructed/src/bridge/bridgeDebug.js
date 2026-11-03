@@ -12,7 +12,10 @@ import { exitRefusingManagedConfig } from "../cli/managedConfigRefusal.js";
 
 //@ chunk-cjydagjy.js:71821-71885 fingerprint = injectBridgeFault (0.593)
 function injectBridgeFault(errorType, message, reason) {
-  return exitRefusingManagedConfig({ message: message, reason: reason, errorType: errorType });
+  return exitRefusingManagedConfig({
+    message,
+    reason,
+    errorType,
+  });
 }
-
 export { injectBridgeFault };

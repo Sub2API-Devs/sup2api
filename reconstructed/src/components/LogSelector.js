@@ -8,18 +8,18 @@
  * pieces: chunk-18hwfzwa.js (1), chunk-52dd7zdd.js (1), chunk-63641kq7.js (1), chunk-b79vwm1h.js (13)
  * attribution: fingerprint 10, file-local 1, layout 4, callgraph-fingerprint 1
  */
-import { sep, sep as sep_2, basename } from "path";
+import { sep, basename } from "path";
 import { truncateToWidth, formatLogMetadata } from "../utils/format.js";
 import { sequential } from "../utils/sequential.js";
-import { PR_URL_RE, parsePrUrl_2 } from "../tools/shared/gitOperationTracking.js";
-import { hf } from "../utils/permissions/autoModeRulesPrompt.js";
+import { PR_URL_RE_2, parsePrUrl_2 } from "../tools/shared/gitOperationTracking.js";
+import { BOXED_DIAMOND_GLYPH } from "../utils/permissions/autoModeRulesPrompt.js";
 import { bunStringWidth } from "../ink/stringWidth.js";
 import { getLogDisplayTitle } from "../utils/log.js";
-import { Me, useResolvedTheme } from "./design-system/ThemeProvider.js";
+import { useTheme_2, useResolvedTheme } from "./design-system/ThemeProvider.js";
 import { useScrollViewportSize } from "./ScrollViewportContext.js";
 import { useTerminalSize } from "../hooks/useTerminalSize.js";
 import { useGlobalExitKeybindings, useKeybinding } from "../keybindings/useKeybinding.js";
-import { nd } from "../utils/stableEmptyObject.js";
+import { stableEmptyObject } from "../utils/stableEmptyObject.js";
 import { useTerminalFocus } from "../ink/hooks/use-terminal-focus.js";
 import { useClock } from "../ink/components/ClockContext.js";
 import { Q, y, eJ, P, R } from "../../vendor/react/cjs/react.production.js";
@@ -35,7 +35,11 @@ import {
   saveCustomTitle,
 } from "../utils/sessionStorage.js";
 import { PANE_PADDING, Pane } from "./design-system/Pane.js";
-import { e, r, Fragment } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+  Fragment,
+} from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { KeyboardShortcutHint } from "./design-system/KeyboardShortcutHint.js";
 import { SessionPreview } from "./SessionPreview.js";
 import { Box, Text } from "../ink/components/Text.js";
@@ -47,10 +51,10 @@ import { TreeSelect } from "./ui/TreeSelect.js";
 import { ConfigurableShortcutHint } from "./ConfigurableShortcutHint.js";
 import { w } from "../../vendor/react/compiler-runtime.js";
 import { renderCompactSummaryText } from "./CompactSummary.js";
-import { t7 } from "../utils/messages/pluginPrompts.js";
+import { renderPluginPromptColon } from "../utils/messages/pluginPrompts.js";
 import { fieldKey } from "./pluginUi/render/RenderInstance.js";
 import { DoctorLazy } from "../cli/handlers/util.js";
-import { u, o } from "../../vendor/zod/v4/classic/schemas.js";
+import { u, string } from "../../vendor/zod/v4/classic/schemas.js";
 
 //@ chunk-b79vwm1h.js:7428-7495 file-local
 function normalizeAndTruncateToWidth(text, maxWidth) {
@@ -58,38 +62,43 @@ function normalizeAndTruncateToWidth(text, maxWidth) {
   return truncateToWidth(normalized, maxWidth);
 }
 //@ chunk-b79vwm1h.js:7495-7541 layout
-var wo = 2,
-  Io = 4,
-  Do = 2000,
-  En = 1000,
-  Tn = 50000,
-  No = 0.3;
+var LOG_MIN_LINES = 2;
+var LOG_MAX_LINES = 4;
+var LOG_REFRESH_MS = 2000;
+var LOG_TAIL_MS = 1000;
+var LOG_MAX_BYTES = 50000;
+var LOG_DIM_RATIO = 0.3;
 //@ chunk-b79vwm1h.js:7541-7612 layout
-var Po = { format: { modCase: "title", charCase: "upper" } },
-  vo = 60000,
-  Ro = 50,
-  Fo = 5;
+var LOG_SHORTCUT_FORMAT = {
+  format: {
+    modCase: "title",
+    charCase: "upper",
+  },
+};
+var LOG_STALE_MS = 60000;
+var LOG_MAX_ENTRIES = 50;
+var LOG_RETRY_COUNT = 5;
 //@ chunk-b79vwm1h.js:7612-7686 fingerprint = formatSnippet (1)
-function formatSnippet({ before: before, match: match, after: after }, highlightColor) {
+function formatSnippet({ before, match, after }, highlightColor) {
   return sequential.dim(before) + highlightColor(match) + sequential.dim(after);
 }
 //@ chunk-b79vwm1h.js:7686-7827 layout
-function formatPrUrlsInQuery(o) {
-  return o.replace(new RegExp(PR_URL_RE.source + '[^,\\s"]*', "g"), (d) => {
-    let c = parsePrUrl_2(d);
-    return c ? `PR #${c.prNumber} ${c.prRepository}` : d;
+function formatPrUrlsInQuery(searchQuery) {
+  return searchQuery.replace(new RegExp(PR_URL_RE_2.source + '[^,\\s"]*', "g"), (d) => {
+    let prUrl = parsePrUrl_2(d);
+    return prUrl ? `PR #${prUrl.prNumber} ${prUrl.prRepository}` : d;
   });
 }
 //@ chunk-b79vwm1h.js:7827-8165 fingerprint = extractSnippet (1)
 function extractSnippet(text, query, contextChars) {
   let matchIndex = text.toLowerCase().indexOf(query.toLowerCase());
   if (matchIndex === -1) return null;
-  let matchEnd = matchIndex + query.length,
-    snippetStart = Math.max(0, matchIndex - contextChars),
-    snippetEnd = Math.min(text.length, matchEnd + contextChars),
-    beforeRaw = text.slice(snippetStart, matchIndex),
-    matchText = text.slice(matchIndex, matchEnd),
-    afterRaw = text.slice(matchEnd, snippetEnd);
+  let matchEnd = matchIndex + query.length;
+  let snippetStart = Math.max(0, matchIndex - contextChars);
+  let snippetEnd = Math.min(text.length, matchEnd + contextChars);
+  let beforeRaw = text.slice(snippetStart, matchIndex);
+  let matchText = text.slice(matchIndex, matchEnd);
+  let afterRaw = text.slice(matchEnd, snippetEnd);
   return {
     before: (snippetStart > 0 ? "\u2026" : "") + beforeRaw.replace(/\s+/g, " ").trimStart(),
     match: matchText.trim(),
@@ -98,97 +107,109 @@ function extractSnippet(text, query, contextChars) {
 }
 //@ chunk-b79vwm1h.js:8165-8496 fingerprint = buildLogLabel (0.948)
 function buildLogLabel(log, maxLabelWidth, options) {
-  let { isGroupHeader: isGroupHeader = !1, isChild: isChild = !1, forkCount: forkCount = 0 } = options || {},
-    b = isGroupHeader && forkCount > 0 ? wo : isChild ? Io : 0,
-    p =
-      isGroupHeader && forkCount > 0
-        ? ` (+${forkCount} other ${forkCount === 1 ? "session" : "sessions"})`
-        : "",
-    _ = log.isSidechain ? " (sidechain)" : "",
-    F = log.artifactCount !== void 0 && log.artifactCount > 0 ? `  ${hf} ${log.artifactCount}` : "",
-    maxSummaryWidth = maxLabelWidth - b - _.length - p.length - bunStringWidth(F);
+  let { isGroupHeader = false, isChild = false, forkCount = 0 } = options || {};
+  let prefixWidth = isGroupHeader && forkCount > 0 ? LOG_MIN_LINES : isChild ? LOG_MAX_LINES : 0;
+  let p =
+    isGroupHeader && forkCount > 0
+      ? ` (+${forkCount} other ${forkCount === 1 ? "session" : "sessions"})`
+      : "";
+  let _ = log.isSidechain ? " (sidechain)" : "";
+  let F =
+    log.artifactCount !== undefined && log.artifactCount > 0
+      ? `  ${BOXED_DIAMOND_GLYPH} ${log.artifactCount}`
+      : "";
+  let maxSummaryWidth = maxLabelWidth - prefixWidth - _.length - p.length - bunStringWidth(F);
   return `${normalizeAndTruncateToWidth(getLogDisplayTitle(log), maxSummaryWidth)}${_}${p}${F}`;
 }
 //@ chunk-b79vwm1h.js:8496-8641 fingerprint = buildLogMetadata (1)
 function buildLogMetadata(log, options) {
-  let { isChild: isChild = !1, showProjectPath: showProjectPath = !1 } = options || {},
-    u = isChild ? "    " : "",
-    baseMetadata = formatLogMetadata(log),
-    b = showProjectPath && log.projectPath ? ` \xB7 ${log.projectPath}` : "";
-  return u + baseMetadata + b;
+  let { isChild = false, showProjectPath = false } = options || {};
+  let childPadding = isChild ? "    " : "";
+  let baseMetadata = formatLogMetadata(log);
+  let projectSuffix = showProjectPath && log.projectPath ? ` \xB7 ${log.projectPath}` : "";
+  return childPadding + baseMetadata + projectSuffix;
 }
+//@ chunk-b79vwm1h.js:8641-18667 fingerprint = LogSelector (0.634)
 /**
  * 会话选择器：显示会话列表（标题、时间、消息数、分支/PR、标签），支持搜索（tengu_session_search_toggled）、所有项目切换、按 sessionId 分组、worktree 检测与预览。
  */
-//@ chunk-b79vwm1h.js:8641-18667 fingerprint = LogSelector (0.634)
 function LogSelector({
-  logs: logs,
-  maxHeight: maxHeight = 1 / 0,
-  forceWidth: forceWidth,
-  onCancel: onCancel,
-  onSelect: onSelect,
-  onLogsChanged: onLogsChanged,
-  onLoadMore: onLoadMore,
-  initialSearchQuery: initialSearchQuery,
-  isLoading: isLoading = !1,
-  reloadGeneration: reloadGeneration = 0,
-  showAllProjects: showAllProjects = !1,
-  onToggleAllProjects: onToggleAllProjects,
-  currentSessionId: currentSessionId,
-  footerNote: footerNote,
+  logs,
+  maxHeight = 1 / 0,
+  forceWidth,
+  onCancel,
+  onSelect,
+  onLogsChanged,
+  onLoadMore,
+  initialSearchQuery,
+  isLoading = false,
+  reloadGeneration = 0,
+  showAllProjects = false,
+  onToggleAllProjects,
+  currentSessionId,
+  footerNote,
 }) {
-  let { storageV5: storageV5 } = Me(),
-    Fe = useScrollViewportSize(useTerminalSize()),
-    Se = forceWidth === void 0 ? Fe.columns : forceWidth,
-    Ce = useGlobalExitKeybindings(onCancel),
-    ee = !1,
-    M = nd(!1),
-    T = Po,
-    qe = "show all projects",
-    te = 2,
-    G = useTerminalFocus(),
-    terminalSize = useClock(),
-    Te = !1,
-    isTerminalFocused = useResolvedTheme(),
-    oe = Q(() => (text) => applyColor(text, isTerminalFocused.warning), [isTerminalFocused.warning]),
-    re = Q(() => (footerNote === void 0 ? 0 : bunStringWidth(footerNote.join(" \xB7 "))), [footerNote]),
-    [A, W] = y(null),
-    [K, vt] = y(!0),
-    [de, ft] = y(!1),
-    [Le, ze] = y(!1),
-    [_t, V] = y(null),
-    [Xe, Rt] = y(null),
-    [ke, Ye] = y([]),
-    [Ze, le] = y(!1),
-    et = useProject(),
-    [H] = y(() => et.originalCwd),
-    [Oe, J] = y(""),
-    [tt, mt] = y(0),
-    [nt, ot] = y(new Set()),
-    [U, ht] = y(null),
-    [we, Ft] = y(1),
-    [x, D] = y(initialSearchQuery ? "search" : "list"),
-    [ue, gt] = y(null),
-    {
-      query: searchQuery,
-      setQuery: setSearchQuery,
-      cursorOffset: searchCursorOffset,
-      handleKeyDown: handleKeyDown,
-      handlePaste: handlePaste,
-    } = useSearchInput({
-      isActive: x === "search",
-      onExit: () => {
-        (D("list"), logEvent("tengu_session_search_toggled", { enabled: !1 }));
-      },
-      onExitUp: () => {
-        (D("list"), logEvent("tengu_session_search_toggled", { enabled: !1 }));
-      },
-      passthroughCtrlKeys: logs.length === 0 ? ["n", "a"] : ["n"],
-      initialQuery: initialSearchQuery || "",
-    }),
-    De = formatPrUrlsInQuery(searchQuery),
-    z = eJ(De),
-    [O, st] = y("");
+  let { storageV5 } = useTheme_2();
+  let scrollViewportSize = useScrollViewportSize(useTerminalSize());
+  let Se = forceWidth === undefined ? scrollViewportSize.columns : forceWidth;
+  let globalExitKeybindings = useGlobalExitKeybindings(onCancel);
+  let ee = false;
+  let M = stableEmptyObject(false);
+  let T = LOG_SHORTCUT_FORMAT;
+  let qe = "show all projects";
+  let te = 2;
+  let isTerminalFocused = useTerminalFocus();
+  let terminalSize = useClock();
+  let Te = false;
+  let isTerminalFocused_2 = useResolvedTheme();
+  let highlightColor = Q(
+    () => (text) => applyColor(text, isTerminalFocused_2.warning),
+    [isTerminalFocused_2.warning],
+  );
+  let re = Q(() => (footerNote === undefined ? 0 : bunStringWidth(footerNote.join(" \xB7 "))), [footerNote]);
+  let [A, W] = y(null);
+  let [K, vt] = y(true);
+  let [de, ft] = y(false);
+  let [Le, ze] = y(false);
+  let [_t, V] = y(null);
+  let [Xe, Rt] = y(null);
+  let [ke, Ye] = y([]);
+  let [Ze, le] = y(false);
+  let project = useProject();
+  let [cwd] = y(() => project.originalCwd);
+  let [Oe, J] = y("");
+  let [tt, mt] = y(0);
+  let [nt, ot] = y(new Set());
+  let [U, ht] = y(null);
+  let [we, Ft] = y(1);
+  let [x, D] = y(initialSearchQuery ? "search" : "list");
+  let [ue, gt] = y(null);
+  let {
+    query: searchQuery,
+    setQuery: setSearchQuery,
+    cursorOffset: searchCursorOffset,
+    handleKeyDown,
+    handlePaste,
+  } = useSearchInput({
+    isActive: x === "search",
+    onExit: () => {
+      D("list");
+      logEvent("tengu_session_search_toggled", {
+        enabled: false,
+      });
+    },
+    onExitUp: () => {
+      D("list");
+      logEvent("tengu_session_search_toggled", {
+        enabled: false,
+      });
+    },
+    passthroughCtrlKeys: logs.length === 0 ? ["n", "a"] : ["n"],
+    initialQuery: initialSearchQuery || "",
+  });
+  let De = formatPrUrlsInQuery(searchQuery);
+  let z = eJ(De);
+  let [query, st] = y("");
   P(() => {
     if (!z) {
       st("");
@@ -196,440 +217,566 @@ function LogSelector({
     }
     return terminalSize.setTimeout(() => st(z), 300);
   }, [z, terminalSize]);
-  let [se, Be] = y(null),
-    bt = !1;
+  let [se, Be] = y(null);
+  let bt = false;
   P(() => {
-    getBranch().then((i) => W(i));
+    getBranch().then((branch) => W(branch));
     let now = Date.now();
-    getWorktreePathsPortable(H)
-      .then(async (i) => (i.length, i))
+    getWorktreePathsPortable(cwd)
+      .then(async (worktreePathsPortable) => {
+        worktreePathsPortable.length;
+        return worktreePathsPortable;
+      })
       .then((i) => {
-        (logEvent("tengu_worktree_detection", {
+        logEvent("tengu_worktree_detection", {
           duration_ms: Date.now() - now,
           worktree_count: i.length,
-          success: !0,
-        }),
-          ze(i.length > 1),
-          Ye(i),
-          V(i[0] ?? null));
-        let filtered = i.filter((branch) => H === branch || H.startsWith(branch + sep));
-        (filtered.sort((f, L) => L.length - f.length), Rt(filtered[0] ?? null), le(!0));
+          success: true,
+        });
+        ze(i.length > 1);
+        Ye(i);
+        V(i[0] ?? null);
+        let filtered = i.filter((branch) => cwd === branch || cwd.startsWith(branch + sep));
+        filtered.sort((f, L) => L.length - f.length);
+        Rt(filtered[0] ?? null);
+        le(true);
       })
       .catch(() => {
-        (logEvent("tengu_worktree_detection", {
+        logEvent("tengu_worktree_detection", {
           duration_ms: Date.now() - now,
           worktree_count: 0,
-          success: !1,
-        }),
-          le(!0));
-      });
-  }, [H]);
-  let it = Q(() => new Map(logs.map((paths) => [paths, buildSearchableText(paths)])), [logs]),
-    We = Q(() => null, [logs, it, !1]),
-    pe = Q(() => {
-      let filtered = logs.filter((log_2) => {
-        let h = getSessionIdFromLog(log_2);
-        if (currentSessionId && h === currentSessionId) return !0;
-        if (log_2.customTitle ?? log_2.aiTitle) return !0;
-        if (getFirstMeaningfulUserMessageTextContent(log_2.messages)) return !0;
-        if (log_2.firstPrompt || log_2.customTitle || log_2.aiTitle) return !0;
-        return !1;
-      });
-      if (!K && A) filtered = filtered.filter((log_3) => log_3.gitBranch === A);
-      if (Le && !de && !showAllProjects) {
-        let i = Xe ?? H;
-        filtered = filtered.filter((log_4) => {
-          if (log_4.isAlias) return !0;
-          let projectPath = log_4.projectPath;
-          if (projectPath === void 0) return !1;
-          let L = null;
-          for (let C of ke)
-            if (projectPath === C || projectPath.startsWith(C + sep)) {
-              if (L === null || C.length > L.length) L = C;
-            }
-          if (L === null) return projectPath === i;
-          return L === i;
+          success: false,
         });
-      }
-      return filtered;
-    }, [logs, currentSessionId, K, A, Le, de, showAllProjects, H, Xe, ke]),
-    $e = Q(() => {
-      if (!De) return pe;
-      let query = De.toLowerCase();
-      return pe.filter((log_5) => {
-        let displayedTitle = getLogDisplayTitle(log_5).toLowerCase(),
-          branch_0 = (log_5.gitBranch || "").toLowerCase(),
-          tag = (log_5.tag || "").toLowerCase(),
-          C = log_5.prNumber ? `pr #${log_5.prNumber} ${log_5.prRepository || ""}`.toLowerCase() : "";
-        return (
-          displayedTitle.includes(query) ||
-          branch_0.includes(query) ||
-          tag.includes(query) ||
-          C.includes(query)
-        );
+        le(true);
       });
-    }, [pe, De]);
+  }, [cwd]);
+  let it = Q(() => new Map(logs.map((paths) => [paths, buildSearchableText(paths)])), [logs]);
+  let We = Q(() => null, [logs, it, false]);
+  let pe = Q(() => {
+    let filtered = logs.filter((log) => {
+      let sessionIdFromLog = getSessionIdFromLog(log);
+      if (currentSessionId && sessionIdFromLog === currentSessionId) return true;
+      if (log.customTitle ?? log.aiTitle) return true;
+      if (getFirstMeaningfulUserMessageTextContent(log.messages)) return true;
+      if (log.firstPrompt || log.customTitle || log.aiTitle) return true;
+      return false;
+    });
+    if (!K && A) filtered = filtered.filter((log_3) => log_3.gitBranch === A);
+    if (Le && !de && !showAllProjects) {
+      let i = Xe ?? cwd;
+      filtered = filtered.filter((log_4) => {
+        if (log_4.isAlias) return true;
+        let projectPath = log_4.projectPath;
+        if (projectPath === undefined) return false;
+        let L = null;
+        for (let C of ke)
+          if (projectPath === C || projectPath.startsWith(C + sep)) {
+            if (L === null || C.length > L.length) L = C;
+          }
+        if (L === null) return projectPath === i;
+        return L === i;
+      });
+    }
+    return filtered;
+  }, [logs, currentSessionId, K, A, Le, de, showAllProjects, cwd, Xe, ke]);
+  let $e = Q(() => {
+    if (!De) return pe;
+    let query = De.toLowerCase();
+    return pe.filter((log) => {
+      let displayedTitle = getLogDisplayTitle(log).toLowerCase();
+      let branch = (log.gitBranch || "").toLowerCase();
+      let tag = (log.tag || "").toLowerCase();
+      let prInfo = log.prNumber ? `pr #${log.prNumber} ${log.prRepository || ""}`.toLowerCase() : "";
+      return (
+        displayedTitle.includes(query) ||
+        branch.includes(query) ||
+        tag.includes(query) ||
+        prInfo.includes(query)
+      );
+    });
+  }, [pe, De]);
   P(() => {
     Be(null);
     return;
-  }, [O, z, We, !1, terminalSize]);
-  let { filteredLogs: filteredLogs, snippets: snippets } = Q(() => {
-      let t = new Map(),
-        i = $e;
-      if (se && O && se.query === O) {
-        for (let result of se.results)
-          if (result.searchableText) {
-            let snippet = extractSnippet(result.searchableText, O, Ro);
-            if (snippet) t.set(result.log, snippet);
-          }
-        let h = new Set(i.map((log_7) => log_7.messages[0]?.uuid)),
-          f = new Set(pe),
-          transcriptOnlyMatches = se.results
-            .map((C) => C.log)
-            .filter((C) => !h.has(C.messages[0]?.uuid) && f.has(C));
-        i = [...i, ...transcriptOnlyMatches];
-      }
-      return { filteredLogs: i, snippets: t };
-    }, [$e, se, O, pe]),
-    me = Se - 2 * PANE_PADDING,
-    maxLabelWidth = Math.max(30, me - 4),
-    Ot = Q(() => {
-      let sessionGroups = groupLogsBySessionId(filteredLogs);
-      return Array.from(sessionGroups.entries()).map(([i, h]) => {
-        let f = h[0],
-          indexInFiltered = filteredLogs.indexOf(f),
-          snippet_0 = snippets.get(f),
-          ge = snippet_0 ? formatSnippet(snippet_0, oe) : null;
-        if (h.length === 1) {
-          let metadata = buildLogMetadata(f, { showProjectPath: showAllProjects });
-          return {
-            id: `log:${i}:0`,
-            value: { log: f, indexInFiltered: indexInFiltered },
-            label: buildLogLabel(f, maxLabelWidth),
-            description: ge
-              ? `${metadata}
-  ${ge}`
-              : metadata,
-            dimDescription: !0,
-          };
+  }, [query, z, We, false, terminalSize]);
+  let { filteredLogs, snippets } = Q(() => {
+    let t = new Map();
+    let i = $e;
+    if (se && query && se.query === query) {
+      for (let result of se.results)
+        if (result.searchableText) {
+          let snippet = extractSnippet(result.searchableText, query, LOG_MAX_ENTRIES);
+          if (snippet) t.set(result.log, snippet);
         }
-        let Wn = h.length - 1,
-          children = h.slice(1).map((log_8, index) => {
-            let childIndexInFiltered = filteredLogs.indexOf(log_8),
-              childSnippet = snippets.get(log_8),
-              jt = childSnippet ? formatSnippet(childSnippet, oe) : null,
-              childMetadata = buildLogMetadata(log_8, { isChild: !0, showProjectPath: showAllProjects });
-            return {
-              id: `log:${i}:${index + 1}`,
-              value: { log: log_8, indexInFiltered: childIndexInFiltered },
-              label: buildLogLabel(log_8, maxLabelWidth, { isChild: !0 }),
-              description: jt
-                ? `${childMetadata}
-      ${jt}`
-                : childMetadata,
-              dimDescription: !0,
-            };
-          }),
-          parentMetadata = buildLogMetadata(f, { showProjectPath: showAllProjects });
+      let h = new Set(i.map((log_7) => log_7.messages[0]?.uuid));
+      let f = new Set(pe);
+      let transcriptOnlyMatches = se.results
+        .map((C) => C.log)
+        .filter((C) => !h.has(C.messages[0]?.uuid) && f.has(C));
+      i = [...i, ...transcriptOnlyMatches];
+    }
+    return {
+      filteredLogs: i,
+      snippets: t,
+    };
+  }, [$e, se, query, pe]);
+  let me = Se - 2 * PANE_PADDING;
+  let maxLabelWidth = Math.max(30, me - 4);
+  let nodes = Q(() => {
+    let sessionGroups = groupLogsBySessionId(filteredLogs);
+    return Array.from(sessionGroups.entries()).map(([sessionId, groupLogs]) => {
+      let latestLog = groupLogs[0];
+      let indexInFiltered = filteredLogs.indexOf(latestLog);
+      let snippet = snippets.get(latestLog);
+      let snippetStr = snippet ? formatSnippet(snippet, highlightColor) : null;
+      if (groupLogs.length === 1) {
+        let metadata = buildLogMetadata(latestLog, {
+          showProjectPath: showAllProjects,
+        });
         return {
-          id: `group:${i}`,
-          value: { log: f, indexInFiltered: indexInFiltered },
-          label: buildLogLabel(f, maxLabelWidth, { isGroupHeader: !0, forkCount: Wn }),
-          description: ge
-            ? `${parentMetadata}
-  ${ge}`
-            : parentMetadata,
-          dimDescription: !0,
-          children: children,
+          id: `log:${sessionId}:0`,
+          value: {
+            log: latestLog,
+            indexInFiltered,
+          },
+          label: buildLogLabel(latestLog, maxLabelWidth),
+          description: snippetStr
+            ? `${metadata}
+  ${snippetStr}`
+            : metadata,
+          dimDescription: true,
+        };
+      }
+      let forkCount = groupLogs.length - 1;
+      let children = groupLogs.slice(1).map((log, index) => {
+        let childIndexInFiltered = filteredLogs.indexOf(log);
+        let childSnippet = snippets.get(log);
+        let childSnippetStr = childSnippet ? formatSnippet(childSnippet, highlightColor) : null;
+        let childMetadata = buildLogMetadata(log, {
+          isChild: true,
+          showProjectPath: showAllProjects,
+        });
+        return {
+          id: `log:${sessionId}:${index + 1}`,
+          value: {
+            log,
+            indexInFiltered: childIndexInFiltered,
+          },
+          label: buildLogLabel(log, maxLabelWidth, {
+            isChild: true,
+          }),
+          description: childSnippetStr
+            ? `${childMetadata}
+      ${childSnippetStr}`
+            : childMetadata,
+          dimDescription: true,
         };
       });
-    }, [filteredLogs, maxLabelWidth, showAllProjects, snippets, oe]),
-    v = U?.value.log ?? null,
-    Dn = () => {
-      if (!v) return "";
-      let sessionId_0 = getSessionIdFromLog(v);
-      if (!sessionId_0) return "";
-      let sessionLogs = filteredLogs.filter((log_10) => getSessionIdFromLog(log_10) === sessionId_0);
-      if (!(sessionLogs.length > 1)) return "";
-      let isExpanded = nt.has(sessionId_0);
-      if (sessionLogs.indexOf(v) > 0 || isExpanded)
-        return e(KeyboardShortcutHint, { chord: "left", action: "collapse", ...M });
-      return e(KeyboardShortcutHint, { chord: "right", action: "expand", ...M });
-    },
-    Nn = async () => {
-      let t = v ? getSessionIdFromLog(v) : void 0;
-      if (!v || !t) {
-        (D("list"), J(""));
-        return;
-      }
-      if (Oe.trim()) {
-        if ((await saveCustomTitle(t, Oe.trim(), v.fullPath, "user", storageV5), onLogsChanged))
-          onLogsChanged();
-      }
-      (D("list"), J(""));
-    },
-    Pn = () => {
-      (D("list"), setSearchQuery(""), logEvent("tengu_session_search_toggled", { enabled: !1 }));
-    },
-    vn = () => {
-      (D("search"), logEvent("tengu_session_search_toggled", { enabled: !0 }));
-    };
+      let parentMetadata = buildLogMetadata(latestLog, {
+        showProjectPath: showAllProjects,
+      });
+      return {
+        id: `group:${sessionId}`,
+        value: {
+          log: latestLog,
+          indexInFiltered,
+        },
+        label: buildLogLabel(latestLog, maxLabelWidth, {
+          isGroupHeader: true,
+          forkCount,
+        }),
+        description: snippetStr
+          ? `${parentMetadata}
+  ${snippetStr}`
+          : parentMetadata,
+        dimDescription: true,
+        children,
+      };
+    });
+  }, [filteredLogs, maxLabelWidth, showAllProjects, snippets, highlightColor]);
+  let log = U?.value.log ?? null;
+  let Dn = () => {
+    if (!log) return "";
+    let sessionId = getSessionIdFromLog(log);
+    if (!sessionId) return "";
+    let sessionLogs = filteredLogs.filter((log) => getSessionIdFromLog(log) === sessionId);
+    if (!(sessionLogs.length > 1)) return "";
+    let isExpanded = nt.has(sessionId);
+    if (sessionLogs.indexOf(log) > 0 || isExpanded)
+      return jsxProd_default(KeyboardShortcutHint, {
+        chord: "left",
+        action: "collapse",
+        ...M,
+      });
+    return jsxProd_default(KeyboardShortcutHint, {
+      chord: "right",
+      action: "expand",
+      ...M,
+    });
+  };
+  let onSubmit = async () => {
+    let sessionId = log ? getSessionIdFromLog(log) : undefined;
+    if (!log || !sessionId) {
+      D("list");
+      J("");
+      return;
+    }
+    if (Oe.trim()) {
+      await saveCustomTitle(sessionId, Oe.trim(), log.fullPath, "user", storageV5);
+      if (onLogsChanged) onLogsChanged();
+    }
+    D("list");
+    J("");
+  };
+  let Pn = () => {
+    D("list");
+    setSearchQuery("");
+    logEvent("tengu_session_search_toggled", {
+      enabled: false,
+    });
+  };
+  let onUpFromFirstItem = () => {
+    D("search");
+    logEvent("tengu_session_search_toggled", {
+      enabled: true,
+    });
+  };
   P(() => {
     if (reloadGeneration === 0) return;
     Be(null);
   }, [reloadGeneration]);
-  let _n = (value) => {
-    ht(value);
-    let index_2 = filteredLogs.findIndex(
-      (log_12) => getSessionIdFromLog(log_12) === getSessionIdFromLog(value.value.log),
+  let onFocus = (node) => {
+    ht(node);
+    let index = filteredLogs.findIndex(
+      (log) => getSessionIdFromLog(log) === getSessionIdFromLog(node.value.log),
     );
-    if (index_2 >= 0) Ft(index_2 + 1);
+    if (index >= 0) Ft(index + 1);
   };
   useKeybinding(
     "confirm:no",
     () => {
-      (D("list"), J(""));
+      D("list");
+      J("");
     },
-    { context: "Settings", isActive: x === "rename" },
+    {
+      context: "Settings",
+      isActive: x === "rename",
+    },
   );
   function Rn(prev) {
     if (x === "preview") return;
     if (x === "rename");
     else if (x === "search") {
-      if ((handleKeyDown(prev), prev.ctrl && prev.key === "n")) (prev.preventDefault(), Pn());
-      else if (prev.ctrl && prev.key === "a" && onToggleAllProjects && logs.length === 0)
-        (prev.preventDefault(),
-          onToggleAllProjects(),
-          logEvent("tengu_session_all_projects_toggled", { enabled: showAllProjects }));
+      handleKeyDown(prev);
+      if (prev.ctrl && prev.key === "n") {
+        prev.preventDefault();
+        Pn();
+      } else if (prev.ctrl && prev.key === "a" && onToggleAllProjects && logs.length === 0) {
+        prev.preventDefault();
+        onToggleAllProjects();
+        logEvent("tengu_session_all_projects_toggled", {
+          enabled: showAllProjects,
+        });
+      }
     } else {
       if (filteredLogs.length === 0 && (prev.key === "up" || prev.key === "down" || prev.key === "return")) {
-        (prev.preventDefault(), D("search"));
+        prev.preventDefault();
+        D("search");
         return;
       }
-      let i = !prev.ctrl && !prev.meta,
-        lowerInput = prev.key.toLowerCase();
-      if (prev.ctrl && prev.key === "a" && onToggleAllProjects)
-        (prev.preventDefault(),
-          onToggleAllProjects(),
-          logEvent("tengu_session_all_projects_toggled", { enabled: showAllProjects }));
-      else if (prev.ctrl && prev.key === "b") {
+      let i = !prev.ctrl && !prev.meta;
+      let lowerInput = prev.key.toLowerCase();
+      if (prev.ctrl && prev.key === "a" && onToggleAllProjects) {
+        prev.preventDefault();
+        onToggleAllProjects();
+        logEvent("tengu_session_all_projects_toggled", {
+          enabled: showAllProjects,
+        });
+      } else if (prev.ctrl && prev.key === "b") {
         prev.preventDefault();
         let newEnabled = !K;
-        (vt(newEnabled), logEvent("tengu_session_branch_filter_toggled", { enabled: !newEnabled }));
+        vt(newEnabled);
+        logEvent("tengu_session_branch_filter_toggled", {
+          enabled: !newEnabled,
+        });
       } else if (prev.ctrl && prev.key === "w" && Le) {
         prev.preventDefault();
         let newValue = !de;
-        (ft(newValue), logEvent("tengu_session_worktree_filter_toggled", { enabled: !newValue }));
-      } else if (lowerInput === "/" && i)
-        (prev.preventDefault(), D("search"), logEvent("tengu_session_search_toggled", { enabled: !0 }));
-      else if (prev.ctrl && prev.key === "r" && v)
-        (prev.preventDefault(), D("rename"), J(""), logEvent("tengu_session_rename_started", {}));
-      else if (((prev.key === " " && i) || (prev.ctrl && prev.key === "v")) && v)
-        (prev.preventDefault(),
-          gt(v),
-          D("preview"),
-          logEvent("tengu_session_preview_opened", { messageCount: v.messageCount }));
-      else if (!prev.defaultPrevented && i && prev.key.length === 1 && prev.key !== " ")
-        (prev.preventDefault(),
-          D("search"),
-          setSearchQuery(prev.key),
-          logEvent("tengu_session_search_toggled", { enabled: !0 }));
+        ft(newValue);
+        logEvent("tengu_session_worktree_filter_toggled", {
+          enabled: !newValue,
+        });
+      } else if (lowerInput === "/" && i) {
+        prev.preventDefault();
+        D("search");
+        logEvent("tengu_session_search_toggled", {
+          enabled: true,
+        });
+      } else if (prev.ctrl && prev.key === "r" && log) {
+        prev.preventDefault();
+        D("rename");
+        J("");
+        logEvent("tengu_session_rename_started", {});
+      } else if (((prev.key === " " && i) || (prev.ctrl && prev.key === "v")) && log) {
+        prev.preventDefault();
+        gt(log);
+        D("preview");
+        logEvent("tengu_session_preview_opened", {
+          messageCount: log.messageCount,
+        });
+      } else if (!prev.defaultPrevented && i && prev.key.length === 1 && prev.key !== " ") {
+        prev.preventDefault();
+        D("search");
+        setSearchQuery(prev.key);
+        logEvent("tengu_session_search_toggled", {
+          enabled: true,
+        });
+      }
     }
   }
-  function Fn(t) {
+  function Fn(event) {
     if (x === "search") {
-      handlePaste(t);
+      handlePaste(event);
       return;
     }
-    let trimmed = (t.text.split(/\r\n|\r|\n/, 2)[0] ?? "").trim();
-    if (x === "preview" || x === "rename" || !v || !trimmed) return;
-    (t.preventDefault(),
-      D("search"),
-      setSearchQuery(trimmed),
-      logEvent("tengu_session_search_toggled", { enabled: !0 }));
+    let trimmed = (event.text.split(/\r\n|\r|\n/, 2)[0] ?? "").trim();
+    if (x === "preview" || x === "rename" || !log || !trimmed) return;
+    event.preventDefault();
+    D("search");
+    setSearchQuery(trimmed);
+    logEvent("tengu_session_search_toggled", {
+      enabled: true,
+    });
   }
-  let _e = [],
-    Mt = !!onToggleAllProjects && !showAllProjects && Ze,
-    Bt = _t ?? H;
+  let _e = [];
+  let Mt = !!onToggleAllProjects && !showAllProjects && Ze;
+  let Bt = _t ?? cwd;
   if (Mt) _e.push(basename(Bt));
   if (!K && A) _e.push(A);
   if (Le && !de && !showAllProjects) {
-    let t = Xe ?? H;
+    let t = Xe ?? cwd;
     if (!(Mt && Bt === t)) _e.push(basename(t));
   }
-  let kn = !!onToggleAllProjects && !showAllProjects && !Ze,
-    Wt = (_e.length > 0 || kn) && x !== "search",
-    $t = 3,
-    On = 5 + $t + (Wt ? 1 : 0),
-    At = footerNote !== void 0 && x !== "rename" && re <= me - 2 && maxHeight - (5 + $t + 1) - 3 >= 3,
-    Mn = 2 + (At ? 1 : 0),
-    visibleCount = Math.max(1, Math.floor((maxHeight - On - Mn) / 3)),
-    Bn = logs.length,
-    at = R({ focusedIndex: -1, visible: -1, empty: 0 });
-  if (
-    (P(() => {
-      if (!onLoadMore) return;
-      let t = at.current;
-      if (t.focusedIndex !== we || t.visible !== filteredLogs.length)
-        at.current = { focusedIndex: we, visible: filteredLogs.length, empty: 0 };
-      let i = visibleCount * 2;
-      if (we + i >= filteredLogs.length && at.current.empty < Fo)
-        (at.current.empty++, onLoadMore(visibleCount * 3));
-    }, [we, visibleCount, filteredLogs.length, Bn, onLoadMore]),
-    logs.length === 0 && !onToggleAllProjects)
-  )
-    return null;
+  let kn = !!onToggleAllProjects && !showAllProjects && !Ze;
+  let Wt = (_e.length > 0 || kn) && x !== "search";
+  let $t = 3;
+  let On = 5 + $t + (Wt ? 1 : 0);
+  let At = footerNote !== undefined && x !== "rename" && re <= me - 2 && maxHeight - (5 + $t + 1) - 3 >= 3;
+  let Mn = 2 + (At ? 1 : 0);
+  let visibleCount = Math.max(1, Math.floor((maxHeight - On - Mn) / 3));
+  let Bn = logs.length;
+  let at = R({
+    focusedIndex: -1,
+    visible: -1,
+    empty: 0,
+  });
+  P(() => {
+    if (!onLoadMore) return;
+    let t = at.current;
+    if (t.focusedIndex !== we || t.visible !== filteredLogs.length)
+      at.current = {
+        focusedIndex: we,
+        visible: filteredLogs.length,
+        empty: 0,
+      };
+    let i = visibleCount * 2;
+    if (we + i >= filteredLogs.length && at.current.empty < LOG_RETRY_COUNT) {
+      at.current.empty++;
+      onLoadMore(visibleCount * 3);
+    }
+  }, [we, visibleCount, filteredLogs.length, Bn, onLoadMore]);
+  if (logs.length === 0 && !onToggleAllProjects) return null;
   if (x === "preview" && ue)
-    return e(SessionPreview, {
+    return jsxProd_default(SessionPreview, {
       log: ue,
       onExit: () => {
-        (D("list"), gt(null));
+        D("list");
+        gt(null);
       },
-      onSelect: onSelect,
+      onSelect,
     });
-  return e(Box, {
+  return jsxProd_default(Box, {
     flexDirection: "column",
     maxHeight: maxHeight - 1,
     onKeyDown: Rn,
     onPaste: Fn,
-    children: r(ResumeSessionPane, {
-      isRedesign: !1,
-      titleDetail: r(Fragment, {
+    children: jsxProd_default_2(ResumeSessionPane, {
+      isRedesign: false,
+      titleDetail: jsxProd_default_2(Fragment, {
         children: [
           x === "list" &&
             filteredLogs.length > visibleCount &&
-            r(Text, { dimColor: !0, children: [" ", "(", we, " of ", filteredLogs.length, ")"] }),
-          isLoading && e(Text, { dimColor: !0, children: " \xB7 Refreshing\u2026" }),
+            jsxProd_default_2(Text, {
+              dimColor: true,
+              children: [" ", "(", we, " of ", filteredLogs.length, ")"],
+            }),
+          isLoading &&
+            jsxProd_default(Text, {
+              dimColor: true,
+              children: " \xB7 Refreshing\u2026",
+            }),
         ],
       }),
       children: [
-        e(SearchBox, {
+        jsxProd_default(SearchBox, {
           query: searchQuery,
           isFocused: x === "search",
-          isTerminalFocused: G,
+          isTerminalFocused,
           cursorOffset: searchCursorOffset,
-          isSearchLineUnpadded: !0,
+          isSearchLineUnpadded: true,
         }),
         Wt &&
           (_e.length > 0
-            ? e(Box, {
+            ? jsxProd_default(Box, {
                 flexShrink: 0,
                 paddingLeft: 2,
-                children: e(Text, { dimColor: !0, children: e(Byline, { children: _e }) }),
+                children: jsxProd_default(Text, {
+                  dimColor: true,
+                  children: jsxProd_default(Byline, {
+                    children: _e,
+                  }),
+                }),
               })
-            : e(Box, { flexShrink: 0, height: 1 })),
-        e(Box, { flexShrink: 0, children: e(Text, { children: " " }) }),
+            : jsxProd_default(Box, {
+                flexShrink: 0,
+                height: 1,
+              })),
+        jsxProd_default(Box, {
+          flexShrink: 0,
+          children: jsxProd_default(Text, {
+            children: " ",
+          }),
+        }),
         (x === "search" || x === "list") &&
           Boolean(searchQuery.trim()) &&
           filteredLogs.length === 0 &&
           !bt &&
           !isLoading &&
-          e(Box, {
+          jsxProd_default(Box, {
             paddingLeft: 1,
             marginBottom: 1,
             flexShrink: 0,
-            children: r(HintText, { children: ['No sessions match "', searchQuery, '".'] }),
+            children: jsxProd_default_2(HintText, {
+              children: ['No sessions match "', searchQuery, '".'],
+            }),
           }),
         logs.length === 0 &&
           x === "list" &&
           !isLoading &&
           !searchQuery.trim() &&
-          e(Box, {
+          jsxProd_default(Box, {
             paddingLeft: 1,
             marginBottom: 1,
             flexShrink: 0,
-            children: e(HintText, {
+            children: jsxProd_default(HintText, {
               hint: showAllProjects
-                ? void 0
-                : e(KeyboardShortcutHint, { chord: "ctrl+a", action: "show all projects", ...T }),
+                ? undefined
+                : jsxProd_default(KeyboardShortcutHint, {
+                    chord: "ctrl+a",
+                    action: "show all projects",
+                    ...T,
+                  }),
               children: showAllProjects
                 ? "No conversations found."
                 : "No conversations found in this project.",
             }),
           }),
-        x === "rename" && v
-          ? r(Box, {
+        x === "rename" && log
+          ? jsxProd_default_2(Box, {
               paddingLeft: 2,
               flexDirection: "column",
               children: [
-                e(Text, { bold: !0, children: "Rename session:" }),
-                e(Box, {
+                jsxProd_default(Text, {
+                  bold: true,
+                  children: "Rename session:",
+                }),
+                jsxProd_default(Box, {
                   paddingTop: 1,
-                  children: e(TextInput, {
+                  children: jsxProd_default(TextInput, {
                     value: Oe,
                     onChange: J,
-                    onSubmit: Nn,
-                    placeholder: getLogDisplayTitle(v, "Enter new session name"),
+                    onSubmit,
+                    placeholder: getLogDisplayTitle(log, "Enter new session name"),
                     columns: me - 2,
                     cursorOffset: tt,
                     onChangeCursorOffset: mt,
-                    showCursor: !0,
-                    focus: !0,
+                    showCursor: true,
+                    focus: true,
                   }),
                 }),
               ],
             })
-          : e(TreeSelect, {
-              nodes: Ot,
+          : jsxProd_default(TreeSelect, {
+              nodes,
               onSelect: (node_0) => {
                 onSelect(node_0.value.log);
               },
-              onFocus: _n,
-              onCancel: onCancel,
+              onFocus,
+              onCancel,
               focusNodeId: U?.id,
               visibleOptionCount: visibleCount,
               layout: "expanded",
               isDisabled: x === "search",
-              hidePromptWhileDisabled: !0,
-              hideIndexes: !1,
+              hidePromptWhileDisabled: true,
+              hideIndexes: false,
               isNodeExpanded: (nodeId) => {
-                if (x === "search" || !K) return !0;
-                let i =
+                if (x === "search" || !K) return true;
+                let sessionId =
                   typeof nodeId === "string" && nodeId.startsWith("group:") ? nodeId.substring(6) : null;
-                return i ? nt.has(i) : !1;
+                return sessionId ? nt.has(sessionId) : false;
               },
-              onExpand: (nodeId_0) => {
-                let i =
-                  typeof nodeId_0 === "string" && nodeId_0.startsWith("group:")
-                    ? nodeId_0.substring(6)
-                    : null;
-                if (i) (ot((prev_0) => new Set(prev_0).add(i)), logEvent("tengu_session_group_expanded", {}));
+              onExpand: (nodeId) => {
+                let sessionId =
+                  typeof nodeId === "string" && nodeId.startsWith("group:") ? nodeId.substring(6) : null;
+                if (sessionId) {
+                  ot((prev) => new Set(prev).add(sessionId));
+                  logEvent("tengu_session_group_expanded", {});
+                }
               },
-              onCollapse: (nodeId_1) => {
-                let i =
-                  typeof nodeId_1 === "string" && nodeId_1.startsWith("group:")
-                    ? nodeId_1.substring(6)
-                    : null;
-                if (i)
-                  ot((prev_1) => {
-                    let newSet = new Set(prev_1);
-                    return (newSet.delete(i), newSet);
+              onCollapse: (nodeId) => {
+                let sessionId =
+                  typeof nodeId === "string" && nodeId.startsWith("group:") ? nodeId.substring(6) : null;
+                if (sessionId)
+                  ot((prev) => {
+                    let newSet = new Set(prev);
+                    newSet.delete(sessionId);
+                    return newSet;
                   });
               },
-              onUpFromFirstItem: vn,
+              onUpFromFirstItem,
             }),
         At &&
-          e(Box, {
+          jsxProd_default(Box, {
             paddingLeft: 2,
             flexShrink: 0,
-            children: e(Text, {
-              dimColor: !0,
+            children: jsxProd_default(Text, {
+              dimColor: true,
               wrap: "truncate-end",
-              children: e(Byline, { children: footerNote }),
+              children: jsxProd_default(Byline, {
+                children: footerNote,
+              }),
             }),
           }),
-        e(Box, {
+        jsxProd_default(Box, {
           paddingLeft: 2,
-          children: Ce.pending
-            ? r(Text, { dimColor: !0, italic: !1, children: ["Press ", Ce.keyName, " again to exit"] })
+          children: globalExitKeybindings.pending
+            ? jsxProd_default_2(Text, {
+                dimColor: true,
+                italic: false,
+                children: ["Press ", globalExitKeybindings.keyName, " again to exit"],
+              })
             : x === "rename"
-              ? e(Text, {
-                  dimColor: !0,
-                  italic: !1,
-                  children: r(Byline, {
+              ? jsxProd_default(Text, {
+                  dimColor: true,
+                  italic: false,
+                  children: jsxProd_default_2(Byline, {
                     children: [
-                      e(KeyboardShortcutHint, { chord: "enter", action: "save", ...M }),
-                      e(ConfigurableShortcutHint, {
+                      jsxProd_default(KeyboardShortcutHint, {
+                        chord: "enter",
+                        action: "save",
+                        ...M,
+                      }),
+                      jsxProd_default(ConfigurableShortcutHint, {
                         action: "confirm:no",
                         context: "Confirmation",
                         fallback: "Esc",
@@ -640,21 +787,27 @@ function LogSelector({
                   }),
                 })
               : x === "search"
-                ? e(Text, {
-                    dimColor: !0,
-                    italic: !1,
-                    children: r(Byline, {
+                ? jsxProd_default(Text, {
+                    dimColor: true,
+                    italic: false,
+                    children: jsxProd_default_2(Byline, {
                       children: [
-                        e(Text, { children: "Type to Search" }),
+                        jsxProd_default(Text, {
+                          children: "Type to Search",
+                        }),
                         logs.length === 0 &&
                           onToggleAllProjects &&
-                          e(KeyboardShortcutHint, {
+                          jsxProd_default(KeyboardShortcutHint, {
                             chord: "ctrl+a",
                             action: showAllProjects ? "only show current repo" : "show all projects",
                             ...T,
                           }),
-                        e(KeyboardShortcutHint, { chord: "enter", action: "select", ...M }),
-                        e(ConfigurableShortcutHint, {
+                        jsxProd_default(KeyboardShortcutHint, {
+                          chord: "enter",
+                          action: "select",
+                          ...M,
+                        }),
+                        jsxProd_default(ConfigurableShortcutHint, {
                           action: "confirm:no",
                           context: "Confirmation",
                           fallback: "Esc",
@@ -664,33 +817,45 @@ function LogSelector({
                       ],
                     }),
                   })
-                : e(Text, {
-                    dimColor: !0,
-                    italic: !1,
-                    children: r(Byline, {
+                : jsxProd_default(Text, {
+                    dimColor: true,
+                    italic: false,
+                    children: jsxProd_default_2(Byline, {
                       children: [
                         onToggleAllProjects &&
-                          e(KeyboardShortcutHint, {
+                          jsxProd_default(KeyboardShortcutHint, {
                             chord: "ctrl+a",
                             action: showAllProjects ? "only show current repo" : "show all projects",
                             ...T,
                           }),
                         A &&
-                          e(KeyboardShortcutHint, {
+                          jsxProd_default(KeyboardShortcutHint, {
                             chord: "ctrl+b",
                             action: K ? "only show current branch" : "show all branches",
                             ...T,
                           }),
                         Le &&
-                          e(KeyboardShortcutHint, {
+                          jsxProd_default(KeyboardShortcutHint, {
                             chord: "ctrl+w",
                             action: de ? "only show current worktree" : "show all worktrees",
                             ...T,
                           }),
-                        v && e(KeyboardShortcutHint, { chord: "space", action: "preview", ...M }),
-                        v && e(KeyboardShortcutHint, { chord: "ctrl+r", action: "rename", ...T }),
-                        e(Text, { children: "Type to search" }),
-                        e(ConfigurableShortcutHint, {
+                        log &&
+                          jsxProd_default(KeyboardShortcutHint, {
+                            chord: "space",
+                            action: "preview",
+                            ...M,
+                          }),
+                        log &&
+                          jsxProd_default(KeyboardShortcutHint, {
+                            chord: "ctrl+r",
+                            action: "rename",
+                            ...T,
+                          }),
+                        jsxProd_default(Text, {
+                          children: "Type to search",
+                        }),
+                        jsxProd_default(ConfigurableShortcutHint, {
                           action: "confirm:no",
                           context: "Confirmation",
                           fallback: "Esc",
@@ -706,44 +871,55 @@ function LogSelector({
     }),
   });
 }
+//@ chunk-b79vwm1h.js:18667-18971 layout
 /**
  * 会话恢复面板：显示“Resume session”标题与附加说明，下方放子内容。
  */
-//@ chunk-b79vwm1h.js:18667-18971 layout
-function ResumeSessionPane(o) {
-  let $ = w(5),
-    { titleDetail: titleDetail, children: children } = o,
-    u;
-  if ($[0] !== titleDetail)
-    ((u = e(Box, {
+function ResumeSessionPane(props) {
+  let $ = w(5);
+  let { titleDetail, children } = props;
+  let u;
+  if ($[0] !== titleDetail) {
+    u = jsxProd_default(Box, {
       flexShrink: 0,
-      children: r(Text, { bold: !0, color: "suggestion", children: ["Resume session", titleDetail] }),
-    })),
-      ($[0] = titleDetail),
-      ($[1] = u));
-  else u = $[1];
+      children: jsxProd_default_2(Text, {
+        bold: true,
+        color: "suggestion",
+        children: ["Resume session", titleDetail],
+      }),
+    });
+    $[0] = titleDetail;
+    $[1] = u;
+  } else u = $[1];
   let m;
-  if ($[2] !== children || $[3] !== u)
-    ((m = r(Pane, { color: "suggestion", children: [u, children] })),
-      ($[2] = children),
-      ($[3] = u),
-      ($[4] = m));
-  else m = $[4];
+  if ($[2] !== children || $[3] !== u) {
+    m = jsxProd_default_2(Pane, {
+      color: "suggestion",
+      children: [u, children],
+    });
+    $[2] = children;
+    $[3] = u;
+    $[4] = m;
+  } else m = $[4];
   return m;
 }
 //@ chunk-b79vwm1h.js:18971-19421 callgraph-fingerprint = extractSearchableText (0.465)
 function extractSearchableText(message) {
   if (message.type !== "user" && message.type !== "assistant") return "";
-  let d = "message" in message ? message.message?.content : void 0;
-  if (!d) return "";
-  let c = message.type === "user" && message.isCompactSummary ? message.modelOnlyText : void 0;
-  if (typeof d === "string")
-    return renderCompactSummaryText(t7(d, message.type === "user" ? message.pluginPrompt : void 0), c);
-  if (Array.isArray(d))
-    return d
+  let content = "message" in message ? message.message?.content : undefined;
+  if (!content) return "";
+  let modelOnlyText = message.type === "user" && message.isCompactSummary ? message.modelOnlyText : undefined;
+  if (typeof content === "string")
+    return renderCompactSummaryText(
+      renderPluginPromptColon(content, message.type === "user" ? message.pluginPrompt : undefined),
+      modelOnlyText,
+    );
+  if (Array.isArray(content))
+    return content
       .map((block) => {
         if (typeof block === "string") return block;
-        if ("text" in block && typeof block.text === "string") return renderCompactSummaryText(block.text, c);
+        if ("text" in block && typeof block.text === "string")
+          return renderCompactSummaryText(block.text, modelOnlyText);
         return "";
       })
       .filter(Boolean)
@@ -753,14 +929,16 @@ function extractSearchableText(message) {
 //@ chunk-b79vwm1h.js:19421-19785 fingerprint = buildSearchableText (0.887)
 function buildSearchableText(log) {
   let messageText = (
-      log.messages.length <= Do ? log.messages : [...log.messages.slice(0, En), ...log.messages.slice(-En)]
-    )
-      .map(extractSearchableText)
-      .filter(Boolean)
-      .join(" "),
-    fullText =
-      `${[log.customTitle, log.aiTitle, log.summary, log.firstPromptShown ?? log.firstPrompt, log.gitBranch, log.tag, log.prNumber ? `PR #${log.prNumber}` : void 0, log.prRepository].filter(Boolean).join(" ")} ${messageText}`.trim();
-  return fullText.length > Tn ? fullText.slice(0, Tn) : fullText;
+    log.messages.length <= LOG_REFRESH_MS
+      ? log.messages
+      : [...log.messages.slice(0, LOG_TAIL_MS), ...log.messages.slice(-LOG_TAIL_MS)]
+  )
+    .map(extractSearchableText)
+    .filter(Boolean)
+    .join(" ");
+  let fullText =
+    `${[log.customTitle, log.aiTitle, log.summary, log.firstPromptShown ?? log.firstPrompt, log.gitBranch, log.tag, log.prNumber ? `PR #${log.prNumber}` : undefined, log.prRepository].filter(Boolean).join(" ")} ${messageText}`.trim();
+  return fullText.length > LOG_MAX_BYTES ? fullText.slice(0, LOG_MAX_BYTES) : fullText;
 }
 //@ chunk-b79vwm1h.js:19785-19999 fingerprint = groupLogsBySessionId (1)
 function groupLogsBySessionId(filteredLogs) {
@@ -773,12 +951,10 @@ function groupLogsBySessionId(filteredLogs) {
       else groups.set(sessionId, [log]);
     }
   }
-  return (
-    groups.forEach((logs) =>
-      logs.sort((l, u) => new Date(u.modified).getTime() - new Date(l.modified).getTime()),
-    ),
-    groups
+  groups.forEach((logs) =>
+    logs.sort((l, u) => new Date(u.modified).getTime() - new Date(l.modified).getTime()),
   );
+  return groups;
 }
 //@ chunk-18hwfzwa.js:485439-485686 fingerprint = getUniqueTags (0.489)
 function getUniqueTags(h, x, D) {
@@ -795,8 +971,11 @@ function getUniqueTags(h, x, D) {
   }, [h, x, D]);
 }
 //@ chunk-52dd7zdd.js:457-534 fingerprint = _temp7 (0.578)
-function N() {
-  let o = { log() {}, hookFailed() {} };
+function createLogSinkRef() {
+  let o = {
+    log() {},
+    hookFailed() {},
+  };
   return {
     set: (r) => {
       o = r;
@@ -805,6 +984,9 @@ function N() {
   };
 }
 //@ chunk-63641kq7.js:5273-5307 fingerprint = _temp2 (0.643)
-var W = DoctorLazy(() => u({ customTitle: o() }));
-
-export { getUniqueTags, LogSelector, N, W };
+var LogSelectorOptionsSchema = DoctorLazy(() =>
+  u({
+    customTitle: string(),
+  }),
+);
+export { getUniqueTags, LogSelector, createLogSinkRef, LogSelectorOptionsSchema };

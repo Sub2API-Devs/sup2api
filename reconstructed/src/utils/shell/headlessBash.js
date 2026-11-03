@@ -21,133 +21,142 @@ import { truncateToLength, firstLineOf, toWellFormedString } from "../stringUtil
 import { escapeXml_2 as escapeXml, truncateBeforeEscape } from "../confusables.js";
 import { stripAnsiSequences } from "../printableName.js";
 
+//@ chunk-rnaw3pc3.js:679-842 placement
 /**
  * 描述 Bash 启动失败：bridge 连接下隐去细节，否则返回错误消息。
  */
-//@ chunk-rnaw3pc3.js:679-842 placement
-function describeSpawnFailure(e, s) {
-  if (!isBridgeOrTransport(s)) return errorMessage(e);
-  return (
-    logForDebugging(`bash spawn failure detail: ${errorMessage(e)}`, { level: "error" }),
-    "shell command failed (detail withheld on this connection)"
-  );
+function describeSpawnFailure(e, session) {
+  if (!isBridgeOrTransport(session)) return errorMessage(e);
+  logForDebugging(`bash spawn failure detail: ${errorMessage(e)}`, {
+    level: "error",
+  });
+  return "shell command failed (detail withheld on this connection)";
 }
 //@ chunk-rnaw3pc3.js:998-1251 placement
-var MAX_BASH_OUTPUT_CHARS = 262144,
-  OTHER_DIRECTORY_WORDS =
-    "Not run: this command was sent for a different folder than the one the session is in now. Ask Claude to run it instead.",
-  BASH_TIMEOUT_MS = 600000,
-  BASH_INTERRUPTED_NOTE = "[interrupted]",
-  TIMED_OUT_NOTE = "[timed out after 10 minutes]",
-  OUTPUT_LIMIT_NOTE = "[stopped: the command printed more than 100 MB]";
+var MAX_BASH_OUTPUT_CHARS = 262144;
+var OTHER_DIRECTORY_WORDS =
+  "Not run: this command was sent for a different folder than the one the session is in now. Ask Claude to run it instead.";
+var BASH_TIMEOUT_MS = 600000;
+var BASH_INTERRUPTED_NOTE = "[interrupted]";
+var TIMED_OUT_NOTE = "[timed out after 10 minutes]";
+var OUTPUT_LIMIT_NOTE = "[stopped: the command printed more than 100 MB]";
 //@ chunk-rnaw3pc3.js:1251-2497 placement
 async function runHeadlessBashCommand(e) {
-  let { command: command } = e,
-    r = e.cwd ?? getCwd(),
-    o = e.maxOutputChars ?? MAX_BASH_OUTPUT_CHARS,
-    { file: file, args: args } =
-      resolveDefaultShell() === "powershell"
-        ? { file: "pwsh", args: ["-NoProfile", "-Command", command] }
-        : { file: "/bin/sh", args: ["-c", command] },
-    abortController = new AbortController(),
-    u = setTimeout((D) => D.abort(), BASH_TIMEOUT_MS + 2000, abortController),
-    any = AbortSignal.any(
-      e.abortSignal === void 0 ? [abortController.signal] : [e.abortSignal, abortController.signal],
-    ),
+  let { command } = e;
+  let cwd = e.cwd ?? getCwd();
+  let maxOutputChars = e.maxOutputChars ?? MAX_BASH_OUTPUT_CHARS;
+  let { file, args } =
+    resolveDefaultShell() === "powershell"
+      ? {
+          file: "pwsh",
+          args: ["-NoProfile", "-Command", command],
+        }
+      : {
+          file: "/bin/sh",
+          args: ["-c", command],
+        };
+  let abortController = new AbortController();
+  let timer = setTimeout((D) => D.abort(), BASH_TIMEOUT_MS + 2000, abortController);
+  let abortSignal = AbortSignal.any(
+    e.abortSignal === undefined ? [abortController.signal] : [e.abortSignal, abortController.signal],
+  );
+  let { stdout, stderr, code, exitCode, timedOut, maxBufferExceeded, error } = await execFileNoThrowWithCwd(
+    file,
+    args,
     {
-      stdout: stdout,
-      stderr: stderr,
-      code: code,
-      exitCode: exitCode,
-      timedOut: timedOut,
-      maxBufferExceeded: maxBufferExceeded,
-      error: error,
-    } = await execFileNoThrowWithCwd(file, args, {
-      abortSignal: any,
+      abortSignal,
       timeout: BASH_TIMEOUT_MS,
-      cwd: r,
+      cwd,
       env: subprocessEnv(),
-      extendEnv: !1,
-      preserveOutputOnError: !0,
-      withoutControllingTerminal: !0,
-      abortEndsProcessGroup: !0,
-      waitForExitAfterKill: !0,
-    }).finally(() => clearTimeout(u)),
-    a =
-      timedOut || abortController.signal.aborted
-        ? "timeout"
-        : e.abortSignal?.aborted === !0
-          ? "interrupt"
-          : maxBufferExceeded
-            ? "output_limit"
-            : void 0,
-    S = error && a === void 0 && !error.startsWith(`Command failed with exit code ${code}`) ? error : "";
+      extendEnv: false,
+      preserveOutputOnError: true,
+      withoutControllingTerminal: true,
+      abortEndsProcessGroup: true,
+      waitForExitAfterKill: true,
+    },
+  ).finally(() => clearTimeout(timer));
+  let a =
+    timedOut || abortController.signal.aborted
+      ? "timeout"
+      : e.abortSignal?.aborted === true
+        ? "interrupt"
+        : maxBufferExceeded
+          ? "output_limit"
+          : undefined;
+  let S = error && a === undefined && !error.startsWith(`Command failed with exit code ${code}`) ? error : "";
   if (S) logFeatureBad("input_remote_bash", "spawn_failed");
   else if (a === "timeout") logFeatureBad("input_remote_bash", "timed_out");
   else if (a === "output_limit") logFeatureBad("input_remote_bash", "output_limit");
-  else logFeatureOk("input_remote_bash", { interrupted: a === "interrupt" });
-  let B = S ? describeSpawnFailure(S, e.session) : "",
-    R =
-      a === "timeout"
-        ? TIMED_OUT_NOTE
-        : a === "interrupt"
-          ? BASH_INTERRUPTED_NOTE
-          : a === "output_limit"
-            ? OUTPUT_LIMIT_NOTE
-            : "",
-    b = exitCode ?? (a === "interrupt" ? 130 : a === "timeout" ? 124 : code);
+  else
+    logFeatureOk("input_remote_bash", {
+      interrupted: a === "interrupt",
+    });
+  let B = S ? describeSpawnFailure(S, e.session) : "";
+  let R =
+    a === "timeout"
+      ? TIMED_OUT_NOTE
+      : a === "interrupt"
+        ? BASH_INTERRUPTED_NOTE
+        : a === "output_limit"
+          ? OUTPUT_LIMIT_NOTE
+          : "";
+  let b = exitCode ?? (a === "interrupt" ? 130 : a === "timeout" ? 124 : code);
   return {
-    outputText: `<${BASH_STDOUT}>${formatBashOutput(stdout, o, "")}</${BASH_STDOUT}><${BASH_STDERR}>${formatBashOutput(stderr || B, o, R)}</${BASH_STDERR}><${BASH_EXIT_CODE}>${b}</${BASH_EXIT_CODE}>`,
+    outputText: `<${BASH_STDOUT}>${formatBashOutput(stdout, maxOutputChars, "")}</${BASH_STDOUT}><${BASH_STDERR}>${formatBashOutput(stderr || B, maxOutputChars, R)}</${BASH_STDERR}><${BASH_EXIT_CODE}>${b}</${BASH_EXIT_CODE}>`,
     exitCode: b,
   };
 }
 //@ chunk-rnaw3pc3.js:2497-2685 placement
-function formatBashOutput(e, s, r) {
+function formatBashOutput(e, maxOutputChars, r) {
   let o =
-      r === ""
-        ? ""
-        : `
-${r}`,
-    i = s - o.length,
-    l = truncateToLength(e, Math.max(i, 0)),
-    n = e.length - l.length,
-    u = cleanShellOutputForViewers(l),
-    c = escapeXml(u),
-    p = n === 0 && c.length <= i ? c : escapeXml(truncateBeforeEscape(u, i, (f) => U(f + n)));
+    r === ""
+      ? ""
+      : `
+${r}`;
+  let i = maxOutputChars - o.length;
+  let l = truncateToLength(e, Math.max(i, 0));
+  let n = e.length - l.length;
+  let u = cleanShellOutputForViewers(l);
+  let c = escapeXml(u);
+  let p =
+    n === 0 && c.length <= i
+      ? c
+      : escapeXml(truncateBeforeEscape(u, i, (f) => formatTruncationNotice(f + n)));
   return `${p}${p === "" ? r : o}`;
 }
 //@ chunk-rnaw3pc3.js:2685-2783 placement
-function U(e) {
+function formatTruncationNotice(e) {
   return `
 [output truncated: ${e.toLocaleString("en-US")} more characters not shown]`;
 }
 //@ chunk-rnaw3pc3.js:2783-2808 placement
-var E = /\x1b\[[0-9;:]*m/g;
+var ANSI_SGR_RE = /\x1b\[[0-9;:]*m/g;
+//@ chunk-rnaw3pc3.js:2808-3443 placement
 /**
  * 解析 OSC 序列参数。
  */
-//@ chunk-rnaw3pc3.js:2808-3443 placement
 function parseOscSequence(e) {
-  let s = [],
-    parts = e.slice(2, -1).split(";");
-  for (let o = 0; o < parts.length; o++) {
-    let i = parts[o],
-      l = firstLineOf(i, ":"),
-      n = l === "" ? 0 : Number(l);
+  let s = [];
+  let parts = e.slice(2, -1).split(";");
+  for (let j = 0; j < parts.length; j++) {
+    let i = parts[j];
+    let l = firstLineOf(i, ":");
+    let n = l === "" ? 0 : Number(l);
     if (n === 38 || n === 48 || n === 58) {
       let u = i.includes(":")
         ? i.split(":")
-        : parts[o + 1] === "5"
-          ? parts.slice(o, o + 3)
-          : parts[o + 1] === "2"
-            ? parts.slice(o, o + 5)
+        : parts[j + 1] === "5"
+          ? parts.slice(j, j + 3)
+          : parts[j + 1] === "2"
+            ? parts.slice(j, j + 5)
             : [i];
-      if (!i.includes(":")) o += u.length - 1;
+      if (!i.includes(":")) j += u.length - 1;
       if (n !== 38) continue;
-      if (u[1] === "5" && u.length === 3 && x(u[2])) s.push("38", "5", u[2]);
+      if (u[1] === "5" && u.length === 3 && isOscNumericParam(u[2])) s.push("38", "5", u[2]);
       else if (u[1] === "2") {
         let sliced = u.slice(-3);
-        if ((u.length === 5 || u.length === 6) && sliced.every(x)) s.push("38", "2", ...sliced);
+        if ((u.length === 5 || u.length === 6) && sliced.every(isOscNumericParam))
+          s.push("38", "2", ...sliced);
       }
       continue;
     }
@@ -170,11 +179,11 @@ function parseOscSequence(e) {
 }
 //@ chunk-rnaw3pc3.js:3443-3589 placement
 function cleanShellOutputForViewers(e, s = {}) {
-  if (s.keepColors !== !0) return sanitizeTerminalText(e);
-  let r = e.match(E) ?? [];
+  if (s.keepColors !== true) return sanitizeTerminalText(e);
+  let r = e.match(ANSI_SGR_RE) ?? [];
   return e
-    .split(E)
-    .map((o, i) => sanitizeTerminalText(o) + (r[i] === void 0 ? "" : parseOscSequence(r[i])))
+    .split(ANSI_SGR_RE)
+    .map((o, i) => sanitizeTerminalText(o) + (r[i] === undefined ? "" : parseOscSequence(r[i])))
     .join("");
 }
 //@ chunk-rnaw3pc3.js:3589-3828 placement
@@ -191,8 +200,7 @@ function sanitizeTerminalText(e) {
     );
 }
 //@ chunk-rnaw3pc3.js:3828-3881 placement
-function x(e) {
-  return e !== void 0 && /^\d{1,3}$/.test(e);
+function isOscNumericParam(e) {
+  return e !== undefined && /^\d{1,3}$/.test(e);
 }
-
 export { cleanShellOutputForViewers, BASH_INTERRUPTED_NOTE, OTHER_DIRECTORY_WORDS, describeSpawnFailure };

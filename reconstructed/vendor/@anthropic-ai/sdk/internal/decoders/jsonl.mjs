@@ -5,36 +5,38 @@
  * pieces: chunk-hwmsct5x.js (1)
  * attribution: esm-fingerprint 1
  */
-import { Vo } from "./line.mjs";
-import { pr } from "../../core/error.mjs";
-import { rr } from "../shims.mjs";
+import { LineDecoder } from "./line.mjs";
+import { AnthropicError } from "../../core/error.mjs";
+import { ReadableStreamToAsyncIterable } from "../shims.mjs";
 
 //@ chunk-hwmsct5x.js:88120-88799 esm-fingerprint
-var Ps = (() => {
-  class e {
-    constructor(n, r) {
-      ((this.iterator = n), (this.controller = r));
+var JSONLDecoder = (() => {
+  class JSONLDecoder {
+    constructor(iterator, controller) {
+      this.iterator = iterator;
+      this.controller = controller;
     }
     async *decoder() {
-      let n = new Vo();
-      for await (let r of this.iterator) for (let s of n.decode(r)) yield JSON.parse(s);
-      for (let r of n.flush()) yield JSON.parse(r);
+      let lineDecoder = new LineDecoder();
+      for await (let chunk of this.iterator)
+        for (let line of lineDecoder.decode(chunk)) yield JSON.parse(line);
+      for (let line of lineDecoder.flush()) yield JSON.parse(line);
     }
     [Symbol.asyncIterator]() {
       return this.decoder();
     }
-    static fromResponse(n, r) {
-      if (!n.body) {
-        if ((r.abort(), typeof globalThis.navigator < "u" && globalThis.navigator.product === "ReactNative"))
-          throw new pr(
+    static fromResponse(response, controller) {
+      if (!response.body) {
+        controller.abort();
+        if (typeof globalThis.navigator !== "undefined" && globalThis.navigator.product === "ReactNative")
+          throw new AnthropicError(
             "The default react-native fetch implementation does not support streaming. Please use expo/fetch: https://docs.expo.dev/versions/latest/sdk/expo/#expofetch-api",
           );
-        throw new pr("Attempted to iterate over a response with no body");
+        throw new AnthropicError("Attempted to iterate over a response with no body");
       }
-      return new e(rr(n.body), r);
+      return new JSONLDecoder(ReadableStreamToAsyncIterable(response.body), controller);
     }
   }
-  return e;
+  return JSONLDecoder;
 })();
-
-export { Ps };
+export { JSONLDecoder };

@@ -8,11 +8,10 @@
  * pieces: chunk-jt8fac03.js (1)
  * attribution: placement 1
  */
-
+//@ chunk-jt8fac03.js:191-37462 placement
 /**
  * 后台 agent 状态分类器的系统提示（blocked/done/working 等四态，决定是否推送手机通知），以及 Projects 回顾提示的若干附加段。
  */
-//@ chunk-jt8fac03.js:191-37462 placement
 var CLASSIFIER_SYSTEM_PROMPT = `A user kicked off a Claude Code agent to do a coding task and walked away. Read the tail of what the agent just said and decide which of four states it's in, so the system knows whether to notify the user.
 
 The classification drives a phone notification: "blocked" pings the user to come back; everything else doesn't. So the question you're really answering is: does the user need to come back right now, and if not, is the work finished or still going? A false "blocked" is an annoying interruption for nothing. A false "done" or "working" when the agent is actually stuck waiting on the user means the work sits idle until they happen to check.
@@ -191,8 +190,8 @@ OUTPUT \u2014 respond with ONLY this JSON, no code fences:
 "needs": when blocked, the exact action the user should take, copied as closely as possible from the tail \u2014 they'll act on this text without reading the transcript. Omit otherwise.
 
 "output.result": one-sentence headline naming a finished deliverable (direct answer, URL/path the agent produced, command the user should run). If the tail has \`result:\` on its own line, that line IS the result. Omit ({}) when still working, or when it would just restate the state.
-`,
-  t = `You write the status card for one Claude Code thread inside a Project. The project owner reads the card instead of opening the thread, so the card has to say what the thread just did and exactly what the owner has to do now. You are given the thread's previous state, the tools it called, the most recent message a person wrote to the thread when there is one, and the tail of the thread's last message. The previous state uses the labels working, blocked, done and failed; "blocked" covers both needs_reply and needs_approval. Decide which of five states the thread is in, write the two card lines and the suggested reply, and write today's short status fields beside them.
+`;
+var PROJECT_THREAD_CARD_PROMPT = `You write the status card for one Claude Code thread inside a Project. The project owner reads the card instead of opening the thread, so the card has to say what the thread just did and exactly what the owner has to do now. You are given the thread's previous state, the tools it called, the most recent message a person wrote to the thread when there is one, and the tail of the thread's last message. The previous state uses the labels working, blocked, done and failed; "blocked" covers both needs_reply and needs_approval. Decide which of five states the thread is in, write the two card lines and the suggested reply, and write today's short status fields beside them.
 
 THE FIVE STATES
 
@@ -277,8 +276,8 @@ EXAMPLES (tail \u2192 card)
 
 OUTPUT \u2014 respond with ONLY this JSON, no code fences:
 {"state":"<needs_reply|needs_approval|done|failed|working>","headline":"<at most 60 characters>","needs":"<when needs_reply or needs_approval: the exact ask; empty otherwise>","happened":"<at most 100 characters>","needs_you":"<at most 100 characters, or empty>","reply":"<at most 8 words, or empty>"}
-`,
-  o = `AN ASK THAT OPENS THE MESSAGE
+`;
+var OPENING_ASK_GUIDE = `AN ASK THAT OPENS THE MESSAGE
 
 On some surfaces the agent is told to say the one thing it needs from the user first, then explain, and end on a statement. So read the whole tail, not only its last sentence: a direct question to the user, or a stated need for something only the user can do or supply, is the gate wherever it sits \u2014 unless later in the same tail the agent answers it itself, says it is handled, or says no action is needed. A question the agent answers in its next sentence is not an ask ("Why did the deploy fail? The image tag was stale\u2026" \u2192 done). The offers-vs-gates test still applies: an opening "if you want, I can also\u2026" is an offer.
 
@@ -289,8 +288,8 @@ On some surfaces the agent is told to say the one thing it needs from the user f
 "Got the zone ID, thanks \u2014 the cutover record is in and resolving. On the TTL question: the records are at 300s, so no change is needed."
 \u2192 {"state":"done","detail":"DNS cutover record in and resolving; TTL left at 300s","tempo":"idle","output":{"result":"cutover record added and resolving; TTL unchanged"}}
   (the need was met; what remains is an answer \u2192 done)
-`,
-  n = `A SESSION THAT TALKS TO PEOPLE IN A CHAT THREAD
+`;
+var CHAT_THREAD_GUIDE = `A SESSION THAT TALKS TO PEOPLE IN A CHAT THREAD
 
 This agent works for people in a chat thread and reaches them only through the messages it posts there. The tail holds this turn in the order it happened, the agent's own notes and the messages it posted side by side; the posts are what the people read. It names people instead of saying "you". Where the rules above differ, these win:
 
@@ -315,15 +314,15 @@ Current state blocked: "Check-in: no reply in the thread, nothing new on PR #212
 "Told Priya the flaky test is fixed in PR #212. It now waits on the storage team's code-owner review."
 \u2192 {"state":"done","detail":"flaky test fixed in PR #212; awaiting code-owner review","tempo":"idle","output":{"result":"flaky test fixed in PR #212"}}
   (the reviewers are a third party and the agent plans nothing more \u2192 done)
-`,
-  a = `AN ASK THAT OPENS THE MESSAGE
+`;
+var PROJECT_OPENING_ASK_GUIDE = `AN ASK THAT OPENS THE MESSAGE
 
 The thread is told to say the one thing it needs from the owner first, then explain, and end on a statement. So read the whole tail, not only its last sentence: a question to the owner, or a need for something only the owner can do or supply, sets the state wherever it sits \u2014 "needs_reply" for an answer or a value, "needs_approval" for a go-ahead \u2014 unless later in the same tail the thread says it is handled or that no action is needed. A question the thread answers in its next sentence is not an ask. needs_you names that need.
 
 "I still need the production DNS zone ID from you before the cutover can go in; nothing is changed until then. On the TTL question: the records are at 300s, so no TTL change is needed."
 \u2192 {"state":"needs_reply","headline":"Cutover waits on DNS zone ID","needs":"The production DNS zone ID","happened":"Prepared the DNS cutover; the TTL stays at 300s","needs_you":"Reply with the production DNS zone ID","reply":""}
-`,
-  i = `HANDED OVER FOR THE USER'S OWN MERGE OR REVIEW
+`;
+var HANDED_OVER_GUIDE = `HANDED OVER FOR THE USER'S OWN MERGE OR REVIEW
 
 One exception to the user-addressed gate above; every other tail is judged exactly as before. When a PR, branch or release is finished and the tail only says that the next step is the user's own ("ready for you to merge", "waiting on you to merge", "awaiting your merge", "needs your review", "merging is your call", "over to you"), no reply would set the agent going again: that is "done", with the step in output.result and no needs. So is a later report that nothing has changed on it.
 

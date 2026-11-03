@@ -8,24 +8,26 @@
 import { x } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-hwmsct5x.js:3818-4328 cjs-fingerprint
-var Mu = x(function (xu) {
-  Object.defineProperty(xu, "__esModule", { value: !0 });
-  xu.timingSafeEqual = void 0;
-  function ku(e, n = "") {
-    if (!e) throw Error(n);
+var require_timing_safe_equal = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.timingSafeEqual = undefined;
+  function assert(expr, msg = "") {
+    if (!expr) throw Error(msg);
   }
-  function sm(e, n) {
-    if (e.byteLength !== n.byteLength) return !1;
-    if (!(e instanceof DataView)) e = new DataView(ArrayBuffer.isView(e) ? e.buffer : e);
-    if (!(n instanceof DataView)) n = new DataView(ArrayBuffer.isView(n) ? n.buffer : n);
-    (ku(e instanceof DataView), ku(n instanceof DataView));
-    let byteLength = e.byteLength,
-      s = 0,
-      h = -1;
-    while (++h < byteLength) s |= e.getUint8(h) ^ n.getUint8(h);
-    return s === 0;
+  function timingSafeEqual(a, b) {
+    if (a.byteLength !== b.byteLength) return false;
+    if (!(a instanceof DataView)) a = new DataView(ArrayBuffer.isView(a) ? a.buffer : a);
+    if (!(b instanceof DataView)) b = new DataView(ArrayBuffer.isView(b) ? b.buffer : b);
+    assert(a instanceof DataView);
+    assert(b instanceof DataView);
+    let length = a.byteLength;
+    let out = 0;
+    let i = -1;
+    while (++i < length) out |= a.getUint8(i) ^ b.getUint8(i);
+    return out === 0;
   }
-  xu.timingSafeEqual = sm;
+  cjsExports.timingSafeEqual = timingSafeEqual;
 });
-
-export { Mu };
+export { require_timing_safe_equal };

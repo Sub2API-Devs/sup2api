@@ -17,31 +17,40 @@ import {
 import { createSystemMessage } from "../../utils/messages.js";
 
 //@ chunk-18hwfzwa.js:1623866-1624076 affinity
-var TRUSTED_DEVICE_ENROLLED = "trusted-device-enrolled",
-  Rvt = {
-    fact: "this computer was enrolled as a trusted device for your account",
-    hint: " \xB7 you'll also get an email \xB7 not expected? review your devices in claude.ai settings",
-  };
+var TRUSTED_DEVICE_ENROLLED = "trusted-device-enrolled";
+var trustedDeviceEnrolledNotice = {
+  fact: "this computer was enrolled as a trusted device for your account",
+  hint: " \xB7 you'll also get an email \xB7 not expected? review your devices in claude.ai settings",
+};
 //@ chunk-18hwfzwa.js:1624076-1624350 fingerprint = _temp (0.302)
-function useTrustedDeviceEnrolledNotice(h, x) {
+function useTrustedDeviceEnrolledNotice(addNotification, transcript) {
   P(() => {
-    function D() {
+    function listener() {
       if (!takeAutomaticEnrollmentNotice()) return;
-      (x.apply({ type: "append", messages: [createSystemMessage(AUTOMATIC_ENROLLMENT_NOTICE, "notice")] }),
-        h({
-          key: TRUSTED_DEVICE_ENROLLED,
-          kind: "event",
-          segments: [
-            { text: Rvt.fact, color: "warning" },
-            { text: Rvt.hint, dim: !0 },
-          ],
-          priority: "high",
-          timeoutMs: 30000,
-          fold: (L, ee) => ee,
-        }));
+      transcript.apply({
+        type: "append",
+        messages: [createSystemMessage(AUTOMATIC_ENROLLMENT_NOTICE, "notice")],
+      });
+      addNotification({
+        key: TRUSTED_DEVICE_ENROLLED,
+        kind: "event",
+        segments: [
+          {
+            text: trustedDeviceEnrolledNotice.fact,
+            color: "warning",
+          },
+          {
+            text: trustedDeviceEnrolledNotice.hint,
+            dim: true,
+          },
+        ],
+        priority: "high",
+        timeoutMs: 30000,
+        fold: (L, ee) => ee,
+      });
     }
-    return (D(), onAutomaticEnrollmentNotice(D));
-  }, [h, x]);
+    listener();
+    return onAutomaticEnrollmentNotice(listener);
+  }, [addNotification, transcript]);
 }
-
 export { useTrustedDeviceEnrolledNotice };

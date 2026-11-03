@@ -11,34 +11,43 @@
 import { truncateToLength } from "../../utils/stringUtils.js";
 import { formatDuration } from "../../utils/format.js";
 
-/**
- * MCP 任务标签长度、格式与能力名常量。
- */
 //@ chunk-dycbmmjy.js:263-331 placement
-var MCP_TASK_LABEL_MAX = 128,
-  C2 = /^[\x21-\x7e]+$/,
-  IO_MODELCONTEXTPROTOCOL_TASKS = "io.modelcontextprotocol/tasks";
+/**
+ * 任务标签允许的字符（可打印 ASCII）。
+ */
+var MCP_TASK_LABEL_MAX = 128;
+var LABEL_PATTERN = /^[\x21-\x7e]+$/;
+var IO_MODELCONTEXTPROTOCOL_TASKS = "io.modelcontextprotocol/tasks";
+//@ chunk-dycbmmjy.js:331-436 placement
 /**
  * 去掉控制/格式字符并截断任务标签。
  */
-//@ chunk-dycbmmjy.js:331-436 placement
-function sanitizeTaskLabel(r) {
+function sanitizeTaskLabel(mcpTaskId) {
   return truncateToLength(
-    r.replace(/[\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}\p{Variation_Selector}]+/gu, ""),
+    mcpTaskId.replace(/[\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}\p{Variation_Selector}]+/gu, ""),
     MCP_TASK_LABEL_MAX,
   );
 }
+//@ chunk-dycbmmjy.js:436-471 placement
 /**
  * 截断为短标签。
  */
-//@ chunk-dycbmmjy.js:436-471 placement
-function shortTaskLabel(r) {
-  return truncateToLength(sanitizeTaskLabel(r), 8);
+function shortTaskLabel(mcpTaskId) {
+  return truncateToLength(sanitizeTaskLabel(mcpTaskId), 8);
 }
 //@ chunk-dycbmmjy.js:471-552 placement
-function f3o(r) {
-  if (!Number.isFinite(r) || r <= 0) return;
-  return r < 1000 ? `${r}ms` : formatDuration(r);
+/**
+ * 把毫秒格式化成简短时长（<1s 用 ms）。
+ */
+function formatShortDuration(pollIntervalMs) {
+  if (!Number.isFinite(pollIntervalMs) || pollIntervalMs <= 0) return;
+  return pollIntervalMs < 1000 ? `${pollIntervalMs}ms` : formatDuration(pollIntervalMs);
 }
-
-export { MCP_TASK_LABEL_MAX, C2, IO_MODELCONTEXTPROTOCOL_TASKS, shortTaskLabel, sanitizeTaskLabel, f3o };
+export {
+  MCP_TASK_LABEL_MAX,
+  LABEL_PATTERN,
+  IO_MODELCONTEXTPROTOCOL_TASKS,
+  shortTaskLabel,
+  sanitizeTaskLabel,
+  formatShortDuration,
+};

@@ -9,10 +9,10 @@
  * attribution: placement 6
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, QD, zg, T, A, E, o } from "../../../vendor/zod/v4/classic/schemas.js";
+import { u, QD, zg, literal, array, E, string } from "../../../vendor/zod/v4/classic/schemas.js";
 import { env } from "../env.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
-import { Yi } from "../../commands/mobile/mobile.js";
+import { claudeInChromeSession } from "../../commands/mobile/mobile.js";
 import { logForDebugging } from "../debug.js";
 import { withTimeout } from "../sleep.js";
 import { parseTabsContextResult } from "./chromeMcpServer.js";
@@ -24,118 +24,173 @@ import { registerCleanup } from "../cleanupRegistry.js";
 import { isTerminalShutdown } from "../terminalShutdown.js";
 
 //@ chunk-9a6n2431.js:3555-3726 placement
-var MAX_TABS_TO_CLOSE = 50,
-  EXIT_CLOSE_TIMEOUT_MS = 1500,
-  CLOSE_CALL_TIMEOUT_MS = 5000,
-  BLANK_TAB_URLS = new Set(["chrome://newtab/", "about:blank"]),
-  closeToolResultSchema = DoctorLazy(() =>
-    u({ error: QD().or(zg()).or(T(!1)).or(T("")).optional(), result: u({ isError: T(!0).optional() }) }),
-  );
+var MAX_TABS_TO_CLOSE = 50;
+var EXIT_CLOSE_TIMEOUT_MS = 1500;
+var CLOSE_CALL_TIMEOUT_MS = 5000;
+var BLANK_TAB_URLS = new Set(["chrome://newtab/", "about:blank"]);
+var closeToolResultSchema = DoctorLazy(() =>
+  u({
+    error: QD().or(zg()).or(literal(false)).or(literal("")).optional(),
+    result: u({
+      isError: literal(true).optional(),
+    }),
+  }),
+);
 //@ chunk-9a6n2431.js:3726-3808 placement
-function M(e) {
-  let safeParse = closeToolResultSchema().safeParse(e);
-  return safeParse.success && safeParse.data.result.isError !== !0;
+/**
+ * 判断关闭标签组的调用是否成功（结果为 isError 时算失败）。
+ */
+function closeTabGroupSucceeded(e) {
+  let s = closeToolResultSchema().safeParse(e);
+  return s.success && s.data.result.isError !== true;
 }
 //@ chunk-9a6n2431.js:3808-3866 placement
-var F = DoctorLazy(() => u({ availableTabs: A(u({ tabId: E(), url: o() })) }));
+/**
+ * 可用标签页列表的 schema（tabId 与 url）。
+ */
+var availableTabsSchema = DoctorLazy(() =>
+  u({
+    availableTabs: array(
+      u({
+        tabId: E(),
+        url: string(),
+      }),
+    ),
+  }),
+);
 //@ chunk-9a6n2431.js:3866-4347 placement
 function closeSessionTabGroupInBackground({
-  sessionId: sessionId,
-  onlyIfEmpty: onlyIfEmpty,
-  clientOverride: clientOverride,
-  callTimeoutMs: callTimeoutMs = CLOSE_CALL_TIMEOUT_MS,
+  sessionId,
+  onlyIfEmpty,
+  clientOverride,
+  callTimeoutMs = CLOSE_CALL_TIMEOUT_MS,
 }) {
   if (
     env.CLAUDE_CODE_REMOTE_SESSION_ID ||
-    !getFeatureValue_CACHED_MAY_BE_STALE("tengu_chrome_tab_group_close", !0)
+    !getFeatureValue_CACHED_MAY_BE_STALE("tengu_chrome_tab_group_close", true)
   )
-    return Promise.resolve({ status: "disabled" });
-  let closesInFlight = Yi().closesInFlight,
-    d = closesInFlight.get(sessionId);
+    return Promise.resolve({
+      status: "disabled",
+    });
+  let closesInFlight = claudeInChromeSession().closesInFlight;
+  let d = closesInFlight.get(sessionId);
   if (d && (onlyIfEmpty || !d.onlyIfEmpty)) return d.promise;
   let r = (d?.promise ?? Promise.resolve())
     .then(() =>
       closeSessionTabGroup({
-        sessionId: sessionId,
-        onlyIfEmpty: onlyIfEmpty,
-        clientOverride: clientOverride,
-        callTimeoutMs: callTimeoutMs,
+        sessionId,
+        onlyIfEmpty,
+        clientOverride,
+        callTimeoutMs,
       }),
     )
     .finally(() => {
       if (closesInFlight.get(sessionId)?.promise === r) closesInFlight.delete(sessionId);
     });
-  return (closesInFlight.set(sessionId, { onlyIfEmpty: onlyIfEmpty, promise: r }), r);
+  closesInFlight.set(sessionId, {
+    onlyIfEmpty,
+    promise: r,
+  });
+  return r;
 }
+//@ chunk-9a6n2431.js:4347-6061 placement
 /**
  * 关闭本会话在浏览器中创建的标签组（可只在为空时关闭），带超时。
  */
-//@ chunk-9a6n2431.js:4347-6061 placement
-async function closeSessionTabGroup({
-  sessionId: sessionId,
-  onlyIfEmpty: onlyIfEmpty,
-  clientOverride: clientOverride,
-  callTimeoutMs: callTimeoutMs,
-}) {
-  let n = clientOverride ?? Yi().bridgeBinding?.socketClient;
-  if (!n || !n.isConnected())
-    return (
-      logForDebugging("[closeSessionTabGroup] bridge not connected, skipping"),
-      { status: "not_connected" }
-    );
-  let d = { permissionMode: "ask", sessionScope: { sessionId: sessionId } },
-    r,
-    _;
+async function closeSessionTabGroup({ sessionId, onlyIfEmpty, clientOverride, callTimeoutMs }) {
+  let n = clientOverride ?? claudeInChromeSession().bridgeBinding?.socketClient;
+  if (!n || !n.isConnected()) {
+    logForDebugging("[closeSessionTabGroup] bridge not connected, skipping");
+    return {
+      status: "not_connected",
+    };
+  }
+  let d = {
+    permissionMode: "ask",
+    sessionScope: {
+      sessionId,
+    },
+  };
+  let r;
+  let _;
   try {
     let a = await withTimeout(
-        n.callTool("tabs_context_mcp", { createIfEmpty: !1 }, d),
-        callTimeoutMs,
-        "tabs_context_mcp timed out",
+      n.callTool(
+        "tabs_context_mcp",
+        {
+          createIfEmpty: false,
+        },
+        d,
       ),
-      { tabGroupId: tabGroupId, json: json } = parseTabsContextResult(a);
-    if (tabGroupId === void 0 || json === void 0)
-      return (logForDebugging("[closeSessionTabGroup] no group for session"), { status: "no_group" });
+      callTimeoutMs,
+      "tabs_context_mcp timed out",
+    );
+    let { tabGroupId, json } = parseTabsContextResult(a);
+    if (tabGroupId === undefined || json === undefined) {
+      logForDebugging("[closeSessionTabGroup] no group for session");
+      return {
+        status: "no_group",
+      };
+    }
     _ = tabGroupId;
-    let safeParse = F().safeParse(jsonParse(json));
-    if (!safeParse.success)
-      return (
-        logForDebugging(`[closeSessionTabGroup] group ${_}: unreadable tab list, keeping it`),
-        logFeatureSad("chrome_tab_group_close", "tabs_unreadable"),
-        { status: "kept", tabs: 0 }
-      );
-    r = safeParse.data.availableTabs;
+    let O = availableTabsSchema().safeParse(jsonParse(json));
+    if (!O.success) {
+      logForDebugging(`[closeSessionTabGroup] group ${_}: unreadable tab list, keeping it`);
+      logFeatureSad("chrome_tab_group_close", "tabs_unreadable");
+      return {
+        status: "kept",
+        tabs: 0,
+      };
+    }
+    r = O.data.availableTabs;
   } catch (error) {
-    return (
-      logForDebugging(`[closeSessionTabGroup] tabs_context_mcp failed: ${String(error)}`),
-      logFeatureBad("chrome_tab_group_close", "context_failed"),
-      { status: "no_group" }
-    );
+    logForDebugging(`[closeSessionTabGroup] tabs_context_mcp failed: ${String(error)}`);
+    logFeatureBad("chrome_tab_group_close", "context_failed");
+    return {
+      status: "no_group",
+    };
   }
-  if (onlyIfEmpty && r.some((a) => !BLANK_TAB_URLS.has(a.url)))
-    return (
-      logForDebugging(`[closeSessionTabGroup] group ${_} has content, keeping ${r.length} tabs`),
-      { status: "kept", tabs: r.length }
+  if (onlyIfEmpty && r.some((a) => !BLANK_TAB_URLS.has(a.url))) {
+    logForDebugging(`[closeSessionTabGroup] group ${_} has content, keeping ${r.length} tabs`);
+    return {
+      status: "kept",
+      tabs: r.length,
+    };
+  }
+  if (r.length > MAX_TABS_TO_CLOSE) {
+    logForDebugging(
+      `[closeSessionTabGroup] group ${_} holds ${r.length} tabs, over the close cap; keeping it`,
     );
-  if (r.length > MAX_TABS_TO_CLOSE)
-    return (
-      logForDebugging(
-        `[closeSessionTabGroup] group ${_} holds ${r.length} tabs, over the close cap; keeping it`,
-      ),
-      logFeatureSad("chrome_tab_group_close", "over_cap"),
-      { status: "kept", tabs: r.length }
-    );
-  let G = { permissionMode: "ask", sessionScope: { sessionId: sessionId, tabGroupId: _ } },
-    k = 0,
-    S = 0;
-  for (let a = r.length - 1; a >= 0; a--) {
-    let { tabId: tabId } = r[a];
+    logFeatureSad("chrome_tab_group_close", "over_cap");
+    return {
+      status: "kept",
+      tabs: r.length,
+    };
+  }
+  let G = {
+    permissionMode: "ask",
+    sessionScope: {
+      sessionId,
+      tabGroupId: _,
+    },
+  };
+  let k = 0;
+  let S = 0;
+  for (let j = r.length - 1; j >= 0; j--) {
+    let { tabId } = r[j];
     try {
       let C = await withTimeout(
-        n.callTool("tabs_close_mcp", { tabId: tabId }, G),
+        n.callTool(
+          "tabs_close_mcp",
+          {
+            tabId,
+          },
+          G,
+        ),
         callTimeoutMs,
         "tabs_close_mcp timed out",
       );
-      if (!M(C)) {
+      if (!closeTabGroupSucceeded(C)) {
         S++;
         break;
       }
@@ -145,38 +200,46 @@ async function closeSessionTabGroup({
       break;
     }
   }
-  if (
-    (logForDebugging(
-      `[closeSessionTabGroup] group ${_}: closed ${k}/${r.length} tabs` +
-        (S > 0 ? ", stopped at a failed close" : ""),
-    ),
-    S > 0)
-  )
-    logFeatureSad("chrome_tab_group_close", "close_failed");
+  logForDebugging(
+    `[closeSessionTabGroup] group ${_}: closed ${k}/${r.length} tabs` +
+      (S > 0 ? ", stopped at a failed close" : ""),
+  );
+  if (S > 0) logFeatureSad("chrome_tab_group_close", "close_failed");
   else logFeatureOk("chrome_tab_group_close");
-  return { status: "closed", closed: k, failed: S };
+  return {
+    status: "closed",
+    closed: k,
+    failed: S,
+  };
 }
 //@ chunk-9a6n2431.js:6061-6519 placement
 function registerTabGroupCleanup() {
-  let e = Yi();
+  let e = claudeInChromeSession();
   if (e.tabGroupCleanupRegistered) return;
-  e.tabGroupCleanupRegistered = !0;
+  e.tabGroupCleanupRegistered = true;
   let id = getRootSession().id;
-  ((e.unsubscribeSessionSwitch = onSessionSwitch((c, b) => {
+  e.unsubscribeSessionSwitch = onSessionSwitch((c, b) => {
     if (c === id) return;
-    let n = id;
-    ((id = c), closeSessionTabGroupInBackground({ sessionId: n, onlyIfEmpty: !0 }).catch(logError));
-  })),
-    (e.unregisterExitCleanup = registerCleanup(() => {
-      if (!isTerminalShutdown()) return;
-      let list = Array.from(e.closesInFlight.values(), (b) => b.promise);
-      return withTimeout(
-        Promise.allSettled([
-          ...list,
-          closeSessionTabGroupInBackground({ sessionId: getRootSession().id, onlyIfEmpty: !0 }),
-        ]),
-        EXIT_CLOSE_TIMEOUT_MS,
-        "chrome tab group close timed out at exit",
-      ).catch(() => {});
-    })));
+    let sessionId = id;
+    id = c;
+    closeSessionTabGroupInBackground({
+      sessionId,
+      onlyIfEmpty: true,
+    }).catch(logError);
+  });
+  e.unregisterExitCleanup = registerCleanup(() => {
+    if (!isTerminalShutdown()) return;
+    let list = Array.from(e.closesInFlight.values(), (b) => b.promise);
+    return withTimeout(
+      Promise.allSettled([
+        ...list,
+        closeSessionTabGroupInBackground({
+          sessionId: getRootSession().id,
+          onlyIfEmpty: true,
+        }),
+      ]),
+      EXIT_CLOSE_TIMEOUT_MS,
+      "chrome tab group close timed out at exit",
+    ).catch(() => {});
+  });
 }

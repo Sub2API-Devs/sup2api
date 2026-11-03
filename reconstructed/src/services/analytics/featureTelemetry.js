@@ -10,39 +10,45 @@
  */
 import { i } from "../../../vendor/lodash-es/_deburrLetter.js";
 import { M, ye } from "../../../vendor/lodash-es/_unicodeWords.js";
-import { p } from "../../../vendor/lodash-es/_asciiWords.js";
+import { deburr_default } from "../../../vendor/lodash-es/_asciiWords.js";
 import { logEvent, logEventAsync } from "./index.js";
 import { fromEnum } from "./safeMetadata.js";
 import { sanitizedFeatureErrorCodeForTelemetry } from "../../utils/errors.js";
 
 //@ chunk-8nhse09v.js:4731-4804 placement
-function Fe(e) {
+function featureNameFactory(e) {
   return function (r) {
-    return i(M(p(r).replace(ye, "")), e, "");
+    return i(M(deburr_default(r).replace(ye, "")), e, "");
   };
 }
 //@ chunk-8nhse09v.js:4804-4813 placement
-var W = Fe;
+var featureNameBuilderFactory = featureNameFactory;
 //@ chunk-8nhse09v.js:4813-4883 placement
-var ke = W(function (e, r, u) {
-    return e + (u ? "_" : "") + r.toLowerCase();
-  }),
-  IDn = ke;
+/**
+ * 导出常量或表 `toSnakeFeatureName`：值为 W(function (e, r, u) { return e + (u ? "_" : "") + r.toLowerCase(); }), IDn = ke。
+ */
+var toSnakeFeatureName = featureNameBuilderFactory(function (e, r, u) {
+  return e + (u ? "_" : "") + r.toLowerCase();
+});
+var featureBadNameBuilder = toSnakeFeatureName;
 //@ chunk-8nhse09v.js:4883-4922 placement
 function toolFeature(e) {
-  return `tool_${IDn(e)}`;
+  return `tool_${featureBadNameBuilder(e)}`;
 }
 //@ chunk-8nhse09v.js:4922-4960 placement
-function cmdFeature(e) {
-  return `cmd_${IDn(e)}`;
+function cmdFeature(name) {
+  return `cmd_${featureBadNameBuilder(name)}`;
 }
 //@ chunk-8nhse09v.js:4960-4998 placement
-function hookFeature(e) {
-  return `hook_${IDn(e)}`;
+function hookFeature(hookEvent) {
+  return `hook_${featureBadNameBuilder(hookEvent)}`;
 }
 //@ chunk-8nhse09v.js:4998-5061 placement
 function logFeatureOk(e, r) {
-  logEvent("tengu_feature_ok", { ...r, feature_name: fromEnum(e) });
+  logEvent("tengu_feature_ok", {
+    ...r,
+    feature_name: fromEnum(e),
+  });
 }
 //@ chunk-8nhse09v.js:5061-5144 placement
 function logFeatureBad(e, r, u) {
@@ -63,13 +69,16 @@ function logFeatureSad(e, r, u) {
 //@ chunk-8nhse09v.js:5227-5316 placement
 async function logFeatureOkAsync(e, r) {
   try {
-    await logEventAsync("tengu_feature_ok", { ...r, feature_name: fromEnum(e) });
+    await logEventAsync("tengu_feature_ok", {
+      ...r,
+      feature_name: fromEnum(e),
+    });
   } catch {}
 }
+//@ chunk-8nhse09v.js:5316-5425 placement
 /**
  * 功能遥测 tengu_feature_ok/bad/sad 的记录函数，按 tool_/cmd_/hook_ 前缀归类。
  */
-//@ chunk-8nhse09v.js:5316-5425 placement
 async function logFeatureBadAsync(e, r, u) {
   try {
     await logEventAsync("tengu_feature_bad", {
@@ -93,12 +102,13 @@ async function logFeatureSadAsync(e, r, u) {
 async function withFeatureTelemetry(e, r, u) {
   try {
     let o = await r();
-    return (logFeatureOk(e), o);
+    logFeatureOk(e);
+    return o;
   } catch (error) {
-    throw (logFeatureBad(e, u?.(error) ?? "error"), error);
+    logFeatureBad(e, u?.(error) ?? "error");
+    throw error;
   }
 }
-
 export {
   logFeatureBad,
   logFeatureSad,
@@ -110,5 +120,5 @@ export {
   cmdFeature,
   hookFeature,
   toolFeature,
-  IDn,
+  featureBadNameBuilder,
 };

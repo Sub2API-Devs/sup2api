@@ -27,25 +27,28 @@ function baseTrim(e) {
 //@ chunk-bwbq4xvm.js:150158-150168 placement
 var baseTrimExport = baseTrim;
 //@ chunk-bwbq4xvm.js:150168-150248 placement
-var NAN = NaN,
-  jR = /^[-+]0x[0-9a-f]+$/i,
-  BR = /^0b[01]+$/i,
-  GR = /^0o[0-7]+$/i,
-  HR = parseInt;
+var NAN = NaN;
+var reIsBadHex = /^[-+]0x[0-9a-f]+$/i;
+var reIsBinary = /^0b[01]+$/i;
+var reIsOctal = /^0o[0-7]+$/i;
+var freeParseInt = parseInt;
 //@ chunk-bwbq4xvm.js:150248-150512 placement
-function toNumber(e) {
-  if (typeof e == "number") return e;
-  if (isSymbolAlias(e)) return NAN;
-  if (RR(e)) {
-    var s = typeof e.valueOf == "function" ? e.valueOf() : e;
-    e = RR(s) ? s + "" : s;
+function toNumber(value) {
+  if (typeof value == "number") return value;
+  if (isSymbolAlias(value)) return NAN;
+  if (RR(value)) {
+    var other = typeof value.valueOf == "function" ? value.valueOf() : value;
+    value = RR(other) ? other + "" : other;
   }
-  if (typeof e != "string") return e === 0 ? e : +e;
-  e = baseTrimExport(e);
-  var matches = BR.test(e);
-  return matches || GR.test(e) ? HR(e.slice(2), matches ? 2 : 8) : jR.test(e) ? NAN : +e;
+  if (typeof value != "string") return value === 0 ? value : +value;
+  value = baseTrimExport(value);
+  var isBinary = reIsBinary.test(value);
+  return isBinary || reIsOctal.test(value)
+    ? freeParseInt(value.slice(2), isBinary ? 2 : 8)
+    : reIsBadHex.test(value)
+      ? NAN
+      : +value;
 }
 //@ chunk-bwbq4xvm.js:150512-150523 placement
 var toNumberExport = toNumber;
-
 export { toNumberExport };

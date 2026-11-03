@@ -15,14 +15,14 @@ import { DreamTask } from "./tasks/DreamTask/DreamTask.js";
 import { AutoModeScanTask } from "./tasks/AutoModeScanTask/AutoModeScanTask.js";
 import { LocalMemoryImportTask } from "./tasks/LocalMemoryImportTask/LocalMemoryImportTask.js";
 import { PostTurnMemoryTask } from "./tasks/PostTurnMemoryTask/PostTurnMemoryTask.js";
-import { oo } from "./tasks/MonitorMcpTask/MonitorMcpTask.js";
+import { MonitorMcpTaskImpl } from "./tasks/MonitorMcpTask/MonitorMcpTask.js";
 import { MonitorWsTask } from "./tasks/MonitorWsTask/MonitorWsTask.js";
 import { InProcessTeammateTask } from "./tasks/InProcessTeammateTask/InProcessTeammateTask.js";
 
+//@ chunk-kxyd0g16.js:18118-18315 fingerprint = LocalWorkflowTask (0.309)
 /**
  * 返回 type → 任务实现（含 kill 方法）的 Map；local_workflow 与 MCP 任务实现通过懒加载 chunk 取得。旧版是 getAllTasks()/getTaskByType()。
  */
-//@ chunk-kxyd0g16.js:18118-18315 fingerprint = LocalWorkflowTask (0.309)
 function getTaskImplsByType() {
   let taskImpls = [
     LocalShellTask,
@@ -32,15 +32,12 @@ function getTaskImplsByType() {
     AutoModeScanTask,
     LocalMemoryImportTask,
     PostTurnMemoryTask,
-    oo,
+    MonitorMcpTaskImpl,
     MonitorWsTask,
     InProcessTeammateTask,
     require("./chunk-xxmv82wc.js").LocalWorkflowTask,
   ];
-  return (
-    taskImpls.push(require("./chunk-1wp0vvkk.js").MCP_TASK),
-    new Map(taskImpls.map((r) => [r.type, r]))
-  );
+  taskImpls.push(require("./chunk-1wp0vvkk.js").MCP_TASK);
+  return new Map(taskImpls.map((taskImpl) => [taskImpl.type, taskImpl]));
 }
-
 export { getTaskImplsByType };

@@ -6,121 +6,141 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { xe } from "./Node.js";
-import { yt } from "./NodeList.js";
-import { Qr } from "./ContainerNode.js";
-import { Ft } from "./Element.js";
-import { Sn } from "./Text.js";
-import { Cn } from "./Comment.js";
-import { Lt } from "./Event.js";
-import { kn } from "./DocumentFragment.js";
-import { Mn } from "./ProcessingInstruction.js";
-import { Er } from "./DOMImplementation.js";
-import { u0 } from "./TreeWalker.js";
-import { p0 } from "./NodeIterator.js";
-import { hr } from "./NodeFilter.js";
-import { ca } from "./URL.js";
-import { ta } from "./select.js";
-import { Un } from "./events.js";
-import { $r } from "./xmlnames.js";
-import { la } from "./htmlelts.js";
-import { Xn } from "./svg.js";
-import { ee } from "./utils.js";
-import { U0 } from "./MutationConstants.js";
-import { Xr } from "./config.js";
+import { require_Node } from "./Node.js";
+import { require_NodeList } from "./NodeList.js";
+import { require_ContainerNode } from "./ContainerNode.js";
+import { require_Element } from "./Element.js";
+import { require_Text } from "./Text.js";
+import { require_Comment } from "./Comment.js";
+import { require_Event } from "./Event.js";
+import { require_DocumentFragment } from "./DocumentFragment.js";
+import { require_ProcessingInstruction } from "./ProcessingInstruction.js";
+import { require_DOMImplementation } from "./DOMImplementation.js";
+import { require_TreeWalker } from "./TreeWalker.js";
+import { require_NodeIterator } from "./NodeIterator.js";
+import { require_NodeFilter } from "./NodeFilter.js";
+import { require_URL } from "./URL.js";
+import { require_select } from "./select.js";
+import { require_events } from "./events.js";
+import { require_xmlnames } from "./xmlnames.js";
+import { require_htmlelts } from "./htmlelts.js";
+import { require_svg } from "./svg.js";
+import { require_utils } from "./utils.js";
+import { require_MutationConstants } from "./MutationConstants.js";
+import { require_config } from "./config.js";
 
 //@ chunk-vwj6ccer.js:107912-120094 cjs-fingerprint
-var fa = x(function (Wd, $0) {
-  $0.exports = br;
-  var he = xe(),
-    kx = yt(),
-    X0 = Qr(),
-    ft = Ft(),
-    Lx = Sn(),
-    Mx = Cn(),
-    gr = Lt(),
-    Rx = kn(),
-    Ix = Mn(),
-    Ox = Er(),
-    qx = u0(),
-    Hx = p0(),
-    V0 = hr(),
-    j0 = ca(),
-    G0 = ta(),
-    Fx = Un(),
-    xa = $r(),
-    Kn = la(),
-    Bx = Xn(),
-    B = ee(),
-    Ut = U0(),
-    NAMESPACE = B.NAMESPACE,
-    isApiWritable = Xr().isApiWritable;
-  function br(e, t) {
-    (X0.call(this),
-      (this.nodeType = he.DOCUMENT_NODE),
-      (this.isHTML = e),
-      (this._address = t || "about:blank"),
-      (this.readyState = "loading"),
-      (this.implementation = new Ox(this)),
-      (this.ownerDocument = null),
-      (this._contentType = e ? "text/html" : "application/xml"),
-      (this.doctype = null),
-      (this.documentElement = null),
-      (this._templateDocCache = null),
-      (this._nodeIterators = null),
-      (this._nid = 1),
-      (this._nextnid = 2),
-      (this._nodes = [null, this]),
-      (this.byId = Object.create(null)),
-      (this.modclock = 0));
+var require_Document = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = Document;
+  var Node = require_Node();
+  var NodeList = require_NodeList();
+  var ContainerNode = require_ContainerNode();
+  var Element = require_Element();
+  var Text = require_Text();
+  var Comment = require_Comment();
+  var gr = require_Event();
+  var DocumentFragment = require_DocumentFragment();
+  var ProcessingInstruction = require_ProcessingInstruction();
+  var DOMImplementation = require_DOMImplementation();
+  var TreeWalker = require_TreeWalker();
+  var NodeIterator = require_NodeIterator();
+  var NodeFilter = require_NodeFilter();
+  var j0 = require_URL();
+  var select = require_select();
+  var events = require_events();
+  var xml = require_xmlnames();
+  var html = require_htmlelts();
+  var svg = require_svg();
+  var utils = require_utils();
+  var MUTATE = require_MutationConstants();
+  var NAMESPACE = utils.NAMESPACE;
+  var isApiWritable = require_config().isApiWritable;
+  function Document(isHTML, address) {
+    ContainerNode.call(this);
+    this.nodeType = Node.DOCUMENT_NODE;
+    this.isHTML = isHTML;
+    this._address = address || "about:blank";
+    this.readyState = "loading";
+    this.implementation = new DOMImplementation(this);
+    this.ownerDocument = null;
+    this._contentType = isHTML ? "text/html" : "application/xml";
+    this.doctype = null;
+    this.documentElement = null;
+    this._templateDocCache = null;
+    this._nodeIterators = null;
+    this._nid = 1;
+    this._nextnid = 2;
+    this._nodes = [null, this];
+    this.byId = Object.create(null);
+    this.modclock = 0;
   }
-  var Px = { event: "Event", customevent: "CustomEvent", uievent: "UIEvent", mouseevent: "MouseEvent" },
-    Ux = {
-      events: "event",
-      htmlevents: "event",
-      mouseevents: "mouseevent",
-      mutationevents: "mutationevent",
-      uievents: "uievent",
-    },
-    Vt = function (e, t, r) {
-      return {
-        get: function () {
-          var a = e.call(this);
-          if (a) return a[t];
-          return r;
-        },
-        set: function (a) {
-          var s = e.call(this);
-          if (s) s[t] = a;
-        },
-      };
+  var supportedEvents = {
+    event: "Event",
+    customevent: "CustomEvent",
+    uievent: "UIEvent",
+    mouseevent: "MouseEvent",
+  };
+  var replacementEvent = {
+    events: "event",
+    htmlevents: "event",
+    mouseevents: "mouseevent",
+    mutationevents: "mutationevent",
+    uievents: "uievent",
+  };
+  var mirrorAttr = function (f, name, defaultValue) {
+    return {
+      get: function () {
+        var o = f.call(this);
+        if (o) return o[name];
+        return defaultValue;
+      },
+      set: function (value) {
+        var o = f.call(this);
+        if (o) o[name] = value;
+      },
     };
-  function z0(e, t) {
-    var r, a, s;
-    if (e === "") e = null;
-    if (!xa.isValidQName(t)) B.InvalidCharacterError();
-    if (((r = null), (a = t), (s = t.indexOf(":")), s >= 0))
-      ((r = t.substring(0, s)), (a = t.substring(s + 1)));
-    if (r !== null && e === null) B.NamespaceError();
-    if (r === "xml" && e !== NAMESPACE.XML) B.NamespaceError();
-    if ((r === "xmlns" || t === "xmlns") && e !== NAMESPACE.XMLNS) B.NamespaceError();
-    if (e === NAMESPACE.XMLNS && !(r === "xmlns" || t === "xmlns")) B.NamespaceError();
-    return { namespace: e, prefix: r, localName: a };
+  };
+  function validateAndExtract(namespace, qualifiedName) {
+    var prefix;
+    var localName;
+    var pos;
+    if (namespace === "") namespace = null;
+    if (!xml.isValidQName(qualifiedName)) utils.InvalidCharacterError();
+    prefix = null;
+    localName = qualifiedName;
+    pos = qualifiedName.indexOf(":");
+    if (pos >= 0) {
+      prefix = qualifiedName.substring(0, pos);
+      localName = qualifiedName.substring(pos + 1);
+    }
+    if (prefix !== null && namespace === null) utils.NamespaceError();
+    if (prefix === "xml" && namespace !== NAMESPACE.XML) utils.NamespaceError();
+    if ((prefix === "xmlns" || qualifiedName === "xmlns") && namespace !== NAMESPACE.XMLNS)
+      utils.NamespaceError();
+    if (namespace === NAMESPACE.XMLNS && !(prefix === "xmlns" || qualifiedName === "xmlns"))
+      utils.NamespaceError();
+    return {
+      namespace,
+      prefix,
+      localName,
+    };
   }
-  br.prototype = Object.create(X0.prototype, {
+  Document.prototype = Object.create(ContainerNode.prototype, {
     _setMutationHandler: {
-      value: function (e) {
-        this.mutationHandler = e;
+      value: function (handler) {
+        this.mutationHandler = handler;
       },
     },
     _dispatchRendererEvent: {
-      value: function (e, t, r) {
-        var a = this._nodes[e];
-        if (!a) return;
-        a._dispatchEvent(new gr(t, r), !0);
+      value: function (targetNid, type, details) {
+        var target = this._nodes[targetNid];
+        if (!target) return;
+        target._dispatchEvent(new gr(type, details), true);
       },
     },
-    nodeName: { value: "#document" },
+    nodeName: {
+      value: "#document",
+    },
     nodeValue: {
       get: function () {
         return null;
@@ -131,7 +151,7 @@ var fa = x(function (Wd, $0) {
       get: function () {
         return this._address;
       },
-      set: B.nyi,
+      set: utils.nyi,
     },
     compatMode: {
       get: function () {
@@ -139,163 +159,189 @@ var fa = x(function (Wd, $0) {
       },
     },
     createTextNode: {
-      value: function (e) {
-        return new Lx(this, String(e));
+      value: function (data) {
+        return new Text(this, String(data));
       },
     },
     createComment: {
-      value: function (e) {
-        return new Mx(this, e);
+      value: function (data) {
+        return new Comment(this, data);
       },
     },
     createDocumentFragment: {
       value: function () {
-        return new Rx(this);
+        return new DocumentFragment(this);
       },
     },
     createProcessingInstruction: {
-      value: function (e, t) {
-        if (!xa.isValidName(e) || t.indexOf("?>") !== -1) B.InvalidCharacterError();
-        return new Ix(this, e, t);
+      value: function (target, data) {
+        if (!xml.isValidName(target) || data.indexOf("?>") !== -1) utils.InvalidCharacterError();
+        return new ProcessingInstruction(this, target, data);
       },
     },
     createAttribute: {
-      value: function (e) {
-        if (((e = String(e)), !xa.isValidName(e))) B.InvalidCharacterError();
-        if (this.isHTML) e = B.toASCIILowerCase(e);
-        return new ft._Attr(null, e, null, null, "");
+      value: function (localName) {
+        localName = String(localName);
+        if (!xml.isValidName(localName)) utils.InvalidCharacterError();
+        if (this.isHTML) localName = utils.toASCIILowerCase(localName);
+        return new Element._Attr(null, localName, null, null, "");
       },
     },
     createAttributeNS: {
-      value: function (e, t) {
-        ((e = e === null || e === void 0 || e === "" ? null : String(e)), (t = String(t)));
-        var r = z0(e, t);
-        return new ft._Attr(null, r.localName, r.prefix, r.namespace, "");
+      value: function (namespace, qualifiedName) {
+        namespace =
+          namespace === null || namespace === undefined || namespace === "" ? null : String(namespace);
+        qualifiedName = String(qualifiedName);
+        var ve = validateAndExtract(namespace, qualifiedName);
+        return new Element._Attr(null, ve.localName, ve.prefix, ve.namespace, "");
       },
     },
     createElement: {
-      value: function (e) {
-        if (((e = String(e)), !xa.isValidName(e))) B.InvalidCharacterError();
+      value: function (localName) {
+        localName = String(localName);
+        if (!xml.isValidName(localName)) utils.InvalidCharacterError();
         if (this.isHTML) {
-          if (/[A-Z]/.test(e)) e = B.toASCIILowerCase(e);
-          return Kn.createElement(this, e, null);
-        } else if (this.contentType === "application/xhtml+xml") return Kn.createElement(this, e, null);
-        else return new ft(this, e, null, null);
+          if (/[A-Z]/.test(localName)) localName = utils.toASCIILowerCase(localName);
+          return html.createElement(this, localName, null);
+        } else if (this.contentType === "application/xhtml+xml")
+          return html.createElement(this, localName, null);
+        else return new Element(this, localName, null, null);
       },
       writable: isApiWritable,
     },
     createElementNS: {
-      value: function (e, t) {
-        ((e = e === null || e === void 0 || e === "" ? null : String(e)), (t = String(t)));
-        var r = z0(e, t);
-        return this._createElementNS(r.localName, r.namespace, r.prefix);
+      value: function (namespace, qualifiedName) {
+        namespace =
+          namespace === null || namespace === undefined || namespace === "" ? null : String(namespace);
+        qualifiedName = String(qualifiedName);
+        var ve = validateAndExtract(namespace, qualifiedName);
+        return this._createElementNS(ve.localName, ve.namespace, ve.prefix);
       },
       writable: isApiWritable,
     },
     _createElementNS: {
-      value: function (e, t, r) {
-        if (t === NAMESPACE.HTML) return Kn.createElement(this, e, r);
-        else if (t === NAMESPACE.SVG) return Bx.createElement(this, e, r);
-        return new ft(this, e, t, r);
+      value: function (localName, namespace, prefix) {
+        if (namespace === NAMESPACE.HTML) return html.createElement(this, localName, prefix);
+        else if (namespace === NAMESPACE.SVG) return svg.createElement(this, localName, prefix);
+        return new Element(this, localName, namespace, prefix);
       },
     },
     createEvent: {
-      value: function (t) {
-        t = t.toLowerCase();
-        var r = Ux[t] || t,
-          a = Fx[Px[r]];
-        if (a) {
-          var s = new a();
-          return ((s._initialized = !1), s);
-        } else B.NotSupportedError();
+      value: function (interfaceName) {
+        interfaceName = interfaceName.toLowerCase();
+        var name = replacementEvent[interfaceName] || interfaceName;
+        var constructor = events[supportedEvents[name]];
+        if (constructor) {
+          var e = new constructor();
+          e._initialized = false;
+          return e;
+        } else utils.NotSupportedError();
       },
     },
     createTreeWalker: {
-      value: function (e, t, r) {
-        if (!e) throw TypeError("root argument is required");
-        if (!(e instanceof he)) throw TypeError("root not a node");
-        return ((t = t === void 0 ? V0.SHOW_ALL : +t), (r = r === void 0 ? null : r), new qx(e, t, r));
+      value: function (root, whatToShow, filter) {
+        if (!root) throw TypeError("root argument is required");
+        if (!(root instanceof Node)) throw TypeError("root not a node");
+        whatToShow = whatToShow === undefined ? NodeFilter.SHOW_ALL : +whatToShow;
+        filter = filter === undefined ? null : filter;
+        return new TreeWalker(root, whatToShow, filter);
       },
     },
     createNodeIterator: {
-      value: function (e, t, r) {
-        if (!e) throw TypeError("root argument is required");
-        if (!(e instanceof he)) throw TypeError("root not a node");
-        return ((t = t === void 0 ? V0.SHOW_ALL : +t), (r = r === void 0 ? null : r), new Hx(e, t, r));
+      value: function (root, whatToShow, filter) {
+        if (!root) throw TypeError("root argument is required");
+        if (!(root instanceof Node)) throw TypeError("root not a node");
+        whatToShow = whatToShow === undefined ? NodeFilter.SHOW_ALL : +whatToShow;
+        filter = filter === undefined ? null : filter;
+        return new NodeIterator(root, whatToShow, filter);
       },
     },
     _attachNodeIterator: {
-      value: function (e) {
+      value: function (ni) {
         if (!this._nodeIterators) this._nodeIterators = [];
-        this._nodeIterators.push(e);
+        this._nodeIterators.push(ni);
       },
     },
     _detachNodeIterator: {
-      value: function (e) {
-        var index = this._nodeIterators.indexOf(e);
-        this._nodeIterators.splice(index, 1);
+      value: function (ni) {
+        var idx = this._nodeIterators.indexOf(ni);
+        this._nodeIterators.splice(idx, 1);
       },
     },
     _preremoveNodeIterators: {
-      value: function (e) {
+      value: function (toBeRemoved) {
         if (this._nodeIterators)
-          this._nodeIterators.forEach(function (_nodeIterator) {
-            _nodeIterator._preremove(e);
+          this._nodeIterators.forEach(function (ni) {
+            ni._preremove(toBeRemoved);
           });
       },
     },
     _updateDocTypeElement: {
       value: function () {
         this.doctype = this.documentElement = null;
-        for (var firstChild = this.firstChild; firstChild !== null; firstChild = firstChild.nextSibling)
-          if (firstChild.nodeType === he.DOCUMENT_TYPE_NODE) this.doctype = firstChild;
-          else if (firstChild.nodeType === he.ELEMENT_NODE) this.documentElement = firstChild;
+        for (var kid = this.firstChild; kid !== null; kid = kid.nextSibling)
+          if (kid.nodeType === Node.DOCUMENT_TYPE_NODE) this.doctype = kid;
+          else if (kid.nodeType === Node.ELEMENT_NODE) this.documentElement = kid;
       },
     },
     insertBefore: {
-      value: function (t, r) {
-        return (he.prototype.insertBefore.call(this, t, r), this._updateDocTypeElement(), t);
+      value: function (child, refChild) {
+        Node.prototype.insertBefore.call(this, child, refChild);
+        this._updateDocTypeElement();
+        return child;
       },
     },
     replaceChild: {
-      value: function (t, r) {
-        return (he.prototype.replaceChild.call(this, t, r), this._updateDocTypeElement(), r);
+      value: function (node, child) {
+        Node.prototype.replaceChild.call(this, node, child);
+        this._updateDocTypeElement();
+        return child;
       },
     },
     removeChild: {
-      value: function (t) {
-        return (he.prototype.removeChild.call(this, t), this._updateDocTypeElement(), t);
+      value: function (child) {
+        Node.prototype.removeChild.call(this, child);
+        this._updateDocTypeElement();
+        return child;
       },
     },
     getElementById: {
-      value: function (e) {
-        var t = this.byId[e];
-        if (!t) return null;
-        if (t instanceof Ke) return t.getFirst();
-        return t;
+      value: function (id) {
+        var n = this.byId[id];
+        if (!n) return null;
+        if (n instanceof MultiId) return n.getFirst();
+        return n;
       },
     },
     _hasMultipleElementsWithId: {
-      value: function (e) {
-        return this.byId[e] instanceof Ke;
+      value: function (id) {
+        return this.byId[id] instanceof MultiId;
       },
     },
-    getElementsByName: { value: ft.prototype.getElementsByName },
-    getElementsByTagName: { value: ft.prototype.getElementsByTagName },
-    getElementsByTagNameNS: { value: ft.prototype.getElementsByTagNameNS },
-    getElementsByClassName: { value: ft.prototype.getElementsByClassName },
+    getElementsByName: {
+      value: Element.prototype.getElementsByName,
+    },
+    getElementsByTagName: {
+      value: Element.prototype.getElementsByTagName,
+    },
+    getElementsByTagNameNS: {
+      value: Element.prototype.getElementsByTagNameNS,
+    },
+    getElementsByClassName: {
+      value: Element.prototype.getElementsByClassName,
+    },
     adoptNode: {
-      value: function (t) {
-        if (t.nodeType === he.DOCUMENT_NODE) B.NotSupportedError();
-        if (t.nodeType === he.ATTRIBUTE_NODE) return t;
-        if (t.parentNode) t.parentNode.removeChild(t);
-        if (t.ownerDocument !== this) Q0(t, this);
-        return t;
+      value: function (node) {
+        if (node.nodeType === Node.DOCUMENT_NODE) utils.NotSupportedError();
+        if (node.nodeType === Node.ATTRIBUTE_NODE) return node;
+        if (node.parentNode) node.parentNode.removeChild(node);
+        if (node.ownerDocument !== this) recursivelySetOwner(node, this);
+        return node;
       },
     },
     importNode: {
-      value: function (t, r) {
-        return this.adoptNode(t.cloneNode(r));
+      value: function (node, deep) {
+        return this.adoptNode(node.cloneNode(deep));
       },
       writable: isApiWritable,
     },
@@ -319,15 +365,25 @@ var fa = x(function (Wd, $0) {
         return this._address;
       },
     },
-    domain: { get: B.nyi, set: B.nyi },
-    referrer: { get: B.nyi },
-    cookie: { get: B.nyi, set: B.nyi },
-    lastModified: { get: B.nyi },
+    domain: {
+      get: utils.nyi,
+      set: utils.nyi,
+    },
+    referrer: {
+      get: utils.nyi,
+    },
+    cookie: {
+      get: utils.nyi,
+      set: utils.nyi,
+    },
+    lastModified: {
+      get: utils.nyi,
+    },
     location: {
       get: function () {
         return this.defaultView ? this.defaultView.location : null;
       },
-      set: B.nyi,
+      set: utils.nyi,
     },
     _titleElement: {
       get: function () {
@@ -336,55 +392,58 @@ var fa = x(function (Wd, $0) {
     },
     title: {
       get: function () {
-        var _titleElement = this._titleElement,
-          t = _titleElement ? _titleElement.textContent : "";
-        return t.replace(/[ \t\n\r\f]+/g, " ").replace(/(^ )|( $)/g, "");
+        var elt = this._titleElement;
+        var value = elt ? elt.textContent : "";
+        return value.replace(/[ \t\n\r\f]+/g, " ").replace(/(^ )|( $)/g, "");
       },
-      set: function (e) {
-        var _titleElement = this._titleElement,
-          head = this.head;
-        if (!_titleElement && !head) return;
-        if (!_titleElement) ((_titleElement = this.createElement("title")), head.appendChild(_titleElement));
-        _titleElement.textContent = e;
+      set: function (value) {
+        var elt = this._titleElement;
+        var head = this.head;
+        if (!elt && !head) return;
+        if (!elt) {
+          elt = this.createElement("title");
+          head.appendChild(elt);
+        }
+        elt.textContent = value;
       },
     },
-    dir: Vt(
+    dir: mirrorAttr(
       function () {
-        var documentElement = this.documentElement;
-        if (documentElement && documentElement.tagName === "HTML") return documentElement;
+        var htmlElement = this.documentElement;
+        if (htmlElement && htmlElement.tagName === "HTML") return htmlElement;
       },
       "dir",
       "",
     ),
-    fgColor: Vt(
+    fgColor: mirrorAttr(
       function () {
         return this.body;
       },
       "text",
       "",
     ),
-    linkColor: Vt(
+    linkColor: mirrorAttr(
       function () {
         return this.body;
       },
       "link",
       "",
     ),
-    vlinkColor: Vt(
+    vlinkColor: mirrorAttr(
       function () {
         return this.body;
       },
       "vLink",
       "",
     ),
-    alinkColor: Vt(
+    alinkColor: mirrorAttr(
       function () {
         return this.body;
       },
       "aLink",
       "",
     ),
-    bgColor: Vt(
+    bgColor: mirrorAttr(
       function () {
         return this.body;
       },
@@ -408,21 +467,33 @@ var fa = x(function (Wd, $0) {
     },
     body: {
       get: function () {
-        return W0(this.documentElement, "body");
+        return namedHTMLChild(this.documentElement, "body");
       },
-      set: B.nyi,
+      set: utils.nyi,
     },
     head: {
       get: function () {
-        return W0(this.documentElement, "head");
+        return namedHTMLChild(this.documentElement, "head");
       },
     },
-    images: { get: B.nyi },
-    embeds: { get: B.nyi },
-    plugins: { get: B.nyi },
-    links: { get: B.nyi },
-    forms: { get: B.nyi },
-    scripts: { get: B.nyi },
+    images: {
+      get: utils.nyi,
+    },
+    embeds: {
+      get: utils.nyi,
+    },
+    plugins: {
+      get: utils.nyi,
+    },
+    links: {
+      get: utils.nyi,
+    },
+    forms: {
+      get: utils.nyi,
+    },
+    scripts: {
+      get: utils.nyi,
+    },
     applets: {
       get: function () {
         return [];
@@ -437,25 +508,25 @@ var fa = x(function (Wd, $0) {
       get: function () {
         return this.serialize();
       },
-      set: B.nyi,
+      set: utils.nyi,
     },
     outerHTML: {
       get: function () {
         return this.serialize();
       },
-      set: B.nyi,
+      set: utils.nyi,
     },
     write: {
-      value: function (e) {
-        if (!this.isHTML) B.InvalidStateError();
+      value: function (args) {
+        if (!this.isHTML) utils.InvalidStateError();
         if (!this._parser) return;
         if (!this._parser);
-        var joined = arguments.join("");
-        this._parser.parse(joined);
+        var s = arguments.join("");
+        this._parser.parse(s);
       },
     },
     writeln: {
-      value: function (t) {
+      value: function (args) {
         this.write(
           Array.prototype.join.call(arguments, "") +
             `
@@ -470,124 +541,157 @@ var fa = x(function (Wd, $0) {
     },
     close: {
       value: function () {
-        if (
-          ((this.readyState = "interactive"),
-          this._dispatchEvent(new gr("readystatechange"), !0),
-          this._dispatchEvent(new gr("DOMContentLoaded"), !0),
-          (this.readyState = "complete"),
-          this._dispatchEvent(new gr("readystatechange"), !0),
-          this.defaultView)
-        )
-          this.defaultView._dispatchEvent(new gr("load"), !0);
+        this.readyState = "interactive";
+        this._dispatchEvent(new gr("readystatechange"), true);
+        this._dispatchEvent(new gr("DOMContentLoaded"), true);
+        this.readyState = "complete";
+        this._dispatchEvent(new gr("readystatechange"), true);
+        if (this.defaultView) this.defaultView._dispatchEvent(new gr("load"), true);
       },
     },
     clone: {
       value: function () {
-        var t = new br(this.isHTML, this._address);
-        return ((t._quirks = this._quirks), (t._contentType = this._contentType), t);
+        var d = new Document(this.isHTML, this._address);
+        d._quirks = this._quirks;
+        d._contentType = this._contentType;
+        return d;
       },
     },
     cloneNode: {
-      value: function (t) {
-        var r = he.prototype.cloneNode.call(this, !1);
-        if (t)
-          for (var firstChild = this.firstChild; firstChild !== null; firstChild = firstChild.nextSibling)
-            r._appendChild(r.importNode(firstChild, !0));
-        return (r._updateDocTypeElement(), r);
+      value: function (deep) {
+        var clone = Node.prototype.cloneNode.call(this, false);
+        if (deep)
+          for (var kid = this.firstChild; kid !== null; kid = kid.nextSibling)
+            clone._appendChild(clone.importNode(kid, true));
+        clone._updateDocTypeElement();
+        return clone;
       },
     },
     isEqual: {
-      value: function (t) {
-        return !0;
+      value: function (n) {
+        return true;
       },
     },
     mutateValue: {
-      value: function (e) {
-        if (this.mutationHandler) this.mutationHandler({ type: Ut.VALUE, target: e, data: e.data });
+      value: function (node) {
+        if (this.mutationHandler)
+          this.mutationHandler({
+            type: MUTATE.VALUE,
+            target: node,
+            data: node.data,
+          });
       },
     },
     mutateAttr: {
-      value: function (e, t) {
-        if (this.mutationHandler) this.mutationHandler({ type: Ut.ATTR, target: e.ownerElement, attr: e });
+      value: function (attr, oldval) {
+        if (this.mutationHandler)
+          this.mutationHandler({
+            type: MUTATE.ATTR,
+            target: attr.ownerElement,
+            attr,
+          });
       },
     },
     mutateRemoveAttr: {
-      value: function (e) {
+      value: function (attr) {
         if (this.mutationHandler)
-          this.mutationHandler({ type: Ut.REMOVE_ATTR, target: e.ownerElement, attr: e });
+          this.mutationHandler({
+            type: MUTATE.REMOVE_ATTR,
+            target: attr.ownerElement,
+            attr,
+          });
       },
     },
     mutateRemove: {
-      value: function (e) {
-        if (this.mutationHandler) this.mutationHandler({ type: Ut.REMOVE, target: e.parentNode, node: e });
-        Y0(e);
+      value: function (node) {
+        if (this.mutationHandler)
+          this.mutationHandler({
+            type: MUTATE.REMOVE,
+            target: node.parentNode,
+            node,
+          });
+        recursivelyUproot(node);
       },
     },
     mutateInsert: {
-      value: function (e) {
-        if ((K0(e), this.mutationHandler))
-          this.mutationHandler({ type: Ut.INSERT, target: e.parentNode, node: e });
+      value: function (node) {
+        recursivelyRoot(node);
+        if (this.mutationHandler)
+          this.mutationHandler({
+            type: MUTATE.INSERT,
+            target: node.parentNode,
+            node,
+          });
       },
     },
     mutateMove: {
-      value: function (e) {
-        if (this.mutationHandler) this.mutationHandler({ type: Ut.MOVE, target: e });
+      value: function (node) {
+        if (this.mutationHandler)
+          this.mutationHandler({
+            type: MUTATE.MOVE,
+            target: node,
+          });
       },
     },
     addId: {
-      value: function (t, r) {
-        var a = this.byId[t];
-        if (!a) this.byId[t] = r;
+      value: function (id, n) {
+        var val = this.byId[id];
+        if (!val) this.byId[id] = n;
         else {
-          if (!(a instanceof Ke)) ((a = new Ke(a)), (this.byId[t] = a));
-          a.add(r);
+          if (!(val instanceof MultiId)) {
+            val = new MultiId(val);
+            this.byId[id] = val;
+          }
+          val.add(n);
         }
       },
     },
     delId: {
-      value: function (t, r) {
-        var a = this.byId[t];
-        if ((B.assert(a), a instanceof Ke)) {
-          if ((a.del(r), a.length === 1)) this.byId[t] = a.downgrade();
-        } else this.byId[t] = void 0;
+      value: function (id, n) {
+        var val = this.byId[id];
+        utils.assert(val);
+        if (val instanceof MultiId) {
+          val.del(n);
+          if (val.length === 1) this.byId[id] = val.downgrade();
+        } else this.byId[id] = undefined;
       },
     },
     _resolve: {
-      value: function (e) {
-        return new j0(this._documentBaseURL).resolve(e);
+      value: function (href) {
+        return new j0(this._documentBaseURL).resolve(href);
       },
     },
     _documentBaseURL: {
       get: function () {
-        var _address = this._address;
-        if (_address === "about:blank") _address = "/";
-        var querySelector = this.querySelector("base[href]");
-        if (querySelector) return new j0(_address).resolve(querySelector.getAttribute("href"));
-        return _address;
+        var url = this._address;
+        if (url === "about:blank") url = "/";
+        var base = this.querySelector("base[href]");
+        if (base) return new j0(url).resolve(base.getAttribute("href"));
+        return url;
       },
     },
     _templateDoc: {
       get: function () {
         if (!this._templateDocCache) {
-          var e = new br(this.isHTML, this._address);
-          this._templateDocCache = e._templateDocCache = e;
+          var newDoc = new Document(this.isHTML, this._address);
+          this._templateDocCache = newDoc._templateDocCache = newDoc;
         }
         return this._templateDocCache;
       },
     },
     querySelector: {
-      value: function (e) {
-        return G0(e, this)[0];
+      value: function (selector) {
+        return select(selector, this)[0];
       },
     },
     querySelectorAll: {
-      value: function (e) {
-        var t = G0(e, this);
-        return t.item ? t : new kx(t);
+      value: function (selector) {
+        var nodes = select(selector, this);
+        return nodes.item ? nodes : new NodeList(nodes);
       },
     },
   });
-  var Vx = [
+  var eventHandlerTypes = [
     "abort",
     "canplay",
     "canplaythrough",
@@ -643,95 +747,98 @@ var fa = x(function (Wd, $0) {
     "load",
     "scroll",
   ];
-  Vx.forEach(function (e) {
-    Object.defineProperty(br.prototype, "on" + e, {
+  eventHandlerTypes.forEach(function (type) {
+    Object.defineProperty(Document.prototype, "on" + type, {
       get: function () {
-        return this._getEventHandler(e);
+        return this._getEventHandler(type);
       },
-      set: function (t) {
-        this._setEventHandler(e, t);
+      set: function (v) {
+        this._setEventHandler(type, v);
       },
     });
   });
-  function W0(e, t) {
-    if (e && e.isHTML) {
-      for (var firstChild = e.firstChild; firstChild !== null; firstChild = firstChild.nextSibling)
+  function namedHTMLChild(parent, name) {
+    if (parent && parent.isHTML) {
+      for (var kid = parent.firstChild; kid !== null; kid = kid.nextSibling)
         if (
-          firstChild.nodeType === he.ELEMENT_NODE &&
-          firstChild.localName === t &&
-          firstChild.namespaceURI === NAMESPACE.HTML
+          kid.nodeType === Node.ELEMENT_NODE &&
+          kid.localName === name &&
+          kid.namespaceURI === NAMESPACE.HTML
         )
-          return firstChild;
+          return kid;
     }
     return null;
   }
-  function jx(e) {
-    if (
-      ((e._nid = e.ownerDocument._nextnid++),
-      (e.ownerDocument._nodes[e._nid] = e),
-      e.nodeType === he.ELEMENT_NODE)
-    ) {
-      var attribute = e.getAttribute("id");
-      if (attribute) e.ownerDocument.addId(attribute, e);
-      if (e._roothook) e._roothook();
+  function root(n) {
+    n._nid = n.ownerDocument._nextnid++;
+    n.ownerDocument._nodes[n._nid] = n;
+    if (n.nodeType === Node.ELEMENT_NODE) {
+      var id = n.getAttribute("id");
+      if (id) n.ownerDocument.addId(id, n);
+      if (n._roothook) n._roothook();
     }
   }
-  function Gx(e) {
-    if (e.nodeType === he.ELEMENT_NODE) {
-      var attribute = e.getAttribute("id");
-      if (attribute) e.ownerDocument.delId(attribute, e);
+  function uproot(n) {
+    if (n.nodeType === Node.ELEMENT_NODE) {
+      var id = n.getAttribute("id");
+      if (id) n.ownerDocument.delId(id, n);
     }
-    ((e.ownerDocument._nodes[e._nid] = void 0), (e._nid = void 0));
+    n.ownerDocument._nodes[n._nid] = undefined;
+    n._nid = undefined;
   }
-  function K0(e) {
-    if ((jx(e), e.nodeType === he.ELEMENT_NODE))
-      for (var firstChild = e.firstChild; firstChild !== null; firstChild = firstChild.nextSibling)
-        K0(firstChild);
+  function recursivelyRoot(node) {
+    root(node);
+    if (node.nodeType === Node.ELEMENT_NODE)
+      for (var kid = node.firstChild; kid !== null; kid = kid.nextSibling) recursivelyRoot(kid);
   }
-  function Y0(e) {
-    Gx(e);
-    for (var firstChild = e.firstChild; firstChild !== null; firstChild = firstChild.nextSibling)
-      Y0(firstChild);
+  function recursivelyUproot(node) {
+    uproot(node);
+    for (var kid = node.firstChild; kid !== null; kid = kid.nextSibling) recursivelyUproot(kid);
   }
-  function Q0(e, t) {
-    if (
-      ((e.ownerDocument = t), (e._lastModTime = void 0), Object.prototype.hasOwnProperty.call(e, "_tagName"))
-    )
-      e._tagName = void 0;
-    for (var firstChild = e.firstChild; firstChild !== null; firstChild = firstChild.nextSibling)
-      Q0(firstChild, t);
+  function recursivelySetOwner(node, owner) {
+    node.ownerDocument = owner;
+    node._lastModTime = undefined;
+    if (Object.prototype.hasOwnProperty.call(node, "_tagName")) node._tagName = undefined;
+    for (var kid = node.firstChild; kid !== null; kid = kid.nextSibling) recursivelySetOwner(kid, owner);
   }
-  function Ke(e) {
-    ((this.nodes = Object.create(null)),
-      (this.nodes[e._nid] = e),
-      (this.length = 1),
-      (this.firstNode = void 0));
+  function MultiId(node) {
+    this.nodes = Object.create(null);
+    this.nodes[node._nid] = node;
+    this.length = 1;
+    this.firstNode = undefined;
   }
-  Ke.prototype.add = function (e) {
-    if (!this.nodes[e._nid]) ((this.nodes[e._nid] = e), this.length++, (this.firstNode = void 0));
+  MultiId.prototype.add = function (node) {
+    if (!this.nodes[node._nid]) {
+      this.nodes[node._nid] = node;
+      this.length++;
+      this.firstNode = undefined;
+    }
   };
-  Ke.prototype.del = function (e) {
-    if (this.nodes[e._nid]) (delete this.nodes[e._nid], this.length--, (this.firstNode = void 0));
+  MultiId.prototype.del = function (node) {
+    if (this.nodes[node._nid]) {
+      delete this.nodes[node._nid];
+      this.length--;
+      this.firstNode = undefined;
+    }
   };
-  Ke.prototype.getFirst = function () {
+  MultiId.prototype.getFirst = function () {
     if (!this.firstNode) {
-      var e;
-      for (e in this.nodes)
+      var nid;
+      for (nid in this.nodes)
         if (
-          this.firstNode === void 0 ||
-          this.firstNode.compareDocumentPosition(this.nodes[e]) & he.DOCUMENT_POSITION_PRECEDING
+          this.firstNode === undefined ||
+          this.firstNode.compareDocumentPosition(this.nodes[nid]) & Node.DOCUMENT_POSITION_PRECEDING
         )
-          this.firstNode = this.nodes[e];
+          this.firstNode = this.nodes[nid];
     }
     return this.firstNode;
   };
-  Ke.prototype.downgrade = function () {
+  MultiId.prototype.downgrade = function () {
     if (this.length === 1) {
-      var e;
-      for (e in this.nodes) return this.nodes[e];
+      var nid;
+      for (nid in this.nodes) return this.nodes[nid];
     }
     return this;
   };
 });
-
-export { fa };
+export { require_Document };

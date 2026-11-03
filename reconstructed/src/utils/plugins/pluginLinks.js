@@ -8,80 +8,84 @@
  * pieces: chunk-f3qhjfah.js (6)
  * attribution: placement 6
  */
-import {
-  isAbsolute,
-  isAbsolute as isAbsolute_2,
-  isAbsolute as isAbsolute_3,
-  isAbsolute as isAbsolute_4,
-  isAbsolute as isAbsolute_5,
-  isAbsolute as isAbsolute_6,
-  join,
-  join as join_2,
-  join as join_3,
-  join as join_4,
-  join as join_5,
-  relative,
-  relative as relative_2,
-  relative as relative_3,
-  sep,
-  sep as sep_2,
-  sep as sep_3,
-  sep as sep_4,
-  sep as sep_5,
-} from "path";
+import { isAbsolute, join, relative, sep } from "path";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, o } from "../../../vendor/zod/v4/classic/schemas.js";
-import { CL } from "../fsJunctions.js";
-import { yl } from "../networkPaths.js";
-import { $j } from "../pathClassification.js";
+import { u, string } from "../../../vendor/zod/v4/classic/schemas.js";
+import { isUncOrDeviceSpelling } from "../fsJunctions.js";
+import { isNetworkMountRoot } from "../networkPaths.js";
+import { hasDotSegmentAlias } from "../pathClassification.js";
 import { getClaudeConfigDirOrNull } from "../envUtils.js";
-import { uA, STORAGE_SPACES } from "../storage/storageSpaces.js";
+import { areValidKeySegments, STORAGE_SPACES } from "../storage/storageSpaces.js";
 
 //@ chunk-f3qhjfah.js:1740-2001 placement
-var PLUGIN_LINK_FILE = ".claude-plugin-link",
-  CJr = DoctorLazy(() =>
-    u({
-      target: o()
-        .min(1)
-        .max(4096)
-        .refine((e) => isAbsolute(e), { message: "must be an absolute path" })
-        .refine((e) => !CL(e) && !yl(e), { message: "must be a local path" })
-        .refine((e) => !$j(e), { message: "must be canonical" }),
-    }),
-  ),
-  vkn = `
+/**
+ * PLUGIN_LINK_FILE：插件链接标记文件名；pluginLinkSchema：插件链接标记 schema（同一声明共 2 个绑定）。
+ */
+var PLUGIN_LINK_FILE_2 = ".claude-plugin-link";
+var PLUGIN_LINK_FILE = DoctorLazy(() =>
+  u({
+    target: string()
+      .min(1)
+      .max(4096)
+      .refine((e) => isAbsolute(e), {
+        message: "must be an absolute path",
+      })
+      .refine((e) => !isUncOrDeviceSpelling(e) && !isNetworkMountRoot(e), {
+        message: "must be a local path",
+      })
+      .refine((e) => !hasDotSegmentAlias(e), {
+        message: "must be canonical",
+      }),
+  }),
+);
+var pluginLinkSchema = `
 [mode: link]`;
 //@ chunk-f3qhjfah.js:2141-2203 placement = getThinkbackSkillDir (1)
 function getThinkbackSkillDir() {
-  let e = getClaudeConfigDirOrNull();
-  return e === null ? null : join_3(e, "skills");
+  let claudeConfigDirOrNull = getClaudeConfigDirOrNull();
+  return claudeConfigDirOrNull === null ? null : join(claudeConfigDirOrNull, "skills");
 }
 //@ chunk-f3qhjfah.js:2203-2323 placement
 function isUnderThinkbackSkillDir(e) {
-  let n = getThinkbackSkillDir();
-  if (n === null) return !1;
-  let r = relative_2(n, e);
-  return r !== "" && r !== ".." && !r.startsWith(`..${sep_2}`) && !isAbsolute_3(r);
+  let thinkbackSkillDir = getThinkbackSkillDir();
+  if (thinkbackSkillDir === null) return false;
+  let r = relative(thinkbackSkillDir, e);
+  return r !== "" && r !== ".." && !r.startsWith(`..${sep}`) && !isAbsolute(r);
 }
 //@ chunk-f3qhjfah.js:2323-2442 placement
 function thinkbackRelativeParts(e) {
-  let n = getThinkbackSkillDir();
-  if (n === null || !isUnderThinkbackSkillDir(e)) return null;
-  let parts = relative_2(n, e).split(sep_2);
-  return uA(parts) && join_3(n, ...parts) === e ? parts : null;
+  let thinkbackSkillDir = getThinkbackSkillDir();
+  if (thinkbackSkillDir === null || !isUnderThinkbackSkillDir(e)) return null;
+  let parts = relative(thinkbackSkillDir, e).split(sep);
+  return areValidKeySegments(parts) && join(thinkbackSkillDir, ...parts) === e ? parts : null;
 }
 //@ chunk-f3qhjfah.js:2442-2520 placement
-function RJr(e) {
+/**
+ * thinkbackUserConfigSpace：thinkback 用户配置存储空间。
+ */
+function thinkbackUserConfigSpace(e) {
   let n = thinkbackRelativeParts(e);
   return n === null ? null : STORAGE_SPACES.userConfigDir("skills", n);
 }
+//@ chunk-f3qhjfah.js:2520-2620 placement
 /**
  * thinkback 技能路径转 userConfigDir 存储键。
  */
-//@ chunk-f3qhjfah.js:2520-2620 placement
 function thinkbackStorageKey(e) {
   let n = thinkbackRelativeParts(e);
-  return n === null ? null : { namespace: "userConfigDir", dir: "skills", relPath: n };
+  return n === null
+    ? null
+    : {
+        namespace: "userConfigDir",
+        dir: "skills",
+        relPath: n,
+      };
 }
-
-export { vkn, PLUGIN_LINK_FILE, CJr, thinkbackStorageKey, RJr, getThinkbackSkillDir };
+export {
+  pluginLinkSchema,
+  PLUGIN_LINK_FILE_2,
+  PLUGIN_LINK_FILE,
+  thinkbackStorageKey,
+  thinkbackUserConfigSpace,
+  getThinkbackSkillDir,
+};

@@ -8,15 +8,16 @@
  * pieces: chunk-nvy3wqke.js (2)
  * attribution: placement 2
  */
-
+//@ chunk-nvy3wqke.js:191-247 placement
 /**
  * 记忆工具名常量。
  */
-//@ chunk-nvy3wqke.js:191-247 placement
-var MEMORY_LIST_TOOL_NAME = "memory_list",
-  MEMORY_READ = "memory_read",
-  MEMORY_WRITE = "memory_write";
+var MEMORY_LIST_TOOL_NAME = "memory_list";
+var MEMORY_READ = "memory_read";
+var MEMORY_WRITE = "memory_write";
 //@ chunk-nvy3wqke.js:247-300 placement
-var Dui = ["memory_list", "memory_read", "memory_write"];
-
-export { Dui, MEMORY_LIST_TOOL_NAME, MEMORY_READ, MEMORY_WRITE };
+/**
+ * 三个记忆工具名（memory_list、memory_read、memory_write）。
+ */
+var MEMORY_TOOL_NAMES = ["memory_list", "memory_read", "memory_write"];
+export { MEMORY_TOOL_NAMES, MEMORY_LIST_TOOL_NAME, MEMORY_READ, MEMORY_WRITE };

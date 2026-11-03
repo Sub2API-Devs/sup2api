@@ -37,29 +37,68 @@ import {
   checkToolHostHelperPreconditions,
   runToolHostLoop,
   spawnToolHostHelper,
-  Se,
+  SIGKILL_GRACE_MS,
 } from "./toolHostHelper.js";
-import { ge } from "../../utils/identity.js";
+import { identity } from "../../utils/identity.js";
 
 //@ chunk-3zy56vtn.js:14494-14548 placement
-var bt = { macos: "darwin", linux: "linux", windows: "win32" };
+var PLATFORM_TO_NODE_NAME = {
+  macos: "darwin",
+  linux: "linux",
+  windows: "win32",
+};
 //@ chunk-3zy56vtn.js:14548-15868 placement
-async function advertiseToolHost(e) {
-  let gate = e.gate();
-  if (gate === !1) return { kind: "withdraw", blocker: "gate_off" };
-  let localDeviceFlag = e.localDeviceFlag();
-  if (localDeviceFlag === !1) return { kind: "withdraw", blocker: "flag_off" };
-  let c = bt[e.platform()];
-  if (c === void 0) return { kind: "withdraw", blocker: "platform" };
-  let offReason = await e.offReason();
-  if (offReason !== void 0 && offReason !== "unknown") return { kind: "withdraw", blocker: offReason };
-  if (!(await e.signsInFromStoredLogin())) return { kind: "withdraw", blocker: "not_stored_login" };
-  let gitEntry = await e.gitEntry();
-  if (gitEntry === "other") return { kind: "withdraw", blocker: "not_git_checkout" };
-  if (await e.inExcludedRepository()) return { kind: "withdraw", blocker: "excluded_repository" };
-  if (gate === "unknown" || localDeviceFlag === "unknown")
-    return { kind: "unknown", waitingOn: "feature_flags" };
-  if (offReason === "unknown") return { kind: "unknown", waitingOn: "policy" };
+async function advertiseToolHost(checks) {
+  let n = checks.gate();
+  if (n === false)
+    return {
+      kind: "withdraw",
+      blocker: "gate_off",
+    };
+  let s = checks.localDeviceFlag();
+  if (s === false)
+    return {
+      kind: "withdraw",
+      blocker: "flag_off",
+    };
+  let c = PLATFORM_TO_NODE_NAME[checks.platform()];
+  if (c === undefined)
+    return {
+      kind: "withdraw",
+      blocker: "platform",
+    };
+  let w = await checks.offReason();
+  if (w !== undefined && w !== "unknown")
+    return {
+      kind: "withdraw",
+      blocker: w,
+    };
+  if (!(await checks.signsInFromStoredLogin()))
+    return {
+      kind: "withdraw",
+      blocker: "not_stored_login",
+    };
+  let O = await checks.gitEntry();
+  if (O === "other")
+    return {
+      kind: "withdraw",
+      blocker: "not_git_checkout",
+    };
+  if (await checks.inExcludedRepository())
+    return {
+      kind: "withdraw",
+      blocker: "excluded_repository",
+    };
+  if (n === "unknown" || s === "unknown")
+    return {
+      kind: "unknown",
+      waitingOn: "feature_flags",
+    };
+  if (w === "unknown")
+    return {
+      kind: "unknown",
+      waitingOn: "policy",
+    };
   return {
     kind: "advertise",
     advert: {
@@ -76,33 +115,36 @@ async function advertiseToolHost(e) {
       }.VERSION,
       platform: c,
     },
-    ...(gitEntry === "absent" && { withoutGit: !0 }),
+    ...(O === "absent" && {
+      withoutGit: true,
+    }),
   };
 }
 //@ chunk-3zy56vtn.js:15868-16305 placement
-function liveToolHostChecks(e, n, s = readRadiantHeron) {
+function liveToolHostChecks(dir, credentials, gate = readRadiantHeron) {
   return {
-    gate: s,
-    localDeviceFlag: () => (isViolinWoodServedOff() ? !1 : isViolinWoodEnabledCached() || "unknown"),
+    gate,
+    localDeviceFlag: () => (isViolinWoodServedOff() ? false : isViolinWoodEnabledCached() || "unknown"),
     platform: getPlatform,
     offReason: async () => {
-      let c = remoteToolServingOffReason(e);
-      if (c === "profile_dirs_unread" || c === "profile_dirs_unreadable")
-        (await primeWindowsProfileDirs(), (c = remoteToolServingOffReason(e)));
-      if (c !== void 0) return c;
-      let { servedToolsUnavailableReason: servedToolsUnavailableReason } =
-          await import("./chunk-012rhzq5.js"),
-        O = servedToolsUnavailableReason();
+      let c = remoteToolServingOffReason(dir);
+      if (c === "profile_dirs_unread" || c === "profile_dirs_unreadable") {
+        await primeWindowsProfileDirs();
+        c = remoteToolServingOffReason(dir);
+      }
+      if (c !== undefined) return c;
+      let { servedToolsUnavailableReason } = await import("./chunk-012rhzq5.js");
+      let O = servedToolsUnavailableReason();
       return O === "policy_org" && !isPolicyLimitsCacheLoaded() ? "unknown" : O;
     },
-    signsInFromStoredLogin: () => hasStoredLoginRefreshToken(n),
-    gitEntry: () => classifyGitEntry(e),
-    inExcludedRepository: () => inExcludedRepository(e),
+    signsInFromStoredLogin: () => hasStoredLoginRefreshToken(credentials),
+    gitEntry: () => classifyGitEntry(dir),
+    inExcludedRepository: () => inExcludedRepository(dir),
   };
 }
 //@ chunk-3zy56vtn.js:16305-16437 placement
 async function hasStoredLoginRefreshToken(e) {
-  if (getBridgeTokenOverride() !== void 0 || !startupReadsStoredLogin()) return !1;
+  if (getBridgeTokenOverride() !== undefined || !startupReadsStoredLogin()) return false;
   let async = await getSecureStorage().readAsync(e);
   return Boolean(async?.claudeAiOauth?.refreshToken);
 }
@@ -114,8 +156,8 @@ async function classifyGitEntry(e) {
   } catch (error) {
     if (getErrnoCode(error) === "ENOENT")
       return (
-        await stat(e).catch((w) => {
-          if (!isFsInaccessible(w)) logError(toError(w));
+        await stat(e).catch((error) => {
+          if (!isFsInaccessible(error)) logError(toError(error));
           return;
         })
       )?.isDirectory()
@@ -126,48 +168,62 @@ async function classifyGitEntry(e) {
   }
 }
 //@ chunk-3zy56vtn.js:16693-16812 placement
-var ADVERT_RETRY_DELAY_MS = 3000,
-  ADVERT_WAIT_BUDGET_MS = 120000,
-  WITHDRAW_BLOCKER_BY_WAIT = {
-    feature_flags: "flags_unloaded",
-    policy: "policy_unloaded",
-    failed_read: "error",
-  },
-  MIN_READVERTISE_INTERVAL_MS = 1e4,
-  READVERTISE_WINDOW_MS = 60000;
+var ADVERT_RETRY_DELAY_MS = 3000;
+var ADVERT_WAIT_BUDGET_MS = 120000;
+var WITHDRAW_BLOCKER_BY_WAIT = {
+  feature_flags: "flags_unloaded",
+  policy: "policy_unloaded",
+  failed_read: "error",
+};
+var MIN_READVERTISE_INTERVAL_MS = 1e4;
+var READVERTISE_WINDOW_MS = 60000;
 //@ chunk-3zy56vtn.js:16812-18426 placement
 async function watchToolHostAdvert({
-  dir: dir,
-  credentials: credentials,
-  log: log,
-  checks: checks = liveToolHostChecks(dir, credentials),
-  signals: signals = [
+  dir,
+  credentials,
+  log,
+  checks = liveToolHostChecks(dir, credentials),
+  signals = [
     onServingMuteRecheck,
     onComplianceTaintsChanged,
     onPolicyVerdictHeldStart,
     onWindowsProfileDirsSettled,
   ],
-  refuse: refuse,
-  onVerdict: onVerdict,
+  refuse,
+  onVerdict,
 }) {
-  let b = { kind: "unknown", waitingOn: "feature_flags" },
-    x = "gate_off",
-    y = !1,
-    V,
-    NEGATIVE_INFINITY = Number.NEGATIVE_INFINITY,
-    S,
-    startTime = performance.now(),
-    G;
+  let b = {
+    kind: "unknown",
+    waitingOn: "feature_flags",
+  };
+  let x = "gate_off";
+  let y = false;
+  let V;
+  let NEGATIVE_INFINITY = Number.NEGATIVE_INFINITY;
+  let S;
+  let startTime = performance.now();
+  let G;
   function te(H) {
-    if (H.kind !== "unknown") return ((startTime = void 0), clearTimeout(G), (G = void 0), H);
+    if (H.kind !== "unknown") {
+      startTime = undefined;
+      clearTimeout(G);
+      G = undefined;
+      return H;
+    }
     startTime ??= performance.now();
     let L = ADVERT_WAIT_BUDGET_MS - (performance.now() - startTime);
-    if (L <= 0) return { kind: "withdraw", blocker: WITHDRAW_BLOCKER_BY_WAIT[H.waitingOn] };
-    if (G === void 0)
-      ((G = setTimeout(() => {
-        ((G = void 0), j());
-      }, L)),
-        G.unref?.());
+    if (L <= 0)
+      return {
+        kind: "withdraw",
+        blocker: WITHDRAW_BLOCKER_BY_WAIT[H.waitingOn],
+      };
+    if (G === undefined) {
+      G = setTimeout(() => {
+        G = undefined;
+        j();
+      }, L);
+      G.unref?.();
+    }
     return H;
   }
   async function j() {
@@ -175,63 +231,86 @@ async function watchToolHostAdvert({
       let H;
       try {
         H = await advertiseToolHost(checks);
-        let Y = H.kind === "advertise" ? refuse?.() : void 0;
-        if (Y !== void 0) H = { kind: "withdraw", blocker: Y };
+        let Y = H.kind === "advertise" ? refuse?.() : undefined;
+        if (Y !== undefined)
+          H = {
+            kind: "withdraw",
+            blocker: Y,
+          };
       } catch (error) {
-        (logError(toError(error)), (H = { kind: "unknown", waitingOn: "failed_read" }));
+        logError(toError(error));
+        H = {
+          kind: "unknown",
+          waitingOn: "failed_read",
+        };
       }
       if (y) return;
       let L = te(H);
-      if (((b = L), onVerdict?.(L), L.kind === "unknown")) return;
+      b = L;
+      onVerdict?.(L);
+      if (L.kind === "unknown") return;
       let Z = L.kind === "advertise" ? (L.withoutGit ? "advertised_without_git" : "advertised") : L.blocker;
-      if (Z !== x)
-        ((x = Z),
-          log(
-            `cloud sessions may use this folder: ${L.kind === "advertise" ? (L.withoutGit ? "yes (not the top folder of a git repository)" : "yes") : `no (${L.blocker})`}`,
-          ));
+      if (Z !== x) {
+        x = Z;
+        log(
+          `cloud sessions may use this folder: ${L.kind === "advertise" ? (L.withoutGit ? "yes (not the top folder of a git repository)" : "yes") : `no (${L.blocker})`}`,
+        );
+      }
     } catch (error) {
       logError(toError(error));
     }
   }
   function ee() {
-    if (V !== void 0) {
+    if (V !== undefined) {
       V();
       return;
     }
-    if (y || S !== void 0) return;
+    if (y || S !== undefined) return;
     if (b.kind === "unknown") {
       j();
       return;
     }
-    let H = Date.now() - NEGATIVE_INFINITY,
-      L =
-        H >= 0 && H < READVERTISE_WINDOW_MS
-          ? Math.max(MIN_READVERTISE_INTERVAL_MS, READVERTISE_WINDOW_MS - H)
-          : MIN_READVERTISE_INTERVAL_MS;
-    ((S = setTimeout(() => {
-      ((S = void 0), (NEGATIVE_INFINITY = Date.now()), j());
-    }, L)),
-      S.unref?.());
+    let H = Date.now() - NEGATIVE_INFINITY;
+    let L =
+      H >= 0 && H < READVERTISE_WINDOW_MS
+        ? Math.max(MIN_READVERTISE_INTERVAL_MS, READVERTISE_WINDOW_MS - H)
+        : MIN_READVERTISE_INTERVAL_MS;
+    S = setTimeout(() => {
+      S = undefined;
+      NEGATIVE_INFINITY = Date.now();
+      j();
+    }, L);
+    S.unref?.();
   }
   await j();
-  let mapped = signals.map((H) => H(ee));
+  let mapped = signals.map((signal) => signal(ee));
   if (b.kind === "unknown" && b.waitingOn === "feature_flags") {
     let abortController = new AbortController();
-    ((V = () => {
+    V = () => {
       j().then(() => {
         if (b.kind !== "unknown") abortController.abort();
       });
-    }),
-      await sleep(ADVERT_RETRY_DELAY_MS, abortController.signal),
-      (V = void 0));
+    };
+    await sleep(ADVERT_RETRY_DELAY_MS, abortController.signal);
+    V = undefined;
   }
   return {
     getToolHostAdvert: () =>
-      b.kind === "advertise" ? { kind: "advertise", advert: b.advert } : { kind: b.kind },
+      b.kind === "advertise"
+        ? {
+            kind: "advertise",
+            advert: b.advert,
+          }
+        : {
+            kind: b.kind,
+          },
     stop: () => {
-      y = !0;
+      y = true;
       for (let H of mapped) H();
-      (clearTimeout(S), (S = void 0), clearTimeout(G), (G = void 0));
+      clearTimeout(S);
+      S = undefined;
+      clearTimeout(G);
+      G = undefined;
     },
   };
 }
@@ -242,51 +321,54 @@ function isSwitchedOffRemotely(e) {
   );
 }
 //@ chunk-3zy56vtn.js:18540-18888 placement
-function liveToolHostSwitches({
-  dir: dir,
-  checks: checks,
-  isOfferingFolder: isOfferingFolder,
-  hasAccessToken: hasAccessToken,
-}) {
+function liveToolHostSwitches({ dir, checks, isOfferingFolder, hasAccessToken }) {
   function w() {
-    return remoteToolServingOffReason(dir, { ignoringMute: !0 });
+    return remoteToolServingOffReason(dir, {
+      ignoringMute: true,
+    });
   }
   return {
-    gateOn: () => checks.gate() === !0 && checks.localDeviceFlag() === !0 && !isRemoteToolServingMuted(),
+    gateOn: () => checks.gate() === true && checks.localDeviceFlag() === true && !isRemoteToolServingMuted(),
     servingOn: () => {
-      if (!hasAccessToken() || !isOfferingFolder() || helperRefusal() !== void 0) return !1;
+      if (!hasAccessToken() || !isOfferingFolder() || helperRefusal() !== undefined) return false;
       let O = w();
-      if (O !== void 0 && O !== "launched_from_home") return !1;
+      if (O !== undefined && O !== "launched_from_home") return false;
       return !isRemoteControlDisabledBySettings();
     },
     folderServed: () => w() !== "launched_from_home",
   };
 }
 //@ chunk-3zy56vtn.js:18888-19039 placement
-function helperRefusal(e = Je()) {
+function helperRefusal(e = getProcessEnv()) {
   let n = checkToolHostHelperPreconditions(e);
-  if (n === void 0) return;
+  if (n === undefined) return;
   return n.message.includes("signs in or sends its traffic elsewhere") ? "other_sign_in" : "no_helper";
 }
 //@ chunk-3zy56vtn.js:19039-19114 placement
 function buildToolHostWorkHandler(e, n) {
-  return runToolHostLoop({ ...e, spawnHelper: (s) => spawnToolHostHelper(s, { env: Je(), ...n }) });
+  return runToolHostLoop({
+    ...e,
+    spawnHelper: (s) =>
+      spawnToolHostHelper(s, {
+        env: getProcessEnv(),
+        ...n,
+      }),
+  });
 }
 //@ chunk-3zy56vtn.js:19114-19191 placement
 async function sweepToolHostForShutdown(e) {
   try {
-    await withDeadline(e.sweep("shutdown"), Se);
+    await withDeadline(e.sweep("shutdown"), SIGKILL_GRACE_MS);
   } catch (error) {
     logError(toError(error));
   }
 }
 //@ chunk-3zy56vtn.js:19191-19224 placement
-function Je() {
+function getProcessEnv() {
   return process.env;
 }
 //@ chunk-jd7h5dfe.js:227-260 placement
-var A = ge(new Map(), (o) => o.clear());
-
+var scopedMap = identity(new Map(), (o) => o.clear());
 export {
   liveToolHostChecks,
   liveToolHostSwitches,

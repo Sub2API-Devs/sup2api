@@ -6,73 +6,83 @@
  * attribution: esm-layout 1, esm-fingerprint 1
  */
 import fsPromises from "fs/promises";
-import { m, h, N, E } from "./checkUrl.js";
-import { _, I } from "./requestHelpers.js";
+import { import_property_provider, checkUrl, import_node_http_handler, import_client } from "./checkUrl.js";
+import { createGetRequest, getCredentials } from "./requestHelpers.js";
 
 //@ chunk-0c72454j.js:2461-2594 esm-layout
 var f = (e, o, n) => async () => {
-  for (let r = 0; r < o; ++r)
+  for (let j = 0; j < o; ++j)
     try {
       return await e();
     } catch (error) {
-      await new Promise((s) => setTimeout(s, n));
+      await new Promise((resolve) => setTimeout(resolve, n));
     }
   return await e();
 };
 //@ chunk-0c72454j.js:2594-4271 esm-fingerprint
-var AWS_CONTAINER_CREDENTIALS_RELATIVE_URI = "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI",
-  HTTP_169_254_170_2 = "http://169.254.170.2",
-  AWS_CONTAINER_CREDENTIALS_FULL_URI = "AWS_CONTAINER_CREDENTIALS_FULL_URI",
-  AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE = "AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE",
-  AWS_CONTAINER_AUTHORIZATION_TOKEN = "AWS_CONTAINER_AUTHORIZATION_TOKEN",
-  H = (e = {}) => {
-    e.logger?.debug("@aws-sdk/credential-provider-http - fromHttp");
-    let o,
-      n = e.awsContainerCredentialsRelativeUri ?? process.env[AWS_CONTAINER_CREDENTIALS_RELATIVE_URI],
-      r = e.awsContainerCredentialsFullUri ?? process.env[AWS_CONTAINER_CREDENTIALS_FULL_URI],
-      t = e.awsContainerAuthorizationToken ?? process.env[AWS_CONTAINER_AUTHORIZATION_TOKEN],
-      s = e.awsContainerAuthorizationTokenFile ?? process.env[AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE],
-      a =
-        e.logger?.constructor?.name === "NoOpLogger" || !e.logger?.warn
-          ? console.warn
-          : e.logger.warn.bind(e.logger);
-    if (n && r)
-      (a(
-        "@aws-sdk/credential-provider-http: you have set both awsContainerCredentialsRelativeUri and awsContainerCredentialsFullUri.",
-      ),
-        a("awsContainerCredentialsFullUri will take precedence."));
-    if (t && s)
-      (a(
-        "@aws-sdk/credential-provider-http: you have set both awsContainerAuthorizationToken and awsContainerAuthorizationTokenFile.",
-      ),
-        a("awsContainerAuthorizationToken will take precedence."));
-    if (r) o = r;
-    else if (n) o = `${HTTP_169_254_170_2}${n}`;
-    else
-      throw new m.CredentialsProviderError(
-        `No HTTP credential provider host provided.
-Set AWS_CONTAINER_CREDENTIALS_FULL_URI or AWS_CONTAINER_CREDENTIALS_RELATIVE_URI.`,
-        { logger: e.logger },
-      );
-    let T = new URL(o);
-    h(T, e.logger);
-    let create = N.NodeHttpHandler.create({
-      requestTimeout: e.timeout ?? 1000,
-      connectionTimeout: e.timeout ?? 1000,
-    });
-    return f(
-      async () => {
-        let c = _(T);
-        if (t) c.headers.Authorization = t;
-        else if (s) c.headers.Authorization = (await fsPromises.readFile(s)).toString();
-        try {
-          let handle = await create.handle(c);
-          return I(handle.response).then((R) => E.setCredentialFeature(R, "CREDENTIALS_HTTP", "z"));
-        } catch (error) {
-          throw new m.CredentialsProviderError(String(error), { logger: e.logger });
-        }
-      },
-      e.maxRetries ?? 3,
-      e.timeout ?? 1000,
+var AWS_CONTAINER_CREDENTIALS_RELATIVE_URI = "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI";
+var DEFAULT_LINK_LOCAL_HOST = "http://169.254.170.2";
+var AWS_CONTAINER_CREDENTIALS_FULL_URI = "AWS_CONTAINER_CREDENTIALS_FULL_URI";
+var AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE = "AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE";
+var AWS_CONTAINER_AUTHORIZATION_TOKEN = "AWS_CONTAINER_AUTHORIZATION_TOKEN";
+var H = (options = {}) => {
+  options.logger?.debug("@aws-sdk/credential-provider-http - fromHttp");
+  let host;
+  let relative =
+    options.awsContainerCredentialsRelativeUri ?? process.env[AWS_CONTAINER_CREDENTIALS_RELATIVE_URI];
+  let full = options.awsContainerCredentialsFullUri ?? process.env[AWS_CONTAINER_CREDENTIALS_FULL_URI];
+  let token = options.awsContainerAuthorizationToken ?? process.env[AWS_CONTAINER_AUTHORIZATION_TOKEN];
+  let tokenFile =
+    options.awsContainerAuthorizationTokenFile ?? process.env[AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE];
+  let warn =
+    options.logger?.constructor?.name === "NoOpLogger" || !options.logger?.warn
+      ? console.warn
+      : options.logger.warn.bind(options.logger);
+  if (relative && full) {
+    warn(
+      "@aws-sdk/credential-provider-http: you have set both awsContainerCredentialsRelativeUri and awsContainerCredentialsFullUri.",
     );
-  };
+    warn("awsContainerCredentialsFullUri will take precedence.");
+  }
+  if (token && tokenFile) {
+    warn(
+      "@aws-sdk/credential-provider-http: you have set both awsContainerAuthorizationToken and awsContainerAuthorizationTokenFile.",
+    );
+    warn("awsContainerAuthorizationToken will take precedence.");
+  }
+  if (full) host = full;
+  else if (relative) host = `${DEFAULT_LINK_LOCAL_HOST}${relative}`;
+  else
+    throw new import_property_provider.CredentialsProviderError(
+      `No HTTP credential provider host provided.
+Set AWS_CONTAINER_CREDENTIALS_FULL_URI or AWS_CONTAINER_CREDENTIALS_RELATIVE_URI.`,
+      {
+        logger: options.logger,
+      },
+    );
+  let url = new URL(host);
+  checkUrl(url, options.logger);
+  let requestHandler = import_node_http_handler.NodeHttpHandler.create({
+    requestTimeout: options.timeout ?? 1000,
+    connectionTimeout: options.timeout ?? 1000,
+  });
+  return f(
+    async () => {
+      let request = createGetRequest(url);
+      if (token) request.headers.Authorization = token;
+      else if (tokenFile) request.headers.Authorization = (await fsPromises.readFile(tokenFile)).toString();
+      try {
+        let result = await requestHandler.handle(request);
+        return getCredentials(result.response).then((credentials) =>
+          import_client.setCredentialFeature(credentials, "CREDENTIALS_HTTP", "z"),
+        );
+      } catch (e) {
+        throw new import_property_provider.CredentialsProviderError(String(e), {
+          logger: options.logger,
+        });
+      }
+    },
+    options.maxRetries ?? 3,
+    options.timeout ?? 1000,
+  );
+};

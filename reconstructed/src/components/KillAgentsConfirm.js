@@ -10,45 +10,64 @@
  */
 import { w } from "../../vendor/react/compiler-runtime.js";
 import { useShortcutDisplay } from "../keybindings/useKeybindingDisplay.js";
-import { rs } from "../state/AppState.js";
-import { e } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { useAppStateSlice } from "../state/AppState.js";
+import { jsxProd_default } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { KeyboardShortcutHint } from "./design-system/KeyboardShortcutHint.js";
 import { Text } from "../ink/components/Text.js";
-import { j } from "../../vendor/react/cjs/react.production.js";
+import { init_react_production } from "../../vendor/react/cjs/react.production.js";
 
 //@ chunk-0e8j1zzj.js:27685-27760 placement
-function va(f) {
+function hasKillAgentsConfirmNotice(f) {
   return f.notifications.current?.key === "kill-agents-confirm";
 }
 //@ chunk-0e8j1zzj.js:27760-27785 placement
-var Ur = { keyCase: "lower" };
+var SHORTCUT_FORMAT_OPTIONS = {
+  keyCase: "lower",
+};
 //@ chunk-0e8j1zzj.js:27785-28281 placement
-function KillAgentsConfirm(o) {
-  let u = w(6),
-    t = useShortcutDisplay("chat:killAgents", "Chat", "ctrl+x ctrl+k"),
-    d = rs(va);
+function KillAgentsConfirm(requestSource) {
+  let u = w(6);
+  let shortcutDisplay = useShortcutDisplay("chat:killAgents", "Chat", "ctrl+x ctrl+k");
+  let appStateSlice = useAppStateSlice(hasKillAgentsConfirmNotice);
   if (
-    !((o?.type === "subagent" || o?.type === "workflow-agent") && o.stoppableByKillAgents === !0) ||
-    t === ""
+    !(
+      (requestSource?.type === "subagent" || requestSource?.type === "workflow-agent") &&
+      requestSource.stoppableByKillAgents === true
+    ) ||
+    shortcutDisplay === ""
   ) {
     return null;
   }
-  const m = d === !0 ? "again to stop background agents" : "twice to stop background agents";
+  const action =
+    appStateSlice === true ? "again to stop background agents" : "twice to stop background agents";
   let i;
-  if (u[0] !== t || u[1] !== m)
-    ((i = e(KeyboardShortcutHint, { chord: t, action: m, format: Ur, terse: !0 })),
-      (u[0] = t),
-      (u[1] = m),
-      (u[2] = i));
-  else i = u[2];
-  let h = i,
-    k;
-  if (u[3] !== d || u[4] !== h)
-    ((k = d === !0 ? e(Text, { color: "text", children: h }) : h), (u[3] = d), (u[4] = h), (u[5] = k));
-  else k = u[5];
+  if (u[0] !== shortcutDisplay || u[1] !== action) {
+    i = jsxProd_default(KeyboardShortcutHint, {
+      chord: shortcutDisplay,
+      action,
+      format: SHORTCUT_FORMAT_OPTIONS,
+      terse: true,
+    });
+    u[0] = shortcutDisplay;
+    u[1] = action;
+    u[2] = i;
+  } else i = u[2];
+  let h = i;
+  let k;
+  if (u[3] !== appStateSlice || u[4] !== h) {
+    k =
+      appStateSlice === true
+        ? jsxProd_default(Text, {
+            color: "text",
+            children: h,
+          })
+        : h;
+    u[3] = appStateSlice;
+    u[4] = h;
+    u[5] = k;
+  } else k = u[5];
   return k;
 }
 //@ chunk-0e8j1zzj.js:28281-28285 placement
-j();
-
+init_react_production();
 export { KillAgentsConfirm };

@@ -27,342 +27,491 @@ import { safeParseJSON } from "../../utils/json.js";
 import { isDiskless } from "../../bootstrap/state.js";
 import { getFsImplementation } from "../../utils/fsOperations.js";
 import { isAnthropicOwnedHost, isAnthropicHost } from "../../utils/anthropicHosts.js";
-import { t3 } from "../../utils/nativeInstaller/downloadsClient.js";
+import { publicCdnGuardedClient } from "../../utils/nativeInstaller/downloadsClient.js";
 import { externalHttp } from "../http/externalHttp.js";
 
+//@ chunk-g6j7q15x.js:732-1574 placement
 /**
  * 内置的发布签名公钥（SPKI），用于校验发布的模型目录。
  */
-//@ chunk-g6j7q15x.js:732-1574 placement
 var RELEASE_SIGNING_KEY = {
-    id: "claude-code-release-signing-key",
-    spkiBase64:
-      "MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEAp28rSV5I8HmK8CK9GixBUZR/gtJxeOCsRXO4EJiej40jzBmQA3cWXGosVO82ZfFsRKVTtMC5iB/HH9sxjncrmYNWGroJNbx29m/FgYQBgkCXT4AfFl6rnnXqRGLZOerj/4AqE4yQ1GZbhBgR55Z7ro0ieKK8RHYUspBKAFHyWRhCCz6THW6YRbf0p/hG/08TOY6Sj3cJ7/AEoTRf9ZmVNX1k0KvbUSiVGpGY9OIHWgxRJUF2pArU4o/hk+sqGAgEUh8Bjvjwvz6+quLXPg+y0Y8Ugb1Fg6BUppam/zydYY/Q/+yNjnuF154gD1jEeeir8R5czs6zUHSbo2yXUpAsIdWYo5End8vGsluVmFExnUWm/fTVMGoM5Wm3v1VRepMydEnJ+atz4oQdmPQcKNAip5GJO2uyk++xFr9CpKvlR5jral92toYV/m+mur3va8ydamWBo/qG7/wt0sdS81IwH6lcu0SQ39rgKD+bdoPLv05EqVMYTFRI2QZEsWGYTMs0DOrfCIJFH50qyD0x4sWw1gEWeG3jDgY8cj2StZz+zjqzUd05CibcCzEAGm1EQg5y9D40tIsAU1OI7bpgQ9V0lC8lrqE7zJY66UK9Z1daA8jrdDi6migNjHFrXfT3V4QvMthCIO05q05SS3x2G3ZpIgmI+CePUPB1pDf+lhPkU1MCAwEAAQ==",
-  },
-  COMPILED_CATALOG_ROOTS = [RELEASE_SIGNING_KEY],
-  MANAGED_MODEL_CATALOG_PUBLIC_KEY = "managed-model-catalog-public-key";
+  id: "claude-code-release-signing-key",
+  spkiBase64:
+    "MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEAp28rSV5I8HmK8CK9GixBUZR/gtJxeOCsRXO4EJiej40jzBmQA3cWXGosVO82ZfFsRKVTtMC5iB/HH9sxjncrmYNWGroJNbx29m/FgYQBgkCXT4AfFl6rnnXqRGLZOerj/4AqE4yQ1GZbhBgR55Z7ro0ieKK8RHYUspBKAFHyWRhCCz6THW6YRbf0p/hG/08TOY6Sj3cJ7/AEoTRf9ZmVNX1k0KvbUSiVGpGY9OIHWgxRJUF2pArU4o/hk+sqGAgEUh8Bjvjwvz6+quLXPg+y0Y8Ugb1Fg6BUppam/zydYY/Q/+yNjnuF154gD1jEeeir8R5czs6zUHSbo2yXUpAsIdWYo5End8vGsluVmFExnUWm/fTVMGoM5Wm3v1VRepMydEnJ+atz4oQdmPQcKNAip5GJO2uyk++xFr9CpKvlR5jral92toYV/m+mur3va8ydamWBo/qG7/wt0sdS81IwH6lcu0SQ39rgKD+bdoPLv05EqVMYTFRI2QZEsWGYTMs0DOrfCIJFH50qyD0x4sWw1gEWeG3jDgY8cj2StZz+zjqzUd05CibcCzEAGm1EQg5y9D40tIsAU1OI7bpgQ9V0lC8lrqE7zJY66UK9Z1daA8jrdDi6migNjHFrXfT3V4QvMthCIO05q05SS3x2G3ZpIgmI+CePUPB1pDf+lhPkU1MCAwEAAQ==",
+};
+var COMPILED_CATALOG_ROOTS = [RELEASE_SIGNING_KEY];
+var MANAGED_MODEL_CATALOG_PUBLIC_KEY = "managed-model-catalog-public-key";
 //@ chunk-g6j7q15x.js:1574-1657 placement
-function O6n(e) {
-  if (e === void 0) return;
+/**
+ * 判断签名公钥来源（托管密钥/编译内置）。
+ */
+function classifyKeySource(e) {
+  if (e === undefined) return;
   return e === MANAGED_MODEL_CATALOG_PUBLIC_KEY ? "managed_key" : "compiled_roots";
 }
 //@ chunk-g6j7q15x.js:1657-1974 placement = base64URLEncode (1)
 function base64URLEncode(buffer) {
   let match = /^-----BEGIN PUBLIC KEY-----([\s\S]*?)-----END PUBLIC KEY-----$/.exec(buffer.trim());
-  if (match === null || match[1] === void 0) return;
+  if (match === null || match[1] === undefined) return;
   let replaced = match[1].replace(/\s+/g, "");
   if (replaced.length === 0 || !/^[A-Za-z0-9+/]+=*$/.test(replaced)) return;
   let buffer_2 = Buffer.from(replaced, "base64");
-  return buffer_2.length > 0 && buffer_2.toString("base64") === replaced ? new Uint8Array(buffer_2) : void 0;
+  return buffer_2.length > 0 && buffer_2.toString("base64") === replaced
+    ? new Uint8Array(buffer_2)
+    : undefined;
 }
 //@ chunk-g6j7q15x.js:1974-1985 placement
-var g = 2048;
+/**
+ * RSA 公钥的最小位数（2048）。
+ */
+var MIN_RSA_BITS = 2048;
+//@ chunk-g6j7q15x.js:1985-2355 placement
 /**
  * 解析目录签名公钥：要求 SPKI DER，记录密钥类型与长度，不合规时返回原因。
  */
-//@ chunk-g6j7q15x.js:1985-2355 placement
-function parseCatalogPublicKey(e) {
-  let r = base64URLEncode(e);
-  if (r === void 0) return { ok: !1, reason: "not_spki_pem" };
-  let n, o;
+function parseCatalogPublicKey(buffer) {
+  let r = base64URLEncode(buffer);
+  if (r === undefined)
+    return {
+      ok: false,
+      reason: "not_spki_pem",
+    };
+  let n;
+  let o;
   try {
-    let a = createPublicKey({ key: Buffer.from(r), format: "der", type: "spki" });
-    ((n = a.asymmetricKeyType), (o = a.asymmetricKeyDetails?.modulusLength));
+    let publicKey = createPublicKey({
+      key: Buffer.from(r),
+      format: "der",
+      type: "spki",
+    });
+    n = publicKey.asymmetricKeyType;
+    o = publicKey.asymmetricKeyDetails?.modulusLength;
   } catch {
-    return { ok: !1, reason: "not_spki_pem" };
+    return {
+      ok: false,
+      reason: "not_spki_pem",
+    };
   }
-  if (n !== "rsa") return { ok: !1, reason: "not_rsa" };
-  if (o === void 0 || o < g) return { ok: !1, reason: "modulus_too_short" };
-  return { ok: !0, der: r };
+  if (n !== "rsa")
+    return {
+      ok: false,
+      reason: "not_rsa",
+    };
+  if (o === undefined || o < MIN_RSA_BITS)
+    return {
+      ok: false,
+      reason: "modulus_too_short",
+    };
+  return {
+    ok: true,
+    der: r,
+  };
 }
 //@ chunk-g6j7q15x.js:2355-2427 placement
-function S(e) {
-  return new Uint8Array(Buffer.from(e.spkiBase64, "base64"));
+/**
+ * 把 spkiBase64 转成字节。
+ */
+function spkiBytes(root) {
+  return new Uint8Array(Buffer.from(root.spkiBase64, "base64"));
 }
 //@ chunk-g6j7q15x.js:2427-2511 placement
-var _ = "https://downloads.claude.ai/model-catalog/v1/catalog.json",
-  h = ".raw-sig.json";
+/**
+ * 签名 sidecar 文件的后缀。
+ */
+var _ = "https://downloads.claude.ai/model-catalog/v1/catalog.json";
+var SIG_SIDECAR_SUFFIX = ".raw-sig.json";
 //@ chunk-g6j7q15x.js:2511-2560 placement
-function m() {
-  return { url: void 0, publicKey: void 0 };
+/**
+ * 空的托管目录来源。
+ */
+function emptyManagedSource() {
+  return {
+    url: undefined,
+    publicKey: undefined,
+  };
 }
+//@ chunk-g6j7q15x.js:2560-2934 placement
 /**
  * 读取托管设置中的模型目录 URL/公钥，只有来自管理员策略（或服务器已确认的远程托管设置）时才采用。
  */
-//@ chunk-g6j7q15x.js:2560-2934 placement
 function getManagedCatalogSource() {
-  let { url: url, publicKey: publicKey } = m();
-  if (url === void 0 && publicKey === void 0) return { url: void 0, publicKey: void 0 };
-  let n = getPolicySettingsOrigin();
-  if (!isAdminPolicyOrigin(n) && !(n === "remote" && isRemoteManagedSettingsVerified()))
-    return (
-      logForDebugging(
-        `[publishedCatalog] ignoring managed model-catalog source settings from a non-admin policy origin (${n ?? "none"}${n === "remote" ? ", unconfirmed by the server" : ""})`,
-      ),
-      { url: void 0, publicKey: void 0 }
+  let { url, publicKey } = emptyManagedSource();
+  if (url === undefined && publicKey === undefined)
+    return {
+      url: undefined,
+      publicKey: undefined,
+    };
+  let policySettingsOrigin = getPolicySettingsOrigin();
+  if (
+    !isAdminPolicyOrigin(policySettingsOrigin) &&
+    !(policySettingsOrigin === "remote" && isRemoteManagedSettingsVerified())
+  ) {
+    logForDebugging(
+      `[publishedCatalog] ignoring managed model-catalog source settings from a non-admin policy origin (${policySettingsOrigin ?? "none"}${policySettingsOrigin === "remote" ? ", unconfirmed by the server" : ""})`,
     );
-  return { url: url, publicKey: publicKey };
+    return {
+      url: undefined,
+      publicKey: undefined,
+    };
+  }
+  return {
+    url,
+    publicKey,
+  };
 }
 //@ chunk-g6j7q15x.js:2934-3041 placement
 function isManagedCatalogSourceUnverified() {
-  let { url: url, publicKey: publicKey } = m();
-  if (url === void 0 && publicKey === void 0) return !1;
+  let { url, publicKey } = emptyManagedSource();
+  if (url === undefined && publicKey === undefined) return false;
   return getPolicySettingsOrigin() === "remote" && !isRemoteManagedSettingsVerified();
 }
 //@ chunk-g6j7q15x.js:3041-3163 placement
 function isUnverifiedFileCatalogSource() {
-  if (!isManagedCatalogSourceUnverified()) return !1;
-  let { url: url } = m();
-  if (url === void 0) return !1;
+  if (!isManagedCatalogSourceUnverified()) return false;
+  let { url } = emptyManagedSource();
+  if (url === undefined) return false;
   try {
     return validateGitUrl(new URL(url)) === "file";
   } catch {
-    return !1;
+    return false;
   }
 }
 //@ chunk-g6j7q15x.js:3163-3230 placement
-function A(e = getManagedCatalogSource()) {
-  return e.url ?? D(env.CLAUDE_CODE_MODEL_CATALOG_URL);
+/**
+ * 取模型目录 URL（托管设置优先，其次环境变量）。
+ */
+function catalogUrl(managedCatalogSource = getManagedCatalogSource()) {
+  return managedCatalogSource.url ?? trimmedOrUndefined(env.CLAUDE_CODE_MODEL_CATALOG_URL);
 }
 //@ chunk-g6j7q15x.js:3230-3328 placement
-function XNo() {
-  let e = A();
-  if (e === void 0) return !1;
+/**
+ * 判断目录来源是否为 file://。
+ */
+function isFileCatalogSource() {
+  let e = catalogUrl();
+  if (e === undefined) return false;
   try {
     return validateGitUrl(new URL(e)) === "file";
   } catch {
-    return !1;
+    return false;
   }
 }
 //@ chunk-g6j7q15x.js:3328-3376 placement
-function D(e) {
-  let r = e?.trim();
-  return r ? r : void 0;
+/**
+ * 去空白，空则 undefined。
+ */
+function trimmedOrUndefined(e) {
+  let trimmed = e?.trim();
+  return trimmed ? trimmed : undefined;
 }
+//@ chunk-g6j7q15x.js:3376-4001 placement
 /**
  * 确定已签名模型目录的来源：取托管设置或环境变量指定的 URL（默认官方地址），拒绝非法 URL、不支持的协议与私有/元数据主机，返回 {kind, url, trust, cacheKey}。
  */
-//@ chunk-g6j7q15x.js:3376-4001 placement
-function resolvePublishedCatalogSource({ ignoreEnvUrl: e = !1 } = {}) {
-  let r = getManagedCatalogSource(),
-    n = (e ? r.url : A(r)) ?? _,
-    url;
+function resolvePublishedCatalogSource({ ignoreEnvUrl: e = false } = {}) {
+  let managedCatalogSource = getManagedCatalogSource();
+  let n = (e ? managedCatalogSource.url : catalogUrl(managedCatalogSource)) ?? _;
+  let url;
   try {
     url = new URL(n);
   } catch {
-    return (
-      logForDebugging("[publishedCatalog] configured catalog URL is not a URL; published path off"),
-      { ok: !1, reason: "invalid_url" }
-    );
+    logForDebugging("[publishedCatalog] configured catalog URL is not a URL; published path off");
+    return {
+      ok: false,
+      reason: "invalid_url",
+    };
   }
   let a = validateGitUrl(url);
-  if (a === void 0)
-    return (
-      logForDebugging(
-        `[publishedCatalog] configured catalog URL has unsupported scheme ${url.protocol}; published path off`,
-      ),
-      { ok: !1, reason: "invalid_url" }
+  if (a === undefined) {
+    logForDebugging(
+      `[publishedCatalog] configured catalog URL has unsupported scheme ${url.protocol}; published path off`,
     );
-  if (a !== "file" && isPrivateHost(url.hostname))
-    return (
-      logForDebugging(
-        "[publishedCatalog] configured catalog URL names a loopback or metadata host; published path off",
-      ),
-      { ok: !1, reason: "invalid_url" }
+    return {
+      ok: false,
+      reason: "invalid_url",
+    };
+  }
+  if (a !== "file" && isPrivateHost(url.hostname)) {
+    logForDebugging(
+      "[publishedCatalog] configured catalog URL names a loopback or metadata host; published path off",
     );
+    return {
+      ok: false,
+      reason: "invalid_url",
+    };
+  }
   let str = url.toString();
-  return { ok: !0, source: { kind: a, url: str, trust: resolveCatalogTrust(a, r), cacheKey: JNo(str) } };
+  return {
+    ok: true,
+    source: {
+      kind: a,
+      url: str,
+      trust: resolveCatalogTrust(a, managedCatalogSource),
+      cacheKey: shortHash(str),
+    },
+  };
 }
+//@ chunk-g6j7q15x.js:4202-4836 placement
 /**
  * 决定目录签名的信任根：托管来源或未配置公钥时只用内置根；配置了公钥但无托管 URL 时也只用内置根；公钥无效时 untrusted；否则内置根加托管公钥。
  */
-//@ chunk-g6j7q15x.js:4202-4836 placement
-function resolveCatalogTrust(e, r) {
-  if (e === "hosted" || r.publicKey === void 0)
-    return { kind: "compiled_roots", roots: COMPILED_CATALOG_ROOTS };
-  if (r.url === void 0)
-    return (
-      logForDebugging(
-        "[publishedCatalog] a managed catalog public key is set but no managed catalog URL is; the env-named URL verifies against the compiled roots only",
-      ),
-      { kind: "compiled_roots", roots: COMPILED_CATALOG_ROOTS }
+function resolveCatalogTrust(e, managedCatalogSource) {
+  if (e === "hosted" || managedCatalogSource.publicKey === undefined)
+    return {
+      kind: "compiled_roots",
+      roots: COMPILED_CATALOG_ROOTS,
+    };
+  if (managedCatalogSource.url === undefined) {
+    logForDebugging(
+      "[publishedCatalog] a managed catalog public key is set but no managed catalog URL is; the env-named URL verifies against the compiled roots only",
     );
-  let n = parseCatalogPublicKey(r.publicKey);
-  if (!n.ok)
-    return (
-      logForDebugging(
-        `[publishedCatalog] the managed catalog public key is not a PEM SPKI RSA public key of at least ${g} bits (${n.reason}); custom source refused`,
-      ),
-      { kind: "untrusted", reason: "invalid_public_key" }
+    return {
+      kind: "compiled_roots",
+      roots: COMPILED_CATALOG_ROOTS,
+    };
+  }
+  let catalogPublicKey = parseCatalogPublicKey(managedCatalogSource.publicKey);
+  if (!catalogPublicKey.ok) {
+    logForDebugging(
+      `[publishedCatalog] the managed catalog public key is not a PEM SPKI RSA public key of at least ${MIN_RSA_BITS} bits (${catalogPublicKey.reason}); custom source refused`,
     );
+    return {
+      kind: "untrusted",
+      reason: "invalid_public_key",
+    };
+  }
   return {
     kind: "managed_key",
     roots: [
       ...COMPILED_CATALOG_ROOTS,
-      { id: MANAGED_MODEL_CATALOG_PUBLIC_KEY, spkiBase64: Buffer.from(n.der).toString("base64") },
+      {
+        id: MANAGED_MODEL_CATALOG_PUBLIC_KEY,
+        spkiBase64: Buffer.from(catalogPublicKey.der).toString("base64"),
+      },
     ],
   };
 }
 //@ chunk-g6j7q15x.js:4836-4907 placement
-function JNo(e) {
+/**
+ * 取 32 位十六进制短哈希。
+ */
+function shortHash(e) {
   return createHash("sha256").update(e).digest("hex").slice(0, 32);
 }
 //@ chunk-g6j7q15x.js:4907-4937 placement
-function P(e) {
+/**
+ * 把 file URL 转成本地路径。
+ */
+function fileUrlToPathOf(e) {
   return fileURLToPath(e.url);
 }
 //@ chunk-g6j7q15x.js:4937-4947 placement
 var CATALOG_FETCH_TIMEOUT_MS = 1e4;
 //@ chunk-g6j7q15x.js:4947-5481 placement = fetchTeamMemoryHashes (0.372)
-async function fetchPublishedCatalog(state, { etag: r, noCache: n = !1 } = {}) {
+async function fetchPublishedCatalog(state, { etag: r, noCache: n = false } = {}) {
   try {
     return state.kind === "file"
       ? await readCatalogFile(state)
-      : await fetchPublishedCatalogHttp(state, { etag: r, noCache: n });
+      : await fetchPublishedCatalogHttp(state, {
+          etag: r,
+          noCache: n,
+        });
   } catch (error) {
-    let { kind: kind, status: status } = classifyAxiosError(error);
+    let { kind, status } = classifyAxiosError(error);
     switch (
-      (logForDebugging(`[publishedCatalog] fetch failed: ${kind}${status !== void 0 ? ` ${status}` : ""}`),
+      (logForDebugging(`[publishedCatalog] fetch failed: ${kind}${status !== undefined ? ` ${status}` : ""}`),
       kind)
     ) {
       case "timeout":
-        return { status: "error", reason: "timeout" };
+        return {
+          status: "error",
+          reason: "timeout",
+        };
       case "network":
-        return { status: "error", reason: "network" };
+        return {
+          status: "error",
+          reason: "network",
+        };
       case "auth":
       case "http":
-        return status === void 0
-          ? { status: "error", reason: isAxiosBodyOrResponseError(error) ? "too_large" : "network" }
-          : { status: "error", reason: "http_status", httpStatus: status };
+        return status === undefined
+          ? {
+              status: "error",
+              reason: isAxiosBodyOrResponseError(error) ? "too_large" : "network",
+            }
+          : {
+              status: "error",
+              reason: "http_status",
+              httpStatus: status,
+            };
       case "other":
-        return { status: "error", reason: "exception" };
+        return {
+          status: "error",
+          reason: "exception",
+        };
     }
   }
 }
 //@ chunk-g6j7q15x.js:5481-6696 placement
-async function fetchPublishedCatalogHttp(e, { etag: etag, noCache: noCache }) {
-  let o = createPinnedRedirectGuard(e.url),
-    a = noCache ? { "Cache-Control": "no-cache", Pragma: "no-cache" } : void 0,
-    s = await U(e.url, {
-      responseType: "arraybuffer",
-      timeout: CATALOG_FETCH_TIMEOUT_MS,
-      maxContentLength: CATALOG_SCHEMA,
-      maxBodyLength: CATALOG_SCHEMA,
-      validateStatus: () => !0,
-      beforeRedirect: o,
-      ...((etag !== void 0 || a !== void 0) && {
-        headers: { ...a, ...(etag !== void 0 && { "If-None-Match": etag }) },
-      }),
+async function fetchPublishedCatalogHttp(state, { etag, noCache }) {
+  let beforeRedirect = createPinnedRedirectGuard(state.url);
+  let a = noCache
+    ? {
+        "Cache-Control": "no-cache",
+        Pragma: "no-cache",
+      }
+    : undefined;
+  let s = await fetchByOwnership(state.url, {
+    responseType: "arraybuffer",
+    timeout: CATALOG_FETCH_TIMEOUT_MS,
+    maxContentLength: CATALOG_SCHEMA,
+    maxBodyLength: CATALOG_SCHEMA,
+    validateStatus: () => true,
+    beforeRedirect,
+    ...((etag !== undefined || a !== undefined) && {
+      headers: {
+        ...a,
+        ...(etag !== undefined && {
+          "If-None-Match": etag,
+        }),
+      },
     }),
-    status = s.status;
-  if (status === 304 && etag !== void 0)
-    return (
-      logForDebugging("[publishedCatalog] fetch: not modified"),
-      { status: "not_modified", httpStatus: status }
-    );
-  if (status < 200 || status >= 300)
-    return (
-      logForDebugging(`[publishedCatalog] fetch: HTTP ${status}`),
-      { status: "error", reason: "http_status", httpStatus: status }
-    );
-  let l = toUint8Array(s.data);
-  if (l.length > CATALOG_SCHEMA) return { status: "error", reason: "too_large", httpStatus: status };
-  let f = void 0,
-    c = !1,
-    d = await U(N(e.url), {
-      responseType: "arraybuffer",
-      timeout: CATALOG_FETCH_TIMEOUT_MS,
-      maxContentLength: MAX_DOCUMENT_CHARS,
-      maxBodyLength: MAX_DOCUMENT_CHARS,
-      validateStatus: () => !0,
-      beforeRedirect: o,
-      ...(a !== void 0 && { headers: a }),
-    });
-  if (d.status >= 200 && d.status < 300) {
-    let p = toUint8Array(d.data);
-    if (p.length <= MAX_DOCUMENT_CHARS) ((c = !0), (f = safeParseJSON(Buffer.from(p).toString("utf8"), !1)));
-  } else logForDebugging(`[publishedCatalog] sidecar fetch: HTTP ${d.status}`);
-  return (
-    logForDebugging(
-      `[publishedCatalog] fetch ok: ${l.length} bytes${c ? ", sidecar present" : ", no sidecar"}`,
-    ),
-    {
-      status: "ok",
-      documentBytes: l,
-      sidecar: f,
-      hasSidecar: c,
-      sidecarHttpStatus: d.status,
-      etag: j(s.headers),
+  });
+  let status = s.status;
+  if (status === 304 && etag !== undefined) {
+    logForDebugging("[publishedCatalog] fetch: not modified");
+    return {
+      status: "not_modified",
       httpStatus: status,
+    };
+  }
+  if (status < 200 || status >= 300) {
+    logForDebugging(`[publishedCatalog] fetch: HTTP ${status}`);
+    return {
+      status: "error",
+      reason: "http_status",
+      httpStatus: status,
+    };
+  }
+  let uint8Array = toUint8Array(s.data);
+  if (uint8Array.length > CATALOG_SCHEMA)
+    return {
+      status: "error",
+      reason: "too_large",
+      httpStatus: status,
+    };
+  let sidecar = undefined;
+  let c = false;
+  let d = await fetchByOwnership(sidecarUrl(state.url), {
+    responseType: "arraybuffer",
+    timeout: CATALOG_FETCH_TIMEOUT_MS,
+    maxContentLength: MAX_DOCUMENT_CHARS,
+    maxBodyLength: MAX_DOCUMENT_CHARS,
+    validateStatus: () => true,
+    beforeRedirect,
+    ...(a !== undefined && {
+      headers: a,
+    }),
+  });
+  if (d.status >= 200 && d.status < 300) {
+    let uint8Array = toUint8Array(d.data);
+    if (uint8Array.length <= MAX_DOCUMENT_CHARS) {
+      c = true;
+      sidecar = safeParseJSON(Buffer.from(uint8Array).toString("utf8"), false);
     }
+  } else logForDebugging(`[publishedCatalog] sidecar fetch: HTTP ${d.status}`);
+  logForDebugging(
+    `[publishedCatalog] fetch ok: ${uint8Array.length} bytes${c ? ", sidecar present" : ", no sidecar"}`,
   );
+  return {
+    status: "ok",
+    documentBytes: uint8Array,
+    sidecar,
+    hasSidecar: c,
+    sidecarHttpStatus: d.status,
+    etag: etagOf(s.headers),
+    httpStatus: status,
+  };
 }
+//@ chunk-g6j7q15x.js:6696-7470 placement
 /**
  * 读取本地模型目录文件：无盘会话不读，限制读取大小，失败返回 read_failed。
  */
-//@ chunk-g6j7q15x.js:6696-7470 placement
-async function readCatalogFile(e) {
-  if (isDiskless())
-    return (
-      logForDebugging("[publishedCatalog] file not read: a diskless session"),
-      { status: "error", reason: "read_failed" }
-    );
-  let r = P(e),
-    n = getFsImplementation(),
-    bytes;
-  try {
-    bytes = await n.readFileBytes(r, CATALOG_SCHEMA + 1);
-  } catch (error) {
-    return (
-      logForDebugging(`[publishedCatalog] file read failed${isENOENT(error) ? " (no such file)" : ""}`),
-      { status: "error", reason: "read_failed" }
-    );
+async function readCatalogFile(state) {
+  if (isDiskless()) {
+    logForDebugging("[publishedCatalog] file not read: a diskless session");
+    return {
+      status: "error",
+      reason: "read_failed",
+    };
   }
-  if (bytes.length > CATALOG_SCHEMA) return { status: "error", reason: "too_large" };
-  let a = void 0,
-    s = !1;
+  let r = fileUrlToPathOf(state);
+  let fsImplementation = getFsImplementation();
+  let bytes;
   try {
-    let fileBytes = await n.readFileBytes(`${r}${h}`, MAX_DOCUMENT_CHARS + 1);
-    if (fileBytes.length <= MAX_DOCUMENT_CHARS)
-      ((s = !0), (a = safeParseJSON(fileBytes.toString("utf8"), !1)));
+    bytes = await fsImplementation.readFileBytes(r, CATALOG_SCHEMA + 1);
+  } catch (error) {
+    logForDebugging(`[publishedCatalog] file read failed${isENOENT(error) ? " (no such file)" : ""}`);
+    return {
+      status: "error",
+      reason: "read_failed",
+    };
+  }
+  if (bytes.length > CATALOG_SCHEMA)
+    return {
+      status: "error",
+      reason: "too_large",
+    };
+  let sidecar = undefined;
+  let s = false;
+  try {
+    let fileBytes = await fsImplementation.readFileBytes(`${r}${SIG_SIDECAR_SUFFIX}`, MAX_DOCUMENT_CHARS + 1);
+    if (fileBytes.length <= MAX_DOCUMENT_CHARS) {
+      s = true;
+      sidecar = safeParseJSON(fileBytes.toString("utf8"), false);
+    }
   } catch (error) {
     if (!isENOENT(error)) logForDebugging("[publishedCatalog] sidecar read failed");
   }
-  return (
-    logForDebugging(
-      `[publishedCatalog] file read ok: ${bytes.length} bytes${s ? ", sidecar present" : ", no sidecar"}`,
-    ),
-    {
-      status: "ok",
-      documentBytes: new Uint8Array(bytes),
-      sidecar: a,
-      hasSidecar: s,
-      sidecarHttpStatus: void 0,
-      etag: void 0,
-      httpStatus: void 0,
-    }
+  logForDebugging(
+    `[publishedCatalog] file read ok: ${bytes.length} bytes${s ? ", sidecar present" : ", no sidecar"}`,
   );
+  return {
+    status: "ok",
+    documentBytes: new Uint8Array(bytes),
+    sidecar,
+    hasSidecar: s,
+    sidecarHttpStatus: undefined,
+    etag: undefined,
+    httpStatus: undefined,
+  };
 }
 //@ chunk-g6j7q15x.js:7470-7523 placement
-function U(e, r) {
-  return isAnthropicOwnedHost(e) ? t3.get(e, r) : externalHttp.get(e, r);
+/**
+ * 按主机归属选择 fetch 实现（自有主机走内置通道）。
+ */
+function fetchByOwnership(e, r) {
+  return isAnthropicOwnedHost(e) ? publicCdnGuardedClient.get(e, r) : externalHttp.get(e, r);
 }
 //@ chunk-g6j7q15x.js:7523-7818 placement
-function createPinnedRedirectGuard(e) {
-  let r = isAnthropicOwnedHost(e),
-    startsWith = e.toLowerCase().startsWith("https:");
+function createPinnedRedirectGuard(url) {
+  let r = isAnthropicOwnedHost(url);
+  let n = url.toLowerCase().startsWith("https:");
   return (o) => {
-    let a = urlFromRequestOptions(o),
-      s = G(a),
-      u = M(a),
-      l = sameOrigin(e, a),
-      f = startsWith ? u === "https:" : l || u === "https:";
+    let a = urlFromRequestOptions(o);
+    let s = hostOf(a);
+    let u = protocolOf(a);
+    let l = sameOrigin(url, a);
+    let f = n ? u === "https:" : l || u === "https:";
     if (!(s !== "" && (r ? isAnthropicOwnedHost(s) : !isAnthropicHost(s)) && f && (l || !isPrivateHost(s))))
       throw Error("[publishedCatalog] redirect refused: a hop left the host the request was pinned to");
   };
 }
 //@ chunk-g6j7q15x.js:7818-7893 placement
-function G(e) {
+/**
+ * 取 URL 主机名（无效返回空串）。
+ */
+function hostOf(e) {
   try {
     return new URL(e).hostname.toLowerCase();
   } catch {
@@ -370,7 +519,10 @@ function G(e) {
   }
 }
 //@ chunk-g6j7q15x.js:7893-7968 placement
-function M(e) {
+/**
+ * 取 URL 协议（无效返回空串）。
+ */
+function protocolOf(e) {
   try {
     return new URL(e).protocol.toLowerCase();
   } catch {
@@ -378,9 +530,13 @@ function M(e) {
   }
 }
 //@ chunk-g6j7q15x.js:7968-8033 placement
-function N(e) {
-  let r = new URL(e);
-  return ((r.pathname += h), r.toString());
+/**
+ * 在地址后加上签名 sidecar 后缀。
+ */
+function sidecarUrl(url) {
+  let r = new URL(url);
+  r.pathname += SIG_SIDECAR_SUFFIX;
+  return r.toString();
 }
 //@ chunk-g6j7q15x.js:8033-8219 placement
 function toUint8Array(e) {
@@ -399,83 +555,119 @@ function isAxiosBodyOrResponseError(err) {
   );
 }
 //@ chunk-g6j7q15x.js:8357-8407 placement
-function j(e) {
-  let r = e?.etag;
-  return isValidEtag(r) ? r : void 0;
+/**
+ * 取合法 etag。
+ */
+function etagOf(headers) {
+  let etag = headers?.etag;
+  return isValidEtag(etag) ? etag : undefined;
 }
 //@ chunk-g6j7q15x.js:8407-8492 placement
-var x = "claude-code-model-catalog-v1\x00",
-  T = { name: "RSASSA-PKCS1-v1_5", hash: "SHA-512" };
+/**
+ * 验签使用的 RSA 算法与哈希。
+ */
+var SIGNING_CONTEXT = "claude-code-model-catalog-v1\x00";
+var RSA_VERIFY_ALGO = {
+  name: "RSASSA-PKCS1-v1_5",
+  hash: "SHA-512",
+};
+//@ chunk-g6j7q15x.js:8492-9289 placement
 /**
  * 校验已签名模型目录：解析 sidecar 的签名与公钥 SHA-256，在信任根中找到对应公钥后用 WebCrypto RSA 验证"上下文前缀 + 文档字节"；返回 {ok, rootId} 或失败原因（sidecar_invalid/unknown_key/key_unusable/bad_signature）。
  */
-//@ chunk-g6j7q15x.js:8492-9289 placement
-async function verifyCatalogSignature({
-  documentBytes: documentBytes,
-  sidecar: sidecar,
-  roots: roots,
-  context: context = x,
-}) {
-  let safeParse = catalogSignatureSchema().safeParse(sidecar);
-  if (!safeParse.success) return { ok: !1, reason: "sidecar_invalid" };
-  let buffer = Buffer.from(safeParse.data.signature, "base64");
-  if (buffer.length === 0 || buffer.toString("base64") !== safeParse.data.signature)
-    return { ok: !1, reason: "sidecar_invalid" };
-  let u, l;
-  for (let d of roots) {
-    let p = b(S(d));
-    if ((await sha256HexOfBytes(p)) === safeParse.data.publicKeySha256) {
-      ((u = d), (l = p));
+async function verifyCatalogSignature({ documentBytes, sidecar, roots, context = SIGNING_CONTEXT }) {
+  let a = catalogSignatureSchema().safeParse(sidecar);
+  if (!a.success)
+    return {
+      ok: false,
+      reason: "sidecar_invalid",
+    };
+  let buffer = Buffer.from(a.data.signature, "base64");
+  if (buffer.length === 0 || buffer.toString("base64") !== a.data.signature)
+    return {
+      ok: false,
+      reason: "sidecar_invalid",
+    };
+  let u;
+  let l;
+  for (let root of roots) {
+    let uint8 = toUint8(spkiBytes(root));
+    if ((await sha256HexOfBytes(uint8)) === a.data.publicKeySha256) {
+      u = root;
+      l = uint8;
       break;
     }
   }
-  if (u === void 0 || l === void 0) return { ok: !1, reason: "unknown_key" };
+  if (u === undefined || l === undefined)
+    return {
+      ok: false,
+      reason: "unknown_key",
+    };
   let f;
   try {
-    f = await crypto.subtle.importKey("spki", l, T, !1, ["verify"]);
+    f = await crypto.subtle.importKey("spki", l, RSA_VERIFY_ALGO, false, ["verify"]);
   } catch (error) {
-    return (
-      logForDebugging(
-        `[publishedCatalog] trust root ${u.id} is not an importable RSA key: ${error instanceof Error ? error.name : "error"}`,
-      ),
-      { ok: !1, reason: "key_unusable" }
+    logForDebugging(
+      `[publishedCatalog] trust root ${u.id} is not an importable RSA key: ${error instanceof Error ? error.name : "error"}`,
     );
+    return {
+      ok: false,
+      reason: "key_unusable",
+    };
   }
   let c;
   try {
-    c = await crypto.subtle.verify(T.name, f, b(buffer), prefixWithSigningContext(documentBytes, context));
+    c = await crypto.subtle.verify(
+      RSA_VERIFY_ALGO.name,
+      f,
+      toUint8(buffer),
+      prefixWithSigningContext(documentBytes, context),
+    );
   } catch {
-    c = !1;
+    c = false;
   }
-  return c ? { ok: !0, rootId: u.id } : { ok: !1, reason: "bad_signature" };
+  return c
+    ? {
+        ok: true,
+        rootId: u.id,
+      }
+    : {
+        ok: false,
+        reason: "bad_signature",
+      };
 }
 //@ chunk-g6j7q15x.js:9289-9413 placement
-function prefixWithSigningContext(e, r = x) {
-  let encode = new TextEncoder().encode(r),
-    uint8Array = new Uint8Array(encode.length + e.length);
-  return (uint8Array.set(encode), uint8Array.set(e, encode.length), uint8Array);
+function prefixWithSigningContext(documentBytes, context = SIGNING_CONTEXT) {
+  let n = new TextEncoder().encode(context);
+  let uint8Array = new Uint8Array(n.length + documentBytes.length);
+  uint8Array.set(n);
+  uint8Array.set(documentBytes, n.length);
+  return uint8Array;
 }
 //@ chunk-g6j7q15x.js:9413-9520 placement
-async function sha256HexOfBytes(e) {
-  let digest = await crypto.subtle.digest("SHA-256", b(e));
-  return Buffer.from(digest).toString("hex");
+async function sha256HexOfBytes(uint8) {
+  let r = await crypto.subtle.digest("SHA-256", toUint8(uint8));
+  return Buffer.from(r).toString("hex");
 }
 //@ chunk-g6j7q15x.js:9520-9587 placement
-function b(e) {
+/**
+ * 把 Buffer 转成 Uint8Array。
+ */
+function toUint8(e) {
   let uint8Array = new Uint8Array(e.byteLength);
-  return (uint8Array.set(e), uint8Array);
+  uint8Array.set(e);
+  return uint8Array;
 }
-
 export {
   _,
   isManagedCatalogSourceUnverified,
   verifyCatalogSignature,
-  O6n,
+  classifyKeySource,
   resolvePublishedCatalogSource,
   fetchPublishedCatalog,
   isUnverifiedFileCatalogSource,
-  JNo,
+  shortHash,
   COMPILED_CATALOG_ROOTS,
   MANAGED_MODEL_CATALOG_PUBLIC_KEY,
-  XNo,
+  isFileCatalogSource,
 };

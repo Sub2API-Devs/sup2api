@@ -21,48 +21,59 @@ class AdoptTicksTokenLogger {
   firedSites = new Set();
   fire(e) {
     if (this.firedSites.has(e)) return;
-    (this.firedSites.add(e), logEvent("tengu_dead_probe_adopt_ticks_token", { site: fromEnum(e) }));
+    this.firedSites.add(e);
+    logEvent("tengu_dead_probe_adopt_ticks_token", {
+      site: fromEnum(e),
+    });
   }
   reset() {
     this.firedSites.clear();
   }
 }
 //@ chunk-gg3tj8q5.js:618-641 placement
-var l = new HostScoped(() => new AdoptTicksTokenLogger());
+var deadProbeSlot = new HostScoped(() => new AdoptTicksTokenLogger());
 //@ chunk-gg3tj8q5.js:641-676 placement
-function f() {
-  return l.of(getRootSession().host);
+function deadProbe() {
+  return deadProbeSlot.of(getRootSession().host);
 }
 //@ chunk-gg3tj8q5.js:676-704 placement
-function A_o(e) {
-  f().fire(e);
+/**
+ * 函数 fireDeadProbe（触发探测）。
+ */
+function fireDeadProbe(e) {
+  deadProbe().fire(e);
 }
+//@ chunk-gg3tj8q5.js:704-886 placement
 /**
  * 从 /proc/<pid>/stat 读取进程启动时刻（clock ticks），用于确认进程身份；失败返回 null。
  */
-//@ chunk-gg3tj8q5.js:704-886 placement
 async function readProcessStartTicks(e) {
   try {
-    let t = await readFile(`/proc/${e}/stat`, "utf-8"),
-      index = t.lastIndexOf(")"),
-      parts = t.slice(index + 2).split(" "),
-      i = Number(parts[19]);
+    let file = await readFile(`/proc/${e}/stat`, "utf-8");
+    let index = file.lastIndexOf(")");
+    let parts = file.slice(index + 2).split(" ");
+    let i = Number(parts[19]);
     return Number.isFinite(i) ? i : null;
   } catch {
     return null;
   }
 }
+//@ chunk-gg3tj8q5.js:886-1080 placement
 /**
  * 确认进程身份未变后发送 SIGTERM。
  */
-//@ chunk-gg3tj8q5.js:886-1080 placement
-async function killIfSameProcess(e, t, r) {
-  if (r !== void 0) {
-    if ((await getProcessStartTimeAsync(e, { skipCache: !0 })) !== r) return;
-  } else if (t !== void 0) {
-    if ((A_o("kill_gate"), (await readProcessStartTicks(e)) !== t)) return;
+async function killIfSameProcess(pid, startTimeTicks, procStart) {
+  if (procStart !== undefined) {
+    if (
+      (await getProcessStartTimeAsync(pid, {
+        skipCache: true,
+      })) !== procStart
+    )
+      return;
+  } else if (startTimeTicks !== undefined) {
+    fireDeadProbe("kill_gate");
+    if ((await readProcessStartTicks(pid)) !== startTimeTicks) return;
   } else return;
-  await killProcessGroup(e, "SIGTERM").catch(() => {});
+  await killProcessGroup(pid, "SIGTERM").catch(() => {});
 }
-
-export { A_o, readProcessStartTicks, killIfSameProcess };
+export { fireDeadProbe, readProcessStartTicks, killIfSameProcess };

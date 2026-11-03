@@ -32,27 +32,26 @@ function connectGithubUrl() {
 }
 //@ chunk-pemtjbn7.js:2852-3122 placement
 function githubNotConnectedMessage(o = "this repository") {
-  let e = connectGithubUrl(),
-    s = isWebSetupOfferable()
-      ? `Run /web-setup to connect with your GitHub CLI login, or connect on the web at ${e}`
-      : `Connect it on the web at ${e}`;
+  let githubUrl = connectGithubUrl();
+  let s = isWebSetupOfferable()
+    ? `Run /web-setup to connect with your GitHub CLI login, or connect on the web at ${githubUrl}`
+    : `Connect it on the web at ${githubUrl}`;
   return `GitHub isn't connected to your Claude account, so ${o} can't be cloned in the cloud. ${s}`;
 }
+//@ chunk-pemtjbn7.js:3122-3367 placement = web (0.749)
 /**
  * /web-setup 命令对象（local-jsx）；描述：Set up cloud sessions with your GitHub account；availability ["claude-ai"]；isEnabled: o$e；isHidden: {return!dn("allow_remote_sessions")||!dn("allow_quick_web_setup")}；实现 chunk-ajkmgejw.js 的 et。
  */
-//@ chunk-pemtjbn7.js:3122-3367 placement = web (0.749)
 var webSetupCommandDefinition = {
-    type: "local-jsx",
-    name: "web-setup",
-    description: "Set up cloud sessions with your GitHub account",
-    availability: ["claude-ai"],
-    isEnabled: isWebSetupEnabled,
-    policyGate: CLOUD_SESSIONS_POLICY,
-    get isHidden() {
-      return !isPolicyAllowed("allow_remote_sessions") || !isPolicyAllowed("allow_quick_web_setup");
-    },
+  type: "local-jsx",
+  name: "web-setup",
+  description: "Set up cloud sessions with your GitHub account",
+  availability: ["claude-ai"],
+  isEnabled: isWebSetupEnabled,
+  policyGate: CLOUD_SESSIONS_POLICY,
+  get isHidden() {
+    return !isPolicyAllowed("allow_remote_sessions") || !isPolicyAllowed("allow_quick_web_setup");
   },
-  webSetupCommand = webSetupCommandDefinition;
-
+};
+var webSetupCommand = webSetupCommandDefinition;
 export { githubNotConnectedMessage, isWebSetupEnabled, isWebSetupOfferable, connectGithubUrl };

@@ -9,17 +9,17 @@
  * attribution: fingerprint 2, layout 2
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { zodStrictObject, o, u, E, A, M } from "../../../vendor/zod/v4/classic/schemas.js";
+import { zodStrictObject, string, u, E, array, M } from "../../../vendor/zod/v4/classic/schemas.js";
 import {
   attachedMachineInputField,
-  $r,
-  $Fe,
-  Cf,
-  yO,
+  HOST_TOOL_INPUT_FIELD,
+  hostContextMeta,
+  hasHostField,
+  canRunToolsOnThisMachine,
   hostFieldNotForwardedMessage,
 } from "../../bridge/deviceRegistration.js";
 import { expandPath, toRelativePath } from "../../utils/path.js";
-import { hl } from "../../utils/networkPaths.js";
+import { isUntouchableSpelling } from "../../utils/networkPaths.js";
 import {
   getPathsForPermissionCheck,
   getFsImplementation,
@@ -31,10 +31,9 @@ import { encodeControlChars } from "../../utils/sanitization.js";
 import { getCwd } from "../../utils/cwd.js";
 import { separateCopyHint } from "../../utils/remoteTools/folderSync.js";
 import { buildTool } from "../../services/tools/permissionCheckGuard.js";
-import { GLOB_TOOL_NAME } from "./prompt.js";
-import { getGlobToolDescription } from "./_new/GLOB_DESCRIPTION.js";
+import { GLOB_TOOL_NAME, getGlobToolDescription } from "./prompt.js";
 import { getToolUseSummary_4 } from "./UI.js";
-import { zCe } from "../../utils/remoteTools/toolHostRouting.js";
+import { remoteRoutingCandidate } from "../../utils/remoteTools/toolHostRouting.js";
 import { resolveAbsoluteGlobPattern, globFiles } from "../../utils/glob.js";
 import { isRemoteOnlyCheck } from "../../utils/permissions/checkRegistry.js";
 import { matchWildcardPattern } from "../../utils/permissions/shellRuleMatching.js";
@@ -45,41 +44,41 @@ import { consumeReadPermission } from "../../utils/fsSafety/atomicWriteStaging.j
 
 //@ chunk-e6aww6q8.js:1441401-1442549 fingerprint = outputSchema (0.549)
 var globInputSchema = DoctorLazy(() =>
-    zodStrictObject({
-      pattern: o().describe("The glob pattern to match files against"),
-      path: o()
-        .optional()
-        .describe(
-          'The directory to search in. If not specified, the current working directory will be used. IMPORTANT: Omit this field to use the default directory. DO NOT enter "undefined" or "null" - simply omit it for the default behavior. Must be a valid directory path if provided.',
-        ),
-      ...attachedMachineInputField(),
-    }),
-  ),
-  globOutputSchema = DoctorLazy(() =>
-    u({
-      durationMs: E().describe("Time taken to execute the search in milliseconds"),
-      numFiles: E().describe("Number of file paths returned (after any truncation)"),
-      filenames: A(o()).describe("Array of file paths that match the pattern"),
-      truncated: M().describe("Whether results were truncated (limited to 100 files)"),
-      totalMatches: E()
-        .optional()
-        .describe(
-          "Total number of matching files before truncation. A lower bound when countIsComplete is false. Absent on results persisted by CLI versions predating this field.",
-        ),
-      countIsComplete: M()
-        .optional()
-        .describe(
-          "Whether totalMatches is the exact total (true) or a floor because the underlying search truncated its own output (false). Absent on results persisted by CLI versions predating this field.",
-        ),
-    }),
-  );
+  zodStrictObject({
+    pattern: string().describe("The glob pattern to match files against"),
+    path: string()
+      .optional()
+      .describe(
+        'The directory to search in. If not specified, the current working directory will be used. IMPORTANT: Omit this field to use the default directory. DO NOT enter "undefined" or "null" - simply omit it for the default behavior. Must be a valid directory path if provided.',
+      ),
+    ...attachedMachineInputField(),
+  }),
+);
+var globOutputSchema = DoctorLazy(() =>
+  u({
+    durationMs: E().describe("Time taken to execute the search in milliseconds"),
+    numFiles: E().describe("Number of file paths returned (after any truncation)"),
+    filenames: array(string()).describe("Array of file paths that match the pattern"),
+    truncated: M().describe("Whether results were truncated (limited to 100 files)"),
+    totalMatches: E()
+      .optional()
+      .describe(
+        "Total number of matching files before truncation. A lower bound when countIsComplete is false. Absent on results persisted by CLI versions predating this field.",
+      ),
+    countIsComplete: M()
+      .optional()
+      .describe(
+        "Whether totalMatches is the exact total (true) or a floor because the underlying search truncated its own output (false). Absent on results persisted by CLI versions predating this field.",
+      ),
+  }),
+);
+//@ chunk-e6aww6q8.js:1442549-1443004 layout
 /**
  * Glob 结果截断时的提示：未知总数、精确总数或"多于 N"三种。
  */
-//@ chunk-e6aww6q8.js:1442549-1443004 layout
 function formatGlobTruncationNote(output) {
   let n = output.filenames.length;
-  if (output.totalMatches === void 0)
+  if (output.totalMatches === undefined)
     return "(Results are truncated. Consider using a more specific path or pattern.)";
   if (output.countIsComplete) {
     let r = output.totalMatches - n;
@@ -87,13 +86,13 @@ function formatGlobTruncationNote(output) {
   }
   return `(Showing the first ${n} files; there are more than ${output.totalMatches} matches. Narrow the pattern or path to see the rest.)`;
 }
+//@ chunk-e6aww6q8.js:1443004-1443397 layout
 /**
  * 显式 path 不存在或不是目录时抛 TelemetrySafeError（附 cwd 说明、Did you mean、远程提示）。
  */
-//@ chunk-e6aww6q8.js:1443004-1443397 layout
-async function assertGlobDirectoryExists(e, n, r) {
-  let s = expandPath(e);
-  if (hl(s) || getPathsForPermissionCheck(s).some((y) => !n.includes(y))) return;
+async function assertGlobDirectoryExists(path, n, r) {
+  let s = expandPath(path);
+  if (isUntouchableSpelling(s) || getPathsForPermissionCheck(s).some((y) => !n.includes(y))) return;
   let h;
   try {
     h = await getFsImplementation().stat(s);
@@ -102,37 +101,39 @@ async function assertGlobDirectoryExists(e, n, r) {
     let S = await normalizePathForComparison(s);
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
       encodeControlChars(
-        `Directory does not exist: ${e}. ${FILE_NOT_FOUND_CWD_NOTE} ${getCwd()}.${S ? ` Did you mean ${S}?` : ""}${separateCopyHint(GlobTool, s, r)}`,
+        `Directory does not exist: ${path}. ${FILE_NOT_FOUND_CWD_NOTE} ${getCwd()}.${S ? ` Did you mean ${S}?` : ""}${separateCopyHint(GlobTool, s, r)}`,
       ),
       "Directory does not exist",
     );
   }
   if (!h.isDirectory())
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      encodeControlChars(`Path is not a directory: ${e}`),
+      encodeControlChars(`Path is not a directory: ${path}`),
       "Path is not a directory",
     );
 }
+//@ chunk-e6aww6q8.js:1443397-1445523 fingerprint = GlobTool (0.653)
 /**
  * Glob 工具定义（name "Glob"）。只读、可并发；pattern 加可选 path；绝对路径模式自动拆出搜索目录；validateInput 查空字节；checkPermissions 读权限；call 用 ripgrep --files 按修改时间排序，默认最多 100 个，截断时给出说明。
  */
-//@ chunk-e6aww6q8.js:1443397-1445523 fingerprint = GlobTool (0.653)
 var GlobTool = buildTool({
   name: GLOB_TOOL_NAME,
   searchHint: "find files by name pattern or wildcard",
   backgrounding: "never",
   maxResultSizeChars: 1e5,
   async description() {
-    return getGlobToolDescription(void 0);
+    return getGlobToolDescription(undefined);
   },
-  remoteExecution: { supported: !0 },
+  remoteExecution: {
+    supported: true,
+  },
   userFacingName() {
     return "Search";
   },
   getToolUseSummary: getToolUseSummary_4,
-  getActivityDescription(e) {
-    let n = getToolUseSummary_4(e);
-    return n ? `Finding ${n}` : "Finding files";
+  getActivityDescription(input) {
+    let summary = getToolUseSummary_4(input);
+    return summary ? `Finding ${summary}` : "Finding files";
   },
   get inputSchema() {
     return globInputSchema();
@@ -141,119 +142,132 @@ var GlobTool = buildTool({
     return globOutputSchema();
   },
   isConcurrencySafe() {
-    return !0;
+    return true;
   },
   isReadOnly() {
-    return !0;
+    return true;
   },
   toAutoClassifierInput(input) {
-    let n = zCe(input);
-    return n === void 0
+    let n = remoteRoutingCandidate(input);
+    return n === undefined
       ? input.pattern
       : {
           pattern: input.pattern,
-          ...(input.path !== void 0 && { path: input.path }),
-          [$r]: n,
-          ...$Fe(input),
+          ...(input.path !== undefined && {
+            path: input.path,
+          }),
+          [HOST_TOOL_INPUT_FIELD]: n,
+          ...hostContextMeta(input),
         };
   },
   suppressesAllPermissionUpdates(e) {
-    return Cf(e);
+    return hasHostField(e);
   },
   isSearchOrReadCommand() {
-    return { isSearch: !0, isRead: !1 };
+    return {
+      isSearch: true,
+      isRead: false,
+    };
   },
   ruleContentField: "path",
-  getPath({ path: e, pattern: n }) {
-    if (n) {
-      let r = resolveAbsoluteGlobPattern(n);
-      if (r) return r.searchDir;
+  getPath({ path, pattern }) {
+    if (pattern) {
+      let absoluteGlobPattern = resolveAbsoluteGlobPattern(pattern);
+      if (absoluteGlobPattern) return absoluteGlobPattern.searchDir;
     }
-    if (isRemoteOnlyCheck(GLOB_TOOL_NAME)) return e ?? "";
-    if (e) return expandPath(e);
+    if (isRemoteOnlyCheck(GLOB_TOOL_NAME)) return path ?? "";
+    if (path) return expandPath(path);
     return getCwd();
   },
-  async preparePermissionMatcher({ pattern: e }) {
-    return (n) => matchWildcardPattern(n, e);
+  async preparePermissionMatcher({ pattern }) {
+    return (rulePattern) => matchWildcardPattern(rulePattern, pattern);
   },
-  async prompt({ model: e, leanPrompt: n }) {
-    return getGlobToolDescription(e, n);
+  async prompt({ model, leanPrompt }) {
+    return getGlobToolDescription(model, leanPrompt);
   },
-  renderToolUseMessage: renderToolUseMessage,
-  extractSearchText({ filenames: e }) {
-    return e.join(`
+  renderToolUseMessage,
+  extractSearchText({ filenames }) {
+    return filenames.join(`
 `);
   },
   create(e) {
     return {
       async validateInput(n) {
-        let { pattern: pattern, path: path } = n;
-        if (yO() && Cf(n)) return { result: !1, message: hostFieldNotForwardedMessage(), errorCode: 3 };
+        let { pattern, path } = n;
+        if (canRunToolsOnThisMachine() && hasHostField(n))
+          return {
+            result: false,
+            message: hostFieldNotForwardedMessage(),
+            errorCode: 3,
+          };
         let h = rejectNullBytes(GLOB_TOOL_NAME, [
           ["pattern", pattern],
           ["path", path],
         ]);
         if (h) return h;
-        return { result: !0 };
+        return {
+          result: true,
+        };
       },
-      async checkPermissions(n, r) {
-        let path = GlobTool.getPath(n),
-          h = walkPermissionCheckPaths(path);
-        return (
-          e.session.writePermissionStash.stash(r.toolUseId, path, h.spellings, "read"),
-          checkReadPermissionForTool(GlobTool, n, e.permissions(), h)
-        );
+      async checkPermissions(input, r) {
+        let path = GlobTool.getPath(input);
+        let h = walkPermissionCheckPaths(path);
+        e.session.writePermissionStash.stash(r.toolUseId, path, h.spellings, "read");
+        return checkReadPermissionForTool(GlobTool, input, e.permissions(), h);
       },
       async call(n, r) {
-        let { globLimits: globLimits } = r,
-          h = {
-            toolUseId: r.toolUseId,
-            remoteCall: r.remoteCall,
-            session: e.session,
-            toolState: e.toolState,
+        let { globLimits } = r;
+        let filePath = {
+          toolUseId: r.toolUseId,
+          remoteCall: r.remoteCall,
+          session: e.session,
+          toolState: e.toolState,
+        };
+        let start = Date.now();
+        let limit = globLimits?.maxResults ?? 100;
+        let toolPermissionContext = GlobTool.getPath(n);
+        let L = consumeReadPermission(filePath, toolPermissionContext);
+        if (n.path && toolPermissionContext === expandPath(n.path))
+          await assertGlobDirectoryExists(n.path, L, filePath);
+        let { files, truncated, totalMatches, countIsComplete } = await globFiles(
+          n.pattern,
+          toolPermissionContext,
+          {
+            limit,
+            offset: 0,
           },
-          now = Date.now(),
-          S = globLimits?.maxResults ?? 100,
-          path = GlobTool.getPath(n),
-          L = consumeReadPermission(h, path);
-        if (n.path && path === expandPath(n.path)) await assertGlobDirectoryExists(n.path, L, h);
-        let {
-            files: files,
-            truncated: truncated,
-            totalMatches: totalMatches,
-            countIsComplete: countIsComplete,
-          } = await globFiles(
-            n.pattern,
-            path,
-            { limit: S, offset: 0 },
-            r.signal,
-            e.permissions(),
-            L,
-            r.timing,
-          ),
-          mapped = files.map(toRelativePath);
+          r.signal,
+          e.permissions(),
+          L,
+          r.timing,
+        );
+        let filenames = files.map(toRelativePath);
         return {
           data: {
-            filenames: mapped,
-            durationMs: Date.now() - now,
-            numFiles: mapped.length,
-            truncated: truncated,
-            totalMatches: totalMatches,
-            countIsComplete: countIsComplete,
+            filenames,
+            durationMs: Date.now() - start,
+            numFiles: filenames.length,
+            truncated,
+            totalMatches,
+            countIsComplete,
           },
         };
       },
     };
   },
-  mapToolResultToToolResultBlockParam(e, n) {
-    if (e.filenames.length === 0) return { tool_use_id: n, type: "tool_result", content: "No files found" };
+  mapToolResultToToolResultBlockParam(output, toolUseID) {
+    if (output.filenames.length === 0)
+      return {
+        tool_use_id: toolUseID,
+        type: "tool_result",
+        content: "No files found",
+      };
     return {
-      tool_use_id: n,
+      tool_use_id: toolUseID,
       type: "tool_result",
-      content: [...e.filenames, ...(e.truncated ? [formatGlobTruncationNote(e)] : [])].join(`
+      content: [...output.filenames, ...(output.truncated ? [formatGlobTruncationNote(output)] : [])].join(`
 `),
     };
   },
 });
-
 export { GlobTool };

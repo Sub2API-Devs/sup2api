@@ -5,137 +5,162 @@
  * pieces: chunk-r0ads4ty.js (8)
  * attribution: esm-layout 2, esm-fingerprint 6
  */
-import { At } from "../utils/debug.js";
+import { logForDebugging } from "../utils/debug.js";
 
 //@ chunk-r0ads4ty.js:1985-1991 esm-layout
-var O;
+var GlobTokenKind;
 //@ chunk-r0ads4ty.js:1991-2155 esm-fingerprint
-(function (e) {
-  ((e.Text = "text"),
-    (e.Separator = "separator"),
-    (e.AnyChar = "anyChar"),
-    (e.Star = "star"),
-    (e.Globstar = "globstar"),
-    (e.GlobstarSlash = "globstarSlash"),
-    (e.Set = "set"));
-})(O || (O = {}));
+(function (GlobTokenKind) {
+  GlobTokenKind.Text = "text";
+  GlobTokenKind.Separator = "separator";
+  GlobTokenKind.AnyChar = "anyChar";
+  GlobTokenKind.Star = "star";
+  GlobTokenKind.Globstar = "globstar";
+  GlobTokenKind.GlobstarSlash = "globstarSlash";
+  GlobTokenKind.Set = "set";
+})(GlobTokenKind || (GlobTokenKind = {}));
 //@ chunk-r0ads4ty.js:2155-2344 esm-fingerprint
-function se(e) {
-  if (e === "") return;
-  let t = [];
-  for (let r = 0; r < e.length; r++) {
-    let n = e[r + 1] === "-" && r + 2 < e.length,
-      code = e.charCodeAt(r);
-    if (n) r += 2;
-    let code_2 = e.charCodeAt(r);
-    if (code_2 < code) return;
-    t.push([code, code_2]);
+function setRanges(members) {
+  if (members === "") return;
+  let ranges = [];
+  for (let i = 0; i < members.length; i++) {
+    let isRange = members[i + 1] === "-" && i + 2 < members.length;
+    let from = members.charCodeAt(i);
+    if (isRange) i += 2;
+    let to = members.charCodeAt(i);
+    if (to < from) return;
+    ranges.push([from, to]);
   }
-  return t;
+  return ranges;
 }
 //@ chunk-r0ads4ty.js:2344-2354 esm-layout
-var ee = 47;
+var SEPARATOR = 47;
 //@ chunk-r0ads4ty.js:2354-3419 esm-fingerprint
-function W(e) {
-  let t = [],
-    r = 0,
-    n = (i) => {
-      if (r < i) {
-        let sliced = e.slice(r, i);
-        t.push({ kind: O.Text, text: sliced });
-      }
-    },
-    c = (i) => {
-      let { Star: Star, Globstar: Globstar, GlobstarSlash: GlobstarSlash } = O,
-        S = (I) => t[t.length - I]?.kind;
-      if (S(1) === Globstar || S(1) === i) return;
-      if (!(i === Globstar || (S(2) === i && (S(1) === Star || S(1) === GlobstarSlash)))) {
-        t.push({ kind: i });
-        return;
-      }
-      while (S(1) === Star || S(1) === GlobstarSlash) t.pop();
-      t.push({ kind: Globstar });
-    },
-    f = 0,
-    a = [],
-    o = 0;
-  while (o < e.length)
-    switch (e[o]) {
+function parseGlob(pattern) {
+  let tokens = [];
+  let textStart = 0;
+  let endText = (at) => {
+    if (textStart < at) {
+      let text = pattern.slice(textStart, at);
+      tokens.push({
+        kind: GlobTokenKind.Text,
+        text,
+      });
+    }
+  };
+  let addWildcard = (kind) => {
+    let { Star, Globstar, GlobstarSlash } = GlobTokenKind;
+    let kindAt = (fromEnd) => tokens[tokens.length - fromEnd]?.kind;
+    if (kindAt(1) === Globstar || kindAt(1) === kind) return;
+    if (!(kind === Globstar || (kindAt(2) === kind && (kindAt(1) === Star || kindAt(1) === GlobstarSlash)))) {
+      tokens.push({
+        kind,
+      });
+      return;
+    }
+    while (kindAt(1) === Star || kindAt(1) === GlobstarSlash) tokens.pop();
+    tokens.push({
+      kind: Globstar,
+    });
+  };
+  let bracketsAreTextUntil = 0;
+  let noSets = [];
+  let i_2 = 0;
+  while (i_2 < pattern.length)
+    switch (pattern[i_2]) {
       case "/":
-        (n(o), t.push({ kind: O.Separator }), (r = ++o));
+        endText(i_2);
+        tokens.push({
+          kind: GlobTokenKind.Separator,
+        });
+        textStart = ++i_2;
         break;
       case "?":
-        (n(o), t.push({ kind: O.AnyChar }), (r = ++o));
+        endText(i_2);
+        tokens.push({
+          kind: GlobTokenKind.AnyChar,
+        });
+        textStart = ++i_2;
         break;
       case "*": {
-        n(o);
-        let i = o;
-        while (e[o] === "*") o++;
-        let s = o - i >= 2 && e[o] === "/",
-          C = o - i - (s ? 2 : 0);
-        if (C >= 2) c(O.Globstar);
-        if (C === 1) c(O.Star);
-        if (s) c(O.GlobstarSlash);
-        r = s ? ++o : o;
+        endText(i_2);
+        let start = i_2;
+        while (pattern[i_2] === "*") i_2++;
+        let withSeparator = i_2 - start >= 2 && pattern[i_2] === "/";
+        let rest = i_2 - start - (withSeparator ? 2 : 0);
+        if (rest >= 2) addWildcard(GlobTokenKind.Globstar);
+        if (rest === 1) addWildcard(GlobTokenKind.Star);
+        if (withSeparator) addWildcard(GlobTokenKind.GlobstarSlash);
+        textStart = withSeparator ? ++i_2 : i_2;
         break;
       }
       case "[": {
-        if (o < f) {
-          o++;
+        if (i_2 < bracketsAreTextUntil) {
+          i_2++;
           break;
         }
-        let index = e.indexOf("]", o + 1);
-        if (index === -1) {
-          (a.push(e.slice(o)), (f = e.length), o++);
+        let close = pattern.indexOf("]", i_2 + 1);
+        if (close === -1) {
+          noSets.push(pattern.slice(i_2));
+          bracketsAreTextUntil = pattern.length;
+          i_2++;
           break;
         }
-        let sliced = e.slice(o + 1, index),
-          C = se(sliced);
-        if (C === void 0) {
-          (a.push(`[${sliced}]`), (f = index + 1), o++);
+        let members = pattern.slice(i_2 + 1, close);
+        let ranges = setRanges(members);
+        if (ranges === undefined) {
+          noSets.push(`[${members}]`);
+          bracketsAreTextUntil = close + 1;
+          i_2++;
           break;
         }
-        (n(o),
-          t.push({ kind: O.Set, members: sliced, matchesSeparator: C.some(([w, S]) => w <= ee && ee <= S) }),
-          (r = o = index + 1));
+        endText(i_2);
+        tokens.push({
+          kind: GlobTokenKind.Set,
+          members,
+          matchesSeparator: ranges.some(([from, to]) => from <= SEPARATOR && SEPARATOR <= to),
+        });
+        textStart = i_2 = close + 1;
         break;
       }
       default:
-        o++;
+        i_2++;
     }
-  if ((n(o), a.length > 0))
-    At(
-      `[Sandbox] The brackets in ${a.join(", ")} spell no set of characters, so they are read as text: ${e}`,
-      { level: "warn" },
+  endText(i_2);
+  if (noSets.length > 0)
+    logForDebugging(
+      `[Sandbox] The brackets in ${noSets.join(", ")} spell no set of characters, so they are read as text: ${pattern}`,
+      {
+        level: "warn",
+      },
     );
-  return t;
+  return tokens;
 }
 //@ chunk-r0ads4ty.js:3419-3482 esm-fingerprint
-function Oqt(e) {
-  return e.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+function escapeRegexLiteral(text) {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 //@ chunk-r0ads4ty.js:3482-3754 esm-fingerprint
-function X(e) {
-  switch (e.kind) {
-    case O.Text:
-      return Oqt(e.text);
-    case O.Separator:
+function globTokenToRegex(token) {
+  switch (token.kind) {
+    case GlobTokenKind.Text:
+      return escapeRegexLiteral(token.text);
+    case GlobTokenKind.Separator:
       return "/";
-    case O.AnyChar:
+    case GlobTokenKind.AnyChar:
       return "[^/]";
-    case O.Star:
+    case GlobTokenKind.Star:
       return "[^/]*";
-    case O.Globstar:
+    case GlobTokenKind.Globstar:
       return ".*";
-    case O.GlobstarSlash:
+    case GlobTokenKind.GlobstarSlash:
       return "(.*/)?";
-    case O.Set:
-      return `[${e.members.replace(/[.^$+{}()|\\]/g, "\\$&")}]`;
+    case GlobTokenKind.Set:
+      return `[${token.members.replace(/[.^$+{}()|\\]/g, "\\$&")}]`;
   }
 }
 //@ chunk-r0ads4ty.js:3754-3804 esm-fingerprint
-function xTt(e) {
-  return `^${W(e).map(X).join("")}$`;
+function xTt(globPattern) {
+  return `^${parseGlob(globPattern).map(globTokenToRegex).join("")}$`;
 }
-
-export { Oqt, xTt, X, O, W };
+export { escapeRegexLiteral, xTt, globTokenToRegex, GlobTokenKind, parseGlob };

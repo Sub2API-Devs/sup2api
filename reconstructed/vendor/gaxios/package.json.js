@@ -8,8 +8,8 @@
 import { x } from "../../runtime/bun-runtime.js";
 
 //@ chunk-na3pph4p.js:1502-3955 cjs-fingerprint
-var Ms = x(function (bd, kc) {
-  kc.exports = {
+var require_package = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = {
     name: "gaxios",
     version: "7.1.4",
     description: "A simple common HTTP client specifically for Google APIs and services.",
@@ -18,8 +18,14 @@ var Ms = x(function (bd, kc) {
     files: ["build/"],
     exports: {
       ".": {
-        import: { types: "./build/esm/src/index.d.ts", default: "./build/esm/src/index.js" },
-        require: { types: "./build/cjs/src/index.d.ts", default: "./build/cjs/src/index.js" },
+        import: {
+          types: "./build/esm/src/index.d.ts",
+          default: "./build/esm/src/index.js",
+        },
+        require: {
+          types: "./build/cjs/src/index.d.ts",
+          default: "./build/cjs/src/index.js",
+        },
       },
     },
     scripts: {
@@ -47,7 +53,9 @@ var Ms = x(function (bd, kc) {
       url: "https://github.com/googleapis/google-cloud-node-core.git",
     },
     keywords: ["google"],
-    engines: { node: ">=18" },
+    engines: {
+      node: ">=18",
+    },
     author: "Google, LLC",
     license: "Apache-2.0",
     devDependencies: {
@@ -97,9 +105,12 @@ var Ms = x(function (bd, kc) {
       webpack: "^5.97.1",
       "webpack-cli": "^6.0.1",
     },
-    dependencies: { extend: "^3.0.2", "https-proxy-agent": "^7.0.1", "node-fetch": "^3.3.2" },
+    dependencies: {
+      extend: "^3.0.2",
+      "https-proxy-agent": "^7.0.1",
+      "node-fetch": "^3.3.2",
+    },
     homepage: "https://github.com/googleapis/google-cloud-node-core/tree/main/packages/gaxios",
   };
 });
-
-export { Ms };
+export { require_package };

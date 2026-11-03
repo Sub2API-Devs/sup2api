@@ -8,15 +8,15 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:518625-520619 cjs-fingerprint
-var Qo = x(function (Nb, Zo) {
-  function o_(e) {
-    let n = "[eE][-+]?\\d(_|\\d)*",
-      a = "\\d(_|\\d)*(\\.\\d(_|\\d)*)?(" + n + ")?",
-      s = "\\w+",
-      r = "\\b(" + ("\\d(_|\\d)*#\\w+(\\.\\w+)?#(" + n + ")?") + "|" + a + ")";
+var require_vhdl = x(function (cjsExports, cjsModule) {
+  function vhdl(hljs) {
+    let INTEGER_RE = "[eE][-+]?\\d(_|\\d)*";
+    let a = "\\d(_|\\d)*(\\.\\d(_|\\d)*)?(" + INTEGER_RE + ")?";
+    let s = "\\w+";
+    let begin = "\\b(" + ("\\d(_|\\d)*#\\w+(\\.\\w+)?#(" + INTEGER_RE + ")?") + "|" + a + ")";
     return {
       name: "VHDL",
-      case_insensitive: !0,
+      case_insensitive: true,
       keywords: {
         keyword: [
           "abs",
@@ -168,16 +168,27 @@ var Qo = x(function (Nb, Zo) {
       },
       illegal: /\{/,
       contains: [
-        e.C_BLOCK_COMMENT_MODE,
-        e.COMMENT("--", "$"),
-        e.QUOTE_STRING_MODE,
-        { className: "number", begin: r, relevance: 0 },
-        { className: "string", begin: "'(U|X|0|1|Z|W|L|H|-)'", contains: [e.BACKSLASH_ESCAPE] },
-        { className: "symbol", begin: "'[A-Za-z](_?[A-Za-z0-9])*", contains: [e.BACKSLASH_ESCAPE] },
+        hljs.C_BLOCK_COMMENT_MODE,
+        hljs.COMMENT("--", "$"),
+        hljs.QUOTE_STRING_MODE,
+        {
+          className: "number",
+          begin,
+          relevance: 0,
+        },
+        {
+          className: "string",
+          begin: "'(U|X|0|1|Z|W|L|H|-)'",
+          contains: [hljs.BACKSLASH_ESCAPE],
+        },
+        {
+          className: "symbol",
+          begin: "'[A-Za-z](_?[A-Za-z0-9])*",
+          contains: [hljs.BACKSLASH_ESCAPE],
+        },
       ],
     };
   }
-  Zo.exports = o_;
+  cjsModule.exports = vhdl;
 });
-
-export { Qo };
+export { require_vhdl };

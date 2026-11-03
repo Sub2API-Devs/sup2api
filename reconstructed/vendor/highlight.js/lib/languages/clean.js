@@ -8,8 +8,8 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:64611-65209 cjs-fingerprint
-var Xt = x(function (Du, Yt) {
-  function ul(e) {
+var require_clean = x(function (cjsExports, cjsModule) {
+  function clean(hljs) {
     return {
       name: "Clean",
       aliases: ["icl", "dcl"],
@@ -50,16 +50,17 @@ var Xt = x(function (Du, Yt) {
         literal: "True False",
       },
       contains: [
-        e.C_LINE_COMMENT_MODE,
-        e.C_BLOCK_COMMENT_MODE,
-        e.APOS_STRING_MODE,
-        e.QUOTE_STRING_MODE,
-        e.C_NUMBER_MODE,
-        { begin: "->|<-[|:]?|#!?|>>=|\\{\\||\\|\\}|:==|=:|<>" },
+        hljs.C_LINE_COMMENT_MODE,
+        hljs.C_BLOCK_COMMENT_MODE,
+        hljs.APOS_STRING_MODE,
+        hljs.QUOTE_STRING_MODE,
+        hljs.C_NUMBER_MODE,
+        {
+          begin: "->|<-[|:]?|#!?|>>=|\\{\\||\\|\\}|:==|=:|<>",
+        },
       ],
     };
   }
-  Yt.exports = ul;
+  cjsModule.exports = clean;
 });
-
-export { Xt };
+export { require_clean };

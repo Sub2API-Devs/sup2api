@@ -12,44 +12,53 @@ import { w } from "../../../vendor/react/compiler-runtime.js";
 import { usePrefersReducedMotion } from "./spinnerFlags.js";
 import { useIsScreenReaderEnabled } from "../../ink/components/ErrorBoundary.js";
 import { useAnimationFrame } from "../../ink/components/Input.js";
-import { e } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { NoticeLine } from "../SlashCommandLink.js";
 import { Box } from "../../ink/components/Text.js";
 
 //@ chunk-kvpw3x0k.js:375-385 placement
-var t = 150;
+var SPINNER_COLUMN_TICK_MS = 150;
 //@ chunk-kvpw3x0k.js:385-781 placement
-function SpinnerColumn(M) {
-  let p = w(8),
-    { tone: tone, text: text } = M,
-    T = usePrefersReducedMotion(),
-    N = useIsScreenReaderEnabled(),
-    o = T || N,
-    [c, P] = useAnimationFrame(o ? null : t);
-  const floored = Math.floor(P / t);
-  let r;
-  if (p[0] !== o || p[1] !== floored || p[2] !== text || p[3] !== tone)
-    ((r = e(NoticeLine, {
+function SpinnerColumn(props) {
+  let p = w(8);
+  let { tone, text } = props;
+  let prefersReducedMotion = usePrefersReducedMotion();
+  let isScreenReaderEnabled = useIsScreenReaderEnabled();
+  let o = prefersReducedMotion || isScreenReaderEnabled;
+  let [c, P] = useAnimationFrame(o ? null : SPINNER_COLUMN_TICK_MS);
+  const frame = Math.floor(P / SPINNER_COLUMN_TICK_MS);
+  let children;
+  if (p[0] !== o || p[1] !== frame || p[2] !== text || p[3] !== tone) {
+    children = jsxProd_default(NoticeLine, {
       state: "live",
-      tone: tone,
-      text: text,
-      linkify: !1,
-      frame: floored,
+      tone,
+      text,
+      linkify: false,
+      frame,
       reducedMotion: o,
-    })),
-      (p[0] = o),
-      (p[1] = floored),
-      (p[2] = text),
-      (p[3] = tone),
-      (p[4] = r));
-  else r = p[4];
+    });
+    p[0] = o;
+    p[1] = frame;
+    p[2] = text;
+    p[3] = tone;
+    p[4] = children;
+  } else children = p[4];
   let m;
-  if (p[5] !== c || p[6] !== r)
-    ((m = e(Box, { ref: c, flexDirection: "column", children: r })), (p[5] = c), (p[6] = r), (p[7] = m));
-  else m = p[7];
+  if (p[5] !== c || p[6] !== children) {
+    m = jsxProd_default(Box, {
+      ref: c,
+      flexDirection: "column",
+      children,
+    });
+    p[5] = c;
+    p[6] = children;
+    p[7] = m;
+  } else m = p[7];
   return m;
 }
 //@ chunk-kvpw3x0k.js:781-791 placement
-var lTe = 0;
-
-export { lTe, SpinnerColumn };
+/**
+ * 导出值：SPINNER_COLUMN_MIN_WIDTH（0）。
+ */
+var SPINNER_COLUMN_MIN_WIDTH = 0;
+export { SPINNER_COLUMN_MIN_WIDTH, SpinnerColumn };

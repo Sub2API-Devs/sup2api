@@ -11,23 +11,26 @@
 import { readFileSync } from "fs";
 import { w } from "../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
-import { wl, BaseText } from "./Text.js";
-import { Wd } from "../../../vendor/code-excerpt/dist/index.js";
+import { textColorizer, BaseText } from "./Text.js";
+import { codeExcerpt_default } from "../../../vendor/code-excerpt/dist/index.js";
 import { BaseBox } from "./Box.js";
-import { r, e } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default_2,
+  jsxProd_default,
+} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 
 //@ chunk-bzr73sfg.js:227142-227193 sole-consumer
-function rC(n) {
+function isTooLongError(n) {
   let { value: ae } = n;
-  return ae.length > fb;
+  return ae.length > MAX_ERROR_LENGTH;
 }
 //@ chunk-bzr73sfg.js:227193-227254 sole-consumer = formatUri (1)
-var Es = (n) => n?.replace(`file://${process.cwd()}/`, ""),
-  fb = 200;
+var stripFileUrlPrefix = (file) => file?.replace(`file://${process.cwd()}/`, "");
+var MAX_ERROR_LENGTH = 200;
+//@ chunk-bzr73sfg.js:227254-227366 affinity
 /**
  * 堆栈帧路径是否是打包内部路径（$bunfs、~BUN、/snapshot/、node:），这些不读源码。
  */
-//@ chunk-bzr73sfg.js:227254-227366 affinity
 function isInternalStackPath(path) {
   return (
     path.includes("$bunfs") ||
@@ -36,93 +39,112 @@ function isInternalStackPath(path) {
     path.startsWith("node:")
   );
 }
+//@ chunk-bzr73sfg.js:227366-229377 fingerprint = ErrorOverview (0.868)
 /**
  * 渲染出错时的错误页：ERROR 标题与消息、出错位置、读源码显示附近几行（超长行不显示）、解析后的堆栈。
  */
-//@ chunk-bzr73sfg.js:227366-229377 fingerprint = ErrorOverview (0.868)
-function ErrorOverview(n) {
-  let f = w(22),
-    { error: error } = n,
-    m;
-  if (f[0] === MEMO_CACHE_SENTINEL)
-    ((m = new wl.default({ cwd: process.cwd(), internals: wl.default.nodeInternals() })), (f[0] = m));
-  else m = f[0];
-  let p = m,
-    g,
-    E,
-    T,
-    A,
-    D,
-    O;
+function ErrorOverview(props) {
+  let f = w(22);
+  let { error } = props;
+  let m;
+  if (f[0] === MEMO_CACHE_SENTINEL) {
+    m = new textColorizer.default({
+      cwd: process.cwd(),
+      internals: textColorizer.default.nodeInternals(),
+    });
+    f[0] = m;
+  } else m = f[0];
+  let p = m;
+  let g;
+  let flexDirection;
+  let padding;
+  let A;
+  let D;
+  let O;
   if (f[1] !== error.message || f[2] !== error.stack) {
-    let _ = error.stack
+    let stack = error.stack
       ? error.stack
           .split(
             `
 `,
           )
           .slice(1)
-      : void 0;
-    let U = _ ? p.parseLine(_[0]) : void 0;
-    let filePath = Es(U?.file);
-    let P;
+      : undefined;
+    let origin = stack ? p.parseLine(stack[0]) : undefined;
+    let filePath = stripFileUrlPrefix(origin?.file);
+    let excerpt;
     let lineWidth = 0;
-    if (filePath && U?.line && !isInternalStackPath(filePath)) {
+    if (filePath && origin?.line && !isInternalStackPath(filePath)) {
       try {
         let sourceCode = readFileSync(filePath, "utf8");
-        if (((P = Wd(sourceCode, U.line)), P?.some(rC))) P = void 0;
-        if (P) {
-          for (const { line: line } of P) lineWidth = Math.max(lineWidth, String(line).length);
+        excerpt = codeExcerpt_default(sourceCode, origin.line);
+        if (excerpt?.some(isTooLongError)) excerpt = undefined;
+        if (excerpt) {
+          for (const { line } of excerpt) lineWidth = Math.max(lineWidth, String(line).length);
         }
       } catch {}
     }
     g = BaseBox;
-    E = "column";
-    T = 1;
+    flexDirection = "column";
+    padding = 1;
     let K;
-    if (f[9] === MEMO_CACHE_SENTINEL)
-      ((K = r(BaseText, { backgroundColor: "ansi:red", color: "ansi:white", children: [" ", "ERROR", " "] })),
-        (f[9] = K));
-    else K = f[9];
-    if (f[10] !== error.message)
-      ((A = r(BaseBox, { children: [K, r(BaseText, { children: [" ", error.message] })] })),
-        (f[10] = error.message),
-        (f[11] = A));
-    else A = f[11];
+    if (f[9] === MEMO_CACHE_SENTINEL) {
+      K = jsxProd_default_2(BaseText, {
+        backgroundColor: "ansi:red",
+        color: "ansi:white",
+        children: [" ", "ERROR", " "],
+      });
+      f[9] = K;
+    } else K = f[9];
+    if (f[10] !== error.message) {
+      A = jsxProd_default_2(BaseBox, {
+        children: [
+          K,
+          jsxProd_default_2(BaseText, {
+            children: [" ", error.message],
+          }),
+        ],
+      });
+      f[10] = error.message;
+      f[11] = A;
+    } else A = f[11];
     D =
-      U &&
+      origin &&
       filePath &&
-      e(BaseBox, {
+      jsxProd_default(BaseBox, {
         marginTop: 1,
-        children: r(BaseText, { dim: !0, children: [filePath, ":", U.line, ":", U.column] }),
+        children: jsxProd_default_2(BaseText, {
+          dim: true,
+          children: [filePath, ":", origin.line, ":", origin.column],
+        }),
       });
     O =
-      U &&
-      P &&
-      e(BaseBox, {
+      origin &&
+      excerpt &&
+      jsxProd_default(BaseBox, {
         marginTop: 1,
         flexDirection: "column",
-        children: P.map((line_1) => {
-          let { line: line, value: J } = line_1;
-          return r(
+        children: excerpt.map((line_1) => {
+          let { line, value } = line_1;
+          return jsxProd_default_2(
             BaseBox,
             {
               children: [
-                e(BaseBox, {
+                jsxProd_default(BaseBox, {
                   width: lineWidth + 1,
-                  children: r(BaseText, {
-                    dim: line !== U.line,
-                    backgroundColor: line === U.line ? "ansi:red" : void 0,
-                    color: line === U.line ? "ansi:white" : void 0,
+                  children: jsxProd_default_2(BaseText, {
+                    dim: line !== origin.line,
+                    backgroundColor: line === origin.line ? "ansi:red" : undefined,
+                    color: line === origin.line ? "ansi:white" : undefined,
                     children: [String(line).padStart(lineWidth, " "), ":"],
                   }),
                 }),
-                e(
+                jsxProd_default(
                   BaseText,
                   {
-                    backgroundColor: line === U.line ? "ansi:red" : void 0,
-                    color: line === U.line ? "ansi:white" : void 0,
-                    children: " " + J,
+                    backgroundColor: line === origin.line ? "ansi:red" : undefined,
+                    color: line === origin.line ? "ansi:white" : undefined,
+                    children: " " + value,
                   },
                   line,
                 ),
@@ -132,20 +154,27 @@ function ErrorOverview(n) {
           );
         }),
       });
-    ((f[1] = error.message),
-      (f[2] = error.stack),
-      (f[3] = g),
-      (f[4] = E),
-      (f[5] = T),
-      (f[6] = A),
-      (f[7] = D),
-      (f[8] = O));
-  } else ((g = f[3]), (E = f[4]), (T = f[5]), (A = f[6]), (D = f[7]), (O = f[8]));
+    f[1] = error.message;
+    f[2] = error.stack;
+    f[3] = g;
+    f[4] = flexDirection;
+    f[5] = padding;
+    f[6] = A;
+    f[7] = D;
+    f[8] = O;
+  } else {
+    g = f[3];
+    flexDirection = f[4];
+    padding = f[5];
+    A = f[6];
+    D = f[7];
+    O = f[8];
+  }
   let K;
-  if (f[12] !== error.stack)
-    ((K =
+  if (f[12] !== error.stack) {
+    K =
       error.stack &&
-      e(BaseBox, {
+      jsxProd_default(BaseBox, {
         marginTop: 1,
         flexDirection: "column",
         children: error.stack
@@ -154,32 +183,44 @@ function ErrorOverview(n) {
 `,
           )
           .slice(1)
-          .map((V) => {
-            let parsedLine = p.parseLine(V);
+          .map((line) => {
+            let parsedLine = p.parseLine(line);
             if (!parsedLine) {
-              return r(
+              return jsxProd_default_2(
                 BaseBox,
                 {
                   children: [
-                    e(BaseText, { dim: !0, children: "- " }),
-                    e(BaseText, { bold: !0, children: V }),
+                    jsxProd_default(BaseText, {
+                      dim: true,
+                      children: "- ",
+                    }),
+                    jsxProd_default(BaseText, {
+                      bold: true,
+                      children: line,
+                    }),
                   ],
                 },
-                V,
+                line,
               );
             }
-            return r(
+            return jsxProd_default_2(
               BaseBox,
               {
                 children: [
-                  e(BaseText, { dim: !0, children: "- " }),
-                  e(BaseText, { bold: !0, children: parsedLine.function }),
-                  r(BaseText, {
-                    dim: !0,
+                  jsxProd_default(BaseText, {
+                    dim: true,
+                    children: "- ",
+                  }),
+                  jsxProd_default(BaseText, {
+                    bold: true,
+                    children: parsedLine.function,
+                  }),
+                  jsxProd_default_2(BaseText, {
+                    dim: true,
                     children: [
                       " ",
                       "(",
-                      Es(parsedLine.file) ?? "",
+                      stripFileUrlPrefix(parsedLine.file) ?? "",
                       ":",
                       parsedLine.line,
                       ":",
@@ -189,26 +230,37 @@ function ErrorOverview(n) {
                   }),
                 ],
               },
-              V,
+              line,
             );
           }),
-      })),
-      (f[12] = error.stack),
-      (f[13] = K));
-  else K = f[13];
+      });
+    f[12] = error.stack;
+    f[13] = K;
+  } else K = f[13];
   let q;
-  if (f[14] !== g || f[15] !== E || f[16] !== T || f[17] !== A || f[18] !== D || f[19] !== O || f[20] !== K)
-    ((q = r(g, { flexDirection: E, padding: T, children: [A, D, O, K] })),
-      (f[14] = g),
-      (f[15] = E),
-      (f[16] = T),
-      (f[17] = A),
-      (f[18] = D),
-      (f[19] = O),
-      (f[20] = K),
-      (f[21] = q));
-  else q = f[21];
+  if (
+    f[14] !== g ||
+    f[15] !== flexDirection ||
+    f[16] !== padding ||
+    f[17] !== A ||
+    f[18] !== D ||
+    f[19] !== O ||
+    f[20] !== K
+  ) {
+    q = jsxProd_default_2(g, {
+      flexDirection,
+      padding,
+      children: [A, D, O, K],
+    });
+    f[14] = g;
+    f[15] = flexDirection;
+    f[16] = padding;
+    f[17] = A;
+    f[18] = D;
+    f[19] = O;
+    f[20] = K;
+    f[21] = q;
+  } else q = f[21];
   return q;
 }
-
 export { ErrorOverview };

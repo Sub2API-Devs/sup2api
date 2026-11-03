@@ -10,7 +10,10 @@
  */
 import { w } from "../../vendor/react/compiler-runtime.js";
 import { getDisplayPath } from "../utils/file.js";
-import { r, e } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default_2,
+  jsxProd_default,
+} from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Box } from "../ink/components/Text.js";
 import { FilePathLink } from "./FilePathLink.js";
 import {
@@ -22,84 +25,98 @@ import { HighlightedCode } from "./HighlightedCode.js";
 import { MessageResponse } from "./MessageResponse.js";
 
 //@ chunk-q466qetm.js:7512-8643 fingerprint = NotebookEditToolUseRejectedMessage (0.909)
-function NotebookEditToolUseRejectedMessage(t0) {
-  let $ = w(23),
-    {
-      notebook_path: notebook_path,
-      cell_id: cell_id,
-      new_source: new_source,
-      cell_type: cell_type,
-      edit_mode: t1,
-      verbose: verbose,
-    } = t0,
-    l = t1 === void 0 ? "replace" : t1,
-    f = l === "delete" ? "delete" : `${l} cell in`,
-    M;
-  if ($[0] !== notebook_path || $[1] !== verbose)
-    ((M = verbose ? notebook_path : getDisplayPath(notebook_path)),
-      ($[0] = notebook_path),
-      ($[1] = verbose),
-      ($[2] = M));
-  else M = $[2];
-  let x = M,
-    u;
-  if ($[3] !== f)
-    ((u = r(Text, { color: "subtle", children: ["User rejected ", f, " "] })), ($[3] = f), ($[4] = u));
-  else u = $[4];
-  let g;
-  if ($[5] !== x || $[6] !== notebook_path)
-    ((g = e(Text, {
-      bold: !0,
+function NotebookEditToolUseRejectedMessage(props) {
+  let $ = w(23);
+  let { notebook_path, cell_id, new_source, cell_type, edit_mode: editMode, verbose } = props;
+  let edit_mode = editMode === undefined ? "replace" : editMode;
+  let f = edit_mode === "delete" ? "delete" : `${edit_mode} cell in`;
+  let M;
+  if ($[0] !== notebook_path || $[1] !== verbose) {
+    M = verbose ? notebook_path : getDisplayPath(notebook_path);
+    $[0] = notebook_path;
+    $[1] = verbose;
+    $[2] = M;
+  } else M = $[2];
+  let children = M;
+  let u;
+  if ($[3] !== f) {
+    u = jsxProd_default_2(Text, {
       color: "subtle",
-      children: e(FilePathLink, { filePath: notebook_path, children: x }),
-    })),
-      ($[5] = x),
-      ($[6] = notebook_path),
-      ($[7] = g));
-  else g = $[7];
+      children: ["User rejected ", f, " "],
+    });
+    $[3] = f;
+    $[4] = u;
+  } else u = $[4];
+  let t4;
+  if ($[5] !== children || $[6] !== notebook_path) {
+    t4 = jsxProd_default(Text, {
+      bold: true,
+      color: "subtle",
+      children: jsxProd_default(FilePathLink, {
+        filePath: notebook_path,
+        children,
+      }),
+    });
+    $[5] = children;
+    $[6] = notebook_path;
+    $[7] = t4;
+  } else t4 = $[7];
   let y;
-  if ($[8] !== cell_id)
-    ((y = cell_id ? markBrokenSequences(replaceLineBreaks(stripUnsafeChars(cell_id))) : ""),
-      ($[8] = cell_id),
-      ($[9] = y));
-  else y = $[9];
+  if ($[8] !== cell_id) {
+    y = cell_id ? markBrokenSequences(replaceLineBreaks(stripUnsafeChars(cell_id))) : "";
+    $[8] = cell_id;
+    $[9] = y;
+  } else y = $[9];
   let _;
-  if ($[10] !== y) ((_ = r(Text, { color: "subtle", children: [" at cell ", y] })), ($[10] = y), ($[11] = _));
-  else _ = $[11];
-  let h;
-  if ($[12] !== u || $[13] !== g || $[14] !== _)
-    ((h = r(Box, { flexDirection: "row", children: [u, g, _] })),
-      ($[12] = u),
-      ($[13] = g),
-      ($[14] = _),
-      ($[15] = h));
-  else h = $[15];
-  let R;
-  if ($[16] !== cell_type || $[17] !== l || $[18] !== new_source)
-    ((R =
-      l !== "delete" &&
-      e(Box, {
+  if ($[10] !== y) {
+    _ = jsxProd_default_2(Text, {
+      color: "subtle",
+      children: [" at cell ", y],
+    });
+    $[10] = y;
+    $[11] = _;
+  } else _ = $[11];
+  let t6;
+  if ($[12] !== u || $[13] !== t4 || $[14] !== _) {
+    t6 = jsxProd_default_2(Box, {
+      flexDirection: "row",
+      children: [u, t4, _],
+    });
+    $[12] = u;
+    $[13] = t4;
+    $[14] = _;
+    $[15] = t6;
+  } else t6 = $[15];
+  let t7;
+  if ($[16] !== cell_type || $[17] !== edit_mode || $[18] !== new_source) {
+    t7 =
+      edit_mode !== "delete" &&
+      jsxProd_default(Box, {
         marginTop: 1,
         flexDirection: "column",
-        children: e(HighlightedCode, {
+        children: jsxProd_default(HighlightedCode, {
           code: stripUnsafeChars(new_source),
           filePath: cell_type === "markdown" ? "file.md" : "file.py",
-          dim: !0,
+          dim: true,
         }),
-      })),
-      ($[16] = cell_type),
-      ($[17] = l),
-      ($[18] = new_source),
-      ($[19] = R));
-  else R = $[19];
-  let D;
-  if ($[20] !== h || $[21] !== R)
-    ((D = e(MessageResponse, { children: r(Box, { flexDirection: "column", children: [h, R] }) })),
-      ($[20] = h),
-      ($[21] = R),
-      ($[22] = D));
-  else D = $[22];
-  return D;
+      });
+    $[16] = cell_type;
+    $[17] = edit_mode;
+    $[18] = new_source;
+    $[19] = t7;
+  } else t7 = $[19];
+  let t8;
+  if ($[20] !== t6 || $[21] !== t7) {
+    t8 = jsxProd_default(MessageResponse, {
+      children: jsxProd_default_2(Box, {
+        flexDirection: "column",
+        children: [t6, t7],
+      }),
+    });
+    $[20] = t6;
+    $[21] = t7;
+    $[22] = t8;
+  } else t8 = $[22];
+  return t8;
 }
-
 export { NotebookEditToolUseRejectedMessage };

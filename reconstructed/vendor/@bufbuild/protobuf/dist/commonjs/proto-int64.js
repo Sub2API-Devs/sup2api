@@ -6,97 +6,108 @@
  * attribution: cjs-require-graph 1
  */
 import { x } from "../../../../../runtime/bun-runtime.js";
-import { Tg } from "../cjs/wire/varint.js";
+import { require_varint } from "../cjs/wire/varint.js";
 
 //@ chunk-fq0cr76a.js:326473-328178 cjs-require-graph
-var ko = x(function (LN) {
-  Object.defineProperty(LN, "__esModule", { value: !0 });
-  LN.protoInt64 = void 0;
-  var Sl = Tg();
-  LN.protoInt64 = _j();
-  function _j() {
-    let dataView = new DataView(new ArrayBuffer(8));
+var require_proto_int64 = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.protoInt64 = undefined;
+  var varint_js_1 = require_varint();
+  cjsExports.protoInt64 = makeInt64Support();
+  function makeInt64Support() {
+    let dv = new DataView(new ArrayBuffer(8));
     if (
       typeof BigInt === "function" &&
-      typeof dataView.getBigInt64 === "function" &&
-      typeof dataView.getBigUint64 === "function" &&
-      typeof dataView.setBigInt64 === "function" &&
-      typeof dataView.setBigUint64 === "function" &&
+      typeof dv.getBigInt64 === "function" &&
+      typeof dv.getBigUint64 === "function" &&
+      typeof dv.setBigInt64 === "function" &&
+      typeof dv.setBigUint64 === "function" &&
       (!!globalThis.Deno ||
         typeof process != "object" ||
         typeof process.env != "object" ||
         process.env.BUF_BIGINT_DISABLE !== "1")
     ) {
-      let r = BigInt("-9223372036854775808"),
-        s = BigInt("9223372036854775807"),
-        h = BigInt("0"),
-        y = BigInt("18446744073709551615");
+      let MIN = BigInt("-9223372036854775808");
+      let MAX = BigInt("9223372036854775807");
+      let UMIN = BigInt("0");
+      let UMAX = BigInt("18446744073709551615");
       return {
         zero: BigInt(0),
-        supported: !0,
-        parse(b) {
-          let S = typeof b == "bigint" ? b : BigInt(b);
-          if (S > s || S < r) throw Error(`invalid int64: ${b}`);
-          return S;
+        supported: true,
+        parse(value) {
+          let bi = typeof value == "bigint" ? value : BigInt(value);
+          if (bi > MAX || bi < MIN) throw Error(`invalid int64: ${value}`);
+          return bi;
         },
-        uParse(b) {
-          let S = typeof b == "bigint" ? b : BigInt(b);
-          if (S > y || S < h) throw Error(`invalid uint64: ${b}`);
-          return S;
+        uParse(value) {
+          let bi = typeof value == "bigint" ? value : BigInt(value);
+          if (bi > UMAX || bi < UMIN) throw Error(`invalid uint64: ${value}`);
+          return bi;
         },
-        enc(b) {
-          return (
-            dataView.setBigInt64(0, this.parse(b), !0),
-            { lo: dataView.getInt32(0, !0), hi: dataView.getInt32(4, !0) }
-          );
+        enc(value) {
+          dv.setBigInt64(0, this.parse(value), true);
+          return {
+            lo: dv.getInt32(0, true),
+            hi: dv.getInt32(4, true),
+          };
         },
-        uEnc(b) {
-          return (
-            dataView.setBigInt64(0, this.uParse(b), !0),
-            { lo: dataView.getInt32(0, !0), hi: dataView.getInt32(4, !0) }
-          );
+        uEnc(value) {
+          dv.setBigInt64(0, this.uParse(value), true);
+          return {
+            lo: dv.getInt32(0, true),
+            hi: dv.getInt32(4, true),
+          };
         },
-        dec(b, S) {
-          return (dataView.setInt32(0, b, !0), dataView.setInt32(4, S, !0), dataView.getBigInt64(0, !0));
+        dec(lo, hi) {
+          dv.setInt32(0, lo, true);
+          dv.setInt32(4, hi, true);
+          return dv.getBigInt64(0, true);
         },
-        uDec(b, S) {
-          return (dataView.setInt32(0, b, !0), dataView.setInt32(4, S, !0), dataView.getBigUint64(0, !0));
+        uDec(lo, hi) {
+          dv.setInt32(0, lo, true);
+          dv.setInt32(4, hi, true);
+          return dv.getBigUint64(0, true);
         },
       };
     }
     return {
       zero: "0",
-      supported: !1,
-      parse(r) {
-        if (typeof r != "string") r = r.toString();
-        return (ON(r), r);
+      supported: false,
+      parse(value) {
+        if (typeof value != "string") value = value.toString();
+        assertInt64String(value);
+        return value;
       },
-      uParse(r) {
-        if (typeof r != "string") r = r.toString();
-        return (PN(r), r);
+      uParse(value) {
+        if (typeof value != "string") value = value.toString();
+        assertUInt64String(value);
+        return value;
       },
-      enc(r) {
-        if (typeof r != "string") r = r.toString();
-        return (ON(r), Sl.int64FromString(r));
+      enc(value) {
+        if (typeof value != "string") value = value.toString();
+        assertInt64String(value);
+        return varint_js_1.int64FromString(value);
       },
-      uEnc(r) {
-        if (typeof r != "string") r = r.toString();
-        return (PN(r), Sl.int64FromString(r));
+      uEnc(value) {
+        if (typeof value != "string") value = value.toString();
+        assertUInt64String(value);
+        return varint_js_1.int64FromString(value);
       },
-      dec(r, s) {
-        return Sl.int64ToString(r, s);
+      dec(lo, hi) {
+        return varint_js_1.int64ToString(lo, hi);
       },
-      uDec(r, s) {
-        return Sl.uInt64ToString(r, s);
+      uDec(lo, hi) {
+        return varint_js_1.uInt64ToString(lo, hi);
       },
     };
   }
-  function ON(e) {
-    if (!/^-?[0-9]+$/.test(e)) throw Error("invalid int64: " + e);
+  function assertInt64String(value) {
+    if (!/^-?[0-9]+$/.test(value)) throw Error("invalid int64: " + value);
   }
-  function PN(e) {
-    if (!/^[0-9]+$/.test(e)) throw Error("invalid uint64: " + e);
+  function assertUInt64String(value) {
+    if (!/^[0-9]+$/.test(value)) throw Error("invalid uint64: " + value);
   }
 });
-
-export { ko };
+export { require_proto_int64 };

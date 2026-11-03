@@ -5,45 +5,47 @@
  * pieces: chunk-3cddmtk7.js (1)
  * attribution: esm-fingerprint 1
  */
-import { Readable, Readable as Readable_2, PassThrough, pipeline } from "stream";
-import { E_2 } from "../../../@smithy/eventstream-codec/dist-es/EventStreamCodec.js";
-import { te } from "./EventSigningStream.js";
+import { Readable, PassThrough, pipeline } from "stream";
+import { EventStreamCodec } from "../../../@smithy/eventstream-codec/dist-es/EventStreamCodec.js";
+import { EventSigningStream } from "./EventSigningStream.js";
 
 //@ chunk-3cddmtk7.js:19174-19948 esm-fingerprint
-class oe {
+class EventStreamPayloadHandler {
   messageSigner;
   eventStreamCodec;
   systemClockOffsetProvider;
-  constructor(e) {
-    ((this.messageSigner = e.messageSigner),
-      (this.eventStreamCodec = new E_2(e.utf8Encoder, e.utf8Decoder)),
-      (this.systemClockOffsetProvider = async () => e.systemClockOffset ?? 0));
+  constructor(options) {
+    this.messageSigner = options.messageSigner;
+    this.eventStreamCodec = new EventStreamCodec(options.utf8Encoder, options.utf8Decoder);
+    this.systemClockOffsetProvider = async () => options.systemClockOffset ?? 0;
   }
-  async handle(e, t, o = {}) {
-    let request = t.request,
-      { body: body, query: query } = request;
-    if (!(body instanceof Readable)) throw Error("Eventstream payload must be a Readable stream.");
-    let a = body;
-    request.body = new PassThrough({ objectMode: !0 });
-    let c =
-        request.headers?.authorization?.match(/Signature=([\w]+)$/)?.[1] ?? query?.["X-Amz-Signature"] ?? "",
-      p = new te({
-        priorSignature: c,
-        eventStreamCodec: this.eventStreamCodec,
-        messageSigner: await this.messageSigner(),
-        systemClockOffsetProvider: this.systemClockOffsetProvider,
-      });
-    pipeline(a, p, request.body, (_) => {
-      if (_) throw _;
+  async handle(next, args, context = {}) {
+    let request = args.request;
+    let { body: payload, query } = request;
+    if (!(payload instanceof Readable)) throw Error("Eventstream payload must be a Readable stream.");
+    let payloadStream = payload;
+    request.body = new PassThrough({
+      objectMode: true,
     });
-    let u;
+    let priorSignature =
+      request.headers?.authorization?.match(/Signature=([\w]+)$/)?.[1] ?? query?.["X-Amz-Signature"] ?? "";
+    let signingStream = new EventSigningStream({
+      priorSignature,
+      eventStreamCodec: this.eventStreamCodec,
+      messageSigner: await this.messageSigner(),
+      systemClockOffsetProvider: this.systemClockOffsetProvider,
+    });
+    pipeline(payloadStream, signingStream, request.body, (err) => {
+      if (err) throw err;
+    });
+    let result;
     try {
-      u = await e(t);
-    } catch (error) {
-      throw (request.body.end(), error);
+      result = await next(args);
+    } catch (e) {
+      request.body.end();
+      throw e;
     }
-    return u;
+    return result;
   }
 }
-
-export { oe };
+export { EventStreamPayloadHandler };

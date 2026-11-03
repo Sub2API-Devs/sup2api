@@ -6,170 +6,210 @@
  * attribution: cjs-fingerprint 1
  */
 import { x, importMetaRequire } from "../../runtime/bun-runtime.js";
-import { jg } from "../escape-string-regexp/index.js";
+import { require_escape_string_regexp } from "../escape-string-regexp/index.js";
 
 //@ chunk-bzr73sfg.js:126279-129747 cjs-fingerprint
-var Qg = x(function (KA, Xg) {
-  var K1 = jg(),
-    W1 = typeof process === "object" && process && typeof process.cwd === "function" ? process.cwd() : ".",
-    mapped = []
-      .concat(importMetaRequire("module").builtinModules, "bootstrap_node", "node")
-      .map(
-        (n) =>
-          new RegExp(
-            `(?:\\((?:node:)?${n}(?:\\.js)?:\\d+:\\d+\\)$|^\\s*at (?:node:)?${n}(?:\\.js)?:\\d+:\\d+$)`,
-          ),
-      );
-  mapped.push(
+var require_stack_utils = x(function (cjsExports, cjsModule) {
+  var escapeStringRegexp = require_escape_string_regexp();
+  var cwd = typeof process === "object" && process && typeof process.cwd === "function" ? process.cwd() : ".";
+  var natives = []
+    .concat(importMetaRequire("module").builtinModules, "bootstrap_node", "node")
+    .map(
+      (n) =>
+        new RegExp(
+          `(?:\\((?:node:)?${n}(?:\\.js)?:\\d+:\\d+\\)$|^\\s*at (?:node:)?${n}(?:\\.js)?:\\d+:\\d+$)`,
+        ),
+    );
+  natives.push(
     /\((?:node:)?internal\/[^:]+:\d+:\d+\)$/,
     /\s*at (?:node:)?internal\/[^:]+:\d+:\d+$/,
     /\/\.node-spawn-wrap-\w+-\w+\/node:\d+:\d+\)?$/,
   );
-  class Yd {
-    constructor(n) {
-      if (((n = { ignoredPackages: [], ...n }), "internals" in n === !1)) n.internals = Yd.nodeInternals();
-      if ("cwd" in n === !1) n.cwd = W1;
-      ((this._cwd = n.cwd.replace(/\\/g, "/")),
-        (this._internals = [].concat(n.internals, Y1(n.ignoredPackages))),
-        (this._wrapCallSite = n.wrapCallSite || !1));
+  class StackUtils {
+    constructor(opts) {
+      opts = {
+        ignoredPackages: [],
+        ...opts,
+      };
+      if ("internals" in opts === false) opts.internals = StackUtils.nodeInternals();
+      if ("cwd" in opts === false) opts.cwd = cwd;
+      this._cwd = opts.cwd.replace(/\\/g, "/");
+      this._internals = [].concat(opts.internals, ignoredPackagesRegExp(opts.ignoredPackages));
+      this._wrapCallSite = opts.wrapCallSite || false;
     }
     static nodeInternals() {
-      return [...mapped];
+      return [...natives];
     }
-    clean(n, u = 0) {
-      if (((u = " ".repeat(u)), !Array.isArray(n)))
-        n = n.split(`
+    clean(stack, indent = 0) {
+      indent = " ".repeat(indent);
+      if (!Array.isArray(stack))
+        stack = stack.split(`
 `);
-      if (!/^\s*at /.test(n[0]) && /^\s*at /.test(n[1])) n = n.slice(1);
-      let f = !1,
-        m = null,
-        p = [];
-      return (
-        n.forEach((g) => {
-          if (((g = g.replace(/\\/g, "/")), this._internals.some((_internal) => _internal.test(g)))) return;
-          let matches = /^\s*at /.test(g);
-          if (f) g = g.trimEnd().replace(/^(\s+)at /, "$1");
-          else if (((g = g.trim()), matches)) g = g.slice(3);
-          if (((g = g.replace(`${this._cwd}/`, "")), g))
-            if (matches) {
-              if (m) (p.push(m), (m = null));
-              p.push(g);
-            } else ((f = !0), (m = g));
-        }),
-        p
-          .map(
-            (g) => `${u}${g}
+      if (!/^\s*at /.test(stack[0]) && /^\s*at /.test(stack[1])) stack = stack.slice(1);
+      let outdent = false;
+      let lastNonAtLine = null;
+      let result = [];
+      stack.forEach((st) => {
+        st = st.replace(/\\/g, "/");
+        if (this._internals.some((internal) => internal.test(st))) return;
+        let isAtLine = /^\s*at /.test(st);
+        if (outdent) st = st.trimEnd().replace(/^(\s+)at /, "$1");
+        else {
+          st = st.trim();
+          if (isAtLine) st = st.slice(3);
+        }
+        st = st.replace(`${this._cwd}/`, "");
+        if (st)
+          if (isAtLine) {
+            if (lastNonAtLine) {
+              result.push(lastNonAtLine);
+              lastNonAtLine = null;
+            }
+            result.push(st);
+          } else {
+            outdent = true;
+            lastNonAtLine = st;
+          }
+      });
+      return result
+        .map(
+          (line) => `${indent}${line}
 `,
-          )
-          .join("")
-      );
+        )
+        .join("");
     }
-    captureString(n, u = this.captureString) {
-      if (typeof n === "function") ((u = n), (n = 1 / 0));
-      let { stackTraceLimit: stackTraceLimit } = Error;
-      if (n) Error.stackTraceLimit = n;
-      let m = {};
-      Error.captureStackTrace(m, u);
-      let { stack: stack } = m;
-      return ((Error.stackTraceLimit = stackTraceLimit), this.clean(stack));
+    captureString(limit, fn = this.captureString) {
+      if (typeof limit === "function") {
+        fn = limit;
+        limit = 1 / 0;
+      }
+      let { stackTraceLimit } = Error;
+      if (limit) Error.stackTraceLimit = limit;
+      let obj = {};
+      Error.captureStackTrace(obj, fn);
+      let { stack } = obj;
+      Error.stackTraceLimit = stackTraceLimit;
+      return this.clean(stack);
     }
-    capture(n, u = this.capture) {
-      if (typeof n === "function") ((u = n), (n = 1 / 0));
-      let { prepareStackTrace: prepareStackTrace, stackTraceLimit: stackTraceLimit } = Error;
-      if (
-        ((Error.prepareStackTrace = (E, T) => {
-          if (this._wrapCallSite) return T.map(this._wrapCallSite);
-          return T;
-        }),
-        n)
-      )
-        Error.stackTraceLimit = n;
-      let p = {};
-      Error.captureStackTrace(p, u);
-      let { stack: stack } = p;
-      return (
-        Object.assign(Error, { prepareStackTrace: prepareStackTrace, stackTraceLimit: stackTraceLimit }),
-        stack
-      );
+    capture(limit, fn = this.capture) {
+      if (typeof limit === "function") {
+        fn = limit;
+        limit = 1 / 0;
+      }
+      let { prepareStackTrace, stackTraceLimit } = Error;
+      Error.prepareStackTrace = (obj, site) => {
+        if (this._wrapCallSite) return site.map(this._wrapCallSite);
+        return site;
+      };
+      if (limit) Error.stackTraceLimit = limit;
+      let obj = {};
+      Error.captureStackTrace(obj, fn);
+      let { stack } = obj;
+      Object.assign(Error, {
+        prepareStackTrace,
+        stackTraceLimit,
+      });
+      return stack;
     }
-    at(n = this.at) {
-      let [u] = this.capture(1, n);
-      if (!u) return {};
-      let f = { line: u.getLineNumber(), column: u.getColumnNumber() };
-      if ((Vg(f, u.getFileName(), this._cwd), u.isConstructor()))
-        Object.defineProperty(f, "constructor", { value: !0, configurable: !0 });
-      if (u.isEval()) f.evalOrigin = u.getEvalOrigin();
-      if (u.isNative()) f.native = !0;
-      let m;
+    at(fn = this.at) {
+      let [site] = this.capture(1, fn);
+      if (!site) return {};
+      let res = {
+        line: site.getLineNumber(),
+        column: site.getColumnNumber(),
+      };
+      setFile(res, site.getFileName(), this._cwd);
+      if (site.isConstructor())
+        Object.defineProperty(res, "constructor", {
+          value: true,
+          configurable: true,
+        });
+      if (site.isEval()) res.evalOrigin = site.getEvalOrigin();
+      if (site.isNative()) res.native = true;
+      let typename;
       try {
-        m = u.getTypeName();
-      } catch (error) {}
-      if (m && m !== "Object" && m !== "[object Object]") f.type = m;
-      let functionName = u.getFunctionName();
-      if (functionName) f.function = functionName;
-      let methodName = u.getMethodName();
-      if (methodName && functionName !== methodName) f.method = methodName;
-      return f;
+        typename = site.getTypeName();
+      } catch (_) {}
+      if (typename && typename !== "Object" && typename !== "[object Object]") res.type = typename;
+      let fname = site.getFunctionName();
+      if (fname) res.function = fname;
+      let meth = site.getMethodName();
+      if (meth && fname !== meth) res.method = meth;
+      return res;
     }
-    parseLine(n) {
-      let u = n && n.match(regExp);
-      if (!u) return null;
-      let f = u[1] === "new",
-        m = u[2],
-        p = u[3],
-        g = u[4],
-        E = Number(u[5]),
-        T = Number(u[6]),
-        A = u[7],
-        D = u[8],
-        O = u[9],
-        _ = u[10] === "native",
-        U = u[11] === ")",
-        L,
-        P = {};
-      if (D) P.line = Number(D);
-      if (O) P.column = Number(O);
-      if (U && A) {
-        let z = 0;
-        for (let G = A.length - 1; G > 0; G--)
-          if (A.charAt(G) === ")") z++;
-          else if (A.charAt(G) === "(" && A.charAt(G - 1) === " ") {
-            if ((z--, z === -1 && A.charAt(G - 1) === " ")) {
-              let sliced = A.slice(0, G - 1);
-              ((A = A.slice(G + 1)), (m += ` (${sliced}`));
+    parseLine(line) {
+      let match = line && line.match(re);
+      if (!match) return null;
+      let ctor = match[1] === "new";
+      let fname = match[2];
+      let evalOrigin = match[3];
+      let evalFile = match[4];
+      let evalLine = Number(match[5]);
+      let evalCol = Number(match[6]);
+      let file = match[7];
+      let lnum = match[8];
+      let col = match[9];
+      let native = match[10] === "native";
+      let closeParen = match[11] === ")";
+      let method;
+      let res = {};
+      if (lnum) res.line = Number(lnum);
+      if (col) res.column = Number(col);
+      if (closeParen && file) {
+        let closes = 0;
+        for (let i = file.length - 1; i > 0; i--)
+          if (file.charAt(i) === ")") closes++;
+          else if (file.charAt(i) === "(" && file.charAt(i - 1) === " ") {
+            closes--;
+            if (closes === -1 && file.charAt(i - 1) === " ") {
+              let before = file.slice(0, i - 1);
+              file = file.slice(i + 1);
+              fname += ` (${before}`;
               break;
             }
           }
       }
-      if (m) {
-        let match = m.match(V1);
-        if (match) ((m = match[1]), (L = match[2]));
+      if (fname) {
+        let methodMatch = fname.match(methodRe);
+        if (methodMatch) {
+          fname = methodMatch[1];
+          method = methodMatch[2];
+        }
       }
-      if ((Vg(P, A, this._cwd), f)) Object.defineProperty(P, "constructor", { value: !0, configurable: !0 });
-      if (p)
-        ((P.evalOrigin = p), (P.evalLine = E), (P.evalColumn = T), (P.evalFile = g && g.replace(/\\/g, "/")));
-      if (_) P.native = !0;
-      if (m) P.function = m;
-      if (L && m !== L) P.method = L;
-      return P;
+      setFile(res, file, this._cwd);
+      if (ctor)
+        Object.defineProperty(res, "constructor", {
+          value: true,
+          configurable: true,
+        });
+      if (evalOrigin) {
+        res.evalOrigin = evalOrigin;
+        res.evalLine = evalLine;
+        res.evalColumn = evalCol;
+        res.evalFile = evalFile && evalFile.replace(/\\/g, "/");
+      }
+      if (native) res.native = true;
+      if (fname) res.function = fname;
+      if (method && fname !== method) res.method = method;
+      return res;
     }
   }
-  function Vg(n, u, f) {
-    if (u) {
-      if (((u = u.replace(/\\/g, "/")), u.startsWith(`${f}/`))) u = u.slice(f.length + 1);
-      n.file = u;
+  function setFile(result, filename, cwd) {
+    if (filename) {
+      filename = filename.replace(/\\/g, "/");
+      if (filename.startsWith(`${cwd}/`)) filename = filename.slice(cwd.length + 1);
+      result.file = filename;
     }
   }
-  function Y1(n) {
-    if (n.length === 0) return [];
-    let mapped = n.map((f) => K1(f));
-    return new RegExp(`[/\\\\]node_modules[/\\\\](?:${mapped.join("|")})[/\\\\][^:]+:\\d+:\\d+`);
+  function ignoredPackagesRegExp(ignoredPackages) {
+    if (ignoredPackages.length === 0) return [];
+    let packages = ignoredPackages.map((mod) => escapeStringRegexp(mod));
+    return new RegExp(`[/\\\\]node_modules[/\\\\](?:${packages.join("|")})[/\\\\][^:]+:\\d+:\\d+`);
   }
-  var regExp = new RegExp(
-      "^(?:\\s*at )?(?:(new) )?(?:(.*?) \\()?(?:eval at ([^ ]+) \\((.+?):(\\d+):(\\d+)\\), )?(?:(.+?):(\\d+):(\\d+)|(native))(\\)?)$",
-    ),
-    V1 = /^(.*?) \[as (.*?)\]$/;
-  Xg.exports = Yd;
+  var re = new RegExp(
+    "^(?:\\s*at )?(?:(new) )?(?:(.*?) \\()?(?:eval at ([^ ]+) \\((.+?):(\\d+):(\\d+)\\), )?(?:(.+?):(\\d+):(\\d+)|(native))(\\)?)$",
+  );
+  var methodRe = /^(.*?) \[as (.*?)\]$/;
+  cjsModule.exports = StackUtils;
 });
-
-export { Qg };
+export { require_stack_utils };

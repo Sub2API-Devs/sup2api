@@ -6,70 +6,88 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { fa } from "./Document.js";
-import { ha } from "./DocumentType.js";
-import { va } from "./HTMLParser.js";
-import { ee } from "./utils.js";
-import { $r } from "./xmlnames.js";
+import { require_Document } from "./Document.js";
+import { require_DocumentType } from "./DocumentType.js";
+import { require_HTMLParser } from "./HTMLParser.js";
+import { require_utils } from "./utils.js";
+import { require_xmlnames } from "./xmlnames.js";
 
 //@ chunk-vwj6ccer.js:233747-234995 cjs-fingerprint
-var Er = x(function (Yd, Sc) {
-  Sc.exports = wc;
-  var yc = fa(),
-    Nc = ha(),
-    pf = va(),
-    Ta = ee(),
-    mf = $r();
-  function wc(e) {
-    this.contextObject = e;
+var require_DOMImplementation = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = DOMImplementation;
+  var Document = require_Document();
+  var DocumentType = require_DocumentType();
+  var HTMLParser = require_HTMLParser();
+  var utils = require_utils();
+  var xml = require_xmlnames();
+  function DOMImplementation(contextObject) {
+    this.contextObject = contextObject;
   }
-  var gf = {
-    xml: { "": !0, "1.0": !0, "2.0": !0 },
-    core: { "": !0, "2.0": !0 },
-    html: { "": !0, "1.0": !0, "2.0": !0 },
-    xhtml: { "": !0, "1.0": !0, "2.0": !0 },
+  var supportedFeatures = {
+    xml: {
+      "": true,
+      "1.0": true,
+      "2.0": true,
+    },
+    core: {
+      "": true,
+      "2.0": true,
+    },
+    html: {
+      "": true,
+      "1.0": true,
+      "2.0": true,
+    },
+    xhtml: {
+      "": true,
+      "1.0": true,
+      "2.0": true,
+    },
   };
-  wc.prototype = {
-    hasFeature: function (t, r) {
-      var a = gf[(t || "").toLowerCase()];
-      return (a && a[r || ""]) || !1;
+  DOMImplementation.prototype = {
+    hasFeature: function (feature, version) {
+      var f = supportedFeatures[(feature || "").toLowerCase()];
+      return (f && f[version || ""]) || false;
     },
-    createDocumentType: function (t, r, a) {
-      if (!mf.isValidQName(t)) Ta.InvalidCharacterError();
-      return new Nc(this.contextObject, t, r, a);
+    createDocumentType: function (qualifiedName, publicId, systemId) {
+      if (!xml.isValidQName(qualifiedName)) utils.InvalidCharacterError();
+      return new DocumentType(this.contextObject, qualifiedName, publicId, systemId);
     },
-    createDocument: function (t, r, a) {
-      var s = new yc(!1, null),
-        c;
-      if (r) c = s.createElementNS(t, r);
-      else c = null;
-      if (a) s.appendChild(a);
-      if (c) s.appendChild(c);
-      if (t === Ta.NAMESPACE.HTML) s._contentType = "application/xhtml+xml";
-      else if (t === Ta.NAMESPACE.SVG) s._contentType = "image/svg+xml";
-      else s._contentType = "application/xml";
-      return s;
+    createDocument: function (namespace, qualifiedName, doctype) {
+      var d = new Document(false, null);
+      var e;
+      if (qualifiedName) e = d.createElementNS(namespace, qualifiedName);
+      else e = null;
+      if (doctype) d.appendChild(doctype);
+      if (e) d.appendChild(e);
+      if (namespace === utils.NAMESPACE.HTML) d._contentType = "application/xhtml+xml";
+      else if (namespace === utils.NAMESPACE.SVG) d._contentType = "image/svg+xml";
+      else d._contentType = "application/xml";
+      return d;
     },
-    createHTMLDocument: function (t) {
-      var r = new yc(!0, null);
-      r.appendChild(new Nc(r, "html"));
-      var element = r.createElement("html");
-      r.appendChild(element);
-      var element_2 = r.createElement("head");
-      if ((element.appendChild(element_2), t !== void 0)) {
-        var element_3 = r.createElement("title");
-        (element_2.appendChild(element_3), element_3.appendChild(r.createTextNode(t)));
+    createHTMLDocument: function (titleText) {
+      var d = new Document(true, null);
+      d.appendChild(new DocumentType(d, "html"));
+      var html = d.createElement("html");
+      d.appendChild(html);
+      var head = d.createElement("head");
+      html.appendChild(head);
+      if (titleText !== undefined) {
+        var title = d.createElement("title");
+        head.appendChild(title);
+        title.appendChild(d.createTextNode(titleText));
       }
-      return (element.appendChild(r.createElement("body")), (r.modclock = 1), r);
+      html.appendChild(d.createElement("body"));
+      d.modclock = 1;
+      return d;
     },
-    mozSetOutputMutationHandler: function (e, t) {
-      e.mutationHandler = t;
+    mozSetOutputMutationHandler: function (doc, handler) {
+      doc.mutationHandler = handler;
     },
-    mozGetInputMutationHandler: function (e) {
-      Ta.nyi();
+    mozGetInputMutationHandler: function (doc) {
+      utils.nyi();
     },
-    mozHTMLParser: pf,
+    mozHTMLParser: HTMLParser,
   };
 });
-
-export { Er };
+export { require_DOMImplementation };

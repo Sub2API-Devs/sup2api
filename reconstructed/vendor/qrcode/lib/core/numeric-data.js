@@ -6,31 +6,40 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { q } from "./mode.js";
+import { require_mode } from "./mode.js";
 
 //@ chunk-spjgqa4y.js:11429-11961 cjs-fingerprint
-var fr = x(function (kl, ur) {
-  var lr = q();
-  function Q(t) {
-    ((this.mode = lr.NUMERIC), (this.data = t.toString()));
+var require_numeric_data = x(function (cjsExports, cjsModule) {
+  var Mode = require_mode();
+  function NumericData(data) {
+    this.mode = Mode.NUMERIC;
+    this.data = data.toString();
   }
-  Q.getBitsLength = function (e) {
-    return 10 * Math.floor(e / 3) + (e % 3 ? (e % 3) * 3 + 1 : 0);
+  NumericData.getBitsLength = function (length) {
+    return 10 * Math.floor(length / 3) + (length % 3 ? (length % 3) * 3 + 1 : 0);
   };
-  Q.prototype.getLength = function () {
+  NumericData.prototype.getLength = function () {
     return this.data.length;
   };
-  Q.prototype.getBitsLength = function () {
-    return Q.getBitsLength(this.data.length);
+  NumericData.prototype.getBitsLength = function () {
+    return NumericData.getBitsLength(this.data.length);
   };
-  Q.prototype.write = function (e) {
-    let r, n, i;
-    for (r = 0; r + 3 <= this.data.length; r += 3)
-      ((n = this.data.substr(r, 3)), (i = parseInt(n, 10)), e.put(i, 10));
-    let o = this.data.length - r;
-    if (o > 0) ((n = this.data.substr(r)), (i = parseInt(n, 10)), e.put(i, o * 3 + 1));
+  NumericData.prototype.write = function (bitBuffer) {
+    let i_2;
+    let group;
+    let value;
+    for (i_2 = 0; i_2 + 3 <= this.data.length; i_2 += 3) {
+      group = this.data.substr(i_2, 3);
+      value = parseInt(group, 10);
+      bitBuffer.put(value, 10);
+    }
+    let remainingNum = this.data.length - i_2;
+    if (remainingNum > 0) {
+      group = this.data.substr(i_2);
+      value = parseInt(group, 10);
+      bitBuffer.put(value, remainingNum * 3 + 1);
+    }
   };
-  ur.exports = Q;
+  cjsModule.exports = NumericData;
 });
-
-export { fr };
+export { require_numeric_data };

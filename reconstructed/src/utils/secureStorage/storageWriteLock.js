@@ -9,7 +9,7 @@
  * attribution: placement 8
  */
 import { AsyncLocalStorage } from "async_hooks";
-import { join, join as join_2, join as join_3 } from "path";
+import { join } from "path";
 import { isDiskless } from "../../bootstrap/state.js";
 import { getProjectDirsUpToHome } from "./macOsKeychainHelpers.js";
 import { getFsImplementation } from "../fsOperations.js";
@@ -21,35 +21,44 @@ import { logFeatureSad } from "../../services/analytics/featureTelemetry.js";
 //@ chunk-b29hdd5e.js:764-807 placement
 var READ_FAILED = Symbol("secureStorage.READ_FAILED");
 //@ chunk-b29hdd5e.js:883-915 placement
-var m = new AsyncLocalStorage(),
-  resolved = Promise.resolve();
+var secureStorageWriteContext = new AsyncLocalStorage();
+var resolved = Promise.resolve();
+//@ chunk-b29hdd5e.js:915-1422 placement
 /**
  * 串行化安全存储的写操作（同一异步上下文可重入）。
  */
-//@ chunk-b29hdd5e.js:915-1422 placement
 async function withStorageWriteLock(e) {
-  if (m.getStore()) return e();
-  let r = resolved,
-    a;
-  resolved = new Promise((n) => {
-    a = n;
+  if (secureStorageWriteContext.getStore()) return e();
+  let r = resolved;
+  let a;
+  resolved = new Promise((resolve) => {
+    a = resolve;
   });
   try {
-    if ((await r, isDiskless())) return await m.run(!0, e);
-    let n = getProjectDirsUpToHome();
-    await getFsImplementation().mkdir(n);
-    let o = await lock(join_2(n, ".storage-write"), {
-      realpath: !1,
-      retries: { retries: 10, minTimeout: 100, maxTimeout: 1000 },
+    await r;
+    if (isDiskless()) return await secureStorageWriteContext.run(true, e);
+    let projectDirsUpToHome = getProjectDirsUpToHome();
+    await getFsImplementation().mkdir(projectDirsUpToHome);
+    let o = await lock(join(projectDirsUpToHome, ".storage-write"), {
+      realpath: false,
+      retries: {
+        retries: 10,
+        minTimeout: 100,
+        maxTimeout: 1000,
+      },
       stale: 15000,
       onCompromised: (s) =>
-        logForDebugging(`[secureStorage] write lock compromised: ${errorMessage(s)}`, { level: "warn" }),
+        logForDebugging(`[secureStorage] write lock compromised: ${errorMessage(s)}`, {
+          level: "warn",
+        }),
     });
     try {
-      return await m.run(!0, e);
+      return await secureStorageWriteContext.run(true, e);
     } finally {
-      await o().catch((s) =>
-        logForDebugging(`[secureStorage] write lock release failed: ${errorMessage(s)}`, { level: "warn" }),
+      await o().catch((error) =>
+        logForDebugging(`[secureStorage] write lock release failed: ${errorMessage(error)}`, {
+          level: "warn",
+        }),
       );
     }
   } finally {
@@ -58,37 +67,47 @@ async function withStorageWriteLock(e) {
 }
 //@ chunk-b29hdd5e.js:1422-1463 placement
 async function runInsideWriteLock(e) {
-  return m.run(!0, e);
+  return secureStorageWriteContext.run(true, e);
 }
 //@ chunk-b29hdd5e.js:1463-1787 placement
-function mutateSecureStorage(e, r, a) {
+function mutateSecureStorage(plainTextStorage, r, a) {
   return withStorageWriteLock(async () => {
-    e.invalidateCache?.();
-    let n = await (e.readAsyncStrict?.(a, { inaccessibleAs: "failureIfTransient" }) ?? e.readAsync(a));
-    if (n === READ_FAILED)
-      return (
-        logFeatureSad("secure_storage_credentials_write", "read_failed_skip_write"),
-        { success: !1, transient: !0 }
-      );
-    let o = n ?? {},
-      s = r(o);
-    return s === o ? { success: !0 } : await e.update(s, a);
+    plainTextStorage.invalidateCache?.();
+    let n = await (plainTextStorage.readAsyncStrict?.(a, {
+      inaccessibleAs: "failureIfTransient",
+    }) ?? plainTextStorage.readAsync(a));
+    if (n === READ_FAILED) {
+      logFeatureSad("secure_storage_credentials_write", "read_failed_skip_write");
+      return {
+        success: false,
+        transient: true,
+      };
+    }
+    let o = n ?? {};
+    let s = r(o);
+    return s === o
+      ? {
+          success: true,
+        }
+      : await plainTextStorage.update(s, a);
   });
 }
 //@ chunk-b29hdd5e.js:1787-1830 placement
-var F = Symbol("secureStorage.fallbackLegs");
+var FALLBACK_LEGS_SYMBOL = Symbol("secureStorage.fallbackLegs");
 //@ chunk-b29hdd5e.js:1830-1858 placement
 function storageMarker(e) {
-  return e[F];
+  return e[FALLBACK_LEGS_SYMBOL];
 }
 //@ chunk-b29hdd5e.js:1858-2006 placement
 function stripSlackBinding(e) {
-  let r = e?.slackTag;
-  if (typeof r !== "object" || r === null || !("lastBinding" in r)) return e;
-  let { lastBinding: lastBinding, ...n } = r;
-  return { ...e, slackTag: n };
+  let slackTag = e?.slackTag;
+  if (typeof slackTag !== "object" || slackTag === null || !("lastBinding" in slackTag)) return e;
+  let { lastBinding, ...n } = slackTag;
+  return {
+    ...e,
+    slackTag: n,
+  };
 }
-
 export {
   READ_FAILED,
   storageMarker,

@@ -8,13 +8,8 @@
  * pieces: chunk-xx1vmpsq.js (1)
  * attribution: fingerprint 1
  */
-import {
-  randomUUID,
-  randomUUID as randomUUID_2,
-  randomUUID as randomUUID_3,
-  randomUUID as randomUUID_4,
-} from "crypto";
-import { kCe, Hwt, createUserMessage } from "../messages.js";
+import { randomUUID } from "crypto";
+import { hasToolResultBlock, markToolSummaryMessage, createUserMessage } from "../messages.js";
 import { logSlashPromptEvent, cloneContent } from "../slashCommandParsing.js";
 import { hasFrustrationLanguage } from "../../query/goalCheckIn.js";
 import { matchesKeepGoingKeyword } from "../userPromptKeywords.js";
@@ -24,73 +19,134 @@ import { promptTelemetryFields } from "../promptSource.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { getOriginKindLabel } from "../messages/promptOrigin.js";
-import { dCt } from "../../tools/RefreshMcpToolsTool/RefreshMcpToolsTool.js";
-import { ye } from "../startupMarks.js";
+import { emptyObjectFactory } from "../../tools/RefreshMcpToolsTool/RefreshMcpToolsTool.js";
+import { sanitizeMarkName } from "../startupMarks.js";
 import { isGlimmeringFinchGateOn } from "../messages/untrustedArtifactContent.js";
-import { Bbt, a3n, Z1t, TZ } from "../agentListing.js";
+import {
+  unreadableToolsUsed,
+  summaryCompanionMessage,
+  joinWithNewlineIfAny,
+  unreadableToolsLine,
+} from "../agentListing.js";
 import { wrapNonUserMessage } from "../messages/nonUserMessages.js";
 
+//@ chunk-xx1vmpsq.js:36221-37461 fingerprint = processTextPrompt (0.523)
 /**
  * processTextPrompt：普通文本提示转为用户消息并上报 tengu_input_prompt。
  */
-//@ chunk-xx1vmpsq.js:36221-37461 fingerprint = processTextPrompt (0.523)
-function processTextPrompt(e, s, n, y, r, w, T, C, I, M, R, E, A, v, U, Q, re, z) {
-  let fe = typeof e === "string" ? e : e.find((block) => block.type === "text")?.text || "",
-    ee = w || randomUUID_4(),
-    Y = typeof e === "string" ? e : e.findLast((block) => block.type === "text")?.text || "",
-    ue = kCe(e) ? void 0 : r;
+function processTextPrompt(
+  e,
+  imageContentBlocks,
+  imagePasteIds,
+  attachmentMessages,
+  r,
+  w,
+  permissionMode,
+  C,
+  effortLevelIfSupported,
+  M,
+  R,
+  wakeupSource,
+  hostInitiator,
+  artifactCommentTurn,
+  U,
+  inboundOrigin,
+  re,
+  z,
+) {
+  let userPromptText = typeof e === "string" ? e : e.find((block) => block.type === "text")?.text || "";
+  let ee = w || randomUUID();
+  let Y = typeof e === "string" ? e : e.findLast((block) => block.type === "text")?.text || "";
+  let ue = hasToolResultBlock(e) ? undefined : r;
   if (Y)
-    logSlashPromptEvent({ text: Y, attributes: { ...(ue && { "prompt.id": ue }), "message.uuid": ee } }, U);
-  let isNegative = hasFrustrationLanguage(fe),
-    isKeepGoing = matchesKeepGoingKeyword(fe),
-    Ve = isPresencePing(fe),
-    nt = C ? null : getLastCancelledAPIMessageId(),
-    Qe = C ? void 0 : incrementPromptIndex(),
-    userMessage = promptTelemetryFields({
-      wakeupSource: E,
-      hostInitiator: A,
-      artifactCommentTurn: v,
-      inboundOrigin: Q,
-    });
+    logSlashPromptEvent(
+      {
+        text: Y,
+        attributes: {
+          ...(ue && {
+            "prompt.id": ue,
+          }),
+          "message.uuid": ee,
+        },
+      },
+      U,
+    );
+  let isNegative = hasFrustrationLanguage(userPromptText);
+  let isKeepGoing = matchesKeepGoingKeyword(userPromptText);
+  let isWakeup = isPresencePing(userPromptText);
+  let nt = C ? null : getLastCancelledAPIMessageId();
+  let promptIndex = C ? undefined : incrementPromptIndex();
+  let userMessage = promptTelemetryFields({
+    wakeupSource,
+    hostInitiator,
+    artifactCommentTurn,
+    inboundOrigin,
+  });
   logEvent("tengu_input_prompt", {
     is_negative: isNegative,
     is_keep_going: isKeepGoing,
-    is_wakeup: Ve,
-    ...!1,
-    prompt_index: Qe,
+    is_wakeup: isWakeup,
+    ...false,
+    prompt_index: promptIndex,
     prompt_length: Y.length,
-    ...(M && { prompt_source: fromEnum(M) }),
-    ...(I && { effort_level: fromEnum(I) }),
+    ...(M && {
+      prompt_source: fromEnum(M),
+    }),
+    ...(effortLevelIfSupported && {
+      effort_level: fromEnum(effortLevelIfSupported),
+    }),
     turn_origin: fromEnum(getOriginKindLabel(R)),
     ...userMessage,
-    ...dCt(),
-    ...(userMessage.artifact_comment_turn && ue && { turn_prompt_id: ye(ue) }),
-    ...(nt && { interrupted_message_id: ye(nt) }),
-  });
-  let at = isGlimmeringFinchGateOn(),
-    St = re === void 0 || !at ? void 0 : Bbt(re, z ?? []),
-    jt = St === void 0 ? [] : [Hwt(createUserMessage(a3n(St)))],
-    de = typeof e === "string" && re !== void 0 && !at ? Z1t(e, TZ(re, z ?? [])) : e,
-    gt = de;
-  if (s.length > 0)
-    gt = [...(typeof de === "string" ? (de.trim() ? [{ type: "text", text: de }] : []) : de), ...s];
-  let userMessage_2 = createUserMessage({
-      content: gt,
-      uuid: ee,
-      imagePasteIds: n.length > 0 ? n : void 0,
-      permissionMode: T,
-      isMeta: C || void 0,
-      promptSource: M,
-      promptId: ue,
-      origin: R,
+    ...emptyObjectFactory(),
+    ...(userMessage.artifact_comment_turn &&
+      ue && {
+        turn_prompt_id: sanitizeMarkName(ue),
+      }),
+    ...(nt && {
+      interrupted_message_id: sanitizeMarkName(nt),
     }),
-    dt = cloneContent(gt);
+  });
+  let at = isGlimmeringFinchGateOn();
+  let St = re === undefined || !at ? undefined : unreadableToolsUsed(re, z ?? []);
+  let jt = St === undefined ? [] : [markToolSummaryMessage(createUserMessage(summaryCompanionMessage(St)))];
+  let de =
+    typeof e === "string" && re !== undefined && !at
+      ? joinWithNewlineIfAny(e, unreadableToolsLine(re, z ?? []))
+      : e;
+  let gt = de;
+  if (imageContentBlocks.length > 0)
+    gt = [
+      ...(typeof de === "string"
+        ? de.trim()
+          ? [
+              {
+                type: "text",
+                text: de,
+              },
+            ]
+          : []
+        : de),
+      ...imageContentBlocks,
+    ];
+  let userMessage_2 = createUserMessage({
+    content: gt,
+    uuid: ee,
+    imagePasteIds: imagePasteIds.length > 0 ? imagePasteIds : undefined,
+    permissionMode,
+    isMeta: C || undefined,
+    promptSource: M,
+    promptId: ue,
+    origin: R,
+  });
+  let unframed = cloneContent(gt);
   if (R) wrapNonUserMessage(userMessage_2, R);
   return {
-    messages: [...jt, userMessage_2, ...y],
-    shouldQuery: !0,
-    promptRow: { message: userMessage_2, unframed: dt },
+    messages: [...jt, userMessage_2, ...attachmentMessages],
+    shouldQuery: true,
+    promptRow: {
+      message: userMessage_2,
+      unframed,
+    },
   };
 }
-
 export { processTextPrompt };

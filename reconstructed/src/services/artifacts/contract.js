@@ -9,7 +9,16 @@
  * attribution: placement 5
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, o, A, M, pe, Ue, oe, T } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  u,
+  string,
+  array,
+  M,
+  record,
+  union,
+  unknown,
+  literal,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import { CONTRACT_VERSION_REGEX, CAPABILITY_NAME_REGEX } from "./capabilityDeclaration.js";
 import { frameApi } from "./frameRelay.js";
 import { buildFrameHeaders } from "./frameApi.js";
@@ -17,54 +26,73 @@ import { errorMessage } from "../../utils/errors.js";
 import { logProxyDenial } from "../../utils/sandbox/proxyDenial.js";
 
 //@ chunk-06y4szbn.js:42449-42833 placement
+/**
+ * artifact 页面契约 schema（版本、能力列表、claude/core 能力与 features 映射）与读取参数。
+ */
 var contractSchema = DoctorLazy(() =>
-    u({
-      version: o().regex(CONTRACT_VERSION_REGEX),
-      capabilities: A(o().regex(CAPABILITY_NAME_REGEX)).max(256),
-      claude: M()
-        .optional()
-        .catch(void 0),
-      core: A(o().regex(CAPABILITY_NAME_REGEX))
-        .max(256)
-        .optional()
-        .catch(void 0),
-      features: pe(
-        o().regex(CAPABILITY_NAME_REGEX),
-        pe(o().regex(CAPABILITY_NAME_REGEX), Ue([pe(o(), oe()), T(!0).transform(() => ({}))])),
-      )
-        .optional()
-        .catch(void 0),
-    }),
-  ),
-  sl = "/api/frame/contract/latest",
-  al = 262144,
-  ol = 65536,
-  ll = 5000,
-  X_CONTRACT_MISSING_CAPS = "x-contract-missing-caps",
-  dl = 16384;
+  u({
+    version: string().regex(CONTRACT_VERSION_REGEX),
+    capabilities: array(string().regex(CAPABILITY_NAME_REGEX)).max(256),
+    claude: M().optional().catch(undefined),
+    core: array(string().regex(CAPABILITY_NAME_REGEX)).max(256).optional().catch(undefined),
+    features: record(
+      string().regex(CAPABILITY_NAME_REGEX),
+      record(
+        string().regex(CAPABILITY_NAME_REGEX),
+        union([record(string(), unknown()), literal(true).transform(() => ({}))]),
+      ),
+    )
+      .optional()
+      .catch(undefined),
+  }),
+);
+var LATEST_CONTRACT_PATH_CONTRACT = "/api/frame/contract/latest";
+var MAX_CONTRACT_DEFS_BYTES = 262144;
+var MAX_CONTRACT_PROMPT_BYTES = 65536;
+var CONTRACT_FETCH_TIMEOUT_MS = 5000;
+var X_CONTRACT_MISSING_CAPS = "x-contract-missing-caps";
+var MAX_CONTRACT_VERSION_BYTES = 16384;
+//@ chunk-06y4szbn.js:42833-43730 placement
 /**
  * 读取 /api/frame/contract/latest 或指定版本的 artifact 页面契约（版本与能力名），区分传输/认证/客户端策略错误。
  */
-//@ chunk-06y4szbn.js:42833-43730 placement
 async function getFrameContract(e, n, r) {
   let s;
   try {
     s = await frameApi.get(e, {
-      refreshOAuth: !0,
-      ...(n.recoverOAuth401 && { recoverOAuth401: !0, storageV5: n.storageV5 }),
+      refreshOAuth: true,
+      ...(n.recoverOAuth401 && {
+        recoverOAuth401: true,
+        storageV5: n.storageV5,
+      }),
       headers: buildFrameHeaders(),
-      maxContentLength: dl,
+      maxContentLength: MAX_CONTRACT_VERSION_BYTES,
       ...r,
-      ...(n.timeoutMs !== void 0 && { timeout: n.timeoutMs }),
-      ...(n.signal && { signal: n.signal }),
+      ...(n.timeoutMs !== undefined && {
+        timeout: n.timeoutMs,
+      }),
+      ...(n.signal && {
+        signal: n.signal,
+      }),
       credentials: n.credentials,
     });
   } catch (error) {
-    return { err: errorMessage(error), cause: "transport" };
+    return {
+      err: errorMessage(error),
+      cause: "transport",
+    };
   }
   if (!s.ok)
-    return { err: `unavailable: ${s.reason}`, cause: s.reason === "no-auth" ? "no_auth" : "client_policy" };
-  if (!s.fromFrame) return { err: `relay HTTP ${s.status}`, cause: "relay", status: s.status };
+    return {
+      err: `unavailable: ${s.reason}`,
+      cause: s.reason === "no-auth" ? "no_auth" : "client_policy",
+    };
+  if (!s.fromFrame)
+    return {
+      err: `relay HTTP ${s.status}`,
+      cause: "relay",
+      status: s.status,
+    };
   if (s.status < 200 || s.status >= 300) {
     let b = logProxyDenial({
       status: s.status,
@@ -77,54 +105,88 @@ async function getFrameContract(e, n, r) {
       err: `HTTP ${s.status}`,
       cause: s.status === 404 ? "http_404" : s.status >= 500 ? "http_5xx" : "http_4xx",
       status: s.status,
-      ...(b !== void 0 && { proxyDeny: b }),
+      ...(b !== undefined && {
+        proxyDeny: b,
+      }),
     };
   }
   let h = s.response?.headers?.[X_CONTRACT_MISSING_CAPS];
-  return { body: s.data, ...(typeof h === "string" && { missingCapsHeader: h }) };
+  return {
+    body: s.data,
+    ...(typeof h === "string" && {
+      missingCapsHeader: h,
+    }),
+  };
 }
 //@ chunk-06y4szbn.js:43730-44066 placement
 async function resolveContract(e) {
-  if (e.version !== void 0 && !CONTRACT_VERSION_REGEX.test(e.version))
-    return { err: "invalid contract version", cause: "malformed" };
-  let n = await getFrameContract(e.version !== void 0 ? `/api/frame/contract/${e.version}` : sl, e);
-  if ("err" in n) return n;
-  let safeParse = contractSchema().safeParse(n.body);
-  if (!safeParse.success) return { err: "malformed contract response", cause: "malformed" };
-  return safeParse.data;
+  if (e.version !== undefined && !CONTRACT_VERSION_REGEX.test(e.version))
+    return {
+      err: "invalid contract version",
+      cause: "malformed",
+    };
+  let frameContract = await getFrameContract(
+    e.version !== undefined ? `/api/frame/contract/${e.version}` : LATEST_CONTRACT_PATH_CONTRACT,
+    e,
+  );
+  if ("err" in frameContract) return frameContract;
+  let r = contractSchema().safeParse(frameContract.body);
+  if (!r.success)
+    return {
+      err: "malformed contract response",
+      cause: "malformed",
+    };
+  return r.data;
 }
 //@ chunk-06y4szbn.js:44066-44442 placement
 async function fetchContractDefs(e, n, r) {
   if (!CONTRACT_VERSION_REGEX.test(e) || !CAPABILITY_NAME_REGEX.test(n))
-    return { err: "invalid contract version or capability name", cause: "malformed" };
-  let s = await getFrameContract(`/api/frame/contract/${e}/${n}.d.ts`, r, {
+    return {
+      err: "invalid contract version or capability name",
+      cause: "malformed",
+    };
+  let frameContract = await getFrameContract(`/api/frame/contract/${e}/${n}.d.ts`, r, {
     responseType: "text",
-    maxContentLength: al,
+    maxContentLength: MAX_CONTRACT_DEFS_BYTES,
   });
-  if ("err" in s) return s;
-  if (typeof s.body !== "string" || s.body.trim() === "")
-    return { err: "empty or non-text defs body", cause: "malformed" };
-  return { dts: s.body };
+  if ("err" in frameContract) return frameContract;
+  if (typeof frameContract.body !== "string" || frameContract.body.trim() === "")
+    return {
+      err: "empty or non-text defs body",
+      cause: "malformed",
+    };
+  return {
+    dts: frameContract.body,
+  };
 }
 //@ chunk-06y4szbn.js:44442-44928 placement
-async function fetchContractPrompt(e, n) {
-  if (!CONTRACT_VERSION_REGEX.test(e)) return { err: "invalid contract version", cause: "malformed" };
-  let r = await getFrameContract(`/api/frame/contract/${e}/prompt`, n, {
+async function fetchContractPrompt(version, n) {
+  if (!CONTRACT_VERSION_REGEX.test(version))
+    return {
+      err: "invalid contract version",
+      cause: "malformed",
+    };
+  let frameContract = await getFrameContract(`/api/frame/contract/${version}/prompt`, n, {
     responseType: "text",
-    maxContentLength: ol,
+    maxContentLength: MAX_CONTRACT_PROMPT_BYTES,
   });
-  if ("err" in r) return r;
-  if (typeof r.body !== "string" || r.body.trim() === "")
-    return { err: "empty or non-text prompt body", cause: "malformed" };
-  let s =
-    r.missingCapsHeader === void 0
+  if ("err" in frameContract) return frameContract;
+  if (typeof frameContract.body !== "string" || frameContract.body.trim() === "")
+    return {
+      err: "empty or non-text prompt body",
+      cause: "malformed",
+    };
+  let missingCaps =
+    frameContract.missingCapsHeader === undefined
       ? []
-      : r.missingCapsHeader
+      : frameContract.missingCapsHeader
           .slice(0, 4096)
           .split(",")
           .map((h) => h.trim())
           .filter((h) => CAPABILITY_NAME_REGEX.test(h));
-  return { promptMd: r.body, missingCaps: s };
+  return {
+    promptMd: frameContract.body,
+    missingCaps,
+  };
 }
-
-export { resolveContract, ll, fetchContractDefs, fetchContractPrompt };
+export { resolveContract, CONTRACT_FETCH_TIMEOUT_MS, fetchContractDefs, fetchContractPrompt };

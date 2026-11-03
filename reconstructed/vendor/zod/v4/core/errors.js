@@ -5,123 +5,178 @@
  * pieces: chunk-7vp249v4.js (8)
  * attribution: esm-fingerprint 8
  */
-import { aSr } from "./util.js";
+import { jsonStringifyReplacer } from "./util.js";
 import { Fr } from "./core.js";
 
 //@ chunk-7vp249v4.js:433-531 esm-fingerprint
-function is() {
-  let _zod = this._zod;
-  return (_zod.message ?? (_zod.message = JSON.stringify(_zod.def, aSr, 2)), _zod.message);
+function _getMessage() {
+  let internals = this._zod;
+  internals.message ?? (internals.message = JSON.stringify(internals.def, jsonStringifyReplacer, 2));
+  return internals.message;
 }
 //@ chunk-7vp249v4.js:531-566 esm-fingerprint
-function ss(e) {
-  this._zod.message = e;
+function _setMessage(value) {
+  this._zod.message = value;
 }
 //@ chunk-7vp249v4.js:566-1225 esm-fingerprint
-var cs = { get: is, set: ss, enumerable: !0, configurable: !0 },
-  Se = { value: void 0, enumerable: !1 },
-  weakSet = new WeakSet([Object.prototype, Error.prototype]),
-  Gt = (e, t) => {
-    ((e.name = "$ZodError"),
-      (Se.value = t),
-      Object.defineProperty(e, "issues", Se),
-      (Se.value = void 0),
-      Object.defineProperty(e, "message", cs));
-    let prototypeOf = Object.getPrototypeOf(e);
-    if (!weakSet.has(prototypeOf))
-      (weakSet.add(prototypeOf),
-        Object.defineProperty(prototypeOf, "toString", {
-          configurable: !0,
-          enumerable: !1,
-          get() {
-            let n = () => this.message;
-            return (Object.defineProperty(this, "toString", { value: n, configurable: !0, writable: !0 }), n);
-          },
-          set(n) {
-            Object.defineProperty(this, "toString", { value: n, configurable: !0, writable: !0 });
-          },
-        }));
-  },
-  qt = Fr("$ZodError", Gt),
-  Yt = Fr("$ZodError", Gt, void 0, { Parent: Error });
+var _messageDesc = {
+  get: _getMessage,
+  set: _setMessage,
+  enumerable: true,
+  configurable: true,
+};
+var _issuesDesc = {
+  value: undefined,
+  enumerable: false,
+};
+var _installedToString = new WeakSet([Object.prototype, Error.prototype]);
+var initializer = (inst, def) => {
+  inst.name = "$ZodError";
+  _issuesDesc.value = def;
+  Object.defineProperty(inst, "issues", _issuesDesc);
+  _issuesDesc.value = undefined;
+  Object.defineProperty(inst, "message", _messageDesc);
+  let proto = Object.getPrototypeOf(inst);
+  if (!_installedToString.has(proto)) {
+    _installedToString.add(proto);
+    Object.defineProperty(proto, "toString", {
+      configurable: true,
+      enumerable: false,
+      get() {
+        let value = () => this.message;
+        Object.defineProperty(this, "toString", {
+          value,
+          configurable: true,
+          writable: true,
+        });
+        return value;
+      },
+      set(value) {
+        Object.defineProperty(this, "toString", {
+          value,
+          configurable: true,
+          writable: true,
+        });
+      },
+    });
+  }
+};
+var $ZodError = Fr("$ZodError", initializer);
+var $ZodRealError = Fr("$ZodError", initializer, undefined, {
+  Parent: Error,
+});
 //@ chunk-7vp249v4.js:1225-1416 esm-fingerprint
-function us(e, t, r) {
-  if (!Object.prototype.hasOwnProperty.call(e, t))
-    if (t === "__proto__")
-      Object.defineProperty(e, t, { value: r(), writable: !0, enumerable: !0, configurable: !0 });
-    else e[t] = r();
-  return e[t];
+function node(obj, key, make) {
+  if (!Object.prototype.hasOwnProperty.call(obj, key))
+    if (key === "__proto__")
+      Object.defineProperty(obj, key, {
+        value: make(),
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+    else obj[key] = make();
+  return obj[key];
 }
 //@ chunk-7vp249v4.js:1416-1590 esm-fingerprint
-function Xt(e, t = (r) => r.message) {
-  let r = {},
-    n = [];
-  for (let issue of e.issues)
-    if (issue.path.length > 0) us(r, issue.path[0], () => []).push(t(issue));
-    else n.push(t(issue));
-  return { formErrors: n, fieldErrors: r };
+function flattenError(error, mapper = (issue) => issue.message) {
+  let fieldErrors = {};
+  let formErrors = [];
+  for (let sub of error.issues)
+    if (sub.path.length > 0) node(fieldErrors, sub.path[0], () => []).push(mapper(sub));
+    else formErrors.push(mapper(sub));
+  return {
+    formErrors,
+    fieldErrors,
+  };
 }
 //@ chunk-7vp249v4.js:1590-2297 esm-fingerprint
-function Ht(e, t = (r) => r.message) {
-  let r = { _errors: [] },
-    n = (i, s = []) => {
-      for (let issue of i.issues)
-        if (issue.code === "invalid_union" && issue.errors.length)
-          issue.errors.map((error) => n({ issues: error }, [...s, ...issue.path]));
-        else if (issue.code === "invalid_key") n({ issues: issue.issues }, [...s, ...issue.path]);
-        else if (issue.code === "invalid_element") n({ issues: issue.issues }, [...s, ...issue.path]);
+function formatError(error, mapper = (issue) => issue.message) {
+  let fieldErrors = {
+    _errors: [],
+  };
+  let processError = (error, path = []) => {
+    for (let issue of error.issues)
+      if (issue.code === "invalid_union" && issue.errors.length)
+        issue.errors.map((issues) =>
+          processError(
+            {
+              issues,
+            },
+            [...path, ...issue.path],
+          ),
+        );
+      else if (issue.code === "invalid_key")
+        processError(
+          {
+            issues: issue.issues,
+          },
+          [...path, ...issue.path],
+        );
+      else if (issue.code === "invalid_element")
+        processError(
+          {
+            issues: issue.issues,
+          },
+          [...path, ...issue.path],
+        );
+      else {
+        let fullpath = [...path, ...issue.path];
+        if (fullpath.length === 0) fieldErrors._errors.push(mapper(issue));
         else {
-          let a = [...s, ...issue.path];
-          if (a.length === 0) r._errors.push(t(issue));
-          else {
-            let l = r,
-              p = 0;
-            while (p < a.length) {
-              let f = a[p],
-                d = p === a.length - 1;
-              if (f === "_errors") {
-                if (d) l._errors.push(t(issue));
-                p++;
-                continue;
-              }
-              if (!Object.prototype.hasOwnProperty.call(l, f))
-                Object.defineProperty(l, f, {
-                  value: { _errors: [] },
-                  enumerable: !0,
-                  writable: !0,
-                  configurable: !0,
-                });
-              let _ = l[f];
-              if (d) _._errors.push(t(issue));
-              ((l = _), p++);
+          let curr = fieldErrors;
+          let i = 0;
+          while (i < fullpath.length) {
+            let el = fullpath[i];
+            let terminal = i === fullpath.length - 1;
+            if (el === "_errors") {
+              if (terminal) curr._errors.push(mapper(issue));
+              i++;
+              continue;
             }
+            if (!Object.prototype.hasOwnProperty.call(curr, el))
+              Object.defineProperty(curr, el, {
+                value: {
+                  _errors: [],
+                },
+                enumerable: true,
+                writable: true,
+                configurable: true,
+              });
+            let node = curr[el];
+            if (terminal) node._errors.push(mapper(issue));
+            curr = node;
+            i++;
           }
         }
-    };
-  return (n(e), r);
+      }
+  };
+  processError(error);
+  return fieldErrors;
 }
 //@ chunk-7vp249v4.js:2297-2602 esm-fingerprint
-function as(e) {
-  let t = [],
-    mapped = e.map((n) => (typeof n === "object" ? n.key : n));
-  for (let n of mapped)
-    if (typeof n === "number") t.push(`[${n}]`);
-    else if (typeof n === "symbol") t.push(`[${JSON.stringify(String(n))}]`);
-    else if (/[^\w$]/.test(n)) t.push(`[${JSON.stringify(n)}]`);
+function toDotPath(_path) {
+  let segs = [];
+  let path = _path.map((seg) => (typeof seg === "object" ? seg.key : seg));
+  for (let seg of path)
+    if (typeof seg === "number") segs.push(`[${seg}]`);
+    else if (typeof seg === "symbol") segs.push(`[${JSON.stringify(String(seg))}]`);
+    else if (/[^\w$]/.test(seg)) segs.push(`[${JSON.stringify(seg)}]`);
     else {
-      if (t.length) t.push(".");
-      t.push(n);
+      if (segs.length) segs.push(".");
+      segs.push(seg);
     }
-  return t.join("");
+  return segs.join("");
 }
 //@ chunk-7vp249v4.js:2602-2814 esm-fingerprint
-function pIi(e) {
-  let t = [],
-    sorted = [...e.issues].sort((n, i) => (n.path ?? []).length - (i.path ?? []).length);
-  for (let n of sorted)
-    if ((t.push(`\u2716 ${n.message}`), n.path?.length)) t.push(`  \u2192 at ${as(n.path)}`);
-  return t.join(`
+function prettifyError(error) {
+  let lines = [];
+  let issues = [...error.issues].sort((a, b) => (a.path ?? []).length - (b.path ?? []).length);
+  for (let issue of issues) {
+    lines.push(`\u2716 ${issue.message}`);
+    if (issue.path?.length) lines.push(`  \u2192 at ${toDotPath(issue.path)}`);
+  }
+  return lines.join(`
 `);
 }
-
-export { Yt, qt, Ht, Xt, pIi };
+export { $ZodRealError, $ZodError, formatError, flattenError, prettifyError };

@@ -8,13 +8,13 @@
  * pieces: chunk-01p2saxj.js (5), chunk-23fm9f0d.js (1), chunk-3a1caa6f.js (1), chunk-ah34pb7m.js (1), chunk-yt6zn9vg.js (65)
  * attribution: placement 2, layout 34, fingerprint 31, sole-consumer 1, callgraph-fingerprint 2, file-local 2, affinity 1
  */
-import { join, extname, join as join_2, join as join_3 } from "path";
+import { join, extname } from "path";
 import * as fsPromisesModule from "fs/promises";
 import { mkdir, writeFile, readFile, unlink, readdir } from "fs/promises";
 import { areBuiltinModelsKnownHosted } from "../utils/model/smallFastModel.js";
 import { getDefaultOpusModel, getMainLoopModel } from "../utils/model/model.js";
 import { DoctorLazy } from "../cli/handlers/util.js";
-import { u, o, E, pe, A, M } from "../../vendor/zod/v4/classic/schemas.js";
+import { u, string, E, record, array, M as M_2 } from "../../vendor/zod/v4/classic/schemas.js";
 import { getClaudeConfigDir } from "../utils/envUtils.js";
 import { STORAGE_SPACES } from "../utils/storage/storageSpaces.js";
 import { isStorageV5Enabled } from "../utils/hoverRest.js";
@@ -29,7 +29,7 @@ import { NOTEBOOK_EDIT_TOOL_NAME } from "../tools/NotebookEditTool/constants.js"
 import { Y5e } from "../../vendor/diff/libesm/diff/line.js";
 import { countCharInString, firstLineOf, truncateToLength } from "../utils/stringUtils.js";
 import { BASH_TOOL_NAME } from "../tools/BashTool/toolName.js";
-import { XCe } from "../tools/BashTool/destructiveTargets.js";
+import { getDestructiveTargetCategory } from "../tools/BashTool/destructiveTargets.js";
 import { checkReadOnlyConstraints } from "../tools/BashTool/readOnlyValidation.js";
 import { commandHasAnyCd } from "../tools/BashTool/bashPermissions.js";
 import { SPLIT_MAX_LEN } from "../utils/bash/commands.js";
@@ -60,8 +60,8 @@ import { isAutoModeSetupNotOverridden } from "./auto-mode-setup/index.js";
 import { getAutoModeConfig } from "../utils/settings/settings.js";
 import { escapeXmlAttr } from "../utils/xml.js";
 import { readAllPages, DEFAULT_MAX_PAGES } from "../utils/pagedRead.js";
-import { Vt } from "../utils/agentId.js";
-import { jdr } from "../utils/messages/untrustedArtifactContent.js";
+import { normalizeUuidOrNull } from "../utils/agentId.js";
+import { tagAndManifestArtifactContent } from "../utils/messages/untrustedArtifactContent.js";
 import { getToolPermissionContext } from "../utils/permissions/toolPermissionContext.js";
 import { canCycleToAuto } from "../utils/permissions/getNextPermissionMode.js";
 import { SandboxManager } from "../utils/sandbox/sandbox-adapter.js";
@@ -69,145 +69,139 @@ import { isAutoClassifierActive } from "../utils/permissions/autoModeState.js";
 import { logEvent } from "../services/analytics/index.js";
 import { fromEnum, fromNumber } from "../services/analytics/safeMetadata.js";
 import { builtinToolNameForMcp } from "../services/analytics/metadata.js";
-import { lft } from "../constants/xml.js";
-import {
-  sanitizePathForGit,
-  buildSafeGitEnv,
-  freeze_4,
-  freeze_5,
-  freeze_6,
-} from "../utils/git/gitSafeEnv.js";
+import { ARTIFACT_BLOCK_TAGS } from "../constants/xml.js";
+import { sanitizePathForGit, buildSafeGitEnv, M, b, F } from "../utils/git/gitSafeEnv.js";
 import { roundToMinute } from "../utils/cronTasks.js";
 import { formatBriefTimestamp } from "../utils/formatBriefTimestamp.js";
 
 //@ chunk-yt6zn9vg.js:12517-12554 sole-consumer
-function Se() {
+function insightsModel() {
   return areBuiltinModelsKnownHosted() ? getDefaultOpusModel() : getMainLoopModel();
 }
+//@ chunk-yt6zn9vg.js:12554-15582 fingerprint = LABEL_MAP (0.741)
 /**
  * /insights 会话元数据缓存的 zod 结构（消息数、工具计数、语言、git 提交、token、代码行变化、权限模式等）；Ve 是扩展名到语言名表，qe 是分面键到显示名的表。
  */
-//@ chunk-yt6zn9vg.js:12554-15582 fingerprint = LABEL_MAP (0.741)
 var sessionMetaSchema = DoctorLazy(() =>
-    u({
-      session_id: o(),
-      transcript_mtime: E().optional(),
-      project_path: o(),
-      start_time: o(),
-      duration_minutes: E(),
-      user_message_count: E(),
-      assistant_message_count: E(),
-      tool_counts: pe(o(), E()).optional(),
-      languages: pe(o(), E()).optional(),
-      git_commits: E(),
-      git_pushes: E(),
-      input_tokens: E(),
-      output_tokens: E(),
-      first_prompt: o(),
-      summary: o().optional(),
-      user_interruptions: E().optional(),
-      user_response_times: A(E()).optional(),
-      tool_errors: E().optional(),
-      tool_error_categories: pe(o(), E()).optional(),
-      uses_task_agent: M().optional(),
-      uses_mcp: M().optional(),
-      uses_web_search: M().optional(),
-      uses_web_fetch: M().optional(),
-      lines_added: E().optional(),
-      lines_removed: E().optional(),
-      files_modified: E().optional(),
-      message_hours: A(E()).optional(),
-      user_message_timestamps: A(o()).optional(),
-      permission_mode: o().optional(),
-      bash_would_prompt_count: E().optional(),
-      file_edit_tool_count: E().optional(),
-      destructive_command_count: E().optional(),
-    }),
-  ),
-  EXTENSION_TO_LANGUAGE = {
-    ".ts": "TypeScript",
-    ".tsx": "TypeScript",
-    ".js": "JavaScript",
-    ".jsx": "JavaScript",
-    ".py": "Python",
-    ".rb": "Ruby",
-    ".go": "Go",
-    ".rs": "Rust",
-    ".java": "Java",
-    ".c": "C",
-    ".h": "C",
-    ".cpp": "C++",
-    ".cc": "C++",
-    ".cxx": "C++",
-    ".hpp": "C++",
-    ".hh": "C++",
-    ".hxx": "C++",
-    ".ipp": "C++",
-    ".md": "Markdown",
-    ".json": "JSON",
-    ".yaml": "YAML",
-    ".yml": "YAML",
-    ".sh": "Shell",
-    ".css": "CSS",
-    ".html": "HTML",
-  },
-  FACET_LABELS = {
-    debug_investigate: "Debug/Investigate",
-    implement_feature: "Implement Feature",
-    fix_bug: "Fix Bug",
-    write_script_tool: "Write Script/Tool",
-    refactor_code: "Refactor Code",
-    configure_system: "Configure System",
-    create_pr_commit: "Create PR/Commit",
-    analyze_data: "Analyze Data",
-    understand_codebase: "Understand Codebase",
-    write_tests: "Write Tests",
-    write_docs: "Write Docs",
-    deploy_infra: "Deploy/Infra",
-    warmup_minimal: "Cache Warmup",
-    fast_accurate_search: "Fast/Accurate Search",
-    correct_code_edits: "Correct Code Edits",
-    good_explanations: "Good Explanations",
-    proactive_help: "Proactive Help",
-    multi_file_changes: "Multi-file Changes",
-    handled_complexity: "Multi-file Changes",
-    good_debugging: "Good Debugging",
-    misunderstood_request: "Misunderstood Request",
-    wrong_approach: "Wrong Approach",
-    buggy_code: "Buggy Code",
-    user_rejected_action: "User Rejected Action",
-    claude_got_blocked: "Claude Got Blocked",
-    user_stopped_early: "User Stopped Early",
-    wrong_file_or_location: "Wrong File/Location",
-    excessive_changes: "Excessive Changes",
-    slow_or_verbose: "Slow/Verbose",
-    tool_failed: "Tool Failed",
-    user_unclear: "User Unclear",
-    external_issue: "External Issue",
-    frustrated: "Frustrated",
-    dissatisfied: "Dissatisfied",
-    likely_satisfied: "Likely Satisfied",
-    satisfied: "Satisfied",
-    happy: "Happy",
-    unsure: "Unsure",
-    neutral: "Neutral",
-    delighted: "Delighted",
-    single_task: "Single Task",
-    multi_task: "Multi Task",
-    iterative_refinement: "Iterative Refinement",
-    exploration: "Exploration",
-    quick_question: "Quick Question",
-    fully_achieved: "Fully Achieved",
-    mostly_achieved: "Mostly Achieved",
-    partially_achieved: "Partially Achieved",
-    not_achieved: "Not Achieved",
-    unclear_from_transcript: "Unclear",
-    unhelpful: "Unhelpful",
-    slightly_helpful: "Slightly Helpful",
-    moderately_helpful: "Moderately Helpful",
-    very_helpful: "Very Helpful",
-    essential: "Essential",
-  };
+  u({
+    session_id: string(),
+    transcript_mtime: E().optional(),
+    project_path: string(),
+    start_time: string(),
+    duration_minutes: E(),
+    user_message_count: E(),
+    assistant_message_count: E(),
+    tool_counts: record(string(), E()).optional(),
+    languages: record(string(), E()).optional(),
+    git_commits: E(),
+    git_pushes: E(),
+    input_tokens: E(),
+    output_tokens: E(),
+    first_prompt: string(),
+    summary: string().optional(),
+    user_interruptions: E().optional(),
+    user_response_times: array(E()).optional(),
+    tool_errors: E().optional(),
+    tool_error_categories: record(string(), E()).optional(),
+    uses_task_agent: M_2().optional(),
+    uses_mcp: M_2().optional(),
+    uses_web_search: M_2().optional(),
+    uses_web_fetch: M_2().optional(),
+    lines_added: E().optional(),
+    lines_removed: E().optional(),
+    files_modified: E().optional(),
+    message_hours: array(E()).optional(),
+    user_message_timestamps: array(string()).optional(),
+    permission_mode: string().optional(),
+    bash_would_prompt_count: E().optional(),
+    file_edit_tool_count: E().optional(),
+    destructive_command_count: E().optional(),
+  }),
+);
+var EXTENSION_TO_LANGUAGE = {
+  ".ts": "TypeScript",
+  ".tsx": "TypeScript",
+  ".js": "JavaScript",
+  ".jsx": "JavaScript",
+  ".py": "Python",
+  ".rb": "Ruby",
+  ".go": "Go",
+  ".rs": "Rust",
+  ".java": "Java",
+  ".c": "C",
+  ".h": "C",
+  ".cpp": "C++",
+  ".cc": "C++",
+  ".cxx": "C++",
+  ".hpp": "C++",
+  ".hh": "C++",
+  ".hxx": "C++",
+  ".ipp": "C++",
+  ".md": "Markdown",
+  ".json": "JSON",
+  ".yaml": "YAML",
+  ".yml": "YAML",
+  ".sh": "Shell",
+  ".css": "CSS",
+  ".html": "HTML",
+};
+var FACET_LABELS = {
+  debug_investigate: "Debug/Investigate",
+  implement_feature: "Implement Feature",
+  fix_bug: "Fix Bug",
+  write_script_tool: "Write Script/Tool",
+  refactor_code: "Refactor Code",
+  configure_system: "Configure System",
+  create_pr_commit: "Create PR/Commit",
+  analyze_data: "Analyze Data",
+  understand_codebase: "Understand Codebase",
+  write_tests: "Write Tests",
+  write_docs: "Write Docs",
+  deploy_infra: "Deploy/Infra",
+  warmup_minimal: "Cache Warmup",
+  fast_accurate_search: "Fast/Accurate Search",
+  correct_code_edits: "Correct Code Edits",
+  good_explanations: "Good Explanations",
+  proactive_help: "Proactive Help",
+  multi_file_changes: "Multi-file Changes",
+  handled_complexity: "Multi-file Changes",
+  good_debugging: "Good Debugging",
+  misunderstood_request: "Misunderstood Request",
+  wrong_approach: "Wrong Approach",
+  buggy_code: "Buggy Code",
+  user_rejected_action: "User Rejected Action",
+  claude_got_blocked: "Claude Got Blocked",
+  user_stopped_early: "User Stopped Early",
+  wrong_file_or_location: "Wrong File/Location",
+  excessive_changes: "Excessive Changes",
+  slow_or_verbose: "Slow/Verbose",
+  tool_failed: "Tool Failed",
+  user_unclear: "User Unclear",
+  external_issue: "External Issue",
+  frustrated: "Frustrated",
+  dissatisfied: "Dissatisfied",
+  likely_satisfied: "Likely Satisfied",
+  satisfied: "Satisfied",
+  happy: "Happy",
+  unsure: "Unsure",
+  neutral: "Neutral",
+  delighted: "Delighted",
+  single_task: "Single Task",
+  multi_task: "Multi Task",
+  iterative_refinement: "Iterative Refinement",
+  exploration: "Exploration",
+  quick_question: "Quick Question",
+  fully_achieved: "Fully Achieved",
+  mostly_achieved: "Mostly Achieved",
+  partially_achieved: "Partially Achieved",
+  not_achieved: "Not Achieved",
+  unclear_from_transcript: "Unclear",
+  unhelpful: "Unhelpful",
+  slightly_helpful: "Slightly Helpful",
+  moderately_helpful: "Moderately Helpful",
+  very_helpful: "Very Helpful",
+  essential: "Essential",
+};
 //@ chunk-yt6zn9vg.js:15582-15625 fingerprint = getDataDir (1)
 function getDataDir() {
   return join(getClaudeConfigDir(), "usage-data");
@@ -221,54 +215,62 @@ function getSessionMetaDir() {
   return join(getDataDir(), "session-meta");
 }
 //@ chunk-yt6zn9vg.js:15709-15785 layout
-function ke(e) {
+function facetsStorePath(e) {
   return STORAGE_SPACES.userConfigDir("usage-data", ["facets", `${e}.json`]);
 }
 //@ chunk-yt6zn9vg.js:15785-15867 layout
-function ze(e) {
-  return STORAGE_SPACES.userConfigDir("usage-data", ["session-meta", `${e}.json`]);
+function sessionMetaStorePath(sessionId) {
+  return STORAGE_SPACES.userConfigDir("usage-data", ["session-meta", `${sessionId}.json`]);
 }
 //@ chunk-yt6zn9vg.js:15867-15924 layout = getDataDir (0.8)
 function getDataDir_2(e) {
   return STORAGE_SPACES.userConfigDir("usage-data", [e]);
 }
 //@ chunk-yt6zn9vg.js:15924-16399 callgraph-fingerprint = saveSessionMeta (0.26)
-async function saveSessionMeta(e, s, n) {
+async function saveSessionMeta(htmlReport, s, storageV5) {
   let metaPath = join(getDataDir(), `report-${s}.html`);
-  if (isStorageV5Enabled() && n) {
+  if (isStorageV5Enabled() && storageV5) {
     for (let g of [`report-${s}.html`, "report.html"]) {
-      let write = await n.write(getDataDir_2(g), e, { mode: 384, keepExistingMode: !0 });
-      if (!write.ok)
-        throw (
-          logForDebugging(`insights: report write failed: ${formatStorageError(write.error)}`),
-          Error("insights: report write through the storage backend failed")
-        );
+      let m = await storageV5.write(getDataDir_2(g), htmlReport, {
+        mode: 384,
+        keepExistingMode: true,
+      });
+      if (!m.ok) {
+        logForDebugging(`insights: report write failed: ${formatStorageError(m.error)}`);
+        throw Error("insights: report write through the storage backend failed");
+      }
     }
     return metaPath;
   }
   try {
-    await mkdir(getDataDir(), { recursive: !0 });
+    await mkdir(getDataDir(), {
+      recursive: true,
+    });
   } catch {}
-  return (
-    await writeFile(metaPath, e, { encoding: "utf-8", mode: 384 }),
-    await writeFile(join(getDataDir(), "report.html"), e, { encoding: "utf-8", mode: 384 }),
-    metaPath
-  );
+  await writeFile(metaPath, htmlReport, {
+    encoding: "utf-8",
+    mode: 384,
+  });
+  await writeFile(join(getDataDir(), "report.html"), htmlReport, {
+    encoding: "utf-8",
+    mode: 384,
+  });
+  return metaPath;
 }
 //@ chunk-yt6zn9vg.js:16399-16579 layout
-function isExpectedCacheWriteFailure(e) {
-  if (e.code !== "Failed") return !1;
+function isExpectedCacheWriteFailure(error) {
+  if (error.code !== "Failed") return false;
   return (
-    e.failureClass === "permission" ||
-    e.failureClass === "environment" ||
-    e.telemetryCode === "UnexpectedAbsent" ||
-    e.telemetryCode === "ENOENT"
+    error.failureClass === "permission" ||
+    error.failureClass === "environment" ||
+    error.telemetryCode === "UnexpectedAbsent" ||
+    error.telemetryCode === "ENOENT"
   );
 }
 //@ chunk-yt6zn9vg.js:16579-16589 layout
-var Ee = 50;
+var INSIGHTS_MCP_AUTH_BATCH = 50;
 //@ chunk-yt6zn9vg.js:16589-16675 layout
-function Ce(e, s) {
+function chunkArray(e, s) {
   let n = [];
   for (let r = 0; r < e.length; r += s) n.push(e.slice(r, r + s));
   return n;
@@ -278,13 +280,18 @@ function loadCachedSessionMeta(sessionId) {
   return createJsonStore(
     join(getSessionMetaDir(), `${sessionId}.json`),
     () => sessionMetaSchema().nullable(),
-    { defaultValue: null, ensureDir: !0, indent: 2, mode: 384 },
+    {
+      defaultValue: null,
+      ensureDir: true,
+      indent: 2,
+      mode: 384,
+    },
   );
 }
+//@ chunk-yt6zn9vg.js:16794-17942 layout
 /**
  * 让模型从单个会话里提取结构化分面（目标类别、满意度、摩擦类型等）的提示词前缀。
  */
-//@ chunk-yt6zn9vg.js:16794-17942 layout
 var FACET_EXTRACTION_PROMPT = `Analyze this Claude Code session and extract structured facets.
 
 CRITICAL GUIDELINES:
@@ -313,7 +320,7 @@ CRITICAL GUIDELINES:
 SESSION:
 `;
 //@ chunk-yt6zn9vg.js:17942-17989 layout
-function me(e) {
+function stringOrEmpty(e) {
   return typeof e === "string" ? e : "";
 }
 //@ chunk-yt6zn9vg.js:17989-18285 layout
@@ -326,59 +333,63 @@ var TOOL_ERROR_CATEGORY_RULES = [
   [["file not found", "does not exist"], "File Not Found"],
 ];
 //@ chunk-yt6zn9vg.js:18285-18423 layout
-function categorizeToolError(e) {
-  if (typeof e !== "string") return "Other";
-  let lower = e.toLowerCase();
+function categorizeToolError(content) {
+  if (typeof content !== "string") return "Other";
+  let lower = content.toLowerCase();
   return TOOL_ERROR_CATEGORY_RULES.find(([n]) => n.some((r) => lower.includes(r)))?.[1] ?? "Other";
 }
 //@ chunk-yt6zn9vg.js:18423-20612 fingerprint = extractToolStats (0.708)
 function extractToolStats(log) {
-  let s = {},
-    n = {},
-    r = 0,
-    g = 0,
-    m = 0,
-    d = 0,
-    y = 0,
-    w = [],
-    i = 0,
-    h = {},
-    f = !1,
-    k = 0,
-    I = 0,
-    filesModified = new Set(),
-    O = [],
-    se = [],
-    R = 0,
-    J = 0,
-    U = 0,
-    L = !1,
-    x = !1,
-    H = !1,
-    lastAssistantTimestamp = null,
-    de = isCcsTenant();
+  let toolCounts = {};
+  let languages = {};
+  let gitCommits = 0;
+  let gitPushes = 0;
+  let inputTokens = 0;
+  let outputTokens = 0;
+  let userInterruptions = 0;
+  let userResponseTimes = [];
+  let toolErrors = 0;
+  let toolErrorCategories = {};
+  let usesTaskAgent = false;
+  let linesAdded = 0;
+  let linesRemoved = 0;
+  let filesModified = new Set();
+  let messageHours = [];
+  let userMessageTimestamps = [];
+  let R = 0;
+  let J = 0;
+  let U = 0;
+  let usesMcp = false;
+  let usesWebSearch = false;
+  let usesWebFetch = false;
+  let lastAssistantTimestamp = null;
+  let de = isCcsTenant();
   for (let msg of log.messages) {
     let msgTimestamp = msg.timestamp;
     if (msg.type === "assistant" && msg.message) {
       if (msgTimestamp) lastAssistantTimestamp = msgTimestamp;
       let usage = msg.message.usage;
-      if (usage) ((m += usage.input_tokens || 0), (d += usage.output_tokens || 0));
+      if (usage) {
+        inputTokens += usage.input_tokens || 0;
+        outputTokens += usage.output_tokens || 0;
+      }
       let content = msg.message.content;
       if (Array.isArray(content)) {
         for (let block of content)
           if (block.type === "tool_use" && "name" in block) {
             let toolName = block.name;
-            if (((s[toolName] = (s[toolName] || 0) + 1), toolName === AGENT || toolName === TASK)) f = !0;
-            if (toolName.startsWith("mcp__")) L = !0;
-            if (toolName === "WebSearch") x = !0;
-            if (toolName === "WebFetch") H = !0;
+            toolCounts[toolName] = (toolCounts[toolName] || 0) + 1;
+            if (toolName === AGENT || toolName === TASK) usesTaskAgent = true;
+            if (toolName.startsWith("mcp__")) usesMcp = true;
+            if (toolName === "WebSearch") usesWebSearch = true;
+            if (toolName === "WebFetch") usesWebFetch = true;
             let input = block.input;
             if (input) {
-              let ue = me(input.file_path);
-              if (ue) {
-                let G = EXTENSION_TO_LANGUAGE[extname(ue).toLowerCase()];
-                if (G) n[G] = (n[G] || 0) + 1;
-                if (toolName === "Edit" || toolName === "Write") filesModified.add(ue);
+              let filePath = stringOrEmpty(input.file_path);
+              if (filePath) {
+                let lang = EXTENSION_TO_LANGUAGE[extname(filePath).toLowerCase()];
+                if (lang) languages[lang] = (languages[lang] || 0) + 1;
+                if (toolName === "Edit" || toolName === "Write") filesModified.add(filePath);
               }
               if (
                 toolName === FILE_EDIT_TOOL_NAME ||
@@ -387,33 +398,35 @@ function extractToolStats(log) {
               )
                 J++;
               if (toolName === "Edit") {
-                let G = me(input.old_string),
-                  lang = me(input.new_string);
+                let oldString = stringOrEmpty(input.old_string);
+                let newString = stringOrEmpty(input.new_string);
                 if (de) {
-                  let oe = countLineChanges(G, lang);
-                  ((k += oe.added), (I += oe.removed));
+                  let oe = countLineChanges(oldString, newString);
+                  linesAdded += oe.added;
+                  linesRemoved += oe.removed;
                 } else
-                  for (let change of Y5e(G, lang)) {
-                    if (change.added) k += change.count || 0;
-                    if (change.removed) I += change.count || 0;
+                  for (let change of Y5e(oldString, newString)) {
+                    if (change.added) linesAdded += change.count || 0;
+                    if (change.removed) linesRemoved += change.count || 0;
                   }
               }
               if (toolName === "Write") {
-                let G = me(input.content);
-                if (G)
-                  k +=
+                let writeContent = stringOrEmpty(input.content);
+                if (writeContent)
+                  linesAdded +=
                     countCharInString(
-                      G,
+                      writeContent,
                       `
 `,
                     ) + 1;
               }
-              let Z = me(input.command);
-              if (Z.includes("git commit")) r++;
-              if (Z.includes("git push")) g++;
-              if (toolName === BASH_TOOL_NAME && Z && !de) {
-                if (!isReadOnlyBashCommandCached(Z)) {
-                  if ((R++, XCe(Z) !== null)) U++;
+              let command = stringOrEmpty(input.command);
+              if (command.includes("git commit")) gitCommits++;
+              if (command.includes("git push")) gitPushes++;
+              if (toolName === BASH_TOOL_NAME && command && !de) {
+                if (!isReadOnlyBashCommandCached(command)) {
+                  R++;
+                  if (getDestructiveTargetCategory(command) !== null) U++;
                 }
               }
             }
@@ -421,42 +434,43 @@ function extractToolStats(log) {
       }
     }
     if (msg.type === "user" && msg.message) {
-      let content = msg.message.content,
-        j = !1;
-      if (typeof content === "string" && content.trim()) j = !0;
+      let content = msg.message.content;
+      let isHumanMessage = false;
+      if (typeof content === "string" && content.trim()) isHumanMessage = true;
       else if (Array.isArray(content)) {
         for (let block of content)
           if (block.type === "text" && "text" in block) {
-            j = !0;
+            isHumanMessage = true;
             break;
           }
       }
-      if (j) {
+      if (isHumanMessage) {
         if (msgTimestamp) {
           let msgDate = new Date(msgTimestamp);
           if (Number.isFinite(msgDate.getTime())) {
             let hour = msgDate.getHours();
-            (O.push(hour), se.push(msgTimestamp));
+            messageHours.push(hour);
+            userMessageTimestamps.push(msgTimestamp);
           }
         }
         if (lastAssistantTimestamp && msgTimestamp) {
-          let assistantTime = new Date(lastAssistantTimestamp).getTime(),
-            responseTimeSec = (new Date(msgTimestamp).getTime() - assistantTime) / 1000;
-          if (responseTimeSec > 2 && responseTimeSec < 3600) w.push(responseTimeSec);
+          let assistantTime = new Date(lastAssistantTimestamp).getTime();
+          let responseTimeSec = (new Date(msgTimestamp).getTime() - assistantTime) / 1000;
+          if (responseTimeSec > 2 && responseTimeSec < 3600) userResponseTimes.push(responseTimeSec);
         }
       }
       if (Array.isArray(content)) {
         for (let block of content)
           if (block.type === "tool_result" && "content" in block) {
             if (block.is_error) {
-              i++;
+              toolErrors++;
               let W = categorizeToolError(block.content);
-              h[W] = (h[W] || 0) + 1;
+              toolErrorCategories[W] = (toolErrorCategories[W] || 0) + 1;
             }
           }
       }
       if (typeof content === "string") {
-        if (content.includes("[Request interrupted by user")) y++;
+        if (content.includes("[Request interrupted by user")) userInterruptions++;
       } else if (Array.isArray(content)) {
         for (let block of content)
           if (
@@ -464,32 +478,32 @@ function extractToolStats(log) {
             "text" in block &&
             block.text.includes("[Request interrupted by user")
           ) {
-            y++;
+            userInterruptions++;
             break;
           }
       }
     }
   }
   return {
-    toolCounts: s,
-    languages: n,
-    gitCommits: r,
-    gitPushes: g,
-    inputTokens: m,
-    outputTokens: d,
-    userInterruptions: y,
-    userResponseTimes: w,
-    toolErrors: i,
-    toolErrorCategories: h,
-    usesTaskAgent: f,
-    usesMcp: L,
-    usesWebSearch: x,
-    usesWebFetch: H,
-    linesAdded: k,
-    linesRemoved: I,
-    filesModified: filesModified,
-    messageHours: O,
-    userMessageTimestamps: se,
+    toolCounts,
+    languages,
+    gitCommits,
+    gitPushes,
+    inputTokens,
+    outputTokens,
+    userInterruptions,
+    userResponseTimes,
+    toolErrors,
+    toolErrorCategories,
+    usesTaskAgent,
+    usesMcp,
+    usesWebSearch,
+    usesWebFetch,
+    linesAdded,
+    linesRemoved,
+    filesModified,
+    messageHours,
+    userMessageTimestamps,
     bashWouldPromptCount: R,
     fileEditToolCount: J,
     destructiveCommandCount: U,
@@ -498,64 +512,75 @@ function extractToolStats(log) {
 //@ chunk-yt6zn9vg.js:20612-20857 layout = wordDiffStrings (1)
 function countLineChanges(oldStr, newStr) {
   let n = new Map();
-  for (let m of oldStr.split(`
+  for (let line of oldStr.split(`
 `))
-    n.set(m, (n.get(m) ?? 0) + 1);
-  let reduced = newStr
-      .split(
-        `
+    n.set(line, (n.get(line) ?? 0) + 1);
+  let added = newStr
+    .split(
+      `
 `,
-      )
-      .reduce((m, d) => {
-        let y = n.get(d) ?? 0;
-        return (n.set(d, y - 1), y > 0 ? m : m + 1);
-      }, 0),
-    len = [...n.values()].reduce((m, d) => m + Math.max(d, 0), 0);
-  return { added: reduced, removed: len };
+    )
+    .reduce((acc, line) => {
+      let y = n.get(line) ?? 0;
+      n.set(line, y - 1);
+      return y > 0 ? acc : acc + 1;
+    }, 0);
+  let len = [...n.values()].reduce((acc, d) => acc + Math.max(d, 0), 0);
+  return {
+    added,
+    removed: len,
+  };
 }
 //@ chunk-yt6zn9vg.js:20857-20880 layout
-var ge = new Map(),
-  dt = 5000;
+var INSIGHTS_CACHE = new Map();
+var MAX_INSIGHTS_CACHE_ENTRIES = 5000;
 //@ chunk-yt6zn9vg.js:20880-21085 layout
-function isReadOnlyBashCommandCached(e) {
-  let s = ge.get(e);
-  if (s !== void 0) return s;
+function isReadOnlyBashCommandCached(command) {
+  let s = INSIGHTS_CACHE.get(command);
+  if (s !== undefined) return s;
   let n;
   try {
     n =
-      checkReadOnlyConstraints({ command: e }, commandHasAnyCd(e), { offlineEstimate: !0 }).behavior ===
-      "allow";
+      checkReadOnlyConstraints(
+        {
+          command,
+        },
+        commandHasAnyCd(command),
+        {
+          offlineEstimate: true,
+        },
+      ).behavior === "allow";
   } catch {
-    n = !1;
+    n = false;
   }
-  if (e.length <= SPLIT_MAX_LEN) {
-    if (ge.size >= dt) ge.clear();
-    ge.set(e, n);
+  if (command.length <= SPLIT_MAX_LEN) {
+    if (INSIGHTS_CACHE.size >= MAX_INSIGHTS_CACHE_ENTRIES) INSIGHTS_CACHE.clear();
+    INSIGHTS_CACHE.set(command, n);
   }
   return n;
 }
 //@ chunk-yt6zn9vg.js:21085-22424 fingerprint = logToSessionMeta (0.918)
 function logToSessionMeta(log) {
-  let stats = extractToolStats(log),
-    sessionId = getSessionIdFromLog(log) || "unknown",
-    startTime = log.created.toISOString(),
-    durationMinutes = Math.round((log.modified.getTime() - log.created.getTime()) / 1000 / 60),
-    m = 0,
-    d = 0;
+  let stats = extractToolStats(log);
+  let sessionId = getSessionIdFromLog(log) || "unknown";
+  let startTime = log.created.toISOString();
+  let durationMinutes = Math.round((log.modified.getTime() - log.created.getTime()) / 1000 / 60);
+  let userMessageCount = 0;
+  let assistantMessageCount = 0;
   for (let msg of log.messages) {
-    if (msg.type === "assistant") d++;
+    if (msg.type === "assistant") assistantMessageCount++;
     if (msg.type === "user" && msg.message) {
-      let content = msg.message.content,
-        i = !1;
-      if (typeof content === "string" && content.trim()) i = !0;
+      let content = msg.message.content;
+      let isHumanMessage = false;
+      if (typeof content === "string" && content.trim()) isHumanMessage = true;
       else if (Array.isArray(content)) {
         for (let block of content)
           if (block.type === "text" && "text" in block) {
-            i = !0;
+            isHumanMessage = true;
             break;
           }
       }
-      if (i) m++;
+      if (isHumanMessage) userMessageCount++;
     }
   }
   return {
@@ -563,8 +588,8 @@ function logToSessionMeta(log) {
     project_path: log.relocatedCwd ?? log.projectPath ?? "",
     start_time: startTime,
     duration_minutes: durationMinutes,
-    user_message_count: m,
-    assistant_message_count: d,
+    user_message_count: userMessageCount,
+    assistant_message_count: assistantMessageCount,
     tool_counts: stats.toolCounts,
     languages: stats.languages,
     git_commits: stats.gitCommits,
@@ -593,21 +618,24 @@ function logToSessionMeta(log) {
   };
 }
 //@ chunk-yt6zn9vg.js:22424-22597 fingerprint = deduplicateSessionBranches (0.759)
-function deduplicateSessionBranches(e, s) {
-  if (!s) return !0;
-  if (e.user_message_count !== s.user_message_count) return e.user_message_count > s.user_message_count;
-  return e.duration_minutes > s.duration_minutes;
+function deduplicateSessionBranches(meta, s) {
+  if (!s) return true;
+  if (meta.user_message_count !== s.user_message_count) return meta.user_message_count > s.user_message_count;
+  return meta.duration_minutes > s.duration_minutes;
 }
 //@ chunk-yt6zn9vg.js:22597-22902 layout = formatTranscriptWithSummarization (0.799)
 function formatTranscriptWithSummarization_2(log) {
-  let chunks = [],
-    meta = logToSessionMeta(log);
-  (chunks.push(`Session: ${meta.session_id.slice(0, 8)}`),
-    chunks.push(`Date: ${meta.start_time}`),
-    chunks.push(`Project: ${meta.project_path}`),
-    chunks.push(`Duration: ${meta.duration_minutes} min`),
-    chunks.push(""));
-  for (let r of formatTranscriptForFacets(log.messages, { userTextChars: 500, assistantTextChars: 300 }))
+  let chunks = [];
+  let meta = logToSessionMeta(log);
+  chunks.push(`Session: ${meta.session_id.slice(0, 8)}`);
+  chunks.push(`Date: ${meta.start_time}`);
+  chunks.push(`Project: ${meta.project_path}`);
+  chunks.push(`Duration: ${meta.duration_minutes} min`);
+  chunks.push("");
+  for (let r of formatTranscriptForFacets(log.messages, {
+    userTextChars: 500,
+    assistantTextChars: 300,
+  }))
     chunks.push(r);
   return chunks.join(`
 `);
@@ -624,52 +652,57 @@ Keep it concise - 3-5 sentences. Preserve specific details like file names, erro
 TRANSCRIPT CHUNK:
 `;
 //@ chunk-yt6zn9vg.js:23229-23659 fingerprint = summarizeTranscriptChunk (0.924)
-async function summarizeTranscriptChunk(e, s, n = "", r) {
+async function summarizeTranscriptChunk(chunk, credentials, n = "", r) {
   try {
     let result = await queryHaiku({
       systemPrompt: asSystemPrompt([]),
-      userPrompt: n + SUMMARIZE_CHUNK_PROMPT + e,
+      userPrompt: n + SUMMARIZE_CHUNK_PROMPT + chunk,
       signal: r ?? new AbortController().signal,
       options: {
-        model: Se(),
+        model: insightsModel(),
         querySource: "insights",
         agents: [],
-        isNonInteractiveSession: !0,
-        hasAppendSystemPrompt: !1,
+        isNonInteractiveSession: true,
+        hasAppendSystemPrompt: false,
         mcpTools: [],
         maxOutputTokensOverride: 500,
         agentContext: mainAgentContext(),
-        credentials: s,
+        credentials,
       },
     });
-    if (result.isApiErrorMessage) return e.slice(0, 2000);
-    return extractTextContent_2(result.message.content) || e.slice(0, 2000);
+    if (result.isApiErrorMessage) return chunk.slice(0, 2000);
+    return extractTextContent_2(result.message.content) || chunk.slice(0, 2000);
   } catch {
-    return e.slice(0, 2000);
+    return chunk.slice(0, 2000);
   }
 }
 //@ chunk-yt6zn9vg.js:23659-23698 layout
-var ht = 5,
-  _t = new SessionRootSlot(() => ({ running: !1 }));
+var CCS_INSIGHTS_SESSION_LIMIT = 5;
+var INSIGHTS_RUNNING_SLOT = new SessionRootSlot(() => ({
+  running: false,
+}));
 //@ chunk-yt6zn9vg.js:23698-24184 fingerprint = formatTranscriptWithSummarization (0.939)
-async function formatTranscriptWithSummarization(e, s, n, r) {
-  let fullTranscript = formatTranscriptWithSummarization_2(e);
+async function formatTranscriptWithSummarization(log, credentials, n, r) {
+  let fullTranscript = formatTranscriptWithSummarization_2(log);
   if (fullTranscript.length <= 30000) return fullTranscript;
-  let CHUNK_SIZE = 25000,
-    d = [];
-  for (let f = 0; f < fullTranscript.length; f += CHUNK_SIZE) d.push(fullTranscript.slice(f, f + CHUNK_SIZE));
-  let y = isCcsTenant() ? ht : d.length,
-    w = [];
-  for (let f of Ce(d, y))
-    (r?.throwIfAborted(), w.push(...(await Promise.all(f.map((k) => summarizeTranscriptChunk(k, s, n, r))))));
-  let meta = logToSessionMeta(e);
+  let CHUNK_SIZE = 25000;
+  let chunks = [];
+  for (let i = 0; i < fullTranscript.length; i += CHUNK_SIZE)
+    chunks.push(fullTranscript.slice(i, i + CHUNK_SIZE));
+  let y = isCcsTenant() ? CCS_INSIGHTS_SESSION_LIMIT : chunks.length;
+  let w = [];
+  for (let f of chunkArray(chunks, y)) {
+    r?.throwIfAborted();
+    w.push(...(await Promise.all(f.map((k) => summarizeTranscriptChunk(k, credentials, n, r)))));
+  }
+  let meta = logToSessionMeta(log);
   return (
     [
       `Session: ${meta.session_id.slice(0, 8)}`,
       `Date: ${meta.start_time}`,
       `Project: ${meta.project_path}`,
       `Duration: ${meta.duration_minutes} min`,
-      `[Long session - ${d.length} parts summarized]`,
+      `[Long session - ${chunks.length} parts summarized]`,
       "",
     ].join(`
 `) +
@@ -681,15 +714,17 @@ async function formatTranscriptWithSummarization(e, s, n, r) {
   );
 }
 //@ chunk-yt6zn9vg.js:24184-24401 fingerprint = loadCachedFacets (1)
-async function loadCachedFacets(e, s) {
+async function loadCachedFacets(sessionId, s) {
   if (s) {
-    let [r] = await getMcpAuthCache([e], s);
+    let [r] = await getMcpAuthCache([sessionId], s);
     return r ?? null;
   }
-  let facetPath = join(getFacetsDir(), `${e}.json`);
+  let facetPath = join(getFacetsDir(), `${sessionId}.json`);
   try {
-    let content = await readFile(facetPath, { encoding: "utf-8" }),
-      parsed = jsonParse(content);
+    let content = await readFile(facetPath, {
+      encoding: "utf-8",
+    });
+    let parsed = jsonParse(content);
     if (!isValidSessionFacets(parsed)) {
       try {
         await unlink(facetPath);
@@ -703,59 +738,66 @@ async function loadCachedFacets(e, s) {
 }
 //@ chunk-yt6zn9vg.js:24401-24570 layout = getMcpAuthCache (1)
 function getMcpAuthCache(e, s) {
-  return batchReadWithFallback(e, ke, s, async (n, r) => {
+  return batchReadWithFallback(e, facetsStorePath, s, async (n, r) => {
     let g;
     try {
       g = jsonParse(Buffer.from(n).toString("utf-8"));
     } catch {
       return null;
     }
-    if (!isValidSessionFacets(g)) return (await s.delete(ke(r)), null);
+    if (!isValidSessionFacets(g)) {
+      await s.delete(facetsStorePath(r));
+      return null;
+    }
     return g;
   });
 }
 //@ chunk-yt6zn9vg.js:24570-24974 fingerprint = saveFacets (0.557)
-async function saveFacets(e, s) {
+async function saveFacets(facets, storageV5) {
   if (!isDiskless())
     try {
-      await mkdir(getFacetsDir(), { recursive: !0 });
+      await mkdir(getFacetsDir(), {
+        recursive: true,
+      });
     } catch {}
-  if (isStorageV5Enabled() && s) {
-    let write = await s.write(ke(e.session_id), jsonStringify(e, null, 2), {
+  if (isStorageV5Enabled() && storageV5) {
+    let r = await storageV5.write(facetsStorePath(facets.session_id), jsonStringify(facets, null, 2), {
       publishDiscipline: "inPlace",
       mode: 384,
     });
-    if (!write.ok)
-      throw (
-        logForDebugging(`saveFacets: cache write failed: ${formatStorageError(write.error)}`),
-        Error("saveFacets: cache write through the storage backend failed")
-      );
+    if (!r.ok) {
+      logForDebugging(`saveFacets: cache write failed: ${formatStorageError(r.error)}`);
+      throw Error("saveFacets: cache write through the storage backend failed");
+    }
     return;
   }
-  let facetPath = join(getFacetsDir(), `${e.session_id}.json`);
-  await writeFile(facetPath, jsonStringify(e, null, 2), { encoding: "utf-8", mode: 384 });
+  let facetPath = join(getFacetsDir(), `${facets.session_id}.json`);
+  await writeFile(facetPath, jsonStringify(facets, null, 2), {
+    encoding: "utf-8",
+    mode: 384,
+  });
 }
 //@ chunk-yt6zn9vg.js:24974-25116 layout
-async function loadSessionMeta(e, s) {
+async function loadSessionMeta(sessionId, s) {
   if (s) {
-    let [n] = await getMcpAuthCache_2([e], s);
+    let [n] = await getMcpAuthCache_2([sessionId], s);
     return n ?? null;
   }
   try {
-    let read = await loadCachedSessionMeta(e).read();
-    return read === null ? null : withSessionMetaDefaults(read);
+    let meta = await loadCachedSessionMeta(sessionId).read();
+    return meta === null ? null : withSessionMetaDefaults(meta);
   } catch {
     return null;
   }
 }
 //@ chunk-yt6zn9vg.js:25116-25299 layout = getMcpAuthCache (0.763)
 function getMcpAuthCache_2(e, s) {
-  return batchReadWithFallback(e, ze, s, (data) => {
+  return batchReadWithFallback(e, sessionMetaStorePath, s, (data) => {
     try {
-      let safeParse = sessionMetaSchema()
+      let r = sessionMetaSchema()
         .nullable()
         .safeParse(jsonParse(Buffer.from(data).toString("utf-8")));
-      return safeParse.success && safeParse.data !== null ? withSessionMetaDefaults(safeParse.data) : null;
+      return r.success && r.data !== null ? withSessionMetaDefaults(r.data) : null;
     } catch {
       return null;
     }
@@ -764,20 +806,20 @@ function getMcpAuthCache_2(e, s) {
 //@ chunk-yt6zn9vg.js:25299-25584 layout
 async function batchReadWithFallback(e, s, n, r) {
   if (e.length === 0) return [];
-  let read = await n.read(e.map(s));
-  if (!read.ok && e.length > 1)
+  let g = await n.read(e.map(s));
+  if (!g.ok && e.length > 1)
     return (await Promise.all(e.map((d) => batchReadWithFallback([d], s, n, r)))).map(([d]) => d ?? null);
   return Promise.all(
     e.map(async (m, d) => {
-      let y = read.ok ? read.value.items[d] : void 0;
+      let y = g.ok ? g.value.items[d] : undefined;
       return y?.found ? r(y.value, m) : null;
     }),
   );
 }
+//@ chunk-yt6zn9vg.js:25584-26157 layout
 /**
  * 给缓存读出的会话元数据补默认值（空对象、空数组、0、false），兼容旧版缓存缺字段。
  */
-//@ chunk-yt6zn9vg.js:25584-26157 layout
 function withSessionMetaDefaults(meta) {
   return {
     ...meta,
@@ -792,22 +834,24 @@ function withSessionMetaDefaults(meta) {
     lines_added: meta.lines_added ?? 0,
     lines_removed: meta.lines_removed ?? 0,
     files_modified: meta.files_modified ?? 0,
-    uses_task_agent: meta.uses_task_agent ?? !1,
-    uses_mcp: meta.uses_mcp ?? !1,
-    uses_web_search: meta.uses_web_search ?? !1,
-    uses_web_fetch: meta.uses_web_fetch ?? !1,
+    uses_task_agent: meta.uses_task_agent ?? false,
+    uses_mcp: meta.uses_mcp ?? false,
+    uses_web_search: meta.uses_web_search ?? false,
+    uses_web_fetch: meta.uses_web_fetch ?? false,
   };
 }
+//@ chunk-yt6zn9vg.js:26157-26559 layout
 /**
  * 写会话元数据缓存：有 v5 存储时写存储（权限/环境类失败只记调试日志，其他上报错误），否则写本地缓存文件；文件系统不可访问时静默。
  */
-//@ chunk-yt6zn9vg.js:26157-26559 layout
-async function writeSessionMetaCache(e, s) {
+async function writeSessionMetaCache(meta, storageV5) {
   try {
-    if (s) {
-      let write = await s.write(ze(e.session_id), jsonStringify(e, null, 2), { mode: 384 });
-      if (!write.ok) {
-        let error = write.error;
+    if (storageV5) {
+      let n = await storageV5.write(sessionMetaStorePath(meta.session_id), jsonStringify(meta, null, 2), {
+        mode: 384,
+      });
+      if (!n.ok) {
+        let error = n.error;
         if (isExpectedCacheWriteFailure(error))
           logForDebugging(`saveSessionMeta: cache write failed: ${formatStorageError(error)}`);
         else
@@ -820,7 +864,7 @@ async function writeSessionMetaCache(e, s) {
       }
       return;
     }
-    await loadCachedSessionMeta(e.session_id).write(e);
+    await loadCachedSessionMeta(meta.session_id).write(meta);
   } catch (error) {
     if (isFsInaccessible(error)) {
       logForDebugging(`saveSessionMeta: cache write failed: ${error}`);
@@ -830,10 +874,10 @@ async function writeSessionMetaCache(e, s) {
   }
 }
 //@ chunk-yt6zn9vg.js:26559-27969 fingerprint = extractFacetsFromAPI (0.971)
-async function extractFacetsFromAPI(e, s, n, r, g) {
+async function extractFacetsFromAPI(log, sessionId, credentials, privacyLabels, signal) {
   try {
-    let m = await formatTranscriptWithSummarization(e, n, r, g),
-      jsonPrompt = `${FACET_EXTRACTION_PROMPT}${m}
+    let transcript = await formatTranscriptWithSummarization(log, credentials, privacyLabels, signal);
+    let jsonPrompt = `${FACET_EXTRACTION_PROMPT}${transcript}
 
 RESPOND WITH ONLY A VALID JSON OBJECT matching this schema:
 {
@@ -847,30 +891,36 @@ RESPOND WITH ONLY A VALID JSON OBJECT matching this schema:
   "friction_detail": "One sentence describing friction or empty",
   "primary_success": "none|fast_accurate_search|correct_code_edits|good_explanations|proactive_help|multi_file_changes|good_debugging",
   "brief_summary": "One sentence: what user wanted and whether they got it"
-}`,
-      result = await queryHaiku({
-        systemPrompt: asSystemPrompt([]),
-        userPrompt: r + jsonPrompt,
-        signal: g ?? new AbortController().signal,
-        options: {
-          model: Se(),
-          querySource: "insights",
-          agents: [],
-          isNonInteractiveSession: !0,
-          hasAppendSystemPrompt: !1,
-          mcpTools: [],
-          maxOutputTokensOverride: 4096,
-          agentContext: mainAgentContext(),
-          credentials: n,
-        },
-      }),
-      jsonMatch = extractTextContent_2(result.message.content).match(/\{[\s\S]*\}/);
+}`;
+    let result = await queryHaiku({
+      systemPrompt: asSystemPrompt([]),
+      userPrompt: privacyLabels + jsonPrompt,
+      signal: signal ?? new AbortController().signal,
+      options: {
+        model: insightsModel(),
+        querySource: "insights",
+        agents: [],
+        isNonInteractiveSession: true,
+        hasAppendSystemPrompt: false,
+        mcpTools: [],
+        maxOutputTokensOverride: 4096,
+        agentContext: mainAgentContext(),
+        credentials,
+      },
+    });
+    let jsonMatch = extractTextContent_2(result.message.content).match(/\{[\s\S]*\}/);
     if (!jsonMatch) return null;
     let parsed = jsonParse(jsonMatch[0]);
     if (!isValidSessionFacets(parsed)) return null;
-    return { ...parsed, session_id: s };
+    return {
+      ...parsed,
+      session_id: sessionId,
+    };
   } catch (err) {
-    return (logForDebugging(`Facet extraction failed: ${toError(err).message}`, { level: "error" }), null);
+    logForDebugging(`Facet extraction failed: ${toError(err).message}`, {
+      level: "error",
+    });
+    return null;
   }
 }
 //@ chunk-yt6zn9vg.js:27969-28795 fingerprint = detectMultiClauding (0.958)
@@ -880,34 +930,38 @@ function detectMultiClauding(sessions) {
     for (let timestamp of session.user_message_timestamps) {
       let ts = new Date(timestamp).getTime();
       if (!Number.isFinite(ts)) continue;
-      allSessionMessages.push({ ts: ts, sessionId: session.session_id });
+      allSessionMessages.push({
+        ts,
+        sessionId: session.session_id,
+      });
     }
   allSessionMessages.sort((w, i) => w.ts - i.ts);
-  let multiClaudeSessionPairs = new Set(),
-    messagesDuringMulticlaude = new Set(),
-    m = 0,
-    sessionLastIndex = new Map();
-  for (let w = 0; w < allSessionMessages.length; w++) {
-    let i = allSessionMessages[w];
-    while (m < w && i.ts - allSessionMessages[m].ts > 1800000) {
-      let f = allSessionMessages[m];
-      if (sessionLastIndex.get(f.sessionId) === m) sessionLastIndex.delete(f.sessionId);
-      m++;
+  let multiClaudeSessionPairs = new Set();
+  let messagesDuringMulticlaude = new Set();
+  let windowStart = 0;
+  let sessionLastIndex = new Map();
+  for (let i_2 = 0; i_2 < allSessionMessages.length; i_2++) {
+    let msg = allSessionMessages[i_2];
+    while (windowStart < i_2 && msg.ts - allSessionMessages[windowStart].ts > 1800000) {
+      let expiring = allSessionMessages[windowStart];
+      if (sessionLastIndex.get(expiring.sessionId) === windowStart)
+        sessionLastIndex.delete(expiring.sessionId);
+      windowStart++;
     }
-    let prevIndex = sessionLastIndex.get(i.sessionId);
-    if (prevIndex !== void 0)
-      for (let f = prevIndex + 1; f < w; f++) {
-        let k = allSessionMessages[f];
-        if (k.sessionId !== i.sessionId) {
-          let pair = [i.sessionId, k.sessionId].sort().join(":");
-          (multiClaudeSessionPairs.add(pair),
-            messagesDuringMulticlaude.add(`${allSessionMessages[prevIndex].ts}:${i.sessionId}`),
-            messagesDuringMulticlaude.add(`${k.ts}:${k.sessionId}`),
-            messagesDuringMulticlaude.add(`${i.ts}:${i.sessionId}`));
+    let prevIndex = sessionLastIndex.get(msg.sessionId);
+    if (prevIndex !== undefined)
+      for (let j = prevIndex + 1; j < i_2; j++) {
+        let between = allSessionMessages[j];
+        if (between.sessionId !== msg.sessionId) {
+          let pair = [msg.sessionId, between.sessionId].sort().join(":");
+          multiClaudeSessionPairs.add(pair);
+          messagesDuringMulticlaude.add(`${allSessionMessages[prevIndex].ts}:${msg.sessionId}`);
+          messagesDuringMulticlaude.add(`${between.ts}:${between.sessionId}`);
+          messagesDuringMulticlaude.add(`${msg.ts}:${msg.sessionId}`);
           break;
         }
       }
-    sessionLastIndex.set(i.sessionId, w);
+    sessionLastIndex.set(msg.sessionId, i_2);
   }
   let sessionsWithOverlaps = new Set();
   for (let pair of multiClaudeSessionPairs) {
@@ -923,172 +977,181 @@ function detectMultiClauding(sessions) {
 }
 //@ chunk-yt6zn9vg.js:28795-32723 fingerprint = aggregateData (0.891)
 function aggregateData(sessions, facets) {
-  let n = {
-      total_sessions: sessions.length,
-      sessions_with_facets: facets.size,
-      date_range: { start: "", end: "" },
-      total_messages: 0,
-      total_duration_hours: 0,
-      total_input_tokens: 0,
-      total_output_tokens: 0,
-      tool_counts: {},
-      languages: {},
-      git_commits: 0,
-      git_pushes: 0,
-      projects: {},
-      goal_categories: {},
-      outcomes: {},
-      satisfaction: {},
-      helpfulness: {},
-      session_types: {},
-      friction: {},
-      success: {},
-      session_summaries: [],
-      total_interruptions: 0,
-      total_tool_errors: 0,
-      tool_error_categories: {},
-      user_response_times: [],
-      median_response_time: 0,
-      avg_response_time: 0,
-      sessions_using_task_agent: 0,
-      sessions_using_mcp: 0,
-      sessions_using_web_search: 0,
-      sessions_using_web_fetch: 0,
-      total_lines_added: 0,
-      total_lines_removed: 0,
-      total_files_modified: 0,
-      days_active: 0,
-      messages_per_day: 0,
-      message_hours: [],
-      multi_clauding: { overlap_events: 0, sessions_involved: 0, user_messages_during: 0 },
-      auto_mode_stats: {
-        auto_sessions: 0,
-        non_auto_sessions: 0,
-        estimated_prompts_in_non_auto: 0,
-        destructive_in_non_auto: 0,
-        recent_all_auto: !1,
-      },
+  let result = {
+    total_sessions: sessions.length,
+    sessions_with_facets: facets.size,
+    date_range: {
+      start: "",
+      end: "",
     },
-    r = [],
-    g = [],
-    m = [],
-    d = [];
+    total_messages: 0,
+    total_duration_hours: 0,
+    total_input_tokens: 0,
+    total_output_tokens: 0,
+    tool_counts: {},
+    languages: {},
+    git_commits: 0,
+    git_pushes: 0,
+    projects: {},
+    goal_categories: {},
+    outcomes: {},
+    satisfaction: {},
+    helpfulness: {},
+    session_types: {},
+    friction: {},
+    success: {},
+    session_summaries: [],
+    total_interruptions: 0,
+    total_tool_errors: 0,
+    tool_error_categories: {},
+    user_response_times: [],
+    median_response_time: 0,
+    avg_response_time: 0,
+    sessions_using_task_agent: 0,
+    sessions_using_mcp: 0,
+    sessions_using_web_search: 0,
+    sessions_using_web_fetch: 0,
+    total_lines_added: 0,
+    total_lines_removed: 0,
+    total_files_modified: 0,
+    days_active: 0,
+    messages_per_day: 0,
+    message_hours: [],
+    multi_clauding: {
+      overlap_events: 0,
+      sessions_involved: 0,
+      user_messages_during: 0,
+    },
+    auto_mode_stats: {
+      auto_sessions: 0,
+      non_auto_sessions: 0,
+      estimated_prompts_in_non_auto: 0,
+      destructive_in_non_auto: 0,
+      recent_all_auto: false,
+    },
+  };
+  let dates = [];
+  let allResponseTimes = [];
+  let m = [];
+  let d = [];
   for (let session of sessions) {
-    (r.push(session.start_time),
-      (n.total_messages += session.user_message_count),
-      (n.total_duration_hours += session.duration_minutes / 60),
-      (n.total_input_tokens += session.input_tokens),
-      (n.total_output_tokens += session.output_tokens),
-      (n.git_commits += session.git_commits),
-      (n.git_pushes += session.git_pushes),
-      (n.total_interruptions += session.user_interruptions),
-      (n.total_tool_errors += session.tool_errors));
-    for (let [f, k] of Object.entries(session.tool_error_categories))
-      n.tool_error_categories[f] = (n.tool_error_categories[f] || 0) + k;
-    if ((g.push(...session.user_response_times), session.uses_task_agent)) n.sessions_using_task_agent++;
-    if (session.uses_mcp) n.sessions_using_mcp++;
-    if (session.uses_web_search) n.sessions_using_web_search++;
-    if (session.uses_web_fetch) n.sessions_using_web_fetch++;
-    if (
-      ((n.total_lines_added += session.lines_added),
-      (n.total_lines_removed += session.lines_removed),
-      (n.total_files_modified += session.files_modified),
-      m.push(...session.message_hours),
-      session.bash_would_prompt_count !== void 0)
-    ) {
-      let permission_mode = session.permission_mode;
-      if (permission_mode === "auto" || permission_mode === "default" || permission_mode === "acceptEdits")
+    dates.push(session.start_time);
+    result.total_messages += session.user_message_count;
+    result.total_duration_hours += session.duration_minutes / 60;
+    result.total_input_tokens += session.input_tokens;
+    result.total_output_tokens += session.output_tokens;
+    result.git_commits += session.git_commits;
+    result.git_pushes += session.git_pushes;
+    result.total_interruptions += session.user_interruptions;
+    result.total_tool_errors += session.tool_errors;
+    for (let [cat, count] of Object.entries(session.tool_error_categories))
+      result.tool_error_categories[cat] = (result.tool_error_categories[cat] || 0) + count;
+    allResponseTimes.push(...session.user_response_times);
+    if (session.uses_task_agent) result.sessions_using_task_agent++;
+    if (session.uses_mcp) result.sessions_using_mcp++;
+    if (session.uses_web_search) result.sessions_using_web_search++;
+    if (session.uses_web_fetch) result.sessions_using_web_fetch++;
+    result.total_lines_added += session.lines_added;
+    result.total_lines_removed += session.lines_removed;
+    result.total_files_modified += session.files_modified;
+    m.push(...session.message_hours);
+    if (session.bash_would_prompt_count !== undefined) {
+      let permissionMode = session.permission_mode;
+      if (permissionMode === "auto" || permissionMode === "default" || permissionMode === "acceptEdits")
         d.push({
           start_time: session.start_time,
-          auto: permission_mode === "auto",
+          auto: permissionMode === "auto",
           prompts:
-            permission_mode === "auto"
+            permissionMode === "auto"
               ? 0
               : session.bash_would_prompt_count +
-                (permission_mode === "default" ? (session.file_edit_tool_count ?? 0) : 0),
-          destructive: permission_mode === "auto" ? 0 : (session.destructive_command_count ?? 0),
+                (permissionMode === "default" ? (session.file_edit_tool_count ?? 0) : 0),
+          destructive: permissionMode === "auto" ? 0 : (session.destructive_command_count ?? 0),
         });
     }
-    for (let [f, k] of Object.entries(session.tool_counts)) n.tool_counts[f] = (n.tool_counts[f] || 0) + k;
-    for (let [f, k] of Object.entries(session.languages)) n.languages[f] = (n.languages[f] || 0) + k;
-    if (session.project_path) n.projects[session.project_path] = (n.projects[session.project_path] || 0) + 1;
+    for (let [tool, count] of Object.entries(session.tool_counts))
+      result.tool_counts[tool] = (result.tool_counts[tool] || 0) + count;
+    for (let [lang, count] of Object.entries(session.languages))
+      result.languages[lang] = (result.languages[lang] || 0) + count;
+    if (session.project_path)
+      result.projects[session.project_path] = (result.projects[session.project_path] || 0) + 1;
     let sessionFacets = facets.get(session.session_id);
     if (sessionFacets) {
-      for (let [f, k] of safeEntries(sessionFacets.goal_categories))
-        if (k > 0) n.goal_categories[f] = (n.goal_categories[f] || 0) + k;
-      n.outcomes[sessionFacets.outcome] = (n.outcomes[sessionFacets.outcome] || 0) + 1;
-      for (let [f, k] of safeEntries(sessionFacets.user_satisfaction_counts))
-        if (k > 0) n.satisfaction[f] = (n.satisfaction[f] || 0) + k;
-      ((n.helpfulness[sessionFacets.claude_helpfulness] =
-        (n.helpfulness[sessionFacets.claude_helpfulness] || 0) + 1),
-        (n.session_types[sessionFacets.session_type] =
-          (n.session_types[sessionFacets.session_type] || 0) + 1));
-      for (let [f, k] of safeEntries(sessionFacets.friction_counts))
-        if (k > 0) n.friction[f] = (n.friction[f] || 0) + k;
+      for (let [cat, count] of safeEntries(sessionFacets.goal_categories))
+        if (count > 0) result.goal_categories[cat] = (result.goal_categories[cat] || 0) + count;
+      result.outcomes[sessionFacets.outcome] = (result.outcomes[sessionFacets.outcome] || 0) + 1;
+      for (let [level, count] of safeEntries(sessionFacets.user_satisfaction_counts))
+        if (count > 0) result.satisfaction[level] = (result.satisfaction[level] || 0) + count;
+      result.helpfulness[sessionFacets.claude_helpfulness] =
+        (result.helpfulness[sessionFacets.claude_helpfulness] || 0) + 1;
+      result.session_types[sessionFacets.session_type] =
+        (result.session_types[sessionFacets.session_type] || 0) + 1;
+      for (let [type, count] of safeEntries(sessionFacets.friction_counts))
+        if (count > 0) result.friction[type] = (result.friction[type] || 0) + count;
       if (sessionFacets.primary_success !== "none")
-        n.success[sessionFacets.primary_success] = (n.success[sessionFacets.primary_success] || 0) + 1;
+        result.success[sessionFacets.primary_success] =
+          (result.success[sessionFacets.primary_success] || 0) + 1;
     }
-    if (n.session_summaries.length < 50)
-      n.session_summaries.push({
+    if (result.session_summaries.length < 50)
+      result.session_summaries.push({
         id: session.session_id.slice(0, 8),
         date: firstLineOf(session.start_time, "T"),
         summary: session.summary || session.first_prompt.slice(0, 100),
         goal: sessionFacets?.underlying_goal,
       });
   }
-  if (
-    (r.sort(),
-    (n.date_range.start = firstLineOf(r[0] ?? "", "T")),
-    (n.date_range.end = firstLineOf(r.at(-1) ?? "", "T")),
-    (n.user_response_times = g),
-    g.length > 0)
-  ) {
-    let sorted = [...g].sort((h, f) => h - f);
-    ((n.median_response_time = sorted[Math.floor(sorted.length / 2)] || 0),
-      (n.avg_response_time = g.reduce((h, f) => h + f, 0) / g.length));
+  dates.sort();
+  result.date_range.start = firstLineOf(dates[0] ?? "", "T");
+  result.date_range.end = firstLineOf(dates.at(-1) ?? "", "T");
+  result.user_response_times = allResponseTimes;
+  if (allResponseTimes.length > 0) {
+    let sorted = [...allResponseTimes].sort((h, f) => h - f);
+    result.median_response_time = sorted[Math.floor(sorted.length / 2)] || 0;
+    result.avg_response_time =
+      allResponseTimes.reduce((acc, responseTime) => acc + responseTime, 0) / allResponseTimes.length;
   }
-  let uniqueDays = new Set(r.map((i) => firstLineOf(i, "T")));
-  ((n.days_active = uniqueDays.size),
-    (n.messages_per_day = n.days_active > 0 ? Math.round((n.total_messages / n.days_active) * 10) / 10 : 0),
-    (n.message_hours = m),
-    (n.multi_clauding = detectMultiClauding(sessions)),
-    d.sort((i, h) => h.start_time.localeCompare(i.start_time)));
-  let sliced = d.slice(0, He);
+  let uniqueDays = new Set(dates.map((date) => firstLineOf(date, "T")));
+  result.days_active = uniqueDays.size;
+  result.messages_per_day =
+    result.days_active > 0 ? Math.round((result.total_messages / result.days_active) * 10) / 10 : 0;
+  result.message_hours = m;
+  result.multi_clauding = detectMultiClauding(sessions);
+  d.sort((i, h) => h.start_time.localeCompare(i.start_time));
+  let sliced = d.slice(0, MAX_GLANCE_SESSIONS);
   for (let i of sliced)
-    if (i.auto) n.auto_mode_stats.auto_sessions++;
-    else
-      (n.auto_mode_stats.non_auto_sessions++,
-        (n.auto_mode_stats.estimated_prompts_in_non_auto += i.prompts),
-        (n.auto_mode_stats.destructive_in_non_auto += i.destructive));
-  return (
-    (n.auto_mode_stats.recent_all_auto = sliced.length >= 3 && sliced.slice(0, 3).every((i) => i.auto)),
-    n
-  );
+    if (i.auto) result.auto_mode_stats.auto_sessions++;
+    else {
+      result.auto_mode_stats.non_auto_sessions++;
+      result.auto_mode_stats.estimated_prompts_in_non_auto += i.prompts;
+      result.auto_mode_stats.destructive_in_non_auto += i.destructive;
+    }
+  result.auto_mode_stats.recent_all_auto = sliced.length >= 3 && sliced.slice(0, 3).every((i) => i.auto);
+  return result;
 }
 //@ chunk-yt6zn9vg.js:32723-32759 layout
-var He = 20,
-  At = 3 * He,
-  Tt = 5,
-  Et = 0.25,
-  It = 3;
+var MAX_GLANCE_SESSIONS = 20;
+var BASH_PROMPT_LOOKBACK_SESSIONS = 3 * MAX_GLANCE_SESSIONS;
+var MIN_SESSIONS_FOR_GLANCE = 5;
+var GLANCE_BASH_PROMPT_MARGIN = 0.25;
+var GLANCE_MIN_BASH_PROMPTS = 3;
+//@ chunk-yt6zn9vg.js:32759-33396 layout
 /**
  * 根据近期会话的自动模式统计给出建议：自动模式用得少且非自动会话中估计权限提示足够多时建议切到 auto；已在用 auto 但没配环境时建议运行 setup。
  */
-//@ chunk-yt6zn9vg.js:32759-33396 layout
 function autoModeRecommendation(report, context) {
   if (!context.autoModeAvailable) return null;
-  let autoStats = report.auto_mode_stats,
-    totalSessions = autoStats.auto_sessions + autoStats.non_auto_sessions;
-  if (totalSessions < Tt) return null;
+  let autoStats = report.auto_mode_stats;
+  let totalSessions = autoStats.auto_sessions + autoStats.non_auto_sessions;
+  if (totalSessions < MIN_SESSIONS_FOR_GLANCE) return null;
   if (!(
     context.currentSessionIsAuto ||
     autoStats.recent_all_auto ||
-    autoStats.auto_sessions / totalSessions >= Et
+    autoStats.auto_sessions / totalSessions >= GLANCE_BASH_PROMPT_MARGIN
   )) {
     if (context.sandboxAutoAllowActive) return null;
     if (context.currentSessionSeesNoDialogs) return null;
     if (context.liveArbiterIsAutoClassifier) return null;
-    if (autoStats.estimated_prompts_in_non_auto < It) return null;
+    if (autoStats.estimated_prompts_in_non_auto < GLANCE_MIN_BASH_PROMPTS) return null;
     return {
       kind: "switch_to_auto",
       estimatedPrompts: autoStats.estimated_prompts_in_non_auto,
@@ -1096,39 +1159,42 @@ function autoModeRecommendation(report, context) {
       destructiveCommands: autoStats.destructive_in_non_auto,
     };
   }
-  if (!context.hasAutoModeEnvironment && context.setupSkillAvailable) return { kind: "run_setup" };
+  if (!context.hasAutoModeEnvironment && context.setupSkillAvailable)
+    return {
+      kind: "run_setup",
+    };
   return null;
 }
 //@ chunk-yt6zn9vg.js:33396-33494 layout
-function We(e) {
-  if (e < 100) return e;
-  let s = 10 ** (Math.floor(Math.log10(e)) - 1);
-  return Math.round(e / s) * s;
+function roundToTwoSigFigs(estimatedPrompts) {
+  if (estimatedPrompts < 100) return estimatedPrompts;
+  let s = 10 ** (Math.floor(Math.log10(estimatedPrompts)) - 1);
+  return Math.round(estimatedPrompts / s) * s;
 }
+//@ chunk-yt6zn9vg.js:33494-33887 layout
 /**
  * 读取生成自动模式建议所需的上下文开关（是否可用、当前会话是否 auto、沙箱自动放行、无对话框、仲裁器是分类器、setup 技能、已配置环境）。
  */
-//@ chunk-yt6zn9vg.js:33494-33887 layout
-function readAutoModeContext(e) {
-  let s = e?.();
+function readAutoModeContext(permissionGates) {
+  let s = permissionGates?.();
   return {
-    autoModeAvailable: s?.autoModeAvailable === !0,
-    currentSessionIsAuto: s?.currentSessionIsAuto === !0,
-    sandboxAutoAllowActive: s?.sandboxAutoAllowActive === !0,
-    currentSessionSeesNoDialogs: s?.currentSessionSeesNoDialogs === !0,
-    liveArbiterIsAutoClassifier: s?.liveArbiterIsAutoClassifier === !0,
+    autoModeAvailable: s?.autoModeAvailable === true,
+    currentSessionIsAuto: s?.currentSessionIsAuto === true,
+    sandboxAutoAllowActive: s?.sandboxAutoAllowActive === true,
+    currentSessionSeesNoDialogs: s?.currentSessionSeesNoDialogs === true,
+    liveArbiterIsAutoClassifier: s?.liveArbiterIsAutoClassifier === true,
     setupSkillAvailable: isAutoModeSetupNotOverridden(),
     hasAutoModeEnvironment: (getAutoModeConfig()?.environment?.length ?? 0) > 0,
   };
 }
+//@ chunk-yt6zn9vg.js:33887-34323 layout
 /**
  * 把自动模式建议转成一行提示文字（切换到 auto 可省多少次权限提示，或运行 /auto-mode-setup）。
  */
-//@ chunk-yt6zn9vg.js:33887-34323 layout
-function autoModeTipText(e) {
-  switch (e.kind) {
+function autoModeTipText(autoModeReco) {
+  switch (autoModeReco.kind) {
     case "switch_to_auto":
-      return `Tip: auto mode could have handled up to ~${We(e.estimatedPrompts).toLocaleString()} permission prompts across ${e.nonAutoSessions.toLocaleString()} of your recent sessions \u2014 press Shift+Tab until the mode indicator shows auto.`;
+      return `Tip: auto mode could have handled up to ~${roundToTwoSigFigs(autoModeReco.estimatedPrompts).toLocaleString()} permission prompts across ${autoModeReco.nonAutoSessions.toLocaleString()} of your recent sessions \u2014 press Shift+Tab until the mode indicator shows auto.`;
     case "run_setup":
       return "Tip: you already use auto mode \u2014 run /auto-mode-setup once to teach it your environment and improve its decisions.";
   }
@@ -1264,135 +1330,155 @@ Find something genuinely interesting or amusing from the session summaries.`,
   },
 ];
 //@ chunk-yt6zn9vg.js:39924-40569 fingerprint = generateSectionInsight (0.803)
-async function generateSectionInsight(e, s, n, r, g) {
+async function generateSectionInsight(section, dataContext, credentials, r, g) {
   try {
     let result = await queryHaiku({
-        systemPrompt: asSystemPrompt([]),
-        userPrompt:
-          r +
-          e.prompt +
-          `
+      systemPrompt: asSystemPrompt([]),
+      userPrompt:
+        r +
+        section.prompt +
+        `
 
 DATA:
 ` +
-          s,
-        signal: g ?? new AbortController().signal,
-        options: {
-          model: Se(),
-          querySource: "insights",
-          agents: [],
-          isNonInteractiveSession: !0,
-          hasAppendSystemPrompt: !1,
-          mcpTools: [],
-          maxOutputTokensOverride: e.maxTokens,
-          agentContext: mainAgentContext(),
-          credentials: n,
-        },
-      }),
-      text = extractTextContent_2(result.message.content);
+        dataContext,
+      signal: g ?? new AbortController().signal,
+      options: {
+        model: insightsModel(),
+        querySource: "insights",
+        agents: [],
+        isNonInteractiveSession: true,
+        hasAppendSystemPrompt: false,
+        mcpTools: [],
+        maxOutputTokensOverride: section.maxTokens,
+        agentContext: mainAgentContext(),
+        credentials,
+      },
+    });
+    let text = extractTextContent_2(result.message.content);
     if (text) {
       let jsonMatch = text.match(/\{[\s\S]*\}/);
       if (jsonMatch)
         try {
-          return { name: e.name, result: jsonParse(jsonMatch[0]) };
+          return {
+            name: section.name,
+            result: jsonParse(jsonMatch[0]),
+          };
         } catch {
-          return { name: e.name, result: null };
+          return {
+            name: section.name,
+            result: null,
+          };
         }
     }
-    return { name: e.name, result: null };
+    return {
+      name: section.name,
+      result: null,
+    };
   } catch (err) {
     if (!g?.aborted)
       logError(
         withTelemetryMessage(
-          Error(`${e.name} failed: ${toError(err).message}`),
+          Error(`${section.name} failed: ${toError(err).message}`),
           "insight section query failed",
         ),
       );
-    return { name: e.name, result: null };
+    return {
+      name: section.name,
+      result: null,
+    };
   }
 }
 //@ chunk-yt6zn9vg.js:40569-44394 fingerprint = generateParallelInsights (0.942)
-async function generateParallelInsights(e, s, n, r, g) {
-  let joined = Array.from(s.values())
-      .slice(0, 50)
-      .map((x) => `- ${x.brief_summary} (${x.outcome}, ${x.claude_helpfulness})`).join(`
-`),
-    joined_2 = Array.from(s.values())
-      .filter((x) => x.friction_detail)
-      .slice(0, 20)
-      .map((x) => `- ${x.friction_detail}`).join(`
-`),
-    joined_3 = Array.from(s.values())
-      .flatMap((x) => x.user_instructions_to_claude || [])
-      .slice(0, 15)
-      .map((x) => `- ${x}`).join(`
-`),
-    i =
-      jsonStringify(
-        {
-          sessions: e.total_sessions,
-          analyzed: e.sessions_with_facets,
-          date_range: e.date_range,
-          messages: e.total_messages,
-          hours: Math.round(e.total_duration_hours),
-          commits: e.git_commits,
-          top_tools: Object.entries(e.tool_counts)
-            .sort((x, H) => H[1] - x[1])
-            .slice(0, 8),
-          top_goals: Object.entries(e.goal_categories)
-            .sort((x, H) => H[1] - x[1])
-            .slice(0, 8),
-          outcomes: e.outcomes,
-          satisfaction: e.satisfaction,
-          friction: e.friction,
-          success: e.success,
-          languages: e.languages,
-        },
-        null,
-        2,
-      ) +
-      `
+async function generateParallelInsights(data, facets, credentials, privacyLabels, signal) {
+  let facetSummaries = Array.from(facets.values())
+    .slice(0, 50)
+    .map((x) => `- ${x.brief_summary} (${x.outcome}, ${x.claude_helpfulness})`).join(`
+`);
+  let frictionDetails = Array.from(facets.values())
+    .filter((x) => x.friction_detail)
+    .slice(0, 20)
+    .map((x) => `- ${x.friction_detail}`).join(`
+`);
+  let userInstructions = Array.from(facets.values())
+    .flatMap((x) => x.user_instructions_to_claude || [])
+    .slice(0, 15)
+    .map((i) => `- ${i}`).join(`
+`);
+  let dataContext =
+    jsonStringify(
+      {
+        sessions: data.total_sessions,
+        analyzed: data.sessions_with_facets,
+        date_range: data.date_range,
+        messages: data.total_messages,
+        hours: Math.round(data.total_duration_hours),
+        commits: data.git_commits,
+        top_tools: Object.entries(data.tool_counts)
+          .sort((x, H) => H[1] - x[1])
+          .slice(0, 8),
+        top_goals: Object.entries(data.goal_categories)
+          .sort((x, H) => H[1] - x[1])
+          .slice(0, 8),
+        outcomes: data.outcomes,
+        satisfaction: data.satisfaction,
+        friction: data.friction,
+        success: data.success,
+        languages: data.languages,
+      },
+      null,
+      2,
+    ) +
+    `
 
 SESSION SUMMARIES:
 ` +
-      joined +
-      `
+    facetSummaries +
+    `
 
 FRICTION DETAILS:
 ` +
-      joined_2 +
-      `
+    frictionDetails +
+    `
 
 USER INSTRUCTIONS TO CLAUDE:
 ` +
-      (joined_3 || "None captured"),
-    results = await Promise.all(
-      INSIGHT_SECTIONS.map((section) => generateSectionInsight(section, i, n, r, g)),
-    );
-  g?.throwIfAborted();
+    (userInstructions || "None captured");
+  let results = await Promise.all(
+    INSIGHT_SECTIONS.map((section) =>
+      generateSectionInsight(section, dataContext, credentials, privacyLabels, signal),
+    ),
+  );
+  signal?.throwIfAborted();
   let insights = {};
-  for (let { name: name, result: result } of results) if (result) insights[name] = result;
-  let k =
-      insights.project_areas?.areas?.map((x) => `- ${x.name}: ${x.description}`).join(`
-`) || "",
-    I =
-      insights.what_works?.impressive_workflows?.map((x) => `- ${x.title}: ${x.description}`).join(`
-`) || "",
-    D =
-      insights.friction_analysis?.categories?.map((x) => `- ${x.category}: ${x.description}`).join(`
-`) || "",
-    O =
-      insights.suggestions?.features_to_try?.map((x) => `- ${x.feature}: ${x.one_liner}`).join(`
-`) || "",
-    se =
-      insights.suggestions?.usage_patterns?.map((x) => `- ${x.title}: ${x.suggestion}`).join(`
-`) || "",
-    R =
-      insights.on_the_horizon?.opportunities?.map((x) => `- ${x.title}: ${x.whats_possible}`).join(`
-`) || "",
-    atAGlanceSection = {
-      name: "at_a_glance",
-      prompt: `You're writing an "At a Glance" summary for a Claude Code usage insights report for Claude Code users. The goal is to help them understand their usage and improve how they can use Claude better, especially as models improve.
+  for (let { name, result } of results) if (result) insights[name] = result;
+  let projectAreasText =
+    insights.project_areas?.areas?.map((x) => `- ${x.name}: ${x.description}`).join(`
+`) || "";
+  let bigWinsText =
+    insights.what_works?.impressive_workflows?.map((x) => `- ${x.title}: ${x.description}`).join(`
+`) || "";
+  let frictionText =
+    insights.friction_analysis?.categories?.map(
+      (category) => `- ${category.category}: ${category.description}`,
+    ).join(`
+`) || "";
+  let featuresText =
+    insights.suggestions?.features_to_try?.map((x) => `- ${x.feature}: ${x.one_liner}`).join(`
+`) || "";
+  let patternsText =
+    insights.suggestions?.usage_patterns?.map(
+      (usagePattern) => `- ${usagePattern.title}: ${usagePattern.suggestion}`,
+    ).join(`
+`) || "";
+  let horizonText =
+    insights.on_the_horizon?.opportunities?.map(
+      (opportunity) => `- ${opportunity.title}: ${opportunity.whats_possible}`,
+    ).join(`
+`) || "";
+  let atAGlanceSection = {
+    name: "at_a_glance",
+    prompt: `You're writing an "At a Glance" summary for a Claude Code usage insights report for Claude Code users. The goal is to help them understand their usage and improve how they can use Claude better, especially as models improve.
 
 Use this 4-part structure:
 
@@ -1415,29 +1501,35 @@ RESPOND WITH ONLY A VALID JSON OBJECT:
 }
 
 SESSION DATA:
-${i}
+${dataContext}
 
 ## Project Areas (what user works on)
-${k}
+${projectAreasText}
 
 ## Big Wins (impressive accomplishments)
-${I}
+${bigWinsText}
 
 ## Friction Categories (where things go wrong)
-${D}
+${frictionText}
 
 ## Features to Try
-${O}
+${featuresText}
 
 ## Usage Patterns to Adopt
-${se}
+${patternsText}
 
 ## On the Horizon (ambitious workflows for better models)
-${R}`,
-      maxTokens: 8192,
-    },
-    L = await generateSectionInsight(atAGlanceSection, "", n, r, g);
-  if (L.result) insights.at_a_glance = L.result;
+${horizonText}`,
+    maxTokens: 8192,
+  };
+  let atAGlanceResult = await generateSectionInsight(
+    atAGlanceSection,
+    "",
+    credentials,
+    privacyLabels,
+    signal,
+  );
+  if (atAGlanceResult.result) insights.at_a_glance = atAGlanceResult.result;
   return insights;
 }
 //@ chunk-yt6zn9vg.js:44394-44470 fingerprint = escapeHtmlWithBold (1)
@@ -1445,14 +1537,14 @@ function escapeHtmlWithBold(text) {
   return escapeXmlAttr(text).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
 }
 //@ chunk-yt6zn9vg.js:44470-44657 fingerprint = SATISFACTION_ORDER (0.699)
-var SATISFACTION_ORDER = ["frustrated", "dissatisfied", "likely_satisfied", "satisfied", "happy", "unsure"],
-  OUTCOME_ORDER = [
-    "not_achieved",
-    "partially_achieved",
-    "mostly_achieved",
-    "fully_achieved",
-    "unclear_from_transcript",
-  ];
+var SATISFACTION_ORDER = ["frustrated", "dissatisfied", "likely_satisfied", "satisfied", "happy", "unsure"];
+var OUTCOME_ORDER = [
+  "not_achieved",
+  "partially_achieved",
+  "mostly_achieved",
+  "fully_achieved",
+  "unclear_from_transcript",
+];
 //@ chunk-yt6zn9vg.js:44657-45251 fingerprint = generateBarChart (1)
 function generateBarChart(data, color, maxItems = 6, fixedOrder) {
   let entries;
@@ -1465,14 +1557,15 @@ function generateBarChart(data, color, maxItems = 6, fixedOrder) {
       .sort((d, y) => y[1] - d[1])
       .slice(0, maxItems);
   if (entries.length === 0) return '<p class="empty">No data</p>';
-  let maxVal = Math.max(...entries.map((d) => d[1]));
-  return entries.map(([d, y]) => {
-    let pct = (y / maxVal) * 100,
-      cleanLabel = FACET_LABELS[d] || d.replaceAll("_", " ").replace(/\b\w/g, (h) => h.toUpperCase());
+  let maxVal = Math.max(...entries.map((e) => e[1]));
+  return entries.map(([label, count]) => {
+    let pct = (count / maxVal) * 100;
+    let cleanLabel =
+      FACET_LABELS[label] || label.replaceAll("_", " ").replace(/\b\w/g, (h) => h.toUpperCase());
     return `<div class="bar-row">
         <div class="bar-label">${escapeXmlAttr(cleanLabel)}</div>
         <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${color}"></div></div>
-        <div class="bar-value">${y}</div>
+        <div class="bar-value">${count}</div>
       </div>`;
   }).join(`
 `);
@@ -1480,23 +1573,31 @@ function generateBarChart(data, color, maxItems = 6, fixedOrder) {
 //@ chunk-yt6zn9vg.js:45251-46100 fingerprint = generateResponseTimeHistogram (1)
 function generateResponseTimeHistogram(times) {
   if (times.length === 0) return '<p class="empty">No response time data</p>';
-  let buckets = { "2-10s": 0, "10-30s": 0, "30s-1m": 0, "1-2m": 0, "2-5m": 0, "5-15m": 0, ">15m": 0 };
-  for (let r of times)
-    if (r < 10) buckets["2-10s"] = (buckets["2-10s"] ?? 0) + 1;
-    else if (r < 30) buckets["10-30s"] = (buckets["10-30s"] ?? 0) + 1;
-    else if (r < 60) buckets["30s-1m"] = (buckets["30s-1m"] ?? 0) + 1;
-    else if (r < 120) buckets["1-2m"] = (buckets["1-2m"] ?? 0) + 1;
-    else if (r < 300) buckets["2-5m"] = (buckets["2-5m"] ?? 0) + 1;
-    else if (r < 900) buckets["5-15m"] = (buckets["5-15m"] ?? 0) + 1;
+  let buckets = {
+    "2-10s": 0,
+    "10-30s": 0,
+    "30s-1m": 0,
+    "1-2m": 0,
+    "2-5m": 0,
+    "5-15m": 0,
+    ">15m": 0,
+  };
+  for (let t of times)
+    if (t < 10) buckets["2-10s"] = (buckets["2-10s"] ?? 0) + 1;
+    else if (t < 30) buckets["10-30s"] = (buckets["10-30s"] ?? 0) + 1;
+    else if (t < 60) buckets["30s-1m"] = (buckets["30s-1m"] ?? 0) + 1;
+    else if (t < 120) buckets["1-2m"] = (buckets["1-2m"] ?? 0) + 1;
+    else if (t < 300) buckets["2-5m"] = (buckets["2-5m"] ?? 0) + 1;
+    else if (t < 900) buckets["5-15m"] = (buckets["5-15m"] ?? 0) + 1;
     else buckets[">15m"] = (buckets[">15m"] ?? 0) + 1;
   let maxVal = Math.max(...Object.values(buckets));
   if (maxVal === 0) return '<p class="empty">No response time data</p>';
-  return Object.entries(buckets).map(([r, g]) => {
-    let pct = (g / maxVal) * 100;
+  return Object.entries(buckets).map(([label, count]) => {
+    let pct = (count / maxVal) * 100;
     return `<div class="bar-row">
-        <div class="bar-label">${r}</div>
+        <div class="bar-label">${label}</div>
         <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:#6366f1"></div></div>
-        <div class="bar-value">${g}</div>
+        <div class="bar-value">${count}</div>
       </div>`;
   }).join(`
 `);
@@ -1505,62 +1606,72 @@ function generateResponseTimeHistogram(times) {
 function generateTimeOfDayChart(messageHours) {
   if (messageHours.length === 0) return '<p class="empty">No time data</p>';
   let periods = [
-      { label: "Morning (6-12)", range: [6, 7, 8, 9, 10, 11] },
-      { label: "Afternoon (12-18)", range: [12, 13, 14, 15, 16, 17] },
-      { label: "Evening (18-24)", range: [18, 19, 20, 21, 22, 23] },
-      { label: "Night (0-6)", range: [0, 1, 2, 3, 4, 5] },
-    ],
-    hourCounts = {};
-  for (let d of messageHours) hourCounts[d] = (hourCounts[d] || 0) + 1;
-  let periodCounts = periods.map((d) => ({
-      label: d.label,
-      count: d.range.reduce((sum, w) => sum + (hourCounts[w] || 0), 0),
-    })),
-    maxVal = Math.max(...periodCounts.map((d) => d.count)) || 1;
+    {
+      label: "Morning (6-12)",
+      range: [6, 7, 8, 9, 10, 11],
+    },
+    {
+      label: "Afternoon (12-18)",
+      range: [12, 13, 14, 15, 16, 17],
+    },
+    {
+      label: "Evening (18-24)",
+      range: [18, 19, 20, 21, 22, 23],
+    },
+    {
+      label: "Night (0-6)",
+      range: [0, 1, 2, 3, 4, 5],
+    },
+  ];
+  let hourCounts = {};
+  for (let messageHour of messageHours) hourCounts[messageHour] = (hourCounts[messageHour] || 0) + 1;
+  let periodCounts = periods.map((period) => ({
+    label: period.label,
+    count: period.range.reduce((sum, w) => sum + (hourCounts[w] || 0), 0),
+  }));
+  let maxVal = Math.max(...periodCounts.map((periodCount) => periodCount.count)) || 1;
   return `<div id="hour-histogram">${periodCounts.map(
-    (d) => `
+    (periodCount) => `
       <div class="bar-row">
-        <div class="bar-label">${d.label}</div>
-        <div class="bar-track"><div class="bar-fill" style="width:${(d.count / maxVal) * 100}%;background:#8b5cf6"></div></div>
-        <div class="bar-value">${d.count}</div>
+        <div class="bar-label">${periodCount.label}</div>
+        <div class="bar-track"><div class="bar-fill" style="width:${(periodCount.count / maxVal) * 100}%;background:#8b5cf6"></div></div>
+        <div class="bar-value">${periodCount.count}</div>
       </div>`,
   ).join(`
 `)}</div>`;
 }
 //@ chunk-yt6zn9vg.js:46851-46919 layout
-function Ht(e) {
-  let s = {};
-  for (let n of e) s[n] = (s[n] || 0) + 1;
-  return jsonStringify(s);
+function countValues(messageHours) {
+  let hourCounts = {};
+  for (let messageHour of messageHours) hourCounts[messageHour] = (hourCounts[messageHour] || 0) + 1;
+  return jsonStringify(hourCounts);
 }
 //@ chunk-yt6zn9vg.js:46919-90609 fingerprint = generateHtmlReport (0.967)
-function generateHtmlReport(e, s, n) {
+function generateHtmlReport(data, insights, htmlReport) {
   let markdownToHtml = (md) => {
-      if (!md) return "";
-      return md
-        .split(
-          `
+    if (!md) return "";
+    return md
+      .split(
+        `
 
 `,
-        )
-        .map((j) => {
-          let html = escapeXmlAttr(j);
-          return (
-            (html = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")),
-            (html = html.replace(/^- /gm, "\u2022 ")),
-            (html = html.replaceAll(
-              `
+      )
+      .map((j) => {
+        let html = escapeXmlAttr(j);
+        html = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+        html = html.replace(/^- /gm, "\u2022 ");
+        html = html.replaceAll(
+          `
 `,
-              "<br>",
-            )),
-            `<p>${html}</p>`
-          );
-        }).join(`
+          "<br>",
+        );
+        return `<p>${html}</p>`;
+      }).join(`
 `);
-    },
-    atAGlance = s.at_a_glance,
-    m = atAGlance
-      ? `
+  };
+  let atAGlance = insights.at_a_glance;
+  let atAGlanceHtml = atAGlance
+    ? `
     <div class="at-a-glance">
       <div class="glance-title">At a Glance</div>
       <div class="glance-sections">
@@ -1571,28 +1682,28 @@ function generateHtmlReport(e, s, n) {
       </div>
     </div>
     `
-      : "",
-    d = !n
-      ? ""
-      : n.kind === "switch_to_auto"
-        ? `
+    : "";
+  let d = !htmlReport
+    ? ""
+    : htmlReport.kind === "switch_to_auto"
+      ? `
     <div class="auto-mode-card" id="section-auto-mode">
-      <div class="auto-mode-title">Auto mode could have handled up to ~${We(n.estimatedPrompts).toLocaleString()} permission prompts for you</div>
-      <div class="auto-mode-desc">Across ${n.nonAutoSessions.toLocaleString()} recent sessions, roughly that many tool calls fell outside Claude Code's always-safe set \u2014 each one a potential "can I run this?" interruption. Auto mode approves routine actions automatically and only checks in on risky ones. Press <code>Shift+Tab</code> in any session until the mode indicator shows auto.</div>
-      ${n.destructiveCommands > 0 ? `<div class="auto-mode-note">It stays careful: ${n.destructiveCommands.toLocaleString()} of those commands looked potentially destructive (force-deletes, history rewrites, and the like) \u2014 auto mode reviews actions like these instead of waving them through.</div>` : ""}
+      <div class="auto-mode-title">Auto mode could have handled up to ~${roundToTwoSigFigs(htmlReport.estimatedPrompts).toLocaleString()} permission prompts for you</div>
+      <div class="auto-mode-desc">Across ${htmlReport.nonAutoSessions.toLocaleString()} recent sessions, roughly that many tool calls fell outside Claude Code's always-safe set \u2014 each one a potential "can I run this?" interruption. Auto mode approves routine actions automatically and only checks in on risky ones. Press <code>Shift+Tab</code> in any session until the mode indicator shows auto.</div>
+      ${htmlReport.destructiveCommands > 0 ? `<div class="auto-mode-note">It stays careful: ${htmlReport.destructiveCommands.toLocaleString()} of those commands looked potentially destructive (force-deletes, history rewrites, and the like) \u2014 auto mode reviews actions like these instead of waving them through.</div>` : ""}
       <div class="auto-mode-fineprint">Estimated from your local session history; the actual number depends on your allowlist rules.</div>
     </div>
     `
-        : `
+      : `
     <div class="auto-mode-card" id="section-auto-mode">
       <div class="auto-mode-title">Make auto mode smarter: run /auto-mode-setup</div>
       <div class="auto-mode-desc">You already use auto mode, but it doesn't know your environment yet. <code>/auto-mode-setup</code> spends a few minutes mapping your repos, trusted services, and routine commands, then writes the result to your settings \u2014 auto mode's decisions get noticeably better. One approval at the end, and you can re-run it anytime.</div>
     </div>
-    `,
-    projectAreas = s.project_areas?.areas || [],
-    w =
-      projectAreas.length > 0
-        ? `
+    `;
+  let projectAreas = insights.project_areas?.areas || [];
+  let projectAreasHtml =
+    projectAreas.length > 0
+      ? `
     <h2 id="section-work">What You Work On</h2>
     <div class="project-areas">
       ${projectAreas
@@ -1610,21 +1721,21 @@ function generateHtmlReport(e, s, n) {
         .join("")}
     </div>
     `
-        : "",
-    interactionStyle = s.interaction_style,
-    h = interactionStyle?.narrative
-      ? `
+      : "";
+  let interactionStyle = insights.interaction_style;
+  let interactionHtml = interactionStyle?.narrative
+    ? `
     <h2 id="section-usage">How You Use Claude Code</h2>
     <div class="narrative">
       ${markdownToHtml(interactionStyle.narrative)}
       ${interactionStyle.key_pattern ? `<div class="key-insight"><strong>Key pattern:</strong> ${escapeXmlAttr(interactionStyle.key_pattern)}</div>` : ""}
     </div>
     `
-      : "",
-    whatWorks = s.what_works,
-    k =
-      whatWorks?.impressive_workflows && whatWorks.impressive_workflows.length > 0
-        ? `
+    : "";
+  let whatWorks = insights.what_works;
+  let whatWorksHtml =
+    whatWorks?.impressive_workflows && whatWorks.impressive_workflows.length > 0
+      ? `
     <h2 id="section-wins">Impressive Things You Did</h2>
     ${whatWorks.intro ? `<p class="section-intro">${escapeXmlAttr(whatWorks.intro)}</p>` : ""}
     <div class="big-wins">
@@ -1640,11 +1751,11 @@ function generateHtmlReport(e, s, n) {
         .join("")}
     </div>
     `
-        : "",
-    frictionAnalysis = s.friction_analysis,
-    D =
-      frictionAnalysis?.categories && frictionAnalysis.categories.length > 0
-        ? `
+      : "";
+  let frictionAnalysis = insights.friction_analysis;
+  let frictionHtml =
+    frictionAnalysis?.categories && frictionAnalysis.categories.length > 0
+      ? `
     <h2 id="section-friction">Where Things Go Wrong</h2>
     ${frictionAnalysis.intro ? `<p class="section-intro">${escapeXmlAttr(frictionAnalysis.intro)}</p>` : ""}
     <div class="friction-categories">
@@ -1661,10 +1772,10 @@ function generateHtmlReport(e, s, n) {
         .join("")}
     </div>
     `
-        : "",
-    suggestions = s.suggestions,
-    se = suggestions
-      ? `
+      : "";
+  let suggestions = insights.suggestions;
+  let suggestionsHtml = suggestions
+    ? `
     ${
       suggestions.claude_md_additions && suggestions.claude_md_additions.length > 0
         ? `
@@ -1677,12 +1788,12 @@ function generateHtmlReport(e, s, n) {
       </div>
       ${suggestions.claude_md_additions
         .map(
-          (add, j) => `
+          (add, i) => `
         <div class="claude-md-item">
-          <input type="checkbox" id="cmd-${j}" class="cmd-checkbox" checked data-text="${escapeXmlAttr(add.prompt_scaffold || add.where || "Add to CLAUDE.md")}\\n\\n${escapeXmlAttr(add.addition)}">
-          <label for="cmd-${j}">
+          <input type="checkbox" id="cmd-${i}" class="cmd-checkbox" checked data-text="${escapeXmlAttr(add.prompt_scaffold || add.where || "Add to CLAUDE.md")}\\n\\n${escapeXmlAttr(add.addition)}">
+          <label for="cmd-${i}">
             <code class="cmd-code">${escapeXmlAttr(add.addition)}</code>
-            <button class="copy-btn" onclick="copyCmdItem(${j})">Copy</button>
+            <button class="copy-btn" onclick="copyCmdItem(${i})">Copy</button>
           </label>
           <div class="cmd-why">${escapeXmlAttr(add.why)}</div>
         </div>
@@ -1762,11 +1873,11 @@ function generateHtmlReport(e, s, n) {
         : ""
     }
     `
-      : "",
-    horizonData = s.on_the_horizon,
-    J =
-      horizonData?.opportunities && horizonData.opportunities.length > 0
-        ? `
+    : "";
+  let horizonData = insights.on_the_horizon;
+  let horizonHtml =
+    horizonData?.opportunities && horizonData.opportunities.length > 0
+      ? `
     <h2 id="section-horizon">On the Horizon</h2>
     ${horizonData.intro ? `<p class="section-intro">${escapeXmlAttr(horizonData.intro)}</p>` : ""}
     <div class="horizon-section">
@@ -1784,16 +1895,16 @@ function generateHtmlReport(e, s, n) {
         .join("")}
     </div>
     `
-        : "",
-    U = [],
-    L = [],
-    x =
-      U.length > 0 || L.length > 0
-        ? `
+      : "";
+  let ccImprovements = [];
+  let modelImprovements = [];
+  let teamFeedbackHtml =
+    ccImprovements.length > 0 || modelImprovements.length > 0
+      ? `
     <h2 id="section-feedback" class="feedback-header">Closing the Loop: Feedback for Other Teams</h2>
     <p class="feedback-intro">Suggestions for the CC product and model teams based on your usage patterns. Click to expand.</p>
     ${
-      U.length > 0
+      ccImprovements.length > 0
         ? `
     <div class="collapsible-section">
       <div class="collapsible-header" onclick="toggleCollapsible(this)">
@@ -1802,15 +1913,17 @@ function generateHtmlReport(e, s, n) {
       </div>
       <div class="collapsible-content">
         <div class="suggestions-section">
-          ${U.map(
-            (imp) => `
+          ${ccImprovements
+            .map(
+              (imp) => `
             <div class="feedback-card team-card">
               <div class="feedback-title">${escapeXmlAttr(imp.title || "")}</div>
               <div class="feedback-detail">${escapeXmlAttr(imp.detail || "")}</div>
               ${imp.evidence ? `<div class="feedback-evidence"><em>Evidence:</em> ${escapeXmlAttr(imp.evidence)}</div>` : ""}
             </div>
           `,
-          ).join("")}
+            )
+            .join("")}
         </div>
       </div>
     </div>
@@ -1818,7 +1931,7 @@ function generateHtmlReport(e, s, n) {
         : ""
     }
     ${
-      L.length > 0
+      modelImprovements.length > 0
         ? `
     <div class="collapsible-section">
       <div class="collapsible-header" onclick="toggleCollapsible(this)">
@@ -1827,15 +1940,17 @@ function generateHtmlReport(e, s, n) {
       </div>
       <div class="collapsible-content">
         <div class="suggestions-section">
-          ${L.map(
-            (imp) => `
+          ${modelImprovements
+            .map(
+              (imp) => `
             <div class="feedback-card model-card">
               <div class="feedback-title">${escapeXmlAttr(imp.title || "")}</div>
               <div class="feedback-detail">${escapeXmlAttr(imp.detail || "")}</div>
               ${imp.evidence ? `<div class="feedback-evidence"><em>Evidence:</em> ${escapeXmlAttr(imp.evidence)}</div>` : ""}
             </div>
           `,
-          ).join("")}
+            )
+            .join("")}
         </div>
       </div>
     </div>
@@ -1843,17 +1958,17 @@ function generateHtmlReport(e, s, n) {
         : ""
     }
     `
-        : "",
-    funEnding = s.fun_ending,
-    le = funEnding?.headline
-      ? `
+      : "";
+  let funEnding = insights.fun_ending;
+  let funEndingHtml = funEnding?.headline
+    ? `
     <div class="fun-ending">
       <div class="fun-headline">"${escapeXmlAttr(funEnding.headline)}"</div>
       ${funEnding.detail ? `<div class="fun-detail">${escapeXmlAttr(funEnding.detail)}</div>` : ""}
     </div>
     `
-      : "",
-    css = `
+    : "";
+  let css = `
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; background: #f8fafc; color: #334155; line-height: 1.65; padding: 48px 24px; }
     .container { max-width: 800px; margin: 0 auto; }
@@ -1969,8 +2084,8 @@ function generateHtmlReport(e, s, n) {
     .collapsible-content.open { display: block; }
     .collapsible-header.open .collapsible-arrow { transform: rotate(90deg); }
     @media (max-width: 640px) { .charts-row { grid-template-columns: 1fr; } .stats-row { justify-content: center; } }
-  `,
-    js = `
+  `;
+  let js = `
     function toggleCollapsible(header) {
       header.classList.toggle('open');
       const content = header.nextElementSibling;
@@ -2010,7 +2125,7 @@ function generateHtmlReport(e, s, n) {
       }
     }
     // Timezone selector for time of day chart (data is from our own analytics, not user input)
-    const rawHourCounts = ${Ht(e.message_hours)};
+    const rawHourCounts = ${countValues(data.message_hours)};
     function updateHourHistogram(offsetFromPT) {
       const periods = [
         { label: "Morning (6-12)", range: [6,7,8,9,10,11] },
@@ -2195,9 +2310,9 @@ function generateHtmlReport(e, s, n) {
 <body>
   <div class="container">
     <h1>Claude Code Insights</h1>
-    <p class="subtitle">${e.total_messages.toLocaleString()} messages across ${e.total_sessions} sessions${e.total_sessions_scanned && e.total_sessions_scanned > e.total_sessions ? ` (${e.total_sessions_scanned.toLocaleString()} total)` : ""} | ${e.date_range.start} to ${e.date_range.end}</p>
+    <p class="subtitle">${data.total_messages.toLocaleString()} messages across ${data.total_sessions} sessions${data.total_sessions_scanned && data.total_sessions_scanned > data.total_sessions ? ` (${data.total_sessions_scanned.toLocaleString()} total)` : ""} | ${data.date_range.start} to ${data.date_range.end}</p>
 
-    ${m}
+    ${atAGlanceHtml}
 
     ${d}
 
@@ -2213,45 +2328,45 @@ function generateHtmlReport(e, s, n) {
     </nav>
 
     <div class="stats-row">
-      <div class="stat"><div class="stat-value">${e.total_messages.toLocaleString()}</div><div class="stat-label">Messages</div></div>
-      <div class="stat"><div class="stat-value">+${e.total_lines_added.toLocaleString()}/-${e.total_lines_removed.toLocaleString()}</div><div class="stat-label">Lines</div></div>
-      <div class="stat"><div class="stat-value">${e.total_files_modified}</div><div class="stat-label">Files</div></div>
-      <div class="stat"><div class="stat-value">${e.days_active}</div><div class="stat-label">Days</div></div>
-      <div class="stat"><div class="stat-value">${e.messages_per_day}</div><div class="stat-label">Msgs/Day</div></div>
+      <div class="stat"><div class="stat-value">${data.total_messages.toLocaleString()}</div><div class="stat-label">Messages</div></div>
+      <div class="stat"><div class="stat-value">+${data.total_lines_added.toLocaleString()}/-${data.total_lines_removed.toLocaleString()}</div><div class="stat-label">Lines</div></div>
+      <div class="stat"><div class="stat-value">${data.total_files_modified}</div><div class="stat-label">Files</div></div>
+      <div class="stat"><div class="stat-value">${data.days_active}</div><div class="stat-label">Days</div></div>
+      <div class="stat"><div class="stat-value">${data.messages_per_day}</div><div class="stat-label">Msgs/Day</div></div>
     </div>
 
-    ${w}
+    ${projectAreasHtml}
 
     <div class="charts-row">
       <div class="chart-card">
         <div class="chart-title">What You Wanted</div>
-        ${generateBarChart(e.goal_categories, "#2563eb")}
+        ${generateBarChart(data.goal_categories, "#2563eb")}
       </div>
       <div class="chart-card">
         <div class="chart-title">Top Tools Used</div>
-        ${generateBarChart(e.tool_counts, "#0891b2")}
+        ${generateBarChart(data.tool_counts, "#0891b2")}
       </div>
     </div>
 
     <div class="charts-row">
       <div class="chart-card">
         <div class="chart-title">Languages</div>
-        ${generateBarChart(e.languages, "#10b981")}
+        ${generateBarChart(data.languages, "#10b981")}
       </div>
       <div class="chart-card">
         <div class="chart-title">Session Types</div>
-        ${generateBarChart(e.session_types || {}, "#8b5cf6")}
+        ${generateBarChart(data.session_types || {}, "#8b5cf6")}
       </div>
     </div>
 
-    ${h}
+    ${interactionHtml}
 
     <!-- Response Time Distribution -->
     <div class="chart-card" style="margin: 24px 0;">
       <div class="chart-title">User Response Time Distribution</div>
-      ${generateResponseTimeHistogram(e.user_response_times)}
+      ${generateResponseTimeHistogram(data.user_response_times)}
       <div style="font-size: 12px; color: #64748b; margin-top: 8px;">
-        Median: ${e.median_response_time.toFixed(1)}s &bull; Average: ${e.avg_response_time.toFixed(1)}s
+        Median: ${data.median_response_time.toFixed(1)}s &bull; Average: ${data.avg_response_time.toFixed(1)}s
       </div>
     </div>
 
@@ -2259,7 +2374,7 @@ function generateHtmlReport(e, s, n) {
     <div class="chart-card" style="margin: 24px 0;">
       <div class="chart-title">Multi-Clauding (Parallel Sessions)</div>
       ${
-        e.multi_clauding.overlap_events === 0
+        data.multi_clauding.overlap_events === 0
           ? `
         <p style="font-size: 14px; color: #64748b; padding: 8px 0;">
           No parallel session usage detected. You typically work with one Claude Code session at a time.
@@ -2268,15 +2383,15 @@ function generateHtmlReport(e, s, n) {
           : `
         <div style="display: flex; gap: 24px; margin: 12px 0;">
           <div style="text-align: center;">
-            <div style="font-size: 24px; font-weight: 700; color: #7c3aed;">${e.multi_clauding.overlap_events}</div>
+            <div style="font-size: 24px; font-weight: 700; color: #7c3aed;">${data.multi_clauding.overlap_events}</div>
             <div style="font-size: 11px; color: #64748b; text-transform: uppercase;">Overlap Events</div>
           </div>
           <div style="text-align: center;">
-            <div style="font-size: 24px; font-weight: 700; color: #7c3aed;">${e.multi_clauding.sessions_involved}</div>
+            <div style="font-size: 24px; font-weight: 700; color: #7c3aed;">${data.multi_clauding.sessions_involved}</div>
             <div style="font-size: 11px; color: #64748b; text-transform: uppercase;">Sessions Involved</div>
           </div>
           <div style="text-align: center;">
-            <div style="font-size: 24px; font-weight: 700; color: #7c3aed;">${e.total_messages > 0 ? Math.round((100 * e.multi_clauding.user_messages_during) / e.total_messages) : 0}%</div>
+            <div style="font-size: 24px; font-weight: 700; color: #7c3aed;">${data.total_messages > 0 ? Math.round((100 * data.multi_clauding.user_messages_during) / data.total_messages) : 0}%</div>
             <div style="font-size: 11px; color: #64748b; text-transform: uppercase;">Of Messages</div>
           </div>
         </div>
@@ -2303,66 +2418,80 @@ function generateHtmlReport(e, s, n) {
           </select>
           <input type="number" id="custom-offset" placeholder="UTC offset" style="display: none; width: 80px; font-size: 12px; padding: 4px; border-radius: 4px; border: 1px solid #e2e8f0;">
         </div>
-        ${generateTimeOfDayChart(e.message_hours)}
+        ${generateTimeOfDayChart(data.message_hours)}
       </div>
       <div class="chart-card">
         <div class="chart-title">Tool Errors Encountered</div>
-        ${Object.keys(e.tool_error_categories).length > 0 ? generateBarChart(e.tool_error_categories, "#dc2626") : '<p class="empty">No tool errors</p>'}
+        ${Object.keys(data.tool_error_categories).length > 0 ? generateBarChart(data.tool_error_categories, "#dc2626") : '<p class="empty">No tool errors</p>'}
       </div>
     </div>
 
-    ${k}
+    ${whatWorksHtml}
 
     <div class="charts-row">
       <div class="chart-card">
         <div class="chart-title">What Helped Most (Claude's Capabilities)</div>
-        ${generateBarChart(e.success, "#16a34a")}
+        ${generateBarChart(data.success, "#16a34a")}
       </div>
       <div class="chart-card">
         <div class="chart-title">Outcomes</div>
-        ${generateBarChart(e.outcomes, "#8b5cf6", 6, OUTCOME_ORDER)}
+        ${generateBarChart(data.outcomes, "#8b5cf6", 6, OUTCOME_ORDER)}
       </div>
     </div>
 
-    ${D}
+    ${frictionHtml}
 
     <div class="charts-row">
       <div class="chart-card">
         <div class="chart-title">Primary Friction Types</div>
-        ${generateBarChart(e.friction, "#dc2626")}
+        ${generateBarChart(data.friction, "#dc2626")}
       </div>
       <div class="chart-card">
         <div class="chart-title">Inferred Satisfaction (model-estimated)</div>
-        ${generateBarChart(e.satisfaction, "#eab308", 6, SATISFACTION_ORDER)}
+        ${generateBarChart(data.satisfaction, "#eab308", 6, SATISFACTION_ORDER)}
       </div>
     </div>
 
-    ${se}
+    ${suggestionsHtml}
 
-    ${J}
+    ${horizonHtml}
 
-    ${le}
+    ${funEndingHtml}
 
-    ${x}
+    ${teamFeedbackHtml}
   </div>
   <script>${js}</script>
 </body>
 </html>`;
 }
+//@ chunk-yt6zn9vg.js:90609-92317 layout
 /**
  * 列出要分析的会话：有 v5 存储时分页列出 transcript 命名空间下的项目和会话（受页数预算限制，截断时告警），否则扫描本地 projects 目录；结果按修改时间倒序。
  */
-//@ chunk-yt6zn9vg.js:90609-92317 layout
 async function listSessionFilesForInsights(storage) {
   if (storage) {
     let m = [];
     switch (
       (
         await readAllPages(
-          (h) => storage.listEntries({ namespace: "transcript" }, h ? { cursor: h } : void 0),
+          (h) =>
+            storage.listEntries(
+              {
+                namespace: "transcript",
+              },
+              h
+                ? {
+                    cursor: h,
+                  }
+                : undefined,
+            ),
           (h) => {
             for (let f of h)
-              if (f.kind === "scope" && f.scope.namespace === "transcript" && f.scope.projectKey !== void 0)
+              if (
+                f.kind === "scope" &&
+                f.scope.namespace === "transcript" &&
+                f.scope.projectKey !== undefined
+              )
                 m.push(f.scope.projectKey);
           },
         )
@@ -2375,25 +2504,39 @@ async function listSessionFilesForInsights(storage) {
       case "capped":
         logForDebugging(
           `insights: project listing truncated at ${DEFAULT_MAX_PAGES} pages; scanning the ${m.length} projects seen`,
-          { level: "warn" },
+          {
+            level: "warn",
+          },
         );
         break;
     }
-    let y = [],
-      w = { pagesLeft: DEFAULT_MAX_PAGES },
-      i = 0;
-    for (let h = 0; h < m.length; h++) {
-      let f = m[h];
+    let y = [];
+    let budget = {
+      pagesLeft: DEFAULT_MAX_PAGES,
+    };
+    let i = 0;
+    for (let j = 0; j < m.length; j++) {
+      let f = m[j];
       switch (
         (
           await readAllPages(
             (I) =>
-              storage.listEntries({ namespace: "transcript", projectKey: f }, I ? { cursor: I } : void 0),
+              storage.listEntries(
+                {
+                  namespace: "transcript",
+                  projectKey: f,
+                },
+                I
+                  ? {
+                      cursor: I,
+                    }
+                  : undefined,
+              ),
             (I) => {
               for (let D of I) {
                 if (D.kind !== "key" || D.key.namespace !== "transcript") continue;
-                if (D.key.agentId !== void 0 || D.key.journal === !0 || D.key.projectKey !== f) continue;
-                let O = Vt(D.key.sessionId);
+                if (D.key.agentId !== undefined || D.key.journal === true || D.key.projectKey !== f) continue;
+                let O = normalizeUuidOrNull(D.key.sessionId);
                 if (!O) continue;
                 y.push({
                   sessionId: O,
@@ -2403,7 +2546,9 @@ async function listSessionFilesForInsights(storage) {
                 });
               }
             },
-            { budget: w },
+            {
+              budget,
+            },
           )
         ).status
       ) {
@@ -2415,128 +2560,154 @@ async function listSessionFilesForInsights(storage) {
           if (i === 0)
             logForDebugging(
               `insights: session listing for project ${f} truncated (the scan's ${DEFAULT_MAX_PAGES}-page session-listing budget is spent); keeping the sessions seen`,
-              { level: "warn" },
+              {
+                level: "warn",
+              },
             );
           i++;
           break;
       }
-      if (h % 10 === 9) await new Promise((I) => setImmediate(I));
+      if (j % 10 === 9) await new Promise((resolve) => setImmediate(resolve));
     }
     if (i > 1)
       logForDebugging(
         `insights: ${i - 1} more ${i === 2 ? "project was" : "projects were"} left without a session listing after the scan's budget ran out`,
-        { level: "warn" },
+        {
+          level: "warn",
+        },
       );
-    return (y.sort((h, f) => f.mtime - h.mtime), y);
+    y.sort((h, f) => f.mtime - h.mtime);
+    return y;
   }
-  let projectsDir = getProjectsDir(),
-    entries;
+  let projectsDir = getProjectsDir();
+  let entries;
   try {
-    entries = await readdir(projectsDir, { withFileTypes: !0 });
+    entries = await readdir(projectsDir, {
+      withFileTypes: true,
+    });
   } catch {
     return [];
   }
-  let projectDirs = entries.filter((m) => m.isDirectory()).map((m) => join(projectsDir, m.name)),
-    sessions = [];
-  for (let m = 0; m < projectDirs.length; m++) {
-    let d = await getSessionFilesWithMtime(projectDirs[m]);
-    for (let [y, w] of d) sessions.push({ sessionId: y, path: w.path, mtime: w.mtime, size: w.size });
-    if (m % 10 === 9) await new Promise((y) => setImmediate(y));
+  let projectDirs = entries
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => join(projectsDir, entry.name));
+  let sessions = [];
+  for (let i = 0; i < projectDirs.length; i++) {
+    let sessionFilesWithMtime = await getSessionFilesWithMtime(projectDirs[i]);
+    for (let [y, w] of sessionFilesWithMtime)
+      sessions.push({
+        sessionId: y,
+        path: w.path,
+        mtime: w.mtime,
+        size: w.size,
+      });
+    if (i % 10 === 9) await new Promise((resolve) => setImmediate(resolve));
   }
-  return (sessions.sort((m, d) => d.mtime - m.mtime), sessions);
+  sessions.sort((m, d) => d.mtime - m.mtime);
+  return sessions;
 }
 //@ chunk-yt6zn9vg.js:92317-95879 fingerprint = generateUsageReport (0.578)
 async function generateUsageReport(options) {
-  let remoteStats,
-    n = options?.liveSession === void 0 ? await listSessionFilesForInsights(options?.storageV5) : [],
-    r = options?.liveSession === void 0 ? n.length : options.liveSession === null ? 0 : 1,
-    MAX_SESSIONS_TO_LOAD = 200,
-    m = [],
-    d = [],
-    y = 0,
-    w = 0,
-    i = 0;
-  for (let v of Ce(n, Ee)) {
-    let P = options?.storageV5,
-      B = P
-        ? await getMcpAuthCache_2(
-            v.map((T) => T.sessionId),
-            P,
-          )
-        : await Promise.all(v.map((sessionInfo) => loadSessionMeta(sessionInfo.sessionId))),
-      mapped = v.map((T, F) => ({ sessionInfo: T, cached: B[F] ?? null }));
+  let remoteStats;
+  let n = options?.liveSession === undefined ? await listSessionFilesForInsights(options?.storageV5) : [];
+  let totalSessionsScanned =
+    options?.liveSession === undefined ? n.length : options.liveSession === null ? 0 : 1;
+  let MAX_SESSIONS_TO_LOAD = 200;
+  let m = [];
+  let d = [];
+  let y = 0;
+  let w = 0;
+  let i = 0;
+  for (let v of chunkArray(n, INSIGHTS_MCP_AUTH_BATCH)) {
+    let storageV5 = options?.storageV5;
+    let B = storageV5
+      ? await getMcpAuthCache_2(
+          v.map((T) => T.sessionId),
+          storageV5,
+        )
+      : await Promise.all(v.map((sessionInfo) => loadSessionMeta(sessionInfo.sessionId)));
+    let mapped = v.map((sessionInfo, F) => ({
+      sessionInfo,
+      cached: B[F] ?? null,
+    }));
     for (let [T, { sessionInfo: F, cached: V }] of mapped.entries()) {
-      let _e = i + T,
-        ce = V?.bash_would_prompt_count !== void 0 || _e >= At;
-      if (V && ce && (V.transcript_mtime === void 0 || V.transcript_mtime >= F.mtime)) m.push(V);
+      let _e = i + T;
+      let ce = V?.bash_would_prompt_count !== undefined || _e >= BASH_PROMPT_LOOKBACK_SESSIONS;
+      if (V && ce && (V.transcript_mtime === undefined || V.transcript_mtime >= F.mtime)) m.push(V);
       else if (!V) {
-        if (y < MAX_SESSIONS_TO_LOAD) (d.push({ sessionInfo: F, cached: V }), y++);
-      } else if (w < MAX_SESSIONS_TO_LOAD) (d.push({ sessionInfo: F, cached: V }), w++);
-      else m.push(V);
+        if (y < MAX_SESSIONS_TO_LOAD) {
+          d.push({
+            sessionInfo: F,
+            cached: V,
+          });
+          y++;
+        }
+      } else if (w < MAX_SESSIONS_TO_LOAD) {
+        d.push({
+          sessionInfo: F,
+          cached: V,
+        });
+        w++;
+      } else m.push(V);
     }
     i += v.length;
   }
-  let h = options?.privacyLabels ?? "",
-    logsForFacets = new Map();
+  let privacyLabels = options?.privacyLabels ?? "";
+  let logsForFacets = new Map();
   if (options?.liveSession) {
     let v = logToSessionMeta(options.liveSession);
-    (m.push(v), logsForFacets.set(v.session_id, options.liveSession));
+    m.push(v);
+    logsForFacets.set(v.session_id, options.liveSession);
   }
   let isMetaSession = (log) => {
-      for (let msg of log.messages.slice(0, 5))
-        if (msg.type === "user" && msg.message) {
-          let content = msg.message.content;
-          if (typeof content === "string") {
-            if (
-              content.includes("RESPOND WITH ONLY A VALID JSON OBJECT") ||
-              content.includes("record_facets")
-            )
-              return !0;
-          }
+    for (let msg of log.messages.slice(0, 5))
+      if (msg.type === "user" && msg.message) {
+        let content = msg.message.content;
+        if (typeof content === "string") {
+          if (content.includes("RESPOND WITH ONLY A VALID JSON OBJECT") || content.includes("record_facets"))
+            return true;
         }
-      return !1;
-    },
-    LOAD_BATCH_SIZE = 10;
-  for (let v = 0; v < d.length; v += LOAD_BATCH_SIZE) {
-    let batch = d.slice(v, v + LOAD_BATCH_SIZE),
-      batchResults = await Promise.all(
-        batch.map(async ({ sessionInfo: sessionInfo, cached: cached }) => {
-          try {
-            return {
-              sessionInfo: sessionInfo,
-              cached: cached,
-              logs:
-                options?.storageV5 && sessionInfo.key
-                  ? await loadAllLogsFromSessionFile(`${sessionInfo.sessionId}.jsonl`, void 0, {
-                      backend: options.storageV5,
-                      key: sessionInfo.key,
-                    })
-                  : await loadAllLogsFromSessionFile(sessionInfo.path ?? ""),
-            };
-          } catch {
-            return { sessionInfo: sessionInfo, cached: cached, logs: [] };
-          }
-        }),
-      ),
-      ee = new Map();
-    for (let { sessionInfo: sessionInfo, cached: cached, logs: logs } of batchResults) {
-      let _e = !1;
-      for (let logs_2 of logs) {
-        if (
-          isMetaSession(logs_2) ||
-          Number.isNaN(logs_2.created.getTime()) ||
-          Number.isNaN(logs_2.modified.getTime())
-        )
+      }
+    return false;
+  };
+  let LOAD_BATCH_SIZE = 10;
+  for (let i = 0; i < d.length; i += LOAD_BATCH_SIZE) {
+    let batch = d.slice(i, i + LOAD_BATCH_SIZE);
+    let batchResults = await Promise.all(
+      batch.map(async ({ sessionInfo, cached }) => {
+        try {
+          return {
+            sessionInfo,
+            cached,
+            logs:
+              options?.storageV5 && sessionInfo.key
+                ? await loadAllLogsFromSessionFile(`${sessionInfo.sessionId}.jsonl`, undefined, {
+                    backend: options.storageV5,
+                    key: sessionInfo.key,
+                  })
+                : await loadAllLogsFromSessionFile(sessionInfo.path ?? ""),
+          };
+        } catch {
+          return {
+            sessionInfo,
+            cached,
+            logs: [],
+          };
+        }
+      }),
+    );
+    let ee = new Map();
+    for (let { sessionInfo, cached, logs } of batchResults) {
+      let _e = false;
+      for (let log of logs) {
+        if (isMetaSession(log) || Number.isNaN(log.created.getTime()) || Number.isNaN(log.modified.getTime()))
           continue;
-        let meta = logToSessionMeta(logs_2);
-        if (
-          ((meta.transcript_mtime = sessionInfo.mtime),
-          m.push(meta),
-          (_e = !0),
-          deduplicateSessionBranches(meta, ee.get(meta.session_id)))
-        )
-          ee.set(meta.session_id, meta);
-        logsForFacets.set(meta.session_id, logs_2);
+        let meta = logToSessionMeta(log);
+        meta.transcript_mtime = sessionInfo.mtime;
+        m.push(meta);
+        _e = true;
+        if (deduplicateSessionBranches(meta, ee.get(meta.session_id))) ee.set(meta.session_id, meta);
+        logsForFacets.set(meta.session_id, log);
       }
       if (!_e && cached) m.push(cached);
     }
@@ -2552,74 +2723,103 @@ async function generateUsageReport(options) {
     if (!keptSessionIds.has(sessionId)) logsForFacets.delete(sessionId);
   m.sort((v, P) => P.start_time.localeCompare(v.start_time));
   let isSubstantiveSession = (meta) => {
-      if (meta.user_message_count < 2) return !1;
-      if (meta.duration_minutes < 1) return !1;
-      return !0;
-    },
-    substantiveMetas = m.filter(isSubstantiveSession),
-    facets = new Map(),
-    U = [],
-    MAX_FACET_EXTRACTIONS = 50,
-    x = options?.storageV5,
-    H = options?.liveSession === void 0 ? substantiveMetas.map((v) => v.session_id) : [],
-    le = x
-      ? (await Promise.all(Ce(H, Ee).map((v) => getMcpAuthCache(v, x)))).flat()
-      : await Promise.all(H.map((meta) => loadCachedFacets(meta))),
-    mapped = substantiveMetas.map((v, P) => ({ sessionId: v.session_id, cached: le[P] ?? null }));
-  for (let { sessionId: sessionId, cached: cached } of mapped)
+    if (meta.user_message_count < 2) return false;
+    if (meta.duration_minutes < 1) return false;
+    return true;
+  };
+  let substantiveMetas = m.filter(isSubstantiveSession);
+  let facets = new Map();
+  let toExtract = [];
+  let MAX_FACET_EXTRACTIONS = 50;
+  let storageV5 = options?.storageV5;
+  let H = options?.liveSession === undefined ? substantiveMetas.map((v) => v.session_id) : [];
+  let le = storageV5
+    ? (
+        await Promise.all(chunkArray(H, INSIGHTS_MCP_AUTH_BATCH).map((v) => getMcpAuthCache(v, storageV5)))
+      ).flat()
+    : await Promise.all(H.map((meta) => loadCachedFacets(meta)));
+  let mapped = substantiveMetas.map((meta, P) => ({
+    sessionId: meta.session_id,
+    cached: le[P] ?? null,
+  }));
+  for (let { sessionId, cached } of mapped)
     if (cached) facets.set(sessionId, cached);
     else {
       let log = logsForFacets.get(sessionId);
-      if (log && U.length < MAX_FACET_EXTRACTIONS) U.push({ log: log, sessionId: sessionId });
+      if (log && toExtract.length < MAX_FACET_EXTRACTIONS)
+        toExtract.push({
+          log,
+          sessionId,
+        });
     }
   let CONCURRENCY = 50;
-  for (let v = 0; v < U.length; v += CONCURRENCY) {
-    let batch = U.slice(v, v + CONCURRENCY),
-      results = await Promise.all(
-        batch.map(async ({ log: log, sessionId: sessionId }) => {
-          let V = await extractFacetsFromAPI(log, sessionId, options?.credentials, h, options?.signal);
-          return { sessionId: sessionId, newFacets: V };
-        }),
-      ),
-      ee = [];
-    for (let { sessionId: sessionId, newFacets: newFacets } of results)
-      if (newFacets) (facets.set(sessionId, newFacets), ee.push(newFacets));
-    if (options?.liveSession === void 0) await Promise.all(ee.map((T) => saveFacets(T, options?.storageV5)));
+  for (let i = 0; i < toExtract.length; i += CONCURRENCY) {
+    let batch = toExtract.slice(i, i + CONCURRENCY);
+    let results = await Promise.all(
+      batch.map(async ({ log, sessionId }) => {
+        let newFacets = await extractFacetsFromAPI(
+          log,
+          sessionId,
+          options?.credentials,
+          privacyLabels,
+          options?.signal,
+        );
+        return {
+          sessionId,
+          newFacets,
+        };
+      }),
+    );
+    let facetsToSave = [];
+    for (let { sessionId, newFacets } of results)
+      if (newFacets) {
+        facets.set(sessionId, newFacets);
+        facetsToSave.push(newFacets);
+      }
+    if (options?.liveSession === undefined)
+      await Promise.all(facetsToSave.map((T) => saveFacets(T, options?.storageV5)));
   }
-  ge.clear();
+  INSIGHTS_CACHE.clear();
   let isMinimalSession = (sessionId) => {
-      let sessionFacets = facets.get(sessionId);
-      if (!sessionFacets) return !1;
-      let cats = sessionFacets.goal_categories,
-        catKeys = safeKeys(cats).filter((T) => (cats[T] ?? 0) > 0);
-      return catKeys.length === 1 && catKeys[0] === "warmup_minimal";
-    },
-    substantiveSessions = substantiveMetas.filter((v) => !isMinimalSession(v.session_id)),
-    substantiveFacets = new Map();
-  for (let [v, P] of facets) if (!isMinimalSession(v)) substantiveFacets.set(v, P);
+    let sessionFacets = facets.get(sessionId);
+    if (!sessionFacets) return false;
+    let cats = sessionFacets.goal_categories;
+    let catKeys = safeKeys(cats).filter((k) => (cats[k] ?? 0) > 0);
+    return catKeys.length === 1 && catKeys[0] === "warmup_minimal";
+  };
+  let substantiveSessions = substantiveMetas.filter((v) => !isMinimalSession(v.session_id));
+  let substantiveFacets = new Map();
+  for (let [sessionId, P] of facets) if (!isMinimalSession(sessionId)) substantiveFacets.set(sessionId, P);
   let aggregated = aggregateData(substantiveSessions, substantiveFacets);
-  ((aggregated.total_sessions_scanned = r), options?.signal?.throwIfAborted());
-  let z = await generateParallelInsights(aggregated, facets, options?.credentials, h, options?.signal),
-    htmlReport = autoModeRecommendation(aggregated, readAutoModeContext(options?.permissionGates));
-  if (options?.liveSession !== void 0)
+  aggregated.total_sessions_scanned = totalSessionsScanned;
+  options?.signal?.throwIfAborted();
+  let insights = await generateParallelInsights(
+    aggregated,
+    facets,
+    options?.credentials,
+    privacyLabels,
+    options?.signal,
+  );
+  let htmlReport = autoModeRecommendation(aggregated, readAutoModeContext(options?.permissionGates));
+  if (options?.liveSession !== undefined)
     return {
-      insights: z,
+      insights,
       htmlPath: "",
       data: aggregated,
-      remoteStats: remoteStats,
+      remoteStats,
       facets: substantiveFacets,
       autoModeReco: htmlReport,
     };
-  let ue = generateHtmlReport(aggregated, z, htmlReport),
-    date = new Date(),
-    G = (v) => String(v).padStart(2, "0"),
-    he = `${date.getFullYear()}-${G(date.getMonth() + 1)}-${G(date.getDate())}-${G(date.getHours())}${G(date.getMinutes())}${G(date.getSeconds())}`,
-    oe = await saveSessionMeta(ue, he, options?.storageV5);
+  let htmlReport_2 = generateHtmlReport(aggregated, insights, htmlReport);
+  let date = new Date();
+  let G = (v) => String(v).padStart(2, "0");
+  let he = `${date.getFullYear()}-${G(date.getMonth() + 1)}-${G(date.getDate())}-${G(date.getHours())}${G(date.getMinutes())}${G(date.getSeconds())}`;
+  let htmlPath = await saveSessionMeta(htmlReport_2, he, options?.storageV5);
   return {
-    insights: z,
-    htmlPath: oe,
+    insights,
+    htmlPath,
     data: aggregated,
-    remoteStats: remoteStats,
+    remoteStats,
     facets: substantiveFacets,
     autoModeReco: htmlReport,
   };
@@ -2632,10 +2832,10 @@ function safeEntries(obj) {
 function safeKeys(obj) {
   return obj ? Object.keys(obj) : [];
 }
+//@ chunk-yt6zn9vg.js:95966-98489 fingerprint = usageReport (0.681)
 /**
  * /insights 命令对象（prompt）；描述：Generate a report analyzing your Claude Code sessions。
  */
-//@ chunk-yt6zn9vg.js:95966-98489 fingerprint = usageReport (0.681)
 var insightsCommandDefinition = {
   type: "prompt",
   name: "insights",
@@ -2651,46 +2851,41 @@ var insightsCommandDefinition = {
           text: "The /insights report is generated only when the command is invoked directly.",
         },
       ];
-    let n = !1,
-      r = [],
-      g = !1,
-      of = _t.of(context.session);
-    if (isCcsTenant() && of.running)
+    let collectRemote = false;
+    let r = [];
+    let g = false;
+    let m = INSIGHTS_RUNNING_SLOT.of(context.session);
+    if (isCcsTenant() && m.running)
       return [
         {
           type: "text",
           text: "An earlier /insights in this session is still stopping. Tell the user to run it again in a moment.",
         },
       ];
-    let d = isCcsTenant() ? currentSessionAsLog(context.messages) : void 0,
-      y = isCcsTenant() ? jdr(context.messages) : "";
-    of.running = isCcsTenant();
-    let {
-      insights: insights,
-      htmlPath: htmlPath,
-      data: h,
-      remoteStats: remoteStats,
-      autoModeReco: autoModeReco,
-    } = await generateUsageReport({
-      collectRemote: n,
-      liveSession: d,
-      privacyLabels: y,
-      signal: isCcsTenant() ? context.abortController.signal : void 0,
+    let liveSession = isCcsTenant() ? currentSessionAsLog(context.messages) : undefined;
+    let privacyLabels = isCcsTenant() ? tagAndManifestArtifactContent(context.messages) : "";
+    m.running = isCcsTenant();
+    let { insights, htmlPath, data, remoteStats, autoModeReco } = await generateUsageReport({
+      collectRemote,
+      liveSession,
+      privacyLabels,
+      signal: isCcsTenant() ? context.abortController.signal : undefined,
       storageV5: context.storageV5,
       credentials: context.credentials,
       permissionGates: () => {
-        let L = getToolPermissionContext(context);
+        let toolPermissionContext = getToolPermissionContext(context);
         return {
-          autoModeAvailable: canCycleToAuto(L),
-          currentSessionIsAuto: L.mode === "auto",
+          autoModeAvailable: canCycleToAuto(toolPermissionContext),
+          currentSessionIsAuto: toolPermissionContext.mode === "auto",
           sandboxAutoAllowActive:
             SandboxManager.isSandboxingEnabled() && SandboxManager.isAutoAllowBashIfSandboxedEnabled(),
-          currentSessionSeesNoDialogs: L.mode === "bypassPermissions" || L.mode === "dontAsk",
-          liveArbiterIsAutoClassifier: isAutoClassifierActive(L.mode),
+          currentSessionSeesNoDialogs:
+            toolPermissionContext.mode === "bypassPermissions" || toolPermissionContext.mode === "dontAsk",
+          liveArbiterIsAutoClassifier: isAutoClassifierActive(toolPermissionContext.mode),
         };
       },
     }).finally(() => {
-      of.running = !1;
+      m.running = false;
     });
     if (autoModeReco && !isCcsTenant())
       logEvent("tengu_insights_auto_mode_recommendation", {
@@ -2701,33 +2896,33 @@ var insightsCommandDefinition = {
           destructive_commands: fromNumber(autoModeReco.destructiveCommands),
         }),
       });
-    let I = `file://${htmlPath}`,
-      joined = [
-        h.total_sessions_scanned && h.total_sessions_scanned > h.total_sessions
-          ? `${h.total_sessions_scanned.toLocaleString()} sessions total \xB7 ${h.total_sessions} analyzed`
-          : `${h.total_sessions} sessions`,
-        `${h.total_messages.toLocaleString()} messages`,
-        `${Math.round(h.total_duration_hours)}h`,
-        `${h.git_commits} commits`,
-      ].join(" \xB7 "),
-      se = "",
-      at_a_glance = insights.at_a_glance,
-      J = at_a_glance
-        ? `## At a Glance
+    let reportUrl = `file://${htmlPath}`;
+    let joined = [
+      data.total_sessions_scanned && data.total_sessions_scanned > data.total_sessions
+        ? `${data.total_sessions_scanned.toLocaleString()} sessions total \xB7 ${data.total_sessions} analyzed`
+        : `${data.total_sessions} sessions`,
+      `${data.total_messages.toLocaleString()} messages`,
+      `${Math.round(data.total_duration_hours)}h`,
+      `${data.git_commits} commits`,
+    ].join(" \xB7 ");
+    let remoteInfo = "";
+    let atAGlance = insights.at_a_glance;
+    let summaryText = atAGlance
+      ? `## At a Glance
 
-${at_a_glance.whats_working ? `**What's working:** ${at_a_glance.whats_working} See _Impressive Things You Did_.` : ""}
+${atAGlance.whats_working ? `**What's working:** ${atAGlance.whats_working} See _Impressive Things You Did_.` : ""}
 
-${at_a_glance.whats_hindering ? `**What's hindering you:** ${at_a_glance.whats_hindering} See _Where Things Go Wrong_.` : ""}
+${atAGlance.whats_hindering ? `**What's hindering you:** ${atAGlance.whats_hindering} See _Where Things Go Wrong_.` : ""}
 
-${at_a_glance.quick_wins ? `**Quick wins to try:** ${at_a_glance.quick_wins} See _Features to Try_.` : ""}
+${atAGlance.quick_wins ? `**Quick wins to try:** ${atAGlance.quick_wins} See _Features to Try_.` : ""}
 
-${at_a_glance.ambitious_workflows ? `**Ambitious workflows:** ${at_a_glance.ambitious_workflows} See _On the Horizon_.` : ""}`
-        : "_No insights generated_",
-      U = `# Claude Code Insights
+${atAGlance.ambitious_workflows ? `**Ambitious workflows:** ${atAGlance.ambitious_workflows} See _On the Horizon_.` : ""}`
+      : "_No insights generated_";
+    let header = `# Claude Code Insights
 
 ${joined}
-${h.date_range.start} to ${h.date_range.end}
-${se}
+${data.date_range.start} to ${data.date_range.end}
+${remoteInfo}
 `;
     if (isCcsTenant())
       return [
@@ -2735,8 +2930,8 @@ ${se}
           type: "text",
           text: insightsSessionPrompt({
             insightsJson: jsonStringify(insights, null, 2),
-            header: U,
-            summaryText: J,
+            header,
+            summaryText,
           }),
         },
       ];
@@ -2745,29 +2940,29 @@ ${se}
         type: "text",
         text: insightsReportPrompt({
           insightsJson: jsonStringify(insights, null, 2),
-          reportUrl: I,
-          htmlPath: htmlPath,
+          reportUrl,
+          htmlPath,
           facetsDir: getFacetsDir(),
-          header: U,
-          summaryText: J,
-          recommendationLine: autoModeReco ? autoModeTipText(autoModeReco) : void 0,
+          header,
+          summaryText,
+          recommendationLine: autoModeReco ? autoModeTipText(autoModeReco) : undefined,
         }),
       },
     ];
   },
 };
+//@ chunk-yt6zn9vg.js:98489-99110 layout
 /**
  * 生成 /insights 完成后给模型的提示：附上完整数据与报告地址，要求逐字回复报告链接与建议行。
  */
-//@ chunk-yt6zn9vg.js:98489-99110 layout
 function insightsReportPrompt({
-  insightsJson: insightsJson,
-  reportUrl: reportUrl,
-  htmlPath: htmlPath,
-  facetsDir: facetsDir,
-  header: header,
-  summaryText: summaryText,
-  recommendationLine: recommendationLine,
+  insightsJson,
+  reportUrl,
+  htmlPath,
+  facetsDir,
+  header,
+  summaryText,
+  recommendationLine,
 }) {
   return `The user just ran /insights to generate a usage report analyzing their Claude Code sessions.
 
@@ -2794,11 +2989,11 @@ ${recommendationLine}
 }
 Want to dig into any section or try one of the suggestions?`;
 }
+//@ chunk-yt6zn9vg.js:99110-99520 layout
 /**
  * 只分析当前会话（无报告文件）时给模型的提示：附上数据与摘要，让模型用自己的话总结。
  */
-//@ chunk-yt6zn9vg.js:99110-99520 layout
-function insightsSessionPrompt({ insightsJson: insightsJson, header: header, summaryText: summaryText }) {
+function insightsSessionPrompt({ insightsJson, header, summaryText }) {
   return `The user just ran /insights to generate a usage report analyzing this Claude Code session.
 
 Here is the full insights data:
@@ -2818,42 +3013,51 @@ function normalizeToolUseNames(e) {
       ...e.message,
       content: e.message.content.map((block) =>
         block.type === "tool_use"
-          ? { ...block, name: builtinToolNameForMcp(block.name) ?? block.name }
+          ? {
+              ...block,
+              name: builtinToolNameForMcp(block.name) ?? block.name,
+            }
           : block,
       ),
     },
   };
 }
+//@ chunk-yt6zn9vg.js:99729-100192 layout
 /**
  * 把当前会话的消息整理成一条日志记录（取首尾时间戳作创建/修改时间），用于只分析当前会话；没有有效时间戳时返回 null。
  */
-//@ chunk-yt6zn9vg.js:99729-100192 layout
-function currentSessionAsLog(e) {
-  let s = getSessionId(),
-    flattened = e.flatMap((d) =>
-      d.type === "user" || d.type === "assistant" || d.type === "attachment"
-        ? [{ ...normalizeToolUseNames(d), sessionId: s, userType: "" }]
-        : [],
-    ),
-    filtered = flattened.map((d) => Date.parse(d.timestamp)).filter((d) => !Number.isNaN(d));
+function currentSessionAsLog(messages) {
+  let sessionId = getSessionId();
+  let flattened = messages.flatMap((d) =>
+    d.type === "user" || d.type === "assistant" || d.type === "attachment"
+      ? [
+          {
+            ...normalizeToolUseNames(d),
+            sessionId,
+            userType: "",
+          },
+        ]
+      : [],
+  );
+  let filtered = flattened.map((d) => Date.parse(d.timestamp)).filter((d) => !Number.isNaN(d));
   if (filtered.length === 0) return null;
-  let date = new Date(filtered.reduce((d, y) => Math.min(d, y))),
-    date_2 = new Date(filtered.reduce((d, y) => Math.max(d, y)));
+  let created = new Date(filtered.reduce((acc, y) => Math.min(acc, y)));
+  let date = new Date(filtered.reduce((acc, y) => Math.max(acc, y)));
   return {
-    date: date_2.toISOString(),
+    date: date.toISOString(),
     messages: flattened,
     value: 0,
-    created: date,
-    modified: date_2,
+    created,
+    modified: date,
     firstPrompt: "",
     messageCount: flattened.length,
-    isSidechain: !1,
-    sessionId: s,
+    isSidechain: false,
+    sessionId,
   };
 }
 //@ chunk-yt6zn9vg.js:100192-100565 fingerprint = isValidSessionFacets (1)
 function isValidSessionFacets(obj) {
-  if (!obj || typeof obj !== "object") return !1;
+  if (!obj || typeof obj !== "object") return false;
   let s = obj;
   return (
     typeof s.underlying_goal === "string" &&
@@ -2869,46 +3073,52 @@ function isValidSessionFacets(obj) {
 }
 //@ chunk-yt6zn9vg.js:100565-100575 affinity
 var insightsCommand = insightsCommandDefinition;
+//@ chunk-01p2saxj.js:305-474 placement
 /**
  * 字符串或数组规整为内容块数组
  */
-//@ chunk-01p2saxj.js:305-474 placement
-function toContentBlocks(r) {
-  if (typeof r === "string") return [{ type: "text", text: r }];
-  if (!Array.isArray(r)) return [];
-  return r.filter((e) => e !== null && typeof e === "object" && !Array.isArray(e));
+function toContentBlocks(content) {
+  if (typeof content === "string")
+    return [
+      {
+        type: "text",
+        text: content,
+      },
+    ];
+  if (!Array.isArray(content)) return [];
+  return content.filter((e) => e !== null && typeof e === "object" && !Array.isArray(e));
 }
 //@ chunk-01p2saxj.js:474-541 placement
-var regExp = new RegExp(`<(${lft.join("|")})>[\\s\\S]*?(?:</\\1>|$)`, "g");
+var regExp = new RegExp(`<(${ARTIFACT_BLOCK_TAGS.join("|")})>[\\s\\S]*?(?:</\\1>|$)`, "g");
 //@ chunk-01p2saxj.js:541-585 layout
-function m(r) {
+function stripXmlTags(r) {
   return r.replace(regExp, "").trim();
 }
 //@ chunk-01p2saxj.js:585-708 layout
 function textBlocksOf(r) {
   return toContentBlocks(r)
     .flatMap((e) => (e.type === "text" && typeof e.text === "string" ? [e.text] : []))
-    .map(m)
+    .map(stripXmlTags)
     .filter((e) => e !== "");
 }
 //@ chunk-01p2saxj.js:708-1642 fingerprint = formatTranscriptForFacets (0.397)
-function formatTranscriptForFacets(r, e) {
-  let lines = [],
-    o = new Set();
-  for (let block of r) {
+function formatTranscriptForFacets(messages, e) {
+  let lines = [];
+  let o = new Set();
+  for (let block of messages) {
     if (
       block.type === "attachment" &&
       typeof block.attachment === "object" &&
       block.attachment !== null &&
       isUserQueuedCommandAttachment(block)
     ) {
-      let s = block.attachment.type === "queued_command" ? block.attachment.prompt : "",
-        source_uuid = block.attachment.source_uuid;
-      if (typeof source_uuid === "string") {
-        if (o.has(source_uuid)) continue;
-        o.add(source_uuid);
+      let prompt = block.attachment.type === "queued_command" ? block.attachment.prompt : "";
+      let sourceUuid = block.attachment.source_uuid;
+      if (typeof sourceUuid === "string") {
+        if (o.has(sourceUuid)) continue;
+        o.add(sourceUuid);
       }
-      for (let u of textBlocksOf(s)) lines.push(`[User]: ${truncateToLength(u, e.userTextChars)}`);
+      for (let u of textBlocksOf(prompt)) lines.push(`[User]: ${truncateToLength(u, e.userTextChars)}`);
       continue;
     }
     if (block.type === "user" && block.message) {
@@ -2931,21 +3141,33 @@ function formatTranscriptForFacets(r, e) {
 }
 //@ chunk-23fm9f0d.js:39583-39849 fingerprint = scanAllSessions (0.665)
 async function scanAllSessions(e, r, s) {
-  if (r === null) return !0;
-  let n = await fsPromisesModule.readdir(e, { withFileTypes: !0 }).catch(() => []);
+  if (r === null) return true;
+  let n = await fsPromisesModule
+    .readdir(e, {
+      withFileTypes: true,
+    })
+    .catch(() => []);
   for (let f of n) {
-    let i = join(e, f.name),
-      m = await fsPromisesModule.lstat(i).catch(() => null);
-    if (m !== null && m.mtime > r) return !0;
-    if (s > 1 && f.isDirectory() && (await scanAllSessions(i, r, s - 1))) return !0;
+    let i = join(e, f.name);
+    let m = await fsPromisesModule.lstat(i).catch(() => null);
+    if (m !== null && m.mtime > r) return true;
+    if (s > 1 && f.isDirectory() && (await scanAllSessions(i, r, s - 1))) return true;
   }
-  return !1;
+  return false;
 }
 //@ chunk-3a1caa6f.js:3079-3216 fingerprint = getRemoteHostSessionCount (0.407)
 function getRemoteHostSessionCount(e, r = {}) {
-  let n = e?.GIT_ALLOW_PROTOCOL?.split(":").includes("ssh") ?? !1;
+  let n = e?.GIT_ALLOW_PROTOCOL?.split(":").includes("ssh") ?? false;
   return sanitizePathForGit(
-    buildSafeGitEnv({ ...freeze_4, ...(r.userLocale !== !0 && freeze_5), ...(!n && freeze_6) }, e, r),
+    buildSafeGitEnv(
+      {
+        ...M,
+        ...(r.userLocale !== true && b),
+        ...(!n && F),
+      },
+      e,
+      r,
+    ),
   );
 }
 //@ chunk-ah34pb7m.js:35940-36053 fingerprint = hasValidDates (0.343)
@@ -2953,7 +3175,6 @@ function hasValidDates(log) {
   let d = roundToMinute(log ?? Number.NaN);
   return Number.isNaN(d.getTime()) ? "" : `, next run ${formatBriefTimestamp(d.toISOString())}`;
 }
-
 export {
   getRemoteHostSessionCount,
   scanAllSessions,

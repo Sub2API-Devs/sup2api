@@ -16,38 +16,50 @@ import {
   artifactLoginEnvQuadMessage,
   ARTIFACT_LOGIN_REQUIRED_MESSAGE,
 } from "./constants.js";
-import { bdt, authExpiredBlock } from "../../services/policyLimits/capabilityBlocks.js";
+import { authOverriddenBlock, authExpiredBlock } from "../../services/policyLimits/capabilityBlocks.js";
 import {
   getAuthTokenSource,
   getAnthropicApiKeyWithSourceSafe,
   describeHowToDisableAuthTokenSource,
 } from "../../utils/auth.js";
-import { v$, getApiKeyFromFileDescriptor } from "../../utils/authFileDescriptor.js";
+import {
+  hasPossibleCredentialFromDescriptor,
+  getApiKeyFromFileDescriptor,
+} from "../../utils/authFileDescriptor.js";
 import { getWIFPrecedenceSource } from "../../utils/wifProfile.js";
 import { getSettingsForSource } from "../../utils/settings/settings.js";
 
+//@ chunk-8wvtd8sr.js:23245-24363 placement
 /**
  * Artifact 需要 claude.ai 登录而当前认证来源会遮蔽登录时给出说明与补救：Unix socket 代理、宿主管理的文件描述符令牌、ANTHROPIC_API_KEY、apiKeyHelper 等。
  */
-//@ chunk-8wvtd8sr.js:23245-24363 placement
 function artifactLoginBlockedReason() {
-  if (env.ANTHROPIC_UNIX_SOCKET) return { message: ARTIFACT_LOGIN_PROXIED_MESSAGE, remedy: bdt(!0) };
+  if (env.ANTHROPIC_UNIX_SOCKET)
+    return {
+      message: ARTIFACT_LOGIN_PROXIED_MESSAGE,
+      remedy: authOverriddenBlock(true),
+    };
   let source = getAuthTokenSource().source;
   if (
-    v$("CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR") ||
+    hasPossibleCredentialFromDescriptor("CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR") ||
     (!env.ANTHROPIC_API_KEY && getApiKeyFromFileDescriptor() !== null) ||
     source === "CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR" ||
     source === "CCR_OAUTH_TOKEN_FILE"
   )
-    return { message: ARTIFACT_LOGIN_HOST_MANAGED_MESSAGE, remedy: bdt(!0) };
-  let { source: source_2 } = getAnthropicApiKeyWithSourceSafe({ skipRetrievingKeyFromApiKeyHelper: !0 });
+    return {
+      message: ARTIFACT_LOGIN_HOST_MANAGED_MESSAGE,
+      remedy: authOverriddenBlock(true),
+    };
+  let { source: source_2 } = getAnthropicApiKeyWithSourceSafe({
+    skipRetrievingKeyFromApiKeyHelper: true,
+  });
   if (source_2 === "ANTHROPIC_API_KEY")
     return {
       message: artifactLoginBlockedByCredentialMessage(
         "the ANTHROPIC_API_KEY environment variable",
         'Unset the ANTHROPIC_API_KEY environment variable, or claude /logout then say "No" to the API key approval before login.',
       ),
-      remedy: bdt(!1),
+      remedy: authOverriddenBlock(false),
     };
   if (source_2 === "apiKeyHelper")
     return {
@@ -55,7 +67,7 @@ function artifactLoginBlockedReason() {
         "the apiKeyHelper setting",
         "Unset the apiKeyHelper setting.",
       ),
-      remedy: bdt(!1),
+      remedy: authOverriddenBlock(false),
     };
   if (source === "profile" && source_2 === "/login managed key" && getWIFPrecedenceSource() === "env-quad")
     return {
@@ -63,7 +75,7 @@ function artifactLoginBlockedReason() {
         "a Console API key saved by a previous /login",
         "Run /logout to clear the saved key.",
       ),
-      remedy: bdt(!1),
+      remedy: authOverriddenBlock(false),
     };
   if (source === "profile" && getWIFPrecedenceSource() === "env-quad")
     return {
@@ -75,9 +87,11 @@ function artifactLoginBlockedReason() {
   if (source !== "none" && source !== "claude.ai")
     return {
       message: artifactLoginBlockedByCredentialMessage(source, describeHowToDisableAuthTokenSource(source)),
-      remedy: bdt(!1),
+      remedy: authOverriddenBlock(false),
     };
-  return { message: ARTIFACT_LOGIN_REQUIRED_MESSAGE, remedy: authExpiredBlock() };
+  return {
+    message: ARTIFACT_LOGIN_REQUIRED_MESSAGE,
+    remedy: authExpiredBlock(),
+  };
 }
-
 export { artifactLoginBlockedReason };

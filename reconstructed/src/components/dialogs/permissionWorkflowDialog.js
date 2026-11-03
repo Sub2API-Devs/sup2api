@@ -10,16 +10,16 @@
  */
 import { withHideWhile } from "./dialogRequests.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { Fh } from "../../utils/deepFreezePlainData.js";
+import { deepFreezeToolName } from "../../utils/deepFreezePlainData.js";
 
+//@ chunk-vhnfh0m3.js:298-572 placement
 /**
  * 权限工作流对话框的定义（载荷含请求、工具、权限结果与脚本，默认结果为取消）。
  */
-//@ chunk-vhnfh0m3.js:298-572 placement
 var permissionWorkflowDialog = withHideWhile({
   kind: "permission_workflow",
   payload: DoctorLazy(() =>
-    Fh(
+    deepFreezeToolName(
       (o) =>
         typeof o === "object" &&
         o !== null &&
@@ -29,6 +29,8 @@ var permissionWorkflowDialog = withHideWhile({
         "script" in o,
     ),
   ),
-  result: DoctorLazy(() => Fh((o) => typeof o === "object" && o !== null && "behavior" in o)),
-  default: { behavior: "cancelled" },
+  result: DoctorLazy(() => deepFreezeToolName((o) => typeof o === "object" && o !== null && "behavior" in o)),
+  default: {
+    behavior: "cancelled",
+  },
 });

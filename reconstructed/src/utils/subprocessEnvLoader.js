@@ -11,7 +11,6 @@
 import { createEnvAccessor } from "./env/envRegistry.js";
 
 //@ chunk-4svv9e16.js:227-294 placement
-var toolServerShape = require("./chunk-kakaahp3.js").toolServerShape,
-  nk = createEnvAccessor(toolServerShape, null);
-
-export { nk };
+var toolServerShape = require("./chunk-kakaahp3.js").toolServerShape;
+var toolServerEnvAccessor = createEnvAccessor(toolServerShape, null);
+export { toolServerEnvAccessor };

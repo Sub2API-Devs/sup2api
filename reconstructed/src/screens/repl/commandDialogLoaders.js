@@ -9,10 +9,10 @@
  * attribution: placement 2
  */
 
+//@ chunk-18hwfzwa.js:37274-40586 placement
 /**
  * 斜杠命令到懒加载 chunk 的映射表，命令对话框打开时按需 import。
  */
-//@ chunk-18hwfzwa.js:37274-40586 placement
 var COMMAND_DIALOG_LOADERS = {
   "add-dir": () => import("./chunk-x4gf1bcz.js"),
   advisor: () => import("./chunk-tx2s9zpa.js"),
@@ -85,7 +85,7 @@ var COMMAND_DIALOG_LOADERS = {
   vim: () => import("./chunk-q8cyy466.js"),
   "web-setup": () => import("./chunk-ajkmgejw.js"),
   wellbeing: () => import("./chunk-a7sxm3q7.js"),
-  ...!1,
+  ...false,
   ...{},
   ...{},
   ...{},
@@ -100,5 +100,4 @@ var COMMAND_DIALOG_LOADERS = {
 };
 //@ chunk-18hwfzwa.js:40586-40620 placement
 var COMMAND_DIALOG_NAMES = new Set(Object.keys(COMMAND_DIALOG_LOADERS));
-
 export { COMMAND_DIALOG_LOADERS };

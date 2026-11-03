@@ -6,218 +6,309 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { Tn } from "./forge.js";
-import { $h } from "./cipher.js";
-import { tS } from "./cipherModes.js";
-import { Zn } from "./util.js";
+import { require_forge } from "./forge.js";
+import { require_cipher } from "./cipher.js";
+import { require_cipherModes } from "./cipherModes.js";
+import { require_util } from "./util.js";
 
 //@ chunk-fq0cr76a.js:43142-47100 cjs-fingerprint
-var Xa = x(function (ufe, ST) {
-  var Sr = Tn();
-  $h();
-  tS();
-  Zn();
-  ST.exports = Sr.aes = Sr.aes || {};
-  Sr.aes.startEncrypting = function (e, n, r, s) {
-    var h = Gh({ key: e, output: r, decrypt: !1, mode: s });
-    return (h.start(n), h);
+var require_aes = x(function (cjsExports, cjsModule) {
+  var forge = require_forge();
+  require_cipher();
+  require_cipherModes();
+  require_util();
+  cjsModule.exports = forge.aes = forge.aes || {};
+  forge.aes.startEncrypting = function (key, iv, output, mode) {
+    var cipher = _createCipher({
+      key,
+      output,
+      decrypt: false,
+      mode,
+    });
+    cipher.start(iv);
+    return cipher;
   };
-  Sr.aes.createEncryptionCipher = function (e, n) {
-    return Gh({ key: e, output: null, decrypt: !1, mode: n });
+  forge.aes.createEncryptionCipher = function (key, mode) {
+    return _createCipher({
+      key,
+      output: null,
+      decrypt: false,
+      mode,
+    });
   };
-  Sr.aes.startDecrypting = function (e, n, r, s) {
-    var h = Gh({ key: e, output: r, decrypt: !0, mode: s });
-    return (h.start(n), h);
+  forge.aes.startDecrypting = function (key, iv, output, mode) {
+    var cipher = _createCipher({
+      key,
+      output,
+      decrypt: true,
+      mode,
+    });
+    cipher.start(iv);
+    return cipher;
   };
-  Sr.aes.createDecryptionCipher = function (e, n) {
-    return Gh({ key: e, output: null, decrypt: !0, mode: n });
+  forge.aes.createDecryptionCipher = function (key, mode) {
+    return _createCipher({
+      key,
+      output: null,
+      decrypt: true,
+      mode,
+    });
   };
-  Sr.aes.Algorithm = function (e, n) {
-    if (!iS) yT();
+  forge.aes.Algorithm = function (name, mode) {
+    if (!init) initialize();
     var r = this;
-    ((r.name = e),
-      (r.mode = new n({
-        blockSize: 16,
-        cipher: {
-          encrypt: function (s, h) {
-            return rS(r._w, s, h, !1);
-          },
-          decrypt: function (s, h) {
-            return rS(r._w, s, h, !0);
-          },
+    r.name = name;
+    r.mode = new mode({
+      blockSize: 16,
+      cipher: {
+        encrypt: function (inBlock, outBlock) {
+          return _updateBlock(r._w, inBlock, outBlock, false);
         },
-      })),
-      (r._init = !1));
+        decrypt: function (inBlock, outBlock) {
+          return _updateBlock(r._w, inBlock, outBlock, true);
+        },
+      },
+    });
+    r._init = false;
   };
-  Sr.aes.Algorithm.prototype.initialize = function (e) {
+  forge.aes.Algorithm.prototype.initialize = function (options) {
     if (this._init) return;
-    var key = e.key,
-      r;
+    var key = options.key;
+    var tmp;
     if (typeof key === "string" && (key.length === 16 || key.length === 24 || key.length === 32))
-      key = Sr.util.createBuffer(key);
-    else if (Sr.util.isArray(key) && (key.length === 16 || key.length === 24 || key.length === 32)) {
-      ((r = key), (key = Sr.util.createBuffer()));
-      for (var s = 0; s < r.length; ++s) key.putByte(r[s]);
+      key = forge.util.createBuffer(key);
+    else if (forge.util.isArray(key) && (key.length === 16 || key.length === 24 || key.length === 32)) {
+      tmp = key;
+      key = forge.util.createBuffer();
+      for (var i = 0; i < tmp.length; ++i) key.putByte(tmp[i]);
     }
-    if (!Sr.util.isArray(key)) {
-      ((r = key), (key = []));
-      var h = r.length();
-      if (h === 16 || h === 24 || h === 32) {
-        h = h >>> 2;
-        for (var s = 0; s < h; ++s) key.push(r.getInt32());
+    if (!forge.util.isArray(key)) {
+      tmp = key;
+      key = [];
+      var len = tmp.length();
+      if (len === 16 || len === 24 || len === 32) {
+        len = len >>> 2;
+        for (var i = 0; i < len; ++i) key.push(tmp.getInt32());
       }
     }
-    if (!Sr.util.isArray(key) || !(key.length === 4 || key.length === 6 || key.length === 8))
+    if (!forge.util.isArray(key) || !(key.length === 4 || key.length === 6 || key.length === 8))
       throw Error("Invalid key parameter.");
-    var y = this.mode.name,
-      b = ["CFB", "OFB", "CTR", "GCM"].indexOf(y) !== -1;
-    ((this._w = bT(key, e.decrypt && !b)), (this._init = !0));
+    var mode = this.mode.name;
+    var encryptOp = ["CFB", "OFB", "CTR", "GCM"].indexOf(mode) !== -1;
+    this._w = _expandKey(key, options.decrypt && !encryptOp);
+    this._init = true;
   };
-  Sr.aes._expandKey = function (e, n) {
-    if (!iS) yT();
-    return bT(e, n);
+  forge.aes._expandKey = function (key, decrypt) {
+    if (!init) initialize();
+    return _expandKey(key, decrypt);
   };
-  Sr.aes._updateBlock = rS;
-  su("AES-ECB", Sr.cipher.modes.ecb);
-  su("AES-CBC", Sr.cipher.modes.cbc);
-  su("AES-CFB", Sr.cipher.modes.cfb);
-  su("AES-OFB", Sr.cipher.modes.ofb);
-  su("AES-CTR", Sr.cipher.modes.ctr);
-  su("AES-GCM", Sr.cipher.modes.gcm);
-  function su(e, n) {
-    var r = function () {
-      return new Sr.aes.Algorithm(e, n);
+  forge.aes._updateBlock = _updateBlock;
+  registerAlgorithm("AES-ECB", forge.cipher.modes.ecb);
+  registerAlgorithm("AES-CBC", forge.cipher.modes.cbc);
+  registerAlgorithm("AES-CFB", forge.cipher.modes.cfb);
+  registerAlgorithm("AES-OFB", forge.cipher.modes.ofb);
+  registerAlgorithm("AES-CTR", forge.cipher.modes.ctr);
+  registerAlgorithm("AES-GCM", forge.cipher.modes.gcm);
+  function registerAlgorithm(name, mode) {
+    var factory = function () {
+      return new forge.aes.Algorithm(name, mode);
     };
-    Sr.cipher.registerAlgorithm(e, r);
+    forge.cipher.registerAlgorithm(name, factory);
   }
-  var iS = !1,
-    nu = 4,
-    Vs,
-    nS,
-    gT,
-    rc,
-    zi;
-  function yT() {
-    ((iS = !0), (gT = [0, 1, 2, 4, 8, 16, 32, 64, 128, 27, 54]));
-    var e = Array(256);
-    for (var n = 0; n < 128; ++n) ((e[n] = n << 1), (e[n + 128] = ((n + 128) << 1) ^ 283));
-    ((Vs = Array(256)), (nS = Array(256)), (rc = [, , , ,]), (zi = [, , , ,]));
-    for (var n = 0; n < 4; ++n) ((rc[n] = Array(256)), (zi[n] = Array(256)));
-    var r = 0,
-      s = 0,
-      h,
-      y,
-      b,
-      S,
-      w,
-      R,
-      D;
-    for (var n = 0; n < 256; ++n) {
-      ((S = s ^ (s << 1) ^ (s << 2) ^ (s << 3) ^ (s << 4)),
-        (S = (S >> 8) ^ (S & 255) ^ 99),
-        (Vs[r] = S),
-        (nS[S] = r),
-        (w = e[S]),
-        (h = e[r]),
-        (y = e[h]),
-        (b = e[y]),
-        (R = (w << 24) ^ (S << 16) ^ (S << 8) ^ (S ^ w)),
-        (D = ((h ^ y ^ b) << 24) ^ ((r ^ b) << 16) ^ ((r ^ y ^ b) << 8) ^ (r ^ h ^ b)));
-      for (var O = 0; O < 4; ++O)
-        ((rc[O][r] = R), (zi[O][S] = D), (R = (R << 24) | (R >>> 8)), (D = (D << 24) | (D >>> 8)));
-      if (r === 0) r = s = 1;
-      else ((r = h ^ e[e[e[h ^ b]]]), (s ^= e[e[s]]));
+  var init = false;
+  var Nb = 4;
+  var sbox;
+  var isbox;
+  var rcon;
+  var mix;
+  var imix;
+  function initialize() {
+    init = true;
+    rcon = [0, 1, 2, 4, 8, 16, 32, 64, 128, 27, 54];
+    var xtime = Array(256);
+    for (var i = 0; i < 128; ++i) {
+      xtime[i] = i << 1;
+      xtime[i + 128] = ((i + 128) << 1) ^ 283;
+    }
+    sbox = Array(256);
+    isbox = Array(256);
+    mix = [, , , ,];
+    imix = [, , , ,];
+    for (var i = 0; i < 4; ++i) {
+      mix[i] = Array(256);
+      imix[i] = Array(256);
+    }
+    var e = 0;
+    var ei = 0;
+    var e2;
+    var e4;
+    var e8;
+    var sx;
+    var sx2;
+    var me;
+    var ime;
+    for (var i = 0; i < 256; ++i) {
+      sx = ei ^ (ei << 1) ^ (ei << 2) ^ (ei << 3) ^ (ei << 4);
+      sx = (sx >> 8) ^ (sx & 255) ^ 99;
+      sbox[e] = sx;
+      isbox[sx] = e;
+      sx2 = xtime[sx];
+      e2 = xtime[e];
+      e4 = xtime[e2];
+      e8 = xtime[e4];
+      me = (sx2 << 24) ^ (sx << 16) ^ (sx << 8) ^ (sx ^ sx2);
+      ime = ((e2 ^ e4 ^ e8) << 24) ^ ((e ^ e8) << 16) ^ ((e ^ e4 ^ e8) << 8) ^ (e ^ e2 ^ e8);
+      for (var n = 0; n < 4; ++n) {
+        mix[n][e] = me;
+        imix[n][sx] = ime;
+        me = (me << 24) | (me >>> 8);
+        ime = (ime << 24) | (ime >>> 8);
+      }
+      if (e === 0) e = ei = 1;
+      else {
+        e = e2 ^ xtime[xtime[xtime[e2 ^ e8]]];
+        ei ^= xtime[xtime[ei]];
+      }
     }
   }
-  function bT(e, n) {
-    var sliced = e.slice(0),
-      s,
-      h = 1,
-      y = sliced.length,
-      b = y + 6 + 1,
-      S = nu * b;
-    for (var w = y; w < S; ++w) {
-      if (((s = sliced[w - 1]), w % y === 0))
-        ((s =
-          (Vs[(s >>> 16) & 255] << 24) ^
-          (Vs[(s >>> 8) & 255] << 16) ^
-          (Vs[s & 255] << 8) ^
-          Vs[s >>> 24] ^
-          (gT[h] << 24)),
-          h++);
-      else if (y > 6 && w % y === 4)
-        s = (Vs[s >>> 24] << 24) ^ (Vs[(s >>> 16) & 255] << 16) ^ (Vs[(s >>> 8) & 255] << 8) ^ Vs[s & 255];
-      sliced[w] = sliced[w - y] ^ s;
+  function _expandKey(key, decrypt) {
+    var w_2 = key.slice(0);
+    var temp;
+    var iNk = 1;
+    var Nk = w_2.length;
+    var Nr1 = Nk + 6 + 1;
+    var end = Nb * Nr1;
+    for (var i = Nk; i < end; ++i) {
+      temp = w_2[i - 1];
+      if (i % Nk === 0) {
+        temp =
+          (sbox[(temp >>> 16) & 255] << 24) ^
+          (sbox[(temp >>> 8) & 255] << 16) ^
+          (sbox[temp & 255] << 8) ^
+          sbox[temp >>> 24] ^
+          (rcon[iNk] << 24);
+        iNk++;
+      } else if (Nk > 6 && i % Nk === 4)
+        temp =
+          (sbox[temp >>> 24] << 24) ^
+          (sbox[(temp >>> 16) & 255] << 16) ^
+          (sbox[(temp >>> 8) & 255] << 8) ^
+          sbox[temp & 255];
+      w_2[i] = w_2[i - Nk] ^ temp;
     }
-    if (n) {
-      var R,
-        D = zi[0],
-        O = zi[1],
-        L = zi[2],
-        V = zi[3],
-        sliced_2 = sliced.slice(0);
-      S = sliced.length;
-      for (var w = 0, q = S - nu; w < S; w += nu, q -= nu)
-        if (w === 0 || w === S - nu)
-          ((sliced_2[w] = sliced[q]),
-            (sliced_2[w + 1] = sliced[q + 3]),
-            (sliced_2[w + 2] = sliced[q + 2]),
-            (sliced_2[w + 3] = sliced[q + 1]));
-        else
-          for (var Z = 0; Z < nu; ++Z)
-            ((R = sliced[q + Z]),
-              (sliced_2[w + (3 & -Z)] =
-                D[Vs[R >>> 24]] ^ O[Vs[(R >>> 16) & 255]] ^ L[Vs[(R >>> 8) & 255]] ^ V[Vs[R & 255]]));
-      sliced = sliced_2;
+    if (decrypt) {
+      var tmp;
+      var m0 = imix[0];
+      var m1 = imix[1];
+      var m2 = imix[2];
+      var m3 = imix[3];
+      var wnew = w_2.slice(0);
+      end = w_2.length;
+      for (var i = 0, wi = end - Nb; i < end; i += Nb, wi -= Nb)
+        if (i === 0 || i === end - Nb) {
+          wnew[i] = w_2[wi];
+          wnew[i + 1] = w_2[wi + 3];
+          wnew[i + 2] = w_2[wi + 2];
+          wnew[i + 3] = w_2[wi + 1];
+        } else
+          for (var n = 0; n < Nb; ++n) {
+            tmp = w_2[wi + n];
+            wnew[i + (3 & -n)] =
+              m0[sbox[tmp >>> 24]] ^
+              m1[sbox[(tmp >>> 16) & 255]] ^
+              m2[sbox[(tmp >>> 8) & 255]] ^
+              m3[sbox[tmp & 255]];
+          }
+      w_2 = wnew;
     }
-    return sliced;
+    return w_2;
   }
-  function rS(e, n, r, s) {
-    var h = e.length / 4 - 1,
-      y,
-      b,
-      S,
-      w,
-      R;
-    if (s) ((y = zi[0]), (b = zi[1]), (S = zi[2]), (w = zi[3]), (R = nS));
-    else ((y = rc[0]), (b = rc[1]), (S = rc[2]), (w = rc[3]), (R = Vs));
-    var D, O, L, V, K, q, Z;
-    ((D = n[0] ^ e[0]), (O = n[s ? 3 : 1] ^ e[1]), (L = n[2] ^ e[2]), (V = n[s ? 1 : 3] ^ e[3]));
-    var J = 3;
-    for (var ie = 1; ie < h; ++ie)
-      ((K = y[D >>> 24] ^ b[(O >>> 16) & 255] ^ S[(L >>> 8) & 255] ^ w[V & 255] ^ e[++J]),
-        (q = y[O >>> 24] ^ b[(L >>> 16) & 255] ^ S[(V >>> 8) & 255] ^ w[D & 255] ^ e[++J]),
-        (Z = y[L >>> 24] ^ b[(V >>> 16) & 255] ^ S[(D >>> 8) & 255] ^ w[O & 255] ^ e[++J]),
-        (V = y[V >>> 24] ^ b[(D >>> 16) & 255] ^ S[(O >>> 8) & 255] ^ w[L & 255] ^ e[++J]),
-        (D = K),
-        (O = q),
-        (L = Z));
-    ((r[0] =
-      (R[D >>> 24] << 24) ^ (R[(O >>> 16) & 255] << 16) ^ (R[(L >>> 8) & 255] << 8) ^ R[V & 255] ^ e[++J]),
-      (r[s ? 3 : 1] =
-        (R[O >>> 24] << 24) ^ (R[(L >>> 16) & 255] << 16) ^ (R[(V >>> 8) & 255] << 8) ^ R[D & 255] ^ e[++J]),
-      (r[2] =
-        (R[L >>> 24] << 24) ^ (R[(V >>> 16) & 255] << 16) ^ (R[(D >>> 8) & 255] << 8) ^ R[O & 255] ^ e[++J]),
-      (r[s ? 1 : 3] =
-        (R[V >>> 24] << 24) ^ (R[(D >>> 16) & 255] << 16) ^ (R[(O >>> 8) & 255] << 8) ^ R[L & 255] ^ e[++J]));
+  function _updateBlock(w_2, input, output, decrypt) {
+    var Nr = w_2.length / 4 - 1;
+    var m0;
+    var m1;
+    var m2;
+    var m3;
+    var sub;
+    if (decrypt) {
+      m0 = imix[0];
+      m1 = imix[1];
+      m2 = imix[2];
+      m3 = imix[3];
+      sub = isbox;
+    } else {
+      m0 = mix[0];
+      m1 = mix[1];
+      m2 = mix[2];
+      m3 = mix[3];
+      sub = sbox;
+    }
+    var a;
+    var b;
+    var c;
+    var d;
+    var a2;
+    var b2;
+    var c2;
+    a = input[0] ^ w_2[0];
+    b = input[decrypt ? 3 : 1] ^ w_2[1];
+    c = input[2] ^ w_2[2];
+    d = input[decrypt ? 1 : 3] ^ w_2[3];
+    var i = 3;
+    for (var round = 1; round < Nr; ++round) {
+      a2 = m0[a >>> 24] ^ m1[(b >>> 16) & 255] ^ m2[(c >>> 8) & 255] ^ m3[d & 255] ^ w_2[++i];
+      b2 = m0[b >>> 24] ^ m1[(c >>> 16) & 255] ^ m2[(d >>> 8) & 255] ^ m3[a & 255] ^ w_2[++i];
+      c2 = m0[c >>> 24] ^ m1[(d >>> 16) & 255] ^ m2[(a >>> 8) & 255] ^ m3[b & 255] ^ w_2[++i];
+      d = m0[d >>> 24] ^ m1[(a >>> 16) & 255] ^ m2[(b >>> 8) & 255] ^ m3[c & 255] ^ w_2[++i];
+      a = a2;
+      b = b2;
+      c = c2;
+    }
+    output[0] =
+      (sub[a >>> 24] << 24) ^
+      (sub[(b >>> 16) & 255] << 16) ^
+      (sub[(c >>> 8) & 255] << 8) ^
+      sub[d & 255] ^
+      w_2[++i];
+    output[decrypt ? 3 : 1] =
+      (sub[b >>> 24] << 24) ^
+      (sub[(c >>> 16) & 255] << 16) ^
+      (sub[(d >>> 8) & 255] << 8) ^
+      sub[a & 255] ^
+      w_2[++i];
+    output[2] =
+      (sub[c >>> 24] << 24) ^
+      (sub[(d >>> 16) & 255] << 16) ^
+      (sub[(a >>> 8) & 255] << 8) ^
+      sub[b & 255] ^
+      w_2[++i];
+    output[decrypt ? 1 : 3] =
+      (sub[d >>> 24] << 24) ^
+      (sub[(a >>> 16) & 255] << 16) ^
+      (sub[(b >>> 8) & 255] << 8) ^
+      sub[c & 255] ^
+      w_2[++i];
   }
-  function Gh(e) {
-    e = e || {};
-    var upper = (e.mode || "CBC").toUpperCase(),
-      r = "AES-" + upper,
-      s;
-    if (e.decrypt) s = Sr.cipher.createDecipher(r, e.key);
-    else s = Sr.cipher.createCipher(r, e.key);
-    var start = s.start;
-    return (
-      (s.start = function (y, b) {
-        var S = null;
-        if (b instanceof Sr.util.ByteBuffer) ((S = b), (b = {}));
-        ((b = b || {}), (b.output = S), (b.iv = y), start.call(s, b));
-      }),
-      s
-    );
+  function _createCipher(options) {
+    options = options || {};
+    var mode = (options.mode || "CBC").toUpperCase();
+    var algorithm = "AES-" + mode;
+    var cipher;
+    if (options.decrypt) cipher = forge.cipher.createDecipher(algorithm, options.key);
+    else cipher = forge.cipher.createCipher(algorithm, options.key);
+    var start = cipher.start;
+    cipher.start = function (iv, options) {
+      var output = null;
+      if (options instanceof forge.util.ByteBuffer) {
+        output = options;
+        options = {};
+      }
+      options = options || {};
+      options.output = output;
+      options.iv = iv;
+      start.call(cipher, options);
+    };
+    return cipher;
   }
 });
-
-export { Xa };
+export { require_aes };

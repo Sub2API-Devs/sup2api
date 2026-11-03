@@ -16,35 +16,49 @@ import __cc_resource_4 from "../../../assets/slidesHowTo-09m4dbj2.md" with { typ
 import __cc_resource_5 from "../../../assets/slidesTwoSteps-1shjmnfb.md" with { type: "text" };
 
 //@ chunk-thjasdp6.js:696-718 placement
-var e = __cc_resource_0;
+var designText = __cc_resource_0;
 //@ chunk-thjasdp6.js:718-740 placement
-var t = __cc_resource_1;
+var designhowtoText = __cc_resource_1;
 //@ chunk-thjasdp6.js:740-762 placement
-var s = __cc_resource_2;
+var designtwostepsText = __cc_resource_2;
 //@ chunk-thjasdp6.js:762-784 placement
-var a = __cc_resource_3;
+var slidesText = __cc_resource_3;
 //@ chunk-thjasdp6.js:784-806 placement
-var i = __cc_resource_4;
+var slideshowtoText = __cc_resource_4;
 //@ chunk-thjasdp6.js:806-828 placement
-var r = __cc_resource_5;
+var slidestwostepsText = __cc_resource_5;
+//@ chunk-thjasdp6.js:828-1259 placement
 /**
  * design/slides 路由说明文本：概述、两步走、操作指引（取自内置 md 资源），以及新 Artifact url、tokens.json 路径占位和"有设计系统时"的注释与句子。
  */
-//@ chunk-thjasdp6.js:828-1259 placement
 var ROUTE_OVERVIEW_TEXTS = new Map([
-    ["design", e.trim()],
-    ["slides", a.trim()],
-  ]),
-  ROUTE_TWO_STEPS_TEXTS = new Map([
-    ["design", s.trim()],
-    ["slides", r.trim()],
-  ]),
-  NEW_ARTIFACT_URL_PLACEHOLDER = "<the new Artifact's url>",
-  TOKENS_PATH_PLACEHOLDER = '"<the tokens.json path above>"',
-  DESIGN_SYSTEM_ONLY_COMMENT = "   // only with a design system",
-  DESIGN_SYSTEM_STYLE_SENTENCE =
-    " With a design system, the colours, type and spacing are the ones in the files you printed.",
-  ROUTE_HOW_TO_TEXTS = new Map([
-    ["design", { text: t.trim(), whole: "design", parts: "boards" }],
-    ["slides", { text: i.trim(), whole: "deck", parts: "slides" }],
-  ]);
+  ["design", designText.trim()],
+  ["slides", slidesText.trim()],
+]);
+var ROUTE_TWO_STEPS_TEXTS = new Map([
+  ["design", designtwostepsText.trim()],
+  ["slides", slidestwostepsText.trim()],
+]);
+var NEW_ARTIFACT_URL_PLACEHOLDER = "<the new Artifact's url>";
+var TOKENS_PATH_PLACEHOLDER = '"<the tokens.json path above>"';
+var DESIGN_SYSTEM_ONLY_COMMENT = "   // only with a design system";
+var DESIGN_SYSTEM_STYLE_SENTENCE =
+  " With a design system, the colours, type and spacing are the ones in the files you printed.";
+var ROUTE_HOW_TO_TEXTS = new Map([
+  [
+    "design",
+    {
+      text: designhowtoText.trim(),
+      whole: "design",
+      parts: "boards",
+    },
+  ],
+  [
+    "slides",
+    {
+      text: slideshowtoText.trim(),
+      whole: "deck",
+      parts: "slides",
+    },
+  ],
+]);

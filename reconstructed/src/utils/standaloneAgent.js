@@ -9,17 +9,20 @@
  * attribution: fingerprint 1
  */
 
+//@ chunk-7s4yj2r0.js:317-484 fingerprint = getStandaloneAgentName (1)
 /**
  * 合并 standaloneAgentContext 字段（无变化时返回原状态），名字缺省为空串。
  */
-//@ chunk-7s4yj2r0.js:317-484 fingerprint = getStandaloneAgentName (1)
 function updateStandaloneAgentContext(appState, patch) {
   let standaloneAgentContext = appState.standaloneAgentContext;
-  if (!Object.keys(patch).some((o) => standaloneAgentContext?.[o] !== patch[o])) return appState;
+  if (!Object.keys(patch).some((key) => standaloneAgentContext?.[key] !== patch[key])) return appState;
   return {
     ...appState,
-    standaloneAgentContext: { ...standaloneAgentContext, name: standaloneAgentContext?.name ?? "", ...patch },
+    standaloneAgentContext: {
+      ...standaloneAgentContext,
+      name: standaloneAgentContext?.name ?? "",
+      ...patch,
+    },
   };
 }
-
 export { updateStandaloneAgentContext };

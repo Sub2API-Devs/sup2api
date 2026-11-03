@@ -8,30 +8,39 @@
  * pieces: chunk-ah34pb7m.js (1)
  * attribution: fingerprint 1
  */
-import { e } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { OutputLine } from "../../components/shell/OutputLine.js";
 import { Box, Text } from "../../ink/components/Text.js";
 import { MessageResponse } from "../../components/MessageResponse.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 
+//@ chunk-ah34pb7m.js:32725-33057 fingerprint = renderToolResultMessage (0.897)
 /**
  * ReadMcpResource 结果渲染：error 显示错误，无内容显示 (No content)，否则格式化 JSON。
  */
-//@ chunk-ah34pb7m.js:32725-33057 fingerprint = renderToolResultMessage (0.897)
-function renderToolResultMessage_5(output, _progressMessagesForMessage, { verbose: verbose }) {
-  if (output?.error) return e(OutputLine, { content: output.error, verbose: verbose });
+function renderToolResultMessage_5(output, _progressMessagesForMessage, { verbose }) {
+  if (output?.error)
+    return jsxProd_default(OutputLine, {
+      content: output.error,
+      verbose,
+    });
   if (!output || !output.contents || output.contents.length === 0)
-    return e(Box, {
+    return jsxProd_default(Box, {
       justifyContent: "space-between",
       overflowX: "hidden",
       width: "100%",
-      children: e(MessageResponse, {
+      children: jsxProd_default(MessageResponse, {
         height: 1,
-        children: e(Text, { dimColor: !0, children: "(No content)" }),
+        children: jsxProd_default(Text, {
+          dimColor: true,
+          children: "(No content)",
+        }),
       }),
     });
   let formattedOutput = jsonStringify(output, null, 2);
-  return e(OutputLine, { content: formattedOutput, verbose: verbose });
+  return jsxProd_default(OutputLine, {
+    content: formattedOutput,
+    verbose,
+  });
 }
-
 export { renderToolResultMessage_5 };

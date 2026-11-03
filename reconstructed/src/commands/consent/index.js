@@ -10,8 +10,8 @@
  */
 import { designCommandCall } from "../design/design.js";
 
+//@ chunk-c9mbsnrs.js:3644-3674 placement
 /**
  * /design-consent 的 local call(args, context, invokedName) 实现入口（由命令对象 load() 返回）。
  */
-//@ chunk-c9mbsnrs.js:3644-3674 placement
-var m = (args, context) => designCommandCall("consent", context);
+var designConsentCall = (args, context) => designCommandCall("consent", context);

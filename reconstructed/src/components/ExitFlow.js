@@ -12,10 +12,12 @@ import { relaunchForExit } from "../utils/processRelaunch.js";
 import { gracefulShutdown } from "../utils/gracefulShutdown.js";
 
 //@ chunk-h52ct3be.js:2850-2991 fingerprint = ExitFlow (0.518)
-async function ExitFlow(e, r = {}, i, n) {
-  if ((await relaunchForExit(e, r, i), n))
-    await gracefulShutdown(0, "prompt_input_exit", { removeWorktree: n });
+async function ExitFlow(e, r = {}, storageV5, removeWorktree) {
+  await relaunchForExit(e, r, storageV5);
+  if (removeWorktree)
+    await gracefulShutdown(0, "prompt_input_exit", {
+      removeWorktree,
+    });
   else await gracefulShutdown(0, "prompt_input_exit");
 }
-
 export { ExitFlow };

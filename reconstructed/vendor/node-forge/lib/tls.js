@@ -6,130 +6,176 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { Tn } from "./forge.js";
-import { Xi } from "./asn1.js";
-import { iu } from "./hmac.js";
-import { jh } from "./md5.js";
-import { sc } from "./pem.js";
-import { kS } from "./pki.js";
-import { Ci } from "./random.js";
-import { cu } from "./sha1.js";
-import { Zn } from "./util.js";
+import { require_forge } from "./forge.js";
+import { require_asn1 } from "./asn1.js";
+import { require_hmac } from "./hmac.js";
+import { require_md5 } from "./md5.js";
+import { require_pem } from "./pem.js";
+import { require_pki } from "./pki.js";
+import { require_random } from "./random.js";
+import { require_sha1 } from "./sha1.js";
+import { require_util } from "./util.js";
 
 //@ chunk-fq0cr76a.js:211753-249438 cjs-fingerprint
-var US = x(function (Bfe, UA) {
-  var nt = Tn();
-  Xi();
-  iu();
-  jh();
-  sc();
-  kS();
-  Ci();
-  cu();
-  Zn();
-  var um = function (e, n, r, s) {
-      var buffer = nt.util.createBuffer(),
-        y = e.length >> 1,
-        b = y + (e.length & 1),
-        substr = e.substr(0, b),
-        substr_2 = e.substr(y, b),
-        buffer_2 = nt.util.createBuffer(),
-        create = nt.hmac.create();
-      r = n + r;
-      var ceil = Math.ceil(s / 16),
-        ceil_2 = Math.ceil(s / 20);
-      create.start("MD5", substr);
-      var buffer_3 = nt.util.createBuffer();
-      buffer_2.putBytes(r);
-      for (var K = 0; K < ceil; ++K)
-        (create.start(null, null),
-          create.update(buffer_2.getBytes()),
-          buffer_2.putBuffer(create.digest()),
-          create.start(null, null),
-          create.update(buffer_2.bytes() + r),
-          buffer_3.putBuffer(create.digest()));
-      create.start("SHA1", substr_2);
-      var buffer_4 = nt.util.createBuffer();
-      (buffer_2.clear(), buffer_2.putBytes(r));
-      for (var K = 0; K < ceil_2; ++K)
-        (create.start(null, null),
-          create.update(buffer_2.getBytes()),
-          buffer_2.putBuffer(create.digest()),
-          create.start(null, null),
-          create.update(buffer_2.bytes() + r),
-          buffer_4.putBuffer(create.digest()));
-      return (buffer.putBytes(nt.util.xorBytes(buffer_3.getBytes(), buffer_4.getBytes(), s)), buffer);
-    },
-    zG = function (e, n, r) {
-      var create = nt.hmac.create();
-      create.start("SHA1", e);
-      var buffer = nt.util.createBuffer();
-      return (
-        buffer.putInt32(n[0]),
-        buffer.putInt32(n[1]),
-        buffer.putByte(r.type),
-        buffer.putByte(r.version.major),
-        buffer.putByte(r.version.minor),
-        buffer.putInt16(r.length),
-        buffer.putBytes(r.fragment.bytes()),
-        create.update(buffer.getBytes()),
-        create.digest().getBytes()
-      );
-    },
-    QG = function (e, n, r) {
-      var s = !1;
-      try {
-        var deflate = e.deflate(n.fragment.getBytes());
-        ((n.fragment = nt.util.createBuffer(deflate)), (n.length = deflate.length), (s = !0));
-      } catch (error) {}
-      return s;
-    },
-    e6 = function (e, n, r) {
-      var s = !1;
-      try {
-        var inflate = e.inflate(n.fragment.getBytes());
-        ((n.fragment = nt.util.createBuffer(inflate)), (n.length = inflate.length), (s = !0));
-      } catch (error) {}
-      return s;
-    },
-    yi = function (e, n) {
-      var r = 0;
-      switch (n) {
-        case 1:
-          r = e.getByte();
-          break;
-        case 2:
-          r = e.getInt16();
-          break;
-        case 3:
-          r = e.getInt24();
-          break;
-        case 4:
-          r = e.getInt32();
-          break;
-      }
-      return nt.util.createBuffer(e.getBytes(r));
-    },
-    ki = function (e, n, r) {
-      (e.putInt(r.length(), n << 3), e.putBuffer(r));
-    },
-    se = {};
-  se.Versions = {
-    TLS_1_0: { major: 3, minor: 1 },
-    TLS_1_1: { major: 3, minor: 2 },
-    TLS_1_2: { major: 3, minor: 3 },
+var require_tls = x(function (cjsExports, cjsModule) {
+  var forge = require_forge();
+  require_asn1();
+  require_hmac();
+  require_md5();
+  require_pem();
+  require_pki();
+  require_random();
+  require_sha1();
+  require_util();
+  var prf_TLS1 = function (secret, label, seed, length) {
+    var rval = forge.util.createBuffer();
+    var idx = secret.length >> 1;
+    var slen = idx + (secret.length & 1);
+    var s1 = secret.substr(0, slen);
+    var s2 = secret.substr(idx, slen);
+    var ai = forge.util.createBuffer();
+    var hmac = forge.hmac.create();
+    seed = label + seed;
+    var md5itr = Math.ceil(length / 16);
+    var sha1itr = Math.ceil(length / 20);
+    hmac.start("MD5", s1);
+    var md5bytes = forge.util.createBuffer();
+    ai.putBytes(seed);
+    for (var i = 0; i < md5itr; ++i) {
+      hmac.start(null, null);
+      hmac.update(ai.getBytes());
+      ai.putBuffer(hmac.digest());
+      hmac.start(null, null);
+      hmac.update(ai.bytes() + seed);
+      md5bytes.putBuffer(hmac.digest());
+    }
+    hmac.start("SHA1", s2);
+    var sha1bytes = forge.util.createBuffer();
+    ai.clear();
+    ai.putBytes(seed);
+    for (var i = 0; i < sha1itr; ++i) {
+      hmac.start(null, null);
+      hmac.update(ai.getBytes());
+      ai.putBuffer(hmac.digest());
+      hmac.start(null, null);
+      hmac.update(ai.bytes() + seed);
+      sha1bytes.putBuffer(hmac.digest());
+    }
+    rval.putBytes(forge.util.xorBytes(md5bytes.getBytes(), sha1bytes.getBytes(), length));
+    return rval;
   };
-  se.SupportedVersions = [se.Versions.TLS_1_1, se.Versions.TLS_1_0];
-  se.Version = se.SupportedVersions[0];
-  se.MaxFragment = 15360;
-  se.ConnectionEnd = { server: 0, client: 1 };
-  se.PRFAlgorithm = { tls_prf_sha256: 0 };
-  se.BulkCipherAlgorithm = { none: null, rc4: 0, des3: 1, aes: 2 };
-  se.CipherType = { stream: 0, block: 1, aead: 2 };
-  se.MACAlgorithm = { none: null, hmac_md5: 0, hmac_sha1: 1, hmac_sha256: 2, hmac_sha384: 3, hmac_sha512: 4 };
-  se.CompressionMethod = { none: 0, deflate: 1 };
-  se.ContentType = { change_cipher_spec: 20, alert: 21, handshake: 22, application_data: 23, heartbeat: 24 };
-  se.HandshakeType = {
+  var hmac_sha1 = function (key, seqNum, record) {
+    var hmac = forge.hmac.create();
+    hmac.start("SHA1", key);
+    var b = forge.util.createBuffer();
+    b.putInt32(seqNum[0]);
+    b.putInt32(seqNum[1]);
+    b.putByte(record.type);
+    b.putByte(record.version.major);
+    b.putByte(record.version.minor);
+    b.putInt16(record.length);
+    b.putBytes(record.fragment.bytes());
+    hmac.update(b.getBytes());
+    return hmac.digest().getBytes();
+  };
+  var deflate = function (c, record, s_2) {
+    var rval = false;
+    try {
+      var bytes = c.deflate(record.fragment.getBytes());
+      record.fragment = forge.util.createBuffer(bytes);
+      record.length = bytes.length;
+      rval = true;
+    } catch (ex) {}
+    return rval;
+  };
+  var inflate = function (c, record, s_2) {
+    var rval = false;
+    try {
+      var bytes = c.inflate(record.fragment.getBytes());
+      record.fragment = forge.util.createBuffer(bytes);
+      record.length = bytes.length;
+      rval = true;
+    } catch (ex) {}
+    return rval;
+  };
+  var readVector = function (b, lenBytes) {
+    var len = 0;
+    switch (lenBytes) {
+      case 1:
+        len = b.getByte();
+        break;
+      case 2:
+        len = b.getInt16();
+        break;
+      case 3:
+        len = b.getInt24();
+        break;
+      case 4:
+        len = b.getInt32();
+        break;
+    }
+    return forge.util.createBuffer(b.getBytes(len));
+  };
+  var writeVector = function (b, lenBytes, v) {
+    b.putInt(v.length(), lenBytes << 3);
+    b.putBuffer(v);
+  };
+  var tls = {};
+  tls.Versions = {
+    TLS_1_0: {
+      major: 3,
+      minor: 1,
+    },
+    TLS_1_1: {
+      major: 3,
+      minor: 2,
+    },
+    TLS_1_2: {
+      major: 3,
+      minor: 3,
+    },
+  };
+  tls.SupportedVersions = [tls.Versions.TLS_1_1, tls.Versions.TLS_1_0];
+  tls.Version = tls.SupportedVersions[0];
+  tls.MaxFragment = 15360;
+  tls.ConnectionEnd = {
+    server: 0,
+    client: 1,
+  };
+  tls.PRFAlgorithm = {
+    tls_prf_sha256: 0,
+  };
+  tls.BulkCipherAlgorithm = {
+    none: null,
+    rc4: 0,
+    des3: 1,
+    aes: 2,
+  };
+  tls.CipherType = {
+    stream: 0,
+    block: 1,
+    aead: 2,
+  };
+  tls.MACAlgorithm = {
+    none: null,
+    hmac_md5: 0,
+    hmac_sha1: 1,
+    hmac_sha256: 2,
+    hmac_sha384: 3,
+    hmac_sha512: 4,
+  };
+  tls.CompressionMethod = {
+    none: 0,
+    deflate: 1,
+  };
+  tls.ContentType = {
+    change_cipher_spec: 20,
+    alert: 21,
+    handshake: 22,
+    application_data: 23,
+    heartbeat: 24,
+  };
+  tls.HandshakeType = {
     hello_request: 0,
     client_hello: 1,
     server_hello: 2,
@@ -141,9 +187,12 @@ var US = x(function (Bfe, UA) {
     client_key_exchange: 16,
     finished: 20,
   };
-  se.Alert = {};
-  se.Alert.Level = { warning: 1, fatal: 2 };
-  se.Alert.Description = {
+  tls.Alert = {};
+  tls.Alert.Level = {
+    warning: 1,
+    fatal: 2,
+  };
+  tls.Alert.Description = {
     close_notify: 0,
     unexpected_message: 10,
     bad_record_mac: 20,
@@ -168,118 +217,143 @@ var US = x(function (Bfe, UA) {
     user_canceled: 90,
     no_renegotiation: 100,
   };
-  se.HeartbeatMessageType = { heartbeat_request: 1, heartbeat_response: 2 };
-  se.CipherSuites = {};
-  se.getCipherSuite = function (e) {
-    var n = null;
-    for (var key in se.CipherSuites) {
-      var s = se.CipherSuites[key];
-      if (s.id[0] === e.charCodeAt(0) && s.id[1] === e.charCodeAt(1)) {
-        n = s;
+  tls.HeartbeatMessageType = {
+    heartbeat_request: 1,
+    heartbeat_response: 2,
+  };
+  tls.CipherSuites = {};
+  tls.getCipherSuite = function (twoBytes) {
+    var rval = null;
+    for (var key in tls.CipherSuites) {
+      var cs = tls.CipherSuites[key];
+      if (cs.id[0] === twoBytes.charCodeAt(0) && cs.id[1] === twoBytes.charCodeAt(1)) {
+        rval = cs;
         break;
       }
     }
-    return n;
+    return rval;
   };
-  se.handleUnexpected = function (e, n) {
-    var r = !e.open && e.entity === se.ConnectionEnd.client;
-    if (!r)
-      e.error(e, {
+  tls.handleUnexpected = function (c, record) {
+    var ignore = !c.open && c.entity === tls.ConnectionEnd.client;
+    if (!ignore)
+      c.error(c, {
         message: "Unexpected message. Received TLS record out of order.",
-        send: !0,
-        alert: { level: se.Alert.Level.fatal, description: se.Alert.Description.unexpected_message },
+        send: true,
+        alert: {
+          level: tls.Alert.Level.fatal,
+          description: tls.Alert.Description.unexpected_message,
+        },
       });
   };
-  se.handleHelloRequest = function (e, n, r) {
-    if (!e.handshaking && e.handshakes > 0)
-      (se.queue(
-        e,
-        se.createAlert(e, {
-          level: se.Alert.Level.warning,
-          description: se.Alert.Description.no_renegotiation,
+  tls.handleHelloRequest = function (c, record, length) {
+    if (!c.handshaking && c.handshakes > 0) {
+      tls.queue(
+        c,
+        tls.createAlert(c, {
+          level: tls.Alert.Level.warning,
+          description: tls.Alert.Description.no_renegotiation,
         }),
-      ),
-        se.flush(e));
-    e.process();
+      );
+      tls.flush(c);
+    }
+    c.process();
   };
-  se.parseHelloMessage = function (e, n, r) {
-    var s = null,
-      h = e.entity === se.ConnectionEnd.client;
-    if (r < 38)
-      e.error(e, {
-        message: h
+  tls.parseHelloMessage = function (c, record, length) {
+    var msg = null;
+    var client = c.entity === tls.ConnectionEnd.client;
+    if (length < 38)
+      c.error(c, {
+        message: client
           ? "Invalid ServerHello message. Message too short."
           : "Invalid ClientHello message. Message too short.",
-        send: !0,
-        alert: { level: se.Alert.Level.fatal, description: se.Alert.Description.illegal_parameter },
+        send: true,
+        alert: {
+          level: tls.Alert.Level.fatal,
+          description: tls.Alert.Description.illegal_parameter,
+        },
       });
     else {
-      var fragment = n.fragment,
-        b = fragment.length();
-      if (
-        ((s = {
-          version: { major: fragment.getByte(), minor: fragment.getByte() },
-          random: nt.util.createBuffer(fragment.getBytes(32)),
-          session_id: yi(fragment, 1),
-          extensions: [],
-        }),
-        h)
-      )
-        ((s.cipher_suite = fragment.getBytes(2)), (s.compression_method = fragment.getByte()));
-      else ((s.cipher_suites = yi(fragment, 2)), (s.compression_methods = yi(fragment, 1)));
-      if (((b = r - (b - fragment.length())), b > 0)) {
-        var S = yi(fragment, 2);
-        while (S.length() > 0) s.extensions.push({ type: [S.getByte(), S.getByte()], data: yi(S, 2) });
-        if (!h)
-          for (var w = 0; w < s.extensions.length; ++w) {
-            var R = s.extensions[w];
-            if (R.type[0] === 0 && R.type[1] === 0) {
-              var D = yi(R.data, 2);
-              while (D.length() > 0) {
-                var byte = D.getByte();
-                if (byte !== 0) break;
-                e.session.extensions.server_name.serverNameList.push(yi(D, 2).getBytes());
+      var b_2 = record.fragment;
+      var remaining = b_2.length();
+      msg = {
+        version: {
+          major: b_2.getByte(),
+          minor: b_2.getByte(),
+        },
+        random: forge.util.createBuffer(b_2.getBytes(32)),
+        session_id: readVector(b_2, 1),
+        extensions: [],
+      };
+      if (client) {
+        msg.cipher_suite = b_2.getBytes(2);
+        msg.compression_method = b_2.getByte();
+      } else {
+        msg.cipher_suites = readVector(b_2, 2);
+        msg.compression_methods = readVector(b_2, 1);
+      }
+      remaining = length - (remaining - b_2.length());
+      if (remaining > 0) {
+        var exts = readVector(b_2, 2);
+        while (exts.length() > 0)
+          msg.extensions.push({
+            type: [exts.getByte(), exts.getByte()],
+            data: readVector(exts, 2),
+          });
+        if (!client)
+          for (var i = 0; i < msg.extensions.length; ++i) {
+            var ext = msg.extensions[i];
+            if (ext.type[0] === 0 && ext.type[1] === 0) {
+              var snl = readVector(ext.data, 2);
+              while (snl.length() > 0) {
+                var snType = snl.getByte();
+                if (snType !== 0) break;
+                c.session.extensions.server_name.serverNameList.push(readVector(snl, 2).getBytes());
               }
             }
           }
       }
-      if (e.session.version) {
-        if (s.version.major !== e.session.version.major || s.version.minor !== e.session.version.minor)
-          return e.error(e, {
+      if (c.session.version) {
+        if (msg.version.major !== c.session.version.major || msg.version.minor !== c.session.version.minor)
+          return c.error(c, {
             message: "TLS version change is disallowed during renegotiation.",
-            send: !0,
-            alert: { level: se.Alert.Level.fatal, description: se.Alert.Description.protocol_version },
+            send: true,
+            alert: {
+              level: tls.Alert.Level.fatal,
+              description: tls.Alert.Description.protocol_version,
+            },
           });
       }
-      if (h) e.session.cipherSuite = se.getCipherSuite(s.cipher_suite);
+      if (client) c.session.cipherSuite = tls.getCipherSuite(msg.cipher_suite);
       else {
-        var buffer = nt.util.createBuffer(s.cipher_suites.bytes());
-        while (buffer.length() > 0)
-          if (
-            ((e.session.cipherSuite = se.getCipherSuite(buffer.getBytes(2))), e.session.cipherSuite !== null)
-          )
-            break;
+        var tmp = forge.util.createBuffer(msg.cipher_suites.bytes());
+        while (tmp.length() > 0) {
+          c.session.cipherSuite = tls.getCipherSuite(tmp.getBytes(2));
+          if (c.session.cipherSuite !== null) break;
+        }
       }
-      if (e.session.cipherSuite === null)
-        return e.error(e, {
+      if (c.session.cipherSuite === null)
+        return c.error(c, {
           message: "No cipher suites in common.",
-          send: !0,
-          alert: { level: se.Alert.Level.fatal, description: se.Alert.Description.handshake_failure },
-          cipherSuite: nt.util.bytesToHex(s.cipher_suite),
+          send: true,
+          alert: {
+            level: tls.Alert.Level.fatal,
+            description: tls.Alert.Description.handshake_failure,
+          },
+          cipherSuite: forge.util.bytesToHex(msg.cipher_suite),
         });
-      if (h) e.session.compressionMethod = s.compression_method;
-      else e.session.compressionMethod = se.CompressionMethod.none;
+      if (client) c.session.compressionMethod = msg.compression_method;
+      else c.session.compressionMethod = tls.CompressionMethod.none;
     }
-    return s;
+    return msg;
   };
-  se.createSecurityParameters = function (e, n) {
-    var r = e.entity === se.ConnectionEnd.client,
-      bytes = n.random.bytes(),
-      h = r ? e.session.sp.client_random : bytes,
-      y = r ? bytes : se.createRandom().getBytes();
-    e.session.sp = {
-      entity: e.entity,
-      prf_algorithm: se.PRFAlgorithm.tls_prf_sha256,
+  tls.createSecurityParameters = function (c, msg) {
+    var client = c.entity === tls.ConnectionEnd.client;
+    var msgRandom = msg.random.bytes();
+    var cRandom = client ? c.session.sp.client_random : msgRandom;
+    var sRandom = client ? msgRandom : tls.createRandom().getBytes();
+    c.session.sp = {
+      entity: c.entity,
+      prf_algorithm: tls.PRFAlgorithm.tls_prf_sha256,
       bulk_cipher_algorithm: null,
       cipher_type: null,
       enc_key_length: null,
@@ -289,1661 +363,1548 @@ var US = x(function (Bfe, UA) {
       mac_algorithm: null,
       mac_length: null,
       mac_key_length: null,
-      compression_algorithm: e.session.compressionMethod,
+      compression_algorithm: c.session.compressionMethod,
       pre_master_secret: null,
       master_secret: null,
-      client_random: h,
-      server_random: y,
+      client_random: cRandom,
+      server_random: sRandom,
     };
   };
-  se.handleServerHello = function (e, n, r) {
-    var helloMessage = se.parseHelloMessage(e, n, r);
-    if (e.fail) return;
-    if (helloMessage.version.minor <= e.version.minor) e.version.minor = helloMessage.version.minor;
+  tls.handleServerHello = function (c, record, length) {
+    var msg = tls.parseHelloMessage(c, record, length);
+    if (c.fail) return;
+    if (msg.version.minor <= c.version.minor) c.version.minor = msg.version.minor;
     else
-      return e.error(e, {
+      return c.error(c, {
         message: "Incompatible TLS version.",
-        send: !0,
-        alert: { level: se.Alert.Level.fatal, description: se.Alert.Description.protocol_version },
+        send: true,
+        alert: {
+          level: tls.Alert.Level.fatal,
+          description: tls.Alert.Description.protocol_version,
+        },
       });
-    e.session.version = e.version;
-    var bytes = helloMessage.session_id.bytes();
-    if (bytes.length > 0 && bytes === e.session.id)
-      ((e.expect = DA),
-        (e.session.resuming = !0),
-        (e.session.sp.server_random = helloMessage.random.bytes()));
-    else ((e.expect = n6), (e.session.resuming = !1), se.createSecurityParameters(e, helloMessage));
-    ((e.session.id = bytes), e.process());
+    c.session.version = c.version;
+    var sessionId = msg.session_id.bytes();
+    if (sessionId.length > 0 && sessionId === c.session.id) {
+      c.expect = SCC;
+      c.session.resuming = true;
+      c.session.sp.server_random = msg.random.bytes();
+    } else {
+      c.expect = SCE;
+      c.session.resuming = false;
+      tls.createSecurityParameters(c, msg);
+    }
+    c.session.id = sessionId;
+    c.process();
   };
-  se.handleClientHello = function (e, n, r) {
-    var helloMessage = se.parseHelloMessage(e, n, r);
-    if (e.fail) return;
-    var bytes = helloMessage.session_id.bytes(),
-      y = null;
-    if (e.sessionCache) {
-      if (((y = e.sessionCache.getSession(bytes)), y === null)) bytes = "";
-      else if (y.version.major !== helloMessage.version.major || y.version.minor > helloMessage.version.minor)
-        ((y = null), (bytes = ""));
+  tls.handleClientHello = function (c, record, length) {
+    var msg = tls.parseHelloMessage(c, record, length);
+    if (c.fail) return;
+    var sessionId = msg.session_id.bytes();
+    var session = null;
+    if (c.sessionCache) {
+      session = c.sessionCache.getSession(sessionId);
+      if (session === null) sessionId = "";
+      else if (session.version.major !== msg.version.major || session.version.minor > msg.version.minor) {
+        session = null;
+        sessionId = "";
+      }
     }
-    if (bytes.length === 0) bytes = nt.random.getBytes(32);
-    if (
-      ((e.session.id = bytes), (e.session.clientHelloVersion = helloMessage.version), (e.session.sp = {}), y)
-    )
-      ((e.version = e.session.version = y.version), (e.session.sp = y.sp));
-    else {
-      var b;
-      for (var S = 1; S < se.SupportedVersions.length; ++S)
-        if (((b = se.SupportedVersions[S]), b.minor <= helloMessage.version.minor)) break;
-      ((e.version = { major: b.major, minor: b.minor }), (e.session.version = e.version));
+    if (sessionId.length === 0) sessionId = forge.random.getBytes(32);
+    c.session.id = sessionId;
+    c.session.clientHelloVersion = msg.version;
+    c.session.sp = {};
+    if (session) {
+      c.version = c.session.version = session.version;
+      c.session.sp = session.sp;
+    } else {
+      var version;
+      for (var i = 1; i < tls.SupportedVersions.length; ++i) {
+        version = tls.SupportedVersions[i];
+        if (version.minor <= msg.version.minor) break;
+      }
+      c.version = {
+        major: version.major,
+        minor: version.minor,
+      };
+      c.session.version = c.version;
     }
-    if (y !== null)
-      ((e.expect = LS),
-        (e.session.resuming = !0),
-        (e.session.sp.client_random = helloMessage.random.bytes()));
-    else
-      ((e.expect = e.verifyClient !== !1 ? c6 : PS),
-        (e.session.resuming = !1),
-        se.createSecurityParameters(e, helloMessage));
-    if (
-      ((e.open = !0),
-      se.queue(e, se.createRecord(e, { type: se.ContentType.handshake, data: se.createServerHello(e) })),
-      e.session.resuming)
-    )
-      (se.queue(
-        e,
-        se.createRecord(e, { type: se.ContentType.change_cipher_spec, data: se.createChangeCipherSpec() }),
-      ),
-        (e.state.pending = se.createConnectionState(e)),
-        (e.state.current.write = e.state.pending.write),
-        se.queue(e, se.createRecord(e, { type: se.ContentType.handshake, data: se.createFinished(e) })));
-    else if (
-      (se.queue(e, se.createRecord(e, { type: se.ContentType.handshake, data: se.createCertificate(e) })),
-      !e.fail)
-    ) {
-      if (
-        (se.queue(
-          e,
-          se.createRecord(e, { type: se.ContentType.handshake, data: se.createServerKeyExchange(e) }),
-        ),
-        e.verifyClient !== !1)
-      )
-        se.queue(
-          e,
-          se.createRecord(e, { type: se.ContentType.handshake, data: se.createCertificateRequest(e) }),
+    if (session !== null) {
+      c.expect = CCC;
+      c.session.resuming = true;
+      c.session.sp.client_random = msg.random.bytes();
+    } else {
+      c.expect = c.verifyClient !== false ? CCE : CKE;
+      c.session.resuming = false;
+      tls.createSecurityParameters(c, msg);
+    }
+    c.open = true;
+    tls.queue(
+      c,
+      tls.createRecord(c, {
+        type: tls.ContentType.handshake,
+        data: tls.createServerHello(c),
+      }),
+    );
+    if (c.session.resuming) {
+      tls.queue(
+        c,
+        tls.createRecord(c, {
+          type: tls.ContentType.change_cipher_spec,
+          data: tls.createChangeCipherSpec(),
+        }),
+      );
+      c.state.pending = tls.createConnectionState(c);
+      c.state.current.write = c.state.pending.write;
+      tls.queue(
+        c,
+        tls.createRecord(c, {
+          type: tls.ContentType.handshake,
+          data: tls.createFinished(c),
+        }),
+      );
+    } else {
+      tls.queue(
+        c,
+        tls.createRecord(c, {
+          type: tls.ContentType.handshake,
+          data: tls.createCertificate(c),
+        }),
+      );
+      if (!c.fail) {
+        tls.queue(
+          c,
+          tls.createRecord(c, {
+            type: tls.ContentType.handshake,
+            data: tls.createServerKeyExchange(c),
+          }),
         );
-      se.queue(e, se.createRecord(e, { type: se.ContentType.handshake, data: se.createServerHelloDone(e) }));
+        if (c.verifyClient !== false)
+          tls.queue(
+            c,
+            tls.createRecord(c, {
+              type: tls.ContentType.handshake,
+              data: tls.createCertificateRequest(c),
+            }),
+          );
+        tls.queue(
+          c,
+          tls.createRecord(c, {
+            type: tls.ContentType.handshake,
+            data: tls.createServerHelloDone(c),
+          }),
+        );
+      }
     }
-    (se.flush(e), e.process());
+    tls.flush(c);
+    c.process();
   };
-  se.handleCertificate = function (e, n, r) {
-    if (r < 3)
-      return e.error(e, {
+  tls.handleCertificate = function (c, record, length) {
+    if (length < 3)
+      return c.error(c, {
         message: "Invalid Certificate message. Message too short.",
-        send: !0,
-        alert: { level: se.Alert.Level.fatal, description: se.Alert.Description.illegal_parameter },
+        send: true,
+        alert: {
+          level: tls.Alert.Level.fatal,
+          description: tls.Alert.Description.illegal_parameter,
+        },
       });
-    var fragment = n.fragment,
-      h = { certificate_list: yi(fragment, 3) },
-      y,
-      b,
-      S = [];
+    var b_2 = record.fragment;
+    var msg = {
+      certificate_list: readVector(b_2, 3),
+    };
+    var cert;
+    var asn1;
+    var certs = [];
     try {
-      while (h.certificate_list.length() > 0)
-        ((y = yi(h.certificate_list, 3)),
-          (b = nt.asn1.fromDer(y)),
-          (y = nt.pki.certificateFromAsn1(b, !0)),
-          S.push(y));
-    } catch (error) {
-      return e.error(e, {
+      while (msg.certificate_list.length() > 0) {
+        cert = readVector(msg.certificate_list, 3);
+        asn1 = forge.asn1.fromDer(cert);
+        cert = forge.pki.certificateFromAsn1(asn1, true);
+        certs.push(cert);
+      }
+    } catch (ex) {
+      return c.error(c, {
         message: "Could not parse certificate list.",
-        cause: error,
-        send: !0,
-        alert: { level: se.Alert.Level.fatal, description: se.Alert.Description.bad_certificate },
+        cause: ex,
+        send: true,
+        alert: {
+          level: tls.Alert.Level.fatal,
+          description: tls.Alert.Description.bad_certificate,
+        },
       });
     }
-    var w = e.entity === se.ConnectionEnd.client;
-    if ((w || e.verifyClient === !0) && S.length === 0)
-      e.error(e, {
-        message: w ? "No server certificate provided." : "No client certificate provided.",
-        send: !0,
-        alert: { level: se.Alert.Level.fatal, description: se.Alert.Description.illegal_parameter },
+    var client = c.entity === tls.ConnectionEnd.client;
+    if ((client || c.verifyClient === true) && certs.length === 0)
+      c.error(c, {
+        message: client ? "No server certificate provided." : "No client certificate provided.",
+        send: true,
+        alert: {
+          level: tls.Alert.Level.fatal,
+          description: tls.Alert.Description.illegal_parameter,
+        },
       });
-    else if (S.length === 0) e.expect = w ? NA : PS;
+    else if (certs.length === 0) c.expect = client ? SKE : CKE;
     else {
-      if (w) e.session.serverCertificate = S[0];
-      else e.session.clientCertificate = S[0];
-      if (se.verifyCertificateChain(e, S)) e.expect = w ? NA : PS;
+      if (client) c.session.serverCertificate = certs[0];
+      else c.session.clientCertificate = certs[0];
+      if (tls.verifyCertificateChain(c, certs)) c.expect = client ? SKE : CKE;
     }
-    e.process();
+    c.process();
   };
-  se.handleServerKeyExchange = function (e, n, r) {
-    if (r > 0)
-      return e.error(e, {
+  tls.handleServerKeyExchange = function (c, record, length) {
+    if (length > 0)
+      return c.error(c, {
         message: "Invalid key parameters. Only RSA is supported.",
-        send: !0,
-        alert: { level: se.Alert.Level.fatal, description: se.Alert.Description.unsupported_certificate },
+        send: true,
+        alert: {
+          level: tls.Alert.Level.fatal,
+          description: tls.Alert.Description.unsupported_certificate,
+        },
       });
-    ((e.expect = r6), e.process());
+    c.expect = SCR;
+    c.process();
   };
-  se.handleClientKeyExchange = function (e, n, r) {
-    if (r < 48)
-      return e.error(e, {
+  tls.handleClientKeyExchange = function (c, record, length) {
+    if (length < 48)
+      return c.error(c, {
         message: "Invalid key parameters. Only RSA is supported.",
-        send: !0,
-        alert: { level: se.Alert.Level.fatal, description: se.Alert.Description.unsupported_certificate },
+        send: true,
+        alert: {
+          level: tls.Alert.Level.fatal,
+          description: tls.Alert.Description.unsupported_certificate,
+        },
       });
-    var fragment = n.fragment,
-      h = { enc_pre_master_secret: yi(fragment, 2).getBytes() },
-      y = null;
-    if (e.getPrivateKey)
+    var b_2 = record.fragment;
+    var msg = {
+      enc_pre_master_secret: readVector(b_2, 2).getBytes(),
+    };
+    var privateKey = null;
+    if (c.getPrivateKey)
       try {
-        ((y = e.getPrivateKey(e, e.session.serverCertificate)), (y = nt.pki.privateKeyFromPem(y)));
-      } catch (error) {
-        e.error(e, {
+        privateKey = c.getPrivateKey(c, c.session.serverCertificate);
+        privateKey = forge.pki.privateKeyFromPem(privateKey);
+      } catch (ex) {
+        c.error(c, {
           message: "Could not get private key.",
-          cause: error,
-          send: !0,
-          alert: { level: se.Alert.Level.fatal, description: se.Alert.Description.internal_error },
+          cause: ex,
+          send: true,
+          alert: {
+            level: tls.Alert.Level.fatal,
+            description: tls.Alert.Description.internal_error,
+          },
         });
       }
-    if (y === null)
-      return e.error(e, {
+    if (privateKey === null)
+      return c.error(c, {
         message: "No private key set.",
-        send: !0,
-        alert: { level: se.Alert.Level.fatal, description: se.Alert.Description.internal_error },
+        send: true,
+        alert: {
+          level: tls.Alert.Level.fatal,
+          description: tls.Alert.Description.internal_error,
+        },
       });
     try {
-      var sp = e.session.sp;
-      sp.pre_master_secret = y.decrypt(h.enc_pre_master_secret);
-      var clientHelloVersion = e.session.clientHelloVersion;
+      var sp = c.session.sp;
+      sp.pre_master_secret = privateKey.decrypt(msg.enc_pre_master_secret);
+      var version = c.session.clientHelloVersion;
       if (
-        clientHelloVersion.major !== sp.pre_master_secret.charCodeAt(0) ||
-        clientHelloVersion.minor !== sp.pre_master_secret.charCodeAt(1)
+        version.major !== sp.pre_master_secret.charCodeAt(0) ||
+        version.minor !== sp.pre_master_secret.charCodeAt(1)
       )
         throw Error("TLS version rollback attack detected.");
-    } catch (error) {
-      sp.pre_master_secret = nt.random.getBytes(48);
+    } catch (ex) {
+      sp.pre_master_secret = forge.random.getBytes(48);
     }
-    if (((e.expect = LS), e.session.clientCertificate !== null)) e.expect = u6;
-    e.process();
+    c.expect = CCC;
+    if (c.session.clientCertificate !== null) c.expect = CCV;
+    c.process();
   };
-  se.handleCertificateRequest = function (e, n, r) {
-    if (r < 3)
-      return e.error(e, {
+  tls.handleCertificateRequest = function (c, record, length) {
+    if (length < 3)
+      return c.error(c, {
         message: "Invalid CertificateRequest. Message too short.",
-        send: !0,
-        alert: { level: se.Alert.Level.fatal, description: se.Alert.Description.illegal_parameter },
+        send: true,
+        alert: {
+          level: tls.Alert.Level.fatal,
+          description: tls.Alert.Description.illegal_parameter,
+        },
       });
-    var fragment = n.fragment,
-      h = { certificate_types: yi(fragment, 1), certificate_authorities: yi(fragment, 2) };
-    ((e.session.certificateRequest = h), (e.expect = s6), e.process());
+    var b = record.fragment;
+    var msg = {
+      certificate_types: readVector(b, 1),
+      certificate_authorities: readVector(b, 2),
+    };
+    c.session.certificateRequest = msg;
+    c.expect = SHD;
+    c.process();
   };
-  se.handleCertificateVerify = function (e, n, r) {
-    if (r < 2)
-      return e.error(e, {
+  tls.handleCertificateVerify = function (c, record, length) {
+    if (length < 2)
+      return c.error(c, {
         message: "Invalid CertificateVerify. Message too short.",
-        send: !0,
-        alert: { level: se.Alert.Level.fatal, description: se.Alert.Description.illegal_parameter },
+        send: true,
+        alert: {
+          level: tls.Alert.Level.fatal,
+          description: tls.Alert.Description.illegal_parameter,
+        },
       });
-    var fragment = n.fragment;
-    fragment.read -= 4;
-    var bytes = fragment.bytes();
-    fragment.read += 4;
-    var y = { signature: yi(fragment, 2).getBytes() },
-      buffer = nt.util.createBuffer();
-    (buffer.putBuffer(e.session.md5.digest()),
-      buffer.putBuffer(e.session.sha1.digest()),
-      (buffer = buffer.getBytes()));
+    var b_2 = record.fragment;
+    b_2.read -= 4;
+    var msgBytes = b_2.bytes();
+    b_2.read += 4;
+    var msg = {
+      signature: readVector(b_2, 2).getBytes(),
+    };
+    var verify = forge.util.createBuffer();
+    verify.putBuffer(c.session.md5.digest());
+    verify.putBuffer(c.session.sha1.digest());
+    verify = verify.getBytes();
     try {
-      var clientCertificate = e.session.clientCertificate;
-      if (!clientCertificate.publicKey.verify(buffer, y.signature, "NONE"))
+      var cert = c.session.clientCertificate;
+      if (!cert.publicKey.verify(verify, msg.signature, "NONE"))
         throw Error("CertificateVerify signature does not match.");
-      (e.session.md5.update(bytes), e.session.sha1.update(bytes));
-    } catch (error) {
-      return e.error(e, {
+      c.session.md5.update(msgBytes);
+      c.session.sha1.update(msgBytes);
+    } catch (ex) {
+      return c.error(c, {
         message: "Bad signature in CertificateVerify.",
-        send: !0,
-        alert: { level: se.Alert.Level.fatal, description: se.Alert.Description.handshake_failure },
+        send: true,
+        alert: {
+          level: tls.Alert.Level.fatal,
+          description: tls.Alert.Description.handshake_failure,
+        },
       });
     }
-    ((e.expect = LS), e.process());
+    c.expect = CCC;
+    c.process();
   };
-  se.handleServerHelloDone = function (e, n, r) {
-    if (r > 0)
-      return e.error(e, {
+  tls.handleServerHelloDone = function (c, record, length) {
+    if (length > 0)
+      return c.error(c, {
         message: "Invalid ServerHelloDone message. Invalid length.",
-        send: !0,
-        alert: { level: se.Alert.Level.fatal, description: se.Alert.Description.record_overflow },
-      });
-    if (e.serverCertificate === null) {
-      var s = {
-          message: "No server certificate provided. Not enough security.",
-          send: !0,
-          alert: { level: se.Alert.Level.fatal, description: se.Alert.Description.insufficient_security },
+        send: true,
+        alert: {
+          level: tls.Alert.Level.fatal,
+          description: tls.Alert.Description.record_overflow,
         },
-        h = 0,
-        verify = e.verify(e, s.alert.description, h, []);
-      if (verify !== !0) {
-        if (verify || verify === 0) {
-          if (typeof verify === "object" && !nt.util.isArray(verify)) {
-            if (verify.message) s.message = verify.message;
-            if (verify.alert) s.alert.description = verify.alert;
-          } else if (typeof verify === "number") s.alert.description = verify;
+      });
+    if (c.serverCertificate === null) {
+      var error = {
+        message: "No server certificate provided. Not enough security.",
+        send: true,
+        alert: {
+          level: tls.Alert.Level.fatal,
+          description: tls.Alert.Description.insufficient_security,
+        },
+      };
+      var depth = 0;
+      var ret = c.verify(c, error.alert.description, depth, []);
+      if (ret !== true) {
+        if (ret || ret === 0) {
+          if (typeof ret === "object" && !forge.util.isArray(ret)) {
+            if (ret.message) error.message = ret.message;
+            if (ret.alert) error.alert.description = ret.alert;
+          } else if (typeof ret === "number") error.alert.description = ret;
         }
-        return e.error(e, s);
+        return c.error(c, error);
       }
     }
-    if (e.session.certificateRequest !== null)
-      ((n = se.createRecord(e, { type: se.ContentType.handshake, data: se.createCertificate(e) })),
-        se.queue(e, n));
-    ((n = se.createRecord(e, { type: se.ContentType.handshake, data: se.createClientKeyExchange(e) })),
-      se.queue(e, n),
-      (e.expect = a6));
-    var b = function (S, w) {
-      if (S.session.certificateRequest !== null && S.session.clientCertificate !== null)
-        se.queue(
-          S,
-          se.createRecord(S, { type: se.ContentType.handshake, data: se.createCertificateVerify(S, w) }),
+    if (c.session.certificateRequest !== null) {
+      record = tls.createRecord(c, {
+        type: tls.ContentType.handshake,
+        data: tls.createCertificate(c),
+      });
+      tls.queue(c, record);
+    }
+    record = tls.createRecord(c, {
+      type: tls.ContentType.handshake,
+      data: tls.createClientKeyExchange(c),
+    });
+    tls.queue(c, record);
+    c.expect = SER;
+    var callback = function (c, signature) {
+      if (c.session.certificateRequest !== null && c.session.clientCertificate !== null)
+        tls.queue(
+          c,
+          tls.createRecord(c, {
+            type: tls.ContentType.handshake,
+            data: tls.createCertificateVerify(c, signature),
+          }),
         );
-      (se.queue(
-        S,
-        se.createRecord(S, { type: se.ContentType.change_cipher_spec, data: se.createChangeCipherSpec() }),
-      ),
-        (S.state.pending = se.createConnectionState(S)),
-        (S.state.current.write = S.state.pending.write),
-        se.queue(S, se.createRecord(S, { type: se.ContentType.handshake, data: se.createFinished(S) })),
-        (S.expect = DA),
-        se.flush(S),
-        S.process());
+      tls.queue(
+        c,
+        tls.createRecord(c, {
+          type: tls.ContentType.change_cipher_spec,
+          data: tls.createChangeCipherSpec(),
+        }),
+      );
+      c.state.pending = tls.createConnectionState(c);
+      c.state.current.write = c.state.pending.write;
+      tls.queue(
+        c,
+        tls.createRecord(c, {
+          type: tls.ContentType.handshake,
+          data: tls.createFinished(c),
+        }),
+      );
+      c.expect = SCC;
+      tls.flush(c);
+      c.process();
     };
-    if (e.session.certificateRequest === null || e.session.clientCertificate === null) return b(e, null);
-    se.getClientSignature(e, b);
+    if (c.session.certificateRequest === null || c.session.clientCertificate === null)
+      return callback(c, null);
+    tls.getClientSignature(c, callback);
   };
-  se.handleChangeCipherSpec = function (e, n) {
-    if (n.fragment.getByte() !== 1)
-      return e.error(e, {
+  tls.handleChangeCipherSpec = function (c, record) {
+    if (record.fragment.getByte() !== 1)
+      return c.error(c, {
         message: "Invalid ChangeCipherSpec message received.",
-        send: !0,
-        alert: { level: se.Alert.Level.fatal, description: se.Alert.Description.illegal_parameter },
+        send: true,
+        alert: {
+          level: tls.Alert.Level.fatal,
+          description: tls.Alert.Description.illegal_parameter,
+        },
       });
-    var r = e.entity === se.ConnectionEnd.client;
-    if ((e.session.resuming && r) || (!e.session.resuming && !r))
-      e.state.pending = se.createConnectionState(e);
-    if (
-      ((e.state.current.read = e.state.pending.read),
-      (!e.session.resuming && r) || (e.session.resuming && !r))
-    )
-      e.state.pending = null;
-    ((e.expect = r ? i6 : d6), e.process());
+    var client = c.entity === tls.ConnectionEnd.client;
+    if ((c.session.resuming && client) || (!c.session.resuming && !client))
+      c.state.pending = tls.createConnectionState(c);
+    c.state.current.read = c.state.pending.read;
+    if ((!c.session.resuming && client) || (c.session.resuming && !client)) c.state.pending = null;
+    c.expect = client ? SFI : CFI;
+    c.process();
   };
-  se.handleFinished = function (e, n, r) {
-    var fragment = n.fragment;
-    fragment.read -= 4;
-    var bytes = fragment.bytes();
-    fragment.read += 4;
-    var bytes_2 = n.fragment.getBytes();
-    ((fragment = nt.util.createBuffer()),
-      fragment.putBuffer(e.session.md5.digest()),
-      fragment.putBuffer(e.session.sha1.digest()));
-    var b = e.entity === se.ConnectionEnd.client,
-      S = b ? "server finished" : "client finished",
-      sp = e.session.sp,
-      R = 12,
-      D = um;
-    if (((fragment = D(sp.master_secret, S, fragment.getBytes(), R)), fragment.getBytes() !== bytes_2))
-      return e.error(e, {
+  tls.handleFinished = function (c, record, length) {
+    var b_2 = record.fragment;
+    b_2.read -= 4;
+    var msgBytes = b_2.bytes();
+    b_2.read += 4;
+    var vd = record.fragment.getBytes();
+    b_2 = forge.util.createBuffer();
+    b_2.putBuffer(c.session.md5.digest());
+    b_2.putBuffer(c.session.sha1.digest());
+    var client = c.entity === tls.ConnectionEnd.client;
+    var label = client ? "server finished" : "client finished";
+    var sp = c.session.sp;
+    var vdl = 12;
+    var prf = prf_TLS1;
+    b_2 = prf(sp.master_secret, label, b_2.getBytes(), vdl);
+    if (b_2.getBytes() !== vd)
+      return c.error(c, {
         message: "Invalid verify_data in Finished message.",
-        send: !0,
-        alert: { level: se.Alert.Level.fatal, description: se.Alert.Description.decrypt_error },
+        send: true,
+        alert: {
+          level: tls.Alert.Level.fatal,
+          description: tls.Alert.Description.decrypt_error,
+        },
       });
-    if (
-      (e.session.md5.update(bytes),
-      e.session.sha1.update(bytes),
-      (e.session.resuming && b) || (!e.session.resuming && !b))
-    )
-      (se.queue(
-        e,
-        se.createRecord(e, { type: se.ContentType.change_cipher_spec, data: se.createChangeCipherSpec() }),
-      ),
-        (e.state.current.write = e.state.pending.write),
-        (e.state.pending = null),
-        se.queue(e, se.createRecord(e, { type: se.ContentType.handshake, data: se.createFinished(e) })));
-    ((e.expect = b ? o6 : f6),
-      (e.handshaking = !1),
-      ++e.handshakes,
-      (e.peerCertificate = b ? e.session.serverCertificate : e.session.clientCertificate),
-      se.flush(e),
-      (e.isConnected = !0),
-      e.connected(e),
-      e.process());
+    c.session.md5.update(msgBytes);
+    c.session.sha1.update(msgBytes);
+    if ((c.session.resuming && client) || (!c.session.resuming && !client)) {
+      tls.queue(
+        c,
+        tls.createRecord(c, {
+          type: tls.ContentType.change_cipher_spec,
+          data: tls.createChangeCipherSpec(),
+        }),
+      );
+      c.state.current.write = c.state.pending.write;
+      c.state.pending = null;
+      tls.queue(
+        c,
+        tls.createRecord(c, {
+          type: tls.ContentType.handshake,
+          data: tls.createFinished(c),
+        }),
+      );
+    }
+    c.expect = client ? SAD : CAD;
+    c.handshaking = false;
+    ++c.handshakes;
+    c.peerCertificate = client ? c.session.serverCertificate : c.session.clientCertificate;
+    tls.flush(c);
+    c.isConnected = true;
+    c.connected(c);
+    c.process();
   };
-  se.handleAlert = function (e, n) {
-    var fragment = n.fragment,
-      s = { level: fragment.getByte(), description: fragment.getByte() },
-      h;
-    switch (s.description) {
-      case se.Alert.Description.close_notify:
-        h = "Connection closed.";
+  tls.handleAlert = function (c, record) {
+    var b = record.fragment;
+    var alert = {
+      level: b.getByte(),
+      description: b.getByte(),
+    };
+    var msg;
+    switch (alert.description) {
+      case tls.Alert.Description.close_notify:
+        msg = "Connection closed.";
         break;
-      case se.Alert.Description.unexpected_message:
-        h = "Unexpected message.";
+      case tls.Alert.Description.unexpected_message:
+        msg = "Unexpected message.";
         break;
-      case se.Alert.Description.bad_record_mac:
-        h = "Bad record MAC.";
+      case tls.Alert.Description.bad_record_mac:
+        msg = "Bad record MAC.";
         break;
-      case se.Alert.Description.decryption_failed:
-        h = "Decryption failed.";
+      case tls.Alert.Description.decryption_failed:
+        msg = "Decryption failed.";
         break;
-      case se.Alert.Description.record_overflow:
-        h = "Record overflow.";
+      case tls.Alert.Description.record_overflow:
+        msg = "Record overflow.";
         break;
-      case se.Alert.Description.decompression_failure:
-        h = "Decompression failed.";
+      case tls.Alert.Description.decompression_failure:
+        msg = "Decompression failed.";
         break;
-      case se.Alert.Description.handshake_failure:
-        h = "Handshake failure.";
+      case tls.Alert.Description.handshake_failure:
+        msg = "Handshake failure.";
         break;
-      case se.Alert.Description.bad_certificate:
-        h = "Bad certificate.";
+      case tls.Alert.Description.bad_certificate:
+        msg = "Bad certificate.";
         break;
-      case se.Alert.Description.unsupported_certificate:
-        h = "Unsupported certificate.";
+      case tls.Alert.Description.unsupported_certificate:
+        msg = "Unsupported certificate.";
         break;
-      case se.Alert.Description.certificate_revoked:
-        h = "Certificate revoked.";
+      case tls.Alert.Description.certificate_revoked:
+        msg = "Certificate revoked.";
         break;
-      case se.Alert.Description.certificate_expired:
-        h = "Certificate expired.";
+      case tls.Alert.Description.certificate_expired:
+        msg = "Certificate expired.";
         break;
-      case se.Alert.Description.certificate_unknown:
-        h = "Certificate unknown.";
+      case tls.Alert.Description.certificate_unknown:
+        msg = "Certificate unknown.";
         break;
-      case se.Alert.Description.illegal_parameter:
-        h = "Illegal parameter.";
+      case tls.Alert.Description.illegal_parameter:
+        msg = "Illegal parameter.";
         break;
-      case se.Alert.Description.unknown_ca:
-        h = "Unknown certificate authority.";
+      case tls.Alert.Description.unknown_ca:
+        msg = "Unknown certificate authority.";
         break;
-      case se.Alert.Description.access_denied:
-        h = "Access denied.";
+      case tls.Alert.Description.access_denied:
+        msg = "Access denied.";
         break;
-      case se.Alert.Description.decode_error:
-        h = "Decode error.";
+      case tls.Alert.Description.decode_error:
+        msg = "Decode error.";
         break;
-      case se.Alert.Description.decrypt_error:
-        h = "Decrypt error.";
+      case tls.Alert.Description.decrypt_error:
+        msg = "Decrypt error.";
         break;
-      case se.Alert.Description.export_restriction:
-        h = "Export restriction.";
+      case tls.Alert.Description.export_restriction:
+        msg = "Export restriction.";
         break;
-      case se.Alert.Description.protocol_version:
-        h = "Unsupported protocol version.";
+      case tls.Alert.Description.protocol_version:
+        msg = "Unsupported protocol version.";
         break;
-      case se.Alert.Description.insufficient_security:
-        h = "Insufficient security.";
+      case tls.Alert.Description.insufficient_security:
+        msg = "Insufficient security.";
         break;
-      case se.Alert.Description.internal_error:
-        h = "Internal error.";
+      case tls.Alert.Description.internal_error:
+        msg = "Internal error.";
         break;
-      case se.Alert.Description.user_canceled:
-        h = "User canceled.";
+      case tls.Alert.Description.user_canceled:
+        msg = "User canceled.";
         break;
-      case se.Alert.Description.no_renegotiation:
-        h = "Renegotiation not supported.";
+      case tls.Alert.Description.no_renegotiation:
+        msg = "Renegotiation not supported.";
         break;
       default:
-        h = "Unknown error.";
+        msg = "Unknown error.";
         break;
     }
-    if (s.description === se.Alert.Description.close_notify) return e.close();
-    (e.error(e, {
-      message: h,
-      send: !1,
-      origin: e.entity === se.ConnectionEnd.client ? "server" : "client",
-      alert: s,
-    }),
-      e.process());
+    if (alert.description === tls.Alert.Description.close_notify) return c.close();
+    c.error(c, {
+      message: msg,
+      send: false,
+      origin: c.entity === tls.ConnectionEnd.client ? "server" : "client",
+      alert,
+    });
+    c.process();
   };
-  se.handleHandshake = function (e, n) {
-    var fragment = n.fragment,
-      byte = fragment.getByte(),
-      int24 = fragment.getInt24();
-    if (int24 > fragment.length())
-      return ((e.fragmented = n), (n.fragment = nt.util.createBuffer()), (fragment.read -= 4), e.process());
-    ((e.fragmented = null), (fragment.read -= 4));
-    var bytes = fragment.bytes(int24 + 4);
-    if (((fragment.read += 4), byte in cm[e.entity][e.expect])) {
-      if (e.entity === se.ConnectionEnd.server && !e.open && !e.fail)
-        ((e.handshaking = !0),
-          (e.session = {
-            version: null,
-            extensions: { server_name: { serverNameList: [] } },
-            cipherSuite: null,
-            compressionMethod: null,
-            serverCertificate: null,
-            clientCertificate: null,
-            md5: nt.md.md5.create(),
-            sha1: nt.md.sha1.create(),
-          }));
-      if (
-        byte !== se.HandshakeType.hello_request &&
-        byte !== se.HandshakeType.certificate_verify &&
-        byte !== se.HandshakeType.finished
-      )
-        (e.session.md5.update(bytes), e.session.sha1.update(bytes));
-      cm[e.entity][e.expect][byte](e, n, int24);
-    } else se.handleUnexpected(e, n);
-  };
-  se.handleApplicationData = function (e, n) {
-    (e.data.putBuffer(n.fragment), e.dataReady(e), e.process());
-  };
-  se.handleHeartbeat = function (e, n) {
-    var fragment = n.fragment,
-      byte = fragment.getByte(),
-      int16 = fragment.getInt16(),
-      bytes = fragment.getBytes(int16);
-    if (byte === se.HeartbeatMessageType.heartbeat_request) {
-      if (e.handshaking || int16 > bytes.length) return e.process();
-      (se.queue(
-        e,
-        se.createRecord(e, {
-          type: se.ContentType.heartbeat,
-          data: se.createHeartbeat(se.HeartbeatMessageType.heartbeat_response, bytes),
-        }),
-      ),
-        se.flush(e));
-    } else if (byte === se.HeartbeatMessageType.heartbeat_response) {
-      if (bytes !== e.expectedHeartbeatPayload) return e.process();
-      if (e.heartbeatReceived) e.heartbeatReceived(e, nt.util.createBuffer(bytes));
+  tls.handleHandshake = function (c, record) {
+    var b = record.fragment;
+    var type = b.getByte();
+    var length = b.getInt24();
+    if (length > b.length()) {
+      c.fragmented = record;
+      record.fragment = forge.util.createBuffer();
+      b.read -= 4;
+      return c.process();
     }
-    e.process();
-  };
-  var t6 = 0,
-    n6 = 1,
-    NA = 2,
-    r6 = 3,
-    s6 = 4,
-    DA = 5,
-    i6 = 6,
-    o6 = 7,
-    a6 = 8,
-    l6 = 0,
-    c6 = 1,
-    PS = 2,
-    u6 = 3,
-    LS = 4,
-    d6 = 5,
-    f6 = 6,
-    {
-      handleUnexpected: handleUnexpected,
-      handleChangeCipherSpec: handleChangeCipherSpec,
-      handleAlert: handleAlert,
-      handleHandshake: handleHandshake,
-      handleApplicationData: handleApplicationData,
-      handleHeartbeat: handleHeartbeat,
-    } = se,
-    BS = [];
-  BS[se.ConnectionEnd.client] = [
-    [handleUnexpected, handleAlert, handleHandshake, handleUnexpected, handleHeartbeat],
-    [handleUnexpected, handleAlert, handleHandshake, handleUnexpected, handleHeartbeat],
-    [handleUnexpected, handleAlert, handleHandshake, handleUnexpected, handleHeartbeat],
-    [handleUnexpected, handleAlert, handleHandshake, handleUnexpected, handleHeartbeat],
-    [handleUnexpected, handleAlert, handleHandshake, handleUnexpected, handleHeartbeat],
-    [handleChangeCipherSpec, handleAlert, handleUnexpected, handleUnexpected, handleHeartbeat],
-    [handleUnexpected, handleAlert, handleHandshake, handleUnexpected, handleHeartbeat],
-    [handleUnexpected, handleAlert, handleHandshake, handleApplicationData, handleHeartbeat],
-    [handleUnexpected, handleAlert, handleHandshake, handleUnexpected, handleHeartbeat],
-  ];
-  BS[se.ConnectionEnd.server] = [
-    [handleUnexpected, handleAlert, handleHandshake, handleUnexpected, handleHeartbeat],
-    [handleUnexpected, handleAlert, handleHandshake, handleUnexpected, handleHeartbeat],
-    [handleUnexpected, handleAlert, handleHandshake, handleUnexpected, handleHeartbeat],
-    [handleUnexpected, handleAlert, handleHandshake, handleUnexpected, handleHeartbeat],
-    [handleChangeCipherSpec, handleAlert, handleUnexpected, handleUnexpected, handleHeartbeat],
-    [handleUnexpected, handleAlert, handleHandshake, handleUnexpected, handleHeartbeat],
-    [handleUnexpected, handleAlert, handleHandshake, handleApplicationData, handleHeartbeat],
-    [handleUnexpected, handleAlert, handleHandshake, handleUnexpected, handleHeartbeat],
-  ];
-  var {
-      handleHelloRequest: handleHelloRequest,
-      handleServerHello: handleServerHello,
-      handleCertificate: handleCertificate,
-      handleServerKeyExchange: handleServerKeyExchange,
-      handleCertificateRequest: handleCertificateRequest,
-      handleServerHelloDone: handleServerHelloDone,
-      handleFinished: handleFinished,
-    } = se,
-    cm = [];
-  cm[se.ConnectionEnd.client] = [
-    [
-      handleUnexpected,
-      handleUnexpected,
-      handleServerHello,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-    ],
-    [
-      handleHelloRequest,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleCertificate,
-      handleServerKeyExchange,
-      handleCertificateRequest,
-      handleServerHelloDone,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-    ],
-    [
-      handleHelloRequest,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleServerKeyExchange,
-      handleCertificateRequest,
-      handleServerHelloDone,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-    ],
-    [
-      handleHelloRequest,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleCertificateRequest,
-      handleServerHelloDone,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-    ],
-    [
-      handleHelloRequest,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleServerHelloDone,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-    ],
-    [
-      handleHelloRequest,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-    ],
-    [
-      handleHelloRequest,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleFinished,
-    ],
-    [
-      handleHelloRequest,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-    ],
-    [
-      handleHelloRequest,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-    ],
-  ];
-  var {
-    handleClientHello: handleClientHello,
-    handleClientKeyExchange: handleClientKeyExchange,
-    handleCertificateVerify: handleCertificateVerify,
-  } = se;
-  cm[se.ConnectionEnd.server] = [
-    [
-      handleUnexpected,
-      handleClientHello,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-    ],
-    [
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleCertificate,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-    ],
-    [
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleClientKeyExchange,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-    ],
-    [
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleCertificateVerify,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-    ],
-    [
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-    ],
-    [
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleFinished,
-    ],
-    [
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-    ],
-    [
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-      handleUnexpected,
-    ],
-  ];
-  se.generateKeys = function (e, n) {
-    var r = um,
-      s = n.client_random + n.server_random;
-    if (!e.session.resuming)
-      ((n.master_secret = r(n.pre_master_secret, "master secret", s, 48).bytes()),
-        (n.pre_master_secret = null));
-    s = n.server_random + n.client_random;
-    var h = 2 * n.mac_key_length + 2 * n.enc_key_length,
-      y = e.version.major === se.Versions.TLS_1_0.major && e.version.minor === se.Versions.TLS_1_0.minor;
-    if (y) h += 2 * n.fixed_iv_length;
-    var b = r(n.master_secret, "key expansion", s, h),
-      S = {
-        client_write_MAC_key: b.getBytes(n.mac_key_length),
-        server_write_MAC_key: b.getBytes(n.mac_key_length),
-        client_write_key: b.getBytes(n.enc_key_length),
-        server_write_key: b.getBytes(n.enc_key_length),
-      };
-    if (y)
-      ((S.client_write_IV = b.getBytes(n.fixed_iv_length)),
-        (S.server_write_IV = b.getBytes(n.fixed_iv_length)));
-    return S;
-  };
-  se.createConnectionState = function (e) {
-    var n = e.entity === se.ConnectionEnd.client,
-      r = function () {
-        var y = {
-          sequenceNumber: [0, 0],
-          macKey: null,
-          macLength: 0,
-          macFunction: null,
-          cipherState: null,
-          cipherFunction: function (b) {
-            return !0;
+    c.fragmented = null;
+    b.read -= 4;
+    var bytes = b.bytes(length + 4);
+    b.read += 4;
+    if (type in hsTable[c.entity][c.expect]) {
+      if (c.entity === tls.ConnectionEnd.server && !c.open && !c.fail) {
+        c.handshaking = true;
+        c.session = {
+          version: null,
+          extensions: {
+            server_name: {
+              serverNameList: [],
+            },
           },
-          compressionState: null,
-          compressFunction: function (b) {
-            return !0;
-          },
-          updateSequenceNumber: function () {
-            if (y.sequenceNumber[1] === 4294967295) ((y.sequenceNumber[1] = 0), ++y.sequenceNumber[0]);
-            else ++y.sequenceNumber[1];
-          },
+          cipherSuite: null,
+          compressionMethod: null,
+          serverCertificate: null,
+          clientCertificate: null,
+          md5: forge.md.md5.create(),
+          sha1: forge.md.sha1.create(),
         };
-        return y;
-      },
-      s = { read: r(), write: r() };
-    if (
-      ((s.read.update = function (y, b) {
-        if (!s.read.cipherFunction(b, s.read))
-          y.error(y, {
-            message: "Could not decrypt record or bad MAC.",
-            send: !0,
-            alert: { level: se.Alert.Level.fatal, description: se.Alert.Description.bad_record_mac },
-          });
-        else if (!s.read.compressFunction(y, b, s.read))
-          y.error(y, {
-            message: "Could not decompress record.",
-            send: !0,
-            alert: { level: se.Alert.Level.fatal, description: se.Alert.Description.decompression_failure },
-          });
-        return !y.fail;
-      }),
-      (s.write.update = function (y, b) {
-        if (!s.write.compressFunction(y, b, s.write))
-          y.error(y, {
-            message: "Could not compress record.",
-            send: !1,
-            alert: { level: se.Alert.Level.fatal, description: se.Alert.Description.internal_error },
-          });
-        else if (!s.write.cipherFunction(b, s.write))
-          y.error(y, {
-            message: "Could not encrypt record.",
-            send: !1,
-            alert: { level: se.Alert.Level.fatal, description: se.Alert.Description.internal_error },
-          });
-        return !y.fail;
-      }),
-      e.session)
-    ) {
-      var sp = e.session.sp;
+      }
+      if (
+        type !== tls.HandshakeType.hello_request &&
+        type !== tls.HandshakeType.certificate_verify &&
+        type !== tls.HandshakeType.finished
+      ) {
+        c.session.md5.update(bytes);
+        c.session.sha1.update(bytes);
+      }
+      hsTable[c.entity][c.expect][type](c, record, length);
+    } else tls.handleUnexpected(c, record);
+  };
+  tls.handleApplicationData = function (c, record) {
+    c.data.putBuffer(record.fragment);
+    c.dataReady(c);
+    c.process();
+  };
+  tls.handleHeartbeat = function (c, record) {
+    var b = record.fragment;
+    var type = b.getByte();
+    var length = b.getInt16();
+    var payload = b.getBytes(length);
+    if (type === tls.HeartbeatMessageType.heartbeat_request) {
+      if (c.handshaking || length > payload.length) return c.process();
+      tls.queue(
+        c,
+        tls.createRecord(c, {
+          type: tls.ContentType.heartbeat,
+          data: tls.createHeartbeat(tls.HeartbeatMessageType.heartbeat_response, payload),
+        }),
+      );
+      tls.flush(c);
+    } else if (type === tls.HeartbeatMessageType.heartbeat_response) {
+      if (payload !== c.expectedHeartbeatPayload) return c.process();
+      if (c.heartbeatReceived) c.heartbeatReceived(c, forge.util.createBuffer(payload));
+    }
+    c.process();
+  };
+  var SHE = 0;
+  var SCE = 1;
+  var SKE = 2;
+  var SCR = 3;
+  var SHD = 4;
+  var SCC = 5;
+  var SFI = 6;
+  var SAD = 7;
+  var SER = 8;
+  var CHE = 0;
+  var CCE = 1;
+  var CKE = 2;
+  var CCV = 3;
+  var CCC = 4;
+  var CFI = 5;
+  var CAD = 6;
+  var {
+    handleUnexpected: __,
+    handleChangeCipherSpec: R0,
+    handleAlert: R1,
+    handleHandshake: R2,
+    handleApplicationData: R3,
+    handleHeartbeat: R4,
+  } = tls;
+  var ctTable = [];
+  ctTable[tls.ConnectionEnd.client] = [
+    [__, R1, R2, __, R4],
+    [__, R1, R2, __, R4],
+    [__, R1, R2, __, R4],
+    [__, R1, R2, __, R4],
+    [__, R1, R2, __, R4],
+    [R0, R1, __, __, R4],
+    [__, R1, R2, __, R4],
+    [__, R1, R2, R3, R4],
+    [__, R1, R2, __, R4],
+  ];
+  ctTable[tls.ConnectionEnd.server] = [
+    [__, R1, R2, __, R4],
+    [__, R1, R2, __, R4],
+    [__, R1, R2, __, R4],
+    [__, R1, R2, __, R4],
+    [R0, R1, __, __, R4],
+    [__, R1, R2, __, R4],
+    [__, R1, R2, R3, R4],
+    [__, R1, R2, __, R4],
+  ];
+  var {
+    handleHelloRequest: H0,
+    handleServerHello: H1,
+    handleCertificate: H2,
+    handleServerKeyExchange: H3,
+    handleCertificateRequest: H4,
+    handleServerHelloDone: H5,
+    handleFinished: H6,
+  } = tls;
+  var hsTable = [];
+  hsTable[tls.ConnectionEnd.client] = [
+    [__, __, H1, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __],
+    [H0, __, __, __, __, __, __, __, __, __, __, H2, H3, H4, H5, __, __, __, __, __, __],
+    [H0, __, __, __, __, __, __, __, __, __, __, __, H3, H4, H5, __, __, __, __, __, __],
+    [H0, __, __, __, __, __, __, __, __, __, __, __, __, H4, H5, __, __, __, __, __, __],
+    [H0, __, __, __, __, __, __, __, __, __, __, __, __, __, H5, __, __, __, __, __, __],
+    [H0, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __],
+    [H0, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, H6],
+    [H0, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __],
+    [H0, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __],
+  ];
+  var { handleClientHello: H7, handleClientKeyExchange: H8, handleCertificateVerify: H9 } = tls;
+  hsTable[tls.ConnectionEnd.server] = [
+    [__, H7, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __],
+    [__, __, __, __, __, __, __, __, __, __, __, H2, __, __, __, __, __, __, __, __, __],
+    [__, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, H8, __, __, __, __],
+    [__, __, __, __, __, __, __, __, __, __, __, __, __, __, __, H9, __, __, __, __, __],
+    [__, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __],
+    [__, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, H6],
+    [__, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __],
+    [__, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __],
+  ];
+  tls.generateKeys = function (c, sp) {
+    var prf = prf_TLS1;
+    var random = sp.client_random + sp.server_random;
+    if (!c.session.resuming) {
+      sp.master_secret = prf(sp.pre_master_secret, "master secret", random, 48).bytes();
+      sp.pre_master_secret = null;
+    }
+    random = sp.server_random + sp.client_random;
+    var length = 2 * sp.mac_key_length + 2 * sp.enc_key_length;
+    var tls10 =
+      c.version.major === tls.Versions.TLS_1_0.major && c.version.minor === tls.Versions.TLS_1_0.minor;
+    if (tls10) length += 2 * sp.fixed_iv_length;
+    var km = prf(sp.master_secret, "key expansion", random, length);
+    var rval = {
+      client_write_MAC_key: km.getBytes(sp.mac_key_length),
+      server_write_MAC_key: km.getBytes(sp.mac_key_length),
+      client_write_key: km.getBytes(sp.enc_key_length),
+      server_write_key: km.getBytes(sp.enc_key_length),
+    };
+    if (tls10) {
+      rval.client_write_IV = km.getBytes(sp.fixed_iv_length);
+      rval.server_write_IV = km.getBytes(sp.fixed_iv_length);
+    }
+    return rval;
+  };
+  tls.createConnectionState = function (c) {
+    var client = c.entity === tls.ConnectionEnd.client;
+    var createMode = function () {
+      var mode = {
+        sequenceNumber: [0, 0],
+        macKey: null,
+        macLength: 0,
+        macFunction: null,
+        cipherState: null,
+        cipherFunction: function (record) {
+          return true;
+        },
+        compressionState: null,
+        compressFunction: function (record) {
+          return true;
+        },
+        updateSequenceNumber: function () {
+          if (mode.sequenceNumber[1] === 4294967295) {
+            mode.sequenceNumber[1] = 0;
+            ++mode.sequenceNumber[0];
+          } else ++mode.sequenceNumber[1];
+        },
+      };
+      return mode;
+    };
+    var state = {
+      read: createMode(),
+      write: createMode(),
+    };
+    state.read.update = function (c, record) {
+      if (!state.read.cipherFunction(record, state.read))
+        c.error(c, {
+          message: "Could not decrypt record or bad MAC.",
+          send: true,
+          alert: {
+            level: tls.Alert.Level.fatal,
+            description: tls.Alert.Description.bad_record_mac,
+          },
+        });
+      else if (!state.read.compressFunction(c, record, state.read))
+        c.error(c, {
+          message: "Could not decompress record.",
+          send: true,
+          alert: {
+            level: tls.Alert.Level.fatal,
+            description: tls.Alert.Description.decompression_failure,
+          },
+        });
+      return !c.fail;
+    };
+    state.write.update = function (c, record) {
+      if (!state.write.compressFunction(c, record, state.write))
+        c.error(c, {
+          message: "Could not compress record.",
+          send: false,
+          alert: {
+            level: tls.Alert.Level.fatal,
+            description: tls.Alert.Description.internal_error,
+          },
+        });
+      else if (!state.write.cipherFunction(record, state.write))
+        c.error(c, {
+          message: "Could not encrypt record.",
+          send: false,
+          alert: {
+            level: tls.Alert.Level.fatal,
+            description: tls.Alert.Description.internal_error,
+          },
+        });
+      return !c.fail;
+    };
+    if (c.session) {
+      var sp = c.session.sp;
       switch (
-        (e.session.cipherSuite.initSecurityParameters(sp),
-        (sp.keys = se.generateKeys(e, sp)),
-        (s.read.macKey = n ? sp.keys.server_write_MAC_key : sp.keys.client_write_MAC_key),
-        (s.write.macKey = n ? sp.keys.client_write_MAC_key : sp.keys.server_write_MAC_key),
-        e.session.cipherSuite.initConnectionState(s, e, sp),
+        (c.session.cipherSuite.initSecurityParameters(sp),
+        (sp.keys = tls.generateKeys(c, sp)),
+        (state.read.macKey = client ? sp.keys.server_write_MAC_key : sp.keys.client_write_MAC_key),
+        (state.write.macKey = client ? sp.keys.client_write_MAC_key : sp.keys.server_write_MAC_key),
+        c.session.cipherSuite.initConnectionState(state, c, sp),
         sp.compression_algorithm)
       ) {
-        case se.CompressionMethod.none:
+        case tls.CompressionMethod.none:
           break;
-        case se.CompressionMethod.deflate:
-          ((s.read.compressFunction = e6), (s.write.compressFunction = QG));
+        case tls.CompressionMethod.deflate:
+          state.read.compressFunction = inflate;
+          state.write.compressFunction = deflate;
           break;
         default:
           throw Error("Unsupported compression algorithm.");
       }
     }
-    return s;
+    return state;
   };
-  se.createRandom = function () {
-    var date = new Date(),
-      n = +date + date.getTimezoneOffset() * 60000,
-      buffer = nt.util.createBuffer();
-    return (buffer.putInt32(n), buffer.putBytes(nt.random.getBytes(28)), buffer);
+  tls.createRandom = function () {
+    var d = new Date();
+    var utc = +d + d.getTimezoneOffset() * 60000;
+    var rval = forge.util.createBuffer();
+    rval.putInt32(utc);
+    rval.putBytes(forge.random.getBytes(28));
+    return rval;
   };
-  se.createRecord = function (e, n) {
-    if (!n.data) return null;
-    var r = {
-      type: n.type,
-      version: { major: e.version.major, minor: e.version.minor },
-      length: n.data.length(),
-      fragment: n.data,
+  tls.createRecord = function (c, options) {
+    if (!options.data) return null;
+    var record = {
+      type: options.type,
+      version: {
+        major: c.version.major,
+        minor: c.version.minor,
+      },
+      length: options.data.length(),
+      fragment: options.data,
     };
-    return r;
+    return record;
   };
-  se.createAlert = function (e, n) {
-    var buffer = nt.util.createBuffer();
-    return (
-      buffer.putByte(n.level),
-      buffer.putByte(n.description),
-      se.createRecord(e, { type: se.ContentType.alert, data: buffer })
-    );
+  tls.createAlert = function (c, alert) {
+    var b = forge.util.createBuffer();
+    b.putByte(alert.level);
+    b.putByte(alert.description);
+    return tls.createRecord(c, {
+      type: tls.ContentType.alert,
+      data: b,
+    });
   };
-  se.createClientHello = function (e) {
-    e.session.clientHelloVersion = { major: e.version.major, minor: e.version.minor };
-    var buffer = nt.util.createBuffer();
-    for (var r = 0; r < e.cipherSuites.length; ++r) {
-      var s = e.cipherSuites[r];
-      (buffer.putByte(s.id[0]), buffer.putByte(s.id[1]));
+  tls.createClientHello = function (c) {
+    c.session.clientHelloVersion = {
+      major: c.version.major,
+      minor: c.version.minor,
+    };
+    var cipherSuites = forge.util.createBuffer();
+    for (var i = 0; i < c.cipherSuites.length; ++i) {
+      var cs = c.cipherSuites[i];
+      cipherSuites.putByte(cs.id[0]);
+      cipherSuites.putByte(cs.id[1]);
     }
-    var h = buffer.length(),
-      buffer_2 = nt.util.createBuffer();
-    buffer_2.putByte(se.CompressionMethod.none);
-    var b = buffer_2.length(),
-      buffer_3 = nt.util.createBuffer();
-    if (e.virtualHost) {
-      var buffer_4 = nt.util.createBuffer();
-      (buffer_4.putByte(0), buffer_4.putByte(0));
-      var buffer_5 = nt.util.createBuffer();
-      (buffer_5.putByte(0), ki(buffer_5, 2, nt.util.createBuffer(e.virtualHost)));
-      var buffer_6 = nt.util.createBuffer();
-      (ki(buffer_6, 2, buffer_5), ki(buffer_4, 2, buffer_6), buffer_3.putBuffer(buffer_4));
+    var cSuites = cipherSuites.length();
+    var compressionMethods = forge.util.createBuffer();
+    compressionMethods.putByte(tls.CompressionMethod.none);
+    var cMethods = compressionMethods.length();
+    var extensions = forge.util.createBuffer();
+    if (c.virtualHost) {
+      var ext = forge.util.createBuffer();
+      ext.putByte(0);
+      ext.putByte(0);
+      var serverName = forge.util.createBuffer();
+      serverName.putByte(0);
+      writeVector(serverName, 2, forge.util.createBuffer(c.virtualHost));
+      var snList = forge.util.createBuffer();
+      writeVector(snList, 2, serverName);
+      writeVector(ext, 2, snList);
+      extensions.putBuffer(ext);
     }
-    var O = buffer_3.length();
-    if (O > 0) O += 2;
-    var id = e.session.id,
-      V = id.length + 1 + 2 + 4 + 28 + 2 + h + 1 + b + O,
-      buffer_7 = nt.util.createBuffer();
-    if (
-      (buffer_7.putByte(se.HandshakeType.client_hello),
-      buffer_7.putInt24(V),
-      buffer_7.putByte(e.version.major),
-      buffer_7.putByte(e.version.minor),
-      buffer_7.putBytes(e.session.sp.client_random),
-      ki(buffer_7, 1, nt.util.createBuffer(id)),
-      ki(buffer_7, 2, buffer),
-      ki(buffer_7, 1, buffer_2),
-      O > 0)
-    )
-      ki(buffer_7, 2, buffer_3);
-    return buffer_7;
+    var extLength = extensions.length();
+    if (extLength > 0) extLength += 2;
+    var sessionId = c.session.id;
+    var length = sessionId.length + 1 + 2 + 4 + 28 + 2 + cSuites + 1 + cMethods + extLength;
+    var rval = forge.util.createBuffer();
+    rval.putByte(tls.HandshakeType.client_hello);
+    rval.putInt24(length);
+    rval.putByte(c.version.major);
+    rval.putByte(c.version.minor);
+    rval.putBytes(c.session.sp.client_random);
+    writeVector(rval, 1, forge.util.createBuffer(sessionId));
+    writeVector(rval, 2, cipherSuites);
+    writeVector(rval, 1, compressionMethods);
+    if (extLength > 0) writeVector(rval, 2, extensions);
+    return rval;
   };
-  se.createServerHello = function (e) {
-    var id = e.session.id,
-      r = id.length + 1 + 2 + 4 + 28 + 2 + 1,
-      buffer = nt.util.createBuffer();
-    return (
-      buffer.putByte(se.HandshakeType.server_hello),
-      buffer.putInt24(r),
-      buffer.putByte(e.version.major),
-      buffer.putByte(e.version.minor),
-      buffer.putBytes(e.session.sp.server_random),
-      ki(buffer, 1, nt.util.createBuffer(id)),
-      buffer.putByte(e.session.cipherSuite.id[0]),
-      buffer.putByte(e.session.cipherSuite.id[1]),
-      buffer.putByte(e.session.compressionMethod),
-      buffer
-    );
+  tls.createServerHello = function (c) {
+    var sessionId = c.session.id;
+    var length = sessionId.length + 1 + 2 + 4 + 28 + 2 + 1;
+    var rval = forge.util.createBuffer();
+    rval.putByte(tls.HandshakeType.server_hello);
+    rval.putInt24(length);
+    rval.putByte(c.version.major);
+    rval.putByte(c.version.minor);
+    rval.putBytes(c.session.sp.server_random);
+    writeVector(rval, 1, forge.util.createBuffer(sessionId));
+    rval.putByte(c.session.cipherSuite.id[0]);
+    rval.putByte(c.session.cipherSuite.id[1]);
+    rval.putByte(c.session.compressionMethod);
+    return rval;
   };
-  se.createCertificate = function (e) {
-    var n = e.entity === se.ConnectionEnd.client,
-      r = null;
-    if (e.getCertificate) {
-      var s;
-      if (n) s = e.session.certificateRequest;
-      else s = e.session.extensions.server_name.serverNameList;
-      r = e.getCertificate(e, s);
+  tls.createCertificate = function (c) {
+    var client = c.entity === tls.ConnectionEnd.client;
+    var cert = null;
+    if (c.getCertificate) {
+      var hint;
+      if (client) hint = c.session.certificateRequest;
+      else hint = c.session.extensions.server_name.serverNameList;
+      cert = c.getCertificate(c, hint);
     }
-    var buffer = nt.util.createBuffer();
-    if (r !== null)
+    var certList = forge.util.createBuffer();
+    if (cert !== null)
       try {
-        if (!nt.util.isArray(r)) r = [r];
-        var y = null;
-        for (var b = 0; b < r.length; ++b) {
-          var S = nt.pem.decode(r[b])[0];
-          if (S.type !== "CERTIFICATE" && S.type !== "X509 CERTIFICATE" && S.type !== "TRUSTED CERTIFICATE") {
-            var w = Error(
+        if (!forge.util.isArray(cert)) cert = [cert];
+        var asn1 = null;
+        for (var i = 0; i < cert.length; ++i) {
+          var msg = forge.pem.decode(cert[i])[0];
+          if (
+            msg.type !== "CERTIFICATE" &&
+            msg.type !== "X509 CERTIFICATE" &&
+            msg.type !== "TRUSTED CERTIFICATE"
+          ) {
+            var error = Error(
               'Could not convert certificate from PEM; PEM header type is not "CERTIFICATE", "X509 CERTIFICATE", or "TRUSTED CERTIFICATE".',
             );
-            throw ((w.headerType = S.type), w);
+            error.headerType = msg.type;
+            throw error;
           }
-          if (S.procType && S.procType.type === "ENCRYPTED")
+          if (msg.procType && msg.procType.type === "ENCRYPTED")
             throw Error("Could not convert certificate from PEM; PEM is encrypted.");
-          var buffer_2 = nt.util.createBuffer(S.body);
-          if (y === null) y = nt.asn1.fromDer(buffer_2.bytes(), !1);
-          var buffer_3 = nt.util.createBuffer();
-          (ki(buffer_3, 3, buffer_2), buffer.putBuffer(buffer_3));
+          var der = forge.util.createBuffer(msg.body);
+          if (asn1 === null) asn1 = forge.asn1.fromDer(der.bytes(), false);
+          var certBuffer = forge.util.createBuffer();
+          writeVector(certBuffer, 3, der);
+          certList.putBuffer(certBuffer);
         }
-        if (((r = nt.pki.certificateFromAsn1(y)), n)) e.session.clientCertificate = r;
-        else e.session.serverCertificate = r;
-      } catch (error) {
-        return e.error(e, {
+        cert = forge.pki.certificateFromAsn1(asn1);
+        if (client) c.session.clientCertificate = cert;
+        else c.session.serverCertificate = cert;
+      } catch (ex) {
+        return c.error(c, {
           message: "Could not send certificate list.",
-          cause: error,
-          send: !0,
-          alert: { level: se.Alert.Level.fatal, description: se.Alert.Description.bad_certificate },
+          cause: ex,
+          send: true,
+          alert: {
+            level: tls.Alert.Level.fatal,
+            description: tls.Alert.Description.bad_certificate,
+          },
         });
       }
-    var O = 3 + buffer.length(),
-      buffer_4 = nt.util.createBuffer();
-    return (
-      buffer_4.putByte(se.HandshakeType.certificate),
-      buffer_4.putInt24(O),
-      ki(buffer_4, 3, buffer),
-      buffer_4
-    );
+    var length = 3 + certList.length();
+    var rval = forge.util.createBuffer();
+    rval.putByte(tls.HandshakeType.certificate);
+    rval.putInt24(length);
+    writeVector(rval, 3, certList);
+    return rval;
   };
-  se.createClientKeyExchange = function (e) {
-    var buffer = nt.util.createBuffer();
-    (buffer.putByte(e.session.clientHelloVersion.major),
-      buffer.putByte(e.session.clientHelloVersion.minor),
-      buffer.putBytes(nt.random.getBytes(46)));
-    var sp = e.session.sp;
-    sp.pre_master_secret = buffer.getBytes();
-    var publicKey = e.session.serverCertificate.publicKey;
-    buffer = publicKey.encrypt(sp.pre_master_secret);
-    var h = buffer.length + 2,
-      buffer_2 = nt.util.createBuffer();
-    return (
-      buffer_2.putByte(se.HandshakeType.client_key_exchange),
-      buffer_2.putInt24(h),
-      buffer_2.putInt16(buffer.length),
-      buffer_2.putBytes(buffer),
-      buffer_2
-    );
+  tls.createClientKeyExchange = function (c) {
+    var b = forge.util.createBuffer();
+    b.putByte(c.session.clientHelloVersion.major);
+    b.putByte(c.session.clientHelloVersion.minor);
+    b.putBytes(forge.random.getBytes(46));
+    var sp = c.session.sp;
+    sp.pre_master_secret = b.getBytes();
+    var key = c.session.serverCertificate.publicKey;
+    b = key.encrypt(sp.pre_master_secret);
+    var length = b.length + 2;
+    var rval = forge.util.createBuffer();
+    rval.putByte(tls.HandshakeType.client_key_exchange);
+    rval.putInt24(length);
+    rval.putInt16(b.length);
+    rval.putBytes(b);
+    return rval;
   };
-  se.createServerKeyExchange = function (e) {
-    var n = 0,
-      buffer = nt.util.createBuffer();
-    if (n > 0) (buffer.putByte(se.HandshakeType.server_key_exchange), buffer.putInt24(n));
-    return buffer;
-  };
-  se.getClientSignature = function (e, n) {
-    var buffer = nt.util.createBuffer();
-    (buffer.putBuffer(e.session.md5.digest()),
-      buffer.putBuffer(e.session.sha1.digest()),
-      (buffer = buffer.getBytes()),
-      (e.getSignature =
-        e.getSignature ||
-        function (s, h, y) {
-          var b = null;
-          if (s.getPrivateKey)
-            try {
-              ((b = s.getPrivateKey(s, s.session.clientCertificate)), (b = nt.pki.privateKeyFromPem(b)));
-            } catch (error) {
-              s.error(s, {
-                message: "Could not get private key.",
-                cause: error,
-                send: !0,
-                alert: { level: se.Alert.Level.fatal, description: se.Alert.Description.internal_error },
-              });
-            }
-          if (b === null)
-            s.error(s, {
-              message: "No private key set.",
-              send: !0,
-              alert: { level: se.Alert.Level.fatal, description: se.Alert.Description.internal_error },
-            });
-          else h = b.sign(h, null);
-          y(s, h);
-        }),
-      e.getSignature(e, buffer, n));
-  };
-  se.createCertificateVerify = function (e, n) {
-    var r = n.length + 2,
-      buffer = nt.util.createBuffer();
-    return (
-      buffer.putByte(se.HandshakeType.certificate_verify),
-      buffer.putInt24(r),
-      buffer.putInt16(n.length),
-      buffer.putBytes(n),
-      buffer
-    );
-  };
-  se.createCertificateRequest = function (e) {
-    var buffer = nt.util.createBuffer();
-    buffer.putByte(1);
-    var buffer_2 = nt.util.createBuffer();
-    for (var key in e.caStore.certs) {
-      var h = e.caStore.certs[key],
-        distinguishedNameToAsn1 = nt.pki.distinguishedNameToAsn1(h.subject),
-        toDer = nt.asn1.toDer(distinguishedNameToAsn1);
-      (buffer_2.putInt16(toDer.length()), buffer_2.putBuffer(toDer));
+  tls.createServerKeyExchange = function (c) {
+    var length = 0;
+    var rval = forge.util.createBuffer();
+    if (length > 0) {
+      rval.putByte(tls.HandshakeType.server_key_exchange);
+      rval.putInt24(length);
     }
-    var S = 1 + buffer.length() + 2 + buffer_2.length(),
-      buffer_3 = nt.util.createBuffer();
-    return (
-      buffer_3.putByte(se.HandshakeType.certificate_request),
-      buffer_3.putInt24(S),
-      ki(buffer_3, 1, buffer),
-      ki(buffer_3, 2, buffer_2),
-      buffer_3
-    );
+    return rval;
   };
-  se.createServerHelloDone = function (e) {
-    var buffer = nt.util.createBuffer();
-    return (buffer.putByte(se.HandshakeType.server_hello_done), buffer.putInt24(0), buffer);
+  tls.getClientSignature = function (c, callback) {
+    var b = forge.util.createBuffer();
+    b.putBuffer(c.session.md5.digest());
+    b.putBuffer(c.session.sha1.digest());
+    b = b.getBytes();
+    c.getSignature =
+      c.getSignature ||
+      function (c, b_2, callback) {
+        var privateKey = null;
+        if (c.getPrivateKey)
+          try {
+            privateKey = c.getPrivateKey(c, c.session.clientCertificate);
+            privateKey = forge.pki.privateKeyFromPem(privateKey);
+          } catch (ex) {
+            c.error(c, {
+              message: "Could not get private key.",
+              cause: ex,
+              send: true,
+              alert: {
+                level: tls.Alert.Level.fatal,
+                description: tls.Alert.Description.internal_error,
+              },
+            });
+          }
+        if (privateKey === null)
+          c.error(c, {
+            message: "No private key set.",
+            send: true,
+            alert: {
+              level: tls.Alert.Level.fatal,
+              description: tls.Alert.Description.internal_error,
+            },
+          });
+        else b_2 = privateKey.sign(b_2, null);
+        callback(c, b_2);
+      };
+    c.getSignature(c, b, callback);
   };
-  se.createChangeCipherSpec = function () {
-    var buffer = nt.util.createBuffer();
-    return (buffer.putByte(1), buffer);
+  tls.createCertificateVerify = function (c, signature) {
+    var length = signature.length + 2;
+    var rval = forge.util.createBuffer();
+    rval.putByte(tls.HandshakeType.certificate_verify);
+    rval.putInt24(length);
+    rval.putInt16(signature.length);
+    rval.putBytes(signature);
+    return rval;
   };
-  se.createFinished = function (e) {
-    var buffer = nt.util.createBuffer();
-    (buffer.putBuffer(e.session.md5.digest()), buffer.putBuffer(e.session.sha1.digest()));
-    var r = e.entity === se.ConnectionEnd.client,
-      sp = e.session.sp,
-      h = 12,
-      y = um,
-      b = r ? "client finished" : "server finished";
-    buffer = y(sp.master_secret, b, buffer.getBytes(), h);
-    var buffer_2 = nt.util.createBuffer();
-    return (
-      buffer_2.putByte(se.HandshakeType.finished),
-      buffer_2.putInt24(buffer.length()),
-      buffer_2.putBuffer(buffer),
-      buffer_2
-    );
+  tls.createCertificateRequest = function (c) {
+    var certTypes = forge.util.createBuffer();
+    certTypes.putByte(1);
+    var cAs = forge.util.createBuffer();
+    for (var key in c.caStore.certs) {
+      var cert = c.caStore.certs[key];
+      var dn = forge.pki.distinguishedNameToAsn1(cert.subject);
+      var byteBuffer = forge.asn1.toDer(dn);
+      cAs.putInt16(byteBuffer.length());
+      cAs.putBuffer(byteBuffer);
+    }
+    var length = 1 + certTypes.length() + 2 + cAs.length();
+    var rval = forge.util.createBuffer();
+    rval.putByte(tls.HandshakeType.certificate_request);
+    rval.putInt24(length);
+    writeVector(rval, 1, certTypes);
+    writeVector(rval, 2, cAs);
+    return rval;
   };
-  se.createHeartbeat = function (e, n, r) {
-    if (typeof r > "u") r = n.length;
-    var buffer = nt.util.createBuffer();
-    (buffer.putByte(e), buffer.putInt16(r), buffer.putBytes(n));
-    var h = buffer.length(),
-      max = Math.max(16, h - r - 3);
-    return (buffer.putBytes(nt.random.getBytes(max)), buffer);
+  tls.createServerHelloDone = function (c) {
+    var rval = forge.util.createBuffer();
+    rval.putByte(tls.HandshakeType.server_hello_done);
+    rval.putInt24(0);
+    return rval;
   };
-  se.queue = function (e, n) {
-    if (!n) return;
-    if (n.fragment.length() === 0) {
+  tls.createChangeCipherSpec = function () {
+    var rval = forge.util.createBuffer();
+    rval.putByte(1);
+    return rval;
+  };
+  tls.createFinished = function (c) {
+    var b_2 = forge.util.createBuffer();
+    b_2.putBuffer(c.session.md5.digest());
+    b_2.putBuffer(c.session.sha1.digest());
+    var client = c.entity === tls.ConnectionEnd.client;
+    var sp = c.session.sp;
+    var vdl = 12;
+    var prf = prf_TLS1;
+    var label = client ? "client finished" : "server finished";
+    b_2 = prf(sp.master_secret, label, b_2.getBytes(), vdl);
+    var rval = forge.util.createBuffer();
+    rval.putByte(tls.HandshakeType.finished);
+    rval.putInt24(b_2.length());
+    rval.putBuffer(b_2);
+    return rval;
+  };
+  tls.createHeartbeat = function (type, payload, payloadLength) {
+    if (typeof payloadLength === "undefined") payloadLength = payload.length;
+    var rval = forge.util.createBuffer();
+    rval.putByte(type);
+    rval.putInt16(payloadLength);
+    rval.putBytes(payload);
+    var plaintextLength = rval.length();
+    var paddingLength = Math.max(16, plaintextLength - payloadLength - 3);
+    rval.putBytes(forge.random.getBytes(paddingLength));
+    return rval;
+  };
+  tls.queue = function (c, record) {
+    if (!record) return;
+    if (record.fragment.length() === 0) {
       if (
-        n.type === se.ContentType.handshake ||
-        n.type === se.ContentType.alert ||
-        n.type === se.ContentType.change_cipher_spec
+        record.type === tls.ContentType.handshake ||
+        record.type === tls.ContentType.alert ||
+        record.type === tls.ContentType.change_cipher_spec
       )
         return;
     }
-    if (n.type === se.ContentType.handshake) {
-      var bytes = n.fragment.bytes();
-      (e.session.md5.update(bytes), e.session.sha1.update(bytes), (bytes = null));
+    if (record.type === tls.ContentType.handshake) {
+      var bytes = record.fragment.bytes();
+      c.session.md5.update(bytes);
+      c.session.sha1.update(bytes);
+      bytes = null;
     }
-    var s;
-    if (n.fragment.length() <= se.MaxFragment) s = [n];
+    var records;
+    if (record.fragment.length() <= tls.MaxFragment) records = [record];
     else {
-      s = [];
-      var bytes_2 = n.fragment.bytes();
-      while (bytes_2.length > se.MaxFragment)
-        (s.push(
-          se.createRecord(e, { type: n.type, data: nt.util.createBuffer(bytes_2.slice(0, se.MaxFragment)) }),
-        ),
-          (bytes_2 = bytes_2.slice(se.MaxFragment)));
-      if (bytes_2.length > 0)
-        s.push(se.createRecord(e, { type: n.type, data: nt.util.createBuffer(bytes_2) }));
+      records = [];
+      var data = record.fragment.bytes();
+      while (data.length > tls.MaxFragment) {
+        records.push(
+          tls.createRecord(c, {
+            type: record.type,
+            data: forge.util.createBuffer(data.slice(0, tls.MaxFragment)),
+          }),
+        );
+        data = data.slice(tls.MaxFragment);
+      }
+      if (data.length > 0)
+        records.push(
+          tls.createRecord(c, {
+            type: record.type,
+            data: forge.util.createBuffer(data),
+          }),
+        );
     }
-    for (var y = 0; y < s.length && !e.fail; ++y) {
-      var b = s[y],
-        write = e.state.current.write;
-      if (write.update(e, b)) e.records.push(b);
+    for (var i = 0; i < records.length && !c.fail; ++i) {
+      var rec = records[i];
+      var s = c.state.current.write;
+      if (s.update(c, rec)) c.records.push(rec);
     }
   };
-  se.flush = function (e) {
-    for (var n = 0; n < e.records.length; ++n) {
-      var r = e.records[n];
-      (e.tlsData.putByte(r.type),
-        e.tlsData.putByte(r.version.major),
-        e.tlsData.putByte(r.version.minor),
-        e.tlsData.putInt16(r.fragment.length()),
-        e.tlsData.putBuffer(e.records[n].fragment));
+  tls.flush = function (c) {
+    for (var i = 0; i < c.records.length; ++i) {
+      var record = c.records[i];
+      c.tlsData.putByte(record.type);
+      c.tlsData.putByte(record.version.major);
+      c.tlsData.putByte(record.version.minor);
+      c.tlsData.putInt16(record.fragment.length());
+      c.tlsData.putBuffer(c.records[i].fragment);
     }
-    return ((e.records = []), e.tlsDataReady(e));
+    c.records = [];
+    return c.tlsDataReady(c);
   };
-  var OS = function (e) {
-      switch (e) {
-        case !0:
-          return !0;
-        case nt.pki.certificateError.bad_certificate:
-          return se.Alert.Description.bad_certificate;
-        case nt.pki.certificateError.unsupported_certificate:
-          return se.Alert.Description.unsupported_certificate;
-        case nt.pki.certificateError.certificate_revoked:
-          return se.Alert.Description.certificate_revoked;
-        case nt.pki.certificateError.certificate_expired:
-          return se.Alert.Description.certificate_expired;
-        case nt.pki.certificateError.certificate_unknown:
-          return se.Alert.Description.certificate_unknown;
-        case nt.pki.certificateError.unknown_ca:
-          return se.Alert.Description.unknown_ca;
-        default:
-          return se.Alert.Description.bad_certificate;
-      }
-    },
-    y6 = function (e) {
-      switch (e) {
-        case !0:
-          return !0;
-        case se.Alert.Description.bad_certificate:
-          return nt.pki.certificateError.bad_certificate;
-        case se.Alert.Description.unsupported_certificate:
-          return nt.pki.certificateError.unsupported_certificate;
-        case se.Alert.Description.certificate_revoked:
-          return nt.pki.certificateError.certificate_revoked;
-        case se.Alert.Description.certificate_expired:
-          return nt.pki.certificateError.certificate_expired;
-        case se.Alert.Description.certificate_unknown:
-          return nt.pki.certificateError.certificate_unknown;
-        case se.Alert.Description.unknown_ca:
-          return nt.pki.certificateError.unknown_ca;
-        default:
-          return nt.pki.certificateError.bad_certificate;
-      }
-    };
-  se.verifyCertificateChain = function (e, n) {
+  var _certErrorToAlertDesc = function (error) {
+    switch (error) {
+      case true:
+        return true;
+      case forge.pki.certificateError.bad_certificate:
+        return tls.Alert.Description.bad_certificate;
+      case forge.pki.certificateError.unsupported_certificate:
+        return tls.Alert.Description.unsupported_certificate;
+      case forge.pki.certificateError.certificate_revoked:
+        return tls.Alert.Description.certificate_revoked;
+      case forge.pki.certificateError.certificate_expired:
+        return tls.Alert.Description.certificate_expired;
+      case forge.pki.certificateError.certificate_unknown:
+        return tls.Alert.Description.certificate_unknown;
+      case forge.pki.certificateError.unknown_ca:
+        return tls.Alert.Description.unknown_ca;
+      default:
+        return tls.Alert.Description.bad_certificate;
+    }
+  };
+  var _alertDescToCertError = function (desc) {
+    switch (desc) {
+      case true:
+        return true;
+      case tls.Alert.Description.bad_certificate:
+        return forge.pki.certificateError.bad_certificate;
+      case tls.Alert.Description.unsupported_certificate:
+        return forge.pki.certificateError.unsupported_certificate;
+      case tls.Alert.Description.certificate_revoked:
+        return forge.pki.certificateError.certificate_revoked;
+      case tls.Alert.Description.certificate_expired:
+        return forge.pki.certificateError.certificate_expired;
+      case tls.Alert.Description.certificate_unknown:
+        return forge.pki.certificateError.certificate_unknown;
+      case tls.Alert.Description.unknown_ca:
+        return forge.pki.certificateError.unknown_ca;
+      default:
+        return forge.pki.certificateError.bad_certificate;
+    }
+  };
+  tls.verifyCertificateChain = function (c, chain) {
     try {
-      var r = {};
-      for (var key in e.verifyOptions) r[key] = e.verifyOptions[key];
-      ((r.verify = function (y, b, S) {
-        var w = OS(y),
-          verify = e.verify(e, y, b, S);
-        if (verify !== !0) {
-          if (typeof verify === "object" && !nt.util.isArray(verify)) {
-            var D = Error("The application rejected the certificate.");
-            if (
-              ((D.send = !0),
-              (D.alert = { level: se.Alert.Level.fatal, description: se.Alert.Description.bad_certificate }),
-              verify.message)
-            )
-              D.message = verify.message;
-            if (verify.alert) D.alert.description = verify.alert;
-            throw D;
+      var options = {};
+      for (var key in c.verifyOptions) options[key] = c.verifyOptions[key];
+      options.verify = function (vfd, depth, chain) {
+        var desc = _certErrorToAlertDesc(vfd);
+        var ret = c.verify(c, vfd, depth, chain);
+        if (ret !== true) {
+          if (typeof ret === "object" && !forge.util.isArray(ret)) {
+            var error = Error("The application rejected the certificate.");
+            error.send = true;
+            error.alert = {
+              level: tls.Alert.Level.fatal,
+              description: tls.Alert.Description.bad_certificate,
+            };
+            if (ret.message) error.message = ret.message;
+            if (ret.alert) error.alert.description = ret.alert;
+            throw error;
           }
-          if (verify !== y) verify = y6(verify);
+          if (ret !== vfd) ret = _alertDescToCertError(ret);
         }
-        return verify;
-      }),
-        nt.pki.verifyCertificateChain(e.caStore, n, r));
-    } catch (error) {
-      var h = error;
-      if (typeof h !== "object" || nt.util.isArray(h))
-        h = { send: !0, alert: { level: se.Alert.Level.fatal, description: OS(error) } };
-      if (!("send" in h)) h.send = !0;
-      if (!("alert" in h)) h.alert = { level: se.Alert.Level.fatal, description: OS(h.error) };
-      e.error(e, h);
+        return ret;
+      };
+      forge.pki.verifyCertificateChain(c.caStore, chain, options);
+    } catch (ex) {
+      var err = ex;
+      if (typeof err !== "object" || forge.util.isArray(err))
+        err = {
+          send: true,
+          alert: {
+            level: tls.Alert.Level.fatal,
+            description: _certErrorToAlertDesc(ex),
+          },
+        };
+      if (!("send" in err)) err.send = true;
+      if (!("alert" in err))
+        err.alert = {
+          level: tls.Alert.Level.fatal,
+          description: _certErrorToAlertDesc(err.error),
+        };
+      c.error(c, err);
     }
-    return !e.fail;
+    return !c.fail;
   };
-  se.createSessionCache = function (e, n) {
-    var r = null;
-    if (e && e.getSession && e.setSession && e.order) r = e;
+  tls.createSessionCache = function (cache, capacity) {
+    var rval = null;
+    if (cache && cache.getSession && cache.setSession && cache.order) rval = cache;
     else {
-      ((r = {}), (r.cache = e || {}), (r.capacity = Math.max(n || 100, 1)), (r.order = []));
-      for (var key in e)
-        if (r.order.length <= n) r.order.push(key);
-        else delete e[key];
-      ((r.getSession = function (h) {
-        var y = null,
-          b = null;
-        if (h) b = nt.util.bytesToHex(h);
-        else if (r.order.length > 0) b = r.order[0];
-        if (b !== null && b in r.cache) {
-          ((y = r.cache[b]), delete r.cache[b]);
-          for (var key in r.order)
-            if (r.order[key] === b) {
-              r.order.splice(key, 1);
+      rval = {};
+      rval.cache = cache || {};
+      rval.capacity = Math.max(capacity || 100, 1);
+      rval.order = [];
+      for (var key in cache)
+        if (rval.order.length <= capacity) rval.order.push(key);
+        else delete cache[key];
+      rval.getSession = function (sessionId) {
+        var session = null;
+        var key = null;
+        if (sessionId) key = forge.util.bytesToHex(sessionId);
+        else if (rval.order.length > 0) key = rval.order[0];
+        if (key !== null && key in rval.cache) {
+          session = rval.cache[key];
+          delete rval.cache[key];
+          for (var i in rval.order)
+            if (rval.order[i] === key) {
+              rval.order.splice(i, 1);
               break;
             }
         }
-        return y;
-      }),
-        (r.setSession = function (h, y) {
-          if (r.order.length === r.capacity) {
-            var bytesToHex = r.order.shift();
-            delete r.cache[bytesToHex];
-          }
-          var bytesToHex = nt.util.bytesToHex(h);
-          (r.order.push(bytesToHex), (r.cache[bytesToHex] = y));
-        }));
+        return session;
+      };
+      rval.setSession = function (sessionId, session) {
+        if (rval.order.length === rval.capacity) {
+          var key = rval.order.shift();
+          delete rval.cache[key];
+        }
+        var key = forge.util.bytesToHex(sessionId);
+        rval.order.push(key);
+        rval.cache[key] = session;
+      };
     }
-    return r;
+    return rval;
   };
-  se.createConnection = function (e) {
-    var n = null;
-    if (e.caStore)
-      if (nt.util.isArray(e.caStore)) n = nt.pki.createCaStore(e.caStore);
-      else n = e.caStore;
-    else n = nt.pki.createCaStore();
-    var r = e.cipherSuites || null;
-    if (r === null) {
-      r = [];
-      for (var key in se.CipherSuites) r.push(se.CipherSuites[key]);
+  tls.createConnection = function (options) {
+    var caStore = null;
+    if (options.caStore) {
+      if (forge.util.isArray(options.caStore)) caStore = forge.pki.createCaStore(options.caStore);
+      else caStore = options.caStore;
+    } else caStore = forge.pki.createCaStore();
+    var cipherSuites = options.cipherSuites || null;
+    if (cipherSuites === null) {
+      cipherSuites = [];
+      for (var key in tls.CipherSuites) cipherSuites.push(tls.CipherSuites[key]);
     }
-    var h = e.server ? se.ConnectionEnd.server : se.ConnectionEnd.client,
-      y = e.sessionCache ? se.createSessionCache(e.sessionCache) : null,
-      b = {
-        version: { major: se.Version.major, minor: se.Version.minor },
-        entity: h,
-        sessionId: e.sessionId,
-        caStore: n,
-        sessionCache: y,
-        cipherSuites: r,
-        connected: e.connected,
-        virtualHost: e.virtualHost || null,
-        verifyClient: e.verifyClient || !1,
-        verify:
-          e.verify ||
-          function (D, O, L, V) {
-            return O;
-          },
-        verifyOptions: e.verifyOptions || {},
-        getCertificate: e.getCertificate || null,
-        getPrivateKey: e.getPrivateKey || null,
-        getSignature: e.getSignature || null,
-        input: nt.util.createBuffer(),
-        tlsData: nt.util.createBuffer(),
-        data: nt.util.createBuffer(),
-        tlsDataReady: e.tlsDataReady,
-        dataReady: e.dataReady,
-        heartbeatReceived: e.heartbeatReceived,
-        closed: e.closed,
-        error: function (D, O) {
-          if (((O.origin = O.origin || (D.entity === se.ConnectionEnd.client ? "client" : "server")), O.send))
-            (se.queue(D, se.createAlert(D, O.alert)), se.flush(D));
-          var L = O.fatal !== !1;
-          if (L) D.fail = !0;
-          if ((e.error(D, O), L)) D.close(!1);
+    var entity = options.server ? tls.ConnectionEnd.server : tls.ConnectionEnd.client;
+    var sessionCache = options.sessionCache ? tls.createSessionCache(options.sessionCache) : null;
+    var c = {
+      version: {
+        major: tls.Version.major,
+        minor: tls.Version.minor,
+      },
+      entity,
+      sessionId: options.sessionId,
+      caStore,
+      sessionCache,
+      cipherSuites,
+      connected: options.connected,
+      virtualHost: options.virtualHost || null,
+      verifyClient: options.verifyClient || false,
+      verify:
+        options.verify ||
+        function (cn, vfd, dpth, cts) {
+          return vfd;
         },
-        deflate: e.deflate || null,
-        inflate: e.inflate || null,
-      };
-    ((b.reset = function (D) {
-      ((b.version = { major: se.Version.major, minor: se.Version.minor }),
-        (b.record = null),
-        (b.session = null),
-        (b.peerCertificate = null),
-        (b.state = { pending: null, current: null }),
-        (b.expect = b.entity === se.ConnectionEnd.client ? t6 : l6),
-        (b.fragmented = null),
-        (b.records = []),
-        (b.open = !1),
-        (b.handshakes = 0),
-        (b.handshaking = !1),
-        (b.isConnected = !1),
-        (b.fail = !(D || typeof D > "u")),
-        b.input.clear(),
-        b.tlsData.clear(),
-        b.data.clear(),
-        (b.state.current = se.createConnectionState(b)));
-    }),
-      b.reset());
-    var S = function (D, O) {
-        var L = O.type - se.ContentType.change_cipher_spec,
-          V = BS[D.entity][D.expect];
-        if (L in V) V[L](D, O);
-        else se.handleUnexpected(D, O);
+      verifyOptions: options.verifyOptions || {},
+      getCertificate: options.getCertificate || null,
+      getPrivateKey: options.getPrivateKey || null,
+      getSignature: options.getSignature || null,
+      input: forge.util.createBuffer(),
+      tlsData: forge.util.createBuffer(),
+      data: forge.util.createBuffer(),
+      tlsDataReady: options.tlsDataReady,
+      dataReady: options.dataReady,
+      heartbeatReceived: options.heartbeatReceived,
+      closed: options.closed,
+      error: function (c, ex) {
+        ex.origin = ex.origin || (c.entity === tls.ConnectionEnd.client ? "client" : "server");
+        if (ex.send) {
+          tls.queue(c, tls.createAlert(c, ex.alert));
+          tls.flush(c);
+        }
+        var fatal = ex.fatal !== false;
+        if (fatal) c.fail = true;
+        options.error(c, ex);
+        if (fatal) c.close(false);
       },
-      w = function (D) {
-        var O = 0,
-          input = D.input,
-          V = input.length();
-        if (V < 5) O = 5 - V;
-        else {
-          D.record = {
-            type: input.getByte(),
-            version: { major: input.getByte(), minor: input.getByte() },
-            length: input.getInt16(),
-            fragment: nt.util.createBuffer(),
-            ready: !1,
-          };
-          var K = D.record.version.major === D.version.major;
-          if (K && D.session && D.session.version) K = D.record.version.minor === D.version.minor;
-          if (!K)
-            D.error(D, {
-              message: "Incompatible TLS version.",
-              send: !0,
-              alert: { level: se.Alert.Level.fatal, description: se.Alert.Description.protocol_version },
-            });
-        }
-        return O;
-      },
-      R = function (D) {
-        var O = 0,
-          input = D.input,
-          V = input.length();
-        if (V < D.record.length) O = D.record.length - V;
-        else {
-          (D.record.fragment.putBytes(input.getBytes(D.record.length)), input.compact());
-          var read = D.state.current.read;
-          if (read.update(D, D.record)) {
-            if (D.fragmented !== null)
-              if (D.fragmented.type === D.record.type)
-                (D.fragmented.fragment.putBuffer(D.record.fragment), (D.record = D.fragmented));
-              else
-                D.error(D, {
-                  message: "Invalid fragmented record.",
-                  send: !0,
-                  alert: {
-                    level: se.Alert.Level.fatal,
-                    description: se.Alert.Description.unexpected_message,
-                  },
-                });
-            D.record.ready = !0;
-          }
-        }
-        return O;
+      deflate: options.deflate || null,
+      inflate: options.inflate || null,
+    };
+    c.reset = function (clearFail) {
+      c.version = {
+        major: tls.Version.major,
+        minor: tls.Version.minor,
       };
-    return (
-      (b.handshake = function (D) {
-        if (b.entity !== se.ConnectionEnd.client)
-          b.error(b, { message: "Cannot initiate handshake as a server.", fatal: !1 });
-        else if (b.handshaking) b.error(b, { message: "Handshake already in progress.", fatal: !1 });
-        else {
-          if (b.fail && !b.open && b.handshakes === 0) b.fail = !1;
-          ((b.handshaking = !0), (D = D || ""));
-          var O = null;
-          if (D.length > 0) {
-            if (b.sessionCache) O = b.sessionCache.getSession(D);
-            if (O === null) D = "";
-          }
-          if (D.length === 0 && b.sessionCache) {
-            if (((O = b.sessionCache.getSession()), O !== null)) D = O.id;
-          }
-          if (
-            ((b.session = {
-              id: D,
-              version: null,
-              cipherSuite: null,
-              compressionMethod: null,
-              serverCertificate: null,
-              certificateRequest: null,
-              clientCertificate: null,
-              sp: {},
-              md5: nt.md.md5.create(),
-              sha1: nt.md.sha1.create(),
-            }),
-            O)
-          )
-            ((b.version = O.version), (b.session.sp = O.sp));
-          ((b.session.sp.client_random = se.createRandom().getBytes()),
-            (b.open = !0),
-            se.queue(
-              b,
-              se.createRecord(b, { type: se.ContentType.handshake, data: se.createClientHello(b) }),
-            ),
-            se.flush(b));
+      c.record = null;
+      c.session = null;
+      c.peerCertificate = null;
+      c.state = {
+        pending: null,
+        current: null,
+      };
+      c.expect = c.entity === tls.ConnectionEnd.client ? SHE : CHE;
+      c.fragmented = null;
+      c.records = [];
+      c.open = false;
+      c.handshakes = 0;
+      c.handshaking = false;
+      c.isConnected = false;
+      c.fail = !(clearFail || typeof clearFail === "undefined");
+      c.input.clear();
+      c.tlsData.clear();
+      c.data.clear();
+      c.state.current = tls.createConnectionState(c);
+    };
+    c.reset();
+    var _update = function (c, record) {
+      var aligned = record.type - tls.ContentType.change_cipher_spec;
+      var handlers = ctTable[c.entity][c.expect];
+      if (aligned in handlers) handlers[aligned](c, record);
+      else tls.handleUnexpected(c, record);
+    };
+    var _readRecordHeader = function (c) {
+      var rval = 0;
+      var b = c.input;
+      var len = b.length();
+      if (len < 5) rval = 5 - len;
+      else {
+        c.record = {
+          type: b.getByte(),
+          version: {
+            major: b.getByte(),
+            minor: b.getByte(),
+          },
+          length: b.getInt16(),
+          fragment: forge.util.createBuffer(),
+          ready: false,
+        };
+        var compatibleVersion = c.record.version.major === c.version.major;
+        if (compatibleVersion && c.session && c.session.version)
+          compatibleVersion = c.record.version.minor === c.version.minor;
+        if (!compatibleVersion)
+          c.error(c, {
+            message: "Incompatible TLS version.",
+            send: true,
+            alert: {
+              level: tls.Alert.Level.fatal,
+              description: tls.Alert.Description.protocol_version,
+            },
+          });
+      }
+      return rval;
+    };
+    var _readRecord = function (c) {
+      var rval = 0;
+      var b = c.input;
+      var len = b.length();
+      if (len < c.record.length) rval = c.record.length - len;
+      else {
+        c.record.fragment.putBytes(b.getBytes(c.record.length));
+        b.compact();
+        var s = c.state.current.read;
+        if (s.update(c, c.record)) {
+          if (c.fragmented !== null)
+            if (c.fragmented.type === c.record.type) {
+              c.fragmented.fragment.putBuffer(c.record.fragment);
+              c.record = c.fragmented;
+            } else
+              c.error(c, {
+                message: "Invalid fragmented record.",
+                send: true,
+                alert: {
+                  level: tls.Alert.Level.fatal,
+                  description: tls.Alert.Description.unexpected_message,
+                },
+              });
+          c.record.ready = true;
         }
-      }),
-      (b.process = function (D) {
-        var O = 0;
-        if (D) b.input.putBytes(D);
-        if (!b.fail) {
-          if (b.record !== null && b.record.ready && b.record.fragment.isEmpty()) b.record = null;
-          if (b.record === null) O = w(b);
-          if (!b.fail && b.record !== null && !b.record.ready) O = R(b);
-          if (!b.fail && b.record !== null && b.record.ready) S(b, b.record);
+      }
+      return rval;
+    };
+    c.handshake = function (sessionId) {
+      if (c.entity !== tls.ConnectionEnd.client)
+        c.error(c, {
+          message: "Cannot initiate handshake as a server.",
+          fatal: false,
+        });
+      else if (c.handshaking)
+        c.error(c, {
+          message: "Handshake already in progress.",
+          fatal: false,
+        });
+      else {
+        if (c.fail && !c.open && c.handshakes === 0) c.fail = false;
+        c.handshaking = true;
+        sessionId = sessionId || "";
+        var session = null;
+        if (sessionId.length > 0) {
+          if (c.sessionCache) session = c.sessionCache.getSession(sessionId);
+          if (session === null) sessionId = "";
         }
-        return O;
-      }),
-      (b.prepare = function (D) {
-        return (
-          se.queue(
-            b,
-            se.createRecord(b, { type: se.ContentType.application_data, data: nt.util.createBuffer(D) }),
-          ),
-          se.flush(b)
+        if (sessionId.length === 0 && c.sessionCache) {
+          session = c.sessionCache.getSession();
+          if (session !== null) sessionId = session.id;
+        }
+        c.session = {
+          id: sessionId,
+          version: null,
+          cipherSuite: null,
+          compressionMethod: null,
+          serverCertificate: null,
+          certificateRequest: null,
+          clientCertificate: null,
+          sp: {},
+          md5: forge.md.md5.create(),
+          sha1: forge.md.sha1.create(),
+        };
+        if (session) {
+          c.version = session.version;
+          c.session.sp = session.sp;
+        }
+        c.session.sp.client_random = tls.createRandom().getBytes();
+        c.open = true;
+        tls.queue(
+          c,
+          tls.createRecord(c, {
+            type: tls.ContentType.handshake,
+            data: tls.createClientHello(c),
+          }),
         );
-      }),
-      (b.prepareHeartbeatRequest = function (D, O) {
-        if (D instanceof nt.util.ByteBuffer) D = D.bytes();
-        if (typeof O > "u") O = D.length;
-        return (
-          (b.expectedHeartbeatPayload = D),
-          se.queue(
-            b,
-            se.createRecord(b, {
-              type: se.ContentType.heartbeat,
-              data: se.createHeartbeat(se.HeartbeatMessageType.heartbeat_request, D, O),
+        tls.flush(c);
+      }
+    };
+    c.process = function (data) {
+      var rval = 0;
+      if (data) c.input.putBytes(data);
+      if (!c.fail) {
+        if (c.record !== null && c.record.ready && c.record.fragment.isEmpty()) c.record = null;
+        if (c.record === null) rval = _readRecordHeader(c);
+        if (!c.fail && c.record !== null && !c.record.ready) rval = _readRecord(c);
+        if (!c.fail && c.record !== null && c.record.ready) _update(c, c.record);
+      }
+      return rval;
+    };
+    c.prepare = function (data) {
+      tls.queue(
+        c,
+        tls.createRecord(c, {
+          type: tls.ContentType.application_data,
+          data: forge.util.createBuffer(data),
+        }),
+      );
+      return tls.flush(c);
+    };
+    c.prepareHeartbeatRequest = function (payload, payloadLength) {
+      if (payload instanceof forge.util.ByteBuffer) payload = payload.bytes();
+      if (typeof payloadLength === "undefined") payloadLength = payload.length;
+      c.expectedHeartbeatPayload = payload;
+      tls.queue(
+        c,
+        tls.createRecord(c, {
+          type: tls.ContentType.heartbeat,
+          data: tls.createHeartbeat(tls.HeartbeatMessageType.heartbeat_request, payload, payloadLength),
+        }),
+      );
+      return tls.flush(c);
+    };
+    c.close = function (clearFail) {
+      if (!c.fail && c.sessionCache && c.session) {
+        var session = {
+          id: c.session.id,
+          version: c.session.version,
+          sp: c.session.sp,
+        };
+        session.sp.keys = null;
+        c.sessionCache.setSession(session.id, session);
+      }
+      if (c.open) {
+        c.open = false;
+        c.input.clear();
+        if (c.isConnected || c.handshaking) {
+          c.isConnected = c.handshaking = false;
+          tls.queue(
+            c,
+            tls.createAlert(c, {
+              level: tls.Alert.Level.warning,
+              description: tls.Alert.Description.close_notify,
             }),
-          ),
-          se.flush(b)
-        );
-      }),
-      (b.close = function (D) {
-        if (!b.fail && b.sessionCache && b.session) {
-          var O = { id: b.session.id, version: b.session.version, sp: b.session.sp };
-          ((O.sp.keys = null), b.sessionCache.setSession(O.id, O));
+          );
+          tls.flush(c);
         }
-        if (b.open) {
-          if (((b.open = !1), b.input.clear(), b.isConnected || b.handshaking))
-            ((b.isConnected = b.handshaking = !1),
-              se.queue(
-                b,
-                se.createAlert(b, {
-                  level: se.Alert.Level.warning,
-                  description: se.Alert.Description.close_notify,
-                }),
-              ),
-              se.flush(b));
-          b.closed(b);
-        }
-        b.reset(D);
-      }),
-      b
-    );
+        c.closed(c);
+      }
+      c.reset(clearFail);
+    };
+    return c;
   };
-  UA.exports = nt.tls = nt.tls || {};
-  for (wf in se) if (typeof se[wf] !== "function") nt.tls[wf] = se[wf];
-  var wf;
-  nt.tls.prf_tls1 = um;
-  nt.tls.hmac_sha1 = zG;
-  nt.tls.createSessionCache = se.createSessionCache;
-  nt.tls.createConnection = se.createConnection;
+  cjsModule.exports = forge.tls = forge.tls || {};
+  for (key in tls) if (typeof tls[key] !== "function") forge.tls[key] = tls[key];
+  var key;
+  forge.tls.prf_tls1 = prf_TLS1;
+  forge.tls.hmac_sha1 = hmac_sha1;
+  forge.tls.createSessionCache = tls.createSessionCache;
+  forge.tls.createConnection = tls.createConnection;
 });
-
-export { US };
+export { require_tls };

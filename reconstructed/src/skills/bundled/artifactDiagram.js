@@ -21,22 +21,26 @@ var ARTIFACT_DIAGRAM_SKILL_DESCRIPTION =
 function isArtifactDiagramSkillEnabled() {
   return isArtifactToolRegistered() && !isBuiltInArtifactHiddenForMcp();
 }
+//@ chunk-hantmvxa.js:26865-27126 placement
 /**
  * 注册 Artifacts 画图指导 bundled skill（"Diagramming guidance for Artifacts"），正文从 chunk-84d2fjs2.js 的 SKILL_MD 懒加载并去掉 frontmatter。
  */
-//@ chunk-hantmvxa.js:26865-27126 placement
 function registerArtifactDiagramSkill() {
   registerBundledSkill({
     name: ARTIFACT_DIAGRAMMING,
     menuDescription: "Diagramming guidance for Artifacts",
     description: ARTIFACT_DIAGRAM_SKILL_DESCRIPTION,
     isEnabled: isArtifactDiagramSkillEnabled,
-    userInvocable: !0,
+    userInvocable: true,
     async getPromptForCommand() {
-      let { SKILL_MD: SKILL_MD } = await import("./chunk-84d2fjs2.js");
-      return [{ type: "text", text: parseFrontmatter(SKILL_MD).content.trimStart() }];
+      let { SKILL_MD } = await import("./chunk-84d2fjs2.js");
+      return [
+        {
+          type: "text",
+          text: parseFrontmatter(SKILL_MD).content.trimStart(),
+        },
+      ];
     },
   });
 }
-
 export { registerArtifactDiagramSkill };

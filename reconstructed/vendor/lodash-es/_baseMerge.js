@@ -7,24 +7,26 @@
  */
 import { Pn } from "./_inlinedHelpers.js";
 import { q8e, RR } from "../@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
-import { pd, rn, on } from "../../src/utils/settings/settingsSourceTrust.js";
-import { J8e } from "../../src/utils/git/gitSafeEnv.js";
+import { mergeDeep_2, safeGet_2, safeSet_2 } from "../../src/utils/settings/settingsSourceTrust.js";
+import { keysInAlias } from "../../src/utils/git/gitSafeEnv.js";
 
 //@ chunk-dcmhvw5a.js:143313-143493 placement
-function baseMerge(e, n, r, s, a) {
-  if (e === n) return;
+function baseMerge(object, source, srcIndex, customizer, stack) {
+  if (object === source) return;
   Pn(
-    n,
-    function (c, g) {
-      if ((a || (a = new q8e()), RR(c))) pd(e, n, g, r, baseMerge, s, a);
+    source,
+    function (srcValue, key) {
+      if (!stack) stack = new q8e();
+      if (RR(srcValue)) mergeDeep_2(object, source, key, srcIndex, baseMerge, customizer, stack);
       else {
-        var m = s ? s(rn(e, g), c, g + "", e, n, a) : void 0;
-        if (m === void 0) m = c;
-        on(e, g, m);
+        var newValue = customizer
+          ? customizer(safeGet_2(object, key), srcValue, key + "", object, source, stack)
+          : undefined;
+        if (newValue === undefined) newValue = srcValue;
+        safeSet_2(object, key, newValue);
       }
     },
-    J8e,
+    keysInAlias,
   );
 }
-
 export { baseMerge };

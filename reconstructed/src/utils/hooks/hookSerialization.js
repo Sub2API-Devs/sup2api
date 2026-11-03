@@ -13,29 +13,34 @@ import { isPlainObject } from "../isPlainObject.js";
 //@ chunk-fpg8jjts.js:226-388 placement
 function sortedKeysReplacer(r, e) {
   if (isPlainObject(e)) {
-    let create = Object.create(null);
-    for (let t of Object.keys(e).toSorted())
-      Object.defineProperty(create, t, { value: e[t], enumerable: !0 });
-    return create;
+    let o = Object.create(null);
+    for (let key of Object.keys(e).toSorted())
+      Object.defineProperty(o, key, {
+        value: e[key],
+        enumerable: true,
+      });
+    return o;
   }
   return e;
 }
 //@ chunk-fpg8jjts.js:388-416 placement
-var f = "\x00unserializable:";
+var UNSERIALIZABLE_PREFIX = "\x00unserializable:";
 //@ chunk-fpg8jjts.js:416-460 placement
-function s() {
+function makeUnserializableId() {
   let r = 0;
-  return () => `${f}${++r}`;
+  return () => `${UNSERIALIZABLE_PREFIX}${++r}`;
 }
 //@ chunk-fpg8jjts.js:460-470 placement
-var u = s();
+var nextUnserializableId = makeUnserializableId();
 //@ chunk-fpg8jjts.js:470-534 placement
-function Rs(r) {
+/**
+ * 稳定序列化的安全包装：无法序列化时返回唯一占位串。
+ */
+function stableStringifySafe(r) {
   try {
     return JSON.stringify(r, sortedKeysReplacer);
   } catch {
-    return u();
+    return nextUnserializableId();
   }
 }
-
-export { Rs };
+export { stableStringifySafe };

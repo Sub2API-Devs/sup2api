@@ -5,22 +5,27 @@
  * pieces: chunk-mrx6y2r5.js (4)
  * attribution: esm-fingerprint 4
  */
-import { il, Do } from "../../../../@typespec/ts-http-runtime/dist/esm/logger/logger.js";
+import {
+  context,
+  createLoggerContext,
+} from "../../../../@typespec/ts-http-runtime/dist/esm/logger/logger.js";
 
 //@ chunk-mrx6y2r5.js:26638-26685 esm-fingerprint
 function Uo(e) {
-  return il.createClientLogger(e);
+  return context.createClientLogger(e);
 }
 //@ chunk-mrx6y2r5.js:26685-26766 esm-fingerprint
-var Ls = Do({ logLevelEnvVarName: "AZURE_LOG_LEVEL", namespace: "azure" }),
-  logger_2 = Ls.logger;
+var context_2 = createLoggerContext({
+  logLevelEnvVarName: "AZURE_LOG_LEVEL",
+  namespace: "azure",
+});
+var AzureLogger = context_2.logger;
 //@ chunk-mrx6y2r5.js:26766-26804 esm-fingerprint
-function Lo() {
-  return Ls.getLogLevel();
+function getLogLevel() {
+  return context_2.getLogLevel();
 }
 //@ chunk-mrx6y2r5.js:26804-26851 esm-fingerprint
 function Pt(e) {
-  return Ls.createClientLogger(e);
+  return context_2.createClientLogger(e);
 }
-
-export { Pt, Uo, Lo };
+export { Pt, Uo, getLogLevel };

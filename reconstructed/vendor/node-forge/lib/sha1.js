@@ -6,176 +6,198 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { Tn } from "./forge.js";
-import { bo } from "./md.js";
-import { Zn } from "./util.js";
+import { require_forge } from "./forge.js";
+import { require_md } from "./md.js";
+import { require_util } from "./util.js";
 
 //@ chunk-fq0cr76a.js:112817-115528 cjs-fingerprint
-var cu = x(function (wfe, eA) {
-  var To = Tn();
-  bo();
-  Zn();
-  var JT = (eA.exports = To.sha1 = To.sha1 || {});
-  To.md.sha1 = To.md.algorithms.sha1 = JT;
-  JT.create = function () {
-    if (!QT) bG();
-    var e = null,
-      buffer = To.util.createBuffer(),
-      r = Array(80),
-      s = {
-        algorithm: "sha1",
-        blockLength: 64,
-        digestLength: 20,
-        messageLength: 0,
-        fullMessageLength: null,
-        messageLengthSize: 8,
+var require_sha1 = x(function (cjsExports, cjsModule) {
+  var forge = require_forge();
+  require_md();
+  require_util();
+  var sha1 = (cjsModule.exports = forge.sha1 = forge.sha1 || {});
+  forge.md.sha1 = forge.md.algorithms.sha1 = sha1;
+  sha1.create = function () {
+    if (!_initialized) _init();
+    var _state = null;
+    var _input = forge.util.createBuffer();
+    var _w = Array(80);
+    var md = {
+      algorithm: "sha1",
+      blockLength: 64,
+      digestLength: 20,
+      messageLength: 0,
+      fullMessageLength: null,
+      messageLengthSize: 8,
+    };
+    md.start = function () {
+      md.messageLength = 0;
+      md.fullMessageLength = md.messageLength64 = [];
+      var int32s = md.messageLengthSize / 4;
+      for (var i = 0; i < int32s; ++i) md.fullMessageLength.push(0);
+      _input = forge.util.createBuffer();
+      _state = {
+        h0: 1732584193,
+        h1: 4023233417,
+        h2: 2562383102,
+        h3: 271733878,
+        h4: 3285377520,
       };
-    return (
-      (s.start = function () {
-        ((s.messageLength = 0), (s.fullMessageLength = s.messageLength64 = []));
-        var h = s.messageLengthSize / 4;
-        for (var y = 0; y < h; ++y) s.fullMessageLength.push(0);
-        return (
-          (buffer = To.util.createBuffer()),
-          (e = { h0: 1732584193, h1: 4023233417, h2: 2562383102, h3: 271733878, h4: 3285377520 }),
-          s
-        );
-      }),
-      s.start(),
-      (s.update = function (h, y) {
-        if (y === "utf8") h = To.util.encodeUtf8(h);
-        var b = h.length;
-        ((s.messageLength += b), (b = [(b / 4294967296) >>> 0, b >>> 0]));
-        for (var S = s.fullMessageLength.length - 1; S >= 0; --S)
-          ((s.fullMessageLength[S] += b[1]),
-            (b[1] = b[0] + ((s.fullMessageLength[S] / 4294967296) >>> 0)),
-            (s.fullMessageLength[S] = s.fullMessageLength[S] >>> 0),
-            (b[0] = (b[1] / 4294967296) >>> 0));
-        if ((buffer.putBytes(h), XT(e, r, buffer), buffer.read > 2048 || buffer.length() === 0))
-          buffer.compact();
-        return s;
-      }),
-      (s.digest = function () {
-        var buffer_2 = To.util.createBuffer();
-        buffer_2.putBytes(buffer.bytes());
-        var y = s.fullMessageLength[s.fullMessageLength.length - 1] + s.messageLengthSize,
-          b = y & (s.blockLength - 1);
-        buffer_2.putBytes(bS.substr(0, s.blockLength - b));
-        var S,
-          w,
-          R = s.fullMessageLength[0] * 8;
-        for (var D = 0; D < s.fullMessageLength.length - 1; ++D)
-          ((S = s.fullMessageLength[D + 1] * 8),
-            (w = (S / 4294967296) >>> 0),
-            (R += w),
-            buffer_2.putInt32(R >>> 0),
-            (R = S >>> 0));
-        buffer_2.putInt32(R);
-        var O = { h0: e.h0, h1: e.h1, h2: e.h2, h3: e.h3, h4: e.h4 };
-        XT(O, r, buffer_2);
-        var buffer_3 = To.util.createBuffer();
-        return (
-          buffer_3.putInt32(O.h0),
-          buffer_3.putInt32(O.h1),
-          buffer_3.putInt32(O.h2),
-          buffer_3.putInt32(O.h3),
-          buffer_3.putInt32(O.h4),
-          buffer_3
-        );
-      }),
-      s
-    );
+      return md;
+    };
+    md.start();
+    md.update = function (msg, encoding) {
+      if (encoding === "utf8") msg = forge.util.encodeUtf8(msg);
+      var len = msg.length;
+      md.messageLength += len;
+      len = [(len / 4294967296) >>> 0, len >>> 0];
+      for (var i = md.fullMessageLength.length - 1; i >= 0; --i) {
+        md.fullMessageLength[i] += len[1];
+        len[1] = len[0] + ((md.fullMessageLength[i] / 4294967296) >>> 0);
+        md.fullMessageLength[i] = md.fullMessageLength[i] >>> 0;
+        len[0] = (len[1] / 4294967296) >>> 0;
+      }
+      _input.putBytes(msg);
+      _update(_state, _w, _input);
+      if (_input.read > 2048 || _input.length() === 0) _input.compact();
+      return md;
+    };
+    md.digest = function () {
+      var finalBlock = forge.util.createBuffer();
+      finalBlock.putBytes(_input.bytes());
+      var remaining = md.fullMessageLength[md.fullMessageLength.length - 1] + md.messageLengthSize;
+      var overflow = remaining & (md.blockLength - 1);
+      finalBlock.putBytes(_padding.substr(0, md.blockLength - overflow));
+      var next;
+      var carry;
+      var bits = md.fullMessageLength[0] * 8;
+      for (var i = 0; i < md.fullMessageLength.length - 1; ++i) {
+        next = md.fullMessageLength[i + 1] * 8;
+        carry = (next / 4294967296) >>> 0;
+        bits += carry;
+        finalBlock.putInt32(bits >>> 0);
+        bits = next >>> 0;
+      }
+      finalBlock.putInt32(bits);
+      var s2 = {
+        h0: _state.h0,
+        h1: _state.h1,
+        h2: _state.h2,
+        h3: _state.h3,
+        h4: _state.h4,
+      };
+      _update(s2, _w, finalBlock);
+      var rval = forge.util.createBuffer();
+      rval.putInt32(s2.h0);
+      rval.putInt32(s2.h1);
+      rval.putInt32(s2.h2);
+      rval.putInt32(s2.h3);
+      rval.putInt32(s2.h4);
+      return rval;
+    };
+    return md;
   };
-  var bS = null,
-    QT = !1;
-  function bG() {
-    ((bS = String.fromCharCode(128)), (bS += To.util.fillString(String.fromCharCode(0), 64)), (QT = !0));
+  var _padding = null;
+  var _initialized = false;
+  function _init() {
+    _padding = String.fromCharCode(128);
+    _padding += forge.util.fillString(String.fromCharCode(0), 64);
+    _initialized = true;
   }
-  function XT(e, n, r) {
-    var s,
-      h,
-      y,
-      b,
-      S,
-      w,
-      R,
-      D,
-      O = r.length();
-    while (O >= 64) {
-      ((h = e.h0), (y = e.h1), (b = e.h2), (S = e.h3), (w = e.h4));
-      for (D = 0; D < 16; ++D)
-        ((s = r.getInt32()),
-          (n[D] = s),
-          (R = S ^ (y & (b ^ S))),
-          (s = ((h << 5) | (h >>> 27)) + R + w + 1518500249 + s),
-          (w = S),
-          (S = b),
-          (b = ((y << 30) | (y >>> 2)) >>> 0),
-          (y = h),
-          (h = s));
-      for (; D < 20; ++D)
-        ((s = n[D - 3] ^ n[D - 8] ^ n[D - 14] ^ n[D - 16]),
-          (s = (s << 1) | (s >>> 31)),
-          (n[D] = s),
-          (R = S ^ (y & (b ^ S))),
-          (s = ((h << 5) | (h >>> 27)) + R + w + 1518500249 + s),
-          (w = S),
-          (S = b),
-          (b = ((y << 30) | (y >>> 2)) >>> 0),
-          (y = h),
-          (h = s));
-      for (; D < 32; ++D)
-        ((s = n[D - 3] ^ n[D - 8] ^ n[D - 14] ^ n[D - 16]),
-          (s = (s << 1) | (s >>> 31)),
-          (n[D] = s),
-          (R = y ^ b ^ S),
-          (s = ((h << 5) | (h >>> 27)) + R + w + 1859775393 + s),
-          (w = S),
-          (S = b),
-          (b = ((y << 30) | (y >>> 2)) >>> 0),
-          (y = h),
-          (h = s));
-      for (; D < 40; ++D)
-        ((s = n[D - 6] ^ n[D - 16] ^ n[D - 28] ^ n[D - 32]),
-          (s = (s << 2) | (s >>> 30)),
-          (n[D] = s),
-          (R = y ^ b ^ S),
-          (s = ((h << 5) | (h >>> 27)) + R + w + 1859775393 + s),
-          (w = S),
-          (S = b),
-          (b = ((y << 30) | (y >>> 2)) >>> 0),
-          (y = h),
-          (h = s));
-      for (; D < 60; ++D)
-        ((s = n[D - 6] ^ n[D - 16] ^ n[D - 28] ^ n[D - 32]),
-          (s = (s << 2) | (s >>> 30)),
-          (n[D] = s),
-          (R = (y & b) | (S & (y ^ b))),
-          (s = ((h << 5) | (h >>> 27)) + R + w + 2400959708 + s),
-          (w = S),
-          (S = b),
-          (b = ((y << 30) | (y >>> 2)) >>> 0),
-          (y = h),
-          (h = s));
-      for (; D < 80; ++D)
-        ((s = n[D - 6] ^ n[D - 16] ^ n[D - 28] ^ n[D - 32]),
-          (s = (s << 2) | (s >>> 30)),
-          (n[D] = s),
-          (R = y ^ b ^ S),
-          (s = ((h << 5) | (h >>> 27)) + R + w + 3395469782 + s),
-          (w = S),
-          (S = b),
-          (b = ((y << 30) | (y >>> 2)) >>> 0),
-          (y = h),
-          (h = s));
-      ((e.h0 = (e.h0 + h) | 0),
-        (e.h1 = (e.h1 + y) | 0),
-        (e.h2 = (e.h2 + b) | 0),
-        (e.h3 = (e.h3 + S) | 0),
-        (e.h4 = (e.h4 + w) | 0),
-        (O -= 64));
+  function _update(s_2, w_2, bytes) {
+    var t;
+    var a;
+    var b_2;
+    var c;
+    var d;
+    var e;
+    var f;
+    var i;
+    var len = bytes.length();
+    while (len >= 64) {
+      a = s_2.h0;
+      b_2 = s_2.h1;
+      c = s_2.h2;
+      d = s_2.h3;
+      e = s_2.h4;
+      for (i = 0; i < 16; ++i) {
+        t = bytes.getInt32();
+        w_2[i] = t;
+        f = d ^ (b_2 & (c ^ d));
+        t = ((a << 5) | (a >>> 27)) + f + e + 1518500249 + t;
+        e = d;
+        d = c;
+        c = ((b_2 << 30) | (b_2 >>> 2)) >>> 0;
+        b_2 = a;
+        a = t;
+      }
+      for (; i < 20; ++i) {
+        t = w_2[i - 3] ^ w_2[i - 8] ^ w_2[i - 14] ^ w_2[i - 16];
+        t = (t << 1) | (t >>> 31);
+        w_2[i] = t;
+        f = d ^ (b_2 & (c ^ d));
+        t = ((a << 5) | (a >>> 27)) + f + e + 1518500249 + t;
+        e = d;
+        d = c;
+        c = ((b_2 << 30) | (b_2 >>> 2)) >>> 0;
+        b_2 = a;
+        a = t;
+      }
+      for (; i < 32; ++i) {
+        t = w_2[i - 3] ^ w_2[i - 8] ^ w_2[i - 14] ^ w_2[i - 16];
+        t = (t << 1) | (t >>> 31);
+        w_2[i] = t;
+        f = b_2 ^ c ^ d;
+        t = ((a << 5) | (a >>> 27)) + f + e + 1859775393 + t;
+        e = d;
+        d = c;
+        c = ((b_2 << 30) | (b_2 >>> 2)) >>> 0;
+        b_2 = a;
+        a = t;
+      }
+      for (; i < 40; ++i) {
+        t = w_2[i - 6] ^ w_2[i - 16] ^ w_2[i - 28] ^ w_2[i - 32];
+        t = (t << 2) | (t >>> 30);
+        w_2[i] = t;
+        f = b_2 ^ c ^ d;
+        t = ((a << 5) | (a >>> 27)) + f + e + 1859775393 + t;
+        e = d;
+        d = c;
+        c = ((b_2 << 30) | (b_2 >>> 2)) >>> 0;
+        b_2 = a;
+        a = t;
+      }
+      for (; i < 60; ++i) {
+        t = w_2[i - 6] ^ w_2[i - 16] ^ w_2[i - 28] ^ w_2[i - 32];
+        t = (t << 2) | (t >>> 30);
+        w_2[i] = t;
+        f = (b_2 & c) | (d & (b_2 ^ c));
+        t = ((a << 5) | (a >>> 27)) + f + e + 2400959708 + t;
+        e = d;
+        d = c;
+        c = ((b_2 << 30) | (b_2 >>> 2)) >>> 0;
+        b_2 = a;
+        a = t;
+      }
+      for (; i < 80; ++i) {
+        t = w_2[i - 6] ^ w_2[i - 16] ^ w_2[i - 28] ^ w_2[i - 32];
+        t = (t << 2) | (t >>> 30);
+        w_2[i] = t;
+        f = b_2 ^ c ^ d;
+        t = ((a << 5) | (a >>> 27)) + f + e + 3395469782 + t;
+        e = d;
+        d = c;
+        c = ((b_2 << 30) | (b_2 >>> 2)) >>> 0;
+        b_2 = a;
+        a = t;
+      }
+      s_2.h0 = (s_2.h0 + a) | 0;
+      s_2.h1 = (s_2.h1 + b_2) | 0;
+      s_2.h2 = (s_2.h2 + c) | 0;
+      s_2.h3 = (s_2.h3 + d) | 0;
+      s_2.h4 = (s_2.h4 + e) | 0;
+      len -= 64;
     }
   }
 });
-
-export { cu };
+export { require_sha1 };

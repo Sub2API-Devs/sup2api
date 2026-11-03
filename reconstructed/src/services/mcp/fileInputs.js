@@ -16,17 +16,24 @@ import {
   fileNotSharedMessage,
   screenUploadPath,
 } from "../fileInputs/screenPath.js";
-import { Dot } from "../../utils/uploadsDir.js";
+import { attachmentDigestOf } from "../../utils/uploadsDir.js";
 import {
-  QSn,
+  exceedsPathVariantBudget,
   getPathAliasVariants,
-  _H,
-  B$e,
-  isCredentialConfigPath,
+  isSensitiveNameOrVariant,
+  isSensitiveBasenameWithVariants,
+  isCredentialConfigPath_2,
 } from "../../utils/permissions/sensitivePaths.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, zodStrictObject, o, A, T, pe } from "../../../vendor/zod/v4/classic/schemas.js";
-import { AS } from "../../utils/commitAttribution.js";
+import {
+  u,
+  zodStrictObject,
+  string,
+  array,
+  literal,
+  record,
+} from "../../../vendor/zod/v4/classic/schemas.js";
+import { SHA256_HEX_RE } from "../../utils/commitAttribution.js";
 import { logError } from "../../utils/log.js";
 import { En } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { logForDebugging } from "../../utils/debug.js";
@@ -44,14 +51,14 @@ import {
 import { truncateAtWord } from "../../utils/stringUtils.js";
 import { validateFileEntries, describeSchemaViolation } from "./inputSchemaCheck.js";
 import { isPlainObject } from "../../utils/objectUtils.js";
-import { OffscreenFreeze, z } from "../../components/OffscreenFreeze.js";
+import { OffscreenFreeze, offscreenFreezeSlot } from "../../components/OffscreenFreeze.js";
 import { isDiskless } from "../../bootstrap/state.js";
 import { firstPartyServerIdFor, allowsFileUploadFor } from "./cliOwnedClients.js";
 import { isOwnCcrMcpServer } from "../analytics/metadata.js";
 import { FIRST_PARTY_UPLOAD_SERVERS } from "./fileReference/wrapFileReferenceTool.js";
 import { isFirstPartyToolboxServer } from "./fileReference/fileReferencePolicy.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../analytics/growthbook.js";
-import { Sbt, O1t, _un } from "../../utils/sizeLimits.js";
+import { MAX_FILES_PER_INPUT, MAX_FILE_BYTES, MAX_TOTAL_BYTES } from "../../utils/sizeLimits.js";
 import { takeFileGrants, keepFileGrants, dropFileGrants } from "./fileGrants.js";
 import { logFeatureOk, logFeatureSad, logFeatureBad } from "../analytics/featureTelemetry.js";
 import { attachmentListText, filesApiUnavailableReason } from "../fileInputs/attachmentText.js";
@@ -61,69 +68,95 @@ import { describeConnectError } from "./auth.js";
 import { buildMcpToolName } from "./mcpStringUtils.js";
 import { mcpRuleMatchesTool } from "./serverIdentity.js";
 
+//@ chunk-gwvwj681.js:6870-9527 placement
 /**
  * 校验要附加的文件路径（经链接解析到别处、方向控制字符、总大小、变化、策略禁止等）。
  */
-//@ chunk-gwvwj681.js:6870-9527 placement
 function validateFileInputPath(
-  { path: path, code: code, resolved: resolved },
-  { words: { nothingDone: r }, maxFileBytes: maxFileBytes, toolPermissionContext: toolPermissionContext },
+  { path, code, resolved },
+  { words: { nothingDone }, maxFileBytes, toolPermissionContext },
 ) {
-  if (isAttachFailureKind(code)) return attachFailureMessage(path, code, maxFileBytes, r);
+  if (isAttachFailureKind(code)) return attachFailureMessage(path, code, maxFileBytes, nothingDone);
   switch (code) {
     case "path_rejected": {
       let a = normalize(path);
-      return Dot(a) === void 0 &&
+      return attachmentDigestOf(a) === undefined &&
         [path, a].some((h) => {
           let replaced = h.slice(parse(h).root.length).split(sep).join("/").replace(/^\/+/, "");
           return (
-            !QSn(replaced) &&
+            !exceedsPathVariantBudget(replaced) &&
             ![replaced, ...getPathAliasVariants(replaced)].some(isAbsolute) &&
-            (_H(replaced) || B$e(replaced) || isCredentialConfigPath(replaced))
+            (isSensitiveNameOrVariant(replaced) ||
+              isSensitiveBasenameWithVariants(replaced) ||
+              isCredentialConfigPath_2(replaced))
           );
         })
-        ? { error: credentialFileRefusalMessage(path, { isRemoteMode: !1 }, r), code: code }
-        : { error: fileNotSharedMessage(path, toolPermissionContext, r), code: code };
+        ? {
+            error: credentialFileRefusalMessage(
+              path,
+              {
+                isRemoteMode: false,
+              },
+              nothingDone,
+            ),
+            code,
+          }
+        : {
+            error: fileNotSharedMessage(path, toolPermissionContext, nothingDone),
+            code,
+          };
     }
     case "resolves_elsewhere": {
-      let a = resolved !== void 0 && /^[\x20\x21\x23-\x7e]+$/.test(resolved) ? resolved : void 0;
+      let a = resolved !== undefined && /^[\x20\x21\x23-\x7e]+$/.test(resolved) ? resolved : undefined;
       return {
-        error: `Cannot attach "${path}": it resolves to another path${a === void 0 ? ", through a link or a name that is stored otherwise" : `, "${a}"`}. A file is attached only by the path it resolves to, so that the path that is approved names the file that is sent. If that is the file you mean, call again with ${a === void 0 ? "the path it resolves to" : "that path"}. ${r}`,
-        code: code,
+        error: `Cannot attach "${path}": it resolves to another path${a === undefined ? ", through a link or a name that is stored otherwise" : `, "${a}"`}. A file is attached only by the path it resolves to, so that the path that is approved names the file that is sent. If that is the file you mean, call again with ${a === undefined ? "the path it resolves to" : "that path"}. ${nothingDone}`,
+        code,
       };
     }
     case "name_direction":
       return {
-        error: `Cannot attach "${path}": its name contains a character that changes text direction. Rename it, or copy it under another name. ${r}`,
-        code: code,
+        error: `Cannot attach "${path}": its name contains a character that changes text direction. Rename it, or copy it under another name. ${nothingDone}`,
+        code,
       };
     case "too_large_total":
       return {
-        error: `Cannot attach "${path}": the files of this call are too large together. Attach fewer or smaller files. ${r}`,
-        code: code,
+        error: `Cannot attach "${path}": the files of this call are too large together. Attach fewer or smaller files. ${nothingDone}`,
+        code,
       };
     case "changed":
-      return { error: `"${path}" changed while it was being attached. ${r} Try again.`, code: code };
+      return {
+        error: `"${path}" changed while it was being attached. ${nothingDone} Try again.`,
+        code,
+      };
     case "canceled":
-      return { error: `Attaching files was interrupted. ${r}`, code: code };
+      return {
+        error: `Attaching files was interrupted. ${nothingDone}`,
+        code,
+      };
     case "policy_denied":
-      return { error: `This organization's policy does not allow attaching files here. ${r}`, code: code };
+      return {
+        error: `This organization's policy does not allow attaching files here. ${nothingDone}`,
+        code,
+      };
     case "repo_rules_unread":
       return {
-        error: `This session's cloud environment could not read the repository's permission rules, so the files were not attached. ${r} Retrying won't help: tell the user that .claude/settings.json or .claude/settings.local.json may have to be fixed or removed.`,
-        code: code,
+        error: `This session's cloud environment could not read the repository's permission rules, so the files were not attached. ${nothingDone} Retrying won't help: tell the user that .claude/settings.json or .claude/settings.local.json may have to be fixed or removed.`,
+        code,
       };
     case "uploads_off":
       return {
-        error: `Attaching files here is no longer allowed in this session. Tell the user; do not retry. ${r}`,
-        code: code,
+        error: `Attaching files here is no longer allowed in this session. Tell the user; do not retry. ${nothingDone}`,
+        code,
       };
     case "rule_not_applicable":
     case "container_too_old":
     case "no_container":
     case "egress_blocked":
     case "essential_traffic":
-      return { error: `Files cannot be attached in this session. ${r}`, code: code };
+      return {
+        error: `Files cannot be attached in this session. ${nothingDone}`,
+        code,
+      };
     case "policy_pending":
     case "container_unreachable":
     case "no_answer":
@@ -136,116 +169,195 @@ function validateFileInputPath(
     case "put_failed":
     case "put_bad_answer":
     case "put_network":
-      return { error: `The files could not be attached. ${r} Try again.`, code: code };
+      return {
+        error: `The files could not be attached. ${nothingDone} Try again.`,
+        code,
+      };
     case "bad_answer":
     case "no_server_policy":
     case "policy_unread":
     case "put_url_refused":
     case "put_header_refused":
-      return { error: `The files could not be attached. ${r}`, code: code };
+      return {
+        error: `The files could not be attached. ${nothingDone}`,
+        code,
+      };
     default:
-      return { error: `The files could not be attached. ${r}`, code: "unexpected" };
+      return {
+        error: `The files could not be attached. ${nothingDone}`,
+        code: "unexpected",
+      };
   }
 }
 //@ chunk-gwvwj681.js:9527-9758 placement
-var MAX_ERROR_DETAIL_CHARS = 300,
-  fileInputUploadAnswerSchema = DoctorLazy(() =>
-    u({
-      arguments: zodStrictObject({ slug: o().min(1).max(256).optional() }).optional(),
-      files: A(
-        u({
-          sha256: o().regex(AS),
-          uri: o().min(1).max(2048),
-          upload: u({ url: o().min(1).max(2048), method: T("PUT"), headers: pe(o(), o()) }).optional(),
-        }),
-      ),
-    }),
-  );
+var MAX_ERROR_DETAIL_CHARS = 300;
+var fileInputUploadAnswerSchema = DoctorLazy(() =>
+  u({
+    arguments: zodStrictObject({
+      slug: string().min(1).max(256).optional(),
+    }).optional(),
+    files: array(
+      u({
+        sha256: string().regex(SHA256_HEX_RE),
+        uri: string().min(1).max(2048),
+        upload: u({
+          url: string().min(1).max(2048),
+          method: literal("PUT"),
+          headers: record(string(), string()),
+        }).optional(),
+      }),
+    ),
+  }),
+);
 //@ chunk-gwvwj681.js:9758-9831 placement
-function H(e, n, i) {
-  let r = describeCallSchemaError(e, n, i);
-  return r !== void 0 && "error" in r ? r : void 0;
+/**
+ * 检查调用参数是否符合 schema，返回错误描述。
+ */
+function schemaErrorForCall(e, schema, fileInput) {
+  let r = describeCallSchemaError(e, schema, fileInput);
+  return r !== undefined && "error" in r ? r : undefined;
 }
 //@ chunk-gwvwj681.js:9831-9969 placement
 async function describeFileInputChange(e) {
-  let n = await resolveFileInputUpload(e);
-  if (n === void 0 || "error" in n) return n ?? {};
-  let i = await describeUploadOutcome(e, n);
-  return i.error === void 0 ? { input: n.input } : i;
+  let fileInputUpload = await resolveFileInputUpload(e);
+  if (fileInputUpload === undefined || "error" in fileInputUpload) return fileInputUpload ?? {};
+  let i = await describeUploadOutcome(e, fileInputUpload);
+  return i.error === undefined
+    ? {
+        input: fileInputUpload.input,
+      }
+    : i;
 }
 //@ chunk-gwvwj681.js:9969-10122 placement
 async function resolveFileInputUpload(e) {
-  let { input: input, schema: schema, words: words } = e,
-    s;
+  let { input, schema, words } = e;
+  let s;
   try {
     let c = describeCallSchemaError(input, schema, words);
-    if (c === void 0) return;
+    if (c === undefined) return;
     s = "error" in c ? c : await uploadFileInput(e, c);
   } catch (error) {
-    (logError(error), (s = filesNotAttachedError(words)));
+    logError(error);
+    s = filesNotAttachedError(words);
   }
   return s;
 }
 //@ chunk-gwvwj681.js:10122-10587 placement
 async function describeUploadOutcome(e, n) {
-  let { words: words } = e,
-    r;
+  let { words } = e;
+  let r;
   try {
-    let gate = e.gate();
-    if (
-      ((r =
-        gate === void 0
-          ? await putFileInputs(e, n.toSend)
-          : validateFileInputPath({ path: n.files[0].path, code: gate }, e)),
-      r?.code === "put_expired")
-    ) {
+    let s = e.gate();
+    r =
+      s === undefined
+        ? await putFileInputs(e, n.toSend)
+        : validateFileInputPath(
+            {
+              path: n.files[0].path,
+              code: s,
+            },
+            e,
+          );
+    if (r?.code === "put_expired") {
       let c = await uploadFileInput(
-          { ...e, input: n.input },
-          { entries: [], paths: n.files.map((file) => file.path) },
-        ),
-        a = "error" in c ? void 0 : n.files.find((file, F) => !En(file, c.files[F]));
+        {
+          ...e,
+          input: n.input,
+        },
+        {
+          entries: [],
+          paths: n.files.map((file) => file.path),
+        },
+      );
+      let a = "error" in c ? undefined : n.files.find((file, F) => !En(file, c.files[F]));
       r =
         "error" in c
           ? c
-          : a === void 0
+          : a === undefined
             ? await putFileInputs(e, c.toSend)
             : validateFileInputPath(
                 {
                   path: a.path,
-                  code: c.files.some((file) => En({ ...file, uri: a.uri }, a)) ? "bad_answer" : "changed",
+                  code: c.files.some((file) =>
+                    En(
+                      {
+                        ...file,
+                        uri: a.uri,
+                      },
+                      a,
+                    ),
+                  )
+                    ? "bad_answer"
+                    : "changed",
                 },
                 e,
               );
     }
   } catch (error) {
-    (logError(error), (r = filesNotAttachedError(words)));
+    logError(error);
+    r = filesNotAttachedError(words);
   }
   return r ?? {};
 }
 //@ chunk-gwvwj681.js:10587-11944 placement
-async function uploadFileInput(e, { entries: entries, paths: paths }) {
-  let { input: input, words: words, files: files, signal: signal } = e,
-    h = paths[0],
-    gate = e.gate();
-  if (gate !== void 0) return validateFileInputPath({ path: h, code: gate }, e);
+async function uploadFileInput(e, { entries, paths }) {
+  let { input, words, files, signal } = e;
+  let path = paths[0];
+  let F = e.gate();
+  if (F !== undefined)
+    return validateFileInputPath(
+      {
+        path,
+        code: F,
+      },
+      e,
+    );
   let y = [];
   for (let _ of await files.hash(paths, signal)) {
     if ("code" in _) return validateFileInputPath(_, e);
     y.push(_);
   }
   if (y.length !== paths.length || y.some((_, I) => _.path !== paths[I]))
-    return validateFileInputPath({ path: h, code: "bad_answer" }, e);
-  if (signal.aborted) return validateFileInputPath({ path: h, code: "canceled" }, e);
+    return validateFileInputPath(
+      {
+        path,
+        code: "bad_answer",
+      },
+      e,
+    );
+  if (signal.aborted)
+    return validateFileInputPath(
+      {
+        path,
+        code: "canceled",
+      },
+      e,
+    );
   let O;
   try {
     O = await e.authorize({
       for_tool: words.tool,
-      ...(typeof input.slug === "string" && { slug: input.slug }),
-      files: y.map(({ name: _, size: size, sha256: sha256 }) => ({ name: _, size: size, sha256: sha256 })),
+      ...(typeof input.slug === "string" && {
+        slug: input.slug,
+      }),
+      files: y.map(({ name: _, size, sha256 }) => ({
+        name: _,
+        size,
+        sha256,
+      })),
     });
   } catch (error) {
-    if (signal.aborted) return validateFileInputPath({ path: h, code: "canceled" }, e);
-    logForDebugging(`[file inputs] ${AUTHORIZE_UPLOAD} failed: ${errorMessage(error)}`, { level: "error" });
+    if (signal.aborted)
+      return validateFileInputPath(
+        {
+          path,
+          code: "canceled",
+        },
+        e,
+      );
+    logForDebugging(`[file inputs] ${AUTHORIZE_UPLOAD} failed: ${errorMessage(error)}`, {
+      level: "error",
+    });
     let I =
       error instanceof McpToolCallError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS ||
       error instanceof McpAuthError
@@ -256,190 +368,255 @@ async function uploadFileInput(e, { entries: entries, paths: paths }) {
       code: "authorize_failed",
     };
   }
-  if (signal.aborted) return validateFileInputPath({ path: h, code: "canceled" }, e);
-  let safeParse = fileInputUploadAnswerSchema().safeParse(O);
+  if (signal.aborted)
+    return validateFileInputPath(
+      {
+        path,
+        code: "canceled",
+      },
+      e,
+    );
+  let S = fileInputUploadAnswerSchema().safeParse(O);
   if (
-    !safeParse.success ||
-    safeParse.data.files.length !== y.length ||
-    safeParse.data.files.some((file, I) => file.sha256 !== y[I].sha256)
+    !S.success ||
+    S.data.files.length !== y.length ||
+    S.data.files.some((file, I) => file.sha256 !== y[I].sha256)
   )
-    return { error: `The files could not be attached. ${words.nothingDone}`, code: "authorize_bad_answer" };
+    return {
+      error: `The files could not be attached. ${words.nothingDone}`,
+      code: "authorize_bad_answer",
+    };
   return {
     input: {
-      ...safeParse.data.arguments,
+      ...S.data.arguments,
       ...input,
-      [words.arg]: replaceLocalWithRef(entries, words, (_) => safeParse.data.files[_].uri),
+      [words.arg]: replaceLocalWithRef(entries, words, (_) => S.data.files[_].uri),
     },
-    files: y.map((_, I) => ({ ..._, uri: safeParse.data.files[I].uri })),
-    toSend: safeParse.data.files.flatMap(({ upload: upload, sha256: sha256 }, b) =>
-      upload === void 0 ? [] : [{ path: paths[b], sha256: sha256, url: upload.url, headers: upload.headers }],
+    files: y.map((_, I) => ({
+      ..._,
+      uri: S.data.files[I].uri,
+    })),
+    toSend: S.data.files.flatMap(({ upload, sha256 }, b) =>
+      upload === undefined
+        ? []
+        : [
+            {
+              path: paths[b],
+              sha256,
+              url: upload.url,
+              headers: upload.headers,
+            },
+          ],
     ),
   };
 }
 //@ chunk-gwvwj681.js:11944-12183 placement
-async function putFileInputs(e, n) {
-  let put = await e.files.put(n, e.signal),
-    found = put.find((s) => "code" in s);
-  if (found !== void 0) return validateFileInputPath(found, e);
-  return put.length !== n.length || e.signal.aborted
-    ? validateFileInputPath({ path: n[0]?.path ?? "", code: e.signal.aborted ? "canceled" : "bad_answer" }, e)
-    : void 0;
+async function putFileInputs(e, toSend) {
+  let i = await e.files.put(toSend, e.signal);
+  let found = i.find((s) => "code" in s);
+  if (found !== undefined) return validateFileInputPath(found, e);
+  return i.length !== toSend.length || e.signal.aborted
+    ? validateFileInputPath(
+        {
+          path: toSend[0]?.path ?? "",
+          code: e.signal.aborted ? "canceled" : "bad_answer",
+        },
+        e,
+      )
+    : undefined;
 }
 //@ chunk-gwvwj681.js:12183-12283 placement
-function filesNotAttachedError({ nothingDone: nothingDone }) {
-  return { error: `The files could not be attached. ${nothingDone}`, code: "unexpected" };
+function filesNotAttachedError({ nothingDone }) {
+  return {
+    error: `The files could not be attached. ${nothingDone}`,
+    code: "unexpected",
+  };
 }
 //@ chunk-gwvwj681.js:12283-12606 placement
 function describeCallSchemaError(e, n, i) {
   let r = e[i.arg];
-  if (r === void 0 || r === null || (Array.isArray(r) && r.length === 0)) return;
+  if (r === undefined || r === null || (Array.isArray(r) && r.length === 0)) return;
   let s = validateFileEntries(r, i);
   if (!Array.isArray(s)) return s;
-  let flat = [r].flat(),
-    a = describeSchemaViolation(e, n, i);
-  return a === void 0
-    ? { entries: flat, paths: s }
+  let entries = [r].flat();
+  let a = describeSchemaViolation(e, n, i);
+  return a === undefined
+    ? {
+        entries,
+        paths: s,
+      }
     : {
         error: `Cannot call ${i.tool} with these arguments: ${a.listed}.${a.takes} ${i.nothingDone}`,
         code: "input_schema",
       };
 }
 //@ chunk-gwvwj681.js:12606-12720 placement
-function replaceLocalWithRef(e, { local: local, ref: ref }, r) {
-  return e.map((s, c) => {
+function replaceLocalWithRef(entries, { local, ref }, r) {
+  return entries.map((s, c) => {
     if (!isPlainObject(s)) return s;
     let { [local]: a, ...h } = s;
-    return { ...h, [ref]: r(c) };
+    return {
+      ...h,
+      [ref]: r(c),
+    };
   });
 }
 //@ chunk-gwvwj681.js:12720-13283 placement
-function isFileInputsEnabled(e, n) {
-  let i = OffscreenFreeze(e.meta);
-  if (i === void 0) return;
-  let { client: client } = e,
-    s = isDiskless() ? z.peek(n)?.host : void 0,
-    c = s?.servers.get(client.name),
-    a = isDiskless()
-      ? c !== void 0 &&
-        client.config.type === "http" &&
-        client.config.url === c.url &&
-        s?.heldSinceBoot(client.name) === !0
-        ? c.server
-        : void 0
-      : client.config.scope === "claudeai" ||
-          firstPartyServerIdFor(client.config) !== void 0 ||
-          isOwnCcrMcpServer(client.config)
-        ? FIRST_PARTY_UPLOAD_SERVERS.find((h) => isFirstPartyToolboxServer(client, h))
-        : void 0;
-  if (a === void 0 || !getFeatureValue_CACHED_MAY_BE_STALE("tengu_walnut_tiller", !0)) return;
+function isFileInputsEnabled(listed, session) {
+  let i = OffscreenFreeze(listed.meta);
+  if (i === undefined) return;
+  let { client } = listed;
+  let host = isDiskless() ? offscreenFreezeSlot.peek(session)?.host : undefined;
+  let c = host?.servers.get(client.name);
+  let a = isDiskless()
+    ? c !== undefined &&
+      client.config.type === "http" &&
+      client.config.url === c.url &&
+      host?.heldSinceBoot(client.name) === true
+      ? c.server
+      : undefined
+    : client.config.scope === "claudeai" ||
+        firstPartyServerIdFor(client.config) !== undefined ||
+        isOwnCcrMcpServer(client.config)
+      ? FIRST_PARTY_UPLOAD_SERVERS.find((h) => isFirstPartyToolboxServer(client, h))
+      : undefined;
+  if (a === undefined || !getFeatureValue_CACHED_MAY_BE_STALE("tengu_walnut_tiller", true)) return;
   return {
     fileInput: {
-      tool: e.name,
+      tool: listed.name,
       arg: i.arg,
       feature: "mcp_file_input_upload",
       local: i.local,
       ref: i.ref,
       refWord: i.ref,
-      maxFiles: Sbt,
-      nothingDone: `${e.name} was not called.`,
+      maxFiles: MAX_FILES_PER_INPUT,
+      nothingDone: `${listed.name} was not called.`,
     },
     server: a,
-    host: s,
+    host,
   };
 }
+//@ chunk-gwvwj681.js:13283-13492 placement
 /**
  * 包装 MCP 工具的 validateInput：原校验通过且该工具启用了文件输入时，再检查文件引用参数是否合法，不合法返回错误（errorCode 2）并记遥测。
  */
-//@ chunk-gwvwj681.js:13283-13492 placement
 async function validateToolFileInputs(e, n, ...[i, r]) {
-  let s = n ? await n(i, r) : { result: !0 },
-    c = s.result ? isFileInputsEnabled(e, r.session) : void 0,
-    a = c && H(i, e.schema, c.fileInput);
-  if (a === void 0) return s;
-  return (logFileInputNotAttached(a.code), { result: !1, message: a.error, errorCode: 2 });
+  let s = n
+    ? await n(i, r)
+    : {
+        result: true,
+      };
+  let c = s.result ? isFileInputsEnabled(e, r.session) : undefined;
+  let a = c && schemaErrorForCall(i, e.schema, c.fileInput);
+  if (a === undefined) return s;
+  logFileInputNotAttached(a.code);
+  return {
+    result: false,
+    message: a.error,
+    errorCode: 2,
+  };
 }
 //@ chunk-gwvwj681.js:13492-14066 placement
 async function describeInputChanged(e) {
   let n = isFileInputsEnabled(e.listed, e.session);
-  if (n === void 0) return e.input;
-  let i = attachFileInputs(e, n),
-    { fileInput: fileInput } = n,
-    s = takeFileGrants(e.session, e.toolUseId),
-    c = s !== void 0 && En(s.input, e.input),
-    a;
-  if (c) a = { ...(await describeUploadOutcome(i, s)), input: e.input };
-  else if (s !== void 0)
+  if (n === undefined) return e.input;
+  let i = attachFileInputs(e, n);
+  let { fileInput } = n;
+  let s = takeFileGrants(e.session, e.toolUseId);
+  let c = s !== undefined && En(s.input, e.input);
+  let a;
+  if (c)
+    a = {
+      ...(await describeUploadOutcome(i, s)),
+      input: e.input,
+    };
+  else if (s !== undefined)
     a = {
       error: `The arguments of this call changed while it waited for approval. Call ${fileInput.tool} again, giving each file by its "${fileInput.local}". ${fileInput.nothingDone}`,
       code: "input_changed",
     };
   else a = await describeFileInputChange(i);
-  if (a.error !== void 0)
-    throw (
-      logFileInputNotAttached(a.code),
-      new McpToolFileInputRejectedError(a.error, a.code ?? "unexpected")
-    );
-  if (a.input === void 0) return e.input;
-  return (logFeatureOk("mcp_file_input_upload"), a.input);
+  if (a.error !== undefined) {
+    logFileInputNotAttached(a.code);
+    throw new McpToolFileInputRejectedError(a.error, a.code ?? "unexpected");
+  }
+  if (a.input === undefined) return e.input;
+  logFeatureOk("mcp_file_input_upload");
+  return a.input;
 }
 //@ chunk-gwvwj681.js:14066-14655 placement
 function describeNoFilesNamed(e) {
-  let n = isFileInputsEnabled(e.listed, e.session),
-    i = n && e.input[n.fileInput.arg];
-  if (n === void 0 || !Array.isArray(i) || !i.some((s) => isPlainObject(s) && n.fileInput.local in s)) return;
-  let r = async (s) => {
-    let c = await resolveFileInputUpload(attachFileInputs({ ...e, input: s }, n));
-    if (c === void 0 || "error" in c)
-      return (logFileInputNotAttached(c?.code), { error: c?.error ?? `${n.fileInput.tool} names no files.` });
-    let a = attachmentListText(c.files);
-    return (
-      keepFileGrants(e.session, e.toolUseId, c),
-      { input: c.input, description: a, release: async () => dropFileGrants(e.session, e.toolUseId) }
+  let n = isFileInputsEnabled(e.listed, e.session);
+  let i = n && e.input[n.fileInput.arg];
+  if (n === undefined || !Array.isArray(i) || !i.some((s) => isPlainObject(s) && n.fileInput.local in s))
+    return;
+  let r = async (input) => {
+    let fileInputUpload = await resolveFileInputUpload(
+      attachFileInputs(
+        {
+          ...e,
+          input,
+        },
+        n,
+      ),
     );
+    if (fileInputUpload === undefined || "error" in fileInputUpload) {
+      logFileInputNotAttached(fileInputUpload?.code);
+      return {
+        error: fileInputUpload?.error ?? `${n.fileInput.tool} names no files.`,
+      };
+    }
+    let description = attachmentListText(fileInputUpload.files);
+    keepFileGrants(e.session, e.toolUseId, fileInputUpload);
+    return {
+      input: fileInputUpload.input,
+      description,
+      release: async () => dropFileGrants(e.session, e.toolUseId),
+    };
   };
   return {
     prepare: () => r(e.input),
-    prepareAgain: ({ slug: slug }) =>
+    prepareAgain: ({ slug }) =>
       r(
         Object.hasOwn(e.input, "slug") || typeof slug !== "string" || slug === ""
           ? e.input
-          : { ...e.input, slug: slug },
+          : {
+              ...e.input,
+              slug,
+            },
       ),
   };
 }
+//@ chunk-gwvwj681.js:14655-15709 placement
 /**
  * 为 MCP 调用附加文件（缓存未命中、路由缺失、策略不可读等）。
  */
-//@ chunk-gwvwj681.js:14655-15709 placement
 function attachFileInputs(
-  {
-    listed: listed,
-    input: input,
-    toolPermissionContext: toolPermissionContext,
-    callTool: callTool,
-    signal: signal,
-  },
-  { fileInput: fileInput, server: server, host: host },
+  { listed, input, toolPermissionContext, callTool, signal },
+  { fileInput, server, host },
 ) {
   return {
-    input: input,
+    input,
     schema: listed.schema,
     words: fileInput,
-    maxFileBytes: O1t,
-    toolPermissionContext: toolPermissionContext,
+    maxFileBytes: MAX_FILE_BYTES,
+    toolPermissionContext,
     gate: () => {
       let F = policyDenyKind(server.policy);
       if (F !== null) return F === "cache_miss" || F === "route_missing" ? "policy_unread" : "policy_denied";
       if (!allowsFileUploadFor(listed.client.config)) return "uploads_off";
       return (
         filesApiUnavailableReason() ??
-        (host?.ruleItCannotApply(toolPermissionContext) === void 0
-          ? host === void 0 ||
+        (host?.ruleItCannotApply(toolPermissionContext) === undefined
+          ? host === undefined ||
             serverStatesPolicyFor(
-              { serverName: listed.client.name, toolName: listed.name },
+              {
+                serverName: listed.client.name,
+                toolName: listed.name,
+              },
               toolPermissionContext,
             )
-            ? void 0
+            ? undefined
             : "no_server_policy"
           : "rule_not_applicable")
       );
@@ -457,65 +634,67 @@ function attachFileInputs(
             return;
           }
         },
-        maxFileBytes: O1t,
-        maxTotalBytes: _un,
+        maxFileBytes: MAX_FILE_BYTES,
+        maxTotalBytes: MAX_TOTAL_BYTES,
         uploadPathPrefix: server.uploadPathPrefix,
-        namesResolvedPaths: !0,
+        namesResolvedPaths: true,
       }),
     authorize: (F) =>
-      logSessionRecovery(callTool, F, signal).catch((y) => {
-        throw y instanceof McpToolCallError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS ||
-          y instanceof McpAuthError ||
-          (y instanceof Error &&
-            (y.name === "McpError" || y.name === "ProtocolError") &&
-            "code" in y &&
-            typeof y.code === "number")
-          ? y
+      logSessionRecovery(callTool, F, signal).catch((error) => {
+        throw error instanceof McpToolCallError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS ||
+          error instanceof McpAuthError ||
+          (error instanceof Error &&
+            (error.name === "McpError" || error.name === "ProtocolError") &&
+            "code" in error &&
+            typeof error.code === "number")
+          ? error
           : new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-              describeConnectError(y, listed.client.config),
+              describeConnectError(error, listed.client.config),
               "MCP tool file input: the ask of the server failed",
             );
       }),
-    signal: signal,
+    signal,
   };
 }
+//@ chunk-gwvwj681.js:15709-15907 placement
 /**
  * 判断权限规则中是否有针对该 MCP 工具的服务器级策略条目。
  */
-//@ chunk-gwvwj681.js:15709-15907 placement
-function serverStatesPolicyFor(
-  e,
-  { alwaysAllowRules: alwaysAllowRules, alwaysAskRules: alwaysAskRules, alwaysDenyRules: alwaysDenyRules },
-) {
-  let s = buildMcpToolName(e.serverName, e.toolName);
+function serverStatesPolicyFor(e, { alwaysAllowRules, alwaysAskRules, alwaysDenyRules }) {
+  let mcpToolName = buildMcpToolName(e.serverName, e.toolName);
   return [alwaysAllowRules, alwaysAskRules, alwaysDenyRules].some((c) =>
-    (c.mcpServerPolicy ?? []).some((a) => a === s || mcpRuleMatchesTool(a, { name: s, mcpInfo: e })),
+    (c.mcpServerPolicy ?? []).some(
+      (a) =>
+        a === mcpToolName ||
+        mcpRuleMatchesTool(a, {
+          name: mcpToolName,
+          mcpInfo: e,
+        }),
+    ),
   );
 }
 //@ chunk-gwvwj681.js:15907-16251 placement
-async function logSessionRecovery(e, n, i) {
+async function logSessionRecovery(callTool, n, signal) {
   try {
-    return await e(AUTHORIZE_UPLOAD, n);
+    return await callTool(AUTHORIZE_UPLOAD, n);
   } catch (error) {
     if (!(error instanceof McpSessionExpiredError)) throw error;
     logFeatureSad("mcp_session_recovery", error.expiryKind);
   }
   try {
-    let r = await e(AUTHORIZE_UPLOAD, n);
-    return (logFeatureOk("mcp_session_recovery"), r);
+    let r = await callTool(AUTHORIZE_UPLOAD, n);
+    logFeatureOk("mcp_session_recovery");
+    return r;
   } catch (error) {
     if (error instanceof McpSessionExpiredError)
       logFeatureBad("mcp_session_recovery", "session_retry_exhausted");
-    else if (!i.aborted) logFeatureBad("mcp_session_recovery", "retry_failed_other");
+    else if (!signal.aborted) logFeatureBad("mcp_session_recovery", "retry_failed_other");
     throw error;
   }
 }
 //@ chunk-gwvwj681.js:16251-16460 placement
-function logFileInputNotAttached(e) {
-  if (
-    (logForDebugging(`[file inputs] not attached: ${e ?? "unexpected"}`),
-    e === "input_schema" || e === "resolves_elsewhere")
-  )
-    logFeatureSad("mcp_file_input_upload", e);
-  else if (e !== "canceled") logFeatureBad("mcp_file_input_upload", e ?? "unexpected");
+function logFileInputNotAttached(code) {
+  logForDebugging(`[file inputs] not attached: ${code ?? "unexpected"}`);
+  if (code === "input_schema" || code === "resolves_elsewhere") logFeatureSad("mcp_file_input_upload", code);
+  else if (code !== "canceled") logFeatureBad("mcp_file_input_upload", code ?? "unexpected");
 }

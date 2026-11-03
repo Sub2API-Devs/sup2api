@@ -8,18 +8,17 @@
 import { tr } from "../../../../@typespec/ts-http-runtime/dist/esm/util/error.js";
 
 //@ chunk-mrx6y2r5.js:56688-56876 esm-fingerprint
-function jr(e) {
+function getErrorMessage(e) {
   if (tr(e)) return e.message;
   else {
-    let t;
+    let stringified;
     try {
-      if (typeof e === "object" && e) t = JSON.stringify(e);
-      else t = String(e);
-    } catch (error) {
-      t = "[unable to stringify input]";
+      if (typeof e === "object" && e) stringified = JSON.stringify(e);
+      else stringified = String(e);
+    } catch (err) {
+      stringified = "[unable to stringify input]";
     }
-    return `Unknown error ${t}`;
+    return `Unknown error ${stringified}`;
   }
 }
-
-export { jr };
+export { getErrorMessage };

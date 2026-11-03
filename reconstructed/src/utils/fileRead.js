@@ -19,82 +19,94 @@ import {
 } from "./fsOperations.js";
 import { detectLineEndings } from "./file.js";
 
+//@ chunk-7r5y3c3p.js:310-431 fingerprint = readFileSyncWithMetadata (0.755)
 /**
  * 读取文件时若经过符号链接则记调试日志。
  */
-//@ chunk-7r5y3c3p.js:310-431 fingerprint = readFileSyncWithMetadata (0.755)
-function readFileSyncWithMetadata(n, e) {
+function readFileSyncWithMetadata(fsImplementation, e) {
   if (!mayWriteDebugLog()) return;
-  let { resolvedPath: resolvedPath, isSymlink: isSymlink } = safeResolvePath(n, e);
+  let { resolvedPath, isSymlink } = safeResolvePath(fsImplementation, e);
   if (isSymlink) logForDebugging(`Reading through symlink: ${e} -> ${resolvedPath}`);
 }
+//@ chunk-7r5y3c3p.js:431-489 placement = isFileWithinReadSizeLimit (1)
 /**
  * statSync 后校验大小上限并返回 stats。
  */
-//@ chunk-7r5y3c3p.js:431-489 placement = isFileWithinReadSizeLimit (1)
-function isFileWithinReadSizeLimit(n, e, r) {
-  let stats = n.statSync(e);
-  return (assertReadableFile(stats, e, r), stats);
+function isFileWithinReadSizeLimit(fsImplementation, e, r) {
+  let stats = fsImplementation.statSync(e);
+  assertReadableFile(stats, e, r);
+  return stats;
 }
+//@ chunk-7r5y3c3p.js:489-920 placement
 /**
  * 校验是普通文件且不超大小。
  */
-//@ chunk-7r5y3c3p.js:489-920 placement
-function assertReadableFile(n, e, r) {
+function assertReadableFile(n, path, r) {
   if (n.isDirectory())
     throw Object.assign(Error("EISDIR: illegal operation on a directory, read"), {
       code: "EISDIR",
       errno: -21,
       syscall: "read",
-      path: e,
+      path,
     });
   if (!n.isFile())
     throw Object.assign(Error("Not a regular file (device, FIFO, or socket)"), {
       code: "ERR_NOT_REGULAR_FILE",
-      path: e,
+      path,
     });
-  if (r !== void 0 && n.size > r)
+  if (r !== undefined && n.size > r)
     throw Object.assign(Error("File exceeds maxBytes limit"), {
       code: "ERR_FILE_TOO_LARGE",
-      path: e,
+      path,
       size: n.size,
       maxBytes: r,
     });
 }
+//@ chunk-7r5y3c3p.js:920-1069 placement
 /**
  * 拒绝多硬链接文件。
  */
-//@ chunk-7r5y3c3p.js:920-1069 placement
-function assertSingleLink(n, e) {
+function assertSingleLink(n, path) {
   if (n.isFile() && Number(n.nlink) > 1)
-    throw Object.assign(Error("File has more than one hard link"), { code: "ERR_MULTIPLE_LINKS", path: e });
+    throw Object.assign(Error("File has more than one hard link"), {
+      code: "ERR_MULTIPLE_LINKS",
+      path,
+    });
 }
+//@ chunk-7r5y3c3p.js:1069-1228 placement
 /**
  * 校验大小上限。
  */
-//@ chunk-7r5y3c3p.js:1069-1228 placement
-function assertWithinMaxBytes(n, e, r) {
-  if (r === void 0) return;
+function assertWithinMaxBytes(n, path, r) {
+  if (r === undefined) return;
   if (n > r)
     throw Object.assign(Error("File exceeds maxBytes limit"), {
       code: "ERR_FILE_TOO_LARGE",
-      path: e,
+      path,
       size: n,
       maxBytes: r,
     });
 }
 //@ chunk-7r5y3c3p.js:1228-1325 placement
-function bde(n) {
-  return n != null && typeof n === "object" && "code" in n && n.code === "ERR_NOT_REGULAR_FILE";
+/**
+ * 判断错误是否为 ERR_NOT_REGULAR_FILE（不是普通文件）。
+ */
+function isNotRegularFileError(error) {
+  return (
+    error != null && typeof error === "object" && "code" in error && error.code === "ERR_NOT_REGULAR_FILE"
+  );
 }
 //@ chunk-7r5y3c3p.js:1325-1419 placement
-function Cj(n) {
-  return n != null && typeof n === "object" && "code" in n && n.code === "ERR_FILE_TOO_LARGE";
+/**
+ * 判断错误是否为 ERR_FILE_TOO_LARGE（文件过大）。
+ */
+function isFileTooLargeError(error) {
+  return error != null && typeof error === "object" && "code" in error && error.code === "ERR_FILE_TOO_LARGE";
 }
+//@ chunk-7r5y3c3p.js:1419-1611 placement = encodePowerShellCommand (0.748)
 /**
  * 按 BOM 判断缓冲区编码（FF FE → utf16le，否则 utf8）；切分误归。
  */
-//@ chunk-7r5y3c3p.js:1419-1611 placement = encodePowerShellCommand (0.748)
 function detectEncodingFromBom(psCommand) {
   if (psCommand.byteLength === 0) return "utf8";
   if (psCommand.byteLength >= 2) {
@@ -105,32 +117,59 @@ function detectEncodingFromBom(psCommand) {
   return "utf8";
 }
 //@ chunk-7r5y3c3p.js:1611-1629 placement
-var c = 4096,
-  E = 8000;
+/**
+ * 读取文件时用于嗅探 BOM 的头部字节数。
+ */
+var BOM_SNIFF_BYTES = 4096;
+var NUL_SCAN_BYTES = 8000;
 //@ chunk-7r5y3c3p.js:1629-1680 placement
-function Vys(n) {
-  return n.subarray(0, E).includes(0);
+/**
+ * 判断文件头部（前 NUL_SCAN_BYTES 字节）是否含 NUL，用于识别二进制文件。
+ */
+function hasNulByteInHead(n) {
+  return n.subarray(0, NUL_SCAN_BYTES).includes(0);
 }
 //@ chunk-7r5y3c3p.js:1680-1936 placement
 function detectTextEncoding(n) {
-  let e = detectEncodingFromBom(n.subarray(0, c));
-  if (e !== "utf8") return { encoding: e };
-  if (n.byteLength >= 2 && n[0] === 254 && n[1] === 255) return { encoding: e, notText: "utf16be" };
-  if (Vys(n)) return { encoding: e, notText: "nul" };
-  return isUtf8(n) ? { encoding: e } : { encoding: e, notText: "not_utf8" };
+  let encodingFromBom = detectEncodingFromBom(n.subarray(0, BOM_SNIFF_BYTES));
+  if (encodingFromBom !== "utf8")
+    return {
+      encoding: encodingFromBom,
+    };
+  if (n.byteLength >= 2 && n[0] === 254 && n[1] === 255)
+    return {
+      encoding: encodingFromBom,
+      notText: "utf16be",
+    };
+  if (hasNulByteInHead(n))
+    return {
+      encoding: encodingFromBom,
+      notText: "nul",
+    };
+  return isUtf8(n)
+    ? {
+        encoding: encodingFromBom,
+      }
+    : {
+        encoding: encodingFromBom,
+        notText: "not_utf8",
+      };
 }
 //@ chunk-7r5y3c3p.js:1936-2034 placement
-function swr(n, e) {
+/**
+ * 若原文本有 BOM 而解码结果丢了，重新补上 BOM 前缀。
+ */
+function preserveBomPrefix(n, e) {
   return e !== "" && n?.charCodeAt(0) === 65279 && e.charCodeAt(0) !== 65279 ? `\uFEFF${e}` : e;
 }
+//@ chunk-7r5y3c3p.js:2034-2166 placement
 /**
  * 按 BOM 解码并把 CRLF 换成 LF。
  */
-//@ chunk-7r5y3c3p.js:2034-2166 placement
 function decodeTextBuffer(n) {
-  let e = detectEncodingFromBom(n.subarray(0, c));
+  let encodingFromBom = detectEncodingFromBom(n.subarray(0, BOM_SNIFF_BYTES));
   return Buffer.from(n.buffer, n.byteOffset, n.byteLength)
-    .toString(e)
+    .toString(encodingFromBom)
     .replaceAll(
       `\r
 `,
@@ -138,70 +177,77 @@ function decodeTextBuffer(n) {
 `,
     );
 }
+//@ chunk-7r5y3c3p.js:2264-2391 fingerprint = detectLineEndingsForString (1)
 /**
  * 统计 CRLF 与 LF 数量，多数为 CRLF 时返回 "CRLF"，否则 "LF"。
  */
-//@ chunk-7r5y3c3p.js:2264-2391 fingerprint = detectLineEndingsForString (1)
 function detectLineEndingsForString(content) {
-  let e = 0,
-    r = 0;
+  let crlfCount = 0;
+  let lfCount = 0;
   for (let i = 0; i < content.length; i++)
     if (
       content[i] ===
       `
 `
     )
-      if (i > 0 && content[i - 1] === "\r") e++;
-      else r++;
-  return e > r ? "CRLF" : "LF";
+      if (i > 0 && content[i - 1] === "\r") crlfCount++;
+      else lfCount++;
+  return crlfCount > lfCount ? "CRLF" : "LF";
 }
 //@ chunk-7r5y3c3p.js:2391-2704 placement
-function detectEncodingForResolvedPath(n, e, r) {
-  let i = getFsImplementation();
-  readFileSyncWithMetadata(i, n);
-  let a = isFileWithinReadSizeLimit(i, n, e);
+function detectEncodingForResolvedPath(path, e, r) {
+  let fsImplementation = getFsImplementation();
+  readFileSyncWithMetadata(fsImplementation, path);
+  let a = isFileWithinReadSizeLimit(fsImplementation, path, e);
   r?.(a);
-  let s = detectLineEndings(n),
-    o;
-  if (e === void 0) o = i.readFileSync(n, { encoding: s });
+  let encoding = detectLineEndings(path);
+  let raw;
+  if (e === undefined)
+    raw = fsImplementation.readFileSync(path, {
+      encoding,
+    });
   else {
-    let { buffer: buffer, bytesRead: bytesRead } = i.readSync(n, { length: e + 1 });
-    (assertWithinMaxBytes(bytesRead, n, e), (o = buffer.subarray(0, bytesRead).toString(s)));
+    let { buffer, bytesRead } = fsImplementation.readSync(path, {
+      length: e + 1,
+    });
+    assertWithinMaxBytes(bytesRead, path, e);
+    raw = buffer.subarray(0, bytesRead).toString(encoding);
   }
-  let u = detectLineEndingsForString(o.slice(0, 4096));
+  let lineEndings = detectLineEndingsForString(raw.slice(0, 4096));
   return {
-    content: o.replaceAll(
+    content: raw.replaceAll(
       `\r
 `,
       `
 `,
     ),
-    encoding: s,
-    lineEndings: u,
+    encoding,
+    lineEndings,
   };
 }
 //@ chunk-7r5y3c3p.js:2704-2749 placement
 function readFileSync(n, e, r) {
   return detectEncodingForResolvedPath(n, e, r).content;
 }
+//@ chunk-7r5y3c3p.js:2749-2870 placement
 /**
  * 校验后读取文件。
  */
-//@ chunk-7r5y3c3p.js:2749-2870 placement
 async function readFileChecked(n, e) {
-  let r = getFsImplementation();
-  (readFileSyncWithMetadata(r, n), assertReadableFile(await r.stat(n), n, e));
+  let fsImplementation = getFsImplementation();
+  readFileSyncWithMetadata(fsImplementation, n);
+  assertReadableFile(await fsImplementation.stat(n), n, e);
   await using i = await open(n, nonblockingReadFlags());
   return await readFileHandleChecked(i, n, e);
 }
 //@ chunk-7r5y3c3p.js:2870-3152 placement
-async function readFileHandleChecked(n, e, r) {
-  assertReadableFile(await n.stat(), e, r);
-  let i = r === void 0 ? await n.readFile() : await readHandleUpTo(n, r + 1, "file");
-  assertWithinMaxBytes(i.length, e, r);
-  let { encoding: encoding, notText: notText } = detectTextEncoding(i),
-    str = i.toString(encoding),
-    u = detectLineEndingsForString(str.slice(0, 4096));
+async function readFileHandleChecked(n, path, r) {
+  assertReadableFile(await n.stat(), path, r);
+  let i = r === undefined ? await n.readFile() : await readHandleUpTo(n, r + 1, "file");
+  assertWithinMaxBytes(i.length, path, r);
+  let { encoding, notText } = detectTextEncoding(i);
+  let str = i.toString(encoding);
+  let lineEndings = detectLineEndingsForString(str.slice(0, 4096));
   return {
     content: str.replaceAll(
       `\r
@@ -209,27 +255,28 @@ async function readFileHandleChecked(n, e, r) {
       `
 `,
     ),
-    encoding: encoding,
-    lineEndings: u,
-    ...(notText && { notText: notText }),
+    encoding,
+    lineEndings,
+    ...(notText && {
+      notText,
+    }),
   };
 }
-
 export {
   detectEncodingFromBom,
   detectEncodingForResolvedPath,
   readFileSync,
-  bde,
+  isNotRegularFileError,
   detectLineEndingsForString,
   readFileChecked,
   decodeTextBuffer,
-  Cj,
-  c,
+  isFileTooLargeError,
+  BOM_SNIFF_BYTES,
   assertReadableFile,
   assertWithinMaxBytes,
   readFileHandleChecked,
   detectTextEncoding,
-  swr,
-  Vys,
+  preserveBomPrefix,
+  hasNulByteInHead,
   assertSingleLink,
 };

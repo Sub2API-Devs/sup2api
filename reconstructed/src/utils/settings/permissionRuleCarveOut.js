@@ -9,17 +9,21 @@
  * attribution: placement 3
  */
 
+//@ chunk-dcmhvw5a.js:189681-189802 placement
 /**
  * max effort 的说明文本。
  */
-//@ chunk-dcmhvw5a.js:189681-189802 placement
 var MAX_EFFORT_DESCRIPTION =
   "May use excessive tokens resulting in long response times or overthinking. Use sparingly for the hardest tasks.";
 //@ chunk-dcmhvw5a.js:189802-189838 placement
 var PATH_RULE_CARVE_OUT_RE = /^(?:Read|Edit)\((?:\.\/)?!/;
 //@ chunk-dcmhvw5a.js:189838-189885 placement
-function _Ot(e) {
-  return e === void 0 || e === !1 ? e : !0;
+/**
+ * normalizeCarveOutFlag：覆盖开关归一（undefined/false 保留）。
+ */
+function normalizeCarveOutFlag(disablePluginDirectory) {
+  return disablePluginDirectory === undefined || disablePluginDirectory === false
+    ? disablePluginDirectory
+    : true;
 }
-
-export { PATH_RULE_CARVE_OUT_RE, MAX_EFFORT_DESCRIPTION, _Ot };
+export { PATH_RULE_CARVE_OUT_RE, MAX_EFFORT_DESCRIPTION, normalizeCarveOutFlag };

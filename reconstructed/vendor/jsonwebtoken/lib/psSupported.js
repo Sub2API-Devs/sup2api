@@ -6,12 +6,11 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { Vy } from "../../semver/index.js";
+import { require_semver_3 } from "../../semver/index.js";
 
 //@ chunk-mrx6y2r5.js:5992-6093 cjs-fingerprint
-var dc = x(function (sL, Yh) {
-  var Ey = Vy();
-  Yh.exports = Ey.satisfies(process.version, "^6.12.0 || >=8.0.0");
+var require_psSupported = x(function (cjsExports, cjsModule) {
+  var semver = require_semver_3();
+  cjsModule.exports = semver.satisfies(process.version, "^6.12.0 || >=8.0.0");
 });
-
-export { dc };
+export { require_psSupported };

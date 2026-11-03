@@ -12,24 +12,32 @@ import { Ar } from "../../../runtime/bun-runtime.js";
 import { ENV_PARSERS } from "../../utils/envSchema.js";
 
 //@ chunk-kakaahp3.js:486-495 placement
-var r = {};
+var TOOL_SERVER_ENV_FIELDS = {};
 //@ chunk-kakaahp3.js:495-800 placement
-Ar(r, {
-  CCR_AGENT_PROXY_TOKEN_FILE_DESCRIPTOR: () => str_2,
-  CLAUDE_CODE_MCP_SERVE_AUTH_TOKEN: () => rawStr,
-  CLAUDE_CODE_MCP_SERVE_ENABLED_PLUGINS: () => rawStr_3,
-  CLAUDE_CODE_MCP_SERVE_INTERFACE_MIN_VERSION: () => int,
-  CLAUDE_CODE_MCP_SERVE_SETTINGS: () => rawStr_2,
-  CLAUDE_CODE_MCP_SERVE_TOOL_OUTPUT: () => bool,
-  CLAUDE_CODE_MCP_SERVE_WORKSPACE_ROOT: () => str,
+Ar(TOOL_SERVER_ENV_FIELDS, {
+  CCR_AGENT_PROXY_TOKEN_FILE_DESCRIPTOR: () => C,
+  CLAUDE_CODE_MCP_SERVE_AUTH_TOKEN: () => TOOL_SERVER_ENV_PARSERS,
+  CLAUDE_CODE_MCP_SERVE_ENABLED_PLUGINS: () => S,
+  CLAUDE_CODE_MCP_SERVE_INTERFACE_MIN_VERSION: () => _,
+  CLAUDE_CODE_MCP_SERVE_SETTINGS: () => o,
+  CLAUDE_CODE_MCP_SERVE_TOOL_OUTPUT: () => e,
+  CLAUDE_CODE_MCP_SERVE_WORKSPACE_ROOT: () => t,
 });
 //@ chunk-kakaahp3.js:800-905 placement
-var rawStr = ENV_PARSERS.rawStr(),
-  bool = ENV_PARSERS.bool(),
-  rawStr_2 = ENV_PARSERS.rawStr(),
-  str = ENV_PARSERS.str(),
-  int = ENV_PARSERS.int({ min: 1, digitsOnly: !0 }),
-  rawStr_3 = ENV_PARSERS.rawStr(),
-  str_2 = ENV_PARSERS.str();
+var TOOL_SERVER_ENV_PARSERS = ENV_PARSERS.rawStr();
+var e = ENV_PARSERS.bool();
+var o = ENV_PARSERS.rawStr();
+var t = ENV_PARSERS.str();
+var _ = ENV_PARSERS.int({
+  min: 1,
+  digitsOnly: true,
+});
+var S = ENV_PARSERS.rawStr();
+var C = ENV_PARSERS.str();
 //@ chunk-kakaahp3.js:905-918 placement
-var n = { ...r };
+/**
+ * 导出常量或表 `TOOL_SERVER_ENV_DEFAULTS_ALIAS`：值为 { ...r }。
+ */
+var TOOL_SERVER_ENV_DEFAULTS_ALIAS = {
+  ...TOOL_SERVER_ENV_FIELDS,
+};

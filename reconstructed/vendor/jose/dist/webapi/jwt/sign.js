@@ -7,48 +7,53 @@
  */
 import { de } from "../lib/jwt_claims_set.js";
 import { Me } from "../jws/compact/sign.js";
-import { O } from "../../node/esm/util/errors.js";
+import { JWTInvalid } from "../../node/esm/util/errors.js";
 
 //@ chunk-5h78gfwc.js:46950-47558 esm-fingerprint
 class SignJWT {
   #e;
   #t;
-  constructor(e = {}) {
-    this.#t = new de(e);
+  constructor(payload = {}) {
+    this.#t = new de(payload);
   }
-  setIssuer(e) {
-    return ((this.#t.iss = e), this);
+  setIssuer(issuer) {
+    this.#t.iss = issuer;
+    return this;
   }
-  setSubject(e) {
-    return ((this.#t.sub = e), this);
+  setSubject(subject) {
+    this.#t.sub = subject;
+    return this;
   }
-  setAudience(e) {
-    return ((this.#t.aud = e), this);
+  setAudience(audience) {
+    this.#t.aud = audience;
+    return this;
   }
-  setJti(e) {
-    return ((this.#t.jti = e), this);
+  setJti(jwtId) {
+    this.#t.jti = jwtId;
+    return this;
   }
-  setNotBefore(e) {
-    return ((this.#t.nbf = e), this);
+  setNotBefore(input) {
+    this.#t.nbf = input;
+    return this;
   }
-  setExpirationTime(e) {
-    return ((this.#t.exp = e), this);
+  setExpirationTime(input) {
+    this.#t.exp = input;
+    return this;
   }
-  setIssuedAt(e) {
-    return ((this.#t.iat = e), this);
+  setIssuedAt(input) {
+    this.#t.iat = input;
+    return this;
   }
-  setProtectedHeader(e) {
-    return ((this.#e = e), this);
+  setProtectedHeader(protectedHeader) {
+    this.#e = protectedHeader;
+    return this;
   }
-  async sign(e, t) {
-    let r = new Me(this.#t.data());
-    if (
-      (r.setProtectedHeader(this.#e),
-      Array.isArray(this.#e?.crit) && this.#e.crit.includes("b64") && this.#e.b64 === !1)
-    )
-      throw new O("JWTs MUST NOT use unencoded payload");
-    return r.sign(e, t);
+  async sign(key, options) {
+    let sig = new Me(this.#t.data());
+    sig.setProtectedHeader(this.#e);
+    if (Array.isArray(this.#e?.crit) && this.#e.crit.includes("b64") && this.#e.b64 === false)
+      throw new JWTInvalid("JWTs MUST NOT use unencoded payload");
+    return sig.sign(key, options);
   }
 }
-
 export { SignJWT };

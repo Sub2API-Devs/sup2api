@@ -13,19 +13,15 @@ import { env } from "../env.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import { isStorageV5Enabled } from "../hoverRest.js";
 
+//@ chunk-zxs3jrb9.js:341-464 placement
 /**
  * 固定 v5 存储后端选择。
  */
-//@ chunk-zxs3jrb9.js:341-464 placement
 function pinStorageV5(e) {
-  if (
-    (recordHoverRestDecision(
-      env.CLAUDE_CODE_HOVER_REST ?? getFeatureValue_CACHED_MAY_BE_STALE("tengu_hover_rest", !1),
-    ),
-    e === void 0)
-  )
-    return isStorageV5Enabled() ? tryCreateV5Backend() : void 0;
+  recordHoverRestDecision(
+    env.CLAUDE_CODE_HOVER_REST ?? getFeatureValue_CACHED_MAY_BE_STALE("tengu_hover_rest", false),
+  );
+  if (e === undefined) return isStorageV5Enabled() ? tryCreateV5Backend() : undefined;
   return adoptStorageV5EnvPin(e);
 }
-
 export { pinStorageV5 };

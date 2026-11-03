@@ -8,57 +8,61 @@
 import { x } from "../../runtime/bun-runtime.js";
 
 //@ chunk-mrx6y2r5.js:13495-14678 cjs-fingerprint
-var hf = x(function (dL, uf) {
-  var cf = 1 / 0,
-    CT = 179769313486231570000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000,
-    lf = NaN,
-    AT = "[object Symbol]",
-    IT = /^\s+|\s+$/g,
-    _T = /^[-+]0x[0-9a-f]+$/i,
-    ST = /^0b[01]+$/i,
-    RT = /^0o[0-7]+$/i,
-    wT = parseInt,
-    vT = Object.prototype,
-    toString = vT.toString;
-  function bT(e) {
-    return typeof e == "number" && e == xT(e);
+var require_lodash_isinteger = x(function (cjsExports, cjsModule) {
+  var INFINITY = 1 / 0;
+  var MAX_INTEGER = 179769313486231570000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000;
+  var NAN = NaN;
+  var symbolTag = "[object Symbol]";
+  var reTrim = /^\s+|\s+$/g;
+  var reIsBadHex = /^[-+]0x[0-9a-f]+$/i;
+  var reIsBinary = /^0b[01]+$/i;
+  var reIsOctal = /^0o[0-7]+$/i;
+  var freeParseInt = parseInt;
+  var objectProto = Object.prototype;
+  var objectToString = objectProto.toString;
+  function isInteger(value) {
+    return typeof value == "number" && value == toInteger(value);
   }
-  function df(e) {
-    var t = typeof e;
-    return !!e && (t == "object" || t == "function");
+  function isObject(value) {
+    var type = typeof value;
+    return !!value && (type == "object" || type == "function");
   }
-  function PT(e) {
-    return !!e && typeof e == "object";
+  function isObjectLike(value) {
+    return !!value && typeof value == "object";
   }
-  function OT(e) {
-    return typeof e == "symbol" || (PT(e) && toString.call(e) == AT);
+  function isSymbol(value) {
+    return typeof value == "symbol" || (isObjectLike(value) && objectToString.call(value) == symbolTag);
   }
-  function NT(e) {
-    if (!e) return e === 0 ? e : 0;
-    if (((e = MT(e)), e === cf || e === -cf)) {
-      var t = e < 0 ? -1 : 1;
-      return t * CT;
+  function toFinite(value) {
+    if (!value) return value === 0 ? value : 0;
+    value = toNumber(value);
+    if (value === INFINITY || value === -INFINITY) {
+      var sign = value < 0 ? -1 : 1;
+      return sign * MAX_INTEGER;
     }
-    return e === e ? e : 0;
+    return value === value ? value : 0;
   }
-  function xT(e) {
-    var t = NT(e),
-      r = t % 1;
-    return t === t ? (r ? t - r : t) : 0;
+  function toInteger(value) {
+    var result = toFinite(value);
+    var remainder = result % 1;
+    return result === result ? (remainder ? result - remainder : result) : 0;
   }
-  function MT(e) {
-    if (typeof e == "number") return e;
-    if (OT(e)) return lf;
-    if (df(e)) {
-      var t = typeof e.valueOf == "function" ? e.valueOf() : e;
-      e = df(t) ? t + "" : t;
+  function toNumber(value) {
+    if (typeof value == "number") return value;
+    if (isSymbol(value)) return NAN;
+    if (isObject(value)) {
+      var other = typeof value.valueOf == "function" ? value.valueOf() : value;
+      value = isObject(other) ? other + "" : other;
     }
-    if (typeof e != "string") return e === 0 ? e : +e;
-    e = e.replace(IT, "");
-    var matches = ST.test(e);
-    return matches || RT.test(e) ? wT(e.slice(2), matches ? 2 : 8) : _T.test(e) ? lf : +e;
+    if (typeof value != "string") return value === 0 ? value : +value;
+    value = value.replace(reTrim, "");
+    var isBinary = reIsBinary.test(value);
+    return isBinary || reIsOctal.test(value)
+      ? freeParseInt(value.slice(2), isBinary ? 2 : 8)
+      : reIsBadHex.test(value)
+        ? NAN
+        : +value;
   }
-  uf.exports = bT;
+  cjsModule.exports = isInteger;
 });
-
-export { hf };
+export { require_lodash_isinteger };

@@ -5,59 +5,77 @@
  * pieces: chunk-hwmsct5x.js (4)
  * attribution: esm-fingerprint 4
  */
-import { ea, cr, rn, ta } from "./uploads.mjs";
+import { checkFileSupport, getName, makeFile, isAsyncIterable } from "./uploads.mjs";
 
 //@ chunk-hwmsct5x.js:41841-42220 esm-fingerprint
-var isBlobLike = (e) =>
-    e != null &&
-    typeof e === "object" &&
-    typeof e.size === "number" &&
-    typeof e.type === "string" &&
-    typeof e.text === "function" &&
-    typeof e.slice === "function" &&
-    typeof e.arrayBuffer === "function",
-  zh = (e) =>
-    e != null &&
-    typeof e === "object" &&
-    typeof e.name === "string" &&
-    typeof e.lastModified === "number" &&
-    isBlobLike(e),
-  Gh = (e) => e != null && typeof e === "object" && typeof e.url === "string" && typeof e.blob === "function";
+var isBlobLike = (value) =>
+  value != null &&
+  typeof value === "object" &&
+  typeof value.size === "number" &&
+  typeof value.type === "string" &&
+  typeof value.text === "function" &&
+  typeof value.slice === "function" &&
+  typeof value.arrayBuffer === "function";
+var isFileLike = (value) =>
+  value != null &&
+  typeof value === "object" &&
+  typeof value.name === "string" &&
+  typeof value.lastModified === "number" &&
+  isBlobLike(value);
+var isResponseLike = (value) =>
+  value != null &&
+  typeof value === "object" &&
+  typeof value.url === "string" &&
+  typeof value.blob === "function";
 //@ chunk-hwmsct5x.js:42220-42684 esm-fingerprint
-async function ra(e, n, r) {
-  if ((ea(), (e = await e), n || (n = cr(e, !0)), zh(e))) {
-    if (e instanceof File && n == null && r == null) return e;
-    return rn([await e.arrayBuffer()], n ?? e.name, { type: e.type, lastModified: e.lastModified, ...r });
+async function toFile(value, name, options) {
+  checkFileSupport();
+  value = await value;
+  if (!name) name = getName(value, true);
+  if (isFileLike(value)) {
+    if (value instanceof File && name == null && options == null) return value;
+    return makeFile([await value.arrayBuffer()], name ?? value.name, {
+      type: value.type,
+      lastModified: value.lastModified,
+      ...options,
+    });
   }
-  if (Gh(e)) {
-    let blob = await e.blob();
-    return (n || (n = new URL(e.url).pathname.split(/[\\/]/).pop()), rn(await na(blob), n, r));
+  if (isResponseLike(value)) {
+    let blob = await value.blob();
+    if (!name) name = new URL(value.url).pathname.split(/[\\/]/).pop();
+    return makeFile(await getBytes(blob), name, options);
   }
-  let s = await na(e);
-  if (!r?.type) {
-    let found = s.find((y) => typeof y === "object" && "type" in y && y.type);
-    if (typeof found === "string") r = { ...r, type: found };
+  let parts = await getBytes(value);
+  if (!options?.type) {
+    let type = parts.find((part) => typeof part === "object" && "type" in part && part.type);
+    if (typeof type === "string")
+      options = {
+        ...options,
+        type,
+      };
   }
-  return rn(s, n, r);
+  return makeFile(parts, name, options);
 }
 //@ chunk-hwmsct5x.js:42684-43045 esm-fingerprint
-async function na(e) {
-  let n = [];
-  if (typeof e === "string" || ArrayBuffer.isView(e) || e instanceof ArrayBuffer) n.push(e);
-  else if (isBlobLike(e)) n.push(e instanceof Blob ? e : await e.arrayBuffer());
-  else if (ta(e)) for await (let r of e) n.push(...(await na(r)));
+async function getBytes(value) {
+  let parts = [];
+  if (typeof value === "string" || ArrayBuffer.isView(value) || value instanceof ArrayBuffer)
+    parts.push(value);
+  else if (isBlobLike(value)) parts.push(value instanceof Blob ? value : await value.arrayBuffer());
+  else if (isAsyncIterable(value)) for await (let chunk of value) parts.push(...(await getBytes(chunk)));
   else {
-    let r = e?.constructor?.name;
-    throw Error(`Unexpected data type: ${typeof e}${r ? `; constructor: ${r}` : ""}${Yh(e)}`);
+    let constructor = value?.constructor?.name;
+    throw Error(
+      `Unexpected data type: ${typeof value}${constructor ? `; constructor: ${constructor}` : ""}${propsForError(value)}`,
+    );
   }
-  return n;
+  return parts;
 }
 //@ chunk-hwmsct5x.js:43045-43184 esm-fingerprint
-function Yh(e) {
-  if (typeof e !== "object" || e === null) return "";
-  return `; props: [${Object.getOwnPropertyNames(e)
-    .map((r) => `"${r}"`)
+function propsForError(value) {
+  if (typeof value !== "object" || value === null) return "";
+  return `; props: [${Object.getOwnPropertyNames(value)
+    .map((p) => `"${p}"`)
     .join(", ")}]`;
 }
-
-export { ra };
+export { toFile };

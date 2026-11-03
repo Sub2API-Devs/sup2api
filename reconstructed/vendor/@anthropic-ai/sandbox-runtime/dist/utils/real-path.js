@@ -5,70 +5,82 @@
  * pieces: chunk-r0ads4ty.js (4)
  * attribution: esm-layout 1, esm-fingerprint 3
  */
-import * as pathModule from "path";
+import "path";
 import * as pathModule_2 from "path";
-import * as fsModule from "fs";
+import "fs";
 import * as fsModule_2 from "fs";
-import * as fsModule_3 from "fs";
+import "fs";
 
 //@ chunk-r0ads4ty.js:884-894 esm-layout
-var re = 40;
+var MAX_LINKS = 40;
 //@ chunk-r0ads4ty.js:894-1077 esm-fingerprint
-function P(e, t) {
-  let r = e(t);
-  if (r.includes("\uFFFD") && !e(t, "buffer").equals(Buffer.from(r)))
-    throw Object.assign(Error(`EILSEQ: illegal byte sequence, '${t}'`), { code: "EILSEQ" });
-  return r;
+function textOf(ask, at) {
+  let text = ask(at);
+  if (text.includes("\uFFFD") && !ask(at, "buffer").equals(Buffer.from(text)))
+    throw Object.assign(Error(`EILSEQ: illegal byte sequence, '${at}'`), {
+      code: "EILSEQ",
+    });
+  return text;
 }
 //@ chunk-r0ads4ty.js:1077-1274 esm-fingerprint
-function JSe(e) {
-  let t = pathModule_2.isAbsolute(e) ? "" : process.cwd(),
-    resolved = pathModule_2.resolve(t, e);
-  if (!(t + e).includes("\\")) return P(fsModule_3.realpathSync.native, resolved);
-  let { real: real, notThere: notThere } = b8o(resolved);
-  if (notThere !== void 0) throw notThere;
+function realPathOf(p) {
+  let from = pathModule_2.isAbsolute(p) ? "" : process.cwd();
+  let folded = pathModule_2.resolve(from, p);
+  if (!(from + p).includes("\\")) return textOf(fsModule_2.realpathSync.native, folded);
+  let { real, notThere } = wayTo(folded);
+  if (notThere !== undefined) throw notThere;
   return real || "/";
 }
 //@ chunk-r0ads4ty.js:1274-1985 esm-fingerprint
-function b8o(e) {
-  let t = "",
-    r = 0,
-    parts = e.split("/");
-  for (let c = parts.shift(); c !== void 0; c = parts.shift()) {
-    if (c === "" || c === "." || c === "..") {
+function wayTo(folded) {
+  let real = "";
+  let links = 0;
+  let rest = folded.split("/");
+  for (let name = rest.shift(); name !== undefined; name = rest.shift()) {
+    if (name === "" || name === "." || name === "..") {
       try {
-        fsModule_3.lstatSync(`${t}/.`);
-      } catch (error) {
-        if (error.code !== "EACCES") throw error;
-        return { real: t, rest: [c, ...parts], notThere: error };
+        fsModule_2.lstatSync(`${real}/.`);
+      } catch (notThere) {
+        if (notThere.code !== "EACCES") throw notThere;
+        return {
+          real,
+          rest: [name, ...rest],
+          notThere,
+        };
       }
-      if (c === "..") t = t.slice(0, t.lastIndexOf("/"));
+      if (name === "..") real = real.slice(0, real.lastIndexOf("/"));
       continue;
     }
-    let f = `${t}/${c}`,
-      a;
+    let next = `${real}/${name}`;
+    let isLink;
     try {
-      a = fsModule_3.lstatSync(f).isSymbolicLink();
-    } catch (error) {
-      let { code: code } = error;
-      if (code !== "ENOENT" && code !== "ENOTDIR" && code !== "EACCES") throw error;
-      return { real: t, rest: [c, ...parts], notThere: error };
+      isLink = fsModule_2.lstatSync(next).isSymbolicLink();
+    } catch (notThere) {
+      let { code } = notThere;
+      if (code !== "ENOENT" && code !== "ENOTDIR" && code !== "EACCES") throw notThere;
+      return {
+        real,
+        rest: [name, ...rest],
+        notThere,
+      };
     }
-    if (!a) {
-      t = f;
+    if (!isLink) {
+      real = next;
       continue;
     }
-    if (++r > re)
-      throw Object.assign(Error(`ELOOP: too many symbolic links encountered, realpath '${e}'`), {
+    if (++links > MAX_LINKS)
+      throw Object.assign(Error(`ELOOP: too many symbolic links encountered, realpath '${folded}'`), {
         code: "ELOOP",
         syscall: "realpath",
-        path: e,
+        path: folded,
       });
-    let o = P(fsModule_3.readlinkSync, f);
-    if (o.startsWith("/")) t = "";
-    parts.unshift(...o.split("/"));
+    let target = textOf(fsModule_2.readlinkSync, next);
+    if (target.startsWith("/")) real = "";
+    rest.unshift(...target.split("/"));
   }
-  return { real: t, rest: parts };
+  return {
+    real,
+    rest,
+  };
 }
-
-export { JSe, b8o };
+export { realPathOf, wayTo };

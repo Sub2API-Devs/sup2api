@@ -20,46 +20,55 @@ import { logEvent } from "../../services/analytics/index.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
 
 //@ chunk-4p0ppc72.js:468-534 placement
-function s(l) {
-  if (l === BASH_TOOL_NAME) return BASH_TOOL_NAME;
-  if (l === POWERSHELL_TOOL_NAME) return POWERSHELL_TOOL_NAME;
+function shellToolNameOrNull(toolName) {
+  if (toolName === BASH_TOOL_NAME) return BASH_TOOL_NAME;
+  if (toolName === POWERSHELL_TOOL_NAME) return POWERSHELL_TOOL_NAME;
   return null;
 }
 //@ chunk-4p0ppc72.js:534-701 placement
-function classifyShellAllowRule(l, e) {
-  let o = s(l);
-  if (o === null) return null;
-  if (e === void 0 || e === "" || /^[\s*]+$/.test(e)) return "bare";
-  return (o === BASH_TOOL_NAME ? isDangerousBashPermission(o, e) : isDangerousPowerShellPermission(o, e))
+function classifyShellAllowRule(l, ruleContent) {
+  let toolName = shellToolNameOrNull(l);
+  if (toolName === null) return null;
+  if (ruleContent === undefined || ruleContent === "" || /^[\s*]+$/.test(ruleContent)) return "bare";
+  return (
+    toolName === BASH_TOOL_NAME
+      ? isDangerousBashPermission(toolName, ruleContent)
+      : isDangerousPowerShellPermission(toolName, ruleContent)
+  )
     ? "dangerous_prefix"
     : "scoped";
 }
 //@ chunk-4p0ppc72.js:701-945 placement
 function countShellAllowRules(l) {
-  let e = {},
-    o = 0;
+  let e = {};
+  let o = 0;
   for (let r of PERMISSION_UPDATE_DESTINATIONS)
     for (let t of l[r] ?? []) {
-      let { toolName: toolName, ruleContent: ruleContent } = permissionRuleValueFromString(t),
-        n = s(toolName);
+      let { toolName, ruleContent } = permissionRuleValueFromString(t);
+      let n = shellToolNameOrNull(toolName);
       if (n === null) continue;
       let i = classifyShellAllowRule(n, ruleContent);
       if (i === null) continue;
       let u = `${r}_${n}_${i}`;
-      ((e[u] = (e[u] ?? 0) + 1), o++);
+      e[u] = (e[u] ?? 0) + 1;
+      o++;
     }
-  return ((e.total_shell_allow_rules = o), e);
+  e.total_shell_allow_rules = o;
+  return e;
 }
 //@ chunk-4p0ppc72.js:945-1003 placement
-function D0s(l) {
-  logEvent("tengu_shell_allow_rules_at_init", countShellAllowRules(l));
+/**
+ * logShellAllowRulesAtInit：启动时上报 shell 允许规则数量。
+ */
+function logShellAllowRulesAtInit(alwaysAllowRules) {
+  logEvent("tengu_shell_allow_rules_at_init", countShellAllowRules(alwaysAllowRules));
 }
 //@ chunk-4p0ppc72.js:1003-1302 placement
 function logShellAllowRuleAdded(l) {
   for (let e of l) {
     if (e.type !== "addRules" || e.behavior !== "allow") continue;
     for (let rule of e.rules) {
-      let r = s(rule.toolName);
+      let r = shellToolNameOrNull(rule.toolName);
       if (r === null) continue;
       let t = classifyShellAllowRule(rule.toolName, rule.ruleContent);
       if (t === null) continue;
@@ -71,5 +80,4 @@ function logShellAllowRuleAdded(l) {
     }
   }
 }
-
-export { D0s, logShellAllowRuleAdded };
+export { logShellAllowRulesAtInit, logShellAllowRuleAdded };

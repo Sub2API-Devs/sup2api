@@ -6,222 +6,254 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../runtime/bun-runtime.js";
-import { KO } from "../yallist/yallist.js";
+import { require_yallist } from "../yallist/yallist.js";
 
 //@ chunk-1ny7cxrt.js:15716-19351 cjs-fingerprint
-var yf = x(function (Bve, YO) {
-  var wF = KO(),
-    Ba = Symbol("max"),
-    Ms = Symbol("length"),
-    bl = Symbol("lengthCalculator"),
-    Eu = Symbol("allowStale"),
-    Ha = Symbol("maxAge"),
-    Ds = Symbol("dispose"),
-    ZO = Symbol("noDisposeOnSet"),
-    Yn = Symbol("lruList"),
-    Li = Symbol("cache"),
-    qO = Symbol("updateAgeOnGet"),
-    fy = () => 1;
-  class GO {
-    constructor(e) {
-      if (typeof e === "number") e = { max: e };
-      if (!e) e = {};
-      if (e.max && (typeof e.max !== "number" || e.max < 0))
+var require_lru_cache = x(function (cjsExports, cjsModule) {
+  var Yallist = require_yallist();
+  var MAX = Symbol("max");
+  var LENGTH = Symbol("length");
+  var LENGTH_CALCULATOR = Symbol("lengthCalculator");
+  var ALLOW_STALE = Symbol("allowStale");
+  var MAX_AGE = Symbol("maxAge");
+  var DISPOSE = Symbol("dispose");
+  var NO_DISPOSE_ON_SET = Symbol("noDisposeOnSet");
+  var LRU_LIST = Symbol("lruList");
+  var CACHE = Symbol("cache");
+  var UPDATE_AGE_ON_GET = Symbol("updateAgeOnGet");
+  var naiveLength = () => 1;
+  class LRUCache {
+    constructor(options) {
+      if (typeof options === "number")
+        options = {
+          max: options,
+        };
+      if (!options) options = {};
+      if (options.max && (typeof options.max !== "number" || options.max < 0))
         throw TypeError("max must be a non-negative number");
-      let t = (this[Ba] = e.max || 1 / 0),
-        n = e.length || fy;
-      if (
-        ((this[bl] = typeof n !== "function" ? fy : n),
-        (this[Eu] = e.stale || !1),
-        e.maxAge && typeof e.maxAge !== "number")
-      )
-        throw TypeError("maxAge must be a number");
-      ((this[Ha] = e.maxAge || 0),
-        (this[Ds] = e.dispose),
-        (this[ZO] = e.noDisposeOnSet || !1),
-        (this[qO] = e.updateAgeOnGet || !1),
-        this.reset());
+      let max = (this[MAX] = options.max || 1 / 0);
+      let lc = options.length || naiveLength;
+      this[LENGTH_CALCULATOR] = typeof lc !== "function" ? naiveLength : lc;
+      this[ALLOW_STALE] = options.stale || false;
+      if (options.maxAge && typeof options.maxAge !== "number") throw TypeError("maxAge must be a number");
+      this[MAX_AGE] = options.maxAge || 0;
+      this[DISPOSE] = options.dispose;
+      this[NO_DISPOSE_ON_SET] = options.noDisposeOnSet || false;
+      this[UPDATE_AGE_ON_GET] = options.updateAgeOnGet || false;
+      this.reset();
     }
-    set max(e) {
-      if (typeof e !== "number" || e < 0) throw TypeError("max must be a non-negative number");
-      ((this[Ba] = e || 1 / 0), ku(this));
+    set max(mL) {
+      if (typeof mL !== "number" || mL < 0) throw TypeError("max must be a non-negative number");
+      this[MAX] = mL || 1 / 0;
+      trim(this);
     }
     get max() {
-      return this[Ba];
+      return this[MAX];
     }
-    set allowStale(e) {
-      this[Eu] = !!e;
+    set allowStale(allowStale) {
+      this[ALLOW_STALE] = !!allowStale;
     }
     get allowStale() {
-      return this[Eu];
+      return this[ALLOW_STALE];
     }
-    set maxAge(e) {
-      if (typeof e !== "number") throw TypeError("maxAge must be a non-negative number");
-      ((this[Ha] = e), ku(this));
+    set maxAge(mA) {
+      if (typeof mA !== "number") throw TypeError("maxAge must be a non-negative number");
+      this[MAX_AGE] = mA;
+      trim(this);
     }
     get maxAge() {
-      return this[Ha];
+      return this[MAX_AGE];
     }
-    set lengthCalculator(e) {
-      if (typeof e !== "function") e = fy;
-      if (e !== this[bl])
-        ((this[bl] = e),
-          (this[Ms] = 0),
-          this[Yn].forEach((t) => {
-            ((t.length = this[bl](t.value, t.key)), (this[Ms] += t.length));
-          }));
-      ku(this);
+    set lengthCalculator(lC) {
+      if (typeof lC !== "function") lC = naiveLength;
+      if (lC !== this[LENGTH_CALCULATOR]) {
+        this[LENGTH_CALCULATOR] = lC;
+        this[LENGTH] = 0;
+        this[LRU_LIST].forEach((hit) => {
+          hit.length = this[LENGTH_CALCULATOR](hit.value, hit.key);
+          this[LENGTH] += hit.length;
+        });
+      }
+      trim(this);
     }
     get lengthCalculator() {
-      return this[bl];
+      return this[LENGTH_CALCULATOR];
     }
     get length() {
-      return this[Ms];
+      return this[LENGTH];
     }
     get itemCount() {
-      return this[Yn].length;
+      return this[LRU_LIST].length;
     }
-    rforEach(e, t) {
-      t = t || this;
-      for (let tail = this[Yn].tail; tail !== null;) {
-        let prev = tail.prev;
-        (VO(this, e, tail, t), (tail = prev));
+    rforEach(fn, thisp) {
+      thisp = thisp || this;
+      for (let walker = this[LRU_LIST].tail; walker !== null;) {
+        let prev = walker.prev;
+        forEachStep(this, fn, walker, thisp);
+        walker = prev;
       }
     }
-    forEach(e, t) {
-      t = t || this;
-      for (let head = this[Yn].head; head !== null;) {
-        let o = head.next;
-        (VO(this, e, head, t), (head = o));
+    forEach(fn, thisp) {
+      thisp = thisp || this;
+      for (let walker = this[LRU_LIST].head; walker !== null;) {
+        let next = walker.next;
+        forEachStep(this, fn, walker, thisp);
+        walker = next;
       }
     }
     keys() {
-      return this[Yn].toArray().map((e) => e.key);
+      return this[LRU_LIST].toArray().map((k) => k.key);
     }
     values() {
-      return this[Yn].toArray().map((e) => e.value);
+      return this[LRU_LIST].toArray().map((k) => k.value);
     }
     reset() {
-      if (this[Ds] && this[Yn] && this[Yn].length) this[Yn].forEach((e) => this[Ds](e.key, e.value));
-      ((this[Li] = new Map()), (this[Yn] = new wF()), (this[Ms] = 0));
+      if (this[DISPOSE] && this[LRU_LIST] && this[LRU_LIST].length)
+        this[LRU_LIST].forEach((hit) => this[DISPOSE](hit.key, hit.value));
+      this[CACHE] = new Map();
+      this[LRU_LIST] = new Yallist();
+      this[LENGTH] = 0;
     }
     dump() {
-      return this[Yn].map((e) => (gf(this, e) ? !1 : { k: e.key, v: e.value, e: e.now + (e.maxAge || 0) }))
+      return this[LRU_LIST].map((hit) =>
+        isStale(this, hit)
+          ? false
+          : {
+              k: hit.key,
+              v: hit.value,
+              e: hit.now + (hit.maxAge || 0),
+            },
+      )
         .toArray()
-        .filter((e) => e);
+        .filter((h) => h);
     }
     dumpLru() {
-      return this[Yn];
+      return this[LRU_LIST];
     }
-    set(e, t, n) {
-      if (((n = n || this[Ha]), n && typeof n !== "number")) throw TypeError("maxAge must be a number");
-      let o = n ? Date.now() : 0,
-        r = this[bl](t, e);
-      if (this[Li].has(e)) {
-        if (r > this[Ba]) return (vl(this, this[Li].get(e)), !1);
-        let l = this[Li].get(e).value;
-        if (this[Ds]) {
-          if (!this[ZO]) this[Ds](e, l.value);
+    set(key, value, maxAge) {
+      maxAge = maxAge || this[MAX_AGE];
+      if (maxAge && typeof maxAge !== "number") throw TypeError("maxAge must be a number");
+      let now = maxAge ? Date.now() : 0;
+      let len = this[LENGTH_CALCULATOR](value, key);
+      if (this[CACHE].has(key)) {
+        if (len > this[MAX]) {
+          del(this, this[CACHE].get(key));
+          return false;
         }
-        return (
-          (l.now = o),
-          (l.maxAge = n),
-          (l.value = t),
-          (this[Ms] += r - l.length),
-          (l.length = r),
-          this.get(e),
-          ku(this),
-          !0
-        );
+        let item = this[CACHE].get(key).value;
+        if (this[DISPOSE]) {
+          if (!this[NO_DISPOSE_ON_SET]) this[DISPOSE](key, item.value);
+        }
+        item.now = now;
+        item.maxAge = maxAge;
+        item.value = value;
+        this[LENGTH] += len - item.length;
+        item.length = len;
+        this.get(key);
+        trim(this);
+        return true;
       }
-      let s = new WO(e, t, r, o, n);
-      if (s.length > this[Ba]) {
-        if (this[Ds]) this[Ds](e, t);
-        return !1;
+      let hit = new Entry(key, value, len, now, maxAge);
+      if (hit.length > this[MAX]) {
+        if (this[DISPOSE]) this[DISPOSE](key, value);
+        return false;
       }
-      return ((this[Ms] += s.length), this[Yn].unshift(s), this[Li].set(e, this[Yn].head), ku(this), !0);
+      this[LENGTH] += hit.length;
+      this[LRU_LIST].unshift(hit);
+      this[CACHE].set(key, this[LRU_LIST].head);
+      trim(this);
+      return true;
     }
-    has(e) {
-      if (!this[Li].has(e)) return !1;
-      let t = this[Li].get(e).value;
-      return !gf(this, t);
+    has(key) {
+      if (!this[CACHE].has(key)) return false;
+      let hit = this[CACHE].get(key).value;
+      return !isStale(this, hit);
     }
-    get(e) {
-      return py(this, e, !0);
+    get(key) {
+      return get(this, key, true);
     }
-    peek(e) {
-      return py(this, e, !1);
+    peek(key) {
+      return get(this, key, false);
     }
     pop() {
-      let tail = this[Yn].tail;
-      if (!tail) return null;
-      return (vl(this, tail), tail.value);
+      let node = this[LRU_LIST].tail;
+      if (!node) return null;
+      del(this, node);
+      return node.value;
     }
-    del(e) {
-      vl(this, this[Li].get(e));
+    del(key) {
+      del(this, this[CACHE].get(key));
     }
-    load(e) {
+    load(arr) {
       this.reset();
       let now = Date.now();
-      for (let n = e.length - 1; n >= 0; n--) {
-        let o = e[n],
-          r = o.e || 0;
-        if (r === 0) this.set(o.k, o.v);
+      for (let l = arr.length - 1; l >= 0; l--) {
+        let hit = arr[l];
+        let expiresAt = hit.e || 0;
+        if (expiresAt === 0) this.set(hit.k, hit.v);
         else {
-          let s = r - now;
-          if (s > 0) this.set(o.k, o.v, s);
+          let maxAge = expiresAt - now;
+          if (maxAge > 0) this.set(hit.k, hit.v, maxAge);
         }
       }
     }
     prune() {
-      this[Li].forEach((e, t) => py(this, t, !1));
+      this[CACHE].forEach((value, key) => get(this, key, false));
     }
   }
-  var py = (e, t, n) => {
-      let o = e[Li].get(t);
-      if (o) {
-        let r = o.value;
-        if (gf(e, r)) {
-          if ((vl(e, o), !e[Eu])) return;
-        } else if (n) {
-          if (e[qO]) o.value.now = Date.now();
-          e[Yn].unshiftNode(o);
-        }
-        return r.value;
+  var get = (e, key, doUse) => {
+    let node = e[CACHE].get(key);
+    if (node) {
+      let hit = node.value;
+      if (isStale(e, hit)) {
+        del(e, node);
+        if (!e[ALLOW_STALE]) return;
+      } else if (doUse) {
+        if (e[UPDATE_AGE_ON_GET]) node.value.now = Date.now();
+        e[LRU_LIST].unshiftNode(node);
       }
-    },
-    gf = (e, t) => {
-      if (!t || (!t.maxAge && !e[Ha])) return !1;
-      let n = Date.now() - t.now;
-      return t.maxAge ? n > t.maxAge : e[Ha] && n > e[Ha];
-    },
-    ku = (e) => {
-      if (e[Ms] > e[Ba])
-        for (let tail = e[Yn].tail; e[Ms] > e[Ba] && tail !== null;) {
-          let prev = tail.prev;
-          (vl(e, tail), (tail = prev));
-        }
-    },
-    vl = (e, t) => {
-      if (t) {
-        let n = t.value;
-        if (e[Ds]) e[Ds](n.key, n.value);
-        ((e[Ms] -= n.length), e[Li].delete(n.key), e[Yn].removeNode(t));
-      }
-    };
-  class WO {
-    constructor(e, t, n, o, r) {
-      ((this.key = e), (this.value = t), (this.length = n), (this.now = o), (this.maxAge = r || 0));
+      return hit.value;
     }
-  }
-  var VO = (e, t, n, o) => {
-    let r = n.value;
-    if (gf(e, r)) {
-      if ((vl(e, n), !e[Eu])) r = void 0;
-    }
-    if (r) t.call(o, r.value, r.key, e);
   };
-  YO.exports = GO;
+  var isStale = (e, hit) => {
+    if (!hit || (!hit.maxAge && !e[MAX_AGE])) return false;
+    let diff = Date.now() - hit.now;
+    return hit.maxAge ? diff > hit.maxAge : e[MAX_AGE] && diff > e[MAX_AGE];
+  };
+  var trim = (e) => {
+    if (e[LENGTH] > e[MAX])
+      for (let walker = e[LRU_LIST].tail; e[LENGTH] > e[MAX] && walker !== null;) {
+        let prev = walker.prev;
+        del(e, walker);
+        walker = prev;
+      }
+  };
+  var del = (e, node) => {
+    if (node) {
+      let hit = node.value;
+      if (e[DISPOSE]) e[DISPOSE](hit.key, hit.value);
+      e[LENGTH] -= hit.length;
+      e[CACHE].delete(hit.key);
+      e[LRU_LIST].removeNode(node);
+    }
+  };
+  class Entry {
+    constructor(key, value, length, now, maxAge) {
+      this.key = key;
+      this.value = value;
+      this.length = length;
+      this.now = now;
+      this.maxAge = maxAge || 0;
+    }
+  }
+  var forEachStep = (e, fn, node, thisp) => {
+    let hit = node.value;
+    if (isStale(e, hit)) {
+      del(e, node);
+      if (!e[ALLOW_STALE]) hit = undefined;
+    }
+    if (hit) fn.call(thisp, hit.value, hit.key, e);
+  };
+  cjsModule.exports = LRUCache;
 });
-
-export { yf };
+export { require_lru_cache };

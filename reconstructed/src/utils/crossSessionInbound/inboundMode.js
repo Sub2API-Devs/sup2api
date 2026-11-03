@@ -13,19 +13,22 @@ import {
   onGrowthBookRefresh,
 } from "../../services/analytics/growthbook.js";
 import { PERMISSION_MODES } from "../../types/permissions.js";
-import { ci } from "../swarm/hostState.js";
-import { _Le, a$t } from "./inboundGate.js";
+import { swarmHostState } from "../swarm/hostState.js";
+import { refreshAndReevaluateHeld, inboundRefuseCause } from "./inboundGate.js";
 import { mainAgentId } from "../../bootstrap/state.js";
 import { registerCleanup } from "../cleanupRegistry.js";
 import { logForDebugging } from "../debug.js";
 import { sleep } from "../sleep.js";
 import { isSettingSourceEnabled } from "../settings/constants.js";
 import { getSettingsForSource } from "../settings/settings.js";
-import { N } from "../../components/KeybindingWarnings.js";
+import { hasKeybindingWarning } from "../../components/KeybindingWarnings.js";
 
 //@ chunk-q40vccff.js:714-772 placement
-function r$t() {
-  return getFeatureValue_CACHED_MAY_BE_STALE("tengu_harbor_kite_mode_emit", !0);
+/**
+ * 读取 tengu_harbor_kite_mode_emit 开关。
+ */
+function isModeEmitFlagOn() {
+  return getFeatureValue_CACHED_MAY_BE_STALE("tengu_harbor_kite_mode_emit", true);
 }
 //@ chunk-q40vccff.js:772-1013 placement
 function getInboundDecidedBy() {
@@ -38,153 +41,223 @@ function getInboundDecidedBy() {
       return "invalid-setting";
     case "flagSettings":
     case "userSettings":
-    case void 0:
+    case undefined:
       return "explicit-setting";
   }
 }
 //@ chunk-q40vccff.js:1013-1066 placement
-var p = { accept: 0, hold: 1, refuse: 2 },
-  Q = 100,
-  P = new Set(PERMISSION_MODES);
+/**
+ * 入站策略的严格程度排序（accept < hold < refuse）。
+ */
+var POLICY_RANK = {
+  accept: 0,
+  hold: 1,
+  refuse: 2,
+};
+var MAX_POLICY_SETTING_CHARS = 100;
+var PERMISSION_MODE_SET = new Set(PERMISSION_MODES);
+//@ chunk-q40vccff.js:1066-1347 placement
 /**
  * 设置跨会话入站模式的读取函数：设置时清除关闭状态并通知模式变化；清除时先记住当前模式。
  */
-//@ chunk-q40vccff.js:1066-1347 placement
-function setInboundModeGetter(e) {
-  if (e !== null) ((ci().inbound.shuttingDown = !1), I(), (ci().inbound.modeAtUnwire = void 0));
-  else {
-    let getCurrentMode = ci().inbound.getCurrentMode;
+function setInboundModeGetter(readMode) {
+  if (readMode !== null) {
+    swarmHostState().inbound.shuttingDown = false;
+    registerShutdownSettle();
+    swarmHostState().inbound.modeAtUnwire = undefined;
+  } else {
+    let getCurrentMode = swarmHostState().inbound.getCurrentMode;
     if (getCurrentMode !== null)
       try {
-        ci().inbound.modeAtUnwire = getCurrentMode();
+        swarmHostState().inbound.modeAtUnwire = getCurrentMode();
       } catch {
-        ci().inbound.modeAtUnwire = void 0;
+        swarmHostState().inbound.modeAtUnwire = undefined;
       }
   }
-  if (((ci().inbound.getCurrentMode = e), e !== null)) _Le("mode-changed");
+  swarmHostState().inbound.getCurrentMode = readMode;
+  if (readMode !== null) refreshAndReevaluateHeld("mode-changed");
 }
 //@ chunk-q40vccff.js:1347-1389 placement
-function xon(e) {
-  ci().inbound.onPeerHeld = e;
+/**
+ * 注册“对等消息被暂扣”的回调。
+ */
+function setOnPeerHeld(onPeerHeld) {
+  swarmHostState().inbound.onPeerHeld = onPeerHeld;
 }
 //@ chunk-q40vccff.js:1389-1436 placement
-function wvo(e) {
-  ci().inbound.sendPeerReceipt = e;
+/**
+ * 注册发送对等回执的函数。
+ */
+function setSendPeerReceipt(sendPeerReceipt) {
+  swarmHostState().inbound.sendPeerReceipt = sendPeerReceipt;
 }
 //@ chunk-q40vccff.js:1436-1535 placement
-function SHs(e, n) {
-  ci().inbound.sendPeerReceipt?.({ mode: "prompt", agentId: mainAgentId(), value: "", origin: e }, n);
+/**
+ * 发送 prompt 模式的对等回执。
+ */
+function sendPromptReceipt(origin, n) {
+  swarmHostState().inbound.sendPeerReceipt?.(
+    {
+      mode: "prompt",
+      agentId: mainAgentId(),
+      value: "",
+      origin,
+    },
+    n,
+  );
 }
+//@ chunk-q40vccff.js:1535-1721 placement
 /**
  * 设置入站可用性发布函数，开启时立即发布并在特性开关刷新时重新发布。
  */
-//@ chunk-q40vccff.js:1535-1721 placement
-function setInboundAvailabilityPublisher(e) {
-  let inbound = ci().inbound;
-  if (
-    ((inbound.publishAvailability = e),
-    inbound.unsubscribeAvailabilityRefresh?.(),
-    (inbound.unsubscribeAvailabilityRefresh = null),
-    e)
-  )
-    (o$t(), (inbound.unsubscribeAvailabilityRefresh = onGrowthBookRefresh(o$t)));
+function setInboundAvailabilityPublisher(reportBridgeCrossSessionInbound) {
+  let inbound = swarmHostState().inbound;
+  inbound.publishAvailability = reportBridgeCrossSessionInbound;
+  inbound.unsubscribeAvailabilityRefresh?.();
+  inbound.unsubscribeAvailabilityRefresh = null;
+  if (reportBridgeCrossSessionInbound) {
+    publishInboundAvailability();
+    inbound.unsubscribeAvailabilityRefresh = onGrowthBookRefresh(publishInboundAvailability);
+  }
 }
 //@ chunk-q40vccff.js:1721-1787 placement
-function o$t() {
-  ci().inbound.publishAvailability?.(a$t() === void 0);
+/**
+ * 发布入站可用性（当前是否未被拒）。
+ */
+function publishInboundAvailability() {
+  swarmHostState().inbound.publishAvailability?.(inboundRefuseCause() === undefined);
 }
 //@ chunk-q40vccff.js:1787-1838 placement
-function Evo(e) {
-  ci().inbound.recordCorrespondent = e;
+/**
+ * 注册记录通信方的回调。
+ */
+function setRecordCorrespondent(recordCorrespondent) {
+  swarmHostState().inbound.recordCorrespondent = recordCorrespondent;
 }
 //@ chunk-q40vccff.js:1838-1848 placement
-var F = 750;
+/**
+ * 关闭时等待暂扣消息结算的时长（750 毫秒）。
+ */
+var SHUTDOWN_SETTLE_MS = 750;
 //@ chunk-q40vccff.js:1848-1947 placement
-function I() {
-  if (ci().inbound.shutdownSettleHandle === null)
-    ci().inbound.shutdownSettleHandle = registerCleanup(settleHeldInboundOnShutdown);
+/**
+ * 注册关闭时的暂扣结算清理（只注册一次）。
+ */
+function registerShutdownSettle() {
+  if (swarmHostState().inbound.shutdownSettleHandle === null)
+    swarmHostState().inbound.shutdownSettleHandle = registerCleanup(settleHeldInboundOnShutdown);
 }
+//@ chunk-q40vccff.js:1947-2390 placement
 /**
  * 关闭时把仍暂扣的跨会话消息按过期处理：发送回执并通知丢弃，最多等待一段时间。
  */
-//@ chunk-q40vccff.js:1947-2390 placement
 async function settleHeldInboundOnShutdown() {
-  let inbound = ci().inbound;
-  if (
-    (inbound.shutdownSettleHandle?.(),
-    (inbound.shutdownSettleHandle = null),
-    (inbound.shuttingDown = !0),
-    inbound.held.length === 0)
-  )
-    return;
-  let splice = inbound.held.splice(0, inbound.held.length);
+  let inbound = swarmHostState().inbound;
+  inbound.shutdownSettleHandle?.();
+  inbound.shutdownSettleHandle = null;
+  inbound.shuttingDown = true;
+  if (inbound.held.length === 0) return;
+  let n = inbound.held.splice(0, inbound.held.length);
   logForDebugging(
-    `[cross-session-inbound] shutdown: settling ${splice.length} still-held peer message(s) as expired`,
+    `[cross-session-inbound] shutdown: settling ${n.length} still-held peer message(s) as expired`,
   );
   let o = [];
-  for (let s of splice)
-    (o.push(inbound.sendPeerReceipt?.(s, "expired")), inbound.onPeerHoldDropped?.(s, "expired"));
-  await Promise.race([Promise.allSettled(o), sleep(F, void 0, { unref: !0 })]);
+  for (let s of n) {
+    o.push(inbound.sendPeerReceipt?.(s, "expired"));
+    inbound.onPeerHoldDropped?.(s, "expired");
+  }
+  await Promise.race([
+    Promise.allSettled(o),
+    sleep(SHUTDOWN_SETTLE_MS, undefined, {
+      unref: true,
+    }),
+  ]);
 }
 //@ chunk-q40vccff.js:2390-2478 placement
-function vvo(e) {
-  let { inbound: inbound } = ci();
-  return inbound.held.includes(e) ? inbound.announced.get(e) : void 0;
+/**
+ * 返回暂扣消息已公告的内容。
+ */
+function announcedHeldMessage(e) {
+  let { inbound } = swarmHostState();
+  return inbound.held.includes(e) ? inbound.announced.get(e) : undefined;
 }
 //@ chunk-q40vccff.js:2478-2527 placement
-function Ion(e) {
-  ci().inbound.onPeerHoldDropped = e;
+/**
+ * 注册“对等暂扣被丢弃”的回调。
+ */
+function setOnPeerHoldDropped(onPeerHoldDropped) {
+  swarmHostState().inbound.onPeerHoldDropped = onPeerHoldDropped;
 }
 //@ chunk-q40vccff.js:2527-2577 placement
-function Oon(e) {
-  ci().inbound.onPeerHoldReleased = e;
+/**
+ * 注册“对等暂扣被释放”的回调。
+ */
+function setOnPeerHoldReleased(onPeerHoldReleased) {
+  swarmHostState().inbound.onPeerHoldReleased = onPeerHoldReleased;
 }
 //@ chunk-q40vccff.js:2577-2609 placement
-function hLe() {
+/**
+ * 解析 crossSessionInbound 设置值（项目层可取更严格值）。
+ */
+function currentInboundSetting() {
   return resolveInboundSetting().value;
 }
+//@ chunk-q40vccff.js:2609-3113 placement
 /**
  * 解析 crossSessionInbound 设置：先取策略/flag/用户设置，再让项目层取更严格的值（记为仓库设置）；设置无效时强制为 hold。
  */
-//@ chunk-q40vccff.js:2609-3113 placement
 function resolveInboundSetting() {
-  let value, decidedBy;
+  let value;
+  let decidedBy;
   for (let o of ["policySettings", "flagSettings", "userSettings"]) {
     if (!isSettingSourceEnabled(o)) continue;
-    let s = getSettingsForSource(o)?.crossSessionInbound;
-    if (s !== void 0) {
-      ((value = s), (decidedBy = o));
+    let crossSessionInbound = getSettingsForSource(o)?.crossSessionInbound;
+    if (crossSessionInbound !== undefined) {
+      value = crossSessionInbound;
+      decidedBy = o;
       break;
     }
   }
   for (let o of ["localSettings", "projectSettings"]) {
     if (!isSettingSourceEnabled(o)) continue;
-    let s = getSettingsForSource(o)?.crossSessionInbound;
-    if (s === void 0) continue;
-    if (p[s] > p[value ?? "accept"]) ((value = s), (decidedBy = "repoSettings"));
-    else if (s !== "accept" && value !== void 0 && p[s] === p[value] && decidedBy !== "policySettings")
+    let crossSessionInbound = getSettingsForSource(o)?.crossSessionInbound;
+    if (crossSessionInbound === undefined) continue;
+    if (POLICY_RANK[crossSessionInbound] > POLICY_RANK[value ?? "accept"]) {
+      value = crossSessionInbound;
+      decidedBy = "repoSettings";
+    } else if (
+      crossSessionInbound !== "accept" &&
+      value !== undefined &&
+      POLICY_RANK[crossSessionInbound] === POLICY_RANK[value] &&
+      decidedBy !== "policySettings"
+    )
       decidedBy = "repoSettings";
   }
-  if (p[value ?? "accept"] < p.hold && N()) ((value = "hold"), (decidedBy = "invalidSetting"));
-  return { value: value, decidedBy: decidedBy };
+  if (POLICY_RANK[value ?? "accept"] < POLICY_RANK.hold && hasKeybindingWarning()) {
+    value = "hold";
+    decidedBy = "invalidSetting";
+  }
+  return {
+    value,
+    decidedBy,
+  };
 }
-
 export {
-  SHs,
+  sendPromptReceipt,
   settleHeldInboundOnShutdown,
-  wvo,
-  Evo,
-  r$t,
-  xon,
-  Ion,
-  Oon,
+  setSendPeerReceipt,
+  setRecordCorrespondent,
+  isModeEmitFlagOn,
+  setOnPeerHeld,
+  setOnPeerHoldDropped,
+  setOnPeerHoldReleased,
   setInboundModeGetter,
   setInboundAvailabilityPublisher,
-  hLe,
-  o$t,
+  currentInboundSetting,
+  publishInboundAvailability,
   getInboundDecidedBy,
-  P,
-  Q,
-  I,
-  vvo,
+  PERMISSION_MODE_SET,
+  MAX_POLICY_SETTING_CHARS,
+  registerShutdownSettle,
+  announcedHeldMessage,
 };

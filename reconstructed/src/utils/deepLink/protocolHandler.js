@@ -19,27 +19,34 @@ import { formatMarketplaceInstallCommand } from "../../commands/plugin/parseArgs
 import { launchInTerminal } from "./terminalLauncher.js";
 import { getKnownPathsForRepo, filterExistingPaths } from "../githubRepoPathMapping.js";
 
+//@ chunk-bh9w80kx.js:10523-11432 fingerprint = handleDeepLinkUri (0.685)
 /**
  * `claude --handle-uri <uri>` 的处理：解析深链接；open 时解析工作目录（cwd 或按 repo 查本地克隆）并读最近 fetch 时间，install-plugin 时在家目录用预置 query 安装插件；然后在终端里启动新的 claude 会话。返回退出码并上报 deep_link_handle。
  */
-//@ chunk-bh9w80kx.js:10523-11432 fingerprint = handleDeepLinkUri (0.685)
 async function handleDeepLinkUri(uri) {
   logForDebugging(`Handling deep link URI: ${uri}`);
   let action;
   try {
     action = parseDeepLink(uri);
   } catch (error) {
-    let l = error instanceof Error ? error.message : String(error);
-    return (console.error(`Deep link error: ${l}`), logFeatureBad("deep_link_handle", "parse_failed"), 1);
+    let message = error instanceof Error ? error.message : String(error);
+    console.error(`Deep link error: ${message}`);
+    logFeatureBad("deep_link_handle", "parse_failed");
+    return 1;
   }
   logForDebugging(`Parsed deep link action: ${jsonStringify(action)}`);
-  let e = await realpath(process.execPath).catch(() => process.execPath),
-    launchAction;
+  let claudePath = await realpath(process.execPath).catch(() => process.execPath);
+  let launchAction;
   switch (action.action) {
     case "open": {
-      let { cwd: cwd, resolvedRepo: resolvedRepo } = await resolveCwd(action),
-        c = resolvedRepo ? await readLastFetchTime(cwd) : void 0;
-      launchAction = { query: action.query, cwd: cwd, repo: resolvedRepo, lastFetchMs: c?.getTime() };
+      let { cwd, resolvedRepo } = await resolveCwd(action);
+      let lastFetch = resolvedRepo ? await readLastFetchTime(cwd) : undefined;
+      launchAction = {
+        query: action.query,
+        cwd,
+        repo: resolvedRepo,
+        lastFetchMs: lastFetch?.getTime(),
+      };
       break;
     }
     case "install-plugin":
@@ -54,34 +61,43 @@ async function handleDeepLinkUri(uri) {
   }
   let launched;
   try {
-    launched = await launchInTerminal(e, launchAction);
+    launched = await launchInTerminal(claudePath, launchAction);
   } catch (error) {
     let l = error instanceof Error ? error.message : String(error);
-    return (console.error(`Deep link error: ${l}`), logFeatureBad("deep_link_handle", "launch_error"), 1);
+    console.error(`Deep link error: ${l}`);
+    logFeatureBad("deep_link_handle", "launch_error");
+    return 1;
   }
-  if (!launched)
-    return (
-      console.error("Failed to open a terminal. Make sure a supported terminal emulator is installed."),
-      logFeatureBad("deep_link_handle", "no_terminal"),
-      1
-    );
-  return (logFeatureOk("deep_link_handle"), 0);
+  if (!launched) {
+    console.error("Failed to open a terminal. Make sure a supported terminal emulator is installed.");
+    logFeatureBad("deep_link_handle", "no_terminal");
+    return 1;
+  }
+  logFeatureOk("deep_link_handle");
+  return 0;
 }
+//@ chunk-bh9w80kx.js:11432-11696 fingerprint = resolveCwd (1)
 /**
  * 确定深链接会话的工作目录：显式 cwd；否则按 repo 在已知路径中找存在的本地克隆；都没有用家目录。
  */
-//@ chunk-bh9w80kx.js:11432-11696 fingerprint = resolveCwd (1)
 async function resolveCwd(action) {
-  if (action.cwd) return { cwd: action.cwd };
+  if (action.cwd)
+    return {
+      cwd: action.cwd,
+    };
   if (action.repo) {
-    let known = getKnownPathsForRepo(action.repo),
-      existing = await filterExistingPaths(known);
-    if (existing[0])
-      return (
-        logForDebugging(`Resolved repo ${action.repo} \u2192 ${existing[0]}`),
-        { cwd: existing[0], resolvedRepo: action.repo }
-      );
+    let known = getKnownPathsForRepo(action.repo);
+    let existing = await filterExistingPaths(known);
+    if (existing[0]) {
+      logForDebugging(`Resolved repo ${action.repo} \u2192 ${existing[0]}`);
+      return {
+        cwd: existing[0],
+        resolvedRepo: action.repo,
+      };
+    }
     logForDebugging(`No local clone found for repo ${action.repo}, falling back to home`);
   }
-  return { cwd: homedir() };
+  return {
+    cwd: homedir(),
+  };
 }

@@ -8,12 +8,14 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:34494-35394 cjs-fingerprint
-var Rt = x(function (fu, At) {
-  function tl(e) {
-    let t = { begin: "`[\\s\\S]" };
+var require_autohotkey = x(function (cjsExports, cjsModule) {
+  function autohotkey(hljs) {
+    let BACKTICK_ESCAPE = {
+      begin: "`[\\s\\S]",
+    };
     return {
       name: "AutoHotkey",
-      case_insensitive: !0,
+      case_insensitive: true,
       aliases: ["ahk"],
       keywords: {
         keyword:
@@ -22,24 +24,55 @@ var Rt = x(function (fu, At) {
         built_in: "ComSpec Clipboard ClipboardAll ErrorLevel",
       },
       contains: [
-        t,
-        e.inherit(e.QUOTE_STRING_MODE, { contains: [t] }),
-        e.COMMENT(";", "$", { relevance: 0 }),
-        e.C_BLOCK_COMMENT_MODE,
-        { className: "number", begin: e.NUMBER_RE, relevance: 0 },
-        { className: "variable", begin: "%[a-zA-Z0-9#_$@]+%" },
-        { className: "built_in", begin: "^\\s*\\w+\\s*(,|%)" },
+        BACKTICK_ESCAPE,
+        hljs.inherit(hljs.QUOTE_STRING_MODE, {
+          contains: [BACKTICK_ESCAPE],
+        }),
+        hljs.COMMENT(";", "$", {
+          relevance: 0,
+        }),
+        hljs.C_BLOCK_COMMENT_MODE,
+        {
+          className: "number",
+          begin: hljs.NUMBER_RE,
+          relevance: 0,
+        },
+        {
+          className: "variable",
+          begin: "%[a-zA-Z0-9#_$@]+%",
+        },
+        {
+          className: "built_in",
+          begin: "^\\s*\\w+\\s*(,|%)",
+        },
         {
           className: "title",
-          variants: [{ begin: '^[^\\n";]+::(?!=)' }, { begin: '^[^\\n";]+:(?!=)', relevance: 0 }],
+          variants: [
+            {
+              begin: '^[^\\n";]+::(?!=)',
+            },
+            {
+              begin: '^[^\\n";]+:(?!=)',
+              relevance: 0,
+            },
+          ],
         },
-        { className: "meta", begin: "^\\s*#\\w+", end: "$", relevance: 0 },
-        { className: "built_in", begin: "A_[a-zA-Z0-9]+" },
-        { begin: ",\\s*," },
+        {
+          className: "meta",
+          begin: "^\\s*#\\w+",
+          end: "$",
+          relevance: 0,
+        },
+        {
+          className: "built_in",
+          begin: "A_[a-zA-Z0-9]+",
+        },
+        {
+          begin: ",\\s*,",
+        },
       ],
     };
   }
-  At.exports = tl;
+  cjsModule.exports = autohotkey;
 });
-
-export { Rt };
+export { require_autohotkey };

@@ -8,9 +8,9 @@
  * pieces: chunk-41w44bgm.js (3)
  * attribution: placement 3
  */
-import { join, join as join_2, dirname, dirname as dirname_2 } from "path";
-import { readFile, mkdir, mkdir as mkdir_2, open, open as open_2, appendFile } from "fs/promises";
-import { nDr, Iz } from "./snapshots.js";
+import { join, dirname } from "path";
+import { readFile, mkdir, open, appendFile } from "fs/promises";
+import { sessionProjectKey, subagentWorkflowDir } from "./snapshots.js";
 import { STORAGE_SPACES } from "../../utils/storage/storageSpaces.js";
 import { getSessionId } from "../../bootstrap/state.js";
 import { validateStorageKey } from "../../utils/storage/storageKeys.js";
@@ -29,28 +29,37 @@ import { logForDebugging } from "../../utils/debug.js";
 import { formatStorageError } from "../../utils/storage/storageErrors.js";
 
 //@ chunk-41w44bgm.js:30489-30500 placement
-class iin {}
+/**
+ * 空类占位（工作流日志相关，当前无字段）。
+ */
+class WorkflowJournalStub {}
 //@ chunk-41w44bgm.js:30500-30619 placement
 function workflowJournalKey(e) {
-  let n = nDr();
-  if (n === void 0) return;
-  let journal = STORAGE_SPACES.journal(n, getSessionId(), ["workflows", e]);
-  return validateStorageKey(journal) === void 0 ? journal : void 0;
+  let n = sessionProjectKey();
+  if (n === undefined) return;
+  let r = STORAGE_SPACES.journal(n, getSessionId(), ["workflows", e]);
+  return validateStorageKey(r) === undefined ? r : undefined;
 }
 //@ chunk-41w44bgm.js:30619-33596 placement
 class LocalFileJournal {
   path;
   storageV5;
-  dirReady = !1;
-  isTailEnded = !1;
+  dirReady = false;
+  isTailEnded = false;
   appendTurns = createMutex();
   constructor(e, n) {
-    this.path = join(Iz(e), "journal.jsonl");
-    let r = n === void 0 ? void 0 : workflowJournalKey(e);
-    this.storageV5 = n === void 0 || r === void 0 ? void 0 : { backend: n, key: r };
+    this.path = join(subagentWorkflowDir(e), "journal.jsonl");
+    let r = n === undefined ? undefined : workflowJournalKey(e);
+    this.storageV5 =
+      n === undefined || r === undefined
+        ? undefined
+        : {
+            backend: n,
+            key: r,
+          };
   }
   async readLines() {
-    if (this.storageV5 !== void 0) return this.loadV5(this.storageV5);
+    if (this.storageV5 !== undefined) return this.loadV5(this.storageV5);
     try {
       return (await readFile(this.path, "utf8")).split(`
 `);
@@ -61,141 +70,185 @@ class LocalFileJournal {
   }
   async restoreState() {
     let lines = await this.readLines();
-    if (lines === void 0) return "missing";
+    if (lines === undefined) return "missing";
     return lines[0] === RESTORING_LINE && !lines.includes(RESTORED_LINE) ? "partial" : "complete";
   }
   async writeRestored(e) {
-    let mapped = [{ type: "restoring" }, ...e, { type: "restored" }].map((y) => toJsonLine(y)),
-      storageV5 = this.storageV5;
-    if (storageV5 === void 0) {
-      (await mkdir(dirname(this.path), { recursive: !0 }), await writeFileAtomic(this.path, mapped.join("")));
+    let mapped = [
+      {
+        type: "restoring",
+      },
+      ...e,
+      {
+        type: "restored",
+      },
+    ].map((y) => toJsonLine(y));
+    let storageV5 = this.storageV5;
+    if (storageV5 === undefined) {
+      await mkdir(dirname(this.path), {
+        recursive: true,
+      });
+      await writeFileAtomic(this.path, mapped.join(""));
       return;
     }
     let h = await storageV5.backend.delete(storageV5.key);
     if (!h.ok && h.error.code !== "NotFound")
-      throw Error("LocalFileJournal: journal delete failed", { cause: h.error });
-    let append = await storageV5.backend.append(
+      throw Error("LocalFileJournal: journal delete failed", {
+        cause: h.error,
+      });
+    let T = await storageV5.backend.append(
       storageV5.key,
-      mapped.map((y) => ({ data: y })),
+      mapped.map((data) => ({
+        data,
+      })),
     );
-    if (!append.ok) throw Error("LocalFileJournal: journal append failed", { cause: append.error });
+    if (!T.ok)
+      throw Error("LocalFileJournal: journal append failed", {
+        cause: T.error,
+      });
   }
   async load() {
     let lines = await this.readLines();
-    if (lines === void 0) return indexJournalEntries([]);
-    let n = [],
-      r = this.storageV5 !== void 0 && (await this.isTailTorn());
+    if (lines === undefined) return indexJournalEntries([]);
+    let entries = [];
+    let r = this.storageV5 !== undefined && (await this.isTailTorn());
     for (let [h, T] of lines.entries()) {
       if (!T || T === RESUMED_LINE) continue;
       try {
-        n.push(jsonParseRaw(T));
+        entries.push(jsonParseRaw(T));
       } catch (error) {
         let L =
-          ((this.storageV5 === void 0 && h === lines.length - 1) || lines[h + 1] === RESUMED_LINE) &&
+          ((this.storageV5 === undefined && h === lines.length - 1) || lines[h + 1] === RESUMED_LINE) &&
           !containsLaunchedLine(T);
-        ((r ||= !L),
-          logForDebugging(`LocalFileJournal: skipping unparseable line in ${this.path}: ${error}`));
+        r ||= !L;
+        logForDebugging(`LocalFileJournal: skipping unparseable line in ${this.path}: ${error}`);
       }
     }
-    return { ...indexJournalEntries(n), ...(r && { hasUnreadLine: !0 }) };
+    return {
+      ...indexJournalEntries(entries),
+      ...(r && {
+        hasUnreadLine: true,
+      }),
+    };
   }
-  async loadV5({ backend: e, key: n }) {
-    let textDecoder = new TextDecoder("utf-8", { ignoreBOM: !0 }),
-      h = [],
-      T;
+  async loadV5({ backend, key }) {
+    let textDecoder = new TextDecoder("utf-8", {
+      ignoreBOM: true,
+    });
+    let h = [];
+    let T;
     for (;;) {
-      let records = await e.readRecords(n, T === void 0 ? void 0 : { fromSeq: T });
+      let records = await backend.readRecords(
+        key,
+        T === undefined
+          ? undefined
+          : {
+              fromSeq: T,
+            },
+      );
       if (!records.ok) {
         if (records.error.code === "NotFound") return;
-        throw (
-          logForDebugging(
-            `LocalFileJournal: read of ${this.path} failed: ${formatStorageError(records.error)}`,
-          ),
-          Error("LocalFileJournal: journal read failed", { cause: records.error })
+        logForDebugging(
+          `LocalFileJournal: read of ${this.path} failed: ${formatStorageError(records.error)}`,
         );
+        throw Error("LocalFileJournal: journal read failed", {
+          cause: records.error,
+        });
       }
       for (let item of records.value.items) {
-        let decode = textDecoder.decode(item.data);
+        let j = textDecoder.decode(item.data);
         h.push(
-          decode.endsWith(`
+          j.endsWith(`
 `)
-            ? decode.slice(0, -1)
-            : decode,
+            ? j.slice(0, -1)
+            : j,
         );
       }
       let nextSeq = records.value.nextSeq;
-      if (nextSeq === void 0) return h;
-      if (T !== void 0 && nextSeq <= T)
+      if (nextSeq === undefined) return h;
+      if (T !== undefined && nextSeq <= T)
         throw Error("LocalFileJournal: journal read cursor failed to advance");
       T = nextSeq;
     }
   }
   async isTailTorn() {
     let storageV5 = this.storageV5;
-    if (storageV5 !== void 0) {
+    if (storageV5 !== undefined) {
       let stats = await storageV5.backend.stat(storageV5.key);
       if (!stats.ok) {
-        if (stats.error.code === "NotFound") return !1;
-        throw Error("LocalFileJournal: journal stat failed", { cause: stats.error });
+        if (stats.error.code === "NotFound") return false;
+        throw Error("LocalFileJournal: journal stat failed", {
+          cause: stats.error,
+        });
       }
       return (stats.value.tornTailBytes ?? 0) > 0;
     }
     let n;
     try {
-      n = await open_2(this.path, "r");
+      n = await open(this.path, "r");
     } catch (error) {
-      if (isENOENT(error)) return !1;
+      if (isENOENT(error)) return false;
       throw error;
     }
     try {
-      let { size: size } = await n.stat();
-      if (size === 0) return !1;
-      let alloc = Buffer.alloc(1);
-      return (await n.read(alloc, 0, 1, size - 1), alloc[0] !== 10);
+      let { size } = await n.stat();
+      if (size === 0) return false;
+      let h = Buffer.alloc(1);
+      await n.read(h, 0, 1, size - 1);
+      return h[0] !== 10;
     } finally {
       await n.close();
     }
   }
   async append(e) {
-    let acquire = await this.appendTurns.acquire();
+    let n = await this.appendTurns.acquire();
     try {
-      let r = !this.isTailEnded && (await this.isTailTorn()),
-        storageV5 = this.storageV5;
-      if (storageV5 !== void 0) {
+      let r = !this.isTailEnded && (await this.isTailTorn());
+      let storageV5 = this.storageV5;
+      if (storageV5 !== undefined) {
         let y = r
-            ? [
-                {
-                  data: `
+          ? [
+              {
+                data: `
 `,
-                },
-                {
-                  data: `${RESUMED_LINE}
+              },
+              {
+                data: `${RESUMED_LINE}
 `,
-                },
-              ]
-            : [],
-          append = await storageV5.backend.append(storageV5.key, [...y, { data: toJsonLine(e) }]);
-        if (!append.ok)
-          throw (
-            logForDebugging(
-              `LocalFileJournal: append to ${this.path} failed: ${formatStorageError(append.error)}`,
-            ),
-            Error("LocalFileJournal: journal append failed", { cause: append.error })
-          );
-        this.isTailEnded = !0;
+              },
+            ]
+          : [];
+        let A = await storageV5.backend.append(storageV5.key, [
+          ...y,
+          {
+            data: toJsonLine(e),
+          },
+        ]);
+        if (!A.ok) {
+          logForDebugging(`LocalFileJournal: append to ${this.path} failed: ${formatStorageError(A.error)}`);
+          throw Error("LocalFileJournal: journal append failed", {
+            cause: A.error,
+          });
+        }
+        this.isTailEnded = true;
         return;
       }
-      if (!this.dirReady) (await mkdir(dirname(this.path), { recursive: !0 }), (this.dirReady = !0));
+      if (!this.dirReady) {
+        await mkdir(dirname(this.path), {
+          recursive: true,
+        });
+        this.dirReady = true;
+      }
       let T = r
         ? `
 ${RESUMED_LINE}
 `
         : "";
-      (await appendFile(this.path, T + toJsonLine(e), "utf8"), (this.isTailEnded = !0));
+      await appendFile(this.path, T + toJsonLine(e), "utf8");
+      this.isTailEnded = true;
     } finally {
-      acquire();
+      n();
     }
   }
 }
-
-export { iin, LocalFileJournal };
+export { WorkflowJournalStub, LocalFileJournal };

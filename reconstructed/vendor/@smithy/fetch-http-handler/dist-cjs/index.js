@@ -6,166 +6,192 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { Kg } from "../../protocol-http/dist-cjs/index.js";
-import { uSr } from "../../querystring-builder/dist-cjs/index.js";
+import { require_protocol_http } from "../../protocol-http/dist-cjs/index.js";
+import { require_querystring_builder } from "../../querystring-builder/dist-cjs/index.js";
 import { base64Module } from "../../../@aws-sdk/credential-provider-web-identity/dist-cjs/index.js";
 
 //@ chunk-wr8v03d0.js:2765-5955 cjs-fingerprint
-var nke = x(function (he) {
-  var I = Kg(),
-    ie = uSr(),
-    ae = base64Module();
-  function D(e, r) {
-    return new Request(e, r);
+var require_fetch_http_handler = x(function (cjsExports) {
+  var HttpResponse = require_protocol_http();
+  var ie = require_querystring_builder();
+  var fromBase64 = base64Module();
+  function createRequest(url, requestOptions) {
+    return new Request(url, requestOptions);
   }
-  function ue(e = 0) {
-    return new Promise((r, t) => {
-      if (e)
+  function requestTimeout(timeoutInMs = 0) {
+    return new Promise((resolve, reject) => {
+      if (timeoutInMs)
         setTimeout(() => {
-          let o = Error(`Request did not complete within ${e} ms`);
-          ((o.name = "TimeoutError"), t(o));
-        }, e);
+          let timeoutError = Error(`Request did not complete within ${timeoutInMs} ms`);
+          timeoutError.name = "TimeoutError";
+          reject(timeoutError);
+        }, timeoutInMs);
     });
   }
-  var p = { supported: void 0 };
-  class w {
+  var keepAliveSupport = {
+    supported: undefined,
+  };
+  class FetchHttpHandler {
     config;
     configProvider;
-    static create(e) {
-      if (typeof e?.handle === "function") return e;
-      return new w(e);
+    static create(instanceOrOptions) {
+      if (typeof instanceOrOptions?.handle === "function") return instanceOrOptions;
+      return new FetchHttpHandler(instanceOrOptions);
     }
-    constructor(e) {
-      if (typeof e === "function") this.configProvider = e().then((r) => r || {});
-      else ((this.config = e ?? {}), (this.configProvider = Promise.resolve(this.config)));
-      if (p.supported === void 0)
-        p.supported = Boolean(typeof Request < "u" && "keepalive" in D("https://[::1]"));
+    constructor(options) {
+      if (typeof options === "function") this.configProvider = options().then((opts) => opts || {});
+      else {
+        this.config = options ?? {};
+        this.configProvider = Promise.resolve(this.config);
+      }
+      if (keepAliveSupport.supported === undefined)
+        keepAliveSupport.supported = Boolean(
+          typeof Request !== "undefined" && "keepalive" in createRequest("https://[::1]"),
+        );
     }
     destroy() {}
-    async handle(e, { abortSignal: r, requestTimeout: t } = {}) {
+    async handle(request, { abortSignal, requestTimeout: requestTimeout$1 } = {}) {
       if (!this.config) this.config = await this.configProvider;
-      let o = t ?? this.config.requestTimeout,
-        f = this.config.keepAlive === !0,
-        credentials = this.config.credentials;
-      if (r?.aborted) {
-        let n = Error("Request aborted");
-        return ((n.name = "AbortError"), Promise.reject(n));
+      let requestTimeoutInMs = requestTimeout$1 ?? this.config.requestTimeout;
+      let keepAlive = this.config.keepAlive === true;
+      let credentials = this.config.credentials;
+      if (abortSignal?.aborted) {
+        let abortError = Error("Request aborted");
+        abortError.name = "AbortError";
+        return Promise.reject(abortError);
       }
-      let path = e.path,
-        queryString = ie.buildQueryString(e.query || {});
+      let path = request.path;
+      let queryString = ie.buildQueryString(request.query || {});
       if (queryString) path += `?${queryString}`;
-      if (e.fragment) path += `#${e.fragment}`;
-      let c = "";
-      if (e.username != null || e.password != null) {
-        let n = e.username ?? "",
-          l = e.password ?? "";
-        c = `${n}:${l}@`;
+      if (request.fragment) path += `#${request.fragment}`;
+      let auth = "";
+      if (request.username != null || request.password != null) {
+        let username = request.username ?? "";
+        let password = request.password ?? "";
+        auth = `${username}:${password}@`;
       }
-      let { port: port, method: method } = e,
-        M = `${e.protocol}//${c}${e.hostname}${port ? `:${port}` : ""}${path}`,
-        A = method === "GET" || method === "HEAD" ? void 0 : e.body,
-        y = { body: A, headers: new Headers(e.headers), method: method, credentials: credentials };
-      if (this.config?.cache) y.cache = this.config.cache;
-      if (A) y.duplex = "half";
-      if (typeof AbortController < "u") y.signal = r;
-      if (p.supported) y.keepalive = f;
-      if (typeof this.config.requestInit === "function") Object.assign(y, this.config.requestInit(e));
-      let E = () => {},
-        F = D(M, y),
-        v = [
-          fetch(F).then((n) => {
-            let headers = n.headers,
-              u = {};
-            for (let b of headers.entries()) u[b[0]] = b[1];
-            if (n.body == null)
-              return n
-                .blob()
-                .then((b) => ({
-                  response: new I.HttpResponse({
-                    headers: u,
-                    reason: n.statusText,
-                    statusCode: n.status,
-                    body: b,
-                  }),
-                }));
-            return {
-              response: new I.HttpResponse({
-                headers: u,
-                reason: n.statusText,
-                statusCode: n.status,
-                body: n.body,
+      let { port, method } = request;
+      let url = `${request.protocol}//${auth}${request.hostname}${port ? `:${port}` : ""}${path}`;
+      let body = method === "GET" || method === "HEAD" ? undefined : request.body;
+      let requestOptions = {
+        body,
+        headers: new Headers(request.headers),
+        method,
+        credentials,
+      };
+      if (this.config?.cache) requestOptions.cache = this.config.cache;
+      if (body) requestOptions.duplex = "half";
+      if (typeof AbortController !== "undefined") requestOptions.signal = abortSignal;
+      if (keepAliveSupport.supported) requestOptions.keepalive = keepAlive;
+      if (typeof this.config.requestInit === "function")
+        Object.assign(requestOptions, this.config.requestInit(request));
+      let removeSignalEventListener = () => {};
+      let fetchRequest = createRequest(url, requestOptions);
+      let raceOfPromises = [
+        fetch(fetchRequest).then((response) => {
+          let fetchHeaders = response.headers;
+          let transformedHeaders = {};
+          for (let pair of fetchHeaders.entries()) transformedHeaders[pair[0]] = pair[1];
+          if (response.body == null)
+            return response.blob().then((body) => ({
+              response: new HttpResponse.HttpResponse({
+                headers: transformedHeaders,
+                reason: response.statusText,
+                statusCode: response.status,
+                body,
               }),
+            }));
+          return {
+            response: new HttpResponse.HttpResponse({
+              headers: transformedHeaders,
+              reason: response.statusText,
+              statusCode: response.status,
+              body: response.body,
+            }),
+          };
+        }),
+        requestTimeout(requestTimeoutInMs),
+      ];
+      if (abortSignal)
+        raceOfPromises.push(
+          new Promise((resolve, reject) => {
+            let onAbort = () => {
+              let abortError = Error("Request aborted");
+              abortError.name = "AbortError";
+              reject(abortError);
             };
-          }),
-          ue(o),
-        ];
-      if (r)
-        v.push(
-          new Promise((n, l) => {
-            let u = () => {
-              let d = Error("Request aborted");
-              ((d.name = "AbortError"), l(d));
-            };
-            if (typeof r.addEventListener === "function") {
-              let d = r;
-              (d.addEventListener("abort", u, { once: !0 }), (E = () => d.removeEventListener("abort", u)));
-            } else r.onabort = u;
+            if (typeof abortSignal.addEventListener === "function") {
+              let signal = abortSignal;
+              signal.addEventListener("abort", onAbort, {
+                once: true,
+              });
+              removeSignalEventListener = () => signal.removeEventListener("abort", onAbort);
+            } else abortSignal.onabort = onAbort;
           }),
         );
-      return Promise.race(v).finally(E);
+      return Promise.race(raceOfPromises).finally(removeSignalEventListener);
     }
-    updateHttpClientConfig(e, r) {
-      ((this.config = void 0), (this.configProvider = this.configProvider.then((t) => ((t[e] = r), t))));
+    updateHttpClientConfig(key, value) {
+      this.config = undefined;
+      this.configProvider = this.configProvider.then((config) => {
+        config[key] = value;
+        return config;
+      });
     }
     httpHandlerConfigs() {
       return this.config ?? {};
     }
   }
-  var ce = async (e) => {
-    if ((typeof Blob === "function" && e instanceof Blob) || e.constructor?.name === "Blob") {
-      if (Blob.prototype.arrayBuffer !== void 0) return new Uint8Array(await e.arrayBuffer());
-      return ye(e);
+  var streamCollector = async (stream) => {
+    if ((typeof Blob === "function" && stream instanceof Blob) || stream.constructor?.name === "Blob") {
+      if (Blob.prototype.arrayBuffer !== undefined) return new Uint8Array(await stream.arrayBuffer());
+      return collectBlob(stream);
     }
-    return de(e);
+    return collectStream(stream);
   };
-  async function ye(e) {
-    let r = await le(e),
-      fromBase64 = ae.fromBase64(r);
-    return new Uint8Array(fromBase64);
+  async function collectBlob(blob) {
+    let base64 = await readToBase64(blob);
+    let arrayBuffer = fromBase64.fromBase64(base64);
+    return new Uint8Array(arrayBuffer);
   }
-  async function de(e) {
-    let r = [],
-      reader = e.getReader(),
-      o = !1,
-      f = 0;
-    while (!o) {
-      let { done: a, value: c } = await reader.read();
-      if (c) (r.push(c), (f += c.length));
-      o = a;
+  async function collectStream(stream) {
+    let chunks = [];
+    let reader = stream.getReader();
+    let isDone = false;
+    let length = 0;
+    while (!isDone) {
+      let { done, value } = await reader.read();
+      if (value) {
+        chunks.push(value);
+        length += value.length;
+      }
+      isDone = done;
     }
-    let uint8Array = new Uint8Array(f),
-      s = 0;
-    for (let a of r) (uint8Array.set(a, s), (s += a.length));
-    return uint8Array;
+    let collected = new Uint8Array(length);
+    let offset = 0;
+    for (let chunk of chunks) {
+      collected.set(chunk, offset);
+      offset += chunk.length;
+    }
+    return collected;
   }
-  function le(e) {
-    return new Promise((r, t) => {
-      let fileReader = new FileReader();
-      ((fileReader.onloadend = () => {
-        if (fileReader.readyState !== 2) return t(Error("Reader aborted too early"));
-        let f = fileReader.result ?? "",
-          index = f.indexOf(","),
-          s = index > -1 ? index + 1 : f.length;
-        r(f.substring(s));
-      }),
-        (fileReader.onabort = () => t(Error("Read aborted"))),
-        (fileReader.onerror = () => t(fileReader.error)),
-        fileReader.readAsDataURL(e));
+  function readToBase64(blob) {
+    return new Promise((resolve, reject) => {
+      let reader = new FileReader();
+      reader.onloadend = () => {
+        if (reader.readyState !== 2) return reject(Error("Reader aborted too early"));
+        let result = reader.result ?? "";
+        let commaIndex = result.indexOf(",");
+        let dataOffset = commaIndex > -1 ? commaIndex + 1 : result.length;
+        resolve(result.substring(dataOffset));
+      };
+      reader.onabort = () => reject(Error("Read aborted"));
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(blob);
     });
   }
-  he.FetchHttpHandler = w;
-  he.keepAliveSupport = p;
-  he.streamCollector = ce;
+  cjsExports.FetchHttpHandler = FetchHttpHandler;
+  cjsExports.keepAliveSupport = keepAliveSupport;
+  cjsExports.streamCollector = streamCollector;
 });
-
-export { nke };
+export { require_fetch_http_handler };

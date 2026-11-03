@@ -7,61 +7,89 @@
  */
 
 //@ chunk-h87x8cg3.js:10486-10538 esm-fingerprint
-var Z = { off: 0, error: 200, warn: 300, info: 400, debug: 500 };
+var levelNumbers = {
+  off: 0,
+  error: 200,
+  warn: 300,
+  info: 400,
+  debug: 500,
+};
 //@ chunk-h87x8cg3.js:10538-10552 esm-layout
 function noopLog() {}
 //@ chunk-h87x8cg3.js:10552-10621 esm-layout
-function C(e, t, r) {
-  if (!t || Z[e] > Z[r]) return noopLog;
-  else return t[e].bind(t);
+function makeLogFn(fnLevel, logger, logLevel) {
+  if (!logger || levelNumbers[fnLevel] > levelNumbers[logLevel]) return noopLog;
+  else return logger[fnLevel].bind(logger);
 }
 //@ chunk-h87x8cg3.js:10621-10674 esm-fingerprint
-var Le = { error: noopLog, warn: noopLog, info: noopLog, debug: noopLog },
-  weakMap = new WeakMap();
+var noopLogger = {
+  error: noopLog,
+  warn: noopLog,
+  info: noopLog,
+  debug: noopLog,
+};
+var cachedLoggers = new WeakMap();
 //@ chunk-h87x8cg3.js:10674-10845 esm-fingerprint
-function He(e, t) {
-  let r = weakMap.get(e);
-  if (r && r[0] === t) return r[1];
-  let n = { error: C("error", e, t), warn: C("warn", e, t), info: C("info", e, t), debug: C("debug", e, t) };
-  return (weakMap.set(e, [t, n]), n);
+function filterLogger(logger, logLevel) {
+  let cachedLogger = cachedLoggers.get(logger);
+  if (cachedLogger && cachedLogger[0] === logLevel) return cachedLogger[1];
+  let levelLogger = {
+    error: makeLogFn("error", logger, logLevel),
+    warn: makeLogFn("warn", logger, logLevel),
+    info: makeLogFn("info", logger, logLevel),
+    debug: makeLogFn("debug", logger, logLevel),
+  };
+  cachedLoggers.set(logger, [logLevel, levelLogger]);
+  return levelLogger;
 }
 //@ chunk-h87x8cg3.js:10845-10925 esm-fingerprint
-function S_2(e) {
-  let logger = e.logger,
-    r = e.logLevel ?? "off";
-  if (!logger) return Le;
-  return He(logger, r);
+function loggerFor(client) {
+  let logger = client.logger;
+  let logLevel = client.logLevel ?? "off";
+  if (!logger) return noopLogger;
+  return filterLogger(logger, logLevel);
 }
 //@ chunk-qhhcfyds.js:1975-2027 esm-fingerprint
-var T = { off: 0, error: 200, warn: 300, info: 400, debug: 500 };
+var levelNumbers_2 = {
+  off: 0,
+  error: 200,
+  warn: 300,
+  info: 400,
+  debug: 500,
+};
 //@ chunk-qhhcfyds.js:2027-2041 esm-layout
 function noopLog_2() {}
 //@ chunk-qhhcfyds.js:2041-2110 esm-layout
-function getLevelWriter(e, t, r) {
-  if (!t || T[e] > T[r]) return noopLog_2;
-  else return t[e].bind(t);
+function getLevelWriter(fnLevel, logger, logLevel) {
+  if (!logger || levelNumbers_2[fnLevel] > levelNumbers_2[logLevel]) return noopLog_2;
+  else return logger[fnLevel].bind(logger);
 }
 //@ chunk-qhhcfyds.js:2110-2162 esm-fingerprint
-var Y = { error: noopLog_2, warn: noopLog_2, info: noopLog_2, debug: noopLog_2 },
-  weakMap_2 = new WeakMap();
+var noopLogger_2 = {
+  error: noopLog_2,
+  warn: noopLog_2,
+  info: noopLog_2,
+  debug: noopLog_2,
+};
+var cachedLoggers_2 = new WeakMap();
 //@ chunk-qhhcfyds.js:2162-2332 esm-fingerprint
-function X(e, t) {
-  let r = weakMap_2.get(e);
-  if (r && r[0] === t) return r[1];
-  let n = {
-    error: getLevelWriter("error", e, t),
-    warn: getLevelWriter("warn", e, t),
-    info: getLevelWriter("info", e, t),
-    debug: getLevelWriter("debug", e, t),
+function filterLogger_2(logger, logLevel) {
+  let cachedLogger = cachedLoggers_2.get(logger);
+  if (cachedLogger && cachedLogger[0] === logLevel) return cachedLogger[1];
+  let levelLogger = {
+    error: getLevelWriter("error", logger, logLevel),
+    warn: getLevelWriter("warn", logger, logLevel),
+    info: getLevelWriter("info", logger, logLevel),
+    debug: getLevelWriter("debug", logger, logLevel),
   };
-  return (weakMap_2.set(e, [t, n]), n);
+  cachedLoggers_2.set(logger, [logLevel, levelLogger]);
+  return levelLogger;
 }
 //@ chunk-qhhcfyds.js:2332-2410 esm-fingerprint
-function _(e) {
-  let logger = e.logger,
-    r = e.logLevel ?? "off";
-  if (!logger) return Y;
-  return X(logger, r);
+function loggerFor_2(client) {
+  let logger = client.logger;
+  let logLevel = client.logLevel ?? "off";
+  if (!logger) return noopLogger_2;
+  return filterLogger_2(logger, logLevel);
 }
-
-export { S_2, _ };
+export { loggerFor, loggerFor_2 };

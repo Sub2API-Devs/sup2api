@@ -8,49 +8,57 @@
 import { x } from "../../../../../runtime/bun-runtime.js";
 
 //@ chunk-fq0cr76a.js:478036-478784 cjs-fingerprint
-var D_ = x(function (WL) {
-  Object.defineProperty(WL, "__esModule", { value: !0 });
-  WL.Namespace = void 0;
-  class k_ {
+var require_namespace = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.Namespace = undefined;
+  class Namespace {
     _name;
     _aliases;
-    constructor(e = "") {
-      ((this._name = e), (this._aliases = new Map()));
+    constructor(name = "") {
+      this._name = name;
+      this._aliases = new Map();
     }
-    static ROOT = new k_();
+    static ROOT = new Namespace();
     name() {
       return this._name;
     }
     aliases() {
       return this._aliases;
     }
-    resolveCandidateNames(e) {
-      if (e.startsWith(".")) {
-        let substring = e.substring(1),
-          alias = this.findAlias(substring);
-        if (alias !== void 0) return [alias];
-        return [substring];
+    resolveCandidateNames(name) {
+      if (name.startsWith(".")) {
+        let qn = name.substring(1);
+        let alias = this.findAlias(qn);
+        if (alias !== undefined) return [alias];
+        return [qn];
       }
-      let alias = this.findAlias(e);
-      if (alias !== void 0) return [alias];
-      if (this.name() === "") return [e];
-      let r = this.name(),
-        s = [r + "." + e];
-      for (let index = r.lastIndexOf("."); index >= 0; index = r.lastIndexOf("."))
-        ((r = r.substring(0, index)), s.push(r + "." + e));
-      return (s.push(e), s);
+      let alias = this.findAlias(name);
+      if (alias !== undefined) return [alias];
+      if (this.name() === "") return [name];
+      let nextCont = this.name();
+      let candidates = [nextCont + "." + name];
+      for (let i = nextCont.lastIndexOf("."); i >= 0; i = nextCont.lastIndexOf(".")) {
+        nextCont = nextCont.substring(0, i);
+        candidates.push(nextCont + "." + name);
+      }
+      candidates.push(name);
+      return candidates;
     }
-    findAlias(e) {
-      let n = e,
-        r = "",
-        index = e.indexOf(".");
-      if (index >= 0) ((n = e.substring(0, index)), (r = e.substring(index)));
-      let h = this._aliases.get(n);
-      if (h === void 0) return;
-      return h + r;
+    findAlias(name) {
+      let simple = name;
+      let qualifier = "";
+      let dot = name.indexOf(".");
+      if (dot >= 0) {
+        simple = name.substring(0, dot);
+        qualifier = name.substring(dot);
+      }
+      let alias = this._aliases.get(simple);
+      if (alias === undefined) return;
+      return alias + qualifier;
     }
   }
-  WL.Namespace = k_;
+  cjsExports.Namespace = Namespace;
 });
-
-export { D_ };
+export { require_namespace };

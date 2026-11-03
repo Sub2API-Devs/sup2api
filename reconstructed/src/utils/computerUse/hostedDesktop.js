@@ -14,22 +14,23 @@ import { hasComplianceTaint } from "../../services/policyLimits/complianceTaints
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import { readFlagWithOverride } from "../../services/analytics/flagOverrides.js";
 
+//@ chunk-j51xvqzq.js:371-452 placement
 /**
  * 是否接入托管桌面 computer-use：托管桌面会话、非 HIPAA 等受限组织，且 GrowthBook tengu_dapper_acorn。
  */
-//@ chunk-j51xvqzq.js:371-452 placement
 function shouldWireHostedDesktopComputerUse() {
   return (
     isHostedDesktopSession() &&
     !isHermeticRemoteSession() &&
     !hasComplianceTaint("hipaa") &&
-    !0 &&
-    getFeatureValue_CACHED_MAY_BE_STALE("tengu_dapper_acorn", !1)
+    true &&
+    getFeatureValue_CACHED_MAY_BE_STALE("tengu_dapper_acorn", false)
   );
 }
 //@ chunk-j51xvqzq.js:452-508 placement
 function isCleverYetiEnabled() {
-  return readFlagWithOverride("tengu_clever_yeti", { safe: !0 });
+  return readFlagWithOverride("tengu_clever_yeti", {
+    safe: true,
+  });
 }
-
 export { shouldWireHostedDesktopComputerUse };

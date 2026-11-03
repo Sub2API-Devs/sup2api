@@ -11,7 +11,7 @@
 import { isInProcessTeammateTask } from "../tasks/InProcessTeammateTask/types.js";
 import { isTerminalTaskStatus } from "../tasks/taskStatus.js";
 import { isWaitingOnChildren, FLAG_IDLE_WINDOW } from "../tasks/LocalAgentTask/keepalive.js";
-import { LD } from "./sessionAddresses.js";
+import { isReservedSessionName } from "./sessionAddresses.js";
 import { logForDebugging } from "./debug.js";
 import { En } from "../../vendor/lodash-es/_inlinedHelpers.js";
 
@@ -21,17 +21,17 @@ function findAgentRecord(r, i) {
   return Object.values(r).find((n) => isInProcessTeammateTask(n) && n.identity.resumableAgentId === i);
 }
 //@ chunk-1jczmbs0.js:533-763 placement
-function liveAgentNames(r, i) {
+function liveAgentNames(agentNameRegistry, i) {
   return new Map(
-    [...r].filter(([, n]) => {
-      let e = findAgentRecord(i, n);
-      if (e === void 0) return !1;
-      if (!isTerminalTaskStatus(e.status)) return !0;
+    [...agentNameRegistry].filter(([, n]) => {
+      let agentRecord = findAgentRecord(i, n);
+      if (agentRecord === undefined) return false;
+      if (!isTerminalTaskStatus(agentRecord.status)) return true;
       return (
-        isWaitingOnChildren(e) &&
-        "keepaliveReasons" in e &&
-        e.keepaliveReasons !== void 0 &&
-        [...e.keepaliveReasons].some((s) => s !== FLAG_IDLE_WINDOW)
+        isWaitingOnChildren(agentRecord) &&
+        "keepaliveReasons" in agentRecord &&
+        agentRecord.keepaliveReasons !== undefined &&
+        [...agentRecord.keepaliveReasons].some((keepaliveReason) => keepaliveReason !== FLAG_IDLE_WINDOW)
       );
     }),
   );
@@ -50,78 +50,109 @@ var NOOP_AGENT_NAME_REGISTRY = {
   setTeammate() {},
   setSendMessagePin() {},
 };
+//@ chunk-1jczmbs0.js:906-2338 placement
 /**
  * 子代理名称登记：分配不冲突的名称、记录已调用的代理类型。
  */
-//@ chunk-1jczmbs0.js:906-2338 placement
-function createAgentNameRegistry(r, i) {
+function createAgentNameRegistry(getAppState, setAppState) {
   return {
     markTypeInvoked(n) {
-      i((e) =>
+      setAppState((e) =>
         e.agentTypesInvokedThisSession.has(n)
           ? e
-          : { ...e, agentTypesInvokedThisSession: new Set(e.agentTypesInvokedThisSession).add(n) },
+          : {
+              ...e,
+              agentTypesInvokedThisSession: new Set(e.agentTypesInvokedThisSession).add(n),
+            },
       );
     },
     registerName(n, e) {
-      if (LD(n)) {
+      if (isReservedSessionName(n)) {
         logForDebugging(`[registerName] refused reserved or agent-id-shaped name "${n}" for ${e}`);
         return;
       }
-      i((s) => {
+      setAppState((s) => {
         if (s.agentNameRegistry.get(n) === e) return s;
         let a = new Map(s.agentNameRegistry);
-        return (a.set(n, e), { ...s, agentNameRegistry: a });
+        a.set(n, e);
+        return {
+          ...s,
+          agentNameRegistry: a,
+        };
       });
     },
     allocateName(n) {
-      let e = sanitizeAgentName(n),
-        s = r(),
-        agentNameRegistry = s.agentNameRegistry,
-        g = new Set(Object.values(s.teamContext?.teammates ?? {}).map((o) => o.name));
-      for (let o = 1; ; o++) {
-        let m = o === 1 ? e : `${e}-${o}`;
-        if (LD(m) || g.has(m)) continue;
+      let e = sanitizeAgentName(n);
+      let s = getAppState();
+      let agentNameRegistry = s.agentNameRegistry;
+      let g = new Set(Object.values(s.teamContext?.teammates ?? {}).map((o) => o.name));
+      for (let j = 1; ; j++) {
+        let m = j === 1 ? e : `${e}-${j}`;
+        if (isReservedSessionName(m) || g.has(m)) continue;
         let d = agentNameRegistry.get(m);
-        if (d === void 0 || findAgentRecord(s.tasks, d) === void 0) return m;
+        if (d === undefined || findAgentRecord(s.tasks, d) === undefined) return m;
       }
     },
     nameOf(n) {
-      for (let [e, s] of r().agentNameRegistry) if (s === n) return e;
+      for (let [e, s] of getAppState().agentNameRegistry) if (s === n) return e;
       return;
     },
     clearTodos(n) {
-      i((e) => {
+      setAppState((e) => {
         if (!(n in e.todos)) return e;
         let { [n]: s, ...a } = e.todos;
-        return { ...e, todos: a };
+        return {
+          ...e,
+          todos: a,
+        };
       });
     },
     setSendMessagePin(n, e) {
-      i((s) => {
-        let a = Object.hasOwn(s.sendMessagePins, n) ? s.sendMessagePins[n] : void 0;
+      setAppState((s) => {
+        let a = Object.hasOwn(s.sendMessagePins, n) ? s.sendMessagePins[n] : undefined;
         if (En(a, e)) return s;
-        return { ...s, sendMessagePins: { ...s.sendMessagePins, [n]: e } };
+        return {
+          ...s,
+          sendMessagePins: {
+            ...s.sendMessagePins,
+            [n]: e,
+          },
+        };
       });
     },
     setTeammate(n, e) {
-      if (e !== void 0 && LD(e.name)) {
+      if (e !== undefined && isReservedSessionName(e.name)) {
         logForDebugging(
           `[setTeammate] refused reserved or agent-id-shaped teammate name "${e.name}" for ${n}`,
         );
         return;
       }
-      i((s) => {
+      setAppState((s) => {
         let teamContext = s.teamContext;
         if (!teamContext) return s;
         let g = teamContext.teammates?.[n];
-        if (e === void 0) {
+        if (e === undefined) {
           if (!g) return s;
           let { [n]: o, ...m } = teamContext.teammates;
-          return { ...s, teamContext: { ...teamContext, teammates: m } };
+          return {
+            ...s,
+            teamContext: {
+              ...teamContext,
+              teammates: m,
+            },
+          };
         }
         if (g === e) return s;
-        return { ...s, teamContext: { ...teamContext, teammates: { ...teamContext.teammates, [n]: e } } };
+        return {
+          ...s,
+          teamContext: {
+            ...teamContext,
+            teammates: {
+              ...teamContext.teammates,
+              [n]: e,
+            },
+          },
+        };
       });
     },
   };
@@ -134,5 +165,4 @@ function sanitizeAgentName(r) {
     .slice(0, 64);
   return sliced.length > 0 ? sliced : "agent";
 }
-
 export { liveAgentNames, NOOP_AGENT_NAME_REGISTRY, createAgentNameRegistry };

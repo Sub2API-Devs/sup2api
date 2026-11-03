@@ -8,21 +8,48 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:491619-492016 cjs-fingerprint
-var Ao = x(function (lb, So) {
-  function Xm(e) {
+var require_tap = x(function (cjsExports, cjsModule) {
+  function tap(hljs) {
     return {
       name: "Test Anything Protocol",
-      case_insensitive: !0,
+      case_insensitive: true,
       contains: [
-        e.HASH_COMMENT_MODE,
-        { className: "meta", variants: [{ begin: "^TAP version (\\d+)$" }, { begin: "^1\\.\\.(\\d+)$" }] },
-        { begin: /---$/, end: "\\.\\.\\.$", subLanguage: "yaml", relevance: 0 },
-        { className: "number", begin: " (\\d+) " },
-        { className: "symbol", variants: [{ begin: "^ok" }, { begin: "^not ok" }] },
+        hljs.HASH_COMMENT_MODE,
+        {
+          className: "meta",
+          variants: [
+            {
+              begin: "^TAP version (\\d+)$",
+            },
+            {
+              begin: "^1\\.\\.(\\d+)$",
+            },
+          ],
+        },
+        {
+          begin: /---$/,
+          end: "\\.\\.\\.$",
+          subLanguage: "yaml",
+          relevance: 0,
+        },
+        {
+          className: "number",
+          begin: " (\\d+) ",
+        },
+        {
+          className: "symbol",
+          variants: [
+            {
+              begin: "^ok",
+            },
+            {
+              begin: "^not ok",
+            },
+          ],
+        },
       ],
     };
   }
-  So.exports = Xm;
+  cjsModule.exports = tap;
 });
-
-export { Ao };
+export { require_tap };

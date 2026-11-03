@@ -6,36 +6,54 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { za } from "./UIEvent.js";
+import { require_UIEvent } from "./UIEvent.js";
 
 //@ chunk-vwj6ccer.js:1526-2402 cjs-fingerprint
-var Xa = x(function (rd, Oi) {
-  var Ii = za();
-  Oi.exports = Wa;
-  function Wa() {
-    (Ii.call(this),
-      (this.screenX = this.screenY = this.clientX = this.clientY = 0),
-      (this.ctrlKey = this.altKey = this.shiftKey = this.metaKey = !1),
-      (this.button = 0),
-      (this.buttons = 1),
-      (this.relatedTarget = null));
+var require_MouseEvent = x(function (cjsExports, cjsModule) {
+  var UIEvent = require_UIEvent();
+  cjsModule.exports = MouseEvent;
+  function MouseEvent() {
+    UIEvent.call(this);
+    this.screenX = this.screenY = this.clientX = this.clientY = 0;
+    this.ctrlKey = this.altKey = this.shiftKey = this.metaKey = false;
+    this.button = 0;
+    this.buttons = 1;
+    this.relatedTarget = null;
   }
-  Wa.prototype = Object.create(Ii.prototype, {
-    constructor: { value: Wa },
+  MouseEvent.prototype = Object.create(UIEvent.prototype, {
+    constructor: {
+      value: MouseEvent,
+    },
     initMouseEvent: {
-      value: function (e, t, r, a, s, c, d, g, m, v, T, ne, se, l, be) {
+      value: function (
+        type,
+        bubbles,
+        cancelable,
+        view,
+        detail,
+        screenX,
+        screenY,
+        clientX,
+        clientY,
+        ctrlKey,
+        altKey,
+        shiftKey,
+        metaKey,
+        button,
+        relatedTarget,
+      ) {
         switch (
-          (this.initEvent(e, t, r, a, s),
-          (this.screenX = c),
-          (this.screenY = d),
-          (this.clientX = g),
-          (this.clientY = m),
-          (this.ctrlKey = v),
-          (this.altKey = T),
-          (this.shiftKey = ne),
-          (this.metaKey = se),
-          (this.button = l),
-          l)
+          (this.initEvent(type, bubbles, cancelable, view, detail),
+          (this.screenX = screenX),
+          (this.screenY = screenY),
+          (this.clientX = clientX),
+          (this.clientY = clientY),
+          (this.ctrlKey = ctrlKey),
+          (this.altKey = altKey),
+          (this.shiftKey = shiftKey),
+          (this.metaKey = metaKey),
+          (this.button = button),
+          button)
         ) {
           case 0:
             this.buttons = 1;
@@ -50,12 +68,12 @@ var Xa = x(function (rd, Oi) {
             this.buttons = 0;
             break;
         }
-        this.relatedTarget = be;
+        this.relatedTarget = relatedTarget;
       },
     },
     getModifierState: {
-      value: function (e) {
-        switch (e) {
+      value: function (key) {
+        switch (key) {
           case "Alt":
             return this.altKey;
           case "Control":
@@ -65,11 +83,10 @@ var Xa = x(function (rd, Oi) {
           case "Meta":
             return this.metaKey;
           default:
-            return !1;
+            return false;
         }
       },
     },
   });
 });
-
-export { Xa };
+export { require_MouseEvent };

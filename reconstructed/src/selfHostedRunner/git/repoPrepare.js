@@ -18,180 +18,195 @@ import { isSafeRefName } from "../../utils/git/safeRefName.js";
 import {
   resolveFetchDepth,
   resolveServerProgressCap,
-  Oe,
-  se,
-  H0r,
-  ae,
-  $e,
+  DEFAULT_SERVER_PROGRESS_CAP_MS,
+  MAX_SERVER_PROGRESS_CAP_MS,
+  getUpstreamUrl,
+  MAX_GIT_OUTPUT_TAIL_CHARS,
+  VALIDATION_MAX_ATTEMPTS,
   classifyFetchRefusal,
-  Ht,
-  de,
-  LVn,
-  Je,
-  Yt,
-  V,
-  nt,
-  Mt,
-  tt,
-  Vt,
-  Bt,
-  xt,
-  xe,
-  We,
-  ie,
-  oe,
+  THROTTLE_BACKOFF_MULTIPLIER,
+  FILESYSTEM_OP_TIMEOUT_MS,
+  DEFAULT_FETCH_REFSPEC,
+  fetchDepthArgs,
+  isDeltaResetEnabled,
+  LOCKED_GIT_ENV,
+  isFailFastFetchEnabled,
+  READ_TREE_TIMEOUT_MS,
+  SLOW_FETCH_CONFIG_AFTER_ATTEMPT,
+  HTTP_LOW_SPEED_LIMIT_BPS,
+  HTTP_LOW_SPEED_TIME_S,
+  isStallGiveUpEnabled,
+  MAX_ERROR_TEXT_CHARS,
+  ERROR_TEXT_HEAD_CHARS,
+  FETCH_MAX_ATTEMPTS,
+  MUTE_GIVEUP_ATTEMPTS,
   isCurlTimeoutOnly,
-  NVn,
+  isFetchRefNotFound,
   FetchRefNotFoundError,
   FetchThrottledError,
 } from "./fetchErrors.js";
 import { runGit } from "./fetchRun.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
-import { G, redactUrlCredentials } from "./tokenRedact.js";
+import { errorText, redactUrlCredentials } from "./tokenRedact.js";
 import { TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS } from "../../utils/errors.js";
 import { sleep } from "../../utils/sleep.js";
-import { FVn, httpsProxyFromEnv } from "./gitCredentials.js";
+import { tokenCredentialHelperArgs, httpsProxyFromEnv } from "./gitCredentials.js";
 import { withBoundedTimeout } from "../../utils/boundedTimeout.js";
-import { rDn } from "../../utils/gitSafeExec.js";
+import { nullDevicePath } from "../../utils/gitSafeExec.js";
 import { truncateToLength, takeLastChars } from "../../utils/stringUtils.js";
 import { redactSecretsInText } from "../../utils/redactSecrets.js";
 
 //@ chunk-t3sg9e26.js:1004-1014 placement
-var me = 50;
+var REPOSITORY_PREPARE_CONCURRENCY = 50;
+//@ chunk-t3sg9e26.js:10294-10757 placement
 /**
  * BYOC 会话开始前逐个准备代码仓库：跳过不支持的来源类型，按 outcome 里给出的目标分支调用 prepareRepository（默认跳过 reset），记录耗时遥测。
  */
-//@ chunk-t3sg9e26.js:10294-10757 placement
 async function prepareRepositories(e) {
   let {
-      baseDir: baseDir,
-      sources: sources,
-      outcomes: outcomes,
-      skipValidation: skipValidation,
-      alwaysFetch: alwaysFetch,
-      skipReset: skipReset,
-      initWithoutTemplate: initWithoutTemplate,
-      onDebug: onDebug,
-      onPhase: onPhase,
-      onProgress: onProgress,
-      signal: signal,
-    } = e,
-    f = outcomeBranchesByRepo(outcomes ?? []);
-  for (let R of sources) {
-    if (!$0r(R.type)) {
-      onDebug(`[byoc:git] Skipping unsupported source type: ${R.type}`);
+    baseDir,
+    sources,
+    outcomes,
+    skipValidation,
+    alwaysFetch,
+    skipReset,
+    initWithoutTemplate,
+    onDebug,
+    onPhase,
+    onProgress,
+    signal,
+  } = e;
+  let f = outcomeBranchesByRepo(outcomes ?? []);
+  for (let source of sources) {
+    if (!isPreparableRepoType(source.type)) {
+      onDebug(`[byoc:git] Skipping unsupported source type: ${source.type}`);
       continue;
     }
     await prepareRepositoryTimed({
-      baseDir: baseDir,
-      source: R,
-      targetBranch: f.get(R.repo),
-      skipValidation: skipValidation ?? !1,
-      alwaysFetch: alwaysFetch ?? !1,
-      skipReset: skipReset ?? !0,
-      initWithoutTemplate: initWithoutTemplate ?? !1,
-      onDebug: onDebug,
-      onPhase: onPhase,
-      onProgress: onProgress,
-      signal: signal,
+      baseDir,
+      source,
+      targetBranch: f.get(source.repo),
+      skipValidation: skipValidation ?? false,
+      alwaysFetch: alwaysFetch ?? false,
+      skipReset: skipReset ?? true,
+      initWithoutTemplate: initWithoutTemplate ?? false,
+      onDebug,
+      onPhase,
+      onProgress,
+      signal,
     });
   }
 }
 //@ chunk-t3sg9e26.js:10757-10828 placement
-function $0r(e) {
-  return e === "github" || e === "github-ssh" || e === "test-file";
+/**
+ * 导出函数 `isPreparableRepoType`：参数 e，返回 e === "github" || e === "github-ssh" || e === "test-file"。
+ */
+function isPreparableRepoType(type) {
+  return type === "github" || type === "github-ssh" || type === "test-file";
 }
 //@ chunk-t3sg9e26.js:10828-11050 placement
 async function prepareRepositoryTimed(e) {
   let now = Date.now();
   try {
-    let { repoExisted: repoExisted } = await prepareRepository(e);
-    logFeatureOk("byoc_git_prepare_repo", { repo_existed: repoExisted, duration_ms: Date.now() - now });
+    let { repoExisted } = await prepareRepository(e);
+    logFeatureOk("byoc_git_prepare_repo", {
+      repo_existed: repoExisted,
+      duration_ms: Date.now() - now,
+    });
   } catch (error) {
-    throw (logFeatureBad("byoc_git_prepare_repo", "error", { duration_ms: Date.now() - now }), error);
+    logFeatureBad("byoc_git_prepare_repo", "error", {
+      duration_ms: Date.now() - now,
+    });
+    throw error;
   }
 }
+//@ chunk-t3sg9e26.js:11050-13156 placement
 /**
  * BYOC 准备仓库：解析目录/引用/目标分支，读取进度上限配置
  */
-//@ chunk-t3sg9e26.js:11050-13156 placement
 async function prepareRepository(e) {
   let {
-      baseDir: baseDir,
-      source: source,
-      targetBranch: targetBranch,
-      skipValidation: skipValidation,
-      alwaysFetch: alwaysFetch,
-      skipReset: skipReset,
-      initWithoutTemplate: initWithoutTemplate,
-      onDebug: onDebug,
-      onPhase: onPhase,
-      onProgress: onProgress,
-      signal: signal,
-    } = e,
-    f = resolveRepositoryUrl(source),
-    R = source.getAuthToken ? f : withTokenInUrl(f, source.token),
-    b = repoCheckoutDir(baseDir, source);
+    baseDir,
+    source,
+    targetBranch,
+    skipValidation,
+    alwaysFetch,
+    skipReset,
+    initWithoutTemplate,
+    onDebug,
+    onPhase,
+    onProgress,
+    signal,
+  } = e;
+  let repositoryUrl = resolveRepositoryUrl(source);
+  let R = source.getAuthToken ? repositoryUrl : withTokenInUrl(repositoryUrl, source.token);
+  let b = repoCheckoutDir(baseDir, source);
   if (!b) throw Error(`Could not determine repository directory for: ${source.repo}`);
   if (source.ref && !isSafeRefName(source.ref)) throw Error(`Invalid ref: ${source.ref}`);
   if (targetBranch && !isSafeRefName(targetBranch)) throw Error(`Invalid target branch: ${targetBranch}`);
   let now = Date.now();
   onDebug(
-    `[byoc:git] Preparing ${source.repo} at ${b} (ref=${source.ref ?? "HEAD"}, auth=${source.getAuthToken ? "git-proxy" : R !== f})`,
+    `[byoc:git] Preparing ${source.repo} at ${b} (ref=${source.ref ?? "HEAD"}, auth=${source.getAuthToken ? "git-proxy" : R !== repositoryUrl})`,
   );
-  let { invalid: invalid } = resolveFetchDepth();
-  if (invalid !== void 0)
+  let { invalid } = resolveFetchDepth();
+  if (invalid !== undefined)
     onDebug(
-      `[byoc:git] Ignoring CLAUDE_RUNNER_FETCH_DEPTH='${invalid}' \u2014 expected 'full', '0', or a positive integer; using default ${me}`,
+      `[byoc:git] Ignoring CLAUDE_RUNNER_FETCH_DEPTH='${invalid}' \u2014 expected 'full', '0', or a positive integer; using default ${REPOSITORY_PREPARE_CONCURRENCY}`,
     );
-  let A = resolveServerProgressCap();
-  if (A.invalid !== void 0)
+  let serverProgressCap = resolveServerProgressCap();
+  if (serverProgressCap.invalid !== undefined)
     onDebug(
-      `[byoc:git] Ignoring CLAUDE_RUNNER_FETCH_SERVER_PROGRESS_CAP_MS='${A.invalid}' \u2014 expected a positive integer (milliseconds), '0' or 'off'; using default ${Oe}`,
+      `[byoc:git] Ignoring CLAUDE_RUNNER_FETCH_SERVER_PROGRESS_CAP_MS='${serverProgressCap.invalid}' \u2014 expected a positive integer (milliseconds), '0' or 'off'; using default ${DEFAULT_SERVER_PROGRESS_CAP_MS}`,
     );
-  else if (A.clamped !== void 0)
+  else if (serverProgressCap.clamped !== undefined)
     onDebug(
-      `[byoc:git] CLAUDE_RUNNER_FETCH_SERVER_PROGRESS_CAP_MS='${A.clamped}' is ${A.capMs === se ? "above the thirty-minute ceiling" : "below the two-minute floor"}; using ${A.capMs} ms`,
+      `[byoc:git] CLAUDE_RUNNER_FETCH_SERVER_PROGRESS_CAP_MS='${serverProgressCap.clamped}' is ${serverProgressCap.capMs === MAX_SERVER_PROGRESS_CAP_MS ? "above the thirty-minute ceiling" : "below the two-minute floor"}; using ${serverProgressCap.capMs} ms`,
     );
   let E = {
-      repoPath: b,
-      gitURL: f,
-      authURL: R,
-      originURL: H0r(source) ?? R,
-      token: source.token,
-      getAuthToken: source.getAuthToken,
-      governedMount: source.governedMount,
-      gitEnvironment: source.gitEnvironment,
-      sanitized: source.sanitized,
-      initWithoutTemplate: initWithoutTemplate,
-      onDebug: onDebug,
-      onPhase: onPhase,
-      onProgress: onProgress,
-      signal: signal,
-    },
-    l = void 0;
+    repoPath: b,
+    gitURL: repositoryUrl,
+    authURL: R,
+    originURL: getUpstreamUrl(source) ?? R,
+    token: source.token,
+    getAuthToken: source.getAuthToken,
+    governedMount: source.governedMount,
+    gitEnvironment: source.gitEnvironment,
+    sanitized: source.sanitized,
+    initWithoutTemplate,
+    onDebug,
+    onPhase,
+    onProgress,
+    signal,
+  };
+  let l = undefined;
   if (!skipValidation)
-    await ke(E, "validateAccess", () =>
-      validateRepositoryAccess(E, source.repo, source.skippedIfThrottled === !0),
+    await measureGitPhase(E, "validateAccess", () =>
+      validateRepositoryAccess(E, source.repo, source.skippedIfThrottled === true),
     );
-  let T = await ke(E, "ensureRepository", () => configureRemoteCredentials(E, baseDir, l !== void 0));
+  let T = await measureGitPhase(E, "ensureRepository", () =>
+    configureRemoteCredentials(E, baseDir, l !== undefined),
+  );
   if (alwaysFetch) await fetchAndCheckout(E, source.ref, skipReset, T, l);
   else if (T && !source.ref) onDebug("[byoc:git] Using prefetched repo as-is (no ref requested)");
   else if (T && source.ref) {
-    if (targetBranch && (await remoteBranchExists(E, targetBranch)))
-      return (
-        onDebug(`[byoc:git] Task branch ${targetBranch} exists on remote, fetching it`),
-        await fetchAndForceCheckout(E, targetBranch, T),
-        onDebug(`[byoc:git] Ready: ${source.repo} (${Date.now() - now}ms)`),
-        { repoExisted: T }
-      );
-    if (await localRefExists(E, source.ref))
-      (onDebug(`[byoc:git] Ref ${source.ref} resolves locally, skipping fetch`),
-        await runGit(E, E.repoPath, ["checkout", "--progress", "--force", source.ref]));
-    else await fetchAndCheckout(E, source.ref, !1, T);
-  } else await fetchAndCheckout(E, source.ref, !1, T);
+    if (targetBranch && (await remoteBranchExists(E, targetBranch))) {
+      onDebug(`[byoc:git] Task branch ${targetBranch} exists on remote, fetching it`);
+      await fetchAndForceCheckout(E, targetBranch, T);
+      onDebug(`[byoc:git] Ready: ${source.repo} (${Date.now() - now}ms)`);
+      return {
+        repoExisted: T,
+      };
+    }
+    if (await localRefExists(E, source.ref)) {
+      onDebug(`[byoc:git] Ref ${source.ref} resolves locally, skipping fetch`);
+      await runGit(E, E.repoPath, ["checkout", "--progress", "--force", source.ref]);
+    } else await fetchAndCheckout(E, source.ref, false, T);
+  } else await fetchAndCheckout(E, source.ref, false, T);
   if (targetBranch) await checkoutTargetBranch(E, targetBranch, T);
-  return (onDebug(`[byoc:git] Ready: ${source.repo} (${Date.now() - now}ms)`), { repoExisted: T });
+  onDebug(`[byoc:git] Ready: ${source.repo} (${Date.now() - now}ms)`);
+  return {
+    repoExisted: T,
+  };
 }
 //@ chunk-t3sg9e26.js:13156-13323 placement
 function reportGitPhase(e, n, t, r) {
@@ -199,57 +214,59 @@ function reportGitPhase(e, n, t, r) {
   try {
     e.onPhase?.(n, t, r);
   } catch (error) {
-    e.onDebug(`[byoc:git] onPhase callback threw: ${G(error)}`);
+    e.onDebug(`[byoc:git] onPhase callback threw: ${errorText(error)}`);
   }
 }
 //@ chunk-t3sg9e26.js:13323-13410 placement
-async function ke(e, n, t, r) {
-  let now = Date.now(),
-    o = await t();
-  return (reportGitPhase(e, n, Date.now() - now, r), o);
+async function measureGitPhase(e, n, t, r) {
+  let now = Date.now();
+  let o = await t();
+  reportGitPhase(e, n, Date.now() - now, r);
+  return o;
 }
+//@ chunk-t3sg9e26.js:13410-14310 placement
 /**
  * 仓库访问失败分类：原因代码到可读说明的映射、git 错误行到原因的正则表，以及"其他 HTTP 状态码"排除规则。
  */
-//@ chunk-t3sg9e26.js:13410-14310 placement
 var REPO_ACCESS_FAILURE_LABELS = {
-    repo_not_found_or_no_permission: "repository not found or no permission",
-    no_credentials: "no credentials for the repository's git host",
-    authentication_failed: "authentication failed",
-    blocked_by_git_proxy: "blocked by the git proxy",
-  },
-  REPO_ACCESS_FAILURE_PATTERNS = [
-    [/^fatal: repository '.*' not found$/, "repo_not_found_or_no_permission"],
-    [
-      /^fatal: unable to access '.*': the requested url returned error: 404$/,
-      "repo_not_found_or_no_permission",
-    ],
-    [/^error: repository not found\.?$/, "repo_not_found_or_no_permission"],
-    [/^fatal: could not read (username|password) for /, "no_credentials"],
-    [/^fatal: authentication failed for /, "authentication_failed"],
-    [/^fatal: unable to access '.*': the requested url returned error: 401$/, "authentication_failed"],
-    [/^\S+@\S+: permission denied \(publickey(,[a-z0-9,-]+)?\)\.?$/, "authentication_failed"],
+  repo_not_found_or_no_permission: "repository not found or no permission",
+  no_credentials: "no credentials for the repository's git host",
+  authentication_failed: "authentication failed",
+  blocked_by_git_proxy: "blocked by the git proxy",
+};
+var REPO_ACCESS_FAILURE_PATTERNS = [
+  [/^fatal: repository '.*' not found$/, "repo_not_found_or_no_permission"],
+  [
+    /^fatal: unable to access '.*': the requested url returned error: 404$/,
+    "repo_not_found_or_no_permission",
   ],
-  OTHER_HTTP_ERROR_REGEX = /^fatal: unable to access '.*': the requested url returned error: (?!40[14]$)\d+$/;
+  [/^error: repository not found\.?$/, "repo_not_found_or_no_permission"],
+  [/^fatal: could not read (username|password) for /, "no_credentials"],
+  [/^fatal: authentication failed for /, "authentication_failed"],
+  [/^fatal: unable to access '.*': the requested url returned error: 401$/, "authentication_failed"],
+  [/^\S+@\S+: permission denied \(publickey(,[a-z0-9,-]+)?\)\.?$/, "authentication_failed"],
+];
+var OTHER_HTTP_ERROR_REGEX =
+  /^fatal: unable to access '.*': the requested url returned error: (?!40[14]$)\d+$/;
+//@ chunk-t3sg9e26.js:14310-14694 placement
 /**
  * 把仓库访问失败的 git 错误输出归类：经 git 代理时识别"代理拒绝访问"，否则按已知错误行模式匹配原因（看门狗超时、输出过长或含排除行时不归类）。
  */
-//@ chunk-t3sg9e26.js:14310-14694 placement
 function classifyRepoAccessFailure(e, n) {
   if (/^git \S+ failed \(watchdog:/.test(e)) return;
   let replaced = e.replace(/^git \S+ failed: /, "");
-  if (replaced.length >= ae) return;
+  if (replaced.length >= MAX_GIT_OUTPUT_TAIL_CHARS) return;
   let mapped = replaced
     .toLowerCase()
     .split(
       `
 `,
     )
-    .map((s) => s.trim());
+    .map((line) => line.trim());
   if (n)
     return mapped.some((s) => s.startsWith("remote: access denied by the git proxy"))
       ? "blocked_by_git_proxy"
-      : void 0;
+      : undefined;
   if (mapped.some((s) => OTHER_HTTP_ERROR_REGEX.test(s))) return;
   for (let [s, o] of REPO_ACCESS_FAILURE_PATTERNS) if (mapped.some((a) => s.test(a))) return o;
   return;
@@ -261,88 +278,103 @@ class RepositoryAccessError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CO
   repository;
   constructor(e, n, t) {
     super(
-      `Repository access validation failed after ${$e} attempts: ${G(e)}`,
+      `Repository access validation failed after ${VALIDATION_MAX_ATTEMPTS} attempts: ${errorText(e)}`,
       "Repository access validation failed",
     );
     this.name = "RepositoryAccessError";
-    let r = URL.canParse(t.gitURL) ? new URL(t.gitURL) : void 0;
-    ((this.repository = {
+    let r = URL.canParse(t.gitURL) ? new URL(t.gitURL) : undefined;
+    this.repository = {
       repo: t.repo,
       address:
-        r !== void 0 && (r.protocol === "https:" || r.protocol === "http:") && r.hostname !== ""
-          ? { scheme: r.protocol.slice(0, -1), host: r.hostname, port: r.port || void 0 }
-          : void 0,
-    }),
-      (this.denial = classifyRepoAccessFailure(G(e), n)),
-      (this.throttle =
-        this.denial === void 0 ? classifyFetchRefusal(G(e), t.lastAttemptExitCode, t.gitURL) : void 0));
+        r !== undefined && (r.protocol === "https:" || r.protocol === "http:") && r.hostname !== ""
+          ? {
+              scheme: r.protocol.slice(0, -1),
+              host: r.hostname,
+              port: r.port || undefined,
+            }
+          : undefined,
+    };
+    this.denial = classifyRepoAccessFailure(errorText(e), n);
+    this.throttle =
+      this.denial === undefined
+        ? classifyFetchRefusal(errorText(e), t.lastAttemptExitCode, t.gitURL)
+        : undefined;
   }
 }
 //@ chunk-t3sg9e26.js:15255-15808 placement
-async function validateRepositoryAccess(e, n, t) {
-  let r = 2000 + Math.random() * 2000,
-    s,
-    o = {};
-  for (let a = 0; a < $e; a++) {
-    if (a > 0) {
-      let c = t && classifyFetchRefusal(G(s), o.exitCode, e.gitURL) !== void 0,
-        d = r * (1 << (a - 1)) * (c ? Ht : 1);
-      (e.onDebug(`[byoc:git] Validation retry ${a + 1}/${$e}, backing off ${Math.round(d)}ms`),
-        await sleep(d, e.signal, { throwOnAbort: !0 }));
+async function validateRepositoryAccess(e, repo, t) {
+  let r = 2000 + Math.random() * 2000;
+  let s;
+  let o = {};
+  for (let j = 0; j < VALIDATION_MAX_ATTEMPTS; j++) {
+    if (j > 0) {
+      let c = t && classifyFetchRefusal(errorText(s), o.exitCode, e.gitURL) !== undefined;
+      let d = r * (1 << (j - 1)) * (c ? THROTTLE_BACKOFF_MULTIPLIER : 1);
+      e.onDebug(
+        `[byoc:git] Validation retry ${j + 1}/${VALIDATION_MAX_ATTEMPTS}, backing off ${Math.round(d)}ms`,
+      );
+      await sleep(d, e.signal, {
+        throwOnAbort: true,
+      });
     }
     o = {};
     try {
-      if ((await runGit(e, "", ["ls-remote", "--heads", e.authURL, "HEAD"], void 0, void 0, o), a > 0))
-        e.onDebug(`[byoc:git] Validation succeeded on attempt ${a + 1}`);
+      await runGit(e, "", ["ls-remote", "--heads", e.authURL, "HEAD"], undefined, undefined, o);
+      if (j > 0) e.onDebug(`[byoc:git] Validation succeeded on attempt ${j + 1}`);
       return;
     } catch (error) {
       s = error;
     }
   }
-  throw new RepositoryAccessError(s, e.getAuthToken !== void 0, {
-    repo: n,
+  throw new RepositoryAccessError(s, e.getAuthToken !== undefined, {
+    repo,
     gitURL: e.gitURL,
     lastAttemptExitCode: o.exitCode,
   });
 }
 //@ chunk-t3sg9e26.js:15808-16080 placement
-function staleMountPushInsteadOfKey(e) {
-  let match = e.trim().match(/^(url\.(https?:\/\/[^\s@]+)\.pushinsteadof) (\S+)$/i);
+function staleMountPushInsteadOfKey(line) {
+  let match = line.trim().match(/^(url\.(https?:\/\/[^\s@]+)\.pushinsteadof) (\S+)$/i);
   if (!match) return;
-  let [, t, r, s] = match,
-    o = s.match(/^https?:\/\/([^/@\s]+\/[^/\s]+\/[^/\s]+)$/i)?.[1],
-    a;
+  let [, t, r, s] = match;
+  let o = s.match(/^https?:\/\/([^/@\s]+\/[^/\s]+\/[^/\s]+)$/i)?.[1];
+  let a;
   try {
     a = new URL(r).pathname;
   } catch {
     return;
   }
-  if (o === void 0 || !a.endsWith(`/${o}`)) return;
+  if (o === undefined || !a.endsWith(`/${o}`)) return;
   return t;
 }
 //@ chunk-t3sg9e26.js:16080-16122 placement
 var CLAUDE_CODE_SESSION_ACCESS_TOKEN = "CLAUDE_CODE_SESSION_ACCESS_TOKEN";
 //@ chunk-t3sg9e26.js:16122-16299 placement
-function sessionTokenCredentialHelper(e) {
-  let match = e.trim().match(/^(credential\.(https?:\/\/[^\s@]+)\.helper) (.+)$/i);
+function sessionTokenCredentialHelper(line) {
+  let match = line.trim().match(/^(credential\.(https?:\/\/[^\s@]+)\.helper) (.+)$/i);
   if (!match) return;
   let [, t, r, s] = match;
-  return s === FVn(CLAUDE_CODE_SESSION_ACCESS_TOKEN) ? { key: t, base: r.replace(/\/+$/, "") } : void 0;
+  return s === tokenCredentialHelperArgs(CLAUDE_CODE_SESSION_ACCESS_TOKEN)
+    ? {
+        key: t,
+        base: r.replace(/\/+$/, ""),
+      }
+    : undefined;
 }
 //@ chunk-t3sg9e26.js:16299-16564 placement
-function staleMountInsteadOfKey(e, n) {
-  let match = e.trim().match(/^(url\.(https?:\/\/[^\s@]+)\.insteadof) (\S+)$/i);
+function staleMountInsteadOfKey(line, n) {
+  let match = line.trim().match(/^(url\.(https?:\/\/[^\s@]+)\.insteadof) (\S+)$/i);
   if (!match) return;
-  let [, r, s, o] = match,
-    a = o.replace(/\.git$/i, "").match(/^https?:\/\/([^/@\s]+\/[^/\s]+\/[^/\s]+)$/i)?.[1];
-  if (a === void 0) return;
-  return n.some((c) => s === `${c}/${a}`) ? r : void 0;
+  let [, r, s, o] = match;
+  let a = o.replace(/\.git$/i, "").match(/^https?:\/\/([^/@\s]+\/[^/\s]+\/[^/\s]+)$/i)?.[1];
+  if (a === undefined) return;
+  return n.some((c) => s === `${c}/${a}`) ? r : undefined;
 }
+//@ chunk-t3sg9e26.js:16564-18738 placement
 /**
  * 配置远程凭据助手，删除过期的 git-mount 凭据助手
  */
-//@ chunk-t3sg9e26.js:16564-18738 placement
-async function configureRemoteCredentials(e, n, t) {
+async function configureRemoteCredentials(e, baseDir, t) {
   let r = {};
   if (
     e.originURL === e.authURL
@@ -350,12 +382,12 @@ async function configureRemoteCredentials(e, n, t) {
           e,
           e.repoPath,
           ["--git-dir", join(e.repoPath, ".git"), "remote", "set-url", "origin", e.authURL],
-          void 0,
-          void 0,
+          undefined,
+          undefined,
           r,
         ).then(
-          () => !0,
-          () => !1,
+          () => true,
+          () => false,
         )
       : await writeRemoteOriginUrl(e)
   ) {
@@ -374,138 +406,147 @@ async function configureRemoteCredentials(e, n, t) {
       "--get-regexp",
       "^url\\..*\\.pushinsteadof$",
     ]).catch(() => "");
-    for (let u of o.split(`
+    for (let line of o.split(`
 `)) {
-      let h = staleMountPushInsteadOfKey(u);
-      if (h === void 0) continue;
-      (await runGit(e, e.repoPath, [
+      let h = staleMountPushInsteadOfKey(line);
+      if (h === undefined) continue;
+      await runGit(e, e.repoPath, [
         "--git-dir",
         join(e.repoPath, ".git"),
         "config",
         "--local",
         "--unset-all",
         h,
-      ]).catch(() => {}),
-        e.onDebug(
-          `[byoc:git] Dropped a stale git-mount push rewrite (${redactUrlCredentials(h)}) from ${e.repoPath}`,
-        ));
+      ]).catch(() => {});
+      e.onDebug(
+        `[byoc:git] Dropped a stale git-mount push rewrite (${redactUrlCredentials(h)}) from ${e.repoPath}`,
+      );
     }
     let a = await runGit(e, e.repoPath, [
+      "--git-dir",
+      join(e.repoPath, ".git"),
+      "config",
+      "--local",
+      "--get-regexp",
+      "^credential\\..*\\.helper$",
+    ]).catch(() => "");
+    let c = new Set();
+    let d = [];
+    for (let line of a.split(`
+`)) {
+      let h = sessionTokenCredentialHelper(line);
+      if (h !== undefined && !c.has(h.key)) {
+        c.add(h.key);
+        d.push(h.base);
+      }
+    }
+    if (d.length > 0) {
+      let u = await runGit(e, e.repoPath, [
         "--git-dir",
         join(e.repoPath, ".git"),
         "config",
         "--local",
         "--get-regexp",
-        "^credential\\..*\\.helper$",
-      ]).catch(() => ""),
-      c = new Set(),
-      d = [];
-    for (let u of a.split(`
+        "^url\\..*\\.insteadof$",
+      ]).catch(() => "");
+      let h = new Set();
+      for (let line of u.split(`
 `)) {
-      let h = sessionTokenCredentialHelper(u);
-      if (h !== void 0 && !c.has(h.key)) (c.add(h.key), d.push(h.base));
-    }
-    if (d.length > 0) {
-      let u = await runGit(e, e.repoPath, [
+        let f = staleMountInsteadOfKey(line, d);
+        if (f === undefined || h.has(f)) continue;
+        h.add(f);
+        await runGit(e, e.repoPath, [
           "--git-dir",
           join(e.repoPath, ".git"),
           "config",
           "--local",
-          "--get-regexp",
-          "^url\\..*\\.insteadof$",
-        ]).catch(() => ""),
-        h = new Set();
-      for (let y of u.split(`
-`)) {
-        let f = staleMountInsteadOfKey(y, d);
-        if (f === void 0 || h.has(f)) continue;
-        (h.add(f),
-          await runGit(e, e.repoPath, [
-            "--git-dir",
-            join(e.repoPath, ".git"),
-            "config",
-            "--local",
-            "--unset-all",
-            f,
-          ]).catch(() => {}),
-          e.onDebug(
-            `[byoc:git] Dropped a stale git-mount fetch rewrite (${redactUrlCredentials(f)}) from ${e.repoPath}`,
-          ));
+          "--unset-all",
+          f,
+        ]).catch(() => {});
+        e.onDebug(
+          `[byoc:git] Dropped a stale git-mount fetch rewrite (${redactUrlCredentials(f)}) from ${e.repoPath}`,
+        );
       }
     }
-    for (let u of c)
-      (await runGit(e, e.repoPath, [
+    for (let u of c) {
+      await runGit(e, e.repoPath, [
         "--git-dir",
         join(e.repoPath, ".git"),
         "config",
         "--local",
         "--unset-all",
         u,
-      ]).catch(() => {}),
-        e.onDebug(
-          `[byoc:git] Dropped a stale git-mount credential helper (${redactUrlCredentials(u)}) from ${e.repoPath}`,
-        ));
-    return (
-      await normalizeRemoteOriginFetch(e),
-      e.onDebug(`[byoc:git] Prefetched repo found at ${e.repoPath}`),
-      !0
-    );
+      ]).catch(() => {});
+      e.onDebug(
+        `[byoc:git] Dropped a stale git-mount credential helper (${redactUrlCredentials(u)}) from ${e.repoPath}`,
+      );
+    }
+    await normalizeRemoteOriginFetch(e);
+    e.onDebug(`[byoc:git] Prefetched repo found at ${e.repoPath}`);
+    return true;
   }
-  return (
-    e.onDebug(`[byoc:git] No prefetched repo, fresh init at ${e.repoPath}`),
-    await withBoundedTimeout(
-      mkdir(n, { recursive: !0 }),
-      de,
-      `[runner:stuck] mkdir ${n} (check NFS/CSI mount health)`,
-    ),
-    await runGit(e, "", ["init", ...(e.initWithoutTemplate ? ["--template="] : []), e.repoPath]),
-    await runGit(e, e.repoPath, ["config", "gc.auto", "0"]).catch(() => {}),
-    await runGit(e, e.repoPath, ["remote", "add", "origin", e.originURL]).catch(() =>
-      runGit(e, e.repoPath, ["remote", "set-url", "origin", e.originURL]),
-    ),
-    await normalizeRemoteOriginFetch(e),
-    !1
+  e.onDebug(`[byoc:git] No prefetched repo, fresh init at ${e.repoPath}`);
+  await withBoundedTimeout(
+    mkdir(baseDir, {
+      recursive: true,
+    }),
+    FILESYSTEM_OP_TIMEOUT_MS,
+    `[runner:stuck] mkdir ${baseDir} (check NFS/CSI mount health)`,
   );
+  await runGit(e, "", ["init", ...(e.initWithoutTemplate ? ["--template="] : []), e.repoPath]);
+  await runGit(e, e.repoPath, ["config", "gc.auto", "0"]).catch(() => {});
+  await runGit(e, e.repoPath, ["remote", "add", "origin", e.originURL]).catch(() =>
+    runGit(e, e.repoPath, ["remote", "set-url", "origin", e.originURL]),
+  );
+  await normalizeRemoteOriginFetch(e);
+  return false;
 }
+//@ chunk-t3sg9e26.js:18738-18946 placement
 /**
  * 写 origin URL 的重试次数与间隔，以及隔离用户/系统 git 配置的环境变量组合。
  */
-//@ chunk-t3sg9e26.js:18738-18946 placement
-var ORIGIN_URL_WRITE_TRIES = 7,
-  ORIGIN_URL_RETRY_BASE_MS = 100,
-  HERMETIC_GIT_CONFIG_ENV = {
-    GIT_CONFIG_NOSYSTEM: "1",
-    GIT_CONFIG_GLOBAL: "/dev/null",
-    GIT_CONFIG_COUNT: "0",
-    GIT_CONFIG_PARAMETERS: "",
-  },
-  ISOLATED_HOME_ENV = { GIT_CONFIG_GLOBAL: "/dev/null", HOME: rDn(), XDG_CONFIG_HOME: rDn() },
-  HERMETIC_GIT_ENV = { ...HERMETIC_GIT_CONFIG_ENV, ...ISOLATED_HOME_ENV };
+var ORIGIN_URL_WRITE_TRIES = 7;
+var ORIGIN_URL_RETRY_BASE_MS = 100;
+var HERMETIC_GIT_CONFIG_ENV = {
+  GIT_CONFIG_NOSYSTEM: "1",
+  GIT_CONFIG_GLOBAL: "/dev/null",
+  GIT_CONFIG_COUNT: "0",
+  GIT_CONFIG_PARAMETERS: "",
+};
+var ISOLATED_HOME_ENV = {
+  GIT_CONFIG_GLOBAL: "/dev/null",
+  HOME: nullDevicePath(),
+  XDG_CONFIG_HOME: nullDevicePath(),
+};
+var HERMETIC_GIT_ENV = {
+  ...HERMETIC_GIT_CONFIG_ENV,
+  ...ISOLATED_HOME_ENV,
+};
+//@ chunk-t3sg9e26.js:18946-19377 placement
 /**
  * 读取裸仓库配置项（如 remote.origin.url）：键不存在返回 undefined，其他失败抛出带修复建议的错误。
  */
-//@ chunk-t3sg9e26.js:18946-19377 placement
 async function readGitConfigOrThrow(e, n, t, r) {
   let s = {};
-  return runGit(e, "", ["--git-dir", n, "config", ...t], r, void 0, s).catch((o) => {
+  return runGit(e, "", ["--git-dir", n, "config", ...t], r, undefined, s).catch((error) => {
     if (s.exitCode === 1) return;
-    if (e.signal?.aborted) throw o;
+    if (e.signal?.aborted) throw error;
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `Could not read remote.origin.url from ${n}/config (${G(o)}). The clone was left as it is: repair that file, or remove the clone when no session is using it; the next session will clone it again.`,
+      `Could not read remote.origin.url from ${n}/config (${errorText(error)}). The clone was left as it is: repair that file, or remove the clone when no session is using it; the next session will clone it again.`,
       "Could not read remote.origin.url of the repository's clone",
     );
   });
 }
 //@ chunk-t3sg9e26.js:19377-20581 placement
 async function writeRemoteOriginUrl(e) {
-  let n = join(e.repoPath, ".git"),
-    t = await readGitConfigOrThrow(e, n, ["--get-all", "remote.origin.url"]);
-  if (t === void 0) {
+  let n = join(e.repoPath, ".git");
+  let gitConfigOrThrow = await readGitConfigOrThrow(e, n, ["--get-all", "remote.origin.url"]);
+  if (gitConfigOrThrow === undefined) {
     if (
       (await readGitConfigOrThrow(e, n, ["--get-regexp", "^remote\\.origin\\."], HERMETIC_GIT_CONFIG_ENV)) ===
-      void 0
+      undefined
     )
-      return !1;
+      return false;
     let o = {};
     if (
       !(await runGit(
@@ -513,26 +554,26 @@ async function writeRemoteOriginUrl(e) {
         "",
         ["--git-dir", n, "config", "--get-regexp", "^remote\\.origin\\."],
         HERMETIC_GIT_ENV,
-        void 0,
+        undefined,
         o,
       ).then(
-        () => !0,
-        (c) => {
-          if (e.signal?.aborted) throw c;
-          return o.exitCode !== 1 || o.wroteStderr !== !1;
+        () => true,
+        (error) => {
+          if (e.signal?.aborted) throw error;
+          return o.exitCode !== 1 || o.wroteStderr !== false;
         },
       ))
     )
-      return !1;
+      return false;
   }
-  let filtered = (t ?? "")
+  let filtered = (gitConfigOrThrow ?? "")
     .split(
       `
 `,
     )
-    .filter((s) => s.length > 0);
-  if (filtered.length === 1 && filtered[0] === e.originURL) return !0;
-  for (let s = 1; ; s++) {
+    .filter((line) => line.length > 0);
+  if (filtered.length === 1 && filtered[0] === e.originURL) return true;
+  for (let j = 1; ; j++) {
     let o = await runGit(e, e.repoPath, [
       "--git-dir",
       n,
@@ -544,22 +585,21 @@ async function writeRemoteOriginUrl(e) {
       () => {
         return;
       },
-      (a) => a ?? Error("git config failed"),
+      (error) => error ?? Error("git config failed"),
     );
-    if (o === void 0)
-      return (
-        e.onDebug(
-          `[byoc:git] remote.origin.url in ${e.repoPath} did not hold the upstream address; corrected`,
-        ),
-        !0
-      );
+    if (o === undefined) {
+      e.onDebug(`[byoc:git] remote.origin.url in ${e.repoPath} did not hold the upstream address; corrected`);
+      return true;
+    }
     if (e.signal?.aborted) throw o;
-    if (s === ORIGIN_URL_WRITE_TRIES)
+    if (j === ORIGIN_URL_WRITE_TRIES)
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `Could not correct remote.origin.url in ${n}/config after ${ORIGIN_URL_WRITE_TRIES} tries over about six seconds (${G(o)}). The clone was left as it is; if that error says "could not lock config file" and "File exists", and no git is running there, remove ${n}/config.lock.`,
+        `Could not correct remote.origin.url in ${n}/config after ${ORIGIN_URL_WRITE_TRIES} tries over about six seconds (${errorText(o)}). The clone was left as it is; if that error says "could not lock config file" and "File exists", and no git is running there, remove ${n}/config.lock.`,
         "Could not write remote.origin.url of the repository's clone",
       );
-    await sleep(ORIGIN_URL_RETRY_BASE_MS * 2 ** (s - 1), e.signal, { throwOnAbort: !0 });
+    await sleep(ORIGIN_URL_RETRY_BASE_MS * 2 ** (j - 1), e.signal, {
+      throwOnAbort: true,
+    });
   }
 }
 //@ chunk-t3sg9e26.js:20581-21060 placement
@@ -578,8 +618,8 @@ async function normalizeRemoteOriginFetch(e) {
         `
 `,
       )
-      .filter((t) => /^\+?refs\/heads\//.test(t));
-    if (filtered.length > 0 && filtered.every((t) => t === LVn)) return;
+      .filter((line) => /^\+?refs\/heads\//.test(line));
+    if (filtered.length > 0 && filtered.every((t) => t === DEFAULT_FETCH_REFSPEC)) return;
   }
   await runGit(e, e.repoPath, [
     "--git-dir",
@@ -587,85 +627,105 @@ async function normalizeRemoteOriginFetch(e) {
     "config",
     "--replace-all",
     "remote.origin.fetch",
-    LVn,
+    DEFAULT_FETCH_REFSPEC,
     "^\\+?refs/heads/",
-  ]).catch((n) => e.onDebug(`[byoc:git] Could not normalize remote.origin.fetch: ${G(n)}`));
+  ]).catch((error) => e.onDebug(`[byoc:git] Could not normalize remote.origin.fetch: ${errorText(error)}`));
 }
 //@ chunk-t3sg9e26.js:21060-21320 placement
 function prepFetchRemote(e) {
-  if (e.originURL === e.authURL) return { configArgs: [], remote: "origin" };
-  let n = `claude-runner-prep-${randomUUID()}`,
-    t = httpsProxyFromEnv();
+  if (e.originURL === e.authURL)
+    return {
+      configArgs: [],
+      remote: "origin",
+    };
+  let n = `claude-runner-prep-${randomUUID()}`;
+  let t = httpsProxyFromEnv();
   return {
     configArgs: [
       "-c",
       `remote.${n}.url=${e.authURL}`,
       "-c",
-      `remote.${n}.fetch=${LVn}`,
+      `remote.${n}.fetch=${DEFAULT_FETCH_REFSPEC}`,
       ...(t ? ["-c", `remote.${n}.proxy=${t}`] : []),
     ],
     remote: n,
   };
 }
 //@ chunk-t3sg9e26.js:21320-22981 placement
-async function fetchAndCheckout(e, n, t, r, s) {
-  let o = n || "HEAD",
-    a = () => {
-      let b = prepFetchRemote(e);
-      return [...b.configArgs, "fetch", ...Je(r), "--progress", "--no-tags", ...[], b.remote, o];
+async function fetchAndCheckout(e, ref, t, r, s) {
+  let o = ref || "HEAD";
+  let a = () => {
+    let b = prepFetchRemote(e);
+    return [...b.configArgs, "fetch", ...fetchDepthArgs(r), "--progress", "--no-tags", ...[], b.remote, o];
+  };
+  let c = !t && isDeltaResetEnabled();
+  let d = false;
+  let u =
+    c &&
+    !d &&
+    (await runGit(e, e.repoPath, ["rev-parse", "--verify", "--quiet", "HEAD^{commit}"], {
+      ...LOCKED_GIT_ENV,
+    }).then(
+      () => true,
+      () => false,
+    ));
+  let h = false;
+  let y = await fetchWithRetry(
+    e,
+    a,
+    async () => {
+      h = await isRemoteEmpty(e);
+      return !h;
     },
-    c = !t && Yt(),
-    d = !1,
-    u =
-      c &&
-      !d &&
-      (await runGit(e, e.repoPath, ["rev-parse", "--verify", "--quiet", "HEAD^{commit}"], { ...V }).then(
-        () => !0,
-        () => !1,
-      )),
-    h = !1,
-    y = await fetchWithRetry(e, a, async () => ((h = await isRemoteEmpty(e)), !h), r && nt());
+    r && isFailFastFetchEnabled(),
+  );
   if (h) {
-    if ((e.onDebug("[byoc:git] Repository is empty, skipping checkout"), e.sanitized)) {
-      let b = join(e.repoPath, ".git"),
-        P = {};
-      await runGit(e, e.repoPath, ["--git-dir", b, "read-tree", "HEAD"], { ...V }, Mt, P).then(
-        e.sanitized.onIndexFromHead,
-        async (v) => {
-          if (
-            (e.signal?.throwIfAborted(),
-            e.onDebug(`[byoc:git] Could not read HEAD into the index: ${G(v)}`),
-            typeof P.exitCode !== "number" || P.exitCode > 128)
-          )
-            await unlink(join(b, "index.lock")).catch(() => {});
+    e.onDebug("[byoc:git] Repository is empty, skipping checkout");
+    if (e.sanitized) {
+      let b = join(e.repoPath, ".git");
+      let P = {};
+      await runGit(
+        e,
+        e.repoPath,
+        ["--git-dir", b, "read-tree", "HEAD"],
+        {
+          ...LOCKED_GIT_ENV,
         },
-      );
+        READ_TREE_TIMEOUT_MS,
+        P,
+      ).then(e.sanitized.onIndexFromHead, async (error) => {
+        e.signal?.throwIfAborted();
+        e.onDebug(`[byoc:git] Could not read HEAD into the index: ${errorText(error)}`);
+        if (typeof P.exitCode !== "number" || P.exitCode > 128)
+          await unlink(join(b, "index.lock")).catch(() => {});
+      });
     }
     return;
   }
   if (!y) throw Error(`git fetch failed for ${e.gitURL}`);
-  if (
-    (await runGit(e, e.repoPath, ["update-ref", "refs/remotes/origin/HEAD", "FETCH_HEAD^{commit}"], {
-      ...V,
-    }).catch((b) => e.onDebug(`[byoc:git] Could not set origin/HEAD: ${G(b)}`)),
-    t)
-  ) {
+  await runGit(e, e.repoPath, ["update-ref", "refs/remotes/origin/HEAD", "FETCH_HEAD^{commit}"], {
+    ...LOCKED_GIT_ENV,
+  }).catch((error) => e.onDebug(`[byoc:git] Could not set origin/HEAD: ${errorText(error)}`));
+  if (t) {
     e.onDebug("[byoc:git] Fetched to FETCH_HEAD, skipping reset-hard (worktree mode)");
     return;
   }
-  let f = () => runGit(e, e.repoPath, ["update-ref", "--no-deref", "HEAD", "HEAD"], { ...V }).catch(() => {}),
-    R = () =>
-      runGit(e, e.repoPath, [
-        "-c",
-        "core.checkStat=minimal",
-        "-c",
-        "core.trustctime=false",
-        "reset",
-        "--hard",
-        "FETCH_HEAD^{commit}",
-      ]);
+  let f = () =>
+    runGit(e, e.repoPath, ["update-ref", "--no-deref", "HEAD", "HEAD"], {
+      ...LOCKED_GIT_ENV,
+    }).catch(() => {});
+  let R = () =>
+    runGit(e, e.repoPath, [
+      "-c",
+      "core.checkStat=minimal",
+      "-c",
+      "core.trustctime=false",
+      "reset",
+      "--hard",
+      "FETCH_HEAD^{commit}",
+    ]);
   if (!u) await f();
-  await ke(
+  await measureGitPhase(
     e,
     "reset",
     async () => {
@@ -685,156 +745,195 @@ async function fetchAndCheckout(e, n, t, r, s) {
           return;
         } catch (error) {
           if (e.signal?.aborted) throw error;
-          (e.onDebug(`[byoc:git] Delta reset failed, falling back to reset --hard: ${G(error)}`), await f());
+          e.onDebug(`[byoc:git] Delta reset failed, falling back to reset --hard: ${errorText(error)}`);
+          await f();
         }
       await R();
     },
-    d ? { delta_reset: "withheld" } : void 0,
+    d
+      ? {
+          delta_reset: "withheld",
+        }
+      : undefined,
   );
 }
 //@ chunk-t3sg9e26.js:22981-23143 placement
 function slowFetchConfigArgs(e, n) {
   let t = [];
-  if (n && e < tt) t.push("-c", `http.lowSpeedLimit=${Vt}`, "-c", `http.lowSpeedTime=${Bt}`);
+  if (n && e < SLOW_FETCH_CONFIG_AFTER_ATTEMPT)
+    t.push(
+      "-c",
+      `http.lowSpeedLimit=${HTTP_LOW_SPEED_LIMIT_BPS}`,
+      "-c",
+      `http.lowSpeedTime=${HTTP_LOW_SPEED_TIME_S}`,
+    );
   if (e >= 3) t.push("-c", "http.version=HTTP/1.1");
   return t;
 }
 //@ chunk-t3sg9e26.js:23143-23197 placement
-function un(e, n, t, r, s) {
+function runGitInRepo(e, n, t, r, s) {
   return runGit(e, e.repoPath, n, t, r, s);
 }
+//@ chunk-t3sg9e26.js:23197-25534 placement
 /**
  * 带重试与总时长上限的 git fetch
  */
-//@ chunk-t3sg9e26.js:23197-25534 placement
-async function fetchWithRetry(e, n, t, r = !1, s = un) {
-  let now = Date.now(),
-    a = 4000 + Math.random() * 4000,
-    c = r && xt(),
-    d = 0,
-    u,
-    h,
-    y = [],
-    f = (l) => (l.length <= xe ? l : truncateToLength(l, We) + "\u2026" + takeLastChars(l, xe - We - 1)),
-    R = () => (y.length > 0 ? { attempt_errors: jsonStringify(y) } : {}),
-    b = 0,
-    P = 0,
-    v = (l) => ({
-      failfast_aborts: String(b),
-      client_aborts: String(P),
-      ...(l?.transferBytes !== void 0 && { pack_bytes: String(l.transferBytes) }),
-      ...(l?.sawServerProgress === !0 && { server_progress: "true" }),
-    });
-  for (let l = 0; l < ie; l++) {
-    if (l > 0) {
-      let N = a * (1 << (l - 1));
-      (e.onDebug(`[byoc:git] Fetch retry ${l + 1}/${ie}, backing off ${Math.round(N)}ms`),
-        await sleep(N, e.signal, { throwOnAbort: !0 }));
+async function fetchWithRetry(e, n, t, r = false, s = runGitInRepo) {
+  let now = Date.now();
+  let a = 4000 + Math.random() * 4000;
+  let c = r && isStallGiveUpEnabled();
+  let d = 0;
+  let u;
+  let h;
+  let y = [];
+  let f = (l) =>
+    l.length <= MAX_ERROR_TEXT_CHARS
+      ? l
+      : truncateToLength(l, ERROR_TEXT_HEAD_CHARS) +
+        "\u2026" +
+        takeLastChars(l, MAX_ERROR_TEXT_CHARS - ERROR_TEXT_HEAD_CHARS - 1);
+  let R = () =>
+    y.length > 0
+      ? {
+          attempt_errors: jsonStringify(y),
+        }
+      : {};
+  let b = 0;
+  let P = 0;
+  let v = (l) => ({
+    failfast_aborts: String(b),
+    client_aborts: String(P),
+    ...(l?.transferBytes !== undefined && {
+      pack_bytes: String(l.transferBytes),
+    }),
+    ...(l?.sawServerProgress === true && {
+      server_progress: "true",
+    }),
+  });
+  for (let j = 0; j < FETCH_MAX_ATTEMPTS; j++) {
+    if (j > 0) {
+      let N = a * (1 << (j - 1));
+      e.onDebug(`[byoc:git] Fetch retry ${j + 1}/${FETCH_MAX_ATTEMPTS}, backing off ${Math.round(N)}ms`);
+      await sleep(N, e.signal, {
+        throwOnAbort: true,
+      });
     }
-    let T = [...slowFetchConfigArgs(l, r), ...(typeof n === "function" ? n() : n)],
-      z = l === ie - 1 || (c && l === oe - 1 && d === oe - 1) ? { GIT_TRACE_PACKET: "1" } : void 0,
-      k = {};
+    let T = [...slowFetchConfigArgs(j, r), ...(typeof n === "function" ? n() : n)];
+    let z =
+      j === FETCH_MAX_ATTEMPTS - 1 || (c && j === MUTE_GIVEUP_ATTEMPTS - 1 && d === MUTE_GIVEUP_ATTEMPTS - 1)
+        ? {
+            GIT_TRACE_PACKET: "1",
+          }
+        : undefined;
+    let k = {};
     try {
-      let N = se - (Date.now() - now);
-      if ((await s(e, T, z, Math.max(1, N), k), l > 0))
-        e.onDebug(`[byoc:git] Fetch succeeded on attempt ${l + 1}`);
-      return (reportGitPhase(e, "fetch", Date.now() - now, { attempts: String(l + 1), ...v(k), ...R() }), !0);
+      let N = MAX_SERVER_PROGRESS_CAP_MS - (Date.now() - now);
+      await s(e, T, z, Math.max(1, N), k);
+      if (j > 0) e.onDebug(`[byoc:git] Fetch succeeded on attempt ${j + 1}`);
+      reportGitPhase(e, "fetch", Date.now() - now, {
+        attempts: String(j + 1),
+        ...v(k),
+        ...R(),
+      });
+      return true;
     } catch (error) {
-      ((u = error), (h = k.exitCode));
-      let O = G(error);
-      (e.onDebug(`[byoc:git] Fetch attempt ${l + 1} failed: ${O}`), y.push(f(redactSecretsInText(O))));
-      let Q = r && l < tt && isCurlTimeoutOnly(O);
-      if (k.killReason !== void 0) P++;
+      u = error;
+      h = k.exitCode;
+      let O = errorText(error);
+      e.onDebug(`[byoc:git] Fetch attempt ${j + 1} failed: ${O}`);
+      y.push(f(redactSecretsInText(O)));
+      let Q = r && j < SLOW_FETCH_CONFIG_AFTER_ATTEMPT && isCurlTimeoutOnly(O);
+      if (k.killReason !== undefined) P++;
       else if (Q) b++;
-      if (
-        ((d =
-          (Q || k.killReason === "silence" || k.killReason === "escalated") &&
-          !k.sawClientProgress &&
-          !k.sawRemoteActivity
-            ? d + 1
-            : 0),
-        Date.now() - now >= se)
-      ) {
-        if (
-          (e.onDebug(
-            `[byoc:git] Fetch cumulative wall-clock ${Date.now() - now}ms \u2265 hard cap \u2014 not retrying`,
-          ),
-          reportGitPhase(e, "fetch", Date.now() - now, {
-            attempts: String(l + 1),
-            hard_cap: "true",
-            ...v(),
-            ...R(),
-          }),
-          NVn(O))
-        )
-          throw new FetchRefNotFoundError(O);
-        throw Error(`git fetch failed (cumulative hard cap after ${l + 1} attempts): ${O}`);
+      d =
+        (Q || k.killReason === "silence" || k.killReason === "escalated") &&
+        !k.sawClientProgress &&
+        !k.sawRemoteActivity
+          ? d + 1
+          : 0;
+      if (Date.now() - now >= MAX_SERVER_PROGRESS_CAP_MS) {
+        e.onDebug(
+          `[byoc:git] Fetch cumulative wall-clock ${Date.now() - now}ms \u2265 hard cap \u2014 not retrying`,
+        );
+        reportGitPhase(e, "fetch", Date.now() - now, {
+          attempts: String(j + 1),
+          hard_cap: "true",
+          ...v(),
+          ...R(),
+        });
+        if (isFetchRefNotFound(O)) throw new FetchRefNotFoundError(O);
+        throw Error(`git fetch failed (cumulative hard cap after ${j + 1} attempts): ${O}`);
       }
-      if (t && NVn(O) && !(await t())) return !1;
-      if (NVn(O))
-        throw (
-          e.onDebug(
-            "[byoc:git] Fetch error is permanent (ref not found on a non-empty remote) \u2014 skipping remaining retries",
-          ),
-          reportGitPhase(e, "fetch", Date.now() - now, {
-            attempts: String(l + 1),
-            permanent: "true",
-            ...v(),
-            ...R(),
-          }),
-          new FetchRefNotFoundError(O)
+      if (t && isFetchRefNotFound(O) && !(await t())) return false;
+      if (isFetchRefNotFound(O)) {
+        e.onDebug(
+          "[byoc:git] Fetch error is permanent (ref not found on a non-empty remote) \u2014 skipping remaining retries",
         );
-      if (c && l === oe - 1 && d === oe)
-        throw (
-          e.onDebug(
-            `[byoc:git] Fetch remote mute on all ${oe} attempts (no progress, no remote activity) \u2014 giving up so the session can be reassigned`,
-          ),
-          reportGitPhase(e, "fetch", Date.now() - now, {
-            attempts: String(l + 1),
-            exhausted: "true",
-            giveup: "mute",
-            ...v(),
-            ...R(),
-          }),
-          Error(
-            `git fetch failed after ${l + 1} mute attempts (no progress, no remote activity; giving up early for reassignment): ${O}`,
-          )
+        reportGitPhase(e, "fetch", Date.now() - now, {
+          attempts: String(j + 1),
+          permanent: "true",
+          ...v(),
+          ...R(),
+        });
+        throw new FetchRefNotFoundError(O);
+      }
+      if (c && j === MUTE_GIVEUP_ATTEMPTS - 1 && d === MUTE_GIVEUP_ATTEMPTS) {
+        e.onDebug(
+          `[byoc:git] Fetch remote mute on all ${MUTE_GIVEUP_ATTEMPTS} attempts (no progress, no remote activity) \u2014 giving up so the session can be reassigned`,
         );
+        reportGitPhase(e, "fetch", Date.now() - now, {
+          attempts: String(j + 1),
+          exhausted: "true",
+          giveup: "mute",
+          ...v(),
+          ...R(),
+        });
+        throw Error(
+          `git fetch failed after ${j + 1} mute attempts (no progress, no remote activity; giving up early for reassignment): ${O}`,
+        );
+      }
     }
   }
-  reportGitPhase(e, "fetch", Date.now() - now, { attempts: String(ie), exhausted: "true", ...v(), ...R() });
-  let A = `git fetch failed after ${ie} attempts: ${G(u)}`,
-    E = classifyFetchRefusal(G(u), h, e.gitURL);
-  if (E !== void 0) throw new FetchThrottledError(A, E);
+  reportGitPhase(e, "fetch", Date.now() - now, {
+    attempts: String(FETCH_MAX_ATTEMPTS),
+    exhausted: "true",
+    ...v(),
+    ...R(),
+  });
+  let A = `git fetch failed after ${FETCH_MAX_ATTEMPTS} attempts: ${errorText(u)}`;
+  let throttle = classifyFetchRefusal(errorText(u), h, e.gitURL);
+  if (throttle !== undefined) throw new FetchThrottledError(A, throttle);
   throw Error(A);
 }
 //@ chunk-t3sg9e26.js:25534-25999 placement
-async function checkoutTargetBranch(e, n, t) {
-  if ((await runGit(e, e.repoPath, ["branch", "--show-current"]).catch(() => "")).trim() === n) {
-    e.onDebug(`[byoc:git] Already on target branch ${n}`);
+async function checkoutTargetBranch(e, targetBranch, t) {
+  if ((await runGit(e, e.repoPath, ["branch", "--show-current"]).catch(() => "")).trim() === targetBranch) {
+    e.onDebug(`[byoc:git] Already on target branch ${targetBranch}`);
     return;
   }
-  if (await remoteBranchExists(e, n))
-    (e.onDebug("[byoc:git] Target branch exists on remote, fetching"), await fetchAndForceCheckout(e, n, t));
-  else
-    (e.onDebug(`[byoc:git] Creating local branch ${n} from HEAD`),
-      await runGit(e, e.repoPath, ["checkout", "-B", n]),
-      await runGit(e, e.repoPath, ["update-ref", `refs/remotes/origin/${n}`, "HEAD"], { ...V }).catch(
-        () => {},
-      ));
+  if (await remoteBranchExists(e, targetBranch)) {
+    e.onDebug("[byoc:git] Target branch exists on remote, fetching");
+    await fetchAndForceCheckout(e, targetBranch, t);
+  } else {
+    e.onDebug(`[byoc:git] Creating local branch ${targetBranch} from HEAD`);
+    await runGit(e, e.repoPath, ["checkout", "-B", targetBranch]);
+    await runGit(e, e.repoPath, ["update-ref", `refs/remotes/origin/${targetBranch}`, "HEAD"], {
+      ...LOCKED_GIT_ENV,
+    }).catch(() => {});
+  }
 }
 //@ chunk-t3sg9e26.js:25999-26212 placement
 async function fetchAndForceCheckout(e, n, t) {
-  (await fetchWithRetry(
+  await fetchWithRetry(
     e,
     () => {
       let r = prepFetchRemote(e);
-      return [...r.configArgs, "fetch", ...Je(t), "--progress", r.remote, n];
+      return [...r.configArgs, "fetch", ...fetchDepthArgs(t), "--progress", r.remote, n];
     },
-    void 0,
-    t && nt(),
-  ),
-    await runGit(e, e.repoPath, ["checkout", "--progress", "--force", "-B", n, "FETCH_HEAD"]));
+    undefined,
+    t && isFailFastFetchEnabled(),
+  );
+  await runGit(e, e.repoPath, ["checkout", "--progress", "--force", "-B", n, "FETCH_HEAD"]);
 }
 //@ chunk-t3sg9e26.js:26212-26353 placement
 async function remoteBranchExists(e, n) {
@@ -843,15 +942,18 @@ async function remoteBranchExists(e, n) {
       (await runGit(e, e.repoPath, ["ls-remote", "--heads", e.authURL, `refs/heads/${n}`])).trim().length > 0
     );
   } catch {
-    return !1;
+    return false;
   }
 }
 //@ chunk-t3sg9e26.js:26353-26472 placement
-async function localRefExists(e, n) {
+async function localRefExists(e, ref) {
   try {
-    return (await runGit(e, e.repoPath, ["rev-parse", "--verify", "--quiet", n], { ...V }), !0);
+    await runGit(e, e.repoPath, ["rev-parse", "--verify", "--quiet", ref], {
+      ...LOCKED_GIT_ENV,
+    });
+    return true;
   } catch {
-    return !1;
+    return false;
   }
 }
 //@ chunk-t3sg9e26.js:26472-26597 placement
@@ -859,8 +961,14 @@ async function isRemoteEmpty(e) {
   try {
     return (await runGit(e, e.repoPath, ["ls-remote", "--symref", e.authURL, "HEAD"])).trim() === "";
   } catch {
-    return !1;
+    return false;
   }
 }
-
-export { $0r, prepareRepositories, RepositoryAccessError, REPO_ACCESS_FAILURE_LABELS, ISOLATED_HOME_ENV, me };
+export {
+  isPreparableRepoType,
+  prepareRepositories,
+  RepositoryAccessError,
+  REPO_ACCESS_FAILURE_LABELS,
+  ISOLATED_HOME_ENV,
+  REPOSITORY_PREPARE_CONCURRENCY,
+};

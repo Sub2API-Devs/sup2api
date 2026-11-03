@@ -31,10 +31,10 @@ In plan mode, you'll:
 
 `;
 }
+//@ chunk-a5k9jscj.js:27450-31089 placement
 /**
  * EnterPlanMode 工具的完整提示词：何时主动进入计划模式、计划模式下做什么。
  */
-//@ chunk-a5k9jscj.js:27450-31089 placement
 function enterPlanModeToolPrompt() {
   let e = agentToolHintSuffix();
   return `Use this tool proactively when you're about to start a non-trivial implementation task. Getting user sign-off on your approach before writing code prevents wasted effort and ensures alignment. This tool transitions you into plan mode where you can explore the codebase and design an implementation approach for user approval.
@@ -114,5 +114,4 @@ User: "What files handle routing?"
 - Users appreciate being consulted before significant changes are made to their codebase
 `;
 }
-
 export { enterPlanModeToolPrompt };

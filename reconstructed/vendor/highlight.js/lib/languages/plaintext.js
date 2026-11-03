@@ -8,11 +8,14 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:362383-362509 cjs-fingerprint
-var Hi = x(function (Rg, qi) {
-  function Fp(e) {
-    return { name: "Plain text", aliases: ["text", "txt"], disableAutodetect: !0 };
+var require_plaintext = x(function (cjsExports, cjsModule) {
+  function plaintext(hljs) {
+    return {
+      name: "Plain text",
+      aliases: ["text", "txt"],
+      disableAutodetect: true,
+    };
   }
-  qi.exports = Fp;
+  cjsModule.exports = plaintext;
 });
-
-export { Hi };
+export { require_plaintext };

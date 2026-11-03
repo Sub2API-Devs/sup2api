@@ -24,12 +24,11 @@ var HTTP_SERVE_ARG_PATTERN =
 function isHttpMcpServeInvocation() {
   {
     let argv = process.argv;
-    if (argv[2] !== "mcp" || argv[3] !== "serve") return !1;
-    let [, , t, ...r] = argv.slice(2),
-      n = t === "--transport=http" ? r : t === "--transport" && r[0] === "http" ? r.slice(1) : void 0;
-    return isRemoteMcpServeHost() && n !== void 0 && n.every((o) => HTTP_SERVE_ARG_PATTERN.test(o));
+    if (argv[2] !== "mcp" || argv[3] !== "serve") return false;
+    let [, , t, ...r] = argv.slice(2);
+    let n = t === "--transport=http" ? r : t === "--transport" && r[0] === "http" ? r.slice(1) : undefined;
+    return isRemoteMcpServeHost() && n !== undefined && n.every((o) => HTTP_SERVE_ARG_PATTERN.test(o));
   }
-  return !1;
+  return false;
 }
-
 export { isHttpMcpServeInvocation, isRemoteMcpServeHost };

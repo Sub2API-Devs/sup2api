@@ -14,36 +14,53 @@ import { otlpProtocol, coworkEgressHosts } from "./telemetry/otlpConfig.js";
 import { buildUserResourceAttributes, buildInferenceModels } from "./telemetry/resourceAttributes.js";
 
 //@ chunk-1ny7cxrt.js:1383147-1383221 placement
-function zd(e) {
-  return e?.underCode === !0 && e.desktopSessionPayload !== void 0;
+/**
+ * 判断会话是否为网关托管的 Claude Code 桌面会话（underCode 且带 desktopSessionPayload）。
+ */
+function isManagedClaudeCodeDesktopSession(e) {
+  return e?.underCode === true && e.desktopSessionPayload !== undefined;
 }
+//@ chunk-1ny7cxrt.js:1383221-1383830 placement
 /**
  * 生成发给客户端的网关引导配置：推理提供方、OTLP 端点、托管设置派生项、禁用内置工具与过期时间。
  */
-//@ chunk-1ny7cxrt.js:1383221-1383830 placement
-function buildClientBootstrapConfig(e, t, n, o) {
-  let r = t?.payload.settings ?? {},
-    s = getDisabledBuiltinToolsFromSettings(r),
-    a = t?.desktop,
-    l = unionStringLists(s.disabledBuiltinTools, a?.disabledBuiltinTools),
-    c = a === void 0 ? void 0 : { ...a, ...(l === void 0 ? {} : { disabledBuiltinTools: l }) },
-    u = e.telemetry.forward_to.length > 0 && e.listen.public_url;
+function buildClientBootstrapConfig(e, policy, n, o) {
+  let settings = policy?.payload.settings ?? {};
+  let disabledBuiltinToolsFromSettings = getDisabledBuiltinToolsFromSettings(settings);
+  let desktop = policy?.desktop;
+  let l = unionStringLists(
+    disabledBuiltinToolsFromSettings.disabledBuiltinTools,
+    desktop?.disabledBuiltinTools,
+  );
+  let c =
+    desktop === undefined
+      ? undefined
+      : {
+          ...desktop,
+          ...(l === undefined
+            ? {}
+            : {
+                disabledBuiltinTools: l,
+              }),
+        };
+  let publicUrl = e.telemetry.forward_to.length > 0 && e.listen.public_url;
   return {
     inferenceProvider: "gateway",
     inferenceGatewayBaseUrl: o,
     inferenceCredentialKind: "interactive",
-    ...(zd(t) && { inferenceGatewayManagedClaudeCode: !0 }),
-    ...(u && {
+    ...(isManagedClaudeCodeDesktopSession(policy) && {
+      inferenceGatewayManagedClaudeCode: true,
+    }),
+    ...(publicUrl && {
       otlpEndpoint: o,
-      otlpProtocol: otlpProtocol(r),
+      otlpProtocol: otlpProtocol(settings),
       otlpResourceAttributes: buildUserResourceAttributes(n, e.telemetry.resource_attributes),
     }),
-    ...buildInferenceModels(e, t ?? void 0, r),
-    ...s,
-    ...coworkEgressHosts(r),
+    ...buildInferenceModels(e, policy ?? undefined, settings),
+    ...disabledBuiltinToolsFromSettings,
+    ...coworkEgressHosts(settings),
     ...c,
     expiresAt: Math.floor(Date.now() / 1000) + e.session.ttl_hours * 3600,
   };
 }
-
-export { zd, buildClientBootstrapConfig };
+export { isManagedClaudeCodeDesktopSession, buildClientBootstrapConfig };

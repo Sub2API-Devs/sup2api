@@ -8,64 +8,51 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-edce4vxq.js:1420-2273 cjs-fingerprint
-var Mme = x(function (fo) {
-  var Br = () => (e, t) => async (r) => {
-      try {
-        let s = await e(r),
-          {
-            clientName: clientName,
-            commandName: commandName,
-            logger: logger,
-            dynamoDbDocumentClientOptions: dynamoDbDocumentClientOptions = {},
-          } = t,
-          {
-            overrideInputFilterSensitiveLog: overrideInputFilterSensitiveLog,
-            overrideOutputFilterSensitiveLog: overrideOutputFilterSensitiveLog,
-          } = dynamoDbDocumentClientOptions,
-          y = overrideInputFilterSensitiveLog ?? t.inputFilterSensitiveLog,
-          N = overrideOutputFilterSensitiveLog ?? t.outputFilterSensitiveLog,
-          { $metadata: $metadata, ...T } = s.output;
-        return (
-          logger?.info?.({
-            clientName: clientName,
-            commandName: commandName,
-            input: y(r.input),
-            output: N(T),
-            metadata: $metadata,
-          }),
-          s
-        );
-      } catch (error) {
-        let {
-            clientName: clientName,
-            commandName: commandName,
-            logger: logger,
-            dynamoDbDocumentClientOptions: dynamoDbDocumentClientOptions = {},
-          } = t,
-          { overrideInputFilterSensitiveLog: overrideInputFilterSensitiveLog } =
-            dynamoDbDocumentClientOptions,
-          m = overrideInputFilterSensitiveLog ?? t.inputFilterSensitiveLog;
-        throw (
-          logger?.error?.({
-            clientName: clientName,
-            commandName: commandName,
-            input: m(r.input),
-            error: error,
-            metadata: error.$metadata,
-          }),
-          error
-        );
-      }
+var require_middleware_logger = x(function (cjsExports) {
+  var loggerMiddleware = () => (next, context) => async (args) => {
+    try {
+      let response = await next(args);
+      let { clientName, commandName, logger, dynamoDbDocumentClientOptions = {} } = context;
+      let { overrideInputFilterSensitiveLog, overrideOutputFilterSensitiveLog } =
+        dynamoDbDocumentClientOptions;
+      let inputFilterSensitiveLog = overrideInputFilterSensitiveLog ?? context.inputFilterSensitiveLog;
+      let outputFilterSensitiveLog = overrideOutputFilterSensitiveLog ?? context.outputFilterSensitiveLog;
+      let { $metadata, ...outputWithoutMetadata } = response.output;
+      logger?.info?.({
+        clientName,
+        commandName,
+        input: inputFilterSensitiveLog(args.input),
+        output: outputFilterSensitiveLog(outputWithoutMetadata),
+        metadata: $metadata,
+      });
+      return response;
+    } catch (error) {
+      let { clientName, commandName, logger, dynamoDbDocumentClientOptions = {} } = context;
+      let { overrideInputFilterSensitiveLog } = dynamoDbDocumentClientOptions;
+      let inputFilterSensitiveLog = overrideInputFilterSensitiveLog ?? context.inputFilterSensitiveLog;
+      logger?.error?.({
+        clientName,
+        commandName,
+        input: inputFilterSensitiveLog(args.input),
+        error,
+        metadata: error.$metadata,
+      });
+      throw error;
+    }
+  };
+  var loggerMiddlewareOptions = {
+    name: "loggerMiddleware",
+    tags: ["LOGGER"],
+    step: "initialize",
+    override: true,
+  };
+  var getLoggerPlugin = (options) => ({
+    applyToStack: (clientStack) => {
+      clientStack.add(loggerMiddleware(), loggerMiddlewareOptions);
     },
-    Lr = { name: "loggerMiddleware", tags: ["LOGGER"], step: "initialize", override: !0 },
-    ho = (e) => ({
-      applyToStack: (t) => {
-        t.add(Br(), Lr);
-      },
-    });
-  fo.getLoggerPlugin = ho;
-  fo.loggerMiddleware = Br;
-  fo.loggerMiddlewareOptions = Lr;
+  });
+  cjsExports.getLoggerPlugin = getLoggerPlugin;
+  cjsExports.loggerMiddleware = loggerMiddleware;
+  cjsExports.loggerMiddlewareOptions = loggerMiddlewareOptions;
 });
-
-export { Mme };
+export { require_middleware_logger };

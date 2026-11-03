@@ -5,7 +5,7 @@
  * pieces: chunk-my7fcfze.js (1)
  * attribution: placement 1
  */
-import { Wns } from "./dist-cjs/submodules/sts/index.js";
+import { require_sts } from "./dist-cjs/submodules/sts/index.js";
 
 //@ chunk-my7fcfze.js:508-529 placement
-export default Wns();
+export default require_sts();

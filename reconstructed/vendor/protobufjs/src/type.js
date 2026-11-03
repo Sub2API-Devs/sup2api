@@ -13,8 +13,8 @@ import { Yt } from "./field.js";
 import { Ts } from "./mapfield.js";
 import { bs } from "./service.js";
 import { Os } from "./message.js";
-import { _Hr } from "./reader.js";
-import { yHr } from "./writer.js";
+import { require_reader as _Hr } from "./reader.js";
+import { require_writer as yHr } from "./writer.js";
 import { de } from "./util.js";
 import { Ka } from "./encoder.js";
 import { qa } from "./decoder.js";
@@ -23,276 +23,313 @@ import { ja } from "./converter.js";
 import { Ga } from "./wrappers.js";
 
 //@ chunk-pwh5dx3n.js:102455-109305 cjs-fingerprint
-var Ps = x(function (hA, Rd) {
-  Rd.exports = J;
-  var We = zr();
-  ((J.prototype = Object.create(We.prototype)).constructor = J).className = "Type";
-  var SE = nt(),
-    Ya = Sr(),
-    ws = Yt(),
-    CE = Ts(),
-    EE = bs(),
-    $a = Os(),
-    Va = _Hr(),
-    TE = yHr(),
-    ve = de(),
-    RE = Ka(),
-    bE = qa(),
-    OE = za(),
-    Td = ja(),
-    wE = Ga();
-  function J(e, t) {
-    ((e = e.replace(/\W/g, "")),
-      We.call(this, e, t),
-      (this.fields = {}),
-      (this.oneofs = void 0),
-      (this.extensions = void 0),
-      (this.reserved = void 0),
-      (this.group = void 0),
-      (this._fieldsById = null),
-      (this._fieldsArray = null),
-      (this._oneofsArray = null),
-      (this._ctor = null));
+var Ps = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = Type;
+  var Namespace = zr();
+  ((Type.prototype = Object.create(Namespace.prototype)).constructor = Type).className = "Type";
+  var Enum = nt();
+  var OneOf = Sr();
+  var Field = Yt();
+  var MapField = Ts();
+  var Service = bs();
+  var Message = Os();
+  var Reader = _Hr();
+  var Writer = yHr();
+  var util = de();
+  var encoder = Ka();
+  var decoder = qa();
+  var verifier = za();
+  var converter = ja();
+  var wrappers = Ga();
+  function Type(name, options) {
+    name = name.replace(/\W/g, "");
+    Namespace.call(this, name, options);
+    this.fields = {};
+    this.oneofs = undefined;
+    this.extensions = undefined;
+    this.reserved = undefined;
+    this.group = undefined;
+    this._fieldsById = null;
+    this._fieldsArray = null;
+    this._oneofsArray = null;
+    this._ctor = null;
   }
-  Object.defineProperties(J.prototype, {
+  Object.defineProperties(Type.prototype, {
     fieldsById: {
       get: function () {
         if (this._fieldsById) return this._fieldsById;
         this._fieldsById = {};
-        for (var keys = Object.keys(this.fields), t = 0; t < keys.length; ++t) {
-          var r = this.fields[keys[t]],
-            id = r.id;
+        for (var names = Object.keys(this.fields), i_2 = 0; i_2 < names.length; ++i_2) {
+          var field = this.fields[names[i_2]];
+          var id = field.id;
           if (this._fieldsById[id]) throw Error("duplicate id " + id + " in " + this);
-          this._fieldsById[id] = r;
+          this._fieldsById[id] = field;
         }
         return this._fieldsById;
       },
     },
     fieldsArray: {
       get: function () {
-        return this._fieldsArray || (this._fieldsArray = ve.toArray(this.fields));
+        return this._fieldsArray || (this._fieldsArray = util.toArray(this.fields));
       },
     },
     oneofsArray: {
       get: function () {
-        return this._oneofsArray || (this._oneofsArray = ve.toArray(this.oneofs));
+        return this._oneofsArray || (this._oneofsArray = util.toArray(this.oneofs));
       },
     },
     ctor: {
       get: function () {
-        return this._ctor || (this.ctor = J.generateConstructor(this)());
+        return this._ctor || (this.ctor = Type.generateConstructor(this)());
       },
-      set: function (e) {
-        var t = e.prototype;
-        if (!(t instanceof $a)) (((e.prototype = new $a()).constructor = e), ve.merge(e.prototype, t));
-        ((e.$type = e.prototype.$type = this), ve.merge(e, $a, !0), (this._ctor = e));
-        var r = 0;
-        for (; r < this.fieldsArray.length; ++r) this._fieldsArray[r].resolve();
-        var i = {};
-        for (r = 0; r < this.oneofsArray.length; ++r)
-          i[this._oneofsArray[r].resolve().name] = {
-            get: ve.oneOfGetter(this._oneofsArray[r].oneof),
-            set: ve.oneOfSetter(this._oneofsArray[r].oneof),
+      set: function (ctor) {
+        var prototype = ctor.prototype;
+        if (!(prototype instanceof Message)) {
+          (ctor.prototype = new Message()).constructor = ctor;
+          util.merge(ctor.prototype, prototype);
+        }
+        ctor.$type = ctor.prototype.$type = this;
+        util.merge(ctor, Message, true);
+        this._ctor = ctor;
+        var i_2 = 0;
+        for (; i_2 < this.fieldsArray.length; ++i_2) this._fieldsArray[i_2].resolve();
+        var ctorProperties = {};
+        for (i_2 = 0; i_2 < this.oneofsArray.length; ++i_2)
+          ctorProperties[this._oneofsArray[i_2].resolve().name] = {
+            get: util.oneOfGetter(this._oneofsArray[i_2].oneof),
+            set: util.oneOfSetter(this._oneofsArray[i_2].oneof),
           };
-        if (r) Object.defineProperties(e.prototype, i);
+        if (i_2) Object.defineProperties(ctor.prototype, ctorProperties);
       },
     },
   });
-  J.generateConstructor = function (t) {
-    var codegen = ve.codegen(["p"], t.name);
-    for (var i = 0, s; i < t.fieldsArray.length; ++i)
-      if ((s = t._fieldsArray[i]).map) codegen("this%s={}", ve.safeProp(s.name));
-      else if (s.repeated) codegen("this%s=[]", ve.safeProp(s.name));
-    return codegen(
-      'if(p)for(var ks=Object.keys(p),i=0;i<ks.length;++i)if(p[ks[i]]!=null&&ks[i]!=="__proto__")',
-    )("this[ks[i]]=p[ks[i]]");
-  };
-  function As(e) {
-    return (
-      (e._fieldsById = e._fieldsArray = e._oneofsArray = null),
-      delete e.encode,
-      delete e.decode,
-      delete e.verify,
-      e
+  Type.generateConstructor = function (mtype) {
+    var gen = util.codegen(["p"], mtype.name);
+    for (var i = 0, field; i < mtype.fieldsArray.length; ++i)
+      if ((field = mtype._fieldsArray[i]).map) gen("this%s={}", util.safeProp(field.name));
+      else if (field.repeated) gen("this%s=[]", util.safeProp(field.name));
+    return gen('if(p)for(var ks=Object.keys(p),i=0;i<ks.length;++i)if(p[ks[i]]!=null&&ks[i]!=="__proto__")')(
+      "this[ks[i]]=p[ks[i]]",
     );
+  };
+  function clearCache(type) {
+    type._fieldsById = type._fieldsArray = type._oneofsArray = null;
+    delete type.encode;
+    delete type.decode;
+    delete type.verify;
+    return type;
   }
-  J.fromJSON = function (t, r, i) {
-    i = ve.checkDepth(i);
-    var s = new J(t, r.options);
-    ((s.extensions = r.extensions), (s.reserved = r.reserved));
-    var keys = Object.keys(r.fields),
-      a = 0;
-    for (; a < keys.length; ++a)
-      s.add((typeof r.fields[keys[a]].keyType < "u" ? CE.fromJSON : ws.fromJSON)(keys[a], r.fields[keys[a]]));
-    if (r.oneofs)
-      for (keys = Object.keys(r.oneofs), a = 0; a < keys.length; ++a)
-        s.add(Ya.fromJSON(keys[a], r.oneofs[keys[a]]));
-    if (r.nested)
-      for (keys = Object.keys(r.nested), a = 0; a < keys.length; ++a) {
-        var o = r.nested[keys[a]];
-        s.add(
-          (o.id !== void 0
-            ? ws.fromJSON
-            : o.fields !== void 0
-              ? J.fromJSON
-              : o.values !== void 0
-                ? SE.fromJSON
-                : o.methods !== void 0
-                  ? EE.fromJSON
-                  : We.fromJSON)(keys[a], o, i + 1),
+  Type.fromJSON = function (name, json, depth) {
+    depth = util.checkDepth(depth);
+    var type = new Type(name, json.options);
+    type.extensions = json.extensions;
+    type.reserved = json.reserved;
+    var names = Object.keys(json.fields);
+    var i = 0;
+    for (; i < names.length; ++i)
+      type.add(
+        (typeof json.fields[names[i]].keyType !== "undefined" ? MapField.fromJSON : Field.fromJSON)(
+          names[i],
+          json.fields[names[i]],
+        ),
+      );
+    if (json.oneofs)
+      for (names = Object.keys(json.oneofs), i = 0; i < names.length; ++i)
+        type.add(OneOf.fromJSON(names[i], json.oneofs[names[i]]));
+    if (json.nested)
+      for (names = Object.keys(json.nested), i = 0; i < names.length; ++i) {
+        var nested = json.nested[names[i]];
+        type.add(
+          (nested.id !== undefined
+            ? Field.fromJSON
+            : nested.fields !== undefined
+              ? Type.fromJSON
+              : nested.values !== undefined
+                ? Enum.fromJSON
+                : nested.methods !== undefined
+                  ? Service.fromJSON
+                  : Namespace.fromJSON)(names[i], nested, depth + 1),
         );
       }
-    if (r.extensions && r.extensions.length) s.extensions = r.extensions;
-    if (r.reserved && r.reserved.length) s.reserved = r.reserved;
-    if (r.group) s.group = !0;
-    if (r.comment) s.comment = r.comment;
-    if (r.edition) s._edition = r.edition;
-    return ((s._defaultEdition = "proto3"), s);
+    if (json.extensions && json.extensions.length) type.extensions = json.extensions;
+    if (json.reserved && json.reserved.length) type.reserved = json.reserved;
+    if (json.group) type.group = true;
+    if (json.comment) type.comment = json.comment;
+    if (json.edition) type._edition = json.edition;
+    type._defaultEdition = "proto3";
+    return type;
   };
-  J.prototype.toJSON = function (t) {
-    var r = We.prototype.toJSON.call(this, t),
-      i = t ? Boolean(t.keepComments) : !1;
-    return ve.toObject([
+  Type.prototype.toJSON = function (toJSONOptions) {
+    var inherited = Namespace.prototype.toJSON.call(this, toJSONOptions);
+    var keepComments = toJSONOptions ? Boolean(toJSONOptions.keepComments) : false;
+    return util.toObject([
       "edition",
       this._editionToJSON(),
       "options",
-      (r && r.options) || void 0,
+      (inherited && inherited.options) || undefined,
       "oneofs",
-      We.arrayToJSON(this.oneofsArray, t),
+      Namespace.arrayToJSON(this.oneofsArray, toJSONOptions),
       "fields",
-      We.arrayToJSON(
-        this.fieldsArray.filter(function (s) {
-          return !s.declaringField;
+      Namespace.arrayToJSON(
+        this.fieldsArray.filter(function (obj) {
+          return !obj.declaringField;
         }),
-        t,
+        toJSONOptions,
       ) || {},
       "extensions",
-      this.extensions && this.extensions.length ? this.extensions : void 0,
+      this.extensions && this.extensions.length ? this.extensions : undefined,
       "reserved",
-      this.reserved && this.reserved.length ? this.reserved : void 0,
+      this.reserved && this.reserved.length ? this.reserved : undefined,
       "group",
-      this.group || void 0,
+      this.group || undefined,
       "nested",
-      (r && r.nested) || void 0,
+      (inherited && inherited.nested) || undefined,
       "comment",
-      i ? this.comment : void 0,
+      keepComments ? this.comment : undefined,
     ]);
   };
-  J.prototype.resolveAll = function () {
+  Type.prototype.resolveAll = function () {
     if (!this._needsRecursiveResolve) return this;
-    We.prototype.resolveAll.call(this);
-    var oneofsArray = this.oneofsArray;
+    Namespace.prototype.resolveAll.call(this);
+    var oneofs = this.oneofsArray;
     i = 0;
-    while (i < oneofsArray.length) oneofsArray[i++].resolve();
-    var fieldsArray = this.fieldsArray,
-      i = 0;
-    while (i < fieldsArray.length) fieldsArray[i++].resolve();
+    while (i < oneofs.length) oneofs[i++].resolve();
+    var fields = this.fieldsArray;
+    var i = 0;
+    while (i < fields.length) fields[i++].resolve();
     return this;
   };
-  J.prototype._resolveFeaturesRecursive = function (t) {
+  Type.prototype._resolveFeaturesRecursive = function (edition) {
     if (!this._needsRecursiveFeatureResolution) return this;
-    return (
-      (t = this._edition || t),
-      We.prototype._resolveFeaturesRecursive.call(this, t),
-      this.oneofsArray.forEach((r) => {
-        r._resolveFeatures(t);
-      }),
-      this.fieldsArray.forEach((r) => {
-        r._resolveFeatures(t);
-      }),
-      this
-    );
+    edition = this._edition || edition;
+    Namespace.prototype._resolveFeaturesRecursive.call(this, edition);
+    this.oneofsArray.forEach((oneof) => {
+      oneof._resolveFeatures(edition);
+    });
+    this.fieldsArray.forEach((field) => {
+      field._resolveFeatures(edition);
+    });
+    return this;
   };
-  J.prototype.get = function (t) {
-    if (Object.prototype.hasOwnProperty.call(this.fields, t)) return this.fields[t];
-    if (this.oneofs && Object.prototype.hasOwnProperty.call(this.oneofs, t)) return this.oneofs[t];
-    if (this.nested && Object.prototype.hasOwnProperty.call(this.nested, t)) return this.nested[t];
+  Type.prototype.get = function (name) {
+    if (Object.prototype.hasOwnProperty.call(this.fields, name)) return this.fields[name];
+    if (this.oneofs && Object.prototype.hasOwnProperty.call(this.oneofs, name)) return this.oneofs[name];
+    if (this.nested && Object.prototype.hasOwnProperty.call(this.nested, name)) return this.nested[name];
     return null;
   };
-  J.prototype.add = function (t) {
-    if (this.get(t.name)) throw Error("duplicate name '" + t.name + "' in " + this);
-    if (t instanceof ws && t.extend === void 0) {
-      if (this._fieldsById ? this._fieldsById[t.id] : this.fieldsById[t.id])
-        throw Error("duplicate id " + t.id + " in " + this);
-      if (this.isReservedId(t.id)) throw Error("id " + t.id + " is reserved in " + this);
-      if (this.isReservedName(t.name)) throw Error("name '" + t.name + "' is reserved in " + this);
-      if (t.name === "__proto__") return this;
-      if (t.parent) t.parent.remove(t);
-      return ((this.fields[t.name] = t), (t.message = this), t.onAdd(this), As(this));
+  Type.prototype.add = function (object) {
+    if (this.get(object.name)) throw Error("duplicate name '" + object.name + "' in " + this);
+    if (object instanceof Field && object.extend === undefined) {
+      if (this._fieldsById ? this._fieldsById[object.id] : this.fieldsById[object.id])
+        throw Error("duplicate id " + object.id + " in " + this);
+      if (this.isReservedId(object.id)) throw Error("id " + object.id + " is reserved in " + this);
+      if (this.isReservedName(object.name)) throw Error("name '" + object.name + "' is reserved in " + this);
+      if (object.name === "__proto__") return this;
+      if (object.parent) object.parent.remove(object);
+      this.fields[object.name] = object;
+      object.message = this;
+      object.onAdd(this);
+      return clearCache(this);
     }
-    if (t instanceof Ya) {
-      if (t.name === "__proto__") return this;
+    if (object instanceof OneOf) {
+      if (object.name === "__proto__") return this;
       if (!this.oneofs) this.oneofs = {};
-      return ((this.oneofs[t.name] = t), t.onAdd(this), As(this));
+      this.oneofs[object.name] = object;
+      object.onAdd(this);
+      return clearCache(this);
     }
-    return We.prototype.add.call(this, t);
+    return Namespace.prototype.add.call(this, object);
   };
-  J.prototype.remove = function (t) {
-    if (t instanceof ws && t.extend === void 0) {
-      if (!this.fields || this.fields[t.name] !== t) throw Error(t + " is not a member of " + this);
-      return (delete this.fields[t.name], (t.parent = null), t.onRemove(this), As(this));
+  Type.prototype.remove = function (object) {
+    if (object instanceof Field && object.extend === undefined) {
+      if (!this.fields || this.fields[object.name] !== object)
+        throw Error(object + " is not a member of " + this);
+      delete this.fields[object.name];
+      object.parent = null;
+      object.onRemove(this);
+      return clearCache(this);
     }
-    if (t instanceof Ya) {
-      if (!this.oneofs || this.oneofs[t.name] !== t) throw Error(t + " is not a member of " + this);
-      return (delete this.oneofs[t.name], (t.parent = null), t.onRemove(this), As(this));
+    if (object instanceof OneOf) {
+      if (!this.oneofs || this.oneofs[object.name] !== object)
+        throw Error(object + " is not a member of " + this);
+      delete this.oneofs[object.name];
+      object.parent = null;
+      object.onRemove(this);
+      return clearCache(this);
     }
-    return We.prototype.remove.call(this, t);
+    return Namespace.prototype.remove.call(this, object);
   };
-  J.prototype.isReservedId = function (t) {
-    return We.isReservedId(this.reserved, t);
+  Type.prototype.isReservedId = function (id) {
+    return Namespace.isReservedId(this.reserved, id);
   };
-  J.prototype.isReservedName = function (t) {
-    return We.isReservedName(this.reserved, t);
+  Type.prototype.isReservedName = function (name) {
+    return Namespace.isReservedName(this.reserved, name);
   };
-  J.prototype.create = function (t) {
-    return new this.ctor(t);
+  Type.prototype.create = function (properties) {
+    return new this.ctor(properties);
   };
-  J.prototype.setup = function () {
-    var fullName = this.fullName,
-      r = [];
-    for (var i = 0; i < this.fieldsArray.length; ++i) r.push(this._fieldsArray[i].resolve().resolvedType);
-    ((this.encode = RE(this)({ Writer: TE, types: r, util: ve })),
-      (this.decode = bE(this)({ Reader: Va, types: r, util: ve })),
-      (this.verify = OE(this)({ types: r, util: ve })),
-      (this.fromObject = Td.fromObject(this)({ types: r, util: ve })),
-      (this.toObject = Td.toObject(this)({ types: r, util: ve })));
-    var s = wE[fullName];
-    if (s) {
-      var create = Object.create(this);
-      ((create.fromObject = this.fromObject),
-        (this.fromObject = s.fromObject.bind(create)),
-        (create.toObject = this.toObject),
-        (this.toObject = s.toObject.bind(create)));
+  Type.prototype.setup = function () {
+    var fullName = this.fullName;
+    var types = [];
+    for (var i = 0; i < this.fieldsArray.length; ++i) types.push(this._fieldsArray[i].resolve().resolvedType);
+    this.encode = encoder(this)({
+      Writer,
+      types,
+      util,
+    });
+    this.decode = decoder(this)({
+      Reader,
+      types,
+      util,
+    });
+    this.verify = verifier(this)({
+      types,
+      util,
+    });
+    this.fromObject = converter.fromObject(this)({
+      types,
+      util,
+    });
+    this.toObject = converter.toObject(this)({
+      types,
+      util,
+    });
+    var wrapper = wrappers[fullName];
+    if (wrapper) {
+      var originalThis = Object.create(this);
+      originalThis.fromObject = this.fromObject;
+      this.fromObject = wrapper.fromObject.bind(originalThis);
+      originalThis.toObject = this.toObject;
+      this.toObject = wrapper.toObject.bind(originalThis);
     }
     return this;
   };
-  J.prototype.encode = function (t, r) {
-    return this.setup().encode(t, r);
+  Type.prototype.encode = function (message, writer) {
+    return this.setup().encode(message, writer);
   };
-  J.prototype.encodeDelimited = function (t, r) {
-    return this.encode(t, r && r.len ? r.fork() : r).ldelim();
+  Type.prototype.encodeDelimited = function (message, writer) {
+    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
   };
-  J.prototype.decode = function (t, r, i, s) {
-    return this.setup().decode(t, r, i, s);
+  Type.prototype.decode = function (reader, length, end, depth) {
+    return this.setup().decode(reader, length, end, depth);
   };
-  J.prototype.decodeDelimited = function (t) {
-    if (!(t instanceof Va)) t = Va.create(t);
-    return this.decode(t, t.uint32());
+  Type.prototype.decodeDelimited = function (reader) {
+    if (!(reader instanceof Reader)) reader = Reader.create(reader);
+    return this.decode(reader, reader.uint32());
   };
-  J.prototype.verify = function (t, r) {
-    return this.setup().verify(t, r);
+  Type.prototype.verify = function (message, depth) {
+    return this.setup().verify(message, depth);
   };
-  J.prototype.fromObject = function (t, r) {
-    return this.setup().fromObject(t, r);
+  Type.prototype.fromObject = function (object, depth) {
+    return this.setup().fromObject(object, depth);
   };
-  J.prototype.toObject = function (t, r) {
-    return this.setup().toObject(t, r);
+  Type.prototype.toObject = function (message, options) {
+    return this.setup().toObject(message, options);
   };
-  J.d = function (t) {
-    return function (i) {
-      ve.decorateType(i, t);
+  Type.d = function (typeName) {
+    return function (target) {
+      util.decorateType(target, typeName);
     };
   };
 });
-
 export { Ps };

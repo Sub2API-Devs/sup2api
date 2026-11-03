@@ -5,54 +5,75 @@
  * pieces: chunk-hwmsct5x.js (1)
  * attribution: esm-fingerprint 1
  */
-import { Y } from "../../../core/resource.mjs";
+import { APIResource } from "../../../core/resource.mjs";
 import { I } from "../../../internal/utils/path.mjs";
-import { T } from "../../../internal/headers.mjs";
-import { ee } from "../../../core/pagination.mjs";
+import { buildHeaders } from "../../../internal/headers.mjs";
+import { TokenPage } from "../../../core/pagination.mjs";
 
 //@ chunk-hwmsct5x.js:85442-86357 esm-fingerprint
-class Wr extends Y {
-  retrieve(e, n, r) {
-    let { memory_store_id: memory_store_id, betas: betas, workspace_id: workspace_id, ...w } = n;
-    return this._client.get(I`/v1/memory_stores/${memory_store_id}/memory_versions/${e}?beta=true`, {
-      query: w,
-      ...r,
-      headers: T([
-        {
-          "anthropic-beta": [...(betas ?? []), "agent-memory-2026-07-22"].toString(),
-          ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0),
-        },
-        r?.headers,
-      ]),
-    });
+class MemoryVersions extends APIResource {
+  retrieve(memoryVersionID, params, options) {
+    let { memory_store_id, betas, workspace_id, ...query } = params;
+    return this._client.get(
+      I`/v1/memory_stores/${memory_store_id}/memory_versions/${memoryVersionID}?beta=true`,
+      {
+        query,
+        ...options,
+        headers: buildHeaders([
+          {
+            "anthropic-beta": [...(betas ?? []), "agent-memory-2026-07-22"].toString(),
+            ...(workspace_id != null
+              ? {
+                  "anthropic-workspace-id": workspace_id,
+                }
+              : undefined),
+          },
+          options?.headers,
+        ]),
+      },
+    );
   }
-  list(e, n = {}, r) {
-    let { betas: betas, workspace_id: workspace_id, ...y } = n ?? {};
-    return this._client.getAPIList(I`/v1/memory_stores/${e}/memory_versions?beta=true`, ee, {
-      query: y,
-      ...r,
-      headers: T([
-        {
-          "anthropic-beta": [...(betas ?? []), "agent-memory-2026-07-22"].toString(),
-          ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0),
-        },
-        r?.headers,
-      ]),
-    });
+  list(memoryStoreID, params = {}, options) {
+    let { betas, workspace_id, ...query } = params ?? {};
+    return this._client.getAPIList(
+      I`/v1/memory_stores/${memoryStoreID}/memory_versions?beta=true`,
+      TokenPage,
+      {
+        query,
+        ...options,
+        headers: buildHeaders([
+          {
+            "anthropic-beta": [...(betas ?? []), "agent-memory-2026-07-22"].toString(),
+            ...(workspace_id != null
+              ? {
+                  "anthropic-workspace-id": workspace_id,
+                }
+              : undefined),
+          },
+          options?.headers,
+        ]),
+      },
+    );
   }
-  redact(e, n, r) {
-    let { memory_store_id: memory_store_id, betas: betas, workspace_id: workspace_id } = n;
-    return this._client.post(I`/v1/memory_stores/${memory_store_id}/memory_versions/${e}/redact?beta=true`, {
-      ...r,
-      headers: T([
-        {
-          "anthropic-beta": [...(betas ?? []), "agent-memory-2026-07-22"].toString(),
-          ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0),
-        },
-        r?.headers,
-      ]),
-    });
+  redact(memoryVersionID, params, options) {
+    let { memory_store_id, betas, workspace_id } = params;
+    return this._client.post(
+      I`/v1/memory_stores/${memory_store_id}/memory_versions/${memoryVersionID}/redact?beta=true`,
+      {
+        ...options,
+        headers: buildHeaders([
+          {
+            "anthropic-beta": [...(betas ?? []), "agent-memory-2026-07-22"].toString(),
+            ...(workspace_id != null
+              ? {
+                  "anthropic-workspace-id": workspace_id,
+                }
+              : undefined),
+          },
+          options?.headers,
+        ]),
+      },
+    );
   }
 }
-
-export { Wr };
+export { MemoryVersions };

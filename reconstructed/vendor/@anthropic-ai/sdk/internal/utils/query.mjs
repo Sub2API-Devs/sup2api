@@ -5,11 +5,12 @@
  * pieces: chunk-hwmsct5x.js (1)
  * attribution: esm-fingerprint 1
  */
-import { ou } from "../qs/stringify.mjs";
+import { stringify } from "../qs/stringify.mjs";
 
 //@ chunk-hwmsct5x.js:25478-25531 esm-fingerprint
-function iu(e) {
-  return ou(e, { arrayFormat: "brackets" });
+function stringifyQuery(query) {
+  return stringify(query, {
+    arrayFormat: "brackets",
+  });
 }
-
-export { iu };
+export { stringifyQuery };

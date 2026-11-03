@@ -11,13 +11,15 @@
 import { HostScoped } from "./hostScoped.js";
 
 //@ chunk-a8yd8msx.js:226-267 placement
-class e {
+class LastResumeRecord {
   last = null;
-  record(s) {
-    this.last = s;
+  record(last) {
+    this.last = last;
   }
 }
 //@ chunk-a8yd8msx.js:267-292 placement
-var loe = new HostScoped(() => new e());
-
-export { loe };
+/**
+ * 宿主隔离的"最近一次恢复结果"记录器。
+ */
+var lastResumeRecordRegistry = new HostScoped(() => new LastResumeRecord());
+export { lastResumeRecordRegistry };

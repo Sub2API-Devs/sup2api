@@ -13,14 +13,14 @@ import { createSignal } from "./signal.js";
 
 //@ chunk-c8400jaf.js:262-586 placement
 class CountedAsk {
-  #e = !1;
+  #e = false;
   #t = createSignal();
   get settled() {
     return this.#e;
   }
   settle() {
     if (this.#e) return;
-    this.#e = !0;
+    this.#e = true;
     try {
       this.#t.emit();
     } catch (error) {
@@ -40,10 +40,10 @@ class CountedAsk {
     return this.#t.subscribe(e);
   }
 }
+//@ chunk-c8400jaf.js:586-994 placement
 /**
  * 计数请求队列：登记未完成的请求，结束时移除；为请求生成"第 N 个，共 M 个"的位置标签并通知订阅者。
  */
-//@ chunk-c8400jaf.js:586-994 placement
 class CountedAskQueue {
   #e = new Map();
   #t = 0;
@@ -51,11 +51,11 @@ class CountedAskQueue {
   subscribe = (e) => this.#i.subscribe(e);
   join(e) {
     if (e.settled || this.#e.has(e)) return;
-    (this.#e.set(
+    this.#e.set(
       e,
       e.onSettle(() => this.#s(e)),
-    ),
-      this.#i.emit());
+    );
+    this.#i.emit();
   }
   positionLabel(e) {
     if (!this.#e.has(e)) return null;
@@ -64,9 +64,11 @@ class CountedAskQueue {
   }
   #s(e) {
     let i = this.#e.get(e);
-    if (i === void 0) return;
-    (i(), this.#e.delete(e), (this.#t = this.#e.size === 0 ? 0 : this.#t + 1), this.#i.emit());
+    if (i === undefined) return;
+    i();
+    this.#e.delete(e);
+    this.#t = this.#e.size === 0 ? 0 : this.#t + 1;
+    this.#i.emit();
   }
 }
-
 export { CountedAsk, CountedAskQueue };

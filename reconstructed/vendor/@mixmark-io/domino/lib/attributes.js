@@ -6,114 +6,114 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { ee } from "./utils.js";
+import { require_utils } from "./utils.js";
 
 //@ chunk-vwj6ccer.js:26129-28295 cjs-fingerprint
-var un = x(function (Cl) {
-  var fs = ee();
-  Cl.property = function (e) {
-    if (Array.isArray(e.type)) {
-      var create = Object.create(null);
-      e.type.forEach(function (s) {
-        create[s.value || s] = s.alias || s;
+var require_attributes = x(function (cjsExports) {
+  var utils = require_utils();
+  cjsExports.property = function (attr) {
+    if (Array.isArray(attr.type)) {
+      var valid = Object.create(null);
+      attr.type.forEach(function (val) {
+        valid[val.value || val] = val.alias || val;
       });
-      var missing = e.missing;
-      if (missing === void 0) missing = null;
-      var invalid = e.invalid;
-      if (invalid === void 0) invalid = missing;
+      var missingValueDefault = attr.missing;
+      if (missingValueDefault === undefined) missingValueDefault = null;
+      var invalidValueDefault = attr.invalid;
+      if (invalidValueDefault === undefined) invalidValueDefault = missingValueDefault;
       return {
         get: function () {
-          var _getattr = this._getattr(e.name);
-          if (_getattr === null) return missing;
-          if (((_getattr = create[_getattr.toLowerCase()]), _getattr !== void 0)) return _getattr;
-          if (invalid !== null) return invalid;
-          return _getattr;
+          var v = this._getattr(attr.name);
+          if (v === null) return missingValueDefault;
+          v = valid[v.toLowerCase()];
+          if (v !== undefined) return v;
+          if (invalidValueDefault !== null) return invalidValueDefault;
+          return v;
         },
-        set: function (s) {
-          this._setattr(e.name, s);
+        set: function (v) {
+          this._setattr(attr.name, v);
         },
       };
-    } else if (e.type === Boolean)
+    } else if (attr.type === Boolean)
       return {
         get: function () {
-          return this.hasAttribute(e.name);
+          return this.hasAttribute(attr.name);
         },
-        set: function (s) {
-          if (s) this._setattr(e.name, "");
-          else this.removeAttribute(e.name);
+        set: function (v) {
+          if (v) this._setattr(attr.name, "");
+          else this.removeAttribute(attr.name);
         },
       };
     else if (
-      e.type === Number ||
-      e.type === "long" ||
-      e.type === "unsigned long" ||
-      e.type === "limited unsigned long with fallback"
+      attr.type === Number ||
+      attr.type === "long" ||
+      attr.type === "unsigned long" ||
+      attr.type === "limited unsigned long with fallback"
     )
-      return Al(e);
-    else if (!e.type || e.type === String)
+      return numberPropDesc(attr);
+    else if (!attr.type || attr.type === String)
       return {
         get: function () {
-          return this._getattr(e.name) || "";
+          return this._getattr(attr.name) || "";
         },
-        set: function (s) {
-          if (e.treatNullAsEmptyString && s === null) s = "";
-          this._setattr(e.name, s);
+        set: function (v) {
+          if (attr.treatNullAsEmptyString && v === null) v = "";
+          this._setattr(attr.name, v);
         },
       };
-    else if (typeof e.type === "function") return e.type(e.name, e);
+    else if (typeof attr.type === "function") return attr.type(attr.name, attr);
     throw Error("Invalid attribute definition");
   };
-  function Al(e) {
-    var t;
-    if (typeof e.default === "function") t = e.default;
-    else if (typeof e.default === "number")
-      t = function () {
-        return e.default;
+  function numberPropDesc(a_2) {
+    var def;
+    if (typeof a_2.default === "function") def = a_2.default;
+    else if (typeof a_2.default === "number")
+      def = function () {
+        return a_2.default;
       };
     else
-      t = function () {
-        fs.assert(!1, typeof e.default);
+      def = function () {
+        utils.assert(false, typeof a_2.default);
       };
-    var r = e.type === "unsigned long",
-      a = e.type === "long",
-      s = e.type === "limited unsigned long with fallback",
-      { min: min, max: max, setmin: setmin } = e;
-    if (min === void 0) {
-      if (r) min = 0;
-      if (a) min = -2147483648;
-      if (s) min = 1;
+    var unsigned_long = a_2.type === "unsigned long";
+    var signed_long = a_2.type === "long";
+    var unsigned_fallback = a_2.type === "limited unsigned long with fallback";
+    var { min, max, setmin } = a_2;
+    if (min === undefined) {
+      if (unsigned_long) min = 0;
+      if (signed_long) min = -2147483648;
+      if (unsigned_fallback) min = 1;
     }
-    if (max === void 0) {
-      if (r || a || s) max = 2147483647;
+    if (max === undefined) {
+      if (unsigned_long || signed_long || unsigned_fallback) max = 2147483647;
     }
     return {
       get: function () {
-        var _getattr = this._getattr(e.name),
-          v = e.float ? parseFloat(_getattr) : parseInt(_getattr, 10);
-        if (_getattr === null || !isFinite(v) || (min !== void 0 && v < min) || (max !== void 0 && v > max))
-          return t.call(this);
-        if (r || a || s) {
-          if (!/^[ \t\n\f\r]*[-+]?[0-9]/.test(_getattr)) return t.call(this);
-          v = v | 0;
+        var v_2 = this._getattr(a_2.name);
+        var n = a_2.float ? parseFloat(v_2) : parseInt(v_2, 10);
+        if (v_2 === null || !isFinite(n) || (min !== undefined && n < min) || (max !== undefined && n > max))
+          return def.call(this);
+        if (unsigned_long || signed_long || unsigned_fallback) {
+          if (!/^[ \t\n\f\r]*[-+]?[0-9]/.test(v_2)) return def.call(this);
+          n = n | 0;
         }
-        return v;
+        return n;
       },
-      set: function (m) {
-        if (!e.float) m = Math.floor(m);
-        if (setmin !== void 0 && m < setmin) fs.IndexSizeError(e.name + " set to " + m);
-        if (r) m = m < 0 || m > 2147483647 ? t.call(this) : m | 0;
-        else if (s) m = m < 1 || m > 2147483647 ? t.call(this) : m | 0;
-        else if (a) m = m < -2147483648 || m > 2147483647 ? t.call(this) : m | 0;
-        this._setattr(e.name, String(m));
+      set: function (v) {
+        if (!a_2.float) v = Math.floor(v);
+        if (setmin !== undefined && v < setmin) utils.IndexSizeError(a_2.name + " set to " + v);
+        if (unsigned_long) v = v < 0 || v > 2147483647 ? def.call(this) : v | 0;
+        else if (unsigned_fallback) v = v < 1 || v > 2147483647 ? def.call(this) : v | 0;
+        else if (signed_long) v = v < -2147483648 || v > 2147483647 ? def.call(this) : v | 0;
+        this._setattr(a_2.name, String(v));
       },
     };
   }
-  Cl.registerChangeHandler = function (e, t, r) {
-    var a = e.prototype;
-    if (!Object.prototype.hasOwnProperty.call(a, "_attributeChangeHandlers"))
-      a._attributeChangeHandlers = Object.create(a._attributeChangeHandlers || null);
-    a._attributeChangeHandlers[t] = r;
+  cjsExports.registerChangeHandler = function (c, name, handler) {
+    var p = c.prototype;
+    if (!Object.prototype.hasOwnProperty.call(p, "_attributeChangeHandlers"))
+      p._attributeChangeHandlers = Object.create(p._attributeChangeHandlers || null);
+    p._attributeChangeHandlers[name] = handler;
   };
 });
-
-export { un };
+export { require_attributes };

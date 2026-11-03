@@ -9,12 +9,11 @@
  * attribution: fingerprint 1
  */
 
+//@ chunk-6vnxsn99.js:22659-22755 fingerprint = isInProcessTeammateTask (1)
 /**
  * 是否是 in_process_teammate 任务。
  */
-//@ chunk-6vnxsn99.js:22659-22755 fingerprint = isInProcessTeammateTask (1)
 function isInProcessTeammateTask(task) {
   return typeof task === "object" && task !== null && "type" in task && task.type === "in_process_teammate";
 }
-
 export { isInProcessTeammateTask };

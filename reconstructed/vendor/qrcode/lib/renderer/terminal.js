@@ -10,13 +10,12 @@ import { qrTerminalRenderer } from "./terminal/terminal.js";
 import { qrTerminalSmallRenderer } from "./terminal/terminal-small.js";
 
 //@ chunk-spjgqa4y.js:54879-55012 cjs-fingerprint
-var qrTerminalModule = x(function (Js) {
-  var Fn = qrTerminalRenderer(),
-    Dn = qrTerminalSmallRenderer();
-  Js.render = function (t, e, r) {
-    if (e && e.small) return Dn.render(t, e, r);
-    return Fn.render(t, e, r);
+var qrTerminalModule = x(function (cjsExports) {
+  var big = qrTerminalRenderer();
+  var small = qrTerminalSmallRenderer();
+  cjsExports.render = function (qrData, options, cb) {
+    if (options && options.small) return small.render(qrData, options, cb);
+    return big.render(qrData, options, cb);
   };
 });
-
 export { qrTerminalModule };

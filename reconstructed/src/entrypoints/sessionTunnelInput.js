@@ -24,21 +24,25 @@ import { jsonParseRaw } from "../utils/slowOperations.js";
 import { setToolServerLaunchEnv } from "../utils/managedEnvApply.js";
 
 //@ chunk-e38pv7hv.js:530-543 placement
-class p {
+class LineCounter {
   line;
 }
 //@ chunk-e38pv7hv.js:543-566 placement
-var l = new HostScoped(() => new p());
+var lineCounterSlot = new HostScoped(() => new LineCounter());
+//@ chunk-e38pv7hv.js:566-1376 placement
 /**
  * 读取 --session-tunnel 的标准输入行（OAuth 令牌、代理令牌与变量）。
  */
-//@ chunk-e38pv7hv.js:566-1376 placement
 function readSessionTunnelInput(e = 0) {
   {
     if (!process.argv.includes("--session-tunnel") || !isHttpMcpServeInvocation()) return;
-    disableCoreDumps((u) => logForDebugging(`[session tunnel] ${u}`, { level: "warn" }));
-    let o = readFromInheritedDescriptor(e, "the session tunnel's line of JSON") ?? void 0;
-    onProcessRootHost(l).line = o;
+    disableCoreDumps((u) =>
+      logForDebugging(`[session tunnel] ${u}`, {
+        level: "warn",
+      }),
+    );
+    let o = readFromInheritedDescriptor(e, "the session tunnel's line of JSON") ?? undefined;
+    onProcessRootHost(lineCounterSlot).line = o;
     let f = openSync(devNull, "r");
     if (f !== e) closeSync(f);
     let n;
@@ -47,35 +51,34 @@ function readSessionTunnelInput(e = 0) {
     } catch {
       n = null;
     }
-    let r = typeof n?.oauth_token === "string" ? n.oauth_token.trim() : "",
-      i = typeof n?.agent_proxy_token === "string" ? n.agent_proxy_token.trim() : "";
-    if (r !== "")
-      (getOAuthTokenFromFileDescriptor(),
-        setOauthTokenFromFd(r),
-        markDescriptorAnnouncementConsumed("CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR"));
+    let r = typeof n?.oauth_token === "string" ? n.oauth_token.trim() : "";
+    let i = typeof n?.agent_proxy_token === "string" ? n.agent_proxy_token.trim() : "";
+    if (r !== "") {
+      getOAuthTokenFromFileDescriptor();
+      setOauthTokenFromFd(r);
+      markDescriptorAnnouncementConsumed("CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR");
+    }
     let a =
-        typeof n?.env === "object" && n.env !== null && !Array.isArray(n.env) ? Object.entries(n.env) : [],
-      s = {};
+      typeof n?.env === "object" && n.env !== null && !Array.isArray(n.env) ? Object.entries(n.env) : [];
+    let s = {};
     for (let [u, m] of a) if (typeof m === "string") s[u] = m;
-    return (
-      setToolServerLaunchEnv(s),
-      logForDebugging(
-        `[session tunnel] the line has ${r === "" ? "no" : "an"} OAuth token, ${i === "" ? "no" : "an"} agent proxy token; variables: ${Object.keys(s).length} of ${a.length}`,
-      ),
-      i === "" ? void 0 : i
+    setToolServerLaunchEnv(s);
+    logForDebugging(
+      `[session tunnel] the line has ${r === "" ? "no" : "an"} OAuth token, ${i === "" ? "no" : "an"} agent proxy token; variables: ${Object.keys(s).length} of ${a.length}`,
     );
+    return i === "" ? undefined : i;
   }
   return;
 }
 //@ chunk-e38pv7hv.js:1376-1409 placement
 function peekSessionTunnelInput() {
-  return onProcessRootHost(l).line;
+  return onProcessRootHost(lineCounterSlot).line;
 }
 //@ chunk-e38pv7hv.js:1409-1468 placement
 function takeSessionTunnelInput() {
-  let e = onProcessRootHost(l),
-    line = e.line;
-  return ((e.line = void 0), line);
+  let e = onProcessRootHost(lineCounterSlot);
+  let line = e.line;
+  e.line = undefined;
+  return line;
 }
-
 export { takeSessionTunnelInput, readSessionTunnelInput };

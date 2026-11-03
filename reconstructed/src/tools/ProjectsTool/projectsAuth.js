@@ -14,8 +14,8 @@ import { ensureProjectsAccessToken } from "../../services/oauth/projectsScope.js
 import { env } from "../../utils/env.js";
 
 //@ chunk-eg496hkq.js:19652-21165 placement
-function scopeUpgradeRefusalText(e) {
-  switch (e) {
+function scopeUpgradeRefusalText(reason) {
+  switch (reason) {
     case "custom_client":
       return 'The claude.ai login uses a custom OAuth client, which cannot be granted project scopes. Run /login with the standard "Claude account with subscription" flow to use Projects.';
     case "save_failed":
@@ -33,7 +33,7 @@ function scopeUpgradeRefusalText(e) {
     case "essential_traffic_only":
       return "Projects is unavailable while nonessential network traffic is restricted (CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC is set).";
     case "policy_disabled": {
-      let { featureLabel: featureLabel, verb: verb } = policyKeyLabel("allow_projects_tool");
+      let { featureLabel, verb } = policyKeyLabel("allow_projects_tool");
       return (
         policyDeniedReason("allow_projects_tool", featureLabel, verb) ?? policyUnverifiedMessage(featureLabel)
       );
@@ -46,33 +46,35 @@ var SCOPE_UPGRADED_NOTE =
 //@ chunk-eg496hkq.js:21353-21469 placement
 class ProjectsPreconditionError extends Error {
   reasonCode;
-  constructor(e, n) {
-    super(e);
-    this.reasonCode = n;
+  constructor(message, reasonCode) {
+    super(message);
+    this.reasonCode = reasonCode;
     this.name = "ProjectsPreconditionError";
   }
 }
 //@ chunk-eg496hkq.js:21469-21867 placement
-async function ensureProjectsScope(e) {
-  let n = await ensureProjectsAccessToken(e);
-  if (!n.ok) {
+async function ensureProjectsScope(credentials) {
+  let projectsAccessToken = await ensureProjectsAccessToken(credentials);
+  if (!projectsAccessToken.ok) {
     let r =
-        n.reason === "wrong_provider" ||
-        n.reason === "essential_traffic_only" ||
-        n.reason === "policy_disabled" ||
-        n.reason === "lock_contended" ||
-        n.reason === "custom_client" ||
-        n.reason === "save_failed"
-          ? ""
-          : "Projects needs a claude.ai login. ",
-      s = n.detail ? ` (${n.detail})` : "";
-    throw new ProjectsPreconditionError(`${r}${scopeUpgradeRefusalText(n.reason)}${s}`);
+      projectsAccessToken.reason === "wrong_provider" ||
+      projectsAccessToken.reason === "essential_traffic_only" ||
+      projectsAccessToken.reason === "policy_disabled" ||
+      projectsAccessToken.reason === "lock_contended" ||
+      projectsAccessToken.reason === "custom_client" ||
+      projectsAccessToken.reason === "save_failed"
+        ? ""
+        : "Projects needs a claude.ai login. ";
+    let s = projectsAccessToken.detail ? ` (${projectsAccessToken.detail})` : "";
+    throw new ProjectsPreconditionError(`${r}${scopeUpgradeRefusalText(projectsAccessToken.reason)}${s}`);
   }
-  return { accessToken: n.accessToken, expanded: n.expanded };
+  return {
+    accessToken: projectsAccessToken.accessToken,
+    expanded: projectsAccessToken.expanded,
+  };
 }
 //@ chunk-eg496hkq.js:21867-21910 placement
 function getAttachedProjectUuid() {
   return env.CLAUDE_PROJECT_UUID;
 }
-
 export { getAttachedProjectUuid, ProjectsPreconditionError, ensureProjectsScope, SCOPE_UPGRADED_NOTE };

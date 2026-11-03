@@ -5,25 +5,24 @@
  * pieces: chunk-dcmhvw5a.js (1)
  * attribution: placement 1
  */
-import { Ohe, Dut } from "../../src/utils/git/gitSafeEnv.js";
+import { assignValueRaw, assignValueIfDifferent } from "../../src/utils/git/gitSafeEnv.js";
 
+//@ chunk-dcmhvw5a.js:3654-3830 placement
 /**
  * lodash copyObject
  */
-//@ chunk-dcmhvw5a.js:3654-3830 placement
-function copyObject(e, n, r, s) {
-  var a = !r;
-  r || (r = {});
-  var c = -1,
-    g = n.length;
-  while (++c < g) {
-    var m = n[c],
-      f = s ? s(r[m], e[m], m, r, e) : void 0;
-    if (f === void 0) f = e[m];
-    if (a) Ohe(r, m, f);
-    else Dut(r, m, f);
+function copyObject(source, props, object, customizer) {
+  var isNew = !object;
+  if (!object) object = {};
+  var index = -1;
+  var length = props.length;
+  while (++index < length) {
+    var key = props[index];
+    var newValue = customizer ? customizer(object[key], source[key], key, object, source) : undefined;
+    if (newValue === undefined) newValue = source[key];
+    if (isNew) assignValueRaw(object, key, newValue);
+    else assignValueIfDifferent(object, key, newValue);
   }
-  return r;
+  return object;
 }
-
 export { copyObject };

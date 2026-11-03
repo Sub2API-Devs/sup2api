@@ -9,9 +9,15 @@
  * attribution: placement 2
  */
 import __cc_resource_0 from "../../../assets/sync-hashes.mjs-a0844915.txt.zst" with { type: "file" };
-import { Et } from "../embeddedAssets.js";
+import { readEmbeddedTextSync } from "../embeddedAssets.js";
 
 //@ chunk-sd0b2vx1.js:314-336 placement
-var r = __cc_resource_0;
+/**
+ * 同步哈希的内嵌资源名。
+ */
+var SYNC_HASHES_RESOURCE = __cc_resource_0;
 //@ chunk-sd0b2vx1.js:336-368 placement
-var b = Et(r, import.meta.dirname);
+/**
+ * 读出的同步哈希文本。
+ */
+var syncHashesText = readEmbeddedTextSync(SYNC_HASHES_RESOURCE, import.meta.dirname);

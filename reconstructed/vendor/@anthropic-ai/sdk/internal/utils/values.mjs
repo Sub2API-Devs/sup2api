@@ -5,45 +5,48 @@
  * pieces: chunk-hwmsct5x.js (7)
  * attribution: esm-fingerprint 4, esm-layout 3
  */
-import { pr } from "../../core/error.mjs";
+import { AnthropicError } from "../../core/error.mjs";
 
 //@ chunk-hwmsct5x.js:16686-16774 esm-fingerprint
-var Mh = /^[a-z][a-z0-9+.-]*:/i,
-  ql = (e) => Mh.test(e),
-  Ye = (e) => ((Ye = Array.isArray), Ye(e)),
-  Di = Ye;
+var startsWithSchemeRegexp = /^[a-z][a-z0-9+.-]*:/i;
+var ql = (url) => startsWithSchemeRegexp.test(url);
+var isArray = (val) => {
+  isArray = Array.isArray;
+  return isArray(val);
+};
+var isArray_default = isArray;
 //@ chunk-hwmsct5x.js:16774-16834 esm-layout
-function nr(e) {
-  if (typeof e !== "object") return {};
-  return e ?? {};
+function maybeObj(x) {
+  if (typeof x !== "object") return {};
+  return x ?? {};
 }
 //@ chunk-hwmsct5x.js:16834-16897 esm-layout
-function Ui(e) {
-  if (!e) return !0;
-  for (let key in e) return !1;
-  return !0;
+function Ui(obj) {
+  if (!obj) return true;
+  for (let key in obj) return false;
+  return true;
 }
 //@ chunk-hwmsct5x.js:16897-16963 esm-fingerprint
-function zl(e, n) {
-  return Object.prototype.hasOwnProperty.call(e, n);
+function hasOwn(obj, key) {
+  return Object.prototype.hasOwnProperty.call(obj, key);
 }
 //@ chunk-hwmsct5x.js:16963-17033 esm-fingerprint
-function Ni(e) {
-  return e != null && typeof e === "object" && !Array.isArray(e);
+function isObj(obj) {
+  return obj != null && typeof obj === "object" && !Array.isArray(obj);
 }
 //@ chunk-hwmsct5x.js:17033-17198 esm-fingerprint
-var Do = (e, n) => {
-  if (typeof n !== "number" || !Number.isInteger(n)) throw new pr(`${e} must be an integer`);
-  if (n < 0) throw new pr(`${e} must be a positive integer`);
-  return n;
+var Do = (name, timeout) => {
+  if (typeof timeout !== "number" || !Number.isInteger(timeout))
+    throw new AnthropicError(`${name} must be an integer`);
+  if (timeout < 0) throw new AnthropicError(`${name} must be a positive integer`);
+  return timeout;
 };
 //@ chunk-hwmsct5x.js:17198-17254 esm-layout
-var Uo = (e) => {
+var Uo = (text) => {
   try {
-    return JSON.parse(e);
-  } catch (error) {
+    return JSON.parse(text);
+  } catch (err) {
     return;
   }
 };
-
-export { Ye, zl, Uo, nr, Di, Ni, Do, ql, Ui };
+export { isArray, hasOwn, Uo, maybeObj, isArray_default, isObj, Do, ql, Ui };

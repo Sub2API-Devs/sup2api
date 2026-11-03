@@ -8,113 +8,156 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:166152-167477 cjs-fingerprint
-var ba = x(function (uE, ga) {
-  function _d(e) {
-    let regex = e.regex,
-      n = {
-        $pattern: /[A-Z]+|%/,
-        keyword: [
-          "THEN",
-          "ELSE",
-          "ENDIF",
-          "IF",
-          "GOTO",
-          "DO",
-          "WHILE",
-          "WH",
-          "END",
-          "CALL",
-          "SUB",
-          "ENDSUB",
-          "EQ",
-          "NE",
-          "LT",
-          "GT",
-          "LE",
-          "GE",
-          "AND",
-          "OR",
-          "XOR",
-          "%",
-        ],
-        built_in: [
-          "ATAN",
-          "ABS",
-          "ACOS",
-          "ASIN",
-          "COS",
-          "EXP",
-          "FIX",
-          "FUP",
-          "ROUND",
-          "LN",
-          "SIN",
-          "SQRT",
-          "TAN",
-          "EXISTS",
+var require_gcode = x(function (cjsExports, cjsModule) {
+  function gcode(hljs) {
+    let regex = hljs.regex;
+    let GCODE_KEYWORDS = {
+      $pattern: /[A-Z]+|%/,
+      keyword: [
+        "THEN",
+        "ELSE",
+        "ENDIF",
+        "IF",
+        "GOTO",
+        "DO",
+        "WHILE",
+        "WH",
+        "END",
+        "CALL",
+        "SUB",
+        "ENDSUB",
+        "EQ",
+        "NE",
+        "LT",
+        "GT",
+        "LE",
+        "GE",
+        "AND",
+        "OR",
+        "XOR",
+        "%",
+      ],
+      built_in: [
+        "ATAN",
+        "ABS",
+        "ACOS",
+        "ASIN",
+        "COS",
+        "EXP",
+        "FIX",
+        "FUP",
+        "ROUND",
+        "LN",
+        "SIN",
+        "SQRT",
+        "TAN",
+        "EXISTS",
+      ],
+    };
+    let LETTER_BOUNDARY_RE = /\b/;
+    function LETTER_BOUNDARY_CALLBACK(matchdata, response) {
+      if (matchdata.index === 0) return;
+      let charBeforeMatch = matchdata.input[matchdata.index - 1];
+      if (charBeforeMatch >= "0" && charBeforeMatch <= "9") return;
+      if (charBeforeMatch === "_") return;
+      response.ignoreMatch();
+    }
+    let NUMBER_RE = /[+-]?((\.\d+)|(\d+)(\.\d*)?)/;
+    let GENERAL_MISC_FUNCTION_RE = /[GM]\s*\d+(\.\d+)?/;
+    let TOOLS_RE = /T\s*\d+/;
+    let SUBROUTINE_RE = /O\s*\d+/;
+    let SUBROUTINE_NAMED_RE = /O<.+>/;
+    let AXES_RE = /[ABCUVWXYZ]\s*/;
+    let PARAMETERS_RE = /[FHIJKPQRS]\s*/;
+    let GCODE_CODE = [
+      hljs.COMMENT(/\(/, /\)/),
+      hljs.COMMENT(/;/, /$/),
+      hljs.APOS_STRING_MODE,
+      hljs.QUOTE_STRING_MODE,
+      hljs.C_NUMBER_MODE,
+      {
+        scope: "title.function",
+        variants: [
+          {
+            match: regex.concat(LETTER_BOUNDARY_RE, GENERAL_MISC_FUNCTION_RE),
+          },
+          {
+            begin: GENERAL_MISC_FUNCTION_RE,
+            "on:begin": LETTER_BOUNDARY_CALLBACK,
+          },
+          {
+            match: regex.concat(LETTER_BOUNDARY_RE, TOOLS_RE),
+          },
+          {
+            begin: TOOLS_RE,
+            "on:begin": LETTER_BOUNDARY_CALLBACK,
+          },
         ],
       },
-      a = /\b/;
-    function s(_, E) {
-      if (_.index === 0) return;
-      let u = _.input[_.index - 1];
-      if (u >= "0" && u <= "9") return;
-      if (u === "_") return;
-      E.ignoreMatch();
-    }
-    let o = /[+-]?((\.\d+)|(\d+)(\.\d*)?)/,
-      r = /[GM]\s*\d+(\.\d+)?/,
-      i = /T\s*\d+/,
-      c = /O\s*\d+/,
-      l = /O<.+>/,
-      d = /[ABCUVWXYZ]\s*/,
-      m = /[FHIJKPQRS]\s*/,
-      p = [
-        e.COMMENT(/\(/, /\)/),
-        e.COMMENT(/;/, /$/),
-        e.APOS_STRING_MODE,
-        e.QUOTE_STRING_MODE,
-        e.C_NUMBER_MODE,
-        {
-          scope: "title.function",
-          variants: [
-            { match: regex.concat(a, r) },
-            { begin: r, "on:begin": s },
-            { match: regex.concat(a, i) },
-            { begin: i, "on:begin": s },
-          ],
-        },
-        {
-          scope: "symbol",
-          variants: [
-            { match: regex.concat(a, c) },
-            { begin: c, "on:begin": s },
-            { match: regex.concat(a, l) },
-            { begin: l, "on:begin": s },
-            { match: /\*\s*\d+\s*$/ },
-          ],
-        },
-        { scope: "operator", match: /^N\s*\d+/ },
-        { scope: "variable", match: /-?#\s*\d+/ },
-        {
-          scope: "property",
-          variants: [{ match: regex.concat(a, d, o) }, { begin: regex.concat(d, o), "on:begin": s }],
-        },
-        {
-          scope: "params",
-          variants: [{ match: regex.concat(a, m, o) }, { begin: regex.concat(m, o), "on:begin": s }],
-        },
-      ];
+      {
+        scope: "symbol",
+        variants: [
+          {
+            match: regex.concat(LETTER_BOUNDARY_RE, SUBROUTINE_RE),
+          },
+          {
+            begin: SUBROUTINE_RE,
+            "on:begin": LETTER_BOUNDARY_CALLBACK,
+          },
+          {
+            match: regex.concat(LETTER_BOUNDARY_RE, SUBROUTINE_NAMED_RE),
+          },
+          {
+            begin: SUBROUTINE_NAMED_RE,
+            "on:begin": LETTER_BOUNDARY_CALLBACK,
+          },
+          {
+            match: /\*\s*\d+\s*$/,
+          },
+        ],
+      },
+      {
+        scope: "operator",
+        match: /^N\s*\d+/,
+      },
+      {
+        scope: "variable",
+        match: /-?#\s*\d+/,
+      },
+      {
+        scope: "property",
+        variants: [
+          {
+            match: regex.concat(LETTER_BOUNDARY_RE, AXES_RE, NUMBER_RE),
+          },
+          {
+            begin: regex.concat(AXES_RE, NUMBER_RE),
+            "on:begin": LETTER_BOUNDARY_CALLBACK,
+          },
+        ],
+      },
+      {
+        scope: "params",
+        variants: [
+          {
+            match: regex.concat(LETTER_BOUNDARY_RE, PARAMETERS_RE, NUMBER_RE),
+          },
+          {
+            begin: regex.concat(PARAMETERS_RE, NUMBER_RE),
+            "on:begin": LETTER_BOUNDARY_CALLBACK,
+          },
+        ],
+      },
+    ];
     return {
       name: "G-code (ISO 6983)",
       aliases: ["nc"],
-      case_insensitive: !0,
-      disableAutodetect: !0,
-      keywords: n,
-      contains: p,
+      case_insensitive: true,
+      disableAutodetect: true,
+      keywords: GCODE_KEYWORDS,
+      contains: GCODE_CODE,
     };
   }
-  ga.exports = _d;
+  cjsModule.exports = gcode;
 });
-
-export { ba };
+export { require_gcode };

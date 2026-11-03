@@ -218,9 +218,12 @@ import { renderInstanceKey } from "../api/state.js";
 import { tellOnce, toldRefusals } from "./renderNotices.js";
 
 //@ chunk-s61vbvea.js:10297-10307 placement
-var x6 = {};
+/**
+ * validateTree 命名空间
+ */
+var VALIDATE_TREE_NAMESPACE = {};
 //@ chunk-s61vbvea.js:10307-14809 placement
-Ar(x6, {
+Ar(VALIDATE_TREE_NAMESPACE, {
   BOOLEAN_PROPS: () => BOOLEAN_PROPS,
   BORDER_ROWS: () => BORDER_ROWS,
   BORDER_STYLES: () => BORDER_STYLES,
@@ -300,7 +303,7 @@ Ar(x6, {
   cutMark: () => cutMark,
   cutProps: () => cutProps,
   cutValue: () => cutValue,
-  default: () => x6,
+  default: () => VALIDATE_TREE_NAMESPACE,
   desktopTicketOf: () => desktopTicketOf,
   dialogFrameOf: () => dialogFrameOf,
   diffHunksOf: () => diffHunksOf,
@@ -427,19 +430,18 @@ Ar(x6, {
   wrapRows: () => wrapRows,
   writtenHref: () => writtenHref,
 });
+//@ chunk-s61vbvea.js:14809-15043 placement
 /**
  * 在 UI 树中找第一个非零 engine 引用（不进入 Button/Input/Select）。
  */
-//@ chunk-s61vbvea.js:14809-15043 placement
 function findEngineRef(e) {
   if (typeof e === "string") return;
-  if (e.type === "engine") return e.ref === 0 ? void 0 : e.ref;
+  if (e.type === "engine") return e.ref === 0 ? undefined : e.ref;
   if (e.type === "Button" || e.type === "Input" || e.type === "Select") return;
   for (let r of e.children ?? []) {
-    let s = findEngineRef(r);
-    if (s !== void 0) return s;
+    let engineRef = findEngineRef(r);
+    if (engineRef !== undefined) return engineRef;
   }
   return;
 }
-
-export { findEngineRef, x6 };
+export { findEngineRef, VALIDATE_TREE_NAMESPACE };

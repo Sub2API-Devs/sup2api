@@ -13,16 +13,16 @@ import { fromEnum } from "../services/analytics/safeMetadata.js";
 import { logForDebugging } from "../utils/debug.js";
 
 //@ chunk-f25sswmp.js:25602-25881 placement
-function reportGitSessionContext(e) {
-  if (e.branchDropped && e.warnMessage) {
-    if (
-      (logEvent("tengu_bridge_outcome_branch_dropped", { reason: fromEnum(e.branchDropped) }),
-      logForDebugging(e.warnMessage, { level: "warn" }),
-      e.branchDropped === "no_evidence")
-    )
-      console.warn(e.warnMessage);
+function reportGitSessionContext(report) {
+  if (report.branchDropped && report.warnMessage) {
+    logEvent("tengu_bridge_outcome_branch_dropped", {
+      reason: fromEnum(report.branchDropped),
+    });
+    logForDebugging(report.warnMessage, {
+      level: "warn",
+    });
+    if (report.branchDropped === "no_evidence") console.warn(report.warnMessage);
   }
-  if (e.revisionGuessUsed) logEvent("tengu_bridge_revision_guess_used", {});
+  if (report.revisionGuessUsed) logEvent("tengu_bridge_revision_guess_used", {});
 }
-
 export { reportGitSessionContext };

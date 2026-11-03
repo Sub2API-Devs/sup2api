@@ -13,8 +13,11 @@ import { useWizard } from "../../../wizard/useWizard.js";
 import { y } from "../../../../../vendor/react/cjs/react.production.js";
 import { MEMO_CACHE_SENTINEL } from "../../../../../runtime/bun-runtime.js";
 import { useKeybinding } from "../../../../keybindings/useKeybinding.js";
-import { b } from "../../../providerSetup/bedrock/BedrockCredentialsStep.js";
-import { r, e } from "../../../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { BEDROCK_STEPS } from "../../../providerSetup/bedrock/BedrockCredentialsStep.js";
+import {
+  jsxProd_default_2,
+  jsxProd_default,
+} from "../../../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Byline } from "../../../design-system/Byline.js";
 import { KeyboardShortcutHint } from "../../../design-system/KeyboardShortcutHint.js";
 import { ConfigurableShortcutHint } from "../../../ConfigurableShortcutHint.js";
@@ -25,99 +28,122 @@ import { WizardDialogLayout } from "../../../wizard/WizardDialogLayout.js";
 
 //@ chunk-sx9xc5ee.js:3821-5151 callgraph-fingerprint = GenerateStep (0.446)
 function GenerateStep() {
-  let $ = w(17),
-    {
-      goBack: goBack,
-      goToStep: goToStep,
-      updateWizardData: updateWizardData,
-      wizardData: wizardData,
-    } = useWizard(),
-    [t, m] = y(wizardData.bearerToken ?? ""),
-    [g, h] = y(t.length),
-    [u, B] = y(null),
-    A;
-  if ($[0] === MEMO_CACHE_SENTINEL) ((A = { context: "Settings" }), ($[0] = A));
-  else A = $[0];
+  let $ = w(17);
+  let { goBack, goToStep, updateWizardData, wizardData } = useWizard();
+  let [bearerToken, setBearerToken] = y(wizardData.bearerToken ?? "");
+  let [g, h] = y(bearerToken.length);
+  let [u, B] = y(null);
+  let A;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    A = {
+      context: "Settings",
+    };
+    $[0] = A;
+  } else A = $[0];
   useKeybinding("confirm:no", goBack, A);
   let E;
-  if ($[1] !== goToStep || $[2] !== updateWizardData || $[3] !== t)
-    ((E = () => {
-      let trimmedPrompt = t.trim();
+  if ($[1] !== goToStep || $[2] !== updateWizardData || $[3] !== bearerToken) {
+    E = () => {
+      let trimmedPrompt = bearerToken.trim();
       if (!trimmedPrompt) {
         B("API key is required");
         return;
       }
-      (B(null), updateWizardData({ bearerToken: trimmedPrompt }), goToStep(b.REGION));
-    }),
-      ($[1] = goToStep),
-      ($[2] = updateWizardData),
-      ($[3] = t),
-      ($[4] = E));
-  else E = $[4];
-  let f = E,
-    C;
-  if ($[5] === MEMO_CACHE_SENTINEL)
-    ((C = r(Byline, {
+      B(null);
+      updateWizardData({
+        bearerToken: trimmedPrompt,
+      });
+      goToStep(BEDROCK_STEPS.REGION);
+    };
+    $[1] = goToStep;
+    $[2] = updateWizardData;
+    $[3] = bearerToken;
+    $[4] = E;
+  } else E = $[4];
+  let onSubmit = E;
+  let footerText;
+  if ($[5] === MEMO_CACHE_SENTINEL) {
+    footerText = jsxProd_default_2(Byline, {
       children: [
-        e(KeyboardShortcutHint, { chord: "enter", action: "continue" }),
-        e(ConfigurableShortcutHint, {
+        jsxProd_default(KeyboardShortcutHint, {
+          chord: "enter",
+          action: "continue",
+        }),
+        jsxProd_default(ConfigurableShortcutHint, {
           action: "confirm:no",
           context: "Settings",
           fallback: "Esc",
           description: "go back",
         }),
       ],
-    })),
-      ($[5] = C));
-  else C = $[5];
-  let v, T;
-  if ($[6] === MEMO_CACHE_SENTINEL)
-    ((v = e(Text, { children: "Paste your Bedrock API key." })),
-      (T = e(Text, {
-        dimColor: !0,
-        children: "Generate one in the AWS console under Bedrock \u2192 API keys.",
-      })),
-      ($[6] = v),
-      ($[7] = T));
-  else ((v = $[6]), (T = $[7]));
+    });
+    $[5] = footerText;
+  } else footerText = $[5];
+  let v;
+  let T;
+  if ($[6] === MEMO_CACHE_SENTINEL) {
+    v = jsxProd_default(Text, {
+      children: "Paste your Bedrock API key.",
+    });
+    T = jsxProd_default(Text, {
+      dimColor: true,
+      children: "Generate one in the AWS console under Bedrock \u2192 API keys.",
+    });
+    $[6] = v;
+    $[7] = T;
+  } else {
+    v = $[6];
+    T = $[7];
+  }
   let _;
-  if ($[8] !== g || $[9] !== f || $[10] !== t)
-    ((_ = e(Box, {
+  if ($[8] !== g || $[9] !== onSubmit || $[10] !== bearerToken) {
+    _ = jsxProd_default(Box, {
       marginTop: 1,
-      children: e(TextInput, {
-        value: t,
-        onChange: m,
-        onSubmit: f,
+      children: jsxProd_default(TextInput, {
+        value: bearerToken,
+        onChange: setBearerToken,
+        onSubmit,
         placeholder: "bedrock-api-key-\u2026",
         mask: "*",
         columns: 60,
         cursorOffset: g,
         onChangeCursorOffset: h,
-        focus: !0,
-        showCursor: !0,
+        focus: true,
+        showCursor: true,
       }),
-    })),
-      ($[8] = g),
-      ($[9] = f),
-      ($[10] = t),
-      ($[11] = _));
-  else _ = $[11];
+    });
+    $[8] = g;
+    $[9] = onSubmit;
+    $[10] = bearerToken;
+    $[11] = _;
+  } else _ = $[11];
   let D;
-  if ($[12] !== u)
-    ((D = u && e(Box, { marginTop: 1, children: e(ErrorText, { error: u }) })), ($[12] = u), ($[13] = D));
-  else D = $[13];
+  if ($[12] !== u) {
+    D =
+      u &&
+      jsxProd_default(Box, {
+        marginTop: 1,
+        children: jsxProd_default(ErrorText, {
+          error: u,
+        }),
+      });
+    $[12] = u;
+    $[13] = D;
+  } else D = $[13];
   let W;
-  if ($[14] !== _ || $[15] !== D)
-    ((W = e(WizardDialogLayout, {
+  if ($[14] !== _ || $[15] !== D) {
+    W = jsxProd_default(WizardDialogLayout, {
       subtitle: "Bedrock API key",
-      footerText: C,
-      children: r(Box, { flexDirection: "column", children: [v, T, _, D] }),
-    })),
-      ($[14] = _),
-      ($[15] = D),
-      ($[16] = W));
-  else W = $[16];
+      footerText,
+      children: jsxProd_default_2(Box, {
+        flexDirection: "column",
+        children: [v, T, _, D],
+      }),
+    });
+    $[14] = _;
+    $[15] = D;
+    $[16] = W;
+  } else W = $[16];
   return W;
 }
-
 export { GenerateStep };

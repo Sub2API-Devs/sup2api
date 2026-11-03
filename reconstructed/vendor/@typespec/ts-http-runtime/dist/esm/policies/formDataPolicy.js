@@ -5,64 +5,84 @@
  * pieces: chunk-mrx6y2r5.js (5)
  * attribution: esm-fingerprint 5
  */
-import { Gr } from "../util/checkEnvironment.js";
+import { isNodeLike } from "../util/checkEnvironment.js";
 import { et } from "../pipelineRequest.js";
 import { rt } from "../util/concat.js";
 
 //@ chunk-mrx6y2r5.js:48001-48025 esm-fingerprint
-var FORMDATAPOLICY = "formDataPolicy";
+var formDataPolicyName = "formDataPolicy";
 //@ chunk-mrx6y2r5.js:48025-48143 esm-fingerprint
-function Gm(e) {
-  var t;
-  let r = {};
-  for (let [n, o] of e.entries()) (((t = r[n]) !== null && t !== void 0) || (r[n] = []), r[n].push(o));
-  return r;
+function formDataToFormDataMap(formData) {
+  var _a;
+  let formDataMap = {};
+  for (let [key, value] of formData.entries()) {
+    if (!((_a = formDataMap[key]) !== null && _a !== undefined)) formDataMap[key] = [];
+    formDataMap[key].push(value);
+  }
+  return formDataMap;
 }
 //@ chunk-mrx6y2r5.js:48143-48477 esm-fingerprint
-function oa() {
+function formDataPolicy() {
   return {
-    name: FORMDATAPOLICY,
-    async sendRequest(e, t) {
-      if (Gr && typeof FormData < "u" && e.body instanceof FormData)
-        ((e.formData = Gm(e.body)), (e.body = void 0));
-      if (e.formData) {
-        let r = e.headers.get("Content-Type");
-        if (r && r.indexOf("application/x-www-form-urlencoded") !== -1) e.body = qm(e.formData);
-        else await Km(e.formData, e);
-        e.formData = void 0;
+    name: formDataPolicyName,
+    async sendRequest(request, next) {
+      if (isNodeLike && typeof FormData !== "undefined" && request.body instanceof FormData) {
+        request.formData = formDataToFormDataMap(request.body);
+        request.body = undefined;
       }
-      return t(e);
+      if (request.formData) {
+        let contentType = request.headers.get("Content-Type");
+        if (contentType && contentType.indexOf("application/x-www-form-urlencoded") !== -1)
+          request.body = qm(request.formData);
+        else await prepareFormData(request.formData, request);
+        request.formData = undefined;
+      }
+      return next(request);
     },
   };
 }
 //@ chunk-mrx6y2r5.js:48477-48661 esm-fingerprint
-function qm(e) {
-  let uRLSearchParams = new URLSearchParams();
-  for (let [r, n] of Object.entries(e))
-    if (Array.isArray(n)) for (let o of n) uRLSearchParams.append(r, o.toString());
-    else uRLSearchParams.append(r, n.toString());
-  return uRLSearchParams.toString();
+function qm(formData) {
+  let urlSearchParams = new URLSearchParams();
+  for (let [key, value] of Object.entries(formData))
+    if (Array.isArray(value)) for (let subValue of value) urlSearchParams.append(key, subValue.toString());
+    else urlSearchParams.append(key, value.toString());
+  return urlSearchParams.toString();
 }
 //@ chunk-mrx6y2r5.js:48661-49396 esm-fingerprint
-async function Km(e, t) {
-  let r = t.headers.get("Content-Type");
-  if (r && !r.startsWith("multipart/form-data")) return;
-  t.headers.set("Content-Type", r !== null && r !== void 0 ? r : "multipart/form-data");
-  let n = [];
-  for (let [o, i] of Object.entries(e))
-    for (let s of Array.isArray(i) ? i : [i])
-      if (typeof s === "string")
-        n.push({ headers: et({ "Content-Disposition": `form-data; name="${o}"` }), body: rt(s, "utf-8") });
-      else if (s === void 0 || s === null || typeof s !== "object")
-        throw Error(`Unexpected value for key ${o}: ${s}. Value should be serialized to string first.`);
+async function prepareFormData(formData, request) {
+  let contentType = request.headers.get("Content-Type");
+  if (contentType && !contentType.startsWith("multipart/form-data")) return;
+  request.headers.set(
+    "Content-Type",
+    contentType !== null && contentType !== undefined ? contentType : "multipart/form-data",
+  );
+  let parts = [];
+  for (let [fieldName, values] of Object.entries(formData))
+    for (let value of Array.isArray(values) ? values : [values])
+      if (typeof value === "string")
+        parts.push({
+          headers: et({
+            "Content-Disposition": `form-data; name="${fieldName}"`,
+          }),
+          body: rt(value, "utf-8"),
+        });
+      else if (value === undefined || value === null || typeof value !== "object")
+        throw Error(
+          `Unexpected value for key ${fieldName}: ${value}. Value should be serialized to string first.`,
+        );
       else {
-        let a = s.name || "blob",
-          c = et();
-        (c.set("Content-Disposition", `form-data; name="${o}"; filename="${a}"`),
-          c.set("Content-Type", s.type || "application/octet-stream"),
-          n.push({ headers: c, body: s }));
+        let fileName = value.name || "blob";
+        let headers = et();
+        headers.set("Content-Disposition", `form-data; name="${fieldName}"; filename="${fileName}"`);
+        headers.set("Content-Type", value.type || "application/octet-stream");
+        parts.push({
+          headers,
+          body: value,
+        });
       }
-  t.multipartBody = { parts: n };
+  request.multipartBody = {
+    parts,
+  };
 }
-
-export { oa };
+export { formDataPolicy };

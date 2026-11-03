@@ -6,63 +6,64 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { dR } from "../../../@smithy/core/dist-cjs/submodules/config/index.native.js";
-import { Si } from "./regionConfig/stsRegionDefaultResolver.js";
+import { require_index_native } from "../../../@smithy/core/dist-cjs/submodules/config/index.native.js";
+import { require_stsRegionDefaultResolver } from "./regionConfig/stsRegionDefaultResolver.js";
 
 //@ chunk-edce4vxq.js:168567-169536 cjs-fingerprint
-var Dae = x(function (Se) {
-  var He = dR(),
-    wi = Si(),
-    oh = (e) => ({
-      setRegion(t) {
-        e.region = t;
-      },
-      region() {
-        return e.region;
-      },
-    }),
-    ah = (e) => ({ region: e.region() });
-  Object.defineProperty(Se, "NODE_REGION_CONFIG_FILE_OPTIONS", {
-    enumerable: !0,
-    get: function () {
-      return He.NODE_REGION_CONFIG_FILE_OPTIONS;
+var require_region_config_resolver = x(function (cjsExports) {
+  var configResolver = require_index_native();
+  var stsRegionDefaultResolver = require_stsRegionDefaultResolver();
+  var getAwsRegionExtensionConfiguration = (runtimeConfig) => ({
+    setRegion(region) {
+      runtimeConfig.region = region;
+    },
+    region() {
+      return runtimeConfig.region;
     },
   });
-  Object.defineProperty(Se, "NODE_REGION_CONFIG_OPTIONS", {
-    enumerable: !0,
+  var resolveAwsRegionExtensionConfiguration = (awsRegionExtensionConfiguration) => ({
+    region: awsRegionExtensionConfiguration.region(),
+  });
+  Object.defineProperty(cjsExports, "NODE_REGION_CONFIG_FILE_OPTIONS", {
+    enumerable: true,
     get: function () {
-      return He.NODE_REGION_CONFIG_OPTIONS;
+      return configResolver.NODE_REGION_CONFIG_FILE_OPTIONS;
     },
   });
-  Object.defineProperty(Se, "REGION_ENV_NAME", {
-    enumerable: !0,
+  Object.defineProperty(cjsExports, "NODE_REGION_CONFIG_OPTIONS", {
+    enumerable: true,
     get: function () {
-      return He.REGION_ENV_NAME;
+      return configResolver.NODE_REGION_CONFIG_OPTIONS;
     },
   });
-  Object.defineProperty(Se, "REGION_INI_NAME", {
-    enumerable: !0,
+  Object.defineProperty(cjsExports, "REGION_ENV_NAME", {
+    enumerable: true,
     get: function () {
-      return He.REGION_INI_NAME;
+      return configResolver.REGION_ENV_NAME;
     },
   });
-  Object.defineProperty(Se, "resolveRegionConfig", {
-    enumerable: !0,
+  Object.defineProperty(cjsExports, "REGION_INI_NAME", {
+    enumerable: true,
     get: function () {
-      return He.resolveRegionConfig;
+      return configResolver.REGION_INI_NAME;
     },
   });
-  Se.getAwsRegionExtensionConfiguration = oh;
-  Se.resolveAwsRegionExtensionConfiguration = ah;
-  Object.keys(wi).forEach(function (e) {
-    if (e !== "default" && !Object.prototype.hasOwnProperty.call(Se, e))
-      Object.defineProperty(Se, e, {
-        enumerable: !0,
+  Object.defineProperty(cjsExports, "resolveRegionConfig", {
+    enumerable: true,
+    get: function () {
+      return configResolver.resolveRegionConfig;
+    },
+  });
+  cjsExports.getAwsRegionExtensionConfiguration = getAwsRegionExtensionConfiguration;
+  cjsExports.resolveAwsRegionExtensionConfiguration = resolveAwsRegionExtensionConfiguration;
+  Object.keys(stsRegionDefaultResolver).forEach(function (k) {
+    if (k !== "default" && !Object.prototype.hasOwnProperty.call(cjsExports, k))
+      Object.defineProperty(cjsExports, k, {
+        enumerable: true,
         get: function () {
-          return wi[e];
+          return stsRegionDefaultResolver[k];
         },
       });
   });
 });
-
-export { Dae };
+export { require_region_config_resolver };

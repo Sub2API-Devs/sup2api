@@ -6,14 +6,18 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { Lt } from "./Event.js";
-import { za } from "./UIEvent.js";
-import { Xa } from "./MouseEvent.js";
-import { E0 } from "./CustomEvent.js";
+import { require_Event } from "./Event.js";
+import { require_UIEvent } from "./UIEvent.js";
+import { require_MouseEvent } from "./MouseEvent.js";
+import { require_CustomEvent } from "./CustomEvent.js";
 
 //@ chunk-vwj6ccer.js:76397-76494 cjs-fingerprint
-var Un = x(function (Od, _0) {
-  _0.exports = { Event: Lt(), UIEvent: za(), MouseEvent: Xa(), CustomEvent: E0() };
+var require_events = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = {
+    Event: require_Event(),
+    UIEvent: require_UIEvent(),
+    MouseEvent: require_MouseEvent(),
+    CustomEvent: require_CustomEvent(),
+  };
 });
-
-export { Un };
+export { require_events };

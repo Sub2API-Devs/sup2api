@@ -14,34 +14,41 @@ import { logEvent } from "../services/analytics/index.js";
 
 //@ chunk-f25sswmp.js:1463-1847 fingerprint = ImageSizeError (0.92)
 class ImageSizeError extends Error {
-  constructor(e, n) {
-    let r,
-      s = e[0];
-    if (e.length === 1 && s)
-      r = `Image base64 size (${formatFileSize(s.size)}) exceeds API limit (${formatFileSize(n)}). Please resize the image before sending.`;
+  constructor(oversizedImages, maxSize) {
+    let message;
+    let firstImage = oversizedImages[0];
+    if (oversizedImages.length === 1 && firstImage)
+      message = `Image base64 size (${formatFileSize(firstImage.size)}) exceeds API limit (${formatFileSize(maxSize)}). Please resize the image before sending.`;
     else
-      r =
-        `${e.length} images exceed the API limit (${formatFileSize(n)}): ` +
-        e.map((i) => `Image ${i.index}: ${formatFileSize(i.size)}`).join(", ") +
+      message =
+        `${oversizedImages.length} images exceed the API limit (${formatFileSize(maxSize)}): ` +
+        oversizedImages.map((img) => `Image ${img.index}: ${formatFileSize(img.size)}`).join(", ") +
         ". Please resize these images before sending.";
-    super(r);
+    super(message);
     this.name = "ImageSizeError";
   }
 }
 //@ chunk-f25sswmp.js:1847-2019 placement
 function isBase64ImageBlock(e) {
-  if (!isPlainObject_2(e) || !("source" in e)) return !1;
+  if (!isPlainObject_2(e) || !("source" in e)) return false;
   let source = e.source;
-  if (!isPlainObject_2(source)) return !1;
-  if (!("type" in source) || source.type !== "base64") return !1;
+  if (!isPlainObject_2(source)) return false;
+  if (!("type" in source) || source.type !== "base64") return false;
   return "data" in source && typeof source.data === "string";
 }
 //@ chunk-f25sswmp.js:2288-2441 fingerprint = validateImagesForAPI (1)
-function validateImagesForAPI(e, n, r, s) {
+function validateImagesForAPI(e, index, r, s) {
   let base64Size = e.source.data.length;
-  if (base64Size > r)
-    (logEvent("tengu_image_api_validation_failed", { base64_size_bytes: base64Size, max_bytes: r }),
-      s.push({ index: n, size: base64Size }));
+  if (base64Size > r) {
+    logEvent("tengu_image_api_validation_failed", {
+      base64_size_bytes: base64Size,
+      max_bytes: r,
+    });
+    s.push({
+      index,
+      size: base64Size,
+    });
+  }
 }
 //@ chunk-171dhyhe.js:44240-44358 fingerprint = isBase64ImageBlock (1)
 function isBase64ImageBlock_2(block) {
@@ -51,5 +58,4 @@ function isBase64ImageBlock_2(block) {
       ? block.text.length
       : 0;
 }
-
 export { isBase64ImageBlock, isBase64ImageBlock_2, ImageSizeError, validateImagesForAPI };

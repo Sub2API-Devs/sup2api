@@ -11,10 +11,10 @@
 import { getMaxSubagentSpawnDepth } from "../tools/AgentTool/spawnDepth.js";
 import { AGENT } from "../tools/AgentTool/constants.js";
 
+//@ chunk-ncsga3m8.js:916-3383 placement
 /**
  * 协调者模式下 worker 代理的系统提示词（其他 worker 可能同时修改分支等环境说明）。
  */
-//@ chunk-ncsga3m8.js:916-3383 placement
 function getCoordinatorWorkerSystemPrompt() {
   return `You are a worker agent executing a task assigned by the coordinator.
 
@@ -69,17 +69,16 @@ var COORDINATOR_WORKER_AGENT = {
   baseDir: "built-in",
   getSystemPrompt: (o) => getCoordinatorWorkerSystemPrompt(),
 };
+//@ chunk-ncsga3m8.js:3611-3634 placement
 /**
  * coordinator 模式的内建代理列表：只有 worker 代理（maxTurns 500、bubble、工具 *）。
  */
-//@ chunk-ncsga3m8.js:3611-3634 placement
 function getCoordinatorAgents() {
   return [COORDINATOR_WORKER_AGENT];
 }
+//@ chunk-rqnncghm.js:191-208 placement = isCustomSubagentType (0.834)
 /**
  * coordinator worker 代理类型名 "worker"。
  */
-//@ chunk-rqnncghm.js:191-208 placement = isCustomSubagentType (0.834)
 var COORDINATOR_WORKER_AGENT_TYPE = "worker";
-
 export { COORDINATOR_WORKER_AGENT_TYPE };

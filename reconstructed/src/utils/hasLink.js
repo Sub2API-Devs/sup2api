@@ -9,10 +9,9 @@
  * attribution: placement 1
  */
 
+//@ chunk-c46jjxz1.js:191-219 placement
 /**
  * 对象是否有 link 字段。
  */
-//@ chunk-c46jjxz1.js:191-219 placement
-var hasLink = (o) => o.link !== void 0;
-
+var hasLink = (loadedModule) => loadedModule.link !== undefined;
 export { hasLink };

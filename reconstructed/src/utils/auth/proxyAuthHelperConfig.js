@@ -8,7 +8,12 @@
  * pieces: chunk-ez5bvzy2.js (1)
  * attribution: placement 1
  */
-import { warnPinnedHelper, C6e, runManagedHelperWithoutProjectEnv, flt } from "./managedHelpers.js";
+import {
+  warnPinnedHelper,
+  isHookedMergeAnswer,
+  runManagedHelperWithoutProjectEnv,
+  managedHelperSettingsGate,
+} from "./managedHelpers.js";
 import { getSettings_DEPRECATED, getSettingsForSourceTightenOnly } from "../settings/settings.js";
 import {
   getConfiguredProxyAuthHelper,
@@ -17,27 +22,23 @@ import {
 } from "../proxy.js";
 import { checkHasTrustDialogAccepted } from "../config.js";
 
+//@ chunk-ez5bvzy2.js:327-621 placement
 /**
  * 从设置配置 proxyAuthHelper（项目/本地设置来源受限）。
  */
-//@ chunk-ez5bvzy2.js:327-621 placement
 function configureProxyAuthHelperFromSettings() {
-  let e = warnPinnedHelper("proxyAuthHelper", (getSettings_DEPRECATED() || {}).proxyAuthHelper),
-    r = getConfiguredProxyAuthHelper() !== e;
-  if (
-    (_setProxyAuthHelperConfig({
-      helper: e,
-      fromProjectOrLocal:
-        getSettingsForSourceTightenOnly("projectSettings")?.proxyAuthHelper === e ||
-        getSettingsForSourceTightenOnly("localSettings")?.proxyAuthHelper === e ||
-        C6e("proxyAuthHelper"),
-      trustAccepted: checkHasTrustDialogAccepted,
-      startHelper: runManagedHelperWithoutProjectEnv,
-      readAsHelperStarts: flt,
-    }),
-    r)
-  )
-    clearProxyAuthHelperCache();
+  let e = warnPinnedHelper("proxyAuthHelper", (getSettings_DEPRECATED() || {}).proxyAuthHelper);
+  let r = getConfiguredProxyAuthHelper() !== e;
+  _setProxyAuthHelperConfig({
+    helper: e,
+    fromProjectOrLocal:
+      getSettingsForSourceTightenOnly("projectSettings")?.proxyAuthHelper === e ||
+      getSettingsForSourceTightenOnly("localSettings")?.proxyAuthHelper === e ||
+      isHookedMergeAnswer("proxyAuthHelper"),
+    trustAccepted: checkHasTrustDialogAccepted,
+    startHelper: runManagedHelperWithoutProjectEnv,
+    readAsHelperStarts: managedHelperSettingsGate,
+  });
+  if (r) clearProxyAuthHelperCache();
 }
-
 export { configureProxyAuthHelperFromSettings };

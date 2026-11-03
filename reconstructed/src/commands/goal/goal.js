@@ -10,7 +10,10 @@
  */
 import { hasManagedSettings } from "../../utils/settings/managedRestrictionKeys.js";
 import { logError } from "../../utils/log.js";
-import { IJ, J_ } from "../../utils/plugins/marketplaceNames.js";
+import {
+  managedMarketplaceAnswerFlag,
+  marketplaceNameAnswerState,
+} from "../../utils/plugins/marketplaceNames.js";
 import { getPluginRegistry } from "../../utils/plugins/pluginLoadState.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { fromEnum, fromEnumOpt, lit } from "../../services/analytics/safeMetadata.js";
@@ -27,7 +30,7 @@ import {
   personTurnedHooksOff,
   shouldSkipSessionHooksByPolicy,
 } from "../../utils/hooks/hooksConfigSnapshot.js";
-import { vmi } from "../../utils/hooks.js";
+import { registerHookEligibility } from "../../utils/hooks.js";
 import { checkHasTrustDialogAccepted } from "../../utils/config.js";
 import { logFeatureSad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 import { createAttachmentMessage } from "../../utils/attachments.js";
@@ -35,45 +38,52 @@ import { plural, getFirstLine } from "../../utils/stringUtils.js";
 
 //@ chunk-bnwcqde4.js:685-790 placement
 function isOrganizationHookPolicyPending() {
-  let t = !1;
+  let t = false;
   try {
     t = hasManagedSettings();
   } catch (error) {
     logError(error);
   }
-  if (!t) return !1;
+  if (!t) return false;
   try {
-    return IJ();
+    return managedMarketplaceAnswerFlag();
   } catch (error) {
-    return (logError(error), !0);
+    logError(error);
+    return true;
   }
 }
 //@ chunk-bnwcqde4.js:790-879 placement
 function isHookPolicyUnanswered() {
-  if (!isOrganizationHookPolicyPending()) return !1;
+  if (!isOrganizationHookPolicyPending()) return false;
   try {
-    return J_() === "unanswered";
+    return marketplaceNameAnswerState() === "unanswered";
   } catch (error) {
-    return (logError(error), !0);
+    logError(error);
+    return true;
   }
 }
 //@ chunk-bnwcqde4.js:879-945 placement
 function markOrganizationAskHeld() {
   try {
-    getPluginRegistry().organizationAsk.hasHeld = !0;
+    getPluginRegistry().organizationAsk.hasHeld = true;
   } catch (error) {
     logError(error);
   }
 }
 //@ chunk-bnwcqde4.js:945-1020 placement
-function buildGoalSentinelAttachment(t, o) {
-  return { type: "goal_status", met: t, sentinel: !0, condition: o };
+function buildGoalSentinelAttachment(met, condition) {
+  return {
+    type: "goal_status",
+    met,
+    sentinel: true,
+    condition,
+  };
 }
 //@ chunk-bnwcqde4.js:1020-1306 placement
 function findActiveGoalCondition(t) {
   if (!t) return null;
-  for (let o = t.length - 1; o >= 0; o--) {
-    let r = t[o];
+  for (let i = t.length - 1; i >= 0; i--) {
+    let r = t[i];
     if (r?.type !== "attachment" || r.attachment.type !== "goal_status") continue;
     if (r.attachment.met || r.attachment.failed) return null;
     let condition = r.attachment.condition;
@@ -91,16 +101,16 @@ function logGoalCleared(t, o) {
   });
 }
 //@ chunk-bnwcqde4.js:1436-1507 placement
-var MAX_GOAL_CONDITION_CHARS = 4000,
-  k = new Set(["clear", "stop", "off", "reset", "none", "cancel"]);
+var MAX_GOAL_CONDITION_CHARS = 4000;
+var GOAL_CLEAR_WORDS = new Set(["clear", "stop", "off", "reset", "none", "cancel"]);
 //@ chunk-bnwcqde4.js:1507-1553 placement
 function isGoalClearKeyword(t) {
-  return k.has(t.toLowerCase());
+  return GOAL_CLEAR_WORDS.has(t.toLowerCase());
 }
 //@ chunk-bnwcqde4.js:1553-1837 placement
-function findLastMetGoal(t) {
-  for (let o = t.length - 1; o >= 0; o--) {
-    let r = t[o];
+function findLastMetGoal(messages) {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    let r = messages[i];
     if (r?.type !== "attachment" || r.attachment.type !== "goal_status") continue;
     let attachment = r.attachment;
     if (!attachment.met || attachment.sentinel) continue;
@@ -117,27 +127,30 @@ function findLastMetGoal(t) {
 var buildGoalSetMessage = (t) =>
   `A session-scoped Stop hook is now active with condition: "${t}". Briefly acknowledge the goal, then immediately start (or continue) working toward it \u2014 treat the condition itself as your directive and do not pause to ask the user what to do. The hook will block stopping until the condition holds. It auto-clears once the condition is met \u2014 do not tell the user to run \`/goal clear\` after success; that's only for clearing a goal early.`;
 //@ chunk-bnwcqde4.js:2301-2484 placement
-function getSessionStopPromptHooks(t, o) {
+function getSessionStopPromptHooks(sessionHooksRegistry, sessionId) {
   let r = [];
-  for (let e of t.get(o, "Stop").get("Stop") ?? []) {
-    if (e.matcher !== "" || e.skillRoot !== void 0) continue;
+  for (let e of sessionHooksRegistry.get(sessionId, "Stop").get("Stop") ?? []) {
+    if (e.matcher !== "" || e.skillRoot !== undefined) continue;
     for (let hook of e.hooks) if (hook.type === "prompt") r.push(hook);
   }
   return r;
 }
 //@ chunk-bnwcqde4.js:2484-2827 placement
+/**
+ * /goal 无法运行的两条说明：组织设置未读取（hooks 是否允许未知）与 hooks 被限制（disableAllHooks/allowManagedHooksOnly）。
+ */
 var GOAL_UNTRUSTED_WORKSPACE_MESSAGE =
-    "/goal is only available in trusted workspaces. Restart, accept the trust dialog, and try again.",
-  A =
-    "/goal can't run yet: your organization's settings haven't been read, so it isn't known whether it allows hooks.",
-  O =
-    "/goal can't run while hooks are restricted (disableAllHooks or allowManagedHooksOnly is set in settings or by policy).";
+  "/goal is only available in trusted workspaces. Restart, accept the trust dialog, and try again.";
+var GOAL_HOOKS_POLICY_UNREAD_TEXT =
+  "/goal can't run yet: your organization's settings haven't been read, so it isn't known whether it allows hooks.";
+var GOAL_HOOKS_RESTRICTED_TEXT =
+  "/goal can't run while hooks are restricted (disableAllHooks or allowManagedHooksOnly is set in settings or by policy).";
 //@ chunk-bnwcqde4.js:2827-2852 placement
 function _() {
   return !isCcsCoworkSurface();
 }
 //@ chunk-bnwcqde4.js:2852-2907 placement
-function u() {
+function areHooksRestrictedForGoal() {
   return isCcsTenant()
     ? !_() ||
         shouldDisableAllHooksIncludingManaged() ||
@@ -147,108 +160,175 @@ function u() {
 }
 //@ chunk-bnwcqde4.js:2907-2979 placement = getValueFromInput (1)
 function getValueFromInput(input) {
-  let o = { type: "prompt", prompt: input };
-  return (vmi(o, () => !u()), o);
+  let o = {
+    type: "prompt",
+    prompt: input,
+  };
+  registerHookEligibility(o, () => !areHooksRestrictedForGoal());
+  return o;
 }
 //@ chunk-bnwcqde4.js:2979-3152 placement
 function getGoalBlockedReason() {
-  if (u()) return { message: O, code: "hooks_gate" };
-  if (isHookPolicyUnanswered()) return (markOrganizationAskHeld(), { message: A, code: "hooks_held" });
+  if (areHooksRestrictedForGoal())
+    return {
+      message: GOAL_HOOKS_RESTRICTED_TEXT,
+      code: "hooks_gate",
+    };
+  if (isHookPolicyUnanswered()) {
+    markOrganizationAskHeld();
+    return {
+      message: GOAL_HOOKS_POLICY_UNREAD_TEXT,
+      code: "hooks_held",
+    };
+  }
   if (!getIsNonInteractiveSession() && !checkHasTrustDialogAccepted())
-    return { message: GOAL_UNTRUSTED_WORKSPACE_MESSAGE, code: "trust_gate" };
+    return {
+      message: GOAL_UNTRUSTED_WORKSPACE_MESSAGE,
+      code: "trust_gate",
+    };
   return null;
 }
 //@ chunk-bnwcqde4.js:3152-3229 placement
-function queueGoalOrigin(t, o, r) {
-  t((e) => ({ ...e, queuedGoalOrigin: { condition: o, origin: r } }));
+function queueGoalOrigin(setAppState, condition, origin) {
+  setAppState((e) => ({
+    ...e,
+    queuedGoalOrigin: {
+      condition,
+      origin,
+    },
+  }));
 }
 //@ chunk-bnwcqde4.js:3229-3397 placement
 function consumeQueuedGoalOrigin(t, o) {
   let queuedGoalOrigin = o.getAppState().queuedGoalOrigin;
-  if (queuedGoalOrigin === void 0 || queuedGoalOrigin.condition !== t) return "user";
-  return (o.setAppState((e) => ({ ...e, queuedGoalOrigin: void 0 })), queuedGoalOrigin.origin);
+  if (queuedGoalOrigin === undefined || queuedGoalOrigin.condition !== t) return "user";
+  o.setAppState((e) => ({
+    ...e,
+    queuedGoalOrigin: undefined,
+  }));
+  return queuedGoalOrigin.origin;
 }
+//@ chunk-bnwcqde4.js:3397-3988 placement
 /**
  * 设置会话目标：检查钩子/信任门槛，替换旧目标，在 Stop 钩子注册表加入 prompt 型钩子并记录遥测。
  */
-//@ chunk-bnwcqde4.js:3397-3988 placement
-function setSessionGoal(t, o, r) {
-  let e = r ?? consumeQueuedGoalOrigin(t, o),
-    n = getGoalBlockedReason();
-  if (n !== null) return (logFeatureSad("goal_set", n.code, { origin: fromEnum(e) }), n.message);
-  let s = getSessionId(),
-    activeGoal = o.getAppState().activeGoal;
-  if (activeGoal !== void 0) logGoalCleared(activeGoal, "superseded");
-  for (let i of getSessionStopPromptHooks(o.sessionHooksRegistry, s))
-    o.sessionHooksRegistry.remove(s, "Stop", i);
-  o.sessionHooksRegistry.add(s, "Stop", "", getValueFromInput(t));
-  let m = {
+function setSessionGoal(t, context, r) {
+  let e = r ?? consumeQueuedGoalOrigin(t, context);
+  let goalBlockedReason = getGoalBlockedReason();
+  if (goalBlockedReason !== null) {
+    logFeatureSad("goal_set", goalBlockedReason.code, {
+      origin: fromEnum(e),
+    });
+    return goalBlockedReason.message;
+  }
+  let sessionId = getSessionId();
+  let activeGoal = context.getAppState().activeGoal;
+  if (activeGoal !== undefined) logGoalCleared(activeGoal, "superseded");
+  for (let i of getSessionStopPromptHooks(context.sessionHooksRegistry, sessionId))
+    context.sessionHooksRegistry.remove(sessionId, "Stop", i);
+  context.sessionHooksRegistry.add(sessionId, "Stop", "", getValueFromInput(t));
+  let activeGoal_2 = {
     condition: t,
     iterations: 0,
     setAt: Date.now(),
     origin: e,
     tokensAtStart: getTotalOutputTokens(),
   };
-  return (
-    o.setAppState((i) => ({ ...i, activeGoal: m })),
-    o.applyMessageOp({ type: "append", messages: [createAttachmentMessage(!1, t)] }),
-    logEvent("tengu_stop_hook_added", { promptLength: t.length, via: lit("goal"), origin: fromEnum(e) }),
-    logFeatureOk("goal_set"),
-    null
-  );
+  context.setAppState((i) => ({
+    ...i,
+    activeGoal: activeGoal_2,
+  }));
+  context.applyMessageOp({
+    type: "append",
+    messages: [createAttachmentMessage(false, t)],
+  });
+  logEvent("tengu_stop_hook_added", {
+    promptLength: t.length,
+    via: lit("goal"),
+    origin: fromEnum(e),
+  });
+  logFeatureOk("goal_set");
+  return null;
 }
 //@ chunk-bnwcqde4.js:3988-4394 placement
-function clearSessionGoal(t) {
-  let o = getSessionId(),
-    r = getSessionStopPromptHooks(t.sessionHooksRegistry, o);
-  if (r.length === 0) return null;
-  let prompt = r[0].prompt;
-  for (let s of r) t.sessionHooksRegistry.remove(o, "Stop", s);
-  let activeGoal = t.getAppState().activeGoal;
-  if (activeGoal !== void 0) logGoalCleared(activeGoal, "user_clear");
-  return (
-    t.setAppState((s) => (s.activeGoal === void 0 ? s : { ...s, activeGoal: void 0 })),
-    t.applyMessageOp({ type: "append", messages: [createAttachmentMessage(!0, prompt)] }),
-    logEvent("tengu_stop_hook_removed", { via: lit("goal") }),
-    prompt
+function clearSessionGoal(context) {
+  let sessionId = getSessionId();
+  let sessionStopPromptHooks = getSessionStopPromptHooks(context.sessionHooksRegistry, sessionId);
+  if (sessionStopPromptHooks.length === 0) return null;
+  let prompt = sessionStopPromptHooks[0].prompt;
+  for (let sessionStopPromptHook of sessionStopPromptHooks)
+    context.sessionHooksRegistry.remove(sessionId, "Stop", sessionStopPromptHook);
+  let activeGoal = context.getAppState().activeGoal;
+  if (activeGoal !== undefined) logGoalCleared(activeGoal, "user_clear");
+  context.setAppState((s) =>
+    s.activeGoal === undefined
+      ? s
+      : {
+          ...s,
+          activeGoal: undefined,
+        },
   );
+  context.applyMessageOp({
+    type: "append",
+    messages: [createAttachmentMessage(true, prompt)],
+  });
+  logEvent("tengu_stop_hook_removed", {
+    via: lit("goal"),
+  });
+  return prompt;
 }
+//@ chunk-s4441tej.js:3789-4492 placement
 /**
  * /goal 命令：设置、查看或清除会话目标（达成条件），长度有限制。
  */
-//@ chunk-s4441tej.js:3789-4492 placement
 var call = async (args, context) => {
   let trimmed = args.trim();
   if (trimmed === "") {
     let activeGoal = context.options.activeGoal;
-    if (!activeGoal) return { type: "text", value: "No goal set. Usage: `/goal <condition>`" };
+    if (!activeGoal)
+      return {
+        type: "text",
+        value: "No goal set. Usage: `/goal <condition>`",
+      };
     let r =
-        activeGoal.iterations === 0
-          ? "not yet evaluated"
-          : `${activeGoal.iterations} ${plural(activeGoal.iterations, "turn")}`,
-      n = activeGoal.lastReason
-        ? `
+      activeGoal.iterations === 0
+        ? "not yet evaluated"
+        : `${activeGoal.iterations} ${plural(activeGoal.iterations, "turn")}`;
+    let n = activeGoal.lastReason
+      ? `
 Last check: ${getFirstLine(activeGoal.lastReason.trim())}`
-        : "";
-    return { type: "text", value: `Goal active: ${activeGoal.condition} (${r})${n}` };
+      : "";
+    return {
+      type: "text",
+      value: `Goal active: ${activeGoal.condition} (${r})${n}`,
+    };
   }
   if (isGoalClearKeyword(trimmed)) {
     let t = clearSessionGoal(context);
-    return { type: "text", value: t === null ? "No goal set" : `Goal cleared: ${t}` };
+    return {
+      type: "text",
+      value: t === null ? "No goal set" : `Goal cleared: ${t}`,
+    };
   }
-  if (trimmed.length > MAX_GOAL_CONDITION_CHARS)
-    return (
-      logFeatureSad("goal_set", "too_long"),
-      {
-        type: "text",
-        value: `Goal condition is limited to ${MAX_GOAL_CONDITION_CHARS} characters (got ${trimmed.length})`,
-      }
-    );
+  if (trimmed.length > MAX_GOAL_CONDITION_CHARS) {
+    logFeatureSad("goal_set", "too_long");
+    return {
+      type: "text",
+      value: `Goal condition is limited to ${MAX_GOAL_CONDITION_CHARS} characters (got ${trimmed.length})`,
+    };
+  }
   let a = setSessionGoal(trimmed, context);
-  if (a !== null) return { type: "text", value: a };
-  return { type: "query", value: `Goal set: ${trimmed}`, prompt: buildGoalSetMessage(trimmed) };
+  if (a !== null)
+    return {
+      type: "text",
+      value: a,
+    };
+  return {
+    type: "query",
+    value: `Goal set: ${trimmed}`,
+    prompt: buildGoalSetMessage(trimmed),
+  };
 };
-
 export {
   isHookPolicyUnanswered,
   logGoalCleared,

@@ -11,37 +11,37 @@
 import {
   findTagOutsideComments,
   isValidLangTag,
-  fl,
-  ul,
+  BASE_STYLE_HEAD_WITH_SAFE_AREA,
+  BASE_STYLE_HEAD,
   spendStripPass,
-  Xs,
+  MAX_NESTED_SKELETON_LEVELS,
   StripUnsettledError,
   FRAME_RUNTIME_HEAD_WINDOW,
   FRAME_RUNTIME_MAX_SPAN,
 } from "./pagePreparation.js";
-import { skipQuotedAttribute, FRAME_RUNTIME_SENTINELS, Dt } from "./pageRuntimes.js";
+import { skipQuotedAttribute, FRAME_RUNTIME_SENTINELS, FRAME_RUNTIME_END_MARKER } from "./pageRuntimes.js";
 import { isHtmlCommentOnly } from "./capabilityRoster.js";
 import { getLiveState } from "../liveReplica/liveReplica.js";
 
+//@ chunk-06y4szbn.js:67830-68237 placement = sanitizeMessageHTML (0.385)
 /**
  * HTML 文档前缀与 meta 常量。旧版名 sanitizeMessageHTML 为错配；疑似归错文件（HTML 预览/发布）。
  */
-//@ chunk-06y4szbn.js:67830-68237 placement = sanitizeMessageHTML (0.385)
-var HTML_DOCTYPE = "<!doctype html>",
-  HTML_OPEN_TAG = "<html",
-  HTML_DOC_PREFIX = HTML_DOCTYPE + HTML_OPEN_TAG,
-  HTML_DOCTYPE_REGEX = new RegExp(`^${HTML_DOCTYPE}`, "i"),
-  META_VIEWPORT_COVER =
-    '<meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover">',
-  META_VIEWPORT = '<meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1">',
-  META_OR_WBR_TAG_REGEX = /^<(?:meta|wbr)(?=[\t\n\f\r />])/i,
-  META_TAG_REGEX = /<meta(?=[\t\n\f\r /])/gi,
-  HTML_HEAD_SCAN_LIMIT = 1024,
-  VIEWPORT_CONTENT_PAIR_REGEX = /([^\t\n\f\r =,]+)[^=,]*[\t\n\f\r =]*([^\t\n\f\r =,]*)/g;
+var HTML_DOCTYPE = "<!doctype html>";
+var HTML_OPEN_TAG = "<html";
+var HTML_DOC_PREFIX = HTML_DOCTYPE + HTML_OPEN_TAG;
+var HTML_DOCTYPE_REGEX = new RegExp(`^${HTML_DOCTYPE}`, "i");
+var META_VIEWPORT_COVER =
+  '<meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover">';
+var META_VIEWPORT = '<meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1">';
+var META_OR_WBR_TAG_REGEX = /^<(?:meta|wbr)(?=[\t\n\f\r />])/i;
+var META_TAG_REGEX = /<meta(?=[\t\n\f\r /])/gi;
+var HTML_HEAD_SCAN_LIMIT = 1024;
+var VIEWPORT_CONTENT_PAIR_REGEX = /([^\t\n\f\r =,]+)[^=,]*[\t\n\f\r =]*([^\t\n\f\r =,]*)/g;
+//@ chunk-06y4szbn.js:68237-68371 placement
 /**
  * viewport content 里 viewport-fit=cover。疑似归错文件。
  */
-//@ chunk-06y4szbn.js:68237-68371 placement
 function hasViewportFitCover(e) {
   let n = "";
   for (let [, r = "", s = ""] of e.matchAll(VIEWPORT_CONTENT_PAIR_REGEX))
@@ -50,15 +50,17 @@ function hasViewportFitCover(e) {
 }
 //@ chunk-06y4szbn.js:68371-68875 placement
 function readTagAttributes(e, n, r) {
-  let s = new Map(),
-    h = r - 1,
-    b = n;
+  let s = new Map();
+  let h = r - 1;
+  let b = n;
   for (;;) {
     while (b < h && /[\t\n\f\r /]/.test(e[b])) b++;
     if (b >= h) return s;
     let y = "";
-    do ((y += e[b].toLowerCase()), b++);
-    while (b < h && !/[\t\n\f\r /=>]/.test(e[b]));
+    do {
+      y += e[b].toLowerCase();
+      b++;
+    } while (b < h && !/[\t\n\f\r /=>]/.test(e[b]));
     while (b < h && /[\t\n\f\r ]/.test(e[b])) b++;
     let x = "";
     if (b < h && e[b] === "=") {
@@ -68,7 +70,8 @@ function readTagAttributes(e, n, r) {
       if (b < h && (w === '"' || w === "'")) {
         let index = e.indexOf(w, b + 1);
         if (index < 0 || index >= h) return s;
-        ((x = e.slice(b + 1, index)), (b = index + 1));
+        x = e.slice(b + 1, index);
+        b = index + 1;
       } else {
         let R = b;
         while (b < h && !/[\t\n\f\r >]/.test(e[b])) b++;
@@ -79,52 +82,56 @@ function readTagAttributes(e, n, r) {
   }
 }
 //@ chunk-06y4szbn.js:68875-69489 placement
-function needsViewportMeta(e, n = !0) {
+function needsViewportMeta(e, n = true) {
   if (!/<meta[\t\n\f\r />]/i.test(e)) return n;
-  let r,
-    s = e + "<wbr>",
-    h = 0,
-    b = findTagOutsideComments(s, META_OR_WBR_TAG_REGEX, 0);
-  while (b >= 0 && b < e.length) {
-    let y = s[b + 1] === "m" || s[b + 1] === "M" ? 5 : 4,
-      x = skipQuotedAttribute(s, b + y);
+  let r;
+  let s = e + "<wbr>";
+  let lastIndex = 0;
+  let tagOutsideComments = findTagOutsideComments(s, META_OR_WBR_TAG_REGEX, 0);
+  while (tagOutsideComments >= 0 && tagOutsideComments < e.length) {
+    let y = s[tagOutsideComments + 1] === "m" || s[tagOutsideComments + 1] === "M" ? 5 : 4;
+    let x = skipQuotedAttribute(s, tagOutsideComments + y);
     if (x < 0 || x > e.length) {
-      b = -1;
+      tagOutsideComments = -1;
       break;
     }
     if (y === 5) {
-      let w = readTagAttributes(s, b + y, x);
-      if (w.get("name")?.toLowerCase() === "viewport") r = w.get("content") ?? "";
+      let tagAttributes = readTagAttributes(s, tagOutsideComments + y, x);
+      if (tagAttributes.get("name")?.toLowerCase() === "viewport") r = tagAttributes.get("content") ?? "";
     }
-    ((h = x), (b = findTagOutsideComments(s, META_OR_WBR_TAG_REGEX, x)));
+    lastIndex = x;
+    tagOutsideComments = findTagOutsideComments(s, META_OR_WBR_TAG_REGEX, x);
   }
-  if (b < 0 && !(r !== void 0 && hasViewportFitCover(r))) {
-    META_TAG_REGEX.lastIndex = h;
+  if (tagOutsideComments < 0 && !(r !== undefined && hasViewportFitCover(r))) {
+    META_TAG_REGEX.lastIndex = lastIndex;
     for (let match = META_TAG_REGEX.exec(e); match !== null; match = META_TAG_REGEX.exec(e)) {
-      let sliced = e.slice(match.index, match.index + HTML_HEAD_SCAN_LIMIT),
-        w = sliced.includes(">") ? skipQuotedAttribute(sliced, 5) : -1;
+      let sliced = e.slice(match.index, match.index + HTML_HEAD_SCAN_LIMIT);
+      let w = sliced.includes(">") ? skipQuotedAttribute(sliced, 5) : -1;
       if (w < 0) continue;
-      let R = readTagAttributes(sliced, 5, w);
-      if (R.get("name")?.toLowerCase() === "viewport") {
-        if (((r = R.get("content") ?? ""), hasViewportFitCover(r))) return !0;
+      let tagAttributes = readTagAttributes(sliced, 5, w);
+      if (tagAttributes.get("name")?.toLowerCase() === "viewport") {
+        r = tagAttributes.get("content") ?? "";
+        if (hasViewportFitCover(r)) return true;
       }
     }
   }
-  return r === void 0 ? n : hasViewportFitCover(r);
+  return r === undefined ? n : hasViewportFitCover(r);
 }
 //@ chunk-06y4szbn.js:69489-69534 placement
-var da = `</head><body>
-`,
-  Ln = `
+var HEAD_BODY_CLOSE = `</head><body>
+`;
+var BODY_HTML_CLOSE = `
 </body></html>`;
 //@ chunk-06y4szbn.js:69534-69661 placement
-function composeArtifactPage(e, n, r) {
-  let s = n !== void 0 && isValidLangTag(n) ? ` lang="${n}"` : "",
-    h = needsViewportMeta(e, r) ? META_VIEWPORT_COVER + fl : META_VIEWPORT + ul;
-  return `${HTML_DOC_PREFIX}${s}><head>${h}${da}${e}${Ln}`;
+function composeArtifactPage(body, roundTripLang, roundTripCover) {
+  let s = roundTripLang !== undefined && isValidLangTag(roundTripLang) ? ` lang="${roundTripLang}"` : "";
+  let h = needsViewportMeta(body, roundTripCover)
+    ? META_VIEWPORT_COVER + BASE_STYLE_HEAD_WITH_SAFE_AREA
+    : META_VIEWPORT + BASE_STYLE_HEAD;
+  return `${HTML_DOC_PREFIX}${s}><head>${h}${HEAD_BODY_CLOSE}${body}${BODY_HTML_CLOSE}`;
 }
 //@ chunk-06y4szbn.js:69661-69699 placement
-function Er(e, n, r) {
+function pinnedAttrEquals(e, n, r) {
   return skipQuotedAttribute(e, n) === r;
 }
 //@ chunk-06y4szbn.js:69699-69761 placement
@@ -138,7 +145,8 @@ function unwrapSkeletonDocument(e) {
   let match = e.match(/^<!doctype html><html(?=[\t\n\f\r >])([^>]*)><head(?=[\t\n\f\r >])[^>]*>/);
   if (!match) return null;
   let r = HTML_DOC_PREFIX.length + match[1].length + 1;
-  if (!Er(e, HTML_DOC_PREFIX.length, r) || !Er(e, r + 5, match[0].length)) return null;
+  if (!pinnedAttrEquals(e, HTML_DOC_PREFIX.length, r) || !pinnedAttrEquals(e, r + 5, match[0].length))
+    return null;
   let index = e.indexOf("</head><body", match[0].length);
   if (index === -1) return null;
   let match_2 = e
@@ -151,12 +159,12 @@ function unwrapSkeletonDocument(e) {
     let q = match[0].length;
     for (let W of ["<meta", "<meta", "<style"]) {
       let G = e.indexOf(">", q + W.length) + 1;
-      if (!e.startsWith(W, q) || !Er(e, q + W.length, G)) return null;
+      if (!e.startsWith(W, q) || !pinnedAttrEquals(e, q + W.length, G)) return null;
       q = G;
     }
   }
-  let y = index + 12,
-    x = skipQuotedAttribute(e, y);
+  let y = index + 12;
+  let x = skipQuotedAttribute(e, y);
   if (x < 0) return null;
   let sliced = e.slice(y, x - 1);
   if (!/^(?:[\t\n\f\r ][^>]*)?$/.test(sliced)) return null;
@@ -177,20 +185,25 @@ function unwrapSkeletonDocument(e) {
 `
   )
     bodyEnd--;
-  let V = match[1].match(/[\t\n\f\r ]lang="([^"]*)"/)?.[1],
-    L = readTagAttributes(match_2[1], 5, match_2[1].length);
+  let V = match[1].match(/[\t\n\f\r ]lang="([^"]*)"/)?.[1];
+  let tagAttributes = readTagAttributes(match_2[1], 5, match_2[1].length);
   return {
     body: e.slice(R, bodyEnd),
-    ...(V !== void 0 && isValidLangTag(V) && { lang: V }),
-    cover: hasViewportFitCover(L.get("content") ?? ""),
-    ...(C.commentsDropped && { hoistedCommentsDropped: !0 }),
+    ...(V !== undefined &&
+      isValidLangTag(V) && {
+        lang: V,
+      }),
+    cover: hasViewportFitCover(tagAttributes.get("content") ?? ""),
+    ...(C.commentsDropped && {
+      hoistedCommentsDropped: true,
+    }),
   };
 }
 //@ chunk-06y4szbn.js:70927-71368 placement
 function trimTrailingComments(e, n) {
-  let r = !1,
-    s = e.length,
-    h = !1;
+  let r = false;
+  let s = e.length;
+  let h = false;
   for (;;) {
     while (
       s > n &&
@@ -201,92 +214,121 @@ function trimTrailingComments(e, n) {
     if (e.endsWith("-->", s)) {
       let index = e.lastIndexOf("<!--", s - 7);
       if (index < n || !isHtmlCommentOnly(e.slice(index, s))) return null;
-      ((r = !0), (s = index));
-    } else if (!h && s - n >= 7 && e.endsWith("</html>", s)) ((h = !0), (s -= 7));
-    else if (h && s - n >= 7 && e.endsWith("</body>", s)) {
+      r = true;
+      s = index;
+    } else if (!h && s - n >= 7 && e.endsWith("</html>", s)) {
+      h = true;
+      s -= 7;
+    } else if (h && s - n >= 7 && e.endsWith("</body>", s)) {
       let b = s - 7;
       if (r) {
         let index = e.lastIndexOf("<!--", b);
         if (index >= n && e.lastIndexOf("-->", b) < index + 4) return null;
       }
-      return { bodyEnd: b, commentsDropped: r };
+      return {
+        bodyEnd: b,
+        commentsDropped: r,
+      };
     } else return null;
   }
 }
 //@ chunk-06y4szbn.js:71368-71665 placement
-function repairNestedPage(e, n, r, s, h) {
-  let b = 0,
-    y = !1;
+function repairNestedPage(body, lang, cover, s, stripBudget) {
+  let b = 0;
+  let y = false;
   for (;;) {
-    spendStripPass(h);
-    let w = matchSkeletonPrefix(e);
+    spendStripPass(stripBudget);
+    let w = matchSkeletonPrefix(body);
     if (w !== null) {
-      if (b === Xs) throw new StripUnsettledError("levels", h.spent);
-      ((e = w.body), (n = w.lang ?? n), (r = w.cover), b++, (y = !1));
+      if (b === MAX_NESTED_SKELETON_LEVELS) throw new StripUnsettledError("levels", stripBudget.spent);
+      body = w.body;
+      lang = w.lang ?? lang;
+      cover = w.cover;
+      b++;
+      y = false;
       continue;
     }
-    y ||= fa(e);
-    let R = s(e);
-    if (R === e) break;
-    e = R;
+    y ||= hasRuntimeSentinelsInHead(body);
+    let R = s(body);
+    if (R === body) break;
+    body = R;
   }
-  let x = y ? (b > 0 ? "partial" : "miss") : b > 0 ? "repaired" : void 0;
-  return { body: e, lang: n, cover: r, outcome: x };
+  let outcome = y ? (b > 0 ? "partial" : "miss") : b > 0 ? "repaired" : undefined;
+  return {
+    body,
+    lang,
+    cover,
+    outcome,
+  };
 }
 //@ chunk-06y4szbn.js:71665-71741 placement
-function fa(e) {
-  if (!startsWithSkeletonOpen(e)) return !1;
+function hasRuntimeSentinelsInHead(e) {
+  if (!startsWithSkeletonOpen(e)) return false;
   let index = e.indexOf(FRAME_RUNTIME_SENTINELS);
   return index !== -1 && index < FRAME_RUNTIME_HEAD_WINDOW;
 }
 //@ chunk-06y4szbn.js:71741-72501 placement
 function matchSkeletonPrefix(e) {
   if (!startsWithSkeletonOpen(e)) return null;
-  let n = HTML_DOC_PREFIX.length,
-    r = (w) => {
-      if (!e.startsWith(w, n)) return !1;
-      return ((n += w.length), !0);
-    },
-    s;
+  let n = HTML_DOC_PREFIX.length;
+  let r = (w) => {
+    if (!e.startsWith(w, n)) return false;
+    n += w.length;
+    return true;
+  };
+  let lang;
   if (r(' lang="')) {
     let index = e.indexOf('"', n);
     if (index === -1 || !isValidLangTag(e.slice(n, index))) return null;
-    ((s = e.slice(n, index)), (n = index + 1));
+    lang = e.slice(n, index);
+    n = index + 1;
   }
   if (!r("><head>" + FRAME_RUNTIME_SENTINELS)) return null;
-  let h = n + FRAME_RUNTIME_MAX_SPAN,
-    b = 0;
+  let h = n + FRAME_RUNTIME_MAX_SPAN;
+  let b = 0;
   while (b < 2 && r("<script>")) {
     let index = e.indexOf("</script>", n);
     if (index === -1 || index > h) return null;
     let sliced = e.slice(n, index);
     if (sliced === "" || sliced.includes("<!--") || /<\/script/i.test(sliced)) return null;
-    ((n = index + 9), b++);
+    n = index + 9;
+    b++;
   }
-  if (b === 0 || !r(Dt)) return null;
+  if (b === 0 || !r(FRAME_RUNTIME_END_MARKER)) return null;
   let y = r(META_VIEWPORT_COVER);
   if (!y && !r(META_VIEWPORT)) return null;
   if (!r("<style>")) return null;
   let index = e.indexOf("</style>", n);
   if (index === -1 || e.slice(n, index).includes("<")) return null;
-  if (((n = index + 8), !r(da))) return null;
-  if (e.length - n < Ln.length || !e.endsWith(Ln)) return null;
-  return { body: e.slice(n, e.length - Ln.length), lang: s, cover: y };
+  n = index + 8;
+  if (!r(HEAD_BODY_CLOSE)) return null;
+  if (e.length - n < BODY_HTML_CLOSE.length || !e.endsWith(BODY_HTML_CLOSE)) return null;
+  return {
+    body: e.slice(n, e.length - BODY_HTML_CLOSE.length),
+    lang,
+    cover: y,
+  };
 }
 //@ chunk-06y4szbn.js:72501-72598 placement
-function mintRoundTripPublishSignal(e) {
-  let freeze = Object.freeze({ slug: e });
-  return (getLiveState().mintedRoundTripPublishSignals.add(freeze), freeze);
+function mintRoundTripPublishSignal(slug) {
+  let n = Object.freeze({
+    slug,
+  });
+  getLiveState().mintedRoundTripPublishSignals.add(n);
+  return n;
 }
 //@ chunk-06y4szbn.js:72598-72694 placement
-function isMintedRoundTripPublishSignal(e) {
-  return typeof e === "object" && e !== null && getLiveState().mintedRoundTripPublishSignals.has(e);
+function isMintedRoundTripPublishSignal(roundTrip) {
+  return (
+    typeof roundTrip === "object" &&
+    roundTrip !== null &&
+    getLiveState().mintedRoundTripPublishSignals.has(roundTrip)
+  );
 }
-
 export {
   unwrapSkeletonDocument,
   repairNestedPage,
-  fa,
+  hasRuntimeSentinelsInHead,
   composeArtifactPage,
   isMintedRoundTripPublishSignal,
   startsWithSkeletonOpen,

@@ -10,80 +10,87 @@
  */
 import { resetCursor } from "../../main.js";
 import { getPlatform } from "../../utils/platform.js";
-import { isRunningFromVersionsDir } from "../../utils/deepLink/registerProtocol.js";
+import { isRunningFromVersionsDir_2 } from "../../utils/deepLink/registerProtocol.js";
 import { getTeammateAgentId, getDisableSlashCommands } from "../../bootstrap/state.js";
 import { isBgSession } from "../../utils/concurrentSessions.js";
-import { wt } from "../../remote/remoteMode.js";
-import { Orn, resolveMaxVersionConfig, TENGU_FANCY_WAND, restartVersionTarget } from "./versionTargets.js";
+import { isRemoteSessionAvailable } from "../../remote/remoteMode.js";
+import {
+  isGrowthBookFreshOrOverridden,
+  resolveMaxVersionConfig,
+  TENGU_FANCY_WAND,
+  restartVersionTarget,
+} from "./versionTargets.js";
 import {
   getFeatureValue_CACHED_MAY_BE_STALE,
   hasGrowthBookOverride,
   getAllGrowthBookFeatures,
 } from "../../services/analytics/growthbook.js";
 
+//@ chunk-e6aww6q8.js:2039771-2039933 placement
 /**
  * canRestartInPlace：TTY、macOS/Linux、非后台、非远程。
  */
-//@ chunk-e6aww6q8.js:2039771-2039933 placement
 function canRestartInPlace() {
-  if (!resetCursor()) return !1;
-  let e = getPlatform();
-  if (e !== "macos" && e !== "linux") return !1;
-  if (!isRunningFromVersionsDir()) return !1;
-  if (getTeammateAgentId() !== void 0) return !1;
-  if (isBgSession()) return !1;
-  return !wt() && !getDisableSlashCommands();
+  if (!resetCursor()) return false;
+  let platform = getPlatform();
+  if (platform !== "macos" && platform !== "linux") return false;
+  if (!isRunningFromVersionsDir_2()) return false;
+  if (getTeammateAgentId() !== undefined) return false;
+  if (isBgSession()) return false;
+  return !isRemoteSessionAvailable() && !getDisableSlashCommands();
 }
 //@ chunk-e6aww6q8.js:2039933-2039999 placement
-function Y3s() {
+/**
+ * /restart 命令的可用性：可原地重启、GrowthBook 新鲜或被覆盖、且满足其他前置条件。
+ */
+function canRestartCommandRun() {
   return (
     canRestartInPlace() &&
-    Orn() &&
-    resolveMaxVersionConfig() === void 0 &&
-    getFeatureValue_CACHED_MAY_BE_STALE(TENGU_FANCY_WAND, !1) === !0
+    isGrowthBookFreshOrOverridden() &&
+    resolveMaxVersionConfig() === undefined &&
+    getFeatureValue_CACHED_MAY_BE_STALE(TENGU_FANCY_WAND, false) === true
   );
 }
+//@ chunk-e6aww6q8.js:2039999-2040076 placement
 /**
  * isRestartFlagOn：tengu_fancy_wand。
  */
-//@ chunk-e6aww6q8.js:2039999-2040076 placement
 function isRestartFlagOn() {
-  if (!Orn()) return !1;
+  if (!isGrowthBookFreshOrOverridden()) return false;
   return hasGrowthBookOverride(TENGU_FANCY_WAND)
-    ? getFeatureValue_CACHED_MAY_BE_STALE(TENGU_FANCY_WAND, !1) === !0
-    : getAllGrowthBookFeatures()[TENGU_FANCY_WAND] === !0;
+    ? getFeatureValue_CACHED_MAY_BE_STALE(TENGU_FANCY_WAND, false) === true
+    : getAllGrowthBookFeatures()[TENGU_FANCY_WAND] === true;
 }
+//@ chunk-e6aww6q8.js:2040076-2040111 placement
 /**
  * isRestartCommandEnabled：/restart 的 isEnabled。
  */
-//@ chunk-e6aww6q8.js:2040076-2040111 placement
 function isRestartCommandEnabled() {
   return canRestartInPlace() && isRestartFlagOn();
 }
+//@ chunk-e6aww6q8.js:2040111-2040494 placement
 /**
  * /restart 命令对象（local）；描述：{let e=TGt();return(e.kind==="newer"||e.kind==="older")&&rJn()===void 0?`Restart on ${e.version} and keep this session`:"Restart Claude Code；别名 ["update"]；isEnabled: Mrn；isHidden: {return!Mrn()}；实现 chunk-egxcxk6h.js 的 hzi。
  */
-//@ chunk-e6aww6q8.js:2040111-2040494 placement
 var restartCommandDefinition = {
-    type: "local",
-    name: "restart",
-    aliases: ["update"],
-    get description() {
-      let e = restartVersionTarget();
-      return (e.kind === "newer" || e.kind === "older") && resolveMaxVersionConfig() === void 0
-        ? `Restart on ${e.version} and keep this session`
-        : "Restart Claude Code and keep this session";
-    },
-    supportsNonInteractive: !1,
-    isEnabled: isRestartCommandEnabled,
-    get isHidden() {
-      return !isRestartCommandEnabled();
-    },
-    get fleetHostCall() {
-      return;
-    },
-    load: () => import("./chunk-egxcxk6h.js"),
+  type: "local",
+  name: "restart",
+  aliases: ["update"],
+  get description() {
+    let e = restartVersionTarget();
+    return (e.kind === "newer" || e.kind === "older") && resolveMaxVersionConfig() === undefined
+      ? `Restart on ${e.version} and keep this session`
+      : "Restart Claude Code and keep this session";
   },
-  restartCommand = restartCommandDefinition;
-
-export { restartCommand, Y3s };
+  supportsNonInteractive: false,
+  isEnabled: isRestartCommandEnabled,
+  get isHidden() {
+    return !isRestartCommandEnabled();
+  },
+  get fleetHostCall() {
+    return;
+  },
+  load: () => import("./chunk-egxcxk6h.js"),
+};
+var restartCommand = restartCommandDefinition;
+export { restartCommand, canRestartCommandRun };

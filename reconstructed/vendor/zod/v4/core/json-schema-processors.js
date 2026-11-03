@@ -5,654 +5,802 @@
  * pieces: chunk-7vp249v4.js (12), chunk-dcmhvw5a.js (1)
  * attribution: esm-layout 2, esm-fingerprint 11
  */
-import { alo, rhs, iSr, She } from "./util.js";
-import { Me, he } from "./schemas.js";
-import { kr, Zr, V, Te } from "./regexes.js";
-import { k, vR, w, ee, te, re } from "./to-json-schema.js";
+import { NUMBER_FORMAT_RANGES, BIGINT_FORMAT_RANGES, iSr, assignProp } from "./util.js";
+import { base64Charset, base64urlCharset } from "./schemas.js";
+import { base64, base64url, number, integer } from "./regexes.js";
+import {
+  handleUnrepresentable,
+  processSchema,
+  isTransforming,
+  initializeContext,
+  extractDefs,
+  finalize,
+} from "./to-json-schema.js";
 
 //@ chunk-7vp249v4.js:65890-67028 esm-layout
-var D = (e, t, r) => {
-    if (e[t] === void 0 || r > e[t]) e[t] = r;
+var narrowMin = (agg, key, value) => {
+  if (agg[key] === undefined || value > agg[key]) agg[key] = value;
+};
+var narrowMax = (agg, key, value) => {
+  if (agg[key] === undefined || value < agg[key]) agg[key] = value;
+};
+var narrowBoth = (agg, value) => {
+  narrowMin(agg, "minimum", value);
+  narrowMax(agg, "maximum", value);
+};
+var addDivisor = (agg, value) => {
+  agg.multipleOf ?? (agg.multipleOf = []);
+  if (!agg.multipleOf.includes(value)) agg.multipleOf.push(value);
+};
+var addPattern = (agg, pattern) => {
+  agg.patterns ?? (agg.patterns = new Set());
+  agg.patterns.add(pattern);
+};
+var intersectMime = (agg, mime) => {
+  agg.mime = agg.mime ? agg.mime.filter((m) => mime.includes(m)) : [...mime];
+};
+var setFormat = (agg, format) => {
+  agg.format = format;
+  if (format.includes("int")) agg.isInt = true;
+};
+var minContributor = (agg, def) => narrowMin(agg, "minimum", def.minimum);
+var maxContributor = (agg, def) => narrowMax(agg, "maximum", def.maximum);
+var formatContributor = (ranges) => (agg, def) => {
+  setFormat(agg, def.format);
+  let [minimum, maximum] = ranges[def.format];
+  narrowMin(agg, "minimum", minimum);
+  narrowMax(agg, "maximum", maximum);
+};
+var contributors = {
+  greater_than: (agg, def) => narrowMin(agg, def.inclusive ? "minimum" : "exclusiveMinimum", def.value),
+  less_than: (agg, def) => narrowMax(agg, def.inclusive ? "maximum" : "exclusiveMaximum", def.value),
+  multiple_of: (agg, def) => addDivisor(agg, def.value),
+  number_format: formatContributor(NUMBER_FORMAT_RANGES),
+  bigint_format: formatContributor(BIGINT_FORMAT_RANGES),
+  min_length: minContributor,
+  max_length: maxContributor,
+  length_equals: (agg, def) => narrowBoth(agg, def.length),
+  min_size: minContributor,
+  max_size: maxContributor,
+  size_equals: (agg, def) => narrowBoth(agg, def.size),
+  string_format: (agg, def) => {
+    setFormat(agg, def.format);
+    if (def.pattern) addPattern(agg, def.pattern);
+    if (def.format === "base64" || def.format === "base64url") agg.contentEncoding = def.format;
+    if (def.local || def.precision === -1) agg.laxFormat = true;
   },
-  j = (e, t, r) => {
-    if (e[t] === void 0 || r < e[t]) e[t] = r;
-  },
-  ui = (e, t) => {
-    (D(e, "minimum", t), j(e, "maximum", t));
-  },
-  di = (e, t) => {
-    if ((e.multipleOf ?? (e.multipleOf = []), !e.multipleOf.includes(t))) e.multipleOf.push(t);
-  },
-  mi = (e, t) => {
-    (e.patterns ?? (e.patterns = new Set()), e.patterns.add(t));
-  },
-  hi = (e, t) => {
-    e.mime = e.mime ? e.mime.filter((r) => t.includes(r)) : [...t];
-  },
-  _i = (e, t) => {
-    if (((e.format = t), t.includes("int"))) e.isInt = !0;
-  },
-  ai = (e, t) => D(e, "minimum", t.minimum),
-  li = (e, t) => j(e, "maximum", t.maximum),
-  pi = (e) => (t, r) => {
-    _i(t, r.format);
-    let [n, i] = e[r.format];
-    (D(t, "minimum", n), j(t, "maximum", i));
-  },
-  js = {
-    greater_than: (e, t) => D(e, t.inclusive ? "minimum" : "exclusiveMinimum", t.value),
-    less_than: (e, t) => j(e, t.inclusive ? "maximum" : "exclusiveMaximum", t.value),
-    multiple_of: (e, t) => di(e, t.value),
-    number_format: pi(alo),
-    bigint_format: pi(rhs),
-    min_length: ai,
-    max_length: li,
-    length_equals: (e, t) => ui(e, t.length),
-    min_size: ai,
-    max_size: li,
-    size_equals: (e, t) => ui(e, t.size),
-    string_format: (e, t) => {
-      if ((_i(e, t.format), t.pattern)) mi(e, t.pattern);
-      if (t.format === "base64" || t.format === "base64url") e.contentEncoding = t.format;
-      if (t.local || t.precision === -1) e.laxFormat = !0;
-    },
-    mime_type: (e, t) => hi(e, t.mime),
-  };
+  mime_type: (agg, def) => intersectMime(agg, def.mime),
+};
 //@ chunk-7vp249v4.js:67028-67644 esm-fingerprint
-function P(e) {
-  let t = {},
-    def = e._zod.def,
-    n = e._zod.traits.has("$ZodCheck") ? [e, ...(def.checks ?? [])] : (def.checks ?? []);
-  for (let s of n) js[s._zod.def.check]?.(t, s._zod.def);
-  let bag = e._zod.bag;
-  if (bag.minimum !== void 0) D(t, "minimum", bag.minimum);
-  if (bag.exclusiveMinimum !== void 0) D(t, "exclusiveMinimum", bag.exclusiveMinimum);
-  if (bag.maximum !== void 0) j(t, "maximum", bag.maximum);
-  if (bag.exclusiveMaximum !== void 0) j(t, "exclusiveMaximum", bag.exclusiveMaximum);
-  if (bag.multipleOf !== void 0) di(t, bag.multipleOf);
-  if (bag.format !== void 0) {
-    if ((t.format ?? (t.format = bag.format), bag.format.includes("int"))) t.isInt = !0;
+function aggregateChecks(schema) {
+  let agg = {};
+  let def = schema._zod.def;
+  let list = schema._zod.traits.has("$ZodCheck") ? [schema, ...(def.checks ?? [])] : (def.checks ?? []);
+  for (let ch of list) contributors[ch._zod.def.check]?.(agg, ch._zod.def);
+  let bag = schema._zod.bag;
+  if (bag.minimum !== undefined) narrowMin(agg, "minimum", bag.minimum);
+  if (bag.exclusiveMinimum !== undefined) narrowMin(agg, "exclusiveMinimum", bag.exclusiveMinimum);
+  if (bag.maximum !== undefined) narrowMax(agg, "maximum", bag.maximum);
+  if (bag.exclusiveMaximum !== undefined) narrowMax(agg, "exclusiveMaximum", bag.exclusiveMaximum);
+  if (bag.multipleOf !== undefined) addDivisor(agg, bag.multipleOf);
+  if (bag.format !== undefined) {
+    agg.format ?? (agg.format = bag.format);
+    if (bag.format.includes("int")) agg.isInt = true;
   }
-  if (bag.mime) hi(t, bag.mime);
-  for (let s of bag.patterns ?? []) mi(t, s);
-  return t;
+  if (bag.mime) intersectMime(agg, bag.mime);
+  for (let pattern of bag.patterns ?? []) addPattern(agg, pattern);
+  return agg;
 }
 //@ chunk-7vp249v4.js:67644-71734 esm-fingerprint
-var Ls = { guid: "uuid", url: "uri", datetime: "date-time", json_string: "json-string", regex: "" },
-  Fs = new Map([
-    [Me, kr],
-    [he, Zr],
-  ]),
-  gi = (e) => Fs.get(e) ?? e,
-  ht = (e, t, r, n) => {
-    let i = r;
-    i.type = "string";
-    let {
-      minimum: minimum,
-      maximum: maximum,
-      format: format,
-      patterns: patterns,
-      contentEncoding: contentEncoding,
-      laxFormat: laxFormat,
-    } = P(e);
-    if (typeof minimum === "number") i.minLength = minimum;
-    if (typeof maximum === "number") i.maxLength = maximum;
-    if (format) {
-      if (((i.format = Ls[format] ?? format), i.format === "")) delete i.format;
-      if (format === "time" || laxFormat) delete i.format;
-    }
-    if (contentEncoding) i.contentEncoding = contentEncoding;
-    if (patterns && patterns.size > 0) {
-      let mapped = [...patterns].map(gi);
-      if (mapped.length === 1) i.pattern = mapped[0].source;
-      else if (mapped.length > 1)
-        i.allOf = [
-          ...mapped.map((_) => ({
-            ...(t.target === "draft-07" || t.target === "draft-04" || t.target === "openapi-3.0"
-              ? { type: "string" }
-              : {}),
-            pattern: _.source,
-          })),
-        ];
-    }
-  },
-  _t = (e, t, r, n) => {
-    let i = r,
-      {
-        minimum: minimum,
-        maximum: maximum,
-        multipleOf: multipleOf,
-        exclusiveMaximum: exclusiveMaximum,
-        exclusiveMinimum: exclusiveMinimum,
-        isInt: isInt,
-      } = P(e);
-    i.type = isInt ? "integer" : "number";
-    let d = typeof exclusiveMinimum === "number" && exclusiveMinimum >= (minimum ?? Number.NEGATIVE_INFINITY),
-      _ = typeof exclusiveMaximum === "number" && exclusiveMaximum <= (maximum ?? Number.POSITIVE_INFINITY),
-      m = t.target === "draft-04" || t.target === "openapi-3.0";
-    if (d)
-      if (m) ((i.minimum = exclusiveMinimum), (i.exclusiveMinimum = !0));
-      else i.exclusiveMinimum = exclusiveMinimum;
-    else if (typeof minimum === "number") i.minimum = minimum;
-    if (_)
-      if (m) ((i.maximum = exclusiveMaximum), (i.exclusiveMaximum = !0));
-      else i.exclusiveMaximum = exclusiveMaximum;
-    else if (typeof maximum === "number") i.maximum = maximum;
-    if (multipleOf) {
-      let h = new Set();
-      for (let v of multipleOf)
-        if (Number.isFinite(v) && v !== 0) h.add(Math.abs(v));
-        else k(e, t, i, n, `A multipleOf divisor of ${v} cannot be represented in JSON Schema`);
-      let [g, ...x] = h;
-      if (g !== void 0) i.multipleOf = g;
-      if (x.length) i.allOf = [...(i.allOf ?? []), ...x.map((v) => ({ multipleOf: v }))];
-    }
-  },
-  gt = (e, t, r, n) => {
-    r.type = "boolean";
-  },
-  xi = (e, t, r, n) => {
-    k(e, t, r, n, "BigInt cannot be represented in JSON Schema");
-  },
-  vi = (e, t, r, n) => {
-    k(e, t, r, n, "Symbols cannot be represented in JSON Schema");
-  },
-  xt = (e, t, r, n) => {
-    if (t.target === "openapi-3.0") ((r.type = "string"), (r.nullable = !0), (r.enum = [null]));
-    else r.type = "null";
-  },
-  vt = (e, t, r, n) => {
-    k(e, t, r, n, "Undefined cannot be represented in JSON Schema");
-  },
-  yi = (e, t, r, n) => {
-    k(e, t, r, n, "Void cannot be represented in JSON Schema");
-  },
-  yt = (e, t, r, n) => {
-    r.not = {};
-  },
-  $t = (e, t, r, n) => {},
-  zt = (e, t, r, n) => {},
-  $i = (e, t, r, n) => {
-    k(e, t, r, n, "Date cannot be represented in JSON Schema");
-  },
-  bt = (e, t, r, n) => {
-    let def = e._zod.def,
-      s = iSr(def.entries);
-    if (s.length === 0) {
-      r.not = {};
-      return;
-    }
-    if (s.every((c) => typeof c === "number")) r.type = "number";
-    if (s.every((c) => typeof c === "string")) r.type = "string";
-    r.enum = s;
-  },
-  Zt = (e, t, r, n) => {
-    let def = e._zod.def;
-    if (def.values.length === 0) {
-      r.not = {};
-      return;
-    }
-    let s = [];
-    for (let c of def.values)
-      if (c === void 0) {
-        if (k(e, t, r, n, "Literal `undefined` cannot be represented in JSON Schema")) return;
-      } else if (typeof c === "bigint") {
-        if (k(e, t, r, n, "BigInt literals cannot be represented in JSON Schema")) return;
-        s.push(Number(c));
-      } else s.push(c);
-    if (s.length === 0);
-    else if (s.length === 1) {
-      let c = s[0];
-      if (((r.type = c === null ? "null" : typeof c), t.target === "draft-04" || t.target === "openapi-3.0"))
-        r.enum = [c];
-      else r.const = c;
-    } else {
-      if (s.every((c) => typeof c === "number")) r.type = "number";
-      if (s.every((c) => typeof c === "string")) r.type = "string";
-      if (s.every((c) => typeof c === "boolean")) r.type = "boolean";
-      if (s.every((c) => c === null)) r.type = "null";
-      r.enum = s;
-    }
-  },
-  zi = (e, t, r, n) => {
-    k(e, t, r, n, "NaN cannot be represented in JSON Schema");
-  },
-  bi = (e, t, r, n) => {
-    let i = r,
-      pattern = e._zod.pattern;
-    if (!pattern) throw Error("Pattern not found in template literal");
-    ((i.type = "string"), (i.pattern = pattern.source));
-  },
-  ki = (e, t, r, n) => {
-    let i = r;
-    ((i.type = "string"), (i.format = "binary"), (i.contentEncoding = "binary"));
-    let { minimum: minimum, maximum: maximum, mime: mime } = P(e);
-    if (minimum !== void 0) i.minLength = minimum;
-    if (maximum !== void 0) i.maxLength = maximum;
-    if (!mime) return;
-    if (mime.length === 0) i.not = {};
-    else if (mime.length === 1) i.contentMediaType = mime[0];
-    else i.anyOf = mime.map((l) => ({ contentMediaType: l }));
-  },
-  Zi = (e, t, r, n) => {
-    r.type = "boolean";
-  },
-  wt = (e, t, r, n) => {
-    k(e, t, r, n, "Custom types cannot be represented in JSON Schema");
-  },
-  wi = (e, t, r, n) => {
-    k(e, t, r, n, "Function types cannot be represented in JSON Schema");
-  },
-  Pt = (e, t, r, n) => {
-    k(e, t, r, n, "Transforms cannot be represented in JSON Schema");
-  },
-  Pi = (e, t, r, n) => {
-    k(e, t, r, n, "Map cannot be represented in JSON Schema");
-  },
-  Si = (e, t, r, n) => {
-    k(e, t, r, n, "Set cannot be represented in JSON Schema");
-  },
-  St = (e, t, r, n) => {
-    let i = r,
-      def = e._zod.def,
-      { minimum: minimum, maximum: maximum } = P(e);
-    if (typeof minimum === "number") i.minItems = minimum;
-    if (typeof maximum === "number") i.maxItems = maximum;
-    ((i.type = "array"), (i.items = vR(def.element, t, { ...n, path: [...n.path, "items"] })));
-  };
+var formatMap = {
+  guid: "uuid",
+  url: "uri",
+  datetime: "date-time",
+  json_string: "json-string",
+  regex: "",
+};
+var exactPatterns = new Map([
+  [base64Charset, base64],
+  [base64urlCharset, base64url],
+]);
+var exactPattern = (p) => exactPatterns.get(p) ?? p;
+var stringProcessor = (schema, ctx, _json, _params) => {
+  let json = _json;
+  json.type = "string";
+  let { minimum, maximum, format, patterns, contentEncoding, laxFormat } = aggregateChecks(schema);
+  if (typeof minimum === "number") json.minLength = minimum;
+  if (typeof maximum === "number") json.maxLength = maximum;
+  if (format) {
+    json.format = formatMap[format] ?? format;
+    if (json.format === "") delete json.format;
+    if (format === "time" || laxFormat) delete json.format;
+  }
+  if (contentEncoding) json.contentEncoding = contentEncoding;
+  if (patterns && patterns.size > 0) {
+    let patternList = [...patterns].map(exactPattern);
+    if (patternList.length === 1) json.pattern = patternList[0].source;
+    else if (patternList.length > 1)
+      json.allOf = [
+        ...patternList.map((regex) => ({
+          ...(ctx.target === "draft-07" || ctx.target === "draft-04" || ctx.target === "openapi-3.0"
+            ? {
+                type: "string",
+              }
+            : {}),
+          pattern: regex.source,
+        })),
+      ];
+  }
+};
+var numberProcessor = (schema, ctx, _json, params) => {
+  let json = _json;
+  let { minimum, maximum, multipleOf, exclusiveMaximum, exclusiveMinimum, isInt } = aggregateChecks(schema);
+  json.type = isInt ? "integer" : "number";
+  let exMin =
+    typeof exclusiveMinimum === "number" && exclusiveMinimum >= (minimum ?? Number.NEGATIVE_INFINITY);
+  let exMax =
+    typeof exclusiveMaximum === "number" && exclusiveMaximum <= (maximum ?? Number.POSITIVE_INFINITY);
+  let legacy = ctx.target === "draft-04" || ctx.target === "openapi-3.0";
+  if (exMin) {
+    if (legacy) {
+      json.minimum = exclusiveMinimum;
+      json.exclusiveMinimum = true;
+    } else json.exclusiveMinimum = exclusiveMinimum;
+  } else if (typeof minimum === "number") json.minimum = minimum;
+  if (exMax) {
+    if (legacy) {
+      json.maximum = exclusiveMaximum;
+      json.exclusiveMaximum = true;
+    } else json.exclusiveMaximum = exclusiveMaximum;
+  } else if (typeof maximum === "number") json.maximum = maximum;
+  if (multipleOf) {
+    let divisors = new Set();
+    for (let divisor of multipleOf)
+      if (Number.isFinite(divisor) && divisor !== 0) divisors.add(Math.abs(divisor));
+      else
+        handleUnrepresentable(
+          schema,
+          ctx,
+          json,
+          params,
+          `A multipleOf divisor of ${divisor} cannot be represented in JSON Schema`,
+        );
+    let [first, ...rest] = divisors;
+    if (first !== undefined) json.multipleOf = first;
+    if (rest.length)
+      json.allOf = [
+        ...(json.allOf ?? []),
+        ...rest.map((m) => ({
+          multipleOf: m,
+        })),
+      ];
+  }
+};
+var booleanProcessor = (_schema, _ctx, json, _params) => {
+  json.type = "boolean";
+};
+var bigintProcessor = (schema, ctx, json, params) => {
+  handleUnrepresentable(schema, ctx, json, params, "BigInt cannot be represented in JSON Schema");
+};
+var symbolProcessor = (schema, ctx, json, params) => {
+  handleUnrepresentable(schema, ctx, json, params, "Symbols cannot be represented in JSON Schema");
+};
+var nullProcessor = (_schema, ctx, json, _params) => {
+  if (ctx.target === "openapi-3.0") {
+    json.type = "string";
+    json.nullable = true;
+    json.enum = [null];
+  } else json.type = "null";
+};
+var undefinedProcessor = (schema, ctx, json, params) => {
+  handleUnrepresentable(schema, ctx, json, params, "Undefined cannot be represented in JSON Schema");
+};
+var voidProcessor = (schema, ctx, json, params) => {
+  handleUnrepresentable(schema, ctx, json, params, "Void cannot be represented in JSON Schema");
+};
+var neverProcessor = (inst, ctx, json, params) => {
+  json.not = {};
+};
+var anyProcessor = (inst, ctx, json, params) => {};
+var unknownProcessor = (inst, ctx, json, params) => {};
+var dateProcessor = (schema, ctx, json, params) => {
+  handleUnrepresentable(schema, ctx, json, params, "Date cannot be represented in JSON Schema");
+};
+var enumProcessor = (schema, _ctx, json, _params) => {
+  let def = schema._zod.def;
+  let values = iSr(def.entries);
+  if (values.length === 0) {
+    json.not = {};
+    return;
+  }
+  if (values.every((v) => typeof v === "number")) json.type = "number";
+  if (values.every((v) => typeof v === "string")) json.type = "string";
+  json.enum = values;
+};
+var literalProcessor = (schema, ctx, json, params) => {
+  let def = schema._zod.def;
+  if (def.values.length === 0) {
+    json.not = {};
+    return;
+  }
+  let vals = [];
+  for (let val of def.values)
+    if (val === undefined) {
+      if (
+        handleUnrepresentable(
+          schema,
+          ctx,
+          json,
+          params,
+          "Literal `undefined` cannot be represented in JSON Schema",
+        )
+      )
+        return;
+    } else if (typeof val === "bigint") {
+      if (
+        handleUnrepresentable(
+          schema,
+          ctx,
+          json,
+          params,
+          "BigInt literals cannot be represented in JSON Schema",
+        )
+      )
+        return;
+      vals.push(Number(val));
+    } else vals.push(val);
+  if (vals.length === 0);
+  else if (vals.length === 1) {
+    let val = vals[0];
+    json.type = val === null ? "null" : typeof val;
+    if (ctx.target === "draft-04" || ctx.target === "openapi-3.0") json.enum = [val];
+    else json.const = val;
+  } else {
+    if (vals.every((v) => typeof v === "number")) json.type = "number";
+    if (vals.every((v) => typeof v === "string")) json.type = "string";
+    if (vals.every((v) => typeof v === "boolean")) json.type = "boolean";
+    if (vals.every((v) => v === null)) json.type = "null";
+    json.enum = vals;
+  }
+};
+var nanProcessor = (schema, ctx, json, params) => {
+  handleUnrepresentable(schema, ctx, json, params, "NaN cannot be represented in JSON Schema");
+};
+var templateLiteralProcessor = (schema, _ctx, json, _params) => {
+  let _json = json;
+  let pattern = schema._zod.pattern;
+  if (!pattern) throw Error("Pattern not found in template literal");
+  _json.type = "string";
+  _json.pattern = pattern.source;
+};
+var fileProcessor = (schema, _ctx, json, _params) => {
+  let _json = json;
+  _json.type = "string";
+  _json.format = "binary";
+  _json.contentEncoding = "binary";
+  let { minimum, maximum, mime } = aggregateChecks(schema);
+  if (minimum !== undefined) _json.minLength = minimum;
+  if (maximum !== undefined) _json.maxLength = maximum;
+  if (!mime) return;
+  if (mime.length === 0) _json.not = {};
+  else if (mime.length === 1) _json.contentMediaType = mime[0];
+  else
+    _json.anyOf = mime.map((m) => ({
+      contentMediaType: m,
+    }));
+};
+var successProcessor = (_schema, _ctx, json, _params) => {
+  json.type = "boolean";
+};
+var customProcessor = (schema, ctx, json, params) => {
+  handleUnrepresentable(schema, ctx, json, params, "Custom types cannot be represented in JSON Schema");
+};
+var functionProcessor = (schema, ctx, json, params) => {
+  handleUnrepresentable(schema, ctx, json, params, "Function types cannot be represented in JSON Schema");
+};
+var transformProcessor = (schema, ctx, json, params) => {
+  handleUnrepresentable(schema, ctx, json, params, "Transforms cannot be represented in JSON Schema");
+};
+var mapProcessor = (schema, ctx, json, params) => {
+  handleUnrepresentable(schema, ctx, json, params, "Map cannot be represented in JSON Schema");
+};
+var setProcessor = (schema, ctx, json, params) => {
+  handleUnrepresentable(schema, ctx, json, params, "Set cannot be represented in JSON Schema");
+};
+var arrayProcessor = (schema, ctx, _json, params) => {
+  let json = _json;
+  let def = schema._zod.def;
+  let { minimum, maximum } = aggregateChecks(schema);
+  if (typeof minimum === "number") json.minItems = minimum;
+  if (typeof maximum === "number") json.maxItems = maximum;
+  json.type = "array";
+  json.items = processSchema(def.element, ctx, {
+    ...params,
+    path: [...params.path, "items"],
+  });
+};
 //@ chunk-7vp249v4.js:71734-71901 esm-fingerprint
-function L(e) {
-  let def = e._zod.def;
-  if (def.type === "pipe" && def.in._zod.traits.has("$ZodTransform")) return L(def.out);
-  if (def.type === "catch") return L(def.innerType);
-  return e._zod.optin;
+function inputOptin(schema) {
+  let def = schema._zod.def;
+  if (def.type === "pipe" && def.in._zod.traits.has("$ZodTransform")) return inputOptin(def.out);
+  if (def.type === "catch") return inputOptin(def.innerType);
+  return schema._zod.optin;
 }
 //@ chunk-7vp249v4.js:71901-74555 esm-fingerprint
-var It = (e, t, r, n) => {
-    let i = r,
-      def = e._zod.def,
-      shape = def.shape;
-    if (
-      Object.getOwnPropertySymbols(shape).length &&
-      k(e, t, i, n, "Symbol keys cannot be represented in JSON Schema")
-    )
-      return;
-    ((i.type = "object"), (i.properties = {}));
-    for (let key in shape)
-      She(i.properties, key, vR(shape[key], t, { ...n, path: [...n.path, "properties", key] }));
-    let l = new Set(Object.keys(shape)),
-      p = new Set(
-        [...l].filter((f) => {
-          let d = def.shape[f];
-          if (t.io === "input") return L(d) === void 0;
-          else return d._zod.optout === void 0;
-        }),
-      );
-    if (p.size > 0) i.required = Array.from(p);
-    if (def.catchall?._zod.def.type === "never") i.additionalProperties = !1;
-    else if (!def.catchall) {
-      if (t.io === "output") i.additionalProperties = !1;
-    } else if (def.catchall)
-      i.additionalProperties = vR(def.catchall, t, { ...n, path: [...n.path, "additionalProperties"] });
-  },
-  Ms = (e, t, r, n) => {
-    let i = r,
-      def = e._zod.def;
-    if (
-      Object.getOwnPropertySymbols(def.shape).length &&
-      k(e, t, i, n, "Symbol keys cannot be represented in JSON Schema")
-    )
-      return;
-    if (t.io === "output") {
-      for (let key in def.shape)
-        if (
-          w(def.shape[key]) &&
-          k(
-            e,
-            t,
-            i,
-            n,
-            `z.properties() returns its input, so the output of a transforming schema at key "${key}" cannot be represented in JSON Schema`,
-          )
-        )
-          return;
-    }
-    ((i.type = "object"), (i.properties = {}));
+var objectProcessor = (schema, ctx, _json, params) => {
+  let json = _json;
+  let def = schema._zod.def;
+  let shape = def.shape;
+  if (
+    Object.getOwnPropertySymbols(shape).length &&
+    handleUnrepresentable(schema, ctx, json, params, "Symbol keys cannot be represented in JSON Schema")
+  )
+    return;
+  json.type = "object";
+  json.properties = {};
+  for (let key in shape)
+    assignProp(
+      json.properties,
+      key,
+      processSchema(shape[key], ctx, {
+        ...params,
+        path: [...params.path, "properties", key],
+      }),
+    );
+  let allKeys = new Set(Object.keys(shape));
+  let requiredKeys = new Set(
+    [...allKeys].filter((key) => {
+      let field = def.shape[key];
+      if (ctx.io === "input") return inputOptin(field) === undefined;
+      else return field._zod.optout === undefined;
+    }),
+  );
+  if (requiredKeys.size > 0) json.required = Array.from(requiredKeys);
+  if (def.catchall?._zod.def.type === "never") json.additionalProperties = false;
+  else if (!def.catchall) {
+    if (ctx.io === "output") json.additionalProperties = false;
+  } else if (def.catchall)
+    json.additionalProperties = processSchema(def.catchall, ctx, {
+      ...params,
+      path: [...params.path, "additionalProperties"],
+    });
+};
+var propertiesProcessor = (schema, ctx, _json, params) => {
+  let json = _json;
+  let def = schema._zod.def;
+  if (
+    Object.getOwnPropertySymbols(def.shape).length &&
+    handleUnrepresentable(schema, ctx, json, params, "Symbol keys cannot be represented in JSON Schema")
+  )
+    return;
+  if (ctx.io === "output") {
     for (let key in def.shape)
-      She(i.properties, key, vR(def.shape[key], t, { ...n, path: [...n.path, "properties", key] }));
-    let filtered = Object.keys(def.shape).filter((a) => L(def.shape[a]) === void 0);
-    if (filtered.length > 0) i.required = filtered;
-  },
-  Ot = (e, t, r, n) => {
-    let def = e._zod.def,
-      s = def.inclusive === !1,
-      mapped = def.options.map((option, l) =>
-        vR(option, t, { ...n, path: [...n.path, s ? "oneOf" : "anyOf", l] }),
-      );
-    if (s) r.oneOf = mapped;
-    else r.anyOf = mapped;
-  },
-  At = (e, t, r, n) => {
-    let def = e._zod.def,
-      s = vR(def.left, t, { ...n, path: [...n.path, "allOf", 0] }),
-      c = vR(def.right, t, { ...n, path: [...n.path, "allOf", 1] }),
-      a = (p) => "allOf" in p && Object.keys(p).length === 1,
-      l = [...(a(s) ? s.allOf : [s]), ...(a(c) ? c.allOf : [c])];
-    ((r.allOf = l), t.intersections.push(l));
-  },
-  Et = (e, t, r, n) => {
-    let i = r,
-      def = e._zod.def;
-    i.type = "array";
-    let c = t.target === "draft-2020-12" ? "prefixItems" : "items",
-      a = t.target === "draft-2020-12" ? "items" : t.target === "openapi-3.0" ? "items" : "additionalItems",
-      mapped = def.items.map((item, x) => vR(item, t, { ...n, path: [...n.path, c, x] })),
-      p = def.rest
-        ? vR(def.rest, t, {
-            ...n,
-            path: [...n.path, a, ...(t.target === "openapi-3.0" ? [def.items.length] : [])],
-          })
-        : null,
-      f = def.items.length;
-    while (f > 0) {
-      let g = def.items[f - 1];
-      if (!(t.io === "input" ? L(g) !== void 0 : g._zod.optout === "optional")) break;
-      f--;
-    }
-    let d = def.items.length,
-      _ = !def.rest;
-    if (t.target === "draft-2020-12") {
-      if (((i.prefixItems = mapped), _)) i.items = !1;
-      else if (p) i.items = p;
-      if (f > 0) i.minItems = f;
-      if (_) i.maxItems = d;
-    } else if (t.target === "openapi-3.0") {
-      if (((i.items = { anyOf: mapped }), p)) i.items.anyOf.push(p);
-      if (f > 0) i.minItems = f;
-      if (_) i.maxItems = d;
-    } else {
-      if (((i.items = mapped), _)) i.additionalItems = !1;
-      else if (p) i.additionalItems = p;
-      if (f > 0) i.minItems = f;
-      if (_) i.maxItems = d;
-    }
-    let { minimum: minimum, maximum: maximum } = P(e);
-    if (typeof minimum === "number") i.minItems = minimum;
-    if (typeof maximum === "number") i.maxItems = maximum;
-  };
+      if (
+        isTransforming(def.shape[key]) &&
+        handleUnrepresentable(
+          schema,
+          ctx,
+          json,
+          params,
+          `z.properties() returns its input, so the output of a transforming schema at key "${key}" cannot be represented in JSON Schema`,
+        )
+      )
+        return;
+  }
+  json.type = "object";
+  json.properties = {};
+  for (let key in def.shape)
+    assignProp(
+      json.properties,
+      key,
+      processSchema(def.shape[key], ctx, {
+        ...params,
+        path: [...params.path, "properties", key],
+      }),
+    );
+  let required = Object.keys(def.shape).filter((key) => inputOptin(def.shape[key]) === undefined);
+  if (required.length > 0) json.required = required;
+};
+var unionProcessor = (schema, ctx, json, params) => {
+  let def = schema._zod.def;
+  let isExclusive = def.inclusive === false;
+  let options = def.options.map((x, i) =>
+    processSchema(x, ctx, {
+      ...params,
+      path: [...params.path, isExclusive ? "oneOf" : "anyOf", i],
+    }),
+  );
+  if (isExclusive) json.oneOf = options;
+  else json.anyOf = options;
+};
+var intersectionProcessor = (schema, ctx, json, params) => {
+  let def = schema._zod.def;
+  let a_2 = processSchema(def.left, ctx, {
+    ...params,
+    path: [...params.path, "allOf", 0],
+  });
+  let b = processSchema(def.right, ctx, {
+    ...params,
+    path: [...params.path, "allOf", 1],
+  });
+  let isSimpleIntersection = (val) => "allOf" in val && Object.keys(val).length === 1;
+  let allOf = [
+    ...(isSimpleIntersection(a_2) ? a_2.allOf : [a_2]),
+    ...(isSimpleIntersection(b) ? b.allOf : [b]),
+  ];
+  json.allOf = allOf;
+  ctx.intersections.push(allOf);
+};
+var tupleProcessor = (schema, ctx, _json, params) => {
+  let json = _json;
+  let def = schema._zod.def;
+  json.type = "array";
+  let prefixPath = ctx.target === "draft-2020-12" ? "prefixItems" : "items";
+  let restPath =
+    ctx.target === "draft-2020-12" ? "items" : ctx.target === "openapi-3.0" ? "items" : "additionalItems";
+  let prefixItems = def.items.map((x_2, i) =>
+    processSchema(x_2, ctx, {
+      ...params,
+      path: [...params.path, prefixPath, i],
+    }),
+  );
+  let rest = def.rest
+    ? processSchema(def.rest, ctx, {
+        ...params,
+        path: [...params.path, restPath, ...(ctx.target === "openapi-3.0" ? [def.items.length] : [])],
+      })
+    : null;
+  let minItems = def.items.length;
+  while (minItems > 0) {
+    let item = def.items[minItems - 1];
+    if (!(ctx.io === "input" ? inputOptin(item) !== undefined : item._zod.optout === "optional")) break;
+    minItems--;
+  }
+  let maxItems = def.items.length;
+  let isClosed = !def.rest;
+  if (ctx.target === "draft-2020-12") {
+    json.prefixItems = prefixItems;
+    if (isClosed) json.items = false;
+    else if (rest) json.items = rest;
+    if (minItems > 0) json.minItems = minItems;
+    if (isClosed) json.maxItems = maxItems;
+  } else if (ctx.target === "openapi-3.0") {
+    json.items = {
+      anyOf: prefixItems,
+    };
+    if (rest) json.items.anyOf.push(rest);
+    if (minItems > 0) json.minItems = minItems;
+    if (isClosed) json.maxItems = maxItems;
+  } else {
+    json.items = prefixItems;
+    if (isClosed) json.additionalItems = false;
+    else if (rest) json.additionalItems = rest;
+    if (minItems > 0) json.minItems = minItems;
+    if (isClosed) json.maxItems = maxItems;
+  }
+  let { minimum, maximum } = aggregateChecks(schema);
+  if (typeof minimum === "number") json.minItems = minimum;
+  if (typeof maximum === "number") json.maxItems = maximum;
+};
 //@ chunk-7vp249v4.js:74555-75344 esm-fingerprint
-function dt(e, t, r) {
-  if (t.$ref) {
-    if (r.has(t)) return t;
-    r.add(t);
-    let h = e.get(t)?.def;
-    if (!h) return t;
-    let g = dt(e, h, r);
-    return g === h ? t : g;
+function stringifyKeyNames(bySchema, json, visited) {
+  if (json.$ref) {
+    if (visited.has(json)) return json;
+    visited.add(json);
+    let def = bySchema.get(json)?.def;
+    if (!def) return json;
+    let inlined = stringifyKeyNames(bySchema, def, visited);
+    return inlined === def ? json : inlined;
   }
-  for (let h of ["anyOf", "oneOf"]) {
-    let g = t[h];
-    if (!Array.isArray(g)) continue;
-    let mapped = g.map((v) => dt(e, v, r));
-    if (mapped.some((v, I) => v !== g[I])) t = { ...t, [h]: mapped };
+  for (let keyword of ["anyOf", "oneOf"]) {
+    let branches = json[keyword];
+    if (!Array.isArray(branches)) continue;
+    let mapped = branches.map((branch) => stringifyKeyNames(bySchema, branch, visited));
+    if (mapped.some((branch, i) => branch !== branches[i]))
+      json = {
+        ...json,
+        [keyword]: mapped,
+      };
   }
-  let n = Array.isArray(t.type) ? t.type : [t.type],
-    i = !n.includes("string") && n.some((h) => h === "number" || h === "integer"),
-    s = t.enum ?? (t.const !== void 0 ? [t.const] : void 0);
-  if (!i && !s?.some((h) => typeof h === "number")) return t;
-  let {
-    minimum: minimum,
-    maximum: maximum,
-    exclusiveMinimum: exclusiveMinimum,
-    exclusiveMaximum: exclusiveMaximum,
-    multipleOf: multipleOf,
-    format: format,
-    id: id,
-    ...m
-  } = t;
-  if (m.enum) m.enum = m.enum.map((h) => (typeof h === "number" ? String(h) : h));
-  else if (typeof m.const === "number") m.const = String(m.const);
-  if (!i) return m;
-  if (((m.type = "string"), !s)) m.pattern = (n.includes("number") ? V : Te).source;
-  return m;
+  let types = Array.isArray(json.type) ? json.type : [json.type];
+  let numericType = !types.includes("string") && types.some((t) => t === "number" || t === "integer");
+  let values = json.enum ?? (json.const !== undefined ? [json.const] : undefined);
+  if (!numericType && !values?.some((v) => typeof v === "number")) return json;
+  let { minimum, maximum, exclusiveMinimum, exclusiveMaximum, multipleOf, format, id, ...rest } = json;
+  if (rest.enum) rest.enum = rest.enum.map((v) => (typeof v === "number" ? String(v) : v));
+  else if (typeof rest.const === "number") rest.const = String(rest.const);
+  if (!numericType) return rest;
+  rest.type = "string";
+  if (!values) rest.pattern = (types.includes("number") ? number : integer).source;
+  return rest;
 }
 //@ chunk-7vp249v4.js:75344-75363 esm-layout
-var weakMap_2 = new WeakMap();
+var pendingRecords = new WeakMap();
 //@ chunk-7vp249v4.js:75363-75773 esm-fingerprint
-function Us(e) {
-  let t = new Map();
-  for (let n of e.seen.values()) if (n.def && !t.has(n.schema)) t.set(n.schema, n);
-  let r = new Map();
-  for (let n of weakMap_2.get(e) ?? []) {
-    let i = e.seen.get(n),
-      s = (i?.def ?? i?.schema)?.propertyNames;
-    if (!s || s === !0 || r.has(s)) continue;
-    let c = dt(t, s, new Set());
-    if (c !== s) r.set(s, c);
+function rewriteKeyNames(ctx) {
+  let bySchema = new Map();
+  for (let entry of ctx.seen.values())
+    if (entry.def && !bySchema.has(entry.schema)) bySchema.set(entry.schema, entry);
+  let rewrites = new Map();
+  for (let record of pendingRecords.get(ctx) ?? []) {
+    let seen = ctx.seen.get(record);
+    let names = (seen?.def ?? seen?.schema)?.propertyNames;
+    if (!names || names === true || rewrites.has(names)) continue;
+    let rewritten = stringifyKeyNames(bySchema, names, new Set());
+    if (rewritten !== names) rewrites.set(names, rewritten);
   }
-  if (!r.size) return;
-  for (let n of e.seen.values())
-    for (let i of [n.schema, n.def]) {
-      let s = i && r.get(i.propertyNames);
-      if (s) i.propertyNames = s;
+  if (!rewrites.size) return;
+  for (let entry of ctx.seen.values())
+    for (let carrier of [entry.schema, entry.def]) {
+      let rewritten = carrier && rewrites.get(carrier.propertyNames);
+      if (rewritten) carrier.propertyNames = rewritten;
     }
 }
 //@ chunk-7vp249v4.js:75773-76797 esm-fingerprint
-var Tt = (e, t, r, n) => {
-    let i = r,
-      def = e._zod.def;
-    i.type = "object";
-    let keyType = def.keyType,
-      patterns = P(keyType).patterns;
-    if (def.mode === "loose" && patterns && patterns.size > 0) {
-      let f = vR(def.valueType, t, { ...n, path: [...n.path, "patternProperties", "*"] });
-      i.patternProperties = {};
-      for (let d of patterns) She(i.patternProperties, gi(d).source, f);
-    } else {
-      if (t.target === "draft-07" || t.target === "draft-2020-12") {
-        i.propertyNames = vR(def.keyType, t, { ...n, path: [...n.path, "propertyNames"] });
-        let f = weakMap_2.get(t);
-        if (!f) ((f = []), weakMap_2.set(t, f), t.deferred.push(() => Us(t)));
-        f.push(e);
-      }
-      i.additionalProperties = vR(def.valueType, t, { ...n, path: [...n.path, "additionalProperties"] });
-    }
-    let values = keyType._zod.values,
-      p = t.io === "input" && L(def.valueType) !== void 0;
-    if (values && !def.partial && !p) {
-      let filtered = [...values].filter((d) => typeof d === "string" || typeof d === "number");
-      if (filtered.length > 0) i.required = filtered.map(String);
-    }
-  },
-  Nt = (e, t, r, n) => {
-    let def = e._zod.def,
-      s = vR(def.innerType, t, n),
-      c = t.seen.get(e);
-    if (t.target === "openapi-3.0") ((c.ref = def.innerType), (r.nullable = !0));
-    else r.anyOf = [s, { type: "null" }];
-  },
-  Ct = (e, t, r, n) => {
-    let def = e._zod.def;
-    vR(def.innerType, t, n);
-    let s = t.seen.get(e);
-    s.ref = def.innerType;
-  },
-  Rt = Symbol();
-//@ chunk-7vp249v4.js:76797-77010 esm-fingerprint
-function Ii(e, t, r, n, i) {
-  let s = !1,
-    json = JSON.stringify(e, (a, l) => {
-      if (typeof l !== "bigint") return l;
-      return ((s = !0), null);
+var recordProcessor = (schema, ctx, _json, params) => {
+  let json = _json;
+  let def = schema._zod.def;
+  json.type = "object";
+  let keyType = def.keyType;
+  let patterns = aggregateChecks(keyType).patterns;
+  if (def.mode === "loose" && patterns && patterns.size > 0) {
+    let valueSchema = processSchema(def.valueType, ctx, {
+      ...params,
+      path: [...params.path, "patternProperties", "*"],
     });
-  if (!s) return JSON.parse(json);
-  return (k(t, r, n, i, "BigInt defaults cannot be represented in JSON Schema"), Rt);
+    json.patternProperties = {};
+    for (let pattern of patterns)
+      assignProp(json.patternProperties, exactPattern(pattern).source, valueSchema);
+  } else {
+    if (ctx.target === "draft-07" || ctx.target === "draft-2020-12") {
+      json.propertyNames = processSchema(def.keyType, ctx, {
+        ...params,
+        path: [...params.path, "propertyNames"],
+      });
+      let pending = pendingRecords.get(ctx);
+      if (!pending) {
+        pending = [];
+        pendingRecords.set(ctx, pending);
+        ctx.deferred.push(() => rewriteKeyNames(ctx));
+      }
+      pending.push(schema);
+    }
+    json.additionalProperties = processSchema(def.valueType, ctx, {
+      ...params,
+      path: [...params.path, "additionalProperties"],
+    });
+  }
+  let keyValues = keyType._zod.values;
+  let omittableOnInput = ctx.io === "input" && inputOptin(def.valueType) !== undefined;
+  if (keyValues && !def.partial && !omittableOnInput) {
+    let validKeyValues = [...keyValues].filter((v) => typeof v === "string" || typeof v === "number");
+    if (validKeyValues.length > 0) json.required = validKeyValues.map(String);
+  }
+};
+var nullableProcessor = (schema, ctx, json, params) => {
+  let def = schema._zod.def;
+  let inner = processSchema(def.innerType, ctx, params);
+  let seen = ctx.seen.get(schema);
+  if (ctx.target === "openapi-3.0") {
+    seen.ref = def.innerType;
+    json.nullable = true;
+  } else
+    json.anyOf = [
+      inner,
+      {
+        type: "null",
+      },
+    ];
+};
+var nonoptionalProcessor = (schema, ctx, _json, params) => {
+  let def = schema._zod.def;
+  processSchema(def.innerType, ctx, params);
+  let seen = ctx.seen.get(schema);
+  seen.ref = def.innerType;
+};
+var UNREPRESENTABLE_DEFAULT = Symbol();
+//@ chunk-7vp249v4.js:76797-77010 esm-fingerprint
+function serializeDefaultValue(value, schema, ctx, json, params) {
+  let unrepresentable = false;
+  let serialized = JSON.stringify(value, (_, val) => {
+    if (typeof val !== "bigint") return val;
+    unrepresentable = true;
+    return null;
+  });
+  if (!unrepresentable) return JSON.parse(serialized);
+  handleUnrepresentable(schema, ctx, json, params, "BigInt defaults cannot be represented in JSON Schema");
+  return UNREPRESENTABLE_DEFAULT;
 }
 //@ chunk-7vp249v4.js:77010-78481 esm-fingerprint
-var Dt = (e, t, r, n) => {
-    let def = e._zod.def;
-    vR(def.innerType, t, n);
-    let s = t.seen.get(e);
-    s.ref = def.innerType;
-    let c = Ii(def.defaultValue, e, t, r, n);
-    if (c !== Rt) r.default = c;
-  },
-  jt = (e, t, r, n) => {
-    let def = e._zod.def;
-    vR(def.innerType, t, n);
-    let s = t.seen.get(e);
-    if (((s.ref = def.innerType), t.io !== "input")) return;
-    let c = Ii(def.defaultValue, e, t, r, n);
-    if (c !== Rt) r._prefault = c;
-  },
-  Lt = (e, t, r, n) => {
-    let def = e._zod.def;
-    vR(def.innerType, t, n);
-    let s = t.seen.get(e);
-    s.ref = def.innerType;
-    let c;
-    try {
-      c = def.catchValue(void 0);
-    } catch {
-      k(e, t, r, n, "Dynamic catch values are not supported in JSON Schema");
-      return;
-    }
-    r.default = c;
-  },
-  Ft = (e, t, r, n) => {
-    let def = e._zod.def,
-      s = def.in._zod.traits.has("$ZodTransform"),
-      c = t.io === "input" ? (s ? def.out : def.in) : def.out;
-    vR(c, t, n);
-    let a = t.seen.get(e);
-    a.ref = c;
-  },
-  Mt = (e, t, r, n) => {
-    let def = e._zod.def;
-    vR(def.innerType, t, n);
-    let s = t.seen.get(e);
-    ((s.ref = def.innerType), (r.readOnly = !0));
-  },
-  Oi = (e, t, r, n) => {
-    let def = e._zod.def;
-    vR(def.innerType, t, n);
-    let s = t.seen.get(e);
-    s.ref = def.innerType;
-  },
-  ke = (e, t, r, n) => {
-    let def = e._zod.def;
-    vR(def.innerType, t, n);
-    let s = t.seen.get(e);
-    s.ref = def.innerType;
-  },
-  Ut = (e, t, r, n) => {
-    let innerType = e._zod.innerType;
-    vR(innerType, t, n);
-    let s = t.seen.get(e);
-    s.ref = innerType;
-  },
-  fi = {
-    string: ht,
-    number: _t,
-    boolean: gt,
-    bigint: xi,
-    symbol: vi,
-    null: xt,
-    undefined: vt,
-    void: yi,
-    never: yt,
-    any: $t,
-    unknown: zt,
-    date: $i,
-    enum: bt,
-    literal: Zt,
-    nan: zi,
-    template_literal: bi,
-    file: ki,
-    success: Zi,
-    custom: wt,
-    properties: Ms,
-    function: wi,
-    transform: Pt,
-    map: Pi,
-    set: Si,
-    array: St,
-    object: It,
-    union: Ot,
-    intersection: At,
-    tuple: Et,
-    record: Tt,
-    nullable: Nt,
-    nonoptional: Ct,
-    default: Dt,
-    prefault: jt,
-    catch: Lt,
-    pipe: Ft,
-    readonly: Mt,
-    promise: Oi,
-    optional: ke,
-    lazy: Ut,
-  };
-//@ chunk-7vp249v4.js:78481-78914 esm-fingerprint
-function nut(e, t) {
-  if ("_idmap" in e) {
-    let n = e,
-      i = ee({ ...t, processors: fi }),
-      s = {};
-    for (let l of n._idmap.entries()) {
-      let [p, f] = l;
-      vR(f, i);
-    }
-    let c = {},
-      a = { registry: n, uri: t?.uri, defs: s };
-    i.external = a;
-    for (let l of n._idmap.entries()) {
-      let [p, f] = l;
-      (te(i, f), She(c, p, re(i, f)));
-    }
-    if (Object.keys(s).length > 0) {
-      let l = i.target === "draft-2020-12" ? "$defs" : "definitions";
-      c.__shared = { [l]: s };
-    }
-    return { schemas: c };
+var defaultProcessor = (schema, ctx, json, params) => {
+  let def = schema._zod.def;
+  processSchema(def.innerType, ctx, params);
+  let seen = ctx.seen.get(schema);
+  seen.ref = def.innerType;
+  let value = serializeDefaultValue(def.defaultValue, schema, ctx, json, params);
+  if (value !== UNREPRESENTABLE_DEFAULT) json.default = value;
+};
+var prefaultProcessor = (schema, ctx, json, params) => {
+  let def = schema._zod.def;
+  processSchema(def.innerType, ctx, params);
+  let seen = ctx.seen.get(schema);
+  seen.ref = def.innerType;
+  if (ctx.io !== "input") return;
+  let value = serializeDefaultValue(def.defaultValue, schema, ctx, json, params);
+  if (value !== UNREPRESENTABLE_DEFAULT) json._prefault = value;
+};
+var catchProcessor = (schema, ctx, json, params) => {
+  let def = schema._zod.def;
+  processSchema(def.innerType, ctx, params);
+  let seen = ctx.seen.get(schema);
+  seen.ref = def.innerType;
+  let catchValue;
+  try {
+    catchValue = def.catchValue(undefined);
+  } catch {
+    handleUnrepresentable(schema, ctx, json, params, "Dynamic catch values are not supported in JSON Schema");
+    return;
   }
-  let r = ee({ ...t, processors: fi });
-  return (vR(e, r), te(r, e), re(r, e));
+  json.default = catchValue;
+};
+var pipeProcessor = (schema, ctx, _json, params) => {
+  let def = schema._zod.def;
+  let inIsTransform = def.in._zod.traits.has("$ZodTransform");
+  let innerType = ctx.io === "input" ? (inIsTransform ? def.out : def.in) : def.out;
+  processSchema(innerType, ctx, params);
+  let seen = ctx.seen.get(schema);
+  seen.ref = innerType;
+};
+var readonlyProcessor = (schema, ctx, json, params) => {
+  let def = schema._zod.def;
+  processSchema(def.innerType, ctx, params);
+  let seen = ctx.seen.get(schema);
+  seen.ref = def.innerType;
+  json.readOnly = true;
+};
+var promiseProcessor = (schema, ctx, _json, params) => {
+  let def = schema._zod.def;
+  processSchema(def.innerType, ctx, params);
+  let seen = ctx.seen.get(schema);
+  seen.ref = def.innerType;
+};
+var optionalProcessor = (schema, ctx, _json, params) => {
+  let def = schema._zod.def;
+  processSchema(def.innerType, ctx, params);
+  let seen = ctx.seen.get(schema);
+  seen.ref = def.innerType;
+};
+var lazyProcessor = (schema, ctx, _json, params) => {
+  let innerType = schema._zod.innerType;
+  processSchema(innerType, ctx, params);
+  let seen = ctx.seen.get(schema);
+  seen.ref = innerType;
+};
+var allProcessors = {
+  string: stringProcessor,
+  number: numberProcessor,
+  boolean: booleanProcessor,
+  bigint: bigintProcessor,
+  symbol: symbolProcessor,
+  null: nullProcessor,
+  undefined: undefinedProcessor,
+  void: voidProcessor,
+  never: neverProcessor,
+  any: anyProcessor,
+  unknown: unknownProcessor,
+  date: dateProcessor,
+  enum: enumProcessor,
+  literal: literalProcessor,
+  nan: nanProcessor,
+  template_literal: templateLiteralProcessor,
+  file: fileProcessor,
+  success: successProcessor,
+  custom: customProcessor,
+  properties: propertiesProcessor,
+  function: functionProcessor,
+  transform: transformProcessor,
+  map: mapProcessor,
+  set: setProcessor,
+  array: arrayProcessor,
+  object: objectProcessor,
+  union: unionProcessor,
+  intersection: intersectionProcessor,
+  tuple: tupleProcessor,
+  record: recordProcessor,
+  nullable: nullableProcessor,
+  nonoptional: nonoptionalProcessor,
+  default: defaultProcessor,
+  prefault: prefaultProcessor,
+  catch: catchProcessor,
+  pipe: pipeProcessor,
+  readonly: readonlyProcessor,
+  promise: promiseProcessor,
+  optional: optionalProcessor,
+  lazy: lazyProcessor,
+};
+//@ chunk-7vp249v4.js:78481-78914 esm-fingerprint
+function toJSONSchema(input, params) {
+  if ("_idmap" in input) {
+    let registry = input;
+    let ctx = initializeContext({
+      ...params,
+      processors: allProcessors,
+    });
+    let defs = {};
+    for (let entry of registry._idmap.entries()) {
+      let [_, schema] = entry;
+      processSchema(schema, ctx);
+    }
+    let schemas = {};
+    let external = {
+      registry,
+      uri: params?.uri,
+      defs,
+    };
+    ctx.external = external;
+    for (let entry of registry._idmap.entries()) {
+      let [key, schema] = entry;
+      extractDefs(ctx, schema);
+      assignProp(schemas, key, finalize(ctx, schema));
+    }
+    if (Object.keys(defs).length > 0) {
+      let defsSegment = ctx.target === "draft-2020-12" ? "$defs" : "definitions";
+      schemas.__shared = {
+        [defsSegment]: defs,
+      };
+    }
+    return {
+      schemas,
+    };
+  }
+  let ctx = initializeContext({
+    ...params,
+    processors: allProcessors,
+  });
+  processSchema(input, ctx);
+  extractDefs(ctx, input);
+  return finalize(ctx, input);
 }
 //@ chunk-dcmhvw5a.js:431253-431399 esm-fingerprint
-var Kp = new Set(["starts_with", "ends_with", "includes"]),
-  Aw = { guid: "uuid", url: "uri", datetime: "date-time", json_string: "json-string", regex: "", time: "" };
-
+var Kp = new Set(["starts_with", "ends_with", "includes"]);
+var Aw = {
+  guid: "uuid",
+  url: "uri",
+  datetime: "date-time",
+  json_string: "json-string",
+  regex: "",
+  time: "",
+};
 export {
   Kp,
   Aw,
-  ht,
-  P,
-  _t,
-  gt,
-  vt,
-  xt,
-  $t,
-  zt,
-  yt,
-  St,
-  It,
-  Ot,
-  At,
-  Et,
-  Tt,
-  bt,
-  Zt,
-  Pt,
-  ke,
-  Nt,
-  Dt,
-  jt,
-  Ct,
-  Lt,
-  Ft,
-  Mt,
-  Ut,
-  wt,
-  nut,
+  stringProcessor,
+  aggregateChecks,
+  numberProcessor,
+  booleanProcessor,
+  undefinedProcessor,
+  nullProcessor,
+  anyProcessor,
+  unknownProcessor,
+  neverProcessor,
+  arrayProcessor,
+  objectProcessor,
+  unionProcessor,
+  intersectionProcessor,
+  tupleProcessor,
+  recordProcessor,
+  enumProcessor,
+  literalProcessor,
+  transformProcessor,
+  optionalProcessor,
+  nullableProcessor,
+  defaultProcessor,
+  prefaultProcessor,
+  nonoptionalProcessor,
+  catchProcessor,
+  pipeProcessor,
+  readonlyProcessor,
+  lazyProcessor,
+  customProcessor,
+  toJSONSchema,
 };

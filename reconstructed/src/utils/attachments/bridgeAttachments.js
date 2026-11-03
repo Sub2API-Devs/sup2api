@@ -13,30 +13,33 @@ import { logFeatureSad, logFeatureBad } from "../../services/analytics/featureTe
 import { logError } from "../log.js";
 
 //@ chunk-e6aww6q8.js:3291241-3291314 placement = _temp (1)
-function Nzr(c) {
+/**
+ * 统计内容里的图片块数量（字符串视为 0）。
+ */
+function countImageParts(c) {
   return typeof c === "string" ? 0 : count(c, (n) => n?.type === "image");
 }
+//@ chunk-e6aww6q8.js:3291314-3291455 placement
 /**
  * 只有在 bridge 目标未变时保留附件的文件 id，否则记录并丢弃。
  */
-//@ chunk-e6aww6q8.js:3291314-3291455 placement
 function keepBridgeFileIds(e, n, r) {
   if (!e?.length) return;
-  if (r === void 0 || Nzr(r) !== Nzr(n)) {
+  if (r === undefined || countImageParts(r) !== countImageParts(n)) {
     logFeatureSad("bridge_attachment_withdraw", "file_ids_not_kept");
     return;
   }
   return e;
 }
 //@ chunk-e6aww6q8.js:3291455-3291976 placement
-function withdrawBridgeAttachments(e, n, r, s, h) {
+function withdrawBridgeAttachments(e, turnId, r, imageFileUuids, savedFiles) {
   try {
-    let found = e.find((w) => w.uuid === n);
-    if (found?.type === "user" && h?.length) found.savedFiles = h;
-    else if (h?.length) logFeatureSad("bridge_attachment_withdraw", "saved_files_not_kept");
-    if (!s?.length) return;
-    let S = keepBridgeFileIds(s, r, found?.type === "user" ? found.message.content : void 0);
-    if (S === void 0 || found?.type !== "user") return;
+    let found = e.find((w) => w.uuid === turnId);
+    if (found?.type === "user" && savedFiles?.length) found.savedFiles = savedFiles;
+    else if (savedFiles?.length) logFeatureSad("bridge_attachment_withdraw", "saved_files_not_kept");
+    if (!imageFileUuids?.length) return;
+    let S = keepBridgeFileIds(imageFileUuids, r, found?.type === "user" ? found.message.content : undefined);
+    if (S === undefined || found?.type !== "user") return;
     found.imageFileUuids = S;
     for (let w of e)
       if (
@@ -46,8 +49,8 @@ function withdrawBridgeAttachments(e, n, r, s, h) {
       )
         w.attachment.fileUuids = S;
   } catch (error) {
-    (logError(error), logFeatureBad("bridge_attachment_withdraw", "stamp_failed"));
+    logError(error);
+    logFeatureBad("bridge_attachment_withdraw", "stamp_failed");
   }
 }
-
-export { withdrawBridgeAttachments, keepBridgeFileIds, Nzr };
+export { withdrawBridgeAttachments, keepBridgeFileIds, countImageParts };

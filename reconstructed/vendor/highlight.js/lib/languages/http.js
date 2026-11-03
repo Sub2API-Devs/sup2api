@@ -8,21 +8,38 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:193632-194529 cjs-fingerprint
-var $a = x(function (CE, Ha) {
-  function Id(e) {
-    let regex = e.regex,
-      n = "HTTP/([32]|1\\.[01])",
-      a = /[A-Za-z][A-Za-z0-9-]*/,
-      s = {
-        className: "attribute",
-        begin: regex.concat("^", a, "(?=\\:\\s)"),
+var require_http = x(function (cjsExports, cjsModule) {
+  function http(hljs) {
+    let regex = hljs.regex;
+    let VERSION = "HTTP/([32]|1\\.[01])";
+    let HEADER_NAME = /[A-Za-z][A-Za-z0-9-]*/;
+    let HEADER = {
+      className: "attribute",
+      begin: regex.concat("^", HEADER_NAME, "(?=\\:\\s)"),
+      starts: {
+        contains: [
+          {
+            className: "punctuation",
+            begin: /: /,
+            relevance: 0,
+            starts: {
+              end: "$",
+              relevance: 0,
+            },
+          },
+        ],
+      },
+    };
+    let HEADERS_AND_BODY = [
+      HEADER,
+      {
+        begin: "\\n\\n",
         starts: {
-          contains: [
-            { className: "punctuation", begin: /: /, relevance: 0, starts: { end: "$", relevance: 0 } },
-          ],
+          subLanguage: [],
+          endsWithParent: true,
         },
       },
-      o = [s, { begin: "\\n\\n", starts: { subLanguage: [], endsWithParent: !0 } }];
+    ];
     return {
       name: "HTTP",
       aliases: ["https"],
@@ -32,26 +49,53 @@ var $a = x(function (CE, Ha) {
           begin: "^(?=HTTP/([32]|1\\.[01]) \\d{3})",
           end: /$/,
           contains: [
-            { className: "meta", begin: "HTTP/([32]|1\\.[01])" },
-            { className: "number", begin: "\\b\\d{3}\\b" },
+            {
+              className: "meta",
+              begin: "HTTP/([32]|1\\.[01])",
+            },
+            {
+              className: "number",
+              begin: "\\b\\d{3}\\b",
+            },
           ],
-          starts: { end: /\b\B/, illegal: /\S/, contains: o },
+          starts: {
+            end: /\b\B/,
+            illegal: /\S/,
+            contains: HEADERS_AND_BODY,
+          },
         },
         {
           begin: "(?=^[A-Z]+ (.*?) HTTP/([32]|1\\.[01])$)",
           end: /$/,
           contains: [
-            { className: "string", begin: " ", end: " ", excludeBegin: !0, excludeEnd: !0 },
-            { className: "meta", begin: "HTTP/([32]|1\\.[01])" },
-            { className: "keyword", begin: "[A-Z]+" },
+            {
+              className: "string",
+              begin: " ",
+              end: " ",
+              excludeBegin: true,
+              excludeEnd: true,
+            },
+            {
+              className: "meta",
+              begin: "HTTP/([32]|1\\.[01])",
+            },
+            {
+              className: "keyword",
+              begin: "[A-Z]+",
+            },
           ],
-          starts: { end: /\b\B/, illegal: /\S/, contains: o },
+          starts: {
+            end: /\b\B/,
+            illegal: /\S/,
+            contains: HEADERS_AND_BODY,
+          },
         },
-        e.inherit(s, { relevance: 0 }),
+        hljs.inherit(HEADER, {
+          relevance: 0,
+        }),
       ],
     };
   }
-  Ha.exports = Id;
+  cjsModule.exports = http;
 });
-
-export { $a };
+export { require_http };

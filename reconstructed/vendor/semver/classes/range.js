@@ -6,57 +6,62 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { il } from "../internal/lrucache.js";
-import { as } from "../internal/parse-options.js";
-import { yt } from "./comparator.js";
-import { St } from "../internal/debug.js";
-import { G } from "./semver.js";
-import { Ye } from "../internal/re.js";
-import { Et } from "../internal/constants.js";
+import { require_lrucache } from "../internal/lrucache.js";
+import { require_parse_options } from "../internal/parse-options.js";
+import { require_comparator } from "./comparator.js";
+import { require_debug } from "../internal/debug.js";
+import { require_semver } from "./semver.js";
+import { require_re } from "../internal/re.js";
+import { require_constants } from "../internal/constants.js";
 
 //@ chunk-bwbq4xvm.js:14215-19771 cjs-fingerprint
-var ee = x(function (T2, hl) {
-  var ck = /\s+/g;
-  class wt {
-    constructor(e, s) {
-      if (((s = uk(s)), e instanceof wt))
-        if (e.loose === !!s.loose && e.includePrerelease === !!s.includePrerelease) return e;
-        else return new wt(e.raw, s);
-      if (e instanceof fs) return ((this.raw = e.value), (this.set = [[e]]), (this.formatted = void 0), this);
-      if (
-        ((this.options = s),
-        (this.loose = !!s.loose),
-        (this.includePrerelease = !!s.includePrerelease),
-        (this.raw = e.trim().replace(ck, " ")),
-        (this.set = this.raw
-          .split("||")
-          .map((n) => this.parseRange(n.trim()))
-          .filter((n) => n.length)),
-        !this.set.length)
-      )
-        throw TypeError(`Invalid SemVer Range: ${this.raw}`);
+var require_range = x(function (cjsExports, cjsModule) {
+  var SPACE_CHARACTERS = /\s+/g;
+  class Range {
+    constructor(range, options) {
+      options = parseOptions(options);
+      if (range instanceof Range)
+        if (range.loose === !!options.loose && range.includePrerelease === !!options.includePrerelease)
+          return range;
+        else return new Range(range.raw, options);
+      if (range instanceof Comparator) {
+        this.raw = range.value;
+        this.set = [[range]];
+        this.formatted = undefined;
+        return this;
+      }
+      this.options = options;
+      this.loose = !!options.loose;
+      this.includePrerelease = !!options.includePrerelease;
+      this.raw = range.trim().replace(SPACE_CHARACTERS, " ");
+      this.set = this.raw
+        .split("||")
+        .map((r) => this.parseRange(r.trim()))
+        .filter((c) => c.length);
+      if (!this.set.length) throw TypeError(`Invalid SemVer Range: ${this.raw}`);
       if (this.set.length > 1) {
-        let n = this.set[0];
-        if (((this.set = this.set.filter((r) => !dl(r[0]))), this.set.length === 0)) this.set = [n];
+        let first = this.set[0];
+        this.set = this.set.filter((c) => !isNullSet(c[0]));
+        if (this.set.length === 0) this.set = [first];
         else if (this.set.length > 1) {
-          for (let r of this.set)
-            if (r.length === 1 && Ek(r[0])) {
-              this.set = [r];
+          for (let c of this.set)
+            if (c.length === 1 && isAny(c[0])) {
+              this.set = [c];
               break;
             }
         }
       }
-      this.formatted = void 0;
+      this.formatted = undefined;
     }
     get range() {
-      if (this.formatted === void 0) {
+      if (this.formatted === undefined) {
         this.formatted = "";
-        for (let e = 0; e < this.set.length; e++) {
-          if (e > 0) this.formatted += "||";
-          let s = this.set[e];
-          for (let n = 0; n < s.length; n++) {
-            if (n > 0) this.formatted += " ";
-            this.formatted += s[n].toString().trim();
+        for (let i = 0; i < this.set.length; i++) {
+          if (i > 0) this.formatted += "||";
+          let comps = this.set[i];
+          for (let k = 0; k < comps.length; k++) {
+            if (k > 0) this.formatted += " ";
+            this.formatted += comps[k].toString().trim();
           }
         }
       }
@@ -68,217 +73,256 @@ var ee = x(function (T2, hl) {
     toString() {
       return this.range;
     }
-    parseRange(e) {
-      let n =
-          ((this.options.includePrerelease && FLAG_INCLUDE_PRERELEASE) | (this.options.loose && FLAG_LOOSE)) +
-          ":" +
-          e,
-        r = ll.get(n);
-      if (r) return r;
-      let loose = this.options.loose,
-        l = loose ? safeRe[H.HYPHENRANGELOOSE] : safeRe[H.HYPHENRANGE];
-      ((e = e.replace(l, Ck(this.options.includePrerelease))),
-        N("hyphen replace", e),
-        (e = e.replace(safeRe[H.COMPARATORTRIM], comparatorTrimReplace)),
-        N("comparator trim", e),
-        (e = e.replace(safeRe[H.TILDETRIM], tildeTrimReplace)),
-        N("tilde trim", e),
-        (e = e.replace(safeRe[H.CARETTRIM], caretTrimReplace)),
-        N("caret trim", e));
-      let mapped = e
+    parseRange(range) {
+      let memoKey =
+        ((this.options.includePrerelease && FLAG_INCLUDE_PRERELEASE) | (this.options.loose && FLAG_LOOSE)) +
+        ":" +
+        range;
+      let cached = cache.get(memoKey);
+      if (cached) return cached;
+      let loose = this.options.loose;
+      let hr = loose ? re[t.HYPHENRANGELOOSE] : re[t.HYPHENRANGE];
+      range = range.replace(hr, hyphenReplace(this.options.includePrerelease));
+      debug("hyphen replace", range);
+      range = range.replace(re[t.COMPARATORTRIM], comparatorTrimReplace);
+      debug("comparator trim", range);
+      range = range.replace(re[t.TILDETRIM], tildeTrimReplace);
+      debug("tilde trim", range);
+      range = range.replace(re[t.CARETTRIM], caretTrimReplace);
+      debug("caret trim", range);
+      let rangeList = range
         .split(" ")
-        .map((w) => Sk(w, this.options))
+        .map((comp) => parseComparator(comp, this.options))
         .join(" ")
         .split(/\s+/)
-        .map((w) => zk(w, this.options));
+        .map((comp) => replaceGTE0(comp, this.options));
       if (loose)
-        mapped = mapped.filter(
-          (w) => (N("loose invalid filter", w, this.options), !!w.match(safeRe[H.COMPARATORLOOSE])),
-        );
-      N("range list", mapped);
-      let h = new Map(),
-        mapped_2 = mapped.map((w) => new fs(w, this.options));
-      for (let w of mapped_2) {
-        if (dl(w)) return [w];
-        h.set(w.value, w);
+        rangeList = rangeList.filter((comp) => {
+          debug("loose invalid filter", comp, this.options);
+          return !!comp.match(re[t.COMPARATORLOOSE]);
+        });
+      debug("range list", rangeList);
+      let rangeMap = new Map();
+      let comparators = rangeList.map((comp) => new Comparator(comp, this.options));
+      for (let comp of comparators) {
+        if (isNullSet(comp)) return [comp];
+        rangeMap.set(comp.value, comp);
       }
-      if (h.size > 1 && h.has("")) h.delete("");
-      let f = [...h.values()];
-      return (ll.set(n, f), f);
+      if (rangeMap.size > 1 && rangeMap.has("")) rangeMap.delete("");
+      let result = [...rangeMap.values()];
+      cache.set(memoKey, result);
+      return result;
     }
-    intersects(e, s) {
-      if (!(e instanceof wt)) throw TypeError("a Range is required");
+    intersects(range, options) {
+      if (!(range instanceof Range)) throw TypeError("a Range is required");
       return this.set.some(
-        (n) => cl(n, s) && e.set.some((r) => cl(r, s) && n.every((a) => r.every((l) => a.intersects(l, s)))),
+        (thisComparators) =>
+          isSatisfiable(thisComparators, options) &&
+          range.set.some(
+            (rangeComparators) =>
+              isSatisfiable(rangeComparators, options) &&
+              thisComparators.every((thisComparator) =>
+                rangeComparators.every((rangeComparator) =>
+                  thisComparator.intersects(rangeComparator, options),
+                ),
+              ),
+          ),
       );
     }
-    test(e) {
-      if (!e) return !1;
-      if (typeof e === "string")
+    test(version) {
+      if (!version) return false;
+      if (typeof version === "string")
         try {
-          e = new pk(e, this.options);
-        } catch (error) {
-          return !1;
+          version = new SemVer(version, this.options);
+        } catch (er) {
+          return false;
         }
-      for (let s = 0; s < this.set.length; s++) if (Ok(this.set[s], e, this.options)) return !0;
-      return !1;
+      for (let i = 0; i < this.set.length; i++) if (testSet(this.set[i], version, this.options)) return true;
+      return false;
     }
   }
-  hl.exports = wt;
-  var hk = il(),
-    ll = new hk(),
-    uk = as(),
-    fs = yt(),
-    N = St(),
-    pk = G(),
-    {
-      safeRe: safeRe,
-      t: H,
-      comparatorTrimReplace: comparatorTrimReplace,
-      tildeTrimReplace: tildeTrimReplace,
-      caretTrimReplace: caretTrimReplace,
-    } = Ye(),
-    { FLAG_INCLUDE_PRERELEASE: FLAG_INCLUDE_PRERELEASE, FLAG_LOOSE: FLAG_LOOSE } = Et(),
-    dl = (e) => e.value === "<0.0.0-0",
-    Ek = (e) => e.value === "",
-    cl = (e, s) => {
-      let n = !0,
-        sliced = e.slice(),
-        a = sliced.pop();
-      while (n && sliced.length) ((n = sliced.every((l) => a.intersects(l, s))), (a = sliced.pop()));
-      return n;
-    },
-    Sk = (e, s) => (
-      (e = e.replace(safeRe[H.BUILD], "")),
-      N("comp", e, s),
-      (e = yk(e, s)),
-      N("caret", e),
-      (e = Tk(e, s)),
-      N("tildes", e),
-      (e = Rk(e, s)),
-      N("xrange", e),
-      (e = kk(e, s)),
-      N("stars", e),
-      e
-    ),
-    F = (e) => !e || e.toLowerCase() === "x" || e === "*",
-    Tk = (e, s) =>
-      e
-        .trim()
-        .split(/\s+/)
-        .map((n) => wk(n, s))
-        .join(" "),
-    wk = (e, s) => {
-      let n = s.loose ? safeRe[H.TILDELOOSE] : safeRe[H.TILDE];
-      return e.replace(n, (r, a, l, c, h) => {
-        N("tilde", e, r, a, l, c, h);
-        let m;
-        if (F(a)) m = "";
-        else if (F(l)) m = `>=${a}.0.0 <${+a + 1}.0.0-0`;
-        else if (F(c)) m = `>=${a}.${l}.0 <${a}.${+l + 1}.0-0`;
-        else if (h) (N("replaceTilde pr", h), (m = `>=${a}.${l}.${c}-${h} <${a}.${+l + 1}.0-0`));
-        else m = `>=${a}.${l}.${c} <${a}.${+l + 1}.0-0`;
-        return (N("tilde return", m), m);
-      });
-    },
-    yk = (e, s) =>
-      e
-        .trim()
-        .split(/\s+/)
-        .map((n) => Ak(n, s))
-        .join(" "),
-    Ak = (e, s) => {
-      N("caret", e, s);
-      let n = s.loose ? safeRe[H.CARETLOOSE] : safeRe[H.CARET],
-        r = s.includePrerelease ? "-0" : "";
-      return e.replace(n, (a, l, c, h, m) => {
-        N("caret", e, a, l, c, h, m);
-        let f;
-        if (F(l)) f = "";
-        else if (F(c)) f = `>=${l}.0.0${r} <${+l + 1}.0.0-0`;
-        else if (F(h))
-          if (l === "0") f = `>=${l}.${c}.0${r} <${l}.${+c + 1}.0-0`;
-          else f = `>=${l}.${c}.0${r} <${+l + 1}.0.0-0`;
-        else if (m)
-          if ((N("replaceCaret pr", m), l === "0"))
-            if (c === "0") f = `>=${l}.${c}.${h}-${m} <${l}.${c}.${+h + 1}-0`;
-            else f = `>=${l}.${c}.${h}-${m} <${l}.${+c + 1}.0-0`;
-          else f = `>=${l}.${c}.${h}-${m} <${+l + 1}.0.0-0`;
-        else if ((N("no pr"), l === "0"))
-          if (c === "0") f = `>=${l}.${c}.${h}${r} <${l}.${c}.${+h + 1}-0`;
-          else f = `>=${l}.${c}.${h}${r} <${l}.${+c + 1}.0-0`;
-        else f = `>=${l}.${c}.${h} <${+l + 1}.0.0-0`;
-        return (N("caret return", f), f);
-      });
-    },
-    Rk = (e, s) => (
-      N("replaceXRanges", e, s),
-      e
-        .split(/\s+/)
-        .map((n) => vk(n, s))
-        .join(" ")
-    ),
-    vk = (e, s) => {
-      e = e.trim();
-      let n = s.loose ? safeRe[H.XRANGELOOSE] : safeRe[H.XRANGE];
-      return e.replace(n, (r, a, l, c, h, m) => {
-        N("xRange", e, r, a, l, c, h, m);
-        let f = F(l),
-          w = f || F(c),
-          z = w || F(h),
-          I = z;
-        if (a === "=" && I) a = "";
-        if (((m = s.includePrerelease ? "-0" : ""), f))
-          if (a === ">" || a === "<") r = "<0.0.0-0";
-          else r = "*";
-        else if (a && I) {
-          if (w) c = 0;
-          if (((h = 0), a === ">"))
-            if (((a = ">="), w)) ((l = +l + 1), (c = 0), (h = 0));
-            else ((c = +c + 1), (h = 0));
-          else if (a === "<=")
-            if (((a = "<"), w)) l = +l + 1;
-            else c = +c + 1;
-          if (a === "<") m = "-0";
-          r = `${a + l}.${c}.${h}${m}`;
-        } else if (w) r = `>=${l}.0.0${m} <${+l + 1}.0.0-0`;
-        else if (z) r = `>=${l}.${c}.0${m} <${l}.${+c + 1}.0-0`;
-        return (N("xRange return", r), r);
-      });
-    },
-    kk = (e, s) => (N("replaceStars", e, s), e.trim().replace(safeRe[H.STAR], "")),
-    zk = (e, s) => (
-      N("replaceGTE0", e, s),
-      e.trim().replace(safeRe[s.includePrerelease ? H.GTE0PRE : H.GTE0], "")
-    ),
-    Ck = (e) => (s, n, r, a, l, c, h, m, f, w, z, I) => {
-      if (F(r)) n = "";
-      else if (F(a)) n = `>=${r}.0.0${e ? "-0" : ""}`;
-      else if (F(l)) n = `>=${r}.${a}.0${e ? "-0" : ""}`;
-      else if (c) n = `>=${n}`;
-      else n = `>=${n}${e ? "-0" : ""}`;
-      if (F(f)) m = "";
-      else if (F(w)) m = `<${+f + 1}.0.0-0`;
-      else if (F(z)) m = `<${f}.${+w + 1}.0-0`;
-      else if (I) m = `<=${f}.${w}.${z}-${I}`;
-      else if (e) m = `<${f}.${w}.${+z + 1}-0`;
-      else m = `<=${m}`;
-      return `${n} ${m}`.trim();
-    },
-    Ok = (e, s, n) => {
-      for (let r = 0; r < e.length; r++) if (!e[r].test(s)) return !1;
-      if (s.prerelease.length && !n.includePrerelease) {
-        for (let r = 0; r < e.length; r++) {
-          if ((N(e[r].semver), e[r].semver === fs.ANY)) continue;
-          if (e[r].semver.prerelease.length > 0) {
-            let semver = e[r].semver;
-            if (semver.major === s.major && semver.minor === s.minor && semver.patch === s.patch) return !0;
-          }
-        }
-        return !1;
+  cjsModule.exports = Range;
+  var LRU = require_lrucache();
+  var cache = new LRU();
+  var parseOptions = require_parse_options();
+  var Comparator = require_comparator();
+  var debug = require_debug();
+  var SemVer = require_semver();
+  var { safeRe: re, t, comparatorTrimReplace, tildeTrimReplace, caretTrimReplace } = require_re();
+  var { FLAG_INCLUDE_PRERELEASE, FLAG_LOOSE } = require_constants();
+  var isNullSet = (c) => c.value === "<0.0.0-0";
+  var isAny = (c) => c.value === "";
+  var isSatisfiable = (comparators, options) => {
+    let result = true;
+    let remainingComparators = comparators.slice();
+    let testComparator = remainingComparators.pop();
+    while (result && remainingComparators.length) {
+      result = remainingComparators.every((otherComparator) =>
+        testComparator.intersects(otherComparator, options),
+      );
+      testComparator = remainingComparators.pop();
+    }
+    return result;
+  };
+  var parseComparator = (comp, options) => {
+    comp = comp.replace(re[t.BUILD], "");
+    debug("comp", comp, options);
+    comp = replaceCarets(comp, options);
+    debug("caret", comp);
+    comp = replaceTildes(comp, options);
+    debug("tildes", comp);
+    comp = replaceXRanges(comp, options);
+    debug("xrange", comp);
+    comp = replaceStars(comp, options);
+    debug("stars", comp);
+    return comp;
+  };
+  var isX = (id) => !id || id.toLowerCase() === "x" || id === "*";
+  var replaceTildes = (comp, options) =>
+    comp
+      .trim()
+      .split(/\s+/)
+      .map((c) => replaceTilde(c, options))
+      .join(" ");
+  var replaceTilde = (comp, options) => {
+    let r = options.loose ? re[t.TILDELOOSE] : re[t.TILDE];
+    return comp.replace(r, (_, M, m_2, p, pr) => {
+      debug("tilde", comp, _, M, m_2, p, pr);
+      let ret;
+      if (isX(M)) ret = "";
+      else if (isX(m_2)) ret = `>=${M}.0.0 <${+M + 1}.0.0-0`;
+      else if (isX(p)) ret = `>=${M}.${m_2}.0 <${M}.${+m_2 + 1}.0-0`;
+      else if (pr) {
+        debug("replaceTilde pr", pr);
+        ret = `>=${M}.${m_2}.${p}-${pr} <${M}.${+m_2 + 1}.0-0`;
+      } else ret = `>=${M}.${m_2}.${p} <${M}.${+m_2 + 1}.0-0`;
+      debug("tilde return", ret);
+      return ret;
+    });
+  };
+  var replaceCarets = (comp, options) =>
+    comp
+      .trim()
+      .split(/\s+/)
+      .map((c) => replaceCaret(c, options))
+      .join(" ");
+  var replaceCaret = (comp, options) => {
+    debug("caret", comp, options);
+    let r_2 = options.loose ? re[t.CARETLOOSE] : re[t.CARET];
+    let z = options.includePrerelease ? "-0" : "";
+    return comp.replace(r_2, (_, M, m_2, p, pr) => {
+      debug("caret", comp, _, M, m_2, p, pr);
+      let ret;
+      if (isX(M)) ret = "";
+      else if (isX(m_2)) ret = `>=${M}.0.0${z} <${+M + 1}.0.0-0`;
+      else if (isX(p)) {
+        if (M === "0") ret = `>=${M}.${m_2}.0${z} <${M}.${+m_2 + 1}.0-0`;
+        else ret = `>=${M}.${m_2}.0${z} <${+M + 1}.0.0-0`;
+      } else if (pr) {
+        debug("replaceCaret pr", pr);
+        if (M === "0") {
+          if (m_2 === "0") ret = `>=${M}.${m_2}.${p}-${pr} <${M}.${m_2}.${+p + 1}-0`;
+          else ret = `>=${M}.${m_2}.${p}-${pr} <${M}.${+m_2 + 1}.0-0`;
+        } else ret = `>=${M}.${m_2}.${p}-${pr} <${+M + 1}.0.0-0`;
+      } else {
+        debug("no pr");
+        if (M === "0") {
+          if (m_2 === "0") ret = `>=${M}.${m_2}.${p}${z} <${M}.${m_2}.${+p + 1}-0`;
+          else ret = `>=${M}.${m_2}.${p}${z} <${M}.${+m_2 + 1}.0-0`;
+        } else ret = `>=${M}.${m_2}.${p} <${+M + 1}.0.0-0`;
       }
-      return !0;
-    };
+      debug("caret return", ret);
+      return ret;
+    });
+  };
+  var replaceXRanges = (comp, options) => {
+    debug("replaceXRanges", comp, options);
+    return comp
+      .split(/\s+/)
+      .map((c) => replaceXRange(c, options))
+      .join(" ");
+  };
+  var replaceXRange = (comp, options) => {
+    comp = comp.trim();
+    let r = options.loose ? re[t.XRANGELOOSE] : re[t.XRANGE];
+    return comp.replace(r, (ret, gtlt, M, m_2, p, pr) => {
+      debug("xRange", comp, ret, gtlt, M, m_2, p, pr);
+      let xM = isX(M);
+      let xm = xM || isX(m_2);
+      let xp = xm || isX(p);
+      let anyX = xp;
+      if (gtlt === "=" && anyX) gtlt = "";
+      pr = options.includePrerelease ? "-0" : "";
+      if (xM) {
+        if (gtlt === ">" || gtlt === "<") ret = "<0.0.0-0";
+        else ret = "*";
+      } else if (gtlt && anyX) {
+        if (xm) m_2 = 0;
+        p = 0;
+        if (gtlt === ">") {
+          gtlt = ">=";
+          if (xm) {
+            M = +M + 1;
+            m_2 = 0;
+            p = 0;
+          } else {
+            m_2 = +m_2 + 1;
+            p = 0;
+          }
+        } else if (gtlt === "<=") {
+          gtlt = "<";
+          if (xm) M = +M + 1;
+          else m_2 = +m_2 + 1;
+        }
+        if (gtlt === "<") pr = "-0";
+        ret = `${gtlt + M}.${m_2}.${p}${pr}`;
+      } else if (xm) ret = `>=${M}.0.0${pr} <${+M + 1}.0.0-0`;
+      else if (xp) ret = `>=${M}.${m_2}.0${pr} <${M}.${+m_2 + 1}.0-0`;
+      debug("xRange return", ret);
+      return ret;
+    });
+  };
+  var replaceStars = (comp, options) => {
+    debug("replaceStars", comp, options);
+    return comp.trim().replace(re[t.STAR], "");
+  };
+  var replaceGTE0 = (comp, options) => {
+    debug("replaceGTE0", comp, options);
+    return comp.trim().replace(re[options.includePrerelease ? t.GTE0PRE : t.GTE0], "");
+  };
+  var hyphenReplace = (incPr) => ($0, from, fM, fm, fp, fpr, fb, to, tM, tm, tp, tpr) => {
+    if (isX(fM)) from = "";
+    else if (isX(fm)) from = `>=${fM}.0.0${incPr ? "-0" : ""}`;
+    else if (isX(fp)) from = `>=${fM}.${fm}.0${incPr ? "-0" : ""}`;
+    else if (fpr) from = `>=${from}`;
+    else from = `>=${from}${incPr ? "-0" : ""}`;
+    if (isX(tM)) to = "";
+    else if (isX(tm)) to = `<${+tM + 1}.0.0-0`;
+    else if (isX(tp)) to = `<${tM}.${+tm + 1}.0-0`;
+    else if (tpr) to = `<=${tM}.${tm}.${tp}-${tpr}`;
+    else if (incPr) to = `<${tM}.${tm}.${+tp + 1}-0`;
+    else to = `<=${to}`;
+    return `${from} ${to}`.trim();
+  };
+  var testSet = (set, version, options) => {
+    for (let i = 0; i < set.length; i++) if (!set[i].test(version)) return false;
+    if (version.prerelease.length && !options.includePrerelease) {
+      for (let i = 0; i < set.length; i++) {
+        debug(set[i].semver);
+        if (set[i].semver === Comparator.ANY) continue;
+        if (set[i].semver.prerelease.length > 0) {
+          let allowed = set[i].semver;
+          if (
+            allowed.major === version.major &&
+            allowed.minor === version.minor &&
+            allowed.patch === version.patch
+          )
+            return true;
+        }
+      }
+      return false;
+    }
+    return true;
+  };
 });
-
-export { ee };
+export { require_range };

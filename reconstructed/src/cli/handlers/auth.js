@@ -55,7 +55,7 @@ import {
   getRootSession,
   setAuthenticatedAccount,
 } from "../../bootstrap/state.js";
-import { e } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { logError } from "../../utils/log.js";
 import { logEvent } from "../../services/analytics/index.js";
 import {
@@ -64,7 +64,7 @@ import {
   fetchProfileInfo,
   subscriptionTypeForOrganizationType,
   shouldUseClaudeAIAuth,
-  B3t,
+  isVerificationOrMintRefusal,
   storeOAuthAccountInfo,
 } from "../../services/oauth/client.js";
 import { LONG_LIVED_OAUTH_TOKEN_TTL_SECONDS, CLAUDE_AI_PROFILE_SCOPE } from "../../constants/oauth.js";
@@ -75,7 +75,7 @@ import {
   loginSettingsOutcome,
   saveLoginOrWarn,
   LOGIN_REFUSAL_REASONS,
-  fnn,
+  rollbackFailureText,
 } from "../../services/oauth/refusedSignIn.js";
 import { saveGlobalConfig, clearClientDataSeed } from "../../utils/config.js";
 import { isExpectedApiError, errorMessage } from "../../utils/errors.js";
@@ -95,7 +95,7 @@ import {
   isClaudeAiOrigin,
   OAuthCallbackError,
 } from "../../services/oauth/oauthErrors.js";
-import { eZ, MANAGED_SETTINGS_NOTICE } from "../../components/ManagedSettingsNotice.js";
+import { managedSettingsUrl, MANAGED_SETTINGS_NOTICE } from "../../components/ManagedSettingsNotice.js";
 import { markManagedSettingsNoticeSeen } from "../../services/remoteManagedSettings/loginNotice.js";
 import { getClaudeConfigDir, isAntBuild } from "../../utils/envUtils.js";
 import { getProjectsDir } from "../../utils/sessionStoragePortable.js";
@@ -122,18 +122,18 @@ import { clearBetasCaches } from "../../utils/betas.js";
 import { resetEntitlementDenies } from "../../utils/model/sessionModelRestriction.js";
 import { deactivateServedCatalog } from "../../utils/model/modelCatalog/catalogEntries.js";
 import { invalidateToolDescriptions } from "../../services/api/toolDescriptionCache.js";
-import { Mxt } from "../../services/api/fileReferenceCalls.js";
+import { replaceFileReferenceHintLatch } from "../../services/api/fileReferenceCalls.js";
 import { clearGzipBlockStore } from "../../services/api/gzipRequestBody.js";
-import { Ws } from "../../services/api/streamFallbackWarning.js";
+import { streamFallbackWarning } from "../../services/api/streamFallbackWarning.js";
 import { clearOrgMemoryCredential } from "../../services/orgMemory/credential.js";
-import { iZs } from "../../services/accountMemory/memoryContext.js";
-import { z2s } from "../../services/artifacts/artifactDb.js";
+import { resetMemoryContextForSession } from "../../services/accountMemory/memoryContext.js";
+import { clearMeIdCache } from "../../services/artifacts/artifactDb.js";
 import { resetLiveStateOnAccountChange } from "../../services/liveReplica/liveReplica.js";
 import { clearServedCapabilities } from "../../services/artifacts/capabilityDeclaration.js";
 import { isBgSession } from "../../utils/concurrentSessions.js";
-import { CUr } from "../../utils/claudeAiSync/skillsSync.js";
-import { H5r } from "../../services/plugins/accountSync/syncedPluginHooks.js";
-import { ZV } from "../../commands/remote-setup/api.js";
+import { removeSyncedSkillHooksFor } from "../../utils/claudeAiSync/skillsSync.js";
+import { removeDelistedSkillHooksNow } from "../../services/plugins/accountSync/syncedPluginHooks.js";
+import { GITHUB_CONNECTION_STATUS_CACHE } from "../../commands/remote-setup/api.js";
 import { resetUserData, refreshGrowthBookAfterAuthChange } from "../../services/analytics/growthbook.js";
 import { invalidateUserContext } from "../../context.js";
 import { getGroveNoticeConfig, updateGroveSettings_2 } from "../../services/api/grove.js";
@@ -146,7 +146,7 @@ import {
   resetCurrentLimits,
 } from "../../services/claudeAiLimits.js";
 import { cancelQuotaAutoResume } from "../../services/quotaAutoResume/quotaAutoResume.js";
-import { endLowPriority, Ydi } from "../../services/lowPriority/lowPriorityMode.js";
+import { endLowPriority, clearBudgetSpent } from "../../services/lowPriority/lowPriorityMode.js";
 import { setHostSessionsBearerSource } from "../../utils/hostSessionsBearer.js";
 import { getOauthProfileFromOauthToken } from "../../services/oauth/getOauthProfile.js";
 import { planDisplayNameFromProfile } from "../../services/oauth/validateOauthToken.js";
@@ -154,29 +154,34 @@ import { logAuthEvent } from "../../utils/telemetry/thirdPartyEventRecords.js";
 
 //@ chunk-84jf153s.js:14816-15055 sole-consumer
 async function exitLoginRefusedByPolicy(o) {
-  (process.stderr.write(
+  process.stderr.write(
     o.message +
       `
 `,
-  ),
-    await sendOrgValidationRefusal(o),
-    await logFeatureBadAsync(
-      "cli_auth_login",
-      o.reason === "provider_not_allowed"
-        ? "cli_auth_login_provider_not_allowed"
-        : "cli_auth_login_org_not_allowed",
-    ),
-    await flushAnalyticsSinks(),
-    await drainRegisteredWriteQueues(),
-    process.exit(1));
+  );
+  await sendOrgValidationRefusal(o);
+  await logFeatureBadAsync(
+    "cli_auth_login",
+    o.reason === "provider_not_allowed"
+      ? "cli_auth_login_provider_not_allowed"
+      : "cli_auth_login_org_not_allowed",
+  );
+  await flushAnalyticsSinks();
+  await drainRegisteredWriteQueues();
+  process.exit(1);
 }
 //@ chunk-84jf153s.js:15055-15220 sole-consumer
 function subscriptionTypeFields(o, h) {
-  if (o === null) return { subscriptionType: null };
+  if (o === null)
+    return {
+      subscriptionType: null,
+    };
   return {
     subscriptionType: o,
     subscriptionTypeSource: "profile",
-    ...(h && { subscriptionTypeVerifiedAt: Date.now() }),
+    ...(h && {
+      subscriptionTypeVerifiedAt: Date.now(),
+    }),
   };
 }
 //@ chunk-84jf153s.js:15220-15359 sole-consumer
@@ -184,154 +189,165 @@ var REFRESH_TOKEN_SPENT_MESSAGE =
   "The refresh token in CLAUDE_CODE_OAUTH_REFRESH_TOKEN was used for this attempt and cannot be used again; issue a new one to retry.";
 //@ chunk-84jf153s.js:15359-15520 sole-consumer
 async function exitLoginOrgConfigRefused(o) {
-  (process.stderr.write(
+  process.stderr.write(
     o +
       `
 `,
-  ),
-    await logFeatureBadAsync("cli_auth_login", "cli_auth_login_org_config_refused"),
-    await settlePendingGateWork(),
-    await flushAnalyticsSinks(),
-    await drainRegisteredWriteQueues(),
-    process.exit(1));
+  );
+  await logFeatureBadAsync("cli_auth_login", "cli_auth_login_org_config_refused");
+  await settlePendingGateWork();
+  await flushAnalyticsSinks();
+  await drainRegisteredWriteQueues();
+  process.exit(1);
 }
 //@ chunk-84jf153s.js:15520-15691 affinity
-function warnOrgCheckDeferred(o) {
-  process.stderr.write(`${o}
+function warnOrgCheckDeferred(message) {
+  process.stderr.write(`${message}
 The sign-in was saved but could not be checked against your organization yet; Claude Code checks it again when it next starts.
 `);
 }
+//@ chunk-84jf153s.js:15691-23088 fingerprint = authLogin (0.367)
 /**
  * claude auth login：--console/--claudeai/--sso/--email/--gateway-json 互斥检查，执行 OAuth 登录（或云网关登录），安装令牌、校验组织策略。
  */
-//@ chunk-84jf153s.js:15691-23088 fingerprint = authLogin (0.367)
-async function authLogin(
-  { email: email, sso: sso, console: v, claudeai: claudeai, gatewayJson: gatewayJson },
-  c,
-  O,
-) {
-  if (v && claudeai)
-    (process.stderr.write(`Error: --console and --claudeai cannot be used together.
-`),
-      process.exit(1));
-  let k = v || claudeai || sso || email !== void 0;
+async function authLogin({ email, sso, console: v, claudeai, gatewayJson }, c, O) {
+  if (v && claudeai) {
+    process.stderr.write(`Error: --console and --claudeai cannot be used together.
+`);
+    process.exit(1);
+  }
+  let k = v || claudeai || sso || email !== undefined;
   if (gatewayJson) {
-    if (k)
-      (process.stderr
+    if (k) {
+      process.stderr
         .write(`Error: --gateway-json cannot be used together with --console, --claudeai, --sso, or --email.
-`),
-        process.exit(1));
+`);
+      process.exit(1);
+    }
     {
-      let i = getForcedGatewayLogin(getUserSettingsGateway());
-      if (i !== void 0) {
-        if (process.stdin.isTTY)
-          (process.stderr
+      let forcedGatewayLogin = getForcedGatewayLogin(getUserSettingsGateway());
+      if (forcedGatewayLogin !== undefined) {
+        if (process.stdin.isTTY) {
+          process.stderr
             .write(`This command is run by the VS Code extension, not by hand. To sign in from a terminal, run /login in Claude Code.
-`),
-            process.exit(1));
-        if (isSpawnedByClaudeCodeSession())
-          (process.stderr
+`);
+          process.exit(1);
+        }
+        if (isSpawnedByClaudeCodeSession()) {
+          process.stderr
             .write(`Cloud gateway sign-in needs a person to answer its questions, so it cannot run inside a Claude Code session. Sign in from the Claude Code panel in VS Code, or run /login in Claude Code.
-`),
-            process.exit(1));
+`);
+          process.exit(1);
+        }
         let abortController = new AbortController();
-        (process.on("SIGTERM", () => abortController.abort()),
-          process.on("SIGINT", () => abortController.abort()),
-          markPrintModeSignalHandlersRegistered());
-        let { runGatewayJsonLogin: runGatewayJsonLogin } = await import("./chunk-gy23bf9p.js"),
-          r = await runGatewayJsonLogin({
-            gateway: i,
-            stdin: process.stdin,
-            write: (p) =>
-              writeStdoutAndDrain(
-                p +
-                  `
+        process.on("SIGTERM", () => abortController.abort());
+        process.on("SIGINT", () => abortController.abort());
+        markPrintModeSignalHandlersRegistered();
+        let { runGatewayJsonLogin } = await import("./chunk-gy23bf9p.js");
+        let r = await runGatewayJsonLogin({
+          gateway: forcedGatewayLogin,
+          stdin: process.stdin,
+          write: (p) =>
+            writeStdoutAndDrain(
+              p +
+                `
 `,
-              ),
-            signal: abortController.signal,
-            credentials: O,
-          });
+            ),
+          signal: abortController.signal,
+          credentials: O,
+        });
         return exitAfterAnalyticsFlush(r ? 0 : 1);
       }
     }
-    (process.stderr
+    process.stderr
       .write(`Cloud gateway sign-in isn't available with this machine's settings. If your organization manages this machine's settings, a gateway in your own settings file isn't used.
-`),
-      process.exit(1));
+`);
+    process.exit(1);
   }
-  let settings = getInitialSettings_2(),
-    L = getForcedLoginMethod();
-  if (L === "gateway") {
-    if ((declareNoConsentSurface(), process.stdin.isTTY && process.stdout.isTTY && !k)) {
-      let [{ Login: Login }, { AppRoot: AppRoot }] = await Promise.all([
-          import("./chunk-whwtfsqf.js"),
-          import("./chunk-f6d8289b.js"),
-        ]),
-        s = await createRoot(getBaseRenderOptions(!1)),
-        r = getGatewayAuth(),
-        winner = await Promise.race([
-          new Promise((G) => {
-            s.render(e(AppRoot, { storageV5: c, children: e(Login, { onDone: G }) }));
-          }),
-          s
-            .waitUntilExit()
-            .catch(logError)
-            .then(() => {
-              return;
+  let settings = getInitialSettings_2();
+  let forcedLoginMethod = getForcedLoginMethod();
+  if (forcedLoginMethod === "gateway") {
+    declareNoConsentSurface();
+    if (process.stdin.isTTY && process.stdout.isTTY && !k) {
+      let [{ Login }, { AppRoot }] = await Promise.all([
+        import("./chunk-whwtfsqf.js"),
+        import("./chunk-f6d8289b.js"),
+      ]);
+      let root = await createRoot(getBaseRenderOptions(false));
+      let gatewayAuth = getGatewayAuth();
+      let winner = await Promise.race([
+        new Promise((resolve) => {
+          root.render(
+            jsxProd_default(AppRoot, {
+              storageV5: c,
+              children: jsxProd_default(Login, {
+                onDone: resolve,
+              }),
             }),
-        ]);
-      s.unmount();
-      let m = getGatewayAuth(),
-        b = winner ?? (m !== null && m !== r);
+          );
+        }),
+        root
+          .waitUntilExit()
+          .catch(logError)
+          .then(() => {
+            return;
+          }),
+      ]);
+      root.unmount();
+      let gatewayAuth_2 = getGatewayAuth();
+      let b = winner ?? (gatewayAuth_2 !== null && gatewayAuth_2 !== gatewayAuth);
       if (b)
         process.stdout.write(`Login successful.
 `);
       else
         process.stderr.write(`Login interrupted.
 `);
-      (await drainRegisteredWriteQueues(), process.exit(b ? 0 : 1));
+      await drainRegisteredWriteQueues();
+      process.exit(b ? 0 : 1);
     }
-    (process.stderr
+    process.stderr
       .write(`Managed settings on this machine configure a Cloud gateway sign-in; run interactive /login to authenticate.
-`),
-      process.exit(1));
+`);
+    process.exit(1);
   }
-  let D = L ? L === "claudeai" : !v,
-    envRefreshToken = process.env.CLAUDE_CODE_OAUTH_REFRESH_TOKEN,
-    x = (await providerAllowlistRefusal("firstParty")) ?? (await providerAllowlistRefusal());
-  if (x)
-    (process.stderr.write(
+  let D = forcedLoginMethod ? forcedLoginMethod === "claudeai" : !v;
+  let envRefreshToken = process.env.CLAUDE_CODE_OAUTH_REFRESH_TOKEN;
+  let x = (await providerAllowlistRefusal("firstParty")) ?? (await providerAllowlistRefusal());
+  if (x) {
+    process.stderr.write(
       x.message +
         `
 `,
-    ),
-      await flushAnalyticsSinks(),
-      process.exit(1));
-  let S = settings.forceLoginMethod !== void 0 && D !== (settings.forceLoginMethod === "claudeai"),
-    K = typeof settings.forceLoginOrgUUID === "string" && !S ? settings.forceLoginOrgUUID : void 0;
+    );
+    await flushAnalyticsSinks();
+    process.exit(1);
+  }
+  let S = settings.forceLoginMethod !== undefined && D !== (settings.forceLoginMethod === "claudeai");
+  let orgUUID = typeof settings.forceLoginOrgUUID === "string" && !S ? settings.forceLoginOrgUUID : undefined;
   if (envRefreshToken) {
     let envScopes = process.env.CLAUDE_CODE_OAUTH_SCOPES;
-    if (!envScopes)
-      (process.stderr.write(`CLAUDE_CODE_OAUTH_SCOPES is required when using CLAUDE_CODE_OAUTH_REFRESH_TOKEN.
+    if (!envScopes) {
+      process.stderr.write(`CLAUDE_CODE_OAUTH_SCOPES is required when using CLAUDE_CODE_OAUTH_REFRESH_TOKEN.
 Set it to the space-separated scopes the refresh token was issued with
 (e.g. "user:inference" or "user:profile user:inference user:sessions:claude_code user:mcp_servers").
-`),
-        process.exit(1));
+`);
+      process.exit(1);
+    }
     let scopes = envScopes.split(/\s+/).filter(Boolean);
     try {
       logEvent("tengu_login_from_refresh_token", {});
-      let s = await resolveLoginOrgPin(scopes);
-      if (s.outcome === "refused") await exitLoginRefusedByPolicy(s.rejection);
-      let r = getStoredOauthAccountInfo(),
-        tokens = await refreshOAuthToken(envRefreshToken, {
-          scopes: scopes,
-          expiresIn: LONG_LIVED_OAUTH_TOKEN_TTL_SECONDS,
-          clientId: process.env.CLAUDE_CODE_OAUTH_CLIENT_ID || void 0,
-          storageV5: c,
-        }),
-        m = await checkNewLoginTokenOrg(tokens);
+      let loginOrgPin = await resolveLoginOrgPin(scopes);
+      if (loginOrgPin.outcome === "refused") await exitLoginRefusedByPolicy(loginOrgPin.rejection);
+      let storedOauthAccountInfo = getStoredOauthAccountInfo();
+      let tokens = await refreshOAuthToken(envRefreshToken, {
+        scopes,
+        expiresIn: LONG_LIVED_OAUTH_TOKEN_TTL_SECONDS,
+        clientId: process.env.CLAUDE_CODE_OAUTH_CLIENT_ID || undefined,
+        storageV5: c,
+      });
+      let m = await checkNewLoginTokenOrg(tokens);
       if (m.outcome === "refused") {
-        if (r) await restoreOAuthAccountAfterRefusedRefresh(r, c);
+        if (storedOauthAccountInfo) await restoreOAuthAccountAfterRefusedRefresh(storedOauthAccountInfo, c);
         let y = await revokeRefusedSignInToken(tokens);
         await exitLoginRefusedByPolicy({
           ...m.rejection,
@@ -342,92 +358,107 @@ ${REFRESH_TOKEN_SPENT_MESSAGE}`,
         });
       }
       let b =
-          tokens.profile !== void 0
-            ? { profile: tokens.profile, stamped: tokens.profileOriginStamped === !0 }
-            : tokens.scopes.includes(CLAUDE_AI_PROFILE_SCOPE)
-              ? await fetchProfileInfo(tokens.accessToken).then((y) => ({
-                  profile: y.rawProfile,
-                  stamped: y.originStamped === !0,
-                }))
-              : void 0,
-        {
-          subscriptionTypeSource: subscriptionTypeSource,
-          subscriptionTypeVerifiedAt: subscriptionTypeVerifiedAt,
-          profileOriginStamped: profileOriginStamped,
-          ...ee
-        } = tokens,
-        F = {
-          ...ee,
-          ...(b?.profile !== void 0 && { profile: b.profile }),
-          ...subscriptionTypeFields(
-            subscriptionTypeForOrganizationType(b?.profile?.organization.organization_type),
-            b?.stamped === !0,
-          ),
-          rateLimitTier: b?.profile?.organization.rate_limit_tier ?? null,
-        },
-        H = await checkLoginAllowed({
-          accessToken: F.accessToken,
-          startupGateFollows: !0,
-          newLogin: F,
-          untieredLogin: needsProfileVerification(F),
-          organizationName: b?.profile?.organization.name,
-        });
+        tokens.profile !== undefined
+          ? {
+              profile: tokens.profile,
+              stamped: tokens.profileOriginStamped === true,
+            }
+          : tokens.scopes.includes(CLAUDE_AI_PROFILE_SCOPE)
+            ? await fetchProfileInfo(tokens.accessToken).then((profileInfo) => ({
+                profile: profileInfo.rawProfile,
+                stamped: profileInfo.originStamped === true,
+              }))
+            : undefined;
+      let { subscriptionTypeSource, subscriptionTypeVerifiedAt, profileOriginStamped, ...ee } = tokens;
+      let F = {
+        ...ee,
+        ...(b?.profile !== undefined && {
+          profile: b.profile,
+        }),
+        ...subscriptionTypeFields(
+          subscriptionTypeForOrganizationType(b?.profile?.organization.organization_type),
+          b?.stamped === true,
+        ),
+        rateLimitTier: b?.profile?.organization.rate_limit_tier ?? null,
+      };
+      let H = await checkLoginAllowed({
+        accessToken: F.accessToken,
+        startupGateFollows: true,
+        newLogin: F,
+        untieredLogin: needsProfileVerification(F),
+        organizationName: b?.profile?.organization.name,
+      });
       if (!H.ok && loginSettingsOutcome(H.evaluation) === "refused") {
-        if (r) await restoreOAuthAccountAfterRefusedRefresh(r, c);
+        if (storedOauthAccountInfo) await restoreOAuthAccountAfterRefusedRefresh(storedOauthAccountInfo, c);
         let y = await revokeRefusedSignInToken(F);
         await exitLoginOrgConfigRefused(`${H.message} ${y}
 
 ${REFRESH_TOKEN_SPENT_MESSAGE}`);
       }
-      let ie = await saveLoginOrWarn(F, { storageV5: c, credentials: O }),
-        Y = await validateForceLoginOrg(O, m.outcome === "permitted" ? m.verified : void 0);
+      let ie = await saveLoginOrWarn(F, {
+        storageV5: c,
+        credentials: O,
+      });
+      let Y = await validateForceLoginOrg(O, m.outcome === "permitted" ? m.verified : undefined);
       if (!Y.valid) {
-        let y = await LOGIN_REFUSAL_REASONS(Y, ie?.storage, { storageV5: c, credentials: O });
-        if (y?.restored === !1)
+        let y = await LOGIN_REFUSAL_REASONS(Y, ie?.storage, {
+          storageV5: c,
+          credentials: O,
+        });
+        if (y?.restored === false)
           process.stderr.write(
-            fnn(y) +
+            rollbackFailureText(y) +
               `
 `,
           );
         await exitLoginRefusedByPolicy(Y);
       }
       if (!H.ok) warnOrgCheckDeferred(H.message);
-      else if (H.warning !== void 0)
+      else if (H.warning !== undefined)
         process.stderr.write(`${H.warning}
 `);
-      (await saveGlobalConfig((current) => {
+      await saveGlobalConfig((current) => {
         if (current.hasCompletedOnboarding) return current;
-        return { ...current, hasCompletedOnboarding: !0 };
-      }, c),
-        logEvent("tengu_oauth_success", { loginWithClaudeAi: shouldUseClaudeAIAuth(F.scopes) }),
-        process.stdout.write(`Login successful.
-`),
-        await offerPostLoginTips(c),
-        await logFeatureOkAsync("cli_auth_login"),
-        await flushAnalyticsSinks(),
-        process.exit(0));
+        return {
+          ...current,
+          hasCompletedOnboarding: true,
+        };
+      }, c);
+      logEvent("tengu_oauth_success", {
+        loginWithClaudeAi: shouldUseClaudeAIAuth(F.scopes),
+      });
+      process.stdout.write(`Login successful.
+`);
+      await offerPostLoginTips(c);
+      await logFeatureOkAsync("cli_auth_login");
+      await flushAnalyticsSinks();
+      process.exit(0);
     } catch (err) {
-      if (isExpectedApiError(err, B3t))
-        logForDebugging(`Login from refresh token failed: ${errorMessage(err)}`, { level: "error" });
+      if (isExpectedApiError(err, isVerificationOrMintRefusal))
+        logForDebugging(`Login from refresh token failed: ${errorMessage(err)}`, {
+          level: "error",
+        });
       else logError(err);
       let sslHint = getSSLErrorHint(err);
-      (process.stderr.write(`Login failed: ${errorMessage(err)}
+      process.stderr.write(`Login failed: ${errorMessage(err)}
 ${
   sslHint
     ? sslHint +
       `
 `
     : ""
-}`),
-        await logFeatureBadAsync("cli_auth_login", "cli_auth_login_refresh_token_failed"),
-        await flushAnalyticsSinks(),
-        await drainRegisteredWriteQueues(),
-        process.exit(1));
+}`);
+      await logFeatureBadAsync("cli_auth_login", "cli_auth_login_refresh_token_failed");
+      await flushAnalyticsSinks();
+      await drainRegisteredWriteQueues();
+      process.exit(1);
     }
   }
-  let W = sso ? "sso" : void 0,
-    oauthService = new OAuthService(),
-    A = createInterface({ input: process.stdin });
+  let loginMethod = sso ? "sso" : undefined;
+  let oauthService = new OAuthService();
+  let A = createInterface({
+    input: process.stdin,
+  });
   A.on("line", (i) => {
     let [f, s] = i.trim().split("#");
     if (!f || !s) {
@@ -435,58 +466,67 @@ ${
 `);
       return;
     }
-    (logEvent("tengu_oauth_manual_entry", {}),
-      oauthService.handleManualAuthCodeInput({ authorizationCode: f, state: s }));
+    logEvent("tengu_oauth_manual_entry", {});
+    oauthService.handleManualAuthCodeInput({
+      authorizationCode: f,
+      state: s,
+    });
   });
-  let C = !1,
-    u = !1,
-    promise = new Promise((i, f) => {
-      A.once("close", () => {
-        if (((u = !0), C)) f(new PasteInputClosedError());
-      });
-    }),
-    I = (i) => {
-      if (C && String(i).includes("\x04")) A.close();
-    };
+  let C = false;
+  let u = false;
+  let promise = new Promise((resolve, reject) => {
+    A.once("close", () => {
+      u = true;
+      if (C) reject(new PasteInputClosedError());
+    });
+  });
+  let I = (i) => {
+    if (C && String(i).includes("\x04")) A.close();
+  };
   process.stdin.on("data", I);
   try {
-    logEvent("tengu_oauth_flow_start", { loginWithClaudeAi: D });
-    let i,
-      f = [
-        async (url) => {
-          if (C) {
-            if (u) throw new PasteInputClosedError();
-            (process.stdout.write(`${MANUAL_CODE_HINT}
-`),
-              process.stdout.write(`Sign in at: ${createHyperlink(url, void 0, { assumeSupport: !0 })}
-`),
-              process.stdout.write(PASTE_CODE_PROMPT));
-            return;
-          }
-          (process.stdout.write(`Opening browser to sign in\u2026
-`),
-            process.stdout
-              .write(`If the browser didn't open, visit: ${createHyperlink(url, void 0, { assumeSupport: !0 })}
-`),
-            process.stdout.write("Paste code here if prompted > "));
-        },
-        {
-          loginWithClaudeAi: D,
-          loginHint: email,
-          loginMethod: W,
-          orgUUID: K,
-          ...(process.stdin.isTTY && {
-            onCallbackListenerUnavailable: () => {
-              C = !0;
-            },
-          }),
-          settingsOnlyGrant: i,
-        },
-      ],
-      s;
+    logEvent("tengu_oauth_flow_start", {
+      loginWithClaudeAi: D,
+    });
+    let settingsOnlyGrant;
+    let f = [
+      async (url) => {
+        if (C) {
+          if (u) throw new PasteInputClosedError();
+          process.stdout.write(`${MANUAL_CODE_HINT}
+`);
+          process.stdout.write(`Sign in at: ${createHyperlink(url, undefined, {
+            assumeSupport: true,
+          })}
+`);
+          process.stdout.write(PASTE_CODE_PROMPT);
+          return;
+        }
+        process.stdout.write(`Opening browser to sign in\u2026
+`);
+        process.stdout.write(`If the browser didn't open, visit: ${createHyperlink(url, undefined, {
+          assumeSupport: true,
+        })}
+`);
+        process.stdout.write("Paste code here if prompted > ");
+      },
+      {
+        loginWithClaudeAi: D,
+        loginHint: email,
+        loginMethod,
+        orgUUID,
+        ...(process.stdin.isTTY && {
+          onCallbackListenerUnavailable: () => {
+            C = true;
+          },
+        }),
+        settingsOnlyGrant,
+      },
+    ];
+    let s;
     s ??= oauthService.startOAuthFlow(...f);
-    let winner = await Promise.race([s, promise]),
-      p = await checkNewLoginTokenOrg(winner);
+    let winner = await Promise.race([s, promise]);
+    let p = await checkNewLoginTokenOrg(winner);
     if (p.outcome === "refused") {
       let w = await revokeRefusedSignInToken(winner);
       await exitLoginRefusedByPolicy({
@@ -497,7 +537,7 @@ ${w}`,
     }
     let m = await checkLoginAllowed({
       accessToken: winner.accessToken,
-      startupGateFollows: !0,
+      startupGateFollows: true,
       newLogin: winner,
       untieredLogin: needsProfileVerification(winner),
       organizationName: winner.profile?.organization.name ?? winner.tokenAccount?.organizationName,
@@ -506,70 +546,83 @@ ${w}`,
       let w = await revokeRefusedSignInToken(winner);
       await exitLoginOrgConfigRefused(`${m.message} ${w}`);
     }
-    let b = await saveLoginOrWarn(winner, { storageV5: c, credentials: O }),
-      G = await validateForceLoginOrg(O, p.outcome === "permitted" ? p.verified : void 0);
+    let b = await saveLoginOrWarn(winner, {
+      storageV5: c,
+      credentials: O,
+    });
+    let G = await validateForceLoginOrg(O, p.outcome === "permitted" ? p.verified : undefined);
     if (!G.valid) {
-      let w = await LOGIN_REFUSAL_REASONS(G, b?.storage, { storageV5: c, credentials: O });
-      if (w?.restored === !1)
+      let w = await LOGIN_REFUSAL_REASONS(G, b?.storage, {
+        storageV5: c,
+        credentials: O,
+      });
+      if (w?.restored === false)
         process.stderr.write(
-          fnn(w) +
+          rollbackFailureText(w) +
             `
 `,
         );
       await exitLoginRefusedByPolicy(G);
     }
     if (!m.ok) warnOrgCheckDeferred(m.message);
-    else if (m.warning !== void 0)
+    else if (m.warning !== undefined)
       process.stderr.write(`${m.warning}
 `);
-    (logEvent("tengu_oauth_success", { loginWithClaudeAi: D }),
-      process.stdout.write(`Login successful.
-`),
-      await offerPostLoginTips(c),
-      await logFeatureOkAsync("cli_auth_login"),
-      await flushAnalyticsSinks(),
-      await drainRegisteredWriteQueues(),
-      process.exit(0));
+    logEvent("tengu_oauth_success", {
+      loginWithClaudeAi: D,
+    });
+    process.stdout.write(`Login successful.
+`);
+    await offerPostLoginTips(c);
+    await logFeatureOkAsync("cli_auth_login");
+    await flushAnalyticsSinks();
+    await drainRegisteredWriteQueues();
+    process.exit(0);
   } catch (err) {
-    if (isOAuthCallbackError(err))
-      (process.stdout.write(`
-`),
-        process.stderr.write(`${formatAccountOnHoldSignInError(isClaudeAiOrigin(err.errorUri))}
-`),
-        await logFeatureBadAsync("cli_auth_login", "cli_auth_login_oauth_flow_failed"),
-        await flushAnalyticsSinks(),
-        await drainRegisteredWriteQueues(),
-        process.exit(1));
+    if (isOAuthCallbackError(err)) {
+      process.stdout.write(`
+`);
+      process.stderr.write(`${formatAccountOnHoldSignInError(isClaudeAiOrigin(err.errorUri))}
+`);
+      await logFeatureBadAsync("cli_auth_login", "cli_auth_login_oauth_flow_failed");
+      await flushAnalyticsSinks();
+      await drainRegisteredWriteQueues();
+      process.exit(1);
+    }
     if (
       err instanceof AuthCodeRefusedError ||
-      isExpectedApiError(err, B3t) ||
+      isExpectedApiError(err, isVerificationOrMintRefusal) ||
       err instanceof OAuthCallbackError ||
       err instanceof CallbackListenerUnavailableError ||
       err instanceof PasteInputClosedError
     )
-      logForDebugging(`OAuth login failed: ${errorMessage(err)}`, { level: "error" });
+      logForDebugging(`OAuth login failed: ${errorMessage(err)}`, {
+        level: "error",
+      });
     else logError(err);
-    let sslHint = getSSLErrorHint(err),
-      s = err instanceof OAuthCallbackError ? err.displayMessage : errorMessage(err),
-      r =
-        err instanceof CallbackListenerUnavailableError ? " Run with --debug for the underlying error." : "";
-    if (B3t(err) || err instanceof PasteInputClosedError)
+    let sslHint = getSSLErrorHint(err);
+    let s = err instanceof OAuthCallbackError ? err.displayMessage : errorMessage(err);
+    let r =
+      err instanceof CallbackListenerUnavailableError ? " Run with --debug for the underlying error." : "";
+    if (isVerificationOrMintRefusal(err) || err instanceof PasteInputClosedError)
       process.stdout.write(`
 `);
-    (process.stderr.write(`Login failed: ${s}${r}
+    process.stderr.write(`Login failed: ${s}${r}
 ${
   sslHint
     ? sslHint +
       `
 `
     : ""
-}`),
-      await logFeatureBadAsync("cli_auth_login", "cli_auth_login_oauth_flow_failed"),
-      await flushAnalyticsSinks(),
-      await drainRegisteredWriteQueues(),
-      process.exit(err instanceof PasteInputClosedError ? 130 : 1));
+}`);
+    await logFeatureBadAsync("cli_auth_login", "cli_auth_login_oauth_flow_failed");
+    await flushAnalyticsSinks();
+    await drainRegisteredWriteQueues();
+    process.exit(err instanceof PasteInputClosedError ? 130 : 1);
   } finally {
-    (process.stdin.off("data", I), A.close(), oauthService.cleanup());
+    process.stdin.off("data", I);
+    A.close();
+    oauthService.cleanup();
   }
 }
 //@ chunk-84jf153s.js:23088-23246 layout
@@ -582,233 +635,253 @@ class PasteInputClosedError extends Error {
 //@ chunk-84jf153s.js:23246-23388 layout
 async function offerPostLoginTips(o) {
   if (!process.stdout.isTTY) return;
-  let h = eZ();
-  if (h === void 0) return;
-  (process.stdout.write(`${MANAGED_SETTINGS_NOTICE}
-`),
-    await markManagedSettingsNoticeSeen(h, "auth_cli", o));
+  let h = managedSettingsUrl();
+  if (h === undefined) return;
+  process.stdout.write(`${MANAGED_SETTINGS_NOTICE}
+`);
+  await markManagedSettingsNoticeSeen(h, "auth_cli", o);
 }
 //@ chunk-84jf153s.js:23388-23601 layout
 function getConfigHomeIfNotOverridden() {
   let o = resolve(getClaudeConfigDir());
   for (let h of ["projectSettings", "localSettings"]) {
-    let v = getSettingsForSource(h)?.env ?? {};
-    for (let [T, N] of Object.entries(v))
-      if (T === "CLAUDE_CONFIG_DIR" && typeof N === "string" && resolve(N) !== o) return null;
+    let env = getSettingsForSource(h)?.env ?? {};
+    for (let [key, value] of Object.entries(env))
+      if (key === "CLAUDE_CONFIG_DIR" && typeof value === "string" && resolve(value) !== o) return null;
   }
   return getProjectsDir();
 }
+//@ chunk-84jf153s.js:23601-25349 fingerprint = authStatus (0.719)
 /**
  * claude auth status：汇总令牌来源、API key 来源、提供方与账户信息，--json（默认）或 --text 输出。
  */
-//@ chunk-84jf153s.js:23601-25349 fingerprint = authStatus (0.719)
 async function authStatus(o, h, v) {
-  let { source: authTokenSource, hasToken: hasToken } = getAuthTokenSource(),
-    { source: apiKeySource } = getAnthropicApiKeyWithSourceSafe(),
-    O = !!process.env.ANTHROPIC_API_KEY && !isAntBuild(),
-    { tokenSource: tokenSource } = getRequestCredentials(authTokenSource, apiKeySource),
-    U = isOAuthBearerSource(authTokenSource) && tokenSource === "none",
-    oauthAccount = getOauthAccountInfo(),
-    subscriptionType = getSubscriptionType(),
-    using3P = isUsing3PServices(),
-    B = getAPIProvider() === "gateway" && !getGatewayAuth(),
-    x = !B && (hasToken || apiKeySource !== "none" || O || using3P),
-    authMethod = "none";
+  let { source: authTokenSource, hasToken } = getAuthTokenSource();
+  let { source: apiKeySource } = getAnthropicApiKeyWithSourceSafe();
+  let hasApiKeyEnvVar = !!process.env.ANTHROPIC_API_KEY && !isAntBuild();
+  let { tokenSource } = getRequestCredentials(authTokenSource, apiKeySource);
+  let U = isOAuthBearerSource(authTokenSource) && tokenSource === "none";
+  let oauthAccount = getOauthAccountInfo();
+  let subscriptionType = getSubscriptionType();
+  let using3P = isUsing3PServices();
+  let B = getAPIProvider() === "gateway" && !getGatewayAuth();
+  let loggedIn = !B && (hasToken || apiKeySource !== "none" || hasApiKeyEnvVar || using3P);
+  let authMethod = "none";
   if (using3P) authMethod = B ? "none" : "third_party";
   else if (tokenSource === "claude.ai") authMethod = "claude.ai";
   else if (tokenSource === "apiKeyHelper") authMethod = "api_key_helper";
   else if (tokenSource !== "none") authMethod = "oauth_token";
-  else if (apiKeySource === "ANTHROPIC_API_KEY" || O || apiKeySource === "/login managed key")
+  else if (apiKeySource === "ANTHROPIC_API_KEY" || hasApiKeyEnvVar || apiKeySource === "/login managed key")
     authMethod = "api_key";
   else if (apiKeySource === "apiKeyHelper" && U) authMethod = "api_key_helper";
-  let K = null,
-    W = !1,
-    P;
+  let K = null;
+  let W = false;
+  let P;
   if (h.text) {
-    let A = probeRefreshTokenDead(v),
-      C = A === void 0 ? void 0 : await A,
-      flat = moveAntOnlyToEnd([[...buildAccountProperties(C), ...buildAPIProviderProperties()]]).flat(),
-      mapped = statusValueRows(flat).map((I) => (I.label ? `${I.label}: ${I.value}` : I.value));
-    if (mapped.length === 0 && O) mapped.push("API key: ANTHROPIC_API_KEY");
-    if (!x)
+    let A = probeRefreshTokenDead(v);
+    let C = A === undefined ? undefined : await A;
+    let u = moveAntOnlyToEnd([[...buildAccountProperties(C), ...buildAPIProviderProperties()]]).flat();
+    let mapped = statusValueRows(u).map((I) => (I.label ? `${I.label}: ${I.value}` : I.value));
+    if (mapped.length === 0 && hasApiKeyEnvVar) mapped.push("API key: ANTHROPIC_API_KEY");
+    if (!loggedIn)
       mapped.push(
         B
           ? "Not logged in. This session uses a Cloud gateway; start `claude` and sign in with /login."
           : "Not logged in. Run claude auth login to authenticate.",
       );
-    P = e(Text, {
+    P = jsxProd_default(Text, {
       children: mapped.join(`
 `),
     });
   } else {
-    let A = getAPIProvider(),
-      C = apiKeySource !== "none" ? apiKeySource : O ? "ANTHROPIC_API_KEY" : null,
-      u = {
-        loggedIn: x,
-        authMethod: authMethod,
-        apiProvider: A,
-        analyticsDisabled: isFirstPartyTelemetryBlocked(),
-        projectsDirectory: getConfigHomeIfNotOverridden(),
-        configDirectory: getClaudeConfigDir(),
-      },
-      apiProvider = getForcedLoginMethod();
-    if (apiProvider) u.forcedLoginMethod = apiProvider;
-    if (getForcedGatewayLogin(getUserSettingsGateway()) !== void 0) u.gatewaySignInOffered = !0;
-    let I = getAllowedProviders();
-    if (I !== void 0) u.allowedProviders = [...I];
+    let apiProvider = getAPIProvider();
+    let C = apiKeySource !== "none" ? apiKeySource : hasApiKeyEnvVar ? "ANTHROPIC_API_KEY" : null;
+    let u = {
+      loggedIn,
+      authMethod,
+      apiProvider,
+      analyticsDisabled: isFirstPartyTelemetryBlocked(),
+      projectsDirectory: getConfigHomeIfNotOverridden(),
+      configDirectory: getClaudeConfigDir(),
+    };
+    let apiProvider_2 = getForcedLoginMethod();
+    if (apiProvider_2) u.forcedLoginMethod = apiProvider_2;
+    if (getForcedGatewayLogin(getUserSettingsGateway()) !== undefined) u.gatewaySignInOffered = true;
+    let allowedProviders = getAllowedProviders();
+    if (allowedProviders !== undefined) u.allowedProviders = [...allowedProviders];
     if (C) u.apiKeySource = C;
-    let i = authMethod === "api_key" && apiKeySource === "/login managed key" ? oauthAccount : void 0;
-    if (authMethod === "claude.ai")
-      ((u.email = oauthAccount?.emailAddress ?? null),
-        (u.orgId = oauthAccount?.organizationUuid ?? null),
-        (u.orgName = oauthAccount?.organizationName ?? null),
-        (u.subscriptionType = subscriptionType ?? null));
-    else if (i)
-      ((u.email = i.emailAddress ?? null),
-        (u.orgId = i.organizationUuid ?? null),
-        (u.orgName = i.organizationName ?? null));
-    else if (A === "gateway") u.email = getGatewayAuth()?.email ?? null;
-    P = e(Text, { children: jsonStringify(u, null, 2) });
+    let i = authMethod === "api_key" && apiKeySource === "/login managed key" ? oauthAccount : undefined;
+    if (authMethod === "claude.ai") {
+      u.email = oauthAccount?.emailAddress ?? null;
+      u.orgId = oauthAccount?.organizationUuid ?? null;
+      u.orgName = oauthAccount?.organizationName ?? null;
+      u.subscriptionType = subscriptionType ?? null;
+    } else if (i) {
+      u.email = i.emailAddress ?? null;
+      u.orgId = i.organizationUuid ?? null;
+      u.orgName = i.organizationName ?? null;
+    } else if (apiProvider === "gateway") u.email = getGatewayAuth()?.email ?? null;
+    P = jsxProd_default(Text, {
+      children: jsonStringify(u, null, 2),
+    });
   }
-  (logFeatureOk("cli_auth_status"),
-    o.render(e(RenderOnceAndExit, { children: P })),
-    await o.waitUntilExit(),
-    await waitForOAuthRefreshBeforeExit(),
-    process.exit(x ? 0 : 1));
+  logFeatureOk("cli_auth_status");
+  o.render(
+    jsxProd_default(RenderOnceAndExit, {
+      children: P,
+    }),
+  );
+  await o.waitUntilExit();
+  await waitForOAuthRefreshBeforeExit();
+  process.exit(loggedIn ? 0 : 1);
 }
+//@ chunk-84jf153s.js:25349-25728 placement
 /**
  * claude auth logout：清除登录凭据，失败时写 stderr 并以 1 退出，成功时打印已登出。
  */
-//@ chunk-84jf153s.js:25349-25728 placement
-async function authLogout(o, h, v) {
+async function authLogout(o, storageV5, credentials) {
   try {
-    await performLogout({ clearOnboarding: !1, storageV5: h, credentials: v });
+    await performLogout({
+      clearOnboarding: false,
+      storageV5,
+      credentials,
+    });
   } catch (error) {
-    (logError(error),
-      process.stderr.write(`Logout failed: ${errorMessage(error)}
-`),
-      await logFeatureBadAsync("cli_auth_logout", "cli_auth_logout_failed"),
-      await flushAnalyticsSinks(),
-      process.exit(1));
+    logError(error);
+    process.stderr.write(`Logout failed: ${errorMessage(error)}
+`);
+    await logFeatureBadAsync("cli_auth_logout", "cli_auth_logout_failed");
+    await flushAnalyticsSinks();
+    process.exit(1);
   }
-  (o.render(
-    e(RenderOnceAndExit, {
-      children: e(Text, { children: "Successfully logged out from your Anthropic account." }),
+  o.render(
+    jsxProd_default(RenderOnceAndExit, {
+      children: jsxProd_default(Text, {
+        children: "Successfully logged out from your Anthropic account.",
+      }),
     }),
-  ),
-    await o.waitUntilExit(),
-    await logFeatureOkAsync("cli_auth_logout"));
+  );
+  await o.waitUntilExit();
+  await logFeatureOkAsync("cli_auth_logout");
 }
 //@ chunk-th8w37yz.js:1472-1483 placement
-var v = null;
+var NO_CONSOLE_LOGIN = null;
 //@ chunk-th8w37yz.js:1483-2126 placement
 function clearOAuthAccountFields(o) {
-  return (
-    (o.oauthAccount = void 0),
-    (o.managedSettingsNoticeSeenOrg = void 0),
-    (o.additionalModelOptionsCache = void 0),
-    (o.additionalModelOptionsAnsweredAt = void 0),
-    (o.additionalModelCostsCache = void 0),
-    (o.modelAccessCache = void 0),
-    (o.orgModelDefaultCache = void 0),
-    (o.cachedArtifactRoster = void 0),
-    (o.artifactRosterDenied = void 0),
-    (o.lastSeenOrgDefaultUpdatedAt = void 0),
-    (o.clientDataCache = void 0),
-    (o.clientDataCacheSlots = void 0),
-    (o.autoCompactWindowsCache = void 0),
-    (o.cachedUsageUtilization = void 0),
-    (o.metricsStatusCache = void 0),
-    (o.metricsStatusCacheByPrincipal = void 0),
-    (o.githubWebConnectionStatusCache = void 0),
-    (o.unusedLimitResetStatusCache = void 0),
-    (o.startupPrefetchedAt = void 0),
-    o
-  );
+  o.oauthAccount = undefined;
+  o.managedSettingsNoticeSeenOrg = undefined;
+  o.additionalModelOptionsCache = undefined;
+  o.additionalModelOptionsAnsweredAt = undefined;
+  o.additionalModelCostsCache = undefined;
+  o.modelAccessCache = undefined;
+  o.orgModelDefaultCache = undefined;
+  o.cachedArtifactRoster = undefined;
+  o.artifactRosterDenied = undefined;
+  o.lastSeenOrgDefaultUpdatedAt = undefined;
+  o.clientDataCache = undefined;
+  o.clientDataCacheSlots = undefined;
+  o.autoCompactWindowsCache = undefined;
+  o.cachedUsageUtilization = undefined;
+  o.metricsStatusCache = undefined;
+  o.metricsStatusCacheByPrincipal = undefined;
+  o.githubWebConnectionStatusCache = undefined;
+  o.unusedLimitResetStatusCache = undefined;
+  o.startupPrefetchedAt = undefined;
+  return o;
 }
 //@ chunk-th8w37yz.js:2126-2187 placement
-async function clearAccountScopedConfig(o) {
-  (await saveGlobalConfig((s) => clearOAuthAccountFields({ ...s }), o), setResolvedOrgDefault(void 0));
+async function clearAccountScopedConfig(storageV5) {
+  await saveGlobalConfig(
+    (s) =>
+      clearOAuthAccountFields({
+        ...s,
+      }),
+    storageV5,
+  );
+  setResolvedOrgDefault(undefined);
 }
 //@ chunk-th8w37yz.js:4565-5345 placement
 async function clearAuthRelatedCaches(
-  o,
-  {
-    preserveQuotaAutoResume: preserveQuotaAutoResume = !1,
-    artifactAccount: artifactAccount = "signed_out",
-    incomingIdentity: incomingIdentity,
-    credentials: credentials,
-  } = {},
+  storageV5,
+  { preserveQuotaAutoResume = false, artifactAccount = "signed_out", incomingIdentity, credentials } = {},
 ) {
-  if ((clearOAuthTokenMemos(), isStorageV5Enabled() && credentials === void 0))
-    invalidatePlainTextStoreCopy();
-  (clearTrustedDeviceTokenCache(),
-    clearClientDataSeed(),
-    getProviderState().providerCache.clientDataFetches.clear(),
-    clearBetasCaches(),
-    getProviderState().providerCache.modelConfigs.clear(),
-    getProviderState().providerCache.validatedModels.clear(),
-    resetEntitlementDenies(),
-    deactivateServedCatalog(),
-    invalidateToolDescriptions(),
-    Mxt(null),
-    clearGzipBlockStore(Ws().gzipRequestBody.blockStore),
-    clearOrgMemoryCredential());
-  let n = getRootSession();
-  if (
-    (iZs(n.host),
-    v?.forgetClaudeCodeKeyHeard(),
-    v?.recordServerAccountMemoryWord(void 0),
-    z2s(n.host),
-    resetLiveStateOnAccountChange(artifactAccount, incomingIdentity),
-    artifactAccount !== "same_account")
-  ) {
-    if ((clearServedCapabilities(n), !(isBgSession() && artifactAccount === "signed_out")))
-      (CUr("account_change"), H5r("account_change"));
+  clearOAuthTokenMemos();
+  if (isStorageV5Enabled() && credentials === undefined) invalidatePlainTextStoreCopy();
+  clearTrustedDeviceTokenCache();
+  clearClientDataSeed();
+  getProviderState().providerCache.clientDataFetches.clear();
+  clearBetasCaches();
+  getProviderState().providerCache.modelConfigs.clear();
+  getProviderState().providerCache.validatedModels.clear();
+  resetEntitlementDenies();
+  deactivateServedCatalog();
+  invalidateToolDescriptions();
+  replaceFileReferenceHintLatch(null);
+  clearGzipBlockStore(streamFallbackWarning().gzipRequestBody.blockStore);
+  clearOrgMemoryCredential();
+  let rootSession = getRootSession();
+  resetMemoryContextForSession(rootSession.host);
+  NO_CONSOLE_LOGIN?.forgetClaudeCodeKeyHeard();
+  NO_CONSOLE_LOGIN?.recordServerAccountMemoryWord(undefined);
+  clearMeIdCache(rootSession.host);
+  resetLiveStateOnAccountChange(artifactAccount, incomingIdentity);
+  if (artifactAccount !== "same_account") {
+    clearServedCapabilities(rootSession);
+    if (!(isBgSession() && artifactAccount === "signed_out")) {
+      removeSyncedSkillHooksFor("account_change");
+      removeDelistedSkillHooksNow("account_change");
+    }
   }
-  if (
-    (ZV.of(n.host).clear(),
-    resetUserData(),
-    invalidateUserContext(n, "account_change"),
-    refreshGrowthBookAfterAuthChange(),
-    getGroveNoticeConfig.cache?.clear?.(),
-    updateGroveSettings_2.cache?.clear?.(),
-    await clearRemoteManagedSettingsCache(o),
-    await clearPolicyLimitsCache(),
-    clearMetricsEnabledCache(),
-    resetGraceState(),
-    resetNearLimitWrapUpState(),
-    !preserveQuotaAutoResume)
-  )
-    (cancelQuotaAutoResume("account_switch"), endLowPriority("account_switch"), Ydi());
+  GITHUB_CONNECTION_STATUS_CACHE.of(rootSession.host).clear();
+  resetUserData();
+  invalidateUserContext(rootSession, "account_change");
+  refreshGrowthBookAfterAuthChange();
+  getGroveNoticeConfig.cache?.clear?.();
+  updateGroveSettings_2.cache?.clear?.();
+  await clearRemoteManagedSettingsCache(storageV5);
+  await clearPolicyLimitsCache();
+  clearMetricsEnabledCache();
+  resetGraceState();
+  resetNearLimitWrapUpState();
+  if (!preserveQuotaAutoResume) {
+    cancelQuotaAutoResume("account_switch");
+    endLowPriority("account_switch");
+    clearBudgetSpent();
+  }
   resetCurrentLimits();
 }
+//@ chunk-zbtr7f5k.js:3736-5302 fingerprint = installOAuthTokens (0.505)
 /**
  * installOAuthTokens：保存 OAuth 令牌并更新账户/组织信息，区分同账号刷新与切换账号。
  */
-//@ chunk-zbtr7f5k.js:3736-5302 fingerprint = installOAuthTokens (0.505)
-async function installOAuthTokens(e, { storageV5: storageV5, credentials: credentials }) {
-  let f = getOauthAccountInfo(),
-    o = {
-      accountUuid: e.profile?.account?.uuid ?? e.tokenAccount?.uuid,
-      organizationUuid: e.profile?.organization?.uuid ?? e.tokenAccount?.organizationUuid,
-    },
-    s = sameOwnerAccount(f, o),
-    p = sameOwnerAccount(getAuthenticatedAccountInfo(), o),
-    y = await getClaudeAIOAuthTokenOriginAsync(credentials),
-    _ = p && (y === "env" || y === "fd" || (y === "store" && s)) ? "same_account" : "account_switch";
-  (await performLogout({
-    clearOnboarding: !1,
-    preserveInProcessTokens: !0,
-    preserveNonAnthropicAuth: !0,
-    storageV5: storageV5,
+async function installOAuthTokens(e, { storageV5, credentials }) {
+  let oauthAccountInfo = getOauthAccountInfo();
+  let o = {
+    accountUuid: e.profile?.account?.uuid ?? e.tokenAccount?.uuid,
+    organizationUuid: e.profile?.organization?.uuid ?? e.tokenAccount?.organizationUuid,
+  };
+  let s = sameOwnerAccount(oauthAccountInfo, o);
+  let p = sameOwnerAccount(getAuthenticatedAccountInfo(), o);
+  let claudeAIOAuthTokenOrigin = await getClaudeAIOAuthTokenOriginAsync(credentials);
+  let artifactAccount =
+    p &&
+    (claudeAIOAuthTokenOrigin === "env" ||
+      claudeAIOAuthTokenOrigin === "fd" ||
+      (claudeAIOAuthTokenOrigin === "store" && s))
+      ? "same_account"
+      : "account_switch";
+  await performLogout({
+    clearOnboarding: false,
+    preserveInProcessTokens: true,
+    preserveNonAnthropicAuth: true,
+    storageV5,
     preserveQuotaAutoResume: s,
-    artifactAccount: _,
+    artifactAccount,
     incomingIdentity: o,
-    credentials: credentials,
-  }),
-    setAuthenticatedAccount(null),
-    setHostSessionsBearerSource(null));
+    credentials,
+  });
+  setAuthenticatedAccount(null);
+  setHostSessionsBearerSource(null);
   let profile = e.profile ?? (await getOauthProfileFromOauthToken(e.accessToken));
   if (profile?.account && profile.organization)
     storeOAuthAccountInfo(
@@ -816,11 +889,11 @@ async function installOAuthTokens(e, { storageV5: storageV5, credentials: creden
         accountUuid: profile.account.uuid,
         emailAddress: profile.account.email,
         organizationUuid: profile.organization.uuid,
-        displayName: profile.account.display_name || void 0,
-        fullName: profile.account.full_name || void 0,
-        hasExtraUsageEnabled: profile.organization.has_extra_usage_enabled ?? void 0,
-        billingType: profile.organization.billing_type ?? void 0,
-        subscriptionCreatedAt: profile.organization.subscription_created_at ?? void 0,
+        displayName: profile.account.display_name || undefined,
+        fullName: profile.account.full_name || undefined,
+        hasExtraUsageEnabled: profile.organization.has_extra_usage_enabled ?? undefined,
+        billingType: profile.organization.billing_type ?? undefined,
+        subscriptionCreatedAt: profile.organization.subscription_created_at ?? undefined,
         accountCreatedAt: profile.account.created_at,
         ccOnboardingFlags: profile.organization.cc_onboarding_flags ?? {},
         claudeCodeTrialEndsAt: profile.organization.claude_code_trial_ends_at ?? null,
@@ -840,10 +913,15 @@ async function installOAuthTokens(e, { storageV5: storageV5, credentials: creden
       },
       storageV5,
     );
-  return (
-    logAuthEvent({ action: "login", success: !0, authMethod: "oauth" }),
-    { preserveQuotaAutoResume: s, artifactAccount: _, incomingIdentity: o }
-  );
+  logAuthEvent({
+    action: "login",
+    success: true,
+    authMethod: "oauth",
+  });
+  return {
+    preserveQuotaAutoResume: s,
+    artifactAccount,
+    incomingIdentity: o,
+  };
 }
-
 export { clearAuthRelatedCaches, clearOAuthAccountFields, installOAuthTokens, clearAccountScopedConfig };

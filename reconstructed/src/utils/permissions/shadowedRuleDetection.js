@@ -26,48 +26,71 @@ function formatSource(source) {
 }
 //@ chunk-p2qwpk2k.js:20369-20640 fingerprint = generateFixSuggestion (1)
 function generateFixSuggestion(shadowType, shadowingRule, shadowedRule) {
-  let shadowingSource = formatSource(shadowingRule.source),
-    shadowedSource = formatSource(shadowedRule.source),
-    toolName = shadowingRule.ruleValue.toolName;
+  let shadowingSource = formatSource(shadowingRule.source);
+  let shadowedSource = formatSource(shadowedRule.source);
+  let toolName = shadowingRule.ruleValue.toolName;
   if (shadowType === "deny")
     return `Remove the "${toolName}" deny rule from ${shadowingSource}, or remove the specific allow rule from ${shadowedSource}`;
   return `Remove the "${toolName}" ask rule from ${shadowingSource}, or remove the specific allow rule from ${shadowedSource}`;
 }
+//@ chunk-p2qwpk2k.js:20640-20964 fingerprint = isAllowRuleShadowedByAskRule (1)
 /**
  * 带内容 allow 规则是否被同工具整工具 ask 规则遮蔽；沙箱自动放行时只认 projectSettings/policySettings/command 来源的 ask。
  */
-//@ chunk-p2qwpk2k.js:20640-20964 fingerprint = isAllowRuleShadowedByAskRule (1)
 function isAllowRuleShadowedByAskRule(allowRule, askRules, options) {
-  let { toolName: toolName, ruleContent: ruleContent } = allowRule.ruleValue;
-  if (ruleContent === void 0) return { shadowed: !1 };
+  let { toolName, ruleContent } = allowRule.ruleValue;
+  if (ruleContent === undefined)
+    return {
+      shadowed: false,
+    };
   let shadowingAskRule = askRules.find(
-    (askRule) => askRule.ruleValue.toolName === toolName && askRule.ruleValue.ruleContent === void 0,
+    (askRule) => askRule.ruleValue.toolName === toolName && askRule.ruleValue.ruleContent === undefined,
   );
-  if (!shadowingAskRule) return { shadowed: !1 };
+  if (!shadowingAskRule)
+    return {
+      shadowed: false,
+    };
   if (toolName === BASH_TOOL_NAME && options.sandboxAutoAllowEnabled) {
-    if (!isSharedSettingSource(shadowingAskRule.source)) return { shadowed: !1 };
+    if (!isSharedSettingSource(shadowingAskRule.source))
+      return {
+        shadowed: false,
+      };
   }
-  return { shadowed: !0, shadowedBy: shadowingAskRule, shadowType: "ask" };
+  return {
+    shadowed: true,
+    shadowedBy: shadowingAskRule,
+    shadowType: "ask",
+  };
 }
 //@ chunk-p2qwpk2k.js:20964-21212 fingerprint = isAllowRuleShadowedByDenyRule (1)
 function isAllowRuleShadowedByDenyRule(allowRule, denyRules) {
-  let { toolName: toolName, ruleContent: ruleContent } = allowRule.ruleValue;
-  if (ruleContent === void 0) return { shadowed: !1 };
+  let { toolName, ruleContent } = allowRule.ruleValue;
+  if (ruleContent === undefined)
+    return {
+      shadowed: false,
+    };
   let shadowingDenyRule = denyRules.find(
-    (denyRule) => denyRule.ruleValue.toolName === toolName && denyRule.ruleValue.ruleContent === void 0,
+    (denyRule) => denyRule.ruleValue.toolName === toolName && denyRule.ruleValue.ruleContent === undefined,
   );
-  if (!shadowingDenyRule) return { shadowed: !1 };
-  return { shadowed: !0, shadowedBy: shadowingDenyRule, shadowType: "deny" };
+  if (!shadowingDenyRule)
+    return {
+      shadowed: false,
+    };
+  return {
+    shadowed: true,
+    shadowedBy: shadowingDenyRule,
+    shadowType: "deny",
+  };
 }
+//@ chunk-p2qwpk2k.js:21212-21751 fingerprint = detectUnreachableRules (1)
 /**
  * 检测不可达的 allow 规则：带内容的 allow 规则若同工具存在整工具 deny（被拦）或整工具 ask（被遮蔽；Bash 在沙箱自动放行开启时只有共享来源的 ask 才算）则列出，附原因和修复建议。
  */
-//@ chunk-p2qwpk2k.js:21212-21751 fingerprint = detectUnreachableRules (1)
 function detectUnreachableRules(context, options) {
-  let unreachable = [],
-    allowRules = getAllowRules(context),
-    askRules = getAskRules(context),
-    denyRules = getDenyRules(context);
+  let unreachable = [];
+  let allowRules = getAllowRules(context);
+  let askRules = getAskRules(context);
+  let denyRules = getDenyRules(context);
   for (let allowRule of allowRules) {
     let denyResult = isAllowRuleShadowedByDenyRule(allowRule, denyRules);
     if (denyResult.shadowed) {
@@ -95,5 +118,4 @@ function detectUnreachableRules(context, options) {
   }
   return unreachable;
 }
-
 export { detectUnreachableRules };

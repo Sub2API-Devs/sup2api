@@ -9,48 +9,63 @@
  * attribution: fingerprint 1
  */
 import { w } from "../../../vendor/react/compiler-runtime.js";
-import { isTranscriptShareKey, TRANSCRIPT_SHARE_RESPONSES, nfo } from "./TranscriptSharePrompt.js";
+import {
+  isTranscriptShareKey,
+  TRANSCRIPT_SHARE_RESPONSES,
+  isShareAnswerKey,
+} from "./TranscriptSharePrompt.js";
 import { useDigitHotkeys } from "../pluginUi/digitHotkeys.js";
-import { e } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Box } from "../../ink/components/Text.js";
 import { SurveyOption } from "./FeedbackSurveyView.js";
 
 //@ chunk-18hwfzwa.js:995118-995644 fingerprint = useDebouncedDigitInput (0.727)
-function useDebouncedDigitInput(h) {
-  let $ = w(10),
-    { onSelect: onSelect, inputValue: inputValue, setInputValue: setInputValue } = h,
-    ke;
-  if ($[0] !== onSelect || $[1] !== setInputValue)
-    ((ke = function Be(Re) {
-      (setInputValue(""), onSelect(Re));
-    }),
-      ($[0] = onSelect),
-      ($[1] = setInputValue),
-      ($[2] = ke));
-  else ke = $[2];
-  let Be = ke,
-    He;
-  if ($[3] !== Be)
-    ((He = (We) => {
+function useDebouncedDigitInput(props) {
+  let $ = w(10);
+  let { onSelect, inputValue, setInputValue } = props;
+  let ke;
+  if ($[0] !== onSelect || $[1] !== setInputValue) {
+    ke = function Be(Re) {
+      setInputValue("");
+      onSelect(Re);
+    };
+    $[0] = onSelect;
+    $[1] = setInputValue;
+    $[2] = ke;
+  } else ke = $[2];
+  let Be = ke;
+  let onDigit;
+  if ($[3] !== Be) {
+    onDigit = (We) => {
       let lower = We.toLowerCase();
       if (isTranscriptShareKey(lower)) Be(TRANSCRIPT_SHARE_RESPONSES[lower]);
-    }),
-      ($[3] = Be),
-      ($[4] = He));
-  else He = $[4];
+    };
+    $[3] = Be;
+    $[4] = onDigit;
+  } else onDigit = $[4];
   let Xe;
-  if ($[5] !== inputValue || $[6] !== He)
-    ((Xe = { inputValue: inputValue, isValidDigit: nfo, onDigit: He }),
-      ($[5] = inputValue),
-      ($[6] = He),
-      ($[7] = Xe));
-  else Xe = $[7];
+  if ($[5] !== inputValue || $[6] !== onDigit) {
+    Xe = {
+      inputValue,
+      isValidDigit: isShareAnswerKey,
+      onDigit,
+    };
+    $[5] = inputValue;
+    $[6] = onDigit;
+    $[7] = Xe;
+  } else Xe = $[7];
   useDigitHotkeys(Xe);
   let rt;
-  if ($[8] !== Be)
-    ((rt = e(Box, { marginTop: 1, children: e(SurveyOption, { onSelect: Be }) })), ($[8] = Be), ($[9] = rt));
-  else rt = $[9];
+  if ($[8] !== Be) {
+    rt = jsxProd_default(Box, {
+      marginTop: 1,
+      children: jsxProd_default(SurveyOption, {
+        onSelect: Be,
+      }),
+    });
+    $[8] = Be;
+    $[9] = rt;
+  } else rt = $[9];
   return rt;
 }
-
 export { useDebouncedDigitInput };

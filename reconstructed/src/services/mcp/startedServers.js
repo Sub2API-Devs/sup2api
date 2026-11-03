@@ -11,7 +11,9 @@
 import { HostScoped } from "../../utils/hostScoped.js";
 
 //@ chunk-30t7m5w1.js:226-261 placement
-var rTs = 100,
-  QHn = new HostScoped(() => new Set());
-
-export { QHn, rTs };
+/**
+ * 按宿主保存的已启动服务器键集合。
+ */
+var MAX_STARTED_SERVER_KEYS = 100;
+var startedServerKeys = new HostScoped(() => new Set());
+export { startedServerKeys, MAX_STARTED_SERVER_KEYS };

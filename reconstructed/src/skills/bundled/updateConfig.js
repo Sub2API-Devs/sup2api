@@ -6,21 +6,21 @@
  * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/skills/bundled/updateConfig.ts
  * pieces: chunk-hantmvxa.js (4), chunk-tyg7f3ek.js (1)
- * attribution: affinity 3, fingerprint 2
+ * attribution: sole-consumer 2, affinity 1, fingerprint 2
  */
 import { artifactPathPrefix } from "../../services/artifacts/artifactMount.js";
 import { registerBundledSkill } from "../bundledSkills.js";
 import { settingsJsonSchema } from "../../utils/settings/schemaOutput.js";
-import { Zio } from "../../utils/settings/types.js";
+import { wholeSettingsSchema } from "../../utils/settings/types.js";
 import { collectValidationTips } from "../../utils/settings/validationTips.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { settleHeldInboundOnShutdown } from "../../utils/crossSessionInbound/inboundMode.js";
 import { sweepQueueAtTeardown } from "../../cli/print/wakeRouter.js";
 
+//@ chunk-hantmvxa.js:201166-208936 sole-consumer
 /**
  * update-config skill 文档：各 settings 文件位置与作用域选择说明。
  */
-//@ chunk-hantmvxa.js:201166-208936 affinity
 var SETTINGS_FILE_LOCATIONS_DOC = `## Settings File Locations
 
 Choose the appropriate file based on scope:
@@ -113,8 +113,8 @@ Plugin syntax: \`plugin-name@source\` where source is \`claude-code-marketplace\
 - \`spinnerVerbs\`: Customize spinner verbs (\`{ "mode": "append" | "replace", "verbs": [...] }\`)
 - \`spinnerTipsOverride\`: Override spinner tips (\`{ "excludeDefault": true, "tips": ["Custom tip"] }\`)
 - \`syntaxHighlightingDisabled\`: Disable diff highlighting
-`,
-  dn = `## Hooks Configuration
+`;
+var HOOKS_SETTINGS_DOC = `## Hooks Configuration
 
 Hooks run commands at specific points in Claude Code's lifecycle.
 
@@ -272,10 +272,10 @@ echo '{"systemMessage": "Session complete!"}'
 }
 \`\`\`
 `;
+//@ chunk-hantmvxa.js:208936-213278 sole-consumer
 /**
  * update-config skill 的「构造钩子（含验证）」章节，按当前 hooks schema 生成。
  */
-//@ chunk-hantmvxa.js:208936-213278 affinity
 function buildHookConstructionDoc() {
   let e = artifactPathPrefix("hooks");
   return `## Constructing a Hook (with verification)
@@ -316,10 +316,10 @@ Given an event, matcher, target file, and desired behavior, follow this flow. Ea
 7. **Handoff.** ${e ? `Tell the user the hook is live (or needs \`${e}\`/restart per the watcher caveat). Point them at \`${e}\` to review, edit, or disable it later.` : "Tell the user the hook is live (or needs a new session per the watcher caveat), and that they can review, edit, or disable it later in the settings file you wrote."} The UI only shows "Ran N hooks" if a hook errors or is slow \u2014 silent success is invisible by design.
 `;
 }
+//@ chunk-hantmvxa.js:213278-217472 affinity
 /**
  * update-config skill 的完整提示词正文（修改 settings.json 的流程与注意事项）。
  */
-//@ chunk-hantmvxa.js:213278-217472 affinity
 function buildUpdateConfigPrompt() {
   return `# Update Config Skill
 
@@ -394,7 +394,7 @@ When adding to permission arrays or hook arrays, **merge with existing**, don't 
 
 ${SETTINGS_FILE_LOCATIONS_DOC}
 
-${dn}
+${HOOKS_SETTINGS_DOC}
 
 ${buildHookConstructionDoc()}
 
@@ -459,10 +459,10 @@ If a hook isn't running:
 6. **Use --debug** - Run \`claude --debug\` to see hook execution logs
 `;
 }
+//@ chunk-hantmvxa.js:217472-218912 fingerprint = registerUpdateConfigSkill (0.811)
 /**
  * 注册 update-config 内置 skill：注入 settings 文件位置说明、钩子构造与验证说明以及由 zod 生成的 settings JSON Schema；参数以 [hooks-only] 开头时只给钩子部分。
  */
-//@ chunk-hantmvxa.js:217472-218912 fingerprint = registerUpdateConfigSkill (0.811)
 function registerUpdateConfigSkill() {
   registerBundledSkill({
     name: "update-config",
@@ -470,55 +470,73 @@ function registerUpdateConfigSkill() {
     description:
       'Use this skill to configure the Claude Code harness via settings.json. Automated behaviors ("from now on when X", "each time X", "whenever X", "before/after X") require hooks configured in settings.json - the harness executes these, not Claude, so memory/preferences cannot fulfill them. Also use for: permissions ("allow X", "add permission", "move permission to"), env vars ("set X=Y"), hook troubleshooting, or any changes to settings.json/settings.local.json files. Examples: "allow npm commands", "add bq permission to global settings", "move permission to user settings", "set DEBUG=true", "when claude stops show X". For simple settings like theme/model, suggest the /config command.',
     allowedTools: ["Read"],
-    userInvocable: !0,
-    async getPromptForCommand(e) {
-      if (e.startsWith("[hooks-only]")) {
-        let req = e.slice(12).trim(),
-          prompt =
-            dn +
-            `
+    userInvocable: true,
+    async getPromptForCommand(args) {
+      if (args.startsWith("[hooks-only]")) {
+        let req = args.slice(12).trim();
+        let prompt =
+          HOOKS_SETTINGS_DOC +
+          `
 
 ` +
-            buildHookConstructionDoc();
+          buildHookConstructionDoc();
         if (req)
           prompt += `
 
 ## Task
 
 ${req}`;
-        return [{ type: "text", text: prompt }];
+        return [
+          {
+            type: "text",
+            text: prompt,
+          },
+        ];
       }
-      let n = settingsJsonSchema(Zio(), { io: "input" }),
-        s = n.properties?.attribution,
-        r =
-          typeof s === "object" ? s.anyOf?.find((w) => typeof w === "object" && w.type === "object") : void 0;
-      if (n.properties && typeof s === "object" && typeof r === "object")
-        n.properties.attribution = { description: s.description, ...r };
-      collectValidationTips(n, !1);
-      let h = jsonStringify(n, null, 2),
-        jsonSchema = buildUpdateConfigPrompt();
-      if (
-        ((jsonSchema += `
+      let n = settingsJsonSchema(wholeSettingsSchema(), {
+        io: "input",
+      });
+      let attribution = n.properties?.attribution;
+      let r =
+        typeof attribution === "object"
+          ? attribution.anyOf?.find((w) => typeof w === "object" && w.type === "object")
+          : undefined;
+      if (n.properties && typeof attribution === "object" && typeof r === "object")
+        n.properties.attribution = {
+          description: attribution.description,
+          ...r,
+        };
+      collectValidationTips(n, false);
+      let h = jsonStringify(n, null, 2);
+      let jsonSchema = buildUpdateConfigPrompt();
+      jsonSchema += `
 
 ## Full Settings JSON Schema
 
 \`\`\`json
 ${h}
-\`\`\``),
-        e)
-      )
+\`\`\``;
+      if (args)
         jsonSchema += `
 
 ## User Request
 
-${e}`;
-      return [{ type: "text", text: jsonSchema }];
+${args}`;
+      return [
+        {
+          type: "text",
+          text: jsonSchema,
+        },
+      ];
     },
   });
 }
 //@ chunk-tyg7f3ek.js:626872-626933 fingerprint = generateSettingsSchema (0.437)
-async function drainQueuedMessages(e, n) {
-  (await settleHeldInboundOnShutdown(), sweepQueueAtTeardown({ messageQueue: n, io: e }));
+async function drainQueuedMessages(io, messageQueue) {
+  await settleHeldInboundOnShutdown();
+  sweepQueueAtTeardown({
+    messageQueue,
+    io,
+  });
 }
-
 export { drainQueuedMessages, registerUpdateConfigSkill };

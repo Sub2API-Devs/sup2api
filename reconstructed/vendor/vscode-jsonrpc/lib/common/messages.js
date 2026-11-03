@@ -6,262 +6,275 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { we } from "./is.js";
+import { require_is } from "./is.js";
 
 //@ chunk-t4ksmxzx.js:4638-8540 cjs-fingerprint
-var ht = x(function (vr) {
-  Object.defineProperty(vr, "__esModule", { value: !0 });
-  vr.Message =
-    vr.NotificationType9 =
-    vr.NotificationType8 =
-    vr.NotificationType7 =
-    vr.NotificationType6 =
-    vr.NotificationType5 =
-    vr.NotificationType4 =
-    vr.NotificationType3 =
-    vr.NotificationType2 =
-    vr.NotificationType1 =
-    vr.NotificationType0 =
-    vr.NotificationType =
-    vr.RequestType9 =
-    vr.RequestType8 =
-    vr.RequestType7 =
-    vr.RequestType6 =
-    vr.RequestType5 =
-    vr.RequestType4 =
-    vr.RequestType3 =
-    vr.RequestType2 =
-    vr.RequestType1 =
-    vr.RequestType =
-    vr.RequestType0 =
-    vr.AbstractMessageSignature =
-    vr.ParameterStructures =
-    vr.ResponseError =
-    vr.ErrorCodes =
-      void 0;
-  var K = we(),
-    lt;
-  (function (e) {
-    ((e.ParseError = -32700),
-      (e.InvalidRequest = -32600),
-      (e.MethodNotFound = -32601),
-      (e.InvalidParams = -32602),
-      (e.InternalError = -32603),
-      (e.jsonrpcReservedErrorRangeStart = -32099),
-      (e.serverErrorStart = -32099),
-      (e.MessageWriteError = -32099),
-      (e.MessageReadError = -32098),
-      (e.PendingResponseRejected = -32097),
-      (e.ConnectionInactive = -32096),
-      (e.ServerNotInitialized = -32002),
-      (e.UnknownErrorCode = -32001),
-      (e.jsonrpcReservedErrorRangeEnd = -32000),
-      (e.serverErrorEnd = -32000));
-  })(lt || (vr.ErrorCodes = lt = {}));
-  class ft extends Error {
-    constructor(e, r, n) {
-      super(r);
-      ((this.code = K.number(e) ? e : lt.UnknownErrorCode),
-        (this.data = n),
-        Object.setPrototypeOf(this, ft.prototype));
+var require_messages = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.Message =
+    cjsExports.NotificationType9 =
+    cjsExports.NotificationType8 =
+    cjsExports.NotificationType7 =
+    cjsExports.NotificationType6 =
+    cjsExports.NotificationType5 =
+    cjsExports.NotificationType4 =
+    cjsExports.NotificationType3 =
+    cjsExports.NotificationType2 =
+    cjsExports.NotificationType1 =
+    cjsExports.NotificationType0 =
+    cjsExports.NotificationType =
+    cjsExports.RequestType9 =
+    cjsExports.RequestType8 =
+    cjsExports.RequestType7 =
+    cjsExports.RequestType6 =
+    cjsExports.RequestType5 =
+    cjsExports.RequestType4 =
+    cjsExports.RequestType3 =
+    cjsExports.RequestType2 =
+    cjsExports.RequestType1 =
+    cjsExports.RequestType =
+    cjsExports.RequestType0 =
+    cjsExports.AbstractMessageSignature =
+    cjsExports.ParameterStructures =
+    cjsExports.ResponseError =
+    cjsExports.ErrorCodes =
+      undefined;
+  var is = require_is();
+  var ErrorCodes;
+  (function (ErrorCodes) {
+    ErrorCodes.ParseError = -32700;
+    ErrorCodes.InvalidRequest = -32600;
+    ErrorCodes.MethodNotFound = -32601;
+    ErrorCodes.InvalidParams = -32602;
+    ErrorCodes.InternalError = -32603;
+    ErrorCodes.jsonrpcReservedErrorRangeStart = -32099;
+    ErrorCodes.serverErrorStart = -32099;
+    ErrorCodes.MessageWriteError = -32099;
+    ErrorCodes.MessageReadError = -32098;
+    ErrorCodes.PendingResponseRejected = -32097;
+    ErrorCodes.ConnectionInactive = -32096;
+    ErrorCodes.ServerNotInitialized = -32002;
+    ErrorCodes.UnknownErrorCode = -32001;
+    ErrorCodes.jsonrpcReservedErrorRangeEnd = -32000;
+    ErrorCodes.serverErrorEnd = -32000;
+  })(ErrorCodes || (cjsExports.ErrorCodes = ErrorCodes = {}));
+  class ResponseError extends Error {
+    constructor(code, message, data) {
+      super(message);
+      this.code = is.number(code) ? code : ErrorCodes.UnknownErrorCode;
+      this.data = data;
+      Object.setPrototypeOf(this, ResponseError.prototype);
     }
     toJson() {
-      let e = { code: this.code, message: this.message };
-      if (this.data !== void 0) e.data = this.data;
-      return e;
+      let result = {
+        code: this.code,
+        message: this.message,
+      };
+      if (this.data !== undefined) result.data = this.data;
+      return result;
     }
   }
-  vr.ResponseError = ft;
-  class H {
-    constructor(e) {
-      this.kind = e;
+  cjsExports.ResponseError = ResponseError;
+  class ParameterStructures {
+    constructor(kind) {
+      this.kind = kind;
     }
-    static is(e) {
-      return e === H.auto || e === H.byName || e === H.byPosition;
+    static is(value) {
+      return (
+        value === ParameterStructures.auto ||
+        value === ParameterStructures.byName ||
+        value === ParameterStructures.byPosition
+      );
     }
     toString() {
       return this.kind;
     }
   }
-  vr.ParameterStructures = H;
-  H.auto = new H("auto");
-  H.byPosition = new H("byPosition");
-  H.byName = new H("byName");
-  class q {
-    constructor(e, r) {
-      ((this.method = e), (this.numberOfParams = r));
+  cjsExports.ParameterStructures = ParameterStructures;
+  ParameterStructures.auto = new ParameterStructures("auto");
+  ParameterStructures.byPosition = new ParameterStructures("byPosition");
+  ParameterStructures.byName = new ParameterStructures("byName");
+  class AbstractMessageSignature {
+    constructor(method, numberOfParams) {
+      this.method = method;
+      this.numberOfParams = numberOfParams;
     }
     get parameterStructures() {
-      return H.auto;
+      return ParameterStructures.auto;
     }
   }
-  vr.AbstractMessageSignature = q;
-  class Yt extends q {
-    constructor(e) {
-      super(e, 0);
+  cjsExports.AbstractMessageSignature = AbstractMessageSignature;
+  class RequestType0 extends AbstractMessageSignature {
+    constructor(method) {
+      super(method, 0);
     }
   }
-  vr.RequestType0 = Yt;
-  class Xt extends q {
-    constructor(e, r = H.auto) {
-      super(e, 1);
-      this._parameterStructures = r;
-    }
-    get parameterStructures() {
-      return this._parameterStructures;
-    }
-  }
-  vr.RequestType = Xt;
-  class Zt extends q {
-    constructor(e, r = H.auto) {
-      super(e, 1);
-      this._parameterStructures = r;
+  cjsExports.RequestType0 = RequestType0;
+  class RequestType extends AbstractMessageSignature {
+    constructor(method, _parameterStructures = ParameterStructures.auto) {
+      super(method, 1);
+      this._parameterStructures = _parameterStructures;
     }
     get parameterStructures() {
       return this._parameterStructures;
     }
   }
-  vr.RequestType1 = Zt;
-  class er extends q {
-    constructor(e) {
-      super(e, 2);
-    }
-  }
-  vr.RequestType2 = er;
-  class tr extends q {
-    constructor(e) {
-      super(e, 3);
-    }
-  }
-  vr.RequestType3 = tr;
-  class rr extends q {
-    constructor(e) {
-      super(e, 4);
-    }
-  }
-  vr.RequestType4 = rr;
-  class nr extends q {
-    constructor(e) {
-      super(e, 5);
-    }
-  }
-  vr.RequestType5 = nr;
-  class ir extends q {
-    constructor(e) {
-      super(e, 6);
-    }
-  }
-  vr.RequestType6 = ir;
-  class sr extends q {
-    constructor(e) {
-      super(e, 7);
-    }
-  }
-  vr.RequestType7 = sr;
-  class or extends q {
-    constructor(e) {
-      super(e, 8);
-    }
-  }
-  vr.RequestType8 = or;
-  class ar extends q {
-    constructor(e) {
-      super(e, 9);
-    }
-  }
-  vr.RequestType9 = ar;
-  class cr extends q {
-    constructor(e, r = H.auto) {
-      super(e, 1);
-      this._parameterStructures = r;
+  cjsExports.RequestType = RequestType;
+  class RequestType1 extends AbstractMessageSignature {
+    constructor(method, _parameterStructures = ParameterStructures.auto) {
+      super(method, 1);
+      this._parameterStructures = _parameterStructures;
     }
     get parameterStructures() {
       return this._parameterStructures;
     }
   }
-  vr.NotificationType = cr;
-  class ur extends q {
-    constructor(e) {
-      super(e, 0);
+  cjsExports.RequestType1 = RequestType1;
+  class RequestType2 extends AbstractMessageSignature {
+    constructor(method) {
+      super(method, 2);
     }
   }
-  vr.NotificationType0 = ur;
-  class dr extends q {
-    constructor(e, r = H.auto) {
-      super(e, 1);
-      this._parameterStructures = r;
+  cjsExports.RequestType2 = RequestType2;
+  class RequestType3 extends AbstractMessageSignature {
+    constructor(method) {
+      super(method, 3);
+    }
+  }
+  cjsExports.RequestType3 = RequestType3;
+  class RequestType4 extends AbstractMessageSignature {
+    constructor(method) {
+      super(method, 4);
+    }
+  }
+  cjsExports.RequestType4 = RequestType4;
+  class RequestType5 extends AbstractMessageSignature {
+    constructor(method) {
+      super(method, 5);
+    }
+  }
+  cjsExports.RequestType5 = RequestType5;
+  class RequestType6 extends AbstractMessageSignature {
+    constructor(method) {
+      super(method, 6);
+    }
+  }
+  cjsExports.RequestType6 = RequestType6;
+  class RequestType7 extends AbstractMessageSignature {
+    constructor(method) {
+      super(method, 7);
+    }
+  }
+  cjsExports.RequestType7 = RequestType7;
+  class RequestType8 extends AbstractMessageSignature {
+    constructor(method) {
+      super(method, 8);
+    }
+  }
+  cjsExports.RequestType8 = RequestType8;
+  class RequestType9 extends AbstractMessageSignature {
+    constructor(method) {
+      super(method, 9);
+    }
+  }
+  cjsExports.RequestType9 = RequestType9;
+  class NotificationType extends AbstractMessageSignature {
+    constructor(method, _parameterStructures = ParameterStructures.auto) {
+      super(method, 1);
+      this._parameterStructures = _parameterStructures;
     }
     get parameterStructures() {
       return this._parameterStructures;
     }
   }
-  vr.NotificationType1 = dr;
-  class lr extends q {
-    constructor(e) {
-      super(e, 2);
+  cjsExports.NotificationType = NotificationType;
+  class NotificationType0 extends AbstractMessageSignature {
+    constructor(method) {
+      super(method, 0);
     }
   }
-  vr.NotificationType2 = lr;
-  class fr extends q {
-    constructor(e) {
-      super(e, 3);
+  cjsExports.NotificationType0 = NotificationType0;
+  class NotificationType1 extends AbstractMessageSignature {
+    constructor(method, _parameterStructures = ParameterStructures.auto) {
+      super(method, 1);
+      this._parameterStructures = _parameterStructures;
+    }
+    get parameterStructures() {
+      return this._parameterStructures;
     }
   }
-  vr.NotificationType3 = fr;
-  class hr extends q {
-    constructor(e) {
-      super(e, 4);
+  cjsExports.NotificationType1 = NotificationType1;
+  class NotificationType2 extends AbstractMessageSignature {
+    constructor(method) {
+      super(method, 2);
     }
   }
-  vr.NotificationType4 = hr;
-  class pr extends q {
-    constructor(e) {
-      super(e, 5);
+  cjsExports.NotificationType2 = NotificationType2;
+  class NotificationType3 extends AbstractMessageSignature {
+    constructor(method) {
+      super(method, 3);
     }
   }
-  vr.NotificationType5 = pr;
-  class mr extends q {
-    constructor(e) {
-      super(e, 6);
+  cjsExports.NotificationType3 = NotificationType3;
+  class NotificationType4 extends AbstractMessageSignature {
+    constructor(method) {
+      super(method, 4);
     }
   }
-  vr.NotificationType6 = mr;
-  class gr extends q {
-    constructor(e) {
-      super(e, 7);
+  cjsExports.NotificationType4 = NotificationType4;
+  class NotificationType5 extends AbstractMessageSignature {
+    constructor(method) {
+      super(method, 5);
     }
   }
-  vr.NotificationType7 = gr;
-  class yr extends q {
-    constructor(e) {
-      super(e, 8);
+  cjsExports.NotificationType5 = NotificationType5;
+  class NotificationType6 extends AbstractMessageSignature {
+    constructor(method) {
+      super(method, 6);
     }
   }
-  vr.NotificationType8 = yr;
-  class br extends q {
-    constructor(e) {
-      super(e, 9);
+  cjsExports.NotificationType6 = NotificationType6;
+  class NotificationType7 extends AbstractMessageSignature {
+    constructor(method) {
+      super(method, 7);
     }
   }
-  vr.NotificationType9 = br;
-  var Qt;
-  (function (e) {
-    function r(c) {
-      let h = c;
-      return h && K.string(h.method) && (K.string(h.id) || K.number(h.id));
+  cjsExports.NotificationType7 = NotificationType7;
+  class NotificationType8 extends AbstractMessageSignature {
+    constructor(method) {
+      super(method, 8);
     }
-    e.isRequest = r;
-    function n(c) {
-      let h = c;
-      return h && K.string(h.method) && c.id === void 0;
+  }
+  cjsExports.NotificationType8 = NotificationType8;
+  class NotificationType9 extends AbstractMessageSignature {
+    constructor(method) {
+      super(method, 9);
     }
-    e.isNotification = n;
-    function s(c) {
-      let h = c;
-      return h && (h.result !== void 0 || !!h.error) && (K.string(h.id) || K.number(h.id) || h.id === null);
+  }
+  cjsExports.NotificationType9 = NotificationType9;
+  var Message;
+  (function (Message) {
+    function isRequest(message) {
+      let candidate = message;
+      return candidate && is.string(candidate.method) && (is.string(candidate.id) || is.number(candidate.id));
     }
-    e.isResponse = s;
-  })(Qt || (vr.Message = Qt = {}));
+    Message.isRequest = isRequest;
+    function isNotification(message) {
+      let candidate = message;
+      return candidate && is.string(candidate.method) && message.id === undefined;
+    }
+    Message.isNotification = isNotification;
+    function isResponse(message) {
+      let candidate = message;
+      return (
+        candidate &&
+        (candidate.result !== undefined || !!candidate.error) &&
+        (is.string(candidate.id) || is.number(candidate.id) || candidate.id === null)
+      );
+    }
+    Message.isResponse = isResponse;
+  })(Message || (cjsExports.Message = Message = {}));
 });
-
-export { ht };
+export { require_messages };

@@ -6,20 +6,19 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../runtime/bun-runtime.js";
-import { pMn } from "../debug/src/index.js";
+import { require_debug_2 } from "../debug/src/index.js";
 
 //@ chunk-h6b7mazd.js:37343-37518 cjs-fingerprint
-var Gs = x(function (Nd, Ws) {
-  var at;
-  Ws.exports = function () {
-    if (!at) {
+var require_debug = x(function (cjsExports, cjsModule) {
+  var debug;
+  cjsModule.exports = function () {
+    if (!debug) {
       try {
-        at = pMn()("follow-redirects");
+        debug = require_debug_2()("follow-redirects");
       } catch (error) {}
-      if (typeof at !== "function") at = function () {};
+      if (typeof debug !== "function") debug = function () {};
     }
-    at.apply(null, arguments);
+    debug.apply(null, arguments);
   };
 });
-
-export { Gs };
+export { require_debug };

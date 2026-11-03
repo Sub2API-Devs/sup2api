@@ -6,8 +6,8 @@
  * attribution: esm-fingerprint 3
  */
 import { createFetchWithDefaults, headersToObject } from "../../../../../../src/utils/fetchWithDefaults.js";
-import { AM, Aue, NHe } from "./auth.js";
-import { gcn } from "../../../../../eventsource-parser/dist/stream.esm.js";
+import { UnauthorizedError, auth, extractWWWAuthenticateParams } from "./auth.js";
+import { EventSourceParserStream } from "../../../../../eventsource-parser/dist/stream.esm.js";
 import {
   JSONRPCMessageSchema,
   isJSONRPCResultResponse,
@@ -16,155 +16,170 @@ import {
 } from "../types.js";
 
 //@ chunk-pjt9hgpa.js:634-744 esm-fingerprint
-var m = {
+var DEFAULT_STREAMABLE_HTTP_RECONNECTION_OPTIONS = {
   initialReconnectionDelay: 1000,
   maxReconnectionDelay: 30000,
   reconnectionDelayGrowFactor: 1.5,
   maxRetries: 2,
 };
 //@ chunk-pjt9hgpa.js:744-835 esm-fingerprint
-class Tue extends Error {
-  constructor(e, t) {
-    super(`Streamable HTTP error: ${t}`);
-    this.code = e;
+class StreamableHTTPError extends Error {
+  constructor(code, message) {
+    super(`Streamable HTTP error: ${message}`);
+    this.code = code;
   }
 }
 //@ chunk-pjt9hgpa.js:835-7749 esm-fingerprint
-class zYn {
-  constructor(e, t) {
-    ((this._hasCompletedAuthFlow = !1),
-      (this._url = e),
-      (this._resourceMetadataUrl = void 0),
-      (this._scope = void 0),
-      (this._requestInit = t?.requestInit),
-      (this._authProvider = t?.authProvider),
-      (this._fetch = t?.fetch),
-      (this._fetchWithInit = createFetchWithDefaults(t?.fetch, t?.requestInit)),
-      (this._sessionId = t?.sessionId),
-      (this._reconnectionOptions = t?.reconnectionOptions ?? m));
+class StreamableHTTPClientTransport {
+  constructor(url, opts) {
+    this._hasCompletedAuthFlow = false;
+    this._url = url;
+    this._resourceMetadataUrl = undefined;
+    this._scope = undefined;
+    this._requestInit = opts?.requestInit;
+    this._authProvider = opts?.authProvider;
+    this._fetch = opts?.fetch;
+    this._fetchWithInit = createFetchWithDefaults(opts?.fetch, opts?.requestInit);
+    this._sessionId = opts?.sessionId;
+    this._reconnectionOptions = opts?.reconnectionOptions ?? DEFAULT_STREAMABLE_HTTP_RECONNECTION_OPTIONS;
   }
   async _authThenStart() {
-    if (!this._authProvider) throw new AM("No auth provider");
-    let e;
+    if (!this._authProvider) throw new UnauthorizedError("No auth provider");
+    let result;
     try {
-      e = await Aue(this._authProvider, {
+      result = await auth(this._authProvider, {
         serverUrl: this._url,
         resourceMetadataUrl: this._resourceMetadataUrl,
         scope: this._scope,
         fetchFn: this._fetchWithInit,
       });
     } catch (error) {
-      throw (this.onerror?.(error), error);
+      this.onerror?.(error);
+      throw error;
     }
-    if (e !== "AUTHORIZED") throw new AM();
-    return await this._startOrAuthSse({ resumptionToken: void 0 });
+    if (result !== "AUTHORIZED") throw new UnauthorizedError();
+    return await this._startOrAuthSse({
+      resumptionToken: undefined,
+    });
   }
   async _commonHeaders() {
-    let e = {};
+    let headers = {};
     if (this._authProvider) {
       let tokens = await this._authProvider.tokens();
-      if (tokens) e.Authorization = `Bearer ${tokens.access_token}`;
+      if (tokens) headers.Authorization = `Bearer ${tokens.access_token}`;
     }
-    if (this._sessionId) e["mcp-session-id"] = this._sessionId;
-    if (this._protocolVersion) e["mcp-protocol-version"] = this._protocolVersion;
-    let t = headersToObject(this._requestInit?.headers);
-    return new Headers({ ...e, ...t });
+    if (this._sessionId) headers["mcp-session-id"] = this._sessionId;
+    if (this._protocolVersion) headers["mcp-protocol-version"] = this._protocolVersion;
+    let extraHeaders = headersToObject(this._requestInit?.headers);
+    return new Headers({
+      ...headers,
+      ...extraHeaders,
+    });
   }
-  async _startOrAuthSse(e) {
-    let { resumptionToken: resumptionToken } = e;
+  async _startOrAuthSse(options) {
+    let { resumptionToken } = options;
     try {
-      let _commonHeaders = await this._commonHeaders();
-      if ((_commonHeaders.set("Accept", "text/event-stream"), resumptionToken))
-        _commonHeaders.set("last-event-id", resumptionToken);
-      let s = await (this._fetch ?? fetch)(this._url, {
+      let headers = await this._commonHeaders();
+      headers.set("Accept", "text/event-stream");
+      if (resumptionToken) headers.set("last-event-id", resumptionToken);
+      let response = await (this._fetch ?? fetch)(this._url, {
         method: "GET",
-        headers: _commonHeaders,
+        headers,
         signal: this._abortController?.signal,
       });
-      if (!s.ok) {
-        if ((await s.body?.cancel(), s.status === 401 && this._authProvider))
-          return await this._authThenStart();
-        if (s.status === 405) return;
-        throw new Tue(s.status, `Failed to open SSE stream: ${s.statusText}`);
+      if (!response.ok) {
+        await response.body?.cancel();
+        if (response.status === 401 && this._authProvider) return await this._authThenStart();
+        if (response.status === 405) return;
+        throw new StreamableHTTPError(response.status, `Failed to open SSE stream: ${response.statusText}`);
       }
-      this._handleSseStream(s.body, e, !0);
+      this._handleSseStream(response.body, options, true);
     } catch (error) {
-      throw (this.onerror?.(error), error);
+      this.onerror?.(error);
+      throw error;
     }
   }
-  _getNextReconnectionDelay(e) {
-    if (this._serverRetryMs !== void 0) return this._serverRetryMs;
-    let initialReconnectionDelay = this._reconnectionOptions.initialReconnectionDelay,
-      reconnectionDelayGrowFactor = this._reconnectionOptions.reconnectionDelayGrowFactor,
-      maxReconnectionDelay = this._reconnectionOptions.maxReconnectionDelay;
-    return Math.min(
-      initialReconnectionDelay * Math.pow(reconnectionDelayGrowFactor, e),
-      maxReconnectionDelay,
-    );
+  _getNextReconnectionDelay(attempt) {
+    if (this._serverRetryMs !== undefined) return this._serverRetryMs;
+    let initialDelay = this._reconnectionOptions.initialReconnectionDelay;
+    let growFactor = this._reconnectionOptions.reconnectionDelayGrowFactor;
+    let maxDelay = this._reconnectionOptions.maxReconnectionDelay;
+    return Math.min(initialDelay * Math.pow(growFactor, attempt), maxDelay);
   }
-  _scheduleReconnection(e, t = 0) {
+  _scheduleReconnection(options, attemptCount = 0) {
     let maxRetries = this._reconnectionOptions.maxRetries;
-    if (t >= maxRetries) {
+    if (attemptCount >= maxRetries) {
       this.onerror?.(Error(`Maximum reconnection attempts (${maxRetries}) exceeded.`));
       return;
     }
-    let _getNextReconnectionDelay = this._getNextReconnectionDelay(t);
+    let delay = this._getNextReconnectionDelay(attemptCount);
     this._reconnectionTimeout = setTimeout(() => {
-      this._startOrAuthSse(e).catch((a) => {
-        (this.onerror?.(
-          Error(`Failed to reconnect SSE stream: ${a instanceof Error ? a.message : String(a)}`),
-        ),
-          this._scheduleReconnection(e, t + 1));
+      this._startOrAuthSse(options).catch((error) => {
+        this.onerror?.(
+          Error(`Failed to reconnect SSE stream: ${error instanceof Error ? error.message : String(error)}`),
+        );
+        this._scheduleReconnection(options, attemptCount + 1);
       });
-    }, _getNextReconnectionDelay);
+    }, delay);
   }
-  _handleSseStream(e, t, r) {
-    if (!e) return;
-    let { onresumptiontoken: onresumptiontoken, replayMessageId: replayMessageId } = t,
-      d,
-      n = !1,
-      u = !1;
+  _handleSseStream(stream, options, isReconnectable) {
+    if (!stream) return;
+    let { onresumptiontoken, replayMessageId } = options;
+    let lastEventId;
+    let n = false;
+    let u = false;
     (async () => {
       try {
-        let reader = e
+        let reader = stream
           .pipeThrough(new TextDecoderStream())
           .pipeThrough(
-            new gcn({
-              onRetry: (o) => {
-                this._serverRetryMs = o;
+            new EventSourceParserStream({
+              onRetry: (retryMs) => {
+                this._serverRetryMs = retryMs;
               },
             }),
           )
           .getReader();
-        while (!0) {
-          let { value: o, done: c } = await reader.read();
-          if (c) break;
-          if (o.id) ((d = o.id), (n = !0), onresumptiontoken?.(o.id));
-          if (!o.data) continue;
-          if (!o.event || o.event === "message")
+        while (true) {
+          let { value: event, done } = await reader.read();
+          if (done) break;
+          if (event.id) {
+            lastEventId = event.id;
+            n = true;
+            onresumptiontoken?.(event.id);
+          }
+          if (!event.data) continue;
+          if (!event.event || event.event === "message")
             try {
-              let parse = JSONRPCMessageSchema.parse(JSON.parse(o.data));
-              if (isJSONRPCResultResponse(parse)) {
-                if (((u = !0), replayMessageId !== void 0)) parse.id = replayMessageId;
+              let message = JSONRPCMessageSchema.parse(JSON.parse(event.data));
+              if (isJSONRPCResultResponse(message)) {
+                u = true;
+                if (replayMessageId !== undefined) message.id = replayMessageId;
               }
-              this.onmessage?.(parse);
+              this.onmessage?.(message);
             } catch (error) {
               this.onerror?.(error);
             }
         }
-        if ((r || n) && !u && this._abortController && !this._abortController.signal.aborted)
+        if ((isReconnectable || n) && !u && this._abortController && !this._abortController.signal.aborted)
           this._scheduleReconnection(
-            { resumptionToken: d, onresumptiontoken: onresumptiontoken, replayMessageId: replayMessageId },
+            {
+              resumptionToken: lastEventId,
+              onresumptiontoken,
+              replayMessageId,
+            },
             0,
           );
       } catch (error) {
-        if (
-          (this.onerror?.(Error(`SSE stream disconnected: ${error}`)),
-          (r || n) && !u && this._abortController && !this._abortController.signal.aborted)
-        )
+        this.onerror?.(Error(`SSE stream disconnected: ${error}`));
+        if ((isReconnectable || n) && !u && this._abortController && !this._abortController.signal.aborted)
           try {
             this._scheduleReconnection(
-              { resumptionToken: d, onresumptiontoken: onresumptiontoken, replayMessageId: replayMessageId },
+              {
+                resumptionToken: lastEventId,
+                onresumptiontoken,
+                replayMessageId,
+              },
               0,
             );
           } catch (error) {
@@ -182,111 +197,131 @@ class zYn {
       );
     this._abortController = new AbortController();
   }
-  async finishAuth(e) {
-    if (!this._authProvider) throw new AM("No auth provider");
+  async finishAuth(authorizationCode) {
+    if (!this._authProvider) throw new UnauthorizedError("No auth provider");
     if (
-      (await Aue(this._authProvider, {
+      (await auth(this._authProvider, {
         serverUrl: this._url,
-        authorizationCode: e,
+        authorizationCode,
         resourceMetadataUrl: this._resourceMetadataUrl,
         scope: this._scope,
         fetchFn: this._fetchWithInit,
       })) !== "AUTHORIZED"
     )
-      throw new AM("Failed to authorize");
+      throw new UnauthorizedError("Failed to authorize");
   }
   async close() {
-    if (this._reconnectionTimeout)
-      (clearTimeout(this._reconnectionTimeout), (this._reconnectionTimeout = void 0));
-    (this._abortController?.abort(), this.onclose?.());
+    if (this._reconnectionTimeout) {
+      clearTimeout(this._reconnectionTimeout);
+      this._reconnectionTimeout = undefined;
+    }
+    this._abortController?.abort();
+    this.onclose?.();
   }
-  async send(e, t) {
+  async send(message, options) {
     try {
-      let { resumptionToken: resumptionToken, onresumptiontoken: onresumptiontoken } = t || {};
+      let { resumptionToken, onresumptiontoken } = options || {};
       if (resumptionToken) {
         this._startOrAuthSse({
-          resumptionToken: resumptionToken,
-          replayMessageId: isJSONRPCRequest(e) ? e.id : void 0,
-        }).catch((i) => this.onerror?.(i));
+          resumptionToken,
+          replayMessageId: isJSONRPCRequest(message) ? message.id : undefined,
+        }).catch((err) => this.onerror?.(err));
         return;
       }
-      let _commonHeaders = await this._commonHeaders();
-      (_commonHeaders.set("content-type", "application/json"),
-        _commonHeaders.set("accept", "application/json, text/event-stream"));
-      let d = {
-          ...this._requestInit,
-          method: "POST",
-          headers: _commonHeaders,
-          body: JSON.stringify(e),
-          signal: this._abortController?.signal,
-        },
-        n = await (this._fetch ?? fetch)(this._url, d),
-        u = n.headers.get("mcp-session-id");
-      if (u) this._sessionId = u;
-      if (!n.ok) {
-        let i = await n.text().catch(() => null);
-        if (n.status === 401 && this._authProvider) {
+      let headers = await this._commonHeaders();
+      headers.set("content-type", "application/json");
+      headers.set("accept", "application/json, text/event-stream");
+      let init = {
+        ...this._requestInit,
+        method: "POST",
+        headers,
+        body: JSON.stringify(message),
+        signal: this._abortController?.signal,
+      };
+      let response = await (this._fetch ?? fetch)(this._url, init);
+      let sessionId = response.headers.get("mcp-session-id");
+      if (sessionId) this._sessionId = sessionId;
+      if (!response.ok) {
+        let text = await response.text().catch(() => null);
+        if (response.status === 401 && this._authProvider) {
           if (this._hasCompletedAuthFlow)
-            throw new Tue(401, "Server returned 401 after successful authentication");
-          let { resourceMetadataUrl: resourceMetadataUrl, scope: scope } = NHe(n);
+            throw new StreamableHTTPError(401, "Server returned 401 after successful authentication");
+          let { resourceMetadataUrl, scope } = extractWWWAuthenticateParams(response);
+          this._resourceMetadataUrl = resourceMetadataUrl;
+          this._scope = scope;
           if (
-            ((this._resourceMetadataUrl = resourceMetadataUrl),
-            (this._scope = scope),
-            (await Aue(this._authProvider, {
+            (await auth(this._authProvider, {
               serverUrl: this._url,
               resourceMetadataUrl: this._resourceMetadataUrl,
               scope: this._scope,
               fetchFn: this._fetchWithInit,
-            })) !== "AUTHORIZED")
+            })) !== "AUTHORIZED"
           )
-            throw new AM();
-          return ((this._hasCompletedAuthFlow = !0), this.send(e));
+            throw new UnauthorizedError();
+          this._hasCompletedAuthFlow = true;
+          return this.send(message);
         }
-        if (n.status === 403 && this._authProvider) {
-          let { resourceMetadataUrl: resourceMetadataUrl, scope: scope, error: error } = NHe(n);
+        if (response.status === 403 && this._authProvider) {
+          let { resourceMetadataUrl, scope, error } = extractWWWAuthenticateParams(response);
           if (error === "insufficient_scope") {
-            let f = n.headers.get("WWW-Authenticate");
-            if (this._lastUpscopingHeader === f)
-              throw new Tue(403, "Server returned 403 after trying upscoping");
+            let wwwAuthHeader = response.headers.get("WWW-Authenticate");
+            if (this._lastUpscopingHeader === wwwAuthHeader)
+              throw new StreamableHTTPError(403, "Server returned 403 after trying upscoping");
             if (scope) this._scope = scope;
             if (resourceMetadataUrl) this._resourceMetadataUrl = resourceMetadataUrl;
+            this._lastUpscopingHeader = wwwAuthHeader ?? undefined;
             if (
-              ((this._lastUpscopingHeader = f ?? void 0),
-              (await Aue(this._authProvider, {
+              (await auth(this._authProvider, {
                 serverUrl: this._url,
                 resourceMetadataUrl: this._resourceMetadataUrl,
                 scope: this._scope,
                 fetchFn: this._fetch,
-              })) !== "AUTHORIZED")
+              })) !== "AUTHORIZED"
             )
-              throw new AM();
-            return this.send(e);
+              throw new UnauthorizedError();
+            return this.send(message);
           }
         }
-        throw new Tue(n.status, `Error POSTing to endpoint: ${i}`);
+        throw new StreamableHTTPError(response.status, `Error POSTing to endpoint: ${text}`);
       }
-      if (((this._hasCompletedAuthFlow = !1), (this._lastUpscopingHeader = void 0), n.status === 202)) {
-        if ((await n.body?.cancel(), isInitializedNotification(e)))
-          this._startOrAuthSse({ resumptionToken: void 0 }).catch((i) => this.onerror?.(i));
+      this._hasCompletedAuthFlow = false;
+      this._lastUpscopingHeader = undefined;
+      if (response.status === 202) {
+        await response.body?.cancel();
+        if (isInitializedNotification(message))
+          this._startOrAuthSse({
+            resumptionToken: undefined,
+          }).catch((err) => this.onerror?.(err));
         return;
       }
       let l =
-          (Array.isArray(e) ? e : [e]).filter((i) => "method" in i && "id" in i && i.id !== void 0).length >
-          0,
-        _ = n.headers.get("content-type");
-      if (l)
-        if (_?.includes("text/event-stream"))
-          this._handleSseStream(n.body, { onresumptiontoken: onresumptiontoken }, !1);
-        else if (_?.includes("application/json")) {
-          let body = await n.json(),
-            o = Array.isArray(body)
-              ? body.map((c) => JSONRPCMessageSchema.parse(c))
-              : [JSONRPCMessageSchema.parse(body)];
-          for (let c of o) this.onmessage?.(c);
-        } else throw (await n.body?.cancel(), new Tue(-1, `Unexpected content type: ${_}`));
-      else await n.body?.cancel();
+        (Array.isArray(message) ? message : [message]).filter(
+          (msg) => "method" in msg && "id" in msg && msg.id !== undefined,
+        ).length > 0;
+      let contentType = response.headers.get("content-type");
+      if (l) {
+        if (contentType?.includes("text/event-stream"))
+          this._handleSseStream(
+            response.body,
+            {
+              onresumptiontoken,
+            },
+            false,
+          );
+        else if (contentType?.includes("application/json")) {
+          let data = await response.json();
+          let responseMessages = Array.isArray(data)
+            ? data.map((msg) => JSONRPCMessageSchema.parse(msg))
+            : [JSONRPCMessageSchema.parse(data)];
+          for (let msg of responseMessages) this.onmessage?.(msg);
+        } else {
+          await response.body?.cancel();
+          throw new StreamableHTTPError(-1, `Unexpected content type: ${contentType}`);
+        }
+      } else await response.body?.cancel();
     } catch (error) {
-      throw (this.onerror?.(error), error);
+      this.onerror?.(error);
+      throw error;
     }
   }
   get sessionId() {
@@ -295,30 +330,34 @@ class zYn {
   async terminateSession() {
     if (!this._sessionId) return;
     try {
-      let _commonHeaders = await this._commonHeaders(),
-        t = {
-          ...this._requestInit,
-          method: "DELETE",
-          headers: _commonHeaders,
-          signal: this._abortController?.signal,
-        },
-        r = await (this._fetch ?? fetch)(this._url, t);
-      if ((await r.body?.cancel(), !r.ok && r.status !== 405))
-        throw new Tue(r.status, `Failed to terminate session: ${r.statusText}`);
-      this._sessionId = void 0;
+      let headers = await this._commonHeaders();
+      let init = {
+        ...this._requestInit,
+        method: "DELETE",
+        headers,
+        signal: this._abortController?.signal,
+      };
+      let response = await (this._fetch ?? fetch)(this._url, init);
+      await response.body?.cancel();
+      if (!response.ok && response.status !== 405)
+        throw new StreamableHTTPError(response.status, `Failed to terminate session: ${response.statusText}`);
+      this._sessionId = undefined;
     } catch (error) {
-      throw (this.onerror?.(error), error);
+      this.onerror?.(error);
+      throw error;
     }
   }
-  setProtocolVersion(e) {
-    this._protocolVersion = e;
+  setProtocolVersion(version) {
+    this._protocolVersion = version;
   }
   get protocolVersion() {
     return this._protocolVersion;
   }
-  async resumeStream(e, t) {
-    await this._startOrAuthSse({ resumptionToken: e, onresumptiontoken: t?.onresumptiontoken });
+  async resumeStream(lastEventId, options) {
+    await this._startOrAuthSse({
+      resumptionToken: lastEventId,
+      onresumptiontoken: options?.onresumptiontoken,
+    });
   }
 }
-
-export { Tue, zYn };
+export { StreamableHTTPError, StreamableHTTPClientTransport };

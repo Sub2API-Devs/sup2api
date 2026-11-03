@@ -12,52 +12,87 @@ import { randomUUID } from "crypto";
 import { isPlainObject } from "../../../utils/isPlainObject.js";
 import {
   checkPinnedKeys,
-  restoreMissingKeys,
-  M,
-  $a,
+  restoreMissingKeys_2,
+  checkResultObject,
+  differsFromAnswer,
   asStringList,
-  freeze_7,
+  as,
   checkValueOrDeny,
-  _rs,
+  stripErrorFlag,
   checkPinnedKeysWith,
 } from "./siteRules.js";
 import { wi } from "../../../../vendor/lodash-es/_inlinedHelpers.js";
-import { Rs } from "../../../utils/hooks/hookSerialization.js";
-import { contextMeasureFor, maxNewTextLength, uf, Ae, Jt, he } from "./promptContextSites.js";
-import { pp, ap } from "./agentSites.js";
-import { CSi } from "../builtinHooksModule.js";
+import { stableStringifySafe } from "../../../utils/hooks/hookSerialization.js";
+import {
+  contextMeasureFor,
+  maxNewTextLength,
+  addsOnlyKey,
+  textLengthIfNotIn,
+  firstLongerText,
+  valueOnlySite,
+} from "./promptContextSites.js";
+import { withCeiling, isPermissionDecisionValue } from "./agentSites.js";
+import { DECISION_ORDER } from "../builtinHooksModule.js";
 
 //@ chunk-4121qate.js:207816-207856 placement
-var kv = ["tool", "tool_use_id", "agentId"];
+/**
+ * tool/tool_use_id/agentId
+ */
+var TOOL_CALL_PINNED_KEYS = ["tool", "tool_use_id", "agentId"];
 //@ chunk-4121qate.js:207856-207875 placement
-var lt = "$shadowed";
+/**
+ * "$shadowed"
+ */
+var SHADOWED_KEY = "$shadowed";
 //@ chunk-4121qate.js:207875-207897 placement
 var REQUESTMETA = "requestMeta";
 //@ chunk-4121qate.js:207897-207950 placement
-var fp = ["tool", "tool_use_id", "agentId", "consent", lt];
+/**
+ * tool.check 固定键
+ */
+var TOOL_CHECK_PINNED_KEYS = ["tool", "tool_use_id", "agentId", "consent", SHADOWED_KEY];
 //@ chunk-4121qate.js:207950-208072 placement
 function pickShadowedToolFields(e) {
   let o = {};
-  for (let r of [...fp, REQUESTMETA]) if (Object.hasOwn(e, r)) o[r] = e[r];
-  return Object.keys(o).length === 0 ? void 0 : o;
+  for (let r of [...TOOL_CHECK_PINNED_KEYS, REQUESTMETA]) if (Object.hasOwn(e, r)) o[r] = e[r];
+  return Object.keys(o).length === 0 ? undefined : o;
 }
+//@ chunk-4121qate.js:208072-208204 placement
 /**
  * 把工具输入整理成 tool.call 事件：放入 tool 与 tool_use_id，consent/agentId/requestMeta 等宿主字段收进隐藏字段。
  */
-//@ chunk-4121qate.js:208072-208204 placement
-function toToolCallEvent(e, o, r) {
-  let n = pickShadowedToolFields(r),
-    { consent: consent, agentId: agentId, requestMeta: requestMeta, ...f } = r;
-  return { ...f, tool: e, tool_use_id: o, ...(n !== void 0 && { [lt]: n }) };
+function toToolCallEvent(tool, toolUseId, r) {
+  let n = pickShadowedToolFields(r);
+  let { consent, agentId, requestMeta, ...f } = r;
+  return {
+    ...f,
+    tool,
+    tool_use_id: toolUseId,
+    ...(n !== undefined && {
+      [SHADOWED_KEY]: n,
+    }),
+  };
 }
 //@ chunk-4121qate.js:208204-208249 placement
-var nSi = (e, o) => (o === void 0 ? e : { ...e, agentId: o });
+/**
+ * 附上 agentId
+ */
+var withAgentId = (e, agentId) =>
+  agentId === undefined
+    ? e
+    : {
+        ...e,
+        agentId,
+      };
 //@ chunk-4121qate.js:208249-208271 placement
-var Rv = ["agentId", lt];
+/**
+ * agentId/$shadowed
+ */
+var AGENT_ID_KEYS = ["agentId", SHADOWED_KEY];
+//@ chunk-4121qate.js:208271-208401 placement
 /**
  * 把内容块数组中的文本块用分隔符拼接（非数组返回空串）。
  */
-//@ chunk-4121qate.js:208271-208401 placement
 var joinTextBlocks = (e, o) =>
   Array.isArray(e)
     ? e
@@ -66,278 +101,362 @@ var joinTextBlocks = (e, o) =>
         )
         .join(o)
     : "";
+//@ chunk-4121qate.js:208401-208516 placement
 /**
  * 从 tool.call 事件还原工具输入：去掉 tool、tool_use_id、agentId、consent、requestMeta，并合回隐藏字段。
  */
-//@ chunk-4121qate.js:208401-208516 placement
 function toolInputOf(e) {
-  let {
-    tool: tool,
-    tool_use_id: tool_use_id,
-    agentId: agentId,
-    consent: consent,
-    requestMeta: requestMeta,
-    [lt]: p,
-    ...f
-  } = e;
-  return isPlainObject(p) ? { ...f, ...p } : f;
+  let { tool, tool_use_id: toolUseId, agentId, consent, requestMeta, [SHADOWED_KEY]: p, ...f } = e;
+  return isPlainObject(p)
+    ? {
+        ...f,
+        ...p,
+      }
+    : f;
 }
 //@ chunk-4121qate.js:208516-208546 placement
-var LUi = (e, o) => toToolCallEvent(e, void 0, o);
+/**
+ * 无 agentId 的工具事件
+ */
+var toolCallEventNoAgent = (tool, o) => toToolCallEvent(tool, undefined, o);
 //@ chunk-4121qate.js:208546-208573 placement
-var m3t = (e, o, r) => toToolCallEvent(e, o, r);
+/**
+ * 工具调用事件
+ */
+var toolCallEvent = (tool, toolUseId, r) => toToolCallEvent(tool, toolUseId, r);
 //@ chunk-4121qate.js:208573-208629 placement
-function Brs(e) {
-  return typeof e === "string"
-    ? e
+/**
+ * 工具输入转文本
+ */
+function toolInputText(content) {
+  return typeof content === "string"
+    ? content
     : joinTextBlocks(
-        e,
+        content,
         `
 `,
       );
 }
 //@ chunk-4121qate.js:208629-208678 placement
-var HUi = (e, o) => (o === void 0 ? e : { ...e, requestMeta: o });
+/**
+ * 附请求元信息
+ */
+var withRequestMeta = (e, requestMeta) =>
+  requestMeta === undefined
+    ? e
+    : {
+        ...e,
+        requestMeta,
+      };
 //@ chunk-4121qate.js:208678-208702 placement
-var Jo = (e, o) => checkPinnedKeys(fp, e, o);
+/**
+ * 校验 tool.check 固定键
+ */
+var checkToolCheckPinned = (e, o) => checkPinnedKeys(TOOL_CHECK_PINNED_KEYS, e, o);
 //@ chunk-4121qate.js:208702-208779 placement
-var mp = (e) =>
-  isPlainObject(e) ? wi(e, (o, r) => o === !1 && (r === "deny" || r === "ask" || r === "allow")) : e;
+/**
+ * 归一权限决定表
+ */
+var normalizePermissionDecisionMap = (e) =>
+  isPlainObject(e) ? wi(e, (o, r) => o === false && (r === "deny" || r === "ask" || r === "allow")) : e;
 //@ chunk-4121qate.js:208779-209194 placement
 var CLASSIC_PRE_TOOL_USE_SITE = {
   event: "classic.PreToolUse",
-  restoreArgument: (e, o) => restoreMissingKeys([lt], e, o),
-  checkArgument: Jo,
-  settle: mp,
-  check: M(({ deny: deny, ask: ask, allow: allow }) => {
+  restoreArgument: (e, o) => restoreMissingKeys_2([SHADOWED_KEY], e, o),
+  checkArgument: checkToolCheckPinned,
+  settle: normalizePermissionDecisionMap,
+  check: checkResultObject(({ deny, ask, allow }) => {
     let n = typeof deny === "string" || typeof ask === "string";
-    return !n && (deny !== void 0 || ask !== void 0)
+    return !n && (deny !== undefined || ask !== undefined)
       ? "a deny or ask that is not a string"
-      : !n && allow !== void 0 && allow !== !0
+      : !n && allow !== undefined && allow !== true
         ? "an allow that is not true"
-        : void 0;
+        : undefined;
   }),
   carry: (e, o, r) =>
-    e.updatedInput === void 0 && typeof e.deny !== "string" && $a(o, r)
-      ? { ...e, updatedInput: toolInputOf(o) }
+    e.updatedInput === undefined && typeof e.deny !== "string" && differsFromAnswer(o, r)
+      ? {
+          ...e,
+          updatedInput: toolInputOf(o),
+        }
       : e,
 };
+//@ chunk-4121qate.js:209194-209464 placement
 /**
  * 保留下层结果中的只读标记（结果未变时）。
  */
-//@ chunk-4121qate.js:209194-209464 placement
 function keepReadOnlyMark(e, o) {
-  let { isReadOnly: isReadOnly, ...n } = e;
-  if (n.deny !== void 0 || n.ref === void 0) return n;
-  let last = o.findLast((f) => f.ref === n.ref),
-    i = Rs(n.result);
-  return last !== void 0 &&
-    last.isReadOnly === !0 &&
-    (n.result === void 0 || n.result === last.result || (i !== void 0 && i === Rs(last.result)))
-    ? { ...n, isReadOnly: !0 }
+  let { isReadOnly, ...n } = e;
+  if (n.deny !== undefined || n.ref === undefined) return n;
+  let last = o.findLast((f) => f.ref === n.ref);
+  let i = stableStringifySafe(n.result);
+  return last !== undefined &&
+    last.isReadOnly === true &&
+    (n.result === undefined ||
+      n.result === last.result ||
+      (i !== undefined && i === stableStringifySafe(last.result)))
+    ? {
+        ...n,
+        isReadOnly: true,
+      }
     : n;
 }
+//@ chunk-4121qate.js:209464-209578 placement
 /**
  * 校验工具名未改动。
  */
-//@ chunk-4121qate.js:209464-209578 placement
 function checkToolNameUnchanged(e, o) {
-  return e.name !== o.name ? "a changed name (the tool being registered; next(e) passes it on)" : void 0;
+  return e.name !== o.name ? "a changed name (the tool being registered; next(e) passes it on)" : undefined;
 }
 //@ chunk-4121qate.js:209615-209790 placement
-var ANTHROPIC_SOURCES = "anthropic/sources",
-  beo = ["claude/plugins", ANTHROPIC_SOURCES],
-  Tn = [ANTHROPIC_SOURCES],
-  COM_ANTHROPIC_SOURCES_RELAY = "com.anthropic/sources-relay",
-  Ffr = randomUUID(),
-  COM_ANTHROPIC_PLUGIN_META_CUT = "com.anthropic/plugin-meta-cut",
-  oxt = 262144,
-  CLAUDE_OMITTED = "claude/omitted";
+/**
+ * 工具站点用到的来源种类常量组：anthropic/sources、claude/plugins、sources-relay 等，以及请求元信息的字节上限。
+ */
+var ANTHROPIC_SOURCES = "anthropic/sources";
+var EDIT_SOURCE_KINDS = ["claude/plugins", ANTHROPIC_SOURCES];
+var SOURCE_KINDS = [ANTHROPIC_SOURCES];
+var COM_ANTHROPIC_SOURCES_RELAY = "com.anthropic/sources-relay";
+var RANDOM_PLUGIN_META_ID = randomUUID();
+var COM_ANTHROPIC_PLUGIN_META_CUT = "com.anthropic/plugin-meta-cut";
+var MAX_REQUEST_META_BYTES = 262144;
+var CLAUDE_OMITTED = "claude/omitted";
 //@ chunk-4121qate.js:209790-209848 placement
-function jrs(e) {
+/**
+ * UTF-8 字节数
+ */
+function utf8Length(e) {
   return new TextEncoder().encode(e).length;
 }
 //@ chunk-4121qate.js:209848-210240 placement
 function checkRequestMeta(e) {
-  if (e === void 0) return;
+  if (e === undefined) return;
   if (!isPlainObject(e)) return "a requestMeta that is not an object";
   let o = 0;
-  for (let [r, n] of Object.entries(e)) {
-    if (!Tn.includes(r)) return `a requestMeta key a hook may not set (it may set ${Tn.join(", ")})`;
-    if (typeof n !== "string") return `a requestMeta value that is not a string (under ${r})`;
-    o += jrs(n);
+  for (let [key, value] of Object.entries(e)) {
+    if (!SOURCE_KINDS.includes(key))
+      return `a requestMeta key a hook may not set (it may set ${SOURCE_KINDS.join(", ")})`;
+    if (typeof value !== "string") return `a requestMeta value that is not a string (under ${key})`;
+    o += utf8Length(value);
   }
-  return o > oxt ? `a requestMeta of ${o} bytes (the most is ${oxt})` : void 0;
+  return o > MAX_REQUEST_META_BYTES
+    ? `a requestMeta of ${o} bytes (the most is ${MAX_REQUEST_META_BYTES})`
+    : undefined;
 }
+//@ chunk-4121qate.js:210240-210391 placement
 /**
  * 去掉对象中宿主专用的元数据键（没有时原样返回）。
  */
-//@ chunk-4121qate.js:210240-210391 placement
 function stripHostToolMeta(e) {
-  if (e === void 0 || !Tn.some((r) => Object.hasOwn(e, r))) return e;
+  if (e === undefined || !SOURCE_KINDS.some((r) => Object.hasOwn(e, r))) return e;
   let o = {};
-  for (let [r, n] of Object.entries(e)) if (!Tn.includes(r)) o[r] = n;
+  for (let [key, value] of Object.entries(e)) if (!SOURCE_KINDS.includes(key)) o[key] = value;
   return o;
 }
 //@ chunk-4121qate.js:210391-210426 placement
-var dp = (e, o) => Jo(e, o) ?? checkRequestMeta(e[REQUESTMETA]);
+/**
+ * 固定键 + 元信息校验
+ */
+var checkToolCallPinnedAndMeta = (e, o) => checkToolCheckPinned(e, o) ?? checkRequestMeta(e[REQUESTMETA]);
 //@ chunk-4121qate.js:210426-210515 placement
-function lp(e) {
-  let o = { ...e };
-  return o.context === void 0 ? o : { ...o, context: asStringList(o.context) ?? freeze_7 };
+/**
+ * context 归一为字符串列表
+ */
+function withContextList(e) {
+  let o = {
+    ...e,
+  };
+  return o.context === undefined
+    ? o
+    : {
+        ...o,
+        context: asStringList(o.context) ?? as,
+      };
 }
 //@ chunk-4121qate.js:210515-210525 placement
-var bn = "";
+/**
+ * 空串
+ */
+var EMPTY_STRING = "";
+//@ chunk-4121qate.js:210525-210788 placement
 /**
  * 从权限结果中挑出决定、原因、规则、钩子、设置与插件等字段。
  */
-//@ chunk-4121qate.js:210525-210788 placement
 function pickToolDecision(e) {
-  let { decision: decision, reason: reason, rule: rule, hook: hook, setting: setting, plugin: plugin } = e,
-    { decider: decider } = e,
-    a = { decision: decision };
-  if (reason !== void 0) a.reason = reason;
-  if (rule !== void 0) a.rule = rule;
-  if (hook !== void 0) a.hook = hook;
-  if (setting !== void 0) a.setting = setting;
-  if (plugin !== void 0) a.plugin = plugin;
-  if (decider === "person") a.plugin = bn;
+  let { decision, reason, rule, hook, setting, plugin } = e;
+  let { decider } = e;
+  let a = {
+    decision,
+  };
+  if (reason !== undefined) a.reason = reason;
+  if (rule !== undefined) a.rule = rule;
+  if (hook !== undefined) a.hook = hook;
+  if (setting !== undefined) a.setting = setting;
+  if (plugin !== undefined) a.plugin = plugin;
+  if (decider === "person") a.plugin = EMPTY_STRING;
   return a;
 }
+//@ chunk-4121qate.js:210788-211176 placement
 /**
  * tool.call 站点规则：固定 tool/tool_use_id/agentId，恢复隐藏字段，结果须为 {result} 或 {deny}，校验 context 保留下层条目。
  */
-//@ chunk-4121qate.js:210788-211176 placement
 var TOOL_CALL_SITE = {
   event: "tool.call",
-  restoreArgument: (e, o) => restoreMissingKeys([...Rv, REQUESTMETA], e, o),
-  checkArgument: dp,
-  pinnedKeys: kv,
-  settle: lp,
+  restoreArgument: (e, o) => restoreMissingKeys_2([...AGENT_ID_KEYS, REQUESTMETA], e, o),
+  checkArgument: checkToolCallPinnedAndMeta,
+  pinnedKeys: TOOL_CALL_PINNED_KEYS,
+  settle: withContextList,
   stripResult: keepReadOnlyMark,
-  check: M((e, o, r) => {
-    let n = e.deny === void 0;
+  check: checkResultObject((e, o, r) => {
+    let n = e.deny === undefined;
     return (
       checkValueOrDeny(e, "{ result }", (s) => Object.hasOwn(s, "result")) ??
       (n
         ? contextMeasureFor(
             e.context,
             e.result,
-            (r ?? []).filter((s) => s.deny === void 0),
+            (r ?? []).filter((s) => s.deny === undefined),
           )
-        : void 0)
+        : undefined)
     );
   }),
   measure: (e, o, r) => maxNewTextLength(e.context, ...r.map((n) => n.context)),
-  isLateRefusal: uf("deny"),
-  carry: _rs,
+  isLateRefusal: addsOnlyKey("deny"),
+  carry: stripErrorFlag,
 };
 //@ chunk-4121qate.js:211176-211270 placement
-function ac(e, o) {
-  let r = e.plugins?.some((n) => n === o) === !0;
-  return e.isHop !== !0 ? e.name : r ? o : void 0;
+/**
+ * 决定名归属插件
+ */
+function pluginDecisionName(e, plugin) {
+  let r = e.plugins?.some((plugin_2) => plugin_2 === plugin) === true;
+  return e.isHop !== true ? e.name : r ? plugin : undefined;
 }
 //@ chunk-4121qate.js:211270-211323 placement
-var fc = ["decision", "reason", "rule", "hook", "setting"];
+/**
+ * 决定相关字段
+ */
+var DECISION_FIELDS = ["decision", "reason", "rule", "hook", "setting"];
 //@ chunk-4121qate.js:211323-211613 placement
 function attributeAskDecision(e, o, r) {
-  let { plugin: plugin, ...s } = e;
+  let { plugin, ...s } = e;
   if (s.decision !== "ask") return s;
-  let filtered = o.filter((u) => fc.every((l) => u[l] === s[l])),
-    p = filtered.find((u) => u.plugin === plugin) ?? filtered[0],
-    f = ac(r, plugin),
-    a = r.isHop === !0 && f !== void 0 && filtered.every((u) => u.plugin !== plugin),
-    c = p !== void 0 && plugin !== bn && !a ? p.plugin : f;
-  return c === void 0 ? s : { ...s, plugin: c };
+  let filtered = o.filter((u) => DECISION_FIELDS.every((l) => u[l] === s[l]));
+  let p = filtered.find((u) => u.plugin === plugin) ?? filtered[0];
+  let f = pluginDecisionName(r, plugin);
+  let a = r.isHop === true && f !== undefined && filtered.every((u) => u.plugin !== plugin);
+  let c = p !== undefined && plugin !== EMPTY_STRING && !a ? p.plugin : f;
+  return c === undefined
+    ? s
+    : {
+        ...s,
+        plugin: c,
+      };
 }
 //@ chunk-4121qate.js:211613-211695 placement
-var gp = ["tool", "input", "tool_use_id", "agentId", "ceiling", "approver", "isReadOnly"];
+/**
+ * tool.call 字段
+ */
+var TOOL_CALL_FIELDS = ["tool", "input", "tool_use_id", "agentId", "ceiling", "approver", "isReadOnly"];
 //@ chunk-4121qate.js:211695-211762 placement
-var xp = ["tool_use_id", "agentId", "ceiling", "approver", "isReadOnly"];
+/**
+ * tool.check 字段
+ */
+var TOOL_CHECK_FIELDS = ["tool_use_id", "agentId", "ceiling", "approver", "isReadOnly"];
 //@ chunk-4121qate.js:211762-212329 placement
 var TOOL_CHECK_SITE = {
   event: "tool.check",
-  restoreArgument: (e, o) => restoreMissingKeys(xp, e, o),
-  checkArgument: (e, o) =>
+  restoreArgument: (e, o) => restoreMissingKeys_2(TOOL_CHECK_FIELDS, e, o),
+  checkArgument: (passed, received) =>
     checkPinnedKeysWith({
-      keys: gp,
-      passed: e,
-      received: o,
+      keys: TOOL_CALL_FIELDS,
+      passed,
+      received,
       explanation:
         "the tool, its input and the call are the question and are pinned; a hook answers { decision }, it does not ask about another call",
     }),
   settle: pickToolDecision,
-  restoreResult: (e, o, r) => pp(e, r),
+  restoreResult: (e, o, r) => withCeiling(e, r),
   stripResult: attributeAskDecision,
-  check: M((e) => {
-    let { decision: decision, reason: reason, rule: rule, hook: hook, setting: setting } = e;
-    if (!ap(decision)) return `no { decision } (one of ${CSi.join(", ")})`;
-    return [reason, rule, hook, setting].every((f) => f === void 0 || typeof f === "string")
-      ? void 0
+  check: checkResultObject((e) => {
+    let { decision, reason, rule, hook, setting } = e;
+    if (!isPermissionDecisionValue(decision)) return `no { decision } (one of ${DECISION_ORDER.join(", ")})`;
+    return [reason, rule, hook, setting].every((f) => f === undefined || typeof f === "string")
+      ? undefined
       : "a reason, rule, hook or setting that is not a string";
   }),
 };
 //@ chunk-4121qate.js:212329-213249 placement
 var TOOL_DESCRIBE_SITE = {
   event: "tool.describe",
-  restoreArgument: (e, o) => restoreMissingKeys(["provider"], e, o),
+  restoreArgument: (e, o) => restoreMissingKeys_2(["provider"], e, o),
   checkArgument: (e, o) => {
     if (typeof e.tool !== "string") return "no { tool }";
     if (e.tool !== o.tool) return "a changed tool (the engine caches the description by it)";
-    if (checkPinnedKeys(["provider"], e, o) !== void 0)
+    if (checkPinnedKeys(["provider"], e, o) !== undefined)
       return "a changed provider (pinned: who provides the tool is a fact)";
-    if (!(e.isDeferred === void 0 || typeof e.isDeferred === "boolean"))
+    if (!(e.isDeferred === undefined || typeof e.isDeferred === "boolean"))
       return "an isDeferred that is not a boolean";
-    return typeof e.description === "string" ? void 0 : "no { description }";
+    return typeof e.description === "string" ? undefined : "no { description }";
   },
-  measureArgument: (e, o) => Ae(e.description, o.description),
+  measureArgument: (e, o) => textLengthIfNotIn(e.description, o.description),
   restoreResult: (e, o, r) => {
-    if (e.isDeferred !== void 0) return e;
-    let s = o.at(-1)?.isDeferred ?? r.isDeferred;
-    return s === void 0 ? e : { ...e, isDeferred: s };
+    if (e.isDeferred !== undefined) return e;
+    let isDeferred = o.at(-1)?.isDeferred ?? r.isDeferred;
+    return isDeferred === undefined
+      ? e
+      : {
+          ...e,
+          isDeferred,
+        };
   },
-  check: M((e) => {
+  check: checkResultObject((e) => {
     if (typeof e.description !== "string") return "no { description } (a string)";
-    return e.isDeferred === void 0 || typeof e.isDeferred === "boolean"
-      ? void 0
+    return e.isDeferred === undefined || typeof e.isDeferred === "boolean"
+      ? undefined
       : "an isDeferred that is not a boolean";
   }),
-  measure: Jt("description"),
+  measure: firstLongerText("description"),
 };
 //@ chunk-4121qate.js:213249-213329 placement
-var dc = { event: "tool.register", check: he("tool.register").check, checkArgument: checkToolNameUnchanged };
-
+/**
+ * tool.register 站点规则
+ */
+var TOOL_REGISTER_SITE = {
+  event: "tool.register",
+  check: valueOnlySite("tool.register").check,
+  checkArgument: checkToolNameUnchanged,
+};
 export {
   toolInputOf,
   REQUESTMETA,
-  m3t,
+  toolCallEvent,
   CLASSIC_PRE_TOOL_USE_SITE,
   TOOL_CALL_SITE,
   TOOL_CHECK_SITE,
-  gp,
-  xp,
+  TOOL_CALL_FIELDS,
+  TOOL_CHECK_FIELDS,
   TOOL_DESCRIBE_SITE,
-  dc,
+  TOOL_REGISTER_SITE,
   keepReadOnlyMark,
   checkToolNameUnchanged,
-  dp,
-  Jo,
-  lp,
+  checkToolCallPinnedAndMeta,
+  checkToolCheckPinned,
+  withContextList,
   pickToolDecision,
-  mp,
-  beo,
-  oxt,
+  normalizePermissionDecisionMap,
+  EDIT_SOURCE_KINDS,
+  MAX_REQUEST_META_BYTES,
   COM_ANTHROPIC_SOURCES_RELAY,
   COM_ANTHROPIC_PLUGIN_META_CUT,
-  nSi,
+  withAgentId,
   stripHostToolMeta,
   joinTextBlocks,
-  Brs,
+  toolInputText,
   ANTHROPIC_SOURCES,
-  Ffr,
+  RANDOM_PLUGIN_META_ID,
   CLAUDE_OMITTED,
-  jrs,
+  utf8Length,
   checkRequestMeta,
-  HUi,
-  LUi,
+  withRequestMeta,
+  toolCallEventNoAgent,
 };

@@ -8,22 +8,21 @@
  * pieces: chunk-ae5g0zb5.js (6)
  * attribution: placement 6
  */
-
 //@ chunk-ae5g0zb5.js:116007-116368 placement
 var HELPER_READ_RULES = Object.freeze([
-    "Read(~/.config/claude-test/**)",
-    "Read(~/Library/Application Support/claude-test/**)",
-    "Read(~/.cache/claude-test/**)",
-    "Read(//**/claude-test/*/secrets.env)",
-    "Read(//**/claude-test/*/auth*.json)",
-    "Read(//**/claude-test/**/storageState.json)",
-    "Read(//**/claude-test/scratch/**)",
-  ]),
-  freeze_2 = Object.freeze(HELPER_READ_RULES.map((e) => e.replace(/^Read\(/, "Edit(")));
+  "Read(~/.config/claude-test/**)",
+  "Read(~/Library/Application Support/claude-test/**)",
+  "Read(~/.cache/claude-test/**)",
+  "Read(//**/claude-test/*/secrets.env)",
+  "Read(//**/claude-test/*/auth*.json)",
+  "Read(//**/claude-test/**/storageState.json)",
+  "Read(//**/claude-test/scratch/**)",
+]);
+var Kn = Object.freeze(HELPER_READ_RULES.map((e) => e.replace(/^Read\(/, "Edit(")));
+//@ chunk-ae5g0zb5.js:116368-117398 placement
 /**
  * 测试代理不得编辑的文件规则（CLAUDE.md、AGENTS.md 等）。
  */
-//@ chunk-ae5g0zb5.js:116368-117398 placement
 var PROTECTED_EDIT_RULES = Object.freeze([
   "Edit(//**/CLAUDE.md)",
   "Edit(//**/CLAUDE.local.md)",
@@ -63,10 +62,10 @@ var PROTECTED_EDIT_RULES = Object.freeze([
   "Edit(~/.zshrc)",
   "Edit(~/.zshenv)",
 ]);
+//@ chunk-ae5g0zb5.js:117398-121311 placement
 /**
  * 后台起草规格文件的内部代理定义（只由 run skill 启动）。
  */
-//@ chunk-ae5g0zb5.js:117398-121311 placement
 var DRAFT_AGENT_DEFINITION = Object.freeze({
   description:
     "Internal to Claude Test \u2014 drafts spec files in the background for a " +
@@ -129,7 +128,7 @@ var DRAFT_AGENT_DEFINITION = Object.freeze({
     "Edit(//**/.claude-test/runs/*/decisions.json/**)",
     ...PROTECTED_EDIT_RULES,
     ...HELPER_READ_RULES,
-    ...freeze_2,
+    ...Kn,
     "Read(**/.git/**)",
     "Read(**/.env)",
     "Read(**/.env.*)",
@@ -188,10 +187,10 @@ var DRAFT_AGENT_DEFINITION = Object.freeze({
     "Read(~/AppData/**)",
   ],
 });
+//@ chunk-ae5g0zb5.js:121311-122994 placement
 /**
  * 在后台浏览器中执行规格的内部代理定义。
  */
-//@ chunk-ae5g0zb5.js:121311-122994 placement
 var EXECUTE_AGENT_DEFINITION = Object.freeze({
   description:
     "Internal to Claude Test \u2014 runs the specs in a background browser. " +
@@ -211,7 +210,7 @@ var EXECUTE_AGENT_DEFINITION = Object.freeze({
     "Edit(//**/.claude-test/skills/**)",
     ...PROTECTED_EDIT_RULES,
     ...HELPER_READ_RULES,
-    ...freeze_2,
+    ...Kn,
     "mcp__plugin_claude-test_browser__claude_test_allow",
     "mcp__plugin_claude-test_browser__claude_test_app_up",
     "mcp__plugin_claude-test_browser__claude_test_show_run",
@@ -236,10 +235,10 @@ var EXECUTE_AGENT_DEFINITION = Object.freeze({
     "Read(~/.claude/projects/**)",
   ],
 });
+//@ chunk-ae5g0zb5.js:122994-124068 placement
 /**
  * /claude-test run skill 的描述与提示。
  */
-//@ chunk-ae5g0zb5.js:122994-124068 placement
 var RUN_SKILL_DEFINITION = Object.freeze({
   description:
     "Local, on this machine: tests your app here in a browser on this computer (not the claude.ai Claude Test connector)",
@@ -256,11 +255,10 @@ var RUN_SKILL_DEFINITION = Object.freeze({
     "Edit(**/.claude-test/filed)",
   ],
 });
+//@ chunk-ae5g0zb5.js:124068-124247 placement
 /**
  * 匹配 “run <…/.claude-test/runs/时间戳>” 形式的命令。
  */
-//@ chunk-ae5g0zb5.js:124068-124247 placement
 var RUN_DIR_COMMAND_RE =
   /^\s*run[ \t]+["']?((?:[A-Za-z]:)?[\\/][^\n"']{0,1024}?[\\/]{1,4}\.claude-test[\\/]{1,4}runs[\\/]{1,4}\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}(?:-\d+)?)[\\/]{0,4}["']?(?:\s|$)/;
-
 export { DRAFT_AGENT_DEFINITION, EXECUTE_AGENT_DEFINITION, RUN_SKILL_DEFINITION, RUN_DIR_COMMAND_RE };

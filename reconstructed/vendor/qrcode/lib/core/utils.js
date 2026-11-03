@@ -8,36 +8,38 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-spjgqa4y.js:357-1074 cjs-fingerprint
-var N = x(function (ti) {
-  var Fe,
-    ei = [
-      0, 26, 44, 70, 100, 134, 172, 196, 242, 292, 346, 404, 466, 532, 581, 655, 733, 815, 901, 991, 1085,
-      1156, 1258, 1364, 1474, 1588, 1706, 1828, 1921, 2051, 2185, 2323, 2465, 2611, 2761, 2876, 3034, 3196,
-      3362, 3532, 3706,
-    ];
-  ti.getSymbolSize = function (e) {
-    if (!e) throw Error('"version" cannot be null or undefined');
-    if (e < 1 || e > 40) throw Error('"version" should be in range from 1 to 40');
-    return e * 4 + 17;
+var require_utils = x(function (cjsExports) {
+  var toSJISFunction;
+  var CODEWORDS_COUNT = [
+    0, 26, 44, 70, 100, 134, 172, 196, 242, 292, 346, 404, 466, 532, 581, 655, 733, 815, 901, 991, 1085, 1156,
+    1258, 1364, 1474, 1588, 1706, 1828, 1921, 2051, 2185, 2323, 2465, 2611, 2761, 2876, 3034, 3196, 3362,
+    3532, 3706,
+  ];
+  cjsExports.getSymbolSize = function (version) {
+    if (!version) throw Error('"version" cannot be null or undefined');
+    if (version < 1 || version > 40) throw Error('"version" should be in range from 1 to 40');
+    return version * 4 + 17;
   };
-  ti.getSymbolTotalCodewords = function (e) {
-    return ei[e];
+  cjsExports.getSymbolTotalCodewords = function (version) {
+    return CODEWORDS_COUNT[version];
   };
-  ti.getBCHDigit = function (t) {
-    let e = 0;
-    while (t !== 0) (e++, (t >>>= 1));
-    return e;
+  cjsExports.getBCHDigit = function (data) {
+    let digit = 0;
+    while (data !== 0) {
+      digit++;
+      data >>>= 1;
+    }
+    return digit;
   };
-  ti.setToSJISFunction = function (e) {
-    if (typeof e !== "function") throw Error('"toSJISFunc" is not a valid function.');
-    Fe = e;
+  cjsExports.setToSJISFunction = function (f) {
+    if (typeof f !== "function") throw Error('"toSJISFunc" is not a valid function.');
+    toSJISFunction = f;
   };
-  ti.isKanjiModeEnabled = function () {
-    return typeof Fe < "u";
+  cjsExports.isKanjiModeEnabled = function () {
+    return typeof toSJISFunction !== "undefined";
   };
-  ti.toSJIS = function (e) {
-    return Fe(e);
+  cjsExports.toSJIS = function (kanji) {
+    return toSJISFunction(kanji);
   };
 });
-
-export { N };
+export { require_utils };

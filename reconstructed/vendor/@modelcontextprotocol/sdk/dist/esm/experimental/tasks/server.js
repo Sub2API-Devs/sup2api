@@ -8,42 +8,57 @@
 import { CreateMessageResultSchema, ElicitResultSchema } from "../../types.js";
 
 //@ chunk-exz1ts42.js:349-2221 esm-fingerprint
-class g {
-  constructor(e) {
-    this._server = e;
+class ExperimentalServerTasks {
+  constructor(_server) {
+    this._server = _server;
   }
-  requestStream(e, t, i) {
-    return this._server.requestStream(e, t, i);
+  requestStream(request, resultSchema, options) {
+    return this._server.requestStream(request, resultSchema, options);
   }
-  createMessageStream(e, t) {
+  createMessageStream(params, options) {
     let clientCapabilities = this._server.getClientCapabilities();
-    if ((e.tools || e.toolChoice) && !clientCapabilities?.sampling?.tools)
+    if ((params.tools || params.toolChoice) && !clientCapabilities?.sampling?.tools)
       throw Error("Client does not support sampling tools capability.");
-    if (e.messages.length > 0) {
-      let s = e.messages[e.messages.length - 1],
-        o = Array.isArray(s.content) ? s.content : [s.content],
-        any = o.some((a) => a.type === "tool_result"),
-        r = e.messages.length > 1 ? e.messages[e.messages.length - 2] : void 0,
-        h = r ? (Array.isArray(r.content) ? r.content : [r.content]) : [],
-        any_2 = h.some((a) => a.type === "tool_use");
-      if (any) {
-        if (o.some((a) => a.type !== "tool_result"))
+    if (params.messages.length > 0) {
+      let lastMessage = params.messages[params.messages.length - 1];
+      let lastContent = Array.isArray(lastMessage.content) ? lastMessage.content : [lastMessage.content];
+      let hasToolResults = lastContent.some((c) => c.type === "tool_result");
+      let previousMessage =
+        params.messages.length > 1 ? params.messages[params.messages.length - 2] : undefined;
+      let previousContent = previousMessage
+        ? Array.isArray(previousMessage.content)
+          ? previousMessage.content
+          : [previousMessage.content]
+        : [];
+      let hasPreviousToolUse = previousContent.some((c) => c.type === "tool_use");
+      if (hasToolResults) {
+        if (lastContent.some((c) => c.type !== "tool_result"))
           throw Error("The last message must contain only tool_result content if any is present");
-        if (!any_2) throw Error("tool_result blocks are not matching any tool_use from the previous message");
+        if (!hasPreviousToolUse)
+          throw Error("tool_result blocks are not matching any tool_use from the previous message");
       }
-      if (any_2) {
-        let a = new Set(h.filter((u) => u.type === "tool_use").map((u) => u.id)),
-          l = new Set(o.filter((u) => u.type === "tool_result").map((u) => u.toolUseId));
-        if (a.size !== l.size || ![...a].every((u) => l.has(u)))
+      if (hasPreviousToolUse) {
+        let toolUseIds = new Set(previousContent.filter((c) => c.type === "tool_use").map((c) => c.id));
+        let toolResultIds = new Set(
+          lastContent.filter((c) => c.type === "tool_result").map((c) => c.toolUseId),
+        );
+        if (toolUseIds.size !== toolResultIds.size || ![...toolUseIds].every((id) => toolResultIds.has(id)))
           throw Error("ids of tool_result blocks and tool_use blocks from previous message do not match");
       }
     }
-    return this.requestStream({ method: "sampling/createMessage", params: e }, CreateMessageResultSchema, t);
+    return this.requestStream(
+      {
+        method: "sampling/createMessage",
+        params,
+      },
+      CreateMessageResultSchema,
+      options,
+    );
   }
-  elicitInputStream(e, t) {
-    let clientCapabilities = this._server.getClientCapabilities(),
-      s = e.mode ?? "form";
-    switch (s) {
+  elicitInputStream(params, options) {
+    let clientCapabilities = this._server.getClientCapabilities();
+    let mode = params.mode ?? "form";
+    switch (mode) {
       case "url": {
         if (!clientCapabilities?.elicitation?.url) throw Error("Client does not support url elicitation.");
         break;
@@ -53,21 +68,56 @@ class g {
         break;
       }
     }
-    let o = s === "form" && e.mode === void 0 ? { ...e, mode: "form" } : e;
-    return this.requestStream({ method: "elicitation/create", params: o }, ElicitResultSchema, t);
+    let normalizedParams =
+      mode === "form" && params.mode === undefined
+        ? {
+            ...params,
+            mode: "form",
+          }
+        : params;
+    return this.requestStream(
+      {
+        method: "elicitation/create",
+        params: normalizedParams,
+      },
+      ElicitResultSchema,
+      options,
+    );
   }
-  async getTask(e, t) {
-    return this._server.getTask({ taskId: e }, t);
+  async getTask(taskId, options) {
+    return this._server.getTask(
+      {
+        taskId,
+      },
+      options,
+    );
   }
-  async getTaskResult(e, t, i) {
-    return this._server.getTaskResult({ taskId: e }, t, i);
+  async getTaskResult(taskId, resultSchema, options) {
+    return this._server.getTaskResult(
+      {
+        taskId,
+      },
+      resultSchema,
+      options,
+    );
   }
-  async listTasks(e, t) {
-    return this._server.listTasks(e ? { cursor: e } : void 0, t);
+  async listTasks(cursor, options) {
+    return this._server.listTasks(
+      cursor
+        ? {
+            cursor,
+          }
+        : undefined,
+      options,
+    );
   }
-  async cancelTask(e, t) {
-    return this._server.cancelTask({ taskId: e }, t);
+  async cancelTask(taskId, options) {
+    return this._server.cancelTask(
+      {
+        taskId,
+      },
+      options,
+    );
   }
 }
-
-export { g };
+export { ExperimentalServerTasks };

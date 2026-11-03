@@ -15,5 +15,4 @@ import { normalizeNameForMCP } from "../../services/mcp/normalization.js";
 function getPrefixServerKey(tools) {
   return mcpInfoFromString(`${getMcpPrefix(tools)}x`)?.serverName ?? normalizeNameForMCP(tools);
 }
-
 export { getPrefixServerKey };

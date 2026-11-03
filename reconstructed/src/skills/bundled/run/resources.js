@@ -15,31 +15,31 @@ import __cc_resource_3 from "../../../../assets/playwright-g4wwbqeh.md" with { t
 import __cc_resource_4 from "../../../../assets/server-z4ytjptt.md" with { type: "text" };
 import __cc_resource_5 from "../../../../assets/tui-93b0fcsh.md" with { type: "text" };
 import __cc_resource_6 from "../../../../assets/SKILL-9ddmsnpa.md" with { type: "text" };
-import { Et } from "../../../utils/embeddedAssets.js";
+import { readEmbeddedTextSync } from "../../../utils/embeddedAssets.js";
 
 //@ chunk-sbfx2p3f.js:784-806 placement
-var e = __cc_resource_0;
+var examplesCli = __cc_resource_0;
 //@ chunk-sbfx2p3f.js:806-828 placement
-var t = __cc_resource_1;
+var electronPath = __cc_resource_1;
 //@ chunk-sbfx2p3f.js:828-860 placement
-var a = Et(t, import.meta.dirname);
+var examplesElectron = readEmbeddedTextSync(electronPath, import.meta.dirname);
 //@ chunk-sbfx2p3f.js:860-882 placement
-var s = __cc_resource_2;
+var examplesLibrary = __cc_resource_2;
 //@ chunk-sbfx2p3f.js:882-904 placement
-var n = __cc_resource_3;
+var examplesPlaywright = __cc_resource_3;
 //@ chunk-sbfx2p3f.js:904-926 placement
-var r = __cc_resource_4;
+var examplesServer = __cc_resource_4;
 //@ chunk-sbfx2p3f.js:926-948 placement
-var i = __cc_resource_5;
+var examplesTui = __cc_resource_5;
 //@ chunk-sbfx2p3f.js:948-970 placement
-var o = __cc_resource_6;
+var skillText = __cc_resource_6;
 //@ chunk-sbfx2p3f.js:970-1121 placement
-var RUN_SKILL_MD = o,
-  RUN_EXAMPLE_FILES = {
-    "examples/cli.md": e,
-    "examples/electron.md": a,
-    "examples/library.md": s,
-    "examples/playwright.md": n,
-    "examples/server.md": r,
-    "examples/tui.md": i,
-  };
+var RUN_SKILL_MD = skillText;
+var RUN_EXAMPLE_FILES = {
+  "examples/cli.md": examplesCli,
+  "examples/electron.md": examplesElectron,
+  "examples/library.md": examplesLibrary,
+  "examples/playwright.md": examplesPlaywright,
+  "examples/server.md": examplesServer,
+  "examples/tui.md": examplesTui,
+};

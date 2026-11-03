@@ -11,5 +11,4 @@
 
 //@ chunk-p7w1d1hp.js:560-607 fingerprint = RESET_ALIASES (1)
 var RESET_ALIASES = ["default", "reset", "none", "gray", "grey"];
-
 export { RESET_ALIASES };

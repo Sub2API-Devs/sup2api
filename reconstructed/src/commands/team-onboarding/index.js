@@ -15,10 +15,10 @@ import { logEvent } from "../../services/analytics/index.js";
 import { saveGlobalConfig } from "../../utils/config.js";
 import { isTeamOnboardingShareEnabled } from "./api.js";
 
+//@ chunk-e6aww6q8.js:1741001-1749817 placement
 /**
  * /team-onboarding 命令对象（prompt）；描述：Help teammates ramp on Claude Code with a guide from your usage；isHidden: false。
  */
-//@ chunk-e6aww6q8.js:1741001-1749817 placement
 var TEAM_ONBOARDING_GUIDE_TEMPLATE = `# Welcome to [Team Name]
 
 ## How We Use Claude
@@ -81,8 +81,8 @@ can (e.g. link to channels), and just surface the purely informational bits.
 
 Don't invent sections or summaries that aren't in the guide. The stats are the
 guide creator's personal usage data \u2014 don't extrapolate them into a "team
-workflow" narrative. -->`,
-  TEAM_ONBOARDING_PROMPT = `You are helping a power user generate an onboarding guide for teammates who are new to Claude Code. The guide will live in the team's onboarding docs and can be pasted into Claude for an interactive walkthrough.
+workflow" narrative. -->`;
+var TEAM_ONBOARDING_PROMPT = `You are helping a power user generate an onboarding guide for teammates who are new to Claude Code. The guide will live in the team's onboarding docs and can be pasted into Claude for an interactive walkthrough.
 
 You're co-authoring this with them \u2014 collaborative and helpful, like a teammate who's done this before and is happy to share.
 
@@ -142,8 +142,8 @@ Generate the guide immediately, then ask for revisions. Don't wait for answers f
 
    Saved to \`ONBOARDING.md\`. Drop it in your team docs and channels \u2014 when a new teammate pastes it into Claude Code, they get a guided onboarding tour from there.
 
-   Apply any edits they come back with to the file.`,
-  getTeamOnboardingSharingInstructions = () => `
+   Apply any edits they come back with to the file.`;
+var getTeamOnboardingSharingInstructions = () => `
 
 **Sharing** \u2014 call the ${SHAREONBOARDINGGUIDE} tool twice:
 
@@ -161,57 +161,75 @@ Generate the guide immediately, then ask for revisions. Don't wait for answers f
 
    ${"Send this to teammates and they'll get a guided walkthrough when they open it in Claude Code."}
 
-If the tool returns 'unavailable' at any point, skip that call and use the manual close from step 5 instead.`,
-  TEAM_ONBOARDING_ALLOWED_TOOLS = ["Edit(ONBOARDING.md)", "Bash(ls *)", SHAREONBOARDINGGUIDE],
-  teamOnboardingCommandDefinition = {
-    type: "prompt",
-    name: "team-onboarding",
-    description: "Help teammates ramp on Claude Code with a guide from your usage",
-    allowedTools: TEAM_ONBOARDING_ALLOWED_TOOLS,
-    contentLength: 0,
-    policyGate: { policy: "allow_team_onboarding" },
-    isHidden: !1,
-    progressMessage: "scanning usage data",
-    effort: "low",
-    requires: { workspace: !0 },
-    userFacingName() {
-      return "team-onboarding";
-    },
-    source: "builtin",
-    disableModelInvocation: !0,
-    async getPromptForCommand(args, context) {
-      let r = getFeatureValue_CACHED_MAY_BE_STALE("tengu_flint_harbor_prompt", {}),
-        s = typeof r?.prompt === "string" ? r.prompt : TEAM_ONBOARDING_PROMPT,
-        h = typeof r?.guideTemplate === "string" ? r.guideTemplate : TEAM_ONBOARDING_GUIDE_TEMPLATE,
-        y =
-          typeof r?.windowDays === "number"
-            ? Math.min(Math.max(Math.floor(r.windowDays), 1), 365)
-            : TEAM_ONBOARDING_DEFAULT_WINDOW_DAYS;
-      (logEvent("tengu_team_onboarding_invoked", { window_days: y }),
-        await saveGlobalConfig((Z) => ({ ...Z, teamOnboardingLastUsedAt: Date.now() }), context.storageV5));
-      let {
-          usageData: usageData,
-          sessionCount: sessionCount,
-          slashCommandCount: slashCommandCount,
-          mcpServerCount: mcpServerCount,
-        } = await collectTeamOnboardingUsage(y),
-        q =
-          s
-            .replaceAll("{{WINDOW_DAYS}}", String(y))
-            .replaceAll("{{GUIDE_TEMPLATE}}", h)
-            .replaceAll("{{USAGE_DATA}}", usageData) +
-          (isTeamOnboardingShareEnabled() ? getTeamOnboardingSharingInstructions() : "");
-      return (
-        logEvent("tengu_team_onboarding_generated", {
-          session_count: sessionCount,
-          slash_command_count: slashCommandCount,
-          mcp_server_count: mcpServerCount,
-          window_days: y,
-        }),
-        [{ type: "text", text: q }]
-      );
-    },
+If the tool returns 'unavailable' at any point, skip that call and use the manual close from step 5 instead.`;
+var TEAM_ONBOARDING_ALLOWED_TOOLS = ["Edit(ONBOARDING.md)", "Bash(ls *)", SHAREONBOARDINGGUIDE];
+var teamOnboardingCommandDefinition = {
+  type: "prompt",
+  name: "team-onboarding",
+  description: "Help teammates ramp on Claude Code with a guide from your usage",
+  allowedTools: TEAM_ONBOARDING_ALLOWED_TOOLS,
+  contentLength: 0,
+  policyGate: {
+    policy: "allow_team_onboarding",
   },
-  teamOnboardingCommand = teamOnboardingCommandDefinition;
-
+  isHidden: false,
+  progressMessage: "scanning usage data",
+  effort: "low",
+  requires: {
+    workspace: true,
+  },
+  userFacingName() {
+    return "team-onboarding";
+  },
+  source: "builtin",
+  disableModelInvocation: true,
+  async getPromptForCommand(args, context) {
+    let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE(
+      "tengu_flint_harbor_prompt",
+      {},
+    );
+    let s =
+      typeof featureValue_CACHED_MAY_BE_STALE?.prompt === "string"
+        ? featureValue_CACHED_MAY_BE_STALE.prompt
+        : TEAM_ONBOARDING_PROMPT;
+    let h =
+      typeof featureValue_CACHED_MAY_BE_STALE?.guideTemplate === "string"
+        ? featureValue_CACHED_MAY_BE_STALE.guideTemplate
+        : TEAM_ONBOARDING_GUIDE_TEMPLATE;
+    let y =
+      typeof featureValue_CACHED_MAY_BE_STALE?.windowDays === "number"
+        ? Math.min(Math.max(Math.floor(featureValue_CACHED_MAY_BE_STALE.windowDays), 1), 365)
+        : TEAM_ONBOARDING_DEFAULT_WINDOW_DAYS;
+    logEvent("tengu_team_onboarding_invoked", {
+      window_days: y,
+    });
+    await saveGlobalConfig(
+      (Z) => ({
+        ...Z,
+        teamOnboardingLastUsedAt: Date.now(),
+      }),
+      context.storageV5,
+    );
+    let { usageData, sessionCount, slashCommandCount, mcpServerCount } = await collectTeamOnboardingUsage(y);
+    let text =
+      s
+        .replaceAll("{{WINDOW_DAYS}}", String(y))
+        .replaceAll("{{GUIDE_TEMPLATE}}", h)
+        .replaceAll("{{USAGE_DATA}}", usageData) +
+      (isTeamOnboardingShareEnabled() ? getTeamOnboardingSharingInstructions() : "");
+    logEvent("tengu_team_onboarding_generated", {
+      session_count: sessionCount,
+      slash_command_count: slashCommandCount,
+      mcp_server_count: mcpServerCount,
+      window_days: y,
+    });
+    return [
+      {
+        type: "text",
+        text,
+      },
+    ];
+  },
+};
+var teamOnboardingCommand = teamOnboardingCommandDefinition;
 export { teamOnboardingCommand };

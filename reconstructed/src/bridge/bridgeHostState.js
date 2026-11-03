@@ -14,10 +14,10 @@ import { getRootSession } from "../bootstrap/state.js";
 
 //@ chunk-s7k22nbx.js:297-1519 placement
 class BridgeInboundState {
-  filterPolicy = void 0;
-  dropNotifier = void 0;
-  senderDropWriter = void 0;
-  malformedConfigReported = !1;
+  filterPolicy = undefined;
+  dropNotifier = undefined;
+  senderDropWriter = undefined;
+  malformedConfigReported = false;
   knownInboundRequestIds = new Set();
   knownOutboundRequestIds = new Set();
   automatedOutboundRequestIds = new Set();
@@ -26,49 +26,55 @@ class BridgeInboundState {
   hostAskOutboundRequestIds = new Set();
   resolvedPromptRequestIds = new Set();
   recentDropEventIds = new Set();
-  commandDropNoticeWindow = { start: 0, count: 0 };
-  messageDropNoticeWindow = { start: 0, count: 0 };
+  commandDropNoticeWindow = {
+    start: 0,
+    count: 0,
+  };
+  messageDropNoticeWindow = {
+    start: 0,
+    count: 0,
+  };
   reportedStrayDropCodes = new Set();
   reportedCloudWorkerCodes = new Set();
   clearWindowsForTesting() {
-    (this.knownInboundRequestIds.clear(),
-      this.knownOutboundRequestIds.clear(),
-      this.automatedOutboundRequestIds.clear(),
-      this.deviceOutboundRequestIds.clear(),
-      this.elicitationOutboundRequestIds.clear(),
-      this.hostAskOutboundRequestIds.clear(),
-      this.resolvedPromptRequestIds.clear(),
-      this.recentDropEventIds.clear(),
-      (this.commandDropNoticeWindow.start = 0),
-      (this.commandDropNoticeWindow.count = 0),
-      (this.messageDropNoticeWindow.start = 0),
-      (this.messageDropNoticeWindow.count = 0));
+    this.knownInboundRequestIds.clear();
+    this.knownOutboundRequestIds.clear();
+    this.automatedOutboundRequestIds.clear();
+    this.deviceOutboundRequestIds.clear();
+    this.elicitationOutboundRequestIds.clear();
+    this.hostAskOutboundRequestIds.clear();
+    this.resolvedPromptRequestIds.clear();
+    this.recentDropEventIds.clear();
+    this.commandDropNoticeWindow.start = 0;
+    this.commandDropNoticeWindow.count = 0;
+    this.messageDropNoticeWindow.start = 0;
+    this.messageDropNoticeWindow.count = 0;
   }
   resetForTesting() {
-    ((this.filterPolicy = void 0),
-      (this.dropNotifier = void 0),
-      (this.senderDropWriter = void 0),
-      (this.malformedConfigReported = !1),
-      this.clearWindowsForTesting(),
-      this.reportedStrayDropCodes.clear(),
-      this.reportedCloudWorkerCodes.clear());
+    this.filterPolicy = undefined;
+    this.dropNotifier = undefined;
+    this.senderDropWriter = undefined;
+    this.malformedConfigReported = false;
+    this.clearWindowsForTesting();
+    this.reportedStrayDropCodes.clear();
+    this.reportedCloudWorkerCodes.clear();
   }
 }
+//@ chunk-s7k22nbx.js:1519-2045 placement
 /**
  * Remote Control 跨会话消息宿主状态容器：出站对端/投递、订阅器启停、实时 socket、身份解析、待同意回复、恢复游标等字段，单例 antproto。
  */
-//@ chunk-s7k22nbx.js:1519-2045 placement
 class PeerMessagingHostState {
   outboundPeers = new Set();
   outboundPosts = new Set();
-  subscriberStarted = !1;
-  subscriberStopping = !1;
+  subscriberStarted = false;
+  subscriberStopping = false;
   liveSocket = null;
   enqueuePeerMessage = null;
   getCurrentMode = null;
   enqueueReceiveNotice = null;
   connectFailureStreak = null;
-  outageWakeSent = !1;
+  outageWakeSent = false;
   identity = null;
   identityResolved = null;
   identityFailedClosed = null;
@@ -80,7 +86,7 @@ class PeerMessagingHostState {
   resumeSeedUs = null;
   lastCursor = null;
   entriesInFlight = 0;
-  replyAwaitsPublish = !1;
+  replyAwaitsPublish = false;
   lastArmedSendAtMs = null;
   onReceiveStateChanged = null;
 }
@@ -88,10 +94,13 @@ class PeerMessagingHostState {
 class InboundReadReceiptsState {
   held = new Map();
   settled = [];
-  reporter = void 0;
-  sessionId = void 0;
+  reporter = undefined;
+  sessionId = undefined;
   resetForTesting() {
-    (this.held.clear(), (this.settled.length = 0), (this.reporter = void 0), (this.sessionId = void 0));
+    this.held.clear();
+    this.settled.length = 0;
+    this.reporter = undefined;
+    this.sessionId = undefined;
   }
 }
 //@ chunk-s7k22nbx.js:2212-2399 placement
@@ -101,10 +110,10 @@ class RepoCheckoutsState {
   onMetadataChanged = null;
   lastEmittedBranches = {};
   reset() {
-    ((this.checkouts = null),
-      (this.baseRefs = null),
-      (this.onMetadataChanged = null),
-      (this.lastEmittedBranches = {}));
+    this.checkouts = null;
+    this.baseRefs = null;
+    this.onMetadataChanged = null;
+    this.lastEmittedBranches = {};
   }
 }
 //@ chunk-s7k22nbx.js:2399-3863 placement
@@ -117,46 +126,49 @@ class BridgeHostState {
   peerIdentityKey = null;
   walkCredentialKey = null;
   retiredHandles = new WeakSet();
-  lastReportedPermissionMode = void 0;
-  lastKnownPermissionMode = void 0;
-  lastReportedEffort = void 0;
-  lastKnownEffort = void 0;
-  lastReportedUltracodeActive = void 0;
-  lastKnownUltracodeActive = void 0;
-  lastKnownEffortRequestId = void 0;
-  lastReportedModel = void 0;
-  lastKnownModel = void 0;
-  contextUsageMirror = void 0;
-  tokenUsageMirror = void 0;
-  lastReportedArtifacts = void 0;
-  lastKnownArtifacts = void 0;
-  artifactsEgressSuppressed = void 0;
-  lastReportedCrossSessionInbound = void 0;
-  lastKnownCrossSessionInbound = void 0;
-  lastKnownPostTurnSummary = void 0;
+  lastReportedPermissionMode = undefined;
+  lastKnownPermissionMode = undefined;
+  lastReportedEffort = undefined;
+  lastKnownEffort = undefined;
+  lastReportedUltracodeActive = undefined;
+  lastKnownUltracodeActive = undefined;
+  lastKnownEffortRequestId = undefined;
+  lastReportedModel = undefined;
+  lastKnownModel = undefined;
+  contextUsageMirror = undefined;
+  tokenUsageMirror = undefined;
+  lastReportedArtifacts = undefined;
+  lastKnownArtifacts = undefined;
+  artifactsEgressSuppressed = undefined;
+  lastReportedCrossSessionInbound = undefined;
+  lastKnownCrossSessionInbound = undefined;
+  lastKnownPostTurnSummary = undefined;
   remoteEgressSuppressed = null;
-  lastRateLimitMirror = void 0;
+  lastRateLimitMirror = undefined;
   dropSenderWriterByHandle = new WeakMap();
   livePreviewByHandle = new WeakMap();
-  isLivePreviewOffByPerson = !1;
+  isLivePreviewOffByPerson = false;
   livePreviewEndedShares = [];
   antproto = new PeerMessagingHostState();
-  bridgeStateFramesGate = void 0;
-  cseShimGate = void 0;
+  bridgeStateFramesGate = undefined;
+  cseShimGate = undefined;
   placeholderWriteChain = Promise.resolve();
-  placeholderSweepStarted = !1;
-  rcActiveImpressionRecorded = !1;
-  verboseRcActive = void 0;
+  placeholderSweepStarted = false;
+  rcActiveImpressionRecorded = false;
+  verboseRcActive = undefined;
   teleportedSessionIds = new Set();
   nameTagWriteChain = Promise.resolve();
   latestAppliedName = new Map();
   connectTimeName = new Map();
-  diagnosticPolicyKick = void 0;
-  bearerPlanFetch = void 0;
-  remoteControlLockReason = void 0;
-  uploadLimitTold = void 0;
-  sessionUploadRoute = void 0;
-  uploadResends = { underWay: 0, lastFailedAtMs: void 0 };
+  diagnosticPolicyKick = undefined;
+  bearerPlanFetch = undefined;
+  remoteControlLockReason = undefined;
+  uploadLimitTold = undefined;
+  sessionUploadRoute = undefined;
+  uploadResends = {
+    underWay: 0,
+    lastFailedAtMs: undefined,
+  };
   imageScaleLock = createMutex();
   historySpoolDir = null;
   historyPrefetchEntries = new Map();
@@ -164,18 +176,23 @@ class BridgeHostState {
   inboundReadReceipts = new InboundReadReceiptsState();
 }
 //@ chunk-s7k22nbx.js:3863-3888 placement
-var t_s = new HostScoped(() => new BridgeHostState());
+/**
+ * 按会话宿主缓存的 BridgeHostState（桥接宿主侧状态机，包含 attestation、已读回执等）。
+ */
+var BRIDGE_HOST_STATE_SLOT = new HostScoped(() => new BridgeHostState());
 //@ chunk-s7k22nbx.js:3888-3926 placement
-function ao() {
-  return t_s.of(getRootSession().host);
+/**
+ * 取当前根会话宿主的 BridgeHostState；桥接层 90 多处调用它读写 attestation/回执/占位记录等状态。
+ */
+function bridgeHostState() {
+  return BRIDGE_HOST_STATE_SLOT.of(getRootSession().host);
 }
+//@ chunk-s7k22nbx.js:3926-4004 placement = toCompatSessionId (1)
 /**
  * cse_xxx → session_xxx（其它原样）。
  */
-//@ chunk-s7k22nbx.js:3926-4004 placement = toCompatSessionId (1)
 function toCompatSessionId_2(id) {
   if (!id.startsWith("cse_")) return id;
   return "session_" + id.slice(4);
 }
-
-export { ao, toCompatSessionId_2, t_s };
+export { bridgeHostState, toCompatSessionId_2, BRIDGE_HOST_STATE_SLOT };

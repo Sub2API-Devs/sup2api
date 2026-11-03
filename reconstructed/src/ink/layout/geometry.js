@@ -9,16 +9,20 @@
  * attribution: fingerprint 1
  */
 
+//@ chunk-bzr73sfg.js:199445-199617 fingerprint = unionRect (1)
 /**
  * 两个矩形的并（包围盒）。
  */
-//@ chunk-bzr73sfg.js:199445-199617 fingerprint = unionRect (1)
 function unionRect(a, b) {
-  let minX = Math.min(a.x, b.x),
-    minY = Math.min(a.y, b.y),
-    maxX = Math.max(a.x + a.width, b.x + b.width),
-    maxY = Math.max(a.y + a.height, b.y + b.height);
-  return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+  let minX = Math.min(a.x, b.x);
+  let minY = Math.min(a.y, b.y);
+  let maxX = Math.max(a.x + a.width, b.x + b.width);
+  let maxY = Math.max(a.y + a.height, b.y + b.height);
+  return {
+    x: minX,
+    y: minY,
+    width: maxX - minX,
+    height: maxY - minY,
+  };
 }
-
 export { unionRect };

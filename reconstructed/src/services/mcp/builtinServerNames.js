@@ -15,14 +15,18 @@ import {
   CCR_EMAIL,
   WIDGETS,
   DOCS_SERVER_NAMES,
-  KIt,
-  Iyr,
-  eRi,
+  sameNormalizedServer,
+  isDocsServerId,
+  isMemoryServerId,
   mcpServerIdHeader,
-  MEMORY_SERVER_ID,
+  MEMORY_SERVER_ID_2,
 } from "./firstPartyServerIds.js";
-import { REMOTE_BROWSER_SERVER_NAME, FPn } from "./remoteBrowserServer.js";
-import { BROWSER_SERVER_NAMES, tOn, CLAUDE_DEVICE } from "../../utils/permissions/browserToolNames.js";
+import { REMOTE_BROWSER_SERVER_NAME, REMOTE_BROWSER_TOOL_NAMES } from "./remoteBrowserServer.js";
+import {
+  BROWSER_SERVER_NAMES,
+  ALL_BROWSER_SERVER_NAMES,
+  CLAUDE_DEVICE,
+} from "../../utils/permissions/browserToolNames.js";
 import { COMPUTER_USE_MCP_SERVER_NAME } from "../../utils/computerUse/common.js";
 import { WORKSPACE } from "../../utils/permissions/permissionRuleParser.js";
 import { desktopConnectorNames } from "../../utils/sessionShape.js";
@@ -46,188 +50,230 @@ import { GLOB_TOOL_NAME } from "../../tools/GlobTool/prompt.js";
 import { GREP_TOOL_NAME } from "../../tools/GrepTool/prompt.js";
 
 //@ chunk-aepeg2w5.js:817702-817755 placement
-function hs(e) {
+/**
+ * 由服务器前缀（mcp__<name>__）取出服务器名。
+ */
+function serverNameFromPrefix(e) {
   return mcpInfoFromString(`${getMcpPrefix_2(e)}tool`)?.serverName;
 }
 //@ chunk-aepeg2w5.js:817755-817844 placement
-function Fg(e) {
+/**
+ * 把若干前缀批量转成服务器名集合。
+ */
+function serverNameSet(e) {
   let n = new Set();
   for (let r of e) {
-    let s = hs(r);
-    if (s !== void 0) n.add(s);
+    let s = serverNameFromPrefix(r);
+    if (s !== undefined) n.add(s);
   }
   return n;
 }
 //@ chunk-aepeg2w5.js:817844-817916 placement
-var Lg = new Set(["hearthbot", REMOTE_DEVICES, CLAUDE_AI, CCR_EMAIL]),
-  IV = Fg(Lg),
-  DV = hs(WIDGETS),
-  NV = hs(REMOTE_BROWSER_SERVER_NAME);
+/**
+ * 远程浏览器服务器的名字。
+ */
+var MAYBE_LOCAL_SERVER_NAMES = new Set(["hearthbot", REMOTE_DEVICES, CLAUDE_AI, CCR_EMAIL]);
+var MAYBE_LOCAL_SERVER_NAME_SET = serverNameSet(MAYBE_LOCAL_SERVER_NAMES);
+var WIDGETS_SERVER_NAME = serverNameFromPrefix(WIDGETS);
+var REMOTE_BROWSER_SERVER_NAME_2 = serverNameFromPrefix(REMOTE_BROWSER_SERVER_NAME);
 //@ chunk-aepeg2w5.js:817916-817990 placement
-function FV(e, n) {
-  for (let r of DOCS_SERVER_NAMES) if (KIt(n, r) || KIt(e, r)) return !0;
-  return !1;
+/**
+ * 判断是否涉及 docs 服务器。
+ */
+function isDocsServer(e, n) {
+  for (let r of DOCS_SERVER_NAMES) if (sameNormalizedServer(n, r) || sameNormalizedServer(e, r)) return true;
+  return false;
 }
 //@ chunk-aepeg2w5.js:817990-818032 placement
-var LV = Fg(BROWSER_SERVER_NAMES),
-  UV = Fg([...tOn, COMPUTER_USE_MCP_SERVER_NAME, WORKSPACE, CLAUDE_DEVICE]);
+/**
+ * 计算机使用相关服务器名集合。
+ */
+var BROWSER_SERVER_NAME_SET = serverNameSet(BROWSER_SERVER_NAMES);
+var COMPUTER_USE_SERVER_NAME_SET = serverNameSet([
+  ...ALL_BROWSER_SERVER_NAMES,
+  COMPUTER_USE_MCP_SERVER_NAME,
+  WORKSPACE,
+  CLAUDE_DEVICE,
+]);
 //@ chunk-aepeg2w5.js:818032-818090 placement
-function nas(e) {
-  return desktopConnectorNames() && (hs(e)?.startsWith(CLAUDE_AI_2) ?? !1);
+/**
+ * 判断是否为桌面连接器（claude.ai 前缀）服务器名。
+ */
+function isDesktopConnectorServerName(e) {
+  return desktopConnectorNames() && (serverNameFromPrefix(e)?.startsWith(CLAUDE_AI_2) ?? false);
 }
+//@ chunk-aepeg2w5.js:818090-818839 placement
 /**
  * 是否为内置/保留的 MCP 服务器名（Slack 登录、远程设备等）。
  */
-//@ chunk-aepeg2w5.js:818090-818839 placement
 function isBuiltinMcpServerName(e, n) {
-  if (isPrototypeKey(e)) return !0;
-  if (e === "Slack sign-in (Claude Code tag)") return !0;
-  let r = hs(e);
-  if (FV(e, r ?? ""))
+  if (isPrototypeKey(e)) return true;
+  if (e === "Slack sign-in (Claude Code tag)") return true;
+  let r = serverNameFromPrefix(e);
+  if (isDocsServer(e, r ?? ""))
     return (
       (n?.hosted ?? env.CLAUDE_CODE_REMOTE) &&
-      !(n?.hostCarrier && DOCS_SERVER_NAMES.has(e) && (!n.config || Iyr(n.config)))
+      !(n?.hostCarrier && DOCS_SERVER_NAMES.has(e) && (!n.config || isDocsServerId(n.config)))
     );
-  if (r === void 0) return !1;
-  if (nas(e)) return !0;
-  if (r === DV) return (n?.hosted ?? env.CLAUDE_CODE_REMOTE) && !(n?.hostCarrier && e === WIDGETS);
+  if (r === undefined) return false;
+  if (isDesktopConnectorServerName(e)) return true;
+  if (r === WIDGETS_SERVER_NAME)
+    return (n?.hosted ?? env.CLAUDE_CODE_REMOTE) && !(n?.hostCarrier && e === WIDGETS);
   if (r === "webagent" || r === "claude-code-remote") return !(n?.hostCarrier && e === r);
-  if (IV.has(r)) return !(n?.hostCarrier && Lg.has(e) && (e !== CLAUDE_AI || !n.config || eRi(n.config)));
-  if (r === NV && isPolicyAllowed())
+  if (MAYBE_LOCAL_SERVER_NAME_SET.has(r))
+    return !(
+      n?.hostCarrier &&
+      MAYBE_LOCAL_SERVER_NAMES.has(e) &&
+      (e !== CLAUDE_AI || !n.config || isMemoryServerId(n.config))
+    );
+  if (r === REMOTE_BROWSER_SERVER_NAME_2 && isPolicyAllowed())
     return (
       (n?.hosted ?? env.CLAUDE_CODE_REMOTE) &&
       !(
         n?.hostCarrier &&
         e === REMOTE_BROWSER_SERVER_NAME &&
-        n.config !== void 0 &&
+        n.config !== undefined &&
         isRemoteBrowserHttpConfig(n.config)
       )
     );
-  if (LV.has(r)) return !(n?.hostCarrier && n.config && isLocalBrowserServerConfig(e, n.config));
+  if (BROWSER_SERVER_NAME_SET.has(r))
+    return !(n?.hostCarrier && n.config && isLocalBrowserServerConfig(e, n.config));
   if (n?.hostCarrier && e === CLAUDE_IN_CHROME_MCP_SERVER_NAME && n.config && isClaudeAiProxyServer(n.config))
-    return !1;
-  return UV.has(r);
+    return false;
+  return COMPUTER_USE_SERVER_NAME_SET.has(r);
 }
+//@ chunk-aepeg2w5.js:818982-819099 placement
 /**
  * 判断远程会话中的远程浏览器 MCP 服务器是否都是带作用域的受信配置。
  */
-//@ chunk-aepeg2w5.js:818982-819099 placement
-function isRemoteBrowserScoped(e) {
-  let n = e ?? [];
+function isRemoteBrowserScoped(mcpClientsFromAccessor) {
+  let n = mcpClientsFromAccessor ?? [];
   return (
     env.CLAUDE_CODE_REMOTE &&
     n.some((r) => r.name === REMOTE_BROWSER_SERVER_NAME) &&
     n.every((r) => r.name !== REMOTE_BROWSER_SERVER_NAME || toScopedConfig(r))
   );
 }
+//@ chunk-aepeg2w5.js:819099-819163 placement = isHTTPConfig (1)
 /**
  * 是否为 claude.ai 代理 MCP 服务器。
  */
-//@ chunk-aepeg2w5.js:819099-819163 placement = isHTTPConfig (1)
 function isClaudeAiProxyServer(config) {
   return (
-    config.type === "http" && mcpServerIdHeader(config) === MEMORY_SERVER_ID && isCcrSessionMcpUrl(config.url)
+    config.type === "http" &&
+    mcpServerIdHeader(config) === MEMORY_SERVER_ID_2 &&
+    isCcrSessionMcpUrl(config.url)
   );
 }
+//@ chunk-aepeg2w5.js:819163-819308 placement = toScopedConfig (0.78)
 /**
  * MCP 配置的 url 有效且作用域合法（动态作用域须来自插件）。
  */
-//@ chunk-aepeg2w5.js:819163-819308 placement = toScopedConfig (0.78)
 function toScopedConfig_2(config) {
-  if (typeof config.url !== "string" || !isSameOriginAsCcr(config.url)) return !1;
-  if (config.scope === void 0) return !1;
-  return config.scope !== "dynamic" || config.pluginSource !== void 0;
+  if (typeof config.url !== "string" || !isSameOriginAsCcr(config.url)) return false;
+  if (config.scope === undefined) return false;
+  return config.scope !== "dynamic" || config.pluginSource !== undefined;
 }
+//@ chunk-aepeg2w5.js:819308-819476 placement
 /**
  * 列出保留的 MCP 服务器名（内置连接器、浏览器、Computer Use、工作区、设备等），用户配置不能使用这些名称。
  */
-//@ chunk-aepeg2w5.js:819308-819476 placement
 function reservedMcpServerNames() {
   let e = [
     "Slack sign-in (Claude Code tag)",
-    ...Lg,
+    ...MAYBE_LOCAL_SERVER_NAMES,
     ...DOCS_SERVER_NAMES,
     WIDGETS,
     ...BROWSER_SERVER_NAMES,
-    ...tOn,
+    ...ALL_BROWSER_SERVER_NAMES,
     COMPUTER_USE_MCP_SERVER_NAME,
     WORKSPACE,
     CLAUDE_DEVICE,
   ];
-  if ((e.push("webagent", "claude-code-remote"), isPolicyAllowed())) e.push(REMOTE_BROWSER_SERVER_NAME);
+  e.push("webagent", "claude-code-remote");
+  if (isPolicyAllowed()) e.push(REMOTE_BROWSER_SERVER_NAME);
   return e;
 }
 //@ chunk-aepeg2w5.js:819476-819520 placement
-var HV = new Set(["127.0.0.1", "[::1]", "::1"]);
+/**
+ * 回环主机名集合。
+ */
+var LOOPBACK_HOSTNAMES = new Set(["127.0.0.1", "[::1]", "::1"]);
 //@ chunk-aepeg2w5.js:819520-819702 placement
-function isLocalBrowserServerConfig(e, n) {
-  if (!BROWSER_SERVER_NAMES.has(e) || n.type !== "http") return !1;
+function isLocalBrowserServerConfig(e, config) {
+  if (!BROWSER_SERVER_NAMES.has(e) || config.type !== "http") return false;
   let r;
   try {
-    r = new URL(n.url);
+    r = new URL(config.url);
   } catch {
-    return !1;
+    return false;
   }
-  return r.protocol === "http:" && r.username === "" && r.password === "" && HV.has(r.hostname);
+  return (
+    r.protocol === "http:" && r.username === "" && r.password === "" && LOOPBACK_HOSTNAMES.has(r.hostname)
+  );
 }
+//@ chunk-aepeg2w5.js:819702-819751 placement = getServerCommandArray (1)
 /**
  * 是否为 stdio 配置。
  */
-//@ chunk-aepeg2w5.js:819702-819751 placement = getServerCommandArray (1)
 function isStdioConfig(config) {
   return config.type === "stdio" || !config.type;
 }
+//@ chunk-aepeg2w5.js:819751-819796 placement
 /**
  * 是否为本机 stdio 服务器。
  */
-//@ chunk-aepeg2w5.js:819751-819796 placement
 function isReservedStdioServer(e, n) {
-  return isStdioConfig(n) && (isClaudeInChromeMCPServer(e) || !1);
+  return isStdioConfig(n) && (isClaudeInChromeMCPServer(e) || false);
 }
-/**
- * 浏览器/远程设备工具名集合。
- */
 //@ chunk-aepeg2w5.js:819796-820317 placement
-var CHROME_TOOL_NAMES = new Set(CHROME_TOOL_NAMES_2.map((e) => normalizeNameForMCP(e))),
-  GV = new Set(CU_TOOL_NAMES.map((e) => normalizeNameForMCP(e))),
-  $V = [
-    "list_devices",
-    "get_device_info",
-    "device_bash",
-    BASH_TOOL_NAME,
-    FILE_READ_TOOL_NAME,
-    FILE_WRITE_TOOL_NAME,
-    FILE_EDIT_TOOL_NAME,
-    GLOB_TOOL_NAME,
-    GREP_TOOL_NAME,
-    "sync_files",
-    "device_list_dir",
-    "device_stage_files",
-    "device_commit_files",
-    "device_request_folder_access",
-    "device_request_delete_permission",
-    "create_artifact",
-    "update_artifact",
-    "list_artifacts",
-    "project_memory_read",
-    "project_memory_write",
-  ],
-  WV = new Set(FPn.map((e) => normalizeNameForMCP(e))),
-  zV = new Set($V.map((e) => normalizeNameForMCP(e))),
-  jV = new Set(["remote_cowork", "remote_cowork_trigger", "local-agent", "local_agent"]);
-
+/**
+ * 远程协作（cowork）服务器名。
+ */
+var CHROME_TOOL_NAMES = new Set(CHROME_TOOL_NAMES_2.map((e) => normalizeNameForMCP(e)));
+var COMPUTER_USE_TOOL_NAMES = new Set(CU_TOOL_NAMES.map((e) => normalizeNameForMCP(e)));
+var DEVICE_TOOL_NAMES = [
+  "list_devices",
+  "get_device_info",
+  "device_bash",
+  BASH_TOOL_NAME,
+  FILE_READ_TOOL_NAME,
+  FILE_WRITE_TOOL_NAME,
+  FILE_EDIT_TOOL_NAME,
+  GLOB_TOOL_NAME,
+  GREP_TOOL_NAME,
+  "sync_files",
+  "device_list_dir",
+  "device_stage_files",
+  "device_commit_files",
+  "device_request_folder_access",
+  "device_request_delete_permission",
+  "create_artifact",
+  "update_artifact",
+  "list_artifacts",
+  "project_memory_read",
+  "project_memory_write",
+];
+var UPSTREAM_TOOL_NAME_SET = new Set(REMOTE_BROWSER_TOOL_NAMES.map((e) => normalizeNameForMCP(e)));
+var DEVICE_TOOL_NAME_SET = new Set(DEVICE_TOOL_NAMES.map((e) => normalizeNameForMCP(e)));
+var REMOTE_COWORK_SERVER_NAMES = new Set([
+  "remote_cowork",
+  "remote_cowork_trigger",
+  "local-agent",
+  "local_agent",
+]);
 export {
   isBuiltinMcpServerName,
-  nas,
+  isDesktopConnectorServerName,
   isClaudeAiProxyServer,
   toScopedConfig_2,
   isReservedStdioServer,
   reservedMcpServerNames,
   isStdioConfig,
-  jV,
+  REMOTE_COWORK_SERVER_NAMES,
   CHROME_TOOL_NAMES,
-  GV,
-  zV,
-  WV,
+  COMPUTER_USE_TOOL_NAMES,
+  DEVICE_TOOL_NAME_SET,
+  UPSTREAM_TOOL_NAME_SET,
   isRemoteBrowserScoped,
 };

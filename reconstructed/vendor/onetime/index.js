@@ -5,27 +5,31 @@
  * pieces: chunk-m4p5zn6n.js (2)
  * attribution: esm-layout 1, esm-fingerprint 1
  */
-import { Ee } from "../mimic-function/index.js";
+import { mimicFunction } from "../mimic-function/index.js";
 
 //@ chunk-m4p5zn6n.js:9126-9455 esm-layout
-var weakMap = new WeakMap(),
-  zt = (e, n = {}) => {
-    if (typeof e !== "function") throw TypeError("Expected a function");
-    let r,
-      o = 0,
-      s = e.displayName || e.name || "<anonymous>",
-      u = function (...d) {
-        if ((weakMap.set(u, ++o), o === 1)) ((r = e.apply(this, d)), (e = null));
-        else if (n.throw === !0) throw Error(`Function \`${s}\` can only be called once`);
-        return r;
-      };
-    return (Ee(u, e), weakMap.set(u, o), u);
+var calledFunctions = new WeakMap();
+var onetime = (function_, options = {}) => {
+  if (typeof function_ !== "function") throw TypeError("Expected a function");
+  let returnValue;
+  let callCount = 0;
+  let functionName = function_.displayName || function_.name || "<anonymous>";
+  let onetime = function (...arguments_) {
+    calledFunctions.set(onetime, ++callCount);
+    if (callCount === 1) {
+      returnValue = function_.apply(this, arguments_);
+      function_ = null;
+    } else if (options.throw === true) throw Error(`Function \`${functionName}\` can only be called once`);
+    return returnValue;
   };
-//@ chunk-m4p5zn6n.js:9455-9596 esm-fingerprint
-zt.callCount = (e) => {
-  if (!weakMap.has(e))
-    throw Error(`The given function \`${e.name}\` is not wrapped by the \`onetime\` package`);
-  return weakMap.get(e);
+  mimicFunction(onetime, function_);
+  calledFunctions.set(onetime, callCount);
+  return onetime;
 };
-
-export { zt };
+//@ chunk-m4p5zn6n.js:9455-9596 esm-fingerprint
+onetime.callCount = (function_) => {
+  if (!calledFunctions.has(function_))
+    throw Error(`The given function \`${function_.name}\` is not wrapped by the \`onetime\` package`);
+  return calledFunctions.get(function_);
+};
+export { onetime };

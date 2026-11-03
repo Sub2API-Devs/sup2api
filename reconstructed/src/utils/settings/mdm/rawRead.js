@@ -19,7 +19,7 @@ import {
 import { SETTINGS, WINDOWS_REGISTRY_KEY_PATH_HKLM, WINDOWS_REGISTRY_KEY_PATH_HKCU } from "./constants.js";
 
 //@ chunk-qrhwndg8.js:297-395 sole-consumer
-class a {
+class RawReadRunner {
   promise = null;
   start() {
     if (this.promise) return;
@@ -30,16 +30,39 @@ class a {
   }
 }
 //@ chunk-qrhwndg8.js:395-407 sole-consumer
-var d = new a();
+var rawReadRunner = new RawReadRunner();
 //@ chunk-qrhwndg8.js:407-870 affinity
 function classifyExecResult(e) {
-  if (!e) return { status: "ok", exitCode: 0, errno: null, signal: null };
-  let t = e,
-    n = typeof t.signal === "string" && t.signal ? t.signal : null;
+  if (!e)
+    return {
+      status: "ok",
+      exitCode: 0,
+      errno: null,
+      signal: null,
+    };
+  let t = e;
+  let signal = typeof t.signal === "string" && t.signal ? t.signal : null;
   if (typeof t.code === "string")
-    return { status: "spawn_error", exitCode: null, errno: t.code, signal: null };
-  if (t.killed === !0) return { status: "timeout", exitCode: null, errno: null, signal: n };
-  if (n) return { status: "killed", exitCode: null, errno: null, signal: n };
+    return {
+      status: "spawn_error",
+      exitCode: null,
+      errno: t.code,
+      signal: null,
+    };
+  if (t.killed === true)
+    return {
+      status: "timeout",
+      exitCode: null,
+      errno: null,
+      signal,
+    };
+  if (signal)
+    return {
+      status: "killed",
+      exitCode: null,
+      errno: null,
+      signal,
+    };
   return {
     status: "exited",
     exitCode: typeof t.code === "number" ? t.code : null,
@@ -48,22 +71,24 @@ function classifyExecResult(e) {
   };
 }
 //@ chunk-qrhwndg8.js:870-1244 callgraph-fingerprint = execFilePromise (0.388)
-function execFilePromise(e, t, n) {
+function execFilePromise(cmd, args, n) {
   let now = Date.now();
   return new Promise((resolve) => {
     try {
       execFile(
-        e,
-        t,
+        cmd,
+        args,
         {
           encoding: "utf-8",
           timeout: REG_QUERY_TIMEOUT_MS,
-          windowsHide: !0,
-          ...(n !== void 0 && { maxBuffer: n }),
+          windowsHide: true,
+          ...(n !== undefined && {
+            maxBuffer: n,
+          }),
         },
-        (u, r, l) => {
+        (u, stdout, l) => {
           resolve({
-            stdout: r ?? "",
+            stdout: stdout ?? "",
             stderr: l ?? "",
             ...classifyExecResult(u),
             durationMs: Date.now() - now,
@@ -98,38 +123,50 @@ function summarizeRegQueryOutcome(e) {
   };
 }
 //@ chunk-qrhwndg8.js:1442-1535 layout
-function f(e) {
+function isStdioMaxBufferError(e) {
   return e.status === "spawn_error" && e.errno === "ERR_CHILD_PROCESS_STDIO_MAXBUFFER";
 }
+//@ chunk-qrhwndg8.js:1535-1683 facade-exports = consumeRawReadResult (0.602)
 /**
  * Windows：并行 reg query HKLM 与 HKCU 的 Settings 值，返回原始输出与每次调用的结果分类。
  */
-//@ chunk-qrhwndg8.js:1535-1683 facade-exports = consumeRawReadResult (0.602)
 function fireRawRead() {
   return (async () => {
     if (isWsl()) return fireRawRead_2(WSL_REG_EXE_PATH);
-    return { plistStdouts: null, hklmStdout: null, hkcuStdout: null, outcomes: { hklm: null, hkcu: null } };
+    return {
+      plistStdouts: null,
+      hklmStdout: null,
+      hkcuStdout: null,
+      outcomes: {
+        hklm: null,
+        hkcu: null,
+      },
+    };
   })();
 }
 //@ chunk-qrhwndg8.js:1683-1991 fingerprint = fireRawRead (0.419)
-async function fireRawRead_2(e) {
-  let t = (o) => execFilePromise(e, ["query", o, "/v", SETTINGS], REG_QUERY_MAX_BUFFER),
-    [n, s] = await Promise.all([t(WINDOWS_REGISTRY_KEY_PATH_HKLM), t(WINDOWS_REGISTRY_KEY_PATH_HKCU)]);
+async function fireRawRead_2(cmd) {
+  let t = (o) => execFilePromise(cmd, ["query", o, "/v", SETTINGS], REG_QUERY_MAX_BUFFER);
+  let [n, s] = await Promise.all([t(WINDOWS_REGISTRY_KEY_PATH_HKLM), t(WINDOWS_REGISTRY_KEY_PATH_HKCU)]);
   return {
     plistStdouts: null,
     hklmStdout: n.status === "ok" ? n.stdout : null,
-    ...(f(n) && { hklmUnreadReason: `the value exceeds ${REG_QUERY_MAX_BUFFER / 1048576} MiB` }),
+    ...(isStdioMaxBufferError(n) && {
+      hklmUnreadReason: `the value exceeds ${REG_QUERY_MAX_BUFFER / 1048576} MiB`,
+    }),
     hkcuStdout: s.status === "ok" ? s.stdout : null,
-    outcomes: { hklm: summarizeRegQueryOutcome(n), hkcu: summarizeRegQueryOutcome(s) },
+    outcomes: {
+      hklm: summarizeRegQueryOutcome(n),
+      hkcu: summarizeRegQueryOutcome(s),
+    },
   };
 }
 //@ chunk-qrhwndg8.js:1991-2016 facade-exports
 function startMdmRawRead() {
-  d.start();
+  rawReadRunner.start();
 }
 //@ chunk-qrhwndg8.js:2016-2048 facade-exports
 function getMdmRawReadPromise() {
-  return d.promise;
+  return rawReadRunner.promise;
 }
-
 export { startMdmRawRead, getMdmRawReadPromise, fireRawRead };

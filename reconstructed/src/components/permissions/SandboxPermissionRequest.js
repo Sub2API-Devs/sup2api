@@ -8,7 +8,7 @@
  * pieces: chunk-18hwfzwa.js (3)
  * attribution: placement 1, layout 1, fingerprint 1
  */
-import { j } from "../../../vendor/react/cjs/react.production.js";
+import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
 import { w } from "../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import {
@@ -18,43 +18,52 @@ import {
 } from "../../utils/sandbox/sandbox-adapter.js";
 import {
   serializeApprovalPayload,
-  Nur,
+  hostnameLengthAllowance,
   plainDisplay,
 } from "../../utils/permissions/approvalPayloadSerialization.js";
 import { parseConsentSuggestions } from "./consentRows.js";
 import { WEBFETCH } from "../../tools/WebFetchTool/prompt.js";
-import { r, e } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default_2,
+  jsxProd_default,
+} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Box } from "../../ink/components/Text.js";
 import { useRefusableAnswer } from "../../hooks/useRefusableAnswer.js";
 import { useTimeout } from "../../ink/hooks/useTerminalHooks.js";
-import { So } from "../../hooks/useRecentInputGuard.js";
+import { RECENT_INPUT_GUARD_MS as RECENT_INPUT_GUARD_MS_3 } from "../../hooks/useRecentInputGuard.js";
 import { DiffFrame } from "../FileEditToolDiff.js";
 import { Blockquote } from "../Blockquote.js";
 import { ModelSelector } from "../agents/ModelSelector.js";
 import { PermissionDialog_2 } from "./PermissionDialog.js";
 
 //@ chunk-18hwfzwa.js:1248685-1248689 placement
-j();
+init_react_production();
 //@ chunk-18hwfzwa.js:1248689-1248719 layout
-var Bct = new Set(["addRules"]);
+var SANDBOX_RULE_UPDATE_TYPES = new Set(["addRules"]);
+//@ chunk-18hwfzwa.js:1248719-1252276 fingerprint = SandboxPermissionRequest (0.396)
 /**
  * 沙箱网络请求：显示请求访问的主机，选项允许一次 / 永久允许该域名（写 userSettings 的 sandbox 规则）/ 拒绝。
  */
-//@ chunk-18hwfzwa.js:1248719-1252276 fingerprint = SandboxPermissionRequest (0.396)
-function SandboxPermissionRequest(t0) {
-  let $ = w(44),
-    { hostPattern: t1, requestSource: requestSource, onUserResponse: onUserResponse } = t0,
-    { host: host } = t1,
-    Re;
-  if ($[0] === MEMO_CACHE_SENTINEL) ((Re = sandboxHostGrantDestination()), ($[0] = Re));
-  else Re = $[0];
-  let Be = Re,
-    He;
-  if ($[1] !== host)
-    ((He = serializeApprovalPayload(host, { maxUnits: Nur(host) })), ($[1] = host), ($[2] = He));
-  else He = $[2];
-  let We = He,
-    ze;
+function SandboxPermissionRequest(props) {
+  let $ = w(44);
+  let { hostPattern, requestSource, onUserResponse } = props;
+  let { host } = hostPattern;
+  let Re;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    Re = sandboxHostGrantDestination();
+    $[0] = Re;
+  } else Re = $[0];
+  let Be = Re;
+  let He;
+  if ($[1] !== host) {
+    He = serializeApprovalPayload(host, {
+      maxUnits: hostnameLengthAllowance(host),
+    });
+    $[1] = host;
+    $[2] = He;
+  } else He = $[2];
+  let We = He;
+  let ze;
   Xe: {
     if (Be === null) {
       ze = null;
@@ -69,8 +78,11 @@ function SandboxPermissionRequest(t0) {
       break Xe;
     }
     let rt;
-    if ($[3] !== host) ((rt = plainDisplay(host)), ($[3] = host), ($[4] = rt));
-    else rt = $[4];
+    if ($[3] !== host) {
+      rt = plainDisplay(host);
+      $[3] = host;
+      $[4] = rt;
+    } else rt = $[4];
     let kt = rt;
     if (kt === null) {
       ze = null;
@@ -79,24 +91,32 @@ function SandboxPermissionRequest(t0) {
     let At;
     if ($[5] !== host || $[6] !== kt) {
       let It;
-      if ($[8] !== host) ((It = consentHostEntry(host)), ($[8] = host), ($[9] = It));
-      else It = $[9];
+      if ($[8] !== host) {
+        It = consentHostEntry(host);
+        $[8] = host;
+        $[9] = It;
+      } else It = $[9];
       At = parseConsentSuggestions(
         [
           {
             type: "addRules",
-            rules: [{ toolName: WEBFETCH, ruleContent: `domain:${It}` }],
+            rules: [
+              {
+                toolName: WEBFETCH,
+                ruleContent: `domain:${It}`,
+              },
+            ],
             behavior: "allow",
             destination: Be,
           },
         ],
         {
-          displayedTypes: Bct,
+          displayedTypes: SANDBOX_RULE_UPDATE_TYPES,
           displayedDestinations: new Set([Be]),
           renderLabel: (value) => {
-            let Et = value.length === 1 ? value[0] : void 0;
+            let Et = value.length === 1 ? value[0] : undefined;
             if (
-              Et === void 0 ||
+              Et === undefined ||
               Et.type !== "addRules" ||
               Et.destination !== Be ||
               Et.rules.length !== 1 ||
@@ -105,158 +125,247 @@ function SandboxPermissionRequest(t0) {
             ) {
               return null;
             }
-            return r(Text, {
+            return jsxProd_default_2(Text, {
               children: [
                 "Yes, and don't ask again for",
                 " ",
-                e(Text, { bold: !0, children: kt.display }),
+                jsxProd_default(Text, {
+                  bold: true,
+                  children: kt.display,
+                }),
                 Et.destination === "userSettings" ? " in any project (user settings)" : "",
               ],
             });
           },
         },
       );
-      (($[5] = host), ($[6] = kt), ($[7] = At));
+      $[5] = host;
+      $[6] = kt;
+      $[7] = At;
     } else At = $[7];
     ze = At;
   }
-  let Dt = ze,
-    rt;
-  if ($[10] !== onUserResponse)
-    ((rt = (At) => {
-      let { response: response } = At;
+  let Dt = ze;
+  let rt;
+  if ($[10] !== onUserResponse) {
+    rt = (At) => {
+      let { response } = At;
       return onUserResponse(response);
-    }),
-      ($[10] = onUserResponse),
-      ($[11] = rt));
-  else rt = $[11];
-  let oo = useRefusableAnswer(rt),
-    Xt = useTimeout(So),
-    At;
-  if ($[12] !== Xt || $[13] !== oo)
-    ((At = function po(io, so) {
-      if (!Xt) {
+    };
+    $[10] = onUserResponse;
+    $[11] = rt;
+  } else rt = $[11];
+  let refusableAnswer = useRefusableAnswer(rt);
+  let timeout = useTimeout(RECENT_INPUT_GUARD_MS_3);
+  let At;
+  if ($[12] !== timeout || $[13] !== refusableAnswer) {
+    At = function po(result, response) {
+      if (!timeout) {
         return;
       }
-      if (!oo.answer({ result: io, response: so })) {
+      if (
+        !refusableAnswer.answer({
+          result,
+          response,
+        })
+      ) {
         return;
       }
-    }),
-      ($[12] = Xt),
-      ($[13] = oo),
-      ($[14] = At));
-  else At = $[14];
-  let po = At,
-    ao = oo.refused === null ? void 0 : oo.refused.result === "yes" ? "yes" : "no",
-    It;
-  if ($[15] !== Dt || $[16] !== po)
-    ((It = function Ao(co) {
-      bo: switch (co) {
+    };
+    $[12] = timeout;
+    $[13] = refusableAnswer;
+    $[14] = At;
+  } else At = $[14];
+  let po = At;
+  let defaultFocusValue =
+    refusableAnswer.refused === null ? undefined : refusableAnswer.refused.result === "yes" ? "yes" : "no";
+  let It;
+  if ($[15] !== Dt || $[16] !== po) {
+    It = function onSelect(value) {
+      bo: switch (value) {
         case "yes": {
-          po("yes", { allow: !0, persistToSettings: !1 });
+          po("yes", {
+            allow: true,
+            persistToSettings: false,
+          });
           break bo;
         }
         case "yes-dont-ask-again": {
-          if (Dt !== null) po("yes-dont-ask-again", { allow: !0, persistToSettings: !0, persistRow: Dt });
-          else po("yes", { allow: !0, persistToSettings: !1 });
+          if (Dt !== null)
+            po("yes-dont-ask-again", {
+              allow: true,
+              persistToSettings: true,
+              persistRow: Dt,
+            });
+          else
+            po("yes", {
+              allow: true,
+              persistToSettings: false,
+            });
           break bo;
         }
         case "no": {
-          po("no", { allow: !1, persistToSettings: !1 });
+          po("no", {
+            allow: false,
+            persistToSettings: false,
+          });
         }
       }
-    }),
-      ($[15] = Dt),
-      ($[16] = po),
-      ($[17] = It));
-  else It = $[17];
-  let Ao = It,
-    Bo;
-  if ($[18] === MEMO_CACHE_SENTINEL) ((Bo = { label: "Yes", value: "yes" }), ($[18] = Bo));
-  else Bo = $[18];
+    };
+    $[15] = Dt;
+    $[16] = po;
+    $[17] = It;
+  } else It = $[17];
+  let onChange = It;
+  let Bo;
+  if ($[18] === MEMO_CACHE_SENTINEL) {
+    Bo = {
+      label: "Yes",
+      value: "yes",
+    };
+    $[18] = Bo;
+  } else Bo = $[18];
   let Ro;
-  if ($[19] !== Dt)
-    ((Ro = Dt !== null ? [{ label: Dt.node, value: "yes-dont-ask-again" }] : []), ($[19] = Dt), ($[20] = Ro));
-  else Ro = $[20];
+  if ($[19] !== Dt) {
+    Ro =
+      Dt !== null
+        ? [
+            {
+              label: Dt.node,
+              value: "yes-dont-ask-again",
+            },
+          ]
+        : [];
+    $[19] = Dt;
+    $[20] = Ro;
+  } else Ro = $[20];
   let Ho;
-  if ($[21] === MEMO_CACHE_SENTINEL)
-    ((Ho = {
-      label: r(Text, {
-        children: ["No, and tell Claude what to do differently ", e(Text, { bold: !0, children: "(esc)" })],
+  if ($[21] === MEMO_CACHE_SENTINEL) {
+    Ho = {
+      label: jsxProd_default_2(Text, {
+        children: [
+          "No, and tell Claude what to do differently ",
+          jsxProd_default(Text, {
+            bold: true,
+            children: "(esc)",
+          }),
+        ],
       }),
       value: "no",
-    }),
-      ($[21] = Ho));
-  else Ho = $[21];
+    };
+    $[21] = Ho;
+  } else Ho = $[21];
   let Io;
-  if ($[22] !== Ro) ((Io = [Bo, ...Ro, Ho]), ($[22] = Ro), ($[23] = Io));
-  else Io = $[23];
-  let Wo = Io,
-    mn;
-  if ($[24] === MEMO_CACHE_SENTINEL) ((mn = e(Text, { dimColor: !0, children: "Host:" })), ($[24] = mn));
-  else mn = $[24];
-  const Cn = We.kind === "full" && We.needsGutter,
-    No = We.kind === "full" ? We.text : We.marker;
-  let vo;
-  if ($[25] !== No) ((vo = r(Text, { children: [" ", No] })), ($[25] = No), ($[26] = vo));
-  else vo = $[26];
+  if ($[22] !== Ro) {
+    Io = [Bo, ...Ro, Ho];
+    $[22] = Ro;
+    $[23] = Io;
+  } else Io = $[23];
+  let options = Io;
+  let mn;
+  if ($[24] === MEMO_CACHE_SENTINEL) {
+    mn = jsxProd_default(Text, {
+      dimColor: true,
+      children: "Host:",
+    });
+    $[24] = mn;
+  } else mn = $[24];
+  const multiline = We.kind === "full" && We.needsGutter;
+  const No = We.kind === "full" ? We.text : We.marker;
+  let children;
+  if ($[25] !== No) {
+    children = jsxProd_default_2(Text, {
+      children: [" ", No],
+    });
+    $[25] = No;
+    $[26] = children;
+  } else children = $[26];
   let Yo;
-  if ($[27] !== Cn || $[28] !== vo)
-    ((Yo = e(DiffFrame, {
-      children: r(Box, { children: [mn, e(Blockquote, { multiline: Cn, children: vo })] }),
-    })),
-      ($[27] = Cn),
-      ($[28] = vo),
-      ($[29] = Yo));
-  else Yo = $[29];
+  if ($[27] !== multiline || $[28] !== children) {
+    Yo = jsxProd_default(DiffFrame, {
+      children: jsxProd_default_2(Box, {
+        children: [
+          mn,
+          jsxProd_default(Blockquote, {
+            multiline,
+            children,
+          }),
+        ],
+      }),
+    });
+    $[27] = multiline;
+    $[28] = children;
+    $[29] = Yo;
+  } else Yo = $[29];
   let kn;
-  if ($[30] === MEMO_CACHE_SENTINEL)
-    ((kn = e(Text, { children: "Do you want to allow this connection?" })), ($[30] = kn));
-  else kn = $[30];
-  const Fn = !Xt;
-  let bn;
-  if ($[31] !== po)
-    ((bn = () => po("cancel", { allow: !1, persistToSettings: !1 })), ($[31] = po), ($[32] = bn));
-  else bn = $[32];
+  if ($[30] === MEMO_CACHE_SENTINEL) {
+    kn = jsxProd_default(Text, {
+      children: "Do you want to allow this connection?",
+    });
+    $[30] = kn;
+  } else kn = $[30];
+  const isDisabled = !timeout;
+  let onCancel;
+  if ($[31] !== po) {
+    onCancel = () =>
+      po("cancel", {
+        allow: false,
+        persistToSettings: false,
+      });
+    $[31] = po;
+    $[32] = onCancel;
+  } else onCancel = $[32];
   let Go;
-  if ($[33] !== Ao || $[34] !== Wo || $[35] !== oo.attempts || $[36] !== ao || $[37] !== Fn || $[38] !== bn)
-    ((Go = r(Box, {
+  if (
+    $[33] !== onChange ||
+    $[34] !== options ||
+    $[35] !== refusableAnswer.attempts ||
+    $[36] !== defaultFocusValue ||
+    $[37] !== isDisabled ||
+    $[38] !== onCancel
+  ) {
+    Go = jsxProd_default_2(Box, {
       flexDirection: "column",
       paddingX: 1,
       paddingBottom: 1,
       children: [
         kn,
-        e(Box, {
-          children: e(
+        jsxProd_default(Box, {
+          children: jsxProd_default(
             ModelSelector,
-            { defaultFocusValue: ao, options: Wo, isDisabled: Fn, onChange: Ao, onCancel: bn },
-            oo.attempts,
+            {
+              defaultFocusValue,
+              options,
+              isDisabled,
+              onChange,
+              onCancel,
+            },
+            refusableAnswer.attempts,
           ),
         }),
       ],
-    })),
-      ($[33] = Ao),
-      ($[34] = Wo),
-      ($[35] = oo.attempts),
-      ($[36] = ao),
-      ($[37] = Fn),
-      ($[38] = bn),
-      ($[39] = Go));
-  else Go = $[39];
+    });
+    $[33] = onChange;
+    $[34] = options;
+    $[35] = refusableAnswer.attempts;
+    $[36] = defaultFocusValue;
+    $[37] = isDisabled;
+    $[38] = onCancel;
+    $[39] = Go;
+  } else Go = $[39];
   let hn;
-  if ($[40] !== requestSource || $[41] !== Yo || $[42] !== Go)
-    ((hn = r(PermissionDialog_2, {
+  if ($[40] !== requestSource || $[41] !== Yo || $[42] !== Go) {
+    hn = jsxProd_default_2(PermissionDialog_2, {
       title: "Network request outside of sandbox",
       innerPaddingX: 0,
-      requestSource: requestSource,
+      requestSource,
       children: [Yo, Go],
-    })),
-      ($[40] = requestSource),
-      ($[41] = Yo),
-      ($[42] = Go),
-      ($[43] = hn));
-  else hn = $[43];
+    });
+    $[40] = requestSource;
+    $[41] = Yo;
+    $[42] = Go;
+    $[43] = hn;
+  } else hn = $[43];
   return hn;
 }
-
 export { SandboxPermissionRequest };

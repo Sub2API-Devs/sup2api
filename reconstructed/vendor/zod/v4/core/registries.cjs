@@ -8,72 +8,82 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-1ny7cxrt.js:508147-509437 cjs-fingerprint
-var Ju = x(function (ql) {
-  var _C;
-  Object.defineProperty(ql, "__esModule", { value: !0 });
-  ql.globalRegistry = ql.$ZodRegistry = ql.$input = ql.$output = void 0;
-  ql.registry = bC;
-  ql.$output = Symbol("ZodOutput");
-  ql.$input = Symbol("ZodInput");
-  class V_ {
+var require_registries = x(function (cjsExports) {
+  var _a;
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.globalRegistry = cjsExports.$ZodRegistry = cjsExports.$input = cjsExports.$output = undefined;
+  cjsExports.registry = registry;
+  cjsExports.$output = Symbol("ZodOutput");
+  cjsExports.$input = Symbol("ZodInput");
+  class $ZodRegistry {
     constructor() {
-      ((this._map = new WeakMap()), (this._idmap = new Map()));
+      this._map = new WeakMap();
+      this._idmap = new Map();
     }
-    add(e, ...t) {
-      let n = t[0];
-      if ((this._map.set(e, n), n && typeof n === "object" && "id" in n)) this._idmap.set(n.id, e);
+    add(schema, ..._meta) {
+      let meta = _meta[0];
+      this._map.set(schema, meta);
+      if (meta && typeof meta === "object" && "id" in meta) this._idmap.set(meta.id, schema);
       return this;
     }
     clear() {
-      return ((this._map = new WeakMap()), (this._idmap = new Map()), this);
+      this._map = new WeakMap();
+      this._idmap = new Map();
+      return this;
     }
-    remove(e) {
-      let t = this._map.get(e);
-      if (t && typeof t === "object" && "id" in t) this._idmap.delete(t.id);
-      return (this._map.delete(e), this);
+    remove(schema) {
+      let meta = this._map.get(schema);
+      if (meta && typeof meta === "object" && "id" in meta) this._idmap.delete(meta.id);
+      this._map.delete(schema);
+      return this;
     }
-    get(e) {
-      let parent = e._zod.parent;
-      if (parent) {
-        let n = { ...(this.get(parent) ?? {}) };
-        delete n.id;
-        let o = { ...n, ...this._map.get(e) };
-        return Object.keys(o).length ? o : void 0;
+    get(schema) {
+      let p = schema._zod.parent;
+      if (p) {
+        let pm = {
+          ...(this.get(p) ?? {}),
+        };
+        delete pm.id;
+        let f = {
+          ...pm,
+          ...this._map.get(schema),
+        };
+        return Object.keys(f).length ? f : undefined;
       }
-      return this._map.get(e);
+      return this._map.get(schema);
     }
-    has(e) {
-      return this._map.has(e);
+    has(schema) {
+      return this._map.has(schema);
     }
   }
-  ql.$ZodRegistry = V_;
-  function bC() {
-    return new V_();
+  cjsExports.$ZodRegistry = $ZodRegistry;
+  function registry() {
+    return new $ZodRegistry();
   }
-  (_C = globalThis).__zod_globalRegistry ?? (_C.__zod_globalRegistry = bC());
-  ql.globalRegistry = globalThis.__zod_globalRegistry;
+  (_a = globalThis).__zod_globalRegistry ?? (_a.__zod_globalRegistry = registry());
+  cjsExports.globalRegistry = globalThis.__zod_globalRegistry;
   (function () {
-    var ownPropertyNames = Object.getOwnPropertyNames(ql);
-    for (var t = 0; t < ownPropertyNames.length; t++) {
-      var ownPropertyDescriptor = Object.getOwnPropertyDescriptor(ql, ownPropertyNames[t]);
-      if (!ownPropertyDescriptor || !ownPropertyDescriptor.get || !ownPropertyDescriptor.configurable)
-        continue;
-      var o;
+    var keys = Object.getOwnPropertyNames(cjsExports);
+    for (var i = 0; i < keys.length; i++) {
+      var desc = Object.getOwnPropertyDescriptor(cjsExports, keys[i]);
+      if (!desc || !desc.get || !desc.configurable) continue;
+      var value;
       try {
-        o = ownPropertyDescriptor.get();
-      } catch (error) {
+        value = desc.get();
+      } catch (e) {
         continue;
       }
-      if (o === void 0) continue;
-      Object.defineProperty(ql, ownPropertyNames[t], {
-        value: o,
-        writable: !1,
-        enumerable: ownPropertyDescriptor.enumerable,
-        configurable: !1,
+      if (value === undefined) continue;
+      Object.defineProperty(cjsExports, keys[i], {
+        value,
+        writable: false,
+        enumerable: desc.enumerable,
+        configurable: false,
       });
     }
-    Object.freeze(ql);
+    Object.freeze(cjsExports);
   })();
 });
-
-export { Ju };
+export { require_registries };

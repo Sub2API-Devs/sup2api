@@ -19,32 +19,32 @@ var useAutoModeUnavailableNotification = {
   id: "auto-mode-unavailable",
   deps: (h) => [h.permissionMode, h.isAutoModeAvailable, h.addNotification, h.store],
   setup() {
-    let h = !1,
-      x;
-    return ({
-      addNotification: addNotification,
-      store: store,
-      permissionMode: permissionMode,
-      isAutoModeAvailable: isAutoModeAvailable,
-    }) => {
-      if (x === void 0) x = permissionMode;
-      let Re = x;
-      if (((x = permissionMode), getIsRemoteMode())) return;
+    let h = false;
+    let x;
+    return ({ addNotification, store, permissionMode, isAutoModeAvailable }) => {
+      if (x === undefined) x = permissionMode;
+      let prevMode = x;
+      x = permissionMode;
+      if (getIsRemoteMode()) return;
       if (h) return;
-      if (!(permissionMode === "default" && Re !== "default" && Re !== "auto" && !isAutoModeAvailable))
+      if (!(
+        permissionMode === "default" &&
+        prevMode !== "default" &&
+        prevMode !== "auto" &&
+        !isAutoModeAvailable
+      ))
         return;
-      let He = getAutoModeUnavailableReason();
-      if (!He) return;
-      ((h = !0),
-        addNotification({
-          key: "auto-mode-unavailable",
-          kind: "feedback",
-          text: getAutoModeUnavailableNotification(He),
-          color: "warning",
-          priority: "medium",
-        }));
+      let reason = getAutoModeUnavailableReason();
+      if (!reason) return;
+      h = true;
+      addNotification({
+        key: "auto-mode-unavailable",
+        kind: "feedback",
+        text: getAutoModeUnavailableNotification(reason),
+        color: "warning",
+        priority: "medium",
+      });
     };
   },
 };
-
 export { useAutoModeUnavailableNotification };

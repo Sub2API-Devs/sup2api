@@ -8,153 +8,199 @@
  * pieces: chunk-9qwbw2qr.js (17)
  * attribution: placement 17
  */
-import { join, join as join_2 } from "path";
+import { join } from "path";
 import { lstat, open } from "fs/promises";
 import { constants } from "fs";
 import { isDiskless } from "../../bootstrap/state.js";
 import { getPluginsDirectory, isSamePluginDirName } from "./pluginDirectories.js";
-import { ws } from "../fsFlags.js";
+import { NOFOLLOW_NONBLOCK_FLAGS } from "../fsFlags.js";
 import { logForDebugging } from "../debug.js";
 import { READ_LIMITS } from "../fsBoundRead.js";
 import { readHandleUpTo, getFsImplementation } from "../fsOperations.js";
 import { jsonParse, jsonStringify } from "../slowOperations.js";
 import { isENOENT, getErrnoCode, errorMessage } from "../errors.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, T, pe, o } from "../../../vendor/zod/v4/classic/schemas.js";
+import { u, literal, record, string } from "../../../vendor/zod/v4/classic/schemas.js";
 import { OFFICIAL_MARKETPLACE_NAME } from "./officialMarketplaceNames.js";
-import { QE } from "./pluginGates.js";
+import { isPluginDirectoryModeOn } from "./pluginGates.js";
 import { pluginDirectoryPolicyBlock } from "./marketplacePolicy.js";
-import { kk } from "./commandSourceErrors.js";
+import { commandSourceSession } from "./commandSourceErrors.js";
 import { writeFileAtomic } from "../atomicPublishWrite.js";
 
+//@ chunk-9qwbw2qr.js:8587-9509 placement
 /**
  * 读取插件目录下的 JSON 文件：符号链接、非普通文件、超过上限都视为 unusable 并记 warn；不存在 absent； 读出返回 {state:"read", json}。无盘模式视为 absent。
  */
-//@ chunk-9qwbw2qr.js:8587-9509 placement
 async function readPluginsDirJsonFile(fileName, maxBytes, label) {
-  if (isDiskless()) return { state: "absent" };
-  let filePath = join_2(getPluginsDirectory(), fileName),
-    displayLabel = label === "plugin catalog cache" ? "Plugin catalog cache" : `Plugin directory ${label}`;
+  if (isDiskless())
+    return {
+      state: "absent",
+    };
+  let filePath = join(getPluginsDirectory(), fileName);
+  let displayLabel = label === "plugin catalog cache" ? "Plugin catalog cache" : `Plugin directory ${label}`;
   try {
-    if (ws === 0 && (await lstat(filePath)).isSymbolicLink())
-      return (
-        logForDebugging(`${displayLabel} is a symbolic link; ignoring it`, { level: "warn" }),
-        { state: "unusable", readFailed: !1 }
-      );
-    await using y = await open(filePath, constants.O_RDONLY | ws | READ_LIMITS);
-    if (!(await y.stat()).isFile())
-      return (
-        logForDebugging(`${displayLabel} is not a file; ignoring it`, { level: "warn" }),
-        { state: "unusable", readFailed: !1 }
-      );
-    let l = await readHandleUpTo(y, maxBytes + 1, "file");
-    if (l.length > maxBytes)
-      return (
-        logForDebugging(`${displayLabel} is too large; ignoring it`, { level: "warn" }),
-        { state: "unusable", readFailed: !1 }
-      );
-    return { state: "read", json: jsonParse(l.toString("utf-8")) };
+    if (NOFOLLOW_NONBLOCK_FLAGS === 0 && (await lstat(filePath)).isSymbolicLink()) {
+      logForDebugging(`${displayLabel} is a symbolic link; ignoring it`, {
+        level: "warn",
+      });
+      return {
+        state: "unusable",
+        readFailed: false,
+      };
+    }
+    await using y = await open(filePath, constants.O_RDONLY | NOFOLLOW_NONBLOCK_FLAGS | READ_LIMITS);
+    if (!(await y.stat()).isFile()) {
+      logForDebugging(`${displayLabel} is not a file; ignoring it`, {
+        level: "warn",
+      });
+      return {
+        state: "unusable",
+        readFailed: false,
+      };
+    }
+    let handleUpTo = await readHandleUpTo(y, maxBytes + 1, "file");
+    if (handleUpTo.length > maxBytes) {
+      logForDebugging(`${displayLabel} is too large; ignoring it`, {
+        level: "warn",
+      });
+      return {
+        state: "unusable",
+        readFailed: false,
+      };
+    }
+    return {
+      state: "read",
+      json: jsonParse(handleUpTo.toString("utf-8")),
+    };
   } catch (error) {
-    if (isENOENT(error)) return { state: "absent" };
-    let l = getErrnoCode(error);
-    if (l === "ELOOP" || l === "EMLINK")
-      return (
-        logForDebugging(`${displayLabel} is a symbolic link; ignoring it`, { level: "warn" }),
-        { state: "unusable", readFailed: !1 }
-      );
-    return (
-      logForDebugging(`${displayLabel} could not be read: ${errorMessage(error)}`),
-      { state: "unusable", readFailed: !(error instanceof SyntaxError) }
-    );
+    if (isENOENT(error))
+      return {
+        state: "absent",
+      };
+    let errnoCode = getErrnoCode(error);
+    if (errnoCode === "ELOOP" || errnoCode === "EMLINK") {
+      logForDebugging(`${displayLabel} is a symbolic link; ignoring it`, {
+        level: "warn",
+      });
+      return {
+        state: "unusable",
+        readFailed: false,
+      };
+    }
+    logForDebugging(`${displayLabel} could not be read: ${errorMessage(error)}`);
+    return {
+      state: "unusable",
+      readFailed: !(error instanceof SyntaxError),
+    };
   }
 }
 //@ chunk-9qwbw2qr.js:9509-9686 placement
-var PLUGIN_DIRECTORY_BINDINGS_JSON = "plugin-directory-bindings.json",
-  A = 1,
-  M = 1048576,
-  Y_n = 4096,
-  ae = DoctorLazy(() =>
-    u({
-      schemaVersion: T(A),
-      bindings: pe(
-        o(),
-        u({ repositoryKey: o().min(1).max(Y_n) })
-          .optional()
-          .catch(void 0),
-      ),
-    }),
-  );
+/**
+ * PLUGIN_DIRECTORY_BINDINGS_FILE：插件目录绑定文件名；PLUGIN_DIRECTORY_BINDINGS_VERSION：绑定文件版本；MAX_BINDINGS_FILE_BYTES：绑定文件体积上限（同一声明共 4 个绑定）。
+ */
+var PLUGIN_DIRECTORY_BINDINGS_JSON = "plugin-directory-bindings.json";
+var PLUGIN_DIRECTORY_BINDINGS_FILE = 1;
+var PLUGIN_DIRECTORY_BINDINGS_VERSION = 1048576;
+var MAX_BINDINGS_FILE_BYTES = 4096;
+var pluginDirectoryBindingsSchema = DoctorLazy(() =>
+  u({
+    schemaVersion: literal(PLUGIN_DIRECTORY_BINDINGS_FILE),
+    bindings: record(
+      string(),
+      u({
+        repositoryKey: string().min(1).max(MAX_BINDINGS_FILE_BYTES),
+      })
+        .optional()
+        .catch(undefined),
+    ),
+  }),
+);
 //@ chunk-9qwbw2qr.js:9686-9751 placement
-function VS(e) {
+/**
+ * isOfficialPluginDirectoryId：插件 id 属于官方市场。
+ */
+function isOfficialPluginDirectoryId(e) {
   let parts = e.split("@");
   return parts.length === 2 && parts[1] === OFFICIAL_MARKETPLACE_NAME;
 }
+//@ chunk-9qwbw2qr.js:9751-9885 placement
 /**
  * 绑定表中与插件同目录名的键（精确匹配在前）。
  */
-//@ chunk-9qwbw2qr.js:9751-9885 placement
 function findBindingKeysFor(e, i) {
-  if (!VS(i)) return [];
-  let filtered = [...e].filter((n) => VS(n) && isSamePluginDirName(n, i));
+  if (!isOfficialPluginDirectoryId(i)) return [];
+  let filtered = [...e].filter((n) => isOfficialPluginDirectoryId(n) && isSamePluginDirName(n, i));
   return [...filtered.filter((n) => n === i), ...filtered.filter((n) => n !== i)];
 }
 //@ chunk-9qwbw2qr.js:9885-9903 placement
 var weakSet = new WeakSet();
 //@ chunk-9qwbw2qr.js:9903-9935 placement
-function xSe(e) {
+/**
+ * isUnreadableBindings：该绑定表读失败过。
+ */
+function isUnreadableBindings(e) {
   return weakSet.has(e);
 }
 //@ chunk-9qwbw2qr.js:9935-10024 placement
-async function lpe() {
-  let e = await readDirectoryBindings();
-  if (e.readFailed) weakSet.add(e.bindings);
-  return e.bindings;
+/**
+ * bindingsWithReadFailure：读绑定表并记下读失败。
+ */
+async function bindingsWithReadFailure() {
+  let directoryBindings = await readDirectoryBindings();
+  if (directoryBindings.readFailed) weakSet.add(directoryBindings.bindings);
+  return directoryBindings.bindings;
 }
+//@ chunk-9qwbw2qr.js:10024-10232 placement
 /**
  * 设置或删除插件的仓库绑定。
  */
-//@ chunk-9qwbw2qr.js:10024-10232 placement
 async function setDirectoryBinding(e, i, r) {
-  if (!VS(e)) return;
-  if (i !== void 0 && !B()) return;
+  if (!isOfficialPluginDirectoryId(e)) return;
+  if (i !== undefined && !isDirectoryBindingsEnabled()) return;
   await updateDirectoryBindings((n) => {
-    if (i === void 0) for (let s of findBindingKeysFor(n.keys(), e)) n.delete(s);
-    else if (!(r?.keepExisting === !0 && findBindingKeysFor(n.keys(), e).length > 0)) n.set(e, i);
+    if (i === undefined) for (let s of findBindingKeysFor(n.keys(), e)) n.delete(s);
+    else if (!(r?.keepExisting === true && findBindingKeysFor(n.keys(), e).length > 0)) n.set(e, i);
   });
 }
+//@ chunk-9qwbw2qr.js:10232-10416 placement
 /**
  * 释放插件目录绑定；只查询时返回 held/none/unreadable。
  */
-//@ chunk-9qwbw2qr.js:10232-10416 placement
 async function releaseDirectoryBinding(e, i) {
-  if (!VS(e)) return "none";
+  if (!isOfficialPluginDirectoryId(e)) return "none";
   if (!i) {
     let r = await updateDirectoryBindings(() => {});
-    if (xSe(r)) return "unreadable";
+    if (isUnreadableBindings(r)) return "unreadable";
     return findBindingKeysFor(r.keys(), e).length > 0 ? "held" : "none";
   }
-  return (await setDirectoryBinding(e, void 0), "none");
+  await setDirectoryBinding(e, undefined);
+  return "none";
 }
 //@ chunk-9qwbw2qr.js:10416-10464 placement
-async function Rrt(e, i) {
+/**
+ * seedBindingsFromInstall：从安装记录补齐绑定。
+ */
+async function seedBindingsFromInstall(e, i) {
   return seedDirectoryBindings([[e, i ?? []]]);
 }
+//@ chunk-9qwbw2qr.js:10464-10793 placement
 /**
  * 从安装记录补齐插件目录插件的仓库绑定。
  */
-//@ chunk-9qwbw2qr.js:10464-10793 placement
 async function seedDirectoryBindings(e) {
   {
-    let i = !1,
-      r = new Map();
+    let i = false;
+    let r = new Map();
     for (let [n, s] of e) {
-      if (!VS(n)) continue;
-      i = !0;
-      let y = s.find((l) => l.directoryRepositoryKey !== void 0)?.directoryRepositoryKey;
-      if (y !== void 0) r.set(n, y);
+      if (!isOfficialPluginDirectoryId(n)) continue;
+      i = true;
+      let directoryRepositoryKey = s.find(
+        (l) => l.directoryRepositoryKey !== undefined,
+      )?.directoryRepositoryKey;
+      if (directoryRepositoryKey !== undefined) r.set(n, directoryRepositoryKey);
     }
     if (!i) return new Map();
-    if (r.size === 0 || !B()) return lpe();
+    if (r.size === 0 || !isDirectoryBindingsEnabled()) return bindingsWithReadFailure();
     return updateDirectoryBindings((n) => {
       for (let [s, y] of r) if (findBindingKeysFor(n.keys(), s).length === 0) n.set(s, y);
     });
@@ -162,70 +208,92 @@ async function seedDirectoryBindings(e) {
   return new Map();
 }
 //@ chunk-9qwbw2qr.js:10793-10850 placement
-function tVt(e) {
+/**
+ * hasDirectoryRepositoryKey：是否带目录仓库键。
+ */
+function hasDirectoryRepositoryKey(e) {
   return Boolean(e.directoryRepositoryKey);
 }
+//@ chunk-9qwbw2qr.js:10850-11283 placement
 /**
  * 持久化插件目录绑定，返回 held/no-key/cannot-hold/not-persisted/not-directory。
  */
-//@ chunk-9qwbw2qr.js:10850-11283 placement
 async function persistDirectoryBinding(e, i) {
   {
-    if (!VS(e)) return "not-directory";
-    let r = (i ?? []).find((l) => l.directoryRepositoryKey)?.directoryRepositoryKey,
-      n = (l) => l.has(e) || findBindingKeysFor(l.keys(), e).some((h) => l.get(h) === r);
+    if (!isOfficialPluginDirectoryId(e)) return "not-directory";
+    let directoryRepositoryKey = (i ?? []).find((l) => l.directoryRepositoryKey)?.directoryRepositoryKey;
+    let n = (l) =>
+      l.has(e) || findBindingKeysFor(l.keys(), e).some((h) => l.get(h) === directoryRepositoryKey);
     await updateDirectoryBindings((l) => {
-      if (r !== void 0 && !n(l)) l.set(e, r);
+      if (directoryRepositoryKey !== undefined && !n(l)) l.set(e, directoryRepositoryKey);
     });
-    let s = await updateDirectoryBindings(() => {}),
-      y = !xSe(s);
-    if (y && (r === void 0 ? findBindingKeysFor(s.keys(), e).length > 0 : n(s))) return "held";
-    if (r === void 0) return "no-key";
+    let s = await updateDirectoryBindings(() => {});
+    let y = !isUnreadableBindings(s);
+    if (y && (directoryRepositoryKey === undefined ? findBindingKeysFor(s.keys(), e).length > 0 : n(s)))
+      return "held";
+    if (directoryRepositoryKey === undefined) return "no-key";
     return y && e.length > 1024 ? "cannot-hold" : "not-persisted";
   }
   return "not-directory";
 }
+//@ chunk-9qwbw2qr.js:11283-11409 placement
 /**
  * 迁移时确保插件目录插件的绑定可持久化。
  */
-//@ chunk-9qwbw2qr.js:11283-11409 placement
 async function ensureDirectoryBindingForMigration(e, i, r) {
-  if (!VS(e)) return !0;
-  if (!r.some(tVt)) return (await persistDirectoryBinding(e, i)) !== "not-persisted";
-  return (await Rrt(e, i), !0);
+  if (!isOfficialPluginDirectoryId(e)) return true;
+  if (!r.some(hasDirectoryRepositoryKey)) return (await persistDirectoryBinding(e, i)) !== "not-persisted";
+  await seedBindingsFromInstall(e, i);
+  return true;
 }
 //@ chunk-9qwbw2qr.js:11409-11447 placement
-function B() {
-  return QE() && pluginDirectoryPolicyBlock() === null;
+function isDirectoryBindingsEnabled() {
+  return isPluginDirectoryModeOn() && pluginDirectoryPolicyBlock() === null;
 }
+//@ chunk-9qwbw2qr.js:11447-11803 placement
 /**
  * 读绑定文件，返回绑定表与是否读失败。
  */
-//@ chunk-9qwbw2qr.js:11447-11803 placement
 async function readDirectoryBindings() {
   let e = new Map();
   {
-    let i = await readPluginsDirJsonFile(PLUGIN_DIRECTORY_BINDINGS_JSON, M, "bindings file"),
-      r = i.state === "read" ? ae().safeParse(i.json) : void 0;
+    let pluginsDirJsonFile = await readPluginsDirJsonFile(
+      PLUGIN_DIRECTORY_BINDINGS_JSON,
+      PLUGIN_DIRECTORY_BINDINGS_VERSION,
+      "bindings file",
+    );
+    let r =
+      pluginsDirJsonFile.state === "read"
+        ? pluginDirectoryBindingsSchema().safeParse(pluginsDirJsonFile.json)
+        : undefined;
     if (r?.success) {
-      for (let [n, s] of Object.entries(r.data.bindings))
-        if (s !== void 0 && n.length <= 1024) e.set(n, s.repositoryKey);
+      for (let [key, value] of Object.entries(r.data.bindings))
+        if (value !== undefined && key.length <= 1024) e.set(key, value.repositoryKey);
     }
-    return { bindings: e, readFailed: i.state === "unusable" || (i.state === "read" && r?.success !== !0) };
+    return {
+      bindings: e,
+      readFailed:
+        pluginsDirJsonFile.state === "unusable" ||
+        (pluginsDirJsonFile.state === "read" && r?.success !== true),
+    };
   }
-  return { bindings: e, readFailed: !1 };
+  return {
+    bindings: e,
+    readFailed: false,
+  };
 }
+//@ chunk-9qwbw2qr.js:11803-12797 placement
 /**
  * 排在上一次写之后执行：读绑定表交给回调修改，去掉过长或空值项；有变化时写回（读失败、无盘或超过 1 MB 时不写并记日志）。返回修改后的表。
  */
-//@ chunk-9qwbw2qr.js:11803-12797 placement
 async function updateDirectoryBindings(mutate) {
   let bindings = new Map();
   {
-    let state = kk(),
-      bindingsWriteTail = state.bindingsWriteTail,
-      { promise: promise, resolve: resolve } = Promise.withResolvers();
-    ((state.bindingsWriteTail = promise), await bindingsWriteTail);
+    let state = commandSourceSession();
+    let bindingsWriteTail = state.bindingsWriteTail;
+    let { promise, resolve } = Promise.withResolvers();
+    state.bindingsWriteTail = promise;
+    await bindingsWriteTail;
     try {
       let current = await readDirectoryBindings();
       if (current.readFailed) weakSet.add(bindings);
@@ -243,17 +311,27 @@ async function updateDirectoryBindings(mutate) {
         logForDebugging("Plugin directory bindings file not written: this session saves nothing to disk");
       else if (changed) {
         let R = jsonStringify({
-          schemaVersion: A,
-          bindings: Object.fromEntries([...bindings].map(([b, w]) => [b, { repositoryKey: w }])),
+          schemaVersion: PLUGIN_DIRECTORY_BINDINGS_FILE,
+          bindings: Object.fromEntries(
+            [...bindings].map(([b, w]) => [
+              b,
+              {
+                repositoryKey: w,
+              },
+            ]),
+          ),
         });
-        if (Buffer.byteLength(R) > M)
+        if (Buffer.byteLength(R) > PLUGIN_DIRECTORY_BINDINGS_VERSION)
           logForDebugging(
             "Plugin directory bindings file would grow past 1 MB, the most that is read back; leaving it as it is",
-            { level: "warn" },
+            {
+              level: "warn",
+            },
           );
-        else
-          (await getFsImplementation().mkdir(getPluginsDirectory()),
-            await writeFileAtomic(join(getPluginsDirectory(), PLUGIN_DIRECTORY_BINDINGS_JSON), R, 384));
+        else {
+          await getFsImplementation().mkdir(getPluginsDirectory());
+          await writeFileAtomic(join(getPluginsDirectory(), PLUGIN_DIRECTORY_BINDINGS_JSON), R, 384);
+        }
       }
     } catch (error) {
       logForDebugging(`Failed to update plugin directory bindings file: ${errorMessage(error)}`, {
@@ -265,18 +343,17 @@ async function updateDirectoryBindings(mutate) {
   }
   return bindings;
 }
-
 export {
   seedDirectoryBindings,
-  VS,
-  lpe,
-  xSe,
+  isOfficialPluginDirectoryId,
+  bindingsWithReadFailure,
+  isUnreadableBindings,
   findBindingKeysFor,
   persistDirectoryBinding,
-  tVt,
+  hasDirectoryRepositoryKey,
   releaseDirectoryBinding,
-  Rrt,
-  Y_n,
+  seedBindingsFromInstall,
+  MAX_BINDINGS_FILE_BYTES,
   readPluginsDirJsonFile,
   setDirectoryBinding,
   ensureDirectoryBindingForMigration,

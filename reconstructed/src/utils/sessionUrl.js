@@ -9,45 +9,59 @@
  * attribution: placement 3, fingerprint 1
  */
 import { randomUUID } from "crypto";
-import { hashAgentId, Vt } from "./agentId.js";
+import { hashAgentId, normalizeUuidOrNull } from "./agentId.js";
 
 //@ chunk-ndmse9kj.js:688-733 placement
-var A = "3ab19d7e-9f35-45c2-926e-75e271cc60b3";
+/**
+ * SESSION_URL_HASH_SALT：会话 URL 哈希盐。
+ */
+var SESSION_URL_HASH_SALT = "3ab19d7e-9f35-45c2-926e-75e271cc60b3";
 //@ chunk-ndmse9kj.js:733-771 placement
-function ADt(e) {
-  return hashAgentId(e.trim(), A);
+/**
+ * hashSessionAddress：会话地址哈希。
+ */
+function hashSessionAddress(e) {
+  return hashAgentId(e.trim(), SESSION_URL_HASH_SALT);
 }
 //@ chunk-ndmse9kj.js:771-864 placement
-function p7t() {
-  let e = process.env.CLAUDE_CODE_REMOTE_SESSION_ID?.trim();
-  return e ? hashAgentId(e, A) : null;
+/**
+ * remoteSessionUrlId：远程会话的 URL id。
+ */
+function remoteSessionUrlId() {
+  let trimmed = process.env.CLAUDE_CODE_REMOTE_SESSION_ID?.trim();
+  return trimmed ? hashAgentId(trimmed, SESSION_URL_HASH_SALT) : null;
 }
+//@ chunk-ndmse9kj.js:864-1213 fingerprint = parseSessionIdentifier (1)
 /**
  * 解析 --resume 参数：.jsonl 路径、会话 UUID 或会话 URL（远程 ingress）。
  */
-//@ chunk-ndmse9kj.js:864-1213 fingerprint = parseSessionIdentifier (1)
 function parseSessionIdentifier(resumeIdentifier) {
   if (resumeIdentifier.toLowerCase().endsWith(".jsonl"))
     return {
       sessionId: randomUUID(),
       ingressUrl: null,
-      isUrl: !1,
+      isUrl: false,
       jsonlFile: resumeIdentifier,
-      isJsonlFile: !0,
+      isJsonlFile: true,
     };
-  if (Vt(resumeIdentifier))
-    return { sessionId: resumeIdentifier, ingressUrl: null, isUrl: !1, jsonlFile: null, isJsonlFile: !1 };
+  if (normalizeUuidOrNull(resumeIdentifier))
+    return {
+      sessionId: resumeIdentifier,
+      ingressUrl: null,
+      isUrl: false,
+      jsonlFile: null,
+      isJsonlFile: false,
+    };
   try {
     let url = new URL(resumeIdentifier);
     return {
-      sessionId: p7t() ?? hashAgentId(url.href, A),
+      sessionId: remoteSessionUrlId() ?? hashAgentId(url.href, SESSION_URL_HASH_SALT),
       ingressUrl: url.href,
-      isUrl: !0,
+      isUrl: true,
       jsonlFile: null,
-      isJsonlFile: !1,
+      isJsonlFile: false,
     };
   } catch {}
   return null;
 }
-
-export { parseSessionIdentifier, ADt, A, p7t };
+export { parseSessionIdentifier, hashSessionAddress, SESSION_URL_HASH_SALT, remoteSessionUrlId };

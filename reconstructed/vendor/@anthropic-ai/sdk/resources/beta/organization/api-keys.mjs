@@ -5,21 +5,26 @@
  * pieces: chunk-hwmsct5x.js (1)
  * attribution: esm-fingerprint 1
  */
-import { Y } from "../../../core/resource.mjs";
+import { APIResource } from "../../../core/resource.mjs";
 import { I } from "../../../internal/utils/path.mjs";
-import { Be } from "../../../core/pagination.mjs";
+import { Page } from "../../../core/pagination.mjs";
 
 //@ chunk-hwmsct5x.js:119155-119462 esm-fingerprint
-class Zr extends Y {
-  retrieve(e, n) {
-    return this._client.get(I`/v1/organizations/api_keys/${e}?beta=true`, n);
+class APIKeys extends APIResource {
+  retrieve(apiKeyID, options) {
+    return this._client.get(I`/v1/organizations/api_keys/${apiKeyID}?beta=true`, options);
   }
-  update(e, n, r) {
-    return this._client.post(I`/v1/organizations/api_keys/${e}?beta=true`, { body: n, ...r });
+  update(apiKeyID, body, options) {
+    return this._client.post(I`/v1/organizations/api_keys/${apiKeyID}?beta=true`, {
+      body,
+      ...options,
+    });
   }
-  list(e = {}, n) {
-    return this._client.getAPIList("/v1/organizations/api_keys?beta=true", Be, { query: e, ...n });
+  list(query = {}, options) {
+    return this._client.getAPIList("/v1/organizations/api_keys?beta=true", Page, {
+      query,
+      ...options,
+    });
   }
 }
-
-export { Zr };
+export { APIKeys };

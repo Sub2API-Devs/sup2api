@@ -11,33 +11,44 @@
 import { createSignal } from "./signal.js";
 
 //@ chunk-b272vy9d.js:227-236 placement
-var a = 50;
+var MAX_NOTICE_BACKLOG = 50;
 //@ chunk-b272vy9d.js:236-501 placement
 function createNoticeBacklog() {
-  let s = createSignal(),
-    t = [],
-    n = 0;
+  let signal = createSignal();
+  let t = [];
+  let n = 0;
   return {
-    publish(e, i, r) {
-      let u = r === void 0 ? { line: e, level: i } : { line: e, level: i, notice: r };
+    publish(line, level, r) {
+      let u =
+        r === undefined
+          ? {
+              line,
+              level,
+            }
+          : {
+              line,
+              level,
+              notice: r,
+            };
       if (n === 0) {
-        t = [...t, u].slice(-a);
+        t = [...t, u].slice(-MAX_NOTICE_BACKLOG);
         return;
       }
-      s.emit(u);
+      signal.emit(u);
     },
     takeBacklog() {
       let e = t;
-      return ((t = []), e);
+      t = [];
+      return e;
     },
     subscribe(e) {
       n += 1;
-      let subscribe = s.subscribe(e);
+      let i = signal.subscribe(e);
       return () => {
-        ((n -= 1), subscribe());
+        n -= 1;
+        i();
       };
     },
   };
 }
-
 export { createNoticeBacklog };

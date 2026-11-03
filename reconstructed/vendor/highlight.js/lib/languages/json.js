@@ -8,32 +8,45 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:214804-215237 cjs-fingerprint
-var dr = x(function (kE, lr) {
-  function Bd(e) {
-    let t = { className: "attr", begin: /"(\\.|[^\\"\r\n])*"(?=\s*:)/, relevance: 1.01 },
-      n = { match: /[{}[\],:]/, className: "punctuation", relevance: 0 },
-      a = ["true", "false", "null"],
-      s = { scope: "literal", beginKeywords: a.join(" ") };
+var require_json = x(function (cjsExports, cjsModule) {
+  function json(hljs) {
+    let ATTRIBUTE = {
+      className: "attr",
+      begin: /"(\\.|[^\\"\r\n])*"(?=\s*:)/,
+      relevance: 1.01,
+    };
+    let PUNCTUATION = {
+      match: /[{}[\],:]/,
+      className: "punctuation",
+      relevance: 0,
+    };
+    let LITERALS = ["true", "false", "null"];
+    let LITERALS_MODE = {
+      scope: "literal",
+      beginKeywords: LITERALS.join(" "),
+    };
     return {
       name: "JSON",
       aliases: ["jsonc"],
-      keywords: { literal: a },
+      keywords: {
+        literal: LITERALS,
+      },
       contains: [
-        t,
-        n,
-        e.QUOTE_STRING_MODE,
-        s,
-        e.C_NUMBER_MODE,
-        e.C_LINE_COMMENT_MODE,
-        e.C_BLOCK_COMMENT_MODE,
+        ATTRIBUTE,
+        PUNCTUATION,
+        hljs.QUOTE_STRING_MODE,
+        LITERALS_MODE,
+        hljs.C_NUMBER_MODE,
+        hljs.C_LINE_COMMENT_MODE,
+        hljs.C_BLOCK_COMMENT_MODE,
       ],
       illegal: "\\S",
     };
   }
-  lr.exports = Bd;
+  cjsModule.exports = json;
 });
 //@ chunk-egr0twnb.js:280042-296565 cjs-fingerprint
-var Yr = x(function (jE, Wr) {
+var require_json_2 = x(function (cjsExports, cjsModule) {
   function gp(e) {
     return {
       name: "MEL",
@@ -44,17 +57,24 @@ var Yr = x(function (jE, Wr) {
         e.C_NUMBER_MODE,
         e.APOS_STRING_MODE,
         e.QUOTE_STRING_MODE,
-        { className: "string", begin: "`", end: "`", contains: [e.BACKSLASH_ESCAPE] },
-        { begin: /[$%@](\^\w\b|#\w+|[^\s\w{]|\{\w+\}|\w+)/ },
+        {
+          className: "string",
+          begin: "`",
+          end: "`",
+          contains: [e.BACKSLASH_ESCAPE],
+        },
+        {
+          begin: /[$%@](\^\w\b|#\w+|[^\s\w{]|\{\w+\}|\w+)/,
+        },
         e.C_LINE_COMMENT_MODE,
         e.C_BLOCK_COMMENT_MODE,
       ],
     };
   }
-  Wr.exports = gp;
+  cjsModule.exports = gp;
 });
 //@ chunk-egr0twnb.js:402801-406633 cjs-fingerprint+context
-var Ms = x(function (zg, hs) {
+var require_json_3 = x(function (cjsExports, cjsModule) {
   function om(e) {
     return {
       name: "Oracle Rules Language",
@@ -70,11 +90,21 @@ var Ms = x(function (zg, hs) {
         e.APOS_STRING_MODE,
         e.QUOTE_STRING_MODE,
         e.C_NUMBER_MODE,
-        { className: "literal", variants: [{ begin: "#\\s+", relevance: 0 }, { begin: "#[a-zA-Z .]+" }] },
+        {
+          className: "literal",
+          variants: [
+            {
+              begin: "#\\s+",
+              relevance: 0,
+            },
+            {
+              begin: "#[a-zA-Z .]+",
+            },
+          ],
+        },
       ],
     };
   }
-  hs.exports = om;
+  cjsModule.exports = om;
 });
-
-export { dr, Yr, Ms };
+export { require_json, require_json_2, require_json_3 };

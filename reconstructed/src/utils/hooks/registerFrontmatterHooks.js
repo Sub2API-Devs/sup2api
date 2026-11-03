@@ -15,44 +15,65 @@ import { isPersonalConfigRestricted } from "../personalConfigRestriction.js";
 import { REPO_DIR_SETTING_SOURCES } from "../settings/constants.js";
 
 //@ chunk-ahpsetyz.js:371-545 placement
-function hasFrontmatterHooks(o) {
-  if (!o || Object.keys(o).length === 0) return !1;
+function hasFrontmatterHooks(hooks) {
+  if (!hooks || Object.keys(hooks).length === 0) return false;
   for (let n of HOOK_EVENTS) {
-    let e = o[n];
+    let e = hooks[n];
     if (!e || e.length === 0) continue;
-    for (let r of e) if ((r.hooks?.length ?? 0) > 0) return !0;
+    for (let r of e) if ((r.hooks?.length ?? 0) > 0) return true;
   }
-  return !1;
+  return false;
 }
+//@ chunk-ahpsetyz.js:545-1033 fingerprint = registerFrontmatterHooks (0.946)
 /**
  * 把代理（agent）frontmatter 的 hooks 注册为会话钩子；isSubagent 时 Stop 改为 SubagentStop。
  */
-//@ chunk-ahpsetyz.js:545-1033 fingerprint = registerFrontmatterHooks (0.946)
-function registerFrontmatterHooks(o, n, e, r, m = !1, l = !1, u = !1, p) {
-  if (!e || Object.keys(e).length === 0) return;
-  tagHooksWithSource(e, p);
+function registerFrontmatterHooks(
+  setAppState,
+  sessionId,
+  hooks,
+  sourceName,
+  isAgent = false,
+  personal = false,
+  checkout = false,
+  p,
+) {
+  if (!hooks || Object.keys(hooks).length === 0) return;
+  tagHooksWithSource(hooks, p);
   let hookCount = 0;
   for (let event of HOOK_EVENTS) {
-    let matchers = e[event];
+    let matchers = hooks[event];
     if (!matchers || matchers.length === 0) continue;
     let targetEvent = event;
-    if (m && event === "Stop")
-      ((targetEvent = "SubagentStop"),
-        logForDebugging(`Converting Stop hook to SubagentStop for ${r} (subagents trigger SubagentStop)`));
+    if (isAgent && event === "Stop") {
+      targetEvent = "SubagentStop";
+      logForDebugging(
+        `Converting Stop hook to SubagentStop for ${sourceName} (subagents trigger SubagentStop)`,
+      );
+    }
     for (let matcherConfig of matchers) {
-      let matcher = matcherConfig.matcher ?? "",
-        hooksArray = matcherConfig.hooks;
+      let matcher = matcherConfig.matcher ?? "";
+      let hooksArray = matcherConfig.hooks;
       if (!hooksArray || hooksArray.length === 0) continue;
-      for (let hook of hooksArray)
-        (o.add(n, targetEvent, matcher, hook, { personal: l, checkout: u }), hookCount++);
+      for (let hook of hooksArray) {
+        setAppState.add(sessionId, targetEvent, matcher, hook, {
+          personal,
+          checkout,
+        });
+        hookCount++;
+      }
     }
   }
   if (hookCount > 0)
-    logForDebugging(`Registered ${hookCount} frontmatter hook(s) from ${r} for session ${n}`);
+    logForDebugging(
+      `Registered ${hookCount} frontmatter hook(s) from ${sourceName} for session ${sessionId}`,
+    );
 }
 //@ chunk-ahpsetyz.js:1033-1084 placement
-function yyt(o) {
-  return isPersonalConfigRestricted() && o !== void 0 && REPO_DIR_SETTING_SOURCES.has(o);
+/**
+ * 判断某 frontmatter 钩子来源是否因个人配置受限而禁用。
+ */
+function isRepoFrontmatterHookRestricted(source) {
+  return isPersonalConfigRestricted() && source !== undefined && REPO_DIR_SETTING_SOURCES.has(source);
 }
-
-export { hasFrontmatterHooks, yyt, registerFrontmatterHooks };
+export { hasFrontmatterHooks, isRepoFrontmatterHookRestricted, registerFrontmatterHooks };

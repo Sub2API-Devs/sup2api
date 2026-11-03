@@ -5,55 +5,77 @@
  * pieces: chunk-h87x8cg3.js (2)
  * attribution: esm-fingerprint 2
  */
-import { F } from "../AWS_restJson1.js";
-import { z, W } from "../internal/shims.mjs";
-import { Ce, B, _ } from "./streaming.js";
+import { de_ResponseStream } from "../AWS_restJson1.js";
+import { ReadableStreamToAsyncIterable, ReadableStreamFrom } from "../internal/shims.mjs";
+import { getMinimalSerdeContext, toUtf8, fromUtf8 } from "./streaming.js";
 import { R } from "../AWS_restJson1.mjs";
-import { pr } from "../../sdk/core/error.mjs";
+import { AnthropicError } from "../../sdk/core/error.mjs";
 import { A } from "../internal/qs/utils.js";
 import { BedrockRuntimeServiceException } from "../../../@aws-sdk/client-bedrock-runtime/dist-cjs/index.js";
-import { j } from "../internal/errors.mjs";
+import { isAbortError } from "../internal/errors.mjs";
 
 //@ chunk-h87x8cg3.js:7144-7853 esm-fingerprint
-function G(e) {
-  let body = e.body;
-  if (!body) return e;
-  async function* r() {
-    let o = F(z(body), Ce());
+function G(response) {
+  let body = response.body;
+  if (!body) return response;
+  async function* sseFrames() {
+    let eventStream = de_ResponseStream(ReadableStreamToAsyncIterable(body), getMinimalSerdeContext());
     try {
-      for await (let i of o)
-        if (i.chunk && i.chunk.bytes) {
-          let a = B(i.chunk.bytes),
-            d = R(a);
-          if (d === void 0) throw new pr(`Could not parse a Bedrock chunk into JSON: ${a}`);
-          let l = A(d) && typeof d.type === "string" ? d.type : null;
-          if (l != null)
-            yield _(`event: ${l}
-data: ${JSON.stringify(d)}
+      for await (let event of eventStream)
+        if (event.chunk && event.chunk.bytes) {
+          let data = toUtf8(event.chunk.bytes);
+          let parsed = R(data);
+          if (parsed === undefined)
+            throw new AnthropicError(`Could not parse a Bedrock chunk into JSON: ${data}`);
+          let eventName = A(parsed) && typeof parsed.type === "string" ? parsed.type : null;
+          if (eventName != null)
+            yield fromUtf8(`event: ${eventName}
+data: ${JSON.stringify(parsed)}
 
 `);
         }
-    } catch (error) {
-      let a = Te(error);
-      if (!a) throw error;
-      yield _(`event: error
-data: ${JSON.stringify({ type: "error", error: a })}
+    } catch (err) {
+      let error = frameError(err);
+      if (!error) throw err;
+      yield fromUtf8(`event: error
+data: ${JSON.stringify({
+        type: "error",
+        error,
+      })}
 
 `);
     }
   }
-  let headers = new Headers(e.headers);
-  (headers.set("content-type", "text/event-stream; charset=utf-8"), headers.delete("content-length"));
-  let response = new Response(W(r()), { status: e.status, statusText: e.statusText, headers: headers });
-  return (Object.defineProperty(response, "url", { value: e.url }), response);
+  let headers = new Headers(response.headers);
+  headers.set("content-type", "text/event-stream; charset=utf-8");
+  headers.delete("content-length");
+  let normalized = new Response(ReadableStreamFrom(sseFrames()), {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+  Object.defineProperty(normalized, "url", {
+    value: response.url,
+  });
+  return normalized;
 }
 //@ chunk-h87x8cg3.js:7853-8101 esm-fingerprint
-function Te(e) {
-  if (e instanceof BedrockRuntimeServiceException)
-    return { type: e.name.charAt(0).toLowerCase() + e.name.slice(1), message: e.message };
-  if (e instanceof Error && Object.getPrototypeOf(e) === Error.prototype && e.name !== "Error" && !j(e))
-    return { type: e.name, message: e.message };
+function frameError(err) {
+  if (err instanceof BedrockRuntimeServiceException)
+    return {
+      type: err.name.charAt(0).toLowerCase() + err.name.slice(1),
+      message: err.message,
+    };
+  if (
+    err instanceof Error &&
+    Object.getPrototypeOf(err) === Error.prototype &&
+    err.name !== "Error" &&
+    !isAbortError(err)
+  )
+    return {
+      type: err.name,
+      message: err.message,
+    };
   return;
 }
-
 export { G };

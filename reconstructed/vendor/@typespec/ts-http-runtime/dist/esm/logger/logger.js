@@ -5,75 +5,93 @@
  * pieces: chunk-mrx6y2r5.js (6)
  * attribution: esm-layout 3, esm-fingerprint 3
  */
-import { merged } from "./debug.js";
+import { debugObj } from "./debug.js";
 
 //@ chunk-mrx6y2r5.js:25443-25453 esm-layout
-var $r = merged;
+var debugObj_default = debugObj;
 //@ chunk-mrx6y2r5.js:25453-25545 esm-fingerprint
-var Us = ["verbose", "info", "warning", "error"],
-  rl = { verbose: 400, info: 300, warning: 200, error: 100 };
+var TYPESPEC_RUNTIME_LOG_LEVELS = ["verbose", "info", "warning", "error"];
+var levelMap = {
+  verbose: 400,
+  info: 300,
+  warning: 200,
+  error: 100,
+};
 //@ chunk-mrx6y2r5.js:25545-25590 esm-layout
-function nl(e, t) {
-  t.log = (...r) => {
-    e.log(...r);
+function patchLogMethod(parent, child) {
+  child.log = (...args) => {
+    parent.log(...args);
   };
 }
 //@ chunk-mrx6y2r5.js:25590-25627 esm-layout
-function ol(e) {
-  return Us.includes(e);
+function isTypeSpecRuntimeLogLevel(level) {
+  return TYPESPEC_RUNTIME_LOG_LEVELS.includes(level);
 }
 //@ chunk-mrx6y2r5.js:25627-26536 esm-fingerprint
-function Do(e) {
-  let t = new Set(),
-    r = (typeof process < "u" && process.env && process.env[e.logLevelEnvVarName]) || void 0,
-    n,
-    o = $r(e.namespace);
-  o.log = (...d) => {
-    $r.log(...d);
+function createLoggerContext(options) {
+  let registeredLoggers = new Set();
+  let logLevelFromEnv =
+    (typeof process !== "undefined" && process.env && process.env[options.logLevelEnvVarName]) || undefined;
+  let logLevel;
+  let clientLogger = debugObj_default(options.namespace);
+  clientLogger.log = (...args) => {
+    debugObj_default.log(...args);
   };
-  function i(d) {
-    if (d && !ol(d)) throw Error(`Unknown log level '${d}'. Acceptable values: ${Us.join(",")}`);
-    n = d;
-    let u = [];
-    for (let m of t) if (s(m)) u.push(m.namespace);
-    $r.enable(u.join(","));
+  function contextSetLogLevel(level) {
+    if (level && !isTypeSpecRuntimeLogLevel(level))
+      throw Error(
+        `Unknown log level '${level}'. Acceptable values: ${TYPESPEC_RUNTIME_LOG_LEVELS.join(",")}`,
+      );
+    logLevel = level;
+    let enabledNamespaces = [];
+    for (let logger of registeredLoggers) if (shouldEnable(logger)) enabledNamespaces.push(logger.namespace);
+    debugObj_default.enable(enabledNamespaces.join(","));
   }
-  if (r)
-    if (ol(r)) i(r);
+  if (logLevelFromEnv)
+    if (isTypeSpecRuntimeLogLevel(logLevelFromEnv)) contextSetLogLevel(logLevelFromEnv);
     else
       console.error(
-        `${e.logLevelEnvVarName} set to unknown log level '${r}'; logging is not enabled. Acceptable values: ${Us.join(", ")}.`,
+        `${options.logLevelEnvVarName} set to unknown log level '${logLevelFromEnv}'; logging is not enabled. Acceptable values: ${TYPESPEC_RUNTIME_LOG_LEVELS.join(", ")}.`,
       );
-  function s(d) {
-    return Boolean(n && rl[d.level] <= rl[n]);
+  function shouldEnable(logger) {
+    return Boolean(logLevel && levelMap[logger.level] <= levelMap[logLevel]);
   }
-  function a(d, u) {
-    let merged = Object.assign(d.extend(u), { level: u });
-    if ((nl(d, merged), s(merged))) {
-      let disable = $r.disable();
-      $r.enable(disable + "," + merged.namespace);
+  function createLogger(parent, level) {
+    let logger = Object.assign(parent.extend(level), {
+      level,
+    });
+    patchLogMethod(parent, logger);
+    if (shouldEnable(logger)) {
+      let enabledNamespaces = debugObj_default.disable();
+      debugObj_default.enable(enabledNamespaces + "," + logger.namespace);
     }
-    return (t.add(merged), merged);
+    registeredLoggers.add(logger);
+    return logger;
   }
-  function c() {
-    return n;
+  function contextGetLogLevel() {
+    return logLevel;
   }
-  function l(d) {
-    let extend = o.extend(d);
-    return (
-      nl(o, extend),
-      {
-        error: a(extend, "error"),
-        warning: a(extend, "warning"),
-        info: a(extend, "info"),
-        verbose: a(extend, "verbose"),
-      }
-    );
+  function contextCreateClientLogger(namespace) {
+    let clientRootLogger = clientLogger.extend(namespace);
+    patchLogMethod(clientLogger, clientRootLogger);
+    return {
+      error: createLogger(clientRootLogger, "error"),
+      warning: createLogger(clientRootLogger, "warning"),
+      info: createLogger(clientRootLogger, "info"),
+      verbose: createLogger(clientRootLogger, "verbose"),
+    };
   }
-  return { setLogLevel: i, getLogLevel: c, createClientLogger: l, logger: o };
+  return {
+    setLogLevel: contextSetLogLevel,
+    getLogLevel: contextGetLogLevel,
+    createClientLogger: contextCreateClientLogger,
+    logger: clientLogger,
+  };
 }
 //@ chunk-mrx6y2r5.js:26536-26638 esm-fingerprint
-var il = Do({ logLevelEnvVarName: "TYPESPEC_RUNTIME_LOG_LEVEL", namespace: "typeSpecRuntime" }),
-  logger = il.logger;
-
-export { il, Do };
+var context = createLoggerContext({
+  logLevelEnvVarName: "TYPESPEC_RUNTIME_LOG_LEVEL",
+  namespace: "typeSpecRuntime",
+});
+var logger_11 = context.logger;
+export { context, createLoggerContext };

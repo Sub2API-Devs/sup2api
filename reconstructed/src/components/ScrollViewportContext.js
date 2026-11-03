@@ -8,37 +8,62 @@
  * pieces: chunk-2e3jzhrc.js (6)
  * attribution: placement 6
  */
-import { j, qt, Se } from "../../vendor/react/cjs/react.production.js";
+import { init_react_production, qt, Se } from "../../vendor/react/cjs/react.production.js";
 import { w } from "../../vendor/react/compiler-runtime.js";
 
 //@ chunk-2e3jzhrc.js:267-271 placement
-j();
+init_react_production();
 //@ chunk-2e3jzhrc.js:271-287 placement
-var $E = qt(null);
+/**
+ * 导出值：scrollViewportContext（滚动视口上下文）；位于「滚动视口上下文（2.1.316 新增）」模块。
+ */
+var scrollViewportContext = qt(null);
 //@ chunk-2e3jzhrc.js:287-322 placement
-function Tl() {
-  return Se($E) !== null;
+/**
+ * 函数 useHasScrollViewport（是否在滚动视口内）；位于「滚动视口上下文（2.1.316 新增）」模块。
+ */
+function useHasScrollViewport() {
+  return Se(scrollViewportContext) !== null;
 }
+//@ chunk-2e3jzhrc.js:322-461 placement
 /**
  * 在滚动视口上下文里时返回视口的 rows/columns，否则返回传入的尺寸。
  */
-//@ chunk-2e3jzhrc.js:322-461 placement
-function useScrollViewportSize(o) {
-  let c = w(3),
-    l = Se($E),
-    n;
-  if (c[0] !== l || c[1] !== o)
-    ((n = l ? { rows: l.rows, columns: l.columns } : o), (c[0] = l), (c[1] = o), (c[2] = n));
-  else n = c[2];
+function useScrollViewportSize(terminalSize) {
+  let c = w(3);
+  let l = Se(scrollViewportContext);
+  let n;
+  if (c[0] !== l || c[1] !== terminalSize) {
+    n = l
+      ? {
+          rows: l.rows,
+          columns: l.columns,
+        }
+      : terminalSize;
+    c[0] = l;
+    c[1] = terminalSize;
+    c[2] = n;
+  } else n = c[2];
   return n;
 }
 //@ chunk-2e3jzhrc.js:461-512 placement
-function fTe() {
-  return Se($E)?.scrollViewport ?? null;
+/**
+ * 函数 useScrollViewportHandle（取滚动视口句柄）；位于「滚动视口上下文（2.1.316 新增）」模块。
+ */
+function useScrollViewportHandle() {
+  return Se(scrollViewportContext)?.scrollViewport ?? null;
 }
 //@ chunk-2e3jzhrc.js:512-563 placement
-function Xmt() {
-  return Se($E)?.claimScrollBox ?? null;
+/**
+ * 函数 useClaimScrollBox（取认领滚动框函数）；位于「滚动视口上下文（2.1.316 新增）」模块。
+ */
+function useClaimScrollBox() {
+  return Se(scrollViewportContext)?.claimScrollBox ?? null;
 }
-
-export { useScrollViewportSize, Tl, fTe, Xmt, $E };
+export {
+  useScrollViewportSize,
+  useHasScrollViewport,
+  useScrollViewportHandle,
+  useClaimScrollBox,
+  scrollViewportContext,
+};

@@ -16,7 +16,7 @@ import {
   SYNTHETIC_MESSAGES,
   normalizeMessages,
   isNotEmptyMessage,
-  QUr,
+  subagentFrameResult,
   extractAgentIdsFromMessages_2,
   REJECT_MESSAGE,
   isEmptyUserMessage,
@@ -39,25 +39,25 @@ import {
   isAssistantResultComplete,
   getThinkingFields,
   toSDKToolHostResultMessage,
-  mLr,
+  informationalSystemMessage,
 } from "./messages/mappers.js";
 import { stripMemoryTagsFromBlocks } from "../services/orgMemory/promptIndex.js";
 import { getSessionId, isSessionPersistenceDisabled } from "../bootstrap/state.js";
-import { MESSAGE_MARK_SYMBOLS } from "./messageKinds.js";
+import { MESSAGE_MARK_SYMBOLS_2 } from "./messageKinds.js";
 import {
   takeCutResult,
   hasTypeField,
   waitForMcpToolServer,
-  s3s,
+  isCacheMissReason,
   shouldWaitForMcpTool,
 } from "../services/tools/toolExecution.js";
 import { AGENT } from "../tools/AgentTool/constants.js";
 import { getToolPermissionContext } from "./permissions/toolPermissionContext.js";
 import { logForDebugging } from "./debug.js";
 import { extractTraceparentContext, runInContext } from "./telemetry/sessionTracing.js";
-import { clearCommandAllowRules, Var } from "./pollEvents.js";
+import { clearCommandAllowRules, applyPollEventToolPermissions } from "./pollEvents.js";
 import { runTools } from "../services/tools/toolOrchestration.js";
-import { mGt, gGt, hmn, E3s } from "./queryProfiler.js";
+import { startPhaseWithin, endPhaseWithin, measurePhase, noteStoreConfirmWrite } from "./queryProfiler.js";
 import {
   recordTranscript,
   isTranscriptPersistenceDisabled,
@@ -90,7 +90,7 @@ import { ReannounceRequester } from "../remote/tools/reannounceRequest.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../services/analytics/growthbook.js";
 import { takeLateAllowDecision, recordMcpApprovalTicket_2 } from "../bridge/mcpApprovalTickets.js";
 import { isPlainObject } from "./objectUtils.js";
-import { qS } from "../services/api/deferredToolsState.js";
+import { findTool } from "../services/api/deferredToolsState.js";
 import { currentMcpClients } from "../services/compact/idleToolResultClearing.js";
 import {
   CAN_USE_TOOL_INVALID_RESULT_DENY_REASON,
@@ -104,16 +104,21 @@ import { getToolCallOutcomeCode } from "./permissions/yoloClassifier.js";
 import {
   isToolResultForToolUse,
   findLastToolUseAssistantMessage,
-  jKt,
+  lastConversationMessage,
 } from "./messages/messagePredicates.js";
-import { XKo } from "../services/compact/keptTools.js";
+import { recordToolUseTagged } from "../services/compact/keptTools.js";
 import { unwrapAbortReason } from "./abortController.js";
 import { setCommandDenyRules } from "./attachments/skillMentions.js";
 import { DEVICE_CALL_NOT_SENT_TEXT, notSentNotice } from "./remoteTools/restartNotices.js";
 import { Ji } from "../../vendor/lodash-es/uniqBy.js";
-import { nv, p9r, __, tv } from "./remoteFileState.js";
-import { Cf } from "../bridge/deviceRegistration.js";
-import { FILE_READ_TOOL_NAME, Mge } from "../tools/FileReadTool/constants.js";
+import {
+  createRemoteFileState,
+  contentHashOf,
+  stripBomAndCarriageReturn,
+  stripBom,
+} from "./remoteFileState.js";
+import { hasHostField } from "../bridge/deviceRegistration.js";
+import { FILE_READ_TOOL_NAME, isImageOrPdfExtension } from "../tools/FileReadTool/constants.js";
 import { normalizeReadInputAliases } from "../tools/FileReadTool/inputAliases.js";
 import { coerceNumberString } from "../tools/ArtifactTool/publishEdits.js";
 import { expandPath, isNotebookPath, expandPathOrNull } from "./path.js";
@@ -129,23 +134,23 @@ import { toolNameVariants } from "./permissions/permissionRuleParser.js";
 import { NOTEBOOK_EDIT_TOOL_NAME } from "../tools/NotebookEditTool/constants.js";
 import { hasModuleHookingSite } from "../plugins/hooksModules/loadedModuleFilters.js";
 import { canShortcutAppend } from "../plugins/functionHooks/modAdmission.js";
-import { nSt } from "../plugins/functionHooks/coreHandlers.js";
+import { TEXT_PASSTHROUGH_CORES } from "../plugins/functionHooks/coreHandlers.js";
 import { getPluginRegistry } from "./plugins/pluginLoadState.js";
-import { ge } from "./identity.js";
+import { identity as identity_2 } from "./identity.js";
 import { SHELL_TOOL_NAMES } from "./shell/shellToolUtils.js";
 import { parseReferences } from "../history.js";
 
+//@ chunk-0h4e7gnq.js:49711-49721 affinity
 /**
  * 10：提取已读文件状态的默认缓存大小。
  */
-//@ chunk-0h4e7gnq.js:49711-49721 affinity
 var READ_FILE_STATE_CACHE_SIZE = 10;
+//@ chunk-0h4e7gnq.js:49721-49930 fingerprint = isResultSuccessful (0.89)
 /**
  * 结果是否成功：最后块是 text/thinking，或是 tool_result 用户消息，或 stop_reason=end_turn。
  */
-//@ chunk-0h4e7gnq.js:49721-49930 fingerprint = isResultSuccessful (0.89)
 function isResultSuccessful(message, stopReason = null) {
-  if (!message) return !1;
+  if (!message) return false;
   if (message.type === "assistant") {
     let lastContent = yj(message.message.content);
     return (
@@ -154,123 +159,151 @@ function isResultSuccessful(message, stopReason = null) {
       lastContent?.type === "redacted_thinking"
     );
   }
-  if (isToolResultOnlyUserMessage(message)) return !0;
+  if (isToolResultOnlyUserMessage(message)) return true;
   return stopReason === "end_turn";
 }
+//@ chunk-0h4e7gnq.js:49930-50143 layout
 /**
  * 末尾是 server_error 的 API 错误但前一条已成功、轮次 completed 时可忽略。
  */
-//@ chunk-0h4e7gnq.js:49930-50143 layout
-function isRecoverableTrailingServerError({
-  trailing: trailing,
-  preceding: preceding,
-  terminalReason: terminalReason,
-  retractionExhausted: retractionExhausted,
-}) {
+function isRecoverableTrailingServerError({ trailing, preceding, terminalReason, retractionExhausted }) {
   return (
     trailing?.type === "assistant" &&
-    trailing.isApiErrorMessage === !0 &&
+    trailing.isApiErrorMessage === true &&
     trailing.error === "server_error" &&
     terminalReason === "completed" &&
     !retractionExhausted &&
-    preceding !== void 0 &&
+    preceding !== undefined &&
     isToolResultOnlyUserMessage(preceding) &&
-    getToolEndsTurnKind(preceding) !== !1
+    getToolEndsTurnKind(preceding) !== false
   );
 }
+//@ chunk-0h4e7gnq.js:50143-50288 layout
 /**
  * 最后一条与前一条都是文本（且不是合成文本）时取前一条文本作为结果。
  */
-//@ chunk-0h4e7gnq.js:50143-50288 layout
 function getSalvageableResultText(e, n) {
-  let s = yj(e.message.content),
-    y = yj(n?.message.content);
-  return s?.type === "text" && !SYNTHETIC_MESSAGES.has(s.text) && y?.type === "text" ? y.text : void 0;
+  let s = yj(e.message.content);
+  let y = yj(n?.message.content);
+  return s?.type === "text" && !SYNTHETIC_MESSAGES.has(s.text) && y?.type === "text" ? y.text : undefined;
 }
+//@ chunk-0h4e7gnq.js:50288-50377 layout
 /**
  * 内存错误日志中某条之后的错误。
  */
-//@ chunk-0h4e7gnq.js:50288-50377 layout
 function getRecentErrorLog(e) {
-  let n = getInMemoryErrors(),
-    s = e ? n.lastIndexOf(e) + 1 : 0;
-  return n.slice(s).map((y) => y.error);
+  let inMemoryErrors = getInMemoryErrors();
+  let s = e ? inMemoryErrors.lastIndexOf(e) + 1 : 0;
+  return inMemoryErrors.slice(s).map((inMemoryError) => inMemoryError.error);
 }
+//@ chunk-0h4e7gnq.js:50377-50424 layout
 /**
  * 空结果诊断：结果类型描述 + 最近错误。
  */
-//@ chunk-0h4e7gnq.js:50377-50424 layout
 function buildEmptyResultDiagnostics(e, n, s) {
   return [formatResultDiagnostic(e, n), ...getRecentErrorLog(s)];
 }
+//@ chunk-0h4e7gnq.js:50424-50617 layout
 /**
  * "[ede_diagnostic] result_type=… last_content_type=… stop_reason=…"。
  */
-//@ chunk-0h4e7gnq.js:50424-50617 layout
 function formatResultDiagnostic(e, n) {
-  let s = e?.type ?? "undefined",
-    y = e?.type === "assistant" ? (yj(e.message.content)?.type ?? "none") : "n/a";
+  let s = e?.type ?? "undefined";
+  let y = e?.type === "assistant" ? (yj(e.message.content)?.type ?? "none") : "n/a";
   return `[ede_diagnostic] result_type=${s} last_content_type=${y} stop_reason=${n}`;
 }
+//@ chunk-0h4e7gnq.js:50617-50800 layout = countToolCallsSince (1)
 /**
  * 首块是 tool_use 或 tool_result 的 user/assistant。覆盖后缀名 countToolCallsSince_3。
  */
-//@ chunk-0h4e7gnq.js:50617-50800 layout = countToolCallsSince (1)
 function isToolUseOrResultMessage(e) {
-  if (e.type !== "assistant" && e.type !== "user") return !1;
+  if (e.type !== "assistant" && e.type !== "user") return false;
   let content = e.message.content;
-  if (!Array.isArray(content)) return !1;
+  if (!Array.isArray(content)) return false;
   let s = content[0];
   return s?.type === "tool_use" || s?.type === "tool_result";
 }
+//@ chunk-0h4e7gnq.js:50800-50859 layout
 /**
  * 开启转发且（转发文本或该消息是工具调用/结果）。
  */
-//@ chunk-0h4e7gnq.js:50800-50859 layout
-function shouldForwardSubagentMessage(e, n) {
-  return e.enabled && (e.forwardText || isToolUseOrResultMessage(n));
+function shouldForwardSubagentMessage(bridgeSubagentFrameGate, n) {
+  return (
+    bridgeSubagentFrameGate.enabled && (bridgeSubagentFrameGate.forwardText || isToolUseOrResultMessage(n))
+  );
 }
+//@ chunk-0h4e7gnq.js:50859-52368 layout
 /**
  * 子代理 progress 事件转 SDK 消息（带 parent_tool_use_id、agent_id、subagent_type）。
  */
-//@ chunk-0h4e7gnq.js:50859-52368 layout
 function* subagentProgressToSDKMessages(e, n) {
-  let agentType = e.data.agentType,
-    description = e.data.description,
-    message = e.data.message,
-    S =
-      message.type === "user"
-        ? toolResultRemedy(message).flatMap(({ id: id, permission_decision: permission_decision }) =>
-            permission_decision ? [{ id: id, permission_decision: permission_decision }] : [],
-          )
-        : [];
+  let agentType = e.data.agentType;
+  let description = e.data.description;
+  let message = e.data.message;
+  let S =
+    message.type === "user"
+      ? toolResultRemedy(message).flatMap(({ id, permission_decision: permissionDecision }) =>
+          permissionDecision
+            ? [
+                {
+                  id,
+                  permission_decision: permissionDecision,
+                },
+              ]
+            : [],
+        )
+      : [];
   for (let h of normalizeMessages([message]))
     switch (h.type) {
       case "assistant":
         if (!isNotEmptyMessage(h)) break;
         {
-          let k = buildToolDisplayNames(h.message.content, n),
-            w = stripMemoryTagsFromBlocks(h.message.content),
-            x = e.data.message.type === "assistant" ? e.data.message : void 0;
+          let toolDisplayNames = buildToolDisplayNames(h.message.content, n);
+          let w = stripMemoryTagsFromBlocks(h.message.content);
+          let message = e.data.message.type === "assistant" ? e.data.message : undefined;
           yield {
             type: "assistant",
-            message: w === h.message.content ? h.message : { ...h.message, content: w },
+            message:
+              w === h.message.content
+                ? h.message
+                : {
+                    ...h.message,
+                    content: w,
+                  },
             parent_tool_use_id: e.parentToolUseID,
             agent_id: e.data.agentId,
             session_id: getSessionId(),
             uuid: h.uuid,
             timestamp: h.timestamp,
             error: h.error,
-            ...(h.requestId !== void 0 && { request_id: h.requestId }),
-            ...(agentType !== void 0 && { subagent_type: agentType }),
-            ...(description !== void 0 && { task_description: description }),
-            ...(h.isApiErrorMessage === !0 && { is_api_error_message: !0 }),
-            ...(h.apiError !== void 0 && { api_error: h.apiError }),
-            ...(h.apiErrorParams !== void 0 && { api_error_params: h.apiErrorParams }),
-            ...(h.apiErrorCode !== void 0 && { api_error_code: h.apiErrorCode }),
-            ...(x?.[MESSAGE_MARK_SYMBOLS] !== void 0 && { api_error_origin: x[MESSAGE_MARK_SYMBOLS] }),
+            ...(h.requestId !== undefined && {
+              request_id: h.requestId,
+            }),
+            ...(agentType !== undefined && {
+              subagent_type: agentType,
+            }),
+            ...(description !== undefined && {
+              task_description: description,
+            }),
+            ...(h.isApiErrorMessage === true && {
+              is_api_error_message: true,
+            }),
+            ...(h.apiError !== undefined && {
+              api_error: h.apiError,
+            }),
+            ...(h.apiErrorParams !== undefined && {
+              api_error_params: h.apiErrorParams,
+            }),
+            ...(h.apiErrorCode !== undefined && {
+              api_error_code: h.apiErrorCode,
+            }),
+            ...(message?.[MESSAGE_MARK_SYMBOLS_2] !== undefined && {
+              api_error_origin: message[MESSAGE_MARK_SYMBOLS_2],
+            }),
             ...getNarrationFields(w, h.message.model),
-            ...(k.length > 0 && { tool_use_meta: k }),
+            ...(toolDisplayNames.length > 0 && {
+              tool_use_meta: toolDisplayNames,
+            }),
           };
         }
         break;
@@ -285,34 +318,45 @@ function* subagentProgressToSDKMessages(e, n) {
           uuid: h.uuid,
           timestamp: h.timestamp,
           isSynthetic: selectableUserMessagesFilter(h),
-          ...!1,
+          ...false,
           tool_use_result: h.mcpMeta
-            ? { content: h.toolUseResult, ...h.mcpMeta }
-            : h.toolUseResult === void 0
-              ? QUr(h)
+            ? {
+                content: h.toolUseResult,
+                ...h.mcpMeta,
+              }
+            : h.toolUseResult === undefined
+              ? subagentFrameResult(h)
               : h.toolUseResult,
-          ...(k.length > 0 && { tool_result_meta: k }),
-          ...(h.origin && { origin: h.origin }),
-          ...(agentType !== void 0 && { subagent_type: agentType }),
-          ...(description !== void 0 && { task_description: description }),
+          ...(k.length > 0 && {
+            tool_result_meta: k,
+          }),
+          ...(h.origin && {
+            origin: h.origin,
+          }),
+          ...(agentType !== undefined && {
+            subagent_type: agentType,
+          }),
+          ...(description !== undefined && {
+            task_description: description,
+          }),
         };
         break;
       }
     }
 }
+//@ chunk-0h4e7gnq.js:52368-52533 layout
 /**
  * 取并消费 tool_result 对应的计时记录。
  */
-//@ chunk-0h4e7gnq.js:52368-52533 layout
-function takeToolResultTiming(e) {
-  let content = e.message.content,
-    s = Array.isArray(content) ? content.find((y) => y.type === "tool_result") : void 0;
-  return s?.type === "tool_result" ? takeCutResult(s.tool_use_id, e.uuid) : void 0;
+function takeToolResultTiming(message) {
+  let content = message.message.content;
+  let s = Array.isArray(content) ? content.find((y) => y.type === "tool_result") : undefined;
+  return s?.type === "tool_result" ? takeCutResult(s.tool_use_id, message.uuid) : undefined;
 }
+//@ chunk-0h4e7gnq.js:52533-54292 fingerprint = normalizeMessage (0.374)
 /**
  * 内部消息转 SDK 流消息（-p/SDK 输出）：assistant 拆块并过滤空块、progress（子代理/心跳）、user、附件、系统消息。
  */
-//@ chunk-0h4e7gnq.js:52533-54292 fingerprint = normalizeMessage (0.374)
 function* normalizeMessage(message, n) {
   switch (message.type) {
     case "assistant": {
@@ -320,8 +364,8 @@ function* normalizeMessage(message, n) {
       for (let normalized of normalizeMessages([message])) {
         if (!isNotEmptyMessage(normalized)) continue;
         let r = supersedesUuids;
-        supersedesUuids = void 0;
-        let S = buildToolDisplayNames(normalized.message.content, n);
+        supersedesUuids = undefined;
+        let toolDisplayNames = buildToolDisplayNames(normalized.message.content, n);
         yield {
           type: "assistant",
           message: normalized.message,
@@ -330,12 +374,19 @@ function* normalizeMessage(message, n) {
           uuid: normalized.uuid,
           timestamp: normalized.timestamp,
           error: normalized.error,
-          ...(normalized.requestId !== void 0 && { request_id: normalized.requestId }),
-          ...(r !== void 0 && r.length > 0 && { supersedes: r }),
+          ...(normalized.requestId !== undefined && {
+            request_id: normalized.requestId,
+          }),
+          ...(r !== undefined &&
+            r.length > 0 && {
+              supersedes: r,
+            }),
           ...isAssistantResultComplete(message, normalized.message.content),
           ...getNarrationFields(normalized.message.content, normalized.message.model),
           ...getThinkingFields(message, normalized.message.content),
-          ...(S.length > 0 && { tool_use_meta: S }),
+          ...(toolDisplayNames.length > 0 && {
+            tool_use_meta: toolDisplayNames,
+          }),
         };
       }
       return;
@@ -349,7 +400,7 @@ function* normalizeMessage(message, n) {
           tool_name: message.data.toolName,
           parent_tool_use_id: message.parentToolUseID,
           elapsed_time_seconds: message.data.elapsedTimeSeconds,
-          heartbeat: !0,
+          heartbeat: true,
           session_id: getSessionId(),
           uuid: message.uuid,
         };
@@ -363,7 +414,7 @@ function* normalizeMessage(message, n) {
           session_id: getSessionId(),
           uuid: message.uuid,
           subagent_type: message.data.agentType,
-          ...(message.data.resolved !== !0 && {
+          ...(message.data.resolved !== true && {
             subagent_retry: {
               agent_id: message.data.agentId,
               attempt: message.data.attempt,
@@ -376,8 +427,8 @@ function* normalizeMessage(message, n) {
         };
       break;
     case "user": {
-      let s = toolResultRemedy(message),
-        y = takeToolResultTiming(message);
+      let s = toolResultRemedy(message);
+      let y = takeToolResultTiming(message);
       for (let normalized of normalizeMessages([message])) {
         let S = filterToolUsesWithResults(s, normalized.message.content);
         yield {
@@ -391,13 +442,24 @@ function* normalizeMessage(message, n) {
           tool_use_result:
             y ??
             (normalized.mcpMeta
-              ? { content: normalized.toolUseResult, ...normalized.mcpMeta }
+              ? {
+                  content: normalized.toolUseResult,
+                  ...normalized.mcpMeta,
+                }
               : normalized.toolUseResult),
-          ...(S.length > 0 && { tool_result_meta: S }),
-          ...void 0,
-          ...(normalized.origin && { origin: normalized.origin }),
-          ...(message.isVirtual === !0 && { is_virtual: !0 }),
-          ...(message.refusedMessageId !== void 0 && { refused_message_id: message.refusedMessageId }),
+          ...(S.length > 0 && {
+            tool_result_meta: S,
+          }),
+          ...undefined,
+          ...(normalized.origin && {
+            origin: normalized.origin,
+          }),
+          ...(message.isVirtual === true && {
+            is_virtual: true,
+          }),
+          ...(message.refusedMessageId !== undefined && {
+            refused_message_id: message.refusedMessageId,
+          }),
         };
       }
       return;
@@ -405,179 +467,237 @@ function* normalizeMessage(message, n) {
     default:
   }
 }
+//@ chunk-0h4e7gnq.js:54292-54497 layout
 /**
  * tool_host_result_lines、hook_system_message 附件转 SDK 系统消息。
  */
-//@ chunk-0h4e7gnq.js:54292-54497 layout
-function* attachmentToSDKMessages(e) {
-  let { attachment: attachment } = e,
-    s;
+function* attachmentToSDKMessages(message) {
+  let { attachment } = message;
+  let s;
   try {
     if (attachment.type === "tool_host_result_lines")
-      s = toSDKToolHostResultMessage(attachment, e.uuid, getSessionId());
+      s = toSDKToolHostResultMessage(attachment, message.uuid, getSessionId());
     else if (attachment.type === "hook_system_message")
-      s = { ...mLr(attachment), uuid: e.uuid, session_id: getSessionId() };
+      s = {
+        ...informationalSystemMessage(attachment),
+        uuid: message.uuid,
+        session_id: getSessionId(),
+      };
   } catch (error) {
     logError(error);
   }
   if (s) yield s;
 }
+//@ chunk-0h4e7gnq.js:54497-56016 layout
 /**
  * 恢复延迟的工具调用：在转录里找回 tool_use，重新走 PreToolUse 与执行，结果写回转录。
  */
-//@ chunk-0h4e7gnq.js:54497-56016 layout
-async function* resumeDeferredToolUse(e, n, s, y) {
-  let r = !isSessionPersistenceDisabled(),
-    S,
-    mode = getToolPermissionContext(y).mode;
-  if (mode !== e.permissionMode)
+async function* resumeDeferredToolUse(deferredToolUse, canUseTool, mutableMessages, toolUseContext) {
+  let r = !isSessionPersistenceDisabled();
+  let S;
+  let mode = getToolPermissionContext(toolUseContext).mode;
+  if (mode !== deferredToolUse.permissionMode)
     logForDebugging(
-      `Deferred tool resume: permissionMode mismatch (deferred under '${e.permissionMode}', resuming under '${mode}'). --resume does not restore permissionMode \u2014 pass --permission-mode ${e.permissionMode} to match.`,
-      { level: "warn" },
+      `Deferred tool resume: permissionMode mismatch (deferred under '${deferredToolUse.permissionMode}', resuming under '${mode}'). --resume does not restore permissionMode \u2014 pass --permission-mode ${deferredToolUse.permissionMode} to match.`,
+      {
+        level: "warn",
+      },
     );
-  let last = s.findLast(
+  let last = mutableMessages.findLast(
     (I) =>
       I.type === "assistant" &&
       Array.isArray(I.message.content) &&
-      I.message.content.some((G) => G.type === "tool_use" && G.id === e.toolUseID),
+      I.message.content.some((G) => G.type === "tool_use" && G.id === deferredToolUse.toolUseID),
   );
   if (!last || last.type !== "assistant") {
-    logForDebugging(`Deferred tool resume: tool_use ${e.toolUseID} not found in transcript`, {
+    logForDebugging(`Deferred tool resume: tool_use ${deferredToolUse.toolUseID} not found in transcript`, {
       level: "warn",
     });
     return;
   }
-  let found = last.message.content.find((I) => I.type === "tool_use" && I.id === e.toolUseID);
+  let found = last.message.content.find((I) => I.type === "tool_use" && I.id === deferredToolUse.toolUseID);
   if (!found) return;
-  logForDebugging(`Deferred tool resume: re-emitting ${e.toolName} (${e.toolUseID}) through PreToolUse`);
-  let x = extractTraceparentContext(e.traceparent);
-  y.setToolPermissionContext(clearCommandAllowRules);
-  let L = runTools([found], [last], n, y)[Symbol.asyncIterator]();
-  mGt("resume_other", "turn_start_tool_run");
+  logForDebugging(
+    `Deferred tool resume: re-emitting ${deferredToolUse.toolName} (${deferredToolUse.toolUseID}) through PreToolUse`,
+  );
+  let traceparentContext = extractTraceparentContext(deferredToolUse.traceparent);
+  toolUseContext.setToolPermissionContext(clearCommandAllowRules);
+  let L = runTools([found], [last], canUseTool, toolUseContext)[Symbol.asyncIterator]();
+  startPhaseWithin("resume_other", "turn_start_tool_run");
   try {
-    while (!0) {
-      let I = await runInContext(x, () => L.next());
+    while (true) {
+      let I = await runInContext(traceparentContext, () => L.next());
       if (I.done) break;
       let G = I.value;
       if (hasTypeField(G)) continue;
       if (G.message) {
-        if ((await appendMessageToConversation(s, G.message), r))
-          await recordTranscript(s, void 0, void 0, void 0, y.storageV5);
+        await appendMessageToConversation(mutableMessages, G.message);
+        if (r)
+          await recordTranscript(mutableMessages, undefined, undefined, undefined, toolUseContext.storageV5);
         if (G.message.type === "progress" || G.message.type === "user") {
-          yield* normalizeMessage(G.message, y.options.refreshTools?.() ?? y.options.tools);
+          yield* normalizeMessage(
+            G.message,
+            toolUseContext.options.refreshTools?.() ?? toolUseContext.options.tools,
+          );
           continue;
         }
         if (G.message.type === "attachment" && G.message.attachment.type === "hook_deferred_tool")
           S = G.message.attachment;
-        yield { ...G.message, session_id: getSessionId(), parent_tool_use_id: null };
+        yield {
+          ...G.message,
+          session_id: getSessionId(),
+          parent_tool_use_id: null,
+        };
       }
     }
   } catch (error) {
     try {
-      await L.return?.(void 0);
+      await L.return?.(undefined);
     } catch {}
     throw error;
   } finally {
-    (gGt("resume_other", "turn_start_tool_run"), await L.return?.(void 0));
+    endPhaseWithin("resume_other", "turn_start_tool_run");
+    await L.return?.(undefined);
   }
   return S;
 }
+//@ chunk-0h4e7gnq.js:56016-56067 layout
 /**
  * 孤立权限被拒时对消息做的变换（refused / orphaned permission）。
  */
-//@ chunk-0h4e7gnq.js:56016-56067 layout
 var orphanedPermissionRefusedTransform = DoctorLazy(() =>
   capPermissionUpdates_2("refused", "orphaned permission"),
 );
+//@ chunk-0h4e7gnq.js:56067-56590 layout
 /**
  * 重放工具的 askInputPreparer，判断记录的答案是否仍适用（served/answer_differs/step_failed 等）。
  */
-//@ chunk-0h4e7gnq.js:56067-56590 layout
-async function replayAskInputPreparer(e, n, s, y, r, S) {
-  let { signal: signal } = r.abortController,
-    k,
-    w = !1;
+async function replayAskInputPreparer(e, n, s, cardInput, r, toolUseID) {
+  let { signal } = r.abortController;
+  let k;
+  let w = false;
   try {
-    let x = await e.askInputPreparer?.(n, r, S);
-    if (x?.prepareAgain === void 0) return;
-    if (y === null) return { ended: "no_record" };
-    if (Object.keys(s).length === 0) return { ended: "answer_empty" };
-    if (!isSameAnswerInput(s, y)) return { ended: "answer_differs" };
-    let prepareAgain = await x.prepareAgain(y);
-    if (!("error" in prepareAgain)) {
-      if (((k = prepareAgain.release), !signal.aborted && isSameAnswerInput(y, prepareAgain.input)))
-        return { ended: "served", input: prepareAgain.input };
-      w = !0;
+    let x = await e.askInputPreparer?.(n, r, toolUseID);
+    if (x?.prepareAgain === undefined) return;
+    if (cardInput === null)
+      return {
+        ended: "no_record",
+      };
+    if (Object.keys(s).length === 0)
+      return {
+        ended: "answer_empty",
+      };
+    if (!isSameAnswerInput(s, cardInput))
+      return {
+        ended: "answer_differs",
+      };
+    let L = await x.prepareAgain(cardInput);
+    if (!("error" in L)) {
+      k = L.release;
+      if (!signal.aborted && isSameAnswerInput(cardInput, L.input))
+        return {
+          ended: "served",
+          input: L.input,
+        };
+      w = true;
     }
   } catch (error) {
     if (!isAbortError(error)) logError(error);
   }
-  return (await k?.(), { ended: signal.aborted ? "aborted" : w ? "step_differs" : "step_failed" });
+  await k?.();
+  return {
+    ended: signal.aborted ? "aborted" : w ? "step_differs" : "step_failed",
+  };
 }
+//@ chunk-0h4e7gnq.js:56590-56771 layout
 /**
  * 重放工具调用时计算应用的权限更新（规范化输入；某些工具或 MCP 服务器只保留非 allow 规则）。
  */
-//@ chunk-0h4e7gnq.js:56590-56771 layout
-function computePermissionUpdatesForReplay(e, n, s, y) {
-  let r = normalizePermissionUpdate(e, void 0, y),
-    S =
-      !n ||
-      n.suppressesAllPermissionUpdates?.(s) === !0 ||
-      (n.mcpInfo?.serverName === REMOTE_DEVICES && isRemoteToolForwardingSwitchOn())
-        ? withoutGrantsForRemoteScope(r)
-        : stripWholeToolGrantsForAsk(r, n, y);
-  return n?.name === SKILL ? withoutNewRulesOfMcpSkillLoadForm(getToolNameWithAliases(n, y), S, y) : S;
+function computePermissionUpdatesForReplay(e, tool, s, toolPermissionContext) {
+  let r = normalizePermissionUpdate(e, undefined, toolPermissionContext);
+  let S =
+    !tool ||
+    tool.suppressesAllPermissionUpdates?.(s) === true ||
+    (tool.mcpInfo?.serverName === REMOTE_DEVICES && isRemoteToolForwardingSwitchOn())
+      ? withoutGrantsForRemoteScope(r)
+      : stripWholeToolGrantsForAsk(r, tool, toolPermissionContext);
+  return tool?.name === SKILL
+    ? withoutNewRulesOfMcpSkillLoadForm(
+        getToolNameWithAliases(tool, toolPermissionContext),
+        S,
+        toolPermissionContext,
+      )
+    : S;
 }
+//@ chunk-0h4e7gnq.js:56771-56941 layout
 /**
  * MCP 交接调用恢复被中断轮次、当前不能询问时延后（开关 tengu_velvet_gannet）。
  */
-//@ chunk-0h4e7gnq.js:56771-56941 layout
 function shouldDeferMcpOrphanedAsk(e, n, s) {
   return (
     typeof e === "string" &&
     mcpInfoFromString(e)?.serverName === REMOTE_DEVICES &&
-    n.resumesInterruptedTurn === !0 &&
+    n.resumesInterruptedTurn === true &&
     !(s.toolState.get(ReannounceRequester).canAsk() && isRemoteToolForwardingSwitchOn()) &&
-    getFeatureValue_CACHED_MAY_BE_STALE("tengu_velvet_gannet", !1)
+    getFeatureValue_CACHED_MAY_BE_STALE("tengu_velvet_gannet", false)
   );
 }
+//@ chunk-0h4e7gnq.js:56941-64632 layout
 /**
  * 恢复时处理孤立的权限请求：按答案策略重新执行或拒绝对应 tool_use，并补写结果。
  */
-//@ chunk-0h4e7gnq.js:56941-64632 layout
-async function* handleOrphanedPermission(e, n, s, y, r, S, h) {
+async function* handleOrphanedPermission(
+  orphanedPermission,
+  tools,
+  canUseTool,
+  mutableMessages,
+  processUserInputContext,
+  waitForDeviceBridgeTool,
+  answers,
+) {
   using k = {
     [Symbol.dispose]() {
-      let me = e.permissionResult?.toolUseID;
-      if (me !== void 0) takeLateAllowDecision(r.session, me);
+      let toolUseID = orphanedPermission.permissionResult?.toolUseID;
+      if (toolUseID !== undefined) takeLateAllowDecision(processUserInputContext.session, toolUseID);
     },
   };
-  switch ((r.setToolPermissionContext(clearCommandAllowRules), h.kind)) {
+  switch ((processUserInputContext.setToolPermissionContext(clearCommandAllowRules), answers.kind)) {
     case "strict":
     case "launcher":
       break;
     default:
-      return (
-        logForDebugging(
-          `handleOrphanedPermission: dropping orphaned permission \u2014 the answer policy's kind (a ${typeof h.kind}) is not one this sink knows`,
-          { level: "warn" },
-        ),
-        { reExecuted: !1, reason: "unknown_answer_policy", toolWait: void 0, callStarted: !1 }
-      );
-  }
-  let w = !isSessionPersistenceDisabled(),
-    { permissionResult: permissionResult, assistantMessage: assistantMessage } = e,
-    { toolUseID: toolUseID } = permissionResult;
-  if (!toolUseID)
-    return (
       logForDebugging(
-        "handleOrphanedPermission: dropping orphaned permission \u2014 permissionResult is missing toolUseID",
-        { level: "warn" },
-      ),
-      { reExecuted: !1, reason: "no_tool_use_id", toolWait: void 0, callStarted: !1 }
+        `handleOrphanedPermission: dropping orphaned permission \u2014 the answer policy's kind (a ${typeof answers.kind}) is not one this sink knows`,
+        {
+          level: "warn",
+        },
+      );
+      return {
+        reExecuted: false,
+        reason: "unknown_answer_policy",
+        toolWait: undefined,
+        callStarted: false,
+      };
+  }
+  let w = !isSessionPersistenceDisabled();
+  let { permissionResult, assistantMessage } = orphanedPermission;
+  let { toolUseID } = permissionResult;
+  if (!toolUseID) {
+    logForDebugging(
+      "handleOrphanedPermission: dropping orphaned permission \u2014 permissionResult is missing toolUseID",
+      {
+        level: "warn",
+      },
     );
-  let content = assistantMessage.message.content,
-    ee;
+    return {
+      reExecuted: false,
+      reason: "no_tool_use_id",
+      toolWait: undefined,
+      callStarted: false,
+    };
+  }
+  let content = assistantMessage.message.content;
+  let ee;
   if (Array.isArray(content)) {
     for (let me of content)
       if (me.type === "tool_use" && me.id === toolUseID) {
@@ -585,53 +705,76 @@ async function* handleOrphanedPermission(e, n, s, y, r, S, h) {
         break;
       }
   }
-  if (!ee)
-    return (
-      logForDebugging(
-        `handleOrphanedPermission: dropping orphaned permission for toolUseID=${toolUseID} \u2014 assistant message ${assistantMessage.message.id} has no matching tool_use block`,
-        { level: "warn" },
-      ),
-      { reExecuted: !1, reason: "no_tool_use_block", toolWait: void 0, callStarted: !1 }
+  if (!ee) {
+    logForDebugging(
+      `handleOrphanedPermission: dropping orphaned permission for toolUseID=${toolUseID} \u2014 assistant message ${assistantMessage.message.id} has no matching tool_use block`,
+      {
+        level: "warn",
+      },
     );
+    return {
+      reExecuted: false,
+      reason: "no_tool_use_block",
+      toolWait: undefined,
+      callStarted: false,
+    };
+  }
   let te = ee.name;
-  if (permissionResult.behavior === "deny" && e.denyIsRefusal === !0) {
-    let toolAliases = r.options.toolAliases;
+  if (permissionResult.behavior === "deny" && orphanedPermission.denyIsRefusal === true) {
+    let toolAliases = processUserInputContext.options.toolAliases;
     if (isPlainObject(ee.input))
-      r.onPermissionDenial?.(qS(n, te, toolAliases) ?? { name: te }, toolUseID, ee.input);
+      processUserInputContext.onPermissionDenial?.(
+        findTool(tools, te, toolAliases) ?? {
+          name: te,
+        },
+        toolUseID,
+        ee.input,
+      );
     yield* recordToolDenialResult({
       block: ee,
-      assistantMessage: assistantMessage,
-      messageRows: e.messageRows,
+      assistantMessage,
+      messageRows: orphanedPermission.messageRows,
       message: permissionResult.message,
-      tools: n,
-      context: r,
-      mutableMessages: y,
+      tools,
+      context: processUserInputContext,
+      mutableMessages,
       persistSession: w,
       toolDenialKind:
         "decisionClassification" in permissionResult &&
         permissionResult.decisionClassification === "user_reject"
           ? "user-rejected"
-          : void 0,
-      ...(!e.siblings?.length && { notSent: e.notSent }),
+          : undefined,
+      ...(!orphanedPermission.siblings?.length && {
+        notSent: orphanedPermission.notSent,
+      }),
     });
-    let Re = n,
-      Ie = partitionSiblingRuns(e, Re, toolAliases);
+    let Re = tools;
+    let Ie = partitionSiblingRuns(orphanedPermission, Re, toolAliases);
     for (let Ke of new Set(Ie.missingToolNames)) {
-      let Ne = await waitForMcpToolServer(Ke, Re, r);
-      if (((Re = Ne.tools), Ne.aborted)) break;
+      let Ne = await waitForMcpToolServer(Ke, Re, processUserInputContext);
+      Re = Ne.tools;
+      if (Ne.aborted) break;
     }
-    if ((e.siblings?.length ?? 0) > 0 && r.abortController.signal.aborted) {
-      if (e.notSent?.length)
+    if (
+      (orphanedPermission.siblings?.length ?? 0) > 0 &&
+      processUserInputContext.abortController.signal.aborted
+    ) {
+      if (orphanedPermission.notSent?.length)
         yield* await answerCallsNeverSent({
-          notSent: e.notSent,
-          tools: n,
-          mutableMessages: y,
+          notSent: orphanedPermission.notSent,
+          tools,
+          mutableMessages,
           persistSession: w,
-          context: r,
+          context: processUserInputContext,
         });
-      return { reExecuted: !1, reason: "aborted", toolWait: void 0, callStarted: !1 };
+      return {
+        reExecuted: false,
+        reason: "aborted",
+        toolWait: undefined,
+        callStarted: false,
+      };
     }
-    if (Ie.missingToolNames.length > 0) Ie = partitionSiblingRuns(e, Re, toolAliases);
+    if (Ie.missingToolNames.length > 0) Ie = partitionSiblingRuns(orphanedPermission, Re, toolAliases);
     if (Ie.runs.length > 0) {
       let Ke = new Set(Ie.runs.map((run) => run.block.id));
       yield* runToolUsesOnResume({
@@ -645,383 +788,507 @@ async function* handleOrphanedPermission(e, n, s, y, r, S, h) {
                 typeof permissionResult.message === "string" && permissionResult.message !== ""
                   ? permissionResult.message
                   : REJECT_MESSAGE,
-              decisionReason: { type: "mode", mode: "default" },
+              decisionReason: {
+                type: "mode",
+                mode: "default",
+              },
             };
-          return (Ke.has(Ue) ? handleOrphanedPermission_2(Et) : void 0) ?? s(Ne, je, Ee, Le, Ue, Et);
+          return (
+            (Ke.has(Ue) ? handleOrphanedPermission_2(Et) : undefined) ?? canUseTool(Ne, je, Ee, Le, Ue, Et)
+          );
         },
         executionContext: {
-          ...r,
-          requireCanUseTool: !0,
-          ...(Re !== n && { options: { ...r.options, tools: Re, mcpClients: [...currentMcpClients(r)] } }),
+          ...processUserInputContext,
+          requireCanUseTool: true,
+          ...(Re !== tools && {
+            options: {
+              ...processUserInputContext.options,
+              tools: Re,
+              mcpClients: [...currentMcpClients(processUserInputContext)],
+            },
+          }),
         },
-        mutableMessages: y,
+        mutableMessages,
         persistSession: w,
-        notSent: e.notSent,
+        notSent: orphanedPermission.notSent,
         echoed: new Set([assistantMessage.uuid]),
       });
-    } else if (e.siblings?.length)
+    } else if (orphanedPermission.siblings?.length)
       yield* await answerCallsNeverSent({
-        notSent: e.notSent ?? [],
-        tools: n,
-        mutableMessages: y,
+        notSent: orphanedPermission.notSent ?? [],
+        tools,
+        mutableMessages,
         persistSession: w,
-        context: r,
+        context: processUserInputContext,
       });
-    return { reExecuted: !0, toolWait: void 0, ...(await storeHandoffNote(e, y, w, r)), callStarted: !1 };
+    return {
+      reExecuted: true,
+      toolWait: undefined,
+      ...(await storeHandoffNote(orphanedPermission, mutableMessages, w, processUserInputContext)),
+      callStarted: false,
+    };
   }
   let R =
-      permissionResult.behavior === "allow" && h.kind === "launcher"
-        ? orphanedPermissionRefusedTransform().safeParse(permissionResult.updatedPermissions)
-        : void 0,
-    z =
-      R?.success === !1
-        ? {
-            behavior: "deny",
-            message: `The canUseTool callback returned an invalid permission result. ${PERMISSION_UPDATES_LIMIT_MESSAGE}`,
-            toolUseID: toolUseID,
-            decisionReason: CAN_USE_TOOL_INVALID_RESULT_DENY_REASON,
-            decideLocation: "ask-path",
-          }
-        : void 0;
+    permissionResult.behavior === "allow" && answers.kind === "launcher"
+      ? orphanedPermissionRefusedTransform().safeParse(permissionResult.updatedPermissions)
+      : undefined;
+  let z =
+    R?.success === false
+      ? {
+          behavior: "deny",
+          message: `The canUseTool callback returned an invalid permission result. ${PERMISSION_UPDATES_LIMIT_MESSAGE}`,
+          toolUseID,
+          decisionReason: CAN_USE_TOOL_INVALID_RESULT_DENY_REASON,
+          decideLocation: "ask-path",
+        }
+      : undefined;
   if (z)
     logForDebugging(
       `handleOrphanedPermission: treating the orphaned allow for toolUseID=${toolUseID} as a denial: its updatedPermissions is too long. ${PERMISSION_UPDATES_LIMIT_MESSAGE}`,
-      { level: "warn" },
+      {
+        level: "warn",
+      },
     );
-  let Z = z ?? permissionResult,
-    V = n,
-    le = qS(V, te, r.options.toolAliases),
-    j,
-    ie,
-    he = typeof te === "string" ? mcpInfoFromString(te)?.serverName : void 0,
-    B = !le && shouldDeferMcpOrphanedAsk(te, e, r);
-  if (!le) {
-    if (
-      ((j = await hmn("resume_other", "resume_connector_wait", () =>
-        B && Z.behavior === "allow" ? S(te, n, r, r.storageV5) : waitForMcpToolServer(te, n, r),
-      )),
-      (le = j.tool),
-      (V = j.tools),
-      le)
-    )
+  let Z = z ?? permissionResult;
+  let V = tools;
+  let tool = findTool(V, te, processUserInputContext.options.toolAliases);
+  let j;
+  let missingTool;
+  let serverName = typeof te === "string" ? mcpInfoFromString(te)?.serverName : undefined;
+  let B = !tool && shouldDeferMcpOrphanedAsk(te, orphanedPermission, processUserInputContext);
+  if (!tool) {
+    j = await measurePhase("resume_other", "resume_connector_wait", () =>
+      B && Z.behavior === "allow"
+        ? waitForDeviceBridgeTool(te, tools, processUserInputContext, processUserInputContext.storageV5)
+        : waitForMcpToolServer(te, tools, processUserInputContext),
+    );
+    tool = j.tool;
+    V = j.tools;
+    if (tool)
       logForDebugging(
         `handleOrphanedPermission: tool "${te}" for toolUseID=${toolUseID} joined the pool after ${j.waitedMs}ms (${j.bridgeEnd ? `the device bridge listed it: ${j.bridgeEnd}` : "its MCP server finished connecting"}); re-executing`,
       );
   }
-  if (!le) {
+  if (!tool) {
     let me =
-      j !== void 0 &&
+      j !== undefined &&
       !j.aborted &&
       (j.serverState === "connected" ||
         j.serverState === "failed" ||
         j.serverState === "needs-auth" ||
         j.serverState === "disabled") &&
       (Z.behavior === "allow" || Z.behavior === "deny") &&
-      e.resumesInterruptedTurn === !0 &&
-      !e.siblings?.length &&
-      he !== void 0 &&
-      lastUserAfterAssistant(y) &&
-      (he === REMOTE_DEVICES
-        ? B && !s3s(j.bridgeEnd)
-        : getFeatureValue_CACHED_MAY_BE_STALE("tengu_expressive_church", !1));
-    if (
-      (logForDebugging(
-        j?.aborted
-          ? `handleOrphanedPermission: turn aborted while waiting for tool "${te}" (toolUseID=${toolUseID}); not re-executing`
-          : `handleOrphanedPermission: ${me ? "closing the call of the" : "dropping"} orphaned permission for toolUseID=${toolUseID} \u2014 tool "${te}" not found in active tools (${V.length} available; MCP server ${j?.serverState ?? "unknown"} after ${j?.waitedMs ?? 0}ms)`,
-        { level: "warn" },
-      ),
-      (ie = j?.aborted || j?.serverState === "unknown" ? void 0 : missingToolTelemetry(te, n, r)),
-      !me)
-    ) {
-      if (h.kind === "strict" && Z.behavior === "allow")
+      orphanedPermission.resumesInterruptedTurn === true &&
+      !orphanedPermission.siblings?.length &&
+      serverName !== undefined &&
+      lastUserAfterAssistant(mutableMessages) &&
+      (serverName === REMOTE_DEVICES
+        ? B && !isCacheMissReason(j.bridgeEnd)
+        : getFeatureValue_CACHED_MAY_BE_STALE("tengu_expressive_church", false));
+    logForDebugging(
+      j?.aborted
+        ? `handleOrphanedPermission: turn aborted while waiting for tool "${te}" (toolUseID=${toolUseID}); not re-executing`
+        : `handleOrphanedPermission: ${me ? "closing the call of the" : "dropping"} orphaned permission for toolUseID=${toolUseID} \u2014 tool "${te}" not found in active tools (${V.length} available; MCP server ${j?.serverState ?? "unknown"} after ${j?.waitedMs ?? 0}ms)`,
+      {
+        level: "warn",
+      },
+    );
+    missingTool =
+      j?.aborted || j?.serverState === "unknown"
+        ? undefined
+        : missingToolTelemetry(te, tools, processUserInputContext);
+    if (!me) {
+      if (answers.kind === "strict" && Z.behavior === "allow")
         warnLateAllowNeverServed(toolUseID, Z.updatedPermissions);
-      let Re = e.notSent?.filter((Ie) => !Ie.onUsersDevice);
-      if (Re?.length)
+      let filtered = orphanedPermission.notSent?.filter((Ie) => !Ie.onUsersDevice);
+      if (filtered?.length)
         yield* await answerCallsNeverSent({
-          notSent: Re,
-          tools: n,
-          mutableMessages: y,
+          notSent: filtered,
+          tools,
+          mutableMessages,
           persistSession: w,
-          context: r,
+          context: processUserInputContext,
         });
       return {
-        reExecuted: !1,
+        reExecuted: false,
         reason: j?.aborted ? "aborted" : "tool_unavailable",
         toolWait: j,
-        missingTool: ie,
-        callStarted: !1,
+        missingTool,
+        callStarted: false,
       };
     }
     if (Z.behavior === "deny") {
-      if (
-        (yield* recordToolDenialResult({
-          block: ee,
-          assistantMessage: assistantMessage,
-          messageRows: e.messageRows,
-          message: Z.message,
-          tools: V,
-          context: r,
-          mutableMessages: y,
-          persistSession: w,
-        }),
-        e.notSent?.length)
-      )
+      yield* recordToolDenialResult({
+        block: ee,
+        assistantMessage,
+        messageRows: orphanedPermission.messageRows,
+        message: Z.message,
+        tools: V,
+        context: processUserInputContext,
+        mutableMessages,
+        persistSession: w,
+      });
+      if (orphanedPermission.notSent?.length)
         yield* await answerCallsNeverSent({
-          notSent: e.notSent,
-          tools: n,
-          mutableMessages: y,
+          notSent: orphanedPermission.notSent,
+          tools,
+          mutableMessages,
           persistSession: w,
-          context: r,
+          context: processUserInputContext,
         });
-      return { reExecuted: !1, reason: "closed_unrun", toolWait: j, missingTool: ie, callStarted: !1 };
+      return {
+        reExecuted: false,
+        reason: "closed_unrun",
+        toolWait: j,
+        missingTool,
+        callStarted: false,
+      };
     }
   }
-  let ce = V === n ? r : { ...r, options: { ...r.options, tools: V, mcpClients: [...currentMcpClients(r)] } },
-    Ae;
+  let ce =
+    V === tools
+      ? processUserInputContext
+      : {
+          ...processUserInputContext,
+          options: {
+            ...processUserInputContext.options,
+            tools: V,
+            mcpClients: [...currentMcpClients(processUserInputContext)],
+          },
+        };
+  let Ae;
   if (Z.behavior === "allow") {
     let updatedInput = Z.updatedInput;
     if (updatedInput && Object.keys(updatedInput).length > 0) Ae = updatedInput;
-    else
-      ((Ae = {}),
-        logForDebugging(
-          `Orphaned permission for ${te}: updatedInput is missing or empty, falling back to original tool input`,
-          { level: "warn" },
-        ));
+    else {
+      Ae = {};
+      logForDebugging(
+        `Orphaned permission for ${te}: updatedInput is missing or empty, falling back to original tool input`,
+        {
+          level: "warn",
+        },
+      );
+    }
     let Re = R?.data;
     if (Re)
       try {
-        let Ie = computePermissionUpdatesForReplay(Re, le, ee.input, getToolPermissionContext(r));
-        (r.setSessionToolPermissionContext((Je) => applyPermissionUpdates(Je, Ie)),
-          await persistPermissionUpdates(Ie, r.storageV5));
+        let permissionUpdatesForReplay = computePermissionUpdatesForReplay(
+          Re,
+          tool,
+          ee.input,
+          getToolPermissionContext(processUserInputContext),
+        );
+        processUserInputContext.setSessionToolPermissionContext((Je) =>
+          applyPermissionUpdates(Je, permissionUpdatesForReplay),
+        );
+        await persistPermissionUpdates(permissionUpdatesForReplay, processUserInputContext.storageV5);
       } catch (error) {
         logForDebugging(
           `Orphaned permission for ${te}: applying or persisting updatedPermissions failed: ${error}`,
-          { level: "warn" },
+          {
+            level: "warn",
+          },
         );
       }
   }
-  let Te = new Set((e.siblings ?? []).map((me) => me.toolUseID)),
-    O =
-      h.kind === "strict" && Z.behavior === "allow" && Ae !== void 0
-        ? createLateAnswerBound(
-            h,
-            { updatedInput: Ae, updatedPermissions: Z.updatedPermissions },
-            toolUseID,
-            computePermissionUpdatesForReplay,
-          )
-        : void 0,
-    q,
-    W = le !== void 0,
-    ue = async (me, Re, Ie, Je, Ke, Ne) => {
-      if (((W ||= Ke === toolUseID), Te.has(Ke)))
-        return handleOrphanedPermission_2(Ne) ?? s(me, Re, Ie, Je, Ke, Ne);
-      if (
-        Ke !== toolUseID ||
-        (Ne?.behavior === "ask" &&
-          Ne.forcedByCaller === !0 &&
-          (Ne.pendingBeforeRestart === !0 || (Ke === toolUseID && O?.hasServedAllow() === !0)))
-      )
-        return s(me, Re, Ie, Je, Ke, Ne);
-      if (Ne?.behavior === "ask" && Ne.forcedByCaller === !0) return Ne;
-      let je = z ?? O?.refusalOf(me, Re, Ie, Ie.setSessionToolPermissionContext);
-      if (je === void 0 && Ae !== void 0 && e.cardInput !== void 0 && Ie.forRemoteExecution !== !0)
-        q ??= replayAskInputPreparer(me, Re, Ae, e.cardInput, Ie, toolUseID);
-      let Ee = je === void 0 ? await q : void 0;
-      if (Ee !== void 0 && Ee.ended !== "served")
-        return {
-          behavior: "deny",
-          toolUseID: toolUseID,
-          decideLocation: "ask-path",
-          ...(Ee.ended === "aborted"
-            ? { message: "Tool permission request aborted", decisionReason: CAN_USE_TOOL_ABORTED_DENY_REASON }
+  let Te = new Set((orphanedPermission.siblings ?? []).map((me) => me.toolUseID));
+  let O =
+    answers.kind === "strict" && Z.behavior === "allow" && Ae !== undefined
+      ? createLateAnswerBound(
+          answers,
+          {
+            updatedInput: Ae,
+            updatedPermissions: Z.updatedPermissions,
+          },
+          toolUseID,
+          computePermissionUpdatesForReplay,
+        )
+      : undefined;
+  let q;
+  let W = tool !== undefined;
+  let canUseTool_2 = async (me, Re, Ie, Je, Ke, Ne) => {
+    W ||= Ke === toolUseID;
+    if (Te.has(Ke)) return handleOrphanedPermission_2(Ne) ?? canUseTool(me, Re, Ie, Je, Ke, Ne);
+    if (
+      Ke !== toolUseID ||
+      (Ne?.behavior === "ask" &&
+        Ne.forcedByCaller === true &&
+        (Ne.pendingBeforeRestart === true || (Ke === toolUseID && O?.hasServedAllow() === true)))
+    )
+      return canUseTool(me, Re, Ie, Je, Ke, Ne);
+    if (Ne?.behavior === "ask" && Ne.forcedByCaller === true) return Ne;
+    let je = z ?? O?.refusalOf(me, Re, Ie, Ie.setSessionToolPermissionContext);
+    if (
+      je === undefined &&
+      Ae !== undefined &&
+      orphanedPermission.cardInput !== undefined &&
+      Ie.forRemoteExecution !== true
+    )
+      q ??= replayAskInputPreparer(me, Re, Ae, orphanedPermission.cardInput, Ie, toolUseID);
+    let Ee = je === undefined ? await q : undefined;
+    if (Ee !== undefined && Ee.ended !== "served")
+      return {
+        behavior: "deny",
+        toolUseID,
+        decideLocation: "ask-path",
+        ...(Ee.ended === "aborted"
+          ? {
+              message: "Tool permission request aborted",
+              decisionReason: CAN_USE_TOOL_ABORTED_DENY_REASON,
+            }
+          : {
+              message: `The approval of ${me.name} was asked for before Claude Code restarted, and cannot be reused. Call ${me.name} again with the same arguments; it may need approval again. ${me.name} was not called.`,
+              decisionReason: {
+                type: "other",
+                reason: "approval cannot be reused",
+              },
+            }),
+      };
+    if (je === undefined && Z.behavior === "allow")
+      recordMcpApprovalTicket_2(takeLateAllowDecision(Ie.session, toolUseID), me, toolUseID, Ie);
+    return (
+      je ?? {
+        ...Z,
+        updatedInput: Ee?.input ?? Ae,
+        decisionReason:
+          answers.kind === "strict"
+            ? {
+                type: "permissionPromptTool",
+                permissionPromptToolName: me.name,
+                toolResult: Z,
+              }
             : {
-                message: `The approval of ${me.name} was asked for before Claude Code restarted, and cannot be reused. Call ${me.name} again with the same arguments; it may need approval again. ${me.name} was not called.`,
-                decisionReason: { type: "other", reason: "approval cannot be reused" },
-              }),
-        };
-      if (je === void 0 && Z.behavior === "allow")
-        recordMcpApprovalTicket_2(takeLateAllowDecision(Ie.session, toolUseID), me, toolUseID, Ie);
-      return (
-        je ?? {
-          ...Z,
-          updatedInput: Ee?.input ?? Ae,
-          decisionReason:
-            h.kind === "strict"
-              ? { type: "permissionPromptTool", permissionPromptToolName: me.name, toolResult: Z }
-              : { type: "mode", mode: "default" },
-        }
-      );
-    },
-    runs = partitionSiblingRuns(e, V, r.options.toolAliases).runs,
-    Q = new Set();
-  (yield* runToolUsesOnResume({
-    runs: [{ block: ee, assistantMessage: assistantMessage, messageRows: e.messageRows }, ...runs],
+                type: "mode",
+                mode: "default",
+              },
+      }
+    );
+  };
+  let runs = partitionSiblingRuns(orphanedPermission, V, processUserInputContext.options.toolAliases).runs;
+  let Q = new Set();
+  yield* runToolUsesOnResume({
+    runs: [
+      {
+        block: ee,
+        assistantMessage,
+        messageRows: orphanedPermission.messageRows,
+      },
+      ...runs,
+    ],
     tools: V,
-    canUseTool: ue,
-    executionContext: { ...ce, requireCanUseTool: !0, markToolCallStarted: Q.add.bind(Q) },
-    mutableMessages: y,
+    canUseTool: canUseTool_2,
+    executionContext: {
+      ...ce,
+      requireCanUseTool: true,
+      markToolCallStarted: Q.add.bind(Q),
+    },
+    mutableMessages,
     persistSession: w,
-    notSent: e.notSent,
-  }),
-    O?.warnIfNeverAsked());
-  let Pe = await storeHandoffNote(e, y, w, r),
-    Ce = Q.has(toolUseID);
+    notSent: orphanedPermission.notSent,
+  });
+  O?.warnIfNeverAsked();
+  let Pe = await storeHandoffNote(orphanedPermission, mutableMessages, w, processUserInputContext);
+  let callStarted = Q.has(toolUseID);
   if (W) {
-    let me = (await q)?.ended;
-    return { reExecuted: !0, toolWait: j, ...Pe, callStarted: Ce, ...(me !== void 0 && { cardStep: me }) };
+    let ended = (await q)?.ended;
+    return {
+      reExecuted: true,
+      toolWait: j,
+      ...Pe,
+      callStarted,
+      ...(ended !== undefined && {
+        cardStep: ended,
+      }),
+    };
   }
-  return r.abortController.signal.aborted
-    ? { reExecuted: !1, reason: "aborted", toolWait: j, callStarted: Ce }
-    : { reExecuted: !1, reason: "closed_unrun", toolWait: j, missingTool: ie, ...Pe, callStarted: Ce };
+  return processUserInputContext.abortController.signal.aborted
+    ? {
+        reExecuted: false,
+        reason: "aborted",
+        toolWait: j,
+        callStarted,
+      }
+    : {
+        reExecuted: false,
+        reason: "closed_unrun",
+        toolWait: j,
+        missingTool,
+        ...Pe,
+        callStarted,
+      };
 }
+//@ chunk-0h4e7gnq.js:64632-64828 layout
 /**
  * 把交接笔记写进转录并持久化，成功返回 {noteStored:true}。
  */
-//@ chunk-0h4e7gnq.js:64632-64828 layout
 async function storeHandoffNote(e, n, s, y) {
-  if (e.note === void 0 || y.abortController.signal.aborted) return {};
-  let r = !1;
+  if (e.note === undefined || y.abortController.signal.aborted) return {};
+  let r = false;
   try {
-    (await appendMessageToConversation(n, e.note()), (r = !0), await persistIfNeeded(n, s, y));
+    await appendMessageToConversation(n, e.note());
+    r = true;
+    await persistIfNeeded(n, s, y);
   } catch (error) {
     if (!isAbortError(error)) logError(error);
   }
-  return r ? { noteStored: !0 } : {};
+  return r
+    ? {
+        noteStored: true,
+      }
+    : {};
 }
+//@ chunk-0h4e7gnq.js:64828-64990 layout
 /**
  * 从末尾看，真实 user 消息是否出现在 assistant 之前。
  */
-//@ chunk-0h4e7gnq.js:64828-64990 layout
 function lastUserAfterAssistant(e) {
-  for (let n = e.length - 1; n >= 0; n--) {
-    let s = e[n];
-    if (s.type === "user" && !isEmptyUserMessage(s) && !isNonConversationMessage(s)) return !0;
+  for (let j = e.length - 1; j >= 0; j--) {
+    let s = e[j];
+    if (s.type === "user" && !isEmptyUserMessage(s) && !isNonConversationMessage(s)) return true;
     if (s.type === "assistant" && !isNonConversationMessage(s) && !isAbandonedOrUnsignedThinkingMessage(s))
-      return !1;
+      return false;
   }
-  return !1;
+  return false;
 }
+//@ chunk-0h4e7gnq.js:64990-65843 layout
 /**
  * 把拒绝写成 tool_result（is_error）并补回 assistant 行。
  */
-//@ chunk-0h4e7gnq.js:64990-65843 layout
 async function* recordToolDenialResult({
-  block: block,
-  assistantMessage: assistantMessage,
-  messageRows: messageRows,
-  message: message,
-  tools: tools,
-  context: context,
-  mutableMessages: mutableMessages,
-  persistSession: persistSession,
-  toolDenialKind: toolDenialKind,
-  notSent: notSent,
+  block,
+  assistantMessage,
+  messageRows,
+  message,
+  tools,
+  context,
+  mutableMessages,
+  persistSession,
+  toolDenialKind,
+  notSent,
 }) {
   if (isTerminalShutdown() && !context.abortController.signal.aborted) await heldUntilExit();
   if (
     !mutableMessages.some(
-      (ee) =>
-        ee.type === "assistant" &&
-        Array.isArray(ee.message.content) &&
-        ee.message.content.some((te) => te.type === "tool_use" && "id" in te && te.id === block.id),
+      (mutableMessage) =>
+        mutableMessage.type === "assistant" &&
+        Array.isArray(mutableMessage.message.content) &&
+        mutableMessage.message.content.some(
+          (te) => te.type === "tool_use" && "id" in te && te.id === block.id,
+        ),
     )
-  )
-    (conversationAppender(mutableMessages).keep(
+  ) {
+    conversationAppender(mutableMessages).keep(
       messagesToKeepForAssistant(assistantMessage, messageRows, mutableMessages),
-    ),
-      await persistIfNeeded(mutableMessages, persistSession, context));
-  if ((yield toSDKAssistantMessage(assistantMessage, tools), notSent?.length))
+    );
+    await persistIfNeeded(mutableMessages, persistSession, context);
+  }
+  yield toSDKAssistantMessage(assistantMessage, tools);
+  if (notSent?.length)
     yield* await answerCallsNeverSent({
-      notSent: notSent,
-      tools: tools,
-      mutableMessages: mutableMessages,
-      persistSession: persistSession,
-      context: context,
+      notSent,
+      tools,
+      mutableMessages,
+      persistSession,
+      context,
     });
   let I = {
-      behavior: "deny",
-      message: typeof message === "string" && message !== "" ? message : REJECT_MESSAGE,
-      toolUseID: block.id,
-      decisionReason: { type: "mode", mode: "default" },
+    behavior: "deny",
+    message: typeof message === "string" && message !== "" ? message : REJECT_MESSAGE,
+    toolUseID: block.id,
+    decisionReason: {
+      type: "mode",
+      mode: "default",
     },
-    G = createUserMessage({
-      content: [{ type: "tool_result", content: I.message, is_error: !0, tool_use_id: block.id }],
-      toolUseResult: `Error: ${I.message}`,
-      toolDenialKind: toolDenialKind ?? getToolCallOutcomeCode(I),
-      sourceToolAssistantUUID: assistantMessage.uuid,
-    });
-  (await appendMessageToConversation(mutableMessages, G),
-    await persistIfNeeded(mutableMessages, persistSession, context),
-    yield* normalizeMessage(G, tools));
+  };
+  let userMessage = createUserMessage({
+    content: [
+      {
+        type: "tool_result",
+        content: I.message,
+        is_error: true,
+        tool_use_id: block.id,
+      },
+    ],
+    toolUseResult: `Error: ${I.message}`,
+    toolDenialKind: toolDenialKind ?? getToolCallOutcomeCode(I),
+    sourceToolAssistantUUID: assistantMessage.uuid,
+  });
+  await appendMessageToConversation(mutableMessages, userMessage);
+  await persistIfNeeded(mutableMessages, persistSession, context);
+  yield* normalizeMessage(userMessage, tools);
 }
+//@ chunk-0h4e7gnq.js:65843-66148 layout
 /**
  * 交接轮次结果是否已落定（已运行或无需重试）。
  */
-//@ chunk-0h4e7gnq.js:65843-66148 layout
 function isHandoffTurnSettled(e) {
-  if (e.ran) return !0;
+  if (e.ran) return true;
   switch (e.reason) {
     case "not_stored":
     case "history_appended":
     case "stopped_closed":
     case "stopped_unconfirmed":
-      return !0;
+      return true;
     case "no_tool_use_block":
     case "tool_unavailable":
     case "already_recorded":
     case "carried_writes_unplaceable":
     case "conversation_moved":
     case "store_refused":
-      return !1;
+      return false;
   }
 }
+//@ chunk-0h4e7gnq.js:66148-66424 layout
 /**
  * 由交接信息计划 relay 标记行（stopped 时不处理）。
  */
-//@ chunk-0h4e7gnq.js:66148-66424 layout
-function planRelayMarkerLine(e, { kind: kind, relayMarker: relayMarker, messages: messages }, r, S) {
-  if (!e || relayMarker === void 0 || kind === "stopped") return;
+function planRelayMarkerLine(e, { kind, relayMarker, messages }, conversation, storeConfirms) {
+  if (!e || relayMarker === undefined || kind === "stopped") return;
   let h;
   try {
     h = e.planRelayFromHandoff({
-      relayMarker: relayMarker,
+      relayMarker,
       carried: messages,
-      conversation: r,
+      conversation,
       persistSession: !isTranscriptPersistenceDisabled(),
-      storeConfirms: S,
+      storeConfirms,
       turnKind: kind,
     });
   } catch (error) {
-    (logError(error), (h = { arm: !1 }));
+    logError(error);
+    h = {
+      arm: false,
+    };
   }
-  return h.arm ? h.markerLine : void 0;
+  return h.arm ? h.markerLine : undefined;
 }
+//@ chunk-0h4e7gnq.js:66424-66639 layout
 /**
  * 交接的记忆行若已在转录里则丢弃，否则返回。
  */
-//@ chunk-0h4e7gnq.js:66424-66639 layout
-async function resolveHandoffMemoryLine({ memoryLine: memoryLine }, n, { storageV5: storageV5 }) {
+async function resolveHandoffMemoryLine({ memoryLine }, n, { storageV5 }) {
   if (memoryLine && n && (await doesMessageExistInSession(getSessionId(), memoryLine.uuid, storageV5))) {
     logForDebugging(
       "handleHandedOffTurn: the memory line is already in the transcript; the turn goes on without it",
-      { level: "warn" },
+      {
+        level: "warn",
+      },
     );
     return;
   }
   return memoryLine;
 }
+//@ chunk-0h4e7gnq.js:66639-66699 layout
 /**
  * 在数组末尾倒数第 n 个位置前插入一行。
  */
-//@ chunk-0h4e7gnq.js:66639-66699 layout
 function insertBeforeTail(e, n, s) {
   return s ? e.toSpliced(e.length - n + 1, 0, s) : e;
 }
+//@ chunk-0h4e7gnq.js:66699-66791 layout
 /**
  * 从存储的交接信息重新武装 relay，异常只记日志。
  */
-//@ chunk-0h4e7gnq.js:66699-66791 layout
 function armRelayFromStoredHandoff(e, n, s, y) {
   if (!e || !n) return;
   try {
@@ -1030,245 +1297,332 @@ function armRelayFromStoredHandoff(e, n, s, y) {
     logError(error);
   }
 }
+//@ chunk-0h4e7gnq.js:66791-70122 layout
 /**
  * 日志自证：处理从其他进程交接来的轮次，校验未回答的 tool_use 与工具池，执行这些工具调用或补写历史。
  */
-//@ chunk-0h4e7gnq.js:66791-70122 layout
-async function* handleHandedOffTurn(e, n, s, y, r, S, h, k, w) {
+async function* handleHandedOffTurn(
+  handedOffTurn,
+  tools,
+  conversation,
+  processUserInputContext,
+  canUseTool,
+  beginTranscriptFlush,
+  handoffRelay,
+  k,
+  placeCarriedWrites,
+) {
   let x = !isSessionPersistenceDisabled();
-  if (e.kind !== "run") return yield* appendHandedOffHistory(e, n, s, y, x, S, h);
-  let L = yj(e.messages);
-  if (L?.type !== "assistant" || e.toolUseIDs.length === 0)
-    return (
-      logForDebugging(
-        "handleHandedOffTurn: the turn does not end with an assistant message naming tool_uses to run; running nothing",
-        { level: "warn" },
-      ),
-      e.release?.(),
-      { ran: !1, reason: "no_tool_use_block" }
+  if (handedOffTurn.kind !== "run")
+    return yield* appendHandedOffHistory(
+      handedOffTurn,
+      tools,
+      conversation,
+      processUserInputContext,
+      x,
+      beginTranscriptFlush,
+      handoffRelay,
     );
-  let I = Array.isArray(L.message.content) ? L.message.content : [],
-    G = [];
-  for (let toolUseID of e.toolUseIDs) {
-    let found = I.find((Te) => Te.type === "tool_use" && Te.id === toolUseID),
-      any = s.some(
-        (Te) =>
-          Te.type === "user" &&
-          Array.isArray(Te.message.content) &&
-          Te.message.content.some((O) => O.type === "tool_result" && O.tool_use_id === toolUseID),
-      );
-    if (found === void 0 || any)
-      return (
-        logForDebugging(
-          `handleHandedOffTurn: tool_use ${toolUseID} is not an unanswered call of the turn's last assistant message; running nothing`,
-          { level: "warn" },
-        ),
-        e.release?.(),
-        { ran: !1, reason: "no_tool_use_block" }
-      );
-    if (!qS(n, found.name, y.options.toolAliases) && !shouldWaitForMcpTool(found.name, y))
-      return (
-        logForDebugging(
-          `handleHandedOffTurn: tool "${found.name}" for tool_use ${toolUseID} is not in the pool (${n.length} available); running nothing`,
-          { level: "warn" },
-        ),
-        e.release?.(),
-        { ran: !1, reason: "tool_unavailable" }
-      );
-    G.push({ block: found, assistantMessage: L });
+  let L = yj(handedOffTurn.messages);
+  if (L?.type !== "assistant" || handedOffTurn.toolUseIDs.length === 0) {
+    logForDebugging(
+      "handleHandedOffTurn: the turn does not end with an assistant message naming tool_uses to run; running nothing",
+      {
+        level: "warn",
+      },
+    );
+    handedOffTurn.release?.();
+    return {
+      ran: false,
+      reason: "no_tool_use_block",
+    };
   }
-  if (isToolResultForToolUse(s))
-    return (
-      logForDebugging(
-        "handleHandedOffTurn: the conversation ends in a call that has no result yet; running nothing",
-        { level: "warn" },
-      ),
-      e.release?.(),
-      { ran: !1, reason: "conversation_moved" }
+  let content = Array.isArray(L.message.content) ? L.message.content : [];
+  let G = [];
+  for (let toolUseID of handedOffTurn.toolUseIDs) {
+    let found = content.find((Te) => Te.type === "tool_use" && Te.id === toolUseID);
+    let any = conversation.some(
+      (Te) =>
+        Te.type === "user" &&
+        Array.isArray(Te.message.content) &&
+        Te.message.content.some((O) => O.type === "tool_result" && O.tool_use_id === toolUseID),
     );
-  let ee = planRelayMarkerLine(h, e, s, S !== void 0),
-    messages = e.messages,
-    R = L;
-  if (h && !ee) {
-    ((R = stripThinkingFromIndex(L)),
-      (messages = [
-        ...messages.slice(0, -1).map((B) => (B.type === "assistant" ? stripThinkingFromIndex(B) : B)),
-        R,
-      ]));
+    if (found === undefined || any) {
+      logForDebugging(
+        `handleHandedOffTurn: tool_use ${toolUseID} is not an unanswered call of the turn's last assistant message; running nothing`,
+        {
+          level: "warn",
+        },
+      );
+      handedOffTurn.release?.();
+      return {
+        ran: false,
+        reason: "no_tool_use_block",
+      };
+    }
+    if (
+      !findTool(tools, found.name, processUserInputContext.options.toolAliases) &&
+      !shouldWaitForMcpTool(found.name, processUserInputContext)
+    ) {
+      logForDebugging(
+        `handleHandedOffTurn: tool "${found.name}" for tool_use ${toolUseID} is not in the pool (${tools.length} available); running nothing`,
+        {
+          level: "warn",
+        },
+      );
+      handedOffTurn.release?.();
+      return {
+        ran: false,
+        reason: "tool_unavailable",
+      };
+    }
+    G.push({
+      block: found,
+      assistantMessage: L,
+    });
+  }
+  if (isToolResultForToolUse(conversation)) {
+    logForDebugging(
+      "handleHandedOffTurn: the conversation ends in a call that has no result yet; running nothing",
+      {
+        level: "warn",
+      },
+    );
+    handedOffTurn.release?.();
+    return {
+      ran: false,
+      reason: "conversation_moved",
+    };
+  }
+  let ee = planRelayMarkerLine(handoffRelay, handedOffTurn, conversation, beginTranscriptFlush !== undefined);
+  let messages = handedOffTurn.messages;
+  let R = L;
+  if (handoffRelay && !ee) {
+    R = stripThinkingFromIndex(L);
+    messages = [
+      ...messages
+        .slice(0, -1)
+        .map((message) => (message.type === "assistant" ? stripThinkingFromIndex(message) : message)),
+      R,
+    ];
     for (let B of G) B.assistantMessage = R;
   }
-  let z = await resolveHandoffMemoryLine(e, x, y);
+  let handoffMemoryLine = await resolveHandoffMemoryLine(handedOffTurn, x, processUserInputContext);
   if (x) {
     for (let B of ee ? [...messages, ee] : messages)
-      if (await doesMessageExistInSession(getSessionId(), B.uuid, y.storageV5))
-        return (
-          logForDebugging(
-            `handleHandedOffTurn: line ${B.uuid} of the handed-off turn is already in the transcript; running nothing`,
-            { level: "warn" },
-          ),
-          { ran: !1, reason: "already_recorded" }
+      if (await doesMessageExistInSession(getSessionId(), B.uuid, processUserInputContext.storageV5)) {
+        logForDebugging(
+          `handleHandedOffTurn: line ${B.uuid} of the handed-off turn is already in the transcript; running nothing`,
+          {
+            level: "warn",
+          },
         );
+        return {
+          ran: false,
+          reason: "already_recorded",
+        };
+      }
   }
-  if ((y.setToolPermissionContext(clearCommandAllowRules), w && !(await w(e, n, y))))
-    return (
-      logForDebugging(
-        "handleHandedOffTurn: could not write the files of the Write calls the turn brought already answered (the reason is in the turn_handoff_carried_writes diagnostic line); running nothing",
-        { level: "warn" },
-      ),
-      e.release?.(),
-      { ran: !1, reason: "carried_writes_unplaceable" }
+  processUserInputContext.setToolPermissionContext(clearCommandAllowRules);
+  if (placeCarriedWrites && !(await placeCarriedWrites(handedOffTurn, tools, processUserInputContext))) {
+    logForDebugging(
+      "handleHandedOffTurn: could not write the files of the Write calls the turn brought already answered (the reason is in the turn_handoff_carried_writes diagnostic line); running nothing",
+      {
+        level: "warn",
+      },
     );
-  let Z = S?.(),
-    flattened = [z, ee, ...messages].flatMap((B) => (B ? [B.uuid] : []));
-  if ((conversationAppender(s).keep(z ? [z, ...messages] : messages), XKo(messages), ee))
-    h?.beginMarkerLineWrite();
-  let le = await hmn("resume_other", "resume_store_confirm", async () => {
+    handedOffTurn.release?.();
+    return {
+      ran: false,
+      reason: "carried_writes_unplaceable",
+    };
+  }
+  let Z = beginTranscriptFlush?.();
+  let flattened = [handoffMemoryLine, ee, ...messages].flatMap((B) => (B ? [B.uuid] : []));
+  conversationAppender(conversation).keep(handoffMemoryLine ? [handoffMemoryLine, ...messages] : messages);
+  recordToolUseTagged(messages);
+  if (ee) handoffRelay?.beginMarkerLineWrite();
+  let le = await measurePhase("resume_other", "resume_store_confirm", async () => {
     if (x) {
       let startTime = performance.now();
-      (await recordTranscript(insertBeforeTail(s, messages.length, ee), void 0, void 0, void 0, y.storageV5),
-        E3s(performance.now() - startTime));
-    }
-    return Z === void 0 || (await Z(y.abortController.signal, flattened)) === !0;
-  });
-  if (Z !== void 0 && !le) {
-    let B = unwrapAbortReason(y.abortController.signal.reason);
-    if (B === "remote-cancel" || B === "user-cancel") {
-      let ce = (await Z(AbortSignal.timeout(HANDOFF_CONFIRM_TIMEOUT_MS), flattened)) === !0;
-      return (
-        yield* cancelUnansweredToolUses(R, ce, n, s, () => persistIfNeeded(s, x, y)),
-        { ran: !1, reason: ce ? "stopped_closed" : "stopped_unconfirmed" }
+      await recordTranscript(
+        insertBeforeTail(conversation, messages.length, ee),
+        undefined,
+        undefined,
+        undefined,
+        processUserInputContext.storageV5,
       );
+      noteStoreConfirmWrite(performance.now() - startTime);
     }
-    return (
-      logForDebugging(
-        "handleHandedOffTurn: the carried lines were not confirmed stored (dropped by the store, or the turn was interrupted while waiting); running nothing",
-        { level: "warn" },
-      ),
-      { ran: !1, reason: "not_stored" }
+    return Z === undefined || (await Z(processUserInputContext.abortController.signal, flattened)) === true;
+  });
+  if (Z !== undefined && !le) {
+    let B = unwrapAbortReason(processUserInputContext.abortController.signal.reason);
+    if (B === "remote-cancel" || B === "user-cancel") {
+      let ce = (await Z(AbortSignal.timeout(HANDOFF_CONFIRM_TIMEOUT_MS), flattened)) === true;
+      yield* cancelUnansweredToolUses(R, ce, tools, conversation, () =>
+        persistIfNeeded(conversation, x, processUserInputContext),
+      );
+      return {
+        ran: false,
+        reason: ce ? "stopped_closed" : "stopped_unconfirmed",
+      };
+    }
+    logForDebugging(
+      "handleHandedOffTurn: the carried lines were not confirmed stored (dropped by the store, or the turn was interrupted while waiting); running nothing",
+      {
+        level: "warn",
+      },
     );
+    return {
+      ran: false,
+      reason: "not_stored",
+    };
   }
-  armRelayFromStoredHandoff(h, ee, s, "run");
-  let any = e.messages.some(isHumanTurnMessage);
+  armRelayFromStoredHandoff(handoffRelay, ee, conversation, "run");
+  let any = handedOffTurn.messages.some(isHumanTurnMessage);
   if (any) {
-    let { alwaysAllowRules: alwaysAllowRules, pollEventDeliveryGuard: pollEventDeliveryGuard } =
-      getToolPermissionContext(y);
-    if (alwaysAllowRules.command !== void 0 || pollEventDeliveryGuard !== void 0) Var(y, void 0, void 0);
-    setCommandDenyRules(y.setToolPermissionContext, []);
+    let { alwaysAllowRules, pollEventDeliveryGuard } = getToolPermissionContext(processUserInputContext);
+    if (alwaysAllowRules.command !== undefined || pollEventDeliveryGuard !== undefined)
+      applyPollEventToolPermissions(processUserInputContext, undefined, undefined);
+    setCommandDenyRules(processUserInputContext.setToolPermissionContext, []);
   }
-  let lastIndex = s.findLastIndex(isHumanTurnMessage);
+  let lastIndex = conversation.findLastIndex(isHumanTurnMessage);
   return {
-    ran: !0,
+    ran: true,
     contextLayers: yield* runToolUsesOnResume({
       runs: G,
-      tools: n,
-      canUseTool: r,
-      executionContext: { ...y, turnStartIndex: any && lastIndex >= 0 ? lastIndex : s.length },
-      mutableMessages: s,
+      tools,
+      canUseTool,
+      executionContext: {
+        ...processUserInputContext,
+        turnStartIndex: any && lastIndex >= 0 ? lastIndex : conversation.length,
+      },
+      mutableMessages: conversation,
       persistSession: x,
-      beforeRun: k && (() => k(y.abortController.signal)),
+      beforeRun: k && (() => k(processUserInputContext.abortController.signal)),
     }),
   };
 }
+//@ chunk-0h4e7gnq.js:70122-70218 layout = isHumanTurn (0.779)
 /**
  * 覆盖后缀名 isHumanTurn_2。
  */
-//@ chunk-0h4e7gnq.js:70122-70218 layout = isHumanTurn (0.779)
 function isHumanTurnMessage(m) {
   return m.type === "user" && !m.isMeta && !m.toolUseResult && !m.isCompactSummary && !isToolResultMessage(m);
 }
+//@ chunk-0h4e7gnq.js:70218-70231 layout
 /**
  * 15000。
  */
-//@ chunk-0h4e7gnq.js:70218-70231 layout
 var HANDOFF_CONFIRM_TIMEOUT_MS = 15000;
+//@ chunk-0h4e7gnq.js:70231-72415 layout
 /**
  * 交接轮次为 history/stopped 时把携带的消息补进对话（检查重复、顺序与会话是否已前进），被打断时补取消结果。
  */
-//@ chunk-0h4e7gnq.js:70231-72415 layout
-async function* appendHandedOffHistory(e, n, s, y, r, S, h) {
-  let { kind: kind, messages: messages } = e,
-    x = findLastToolUseAssistantMessage(messages),
-    L = s.find((B) => B.uuid === x?.uuid) ?? x,
-    I = (B, ce) => {
-      if (
-        (logForDebugging(`handleHandedOffTurn: ${ce}; appending nothing`, { level: "warn" }),
-        B !== "already_recorded")
-      )
-        e.release?.();
-      return { ran: !1, reason: B };
+async function* appendHandedOffHistory(e, n, conversation, y, r, S, h) {
+  let { kind, messages } = e;
+  let lastToolUseAssistantMessage = findLastToolUseAssistantMessage(messages);
+  let L =
+    conversation.find((B) => B.uuid === lastToolUseAssistantMessage?.uuid) ?? lastToolUseAssistantMessage;
+  let I = (B, ce) => {
+    logForDebugging(`handleHandedOffTurn: ${ce}; appending nothing`, {
+      level: "warn",
+    });
+    if (B !== "already_recorded") e.release?.();
+    return {
+      ran: false,
+      reason: B,
     };
+  };
   if (L?.type !== "assistant") return I("no_tool_use_block", "the turn holds no assistant message to echo");
-  let G = () => persistIfNeeded(s, r, y),
-    ee = new Set(s.map((B) => B.uuid)),
-    te = 0;
+  let G = () => persistIfNeeded(conversation, r, y);
+  let ee = new Set(conversation.map((B) => B.uuid));
+  let te = 0;
   while (te < messages.length && ee.has(messages[te].uuid)) te++;
   let sliced = messages.slice(te);
   if (sliced.some((B) => ee.has(B.uuid)))
     return I("already_recorded", "the conversation holds some of the carried lines out of order");
-  if (te > 0 && !(kind === "history" && sliced.length === 0) && jKt(s)?.uuid !== messages[te - 1].uuid)
+  if (
+    te > 0 &&
+    !(kind === "history" && sliced.length === 0) &&
+    lastConversationMessage(conversation)?.uuid !== messages[te - 1].uuid
+  )
     return I("conversation_moved", "the conversation has moved on past the part of the turn it holds");
-  if (te === 0 && isToolResultForToolUse(s))
+  if (te === 0 && isToolResultForToolUse(conversation))
     return I("conversation_moved", "the conversation ends in a call that has no result yet");
   if (r) {
     for (let B of sliced)
       if (await doesMessageExistInSession(getSessionId(), B.uuid, y.storageV5))
         return I("already_recorded", `carried message ${B.uuid} is already in the transcript`);
   }
-  let z = kind === "history" && te === 0,
-    Z = z ? await resolveHandoffMemoryLine(e, r, y) : void 0,
-    V = z ? planRelayMarkerLine(h, e, s, S !== void 0) : void 0;
-  if (V && (await doesMessageExistInSession(getSessionId(), V.uuid, y.storageV5)))
-    (logForDebugging(
+  let z = kind === "history" && te === 0;
+  let Z = z ? await resolveHandoffMemoryLine(e, r, y) : undefined;
+  let V = z ? planRelayMarkerLine(h, e, conversation, S !== undefined) : undefined;
+  if (V && (await doesMessageExistInSession(getSessionId(), V.uuid, y.storageV5))) {
+    logForDebugging(
       "handleHandedOffTurn: the marker line is already in the transcript; appending the turn without it",
-      { level: "warn" },
-    ),
-      (V = void 0));
+      {
+        level: "warn",
+      },
+    );
+    V = undefined;
+  }
   let le = S?.();
   if (sliced.length > 0) {
-    if ((conversationAppender(s).keep(Z ? [Z, ...sliced] : sliced), XKo(sliced), V))
-      h?.beginMarkerLineWrite();
-    await persistIfNeeded(insertBeforeTail(s, sliced.length, V), r, y);
+    conversationAppender(conversation).keep(Z ? [Z, ...sliced] : sliced);
+    recordToolUseTagged(sliced);
+    if (V) h?.beginMarkerLineWrite();
+    await persistIfNeeded(insertBeforeTail(conversation, sliced.length, V), r, y);
   }
   let j =
-      le === void 0 ||
-      (await le(
-        AbortSignal.timeout(HANDOFF_CONFIRM_TIMEOUT_MS),
-        [Z, V, ...messages].flatMap((B) => (B ? [B.uuid] : [])),
-      )),
-    ie = j === !0,
-    index = s.findIndex((B) => B.uuid === messages[0]?.uuid);
+    le === undefined ||
+    (await le(
+      AbortSignal.timeout(HANDOFF_CONFIRM_TIMEOUT_MS),
+      [Z, V, ...messages].flatMap((B) => (B ? [B.uuid] : [])),
+    ));
+  let ie = j === true;
+  let index = conversation.findIndex((B) => B.uuid === messages[0]?.uuid);
   if (
     j === "refused" &&
     kind === "history" &&
     index >= 0 &&
-    s.findLast(isChainParticipant)?.uuid === messages.at(-1)?.uuid
+    conversation.findLast(isChainParticipant)?.uuid === messages.at(-1)?.uuid
   ) {
-    let B = s[index - 1];
+    let B = conversation[index - 1];
     if (B?.type === "attachment" && B.attachment.type === "cowork_memory_context") index--;
-    return (
-      s.splice(index),
-      logForDebugging(
-        "handleHandedOffTurn: the store refused lines of the turn; removed it, echoing nothing",
-        { level: "warn" },
-      ),
-      { ran: !1, reason: "store_refused" }
-    );
+    conversation.splice(index);
+    logForDebugging("handleHandedOffTurn: the store refused lines of the turn; removed it, echoing nothing", {
+      level: "warn",
+    });
+    return {
+      ran: false,
+      reason: "store_refused",
+    };
   }
-  if (kind === "stopped") yield* cancelUnansweredToolUses(L, ie, n, s, G);
-  else if (ie) (armRelayFromStoredHandoff(h, V, s, "history"), yield toSDKAssistantMessage(L, n));
-  if (!ie)
-    return (
-      logForDebugging("handleHandedOffTurn: the carried lines were not confirmed stored; echoing nothing", {
-        level: "warn",
-      }),
-      { ran: !1, reason: kind === "stopped" ? "stopped_unconfirmed" : "not_stored" }
-    );
-  return { ran: !1, reason: kind === "stopped" ? "stopped_closed" : "history_appended" };
+  if (kind === "stopped") yield* cancelUnansweredToolUses(L, ie, n, conversation, G);
+  else if (ie) {
+    armRelayFromStoredHandoff(h, V, conversation, "history");
+    yield toSDKAssistantMessage(L, n);
+  }
+  if (!ie) {
+    logForDebugging("handleHandedOffTurn: the carried lines were not confirmed stored; echoing nothing", {
+      level: "warn",
+    });
+    return {
+      ran: false,
+      reason: kind === "stopped" ? "stopped_unconfirmed" : "not_stored",
+    };
+  }
+  return {
+    ran: false,
+    reason: kind === "stopped" ? "stopped_closed" : "history_appended",
+  };
 }
+//@ chunk-0h4e7gnq.js:72415-72947 layout
 /**
  * 给未回答的 tool_use 补已取消结果并追加中断消息。
  */
-//@ chunk-0h4e7gnq.js:72415-72947 layout
 async function* cancelUnansweredToolUses(e, n, s, y, r) {
   if (n) yield toSDKAssistantMessage(e, s);
   let S = new Set();
@@ -1277,36 +1631,44 @@ async function* cancelUnansweredToolUses(e, n, s, y, r) {
       for (let L of x.message.content) if (L.type === "tool_result") S.add(L.tool_use_id);
     }
   let mapped = (
-      Array.isArray(e.message.content)
-        ? e.message.content.filter((x) => x.type === "tool_use" && !S.has(x.id))
-        : []
-    ).map((x) =>
-      createUserMessage({
-        content: [
-          { ...createCancelledToolResultBlock(x.id), content: withMemoryCorrectionHint(CANCEL_MESSAGE) },
-        ],
-        toolUseResult: CANCEL_MESSAGE,
-        toolDenialKind: "cancelled",
-        sourceToolAssistantUUID: e.uuid,
-      }),
-    ),
-    w = createUserInterruptionMessage({ toolUse: !0 });
-  for (let x of [...mapped, w])
-    if ((await appendMessageToConversation(y, x), await r(), n)) yield* normalizeMessage(x, s);
+    Array.isArray(e.message.content)
+      ? e.message.content.filter((x) => x.type === "tool_use" && !S.has(x.id))
+      : []
+  ).map((x) =>
+    createUserMessage({
+      content: [
+        {
+          ...createCancelledToolResultBlock(x.id),
+          content: withMemoryCorrectionHint(CANCEL_MESSAGE),
+        },
+      ],
+      toolUseResult: CANCEL_MESSAGE,
+      toolDenialKind: "cancelled",
+      sourceToolAssistantUUID: e.uuid,
+    }),
+  );
+  let userInterruptionMessage = createUserInterruptionMessage({
+    toolUse: true,
+  });
+  for (let x of [...mapped, userInterruptionMessage]) {
+    await appendMessageToConversation(y, x);
+    await r();
+    if (n) yield* normalizeMessage(x, s);
+  }
 }
+//@ chunk-0h4e7gnq.js:72947-73022 layout
 /**
  * 需要持久化时把对话写入会话存储。
  */
-//@ chunk-0h4e7gnq.js:72947-73022 layout
 async function persistIfNeeded(e, n, s) {
-  if (n) await recordTranscript(e, void 0, void 0, void 0, s.storageV5);
+  if (n) await recordTranscript(e, undefined, undefined, undefined, s.storageV5);
 }
+//@ chunk-0h4e7gnq.js:73022-73332 layout
 /**
  * 内部 assistant 消息转 SDK assistant 消息（session_id、request_id、tool_use_meta）。
  */
-//@ chunk-0h4e7gnq.js:73022-73332 layout
-function toSDKAssistantMessage(e, n) {
-  let s = buildToolDisplayNames(e.message.content, n);
+function toSDKAssistantMessage(e, tools) {
+  let toolDisplayNames = buildToolDisplayNames(e.message.content, tools);
   return {
     type: "assistant",
     message: e.message,
@@ -1315,58 +1677,51 @@ function toSDKAssistantMessage(e, n) {
     uuid: e.uuid,
     timestamp: e.timestamp,
     error: e.error,
-    ...(e.requestId !== void 0 && { request_id: e.requestId }),
+    ...(e.requestId !== undefined && {
+      request_id: e.requestId,
+    }),
     ...isAssistantResultComplete(e),
     ...getNarrationFields(e.message.content, e.message.model),
-    ...(s.length > 0 && { tool_use_meta: s }),
+    ...(toolDisplayNames.length > 0 && {
+      tool_use_meta: toolDisplayNames,
+    }),
   };
 }
+//@ chunk-0h4e7gnq.js:73332-73629 layout
 /**
  * 补写 assistant 行时决定保留哪些同轮消息。
  */
-//@ chunk-0h4e7gnq.js:73332-73629 layout
-function messagesToKeepForAssistant(e, n, s) {
+function messagesToKeepForAssistant(e, messageRows, mutableMessages) {
   if (
-    n === void 0 ||
-    !n.some((r) => r.uuid === e.uuid) ||
-    n.some(
+    messageRows === undefined ||
+    !messageRows.some((r) => r.uuid === e.uuid) ||
+    messageRows.some(
       (r) =>
-        r.resumedFromIncompleteThinking === !0 ||
+        r.resumedFromIncompleteThinking === true ||
         (r.uuid !== e.uuid &&
           Array.isArray(r.message.content) &&
           r.message.content.some((S) => S.type === "tool_use")),
     )
   )
     return [e];
-  let y = new Set(s.map((r) => r.uuid));
-  return n.filter((r) => !y.has(r.uuid));
+  let y = new Set(mutableMessages.map((r) => r.uuid));
+  return messageRows.filter((r) => !y.has(r.uuid));
 }
+//@ chunk-0h4e7gnq.js:73629-74539 layout
 /**
  * 日志自证：对从未发出的工具调用补 is_error 结果。
  */
-//@ chunk-0h4e7gnq.js:73629-74539 layout
-async function answerCallsNeverSent({
-  notSent: notSent,
-  tools: tools,
-  mutableMessages: mutableMessages,
-  persistSession: persistSession,
-  context: context,
-}) {
-  let S = [],
-    h = new Set(notSent.map((k) => k.toolUseID));
-  for (let {
-    toolUseID: toolUseID,
-    assistantMessage: assistantMessage,
-    host: host,
-    onUsersDevice: onUsersDevice,
-  } of notSent)
+async function answerCallsNeverSent({ notSent, tools, mutableMessages, persistSession, context }) {
+  let S = [];
+  let h = new Set(notSent.map((k) => k.toolUseID));
+  for (let { toolUseID, assistantMessage, host, onUsersDevice } of notSent)
     try {
       if (
         !mutableMessages.some(
-          (te) =>
-            te.type === "assistant" &&
-            Array.isArray(te.message.content) &&
-            te.message.content.some((R) => R.type === "tool_use" && R.id === toolUseID),
+          (mutableMessage) =>
+            mutableMessage.type === "assistant" &&
+            Array.isArray(mutableMessage.message.content) &&
+            mutableMessage.message.content.some((R) => R.type === "tool_use" && R.id === toolUseID),
         )
       ) {
         if (
@@ -1378,18 +1733,25 @@ async function answerCallsNeverSent({
           );
           continue;
         }
-        (conversationAppender(mutableMessages).keep([assistantMessage]),
-          S.push(toSDKAssistantMessage(assistantMessage, tools)));
+        conversationAppender(mutableMessages).keep([assistantMessage]);
+        S.push(toSDKAssistantMessage(assistantMessage, tools));
       }
-      let G = onUsersDevice ? DEVICE_CALL_NOT_SENT_TEXT : notSentNotice(host),
-        ee = createUserMessage({
-          content: [{ type: "tool_result", content: G, is_error: !0, tool_use_id: toolUseID }],
-          toolUseResult: `Error: ${G}`,
-          sourceToolAssistantUUID: assistantMessage.uuid,
-        });
-      (await appendMessageToConversation(mutableMessages, ee),
-        await persistIfNeeded(mutableMessages, persistSession, context),
-        S.push(...normalizeMessage(ee, tools)));
+      let G = onUsersDevice ? DEVICE_CALL_NOT_SENT_TEXT : notSentNotice(host);
+      let userMessage = createUserMessage({
+        content: [
+          {
+            type: "tool_result",
+            content: G,
+            is_error: true,
+            tool_use_id: toolUseID,
+          },
+        ],
+        toolUseResult: `Error: ${G}`,
+        sourceToolAssistantUUID: assistantMessage.uuid,
+      });
+      await appendMessageToConversation(mutableMessages, userMessage);
+      await persistIfNeeded(mutableMessages, persistSession, context);
+      S.push(...normalizeMessage(userMessage, tools));
     } catch (error) {
       if (isAbortError(error))
         logForDebugging(`answerCallsNeverSent: turn stopped before toolUseID=${toolUseID} got its result`);
@@ -1397,56 +1759,56 @@ async function answerCallsNeverSent({
     }
   return S;
 }
+//@ chunk-0h4e7gnq.js:74539-75821 layout
 /**
  * 恢复时执行一批 tool_use：补写 assistant 行、执行工具并把结果写入转录与 SDK 输出。
  */
-//@ chunk-0h4e7gnq.js:74539-75821 layout
 async function* runToolUsesOnResume({
-  runs: runs,
-  tools: tools,
-  canUseTool: canUseTool,
-  executionContext: executionContext,
-  mutableMessages: mutableMessages,
-  persistSession: persistSession,
-  beforeRun: beforeRun,
-  notSent: notSent,
-  echoed: echoed,
+  runs,
+  tools,
+  canUseTool,
+  executionContext,
+  mutableMessages,
+  persistSession,
+  beforeRun,
+  notSent,
+  echoed,
 }) {
-  let x = Ji(
-    runs.map((I) => I.assistantMessage),
+  let assistantMessages = Ji(
+    runs.map((run) => run.assistantMessage),
     (I) => I.uuid,
   );
-  for (let I of x) {
-    let filtered = runs.filter((R) => R.assistantMessage.uuid === I.uuid),
-      mapped = filtered.map((R) => R.block.id);
+  for (let I of assistantMessages) {
+    let filtered = runs.filter((run) => run.assistantMessage.uuid === I.uuid);
+    let mapped = filtered.map((R) => R.block.id);
     if (
       !mutableMessages.some(
-        (R) =>
-          R.type === "assistant" &&
-          Array.isArray(R.message.content) &&
-          R.message.content.some((z) => z.type === "tool_use" && "id" in z && mapped.includes(z.id)),
+        (mutableMessage) =>
+          mutableMessage.type === "assistant" &&
+          Array.isArray(mutableMessage.message.content) &&
+          mutableMessage.message.content.some(
+            (z) => z.type === "tool_use" && "id" in z && mapped.includes(z.id),
+          ),
       )
     ) {
-      if (
-        (conversationAppender(mutableMessages).keep(
-          messagesToKeepForAssistant(
-            I,
-            filtered.find((R) => R.messageRows !== void 0)?.messageRows,
-            mutableMessages,
-          ),
+      conversationAppender(mutableMessages).keep(
+        messagesToKeepForAssistant(
+          I,
+          filtered.find((R) => R.messageRows !== undefined)?.messageRows,
+          mutableMessages,
         ),
-        persistSession)
-      )
-        await recordTranscript(mutableMessages, void 0, void 0, void 0, executionContext.storageV5);
+      );
+      if (persistSession)
+        await recordTranscript(mutableMessages, undefined, undefined, undefined, executionContext.storageV5);
     }
     if (!echoed?.has(I.uuid)) yield toSDKAssistantMessage(I, tools);
   }
   if (notSent?.length)
     yield* await answerCallsNeverSent({
-      notSent: notSent,
-      tools: tools,
-      mutableMessages: mutableMessages,
-      persistSession: persistSession,
+      notSent,
+      tools,
+      mutableMessages,
+      persistSession,
       context: executionContext,
     });
   if (beforeRun)
@@ -1456,18 +1818,26 @@ async function* runToolUsesOnResume({
       if (!isAbortError(error)) logError(error);
     }
   let permissionLayers = executionContext.permissionLayers;
-  mGt("resume_other", "turn_start_tool_run");
+  startPhaseWithin("resume_other", "turn_start_tool_run");
   try {
     for await (let I of runTools(
-      runs.map((G) => G.block),
-      x,
+      runs.map((run) => run.block),
+      assistantMessages,
       canUseTool,
       executionContext,
     )) {
       if (hasTypeField(I)) continue;
-      if (((permissionLayers = I.newContext.permissionLayers), I.message)) {
-        if ((await appendMessageToConversation(mutableMessages, I.message), persistSession))
-          await recordTranscript(mutableMessages, void 0, void 0, void 0, executionContext.storageV5);
+      permissionLayers = I.newContext.permissionLayers;
+      if (I.message) {
+        await appendMessageToConversation(mutableMessages, I.message);
+        if (persistSession)
+          await recordTranscript(
+            mutableMessages,
+            undefined,
+            undefined,
+            undefined,
+            executionContext.storageV5,
+          );
         if (I.message.type === "progress" || I.message.type === "user") {
           yield* normalizeMessage(I.message, executionContext.options.refreshTools?.() ?? tools);
           continue;
@@ -1476,24 +1846,28 @@ async function* runToolUsesOnResume({
           yield* attachmentToSDKMessages(I.message);
           continue;
         }
-        yield { ...I.message, session_id: getSessionId(), parent_tool_use_id: null };
+        yield {
+          ...I.message,
+          session_id: getSessionId(),
+          parent_tool_use_id: null,
+        };
       }
     }
   } finally {
-    gGt("resume_other", "turn_start_tool_run");
+    endPhaseWithin("resume_other", "turn_start_tool_run");
   }
   return permissionLayers;
 }
+//@ chunk-0h4e7gnq.js:75821-78840 fingerprint = extractReadFilesFromMessages (0.37)
 /**
  * 从历史 Read/Write/Edit 调用与结果重建 readFileState（内容与时间戳，LRU 上限），跳过有截断提示的读取。
  */
-//@ chunk-0h4e7gnq.js:75821-78840 fingerprint = extractReadFilesFromMessages (0.37)
 function extractReadFilesFromMessages(messages, cwd, maxSize = READ_FILE_STATE_CACHE_SIZE) {
-  let cache = nv(maxSize),
-    fileReadToolUseIds = new Map(),
-    fileWriteToolUseIds = new Map(),
-    fileEditToolUseIds = new Map(),
-    k = new Set();
+  let cache = createRemoteFileState(maxSize);
+  let fileReadToolUseIds = new Map();
+  let fileWriteToolUseIds = new Map();
+  let fileEditToolUseIds = new Map();
+  let k = new Set();
   for (let message of messages) {
     if (message.type === "attachment" && message.attachment.type === "read_truncation_notice") {
       k.add(message.attachment.toolUseID);
@@ -1502,28 +1876,28 @@ function extractReadFilesFromMessages(messages, cwd, maxSize = READ_FILE_STATE_C
     if (message.type === "assistant" && Array.isArray(message.message.content))
       for (let content of message.message.content) {
         if (content.type !== "tool_use") continue;
-        if (Cf(content.input)) continue;
+        if (hasHostField(content.input)) continue;
         try {
           if (content.name === FILE_READ_TOOL_NAME) {
-            let V = normalizeReadInputAliases(content.input)?.input ?? content.input,
-              le = coerceNumberString(V?.offset),
-              j = coerceNumberString(V?.limit);
+            let input = normalizeReadInputAliases(content.input)?.input ?? content.input;
+            let le = coerceNumberString(input?.offset);
+            let j = coerceNumberString(input?.limit);
             if (
-              typeof V?.file_path === "string" &&
-              (le === void 0 || (typeof le === "number" && Number.isInteger(le) && le >= 0)) &&
-              (j === void 0 || (typeof j === "number" && Number.isInteger(j) && j >= 1))
+              typeof input?.file_path === "string" &&
+              (le === undefined || (typeof le === "number" && Number.isInteger(le) && le >= 0)) &&
+              (j === undefined || (typeof j === "number" && Number.isInteger(j) && j >= 1))
             )
               fileReadToolUseIds.set(content.id, {
-                filePath: expandPath(V.file_path, cwd),
+                filePath: expandPath(input.file_path, cwd),
                 offset: le,
                 limit: j,
               });
           } else if (content.name === FILE_WRITE_TOOL_NAME) {
-            let V = normalizeWriteInputAliases(content.input)?.input ?? content.input;
-            if (typeof V?.file_path === "string" && typeof V.content === "string")
+            let input = normalizeWriteInputAliases(content.input)?.input ?? content.input;
+            if (typeof input?.file_path === "string" && typeof input.content === "string")
               fileWriteToolUseIds.set(content.id, {
-                filePath: expandPath(V.file_path, cwd),
-                content: V.content,
+                filePath: expandPath(input.file_path, cwd),
+                content: input.content,
               });
           } else if (content.name === FILE_EDIT_TOOL_NAME) {
             let input = content.input;
@@ -1537,99 +1911,107 @@ function extractReadFilesFromMessages(messages, cwd, maxSize = READ_FILE_STATE_C
         }
       }
   }
-  let w = new Set(),
-    x = nv(maxSize),
-    L = [],
-    I = (R, z) => {
-      (w.add(normalize(R)), x.set(R, z), L.push(R));
-    },
-    G = isRemoteToolForwardingSwitchOn()
-      ? new Set(
-          [...fileWriteToolUseIds.values()]
-            .map((R) => R.filePath)
-            .concat([...fileEditToolUseIds.values()])
-            .map((R) => normalize(R)),
-        )
-      : void 0,
-    ee = new Map(),
-    te = (R, z) => {
-      let Z = normalize(R),
-        V = x.get(R);
-      (x.set(R, z), x.set(R, V), ee.delete(Z));
-    };
-  e: for (let R = messages.length - 1; R >= 0; R--) {
-    let z = messages[R];
+  let w = new Set();
+  let remoteFileState = createRemoteFileState(maxSize);
+  let L = [];
+  let I = (R, z) => {
+    w.add(normalize(R));
+    remoteFileState.set(R, z);
+    L.push(R);
+  };
+  let G = isRemoteToolForwardingSwitchOn()
+    ? new Set(
+        [...fileWriteToolUseIds.values()]
+          .map((R) => R.filePath)
+          .concat([...fileEditToolUseIds.values()])
+          .map((R) => normalize(R)),
+      )
+    : undefined;
+  let ee = new Map();
+  let te = (R, z) => {
+    let Z = normalize(R);
+    let V = remoteFileState.get(R);
+    remoteFileState.set(R, z);
+    remoteFileState.set(R, V);
+    ee.delete(Z);
+  };
+  e: for (let idx = messages.length - 1; idx >= 0; idx--) {
+    let z = messages[idx];
     if (z.type !== "user" || !Array.isArray(z.message.content)) continue;
     let content = z.message.content;
-    for (let V = content.length - 1; V >= 0; V--) {
-      let le = content[V];
+    for (let idx = content.length - 1; idx >= 0; idx--) {
+      let le = content[idx];
       if (le.type !== "tool_result" || !le.tool_use_id) continue;
-      let readFilePath = fileReadToolUseIds.get(le.tool_use_id),
-        ie = readFilePath && normalize(readFilePath.filePath),
-        he = ie !== void 0 && !w.has(ie) && w.size < maxSize;
+      let readFilePath = fileReadToolUseIds.get(le.tool_use_id);
+      let ie = readFilePath && normalize(readFilePath.filePath);
+      let he = ie !== undefined && !w.has(ie) && w.size < maxSize;
       if (
         readFilePath &&
         (he || ee.has(ie)) &&
-        le.is_error !== !0 &&
+        le.is_error !== true &&
         typeof le.content === "string" &&
         !isFileUnchangedStub(le.content) &&
         z.timestamp
       ) {
-        let toolUseResult = z.toolUseResult,
-          ue =
-            toolUseResult?.file?.truncatedByTokenCap === !0 ||
-            k.has(le.tool_use_id) ||
-            le.content.startsWith("<system-reminder>" + TRUNCATED_PARTIAL_VIEW_PREFIX),
-          pe,
-          Q = toolUseResult?.file?.content;
+        let toolUseResult = z.toolUseResult;
+        let ue =
+          toolUseResult?.file?.truncatedByTokenCap === true ||
+          k.has(le.tool_use_id) ||
+          le.content.startsWith("<system-reminder>" + TRUNCATED_PARTIAL_VIEW_PREFIX);
+        let pe;
+        let content_2 = toolUseResult?.file?.content;
         if (
           (content.length === 1 || count(content, (Ce) => Ce.type === "tool_result") === 1) &&
-          typeof Q === "string" &&
-          Q !== ""
+          typeof content_2 === "string" &&
+          content_2 !== ""
         )
-          pe = Q.trim();
+          pe = content_2.trim();
         else pe = stripReminderAndLineNumbers(le.content);
         if (!he) {
-          if (p9r(pe) !== ee.get(ie)) ee.delete(ie);
+          if (contentHashOf(pe) !== ee.get(ie)) ee.delete(ie);
         } else {
-          let timestamp = new Date(z.timestamp).getTime(),
-            me = isNotebookPath(readFilePath.filePath);
-          if (
-            (I(readFilePath.filePath, {
-              content: pe,
-              timestamp: timestamp,
-              offset: me ? 1 : (readFilePath.offset ?? 1),
-              limit: me ? void 0 : readFilePath.limit,
-              ...(ue && { isPartialView: !0 }),
-              contentFromTranscript: !0,
+          let timestamp = new Date(z.timestamp).getTime();
+          let me = isNotebookPath(readFilePath.filePath);
+          I(readFilePath.filePath, {
+            content: pe,
+            timestamp,
+            offset: me ? 1 : (readFilePath.offset ?? 1),
+            limit: me ? undefined : readFilePath.limit,
+            ...(ue && {
+              isPartialView: true,
             }),
-            G?.has(ie))
-          )
-            ee.set(ie, x.get(readFilePath.filePath).contentHash);
+            contentFromTranscript: true,
+          });
+          if (G?.has(ie)) ee.set(ie, remoteFileState.get(readFilePath.filePath).contentHash);
         }
       }
-      let writeToolData = fileWriteToolUseIds.get(le.tool_use_id),
-        ce = writeToolData && normalize(writeToolData.filePath),
-        Ae = ce !== void 0 && !w.has(ce) && w.size < maxSize;
-      if (writeToolData && (Ae || ee.has(ce)) && le.is_error !== !0 && z.timestamp) {
-        let timestamp = new Date(z.timestamp).getTime(),
-          ue = { content: __(writeToolData.content), timestamp: timestamp, offset: void 0, limit: void 0 };
+      let writeToolData = fileWriteToolUseIds.get(le.tool_use_id);
+      let ce = writeToolData && normalize(writeToolData.filePath);
+      let Ae = ce !== undefined && !w.has(ce) && w.size < maxSize;
+      if (writeToolData && (Ae || ee.has(ce)) && le.is_error !== true && z.timestamp) {
+        let timestamp = new Date(z.timestamp).getTime();
+        let ue = {
+          content: stripBomAndCarriageReturn(writeToolData.content),
+          timestamp,
+          offset: undefined,
+          limit: undefined,
+        };
         if (Ae) I(writeToolData.filePath, ue);
         else te(writeToolData.filePath, ue);
       }
-      let editFilePath = fileEditToolUseIds.get(le.tool_use_id),
-        O = editFilePath && normalize(editFilePath),
-        q = O !== void 0 && !w.has(O) && w.size < maxSize;
-      if (editFilePath && (q || ee.has(O)) && le.is_error !== !0)
+      let editFilePath = fileEditToolUseIds.get(le.tool_use_id);
+      let O = editFilePath && normalize(editFilePath);
+      let q = O !== undefined && !w.has(O) && w.size < maxSize;
+      if (editFilePath && (q || ee.has(O)) && le.is_error !== true)
         try {
-          let { content: diskContent } = detectEncodingForResolvedPath(editFilePath),
-            ue = {
-              content: tv(diskContent),
-              timestamp: getFileModificationTime(editFilePath),
-              offset: void 0,
-              limit: void 0,
-              contentNotInModelContext: !0,
-            };
+          let { content: diskContent } = detectEncodingForResolvedPath(editFilePath);
+          let ue = {
+            content: stripBom(diskContent),
+            timestamp: getFileModificationTime(editFilePath),
+            offset: undefined,
+            limit: undefined,
+            contentNotInModelContext: true,
+          };
           if (q) I(editFilePath, ue);
           else te(editFilePath, ue);
         } catch (error) {
@@ -1640,35 +2022,36 @@ function extractReadFilesFromMessages(messages, cwd, maxSize = READ_FILE_STATE_C
       if (w.size >= maxSize && ee.size === 0) break e;
     }
   }
-  for (let R = L.length - 1; R >= 0; R--) {
-    let z = L[R];
-    cache.set(z, x.get(z));
+  for (let j = L.length - 1; j >= 0; j--) {
+    let z = L[j];
+    cache.set(z, remoteFileState.get(z));
   }
   return cache;
 }
+//@ chunk-0h4e7gnq.js:78840-80094 layout
 /**
  * 日志自证：收集回退时需重新追踪的文件路径（编辑类工具、文件附件、记忆附件）。
  */
-//@ chunk-0h4e7gnq.js:78840-80094 layout
-function collectRewoundFileTrackingPaths(e, n, s) {
-  let y = [],
-    r = [],
-    S = [];
+function collectRewoundFileTrackingPaths(e, n, toolAliases) {
+  let y = [];
+  let r = [];
+  let S = [];
   for (let h of e) {
     if (h.type === "assistant") {
       if (!Array.isArray(h.message.content)) continue;
       for (let w of h.message.content) {
-        if (!isPlainObject(w) || w.type !== "tool_use" || !isPlainObject(w.input) || Cf(w.input)) continue;
-        let input = w.input,
-          at = toolNameVariants(w.name, s).at(-1),
-          I =
-            at === NOTEBOOK_EDIT_TOOL_NAME
-              ? input.notebook_path
-              : at === FILE_READ_TOOL_NAME || at === FILE_EDIT_TOOL_NAME || at === FILE_WRITE_TOOL_NAME
-                ? input.file_path
-                : void 0;
+        if (!isPlainObject(w) || w.type !== "tool_use" || !isPlainObject(w.input) || hasHostField(w.input))
+          continue;
+        let input = w.input;
+        let last = toolNameVariants(w.name, toolAliases).at(-1);
+        let I =
+          last === NOTEBOOK_EDIT_TOOL_NAME
+            ? input.notebook_path
+            : last === FILE_READ_TOOL_NAME || last === FILE_EDIT_TOOL_NAME || last === FILE_WRITE_TOOL_NAME
+              ? input.file_path
+              : undefined;
         if (typeof I !== "string") continue;
-        if (at === FILE_READ_TOOL_NAME && Mge(I)) continue;
+        if (last === FILE_READ_TOOL_NAME && isImageOrPdfExtension(I)) continue;
         let G = expandPathOrNull(I, n);
         if (G !== normalize(I)) S.push(I);
         if (G === null) {
@@ -1707,89 +2090,113 @@ function collectRewoundFileTrackingPaths(e, n, s) {
         );
       }
   }
-  return { readFilePaths: y, nestedMemoryPaths: r, spelledFilePaths: S };
+  return {
+    readFilePaths: y,
+    nestedMemoryPaths: r,
+    spelledFilePaths: S,
+  };
 }
+//@ chunk-0h4e7gnq.js:80094-80199 layout
 /**
  * 追加一条消息到对话（失败时直接 push 去重）。
  */
-//@ chunk-0h4e7gnq.js:80094-80199 layout
-async function appendMessageToConversation(e, n) {
+async function appendMessageToConversation(mutableMessages, n) {
   try {
-    await appendRowsWithHooks(conversationAppender(e), [n]);
+    await appendRowsWithHooks(conversationAppender(mutableMessages), [n]);
   } catch (error) {
-    if ((logError(error), !e.some((y) => y.uuid === n.uuid))) e.push(n);
+    logError(error);
+    if (!mutableMessages.some((y) => y.uuid === n.uuid)) mutableMessages.push(n);
   }
 }
+//@ chunk-0h4e7gnq.js:80199-80248 layout
 /**
  * 对话追加器（把行 push 到数组）。
  */
-//@ chunk-0h4e7gnq.js:80199-80248 layout
-function conversationAppender(e) {
-  return QNi(e, (n) => {
-    e.push(...n);
+function conversationAppender(mutableMessages) {
+  return rowSourceFor(mutableMessages, (n) => {
+    mutableMessages.push(...n);
   });
 }
+//@ chunk-0h4e7gnq.js:80248-80630 layout
 /**
  * 把兄弟调用分成可运行（工具在池中）与缺失工具两类。
  */
-//@ chunk-0h4e7gnq.js:80248-80630 layout
-function partitionSiblingRuns(e, n, s) {
-  let y = [],
-    r = [],
-    S = !1;
+function partitionSiblingRuns(e, n, toolAliases) {
+  let y = [];
+  let r = [];
+  let missingBlocks = false;
   for (let h of e.siblings ?? []) {
     let k = Array.isArray(h.assistantMessage.message.content)
       ? h.assistantMessage.message.content.find((w) => w.type === "tool_use" && w.id === h.toolUseID)
-      : void 0;
-    if (k === void 0) S = !0;
-    else if (qS(n, k.name, s)) y.push({ block: k, assistantMessage: h.assistantMessage });
+      : undefined;
+    if (k === undefined) missingBlocks = true;
+    else if (findTool(n, k.name, toolAliases))
+      y.push({
+        block: k,
+        assistantMessage: h.assistantMessage,
+      });
     else r.push(k.name);
   }
-  return { runs: y, missingToolNames: r, missingBlocks: S };
+  return {
+    runs: y,
+    missingToolNames: r,
+    missingBlocks,
+  };
 }
+//@ chunk-0h4e7gnq.js:80630-80820 fingerprint = handleOrphanedPermission (0.365)
 /**
  * 孤立权限的决定：被调用方强制询问时保留 ask（重启前挂起的除外），否则视为允许。
  */
-//@ chunk-0h4e7gnq.js:80630-80820 fingerprint = handleOrphanedPermission (0.365)
 function handleOrphanedPermission_2(e) {
-  if (e?.behavior === "ask" && e.forcedByCaller === !0) return e.pendingBeforeRestart === !0 ? void 0 : e;
-  return { behavior: "allow", updatedInput: {}, decisionReason: { type: "mode", mode: "default" } };
+  if (e?.behavior === "ask" && e.forcedByCaller === true)
+    return e.pendingBeforeRestart === true ? undefined : e;
+  return {
+    behavior: "allow",
+    updatedInput: {},
+    decisionReason: {
+      type: "mode",
+      mode: "default",
+    },
+  };
 }
+//@ chunk-0h4e7gnq.js:80820-80991 placement
 /**
  * 判断从下标 n 起的消息中是否已有指定 tool_use_id 的 tool_result。
  */
-//@ chunk-0h4e7gnq.js:80820-80991 placement
-function hasToolResultAfter(e, n, s) {
-  return e
+function hasToolResultAfter(mutableMessages, n, toolUseID) {
+  return mutableMessages
     .slice(n)
     .some(
       (y) =>
         y.type === "user" &&
         Array.isArray(y.message.content) &&
-        y.message.content.some((r) => r.type === "tool_result" && r.tool_use_id === s),
+        y.message.content.some((r) => r.type === "tool_result" && r.tool_use_id === toolUseID),
     );
 }
 //@ chunk-e6aww6q8.js:4735394-4735466 placement
-function Owt() {
-  return hasModuleHookingSite("session.append", void 0, canShortcutAppend("session.append"));
+/**
+ * appendHookableFastPath：可走快路径的 session.append。
+ */
+function appendHookableFastPath() {
+  return hasModuleHookingSite("session.append", undefined, canShortcutAppend("session.append"));
 }
+//@ chunk-e6aww6q8.js:4735466-4735716 placement
 /**
  * 把行追加到会话：无钩子时直接保留，有 session.append 钩子时按顺序经钩子处理（期间发生裁剪则不保留）。
  */
-//@ chunk-e6aww6q8.js:4735466-4735716 placement
 function appendRowsWithHooks(e, n, r = {}) {
-  let s = nSt.get();
-  if (s === null || !e.isHookable || !Owt()) {
-    if (r.fills !== !0) (r.keep ?? e.keep)(n);
+  let s = TEXT_PASSTHROUGH_CORES.get();
+  if (s === null || !e.isHookable || !appendHookableFastPath()) {
+    if (r.fills !== true) (r.keep ?? e.keep)(n);
     return n;
   }
-  let cuts = e.cuts(),
-    S = r.keep ?? e.keep;
+  let y = e.cuts();
+  let keep = r.keep ?? e.keep;
   return e.inOrder(async () =>
     (await s()).rowsAppendedTo(e, n, {
       ...r,
       keep: (w) => {
-        if (e.cuts() === cuts) S(w);
+        if (e.cuts() === y) keep(w);
       },
     }),
   );
@@ -1799,31 +2206,34 @@ function createRowSourceRegistry() {
   let weakMap = new WeakMap();
   return {
     noted: (n) => {
-      if (n.list !== void 0) weakMap.set(n.list, n);
+      if (n.list !== undefined) weakMap.set(n.list, n);
       return n;
     },
     of: (n) => weakMap.get(n),
   };
 }
 //@ chunk-e6aww6q8.js:4735831-4735845 placement
-var zpt = createRowSourceRegistry();
+var rowSourceRegistry = createRowSourceRegistry();
+//@ chunk-e6aww6q8.js:4735845-4736347 placement
 /**
  * 为行来源加上顺序追加能力：inOrder 串行执行、裁剪计数、等待追加完成、附加循环收集新到的行。
  */
-//@ chunk-e6aww6q8.js:4735845-4736347 placement
 function createOrderedRowSource(e) {
-  let resolved = Promise.resolve(),
-    r = 0,
-    s = 0,
-    h = new Set();
+  let resolved = Promise.resolve();
+  let r = 0;
+  let s = 0;
+  let h = new Set();
   function y(S) {
     r += 1;
-    let w = resolved.then(S),
-      { appendsInFlight: appendsInFlight } = getPluginRegistry(),
-      G = () => {
-        ((r -= 1), appendsInFlight.delete(w));
-      };
-    return (appendsInFlight.add(w), (resolved = w.then(G, G)), w);
+    let w = resolved.then(S);
+    let { appendsInFlight } = getPluginRegistry();
+    let G = () => {
+      r -= 1;
+      appendsInFlight.delete(w);
+    };
+    appendsInFlight.add(w);
+    resolved = w.then(G, G);
+    return w;
   }
   return {
     ...e,
@@ -1837,23 +2247,27 @@ function createOrderedRowSource(e) {
         S();
         return;
       }
-      return y(() => (S(), Promise.resolve()));
+      return y(() => {
+        S();
+        return Promise.resolve();
+      });
     },
     settled: () => resolved,
     attachLoop: () => {
-      let S = { rows: [] };
-      return (
-        h.add(S),
-        {
-          taken: () => {
-            let rows = S.rows;
-            return ((S.rows = []), rows);
-          },
-          [Symbol.dispose]: () => {
-            h.delete(S);
-          },
-        }
-      );
+      let S = {
+        rows: [],
+      };
+      h.add(S);
+      return {
+        taken: () => {
+          let rows = S.rows;
+          S.rows = [];
+          return rows;
+        },
+        [Symbol.dispose]: () => {
+          h.delete(S);
+        },
+      };
     },
     arrived: (S) => {
       for (let w of h) w.rows = [...w.rows, ...S];
@@ -1861,21 +2275,30 @@ function createOrderedRowSource(e) {
   };
 }
 //@ chunk-e6aww6q8.js:4736347-4736378 placement
-var Ebe = (e) => zpt.noted(createOrderedRowSource(e));
+/**
+ * orderedRowSource：登记有序行来源。
+ */
+var orderedRowSource = (e) => rowSourceRegistry.noted(createOrderedRowSource(e));
 //@ chunk-e6aww6q8.js:4736378-4736443 placement
-var QNi = (e, n) => zpt.of(e) ?? Ebe({ keep: n, rows: () => e, isHookable: !1 });
+var rowSourceFor = (e, keep) =>
+  rowSourceRegistry.of(e) ??
+  orderedRowSource({
+    keep,
+    rows: () => e,
+    isHookable: false,
+  });
 //@ chunk-e6aww6q8.js:4736443-4736600 placement
 function createRunningTurnRegistry() {
   let e = new Map();
   return {
-    running: (n, r) => (
-      e.set(n, r),
-      {
+    running: (n, r) => {
+      e.set(n, r);
+      return {
         [Symbol.dispose]: () => {
           if (e.get(n) === r) e.delete(n);
         },
-      }
-    ),
+      };
+    },
     of: (n) => e.get(n),
     clear: () => {
       e.clear();
@@ -1883,17 +2306,20 @@ function createRunningTurnRegistry() {
   };
 }
 //@ chunk-e6aww6q8.js:4736600-4736633 placement
-var Mwt = ge(createRunningTurnRegistry(), (e) => e.clear());
+/**
+ * runningTurnRegistry：运行中回合登记表。
+ */
+var runningTurnRegistry = identity_2(createRunningTurnRegistry(), (e) => e.clear());
+//@ chunk-0eyv3mzk.js:227-501 fingerprint = extractBashToolsFromMessages (1)
 /**
  * 遍历 assistant 里 Bash 类 tool_use 的 command 字符串。
  */
-//@ chunk-0eyv3mzk.js:227-501 fingerprint = extractBashToolsFromMessages (1)
 function* extractBashToolsFromMessages(messages) {
   for (let message of messages)
     if (message.type === "assistant" && Array.isArray(message.message.content)) {
       for (let content of message.message.content)
         if (content.type === "tool_use" && SHELL_TOOL_NAMES.includes(content.name)) {
-          let { input: input } = content;
+          let { input } = content;
           if (
             typeof input === "object" &&
             input !== null &&
@@ -1904,22 +2330,25 @@ function* extractBashToolsFromMessages(messages) {
         }
     }
 }
+//@ chunk-0eyv3mzk.js:501-584 placement
 /**
  * 历史中 Bash 命令用到的 CLI 名集合。
  */
-//@ chunk-0eyv3mzk.js:501-584 placement
-function extractBashCliNames(n) {
+function extractBashCliNames(messages) {
   let s = new Set();
-  for (let e of extractBashToolsFromMessages(n)) {
-    let t = extractCliName(e);
-    if (t) s.add(t);
+  for (let e of extractBashToolsFromMessages(messages)) {
+    let cliName = extractCliName(e);
+    if (cliName) s.add(cliName);
   }
   return s;
 }
 //@ chunk-0eyv3mzk.js:839-923 placement
-function XWn(n) {
+/**
+ * referencedBashToolNames：从消息里的 Bash 工具调用提取引用的工具名。
+ */
+function referencedBashToolNames(messages) {
   let s = new Set();
-  for (let e of extractBashToolsFromMessages(n)) for (let t of parseReferences(e)) s.add(t);
+  for (let e of extractBashToolsFromMessages(messages)) for (let t of parseReferences(e)) s.add(t);
   return s;
 }
 //@ chunk-0eyv3mzk.js:923-1104 placement = countToolCallsSince (1)
@@ -1931,15 +2360,15 @@ function collectUsedToolNames(n) {
     }
   return s;
 }
+//@ chunk-0eyv3mzk.js:1104-1128 fingerprint = STRIPPED_COMMANDS (1)
 /**
  * 取 CLI 名时跳过的前缀命令（sudo）。
  */
-//@ chunk-0eyv3mzk.js:1104-1128 fingerprint = STRIPPED_COMMANDS (1)
 var STRIPPED_COMMANDS = new Set(["sudo"]);
+//@ chunk-0eyv3mzk.js:1128-1273 file-local
 /**
  * 取命令第一个非 VAR=值 赋值、非 sudo 的词。
  */
-//@ chunk-0eyv3mzk.js:1128-1273 file-local
 function extractCliName(command) {
   if (!command) return;
   let tokens = command.trim().split(/\s+/);
@@ -1950,13 +2379,12 @@ function extractCliName(command) {
   }
   return;
 }
-
 export {
   normalizeMessage,
   isToolUseOrResultMessage,
-  Ebe,
+  orderedRowSource,
   appendRowsWithHooks,
-  Mwt,
+  runningTurnRegistry,
   extractReadFilesFromMessages,
   collectRewoundFileTrackingPaths,
   shouldForwardSubagentMessage,
@@ -1966,11 +2394,11 @@ export {
   handleHandedOffTurn,
   isHandoffTurnSettled,
   resumeDeferredToolUse,
-  Owt,
+  appendHookableFastPath,
   getSalvageableResultText,
   getRecentErrorLog,
   extractBashCliNames,
-  XWn,
+  referencedBashToolNames,
   collectUsedToolNames,
   subagentProgressToSDKMessages,
   formatResultDiagnostic,

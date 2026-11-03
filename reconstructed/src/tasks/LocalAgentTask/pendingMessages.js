@@ -16,64 +16,74 @@ import { TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS } from "../
 import { queueAgentMessage } from "./childWork.js";
 import { mainAgentId } from "../../bootstrap/state.js";
 
+//@ chunk-e6aww6q8.js:4718913-4718996 placement
 /**
  * 往子代理的 transcript 追加一条消息。
  */
-//@ chunk-e6aww6q8.js:4718913-4718996 placement
 function appendAgentTranscriptMessage(taskId, message, taskRegistry) {
-  taskRegistry.updateTranscript(taskId, (s) => ({ ...s, messages: [...s.messages, message] }));
+  taskRegistry.updateTranscript(taskId, (s) => ({
+    ...s,
+    messages: [...s.messages, message],
+  }));
 }
+//@ chunk-e6aww6q8.js:4718996-4719155 placement = queuePendingMessage (0.752)
 /**
  * 取出并清空子代理的 pendingMessages。
  */
-//@ chunk-e6aww6q8.js:4718996-4719155 placement = queuePendingMessage (0.752)
 function drainPendingMessages(taskId, taskRegistry) {
-  let r = taskRegistry.get(taskId);
-  if (!isLocalAgent(r) || r.pendingMessages.length === 0) return [];
-  let pendingMessages = r.pendingMessages;
-  return (taskRegistry.update(taskId, (task) => ({ ...task, pendingMessages: [] })), pendingMessages);
+  let task = taskRegistry.get(taskId);
+  if (!isLocalAgent(task) || task.pendingMessages.length === 0) return [];
+  let drained = task.pendingMessages;
+  taskRegistry.update(taskId, (t) => ({
+    ...t,
+    pendingMessages: [],
+  }));
+  return drained;
 }
+//@ chunk-e6aww6q8.js:4719236-4719571 placement
 /**
  * 插件拒绝恢复代理时，丢弃对应的排队消息并发出恢复失败事件。
  */
-//@ chunk-e6aww6q8.js:4719236-4719571 placement
-function dropDeniedResumeMessages(e, n, r, { deniedByPlugin: deniedByPlugin }) {
-  let h = new Set(r),
-    filtered = drainPendingMessages(e, n).filter((S) => !h.has(S));
-  if (
-    (queuePendingMessage(e, filtered, n),
-    logForDebugging(`resume of ${e} denied: dropping ${r.length} queued message(s): ${deniedByPlugin}`),
-    getTaskRunState().agentResumeFailed.emit(e, {
-      error: new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        deniedByPlugin,
-        "Subagent resume denied by a plugin",
-      ),
-      undeliverable: r,
-      terminal: !1,
-    }),
-    filtered.length > 0)
-  )
-    getTaskRunState().agentStrandedMessages.emit(e);
+function dropDeniedResumeMessages(e, n, r, { deniedByPlugin }) {
+  let h = new Set(r);
+  let filtered = drainPendingMessages(e, n).filter((S) => !h.has(S));
+  queuePendingMessage(e, filtered, n);
+  logForDebugging(`resume of ${e} denied: dropping ${r.length} queued message(s): ${deniedByPlugin}`);
+  getTaskRunState().agentResumeFailed.emit(e, {
+    error: new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
+      deniedByPlugin,
+      "Subagent resume denied by a plugin",
+    ),
+    undeliverable: r,
+    terminal: false,
+  });
+  if (filtered.length > 0) getTaskRunState().agentStrandedMessages.emit(e);
 }
+//@ chunk-e6aww6q8.js:4719571-4719714 placement
 /**
  * 向代理发送消息，代理未运行时发出消息滞留事件，返回代理是否存在。
  */
-//@ chunk-e6aww6q8.js:4719571-4719714 placement
-function sendMessageToAgent(e, n, r, s = {}) {
-  queueAgentMessage(e, n, r, s);
-  let h = r.get(e)?.status;
-  if (h !== void 0 && h !== "running") getTaskRunState().agentStrandedMessages.emit(e);
-  return h !== void 0;
+function sendMessageToAgent(agentId, text, taskRegistry, options = {}) {
+  queueAgentMessage(agentId, text, taskRegistry, options);
+  let status = taskRegistry.get(agentId)?.status;
+  if (status !== undefined && status !== "running") getTaskRunState().agentStrandedMessages.emit(agentId);
+  return status !== undefined;
 }
+//@ chunk-e6aww6q8.js:4719714-4719839 placement
 /**
  * 发送消息后清除代理的等待通知接收者（若匹配）。
  */
-//@ chunk-e6aww6q8.js:4719714-4719839 placement
-function clearWaitingNotice(e, n, r) {
-  let s = resolveVisibleSubagentId(n, r) ?? mainAgentId();
-  r.update(e, (h) => (h.waitingNoticeRecipient === s ? { ...h, waitingNoticeRecipient: void 0 } : h));
+function clearWaitingNotice(agentId, agentId_2, taskRegistry) {
+  let s = resolveVisibleSubagentId(agentId_2, taskRegistry) ?? mainAgentId();
+  taskRegistry.update(agentId, (h) =>
+    h.waitingNoticeRecipient === s
+      ? {
+          ...h,
+          waitingNoticeRecipient: undefined,
+        }
+      : h,
+  );
 }
-
 export {
   sendMessageToAgent,
   appendAgentTranscriptMessage,

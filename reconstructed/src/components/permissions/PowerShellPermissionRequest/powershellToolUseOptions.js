@@ -8,22 +8,22 @@
  * pieces: chunk-18hwfzwa.js (2)
  * attribution: placement 1, fingerprint 1
  */
-import { j } from "../../../../vendor/react/cjs/react.production.js";
+import { init_react_production } from "../../../../vendor/react/cjs/react.production.js";
 import { shouldShowAlwaysAllowOptions } from "../../../utils/permissions/permissionsLoader.js";
 import { POWERSHELL_TOOL_NAME } from "../../../tools/PowerShellTool/toolName.js";
 
 //@ chunk-18hwfzwa.js:1395417-1395421 placement
-j();
+init_react_production();
 //@ chunk-18hwfzwa.js:1395421-1396518 fingerprint = powershellToolUseOptions (0.902)
 function powershellToolUseOptions({
-  suggestionsRow: suggestionsRow = null,
-  onRejectFeedbackChange: onRejectFeedbackChange,
-  onAcceptFeedbackChange: onAcceptFeedbackChange,
-  yesInputMode: yesInputMode = !1,
-  noInputMode: noInputMode = !1,
-  editablePrefix: editablePrefix,
-  onEditablePrefixChange: onEditablePrefixChange,
-  hasBackendSuggestions: hasBackendSuggestions,
+  suggestionsRow = null,
+  onRejectFeedbackChange,
+  onAcceptFeedbackChange,
+  yesInputMode = false,
+  noInputMode = false,
+  editablePrefix,
+  onEditablePrefixChange,
+  hasBackendSuggestions,
 }) {
   let options = [];
   if (yesInputMode)
@@ -33,19 +33,23 @@ function powershellToolUseOptions({
       value: "yes",
       placeholder: "and tell Claude what to do next",
       onChange: onAcceptFeedbackChange,
-      allowEmptySubmitToCancel: !0,
+      allowEmptySubmitToCancel: true,
     });
-  else options.push({ label: "Yes", value: "yes" });
+  else
+    options.push({
+      label: "Yes",
+      value: "yes",
+    });
   let We = hasBackendSuggestions ?? suggestionsRow !== null;
   if (shouldShowAlwaysAllowOptions() && We) {
-    let ze =
+    let hasNonPowerShellSuggestions =
       suggestionsRow !== null &&
       suggestionsRow.applies.some(
         (Xe) =>
           Xe.type === "addDirectories" ||
           (Xe.type === "addRules" && Xe.rules.some((rule) => rule.toolName !== POWERSHELL_TOOL_NAME)),
       );
-    if (editablePrefix !== void 0 && onEditablePrefixChange && !ze)
+    if (editablePrefix !== undefined && onEditablePrefixChange && !hasNonPowerShellSuggestions)
       options.push({
         type: "input",
         label: "Yes, and don\u2019t ask again for",
@@ -53,13 +57,16 @@ function powershellToolUseOptions({
         placeholder: "command prefix (e.g., Get-Process *)",
         initialValue: editablePrefix,
         onChange: onEditablePrefixChange,
-        allowEmptySubmitToCancel: !0,
-        showLabelWithValue: !0,
+        allowEmptySubmitToCancel: true,
+        showLabelWithValue: true,
         labelValueSeparator: ": ",
-        resetCursorOnUpdate: !0,
+        resetCursorOnUpdate: true,
       });
     else if (suggestionsRow !== null)
-      options.push({ label: suggestionsRow.node, value: "yes-apply-suggestions" });
+      options.push({
+        label: suggestionsRow.node,
+        value: "yes-apply-suggestions",
+      });
   }
   if (noInputMode)
     options.push({
@@ -68,10 +75,13 @@ function powershellToolUseOptions({
       value: "no",
       placeholder: "and tell Claude what to do differently",
       onChange: onRejectFeedbackChange,
-      allowEmptySubmitToCancel: !0,
+      allowEmptySubmitToCancel: true,
     });
-  else options.push({ label: "No", value: "no" });
+  else
+    options.push({
+      label: "No",
+      value: "no",
+    });
   return options;
 }
-
 export { powershellToolUseOptions };

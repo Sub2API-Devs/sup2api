@@ -8,34 +8,48 @@
  * pieces: chunk-ah34pb7m.js (1)
  * attribution: fingerprint 1
  */
-import { e, r, Fragment } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+  Fragment,
+} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { MessageResponse } from "../../components/MessageResponse.js";
 import { Box, Text } from "../../ink/components/Text.js";
 
+//@ chunk-ah34pb7m.js:30882-31204 fingerprint = renderToolResultMessage (0.78)
 /**
  * ExitWorktree 结果渲染：Kept/Removed worktree（分支名）与返回的目录。
  */
-//@ chunk-ah34pb7m.js:30882-31204 fingerprint = renderToolResultMessage (0.78)
 function renderToolResultMessage_7(output, _progressMessagesForMessage, _options) {
   let actionLabel = output.action === "keep" ? "Kept worktree" : "Removed worktree";
-  return e(MessageResponse, {
-    children: r(Box, {
+  return jsxProd_default(MessageResponse, {
+    children: jsxProd_default_2(Box, {
       flexDirection: "column",
       children: [
-        r(Text, {
+        jsxProd_default_2(Text, {
           children: [
             actionLabel,
             output.worktreeBranch
-              ? r(Fragment, {
-                  children: [" ", "(branch ", e(Text, { bold: !0, children: output.worktreeBranch }), ")"],
+              ? jsxProd_default_2(Fragment, {
+                  children: [
+                    " ",
+                    "(branch ",
+                    jsxProd_default(Text, {
+                      bold: true,
+                      children: output.worktreeBranch,
+                    }),
+                    ")",
+                  ],
                 })
               : null,
           ],
         }),
-        r(Text, { dimColor: !0, children: ["Returned to ", output.originalCwd] }),
+        jsxProd_default_2(Text, {
+          dimColor: true,
+          children: ["Returned to ", output.originalCwd],
+        }),
       ],
     }),
   });
 }
-
 export { renderToolResultMessage_7 };

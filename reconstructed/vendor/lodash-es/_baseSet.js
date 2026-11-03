@@ -11,27 +11,28 @@ import {
   Ihe,
   Put,
 } from "../@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
-import { Dut } from "../../src/utils/git/gitSafeEnv.js";
+import { assignValueIfDifferent } from "../../src/utils/git/gitSafeEnv.js";
 
 //@ chunk-3a1caa6f.js:1241-1536 placement
-function baseSet(e, r, n, o) {
-  if (!RR(e)) return e;
-  r = Qve(r, e);
-  var i = -1,
-    s = r.length,
-    a = s - 1,
-    t = e;
-  while (t != null && ++i < s) {
-    var _ = Ihe(r[i]),
-      O = n;
-    if (_ === "__proto__" || _ === "constructor" || _ === "prototype") return e;
-    if (i != a) {
-      var f = t[_];
-      if (((O = o ? o(f, _, t) : void 0), O === void 0)) O = RR(f) ? f : Put(r[i + 1]) ? [] : {};
+function baseSet(object, path, value, customizer) {
+  if (!RR(object)) return object;
+  path = Qve(path, object);
+  var index = -1;
+  var length = path.length;
+  var lastIndex = length - 1;
+  var nested = object;
+  while (nested != null && ++index < length) {
+    var key = Ihe(path[index]);
+    var newValue = value;
+    if (key === "__proto__" || key === "constructor" || key === "prototype") return object;
+    if (index != lastIndex) {
+      var objValue = nested[key];
+      newValue = customizer ? customizer(objValue, key, nested) : undefined;
+      if (newValue === undefined) newValue = RR(objValue) ? objValue : Put(path[index + 1]) ? [] : {};
     }
-    (Dut(t, _, O), (t = t[_]));
+    assignValueIfDifferent(nested, key, newValue);
+    nested = nested[key];
   }
-  return e;
+  return object;
 }
-
 export { baseSet };

@@ -15,7 +15,7 @@ import {
   stripHostToolMeta,
   ANTHROPIC_SOURCES,
   COM_ANTHROPIC_SOURCES_RELAY,
-  Ffr,
+  RANDOM_PLUGIN_META_ID,
 } from "../plugins/functionHooks/sites/toolSites.js";
 
 //@ chunk-gv8haye8.js:496-620 placement
@@ -23,29 +23,38 @@ function isCcrSessionScopedServer(e) {
   return (
     e.scope === "dynamic" &&
     !isPluginServerConfig(e) &&
-    startupCcrEnv.bridgeCarrier === void 0 &&
+    startupCcrEnv.bridgeCarrier === undefined &&
     "url" in e &&
     typeof e.url === "string" &&
     isCcrSessionScopedMcpUrl(e.url)
   );
 }
 //@ chunk-gv8haye8.js:620-659 placement
-function mYn(e, n) {
-  return isCcrSessionScopedServer(e) ? n : stripHostToolMeta(n);
+/**
+ * CCR 会话级服务器保留 host 元数据，其余情况剥掉 host 工具元数据（桥接权限回调的前置处理）。
+ */
+function stripHostMetaUnlessCcrScoped(config, mcpRequestMeta) {
+  return isCcrSessionScopedServer(config) ? mcpRequestMeta : stripHostToolMeta(mcpRequestMeta);
 }
 //@ chunk-gv8haye8.js:659-753 placement
-function gYn(e, n) {
-  if (n === void 0 || !Object.hasOwn(n, ANTHROPIC_SOURCES) || !isCcrSessionScopedServer(e)) return n;
-  return { ...n, [COM_ANTHROPIC_SOURCES_RELAY]: Ffr };
+/**
+ * CCR 会话级服务器上把 anthropic/sources 改写为中继来源标记，其他情况原样返回。
+ */
+function rewriteAnthropicSourcesForCcr(config, n) {
+  if (n === undefined || !Object.hasOwn(n, ANTHROPIC_SOURCES) || !isCcrSessionScopedServer(config)) return n;
+  return {
+    ...n,
+    [COM_ANTHROPIC_SOURCES_RELAY]: RANDOM_PLUGIN_META_ID,
+  };
 }
 //@ chunk-gv8haye8.js:753-812 layout
-var APPROVALTICKET = "approvalTicket",
-  ANTHROPIC_APPROVALTICKET = "anthropic/approvalTicket",
-  c = 8192;
+var APPROVALTICKET = "approvalTicket";
+var ANTHROPIC_APPROVALTICKET = "anthropic/approvalTicket";
+var MAX_APPROVAL_TICKET_CHARS = 8192;
+//@ chunk-gv8haye8.js:812-979 fingerprint = isBridgePermissionResponse (1)
 /**
  * allow 决定若带非空且不超长的审批票据（APPROVALTICKET 字段）则返回票据，否则 undefined。
  */
-//@ chunk-gv8haye8.js:812-979 fingerprint = isBridgePermissionResponse (1)
 function getApprovalTicket(decision) {
   let n =
     typeof decision === "object" &&
@@ -54,8 +63,14 @@ function getApprovalTicket(decision) {
     decision.behavior === "allow" &&
     APPROVALTICKET in decision
       ? decision[APPROVALTICKET]
-      : void 0;
-  return typeof n === "string" && n !== "" && n.length <= c ? n : void 0;
+      : undefined;
+  return typeof n === "string" && n !== "" && n.length <= MAX_APPROVAL_TICKET_CHARS ? n : undefined;
 }
-
-export { mYn, gYn, getApprovalTicket, isCcrSessionScopedServer, ANTHROPIC_APPROVALTICKET, APPROVALTICKET };
+export {
+  stripHostMetaUnlessCcrScoped,
+  rewriteAnthropicSourcesForCcr,
+  getApprovalTicket,
+  isCcrSessionScopedServer,
+  ANTHROPIC_APPROVALTICKET,
+  APPROVALTICKET,
+};

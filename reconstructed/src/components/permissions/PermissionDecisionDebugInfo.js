@@ -28,7 +28,7 @@ import {
   NO_APPROVAL_SURFACE_REASON,
   CLASSIFIER_UNAVAILABLE_REASON,
 } from "../../types/permissions.js";
-import { dNn, lPe } from "../../services/tools/toolDecisionTelemetry.js";
+import { pickReasonFromList, splitSubcommandReason } from "../../services/tools/toolDecisionTelemetry.js";
 import { firstLineOf } from "../../utils/stringUtils.js";
 import { TOOLS_HELD_UNTIL_A_PERSON_TYPES } from "../../utils/permissions/permissions.js";
 import { HOOK_EVENTS } from "../../entrypoints/sdk/coreSchemas.js";
@@ -39,13 +39,18 @@ import { parseModeSuggestions } from "./consentRows.js";
 //@ chunk-e6aww6q8.js:39273-39452 fingerprint = extractMode (0.676)
 function extractMode(updates) {
   if (updates.behavior !== "allow") return updates;
-  let { updatedPermissions: updatedPermissions } = updates;
-  return updatedPermissions === void 0
+  let { updatedPermissions } = updates;
+  return updatedPermissions === undefined
     ? updates
     : {
         ...updates,
-        updatedPermissions: updatedPermissions.map((s) =>
-          s.type === "setMode" ? { ...s, mode: normalizePermissionModeAlias(s.mode) } : s,
+        updatedPermissions: updatedPermissions.map((updatedPermission) =>
+          updatedPermission.type === "setMode"
+            ? {
+                ...updatedPermission,
+                mode: normalizePermissionModeAlias(updatedPermission.mode),
+              }
+            : updatedPermission,
         ),
       };
 }
@@ -54,61 +59,61 @@ function decisionReasonText(e) {
   let decisionReason = e.decisionReason;
   switch (e.behavior) {
     case "allow":
-      return decisionReason && "reason" in decisionReason ? decisionReason.reason : void 0;
+      return decisionReason && "reason" in decisionReason ? decisionReason.reason : undefined;
     case "ask":
     case "deny":
       return e.message;
   }
 }
+//@ chunk-e6aww6q8.js:50457-50656 placement
 /**
  * 在子命令结果中找出决定行为的规则
  */
-//@ chunk-e6aww6q8.js:50457-50656 placement
-function findDecidingRule(e, n) {
-  if (e?.type !== "subcommandResults") return;
-  for (let r of e.reasons.values()) {
-    let h = r.behavior === n ? r.decisionReason : void 0,
-      S = h?.type === "rule" ? h.rule : findDecidingRule(h, n);
-    if (S !== void 0) return S;
+function findDecidingRule(decisionReason, n) {
+  if (decisionReason?.type !== "subcommandResults") return;
+  for (let reason of decisionReason.reasons.values()) {
+    let decisionReason = reason.behavior === n ? reason.decisionReason : undefined;
+    let S = decisionReason?.type === "rule" ? decisionReason.rule : findDecidingRule(decisionReason, n);
+    if (S !== undefined) return S;
   }
   return;
 }
 //@ chunk-e6aww6q8.js:50942-51058 fingerprint = PermissionDecisionInfoItem (0.631)
 function PermissionDecisionInfoItem(t0) {
   return t0?.type === "subcommandResults"
-    ? [...t0.reasons.values()].some((t2) => PermissionDecisionInfoItem(t2.decisionReason))
+    ? [...t0.reasons.values()].some((reason) => PermissionDecisionInfoItem(reason.decisionReason))
     : isOutsideReadsBlockedAsk(t0);
 }
 //@ chunk-e6aww6q8.js:3765551-3767426 fingerprint = decisionReasonDisplayString (0.389)
 function decisionReasonDisplayString(e, n, r, s) {
-  if (n !== void 0 && n !== "config") {
+  if (n !== undefined && n !== "config") {
     if (n === "hook") return "hook:PermissionRequest";
     if (n === "classifier" && r?.type === "classifier") return formatClassifierReasonTag(r);
     return n;
   }
-  if (r?.type !== "rule" && s !== void 0) return `rule:${s.source}`;
-  if (r === void 0) return "unknown";
+  if (r?.type !== "rule" && s !== undefined) return `rule:${s.source}`;
+  if (r === undefined) return "unknown";
   switch (r.type) {
     case "rule":
       return `rule:${r.rule.source}`;
     case "mode":
       return `mode:${r.mode}`;
     case "hook":
-      return `hook:${dNn(HOOK_ANALYTICS_NAMES, firstLineOf(r.hookName, ":"))}`;
+      return `hook:${pickReasonFromList(HOOK_ANALYTICS_NAMES, firstLineOf(r.hookName, ":"))}`;
     case "classifier":
       return formatClassifierReasonTag(r);
     case "subcommandResults": {
       let h = new Set();
-      for (let S of r.reasons.values())
+      for (let reason of r.reasons.values())
         if (
-          (S.behavior === e || (e === "ask" && S.behavior === "passthrough")) &&
-          S.decisionReason !== void 0
+          (reason.behavior === e || (e === "ask" && reason.behavior === "passthrough")) &&
+          reason.decisionReason !== undefined
         ) {
-          let L = decisionReasonDisplayString(e, void 0, S.decisionReason);
-          for (let G of e === "ask" ? lPe(L) : [L]) h.add(G);
+          let L = decisionReasonDisplayString(e, undefined, reason.decisionReason);
+          for (let G of e === "ask" ? splitSubcommandReason(L) : [L]) h.add(G);
         }
       let [y] = h;
-      if (h.size === 1 && y !== void 0) return y;
+      if (h.size === 1 && y !== undefined) return y;
       if (h.size > 1) {
         let S = e === "ask" ? h : new Set([...h].map((w) => firstLineOf(w, ":")));
         return `${SUBCOMMANDS}${[...S].sort().join("+")}`;
@@ -130,7 +135,7 @@ function decisionReasonDisplayString(e, n, r, s) {
       if (r.reason === CAN_USE_TOOL_INVALID_RESULT_REASON) return "canUseToolInvalidResult";
       if (r.reason === CAN_USE_TOOL_REQUEST_FAILED_REASON) return "canUseToolRequestFailed";
       if (r.reason === CAN_USE_TOOL_ABORTED_REASON) return "canUseToolAborted";
-      if (r.bashMissKind !== void 0) return `bashMiss:${r.bashMissKind}`;
+      if (r.bashMissKind !== undefined) return `bashMiss:${r.bashMissKind}`;
       return "other";
     case "asyncAgent":
       if (r.reason === HOOK_REWRITTEN_INPUT_ASK_REASON) return "hookRewrittenInputAsk";
@@ -150,29 +155,35 @@ function decisionReasonDisplayString(e, n, r, s) {
 }
 //@ chunk-e6aww6q8.js:3767426-3767598 layout
 function formatClassifierReasonTag(e) {
-  let n = dNn(CLASSIFIER_ANALYTICS_NAMES, e.classifier);
+  let n = pickReasonFromList(CLASSIFIER_ANALYTICS_NAMES, e.classifier);
   if (e.reason === CLASSIFIER_UNAVAILABLE_REASON) return `classifier:${n}:unavailable`;
   if (e.noVerdict) return `classifier:${n}:no-verdict`;
   return `classifier:${n}`;
 }
 //@ chunk-e6aww6q8.js:3767598-3767655 placement = getAutoModeDumpDir (0.607)
-var CLASSIFIER_ANALYTICS_NAMES = ["auto-mode"],
-  HOOK_ANALYTICS_NAMES = [...HOOK_EVENTS, TOOL_CHECK],
-  SUBCOMMANDS = "subcommands:";
+var CLASSIFIER_ANALYTICS_NAMES = ["auto-mode"];
+var HOOK_ANALYTICS_NAMES = [...HOOK_EVENTS, TOOL_CHECK];
+var SUBCOMMANDS = "subcommands:";
 //@ chunk-18hwfzwa.js:1369049-1369244 fingerprint = extractDirectories (0.651)
-function extractDirectories(h, x, D) {
-  let found = generateSuggestions(h, x, D).find((update) => update.type === "addDirectories");
+function extractDirectories(filePath, operationType, toolPermissionContext) {
+  let found = generateSuggestions(filePath, operationType, toolPermissionContext).find(
+    (update) => update.type === "addDirectories",
+  );
   if (found?.type !== "addDirectories") return null;
-  let ee = parseModeSuggestions(found.directories);
-  return ee === null ? null : { row: ee, value: "yes-session" };
+  let modeSuggestions = parseModeSuggestions(found.directories);
+  return modeSuggestions === null
+    ? null
+    : {
+        row: modeSuggestions,
+        value: "yes-session",
+      };
 }
-
 export {
   extractDirectories,
+  decisionReasonDisplayString,
   findDecidingRule,
   extractMode,
   decisionReasonText,
   PermissionDecisionInfoItem,
-  decisionReasonDisplayString,
   SUBCOMMANDS,
 };

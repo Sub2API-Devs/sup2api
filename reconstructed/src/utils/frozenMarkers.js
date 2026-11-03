@@ -12,16 +12,19 @@
 //@ chunk-75swpmx0.js:191-209 placement
 var weakSet = new WeakSet();
 //@ chunk-75swpmx0.js:209-266 placement
-function GCo() {
-  let freeze = Object.freeze({});
-  return (weakSet.add(freeze), freeze);
+/**
+ * 创建一个冻结的空标记对象并登记，供"已冻结标记"判定使用。
+ */
+function createFrozenMarker() {
+  let e = Object.freeze({});
+  weakSet.add(e);
+  return e;
 }
+//@ chunk-75swpmx0.js:266-328 placement
 /**
  * 是否为冻结标记对象。
  */
-//@ chunk-75swpmx0.js:266-328 placement
 function isFrozenMarker(e) {
   return typeof e === "object" && e !== null && weakSet.has(e);
 }
-
-export { GCo, isFrozenMarker };
+export { createFrozenMarker, isFrozenMarker };

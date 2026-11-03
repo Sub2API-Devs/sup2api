@@ -23,74 +23,85 @@ function calculatePercentiles(dailyActivity) {
     p75: counts[Math.floor(counts.length * 0.75)],
   };
 }
+//@ chunk-9h8dr0qb.js:68970-70093 fingerprint = generateHeatmap (1)
 /**
  * 按每日消息数生成 /stats 的终端热力图。
  */
-//@ chunk-9h8dr0qb.js:68970-70093 fingerprint = generateHeatmap (1)
 function generateHeatmap(dailyActivity, options = {}) {
-  let { terminalWidth: terminalWidth = 80, showMonthLabels: showMonthLabels = !0 } = options,
-    dayLabelWidth = 4,
-    E = terminalWidth - 4,
-    width = Math.min(52, Math.max(10, E)),
-    activityMap = new Map();
+  let { terminalWidth = 80, showMonthLabels = true } = options;
+  let dayLabelWidth = 4;
+  let availableWidth = terminalWidth - 4;
+  let width = Math.min(52, Math.max(10, availableWidth));
+  let activityMap = new Map();
   for (let activity of dailyActivity) activityMap.set(activity.date, activity);
-  let percentiles = calculatePercentiles(dailyActivity),
-    today = new Date();
+  let percentiles = calculatePercentiles(dailyActivity);
+  let today = new Date();
   today.setHours(0, 0, 0, 0);
   let currentWeekStart = new Date(today);
   currentWeekStart.setDate(today.getDate() - today.getDay());
   let startDate = new Date(currentWeekStart);
   startDate.setDate(startDate.getDate() - (width - 1) * 7);
-  let grid = Array.from({ length: 7 }, () => Array(width).fill("")),
-    B = [],
-    lastMonth = -1,
-    currentDate = new Date(startDate);
-  for (let V = 0; V < width; V++)
-    for (let L = 0; L < 7; L++) {
+  let grid = Array.from(
+    {
+      length: 7,
+    },
+    () => Array(width).fill(""),
+  );
+  let monthStarts = [];
+  let lastMonth = -1;
+  let currentDate = new Date(startDate);
+  for (let week = 0; week < width; week++)
+    for (let day = 0; day < 7; day++) {
       if (currentDate > today) {
-        ((grid[L][V] = " "), currentDate.setDate(currentDate.getDate() + 1));
+        grid[day][week] = " ";
+        currentDate.setDate(currentDate.getDate() + 1);
         continue;
       }
-      let dateStr = getLocalISODate(currentDate),
-        activity = activityMap.get(dateStr);
-      if (L === 0) {
+      let dateStr = getLocalISODate(currentDate);
+      let activity = activityMap.get(dateStr);
+      if (day === 0) {
         let month = currentDate.getMonth();
-        if (month !== lastMonth) (B.push({ month: month, week: V }), (lastMonth = month));
+        if (month !== lastMonth) {
+          monthStarts.push({
+            month,
+            week,
+          });
+          lastMonth = month;
+        }
       }
       let intensity = getIntensity(activity?.messageCount || 0, percentiles);
-      ((grid[L][V] = getHeatmapChar(intensity)), currentDate.setDate(currentDate.getDate() + 1));
+      grid[day][week] = getHeatmapChar(intensity);
+      currentDate.setDate(currentDate.getDate() + 1);
     }
-  let ee = [];
+  let lines = [];
   if (showMonthLabels) {
-    let monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
-      uniqueMonths = B.map((me) => me.month),
-      labelWidth = Math.floor(width / Math.max(uniqueMonths.length, 1)),
-      monthLabels = uniqueMonths.map((month) => monthNames[month].padEnd(labelWidth)).join("");
-    ee.push("    " + monthLabels);
+    let monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    let uniqueMonths = monthStarts.map((m) => m.month);
+    let labelWidth = Math.floor(width / Math.max(uniqueMonths.length, 1));
+    let monthLabels = uniqueMonths.map((month) => monthNames[month].padEnd(labelWidth)).join("");
+    lines.push("    " + monthLabels);
   }
   let dayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  for (let V = 0; V < 7; V++) {
-    let J = ([1, 3, 5].includes(V) ? dayLabels[V].padEnd(3) : "   ") + " " + grid[V].join("");
-    ee.push(J);
+  for (let day = 0; day < 7; day++) {
+    let J = ([1, 3, 5].includes(day) ? dayLabels[day].padEnd(3) : "   ") + " " + grid[day].join("");
+    lines.push(J);
   }
-  return (
-    ee.push(""),
-    ee.push(
-      "    Less " +
-        [claudeOrange("\u2591"), claudeOrange("\u2592"), claudeOrange("\u2593"), claudeOrange("\u2588")].join(
-          " ",
-        ) +
-        " More",
-    ),
-    ee.join(`
-`)
+  lines.push("");
+  lines.push(
+    "    Less " +
+      [claudeOrange("\u2591"), claudeOrange("\u2592"), claudeOrange("\u2593"), claudeOrange("\u2588")].join(
+        " ",
+      ) +
+      " More",
   );
+  return lines.join(`
+`);
 }
 //@ chunk-9h8dr0qb.js:70093-70232 layout = getLocalISODate (0.851)
-function getLocalISODate(o) {
-  let year = o.getFullYear(),
-    month = String(o.getMonth() + 1).padStart(2, "0"),
-    day = String(o.getDate()).padStart(2, "0");
+function getLocalISODate(now) {
+  let year = now.getFullYear();
+  let month = String(now.getMonth() + 1).padStart(2, "0");
+  let day = String(now.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 }
 //@ chunk-9h8dr0qb.js:70232-70343 fingerprint = getIntensity (1)
@@ -120,5 +131,4 @@ function getHeatmapChar(intensity) {
       return sequential.gray("\xB7");
   }
 }
-
 export { generateHeatmap };

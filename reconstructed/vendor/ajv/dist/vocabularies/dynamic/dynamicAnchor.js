@@ -6,43 +6,49 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../runtime/bun-runtime.js";
-import { uh } from "../../compile/codegen/index.js";
-import { DPe } from "../../compile/names.js";
-import { tlr } from "../../compile/index.js";
-import { _Xr } from "../core/ref.js";
+import { require_codegen_2 as require_codegen } from "../../compile/codegen/index.js";
+import { require_names } from "../../compile/names.js";
+import { require_compile_2 as require_compile } from "../../compile/index.js";
+import { require_ref } from "../core/ref.js";
 
 //@ chunk-1r4fv9mg.js:576-1267 cjs-fingerprint
-var T = x(function (z) {
-  Object.defineProperty(z, "__esModule", { value: !0 });
-  z.dynamicAnchor = void 0;
-  var A = uh(),
-    Te = DPe(),
-    O = tlr(),
-    G = _Xr(),
-    Fe = { keyword: "$dynamicAnchor", schemaType: "string", code: (e) => U(e, e.schema) };
-  function U(e, r) {
-    let { gen: gen, it: it } = e;
-    it.schemaEnv.root.dynamicAnchors[r] = !0;
-    let o = A._`${Te.default.dynamicAnchors}${A.getProperty(r)}`,
-      i = it.errSchemaPath === "#" ? it.validateName : Ve(e);
-    gen.if(A._`!${o}`, () => gen.assign(o, i));
+var require_dynamicAnchor = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.dynamicAnchor = undefined;
+  var codegen_1 = require_codegen();
+  var names_1 = require_names();
+  var compile_1 = require_compile();
+  var ref_1 = require_ref();
+  var def = {
+    keyword: "$dynamicAnchor",
+    schemaType: "string",
+    code: (cxt) => dynamicAnchor(cxt, cxt.schema),
+  };
+  function dynamicAnchor(cxt, anchor) {
+    let { gen, it } = cxt;
+    it.schemaEnv.root.dynamicAnchors[anchor] = true;
+    let v = codegen_1._`${names_1.default.dynamicAnchors}${codegen_1.getProperty(anchor)}`;
+    let validate = it.errSchemaPath === "#" ? it.validateName : _getValidate(cxt);
+    gen.if(codegen_1._`!${v}`, () => gen.assign(v, validate));
   }
-  z.dynamicAnchor = U;
-  function Ve(e) {
-    let { schemaEnv: schemaEnv, schema: schema, self: n } = e.it,
-      { root: root, baseId: baseId, localRefs: localRefs, meta: meta } = schemaEnv.root,
-      { schemaId: schemaId } = n.opts,
-      p = new O.SchemaEnv({
-        schema: schema,
-        schemaId: schemaId,
-        root: root,
-        baseId: baseId,
-        localRefs: localRefs,
-        meta: meta,
-      });
-    return (O.compileSchema.call(n, p), G.getValidate(e, p));
+  cjsExports.dynamicAnchor = dynamicAnchor;
+  function _getValidate(cxt) {
+    let { schemaEnv, schema, self: n } = cxt.it;
+    let { root, baseId, localRefs, meta } = schemaEnv.root;
+    let { schemaId } = n.opts;
+    let sch = new compile_1.SchemaEnv({
+      schema,
+      schemaId,
+      root,
+      baseId,
+      localRefs,
+      meta,
+    });
+    compile_1.compileSchema.call(n, sch);
+    return ref_1.getValidate(cxt, sch);
   }
-  z.default = Fe;
+  cjsExports.default = def;
 });
-
-export { T };
+export { require_dynamicAnchor };

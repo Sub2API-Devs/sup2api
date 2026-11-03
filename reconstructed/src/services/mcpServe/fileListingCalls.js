@@ -9,13 +9,22 @@
  * attribution: placement 10
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { zodStrictObject, o, u as u_2, A, E, Ue, M, U } from "../../../vendor/zod/v4/classic/schemas.js";
-import { Byt } from "../../hooks/fileSuggestions.js";
-import { FDi } from "../../utils/resultError.js";
+import {
+  zodStrictObject,
+  string,
+  u,
+  array,
+  E,
+  union,
+  M,
+  _enum,
+} from "../../../vendor/zod/v4/classic/schemas.js";
+import { MAX_FILE_SUGGESTIONS } from "../../hooks/fileSuggestions.js";
+import { isAlreadySanitized } from "../../utils/resultError.js";
 import {
   MAX_DIRECTORY_PATH_LENGTH,
   safeSerializedPermissionContextSchema,
-  PV,
+  exceedsSerializedContextLimit,
 } from "../../utils/permissions/permissionContextSerialization.js";
 import {
   REMOTE_LIST_DIRECTORY_MAX_ENTRIES,
@@ -24,113 +33,171 @@ import {
 import { REPO_ROOT_ERROR_TONES, repoRootErrorClass } from "../repoRoots/repoRootErrors.js";
 import { isPlainObject } from "../../utils/objectUtils.js";
 import { limitConcurrency } from "../../utils/concurrencyLimit.js";
-import { remoteReadPermissionContext, pZt } from "../remoteTools/readFileForRemote.js";
-import { xo } from "../../bootstrap/sessionSlices.js";
+import { remoteReadPermissionContext, MAX_REMOTE_READ_BYTES } from "../remoteTools/readFileForRemote.js";
+import { getSessionProject } from "../../bootstrap/sessionSlices.js";
 import { buildNativeDoctorDiagnostics } from "../../screens/Doctor.js";
 import { getOriginalCwd } from "../../bootstrap/state.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 
 //@ chunk-wy9dbk5f.js:18108-18295 placement
-var FILESUGGESTIONS = "FileSuggestions",
-  Se = 4096,
-  pn = DoctorLazy(() => zodStrictObject({ query: o().max(Se) })),
-  Es = DoctorLazy(() =>
-    u_2({
-      paths: A(o().min(1).max(Se)).max(Byt),
-      cwd: o().min(1).max(Se).optional(),
-      leftOut: E().int().min(0).max(Byt),
-    }),
-  );
+/**
+ * 文件建议结果的 schema。
+ */
+var FILESUGGESTIONS = "FileSuggestions";
+var MAX_QUERY_CHARS = 4096;
+var fileSuggestionsInputSchema = DoctorLazy(() =>
+  zodStrictObject({
+    query: string().max(MAX_QUERY_CHARS),
+  }),
+);
+var fileSuggestionsResultSchema = DoctorLazy(() =>
+  u({
+    paths: array(string().min(1).max(MAX_QUERY_CHARS)).max(MAX_FILE_SUGGESTIONS),
+    cwd: string().min(1).max(MAX_QUERY_CHARS).optional(),
+    leftOut: E().int().min(0).max(MAX_FILE_SUGGESTIONS),
+  }),
+);
 //@ chunk-wy9dbk5f.js:18295-18350 placement
-function nt(e) {
-  return e.length > 0 && e.length <= Se && FDi(e);
+/**
+ * 判断查询是否可用（非空、不超长、符合过滤规则）。
+ */
+function isUsableQuery(e) {
+  return e.length > 0 && e.length <= MAX_QUERY_CHARS && isAlreadySanitized(e);
 }
 //@ chunk-wy9dbk5f.js:18350-18776 placement
 async function serveFileSuggestions(e, r, n) {
-  let { query: query } = pn().parse(e),
-    {
-      generateFileSuggestionsWithBase: generateFileSuggestionsWithBase,
-      globalFileIndexCache: globalFileIndexCache,
-    } = await import("./chunk-21emf7ab.js"),
-    { items: items, baseDir: baseDir } = await generateFileSuggestionsWithBase(
-      globalFileIndexCache,
-      query,
-      !0,
-      n.toolUseContext().storageV5,
-      !1,
-    ),
-    h = baseDir !== void 0 && nt(baseDir) ? baseDir : void 0,
-    S = [],
-    sliced = items.slice(0, Byt);
-  for (let { displayText: displayText } of sliced) if (h !== void 0 && nt(displayText)) S.push(displayText);
+  let { query } = fileSuggestionsInputSchema().parse(e);
+  let { generateFileSuggestionsWithBase, globalFileIndexCache } = await import("./chunk-21emf7ab.js");
+  let { items, baseDir } = await generateFileSuggestionsWithBase(
+    globalFileIndexCache,
+    query,
+    true,
+    n.toolUseContext().storageV5,
+    false,
+  );
+  let h = baseDir !== undefined && isUsableQuery(baseDir) ? baseDir : undefined;
+  let S = [];
+  let sliced = items.slice(0, MAX_FILE_SUGGESTIONS);
+  for (let { displayText } of sliced) if (h !== undefined && isUsableQuery(displayText)) S.push(displayText);
   return {
     summary: `${S.length} paths`,
-    output: { paths: S, ...(h !== void 0 && { cwd: h }), leftOut: sliced.length - S.length },
+    output: {
+      paths: S,
+      ...(h !== undefined && {
+        cwd: h,
+      }),
+      leftOut: sliced.length - S.length,
+    },
   };
 }
 //@ chunk-wy9dbk5f.js:18776-19090 placement
-var LISTDIRECTORYFORREMOTE = "ListDirectoryForRemote",
-  dn = DoctorLazy(() => u_2({ path: o().max(MAX_DIRECTORY_PATH_LENGTH) })),
-  mn = DoctorLazy(() =>
-    dn().extend({ permission_context: safeSerializedPermissionContextSchema() }).strict(),
-  ),
-  vs = DoctorLazy(() =>
-    Ue([
-      u_2({
-        listing: u_2({
-          entries: A(
-            u_2({ name: o(), isDirectory: M(), isSymlink: M().optional(), isSpecial: M().optional() }),
-          ).max(REMOTE_LIST_DIRECTORY_MAX_ENTRIES),
-          truncated: M(),
-        }).refine(fitsListingLimit),
-      }),
-      u_2({ denied: U(Object.keys(REPO_ROOT_ERROR_TONES)) }),
-    ]),
-  );
+/**
+ * 列目录结果的 schema。
+ */
+var LISTDIRECTORYFORREMOTE = "ListDirectoryForRemote";
+var listDirectoryInputSchema = DoctorLazy(() =>
+  u({
+    path: string().max(MAX_DIRECTORY_PATH_LENGTH),
+  }),
+);
+var listDirectoryWithContextSchema = DoctorLazy(() =>
+  listDirectoryInputSchema()
+    .extend({
+      permission_context: safeSerializedPermissionContextSchema(),
+    })
+    .strict(),
+);
+var listDirectoryResultSchema = DoctorLazy(() =>
+  union([
+    u({
+      listing: u({
+        entries: array(
+          u({
+            name: string(),
+            isDirectory: M(),
+            isSymlink: M().optional(),
+            isSpecial: M().optional(),
+          }),
+        ).max(REMOTE_LIST_DIRECTORY_MAX_ENTRIES),
+        truncated: M(),
+      }).refine(fitsListingLimit),
+    }),
+    u({
+      denied: _enum(Object.keys(REPO_ROOT_ERROR_TONES)),
+    }),
+  ]),
+);
 //@ chunk-wy9dbk5f.js:19090-19226 placement
 async function serveListDirectory(e, r, n) {
-  if (isPlainObject(e) && PV(e.permission_context)) throw Error("permission_context is too large");
-  return fn(mn().parse(e), r, n);
+  if (isPlainObject(e) && exceedsSerializedContextLimit(e.permission_context))
+    throw Error("permission_context is too large");
+  return limitedListDirectory(listDirectoryWithContextSchema().parse(e), r, n);
 }
 //@ chunk-wy9dbk5f.js:19226-19242 placement
-var fn = limitConcurrency(4, serveListDirectoryForRemote);
+/**
+ * 并发限制为 4 的列目录实现。
+ */
+var limitedListDirectory = limitConcurrency(4, serveListDirectoryForRemote);
 //@ chunk-wy9dbk5f.js:19242-19860 placement
-async function serveListDirectoryForRemote({ permission_context: permission_context, path: path }, n, s) {
-  if (n.aborted || s.callerGone?.aborted) return _e("unexpected_error");
+async function serveListDirectoryForRemote({ permission_context: permissionContext, path }, n, s) {
+  if (n.aborted || s.callerGone?.aborted) return deniedListing("unexpected_error");
   let a = s.launchPermissionContext && remoteReadPermissionContext(s.launchPermissionContext);
-  if (!a) return _e("read_rule");
-  let { projectRoot: projectRoot, originalCwd: originalCwd } = xo(s.session);
-  if (originalCwd !== projectRoot) return _e("workspace_moved");
-  let g = buildNativeDoctorDiagnostics(permission_context, a, projectRoot);
+  if (!a) return deniedListing("read_rule");
+  let { projectRoot, originalCwd } = getSessionProject(s.session);
+  if (originalCwd !== projectRoot) return deniedListing("workspace_moved");
+  let nativeDoctorDiagnostics = buildNativeDoctorDiagnostics(permissionContext, a, projectRoot);
   try {
-    let { entries: entries, truncated: truncated } = await listDirectoryForRemote(
-        path,
-        projectRoot,
-        () => g,
-        () => getOriginalCwd() !== projectRoot,
-      ),
-      C = 0,
-      index = entries.findIndex((x) => (C += Buffer.byteLength(jsonStringify(x)) + 1) > hn),
-      R =
-        index === -1
-          ? { entries: entries, truncated: truncated }
-          : { entries: entries.slice(0, index), truncated: !0 };
-    return { summary: `${R.entries.length} entries`, output: { listing: R } };
+    let { entries, truncated } = await listDirectoryForRemote(
+      path,
+      projectRoot,
+      () => nativeDoctorDiagnostics,
+      () => getOriginalCwd() !== projectRoot,
+    );
+    let C = 0;
+    let index = entries.findIndex(
+      (entry) => (C += Buffer.byteLength(jsonStringify(entry)) + 1) > MAX_LISTING_BYTES,
+    );
+    let R =
+      index === -1
+        ? {
+            entries,
+            truncated,
+          }
+        : {
+            entries: entries.slice(0, index),
+            truncated: true,
+          };
+    return {
+      summary: `${R.entries.length} entries`,
+      output: {
+        listing: R,
+      },
+    };
   } catch (error) {
-    return _e(repoRootErrorClass(error) ?? "unexpected_error");
+    return deniedListing(repoRootErrorClass(error) ?? "unexpected_error");
   }
 }
 //@ chunk-wy9dbk5f.js:19860-19874 placement
-var hn = pZt - 64;
+/**
+ * 列目录结果的最大字节数（上限减 64）。
+ */
+var MAX_LISTING_BYTES = MAX_REMOTE_READ_BYTES - 64;
 //@ chunk-wy9dbk5f.js:19874-19943 placement
-function _e(e) {
-  return { summary: `list denied: ${e}`, output: { denied: e } };
+/**
+ * 生成“列目录被拒绝”的结果。
+ */
+function deniedListing(e) {
+  return {
+    summary: `list denied: ${e}`,
+    output: {
+      denied: e,
+    },
+  };
 }
 //@ chunk-wy9dbk5f.js:19943-20050 placement
 function fitsListingLimit(e) {
   let r = 0;
   for (let { name: n } of e.entries) r += n.length;
-  return r <= pZt && Buffer.byteLength(jsonStringify(e)) <= pZt;
+  return r <= MAX_REMOTE_READ_BYTES && Buffer.byteLength(jsonStringify(e)) <= MAX_REMOTE_READ_BYTES;
 }
-
 export { FILESUGGESTIONS, serveFileSuggestions, LISTDIRECTORYFORREMOTE, serveListDirectory };

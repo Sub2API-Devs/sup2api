@@ -5,28 +5,35 @@
  * pieces: chunk-6ja29j2n.js (2)
  * attribution: esm-layout 1, esm-fingerprint 1
  */
-import { Oe, Se, s, X, K, V } from "../common/unicode.js";
+import {
+  isSurrogatePair,
+  getSurrogatePairCodePoint,
+  CODE_POINTS,
+  isSurrogate,
+  isControlCodePoint,
+  isUndefinedCodePoint,
+} from "../common/unicode.js";
 import { o } from "../../lib/common/error-codes.js";
 
 //@ chunk-6ja29j2n.js:5754-5767 esm-layout
-var mt = 65536;
+var DEFAULT_BUFFER_WATERLINE = 65536;
 //@ chunk-6ja29j2n.js:5767-8620 esm-fingerprint
-class de {
-  constructor(e) {
-    ((this.handler = e),
-      (this.html = ""),
-      (this.pos = -1),
-      (this.lastGapPos = -2),
-      (this.gapStack = []),
-      (this.skipNextNewLine = !1),
-      (this.lastChunkWritten = !1),
-      (this.endOfChunkHit = !1),
-      (this.bufferWaterline = mt),
-      (this.isEol = !1),
-      (this.lineStartPos = 0),
-      (this.droppedBufferSize = 0),
-      (this.line = 1),
-      (this.lastErrOffset = -1));
+class Preprocessor {
+  constructor(handler) {
+    this.handler = handler;
+    this.html = "";
+    this.pos = -1;
+    this.lastGapPos = -2;
+    this.gapStack = [];
+    this.skipNextNewLine = false;
+    this.lastChunkWritten = false;
+    this.endOfChunkHit = false;
+    this.bufferWaterline = DEFAULT_BUFFER_WATERLINE;
+    this.isEol = false;
+    this.lineStartPos = 0;
+    this.droppedBufferSize = 0;
+    this.line = 1;
+    this.lastErrOffset = -1;
   }
   get col() {
     return this.pos - this.lineStartPos + Number(this.lastGapPos !== this.pos);
@@ -34,89 +41,136 @@ class de {
   get offset() {
     return this.droppedBufferSize + this.pos;
   }
-  getError(e, t) {
-    let { line: line, col: col, offset: offset } = this,
-      h = col + t,
-      l = offset + t;
-    return { code: e, startLine: line, endLine: line, startCol: h, endCol: h, startOffset: l, endOffset: l };
+  getError(code, cpOffset) {
+    let { line, col, offset } = this;
+    let startCol = col + cpOffset;
+    let startOffset = offset + cpOffset;
+    return {
+      code,
+      startLine: line,
+      endLine: line,
+      startCol,
+      endCol: startCol,
+      startOffset,
+      endOffset: startOffset,
+    };
   }
-  _err(e) {
-    if (this.handler.onParseError && this.lastErrOffset !== this.offset)
-      ((this.lastErrOffset = this.offset), this.handler.onParseError(this.getError(e, 0)));
+  _err(code) {
+    if (this.handler.onParseError && this.lastErrOffset !== this.offset) {
+      this.lastErrOffset = this.offset;
+      this.handler.onParseError(this.getError(code, 0));
+    }
   }
   _addGap() {
-    (this.gapStack.push(this.lastGapPos), (this.lastGapPos = this.pos));
+    this.gapStack.push(this.lastGapPos);
+    this.lastGapPos = this.pos;
   }
-  _processSurrogate(e) {
+  _processSurrogate(cp) {
     if (this.pos !== this.html.length - 1) {
-      let code = this.html.charCodeAt(this.pos + 1);
-      if (Oe(code)) return (this.pos++, this._addGap(), Se(e, code));
-    } else if (!this.lastChunkWritten) return ((this.endOfChunkHit = !0), s.EOF);
-    return (this._err(o.surrogateInInputStream), e);
+      let nextCp = this.html.charCodeAt(this.pos + 1);
+      if (isSurrogatePair(nextCp)) {
+        this.pos++;
+        this._addGap();
+        return getSurrogatePairCodePoint(cp, nextCp);
+      }
+    } else if (!this.lastChunkWritten) {
+      this.endOfChunkHit = true;
+      return CODE_POINTS.EOF;
+    }
+    this._err(o.surrogateInInputStream);
+    return cp;
   }
   willDropParsedChunk() {
     return this.pos > this.bufferWaterline;
   }
   dropParsedChunk() {
-    if (this.willDropParsedChunk())
-      ((this.html = this.html.substring(this.pos)),
-        (this.lineStartPos -= this.pos),
-        (this.droppedBufferSize += this.pos),
-        (this.pos = 0),
-        (this.lastGapPos = -2),
-        (this.gapStack.length = 0));
+    if (this.willDropParsedChunk()) {
+      this.html = this.html.substring(this.pos);
+      this.lineStartPos -= this.pos;
+      this.droppedBufferSize += this.pos;
+      this.pos = 0;
+      this.lastGapPos = -2;
+      this.gapStack.length = 0;
+    }
   }
-  write(e, t) {
-    if (this.html.length > 0) this.html += e;
-    else this.html = e;
-    ((this.endOfChunkHit = !1), (this.lastChunkWritten = t));
+  write(chunk, isLastChunk) {
+    if (this.html.length > 0) this.html += chunk;
+    else this.html = chunk;
+    this.endOfChunkHit = false;
+    this.lastChunkWritten = isLastChunk;
   }
-  insertHtmlAtCurrentPos(e) {
-    ((this.html = this.html.substring(0, this.pos + 1) + e + this.html.substring(this.pos + 1)),
-      (this.endOfChunkHit = !1));
+  insertHtmlAtCurrentPos(chunk) {
+    this.html = this.html.substring(0, this.pos + 1) + chunk + this.html.substring(this.pos + 1);
+    this.endOfChunkHit = false;
   }
-  startsWith(e, t) {
-    if (this.pos + e.length > this.html.length) return ((this.endOfChunkHit = !this.lastChunkWritten), !1);
-    if (t) return this.html.startsWith(e, this.pos);
-    for (let a = 0; a < e.length; a++)
-      if ((this.html.charCodeAt(this.pos + a) | 32) !== e.charCodeAt(a)) return !1;
-    return !0;
+  startsWith(pattern, caseSensitive) {
+    if (this.pos + pattern.length > this.html.length) {
+      this.endOfChunkHit = !this.lastChunkWritten;
+      return false;
+    }
+    if (caseSensitive) return this.html.startsWith(pattern, this.pos);
+    for (let i = 0; i < pattern.length; i++)
+      if ((this.html.charCodeAt(this.pos + i) | 32) !== pattern.charCodeAt(i)) return false;
+    return true;
   }
-  peek(e) {
-    let t = this.pos + e;
-    if (t >= this.html.length) return ((this.endOfChunkHit = !this.lastChunkWritten), s.EOF);
-    let code = this.html.charCodeAt(t);
-    return code === s.CARRIAGE_RETURN ? s.LINE_FEED : code;
+  peek(offset) {
+    let pos = this.pos + offset;
+    if (pos >= this.html.length) {
+      this.endOfChunkHit = !this.lastChunkWritten;
+      return CODE_POINTS.EOF;
+    }
+    let code = this.html.charCodeAt(pos);
+    return code === CODE_POINTS.CARRIAGE_RETURN ? CODE_POINTS.LINE_FEED : code;
   }
   advance() {
-    if ((this.pos++, this.isEol)) ((this.isEol = !1), this.line++, (this.lineStartPos = this.pos));
-    if (this.pos >= this.html.length) return ((this.endOfChunkHit = !this.lastChunkWritten), s.EOF);
-    let code = this.html.charCodeAt(this.pos);
-    if (code === s.CARRIAGE_RETURN) return ((this.isEol = !0), (this.skipNextNewLine = !0), s.LINE_FEED);
-    if (code === s.LINE_FEED) {
-      if (((this.isEol = !0), this.skipNextNewLine))
-        return (this.line--, (this.skipNextNewLine = !1), this._addGap(), this.advance());
+    this.pos++;
+    if (this.isEol) {
+      this.isEol = false;
+      this.line++;
+      this.lineStartPos = this.pos;
     }
-    if (((this.skipNextNewLine = !1), X(code))) code = this._processSurrogate(code);
+    if (this.pos >= this.html.length) {
+      this.endOfChunkHit = !this.lastChunkWritten;
+      return CODE_POINTS.EOF;
+    }
+    let cp = this.html.charCodeAt(this.pos);
+    if (cp === CODE_POINTS.CARRIAGE_RETURN) {
+      this.isEol = true;
+      this.skipNextNewLine = true;
+      return CODE_POINTS.LINE_FEED;
+    }
+    if (cp === CODE_POINTS.LINE_FEED) {
+      this.isEol = true;
+      if (this.skipNextNewLine) {
+        this.line--;
+        this.skipNextNewLine = false;
+        this._addGap();
+        return this.advance();
+      }
+    }
+    this.skipNextNewLine = false;
+    if (isSurrogate(cp)) cp = this._processSurrogate(cp);
     if (!(
       this.handler.onParseError === null ||
-      (code > 31 && code < 127) ||
-      code === s.LINE_FEED ||
-      code === s.CARRIAGE_RETURN ||
-      (code > 159 && code < 64976)
+      (cp > 31 && cp < 127) ||
+      cp === CODE_POINTS.LINE_FEED ||
+      cp === CODE_POINTS.CARRIAGE_RETURN ||
+      (cp > 159 && cp < 64976)
     ))
-      this._checkForProblematicCharacters(code);
-    return code;
+      this._checkForProblematicCharacters(cp);
+    return cp;
   }
-  _checkForProblematicCharacters(e) {
-    if (K(e)) this._err(o.controlCharacterInInputStream);
-    else if (V(e)) this._err(o.noncharacterInInputStream);
+  _checkForProblematicCharacters(cp) {
+    if (isControlCodePoint(cp)) this._err(o.controlCharacterInInputStream);
+    else if (isUndefinedCodePoint(cp)) this._err(o.noncharacterInInputStream);
   }
-  retreat(e) {
-    this.pos -= e;
-    while (this.pos < this.lastGapPos) ((this.lastGapPos = this.gapStack.pop()), this.pos--);
-    this.isEol = !1;
+  retreat(count) {
+    this.pos -= count;
+    while (this.pos < this.lastGapPos) {
+      this.lastGapPos = this.gapStack.pop();
+      this.pos--;
+    }
+    this.isEol = false;
   }
 }
-
-export { de };
+export { Preprocessor };

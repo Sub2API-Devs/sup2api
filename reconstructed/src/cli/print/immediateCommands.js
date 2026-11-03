@@ -20,17 +20,17 @@ import {
 } from "../../commands.js";
 import { logError } from "../../utils/log.js";
 import { withTelemetryMessage, toError } from "../../utils/errors.js";
-import { Xet } from "../../utils/promptSource.js";
-import { isSlashCommand_2, im } from "../../utils/messageQueueManager.js";
-import { aO } from "../../utils/historyFile.js";
+import { originKindForWakeup } from "../../utils/promptSource.js";
+import { isSlashCommand_2, isActiveMainAgentCommand } from "../../utils/messageQueueManager.js";
+import { lastTextBlockText } from "../../utils/historyFile.js";
 import { parseSlashCommand } from "../../utils/slashCommandParsing.js";
-import { I1r } from "../../plugins/functionHooks/commandHooks.js";
+import { isPluginLocalCommand_2 } from "../../plugins/functionHooks/commandHooks.js";
 import { resolvePromptOrigin } from "../../utils/messageOrigin.js";
 import { viewportInfo } from "../../plugins/functionHooks/surfaceBinding.js";
-import { Yjt, aUo } from "../../plugins/functionHooks/commandRunDispatch.js";
-import { rPe } from "../../bridge/inboundMessageOrigin.js";
+import { inflightCommandRuns, takeInflightRun } from "../../plugins/functionHooks/commandRunDispatch.js";
+import { wrapCommandLifecycle } from "../../bridge/inboundMessageOrigin.js";
 import { logFeatureOk, logFeatureBad } from "../../services/analytics/featureTelemetry.js";
-import { V_e, oX } from "../../plugins/functionHooks/promptSubmit.js";
+import { submitMarks, submitMarksSlot } from "../../plugins/functionHooks/promptSubmit.js";
 import { isGoalIdleCheckinPaused } from "../../query/goalCheckIn.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import { getActiveMessageQueue } from "../../query/presenceCheck.js";
@@ -38,23 +38,23 @@ import { logForDebugging } from "../../utils/debug.js";
 import { MAX_CONTROL_RESPONSE_BYTES } from "../../bridge/controlRequests.js";
 import { sleep } from "../../utils/sleep.js";
 
+//@ chunk-tyg7f3ek.js:78432-78743 placement
 /**
  * 轮次进行中收到本地 stdin 的即时斜杠命令时立即执行（不等当前轮结束），并上报 tengu_immediate_command_executed。
  */
-//@ chunk-tyg7f3ek.js:78432-78743 placement
 function runImmediateSlashCommand(e, n) {
   try {
-    if (!n.drain.turnUnderWay || e.uuid === void 0 || !isImmediateCommandsEnabled()) return;
+    if (!n.drain.turnUnderWay || e.uuid === undefined || !isImmediateCommandsEnabled()) return;
     let r = planImmediateCommand(e, n);
-    if (r === void 0) return;
-    (watchImmediateCommandLifecycle(n.io),
-      runCommandInGate(e.uuid, r),
-      reportImmediateCommandRanAhead(e.uuid, n),
-      logEvent("tengu_immediate_command_executed", {
-        commandName: shippedCommandNameForAnalytics(r.command),
-        fromKeybinding: !1,
-        headless: !0,
-      }));
+    if (r === undefined) return;
+    watchImmediateCommandLifecycle(n.io);
+    runCommandInGate(e.uuid, r);
+    reportImmediateCommandRanAhead(e.uuid, n);
+    logEvent("tengu_immediate_command_executed", {
+      commandName: shippedCommandNameForAnalytics(r.command),
+      fromKeybinding: false,
+      headless: true,
+    });
   } catch (error) {
     logError(withTelemetryMessage(toError(error), "headless immediate command failed to start"));
   }
@@ -63,23 +63,26 @@ function runImmediateSlashCommand(e, n) {
 function planImmediateCommand(e, n) {
   if (
     e.mode !== "prompt" ||
-    e.localStdinOrigin !== !0 ||
-    e.bridgeOrigin === !0 ||
-    e.shouldQuery === !1 ||
-    Xet(e.hostInitiator) !== void 0 ||
+    e.localStdinOrigin !== true ||
+    e.bridgeOrigin === true ||
+    e.shouldQuery === false ||
+    originKindForWakeup(e.hostInitiator) !== undefined ||
     !isSlashCommand_2(e)
   )
     return;
-  let r = aO(e.value),
-    s = r?.startsWith("/") ? parseSlashCommand(r) : null,
-    h = s === null ? void 0 : findCommand(s.commandName, n.commands());
+  let r = lastTextBlockText(e.value);
+  let s = r?.startsWith("/") ? parseSlashCommand(r) : null;
+  let h = s === null ? undefined : findCommand(s.commandName, n.commands());
   if (
     s === null ||
-    h === void 0 ||
+    h === undefined ||
     !isCommandEnabled(h) ||
-    !I1r(h) ||
+    !isPluginLocalCommand_2(h) ||
     !isImmediateCommand(h, s.args, "inline") ||
-    !admitsBridgeAuthor(h, { origin: e.origin, relayAuthored: e.verifiedSlackHumanTurn === !0 }) ||
+    !admitsBridgeAuthor(h, {
+      origin: e.origin,
+      relayAuthored: e.verifiedSlackHumanTurn === true,
+    }) ||
     n.closing()
   )
     return;
@@ -88,21 +91,21 @@ function planImmediateCommand(e, n) {
     args: s.args,
     origin: resolvePromptOrigin({
       submissionOrigin: e.origin,
-      dispatchedOverBridge: void 0,
+      dispatchedOverBridge: undefined,
       promptSource: "sdk",
     }),
-    presentation: viewportInfo(void 0),
+    presentation: viewportInfo(undefined),
   };
 }
 //@ chunk-tyg7f3ek.js:79296-79504 placement
-async function reportImmediateCommandRanAhead(e, n) {
+async function reportImmediateCommandRanAhead(uuid, n) {
   try {
-    await Yjt.get(e)?.answer;
+    await inflightCommandRuns.get(uuid)?.answer;
   } catch {
     return;
   }
   try {
-    if (n.queue.peek((r) => r.uuid === e) !== void 0) n.sayRanAhead(e);
+    if (n.queue.peek((r) => r.uuid === uuid) !== undefined) n.sayRanAhead(uuid);
   } catch (error) {
     logError(withTelemetryMessage(toError(error), "headless immediate command could not be reported as run"));
   }
@@ -110,49 +113,49 @@ async function reportImmediateCommandRanAhead(e, n) {
 //@ chunk-tyg7f3ek.js:79504-79734 placement
 function watchImmediateCommandLifecycle(e) {
   if (WATCHED_IMMEDIATE_IOS.has(e)) return;
-  (WATCHED_IMMEDIATE_IOS.add(e),
-    rPe(e, (n, r) => {
-      switch (r) {
-        case "queued":
-        case "started":
-          return;
-        case "completed":
-        case "cancelled":
-        case "discarded":
-        case "refused":
-          aUo(n)?.stop(`the command's frame was ${r} with no dispatch`);
-      }
-    }));
+  WATCHED_IMMEDIATE_IOS.add(e);
+  wrapCommandLifecycle(e, (n, r) => {
+    switch (r) {
+      case "queued":
+      case "started":
+        return;
+      case "completed":
+      case "cancelled":
+      case "discarded":
+      case "refused":
+        takeInflightRun(n)?.stop(`the command's frame was ${r} with no dispatch`);
+    }
+  });
 }
 //@ chunk-tyg7f3ek.js:79734-80592 placement
 class UnseenPanelModInputHold {
   messageQueue;
   isShown;
-  hasLeft = !1;
+  hasLeft = false;
   held = [];
-  constructor(e, n) {
-    ((this.messageQueue = e), (this.isShown = n));
+  constructor(messageQueue, isShown) {
+    this.messageQueue = messageQueue;
+    this.isShown = isShown;
   }
   setAside() {
     try {
       if (this.hasLeft && !this.isShown() && isImmediateCommandsEnabled()) {
-        let dequeueAllMatching = this.messageQueue.dequeueAllMatching(isUnseenPluginPrompt);
-        if (dequeueAllMatching.length > 0 && this.held.length === 0) logFeatureOk("ide_mods_unseen_hold");
-        (this.held.push(...dequeueAllMatching),
-          V_e.setAside(dequeueAllMatching.flatMap((r) => r.uuid ?? [])));
+        let n = this.messageQueue.dequeueAllMatching(isUnseenPluginPrompt);
+        if (n.length > 0 && this.held.length === 0) logFeatureOk("ide_mods_unseen_hold");
+        this.held.push(...n);
+        submitMarks.setAside(n.flatMap((r) => r.uuid ?? []));
       } else this.putBack();
     } catch (error) {
-      (logFeatureBad("ide_mods_unseen_hold", "threw"),
-        logError(
-          withTelemetryMessage(toError(error), "holding mod input of an unseen panel session failed"),
-        ));
+      logFeatureBad("ide_mods_unseen_hold", "threw");
+      logError(withTelemetryMessage(toError(error), "holding mod input of an unseen panel session failed"));
     }
   }
   noteLeft() {
     this.hasLeft = isImmediateCommandsEnabled();
   }
   noteShown() {
-    ((this.hasLeft = !1), this.setAside());
+    this.hasLeft = false;
+    this.setAside();
   }
   noteSwitchedOff() {
     this.noteShown();
@@ -171,45 +174,44 @@ class UnseenPanelModInputHold {
   }
   putBack() {
     if (this.held.length === 0) return;
-    let dequeueAllMatching = this.messageQueue.dequeueAllMatching(isUnseenPluginPrompt);
-    for (let n of [...this.held.splice(0), ...dequeueAllMatching]) this.messageQueue.enqueue(n);
-    V_e.putBack();
+    let e = this.messageQueue.dequeueAllMatching(isUnseenPluginPrompt);
+    for (let n of [...this.held.splice(0), ...e]) this.messageQueue.enqueue(n);
+    submitMarks.putBack();
   }
 }
 //@ chunk-tyg7f3ek.js:80592-80661 placement = _temp0 (1)
 function isUnseenPluginPrompt(a_5) {
-  return im(a_5) && a_5.origin?.kind === "plugin" && !isGoalIdleCheckinPaused(a_5.uuid);
+  return isActiveMainAgentCommand(a_5) && a_5.origin?.kind === "plugin" && !isGoalIdleCheckinPaused(a_5.uuid);
 }
 //@ chunk-tyg7f3ek.js:80661-80705 placement
-var vB = !0,
-  isInitializeReplyWaitEnabled = () => getFeatureValue_CACHED_MAY_BE_STALE("tengu_steady_panda", vB);
+var INITIALIZE_REPLY_WAIT_DEFAULT = true;
+var isInitializeReplyWaitEnabled = () =>
+  getFeatureValue_CACHED_MAY_BE_STALE("tengu_steady_panda", INITIALIZE_REPLY_WAIT_DEFAULT);
 //@ chunk-tyg7f3ek.js:80705-80874 placement
 function waitBeforeInitializeReply(e) {
   try {
     let n = getActiveMessageQueue() ?? e.rescan();
-    return n !== void 0 && isInitializeReplyWaitEnabled()
+    return n !== undefined && isInitializeReplyWaitEnabled()
       ? waitForStartupSettled(n, e).catch(logError)
-      : void 0;
+      : undefined;
   } catch (error) {
-    (logForDebugging("initialize: the reply does not wait", { level: "error" }), logError(error));
+    logForDebugging("initialize: the reply does not wait", {
+      level: "error",
+    });
+    logError(error);
     return;
   }
 }
 //@ chunk-tyg7f3ek.js:80874-81381 placement
 async function waitForStartupSettled(
   e,
-  {
-    rescan: rescan,
-    isReaderOwed: isReaderOwed,
-    lookAgainOn: lookAgainOn,
-    limitMs: limitMs = MAX_CONTROL_RESPONSE_BYTES,
-  },
+  { rescan, isReaderOwed, lookAgainOn, limitMs = MAX_CONTROL_RESPONSE_BYTES },
 ) {
-  let now = Date.now(),
-    abortController = new AbortController(),
-    R = [],
-    w,
-    P = () => {};
+  let now = Date.now();
+  let abortController = new AbortController();
+  let R = [];
+  let w;
+  let P = () => {};
   try {
     let L = Promise.race([
       drainPromiseChain(e, rescan).then(() => "settled"),
@@ -218,11 +220,11 @@ async function waitForStartupSettled(
       w = q;
     });
     for (let q of lookAgainOn) R.push(q(() => P()));
-    while (!w && !isReaderOwed() && !oX.get()?.size)
+    while (!w && !isReaderOwed() && !submitMarksSlot.get()?.size)
       await Promise.race([
         L,
-        new Promise((q) => {
-          P = q;
+        new Promise((resolve) => {
+          P = resolve;
         }),
       ]);
   } finally {
@@ -234,9 +236,11 @@ async function waitForStartupSettled(
   }
 }
 //@ chunk-tyg7f3ek.js:81381-81434 placement
-async function drainPromiseChain(e, n) {
+async function drainPromiseChain(e, rescan) {
   let r = e;
-  while (r) (await r, (r = n()));
+  while (r) {
+    await r;
+    r = rescan();
+  }
 }
-
 export { UnseenPanelModInputHold, waitBeforeInitializeReply, runImmediateSlashCommand };

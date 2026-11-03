@@ -8,11 +8,13 @@
 import { x } from "../../../../../../runtime/bun-runtime.js";
 
 //@ chunk-1r4fv9mg.js:9474-10467 cjs-fingerprint
-var Oe = x(function (Sr, Ct) {
-  Ct.exports = {
+var require_core = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = {
     $schema: "https://json-schema.org/draft/2020-12/schema",
     $id: "https://json-schema.org/draft/2020-12/meta/core",
-    $vocabulary: { "https://json-schema.org/draft/2020-12/vocab/core": !0 },
+    $vocabulary: {
+      "https://json-schema.org/draft/2020-12/vocab/core": true,
+    },
     $dynamicAnchor: "meta",
     title: "Core vocabulary meta-schema",
     type: ["object", "boolean"],
@@ -22,25 +24,54 @@ var Oe = x(function (Sr, Ct) {
         $comment: "Non-empty fragments not allowed.",
         pattern: "^[^#]*#?$",
       },
-      $schema: { $ref: "#/$defs/uriString" },
-      $ref: { $ref: "#/$defs/uriReferenceString" },
-      $anchor: { $ref: "#/$defs/anchorString" },
-      $dynamicRef: { $ref: "#/$defs/uriReferenceString" },
-      $dynamicAnchor: { $ref: "#/$defs/anchorString" },
+      $schema: {
+        $ref: "#/$defs/uriString",
+      },
+      $ref: {
+        $ref: "#/$defs/uriReferenceString",
+      },
+      $anchor: {
+        $ref: "#/$defs/anchorString",
+      },
+      $dynamicRef: {
+        $ref: "#/$defs/uriReferenceString",
+      },
+      $dynamicAnchor: {
+        $ref: "#/$defs/anchorString",
+      },
       $vocabulary: {
         type: "object",
-        propertyNames: { $ref: "#/$defs/uriString" },
-        additionalProperties: { type: "boolean" },
+        propertyNames: {
+          $ref: "#/$defs/uriString",
+        },
+        additionalProperties: {
+          type: "boolean",
+        },
       },
-      $comment: { type: "string" },
-      $defs: { type: "object", additionalProperties: { $dynamicRef: "#meta" } },
+      $comment: {
+        type: "string",
+      },
+      $defs: {
+        type: "object",
+        additionalProperties: {
+          $dynamicRef: "#meta",
+        },
+      },
     },
     $defs: {
-      anchorString: { type: "string", pattern: "^[A-Za-z_][-A-Za-z0-9._]*$" },
-      uriString: { type: "string", format: "uri" },
-      uriReferenceString: { type: "string", format: "uri-reference" },
+      anchorString: {
+        type: "string",
+        pattern: "^[A-Za-z_][-A-Za-z0-9._]*$",
+      },
+      uriString: {
+        type: "string",
+        format: "uri",
+      },
+      uriReferenceString: {
+        type: "string",
+        format: "uri-reference",
+      },
     },
   };
 });
-
-export { Oe };
+export { require_core };

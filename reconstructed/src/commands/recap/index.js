@@ -8,17 +8,16 @@
  * pieces: chunk-66drwgm7.js (1)
  * attribution: placement 1
  */
-
+//@ chunk-66drwgm7.js:191-377 placement
 /**
  * /recap 命令对象（local）；描述：Generate a one-line session recap now；实现 chunk-z9nn3hxt.js 的 E。
  */
-//@ chunk-66drwgm7.js:191-377 placement
 var recapCommandDefinition = {
-    type: "local",
-    name: "recap",
-    description: "Generate a one-line session recap now",
-    supportsNonInteractive: !0,
-    thinClientDispatch: "post-text",
-    load: () => import("./chunk-z9nn3hxt.js"),
-  },
-  recapCommand = recapCommandDefinition;
+  type: "local",
+  name: "recap",
+  description: "Generate a one-line session recap now",
+  supportsNonInteractive: true,
+  thinClientDispatch: "post-text",
+  load: () => import("./chunk-z9nn3hxt.js"),
+};
+var recapCommand = recapCommandDefinition;

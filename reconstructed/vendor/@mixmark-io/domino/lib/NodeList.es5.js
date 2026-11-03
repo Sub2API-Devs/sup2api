@@ -8,15 +8,15 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-vwj6ccer.js:23571-23693 cjs-fingerprint
-var ns = x(function (xd, as) {
-  function dl(e) {
-    return this[e] || null;
+var require_NodeList_es5 = x(function (cjsExports, cjsModule) {
+  function item(i) {
+    return this[i] || null;
   }
-  function hl(e) {
-    if (!e) e = [];
-    return ((e.item = dl), e);
+  function NodeList(a) {
+    if (!a) a = [];
+    a.item = item;
+    return a;
   }
-  as.exports = hl;
+  cjsModule.exports = NodeList;
 });
-
-export { ns };
+export { require_NodeList_es5 };

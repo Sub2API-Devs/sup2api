@@ -10,10 +10,10 @@
  */
 
 //@ chunk-9vb6sa16.js:191-572 placement
-function validateHandleUriArgs(e) {
-  let index = e.indexOf("--handle-uri");
-  if (index === -1 || !e[index + 1]) return null;
-  if (e.length > index + 2)
+function validateHandleUriArgs(argv) {
+  let index = argv.indexOf("--handle-uri");
+  if (index === -1 || !argv[index + 1]) return null;
+  if (argv.length > index + 2)
     return (
       `claude: rejected deep-link invocation \u2014 unexpected arguments after the URI.
 ` +
@@ -21,5 +21,4 @@ function validateHandleUriArgs(e) {
     );
   return null;
 }
-
 export { validateHandleUriArgs };

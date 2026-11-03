@@ -5,213 +5,251 @@
  * pieces: chunk-fq0cr76a.js (4)
  * attribution: esm-fingerprint 4
  */
-import net, { default as net_2 } from "net";
+import net from "net";
 
 //@ chunk-fq0cr76a.js:694208-697469 esm-fingerprint
-var gR = ((e) => ((e[(e.connect = 1)] = "connect"), (e[(e.bind = 2)] = "bind"), (e[(e.udp = 3)] = "udp"), e))(
-    gR || {},
-  ),
-  AE = ((e) => (
-    (e[(e.REQUEST_GRANTED = 0)] = "REQUEST_GRANTED"),
-    (e[(e.GENERAL_FAILURE = 1)] = "GENERAL_FAILURE"),
-    (e[(e.CONNECTION_NOT_ALLOWED = 2)] = "CONNECTION_NOT_ALLOWED"),
-    (e[(e.NETWORK_UNREACHABLE = 3)] = "NETWORK_UNREACHABLE"),
-    (e[(e.HOST_UNREACHABLE = 4)] = "HOST_UNREACHABLE"),
-    (e[(e.CONNECTION_REFUSED = 5)] = "CONNECTION_REFUSED"),
-    (e[(e.TTL_EXPIRED = 6)] = "TTL_EXPIRED"),
-    (e[(e.COMMAND_NOT_SUPPORTED = 7)] = "COMMAND_NOT_SUPPORTED"),
-    (e[(e.ADDRESS_TYPE_NOT_SUPPORTED = 8)] = "ADDRESS_TYPE_NOT_SUPPORTED"),
-    e
-  ))(AE || {}),
-  _H = class {
-    constructor(e, n) {
-      ((this.errorHandler = () => {}),
-        (this.metadata = {}),
-        (this.socket = n),
-        (this.server = e),
-        n.on("error", this.errorHandler),
-        n.pause(),
-        this.handleGreeting());
+var Socks5ConnectionCommand = ((Socks5ConnectionCommand2) => {
+  Socks5ConnectionCommand2[(Socks5ConnectionCommand2.connect = 1)] = "connect";
+  Socks5ConnectionCommand2[(Socks5ConnectionCommand2.bind = 2)] = "bind";
+  Socks5ConnectionCommand2[(Socks5ConnectionCommand2.udp = 3)] = "udp";
+  return Socks5ConnectionCommand2;
+})(Socks5ConnectionCommand || {});
+var Socks5ConnectionStatus = ((Socks5ConnectionStatus2) => {
+  Socks5ConnectionStatus2[(Socks5ConnectionStatus2.REQUEST_GRANTED = 0)] = "REQUEST_GRANTED";
+  Socks5ConnectionStatus2[(Socks5ConnectionStatus2.GENERAL_FAILURE = 1)] = "GENERAL_FAILURE";
+  Socks5ConnectionStatus2[(Socks5ConnectionStatus2.CONNECTION_NOT_ALLOWED = 2)] = "CONNECTION_NOT_ALLOWED";
+  Socks5ConnectionStatus2[(Socks5ConnectionStatus2.NETWORK_UNREACHABLE = 3)] = "NETWORK_UNREACHABLE";
+  Socks5ConnectionStatus2[(Socks5ConnectionStatus2.HOST_UNREACHABLE = 4)] = "HOST_UNREACHABLE";
+  Socks5ConnectionStatus2[(Socks5ConnectionStatus2.CONNECTION_REFUSED = 5)] = "CONNECTION_REFUSED";
+  Socks5ConnectionStatus2[(Socks5ConnectionStatus2.TTL_EXPIRED = 6)] = "TTL_EXPIRED";
+  Socks5ConnectionStatus2[(Socks5ConnectionStatus2.COMMAND_NOT_SUPPORTED = 7)] = "COMMAND_NOT_SUPPORTED";
+  Socks5ConnectionStatus2[(Socks5ConnectionStatus2.ADDRESS_TYPE_NOT_SUPPORTED = 8)] =
+    "ADDRESS_TYPE_NOT_SUPPORTED";
+  return Socks5ConnectionStatus2;
+})(Socks5ConnectionStatus || {});
+var Socks5Connection = class {
+  constructor(server, socket) {
+    this.errorHandler = () => {};
+    this.metadata = {};
+    this.socket = socket;
+    this.server = server;
+    socket.on("error", this.errorHandler);
+    socket.pause();
+    this.handleGreeting();
+  }
+  readBytes(len) {
+    return new Promise((resolve) => {
+      let buf = Buffer.allocUnsafe(len);
+      let offset = 0;
+      let dataListener = (chunk) => {
+        let readAmount = Math.min(chunk.length, len - offset);
+        chunk.copy(buf, offset, 0, readAmount);
+        offset += readAmount;
+        if (offset < len) return;
+        this.socket.removeListener("data", dataListener);
+        this.socket.push(chunk.subarray(readAmount));
+        resolve(buf);
+        this.socket.pause();
+      };
+      this.socket.on("data", dataListener);
+      this.socket.resume();
+    });
+  }
+  async handleGreeting() {
+    if ((await this.readBytes(1)).readUInt8() !== 5) return this.socket.destroy();
+    let authMethodsAmount = (await this.readBytes(1)).readUInt8();
+    if (authMethodsAmount > 128 || authMethodsAmount === 0) return this.socket.destroy();
+    let authMethods = await this.readBytes(authMethodsAmount);
+    let authMethodByteCode = this.server.authHandler ? 2 : 0;
+    if (!authMethods.includes(authMethodByteCode)) {
+      this.socket.write(Buffer.from([5, 255]));
+      return this.socket.destroy();
     }
-    readBytes(e) {
-      return new Promise((n) => {
-        let allocUnsafe = Buffer.allocUnsafe(e),
-          s = 0,
-          h = (y) => {
-            let min = Math.min(y.length, e - s);
-            if ((y.copy(allocUnsafe, s, 0, min), (s += min), s < e)) return;
-            (this.socket.removeListener("data", h),
-              this.socket.push(y.subarray(min)),
-              n(allocUnsafe),
-              this.socket.pause());
-          };
-        (this.socket.on("data", h), this.socket.resume());
-      });
+    this.socket.write(Buffer.from([5, authMethodByteCode]));
+    if (this.server.authHandler) this.handleUserPassword();
+    else this.handleConnectionRequest();
+  }
+  async handleUserPassword() {
+    await this.readBytes(1);
+    let usernameLength = (await this.readBytes(1)).readUint8();
+    let username = (await this.readBytes(usernameLength)).toString();
+    let passwordLength = (await this.readBytes(1)).readUint8();
+    let password = (await this.readBytes(passwordLength)).toString();
+    this.username = username;
+    this.password = password;
+    let calledBack = false;
+    let acceptCallback = () => {
+      if (calledBack) return;
+      calledBack = true;
+      this.socket.write(Buffer.from([1, 0]));
+      this.handleConnectionRequest();
+    };
+    let denyCallback = () => {
+      if (calledBack) return;
+      calledBack = true;
+      this.socket.write(Buffer.from([1, 1]));
+      this.socket.destroy();
+    };
+    let resp = await this.server.authHandler(this, acceptCallback, denyCallback);
+    if (resp === true) acceptCallback();
+    else if (resp === false) denyCallback();
+  }
+  async handleConnectionRequest() {
+    await this.readBytes(1);
+    let commandByte = (await this.readBytes(1))[0];
+    let command = Socks5ConnectionCommand[commandByte];
+    if (!command) return this.socket.destroy();
+    this.command = command;
+    await this.readBytes(1);
+    let addrType = (await this.readBytes(1)).readUInt8();
+    let address = "";
+    switch (addrType) {
+      case 1:
+        address = (await this.readBytes(4)).join(".");
+        break;
+      case 3:
+        let hostLength = (await this.readBytes(1)).readUInt8();
+        address = (await this.readBytes(hostLength)).toString();
+        break;
+      case 4:
+        let bytes = await this.readBytes(16);
+        for (let i = 0; i < 16; i++) {
+          if (i % 2 === 0 && i > 0) address += ":";
+          address += `${bytes[i] < 16 ? "0" : ""}${bytes[i].toString(16)}`;
+        }
+        break;
+      default:
+        this.socket.destroy();
+        return;
     }
-    async handleGreeting() {
-      if ((await this.readBytes(1)).readUInt8() !== 5) return this.socket.destroy();
-      let uInt8 = (await this.readBytes(1)).readUInt8();
-      if (uInt8 > 128 || uInt8 === 0) return this.socket.destroy();
-      let bytes = await this.readBytes(uInt8),
-        s = this.server.authHandler ? 2 : 0;
-      if (!bytes.includes(s)) return (this.socket.write(Buffer.from([5, 255])), this.socket.destroy());
-      if ((this.socket.write(Buffer.from([5, s])), this.server.authHandler)) this.handleUserPassword();
-      else this.handleConnectionRequest();
+    let port = (await this.readBytes(2)).readUInt16BE();
+    if (!this.server.supportedCommands.has(command)) {
+      this.socket.write(Buffer.from([5, 7]));
+      return this.socket.destroy();
     }
-    async handleUserPassword() {
-      await this.readBytes(1);
-      let uint8 = (await this.readBytes(1)).readUint8(),
-        str = (await this.readBytes(uint8)).toString(),
-        uint8_2 = (await this.readBytes(1)).readUint8(),
-        str_2 = (await this.readBytes(uint8_2)).toString();
-      ((this.username = str), (this.password = str_2));
-      let h = !1,
-        y = () => {
-          if (h) return;
-          ((h = !0), this.socket.write(Buffer.from([1, 0])), this.handleConnectionRequest());
-        },
-        b = () => {
-          if (h) return;
-          ((h = !0), this.socket.write(Buffer.from([1, 1])), this.socket.destroy());
-        },
-        authHandler = await this.server.authHandler(this, y, b);
-      if (authHandler === !0) y();
-      else if (authHandler === !1) b();
-    }
-    async handleConnectionRequest() {
-      await this.readBytes(1);
-      let e = (await this.readBytes(1))[0],
-        n = gR[e];
-      if (!n) return this.socket.destroy();
-      ((this.command = n), await this.readBytes(1));
-      let uInt8 = (await this.readBytes(1)).readUInt8(),
-        s = "";
-      switch (uInt8) {
-        case 1:
-          s = (await this.readBytes(4)).join(".");
+    this.destAddress = address;
+    this.destPort = port;
+    let calledBack = false;
+    let acceptCallback = () => {
+      if (calledBack) return;
+      calledBack = true;
+      this.connect();
+    };
+    if (!this.server.rulesetValidator) return acceptCallback();
+    let denyCallback = () => {
+      if (calledBack) return;
+      calledBack = true;
+      this.socket.write(Buffer.from([5, 2, 0, 1, 0, 0, 0, 0, 0, 0]));
+      this.socket.destroy();
+    };
+    let resp = await this.server.rulesetValidator(this, acceptCallback, denyCallback);
+    if (resp === true) acceptCallback();
+    else if (resp === false) denyCallback();
+  }
+  connect() {
+    this.socket.removeListener("error", this.errorHandler);
+    this.server.connectionHandler(this, (status) => {
+      if (Socks5ConnectionStatus[status] === undefined) throw Error(`"${status}" is not a valid status.`);
+      this.socket.write(Buffer.from([5, Socks5ConnectionStatus[status], 0, 1, 0, 0, 0, 0, 0, 0]));
+      if (status !== "REQUEST_GRANTED") this.socket.destroy();
+    });
+    this.socket.resume();
+  }
+};
+//@ chunk-fq0cr76a.js:697469-698080 esm-fingerprint
+function connectionHandler_default(connection, sendStatus) {
+  if (connection.command !== "connect") return sendStatus("COMMAND_NOT_SUPPORTED");
+  connection.socket.on("error", () => {});
+  let stream = net.createConnection({
+    host: connection.destAddress,
+    port: connection.destPort,
+  });
+  stream.setNoDelay();
+  let streamOpened = false;
+  stream.on("error", (err) => {
+    if (!streamOpened)
+      switch (err.code) {
+        case "EINVAL":
+        case "ENOENT":
+        case "ENOTFOUND":
+        case "ETIMEDOUT":
+        case "EADDRNOTAVAIL":
+        case "EHOSTUNREACH":
+          sendStatus("HOST_UNREACHABLE");
           break;
-        case 3:
-          let uInt8 = (await this.readBytes(1)).readUInt8();
-          s = (await this.readBytes(uInt8)).toString();
+        case "ENETUNREACH":
+          sendStatus("NETWORK_UNREACHABLE");
           break;
-        case 4:
-          let bytes = await this.readBytes(16);
-          for (let O = 0; O < 16; O++) {
-            if (O % 2 === 0 && O > 0) s += ":";
-            s += `${bytes[O] < 16 ? "0" : ""}${bytes[O].toString(16)}`;
-          }
+        case "ECONNREFUSED":
+          sendStatus("CONNECTION_REFUSED");
           break;
         default:
-          this.socket.destroy();
-          return;
+          sendStatus("GENERAL_FAILURE");
       }
-      let uInt16BE = (await this.readBytes(2)).readUInt16BE();
-      if (!this.server.supportedCommands.has(n))
-        return (this.socket.write(Buffer.from([5, 7])), this.socket.destroy());
-      ((this.destAddress = s), (this.destPort = uInt16BE));
-      let y = !1,
-        b = () => {
-          if (y) return;
-          ((y = !0), this.connect());
-        };
-      if (!this.server.rulesetValidator) return b();
-      let S = () => {
-          if (y) return;
-          ((y = !0), this.socket.write(Buffer.from([5, 2, 0, 1, 0, 0, 0, 0, 0, 0])), this.socket.destroy());
-        },
-        rulesetValidator = await this.server.rulesetValidator(this, b, S);
-      if (rulesetValidator === !0) b();
-      else if (rulesetValidator === !1) S();
-    }
-    connect() {
-      (this.socket.removeListener("error", this.errorHandler),
-        this.server.connectionHandler(this, (e) => {
-          if (AE[e] === void 0) throw Error(`"${e}" is not a valid status.`);
-          if ((this.socket.write(Buffer.from([5, AE[e], 0, 1, 0, 0, 0, 0, 0, 0])), e !== "REQUEST_GRANTED"))
-            this.socket.destroy();
-        }),
-        this.socket.resume());
-    }
-  };
-//@ chunk-fq0cr76a.js:697469-698080 esm-fingerprint
-function mR(e, n) {
-  if (e.command !== "connect") return n("COMMAND_NOT_SUPPORTED");
-  e.socket.on("error", () => {});
-  let connection = net_2.createConnection({ host: e.destAddress, port: e.destPort });
-  connection.setNoDelay();
-  let s = !1;
-  return (
-    connection.on("error", (h) => {
-      if (!s)
-        switch (h.code) {
-          case "EINVAL":
-          case "ENOENT":
-          case "ENOTFOUND":
-          case "ETIMEDOUT":
-          case "EADDRNOTAVAIL":
-          case "EHOSTUNREACH":
-            n("HOST_UNREACHABLE");
-            break;
-          case "ENETUNREACH":
-            n("NETWORK_UNREACHABLE");
-            break;
-          case "ECONNREFUSED":
-            n("CONNECTION_REFUSED");
-            break;
-          default:
-            n("GENERAL_FAILURE");
-        }
-    }),
-    connection.on("ready", () => {
-      ((s = !0), n("REQUEST_GRANTED"), e.socket.pipe(connection).pipe(e.socket));
-    }),
-    e.socket.on("close", () => connection.destroy()),
-    connection
-  );
+  });
+  stream.on("ready", () => {
+    streamOpened = true;
+    sendStatus("REQUEST_GRANTED");
+    connection.socket.pipe(stream).pipe(connection.socket);
+  });
+  connection.socket.on("close", () => stream.destroy());
+  return stream;
 }
 //@ chunk-fq0cr76a.js:698080-698757 esm-fingerprint
-var wH = class {
+var Socks5Server = class {
   constructor() {
-    ((this.supportedCommands = new Set(["connect"])),
-      (this.connectionHandler = mR),
-      (this.server = net.createServer((e) => {
-        (e.setNoDelay(), this._handleConnection(e));
-      })));
+    this.supportedCommands = new Set(["connect"]);
+    this.connectionHandler = connectionHandler_default;
+    this.server = net.createServer((socket) => {
+      socket.setNoDelay();
+      this._handleConnection(socket);
+    });
   }
-  listen(...e) {
-    return (this.server.listen(...e), this);
+  listen(...args) {
+    this.server.listen(...args);
+    return this;
   }
-  close(e) {
-    return (this.server.close(e), this);
+  close(callback) {
+    this.server.close(callback);
+    return this;
   }
-  setAuthHandler(e) {
-    return ((this.authHandler = e), this);
+  setAuthHandler(handler) {
+    this.authHandler = handler;
+    return this;
   }
   disableAuthHandler() {
-    return ((this.authHandler = void 0), this);
+    this.authHandler = undefined;
+    return this;
   }
-  setRulesetValidator(e) {
-    return ((this.rulesetValidator = e), this);
+  setRulesetValidator(handler) {
+    this.rulesetValidator = handler;
+    return this;
   }
   disableRulesetValidator() {
-    return ((this.rulesetValidator = void 0), this);
+    this.rulesetValidator = undefined;
+    return this;
   }
-  setConnectionHandler(e) {
-    return ((this.connectionHandler = e), this);
+  setConnectionHandler(handler) {
+    this.connectionHandler = handler;
+    return this;
   }
   useDefaultConnectionHandler() {
-    return ((this.connectionHandler = mR), this);
+    this.connectionHandler = connectionHandler_default;
+    return this;
   }
-  _handleConnection(e) {
-    return (new _H(this, e), this);
+  _handleConnection(socket) {
+    new Socks5Connection(this, socket);
+    return this;
   }
 };
 //@ chunk-fq0cr76a.js:698757-698926 esm-fingerprint
-function yR(e) {
-  let n = new wH();
-  if (e?.auth) n.setAuthHandler((r) => r.username === e.auth.username && r.password === e.auth.password);
-  if (e?.port) n.listen(e.port, e.hostname);
-  return n;
+function createServer(opts) {
+  let server = new Socks5Server();
+  if (opts?.auth)
+    server.setAuthHandler(
+      (conn) => conn.username === opts.auth.username && conn.password === opts.auth.password,
+    );
+  if (opts?.port) server.listen(opts.port, opts.hostname);
+  return server;
 }
-
-export { yR };
+export { createServer };

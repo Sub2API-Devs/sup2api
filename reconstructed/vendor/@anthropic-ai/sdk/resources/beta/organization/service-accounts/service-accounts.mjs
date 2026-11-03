@@ -5,74 +5,104 @@
  * pieces: chunk-hwmsct5x.js (1)
  * attribution: esm-fingerprint 1
  */
-import { Y } from "../../../../core/resource.mjs";
-import { uo } from "./workspaces.mjs";
-import { T } from "../../../../internal/headers.mjs";
+import { APIResource } from "../../../../core/resource.mjs";
+import { Workspaces_2 } from "./workspaces.mjs";
+import { buildHeaders } from "../../../../internal/headers.mjs";
 import { I } from "../../../../internal/utils/path.mjs";
-import { ee } from "../../../../core/pagination.mjs";
+import { TokenPage } from "../../../../core/pagination.mjs";
 
 //@ chunk-hwmsct5x.js:125120-126331 esm-fingerprint
-var Ys = (() => {
-  class e extends Y {
+var ServiceAccounts = (() => {
+  class ServiceAccounts extends APIResource {
     constructor() {
       super(...arguments);
-      this.workspaces = new uo(this._client);
+      this.workspaces = new Workspaces_2(this._client);
     }
-    create(n, r) {
-      let { betas: betas, ...h } = n;
+    create(params, options) {
+      let { betas, ...body } = params;
       return this._client.post("/v1/organizations/service_accounts?beta=true", {
-        body: h,
-        ...r,
-        headers: T([
-          { ...(betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0) },
-          r?.headers,
+        body,
+        ...options,
+        headers: buildHeaders([
+          {
+            ...(betas?.toString() != null
+              ? {
+                  "anthropic-beta": betas?.toString(),
+                }
+              : undefined),
+          },
+          options?.headers,
         ]),
       });
     }
-    retrieve(n, r = {}, s) {
-      let { betas: betas } = r ?? {};
-      return this._client.get(I`/v1/organizations/service_accounts/${n}?beta=true`, {
-        ...s,
-        headers: T([
-          { ...(betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0) },
-          s?.headers,
+    retrieve(serviceAccountID, params = {}, options) {
+      let { betas } = params ?? {};
+      return this._client.get(I`/v1/organizations/service_accounts/${serviceAccountID}?beta=true`, {
+        ...options,
+        headers: buildHeaders([
+          {
+            ...(betas?.toString() != null
+              ? {
+                  "anthropic-beta": betas?.toString(),
+                }
+              : undefined),
+          },
+          options?.headers,
         ]),
       });
     }
-    update(n, r, s) {
-      let { betas: betas, ...y } = r;
-      return this._client.post(I`/v1/organizations/service_accounts/${n}?beta=true`, {
-        body: y,
-        ...s,
-        headers: T([
-          { ...(betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0) },
-          s?.headers,
+    update(serviceAccountID, params, options) {
+      let { betas, ...body } = params;
+      return this._client.post(I`/v1/organizations/service_accounts/${serviceAccountID}?beta=true`, {
+        body,
+        ...options,
+        headers: buildHeaders([
+          {
+            ...(betas?.toString() != null
+              ? {
+                  "anthropic-beta": betas?.toString(),
+                }
+              : undefined),
+          },
+          options?.headers,
         ]),
       });
     }
-    list(n = {}, r) {
-      let { betas: betas, ...h } = n ?? {};
-      return this._client.getAPIList("/v1/organizations/service_accounts?beta=true", ee, {
-        query: h,
-        ...r,
-        headers: T([
-          { ...(betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0) },
-          r?.headers,
+    list(params = {}, options) {
+      let { betas, ...query } = params ?? {};
+      return this._client.getAPIList("/v1/organizations/service_accounts?beta=true", TokenPage, {
+        query,
+        ...options,
+        headers: buildHeaders([
+          {
+            ...(betas?.toString() != null
+              ? {
+                  "anthropic-beta": betas?.toString(),
+                }
+              : undefined),
+          },
+          options?.headers,
         ]),
       });
     }
-    archive(n, r = {}, s) {
-      let { betas: betas } = r ?? {};
-      return this._client.post(I`/v1/organizations/service_accounts/${n}/archive?beta=true`, {
-        ...s,
-        headers: T([
-          { ...(betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0) },
-          s?.headers,
+    archive(serviceAccountID, params = {}, options) {
+      let { betas } = params ?? {};
+      return this._client.post(I`/v1/organizations/service_accounts/${serviceAccountID}/archive?beta=true`, {
+        ...options,
+        headers: buildHeaders([
+          {
+            ...(betas?.toString() != null
+              ? {
+                  "anthropic-beta": betas?.toString(),
+                }
+              : undefined),
+          },
+          options?.headers,
         ]),
       });
     }
   }
-  return ((e.Workspaces = uo), e);
+  ServiceAccounts.Workspaces = Workspaces_2;
+  return ServiceAccounts;
 })();
-
-export { Ys };
+export { ServiceAccounts };

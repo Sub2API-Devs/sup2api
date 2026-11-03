@@ -8,8 +8,8 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-pwh5dx3n.js:142957-156548 cjs-fingerprint
-var oo = x(function (OA, hT) {
-  hT.exports = {
+var oo = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = {
     nested: {
       google: {
         nested: {
@@ -20,13 +20,19 @@ var oo = x(function (OA, hT) {
               java_outer_classname: "DescriptorProtos",
               csharp_namespace: "Google.Protobuf.Reflection",
               objc_class_prefix: "GPB",
-              cc_enable_arenas: !0,
+              cc_enable_arenas: true,
               optimize_for: "SPEED",
             },
             nested: {
               FileDescriptorSet: {
                 edition: "proto2",
-                fields: { file: { rule: "repeated", type: "FileDescriptorProto", id: 1 } },
+                fields: {
+                  file: {
+                    rule: "repeated",
+                    type: "FileDescriptorProto",
+                    id: 1,
+                  },
+                },
                 extensions: [[536000000, 536000000]],
               },
               Edition: {
@@ -49,96 +55,270 @@ var oo = x(function (OA, hT) {
               FileDescriptorProto: {
                 edition: "proto2",
                 fields: {
-                  name: { type: "string", id: 1 },
-                  package: { type: "string", id: 2 },
-                  dependency: { rule: "repeated", type: "string", id: 3 },
-                  publicDependency: { rule: "repeated", type: "int32", id: 10 },
-                  weakDependency: { rule: "repeated", type: "int32", id: 11 },
-                  optionDependency: { rule: "repeated", type: "string", id: 15 },
-                  messageType: { rule: "repeated", type: "DescriptorProto", id: 4 },
-                  enumType: { rule: "repeated", type: "EnumDescriptorProto", id: 5 },
-                  service: { rule: "repeated", type: "ServiceDescriptorProto", id: 6 },
-                  extension: { rule: "repeated", type: "FieldDescriptorProto", id: 7 },
-                  options: { type: "FileOptions", id: 8 },
-                  sourceCodeInfo: { type: "SourceCodeInfo", id: 9 },
-                  syntax: { type: "string", id: 12 },
-                  edition: { type: "Edition", id: 14 },
+                  name: {
+                    type: "string",
+                    id: 1,
+                  },
+                  package: {
+                    type: "string",
+                    id: 2,
+                  },
+                  dependency: {
+                    rule: "repeated",
+                    type: "string",
+                    id: 3,
+                  },
+                  publicDependency: {
+                    rule: "repeated",
+                    type: "int32",
+                    id: 10,
+                  },
+                  weakDependency: {
+                    rule: "repeated",
+                    type: "int32",
+                    id: 11,
+                  },
+                  optionDependency: {
+                    rule: "repeated",
+                    type: "string",
+                    id: 15,
+                  },
+                  messageType: {
+                    rule: "repeated",
+                    type: "DescriptorProto",
+                    id: 4,
+                  },
+                  enumType: {
+                    rule: "repeated",
+                    type: "EnumDescriptorProto",
+                    id: 5,
+                  },
+                  service: {
+                    rule: "repeated",
+                    type: "ServiceDescriptorProto",
+                    id: 6,
+                  },
+                  extension: {
+                    rule: "repeated",
+                    type: "FieldDescriptorProto",
+                    id: 7,
+                  },
+                  options: {
+                    type: "FileOptions",
+                    id: 8,
+                  },
+                  sourceCodeInfo: {
+                    type: "SourceCodeInfo",
+                    id: 9,
+                  },
+                  syntax: {
+                    type: "string",
+                    id: 12,
+                  },
+                  edition: {
+                    type: "Edition",
+                    id: 14,
+                  },
                 },
               },
               DescriptorProto: {
                 edition: "proto2",
                 fields: {
-                  name: { type: "string", id: 1 },
-                  field: { rule: "repeated", type: "FieldDescriptorProto", id: 2 },
-                  extension: { rule: "repeated", type: "FieldDescriptorProto", id: 6 },
-                  nestedType: { rule: "repeated", type: "DescriptorProto", id: 3 },
-                  enumType: { rule: "repeated", type: "EnumDescriptorProto", id: 4 },
-                  extensionRange: { rule: "repeated", type: "ExtensionRange", id: 5 },
-                  oneofDecl: { rule: "repeated", type: "OneofDescriptorProto", id: 8 },
-                  options: { type: "MessageOptions", id: 7 },
-                  reservedRange: { rule: "repeated", type: "ReservedRange", id: 9 },
-                  reservedName: { rule: "repeated", type: "string", id: 10 },
-                  visibility: { type: "SymbolVisibility", id: 11 },
+                  name: {
+                    type: "string",
+                    id: 1,
+                  },
+                  field: {
+                    rule: "repeated",
+                    type: "FieldDescriptorProto",
+                    id: 2,
+                  },
+                  extension: {
+                    rule: "repeated",
+                    type: "FieldDescriptorProto",
+                    id: 6,
+                  },
+                  nestedType: {
+                    rule: "repeated",
+                    type: "DescriptorProto",
+                    id: 3,
+                  },
+                  enumType: {
+                    rule: "repeated",
+                    type: "EnumDescriptorProto",
+                    id: 4,
+                  },
+                  extensionRange: {
+                    rule: "repeated",
+                    type: "ExtensionRange",
+                    id: 5,
+                  },
+                  oneofDecl: {
+                    rule: "repeated",
+                    type: "OneofDescriptorProto",
+                    id: 8,
+                  },
+                  options: {
+                    type: "MessageOptions",
+                    id: 7,
+                  },
+                  reservedRange: {
+                    rule: "repeated",
+                    type: "ReservedRange",
+                    id: 9,
+                  },
+                  reservedName: {
+                    rule: "repeated",
+                    type: "string",
+                    id: 10,
+                  },
+                  visibility: {
+                    type: "SymbolVisibility",
+                    id: 11,
+                  },
                 },
                 nested: {
                   ExtensionRange: {
                     fields: {
-                      start: { type: "int32", id: 1 },
-                      end: { type: "int32", id: 2 },
-                      options: { type: "ExtensionRangeOptions", id: 3 },
+                      start: {
+                        type: "int32",
+                        id: 1,
+                      },
+                      end: {
+                        type: "int32",
+                        id: 2,
+                      },
+                      options: {
+                        type: "ExtensionRangeOptions",
+                        id: 3,
+                      },
                     },
                   },
                   ReservedRange: {
-                    fields: { start: { type: "int32", id: 1 }, end: { type: "int32", id: 2 } },
+                    fields: {
+                      start: {
+                        type: "int32",
+                        id: 1,
+                      },
+                      end: {
+                        type: "int32",
+                        id: 2,
+                      },
+                    },
                   },
                 },
               },
               ExtensionRangeOptions: {
                 edition: "proto2",
                 fields: {
-                  uninterpretedOption: { rule: "repeated", type: "UninterpretedOption", id: 999 },
+                  uninterpretedOption: {
+                    rule: "repeated",
+                    type: "UninterpretedOption",
+                    id: 999,
+                  },
                   declaration: {
                     rule: "repeated",
                     type: "Declaration",
                     id: 2,
-                    options: { retention: "RETENTION_SOURCE" },
+                    options: {
+                      retention: "RETENTION_SOURCE",
+                    },
                   },
-                  features: { type: "FeatureSet", id: 50 },
+                  features: {
+                    type: "FeatureSet",
+                    id: 50,
+                  },
                   verification: {
                     type: "VerificationState",
                     id: 3,
-                    options: { default: "UNVERIFIED", retention: "RETENTION_SOURCE" },
+                    options: {
+                      default: "UNVERIFIED",
+                      retention: "RETENTION_SOURCE",
+                    },
                   },
                 },
                 extensions: [[1000, 536870911]],
                 nested: {
                   Declaration: {
                     fields: {
-                      number: { type: "int32", id: 1 },
-                      fullName: { type: "string", id: 2 },
-                      type: { type: "string", id: 3 },
-                      reserved: { type: "bool", id: 5 },
-                      repeated: { type: "bool", id: 6 },
+                      number: {
+                        type: "int32",
+                        id: 1,
+                      },
+                      fullName: {
+                        type: "string",
+                        id: 2,
+                      },
+                      type: {
+                        type: "string",
+                        id: 3,
+                      },
+                      reserved: {
+                        type: "bool",
+                        id: 5,
+                      },
+                      repeated: {
+                        type: "bool",
+                        id: 6,
+                      },
                     },
                     reserved: [[4, 4]],
                   },
-                  VerificationState: { values: { DECLARATION: 0, UNVERIFIED: 1 } },
+                  VerificationState: {
+                    values: {
+                      DECLARATION: 0,
+                      UNVERIFIED: 1,
+                    },
+                  },
                 },
               },
               FieldDescriptorProto: {
                 edition: "proto2",
                 fields: {
-                  name: { type: "string", id: 1 },
-                  number: { type: "int32", id: 3 },
-                  label: { type: "Label", id: 4 },
-                  type: { type: "Type", id: 5 },
-                  typeName: { type: "string", id: 6 },
-                  extendee: { type: "string", id: 2 },
-                  defaultValue: { type: "string", id: 7 },
-                  oneofIndex: { type: "int32", id: 9 },
-                  jsonName: { type: "string", id: 10 },
-                  options: { type: "FieldOptions", id: 8 },
-                  proto3Optional: { type: "bool", id: 17 },
+                  name: {
+                    type: "string",
+                    id: 1,
+                  },
+                  number: {
+                    type: "int32",
+                    id: 3,
+                  },
+                  label: {
+                    type: "Label",
+                    id: 4,
+                  },
+                  type: {
+                    type: "Type",
+                    id: 5,
+                  },
+                  typeName: {
+                    type: "string",
+                    id: 6,
+                  },
+                  extendee: {
+                    type: "string",
+                    id: 2,
+                  },
+                  defaultValue: {
+                    type: "string",
+                    id: 7,
+                  },
+                  oneofIndex: {
+                    type: "int32",
+                    id: 9,
+                  },
+                  jsonName: {
+                    type: "string",
+                    id: 10,
+                  },
+                  options: {
+                    type: "FieldOptions",
+                    id: 8,
+                  },
+                  proto3Optional: {
+                    type: "bool",
+                    id: 17,
+                  },
                 },
                 nested: {
                   Type: {
@@ -163,95 +343,283 @@ var oo = x(function (OA, hT) {
                       TYPE_SINT64: 18,
                     },
                   },
-                  Label: { values: { LABEL_OPTIONAL: 1, LABEL_REPEATED: 3, LABEL_REQUIRED: 2 } },
+                  Label: {
+                    values: {
+                      LABEL_OPTIONAL: 1,
+                      LABEL_REPEATED: 3,
+                      LABEL_REQUIRED: 2,
+                    },
+                  },
                 },
               },
               OneofDescriptorProto: {
                 edition: "proto2",
-                fields: { name: { type: "string", id: 1 }, options: { type: "OneofOptions", id: 2 } },
+                fields: {
+                  name: {
+                    type: "string",
+                    id: 1,
+                  },
+                  options: {
+                    type: "OneofOptions",
+                    id: 2,
+                  },
+                },
               },
               EnumDescriptorProto: {
                 edition: "proto2",
                 fields: {
-                  name: { type: "string", id: 1 },
-                  value: { rule: "repeated", type: "EnumValueDescriptorProto", id: 2 },
-                  options: { type: "EnumOptions", id: 3 },
-                  reservedRange: { rule: "repeated", type: "EnumReservedRange", id: 4 },
-                  reservedName: { rule: "repeated", type: "string", id: 5 },
-                  visibility: { type: "SymbolVisibility", id: 6 },
+                  name: {
+                    type: "string",
+                    id: 1,
+                  },
+                  value: {
+                    rule: "repeated",
+                    type: "EnumValueDescriptorProto",
+                    id: 2,
+                  },
+                  options: {
+                    type: "EnumOptions",
+                    id: 3,
+                  },
+                  reservedRange: {
+                    rule: "repeated",
+                    type: "EnumReservedRange",
+                    id: 4,
+                  },
+                  reservedName: {
+                    rule: "repeated",
+                    type: "string",
+                    id: 5,
+                  },
+                  visibility: {
+                    type: "SymbolVisibility",
+                    id: 6,
+                  },
                 },
                 nested: {
                   EnumReservedRange: {
-                    fields: { start: { type: "int32", id: 1 }, end: { type: "int32", id: 2 } },
+                    fields: {
+                      start: {
+                        type: "int32",
+                        id: 1,
+                      },
+                      end: {
+                        type: "int32",
+                        id: 2,
+                      },
+                    },
                   },
                 },
               },
               EnumValueDescriptorProto: {
                 edition: "proto2",
                 fields: {
-                  name: { type: "string", id: 1 },
-                  number: { type: "int32", id: 2 },
-                  options: { type: "EnumValueOptions", id: 3 },
+                  name: {
+                    type: "string",
+                    id: 1,
+                  },
+                  number: {
+                    type: "int32",
+                    id: 2,
+                  },
+                  options: {
+                    type: "EnumValueOptions",
+                    id: 3,
+                  },
                 },
               },
               ServiceDescriptorProto: {
                 edition: "proto2",
                 fields: {
-                  name: { type: "string", id: 1 },
-                  method: { rule: "repeated", type: "MethodDescriptorProto", id: 2 },
-                  options: { type: "ServiceOptions", id: 3 },
+                  name: {
+                    type: "string",
+                    id: 1,
+                  },
+                  method: {
+                    rule: "repeated",
+                    type: "MethodDescriptorProto",
+                    id: 2,
+                  },
+                  options: {
+                    type: "ServiceOptions",
+                    id: 3,
+                  },
                 },
               },
               MethodDescriptorProto: {
                 edition: "proto2",
                 fields: {
-                  name: { type: "string", id: 1 },
-                  inputType: { type: "string", id: 2 },
-                  outputType: { type: "string", id: 3 },
-                  options: { type: "MethodOptions", id: 4 },
-                  clientStreaming: { type: "bool", id: 5 },
-                  serverStreaming: { type: "bool", id: 6 },
+                  name: {
+                    type: "string",
+                    id: 1,
+                  },
+                  inputType: {
+                    type: "string",
+                    id: 2,
+                  },
+                  outputType: {
+                    type: "string",
+                    id: 3,
+                  },
+                  options: {
+                    type: "MethodOptions",
+                    id: 4,
+                  },
+                  clientStreaming: {
+                    type: "bool",
+                    id: 5,
+                  },
+                  serverStreaming: {
+                    type: "bool",
+                    id: 6,
+                  },
                 },
               },
               FileOptions: {
                 edition: "proto2",
                 fields: {
-                  javaPackage: { type: "string", id: 1 },
-                  javaOuterClassname: { type: "string", id: 8 },
-                  javaMultipleFiles: { type: "bool", id: 10 },
-                  javaGenerateEqualsAndHash: { type: "bool", id: 20, options: { deprecated: !0 } },
-                  javaStringCheckUtf8: { type: "bool", id: 27 },
-                  optimizeFor: { type: "OptimizeMode", id: 9, options: { default: "SPEED" } },
-                  goPackage: { type: "string", id: 11 },
-                  ccGenericServices: { type: "bool", id: 16 },
-                  javaGenericServices: { type: "bool", id: 17 },
-                  pyGenericServices: { type: "bool", id: 18 },
-                  deprecated: { type: "bool", id: 23 },
-                  ccEnableArenas: { type: "bool", id: 31, options: { default: !0 } },
-                  objcClassPrefix: { type: "string", id: 36 },
-                  csharpNamespace: { type: "string", id: 37 },
-                  swiftPrefix: { type: "string", id: 39 },
-                  phpClassPrefix: { type: "string", id: 40 },
-                  phpNamespace: { type: "string", id: 41 },
-                  phpMetadataNamespace: { type: "string", id: 44 },
-                  rubyPackage: { type: "string", id: 45 },
-                  features: { type: "FeatureSet", id: 50 },
-                  uninterpretedOption: { rule: "repeated", type: "UninterpretedOption", id: 999 },
+                  javaPackage: {
+                    type: "string",
+                    id: 1,
+                  },
+                  javaOuterClassname: {
+                    type: "string",
+                    id: 8,
+                  },
+                  javaMultipleFiles: {
+                    type: "bool",
+                    id: 10,
+                  },
+                  javaGenerateEqualsAndHash: {
+                    type: "bool",
+                    id: 20,
+                    options: {
+                      deprecated: true,
+                    },
+                  },
+                  javaStringCheckUtf8: {
+                    type: "bool",
+                    id: 27,
+                  },
+                  optimizeFor: {
+                    type: "OptimizeMode",
+                    id: 9,
+                    options: {
+                      default: "SPEED",
+                    },
+                  },
+                  goPackage: {
+                    type: "string",
+                    id: 11,
+                  },
+                  ccGenericServices: {
+                    type: "bool",
+                    id: 16,
+                  },
+                  javaGenericServices: {
+                    type: "bool",
+                    id: 17,
+                  },
+                  pyGenericServices: {
+                    type: "bool",
+                    id: 18,
+                  },
+                  deprecated: {
+                    type: "bool",
+                    id: 23,
+                  },
+                  ccEnableArenas: {
+                    type: "bool",
+                    id: 31,
+                    options: {
+                      default: true,
+                    },
+                  },
+                  objcClassPrefix: {
+                    type: "string",
+                    id: 36,
+                  },
+                  csharpNamespace: {
+                    type: "string",
+                    id: 37,
+                  },
+                  swiftPrefix: {
+                    type: "string",
+                    id: 39,
+                  },
+                  phpClassPrefix: {
+                    type: "string",
+                    id: 40,
+                  },
+                  phpNamespace: {
+                    type: "string",
+                    id: 41,
+                  },
+                  phpMetadataNamespace: {
+                    type: "string",
+                    id: 44,
+                  },
+                  rubyPackage: {
+                    type: "string",
+                    id: 45,
+                  },
+                  features: {
+                    type: "FeatureSet",
+                    id: 50,
+                  },
+                  uninterpretedOption: {
+                    rule: "repeated",
+                    type: "UninterpretedOption",
+                    id: 999,
+                  },
                 },
                 extensions: [[1000, 536870911]],
                 reserved: [[42, 42], [38, 38], "php_generic_services"],
-                nested: { OptimizeMode: { values: { SPEED: 1, CODE_SIZE: 2, LITE_RUNTIME: 3 } } },
+                nested: {
+                  OptimizeMode: {
+                    values: {
+                      SPEED: 1,
+                      CODE_SIZE: 2,
+                      LITE_RUNTIME: 3,
+                    },
+                  },
+                },
               },
               MessageOptions: {
                 edition: "proto2",
                 fields: {
-                  messageSetWireFormat: { type: "bool", id: 1 },
-                  noStandardDescriptorAccessor: { type: "bool", id: 2 },
-                  deprecated: { type: "bool", id: 3 },
-                  mapEntry: { type: "bool", id: 7 },
-                  deprecatedLegacyJsonFieldConflicts: { type: "bool", id: 11, options: { deprecated: !0 } },
-                  features: { type: "FeatureSet", id: 12 },
-                  uninterpretedOption: { rule: "repeated", type: "UninterpretedOption", id: 999 },
+                  messageSetWireFormat: {
+                    type: "bool",
+                    id: 1,
+                  },
+                  noStandardDescriptorAccessor: {
+                    type: "bool",
+                    id: 2,
+                  },
+                  deprecated: {
+                    type: "bool",
+                    id: 3,
+                  },
+                  mapEntry: {
+                    type: "bool",
+                    id: 7,
+                  },
+                  deprecatedLegacyJsonFieldConflicts: {
+                    type: "bool",
+                    id: 11,
+                    options: {
+                      deprecated: true,
+                    },
+                  },
+                  features: {
+                    type: "FeatureSet",
+                    id: 12,
+                  },
+                  uninterpretedOption: {
+                    rule: "repeated",
+                    type: "UninterpretedOption",
+                    id: 999,
+                  },
                 },
                 extensions: [[1000, 536870911]],
                 reserved: [
@@ -265,20 +633,74 @@ var oo = x(function (OA, hT) {
               FieldOptions: {
                 edition: "proto2",
                 fields: {
-                  ctype: { type: "CType", id: 1, options: { default: "STRING" } },
-                  packed: { type: "bool", id: 2 },
-                  jstype: { type: "JSType", id: 6, options: { default: "JS_NORMAL" } },
-                  lazy: { type: "bool", id: 5 },
-                  unverifiedLazy: { type: "bool", id: 15 },
-                  deprecated: { type: "bool", id: 3 },
-                  weak: { type: "bool", id: 10, options: { deprecated: !0 } },
-                  debugRedact: { type: "bool", id: 16 },
-                  retention: { type: "OptionRetention", id: 17 },
-                  targets: { rule: "repeated", type: "OptionTargetType", id: 19 },
-                  editionDefaults: { rule: "repeated", type: "EditionDefault", id: 20 },
-                  features: { type: "FeatureSet", id: 21 },
-                  featureSupport: { type: "FeatureSupport", id: 22 },
-                  uninterpretedOption: { rule: "repeated", type: "UninterpretedOption", id: 999 },
+                  ctype: {
+                    type: "CType",
+                    id: 1,
+                    options: {
+                      default: "STRING",
+                    },
+                  },
+                  packed: {
+                    type: "bool",
+                    id: 2,
+                  },
+                  jstype: {
+                    type: "JSType",
+                    id: 6,
+                    options: {
+                      default: "JS_NORMAL",
+                    },
+                  },
+                  lazy: {
+                    type: "bool",
+                    id: 5,
+                  },
+                  unverifiedLazy: {
+                    type: "bool",
+                    id: 15,
+                  },
+                  deprecated: {
+                    type: "bool",
+                    id: 3,
+                  },
+                  weak: {
+                    type: "bool",
+                    id: 10,
+                    options: {
+                      deprecated: true,
+                    },
+                  },
+                  debugRedact: {
+                    type: "bool",
+                    id: 16,
+                  },
+                  retention: {
+                    type: "OptionRetention",
+                    id: 17,
+                  },
+                  targets: {
+                    rule: "repeated",
+                    type: "OptionTargetType",
+                    id: 19,
+                  },
+                  editionDefaults: {
+                    rule: "repeated",
+                    type: "EditionDefault",
+                    id: 20,
+                  },
+                  features: {
+                    type: "FeatureSet",
+                    id: 21,
+                  },
+                  featureSupport: {
+                    type: "FeatureSupport",
+                    id: 22,
+                  },
+                  uninterpretedOption: {
+                    rule: "repeated",
+                    type: "UninterpretedOption",
+                    id: 999,
+                  },
                 },
                 extensions: [[1000, 536870911]],
                 reserved: [
@@ -286,10 +708,26 @@ var oo = x(function (OA, hT) {
                   [18, 18],
                 ],
                 nested: {
-                  CType: { values: { STRING: 0, CORD: 1, STRING_PIECE: 2 } },
-                  JSType: { values: { JS_NORMAL: 0, JS_STRING: 1, JS_NUMBER: 2 } },
+                  CType: {
+                    values: {
+                      STRING: 0,
+                      CORD: 1,
+                      STRING_PIECE: 2,
+                    },
+                  },
+                  JSType: {
+                    values: {
+                      JS_NORMAL: 0,
+                      JS_STRING: 1,
+                      JS_NUMBER: 2,
+                    },
+                  },
                   OptionRetention: {
-                    values: { RETENTION_UNKNOWN: 0, RETENTION_RUNTIME: 1, RETENTION_SOURCE: 2 },
+                    values: {
+                      RETENTION_UNKNOWN: 0,
+                      RETENTION_RUNTIME: 1,
+                      RETENTION_SOURCE: 2,
+                    },
                   },
                   OptionTargetType: {
                     values: {
@@ -306,14 +744,35 @@ var oo = x(function (OA, hT) {
                     },
                   },
                   EditionDefault: {
-                    fields: { edition: { type: "Edition", id: 3 }, value: { type: "string", id: 2 } },
+                    fields: {
+                      edition: {
+                        type: "Edition",
+                        id: 3,
+                      },
+                      value: {
+                        type: "string",
+                        id: 2,
+                      },
+                    },
                   },
                   FeatureSupport: {
                     fields: {
-                      editionIntroduced: { type: "Edition", id: 1 },
-                      editionDeprecated: { type: "Edition", id: 2 },
-                      deprecationWarning: { type: "string", id: 3 },
-                      editionRemoved: { type: "Edition", id: 4 },
+                      editionIntroduced: {
+                        type: "Edition",
+                        id: 1,
+                      },
+                      editionDeprecated: {
+                        type: "Edition",
+                        id: 2,
+                      },
+                      deprecationWarning: {
+                        type: "string",
+                        id: 3,
+                      },
+                      editionRemoved: {
+                        type: "Edition",
+                        id: 4,
+                      },
                     },
                   },
                 },
@@ -321,19 +780,45 @@ var oo = x(function (OA, hT) {
               OneofOptions: {
                 edition: "proto2",
                 fields: {
-                  features: { type: "FeatureSet", id: 1 },
-                  uninterpretedOption: { rule: "repeated", type: "UninterpretedOption", id: 999 },
+                  features: {
+                    type: "FeatureSet",
+                    id: 1,
+                  },
+                  uninterpretedOption: {
+                    rule: "repeated",
+                    type: "UninterpretedOption",
+                    id: 999,
+                  },
                 },
                 extensions: [[1000, 536870911]],
               },
               EnumOptions: {
                 edition: "proto2",
                 fields: {
-                  allowAlias: { type: "bool", id: 2 },
-                  deprecated: { type: "bool", id: 3 },
-                  deprecatedLegacyJsonFieldConflicts: { type: "bool", id: 6, options: { deprecated: !0 } },
-                  features: { type: "FeatureSet", id: 7 },
-                  uninterpretedOption: { rule: "repeated", type: "UninterpretedOption", id: 999 },
+                  allowAlias: {
+                    type: "bool",
+                    id: 2,
+                  },
+                  deprecated: {
+                    type: "bool",
+                    id: 3,
+                  },
+                  deprecatedLegacyJsonFieldConflicts: {
+                    type: "bool",
+                    id: 6,
+                    options: {
+                      deprecated: true,
+                    },
+                  },
+                  features: {
+                    type: "FeatureSet",
+                    id: 7,
+                  },
+                  uninterpretedOption: {
+                    rule: "repeated",
+                    type: "UninterpretedOption",
+                    id: 999,
+                  },
                 },
                 extensions: [[1000, 536870911]],
                 reserved: [[5, 5]],
@@ -341,56 +826,130 @@ var oo = x(function (OA, hT) {
               EnumValueOptions: {
                 edition: "proto2",
                 fields: {
-                  deprecated: { type: "bool", id: 1 },
-                  features: { type: "FeatureSet", id: 2 },
-                  debugRedact: { type: "bool", id: 3 },
-                  featureSupport: { type: "FieldOptions.FeatureSupport", id: 4 },
-                  uninterpretedOption: { rule: "repeated", type: "UninterpretedOption", id: 999 },
+                  deprecated: {
+                    type: "bool",
+                    id: 1,
+                  },
+                  features: {
+                    type: "FeatureSet",
+                    id: 2,
+                  },
+                  debugRedact: {
+                    type: "bool",
+                    id: 3,
+                  },
+                  featureSupport: {
+                    type: "FieldOptions.FeatureSupport",
+                    id: 4,
+                  },
+                  uninterpretedOption: {
+                    rule: "repeated",
+                    type: "UninterpretedOption",
+                    id: 999,
+                  },
                 },
                 extensions: [[1000, 536870911]],
               },
               ServiceOptions: {
                 edition: "proto2",
                 fields: {
-                  features: { type: "FeatureSet", id: 34 },
-                  deprecated: { type: "bool", id: 33 },
-                  uninterpretedOption: { rule: "repeated", type: "UninterpretedOption", id: 999 },
+                  features: {
+                    type: "FeatureSet",
+                    id: 34,
+                  },
+                  deprecated: {
+                    type: "bool",
+                    id: 33,
+                  },
+                  uninterpretedOption: {
+                    rule: "repeated",
+                    type: "UninterpretedOption",
+                    id: 999,
+                  },
                 },
                 extensions: [[1000, 536870911]],
               },
               MethodOptions: {
                 edition: "proto2",
                 fields: {
-                  deprecated: { type: "bool", id: 33 },
+                  deprecated: {
+                    type: "bool",
+                    id: 33,
+                  },
                   idempotencyLevel: {
                     type: "IdempotencyLevel",
                     id: 34,
-                    options: { default: "IDEMPOTENCY_UNKNOWN" },
+                    options: {
+                      default: "IDEMPOTENCY_UNKNOWN",
+                    },
                   },
-                  features: { type: "FeatureSet", id: 35 },
-                  uninterpretedOption: { rule: "repeated", type: "UninterpretedOption", id: 999 },
+                  features: {
+                    type: "FeatureSet",
+                    id: 35,
+                  },
+                  uninterpretedOption: {
+                    rule: "repeated",
+                    type: "UninterpretedOption",
+                    id: 999,
+                  },
                 },
                 extensions: [[1000, 536870911]],
                 nested: {
-                  IdempotencyLevel: { values: { IDEMPOTENCY_UNKNOWN: 0, NO_SIDE_EFFECTS: 1, IDEMPOTENT: 2 } },
+                  IdempotencyLevel: {
+                    values: {
+                      IDEMPOTENCY_UNKNOWN: 0,
+                      NO_SIDE_EFFECTS: 1,
+                      IDEMPOTENT: 2,
+                    },
+                  },
                 },
               },
               UninterpretedOption: {
                 edition: "proto2",
                 fields: {
-                  name: { rule: "repeated", type: "NamePart", id: 2 },
-                  identifierValue: { type: "string", id: 3 },
-                  positiveIntValue: { type: "uint64", id: 4 },
-                  negativeIntValue: { type: "int64", id: 5 },
-                  doubleValue: { type: "double", id: 6 },
-                  stringValue: { type: "bytes", id: 7 },
-                  aggregateValue: { type: "string", id: 8 },
+                  name: {
+                    rule: "repeated",
+                    type: "NamePart",
+                    id: 2,
+                  },
+                  identifierValue: {
+                    type: "string",
+                    id: 3,
+                  },
+                  positiveIntValue: {
+                    type: "uint64",
+                    id: 4,
+                  },
+                  negativeIntValue: {
+                    type: "int64",
+                    id: 5,
+                  },
+                  doubleValue: {
+                    type: "double",
+                    id: 6,
+                  },
+                  stringValue: {
+                    type: "bytes",
+                    id: 7,
+                  },
+                  aggregateValue: {
+                    type: "string",
+                    id: 8,
+                  },
                 },
                 nested: {
                   NamePart: {
                     fields: {
-                      namePart: { rule: "required", type: "string", id: 1 },
-                      isExtension: { rule: "required", type: "bool", id: 2 },
+                      namePart: {
+                        rule: "required",
+                        type: "string",
+                        id: 1,
+                      },
+                      isExtension: {
+                        rule: "required",
+                        type: "bool",
+                        id: 2,
+                      },
                     },
                   },
                 },
@@ -495,19 +1054,54 @@ var oo = x(function (OA, hT) {
                 reserved: [[999, 999]],
                 nested: {
                   FieldPresence: {
-                    values: { FIELD_PRESENCE_UNKNOWN: 0, EXPLICIT: 1, IMPLICIT: 2, LEGACY_REQUIRED: 3 },
+                    values: {
+                      FIELD_PRESENCE_UNKNOWN: 0,
+                      EXPLICIT: 1,
+                      IMPLICIT: 2,
+                      LEGACY_REQUIRED: 3,
+                    },
                   },
-                  EnumType: { values: { ENUM_TYPE_UNKNOWN: 0, OPEN: 1, CLOSED: 2 } },
+                  EnumType: {
+                    values: {
+                      ENUM_TYPE_UNKNOWN: 0,
+                      OPEN: 1,
+                      CLOSED: 2,
+                    },
+                  },
                   RepeatedFieldEncoding: {
-                    values: { REPEATED_FIELD_ENCODING_UNKNOWN: 0, PACKED: 1, EXPANDED: 2 },
+                    values: {
+                      REPEATED_FIELD_ENCODING_UNKNOWN: 0,
+                      PACKED: 1,
+                      EXPANDED: 2,
+                    },
                   },
-                  Utf8Validation: { values: { UTF8_VALIDATION_UNKNOWN: 0, VERIFY: 2, NONE: 3 } },
+                  Utf8Validation: {
+                    values: {
+                      UTF8_VALIDATION_UNKNOWN: 0,
+                      VERIFY: 2,
+                      NONE: 3,
+                    },
+                  },
                   MessageEncoding: {
-                    values: { MESSAGE_ENCODING_UNKNOWN: 0, LENGTH_PREFIXED: 1, DELIMITED: 2 },
+                    values: {
+                      MESSAGE_ENCODING_UNKNOWN: 0,
+                      LENGTH_PREFIXED: 1,
+                      DELIMITED: 2,
+                    },
                   },
-                  JsonFormat: { values: { JSON_FORMAT_UNKNOWN: 0, ALLOW: 1, LEGACY_BEST_EFFORT: 2 } },
+                  JsonFormat: {
+                    values: {
+                      JSON_FORMAT_UNKNOWN: 0,
+                      ALLOW: 1,
+                      LEGACY_BEST_EFFORT: 2,
+                    },
+                  },
                   EnforceNamingStyle: {
-                    values: { ENFORCE_NAMING_STYLE_UNKNOWN: 0, STYLE2024: 1, STYLE_LEGACY: 2 },
+                    values: {
+                      ENFORCE_NAMING_STYLE_UNKNOWN: 0,
+                      STYLE2024: 1,
+                      STYLE_LEGACY: 2,
+                    },
                   },
                   VisibilityFeature: {
                     fields: {},
@@ -529,16 +1123,35 @@ var oo = x(function (OA, hT) {
               FeatureSetDefaults: {
                 edition: "proto2",
                 fields: {
-                  defaults: { rule: "repeated", type: "FeatureSetEditionDefault", id: 1 },
-                  minimumEdition: { type: "Edition", id: 4 },
-                  maximumEdition: { type: "Edition", id: 5 },
+                  defaults: {
+                    rule: "repeated",
+                    type: "FeatureSetEditionDefault",
+                    id: 1,
+                  },
+                  minimumEdition: {
+                    type: "Edition",
+                    id: 4,
+                  },
+                  maximumEdition: {
+                    type: "Edition",
+                    id: 5,
+                  },
                 },
                 nested: {
                   FeatureSetEditionDefault: {
                     fields: {
-                      edition: { type: "Edition", id: 3 },
-                      overridableFeatures: { type: "FeatureSet", id: 4 },
-                      fixedFeatures: { type: "FeatureSet", id: 5 },
+                      edition: {
+                        type: "Edition",
+                        id: 3,
+                      },
+                      overridableFeatures: {
+                        type: "FeatureSet",
+                        id: 4,
+                      },
+                      fixedFeatures: {
+                        type: "FeatureSet",
+                        id: 5,
+                      },
                     },
                     reserved: [[1, 1], [2, 2], "features"],
                   },
@@ -546,39 +1159,106 @@ var oo = x(function (OA, hT) {
               },
               SourceCodeInfo: {
                 edition: "proto2",
-                fields: { location: { rule: "repeated", type: "Location", id: 1 } },
+                fields: {
+                  location: {
+                    rule: "repeated",
+                    type: "Location",
+                    id: 1,
+                  },
+                },
                 extensions: [[536000000, 536000000]],
                 nested: {
                   Location: {
                     fields: {
-                      path: { rule: "repeated", type: "int32", id: 1, options: { packed: !0 } },
-                      span: { rule: "repeated", type: "int32", id: 2, options: { packed: !0 } },
-                      leadingComments: { type: "string", id: 3 },
-                      trailingComments: { type: "string", id: 4 },
-                      leadingDetachedComments: { rule: "repeated", type: "string", id: 6 },
+                      path: {
+                        rule: "repeated",
+                        type: "int32",
+                        id: 1,
+                        options: {
+                          packed: true,
+                        },
+                      },
+                      span: {
+                        rule: "repeated",
+                        type: "int32",
+                        id: 2,
+                        options: {
+                          packed: true,
+                        },
+                      },
+                      leadingComments: {
+                        type: "string",
+                        id: 3,
+                      },
+                      trailingComments: {
+                        type: "string",
+                        id: 4,
+                      },
+                      leadingDetachedComments: {
+                        rule: "repeated",
+                        type: "string",
+                        id: 6,
+                      },
                     },
                   },
                 },
               },
               GeneratedCodeInfo: {
                 edition: "proto2",
-                fields: { annotation: { rule: "repeated", type: "Annotation", id: 1 } },
+                fields: {
+                  annotation: {
+                    rule: "repeated",
+                    type: "Annotation",
+                    id: 1,
+                  },
+                },
                 nested: {
                   Annotation: {
                     fields: {
-                      path: { rule: "repeated", type: "int32", id: 1, options: { packed: !0 } },
-                      sourceFile: { type: "string", id: 2 },
-                      begin: { type: "int32", id: 3 },
-                      end: { type: "int32", id: 4 },
-                      semantic: { type: "Semantic", id: 5 },
+                      path: {
+                        rule: "repeated",
+                        type: "int32",
+                        id: 1,
+                        options: {
+                          packed: true,
+                        },
+                      },
+                      sourceFile: {
+                        type: "string",
+                        id: 2,
+                      },
+                      begin: {
+                        type: "int32",
+                        id: 3,
+                      },
+                      end: {
+                        type: "int32",
+                        id: 4,
+                      },
+                      semantic: {
+                        type: "Semantic",
+                        id: 5,
+                      },
                     },
-                    nested: { Semantic: { values: { NONE: 0, SET: 1, ALIAS: 2 } } },
+                    nested: {
+                      Semantic: {
+                        values: {
+                          NONE: 0,
+                          SET: 1,
+                          ALIAS: 2,
+                        },
+                      },
+                    },
                   },
                 },
               },
               SymbolVisibility: {
                 edition: "proto2",
-                values: { VISIBILITY_UNSET: 0, VISIBILITY_LOCAL: 1, VISIBILITY_EXPORT: 2 },
+                values: {
+                  VISIBILITY_UNSET: 0,
+                  VISIBILITY_LOCAL: 1,
+                  VISIBILITY_EXPORT: 2,
+                },
               },
             },
           },
@@ -587,5 +1267,4 @@ var oo = x(function (OA, hT) {
     },
   };
 });
-
 export { oo };

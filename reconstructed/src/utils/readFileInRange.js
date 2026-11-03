@@ -8,28 +8,20 @@
  * pieces: chunk-wn385gmf.js (19)
  * attribution: fingerprint 7, layout 2, placement 10
  */
-import {
-  stat,
-  stat as stat_2,
-  readFile,
-  open,
-  open as open_2,
-  readlink,
-  readlink as readlink_2,
-} from "fs/promises";
-import { fstat, createReadStream, constants, constants as constants_2 } from "fs";
+import { stat, readFile, open, readlink } from "fs/promises";
+import { fstat, createReadStream, constants } from "fs";
 import { StringDecoder } from "string_decoder";
 import { Readable } from "stream";
 import { formatFileSize } from "./format.js";
-import { Ue, y3o } from "./claudeInChrome/fileUpload.js";
+import { MAX_PANE_UPLOAD_BYTES, MAX_CHROME_UPLOAD_BYTES } from "./claudeInChrome/fileUpload.js";
 import { detectTextEncoding, detectEncodingFromBom, readFileChecked } from "./fileRead.js";
 import { STREAM_DECODE_OPTS_2 } from "../cli/transports/SSETransport.js";
 import { toError, AbortError, getErrnoCode } from "./errors.js";
 import { isDiskless } from "../bootstrap/state.js";
 import { reportOnce } from "./reportOnce.js";
 import { getFileModificationTimeAsync } from "./file.js";
-import { tv, isFullFileView, y1 } from "./remoteFileState.js";
-import { mn } from "./remoteEnvironment.js";
+import { stripBom, isFullFileView, matchesContentHash } from "./remoteFileState.js";
+import { isRemoteManagedEnvironment } from "./remoteEnvironment.js";
 import { DEFAULT_OUTPUTS_ROOT, DEFAULT_ATTACH_OUTPUTS_ROOT } from "./stageFileRoots.js";
 import { nonblockingReadFlags } from "./fsOperations.js";
 import { getPlatform } from "./platform.js";
@@ -37,49 +29,50 @@ import { probeNoFollowAny } from "./fsBoundRead.js";
 import { statChain, openNoFollow } from "./fsSafety/pathRevalidation.js";
 import { isSentinelInode } from "./slowOperations.js";
 
+//@ chunk-wn385gmf.js:19715-20071 fingerprint = FileTooLargeError (0.887)
 /**
  * 文件总大小超过 maxSizeBytes 的错误（带 sizeInBytes/maxSizeBytes）。
  */
-//@ chunk-wn385gmf.js:19715-20071 fingerprint = FileTooLargeError (0.887)
 class FileTooLargeError extends Error {
   sizeInBytes;
   maxSizeBytes;
-  constructor(n, e, r = "") {
+  constructor(n, e, allowLargeHint = "") {
     super(
-      `File content (${formatFileSize(n)}) exceeds maximum allowed size (${formatFileSize(e)}). Use offset and limit parameters to read specific portions of the file, or search for specific content instead of reading the whole file.${r}`,
+      `File content (${formatFileSize(n)}) exceeds maximum allowed size (${formatFileSize(e)}). Use offset and limit parameters to read specific portions of the file, or search for specific content instead of reading the whole file.${allowLargeHint}`,
     );
     this.sizeInBytes = n;
     this.maxSizeBytes = e;
     this.name = "FileTooLargeError";
   }
 }
+//@ chunk-wn385gmf.js:20071-20454 layout
 /**
  * 所选行区间字节数超过上限的错误。
  */
-//@ chunk-wn385gmf.js:20071-20454 layout
 class SelectedRangeTooLargeError extends Error {
   selectedBytes;
   maxSelectedBytes;
-  constructor(n, e, r = "") {
+  constructor(selectedBytes, maxSelectedBytes, allowLargeHint = "") {
     super(
-      `The requested line range contains over ${formatFileSize(e)} of text, more than a read can return. Use a smaller limit \u2014 or, if a single line is this large, no limit will fit it: search for specific content instead.${r}`,
+      `The requested line range contains over ${formatFileSize(maxSelectedBytes)} of text, more than a read can return. Use a smaller limit \u2014 or, if a single line is this large, no limit will fit it: search for specific content instead.${allowLargeHint}`,
     );
-    this.selectedBytes = n;
-    this.maxSelectedBytes = e;
+    this.selectedBytes = selectedBytes;
+    this.maxSelectedBytes = maxSelectedBytes;
     this.name = "SelectedRangeTooLargeError";
   }
 }
+//@ chunk-wn385gmf.js:20454-21238 fingerprint = readFileInRange (0.505)
 /**
  * 按行区间读文件：目录报 EISDIR；小于快速路径阈值的普通文件整读（超过 maxBytes 抛 FileTooLargeError），检测编码后切行；否则流式读取。返回内容、行数、总行数、字节数、mtime、notText。
  */
-//@ chunk-wn385gmf.js:20454-21238 fingerprint = readFileInRange (0.505)
 async function readFileInRange(filePath, offset = 0, maxLines, maxBytes, signal, options) {
   signal?.throwIfAborted();
-  let truncateOnByteLimit = options?.truncateOnByteLimit ?? !1,
-    l = options?.maxSelectedBytes,
-    c = options?.handle,
-    f = c ? (options?.handleStats ?? (await c.stat())) : await stat_2(filePath);
-  if (l !== void 0 && f.isFile() && f.size <= l) l = void 0;
+  let truncateOnByteLimit = options?.truncateOnByteLimit ?? false;
+  let maxSelectedBytes = options?.maxSelectedBytes;
+  let handle = options?.handle;
+  let f = handle ? (options?.handleStats ?? (await handle.stat())) : await stat(filePath);
+  if (maxSelectedBytes !== undefined && f.isFile() && f.size <= maxSelectedBytes)
+    maxSelectedBytes = undefined;
   if (f.isDirectory())
     throw Object.assign(Error(`EISDIR: illegal operation on a directory, read '${filePath}'`), {
       code: "EISDIR",
@@ -87,14 +80,20 @@ async function readFileInRange(filePath, offset = 0, maxLines, maxBytes, signal,
       syscall: "read",
       path: filePath,
     });
-  if (f.isFile() && f.size < Ue) {
-    if (!truncateOnByteLimit && maxBytes !== void 0 && f.size > maxBytes)
+  if (f.isFile() && f.size < MAX_PANE_UPLOAD_BYTES) {
+    if (!truncateOnByteLimit && maxBytes !== undefined && f.size > maxBytes)
       throw new FileTooLargeError(f.size, maxBytes);
-    let h = c ? await c.readFile({ signal: signal }) : await readFile(filePath, { signal: signal });
-    if (!truncateOnByteLimit && maxBytes !== void 0) {
+    let h = handle
+      ? await handle.readFile({
+          signal,
+        })
+      : await readFile(filePath, {
+          signal,
+        });
+    if (!truncateOnByteLimit && maxBytes !== undefined) {
       if (h.length > maxBytes) throw new FileTooLargeError(h.length, maxBytes);
     }
-    let { encoding: encoding, notText: notText } = detectTextEncoding(h);
+    let { encoding, notText } = detectTextEncoding(h);
     return {
       ...readFileInRangeFast(
         h.toString(encoding),
@@ -102,10 +101,12 @@ async function readFileInRange(filePath, offset = 0, maxLines, maxBytes, signal,
         f.mtimeMs,
         offset,
         maxLines,
-        truncateOnByteLimit ? maxBytes : void 0,
-        l,
+        truncateOnByteLimit ? maxBytes : undefined,
+        maxSelectedBytes,
       ),
-      ...(notText && { notText: notText }),
+      ...(notText && {
+        notText,
+      }),
     };
   }
   return readFileInRangeStreaming(
@@ -113,98 +114,110 @@ async function readFileInRange(filePath, offset = 0, maxLines, maxBytes, signal,
     offset,
     maxLines,
     maxBytes,
-    l,
-    f.isFile() ? void 0 : y3o,
+    maxSelectedBytes,
+    f.isFile() ? undefined : MAX_CHROME_UPLOAD_BYTES,
     truncateOnByteLimit,
     signal,
-    c ? { handle: c, mtimeMs: f.mtimeMs, positional: f.isFile() } : void 0,
+    handle
+      ? {
+          handle,
+          mtimeMs: f.mtimeMs,
+          positional: f.isFile(),
+        }
+      : undefined,
   );
 }
+//@ chunk-wn385gmf.js:21238-22228 fingerprint = readFileInRangeFast (1)
 /**
  * 内存中按行切片（处理 BOM、CRLF、字节截断与选区上限）。
  */
-//@ chunk-wn385gmf.js:21238-22228 fingerprint = readFileInRangeFast (1)
-function readFileInRangeFast(n, e, r, s, o, a, u) {
+function readFileInRangeFast(n, totalBytes, mtimeMs, s, o, a, u) {
   let l = n.charCodeAt(0) === 65279;
-  if (l) e -= 3;
-  let c = l ? n.slice(1) : n;
-  if (s === 0 && o === void 0 && a === void 0 && u === void 0) {
-    let y = c.includes("\r")
-      ? c.replaceAll(
+  if (l) totalBytes -= 3;
+  let text = l ? n.slice(1) : n;
+  if (s === 0 && o === undefined && a === undefined && u === undefined) {
+    let y = text.includes("\r")
+      ? text.replaceAll(
           `\r
 `,
           `
 `,
         )
-      : c;
+      : text;
     if (y.endsWith("\r")) y = y.slice(0, -1);
-    let S = 1,
-      index = y.indexOf(`
+    let S = 1;
+    let index = y.indexOf(`
 `);
-    while (index !== -1)
-      (S++,
-        (index = y.indexOf(
-          `
+    while (index !== -1) {
+      S++;
+      index = y.indexOf(
+        `
 `,
-          index + 1,
-        )));
+        index + 1,
+      );
+    }
     return {
       content: y,
       lineCount: S,
       totalLines: S,
-      totalBytes: e,
+      totalBytes,
       readBytes: Buffer.byteLength(y, "utf8"),
-      mtimeMs: r,
-      truncatedByBytes: !1,
+      mtimeMs,
+      truncatedByBytes: false,
     };
   }
-  let f = o !== void 0 ? s + o : 1 / 0,
-    selectedLines = [],
-    g = 0,
-    p = 0,
-    newlinePos,
-    w = 0,
-    b = !1;
+  let f = o !== undefined ? s + o : 1 / 0;
+  let selectedLines = [];
+  let lineIndex = 0;
+  let startPos = 0;
+  let newlinePos;
+  let selectedBytes = 0;
+  let truncatedByBytes = false;
   function tryPush(line) {
-    if (u !== void 0 || a !== void 0) {
-      let S = selectedLines.length > 0 ? 1 : 0,
-        O = w + S + Buffer.byteLength(line);
-      if (a !== void 0 && O > a) return ((b = !0), !1);
-      if (u !== void 0 && O > u) throw new SelectedRangeTooLargeError(O, u);
-      w = O;
+    if (u !== undefined || a !== undefined) {
+      let sep = selectedLines.length > 0 ? 1 : 0;
+      let O = selectedBytes + sep + Buffer.byteLength(line);
+      if (a !== undefined && O > a) {
+        truncatedByBytes = true;
+        return false;
+      }
+      if (u !== undefined && O > u) throw new SelectedRangeTooLargeError(O, u);
+      selectedBytes = O;
     }
-    return (selectedLines.push(line), !0);
+    selectedLines.push(line);
+    return true;
   }
   while (
-    (newlinePos = c.indexOf(
+    (newlinePos = text.indexOf(
       `
 `,
-      p,
+      startPos,
     )) !== -1
   ) {
-    if (g >= s && g < f && !b) {
-      let line = c.slice(p, newlinePos);
+    if (lineIndex >= s && lineIndex < f && !truncatedByBytes) {
+      let line = text.slice(startPos, newlinePos);
       if (line.endsWith("\r")) line = line.slice(0, -1);
       tryPush(line);
     }
-    (g++, (p = newlinePos + 1));
+    lineIndex++;
+    startPos = newlinePos + 1;
   }
-  if (g >= s && g < f && !b) {
-    let line = c.slice(p);
+  if (lineIndex >= s && lineIndex < f && !truncatedByBytes) {
+    let line = text.slice(startPos);
     if (line.endsWith("\r")) line = line.slice(0, -1);
     tryPush(line);
   }
-  g++;
-  let joined = selectedLines.join(`
+  lineIndex++;
+  let content = selectedLines.join(`
 `);
   return {
-    content: joined,
+    content,
     lineCount: selectedLines.length,
-    totalLines: g,
-    totalBytes: e,
-    readBytes: Buffer.byteLength(joined, "utf8"),
-    mtimeMs: r,
-    truncatedByBytes: b,
+    totalLines: lineIndex,
+    totalBytes,
+    readBytes: Buffer.byteLength(content, "utf8"),
+    mtimeMs,
+    truncatedByBytes,
   };
 }
 //@ chunk-wn385gmf.js:22228-22291 fingerprint = streamOnOpen (1)
@@ -213,189 +226,219 @@ function streamOnOpen(n) {
     this.resolveMtime(err ? 0 : stats.mtimeMs);
   });
 }
+//@ chunk-wn385gmf.js:22291-22436 layout
 /**
  * 流式读取的数据回调：首块检测 UTF-16LE 后切换解码器。
  */
-//@ chunk-wn385gmf.js:22291-22436 layout
 function streamOnDataWithBomDetection(n) {
   if (this.isFirstChunk && detectEncodingFromBom(n) === "utf16le")
     this.decoder = new StringDecoder("utf16le");
-  let write = this.decoder.write(n);
-  if (write.length > 0) streamOnData.call(this, write);
+  let e = this.decoder.write(n);
+  if (e.length > 0) streamOnData.call(this, e);
 }
 //@ chunk-wn385gmf.js:22436-24210 fingerprint = streamOnData (0.885)
 function streamOnData(n) {
-  let e = n;
+  let chunk = n;
   if (this.isFirstChunk) {
-    if (((this.isFirstChunk = !1), e.charCodeAt(0) === 65279)) e = e.slice(1);
+    this.isFirstChunk = false;
+    if (chunk.charCodeAt(0) === 65279) chunk = chunk.slice(1);
   }
-  let byteLength = Buffer.byteLength(e);
-  if (
-    ((this.totalBytesRead += byteLength),
-    this.hardCapBytes !== void 0 && this.totalBytesRead > this.hardCapBytes)
-  ) {
+  let r = Buffer.byteLength(chunk);
+  this.totalBytesRead += r;
+  if (this.hardCapBytes !== undefined && this.totalBytesRead > this.hardCapBytes) {
     this.stream.destroy(new FileTooLargeError(this.totalBytesRead, this.hardCapBytes));
     return;
   }
-  if (!this.truncateOnByteLimit && this.maxBytes !== void 0 && this.totalBytesRead > this.maxBytes) {
+  if (!this.truncateOnByteLimit && this.maxBytes !== undefined && this.totalBytesRead > this.maxBytes) {
     this.stream.destroy(new FileTooLargeError(this.totalBytesRead, this.maxBytes));
     return;
   }
-  let s = this.partial.length > 0 ? this.partial + e : e,
-    o = this.partialBytes + byteLength;
-  ((this.partial = ""), (this.partialBytes = 0));
-  let startPos = 0,
-    newlinePos;
+  let data = this.partial.length > 0 ? this.partial + chunk : chunk;
+  let o = this.partialBytes + r;
+  this.partial = "";
+  this.partialBytes = 0;
+  let startPos = 0;
+  let newlinePos;
   while (
-    (newlinePos = s.indexOf(
+    (newlinePos = data.indexOf(
       `
 `,
       startPos,
     )) !== -1
   ) {
     if (this.currentLineIndex >= this.offset && this.currentLineIndex < this.endLine) {
-      let line = s.slice(startPos, newlinePos);
+      let line = data.slice(startPos, newlinePos);
       if (line.endsWith("\r")) line = line.slice(0, -1);
-      let c = this.truncateOnByteLimit && this.maxBytes !== void 0;
-      if (c || this.maxSelectedBytes !== void 0) {
-        let f = this.selectedLines.length > 0 ? 1 : 0,
-          h = this.selectedBytes + f + Buffer.byteLength(line);
-        if (c && h > this.maxBytes) ((this.truncatedByBytes = !0), (this.endLine = this.currentLineIndex));
-        else if (this.maxSelectedBytes !== void 0 && h > this.maxSelectedBytes) {
+      let c = this.truncateOnByteLimit && this.maxBytes !== undefined;
+      if (c || this.maxSelectedBytes !== undefined) {
+        let sep = this.selectedLines.length > 0 ? 1 : 0;
+        let h = this.selectedBytes + sep + Buffer.byteLength(line);
+        if (c && h > this.maxBytes) {
+          this.truncatedByBytes = true;
+          this.endLine = this.currentLineIndex;
+        } else if (this.maxSelectedBytes !== undefined && h > this.maxSelectedBytes) {
           this.stream.destroy(new SelectedRangeTooLargeError(h, this.maxSelectedBytes));
           return;
-        } else ((this.selectedBytes = h), this.selectedLines.push(line));
+        } else {
+          this.selectedBytes = h;
+          this.selectedLines.push(line);
+        }
       } else this.selectedLines.push(line);
     }
-    (this.currentLineIndex++, (startPos = newlinePos + 1));
+    this.currentLineIndex++;
+    startPos = newlinePos + 1;
   }
-  if (startPos < s.length) {
+  if (startPos < data.length) {
     if (this.currentLineIndex >= this.offset && this.currentLineIndex < this.endLine) {
-      let fragment = s.slice(startPos),
-        c = startPos === 0 ? o : Buffer.byteLength(fragment),
-        f = this.truncateOnByteLimit && this.maxBytes !== void 0;
-      if (f || this.maxSelectedBytes !== void 0) {
-        let h = this.selectedLines.length > 0 ? 1 : 0,
-          g = this.selectedBytes + h + c;
+      let fragment = data.slice(startPos);
+      let c = startPos === 0 ? o : Buffer.byteLength(fragment);
+      let f = this.truncateOnByteLimit && this.maxBytes !== undefined;
+      if (f || this.maxSelectedBytes !== undefined) {
+        let sep = this.selectedLines.length > 0 ? 1 : 0;
+        let g = this.selectedBytes + sep + c;
         if (f && g > this.maxBytes) {
-          ((this.truncatedByBytes = !0), (this.endLine = this.currentLineIndex));
+          this.truncatedByBytes = true;
+          this.endLine = this.currentLineIndex;
           return;
         }
-        if (this.maxSelectedBytes !== void 0 && g > this.maxSelectedBytes) {
+        if (this.maxSelectedBytes !== undefined && g > this.maxSelectedBytes) {
           this.stream.destroy(new SelectedRangeTooLargeError(g, this.maxSelectedBytes));
           return;
         }
       }
-      ((this.partial = fragment), (this.partialBytes = c));
+      this.partial = fragment;
+      this.partialBytes = c;
     }
   }
 }
+//@ chunk-wn385gmf.js:24210-24985 fingerprint = streamOnEnd (0.923)
 /**
  * 流式读取结束：冲刷解码器与最后一行，完成统计。
  */
-//@ chunk-wn385gmf.js:24210-24985 fingerprint = streamOnEnd (0.923)
 function streamOnEnd() {
-  let end = this.decoder.end();
-  if (end.length > 0) {
-    if ((streamOnData.call(this, end), this.stream.destroyed)) return;
+  let n = this.decoder.end();
+  if (n.length > 0) {
+    streamOnData.call(this, n);
+    if (this.stream.destroyed) return;
   }
   let line = this.partial;
   if (line.endsWith("\r")) line = line.slice(0, -1);
   if (this.currentLineIndex >= this.offset && this.currentLineIndex < this.endLine)
-    if (this.truncateOnByteLimit && this.maxBytes !== void 0) {
+    if (this.truncateOnByteLimit && this.maxBytes !== undefined) {
       let sep = this.selectedLines.length > 0 ? 1 : 0;
-      if (this.selectedBytes + sep + Buffer.byteLength(line) > this.maxBytes) this.truncatedByBytes = !0;
+      if (this.selectedBytes + sep + Buffer.byteLength(line) > this.maxBytes) this.truncatedByBytes = true;
       else this.selectedLines.push(line);
     } else this.selectedLines.push(line);
   this.currentLineIndex++;
-  let joined = this.selectedLines.join(`
-`),
-    truncated = this.truncatedByBytes;
+  let content = this.selectedLines.join(`
+`);
+  let truncated = this.truncatedByBytes;
   this.mtimeReady.then((mtimeMs) => {
     this.resolve({
-      content: joined,
+      content,
       lineCount: this.selectedLines.length,
       totalLines: this.currentLineIndex,
       totalBytes: this.totalBytesRead,
-      readBytes: Buffer.byteLength(joined, "utf8"),
-      mtimeMs: mtimeMs,
+      readBytes: Buffer.byteLength(content, "utf8"),
+      mtimeMs,
       truncatedByBytes: truncated,
     });
   });
 }
 //@ chunk-wn385gmf.js:24985-25653 fingerprint = readFileInRangeStreaming (0.846)
-function readFileInRangeStreaming(n, e, r, s, o, a, u, l, c) {
+function readFileInRangeStreaming(
+  filePath,
+  offset,
+  maxLines,
+  maxBytes,
+  maxSelectedBytes,
+  hardCapBytes,
+  truncateOnByteLimit,
+  signal,
+  c,
+) {
   return new Promise((resolve, reject) => {
-    let g = {
+    let state = {
       stream: c
-        ? createAbortableStream(c.handle, c.positional, l)
-        : createReadStream(n, { highWaterMark: 524288, ...(l ? { signal: l } : void 0) }),
+        ? createAbortableStream(c.handle, c.positional, signal)
+        : createReadStream(filePath, {
+            highWaterMark: 524288,
+            ...(signal
+              ? {
+                  signal,
+                }
+              : undefined),
+          }),
       decoder: new StringDecoder("utf8"),
-      offset: e,
-      endLine: r !== void 0 ? e + r : 1 / 0,
-      maxBytes: s,
-      maxSelectedBytes: o,
-      hardCapBytes: a,
-      truncateOnByteLimit: u,
-      resolve: resolve,
+      offset,
+      endLine: maxLines !== undefined ? offset + maxLines : 1 / 0,
+      maxBytes,
+      maxSelectedBytes,
+      hardCapBytes,
+      truncateOnByteLimit,
+      resolve,
       totalBytesRead: 0,
       selectedBytes: 0,
-      truncatedByBytes: !1,
+      truncatedByBytes: false,
       currentLineIndex: 0,
       selectedLines: [],
       partial: "",
       partialBytes: 0,
-      isFirstChunk: !0,
+      isFirstChunk: true,
       resolveMtime: () => {},
       mtimeReady: null,
     };
-    if (
-      ((g.mtimeReady = new Promise((p) => {
-        g.resolveMtime = p;
-      })),
-      c)
-    )
-      g.resolveMtime(c.mtimeMs);
-    else g.stream.once("open", streamOnOpen.bind(g));
-    (g.stream.on("data", je.bind(g)), g.stream.once("end", We.bind(g)), g.stream.once("error", reject));
+    state.mtimeReady = new Promise((resolve) => {
+      state.resolveMtime = resolve;
+    });
+    if (c) state.resolveMtime(c.mtimeMs);
+    else state.stream.once("open", streamOnOpen.bind(state));
+    state.stream.on("data", decodeWithBomDetection.bind(state));
+    state.stream.once("end", decodeStreamEnd.bind(state));
+    state.stream.once("error", reject);
   });
 }
 //@ chunk-wn385gmf.js:25747-25771 placement
-var je = STREAM_DECODE_OPTS_2(streamOnDataWithBomDetection),
-  We = STREAM_DECODE_OPTS_2(streamOnEnd);
+var decodeWithBomDetection = STREAM_DECODE_OPTS_2(streamOnDataWithBomDetection);
+var decodeStreamEnd = STREAM_DECODE_OPTS_2(streamOnEnd);
 //@ chunk-wn385gmf.js:25771-26264 placement
-function createAbortableStream(n, e, r) {
-  let allocUnsafe = Buffer.allocUnsafe(524288),
-    a = e ? 0 : null,
-    u = !1,
-    l = new Readable({
-      read() {
-        if (u) return;
-        ((u = !0),
-          n
-            .read(allocUnsafe, 0, 524288, a)
-            .then(({ bytesRead: bytesRead }) => {
-              if (((u = !1), l.destroyed)) return;
-              if (bytesRead === 0) {
-                l.push(null);
-                return;
-              }
-              if (a !== null) a += bytesRead;
-              l.push(Buffer.from(allocUnsafe.subarray(0, bytesRead)));
-            })
-            .catch((c) => {
-              ((u = !1), l.destroy(toError(c)));
-            }));
-      },
-    });
+function createAbortableStream(handle, e, r) {
+  let o = Buffer.allocUnsafe(524288);
+  let a = e ? 0 : null;
+  let u = false;
+  let l = new Readable({
+    read() {
+      if (u) return;
+      u = true;
+      handle
+        .read(o, 0, 524288, a)
+        .then(({ bytesRead }) => {
+          u = false;
+          if (l.destroyed) return;
+          if (bytesRead === 0) {
+            l.push(null);
+            return;
+          }
+          if (a !== null) a += bytesRead;
+          l.push(Buffer.from(o.subarray(0, bytesRead)));
+        })
+        .catch((error) => {
+          u = false;
+          l.destroy(toError(error));
+        });
+    },
+  });
   if (r) {
     let c = () => {
       l.destroy(r.reason instanceof Error ? r.reason : new AbortError());
     };
     if (r.aborted) c();
-    else
-      (r.addEventListener("abort", c, { once: !0 }),
-        l.once("close", () => r.removeEventListener("abort", c)));
+    else {
+      r.addEventListener("abort", c, {
+        once: true,
+      });
+      l.once("close", () => r.removeEventListener("abort", c));
+    }
   }
   return l;
 }
@@ -408,171 +451,215 @@ async function logFileStateResync(n, e, r = {}) {
   let s = fullReadState(n, e);
   if (!s) return null;
   try {
-    let o = await getFileModificationTimeAsync(e);
-    if (o <= s.timestamp) return null;
-    let a = tv((await readFileChecked(e)).content);
+    let timestamp = await getFileModificationTimeAsync(e);
+    if (timestamp <= s.timestamp) return null;
+    let a = stripBom((await readFileChecked(e)).content);
     if (n.get(e) !== s) return null;
-    return compareFileContent(n, e, s, o, a, r.requireReadBeforeWrite === !0);
+    return compareFileContent(n, e, s, timestamp, a, r.requireReadBeforeWrite === true);
   } catch {
     return null;
   }
 }
+//@ chunk-wn385gmf.js:26646-26782 placement
 /**
  * 取该文件的完整读取状态（或从头开始的部分视图）。
  */
-//@ chunk-wn385gmf.js:26646-26782 placement
 function fullReadState(n, e) {
   let r = n.get(e);
   if (!r) return null;
-  let s = r.isPartialView === !0 && (r.offset ?? 1) <= 1 && r.limit === void 0;
+  let s = r.isPartialView === true && (r.offset ?? 1) <= 1 && r.limit === undefined;
   return isFullFileView(r) || s ? r : null;
 }
 //@ chunk-wn385gmf.js:26782-27186 placement
-function compareFileContent(n, e, r, s, o, a) {
-  let u = y1(r, o);
-  return (
-    n.set(e, {
-      content: o,
-      timestamp: s,
-      offset: void 0,
-      limit: void 0,
-      ...((!u || r.contentNotInModelContext) && { contentNotInModelContext: !0 }),
-      ...((r.isPartialView || (a && !u)) && { isPartialView: !0 }),
-      ...(((a && !u) || r.refreshedBehindModel) && { refreshedBehindModel: !0 }),
-      ...(r.startupMemorySeed && { startupMemorySeed: !0 }),
-      ...(u && r.seededFromContext && { seededFromContext: !0 }),
+function compareFileContent(n, e, r, timestamp, o, a) {
+  let u = matchesContentHash(r, o);
+  n.set(e, {
+    content: o,
+    timestamp,
+    offset: undefined,
+    limit: undefined,
+    ...((!u || r.contentNotInModelContext) && {
+      contentNotInModelContext: true,
     }),
-    u ? "unchanged" : "changed"
-  );
+    ...((r.isPartialView || (a && !u)) && {
+      isPartialView: true,
+    }),
+    ...(((a && !u) || r.refreshedBehindModel) && {
+      refreshedBehindModel: true,
+    }),
+    ...(r.startupMemorySeed && {
+      startupMemorySeed: true,
+    }),
+    ...(u &&
+      r.seededFromContext && {
+        seededFromContext: true,
+      }),
+  });
+  return u ? "unchanged" : "changed";
 }
+//@ chunk-wn385gmf.js:27186-27424 placement
 /**
  * 磁盘大小与记录的内容长度（考虑换行转换）是否不符。
  */
-//@ chunk-wn385gmf.js:27186-27424 placement
 function isSizeInconsistent(n, e) {
-  if (n.content === "" && n.contentHash !== void 0) {
-    let o = n.contentLength ?? 0;
-    return e < o || e > o * 4 + 3;
+  if (n.content === "" && n.contentHash !== undefined) {
+    let contentLength = n.contentLength ?? 0;
+    return e < contentLength || e > contentLength * 4 + 3;
   }
-  let byteLength = Buffer.byteLength(n.content),
-    s = 0;
+  let r = Buffer.byteLength(n.content);
+  let s = 0;
   for (
     let index = n.content.indexOf(`
 `);
     index !== -1;
-  )
-    (s++,
-      (index = n.content.indexOf(
-        `
+  ) {
+    s++;
+    index = n.content.indexOf(
+      `
 `,
-        index + 1,
-      )));
-  return e < byteLength || e > byteLength + s + 3;
+      index + 1,
+    );
+  }
+  return e < r || e > r + s + 3;
 }
 //@ chunk-wn385gmf.js:27424-27483 placement
-function mor() {
-  return mn() ? { product: DEFAULT_OUTPUTS_ROOT, attach: DEFAULT_ATTACH_OUTPUTS_ROOT } : void 0;
+/**
+ * defaultOutputRoots：默认输出根目录。
+ */
+function defaultOutputRoots() {
+  return isRemoteManagedEnvironment()
+    ? {
+        product: DEFAULT_OUTPUTS_ROOT,
+        attach: DEFAULT_ATTACH_OUTPUTS_ROOT,
+      }
+    : undefined;
 }
+//@ chunk-wn385gmf.js:27483-27660 placement
 /**
  * 路径是否在产品同步目录下且与附件路径对应。
  */
-//@ chunk-wn385gmf.js:27483-27660 placement
 function isSyncedAttachPath(n, e, r) {
   let s = `${r.product}/`;
-  if (!n.startsWith(s)) return !1;
+  if (!n.startsWith(s)) return false;
   let sliced = n.slice(s.length);
   return sliced.split("/").every((u) => u !== "" && u !== "." && u !== "..") && e === `${r.attach}/${sliced}`;
 }
+//@ chunk-wn385gmf.js:27660-27828 placement
 /**
  * 检查文件状态是否需要重新同步，结果只回调一次。
  */
-//@ chunk-wn385gmf.js:27660-27828 placement
-async function checkFileStateResyncOnce(n, e, r, s, o, a = {}) {
-  let u = !1,
-    l = (c, f, h) => {
-      if (!u && !o.aborted) ((u = !0), a.onOutcome?.(c, f, h));
-    };
+async function checkFileStateResyncOnce(readFileState, normalizedPath, fileState, s, signal, a = {}) {
+  let u = false;
+  let l = (c, f, h) => {
+    if (!u && !signal.aborted) {
+      u = true;
+      a.onOutcome?.(c, f, h);
+    }
+  };
   try {
-    return await checkFileStateResync(n, e, r, s, o, a, l);
+    return await checkFileStateResync(readFileState, normalizedPath, fileState, s, signal, a, l);
   } catch (error) {
-    throw (l("other", !1), error);
+    l("other", false);
+    throw error;
   }
 }
+//@ chunk-wn385gmf.js:27828-29146 placement
 /**
  * 检查读过的文件是否在别处被改动（部分视图、链接、超大、同/异）。
  */
-//@ chunk-wn385gmf.js:27828-29146 placement
 async function checkFileStateResync(n, e, r, s, o, a, u) {
-  let l = (m) => (u(m, !1), !1);
+  let l = (m) => {
+    u(m, false);
+    return false;
+  };
   if (!isFullFileView(r)) return l("partial_view");
   if (r.touchCompared) return l("already_compared");
   o.throwIfAborted();
-  let c = nonblockingReadFlags(),
-    f = getPlatform(),
-    h = f === "linux" || f === "wsl",
-    g = typeof c === "number" && (h || (f === "macos" && !(await probeNoFollowAny()))),
-    p;
+  let c = nonblockingReadFlags();
+  let platform = getPlatform();
+  let h = platform === "linux" || platform === "wsl";
+  let g = typeof c === "number" && (h || (platform === "macos" && !(await probeNoFollowAny())));
+  let p;
   try {
-    if (!g && (await statChain(e)) === void 0) return l("other");
-    p = typeof c === "number" ? await openNoFollow(e, c | constants_2.O_NOFOLLOW, f) : await open_2(e, c);
+    if (!g && (await statChain(e)) === undefined) return l("other");
+    p = typeof c === "number" ? await openNoFollow(e, c | constants.O_NOFOLLOW, platform) : await open(e, c);
   } catch (error) {
-    let w = getErrnoCode(error);
-    if (w === "ENOENT" || w === "ELOOP") return l(w === "ENOENT" ? "enoent" : "leaf_link");
+    let errnoCode = getErrnoCode(error);
+    if (errnoCode === "ENOENT" || errnoCode === "ELOOP")
+      return l(errnoCode === "ENOENT" ? "enoent" : "leaf_link");
     throw error;
   }
   try {
-    let stats = await p.stat(),
-      w = h
-        ? await readlink_2(`/proc/self/fd/${p.fd}`).catch(() => {
-            return;
-          })
-        : e,
-      b =
-        w !== e &&
-        w !== void 0 &&
-        a.outputsLink !== void 0 &&
-        isSyncedAttachPath(e, w, a.outputsLink) &&
-        a.isLandingJudged?.(w) === !0;
+    let stats = await p.stat();
+    let w = h
+      ? await readlink(`/proc/self/fd/${p.fd}`).catch(() => {
+          return;
+        })
+      : e;
+    let b =
+      w !== e &&
+      w !== undefined &&
+      a.outputsLink !== undefined &&
+      isSyncedAttachPath(e, w, a.outputsLink) &&
+      a.isLandingJudged?.(w) === true;
     if (!stats.isFile()) return l("not_regular");
     if (stats.size > s) return l("oversize");
     if (stats.nlink > 1) return l("nlink");
-    if (w === void 0) return l("other");
+    if (w === undefined) return l("other");
     if (w !== e && !b) return l("link_on_path");
     if (!g) {
-      let stats = await p.stat({ bigint: !0 }),
-        S = await statChain(e);
-      if (S === void 0 || S.dev !== stats.dev || S.ino !== stats.ino || isSentinelInode(S.ino))
+      let stats = await p.stat({
+        bigint: true,
+      });
+      let S = await statChain(e);
+      if (S === undefined || S.dev !== stats.dev || S.ino !== stats.ino || isSentinelInode(S.ino))
         return l("link_on_path");
     }
-    let R = !1,
-      _ = !1;
+    let R = false;
+    let _ = false;
     try {
-      ((R =
+      R =
         !isSizeInconsistent(r, stats.size) &&
-        y1(r, (await readFileInRange(e, 0, void 0, s, o, { handle: p, handleStats: stats })).content)),
-        (_ = !0));
+        matchesContentHash(
+          r,
+          (
+            await readFileInRange(e, 0, undefined, s, o, {
+              handle: p,
+              handleStats: stats,
+            })
+          ).content,
+        );
+      _ = true;
     } finally {
       if (!o.aborted && n.get(e) === r) {
-        if ((n.set(e, { ...r, ...(R && { timestamp: Math.floor(stats.mtimeMs) }), touchCompared: !0 }), _))
-          u(R ? "same" : "differs", b, stats.size);
-      } else ((R = !1), u("other", !1));
+        n.set(e, {
+          ...r,
+          ...(R && {
+            timestamp: Math.floor(stats.mtimeMs),
+          }),
+          touchCompared: true,
+        });
+        if (_) u(R ? "same" : "differs", b, stats.size);
+      } else {
+        R = false;
+        u("other", false);
+      }
     }
     return R;
   } finally {
-    let close = p.close();
-    if (o.aborted) close.catch(() => {});
-    else await close;
+    let m = p.close();
+    if (o.aborted) m.catch(() => {});
+    else await m;
   }
 }
-
 export {
   isSyncedAttachPath,
   readFileInRange,
+  logFileStateResync,
   FileTooLargeError,
   SelectedRangeTooLargeError,
   readFileInRangeFast,
-  mor,
+  defaultOutputRoots,
   checkFileStateResyncOnce,
   createAbortableStream,
-  logFileStateResync,
 };

@@ -9,7 +9,7 @@
  * attribution: placement 14
  */
 import { join, relative, basename } from "path";
-import { writeFile, lstat, lstat as lstat_2, rm, mkdir, readdir, stat, rename, lutimes } from "fs/promises";
+import { writeFile, lstat, rm, mkdir, readdir, stat, rename, lutimes } from "fs/promises";
 import { createSkillCommand, pruneDynamicSkillsNotIn, clearSkillCaches } from "../../skills/loadSkillsDir.js";
 import { escapeXmlInline } from "../../utils/permissions/checkRegistry.js";
 import { buildSkillAttribution } from "../../utils/telemetry/skillAttribution.js";
@@ -17,25 +17,25 @@ import { frontmatterProblemResult } from "../memorySync/pathScrub.js";
 import { raceWithAbortSignal, sleep } from "../../utils/sleep.js";
 import {
   startPendingDownload,
-  S3n,
-  cet,
+  skillSwitchedOffText,
+  MAX_SYNCED_SKILL_BYTES,
   parseValidRows,
-  uet,
-  j1t,
-  Zoe,
-  det,
-  YKs,
-  _3n,
-  dqs,
+  stringArray,
+  refreshAccountSkillsSyncFlag,
+  isSkillsSyncActive,
+  isSkillsCustomizationAllowed,
+  readSkillsSyncSetting,
+  isSessionRefsSkillsSyncOn,
+  convertedSkillsListPin,
   shouldConvertSkillsListAsks,
   mergeRowsByKey,
-  y3n,
+  takeReuseStamp,
   pruneSyncedSkillState,
   replaceRowsWithAttribution,
-  dfn,
-  rqs,
+  writeOrClearReuseStamp,
+  registerSkillPlaceholder,
   registerPendingDownload,
-  oqs,
+  unregisterSkillPlaceholder,
   pruneGoneSkillDirs,
 } from "../../utils/claudeAiSync/skillsSync.js";
 import { AbortError, getErrnoCode, toError, isENOENT } from "../../utils/errors.js";
@@ -43,14 +43,14 @@ import { getCommands, clearCommandMemoizationCaches } from "../../commands.js";
 import { getProjectRootOrNull, getAccountSkillsSyncEnabled } from "../../bootstrap/state.js";
 import { isHostCatalogSkill } from "../../utils/commandPredicates.js";
 import {
-  DUr,
-  LUr,
-  W6n,
+  freshRootState,
+  downloadFailure,
+  extractFailure,
   ROOT_REFUSED_RESULT,
-  a$o,
-  G6n,
+  DEFERRED_PLACEMENT,
+  isDirConflictErrno,
   buildLocalPlacementFailure,
-  zun,
+  LOCAL_PLACEMENT_FAILURE,
   SYNC_OK,
   verifySyncRoot,
   readSyncMarker,
@@ -64,63 +64,67 @@ import {
 } from "../../utils/claudeAiSync/syncOwnedRoot.js";
 import { getClaudeConfigDir } from "../../utils/envUtils.js";
 import {
-  SKILLS_SYNC_DIR,
-  MJ,
+  SKILLS_SYNC_DIR_2,
+  isHiddenFoldName,
   SYNCED_MANIFEST_FILE,
   parsePendingClaim,
   syncedItemPath_2,
   LegacyReservedSpellingError,
   getSyncBucket,
-  $Jr,
+  syncKeyOf,
 } from "../../utils/plugins/syncedItems.js";
 import {
-  Y,
-  fn,
+  syncedSkillDirPath,
+  perProcessTempDir,
   moveToSyncTrash,
-  $t,
-  qt,
-  ne,
-  xe,
-  Hce,
-  rt,
-  Hn,
+  syncedSkillsManifestSchema,
+  syncedSkillEntrySchema,
+  skillsSyncDir,
+  trashRootDir,
+  resetSkillSyncState,
+  skillsSyncPath,
+  shouldWeatherIdle,
   reuseSkillsSyncRound,
   noteHidingFoldersGone,
   readSkillsSyncManifest,
   sessionRefSkillEntry,
-  ct,
-  Ie,
+  carryBackingPluginId,
+  FIRST_FAILED_ROUND_THRESHOLD_MS,
   trashStraySyncEntries,
   resolveSkillsBucket,
-  $n,
+  onlyConvertedSkills,
   assignSkillDirs,
-  un,
+  markFirstRoundEmitted,
   hasSyncedSkillMd,
   writeSkillsSyncManifest,
   SKILLS_MANIFEST_SCHEMA,
-  nt,
-  Be,
+  SKILLS_MANIFEST_SCHEMA_PLACEHOLDER,
+  manifestPathIn,
   noteBucketGeneration,
-  ye,
+  listedForKey,
   firstListDeferred,
-  ln,
+  MAX_INSTALL_WAIT_CHAIN,
   readSyncedSkillMd,
-  Fe,
-  jn,
+  isQuizzicalWirthOn,
+  rescheduleResyncByBackoff,
   isSkillMdMissing,
-  Yt,
+  INSTALL_WAIT_CEILING_MS,
 } from "./skillsSync.js";
 import { tmpdir } from "../../utils/tempDir.js";
 import { logForDiagnosticsNoPII } from "../../utils/diagLogs.js";
-import { downloadOrgSkillZip, Aln } from "./orgSkillsApi.js";
+import { downloadOrgSkillZip, fetchOrgSkillsListWithRetry } from "./orgSkillsApi.js";
 import { readAndUnzipFile } from "../../utils/dxt/zip.js";
-import { containsGitDirectory, ifn, createLiveEntryClassifier } from "../../utils/plugins/fileIdentity.js";
+import {
+  containsGitDirectory,
+  isSameFileIdentity,
+  createLiveEntryClassifier,
+} from "../../utils/plugins/fileIdentity.js";
 import {
   recordMountMiss,
   COLLISION_LOSER,
-  nii,
+  hostMountKindForRow,
   createHostSkillReader,
-  hrr,
+  flattenMountMissCounts,
 } from "../../skills/hostSkillMounts.js";
 import { remoteToolsState } from "../../remote/tools/callResults.js";
 import { readFileChecked } from "../../utils/fileRead.js";
@@ -130,52 +134,52 @@ import { fromEnum } from "../analytics/safeMetadata.js";
 import { logFeatureSad, logFeatureOk, logFeatureBad } from "../analytics/featureTelemetry.js";
 import { updateSessionConvertedSkillsAsk } from "../../utils/concurrentSessions.js";
 import { isSessionRefsSyncEnabled } from "../../utils/claudeAiSync/sessionRefsGate.js";
-import { zqe } from "../plugins/accountSync/sessionSkillManifest.js";
+import { sessionSkillManifestSlot } from "../plugins/accountSync/sessionSkillManifest.js";
 import { env } from "../../utils/env.js";
-import { Hee } from "../plugins/accountSync/syncedPluginHooks.js";
+import { isNotFoundServerError } from "../plugins/accountSync/syncedPluginHooks.js";
 import { listErrorTelemetry } from "../plugins/accountSync/listPlugins.js";
 import { logEvent } from "../analytics/index.js";
-import { Jz } from "../../utils/plugins/pluginsChangedSignal.js";
+import { skillsChangedSignal } from "../../utils/plugins/pluginsChangedSignal.js";
 import { getProcessStartTimeAsync, isSameProcessAsync } from "../../utils/processIdentity.js";
 import { logError } from "../../utils/log.js";
-import { limitConcurrency, Idi } from "../../utils/concurrencyLimit.js";
+import { limitConcurrency, preloadThenLimit } from "../../utils/concurrencyLimit.js";
 import { isProcessRunning } from "../../utils/genericProcessUtils.js";
 
+//@ chunk-hme9amad.js:13495-14841 placement = createSkillCommand (0.55)
 /**
  * 为尚未下载正文的同步 skill 创建占位命令；调用时等待下载完成再转交真正的命令，失败时返回「Skill X could not be downloaded … Proceed without it.」。
  */
-//@ chunk-hme9amad.js:13495-14841 placement = createSkillCommand (0.55)
-function createDeferredSyncedSkillCommand(e, n, s) {
-  let t = createSkillCommand({
+function createDeferredSyncedSkillCommand(e, n, baseDir) {
+  let skillCommand = createSkillCommand({
     skillName: e,
-    displayName: void 0,
+    displayName: undefined,
     description: escapeXmlInline(n.description),
-    hasUserSpecifiedDescription: !0,
+    hasUserSpecifiedDescription: true,
     markdownContent: "",
     allowedTools: [],
-    argumentHint: void 0,
+    argumentHint: undefined,
     argumentNames: [],
-    whenToUse: void 0,
-    version: void 0,
-    model: void 0,
-    disableModelInvocation: n.disableModelInvocation ?? !1,
-    userInvocable: n.userInvocable ?? !0,
+    whenToUse: undefined,
+    version: undefined,
+    model: undefined,
+    disableModelInvocation: n.disableModelInvocation ?? false,
+    userInvocable: n.userInvocable ?? true,
     source: "userSettings",
-    baseDir: s,
+    baseDir,
     serverAttribution: buildSkillAttribution(n.skillId, n.backingPluginId),
     loadedFrom: "syncedSkills",
-    hooks: void 0,
-    executionContext: void 0,
-    agent: void 0,
-    paths: void 0,
-    effort: void 0,
-    shell: void 0,
+    hooks: undefined,
+    executionContext: undefined,
+    agent: undefined,
+    paths: undefined,
+    effort: undefined,
+    shell: undefined,
     skillFile: frontmatterProblemResult(
       "was not read: this command was listed before its file was downloaded",
     ),
   });
-  if (t?.type === "prompt")
-    t.getPromptForCommand = async (d, w) => {
+  if (skillCommand?.type === "prompt")
+    skillCommand.getPromptForCommand = async (d, w) => {
       let h = await raceWithAbortSignal(
         startPendingDownload(e),
         w.abortController.signal,
@@ -185,230 +189,265 @@ function createDeferredSyncedSkillCommand(e, n, s) {
         let found = (await getCommands(getProjectRootOrNull(), w.storageV5)).find(
           (D) =>
             D.loadedFrom === "syncedSkills" &&
-            isHostCatalogSkill(D) === isHostCatalogSkill(t) &&
-            D.name === t.name &&
+            isHostCatalogSkill(D) === isHostCatalogSkill(skillCommand) &&
+            D.name === skillCommand.name &&
             D.type === "prompt" &&
-            D.getPromptForCommand !== t.getPromptForCommand,
+            D.getPromptForCommand !== skillCommand.getPromptForCommand,
         );
-        if (found && found.type === "prompt")
-          return (
-            (t.source = found.source),
-            (t.skillRoot = found.skillRoot),
-            (t.skillFile = found.skillFile),
-            (t.contentLength = found.contentLength),
-            (t.progressMessage = found.progressMessage),
-            (t.userInvocable = found.userInvocable),
-            found.getPromptForCommand(d, w)
-          );
+        if (found && found.type === "prompt") {
+          skillCommand.source = found.source;
+          skillCommand.skillRoot = found.skillRoot;
+          skillCommand.skillFile = found.skillFile;
+          skillCommand.contentLength = found.contentLength;
+          skillCommand.progressMessage = found.progressMessage;
+          skillCommand.userInvocable = found.userInvocable;
+          return found.getPromptForCommand(d, w);
+        }
       }
-      let y = h.ok ? "skill not found after download" : h.reason;
+      let reason = h.ok ? "skill not found after download" : h.reason;
       return [
         {
           type: "text",
           text:
             !h.ok && h.withheld
-              ? `${S3n(t.name)} Proceed without it.`
-              : `Skill ${e} could not be downloaded (${y}). Proceed without it.`,
+              ? `${skillSwitchedOffText(skillCommand.name)} Proceed without it.`
+              : `Skill ${e} could not be downloaded (${reason}). Proceed without it.`,
         },
       ];
     };
-  return t;
+  return skillCommand;
 }
 //@ chunk-hme9amad.js:14841-14955 placement
-function checkSkillsSyncRoot(e, n) {
-  return DUr({
+function checkSkillsSyncRoot(storageV5, n) {
+  return freshRootState({
     root: () => n,
     configHome: getClaudeConfigDir,
-    rootLabel: SKILLS_SYNC_DIR,
+    rootLabel: SKILLS_SYNC_DIR_2,
     event: "skills_sync_root_refused",
-    storageV5: e,
+    storageV5,
   });
 }
 //@ chunk-hme9amad.js:14955-15041 placement
-var ut = LUr("zip fetch failed"),
-  Pe = W6n("skill archive unusable or landing obstructed");
+var ZIP_FETCH_FAILED_RESULT = downloadFailure("zip fetch failed");
+var ARCHIVE_UNUSABLE_RESULT = extractFailure("skill archive unusable or landing obstructed");
 //@ chunk-hme9amad.js:15041-16971 placement
 async function downloadSyncedSkill(
   e,
   {
-    round: round,
-    credentials: credentials,
-    storageV5: storageV5,
-    replacesAttributedCopy: replacesAttributedCopy,
-    targetHeldSkillFile: targetHeldSkillFile,
-    classifyOccupant: classifyOccupant,
-    markTargetDestroyed: markTargetDestroyed,
-    noteDownloadedBytes: noteDownloadedBytes,
+    round,
+    credentials,
+    storageV5,
+    replacesAttributedCopy,
+    targetHeldSkillFile,
+    classifyOccupant,
+    markTargetDestroyed,
+    noteDownloadedBytes,
   },
   R,
 ) {
-  let root = round.root,
-    M = Y(root, e.name),
-    S = join(fn(root), relative(root, M)),
-    O = join(tmpdir(), `claude-skill-${process.pid}-${Math.random().toString(36).slice(2)}.zip`);
+  let root = round.root;
+  let M = syncedSkillDirPath(root, e.name);
+  let S = join(perProcessTempDir(root), relative(root, M));
+  let O = join(tmpdir(), `claude-skill-${process.pid}-${Math.random().toString(36).slice(2)}.zip`);
   try {
     if (round.guard.refused()) return ROOT_REFUSED_RESULT;
-    if (R !== void 0) await writeFile(O, R);
+    if (R !== undefined) await writeFile(O, R);
     else {
       if (
         !replacesAttributedCopy &&
         targetHeldSkillFile &&
         (await classifyOccupant(basename(M))) === "inFlight"
-      )
-        return (logForDiagnosticsNoPII("info", "skills_sync_target_in_flight_elsewhere"), a$o);
+      ) {
+        logForDiagnosticsNoPII("info", "skills_sync_target_in_flight_elsewhere");
+        return DEFERRED_PLACEMENT;
+      }
       if (
         !(await downloadOrgSkillZip(e.skillId, O, e.requestedVersion, {
-          isBackground: !0,
-          credentials: credentials,
+          isBackground: true,
+          credentials,
         }))
       )
-        return ut;
+        return ZIP_FETCH_FAILED_RESULT;
       noteDownloadedBytes((await lstat(O).catch(() => null))?.size ?? 0);
     }
     if (!(await round.guard.verify())) return ROOT_REFUSED_RESULT;
-    (await rm(S, { recursive: !0, force: !0 }),
-      await mkdir(fn(root), { recursive: !0 }),
-      await readAndUnzipFile(O, S, { skipEntry: (C) => C.split(/[\\/]/).some((W) => MJ(W)) }));
-    let I = S,
-      B = await readdir(S, { withFileTypes: !0 });
+    await rm(S, {
+      recursive: true,
+      force: true,
+    });
+    await mkdir(perProcessTempDir(root), {
+      recursive: true,
+    });
+    await readAndUnzipFile(O, S, {
+      skipEntry: (C) => C.split(/[\\/]/).some((W) => isHiddenFoldName(W)),
+    });
+    let I = S;
+    let B = await readdir(S, {
+      withFileTypes: true,
+    });
     if (!B.some((C) => C.name === "SKILL.md") && B.length === 1 && B[0].isDirectory()) I = join(S, B[0].name);
     try {
-      if (!(await stat(join(I, "SKILL.md"))).isFile())
-        return (logForDiagnosticsNoPII("warn", "skills_sync_extracted_zip_unusable"), Pe);
+      if (!(await stat(join(I, "SKILL.md"))).isFile()) {
+        logForDiagnosticsNoPII("warn", "skills_sync_extracted_zip_unusable");
+        return ARCHIVE_UNUSABLE_RESULT;
+      }
     } catch {
-      return (logForDiagnosticsNoPII("warn", "skills_sync_extracted_zip_unusable"), Pe);
+      logForDiagnosticsNoPII("warn", "skills_sync_extracted_zip_unusable");
+      return ARCHIVE_UNUSABLE_RESULT;
     }
-    if (await containsGitDirectory(I))
-      return (logForDiagnosticsNoPII("warn", "skills_sync_extracted_zip_unusable"), Pe);
+    if (await containsGitDirectory(I)) {
+      logForDiagnosticsNoPII("warn", "skills_sync_extracted_zip_unusable");
+      return ARCHIVE_UNUSABLE_RESULT;
+    }
     if (!(await round.guard.verify())) return ROOT_REFUSED_RESULT;
-    if (replacesAttributedCopy) await rm(M, { recursive: !0, force: !0 });
+    if (replacesAttributedCopy)
+      await rm(M, {
+        recursive: true,
+        force: true,
+      });
     try {
       await rename(I, M);
     } catch (error) {
-      let W = getErrnoCode(error);
-      if (replacesAttributedCopy || !G6n(W)) {
+      let errnoCode = getErrnoCode(error);
+      if (replacesAttributedCopy || !isDirConflictErrno(errnoCode)) {
         if (replacesAttributedCopy) markTargetDestroyed();
-        return (
-          logForDiagnosticsNoPII("warn", "skills_sync_promotion_failed", { code: W ?? "unknown" }),
-          buildLocalPlacementFailure(W)
-        );
+        logForDiagnosticsNoPII("warn", "skills_sync_promotion_failed", {
+          code: errnoCode ?? "unknown",
+        });
+        return buildLocalPlacementFailure(errnoCode);
       }
       let de = await classifyOccupant(basename(M));
-      if (de === "inFlight")
-        return (logForDiagnosticsNoPII("info", "skills_sync_target_in_flight_elsewhere"), a$o);
-      if (de === "landed") await rm(M, { recursive: !0, force: !0 });
-      else if (!(await moveToSyncTrash(M, storageV5))) return zun;
+      if (de === "inFlight") {
+        logForDiagnosticsNoPII("info", "skills_sync_target_in_flight_elsewhere");
+        return DEFERRED_PLACEMENT;
+      }
+      if (de === "landed")
+        await rm(M, {
+          recursive: true,
+          force: true,
+        });
+      else if (!(await moveToSyncTrash(M, storageV5))) return LOCAL_PLACEMENT_FAILURE;
       try {
         await rename(I, M);
       } catch (error) {
         markTargetDestroyed();
-        let ke = getErrnoCode(error);
-        return (
-          logForDiagnosticsNoPII("warn", "skills_sync_promotion_failed", { code: ke ?? "unknown" }),
-          buildLocalPlacementFailure(ke)
-        );
+        let errnoCode = getErrnoCode(error);
+        logForDiagnosticsNoPII("warn", "skills_sync_promotion_failed", {
+          code: errnoCode ?? "unknown",
+        });
+        return buildLocalPlacementFailure(errnoCode);
       }
     }
     return SYNC_OK;
   } finally {
+    await rm(O, {
+      force: true,
+    }).catch(() => {});
     if (
-      (await rm(O, { force: !0 }).catch(() => {}),
       !round.guard.refused() &&
-        (await verifySyncRoot(
-          root,
-          getClaudeConfigDir(),
-          { event: "skills_sync_root_refused", phase: "sweep", rootLabel: SKILLS_SYNC_DIR },
-          { checkStagingLeaf: !0, storageV5: storageV5 },
-        ).catch(() => null)) === "real")
+      (await verifySyncRoot(
+        root,
+        getClaudeConfigDir(),
+        {
+          event: "skills_sync_root_refused",
+          phase: "sweep",
+          rootLabel: SKILLS_SYNC_DIR_2,
+        },
+        {
+          checkStagingLeaf: true,
+          storageV5,
+        },
+      ).catch(() => null)) === "real"
     )
-      await rm(S, { recursive: !0, force: !0 }).catch(() => {});
+      await rm(S, {
+        recursive: true,
+        force: true,
+      }).catch(() => {});
   }
 }
 //@ chunk-hme9amad.js:16971-16982 placement
-var ri = 500;
+var SYNC_RETRY_SLEEP_MS = 500;
 //@ chunk-hme9amad.js:16982-17116 placement
 async function downloadWithRetry(e, n) {
   try {
-    return await downloadSyncedSkill(e, n, void 0);
+    return await downloadSyncedSkill(e, n, undefined);
   } catch {
-    return (
-      logForDiagnosticsNoPII("warn", "skills_sync_extract_retry"),
-      await sleep(ri),
-      downloadSyncedSkill(e, n, void 0)
-    );
+    logForDiagnosticsNoPII("warn", "skills_sync_extract_retry");
+    await sleep(SYNC_RETRY_SLEEP_MS);
+    return downloadSyncedSkill(e, n, undefined);
   }
 }
 //@ chunk-hme9amad.js:17116-17404 placement
 async function landSyncedSkill(e, n) {
-  let { fromHostMount: fromHostMount } = n;
-  if (fromHostMount !== void 0) {
+  let { fromHostMount } = n;
+  if (fromHostMount !== undefined) {
     let t = await downloadSyncedSkill(e, n, fromHostMount.zip).catch(() => null);
     if (t?.ok) n.markLandedFromHostMount();
     if (t !== null && (t.ok || t.cause !== "extract")) return t;
     recordMountMiss(
       fromHostMount.kind,
-      { reason: t === null ? "landing_threw" : "zip_unusable" },
+      {
+        reason: t === null ? "landing_threw" : "zip_unusable",
+      },
       n.hostMountMissCounts,
     );
   }
   return downloadWithRetry(e, n);
 }
+//@ chunk-hme9amad.js:17404-17561 placement
 /**
  * 启动一轮技能同步；已有同步进行时复用同一 Promise。
  */
-//@ chunk-hme9amad.js:17404-17561 placement
 async function runSyncRoundOnce(e, n, s, t) {
   let d = remoteToolsState();
   if (d.syncPromise) return d.syncPromise;
-  return (
-    (d.syncPromise = runSkillsSyncRound(e, n, s, t).finally(() => {
-      d.syncPromise = null;
-    })),
-    d.syncPromise
-  );
+  d.syncPromise = runSkillsSyncRound(e, n, s, t).finally(() => {
+    d.syncPromise = null;
+  });
+  return d.syncPromise;
 }
 //@ chunk-hme9amad.js:17561-18945 placement
 async function reconcileSkillsManifest(e, n) {
-  let s = join(e, SYNCED_MANIFEST_FILE),
-    t,
-    d,
-    w;
+  let s = join(e, SYNCED_MANIFEST_FILE);
+  let t;
+  let d;
+  let w;
   try {
-    ((d = (await readFileChecked(s, cet)).content), (w = jsonParse(d)));
+    d = (await readFileChecked(s, MAX_SYNCED_SKILL_BYTES)).content;
+    w = jsonParse(d);
   } catch {
     return null;
   }
-  let safeParse = $t().safeParse(w);
-  if (safeParse.success) {
-    let {
-      lastUpdated: lastUpdated,
-      skills: skills,
-      staleDirs: staleDirs,
-      pendingClaims: pendingClaims,
-      ...C
-    } = safeParse.data;
+  let h = syncedSkillsManifestSchema().safeParse(w);
+  if (h.success) {
+    let { lastUpdated, skills, staleDirs, pendingClaims, ...C } = h.data;
     t = {
       ...C,
-      lastUpdated: lastUpdated,
-      skills: parseValidRows(qt(), skills),
-      staleDirs: uet(staleDirs),
-      pendingClaims: uet(pendingClaims),
+      lastUpdated,
+      skills: parseValidRows(syncedSkillEntrySchema(), skills),
+      staleDirs: stringArray(staleDirs),
+      pendingClaims: stringArray(pendingClaims),
     };
   } else return null;
   let y = [
-      ...t.skills.map((skill) => ({ row: skill, syntheticListName: null })),
-      ...["staleDirs", "pendingClaims"].flatMap((S) =>
-        (t[S] ?? []).map((O) => ({
-          row: { name: S === "pendingClaims" ? parsePendingClaim(O).name : O },
-          syntheticListName: S,
-          entry: O,
-        })),
-      ),
-    ],
-    b = 0,
-    R = [],
-    D = [],
-    M = [];
+    ...t.skills.map((row) => ({
+      row,
+      syntheticListName: null,
+    })),
+    ...["staleDirs", "pendingClaims"].flatMap((S) =>
+      (t[S] ?? []).map((O) => ({
+        row: {
+          name: S === "pendingClaims" ? parsePendingClaim(O).name : O,
+        },
+        syntheticListName: S,
+        entry: O,
+      })),
+    ),
+  ];
+  let b = 0;
+  let R = [];
+  let D = [];
+  let M = [];
   for (let S of y) {
     let row = S.row;
     if (S.syntheticListName === "pendingClaims" && (await isClaimOwnerAlive(S.entry))) {
@@ -417,11 +456,11 @@ async function reconcileSkillsManifest(e, n) {
     }
     try {
       let I = syncedItemPath_2(row.name, e);
-      if (await ifn(I, ne())) {
+      if (await isSameFileIdentity(I, skillsSyncDir())) {
         logForDiagnosticsNoPII("info", "skills_sync_sibling_root_row_skipped");
         continue;
       }
-      if (await ifn(I, xe())) {
+      if (await isSameFileIdentity(I, trashRootDir())) {
         logForDiagnosticsNoPII("info", "skills_sync_trash_root_row_skipped");
         continue;
       }
@@ -440,486 +479,641 @@ async function reconcileSkillsManifest(e, n) {
   }
   if (R.length > 0 || D.length > 0 || M.length > 0) {
     let S = jsonStringify(
-      { ...t, skills: R, staleDirs: D.length > 0 ? D : void 0, pendingClaims: M.length > 0 ? M : void 0 },
+      {
+        ...t,
+        skills: R,
+        staleDirs: D.length > 0 ? D : undefined,
+        pendingClaims: M.length > 0 ? M : undefined,
+      },
       null,
       2,
     );
     if (S !== d) await writeFileAtomic(s, S).catch(() => {});
-  } else await rm(s, { force: !0 }).catch(() => {});
+  } else
+    await rm(s, {
+      force: true,
+    }).catch(() => {});
   return b;
 }
+//@ chunk-hme9amad.js:18945-30122 placement
 /**
  * claude.ai skills 同步一轮：检查开关与账号选择、解析 bucket、下载 skill zip 解压到同步目录、清理过期目录、记录 skills_sync_round 遥测；支持睡眠唤醒后的重同步。
  */
-//@ chunk-hme9amad.js:18945-30122 placement
-async function runSkillsSyncRound(e, n, s, t) {
-  let now = Date.now(),
-    startTime = performance.now(),
-    h = !1,
-    y = !1,
-    b = !1,
-    R = !1,
-    D = 0,
-    M = 0,
-    S = () => {
-      let x = Date.now() - now;
-      return {
-        account_opt_in: b,
-        idle: R,
-        woken: "woken" in t,
-        trigger: fromEnum(t.trigger),
-        ...("tickLateMs" in t && { tick_late_ms: t.tickLateMs }),
-        ...(D > 0 && { kept: D }),
-        ...(M > 0 && { approx_downloaded_bytes: Number(M.toPrecision(2)) }),
-        duration_ms: x,
-        suspended_ms: Math.max(0, Math.round(x - (performance.now() - startTime))),
-      };
-    },
-    O = new Map(),
-    I = !1,
-    B = null,
-    C = remoteToolsState(),
-    W = !1,
-    de = null,
-    Me = new Set(),
-    ke = !1;
+async function runSkillsSyncRound(e, storageV5, s, t) {
+  let now = Date.now();
+  let startTime = performance.now();
+  let h = false;
+  let y = false;
+  let b = false;
+  let idle = false;
+  let D = 0;
+  let M = 0;
+  let S = () => {
+    let x = Date.now() - now;
+    return {
+      account_opt_in: b,
+      idle,
+      woken: "woken" in t,
+      trigger: fromEnum(t.trigger),
+      ...("tickLateMs" in t && {
+        tick_late_ms: t.tickLateMs,
+      }),
+      ...(D > 0 && {
+        kept: D,
+      }),
+      ...(M > 0 && {
+        approx_downloaded_bytes: Number(M.toPrecision(2)),
+      }),
+      duration_ms: x,
+      suspended_ms: Math.max(0, Math.round(x - (performance.now() - startTime))),
+    };
+  };
+  let O = new Map();
+  let I = false;
+  let B = null;
+  let C = remoteToolsState();
+  let W = false;
+  let de = null;
+  let Me = new Set();
+  let ke = false;
   try {
-    if (((b = getAccountSkillsSyncEnabled()), j1t())) b = !0;
-    if (!Zoe(e) || !det()) {
+    b = getAccountSkillsSyncEnabled();
+    if (refreshAccountSkillsSyncFlag()) b = true;
+    if (!isSkillsSyncActive(e) || !isSkillsCustomizationAllowed()) {
       logForDiagnosticsNoPII("info", "skills_sync_gate_closed");
-      let { placeholders: placeholders, listedOwnerships: listedOwnerships } = remoteToolsState();
-      if ((listedOwnerships.clear(), placeholders.size > 0)) (placeholders.clear(), Hce());
+      let { placeholders, listedOwnerships } = remoteToolsState();
+      listedOwnerships.clear();
+      if (placeholders.size > 0) {
+        placeholders.clear();
+        resetSkillSyncState();
+      }
       logFeatureSad("skills_sync_round", "gate_closed", S());
       return;
     }
-    if (YKs()) {
-      (logForDiagnosticsNoPII("info", "skills_sync_policy_verdict_pending"),
-        logFeatureSad("skills_sync_round", "policy_verdict_pending", S()));
+    if (readSkillsSyncSetting()) {
+      logForDiagnosticsNoPII("info", "skills_sync_policy_verdict_pending");
+      logFeatureSad("skills_sync_round", "policy_verdict_pending", S());
       return;
     }
-    let x = await getSyncBucket(s);
-    if (x === null) {
-      (logForDiagnosticsNoPII("info", "skills_sync_bucket_unresolved"),
-        logFeatureSad("skills_sync_round", "bucket_unresolved", S()));
+    let syncBucket = await getSyncBucket(s);
+    if (syncBucket === null) {
+      logForDiagnosticsNoPII("info", "skills_sync_bucket_unresolved");
+      logFeatureSad("skills_sync_round", "bucket_unresolved", S());
       return;
     }
-    let G = checkSkillsSyncRoot(n, rt(x));
+    let G = checkSkillsSyncRoot(storageV5, skillsSyncPath(syncBucket));
     B = G;
     let root = G.root;
-    R = t.trigger === "resync" && !("woken" in t) && C.consecutiveFailedRounds === 0 && !_3n(e) && Hn();
-    let gn = dqs(e);
-    if (gn !== void 0) await gn;
+    idle =
+      t.trigger === "resync" &&
+      !("woken" in t) &&
+      C.consecutiveFailedRounds === 0 &&
+      !isSessionRefsSkillsSyncOn(e) &&
+      shouldWeatherIdle();
+    let gn = convertedSkillsListPin(e);
+    if (gn !== undefined) await gn;
     let se = shouldConvertSkillsListAsks(e);
-    updateSessionConvertedSkillsAsk(se, n);
+    updateSessionConvertedSkillsAsk(se, storageV5);
     let ge = await reuseSkillsSyncRound({
-      syncedRoot: ne(),
-      bucket: x,
-      root: root,
+      syncedRoot: skillsSyncDir(),
+      bucket: syncBucket,
+      root,
       trigger: t.trigger,
       pinned: isSessionRefsSyncEnabled(e),
       lastGeneration: C.bucketGeneration,
       holdsPlaceholders: C.placeholders.size > 0,
-      idle: R,
+      idle,
       convertedSkillsAsPlugins: se,
     });
     if (!ge.list) {
       C.bucketGeneration = ge.generation;
-      let r = await noteHidingFoldersGone(async () => (await readSkillsSyncManifest(n, G))?.skills ?? []);
+      let r = await noteHidingFoldersGone(
+        async () => (await readSkillsSyncManifest(storageV5, G))?.skills ?? [],
+      );
       if (ge.reload) {
-        let u = await readSkillsSyncManifest(n, G);
-        if (u) {
+        let skillsSyncManifest = await readSkillsSyncManifest(storageV5, G);
+        if (skillsSyncManifest) {
           let L = new Set();
-          for (let skill of u.skills)
+          for (let skill of skillsSyncManifest.skills)
             try {
-              L.add(basename(Y(root, skill.name)));
+              L.add(basename(syncedSkillDirPath(root, skill.name)));
             } catch {}
           pruneDynamicSkillsNotIn(L);
         }
-        ((de = new Set()), Hce());
-      } else if (r) Hce();
-      logFeatureOk("skills_sync_round", { ...S(), reused: !0, reloaded: ge.reload || r });
+        de = new Set();
+        resetSkillSyncState();
+      } else if (r) resetSkillSyncState();
+      logFeatureOk("skills_sync_round", {
+        ...S(),
+        reused: true,
+        reloaded: ge.reload || r,
+      });
       return;
     }
-    ((ke = !0), logForDiagnosticsNoPII("info", "skills_sync_starting"));
-    let U,
-      Re = [],
-      startTime_2 = performance.now();
+    ke = true;
+    logForDiagnosticsNoPII("info", "skills_sync_starting");
+    let U;
+    let Re = [];
+    let startTime_2 = performance.now();
     if (isSessionRefsSyncEnabled(e)) {
       let [r, u] = await Promise.all([
-        zqe.of(e).listEntries("skills", { startup: t.trigger === "startup" }),
+        sessionSkillManifestSlot.of(e).listEntries("skills", {
+          startup: t.trigger === "startup",
+        }),
         env.CLAUDE_CODE_SYNC_SKILLS
-          ? Aln({ isBackground: !0, credentials: s, ...(se && { convertedSkillsAsPlugins: !0 }) })
+          ? fetchOrgSkillsListWithRetry({
+              isBackground: true,
+              credentials: s,
+              ...(se && {
+                convertedSkillsAsPlugins: true,
+              }),
+            })
           : null,
       ]);
       if (!r.success) U = r;
-      else if (((Re = r.entries.map(sessionRefSkillEntry)), u === null)) U = { success: !0, skills: Re };
-      else if (!u.success) U = u;
-      else
-        U = {
-          success: !0,
-          skills: mergeRowsByKey(
-            Re,
-            u.skills,
-            (L) => L.skillId,
-            (L, T) => ({
-              ...ct(L, T),
-              userInvocable: T.userInvocable,
-              disableModelInvocation: T.disableModelInvocation,
-            }),
-          ),
-        };
-    } else U = await Aln({ isBackground: !0, credentials: s, ...(se && { convertedSkillsAsPlugins: !0 }) });
-    let rounded = Math.round(performance.now() - startTime_2);
-    if (((W = !U.success && Hee(U)), W))
-      (logForDiagnosticsNoPII("warn", "skills_sync_list_refused"),
-        C.listedOwnerships.clear(),
-        (U = { success: !0, skills: Re }));
+      else {
+        Re = r.entries.map(sessionRefSkillEntry);
+        if (u === null)
+          U = {
+            success: true,
+            skills: Re,
+          };
+        else if (!u.success) U = u;
+        else
+          U = {
+            success: true,
+            skills: mergeRowsByKey(
+              Re,
+              u.skills,
+              (L) => L.skillId,
+              (L, T) => ({
+                ...carryBackingPluginId(L, T),
+                userInvocable: T.userInvocable,
+                disableModelInvocation: T.disableModelInvocation,
+              }),
+            ),
+          };
+      }
+    } else
+      U = await fetchOrgSkillsListWithRetry({
+        isBackground: true,
+        credentials: s,
+        ...(se && {
+          convertedSkillsAsPlugins: true,
+        }),
+      });
+    let listMs = Math.round(performance.now() - startTime_2);
+    W = !U.success && isNotFoundServerError(U);
+    if (W) {
+      logForDiagnosticsNoPII("warn", "skills_sync_list_refused");
+      C.listedOwnerships.clear();
+      U = {
+        success: true,
+        skills: Re,
+      };
+    }
     if (!U.success) {
       C.consecutiveFailedRounds++;
-      let r = listErrorTelemetry(U),
-        u = { ...S(), ...r };
+      let r = listErrorTelemetry(U);
+      let u = {
+        ...S(),
+        ...r,
+      };
+      logForDiagnosticsNoPII("warn", "skills_sync_list_failed", u);
+      logEvent("tengu_skills_sync_list_failed", u);
       if (
-        (logForDiagnosticsNoPII("warn", "skills_sync_list_failed", u),
-        logEvent("tengu_skills_sync_list_failed", u),
-        (U.kind === "timeout" || U.kind === "network" || U.kind === "http") && u.suspended_ms > Ie)
+        (U.kind === "timeout" || U.kind === "network" || U.kind === "http") &&
+        u.suspended_ms > FIRST_FAILED_ROUND_THRESHOLD_MS
       )
         logFeatureSad("skills_sync_round", "suspended", u);
       else logFeatureBad("skills_sync_round", "list_failed", u);
       return;
     }
     C.consecutiveFailedRounds = W ? C.consecutiveFailedRounds + 1 : 0;
-    let be = await readSyncMarker(ne(), x);
+    let syncMarker = await readSyncMarker(skillsSyncDir(), syncBucket);
     if (
-      be === "unmarked" &&
+      syncMarker === "unmarked" &&
       (await lstat(root).then(
         (r) => r.isDirectory(),
-        () => !1,
+        () => false,
       )) &&
       (await checkSyncRoots({
         dir: root,
-        trashRoot: xe(),
+        trashRoot: trashRootDir(),
         configHome: getClaudeConfigDir(),
         failureEvent: "skills_sync_trash_move_failed",
-        storageV5: n,
-      }).catch(() => !1))
+        storageV5,
+      }).catch(() => false))
     )
       logForDiagnosticsNoPII("info", "skills_sync_unmarked_bucket_quarantined");
-    if ((await checkSyncOwnedRootFor(n, root), typeof be === "object"))
-      throw (
-        logForDiagnosticsNoPII("warn", "skills_sync_root_refused", {
-          phase: "round_head",
-          root: toPosixLabelPath(join(SKILLS_SYNC_DIR, x)),
-          component: "marker",
-          reason: "unverified",
-          code: be.unreadable,
-        }),
-        new SyncOwnedRootRefusedError("unverified", { code: be.unreadable })
-      );
-    (await touchExclusive(ne(), x), (I = !0));
-    let pe = await y3n(root);
+    await checkSyncOwnedRootFor(storageV5, root);
+    if (typeof syncMarker === "object") {
+      logForDiagnosticsNoPII("warn", "skills_sync_root_refused", {
+        phase: "round_head",
+        root: toPosixLabelPath(join(SKILLS_SYNC_DIR_2, syncBucket)),
+        component: "marker",
+        reason: "unverified",
+        code: syncMarker.unreadable,
+      });
+      throw new SyncOwnedRootRefusedError("unverified", {
+        code: syncMarker.unreadable,
+      });
+    }
+    await touchExclusive(skillsSyncDir(), syncBucket);
+    I = true;
+    let pe = await takeReuseStamp(root);
     if (
-      (!W && (await noteHidingFoldersGone(async () => (await readSkillsSyncManifest(n, G))?.skills ?? []))) ||
+      (!W &&
+        (await noteHidingFoldersGone(
+          async () => (await readSkillsSyncManifest(storageV5, G))?.skills ?? [],
+        ))) ||
       (ge.shared && pe !== null && C.bucketGeneration !== null && pe.token !== C.bucketGeneration)
     )
-      Hce();
-    await trashStraySyncEntries(n);
-    let Z = await readSkillsSyncManifest(n, G),
-      Sn = se && !W ? await resolveSkillsBucket(Z?.skills ?? [], U.skills, x) : [];
+      resetSkillSyncState();
+    await trashStraySyncEntries(storageV5);
+    let skillsSyncManifest = await readSkillsSyncManifest(storageV5, G);
+    let Sn =
+      se && !W ? await resolveSkillsBucket(skillsSyncManifest?.skills ?? [], U.skills, syncBucket) : [];
     D = Sn.length;
-    let wn = pe !== null && se ? $n(pe) : pe,
-      {
-        toDownload: toDownload,
-        toRemove: toRemove,
-        carryover: carryover,
-        liveDirs: liveDirs,
-        carryoverOwningLiveDir: carryoverOwningLiveDir,
-      } = assignSkillDirs(root, [...U.skills, ...Sn], Z?.skills ?? []),
-      gt = createLiveEntryClassifier(liveDirs),
-      Ue = new Map(),
-      He = async (r) => {
-        let u;
-        try {
-          u = syncedItemPath_2(r, root);
-        } catch (error) {
-          if (error instanceof LegacyReservedSpellingError) return !1;
-          return !0;
-        }
-        let L = await gt(u);
-        if (L === "live") return !0;
-        if (L === "indeterminate") return !1;
-        Me.add(u);
-        let T = Ue.get(u);
-        if (T !== void 0) return T;
-        let F = moveToSyncTrash(u, n).finally(() => Ue.delete(u));
-        return (Ue.set(u, F), F);
-      },
-      Ke = new Set(Array.from(liveDirs, (r) => basename(r))),
-      pt = pruneDynamicSkillsNotIn(Ke);
-    if (pruneSyncedSkillState(Ke) + pt > 0) (clearCommandMemoizationCaches(), un(), Jz.emit());
+    let wn = pe !== null && se ? onlyConvertedSkills(pe) : pe;
+    let { toDownload, toRemove, carryover, liveDirs, carryoverOwningLiveDir } = assignSkillDirs(
+      root,
+      [...U.skills, ...Sn],
+      skillsSyncManifest?.skills ?? [],
+    );
+    let liveEntryClassifier = createLiveEntryClassifier(liveDirs);
+    let Ue = new Map();
+    let He = async (name) => {
+      let u;
+      try {
+        u = syncedItemPath_2(name, root);
+      } catch (error) {
+        if (error instanceof LegacyReservedSpellingError) return false;
+        return true;
+      }
+      let L = await liveEntryClassifier(u);
+      if (L === "live") return true;
+      if (L === "indeterminate") return false;
+      Me.add(u);
+      let T = Ue.get(u);
+      if (T !== undefined) return T;
+      let F = moveToSyncTrash(u, storageV5).finally(() => Ue.delete(u));
+      Ue.set(u, F);
+      return F;
+    };
+    let Ke = new Set(Array.from(liveDirs, (r) => basename(r)));
+    let pt = pruneDynamicSkillsNotIn(Ke);
+    if (pruneSyncedSkillState(Ke) + pt > 0) {
+      clearCommandMemoizationCaches();
+      markFirstRoundEmitted();
+      skillsChangedSignal.emit();
+    }
     de = liveDirs;
     let results = await Promise.all(
-        carryover.map((r) =>
-          carryoverOwningLiveDir.has(r.skillId) ? hasSyncedSkillMd(root, r.name, n) : null,
-        ),
+      carryover.map((r) =>
+        carryoverOwningLiveDir.has(r.skillId) ? hasSyncedSkillMd(root, r.name, storageV5) : null,
       ),
-      We = new Set();
+    );
+    let We = new Set();
     for (let [r, u] of carryover.entries()) {
       let L = results[r];
       if (L === null) continue;
       if (!L) {
         let found = U.skills.find((skill) => skill.skillId === u.skillId);
-        if (found) (We.add(u.skillId), toDownload.push({ item: found }));
+        if (found) {
+          We.add(u.skillId);
+          toDownload.push({
+            item: found,
+          });
+        }
         continue;
       }
-      let T = basename(Y(root, u.name));
-      if (C.placeholders.delete(T))
-        (C.pendingDownloads.get(T)?.resolve({ ok: !0 }),
-          C.pendingDownloads.delete(T),
-          clearSkillCaches(),
-          clearCommandMemoizationCaches(),
-          (y = !0),
-          logForDiagnosticsNoPII("info", "skills_sync_materialized_elsewhere"));
+      let T = basename(syncedSkillDirPath(root, u.name));
+      if (C.placeholders.delete(T)) {
+        C.pendingDownloads.get(T)?.resolve({
+          ok: true,
+        });
+        C.pendingDownloads.delete(T);
+        clearSkillCaches();
+        clearCommandMemoizationCaches();
+        y = true;
+        logForDiagnosticsNoPII("info", "skills_sync_materialized_elsewhere");
+      }
     }
-    let filtered = carryover.filter((r) => !We.has(r.skillId)),
-      Ge = new Map(carryover.filter((r) => We.has(r.skillId)).map((r) => [r.skillId, r])),
-      j = new Set(Z?.staleDirs ?? []),
-      ue = new Set(),
-      Q = new Set(),
-      Ye = { pid: process.pid, procStart: await getProcessStartTimeAsync(process.pid) },
-      Xe = [];
-    if (Z?.pendingClaims) {
-      let pendingClaims = Z.pendingClaims,
-        u = new Set();
-      for (let L of pendingClaims)
-        if (await isClaimOwnerAlive(L)) u.add(parsePendingClaim(L).name);
-        else Xe.push(L);
+    let filtered = carryover.filter((r) => !We.has(r.skillId));
+    let Ge = new Map(carryover.filter((r) => We.has(r.skillId)).map((r) => [r.skillId, r]));
+    let j = new Set(skillsSyncManifest?.staleDirs ?? []);
+    let ue = new Set();
+    let Q = new Set();
+    let Ye = {
+      pid: process.pid,
+      procStart: await getProcessStartTimeAsync(process.pid),
+    };
+    let Xe = [];
+    if (skillsSyncManifest?.pendingClaims) {
+      let pendingClaims = skillsSyncManifest.pendingClaims;
+      let u = new Set();
+      for (let pendingClaim of pendingClaims)
+        if (await isClaimOwnerAlive(pendingClaim)) u.add(parsePendingClaim(pendingClaim).name);
+        else Xe.push(pendingClaim);
       for (let L of Xe) {
         let { name: T } = parsePendingClaim(L);
         if (u.has(T) || Ke.has(T)) continue;
-        (j.add(T), Q.add(L));
+        j.add(T);
+        Q.add(L);
       }
     }
-    for (let r of j) if (await He(r)) (j.delete(r), ue.add(r));
-    if (ue.size > 0 || Q.size > 0) y = !0;
+    for (let r of j)
+      if (await He(r)) {
+        j.delete(r);
+        ue.add(r);
+      }
+    if (ue.size > 0 || Q.size > 0) y = true;
     let ve = replaceRowsWithAttribution(
-      Z?.skills ?? [],
-      [...carryover, ...toDownload.flatMap(({ prev: prev }) => prev ?? [])],
+      skillsSyncManifest?.skills ?? [],
+      [...carryover, ...toDownload.flatMap(({ prev }) => prev ?? [])],
       (r) => r.skillId,
       (r, u) =>
         r.backingPluginId === u.backingPluginId &&
         (r.updatedAt === COLLISION_LOSER) === (u.updatedAt === COLLISION_LOSER),
     );
     if (toDownload.length === 0 && toRemove.length === 0) {
-      if (y) Hce();
-      if ((ue.size > 0 || Q.size > 0 || ve.attributionMoved) && Z)
+      if (y) resetSkillSyncState();
+      if ((ue.size > 0 || Q.size > 0 || ve.attributionMoved) && skillsSyncManifest)
         await writeSkillsSyncManifest(
           {
-            lastUpdated: Z.lastUpdated,
+            lastUpdated: skillsSyncManifest.lastUpdated,
             skills: ve.rows,
-            staleDirs: j.size > 0 ? Array.from(j) : void 0,
-            pendingClaims: void 0,
+            staleDirs: j.size > 0 ? Array.from(j) : undefined,
+            pendingClaims: undefined,
           },
-          { staleDirs: ue, pendingClaims: Q, removedSkillIds: SKILLS_MANIFEST_SCHEMA, deferredRows: nt },
-          n,
+          {
+            staleDirs: ue,
+            pendingClaims: Q,
+            removedSkillIds: SKILLS_MANIFEST_SCHEMA,
+            deferredRows: SKILLS_MANIFEST_SCHEMA_PLACEHOLDER,
+          },
+          storageV5,
           G,
         );
-      if (Z) {
+      if (skillsSyncManifest) {
         let date = new Date();
-        await lutimes(Be(root), date, date).catch(() => {});
+        await lutimes(manifestPathIn(root), date, date).catch(() => {});
       }
       let r = y ? null : wn;
-      (noteBucketGeneration(
-        await dfn(root, "skills", j.size === 0 && !W && !isSessionRefsSyncEnabled(e), r, ye(se)),
+      noteBucketGeneration(
+        await writeOrClearReuseStamp(
+          root,
+          "skills",
+          j.size === 0 && !W && !isSessionRefsSyncEnabled(e),
+          r,
+          listedForKey(se),
+        ),
         r,
-      ),
-        logForDiagnosticsNoPII("info", "skills_sync_no_changes", {
-          duration_ms: Date.now() - now,
-          list_ms: rounded,
-          ...(t.trigger === "startup" && {
-            first_message_gate_open_ms: Math.round(performance.now() - startTime),
-          }),
-        }));
-      let u = { ...S(), no_changes: !0 };
+      );
+      logForDiagnosticsNoPII("info", "skills_sync_no_changes", {
+        duration_ms: Date.now() - now,
+        list_ms: listMs,
+        ...(t.trigger === "startup" && {
+          first_message_gate_open_ms: Math.round(performance.now() - startTime),
+        }),
+      });
+      let u = {
+        ...S(),
+        no_changes: true,
+      };
       if (W) logFeatureSad("skills_sync_round", "not_entitled", u);
       else logFeatureOk("skills_sync_round", u);
       return;
     }
     let hn = 0;
-    for (let { item: item, prev: prev } of toDownload)
+    for (let { item, prev } of toDownload)
       if (!prev) {
-        let L = Y(root, item.name),
-          T = createDeferredSyncedSkillCommand(basename(L), item, L);
-        if (T === void 0) continue;
-        (rqs(T), hn++, O.set(item.skillId, registerPendingDownload(basename(Y(root, item.name)))));
+        let baseDir = syncedSkillDirPath(root, item.name);
+        let deferredSyncedSkillCommand = createDeferredSyncedSkillCommand(basename(baseDir), item, baseDir);
+        if (deferredSyncedSkillCommand === undefined) continue;
+        registerSkillPlaceholder(deferredSyncedSkillCommand);
+        hn++;
+        O.set(item.skillId, registerPendingDownload(basename(syncedSkillDirPath(root, item.name))));
       }
-    if (hn > 0) (clearCommandMemoizationCaches(), un(), Jz.emit());
-    let Mn = !0;
+    if (hn > 0) {
+      clearCommandMemoizationCaches();
+      markFirstRoundEmitted();
+      skillsChangedSignal.emit();
+    }
+    let Mn = true;
     try {
       let r = [];
-      for (let { item: item } of toDownload)
+      for (let { item } of toDownload)
         try {
-          r.push($Jr(basename(Y(root, item.name)), Ye));
+          r.push(syncKeyOf(basename(syncedSkillDirPath(root, item.name)), Ye));
         } catch {}
       if (r.length > 0)
         await writeSkillsSyncManifest(
           {
-            lastUpdated: Z?.lastUpdated ?? 0,
+            lastUpdated: skillsSyncManifest?.lastUpdated ?? 0,
             skills: ve.rows,
-            staleDirs: j.size > 0 ? Array.from(j) : void 0,
+            staleDirs: j.size > 0 ? Array.from(j) : undefined,
             pendingClaims: r,
           },
-          { staleDirs: ue, pendingClaims: Q, removedSkillIds: SKILLS_MANIFEST_SCHEMA, deferredRows: nt },
-          n,
+          {
+            staleDirs: ue,
+            pendingClaims: Q,
+            removedSkillIds: SKILLS_MANIFEST_SCHEMA,
+            deferredRows: SKILLS_MANIFEST_SCHEMA_PLACEHOLDER,
+          },
+          storageV5,
           G,
         );
     } catch (error) {
       if (error instanceof SyncOwnedRootRefusedError) throw error;
-      ((Mn = !1), logForDiagnosticsNoPII("warn", "skills_sync_pending_claims_write_failed"));
+      Mn = false;
+      logForDiagnosticsNoPII("warn", "skills_sync_pending_claims_write_failed");
     }
     firstListDeferred().resolve();
-    let rounded_2 = Math.round(performance.now() - startTime);
+    let firstMessageGateOpenMs = Math.round(performance.now() - startTime);
     if (!Mn) {
-      if ((logFeatureBad("skills_sync_round", "pending_claims_write_failed", S()), y)) Hce();
+      logFeatureBad("skills_sync_round", "pending_claims_write_failed", S());
+      if (y) resetSkillSyncState();
       return;
     }
-    let re = [],
-      Rn = [],
-      Ze = [],
-      De = 0,
-      vn = 0,
-      me = {},
-      Dn = ({ item: item, prev: prev }) => (prev === void 0 && !Ge.has(item.skillId) ? nii(item) : void 0),
-      flattened = toDownload.flatMap((r) => Dn(r) ?? []),
-      En = new Set(flattened),
-      Je = new Map(),
-      In = (r) => (
-        logForDiagnosticsNoPII("warn", "skills_sync_host_mount_threw"),
-        logError(toError(r)),
-        null
-      ),
-      Cn = En.size > 0 ? createHostSkillReader(En, Je).catch(In) : null,
-      Le = new Set(),
-      Tn = new Map();
-    (await Promise.all(
+    let skills = [];
+    let Rn = [];
+    let Ze = [];
+    let De = 0;
+    let vn = 0;
+    let me = {};
+    let Dn = ({ item, prev }) =>
+      prev === undefined && !Ge.has(item.skillId) ? hostMountKindForRow(item) : undefined;
+    let flattened = toDownload.flatMap((r) => Dn(r) ?? []);
+    let En = new Set(flattened);
+    let Je = new Map();
+    let In = (r) => {
+      logForDiagnosticsNoPII("warn", "skills_sync_host_mount_threw");
+      logError(toError(r));
+      return null;
+    };
+    let Cn = En.size > 0 ? createHostSkillReader(En, Je).catch(In) : null;
+    let Le = new Set();
+    let Tn = new Map();
+    await Promise.all(
       toDownload.map(
-        limitConcurrency(ln, async ({ item: item }) => {
-          Tn.set(item, await readSyncedSkillMd(root, item.name, n));
+        limitConcurrency(MAX_INSTALL_WAIT_CHAIN, async ({ item }) => {
+          Tn.set(item, await readSyncedSkillMd(root, item.name, storageV5));
         }),
       ),
-    ),
-      await Promise.all(
-        toDownload.map(
-          Idi(
-            ln,
-            async (r) => {
-              let u = Dn(r);
-              if (u === void 0) return;
-              let T = await (await Cn)?.readZip(u, r.item).catch(In);
-              return T ? { kind: u, zip: T } : void 0;
-            },
-            async ({ item: item, prev: prev }, L) => {
-              let T = Tn.get(item) ?? null,
-                F = ut;
-              try {
-                F = await landSyncedSkill(item, {
-                  round: G,
-                  credentials: s,
-                  storageV5: n,
-                  classifyOccupant: (K) => skillDirOccupancy(K, n, G),
-                  markTargetDestroyed: () => {
-                    h = !0;
-                  },
-                  replacesAttributedCopy:
-                    (prev !== void 0 && (await isSameSkillDir(root, prev.name, item.name))) ||
-                    Ge.has(item.skillId),
-                  targetHeldSkillFile: Fe() && T !== null,
-                  fromHostMount: L,
-                  markLandedFromHostMount: () => {
-                    Le.add(item.skillId);
-                  },
-                  hostMountMissCounts: Je,
-                  noteDownloadedBytes: (K) => {
-                    M += K;
-                  },
-                });
-              } catch {
-                ((F = Pe), logForDiagnosticsNoPII("warn", "skills_sync_extract_failed"));
-              }
-              if (F.ok) {
-                if ((re.push(item), prev && prev.name !== item.name)) {
-                  if (!(await He(prev.name))) j.add(prev.name);
+    );
+    await Promise.all(
+      toDownload.map(
+        preloadThenLimit(
+          MAX_INSTALL_WAIT_CHAIN,
+          async (r) => {
+            let u = Dn(r);
+            if (u === undefined) return;
+            let T = await (await Cn)?.readZip(u, r.item).catch(In);
+            return T
+              ? {
+                  kind: u,
+                  zip: T,
                 }
-                (oqs(basename(Y(root, item.name))),
-                  clearSkillCaches(),
-                  clearCommandMemoizationCaches(),
-                  logFeatureOk("skills_sync_download", { landed_from_mount: Le.has(item.skillId) }));
-              } else {
-                let K = getSyncFailureEvent(F.cause);
-                if (K === null) (De++, logForDiagnosticsNoPII("info", "skills_sync_landing_deferred"));
-                else ((me[K] = (me[K] ?? 0) + 1), logFeatureBad("skills_sync_download", K));
-                let _e = prev ?? Ge.get(item.skillId);
-                if (_e && F.cause === "deferred") {
-                  if ((Ze.push(_e), prev && prev.name !== item.name)) (j.add(prev.name), vn++);
-                } else if (_e) Rn.push(_e);
-                else
-                  try {
-                    let ee = Y(root, item.name);
-                    if (
-                      await lstat(ee).then(
-                        () => !1,
-                        (Rt) => isENOENT(Rt),
-                      )
-                    )
-                      Q.add($Jr(basename(ee), Ye));
-                  } catch {}
+              : undefined;
+          },
+          async ({ item, prev }, fromHostMount) => {
+            let T = Tn.get(item) ?? null;
+            let F = ZIP_FETCH_FAILED_RESULT;
+            try {
+              F = await landSyncedSkill(item, {
+                round: G,
+                credentials: s,
+                storageV5,
+                classifyOccupant: (K) => skillDirOccupancy(K, storageV5, G),
+                markTargetDestroyed: () => {
+                  h = true;
+                },
+                replacesAttributedCopy:
+                  (prev !== undefined && (await isSameSkillDir(root, prev.name, item.name))) ||
+                  Ge.has(item.skillId),
+                targetHeldSkillFile: isQuizzicalWirthOn() && T !== null,
+                fromHostMount,
+                markLandedFromHostMount: () => {
+                  Le.add(item.skillId);
+                },
+                hostMountMissCounts: Je,
+                noteDownloadedBytes: (K) => {
+                  M += K;
+                },
+              });
+            } catch {
+              F = ARCHIVE_UNUSABLE_RESULT;
+              logForDiagnosticsNoPII("warn", "skills_sync_extract_failed");
+            }
+            if (F.ok) {
+              skills.push(item);
+              if (prev && prev.name !== item.name) {
+                if (!(await He(prev.name))) j.add(prev.name);
               }
-              O.get(item.skillId)?.(F.ok ? { ok: !0 } : { ok: !1, reason: describeSyncFailure(F.cause) });
-            },
-          ),
+              unregisterSkillPlaceholder(basename(syncedSkillDirPath(root, item.name)));
+              clearSkillCaches();
+              clearCommandMemoizationCaches();
+              logFeatureOk("skills_sync_download", {
+                landed_from_mount: Le.has(item.skillId),
+              });
+            } else {
+              let syncFailureEvent = getSyncFailureEvent(F.cause);
+              if (syncFailureEvent === null) {
+                De++;
+                logForDiagnosticsNoPII("info", "skills_sync_landing_deferred");
+              } else {
+                me[syncFailureEvent] = (me[syncFailureEvent] ?? 0) + 1;
+                logFeatureBad("skills_sync_download", syncFailureEvent);
+              }
+              let _e = prev ?? Ge.get(item.skillId);
+              if (_e && F.cause === "deferred") {
+                Ze.push(_e);
+                if (prev && prev.name !== item.name) {
+                  j.add(prev.name);
+                  vn++;
+                }
+              } else if (_e) Rn.push(_e);
+              else
+                try {
+                  let ee = syncedSkillDirPath(root, item.name);
+                  if (
+                    await lstat(ee).then(
+                      () => false,
+                      (error) => isENOENT(error),
+                    )
+                  )
+                    Q.add(syncKeyOf(basename(ee), Ye));
+                } catch {}
+            }
+            O.get(item.skillId)?.(
+              F.ok
+                ? {
+                    ok: true,
+                  }
+                : {
+                    ok: false,
+                    reason: describeSyncFailure(F.cause),
+                  },
+            );
+          },
         ),
-      ));
+      ),
+    );
     let we = [];
     await Promise.all(
       toRemove.map(
-        limitConcurrency(ln, async (r) => {
+        limitConcurrency(MAX_INSTALL_WAIT_CHAIN, async (r) => {
           if (!(await He(r.name))) we.push(r);
         }),
       ),
     );
     let Qe = new Set(toRemove.map((r) => r.skillId));
     for (let r of we) Qe.delete(r.skillId);
-    let Ve = re.length > 0 || h || we.length < toRemove.length || ue.size > 0 || Q.size > 0,
-      Mt = Ve || vn > 0 || ve.attributionMoved;
+    let Ve = skills.length > 0 || h || we.length < toRemove.length || ue.size > 0 || Q.size > 0;
+    let Mt = Ve || vn > 0 || ve.attributionMoved;
     if (Qe.size > 0) clearCommandMemoizationCaches();
-    if (Ve || y) Hce();
-    let Ee = !1;
+    if (Ve || y) resetSkillSyncState();
+    let Ee = false;
     if (Mt) {
-      let r = [...filtered, ...re, ...Rn, ...we],
-        u = new Set();
-      for (let F of [...r, ...Ze])
+      let skills_2 = [...filtered, ...skills, ...Rn, ...we];
+      let u = new Set();
+      for (let F of [...skills_2, ...Ze])
         try {
-          u.add(basename(Y(root, F.name)));
+          u.add(basename(syncedSkillDirPath(root, F.name)));
         } catch {}
-      for (let F of u) Q.add($Jr(F, Ye));
+      for (let F of u) Q.add(syncKeyOf(F, Ye));
       for (let F of Xe) if (u.has(parsePendingClaim(F).name)) Q.add(F);
-      let L = (F, K) =>
+      let L = (skills, onlyOverReadable) =>
         writeSkillsSyncManifest(
-          { lastUpdated: Date.now(), skills: F, staleDirs: j.size > 0 ? Array.from(j) : void 0 },
-          { staleDirs: ue, pendingClaims: Q, removedSkillIds: Qe, deferredRows: Ze, onlyOverReadable: K },
-          n,
+          {
+            lastUpdated: Date.now(),
+            skills,
+            staleDirs: j.size > 0 ? Array.from(j) : undefined,
+          },
+          {
+            staleDirs: ue,
+            pendingClaims: Q,
+            removedSkillIds: Qe,
+            deferredRows: Ze,
+            onlyOverReadable,
+          },
+          storageV5,
           G,
         );
-      await L(r, !1);
-      let T = re.length > 0 && Fe() ? 2 : 0;
-      for (let F = 0; F < T; F++) {
+      await L(skills_2, false);
+      let T = skills.length > 0 && isQuizzicalWirthOn() ? 2 : 0;
+      for (let idx = 0; idx < T; idx++) {
         await sleep(C.lostRowsRecheckMs * (1 + Math.random()));
-        let K = await readSkillsSyncManifest(n, G),
-          _e = new Set(K?.skills.map((ee) => ee.skillId));
-        if (((Ee = !re.every((ee) => _e.has(ee.skillId))), !Ee)) break;
-        if (K === null) continue;
+        let skillsSyncManifest = await readSkillsSyncManifest(storageV5, G);
+        let _e = new Set(skillsSyncManifest?.skills.map((skill) => skill.skillId));
+        Ee = !skills.every((ee) => _e.has(ee.skillId));
+        if (!Ee) break;
+        if (skillsSyncManifest === null) continue;
         logForDiagnosticsNoPII("info", "skills_sync_manifest_rows_lost");
         try {
-          await L(re, !0);
+          await L(skills, true);
         } catch (error) {
           if (error instanceof SyncOwnedRootRefusedError) throw error;
           logError(toError(error));
@@ -928,37 +1122,50 @@ async function runSkillsSyncRound(e, n, s, t) {
       }
       if (Ee) logForDiagnosticsNoPII("warn", "skills_sync_manifest_rows_unconfirmed");
     }
-    let en = toDownload.length - re.length - De,
-      Fn = await Cn,
-      nn = {
-        downloaded: re.length - Le.size,
-        from_mount: Le.size,
-        mount_eligible: flattened.length,
-        mount_read_ms: Fn?.spentMs() ?? 0,
-        mount_wait_ms: Fn?.waitedMs() ?? 0,
-        ...hrr(Je),
-      };
+    let en = toDownload.length - skills.length - De;
+    let Fn = await Cn;
+    let nn = {
+      downloaded: skills.length - Le.size,
+      from_mount: Le.size,
+      mount_eligible: flattened.length,
+      mount_read_ms: Fn?.spentMs() ?? 0,
+      mount_wait_ms: Fn?.waitedMs() ?? 0,
+      ...flattenMountMissCounts(Je),
+    };
     logForDiagnosticsNoPII("info", "skills_sync_complete", {
       ...nn,
       removed: toRemove.length,
       duration_ms: Date.now() - now,
-      list_ms: rounded,
-      ...(t.trigger === "startup" && { first_message_gate_open_ms: rounded_2 }),
+      list_ms: listMs,
+      ...(t.trigger === "startup" && {
+        first_message_gate_open_ms: firstMessageGateOpenMs,
+      }),
     });
     let Pn = S();
-    logEvent("tengu_skills_sync_success", { ...Pn, ...nn, removed: toRemove.length, total: U.skills.length });
+    logEvent("tengu_skills_sync_success", {
+      ...Pn,
+      ...nn,
+      removed: toRemove.length,
+      total: U.skills.length,
+    });
     let An = Ve || y ? null : wn;
     noteBucketGeneration(
-      await dfn(
+      await writeOrClearReuseStamp(
         root,
         "skills",
         !W && en === 0 && De === 0 && !Ee && we.length === 0 && j.size === 0 && !isSessionRefsSyncEnabled(e),
         An,
-        ye(se),
+        listedForKey(se),
       ),
       An,
     );
-    let tn = { ...Pn, ...nn, deferred: De, removed: toRemove.length, total: U.skills.length };
+    let tn = {
+      ...Pn,
+      ...nn,
+      deferred: De,
+      removed: toRemove.length,
+      total: U.skills.length,
+    };
     if (en > 0)
       logFeatureSad("skills_sync_round", "download_failed", {
         ...tn,
@@ -971,112 +1178,131 @@ async function runSkillsSyncRound(e, n, s, t) {
     else if (W) logFeatureSad("skills_sync_round", "not_entitled", tn);
     else logFeatureOk("skills_sync_round", tn);
   } catch (error) {
-    if (y || h) Hce();
-    if (error instanceof SyncOwnedRootRefusedError && I)
-      (logForDiagnosticsNoPII("warn", "skills_sync_late_root_refusal", {
+    if (y || h) resetSkillSyncState();
+    if (error instanceof SyncOwnedRootRefusedError && I) {
+      logForDiagnosticsNoPII("warn", "skills_sync_late_root_refusal", {
         reason: error.reason,
         duration_ms: Date.now() - now,
-      }),
-        logFeatureSad("skills_sync_round", "root_refused", S()),
-        (I = !1));
-    else if (error instanceof SyncOwnedRootRefusedError)
-      (logForDiagnosticsNoPII("warn", "skills_sync_root_refused_round", {
+      });
+      logFeatureSad("skills_sync_round", "root_refused", S());
+      I = false;
+    } else if (error instanceof SyncOwnedRootRefusedError) {
+      logForDiagnosticsNoPII("warn", "skills_sync_root_refused_round", {
         reason: error.reason,
         duration_ms: Date.now() - now,
-      }),
-        logFeatureSad("skills_sync_round", "root_refused", S()));
-    else {
+      });
+      logFeatureSad("skills_sync_round", "root_refused", S());
+    } else {
       if (!W) C.consecutiveFailedRounds++;
-      logForDiagnosticsNoPII("error", "skills_sync_unexpected_error", { duration_ms: Date.now() - now });
+      logForDiagnosticsNoPII("error", "skills_sync_unexpected_error", {
+        duration_ms: Date.now() - now,
+      });
       let G = S();
-      (logEvent("tengu_skills_sync_error", G), logFeatureBad("skills_sync_round", "unexpected_error", G));
+      logEvent("tengu_skills_sync_error", G);
+      logFeatureBad("skills_sync_round", "unexpected_error", G);
     }
   } finally {
-    if (ke) jn();
-    for (let x of O.values()) x({ ok: !1, reason: "skills sync failed" });
-    if ((firstListDeferred().resolve(), de !== null && B !== null))
+    if (ke) rescheduleResyncByBackoff();
+    for (let x of O.values())
+      x({
+        ok: false,
+        reason: "skills sync failed",
+      });
+    firstListDeferred().resolve();
+    if (de !== null && B !== null)
       await pruneGoneSkillDirs({
         bucketRoot: B.root,
         listedDirs: de,
         removalTriedDirs: Me,
-        isSkillFileGone: (x) => isSkillMdMissing(x, n),
+        isSkillFileGone: (x) => isSkillMdMissing(x, storageV5),
       }).catch(() => {
         logForDiagnosticsNoPII("warn", "skills_sync_hooks_removal_failed");
       });
-    if (B === null || B.guard.refused()) I = !1;
+    if (B === null || B.guard.refused()) I = false;
     if (I && B !== null) {
       if (
         (await verifySyncRoot(
           B.root,
           getClaudeConfigDir(),
-          { event: "skills_sync_root_refused", phase: "sweep", rootLabel: SKILLS_SYNC_DIR },
-          { checkStagingLeaf: !0, storageV5: n },
+          {
+            event: "skills_sync_root_refused",
+            phase: "sweep",
+            rootLabel: SKILLS_SYNC_DIR_2,
+          },
+          {
+            checkStagingLeaf: true,
+            storageV5,
+          },
         ).catch(() => null)) === "real"
       )
-        await rm(fn(B.root), { recursive: !0, force: !0 }).catch(() => {});
+        await rm(perProcessTempDir(B.root), {
+          recursive: true,
+          force: true,
+        }).catch(() => {});
     }
   }
 }
 //@ chunk-hme9amad.js:30122-30240 placement
 async function isClaimOwnerAlive(e) {
-  let { ownerPid: ownerPid, ownerProcStart: ownerProcStart } = parsePendingClaim(e);
+  let { ownerPid, ownerProcStart } = parsePendingClaim(e);
   return (
-    ownerPid !== void 0 &&
+    ownerPid !== undefined &&
     ownerPid !== process.pid &&
     isProcessRunning(ownerPid) &&
     (await isSameProcessAsync(ownerPid, ownerProcStart))
   );
 }
+//@ chunk-hme9amad.js:30240-30763 placement
 /**
  * 判断技能目录被谁占用：已落地、进行中或无归属。
  */
-//@ chunk-hme9amad.js:30240-30763 placement
 async function skillDirOccupancy(e, n, s) {
-  let t = await readSkillsSyncManifest(n, s);
-  if (!t) return "unattributed";
-  for (let skill of t.skills) if (await isSameSkillDir(s.root, skill.name, e)) return "landed";
-  for (let d of t.pendingClaims ?? [])
+  let skillsSyncManifest = await readSkillsSyncManifest(n, s);
+  if (!skillsSyncManifest) return "unattributed";
+  for (let skill of skillsSyncManifest.skills)
+    if (await isSameSkillDir(s.root, skill.name, e)) return "landed";
+  for (let d of skillsSyncManifest.pendingClaims ?? [])
     if (parsePendingClaim(d).name === e && (await isClaimOwnerAlive(d))) {
-      if (!Fe()) return "inFlight";
+      if (!isQuizzicalWirthOn()) return "inFlight";
       let w = await lstat(join(s.root, e)).then(
         (h) => Math.floor(h.ctimeMs),
-        (h) => {
-          if (isENOENT(h)) return -1 / 0;
-          return (
-            logForDiagnosticsNoPII("warn", "skills_sync_occupant_unreadable", {
-              code: getErrnoCode(h) ?? "unknown",
-            }),
-            1 / 0
-          );
+        (error) => {
+          if (isENOENT(error)) return -1 / 0;
+          logForDiagnosticsNoPII("warn", "skills_sync_occupant_unreadable", {
+            code: getErrnoCode(error) ?? "unknown",
+          });
+          return 1 / 0;
         },
       );
-      if (!(Date.now() - w >= Yt)) return "inFlight";
-      return (logForDiagnosticsNoPII("info", "skills_sync_live_claim_timed_out"), "unattributed");
+      if (!(Date.now() - w >= INSTALL_WAIT_CEILING_MS)) return "inFlight";
+      logForDiagnosticsNoPII("info", "skills_sync_live_claim_timed_out");
+      return "unattributed";
     }
   return "unattributed";
 }
 //@ chunk-hme9amad.js:30763-30865 placement
-async function isSameSkillDir(e, n, s) {
+async function isSameSkillDir(root, name, s) {
   try {
-    let t = Y(e, n),
-      d = Y(e, s);
-    return basename(t) === basename(d) || (await ifn(t, d));
+    let t = syncedSkillDirPath(root, name);
+    let d = syncedSkillDirPath(root, s);
+    return basename(t) === basename(d) || (await isSameFileIdentity(t, d));
   } catch {
-    return !1;
+    return false;
   }
 }
+//@ chunk-hme9amad.js:30865-30990 placement
 /**
  * 检查技能同步拥有的根目录（带回收目录与配置目录）。
  */
-//@ chunk-hme9amad.js:30865-30990 placement
-function checkSyncOwnedRootFor(e, n) {
+function checkSyncOwnedRootFor(storageV5, root) {
   return checkSyncOwnedRoot({
-    root: n,
-    trashRoot: xe(),
+    root,
+    trashRoot: trashRootDir(),
     configHome: getClaudeConfigDir(),
-    events: { refused: "skills_sync_root_refused" },
-    storageV5: e,
+    events: {
+      refused: "skills_sync_root_refused",
+    },
+    storageV5,
   });
 }
-
 export { runSyncRoundOnce, reconcileSkillsManifest, checkSyncOwnedRootFor };

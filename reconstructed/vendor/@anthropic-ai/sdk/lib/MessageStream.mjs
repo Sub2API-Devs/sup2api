@@ -5,322 +5,450 @@
  * pieces: chunk-hwmsct5x.js (3)
  * attribution: esm-layout 1, esm-fingerprint 2
  */
-import { Kn, ke } from "../internal/tslib.mjs";
-import { Kje } from "../internal/errors.mjs";
-import { Lf, pr } from "../core/error.mjs";
-import { X_STAINLESS_HELPER_METHOD } from "../internal/stainless-helper-header.mjs";
-import { St } from "../core/streaming.mjs";
-import { Bt_hwms } from "../tools/agent-toolset/memories.mjs";
-import { La } from "./parser.mjs";
-import { Gt, Is } from "../internal/message-stream-utils.mjs";
+import { __classPrivateFieldSet, __classPrivateFieldGet } from "../internal/tslib.mjs";
+import { isAbortError_2 } from "../internal/errors.mjs";
+import { APIUserAbortError, AnthropicError } from "../core/error.mjs";
+import { STAINLESS_HELPER_METHOD_HEADER } from "../internal/stainless-helper-header.mjs";
+import { Stream } from "../core/streaming.mjs";
+import { Bt } from "../tools/agent-toolset/memories.mjs";
+import { maybeParseMessage } from "./parser.mjs";
+import { JSON_BUF_PROPERTY, withLazyInput } from "../internal/message-stream-utils.mjs";
 
 //@ chunk-hwmsct5x.js:147532-147611 esm-layout
-var ft, Kt, Wn, yo, oi, wo, So, si, Eo, At, vo, ii, ai, pn, li, ui, di, Ro, Da, wd, Ua, Na, Ba, Ha, Sd;
+var _MessageStream_instances;
+var _MessageStream_currentMessageSnapshot;
+var _MessageStream_params;
+var _MessageStream_connectedPromise;
+var _MessageStream_resolveConnectedPromise;
+var _MessageStream_rejectConnectedPromise;
+var _MessageStream_endPromise;
+var _MessageStream_resolveEndPromise;
+var _MessageStream_rejectEndPromise;
+var _MessageStream_listeners;
+var _MessageStream_ended;
+var _MessageStream_errored;
+var _MessageStream_aborted;
+var _MessageStream_catchingPromiseCreated;
+var _MessageStream_response;
+var _MessageStream_request_id;
+var _MessageStream_workspace_id;
+var _MessageStream_logger;
+var _MessageStream_getFinalMessage;
+var _MessageStream_getFinalText;
+var _MessageStream_handleError;
+var _MessageStream_beginRequest;
+var _MessageStream_addStreamEvent;
+var _MessageStream_endRequest;
+var _MessageStream_accumulateMessage;
 //@ chunk-hwmsct5x.js:147611-147681 esm-fingerprint
-function $a(e) {
-  return e.type === "tool_use" || e.type === "server_tool_use";
+function tracksToolInput_2(content) {
+  return content.type === "tool_use" || content.type === "server_tool_use";
 }
 //@ chunk-hwmsct5x.js:147681-156923 esm-fingerprint
-var Ed = (() => {
-  class e {
-    constructor(n, r) {
-      (ft.add(this),
-        (this.messages = []),
-        (this.receivedMessages = []),
-        Kt.set(this, void 0),
-        Wn.set(this, null),
-        (this.controller = new AbortController()),
-        yo.set(this, void 0),
-        oi.set(this, () => {}),
-        wo.set(this, () => {}),
-        So.set(this, void 0),
-        si.set(this, () => {}),
-        Eo.set(this, () => {}),
-        At.set(this, {}),
-        vo.set(this, !1),
-        ii.set(this, !1),
-        ai.set(this, !1),
-        pn.set(this, !1),
-        li.set(this, void 0),
-        ui.set(this, void 0),
-        di.set(this, void 0),
-        Ro.set(this, void 0),
-        Ua.set(this, (s) => {
-          if ((Kn(this, ii, !0, "f"), Kje(s))) s = new Lf();
-          if (s instanceof Lf) return (Kn(this, ai, !0, "f"), this._emit("abort", s));
-          if (s instanceof pr) return this._emit("error", s);
-          if (s instanceof Error) {
-            let h = new pr(s.message);
-            return ((h.cause = s), this._emit("error", h));
-          }
-          return this._emit("error", new pr(String(s)));
+var MessageStream = (() => {
+  class MessageStream {
+    constructor(params, opts) {
+      _MessageStream_instances.add(this);
+      this.messages = [];
+      this.receivedMessages = [];
+      _MessageStream_currentMessageSnapshot.set(this, undefined);
+      _MessageStream_params.set(this, null);
+      this.controller = new AbortController();
+      _MessageStream_connectedPromise.set(this, undefined);
+      _MessageStream_resolveConnectedPromise.set(this, () => {});
+      _MessageStream_rejectConnectedPromise.set(this, () => {});
+      _MessageStream_endPromise.set(this, undefined);
+      _MessageStream_resolveEndPromise.set(this, () => {});
+      _MessageStream_rejectEndPromise.set(this, () => {});
+      _MessageStream_listeners.set(this, {});
+      _MessageStream_ended.set(this, false);
+      _MessageStream_errored.set(this, false);
+      _MessageStream_aborted.set(this, false);
+      _MessageStream_catchingPromiseCreated.set(this, false);
+      _MessageStream_response.set(this, undefined);
+      _MessageStream_request_id.set(this, undefined);
+      _MessageStream_workspace_id.set(this, undefined);
+      _MessageStream_logger.set(this, undefined);
+      _MessageStream_handleError.set(this, (error) => {
+        __classPrivateFieldSet(this, _MessageStream_errored, true, "f");
+        if (isAbortError_2(error)) error = new APIUserAbortError();
+        if (error instanceof APIUserAbortError) {
+          __classPrivateFieldSet(this, _MessageStream_aborted, true, "f");
+          return this._emit("abort", error);
+        }
+        if (error instanceof AnthropicError) return this._emit("error", error);
+        if (error instanceof Error) {
+          let anthropicError = new AnthropicError(error.message);
+          anthropicError.cause = error;
+          return this._emit("error", anthropicError);
+        }
+        return this._emit("error", new AnthropicError(String(error)));
+      });
+      __classPrivateFieldSet(
+        this,
+        _MessageStream_connectedPromise,
+        new Promise((resolve, reject) => {
+          __classPrivateFieldSet(this, _MessageStream_resolveConnectedPromise, resolve, "f");
+          __classPrivateFieldSet(this, _MessageStream_rejectConnectedPromise, reject, "f");
         }),
-        Kn(
-          this,
-          yo,
-          new Promise((s, h) => {
-            (Kn(this, oi, s, "f"), Kn(this, wo, h, "f"));
-          }),
-          "f",
-        ),
-        Kn(
-          this,
-          So,
-          new Promise((s, h) => {
-            (Kn(this, si, s, "f"), Kn(this, Eo, h, "f"));
-          }),
-          "f",
-        ),
-        ke(this, yo, "f").catch(() => {}),
-        ke(this, So, "f").catch(() => {}),
-        Kn(this, Wn, n, "f"),
-        Kn(this, Ro, r?.logger ?? console, "f"));
+        "f",
+      );
+      __classPrivateFieldSet(
+        this,
+        _MessageStream_endPromise,
+        new Promise((resolve, reject) => {
+          __classPrivateFieldSet(this, _MessageStream_resolveEndPromise, resolve, "f");
+          __classPrivateFieldSet(this, _MessageStream_rejectEndPromise, reject, "f");
+        }),
+        "f",
+      );
+      __classPrivateFieldGet(this, _MessageStream_connectedPromise, "f").catch(() => {});
+      __classPrivateFieldGet(this, _MessageStream_endPromise, "f").catch(() => {});
+      __classPrivateFieldSet(this, _MessageStream_params, params, "f");
+      __classPrivateFieldSet(this, _MessageStream_logger, opts?.logger ?? console, "f");
     }
     get response() {
-      return ke(this, li, "f");
+      return __classPrivateFieldGet(this, _MessageStream_response, "f");
     }
     get request_id() {
-      return ke(this, ui, "f");
+      return __classPrivateFieldGet(this, _MessageStream_request_id, "f");
     }
     get workspace_id() {
-      return ke(this, di, "f");
+      return __classPrivateFieldGet(this, _MessageStream_workspace_id, "f");
     }
     async withResponse() {
-      Kn(this, pn, !0, "f");
-      let n = await ke(this, yo, "f");
-      if (!n) throw Error("Could not resolve a `Response` object");
+      __classPrivateFieldSet(this, _MessageStream_catchingPromiseCreated, true, "f");
+      let response = await __classPrivateFieldGet(this, _MessageStream_connectedPromise, "f");
+      if (!response) throw Error("Could not resolve a `Response` object");
       return {
         data: this,
-        response: n,
-        request_id: n.headers.get("request-id"),
-        workspace_id: n.headers.get("anthropic-workspace-id"),
+        response,
+        request_id: response.headers.get("request-id"),
+        workspace_id: response.headers.get("anthropic-workspace-id"),
       };
     }
-    static fromReadableStream(n) {
-      let r = new e(null);
-      return (r._run(() => r._fromReadableStream(n)), r);
+    static fromReadableStream(stream) {
+      let runner = new MessageStream(null);
+      runner._run(() => runner._fromReadableStream(stream));
+      return runner;
     }
-    static createMessage(n, r, s, { logger: h } = {}) {
-      let y = new e(r, { logger: h });
-      for (let message of r.messages) y._addMessageParam(message);
-      return (
-        Kn(y, Wn, { ...r, stream: !0 }, "f"),
-        y._run(() =>
-          y._createMessage(
-            n,
-            { ...r, stream: !0 },
-            { ...s, headers: { ...s?.headers, [X_STAINLESS_HELPER_METHOD]: "stream" } },
-          ),
-        ),
-        y
-      );
-    }
-    _run(n) {
-      n().then(
-        () => {
-          (this._emitFinal(), this._emit("end"));
+    static createMessage(messages, params, options, { logger } = {}) {
+      let runner = new MessageStream(params, {
+        logger,
+      });
+      for (let message of params.messages) runner._addMessageParam(message);
+      __classPrivateFieldSet(
+        runner,
+        _MessageStream_params,
+        {
+          ...params,
+          stream: true,
         },
-        ke(this, Ua, "f"),
+        "f",
+      );
+      runner._run(() =>
+        runner._createMessage(
+          messages,
+          {
+            ...params,
+            stream: true,
+          },
+          {
+            ...options,
+            headers: {
+              ...options?.headers,
+              [STAINLESS_HELPER_METHOD_HEADER]: "stream",
+            },
+          },
+        ),
+      );
+      return runner;
+    }
+    _run(executor) {
+      executor().then(
+        () => {
+          this._emitFinal();
+          this._emit("end");
+        },
+        __classPrivateFieldGet(this, _MessageStream_handleError, "f"),
       );
     }
-    _addMessageParam(n) {
-      this.messages.push(n);
+    _addMessageParam(message) {
+      this.messages.push(message);
     }
-    _addMessage(n, r = !0) {
-      if ((this.receivedMessages.push(n), r)) this._emit("message", n);
+    _addMessage(message, emit = true) {
+      this.receivedMessages.push(message);
+      if (emit) this._emit("message", message);
     }
-    async _createMessage(n, r, s) {
-      let h = s?.signal,
-        y;
-      if (h) {
-        if (h.aborted) this.controller.abort();
-        ((y = this.controller.abort.bind(this.controller)), h.addEventListener("abort", y));
+    async _createMessage(messages, params, options) {
+      let signal = options?.signal;
+      let abortHandler;
+      if (signal) {
+        if (signal.aborted) this.controller.abort();
+        abortHandler = this.controller.abort.bind(this.controller);
+        signal.addEventListener("abort", abortHandler);
       }
       try {
-        ke(this, ft, "m", Na).call(this);
-        let { response: response, data: S } = await n
-          .create({ ...r, stream: !0 }, { ...s, signal: this.controller.signal })
+        __classPrivateFieldGet(this, _MessageStream_instances, "m", _MessageStream_beginRequest).call(this);
+        let { response, data: stream } = await messages
+          .create(
+            {
+              ...params,
+              stream: true,
+            },
+            {
+              ...options,
+              signal: this.controller.signal,
+            },
+          )
           .withResponse();
         this._connected(response);
-        for await (let E of S) ke(this, ft, "m", Ba).call(this, E);
-        if (S.controller.signal?.aborted) throw new Lf();
-        ke(this, ft, "m", Ha).call(this);
+        for await (let event of stream)
+          __classPrivateFieldGet(this, _MessageStream_instances, "m", _MessageStream_addStreamEvent).call(
+            this,
+            event,
+          );
+        if (stream.controller.signal?.aborted) throw new APIUserAbortError();
+        __classPrivateFieldGet(this, _MessageStream_instances, "m", _MessageStream_endRequest).call(this);
       } finally {
-        if (h && y) h.removeEventListener("abort", y);
+        if (signal && abortHandler) signal.removeEventListener("abort", abortHandler);
       }
     }
-    _connected(n) {
+    _connected(response) {
       if (this.ended) return;
-      (Kn(this, li, n, "f"),
-        Kn(this, ui, n?.headers.get("request-id"), "f"),
-        Kn(this, di, n?.headers.get("anthropic-workspace-id"), "f"),
-        ke(this, oi, "f").call(this, n),
-        this._emit("connect"));
+      __classPrivateFieldSet(this, _MessageStream_response, response, "f");
+      __classPrivateFieldSet(this, _MessageStream_request_id, response?.headers.get("request-id"), "f");
+      __classPrivateFieldSet(
+        this,
+        _MessageStream_workspace_id,
+        response?.headers.get("anthropic-workspace-id"),
+        "f",
+      );
+      __classPrivateFieldGet(this, _MessageStream_resolveConnectedPromise, "f").call(this, response);
+      this._emit("connect");
     }
     get ended() {
-      return ke(this, vo, "f");
+      return __classPrivateFieldGet(this, _MessageStream_ended, "f");
     }
     get errored() {
-      return ke(this, ii, "f");
+      return __classPrivateFieldGet(this, _MessageStream_errored, "f");
     }
     get aborted() {
-      return ke(this, ai, "f");
+      return __classPrivateFieldGet(this, _MessageStream_aborted, "f");
     }
     abort() {
       this.controller.abort();
     }
-    on(n, r) {
-      return ((ke(this, At, "f")[n] || (ke(this, At, "f")[n] = [])).push({ listener: r }), this);
-    }
-    off(n, r) {
-      let s = ke(this, At, "f")[n];
-      if (!s) return this;
-      let index = s.findIndex((y) => y.listener === r);
-      if (index >= 0) s.splice(index, 1);
+    on(event, listener) {
+      (
+        __classPrivateFieldGet(this, _MessageStream_listeners, "f")[event] ||
+        (__classPrivateFieldGet(this, _MessageStream_listeners, "f")[event] = [])
+      ).push({
+        listener,
+      });
       return this;
     }
-    once(n, r) {
-      return ((ke(this, At, "f")[n] || (ke(this, At, "f")[n] = [])).push({ listener: r, once: !0 }), this);
+    off(event, listener) {
+      let listeners = __classPrivateFieldGet(this, _MessageStream_listeners, "f")[event];
+      if (!listeners) return this;
+      let index = listeners.findIndex((l) => l.listener === listener);
+      if (index >= 0) listeners.splice(index, 1);
+      return this;
     }
-    emitted(n) {
-      return new Promise((r, s) => {
-        if ((Kn(this, pn, !0, "f"), n !== "error")) this.once("error", s);
-        this.once(n, r);
+    once(event, listener) {
+      (
+        __classPrivateFieldGet(this, _MessageStream_listeners, "f")[event] ||
+        (__classPrivateFieldGet(this, _MessageStream_listeners, "f")[event] = [])
+      ).push({
+        listener,
+        once: true,
+      });
+      return this;
+    }
+    emitted(event) {
+      return new Promise((resolve, reject) => {
+        __classPrivateFieldSet(this, _MessageStream_catchingPromiseCreated, true, "f");
+        if (event !== "error") this.once("error", reject);
+        this.once(event, resolve);
       });
     }
     async done() {
-      (Kn(this, pn, !0, "f"), await ke(this, So, "f"));
+      __classPrivateFieldSet(this, _MessageStream_catchingPromiseCreated, true, "f");
+      await __classPrivateFieldGet(this, _MessageStream_endPromise, "f");
     }
     get currentMessage() {
-      return ke(this, Kt, "f");
+      return __classPrivateFieldGet(this, _MessageStream_currentMessageSnapshot, "f");
     }
     async finalMessage() {
-      return (await this.done(), ke(this, ft, "m", Da).call(this));
+      await this.done();
+      return __classPrivateFieldGet(this, _MessageStream_instances, "m", _MessageStream_getFinalMessage).call(
+        this,
+      );
     }
     async finalText() {
-      return (await this.done(), ke(this, ft, "m", wd).call(this));
+      await this.done();
+      return __classPrivateFieldGet(this, _MessageStream_instances, "m", _MessageStream_getFinalText).call(
+        this,
+      );
     }
-    _emit(n, ...r) {
-      if (ke(this, vo, "f")) return;
-      if (n === "end") (Kn(this, vo, !0, "f"), ke(this, si, "f").call(this));
-      let s = ke(this, At, "f")[n];
-      if (s)
-        ((ke(this, At, "f")[n] = s.filter((h) => !h.once)),
-          s.forEach(({ listener: listener }) => listener(...r)));
-      if (n === "abort") {
-        let h = r[0];
-        if (!ke(this, pn, "f") && !s?.length) Promise.reject(h);
-        (ke(this, wo, "f").call(this, h), ke(this, Eo, "f").call(this, h), this._emit("end"));
+    _emit(event, ...args) {
+      if (__classPrivateFieldGet(this, _MessageStream_ended, "f")) return;
+      if (event === "end") {
+        __classPrivateFieldSet(this, _MessageStream_ended, true, "f");
+        __classPrivateFieldGet(this, _MessageStream_resolveEndPromise, "f").call(this);
+      }
+      let listeners = __classPrivateFieldGet(this, _MessageStream_listeners, "f")[event];
+      if (listeners) {
+        __classPrivateFieldGet(this, _MessageStream_listeners, "f")[event] = listeners.filter((l) => !l.once);
+        listeners.forEach(({ listener }) => listener(...args));
+      }
+      if (event === "abort") {
+        let error = args[0];
+        if (!__classPrivateFieldGet(this, _MessageStream_catchingPromiseCreated, "f") && !listeners?.length)
+          Promise.reject(error);
+        __classPrivateFieldGet(this, _MessageStream_rejectConnectedPromise, "f").call(this, error);
+        __classPrivateFieldGet(this, _MessageStream_rejectEndPromise, "f").call(this, error);
+        this._emit("end");
         return;
       }
-      if (n === "error") {
-        let h = r[0];
-        if (!ke(this, pn, "f") && !s?.length) Promise.reject(h);
-        (ke(this, wo, "f").call(this, h), ke(this, Eo, "f").call(this, h), this._emit("end"));
+      if (event === "error") {
+        let error = args[0];
+        if (!__classPrivateFieldGet(this, _MessageStream_catchingPromiseCreated, "f") && !listeners?.length)
+          Promise.reject(error);
+        __classPrivateFieldGet(this, _MessageStream_rejectConnectedPromise, "f").call(this, error);
+        __classPrivateFieldGet(this, _MessageStream_rejectEndPromise, "f").call(this, error);
+        this._emit("end");
       }
     }
     _emitFinal() {
-      if (this.receivedMessages.at(-1)) this._emit("finalMessage", ke(this, ft, "m", Da).call(this));
+      if (this.receivedMessages.at(-1))
+        this._emit(
+          "finalMessage",
+          __classPrivateFieldGet(this, _MessageStream_instances, "m", _MessageStream_getFinalMessage).call(
+            this,
+          ),
+        );
     }
-    async _fromReadableStream(n, r) {
-      let s = r?.signal,
-        h;
-      if (s) {
-        if (s.aborted) this.controller.abort();
-        ((h = this.controller.abort.bind(this.controller)), s.addEventListener("abort", h));
+    async _fromReadableStream(readableStream, options) {
+      let signal = options?.signal;
+      let abortHandler;
+      if (signal) {
+        if (signal.aborted) this.controller.abort();
+        abortHandler = this.controller.abort.bind(this.controller);
+        signal.addEventListener("abort", abortHandler);
       }
       try {
-        (ke(this, ft, "m", Na).call(this), this._connected(null));
-        let fromReadableStream = St.fromReadableStream(n, this.controller);
-        for await (let w of fromReadableStream) ke(this, ft, "m", Ba).call(this, w);
-        if (fromReadableStream.controller.signal?.aborted) throw new Lf();
-        ke(this, ft, "m", Ha).call(this);
+        __classPrivateFieldGet(this, _MessageStream_instances, "m", _MessageStream_beginRequest).call(this);
+        this._connected(null);
+        let stream = Stream.fromReadableStream(readableStream, this.controller);
+        for await (let event of stream)
+          __classPrivateFieldGet(this, _MessageStream_instances, "m", _MessageStream_addStreamEvent).call(
+            this,
+            event,
+          );
+        if (stream.controller.signal?.aborted) throw new APIUserAbortError();
+        __classPrivateFieldGet(this, _MessageStream_instances, "m", _MessageStream_endRequest).call(this);
       } finally {
-        if (s && h) s.removeEventListener("abort", h);
+        if (signal && abortHandler) signal.removeEventListener("abort", abortHandler);
       }
     }
-    [((Kt = new WeakMap()),
-    (Wn = new WeakMap()),
-    (yo = new WeakMap()),
-    (oi = new WeakMap()),
-    (wo = new WeakMap()),
-    (So = new WeakMap()),
-    (si = new WeakMap()),
-    (Eo = new WeakMap()),
-    (At = new WeakMap()),
-    (vo = new WeakMap()),
-    (ii = new WeakMap()),
-    (ai = new WeakMap()),
-    (pn = new WeakMap()),
-    (li = new WeakMap()),
-    (ui = new WeakMap()),
-    (di = new WeakMap()),
-    (Ro = new WeakMap()),
-    (Ua = new WeakMap()),
-    (ft = new WeakSet()),
-    (Da = function () {
+    [((_MessageStream_currentMessageSnapshot = new WeakMap()),
+    (_MessageStream_params = new WeakMap()),
+    (_MessageStream_connectedPromise = new WeakMap()),
+    (_MessageStream_resolveConnectedPromise = new WeakMap()),
+    (_MessageStream_rejectConnectedPromise = new WeakMap()),
+    (_MessageStream_endPromise = new WeakMap()),
+    (_MessageStream_resolveEndPromise = new WeakMap()),
+    (_MessageStream_rejectEndPromise = new WeakMap()),
+    (_MessageStream_listeners = new WeakMap()),
+    (_MessageStream_ended = new WeakMap()),
+    (_MessageStream_errored = new WeakMap()),
+    (_MessageStream_aborted = new WeakMap()),
+    (_MessageStream_catchingPromiseCreated = new WeakMap()),
+    (_MessageStream_response = new WeakMap()),
+    (_MessageStream_request_id = new WeakMap()),
+    (_MessageStream_workspace_id = new WeakMap()),
+    (_MessageStream_logger = new WeakMap()),
+    (_MessageStream_handleError = new WeakMap()),
+    (_MessageStream_instances = new WeakSet()),
+    (_MessageStream_getFinalMessage = function () {
       if (this.receivedMessages.length === 0)
-        throw new pr("stream ended without producing a Message with role=assistant");
+        throw new AnthropicError("stream ended without producing a Message with role=assistant");
       return this.receivedMessages.at(-1);
     }),
-    (wd = function () {
+    (_MessageStream_getFinalText = function () {
       if (this.receivedMessages.length === 0)
-        throw new pr("stream ended without producing a Message with role=assistant");
-      let mapped = this.receivedMessages
+        throw new AnthropicError("stream ended without producing a Message with role=assistant");
+      let textBlocks = this.receivedMessages
         .at(-1)
-        .content.filter((s) => s.type === "text")
-        .map((s) => s.text);
-      if (mapped.length === 0) throw new pr("stream ended without producing a content block with type=text");
-      return mapped.join(" ");
+        .content.filter((block) => block.type === "text")
+        .map((block) => block.text);
+      if (textBlocks.length === 0)
+        throw new AnthropicError("stream ended without producing a content block with type=text");
+      return textBlocks.join(" ");
     }),
-    (Na = function () {
+    (_MessageStream_beginRequest = function () {
       if (this.ended) return;
-      Kn(this, Kt, void 0, "f");
+      __classPrivateFieldSet(this, _MessageStream_currentMessageSnapshot, undefined, "f");
     }),
-    (Ba = function (r) {
+    (_MessageStream_addStreamEvent = function (event) {
       if (this.ended) return;
-      let s = ke(this, ft, "m", Sd).call(this, r);
-      switch ((this._emit("streamEvent", r, s), r.type)) {
+      let messageSnapshot = __classPrivateFieldGet(
+        this,
+        _MessageStream_instances,
+        "m",
+        _MessageStream_accumulateMessage,
+      ).call(this, event);
+      switch ((this._emit("streamEvent", event, messageSnapshot), event.type)) {
         case "content_block_delta": {
-          let at = s.content.at(-1);
-          switch (r.delta.type) {
+          let content = messageSnapshot.content.at(-1);
+          switch (event.delta.type) {
             case "text_delta": {
-              if (at.type === "text") this._emit("text", r.delta.text, at.text || "");
+              if (content.type === "text") this._emit("text", event.delta.text, content.text || "");
               break;
             }
             case "citations_delta": {
-              if (at.type === "text") this._emit("citation", r.delta.citation, at.citations ?? []);
+              if (content.type === "text")
+                this._emit("citation", event.delta.citation, content.citations ?? []);
               break;
             }
             case "input_json_delta": {
-              if ($a(at) && ke(this, At, "f").inputJson?.length)
-                this._emit("inputJson", r.delta.partial_json, at.input);
+              if (
+                tracksToolInput_2(content) &&
+                __classPrivateFieldGet(this, _MessageStream_listeners, "f").inputJson?.length
+              )
+                this._emit("inputJson", event.delta.partial_json, content.input);
               break;
             }
             case "thinking_delta": {
-              if (at.type === "thinking") this._emit("thinking", r.delta.thinking, at.thinking);
+              if (content.type === "thinking") this._emit("thinking", event.delta.thinking, content.thinking);
               break;
             }
             case "signature_delta": {
-              if (at.type === "thinking") this._emit("signature", at.signature);
+              if (content.type === "thinking") this._emit("signature", content.signature);
               break;
             }
             default:
-              Bt_hwms(r.delta);
+              Bt(event.delta);
           }
           break;
         }
         case "message_stop": {
-          (this._addMessageParam(s),
-            this._addMessage(La(s, ke(this, Wn, "f"), { logger: ke(this, Ro, "f") }), !0));
+          this._addMessageParam(messageSnapshot);
+          this._addMessage(
+            maybeParseMessage(messageSnapshot, __classPrivateFieldGet(this, _MessageStream_params, "f"), {
+              logger: __classPrivateFieldGet(this, _MessageStream_logger, "f"),
+            }),
+            true,
+          );
           break;
         }
         case "content_block_stop": {
-          this._emit("contentBlock", s.content.at(-1));
+          this._emit("contentBlock", messageSnapshot.content.at(-1));
           break;
         }
         case "message_start": {
-          Kn(this, Kt, s, "f");
+          __classPrivateFieldSet(this, _MessageStream_currentMessageSnapshot, messageSnapshot, "f");
           break;
         }
         case "content_block_start":
@@ -328,132 +456,177 @@ var Ed = (() => {
           break;
       }
     }),
-    (Ha = function () {
-      if (this.ended) throw new pr("stream has ended, this shouldn't happen");
-      let r = ke(this, Kt, "f");
-      if (!r) throw new pr("request ended without sending any chunks");
-      return (Kn(this, Kt, void 0, "f"), La(r, ke(this, Wn, "f"), { logger: ke(this, Ro, "f") }));
+    (_MessageStream_endRequest = function () {
+      if (this.ended) throw new AnthropicError("stream has ended, this shouldn't happen");
+      let snapshot = __classPrivateFieldGet(this, _MessageStream_currentMessageSnapshot, "f");
+      if (!snapshot) throw new AnthropicError("request ended without sending any chunks");
+      __classPrivateFieldSet(this, _MessageStream_currentMessageSnapshot, undefined, "f");
+      return maybeParseMessage(snapshot, __classPrivateFieldGet(this, _MessageStream_params, "f"), {
+        logger: __classPrivateFieldGet(this, _MessageStream_logger, "f"),
+      });
     }),
-    (Sd = function (r) {
-      let s = ke(this, Kt, "f");
-      if (r.type === "message_start") {
-        if (s) throw new pr(`Unexpected event order, got ${r.type} before receiving "message_stop"`);
-        return r.message;
+    (_MessageStream_accumulateMessage = function (event) {
+      let snapshot = __classPrivateFieldGet(this, _MessageStream_currentMessageSnapshot, "f");
+      if (event.type === "message_start") {
+        if (snapshot)
+          throw new AnthropicError(
+            `Unexpected event order, got ${event.type} before receiving "message_stop"`,
+          );
+        return event.message;
       }
-      if (!s) throw new pr(`Unexpected event order, got ${r.type} before "message_start"`);
-      switch (r.type) {
+      if (!snapshot)
+        throw new AnthropicError(`Unexpected event order, got ${event.type} before "message_start"`);
+      switch (event.type) {
         case "message_stop":
-          return s;
+          return snapshot;
         case "message_delta":
-          if (
-            ((s.stop_reason = r.delta.stop_reason),
-            (s.stop_sequence = r.delta.stop_sequence),
-            (s.stop_details = r.delta.stop_details),
-            (s.usage.output_tokens = r.usage.output_tokens),
-            r.delta.container != null)
-          )
-            s.container = r.delta.container;
-          if (r.usage.input_tokens != null) s.usage.input_tokens = r.usage.input_tokens;
-          if (r.usage.cache_creation_input_tokens != null)
-            s.usage.cache_creation_input_tokens = r.usage.cache_creation_input_tokens;
-          if (r.usage.cache_read_input_tokens != null)
-            s.usage.cache_read_input_tokens = r.usage.cache_read_input_tokens;
-          if (r.usage.server_tool_use != null) s.usage.server_tool_use = r.usage.server_tool_use;
-          if (r.usage.output_tokens_details != null)
-            s.usage.output_tokens_details = r.usage.output_tokens_details;
-          return s;
+          snapshot.stop_reason = event.delta.stop_reason;
+          snapshot.stop_sequence = event.delta.stop_sequence;
+          snapshot.stop_details = event.delta.stop_details;
+          snapshot.usage.output_tokens = event.usage.output_tokens;
+          if (event.delta.container != null) snapshot.container = event.delta.container;
+          if (event.usage.input_tokens != null) snapshot.usage.input_tokens = event.usage.input_tokens;
+          if (event.usage.cache_creation_input_tokens != null)
+            snapshot.usage.cache_creation_input_tokens = event.usage.cache_creation_input_tokens;
+          if (event.usage.cache_read_input_tokens != null)
+            snapshot.usage.cache_read_input_tokens = event.usage.cache_read_input_tokens;
+          if (event.usage.server_tool_use != null)
+            snapshot.usage.server_tool_use = event.usage.server_tool_use;
+          if (event.usage.output_tokens_details != null)
+            snapshot.usage.output_tokens_details = event.usage.output_tokens_details;
+          return snapshot;
         case "content_block_start":
-          return (s.content.push({ ...r.content_block }), s);
+          snapshot.content.push({
+            ...event.content_block,
+          });
+          return snapshot;
         case "content_block_delta": {
-          let at = s.content.at(r.index);
-          switch (r.delta.type) {
+          let snapshotContent = snapshot.content.at(event.index);
+          switch (event.delta.type) {
             case "text_delta": {
-              if (at?.type === "text") s.content[r.index] = { ...at, text: (at.text || "") + r.delta.text };
+              if (snapshotContent?.type === "text")
+                snapshot.content[event.index] = {
+                  ...snapshotContent,
+                  text: (snapshotContent.text || "") + event.delta.text,
+                };
               break;
             }
             case "citations_delta": {
-              if (at?.type === "text")
-                s.content[r.index] = { ...at, citations: [...(at.citations ?? []), r.delta.citation] };
+              if (snapshotContent?.type === "text")
+                snapshot.content[event.index] = {
+                  ...snapshotContent,
+                  citations: [...(snapshotContent.citations ?? []), event.delta.citation],
+                };
               break;
             }
             case "input_json_delta": {
-              if (at && $a(at)) {
-                let y = (at[Gt] || "") + r.delta.partial_json;
-                s.content[r.index] = Is(at, y);
+              if (snapshotContent && tracksToolInput_2(snapshotContent)) {
+                let jsonBuf = (snapshotContent[JSON_BUF_PROPERTY] || "") + event.delta.partial_json;
+                snapshot.content[event.index] = withLazyInput(snapshotContent, jsonBuf);
               }
               break;
             }
             case "thinking_delta": {
-              if (at?.type === "thinking")
-                s.content[r.index] = { ...at, thinking: at.thinking + r.delta.thinking };
+              if (snapshotContent?.type === "thinking")
+                snapshot.content[event.index] = {
+                  ...snapshotContent,
+                  thinking: snapshotContent.thinking + event.delta.thinking,
+                };
               break;
             }
             case "signature_delta": {
-              if (at?.type === "thinking") s.content[r.index] = { ...at, signature: r.delta.signature };
+              if (snapshotContent?.type === "thinking")
+                snapshot.content[event.index] = {
+                  ...snapshotContent,
+                  signature: event.delta.signature,
+                };
               break;
             }
             default:
-              Bt_hwms(r.delta);
+              Bt(event.delta);
           }
-          return s;
+          return snapshot;
         }
         case "content_block_stop": {
-          let at = s.content.at(r.index);
-          if (at && $a(at) && Gt in at)
-            Object.defineProperty(at, "input", {
-              value: at.input,
-              enumerable: !0,
-              configurable: !0,
-              writable: !0,
+          let snapshotContent = snapshot.content.at(event.index);
+          if (snapshotContent && tracksToolInput_2(snapshotContent) && JSON_BUF_PROPERTY in snapshotContent)
+            Object.defineProperty(snapshotContent, "input", {
+              value: snapshotContent.input,
+              enumerable: true,
+              configurable: true,
+              writable: true,
             });
-          return s;
+          return snapshot;
         }
       }
     }),
     Symbol.asyncIterator)]() {
-      let n = [],
-        r = [],
-        s = !1;
-      return (
-        this.on("streamEvent", (h) => {
-          let y = r.shift();
-          if (y) y.resolve(h);
-          else n.push(h);
-        }),
-        this.on("end", () => {
-          s = !0;
-          for (let h of r) h.resolve(void 0);
-          r.length = 0;
-        }),
-        this.on("abort", (h) => {
-          s = !0;
-          for (let y of r) y.reject(h);
-          r.length = 0;
-        }),
-        this.on("error", (h) => {
-          s = !0;
-          for (let y of r) y.reject(h);
-          r.length = 0;
-        }),
-        {
-          next: async () => {
-            if (!n.length) {
-              if (s) return { value: void 0, done: !0 };
-              return new Promise((y, w) => r.push({ resolve: y, reject: w })).then((y) =>
-                y ? { value: y, done: !1 } : { value: void 0, done: !0 },
-              );
-            }
-            return { value: n.shift(), done: !1 };
-          },
-          return: async () => (this.abort(), { value: void 0, done: !0 }),
-        }
-      );
+      let pushQueue = [];
+      let readQueue = [];
+      let done = false;
+      this.on("streamEvent", (event) => {
+        let reader = readQueue.shift();
+        if (reader) reader.resolve(event);
+        else pushQueue.push(event);
+      });
+      this.on("end", () => {
+        done = true;
+        for (let reader of readQueue) reader.resolve(undefined);
+        readQueue.length = 0;
+      });
+      this.on("abort", (err) => {
+        done = true;
+        for (let reader of readQueue) reader.reject(err);
+        readQueue.length = 0;
+      });
+      this.on("error", (err) => {
+        done = true;
+        for (let reader of readQueue) reader.reject(err);
+        readQueue.length = 0;
+      });
+      return {
+        next: async () => {
+          if (!pushQueue.length) {
+            if (done)
+              return {
+                value: undefined,
+                done: true,
+              };
+            return new Promise((resolve, reject) =>
+              readQueue.push({
+                resolve,
+                reject,
+              }),
+            ).then((chunk) =>
+              chunk
+                ? {
+                    value: chunk,
+                    done: false,
+                  }
+                : {
+                    value: undefined,
+                    done: true,
+                  },
+            );
+          }
+          return {
+            value: pushQueue.shift(),
+            done: false,
+          };
+        },
+        return: async () => {
+          this.abort();
+          return {
+            value: undefined,
+            done: true,
+          };
+        },
+      };
     }
     toReadableStream() {
-      return new St(this[Symbol.asyncIterator].bind(this), this.controller).toReadableStream();
+      return new Stream(this[Symbol.asyncIterator].bind(this), this.controller).toReadableStream();
     }
   }
-  return e;
+  return MessageStream;
 })();
-
-export { Ed };
+export { MessageStream };

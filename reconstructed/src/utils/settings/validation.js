@@ -15,7 +15,7 @@ import {
   SUPPORTED_PLATFORMS,
   withholdGrants,
 } from "./types.js";
-import { LOt } from "../spellcheck.js";
+import { enabledSettingsFeatureGroups } from "../spellcheck.js";
 import { UNLOADABLE_GUARD_NOTE } from "../../schemas/hookEntryValidation.js";
 import { getValidationTip } from "./validationTips.js";
 import { plural } from "../stringUtils.js";
@@ -36,7 +36,11 @@ import { generateSettingsJSONSchema } from "./schemaOutput.js";
 import { validatePermissionRule } from "./permissionValidation.js";
 
 //@ chunk-dcmhvw5a.js:437432-437494 sole-consumer
-var Dw = DoctorLazy(() => buildWholeSettingsSchema(LOt(), { strictPolicyHelperKeys: !0 }).strict());
+var strictSettingsSchema = DoctorLazy(() =>
+  buildWholeSettingsSchema(enabledSettingsFeatureGroups(), {
+    strictPolicyHelperKeys: true,
+  }).strict(),
+);
 //@ chunk-dcmhvw5a.js:437494-437540 fingerprint = isInvalidTypeIssue (1)
 function isInvalidTypeIssue(issue) {
   return issue.code === "invalid_type";
@@ -54,7 +58,10 @@ function isTooSmallIssue(issue) {
   return issue.code === "too_small";
 }
 //@ chunk-dcmhvw5a.js:437681-437754 layout
-function AOn(e) {
+/**
+ * isBlockingSettingsIssue：是否阻断的设置问题。
+ */
+function isBlockingSettingsIssue(e) {
   return e.severity !== "warning" && !e.loadedWithoutGuardHook;
 }
 //@ chunk-dcmhvw5a.js:437754-438033 layout
@@ -67,7 +74,7 @@ function explainUnloadableGuardHooks(e) {
       ? {
           ...n,
           message: n.message.replace(UNLOADABLE_GUARD_NOTE, () => UNLOADABLE_GUARD_HOOK_TEXT),
-          loadedWithoutGuardHook: !0,
+          loadedWithoutGuardHook: true,
         }
       : n,
   );
@@ -75,108 +82,141 @@ function explainUnloadableGuardHooks(e) {
 //@ chunk-dcmhvw5a.js:438186-438308 fingerprint = getReceivedType (1)
 function getReceivedType(value) {
   if (value === null) return "null";
-  if (value === void 0) return "undefined";
+  if (value === undefined) return "undefined";
   if (Array.isArray(value)) return "array";
   return typeof value;
 }
 //@ chunk-dcmhvw5a.js:438308-438376 file-local
 function extractReceivedFromMessage(msg) {
   let match = msg.match(/received (\w+)/);
-  return match ? match[1] : void 0;
+  return match ? match[1] : undefined;
 }
+//@ chunk-dcmhvw5a.js:438376-439575 fingerprint = formatZodError (0.935)
 /**
  * 把 zod 错误转成 {file,path,message} 列表，附带 validationTips 里的修正提示与文档链接。
  */
-//@ chunk-dcmhvw5a.js:438376-439575 fingerprint = formatZodError (0.935)
 function formatZodError(error, filePath) {
   return error.issues
     .flatMap((issue) => {
       if (issue.code !== "invalid_union" || issue.path.join(".") !== "attribution") return [issue];
-      let filtered = issue.errors.flat().filter((c) => c.path.length > 0);
+      let filtered = issue.errors.flat().filter((error) => error.path.length > 0);
       return filtered.length > 0
-        ? filtered.map((c) => ({ ...c, path: [...issue.path, ...c.path] }))
+        ? filtered.map((c) => ({
+            ...c,
+            path: [...issue.path, ...c.path],
+          }))
         : [issue];
     })
-    .map((s) => {
-      let path = s.path.map(String).join("."),
-        message = s.message,
-        g,
-        m,
-        f,
-        h,
-        y;
-      if (isInvalidValueIssue(s))
-        ((m = s.values.map((S) => String(S))), (f = m.join(" | ")), (h = void 0), (y = void 0));
-      else if (isInvalidTypeIssue(s)) {
-        f = s.expected;
-        let receivedType = extractReceivedFromMessage(s.message);
-        ((h = receivedType ?? getReceivedType(s.input)), (y = receivedType ?? getReceivedType(s.input)));
-      } else if (isTooSmallIssue(s)) f = String(s.minimum);
-      else if (s.code === "custom" && "params" in s) ((h = s.params.received), (y = h));
+    .map((issue) => {
+      let path = issue.path.map(String).join(".");
+      let message = issue.message;
+      let expected;
+      let enumValues;
+      let expectedValue;
+      let receivedValue;
+      let invalidValue;
+      if (isInvalidValueIssue(issue)) {
+        enumValues = issue.values.map((v) => String(v));
+        expectedValue = enumValues.join(" | ");
+        receivedValue = undefined;
+        invalidValue = undefined;
+      } else if (isInvalidTypeIssue(issue)) {
+        expectedValue = issue.expected;
+        let receivedType = extractReceivedFromMessage(issue.message);
+        receivedValue = receivedType ?? getReceivedType(issue.input);
+        invalidValue = receivedType ?? getReceivedType(issue.input);
+      } else if (isTooSmallIssue(issue)) expectedValue = String(issue.minimum);
+      else if (issue.code === "custom" && "params" in issue) {
+        receivedValue = issue.params.received;
+        invalidValue = receivedValue;
+      }
       let tip = getValidationTip({
-        path: path,
-        code: s.code,
-        expected: f,
-        received: h,
-        enumValues: m,
-        message: s.message,
-        value: h,
+        path,
+        code: issue.code,
+        expected: expectedValue,
+        received: receivedValue,
+        enumValues,
+        message: issue.message,
+        value: receivedValue,
       });
-      if (isInvalidValueIssue(s))
-        ((g = m?.map((S) => `"${S}"`).join(", ")), (message = `Invalid value. Expected one of: ${g}`));
-      else if (isInvalidTypeIssue(s)) {
-        let receivedType = extractReceivedFromMessage(s.message) ?? getReceivedType(s.input);
-        if (s.expected === "object" && receivedType === "null" && path === "")
+      if (isInvalidValueIssue(issue)) {
+        expected = enumValues?.map((v) => `"${v}"`).join(", ");
+        message = `Invalid value. Expected one of: ${expected}`;
+      } else if (isInvalidTypeIssue(issue)) {
+        let receivedType = extractReceivedFromMessage(issue.message) ?? getReceivedType(issue.input);
+        if (issue.expected === "object" && receivedType === "null" && path === "")
           message = "Invalid or malformed JSON";
-        else message = `Expected ${s.expected}, but received ${receivedType}`;
-      } else if (isUnrecognizedKeysIssue(s)) {
-        let keys = s.keys.join(", ");
-        message = `Unrecognized ${plural(s.keys.length, "field")}: ${keys}`;
-      } else if (isTooSmallIssue(s))
-        ((message = `Number must be greater than or equal to ${s.minimum}`), (g = String(s.minimum)));
+        else message = `Expected ${issue.expected}, but received ${receivedType}`;
+      } else if (isUnrecognizedKeysIssue(issue)) {
+        let keys = issue.keys.join(", ");
+        message = `Unrecognized ${plural(issue.keys.length, "field")}: ${keys}`;
+      } else if (isTooSmallIssue(issue)) {
+        message = `Number must be greater than or equal to ${issue.minimum}`;
+        expected = String(issue.minimum);
+      }
       return {
         file: filePath,
-        path: path,
-        message: message,
-        expected: g,
-        invalidValue: y,
+        path,
+        message,
+        expected,
+        invalidValue,
         suggestion: tip?.suggestion,
         docLink: tip?.docLink,
       };
     });
 }
+//@ chunk-dcmhvw5a.js:439575-440624 fingerprint = validateSettingsFileContent (0.508)
 /**
  * 校验设置文件文本（编辑 settings.json 前后用），返回是否合法与错误说明。
  */
-//@ chunk-dcmhvw5a.js:439575-440624 fingerprint = validateSettingsFileContent (0.508)
 function validateSettingsFileContent(content) {
   try {
-    let jsonData = jsonParse(content),
-      r = isPlainObject_2(jsonData) ? { ...jsonData } : jsonData,
-      mapped = applySettingAliases(r, "settings").map(aliasConflictMessage),
-      a = jsonData;
+    let jsonData = jsonParse(content);
+    let r = isPlainObject_2(jsonData)
+      ? {
+          ...jsonData,
+        }
+      : jsonData;
+    let mapped = applySettingAliases(r, "settings").map(aliasConflictMessage);
+    let a = jsonData;
     if (isPlainObject_2(jsonData)) {
       let filtered = SETTING_ALIASES.map((w) => w.alias).filter((w) => w in jsonData && jsonData[w] === null);
       if (filtered.length > 0) {
-        let w = { ...jsonData };
+        let w = {
+          ...jsonData,
+        };
         for (let L of filtered) delete w[L];
         a = w;
       }
     }
-    let result = Dw().safeParse(a),
-      g = result.success ? [] : formatZodError(result.error, "settings"),
-      m = crossSessionInboundError(jsonData);
-    if (m !== void 0) g.push({ path: CROSSSESSIONINBOUND, message: `"crossSessionInbound" ${m}.` });
+    let result = strictSettingsSchema().safeParse(a);
+    let g = result.success ? [] : formatZodError(result.error, "settings");
+    let m = crossSessionInboundError(jsonData);
+    if (m !== undefined)
+      g.push({
+        path: CROSSSESSIONINBOUND,
+        message: `"crossSessionInbound" ${m}.`,
+      });
     let f = strictPluginOnlyCustomizationError(jsonData);
-    if (f !== void 0)
-      g.push({ path: "strictPluginOnlyCustomization", message: `"strictPluginOnlyCustomization" ${f}.` });
+    if (f !== undefined)
+      g.push({
+        path: "strictPluginOnlyCustomization",
+        message: `"strictPluginOnlyCustomization" ${f}.`,
+      });
     let h = validateAllowedProviders(jsonData);
-    if (h !== void 0) g.push({ path: "allowedProviders", message: `"allowedProviders" ${h}.` });
-    let y = staticPayloadWarnings(jsonData),
-      b = collectRuleWarnings(r);
-    if (g.length === 0 && mapped.length === 0 && y.length === 0 && b.length === 0) return { isValid: !0 };
+    if (h !== undefined)
+      g.push({
+        path: "allowedProviders",
+        message: `"allowedProviders" ${h}.`,
+      });
+    let y = staticPayloadWarnings(jsonData);
+    let ruleWarnings = collectRuleWarnings(r);
+    if (g.length === 0 && mapped.length === 0 && y.length === 0 && ruleWarnings.length === 0)
+      return {
+        isValid: true,
+      };
     return {
-      isValid: !1,
+      isValid: false,
       error:
         `Settings validation failed:
 ` +
@@ -187,7 +227,7 @@ function validateSettingsFileContent(content) {
             if (C.suggestion) w += `. ${C.suggestion}`;
             return w;
           }),
-          ...b.map((C) => `- ${C}`),
+          ...ruleWarnings.map((ruleWarning) => `- ${ruleWarning}`),
           ...y.map((err) => `- ${err}`),
         ].join(`
 `),
@@ -195,7 +235,7 @@ function validateSettingsFileContent(content) {
     };
   } catch (parseError) {
     return {
-      isValid: !1,
+      isValid: false,
       error: `Invalid JSON: ${parseError instanceof Error ? parseError.message : "Unknown parsing error"}`,
       fullSchema: generateSettingsJSONSchema(),
     };
@@ -203,67 +243,86 @@ function validateSettingsFileContent(content) {
 }
 //@ chunk-dcmhvw5a.js:440624-441480 layout
 function validatePolicyHelperConfig(e, n) {
-  let r = clone(e),
-    s = [];
+  let r = clone(e);
+  let s = [];
   if (r && typeof r === "object") {
     let y = r;
     for (let b of ["policyHelper", "policyHelpers"])
-      if (y[b] !== void 0) {
+      if (y[b] !== undefined) {
         if (y[b] !== null) s.push(b);
         delete y[b];
       }
   }
-  let a = new Map(),
-    c = validateSettingsDocument(r, n, {
-      mcpServerEntrySalvageOnly: !0,
-      policySource: !0,
-      marketplacePatternIndexMapOut: a,
-    }),
-    g = n.startsWith("policyHelpers.") ? "payload" : "managedSettings",
-    m = strictPluginOnlyCustomizationError(r);
-  if (m !== void 0)
-    return { error: `${g} rejected: strictPluginOnlyCustomization: ${m}`, warnings: c, strippedKeys: s };
+  let a = new Map();
+  let warnings = validateSettingsDocument(r, n, {
+    mcpServerEntrySalvageOnly: true,
+    policySource: true,
+    marketplacePatternIndexMapOut: a,
+  });
+  let g = n.startsWith("policyHelpers.") ? "payload" : "managedSettings";
+  let m = strictPluginOnlyCustomizationError(r);
+  if (m !== undefined)
+    return {
+      error: `${g} rejected: strictPluginOnlyCustomization: ${m}`,
+      warnings,
+      strippedKeys: s,
+    };
   let f = validateAllowedProviders(r);
-  if (f !== void 0) return { error: `${g} rejected: allowedProviders: ${f}`, warnings: c, strippedKeys: s };
-  let safeParse = getSettingsSchemaForDocument(r).safeParse(r);
-  if (!safeParse.success) {
-    let joined = safeParse.error.issues
+  if (f !== undefined)
+    return {
+      error: `${g} rejected: allowedProviders: ${f}`,
+      warnings,
+      strippedKeys: s,
+    };
+  let h = getSettingsSchemaForDocument(r).safeParse(r);
+  if (!h.success) {
+    let joined = h.error.issues
       .slice(0, 3)
-      .map((b) => {
-        let S = remapIssuePath(b.path, a);
-        return S.length ? `${S.join(".")}: ${b.message}` : b.message;
+      .map((issue) => {
+        let S = remapIssuePath(issue.path, a);
+        return S.length ? `${S.join(".")}: ${issue.message}` : issue.message;
       })
       .join("; ");
-    return { error: `${g} rejected: ${joined}`, warnings: c, strippedKeys: s };
+    return {
+      error: `${g} rejected: ${joined}`,
+      warnings,
+      strippedKeys: s,
+    };
   }
-  return (
-    copyAllowedProviders(r, safeParse.data),
-    { settings: safeParse.data, warnings: c, strippedKeys: s }
-  );
+  copyAllowedProviders(r, h.data);
+  return {
+    settings: h.data,
+    warnings,
+    strippedKeys: s,
+  };
 }
+//@ chunk-dcmhvw5a.js:441480-442221 layout
 /**
  * 检查 policyHelpers 中的静态设置载荷（default 与各平台 defaultSettings）：别名冲突、规则警告与无效载荷（来自 OS 管理员来源时会拒绝启动），返回警告文字列表。
  */
-//@ chunk-dcmhvw5a.js:441480-442221 layout
 function staticPayloadWarnings(e) {
   if (!e || typeof e !== "object" || Array.isArray(e)) return [];
   let policyHelpers = e.policyHelpers;
   if (!policyHelpers || typeof policyHelpers !== "object" || Array.isArray(policyHelpers)) return [];
-  let payloads = [],
-    helpers = policyHelpers;
-  if (helpers.default !== void 0 && helpers.default !== null)
+  let payloads = [];
+  let helpers = policyHelpers;
+  if (helpers.default !== undefined && helpers.default !== null)
     payloads.push(["policyHelpers.default", helpers.default]);
   for (let c of SUPPORTED_PLATFORMS) {
     let g = helpers[c];
     if (g && typeof g === "object" && !Array.isArray(g)) {
       let defaultSettings = g.defaultSettings;
-      if (defaultSettings !== void 0 && defaultSettings !== null)
+      if (defaultSettings !== undefined && defaultSettings !== null)
         payloads.push([`policyHelpers.${c}.defaultSettings`, defaultSettings]);
     }
   }
   let warnings = [];
   for (let [c, g] of payloads) {
-    let m = isPlainObject_2(g) ? { ...g } : g;
+    let m = isPlainObject_2(g)
+      ? {
+          ...g,
+        }
+      : g;
     for (let h of applySettingAliases(m, c)) warnings.push(`${c}: ${aliasConflictMessage(h)}`);
     for (let h of collectRuleWarnings(m)) warnings.push(`${c}.${h}`);
     let f = validatePolicyHelperConfig(g, c);
@@ -274,48 +333,45 @@ function staticPayloadWarnings(e) {
   }
   return warnings;
 }
+//@ chunk-dcmhvw5a.js:442221-443201 fingerprint = filterInvalidPermissionRules (0.686)
 /**
  * 从 permissions.allow/deny/ask 中剔除格式错误的规则并给出警告，避免整份设置作废。
  */
-//@ chunk-dcmhvw5a.js:442221-443201 fingerprint = filterInvalidPermissionRules (0.686)
-function filterInvalidPermissionRules(e, n, r) {
-  if (!e || typeof e !== "object") return [];
-  let obj = e;
+function filterInvalidPermissionRules(data, filePath, r) {
+  if (!data || typeof data !== "object") return [];
+  let obj = data;
   if (!obj.permissions || typeof obj.permissions !== "object") return [];
-  let perms = obj.permissions,
-    warnings = [],
-    g = new Map();
+  let perms = obj.permissions;
+  let warnings = [];
+  let g = new Map();
   for (let key of ["allow", "deny", "ask"]) {
     let rules = perms[key];
     if (!Array.isArray(rules)) continue;
     let filtered = rules.filter((rule) => {
-      if (typeof rule !== "string")
-        return (
-          warnings.push({
-            file: n,
-            path: `permissions.${key}`,
-            message: `Non-string value in ${key} array was removed`,
-            severity: "warning",
-            invalidValue: rule,
-          }),
-          !1
-        );
-      let b = validatePermissionRule(rule, key);
-      if (!b.valid) {
-        let message = `Invalid permission rule "${rule}" was skipped: ${b.error}`;
-        if (b.suggestion) message += `. ${b.suggestion}`;
-        return (
-          warnings.push({
-            file: n,
-            path: `permissions.${key}`,
-            message: message,
-            severity: "warning",
-            invalidValue: rule,
-          }),
-          !1
-        );
+      if (typeof rule !== "string") {
+        warnings.push({
+          file: filePath,
+          path: `permissions.${key}`,
+          message: `Non-string value in ${key} array was removed`,
+          severity: "warning",
+          invalidValue: rule,
+        });
+        return false;
       }
-      return !0;
+      let result = validatePermissionRule(rule, key);
+      if (!result.valid) {
+        let message = `Invalid permission rule "${rule}" was skipped: ${result.error}`;
+        if (result.suggestion) message += `. ${result.suggestion}`;
+        warnings.push({
+          file: filePath,
+          path: `permissions.${key}`,
+          message,
+          severity: "warning",
+          invalidValue: rule,
+        });
+        return false;
+      }
+      return true;
     });
     if (r?.policySource && key !== "allow" && rules.length > 0 && filtered.length === 0) {
       if (!r.strictParseFollows) continue;
@@ -323,27 +379,26 @@ function filterInvalidPermissionRules(e, n, r) {
     } else if (filtered.length < rules.length) g.set(key, "trimmed");
     perms[key] = filtered;
   }
-  return (
-    withholdGrants(
-      "permissions",
-      perms,
-      (m) => g.get(m),
-      (m) =>
-        warnings.push({
-          file: n,
-          path: m.path,
-          message: m.message,
-          severity: "warning",
-          ...(m.substituted && { substituted: m.substituted }),
+  withholdGrants(
+    "permissions",
+    perms,
+    (m) => g.get(m),
+    (m) =>
+      warnings.push({
+        file: filePath,
+        path: m.path,
+        message: m.message,
+        severity: "warning",
+        ...(m.substituted && {
+          substituted: m.substituted,
         }),
-    ),
-    warnings
+      }),
   );
+  return warnings;
 }
-
 export {
   staticPayloadWarnings,
-  AOn,
+  isBlockingSettingsIssue,
   getReceivedType,
   filterInvalidPermissionRules,
   formatZodError,

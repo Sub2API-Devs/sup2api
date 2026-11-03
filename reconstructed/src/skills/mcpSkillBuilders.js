@@ -8,14 +8,13 @@
  * pieces: chunk-s61vbvea.js (1)
  * attribution: fingerprint 1
  */
-import { Ag } from "../services/memorySync/syncFiles.js";
+import { loaderSideHolder } from "../services/memorySync/syncFiles.js";
 
 //@ chunk-s61vbvea.js:90219-90368 fingerprint = getMCPSkillBuilders (0.795)
 function getMCPSkillBuilders() {
-  let loaderSide = Ag.loaderSide;
+  let loaderSide = loaderSideHolder.loaderSide;
   if (!loaderSide)
     throw Error("MCP skill builders not registered \u2014 loadSkillsDir.ts has not been evaluated yet");
   return loaderSide;
 }
-
 export { getMCPSkillBuilders };

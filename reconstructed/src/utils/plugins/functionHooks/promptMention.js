@@ -10,7 +10,7 @@
  */
 import { randomUUID } from "crypto";
 import { Ar } from "../../../../runtime/bun-runtime.js";
-import { LAn } from "../../../plugins/functionHooks/sites/siteRules.js";
+import { PDF_REFERENCE_KINDS } from "../../../plugins/functionHooks/sites/siteRules.js";
 import { runPromptMention } from "../../../plugins/functionHooks/promptMentionRunner.js";
 import { logForDebugging } from "../../debug.js";
 import { errorMessage } from "../../errors.js";
@@ -26,44 +26,60 @@ Ar(promptMentionNamespace, {
   readThroughMention: () => readThroughMention,
 });
 //@ chunk-hg7yd2v7.js:3647-3691 placement
-var attachedNameOf = (e) => LAn.find((r) => r === e?.type) ?? null;
+var attachedNameOf = (e) => PDF_REFERENCE_KINDS.find((r) => r === e?.type) ?? null;
 //@ chunk-hg7yd2v7.js:3727-3862 placement
-var contextAttachmentOf = (e) => ({
+var contextAttachmentOf = (content) => ({
   type: "hook_additional_context",
-  content: e,
+  content,
   hookName: "prompt.mention",
   toolUseID: `hook-${randomUUID()}`,
   hookEvent: "UserPromptSubmit",
 });
 //@ chunk-hg7yd2v7.js:3862-4728 placement
 async function readThroughMention(e) {
-  if (e.isIsolated) return { attachment: await e.read(e.raised, "unhooked"), context: void 0 };
-  let r = [],
-    p = await runPromptMention({
-      raised: e.raised,
-      signalOf: e.signalOf,
-      ...(e.skipping !== void 0 && { skipping: e.skipping }),
-      read: async (o, n) => {
-        let refusal = e.refusal(o);
-        if (refusal !== void 0) return { deny: refusal };
-        let read = e.read(o, n);
-        return (r.push({ arrived: o, made: read }), { type: attachedNameOf(await read) });
-      },
-    }).catch(async (o) => {
-      throw (
-        await Promise.allSettled(r.map((n) => n.made)),
-        r.forEach((n) => e.forget(n.arrived)),
-        logForDebugging(
-          `prompt.mention of ${e.raised.path}: the hooks' chain failed (${errorMessage(o)}); nothing attached`,
-        ),
-        o
-      );
+  if (e.isIsolated)
+    return {
+      attachment: await e.read(e.raised, "unhooked"),
+      context: undefined,
+    };
+  let r = [];
+  let p = await runPromptMention({
+    raised: e.raised,
+    signalOf: e.signalOf,
+    ...(e.skipping !== undefined && {
+      skipping: e.skipping,
     }),
-    s =
-      (await Promise.allSettled(r.map((o) => o.made)))
-        .flatMap((o) => (o.status === "fulfilled" ? [o.value] : []))
-        .find((o) => o !== null) ?? null;
+    read: async (o, n) => {
+      let u = e.refusal(o);
+      if (u !== undefined)
+        return {
+          deny: u,
+        };
+      let x = e.read(o, n);
+      r.push({
+        arrived: o,
+        made: x,
+      });
+      return {
+        type: attachedNameOf(await x),
+      };
+    },
+  }).catch(async (error) => {
+    await Promise.allSettled(r.map((n) => n.made));
+    r.forEach((n) => e.forget(n.arrived));
+    logForDebugging(
+      `prompt.mention of ${e.raised.path}: the hooks' chain failed (${errorMessage(error)}); nothing attached`,
+    );
+    throw error;
+  });
+  let s =
+    (await Promise.allSettled(r.map((o) => o.made)))
+      .flatMap((o) => (o.status === "fulfilled" ? [o.value] : []))
+      .find((o) => o !== null) ?? null;
   if (p.isDenied || (s !== null && !p.isKept)) r.forEach((o) => e.forget(o.arrived));
-  let f = await capAdditionalContext(p.context, "prompt.mention", e.storageV5);
-  return { attachment: p.isKept ? s : null, context: f.length > 0 ? contextAttachmentOf(f) : void 0 };
+  let content = await capAdditionalContext(p.context, "prompt.mention", e.storageV5);
+  return {
+    attachment: p.isKept ? s : null,
+    context: content.length > 0 ? contextAttachmentOf(content) : undefined,
+  };
 }

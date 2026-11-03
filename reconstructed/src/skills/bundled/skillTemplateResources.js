@@ -10,14 +10,17 @@
  */
 import __cc_resource_0 from "../../../assets/SKILL-e3d212e9.md.zst" with { type: "file" };
 import __cc_resource_1 from "../../../assets/template-eg8004mh.md" with { type: "text" };
-import { Et } from "../../utils/embeddedAssets.js";
+import { readEmbeddedTextSync } from "../../utils/embeddedAssets.js";
 
 //@ chunk-z2aczm6x.js:415-437 placement
-var e = __cc_resource_0;
+var skillPath = __cc_resource_0;
 //@ chunk-z2aczm6x.js:437-469 placement
-var t = Et(e, import.meta.dirname);
+var skill = readEmbeddedTextSync(skillPath, import.meta.dirname);
 //@ chunk-z2aczm6x.js:469-491 placement
-var a = __cc_resource_1;
+var templateText = __cc_resource_1;
 //@ chunk-z2aczm6x.js:491-503 placement
-var p = t,
-  m = a;
+/**
+ * skill 模板资源导出：SKILL.md 与模板 markdown 的文本。
+ */
+var SKILL_MD = skill;
+var TEMPLATE_MD = templateText;

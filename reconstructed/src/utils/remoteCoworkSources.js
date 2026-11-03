@@ -10,6 +10,8 @@
  */
 
 //@ chunk-w5sk7e3v.js:191-241 placement
-var FDn = ["remote_cowork", "remote_cowork_trigger"];
-
-export { FDn };
+/**
+ * REMOTE_COWORK_SOURCE_KINDS：远程 cowork 来源种类。
+ */
+var REMOTE_COWORK_SOURCE_KINDS = ["remote_cowork", "remote_cowork_trigger"];
+export { REMOTE_COWORK_SOURCE_KINDS };

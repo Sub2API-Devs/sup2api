@@ -5,40 +5,52 @@
  *
  * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/generators.ts
- * pieces: chunk-0sxtya66.js (1), chunk-e6aww6q8.js (4)
- * attribution: fingerprint 2, placement 3
+ * pieces: chunk-0sxtya66.js (1), chunk-e6aww6q8.js (5)
+ * attribution: fingerprint 2, placement 4
  */
-import { ty, readJsonStringField, encode_7 as encode_7_2 } from "../services/usageInsights/transcriptScan.js";
+import { indexOfBytes, readJsonStringField, VLr } from "../services/usageInsights/transcriptScan.js";
 import {
-  encode_3,
-  encode_4,
-  F,
-  b,
+  R,
+  q,
+  sanitizeToolLabel,
+  EMPTY_TOOL_LABEL,
   extractToolEvidenceLabel,
-  z,
+  MAX_EVIDENCE_FIELD_CHARS,
 } from "../services/usageInsights/recommendations.js";
 
+//@ chunk-e6aww6q8.js:922105-922183 placement = returnValue (1)
+async function returnValue_2(as) {
+  let e;
+  do e = await as.next();
+  while (!e.done);
+  return e.value;
+}
+//@ chunk-e6aww6q8.js:922183-922573 fingerprint = all (1)
 /**
  * 并发合并多个异步生成器（最多 n 个同时运行），按产出先后交错 yield 各生成器的值。
  */
-//@ chunk-e6aww6q8.js:922183-922573 fingerprint = all (1)
 async function* all(generators, concurrencyCap = 1 / 0) {
   let next = (generator) => {
-      let promise = generator
-        .next()
-        .then(({ done: w, value: L }) => ({ done: w, value: L, generator: generator, promise: promise }));
-      return promise;
-    },
-    waiting = [...generators],
-    promises = new Set();
+    let promise = generator.next().then(({ done, value }) => ({
+      done,
+      value,
+      generator,
+      promise,
+    }));
+    return promise;
+  };
+  let waiting = [...generators];
+  let promises = new Set();
   while (promises.size < concurrencyCap && waiting.length > 0) {
     let gen = waiting.shift();
     promises.add(next(gen));
   }
   while (promises.size > 0) {
-    let { done: done, value: value, generator: generator, promise: promise } = await Promise.race(promises);
-    if ((promises.delete(promise), !done)) {
-      if ((promises.add(next(generator)), value !== void 0)) yield value;
+    let { done, value, generator, promise } = await Promise.race(promises);
+    promises.delete(promise);
+    if (!done) {
+      promises.add(next(generator));
+      if (value !== undefined) yield value;
     } else if (waiting.length > 0) {
       let nextGen = waiting.shift();
       promises.add(next(nextGen));
@@ -52,50 +64,60 @@ async function toArray_2(generator) {
   return result;
 }
 //@ chunk-e6aww6q8.js:922644-922689 placement
-async function* o4s(e) {
+/**
+ * 把同步可迭代对象重新包装为异步生成器（逐项 yield）。
+ */
+async function* replayAsyncIterable(e) {
   for (let n of e) yield n;
 }
+//@ chunk-e6aww6q8.js:922689-923051 placement
 /**
  * 包装异步迭代器：结束或出错后释放对原迭代器的引用，之后 next/return 直接完成；支持 await using 释放。
  */
-//@ chunk-e6aww6q8.js:922689-923051 placement
 function releasingAsyncIterator(e) {
-  let n = e,
-    r = (S) => {
-      if (S.done) n = void 0;
-      return S;
+  let n = e;
+  let r = (S) => {
+    if (S.done) n = undefined;
+    return S;
+  };
+  let s = (S) => {
+    n = undefined;
+    throw S;
+  };
+  let h = (value) =>
+    Promise.resolve({
+      done: true,
+      value,
+    });
+  let y = {
+    next: (S) => (n ? n.next(S).then(r, s) : h(undefined)),
+    return: (S) => (n ? n.return(S).then(r, s) : h(S)),
+    throw: (S) => (n ? n.throw(S).then(r, s) : Promise.reject(S)),
+    [Symbol.asyncIterator]: () => y,
+    [Symbol.asyncDispose]: async () => {
+      await y.return(undefined);
     },
-    s = (S) => {
-      throw ((n = void 0), S);
-    },
-    h = (S) => Promise.resolve({ done: !0, value: S }),
-    y = {
-      next: (S) => (n ? n.next(S).then(r, s) : h(void 0)),
-      return: (S) => (n ? n.return(S).then(r, s) : h(S)),
-      throw: (S) => (n ? n.throw(S).then(r, s) : Promise.reject(S)),
-      [Symbol.asyncIterator]: () => y,
-      [Symbol.asyncDispose]: async () => {
-        await y.return(void 0);
-      },
-    };
+  };
   return y;
 }
 //@ chunk-0sxtya66.js:3695-3948 fingerprint = returnValue (1)
 function returnValue(e, t, n) {
-  let r = ty(e, encode_3, 0, t);
+  let r = indexOfBytes(e, R, 0, t);
   while (r >= 0) {
-    let i = ty(e, encode_3, r + encode_3.length, t),
-      a = i < 0 ? t : i,
-      d = readJsonStringField(e, encode_7_2, r, a),
-      s = readJsonStringField(e, encode_4, r, a);
-    if (d && s && !n.has(d)) {
-      let f = F(s) ?? b;
-      n.set(d, { tool: f, detail: extractToolEvidenceLabel(f, e, r, a) });
+    let i = indexOfBytes(e, R, r + R.length, t);
+    let a = i < 0 ? t : i;
+    let jsonStringField = readJsonStringField(e, VLr, r, a);
+    let jsonStringField_2 = readJsonStringField(e, q, r, a);
+    if (jsonStringField && jsonStringField_2 && !n.has(jsonStringField)) {
+      let f = sanitizeToolLabel(jsonStringField_2) ?? EMPTY_TOOL_LABEL;
+      n.set(jsonStringField, {
+        tool: f,
+        detail: extractToolEvidenceLabel(f, e, r, a),
+      });
       let l = n.keys().next();
-      if (n.size > z && !l.done) n.delete(l.value);
+      if (n.size > MAX_EVIDENCE_FIELD_CHARS && !l.done) n.delete(l.value);
     }
     r = i;
   }
 }
-
-export { all, returnValue, o4s, releasingAsyncIterator, toArray_2 };
+export { all, returnValue, replayAsyncIterable, returnValue_2, releasingAsyncIterator, toArray_2 };

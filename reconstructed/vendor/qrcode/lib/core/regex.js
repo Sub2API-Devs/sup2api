@@ -8,32 +8,31 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-spjgqa4y.js:8067-8825 cjs-fingerprint
-var Ge = x(function (Ui) {
-  var ge =
+var require_regex = x(function (cjsExports) {
+  var kanji =
     "(?:[u3000-u303F]|[u3040-u309F]|[u30A0-u30FF]|[uFF00-uFFEF]|[u4E00-u9FAF]|[u2605-u2606]|[u2190-u2195]|u203B|[u2010u2015u2018u2019u2025u2026u201Cu201Du2225u2260]|[u0391-u0451]|[u00A7u00A8u00B1u00B4u00D7u00F7])+";
-  ge = ge.replace(/u/g, "\\u");
-  var Mi =
+  kanji = kanji.replace(/u/g, "\\u");
+  var byte =
     "(?:(?![A-Z0-9 $%*+\\-./:]|" +
-    ge +
+    kanji +
     `)(?:.|[\r
 ]))+`;
-  Ui.KANJI = new RegExp(ge, "g");
-  Ui.BYTE_KANJI = new RegExp("[^A-Z0-9 $%*+\\-./:]+", "g");
-  Ui.BYTE = new RegExp(Mi, "g");
-  Ui.NUMERIC = new RegExp("[0-9]+", "g");
-  Ui.ALPHANUMERIC = new RegExp("[A-Z $%*+\\-./:]+", "g");
-  var regExp = new RegExp("^" + ge + "$"),
-    regExp_2 = new RegExp("^[0-9]+$"),
-    regExp_3 = new RegExp("^[A-Z0-9 $%*+\\-./:]+$");
-  Ui.testKanji = function (e) {
-    return regExp.test(e);
+  cjsExports.KANJI = new RegExp(kanji, "g");
+  cjsExports.BYTE_KANJI = new RegExp("[^A-Z0-9 $%*+\\-./:]+", "g");
+  cjsExports.BYTE = new RegExp(byte, "g");
+  cjsExports.NUMERIC = new RegExp("[0-9]+", "g");
+  cjsExports.ALPHANUMERIC = new RegExp("[A-Z $%*+\\-./:]+", "g");
+  var TEST_KANJI = new RegExp("^" + kanji + "$");
+  var TEST_NUMERIC = new RegExp("^[0-9]+$");
+  var TEST_ALPHANUMERIC = new RegExp("^[A-Z0-9 $%*+\\-./:]+$");
+  cjsExports.testKanji = function (str) {
+    return TEST_KANJI.test(str);
   };
-  Ui.testNumeric = function (e) {
-    return regExp_2.test(e);
+  cjsExports.testNumeric = function (str) {
+    return TEST_NUMERIC.test(str);
   };
-  Ui.testAlphanumeric = function (e) {
-    return regExp_3.test(e);
+  cjsExports.testAlphanumeric = function (str) {
+    return TEST_ALPHANUMERIC.test(str);
   };
 });
-
-export { Ge };
+export { require_regex };

@@ -6,24 +6,25 @@
  * attribution: cjs-fingerprint 1
  */
 import { x, importMetaRequire } from "../../../../runtime/bun-runtime.js";
-import { s_s } from "../../is-array-buffer/dist-cjs/index.js";
+import { require_is_array_buffer } from "../../is-array-buffer/dist-cjs/index.js";
 
 //@ chunk-wr8v03d0.js:440-877 cjs-fingerprint
-var UQt = x(function (X) {
-  var z = s_s(),
-    g = importMetaRequire("buffer"),
-    Q = (e, r = 0, t = e.byteLength - r) => {
-      if (!z.isArrayBuffer(e))
-        throw TypeError(`The "input" argument must be ArrayBuffer. Received type ${typeof e} (${e})`);
-      return g.Buffer.from(e, r, t);
-    },
-    V = (e, r) => {
-      if (typeof e !== "string")
-        throw TypeError(`The "input" argument must be of type string. Received type ${typeof e} (${e})`);
-      return r ? g.Buffer.from(e, r) : g.Buffer.from(e);
-    };
-  X.fromArrayBuffer = Q;
-  X.fromString = V;
+var require_util_buffer_from = x(function (cjsExports) {
+  var import_is_array_buffer = require_is_array_buffer();
+  var import_buffer = importMetaRequire("buffer");
+  var fromArrayBuffer = (input, offset = 0, length = input.byteLength - offset) => {
+    if (!import_is_array_buffer.isArrayBuffer(input))
+      throw TypeError(`The "input" argument must be ArrayBuffer. Received type ${typeof input} (${input})`);
+    return import_buffer.Buffer.from(input, offset, length);
+  };
+  var fromString = (input, encoding) => {
+    if (typeof input !== "string")
+      throw TypeError(
+        `The "input" argument must be of type string. Received type ${typeof input} (${input})`,
+      );
+    return encoding ? import_buffer.Buffer.from(input, encoding) : import_buffer.Buffer.from(input);
+  };
+  cjsExports.fromArrayBuffer = fromArrayBuffer;
+  cjsExports.fromString = fromString;
 });
-
-export { UQt };
+export { require_util_buffer_from };

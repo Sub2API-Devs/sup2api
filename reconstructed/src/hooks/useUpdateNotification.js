@@ -9,19 +9,18 @@
  * attribution: fingerprint 1
  */
 import { DoctorLazy } from "../cli/handlers/util.js";
-import { u, o, A, pe, E } from "../../vendor/zod/v4/classic/schemas.js";
+import { u, string, array, record, E } from "../../vendor/zod/v4/classic/schemas.js";
 
 //@ chunk-hddjmtjj.js:53438-53634 fingerprint = getSemverPart (0.622)
 var getSemverPart = DoctorLazy(() =>
   u({
-    httpUrl: o().optional(),
-    url: o().optional(),
-    command: o().optional(),
-    args: A(o()).optional(),
-    env: pe(o(), o()).optional(),
-    headers: pe(o(), o()).optional(),
+    httpUrl: string().optional(),
+    url: string().optional(),
+    command: string().optional(),
+    args: array(string()).optional(),
+    env: record(string(), string()).optional(),
+    headers: record(string(), string()).optional(),
     timeout: E().optional(),
   }).loose(),
 );
-
 export { getSemverPart };

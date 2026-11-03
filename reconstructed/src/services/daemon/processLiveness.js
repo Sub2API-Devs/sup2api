@@ -11,25 +11,33 @@
 import { isProcessRunning } from "../../utils/genericProcessUtils.js";
 import { isSameProcessAsync, isExitedProcessAsync } from "../../utils/processIdentity.js";
 
+//@ chunk-y162pn60.js:17913-18053 placement
 /**
  * 检查进程存活：pid 不存在、启动时间不符、僵尸或存活。
  */
-//@ chunk-y162pn60.js:17913-18053 placement
-async function checkProcessLiveness(e, n) {
-  if (!isProcessRunning(e)) return "dead_pid";
-  if (!(await isSameProcessAsync(e, n))) return "procstart_mismatch";
-  if (await isExitedProcessAsync(e)) return "zombie";
+async function checkProcessLiveness(pid, n) {
+  if (!isProcessRunning(pid)) return "dead_pid";
+  if (!(await isSameProcessAsync(pid, n))) return "procstart_mismatch";
+  if (await isExitedProcessAsync(pid)) return "zombie";
   return "live";
 }
 //@ chunk-y162pn60.js:18053-18108 placement
-async function oyn(e, n) {
-  return (await checkProcessLiveness(e, n)) === "live";
+/**
+ * 判断进程是否存活（"live"）。
+ */
+async function isProcessLive(pid, procStart) {
+  return (await checkProcessLiveness(pid, procStart)) === "live";
 }
 //@ chunk-y162pn60.js:18108-18150 placement
-var Ft = /^-|^[A-Za-z][A-Za-z0-9+.-]+:\/\//;
+/**
+ * 匹配 “以 - 开头或带协议前缀” 的正则。
+ */
+var UNSAFE_MODEL_ARG_RE = /^-|^[A-Za-z][A-Za-z0-9+.-]+:\/\//;
 //@ chunk-y162pn60.js:18150-18205 placement
-function Xse(e) {
-  return !Ft.test(e) && !e.includes("\x00");
+/**
+ * 判断字符串是否可作为模型参数（非选项、非 URL、无 NUL）。
+ */
+function isAcceptableModelArg(e) {
+  return !UNSAFE_MODEL_ARG_RE.test(e) && !e.includes("\x00");
 }
-
-export { Xse, checkProcessLiveness, oyn };
+export { isAcceptableModelArg, checkProcessLiveness, isProcessLive };

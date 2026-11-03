@@ -9,32 +9,41 @@
  * attribution: fingerprint 1
  */
 import { createAbortController } from "./abortController.js";
-import { ec } from "./timerDelayClamp.js";
+import { MAX_TIMER_DELAY_MS } from "./timerDelayClamp.js";
 
+//@ chunk-sthwtwzm.js:263-731 fingerprint = createCombinedAbortSignal (0.925)
 /**
  * 合并多个 AbortSignal（及可选超时）为一个，任一触发即 abort，返回 signal 与清理函数。
  */
-//@ chunk-sthwtwzm.js:263-731 fingerprint = createCombinedAbortSignal (0.925)
 function createCombinedAbortSignal(signal, opts) {
-  let { signalB: signalB, timeoutMs: timeoutMs, refTimer: refTimer } = opts ?? {},
-    combined = createAbortController();
-  if (signal?.aborted || signalB?.aborted)
-    return (combined.abort(), { signal: combined.signal, cleanup: () => {} });
-  let timer,
-    abortCombined = () => {
-      if (timer !== void 0) clearTimeout(timer);
-      combined.abort();
+  let { signalB, timeoutMs, refTimer } = opts ?? {};
+  let combined = createAbortController();
+  if (signal?.aborted || signalB?.aborted) {
+    combined.abort();
+    return {
+      signal: combined.signal,
+      cleanup: () => {},
     };
-  if (timeoutMs !== void 0) {
-    if (((timer = setTimeout(abortCombined, Math.min(timeoutMs, ec))), !refTimer)) timer.unref?.();
   }
-  (signal?.addEventListener("abort", abortCombined), signalB?.addEventListener("abort", abortCombined));
-  let cleanup = () => {
-    if (timer !== void 0) clearTimeout(timer);
-    (signal?.removeEventListener("abort", abortCombined),
-      signalB?.removeEventListener("abort", abortCombined));
+  let timer;
+  let abortCombined = () => {
+    if (timer !== undefined) clearTimeout(timer);
+    combined.abort();
   };
-  return { signal: combined.signal, cleanup: cleanup };
+  if (timeoutMs !== undefined) {
+    timer = setTimeout(abortCombined, Math.min(timeoutMs, MAX_TIMER_DELAY_MS));
+    if (!refTimer) timer.unref?.();
+  }
+  signal?.addEventListener("abort", abortCombined);
+  signalB?.addEventListener("abort", abortCombined);
+  let cleanup = () => {
+    if (timer !== undefined) clearTimeout(timer);
+    signal?.removeEventListener("abort", abortCombined);
+    signalB?.removeEventListener("abort", abortCombined);
+  };
+  return {
+    signal: combined.signal,
+    cleanup,
+  };
 }
-
 export { createCombinedAbortSignal };

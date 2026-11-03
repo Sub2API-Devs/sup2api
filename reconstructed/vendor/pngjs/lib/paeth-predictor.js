@@ -8,16 +8,15 @@
 import { x } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-spjgqa4y.js:23814-23978 cjs-require-graph
-var ut = x(function (Hl, kr) {
-  kr.exports = function (e, r, n) {
-    let i = e + r - n,
-      abs = Math.abs(i - e),
-      abs_2 = Math.abs(i - r),
-      abs_3 = Math.abs(i - n);
-    if (abs <= abs_2 && abs <= abs_3) return e;
-    if (abs_2 <= abs_3) return r;
-    return n;
+var require_paeth_predictor = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = function (left, above, upLeft) {
+    let paeth = left + above - upLeft;
+    let pLeft = Math.abs(paeth - left);
+    let pAbove = Math.abs(paeth - above);
+    let pUpLeft = Math.abs(paeth - upLeft);
+    if (pLeft <= pAbove && pLeft <= pUpLeft) return left;
+    if (pAbove <= pUpLeft) return above;
+    return upLeft;
   };
 });
-
-export { ut };
+export { require_paeth_predictor };

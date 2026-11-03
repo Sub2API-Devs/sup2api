@@ -16,32 +16,32 @@ import {
   getFastModeUnavailableMessage,
   onFastModeOverageRejection,
   onFallbackModelFastRejected,
-  Nto,
-  $to,
+  onFastModeCooldownTriggered,
+  onFastModeCooldownExpired,
 } from "../../utils/fastMode.js";
 import { renderModelName } from "../../utils/model/modelDisplay.js";
 import { formatDuration } from "../../utils/format.js";
 
 //@ chunk-18hwfzwa.js:1759555-1759822 callgraph-fingerprint = ORG_CHANGED_KEY (0.268)
-var FAST_MODE_COOLDOWN_STARTED = "fast-mode-cooldown-started",
-  FAST_MODE_COOLDOWN_EXPIRED = "fast-mode-cooldown-expired",
-  FAST_MODE_ORG_CHANGED = "fast-mode-org-changed",
-  FAST_MODE_OVERAGE_REJECTED = "fast-mode-overage-rejected",
-  FAST_MODE_FALLBACK_MODEL_REJECTED = "fast-mode-fallback-model-rejected",
-  uTt = {
-    id: "fast-mode-org-changed",
-    deps: (h) => [h.addNotification, h.fastMode, h.store],
-    setup: () => onOrgFastModeChangeNotice,
-  };
+var FAST_MODE_COOLDOWN_STARTED = "fast-mode-cooldown-started";
+var FAST_MODE_COOLDOWN_EXPIRED = "fast-mode-cooldown-expired";
+var FAST_MODE_ORG_CHANGED = "fast-mode-org-changed";
+var FAST_MODE_OVERAGE_REJECTED = "fast-mode-overage-rejected";
+var FAST_MODE_FALLBACK_MODEL_REJECTED = "fast-mode-fallback-model-rejected";
+var fastModeOrgChangedNoticeSpec = {
+  id: "fast-mode-org-changed",
+  deps: (h) => [h.addNotification, h.fastMode, h.store],
+  setup: () => onOrgFastModeChangeNotice,
+};
+//@ chunk-18hwfzwa.js:1759822-1760212 file-local
 /**
  * 监听组织 fast mode 开关变化：变为可用时提示，变为不可用且当前开启时关闭 fast mode 并提示原因。
  */
-//@ chunk-18hwfzwa.js:1759822-1760212 file-local
-function onOrgFastModeChangeNotice({ addNotification: addNotification, fastMode: fastMode, store: store }) {
+function onOrgFastModeChangeNotice({ addNotification, fastMode, store }) {
   if (getIsRemoteMode()) return;
   if (!isFastModeEnabled()) return;
-  return onOrgFastModeChange((L) => {
-    if (L)
+  return onOrgFastModeChange((orgEnabled) => {
+    if (orgEnabled)
       addNotification({
         key: FAST_MODE_ORG_CHANGED,
         kind: "event",
@@ -50,16 +50,19 @@ function onOrgFastModeChangeNotice({ addNotification: addNotification, fastMode:
         text: "Fast mode is now available \xB7 /fast to turn on",
       });
     else if (fastMode && isOrgFastModeDisabledByServer()) {
-      let ee = getFastModeUnavailableMessage();
-      if (ee === null) return;
-      (store.setState((ke) => ({ ...ke, fastMode: !1 })),
-        addNotification({
-          key: FAST_MODE_ORG_CHANGED,
-          kind: "event",
-          color: "warning",
-          priority: "immediate",
-          text: ee,
-        }));
+      let fastModeUnavailableMessage = getFastModeUnavailableMessage();
+      if (fastModeUnavailableMessage === null) return;
+      store.setState((ke) => ({
+        ...ke,
+        fastMode: false,
+      }));
+      addNotification({
+        key: FAST_MODE_ORG_CHANGED,
+        kind: "event",
+        color: "warning",
+        priority: "immediate",
+        text: fastModeUnavailableMessage,
+      });
     }
   });
 }
@@ -70,28 +73,31 @@ var OVERAGE_REJECTED_KEY = {
   setup: () => onFastModeOverageRejectedNotice,
 };
 //@ chunk-18hwfzwa.js:1760306-1760507 file-local
-function onFastModeOverageRejectedNotice({ addNotification: addNotification, store: store }) {
+function onFastModeOverageRejectedNotice({ addNotification, store }) {
   if (getIsRemoteMode()) return;
   if (!isFastModeEnabled()) return;
-  return onFastModeOverageRejection((D) => {
-    (store.setState((L) => ({ ...L, fastMode: !1 })),
-      addNotification({
-        key: FAST_MODE_OVERAGE_REJECTED,
-        kind: "feedback",
-        color: "error",
-        priority: "immediate",
-        text: D,
-      }));
+  return onFastModeOverageRejection((message) => {
+    store.setState((L) => ({
+      ...L,
+      fastMode: false,
+    }));
+    addNotification({
+      key: FAST_MODE_OVERAGE_REJECTED,
+      kind: "feedback",
+      color: "error",
+      priority: "immediate",
+      text: message,
+    });
   });
 }
 //@ chunk-18hwfzwa.js:1760507-1760600 layout
-var pTt = {
+var fastModeFallbackRejectedNoticeSpec = {
   id: "fast-mode-fallback-model-rejected",
   deps: (h) => [h.addNotification],
   setup: () => onFallbackFastRejectedNotice,
 };
 //@ chunk-18hwfzwa.js:1760600-1760821 file-last-pair
-function onFallbackFastRejectedNotice({ addNotification: addNotification }) {
+function onFallbackFastRejectedNotice({ addNotification }) {
   if (getIsRemoteMode()) return;
   if (!isFastModeEnabled()) return;
   return onFallbackModelFastRejected((x) => {
@@ -105,38 +111,41 @@ function onFallbackFastRejectedNotice({ addNotification: addNotification }) {
   });
 }
 //@ chunk-18hwfzwa.js:1760821-1760910 layout
-var fTt = {
+var fastModeCooldownNoticeSpec = {
   id: "fast-mode-cooldown",
   deps: (h) => [h.addNotification, h.fastMode],
   setup: () => useFastModeNotification,
 };
 //@ chunk-18hwfzwa.js:1760910-1761307 fingerprint = useFastModeNotification (0.722)
-function useFastModeNotification({ addNotification: addNotification, fastMode: fastMode }) {
+function useFastModeNotification({ addNotification, fastMode }) {
   if (getIsRemoteMode()) return;
   if (!fastMode) return;
-  let D = Nto((resetAt, reason) => {
-      let resetIn = formatDuration(resetAt - Date.now(), { hideTrailingZeros: !0 }),
-        message_0 = getCooldownMessage(reason, resetIn);
-      addNotification({
-        key: FAST_MODE_COOLDOWN_STARTED,
-        invalidates: [FAST_MODE_COOLDOWN_EXPIRED],
-        text: message_0,
-        color: "warning",
-        priority: "immediate",
-      });
-    }),
-    unsubExpired = $to(() => {
-      addNotification({
-        key: FAST_MODE_COOLDOWN_EXPIRED,
-        kind: "event",
-        invalidates: [FAST_MODE_COOLDOWN_STARTED],
-        color: "fastMode",
-        text: "Fast limit reset \xB7 now using fast mode",
-        priority: "immediate",
-      });
+  let unsubTriggered = onFastModeCooldownTriggered((resetAt, reason) => {
+    let resetIn = formatDuration(resetAt - Date.now(), {
+      hideTrailingZeros: true,
     });
+    let message = getCooldownMessage(reason, resetIn);
+    addNotification({
+      key: FAST_MODE_COOLDOWN_STARTED,
+      invalidates: [FAST_MODE_COOLDOWN_EXPIRED],
+      text: message,
+      color: "warning",
+      priority: "immediate",
+    });
+  });
+  let unsubExpired = onFastModeCooldownExpired(() => {
+    addNotification({
+      key: FAST_MODE_COOLDOWN_EXPIRED,
+      kind: "event",
+      invalidates: [FAST_MODE_COOLDOWN_STARTED],
+      color: "fastMode",
+      text: "Fast limit reset \xB7 now using fast mode",
+      priority: "immediate",
+    });
+  });
   return () => {
-    (D(), unsubExpired());
+    unsubTriggered();
+    unsubExpired();
   };
 }
 //@ chunk-18hwfzwa.js:1761307-1761522 fingerprint = getCooldownMessage (1)
@@ -148,5 +157,9 @@ function getCooldownMessage(reason, resetIn) {
       return `Fast limit reached and temporarily disabled \xB7 resets in ${resetIn}`;
   }
 }
-
-export { uTt, OVERAGE_REJECTED_KEY, fTt, pTt };
+export {
+  fastModeOrgChangedNoticeSpec,
+  OVERAGE_REJECTED_KEY,
+  fastModeCooldownNoticeSpec,
+  fastModeFallbackRejectedNoticeSpec,
+};

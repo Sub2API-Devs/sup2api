@@ -8,14 +8,17 @@
  * pieces: chunk-ag5x7vhf.js (6)
  * attribution: fingerprint 3, layout 1, callgraph-witnessed 1, placement 1
  */
-import { Me } from "../design-system/ThemeProvider.js";
+import { useTheme_2 } from "../design-system/ThemeProvider.js";
 import { Se, Q, P } from "../../../vendor/react/cjs/react.production.js";
 import { SlashLinkContexts } from "../SlashCommandLink.js";
-import { Dt } from "./CondensedLogo.js";
+import { useNoticeImpressionEnabled } from "./CondensedLogo.js";
 import { saveGlobalConfig, getGlobalConfig } from "../../utils/config.js";
-import { r, e } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default_2,
+  jsxProd_default,
+} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Box } from "../../ink/components/Text.js";
-import { Gg } from "../../utils/permissions/autoModeRulesPrompt.js";
+import { WARNING_GLYPH } from "../../utils/permissions/autoModeRulesPrompt.js";
 import { getDynamicConfig_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import { hasComplianceTaint } from "../../services/policyLimits/complianceTaints.js";
 
@@ -23,53 +26,68 @@ import { hasComplianceTaint } from "../../services/policyLimits/complianceTaints
 var CONFIG_NAME = "tengu-top-of-feed-tip";
 //@ chunk-ag5x7vhf.js:77906-78419 fingerprint = EmergencyTip (0.872)
 function EmergencyTip() {
-  let { storageV5: storageV5 } = Me(),
-    h = Se(SlashLinkContexts),
-    x = Dt(),
-    tip = Q(getTipOfFeed, []),
-    lastShownTip = Q(() => shouldShowEmergencyTip(tip, x), [tip, x]);
-  if (
-    (P(() => {
-      if (lastShownTip && !tip.persistent)
-        saveGlobalConfig((current) => {
-          if (current.lastShownEmergencyTip === tip.tip) return current;
-          return { ...current, lastShownEmergencyTip: tip.tip };
-        }, storageV5);
-    }, [lastShownTip, tip.tip, tip.persistent, storageV5]),
-    !lastShownTip)
-  )
-    return null;
-  if (h) return r(Text, { color: tip.color === "error" ? "error" : "warning", children: [Gg, " ", tip.tip] });
-  return e(Box, {
+  let { storageV5 } = useTheme_2();
+  let h = Se(SlashLinkContexts);
+  let noticeImpressionEnabled = useNoticeImpressionEnabled();
+  let tip = Q(getTipOfFeed, []);
+  let lastShownTip = Q(
+    () => shouldShowEmergencyTip(tip, noticeImpressionEnabled),
+    [tip, noticeImpressionEnabled],
+  );
+  P(() => {
+    if (lastShownTip && !tip.persistent)
+      saveGlobalConfig((current) => {
+        if (current.lastShownEmergencyTip === tip.tip) return current;
+        return {
+          ...current,
+          lastShownEmergencyTip: tip.tip,
+        };
+      }, storageV5);
+  }, [lastShownTip, tip.tip, tip.persistent, storageV5]);
+  if (!lastShownTip) return null;
+  if (h)
+    return jsxProd_default_2(Text, {
+      color: tip.color === "error" ? "error" : "warning",
+      children: [WARNING_GLYPH, " ", tip.tip],
+    });
+  return jsxProd_default(Box, {
     paddingLeft: 2,
     flexDirection: "column",
-    children: e(Text, {
+    children: jsxProd_default(Text, {
       ...(tip.color === "warning"
-        ? { color: "warning" }
+        ? {
+            color: "warning",
+          }
         : tip.color === "error"
-          ? { color: "error" }
-          : { dimColor: !0 }),
+          ? {
+              color: "error",
+            }
+          : {
+              dimColor: true,
+            }),
       children: tip.tip,
     }),
   });
 }
 //@ chunk-ag5x7vhf.js:78419-78522 layout
-function shouldShowEmergencyTip(m, h) {
-  if (!isEmergencyTipShown(m)) return !1;
-  if (m.persistent) return !0;
+function shouldShowEmergencyTip(m, noticeImpressionEnabled) {
+  if (!isEmergencyTipShown(m)) return false;
+  if (m.persistent) return true;
   return m.tip !== getGlobalConfig().lastShownEmergencyTip;
 }
 //@ chunk-ag5x7vhf.js:78522-78550 fingerprint = DEFAULT_TIP (1)
-var DEFAULT_TIP = { tip: "", color: "dim" };
+var DEFAULT_TIP = {
+  tip: "",
+  color: "dim",
+};
 //@ chunk-ag5x7vhf.js:78550-78581 callgraph-witnessed = getTipOfFeed (0)
 function getTipOfFeed() {
   return getDynamicConfig_CACHED_MAY_BE_STALE(CONFIG_NAME, DEFAULT_TIP);
 }
 //@ chunk-ag5x7vhf.js:78581-78698 placement
 function isEmergencyTipShown(m) {
-  if (!m.tip) return !1;
-  if (!Array.isArray(m.taints) || m.taints.length === 0) return !0;
+  if (!m.tip) return false;
+  if (!Array.isArray(m.taints) || m.taints.length === 0) return true;
   return m.taints.some(hasComplianceTaint);
 }
-
 export { isEmergencyTipShown, getTipOfFeed, EmergencyTip };

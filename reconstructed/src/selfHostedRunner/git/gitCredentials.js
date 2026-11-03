@@ -8,12 +8,17 @@
  * pieces: chunk-t3sg9e26.js (7)
  * attribution: placement 7
  */
-
 //@ chunk-t3sg9e26.js:26597-26662 placement
-var SHR_GIT_PROXY_TOKEN = "SHR_GIT_PROXY_TOKEN",
-  uMo = ["-c", "lfs.locksverify=false"];
+/**
+ * 导出常量或表 `SHR_GIT_PROXY_TOKEN`：值为 "SHR_GIT_PROXY_TOKEN", uMo = ["-c", "lfs.locksverify=false"]。
+ */
+var SHR_GIT_PROXY_TOKEN = "SHR_GIT_PROXY_TOKEN";
+var LFS_NO_LOCKVERIFY_ARGS = ["-c", "lfs.locksverify=false"];
 //@ chunk-t3sg9e26.js:26662-26700 placement
-function fMo(e) {
+/**
+ * 导出函数 `anonCredentialHelperArgs`：参数 e，返回 credentialHelperScript("unused", e)。
+ */
+function anonCredentialHelperArgs(e) {
   return credentialHelperScript("unused", e);
 }
 //@ chunk-t3sg9e26.js:26700-26815 placement
@@ -21,7 +26,10 @@ function credentialHelperScript(e, n) {
   return `!f() { if test "$1" = get; then printf 'username=${e}\\npassword=%s\\n' "$${n}"; fi; }; f`;
 }
 //@ chunk-t3sg9e26.js:26815-26861 placement
-function FVn(e) {
+/**
+ * 导出函数 `tokenCredentialHelperArgs`：参数 e，返回 credentialHelperScript("x-access-token", e)。
+ */
+function tokenCredentialHelperArgs(e) {
   return credentialHelperScript("x-access-token", e);
 }
 //@ chunk-t3sg9e26.js:26861-27008 placement
@@ -33,7 +41,7 @@ function credentialHelperArgs(e) {
     "-c",
     `credential.${origin}.helper=`,
     "-c",
-    `credential.${origin}.helper=${fMo(SHR_GIT_PROXY_TOKEN)}`,
+    `credential.${origin}.helper=${anonCredentialHelperArgs(SHR_GIT_PROXY_TOKEN)}`,
   ];
 }
 //@ chunk-t3sg9e26.js:27008-27128 placement
@@ -44,14 +52,21 @@ function httpsProxyFromEnv() {
 }
 //@ chunk-t3sg9e26.js:27128-27339 placement
 function remoteProxyArgs(e) {
-  let t = ["", `${new URL(e).origin}.`, `${e}.`],
-    r = httpsProxyFromEnv(),
-    s = r ? ["-c", `remote.origin.proxy=${r}`] : [];
+  let t = ["", `${new URL(e).origin}.`, `${e}.`];
+  let r = httpsProxyFromEnv();
+  let s = r ? ["-c", `remote.origin.proxy=${r}`] : [];
   for (let o of t) {
     if (r) s.push("-c", `http.${o}proxy=${r}`);
     s.push("-c", `http.${o}sslVerify=true`);
   }
   return s;
 }
-
-export { fMo, FVn, remoteProxyArgs, credentialHelperArgs, uMo, SHR_GIT_PROXY_TOKEN, httpsProxyFromEnv };
+export {
+  anonCredentialHelperArgs,
+  tokenCredentialHelperArgs,
+  remoteProxyArgs,
+  credentialHelperArgs,
+  LFS_NO_LOCKVERIFY_ARGS,
+  SHR_GIT_PROXY_TOKEN,
+  httpsProxyFromEnv,
+};

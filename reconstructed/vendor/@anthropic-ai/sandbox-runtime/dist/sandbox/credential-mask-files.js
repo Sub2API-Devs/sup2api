@@ -5,194 +5,236 @@
  * pieces: chunk-fq0cr76a.js (4)
  * attribution: esm-fingerprint 4
  */
-import * as fsModule from "fs";
+import "fs";
 import * as fsModule_2 from "fs";
-import * as fsModule_3 from "fs";
-import * as fsModule_4 from "fs";
-import * as fsModule_5 from "fs";
-import * as fsModule_6 from "fs";
-import * as fsModule_7 from "fs";
-import {
-  join,
-  join as join_2,
-  join as join_3,
-  join as join_4,
-  join as join_5,
-  join as join_6,
-  join as join_7,
-  join as join_8,
-  join as join_9,
-  join as join_10,
-  join as join_11,
-} from "path";
-import { tmpdir, tmpdir as tmpdir_2, tmpdir as tmpdir_3, tmpdir as tmpdir_4, tmpdir as tmpdir_5 } from "os";
-import { randomUUID, randomUUID as randomUUID_2, randomUUID as randomUUID_3 } from "crypto";
-import { At } from "../utils/debug.js";
-import { sS } from "./sandbox-utils.js";
-import { vR, Vm, Gm, Wm } from "./credential-decode.js";
+import "fs";
+import "fs";
+import "fs";
+import "fs";
+import "fs";
+import { join } from "path";
+import { tmpdir } from "os";
+import { randomUUID } from "crypto";
+import { logForDebugging as logForDebugging_2 } from "../utils/debug.js";
+import { normalizePathForSandbox } from "./sandbox-utils.js";
+import { JWT_DEFAULT_EXTRACT_PATTERN, verifyJwt, maskJwtClaims, mintFakeJwt } from "./credential-decode.js";
 
 //@ chunk-fq0cr76a.js:707455-708365 esm-fingerprint
-function $m(e, n, r, s = {}) {
-  let regExp = new RegExp(n, "gd"),
-    y = new Map(),
-    b = new Map(),
-    S = [];
-  for (let D of e.matchAll(regExp)) {
-    let O = D[1];
-    if (O === void 0)
+function extractAndSubstitute(content, pattern, sentinelFor, options = {}) {
+  let re = new RegExp(pattern, "gd");
+  let indexByCapture = new Map();
+  let sentinelByCapture = new Map();
+  let spans = [];
+  for (let m of content.matchAll(re)) {
+    let cap = m[1];
+    if (cap === undefined)
       throw Error(
-        `extract pattern /${n}/ matched at offset ${D.index} but ` +
+        `extract pattern /${pattern}/ matched at offset ${m.index} but ` +
           "capture group 1 is undefined \u2014 group 1 must capture the " +
           "credential value on every match.",
       );
-    if (O.length === 0) continue;
-    let L = y.get(O);
-    if (L === void 0) y.set(O, (L = y.size));
-    let [V, K] = D.indices[1],
-      q = r(O, L);
-    if (!b.has(O)) b.set(O, q);
-    S.push({ start: V, end: K, sentinel: q });
+    if (cap.length === 0) continue;
+    let i = indexByCapture.get(cap);
+    if (i === undefined) indexByCapture.set(cap, (i = indexByCapture.size));
+    let [start, end] = m.indices[1];
+    let sentinel = sentinelFor(cap, i);
+    if (!sentinelByCapture.has(cap)) sentinelByCapture.set(cap, sentinel);
+    spans.push({
+      start,
+      end,
+      sentinel,
+    });
   }
-  if (y.size === 0) return null;
-  if (s.maskDuplicates) {
-    let sorted = [...y.keys()].sort((O, L) => L.length - O.length);
-    for (let O of sorted) {
-      let L = b.get(O);
-      if (L === O) continue;
-      for (let index = e.indexOf(O); index !== -1; index = e.indexOf(O, index + 1)) {
-        let K = index + O.length;
-        if (S.some((q) => index < q.end && q.start < K)) continue;
-        S.push({ start: index, end: K, sentinel: L });
+  if (indexByCapture.size === 0) return null;
+  if (options.maskDuplicates) {
+    let byLength = [...indexByCapture.keys()].sort((a, b) => b.length - a.length);
+    for (let cap of byLength) {
+      let sentinel = sentinelByCapture.get(cap);
+      if (sentinel === cap) continue;
+      for (let start = content.indexOf(cap); start !== -1; start = content.indexOf(cap, start + 1)) {
+        let end = start + cap.length;
+        if (spans.some((s) => start < s.end && s.start < end)) continue;
+        spans.push({
+          start,
+          end,
+          sentinel,
+        });
       }
     }
-    S.sort((O, L) => O.start - L.start);
+    spans.sort((a, b) => a.start - b.start);
   }
-  let w = "",
-    R = 0;
-  for (let D of S) ((w += e.slice(R, D.start) + D.sentinel), (R = D.end));
-  return { fakeContent: w + e.slice(R), captures: [...y.keys()] };
+  let out = "";
+  let pos = 0;
+  for (let s of spans) {
+    out += content.slice(pos, s.start) + s.sentinel;
+    pos = s.end;
+  }
+  return {
+    fakeContent: out + content.slice(pos),
+    captures: [...indexByCapture.keys()],
+  };
 }
 //@ chunk-fq0cr76a.js:709266-709281 esm-fingerprint
 var FILE_URL_PREFIX = "file:";
 //@ chunk-fq0cr76a.js:709281-709783 esm-fingerprint
-class kE {
+class MaskedFileStore {
   constructor() {
     this.byKey = new Map();
   }
-  write(e, n) {
-    if (this.dir === void 0) this.dir = fsModule_2.mkdtempSync(join_4(tmpdir_3(), "srt-credmask-"));
-    let r = this.byKey.get(e);
-    if (r === void 0) ((r = join_4(this.dir, `${this.byKey.size}.fake`)), this.byKey.set(e, r));
-    return (fsModule_2.rmSync(r, { force: !0 }), fsModule_2.writeFileSync(r, n, { mode: 384 }), r);
+  write(key, sentinel) {
+    if (this.dir === undefined) this.dir = fsModule_2.mkdtempSync(join(tmpdir(), "srt-credmask-"));
+    let fakePath = this.byKey.get(key);
+    if (fakePath === undefined) {
+      fakePath = join(this.dir, `${this.byKey.size}.fake`);
+      this.byKey.set(key, fakePath);
+    }
+    fsModule_2.rmSync(fakePath, {
+      force: true,
+    });
+    fsModule_2.writeFileSync(fakePath, sentinel, {
+      mode: 384,
+    });
+    return fakePath;
   }
   dispose() {
-    if (this.dir !== void 0)
+    if (this.dir !== undefined)
       try {
-        fsModule_2.rmSync(this.dir, { recursive: !0, force: !0 });
-      } catch (error) {
-        At(`MaskedFileStore cleanup failed: ${error}`, { level: "error" });
+        fsModule_2.rmSync(this.dir, {
+          recursive: true,
+          force: true,
+        });
+      } catch (err) {
+        logForDebugging_2(`MaskedFileStore cleanup failed: ${err}`, {
+          level: "error",
+        });
       }
-    ((this.dir = void 0), this.byKey.clear());
+    this.dir = undefined;
+    this.byKey.clear();
   }
   get dirPath() {
     return this.dir;
   }
 }
 //@ chunk-fq0cr76a.js:709783-712340 esm-fingerprint
-function AR(e, n, r, s) {
-  let h = [],
-    y = [];
-  for (let b of e) {
-    if (b.mode !== "mask") continue;
-    let S = sS(b.path, { literal: !0 }),
-      w;
+function buildMaskedFileBinds(files, allowedDomains, registry, store) {
+  let binds = [];
+  let degradeToDenyPaths = [];
+  for (let f of files) {
+    if (f.mode !== "mask") continue;
+    let realPath = normalizePathForSandbox(f.path, {
+      literal: true,
+    });
+    let content;
     try {
-      if (fsModule_2.statSync(S).isDirectory()) {
-        At(
-          `[credential-mask] Skipping masked file entry that resolves to a directory: ${b.path} \u2014 use mode "deny" for directories.`,
-          { level: "warn" },
+      if (fsModule_2.statSync(realPath).isDirectory()) {
+        logForDebugging_2(
+          `[credential-mask] Skipping masked file entry that resolves to a directory: ${f.path} \u2014 use mode "deny" for directories.`,
+          {
+            level: "warn",
+          },
         );
         continue;
       }
-      let content = fsModule_2.readFileSync(S);
-      if (((w = content.toString("utf8")), Buffer.byteLength(w, "utf8") !== content.length)) {
-        At(
-          `[credential-mask] Skipping masked file with non-UTF-8 content (binary credential files are not supported in mask mode): ${b.path}`,
-          { level: "warn" },
+      let raw = fsModule_2.readFileSync(realPath);
+      content = raw.toString("utf8");
+      if (Buffer.byteLength(content, "utf8") !== raw.length) {
+        logForDebugging_2(
+          `[credential-mask] Skipping masked file with non-UTF-8 content (binary credential files are not supported in mask mode): ${f.path}`,
+          {
+            level: "warn",
+          },
         );
         continue;
       }
-    } catch (error) {
-      At(`[credential-mask] Skipping masked file (unreadable on host): ${b.path} \u2014 ${error.message}`);
+    } catch (err) {
+      logForDebugging_2(
+        `[credential-mask] Skipping masked file (unreadable on host): ${f.path} \u2014 ${err.message}`,
+      );
       continue;
     }
-    let R = b.injectHosts ?? n,
-      D = FILE_URL_PREFIX + S,
-      O;
-    if (b.extract === void 0 && b.decode === void 0) O = r.register(D, w, R);
+    let injectHosts = f.injectHosts ?? allowedDomains;
+    let key = FILE_URL_PREFIX + realPath;
+    let fakeContent;
+    if (f.extract === undefined && f.decode === undefined)
+      fakeContent = registry.register(key, content, injectHosts);
     else {
-      let V = b.extract ?? vR,
-        K = 0,
-        q = $m(
-          w,
-          V,
-          (Z, J) => {
-            if (b.decode === "jwt" && !Vm(Z)) return Z;
-            let ie = `${D}#${J}`;
-            if (b.decode === "jwt" && b.maskClaims?.length) {
-              let ae = Gm(Z, b.maskClaims, (ue, me) => r.register(`${D}#jwt${J}.${ue}`, me, R));
-              if (ae === null)
-                return (
-                  At(
-                    `[credential-mask] ${b.path}: verified JWT candidate has none of maskClaims ${JSON.stringify(b.maskClaims)} as ` +
-                      "string claims \u2014 left unmasked.",
-                  ),
-                  Z
-                );
-              let filtered = b.maskClaims.filter((maskClaim) => !ae.claimSentinels.has(maskClaim));
-              if (filtered.length > 0)
-                At(
-                  `[credential-mask] ${b.path}: maskClaims ${JSON.stringify(filtered)} absent or non-string in a ` +
-                    "verified JWT \u2014 skipped.",
-                );
-              return (K++, r.registerWithSentinel(ie, ae.fakeToken, Z, R));
-            }
-            return (
-              K++,
-              b.decode === "jwt" ? r.registerWithSentinel(ie, Wm(randomUUID_2()), Z, R) : r.register(ie, Z, R)
+      let pattern = f.extract ?? JWT_DEFAULT_EXTRACT_PATTERN;
+      let maskedCount = 0;
+      let extracted = extractAndSubstitute(
+        content,
+        pattern,
+        (cap, i) => {
+          if (f.decode === "jwt" && !verifyJwt(cap)) return cap;
+          let name = `${key}#${i}`;
+          if (f.decode === "jwt" && f.maskClaims?.length) {
+            let masked = maskJwtClaims(cap, f.maskClaims, (claim, real) =>
+              registry.register(`${key}#jwt${i}.${claim}`, real, injectHosts),
             );
-          },
-          { maskDuplicates: b.maskDuplicates ?? !1 },
-        );
-      if (q === null || K === 0) {
-        let Z =
-            b.decode === "jwt"
-              ? b.maskClaims?.length
-                ? `decode "jwt" with pattern "${V}" that matched no verified JWT with maskable claims (maskClaims: ${JSON.stringify(b.maskClaims)})`
-                : `decode "jwt" with pattern "${V}" that matched no verified JWT`
-              : `extract pattern "${V}" that matched nothing`,
-          J = b.onExtractNoMatch ?? "warn";
-        if (J === "error")
+            if (masked === null) {
+              logForDebugging_2(
+                `[credential-mask] ${f.path}: verified JWT candidate has none of maskClaims ${JSON.stringify(f.maskClaims)} as ` +
+                  "string claims \u2014 left unmasked.",
+              );
+              return cap;
+            }
+            let skipped = f.maskClaims.filter((c) => !masked.claimSentinels.has(c));
+            if (skipped.length > 0)
+              logForDebugging_2(
+                `[credential-mask] ${f.path}: maskClaims ${JSON.stringify(skipped)} absent or non-string in a ` +
+                  "verified JWT \u2014 skipped.",
+              );
+            maskedCount++;
+            return registry.registerWithSentinel(name, masked.fakeToken, cap, injectHosts);
+          }
+          maskedCount++;
+          return f.decode === "jwt"
+            ? registry.registerWithSentinel(name, mintFakeJwt(randomUUID()), cap, injectHosts)
+            : registry.register(name, cap, injectHosts);
+        },
+        {
+          maskDuplicates: f.maskDuplicates ?? false,
+        },
+      );
+      if (extracted === null || maskedCount === 0) {
+        let cause =
+          f.decode === "jwt"
+            ? f.maskClaims?.length
+              ? `decode "jwt" with pattern "${pattern}" that matched no verified JWT with maskable claims (maskClaims: ${JSON.stringify(f.maskClaims)})`
+              : `decode "jwt" with pattern "${pattern}" that matched no verified JWT`
+            : `extract pattern "${pattern}" that matched nothing`;
+        let onNoMatch = f.onExtractNoMatch ?? "warn";
+        if (onNoMatch === "error")
           throw Error(
-            `credentials.files entry "${b.path}": ${Z} (onExtractNoMatch: "error"). Fix the config, change to "warn"/"deny", or remove the entry.`,
+            `credentials.files entry "${f.path}": ${cause} (onExtractNoMatch: "error"). Fix the config, change to "warn"/"deny", or remove the entry.`,
           );
-        if (J === "deny") {
-          (At(`[credential-mask] ${b.path} has ${Z} \u2014 degrading to ` + 'mode "deny".', {
-            level: "warn",
-          }),
-            y.push(S));
+        if (onNoMatch === "deny") {
+          logForDebugging_2(
+            `[credential-mask] ${f.path} has ${cause} \u2014 degrading to ` + 'mode "deny".',
+            {
+              level: "warn",
+            },
+          );
+          degradeToDenyPaths.push(realPath);
           continue;
         }
-        let ie = `[sandbox-runtime] WARNING: credentials.files entry "${b.path}" has ${Z} in the file. The file is left UNPROTECTED (readable as-is inside the sandbox). Fix the config, set onExtractNoMatch to "deny" or "error", or remove the entry.`;
-        (console.warn(ie), At(ie, { level: "warn" }));
+        let msg = `[sandbox-runtime] WARNING: credentials.files entry "${f.path}" has ${cause} in the file. The file is left UNPROTECTED (readable as-is inside the sandbox). Fix the config, set onExtractNoMatch to "deny" or "error", or remove the entry.`;
+        console.warn(msg);
+        logForDebugging_2(msg, {
+          level: "warn",
+        });
         continue;
       }
-      O = q.fakeContent;
+      fakeContent = extracted.fakeContent;
     }
-    let write = s.write(D, O);
-    h.push({ realPath: S, fakePath: write });
+    let fakePath = store.write(key, fakeContent);
+    binds.push({
+      realPath,
+      fakePath,
+    });
   }
-  return { binds: h, degradeToDenyPaths: y };
+  return {
+    binds,
+    degradeToDenyPaths,
+  };
 }
-
-export { kE, AR, $m };
+export { MaskedFileStore, buildMaskedFileBinds, extractAndSubstitute };

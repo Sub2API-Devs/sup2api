@@ -6,22 +6,21 @@
  * attribution: esm-layout 1
  */
 import { Re } from "../../runtime/bun-runtime.js";
-import { Q } from "./index.js";
+import { require_commander_2 } from "./index.js";
 
 //@ chunk-b7dyevzy.js:35561-35767 esm-layout
-var Z = Re(Q(), 1),
-  {
-    program: program,
-    createCommand: createCommand,
-    createArgument: createArgument,
-    createOption: createOption,
-    CommanderError: CommanderError,
-    InvalidArgumentError: InvalidArgumentError,
-    InvalidOptionArgumentError: InvalidOptionArgumentError,
-    Command: Command,
-    Argument: Argument,
-    Option: Option,
-    Help: Help,
-  } = Z.default;
-
+var program = Re(require_commander_2(), 1);
+var {
+  program: program_2,
+  createCommand,
+  createArgument,
+  createOption,
+  CommanderError,
+  InvalidArgumentError,
+  InvalidOptionArgumentError,
+  Command,
+  Argument,
+  Option,
+  Help,
+} = program.default;
 export { Option, Command, InvalidArgumentError, Help };

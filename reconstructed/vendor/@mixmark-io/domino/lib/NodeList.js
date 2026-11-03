@@ -6,18 +6,17 @@
  * attribution: cjs-require-graph 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { rs } from "./NodeList.es6.js";
-import { ns } from "./NodeList.es5.js";
+import { require_NodeList_es6 } from "./NodeList.es6.js";
+import { require_NodeList_es5 } from "./NodeList.es5.js";
 
 //@ chunk-vwj6ccer.js:23693-23770 cjs-require-graph
-var yt = x(function (fd, is) {
-  var sn;
+var require_NodeList = x(function (cjsExports, cjsModule) {
+  var NodeList;
   try {
-    sn = rs();
+    NodeList = require_NodeList_es6();
   } catch (error) {
-    sn = ns();
+    NodeList = require_NodeList_es5();
   }
-  is.exports = sn;
+  cjsModule.exports = NodeList;
 });
-
-export { yt };
+export { require_NodeList };

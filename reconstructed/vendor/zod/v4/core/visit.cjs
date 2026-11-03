@@ -6,144 +6,190 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { Bl } from "./schemas.cjs";
-import { Ee } from "./util.cjs";
+import { require_schemas } from "./schemas.cjs";
+import { require_util } from "./util.cjs";
 
 //@ chunk-1ny7cxrt.js:644420-647824 cjs-fingerprint
-var hb = x(function (ui) {
-  var OQ =
-      (ui && ui.__createBinding) ||
-      (Object.create
-        ? function (e, t, n, o) {
-            if (o === void 0) o = n;
-            var ownPropertyDescriptor = Object.getOwnPropertyDescriptor(t, n);
-            if (
-              !ownPropertyDescriptor ||
-              ("get" in ownPropertyDescriptor
-                ? !t.__esModule
-                : ownPropertyDescriptor.writable || ownPropertyDescriptor.configurable)
-            )
-              ownPropertyDescriptor = {
-                enumerable: !0,
-                get: function () {
-                  return t[n];
-                },
-              };
-            Object.defineProperty(e, o, ownPropertyDescriptor);
-          }
-        : function (e, t, n, o) {
-            if (o === void 0) o = n;
-            e[o] = t[n];
-          }),
-    SQ =
-      (ui && ui.__setModuleDefault) ||
-      (Object.create
-        ? function (e, t) {
-            Object.defineProperty(e, "default", { enumerable: !0, value: t });
-          }
-        : function (e, t) {
-            e.default = t;
-          }),
-    kQ =
-      (ui && ui.__importStar) ||
-      function (e) {
-        if (e && e.__esModule) return e;
-        var t = {};
-        if (e != null) {
-          for (var key in e)
-            if (key !== "default" && Object.prototype.hasOwnProperty.call(e, key)) OQ(t, e, key);
+var require_visit = x(function (cjsExports) {
+  var __createBinding =
+    (cjsExports && cjsExports.__createBinding) ||
+    (Object.create
+      ? function (o_2, m, k, k2) {
+          if (k2 === undefined) k2 = k;
+          var desc = Object.getOwnPropertyDescriptor(m, k);
+          if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable))
+            desc = {
+              enumerable: true,
+              get: function () {
+                return m[k];
+              },
+            };
+          Object.defineProperty(o_2, k2, desc);
         }
-        return (SQ(t, e), t);
-      };
-  Object.defineProperty(ui, "__esModule", { value: !0 });
-  ui.visit = PQ;
-  var EQ = kQ(Bl()),
-    vn = Ee(),
-    BT = Symbol("z.visit/resolving");
-  function PQ(e, t) {
-    let n =
-        typeof t === "function"
-          ? t
-          : (a, l) => {
-              let c = t[a._zod.def.type];
-              return c ? c(a, l) : a;
-            },
-      o = new Map();
-    function r(a) {
-      let l = o.get(a);
-      if (l === BT) return new EQ.$ZodLazy({ type: "lazy", getter: () => o.get(a) });
-      if (l !== void 0) return l;
-      o.set(a, BT);
-      let c = s(a),
-        u = n(c, c !== a);
-      return (o.set(a, u), u);
+      : function (o_2, m, k, k2) {
+          if (k2 === undefined) k2 = k;
+          o_2[k2] = m[k];
+        });
+  var __setModuleDefault =
+    (cjsExports && cjsExports.__setModuleDefault) ||
+    (Object.create
+      ? function (o, v) {
+          Object.defineProperty(o, "default", {
+            enumerable: true,
+            value: v,
+          });
+        }
+      : function (o, v) {
+          o.default = v;
+        });
+  var __importStar =
+    (cjsExports && cjsExports.__importStar) ||
+    function (mod) {
+      if (mod && mod.__esModule) return mod;
+      var result = {};
+      if (mod != null) {
+        for (var k in mod)
+          if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k))
+            __createBinding(result, mod, k);
+      }
+      __setModuleDefault(result, mod);
+      return result;
+    };
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.visit = visit;
+  var schemas = __importStar(require_schemas());
+  var util_js_1 = require_util();
+  var RESOLVING = Symbol("z.visit/resolving");
+  function visit(schema, fnOrHandlers) {
+    let fn =
+      typeof fnOrHandlers === "function"
+        ? fnOrHandlers
+        : (node, rewritten) => {
+            let h = fnOrHandlers[node._zod.def.type];
+            return h ? h(node, rewritten) : node;
+          };
+    let cache = new Map();
+    function run(s_2) {
+      let cached = cache.get(s_2);
+      if (cached === RESOLVING)
+        return new schemas.$ZodLazy({
+          type: "lazy",
+          getter: () => cache.get(s_2),
+        });
+      if (cached !== undefined) return cached;
+      cache.set(s_2, RESOLVING);
+      let inner = mapInner(s_2);
+      let mapped = fn(inner, inner !== s_2);
+      cache.set(s_2, mapped);
+      return mapped;
     }
-    function s(a) {
-      let def = a._zod.def,
-        c = def.type;
-      switch (c) {
+    function mapInner(s) {
+      let def = s._zod.def;
+      let kind = def.type;
+      switch (kind) {
         case "object": {
-          let shape = def.shape,
-            keys = Object.keys(shape),
-            h = !1,
-            m = {};
-          for (let b of keys) {
-            let w = r(shape[b]);
-            if (w !== shape[b]) h = !0;
-            m[b] = w;
+          let oldShape = def.shape;
+          let keys = Object.keys(oldShape);
+          let changed = false;
+          let newShape = {};
+          for (let k of keys) {
+            let mapped = run(oldShape[k]);
+            if (mapped !== oldShape[k]) changed = true;
+            newShape[k] = mapped;
           }
-          let catchall = def.catchall;
+          let newCatchall = def.catchall;
           if (def.catchall) {
-            if (((catchall = r(def.catchall)), catchall !== def.catchall)) h = !0;
+            newCatchall = run(def.catchall);
+            if (newCatchall !== def.catchall) changed = true;
           }
-          return h ? vn.clone(a, { ...def, shape: m, catchall: catchall }) : a;
+          return changed
+            ? util_js_1.clone(s, {
+                ...def,
+                shape: newShape,
+                catchall: newCatchall,
+              })
+            : s;
         }
         case "array": {
-          let u = r(def.element);
-          return u === def.element ? a : vn.clone(a, { ...def, element: u });
+          let mapped = run(def.element);
+          return mapped === def.element
+            ? s
+            : util_js_1.clone(s, {
+                ...def,
+                element: mapped,
+              });
         }
         case "tuple": {
-          let items = def.items,
-            f = !1,
-            h = [];
-          for (let y of items) {
-            let b = r(y);
-            if (b !== y) f = !0;
-            h.push(b);
+          let oldItems = def.items;
+          let changed = false;
+          let newItems = [];
+          for (let item of oldItems) {
+            let mapped = run(item);
+            if (mapped !== item) changed = true;
+            newItems.push(mapped);
           }
-          let rest = def.rest;
+          let newRest = def.rest;
           if (def.rest) {
-            if (((rest = r(def.rest)), rest !== def.rest)) f = !0;
+            newRest = run(def.rest);
+            if (newRest !== def.rest) changed = true;
           }
-          return f ? vn.clone(a, { ...def, items: h, rest: rest }) : a;
+          return changed
+            ? util_js_1.clone(s, {
+                ...def,
+                items: newItems,
+                rest: newRest,
+              })
+            : s;
         }
         case "record":
         case "map": {
-          let u = r(def.keyType),
-            f = r(def.valueType);
-          return u === def.keyType && f === def.valueType
-            ? a
-            : vn.clone(a, { ...def, keyType: u, valueType: f });
+          let newKey = run(def.keyType);
+          let newVal = run(def.valueType);
+          return newKey === def.keyType && newVal === def.valueType
+            ? s
+            : util_js_1.clone(s, {
+                ...def,
+                keyType: newKey,
+                valueType: newVal,
+              });
         }
         case "set": {
-          let u = r(def.valueType);
-          return u === def.valueType ? a : vn.clone(a, { ...def, valueType: u });
+          let newVal = run(def.valueType);
+          return newVal === def.valueType
+            ? s
+            : util_js_1.clone(s, {
+                ...def,
+                valueType: newVal,
+              });
         }
         case "union": {
-          let options = def.options,
-            f = !1,
-            h = [];
-          for (let m of options) {
-            let y = r(m);
-            if (y !== m) f = !0;
-            h.push(y);
+          let oldOptions = def.options;
+          let changed = false;
+          let newOptions = [];
+          for (let opt of oldOptions) {
+            let mapped = run(opt);
+            if (mapped !== opt) changed = true;
+            newOptions.push(mapped);
           }
-          return f ? vn.clone(a, { ...def, options: h }) : a;
+          return changed
+            ? util_js_1.clone(s, {
+                ...def,
+                options: newOptions,
+              })
+            : s;
         }
         case "intersection": {
-          let u = r(def.left),
-            f = r(def.right);
-          return u === def.left && f === def.right ? a : vn.clone(a, { ...def, left: u, right: f });
+          let newLeft = run(def.left);
+          let newRight = run(def.right);
+          return newLeft === def.left && newRight === def.right
+            ? s
+            : util_js_1.clone(s, {
+                ...def,
+                left: newLeft,
+                right: newRight,
+              });
         }
         case "optional":
         case "nullable":
@@ -154,34 +200,59 @@ var hb = x(function (ui) {
         case "nonoptional":
         case "promise":
         case "success": {
-          let u = r(def.innerType);
-          return u === def.innerType ? a : vn.clone(a, { ...def, innerType: u });
+          let newInner = run(def.innerType);
+          return newInner === def.innerType
+            ? s
+            : util_js_1.clone(s, {
+                ...def,
+                innerType: newInner,
+              });
         }
         case "pipe": {
-          let u = r(def.in),
-            f = r(def.out);
-          return u === def.in && f === def.out ? a : vn.clone(a, { ...def, in: u, out: f });
+          let newIn = run(def.in);
+          let newOut = run(def.out);
+          return newIn === def.in && newOut === def.out
+            ? s
+            : util_js_1.clone(s, {
+                ...def,
+                in: newIn,
+                out: newOut,
+              });
         }
         case "function": {
-          let u = r(def.input),
-            f = r(def.output);
-          return u === def.input && f === def.output ? a : vn.clone(a, { ...def, input: u, output: f });
+          let newInput = run(def.input);
+          let newOutput = run(def.output);
+          return newInput === def.input && newOutput === def.output
+            ? s
+            : util_js_1.clone(s, {
+                ...def,
+                input: newInput,
+                output: newOutput,
+              });
         }
         case "lazy": {
-          let getter = def.getter,
-            { _cachedInner: _cachedInner, ...h } = def;
-          return vn.clone(a, { ...h, getter: () => r(getter()) });
+          let original = def.getter;
+          let { _cachedInner, ...rest } = def;
+          return util_js_1.clone(s, {
+            ...rest,
+            getter: () => run(original()),
+          });
         }
         case "properties": {
-          let shape = def.shape,
-            f = !1,
-            h = {};
-          for (let m of Reflect.ownKeys(shape)) {
-            let y = r(shape[m]);
-            if (y !== shape[m]) f = !0;
-            h[m] = y;
+          let oldShape = def.shape;
+          let changed = false;
+          let newShape = {};
+          for (let k of Reflect.ownKeys(oldShape)) {
+            let mapped = run(oldShape[k]);
+            if (mapped !== oldShape[k]) changed = true;
+            newShape[k] = mapped;
           }
-          return f ? vn.clone(a, { ...def, shape: h }) : a;
+          return changed
+            ? util_js_1.clone(s, {
+                ...def,
+                shape: newShape,
+              })
+            : s;
         }
         case "template_literal":
         case "string":
@@ -203,35 +274,33 @@ var hb = x(function (ui) {
         case "file":
         case "transform":
         case "custom":
-          return a;
+          return s;
         default:
-          return a;
+          return s;
       }
     }
-    return r(e);
+    return run(schema);
   }
   (function () {
-    var ownPropertyNames = Object.getOwnPropertyNames(ui);
-    for (var t = 0; t < ownPropertyNames.length; t++) {
-      var ownPropertyDescriptor = Object.getOwnPropertyDescriptor(ui, ownPropertyNames[t]);
-      if (!ownPropertyDescriptor || !ownPropertyDescriptor.get || !ownPropertyDescriptor.configurable)
-        continue;
-      var o;
+    var keys = Object.getOwnPropertyNames(cjsExports);
+    for (var i = 0; i < keys.length; i++) {
+      var desc = Object.getOwnPropertyDescriptor(cjsExports, keys[i]);
+      if (!desc || !desc.get || !desc.configurable) continue;
+      var value;
       try {
-        o = ownPropertyDescriptor.get();
-      } catch (error) {
+        value = desc.get();
+      } catch (e) {
         continue;
       }
-      if (o === void 0) continue;
-      Object.defineProperty(ui, ownPropertyNames[t], {
-        value: o,
-        writable: !1,
-        enumerable: ownPropertyDescriptor.enumerable,
-        configurable: !1,
+      if (value === undefined) continue;
+      Object.defineProperty(cjsExports, keys[i], {
+        value,
+        writable: false,
+        enumerable: desc.enumerable,
+        configurable: false,
       });
     }
-    Object.freeze(ui);
+    Object.freeze(cjsExports);
   })();
 });
-
-export { hb };
+export { require_visit };

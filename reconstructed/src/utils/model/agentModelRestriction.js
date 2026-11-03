@@ -12,21 +12,21 @@ import { displayModelName, formatModelRestrictedNotice } from "./validateModel.j
 import { createInformationalSystemMessage } from "../messages.js";
 
 //@ chunk-n0w240z3.js:266-330 placement
-function o(e) {
+function agentDisplayName(e) {
   let t = displayModelName(e);
   return t === displayModelName("") ? "(unnamed agent)" : t;
 }
 //@ chunk-n0w240z3.js:330-382 placement
-function r(e, t, i) {
-  return `${o(e)} agent: ${formatModelRestrictedNotice(t, i)}`;
+function agentRestrictedNoticeText(e, t, i) {
+  return `${agentDisplayName(e)} agent: ${formatModelRestrictedNotice(t, i)}`;
 }
 //@ chunk-n0w240z3.js:382-551 placement
 function buildAgentModelRestrictedNotice(e, t, i) {
   return {
     type: "notification",
     notification: {
-      key: `agent-model-restricted-${o(e)}-${displayModelName(t)}`,
-      text: r(e, t, i),
+      key: `agent-model-restricted-${agentDisplayName(e)}-${displayModelName(t)}`,
+      text: agentRestrictedNoticeText(e, t, i),
       priority: "medium",
       color: "warning",
       timeoutMs: 1e4,
@@ -34,19 +34,21 @@ function buildAgentModelRestrictedNotice(e, t, i) {
   };
 }
 //@ chunk-n0w240z3.js:551-598 placement
-function i2n(e, t) {
+/**
+ * 生成"agent 模型受限"通知的上报回调。
+ */
+function agentModelRestrictedReporter(bareCommandName, t) {
   return (i, n) => {
-    t?.(buildAgentModelRestrictedNotice(e, i, n));
+    t?.(buildAgentModelRestrictedNotice(bareCommandName, i, n));
   };
 }
+//@ chunk-n0w240z3.js:598-659 placement
 /**
  * 子代理模型受限时发通知。
  */
-//@ chunk-n0w240z3.js:598-659 placement
-function agentModelRestrictionNotifier(e, t) {
+function agentModelRestrictionNotifier(e, appendSystemMessage) {
   return (i, n) => {
-    t?.(createInformationalSystemMessage(r(e, i, n), "warning"));
+    appendSystemMessage?.(createInformationalSystemMessage(agentRestrictedNoticeText(e, i, n), "warning"));
   };
 }
-
-export { agentModelRestrictionNotifier, i2n };
+export { agentModelRestrictionNotifier, agentModelRestrictedReporter };

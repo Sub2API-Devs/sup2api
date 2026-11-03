@@ -10,10 +10,10 @@
  */
 import { ASKUSERQUESTION } from "../AskUserQuestionTool/prompt.js";
 
+//@ chunk-fnhsh6ng.js:3021-5426 fingerprint = EXIT_PLAN_MODE_V2_TOOL_PROMPT (1)
 /**
  * ExitPlanMode 的两版 prompt：读计划文件版与 diskless 直接传 plan 版。
  */
-//@ chunk-fnhsh6ng.js:3021-5426 fingerprint = EXIT_PLAN_MODE_V2_TOOL_PROMPT (1)
 var EXIT_PLAN_MODE_PROMPT = `Use this tool when you are in plan mode and have finished writing your plan to the plan file and are ready for user approval.
 
 ## How This Tool Works
@@ -37,13 +37,12 @@ Ensure your plan is complete and unambiguous:
 1. Initial task: "Search for and understand the implementation of vim mode in the codebase" - Do not use the exit plan mode tool because you are not planning the implementation steps of a task.
 2. Initial task: "Help me implement yank mode for vim" - Use the exit plan mode tool after you have finished planning the implementation steps of the task.
 3. Initial task: "Add a new feature to handle user authentication" - If unsure about auth method (OAuth, JWT, etc.), use ${ASKUSERQUESTION} first, then use exit plan mode tool after clarifying the approach.
-`,
-  EXIT_PLAN_MODE_DISKLESS_PROMPT = `Use this tool when you are in plan mode and your plan is ready for the user to approve.
+`;
+var EXIT_PLAN_MODE_DISKLESS_PROMPT = `Use this tool when you are in plan mode and your plan is ready for the user to approve.
 
 - Pass the whole plan as \`plan\`, in Markdown. This session has no plan file, so do not write the plan to a file.
 - The user sees the plan on an approval card and approves or declines it. Do NOT ask "Is this plan okay?" or "Should I proceed?" in any other way: that is what this tool does.
 - If they approve, plan mode ends and you carry out the plan as approved.
 - If they decline, you stay in plan mode: find out what they want changed, revise the plan, and call this tool again.
 `;
-
 export { EXIT_PLAN_MODE_DISKLESS_PROMPT, EXIT_PLAN_MODE_PROMPT };

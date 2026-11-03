@@ -6,65 +6,71 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { ge } from "../../graceful-fs/graceful-fs.js";
+import { require_graceful_fs } from "../../graceful-fs/graceful-fs.js";
 
 //@ chunk-bmbhxpfm.js:20904-21622 cjs-fingerprint
-var properLockfileAdapter = x(function (or, ot) {
-  var Ut = ge();
-  function At(e) {
-    let r = ["mkdir", "realpath", "stat", "rmdir", "utimes"],
-      n = { ...e };
-    return (
-      r.forEach((i) => {
-        n[i] = (...u) => {
-          let c = u.pop(),
-            h;
-          try {
-            h = e[`${i}Sync`](...u);
-          } catch (error) {
-            return c(error);
-          }
-          c(null, h);
-        };
-      }),
-      n
-    );
+var properLockfileAdapter = x(function (cjsExports, cjsModule) {
+  var fs = require_graceful_fs();
+  function createSyncFs(fs) {
+    let methods = ["mkdir", "realpath", "stat", "rmdir", "utimes"];
+    let newFs = {
+      ...fs,
+    };
+    methods.forEach((method) => {
+      newFs[method] = (...args) => {
+        let callback = args.pop();
+        let ret;
+        try {
+          ret = fs[`${method}Sync`](...args);
+        } catch (err) {
+          return callback(err);
+        }
+        callback(null, ret);
+      };
+    });
+    return newFs;
   }
-  function $t(e) {
-    return (...r) =>
-      new Promise((n, i) => {
-        (r.push((u, c) => {
-          if (u) i(u);
-          else n(c);
-        }),
-          e(...r));
+  function toPromise(method) {
+    return (...args) =>
+      new Promise((resolve, reject) => {
+        args.push((err, result) => {
+          if (err) reject(err);
+          else resolve(result);
+        });
+        method(...args);
       });
   }
-  function Wt(e) {
-    return (...r) => {
-      let n, i;
-      if (
-        (r.push((u, c) => {
-          ((n = u), (i = c));
-        }),
-        e(...r),
-        n)
-      )
-        throw n;
-      return i;
+  function toSync(method) {
+    return (...args) => {
+      let err;
+      let result;
+      args.push((_err, _result) => {
+        err = _err;
+        result = _result;
+      });
+      method(...args);
+      if (err) throw err;
+      return result;
     };
   }
-  function Yt(e) {
+  function toSyncOptions(options) {
+    options = {
+      ...options,
+    };
+    options.fs = createSyncFs(options.fs || fs);
     if (
-      ((e = { ...e }),
-      (e.fs = At(e.fs || Ut)),
-      (typeof e.retries === "number" && e.retries > 0) ||
-        (e.retries && typeof e.retries.retries === "number" && e.retries.retries > 0))
+      (typeof options.retries === "number" && options.retries > 0) ||
+      (options.retries && typeof options.retries.retries === "number" && options.retries.retries > 0)
     )
-      throw Object.assign(Error("Cannot use retries with the sync api"), { code: "ESYNC" });
-    return e;
+      throw Object.assign(Error("Cannot use retries with the sync api"), {
+        code: "ESYNC",
+      });
+    return options;
   }
-  ot.exports = { toPromise: $t, toSync: Wt, toSyncOptions: Yt };
+  cjsModule.exports = {
+    toPromise,
+    toSync,
+    toSyncOptions,
+  };
 });
-
 export { properLockfileAdapter };

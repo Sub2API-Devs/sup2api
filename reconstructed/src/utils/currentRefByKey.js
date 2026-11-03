@@ -11,17 +11,24 @@
 import { SessionRootSlot } from "../bootstrap/sessionSlices.js";
 
 //@ chunk-16t5vfjc.js:227-264 placement
-var n = new SessionRootSlot(() => ({ current: void 0 }));
+/**
+ * 按会话根保存的按键当前值。
+ */
+var currentValueByKeySlot = new SessionRootSlot(() => ({
+  current: undefined,
+}));
 //@ chunk-16t5vfjc.js:264-306 placement
-function bUt(e) {
-  return n.peek(e)?.current;
+/**
+ * 读取某按键存储的当前值。
+ */
+function getCurrentForKey(session) {
+  return currentValueByKeySlot.peek(session)?.current;
 }
+//@ chunk-16t5vfjc.js:306-341 placement
 /**
  * 设置按键存储的当前值。
  */
-//@ chunk-16t5vfjc.js:306-341 placement
-function setCurrentForKey(e, o) {
-  n.of(e).current = o;
+function setCurrentForKey(session, o) {
+  currentValueByKeySlot.of(session).current = o;
 }
-
-export { setCurrentForKey, bUt };
+export { setCurrentForKey, getCurrentForKey };

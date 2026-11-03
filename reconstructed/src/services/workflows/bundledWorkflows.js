@@ -10,40 +10,65 @@
  */
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../analytics/growthbook.js";
 import { getHostState } from "../../utils/hostEnvironment.js";
-import { I3, e6e, D4 } from "../../skills/bundledSkillsGate.js";
+import {
+  isBundledSkillsDisabled,
+  isBundledSkillsPolicyDenied,
+  isSkillOutsideCorePolicy,
+} from "../../skills/bundledSkillsGate.js";
 
 //@ chunk-p9mapmve.js:3371-4299 placement
-var DEEP_RESEARCH_WORKFLOW_NAME = "deep-research",
-  e = DEEP_RESEARCH_WORKFLOW_NAME,
-  t =
-    "Deep research harness \u2014 fan-out web searches, fetch sources, adversarially verify claims, synthesize a cited report.",
-  r =
-    'When the user wants a deep, multi-source, fact-checked research report on any topic. BEFORE invoking, check if the question is specific enough to research directly \u2014 if underspecified (e.g., "what car to buy" without budget/use-case/region), ask 2-3 clarifying questions to narrow scope. Then pass the refined question as args, weaving the answers in.',
-  s = [
-    { title: "Scope", detail: "Decompose question (from args) into 5 search angles" },
-    { title: "Search", detail: "5 parallel WebSearch agents, one per angle" },
-    { title: "Fetch", detail: "URL-dedup, fetch top 15 sources, extract falsifiable claims" },
-    { title: "Verify", detail: "3-vote adversarial verification per claim (need 2/3 refutes to kill)" },
-    { title: "Synthesize", detail: "Merge semantic dupes, rank by confidence, cite sources" },
-  ];
+/**
+ * deep-research 内置工作流的适用场景、阶段表与脚本常量。
+ */
+var DEEP_RESEARCH_WORKFLOW_NAME = "deep-research";
+var WORKFLOW_NAME_DEEP_RESEARCH = DEEP_RESEARCH_WORKFLOW_NAME;
+var DEEP_RESEARCH_DESCRIPTION =
+  "Deep research harness \u2014 fan-out web searches, fetch sources, adversarially verify claims, synthesize a cited report.";
+var DEEP_RESEARCH_WHEN_TO_USE =
+  'When the user wants a deep, multi-source, fact-checked research report on any topic. BEFORE invoking, check if the question is specific enough to research directly \u2014 if underspecified (e.g., "what car to buy" without budget/use-case/region), ask 2-3 clarifying questions to narrow scope. Then pass the refined question as args, weaving the answers in.';
+var DEEP_RESEARCH_PHASES = [
+  {
+    title: "Scope",
+    detail: "Decompose question (from args) into 5 search angles",
+  },
+  {
+    title: "Search",
+    detail: "5 parallel WebSearch agents, one per angle",
+  },
+  {
+    title: "Fetch",
+    detail: "URL-dedup, fetch top 15 sources, extract falsifiable claims",
+  },
+  {
+    title: "Verify",
+    detail: "3-vote adversarial verification per claim (need 2/3 refutes to kill)",
+  },
+  {
+    title: "Synthesize",
+    detail: "Merge semantic dupes, rank by confidence, cite sources",
+  },
+];
 //@ chunk-p9mapmve.js:4299-4327 placement
 var TENGU_SORREL_AVOCET = "tengu_sorrel_avocet";
 //@ chunk-p9mapmve.js:4327-4369 placement
-function l() {
-  if (getFeatureValue_CACHED_MAY_BE_STALE(TENGU_SORREL_AVOCET, !1)) return !1;
-  return !0;
+/**
+ * 判断是否注册 deep-research 工作流（灰度开关关闭时启用）。
+ */
+function isDeepResearchWorkflowEnabled() {
+  if (getFeatureValue_CACHED_MAY_BE_STALE(TENGU_SORREL_AVOCET, false)) return false;
+  return true;
 }
+//@ chunk-p9mapmve.js:4369-28733 placement
 /**
  * 注册内置 deep-research 工作流：Scope（拆 5 个搜索角度）→ Search（5 个并行 WebSearch 代理）→ Fetch（抓取前 15 个来源）→ Verify（每条结论 3 票对抗验证）→ 汇总报告。
  */
-//@ chunk-p9mapmve.js:4369-28733 placement
 function registerDeepResearchWorkflow() {
   registerBundledWorkflow(
     `export const meta = {
-  name: '${e}',
-  description: '${t}',
-  whenToUse: '${r}',
-  phases: ${JSON.stringify(s)},
+  name: '${WORKFLOW_NAME_DEEP_RESEARCH}',
+  description: '${DEEP_RESEARCH_DESCRIPTION}',
+  whenToUse: '${DEEP_RESEARCH_WHEN_TO_USE}',
+  phases: ${JSON.stringify(DEEP_RESEARCH_PHASES)},
 }
 
 // deep-research: Scope \u2192 pipeline(Search \u2192 URL-dedup \u2192 Fetch+Extract) \u2192 3-vote Verify \u2192 Synthesize
@@ -477,35 +502,41 @@ return {
     agentCalls: 1 + scope.angles.length + allSources.length + (voted.length * VOTES_PER_CLAIM) + 1,
   },
 }`,
-    { name: e, description: t, whenToUse: r, phases: s },
-    { disableModelInvocation: l },
+    {
+      name: WORKFLOW_NAME_DEEP_RESEARCH,
+      description: DEEP_RESEARCH_DESCRIPTION,
+      whenToUse: DEEP_RESEARCH_WHEN_TO_USE,
+      phases: DEEP_RESEARCH_PHASES,
+    },
+    {
+      disableModelInvocation: isDeepResearchWorkflowEnabled,
+    },
   );
 }
 //@ chunk-p9mapmve.js:28733-28750 placement
 function initBundledWorkflows() {
   registerDeepResearchWorkflow();
 }
+//@ chunk-k2dqfxa4.js:270-401 placement
 /**
  * 注册一个内置工作流（脚本与元数据）到宿主状态。
  */
-//@ chunk-k2dqfxa4.js:270-401 placement
-function registerBundledWorkflow(o, e, r) {
+function registerBundledWorkflow(script, e, r) {
   getHostState().bundledWorkflows.push({
     source: "built-in",
     ...e,
-    script: o,
+    script,
     disableModelInvocation: r?.disableModelInvocation,
   });
 }
+//@ chunk-k2dqfxa4.js:401-513 placement
 /**
  * 获取可用的内置工作流列表（工作流关闭时为空，部分情况下过滤被禁用的）。
  */
-//@ chunk-k2dqfxa4.js:401-513 placement
 function getBundledWorkflows() {
-  if (I3()) return [];
+  if (isBundledSkillsDisabled()) return [];
   let bundledWorkflows = getHostState().bundledWorkflows;
-  if (e6e()) return bundledWorkflows.filter((e) => !D4(e.name));
+  if (isBundledSkillsPolicyDenied()) return bundledWorkflows.filter((e) => !isSkillOutsideCorePolicy(e.name));
   return bundledWorkflows;
 }
-
 export { getBundledWorkflows };

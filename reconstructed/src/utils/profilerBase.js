@@ -29,5 +29,4 @@ function formatTimelineLine(totalMs, deltaMs, name, memory, totalPad, deltaPad, 
     : "";
   return `[+${formatMs(totalMs).padStart(totalPad)}ms] (+${formatMs(deltaMs).padStart(deltaPad)}ms) ${name}${extra}${memInfo}`;
 }
-
 export { getPerformance, formatTimelineLine, formatMs };

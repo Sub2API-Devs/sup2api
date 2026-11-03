@@ -12,11 +12,14 @@ import { ensureDeviceSandboxPosture } from "../../remote/tools/deviceSandboxPost
 import { isAbortError } from "../../utils/errors.js";
 
 //@ chunk-3qz57b12.js:264-274 placement
-var TBn = 4;
+/**
+ * 远端工具默认的并发在飞上限。
+ */
+var DEFAULT_MAX_IN_FLIGHT = 4;
+//@ chunk-3qz57b12.js:274-383 placement
 /**
  * 创建简单的并发计数器：tryAcquire 在未满时占位并返回只能调用一次的释放函数。
  */
-//@ chunk-3qz57b12.js:274-383 placement
 function createConcurrencyLimiter(e) {
   let o = 0;
   return {
@@ -24,42 +27,46 @@ function createConcurrencyLimiter(e) {
     tryAcquire() {
       if (o >= e) return;
       o++;
-      let r = !1;
+      let r = false;
       return () => {
-        if (!r) ((r = !0), o--);
+        if (!r) {
+          r = true;
+          o--;
+        }
       };
     },
   };
 }
+//@ chunk-3qz57b12.js:383-1090 placement
 /**
  * 设备工具调用的准入：检查会话、设备绑定与模式是否有效，占用并发槽位，确认沙箱真正限制（文件系统与网络）后再执行；拒绝时生成说明，中止时返回 cancelled。
  */
-//@ chunk-3qz57b12.js:383-1090 placement
 function createAdmissionGate(options) {
-  let o = options.readPosture ?? ensureDeviceSandboxPosture;
+  let readPosture = options.readPosture ?? ensureDeviceSandboxPosture;
   return {
-    async admitWithoutSlot(r, s, t) {
+    async admitWithoutSlot(toolName, s, t) {
       try {
         if (s.signal.aborted) return t.cancelled();
-        let n = admissionRefusal(options, s);
-        if (n !== void 0) return t.refuse(n, admissionRefusalText(r, options, n));
+        let reason = admissionRefusal(options, s);
+        if (reason !== undefined) return t.refuse(reason, admissionRefusalText(toolName, options, reason));
         return await t.serve();
       } catch (error) {
         return s.signal.aborted || isAbortError(error) ? t.cancelled() : t.fail(error);
       }
     },
-    async run(r, s, t) {
-      let n = (i) => t.refuse(i, admissionRefusalText(r, options, i)),
-        a;
+    async run(toolName, s, t) {
+      let n = (reason) => t.refuse(reason, admissionRefusalText(toolName, options, reason));
+      let a;
       try {
         if (s.signal.aborted) return t.cancelled();
         let i = admissionRefusal(options, s);
-        if (i !== void 0) return n(i);
-        if (((a = options.limiter.tryAcquire()), a === void 0)) return n("too_many_concurrent");
-        let c = await o();
-        if (!c.confined) return n(c.reason);
+        if (i !== undefined) return n(i);
+        a = options.limiter.tryAcquire();
+        if (a === undefined) return n("too_many_concurrent");
+        let posture = await readPosture();
+        if (!posture.confined) return n(posture.reason);
         let u = admissionRefusal(options, s);
-        if (u !== void 0) return n(u);
+        if (u !== undefined) return n(u);
         if (s.signal.aborted) return t.cancelled();
         return await t.serve();
       } catch (error) {
@@ -71,17 +78,17 @@ function createAdmissionGate(options) {
   };
 }
 //@ chunk-3qz57b12.js:1090-1244 placement
-function admissionRefusal(e, o) {
-  if (o.sessionId === void 0) return "no_session";
-  if (!e.getDeviceId()) return "unbound_device";
-  if (!e.isModeCurrent()) return "mode_withdrawn";
+function admissionRefusal(options, o) {
+  if (o.sessionId === undefined) return "no_session";
+  if (!options.getDeviceId()) return "unbound_device";
+  if (!options.isModeCurrent()) return "mode_withdrawn";
   return;
 }
+//@ chunk-3qz57b12.js:1244-4682 placement
 /**
  * 按准入拒绝原因（无会话、设备未绑定、模式已撤回、并发过多、沙箱未开启/不支持/启动失败/不够严格/被削弱/允许 Unix socket/缺 seccomp/注入凭证）生成给模型的说明。
  */
-//@ chunk-3qz57b12.js:1244-4682 placement
-function admissionRefusalText(toolName, { limiter: limiter }, reason) {
+function admissionRefusalText(toolName, { limiter }, reason) {
   switch (reason) {
     case "no_session":
       return `${toolName} refused: no server-asserted session.`;
@@ -110,8 +117,14 @@ function admissionRefusalText(toolName, { limiter: limiter }, reason) {
   }
 }
 //@ chunk-3qz57b12.js:4682-4738 placement
-var CORE = "core",
-  REMOTE_TOOLS = "remote-tools",
-  MCP_PASSTHROUGH = "mcp-passthrough";
-
-export { createConcurrencyLimiter, TBn, createAdmissionGate, REMOTE_TOOLS, MCP_PASSTHROUGH, CORE };
+var CORE = "core";
+var REMOTE_TOOLS = "remote-tools";
+var MCP_PASSTHROUGH = "mcp-passthrough";
+export {
+  createConcurrencyLimiter,
+  DEFAULT_MAX_IN_FLIGHT,
+  createAdmissionGate,
+  REMOTE_TOOLS,
+  MCP_PASSTHROUGH,
+  CORE,
+};

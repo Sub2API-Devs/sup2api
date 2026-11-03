@@ -6,14 +6,19 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../runtime/bun-runtime.js";
-import { F } from "./dynamicRef.js";
+import { require_dynamicRef } from "./dynamicRef.js";
 
 //@ chunk-1r4fv9mg.js:2225-2409 cjs-fingerprint
-var ne = x(function (ae) {
-  Object.defineProperty(ae, "__esModule", { value: !0 });
-  var re = F(),
-    Ue = { keyword: "$recursiveRef", schemaType: "string", code: (e) => re.dynamicRef(e, e.schema) };
-  ae.default = Ue;
+var require_recursiveRef = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  var dynamicRef_1 = require_dynamicRef();
+  var def = {
+    keyword: "$recursiveRef",
+    schemaType: "string",
+    code: (cxt) => dynamicRef_1.dynamicRef(cxt, cxt.schema),
+  };
+  cjsExports.default = def;
 });
-
-export { ne };
+export { require_recursiveRef };

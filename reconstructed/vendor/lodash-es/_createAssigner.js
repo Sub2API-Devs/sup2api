@@ -5,24 +5,26 @@
  * pieces: chunk-dcmhvw5a.js (1)
  * attribution: placement 1
  */
-import { fd, hio } from "../../src/utils/settings/settingsSourceTrust.js";
+import { mergeKeys, isIterateeCall_2 } from "../../src/utils/settings/settingsSourceTrust.js";
 
 //@ chunk-dcmhvw5a.js:143711-143963 placement
-function createAssigner(e) {
-  return fd(function (n, r) {
-    var s = -1,
-      a = r.length,
-      c = a > 1 ? r[a - 1] : void 0,
-      g = a > 2 ? r[2] : void 0;
-    if (((c = e.length > 3 && typeof c == "function" ? (a--, c) : void 0), g && hio(r[0], r[1], g)))
-      ((c = a < 3 ? void 0 : c), (a = 1));
-    n = Object(n);
-    while (++s < a) {
-      var m = r[s];
-      if (m) e(n, m, s, c);
+function createAssigner(assigner) {
+  return mergeKeys(function (object, sources) {
+    var index = -1;
+    var length = sources.length;
+    var customizer = length > 1 ? sources[length - 1] : undefined;
+    var guard = length > 2 ? sources[2] : undefined;
+    customizer = assigner.length > 3 && typeof customizer == "function" ? (length--, customizer) : undefined;
+    if (guard && isIterateeCall_2(sources[0], sources[1], guard)) {
+      customizer = length < 3 ? undefined : customizer;
+      length = 1;
     }
-    return n;
+    object = Object(object);
+    while (++index < length) {
+      var source = sources[index];
+      if (source) assigner(object, source, index, customizer);
+    }
+    return object;
   });
 }
-
 export { createAssigner };

@@ -13,33 +13,32 @@ import { useSelectNavigation } from "./use-select-navigation.js";
 
 //@ chunk-ey2qag4x.js:42760-43084 fingerprint = useSelectState (0.744)
 function useSelectState_2({
-  visibleOptionCount: visibleOptionCount = 5,
-  options: options,
-  defaultValue: defaultValue,
-  selectedValue: selectedValue,
-  onChange: onChange,
-  onCancel: onCancel,
-  onFocus: onFocus,
-  focusValue: focusValue,
+  visibleOptionCount = 5,
+  options,
+  defaultValue,
+  selectedValue,
+  onChange,
+  onCancel,
+  onFocus,
+  focusValue,
 }) {
-  let [g, c] = y(defaultValue),
-    navigation = useSelectNavigation({
-      visibleOptionCount: visibleOptionCount,
-      options: options,
-      onFocus: onFocus,
-      focusValue: focusValue,
-    }),
-    { getFocusedValue: getFocusedValue } = navigation,
-    selectFocusedOption = ce(() => {
-      c(getFocusedValue());
-    }, [getFocusedValue]);
+  let [value, setValue] = y(defaultValue);
+  let navigation = useSelectNavigation({
+    visibleOptionCount,
+    options,
+    onFocus,
+    focusValue,
+  });
+  let { getFocusedValue } = navigation;
+  let selectFocusedOption = ce(() => {
+    setValue(getFocusedValue());
+  }, [getFocusedValue]);
   return {
     ...navigation,
-    value: selectedValue !== void 0 ? selectedValue : g,
-    selectFocusedOption: selectFocusedOption,
-    onChange: onChange,
-    onCancel: onCancel,
+    value: selectedValue !== undefined ? selectedValue : value,
+    selectFocusedOption,
+    onChange,
+    onCancel,
   };
 }
-
 export { useSelectState_2 };

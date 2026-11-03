@@ -6,158 +6,181 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { Ee } from "../core/util.cjs";
+import { require_util } from "../core/util.cjs";
 
 //@ chunk-1ny7cxrt.js:379138-382650 cjs-fingerprint
-var vI = x(function (Co, bI) {
-  var IW =
-      (Co && Co.__createBinding) ||
-      (Object.create
-        ? function (e, t, n, o) {
-            if (o === void 0) o = n;
-            var ownPropertyDescriptor = Object.getOwnPropertyDescriptor(t, n);
-            if (
-              !ownPropertyDescriptor ||
-              ("get" in ownPropertyDescriptor
-                ? !t.__esModule
-                : ownPropertyDescriptor.writable || ownPropertyDescriptor.configurable)
-            )
-              ownPropertyDescriptor = {
-                enumerable: !0,
-                get: function () {
-                  return t[n];
-                },
-              };
-            Object.defineProperty(e, o, ownPropertyDescriptor);
-          }
-        : function (e, t, n, o) {
-            if (o === void 0) o = n;
-            e[o] = t[n];
-          }),
-    CW =
-      (Co && Co.__setModuleDefault) ||
-      (Object.create
-        ? function (e, t) {
-            Object.defineProperty(e, "default", { enumerable: !0, value: t });
-          }
-        : function (e, t) {
-            e.default = t;
-          }),
-    TW =
-      (Co && Co.__importStar) ||
-      function (e) {
-        if (e && e.__esModule) return e;
-        var t = {};
-        if (e != null) {
-          for (var key in e)
-            if (key !== "default" && Object.prototype.hasOwnProperty.call(e, key)) IW(t, e, key);
+var require_nl = x(function (cjsExports, cjsModule) {
+  var __createBinding =
+    (cjsExports && cjsExports.__createBinding) ||
+    (Object.create
+      ? function (o_2, m, k, k2) {
+          if (k2 === undefined) k2 = k;
+          var desc = Object.getOwnPropertyDescriptor(m, k);
+          if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable))
+            desc = {
+              enumerable: true,
+              get: function () {
+                return m[k];
+              },
+            };
+          Object.defineProperty(o_2, k2, desc);
         }
-        return (CW(t, e), t);
-      };
-  Object.defineProperty(Co, "__esModule", { value: !0 });
-  Co.default = RW;
-  var qp = TW(Ee()),
-    $W = () => {
-      let e = {
-        string: { unit: "tekens", verb: "heeft" },
-        file: { unit: "bytes", verb: "heeft" },
-        array: { unit: "elementen", verb: "heeft" },
-        set: { unit: "elementen", verb: "heeft" },
-        map: { unit: "elementen", verb: "heeft" },
-      };
-      function t(r) {
-        return e[r] ?? null;
+      : function (o_2, m, k, k2) {
+          if (k2 === undefined) k2 = k;
+          o_2[k2] = m[k];
+        });
+  var __setModuleDefault =
+    (cjsExports && cjsExports.__setModuleDefault) ||
+    (Object.create
+      ? function (o, v) {
+          Object.defineProperty(o, "default", {
+            enumerable: true,
+            value: v,
+          });
+        }
+      : function (o, v) {
+          o.default = v;
+        });
+  var __importStar =
+    (cjsExports && cjsExports.__importStar) ||
+    function (mod) {
+      if (mod && mod.__esModule) return mod;
+      var result = {};
+      if (mod != null) {
+        for (var k in mod)
+          if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k))
+            __createBinding(result, mod, k);
       }
-      let n = {
-          regex: "invoer",
-          email: "emailadres",
-          url: "URL",
-          emoji: "emoji",
-          uuid: "UUID",
-          uuidv4: "UUIDv4",
-          uuidv6: "UUIDv6",
-          nanoid: "nanoid",
-          guid: "GUID",
-          cuid: "cuid",
-          cuid2: "cuid2",
-          ulid: "ULID",
-          xid: "XID",
-          ksuid: "KSUID",
-          datetime: "ISO datum en tijd",
-          date: "ISO datum",
-          time: "ISO tijd",
-          duration: "ISO duur",
-          ipv4: "IPv4-adres",
-          ipv6: "IPv6-adres",
-          mac: "MAC-adres",
-          cidrv4: "IPv4-bereik",
-          cidrv6: "IPv6-bereik",
-          base64: "base64-gecodeerde tekst",
-          base64url: "base64 URL-gecodeerde tekst",
-          json_string: "JSON string",
-          e164: "E.164-nummer",
-          credit_card: "creditcardnummer",
-          iban: "IBAN",
-          jwt: "JWT",
-          template_literal: "invoer",
-        },
-        o = { nan: "NaN", number: "getal" };
-      return (r) => {
-        switch (r.code) {
-          case "invalid_type": {
-            let s = o[r.expected] ?? r.expected,
-              parsedType = qp.parsedType(r.input),
-              l = o[parsedType] ?? parsedType;
-            if (/^[A-Z]/.test(r.expected))
-              return `Ongeldige invoer: verwacht instanceof ${r.expected}, ontving ${l}`;
-            return `Ongeldige invoer: verwacht ${s}, ontving ${l}`;
-          }
-          case "invalid_value":
-            if (r.values.length === 1)
-              return `Ongeldige invoer: verwacht ${qp.stringifyPrimitive(r.values[0])}`;
-            return `Ongeldige optie: verwacht \xE9\xE9n van ${qp.joinValues(r.values, "|")}`;
-          case "too_big": {
-            let s = r.inclusive ? "<=" : "<",
-              a = t(r.origin),
-              l = r.origin === "date" ? "laat" : r.origin === "string" ? "lang" : "groot";
-            if (a)
-              return `Te ${l}: verwacht dat ${r.origin ?? "waarde"} ${s}${r.maximum.toString()} ${a.unit ?? "elementen"} ${a.verb}`;
-            return `Te ${l}: verwacht dat ${r.origin ?? "waarde"} ${s}${r.maximum.toString()} is`;
-          }
-          case "too_small": {
-            let s = r.inclusive ? ">=" : ">",
-              a = t(r.origin),
-              l = r.origin === "date" ? "vroeg" : r.origin === "string" ? "kort" : "klein";
-            if (a) return `Te ${l}: verwacht dat ${r.origin} ${s}${r.minimum.toString()} ${a.unit} ${a.verb}`;
-            return `Te ${l}: verwacht dat ${r.origin} ${s}${r.minimum.toString()} is`;
-          }
-          case "invalid_format": {
-            let s = r;
-            if (s.format === "starts_with") return `Ongeldige tekst: moet met "${s.prefix}" beginnen`;
-            if (s.format === "ends_with") return `Ongeldige tekst: moet op "${s.suffix}" eindigen`;
-            if (s.format === "includes") return `Ongeldige tekst: moet "${s.includes}" bevatten`;
-            if (s.format === "regex") return `Ongeldige tekst: moet overeenkomen met patroon ${s.pattern}`;
-            return `Ongeldig: ${n[s.format] ?? r.format}`;
-          }
-          case "not_multiple_of":
-            return `Ongeldig getal: moet een veelvoud van ${r.divisor} zijn`;
-          case "unrecognized_keys":
-            return `Onbekende key${r.keys.length > 1 ? "s" : ""}: ${qp.joinValues(r.keys, ", ")}`;
-          case "invalid_key":
-            return `Ongeldige key in ${r.origin}`;
-          case "invalid_union":
-            return "Ongeldige invoer";
-          case "invalid_element":
-            return `Ongeldige waarde in ${r.origin}`;
-          default:
-            return "Ongeldige invoer";
-        }
-      };
+      __setModuleDefault(result, mod);
+      return result;
     };
-  function RW() {
-    return { localeError: $W() };
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.default = default_1;
+  var util = __importStar(require_util());
+  var error = () => {
+    let Sizable = {
+      string: {
+        unit: "tekens",
+        verb: "heeft",
+      },
+      file: {
+        unit: "bytes",
+        verb: "heeft",
+      },
+      array: {
+        unit: "elementen",
+        verb: "heeft",
+      },
+      set: {
+        unit: "elementen",
+        verb: "heeft",
+      },
+      map: {
+        unit: "elementen",
+        verb: "heeft",
+      },
+    };
+    function getSizing(origin) {
+      return Sizable[origin] ?? null;
+    }
+    let FormatDictionary = {
+      regex: "invoer",
+      email: "emailadres",
+      url: "URL",
+      emoji: "emoji",
+      uuid: "UUID",
+      uuidv4: "UUIDv4",
+      uuidv6: "UUIDv6",
+      nanoid: "nanoid",
+      guid: "GUID",
+      cuid: "cuid",
+      cuid2: "cuid2",
+      ulid: "ULID",
+      xid: "XID",
+      ksuid: "KSUID",
+      datetime: "ISO datum en tijd",
+      date: "ISO datum",
+      time: "ISO tijd",
+      duration: "ISO duur",
+      ipv4: "IPv4-adres",
+      ipv6: "IPv6-adres",
+      mac: "MAC-adres",
+      cidrv4: "IPv4-bereik",
+      cidrv6: "IPv6-bereik",
+      base64: "base64-gecodeerde tekst",
+      base64url: "base64 URL-gecodeerde tekst",
+      json_string: "JSON string",
+      e164: "E.164-nummer",
+      credit_card: "creditcardnummer",
+      iban: "IBAN",
+      jwt: "JWT",
+      template_literal: "invoer",
+    };
+    let TypeDictionary = {
+      nan: "NaN",
+      number: "getal",
+    };
+    return (issue) => {
+      switch (issue.code) {
+        case "invalid_type": {
+          let expected = TypeDictionary[issue.expected] ?? issue.expected;
+          let receivedType = util.parsedType(issue.input);
+          let received = TypeDictionary[receivedType] ?? receivedType;
+          if (/^[A-Z]/.test(issue.expected))
+            return `Ongeldige invoer: verwacht instanceof ${issue.expected}, ontving ${received}`;
+          return `Ongeldige invoer: verwacht ${expected}, ontving ${received}`;
+        }
+        case "invalid_value":
+          if (issue.values.length === 1)
+            return `Ongeldige invoer: verwacht ${util.stringifyPrimitive(issue.values[0])}`;
+          return `Ongeldige optie: verwacht \xE9\xE9n van ${util.joinValues(issue.values, "|")}`;
+        case "too_big": {
+          let adj = issue.inclusive ? "<=" : "<";
+          let sizing = getSizing(issue.origin);
+          let longName = issue.origin === "date" ? "laat" : issue.origin === "string" ? "lang" : "groot";
+          if (sizing)
+            return `Te ${longName}: verwacht dat ${issue.origin ?? "waarde"} ${adj}${issue.maximum.toString()} ${sizing.unit ?? "elementen"} ${sizing.verb}`;
+          return `Te ${longName}: verwacht dat ${issue.origin ?? "waarde"} ${adj}${issue.maximum.toString()} is`;
+        }
+        case "too_small": {
+          let adj = issue.inclusive ? ">=" : ">";
+          let sizing = getSizing(issue.origin);
+          let shortName = issue.origin === "date" ? "vroeg" : issue.origin === "string" ? "kort" : "klein";
+          if (sizing)
+            return `Te ${shortName}: verwacht dat ${issue.origin} ${adj}${issue.minimum.toString()} ${sizing.unit} ${sizing.verb}`;
+          return `Te ${shortName}: verwacht dat ${issue.origin} ${adj}${issue.minimum.toString()} is`;
+        }
+        case "invalid_format": {
+          let _issue = issue;
+          if (_issue.format === "starts_with") return `Ongeldige tekst: moet met "${_issue.prefix}" beginnen`;
+          if (_issue.format === "ends_with") return `Ongeldige tekst: moet op "${_issue.suffix}" eindigen`;
+          if (_issue.format === "includes") return `Ongeldige tekst: moet "${_issue.includes}" bevatten`;
+          if (_issue.format === "regex")
+            return `Ongeldige tekst: moet overeenkomen met patroon ${_issue.pattern}`;
+          return `Ongeldig: ${FormatDictionary[_issue.format] ?? issue.format}`;
+        }
+        case "not_multiple_of":
+          return `Ongeldig getal: moet een veelvoud van ${issue.divisor} zijn`;
+        case "unrecognized_keys":
+          return `Onbekende key${issue.keys.length > 1 ? "s" : ""}: ${util.joinValues(issue.keys, ", ")}`;
+        case "invalid_key":
+          return `Ongeldige key in ${issue.origin}`;
+        case "invalid_union":
+          return "Ongeldige invoer";
+        case "invalid_element":
+          return `Ongeldige waarde in ${issue.origin}`;
+        default:
+          return "Ongeldige invoer";
+      }
+    };
+  };
+  function default_1() {
+    return {
+      localeError: error(),
+    };
   }
-  bI.exports = Co.default;
+  cjsModule.exports = cjsExports.default;
 });
-
-export { vI };
+export { require_nl };

@@ -8,128 +8,165 @@
 import { O } from "../../lib/common/html.js";
 
 //@ chunk-6ja29j2n.js:123774-126135 esm-fingerprint
-var L = {
+var defaultTreeAdapter = {
   createDocument() {
-    return { nodeName: "#document", mode: O.NO_QUIRKS, childNodes: [] };
+    return {
+      nodeName: "#document",
+      mode: O.NO_QUIRKS,
+      childNodes: [],
+    };
   },
   createDocumentFragment() {
-    return { nodeName: "#document-fragment", childNodes: [] };
+    return {
+      nodeName: "#document-fragment",
+      childNodes: [],
+    };
   },
-  createElement(e, t, a) {
-    return { nodeName: e, tagName: e, attrs: a, namespaceURI: t, childNodes: [], parentNode: null };
+  createElement(tagName, namespaceURI, attrs) {
+    return {
+      nodeName: tagName,
+      tagName,
+      attrs,
+      namespaceURI,
+      childNodes: [],
+      parentNode: null,
+    };
   },
-  createCommentNode(e) {
-    return { nodeName: "#comment", data: e, parentNode: null };
+  createCommentNode(data) {
+    return {
+      nodeName: "#comment",
+      data,
+      parentNode: null,
+    };
   },
-  createTextNode(e) {
-    return { nodeName: "#text", value: e, parentNode: null };
+  createTextNode(value) {
+    return {
+      nodeName: "#text",
+      value,
+      parentNode: null,
+    };
   },
-  appendChild(e, t) {
-    (e.childNodes.push(t), (t.parentNode = e));
+  appendChild(parentNode, newNode) {
+    parentNode.childNodes.push(newNode);
+    newNode.parentNode = parentNode;
   },
-  insertBefore(e, t, a) {
-    let index = e.childNodes.indexOf(a);
-    (e.childNodes.splice(index, 0, t), (t.parentNode = e));
+  insertBefore(parentNode, newNode, referenceNode) {
+    let insertionIdx = parentNode.childNodes.indexOf(referenceNode);
+    parentNode.childNodes.splice(insertionIdx, 0, newNode);
+    newNode.parentNode = parentNode;
   },
-  setTemplateContent(e, t) {
-    e.content = t;
+  setTemplateContent(templateElement, contentElement) {
+    templateElement.content = contentElement;
   },
-  getTemplateContent(e) {
-    return e.content;
+  getTemplateContent(templateElement) {
+    return templateElement.content;
   },
-  setDocumentType(e, t, a, n) {
-    let found = e.childNodes.find((childNode) => childNode.nodeName === "#documentType");
-    if (found) ((found.name = t), (found.publicId = a), (found.systemId = n));
-    else {
-      let h = { nodeName: "#documentType", name: t, publicId: a, systemId: n, parentNode: null };
-      L.appendChild(e, h);
+  setDocumentType(e, name, publicId, systemId) {
+    let doctypeNode = e.childNodes.find((node) => node.nodeName === "#documentType");
+    if (doctypeNode) {
+      doctypeNode.name = name;
+      doctypeNode.publicId = publicId;
+      doctypeNode.systemId = systemId;
+    } else {
+      let node = {
+        nodeName: "#documentType",
+        name,
+        publicId,
+        systemId,
+        parentNode: null,
+      };
+      defaultTreeAdapter.appendChild(e, node);
     }
   },
-  setDocumentMode(e, t) {
-    e.mode = t;
+  setDocumentMode(e, mode) {
+    e.mode = mode;
   },
   getDocumentMode(e) {
     return e.mode;
   },
-  detachNode(e) {
-    if (e.parentNode) {
-      let index = e.parentNode.childNodes.indexOf(e);
-      (e.parentNode.childNodes.splice(index, 1), (e.parentNode = null));
+  detachNode(node) {
+    if (node.parentNode) {
+      let idx = node.parentNode.childNodes.indexOf(node);
+      node.parentNode.childNodes.splice(idx, 1);
+      node.parentNode = null;
     }
   },
-  insertText(e, t) {
-    if (e.childNodes.length > 0) {
-      let a = e.childNodes[e.childNodes.length - 1];
-      if (L.isTextNode(a)) {
-        a.value += t;
+  insertText(parentNode, text) {
+    if (parentNode.childNodes.length > 0) {
+      let prevNode = parentNode.childNodes[parentNode.childNodes.length - 1];
+      if (defaultTreeAdapter.isTextNode(prevNode)) {
+        prevNode.value += text;
         return;
       }
     }
-    L.appendChild(e, L.createTextNode(t));
+    defaultTreeAdapter.appendChild(parentNode, defaultTreeAdapter.createTextNode(text));
   },
-  insertTextBefore(e, t, a) {
-    let n = e.childNodes[e.childNodes.indexOf(a) - 1];
-    if (n && L.isTextNode(n)) n.value += t;
-    else L.insertBefore(e, L.createTextNode(t), a);
+  insertTextBefore(parentNode, text, referenceNode) {
+    let prevNode = parentNode.childNodes[parentNode.childNodes.indexOf(referenceNode) - 1];
+    if (prevNode && defaultTreeAdapter.isTextNode(prevNode)) prevNode.value += text;
+    else defaultTreeAdapter.insertBefore(parentNode, defaultTreeAdapter.createTextNode(text), referenceNode);
   },
-  adoptAttributes(e, t) {
-    let a = new Set(e.attrs.map((attr) => attr.name));
-    for (let n = 0; n < t.length; n++) if (!a.has(t[n].name)) e.attrs.push(t[n]);
+  adoptAttributes(recipient, attrs) {
+    let recipientAttrsMap = new Set(recipient.attrs.map((attr) => attr.name));
+    for (let j = 0; j < attrs.length; j++)
+      if (!recipientAttrsMap.has(attrs[j].name)) recipient.attrs.push(attrs[j]);
   },
-  getFirstChild(e) {
-    return e.childNodes[0];
+  getFirstChild(node) {
+    return node.childNodes[0];
   },
-  getChildNodes(e) {
-    return e.childNodes;
+  getChildNodes(node) {
+    return node.childNodes;
   },
-  getParentNode(e) {
-    return e.parentNode;
+  getParentNode(node) {
+    return node.parentNode;
   },
-  getAttrList(e) {
-    return e.attrs;
+  getAttrList(element) {
+    return element.attrs;
   },
-  getTagName(e) {
-    return e.tagName;
+  getTagName(element) {
+    return element.tagName;
   },
-  getNamespaceURI(e) {
-    return e.namespaceURI;
+  getNamespaceURI(element) {
+    return element.namespaceURI;
   },
-  getTextNodeContent(e) {
-    return e.value;
+  getTextNodeContent(textNode) {
+    return textNode.value;
   },
-  getCommentNodeContent(e) {
-    return e.data;
+  getCommentNodeContent(commentNode) {
+    return commentNode.data;
   },
-  getDocumentTypeNodeName(e) {
-    return e.name;
+  getDocumentTypeNodeName(doctypeNode) {
+    return doctypeNode.name;
   },
-  getDocumentTypeNodePublicId(e) {
-    return e.publicId;
+  getDocumentTypeNodePublicId(doctypeNode) {
+    return doctypeNode.publicId;
   },
-  getDocumentTypeNodeSystemId(e) {
-    return e.systemId;
+  getDocumentTypeNodeSystemId(doctypeNode) {
+    return doctypeNode.systemId;
   },
-  isTextNode(e) {
-    return e.nodeName === "#text";
+  isTextNode(node) {
+    return node.nodeName === "#text";
   },
-  isCommentNode(e) {
-    return e.nodeName === "#comment";
+  isCommentNode(node) {
+    return node.nodeName === "#comment";
   },
-  isDocumentTypeNode(e) {
-    return e.nodeName === "#documentType";
+  isDocumentTypeNode(node) {
+    return node.nodeName === "#documentType";
   },
-  isElementNode(e) {
-    return Object.prototype.hasOwnProperty.call(e, "tagName");
+  isElementNode(node) {
+    return Object.prototype.hasOwnProperty.call(node, "tagName");
   },
-  setNodeSourceCodeLocation(e, t) {
-    e.sourceCodeLocation = t;
+  setNodeSourceCodeLocation(node, location) {
+    node.sourceCodeLocation = location;
   },
-  getNodeSourceCodeLocation(e) {
-    return e.sourceCodeLocation;
+  getNodeSourceCodeLocation(node) {
+    return node.sourceCodeLocation;
   },
-  updateNodeSourceCodeLocation(e, t) {
-    e.sourceCodeLocation = { ...e.sourceCodeLocation, ...t };
+  updateNodeSourceCodeLocation(node, endLocation) {
+    node.sourceCodeLocation = {
+      ...node.sourceCodeLocation,
+      ...endLocation,
+    };
   },
 };
-
-export { L };
+export { defaultTreeAdapter };

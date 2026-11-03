@@ -8,8 +8,14 @@
  * pieces: chunk-d1cgs5na.js (23)
  * attribution: placement 23
  */
-import { iHe, Toe, nZ, Djs, saveCachedCatalog } from "../../services/modelCatalog/servedCatalog.js";
-import { servedCatalogSource, vCn } from "../../utils/model/modelCatalog/servedCatalog.js";
+import {
+  servedCatalogMode,
+  catalogScope,
+  catalogSurface,
+  getCachedCatalogEntry,
+  saveCachedCatalog,
+} from "../../services/modelCatalog/servedCatalog.js";
+import { servedCatalogSource, selectorStateSchema } from "../../utils/model/modelCatalog/servedCatalog.js";
 import {
   parseUserSpecifiedModel,
   renderModelName,
@@ -37,9 +43,9 @@ import {
   isOpus1mUnavailable,
   requires1mEntitlementCheck,
   renderModelLabel,
-  aue,
+  resolveRequestedModel,
 } from "./model.js";
-import { Lt } from "../../utils/model/modelIds.js";
+import { strip1mSuffix } from "../../utils/model/modelIds.js";
 import {
   displayModelName,
   reprobeEntitlementDeny,
@@ -51,24 +57,24 @@ import { artifactPathPrefix } from "../../services/artifacts/artifactMount.js";
 import { sanitizeTitle, sanitizeShortText } from "../../utils/resultError.js";
 import {
   classifyModelDenial,
-  D,
-  P,
+  neverDenied,
+  codeError,
   classifyModelUnavailability,
-  WKn,
+  ladderForDefaultModel,
 } from "../../utils/model/modelUnavailability.js";
 import { getModelUnavailabilityReason } from "../../utils/model/classifierModel.js";
 import { fetchBootstrapData } from "../../services/api/bootstrap.js";
 import {
-  bk,
+  effectiveModelForContext,
   runPreModelSwitchHooks as runPreModelSwitchHooks_2,
   useMainLoopModel_2 as useMainLoopModel_2_2_2,
   resolveEffectiveModel,
-  zE,
+  recordSwitchIfChanged,
 } from "../../utils/model/modelSwitchHooks.js";
 import {
   replaceLineBreaks,
   stripUnsafeChars,
-  pAn,
+  truncateForDisplayText,
 } from "../../utils/permissions/approvalPayloadSerialization.js";
 import { clearRefusalFallbackModelLatch } from "../../bootstrap/state.js";
 import {
@@ -79,7 +85,7 @@ import {
 } from "../../utils/fastMode.js";
 import { SET_MODEL_PREFIX, toInlineCode, SAVED_AS_DEFAULT_SUFFIX } from "./modelMessages.js";
 import { formatFastModeSuffix } from "../fast/fast.js";
-import { wt } from "../../remote/remoteMode.js";
+import { isRemoteSessionAvailable } from "../../remote/remoteMode.js";
 import { buildUnknownModelNotice } from "../../services/compact/unknownModelNotice.js";
 import {
   updateSettingsForSource,
@@ -95,155 +101,181 @@ import { getCanonicalName } from "../../utils/model/canonicalModelName.js";
 import { sequential } from "../../utils/sequential.js";
 
 //@ chunk-d1cgs5na.js:1903-1914 placement
-var T = 5000;
+var MODEL_SWITCH_TIMEOUT_MS = 5000;
 //@ chunk-d1cgs5na.js:1914-2192 placement
 async function classifyModelScope(e) {
   if (e === null) return skipSelectionWrite("follows_account");
-  if (I(e)) return skipSelectionWrite("not_representable");
-  if (iHe() !== "primary") return skipSelectionWrite("not_primary");
+  if (isOpusPlanAlias(e)) return skipSelectionWrite("not_representable");
+  if (servedCatalogMode() !== "primary") return skipSelectionWrite("not_primary");
   if (servedCatalogSource() !== "served") return skipSelectionWrite("not_served");
-  let o = Toe();
+  let o = catalogScope();
   if (o === null || o.kind !== "account") return skipSelectionWrite("no_account_scope");
-  return syncModelSelectionToServer(o, nZ(), e);
+  return syncModelSelectionToServer(o, catalogSurface(), e);
 }
+//@ chunk-d1cgs5na.js:2192-3061 placement
 /**
  * 把模型选择写到组织的 model_selector_state（失败分类记录）。
  */
-//@ chunk-d1cgs5na.js:2192-3061 placement
 async function syncModelSelectionToServer(e, o, s) {
-  let a = { model: parseUserSpecifiedModel(s) };
+  let a = {
+    model: parseUserSpecifiedModel(s),
+  };
   try {
-    let patch = await apiClient.patch(`/api/organizations/:orgUUID/model_selector_state/${o}`, a, {
+    let n = await apiClient.patch(`/api/organizations/:orgUUID/model_selector_state/${o}`, a, {
       auth: "teleport-org",
-      isBackground: !0,
-      timeout: T,
-      validateStatus: () => !0,
+      isBackground: true,
+      timeout: MODEL_SWITCH_TIMEOUT_MS,
+      validateStatus: () => true,
     });
-    if (!patch.ok)
-      return (
-        logForDebugging(`[servedCatalog] selection write (${o}) skipped: ${patch.reason}`),
-        logFeatureSad("model_default_server_sync", `declined_${patch.reason}`),
-        { status: "skipped", reason: "declined" }
-      );
-    let status = patch.status;
-    if (status < 200 || status >= 300)
-      return (
-        logForDebugging(`[servedCatalog] selection write (${o}): HTTP ${status}`),
-        logFeatureSad("model_default_server_sync", `http_${status}`),
-        { status: "error", reason: "http_status", httpStatus: status }
-      );
-    return (
-      logForDebugging(`[servedCatalog] selection write (${o}) ok`),
-      logFeatureOk("model_default_server_sync"),
-      await describeModelSource(e, o, patch.data, a.model),
-      { status: "ok", httpStatus: status }
-    );
+    if (!n.ok) {
+      logForDebugging(`[servedCatalog] selection write (${o}) skipped: ${n.reason}`);
+      logFeatureSad("model_default_server_sync", `declined_${n.reason}`);
+      return {
+        status: "skipped",
+        reason: "declined",
+      };
+    }
+    let status = n.status;
+    if (status < 200 || status >= 300) {
+      logForDebugging(`[servedCatalog] selection write (${o}): HTTP ${status}`);
+      logFeatureSad("model_default_server_sync", `http_${status}`);
+      return {
+        status: "error",
+        reason: "http_status",
+        httpStatus: status,
+      };
+    }
+    logForDebugging(`[servedCatalog] selection write (${o}) ok`);
+    logFeatureOk("model_default_server_sync");
+    await describeModelSource(e, o, n.data, a.model);
+    return {
+      status: "ok",
+      httpStatus: status,
+    };
   } catch (error) {
     let kind = classifyAxiosError(error).kind;
-    return (
-      logForDebugging(`[servedCatalog] selection write (${o}) failed: ${kind}`),
-      logFeatureSad("model_default_server_sync", `network_${kind}`),
-      { status: "error", reason: "network" }
-    );
+    logForDebugging(`[servedCatalog] selection write (${o}) failed: ${kind}`);
+    logFeatureSad("model_default_server_sync", `network_${kind}`);
+    return {
+      status: "error",
+      reason: "network",
+    };
   }
 }
 //@ chunk-d1cgs5na.js:3061-3361 placement
-async function describeModelSource(e, o, s, a) {
-  let n = Djs(e, o);
-  if (n === void 0 || n.catalog === null) return;
-  let safeParse = vCn().safeParse(s),
-    r =
-      safeParse.success && safeParse.data.id === o
-        ? safeParse.data
-        : { ...(n.catalog.state ?? { id: o }), model: a, selection_source: "user_setting" };
+async function describeModelSource(e, o, s, model) {
+  let cachedCatalogEntry = getCachedCatalogEntry(e, o);
+  if (cachedCatalogEntry === undefined || cachedCatalogEntry.catalog === null) return;
+  let l = selectorStateSchema().safeParse(s);
+  let state =
+    l.success && l.data.id === o
+      ? l.data
+      : {
+          ...(cachedCatalogEntry.catalog.state ?? {
+            id: o,
+          }),
+          model,
+          selection_source: "user_setting",
+        };
   await saveCachedCatalog(e, o, {
-    ...n,
-    staleAt: Math.min(n.staleAt, Date.now()),
-    catalog: { ...n.catalog, state: r },
+    ...cachedCatalogEntry,
+    staleAt: Math.min(cachedCatalogEntry.staleAt, Date.now()),
+    catalog: {
+      ...cachedCatalogEntry.catalog,
+      state,
+    },
   });
 }
 //@ chunk-d1cgs5na.js:3361-3461 placement
 function skipSelectionWrite(e) {
-  return (logForDebugging(`[servedCatalog] selection write skipped: ${e}`), { status: "skipped", reason: e });
+  logForDebugging(`[servedCatalog] selection write skipped: ${e}`);
+  return {
+    status: "skipped",
+    reason: e,
+  };
 }
 //@ chunk-d1cgs5na.js:3461-3546 placement
-function I(e) {
+function isOpusPlanAlias(e) {
   let lower = e.trim().toLowerCase();
   return lower === "opusplan" || lower === "opusplan[1m]";
 }
+//@ chunk-d1cgs5na.js:3546-3713 placement
 /**
  * 切换主循环模型的安全包装：失败消息与额度拒绝说明经过遥测清理后再返回。
  */
-//@ chunk-d1cgs5na.js:3546-3713 placement
 async function switchMainLoopModelSafe(...e) {
   let o = await switchMainLoopModel(...e);
-  if (!o.ok) return { ...o, message: sanitizeTelemetryString(o.message) };
-  return o.creditsRefusal === void 0
+  if (!o.ok)
+    return {
+      ...o,
+      message: sanitizeTelemetryString(o.message),
+    };
+  return o.creditsRefusal === undefined
     ? o
-    : { ...o, creditsRefusal: sanitizeTelemetryString(o.creditsRefusal) };
+    : {
+        ...o,
+        creditsRefusal: sanitizeTelemetryString(o.creditsRefusal),
+      };
 }
+//@ chunk-d1cgs5na.js:3713-8138 placement
 /**
  * 切换主循环模型：默认/别名、计划模式、保存、遥测（约 4.4 KB）。
  */
-//@ chunk-d1cgs5na.js:3713-8138 placement
 async function switchMainLoopModel(e, o, s, a) {
-  let n = e === "default" ? null : e;
-  if (n === null) {
+  let model = e === "default" ? null : e;
+  if (model === null) {
     let r = managedDenyStartupRefusal(getDefaultMainLoopModelSetting(), "switch");
-    if (r !== null)
-      return (
-        logFeatureBad("model_switch", "denied_by_managed_settings"),
-        { ok: !1, message: r, code: "restricted_by_org" }
-      );
+    if (r !== null) {
+      logFeatureBad("model_switch", "denied_by_managed_settings");
+      return {
+        ok: false,
+        message: r,
+        code: "restricted_by_org",
+      };
+    }
   }
   let l;
-  if (n) {
-    let r = diagnose1mAliasSwitch(n);
+  if (model) {
+    let r = diagnose1mAliasSwitch(model);
     if (r !== null) {
-      let c = Lt(n.trim().toLowerCase()),
-        u = displayModelName(n),
-        p = artifactPathPrefix("model");
+      let c = strip1mSuffix(model.trim().toLowerCase());
+      let u = displayModelName(model);
+      let p = artifactPathPrefix("model");
       switch (r.kind) {
         case "disabled":
-          return (
-            logFeatureBad("model_switch", "alias_1m_disabled"),
-            {
-              ok: !1,
-              message: p
-                ? `1M context is turned off here (CLAUDE_CODE_DISABLE_1M_CONTEXT is set), so '${u}' isn't available. Run ${p} ${c} instead.`
-                : `1M context is turned off (CLAUDE_CODE_DISABLE_1M_CONTEXT is set), so '${u}' isn\u2019t available. Switch to ${c} instead.`,
-              code: "alias_1m_disabled",
-            }
-          );
+          logFeatureBad("model_switch", "alias_1m_disabled");
+          return {
+            ok: false,
+            message: p
+              ? `1M context is turned off here (CLAUDE_CODE_DISABLE_1M_CONTEXT is set), so '${u}' isn't available. Run ${p} ${c} instead.`
+              : `1M context is turned off (CLAUDE_CODE_DISABLE_1M_CONTEXT is set), so '${u}' isn\u2019t available. Switch to ${c} instead.`,
+            code: "alias_1m_disabled",
+          };
         case "unsupported":
-          return (
-            logFeatureBad("model_switch", "alias_1m_unsupported"),
-            {
-              ok: !1,
-              message: p
-                ? `${sanitizeTitle(renderModelName(r.carrier))} doesn't have a 1M context window, so '${u}' isn't available. Run ${p} ${c} to use it with its standard context window.`
-                : `${sanitizeTitle(renderModelName(r.carrier))} doesn\u2019t have a 1M context window, so '${u}' isn\u2019t available. Switch to ${c} to use its standard context window.`,
-              code: "alias_1m_unsupported",
-            }
-          );
+          logFeatureBad("model_switch", "alias_1m_unsupported");
+          return {
+            ok: false,
+            message: p
+              ? `${sanitizeTitle(renderModelName(r.carrier))} doesn't have a 1M context window, so '${u}' isn't available. Run ${p} ${c} to use it with its standard context window.`
+              : `${sanitizeTitle(renderModelName(r.carrier))} doesn\u2019t have a 1M context window, so '${u}' isn\u2019t available. Switch to ${c} to use its standard context window.`,
+            code: "alias_1m_unsupported",
+          };
         case "noModeDependentVariant":
-          return (
-            logFeatureBad("model_switch", "alias_1m_no_mode_variant"),
-            {
-              ok: !1,
-              message: p
-                ? `'${u}' isn't available: the ${c} setting switches models in plan mode and has no 1M form. Run ${p} ${c}, or ${p} sonnet[1m] for a 1M context window.`
-                : `'${u}' isn\u2019t available, because the ${c} setting switches models in plan mode and has no 1M form. You can switch to ${c}, or to sonnet[1m] for a 1M context window.`,
-              code: "alias_1m_unsupported",
-            }
-          );
+          logFeatureBad("model_switch", "alias_1m_no_mode_variant");
+          return {
+            ok: false,
+            message: p
+              ? `'${u}' isn't available: the ${c} setting switches models in plan mode and has no 1M form. Run ${p} ${c}, or ${p} sonnet[1m] for a 1M context window.`
+              : `'${u}' isn\u2019t available, because the ${c} setting switches models in plan mode and has no 1M form. You can switch to ${c}, or to sonnet[1m] for a 1M context window.`,
+            code: "alias_1m_unsupported",
+          };
       }
     }
   }
-  if (n && isModelDenied(n, getModelEntitlementDenySet())) {
-    let r = stepDownRestrictedFamilyAliasPick(n);
+  if (model && isModelDenied(model, getModelEntitlementDenySet())) {
+    let r = stepDownRestrictedFamilyAliasPick(model);
     if (r === null) {
-      let c = await reprobeEntitlementDeny(n, o, s);
+      let c = await reprobeEntitlementDeny(model, o, s);
       if (c !== "overturned") {
         logFeatureBad(
           "model_switch",
@@ -251,255 +283,366 @@ async function switchMainLoopModel(e, o, s, a) {
         );
         let u = artifactPathPrefix("model");
         return {
-          ok: !1,
-          message: `Model '${displayModelName(n)}' is restricted by your organization's settings. ${u ? `Run ${u} to choose a different model.` : "Switch to a different model."}`,
+          ok: false,
+          message: `Model '${displayModelName(model)}' is restricted by your organization's settings. ${u ? `Run ${u} to choose a different model.` : "Switch to a different model."}`,
           code: c === "probe_failed" ? "check_failed" : "restricted_by_org",
         };
       }
-    } else ((l = n), (n = r));
-  } else if (n && !isModelAllowed(n)) {
-    let r = stepDownRestrictedFamilyAliasPick(n);
-    if (r === null)
-      return (
-        logFeatureBad("model_switch", classifyModelDenial(n)),
-        {
-          ok: !1,
-          message: `Model '${displayModelName(n)}' is not available. Your organization restricts model selection.`,
-          code: "restricted_by_org",
-        }
-      );
-    ((l = n), (n = r));
+    } else {
+      l = model;
+      model = r;
+    }
+  } else if (model && !isModelAllowed(model)) {
+    let r = stepDownRestrictedFamilyAliasPick(model);
+    if (r === null) {
+      logFeatureBad("model_switch", classifyModelDenial(model));
+      return {
+        ok: false,
+        message: `Model '${displayModelName(model)}' is not available. Your organization restricts model selection.`,
+        code: "restricted_by_org",
+      };
+    }
+    l = model;
+    model = r;
   }
-  if (n && isOpus1mUnavailable(n))
-    return (
-      logFeatureBad("model_switch", "opus_1m_unavailable"),
-      {
-        ok: !1,
-        message:
-          "Opus with 1M context is not available for your account. Learn more: https://code.claude.com/docs/en/model-config#extended-context-with-1m",
-        code: "unavailable_for_account",
-      }
-    );
-  if (n && requires1mEntitlementCheck(n))
-    return (
-      logFeatureBad("model_switch", "sonnet_1m_unavailable"),
-      {
-        ok: !1,
-        message:
-          "Sonnet with 1M context is not available for your account. Learn more: https://code.claude.com/docs/en/model-config#extended-context-with-1m",
-        code: "unavailable_for_account",
-      }
-    );
-  if (n) {
-    let r = getModelUnavailabilityReason(n);
-    if (r)
-      switch (r.reason) {
+  if (model && isOpus1mUnavailable(model)) {
+    logFeatureBad("model_switch", "opus_1m_unavailable");
+    return {
+      ok: false,
+      message:
+        "Opus with 1M context is not available for your account. Learn more: https://code.claude.com/docs/en/model-config#extended-context-with-1m",
+      code: "unavailable_for_account",
+    };
+  }
+  if (model && requires1mEntitlementCheck(model)) {
+    logFeatureBad("model_switch", "sonnet_1m_unavailable");
+    return {
+      ok: false,
+      message:
+        "Sonnet with 1M context is not available for your account. Learn more: https://code.claude.com/docs/en/model-config#extended-context-with-1m",
+      code: "unavailable_for_account",
+    };
+  }
+  if (model) {
+    let modelUnavailabilityReason = getModelUnavailabilityReason(model);
+    if (modelUnavailabilityReason)
+      switch (modelUnavailabilityReason.reason) {
         case "disabled":
-          if (r.notOffered)
-            return (
-              logFeatureBad("model_switch", "not_offered"),
-              {
-                ok: !1,
-                message: `Model '${displayModelName(n)}' is not available. ${sanitizeShortText(r.description)}`,
-                code: "not_offered",
-              }
-            );
-          return (
-            logFeatureBad("model_switch", "disabled_by_org"),
-            {
-              ok: !1,
-              message:
-                `Model '${displayModelName(n)}' is not currently available for your account. ${sanitizeShortText(r.description)}`.trimEnd(),
-              code: "unavailable_for_account",
-            }
-          );
+          if (modelUnavailabilityReason.notOffered) {
+            logFeatureBad("model_switch", "not_offered");
+            return {
+              ok: false,
+              message: `Model '${displayModelName(model)}' is not available. ${sanitizeShortText(modelUnavailabilityReason.description)}`,
+              code: "not_offered",
+            };
+          }
+          logFeatureBad("model_switch", "disabled_by_org");
+          return {
+            ok: false,
+            message:
+              `Model '${displayModelName(model)}' is not currently available for your account. ${sanitizeShortText(modelUnavailabilityReason.description)}`.trimEnd(),
+            code: "unavailable_for_account",
+          };
         case "absent": {
           let c = await validateModelWithDeadline(
-              resolveAliasForProbe(n),
-              { forceServerProbe: !0, credentials: s },
-              a?.deadlineMs,
-            ),
-            u = D(c, a);
+            resolveAliasForProbe(model),
+            {
+              forceServerProbe: true,
+              credentials: s,
+            },
+            a?.deadlineMs,
+          );
+          let u = neverDenied(c, a);
           if (!c.valid && !u) {
             logFeatureBad("model_switch", c.notFound ? "fable_unavailable" : "fable_probe_failed");
             let p = artifactPathPrefix("model");
             return {
-              ok: !1,
+              ok: false,
               message: c.notFound
-                ? `${r.displayName} isn't available for your account yet. ${p ? `Run ${p} to pick another model.` : "Switch to a different model."}`
+                ? `${modelUnavailabilityReason.displayName} isn't available for your account yet. ${p ? `Run ${p} to pick another model.` : "Switch to a different model."}`
                 : c.error,
-              ...P(
+              ...codeError(
                 c.notFound || c.permissionDenied ? "unavailable_for_account" : classifyModelUnavailability(c),
               ),
-              ...(c.serverRefusedModel === !0 && l === void 0 && { serverRefusedModel: !0 }),
+              ...(c.serverRefusedModel === true &&
+                l === undefined && {
+                  serverRefusedModel: true,
+                }),
             };
           }
           if (c.valid) fetchBootstrapData(o, s);
           return {
-            ok: !0,
-            model: isAliasSpelling(n) ? n.trim().toLowerCase() : n,
-            ...(l !== void 0 && { substitutedFrom: l }),
-            ...(u && { unconfirmed: !0 }),
+            ok: true,
+            model: isAliasSpelling(model) ? model.trim().toLowerCase() : model,
+            ...(l !== undefined && {
+              substitutedFrom: l,
+            }),
+            ...(u && {
+              unconfirmed: true,
+            }),
           };
         }
       }
   }
-  if (!n) return { ok: !0, model: n };
-  if (isAliasSpelling(n)) return { ok: !0, model: n.trim().toLowerCase() };
+  if (!model)
+    return {
+      ok: true,
+      model,
+    };
+  if (isAliasSpelling(model))
+    return {
+      ok: true,
+      model: model.trim().toLowerCase(),
+    };
   try {
     let r = await validateModelWithDeadline(
-        n,
-        { credentials: s, ...(a?.confirmWithServer === !1 && { serverProbe: !1 }) },
-        a?.deadlineMs,
-      ),
-      c = !r.valid && r.creditsRequired === !0 && a?.acceptCreditsRequired === !0 && WKn(x(n)),
-      u = D(r, a),
-      p = !r.valid && r.sharedLimitReached === !0 && a?.acceptSharedLimitRefusal === !0;
-    if (!r.valid && !c && !u && !p)
-      return (
-        logFeatureBad("model_switch", "invalid_model"),
-        {
-          ok: !1,
-          message: r.error,
-          ...P(classifyModelUnavailability(r)),
-          ...(r.serverRefusedModel === !0 && l === void 0 && { serverRefusedModel: !0 }),
-        }
-      );
+      model,
+      {
+        credentials: s,
+        ...(a?.confirmWithServer === false && {
+          serverProbe: false,
+        }),
+      },
+      a?.deadlineMs,
+    );
+    let c =
+      !r.valid &&
+      r.creditsRequired === true &&
+      a?.acceptCreditsRequired === true &&
+      ladderForDefaultModel(identity(model));
+    let u = neverDenied(r, a);
+    let p = !r.valid && r.sharedLimitReached === true && a?.acceptSharedLimitRefusal === true;
+    if (!r.valid && !c && !u && !p) {
+      logFeatureBad("model_switch", "invalid_model");
+      return {
+        ok: false,
+        message: r.error,
+        ...codeError(classifyModelUnavailability(r)),
+        ...(r.serverRefusedModel === true &&
+          l === undefined && {
+            serverRefusedModel: true,
+          }),
+      };
+    }
     return {
-      ok: !0,
-      model: x(n),
-      ...(l !== void 0 && { substitutedFrom: l }),
-      ...(!r.valid && c && { creditsRefusal: r.error }),
-      ...(u && { unconfirmed: !0 }),
+      ok: true,
+      model: identity(model),
+      ...(l !== undefined && {
+        substitutedFrom: l,
+      }),
+      ...(!r.valid &&
+        c && {
+          creditsRefusal: r.error,
+        }),
+      ...(u && {
+        unconfirmed: true,
+      }),
     };
   } catch (error) {
-    return (
-      logFeatureBad("model_switch", "validate_exception"),
-      {
-        ok: !1,
-        message: `Failed to validate model: ${sanitizeShortText(errorMessage(error))}`,
-        code: "check_failed",
-      }
-    );
+    logFeatureBad("model_switch", "validate_exception");
+    return {
+      ok: false,
+      message: `Failed to validate model: ${sanitizeShortText(errorMessage(error))}`,
+      code: "check_failed",
+    };
   }
 }
 //@ chunk-d1cgs5na.js:8138-8161 placement
-function x(e) {
+function identity(e) {
   return e;
 }
+//@ chunk-d1cgs5na.js:8161-8898 placement
 /**
  * 运行 PreModelSwitch 钩子决定 proceed/block（会话模型在钩子运行中变化时作废）。
  */
-//@ chunk-d1cgs5na.js:8161-8898 placement
-async function runPreModelSwitchHooks(e, o, s, a, n = {}) {
-  let l = o(),
-    r = bk(l),
-    c = planModeModelOf(l, s);
-  if (c.length === 0) return { decision: "proceed", skipConfirm: !1, messages: [] };
-  let u = [],
-    p,
-    M = !1,
-    _ = !0;
+async function runPreModelSwitchHooks(session, o, s, a, n = {}) {
+  let l = o();
+  let r = effectiveModelForContext(l);
+  let c = planModeModelOf(l, s);
+  if (c.length === 0)
+    return {
+      decision: "proceed",
+      skipConfirm: false,
+      messages: [],
+    };
+  let u = [];
+  let reason;
+  let M = false;
+  let _ = true;
   for (let h of c) {
-    let S = await runPreModelSwitchHooks_2(e, { ...h, requestedModel: s, source: a }, { signal: n.signal });
-    if ((u.push(...S.messages), S.decision === "block"))
-      return { decision: "block", reason: S.reason, messages: u };
-    if (S.decision === "ask") ((M = !0), (p ??= S.reason));
-    else _ = _ && S.skipConfirm;
+    let S = await runPreModelSwitchHooks_2(
+      session,
+      {
+        ...h,
+        requestedModel: s,
+        source: a,
+      },
+      {
+        signal: n.signal,
+      },
+    );
+    u.push(...S.messages);
+    if (S.decision === "block")
+      return {
+        decision: "block",
+        reason: S.reason,
+        messages: u,
+      };
+    if (S.decision === "ask") {
+      M = true;
+      reason ??= S.reason;
+    } else _ = _ && S.skipConfirm;
   }
-  if (bk(o()) !== r) {
+  if (effectiveModelForContext(o()) !== r) {
     if (n.revalidating)
       return {
         decision: "block",
         reason: "the session model changed while a PreModelSwitch hook was running; pick again",
         messages: u,
       };
-    let h = await runPreModelSwitchHooks(e, o, s, a, { ...n, revalidating: !0 });
-    return { ...h, messages: [...u, ...h.messages] };
+    let h = await runPreModelSwitchHooks(session, o, s, a, {
+      ...n,
+      revalidating: true,
+    });
+    return {
+      ...h,
+      messages: [...u, ...h.messages],
+    };
   }
   return M
-    ? { decision: "ask", reason: p, messages: u }
-    : { decision: "proceed", skipConfirm: _, messages: u };
+    ? {
+        decision: "ask",
+        reason,
+        messages: u,
+      }
+    : {
+        decision: "proceed",
+        skipConfirm: _,
+        messages: u,
+      };
 }
 //@ chunk-d1cgs5na.js:8898-9136 placement
 function planModeModelOf(e, o) {
-  let s = useMainLoopModel_2_2_2(e),
-    mode = e.toolPermissionContext.mode,
-    n = [mode, mode === "plan" ? "default" : "plan"],
-    l = new Set(),
-    r = [];
+  let mainLoopModel = useMainLoopModel_2_2_2(e);
+  let mode = e.toolPermissionContext.mode;
+  let n = [mode, mode === "plan" ? "default" : "plan"];
+  let l = new Set();
+  let r = [];
   for (let c of n) {
-    let u = resolveEffectiveModel(s, c),
-      p = resolveEffectiveModel(o, c),
-      M = `${u}\x00${p}`;
-    if (u !== p && !l.has(M)) (l.add(M), r.push({ fromModel: u, toModel: p }));
+    let effectiveModel = resolveEffectiveModel(mainLoopModel, c);
+    let effectiveModel_2 = resolveEffectiveModel(o, c);
+    let M = `${effectiveModel}\x00${effectiveModel_2}`;
+    if (effectiveModel !== effectiveModel_2 && !l.has(M)) {
+      l.add(M);
+      r.push({
+        fromModel: effectiveModel,
+        toModel: effectiveModel_2,
+      });
+    }
   }
   return r;
 }
 //@ chunk-d1cgs5na.js:9136-9357 placement
 function describeModelSwitchBlocked(e) {
   return [
-    `Model switch blocked by a PreModelSwitch hook${e.reason !== void 0 ? `: ${Nf(e.reason)}` : e.decision === "ask" ? ": confirmation required, and this session cannot ask" : ""}`,
-    ...e.messages.map(Nf),
+    `Model switch blocked by a PreModelSwitch hook${e.reason !== undefined ? `: ${sanitizeHookText(e.reason)}` : e.decision === "ask" ? ": confirmation required, and this session cannot ask" : ""}`,
+    ...e.messages.map(sanitizeHookText),
   ].join(`
 `);
 }
 //@ chunk-d1cgs5na.js:9357-9404 placement
-function Nf(e) {
-  return replaceLineBreaks(stripUnsafeChars(pAn(e.trimEnd())));
+/**
+ * 净化来自钩子的文本：去不安全字符、换行替换、去尾部空白。
+ */
+function sanitizeHookText(e) {
+  return replaceLineBreaks(stripUnsafeChars(truncateForDisplayText(e.trimEnd())));
 }
+//@ chunk-d1cgs5na.js:9404-9538 placement
 /**
  * PreModelSwitch 钩子阻止切换模型时的提示文本（含钩子给出的原因与附加消息）。
  */
-//@ chunk-d1cgs5na.js:9404-9538 placement
-function preModelSwitchBlockedMessage(e, o, s) {
+function preModelSwitchBlockedMessage(e, o, messages) {
   return [
-    `Model switch to ${renderModelLabel(e)} was blocked by a PreModelSwitch hook${o ? `: ${Nf(o)}` : ""}`,
-    ...s.map(Nf),
+    `Model switch to ${renderModelLabel(e)} was blocked by a PreModelSwitch hook${o ? `: ${sanitizeHookText(o)}` : ""}`,
+    ...messages.map(sanitizeHookText),
   ].join(`
 `);
 }
 //@ chunk-d1cgs5na.js:9538-10115 placement
-async function saveModelSwitch(e, o, s, a, n, l, r, c, u) {
+async function saveModelSwitch(session, o, s, setAppState, n, l, r, storageV5, u) {
   let fastMode = s().fastMode;
-  if (
-    (clearRefusalFallbackModelLatch(),
-    zE(e, s(), o, l),
-    a((b) => ({ ...b, mainLoopModel: o, mainLoopModelForSession: null })),
-    r !== void 0)
-  )
-    logFeatureSad("model_switch", "family_alias_stepped_down");
+  clearRefusalFallbackModelLatch();
+  recordSwitchIfChanged(session, s(), o, l);
+  setAppState((b) => ({
+    ...b,
+    mainLoopModel: o,
+    mainLoopModelForSession: null,
+  }));
+  if (r !== undefined) logFeatureSad("model_switch", "family_alias_stepped_down");
   else logFeatureOk("model_switch");
   let M = isFastModeEnabled() ? isFastModeActive(o, fastMode) : !!fastMode;
   if (isFastModeEnabled()) {
-    if ((clearFastModeCooldown(), M !== !!fastMode))
-      (a((b) => ({ ...b, fastMode: M })), reportFastModeToggle(fastMode, M));
+    clearFastModeCooldown();
+    if (M !== !!fastMode) {
+      setAppState((b) => ({
+        ...b,
+        fastMode: M,
+      }));
+      reportFastModeToggle(fastMode, M);
+    }
   }
-  let _ = n ? await setDefaultModel(o, c) : null;
+  let _ = n ? await setDefaultModel(o, storageV5) : null;
   u?.(_);
-  let h = _?.kind === "saved",
-    S = `${SET_MODEL_PREFIX}${toInlineCode(renderModelLabel(o))}${h ? SAVED_AS_DEFAULT_SUFFIX : " for this session only"}`;
-  ((S += formatFastModeSuffix(fastMode, M, o, { announceKeptOn: !0 })),
-    (S += describeDefaultSaved(_)),
-    (S += (h ? anthropicModelEnvNotice(o) : "") || findModelSettingSource(o)));
-  let O = wt() ? null : buildUnknownModelNotice(aue(o), s().autoCompactWindow);
+  let h = _?.kind === "saved";
+  let S = `${SET_MODEL_PREFIX}${toInlineCode(renderModelLabel(o))}${h ? SAVED_AS_DEFAULT_SUFFIX : " for this session only"}`;
+  S += formatFastModeSuffix(fastMode, M, o, {
+    announceKeptOn: true,
+  });
+  S += describeDefaultSaved(_);
+  S += (h ? anthropicModelEnvNotice(o) : "") || findModelSettingSource(o);
+  let O = isRemoteSessionAvailable()
+    ? null
+    : buildUnknownModelNotice(resolveRequestedModel(o), s().autoCompactWindow);
   if (O !== null)
     S += `
 ${O.text}`;
   return S;
 }
 //@ chunk-d1cgs5na.js:10115-10136 placement
-var W = 3000,
-  jKn = 15000;
+/**
+ * 设置默认模型的等待 3000ms 与模型列表刷新超时 15000ms。
+ */
+var SET_DEFAULT_MODEL_TIMEOUT_MS = 3000;
+var MODEL_LIST_REFRESH_TIMEOUT_MS = 15000;
 //@ chunk-d1cgs5na.js:10136-10493 placement
-async function setDefaultModel(e, o, s = W) {
-  let a = updateSettingsForSource("userSettings", { model: e ?? void 0 }, void 0, o);
-  a.then((l) => (l.error ? void 0 : classifyModelScope(e))).catch(() => {});
+async function setDefaultModel(e, storageV5, s = SET_DEFAULT_MODEL_TIMEOUT_MS) {
+  let a = updateSettingsForSource(
+    "userSettings",
+    {
+      model: e ?? undefined,
+    },
+    undefined,
+    storageV5,
+  );
+  a.then((l) => (l.error ? undefined : classifyModelScope(e))).catch(() => {});
   let n = await withDeadline(a, s);
-  if (n === void 0) return (logFeatureSad("model_set_default", "unconfirmed"), { kind: "unconfirmed" });
-  if (n.error)
-    return (logFeatureBad("model_set_default", "write_failed"), { kind: "failed", error: n.error });
-  return (logFeatureOk("model_set_default"), { kind: "saved" });
+  if (n === undefined) {
+    logFeatureSad("model_set_default", "unconfirmed");
+    return {
+      kind: "unconfirmed",
+    };
+  }
+  if (n.error) {
+    logFeatureBad("model_set_default", "write_failed");
+    return {
+      kind: "failed",
+      error: n.error,
+    };
+  }
+  logFeatureOk("model_set_default");
+  return {
+    kind: "saved",
+  };
 }
 //@ chunk-d1cgs5na.js:10493-10896 placement
 function describeDefaultSaved(e) {
@@ -509,97 +652,109 @@ function describeDefaultSaved(e) {
     case "unconfirmed":
       return ` \xB7 couldn't confirm it was saved as your default (${o} is still being written)`;
     case "failed": {
-      let cause = e.error.cause,
-        a =
-          cause instanceof Error
-            ? `can't be written (${getErrnoCode(cause) ?? sanitizeShortText(cause.message)})`
-            : "isn't valid JSON";
+      let cause = e.error.cause;
+      let a =
+        cause instanceof Error
+          ? `can't be written (${getErrnoCode(cause) ?? sanitizeShortText(cause.message)})`
+          : "isn't valid JSON";
       return ` \xB7 couldn't save it as your default: ${o} ${a}`;
     }
   }
 }
+//@ chunk-d1cgs5na.js:10896-11078 placement
 /**
  * ANTHROPIC_MODEL 环境变量设置了允许的模型且与当前选择不同时，提示新会话将使用该模型。
  */
-//@ chunk-d1cgs5na.js:10896-11078 placement
 function anthropicModelEnvNotice(e) {
   let ANTHROPIC_MODEL = env.ANTHROPIC_MODEL;
   if (!ANTHROPIC_MODEL || !isModelAllowed(ANTHROPIC_MODEL)) return "";
   if (!isDifferentModelSetting(e ?? getDefaultMainLoopModelSetting(), ANTHROPIC_MODEL)) return "";
-  return v(
+  return dimWithCode(
     "ANTHROPIC_MODEL is set to ",
     renderModelSetting(ANTHROPIC_MODEL),
     " \u2014 new sessions use that while it is set",
   );
 }
 //@ chunk-d1cgs5na.js:11078-11211 placement
-function isDifferentModelSetting(e, o) {
-  let s = parseUserSpecifiedModel(e),
-    a = parseUserSpecifiedModel(o);
+function isDifferentModelSetting(e, model) {
+  let userSpecifiedModel = parseUserSpecifiedModel(e);
+  let userSpecifiedModel_2 = parseUserSpecifiedModel(model);
   return (
     isModeDependentModelSetting(e) ||
-    getCanonicalName(s, { identity: !0 }) !== getCanonicalName(a, { identity: !0 }) ||
-    /\[1m\]$/i.test(s) !== /\[1m\]$/i.test(a)
+    getCanonicalName(userSpecifiedModel, {
+      identity: true,
+    }) !==
+      getCanonicalName(userSpecifiedModel_2, {
+        identity: true,
+      }) ||
+    /\[1m\]$/i.test(userSpecifiedModel) !== /\[1m\]$/i.test(userSpecifiedModel_2)
   );
 }
 //@ chunk-d1cgs5na.js:11211-11716 placement
 function findModelSettingSource(e) {
-  let o = getEffectiveSettingSource_2("model");
-  if (o !== "projectSettings" && o !== "localSettings" && o !== "policySettings") {
-    let n = getOrgLockedDefaultModel();
+  let effectiveSettingSource = getEffectiveSettingSource_2("model");
+  if (
+    effectiveSettingSource !== "projectSettings" &&
+    effectiveSettingSource !== "localSettings" &&
+    effectiveSettingSource !== "policySettings"
+  ) {
+    let orgLockedDefaultModel = getOrgLockedDefaultModel();
     if (
-      n !== null &&
+      orgLockedDefaultModel !== null &&
       e !== null &&
-      o !== "flagSettings" &&
+      effectiveSettingSource !== "flagSettings" &&
       !env.ANTHROPIC_MODEL &&
-      isDifferentModelSetting(e, n.model)
+      isDifferentModelSetting(e, orgLockedDefaultModel.model)
     )
-      return renderOrgDefaultRestartNotice(n);
+      return renderOrgDefaultRestartNotice(orgLockedDefaultModel);
     return "";
   }
-  if (o !== "policySettings") {
-    let n = getOrgLockedDefaultModel();
-    if (n !== null && !env.ANTHROPIC_MODEL) {
+  if (effectiveSettingSource !== "policySettings") {
+    let orgLockedDefaultModel = getOrgLockedDefaultModel();
+    if (orgLockedDefaultModel !== null && !env.ANTHROPIC_MODEL) {
       if (e === null) return "";
-      if (isDifferentModelSetting(e, n.model)) return renderOrgDefaultRestartNotice(n);
+      if (isDifferentModelSetting(e, orgLockedDefaultModel.model))
+        return renderOrgDefaultRestartNotice(orgLockedDefaultModel);
       return "";
     }
   }
-  let s = getSettingsForSource(o)?.model;
-  if (s === void 0 || e === s) return "";
-  let a = o === "policySettings" ? "Managed settings" : getRelativeSettingsFilePathForSource(o);
-  return v(`${a} pins `, renderModelSetting(s), " \u2014 that applies on restart");
+  let model = getSettingsForSource(effectiveSettingSource)?.model;
+  if (model === undefined || e === model) return "";
+  let a =
+    effectiveSettingSource === "policySettings"
+      ? "Managed settings"
+      : getRelativeSettingsFilePathForSource(effectiveSettingSource);
+  return dimWithCode(`${a} pins `, renderModelSetting(model), " \u2014 that applies on restart");
 }
 //@ chunk-d1cgs5na.js:11716-11786 placement
-function v(e, o, s) {
+function dimWithCode(e, o, s) {
   return `${sequential.dim(`
      ${e}`)}${toInlineCode(o)}${sequential.dim(s)}`;
 }
+//@ chunk-d1cgs5na.js:11786-12054 placement
 /**
  * 组织默认模型在重启后生效的提示（org 或 standard）。
  */
-//@ chunk-d1cgs5na.js:11786-12054 placement
-function renderOrgDefaultRestartNotice(e) {
-  let o = renderModelSetting(e.model);
-  switch (e.kind) {
+function renderOrgDefaultRestartNotice(orgLockedDefaultModel) {
+  let o = renderModelSetting(orgLockedDefaultModel.model);
+  switch (orgLockedDefaultModel.kind) {
     case "org":
-      return v("Your organization's default (", o, ") applies on restart");
+      return dimWithCode("Your organization's default (", o, ") applies on restart");
     case "standard":
-      return v(
+      return dimWithCode(
         "Your organization's default model isn't available in this build, so the standard default (",
         o,
         ") applies on restart",
       );
   }
 }
-
 export {
   switchMainLoopModelSafe,
-  jKn,
+  MODEL_LIST_REFRESH_TIMEOUT_MS,
   runPreModelSwitchHooks,
   preModelSwitchBlockedMessage,
   saveModelSwitch,
-  Nf,
+  sanitizeHookText,
   describeModelSwitchBlocked,
   setDefaultModel,
   describeDefaultSaved,

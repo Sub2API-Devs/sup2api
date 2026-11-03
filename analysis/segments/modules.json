@@ -217,18 +217,29 @@
    "placement": 19
   }
  },
- "components/skills/_new/SkillsMenu.helpers-00qh.ts": {
+ "components/skills/SkillsMenu.tsx": {
   "kind": "first-party",
   "decls": [
    "chunk-00qhwn8e.js#is",
-   "chunk-00qhwn8e.js#ns"
+   "chunk-00qhwn8e.js#ns",
+   "chunk-00qhwn8e.js#qe",
+   "chunk-ae5g0zb5.js#Xt",
+   "chunk-e6aww6q8.js#aYo",
+   "chunk-vrb44rx7.js#Nd",
+   "chunk-ygke3hz8.js#x"
   ],
   "chunks": {
-   "chunk-00qhwn8e.js": 2
+   "chunk-00qhwn8e.js": 3,
+   "chunk-ae5g0zb5.js": 1,
+   "chunk-e6aww6q8.js": 1,
+   "chunk-vrb44rx7.js": 1,
+   "chunk-ygke3hz8.js": 1
   },
-  "bytes": 102,
+  "bytes": 2356,
   "methods": {
-   "sole-consumer-new": 2
+   "placement": 2,
+   "callgraph-fingerprint": 1,
+   "fingerprint": 4
   }
  },
  "components/ui/OrderedList.tsx": {
@@ -250,28 +261,6 @@
    "sole-consumer": 1
   }
  },
- "components/skills/SkillsMenu.tsx": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-00qhwn8e.js#qe",
-   "chunk-ae5g0zb5.js#Xt",
-   "chunk-e6aww6q8.js#aYo",
-   "chunk-vrb44rx7.js#Nd",
-   "chunk-ygke3hz8.js#x"
-  ],
-  "chunks": {
-   "chunk-00qhwn8e.js": 1,
-   "chunk-ae5g0zb5.js": 1,
-   "chunk-e6aww6q8.js": 1,
-   "chunk-vrb44rx7.js": 1,
-   "chunk-ygke3hz8.js": 1
-  },
-  "bytes": 2254,
-  "methods": {
-   "callgraph-fingerprint": 1,
-   "fingerprint": 4
-  }
- },
  "commands/skills/skills.tsx": {
   "kind": "first-party",
   "decls": [
@@ -283,15 +272,17 @@
    "chunk-00qhwn8e.js#wt",
    "chunk-00qhwn8e.js#bt",
    "chunk-00qhwn8e.js#Ze",
-   "chunk-00qhwn8e.js#Rr"
+   "chunk-00qhwn8e.js#Rr",
+   "chunk-ygke3hz8.js#q0t"
   ],
   "chunks": {
-   "chunk-00qhwn8e.js": 9
+   "chunk-00qhwn8e.js": 9,
+   "chunk-ygke3hz8.js": 1
   },
-  "bytes": 8835,
+  "bytes": 8890,
   "methods": {
    "sole-consumer": 4,
-   "placement": 1,
+   "placement": 2,
    "layout": 3,
    "fingerprint": 1
   }
@@ -1518,21 +1509,23 @@
    "chunk-2g090z7k.js#ni",
    "chunk-2g090z7k.js#zde",
    "chunk-06y4szbn.js#Ya",
+   "chunk-24t3dkzb.js#v",
    "chunk-e6aww6q8.js#iJ",
    "chunk-hm0ce8vc.js#Nl",
    "chunk-sycgf9xs.js#Ne"
   ],
   "chunks": {
    "chunk-06y4szbn.js": 1,
+   "chunk-24t3dkzb.js": 1,
    "chunk-2g090z7k.js": 68,
    "chunk-e6aww6q8.js": 1,
    "chunk-hm0ce8vc.js": 1,
    "chunk-sycgf9xs.js": 1
   },
-  "bytes": 8487,
+  "bytes": 8565,
   "methods": {
    "fingerprint": 3,
-   "placement": 68,
+   "placement": 69,
    "callgraph-witnessed": 1
   }
  },
@@ -1654,19 +1647,23 @@
    "chunk-a658aeqp.js#Z",
    "chunk-a658aeqp.js#Q",
    "chunk-a658aeqp.js#M",
+   "chunk-a658aeqp.js#I",
+   "chunk-a658aeqp.js#x",
+   "chunk-a658aeqp.js#De",
    "chunk-0777tkjc.js#a",
    "chunk-0777tkjc.js#q9e"
   ],
   "chunks": {
    "chunk-0777tkjc.js": 2,
-   "chunk-a658aeqp.js": 10
+   "chunk-a658aeqp.js": 13
   },
-  "bytes": 14781,
+  "bytes": 15654,
   "methods": {
    "fingerprint": 4,
    "sole-consumer": 6,
    "affinity": 1,
-   "layout": 1
+   "layout": 1,
+   "placement": 3
   }
  },
  "services/mcp/deviceMcpConsent.ts": {
@@ -2401,15 +2398,17 @@
   "decls": [
    "chunk-vr8smdd9.js#pt",
    "chunk-vr8smdd9.js#ct",
+   "chunk-vr8smdd9.js#Ae",
    "chunk-08945j39.js#Re"
   ],
   "chunks": {
    "chunk-08945j39.js": 1,
-   "chunk-vr8smdd9.js": 2
+   "chunk-vr8smdd9.js": 3
   },
-  "bytes": 796,
+  "bytes": 864,
   "methods": {
-   "fingerprint": 3
+   "fingerprint": 3,
+   "placement": 1
   }
  },
  "remote/RemoteSessionManager.ts": {
@@ -2851,16 +2850,18 @@
    "chunk-18hwfzwa.js#tUe",
    "chunk-18hwfzwa.js#eUe",
    "chunk-96sthk2s.js#Ua",
-   "chunk-96sthk2s.js#wme"
+   "chunk-96sthk2s.js#wme",
+   "chunk-hg2zbde4.js#hsi"
   ],
   "chunks": {
    "chunk-09njdshr.js": 14,
    "chunk-18hwfzwa.js": 2,
-   "chunk-96sthk2s.js": 2
+   "chunk-96sthk2s.js": 2,
+   "chunk-hg2zbde4.js": 1
   },
-  "bytes": 22334,
+  "bytes": 22488,
   "methods": {
-   "placement": 10,
+   "placement": 11,
    "layout": 2,
    "facade-exports": 4,
    "affinity": 1,
@@ -3312,29 +3313,18 @@
   "decls": [
    "chunk-0e8j1zzj.js#Gke",
    "chunk-0e8j1zzj.js#o5",
+   "chunk-0e8j1zzj.js#Vmo",
    "chunk-18hwfzwa.js#m1e"
   ],
   "chunks": {
-   "chunk-0e8j1zzj.js": 2,
+   "chunk-0e8j1zzj.js": 3,
    "chunk-18hwfzwa.js": 1
   },
-  "bytes": 340,
+  "bytes": 555,
   "methods": {
    "shared-adjacent": 1,
-   "fingerprint": 2
-  }
- },
- "components/PromptInput/_new/getActiveAgentName.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-0e8j1zzj.js#Vmo"
-  ],
-  "chunks": {
-   "chunk-0e8j1zzj.js": 1
-  },
-  "bytes": 215,
-  "methods": {
-   "sole-consumer-new": 1
+   "fingerprint": 2,
+   "placement": 1
   }
  },
  "components/PromptInput/promptBorderColor.ts": {
@@ -3365,15 +3355,18 @@
    "chunk-0e8j1zzj.js#Aen",
    "chunk-0e8j1zzj.js#hs",
    "chunk-0e8j1zzj.js#Wn",
-   "chunk-0e8j1zzj.js#Yt"
+   "chunk-0e8j1zzj.js#Yt",
+   "chunk-7s4yj2r0.js#uWs"
   ],
   "chunks": {
-   "chunk-0e8j1zzj.js": 5
+   "chunk-0e8j1zzj.js": 5,
+   "chunk-7s4yj2r0.js": 1
   },
-  "bytes": 1577,
+  "bytes": 1667,
   "methods": {
    "fingerprint": 2,
-   "layout": 3
+   "layout": 3,
+   "placement": 1
   }
  },
  "components/permissions/UnattendedAutoBlockNotice.tsx": {
@@ -3573,7 +3566,7 @@
    "affinity": 1
   }
  },
- "components/permissions/_new/ToolInputEntries.ts": {
+ "components/permissions/ToolInputEntries.tsx": {
   "kind": "first-party",
   "decls": [
    "chunk-0e8j1zzj.js#Lo",
@@ -3589,7 +3582,7 @@
   },
   "bytes": 2688,
   "methods": {
-   "sole-consumer-new": 7
+   "placement": 7
   }
  },
  "utils/permissions/permissions.ts": {
@@ -3958,15 +3951,17 @@
   "decls": [
    "chunk-0eepcc6r.js#We",
    "chunk-0eepcc6r.js#Mo",
+   "chunk-tyg7f3ek.js#Rz",
    "chunk-yxg7c7n7.js#m"
   ],
   "chunks": {
    "chunk-0eepcc6r.js": 2,
+   "chunk-tyg7f3ek.js": 1,
    "chunk-yxg7c7n7.js": 1
   },
-  "bytes": 3650,
+  "bytes": 4106,
   "methods": {
-   "placement": 3
+   "placement": 4
   }
  },
  "services/mcp/hostedWorkerTrust.ts": {
@@ -4438,18 +4433,19 @@
    "chunk-0h4e7gnq.js#gyt",
    "chunk-0h4e7gnq.js#fBs",
    "chunk-0h4e7gnq.js#pBs",
+   "chunk-0h4e7gnq.js#gBs",
    "chunk-kj4ctmv0.js#HFs"
   ],
   "chunks": {
-   "chunk-0h4e7gnq.js": 11,
+   "chunk-0h4e7gnq.js": 12,
    "chunk-3xdfvx0n.js": 18,
    "chunk-kj4ctmv0.js": 1
   },
-  "bytes": 15231,
+  "bytes": 16545,
   "methods": {
    "fingerprint": 5,
    "affinity": 4,
-   "placement": 8,
+   "placement": 9,
    "callgraph-fingerprint": 1,
    "layout": 12
   }
@@ -4919,19 +4915,6 @@
    "layout": 13,
    "file-local": 2,
    "affinity": 2
-  }
- },
- "remote/_new/toSdkRateLimitInfo.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-0h4e7gnq.js#gBs"
-  ],
-  "chunks": {
-   "chunk-0h4e7gnq.js": 1
-  },
-  "bytes": 1314,
-  "methods": {
-   "sole-consumer-new": 1
   }
  },
  "services/claudeAiLimits.ts": {
@@ -7853,14 +7836,16 @@
    "chunk-0sfjpx19.js#sNn",
    "chunk-0sfjpx19.js#Ns",
    "chunk-0sfjpx19.js#vAs",
-   "chunk-0sfjpx19.js#Hs"
+   "chunk-0sfjpx19.js#Hs",
+   "chunk-e6aww6q8.js#$zr"
   ],
   "chunks": {
-   "chunk-0sfjpx19.js": 20
+   "chunk-0sfjpx19.js": 20,
+   "chunk-e6aww6q8.js": 1
   },
-  "bytes": 11860,
+  "bytes": 12224,
   "methods": {
-   "placement": 20
+   "placement": 21
   }
  },
  "services/artifacts/commentMonitorResume.ts": {
@@ -8451,6 +8436,7 @@
  "utils/generators.ts": {
   "kind": "first-party",
   "decls": [
+   "chunk-e6aww6q8.js#qBt",
    "chunk-e6aww6q8.js#cSt",
    "chunk-e6aww6q8.js#W2e",
    "chunk-e6aww6q8.js#o4s",
@@ -8459,12 +8445,12 @@
   ],
   "chunks": {
    "chunk-0sxtya66.js": 1,
-   "chunk-e6aww6q8.js": 4
+   "chunk-e6aww6q8.js": 5
   },
-  "bytes": 1121,
+  "bytes": 1199,
   "methods": {
    "fingerprint": 2,
-   "placement": 3
+   "placement": 4
   }
  },
  "tools/AgentTool/agentLaunchHelpers.ts": {
@@ -8752,17 +8738,18 @@
    "chunk-0wa2vg6f.js#S",
    "chunk-0wa2vg6f.js#b",
    "chunk-0wa2vg6f.js#m",
+   "chunk-3nztfxrw.js#re",
    "chunk-3nztfxrw.js#$Hn"
   ],
   "chunks": {
    "chunk-0wa2vg6f.js": 14,
-   "chunk-3nztfxrw.js": 1
+   "chunk-3nztfxrw.js": 2
   },
-  "bytes": 12650,
+  "bytes": 12821,
   "methods": {
    "fingerprint": 3,
    "layout": 4,
-   "placement": 7,
+   "placement": 8,
    "callgraph-witnessed": 1
   }
  },
@@ -10030,14 +10017,15 @@
    "chunk-171dhyhe.js#Ge",
    "chunk-171dhyhe.js#ke",
    "chunk-171dhyhe.js#Q",
-   "chunk-171dhyhe.js#ie"
+   "chunk-171dhyhe.js#ie",
+   "chunk-171dhyhe.js#Ve"
   ],
   "chunks": {
-   "chunk-171dhyhe.js": 15
+   "chunk-171dhyhe.js": 16
   },
-  "bytes": 5770,
+  "bytes": 8142,
   "methods": {
-   "placement": 15
+   "placement": 16
   }
  },
  "utils/auth.ts": {
@@ -10408,12 +10396,13 @@
    "chunk-aepeg2w5.js#k8t",
    "chunk-aepeg2w5.js#QT",
    "chunk-aepeg2w5.js#vm",
+   "chunk-e6aww6q8.js#Uur",
+   "chunk-e6aww6q8.js#van",
+   "chunk-e6aww6q8.js#Ean",
    "chunk-171dhyhe.js#ve",
    "chunk-171dhyhe.js#We",
    "chunk-cdz6g143.js#V$e",
    "chunk-cdz6g143.js#bsr",
-   "chunk-e6aww6q8.js#Uur",
-   "chunk-e6aww6q8.js#van",
    "chunk-30p0tvt0.js#b8",
    "chunk-3g8vhh6f.js#aDn",
    "chunk-4pc1m5n9.js#Se",
@@ -10432,30 +10421,17 @@
    "chunk-aepeg2w5.js": 365,
    "chunk-cdz6g143.js": 2,
    "chunk-dcmhvw5a.js": 1,
-   "chunk-e6aww6q8.js": 2,
+   "chunk-e6aww6q8.js": 3,
    "chunk-g54kbxqw.js": 1
   },
-  "bytes": 89066,
+  "bytes": 89093,
   "methods": {
    "affinity": 5,
    "fingerprint": 22,
-   "placement": 6,
+   "placement": 7,
    "layout": 102,
    "facade-majority": 242,
    "file-local": 1
-  }
- },
- "tools/DesignTool/_new/handleDesignAuth401.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-171dhyhe.js#Ve"
-  ],
-  "chunks": {
-   "chunk-171dhyhe.js": 1
-  },
-  "bytes": 2372,
-  "methods": {
-   "sole-consumer-new": 1
   }
  },
  "tools/DesignTool/designMcpClient.ts": {
@@ -11369,17 +11345,94 @@
    "fingerprint": 1
   }
  },
- "components/PromptInput/_new/PromptComposer.helpers-18hw.ts": {
+ "components/PromptInput/PromptComposer.tsx": {
   "kind": "first-party",
   "decls": [
-   "chunk-18hwfzwa.js#QFe"
+   "chunk-18hwfzwa.js#QFe",
+   "chunk-18hwfzwa.js#wJ",
+   "chunk-18hwfzwa.js#$3",
+   "chunk-18hwfzwa.js#swe",
+   "chunk-18hwfzwa.js#zco",
+   "chunk-18hwfzwa.js#Yco",
+   "chunk-18hwfzwa.js#Jco",
+   "chunk-18hwfzwa.js#Xco",
+   "chunk-18hwfzwa.js#Zco",
+   "chunk-18hwfzwa.js#euo",
+   "chunk-18hwfzwa.js#tuo",
+   "chunk-18hwfzwa.js#ouo",
+   "chunk-18hwfzwa.js#suo",
+   "chunk-18hwfzwa.js#iuo",
+   "chunk-18hwfzwa.js#auo",
+   "chunk-18hwfzwa.js#luo",
+   "chunk-18hwfzwa.js#duo",
+   "chunk-18hwfzwa.js#cuo",
+   "chunk-18hwfzwa.js#uuo",
+   "chunk-18hwfzwa.js#muo",
+   "chunk-18hwfzwa.js#puo",
+   "chunk-18hwfzwa.js#fuo",
+   "chunk-18hwfzwa.js#guo",
+   "chunk-18hwfzwa.js#huo",
+   "chunk-18hwfzwa.js#yuo",
+   "chunk-18hwfzwa.js#Suo",
+   "chunk-18hwfzwa.js#buo",
+   "chunk-18hwfzwa.js#kuo",
+   "chunk-18hwfzwa.js#Cuo",
+   "chunk-18hwfzwa.js#_uo",
+   "chunk-18hwfzwa.js#Tuo",
+   "chunk-18hwfzwa.js#Ruo",
+   "chunk-18hwfzwa.js#xuo",
+   "chunk-18hwfzwa.js#Puo",
+   "chunk-18hwfzwa.js#Auo",
+   "chunk-18hwfzwa.js#Muo",
+   "chunk-18hwfzwa.js#Iuo",
+   "chunk-18hwfzwa.js#Euo",
+   "chunk-18hwfzwa.js#Duo",
+   "chunk-18hwfzwa.js#Ouo",
+   "chunk-18hwfzwa.js#Nuo",
+   "chunk-18hwfzwa.js#Luo",
+   "chunk-18hwfzwa.js#Fuo",
+   "chunk-18hwfzwa.js#Buo",
+   "chunk-18hwfzwa.js#Huo",
+   "chunk-18hwfzwa.js#Wuo",
+   "chunk-18hwfzwa.js#juo",
+   "chunk-18hwfzwa.js#quo",
+   "chunk-18hwfzwa.js#$uo",
+   "chunk-18hwfzwa.js#Vuo",
+   "chunk-18hwfzwa.js#Kuo",
+   "chunk-18hwfzwa.js#Guo",
+   "chunk-18hwfzwa.js#Quo",
+   "chunk-18hwfzwa.js#zuo",
+   "chunk-18hwfzwa.js#Yuo",
+   "chunk-18hwfzwa.js#Juo",
+   "chunk-18hwfzwa.js#Xuo",
+   "chunk-18hwfzwa.js#Zuo",
+   "chunk-18hwfzwa.js#emo",
+   "chunk-18hwfzwa.js#tmo",
+   "chunk-18hwfzwa.js#omo",
+   "chunk-18hwfzwa.js#nmo",
+   "chunk-18hwfzwa.js#rmo",
+   "chunk-18hwfzwa.js#smo",
+   "chunk-18hwfzwa.js#cmo",
+   "chunk-18hwfzwa.js#umo",
+   "chunk-18hwfzwa.js#gmo",
+   "chunk-18hwfzwa.js#Cmo",
+   "chunk-18hwfzwa.js#_mo",
+   "chunk-18hwfzwa.js#Rmo",
+   "chunk-18hwfzwa.js#E9e",
+   "chunk-18hwfzwa.js#J3",
+   "chunk-18hwfzwa.js#Oet",
+   "chunk-18hwfzwa.js#Iet",
+   "chunk-18hwfzwa.js#Eet",
+   "chunk-18hwfzwa.js#G6",
+   "chunk-18hwfzwa.js#Nke",
+   "chunk-18hwfzwa.js#@978626"
   ],
   "chunks": {
-   "chunk-18hwfzwa.js": 1
+   "chunk-18hwfzwa.js": 78
   },
-  "bytes": 42,
+  "bytes": 51762,
   "methods": {
-   "sole-consumer-new": 1
+   "placement": 78
   }
  },
  "screens/repl/sendNow.ts": {
@@ -11888,6 +11941,33 @@
   "kind": "first-party",
   "decls": [
    "chunk-18hwfzwa.js#hHe",
+   "chunk-18hwfzwa.js#Pz",
+   "chunk-18hwfzwa.js#fle",
+   "chunk-18hwfzwa.js#rU",
+   "chunk-18hwfzwa.js#Rz",
+   "chunk-18hwfzwa.js#xz",
+   "chunk-18hwfzwa.js#yqe",
+   "chunk-18hwfzwa.js#iT",
+   "chunk-18hwfzwa.js#djt",
+   "chunk-18hwfzwa.js#cjt",
+   "chunk-18hwfzwa.js#mjt",
+   "chunk-18hwfzwa.js#pjt",
+   "chunk-18hwfzwa.js#fjt",
+   "chunk-18hwfzwa.js#gjt",
+   "chunk-18hwfzwa.js#hjt",
+   "chunk-18hwfzwa.js#yjt",
+   "chunk-18hwfzwa.js#Sjt",
+   "chunk-18hwfzwa.js#bjt",
+   "chunk-18hwfzwa.js#wjt",
+   "chunk-18hwfzwa.js#kjt",
+   "chunk-18hwfzwa.js#Cjt",
+   "chunk-18hwfzwa.js#_jt",
+   "chunk-18hwfzwa.js#Tjt",
+   "chunk-18hwfzwa.js#Ajt",
+   "chunk-18hwfzwa.js#Mjt",
+   "chunk-18hwfzwa.js#Ijt",
+   "chunk-18hwfzwa.js#Ejt",
+   "chunk-18hwfzwa.js#Djt",
    "chunk-18hwfzwa.js#Njt",
    "chunk-18hwfzwa.js#Ljt",
    "chunk-18hwfzwa.js#Fjt",
@@ -11935,16 +12015,17 @@
    "chunk-18hwfzwa.js#@462807",
    "chunk-18hwfzwa.js#vU",
    "chunk-18hwfzwa.js#hg",
+   "chunk-e6aww6q8.js#nHn",
    "chunk-e6aww6q8.js#y$i"
   ],
   "chunks": {
-   "chunk-18hwfzwa.js": 48,
-   "chunk-e6aww6q8.js": 1
+   "chunk-18hwfzwa.js": 75,
+   "chunk-e6aww6q8.js": 2
   },
-  "bytes": 22282,
+  "bytes": 28000,
   "methods": {
    "fingerprint": 4,
-   "placement": 35,
+   "placement": 63,
    "layout": 9,
    "callgraph-witnessed": 1
   }
@@ -12174,14 +12255,16 @@
    "chunk-18hwfzwa.js#WQ",
    "chunk-18hwfzwa.js#@222453",
    "chunk-18hwfzwa.js#Jie",
-   "chunk-18hwfzwa.js#ug"
+   "chunk-18hwfzwa.js#ug",
+   "chunk-e6aww6q8.js#gBo"
   ],
   "chunks": {
-   "chunk-18hwfzwa.js": 11
+   "chunk-18hwfzwa.js": 11,
+   "chunk-e6aww6q8.js": 1
   },
-  "bytes": 1852,
+  "bytes": 1955,
   "methods": {
-   "placement": 11
+   "placement": 12
   }
  },
  "hooks/useIdeLogging.ts": {
@@ -12322,7 +12405,7 @@
    "fingerprint": 1
   }
  },
- "screens/_new/useViewedAgentTranscript.ts": {
+ "screens/repl/useViewedAgentTranscript.ts": {
   "kind": "first-party",
   "decls": [
    "chunk-18hwfzwa.js#Xie",
@@ -12334,7 +12417,7 @@
   },
   "bytes": 409,
   "methods": {
-   "sole-consumer-new": 3
+   "placement": 3
   }
  },
  "server/directConnectManager.ts": {
@@ -12781,17 +12864,23 @@
    "sole-consumer": 1
   }
  },
- "components/PromptInput/_new/isMidTurnInterjectionMessage.ts": {
+ "utils/messagePredicates.ts": {
   "kind": "first-party",
   "decls": [
+   "chunk-aepeg2w5.js#Ais",
+   "chunk-aepeg2w5.js#q3",
+   "chunk-aepeg2w5.js#iki",
+   "chunk-aepeg2w5.js#yge",
    "chunk-18hwfzwa.js#_Bt"
   ],
   "chunks": {
-   "chunk-18hwfzwa.js": 1
+   "chunk-18hwfzwa.js": 1,
+   "chunk-aepeg2w5.js": 4
   },
-  "bytes": 248,
+  "bytes": 762,
   "methods": {
-   "sole-consumer-new": 1
+   "placement": 4,
+   "fingerprint": 1
   }
  },
  "screens/repl/sessionRehydration.ts": {
@@ -13142,6 +13231,9 @@
  "components/messages/AssistantToolUseMessage.tsx": {
   "kind": "first-party",
   "decls": [
+   "chunk-ah34pb7m.js#@64176",
+   "chunk-ah34pb7m.js#Rp",
+   "chunk-ah34pb7m.js#kp",
    "chunk-ah34pb7m.js#uA",
    "chunk-ah34pb7m.js#pA",
    "chunk-ah34pb7m.js#cA",
@@ -13155,17 +13247,18 @@
   ],
   "chunks": {
    "chunk-18hwfzwa.js": 1,
-   "chunk-ah34pb7m.js": 9
+   "chunk-ah34pb7m.js": 12
   },
-  "bytes": 13018,
+  "bytes": 13122,
   "methods": {
    "fingerprint": 5,
+   "placement": 3,
    "affinity": 1,
    "callgraph-fingerprint": 1,
    "layout": 3
   }
  },
- "screens/_new/WorkerPendingPermissions.ts": {
+ "screens/repl/WorkerPendingPermissions.tsx": {
   "kind": "first-party",
   "decls": [
    "chunk-18hwfzwa.js#BHt",
@@ -13179,7 +13272,7 @@
   },
   "bytes": 464,
   "methods": {
-   "sole-consumer-new": 5
+   "placement": 5
   }
  },
  "hooks/notifs/usePluginInstallationStatus.tsx": {
@@ -13237,45 +13330,6 @@
    "fingerprint": 4,
    "callgraph-fingerprint": 1,
    "layout": 2
-  }
- },
- "components/_new/AgentStatusRowView.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-18hwfzwa.js#Pz",
-   "chunk-18hwfzwa.js#fle",
-   "chunk-18hwfzwa.js#rU",
-   "chunk-18hwfzwa.js#Rz",
-   "chunk-18hwfzwa.js#xz",
-   "chunk-18hwfzwa.js#yqe",
-   "chunk-18hwfzwa.js#iT",
-   "chunk-18hwfzwa.js#djt",
-   "chunk-18hwfzwa.js#cjt",
-   "chunk-18hwfzwa.js#mjt",
-   "chunk-18hwfzwa.js#pjt",
-   "chunk-18hwfzwa.js#fjt",
-   "chunk-18hwfzwa.js#gjt",
-   "chunk-18hwfzwa.js#hjt",
-   "chunk-18hwfzwa.js#yjt",
-   "chunk-18hwfzwa.js#Sjt",
-   "chunk-18hwfzwa.js#bjt",
-   "chunk-18hwfzwa.js#wjt",
-   "chunk-18hwfzwa.js#kjt",
-   "chunk-18hwfzwa.js#Cjt",
-   "chunk-18hwfzwa.js#_jt",
-   "chunk-18hwfzwa.js#Tjt",
-   "chunk-18hwfzwa.js#Ajt",
-   "chunk-18hwfzwa.js#Mjt",
-   "chunk-18hwfzwa.js#Ijt",
-   "chunk-18hwfzwa.js#Ejt",
-   "chunk-18hwfzwa.js#Djt"
-  ],
-  "chunks": {
-   "chunk-18hwfzwa.js": 27
-  },
-  "bytes": 5548,
-  "methods": {
-   "sole-consumer-new": 27
   }
  },
  "hooks/useBackgroundTaskNavigation.ts": {
@@ -13878,7 +13932,7 @@
    "layout": 8
   }
  },
- "hooks/_new/EMOJI_BY_SHORTCODE.ts": {
+ "utils/emojiShortcodes.ts": {
   "kind": "first-party",
   "decls": [
    "chunk-18hwfzwa.js#rKe",
@@ -13892,7 +13946,7 @@
   },
   "bytes": 47621,
   "methods": {
-   "sole-consumer-new": 5
+   "placement": 5
   }
  },
  "utils/suggestions/shellHistoryCompletion.ts": {
@@ -14030,6 +14084,12 @@
    "chunk-18hwfzwa.js#@782955",
    "chunk-18hwfzwa.js#@782959",
    "chunk-18hwfzwa.js#@785667",
+   "chunk-18hwfzwa.js#wge",
+   "chunk-18hwfzwa.js#f9t",
+   "chunk-18hwfzwa.js#@786748",
+   "chunk-18hwfzwa.js#t7t",
+   "chunk-18hwfzwa.js#o7t",
+   "chunk-18hwfzwa.js#n7t",
    "chunk-18hwfzwa.js#s7t",
    "chunk-18hwfzwa.js#i7t",
    "chunk-18hwfzwa.js#a7t",
@@ -14053,12 +14113,12 @@
    "chunk-8jypjjdf.js#xyo"
   ],
   "chunks": {
-   "chunk-18hwfzwa.js": 24,
+   "chunk-18hwfzwa.js": 30,
    "chunk-8jypjjdf.js": 6
   },
-  "bytes": 10133,
+  "bytes": 11291,
   "methods": {
-   "placement": 19,
+   "placement": 25,
    "sole-consumer": 7,
    "affinity": 1,
    "fingerprint": 3
@@ -14290,21 +14350,23 @@
    "chunk-18hwfzwa.js#b5t",
    "chunk-18hwfzwa.js#pQe",
    "chunk-18hwfzwa.js#Hme",
+   "chunk-18hwfzwa.js#gQe",
+   "chunk-18hwfzwa.js#@676080",
    "chunk-18hwfzwa.js#g8t",
    "chunk-18hwfzwa.js#I2e",
    "chunk-18hwfzwa.js#PJ",
    "chunk-18hwfzwa.js#vuo"
   ],
   "chunks": {
-   "chunk-18hwfzwa.js": 19
+   "chunk-18hwfzwa.js": 21
   },
-  "bytes": 8923,
+  "bytes": 9118,
   "methods": {
    "sole-consumer": 8,
    "fingerprint": 4,
    "layout": 3,
    "callgraph-fingerprint": 2,
-   "placement": 1,
+   "placement": 3,
    "affinity": 1
   }
  },
@@ -14407,40 +14469,27 @@
    "chunk-kswt4qha.js#eTn",
    "chunk-18hwfzwa.js#V2",
    "chunk-18hwfzwa.js#FZt",
+   "chunk-dcmhvw5a.js#Ei",
+   "chunk-dcmhvw5a.js#b_r",
    "chunk-kcvmr83c.js#A",
    "chunk-kcvmr83c.js#NCo",
-   "chunk-3rwvzn82.js#Go",
-   "chunk-dcmhvw5a.js#Ei"
+   "chunk-3rwvzn82.js#Go"
   ],
   "chunks": {
    "chunk-18hwfzwa.js": 2,
    "chunk-3rwvzn82.js": 1,
-   "chunk-dcmhvw5a.js": 1,
+   "chunk-dcmhvw5a.js": 2,
    "chunk-kcvmr83c.js": 2,
    "chunk-kswt4qha.js": 94
   },
-  "bytes": 13517,
+  "bytes": 13570,
   "methods": {
    "callgraph-fingerprint": 4,
-   "placement": 18,
+   "placement": 19,
    "callgraph-witnessed": 2,
    "layout": 68,
    "file-local": 3,
    "fingerprint": 5
-  }
- },
- "components/_new/filterModelOptions.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-18hwfzwa.js#gQe",
-   "chunk-18hwfzwa.js#@676080"
-  ],
-  "chunks": {
-   "chunk-18hwfzwa.js": 2
-  },
-  "bytes": 195,
-  "methods": {
-   "sole-consumer-new": 2
   }
  },
  "components/ThinkingToggle.tsx": {
@@ -15017,6 +15066,23 @@
    "chunk-18hwfzwa.js#G6t",
    "chunk-18hwfzwa.js#Q6t",
    "chunk-18hwfzwa.js#z6t",
+   "chunk-18hwfzwa.js#J6t",
+   "chunk-18hwfzwa.js#X6t",
+   "chunk-18hwfzwa.js#Z6t",
+   "chunk-18hwfzwa.js#e4t",
+   "chunk-18hwfzwa.js#t4t",
+   "chunk-18hwfzwa.js#o4t",
+   "chunk-18hwfzwa.js#n4t",
+   "chunk-18hwfzwa.js#r4t",
+   "chunk-18hwfzwa.js#s4t",
+   "chunk-18hwfzwa.js#i4t",
+   "chunk-18hwfzwa.js#d4t",
+   "chunk-18hwfzwa.js#c4t",
+   "chunk-18hwfzwa.js#u4t",
+   "chunk-18hwfzwa.js#m4t",
+   "chunk-18hwfzwa.js#p4t",
+   "chunk-18hwfzwa.js#f4t",
+   "chunk-18hwfzwa.js#h4t",
    "chunk-18hwfzwa.js#S4t",
    "chunk-18hwfzwa.js#b4t",
    "chunk-18hwfzwa.js#w4t",
@@ -15047,11 +15113,11 @@
    "chunk-18hwfzwa.js#E6t"
   ],
   "chunks": {
-   "chunk-18hwfzwa.js": 55
+   "chunk-18hwfzwa.js": 72
   },
-  "bytes": 38972,
+  "bytes": 39614,
   "methods": {
-   "placement": 3,
+   "placement": 20,
    "sole-consumer": 19,
    "affinity": 7,
    "file-local": 2,
@@ -15287,28 +15353,6 @@
    "callgraph-witnessed": 1
   }
  },
- "components/tasks/_new/logSubagentHistoryLaunchError.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-18hwfzwa.js#J6t",
-   "chunk-18hwfzwa.js#X6t",
-   "chunk-18hwfzwa.js#Z6t",
-   "chunk-18hwfzwa.js#e4t",
-   "chunk-18hwfzwa.js#t4t",
-   "chunk-18hwfzwa.js#o4t",
-   "chunk-18hwfzwa.js#n4t",
-   "chunk-18hwfzwa.js#r4t",
-   "chunk-18hwfzwa.js#s4t",
-   "chunk-18hwfzwa.js#i4t"
-  ],
-  "chunks": {
-   "chunk-18hwfzwa.js": 10
-  },
-  "bytes": 416,
-  "methods": {
-   "sole-consumer-new": 10
-  }
- },
  "tasks/InProcessTeammateTask/InProcessTeammateTask.tsx": {
   "kind": "first-party",
   "decls": [
@@ -15333,25 +15377,6 @@
    "fingerprint": 5,
    "file-local": 2,
    "layout": 2
-  }
- },
- "components/tasks/_new/isTaskRunning_2.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-18hwfzwa.js#d4t",
-   "chunk-18hwfzwa.js#c4t",
-   "chunk-18hwfzwa.js#u4t",
-   "chunk-18hwfzwa.js#m4t",
-   "chunk-18hwfzwa.js#p4t",
-   "chunk-18hwfzwa.js#f4t",
-   "chunk-18hwfzwa.js#h4t"
-  ],
-  "chunks": {
-   "chunk-18hwfzwa.js": 7
-  },
-  "bytes": 226,
-  "methods": {
-   "sole-consumer-new": 7
   }
  },
  "tools/TaskOutputTool/TaskOutputTool.tsx": {
@@ -15406,95 +15431,6 @@
   "bytes": 644,
   "methods": {
    "placement": 3
-  }
- },
- "components/PromptInput/PromptComposer.tsx": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-18hwfzwa.js#wJ",
-   "chunk-18hwfzwa.js#$3",
-   "chunk-18hwfzwa.js#swe",
-   "chunk-18hwfzwa.js#zco",
-   "chunk-18hwfzwa.js#Yco",
-   "chunk-18hwfzwa.js#Jco",
-   "chunk-18hwfzwa.js#Xco",
-   "chunk-18hwfzwa.js#Zco",
-   "chunk-18hwfzwa.js#euo",
-   "chunk-18hwfzwa.js#tuo",
-   "chunk-18hwfzwa.js#ouo",
-   "chunk-18hwfzwa.js#suo",
-   "chunk-18hwfzwa.js#iuo",
-   "chunk-18hwfzwa.js#auo",
-   "chunk-18hwfzwa.js#luo",
-   "chunk-18hwfzwa.js#duo",
-   "chunk-18hwfzwa.js#cuo",
-   "chunk-18hwfzwa.js#uuo",
-   "chunk-18hwfzwa.js#muo",
-   "chunk-18hwfzwa.js#puo",
-   "chunk-18hwfzwa.js#fuo",
-   "chunk-18hwfzwa.js#guo",
-   "chunk-18hwfzwa.js#huo",
-   "chunk-18hwfzwa.js#yuo",
-   "chunk-18hwfzwa.js#Suo",
-   "chunk-18hwfzwa.js#buo",
-   "chunk-18hwfzwa.js#kuo",
-   "chunk-18hwfzwa.js#Cuo",
-   "chunk-18hwfzwa.js#_uo",
-   "chunk-18hwfzwa.js#Tuo",
-   "chunk-18hwfzwa.js#Ruo",
-   "chunk-18hwfzwa.js#xuo",
-   "chunk-18hwfzwa.js#Puo",
-   "chunk-18hwfzwa.js#Auo",
-   "chunk-18hwfzwa.js#Muo",
-   "chunk-18hwfzwa.js#Iuo",
-   "chunk-18hwfzwa.js#Euo",
-   "chunk-18hwfzwa.js#Duo",
-   "chunk-18hwfzwa.js#Ouo",
-   "chunk-18hwfzwa.js#Nuo",
-   "chunk-18hwfzwa.js#Luo",
-   "chunk-18hwfzwa.js#Fuo",
-   "chunk-18hwfzwa.js#Buo",
-   "chunk-18hwfzwa.js#Huo",
-   "chunk-18hwfzwa.js#Wuo",
-   "chunk-18hwfzwa.js#juo",
-   "chunk-18hwfzwa.js#quo",
-   "chunk-18hwfzwa.js#$uo",
-   "chunk-18hwfzwa.js#Vuo",
-   "chunk-18hwfzwa.js#Kuo",
-   "chunk-18hwfzwa.js#Guo",
-   "chunk-18hwfzwa.js#Quo",
-   "chunk-18hwfzwa.js#zuo",
-   "chunk-18hwfzwa.js#Yuo",
-   "chunk-18hwfzwa.js#Juo",
-   "chunk-18hwfzwa.js#Xuo",
-   "chunk-18hwfzwa.js#Zuo",
-   "chunk-18hwfzwa.js#emo",
-   "chunk-18hwfzwa.js#tmo",
-   "chunk-18hwfzwa.js#omo",
-   "chunk-18hwfzwa.js#nmo",
-   "chunk-18hwfzwa.js#rmo",
-   "chunk-18hwfzwa.js#smo",
-   "chunk-18hwfzwa.js#cmo",
-   "chunk-18hwfzwa.js#umo",
-   "chunk-18hwfzwa.js#gmo",
-   "chunk-18hwfzwa.js#Cmo",
-   "chunk-18hwfzwa.js#_mo",
-   "chunk-18hwfzwa.js#Rmo",
-   "chunk-18hwfzwa.js#E9e",
-   "chunk-18hwfzwa.js#J3",
-   "chunk-18hwfzwa.js#Oet",
-   "chunk-18hwfzwa.js#Iet",
-   "chunk-18hwfzwa.js#Eet",
-   "chunk-18hwfzwa.js#G6",
-   "chunk-18hwfzwa.js#Nke",
-   "chunk-18hwfzwa.js#@978626"
-  ],
-  "chunks": {
-   "chunk-18hwfzwa.js": 77
-  },
-  "bytes": 51720,
-  "methods": {
-   "placement": 77
   }
  },
  "components/PromptInput/usePrefilledPromptWarning.ts": {
@@ -15653,21 +15589,6 @@
    "layout": 1
   }
  },
- "components/PromptInput/_new/GoalActiveIndicator.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-18hwfzwa.js#wge",
-   "chunk-18hwfzwa.js#f9t",
-   "chunk-18hwfzwa.js#@786748"
-  ],
-  "chunks": {
-   "chunk-18hwfzwa.js": 3
-  },
-  "bytes": 1024,
-  "methods": {
-   "sole-consumer-new": 3
-  }
- },
  "components/PromptInput/SandboxPromptFooterHint.tsx": {
   "kind": "first-party",
   "decls": [
@@ -15679,21 +15600,6 @@
   "bytes": 862,
   "methods": {
    "fingerprint": 1
-  }
- },
- "components/PromptInput/_new/Notifications.helpers-18hw.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-18hwfzwa.js#t7t",
-   "chunk-18hwfzwa.js#o7t",
-   "chunk-18hwfzwa.js#n7t"
-  ],
-  "chunks": {
-   "chunk-18hwfzwa.js": 3
-  },
-  "bytes": 134,
-  "methods": {
-   "sole-consumer-new": 3
   }
  },
  "components/PromptInput/VoiceIndicator.tsx": {
@@ -16192,19 +16098,7 @@
   "kind": "first-party",
   "decls": [
    "chunk-18hwfzwa.js#Eno",
-   "chunk-18hwfzwa.js#Z3e"
-  ],
-  "chunks": {
-   "chunk-18hwfzwa.js": 2
-  },
-  "bytes": 1171,
-  "methods": {
-   "placement": 2
-  }
- },
- "components/PromptInput/_new/useSpellcheckHighlights.ts": {
-  "kind": "first-party",
-  "decls": [
+   "chunk-18hwfzwa.js#Z3e",
    "chunk-18hwfzwa.js#Hno",
    "chunk-18hwfzwa.js#t6e",
    "chunk-18hwfzwa.js#o6e",
@@ -16220,11 +16114,11 @@
    "chunk-18hwfzwa.js#@875917"
   ],
   "chunks": {
-   "chunk-18hwfzwa.js": 13
+   "chunk-18hwfzwa.js": 15
   },
-  "bytes": 2878,
+  "bytes": 4049,
   "methods": {
-   "sole-consumer-new": 13
+   "placement": 15
   }
  },
  "components/PromptInput/useMaybeTruncateInput.ts": {
@@ -16920,7 +16814,7 @@
    "placement": 17
   }
  },
- "screens/_new/useOrgSurvey.ts": {
+ "components/FeedbackSurvey/useOrgSurvey.tsx": {
   "kind": "first-party",
   "decls": [
    "chunk-18hwfzwa.js#SSo",
@@ -16948,7 +16842,7 @@
   },
   "bytes": 11934,
   "methods": {
-   "sole-consumer-new": 19
+   "placement": 19
   }
  },
  "components/FeedbackSurvey/usePostCompactSurvey.tsx": {
@@ -16978,20 +16872,34 @@
    "placement": 2
   }
  },
- "hooks/_new/useBackgroundWorkItems.helpers-18hw.ts": {
+ "hooks/useBackgroundWorkItems.ts": {
   "kind": "first-party",
   "decls": [
    "chunk-18hwfzwa.js#@1094819",
    "chunk-18hwfzwa.js#@1094823",
    "chunk-18hwfzwa.js#owo",
-   "chunk-18hwfzwa.js#xC"
+   "chunk-18hwfzwa.js#xC",
+   "chunk-18hwfzwa.js#ICe",
+   "chunk-18hwfzwa.js#rwo",
+   "chunk-18hwfzwa.js#ECe",
+   "chunk-18hwfzwa.js#DCe",
+   "chunk-18hwfzwa.js#pwo",
+   "chunk-18hwfzwa.js#fwo",
+   "chunk-18hwfzwa.js#S8",
+   "chunk-18hwfzwa.js#@1098292",
+   "chunk-18hwfzwa.js#b8",
+   "chunk-18hwfzwa.js#NCe",
+   "chunk-18hwfzwa.js#@1098341",
+   "chunk-18hwfzwa.js#@1098345"
   ],
   "chunks": {
-   "chunk-18hwfzwa.js": 4
+   "chunk-18hwfzwa.js": 16
   },
-  "bytes": 83,
+  "bytes": 3473,
   "methods": {
-   "sole-consumer-new": 4
+   "placement": 12,
+   "sole-consumer": 3,
+   "affinity": 1
   }
  },
  "utils/hooks/AsyncHookRegistry.ts": {
@@ -17017,32 +16925,6 @@
    "fingerprint": 3,
    "callgraph-fingerprint": 1,
    "placement": 6
-  }
- },
- "hooks/useBackgroundWorkItems.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-18hwfzwa.js#ICe",
-   "chunk-18hwfzwa.js#rwo",
-   "chunk-18hwfzwa.js#ECe",
-   "chunk-18hwfzwa.js#DCe",
-   "chunk-18hwfzwa.js#pwo",
-   "chunk-18hwfzwa.js#fwo",
-   "chunk-18hwfzwa.js#S8",
-   "chunk-18hwfzwa.js#@1098292",
-   "chunk-18hwfzwa.js#b8",
-   "chunk-18hwfzwa.js#NCe",
-   "chunk-18hwfzwa.js#@1098341",
-   "chunk-18hwfzwa.js#@1098345"
-  ],
-  "chunks": {
-   "chunk-18hwfzwa.js": 12
-  },
-  "bytes": 3390,
-  "methods": {
-   "sole-consumer": 3,
-   "affinity": 1,
-   "placement": 8
   }
  },
  "components/grove/Grove.tsx": {
@@ -17138,6 +17020,7 @@
    "chunk-aepeg2w5.js#KUe",
    "chunk-aepeg2w5.js#bu",
    "chunk-aepeg2w5.js#VUe",
+   "chunk-aepeg2w5.js#dEi",
    "chunk-aepeg2w5.js#C0",
    "chunk-18hwfzwa.js#@1101521",
    "chunk-18hwfzwa.js#oAs",
@@ -17146,12 +17029,12 @@
   ],
   "chunks": {
    "chunk-18hwfzwa.js": 3,
-   "chunk-aepeg2w5.js": 39,
+   "chunk-aepeg2w5.js": 40,
    "chunk-e6aww6q8.js": 1
   },
-  "bytes": 8934,
+  "bytes": 8998,
   "methods": {
-   "placement": 3,
+   "placement": 4,
    "fingerprint": 7,
    "layout": 32,
    "file-local": 1
@@ -17572,22 +17455,10 @@
    "placement": 9
   }
  },
- "components/mcp/_new/ElicitationDialog.helpers-18hw.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-18hwfzwa.js#_xo"
-  ],
-  "chunks": {
-   "chunk-18hwfzwa.js": 1
-  },
-  "bytes": 33,
-  "methods": {
-   "sole-consumer-new": 1
-  }
- },
  "components/mcp/ElicitationDialog.tsx": {
   "kind": "first-party",
   "decls": [
+   "chunk-18hwfzwa.js#_xo",
    "chunk-18hwfzwa.js#ITe",
    "chunk-18hwfzwa.js#t9",
    "chunk-18hwfzwa.js#iRe",
@@ -17600,12 +17471,12 @@
    "chunk-tn4j580p.js#q"
   ],
   "chunks": {
-   "chunk-18hwfzwa.js": 9,
+   "chunk-18hwfzwa.js": 10,
    "chunk-tn4j580p.js": 1
   },
-  "bytes": 31102,
+  "bytes": 31135,
   "methods": {
-   "placement": 2,
+   "placement": 3,
    "fingerprint": 6,
    "layout": 1,
    "sole-consumer": 1
@@ -18244,33 +18115,23 @@
    "fingerprint": 2
   }
  },
- "components/permissions/FilePermissionDialog/_new/useFittedDiffBody.ts": {
+ "components/permissions/FilePermissionDialog/FilePermissionDialog.tsx": {
   "kind": "first-party",
   "decls": [
    "chunk-18hwfzwa.js#@1377043",
    "chunk-18hwfzwa.js#BAe",
-   "chunk-18hwfzwa.js#Xht"
-  ],
-  "chunks": {
-   "chunk-18hwfzwa.js": 3
-  },
-  "bytes": 1303,
-  "methods": {
-   "sole-consumer-new": 3
-  }
- },
- "components/permissions/FilePermissionDialog/_new/FileDialogQuestion.ts": {
-  "kind": "first-party",
-  "decls": [
+   "chunk-18hwfzwa.js#Xht",
    "chunk-18hwfzwa.js#tyt",
-   "chunk-18hwfzwa.js#IFo"
+   "chunk-18hwfzwa.js#IFo",
+   "chunk-18hwfzwa.js#oyt"
   ],
   "chunks": {
-   "chunk-18hwfzwa.js": 2
+   "chunk-18hwfzwa.js": 6
   },
-  "bytes": 189,
+  "bytes": 7243,
   "methods": {
-   "sole-consumer-new": 2
+   "placement": 5,
+   "fingerprint": 1
   }
  },
  "components/permissions/NotebookEditPermissionRequest/NotebookEditPermissionRequest.tsx": {
@@ -18284,19 +18145,6 @@
   "bytes": 1380,
   "methods": {
    "callgraph-fingerprint": 1
-  }
- },
- "components/permissions/FilePermissionDialog/FilePermissionDialog.tsx": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-18hwfzwa.js#oyt"
-  ],
-  "chunks": {
-   "chunk-18hwfzwa.js": 1
-  },
-  "bytes": 5751,
-  "methods": {
-   "fingerprint": 1
   }
  },
  "components/permissions/GoalProposalPermissionRequest.tsx": {
@@ -19256,7 +19104,7 @@
    "fingerprint": 1
   }
  },
- "screens/_new/ReplBridgeConnector.ts": {
+ "screens/repl/ReplBridgeConnector.tsx": {
   "kind": "first-party",
   "decls": [
    "chunk-18hwfzwa.js#@1622704",
@@ -19272,7 +19120,7 @@
   },
   "bytes": 1162,
   "methods": {
-   "sole-consumer-new": 7
+   "placement": 7
   }
  },
  "hooks/notifs/useNpmDeprecationNotification.tsx": {
@@ -19308,14 +19156,17 @@
    "chunk-18hwfzwa.js#W$o",
    "chunk-18hwfzwa.js#FIe",
    "chunk-18hwfzwa.js#j$o",
-   "chunk-18hwfzwa.js#@1645257"
+   "chunk-18hwfzwa.js#@1645257",
+   "chunk-xe7zq1p4.js#qCr",
+   "chunk-xe7zq1p4.js#@2000"
   ],
   "chunks": {
-   "chunk-18hwfzwa.js": 16
+   "chunk-18hwfzwa.js": 16,
+   "chunk-xe7zq1p4.js": 2
   },
-  "bytes": 4522,
+  "bytes": 4555,
   "methods": {
-   "placement": 16
+   "placement": 18
   }
  },
  "components/FeatureOfTheWeekClaim.tsx": {
@@ -19499,6 +19350,19 @@
    "fingerprint": 1
   }
  },
+ "_unattributed/chunk-18hwfzwa/part-001.js": {
+  "kind": "unattributed",
+  "decls": [
+   "chunk-18hwfzwa.js#aCt"
+  ],
+  "chunks": {
+   "chunk-18hwfzwa.js": 1
+  },
+  "bytes": 104,
+  "methods": {
+   "leftover": 1
+  }
+ },
  "components/Stats.tsx": {
   "kind": "first-party",
   "decls": [
@@ -19533,25 +19397,24 @@
    "chunk-9h8dr0qb.js#bf",
    "chunk-9h8dr0qb.js#Cf",
    "chunk-9h8dr0qb.js#wf",
-   "chunk-18hwfzwa.js#aCt",
    "chunk-18hwfzwa.js#eEe"
   ],
   "chunks": {
-   "chunk-18hwfzwa.js": 2,
+   "chunk-18hwfzwa.js": 1,
    "chunk-9h8dr0qb.js": 31
   },
-  "bytes": 22920,
+  "bytes": 22816,
   "methods": {
-   "affinity": 2,
    "fingerprint": 16,
    "placement": 3,
+   "affinity": 1,
    "file-local": 3,
    "layout": 7,
    "callgraph-witnessed": 1,
    "callgraph-fingerprint": 1
   }
  },
- "screens/_new/InlineProgressList.ts": {
+ "screens/repl/InlineProgressList.tsx": {
   "kind": "first-party",
   "decls": [
    "chunk-18hwfzwa.js#tEe",
@@ -19566,12 +19429,21 @@
   },
   "bytes": 1176,
   "methods": {
-   "sole-consumer-new": 6
+   "placement": 6
   }
  },
  "tools/SendMessageTool/SendMessageTool.ts": {
   "kind": "first-party",
   "decls": [
+   "chunk-astf3mhy.js#ms",
+   "chunk-astf3mhy.js#tt",
+   "chunk-astf3mhy.js#us",
+   "chunk-astf3mhy.js#cs",
+   "chunk-astf3mhy.js#gs",
+   "chunk-astf3mhy.js#nt",
+   "chunk-astf3mhy.js#Ce",
+   "chunk-astf3mhy.js#fs",
+   "chunk-astf3mhy.js#ps",
    "chunk-astf3mhy.js#ys",
    "chunk-astf3mhy.js#Ae",
    "chunk-astf3mhy.js#_e",
@@ -19662,18 +19534,18 @@
   ],
   "chunks": {
    "chunk-18hwfzwa.js": 1,
-   "chunk-astf3mhy.js": 71,
+   "chunk-astf3mhy.js": 80,
    "chunk-e6aww6q8.js": 15
   },
-  "bytes": 75077,
+  "bytes": 83498,
   "methods": {
    "callgraph-fingerprint": 1,
+   "placement": 24,
    "sole-consumer": 16,
    "affinity": 1,
    "fingerprint": 9,
    "layout": 44,
-   "callgraph-witnessed": 1,
-   "placement": 15
+   "callgraph-witnessed": 1
   }
  },
  "hooks/useInboxPoller.ts": {
@@ -19928,17 +19800,41 @@
    "placement": 3
   }
  },
- "hooks/notifs/specs/_new/CONFIG_PROFILE_SOURCES.ts": {
+ "hooks/notifs/specs/subagentConfigWarning.ts": {
   "kind": "first-party",
   "decls": [
-   "chunk-18hwfzwa.js#cK"
+   "chunk-18hwfzwa.js#cK",
+   "chunk-18hwfzwa.js#C_t",
+   "chunk-18hwfzwa.js#tKo",
+   "chunk-18hwfzwa.js#dKo",
+   "chunk-18hwfzwa.js#uKo",
+   "chunk-18hwfzwa.js#A_t",
+   "chunk-18hwfzwa.js#mKo",
+   "chunk-18hwfzwa.js#OEe",
+   "chunk-18hwfzwa.js#M_t",
+   "chunk-18hwfzwa.js#pKo",
+   "chunk-18hwfzwa.js#fKo",
+   "chunk-18hwfzwa.js#gKo",
+   "chunk-18hwfzwa.js#hKo",
+   "chunk-18hwfzwa.js#yKo",
+   "chunk-18hwfzwa.js#SKo",
+   "chunk-18hwfzwa.js#I_t",
+   "chunk-18hwfzwa.js#bKo",
+   "chunk-18hwfzwa.js#E_t",
+   "chunk-18hwfzwa.js#D_t",
+   "chunk-18hwfzwa.js#O_t",
+   "chunk-18hwfzwa.js#wKo",
+   "chunk-18hwfzwa.js#N_t",
+   "chunk-18hwfzwa.js#L_t",
+   "chunk-18hwfzwa.js#F_t"
   ],
   "chunks": {
-   "chunk-18hwfzwa.js": 1
+   "chunk-18hwfzwa.js": 24
   },
-  "bytes": 1834,
+  "bytes": 7733,
   "methods": {
-   "sole-consumer-new": 1
+   "placement": 23,
+   "affinity": 1
   }
  },
  "services/analytics/metadata.ts": {
@@ -20082,56 +19978,22 @@
    "chunk-aepeg2w5.js#Wro",
    "chunk-aepeg2w5.js#mP",
    "chunk-18hwfzwa.js#JF",
+   "chunk-1wpnxx5r.js#Ccs",
    "chunk-6vnxsn99.js#Yr"
   ],
   "chunks": {
    "chunk-18hwfzwa.js": 1,
+   "chunk-1wpnxx5r.js": 1,
    "chunk-6vnxsn99.js": 1,
    "chunk-aepeg2w5.js": 137
   },
-  "bytes": 33415,
+  "bytes": 33447,
   "methods": {
    "fingerprint": 15,
+   "placement": 83,
    "sole-consumer": 2,
-   "placement": 82,
    "layout": 39,
    "file-local": 1
-  }
- },
- "hooks/notifs/specs/subagentConfigWarning.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-18hwfzwa.js#C_t",
-   "chunk-18hwfzwa.js#tKo",
-   "chunk-18hwfzwa.js#dKo",
-   "chunk-18hwfzwa.js#uKo",
-   "chunk-18hwfzwa.js#A_t",
-   "chunk-18hwfzwa.js#mKo",
-   "chunk-18hwfzwa.js#OEe",
-   "chunk-18hwfzwa.js#M_t",
-   "chunk-18hwfzwa.js#pKo",
-   "chunk-18hwfzwa.js#fKo",
-   "chunk-18hwfzwa.js#gKo",
-   "chunk-18hwfzwa.js#hKo",
-   "chunk-18hwfzwa.js#yKo",
-   "chunk-18hwfzwa.js#SKo",
-   "chunk-18hwfzwa.js#I_t",
-   "chunk-18hwfzwa.js#bKo",
-   "chunk-18hwfzwa.js#E_t",
-   "chunk-18hwfzwa.js#D_t",
-   "chunk-18hwfzwa.js#O_t",
-   "chunk-18hwfzwa.js#wKo",
-   "chunk-18hwfzwa.js#N_t",
-   "chunk-18hwfzwa.js#L_t",
-   "chunk-18hwfzwa.js#F_t"
-  ],
-  "chunks": {
-   "chunk-18hwfzwa.js": 23
-  },
-  "bytes": 5899,
-  "methods": {
-   "sole-consumer": 1,
-   "placement": 22
   }
  },
  "hooks/notifs/specs/installNotices.ts": {
@@ -20155,6 +20017,8 @@
   "decls": [
    "chunk-18hwfzwa.js#LEe",
    "chunk-18hwfzwa.js#@1751835",
+   "chunk-18hwfzwa.js#XTt",
+   "chunk-18hwfzwa.js#lRt",
    "chunk-18hwfzwa.js#WEe",
    "chunk-18hwfzwa.js#@1789771",
    "chunk-18hwfzwa.js#jEe",
@@ -20165,14 +20029,16 @@
    "chunk-18hwfzwa.js#bGo",
    "chunk-18hwfzwa.js#@1791868",
    "chunk-18hwfzwa.js#mRt",
-   "chunk-18hwfzwa.js#noe"
+   "chunk-18hwfzwa.js#noe",
+   "chunk-6vnxsn99.js#iQs"
   ],
   "chunks": {
-   "chunk-18hwfzwa.js": 13
+   "chunk-18hwfzwa.js": 15,
+   "chunk-6vnxsn99.js": 1
   },
-  "bytes": 3284,
+  "bytes": 3871,
   "methods": {
-   "placement": 13
+   "placement": 16
   }
  },
  "hooks/notifs/specs/sessionNotices.ts": {
@@ -20406,19 +20272,6 @@
    "placement": 5
   }
  },
- "hooks/notifs/_new/ROLLOUT_COHORT_NOTICE_SPEC.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-18hwfzwa.js#XTt"
-  ],
-  "chunks": {
-   "chunk-18hwfzwa.js": 1
-  },
-  "bytes": 114,
-  "methods": {
-   "sole-consumer-new": 1
-  }
- },
  "hooks/notifs/useStartupNotification.ts": {
   "kind": "first-party",
   "decls": [
@@ -20467,19 +20320,6 @@
    "file-local": 1,
    "layout": 2,
    "fingerprint": 3
-  }
- },
- "hooks/notifs/_new/TEAMMATE_LIFECYCLE_NOTICE_SPEC.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-18hwfzwa.js#lRt"
-  ],
-  "chunks": {
-   "chunk-18hwfzwa.js": 1
-  },
-  "bytes": 374,
-  "methods": {
-   "sole-consumer-new": 1
   }
  },
  "hooks/useAwaySummary.ts": {
@@ -20545,7 +20385,7 @@
    "file-local": 1
   }
  },
- "screens/_new/useSerialTaskRunner.ts": {
+ "screens/repl/useSerialTaskRunner.ts": {
   "kind": "first-party",
   "decls": [
    "chunk-18hwfzwa.js#@1801080",
@@ -20556,7 +20396,7 @@
   },
   "bytes": 259,
   "methods": {
-   "sole-consumer-new": 2
+   "placement": 2
   }
  },
  "hooks/usePluginRecommendationBase.tsx": {
@@ -20674,9 +20514,46 @@
    "fingerprint": 1
   }
  },
- "screens/_new/logDiffPanelShown.ts": {
+ "hooks/useWorkspaceDiff.ts": {
   "kind": "first-party",
   "decls": [
+   "chunk-qwh6zcf0.js#@1247",
+   "chunk-qwh6zcf0.js#q",
+   "chunk-qwh6zcf0.js#yyo",
+   "chunk-qwh6zcf0.js#@1588",
+   "chunk-qwh6zcf0.js#K",
+   "chunk-qwh6zcf0.js#z",
+   "chunk-qwh6zcf0.js#X",
+   "chunk-qwh6zcf0.js#Y",
+   "chunk-qwh6zcf0.js#bFn",
+   "chunk-qwh6zcf0.js#oCr",
+   "chunk-qwh6zcf0.js#T",
+   "chunk-qwh6zcf0.js#ce",
+   "chunk-qwh6zcf0.js#uyo",
+   "chunk-qwh6zcf0.js#J",
+   "chunk-qwh6zcf0.js#Wtn",
+   "chunk-qwh6zcf0.js#me",
+   "chunk-qwh6zcf0.js#pyo",
+   "chunk-qwh6zcf0.js#dPs",
+   "chunk-qwh6zcf0.js#Z",
+   "chunk-qwh6zcf0.js#wFn",
+   "chunk-qwh6zcf0.js#sCr",
+   "chunk-qwh6zcf0.js#myo",
+   "chunk-qwh6zcf0.js#ee",
+   "chunk-qwh6zcf0.js#he",
+   "chunk-qwh6zcf0.js#De",
+   "chunk-qwh6zcf0.js#uPs",
+   "chunk-qwh6zcf0.js#EFn",
+   "chunk-qwh6zcf0.js#PWe",
+   "chunk-qwh6zcf0.js#gyo",
+   "chunk-qwh6zcf0.js#H",
+   "chunk-qwh6zcf0.js#Gtn",
+   "chunk-qwh6zcf0.js#hyo",
+   "chunk-qwh6zcf0.js#ztn",
+   "chunk-qwh6zcf0.js#ye",
+   "chunk-qwh6zcf0.js#@8268",
+   "chunk-qwh6zcf0.js#L",
+   "chunk-qwh6zcf0.js#vFn",
    "chunk-18hwfzwa.js#@1821939",
    "chunk-18hwfzwa.js#fXs",
    "chunk-18hwfzwa.js#gXs",
@@ -20686,11 +20563,12 @@
    "chunk-18hwfzwa.js#gzo"
   ],
   "chunks": {
-   "chunk-18hwfzwa.js": 7
+   "chunk-18hwfzwa.js": 7,
+   "chunk-qwh6zcf0.js": 37
   },
-  "bytes": 627,
+  "bytes": 7277,
   "methods": {
-   "sole-consumer-new": 7
+   "placement": 44
   }
  },
  "ink/hooks/use-terminal-viewport.ts": {
@@ -21518,17 +21396,89 @@
    "placement": 3
   }
  },
- "upstreamproxy/_new/buildGhGuardScript.ts": {
+ "upstreamproxy/upstreamproxy.ts": {
   "kind": "first-party",
   "decls": [
-   "chunk-1k6d6j2b.js#QLs"
+   "chunk-awy329vy.js#jt",
+   "chunk-awy329vy.js#NHi",
+   "chunk-awy329vy.js#_r",
+   "chunk-awy329vy.js#BHi",
+   "chunk-awy329vy.js#Pe",
+   "chunk-awy329vy.js#yGi",
+   "chunk-awy329vy.js#wr",
+   "chunk-awy329vy.js#Et",
+   "chunk-awy329vy.js#XLs",
+   "chunk-awy329vy.js#Hi",
+   "chunk-awy329vy.js#Tr",
+   "chunk-awy329vy.js#or",
+   "chunk-awy329vy.js#ir",
+   "chunk-awy329vy.js#Sr",
+   "chunk-awy329vy.js#ue",
+   "chunk-awy329vy.js#_Gi",
+   "chunk-awy329vy.js#bGi",
+   "chunk-awy329vy.js#SGi",
+   "chunk-awy329vy.js#Tt",
+   "chunk-awy329vy.js#ar",
+   "chunk-awy329vy.js#Cr",
+   "chunk-awy329vy.js#Ui",
+   "chunk-awy329vy.js#xr",
+   "chunk-awy329vy.js#kt",
+   "chunk-awy329vy.js#Wi",
+   "chunk-awy329vy.js#sr",
+   "chunk-awy329vy.js#Er",
+   "chunk-awy329vy.js#lr",
+   "chunk-awy329vy.js#ur",
+   "chunk-awy329vy.js#fr",
+   "chunk-awy329vy.js#Ar",
+   "chunk-awy329vy.js#At",
+   "chunk-awy329vy.js#Rt",
+   "chunk-awy329vy.js#Ye",
+   "chunk-awy329vy.js#ji",
+   "chunk-awy329vy.js#Yi",
+   "chunk-awy329vy.js#Xi",
+   "chunk-awy329vy.js#Ji",
+   "chunk-awy329vy.js#Ki",
+   "chunk-awy329vy.js#JLs",
+   "chunk-awy329vy.js#Vi",
+   "chunk-awy329vy.js#qi",
+   "chunk-awy329vy.js#zi",
+   "chunk-awy329vy.js#Ot",
+   "chunk-awy329vy.js#jHi",
+   "chunk-awy329vy.js#Ct",
+   "chunk-awy329vy.js#xt",
+   "chunk-awy329vy.js#Zi",
+   "chunk-awy329vy.js#ea",
+   "chunk-awy329vy.js#WHi",
+   "chunk-awy329vy.js#jEo",
+   "chunk-awy329vy.js#pr",
+   "chunk-awy329vy.js#na",
+   "chunk-awy329vy.js#GHi",
+   "chunk-awy329vy.js#ra",
+   "chunk-awy329vy.js#Dt",
+   "chunk-awy329vy.js#ia",
+   "chunk-awy329vy.js#Pr",
+   "chunk-awy329vy.js#vr",
+   "chunk-awy329vy.js#Nt",
+   "chunk-awy329vy.js#aa",
+   "chunk-awy329vy.js#hr",
+   "chunk-awy329vy.js#ca",
+   "chunk-awy329vy.js#$t",
+   "chunk-awy329vy.js#It",
+   "chunk-awy329vy.js#la",
+   "chunk-awy329vy.js#ce",
+   "chunk-awy329vy.js#da",
+   "chunk-1k6d6j2b.js#QLs",
+   "chunk-hm0ce8vc.js#Yl"
   ],
   "chunks": {
-   "chunk-1k6d6j2b.js": 1
+   "chunk-1k6d6j2b.js": 1,
+   "chunk-awy329vy.js": 68,
+   "chunk-hm0ce8vc.js": 1
   },
-  "bytes": 2056,
+  "bytes": 44266,
   "methods": {
-   "sole-consumer-new": 1
+   "placement": 67,
+   "fingerprint": 3
   }
  },
  "services/mcp/xaa.ts": {
@@ -21700,6 +21650,8 @@
  "services/mcp/auth.ts": {
   "kind": "first-party",
   "decls": [
+   "chunk-n1aavqzh.js#Ze",
+   "chunk-n1aavqzh.js#Qe",
    "chunk-n1aavqzh.js#tt",
    "chunk-n1aavqzh.js#ke",
    "chunk-n1aavqzh.js#at",
@@ -21854,17 +21806,17 @@
    "chunk-1kaj6e83.js": 43,
    "chunk-4w0z5wdp.js": 6,
    "chunk-cyj440je.js": 10,
-   "chunk-n1aavqzh.js": 54,
+   "chunk-n1aavqzh.js": 56,
    "chunk-yqnmafqp.js": 36
   },
-  "bytes": 115427,
+  "bytes": 116957,
   "methods": {
    "sole-consumer": 12,
    "affinity": 4,
    "facade-exports": 50,
    "layout": 42,
    "fingerprint": 10,
-   "placement": 30,
+   "placement": 32,
    "callgraph-fingerprint": 1
   }
  },
@@ -24666,10 +24618,13 @@
    "chunk-e6aww6q8.js#okr",
    "chunk-e6aww6q8.js#rkr",
    "chunk-e6aww6q8.js#@2808545",
-   "chunk-r1wk8q25.js#te",
-   "chunk-r1wk8q25.js#ie",
+   "chunk-w5ndchqs.js#ct",
+   "chunk-w5ndchqs.js#Ce",
    "chunk-w5ndchqs.js#JXs",
    "chunk-w5ndchqs.js#vVe",
+   "chunk-r1wk8q25.js#te",
+   "chunk-r1wk8q25.js#ae",
+   "chunk-r1wk8q25.js#ie",
    "chunk-1ny7cxrt.js#QH",
    "chunk-1qpz7qcd.js#ve",
    "chunk-3xb70ww4.js#T1n",
@@ -24681,13 +24636,13 @@
    "chunk-3xb70ww4.js": 1,
    "chunk-aepeg2w5.js": 1,
    "chunk-e6aww6q8.js": 187,
-   "chunk-r1wk8q25.js": 2,
-   "chunk-w5ndchqs.js": 2
+   "chunk-r1wk8q25.js": 3,
+   "chunk-w5ndchqs.js": 4
   },
-  "bytes": 183721,
+  "bytes": 183955,
   "methods": {
    "fingerprint": 21,
-   "placement": 112,
+   "placement": 115,
    "layout": 54,
    "callgraph-fingerprint": 2,
    "callgraph-witnessed": 3,
@@ -25903,27 +25858,15 @@
    "chunk-1r5nz6dk.js#O",
    "chunk-1r5nz6dk.js#C",
    "chunk-1r5nz6dk.js#S",
-   "chunk-1r5nz6dk.js#m"
-  ],
-  "chunks": {
-   "chunk-1r5nz6dk.js": 9
-  },
-  "bytes": 2096,
-  "methods": {
-   "placement": 9
-  }
- },
- "utils/_new/resolveDiffWorkTree.ts": {
-  "kind": "first-party",
-  "decls": [
+   "chunk-1r5nz6dk.js#m",
    "chunk-1r5nz6dk.js#g"
   ],
   "chunks": {
-   "chunk-1r5nz6dk.js": 1
+   "chunk-1r5nz6dk.js": 10
   },
-  "bytes": 276,
+  "bytes": 2372,
   "methods": {
-   "sole-consumer-new": 1
+   "placement": 10
   }
  },
  "utils/teleport/serviceSessionName.ts": {
@@ -26339,6 +26282,10 @@
   "decls": [
    "chunk-p8fze0jh.js#@16213",
    "chunk-p8fze0jh.js#@16217",
+   "chunk-p8fze0jh.js#z",
+   "chunk-p8fze0jh.js#@19177",
+   "chunk-p8fze0jh.js#@19181",
+   "chunk-p8fze0jh.js#@19185",
    "chunk-p8fze0jh.js#@20134",
    "chunk-p8fze0jh.js#K",
    "chunk-p8fze0jh.js#Ie",
@@ -26347,12 +26294,12 @@
   ],
   "chunks": {
    "chunk-1tz177x8.js": 1,
-   "chunk-p8fze0jh.js": 6
+   "chunk-p8fze0jh.js": 10
   },
-  "bytes": 3812,
+  "bytes": 3991,
   "methods": {
    "fingerprint": 2,
-   "placement": 2,
+   "placement": 6,
    "sole-consumer": 2,
    "affinity": 1
   }
@@ -26667,19 +26614,6 @@
   "methods": {
    "placement": 67,
    "fingerprint": 1
-  }
- },
- "services/analytics/_new/isFirstPartyApiHost.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-1wpnxx5r.js#Ccs"
-  ],
-  "chunks": {
-   "chunk-1wpnxx5r.js": 1
-  },
-  "bytes": 32,
-  "methods": {
-   "sole-consumer-new": 1
   }
  },
  "cli/transports/sdkUrlValidation.ts": {
@@ -27896,26 +27830,14 @@
    "layout": 6
   }
  },
- "utils/_new/cleanup.helpers-23fm.ts": {
+ "utils/cleanup.ts": {
   "kind": "first-party",
   "decls": [
    "chunk-23fm9f0d.js#pe",
    "chunk-23fm9f0d.js#Ne",
    "chunk-23fm9f0d.js#Le",
    "chunk-23fm9f0d.js#fe",
-   "chunk-23fm9f0d.js#me"
-  ],
-  "chunks": {
-   "chunk-23fm9f0d.js": 5
-  },
-  "bytes": 299,
-  "methods": {
-   "sole-consumer-new": 5
-  }
- },
- "utils/cleanup.ts": {
-  "kind": "first-party",
-  "decls": [
+   "chunk-23fm9f0d.js#me",
    "chunk-23fm9f0d.js#en",
    "chunk-23fm9f0d.js#se",
    "chunk-23fm9f0d.js#Ue",
@@ -27970,6 +27892,7 @@
    "chunk-23fm9f0d.js#St",
    "chunk-23fm9f0d.js#Dt",
    "chunk-23fm9f0d.js#L",
+   "chunk-23fm9f0d.js#Et",
    "chunk-23fm9f0d.js#Ct",
    "chunk-23fm9f0d.js#vt",
    "chunk-23fm9f0d.js#bt",
@@ -27994,6 +27917,13 @@
    "chunk-23fm9f0d.js#zt",
    "chunk-23fm9f0d.js#Xt",
    "chunk-23fm9f0d.js#Jt",
+   "chunk-23fm9f0d.js#qt",
+   "chunk-23fm9f0d.js#Qt",
+   "chunk-23fm9f0d.js#Vt",
+   "chunk-23fm9f0d.js#$s",
+   "chunk-23fm9f0d.js#er",
+   "chunk-23fm9f0d.js#tr",
+   "chunk-23fm9f0d.js#rr",
    "chunk-23fm9f0d.js#sr",
    "chunk-23fm9f0d.js#ir",
    "chunk-23fm9f0d.js#ar",
@@ -28016,13 +27946,13 @@
    "chunk-4nhpaxz9.js#j"
   ],
   "chunks": {
-   "chunk-23fm9f0d.js": 94,
+   "chunk-23fm9f0d.js": 107,
    "chunk-4nhpaxz9.js": 1,
    "chunk-kqn19nw9.js": 3
   },
-  "bytes": 32371,
+  "bytes": 36617,
   "methods": {
-   "placement": 22,
+   "placement": 35,
    "facade-majority": 8,
    "layout": 21,
    "fingerprint": 8,
@@ -28135,19 +28065,6 @@
    "placement": 4,
    "layout": 4,
    "file-local": 1
-  }
- },
- "utils/_new/getTaskOutputDir.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-23fm9f0d.js#Et"
-  ],
-  "chunks": {
-   "chunk-23fm9f0d.js": 1
-  },
-  "bytes": 32,
-  "methods": {
-   "sole-consumer-new": 1
   }
  },
  "bridge/inboundAttachments.ts": {
@@ -28276,25 +28193,6 @@
    "placement": 10,
    "layout": 1,
    "callgraph-fingerprint": 1
-  }
- },
- "utils/_new/cleanupDaemonFiles.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-23fm9f0d.js#qt",
-   "chunk-23fm9f0d.js#Qt",
-   "chunk-23fm9f0d.js#Vt",
-   "chunk-23fm9f0d.js#$s",
-   "chunk-23fm9f0d.js#er",
-   "chunk-23fm9f0d.js#tr",
-   "chunk-23fm9f0d.js#rr"
-  ],
-  "chunks": {
-   "chunk-23fm9f0d.js": 7
-  },
-  "bytes": 3915,
-  "methods": {
-   "sole-consumer-new": 7
   }
  },
  "utils/filePersistence/outputsScanner.ts": {
@@ -28497,19 +28395,6 @@
    "placement": 25
   }
  },
- "utils/_new/getErrorCodeString.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-24t3dkzb.js#v"
-  ],
-  "chunks": {
-   "chunk-24t3dkzb.js": 1
-  },
-  "bytes": 78,
-  "methods": {
-   "sole-consumer-new": 1
-  }
- },
  "ink/events/event.ts": {
   "kind": "first-party",
   "decls": [
@@ -28594,16 +28479,19 @@
    "chunk-bzr73sfg.js#rr",
    "chunk-bzr73sfg.js#Nb",
    "chunk-bzr73sfg.js#rf",
+   "chunk-bzr73sfg.js#TC",
+   "chunk-bzr73sfg.js#Db",
+   "chunk-bzr73sfg.js#_b",
    "chunk-bzr73sfg.js#ER",
    "chunk-24t3dkzb.js#VUn"
   ],
   "chunks": {
    "chunk-24t3dkzb.js": 1,
-   "chunk-bzr73sfg.js": 24
+   "chunk-bzr73sfg.js": 27
   },
-  "bytes": 8511,
+  "bytes": 8925,
   "methods": {
-   "placement": 7,
+   "placement": 10,
    "fingerprint": 10,
    "callgraph-witnessed": 2,
    "layout": 1,
@@ -32408,35 +32296,23 @@
    "chunk-r01896cg.js#pe",
    "chunk-r01896cg.js#an",
    "chunk-38axkkfw.js#M",
+   "chunk-38axkkfw.js#v",
+   "chunk-38axkkfw.js#z",
+   "chunk-38axkkfw.js#N",
    "chunk-38axkkfw.js#K"
   ],
   "chunks": {
-   "chunk-38axkkfw.js": 2,
+   "chunk-38axkkfw.js": 5,
    "chunk-r01896cg.js": 14
   },
-  "bytes": 2730,
+  "bytes": 2915,
   "methods": {
    "fingerprint": 3,
-   "placement": 5,
+   "placement": 8,
    "callgraph-fingerprint": 1,
    "facade-exports": 5,
    "layout": 1,
    "file-local": 1
-  }
- },
- "utils/bash/_new/containsSubstitution.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-38axkkfw.js#v",
-   "chunk-38axkkfw.js#z",
-   "chunk-38axkkfw.js#N"
-  ],
-  "chunks": {
-   "chunk-38axkkfw.js": 3
-  },
-  "bytes": 185,
-  "methods": {
-   "sole-consumer-new": 3
   }
  },
  "utils/bash/ast.ts": {
@@ -32583,20 +32459,23 @@
    "chunk-r01896cg.js#Yst",
    "chunk-e6aww6q8.js#q2t",
    "chunk-e6aww6q8.js#zIo",
+   "chunk-e6aww6q8.js#U2t",
+   "chunk-e6aww6q8.js#YIo",
+   "chunk-e6aww6q8.js#rVt",
    "chunk-e6aww6q8.js#XIo",
    "chunk-38axkkfw.js#I",
    "chunk-jxcqr1hv.js#_Kn"
   ],
   "chunks": {
    "chunk-38axkkfw.js": 1,
-   "chunk-e6aww6q8.js": 3,
+   "chunk-e6aww6q8.js": 6,
    "chunk-jxcqr1hv.js": 1,
    "chunk-r01896cg.js": 139
   },
-  "bytes": 100509,
+  "bytes": 100794,
   "methods": {
    "fingerprint": 21,
-   "placement": 12,
+   "placement": 15,
    "facade-majority": 35,
    "layout": 63,
    "file-local": 3,
@@ -33366,30 +33245,19 @@
    "placement": 4
   }
  },
- "utils/processUserInput/_new/checkSkillHooksFit.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-3g0djq3w.js#zt",
-   "chunk-3g0djq3w.js#Ct"
-  ],
-  "chunks": {
-   "chunk-3g0djq3w.js": 2
-  },
-  "bytes": 1637,
-  "methods": {
-   "sole-consumer-new": 2
-  }
- },
  "utils/hooks/registerSkillHooks.ts": {
   "kind": "first-party",
   "decls": [
+   "chunk-3g0djq3w.js#zt",
+   "chunk-3g0djq3w.js#Ct",
    "chunk-3g0djq3w.js#St"
   ],
   "chunks": {
-   "chunk-3g0djq3w.js": 1
+   "chunk-3g0djq3w.js": 3
   },
-  "bytes": 431,
+  "bytes": 2068,
   "methods": {
+   "placement": 2,
    "fingerprint": 1
   }
  },
@@ -34075,19 +33943,6 @@
   "bytes": 3997,
   "methods": {
    "placement": 13
-  }
- },
- "commands/remote-setup/_new/getOAuthHeaders_3.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-3nztfxrw.js#re"
-  ],
-  "chunks": {
-   "chunk-3nztfxrw.js": 1
-  },
-  "bytes": 171,
-  "methods": {
-   "sole-consumer-new": 1
   }
  },
  "selfHostedRunner/runnerApiErrors.ts": {
@@ -36048,6 +35903,9 @@
    "chunk-fp6aqx1j.js#We",
    "chunk-fp6aqx1j.js#ke",
    "chunk-fp6aqx1j.js#Be",
+   "chunk-fp6aqx1j.js#hs",
+   "chunk-fp6aqx1j.js#ms",
+   "chunk-fp6aqx1j.js#vs",
    "chunk-fp6aqx1j.js#ys",
    "chunk-fp6aqx1j.js#Ee",
    "chunk-fp6aqx1j.js#Fs",
@@ -36094,12 +35952,12 @@
   ],
   "chunks": {
    "chunk-3wek6r2k.js": 1,
-   "chunk-fp6aqx1j.js": 88
+   "chunk-fp6aqx1j.js": 91
   },
-  "bytes": 133278,
+  "bytes": 134577,
   "methods": {
    "fingerprint": 3,
-   "placement": 70,
+   "placement": 73,
    "layout": 11,
    "affinity": 4,
    "callgraph-witnessed": 1
@@ -38094,7 +37952,8 @@
   "bytes": 828,
   "methods": {
    "fingerprint": 2,
-   "affinity": 2
+   "sole-consumer": 1,
+   "affinity": 1
   }
  },
  "plugins/functionHooks/sites/uiSites.ts": {
@@ -39764,19 +39623,7 @@
    "chunk-4j20twbf.js#a",
    "chunk-4j20twbf.js#_dn",
    "chunk-4j20twbf.js#SBt",
-   "chunk-4j20twbf.js#Oze"
-  ],
-  "chunks": {
-   "chunk-4j20twbf.js": 5
-  },
-  "bytes": 898,
-  "methods": {
-   "placement": 5
-  }
- },
- "tools/WebFetchTool/_new/addSanitizeCost.ts": {
-  "kind": "first-party",
-  "decls": [
+   "chunk-4j20twbf.js#Oze",
    "chunk-4j20twbf.js#f",
    "chunk-4j20twbf.js#u",
    "chunk-4j20twbf.js#c",
@@ -39784,11 +39631,11 @@
    "chunk-4j20twbf.js#y"
   ],
   "chunks": {
-   "chunk-4j20twbf.js": 5
+   "chunk-4j20twbf.js": 10
   },
-  "bytes": 759,
+  "bytes": 1657,
   "methods": {
-   "sole-consumer-new": 5
+   "placement": 10
   }
  },
  "utils/timeouts.ts": {
@@ -41255,18 +41102,21 @@
    "chunk-4t8fx0s8.js#_",
    "chunk-4t8fx0s8.js#qe",
    "chunk-4t8fx0s8.js#Do",
-   "chunk-4t8fx0s8.js#Qe"
+   "chunk-4t8fx0s8.js#Qe",
+   "chunk-5nte8cwj.js#wFs"
   ],
   "chunks": {
-   "chunk-4t8fx0s8.js": 36
+   "chunk-4t8fx0s8.js": 36,
+   "chunk-5nte8cwj.js": 1
   },
-  "bytes": 31376,
+  "bytes": 31421,
   "methods": {
    "sole-consumer": 23,
    "fingerprint": 3,
    "layout": 8,
    "affinity": 1,
-   "file-local": 1
+   "file-local": 1,
+   "placement": 1
   }
  },
  "skills/bundled/keybindings.ts": {
@@ -41424,7 +41274,7 @@
    "fingerprint": 1
   }
  },
- "commands/install-github-app/_new/CheckingGhCliStep.ts": {
+ "commands/install-github-app/CheckingGhCliStep.tsx": {
   "kind": "first-party",
   "decls": [
    "chunk-4v9zy7gn.js#Be",
@@ -41435,7 +41285,7 @@
   },
   "bytes": 130,
   "methods": {
-   "sole-consumer-new": 2
+   "placement": 2
   }
  },
  "commands/install-github-app/ChooseRepoStep.tsx": {
@@ -42501,19 +42351,25 @@
    "placement": 52
   }
  },
- "hooks/_new/useVimInput.helpers-530h.ts": {
+ "hooks/useVimInput.ts": {
   "kind": "first-party",
   "decls": [
    "chunk-530hfzwb.js#@672",
    "chunk-530hfzwb.js#@676",
-   "chunk-530hfzwb.js#dt"
+   "chunk-530hfzwb.js#dt",
+   "chunk-530hfzwb.js#ot",
+   "chunk-530hfzwb.js#M_o",
+   "chunk-530hfzwb.js#eIs",
+   "chunk-530hfzwb.js#Pn"
   ],
   "chunks": {
-   "chunk-530hfzwb.js": 3
+   "chunk-530hfzwb.js": 7
   },
-  "bytes": 73,
+  "bytes": 13142,
   "methods": {
-   "sole-consumer-new": 3
+   "placement": 5,
+   "affinity": 1,
+   "fingerprint": 1
   }
  },
  "utils/truncate.ts": {
@@ -42710,24 +42566,6 @@
    "layout": 8,
    "file-local": 2,
    "placement": 15
-  }
- },
- "hooks/useVimInput.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-530hfzwb.js#ot",
-   "chunk-530hfzwb.js#M_o",
-   "chunk-530hfzwb.js#eIs",
-   "chunk-530hfzwb.js#Pn"
-  ],
-  "chunks": {
-   "chunk-530hfzwb.js": 4
-  },
-  "bytes": 13069,
-  "methods": {
-   "affinity": 1,
-   "fingerprint": 1,
-   "placement": 2
   }
  },
  "services/artifacts/artifactOpeningPrefetch.ts": {
@@ -43491,28 +43329,16 @@
    "chunk-5aas12zq.js#ft",
    "chunk-5aas12zq.js#ht",
    "chunk-5aas12zq.js#pt",
-   "chunk-5aas12zq.js#ze"
-  ],
-  "chunks": {
-   "chunk-5aas12zq.js": 15
-  },
-  "bytes": 8688,
-  "methods": {
-   "placement": 13,
-   "sole-consumer": 2
-  }
- },
- "utils/plugins/validate/_new/isValidToolPolicyEntry.ts": {
-  "kind": "first-party",
-  "decls": [
+   "chunk-5aas12zq.js#ze",
    "chunk-5aas12zq.js#mt"
   ],
   "chunks": {
-   "chunk-5aas12zq.js": 1
+   "chunk-5aas12zq.js": 16
   },
-  "bytes": 199,
+  "bytes": 8887,
   "methods": {
-   "sole-consumer-new": 1
+   "placement": 14,
+   "sole-consumer": 2
   }
  },
  "utils/plugins/validate/archiveChecks.ts": {
@@ -43580,6 +43406,9 @@
    "chunk-5bdzenzx.js#Mo",
    "chunk-5bdzenzx.js#_o",
    "chunk-5bdzenzx.js#Vo",
+   "chunk-5bdzenzx.js#Ao",
+   "chunk-5bdzenzx.js#Po",
+   "chunk-5bdzenzx.js#Lo",
    "chunk-5bdzenzx.js#qo",
    "chunk-5bdzenzx.js#Fo",
    "chunk-5bdzenzx.js#Wo",
@@ -43595,17 +43424,20 @@
    "chunk-5bdzenzx.js#Dn",
    "chunk-5bdzenzx.js#hn",
    "chunk-5bdzenzx.js#De",
+   "chunk-e6aww6q8.js#k8s",
    "chunk-fq0cr76a.js#D$"
   ],
   "chunks": {
-   "chunk-5bdzenzx.js": 21,
+   "chunk-5bdzenzx.js": 24,
+   "chunk-e6aww6q8.js": 1,
    "chunk-fq0cr76a.js": 1
   },
-  "bytes": 10942,
+  "bytes": 11369,
   "methods": {
    "sole-consumer": 5,
    "file-local": 1,
    "fingerprint": 11,
+   "placement": 4,
    "affinity": 1,
    "layout": 4
   }
@@ -43649,21 +43481,6 @@
    "sole-consumer": 13,
    "affinity": 1,
    "layout": 3
-  }
- },
- "commands/ide/_new/ide.helpers-5bdz.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-5bdzenzx.js#Ao",
-   "chunk-5bdzenzx.js#Po",
-   "chunk-5bdzenzx.js#Lo"
-  ],
-  "chunks": {
-   "chunk-5bdzenzx.js": 3
-  },
-  "bytes": 101,
-  "methods": {
-   "sole-consumer-new": 3
   }
  },
  "services/mcp/mcpSdkGeneration.ts": {
@@ -44876,30 +44693,25 @@
    "layout": 59
   }
  },
- "services/tips/_new/tipRegistry.helpers-5nte.ts": {
+ "components/DesktopHandoff.tsx": {
   "kind": "first-party",
   "decls": [
-   "chunk-5nte8cwj.js#wFs"
-  ],
-  "chunks": {
-   "chunk-5nte8cwj.js": 1
-  },
-  "bytes": 45,
-  "methods": {
-   "sole-consumer-new": 1
-  }
- },
- "components/_new/DesktopHandoff.helpers-5nte.ts": {
-  "kind": "first-party",
-  "decls": [
+   "chunk-ds2d8kad.js#@15178",
+   "chunk-ds2d8kad.js#w",
+   "chunk-ds2d8kad.js#h",
+   "chunk-ds2d8kad.js#v",
+   "chunk-ds2d8kad.js#C",
    "chunk-5nte8cwj.js#vFs"
   ],
   "chunks": {
-   "chunk-5nte8cwj.js": 1
+   "chunk-5nte8cwj.js": 1,
+   "chunk-ds2d8kad.js": 5
   },
-  "bytes": 63,
+  "bytes": 3203,
   "methods": {
-   "sole-consumer-new": 1
+   "placement": 2,
+   "fingerprint": 3,
+   "layout": 1
   }
  },
  "plugins/functionHooks/sites/classicHookIds.ts": {
@@ -46489,17 +46301,49 @@
    "placement": 32
   }
  },
- "services/extractMemories/_new/sanitizeBackgroundBashInput.ts": {
+ "services/extractMemories/extractMemories.ts": {
   "kind": "first-party",
   "decls": [
+   "chunk-xr4xc2mq.js#Pe",
+   "chunk-xr4xc2mq.js#q",
+   "chunk-xr4xc2mq.js#Rr",
+   "chunk-xr4xc2mq.js#Or",
+   "chunk-xr4xc2mq.js#Lr",
+   "chunk-xr4xc2mq.js#Ir",
+   "chunk-xr4xc2mq.js#Bxr",
+   "chunk-xr4xc2mq.js#Fr",
+   "chunk-xr4xc2mq.js#sLe",
+   "chunk-xr4xc2mq.js#jxr",
+   "chunk-xr4xc2mq.js#Kt",
+   "chunk-xr4xc2mq.js#er",
+   "chunk-xr4xc2mq.js#tr",
+   "chunk-xr4xc2mq.js#Wr",
+   "chunk-xr4xc2mq.js#zt",
+   "chunk-xr4xc2mq.js#Ur",
+   "chunk-xr4xc2mq.js#Ze",
+   "chunk-xr4xc2mq.js#Jt",
+   "chunk-xr4xc2mq.js#ESo",
+   "chunk-xr4xc2mq.js#Qt",
+   "chunk-xr4xc2mq.js#KWi",
+   "chunk-xr4xc2mq.js#VWi",
+   "chunk-xr4xc2mq.js#qWi",
+   "chunk-xr4xc2mq.js#YWi",
+   "chunk-xr4xc2mq.js#XWi",
+   "chunk-xr4xc2mq.js#JWi",
    "chunk-6exk38gf.js#EDs"
   ],
   "chunks": {
-   "chunk-6exk38gf.js": 1
+   "chunk-6exk38gf.js": 1,
+   "chunk-xr4xc2mq.js": 26
   },
-  "bytes": 621,
+  "bytes": 23000,
   "methods": {
-   "sole-consumer-new": 1
+   "placement": 1,
+   "facade-exports": 11,
+   "fingerprint": 1,
+   "file-local": 2,
+   "sole-consumer": 3,
+   "layout": 9
   }
  },
  "components/Settings/Config.tsx": {
@@ -47750,29 +47594,18 @@
   "kind": "first-party",
   "decls": [
    "chunk-6qssfmzs.js#X5e",
+   "chunk-6qssfmzs.js#ISi",
    "chunk-6qssfmzs.js#v",
    "chunk-6qssfmzs.js#y"
   ],
   "chunks": {
-   "chunk-6qssfmzs.js": 3
+   "chunk-6qssfmzs.js": 4
   },
-  "bytes": 1845,
+  "bytes": 1927,
   "methods": {
    "fingerprint": 2,
+   "placement": 1,
    "affinity": 1
-  }
- },
- "keybindings/_new/getReservedShortcuts.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-6qssfmzs.js#ISi"
-  ],
-  "chunks": {
-   "chunk-6qssfmzs.js": 1
-  },
-  "bytes": 82,
-  "methods": {
-   "sole-consumer-new": 1
   }
  },
  "keybindings/parser.ts": {
@@ -48185,19 +48018,6 @@
   "bytes": 96,
   "methods": {
    "fingerprint": 1
-  }
- },
- "hooks/notifs/_new/teammateStatusSignature.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-6vnxsn99.js#iQs"
-  ],
-  "chunks": {
-   "chunk-6vnxsn99.js": 1
-  },
-  "bytes": 99,
-  "methods": {
-   "sole-consumer-new": 1
   }
  },
  "utils/inProcessTeammateHelpers.ts": {
@@ -51413,14 +51233,16 @@
  "hooks/useVoiceAudioLevels.ts": {
   "kind": "first-party",
   "decls": [
-   "chunk-7p2hc4jn.js#O0t"
+   "chunk-7p2hc4jn.js#O0t",
+   "chunk-yj65zw1g.js#U_o"
   ],
   "chunks": {
-   "chunk-7p2hc4jn.js": 1
+   "chunk-7p2hc4jn.js": 1,
+   "chunk-yj65zw1g.js": 1
   },
-  "bytes": 475,
+  "bytes": 515,
   "methods": {
-   "placement": 1
+   "placement": 2
   }
  },
  "hooks/usePasteHandler.ts": {
@@ -51429,14 +51251,19 @@
    "chunk-7p2hc4jn.js#@51533",
    "chunk-7p2hc4jn.js#Rr",
    "chunk-7p2hc4jn.js#zt",
-   "chunk-7p2hc4jn.js#Ymt"
+   "chunk-7p2hc4jn.js#Ymt",
+   "chunk-e6aww6q8.js#s3t",
+   "chunk-e6aww6q8.js#A_e",
+   "chunk-e6aww6q8.js#i3t",
+   "chunk-e6aww6q8.js#o$i"
   ],
   "chunks": {
-   "chunk-7p2hc4jn.js": 4
+   "chunk-7p2hc4jn.js": 4,
+   "chunk-e6aww6q8.js": 4
   },
-  "bytes": 3122,
+  "bytes": 4152,
   "methods": {
-   "placement": 3,
+   "placement": 7,
    "callgraph-witnessed": 1
   }
  },
@@ -51599,19 +51426,6 @@
   "bytes": 3362,
   "methods": {
    "placement": 6
-  }
- },
- "components/PromptInput/_new/useSwarmBanner.helpers-7s4y.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-7s4yj2r0.js#uWs"
-  ],
-  "chunks": {
-   "chunk-7s4yj2r0.js": 1
-  },
-  "bytes": 90,
-  "methods": {
-   "sole-consumer-new": 1
   }
  },
  "utils/standaloneAgent.ts": {
@@ -57046,28 +56860,16 @@
    "chunk-8wvtd8sr.js#C_",
    "chunk-8wvtd8sr.js#$_",
    "chunk-8wvtd8sr.js#T_",
-   "chunk-8wvtd8sr.js#xf"
-  ],
-  "chunks": {
-   "chunk-8wvtd8sr.js": 38
-  },
-  "bytes": 20396,
-  "methods": {
-   "placement": 37,
-   "sole-consumer": 1
-  }
- },
- "tools/ArtifactTool/preview/_new/hasIpv6Loopback.ts": {
-  "kind": "first-party",
-  "decls": [
+   "chunk-8wvtd8sr.js#xf",
    "chunk-8wvtd8sr.js#P_"
   ],
   "chunks": {
-   "chunk-8wvtd8sr.js": 1
+   "chunk-8wvtd8sr.js": 39
   },
-  "bytes": 104,
+  "bytes": 20500,
   "methods": {
-   "sole-consumer-new": 1
+   "placement": 38,
+   "affinity": 1
   }
  },
  "tools/ArtifactTool/preview/launchChrome.ts": {
@@ -57701,18 +57503,21 @@
    "chunk-8xs34hez.js#Me",
    "chunk-8xs34hez.js#Qe",
    "chunk-8xs34hez.js#Ze",
-   "chunk-8xs34hez.js#Yko"
+   "chunk-8xs34hez.js#Yko",
+   "chunk-phrnybk8.js#vOr"
   ],
   "chunks": {
-   "chunk-8xs34hez.js": 10
+   "chunk-8xs34hez.js": 10,
+   "chunk-phrnybk8.js": 1
   },
-  "bytes": 21480,
+  "bytes": 21602,
   "methods": {
    "affinity": 1,
    "fingerprint": 5,
    "layout": 2,
    "sole-consumer": 1,
-   "facade-exports": 1
+   "facade-exports": 1,
+   "placement": 1
   }
  },
  "hooks/useTaskListWatcher.ts": {
@@ -59062,32 +58867,26 @@
    "chunk-9br8f9tm.js#U",
    "chunk-9br8f9tm.js#uVr",
    "chunk-9br8f9tm.js#K",
-   "chunk-9br8f9tm.js#x2o"
+   "chunk-9br8f9tm.js#x2o",
+   "chunk-9br8f9tm.js#YJs",
+   "chunk-e6aww6q8.js#c2n",
+   "chunk-e6aww6q8.js#vpt",
+   "chunk-e6aww6q8.js#m2n",
+   "chunk-e6aww6q8.js#Ept",
+   "chunk-e6aww6q8.js#CTs"
   ],
   "chunks": {
-   "chunk-9br8f9tm.js": 34
+   "chunk-9br8f9tm.js": 35,
+   "chunk-e6aww6q8.js": 5
   },
-  "bytes": 7275,
+  "bytes": 8910,
   "methods": {
    "sole-consumer": 1,
-   "placement": 4,
+   "placement": 10,
    "fingerprint": 9,
    "layout": 14,
    "file-local": 5,
    "callgraph-witnessed": 1
-  }
- },
- "tools/FileEditTool/_new/areFileEditsInputsEquivalent.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-9br8f9tm.js#YJs"
-  ],
-  "chunks": {
-   "chunk-9br8f9tm.js": 1
-  },
-  "bytes": 257,
-  "methods": {
-   "sole-consumer-new": 1
   }
  },
  "components/ProviderSetupRestart.tsx": {
@@ -61373,7 +61172,7 @@
    "file-local": 1
   }
  },
- "utils/telemetry/_new/classifyBigQueryError.ts": {
+ "utils/telemetry/bigqueryExporter.ts": {
   "kind": "first-party",
   "decls": [
    "chunk-9vvvg0d3.js#We",
@@ -61381,14 +61180,18 @@
    "chunk-9vvvg0d3.js#ht",
    "chunk-9vvvg0d3.js#Qe",
    "chunk-9vvvg0d3.js#Et",
-   "chunk-9vvvg0d3.js#_t"
+   "chunk-9vvvg0d3.js#_t",
+   "chunk-9vvvg0d3.js#gt",
+   "chunk-9vvvg0d3.js#Le"
   ],
   "chunks": {
-   "chunk-9vvvg0d3.js": 6
+   "chunk-9vvvg0d3.js": 8
   },
-  "bytes": 719,
+  "bytes": 6672,
   "methods": {
-   "sole-consumer-new": 6
+   "placement": 6,
+   "affinity": 1,
+   "fingerprint": 1
   }
  },
  "utils/http.ts": {
@@ -61424,21 +61227,6 @@
    "fingerprint": 1,
    "placement": 7,
    "facade-exports": 10
-  }
- },
- "utils/telemetry/bigqueryExporter.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-9vvvg0d3.js#gt",
-   "chunk-9vvvg0d3.js#Le"
-  ],
-  "chunks": {
-   "chunk-9vvvg0d3.js": 2
-  },
-  "bytes": 5953,
-  "methods": {
-   "affinity": 1,
-   "fingerprint": 1
   }
  },
  "@opentelemetry/resources/build/esm/detectors/platform/node/utils.js": {
@@ -62375,21 +62163,6 @@
    "file-local": 1
   }
  },
- "hooks/_new/useVoiceController.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-a658aeqp.js#I",
-   "chunk-a658aeqp.js#x",
-   "chunk-a658aeqp.js#De"
-  ],
-  "chunks": {
-   "chunk-a658aeqp.js": 3
-  },
-  "bytes": 873,
-  "methods": {
-   "sole-consumer-new": 3
-  }
- },
  "components/projects/ProjectProposalCard.tsx": {
   "kind": "first-party",
   "decls": [
@@ -63242,7 +63015,7 @@
    "fingerprint": 2
   }
  },
- "commands/passes/_new/GuestPassesContent.ts": {
+ "commands/passes/GuestPassesContent.tsx": {
   "kind": "first-party",
   "decls": [
    "chunk-aa3cndeh.js#@5303",
@@ -63252,14 +63025,15 @@
    "chunk-aa3cndeh.js#Oe",
    "chunk-aa3cndeh.js#se",
    "chunk-aa3cndeh.js#ee",
-   "chunk-aa3cndeh.js#P"
+   "chunk-aa3cndeh.js#P",
+   "chunk-aa3cndeh.js#me"
   ],
   "chunks": {
-   "chunk-aa3cndeh.js": 8
+   "chunk-aa3cndeh.js": 9
   },
-  "bytes": 4391,
+  "bytes": 5047,
   "methods": {
-   "sole-consumer-new": 8
+   "placement": 9
   }
  },
  "components/Passes/Passes.tsx": {
@@ -63273,19 +63047,6 @@
   "bytes": 796,
   "methods": {
    "fingerprint": 1
-  }
- },
- "commands/passes/_new/_new/loadGuestPassStatus.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-aa3cndeh.js#me"
-  ],
-  "chunks": {
-   "chunk-aa3cndeh.js": 1
-  },
-  "bytes": 656,
-  "methods": {
-   "sole-consumer-new": 1
   }
  },
  "commands/passes/passes.tsx": {
@@ -64984,17 +64745,26 @@
    "placement": 8
   }
  },
- "services/analytics/_new/telemetryCredentialGuard.helpers-aepe.ts": {
+ "services/analytics/telemetryCredentialGuard.ts": {
   "kind": "first-party",
   "decls": [
-   "chunk-aepeg2w5.js#mD"
+   "chunk-aepeg2w5.js#mD",
+   "chunk-aepeg2w5.js#EIe",
+   "chunk-aepeg2w5.js#tQ",
+   "chunk-aepeg2w5.js#Da",
+   "chunk-aepeg2w5.js#gD",
+   "chunk-aepeg2w5.js#Fa",
+   "chunk-aepeg2w5.js#Ty",
+   "chunk-aepeg2w5.js#xc",
+   "chunk-aepeg2w5.js#yCn",
+   "chunk-aepeg2w5.js#Ry"
   ],
   "chunks": {
-   "chunk-aepeg2w5.js": 1
+   "chunk-aepeg2w5.js": 10
   },
-  "bytes": 33,
+  "bytes": 919,
   "methods": {
-   "sole-consumer-new": 1
+   "placement": 10
   }
  },
  "services/settingsSync/index.ts": {
@@ -65019,27 +64789,6 @@
    "callgraph-fingerprint": 4,
    "sole-consumer": 1,
    "fingerprint": 1
-  }
- },
- "services/analytics/telemetryCredentialGuard.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-aepeg2w5.js#EIe",
-   "chunk-aepeg2w5.js#tQ",
-   "chunk-aepeg2w5.js#Da",
-   "chunk-aepeg2w5.js#gD",
-   "chunk-aepeg2w5.js#Fa",
-   "chunk-aepeg2w5.js#Ty",
-   "chunk-aepeg2w5.js#xc",
-   "chunk-aepeg2w5.js#yCn",
-   "chunk-aepeg2w5.js#Ry"
-  ],
-  "chunks": {
-   "chunk-aepeg2w5.js": 9
-  },
-  "bytes": 886,
-  "methods": {
-   "placement": 9
   }
  },
  "utils/model/bedrock.ts": {
@@ -65317,17 +65066,29 @@
    "placement": 67
   }
  },
- "services/gateway/_new/findCatalogRowIdByWireId.ts": {
+ "utils/model/modelCatalog/catalogSeed.ts": {
   "kind": "first-party",
   "decls": [
-   "chunk-aepeg2w5.js#Eb"
+   "chunk-aepeg2w5.js#Eb",
+   "chunk-aepeg2w5.js#TCn",
+   "chunk-aepeg2w5.js#gto",
+   "chunk-aepeg2w5.js#wb",
+   "chunk-aepeg2w5.js#Ab",
+   "chunk-aepeg2w5.js#kN",
+   "chunk-aepeg2w5.js#wN",
+   "chunk-aepeg2w5.js#Tb",
+   "chunk-aepeg2w5.js#Cb",
+   "chunk-aepeg2w5.js#Rb",
+   "chunk-aepeg2w5.js#AN",
+   "chunk-aepeg2w5.js#TN",
+   "chunk-aepeg2w5.js#xb"
   ],
   "chunks": {
-   "chunk-aepeg2w5.js": 1
+   "chunk-aepeg2w5.js": 13
   },
-  "bytes": 526,
+  "bytes": 2208,
   "methods": {
-   "sole-consumer-new": 1
+   "placement": 13
   }
  },
  "utils/betas.ts": {
@@ -65411,30 +65172,6 @@
    "facade-exports": 27
   }
  },
- "utils/model/modelCatalog/catalogSeed.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-aepeg2w5.js#TCn",
-   "chunk-aepeg2w5.js#gto",
-   "chunk-aepeg2w5.js#wb",
-   "chunk-aepeg2w5.js#Ab",
-   "chunk-aepeg2w5.js#kN",
-   "chunk-aepeg2w5.js#wN",
-   "chunk-aepeg2w5.js#Tb",
-   "chunk-aepeg2w5.js#Cb",
-   "chunk-aepeg2w5.js#Rb",
-   "chunk-aepeg2w5.js#AN",
-   "chunk-aepeg2w5.js#TN",
-   "chunk-aepeg2w5.js#xb"
-  ],
-  "chunks": {
-   "chunk-aepeg2w5.js": 12
-  },
-  "bytes": 1682,
-  "methods": {
-   "placement": 12
-  }
- },
  "utils/semver.ts": {
   "kind": "first-party",
   "decls": [
@@ -65444,29 +65181,18 @@
    "chunk-aepeg2w5.js#uv",
    "chunk-aepeg2w5.js#jH",
    "chunk-aepeg2w5.js#BUe",
-   "chunk-aepeg2w5.js#Ipr"
-  ],
-  "chunks": {
-   "chunk-aepeg2w5.js": 7
-  },
-  "bytes": 309,
-  "methods": {
-   "affinity": 1,
-   "fingerprint": 2,
-   "layout": 4
-  }
- },
- "services/remoteTools/_new/compareVersions.ts": {
-  "kind": "first-party",
-  "decls": [
+   "chunk-aepeg2w5.js#Ipr",
    "chunk-aepeg2w5.js#fwi"
   ],
   "chunks": {
-   "chunk-aepeg2w5.js": 1
+   "chunk-aepeg2w5.js": 8
   },
-  "bytes": 33,
+  "bytes": 342,
   "methods": {
-   "sole-consumer-new": 1
+   "affinity": 1,
+   "fingerprint": 2,
+   "layout": 4,
+   "placement": 1
   }
  },
  "utils/model/modelCatalog/catalogCapabilities.ts": {
@@ -65874,6 +65600,12 @@
  "entrypoints/init.ts": {
   "kind": "first-party",
   "decls": [
+   "chunk-vbtpanx5.js#U",
+   "chunk-vbtpanx5.js#z",
+   "chunk-vbtpanx5.js#@3422",
+   "chunk-vbtpanx5.js#A",
+   "chunk-vbtpanx5.js#O",
+   "chunk-vbtpanx5.js#R",
    "chunk-vbtpanx5.js#X",
    "chunk-vbtpanx5.js#D",
    "chunk-vbtpanx5.js#L",
@@ -65887,15 +65619,17 @@
    "chunk-vbtpanx5.js#w",
    "chunk-vbtpanx5.js#kon",
    "chunk-vbtpanx5.js#wjn",
-   "chunk-aepeg2w5.js#Rwi"
+   "chunk-aepeg2w5.js#Rwi",
+   "chunk-xdkvf45x.js#Koi"
   ],
   "chunks": {
    "chunk-aepeg2w5.js": 1,
-   "chunk-vbtpanx5.js": 13
+   "chunk-vbtpanx5.js": 19,
+   "chunk-xdkvf45x.js": 1
   },
-  "bytes": 7210,
+  "bytes": 9244,
   "methods": {
-   "placement": 1,
+   "placement": 8,
    "affinity": 1,
    "fingerprint": 2,
    "layout": 5,
@@ -66392,19 +66126,6 @@
   "bytes": 9226,
   "methods": {
    "placement": 30
-  }
- },
- "services/api/_new/getModelPricingString.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-aepeg2w5.js#dEi"
-  ],
-  "chunks": {
-   "chunk-aepeg2w5.js": 1
-  },
-  "bytes": 64,
-  "methods": {
-   "sole-consumer-new": 1
   }
  },
  "services/api/withRetry.ts": {
@@ -67089,6 +66810,8 @@
    "chunk-hwmsct5x.js#Rc",
    "chunk-hwmsct5x.js#nb",
    "chunk-hwmsct5x.js#_ir",
+   "chunk-hwmsct5x.js#kc",
+   "chunk-hwmsct5x.js#Jt",
    "chunk-hwmsct5x.js#Pt",
    "chunk-hwmsct5x.js#Qt",
    "chunk-hwmsct5x.js#al",
@@ -67102,12 +66825,12 @@
   "chunks": {
    "chunk-aepeg2w5.js": 1,
    "chunk-d1cgs5na.js": 1,
-   "chunk-hwmsct5x.js": 79
+   "chunk-hwmsct5x.js": 81
   },
-  "bytes": 23885,
+  "bytes": 24595,
   "methods": {
    "fingerprint": 17,
-   "placement": 46,
+   "placement": 48,
    "layout": 13,
    "callgraph-fingerprint": 1,
    "callgraph-witnessed": 3,
@@ -67708,19 +67431,6 @@
    "placement": 19
   }
  },
- "utils/messages/_new/isHumanAuthoredTurn.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-aepeg2w5.js#Ais"
-  ],
-  "chunks": {
-   "chunk-aepeg2w5.js": 1
-  },
-  "bytes": 134,
-  "methods": {
-   "sole-consumer-new": 1
-  }
- },
  "utils/messageProvenance.ts": {
   "kind": "first-party",
   "decls": [
@@ -67819,22 +67529,6 @@
   "bytes": 20250,
   "methods": {
    "placement": 88
-  }
- },
- "utils/messagePredicates.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-aepeg2w5.js#q3",
-   "chunk-aepeg2w5.js#iki",
-   "chunk-aepeg2w5.js#yge"
-  ],
-  "chunks": {
-   "chunk-aepeg2w5.js": 3
-  },
-  "bytes": 380,
-  "methods": {
-   "fingerprint": 1,
-   "placement": 2
   }
  },
  "services/analytics/growthbook.ts": {
@@ -68748,14 +68442,18 @@
  "tools/GlobTool/prompt.ts": {
   "kind": "first-party",
   "decls": [
+   "chunk-g54kbxqw.js#S7o",
+   "chunk-g54kbxqw.js#sr",
    "chunk-aepeg2w5.js#oo"
   ],
   "chunks": {
-   "chunk-aepeg2w5.js": 1
+   "chunk-aepeg2w5.js": 1,
+   "chunk-g54kbxqw.js": 2
   },
-  "bytes": 14,
+  "bytes": 648,
   "methods": {
-   "fingerprint": 1
+   "fingerprint": 1,
+   "placement": 2
   }
  },
  "tools/GrepTool/prompt.ts": {
@@ -69176,6 +68874,9 @@
    "chunk-ag5x7vhf.js#sAr",
    "chunk-ag5x7vhf.js#iAr",
    "chunk-ag5x7vhf.js#@11160",
+   "chunk-ag5x7vhf.js#GT",
+   "chunk-ag5x7vhf.js#aa",
+   "chunk-ag5x7vhf.js#ih",
    "chunk-ag5x7vhf.js#dtn",
    "chunk-ag5x7vhf.js#@22097",
    "chunk-ag5x7vhf.js#ctn",
@@ -69219,11 +68920,11 @@
    "chunk-ag5x7vhf.js#@46512"
   ],
   "chunks": {
-   "chunk-ag5x7vhf.js": 57
+   "chunk-ag5x7vhf.js": 60
   },
-  "bytes": 21190,
+  "bytes": 23995,
   "methods": {
-   "placement": 34,
+   "placement": 37,
    "sole-consumer": 5,
    "affinity": 1,
    "fingerprint": 8,
@@ -69286,21 +68987,6 @@
    "file-local": 2
   }
  },
- "components/_new/FullscreenLayoutView.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-ag5x7vhf.js#GT",
-   "chunk-ag5x7vhf.js#aa",
-   "chunk-ag5x7vhf.js#ih"
-  ],
-  "chunks": {
-   "chunk-ag5x7vhf.js": 3
-  },
-  "bytes": 2805,
-  "methods": {
-   "sole-consumer-new": 3
-  }
- },
  "ink/render-to-screen.ts": {
   "kind": "first-party",
   "decls": [
@@ -69338,6 +69024,9 @@
   "decls": [
    "chunk-e6aww6q8.js#J8n",
    "chunk-e6aww6q8.js#iWt",
+   "chunk-e6aww6q8.js#gZt",
+   "chunk-e6aww6q8.js#yZt",
+   "chunk-e6aww6q8.js#hZt",
    "chunk-e6aww6q8.js#bsr",
    "chunk-e6aww6q8.js#Ssn",
    "chunk-e6aww6q8.js#Csr",
@@ -69418,12 +69107,12 @@
   ],
   "chunks": {
    "chunk-ag5x7vhf.js": 1,
-   "chunk-e6aww6q8.js": 78
+   "chunk-e6aww6q8.js": 81
   },
-  "bytes": 44586,
+  "bytes": 45490,
   "methods": {
    "fingerprint": 19,
-   "placement": 33,
+   "placement": 36,
    "sole-consumer": 1,
    "layout": 26
   }
@@ -69945,7 +69634,7 @@
    "fingerprint": 1
   }
  },
- "components/_new/dropRepeatedTurnDurations.ts": {
+ "utils/collapseTurnMessages.ts": {
   "kind": "first-party",
   "decls": [
    "chunk-ag5x7vhf.js#fw",
@@ -69959,7 +69648,7 @@
   },
   "bytes": 1404,
   "methods": {
-   "sole-consumer-new": 5
+   "placement": 5
   }
  },
  "utils/collapseHookSummaries.ts": {
@@ -70002,33 +69691,22 @@
    "fingerprint": 2
   }
  },
- "components/_new/countToolCallsSince_2.ts": {
+ "utils/groupToolUses.ts": {
   "kind": "first-party",
   "decls": [
    "chunk-ag5x7vhf.js#bw",
    "chunk-ag5x7vhf.js#PE",
-   "chunk-ag5x7vhf.js#wp"
-  ],
-  "chunks": {
-   "chunk-ag5x7vhf.js": 3
-  },
-  "bytes": 1032,
-  "methods": {
-   "sole-consumer-new": 3
-  }
- },
- "utils/groupToolUses.ts": {
-  "kind": "first-party",
-  "decls": [
+   "chunk-ag5x7vhf.js#wp",
    "chunk-ag5x7vhf.js#xw",
    "chunk-ag5x7vhf.js#LE"
   ],
   "chunks": {
-   "chunk-ag5x7vhf.js": 2
+   "chunk-ag5x7vhf.js": 5
   },
-  "bytes": 390,
+  "bytes": 1422,
   "methods": {
-   "affinity": 1,
+   "placement": 3,
+   "layout": 1,
    "fingerprint": 1
   }
  },
@@ -71002,21 +70680,6 @@
    "fingerprint": 1
   }
  },
- "components/messages/_new/AssistantToolUseMessage.helpers-ah34.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-ah34pb7m.js#@64176",
-   "chunk-ah34pb7m.js#Rp",
-   "chunk-ah34pb7m.js#kp"
-  ],
-  "chunks": {
-   "chunk-ah34pb7m.js": 3
-  },
-  "bytes": 104,
-  "methods": {
-   "sole-consumer-new": 3
-  }
- },
  "components/messages/HookProgressMessage.tsx": {
   "kind": "first-party",
   "decls": [
@@ -71035,6 +70698,12 @@
   "decls": [
    "chunk-ah34pb7m.js#jE",
    "chunk-ah34pb7m.js#Zs",
+   "chunk-ah34pb7m.js#@190237",
+   "chunk-ah34pb7m.js#@190290",
+   "chunk-ah34pb7m.js#bB",
+   "chunk-ah34pb7m.js#um",
+   "chunk-ah34pb7m.js#bf",
+   "chunk-ah34pb7m.js#gs",
    "chunk-ah34pb7m.js#RB",
    "chunk-ah34pb7m.js#kf",
    "chunk-ah34pb7m.js#SWe",
@@ -71063,20 +70732,20 @@
    "chunk-e6aww6q8.js#z7t"
   ],
   "chunks": {
-   "chunk-ah34pb7m.js": 26,
+   "chunk-ah34pb7m.js": 32,
    "chunk-e4xept39.js": 1,
    "chunk-e6aww6q8.js": 1
   },
-  "bytes": 17294,
+  "bytes": 20327,
   "methods": {
    "affinity": 1,
    "fingerprint": 12,
+   "placement": 8,
    "layout": 12,
-   "placement": 2,
    "file-local": 1
   }
  },
- "components/messages/_new/WithheldFileLine.ts": {
+ "components/messages/AttachmentMessage.tsx": {
   "kind": "first-party",
   "decls": [
    "chunk-ah34pb7m.js#qQ",
@@ -71084,14 +70753,28 @@
    "chunk-ah34pb7m.js#gl",
    "chunk-ah34pb7m.js#MA",
    "chunk-ah34pb7m.js#fl",
-   "chunk-ah34pb7m.js#@80589"
+   "chunk-ah34pb7m.js#@80589",
+   "chunk-ah34pb7m.js#dL",
+   "chunk-ah34pb7m.js#mL",
+   "chunk-ah34pb7m.js#uL",
+   "chunk-ah34pb7m.js#pd",
+   "chunk-ah34pb7m.js#lg",
+   "chunk-ah34pb7m.js#_a",
+   "chunk-ah34pb7m.js#dg",
+   "chunk-ah34pb7m.js#cx",
+   "chunk-ah34pb7m.js#gx",
+   "chunk-ah34pb7m.js#he"
   ],
   "chunks": {
-   "chunk-ah34pb7m.js": 6
+   "chunk-ah34pb7m.js": 16
   },
-  "bytes": 1288,
+  "bytes": 22050,
   "methods": {
-   "sole-consumer-new": 6
+   "placement": 6,
+   "sole-consumer": 2,
+   "affinity": 1,
+   "fingerprint": 5,
+   "layout": 2
   }
  },
  "components/DiagnosticsDisplay.tsx": {
@@ -71457,31 +71140,6 @@
    "placement": 8
   }
  },
- "components/messages/AttachmentMessage.tsx": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-ah34pb7m.js#dL",
-   "chunk-ah34pb7m.js#mL",
-   "chunk-ah34pb7m.js#uL",
-   "chunk-ah34pb7m.js#pd",
-   "chunk-ah34pb7m.js#lg",
-   "chunk-ah34pb7m.js#_a",
-   "chunk-ah34pb7m.js#dg",
-   "chunk-ah34pb7m.js#cx",
-   "chunk-ah34pb7m.js#gx",
-   "chunk-ah34pb7m.js#he"
-  ],
-  "chunks": {
-   "chunk-ah34pb7m.js": 10
-  },
-  "bytes": 20762,
-  "methods": {
-   "sole-consumer": 2,
-   "affinity": 1,
-   "fingerprint": 5,
-   "layout": 2
-  }
- },
  "components/messages/teamMemCollapsed.tsx": {
   "kind": "first-party",
   "decls": [
@@ -71634,24 +71292,6 @@
    "fingerprint": 1
   }
  },
- "components/messages/_new/SyncStatusRows.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-ah34pb7m.js#@190237",
-   "chunk-ah34pb7m.js#@190290",
-   "chunk-ah34pb7m.js#bB",
-   "chunk-ah34pb7m.js#um",
-   "chunk-ah34pb7m.js#bf",
-   "chunk-ah34pb7m.js#gs"
-  ],
-  "chunks": {
-   "chunk-ah34pb7m.js": 6
-  },
-  "bytes": 3033,
-  "methods": {
-   "sole-consumer-new": 6
-  }
- },
  "constants/turnCompletionVerbs.ts": {
   "kind": "first-party",
   "decls": [
@@ -71744,17 +71384,19 @@
    "fingerprint": 1
   }
  },
- "components/messages/UserToolResultMessage/_new/UserToolResultMessage.helpers-ah34.ts": {
+ "components/messages/UserToolResultMessage/UserToolResultMessage.tsx": {
   "kind": "first-party",
   "decls": [
-   "chunk-ah34pb7m.js#c_"
+   "chunk-ah34pb7m.js#c_",
+   "chunk-ah34pb7m.js#kh"
   ],
   "chunks": {
-   "chunk-ah34pb7m.js": 1
+   "chunk-ah34pb7m.js": 2
   },
-  "bytes": 39,
+  "bytes": 3241,
   "methods": {
-   "sole-consumer-new": 1
+   "placement": 1,
+   "fingerprint": 1
   }
  },
  "components/Message.tsx": {
@@ -71788,19 +71430,6 @@
    "affinity": 1,
    "fingerprint": 5,
    "layout": 6
-  }
- },
- "components/messages/UserToolResultMessage/UserToolResultMessage.tsx": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-ah34pb7m.js#kh"
-  ],
-  "chunks": {
-   "chunk-ah34pb7m.js": 1
-  },
-  "bytes": 3202,
-  "methods": {
-   "fingerprint": 1
   }
  },
  "tools/MCPTool/UI.tsx": {
@@ -72693,27 +72322,6 @@
    "placement": 12
   }
  },
- "tools/SendMessageTool/_new/resumeInProcessTeammate.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-astf3mhy.js#ms",
-   "chunk-astf3mhy.js#tt",
-   "chunk-astf3mhy.js#us",
-   "chunk-astf3mhy.js#cs",
-   "chunk-astf3mhy.js#gs",
-   "chunk-astf3mhy.js#nt",
-   "chunk-astf3mhy.js#Ce",
-   "chunk-astf3mhy.js#fs",
-   "chunk-astf3mhy.js#ps"
-  ],
-  "chunks": {
-   "chunk-astf3mhy.js": 9
-  },
-  "bytes": 8421,
-  "methods": {
-   "sole-consumer-new": 9
-  }
- },
  "tools/SendMessageTool/prompt.ts": {
   "kind": "first-party",
   "decls": [
@@ -72796,89 +72404,6 @@
    "sole-consumer": 1,
    "fingerprint": 2,
    "layout": 1
-  }
- },
- "upstreamproxy/upstreamproxy.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-awy329vy.js#jt",
-   "chunk-awy329vy.js#NHi",
-   "chunk-awy329vy.js#_r",
-   "chunk-awy329vy.js#BHi",
-   "chunk-awy329vy.js#Pe",
-   "chunk-awy329vy.js#yGi",
-   "chunk-awy329vy.js#wr",
-   "chunk-awy329vy.js#Et",
-   "chunk-awy329vy.js#XLs",
-   "chunk-awy329vy.js#Hi",
-   "chunk-awy329vy.js#Tr",
-   "chunk-awy329vy.js#or",
-   "chunk-awy329vy.js#ir",
-   "chunk-awy329vy.js#Sr",
-   "chunk-awy329vy.js#ue",
-   "chunk-awy329vy.js#_Gi",
-   "chunk-awy329vy.js#bGi",
-   "chunk-awy329vy.js#SGi",
-   "chunk-awy329vy.js#Tt",
-   "chunk-awy329vy.js#ar",
-   "chunk-awy329vy.js#Cr",
-   "chunk-awy329vy.js#Ui",
-   "chunk-awy329vy.js#xr",
-   "chunk-awy329vy.js#kt",
-   "chunk-awy329vy.js#Wi",
-   "chunk-awy329vy.js#sr",
-   "chunk-awy329vy.js#Er",
-   "chunk-awy329vy.js#lr",
-   "chunk-awy329vy.js#ur",
-   "chunk-awy329vy.js#fr",
-   "chunk-awy329vy.js#Ar",
-   "chunk-awy329vy.js#At",
-   "chunk-awy329vy.js#Rt",
-   "chunk-awy329vy.js#Ye",
-   "chunk-awy329vy.js#ji",
-   "chunk-awy329vy.js#Yi",
-   "chunk-awy329vy.js#Xi",
-   "chunk-awy329vy.js#Ji",
-   "chunk-awy329vy.js#Ki",
-   "chunk-awy329vy.js#JLs",
-   "chunk-awy329vy.js#Vi",
-   "chunk-awy329vy.js#qi",
-   "chunk-awy329vy.js#zi",
-   "chunk-awy329vy.js#Ot",
-   "chunk-awy329vy.js#jHi",
-   "chunk-awy329vy.js#Ct",
-   "chunk-awy329vy.js#xt",
-   "chunk-awy329vy.js#Zi",
-   "chunk-awy329vy.js#ea",
-   "chunk-awy329vy.js#WHi",
-   "chunk-awy329vy.js#jEo",
-   "chunk-awy329vy.js#pr",
-   "chunk-awy329vy.js#na",
-   "chunk-awy329vy.js#GHi",
-   "chunk-awy329vy.js#ra",
-   "chunk-awy329vy.js#Dt",
-   "chunk-awy329vy.js#ia",
-   "chunk-awy329vy.js#Pr",
-   "chunk-awy329vy.js#vr",
-   "chunk-awy329vy.js#Nt",
-   "chunk-awy329vy.js#aa",
-   "chunk-awy329vy.js#hr",
-   "chunk-awy329vy.js#ca",
-   "chunk-awy329vy.js#$t",
-   "chunk-awy329vy.js#It",
-   "chunk-awy329vy.js#la",
-   "chunk-awy329vy.js#ce",
-   "chunk-awy329vy.js#da",
-   "chunk-hm0ce8vc.js#Yl"
-  ],
-  "chunks": {
-   "chunk-awy329vy.js": 68,
-   "chunk-hm0ce8vc.js": 1
-  },
-  "bytes": 42210,
-  "methods": {
-   "fingerprint": 3,
-   "placement": 66
   }
  },
  "upstreamproxy/caBundle.ts": {
@@ -73985,16 +73510,20 @@
   "decls": [
    "chunk-b29hdd5e.js#A",
    "chunk-b29hdd5e.js#U",
-   "chunk-b29hdd5e.js#SRi"
+   "chunk-b29hdd5e.js#SRi",
+   "chunk-gwwacf44.js#kRi",
+   "chunk-gwwacf44.js#TRi"
   ],
   "chunks": {
-   "chunk-b29hdd5e.js": 3
+   "chunk-b29hdd5e.js": 3,
+   "chunk-gwwacf44.js": 2
   },
-  "bytes": 206,
+  "bytes": 1190,
   "methods": {
    "sole-consumer": 1,
    "affinity": 1,
-   "fingerprint": 1
+   "fingerprint": 1,
+   "placement": 2
   }
  },
  "utils/secureStorage/plainTextStorage.ts": {
@@ -76456,6 +75985,7 @@
  "services/tools/toolExecution.ts": {
   "kind": "first-party",
   "decls": [
+   "chunk-e6aww6q8.js#voe",
    "chunk-e6aww6q8.js#BNn",
    "chunk-e6aww6q8.js#Eoe",
    "chunk-e6aww6q8.js#UNn",
@@ -76583,12 +76113,12 @@
   ],
   "chunks": {
    "chunk-bk5ntezz.js": 1,
-   "chunk-e6aww6q8.js": 123
+   "chunk-e6aww6q8.js": 124
   },
-  "bytes": 85857,
+  "bytes": 85903,
   "methods": {
    "fingerprint": 8,
-   "placement": 101,
+   "placement": 102,
    "layout": 15
   }
  },
@@ -80937,6 +80467,8 @@
    "chunk-bzr73sfg.js#ef",
    "chunk-bzr73sfg.js#Tb",
    "chunk-bzr73sfg.js#Ab",
+   "chunk-bzr73sfg.js#wb",
+   "chunk-bzr73sfg.js#of",
    "chunk-bzr73sfg.js#Cf",
    "chunk-bzr73sfg.js#Sv",
    "chunk-bzr73sfg.js#_R",
@@ -80944,25 +80476,12 @@
    "chunk-bzr73sfg.js#OR"
   ],
   "chunks": {
-   "chunk-bzr73sfg.js": 11
+   "chunk-bzr73sfg.js": 13
   },
-  "bytes": 3294,
+  "bytes": 3921,
   "methods": {
-   "placement": 8,
+   "placement": 10,
    "fingerprint": 3
-  }
- },
- "ink/_new/dispatchHoverFollowsPaint.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-bzr73sfg.js#wb"
-  ],
-  "chunks": {
-   "chunk-bzr73sfg.js": 1
-  },
-  "bytes": 433,
-  "methods": {
-   "sole-consumer-new": 1
   }
  },
  "ink/events/pointer-event.ts": {
@@ -80976,34 +80495,6 @@
   "bytes": 333,
   "methods": {
    "placement": 1
-  }
- },
- "ink/_new/findPointerTarget.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-bzr73sfg.js#of"
-  ],
-  "chunks": {
-   "chunk-bzr73sfg.js": 1
-  },
-  "bytes": 194,
-  "methods": {
-   "sole-consumer-new": 1
-  }
- },
- "ink/_new/countDomNodes.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-bzr73sfg.js#TC",
-   "chunk-bzr73sfg.js#Db",
-   "chunk-bzr73sfg.js#_b"
-  ],
-  "chunks": {
-   "chunk-bzr73sfg.js": 3
-  },
-  "bytes": 414,
-  "methods": {
-   "sole-consumer-new": 3
   }
  },
  "ink/termio/iterm2Image.ts": {
@@ -81079,21 +80570,23 @@
    "layout": 4
   }
  },
- "ink/_new/_new/scanImagePlaceholders.ts": {
+ "ink/TerminalImageManager.ts": {
   "kind": "first-party",
   "decls": [
    "chunk-bzr73sfg.js#Fb",
    "chunk-bzr73sfg.js#zC",
    "chunk-bzr73sfg.js#Ub",
    "chunk-bzr73sfg.js#Ib",
-   "chunk-bzr73sfg.js#Gb"
+   "chunk-bzr73sfg.js#Gb",
+   "chunk-bzr73sfg.js#IC",
+   "chunk-bzr73sfg.js#hf"
   ],
   "chunks": {
-   "chunk-bzr73sfg.js": 5
+   "chunk-bzr73sfg.js": 7
   },
-  "bytes": 930,
+  "bytes": 5871,
   "methods": {
-   "sole-consumer-new": 5
+   "placement": 7
   }
  },
  "ink/termio/osc.ts": {
@@ -81134,36 +80627,34 @@
    "chunk-dxdtyerk.js#bQs",
    "chunk-bzr73sfg.js#FC",
    "chunk-bzr73sfg.js#Do",
-   "chunk-bzr73sfg.js#Yb",
-   "chunk-bzr73sfg.js#jb",
-   "chunk-bzr73sfg.js#Vb"
+   "chunk-bzr73sfg.js#Yb"
   ],
   "chunks": {
-   "chunk-bzr73sfg.js": 5,
+   "chunk-bzr73sfg.js": 3,
    "chunk-dxdtyerk.js": 33
   },
-  "bytes": 9129,
+  "bytes": 8530,
   "methods": {
    "fingerprint": 12,
-   "affinity": 4,
+   "affinity": 2,
    "callgraph-fingerprint": 2,
    "layout": 18,
    "callgraph-witnessed": 1,
    "placement": 1
   }
  },
- "ink/_new/TerminalImageManager.ts": {
-  "kind": "first-party",
+ "_unattributed/chunk-bzr73sfg/part-001.js": {
+  "kind": "unattributed",
   "decls": [
-   "chunk-bzr73sfg.js#IC",
-   "chunk-bzr73sfg.js#hf"
+   "chunk-bzr73sfg.js#jb",
+   "chunk-bzr73sfg.js#Vb"
   ],
   "chunks": {
    "chunk-bzr73sfg.js": 2
   },
-  "bytes": 4941,
+  "bytes": 599,
   "methods": {
-   "sole-consumer-new": 2
+   "leftover": 2
   }
  },
  "ink/optimizer.ts": {
@@ -81195,17 +80686,23 @@
    "layout": 1
   }
  },
- "ink/_new/RenderDebugHud.ts": {
+ "ink/renderTelemetry.ts": {
   "kind": "first-party",
   "decls": [
+   "chunk-x6v6jz2y.js#iIs",
+   "chunk-x6v6jz2y.js#Pe",
+   "chunk-x6v6jz2y.js#Tt",
+   "chunk-x6v6jz2y.js#Et",
+   "chunk-x6v6jz2y.js#wt",
    "chunk-bzr73sfg.js#gf"
   ],
   "chunks": {
-   "chunk-bzr73sfg.js": 1
+   "chunk-bzr73sfg.js": 1,
+   "chunk-x6v6jz2y.js": 5
   },
-  "bytes": 1378,
+  "bytes": 2725,
   "methods": {
-   "sole-consumer-new": 1
+   "placement": 6
   }
  },
  "indent-string/index.js": {
@@ -81362,10 +80859,10 @@
   "bytes": 56564,
   "methods": {
    "placement": 4,
-   "sole-consumer": 2,
+   "sole-consumer": 3,
    "fingerprint": 5,
    "layout": 4,
-   "affinity": 5
+   "affinity": 4
   }
  },
  "ink/searchHighlight.ts": {
@@ -82524,7 +82021,7 @@
    "fingerprint": 1
   }
  },
- "bridge/_new/runPersistenceBackfill.ts": {
+ "bridge/persistenceBackfill.ts": {
   "kind": "first-party",
   "decls": [
    "chunk-cg2r2hy6.js#Zt",
@@ -82549,7 +82046,7 @@
   },
   "bytes": 10486,
   "methods": {
-   "sole-consumer-new": 16
+   "placement": 16
   }
  },
  "bridge/workSecretRefresh.ts": {
@@ -82575,28 +82072,17 @@
  "bridge/initReplBridge.ts": {
   "kind": "first-party",
   "decls": [
-   "chunk-cg2r2hy6.js#ji"
-  ],
-  "chunks": {
-   "chunk-cg2r2hy6.js": 1
-  },
-  "bytes": 20906,
-  "methods": {
-   "callgraph-witnessed": 1
-  }
- },
- "bridge/_new/firstSentenceSnippet.ts": {
-  "kind": "first-party",
-  "decls": [
+   "chunk-cg2r2hy6.js#ji",
    "chunk-cg2r2hy6.js#hn",
    "chunk-cg2r2hy6.js#_r"
   ],
   "chunks": {
-   "chunk-cg2r2hy6.js": 2
+   "chunk-cg2r2hy6.js": 3
   },
-  "bytes": 160,
+  "bytes": 21066,
   "methods": {
-   "sole-consumer-new": 2
+   "callgraph-witnessed": 1,
+   "placement": 2
   }
  },
  "commands/remote-workflow/remote-workflow.ts": {
@@ -83548,6 +83034,8 @@
    "chunk-cne5hsvz.js#Z",
    "chunk-cne5hsvz.js#_e",
    "chunk-cne5hsvz.js#ue",
+   "chunk-cne5hsvz.js#j",
+   "chunk-cne5hsvz.js#ce",
    "chunk-cne5hsvz.js#ge",
    "chunk-cne5hsvz.js#Ee",
    "chunk-cne5hsvz.js#ne",
@@ -83559,13 +83047,14 @@
    "chunk-hntsfzas.js#re"
   ],
   "chunks": {
-   "chunk-cne5hsvz.js": 13,
+   "chunk-cne5hsvz.js": 15,
    "chunk-hntsfzas.js": 1
   },
-  "bytes": 11852,
+  "bytes": 13421,
   "methods": {
    "sole-consumer": 4,
    "fingerprint": 9,
+   "placement": 2,
    "affinity": 1
   }
  },
@@ -83633,19 +83122,6 @@
    "placement": 3
   }
  },
- "tools/shared/_new/reserveTeammateAndSpawn.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-cne5hsvz.js#j"
-  ],
-  "chunks": {
-   "chunk-cne5hsvz.js": 1
-  },
-  "bytes": 998,
-  "methods": {
-   "sole-consumer-new": 1
-  }
- },
  "utils/swarm/teamHelpers.ts": {
   "kind": "first-party",
   "decls": [
@@ -83700,19 +83176,6 @@
    "facade-exports": 18,
    "file-local": 1,
    "fingerprint": 1
-  }
- },
- "tools/shared/_new/_new/uniqueTeammateName.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-cne5hsvz.js#ce"
-  ],
-  "chunks": {
-   "chunk-cne5hsvz.js": 1
-  },
-  "bytes": 571,
-  "methods": {
-   "sole-consumer-new": 1
   }
  },
  "services/mcp/fileGrants.ts": {
@@ -84300,17 +83763,396 @@
    "layout": 1
   }
  },
- "utils/sandbox/_new/sandbox-adapter.helpers-czff.ts": {
+ "utils/sandbox/sandbox-adapter.ts": {
   "kind": "first-party",
   "decls": [
-   "chunk-czffketc.js#Hai"
+   "chunk-fq0cr76a.js#Z6r",
+   "chunk-fq0cr76a.js#t3r",
+   "chunk-fq0cr76a.js#f$",
+   "chunk-fq0cr76a.js#Zq",
+   "chunk-fq0cr76a.js#z6",
+   "chunk-fq0cr76a.js#dTt",
+   "chunk-fq0cr76a.js#Oot",
+   "chunk-fq0cr76a.js#n3r",
+   "chunk-fq0cr76a.js#KFi",
+   "chunk-fq0cr76a.js#yce",
+   "chunk-fq0cr76a.js#jp",
+   "chunk-fq0cr76a.js#cTt",
+   "chunk-fq0cr76a.js#R4",
+   "chunk-fq0cr76a.js#uTt",
+   "chunk-fq0cr76a.js#Ki",
+   "chunk-fq0cr76a.js#Aie",
+   "chunk-fq0cr76a.js#K0",
+   "chunk-fq0cr76a.js#r3r",
+   "chunk-fq0cr76a.js#fTt",
+   "chunk-fq0cr76a.js#o3r",
+   "chunk-fq0cr76a.js#Ior",
+   "chunk-fq0cr76a.js#s3r",
+   "chunk-fq0cr76a.js#p$",
+   "chunk-fq0cr76a.js#h$",
+   "chunk-fq0cr76a.js#Wd",
+   "chunk-fq0cr76a.js#q0",
+   "chunk-fq0cr76a.js#bce",
+   "chunk-fq0cr76a.js#$0",
+   "chunk-fq0cr76a.js#Mpe",
+   "chunk-fq0cr76a.js#$p",
+   "chunk-fq0cr76a.js#I4",
+   "chunk-fq0cr76a.js#Qv",
+   "chunk-fq0cr76a.js#m$",
+   "chunk-fq0cr76a.js#g$",
+   "chunk-fq0cr76a.js#y$",
+   "chunk-fq0cr76a.js#rb",
+   "chunk-fq0cr76a.js#ew",
+   "chunk-fq0cr76a.js#yw",
+   "chunk-fq0cr76a.js#Vp",
+   "chunk-fq0cr76a.js#j0",
+   "chunk-fq0cr76a.js#i3r",
+   "chunk-fq0cr76a.js#tw",
+   "chunk-fq0cr76a.js#fwe",
+   "chunk-fq0cr76a.js#R3o",
+   "chunk-fq0cr76a.js#b$",
+   "chunk-fq0cr76a.js#E$",
+   "chunk-fq0cr76a.js#x$",
+   "chunk-fq0cr76a.js#Sce",
+   "chunk-fq0cr76a.js#_$",
+   "chunk-fq0cr76a.js#Ece",
+   "chunk-fq0cr76a.js#v$",
+   "chunk-fq0cr76a.js#xce",
+   "chunk-fq0cr76a.js#Qp",
+   "chunk-fq0cr76a.js#x3o",
+   "chunk-fq0cr76a.js#bw",
+   "chunk-fq0cr76a.js#_ce",
+   "chunk-fq0cr76a.js#w$",
+   "chunk-fq0cr76a.js#k4",
+   "chunk-fq0cr76a.js#Oor",
+   "chunk-fq0cr76a.js#T$",
+   "chunk-fq0cr76a.js#A$",
+   "chunk-fq0cr76a.js#C$",
+   "chunk-fq0cr76a.js#Wp",
+   "chunk-fq0cr76a.js#R$",
+   "chunk-fq0cr76a.js#jxe",
+   "chunk-fq0cr76a.js#vce",
+   "chunk-fq0cr76a.js#m4e",
+   "chunk-fq0cr76a.js#a3r",
+   "chunk-fq0cr76a.js#wce",
+   "chunk-fq0cr76a.js#I$",
+   "chunk-fq0cr76a.js#P3o",
+   "chunk-fq0cr76a.js#N$",
+   "chunk-fq0cr76a.js#Mot",
+   "chunk-fq0cr76a.js#k$",
+   "chunk-fq0cr76a.js#XC",
+   "chunk-fq0cr76a.js#Mor",
+   "chunk-fq0cr76a.js#Tce",
+   "chunk-fq0cr76a.js#VSe",
+   "chunk-fq0cr76a.js#sb",
+   "chunk-fq0cr76a.js#Dor",
+   "chunk-fq0cr76a.js#I3o",
+   "chunk-fq0cr76a.js#Sqt",
+   "chunk-fq0cr76a.js#Sw",
+   "chunk-fq0cr76a.js#Yp",
+   "chunk-fq0cr76a.js#Ace",
+   "chunk-fq0cr76a.js#l3r",
+   "chunk-fq0cr76a.js#d3r",
+   "chunk-fq0cr76a.js#Cce",
+   "chunk-fq0cr76a.js#Rce",
+   "chunk-fq0cr76a.js#c3r",
+   "chunk-fq0cr76a.js#dJ",
+   "chunk-fq0cr76a.js#Ew",
+   "chunk-fq0cr76a.js#Ice",
+   "chunk-fq0cr76a.js#O$",
+   "chunk-fq0cr76a.js#P$",
+   "chunk-fq0cr76a.js#Nce",
+   "chunk-fq0cr76a.js#kce",
+   "chunk-fq0cr76a.js#g4e",
+   "chunk-fq0cr76a.js#xw",
+   "chunk-fq0cr76a.js#nw",
+   "chunk-fq0cr76a.js#Kv",
+   "chunk-fq0cr76a.js#O3o",
+   "chunk-fq0cr76a.js#Dce",
+   "chunk-fq0cr76a.js#zs",
+   "chunk-fq0cr76a.js#Oce",
+   "chunk-fq0cr76a.js#Pce",
+   "chunk-fq0cr76a.js#Lce",
+   "chunk-fq0cr76a.js#Bce",
+   "chunk-fq0cr76a.js#Uce",
+   "chunk-fq0cr76a.js#L$",
+   "chunk-fq0cr76a.js#D4",
+   "chunk-fq0cr76a.js#Fce",
+   "chunk-fq0cr76a.js#Mce",
+   "chunk-fq0cr76a.js#$ce",
+   "chunk-fq0cr76a.js#Gp",
+   "chunk-fq0cr76a.js#_w",
+   "chunk-fq0cr76a.js#B$",
+   "chunk-fq0cr76a.js#U$",
+   "chunk-fq0cr76a.js#vw",
+   "chunk-fq0cr76a.js#Vce",
+   "chunk-fq0cr76a.js#Zp",
+   "chunk-fq0cr76a.js#zp",
+   "chunk-fq0cr76a.js#eh",
+   "chunk-fq0cr76a.js#Wce",
+   "chunk-fq0cr76a.js#O4",
+   "chunk-fq0cr76a.js#Y0",
+   "chunk-fq0cr76a.js#P4",
+   "chunk-fq0cr76a.js#Gce",
+   "chunk-fq0cr76a.js#Kce",
+   "chunk-fq0cr76a.js#Vd",
+   "chunk-fq0cr76a.js#Hp",
+   "chunk-fq0cr76a.js#qce",
+   "chunk-fq0cr76a.js#J0",
+   "chunk-fq0cr76a.js#Hd",
+   "chunk-fq0cr76a.js#Oc",
+   "chunk-fq0cr76a.js#ww",
+   "chunk-fq0cr76a.js#L4",
+   "chunk-fq0cr76a.js#Wxe",
+   "chunk-fq0cr76a.js#Yce",
+   "chunk-fq0cr76a.js#B4",
+   "chunk-fq0cr76a.js#V0",
+   "chunk-fq0cr76a.js#Zce",
+   "chunk-fq0cr76a.js#co",
+   "chunk-fq0cr76a.js#F$",
+   "chunk-fq0cr76a.js#qv",
+   "chunk-fq0cr76a.js#M$",
+   "chunk-fq0cr76a.js#jv",
+   "chunk-fq0cr76a.js#Fp",
+   "chunk-fq0cr76a.js#$$",
+   "chunk-fq0cr76a.js#V$",
+   "chunk-fq0cr76a.js#zce",
+   "chunk-fq0cr76a.js#W$",
+   "chunk-fq0cr76a.js#Xce",
+   "chunk-fq0cr76a.js#Jce",
+   "chunk-fq0cr76a.js#Qce",
+   "chunk-fq0cr76a.js#Q0",
+   "chunk-fq0cr76a.js#_i",
+   "chunk-fq0cr76a.js#G$",
+   "chunk-fq0cr76a.js#U4",
+   "chunk-fq0cr76a.js#H$",
+   "chunk-fq0cr76a.js#rw",
+   "chunk-fq0cr76a.js#He",
+   "chunk-fq0cr76a.js#Xp",
+   "chunk-fq0cr76a.js#M3o",
+   "chunk-fq0cr76a.js#D3o",
+   "chunk-fq0cr76a.js#F4",
+   "chunk-fq0cr76a.js#eue",
+   "chunk-fq0cr76a.js#Ar",
+   "chunk-fq0cr76a.js#Xs",
+   "chunk-fq0cr76a.js#tue",
+   "chunk-fq0cr76a.js#Tw",
+   "chunk-fq0cr76a.js#nue",
+   "chunk-fq0cr76a.js#K$",
+   "chunk-fq0cr76a.js#M4",
+   "chunk-fq0cr76a.js#$4",
+   "chunk-fq0cr76a.js#W0",
+   "chunk-fq0cr76a.js#rue",
+   "chunk-fq0cr76a.js#sue",
+   "chunk-fq0cr76a.js#iue",
+   "chunk-fq0cr76a.js#q$",
+   "chunk-fq0cr76a.js#j$",
+   "chunk-fq0cr76a.js#oue",
+   "chunk-fq0cr76a.js#Zv",
+   "chunk-fq0cr76a.js#Y$",
+   "chunk-fq0cr76a.js#Z$",
+   "chunk-fq0cr76a.js#aue",
+   "chunk-fq0cr76a.js#lue",
+   "chunk-fq0cr76a.js#z$",
+   "chunk-fq0cr76a.js#ib",
+   "chunk-fq0cr76a.js#X$",
+   "chunk-fq0cr76a.js#Aw",
+   "chunk-fq0cr76a.js#Ia",
+   "chunk-fq0cr76a.js#$d",
+   "chunk-fq0cr76a.js#cue",
+   "chunk-fq0cr76a.js#J$",
+   "chunk-fq0cr76a.js#eb",
+   "chunk-fq0cr76a.js#uue",
+   "chunk-fq0cr76a.js#V4",
+   "chunk-fq0cr76a.js#Kp",
+   "chunk-fq0cr76a.js#ea",
+   "chunk-fq0cr76a.js#Na",
+   "chunk-fq0cr76a.js#due",
+   "chunk-fq0cr76a.js#fue",
+   "chunk-fq0cr76a.js#pue",
+   "chunk-fq0cr76a.js#hue",
+   "chunk-fq0cr76a.js#Q$",
+   "chunk-fq0cr76a.js#sw",
+   "chunk-fq0cr76a.js#mue",
+   "chunk-fq0cr76a.js#Lor",
+   "chunk-fq0cr76a.js#iw",
+   "chunk-fq0cr76a.js#eV",
+   "chunk-fq0cr76a.js#ow",
+   "chunk-fq0cr76a.js#W4",
+   "chunk-fq0cr76a.js#gue",
+   "chunk-fq0cr76a.js#tV",
+   "chunk-fq0cr76a.js#nV",
+   "chunk-fq0cr76a.js#G4",
+   "chunk-fq0cr76a.js#G0",
+   "chunk-fq0cr76a.js#bue",
+   "chunk-fq0cr76a.js#rV",
+   "chunk-fq0cr76a.js#H4",
+   "chunk-fq0cr76a.js#Eue",
+   "chunk-fq0cr76a.js#K4",
+   "chunk-fq0cr76a.js#q4",
+   "chunk-fq0cr76a.js#xue",
+   "chunk-fq0cr76a.js#_ue",
+   "chunk-fq0cr76a.js#sV",
+   "chunk-fq0cr76a.js#aw",
+   "chunk-fq0cr76a.js#j4",
+   "chunk-fq0cr76a.js#Y4",
+   "chunk-fq0cr76a.js#Lp",
+   "chunk-fq0cr76a.js#iV",
+   "chunk-fq0cr76a.js#lw",
+   "chunk-fq0cr76a.js#oV",
+   "chunk-fq0cr76a.js#aV",
+   "chunk-fq0cr76a.js#Hor",
+   "chunk-fq0cr76a.js#Pc",
+   "chunk-fq0cr76a.js#vue",
+   "chunk-fq0cr76a.js#wue",
+   "chunk-fq0cr76a.js#lV",
+   "chunk-fq0cr76a.js#cV",
+   "chunk-fq0cr76a.js#uV",
+   "chunk-fq0cr76a.js#Tue",
+   "chunk-fq0cr76a.js#Dpe",
+   "chunk-fq0cr76a.js#ql",
+   "chunk-fq0cr76a.js#Lpe",
+   "chunk-fq0cr76a.js#dV",
+   "chunk-fq0cr76a.js#Aue",
+   "chunk-fq0cr76a.js#fV",
+   "chunk-fq0cr76a.js#Oa",
+   "chunk-fq0cr76a.js#Cue",
+   "chunk-fq0cr76a.js#Rue",
+   "chunk-fq0cr76a.js#pV",
+   "chunk-fq0cr76a.js#Iue",
+   "chunk-fq0cr76a.js#hV",
+   "chunk-fq0cr76a.js#cw",
+   "chunk-fq0cr76a.js#mV",
+   "chunk-fq0cr76a.js#gV",
+   "chunk-fq0cr76a.js#Nue",
+   "chunk-fq0cr76a.js#uw",
+   "chunk-fq0cr76a.js#tb",
+   "chunk-fq0cr76a.js#Oue",
+   "chunk-fq0cr76a.js#Pue",
+   "chunk-fq0cr76a.js#Z4",
+   "chunk-fq0cr76a.js#yV",
+   "chunk-fq0cr76a.js#z4",
+   "chunk-fq0cr76a.js#Jp",
+   "chunk-fq0cr76a.js#dw",
+   "chunk-fq0cr76a.js#H0",
+   "chunk-fq0cr76a.js#X4",
+   "chunk-fq0cr76a.js#Lue",
+   "chunk-fq0cr76a.js#Bue",
+   "chunk-fq0cr76a.js#bV",
+   "chunk-fq0cr76a.js#Uue",
+   "chunk-fq0cr76a.js#Fue",
+   "chunk-fq0cr76a.js#Cw",
+   "chunk-fq0cr76a.js#Mue",
+   "chunk-fq0cr76a.js#ob",
+   "chunk-fq0cr76a.js#Dc",
+   "chunk-fq0cr76a.js#SV",
+   "chunk-fq0cr76a.js#EV",
+   "chunk-fq0cr76a.js#Jo",
+   "chunk-fq0cr76a.js#Z0",
+   "chunk-fq0cr76a.js#ab",
+   "chunk-fq0cr76a.js#$ue",
+   "chunk-fq0cr76a.js#Rw",
+   "chunk-fq0cr76a.js#Iw",
+   "chunk-fq0cr76a.js#Vue",
+   "chunk-fq0cr76a.js#@1030390",
+   "chunk-fq0cr76a.js#Kd",
+   "chunk-fq0cr76a.js#lb",
+   "chunk-fq0cr76a.js#th",
+   "chunk-fq0cr76a.js#Bc",
+   "chunk-fq0cr76a.js#xV",
+   "chunk-fq0cr76a.js#cb",
+   "chunk-fq0cr76a.js#_V",
+   "chunk-fq0cr76a.js#L3o",
+   "chunk-fq0cr76a.js#wqt",
+   "chunk-fq0cr76a.js#H3o",
+   "chunk-fq0cr76a.js#nh",
+   "chunk-fq0cr76a.js#vV",
+   "chunk-fq0cr76a.js#wV",
+   "chunk-fq0cr76a.js#Nor",
+   "chunk-fq0cr76a.js#Nw",
+   "chunk-fq0cr76a.js#Wue",
+   "chunk-fq0cr76a.js#Gue",
+   "chunk-fq0cr76a.js#Hue",
+   "chunk-fq0cr76a.js#kw",
+   "chunk-fq0cr76a.js#Kue",
+   "chunk-fq0cr76a.js#que",
+   "chunk-fq0cr76a.js#TV",
+   "chunk-fq0cr76a.js#jue",
+   "chunk-fq0cr76a.js#Yue",
+   "chunk-fq0cr76a.js#Zue",
+   "chunk-fq0cr76a.js#pTt",
+   "chunk-fq0cr76a.js#AV",
+   "chunk-fq0cr76a.js#zue",
+   "chunk-fq0cr76a.js#Xue",
+   "chunk-fq0cr76a.js#CV",
+   "chunk-fq0cr76a.js#Jue",
+   "chunk-fq0cr76a.js#Que",
+   "chunk-fq0cr76a.js#Dw",
+   "chunk-fq0cr76a.js#ede",
+   "chunk-fq0cr76a.js#u3r",
+   "chunk-fq0cr76a.js#N3o",
+   "chunk-fq0cr76a.js#RV",
+   "chunk-fq0cr76a.js#IV",
+   "chunk-fq0cr76a.js#tde",
+   "chunk-fq0cr76a.js#nde",
+   "chunk-fq0cr76a.js#fw",
+   "chunk-fq0cr76a.js#Ow",
+   "chunk-fq0cr76a.js#Mp",
+   "chunk-fq0cr76a.js#ub",
+   "chunk-fq0cr76a.js#hw",
+   "chunk-fq0cr76a.js#rde",
+   "chunk-fq0cr76a.js#nwn",
+   "chunk-fq0cr76a.js#qp",
+   "chunk-fq0cr76a.js#kV",
+   "chunk-fq0cr76a.js#DV",
+   "chunk-fq0cr76a.js#OV",
+   "chunk-fq0cr76a.js#PV",
+   "chunk-fq0cr76a.js#ide",
+   "chunk-fq0cr76a.js#ode",
+   "chunk-fq0cr76a.js#LV",
+   "chunk-fq0cr76a.js#J4",
+   "chunk-fq0cr76a.js#ade",
+   "chunk-fq0cr76a.js#lde",
+   "chunk-fq0cr76a.js#BV",
+   "chunk-fq0cr76a.js#Q4",
+   "chunk-fq0cr76a.js#e$",
+   "chunk-fq0cr76a.js#UV",
+   "chunk-fq0cr76a.js#cde",
+   "chunk-fq0cr76a.js#ude",
+   "chunk-fq0cr76a.js#t$",
+   "chunk-fq0cr76a.js#n$",
+   "chunk-fq0cr76a.js#r$",
+   "chunk-fq0cr76a.js#dde",
+   "chunk-fq0cr76a.js#Pw",
+   "chunk-fq0cr76a.js#db",
+   "chunk-fq0cr76a.js#fde",
+   "chunk-fq0cr76a.js#rwn",
+   "chunk-fq0cr76a.js#Xv",
+   "chunk-fq0cr76a.js#Ke",
+   "chunk-fq0cr76a.js#s$",
+   "chunk-fq0cr76a.js#Bp",
+   "chunk-fq0cr76a.js#i$",
+   "chunk-fq0cr76a.js#hde",
+   "chunk-fq0cr76a.js#mde",
+   "chunk-fq0cr76a.js#o$",
+   "chunk-fq0cr76a.js#nb",
+   "chunk-czffketc.js#Hai",
+   "chunk-e6aww6q8.js#wer"
   ],
   "chunks": {
-   "chunk-czffketc.js": 1
+   "chunk-czffketc.js": 1,
+   "chunk-e6aww6q8.js": 1,
+   "chunk-fq0cr76a.js": 370
   },
-  "bytes": 96,
+  "bytes": 159713,
   "methods": {
-   "sole-consumer-new": 1
+   "placement": 308,
+   "fingerprint": 12,
+   "sole-consumer": 1,
+   "layout": 47,
+   "callgraph-fingerprint": 1,
+   "file-local": 2,
+   "callgraph-witnessed": 1
   }
  },
  "services/remoteManagedSettings/seating.ts": {
@@ -84763,6 +84605,9 @@
    "chunk-d4eg9at2.js#kn",
    "chunk-d4eg9at2.js#ue",
    "chunk-d4eg9at2.js#wn",
+   "chunk-d4eg9at2.js#ge",
+   "chunk-d4eg9at2.js#oe",
+   "chunk-d4eg9at2.js#_n",
    "chunk-d4eg9at2.js#Sn",
    "chunk-d4eg9at2.js#be",
    "chunk-d4eg9at2.js#iji",
@@ -84773,13 +84618,13 @@
    "chunk-z2kk8ttr.js#ae"
   ],
   "chunks": {
-   "chunk-d4eg9at2.js": 59,
+   "chunk-d4eg9at2.js": 62,
    "chunk-y5m1jrzk.js": 2,
    "chunk-z2kk8ttr.js": 2
   },
-  "bytes": 53379,
+  "bytes": 53669,
   "methods": {
-   "placement": 15,
+   "placement": 18,
    "facade-exports": 20,
    "layout": 16,
    "fingerprint": 2,
@@ -84840,21 +84685,6 @@
    "placement": 8,
    "layout": 6,
    "file-local": 1
-  }
- },
- "cli/handlers/_new/parseStringRecord.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-d4eg9at2.js#ge",
-   "chunk-d4eg9at2.js#oe",
-   "chunk-d4eg9at2.js#_n"
-  ],
-  "chunks": {
-   "chunk-d4eg9at2.js": 3
-  },
-  "bytes": 290,
-  "methods": {
-   "sole-consumer-new": 3
   }
  },
  "ink/root.ts": {
@@ -85945,19 +85775,6 @@
    "placement": 3
   }
  },
- "services/api/_new/isEffortHigherThan.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-dcmhvw5a.js#b_r"
-  ],
-  "chunks": {
-   "chunk-dcmhvw5a.js": 1
-  },
-  "bytes": 53,
-  "methods": {
-   "sole-consumer-new": 1
-  }
- },
  "utils/settings/permissionRuleCarveOut.ts": {
   "kind": "first-party",
   "decls": [
@@ -86264,14 +86081,15 @@
    "chunk-dcmhvw5a.js#hn",
    "chunk-dcmhvw5a.js#tu",
    "chunk-dcmhvw5a.js#eu",
-   "chunk-dcmhvw5a.js#nu"
+   "chunk-dcmhvw5a.js#nu",
+   "chunk-dcmhvw5a.js#ou"
   ],
   "chunks": {
-   "chunk-dcmhvw5a.js": 16
+   "chunk-dcmhvw5a.js": 17
   },
-  "bytes": 5620,
+  "bytes": 5657,
   "methods": {
-   "placement": 16
+   "placement": 17
   }
  },
  "@modelcontextprotocol/client/dist/cfWorkerProvider-l7BFVI5n.mjs": {
@@ -86289,19 +86107,6 @@
   "methods": {
    "esm-fingerprint": 2,
    "esm-layout": 1
-  }
- },
- "_unattributed/chunk-dcmhvw5a/part-001.js": {
-  "kind": "unattributed",
-  "decls": [
-   "chunk-dcmhvw5a.js#ou"
-  ],
-  "chunks": {
-   "chunk-dcmhvw5a.js": 1
-  },
-  "bytes": 37,
-  "methods": {
-   "leftover": 1
   }
  },
  "utils/managedEnvConstants.ts": {
@@ -86944,14 +86749,17 @@
    "chunk-dcmhvw5a.js#hw",
    "chunk-dcmhvw5a.js#Tp",
    "chunk-dcmhvw5a.js#Us",
-   "chunk-dcmhvw5a.js#Hs"
+   "chunk-dcmhvw5a.js#Hs",
+   "chunk-dcmhvw5a.js#wp",
+   "chunk-dcmhvw5a.js#Ap"
   ],
   "chunks": {
-   "chunk-dcmhvw5a.js": 12
+   "chunk-dcmhvw5a.js": 14
   },
-  "bytes": 3526,
+  "bytes": 3854,
   "methods": {
-   "placement": 12
+   "placement": 13,
+   "sole-consumer": 1
   }
  },
  "utils/tmuxSocket.ts": {
@@ -86970,23 +86778,9 @@
    "file-local": 1
   }
  },
- "services/mcp/_new/isPathOrParentWritable.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-dcmhvw5a.js#wp"
-  ],
-  "chunks": {
-   "chunk-dcmhvw5a.js": 1
-  },
-  "bytes": 244,
-  "methods": {
-   "sole-consumer-new": 1
-  }
- },
  "utils/settings/managedPath.ts": {
   "kind": "first-party",
   "decls": [
-   "chunk-dcmhvw5a.js#Ap",
    "chunk-dcmhvw5a.js#Pp",
    "chunk-dcmhvw5a.js#js",
    "chunk-dcmhvw5a.js#$s",
@@ -86999,11 +86793,10 @@
    "chunk-dcmhvw5a.js#Pms"
   ],
   "chunks": {
-   "chunk-dcmhvw5a.js": 11
+   "chunk-dcmhvw5a.js": 10
   },
-  "bytes": 1556,
+  "bytes": 1472,
   "methods": {
-   "affinity": 1,
    "placement": 9,
    "fingerprint": 1
   }
@@ -87758,25 +87551,6 @@
   "bytes": 16652,
   "methods": {
    "placement": 12
-  }
- },
- "components/DesktopHandoff.tsx": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-ds2d8kad.js#@15178",
-   "chunk-ds2d8kad.js#w",
-   "chunk-ds2d8kad.js#h",
-   "chunk-ds2d8kad.js#v",
-   "chunk-ds2d8kad.js#C"
-  ],
-  "chunks": {
-   "chunk-ds2d8kad.js": 5
-  },
-  "bytes": 3140,
-  "methods": {
-   "placement": 1,
-   "fingerprint": 3,
-   "layout": 1
   }
  },
  "commands/desktop/desktop.tsx": {
@@ -91503,19 +91277,39 @@
    "placement": 2
   }
  },
- "utils/_new/sweepShellTrees.ts": {
+ "utils/ShellCommand.ts": {
   "kind": "first-party",
   "decls": [
    "chunk-e6aww6q8.js#nAt",
    "chunk-e6aww6q8.js#oAt",
-   "chunk-e6aww6q8.js#aAt"
+   "chunk-e6aww6q8.js#aAt",
+   "chunk-e6aww6q8.js#I9",
+   "chunk-e6aww6q8.js#TAt",
+   "chunk-e6aww6q8.js#x$o",
+   "chunk-e6aww6q8.js#ece",
+   "chunk-e6aww6q8.js#rjt",
+   "chunk-e6aww6q8.js#f3n",
+   "chunk-e6aww6q8.js#uHe",
+   "chunk-e6aww6q8.js#fHe",
+   "chunk-e6aww6q8.js#tce",
+   "chunk-e6aww6q8.js#vAt",
+   "chunk-e6aww6q8.js#J$",
+   "chunk-e6aww6q8.js#pAt",
+   "chunk-e6aww6q8.js#cHe",
+   "chunk-e6aww6q8.js#dHe",
+   "chunk-e6aww6q8.js#Oco",
+   "chunk-e6aww6q8.js#mAt",
+   "chunk-e6aww6q8.js#o_",
+   "chunk-e6aww6q8.js#g4n"
   ],
   "chunks": {
-   "chunk-e6aww6q8.js": 3
+   "chunk-e6aww6q8.js": 21
   },
-  "bytes": 2314,
+  "bytes": 10675,
   "methods": {
-   "sole-consumer-new": 3
+   "placement": 9,
+   "fingerprint": 5,
+   "layout": 7
   }
  },
  "utils/CircularBuffer.ts": {
@@ -91547,38 +91341,6 @@
   "methods": {
    "sole-consumer": 4,
    "fingerprint": 1
-  }
- },
- "utils/ShellCommand.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-e6aww6q8.js#I9",
-   "chunk-e6aww6q8.js#TAt",
-   "chunk-e6aww6q8.js#x$o",
-   "chunk-e6aww6q8.js#ece",
-   "chunk-e6aww6q8.js#rjt",
-   "chunk-e6aww6q8.js#f3n",
-   "chunk-e6aww6q8.js#uHe",
-   "chunk-e6aww6q8.js#fHe",
-   "chunk-e6aww6q8.js#tce",
-   "chunk-e6aww6q8.js#vAt",
-   "chunk-e6aww6q8.js#J$",
-   "chunk-e6aww6q8.js#pAt",
-   "chunk-e6aww6q8.js#cHe",
-   "chunk-e6aww6q8.js#dHe",
-   "chunk-e6aww6q8.js#Oco",
-   "chunk-e6aww6q8.js#mAt",
-   "chunk-e6aww6q8.js#o_",
-   "chunk-e6aww6q8.js#g4n"
-  ],
-  "chunks": {
-   "chunk-e6aww6q8.js": 18
-  },
-  "bytes": 8361,
-  "methods": {
-   "placement": 6,
-   "fingerprint": 5,
-   "layout": 7
   }
  },
  "utils/shell/diskSpaceWarning.ts": {
@@ -93536,6 +93298,7 @@
   "kind": "first-party",
   "decls": [
    "chunk-e6aww6q8.js#Ege",
+   "chunk-e6aww6q8.js#Iwn",
    "chunk-e6aww6q8.js#Uwn",
    "chunk-e6aww6q8.js#Qvr",
    "chunk-e6aww6q8.js#Jvr",
@@ -93565,11 +93328,11 @@
    "chunk-e6aww6q8.js#gEr"
   ],
   "chunks": {
-   "chunk-e6aww6q8.js": 28
+   "chunk-e6aww6q8.js": 29
   },
-  "bytes": 6753,
+  "bytes": 7279,
   "methods": {
-   "placement": 17,
+   "placement": 18,
    "layout": 9,
    "fingerprint": 2
   }
@@ -94091,19 +93854,6 @@
    "placement": 2
   }
  },
- "services/api/_new/returnValue.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-e6aww6q8.js#qBt"
-  ],
-  "chunks": {
-   "chunk-e6aww6q8.js": 1
-  },
-  "bytes": 78,
-  "methods": {
-   "sole-consumer-new": 1
-  }
- },
  "utils/hooks/hookFailures.ts": {
   "kind": "first-party",
   "decls": [
@@ -94566,7 +94316,8 @@
   "bytes": 6557,
   "methods": {
    "fingerprint": 4,
-   "affinity": 3,
+   "sole-consumer": 2,
+   "affinity": 1,
    "file-local": 1,
    "layout": 8,
    "placement": 2
@@ -95558,21 +95309,6 @@
    "sole-consumer": 1
   }
  },
- "tools/BashTool/_new/hasSubshellNode.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-e6aww6q8.js#U2t",
-   "chunk-e6aww6q8.js#YIo",
-   "chunk-e6aww6q8.js#rVt"
-  ],
-  "chunks": {
-   "chunk-e6aww6q8.js": 3
-  },
-  "bytes": 285,
-  "methods": {
-   "sole-consumer-new": 3
-  }
- },
  "tools/BashTool/bashCommandHelpers.ts": {
   "kind": "first-party",
   "decls": [
@@ -95935,19 +95671,6 @@
    "placement": 36
   }
  },
- "screens/repl/_new/nextTeammateMode.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-e6aww6q8.js#gBo"
-  ],
-  "chunks": {
-   "chunk-e6aww6q8.js": 1
-  },
-  "bytes": 103,
-  "methods": {
-   "sole-consumer-new": 1
-  }
- },
  "utils/permissions/denialTracking.ts": {
   "kind": "first-party",
   "decls": [
@@ -96155,22 +95878,6 @@
   "bytes": 8283,
   "methods": {
    "placement": 73
-  }
- },
- "hooks/_new/examinePastedPath.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-e6aww6q8.js#s3t",
-   "chunk-e6aww6q8.js#A_e",
-   "chunk-e6aww6q8.js#i3t",
-   "chunk-e6aww6q8.js#o$i"
-  ],
-  "chunks": {
-   "chunk-e6aww6q8.js": 4
-  },
-  "bytes": 1030,
-  "methods": {
-   "sole-consumer-new": 4
   }
  },
  "components/ClaudeMdExternalIncludesDialog.tsx": {
@@ -97459,21 +97166,6 @@
    "layout": 3,
    "facade-majority": 4,
    "file-local": 2
-  }
- },
- "services/compact/_new/withToolsLoadedBeforeSummary.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-e6aww6q8.js#gZt",
-   "chunk-e6aww6q8.js#yZt",
-   "chunk-e6aww6q8.js#hZt"
-  ],
-  "chunks": {
-   "chunk-e6aww6q8.js": 3
-  },
-  "bytes": 904,
-  "methods": {
-   "sole-consumer-new": 3
   }
  },
  "utils/contextAnalysis.ts": {
@@ -98913,396 +98605,6 @@
    "placement": 36
   }
  },
- "utils/sandbox/sandbox-adapter.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-fq0cr76a.js#Z6r",
-   "chunk-fq0cr76a.js#t3r",
-   "chunk-fq0cr76a.js#f$",
-   "chunk-fq0cr76a.js#Zq",
-   "chunk-fq0cr76a.js#z6",
-   "chunk-fq0cr76a.js#dTt",
-   "chunk-fq0cr76a.js#Oot",
-   "chunk-fq0cr76a.js#n3r",
-   "chunk-fq0cr76a.js#KFi",
-   "chunk-fq0cr76a.js#yce",
-   "chunk-fq0cr76a.js#jp",
-   "chunk-fq0cr76a.js#cTt",
-   "chunk-fq0cr76a.js#R4",
-   "chunk-fq0cr76a.js#uTt",
-   "chunk-fq0cr76a.js#Ki",
-   "chunk-fq0cr76a.js#Aie",
-   "chunk-fq0cr76a.js#K0",
-   "chunk-fq0cr76a.js#r3r",
-   "chunk-fq0cr76a.js#fTt",
-   "chunk-fq0cr76a.js#o3r",
-   "chunk-fq0cr76a.js#Ior",
-   "chunk-fq0cr76a.js#s3r",
-   "chunk-fq0cr76a.js#p$",
-   "chunk-fq0cr76a.js#h$",
-   "chunk-fq0cr76a.js#Wd",
-   "chunk-fq0cr76a.js#q0",
-   "chunk-fq0cr76a.js#bce",
-   "chunk-fq0cr76a.js#$0",
-   "chunk-fq0cr76a.js#Mpe",
-   "chunk-fq0cr76a.js#$p",
-   "chunk-fq0cr76a.js#I4",
-   "chunk-fq0cr76a.js#Qv",
-   "chunk-fq0cr76a.js#m$",
-   "chunk-fq0cr76a.js#g$",
-   "chunk-fq0cr76a.js#y$",
-   "chunk-fq0cr76a.js#rb",
-   "chunk-fq0cr76a.js#ew",
-   "chunk-fq0cr76a.js#yw",
-   "chunk-fq0cr76a.js#Vp",
-   "chunk-fq0cr76a.js#j0",
-   "chunk-fq0cr76a.js#i3r",
-   "chunk-fq0cr76a.js#tw",
-   "chunk-fq0cr76a.js#fwe",
-   "chunk-fq0cr76a.js#R3o",
-   "chunk-fq0cr76a.js#b$",
-   "chunk-fq0cr76a.js#E$",
-   "chunk-fq0cr76a.js#x$",
-   "chunk-fq0cr76a.js#Sce",
-   "chunk-fq0cr76a.js#_$",
-   "chunk-fq0cr76a.js#Ece",
-   "chunk-fq0cr76a.js#v$",
-   "chunk-fq0cr76a.js#xce",
-   "chunk-fq0cr76a.js#Qp",
-   "chunk-fq0cr76a.js#x3o",
-   "chunk-fq0cr76a.js#bw",
-   "chunk-fq0cr76a.js#_ce",
-   "chunk-fq0cr76a.js#w$",
-   "chunk-fq0cr76a.js#k4",
-   "chunk-fq0cr76a.js#Oor",
-   "chunk-fq0cr76a.js#T$",
-   "chunk-fq0cr76a.js#A$",
-   "chunk-fq0cr76a.js#C$",
-   "chunk-fq0cr76a.js#Wp",
-   "chunk-fq0cr76a.js#R$",
-   "chunk-fq0cr76a.js#jxe",
-   "chunk-fq0cr76a.js#vce",
-   "chunk-fq0cr76a.js#m4e",
-   "chunk-fq0cr76a.js#a3r",
-   "chunk-fq0cr76a.js#wce",
-   "chunk-fq0cr76a.js#I$",
-   "chunk-fq0cr76a.js#P3o",
-   "chunk-fq0cr76a.js#N$",
-   "chunk-fq0cr76a.js#Mot",
-   "chunk-fq0cr76a.js#k$",
-   "chunk-fq0cr76a.js#XC",
-   "chunk-fq0cr76a.js#Mor",
-   "chunk-fq0cr76a.js#Tce",
-   "chunk-fq0cr76a.js#VSe",
-   "chunk-fq0cr76a.js#sb",
-   "chunk-fq0cr76a.js#Dor",
-   "chunk-fq0cr76a.js#I3o",
-   "chunk-fq0cr76a.js#Sqt",
-   "chunk-fq0cr76a.js#Sw",
-   "chunk-fq0cr76a.js#Yp",
-   "chunk-fq0cr76a.js#Ace",
-   "chunk-fq0cr76a.js#l3r",
-   "chunk-fq0cr76a.js#d3r",
-   "chunk-fq0cr76a.js#Cce",
-   "chunk-fq0cr76a.js#Rce",
-   "chunk-fq0cr76a.js#c3r",
-   "chunk-fq0cr76a.js#dJ",
-   "chunk-fq0cr76a.js#Ew",
-   "chunk-fq0cr76a.js#Ice",
-   "chunk-fq0cr76a.js#O$",
-   "chunk-fq0cr76a.js#P$",
-   "chunk-fq0cr76a.js#Nce",
-   "chunk-fq0cr76a.js#kce",
-   "chunk-fq0cr76a.js#g4e",
-   "chunk-fq0cr76a.js#xw",
-   "chunk-fq0cr76a.js#nw",
-   "chunk-fq0cr76a.js#Kv",
-   "chunk-fq0cr76a.js#O3o",
-   "chunk-fq0cr76a.js#Dce",
-   "chunk-fq0cr76a.js#zs",
-   "chunk-fq0cr76a.js#Oce",
-   "chunk-fq0cr76a.js#Pce",
-   "chunk-fq0cr76a.js#Lce",
-   "chunk-fq0cr76a.js#Bce",
-   "chunk-fq0cr76a.js#Uce",
-   "chunk-fq0cr76a.js#L$",
-   "chunk-fq0cr76a.js#D4",
-   "chunk-fq0cr76a.js#Fce",
-   "chunk-fq0cr76a.js#Mce",
-   "chunk-fq0cr76a.js#$ce",
-   "chunk-fq0cr76a.js#Gp",
-   "chunk-fq0cr76a.js#_w",
-   "chunk-fq0cr76a.js#B$",
-   "chunk-fq0cr76a.js#U$",
-   "chunk-fq0cr76a.js#vw",
-   "chunk-fq0cr76a.js#Vce",
-   "chunk-fq0cr76a.js#Zp",
-   "chunk-fq0cr76a.js#zp",
-   "chunk-fq0cr76a.js#eh",
-   "chunk-fq0cr76a.js#Wce",
-   "chunk-fq0cr76a.js#O4",
-   "chunk-fq0cr76a.js#Y0",
-   "chunk-fq0cr76a.js#P4",
-   "chunk-fq0cr76a.js#Gce",
-   "chunk-fq0cr76a.js#Kce",
-   "chunk-fq0cr76a.js#Vd",
-   "chunk-fq0cr76a.js#Hp",
-   "chunk-fq0cr76a.js#qce",
-   "chunk-fq0cr76a.js#J0",
-   "chunk-fq0cr76a.js#Hd",
-   "chunk-fq0cr76a.js#Oc",
-   "chunk-fq0cr76a.js#ww",
-   "chunk-fq0cr76a.js#L4",
-   "chunk-fq0cr76a.js#Wxe",
-   "chunk-fq0cr76a.js#Yce",
-   "chunk-fq0cr76a.js#B4",
-   "chunk-fq0cr76a.js#V0",
-   "chunk-fq0cr76a.js#Zce",
-   "chunk-fq0cr76a.js#co",
-   "chunk-fq0cr76a.js#F$",
-   "chunk-fq0cr76a.js#qv",
-   "chunk-fq0cr76a.js#M$",
-   "chunk-fq0cr76a.js#jv",
-   "chunk-fq0cr76a.js#Fp",
-   "chunk-fq0cr76a.js#$$",
-   "chunk-fq0cr76a.js#V$",
-   "chunk-fq0cr76a.js#zce",
-   "chunk-fq0cr76a.js#W$",
-   "chunk-fq0cr76a.js#Xce",
-   "chunk-fq0cr76a.js#Jce",
-   "chunk-fq0cr76a.js#Qce",
-   "chunk-fq0cr76a.js#Q0",
-   "chunk-fq0cr76a.js#_i",
-   "chunk-fq0cr76a.js#G$",
-   "chunk-fq0cr76a.js#U4",
-   "chunk-fq0cr76a.js#H$",
-   "chunk-fq0cr76a.js#rw",
-   "chunk-fq0cr76a.js#He",
-   "chunk-fq0cr76a.js#Xp",
-   "chunk-fq0cr76a.js#M3o",
-   "chunk-fq0cr76a.js#D3o",
-   "chunk-fq0cr76a.js#F4",
-   "chunk-fq0cr76a.js#eue",
-   "chunk-fq0cr76a.js#Ar",
-   "chunk-fq0cr76a.js#Xs",
-   "chunk-fq0cr76a.js#tue",
-   "chunk-fq0cr76a.js#Tw",
-   "chunk-fq0cr76a.js#nue",
-   "chunk-fq0cr76a.js#K$",
-   "chunk-fq0cr76a.js#M4",
-   "chunk-fq0cr76a.js#$4",
-   "chunk-fq0cr76a.js#W0",
-   "chunk-fq0cr76a.js#rue",
-   "chunk-fq0cr76a.js#sue",
-   "chunk-fq0cr76a.js#iue",
-   "chunk-fq0cr76a.js#q$",
-   "chunk-fq0cr76a.js#j$",
-   "chunk-fq0cr76a.js#oue",
-   "chunk-fq0cr76a.js#Zv",
-   "chunk-fq0cr76a.js#Y$",
-   "chunk-fq0cr76a.js#Z$",
-   "chunk-fq0cr76a.js#aue",
-   "chunk-fq0cr76a.js#lue",
-   "chunk-fq0cr76a.js#z$",
-   "chunk-fq0cr76a.js#ib",
-   "chunk-fq0cr76a.js#X$",
-   "chunk-fq0cr76a.js#Aw",
-   "chunk-fq0cr76a.js#Ia",
-   "chunk-fq0cr76a.js#$d",
-   "chunk-fq0cr76a.js#cue",
-   "chunk-fq0cr76a.js#J$",
-   "chunk-fq0cr76a.js#eb",
-   "chunk-fq0cr76a.js#uue",
-   "chunk-fq0cr76a.js#V4",
-   "chunk-fq0cr76a.js#Kp",
-   "chunk-fq0cr76a.js#ea",
-   "chunk-fq0cr76a.js#Na",
-   "chunk-fq0cr76a.js#due",
-   "chunk-fq0cr76a.js#fue",
-   "chunk-fq0cr76a.js#pue",
-   "chunk-fq0cr76a.js#hue",
-   "chunk-fq0cr76a.js#Q$",
-   "chunk-fq0cr76a.js#sw",
-   "chunk-fq0cr76a.js#mue",
-   "chunk-fq0cr76a.js#Lor",
-   "chunk-fq0cr76a.js#iw",
-   "chunk-fq0cr76a.js#eV",
-   "chunk-fq0cr76a.js#ow",
-   "chunk-fq0cr76a.js#W4",
-   "chunk-fq0cr76a.js#gue",
-   "chunk-fq0cr76a.js#tV",
-   "chunk-fq0cr76a.js#nV",
-   "chunk-fq0cr76a.js#G4",
-   "chunk-fq0cr76a.js#G0",
-   "chunk-fq0cr76a.js#bue",
-   "chunk-fq0cr76a.js#rV",
-   "chunk-fq0cr76a.js#H4",
-   "chunk-fq0cr76a.js#Eue",
-   "chunk-fq0cr76a.js#K4",
-   "chunk-fq0cr76a.js#q4",
-   "chunk-fq0cr76a.js#xue",
-   "chunk-fq0cr76a.js#_ue",
-   "chunk-fq0cr76a.js#sV",
-   "chunk-fq0cr76a.js#aw",
-   "chunk-fq0cr76a.js#j4",
-   "chunk-fq0cr76a.js#Y4",
-   "chunk-fq0cr76a.js#Lp",
-   "chunk-fq0cr76a.js#iV",
-   "chunk-fq0cr76a.js#lw",
-   "chunk-fq0cr76a.js#oV",
-   "chunk-fq0cr76a.js#aV",
-   "chunk-fq0cr76a.js#Hor",
-   "chunk-fq0cr76a.js#Pc",
-   "chunk-fq0cr76a.js#vue",
-   "chunk-fq0cr76a.js#wue",
-   "chunk-fq0cr76a.js#lV",
-   "chunk-fq0cr76a.js#cV",
-   "chunk-fq0cr76a.js#uV",
-   "chunk-fq0cr76a.js#Tue",
-   "chunk-fq0cr76a.js#Dpe",
-   "chunk-fq0cr76a.js#ql",
-   "chunk-fq0cr76a.js#Lpe",
-   "chunk-fq0cr76a.js#dV",
-   "chunk-fq0cr76a.js#Aue",
-   "chunk-fq0cr76a.js#fV",
-   "chunk-fq0cr76a.js#Oa",
-   "chunk-fq0cr76a.js#Cue",
-   "chunk-fq0cr76a.js#Rue",
-   "chunk-fq0cr76a.js#pV",
-   "chunk-fq0cr76a.js#Iue",
-   "chunk-fq0cr76a.js#hV",
-   "chunk-fq0cr76a.js#cw",
-   "chunk-fq0cr76a.js#mV",
-   "chunk-fq0cr76a.js#gV",
-   "chunk-fq0cr76a.js#Nue",
-   "chunk-fq0cr76a.js#uw",
-   "chunk-fq0cr76a.js#tb",
-   "chunk-fq0cr76a.js#Oue",
-   "chunk-fq0cr76a.js#Pue",
-   "chunk-fq0cr76a.js#Z4",
-   "chunk-fq0cr76a.js#yV",
-   "chunk-fq0cr76a.js#z4",
-   "chunk-fq0cr76a.js#Jp",
-   "chunk-fq0cr76a.js#dw",
-   "chunk-fq0cr76a.js#H0",
-   "chunk-fq0cr76a.js#X4",
-   "chunk-fq0cr76a.js#Lue",
-   "chunk-fq0cr76a.js#Bue",
-   "chunk-fq0cr76a.js#bV",
-   "chunk-fq0cr76a.js#Uue",
-   "chunk-fq0cr76a.js#Fue",
-   "chunk-fq0cr76a.js#Cw",
-   "chunk-fq0cr76a.js#Mue",
-   "chunk-fq0cr76a.js#ob",
-   "chunk-fq0cr76a.js#Dc",
-   "chunk-fq0cr76a.js#SV",
-   "chunk-fq0cr76a.js#EV",
-   "chunk-fq0cr76a.js#Jo",
-   "chunk-fq0cr76a.js#Z0",
-   "chunk-fq0cr76a.js#ab",
-   "chunk-fq0cr76a.js#$ue",
-   "chunk-fq0cr76a.js#Rw",
-   "chunk-fq0cr76a.js#Iw",
-   "chunk-fq0cr76a.js#Vue",
-   "chunk-fq0cr76a.js#@1030390",
-   "chunk-fq0cr76a.js#Kd",
-   "chunk-fq0cr76a.js#lb",
-   "chunk-fq0cr76a.js#th",
-   "chunk-fq0cr76a.js#Bc",
-   "chunk-fq0cr76a.js#xV",
-   "chunk-fq0cr76a.js#cb",
-   "chunk-fq0cr76a.js#_V",
-   "chunk-fq0cr76a.js#L3o",
-   "chunk-fq0cr76a.js#wqt",
-   "chunk-fq0cr76a.js#H3o",
-   "chunk-fq0cr76a.js#nh",
-   "chunk-fq0cr76a.js#vV",
-   "chunk-fq0cr76a.js#wV",
-   "chunk-fq0cr76a.js#Nor",
-   "chunk-fq0cr76a.js#Nw",
-   "chunk-fq0cr76a.js#Wue",
-   "chunk-fq0cr76a.js#Gue",
-   "chunk-fq0cr76a.js#Hue",
-   "chunk-fq0cr76a.js#kw",
-   "chunk-fq0cr76a.js#Kue",
-   "chunk-fq0cr76a.js#que",
-   "chunk-fq0cr76a.js#TV",
-   "chunk-fq0cr76a.js#jue",
-   "chunk-fq0cr76a.js#Yue",
-   "chunk-fq0cr76a.js#Zue",
-   "chunk-fq0cr76a.js#pTt",
-   "chunk-fq0cr76a.js#AV",
-   "chunk-fq0cr76a.js#zue",
-   "chunk-fq0cr76a.js#Xue",
-   "chunk-fq0cr76a.js#CV",
-   "chunk-fq0cr76a.js#Jue",
-   "chunk-fq0cr76a.js#Que",
-   "chunk-fq0cr76a.js#Dw",
-   "chunk-fq0cr76a.js#ede",
-   "chunk-fq0cr76a.js#u3r",
-   "chunk-fq0cr76a.js#N3o",
-   "chunk-fq0cr76a.js#RV",
-   "chunk-fq0cr76a.js#IV",
-   "chunk-fq0cr76a.js#tde",
-   "chunk-fq0cr76a.js#nde",
-   "chunk-fq0cr76a.js#fw",
-   "chunk-fq0cr76a.js#Ow",
-   "chunk-fq0cr76a.js#Mp",
-   "chunk-fq0cr76a.js#ub",
-   "chunk-fq0cr76a.js#hw",
-   "chunk-fq0cr76a.js#rde",
-   "chunk-fq0cr76a.js#nwn",
-   "chunk-fq0cr76a.js#qp",
-   "chunk-fq0cr76a.js#kV",
-   "chunk-fq0cr76a.js#DV",
-   "chunk-fq0cr76a.js#OV",
-   "chunk-fq0cr76a.js#PV",
-   "chunk-fq0cr76a.js#ide",
-   "chunk-fq0cr76a.js#ode",
-   "chunk-fq0cr76a.js#LV",
-   "chunk-fq0cr76a.js#J4",
-   "chunk-fq0cr76a.js#ade",
-   "chunk-fq0cr76a.js#lde",
-   "chunk-fq0cr76a.js#BV",
-   "chunk-fq0cr76a.js#Q4",
-   "chunk-fq0cr76a.js#e$",
-   "chunk-fq0cr76a.js#UV",
-   "chunk-fq0cr76a.js#cde",
-   "chunk-fq0cr76a.js#ude",
-   "chunk-fq0cr76a.js#t$",
-   "chunk-fq0cr76a.js#n$",
-   "chunk-fq0cr76a.js#r$",
-   "chunk-fq0cr76a.js#dde",
-   "chunk-fq0cr76a.js#Pw",
-   "chunk-fq0cr76a.js#db",
-   "chunk-fq0cr76a.js#fde",
-   "chunk-fq0cr76a.js#rwn",
-   "chunk-fq0cr76a.js#Xv",
-   "chunk-fq0cr76a.js#Ke",
-   "chunk-fq0cr76a.js#s$",
-   "chunk-fq0cr76a.js#Bp",
-   "chunk-fq0cr76a.js#i$",
-   "chunk-fq0cr76a.js#hde",
-   "chunk-fq0cr76a.js#mde",
-   "chunk-fq0cr76a.js#o$",
-   "chunk-fq0cr76a.js#nb",
-   "chunk-e6aww6q8.js#wer"
-  ],
-  "chunks": {
-   "chunk-e6aww6q8.js": 1,
-   "chunk-fq0cr76a.js": 370
-  },
-  "bytes": 159617,
-  "methods": {
-   "fingerprint": 12,
-   "placement": 307,
-   "sole-consumer": 1,
-   "layout": 47,
-   "callgraph-fingerprint": 1,
-   "file-local": 2,
-   "callgraph-witnessed": 1
-  }
- },
  "utils/teleport/screenedGit.ts": {
   "kind": "first-party",
   "decls": [
@@ -100537,19 +99839,6 @@
   "bytes": 1851,
   "methods": {
    "placement": 10
-  }
- },
- "utils/_new/oauth401DedupByHost.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-e6aww6q8.js#Ean"
-  ],
-  "chunks": {
-   "chunk-e6aww6q8.js": 1
-  },
-  "bytes": 27,
-  "methods": {
-   "sole-consumer-new": 1
   }
  },
  "services/mcp/mcpAccountKey.ts": {
@@ -101942,19 +101231,6 @@
    "callgraph-witnessed": 1
   }
  },
- "utils/shell/_new/probeSpawnEnv.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-e6aww6q8.js#Iwn"
-  ],
-  "chunks": {
-   "chunk-e6aww6q8.js": 1
-  },
-  "bytes": 526,
-  "methods": {
-   "sole-consumer-new": 1
-  }
- },
  "utils/bash/shellQuoting.ts": {
   "kind": "first-party",
   "decls": [
@@ -102357,19 +101633,6 @@
    "fingerprint": 31,
    "file-local": 1,
    "layout": 10
-  }
- },
- "commands/ide/_new/detectVSCodeFamily.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-e6aww6q8.js#k8s"
-  ],
-  "chunks": {
-   "chunk-e6aww6q8.js": 1
-  },
-  "bytes": 326,
-  "methods": {
-   "sole-consumer-new": 1
   }
  },
  "hooks/useIdeConnectionStatus.ts": {
@@ -102950,19 +102213,6 @@
    "layout": 1
   }
  },
- "cli/print/_new/executeMessageDisplayHooks.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-e6aww6q8.js#$zr"
-  ],
-  "chunks": {
-   "chunk-e6aww6q8.js": 1
-  },
-  "bytes": 364,
-  "methods": {
-   "sole-consumer-new": 1
-  }
- },
  "utils/model/modelSwitchHooks.ts": {
   "kind": "first-party",
   "decls": [
@@ -103510,6 +102760,8 @@
   "decls": [
    "chunk-e6aww6q8.js#lDn",
    "chunk-e6aww6q8.js#F$r",
+   "chunk-e6aww6q8.js#RLn",
+   "chunk-e6aww6q8.js#YHr",
    "chunk-e6aww6q8.js#C3r",
    "chunk-e6aww6q8.js#YPe",
    "chunk-e6aww6q8.js#Y$n",
@@ -103522,11 +102774,11 @@
    "chunk-e6aww6q8.js#V$n"
   ],
   "chunks": {
-   "chunk-e6aww6q8.js": 12
+   "chunk-e6aww6q8.js": 14
   },
-  "bytes": 2378,
+  "bytes": 3632,
   "methods": {
-   "placement": 12
+   "placement": 14
   }
  },
  "plugins/functionHooks/audioApi.ts": {
@@ -103661,19 +102913,6 @@
    "placement": 1
   }
  },
- "plugins/functionHooks/_new/_new/agentDisplayStatus.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-e6aww6q8.js#RLn"
-  ],
-  "chunks": {
-   "chunk-e6aww6q8.js": 1
-  },
-  "bytes": 415,
-  "methods": {
-   "sole-consumer-new": 1
-  }
- },
  "utils/teamDiscovery.ts": {
   "kind": "first-party",
   "decls": [
@@ -103685,19 +102924,6 @@
   "bytes": 363,
   "methods": {
    "callgraph-fingerprint": 1
-  }
- },
- "plugins/functionHooks/_new/listAgentsForPlugin.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-e6aww6q8.js#YHr"
-  ],
-  "chunks": {
-   "chunk-e6aww6q8.js": 1
-  },
-  "bytes": 839,
-  "methods": {
-   "sole-consumer-new": 1
   }
  },
  "utils/remoteTools/folderTargets.ts": {
@@ -103738,19 +102964,6 @@
   "bytes": 5745,
   "methods": {
    "placement": 11
-  }
- },
- "services/tools/_new/toolExecution.helpers-e6aw.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-e6aww6q8.js#voe"
-  ],
-  "chunks": {
-   "chunk-e6aww6q8.js": 1
-  },
-  "bytes": 46,
-  "methods": {
-   "sole-consumer-new": 1
   }
  },
  "services/tools/toolDecisionTelemetry.ts": {
@@ -104125,19 +103338,6 @@
    "placement": 56
   }
  },
- "components/_new/teammateRowState.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-e6aww6q8.js#nHn"
-  ],
-  "chunks": {
-   "chunk-e6aww6q8.js": 1
-  },
-  "bytes": 170,
-  "methods": {
-   "sole-consumer-new": 1
-  }
- },
  "context/voice.tsx": {
   "kind": "first-party",
   "decls": [
@@ -104147,7 +103347,6 @@
    "chunk-yj65zw1g.js#i",
    "chunk-yj65zw1g.js#IRr",
    "chunk-yj65zw1g.js#r",
-   "chunk-yj65zw1g.js#PJe",
    "chunk-yj65zw1g.js#KWe",
    "chunk-hxkp4105.js#@300",
    "chunk-hxkp4105.js#Jw",
@@ -104156,13 +103355,12 @@
   "chunks": {
    "chunk-e6aww6q8.js": 1,
    "chunk-hxkp4105.js": 2,
-   "chunk-yj65zw1g.js": 8
+   "chunk-yj65zw1g.js": 7
   },
-  "bytes": 941,
+  "bytes": 909,
   "methods": {
    "fingerprint": 4,
    "placement": 5,
-   "affinity": 1,
    "callgraph-fingerprint": 1
   }
  },
@@ -105767,19 +104965,6 @@
    "fingerprint": 1
   }
  },
- "tools/FileEditTool/_new/normalizeEditInputAliases.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-e6aww6q8.js#c2n"
-  ],
-  "chunks": {
-   "chunk-e6aww6q8.js": 1
-  },
-  "bytes": 619,
-  "methods": {
-   "sole-consumer-new": 1
-  }
- },
  "tools/FileEditTool/prompt.ts": {
   "kind": "first-party",
   "decls": [
@@ -105794,22 +104979,6 @@
   "methods": {
    "fingerprint": 2,
    "layout": 1
-  }
- },
- "tools/FileEditTool/_new/recordEditFingerprint.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-e6aww6q8.js#vpt",
-   "chunk-e6aww6q8.js#m2n",
-   "chunk-e6aww6q8.js#Ept",
-   "chunk-e6aww6q8.js#CTs"
-  ],
-  "chunks": {
-   "chunk-e6aww6q8.js": 4
-  },
-  "bytes": 759,
-  "methods": {
-   "sole-consumer-new": 4
   }
  },
  "tools/FileEditTool/FileEditTool.ts": {
@@ -113452,21 +112621,6 @@
    "layout": 1
   }
  },
- "cli/transports/_new/pendingActionSchema.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-fp6aqx1j.js#hs",
-   "chunk-fp6aqx1j.js#ms",
-   "chunk-fp6aqx1j.js#vs"
-  ],
-  "chunks": {
-   "chunk-fp6aqx1j.js": 3
-  },
-  "bytes": 1299,
-  "methods": {
-   "sole-consumer-new": 3
-  }
- },
  "cli/transports/HybridTransport.ts": {
   "kind": "first-party",
   "decls": [
@@ -118011,27 +117165,15 @@
    "chunk-g54kbxqw.js#ha",
    "chunk-g54kbxqw.js#ya",
    "chunk-g54kbxqw.js#_a",
-   "chunk-g54kbxqw.js#yn"
-  ],
-  "chunks": {
-   "chunk-g54kbxqw.js": 40
-  },
-  "bytes": 7372,
-  "methods": {
-   "placement": 40
-  }
- },
- "services/api/_new/messageContentBlocks.ts": {
-  "kind": "first-party",
-  "decls": [
+   "chunk-g54kbxqw.js#yn",
    "chunk-g54kbxqw.js#_n"
   ],
   "chunks": {
-   "chunk-g54kbxqw.js": 1
+   "chunk-g54kbxqw.js": 41
   },
-  "bytes": 197,
+  "bytes": 7569,
   "methods": {
-   "sole-consumer-new": 1
+   "placement": 41
   }
  },
  "constants/promptSections.ts": {
@@ -118103,20 +117245,6 @@
   "methods": {
    "fingerprint": 3,
    "layout": 3
-  }
- },
- "tools/GlobTool/_new/GLOB_DESCRIPTION.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-g54kbxqw.js#S7o",
-   "chunk-g54kbxqw.js#sr"
-  ],
-  "chunks": {
-   "chunk-g54kbxqw.js": 2
-  },
-  "bytes": 634,
-  "methods": {
-   "sole-consumer-new": 2
   }
  },
  "tools/WebFetchTool/prompt.ts": {
@@ -119614,20 +118742,6 @@
    "callgraph-fingerprint": 1
   }
  },
- "utils/_new/classifyKeychainError.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-gwwacf44.js#kRi",
-   "chunk-gwwacf44.js#TRi"
-  ],
-  "chunks": {
-   "chunk-gwwacf44.js": 2
-  },
-  "bytes": 984,
-  "methods": {
-   "sole-consumer-new": 2
-  }
- },
  "tools/SendMessageTool/selfTarget.ts": {
   "kind": "first-party",
   "decls": [
@@ -120682,18 +119796,16 @@
    "chunk-h6b7mazd.js#@103290",
    "chunk-h6b7mazd.js#Dt",
    "chunk-h6b7mazd.js#Sy",
-   "chunk-tyg7f3ek.js#nA",
    "chunk-tyg7f3ek.js#tA"
   ],
   "chunks": {
    "chunk-h6b7mazd.js": 107,
-   "chunk-tyg7f3ek.js": 2
+   "chunk-tyg7f3ek.js": 1
   },
-  "bytes": 30795,
+  "bytes": 29933,
   "methods": {
    "esm-layout": 26,
-   "esm-fingerprint": 82,
-   "affinity": 1
+   "esm-fingerprint": 82
   }
  },
  "axios/dist/node/axios.cjs": {
@@ -120815,17 +119927,23 @@
    "fingerprint": 1
   }
  },
- "commands/plan/_new/plan.helpers-h6f3.ts": {
+ "commands/plan/plan.tsx": {
   "kind": "first-party",
   "decls": [
+   "chunk-ve85yyeb.js#B",
+   "chunk-ve85yyeb.js#b",
+   "chunk-ve85yyeb.js#le",
    "chunk-h6f3feta.js#QFn"
   ],
   "chunks": {
-   "chunk-h6f3feta.js": 1
+   "chunk-h6f3feta.js": 1,
+   "chunk-ve85yyeb.js": 3
   },
-  "bytes": 58,
+  "bytes": 3791,
   "methods": {
-   "sole-consumer-new": 1
+   "placement": 1,
+   "affinity": 1,
+   "fingerprint": 2
   }
  },
  "services/mcp/mcpServerOrigin.ts": {
@@ -122080,18 +121198,27 @@
    "placement": 9
   }
  },
- "skills/bundled/_new/index.helpers-hant.ts": {
+ "skills/bundled/index.ts": {
   "kind": "first-party",
   "decls": [
    "chunk-hantmvxa.js#Co",
-   "chunk-hantmvxa.js#_o"
+   "chunk-hantmvxa.js#_o",
+   "chunk-hantmvxa.js#Vo",
+   "chunk-hantmvxa.js#pn",
+   "chunk-hantmvxa.js#Qi",
+   "chunk-hantmvxa.js#mn",
+   "chunk-hantmvxa.js#ALe",
+   "chunk-pjf54ny3.js#UWn"
   ],
   "chunks": {
-   "chunk-hantmvxa.js": 2
+   "chunk-hantmvxa.js": 7,
+   "chunk-pjf54ny3.js": 1
   },
-  "bytes": 30,
+  "bytes": 2209,
   "methods": {
-   "sole-consumer-new": 2
+   "placement": 4,
+   "sole-consumer": 3,
+   "callgraph-witnessed": 1
   }
  },
  "skills/bundled/stuck.ts": {
@@ -122168,6 +121295,19 @@
    "callgraph-fingerprint": 1
   }
  },
+ "_unattributed/chunk-hantmvxa/part-001.js": {
+  "kind": "unattributed",
+  "decls": [
+   "chunk-hantmvxa.js#Uo"
+  ],
+  "chunks": {
+   "chunk-hantmvxa.js": 1
+  },
+  "bytes": 51,
+  "methods": {
+   "leftover": 1
+  }
+ },
  "skills/bundled/claudeApi.ts": {
   "kind": "first-party",
   "decls": [
@@ -122176,45 +121316,80 @@
    "chunk-ym2xht5h.js#D",
    "chunk-ym2xht5h.js#I",
    "chunk-ym2xht5h.js#B",
-   "chunk-hantmvxa.js#Uo",
    "chunk-hantmvxa.js#mi",
    "chunk-jy3v56kg.js#Be",
    "chunk-v8425tx0.js#B"
   ],
   "chunks": {
-   "chunk-hantmvxa.js": 2,
+   "chunk-hantmvxa.js": 1,
    "chunk-jy3v56kg.js": 1,
    "chunk-v8425tx0.js": 1,
    "chunk-ym2xht5h.js": 5
   },
-  "bytes": 5897,
+  "bytes": 5846,
   "methods": {
-   "affinity": 2,
    "fingerprint": 4,
-   "sole-consumer": 3
+   "sole-consumer": 3,
+   "affinity": 1
   }
  },
- "skills/bundled/_new/buildDoctorPrompt.ts": {
+ "skills/bundled/designSync.ts": {
   "kind": "first-party",
   "decls": [
    "chunk-hantmvxa.js#fi",
-   "chunk-hantmvxa.js#jo",
+   "chunk-hantmvxa.js#jo"
+  ],
+  "chunks": {
+   "chunk-hantmvxa.js": 2
+  },
+  "bytes": 795,
+  "methods": {
+   "placement": 2
+  }
+ },
+ "skills/bundled/doctor.ts": {
+  "kind": "first-party",
+  "decls": [
    "chunk-hantmvxa.js#gi",
    "chunk-hantmvxa.js#yi",
    "chunk-hantmvxa.js#Fo",
    "chunk-hantmvxa.js#wi",
-   "chunk-hantmvxa.js#Bo",
+   "chunk-hantmvxa.js#Bo"
+  ],
+  "chunks": {
+   "chunk-hantmvxa.js": 5
+  },
+  "bytes": 50994,
+  "methods": {
+   "placement": 5
+  }
+ },
+ "skills/bundled/explainUsageSkill.ts": {
+  "kind": "first-party",
+  "decls": [
    "chunk-hantmvxa.js#bi",
-   "chunk-hantmvxa.js#Ho",
+   "chunk-hantmvxa.js#Ho"
+  ],
+  "chunks": {
+   "chunk-hantmvxa.js": 2
+  },
+  "bytes": 1914,
+  "methods": {
+   "placement": 2
+  }
+ },
+ "skills/bundled/fewerPermissionPrompts.ts": {
+  "kind": "first-party",
+  "decls": [
    "chunk-hantmvxa.js#ki",
    "chunk-hantmvxa.js#Go"
   ],
   "chunks": {
-   "chunk-hantmvxa.js": 11
+   "chunk-hantmvxa.js": 2
   },
-  "bytes": 61968,
+  "bytes": 8265,
   "methods": {
-   "sole-consumer-new": 11
+   "placement": 2
   }
  },
  "skills/bundled/loremIpsum.ts": {
@@ -122234,27 +121409,6 @@
    "callgraph-fingerprint": 2
   }
  },
- "skills/bundled/index.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-hantmvxa.js#Vo",
-   "chunk-hantmvxa.js#pn",
-   "chunk-hantmvxa.js#Qi",
-   "chunk-hantmvxa.js#mn",
-   "chunk-hantmvxa.js#ALe",
-   "chunk-pjf54ny3.js#UWn"
-  ],
-  "chunks": {
-   "chunk-hantmvxa.js": 5,
-   "chunk-pjf54ny3.js": 1
-  },
-  "bytes": 2179,
-  "methods": {
-   "placement": 2,
-   "sole-consumer": 3,
-   "callgraph-witnessed": 1
-  }
- },
  "skills/bundled/remember.ts": {
   "kind": "first-party",
   "decls": [
@@ -122270,7 +121424,7 @@
    "callgraph-fingerprint": 1
   }
  },
- "skills/bundled/_new/getSkillifyPrompt.ts": {
+ "skills/bundled/createPr.ts": {
   "kind": "first-party",
   "decls": [
    "chunk-hantmvxa.js#Qo",
@@ -122278,20 +121432,56 @@
    "chunk-hantmvxa.js#Gi",
    "chunk-hantmvxa.js#Wi",
    "chunk-hantmvxa.js#on",
-   "chunk-hantmvxa.js#sn",
+   "chunk-hantmvxa.js#sn"
+  ],
+  "chunks": {
+   "chunk-hantmvxa.js": 6
+  },
+  "bytes": 3497,
+  "methods": {
+   "placement": 6
+  }
+ },
+ "skills/bundled/simplify.ts": {
+  "kind": "first-party",
+  "decls": [
    "chunk-hantmvxa.js#qi",
-   "chunk-hantmvxa.js#an",
+   "chunk-hantmvxa.js#an"
+  ],
+  "chunks": {
+   "chunk-hantmvxa.js": 2
+  },
+  "bytes": 3183,
+  "methods": {
+   "placement": 2
+  }
+ },
+ "skills/bundled/skillifyPrompt.ts": {
+  "kind": "first-party",
+  "decls": [
    "chunk-hantmvxa.js#Vi",
-   "chunk-hantmvxa.js#rn",
+   "chunk-hantmvxa.js#rn"
+  ],
+  "chunks": {
+   "chunk-hantmvxa.js": 2
+  },
+  "bytes": 7379,
+  "methods": {
+   "placement": 2
+  }
+ },
+ "skills/bundled/stuckPrompt.ts": {
+  "kind": "first-party",
+  "decls": [
    "chunk-hantmvxa.js#Ki",
    "chunk-hantmvxa.js#ln"
   ],
   "chunks": {
-   "chunk-hantmvxa.js": 12
+   "chunk-hantmvxa.js": 2
   },
-  "bytes": 17587,
+  "bytes": 3528,
   "methods": {
-   "sole-consumer-new": 12
+   "placement": 2
   }
  },
  "skills/bundled/updateConfig.ts": {
@@ -122309,7 +121499,8 @@
   },
   "bytes": 17807,
   "methods": {
-   "affinity": 3,
+   "sole-consumer": 2,
+   "affinity": 1,
    "fingerprint": 2
   }
  },
@@ -122914,19 +122105,6 @@
    "fingerprint": 1
   }
  },
- "coordinator/_new/prActivityServerPreference.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-hg2zbde4.js#hsi"
-  ],
-  "chunks": {
-   "chunk-hg2zbde4.js": 1
-  },
-  "bytes": 154,
-  "methods": {
-   "sole-consumer-new": 1
-  }
- },
  "utils/plugins/functionHooks/promptMention.ts": {
   "kind": "first-party",
   "decls": [
@@ -123246,14 +122424,16 @@
    "chunk-hm0ce8vc.js#o_",
    "chunk-hm0ce8vc.js#qo",
    "chunk-hm0ce8vc.js#Jo",
-   "chunk-hm0ce8vc.js#cd"
+   "chunk-hm0ce8vc.js#cd",
+   "chunk-t3sg9e26.js#GWs"
   ],
   "chunks": {
-   "chunk-hm0ce8vc.js": 35
+   "chunk-hm0ce8vc.js": 35,
+   "chunk-t3sg9e26.js": 1
   },
-  "bytes": 18809,
+  "bytes": 18921,
   "methods": {
-   "placement": 35
+   "placement": 36
   }
  },
  "services/selfHostedRunner/handleSession.ts": {
@@ -126068,20 +125248,6 @@
    "placement": 11
   }
  },
- "utils/model/_new/resolveGatewayAliasOptionModel.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-hwmsct5x.js#kc",
-   "chunk-hwmsct5x.js#Jt"
-  ],
-  "chunks": {
-   "chunk-hwmsct5x.js": 2
-  },
-  "bytes": 710,
-  "methods": {
-   "sole-consumer-new": 2
-  }
- },
  "commands/plugin/PluginOptionsFlow.tsx": {
   "kind": "first-party",
   "decls": [
@@ -126775,28 +125941,16 @@
   "kind": "first-party",
   "decls": [
    "chunk-j0y6ypnr.js#awn",
-   "chunk-j0y6ypnr.js#Lot"
-  ],
-  "chunks": {
-   "chunk-j0y6ypnr.js": 2
-  },
-  "bytes": 619,
-  "methods": {
-   "placement": 1,
-   "fingerprint": 1
-  }
- },
- "utils/_new/isSameWslDistro.ts": {
-  "kind": "first-party",
-  "decls": [
+   "chunk-j0y6ypnr.js#Lot",
    "chunk-j0y6ypnr.js#Lai"
   ],
   "chunks": {
-   "chunk-j0y6ypnr.js": 1
+   "chunk-j0y6ypnr.js": 3
   },
-  "bytes": 107,
+  "bytes": 726,
   "methods": {
-   "sole-consumer-new": 1
+   "placement": 2,
+   "fingerprint": 1
   }
  },
  "components/permissions/rules/AddWorkspaceDirectory.tsx": {
@@ -127520,29 +126674,17 @@
    "chunk-jhrww53q.js#tft",
    "chunk-jhrww53q.js#nft",
    "chunk-jhrww53q.js#Y",
-   "chunk-jhrww53q.js#Va"
-  ],
-  "chunks": {
-   "chunk-jhrww53q.js": 6
-  },
-  "bytes": 1594,
-  "methods": {
-   "placement": 5,
-   "layout": 1
-  }
- },
- "utils/_new/isWindowsJunction.ts": {
-  "kind": "first-party",
-  "decls": [
+   "chunk-jhrww53q.js#Va",
    "chunk-jhrww53q.js#m_",
    "chunk-jhrww53q.js#d_"
   ],
   "chunks": {
-   "chunk-jhrww53q.js": 2
+   "chunk-jhrww53q.js": 8
   },
-  "bytes": 167,
+  "bytes": 1761,
   "methods": {
-   "sole-consumer-new": 2
+   "placement": 7,
+   "layout": 1
   }
  },
  "utils/which.ts": {
@@ -127861,15 +127003,17 @@
    "chunk-kgtpkbhq.js#NVi",
    "chunk-kgtpkbhq.js#JTn",
    "chunk-kgtpkbhq.js#C7r",
+   "chunk-kgtpkbhq.js#B",
+   "chunk-kgtpkbhq.js#w",
    "chunk-jt8zq468.js#xme"
   ],
   "chunks": {
    "chunk-jt8zq468.js": 1,
-   "chunk-kgtpkbhq.js": 23
+   "chunk-kgtpkbhq.js": 25
   },
-  "bytes": 7696,
+  "bytes": 8002,
   "methods": {
-   "placement": 2,
+   "placement": 4,
    "fingerprint": 1,
    "facade-majority": 17,
    "layout": 4
@@ -129345,20 +128489,6 @@
   "bytes": 203,
   "methods": {
    "placement": 2
-  }
- },
- "bridge/_new/extractMcpConfigContent.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-kgtpkbhq.js#B",
-   "chunk-kgtpkbhq.js#w"
-  ],
-  "chunks": {
-   "chunk-kgtpkbhq.js": 2
-  },
-  "bytes": 306,
-  "methods": {
-   "sole-consumer-new": 2
   }
  },
  "commands/statusline/statuslineCommandPrompt.ts": {
@@ -134819,6 +133949,9 @@
    "chunk-mthxbav8.js#Hn",
    "chunk-mthxbav8.js#Sr",
    "chunk-mthxbav8.js#yt",
+   "chunk-mthxbav8.js#He",
+   "chunk-mthxbav8.js#On",
+   "chunk-mthxbav8.js#vr",
    "chunk-mthxbav8.js#$t",
    "chunk-mthxbav8.js#So",
    "chunk-mthxbav8.js#Bi",
@@ -134895,26 +134028,11 @@
    "chunk-mthxbav8.js#Ps"
   ],
   "chunks": {
-   "chunk-mthxbav8.js": 79
+   "chunk-mthxbav8.js": 82
   },
-  "bytes": 55604,
+  "bytes": 57850,
   "methods": {
-   "placement": 79
-  }
- },
- "utils/hooks/deviceHooks/_new/classifyDeviceHookReach.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-mthxbav8.js#He",
-   "chunk-mthxbav8.js#On",
-   "chunk-mthxbav8.js#vr"
-  ],
-  "chunks": {
-   "chunk-mthxbav8.js": 3
-  },
-  "bytes": 2246,
-  "methods": {
-   "sole-consumer-new": 3
+   "placement": 82
   }
  },
  "utils/hooks/deviceHooks/runDeviceHook.ts": {
@@ -135125,34 +134243,23 @@
    "file-local": 1
   }
  },
- "components/diff/_new/DiffFileList.ts": {
+ "components/diff/DiffDialog.tsx": {
   "kind": "first-party",
   "decls": [
    "chunk-mtx4csef.js#Vt",
    "chunk-mtx4csef.js#Ht",
    "chunk-mtx4csef.js#Fe",
-   "chunk-mtx4csef.js#G"
-  ],
-  "chunks": {
-   "chunk-mtx4csef.js": 4
-  },
-  "bytes": 567,
-  "methods": {
-   "sole-consumer-new": 4
-  }
- },
- "components/diff/DiffDialog.tsx": {
-  "kind": "first-party",
-  "decls": [
+   "chunk-mtx4csef.js#G",
    "chunk-mtx4csef.js#si",
    "chunk-mtx4csef.js#Re",
    "chunk-mtx4csef.js#ri"
   ],
   "chunks": {
-   "chunk-mtx4csef.js": 3
+   "chunk-mtx4csef.js": 7
   },
-  "bytes": 6840,
+  "bytes": 7407,
   "methods": {
+   "placement": 4,
    "fingerprint": 3
   }
  },
@@ -135733,20 +134840,6 @@
   "bytes": 393,
   "methods": {
    "placement": 5
-  }
- },
- "services/mcp/_new/discoverAuthorizationServer.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-n1aavqzh.js#Ze",
-   "chunk-n1aavqzh.js#Qe"
-  ],
-  "chunks": {
-   "chunk-n1aavqzh.js": 2
-  },
-  "bytes": 1530,
-  "methods": {
-   "sole-consumer-new": 2
   }
  },
  "components/LogoV2/WelcomeV2.tsx": {
@@ -139805,22 +138898,6 @@
    "fingerprint": 2
   }
  },
- "components/_new/PressEnterToContinue.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-p8fze0jh.js#z",
-   "chunk-p8fze0jh.js#@19177",
-   "chunk-p8fze0jh.js#@19181",
-   "chunk-p8fze0jh.js#@19185"
-  ],
-  "chunks": {
-   "chunk-p8fze0jh.js": 4
-  },
-  "bytes": 179,
-  "methods": {
-   "sole-consumer-new": 4
-  }
- },
  "components/ui/OrderedListItem.tsx": {
   "kind": "first-party",
   "decls": [
@@ -140291,19 +139368,6 @@
   "bytes": 1240,
   "methods": {
    "placement": 3
-  }
- },
- "utils/swarm/_new/appendTeammateTranscript.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-phrnybk8.js#vOr"
-  ],
-  "chunks": {
-   "chunk-phrnybk8.js": 1
-  },
-  "bytes": 122,
-  "methods": {
-   "sole-consumer-new": 1
   }
  },
  "utils/swarm/planApprovalWake.ts": {
@@ -144410,24 +143474,12 @@
    "placement": 18
   }
  },
- "components/PromptInput/_new/CURRENT_PR.ts": {
+ "components/PrBadge.tsx": {
   "kind": "first-party",
   "decls": [
    "chunk-qgpgvvwv.js#@595",
    "chunk-qgpgvvwv.js#@599",
-   "chunk-qgpgvvwv.js#zAr"
-  ],
-  "chunks": {
-   "chunk-qgpgvvwv.js": 3
-  },
-  "bytes": 29,
-  "methods": {
-   "sole-consumer-new": 3
-  }
- },
- "components/PrBadge.tsx": {
-  "kind": "first-party",
-  "decls": [
+   "chunk-qgpgvvwv.js#zAr",
    "chunk-qgpgvvwv.js#de",
    "chunk-qgpgvvwv.js#S",
    "chunk-qgpgvvwv.js#jho",
@@ -144437,13 +143489,13 @@
    "chunk-qgpgvvwv.js#hT"
   ],
   "chunks": {
-   "chunk-qgpgvvwv.js": 7
+   "chunk-qgpgvvwv.js": 10
   },
-  "bytes": 2419,
+  "bytes": 2448,
   "methods": {
+   "placement": 4,
    "fingerprint": 2,
-   "layout": 4,
-   "placement": 1
+   "layout": 4
   }
  },
  "components/TeleportStash.tsx": {
@@ -145409,55 +144461,6 @@
    "placement": 7
   }
  },
- "hooks/useWorkspaceDiff.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-qwh6zcf0.js#@1247",
-   "chunk-qwh6zcf0.js#q",
-   "chunk-qwh6zcf0.js#yyo",
-   "chunk-qwh6zcf0.js#@1588",
-   "chunk-qwh6zcf0.js#K",
-   "chunk-qwh6zcf0.js#z",
-   "chunk-qwh6zcf0.js#X",
-   "chunk-qwh6zcf0.js#Y",
-   "chunk-qwh6zcf0.js#bFn",
-   "chunk-qwh6zcf0.js#oCr",
-   "chunk-qwh6zcf0.js#T",
-   "chunk-qwh6zcf0.js#ce",
-   "chunk-qwh6zcf0.js#uyo",
-   "chunk-qwh6zcf0.js#J",
-   "chunk-qwh6zcf0.js#Wtn",
-   "chunk-qwh6zcf0.js#me",
-   "chunk-qwh6zcf0.js#pyo",
-   "chunk-qwh6zcf0.js#dPs",
-   "chunk-qwh6zcf0.js#Z",
-   "chunk-qwh6zcf0.js#wFn",
-   "chunk-qwh6zcf0.js#sCr",
-   "chunk-qwh6zcf0.js#myo",
-   "chunk-qwh6zcf0.js#ee",
-   "chunk-qwh6zcf0.js#he",
-   "chunk-qwh6zcf0.js#De",
-   "chunk-qwh6zcf0.js#uPs",
-   "chunk-qwh6zcf0.js#EFn",
-   "chunk-qwh6zcf0.js#PWe",
-   "chunk-qwh6zcf0.js#gyo",
-   "chunk-qwh6zcf0.js#H",
-   "chunk-qwh6zcf0.js#Gtn",
-   "chunk-qwh6zcf0.js#hyo",
-   "chunk-qwh6zcf0.js#ztn",
-   "chunk-qwh6zcf0.js#ye",
-   "chunk-qwh6zcf0.js#@8268",
-   "chunk-qwh6zcf0.js#L",
-   "chunk-qwh6zcf0.js#vFn"
-  ],
-  "chunks": {
-   "chunk-qwh6zcf0.js": 37
-  },
-  "bytes": 6650,
-  "methods": {
-   "placement": 37
-  }
- },
  "hooks/useDiffData.ts": {
   "kind": "first-party",
   "decls": [
@@ -146115,19 +145118,6 @@
   "bytes": 7129,
   "methods": {
    "placement": 13
-  }
- },
- "_unattributed/chunk-r1wk8q25/part-001.js": {
-  "kind": "unattributed",
-  "decls": [
-   "chunk-r1wk8q25.js#ae"
-  ],
-  "chunks": {
-   "chunk-r1wk8q25.js": 1
-  },
-  "bytes": 21,
-  "methods": {
-   "leftover": 1
   }
  },
  "utils/subscriptionNoticeIds.ts": {
@@ -147804,37 +146794,29 @@
    "callgraph-fingerprint": 1
   }
  },
- "components/_new/_new/ManagedSettingsLoginNotice.ts": {
+ "components/ConsoleOAuthFlow.tsx": {
   "kind": "first-party",
   "decls": [
    "chunk-s5p7fp0c.js#@12637",
    "chunk-s5p7fp0c.js#mt",
    "chunk-s5p7fp0c.js#mn",
    "chunk-s5p7fp0c.js#pn",
-   "chunk-s5p7fp0c.js#hn"
-  ],
-  "chunks": {
-   "chunk-s5p7fp0c.js": 5
-  },
-  "bytes": 476,
-  "methods": {
-   "sole-consumer-new": 5
-  }
- },
- "components/ConsoleOAuthFlow.tsx": {
-  "kind": "first-party",
-  "decls": [
+   "chunk-s5p7fp0c.js#hn",
    "chunk-s5p7fp0c.js#Mo",
    "chunk-s5p7fp0c.js#Fo",
    "chunk-s5p7fp0c.js#$De",
+   "chunk-s5p7fp0c.js#to",
+   "chunk-s5p7fp0c.js#fo",
+   "chunk-s5p7fp0c.js#go",
    "chunk-zkzpd9ky.js#gt"
   ],
   "chunks": {
-   "chunk-s5p7fp0c.js": 3,
+   "chunk-s5p7fp0c.js": 11,
    "chunk-zkzpd9ky.js": 1
   },
-  "bytes": 13171,
+  "bytes": 29348,
   "methods": {
+   "placement": 8,
    "callgraph-fingerprint": 1,
    "layout": 1,
    "facade-exports": 1,
@@ -147852,21 +146834,6 @@
   "bytes": 507,
   "methods": {
    "placement": 1
-  }
- },
- "components/_new/ConsoleOAuthFlowView.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-s5p7fp0c.js#to",
-   "chunk-s5p7fp0c.js#fo",
-   "chunk-s5p7fp0c.js#go"
-  ],
-  "chunks": {
-   "chunk-s5p7fp0c.js": 3
-  },
-  "bytes": 15701,
-  "methods": {
-   "sole-consumer-new": 3
   }
  },
  "plugins/functionHooks/api/state.ts": {
@@ -149878,22 +148845,10 @@
    "placement": 24
   }
  },
- "utils/claudeInChrome/_new/isAcceptableHostSymlink.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-s61vbvea.js#Uw"
-  ],
-  "chunks": {
-   "chunk-s61vbvea.js": 1
-  },
-  "bytes": 182,
-  "methods": {
-   "sole-consumer-new": 1
-  }
- },
  "utils/claudeInChrome/setup.ts": {
   "kind": "first-party",
   "decls": [
+   "chunk-s61vbvea.js#Uw",
    "chunk-s61vbvea.js#OH",
    "chunk-s61vbvea.js#Gw",
    "chunk-s61vbvea.js#UNe",
@@ -149920,11 +148875,11 @@
    "chunk-s61vbvea.js#HW"
   ],
   "chunks": {
-   "chunk-s61vbvea.js": 24
+   "chunk-s61vbvea.js": 25
   },
-  "bytes": 5519,
+  "bytes": 5701,
   "methods": {
-   "placement": 1,
+   "placement": 2,
    "sole-consumer": 1,
    "facade-majority": 17,
    "fingerprint": 4,
@@ -150171,38 +149126,26 @@
    "chunk-sycgf9xs.js#sn",
    "chunk-sycgf9xs.js#$e",
    "chunk-sycgf9xs.js#Be",
-   "chunk-s61vbvea.js#Di",
-   "chunk-s61vbvea.js#J$"
+   "chunk-s61vbvea.js#Di"
   ],
   "chunks": {
-   "chunk-s61vbvea.js": 2,
+   "chunk-s61vbvea.js": 1,
    "chunk-sycgf9xs.js": 26
   },
-  "bytes": 9231,
+  "bytes": 9111,
   "methods": {
    "fingerprint": 2,
-   "affinity": 5,
+   "affinity": 4,
    "facade-exports": 4,
    "layout": 1,
    "sole-consumer": 16
   }
  },
- "utils/permissions/_new/_new/getDirRemoteState.ts": {
+ "utils/permissions/repoVisibilityMeta.ts": {
   "kind": "first-party",
   "decls": [
-   "chunk-s61vbvea.js#Q$"
-  ],
-  "chunks": {
-   "chunk-s61vbvea.js": 1
-  },
-  "bytes": 137,
-  "methods": {
-   "sole-consumer-new": 1
-  }
- },
- "utils/permissions/_new/collectRepoVisibilityMeta.ts": {
-  "kind": "first-party",
-  "decls": [
+   "chunk-s61vbvea.js#J$",
+   "chunk-s61vbvea.js#Q$",
    "chunk-s61vbvea.js#eU",
    "chunk-s61vbvea.js#lk",
    "chunk-s61vbvea.js#mk",
@@ -150211,11 +149154,12 @@
    "chunk-s61vbvea.js#qei"
   ],
   "chunks": {
-   "chunk-s61vbvea.js": 6
+   "chunk-s61vbvea.js": 8
   },
-  "bytes": 2815,
+  "bytes": 3072,
   "methods": {
-   "sole-consumer-new": 6
+   "sole-consumer": 1,
+   "placement": 7
   }
  },
  "remote/tools/deviceSandboxPosture.ts": {
@@ -154029,14 +152973,15 @@
    "chunk-sx9xc5ee.js#ee",
    "chunk-sx9xc5ee.js#Se",
    "chunk-sx9xc5ee.js#@19292",
+   "chunk-sx9xc5ee.js#@20653",
    "chunk-sx9xc5ee.js#we"
   ],
   "chunks": {
-   "chunk-sx9xc5ee.js": 20
+   "chunk-sx9xc5ee.js": 21
   },
-  "bytes": 9015,
+  "bytes": 9019,
   "methods": {
-   "placement": 20
+   "placement": 21
   }
  },
  "components/agents/new-agent-creation/wizard-steps/MethodStep.tsx": {
@@ -154063,19 +153008,6 @@
   "bytes": 1357,
   "methods": {
    "callgraph-fingerprint": 1
-  }
- },
- "_unattributed/chunk-sx9xc5ee/part-001.js": {
-  "kind": "unattributed",
-  "decls": [
-   "chunk-sx9xc5ee.js#@20653"
-  ],
-  "chunks": {
-   "chunk-sx9xc5ee.js": 1
-  },
-  "bytes": 4,
-  "methods": {
-   "leftover": 1
   }
  },
  "components/agents/new-agent-creation/CreateAgentWizard.tsx": {
@@ -154303,17 +153235,57 @@
    "placement": 26
   }
  },
- "tools/AppifactReplTool/_new/hasNoZeroWidthChars.ts": {
+ "tools/AppifactReplTool/AppifactReplTool.ts": {
   "kind": "first-party",
   "decls": [
+   "chunk-tmx5d02z.js#Qe",
+   "chunk-tmx5d02z.js#et",
+   "chunk-tmx5d02z.js#ln",
+   "chunk-tmx5d02z.js#Ze",
+   "chunk-tmx5d02z.js#Ae",
+   "chunk-tmx5d02z.js#fn",
+   "chunk-tmx5d02z.js#st",
+   "chunk-tmx5d02z.js#at",
+   "chunk-tmx5d02z.js#nt",
+   "chunk-tmx5d02z.js#mn",
+   "chunk-tmx5d02z.js#gn",
+   "chunk-tmx5d02z.js#lt",
+   "chunk-tmx5d02z.js#hn",
+   "chunk-tmx5d02z.js#bn",
+   "chunk-tmx5d02z.js#dt",
+   "chunk-tmx5d02z.js#ye",
+   "chunk-tmx5d02z.js#_n",
+   "chunk-tmx5d02z.js#An",
+   "chunk-tmx5d02z.js#yn",
+   "chunk-tmx5d02z.js#it",
+   "chunk-tmx5d02z.js#ct",
+   "chunk-tmx5d02z.js#te",
+   "chunk-tmx5d02z.js#Rn",
+   "chunk-tmx5d02z.js#pt",
+   "chunk-tmx5d02z.js#Se",
+   "chunk-tmx5d02z.js#Tn",
+   "chunk-tmx5d02z.js#ft",
+   "chunk-tmx5d02z.js#mt",
+   "chunk-tmx5d02z.js#we",
+   "chunk-tmx5d02z.js#Re",
+   "chunk-tmx5d02z.js#En",
+   "chunk-tmx5d02z.js#On",
+   "chunk-tmx5d02z.js#_t",
+   "chunk-tmx5d02z.js#$n",
+   "chunk-tmx5d02z.js#ji",
+   "chunk-tmx5d02z.js#jn",
+   "chunk-tmx5d02z.js#Nn",
+   "chunk-tmx5d02z.js#re",
+   "chunk-tmx5d02z.js#Bn",
    "chunk-t0gq9gyw.js#Clo"
   ],
   "chunks": {
-   "chunk-t0gq9gyw.js": 1
+   "chunk-t0gq9gyw.js": 1,
+   "chunk-tmx5d02z.js": 39
   },
-  "bytes": 39,
+  "bytes": 17699,
   "methods": {
-   "sole-consumer-new": 1
+   "placement": 40
   }
  },
  "utils/fsSafety/networkPathCheck.ts": {
@@ -154687,19 +153659,6 @@
   "bytes": 16313,
   "methods": {
    "placement": 30
-  }
- },
- "services/selfHostedRunner/_new/getGitSslConfig.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-t3sg9e26.js#GWs"
-  ],
-  "chunks": {
-   "chunk-t3sg9e26.js": 1
-  },
-  "bytes": 112,
-  "methods": {
-   "sole-consumer-new": 1
   }
  },
  "selfHostedRunner/git/proxyTrust.ts": {
@@ -155717,57 +154676,6 @@
    "placement": 23
   }
  },
- "tools/AppifactReplTool/AppifactReplTool.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-tmx5d02z.js#Qe",
-   "chunk-tmx5d02z.js#et",
-   "chunk-tmx5d02z.js#ln",
-   "chunk-tmx5d02z.js#Ze",
-   "chunk-tmx5d02z.js#Ae",
-   "chunk-tmx5d02z.js#fn",
-   "chunk-tmx5d02z.js#st",
-   "chunk-tmx5d02z.js#at",
-   "chunk-tmx5d02z.js#nt",
-   "chunk-tmx5d02z.js#mn",
-   "chunk-tmx5d02z.js#gn",
-   "chunk-tmx5d02z.js#lt",
-   "chunk-tmx5d02z.js#hn",
-   "chunk-tmx5d02z.js#bn",
-   "chunk-tmx5d02z.js#dt",
-   "chunk-tmx5d02z.js#ye",
-   "chunk-tmx5d02z.js#_n",
-   "chunk-tmx5d02z.js#An",
-   "chunk-tmx5d02z.js#yn",
-   "chunk-tmx5d02z.js#it",
-   "chunk-tmx5d02z.js#ct",
-   "chunk-tmx5d02z.js#te",
-   "chunk-tmx5d02z.js#Rn",
-   "chunk-tmx5d02z.js#pt",
-   "chunk-tmx5d02z.js#Se",
-   "chunk-tmx5d02z.js#Tn",
-   "chunk-tmx5d02z.js#ft",
-   "chunk-tmx5d02z.js#mt",
-   "chunk-tmx5d02z.js#we",
-   "chunk-tmx5d02z.js#Re",
-   "chunk-tmx5d02z.js#En",
-   "chunk-tmx5d02z.js#On",
-   "chunk-tmx5d02z.js#_t",
-   "chunk-tmx5d02z.js#$n",
-   "chunk-tmx5d02z.js#ji",
-   "chunk-tmx5d02z.js#jn",
-   "chunk-tmx5d02z.js#Nn",
-   "chunk-tmx5d02z.js#re",
-   "chunk-tmx5d02z.js#Bn"
-  ],
-  "chunks": {
-   "chunk-tmx5d02z.js": 39
-  },
-  "bytes": 17660,
-  "methods": {
-   "placement": 39
-  }
- },
  "utils/hooks/hookTemplates.ts": {
   "kind": "first-party",
   "decls": [
@@ -156287,16 +155195,19 @@
    "chunk-tw8fk0yz.js#Ae",
    "chunk-tw8fk0yz.js#tje",
    "chunk-tw8fk0yz.js#bQt",
-   "chunk-tw8fk0yz.js#se"
+   "chunk-tw8fk0yz.js#se",
+   "chunk-wz6vk74d.js#Ays"
   ],
   "chunks": {
-   "chunk-tw8fk0yz.js": 4
+   "chunk-tw8fk0yz.js": 4,
+   "chunk-wz6vk74d.js": 1
   },
-  "bytes": 3232,
+  "bytes": 3269,
   "methods": {
    "affinity": 1,
    "fingerprint": 2,
-   "layout": 1
+   "layout": 1,
+   "placement": 1
   }
  },
  "ink/wrapAnsi.ts": {
@@ -157303,7 +156214,7 @@
    "placement": 7
   }
  },
- "cli/_new/UnattendedStartRecord.ts": {
+ "cli/print/unattendedStartRecord.ts": {
   "kind": "first-party",
   "decls": [
    "chunk-tyg7f3ek.js#$u",
@@ -157345,7 +156256,7 @@
   },
   "bytes": 15690,
   "methods": {
-   "sole-consumer-new": 33
+   "placement": 33
   }
  },
  "cli/print/artifactEditorCodelivery.ts": {
@@ -157516,7 +156427,20 @@
    "placement": 12
   }
  },
- "cli/_new/createElicitationRegistrar.ts": {
+ "cli/print/_new/elicitationRegistrar.helpers-tyg7.ts": {
+  "kind": "first-party",
+  "decls": [
+   "chunk-tyg7f3ek.js#nA"
+  ],
+  "chunks": {
+   "chunk-tyg7f3ek.js": 1
+  },
+  "bytes": 862,
+  "methods": {
+   "sole-consumer-new": 1
+  }
+ },
+ "cli/print/elicitationRegistrar.ts": {
   "kind": "first-party",
   "decls": [
    "chunk-tyg7f3ek.js#sA",
@@ -157558,7 +156482,7 @@
   },
   "bytes": 14249,
   "methods": {
-   "sole-consumer-new": 33
+   "placement": 33
   }
  },
  "utils/streamJsonStdoutGuard.ts": {
@@ -158278,13 +157202,12 @@
    "placement": 12
   }
  },
- "cli/_new/restoreProactivityOptIn.ts": {
+ "cli/print/workerEpochRestore.ts": {
   "kind": "first-party",
   "decls": [
    "chunk-tyg7f3ek.js#Tz",
    "chunk-tyg7f3ek.js#Yx",
    "chunk-tyg7f3ek.js#Am",
-   "chunk-tyg7f3ek.js#Rz",
    "chunk-tyg7f3ek.js#Cz",
    "chunk-tyg7f3ek.js#Pz",
    "chunk-tyg7f3ek.js#Az",
@@ -158294,11 +157217,11 @@
    "chunk-tyg7f3ek.js#Oz"
   ],
   "chunks": {
-   "chunk-tyg7f3ek.js": 11
+   "chunk-tyg7f3ek.js": 10
   },
-  "bytes": 2519,
+  "bytes": 2063,
   "methods": {
-   "sole-consumer-new": 11
+   "placement": 10
   }
  },
  "hooks/useCopyOnSelect.ts": {
@@ -158379,15 +157302,17 @@
    "chunk-tzghj6zv.js#cn",
    "chunk-tzghj6zv.js#Opt",
    "chunk-tzghj6zv.js#kXe",
-   "chunk-v6kts6xw.js#R"
+   "chunk-v6kts6xw.js#R",
+   "chunk-yj65zw1g.js#CUn"
   ],
   "chunks": {
    "chunk-tzghj6zv.js": 19,
-   "chunk-v6kts6xw.js": 1
+   "chunk-v6kts6xw.js": 1,
+   "chunk-yj65zw1g.js": 1
   },
-  "bytes": 8519,
+  "bytes": 8556,
   "methods": {
-   "placement": 4,
+   "placement": 5,
    "layout": 12,
    "fingerprint": 4
   }
@@ -158501,21 +157426,7 @@
    "chunk-v0yfsee9.js#Et",
    "chunk-v0yfsee9.js#Ue",
    "chunk-v0yfsee9.js#et",
-   "chunk-v0yfsee9.js#At"
-  ],
-  "chunks": {
-   "chunk-v0yfsee9.js": 11
-  },
-  "bytes": 1750,
-  "methods": {
-   "placement": 4,
-   "layout": 4,
-   "fingerprint": 3
-  }
- },
- "tools/PowerShellTool/_new/copyMoveMayReachGitInternals.ts": {
-  "kind": "first-party",
-  "decls": [
+   "chunk-v0yfsee9.js#At",
    "chunk-v0yfsee9.js#tt",
    "chunk-v0yfsee9.js#yn",
    "chunk-v0yfsee9.js#_t",
@@ -158523,11 +157434,13 @@
    "chunk-v0yfsee9.js#Mt"
   ],
   "chunks": {
-   "chunk-v0yfsee9.js": 5
+   "chunk-v0yfsee9.js": 16
   },
-  "bytes": 2195,
+  "bytes": 3945,
   "methods": {
-   "sole-consumer-new": 5
+   "placement": 9,
+   "layout": 4,
+   "fingerprint": 3
   }
  },
  "tools/PowerShellTool/modeValidation.ts": {
@@ -159279,24 +158192,6 @@
    "fingerprint": 1
   }
  },
- "entrypoints/_new/readAgentProxyRelayToken.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-vbtpanx5.js#U",
-   "chunk-vbtpanx5.js#z",
-   "chunk-vbtpanx5.js#@3422",
-   "chunk-vbtpanx5.js#A",
-   "chunk-vbtpanx5.js#O",
-   "chunk-vbtpanx5.js#R"
-  ],
-  "chunks": {
-   "chunk-vbtpanx5.js": 6
-  },
-  "bytes": 1965,
-  "methods": {
-   "sole-consumer-new": 6
-  }
- },
  "utils/apiPreconnect.ts": {
   "kind": "first-party",
   "decls": [
@@ -159405,22 +158300,6 @@
   "methods": {
    "sole-consumer": 1,
    "file-local": 1,
-   "fingerprint": 2
-  }
- },
- "commands/plan/plan.tsx": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-ve85yyeb.js#B",
-   "chunk-ve85yyeb.js#b",
-   "chunk-ve85yyeb.js#le"
-  ],
-  "chunks": {
-   "chunk-ve85yyeb.js": 3
-  },
-  "bytes": 3733,
-  "methods": {
-   "affinity": 1,
    "fingerprint": 2
   }
  },
@@ -159817,19 +158696,6 @@
   "bytes": 3688,
   "methods": {
    "placement": 40
-  }
- },
- "utils/plugins/_new/parseJsonBytes.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-vr8smdd9.js#Ae"
-  ],
-  "chunks": {
-   "chunk-vr8smdd9.js": 1
-  },
-  "bytes": 68,
-  "methods": {
-   "sole-consumer-new": 1
   }
  },
  "utils/systemDirectories.ts": {
@@ -162069,20 +160935,6 @@
    "facade-exports": 1
   }
  },
- "services/api/_new/sanitizeExtraMetadata.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-w5ndchqs.js#ct",
-   "chunk-w5ndchqs.js#Ce"
-  ],
-  "chunks": {
-   "chunk-w5ndchqs.js": 2
-  },
-  "bytes": 213,
-  "methods": {
-   "sole-consumer-new": 2
-  }
- },
  "services/rateLimitMocking.ts": {
   "kind": "first-party",
   "decls": [
@@ -164143,6 +162995,7 @@
    "chunk-wy9dbk5f.js#er",
    "chunk-wy9dbk5f.js#ao",
    "chunk-wy9dbk5f.js#co",
+   "chunk-wy9dbk5f.js#uo",
    "chunk-wy9dbk5f.js#nr",
    "chunk-wy9dbk5f.js#rr",
    "chunk-wy9dbk5f.js#Ie",
@@ -164168,24 +163021,11 @@
    "chunk-wy9dbk5f.js#fr"
   ],
   "chunks": {
-   "chunk-wy9dbk5f.js": 30
+   "chunk-wy9dbk5f.js": 31
   },
-  "bytes": 11567,
+  "bytes": 11831,
   "methods": {
-   "placement": 30
-  }
- },
- "services/mcpServe/_new/handleSetMcpServerEnabled.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-wy9dbk5f.js#uo"
-  ],
-  "chunks": {
-   "chunk-wy9dbk5f.js": 1
-  },
-  "bytes": 264,
-  "methods": {
-   "sole-consumer-new": 1
+   "placement": 31
   }
  },
  "services/mcpServe/projectSettingsCalls.ts": {
@@ -164663,19 +163503,6 @@
    "fingerprint": 1
   }
  },
- "ink/termio/_new/tokenize.helpers-wz6v.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-wz6vk74d.js#Ays"
-  ],
-  "chunks": {
-   "chunk-wz6vk74d.js": 1
-  },
-  "bytes": 37,
-  "methods": {
-   "sole-consumer-new": 1
-  }
- },
  "ink/termio/csi.ts": {
   "kind": "first-party",
   "decls": [
@@ -165123,23 +163950,6 @@
    "placement": 16
   }
  },
- "ink/renderTelemetry.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-x6v6jz2y.js#iIs",
-   "chunk-x6v6jz2y.js#Pe",
-   "chunk-x6v6jz2y.js#Tt",
-   "chunk-x6v6jz2y.js#Et",
-   "chunk-x6v6jz2y.js#wt"
-  ],
-  "chunks": {
-   "chunk-x6v6jz2y.js": 5
-  },
-  "bytes": 1347,
-  "methods": {
-   "placement": 5
-  }
- },
  "components/design-system/ThemedBox.tsx": {
   "kind": "first-party",
   "decls": [
@@ -165541,19 +164351,6 @@
    "placement": 12
   }
  },
- "entrypoints/_new/init.helpers-xdkv.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-xdkvf45x.js#Koi"
-  ],
-  "chunks": {
-   "chunk-xdkvf45x.js": 1
-  },
-  "bytes": 69,
-  "methods": {
-   "sole-consumer-new": 1
-  }
- },
  "services/analytics/violinTipGate.ts": {
   "kind": "first-party",
   "decls": [
@@ -165585,7 +164382,8 @@
   "bytes": 1585,
   "methods": {
    "placement": 3,
-   "affinity": 2,
+   "sole-consumer": 1,
+   "affinity": 1,
    "fingerprint": 2,
    "layout": 1
   }
@@ -165601,20 +164399,6 @@
   "bytes": 161,
   "methods": {
    "fingerprint": 1
-  }
- },
- "screens/_new/REPL.helpers-xe7z.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-xe7zq1p4.js#qCr",
-   "chunk-xe7zq1p4.js#@2000"
-  ],
-  "chunks": {
-   "chunk-xe7zq1p4.js": 2
-  },
-  "bytes": 33,
-  "methods": {
-   "sole-consumer-new": 2
   }
  },
  "keybindings/KeybindingProviderSetup.tsx": {
@@ -166148,48 +164932,6 @@
   "bytes": 8872,
   "methods": {
    "placement": 39
-  }
- },
- "services/extractMemories/extractMemories.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-xr4xc2mq.js#Pe",
-   "chunk-xr4xc2mq.js#q",
-   "chunk-xr4xc2mq.js#Rr",
-   "chunk-xr4xc2mq.js#Or",
-   "chunk-xr4xc2mq.js#Lr",
-   "chunk-xr4xc2mq.js#Ir",
-   "chunk-xr4xc2mq.js#Bxr",
-   "chunk-xr4xc2mq.js#Fr",
-   "chunk-xr4xc2mq.js#sLe",
-   "chunk-xr4xc2mq.js#jxr",
-   "chunk-xr4xc2mq.js#Kt",
-   "chunk-xr4xc2mq.js#er",
-   "chunk-xr4xc2mq.js#tr",
-   "chunk-xr4xc2mq.js#Wr",
-   "chunk-xr4xc2mq.js#zt",
-   "chunk-xr4xc2mq.js#Ur",
-   "chunk-xr4xc2mq.js#Ze",
-   "chunk-xr4xc2mq.js#Jt",
-   "chunk-xr4xc2mq.js#ESo",
-   "chunk-xr4xc2mq.js#Qt",
-   "chunk-xr4xc2mq.js#KWi",
-   "chunk-xr4xc2mq.js#VWi",
-   "chunk-xr4xc2mq.js#qWi",
-   "chunk-xr4xc2mq.js#YWi",
-   "chunk-xr4xc2mq.js#XWi",
-   "chunk-xr4xc2mq.js#JWi"
-  ],
-  "chunks": {
-   "chunk-xr4xc2mq.js": 26
-  },
-  "bytes": 22379,
-  "methods": {
-   "facade-exports": 11,
-   "fingerprint": 1,
-   "file-local": 2,
-   "sole-consumer": 3,
-   "layout": 9
   }
  },
  "components/ExitFeedbackNudge.tsx": {
@@ -167955,19 +166697,6 @@
    "placement": 4
   }
  },
- "commands/skills/_new/skills.helpers-ygke.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-ygke3hz8.js#q0t"
-  ],
-  "chunks": {
-   "chunk-ygke3hz8.js": 1
-  },
-  "bytes": 55,
-  "methods": {
-   "sole-consumer-new": 1
-  }
- },
  "skills/claudeAiSkillConflicts.ts": {
   "kind": "first-party",
   "decls": [
@@ -168034,30 +166763,17 @@
    "esm-fingerprint": 1
   }
  },
- "hooks/_new/useVoiceLevelSmoother.ts": {
-  "kind": "first-party",
+ "_unattributed/chunk-yj65zw1g/part-001.js": {
+  "kind": "unattributed",
   "decls": [
-   "chunk-yj65zw1g.js#U_o"
+   "chunk-yj65zw1g.js#PJe"
   ],
   "chunks": {
    "chunk-yj65zw1g.js": 1
   },
-  "bytes": 40,
+  "bytes": 32,
   "methods": {
-   "sole-consumer-new": 1
-  }
- },
- "hooks/_new/useVoiceIntegration.helpers-yj65.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-yj65zw1g.js#CUn"
-  ],
-  "chunks": {
-   "chunk-yj65zw1g.js": 1
-  },
-  "bytes": 37,
-  "methods": {
-   "sole-consumer-new": 1
+   "leftover": 1
   }
  },
  "plugins/bundled/secDefault/index.ts": {
@@ -168341,7 +167057,7 @@
    "placement": 3
   }
  },
- "components/HelpV2/_new/CommandList.ts": {
+ "components/HelpV2/CommandList.tsx": {
   "kind": "first-party",
   "decls": [
    "chunk-yxcx2jtr.js#@14074",
@@ -168358,7 +167074,7 @@
   },
   "bytes": 1456,
   "methods": {
-   "sole-consumer-new": 8
+   "placement": 8
   }
  },
  "components/HelpV2/General.tsx": {

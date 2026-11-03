@@ -5,66 +5,63 @@
  * pieces: chunk-hwmsct5x.js (1)
  * attribution: esm-fingerprint 1
  */
-import { Y } from "../../core/resource.mjs";
-import { Rr } from "./models.mjs";
-import { qs } from "./messages/messages.mjs";
-import { ds } from "./agents/agents.mjs";
-import { Ms } from "./environments/environments.mjs";
-import { Zs } from "./sessions/sessions.mjs";
-import { _r } from "./deployments.mjs";
-import { hr } from "./deployment-runs.mjs";
-import { ri } from "./vaults/vaults.mjs";
-import { Os } from "./memory-stores/memory-stores.mjs";
-import { Sr } from "./files.mjs";
-import { ti } from "./skills/skills.mjs";
-import { Mr } from "./webhooks.js";
-import { Ar } from "./user-profiles.mjs";
-import { br } from "./dreams.mjs";
-import { ni } from "./tunnels/tunnels.mjs";
-import { Vs } from "./organization/organization.mjs";
+import { APIResource } from "../../core/resource.mjs";
+import { Models } from "./models.mjs";
+import { Messages } from "./messages/messages.mjs";
+import { Agents } from "./agents/agents.mjs";
+import { Environments } from "./environments/environments.mjs";
+import { Sessions } from "./sessions/sessions.mjs";
+import { Deployments } from "./deployments.mjs";
+import { DeploymentRuns } from "./deployment-runs.mjs";
+import { Vaults } from "./vaults/vaults.mjs";
+import { MemoryStores } from "./memory-stores/memory-stores.mjs";
+import { Files } from "./files.mjs";
+import { Skills } from "./skills/skills.mjs";
+import { Webhooks } from "./webhooks.js";
+import { UserProfiles } from "./user-profiles.mjs";
+import { Dreams } from "./dreams.mjs";
+import { Tunnels } from "./tunnels/tunnels.mjs";
+import { Organization } from "./organization/organization.mjs";
 
 //@ chunk-hwmsct5x.js:144643-145529 esm-fingerprint
-var Nie = (() => {
-  class e extends Y {
+var Beta = (() => {
+  class Beta extends APIResource {
     constructor() {
       super(...arguments);
-      ((this.models = new Rr(this._client)),
-        (this.messages = new qs(this._client)),
-        (this.agents = new ds(this._client)),
-        (this.environments = new Ms(this._client)),
-        (this.sessions = new Zs(this._client)),
-        (this.deployments = new _r(this._client)),
-        (this.deploymentRuns = new hr(this._client)),
-        (this.vaults = new ri(this._client)),
-        (this.memoryStores = new Os(this._client)),
-        (this.files = new Sr(this._client)),
-        (this.skills = new ti(this._client)),
-        (this.webhooks = new Mr(this._client)),
-        (this.userProfiles = new Ar(this._client)),
-        (this.dreams = new br(this._client)),
-        (this.tunnels = new ni(this._client)),
-        (this.organization = new Vs(this._client)));
+      this.models = new Models(this._client);
+      this.messages = new Messages(this._client);
+      this.agents = new Agents(this._client);
+      this.environments = new Environments(this._client);
+      this.sessions = new Sessions(this._client);
+      this.deployments = new Deployments(this._client);
+      this.deploymentRuns = new DeploymentRuns(this._client);
+      this.vaults = new Vaults(this._client);
+      this.memoryStores = new MemoryStores(this._client);
+      this.files = new Files(this._client);
+      this.skills = new Skills(this._client);
+      this.webhooks = new Webhooks(this._client);
+      this.userProfiles = new UserProfiles(this._client);
+      this.dreams = new Dreams(this._client);
+      this.tunnels = new Tunnels(this._client);
+      this.organization = new Organization(this._client);
     }
   }
-  return (
-    (e.Models = Rr),
-    (e.Messages = qs),
-    (e.Agents = ds),
-    (e.Environments = Ms),
-    (e.Sessions = Zs),
-    (e.Deployments = _r),
-    (e.DeploymentRuns = hr),
-    (e.Vaults = ri),
-    (e.MemoryStores = Os),
-    (e.Files = Sr),
-    (e.Skills = ti),
-    (e.Webhooks = Mr),
-    (e.UserProfiles = Ar),
-    (e.Dreams = br),
-    (e.Tunnels = ni),
-    (e.Organization = Vs),
-    e
-  );
+  Beta.Models = Models;
+  Beta.Messages = Messages;
+  Beta.Agents = Agents;
+  Beta.Environments = Environments;
+  Beta.Sessions = Sessions;
+  Beta.Deployments = Deployments;
+  Beta.DeploymentRuns = DeploymentRuns;
+  Beta.Vaults = Vaults;
+  Beta.MemoryStores = MemoryStores;
+  Beta.Files = Files;
+  Beta.Skills = Skills;
+  Beta.Webhooks = Webhooks;
+  Beta.UserProfiles = UserProfiles;
+  Beta.Dreams = Dreams;
+  Beta.Tunnels = Tunnels;
+  Beta.Organization = Organization;
+  return Beta;
 })();
-
-export { Nie };
+export { Beta };

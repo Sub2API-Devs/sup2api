@@ -10,8 +10,10 @@
  */
 
 //@ chunk-j7w6w6jx.js:191-229 placement
-function X0(e) {
-  return e?.aborted === !0;
+/**
+ * 判断中止信号是否已经中止（未给信号视为未中止）。
+ */
+function isAborted(signal) {
+  return signal?.aborted === true;
 }
-
-export { X0 };
+export { isAborted };

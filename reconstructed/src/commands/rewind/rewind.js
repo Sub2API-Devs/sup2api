@@ -9,10 +9,15 @@
  * attribution: placement 1
  */
 
+//@ chunk-ye0hzrsv.js:191-283 placement
 /**
  * /rewind 的 local call(args, context, invokedName) 实现入口（由命令对象 load() 返回）。
  */
-//@ chunk-ye0hzrsv.js:191-283 placement
-async function o(args, context) {
-  return (context.onQueryEvent?.({ type: "open_message_selector" }), { type: "skip" });
+async function rewindCommandCall(args, context) {
+  context.onQueryEvent?.({
+    type: "open_message_selector",
+  });
+  return {
+    type: "skip",
+  };
 }

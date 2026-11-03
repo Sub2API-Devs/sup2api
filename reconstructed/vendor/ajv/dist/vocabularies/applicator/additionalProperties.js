@@ -6,92 +6,108 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../runtime/bun-runtime.js";
-import { Q } from "../code.js";
-import { uh } from "../../compile/codegen/index.js";
-import { DPe } from "../../compile/names.js";
-import { ew } from "../../compile/util.js";
+import { require_code_2 } from "../code.js";
+import { require_codegen_2 } from "../../compile/codegen/index.js";
+import { require_names } from "../../compile/names.js";
+import { require_util_2 } from "../../compile/util.js";
 
 //@ chunk-s82q9s4x.js:98810-100498 cjs-fingerprint
-var Tr = x(function (Ni) {
-  Object.defineProperty(Ni, "__esModule", { value: !0 });
-  var qe = Q(),
-    U = uh(),
-    $p = DPe(),
-    Oe = ew(),
-    vp = {
-      message: "must NOT have additional properties",
-      params: ({ params: params }) => U._`{additionalProperty: ${params.additionalProperty}}`,
-    },
-    wp = {
-      keyword: "additionalProperties",
-      type: ["object"],
-      schemaType: ["boolean", "object"],
-      allowUndefined: !0,
-      trackErrors: !0,
-      error: vp,
-      code(e) {
-        let {
-          gen: gen,
-          schema: schema,
-          parentSchema: parentSchema,
-          data: n,
-          errsCount: errsCount,
-          it: it,
-        } = e;
-        if (!errsCount) throw Error("ajv implementation error");
-        let { allErrors: allErrors, opts: opts } = it;
-        if (((it.props = !0), opts.removeAdditional !== "all" && Oe.alwaysValidSchema(it, schema))) return;
-        let allSchemaProperties = qe.allSchemaProperties(parentSchema.properties),
-          allSchemaProperties_2 = qe.allSchemaProperties(parentSchema.patternProperties);
-        (f(), e.ok(U._`${errsCount} === ${$p.default.errors}`));
-        function f() {
-          gen.forIn("key", n, (y) => {
-            if (!allSchemaProperties.length && !allSchemaProperties_2.length) h(y);
-            else gen.if(b(y), () => h(y));
+var require_additionalProperties = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  var code_1 = require_code_2();
+  var codegen_1 = require_codegen_2();
+  var names_1 = require_names();
+  var util_1 = require_util_2();
+  var error = {
+    message: "must NOT have additional properties",
+    params: ({ params }) => codegen_1._`{additionalProperty: ${params.additionalProperty}}`,
+  };
+  var def = {
+    keyword: "additionalProperties",
+    type: ["object"],
+    schemaType: ["boolean", "object"],
+    allowUndefined: true,
+    trackErrors: true,
+    error,
+    code(cxt) {
+      let { gen, schema, parentSchema, data, errsCount, it } = cxt;
+      if (!errsCount) throw Error("ajv implementation error");
+      let { allErrors, opts } = it;
+      it.props = true;
+      if (opts.removeAdditional !== "all" && util_1.alwaysValidSchema(it, schema)) return;
+      let props = code_1.allSchemaProperties(parentSchema.properties);
+      let patProps = code_1.allSchemaProperties(parentSchema.patternProperties);
+      checkAdditionalProperties();
+      cxt.ok(codegen_1._`${errsCount} === ${names_1.default.errors}`);
+      function checkAdditionalProperties() {
+        gen.forIn("key", data, (key) => {
+          if (!props.length && !patProps.length) additionalPropertyCode(key);
+          else gen.if(isAdditional(key), () => additionalPropertyCode(key));
+        });
+      }
+      function isAdditional(key) {
+        let definedProp;
+        if (props.length > 8) {
+          let propsSchema = util_1.schemaRefOrVal(it, parentSchema.properties, "properties");
+          definedProp = code_1.isOwnProperty(gen, propsSchema, key);
+        } else if (props.length)
+          definedProp = codegen_1.or(...props.map((p) => codegen_1._`${key} === ${p}`));
+        else definedProp = codegen_1.nil;
+        if (patProps.length)
+          definedProp = codegen_1.or(
+            definedProp,
+            ...patProps.map((p) => codegen_1._`${code_1.usePattern(cxt, p)}.test(${key})`),
+          );
+        return codegen_1.not(definedProp);
+      }
+      function deleteAdditional(key) {
+        gen.code(codegen_1._`delete ${data}[${key}]`);
+      }
+      function additionalPropertyCode(key) {
+        if (opts.removeAdditional === "all" || (opts.removeAdditional && schema === false)) {
+          deleteAdditional(key);
+          return;
+        }
+        if (schema === false) {
+          cxt.setParams({
+            additionalProperty: key,
           });
+          cxt.error();
+          if (!allErrors) gen.break();
+          return;
         }
-        function b(y) {
-          let v;
-          if (allSchemaProperties.length > 8) {
-            let schemaRefOrVal = Oe.schemaRefOrVal(it, parentSchema.properties, "properties");
-            v = qe.isOwnProperty(gen, schemaRefOrVal, y);
-          } else if (allSchemaProperties.length)
-            v = U.or(...allSchemaProperties.map((O) => U._`${y} === ${O}`));
-          else v = U.nil;
-          if (allSchemaProperties_2.length)
-            v = U.or(v, ...allSchemaProperties_2.map((O) => U._`${qe.usePattern(e, O)}.test(${y})`));
-          return U.not(v);
-        }
-        function _(y) {
-          gen.code(U._`delete ${n}[${y}]`);
-        }
-        function h(y) {
-          if (opts.removeAdditional === "all" || (opts.removeAdditional && schema === !1)) {
-            _(y);
-            return;
-          }
-          if (schema === !1) {
-            if ((e.setParams({ additionalProperty: y }), e.error(), !allErrors)) gen.break();
-            return;
-          }
-          if (typeof schema == "object" && !Oe.alwaysValidSchema(it, schema)) {
-            let v = gen.name("valid");
-            if (opts.removeAdditional === "failing")
-              (p(y, v, !1),
-                gen.if(U.not(v), () => {
-                  (e.reset(), _(y));
-                }));
-            else if ((p(y, v), !allErrors)) gen.if(U.not(v), () => gen.break());
+        if (typeof schema == "object" && !util_1.alwaysValidSchema(it, schema)) {
+          let valid = gen.name("valid");
+          if (opts.removeAdditional === "failing") {
+            applyAdditionalSchema(key, valid, false);
+            gen.if(codegen_1.not(valid), () => {
+              cxt.reset();
+              deleteAdditional(key);
+            });
+          } else {
+            applyAdditionalSchema(key, valid);
+            if (!allErrors) gen.if(codegen_1.not(valid), () => gen.break());
           }
         }
-        function p(y, v, O) {
-          let q = { keyword: "additionalProperties", dataProp: y, dataPropType: Oe.Type.Str };
-          if (O === !1) Object.assign(q, { compositeRule: !0, createErrors: !1, allErrors: !1 });
-          e.subschema(q, v);
-        }
-      },
-    };
-  Ni.default = wp;
+      }
+      function applyAdditionalSchema(key, valid, errors) {
+        let subschema = {
+          keyword: "additionalProperties",
+          dataProp: key,
+          dataPropType: util_1.Type.Str,
+        };
+        if (errors === false)
+          Object.assign(subschema, {
+            compositeRule: true,
+            createErrors: false,
+            allErrors: false,
+          });
+        cxt.subschema(subschema, valid);
+      }
+    },
+  };
+  cjsExports.default = def;
 });
-
-export { Tr };
+export { require_additionalProperties };

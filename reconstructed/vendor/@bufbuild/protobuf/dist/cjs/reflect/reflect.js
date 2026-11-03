@@ -6,145 +6,162 @@
  * attribution: cjs-require-graph 1
  */
 import { x } from "../../../../../../runtime/bun-runtime.js";
-import { Ns } from "../descriptors.js";
-import { Dg } from "./reflect-check.js";
-import { op } from "./error.js";
-import { xl } from "./unsafe.js";
-import { wl } from "../create.js";
-import { Fu } from "../wkt/wrappers.js";
-import { El } from "../../commonjs/reflect/scalar.js";
-import { ko } from "../../commonjs/proto-int64.js";
-import { Uu } from "./guard.js";
+import { require_descriptors } from "../descriptors.js";
+import { require_reflect_check } from "./reflect-check.js";
+import { require_error_2 } from "./error.js";
+import { require_unsafe } from "./unsafe.js";
+import { require_create } from "../create.js";
+import { require_wrappers } from "../wkt/wrappers.js";
+import { require_scalar } from "../../commonjs/reflect/scalar.js";
+import { require_proto_int64 } from "../../commonjs/proto-int64.js";
+import { require_guard } from "./guard.js";
 
 //@ chunk-fq0cr76a.js:345921-353042 cjs-require-graph
-var Po = x(function (Ck) {
-  Object.defineProperty(Ck, "__esModule", { value: !0 });
-  Ck.reflect = AY;
-  Ck.reflectList = CY;
-  Ck.reflectMap = RY;
-  var On = Ns(),
-    Tl = Dg(),
-    Fg = op(),
-    Yr = xl(),
-    xk = wl(),
-    Mg = Fu(),
-    _k = El(),
-    Li = ko(),
-    Oo = Uu();
-  function AY(e, n, r = !0) {
-    return new qx(e, n, r);
+var require_reflect = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.reflect = reflect;
+  cjsExports.reflectList = reflectList;
+  cjsExports.reflectMap = reflectMap;
+  var descriptors_js_1 = require_descriptors();
+  var reflect_check_js_1 = require_reflect_check();
+  var error_js_1 = require_error_2();
+  var unsafe_js_1 = require_unsafe();
+  var create_js_1 = require_create();
+  var wrappers_js_1 = require_wrappers();
+  var scalar_js_1 = require_scalar();
+  var proto_int64_js_1 = require_proto_int64();
+  var guard_js_1 = require_guard();
+  function reflect(messageDesc, message, check = true) {
+    return new ReflectMessageImpl(messageDesc, message, check);
   }
-  var weakMap = new WeakMap();
-  class qx {
+  var messageSortedFields = new WeakMap();
+  class ReflectMessageImpl {
     get sortedFields() {
-      let e = weakMap.get(this.desc);
-      if (e) return e;
-      let sorted = this.desc.fields.concat().sort((r, s) => r.number - s.number);
-      return (weakMap.set(this.desc, sorted), sorted);
+      let cached = messageSortedFields.get(this.desc);
+      if (cached) return cached;
+      let sortedFields = this.desc.fields.concat().sort((a, b) => a.number - b.number);
+      messageSortedFields.set(this.desc, sortedFields);
+      return sortedFields;
     }
-    constructor(e, n, r = !0) {
-      ((this.lists = new Map()),
-        (this.maps = new Map()),
-        (this.check = r),
-        (this.desc = e),
-        (this.message = this[Yr.unsafeLocal] = n !== null && n !== void 0 ? n : xk.create(e)),
-        (this.fields = e.fields),
-        (this.oneofs = e.oneofs),
-        (this.members = e.members));
+    constructor(messageDesc, message, check = true) {
+      this.lists = new Map();
+      this.maps = new Map();
+      this.check = check;
+      this.desc = messageDesc;
+      this.message = this[unsafe_js_1.unsafeLocal] =
+        message !== null && message !== undefined ? message : create_js_1.create(messageDesc);
+      this.fields = messageDesc.fields;
+      this.oneofs = messageDesc.oneofs;
+      this.members = messageDesc.members;
     }
-    findNumber(e) {
-      if (!this._fieldsByNumber)
-        this._fieldsByNumber = new Map(this.desc.fields.map((field) => [field.number, field]));
-      return this._fieldsByNumber.get(e);
+    findNumber(number) {
+      if (!this._fieldsByNumber) this._fieldsByNumber = new Map(this.desc.fields.map((f) => [f.number, f]));
+      return this._fieldsByNumber.get(number);
     }
-    oneofCase(e) {
-      return (cp(this.message, e), Yr.unsafeOneofCase(this.message, e));
+    oneofCase(oneof) {
+      assertOwn(this.message, oneof);
+      return unsafe_js_1.unsafeOneofCase(this.message, oneof);
     }
-    isSet(e) {
-      return (cp(this.message, e), Yr.unsafeIsSet(this.message, e));
+    isSet(field) {
+      assertOwn(this.message, field);
+      return unsafe_js_1.unsafeIsSet(this.message, field);
     }
-    clear(e) {
-      (cp(this.message, e), Yr.unsafeClear(this.message, e));
+    clear(field) {
+      assertOwn(this.message, field);
+      unsafe_js_1.unsafeClear(this.message, field);
     }
-    get(e) {
-      cp(this.message, e);
-      let unsafeGet = Yr.unsafeGet(this.message, e);
-      switch (e.fieldKind) {
+    get(field) {
+      assertOwn(this.message, field);
+      let value = unsafe_js_1.unsafeGet(this.message, field);
+      switch (field.fieldKind) {
         case "list":
-          let r = this.lists.get(e);
-          if (!r || r[Yr.unsafeLocal] !== unsafeGet)
-            this.lists.set(e, (r = new jx(e, unsafeGet, this.check)));
-          return r;
+          let list = this.lists.get(field);
+          if (!list || list[unsafe_js_1.unsafeLocal] !== value)
+            this.lists.set(field, (list = new ReflectListImpl(field, value, this.check)));
+          return list;
         case "map":
-          let s = this.maps.get(e);
-          if (!s || s[Yr.unsafeLocal] !== unsafeGet) this.maps.set(e, (s = new Yx(e, unsafeGet, this.check)));
-          return s;
+          let map = this.maps.get(field);
+          if (!map || map[unsafe_js_1.unsafeLocal] !== value)
+            this.maps.set(field, (map = new ReflectMapImpl(field, value, this.check)));
+          return map;
         case "message":
-          return zx(e, unsafeGet, this.check);
+          return messageToReflect(field, value, this.check);
         case "scalar":
-          return unsafeGet === void 0 ? _k.scalarZeroValue(e.scalar, !1) : Xx(e, unsafeGet);
+          return value === undefined
+            ? scalar_js_1.scalarZeroValue(field.scalar, false)
+            : longToReflect(field, value);
         case "enum":
-          return unsafeGet !== null && unsafeGet !== void 0 ? unsafeGet : e.enum.values[0].number;
+          return value !== null && value !== undefined ? value : field.enum.values[0].number;
       }
     }
-    set(e, n) {
-      if ((cp(this.message, e), this.check)) {
-        let checkField = Tl.checkField(e, n);
-        if (checkField) throw checkField;
+    set(field, value) {
+      assertOwn(this.message, field);
+      if (this.check) {
+        let err = reflect_check_js_1.checkField(field, value);
+        if (err) throw err;
       }
-      let r;
-      if (e.fieldKind == "message") r = Zx(e, n);
-      else if (Oo.isReflectMap(n) || Oo.isReflectList(n)) r = n[Yr.unsafeLocal];
-      else r = Jx(e, n);
-      Yr.unsafeSet(this.message, e, r);
+      let local;
+      if (field.fieldKind == "message") local = messageToLocal(field, value);
+      else if (guard_js_1.isReflectMap(value) || guard_js_1.isReflectList(value))
+        local = value[unsafe_js_1.unsafeLocal];
+      else local = longToLocal(field, value);
+      unsafe_js_1.unsafeSet(this.message, field, local);
     }
     getUnknown() {
       return this.message.$unknown;
     }
-    setUnknown(e) {
-      this.message.$unknown = e;
+    setUnknown(value) {
+      this.message.$unknown = value;
     }
   }
-  function cp(e, n) {
-    if (n.parent.typeName !== e.$typeName)
-      throw new Fg.FieldError(
-        n,
-        `cannot use ${n.toString()} with message ${e.$typeName}`,
+  function assertOwn(owner, member) {
+    if (member.parent.typeName !== owner.$typeName)
+      throw new error_js_1.FieldError(
+        member,
+        `cannot use ${member.toString()} with message ${owner.$typeName}`,
         "ForeignFieldError",
       );
   }
-  function CY(e, n, r = !0) {
-    return new jx(e, n !== null && n !== void 0 ? n : [], r);
+  function reflectList(field, unsafeInput, check = true) {
+    return new ReflectListImpl(
+      field,
+      unsafeInput !== null && unsafeInput !== undefined ? unsafeInput : [],
+      check,
+    );
   }
-  class jx {
+  class ReflectListImpl {
     field() {
       return this._field;
     }
     get size() {
       return this._arr.length;
     }
-    constructor(e, n, r) {
-      ((this._field = e), (this._arr = this[Yr.unsafeLocal] = n), (this.check = r));
+    constructor(field, unsafeInput, check) {
+      this._field = field;
+      this._arr = this[unsafe_js_1.unsafeLocal] = unsafeInput;
+      this.check = check;
     }
-    get(e) {
-      let n = this._arr[e];
-      return n === void 0 ? void 0 : Hx(this._field, n, this.check);
+    get(index) {
+      let item = this._arr[index];
+      return item === undefined ? undefined : listItemToReflect(this._field, item, this.check);
     }
-    set(e, n) {
-      if (e < 0 || e >= this._arr.length)
-        throw new Fg.FieldError(this._field, `list item #${e + 1}: out of range`);
+    set(index, item) {
+      if (index < 0 || index >= this._arr.length)
+        throw new error_js_1.FieldError(this._field, `list item #${index + 1}: out of range`);
       if (this.check) {
-        let checkListItem = Tl.checkListItem(this._field, e, n);
-        if (checkListItem) throw checkListItem;
+        let err = reflect_check_js_1.checkListItem(this._field, index, item);
+        if (err) throw err;
       }
-      this._arr[e] = Sk(this._field, n);
+      this._arr[index] = listItemToLocal(this._field, item);
     }
-    add(e) {
+    add(item) {
       if (this.check) {
-        let checkListItem = Tl.checkListItem(this._field, this._arr.length, e);
-        if (checkListItem) throw checkListItem;
+        let err = reflect_check_js_1.checkListItem(this._field, this._arr.length, item);
+        if (err) throw err;
       }
-      this._arr.push(Sk(this._field, e));
+      this._arr.push(listItemToLocal(this._field, item));
       return;
     }
     clear() {
@@ -157,54 +174,60 @@ var Po = x(function (Ck) {
       return this._arr.keys();
     }
     *values() {
-      for (let e of this._arr) yield Hx(this._field, e, this.check);
+      for (let item of this._arr) yield listItemToReflect(this._field, item, this.check);
     }
     *entries() {
-      for (let e = 0; e < this._arr.length; e++) yield [e, Hx(this._field, this._arr[e], this.check)];
+      for (let i = 0; i < this._arr.length; i++)
+        yield [i, listItemToReflect(this._field, this._arr[i], this.check)];
     }
   }
-  function RY(e, n, r = !0) {
-    return new Yx(e, n, r);
+  function reflectMap(field, unsafeInput, check = true) {
+    return new ReflectMapImpl(field, unsafeInput, check);
   }
-  class Yx {
-    constructor(e, n, r = !0) {
-      ((this.obj = this[Yr.unsafeLocal] = n !== null && n !== void 0 ? n : {}),
-        (this.check = r),
-        (this._field = e));
+  class ReflectMapImpl {
+    constructor(field, unsafeInput, check = true) {
+      this.obj = this[unsafe_js_1.unsafeLocal] =
+        unsafeInput !== null && unsafeInput !== undefined ? unsafeInput : {};
+      this.check = check;
+      this._field = field;
     }
     field() {
       return this._field;
     }
-    set(e, n) {
+    set(key, value) {
       if (this.check) {
-        let checkMapEntry = Tl.checkMapEntry(this._field, e, n);
-        if (checkMapEntry) throw checkMapEntry;
+        let err = reflect_check_js_1.checkMapEntry(this._field, key, value);
+        if (err) throw err;
       }
-      return ((this.obj[Ug(e)] = IY(this._field, n)), this);
+      this.obj[mapKeyToLocal(key)] = mapValueToLocal(this._field, value);
+      return this;
     }
-    delete(e) {
-      let n = Ug(e),
-        r = Object.prototype.hasOwnProperty.call(this.obj, n);
-      if (r) delete this.obj[n];
-      return r;
+    delete(key) {
+      let k = mapKeyToLocal(key);
+      let has = Object.prototype.hasOwnProperty.call(this.obj, k);
+      if (has) delete this.obj[k];
+      return has;
     }
     clear() {
-      for (let e of Object.keys(this.obj)) delete this.obj[e];
+      for (let key of Object.keys(this.obj)) delete this.obj[key];
     }
-    get(e) {
-      let n = this.obj[Ug(e)];
-      if (n !== void 0) n = Kx(this._field, n, this.check);
-      return n;
+    get(key) {
+      let val = this.obj[mapKeyToLocal(key)];
+      if (val !== undefined) val = mapValueToReflect(this._field, val, this.check);
+      return val;
     }
-    has(e) {
-      return Object.prototype.hasOwnProperty.call(this.obj, Ug(e));
+    has(key) {
+      return Object.prototype.hasOwnProperty.call(this.obj, mapKeyToLocal(key));
     }
     *keys() {
-      for (let e of Object.keys(this.obj)) yield Ek(e, this._field.mapKey);
+      for (let objKey of Object.keys(this.obj)) yield mapKeyToReflect(objKey, this._field.mapKey);
     }
     *entries() {
-      for (let e of Object.entries(this.obj))
-        yield [Ek(e[0], this._field.mapKey), Kx(this._field, e[1], this.check)];
+      for (let objEntry of Object.entries(this.obj))
+        yield [
+          mapKeyToReflect(objEntry[0], this._field.mapKey),
+          mapValueToReflect(this._field, objEntry[1], this.check),
+        ];
     }
     [Symbol.iterator]() {
       return this.entries();
@@ -213,162 +236,201 @@ var Po = x(function (Ck) {
       return Object.keys(this.obj).length;
     }
     *values() {
-      for (let e of Object.values(this.obj)) yield Kx(this._field, e, this.check);
+      for (let val of Object.values(this.obj)) yield mapValueToReflect(this._field, val, this.check);
     }
-    forEach(e, n) {
-      for (let r of this.entries()) e.call(n, r[1], r[0], this);
+    forEach(callbackfn, thisArg) {
+      for (let mapEntry of this.entries()) callbackfn.call(thisArg, mapEntry[1], mapEntry[0], this);
     }
   }
-  function Zx(e, n) {
-    if (!Oo.isReflectMessage(n)) return n;
-    if (Mg.isWrapper(n.message) && !e.oneof && e.fieldKind == "message") return n.message.value;
-    if (n.desc.typeName == "google.protobuf.Struct" && e.parent.typeName != "google.protobuf.Value")
-      return wk(n.message);
-    return n.message;
+  function messageToLocal(field, value) {
+    if (!guard_js_1.isReflectMessage(value)) return value;
+    if (wrappers_js_1.isWrapper(value.message) && !field.oneof && field.fieldKind == "message")
+      return value.message.value;
+    if (value.desc.typeName == "google.protobuf.Struct" && field.parent.typeName != "google.protobuf.Value")
+      return wktStructToLocal(value.message);
+    return value.message;
   }
-  function zx(e, n, r) {
-    if (n !== void 0) {
-      if (Mg.isWrapperDesc(e.message) && !e.oneof && e.fieldKind == "message")
-        n = { $typeName: e.message.typeName, value: Xx(e.message.fields[0], n) };
+  function messageToReflect(field, value, check) {
+    if (value !== undefined) {
+      if (wrappers_js_1.isWrapperDesc(field.message) && !field.oneof && field.fieldKind == "message")
+        value = {
+          $typeName: field.message.typeName,
+          value: longToReflect(field.message.fields[0], value),
+        };
       else if (
-        e.message.typeName == "google.protobuf.Struct" &&
-        e.parent.typeName != "google.protobuf.Value" &&
-        Oo.isObject(n)
+        field.message.typeName == "google.protobuf.Struct" &&
+        field.parent.typeName != "google.protobuf.Value" &&
+        guard_js_1.isObject(value)
       )
-        n = vk(n);
+        value = wktStructToReflect(value);
     }
-    return new qx(e.message, n, r);
+    return new ReflectMessageImpl(field.message, value, check);
   }
-  function Sk(e, n) {
-    if (e.listKind == "message") return Zx(e, n);
-    return Jx(e, n);
+  function listItemToLocal(field, value) {
+    if (field.listKind == "message") return messageToLocal(field, value);
+    return longToLocal(field, value);
   }
-  function Hx(e, n, r) {
-    if (e.listKind == "message") return zx(e, n, r);
-    return Xx(e, n);
+  function listItemToReflect(field, value, check) {
+    if (field.listKind == "message") return messageToReflect(field, value, check);
+    return longToReflect(field, value);
   }
-  function IY(e, n) {
-    if (e.mapKind == "message") return Zx(e, n);
-    return Jx(e, n);
+  function mapValueToLocal(field, value) {
+    if (field.mapKind == "message") return messageToLocal(field, value);
+    return longToLocal(field, value);
   }
-  function Kx(e, n, r) {
-    if (e.mapKind == "message") return zx(e, n, r);
-    return n;
+  function mapValueToReflect(field, value, check) {
+    if (field.mapKind == "message") return messageToReflect(field, value, check);
+    return value;
   }
-  function Ug(e) {
-    return typeof e == "string" || typeof e == "number" ? e : String(e);
+  function mapKeyToLocal(key) {
+    return typeof key == "string" || typeof key == "number" ? key : String(key);
   }
-  function Ek(e, n) {
-    switch (n) {
-      case On.ScalarType.STRING:
-        return e;
-      case On.ScalarType.INT32:
-      case On.ScalarType.FIXED32:
-      case On.ScalarType.UINT32:
-      case On.ScalarType.SFIXED32:
-      case On.ScalarType.SINT32: {
-        let int = Number.parseInt(e);
-        if (Number.isFinite(int)) return int;
+  function mapKeyToReflect(key, type) {
+    switch (type) {
+      case descriptors_js_1.ScalarType.STRING:
+        return key;
+      case descriptors_js_1.ScalarType.INT32:
+      case descriptors_js_1.ScalarType.FIXED32:
+      case descriptors_js_1.ScalarType.UINT32:
+      case descriptors_js_1.ScalarType.SFIXED32:
+      case descriptors_js_1.ScalarType.SINT32: {
+        let n = Number.parseInt(key);
+        if (Number.isFinite(n)) return n;
         break;
       }
-      case On.ScalarType.BOOL:
-        switch (e) {
+      case descriptors_js_1.ScalarType.BOOL:
+        switch (key) {
           case "true":
-            return !0;
+            return true;
           case "false":
-            return !1;
+            return false;
         }
         break;
-      case On.ScalarType.UINT64:
-      case On.ScalarType.FIXED64:
+      case descriptors_js_1.ScalarType.UINT64:
+      case descriptors_js_1.ScalarType.FIXED64:
         try {
-          return Li.protoInt64.uParse(e);
-        } catch (error) {}
+          return proto_int64_js_1.protoInt64.uParse(key);
+        } catch (_a) {}
         break;
       default:
         try {
-          return Li.protoInt64.parse(e);
-        } catch (error) {}
+          return proto_int64_js_1.protoInt64.parse(key);
+        } catch (_b) {}
         break;
     }
-    return e;
+    return key;
   }
-  function Xx(e, n) {
-    switch (e.scalar) {
-      case On.ScalarType.INT64:
-      case On.ScalarType.SFIXED64:
-      case On.ScalarType.SINT64:
-        if ("longAsString" in e && e.longAsString && typeof n == "string") n = Li.protoInt64.parse(n);
+  function longToReflect(field, value) {
+    switch (field.scalar) {
+      case descriptors_js_1.ScalarType.INT64:
+      case descriptors_js_1.ScalarType.SFIXED64:
+      case descriptors_js_1.ScalarType.SINT64:
+        if ("longAsString" in field && field.longAsString && typeof value == "string")
+          value = proto_int64_js_1.protoInt64.parse(value);
         break;
-      case On.ScalarType.FIXED64:
-      case On.ScalarType.UINT64:
-        if ("longAsString" in e && e.longAsString && typeof n == "string") n = Li.protoInt64.uParse(n);
-        break;
-    }
-    return n;
-  }
-  function Jx(e, n) {
-    switch (e.scalar) {
-      case On.ScalarType.INT64:
-      case On.ScalarType.SFIXED64:
-      case On.ScalarType.SINT64:
-        if ("longAsString" in e && e.longAsString) n = String(n);
-        else if (typeof n == "string" || typeof n == "number") n = Li.protoInt64.parse(n);
-        break;
-      case On.ScalarType.FIXED64:
-      case On.ScalarType.UINT64:
-        if ("longAsString" in e && e.longAsString) n = String(n);
-        else if (typeof n == "string" || typeof n == "number") n = Li.protoInt64.uParse(n);
+      case descriptors_js_1.ScalarType.FIXED64:
+      case descriptors_js_1.ScalarType.UINT64:
+        if ("longAsString" in field && field.longAsString && typeof value == "string")
+          value = proto_int64_js_1.protoInt64.uParse(value);
         break;
     }
-    return n;
+    return value;
   }
-  function vk(e) {
-    let n = { $typeName: "google.protobuf.Struct", fields: {} };
-    if (Oo.isObject(e)) for (let [r, s] of Object.entries(e)) n.fields[r] = Ak(s);
-    return n;
+  function longToLocal(field, value) {
+    switch (field.scalar) {
+      case descriptors_js_1.ScalarType.INT64:
+      case descriptors_js_1.ScalarType.SFIXED64:
+      case descriptors_js_1.ScalarType.SINT64:
+        if ("longAsString" in field && field.longAsString) value = String(value);
+        else if (typeof value == "string" || typeof value == "number")
+          value = proto_int64_js_1.protoInt64.parse(value);
+        break;
+      case descriptors_js_1.ScalarType.FIXED64:
+      case descriptors_js_1.ScalarType.UINT64:
+        if ("longAsString" in field && field.longAsString) value = String(value);
+        else if (typeof value == "string" || typeof value == "number")
+          value = proto_int64_js_1.protoInt64.uParse(value);
+        break;
+    }
+    return value;
   }
-  function wk(e) {
-    let n = {};
-    for (let [r, s] of Object.entries(e.fields)) n[r] = Tk(s);
-    return n;
+  function wktStructToReflect(json) {
+    let struct = {
+      $typeName: "google.protobuf.Struct",
+      fields: {},
+    };
+    if (guard_js_1.isObject(json))
+      for (let [k, v] of Object.entries(json)) struct.fields[k] = wktValueToReflect(v);
+    return struct;
   }
-  function Tk(e) {
-    switch (e.kind.case) {
+  function wktStructToLocal(val) {
+    let json = {};
+    for (let [k, v] of Object.entries(val.fields)) json[k] = wktValueToLocal(v);
+    return json;
+  }
+  function wktValueToLocal(val) {
+    switch (val.kind.case) {
       case "structValue":
-        return wk(e.kind.value);
+        return wktStructToLocal(val.kind.value);
       case "listValue":
-        return e.kind.value.values.map(Tk);
+        return val.kind.value.values.map(wktValueToLocal);
       case "nullValue":
-      case void 0:
+      case undefined:
         return null;
       default:
-        return e.kind.value;
+        return val.kind.value;
     }
   }
-  function Ak(e) {
-    let n = { $typeName: "google.protobuf.Value", kind: { case: void 0 } };
-    switch (typeof e) {
+  function wktValueToReflect(json) {
+    let value = {
+      $typeName: "google.protobuf.Value",
+      kind: {
+        case: undefined,
+      },
+    };
+    switch (typeof json) {
       case "number":
-        n.kind = { case: "numberValue", value: e };
+        value.kind = {
+          case: "numberValue",
+          value: json,
+        };
         break;
       case "string":
-        n.kind = { case: "stringValue", value: e };
+        value.kind = {
+          case: "stringValue",
+          value: json,
+        };
         break;
       case "boolean":
-        n.kind = { case: "boolValue", value: e };
+        value.kind = {
+          case: "boolValue",
+          value: json,
+        };
         break;
       case "object":
-        if (e === null) n.kind = { case: "nullValue", value: 0 };
-        else if (Array.isArray(e)) {
-          let r = { $typeName: "google.protobuf.ListValue", values: [] };
-          if (Array.isArray(e)) for (let s of e) r.values.push(Ak(s));
-          n.kind = { case: "listValue", value: r };
-        } else n.kind = { case: "structValue", value: vk(e) };
+        if (json === null)
+          value.kind = {
+            case: "nullValue",
+            value: 0,
+          };
+        else if (Array.isArray(json)) {
+          let listValue = {
+            $typeName: "google.protobuf.ListValue",
+            values: [],
+          };
+          if (Array.isArray(json)) for (let e of json) listValue.values.push(wktValueToReflect(e));
+          value.kind = {
+            case: "listValue",
+            value: listValue,
+          };
+        } else
+          value.kind = {
+            case: "structValue",
+            value: wktStructToReflect(json),
+          };
         break;
     }
-    return n;
+    return value;
   }
 });
-
-export { Po };
+export { require_reflect };

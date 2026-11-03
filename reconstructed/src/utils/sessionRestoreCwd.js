@@ -8,86 +8,98 @@
  * pieces: chunk-6bye9wca.js (5)
  * attribution: placement 5
  */
-import { bks } from "./cwd.js";
+import { identityPath } from "./cwd.js";
 import {
   resolveContainmentTarget,
-  NW,
+  hasUnresolvedCanonicalPath,
   isOutsideContainment,
   isSameContainmentPath,
 } from "./permissions/bgContainment.js";
-import { ai, yl } from "./networkPaths.js";
+import { isNonWslUncPath, isNetworkMountRoot } from "./networkPaths.js";
 import { findCanonicalGitRoot } from "./git.js";
-import { gitRootsForPath, R6 } from "./worktreeIsolation.js";
+import { gitRootsForPath, compareSameContainment } from "./worktreeIsolation.js";
 
 //@ chunk-6bye9wca.js:356-432 placement
-var WLe = (() => {
+/**
+ * STARTUP_CWD_REALPATH：启动时解析出的 cwd。
+ */
+var STARTUP_CWD_REALPATH = (() => {
   try {
-    return bks(process.cwd());
+    return identityPath(process.cwd());
   } catch {
     return process.cwd();
   }
 })();
+//@ chunk-6bye9wca.js:432-545 placement
 /**
  * 比较两个路径的包含目标（解析失败或一方被跳过视为相同）。
  */
-//@ chunk-6bye9wca.js:432-545 placement
-function isSameRestoreLocation(r, e) {
-  let n = resolveContainmentTarget(r),
-    t = resolveContainmentTarget(e);
-  if (NW(n) || NW(t)) return !0;
-  if (n.skipped !== t.skipped) return !0;
-  return isOutsideContainment(n, t);
+function isSameRestoreLocation(r, worktreePath) {
+  let containmentTarget = resolveContainmentTarget(r);
+  let containmentTarget_2 = resolveContainmentTarget(worktreePath);
+  if (hasUnresolvedCanonicalPath(containmentTarget) || hasUnresolvedCanonicalPath(containmentTarget_2))
+    return true;
+  if (containmentTarget.skipped !== containmentTarget_2.skipped) return true;
+  return isOutsideContainment(containmentTarget, containmentTarget_2);
 }
+//@ chunk-6bye9wca.js:545-725 placement
 /**
  * 恢复会话时要比对的根目录：规范 git 根或所在工作树，可排除与指定路径相同者。
  */
-//@ chunk-6bye9wca.js:545-725 placement
-function restoreRootsFor(r, e) {
-  if (ai(r) || yl(r)) return [];
-  let n = findCanonicalGitRoot(r),
-    t =
-      n !== null && n !== void 0
-        ? [n]
-        : (() => {
-            let o = gitRootsForPath(r);
-            return o.length > 0 ? o : [r];
-          })();
-  return e === void 0 ? t : t.filter((o) => R6(o, e) !== "same");
+function restoreRootsFor(liveLaunchAnchor, worktreePath) {
+  if (isNonWslUncPath(liveLaunchAnchor) || isNetworkMountRoot(liveLaunchAnchor)) return [];
+  let canonicalGitRoot = findCanonicalGitRoot(liveLaunchAnchor);
+  let t =
+    canonicalGitRoot !== null && canonicalGitRoot !== undefined
+      ? [canonicalGitRoot]
+      : (() => {
+          let o = gitRootsForPath(liveLaunchAnchor);
+          return o.length > 0 ? o : [liveLaunchAnchor];
+        })();
+  return worktreePath === undefined ? t : t.filter((o) => compareSameContainment(o, worktreePath) !== "same");
 }
+//@ chunk-6bye9wca.js:725-865 placement
 /**
  * 退出工作树时要比对的根目录：规范 git 根或所在工作树，可排除与指定路径相同者。
  */
-//@ chunk-6bye9wca.js:725-865 placement
-function worktreeRootsFor(r, e) {
-  if (ai(r) || yl(r)) return [];
-  let n = findCanonicalGitRoot(r),
-    t = n !== null && n !== void 0 ? [n] : gitRootsForPath(r);
-  return e === void 0 ? t : t.filter((s) => R6(s, e) !== "same");
+function worktreeRootsFor(liveLaunchAnchor, worktreePath) {
+  if (isNonWslUncPath(liveLaunchAnchor) || isNetworkMountRoot(liveLaunchAnchor)) return [];
+  let canonicalGitRoot = findCanonicalGitRoot(liveLaunchAnchor);
+  let t =
+    canonicalGitRoot !== null && canonicalGitRoot !== undefined
+      ? [canonicalGitRoot]
+      : gitRootsForPath(liveLaunchAnchor);
+  return worktreePath === undefined ? t : t.filter((s) => compareSameContainment(s, worktreePath) !== "same");
 }
 //@ chunk-6bye9wca.js:865-1222 placement
 function isCoveredByWorktrees(r, e, n) {
-  if (e.length === 0) return !1;
+  if (e.length === 0) return false;
   if (
     !e.every((s) => {
-      let o = R6(r, s);
-      if (o === "indeterminate") return !1;
-      if (o === "same") return !0;
+      let o = compareSameContainment(r, s);
+      if (o === "indeterminate") return false;
+      if (o === "same") return true;
       return !isSameRestoreLocation(s, r);
     })
   )
-    return !1;
-  if (n?.requireCovered === !0) {
-    let s = resolveContainmentTarget(r);
-    if (NW(s)) return !1;
+    return false;
+  if (n?.requireCovered === true) {
+    let containmentTarget = resolveContainmentTarget(r);
+    if (hasUnresolvedCanonicalPath(containmentTarget)) return false;
     let o = (a) =>
       a.some((u) => {
-        let i = resolveContainmentTarget(u);
-        if (NW(i)) return !1;
-        return isSameContainmentPath(s, i);
+        let containmentTarget_2 = resolveContainmentTarget(u);
+        if (hasUnresolvedCanonicalPath(containmentTarget_2)) return false;
+        return isSameContainmentPath(containmentTarget, containmentTarget_2);
       });
     return o(n.coveredWitnesses ?? e) || o(n.extraCoveredRoots ?? []);
   }
-  return !0;
+  return true;
 }
-
-export { isCoveredByWorktrees, restoreRootsFor, WLe, isSameRestoreLocation, worktreeRootsFor };
+export {
+  isCoveredByWorktrees,
+  restoreRootsFor,
+  STARTUP_CWD_REALPATH,
+  isSameRestoreLocation,
+  worktreeRootsFor,
+};

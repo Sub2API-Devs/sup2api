@@ -10,37 +10,37 @@
  */
 import { generateTaskId, createTaskStateBase } from "../Task.js";
 
+//@ chunk-m8444q1d.js:14984-15075 placement
 /**
  * 是否是 auto_mode_scan 任务。
  */
-//@ chunk-m8444q1d.js:14984-15075 placement
 function isAutoModeScanTask(task) {
   return typeof task === "object" && task !== null && "type" in task && task.type === "auto_mode_scan";
 }
+//@ chunk-m8444q1d.js:15075-15172 placement = requestTeammateShutdown (1)
 /**
  * 找到正在运行的 auto_mode_scan 任务。
  */
-//@ chunk-m8444q1d.js:15075-15172 placement = requestTeammateShutdown (1)
 function findRunningAutoModeScanTask(taskRegistry) {
-  for (let t of Object.values(taskRegistry.all()))
-    if (isAutoModeScanTask(t) && t.status === "running") return t;
+  for (let task of Object.values(taskRegistry.all()))
+    if (isAutoModeScanTask(task) && task.status === "running") return task;
   return;
 }
+//@ chunk-m8444q1d.js:15172-15399 placement
 /**
  * 注册"scanning for auto-mode setup"后台任务（运行中、不写入记录，记录是否从 GitHub 组织收集），返回任务 id。
  */
-//@ chunk-m8444q1d.js:15172-15399 placement
-function registerAutoModeScanTask(o, t, i) {
-  let u = generateTaskId("auto_mode_scan"),
-    M = {
-      ...createTaskStateBase(u, "auto_mode_scan", "scanning for auto-mode setup"),
-      type: "auto_mode_scan",
-      status: "running",
-      skipTranscript: !0,
-      gathersFromGitHubOrg: i,
-      abortController: t,
-    };
-  return (o.register(M), u);
+function registerAutoModeScanTask(taskRegistry, abortController, gathersFromGitHubOrg) {
+  let taskId = generateTaskId("auto_mode_scan");
+  let M = {
+    ...createTaskStateBase(taskId, "auto_mode_scan", "scanning for auto-mode setup"),
+    type: "auto_mode_scan",
+    status: "running",
+    skipTranscript: true,
+    gathersFromGitHubOrg,
+    abortController,
+  };
+  taskRegistry.register(M);
+  return taskId;
 }
-
 export { registerAutoModeScanTask, findRunningAutoModeScanTask };

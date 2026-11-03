@@ -10,12 +10,12 @@
  */
 import { createUiMessagePort } from "../../plugins/functionHooks/surfaceClients.js";
 import { dispatchUiMessage } from "../../plugins/functionHooks/ui/desktopSurface.js";
-import { pd } from "../../utils/hooks/functionHookMatchers.js";
+import { matcherLog } from "../../utils/hooks/functionHookMatchers.js";
 
+//@ chunk-1tz177x8.js:26473-26606 fingerprint = getImageProcessor (0.396)
 /**
  * 创建图片处理调度器（setImmediate 调度，警告写日志）。
  */
-//@ chunk-1tz177x8.js:26473-26606 fingerprint = getImageProcessor (0.396)
 var getImageProcessor = () =>
   createUiMessagePort({
     run: (e) => dispatchUiMessage(e),
@@ -26,8 +26,7 @@ var getImageProcessor = () =>
       };
     },
     warn: (e) => {
-      pd().log(e, "warn");
+      matcherLog().log(e, "warn");
     },
   });
-
 export { getImageProcessor };

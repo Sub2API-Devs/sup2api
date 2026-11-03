@@ -9,24 +9,24 @@
  * attribution: placement 2
  */
 
+//@ chunk-e6aww6q8.js:249937-250002 placement = isValidNumericEffort (0.684)
 /**
  * 整数、大于 1 且不是本进程的 pid。旧版名 isValidNumericEffort 为错配，与 effort 无关（进程清理代码）。
  */
-//@ chunk-e6aww6q8.js:249937-250002 placement = isValidNumericEffort (0.684)
 function isSignalablePid(value) {
   return Number.isInteger(value) && value > 1 && value !== process.pid;
 }
+//@ chunk-g4mgfvqt.js:1374-1454 placement = isProcessRunning (1)
 /**
  * process.kill(pid, 0) 判断进程是否存活（EPERM 视为存活）。
  */
-//@ chunk-g4mgfvqt.js:1374-1454 placement = isProcessRunning (1)
 function isProcessRunning(pid) {
-  if (pid <= 1) return !1;
+  if (pid <= 1) return false;
   try {
-    return (process.kill(pid, 0), !0);
+    process.kill(pid, 0);
+    return true;
   } catch {
-    return !1;
+    return false;
   }
 }
-
 export { isProcessRunning, isSignalablePid };

@@ -8,11 +8,9 @@
  * pieces: chunk-p90h2n8k.js (1)
  * attribution: placement 1
  */
-
 //@ chunk-p90h2n8k.js:191-276 placement
-var ANTHROPIC_FILEINPUTS = "anthropic/fileInputs",
-  AUTHORIZE_UPLOAD = "authorize_upload",
-  HASHFILES = "HashFiles",
-  PUTFILES = "PutFiles";
-
+var ANTHROPIC_FILEINPUTS = "anthropic/fileInputs";
+var AUTHORIZE_UPLOAD = "authorize_upload";
+var HASHFILES = "HashFiles";
+var PUTFILES = "PutFiles";
 export { ANTHROPIC_FILEINPUTS, AUTHORIZE_UPLOAD, HASHFILES, PUTFILES };

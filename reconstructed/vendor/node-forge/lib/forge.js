@@ -8,8 +8,11 @@
 import { x } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-fq0cr76a.js:3429-3501 cjs-fingerprint
-var Tn = x(function (ife, sT) {
-  sT.exports = { options: { usePureJavaScript: !1 } };
+var require_forge = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = {
+    options: {
+      usePureJavaScript: false,
+    },
+  };
 });
-
-export { Tn };
+export { require_forge };

@@ -11,44 +11,44 @@
 import { KICKED_ATTACH_CODE, SUPERVISOR_DETACH_CODE, BG_PROTO } from "../../services/daemon/leaseProtocol.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { fromEnum, fromEnumOpt } from "../../services/analytics/safeMetadata.js";
-import { ye } from "../../utils/startupMarks.js";
+import { sanitizeMarkName } from "../../utils/startupMarks.js";
 import { controlRequest } from "../../services/daemon/controlClient.js";
 
+//@ chunk-vrr64ez0.js:9089-9464 placement
 /**
  * 附加/控制错误码与提示文本。
  */
-//@ chunk-vrr64ez0.js:9089-9464 placement
-var ATTACH_ERROR_CODES = 1e4,
-  ENORESPONSE = "ENORESPONSE",
-  IHt = "Session isn't responding",
-  an = {
-    ENOJOB: "enojob",
-    ETIMEOUT: "etimeout",
-    ECWDGONE: "ecwdgone",
-    EUNKNOWN: "eunknown",
-    ENOREPLY: "enoreply",
-    ERESPAWNING: "erespawning",
-    ESTALE: "estale",
-    EALIVE: "ealive",
-    ESTARTING: "estarting",
-    EPEERUID: "epeeruid",
-    ETOOLARGE: "etoolarge",
-    EUNVERIFIED: "eunverified",
-    EAUTH: "eauth",
-    EPROTO: "eproto",
-    EHOSTDEAD: "ehostdead",
-    ESKEW: "eskew",
-  };
+var ATTACH_ERROR_CODES_2 = 1e4;
+var ENORESPONSE = "ENORESPONSE";
+var SESSION_NOT_RESPONDING_TEXT = "Session isn't responding";
+var ATTACH_ERROR_CODES = {
+  ENOJOB: "enojob",
+  ETIMEOUT: "etimeout",
+  ECWDGONE: "ecwdgone",
+  EUNKNOWN: "eunknown",
+  ENOREPLY: "enoreply",
+  ERESPAWNING: "erespawning",
+  ESTALE: "estale",
+  EALIVE: "ealive",
+  ESTARTING: "estarting",
+  EPEERUID: "epeeruid",
+  ETOOLARGE: "etoolarge",
+  EUNVERIFIED: "eunverified",
+  EAUTH: "eauth",
+  EPROTO: "eproto",
+  EHOSTDEAD: "ehostdead",
+  ESKEW: "eskew",
+};
 //@ chunk-vrr64ez0.js:9464-9527 placement
-function tr(e) {
-  return Object.hasOwn(an, e) ? an[e] : "unknown_code";
+function attachErrorCode(code) {
+  return Object.hasOwn(ATTACH_ERROR_CODES, code) ? ATTACH_ERROR_CODES[code] : "unknown_code";
 }
+//@ chunk-vrr64ez0.js:9527-9891 placement
 /**
  * 从错误文本分类附加失败原因。
  */
-//@ chunk-vrr64ez0.js:9527-9891 placement
 function classifyAttachError(e) {
-  if (e === void 0 || e === "") return;
+  if (e === undefined || e === "") return;
   if (KICKED_ATTACH_CODE.test(e)) return "ekicked";
   if (e.includes("ERESPAWNING")) return "erespawning";
   if (e.includes("ESTARTING")) return "estarting";
@@ -58,55 +58,58 @@ function classifyAttachError(e) {
   if (SUPERVISOR_DETACH_CODE.test(e)) return "unknown_code";
   return "worker_detach";
 }
+//@ chunk-vrr64ez0.js:9891-10803 placement
 /**
  * 附加结束时上报遥测（交互是否到达、耗时）。
  */
-//@ chunk-vrr64ez0.js:9891-10803 placement
 function reportAttachTelemetry(e, n, o) {
   if (!e) return;
-  let r = e.interactive?.reached,
-    u = n === "detached" ? e.interactive?.marksExpected : void 0,
-    s = n === "detached" && r === void 0 && u === !0,
-    h = s && e.t0 !== void 0 ? Math.round(performance.now() - e.t0) : void 0;
+  let reached = e.interactive?.reached;
+  let marksExpected = n === "detached" ? e.interactive?.marksExpected : undefined;
+  let s = n === "detached" && reached === undefined && marksExpected === true;
+  let h = s && e.t0 !== undefined ? Math.round(performance.now() - e.t0) : undefined;
   logEvent("tengu_bg_attach_outcome", {
     outcome: fromEnum(n),
-    got_ack: !1,
-    got_first_frame: !1,
-    synthetic: !0,
-    apc_detach: !1,
-    failure_class: fromEnumOpt(n === "error" ? (o ?? "daemon_unavailable") : void 0),
-    gesture_id: ye(e.gestureId),
+    got_ack: false,
+    got_first_frame: false,
+    synthetic: true,
+    apc_detach: false,
+    failure_class: fromEnumOpt(n === "error" ? (o ?? "daemon_unavailable") : undefined),
+    gesture_id: sanitizeMarkName(e.gestureId),
     attempt: ++e.attempt,
     surface: fromEnumOpt(e.surface),
     daemon_booted: e.daemonBooted,
     via: fromEnumOpt(e.interactive?.via),
     attach_cold: e.interactive?.attachCold,
-    attach_ms: r !== void 0 ? r.attachMs : h,
-    content_paint_ms: r !== void 0 ? Math.round(r.contentPaintMs) : void 0,
-    prompt_idle_ms: r !== void 0 ? Math.round(r.promptIdleMs) : void 0,
-    msgs_loaded: r?.msgsLoaded,
-    msgs_in_jsonl: r?.msgsInJsonl,
-    msgs_rendered_at_first_paint: r?.msgsRenderedAtFirstPaint,
-    first_frame_kind: fromEnumOpt(r !== void 0 ? "real" : void 0),
-    marks_expected: r !== void 0 ? !0 : u,
-    attach_censored: s ? !0 : void 0,
+    attach_ms: reached !== undefined ? reached.attachMs : h,
+    content_paint_ms: reached !== undefined ? Math.round(reached.contentPaintMs) : undefined,
+    prompt_idle_ms: reached !== undefined ? Math.round(reached.promptIdleMs) : undefined,
+    msgs_loaded: reached?.msgsLoaded,
+    msgs_in_jsonl: reached?.msgsInJsonl,
+    msgs_rendered_at_first_paint: reached?.msgsRenderedAtFirstPaint,
+    first_frame_kind: fromEnumOpt(reached !== undefined ? "real" : undefined),
+    marks_expected: reached !== undefined ? true : marksExpected,
+    attach_censored: s ? true : undefined,
   });
 }
+//@ chunk-vrr64ez0.js:10803-10911 placement
 /**
  * 向守护进程询问短 id 对应的后台会话是否存在，明确不存在时为真。
  */
-//@ chunk-vrr64ez0.js:10803-10911 placement
-async function isBackgroundSessionGone(e) {
-  let n = await controlRequest({ proto: BG_PROTO, op: "has", short: e });
-  return n.ok && n.op === "has" && n.present === !1;
+async function isBackgroundSessionGone(short) {
+  let n = await controlRequest({
+    proto: BG_PROTO,
+    op: "has",
+    short,
+  });
+  return n.ok && n.op === "has" && n.present === false;
 }
-
 export {
   reportAttachTelemetry,
   isBackgroundSessionGone,
   ENORESPONSE,
-  IHt,
+  SESSION_NOT_RESPONDING_TEXT,
   classifyAttachError,
-  tr,
-  ATTACH_ERROR_CODES,
+  attachErrorCode,
+  ATTACH_ERROR_CODES_2,
 };

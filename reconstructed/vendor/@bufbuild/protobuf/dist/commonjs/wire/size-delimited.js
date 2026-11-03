@@ -6,164 +6,195 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../../runtime/bun-runtime.js";
-import { qu } from "../../cjs/to-binary.js";
-import { xc } from "./binary-encoding.js";
-import { Ku } from "../from-binary.js";
+import { require_to_binary } from "../../cjs/to-binary.js";
+import { require_binary_encoding } from "./binary-encoding.js";
+import { require_from_binary } from "../from-binary.js";
 
 //@ chunk-fq0cr76a.js:446147-448705 cjs-fingerprint
-var AP = x(function (oo) {
-  var mJ =
-      (oo && oo.__asyncValues) ||
-      function (e) {
-        if (!Symbol.asyncIterator) throw TypeError("Symbol.asyncIterator is not defined.");
-        var n = e[Symbol.asyncIterator],
-          r;
-        return n
-          ? n.call(e)
-          : ((e = typeof __values === "function" ? __values(e) : e[Symbol.iterator]()),
-            (r = {}),
-            s("next"),
-            s("throw"),
-            s("return"),
-            (r[Symbol.asyncIterator] = function () {
-              return this;
-            }),
-            r);
-        function s(y) {
-          r[y] =
-            e[y] &&
-            function (b) {
-              return new Promise(function (S, w) {
-                ((b = e[y](b)), h(S, w, b.done, b.value));
-              });
-            };
-        }
-        function h(y, b, S, w) {
-          Promise.resolve(w).then(function (R) {
-            y({ value: R, done: S });
-          }, b);
-        }
-      },
-    nd =
-      (oo && oo.__await) ||
-      function (e) {
-        return this instanceof nd ? ((this.v = e), this) : new nd(e);
-      },
-    gJ =
-      (oo && oo.__asyncGenerator) ||
-      function (e, n, r) {
-        if (!Symbol.asyncIterator) throw TypeError("Symbol.asyncIterator is not defined.");
-        var s = r.apply(e, n || []),
-          h,
-          y = [];
-        return (
-          (h = Object.create((typeof AsyncIterator === "function" ? AsyncIterator : Object).prototype)),
-          S("next"),
-          S("throw"),
-          S("return", b),
-          (h[Symbol.asyncIterator] = function () {
+var require_size_delimited = x(function (cjsExports) {
+  var __asyncValues =
+    (cjsExports && cjsExports.__asyncValues) ||
+    function (o) {
+      if (!Symbol.asyncIterator) throw TypeError("Symbol.asyncIterator is not defined.");
+      var m = o[Symbol.asyncIterator];
+      var i;
+      return m
+        ? m.call(o)
+        : ((o = typeof __values === "function" ? __values(o) : o[Symbol.iterator]()),
+          (i = {}),
+          verb("next"),
+          verb("throw"),
+          verb("return"),
+          (i[Symbol.asyncIterator] = function () {
             return this;
           }),
-          h
-        );
-        function b(V) {
-          return function (K) {
-            return Promise.resolve(K).then(V, O);
+          i);
+      function verb(n) {
+        i[n] =
+          o[n] &&
+          function (v) {
+            return new Promise(function (resolve, reject) {
+              v = o[n](v);
+              settle(resolve, reject, v.done, v.value);
+            });
           };
-        }
-        function S(V, K) {
-          if (s[V]) {
-            if (
-              ((h[V] = function (q) {
-                return new Promise(function (Z, J) {
-                  y.push([V, q, Z, J]) > 1 || w(V, q);
-                });
-              }),
-              K)
-            )
-              h[V] = K(h[V]);
-          }
-        }
-        function w(V, K) {
-          try {
-            R(s[V](K));
-          } catch (error) {
-            L(y[0][3], error);
-          }
-        }
-        function R(V) {
-          V.value instanceof nd ? Promise.resolve(V.value.v).then(D, O) : L(y[0][2], V);
-        }
-        function D(V) {
-          w("next", V);
-        }
-        function O(V) {
-          w("throw", V);
-        }
-        function L(V, K) {
-          if ((V(K), y.shift(), y.length)) w(y[0][0], y[0][1]);
-        }
-      };
-  Object.defineProperty(oo, "__esModule", { value: !0 });
-  oo.sizeDelimitedEncode = yJ;
-  oo.sizeDelimitedDecodeStream = bJ;
-  oo.sizeDelimitedPeek = TP;
-  var vP = qu(),
-    py = xc(),
-    wP = Ku();
-  function yJ(e, n, r) {
-    let s = new py.BinaryWriter();
-    return (s.bytes(vP.toBinary(e, n, r)), s.finish());
-  }
-  function bJ(e, n, r) {
-    return gJ(this, arguments, function* () {
-      var h, y, b, S;
-      function w(V, K) {
-        let uint8Array = new Uint8Array(V.byteLength + K.byteLength);
-        return (uint8Array.set(V), uint8Array.set(K, V.length), uint8Array);
       }
-      let uint8Array = new Uint8Array(0);
+      function settle(resolve, reject, d, v) {
+        Promise.resolve(v).then(function (v) {
+          resolve({
+            value: v,
+            done: d,
+          });
+        }, reject);
+      }
+    };
+  var __await =
+    (cjsExports && cjsExports.__await) ||
+    function (v) {
+      return this instanceof __await ? ((this.v = v), this) : new __await(v);
+    };
+  var __asyncGenerator =
+    (cjsExports && cjsExports.__asyncGenerator) ||
+    function (thisArg, _arguments, generator) {
+      if (!Symbol.asyncIterator) throw TypeError("Symbol.asyncIterator is not defined.");
+      var g = generator.apply(thisArg, _arguments || []);
+      var i;
+      var q_2 = [];
+      i = Object.create((typeof AsyncIterator === "function" ? AsyncIterator : Object).prototype);
+      verb("next");
+      verb("throw");
+      verb("return", awaitReturn);
+      i[Symbol.asyncIterator] = function () {
+        return this;
+      };
+      return i;
+      function awaitReturn(f) {
+        return function (v) {
+          return Promise.resolve(v).then(f, reject);
+        };
+      }
+      function verb(n, f) {
+        if (g[n]) {
+          i[n] = function (v) {
+            return new Promise(function (a, b) {
+              if (!(q_2.push([n, v, a, b]) > 1)) resume(n, v);
+            });
+          };
+          if (f) i[n] = f(i[n]);
+        }
+      }
+      function resume(n, v) {
+        try {
+          step(g[n](v));
+        } catch (e) {
+          settle(q_2[0][3], e);
+        }
+      }
+      function step(r) {
+        if (r.value instanceof __await) Promise.resolve(r.value.v).then(fulfill, reject);
+        else settle(q_2[0][2], r);
+      }
+      function fulfill(value) {
+        resume("next", value);
+      }
+      function reject(value) {
+        resume("throw", value);
+      }
+      function settle(f, v) {
+        f(v);
+        q_2.shift();
+        if (q_2.length) resume(q_2[0][0], q_2[0][1]);
+      }
+    };
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.sizeDelimitedEncode = sizeDelimitedEncode;
+  cjsExports.sizeDelimitedDecodeStream = sizeDelimitedDecodeStream;
+  cjsExports.sizeDelimitedPeek = sizeDelimitedPeek;
+  var to_binary_js_1 = require_to_binary();
+  var binary_encoding_js_1 = require_binary_encoding();
+  var from_binary_js_1 = require_from_binary();
+  function sizeDelimitedEncode(messageDesc, message, options) {
+    let writer = new binary_encoding_js_1.BinaryWriter();
+    writer.bytes(to_binary_js_1.toBinary(messageDesc, message, options));
+    return writer.finish();
+  }
+  function sizeDelimitedDecodeStream(messageDesc, iterable, options) {
+    return __asyncGenerator(this, arguments, function* () {
+      var _a;
+      var e_1;
+      var _b;
+      var _c;
+      function append(buffer, chunk) {
+        let n = new Uint8Array(buffer.byteLength + chunk.byteLength);
+        n.set(buffer);
+        n.set(chunk, buffer.length);
+        return n;
+      }
+      let buffer = new Uint8Array(0);
       try {
-        for (var D = !0, O = mJ(n), L; (L = yield nd(O.next())), (h = L.done), !h; D = !0) {
-          ((S = L.value), (D = !1), (uint8Array = w(uint8Array, S)));
+        for (
+          var _d = true, iterable_1 = __asyncValues(iterable), iterable_1_1;
+          (iterable_1_1 = yield __await(iterable_1.next())), (_a = iterable_1_1.done), !_a;
+          _d = true
+        ) {
+          _c = iterable_1_1.value;
+          _d = false;
+          buffer = append(buffer, _c);
           for (;;) {
-            let K = TP(uint8Array);
-            if (K.eof) break;
-            if (K.offset + K.size > uint8Array.byteLength) break;
-            (yield yield nd(wP.fromBinary(e, uint8Array.subarray(K.offset, K.offset + K.size), r)),
-              (uint8Array = uint8Array.subarray(K.offset + K.size)));
+            let size = sizeDelimitedPeek(buffer);
+            if (size.eof) break;
+            if (size.offset + size.size > buffer.byteLength) break;
+            yield yield __await(
+              from_binary_js_1.fromBinary(
+                messageDesc,
+                buffer.subarray(size.offset, size.offset + size.size),
+                options,
+              ),
+            );
+            buffer = buffer.subarray(size.offset + size.size);
           }
         }
-      } catch (error) {
-        y = { error: error };
+      } catch (e_1_1) {
+        e_1 = {
+          error: e_1_1,
+        };
       } finally {
         try {
-          if (!D && !h && (b = O.return)) yield nd(b.call(O));
+          if (!_d && !_a && (_b = iterable_1.return)) yield __await(_b.call(iterable_1));
         } finally {
-          if (y) throw y.error;
+          if (e_1) throw e_1.error;
         }
       }
-      if (uint8Array.byteLength > 0) throw Error("incomplete data");
+      if (buffer.byteLength > 0) throw Error("incomplete data");
     });
   }
-  function TP(e) {
-    let n = { eof: !0, size: null, offset: null };
-    for (let r = 0; r < 10; r++) {
-      if (r > e.byteLength) return n;
-      if ((e[r] & 128) == 0) {
-        let s = new py.BinaryReader(e),
-          h;
+  function sizeDelimitedPeek(data) {
+    let sizeEof = {
+      eof: true,
+      size: null,
+      offset: null,
+    };
+    for (let i = 0; i < 10; i++) {
+      if (i > data.byteLength) return sizeEof;
+      if ((data[i] & 128) == 0) {
+        let reader = new binary_encoding_js_1.BinaryReader(data);
+        let size;
         try {
-          h = s.uint32();
-        } catch (error) {
-          if (error instanceof RangeError) return n;
-          throw error;
+          size = reader.uint32();
+        } catch (e) {
+          if (e instanceof RangeError) return sizeEof;
+          throw e;
         }
-        return { eof: !1, size: h, offset: s.pos };
+        return {
+          eof: false,
+          size,
+          offset: reader.pos,
+        };
       }
     }
     throw Error("invalid varint");
   }
 });
-
-export { AP };
+export { require_size_delimited };

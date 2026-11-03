@@ -5,18 +5,24 @@
  * pieces: chunk-5h78gfwc.js (1)
  * attribution: esm-fingerprint 1
  */
-import { Tt } from "../jws/compact/verify.js";
-import { O } from "../util/errors.js";
-import { Ae } from "../../../webapi/lib/jwt_claims_set.js";
+import { compactVerify_2 } from "../jws/compact/verify.js";
+import { JWTInvalid } from "../util/errors.js";
+import { validateClaimsSet } from "../../../webapi/lib/jwt_claims_set.js";
 
 //@ chunk-5h78gfwc.js:44123-44434 esm-fingerprint
-async function jwtVerify(e, t, r) {
-  let n = await Tt(e, t, r);
-  if (n.protectedHeader.crit?.includes("b64") && n.protectedHeader.b64 === !1)
-    throw new O("JWTs MUST NOT use unencoded payload");
-  let o = { payload: Ae(n.protectedHeader, n.payload, r), protectedHeader: n.protectedHeader };
-  if (typeof t === "function") return { ...o, key: n.key };
-  return o;
+async function jwtVerify(jwt, key, options) {
+  let verified = await compactVerify_2(jwt, key, options);
+  if (verified.protectedHeader.crit?.includes("b64") && verified.protectedHeader.b64 === false)
+    throw new JWTInvalid("JWTs MUST NOT use unencoded payload");
+  let result = {
+    payload: validateClaimsSet(verified.protectedHeader, verified.payload, options),
+    protectedHeader: verified.protectedHeader,
+  };
+  if (typeof key === "function")
+    return {
+      ...result,
+      key: verified.key,
+    };
+  return result;
 }
-
 export { jwtVerify };

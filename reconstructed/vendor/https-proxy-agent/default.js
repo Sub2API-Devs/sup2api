@@ -5,7 +5,7 @@
  * pieces: chunk-4yss8b2e.js (1)
  * attribution: placement 1
  */
-import { glo } from "./dist/index.js";
+import { require_https_proxy_agent } from "./dist/index.js";
 
 //@ chunk-4yss8b2e.js:228-249 placement
-export default glo();
+export default require_https_proxy_agent();

@@ -5,13 +5,13 @@
  * pieces: chunk-mrx6y2r5.js (5)
  * attribution: esm-layout 5
  */
-import { pl } from "../nodeHttpClient.js";
-import { zs } from "../pipeline.js";
+import { NodeHttpClient } from "../nodeHttpClient.js";
+import { createEmptyPipeline } from "../pipeline.js";
 import { Pt } from "../../../../../@azure/logger/dist/esm/index.js";
 
 //@ chunk-mrx6y2r5.js:42736-42764 esm-layout
 function gl() {
-  return new pl();
+  return new NodeHttpClient();
 }
 //@ chunk-mrx6y2r5.js:42764-42790 esm-layout
 function Vs() {
@@ -19,19 +19,18 @@ function Vs() {
 }
 //@ chunk-mrx6y2r5.js:42790-42816 esm-layout
 function qn() {
-  return zs();
+  return createEmptyPipeline();
 }
 //@ chunk-mrx6y2r5.js:42816-42848 esm-layout
 var ut = Pt("core-rest-pipeline");
 //@ chunk-mrx6y2r5.js:42848-42950 esm-layout
-function js(e) {
+function agentPolicy(agent) {
   return {
     name: "agentPolicy",
-    sendRequest: async (t, r) => {
-      if (!t.agent) t.agent = e;
-      return r(t);
+    sendRequest: async (req, next) => {
+      if (!req.agent) req.agent = agent;
+      return next(req);
     },
   };
 }
-
-export { ut, js, qn, Vs };
+export { ut, agentPolicy, qn, Vs };

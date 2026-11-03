@@ -11,38 +11,39 @@
 import { defaultOpusLabel, isFastModeEnabled } from "../../utils/fastMode.js";
 import { getIsNonInteractiveSession } from "../../bootstrap/state.js";
 
+//@ chunk-e6aww6q8.js:2027306-2027748 fingerprint = fast (0.634)
 /**
  * /fast 命令对象（local-jsx）；描述：{return`Toggle fast mode (${U4()})`}；isHidden: {return!ys()}；实现 chunk-sfatdaes.js 的 Fji。
  */
-//@ chunk-e6aww6q8.js:2027306-2027748 fingerprint = fast (0.634)
 var fastCommandDefinition = {
-    type: "local-jsx",
-    name: "fast",
-    get description() {
-      return `Toggle fast mode (${defaultOpusLabel()})`;
-    },
-    get isHidden() {
-      return !isFastModeEnabled();
-    },
-    argumentHint: "[on|off]",
-    immediate: !0,
-    requires: { ink: !0 },
-    thinClientDispatch: "control-request",
+  type: "local-jsx",
+  name: "fast",
+  get description() {
+    return `Toggle fast mode (${defaultOpusLabel()})`;
   },
-  fastNonInteractiveCommand = {
-    type: "local",
-    name: "fast",
-    supportsNonInteractive: !0,
-    get description() {
-      return `Toggle fast mode (${defaultOpusLabel()})`;
-    },
-    argumentHint: "[on|off]",
-    isEnabled: () => getIsNonInteractiveSession(),
-    get isHidden() {
-      return !getIsNonInteractiveSession();
-    },
-    load: () => import("./chunk-vr5qyyg8.js"),
+  get isHidden() {
+    return !isFastModeEnabled();
   },
-  fastCommand = fastCommandDefinition;
-
+  argumentHint: "[on|off]",
+  immediate: true,
+  requires: {
+    ink: true,
+  },
+  thinClientDispatch: "control-request",
+};
+var fastNonInteractiveCommand = {
+  type: "local",
+  name: "fast",
+  supportsNonInteractive: true,
+  get description() {
+    return `Toggle fast mode (${defaultOpusLabel()})`;
+  },
+  argumentHint: "[on|off]",
+  isEnabled: () => getIsNonInteractiveSession(),
+  get isHidden() {
+    return !getIsNonInteractiveSession();
+  },
+  load: () => import("./chunk-vr5qyyg8.js"),
+};
+var fastCommand = fastCommandDefinition;
 export { fastCommand, fastNonInteractiveCommand };

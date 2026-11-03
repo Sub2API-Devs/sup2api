@@ -6,50 +6,51 @@
  * attribution: cjs-fingerprint 1
  */
 import { x, importMetaRequire } from "../../../../runtime/bun-runtime.js";
-import { Oae } from "../../middleware-user-agent/dist-cjs/index.js";
+import { require_middleware_user_agent } from "../../middleware-user-agent/dist-cjs/index.js";
 
 //@ chunk-edce4vxq.js:134734-135599 cjs-fingerprint
-var Hme = x(function (Jl) {
-  var Gn = importMetaRequire("os"),
-    hr = importMetaRequire("process"),
-    Xl = Oae(),
-    Xn = { isCrtAvailable: !1 },
-    Wl = () => {
-      if (Xn.isCrtAvailable) return ["md/crt-avail"];
-      return null;
-    },
-    Wn =
-      ({ serviceId: serviceId, clientVersion: clientVersion }) =>
-      async (r) => {
-        let s = [
-            ["aws-sdk-js", clientVersion],
-            ["ua", "2.1"],
-            [`os/${Gn.platform()}`, Gn.release()],
-            ["lang/js"],
-            ["md/nodejs", `${hr.versions.node}`],
-          ],
-          o = Wl();
-        if (o) s.push(o);
-        if (serviceId) s.push([`api/${serviceId}`, clientVersion]);
-        if (hr.env.AWS_EXECUTION_ENV) s.push([`exec-env/${hr.env.AWS_EXECUTION_ENV}`]);
-        let a = await r?.userAgentAppId?.();
-        return a ? [...s, [`app/${a}`]] : [...s];
-      },
-    Kl = Wn,
-    Kn = "AWS_SDK_UA_APP_ID",
-    Qn = "sdk_ua_app_id",
-    Ql = "sdk-ua-app-id",
-    Yl = {
-      environmentVariableSelector: (e) => e[Kn],
-      configFileSelector: (e) => e[Qn] ?? e[Ql],
-      default: Xl.DEFAULT_UA_APP_ID,
+var require_util_user_agent_node = x(function (cjsExports) {
+  var os = importMetaRequire("os");
+  var hr = importMetaRequire("process");
+  var middlewareUserAgent = require_middleware_user_agent();
+  var crtAvailability = {
+    isCrtAvailable: false,
+  };
+  var isCrtAvailable = () => {
+    if (crtAvailability.isCrtAvailable) return ["md/crt-avail"];
+    return null;
+  };
+  var createDefaultUserAgentProvider =
+    ({ serviceId, clientVersion }) =>
+    async (config) => {
+      let sections = [
+        ["aws-sdk-js", clientVersion],
+        ["ua", "2.1"],
+        [`os/${os.platform()}`, os.release()],
+        ["lang/js"],
+        ["md/nodejs", `${hr.versions.node}`],
+      ];
+      let crtAvailable = isCrtAvailable();
+      if (crtAvailable) sections.push(crtAvailable);
+      if (serviceId) sections.push([`api/${serviceId}`, clientVersion]);
+      if (hr.env.AWS_EXECUTION_ENV) sections.push([`exec-env/${hr.env.AWS_EXECUTION_ENV}`]);
+      let appId = await config?.userAgentAppId?.();
+      return appId ? [...sections, [`app/${appId}`]] : [...sections];
     };
-  Jl.NODE_APP_ID_CONFIG_OPTIONS = Yl;
-  Jl.UA_APP_ID_ENV_NAME = Kn;
-  Jl.UA_APP_ID_INI_NAME = Qn;
-  Jl.createDefaultUserAgentProvider = Wn;
-  Jl.crtAvailability = Xn;
-  Jl.defaultUserAgent = Kl;
+  var defaultUserAgent = createDefaultUserAgentProvider;
+  var UA_APP_ID_ENV_NAME = "AWS_SDK_UA_APP_ID";
+  var UA_APP_ID_INI_NAME = "sdk_ua_app_id";
+  var UA_APP_ID_INI_NAME_DEPRECATED = "sdk-ua-app-id";
+  var NODE_APP_ID_CONFIG_OPTIONS = {
+    environmentVariableSelector: (env) => env[UA_APP_ID_ENV_NAME],
+    configFileSelector: (profile) => profile[UA_APP_ID_INI_NAME] ?? profile[UA_APP_ID_INI_NAME_DEPRECATED],
+    default: middlewareUserAgent.DEFAULT_UA_APP_ID,
+  };
+  cjsExports.NODE_APP_ID_CONFIG_OPTIONS = NODE_APP_ID_CONFIG_OPTIONS;
+  cjsExports.UA_APP_ID_ENV_NAME = UA_APP_ID_ENV_NAME;
+  cjsExports.UA_APP_ID_INI_NAME = UA_APP_ID_INI_NAME;
+  cjsExports.createDefaultUserAgentProvider = createDefaultUserAgentProvider;
+  cjsExports.crtAvailability = crtAvailability;
+  cjsExports.defaultUserAgent = defaultUserAgent;
 });
-
-export { Hme };
+export { require_util_user_agent_node };

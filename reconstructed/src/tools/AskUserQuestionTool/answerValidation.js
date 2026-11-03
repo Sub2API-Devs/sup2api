@@ -14,28 +14,31 @@ import { isSameAnswerInput } from "../../utils/permissions/permissionAnswer.js";
 import { displayText, hasSuspiciousText } from "../../utils/permissions/approvalPayloadSerialization.js";
 
 //@ chunk-a91k35xs.js:859-946 placement
-function fBt(e) {
+/**
+ * 把选择的答案列表用 “, ” 连成一行；含 “, ” 或双引号的项用 jsonStringify 加引号，避免歧义。
+ */
+function formatSelectionList(e) {
   return e.map((t) => (t.includes(", ") || t.includes('"') ? jsonStringify(t) : t)).join(", ");
 }
+//@ chunk-a91k35xs.js:946-1473 placement
 /**
  * 解析 ", " 分隔的值列表，支持 JSON 双引号字符串；格式不合法返回 null。
  */
-//@ chunk-a91k35xs.js:946-1473 placement
 function parseCommaSeparatedValues(input) {
-  let values = [],
-    rest = input;
+  let values = [];
+  let rest = input;
   for (;;) {
     if (rest.startsWith('"')) {
-      let closeIndex = -1,
-        escaped = !1;
+      let closeIndex = -1;
+      let escaped = false;
       for (let pos = 1; pos < rest.length; pos++) {
         let ch = rest[pos];
         if (escaped) {
-          escaped = !1;
+          escaped = false;
           continue;
         }
         if (ch === "\\") {
-          escaped = !0;
+          escaped = true;
           continue;
         }
         if (ch === '"') {
@@ -53,48 +56,53 @@ function parseCommaSeparatedValues(input) {
       }
       rest = rest.slice(closeIndex + 1);
     } else {
-      let index = rest.indexOf(", "),
-        i = index === -1 ? rest : rest.slice(0, index);
+      let index = rest.indexOf(", ");
+      let i = index === -1 ? rest : rest.slice(0, index);
       if (i.includes('"')) return null;
-      (values.push(i), (rest = index === -1 ? "" : rest.slice(index)));
+      values.push(i);
+      rest = index === -1 ? "" : rest.slice(index);
     }
     if (rest === "") break;
     if (!rest.startsWith(", ")) return null;
-    if (((rest = rest.slice(2)), rest === "")) return null;
+    rest = rest.slice(2);
+    if (rest === "") return null;
   }
   return values;
 }
 //@ chunk-a91k35xs.js:1473-1649 placement
-var MAX_ANSWER_CHARS = 32768,
-  MAX_NOTES_CHARS = 8192,
-  MAX_TEXT_CHARS = 32768,
-  SIZE_HEADROOM = 2000,
-  MAX_TOTAL_CHARS = OUTPUT_SIZE_LIMITS - SIZE_HEADROOM,
-  MAX_PREVIEW_COMPARE_CHARS = 2000,
-  UNANSWERED_REASONS = ["skipped", "replied_in_chat", "dismissed"],
-  ANSWER_FIELDS = new Set(["answers", "annotations", "response", "followUp"]),
-  AFKTIMEOUTMS = "afkTimeoutMs";
+var MAX_ANSWER_CHARS = 32768;
+var MAX_NOTES_CHARS = 8192;
+var MAX_TEXT_CHARS = 32768;
+var SIZE_HEADROOM = 2000;
+var MAX_TOTAL_CHARS = OUTPUT_SIZE_LIMITS - SIZE_HEADROOM;
+var MAX_PREVIEW_COMPARE_CHARS = 2000;
+var UNANSWERED_REASONS = ["skipped", "replied_in_chat", "dismissed"];
+var ANSWER_FIELDS = new Set(["answers", "annotations", "response", "followUp"]);
+var AFKTIMEOUTMS = "afkTimeoutMs";
 //@ chunk-a91k35xs.js:1649-1709 placement
-function V(e, t) {
+/**
+ * 安全版 admitAnswerInput：宿主回传答案校验抛出异常时，按 “threw” 规则返回拒绝。
+ */
+function admitAnswerInputSafely(shownInput, reply) {
   try {
-    return admitAnswerInput(e, t);
+    return admitAnswerInput(shownInput, reply);
   } catch {
-    return S("threw");
+    return answerRefusal("threw");
   }
 }
+//@ chunk-a91k35xs.js:1709-3613 placement
 /**
  * 校验宿主回传的 AskUserQuestion 答案：不得改动已展示字段，answers/annotations/response/followUp 逐项检查类型、长度与问题对应关系，总大小受限；通过返回 {kind:'admitted', input}。
  */
-//@ chunk-a91k35xs.js:1709-3613 placement
 function admitAnswerInput(shownInput, reply) {
-  if (!isPlainObject(reply)) return S("not_an_object");
+  if (!isPlainObject(reply)) return answerRefusal("not_an_object");
   for (let key of Object.keys(reply)) {
-    if (key === AFKTIMEOUTMS) return S("host_field");
+    if (key === AFKTIMEOUTMS) return answerRefusal("host_field");
     if (ANSWER_FIELDS.has(key)) {
-      if (Object.hasOwn(shownInput, key)) return S("changed_shown_field");
+      if (Object.hasOwn(shownInput, key)) return answerRefusal("changed_shown_field");
       continue;
     }
-    if (!Object.hasOwn(shownInput, key)) return S("unknown_field");
+    if (!Object.hasOwn(shownInput, key)) return answerRefusal("unknown_field");
     if (
       !isSameAnswerInput(reply[key], shownInput[key]) &&
       !(
@@ -103,157 +111,186 @@ function admitAnswerInput(shownInput, reply) {
         questionsMatchIgnoringDefaults(reply[key], shownInput[key])
       )
     )
-      return S("changed_shown_field");
+      return answerRefusal("changed_shown_field");
   }
-  let { questions: questions, extended: extended } = indexShownQuestions(I(shownInput, "questions")),
-    textChars = 0,
-    extraChars = 0,
-    answeredQuestions = new Set(),
-    admitted = { ...shownInput },
-    answersOut = Object.create(null),
-    answersIn = I(reply, "answers");
-  if (answersIn !== void 0) {
-    if (!isPlainObject(answersIn)) return S("answers");
-    for (let d of Object.keys(answersIn)) {
-      let question = questions.get(d);
-      if (question === void 0) return S("answers");
-      answeredQuestions.add(d);
-      let answer = answersIn[d];
+  let { questions, extended } = indexShownQuestions(getOwnPropertyOrUndefined(shownInput, "questions"));
+  let textChars = 0;
+  let extraChars = 0;
+  let answeredQuestions = new Set();
+  let admitted = {
+    ...shownInput,
+  };
+  let answersOut = Object.create(null);
+  let answersIn = getOwnPropertyOrUndefined(reply, "answers");
+  if (answersIn !== undefined) {
+    if (!isPlainObject(answersIn)) return answerRefusal("answers");
+    for (let key of Object.keys(answersIn)) {
+      let question = questions.get(key);
+      if (question === undefined) return answerRefusal("answers");
+      answeredQuestions.add(key);
+      let answer = answersIn[key];
       if (typeof answer === "string") {
-        if (answer.length > MAX_ANSWER_CHARS) return S("answers");
-        ((textChars += answer.length), (answersOut[d] = answer));
+        if (answer.length > MAX_ANSWER_CHARS) return answerRefusal("answers");
+        textChars += answer.length;
+        answersOut[key] = answer;
         continue;
       }
       if (!question.multiSelect || !Array.isArray(answer) || answer.length > question.optionCount + 1)
-        return S("answers");
+        return answerRefusal("answers");
       let selections = [];
       for (let idx = 0; idx < answer.length; idx++) {
         let selection = answer[idx];
-        if (typeof selection !== "string" || selection.length > MAX_ANSWER_CHARS) return S("answers");
+        if (typeof selection !== "string" || selection.length > MAX_ANSWER_CHARS)
+          return answerRefusal("answers");
         selections.push(selection);
       }
-      let joined = fBt(selections);
-      ((textChars += joined.length), (answersOut[d] = joined));
+      let joined = formatSelectionList(selections);
+      textChars += joined.length;
+      answersOut[key] = joined;
     }
   }
   if (!Object.hasOwn(shownInput, "answers")) admitted.answers = answersOut;
-  let annotationsIn = I(reply, "annotations");
-  if (annotationsIn !== void 0) {
-    if (!isPlainObject(annotationsIn)) return S("annotations");
-    let create = Object.create(null);
-    for (let R of Object.keys(annotationsIn)) {
-      let T = questions.get(R),
-        b = annotationsIn[R];
-      if (T === void 0 || !isPlainObject(b)) return S("annotations");
-      answeredQuestions.add(R);
+  let annotationsIn = getOwnPropertyOrUndefined(reply, "annotations");
+  if (annotationsIn !== undefined) {
+    if (!isPlainObject(annotationsIn)) return answerRefusal("annotations");
+    let d = Object.create(null);
+    for (let key of Object.keys(annotationsIn)) {
+      let T = questions.get(key);
+      let b = annotationsIn[key];
+      if (T === undefined || !isPlainObject(b)) return answerRefusal("annotations");
+      answeredQuestions.add(key);
       let y = {};
-      for (let k of Object.keys(b)) {
-        let g = b[k];
-        switch (k) {
+      for (let key of Object.keys(b)) {
+        let g = b[key];
+        switch (key) {
           case "preview":
-            if (typeof g !== "string" || !isShownPreview(T, g)) return S("annotations");
-            ((extraChars += g.length), (y.preview = g));
+            if (typeof g !== "string" || !isShownPreview(T, g)) return answerRefusal("annotations");
+            extraChars += g.length;
+            y.preview = g;
             break;
           case "notes":
-            if (typeof g !== "string" || g.length > MAX_NOTES_CHARS) return S("annotations");
-            ((textChars += g.length), (y.notes = g));
+            if (typeof g !== "string" || g.length > MAX_NOTES_CHARS) return answerRefusal("annotations");
+            textChars += g.length;
+            y.notes = g;
             break;
           case "unanswered": {
             let found = UNANSWERED_REASONS.find((z) => z === g);
-            if (found === void 0) return S("annotations");
+            if (found === undefined) return answerRefusal("annotations");
             y.unanswered = found;
             break;
           }
           default:
-            return S("annotations");
+            return answerRefusal("annotations");
         }
       }
-      create[R] = y;
+      d[key] = y;
     }
-    admitted.annotations = create;
+    admitted.annotations = d;
   }
-  let response = I(reply, "response");
-  if (response !== void 0) {
-    if (typeof response !== "string" || response.length > MAX_ANSWER_CHARS) return S("response");
-    ((textChars += response.length), (admitted.response = response));
+  let response = getOwnPropertyOrUndefined(reply, "response");
+  if (response !== undefined) {
+    if (typeof response !== "string" || response.length > MAX_ANSWER_CHARS) return answerRefusal("response");
+    textChars += response.length;
+    admitted.response = response;
   }
-  let followUp = I(reply, "followUp");
-  if (followUp !== void 0) {
-    if (typeof followUp !== "boolean" || !extended) return S("follow_up");
+  let followUp = getOwnPropertyOrUndefined(reply, "followUp");
+  if (followUp !== undefined) {
+    if (typeof followUp !== "boolean" || !extended) return answerRefusal("follow_up");
     admitted.followUp = followUp;
   }
-  for (let d of answeredQuestions) extraChars += d.length;
-  if (textChars > MAX_TEXT_CHARS || textChars + extraChars > MAX_TOTAL_CHARS) return S("too_large");
-  return { kind: "admitted", input: admitted };
+  for (let answeredQuestion of answeredQuestions) extraChars += answeredQuestion.length;
+  if (textChars > MAX_TEXT_CHARS || textChars + extraChars > MAX_TOTAL_CHARS)
+    return answerRefusal("too_large");
+  return {
+    kind: "admitted",
+    input: admitted,
+  };
 }
+//@ chunk-a91k35xs.js:3613-4090 placement
 /**
  * 把问题数组整理为 question→{multiSelect、选项数、预览集合}，并判断是否全部使用扩展格式（带 kind）。
  */
-//@ chunk-a91k35xs.js:3613-4090 placement
-function indexShownQuestions(e) {
+function indexShownQuestions(ownPropertyOrUndefined) {
   let t = new Map();
-  if (!Array.isArray(e)) return { questions: t, extended: !1 };
-  let n = e.length > 0;
-  for (let s of e) {
+  if (!Array.isArray(ownPropertyOrUndefined))
+    return {
+      questions: t,
+      extended: false,
+    };
+  let n = ownPropertyOrUndefined.length > 0;
+  for (let s of ownPropertyOrUndefined) {
     if (!isPlainObject(s)) {
-      n = !1;
+      n = false;
       continue;
     }
-    if (typeof I(s, "kind") !== "string") n = !1;
-    let i = I(s, "question");
-    if (typeof i !== "string") continue;
-    let r = I(s, "options"),
-      f = Array.isArray(r) ? r : [],
-      h = new Set();
+    if (typeof getOwnPropertyOrUndefined(s, "kind") !== "string") n = false;
+    let ownPropertyOrUndefined = getOwnPropertyOrUndefined(s, "question");
+    if (typeof ownPropertyOrUndefined !== "string") continue;
+    let ownPropertyOrUndefined_2 = getOwnPropertyOrUndefined(s, "options");
+    let f = Array.isArray(ownPropertyOrUndefined_2) ? ownPropertyOrUndefined_2 : [];
+    let h = new Set();
     for (let m of f) {
-      let l = isPlainObject(m) ? I(m, "preview") : void 0;
+      let l = isPlainObject(m) ? getOwnPropertyOrUndefined(m, "preview") : undefined;
       if (typeof l === "string") h.add(l);
     }
-    t.set(i, { multiSelect: I(s, "multiSelect") === !0, optionCount: f.length, previews: h });
+    t.set(ownPropertyOrUndefined, {
+      multiSelect: getOwnPropertyOrUndefined(s, "multiSelect") === true,
+      optionCount: f.length,
+      previews: h,
+    });
   }
-  return { questions: t, extended: n };
+  return {
+    questions: t,
+    extended: n,
+  };
 }
+//@ chunk-a91k35xs.js:4090-4419 placement
 /**
  * 比较两组问题，忽略补上的默认字段（kind=choice、multiSelect=false）后是否一致。
  */
-//@ chunk-a91k35xs.js:4090-4419 placement
 function questionsMatchIgnoringDefaults(e, t) {
-  if (!Array.isArray(e) || !Array.isArray(t) || e.length !== t.length) return !1;
+  if (!Array.isArray(e) || !Array.isArray(t) || e.length !== t.length) return false;
   let mapped = t.map((s, i) => {
     let r = e[i];
     if (!isPlainObject(s) || !isPlainObject(r)) return s;
-    let f = { ...s };
-    if (I(s, "kind") === "choice" && !Object.hasOwn(r, "kind")) delete f.kind;
-    if (I(s, "multiSelect") === !1 && !Object.hasOwn(r, "multiSelect")) delete f.multiSelect;
+    let f = {
+      ...s,
+    };
+    if (getOwnPropertyOrUndefined(s, "kind") === "choice" && !Object.hasOwn(r, "kind")) delete f.kind;
+    if (getOwnPropertyOrUndefined(s, "multiSelect") === false && !Object.hasOwn(r, "multiSelect"))
+      delete f.multiSelect;
     return f;
   });
   return isSameAnswerInput(e, mapped);
 }
 //@ chunk-a91k35xs.js:4419-4544 placement
 function isShownPreview(e, t) {
-  if (e.previews.has(t)) return !0;
-  for (let preview of e.previews)
-    if (
-      preview.length <= MAX_PREVIEW_COMPARE_CHARS &&
-      displayText(preview) === t &&
-      !hasSuspiciousText(preview)
-    )
-      return !0;
-  return !1;
+  if (e.previews.has(t)) return true;
+  for (let n of e.previews)
+    if (n.length <= MAX_PREVIEW_COMPARE_CHARS && displayText(n) === t && !hasSuspiciousText(n)) return true;
+  return false;
 }
 //@ chunk-a91k35xs.js:4544-4687 placement
 function isPlainObject(e) {
-  if (typeof e !== "object" || e === null || Array.isArray(e)) return !1;
+  if (typeof e !== "object" || e === null || Array.isArray(e)) return false;
   let prototypeOf = Object.getPrototypeOf(e);
   return prototypeOf === Object.prototype || prototypeOf === null;
 }
 //@ chunk-a91k35xs.js:4687-4741 placement
-function I(e, t) {
-  return Object.hasOwn(e, t) ? e[t] : void 0;
+/**
+ * 只读自有属性（Object.hasOwn），不存在或来自原型时返回 undefined；答案校验用它逐个读取 answers/annotations/response 等字段。
+ */
+function getOwnPropertyOrUndefined(e, t) {
+  return Object.hasOwn(e, t) ? e[t] : undefined;
 }
 //@ chunk-a91k35xs.js:4741-4785 placement
-function S(e) {
-  return { kind: "refused", rule: e };
+/**
+ * 构造答案校验的拒绝结果 {kind:"refused", rule}，rule 是命中的拒绝规则名。
+ */
+function answerRefusal(rule) {
+  return {
+    kind: "refused",
+    rule,
+  };
 }
-
-export { fBt, UNANSWERED_REASONS, V, parseCommaSeparatedValues };
+export { formatSelectionList, UNANSWERED_REASONS, admitAnswerInputSafely, parseCommaSeparatedValues };

@@ -15,32 +15,52 @@ import { logEvent } from "../services/analytics/index.js";
 import { getSettings_DEPRECATED } from "../utils/settings/settings.js";
 import { logFeatureOk } from "../services/analytics/featureTelemetry.js";
 
+//@ chunk-cjydagjy.js:13529-14073 fingerprint = resetProToOpusDefault (0.873)
 /**
  * 迁移：Pro 用户未显式选模型时记录切到 Opus 默认（只做一次，opusProMigrationComplete）。
  */
-//@ chunk-cjydagjy.js:13529-14073 fingerprint = resetProToOpusDefault (0.873)
 function resetProToOpusDefault(e) {
   if (getGlobalConfig().opusProMigrationComplete) return;
   if (getAPIProvider() !== "firstParty" || !isProSubscriber()) {
-    (saveGlobalConfig((current) => ({ ...current, opusProMigrationComplete: !0 }), e),
-      logEvent("tengu_reset_pro_to_opus_default", { skipped: !0 }));
-    return;
-  }
-  if (getSettings_DEPRECATED()?.model === void 0) {
-    let opusProMigrationTimestamp = Date.now();
-    (saveGlobalConfig(
+    saveGlobalConfig(
       (current) => ({
         ...current,
-        opusProMigrationComplete: !0,
-        opusProMigrationTimestamp: opusProMigrationTimestamp,
+        opusProMigrationComplete: true,
       }),
       e,
-    ),
-      logEvent("tengu_reset_pro_to_opus_default", { skipped: !1, had_custom_model: !1 }));
-  } else
-    (saveGlobalConfig((current) => ({ ...current, opusProMigrationComplete: !0 }), e),
-      logEvent("tengu_reset_pro_to_opus_default", { skipped: !1, had_custom_model: !0 }));
+    );
+    logEvent("tengu_reset_pro_to_opus_default", {
+      skipped: true,
+    });
+    return;
+  }
+  if (getSettings_DEPRECATED()?.model === undefined) {
+    let opusProMigrationTimestamp = Date.now();
+    saveGlobalConfig(
+      (current) => ({
+        ...current,
+        opusProMigrationComplete: true,
+        opusProMigrationTimestamp,
+      }),
+      e,
+    );
+    logEvent("tengu_reset_pro_to_opus_default", {
+      skipped: false,
+      had_custom_model: false,
+    });
+  } else {
+    saveGlobalConfig(
+      (current) => ({
+        ...current,
+        opusProMigrationComplete: true,
+      }),
+      e,
+    );
+    logEvent("tengu_reset_pro_to_opus_default", {
+      skipped: false,
+      had_custom_model: true,
+    });
+  }
   logFeatureOk("migration_reset_pro_to_opus_default");
 }
-
 export { resetProToOpusDefault };

@@ -9,7 +9,7 @@
  * attribution: placement 6
  */
 import { getPathsForNetworkScreen, getPathsForNetworkScreenAsync } from "../fsOperations.js";
-import { gb } from "../pathClassification.js";
+import { isDevicePrefixPath } from "../pathClassification.js";
 import {
   isUntrustedUncPath,
   isUntrustedAutomountPath,
@@ -17,48 +17,90 @@ import {
 } from "./filesystem.js";
 
 //@ chunk-s61vbvea.js:583413-583466 placement
-function NF(e, n, r, s) {
-  return vetPathSpellings(e, n, r) ?? vetResolvedPathChain(getPathsForNetworkScreen(n), r, s);
+/**
+ * vetPathSpellingsOrChain：先按拼写审查，再按解析链审查。
+ */
+function vetPathSpellingsOrChain(e, n, trustedNetworkDirectories, s) {
+  return (
+    vetPathSpellings(e, n, trustedNetworkDirectories) ??
+    vetResolvedPathChain(getPathsForNetworkScreen(n), trustedNetworkDirectories, s)
+  );
 }
 //@ chunk-s61vbvea.js:583466-583529 placement
-async function tei(e, n, r) {
-  return vetPathSpellings(e, n, r) ?? vetResolvedPathChain(await getPathsForNetworkScreenAsync(n), r);
+/**
+ * vetPathSpellingsOrChainAsync：异步版：网络屏幕路径异步获取。
+ */
+async function vetPathSpellingsOrChainAsync(e, n, trustedNetworkDirectories) {
+  return (
+    vetPathSpellings(e, n, trustedNetworkDirectories) ??
+    vetResolvedPathChain(await getPathsForNetworkScreenAsync(n), trustedNetworkDirectories)
+  );
 }
 //@ chunk-s61vbvea.js:583529-583641 placement
 function vetPathSpellings(e, n, r) {
-  let trimmed = e.trim(),
-    h = trimmed === n ? [n] : [trimmed, n];
+  let trimmed = e.trim();
+  let h = trimmed === n ? [n] : [trimmed, n];
   for (let y of h) {
     let S = vetPathSpelling(y, r);
-    if (S !== void 0) return S;
+    if (S !== undefined) return S;
   }
   return;
 }
+//@ chunk-s61vbvea.js:583641-583892 placement
 /**
  * 审查路径解析链：链不可审查、任一路径命中 NT 命名空间/不可信 UNC/自动挂载/可疑 Windows 拼写，或链接文本向上越级（未允许时）则拒绝，否则返回待检查路径。
  */
-//@ chunk-s61vbvea.js:583641-583892 placement
-function vetResolvedPathChain({ paths: paths, vetted: vetted, linkTextClimbs: linkTextClimbs }, s, h) {
-  if (!vetted) return { ok: !1, reason: "unvettable_chain" };
-  for (let y of paths) {
-    let S = vetPathSpelling(y, s);
-    if (S !== void 0) return S;
+function vetResolvedPathChain({ paths, vetted, linkTextClimbs }, s, h) {
+  if (!vetted)
+    return {
+      ok: false,
+      reason: "unvettable_chain",
+    };
+  for (let path of paths) {
+    let S = vetPathSpelling(path, s);
+    if (S !== undefined) return S;
   }
-  if (linkTextClimbs && !h?.allowLinkTextClimbs) return { ok: !1, reason: "link_text_climbs" };
-  return { ok: !0, pathsToCheck: paths };
+  if (linkTextClimbs && !h?.allowLinkTextClimbs)
+    return {
+      ok: false,
+      reason: "link_text_climbs",
+    };
+  return {
+    ok: true,
+    pathsToCheck: paths,
+  };
 }
 //@ chunk-s61vbvea.js:583892-583932 placement
-function cH(e, n) {
-  return vetPathSpelling(e, n)?.reason;
+/**
+ * pathVettingReason：路径审查不通过的原因。
+ */
+function pathVettingReason(e, trustedNetworkDirectories) {
+  return vetPathSpelling(e, trustedNetworkDirectories)?.reason;
 }
 //@ chunk-s61vbvea.js:583932-584196 placement
 function vetPathSpelling(e, n) {
-  if (gb(e)) return { ok: !1, reason: "nt_namespace" };
-  if (isUntrustedUncPath(e, n)) return { ok: !1, reason: "untrusted_unc" };
-  if (isUntrustedAutomountPath(e, n)) return { ok: !1, reason: "untrusted_automount" };
+  if (isDevicePrefixPath(e))
+    return {
+      ok: false,
+      reason: "nt_namespace",
+    };
+  if (isUntrustedUncPath(e, n))
+    return {
+      ok: false,
+      reason: "untrusted_unc",
+    };
+  if (isUntrustedAutomountPath(e, n))
+    return {
+      ok: false,
+      reason: "untrusted_automount",
+    };
   let r = classifySuspiciousWindowsPathPattern(e, n);
-  if (r !== void 0) return { ok: !1, reason: "suspicious_windows_spelling", spelling: r };
+  if (r !== undefined)
+    return {
+      ok: false,
+      reason: "suspicious_windows_spelling",
+      spelling: r,
+    };
   return;
 }
-
-export { NF, cH, tei };
+export { vetPathSpellingsOrChain, pathVettingReason, vetPathSpellingsOrChainAsync };

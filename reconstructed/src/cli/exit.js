@@ -15,16 +15,16 @@ import { stripControlChars, drainRegisteredWriteQueues } from "../utils/settings
 import { waitForOAuthRefreshBeforeExit } from "../utils/auth/oauthRefreshExitWait.js";
 import { withDeadline } from "../utils/sleep.js";
 import { getOutermostCallFrame } from "../utils/cwd.js";
-import { s } from "../remote/remoteMode.js";
+import { remoteCallFrameStorage } from "../remote/remoteMode.js";
 
 //@ chunk-437rqrst.js:411-451 placement
 function printCliError(r) {
   console.error(sequential.red(r));
 }
+//@ chunk-437rqrst.js:451-529 placement = cliOk (0.415)
 /**
  * cliError：输出红色错误（可选）并以 1 退出；非 diskless 进程先记录退出原因。（旧版名 cliOk 配错，门面导出名为 cliError）
  */
-//@ chunk-437rqrst.js:451-529 placement = cliOk (0.415)
 function cliError(r, e = "cli_error") {
   if (r) printCliError(r);
   if (!isDisklessProcess()) setBgExitCause(e);
@@ -49,8 +49,8 @@ function cliExit(r) {
 }
 //@ chunk-437rqrst.js:639-718 placement
 async function writeStdoutAndDrain(r) {
-  await new Promise((e) => {
-    process.stdout.write(r, () => e());
+  await new Promise((resolve) => {
+    process.stdout.write(r, () => resolve());
   });
 }
 //@ chunk-437rqrst.js:718-776 placement
@@ -62,25 +62,27 @@ function cliWarn(r) {
   );
 }
 //@ chunk-437rqrst.js:776-787 placement
-var i = 2000;
+var WRITE_DRAIN_TIMEOUT_MS = 2000;
 //@ chunk-437rqrst.js:787-955 placement
-async function flushAnalyticsBeforeExit({ waitForOAuthRefresh: waitForOAuthRefresh = !0 } = {}) {
+async function flushAnalyticsBeforeExit({ waitForOAuthRefresh = true } = {}) {
   if (waitForOAuthRefresh) await waitForOAuthRefreshBeforeExit();
-  await withDeadline(drainRegisteredWriteQueues(), i);
+  await withDeadline(drainRegisteredWriteQueues(), WRITE_DRAIN_TIMEOUT_MS);
   try {
-    let { flushAnalyticsSinks: flushAnalyticsSinks } = await import("./chunk-af5wdhtv.js");
+    let { flushAnalyticsSinks } = await import("./chunk-af5wdhtv.js");
     await flushAnalyticsSinks();
   } catch {}
 }
 //@ chunk-437rqrst.js:955-1010 placement
 async function exitAfterAnalyticsFlush(r) {
-  (await flushAnalyticsBeforeExit(), process.exit(r));
+  await flushAnalyticsBeforeExit();
+  process.exit(r);
   return;
 }
 //@ chunk-437rqrst.js:1010-1065 placement
 async function cliErrorAfterAnalyticsFlush(r) {
   if (r) printCliError(r);
-  return (await flushAnalyticsBeforeExit(), cliError());
+  await flushAnalyticsBeforeExit();
+  return cliError();
 }
 //@ chunk-437rqrst.js:1065-1142 placement
 async function cliOkAfterAnalyticsFlush(r) {
@@ -90,17 +92,19 @@ async function cliOkAfterAnalyticsFlush(r) {
         `
 `,
     );
-  return (await flushAnalyticsBeforeExit(), cliOk());
+  await flushAnalyticsBeforeExit();
+  return cliOk();
 }
+//@ chunk-fnk5kvbf.js:2273-2338 fingerprint = cliError (0.708)
 /**
  * 在异步上下文外运行回调（AsyncLocalStorage.exit/run），旧版名 cliError 配错。
  */
-//@ chunk-fnk5kvbf.js:2273-2338 fingerprint = cliError (0.708)
 function cliError_2(msg) {
-  let n = getOutermostCallFrame();
-  return n === void 0 ? s.exit(msg) : s.run(n, msg);
+  let outermostCallFrame = getOutermostCallFrame();
+  return outermostCallFrame === undefined
+    ? remoteCallFrameStorage.exit(msg)
+    : remoteCallFrameStorage.run(outermostCallFrame, msg);
 }
-
 export {
   writeStdoutAndDrain,
   exitAfterAnalyticsFlush,

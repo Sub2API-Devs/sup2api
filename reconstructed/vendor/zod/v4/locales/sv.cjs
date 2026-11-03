@@ -6,157 +6,183 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { Ee } from "../core/util.cjs";
+import { require_util } from "../core/util.cjs";
 
 //@ chunk-1ny7cxrt.js:432414-436028 cjs-fingerprint
-var ZI = x(function (Ho, KI) {
-  var M2 =
-      (Ho && Ho.__createBinding) ||
-      (Object.create
-        ? function (e, t, n, o) {
-            if (o === void 0) o = n;
-            var ownPropertyDescriptor = Object.getOwnPropertyDescriptor(t, n);
-            if (
-              !ownPropertyDescriptor ||
-              ("get" in ownPropertyDescriptor
-                ? !t.__esModule
-                : ownPropertyDescriptor.writable || ownPropertyDescriptor.configurable)
-            )
-              ownPropertyDescriptor = {
-                enumerable: !0,
-                get: function () {
-                  return t[n];
-                },
-              };
-            Object.defineProperty(e, o, ownPropertyDescriptor);
-          }
-        : function (e, t, n, o) {
-            if (o === void 0) o = n;
-            e[o] = t[n];
-          }),
-    j2 =
-      (Ho && Ho.__setModuleDefault) ||
-      (Object.create
-        ? function (e, t) {
-            Object.defineProperty(e, "default", { enumerable: !0, value: t });
-          }
-        : function (e, t) {
-            e.default = t;
-          }),
-    x2 =
-      (Ho && Ho.__importStar) ||
-      function (e) {
-        if (e && e.__esModule) return e;
-        var t = {};
-        if (e != null) {
-          for (var key in e)
-            if (key !== "default" && Object.prototype.hasOwnProperty.call(e, key)) M2(t, e, key);
+var require_sv = x(function (cjsExports, cjsModule) {
+  var __createBinding =
+    (cjsExports && cjsExports.__createBinding) ||
+    (Object.create
+      ? function (o_2, m, k, k2) {
+          if (k2 === undefined) k2 = k;
+          var desc = Object.getOwnPropertyDescriptor(m, k);
+          if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable))
+            desc = {
+              enumerable: true,
+              get: function () {
+                return m[k];
+              },
+            };
+          Object.defineProperty(o_2, k2, desc);
         }
-        return (j2(t, e), t);
-      };
-  Object.defineProperty(Ho, "__esModule", { value: !0 });
-  Ho.default = N2;
-  var sh = x2(Ee()),
-    L2 = () => {
-      let e = {
-        string: { unit: "tecken", verb: "att ha" },
-        file: { unit: "bytes", verb: "att ha" },
-        array: { unit: "objekt", verb: "att inneh\xE5lla" },
-        set: { unit: "objekt", verb: "att inneh\xE5lla" },
-        map: { unit: "objekt", verb: "att inneh\xE5lla" },
-      };
-      function t(r) {
-        return e[r] ?? null;
+      : function (o_2, m, k, k2) {
+          if (k2 === undefined) k2 = k;
+          o_2[k2] = m[k];
+        });
+  var __setModuleDefault =
+    (cjsExports && cjsExports.__setModuleDefault) ||
+    (Object.create
+      ? function (o, v) {
+          Object.defineProperty(o, "default", {
+            enumerable: true,
+            value: v,
+          });
+        }
+      : function (o, v) {
+          o.default = v;
+        });
+  var __importStar =
+    (cjsExports && cjsExports.__importStar) ||
+    function (mod) {
+      if (mod && mod.__esModule) return mod;
+      var result = {};
+      if (mod != null) {
+        for (var k in mod)
+          if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k))
+            __createBinding(result, mod, k);
       }
-      let n = {
-          regex: "regulj\xE4rt uttryck",
-          email: "e-postadress",
-          url: "URL",
-          emoji: "emoji",
-          uuid: "UUID",
-          uuidv4: "UUIDv4",
-          uuidv6: "UUIDv6",
-          nanoid: "nanoid",
-          guid: "GUID",
-          cuid: "cuid",
-          cuid2: "cuid2",
-          ulid: "ULID",
-          xid: "XID",
-          ksuid: "KSUID",
-          datetime: "ISO-datum och tid",
-          date: "ISO-datum",
-          time: "ISO-tid",
-          duration: "ISO-varaktighet",
-          ipv4: "IPv4-adress",
-          ipv6: "IPv6-adress",
-          mac: "MAC-adress",
-          cidrv4: "IPv4-spektrum",
-          cidrv6: "IPv6-spektrum",
-          base64: "base64-kodad str\xE4ng",
-          base64url: "base64url-kodad str\xE4ng",
-          json_string: "JSON-str\xE4ng",
-          e164: "E.164-nummer",
-          credit_card: "kreditkortsnummer",
-          iban: "IBAN",
-          jwt: "JWT",
-          template_literal: "mall-literal",
-        },
-        o = { nan: "NaN", number: "antal", array: "lista" };
-      return (r) => {
-        switch (r.code) {
-          case "invalid_type": {
-            let s = o[r.expected] ?? r.expected,
-              parsedType = sh.parsedType(r.input),
-              l = o[parsedType] ?? parsedType;
-            if (/^[A-Z]/.test(r.expected))
-              return `Ogiltig inmatning: f\xF6rv\xE4ntat instanceof ${r.expected}, fick ${l}`;
-            return `Ogiltig inmatning: f\xF6rv\xE4ntat ${s}, fick ${l}`;
-          }
-          case "invalid_value":
-            if (r.values.length === 1)
-              return `Ogiltig inmatning: f\xF6rv\xE4ntat ${sh.stringifyPrimitive(r.values[0])}`;
-            return `Ogiltigt val: f\xF6rv\xE4ntade en av ${sh.joinValues(r.values, "|")}`;
-          case "too_big": {
-            let s = r.inclusive ? "<=" : "<",
-              a = t(r.origin);
-            if (a)
-              return `F\xF6r stor(t): f\xF6rv\xE4ntade ${r.origin ?? "v\xE4rdet"} att ha ${s}${r.maximum.toString()} ${a.unit ?? "element"}`;
-            return `F\xF6r stor(t): f\xF6rv\xE4ntat ${r.origin ?? "v\xE4rdet"} att ha ${s}${r.maximum.toString()}`;
-          }
-          case "too_small": {
-            let s = r.inclusive ? ">=" : ">",
-              a = t(r.origin);
-            if (a)
-              return `F\xF6r lite(t): f\xF6rv\xE4ntade ${r.origin ?? "v\xE4rdet"} att ha ${s}${r.minimum.toString()} ${a.unit}`;
-            return `F\xF6r lite(t): f\xF6rv\xE4ntade ${r.origin ?? "v\xE4rdet"} att ha ${s}${r.minimum.toString()}`;
-          }
-          case "invalid_format": {
-            let s = r;
-            if (s.format === "starts_with") return `Ogiltig str\xE4ng: m\xE5ste b\xF6rja med "${s.prefix}"`;
-            if (s.format === "ends_with") return `Ogiltig str\xE4ng: m\xE5ste sluta med "${s.suffix}"`;
-            if (s.format === "includes") return `Ogiltig str\xE4ng: m\xE5ste inneh\xE5lla "${s.includes}"`;
-            if (s.format === "regex") return `Ogiltig str\xE4ng: m\xE5ste matcha m\xF6nstret "${s.pattern}"`;
-            return `Ogiltig(t) ${n[s.format] ?? r.format}`;
-          }
-          case "not_multiple_of":
-            return `Ogiltigt tal: m\xE5ste vara en multipel av ${r.divisor}`;
-          case "unrecognized_keys":
-            return `${r.keys.length > 1 ? "Ok\xE4nda nycklar" : "Ok\xE4nd nyckel"}: ${sh.joinValues(r.keys, ", ")}`;
-          case "invalid_key":
-            return `Ogiltig nyckel i ${r.origin ?? "v\xE4rdet"}`;
-          case "invalid_union":
-            return "Ogiltig input";
-          case "invalid_element":
-            return `Ogiltigt v\xE4rde i ${r.origin ?? "v\xE4rdet"}`;
-          default:
-            return "Ogiltig input";
-        }
-      };
+      __setModuleDefault(result, mod);
+      return result;
     };
-  function N2() {
-    return { localeError: L2() };
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.default = default_1;
+  var util = __importStar(require_util());
+  var error = () => {
+    let Sizable = {
+      string: {
+        unit: "tecken",
+        verb: "att ha",
+      },
+      file: {
+        unit: "bytes",
+        verb: "att ha",
+      },
+      array: {
+        unit: "objekt",
+        verb: "att inneh\xE5lla",
+      },
+      set: {
+        unit: "objekt",
+        verb: "att inneh\xE5lla",
+      },
+      map: {
+        unit: "objekt",
+        verb: "att inneh\xE5lla",
+      },
+    };
+    function getSizing(origin) {
+      return Sizable[origin] ?? null;
+    }
+    let FormatDictionary = {
+      regex: "regulj\xE4rt uttryck",
+      email: "e-postadress",
+      url: "URL",
+      emoji: "emoji",
+      uuid: "UUID",
+      uuidv4: "UUIDv4",
+      uuidv6: "UUIDv6",
+      nanoid: "nanoid",
+      guid: "GUID",
+      cuid: "cuid",
+      cuid2: "cuid2",
+      ulid: "ULID",
+      xid: "XID",
+      ksuid: "KSUID",
+      datetime: "ISO-datum och tid",
+      date: "ISO-datum",
+      time: "ISO-tid",
+      duration: "ISO-varaktighet",
+      ipv4: "IPv4-adress",
+      ipv6: "IPv6-adress",
+      mac: "MAC-adress",
+      cidrv4: "IPv4-spektrum",
+      cidrv6: "IPv6-spektrum",
+      base64: "base64-kodad str\xE4ng",
+      base64url: "base64url-kodad str\xE4ng",
+      json_string: "JSON-str\xE4ng",
+      e164: "E.164-nummer",
+      credit_card: "kreditkortsnummer",
+      iban: "IBAN",
+      jwt: "JWT",
+      template_literal: "mall-literal",
+    };
+    let TypeDictionary = {
+      nan: "NaN",
+      number: "antal",
+      array: "lista",
+    };
+    return (issue) => {
+      switch (issue.code) {
+        case "invalid_type": {
+          let expected = TypeDictionary[issue.expected] ?? issue.expected;
+          let receivedType = util.parsedType(issue.input);
+          let received = TypeDictionary[receivedType] ?? receivedType;
+          if (/^[A-Z]/.test(issue.expected))
+            return `Ogiltig inmatning: f\xF6rv\xE4ntat instanceof ${issue.expected}, fick ${received}`;
+          return `Ogiltig inmatning: f\xF6rv\xE4ntat ${expected}, fick ${received}`;
+        }
+        case "invalid_value":
+          if (issue.values.length === 1)
+            return `Ogiltig inmatning: f\xF6rv\xE4ntat ${util.stringifyPrimitive(issue.values[0])}`;
+          return `Ogiltigt val: f\xF6rv\xE4ntade en av ${util.joinValues(issue.values, "|")}`;
+        case "too_big": {
+          let adj = issue.inclusive ? "<=" : "<";
+          let sizing = getSizing(issue.origin);
+          if (sizing)
+            return `F\xF6r stor(t): f\xF6rv\xE4ntade ${issue.origin ?? "v\xE4rdet"} att ha ${adj}${issue.maximum.toString()} ${sizing.unit ?? "element"}`;
+          return `F\xF6r stor(t): f\xF6rv\xE4ntat ${issue.origin ?? "v\xE4rdet"} att ha ${adj}${issue.maximum.toString()}`;
+        }
+        case "too_small": {
+          let adj = issue.inclusive ? ">=" : ">";
+          let sizing = getSizing(issue.origin);
+          if (sizing)
+            return `F\xF6r lite(t): f\xF6rv\xE4ntade ${issue.origin ?? "v\xE4rdet"} att ha ${adj}${issue.minimum.toString()} ${sizing.unit}`;
+          return `F\xF6r lite(t): f\xF6rv\xE4ntade ${issue.origin ?? "v\xE4rdet"} att ha ${adj}${issue.minimum.toString()}`;
+        }
+        case "invalid_format": {
+          let _issue = issue;
+          if (_issue.format === "starts_with")
+            return `Ogiltig str\xE4ng: m\xE5ste b\xF6rja med "${_issue.prefix}"`;
+          if (_issue.format === "ends_with")
+            return `Ogiltig str\xE4ng: m\xE5ste sluta med "${_issue.suffix}"`;
+          if (_issue.format === "includes")
+            return `Ogiltig str\xE4ng: m\xE5ste inneh\xE5lla "${_issue.includes}"`;
+          if (_issue.format === "regex")
+            return `Ogiltig str\xE4ng: m\xE5ste matcha m\xF6nstret "${_issue.pattern}"`;
+          return `Ogiltig(t) ${FormatDictionary[_issue.format] ?? issue.format}`;
+        }
+        case "not_multiple_of":
+          return `Ogiltigt tal: m\xE5ste vara en multipel av ${issue.divisor}`;
+        case "unrecognized_keys":
+          return `${issue.keys.length > 1 ? "Ok\xE4nda nycklar" : "Ok\xE4nd nyckel"}: ${util.joinValues(issue.keys, ", ")}`;
+        case "invalid_key":
+          return `Ogiltig nyckel i ${issue.origin ?? "v\xE4rdet"}`;
+        case "invalid_union":
+          return "Ogiltig input";
+        case "invalid_element":
+          return `Ogiltigt v\xE4rde i ${issue.origin ?? "v\xE4rdet"}`;
+        default:
+          return "Ogiltig input";
+      }
+    };
+  };
+  function default_1() {
+    return {
+      localeError: error(),
+    };
   }
-  KI.exports = Ho.default;
+  cjsModule.exports = cjsExports.default;
 });
-
-export { ZI };
+export { require_sv };

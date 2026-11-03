@@ -5,27 +5,34 @@
  * pieces: chunk-hwmsct5x.js (1)
  * attribution: esm-fingerprint 1
  */
-import { Y } from "../core/resource.mjs";
-import { T } from "../internal/headers.mjs";
+import { APIResource } from "../core/resource.mjs";
+import { buildHeaders } from "../internal/headers.mjs";
 
 //@ chunk-hwmsct5x.js:145529-145854 esm-fingerprint
-class nAt extends Y {
-  create(e, n) {
-    let { betas: betas, workspace_id: workspace_id, ...h } = e;
+class Completions extends APIResource {
+  create(params, options) {
+    let { betas, workspace_id, ...body } = params;
     return this._client.post("/v1/complete", {
-      body: h,
+      body,
       timeout: this._client._options.timeout ?? 600000,
-      ...n,
-      headers: T([
+      ...options,
+      headers: buildHeaders([
         {
-          ...(betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0),
-          ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0),
+          ...(betas?.toString() != null
+            ? {
+                "anthropic-beta": betas?.toString(),
+              }
+            : undefined),
+          ...(workspace_id != null
+            ? {
+                "anthropic-workspace-id": workspace_id,
+              }
+            : undefined),
         },
-        n?.headers,
+        options?.headers,
       ]),
-      stream: e.stream ?? !1,
+      stream: params.stream ?? false,
     });
   }
 }
-
-export { nAt };
+export { Completions };

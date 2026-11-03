@@ -8,13 +8,18 @@
  * pieces: chunk-e6aww6q8.js (1)
  * attribution: fingerprint 1
  */
-
 //@ chunk-e6aww6q8.js:3040109-3040233 fingerprint = time (1)
+/**
+ * time 命令的补全 spec。
+ */
 var timeSpec = {
-    name: "time",
-    description: "Time a command",
-    args: { name: "command", description: "Command to time", isCommand: !0 },
+  name: "time",
+  description: "Time a command",
+  args: {
+    name: "command",
+    description: "Command to time",
+    isCommand: true,
   },
-  zbn = timeSpec;
-
-export { zbn };
+};
+var timeSpec_2 = timeSpec;
+export { timeSpec_2 };

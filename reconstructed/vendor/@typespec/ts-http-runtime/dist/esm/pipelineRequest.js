@@ -5,50 +5,56 @@
  * pieces: chunk-mrx6y2r5.js (4)
  * attribution: esm-layout 3, esm-fingerprint 1
  */
-import { randomUUID, randomUUID as randomUUID_2 } from "crypto";
-import { ll } from "./httpHeaders.js";
+import { randomUUID } from "crypto";
+import { HttpHeadersImpl } from "./httpHeaders.js";
 
 //@ chunk-mrx6y2r5.js:30845-30877 esm-layout
-function et(e) {
-  return new ll(e);
+function et(rawHeaders) {
+  return new HttpHeadersImpl(rawHeaders);
 }
 //@ chunk-mrx6y2r5.js:30914-31111 esm-layout
-var $s,
-  Sm =
-    typeof (($s = globalThis === null || globalThis === void 0 ? void 0 : globalThis.crypto) === null ||
-    $s === void 0
-      ? void 0
-      : $s.randomUUID) === "function"
-      ? globalThis.crypto.randomUUID.bind(globalThis.crypto)
-      : randomUUID;
+var $s;
+var Sm =
+  typeof (($s = globalThis === null || globalThis === undefined ? undefined : globalThis.crypto) === null ||
+  $s === undefined
+    ? undefined
+    : $s.randomUUID) === "function"
+    ? globalThis.crypto.randomUUID.bind(globalThis.crypto)
+    : randomUUID;
 //@ chunk-mrx6y2r5.js:31111-31137 esm-layout
 function Bn() {
   return Sm();
 }
 //@ chunk-mrx6y2r5.js:31137-32039 esm-fingerprint
 class dl {
-  constructor(e) {
-    var t, r, n, o, i, s, a;
-    ((this.url = e.url),
-      (this.body = e.body),
-      (this.headers = (t = e.headers) !== null && t !== void 0 ? t : et()),
-      (this.method = (r = e.method) !== null && r !== void 0 ? r : "GET"),
-      (this.timeout = (n = e.timeout) !== null && n !== void 0 ? n : 0),
-      (this.multipartBody = e.multipartBody),
-      (this.formData = e.formData),
-      (this.disableKeepAlive = (o = e.disableKeepAlive) !== null && o !== void 0 ? o : !1),
-      (this.proxySettings = e.proxySettings),
-      (this.streamResponseStatusCodes = e.streamResponseStatusCodes),
-      (this.withCredentials = (i = e.withCredentials) !== null && i !== void 0 ? i : !1),
-      (this.abortSignal = e.abortSignal),
-      (this.onUploadProgress = e.onUploadProgress),
-      (this.onDownloadProgress = e.onDownloadProgress),
-      (this.requestId = e.requestId || Bn()),
-      (this.allowInsecureConnection = (s = e.allowInsecureConnection) !== null && s !== void 0 ? s : !1),
-      (this.enableBrowserStreams = (a = e.enableBrowserStreams) !== null && a !== void 0 ? a : !1),
-      (this.requestOverrides = e.requestOverrides),
-      (this.authSchemes = e.authSchemes));
+  constructor(options) {
+    var _a;
+    var _b;
+    var _c;
+    var _d;
+    var _e;
+    var _f;
+    var _g;
+    this.url = options.url;
+    this.body = options.body;
+    this.headers = (_a = options.headers) !== null && _a !== undefined ? _a : et();
+    this.method = (_b = options.method) !== null && _b !== undefined ? _b : "GET";
+    this.timeout = (_c = options.timeout) !== null && _c !== undefined ? _c : 0;
+    this.multipartBody = options.multipartBody;
+    this.formData = options.formData;
+    this.disableKeepAlive = (_d = options.disableKeepAlive) !== null && _d !== undefined ? _d : false;
+    this.proxySettings = options.proxySettings;
+    this.streamResponseStatusCodes = options.streamResponseStatusCodes;
+    this.withCredentials = (_e = options.withCredentials) !== null && _e !== undefined ? _e : false;
+    this.abortSignal = options.abortSignal;
+    this.onUploadProgress = options.onUploadProgress;
+    this.onDownloadProgress = options.onDownloadProgress;
+    this.requestId = options.requestId || Bn();
+    this.allowInsecureConnection =
+      (_f = options.allowInsecureConnection) !== null && _f !== undefined ? _f : false;
+    this.enableBrowserStreams = (_g = options.enableBrowserStreams) !== null && _g !== undefined ? _g : false;
+    this.requestOverrides = options.requestOverrides;
+    this.authSchemes = options.authSchemes;
   }
 }
-
 export { dl, et, Bn };

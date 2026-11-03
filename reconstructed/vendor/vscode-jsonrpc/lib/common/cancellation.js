@@ -6,76 +6,90 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { de } from "./ral.js";
-import { we } from "./is.js";
-import { _e } from "./events.js";
+import { require_ral } from "./ral.js";
+import { require_is } from "./is.js";
+import { require_events } from "./events.js";
 
 //@ chunk-t4ksmxzx.js:15429-16783 cjs-fingerprint
-var Ve = x(function (qr) {
-  Object.defineProperty(qr, "__esModule", { value: !0 });
-  qr.CancellationTokenSource = qr.CancellationToken = void 0;
-  var Fi = de(),
-    jr = we(),
-    Se = _e(),
-    Ue;
-  (function (e) {
-    ((e.None = Object.freeze({ isCancellationRequested: !1, onCancellationRequested: Se.Event.None })),
-      (e.Cancelled = Object.freeze({ isCancellationRequested: !0, onCancellationRequested: Se.Event.None })));
-    function r(n) {
-      let s = n;
+var require_cancellation = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.CancellationTokenSource = cjsExports.CancellationToken = undefined;
+  var ral_1 = require_ral();
+  var Is = require_is();
+  var events_1 = require_events();
+  var CancellationToken;
+  (function (CancellationToken) {
+    CancellationToken.None = Object.freeze({
+      isCancellationRequested: false,
+      onCancellationRequested: events_1.Event.None,
+    });
+    CancellationToken.Cancelled = Object.freeze({
+      isCancellationRequested: true,
+      onCancellationRequested: events_1.Event.None,
+    });
+    function is(value) {
+      let candidate = value;
       return (
-        s &&
-        (s === e.None ||
-          s === e.Cancelled ||
-          (jr.boolean(s.isCancellationRequested) && !!s.onCancellationRequested))
+        candidate &&
+        (candidate === CancellationToken.None ||
+          candidate === CancellationToken.Cancelled ||
+          (Is.boolean(candidate.isCancellationRequested) && !!candidate.onCancellationRequested))
       );
     }
-    e.is = r;
-  })(Ue || (qr.CancellationToken = Ue = {}));
-  var freeze = Object.freeze(function (e, r) {
-    let n = (0, Fi.default)().timer.setTimeout(e.bind(r), 0);
+    CancellationToken.is = is;
+  })(CancellationToken || (cjsExports.CancellationToken = CancellationToken = {}));
+  var shortcutEvent = Object.freeze(function (callback, context) {
+    let handle = (0, ral_1.default)().timer.setTimeout(callback.bind(context), 0);
     return {
       dispose() {
-        n.dispose();
+        handle.dispose();
       },
     };
   });
-  class bt {
+  class MutableToken {
     constructor() {
-      this._isCancelled = !1;
+      this._isCancelled = false;
     }
     cancel() {
       if (!this._isCancelled) {
-        if (((this._isCancelled = !0), this._emitter)) (this._emitter.fire(void 0), this.dispose());
+        this._isCancelled = true;
+        if (this._emitter) {
+          this._emitter.fire(undefined);
+          this.dispose();
+        }
       }
     }
     get isCancellationRequested() {
       return this._isCancelled;
     }
     get onCancellationRequested() {
-      if (this._isCancelled) return freeze;
-      if (!this._emitter) this._emitter = new Se.Emitter();
+      if (this._isCancelled) return shortcutEvent;
+      if (!this._emitter) this._emitter = new events_1.Emitter();
       return this._emitter.event;
     }
     dispose() {
-      if (this._emitter) (this._emitter.dispose(), (this._emitter = void 0));
+      if (this._emitter) {
+        this._emitter.dispose();
+        this._emitter = undefined;
+      }
     }
   }
-  class $r {
+  class CancellationTokenSource {
     get token() {
-      if (!this._token) this._token = new bt();
+      if (!this._token) this._token = new MutableToken();
       return this._token;
     }
     cancel() {
-      if (!this._token) this._token = Ue.Cancelled;
+      if (!this._token) this._token = CancellationToken.Cancelled;
       else this._token.cancel();
     }
     dispose() {
-      if (!this._token) this._token = Ue.None;
-      else if (this._token instanceof bt) this._token.dispose();
+      if (!this._token) this._token = CancellationToken.None;
+      else if (this._token instanceof MutableToken) this._token.dispose();
     }
   }
-  qr.CancellationTokenSource = $r;
+  cjsExports.CancellationTokenSource = CancellationTokenSource;
 });
-
-export { Ve };
+export { require_cancellation };

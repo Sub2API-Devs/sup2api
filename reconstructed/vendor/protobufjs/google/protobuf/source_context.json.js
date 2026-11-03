@@ -8,16 +8,26 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-pwh5dx3n.js:169329-169471 cjs-fingerprint
-var hh = x(function (AA, OT) {
-  OT.exports = {
+var hh = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = {
     nested: {
       google: {
         nested: {
-          protobuf: { nested: { SourceContext: { fields: { fileName: { type: "string", id: 1 } } } } },
+          protobuf: {
+            nested: {
+              SourceContext: {
+                fields: {
+                  fileName: {
+                    type: "string",
+                    id: 1,
+                  },
+                },
+              },
+            },
+          },
         },
       },
     },
   };
 });
-
 export { hh };

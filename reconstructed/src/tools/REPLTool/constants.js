@@ -8,25 +8,32 @@
  * pieces: chunk-cy6qaqnq.js (4)
  * attribution: fingerprint 1, placement 3
  */
-
+//@ chunk-cy6qaqnq.js:191-216 fingerprint = REPL_TOOL_NAME (1)
 /**
  * REPL 工具名常量 "REPL"。
  */
-//@ chunk-cy6qaqnq.js:191-216 fingerprint = REPL_TOOL_NAME (1)
-var REPL_TOOL_NAME = "REPL",
-  REPL_TOOL_NAME_ALIAS = "REPL";
+var REPL_TOOL_NAME = "REPL";
+var REPL_TOOL_NAME_ALIAS = "REPL";
 //@ chunk-cy6qaqnq.js:216-254 placement
-function _O(o) {
+/**
+ * 判断工具名是 REPL 工具名或其别名。
+ */
+function isReplToolName(o) {
   return o === REPL_TOOL_NAME || o === REPL_TOOL_NAME_ALIAS;
 }
 //@ chunk-cy6qaqnq.js:254-297 placement
-function S4(o) {
-  if (o === REPL_TOOL_NAME) return !0;
-  return !1;
+/**
+ * 判断工具名是否精确等于 REPL 工具名。
+ */
+function isExactReplToolName(name) {
+  if (name === REPL_TOOL_NAME) return true;
+  return false;
 }
 //@ chunk-cy6qaqnq.js:297-322 placement
-function pae(o) {
+/**
+ * 原样返回输入（辅助占位）。
+ */
+function identity(o) {
   return o;
 }
-
-export { _O, REPL_TOOL_NAME, S4, pae, REPL_TOOL_NAME_ALIAS };
+export { isReplToolName, REPL_TOOL_NAME, isExactReplToolName, identity, REPL_TOOL_NAME_ALIAS };

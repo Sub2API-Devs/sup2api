@@ -6,21 +6,22 @@
  * attribution: cjs-fingerprint 1
  */
 import { x, importMetaRequire } from "../../../../runtime/bun-runtime.js";
-import { _t } from "../../../shebang-command/index.js";
+import { require_shebang_command } from "../../../shebang-command/index.js";
 
 //@ chunk-m4p5zn6n.js:5128-5330 cjs-fingerprint
-var kt = x(function (xi, $t) {
-  var _ = importMetaRequire("fs"),
-    ar = _t();
-  function ur(e) {
-    let alloc = Buffer.alloc(150),
-      o;
+var require_readShebang = x(function (cjsExports, cjsModule) {
+  var fs = importMetaRequire("fs");
+  var ar = require_shebang_command();
+  function readShebang(command) {
+    let buffer = Buffer.alloc(150);
+    let fd;
     try {
-      ((o = _.openSync(e, "r")), _.readSync(o, alloc, 0, 150, 0), _.closeSync(o));
+      fd = fs.openSync(command, "r");
+      fs.readSync(fd, buffer, 0, 150, 0);
+      fs.closeSync(fd);
     } catch (error) {}
-    return ar(alloc.toString());
+    return ar(buffer.toString());
   }
-  $t.exports = ur;
+  cjsModule.exports = readShebang;
 });
-
-export { kt };
+export { require_readShebang };

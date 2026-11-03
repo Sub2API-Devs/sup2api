@@ -5,50 +5,76 @@
  * pieces: chunk-hwmsct5x.js (1)
  * attribution: esm-layout 1
  */
-import { ke, Kn } from "../tslib.mjs";
+import { __classPrivateFieldGet, __classPrivateFieldSet } from "../tslib.mjs";
 
 //@ chunk-hwmsct5x.js:59815-60695 esm-layout
-var Mn,
-  Wt,
-  On,
-  Wu = (() => {
-    class e {
-      constructor() {
-        (Mn.set(this, []), Wt.set(this, []), On.set(this, !1));
-      }
-      push(n) {
-        if (ke(this, On, "f")) return !1;
-        let r = ke(this, Wt, "f").shift();
-        if (r) r({ done: !1, value: n });
-        else ke(this, Mn, "f").push(n);
-        return !0;
-      }
-      close() {
-        if (ke(this, On, "f")) return;
-        Kn(this, On, !0, "f");
-        while (ke(this, Wt, "f").length > 0) ke(this, Wt, "f").shift()({ done: !0, value: void 0 });
-      }
-      next(n) {
-        if (ke(this, Mn, "f").length > 0)
-          return Promise.resolve({ done: !1, value: ke(this, Mn, "f").shift() });
-        if (ke(this, On, "f") || n?.aborted) return Promise.resolve({ done: !0, value: void 0 });
-        return new Promise((r) => {
-          let s = (y) => {
-              (n?.removeEventListener("abort", h), r(y));
-            },
-            h = () => {
-              let index = ke(this, Wt, "f").indexOf(s);
-              if (index >= 0) ke(this, Wt, "f").splice(index, 1);
-              r({ done: !0, value: void 0 });
-            };
-          (ke(this, Wt, "f").push(s), n?.addEventListener("abort", h, { once: !0 }));
-        });
-      }
-      tryShift() {
-        return ke(this, Mn, "f").shift();
-      }
+var _AsyncQueue_items;
+var _AsyncQueue_waiters;
+var _AsyncQueue_closed;
+var AsyncQueue = (() => {
+  class AsyncQueue {
+    constructor() {
+      _AsyncQueue_items.set(this, []);
+      _AsyncQueue_waiters.set(this, []);
+      _AsyncQueue_closed.set(this, false);
     }
-    return ((Mn = new WeakMap()), (Wt = new WeakMap()), (On = new WeakMap()), e);
-  })();
-
-export { Wu };
+    push(item) {
+      if (__classPrivateFieldGet(this, _AsyncQueue_closed, "f")) return false;
+      let w = __classPrivateFieldGet(this, _AsyncQueue_waiters, "f").shift();
+      if (w)
+        w({
+          done: false,
+          value: item,
+        });
+      else __classPrivateFieldGet(this, _AsyncQueue_items, "f").push(item);
+      return true;
+    }
+    close() {
+      if (__classPrivateFieldGet(this, _AsyncQueue_closed, "f")) return;
+      __classPrivateFieldSet(this, _AsyncQueue_closed, true, "f");
+      while (__classPrivateFieldGet(this, _AsyncQueue_waiters, "f").length > 0)
+        __classPrivateFieldGet(this, _AsyncQueue_waiters, "f").shift()({
+          done: true,
+          value: undefined,
+        });
+    }
+    next(signal) {
+      if (__classPrivateFieldGet(this, _AsyncQueue_items, "f").length > 0)
+        return Promise.resolve({
+          done: false,
+          value: __classPrivateFieldGet(this, _AsyncQueue_items, "f").shift(),
+        });
+      if (__classPrivateFieldGet(this, _AsyncQueue_closed, "f") || signal?.aborted)
+        return Promise.resolve({
+          done: true,
+          value: undefined,
+        });
+      return new Promise((resolve) => {
+        let waiter = (r) => {
+          signal?.removeEventListener("abort", onAbort);
+          resolve(r);
+        };
+        let onAbort = () => {
+          let idx = __classPrivateFieldGet(this, _AsyncQueue_waiters, "f").indexOf(waiter);
+          if (idx >= 0) __classPrivateFieldGet(this, _AsyncQueue_waiters, "f").splice(idx, 1);
+          resolve({
+            done: true,
+            value: undefined,
+          });
+        };
+        __classPrivateFieldGet(this, _AsyncQueue_waiters, "f").push(waiter);
+        signal?.addEventListener("abort", onAbort, {
+          once: true,
+        });
+      });
+    }
+    tryShift() {
+      return __classPrivateFieldGet(this, _AsyncQueue_items, "f").shift();
+    }
+  }
+  _AsyncQueue_items = new WeakMap();
+  _AsyncQueue_waiters = new WeakMap();
+  _AsyncQueue_closed = new WeakMap();
+  return AsyncQueue;
+})();
+export { AsyncQueue };

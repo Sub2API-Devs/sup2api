@@ -6,80 +6,88 @@
  * attribution: cjs-require-graph 1
  */
 import { x } from "../../../../../../runtime/bun-runtime.js";
-import { El } from "../../commonjs/reflect/scalar.js";
+import { require_scalar } from "../../commonjs/reflect/scalar.js";
 
 //@ chunk-fq0cr76a.js:329308-330751 cjs-require-graph
-var xl = x(function (VN) {
-  Object.defineProperty(VN, "__esModule", { value: !0 });
-  VN.unsafeLocal = void 0;
-  VN.unsafeOneofCase = Ij;
-  VN.unsafeIsSet = Nj;
-  VN.unsafeIsSetExplicit = kj;
-  VN.unsafeGet = Dj;
-  VN.unsafeSet = Oj;
-  VN.unsafeClear = Pj;
-  var Ag = El(),
-    MN = 2;
-  VN.unsafeLocal = Symbol.for("reflect unsafe local");
-  function Ij(e, n) {
-    let r = e[n.localName].case;
-    if (r === void 0) return r;
-    return n.fields.find((field) => field.localName === r);
+var require_unsafe = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.unsafeLocal = undefined;
+  cjsExports.unsafeOneofCase = unsafeOneofCase;
+  cjsExports.unsafeIsSet = unsafeIsSet;
+  cjsExports.unsafeIsSetExplicit = unsafeIsSetExplicit;
+  cjsExports.unsafeGet = unsafeGet;
+  cjsExports.unsafeSet = unsafeSet;
+  cjsExports.unsafeClear = unsafeClear;
+  var scalar_js_1 = require_scalar();
+  var IMPLICIT = 2;
+  cjsExports.unsafeLocal = Symbol.for("reflect unsafe local");
+  function unsafeOneofCase(target, oneof) {
+    let c = target[oneof.localName].case;
+    if (c === undefined) return c;
+    return oneof.fields.find((f) => f.localName === c);
   }
-  function Nj(e, n) {
-    let localName = n.localName;
-    if (n.oneof) return e[n.oneof.localName].case === localName;
-    if (n.presence != MN)
-      return e[localName] !== void 0 && Object.prototype.hasOwnProperty.call(e, localName);
-    switch (n.fieldKind) {
+  function unsafeIsSet(target, field) {
+    let name = field.localName;
+    if (field.oneof) return target[field.oneof.localName].case === name;
+    if (field.presence != IMPLICIT)
+      return target[name] !== undefined && Object.prototype.hasOwnProperty.call(target, name);
+    switch (field.fieldKind) {
       case "list":
-        return e[localName].length > 0;
+        return target[name].length > 0;
       case "map":
-        return Object.keys(e[localName]).length > 0;
+        return Object.keys(target[name]).length > 0;
       case "scalar":
-        return !Ag.isScalarZeroValue(n.scalar, e[localName]);
+        return !scalar_js_1.isScalarZeroValue(field.scalar, target[name]);
       case "enum":
-        return e[localName] !== n.enum.values[0].number;
+        return target[name] !== field.enum.values[0].number;
     }
     throw Error("message field with implicit presence");
   }
-  function kj(e, n) {
-    return Object.prototype.hasOwnProperty.call(e, n) && e[n] !== void 0;
+  function unsafeIsSetExplicit(target, localName) {
+    return Object.prototype.hasOwnProperty.call(target, localName) && target[localName] !== undefined;
   }
-  function Dj(e, n) {
-    if (n.oneof) {
-      let r = e[n.oneof.localName];
-      if (r.case === n.localName) return r.value;
+  function unsafeGet(target, field) {
+    if (field.oneof) {
+      let oneof = target[field.oneof.localName];
+      if (oneof.case === field.localName) return oneof.value;
       return;
     }
-    return e[n.localName];
+    return target[field.localName];
   }
-  function Oj(e, n, r) {
-    if (n.oneof) e[n.oneof.localName] = { case: n.localName, value: r };
-    else e[n.localName] = r;
+  function unsafeSet(target, field, value) {
+    if (field.oneof)
+      target[field.oneof.localName] = {
+        case: field.localName,
+        value,
+      };
+    else target[field.localName] = value;
   }
-  function Pj(e, n) {
-    let localName = n.localName;
-    if (n.oneof) {
-      let localName_2 = n.oneof.localName;
-      if (e[localName_2].case === localName) e[localName_2] = { case: void 0 };
-    } else if (n.presence != MN) delete e[localName];
+  function unsafeClear(target, field) {
+    let name = field.localName;
+    if (field.oneof) {
+      let oneofLocalName = field.oneof.localName;
+      if (target[oneofLocalName].case === name)
+        target[oneofLocalName] = {
+          case: undefined,
+        };
+    } else if (field.presence != IMPLICIT) delete target[name];
     else
-      switch (n.fieldKind) {
+      switch (field.fieldKind) {
         case "map":
-          e[localName] = {};
+          target[name] = {};
           break;
         case "list":
-          e[localName] = [];
+          target[name] = [];
           break;
         case "enum":
-          e[localName] = n.enum.values[0].number;
+          target[name] = field.enum.values[0].number;
           break;
         case "scalar":
-          e[localName] = Ag.scalarZeroValue(n.scalar, n.longAsString);
+          target[name] = scalar_js_1.scalarZeroValue(field.scalar, field.longAsString);
           break;
       }
   }
 });
-
-export { xl };
+export { require_unsafe };

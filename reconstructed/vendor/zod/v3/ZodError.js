@@ -5,10 +5,10 @@
  * pieces: chunk-j2t139r9.js (2)
  * attribution: esm-fingerprint 2
  */
-import { g } from "./helpers/util.js";
+import { util } from "./helpers/util.js";
 
 //@ chunk-j2t139r9.js:2007-2316 esm-fingerprint
-var arrayToEnum_2 = g.arrayToEnum([
+var ZodIssueCode = util.arrayToEnum([
   "invalid_type",
   "invalid_literal",
   "custom",
@@ -31,85 +31,98 @@ class ZodError extends Error {
   get errors() {
     return this.issues;
   }
-  constructor(e) {
+  constructor(issues) {
     super();
-    ((this.issues = []),
-      (this.addIssue = (r) => {
-        this.issues = [...this.issues, r];
-      }),
-      (this.addIssues = (r = []) => {
-        this.issues = [...this.issues, ...r];
-      }));
-    let t = new.target.prototype;
-    if (Object.setPrototypeOf) Object.setPrototypeOf(this, t);
-    else this.__proto__ = t;
-    ((this.name = "ZodError"), (this.issues = e));
+    this.issues = [];
+    this.addIssue = (sub) => {
+      this.issues = [...this.issues, sub];
+    };
+    this.addIssues = (subs = []) => {
+      this.issues = [...this.issues, ...subs];
+    };
+    let actualProto = new.target.prototype;
+    if (Object.setPrototypeOf) Object.setPrototypeOf(this, actualProto);
+    else this.__proto__ = actualProto;
+    this.name = "ZodError";
+    this.issues = issues;
   }
-  format(e) {
-    let t =
-        e ||
-        function (s) {
-          return s.message;
-        },
-      r = { _errors: [] },
-      a = (s) => {
-        for (let issue of s.issues)
-          if (issue.code === "invalid_union") issue.unionErrors.map(a);
-          else if (issue.code === "invalid_return_type") a(issue.returnTypeError);
-          else if (issue.code === "invalid_arguments") a(issue.argumentsError);
-          else if (issue.path.length === 0) r._errors.push(t(issue));
-          else {
-            let n = r,
-              c = 0;
-            while (c < issue.path.length) {
-              let o = issue.path[c],
-                p = c === issue.path.length - 1;
-              if (o === "_errors") {
-                if (p) n._errors.push(t(issue));
-                c++;
-                continue;
-              }
-              if (!Object.prototype.hasOwnProperty.call(n, o))
-                if (o === "__proto__")
-                  Object.defineProperty(n, o, {
-                    value: { _errors: [] },
-                    writable: !0,
-                    enumerable: !0,
-                    configurable: !0,
-                  });
-                else n[o] = { _errors: [] };
-              if (((n = n[o]), p)) n._errors.push(t(issue));
-              c++;
-            }
-          }
+  format(_mapper) {
+    let mapper =
+      _mapper ||
+      function (issue) {
+        return issue.message;
       };
-    return (a(this), r);
+    let fieldErrors = {
+      _errors: [],
+    };
+    let processError = (error) => {
+      for (let issue of error.issues)
+        if (issue.code === "invalid_union") issue.unionErrors.map(processError);
+        else if (issue.code === "invalid_return_type") processError(issue.returnTypeError);
+        else if (issue.code === "invalid_arguments") processError(issue.argumentsError);
+        else if (issue.path.length === 0) fieldErrors._errors.push(mapper(issue));
+        else {
+          let curr = fieldErrors;
+          let i = 0;
+          while (i < issue.path.length) {
+            let el = issue.path[i];
+            let terminal = i === issue.path.length - 1;
+            if (el === "_errors") {
+              if (terminal) curr._errors.push(mapper(issue));
+              i++;
+              continue;
+            }
+            if (!Object.prototype.hasOwnProperty.call(curr, el))
+              if (el === "__proto__")
+                Object.defineProperty(curr, el, {
+                  value: {
+                    _errors: [],
+                  },
+                  writable: true,
+                  enumerable: true,
+                  configurable: true,
+                });
+              else
+                curr[el] = {
+                  _errors: [],
+                };
+            curr = curr[el];
+            if (terminal) curr._errors.push(mapper(issue));
+            i++;
+          }
+        }
+    };
+    processError(this);
+    return fieldErrors;
   }
-  static assert(e) {
-    if (!(e instanceof ZodError)) throw Error(`Not a ZodError: ${e}`);
+  static assert(value) {
+    if (!(value instanceof ZodError)) throw Error(`Not a ZodError: ${value}`);
   }
   toString() {
     return this.message;
   }
   get message() {
-    return JSON.stringify(this.issues, g.jsonStringifyReplacer, 2);
+    return JSON.stringify(this.issues, util.jsonStringifyReplacer, 2);
   }
   get isEmpty() {
     return this.issues.length === 0;
   }
-  flatten(e = (t) => t.message) {
-    let create = Object.create(null),
-      r = [];
-    for (let issue of this.issues)
-      if (issue.path.length > 0) {
-        let s = issue.path[0];
-        ((create[s] = create[s] || []), create[s].push(e(issue)));
-      } else r.push(e(issue));
-    return { formErrors: r, fieldErrors: create };
+  flatten(mapper = (issue) => issue.message) {
+    let fieldErrors = Object.create(null);
+    let formErrors = [];
+    for (let sub of this.issues)
+      if (sub.path.length > 0) {
+        let firstEl = sub.path[0];
+        fieldErrors[firstEl] = fieldErrors[firstEl] || [];
+        fieldErrors[firstEl].push(mapper(sub));
+      } else formErrors.push(mapper(sub));
+    return {
+      formErrors,
+      fieldErrors,
+    };
   }
   get formErrors() {
     return this.flatten();
   }
 }
-
-export { arrayToEnum_2, ZodError };
+export { ZodIssueCode, ZodError };

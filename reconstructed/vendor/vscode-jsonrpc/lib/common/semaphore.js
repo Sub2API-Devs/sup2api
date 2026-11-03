@@ -6,21 +6,30 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { de } from "./ral.js";
+import { require_ral } from "./ral.js";
 
 //@ chunk-t4ksmxzx.js:17959-18920 cjs-fingerprint
-var vt = x(function (Jr) {
-  Object.defineProperty(Jr, "__esModule", { value: !0 });
-  Jr.Semaphore = void 0;
-  var Ji = de();
-  class Vr {
-    constructor(e = 1) {
-      if (e <= 0) throw Error("Capacity must be greater than 0");
-      ((this._capacity = e), (this._active = 0), (this._waiting = []));
+var require_semaphore = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.Semaphore = undefined;
+  var ral_1 = require_ral();
+  class Semaphore {
+    constructor(capacity = 1) {
+      if (capacity <= 0) throw Error("Capacity must be greater than 0");
+      this._capacity = capacity;
+      this._active = 0;
+      this._waiting = [];
     }
-    lock(e) {
-      return new Promise((r, n) => {
-        (this._waiting.push({ thunk: e, resolve: r, reject: n }), this.runNext());
+    lock(thunk) {
+      return new Promise((resolve, reject) => {
+        this._waiting.push({
+          thunk,
+          resolve,
+          reject,
+        });
+        this.runNext();
       });
     }
     get active() {
@@ -28,30 +37,40 @@ var vt = x(function (Jr) {
     }
     runNext() {
       if (this._waiting.length === 0 || this._active === this._capacity) return;
-      (0, Ji.default)().timer.setImmediate(() => this.doRunNext());
+      (0, ral_1.default)().timer.setImmediate(() => this.doRunNext());
     }
     doRunNext() {
       if (this._waiting.length === 0 || this._active === this._capacity) return;
-      let e = this._waiting.shift();
-      if ((this._active++, this._active > this._capacity)) throw Error("To many thunks active");
+      let next = this._waiting.shift();
+      this._active++;
+      if (this._active > this._capacity) throw Error("To many thunks active");
       try {
-        let thunk = e.thunk();
-        if (thunk instanceof Promise)
-          thunk.then(
-            (n) => {
-              (this._active--, e.resolve(n), this.runNext());
+        let result = next.thunk();
+        if (result instanceof Promise)
+          result.then(
+            (value) => {
+              this._active--;
+              next.resolve(value);
+              this.runNext();
             },
-            (n) => {
-              (this._active--, e.reject(n), this.runNext());
+            (err) => {
+              this._active--;
+              next.reject(err);
+              this.runNext();
             },
           );
-        else (this._active--, e.resolve(thunk), this.runNext());
-      } catch (error) {
-        (this._active--, e.reject(error), this.runNext());
+        else {
+          this._active--;
+          next.resolve(result);
+          this.runNext();
+        }
+      } catch (err) {
+        this._active--;
+        next.reject(err);
+        this.runNext();
       }
     }
   }
-  Jr.Semaphore = Vr;
+  cjsExports.Semaphore = Semaphore;
 });
-
-export { vt };
+export { require_semaphore };

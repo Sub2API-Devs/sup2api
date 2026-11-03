@@ -11,87 +11,112 @@
 import { isSingleShotPrintSession, isDiskless } from "../../bootstrap/state.js";
 import { getFeatureValue_SESSION_PINNED } from "../../services/analytics/growthbook.js";
 import { env } from "../../utils/env.js";
-import { T_, isBackgroundShellDisabled, b5e } from "../AgentTool/backgroundGates.js";
+import {
+  hasBackgroundBashStopAfterReply,
+  isBackgroundShellDisabled,
+  canLaunchBackgroundAgent,
+} from "../AgentTool/backgroundGates.js";
 import { formatDuration } from "../../utils/format.js";
 import { plural } from "../../utils/stringUtils.js";
-import { h$e } from "../PushNotificationTool/prompt.js";
+import { isAgentPushNotificationEnabled } from "../PushNotificationTool/prompt.js";
 import { PUSHNOTIFICATION } from "../PushNotificationTool/constants.js";
 import { BASH_TOOL_NAME } from "../BashTool/toolName.js";
 import { MONITOR } from "./constants.js";
 
 //@ chunk-yt6b774j.js:978-1024 placement
-var MONITOR_DEFAULT_TIMEOUT_MS = 300000,
-  jbn = 3600000,
-  n = 1800000,
-  a = 600000;
+/**
+ * Monitor 超时的绝对上限（1 小时）。
+ */
+var MONITOR_DEFAULT_TIMEOUT_MS = 300000;
+var MONITOR_ABSOLUTE_MAX_TIMEOUT_MS = 3600000;
+var MONITOR_DEFAULT_MAX_TIMEOUT_MS = 1800000;
+var MONITOR_SHORT_SESSION_TIMEOUT_MS = 600000;
 //@ chunk-yt6b774j.js:1024-1060 placement
 function monitorMaxTimeoutMs() {
-  return isSingleShotPrintSession() || isDiskless() ? a : n;
+  return isSingleShotPrintSession() || isDiskless()
+    ? MONITOR_SHORT_SESSION_TIMEOUT_MS
+    : MONITOR_DEFAULT_MAX_TIMEOUT_MS;
 }
 //@ chunk-yt6b774j.js:1060-1113 placement
-var l = "[Monitor timed out \u2014 re-arm if needed.]";
+/**
+ * Monitor 超时时的默认提示文本。
+ */
+var MONITOR_TIMEOUT_TEXT = "[Monitor timed out \u2014 re-arm if needed.]";
 //@ chunk-yt6b774j.js:1113-1171 placement
 function isMonitorPersistentAllowed() {
-  return isDiskless() || getFeatureValue_SESSION_PINNED("tengu_breezy_crescent", !0);
+  return isDiskless() || getFeatureValue_SESSION_PINNED("tengu_breezy_crescent", true);
 }
 //@ chunk-yt6b774j.js:1171-1226 placement
 function formatMinutes(e) {
   return `${Math.round(e / 60000)} minutes`;
 }
+//@ chunk-yt6b774j.js:1226-1467 placement
 /**
  * 按会话类型钳制 Monitor 的 timeout_ms 并决定是否允许 persistent。
  */
-//@ chunk-yt6b774j.js:1226-1467 placement
 function clampMonitorTimeout(e, t) {
-  if (t) return { timeout_ms: Math.min(e.timeout_ms, monitorMaxTimeoutMs()), persistent: !1 };
-  let o = e.persistent === !0;
-  if (!env.CLAUDE_CODE_REMOTE) return { timeout_ms: e.timeout_ms, persistent: o };
-  return { timeout_ms: o ? n : Math.min(e.timeout_ms, n), persistent: !1 };
+  if (t)
+    return {
+      timeout_ms: Math.min(e.timeout_ms, monitorMaxTimeoutMs()),
+      persistent: false,
+    };
+  let o = e.persistent === true;
+  if (!env.CLAUDE_CODE_REMOTE)
+    return {
+      timeout_ms: e.timeout_ms,
+      persistent: o,
+    };
+  return {
+    timeout_ms: o ? MONITOR_DEFAULT_MAX_TIMEOUT_MS : Math.min(e.timeout_ms, MONITOR_DEFAULT_MAX_TIMEOUT_MS),
+    persistent: false,
+  };
 }
 //@ chunk-yt6b774j.js:1467-2297 placement
-function monitorTimedOutMessage(e, t, o) {
-  if (!o)
-    return T_()
+function monitorTimedOutMessage(timeoutMs, t, bounded) {
+  if (!bounded)
+    return hasBackgroundBashStopAfterReply()
       ? "[Monitor timed out. Re-arm it only if you have more to do before you reply; a few minutes after your reply a new watch is likely stopped, so tell the user what to check instead.]"
-      : l;
-  let r = formatDuration(e, { hideTrailingZeros: !0 }),
-    s = isDiskless()
-      ? "Re-arm it only if you have more to do before you reply; after your reply a new watch may stop within a minute, so tell the user what to check instead"
-      : T_()
-        ? "Re-arm it only if you have more to do before you reply; a few minutes after your reply a new watch is likely stopped, so tell the user what to check instead"
-        : "Re-arm it if you still need the watch";
+      : MONITOR_TIMEOUT_TEXT;
+  let r = formatDuration(timeoutMs, {
+    hideTrailingZeros: true,
+  });
+  let s = isDiskless()
+    ? "Re-arm it only if you have more to do before you reply; after your reply a new watch may stop within a minute, so tell the user what to check instead"
+    : hasBackgroundBashStopAfterReply()
+      ? "Re-arm it only if you have more to do before you reply; a few minutes after your reply a new watch is likely stopped, so tell the user what to check instead"
+      : "Re-arm it if you still need the watch";
   if (t === 0)
     return `[Monitor expired after ${r} with no events delivered. ${s} \u2014 and widen the filter if silence was unexpected.]`;
   return `[Monitor expired after ${r} with ${t} ${plural(t, "event")} delivered. ${s}.]`;
 }
 //@ chunk-yt6b774j.js:2297-2557 placement
 function monitorEventGuidance() {
-  return h$e()
+  return isAgentPushNotificationEnabled()
     ? `
 
 When an event lands that the user would want to act on now \u2014 an error appeared, the status they were waiting on flipped \u2014 send a ${PUSHNOTIFICATION}. Not every event is worth a push; the ones that change what they'd do next are.`
     : "";
 }
+//@ chunk-yt6b774j.js:2557-8813 placement
 /**
  * Monitor 工具的完整提示词：单次/持续/轮询等使用模式、事件源说明、超时规则。
  */
-//@ chunk-yt6b774j.js:2557-8813 placement
 function monitorToolPrompt() {
-  let e = isBackgroundShellDisabled() || isDiskless() || T_(),
-    t =
-      '- **One** ("tell me when the server is ready / the build finishes") \u2192 ' +
-      (e
-        ? 'run the command in the **foreground with Bash**, exiting when the condition is true, e.g. `until grep -q "Ready in" dev.log; do sleep 0.5; done`.'
-        : 'use **Bash with `run_in_background`** and a command that exits when the condition is true, e.g. `until grep -q "Ready in" dev.log; do sleep 0.5; done`. You get a single completion notification when it exits.'),
-    o = e
-      ? "use a foreground Bash `until` loop instead"
-      : "use Bash `run_in_background` with an `until` loop instead (one notification, ends in seconds)";
-  return `Start a background monitor that streams events from a long-running script. Each stdout line is an event \u2014 you keep working and notifications arrive in the chat. Events arrive on their own schedule and are not replies from the user, even if one lands while you're waiting for the user to answer a question.${isDiskless() ? ` ${MONITOR_SESSION_LIFETIME_NOTE}` : T_() ? ` ${h} ${b5e() ? `To wait past your reply, have a background agent wait with foreground ${BASH_TOOL_NAME} commands, or tell the user what to check and when.` : "For anything longer, tell the user what to check and when."}` : ""}
+  let e = isBackgroundShellDisabled() || isDiskless() || hasBackgroundBashStopAfterReply();
+  let t =
+    '- **One** ("tell me when the server is ready / the build finishes") \u2192 ' +
+    (e
+      ? 'run the command in the **foreground with Bash**, exiting when the condition is true, e.g. `until grep -q "Ready in" dev.log; do sleep 0.5; done`.'
+      : 'use **Bash with `run_in_background`** and a command that exits when the condition is true, e.g. `until grep -q "Ready in" dev.log; do sleep 0.5; done`. You get a single completion notification when it exits.');
+  let o = e
+    ? "use a foreground Bash `until` loop instead"
+    : "use Bash `run_in_background` with an `until` loop instead (one notification, ends in seconds)";
+  return `Start a background monitor that streams events from a long-running script. Each stdout line is an event \u2014 you keep working and notifications arrive in the chat. Events arrive on their own schedule and are not replies from the user, even if one lands while you're waiting for the user to answer a question.${isDiskless() ? ` ${MONITOR_SESSION_LIFETIME_NOTE}` : hasBackgroundBashStopAfterReply() ? ` ${MONITOR_SESSION_LIFETIME_NOTE_LONG} ${canLaunchBackgroundAgent() ? `To wait past your reply, have a background agent wait with foreground ${BASH_TOOL_NAME} commands, or tell the user what to check and when.` : "For anything longer, tell the user what to check and when."}` : ""}
 
 Pick by how many notifications you need:
 ${t}
 ${
-  isDiskless() || T_()
+  isDiskless() || hasBackgroundBashStopAfterReply()
     ? `- **One per occurrence, while you work on this turn** ("show each ERROR line in the dev server's log while you try the change") \u2192 ${MONITOR} with an unbounded command (\`tail -f\`, \`inotifywait -m\`, \`while true\`).
 - **One per occurrence, until a known end, while you work on this turn** ("show each test file's result as the suite you just started runs, stop when it ends") \u2192 ${MONITOR} with a command that emits lines and then exits.`
     : `- **One per occurrence, ${isMonitorPersistentAllowed() ? "until the monitor expires (re-arm to continue)" : "indefinitely"}** ("tell me every time an ERROR line appears") \u2192 Monitor with an unbounded command (\`tail -f\`, \`inotifywait -m\`, \`while true\`).
@@ -154,13 +179,16 @@ Stdout lines within 200ms are batched into a single notification, so multiline o
 The script runs in the same shell environment as Bash. Exit ends the watch (exit code is reported). ${monitorExpiryParagraph()} Use TaskStop to cancel early.`;
 }
 //@ chunk-yt6b774j.js:8813-9539 placement
-var MONITOR_SESSION_LIFETIME_NOTE = `In this session a monitor can be counted on only while you are working. After your reply it may stop at any time, often within a minute, and you are told so with the user's next message. To wait for one thing before you answer, run a foreground ${BASH_TOOL_NAME} command that exits when it happens; for anything longer, tell the user what to check and when.`,
-  h = `In this session a monitor can be counted on only while you are working: a few minutes after your reply it is likely stopped along with every other process left running here, and you may hear nothing more from it, not even that it stopped, until the user writes again. To wait for one thing before you answer, run a foreground ${BASH_TOOL_NAME} command that exits when it happens.`;
+/**
+ * 会话内 Monitor 随时可能被停止的长版说明（含不订阅通知的情形）。
+ */
+var MONITOR_SESSION_LIFETIME_NOTE = `In this session a monitor can be counted on only while you are working. After your reply it may stop at any time, often within a minute, and you are told so with the user's next message. To wait for one thing before you answer, run a foreground ${BASH_TOOL_NAME} command that exits when it happens; for anything longer, tell the user what to check and when.`;
+var MONITOR_SESSION_LIFETIME_NOTE_LONG = `In this session a monitor can be counted on only while you are working: a few minutes after your reply it is likely stopped along with every other process left running here, and you may hear nothing more from it, not even that it stopped, until the user writes again. To wait for one thing before you answer, run a foreground ${BASH_TOOL_NAME} command that exits when it happens.`;
 //@ chunk-yt6b774j.js:9539-10698 placement
 function monitorExpiryParagraph() {
   if (isDiskless())
     return `Every monitor expires after \`timeout_ms\` (default ${formatMinutes(MONITOR_DEFAULT_TIMEOUT_MS)}, at most ${formatMinutes(monitorMaxTimeoutMs())}): it is killed and you get one notice with the event count. If it stops after your reply and before it expires, you learn only that it stopped, with the user's next message.`;
-  if (T_())
+  if (hasBackgroundBashStopAfterReply())
     return `${isMonitorPersistentAllowed() ? `Every monitor expires after \`timeout_ms\` (default ${formatMinutes(MONITOR_DEFAULT_TIMEOUT_MS)}, at most ${formatMinutes(monitorMaxTimeoutMs())}): it is killed and you get one notice with the event count.` : "Timeout \u2192 killed."} Any monitor is also likely stopped a few minutes after your reply, and you may hear nothing of that until the user writes again.`;
   return isMonitorPersistentAllowed()
     ? `Every monitor expires after \`timeout_ms\` (default ${formatMinutes(MONITOR_DEFAULT_TIMEOUT_MS)}, at most ${formatMinutes(monitorMaxTimeoutMs())}): it is killed and you get one notice with the event count. Re-arm it if you still need the watch; for a long watch (PR monitoring, log tails) set \`timeout_ms\` to the maximum and re-arm on each expiry, and widen the filter if an expiry with no events was unexpected.`
@@ -178,11 +206,10 @@ var WS_SOURCE_PARAGRAPH = `
 Each text frame becomes one notification (multiline frames stay as one event). Binary frames are reported as \`[binary frame, N bytes]\` rather than passed through. Socket close ends the watch with the close code surfaced; errors are surfaced before close. Same rate limiting as bash \u2014 a firehose will be suppressed and eventually stopped, so subscribe to a filtered feed where one exists.
 
 Prefer this over \`command: 'websocat wss://\u2026'\` \u2014 it avoids the extra process and line-buffering pitfalls. Use bash when you need to transform or filter frames with shell tools before they become events.`;
-
 export {
   monitorTimedOutMessage,
   MONITOR_DEFAULT_TIMEOUT_MS,
-  jbn,
+  MONITOR_ABSOLUTE_MAX_TIMEOUT_MS,
   monitorMaxTimeoutMs,
   isMonitorPersistentAllowed,
   monitorToolPrompt,

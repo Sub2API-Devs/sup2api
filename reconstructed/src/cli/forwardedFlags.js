@@ -10,12 +10,16 @@
  */
 import { join, resolve, isAbsolute, sep, relative } from "path";
 import { homedir } from "os";
-import { HOt, Z_r, gj } from "../utils/managedEnvConstants.js";
+import {
+  MODEL_SELECTION_ENV_VARS,
+  CUSTOM_MODEL_OPTION_VARS,
+  PROVIDER_SELECTION_ENV_VARS,
+} from "../utils/managedEnvConstants.js";
 import { getClaudeConfigDir, isEnvTruthy } from "../utils/envUtils.js";
 import { tmpdir, claudeTempDirName } from "../utils/tempDir.js";
 import { env } from "../utils/env.js";
-import { Cp } from "../utils/pathIdentity.js";
-import { Mn } from "../utils/pathClassification.js";
+import { foldCaseBasic } from "../utils/pathIdentity.js";
+import { identity } from "../utils/pathClassification.js";
 import { getPlatform } from "../utils/platform.js";
 import {
   describeEnvEntryName,
@@ -25,189 +29,203 @@ import {
 import { logForDebugging } from "../utils/debug.js";
 import { stripLongPathPrefixes } from "../utils/windowsUncPaths.js";
 
+//@ chunk-nwzhqrkg.js:681-3226 placement
 /**
  * 转发给后台会话的带值 CLI 标志集合（--model、--permission-mode、--settings 等）及可变参标志。
  */
-//@ chunk-nwzhqrkg.js:681-3226 placement
 var FORWARDED_VALUE_FLAGS = new Set([
-    "--model",
-    "-m",
-    "--permission-mode",
-    "--inherit-permission-mode",
-    "--proactivity",
-    "--agent",
-    "--agents",
-    "--routine",
-    "--effort",
-    "--fast-mode",
-    "--add-dir",
-    "--mcp-config",
-    "--settings",
-    "--setting-sources",
-    "--managed-settings",
-    "--client-data-url",
-    "--system-prompt",
-    "--system-prompt-file",
-    "--append-system-prompt",
-    "--append-system-prompt-file",
-    "--system-prompt-snapshot",
-    "--append-subagent-system-prompt",
-    "--append-subagent-system-prompt-file",
-    "--fallback-model",
-    "--advisor",
-    "--channels",
-    "--watch-artifact",
-    "--watch-artifact-no-autoreact",
-    "--permission-prompt-tool",
-    "--permission-prompts",
-    "--allowed-tools",
-    "--allowedTools",
-    "--disallowed-tools",
-    "--disallowedTools",
-    "--tools",
-    "--session-id",
-    "--debug-file",
-    "-n",
-    "--name",
-    "--autocompact",
-    "--betas",
-    "--file",
-    "--max-budget-usd",
-    "--max-thinking-tokens",
-    "--max-turns",
-    "--task-budget",
-    "--plan-mode-instructions",
-    "--plugin-dir",
-    "--plugin-dir-no-mcp",
-    "--plugin-url",
-    "--rewind-files",
-    "--thinking",
-    "--thinking-display",
-    "--remote-control-session-name-prefix",
-    "--json-schema",
-  ]),
-  G2t = new Set([
-    ...FORWARDED_VALUE_FLAGS,
-    "--resume-session-at",
-    "--resume-drops-turn",
-    "--project-config-root",
-    "--exec",
-  ]),
-  Evt = new Set([
-    "--allowed-tools",
-    "--allowedTools",
-    "--disallowed-tools",
-    "--disallowedTools",
-    "--tools",
-    "--mcp-config",
-    "--betas",
-    "--add-dir",
-    "--file",
-    "--channels",
-  ]),
-  D = new Set(["--plugin-dir", "--plugin-dir-no-mcp", "--plugin-url"]),
-  hyn = new Set([
-    "--dangerously-skip-permissions",
-    "--allow-dangerously-skip-permissions",
-    "--strict-mcp-config",
-    "--dangerously-allow-browser-network-access",
-    "--restricted",
-    "--disable-slash-commands",
-    "--include-unsupported-models",
-    "--verbose",
-    "--reply-on-resume",
-    "--ide",
-    "--chrome",
-    "--no-chrome",
-    "--bare",
-    "--safe-mode",
-    "--brief",
-    "--remote-control",
-    "--rc",
-    "--local",
-    "--unsandboxed",
-    "--personal",
-    "--allow-other-models",
-  ]),
-  VKo = new Set(["CLAUDE_CODE_SUBAGENT_MODEL_FORCE", "CLAUDE_CODE_HOST_GATEWAY_LINEAGE"]),
-  qKo = [...HOt, ...Z_r, "CLAUDE_CODE_SUBAGENT_MODEL_FORCE", "CLAUDE_CODE_SUBAGENT_EFFORT"],
-  knt = new Set([
-    "CLAUDE_CONFIG_DIR",
-    "CLAUDE_INTERNAL_FC_OVERRIDES",
-    ...qKo,
-    "CLAUDE_CODE_CLIENT_DATA_URL",
-    "CLAUDE_CODE_ALLOW_OTHER_MODELS",
-    "CLAUDE_CODE_ATTRIBUTION_PROJECT",
-    ...gj,
-    "AWS_REGION",
-    "AWS_DEFAULT_REGION",
-    "ANTHROPIC_BEDROCK_REGION_PREFIX",
-    "AWS_PROFILE",
-    "AWS_CONFIG_FILE",
-    "AWS_SHARED_CREDENTIALS_FILE",
-    "GOOGLE_APPLICATION_CREDENTIALS",
-    "GOOGLE_CLOUD_PROJECT",
-    "GCLOUD_PROJECT",
-    "CLAUDE_SECURESTORAGE_CONFIG_DIR",
-    "CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST",
-    "CLAUDE_CODE_HOST_GATEWAY_LINEAGE",
-  ]),
-  m = new Set(["AWS_CONFIG_FILE", "AWS_SHARED_CREDENTIALS_FILE", "GOOGLE_APPLICATION_CREDENTIALS"]),
-  CLAUDE_SECURESTORAGE_CONFIG_DIR = "CLAUDE_SECURESTORAGE_CONFIG_DIR";
+  "--model",
+  "-m",
+  "--permission-mode",
+  "--inherit-permission-mode",
+  "--proactivity",
+  "--agent",
+  "--agents",
+  "--routine",
+  "--effort",
+  "--fast-mode",
+  "--add-dir",
+  "--mcp-config",
+  "--settings",
+  "--setting-sources",
+  "--managed-settings",
+  "--client-data-url",
+  "--system-prompt",
+  "--system-prompt-file",
+  "--append-system-prompt",
+  "--append-system-prompt-file",
+  "--system-prompt-snapshot",
+  "--append-subagent-system-prompt",
+  "--append-subagent-system-prompt-file",
+  "--fallback-model",
+  "--advisor",
+  "--channels",
+  "--watch-artifact",
+  "--watch-artifact-no-autoreact",
+  "--permission-prompt-tool",
+  "--permission-prompts",
+  "--allowed-tools",
+  "--allowedTools",
+  "--disallowed-tools",
+  "--disallowedTools",
+  "--tools",
+  "--session-id",
+  "--debug-file",
+  "-n",
+  "--name",
+  "--autocompact",
+  "--betas",
+  "--file",
+  "--max-budget-usd",
+  "--max-thinking-tokens",
+  "--max-turns",
+  "--task-budget",
+  "--plan-mode-instructions",
+  "--plugin-dir",
+  "--plugin-dir-no-mcp",
+  "--plugin-url",
+  "--rewind-files",
+  "--thinking",
+  "--thinking-display",
+  "--remote-control-session-name-prefix",
+  "--json-schema",
+]);
+var BACKGROUND_FORWARDED_VALUE_FLAGS = new Set([
+  ...FORWARDED_VALUE_FLAGS,
+  "--resume-session-at",
+  "--resume-drops-turn",
+  "--project-config-root",
+  "--exec",
+]);
+var VARIADIC_FORWARDED_FLAGS = new Set([
+  "--allowed-tools",
+  "--allowedTools",
+  "--disallowed-tools",
+  "--disallowedTools",
+  "--tools",
+  "--mcp-config",
+  "--betas",
+  "--add-dir",
+  "--file",
+  "--channels",
+]);
+var PLUGIN_SOURCE_FLAGS = new Set(["--plugin-dir", "--plugin-dir-no-mcp", "--plugin-url"]);
+var BOOLEAN_FORWARDED_FLAGS = new Set([
+  "--dangerously-skip-permissions",
+  "--allow-dangerously-skip-permissions",
+  "--strict-mcp-config",
+  "--dangerously-allow-browser-network-access",
+  "--restricted",
+  "--disable-slash-commands",
+  "--include-unsupported-models",
+  "--verbose",
+  "--reply-on-resume",
+  "--ide",
+  "--chrome",
+  "--no-chrome",
+  "--bare",
+  "--safe-mode",
+  "--brief",
+  "--remote-control",
+  "--rc",
+  "--local",
+  "--unsandboxed",
+  "--personal",
+  "--allow-other-models",
+]);
+var ENV_FORCE_PASSTHROUGH_NAMES = new Set([
+  "CLAUDE_CODE_SUBAGENT_MODEL_FORCE",
+  "CLAUDE_CODE_HOST_GATEWAY_LINEAGE",
+]);
+var SUBAGENT_MODEL_ENV_NAMES = [
+  ...MODEL_SELECTION_ENV_VARS,
+  ...CUSTOM_MODEL_OPTION_VARS,
+  "CLAUDE_CODE_SUBAGENT_MODEL_FORCE",
+  "CLAUDE_CODE_SUBAGENT_EFFORT",
+];
+var BACKGROUND_ALLOWED_ENV_NAMES = new Set([
+  "CLAUDE_CONFIG_DIR",
+  "CLAUDE_INTERNAL_FC_OVERRIDES",
+  ...SUBAGENT_MODEL_ENV_NAMES,
+  "CLAUDE_CODE_CLIENT_DATA_URL",
+  "CLAUDE_CODE_ALLOW_OTHER_MODELS",
+  "CLAUDE_CODE_ATTRIBUTION_PROJECT",
+  ...PROVIDER_SELECTION_ENV_VARS,
+  "AWS_REGION",
+  "AWS_DEFAULT_REGION",
+  "ANTHROPIC_BEDROCK_REGION_PREFIX",
+  "AWS_PROFILE",
+  "AWS_CONFIG_FILE",
+  "AWS_SHARED_CREDENTIALS_FILE",
+  "GOOGLE_APPLICATION_CREDENTIALS",
+  "GOOGLE_CLOUD_PROJECT",
+  "GCLOUD_PROJECT",
+  "CLAUDE_SECURESTORAGE_CONFIG_DIR",
+  "CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST",
+  "CLAUDE_CODE_HOST_GATEWAY_LINEAGE",
+]);
+var PATH_VALUED_ENV_NAMES = new Set([
+  "AWS_CONFIG_FILE",
+  "AWS_SHARED_CREDENTIALS_FILE",
+  "GOOGLE_APPLICATION_CREDENTIALS",
+]);
+var CLAUDE_SECURESTORAGE_CONFIG_DIR = "CLAUDE_SECURESTORAGE_CONFIG_DIR";
 //@ chunk-nwzhqrkg.js:3226-3470 placement
 function jobAllowedRoots(n) {
-  let s = getClaudeConfigDir(),
-    r = [
-      join(s, "jobs"),
-      join(tmpdir(), claudeTempDirName()),
-      join(s, "projects"),
-      join(s, "plans"),
-      join(s, "agent-memory"),
-    ],
-    CLAUDE_CODE_REMOTE_MEMORY_DIR = env.CLAUDE_CODE_REMOTE_MEMORY_DIR;
+  let claudeConfigDir = getClaudeConfigDir();
+  let r = [
+    join(claudeConfigDir, "jobs"),
+    join(tmpdir(), claudeTempDirName()),
+    join(claudeConfigDir, "projects"),
+    join(claudeConfigDir, "plans"),
+    join(claudeConfigDir, "agent-memory"),
+  ];
+  let CLAUDE_CODE_REMOTE_MEMORY_DIR = env.CLAUDE_CODE_REMOTE_MEMORY_DIR;
   if (CLAUDE_CODE_REMOTE_MEMORY_DIR)
     r.push(
       join(CLAUDE_CODE_REMOTE_MEMORY_DIR, "projects"),
       join(CLAUDE_CODE_REMOTE_MEMORY_DIR, "agent-memory"),
     );
-  if (m.has(n))
+  if (PATH_VALUED_ENV_NAMES.has(n))
     try {
       r.push(join(homedir(), ".claude"));
     } catch {}
   return r;
 }
 //@ chunk-nwzhqrkg.js:3470-3504 placement
-function f(n) {
-  return Cp(Mn(resolve(n)));
+function normalizeResolvedPath(n) {
+  return foldCaseBasic(identity(resolve(n)));
 }
 //@ chunk-nwzhqrkg.js:3504-3583 placement
-function T(n) {
+function isAbsoluteOnPlatform(n) {
   return getPlatform() === "windows" ? /^([A-Za-z]:[\\/]|[\\/]{2})/.test(n) : isAbsolute(n);
 }
+//@ chunk-nwzhqrkg.js:3583-4013 placement
 /**
  * 校验转发给后台会话的路径型环境变量：必须是完整路径且不在 Claude 临时目录。
  */
-//@ chunk-nwzhqrkg.js:3583-4013 placement
 function checkForwardedPath(n, s) {
-  if (s === "") return n === CLAUDE_SECURESTORAGE_CONFIG_DIR ? void 0 : "empty path";
-  if (!T(s)) return "not a full path";
-  let r = f(s);
-  if (getPlatform() !== "windows" && r.split(sep).includes(Cp(claudeTempDirName())))
+  if (s === "") return n === CLAUDE_SECURESTORAGE_CONFIG_DIR ? undefined : "empty path";
+  if (!isAbsoluteOnPlatform(s)) return "not a full path";
+  let r = normalizeResolvedPath(s);
+  if (getPlatform() !== "windows" && r.split(sep).includes(foldCaseBasic(claudeTempDirName())))
     return "path is inside a Claude temp folder, which background sessions can write to without asking";
   for (let e of jobAllowedRoots(n)) {
-    let o = relative(f(e), r);
+    let o = relative(normalizeResolvedPath(e), r);
     if (o !== ".." && !o.startsWith(`..${sep}`) && !isAbsolute(o))
       return `path is inside ${e}, where background sessions can write some files without asking`;
   }
   return;
 }
+//@ chunk-nwzhqrkg.js:4013-4118 placement
 /**
  * 把转发给后台任务的环境变量中表示路径的条目按给定目录解析为绝对路径，其余原样保留。
  */
-//@ chunk-nwzhqrkg.js:4013-4118 placement
-function resolveForwardedEnvPaths(n, s) {
+function resolveForwardedEnvPaths(providerEnv, cwd) {
   let r = {};
-  for (let [e, o] of Object.entries(n)) r[e] = o !== "" && m.has(e) ? resolve(s, expandAwsHomePath(e, o)) : o;
+  for (let [key, value] of Object.entries(providerEnv))
+    r[key] =
+      value !== "" && PATH_VALUED_ENV_NAMES.has(key) ? resolve(cwd, expandAwsHomePath(key, value)) : value;
   return r;
 }
 //@ chunk-nwzhqrkg.js:4118-4234 placement
@@ -222,135 +240,148 @@ function expandAwsHomePath(n, s) {
 //@ chunk-nwzhqrkg.js:4234-4389 placement
 var PROJECT_ID_RE =
   /^\s*(?:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}|claude_proj_(?:staging_|local_)?01[1-9A-HJ-NP-Za-km-z]{22})\s*$/;
+//@ chunk-nwzhqrkg.js:4389-4898 placement
 /**
  * 过滤要带给后台会话的环境变量，返回保留项与被丢弃项（附原因）。
  */
-//@ chunk-nwzhqrkg.js:4389-4898 placement
 function filterBackgroundEnv(n) {
-  let s = {},
-    r = [];
-  for (let [e, o] of Object.entries(n)) {
-    let a = !knt.has(e)
+  let s = {};
+  let r = [];
+  for (let [key, value] of Object.entries(n)) {
+    let a = !BACKGROUND_ALLOWED_ENV_NAMES.has(key)
       ? "not kept for background sessions"
-      : VKo.has(e) && !isEnvTruthy(o)
+      : ENV_FORCE_PASSTHROUGH_NAMES.has(key) && !isEnvTruthy(value)
         ? "only kept when set to a true value such as 1"
-        : m.has(e) || e === CLAUDE_SECURESTORAGE_CONFIG_DIR
-          ? checkForwardedPath(e, o)
-          : e === "CLAUDE_CODE_ATTRIBUTION_PROJECT" && !PROJECT_ID_RE.test(o)
+        : PATH_VALUED_ENV_NAMES.has(key) || key === CLAUDE_SECURESTORAGE_CONFIG_DIR
+          ? checkForwardedPath(key, value)
+          : key === "CLAUDE_CODE_ATTRIBUTION_PROJECT" && !PROJECT_ID_RE.test(value)
             ? "not a claude.ai Project ID"
-            : void 0;
-    if (a) r.push(`${describeEnvEntryName(e)} (${a})`);
-    else s[e] = o;
+            : undefined;
+    if (a) r.push(`${describeEnvEntryName(key)} (${a})`);
+    else s[key] = value;
   }
   if (r.length === 0) return n;
-  return (
-    logForDebugging(
-      `[jobs] ignored these saved environment entries in the job's state.json: ${r.join(", ")}`,
-      { level: "warn" },
-    ),
-    Object.keys(s).length > 0 ? s : void 0
-  );
+  logForDebugging(`[jobs] ignored these saved environment entries in the job's state.json: ${r.join(", ")}`, {
+    level: "warn",
+  });
+  return Object.keys(s).length > 0 ? s : undefined;
 }
+//@ chunk-nwzhqrkg.js:4898-5086 placement
 /**
  * 过滤可转发的环境变量，被丢弃的条目逐个记录警告日志（名称经转义、附原因）。
  */
-//@ chunk-nwzhqrkg.js:4898-5086 placement
 function keepForwardableEnv(n, s) {
-  let { kept: kept, dropped: dropped } = filterInvalidEnvEntries(n);
-  return (
-    dropped.forEach(({ name: o, problem: problem }) => {
-      try {
-        logForDebugging(
-          `[jobs] dropped environment entry ${describeEnvEntryName(o)} from ${s}: ${ENV_ENTRY_PROBLEM_TEXT[problem]}.`,
-          { level: "warn" },
-        );
-      } catch {}
-    }),
-    kept
-  );
+  let { kept, dropped } = filterInvalidEnvEntries(n);
+  dropped.forEach(({ name: o, problem }) => {
+    try {
+      logForDebugging(
+        `[jobs] dropped environment entry ${describeEnvEntryName(o)} from ${s}: ${ENV_ENTRY_PROBLEM_TEXT[problem]}.`,
+        {
+          level: "warn",
+        },
+      );
+    } catch {}
+  });
+  return kept;
 }
+//@ chunk-nwzhqrkg.js:5086-5669 placement
 /**
  * 把 argv 分成可转发的标志与其余参数。
  */
-//@ chunk-nwzhqrkg.js:5086-5669 placement
 function splitForwardableArgs(n) {
-  let s = [],
-    r = [];
-  for (let e = 0; e < n.length; e++) {
-    let o = n[e];
+  let s = [];
+  let r = [];
+  for (let j = 0; j < n.length; j++) {
+    let o = n[j];
     if (!o.startsWith("-")) {
       r.push(o);
       continue;
     }
-    let index = o.indexOf("="),
-      l = index === -1 ? o : o.slice(0, index);
-    if (index !== -1 && !FORWARDED_VALUE_FLAGS.has(l) && hyn.has(l)) {
-      (s.push(l), r.push(o));
+    let index = o.indexOf("=");
+    let l = index === -1 ? o : o.slice(0, index);
+    if (index !== -1 && !FORWARDED_VALUE_FLAGS.has(l) && BOOLEAN_FORWARDED_FLAGS.has(l)) {
+      s.push(l);
+      r.push(o);
       continue;
     }
-    let d = index === -1 && FORWARDED_VALUE_FLAGS.has(l),
-      g =
-        l !== "-m" &&
-        (index === -1 ? hyn.has(l) || (d && n[e + 1] !== void 0) : FORWARDED_VALUE_FLAGS.has(l)),
-      h = g ? s : r;
-    if ((h.push(o), d && n[e + 1] !== void 0)) h.push(n[++e]);
-    if (!g || (d && Evt.has(l))) while (n[e + 1] !== void 0 && !n[e + 1].startsWith("-")) h.push(n[++e]);
+    let d = index === -1 && FORWARDED_VALUE_FLAGS.has(l);
+    let g =
+      l !== "-m" &&
+      (index === -1
+        ? BOOLEAN_FORWARDED_FLAGS.has(l) || (d && n[j + 1] !== undefined)
+        : FORWARDED_VALUE_FLAGS.has(l));
+    let h = g ? s : r;
+    h.push(o);
+    if (d && n[j + 1] !== undefined) h.push(n[++j]);
+    if (!g || (d && VARIADIC_FORWARDED_FLAGS.has(l)))
+      while (n[j + 1] !== undefined && !n[j + 1].startsWith("-")) h.push(n[++j]);
   }
   if (r.length > 0)
     logForDebugging(
       `[jobs] stripped respawnFlags token(s) that a restart does not re-apply: ${r.join(" ")}`,
-      { level: "warn" },
+      {
+        level: "warn",
+      },
     );
   return groupFlagArgs(normalizeForwardedFlags(s));
 }
 //@ chunk-nwzhqrkg.js:5669-5939 placement
 function normalizeForwardedFlags(n) {
   let s = [];
-  for (let r = 0; r < n.length; r++) {
-    let e = n[r];
+  for (let j = 0; j < n.length; j++) {
+    let e = n[j];
     if (!FORWARDED_VALUE_FLAGS.has(e)) {
       s.push(e);
       continue;
     }
-    let o = n[++r];
+    let o = n[++j];
     if (!o.startsWith("-")) {
       s.push(e, o);
       continue;
     }
     s.push(`${e === "-n" ? "--name" : e}=${o}`);
-    let a = n[r + 1];
-    if (Evt.has(e) && a !== void 0 && !a.startsWith("-")) s.push(e);
+    let a = n[j + 1];
+    if (VARIADIC_FORWARDED_FLAGS.has(e) && a !== undefined && !a.startsWith("-")) s.push(e);
   }
   return s;
 }
+//@ chunk-nwzhqrkg.js:5939-6393 placement
 /**
  * 把 argv 按标志分组（标志与其值放在一起，可变参标志吞掉后续值）。
  */
-//@ chunk-nwzhqrkg.js:5939-6393 placement
 function groupFlagArgs(n) {
   let s = [];
-  for (let e = 0; e < n.length; e++) {
-    let o = n[e],
-      index = o.indexOf("="),
-      l = index === -1 ? o : o.slice(0, index),
-      d = [o];
-    if (index === -1 && FORWARDED_VALUE_FLAGS.has(l) && n[e + 1] !== void 0) {
-      if ((d.push(n[++e]), Evt.has(l)))
-        while (n[e + 1] !== void 0 && !n[e + 1].startsWith("-")) d.push(n[++e]);
+  for (let j = 0; j < n.length; j++) {
+    let o = n[j];
+    let index = o.indexOf("=");
+    let l = index === -1 ? o : o.slice(0, index);
+    let d = [o];
+    if (index === -1 && FORWARDED_VALUE_FLAGS.has(l) && n[j + 1] !== undefined) {
+      d.push(n[++j]);
+      if (VARIADIC_FORWARDED_FLAGS.has(l))
+        while (n[j + 1] !== undefined && !n[j + 1].startsWith("-")) d.push(n[++j]);
     }
-    s.push({ name: l, toks: d });
+    s.push({
+      name: l,
+      toks: d,
+    });
   }
   let r = new Map();
-  for (let e = 0; e < s.length; e++) {
-    let o = s[e];
-    if (FORWARDED_VALUE_FLAGS.has(o.name) && !Evt.has(o.name) && !D.has(o.name)) r.set(o.name, e);
+  for (let j = 0; j < s.length; j++) {
+    let o = s[j];
+    if (
+      FORWARDED_VALUE_FLAGS.has(o.name) &&
+      !VARIADIC_FORWARDED_FLAGS.has(o.name) &&
+      !PLUGIN_SOURCE_FLAGS.has(o.name)
+    )
+      r.set(o.name, j);
   }
   return s.filter((e, o) => (r.get(e.name) ?? o) === o).flatMap((e) => e.toks);
 }
+//@ chunk-nwzhqrkg.js:6393-6621 placement
 /**
  * 若 --dangerously-skip-permissions 之后又出现 --permission-mode，则去掉前者（后者优先）。
  */
-//@ chunk-nwzhqrkg.js:6393-6621 placement
 function dropOverriddenSkipPermissions(n) {
   let index = n.lastIndexOf("--dangerously-skip-permissions");
   return index !== -1 &&
@@ -358,52 +389,67 @@ function dropOverriddenSkipPermissions(n) {
     ? n.filter((e) => e !== "--dangerously-skip-permissions")
     : [...n];
 }
+//@ chunk-nwzhqrkg.js:6621-6786 placement
 /**
  * 把 --dangerously-skip-permissions 移到参数列表末尾。
  */
-//@ chunk-nwzhqrkg.js:6621-6786 placement
 function moveSkipPermissionsLast(n) {
   return n.includes("--dangerously-skip-permissions")
     ? [...n.filter((s) => s !== "--dangerously-skip-permissions"), "--dangerously-skip-permissions"]
     : [...n];
 }
+//@ chunk-nwzhqrkg.js:6786-7714 placement
 /**
  * 去掉 argv 中已转发的标志（含 --flag=value 形式），保留 -- 之后的内容。
  */
-//@ chunk-nwzhqrkg.js:6786-7714 placement
 function stripForwardedFlags(n) {
   let s = [];
-  for (let r = 0; r < n.length; r++) {
-    let e = n[r];
+  for (let j = 0; j < n.length; j++) {
+    let e = n[j];
     if (e === "--") {
-      for (let a = r; a < n.length; a++) s.push(n[a]);
+      for (let a = j; a < n.length; a++) s.push(n[a]);
       break;
     }
     let o = e.startsWith("--") ? e.indexOf("=") : -1;
-    if (o !== -1 && (G2t.has(e.slice(0, o)) || c.has(e.slice(0, o)))) {
-      s.push(e.slice(0, o + 1) + u(e.slice(0, o), e.slice(o + 1)));
+    if (
+      o !== -1 &&
+      (BACKGROUND_FORWARDED_VALUE_FLAGS.has(e.slice(0, o)) || RESUME_VALUE_FLAGS.has(e.slice(0, o)))
+    ) {
+      s.push(e.slice(0, o + 1) + stripPathPrefixUnlessPrompt(e.slice(0, o), e.slice(o + 1)));
       continue;
     }
     if (/^-[a-zA-Z].+/.test(e)) {
       let a = 1;
-      while (a < e.length - 1 && lqr.has(`-${e[a]}`)) a++;
+      while (a < e.length - 1 && SINGLE_LETTER_FLAGS.has(`-${e[a]}`)) a++;
       let l = `-${e[a]}`;
-      if (e.length > a + 1 && (G2t.has(l) || c.has(l))) {
-        s.push(e.slice(0, a + 1) + u(l, e.slice(a + 1)));
+      if (e.length > a + 1 && (BACKGROUND_FORWARDED_VALUE_FLAGS.has(l) || RESUME_VALUE_FLAGS.has(l))) {
+        s.push(e.slice(0, a + 1) + stripPathPrefixUnlessPrompt(l, e.slice(a + 1)));
         continue;
       }
-      if (e.length === a + 1 && a > 1 && (G2t.has(l) || c.has(l))) {
-        if ((s.push(e), G2t.has(l) && n[r + 1] !== void 0)) {
-          if ((s.push(u(l, n[++r])), Evt.has(l)))
-            while (n[r + 1] !== void 0 && !E(n[r + 1])) s.push(u(l, n[++r]));
-        } else if (c.has(l) && n[r + 1] !== void 0 && !E(n[r + 1])) s.push(stripLongPathPrefixes(n[++r]));
+      if (
+        e.length === a + 1 &&
+        a > 1 &&
+        (BACKGROUND_FORWARDED_VALUE_FLAGS.has(l) || RESUME_VALUE_FLAGS.has(l))
+      ) {
+        s.push(e);
+        if (BACKGROUND_FORWARDED_VALUE_FLAGS.has(l) && n[j + 1] !== undefined) {
+          s.push(stripPathPrefixUnlessPrompt(l, n[++j]));
+          if (VARIADIC_FORWARDED_FLAGS.has(l))
+            while (n[j + 1] !== undefined && !looksLikeFlag_2(n[j + 1]))
+              s.push(stripPathPrefixUnlessPrompt(l, n[++j]));
+        } else if (RESUME_VALUE_FLAGS.has(l) && n[j + 1] !== undefined && !looksLikeFlag_2(n[j + 1]))
+          s.push(stripLongPathPrefixes(n[++j]));
         continue;
       }
     }
-    if ((s.push(e), G2t.has(e) && n[r + 1] !== void 0)) {
-      if ((s.push(u(e, n[++r])), Evt.has(e)))
-        while (n[r + 1] !== void 0 && !E(n[r + 1])) s.push(u(e, n[++r]));
-    } else if (c.has(e) && n[r + 1] !== void 0 && !E(n[r + 1])) s.push(stripLongPathPrefixes(n[++r]));
+    s.push(e);
+    if (BACKGROUND_FORWARDED_VALUE_FLAGS.has(e) && n[j + 1] !== undefined) {
+      s.push(stripPathPrefixUnlessPrompt(e, n[++j]));
+      if (VARIADIC_FORWARDED_FLAGS.has(e))
+        while (n[j + 1] !== undefined && !looksLikeFlag_2(n[j + 1]))
+          s.push(stripPathPrefixUnlessPrompt(e, n[++j]));
+    } else if (RESUME_VALUE_FLAGS.has(e) && n[j + 1] !== undefined && !looksLikeFlag_2(n[j + 1]))
+      s.push(stripLongPathPrefixes(n[++j]));
   }
   return s;
 }
@@ -417,44 +463,46 @@ var PROMPT_TEXT_FLAGS = new Set([
   "-n",
 ]);
 //@ chunk-nwzhqrkg.js:7849-7889 placement
-function u(n, s) {
+function stripPathPrefixUnlessPrompt(n, s) {
   return PROMPT_TEXT_FLAGS.has(n) ? s : stripLongPathPrefixes(s);
 }
 //@ chunk-nwzhqrkg.js:7889-7957 placement
-var c = new Set(["-r", "--resume"]),
-  lqr = new Set(["-c", "-p", "-h", "-v"]);
+/**
+ * 转发参数解析用的标志集合：-r/--resume 为带值标志，-c/-p/-h/-v 为单字母标志。
+ */
+var RESUME_VALUE_FLAGS = new Set(["-r", "--resume"]);
+var SINGLE_LETTER_FLAGS = new Set(["-c", "-p", "-h", "-v"]);
 //@ chunk-nwzhqrkg.js:7957-8008 placement
-function E(n) {
+function looksLikeFlag_2(n) {
   return n.length > 1 && n.startsWith("-");
 }
+//@ chunk-nwzhqrkg.js:8008-8097 placement
 /**
  * 确保参数里带 --reply-on-resume。
  */
-//@ chunk-nwzhqrkg.js:8008-8097 placement
 function withReplyOnResume(n) {
   return n.includes("--reply-on-resume") ? [...n] : [...n, "--reply-on-resume"];
 }
+//@ chunk-nwzhqrkg.js:8097-8159 placement
 /**
  * 去掉参数里的 --reply-on-resume。
  */
-//@ chunk-nwzhqrkg.js:8097-8159 placement
-function withoutReplyOnResume(n) {
-  return n.filter((s) => s !== "--reply-on-resume");
+function withoutReplyOnResume(respawnFlags) {
+  return respawnFlags.filter((s) => s !== "--reply-on-resume");
 }
-
 export {
   splitForwardableArgs,
   stripForwardedFlags,
-  qKo,
+  SUBAGENT_MODEL_ENV_NAMES,
   withoutReplyOnResume,
   moveSkipPermissionsLast,
-  hyn,
+  BOOLEAN_FORWARDED_FLAGS,
   FORWARDED_VALUE_FLAGS,
-  lqr,
-  G2t,
-  Evt,
-  knt,
-  VKo,
+  SINGLE_LETTER_FLAGS,
+  BACKGROUND_FORWARDED_VALUE_FLAGS,
+  VARIADIC_FORWARDED_FLAGS,
+  BACKGROUND_ALLOWED_ENV_NAMES,
+  ENV_FORCE_PASSTHROUGH_NAMES,
   withReplyOnResume,
   keepForwardableEnv,
   dropOverriddenSkipPermissions,

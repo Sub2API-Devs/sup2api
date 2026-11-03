@@ -8,9 +8,10 @@
  * pieces: chunk-6xf45py0.js (1)
  * attribution: placement 1
  */
-
 //@ chunk-6xf45py0.js:191-246 placement
-var jun = 65536,
-  Wun = "claude native binary not installed";
-
-export { Wun, jun };
+/**
+ * 探测原生二进制时的最大读取字节数，以及"未安装"提示文本。
+ */
+var MAX_BINARY_PROBE_BYTES = 65536;
+var NATIVE_BINARY_MISSING_TEXT = "claude native binary not installed";
+export { NATIVE_BINARY_MISSING_TEXT, MAX_BINARY_PROBE_BYTES };

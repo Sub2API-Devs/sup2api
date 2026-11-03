@@ -10,25 +10,33 @@
  */
 
 //@ chunk-y6209p35.js:191-201 placement
-var yce = 8;
+/**
+ * 导出值：MAX_VISIBLE_ITEMS（8：列表/应用数超过该值即折叠）。
+ */
+var MAX_VISIBLE_ITEMS = 8;
+//@ chunk-y6209p35.js:201-329 placement
 /**
  * 按显示宽度把字符序列切分成多行。
  */
-//@ chunk-y6209p35.js:201-329 placement
 function wrapByWidth(o, u) {
-  let e = [],
-    n = "",
-    t = 0;
+  let e = [];
+  let n = "";
+  let t = 0;
   for (let r of o) {
-    let s = l(r);
-    if (t + s > u && n !== "") (e.push(n), (n = ""), (t = 0));
-    ((n += r), (t += s));
+    let s = charWidth(r);
+    if (t + s > u && n !== "") {
+      e.push(n);
+      n = "";
+      t = 0;
+    }
+    n += r;
+    t += s;
   }
-  return (e.push(n), e);
+  e.push(n);
+  return e;
 }
 //@ chunk-y6209p35.js:329-377 placement
-function l(o) {
+function charWidth(o) {
   return o.length === 1 && o < "\x80" ? 1 : 2;
 }
-
-export { yce, wrapByWidth };
+export { MAX_VISIBLE_ITEMS, wrapByWidth };

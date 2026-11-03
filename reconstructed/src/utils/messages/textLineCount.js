@@ -10,40 +10,42 @@
  */
 
 //@ chunk-rmf8afvh.js:191-202 placement
-var WCt = 10;
+/**
+ * 行数阈值（10 行）。
+ */
+var MAX_LINES_THRESHOLD = 10;
+//@ chunk-rmf8afvh.js:202-450 placement
 /**
  * 判断内容是否超过 10 行：字符串直接数换行；内容块数组中每块至少算一行，文本块再加上其中的换行。
  */
-//@ chunk-rmf8afvh.js:202-450 placement
-function exceedsTenLines(e) {
-  if (typeof e === "string") return s(e, 9);
-  if (!Array.isArray(e)) return !1;
+function exceedsTenLines(content) {
+  if (typeof content === "string") return exceedsLineCount(content, 9);
+  if (!Array.isArray(content)) return false;
   let t = 0;
-  for (let r of e) {
-    if (((t += 1), t > 10)) return !0;
+  for (let r of content) {
+    t += 1;
+    if (t > 10) return true;
     if (!isTextBlock(r)) continue;
-    let text = r.text,
-      o = 0;
+    let text = r.text;
+    let o = 0;
     while (t <= 10) {
-      if (
-        ((o = text.indexOf(
-          `
+      o = text.indexOf(
+        `
 `,
-          o,
-        )),
-        o === -1)
-      )
-        break;
-      (o++, t++);
+        o,
+      );
+      if (o === -1) break;
+      o++;
+      t++;
     }
-    if (t > 10) return !0;
+    if (t > 10) return true;
   }
-  return !1;
+  return false;
 }
+//@ chunk-rmf8afvh.js:450-570 placement = extractErrorTypeFromData (1)
 /**
  * 是否为文本块。
  */
-//@ chunk-rmf8afvh.js:450-570 placement = extractErrorTypeFromData (1)
 function isTextBlock(data) {
   return (
     typeof data === "object" &&
@@ -55,21 +57,17 @@ function isTextBlock(data) {
   );
 }
 //@ chunk-rmf8afvh.js:570-667 placement
-function s(e, t) {
+function exceedsLineCount(e, t) {
   let r = 0;
-  for (let n = 0; n <= t; n++) {
-    if (
-      ((r = e.indexOf(
-        `
+  for (let i = 0; i <= t; i++) {
+    r = e.indexOf(
+      `
 `,
-        r,
-      )),
-      r === -1)
-    )
-      return !1;
+      r,
+    );
+    if (r === -1) return false;
     r++;
   }
-  return !0;
+  return true;
 }
-
-export { exceedsTenLines, isTextBlock, WCt };
+export { exceedsTenLines, isTextBlock, MAX_LINES_THRESHOLD };

@@ -15,10 +15,9 @@ function selectTeamContext(s) {
   return s.teamContext;
 }
 //@ chunk-ay9hyszk.js:1490-1564 fingerprint = _temp2 (1)
-function y(t) {
-  if (!(t || getTeamName())) return !1;
-  let n = getAgentId();
-  return !n || n === "team-lead";
+function isTeamLeadDefault(t) {
+  if (!(t || getTeamName())) return false;
+  let agentId = getAgentId();
+  return !agentId || agentId === "team-lead";
 }
-
-export { selectTeamContext, y };
+export { selectTeamContext, isTeamLeadDefault };

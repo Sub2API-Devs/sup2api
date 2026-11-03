@@ -12,16 +12,16 @@ import { isBridgeProjectsHintEnabled } from "./bridgeGates.js";
 
 //@ chunk-6w5h3e35.js:228-239 placement
 var SPAWN_SESSIONS_DEFAULT = 32;
+//@ chunk-6w5h3e35.js:239-4907 placement = printHelp (0.37)
 /**
  * 打印 claude remote-control 的帮助。
  */
-//@ chunk-6w5h3e35.js:239-4907 placement = printHelp (0.37)
 async function printRemoteControlHelp() {
-  let { EXTERNAL_PERMISSION_MODES: EXTERNAL_PERMISSION_MODES } = await import("./chunk-k6t7e4cb.js"),
-    modes = EXTERNAL_PERMISSION_MODES.join(", "),
-    { isViolinWoodEnabledCached: isViolinWoodEnabledCached } = await import("./chunk-m288yvvf.js"),
-    e = isViolinWoodEnabledCached(),
-    help = `
+  let { EXTERNAL_PERMISSION_MODES } = await import("./chunk-k6t7e4cb.js");
+  let modes = EXTERNAL_PERMISSION_MODES.join(", ");
+  let { isViolinWoodEnabledCached } = await import("./chunk-m288yvvf.js");
+  let e = isViolinWoodEnabledCached();
+  let help = `
 Remote Control - Control local sessions from claude.ai/code or the Claude mobile app
 
 USAGE
@@ -111,5 +111,4 @@ NOTES
 `;
   console.log(help);
 }
-
 export { printRemoteControlHelp, SPAWN_SESSIONS_DEFAULT };

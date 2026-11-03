@@ -11,12 +11,11 @@
 import { logOTelEvent, redactIfDisabled_2 } from "./events.js";
 
 //@ chunk-b5rfb1p7.js:303-402 placement
-function logUserPromptEvent(t, r) {
+function logUserPromptEvent(t, content) {
   logOTelEvent("user_prompt", {
-    prompt_length: String(r?.length ?? 0),
-    ...redactIfDisabled_2(r),
+    prompt_length: String(content?.length ?? 0),
+    ...redactIfDisabled_2(content),
     ...t.attributes,
   });
 }
-
 export { logUserPromptEvent };

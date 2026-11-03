@@ -5,23 +5,27 @@
  * pieces: chunk-mrx6y2r5.js (1)
  * attribution: esm-fingerprint 1
  */
-import { ya } from "../../../core-rest-pipeline/dist/esm/createPipelineFromOptions.js";
-import { Zn } from "../../../core-rest-pipeline/dist/esm/policies/bearerTokenAuthenticationPolicy.js";
-import { bd } from "../index.js";
-import { vd } from "./deserializationPolicy.js";
+import { createPipelineFromOptions } from "../../../core-rest-pipeline/dist/esm/createPipelineFromOptions.js";
+import { bearerTokenAuthenticationPolicy } from "../../../core-rest-pipeline/dist/esm/policies/bearerTokenAuthenticationPolicy.js";
+import { serializationPolicy } from "../index.js";
+import { deserializationPolicy } from "./deserializationPolicy.js";
 
 //@ chunk-mrx6y2r5.js:76618-76933 esm-fingerprint
-function Pd(e = {}) {
-  let t = ya(e !== null && e !== void 0 ? e : {});
-  if (e.credentialOptions)
-    t.addPolicy(
-      Zn({ credential: e.credentialOptions.credential, scopes: e.credentialOptions.credentialScopes }),
+function createClientPipeline(options = {}) {
+  let pipeline = createPipelineFromOptions(options !== null && options !== undefined ? options : {});
+  if (options.credentialOptions)
+    pipeline.addPolicy(
+      bearerTokenAuthenticationPolicy({
+        credential: options.credentialOptions.credential,
+        scopes: options.credentialOptions.credentialScopes,
+      }),
     );
-  return (
-    t.addPolicy(bd(e.serializationOptions), { phase: "Serialize" }),
-    t.addPolicy(vd(e.deserializationOptions), { phase: "Deserialize" }),
-    t
-  );
+  pipeline.addPolicy(serializationPolicy(options.serializationOptions), {
+    phase: "Serialize",
+  });
+  pipeline.addPolicy(deserializationPolicy(options.deserializationOptions), {
+    phase: "Deserialize",
+  });
+  return pipeline;
 }
-
-export { Pd };
+export { createClientPipeline };

@@ -8,24 +8,41 @@
 import { x } from "../../../../../../runtime/bun-runtime.js";
 
 //@ chunk-1r4fv9mg.js:10855-11392 cjs-fingerprint
-var xe = x(function (Or, Tt) {
-  Tt.exports = {
+var require_meta_data = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = {
     $schema: "https://json-schema.org/draft/2020-12/schema",
     $id: "https://json-schema.org/draft/2020-12/meta/meta-data",
-    $vocabulary: { "https://json-schema.org/draft/2020-12/vocab/meta-data": !0 },
+    $vocabulary: {
+      "https://json-schema.org/draft/2020-12/vocab/meta-data": true,
+    },
     $dynamicAnchor: "meta",
     title: "Meta-data vocabulary meta-schema",
     type: ["object", "boolean"],
     properties: {
-      title: { type: "string" },
-      description: { type: "string" },
-      default: !0,
-      deprecated: { type: "boolean", default: !1 },
-      readOnly: { type: "boolean", default: !1 },
-      writeOnly: { type: "boolean", default: !1 },
-      examples: { type: "array", items: !0 },
+      title: {
+        type: "string",
+      },
+      description: {
+        type: "string",
+      },
+      default: true,
+      deprecated: {
+        type: "boolean",
+        default: false,
+      },
+      readOnly: {
+        type: "boolean",
+        default: false,
+      },
+      writeOnly: {
+        type: "boolean",
+        default: false,
+      },
+      examples: {
+        type: "array",
+        items: true,
+      },
     },
   };
 });
-
-export { xe };
+export { require_meta_data };

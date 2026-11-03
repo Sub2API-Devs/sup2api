@@ -15,14 +15,22 @@ import { logForDebugging } from "../../utils/debug.js";
 import { errorMessage } from "../../utils/errors.js";
 
 //@ chunk-y5dttnq0.js:368-650 placement
-async function markManagedSettingsNoticeSeen(o, r, n) {
+async function markManagedSettingsNoticeSeen(o, r, storageV5) {
   try {
     await Promise.all([
       saveGlobalConfig(
-        (e) => (e.managedSettingsNoticeSeenOrg === o ? e : { ...e, managedSettingsNoticeSeenOrg: o }),
-        n,
+        (e) =>
+          e.managedSettingsNoticeSeenOrg === o
+            ? e
+            : {
+                ...e,
+                managedSettingsNoticeSeenOrg: o,
+              },
+        storageV5,
       ),
-      logFeatureOkAsync("remote_managed_settings_login_notice", { surface: fromEnum(r) }),
+      logFeatureOkAsync("remote_managed_settings_login_notice", {
+        surface: fromEnum(r),
+      }),
     ]);
   } catch (error) {
     logForDebugging(`managed settings notice: not recorded as shown: ${errorMessage(error)}`, {
@@ -30,5 +38,4 @@ async function markManagedSettingsNoticeSeen(o, r, n) {
     });
   }
 }
-
 export { markManagedSettingsNoticeSeen };

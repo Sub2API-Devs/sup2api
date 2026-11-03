@@ -9,15 +9,17 @@
  * attribution: placement 2
  */
 
+//@ chunk-8djvzp0d.js:313-416 placement
 /**
  * macOS 未安装 git 的提示。
  */
-//@ chunk-8djvzp0d.js:313-416 placement
 var GIT_MISSING_MAC_MESSAGE =
   "git is not installed on this Mac. To install it, run xcode-select --install, then try again.";
 //@ chunk-8djvzp0d.js:416-443 placement
-function fje(n, e) {
-  return !1;
+/**
+ * 判断当前平台是否需要"未安装 git"的提示（此构建恒为 false）。
+ */
+function isGitMissingMessageSupported(n, env) {
+  return false;
 }
-
-export { fje, GIT_MISSING_MAC_MESSAGE };
+export { isGitMissingMessageSupported, GIT_MISSING_MAC_MESSAGE };

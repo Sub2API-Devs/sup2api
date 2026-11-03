@@ -8,24 +8,31 @@
  * pieces: chunk-1wpnxx5r.js (3)
  * attribution: placement 3
  */
-import { E, ALLOWED_API_HOSTS } from "../../utils/model/providers.js";
+import { jsonStringify, ALLOWED_API_HOSTS } from "../../utils/model/providers.js";
 import { getCcrSessionUrl } from "../../bootstrap/state.js";
 import { eagerParseCliFlagAll } from "../../utils/cliArgs.js";
 
 //@ chunk-1wpnxx5r.js:952-1395 placement
-function validateSdkUrlFlag(e) {
-  let r = resolveSdkUrl();
-  if (!e) {
-    if (r.status === "absent") return null;
-    return r.status === "rejected"
-      ? { code: r.code, reason: r.reason }
+function validateSdkUrlFlag(sdkUrl) {
+  let sdkUrl_2 = resolveSdkUrl();
+  if (!sdkUrl) {
+    if (sdkUrl_2.status === "absent") return null;
+    return sdkUrl_2.status === "rejected"
+      ? {
+          code: sdkUrl_2.code,
+          reason: sdkUrl_2.reason,
+        }
       : {
           code: "view_mismatch",
           reason: "the eager argv scan sees a --sdk-url value commander did not bind",
         };
   }
-  if (r.status === "rejected") return { code: r.code, reason: r.reason };
-  if (r.status === "absent" || r.url !== e)
+  if (sdkUrl_2.status === "rejected")
+    return {
+      code: sdkUrl_2.code,
+      reason: sdkUrl_2.reason,
+    };
+  if (sdkUrl_2.status === "absent" || sdkUrl_2.url !== sdkUrl)
     return {
       code: "view_mismatch",
       reason: "the --sdk-url value commander bound disagrees with the eager argv scan",
@@ -38,30 +45,53 @@ function checkSdkUrl(e) {
   try {
     r = new URL(e);
   } catch {
-    return { code: "unparseable", reason: `could not parse ${E(e)} as a URL` };
+    return {
+      code: "unparseable",
+      reason: `could not parse ${jsonStringify(e)} as a URL`,
+    };
   }
   if (ALLOWED_API_HOSTS.has(r.hostname)) {
     if (r.protocol !== "wss:" && r.protocol !== "https:")
       return {
         code: "bad_scheme",
-        reason: `scheme ${E(r.protocol)} is not permitted for host ${E(r.hostname)}; only wss:// and https:// are accepted`,
+        reason: `scheme ${jsonStringify(r.protocol)} is not permitted for host ${jsonStringify(r.hostname)}; only wss:// and https:// are accepted`,
       };
     return null;
   }
-  return { code: "not_allowlisted", reason: `host ${E(r.hostname)} is not an approved Anthropic endpoint` };
+  return {
+    code: "not_allowlisted",
+    reason: `host ${jsonStringify(r.hostname)} is not an approved Anthropic endpoint`,
+  };
 }
 //@ chunk-1wpnxx5r.js:1831-2162 placement
 function resolveSdkUrl() {
-  let e = getCcrSessionUrl();
-  if (e !== void 0) return { status: "ok", url: e };
-  let r = eagerParseCliFlagAll("--sdk-url"),
-    at = r.filter(Boolean).at(-1);
-  if (!at) return { status: "absent" };
+  let ccrSessionUrl = getCcrSessionUrl();
+  if (ccrSessionUrl !== undefined)
+    return {
+      status: "ok",
+      url: ccrSessionUrl,
+    };
+  let r = eagerParseCliFlagAll("--sdk-url");
+  let last = r.filter(Boolean).at(-1);
+  if (!last)
+    return {
+      status: "absent",
+    };
   if (new Set(r).size > 1)
-    return { status: "rejected", code: "conflicting", reason: "conflicting --sdk-url occurrences" };
-  let t = checkSdkUrl(at);
-  if (t) return { status: "rejected", ...t };
-  return { status: "ok", url: at };
+    return {
+      status: "rejected",
+      code: "conflicting",
+      reason: "conflicting --sdk-url occurrences",
+    };
+  let t = checkSdkUrl(last);
+  if (t)
+    return {
+      status: "rejected",
+      ...t,
+    };
+  return {
+    status: "ok",
+    url: last,
+  };
 }
-
 export { resolveSdkUrl, validateSdkUrlFlag, checkSdkUrl };

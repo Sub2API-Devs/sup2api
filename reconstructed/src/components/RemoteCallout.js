@@ -10,38 +10,41 @@
  */
 import { w } from "../../vendor/react/compiler-runtime.js";
 import { useConfirmArmed } from "./design-system/ConfirmSelect.js";
-import { So } from "../hooks/useRecentInputGuard.js";
+import { RECENT_INPUT_GUARD_MS as RECENT_INPUT_GUARD_MS_3 } from "../hooks/useRecentInputGuard.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
-import { r, e } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default_2,
+  jsxProd_default,
+} from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Box, Text } from "../ink/components/Text.js";
 import { PermissionDialog_2 } from "./permissions/PermissionDialog.js";
 import { ModelSelector } from "./agents/ModelSelector.js";
 import { getGlobalConfig } from "../utils/config.js";
 import { withHideWhile } from "./dialogs/dialogRequests.js";
 import { DoctorLazy } from "../cli/handlers/util.js";
-import { u, U } from "../../vendor/zod/v4/classic/schemas.js";
+import { u, _enum } from "../../vendor/zod/v4/classic/schemas.js";
 
 //@ chunk-18hwfzwa.js:1195547-1196852 fingerprint = RemoteCallout (0.769)
-function RemoteCallout(h) {
-  let $ = w(12),
-    { onDone: onDone, defaultFocusValue: defaultFocusValue } = h,
-    L = useConfirmArmed(So),
-    ke;
-  if ($[0] !== L || $[1] !== onDone)
-    ((ke = function Be(current) {
-      if (!L) {
+function RemoteCallout(props) {
+  let $ = w(12);
+  let { onDone, defaultFocusValue } = props;
+  let confirmArmed = useConfirmArmed(RECENT_INPUT_GUARD_MS_3);
+  let ke;
+  if ($[0] !== confirmArmed || $[1] !== onDone) {
+    ke = function Be(current) {
+      if (!confirmArmed) {
         return;
       }
       onDone(current);
-    }),
-      ($[0] = L),
-      ($[1] = onDone),
-      ($[2] = ke));
-  else ke = $[2];
-  let Be = ke,
-    He;
-  if ($[3] === MEMO_CACHE_SENTINEL)
-    ((He = [
+    };
+    $[0] = confirmArmed;
+    $[1] = onDone;
+    $[2] = ke;
+  } else ke = $[2];
+  let Be = ke;
+  let He;
+  if ($[3] === MEMO_CACHE_SENTINEL) {
+    He = [
       {
         label: "Enable Remote Control",
         description: "Opens a secure connection to claude.ai.",
@@ -52,77 +55,81 @@ function RemoteCallout(h) {
         description: "You can always enable it later with /remote-control.",
         value: "dismiss",
       },
-    ]),
-      ($[3] = He));
-  else He = $[3];
-  let We = He,
-    ze;
-  if ($[4] === MEMO_CACHE_SENTINEL)
-    ((ze = r(Box, {
+    ];
+    $[3] = He;
+  } else He = $[3];
+  let options = He;
+  let ze;
+  if ($[4] === MEMO_CACHE_SENTINEL) {
+    ze = jsxProd_default_2(Box, {
       marginBottom: 1,
       flexDirection: "column",
       children: [
-        e(Text, {
+        jsxProd_default(Text, {
           children:
             "Take this session with you and pick up right where you left off on any device. Open the Code tab in the Claude mobile app, or visit claude.ai/code in a browser.",
         }),
-        e(Text, { children: " " }),
-        e(Text, {
+        jsxProd_default(Text, {
+          children: " ",
+        }),
+        jsxProd_default(Text, {
           children:
             "The session keeps running on this machine. Use your other devices as a remote control. Disconnect anytime with /remote-control.",
         }),
       ],
-    })),
-      ($[4] = ze));
-  else ze = $[4];
-  const Xe = !L;
-  let rt;
-  if ($[5] !== Be) ((rt = () => Be("dismiss")), ($[5] = Be), ($[6] = rt));
-  else rt = $[6];
+    });
+    $[4] = ze;
+  } else ze = $[4];
+  const isDisabled = !confirmArmed;
+  let onCancel;
+  if ($[5] !== Be) {
+    onCancel = () => Be("dismiss");
+    $[5] = Be;
+    $[6] = onCancel;
+  } else onCancel = $[6];
   let kt;
-  if ($[7] !== defaultFocusValue || $[8] !== Be || $[9] !== Xe || $[10] !== rt)
-    ((kt = e(PermissionDialog_2, {
+  if ($[7] !== defaultFocusValue || $[8] !== Be || $[9] !== isDisabled || $[10] !== onCancel) {
+    kt = jsxProd_default(PermissionDialog_2, {
       title: "Remote Control",
-      children: r(Box, {
+      children: jsxProd_default_2(Box, {
         flexDirection: "column",
         paddingX: 2,
         paddingY: 1,
         children: [
           ze,
-          e(Box, {
-            children: e(ModelSelector, {
-              defaultFocusValue: defaultFocusValue,
-              options: We,
-              isDisabled: Xe,
+          jsxProd_default(Box, {
+            children: jsxProd_default(ModelSelector, {
+              defaultFocusValue,
+              options,
+              isDisabled,
               onChange: Be,
-              onCancel: rt,
+              onCancel,
             }),
           }),
         ],
       }),
-    })),
-      ($[7] = defaultFocusValue),
-      ($[8] = Be),
-      ($[9] = Xe),
-      ($[10] = rt),
-      ($[11] = kt));
-  else kt = $[11];
+    });
+    $[7] = defaultFocusValue;
+    $[8] = Be;
+    $[9] = isDisabled;
+    $[10] = onCancel;
+    $[11] = kt;
+  } else kt = $[11];
   return kt;
 }
 //@ chunk-18hwfzwa.js:1196852-1196896 fingerprint = shouldShowRemoteCallout (0.779)
 function shouldShowRemoteCallout() {
   return !getGlobalConfig().remoteDialogSeen;
 }
+//@ chunk-drvxna8v.js:299-453 placement
 /**
  * Remote Control 首次提示对话框的定义（结果 enable/dismiss/cancelled，面板或草稿打开时隐藏）。
  */
-//@ chunk-drvxna8v.js:299-453 placement
 var REMOTE_CALLOUT_DIALOG = withHideWhile({
   kind: "remote_callout",
   payload: DoctorLazy(() => u({})),
-  result: DoctorLazy(() => U(["enable", "dismiss", "cancelled"])),
+  result: DoctorLazy(() => _enum(["enable", "dismiss", "cancelled"])),
   default: "cancelled",
   hideWhile: ["panel", "draft"],
 });
-
 export { REMOTE_CALLOUT_DIALOG, shouldShowRemoteCallout, RemoteCallout };

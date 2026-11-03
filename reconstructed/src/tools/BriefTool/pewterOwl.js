@@ -16,34 +16,33 @@ import { getCanonicalName } from "../../utils/model/canonicalModelName.js";
 import { getMainLoopModel } from "../../utils/model/model.js";
 
 //@ chunk-gt4x42hj.js:306-424 placement
-function getPewterOwlModel(t) {
-  let e = t?.pewter_owl_model;
-  if (typeof e === "string" && e !== "") return e;
+function getPewterOwlModel(cachedClientData) {
+  let pewterOwlModel = cachedClientData?.pewter_owl_model;
+  if (typeof pewterOwlModel === "string" && pewterOwlModel !== "") return pewterOwlModel;
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_pewter_owl_model", "");
 }
+//@ chunk-gt4x42hj.js:424-623 placement
 /**
  * pewter_owl 开关（环境变量、模型、GrowthBook）
  */
-//@ chunk-gt4x42hj.js:424-623 placement
 function isPewterOwlEnabled(t) {
-  if (env.CLAUDE_CODE_PEWTER_OWL !== void 0) return env.CLAUDE_CODE_PEWTER_OWL;
-  if (getIsNonInteractiveSession()) return !1;
-  let e = getCachedClientData(),
-    r = getPewterOwlModel(e);
-  if (r !== "" && !getCanonicalName(getMainLoopModel()).includes(r)) return !1;
-  return getFeatureValue_CACHED_MAY_BE_STALE(`tengu_${t}`, !1) || e?.[t] === !0;
+  if (env.CLAUDE_CODE_PEWTER_OWL !== undefined) return env.CLAUDE_CODE_PEWTER_OWL;
+  if (getIsNonInteractiveSession()) return false;
+  let cachedClientData = getCachedClientData();
+  let pewterOwlModel = getPewterOwlModel(cachedClientData);
+  if (pewterOwlModel !== "" && !getCanonicalName(getMainLoopModel()).includes(pewterOwlModel)) return false;
+  return getFeatureValue_CACHED_MAY_BE_STALE(`tengu_${t}`, false) || cachedClientData?.[t] === true;
 }
+//@ chunk-gt4x42hj.js:623-745 placement
 /**
  * pewter_owl 工具开关。
  */
-//@ chunk-gt4x42hj.js:623-745 placement
 function isPewterOwlTool() {
-  if (env.CLAUDE_CODE_PEWTER_OWL_TOOL !== void 0) return env.CLAUDE_CODE_PEWTER_OWL_TOOL;
+  if (env.CLAUDE_CODE_PEWTER_OWL_TOOL !== undefined) return env.CLAUDE_CODE_PEWTER_OWL_TOOL;
   return isPewterOwlEnabled("pewter_owl_tool");
 }
 //@ chunk-gt4x42hj.js:745-789 placement
 function isPewterOwlBrief() {
   return isPewterOwlEnabled("pewter_owl_brief");
 }
-
 export { isPewterOwlTool, isPewterOwlBrief };

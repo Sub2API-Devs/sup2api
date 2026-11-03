@@ -5,17 +5,20 @@
  * pieces: chunk-fq0cr76a.js (1)
  * attribution: esm-fingerprint 1
  */
-import { spawnSync, spawnSync as spawnSync_2, spawnSync as spawnSync_3 } from "child_process";
+import { spawnSync } from "child_process";
 
+//@ chunk-fq0cr76a.js:718503-718725 esm-fingerprint
 /**
  * 同步查找 node 可执行文件路径。
  */
-//@ chunk-fq0cr76a.js:718503-718725 esm-fingerprint
-function ha(e) {
-  if (typeof globalThis.Bun < "u") return globalThis.Bun.which(e);
-  let n = spawnSync("which", [e], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], timeout: 1000 });
-  if (n.status === 0 && n.stdout) return n.stdout.trim();
+function whichSync(bin) {
+  if (typeof globalThis.Bun !== "undefined") return globalThis.Bun.which(bin);
+  let result = spawnSync("which", [bin], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"],
+    timeout: 1000,
+  });
+  if (result.status === 0 && result.stdout) return result.stdout.trim();
   return null;
 }
-
-export { ha };
+export { whichSync };

@@ -9,9 +9,15 @@
  * attribution: placement 2
  */
 import __cc_resource_0 from "../../../../assets/story-imports.mjs-c9db5303.txt.zst" with { type: "file" };
-import { Et } from "../../../utils/embeddedAssets.js";
+import { readEmbeddedTextSync } from "../../../utils/embeddedAssets.js";
 
 //@ chunk-5265f3tr.js:316-338 placement
-var r = __cc_resource_0;
+/**
+ * 内嵌资源
+ */
+var STORY_IMPORTS_RESOURCE = __cc_resource_0;
 //@ chunk-5265f3tr.js:338-370 placement
-var S = Et(r, import.meta.dirname);
+/**
+ * 读取资源文本
+ */
+var storyImportsText = readEmbeddedTextSync(STORY_IMPORTS_RESOURCE, import.meta.dirname);

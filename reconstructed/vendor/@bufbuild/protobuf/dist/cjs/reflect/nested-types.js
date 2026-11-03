@@ -8,61 +8,76 @@
 import { x } from "../../../../../../runtime/bun-runtime.js";
 
 //@ chunk-fq0cr76a.js:322426-323372 cjs-require-graph
-var Ux = x(function (wN) {
-  Object.defineProperty(wN, "__esModule", { value: !0 });
-  wN.nestedTypes = Bx;
-  wN.usedTypes = ej;
-  wN.parentTypes = tj;
-  function* Bx(e) {
-    switch (e.kind) {
+var require_nested_types = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.nestedTypes = nestedTypes;
+  cjsExports.usedTypes = usedTypes;
+  cjsExports.parentTypes = parentTypes;
+  function* nestedTypes(desc) {
+    switch (desc.kind) {
       case "file":
-        for (let message of e.messages) (yield message, yield* Bx(message));
-        (yield* e.enums, yield* e.services, yield* e.extensions);
+        for (let message of desc.messages) {
+          yield message;
+          yield* nestedTypes(message);
+        }
+        yield* desc.enums;
+        yield* desc.services;
+        yield* desc.extensions;
         break;
       case "message":
-        for (let nestedMessage of e.nestedMessages) (yield nestedMessage, yield* Bx(nestedMessage));
-        (yield* e.nestedEnums, yield* e.nestedExtensions);
+        for (let message of desc.nestedMessages) {
+          yield message;
+          yield* nestedTypes(message);
+        }
+        yield* desc.nestedEnums;
+        yield* desc.nestedExtensions;
         break;
     }
   }
-  function ej(e) {
-    return vN(e, new Set());
+  function usedTypes(descMessage) {
+    return usedTypesInternal(descMessage, new Set());
   }
-  function* vN(e, n) {
-    var r, s;
-    for (let field of e.fields) {
-      let y =
-        (s = (r = field.enum) !== null && r !== void 0 ? r : field.message) !== null && s !== void 0
-          ? s
-          : void 0;
-      if (!y || n.has(y.typeName)) continue;
-      if ((n.add(y.typeName), yield y, y.kind == "message")) yield* vN(y, n);
+  function* usedTypesInternal(descMessage, seen) {
+    var _a;
+    var _b;
+    for (let field of descMessage.fields) {
+      let ref =
+        (_b = (_a = field.enum) !== null && _a !== undefined ? _a : field.message) !== null &&
+        _b !== undefined
+          ? _b
+          : undefined;
+      if (!ref || seen.has(ref.typeName)) continue;
+      seen.add(ref.typeName);
+      yield ref;
+      if (ref.kind == "message") yield* usedTypesInternal(ref, seen);
     }
   }
-  function tj(e) {
-    let n = [];
-    while (e.kind !== "file") {
-      let r = nj(e);
-      ((e = r), n.push(r));
+  function parentTypes(desc) {
+    let parents = [];
+    while (desc.kind !== "file") {
+      let p = parent(desc);
+      desc = p;
+      parents.push(p);
     }
-    return n;
+    return parents;
   }
-  function nj(e) {
-    var n;
-    switch (e.kind) {
+  function parent(desc) {
+    var _a;
+    switch (desc.kind) {
       case "enum_value":
       case "field":
       case "oneof":
       case "rpc":
-        return e.parent;
+        return desc.parent;
       case "service":
-        return e.file;
+        return desc.file;
       case "extension":
       case "enum":
       case "message":
-        return (n = e.parent) !== null && n !== void 0 ? n : e.file;
+        return (_a = desc.parent) !== null && _a !== undefined ? _a : desc.file;
     }
   }
 });
-
-export { Ux };
+export { require_nested_types };

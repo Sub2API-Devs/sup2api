@@ -8,18 +8,18 @@
  * pieces: chunk-qvp68pt5.js (63)
  * attribution: placement 63
  */
-import { stripNonPrintable, wrapLongLines, X1e } from "../truncateGraphemes.js";
+import { stripNonPrintable, wrapLongLines, GRAPHEME_TRUNCATION_MARKER_RE } from "../truncateGraphemes.js";
 import { truncateToLength, getFirstLine } from "../stringUtils.js";
 import { bunStringWidth } from "../../ink/stringWidth.js";
 import { truncateToWidth, truncate } from "../format.js";
 import { jsonStringify } from "../slowOperations.js";
-import { y3e, ple, Yls } from "../deepFreezePlainData.js";
+import { INVALID_TOOL_NAME_TEXT, identityFreeze, identityFreeze2 } from "../deepFreezePlainData.js";
 
 //@ chunk-qvp68pt5.js:429-483 placement
-var w = /\p{Default_Ignorable_Code_Point}/u,
-  R = /\p{Cf}/u;
+var DEFAULT_IGNORABLE_CHAR_RE = /\p{Default_Ignorable_Code_Point}/u;
+var FORMAT_CHAR_RE = /\p{Cf}/u;
 //@ chunk-qvp68pt5.js:483-580 placement
-function T(n) {
+function isPreservedJoinerCodePoint(n) {
   return (
     (n >= 8204 && n <= 8207) ||
     n === 1564 ||
@@ -31,88 +31,94 @@ function T(n) {
 //@ chunk-qvp68pt5.js:580-699 placement
 function isUnsafeDisplayChar(n, t) {
   return (
-    w.test(n) ||
+    DEFAULT_IGNORABLE_CHAR_RE.test(n) ||
     n === "\u2028" ||
     n === "\u2029" ||
     n === "\u2800" ||
     (t >= 55296 && t <= 57343) ||
     t === 1109742 ||
-    R.test(n)
+    FORMAT_CHAR_RE.test(n)
   );
 }
+//@ chunk-qvp68pt5.js:699-776 placement
 /**
  * 是否含需要处理的显示字符。
  */
-//@ chunk-qvp68pt5.js:699-776 placement
 function hasDisplayUnsafeChar(n) {
-  for (let t of n) if (isUnsafeDisplayChar(t, t.codePointAt(0) ?? 0)) return !0;
-  return !1;
+  for (let t of n) if (isUnsafeDisplayChar(t, t.codePointAt(0) ?? 0)) return true;
+  return false;
 }
 //@ chunk-qvp68pt5.js:776-813 placement
-function M(n, t) {
-  return isUnsafeDisplayChar(n, t) && !T(t);
+function isReplacableUnsafeChar(n, t) {
+  return isUnsafeDisplayChar(n, t) && !isPreservedJoinerCodePoint(t);
 }
 //@ chunk-qvp68pt5.js:813-901 placement
-function b(n, t) {
+function replaceCharsByPredicate(n, t) {
   let e = "";
   for (let r of n) e += t(r, r.codePointAt(0) ?? 0) ? "\uFFFD" : r;
   return e;
 }
 //@ chunk-qvp68pt5.js:901-1103 placement
 function replaceUnsafeChars(n, t) {
-  let list = Array.from(n),
-    r = "";
-  for (let o = 0; o < list.length; o++) {
-    let i = list[o] ?? "";
+  let list = Array.from(n);
+  let r = "";
+  for (let j = 0; j < list.length; j++) {
+    let i = list[j] ?? "";
     r += t(
       i,
       i.codePointAt(0) ?? 0,
-      list[o - 1]?.codePointAt(0) ?? Number.NaN,
-      list[o + 1]?.codePointAt(0) ?? Number.NaN,
+      list[j - 1]?.codePointAt(0) ?? Number.NaN,
+      list[j + 1]?.codePointAt(0) ?? Number.NaN,
     )
       ? "\uFFFD"
       : i;
   }
   return r;
 }
+//@ chunk-qvp68pt5.js:1103-1136 placement
 /**
  * 去掉不安全显示字符。
  */
-//@ chunk-qvp68pt5.js:1103-1136 placement
 function stripUnsafeChars(n) {
-  return stripNonPrintable(b(n, M));
+  return stripNonPrintable(replaceCharsByPredicate(n, isReplacableUnsafeChar));
 }
 //@ chunk-qvp68pt5.js:1136-1167 placement
-function mat(n) {
-  return h(E(n));
+/**
+ * sanitizeForDisplay：逐字符清洗后的显示文本。
+ */
+function sanitizeForDisplay(n) {
+  return fixBrokenSequences(stripAllUnsafeDisplayChars(n));
 }
 //@ chunk-qvp68pt5.js:1167-1199 placement
-function E(n) {
-  return stripNonPrintable(b(n, isUnsafeDisplayChar));
+function stripAllUnsafeDisplayChars(n) {
+  return stripNonPrintable(replaceCharsByPredicate(n, isUnsafeDisplayChar));
 }
+//@ chunk-qvp68pt5.js:1199-1217 placement
 /**
  * 显示长度上限与主机名长度上限。
  */
-//@ chunk-qvp68pt5.js:1199-1217 placement
-var MAX_DISPLAY_UNITS = 2000,
-  F = 253;
+var MAX_DISPLAY_UNITS = 2000;
+var MAX_HOSTNAME_LENGTH = 253;
 //@ chunk-qvp68pt5.js:1217-1283 placement
-function Nur(n) {
-  return F + (n.endsWith(".") && !n.endsWith("..") ? 1 : 0);
+/**
+ * hostnameLengthAllowance：允许的主机名长度（末尾单个点加 1）。
+ */
+function hostnameLengthAllowance(n) {
+  return MAX_HOSTNAME_LENGTH + (n.endsWith(".") && !n.endsWith("..") ? 1 : 0);
 }
+//@ chunk-qvp68pt5.js:1283-1297 placement
 /**
  * 审批载荷序列化上限。
  */
-//@ chunk-qvp68pt5.js:1283-1297 placement
 var MAX_PAYLOAD_UNITS = 200000;
 //@ chunk-qvp68pt5.js:1297-1335 placement
-function D(n, t = MAX_DISPLAY_UNITS) {
-  return truncateToLength(n, t) === n;
+function fitsWithinUnits(n, maxUnits = MAX_DISPLAY_UNITS) {
+  return truncateToLength(n, maxUnits) === n;
 }
+//@ chunk-qvp68pt5.js:1335-1383 placement
 /**
  * 文本是否需要边栏显示（多行或过长）。
  */
-//@ chunk-qvp68pt5.js:1335-1383 placement
 function needsGutter(n) {
   return (
     n.includes(`
@@ -120,95 +126,110 @@ function needsGutter(n) {
   );
 }
 //@ chunk-qvp68pt5.js:1383-1465 placement
-function pAn(n) {
-  let t = truncateToLength(n, MAX_DISPLAY_UNITS),
-    replaced = t.replace(/\t/g, " ");
+/**
+ * truncateForDisplayText：截断到显示上限并补省略号。
+ */
+function truncateForDisplayText(n) {
+  let t = truncateToLength(n, MAX_DISPLAY_UNITS);
+  let replaced = t.replace(/\t/g, " ");
   return t === n ? replaced : `${replaced}\u2026`;
 }
 //@ chunk-qvp68pt5.js:1465-1551 placement
-function f(n) {
+function hasVisibleWidth(n) {
   return bunStringWidth(n.replace(/[\uFE0E\uFE0F\u180B-\u180F\u2800]/gu, "").trim()) > 0;
 }
 //@ chunk-qvp68pt5.js:1551-1613 placement
-function p(n) {
+function stripZeroWidthChars(n) {
   return Array.from(n)
-    .filter((t) => C(t))
+    .filter((t) => hasRenderedWidth(t))
     .join("");
 }
 //@ chunk-qvp68pt5.js:1613-1686 placement
-function C(n) {
+function hasRenderedWidth(n) {
   return bunStringWidth(n.replace(/[\uFE0E\uFE0F\u180B-\u180F]/gu, "")) > 0;
 }
 //@ chunk-qvp68pt5.js:1686-1705 placement
-var I = 8,
-  O = /\p{M}/u;
+var MAX_ZERO_WIDTH_RUN = 8;
+var COMBINING_MARK_RE = /\p{M}/u;
 //@ chunk-qvp68pt5.js:1705-1745 placement
-function Ons(n) {
-  return O.test(n) || !C(n);
+/**
+ * isCombiningOrZeroWidth：组合标记或无渲染宽度。
+ */
+function isCombiningOrZeroWidth(n) {
+  return COMBINING_MARK_RE.test(n) || !hasRenderedWidth(n);
 }
+//@ chunk-qvp68pt5.js:1745-1953 placement
 /**
  * 用替换字符标记残缺序列。
  */
-//@ chunk-qvp68pt5.js:1745-1953 placement
 function markBrokenSequences(n) {
-  let t = "",
-    e = 0,
-    r = !1;
+  let t = "";
+  let e = 0;
+  let r = false;
   for (let o of n) {
     if (
       o ===
       `
 `
     ) {
-      if (r) ((t += "\uFFFD"), (r = !1));
-      ((t += o), (e = 0));
+      if (r) {
+        t += "\uFFFD";
+        r = false;
+      }
+      t += o;
+      e = 0;
       continue;
     }
-    if (!Ons(o)) {
-      if (r) ((t += "\uFFFD"), (r = !1));
-      ((t += o), (e = 0));
+    if (!isCombiningOrZeroWidth(o)) {
+      if (r) {
+        t += "\uFFFD";
+        r = false;
+      }
+      t += o;
+      e = 0;
       continue;
     }
-    if (e < I) {
-      ((t += o), e++);
+    if (e < MAX_ZERO_WIDTH_RUN) {
+      t += o;
+      e++;
       continue;
     }
-    r = !0;
+    r = true;
   }
   return r ? `${t}\uFFFD` : t;
 }
 //@ chunk-qvp68pt5.js:1953-1984 placement
-function h(n) {
+function fixBrokenSequences(n) {
   return stripNonPrintable(markBrokenSequences(n));
 }
 //@ chunk-qvp68pt5.js:1984-2120 placement
 function trimToVisible(n) {
-  let list = Array.from(n),
-    e = 0,
-    r = list.length;
-  while (e < r && !f(list[e] ?? "")) e++;
-  while (r > e && !f(list[r - 1] ?? "")) r--;
+  let list = Array.from(n);
+  let e = 0;
+  let r = list.length;
+  while (e < r && !hasVisibleWidth(list[e] ?? "")) e++;
+  while (r > e && !hasVisibleWidth(list[r - 1] ?? "")) r--;
   return list.slice(e, r).join("");
 }
 //@ chunk-qvp68pt5.js:2120-2190 placement
-function m(n, t) {
+function firstOrLastVisibleChar(n, t) {
   let list = Array.from(trimToVisible(n));
   return t === "end" ? list.at(-1) : list[0];
 }
 //@ chunk-qvp68pt5.js:2190-2233 placement
-function A(n) {
-  return m(n, "end") === "\u2026";
+function endsWithEllipsis(n) {
+  return firstOrLastVisibleChar(n, "end") === "\u2026";
 }
+//@ chunk-qvp68pt5.js:2233-2403 placement
 /**
  * 去掉末尾的省略号（及其后的不可见字符），可连续多个。
  */
-//@ chunk-qvp68pt5.js:2233-2403 placement
 function stripTrailingEllipsis(n) {
-  let list = Array.from(n),
-    e = list.length;
+  let list = Array.from(n);
+  let e = list.length;
   for (;;) {
     let r = e;
-    while (r > 0 && !f(list[r - 1] ?? "")) r--;
+    while (r > 0 && !hasVisibleWidth(list[r - 1] ?? "")) r--;
     if (r > 0 && list[r - 1] === "\u2026") {
       e = r - 1;
       continue;
@@ -217,45 +238,49 @@ function stripTrailingEllipsis(n) {
   }
   return list.slice(0, e).join("");
 }
+//@ chunk-qvp68pt5.js:2403-2563 placement
 /**
  * 文本是否干净（无替换字符）。
  */
-//@ chunk-qvp68pt5.js:2403-2563 placement
 function isCleanText(n) {
-  let t = [],
-    e = !1;
+  let t = [];
+  let e = false;
   for (let r of Array.from(n)) {
     if (
       r !==
         `
 ` &&
-      !f(r)
+      !hasVisibleWidth(r)
     ) {
-      e = !0;
+      e = true;
       continue;
     }
     if (r === "\uFFFD" && e) {
-      e = !1;
+      e = false;
       continue;
     }
-    ((e = !1), t.push(r));
+    e = false;
+    t.push(r);
   }
-  return f(t.join(""));
+  return hasVisibleWidth(t.join(""));
 }
 //@ chunk-qvp68pt5.js:2563-2612 placement
-function z(n) {
+function isIdentifierName(n) {
   return /^[A-Za-z_$][\w$]*$/.test(n);
 }
 //@ chunk-qvp68pt5.js:2612-2642 placement
-function P5e(n) {
-  return mat(n);
+/**
+ * renderableText：清洗后可直接显示的文本。
+ */
+function renderableText(n) {
+  return sanitizeForDisplay(n);
 }
+//@ chunk-qvp68pt5.js:2642-2832 placement
 /**
  * 清洗用于显示的文本：变体选择符、零宽连接符、蒙古文变体选择符按上下文保留，其余不安全字符替换为 U+FFFD，再去掉不可打印字符。
  */
-//@ chunk-qvp68pt5.js:2642-2832 placement
 function sanitizeDisplayText(n) {
-  return h(
+  return fixBrokenSequences(
     stripNonPrintable(
       replaceUnsafeChars(n, (t, e, r, o) => {
         if (e === 65038 || e === 65039) return !(r > 127 || o === 8419);
@@ -266,96 +291,101 @@ function sanitizeDisplayText(n) {
     ),
   );
 }
+//@ chunk-qvp68pt5.js:2832-2955 placement
 /**
  * 是否有可见文本。
  */
-//@ chunk-qvp68pt5.js:2832-2955 placement
 function hasVisibleText(n) {
-  if (n === void 0) return !1;
-  let trimmed = mat(n)
+  if (n === undefined) return false;
+  let trimmed = sanitizeForDisplay(n)
     .replace(/\uFFFD/g, "")
     .replace(/\s+/g, " ")
     .trim();
   return trimmed !== "" && bunStringWidth(trimmed) > 0;
 }
+//@ chunk-qvp68pt5.js:2955-2973 placement
 /**
  * 短标签宽度与截断长度。
  */
-//@ chunk-qvp68pt5.js:2955-2973 placement
-var SHORT_LABEL_WIDTH = 48,
-  HH = 256;
+var SHORT_LABEL_WIDTH = 48;
+var MAX_RAW_DISPLAY_CHARS = 256;
+//@ chunk-qvp68pt5.js:2973-3076 placement
 /**
  * 生成短标签。
  */
-//@ chunk-qvp68pt5.js:2973-3076 placement
 function shortLabel(n) {
-  let t = P5e(truncateToLength(n, HH)),
-    trimmed = t.replace(/\s+/g, " ").trim();
-  return truncateToWidth(quoteIfAmbiguous(trimmed, t, n.length > HH), SHORT_LABEL_WIDTH);
+  let t = renderableText(truncateToLength(n, MAX_RAW_DISPLAY_CHARS));
+  let trimmed = t.replace(/\s+/g, " ").trim();
+  return truncateToWidth(quoteIfAmbiguous(trimmed, t, n.length > MAX_RAW_DISPLAY_CHARS), SHORT_LABEL_WIDTH);
 }
+//@ chunk-qvp68pt5.js:3076-3176 placement
 /**
  * 值与原文相同且原文无引号、不含特殊字符时原样返回，否则返回 JSON 字符串形式。
  */
-//@ chunk-qvp68pt5.js:3076-3176 placement
-function quoteIfAmbiguous(n, t, e = !1) {
-  let r = m(n, "start") === '"' || m(n, "end") === '"' || A(n);
+function quoteIfAmbiguous(n, t, e = false) {
+  let r =
+    firstOrLastVisibleChar(n, "start") === '"' ||
+    firstOrLastVisibleChar(n, "end") === '"' ||
+    endsWithEllipsis(n);
   return n === t && !r && !e ? n : jsonStringify(t);
 }
 //@ chunk-qvp68pt5.js:3176-3269 placement
-function N(n) {
-  let t = P5e(truncateToLength(n, HH)),
-    trimmed = t.replace(/\s+/g, " ").trim();
-  return quoteIfAmbiguous(trimmed, t, n.length > HH);
+function makeShortLabel(n) {
+  let t = renderableText(truncateToLength(n, MAX_RAW_DISPLAY_CHARS));
+  let trimmed = t.replace(/\s+/g, " ").trim();
+  return quoteIfAmbiguous(trimmed, t, n.length > MAX_RAW_DISPLAY_CHARS);
 }
+//@ chunk-qvp68pt5.js:3269-3305 placement
 /**
  * 是否在标签长度内。
  */
-//@ chunk-qvp68pt5.js:3269-3305 placement
 function fitsLabelLimit(n) {
-  return truncateToLength(n, HH) === n;
+  return truncateToLength(n, MAX_RAW_DISPLAY_CHARS) === n;
 }
+//@ chunk-qvp68pt5.js:3305-3754 placement
 /**
  * 为显示相同的标签消歧。
  */
-//@ chunk-qvp68pt5.js:3305-3754 placement
 function disambiguateLabels(n, t) {
-  let e = new Map(),
-    r = (s) => t(s).normalize("NFC");
+  let e = new Map();
+  let r = (s) => t(s).normalize("NFC");
   for (let s of n) {
-    let a = r(s),
-      u = e.get(a) ?? new Set();
-    (u.add(s), e.set(a, u));
+    let a = r(s);
+    let u = e.get(a) ?? new Set();
+    u.add(s);
+    e.set(a, u);
   }
   let o = (s) =>
-      jsonStringify(truncateToLength(s, MAX_DISPLAY_UNITS)).replace(
-        /[\u007f-\uffff]/g,
-        (a) => `\\u${a.charCodeAt(0).toString(16).padStart(4, "0")}`,
-      ) + (s.length > MAX_DISPLAY_UNITS ? "\u2026" : ""),
-    i = new Map();
+    jsonStringify(truncateToLength(s, MAX_DISPLAY_UNITS)).replace(
+      /[\u007f-\uffff]/g,
+      (a) => `\\u${a.charCodeAt(0).toString(16).padStart(4, "0")}`,
+    ) + (s.length > MAX_DISPLAY_UNITS ? "\u2026" : "");
+  let i = new Map();
   return n.map((s) => {
     let a = r(s);
     if ((e.get(a)?.size ?? 0) <= 1) return t(s);
-    let u = o(s),
-      l = i.get(u) ?? new Map();
+    let u = o(s);
+    let l = i.get(u) ?? new Map();
     i.set(u, l);
     let c = l.get(s) ?? l.size + 1;
-    return (l.set(s, c), c > 1 ? `${u} (#${c})` : u);
+    l.set(s, c);
+    return c > 1 ? `${u} (#${c})` : u;
   });
 }
+//@ chunk-qvp68pt5.js:3754-4102 placement
 /**
  * 生成唯一的显示名。
  */
-//@ chunk-qvp68pt5.js:3754-4102 placement
-function uniqueDisplayNames(n) {
+function uniqueDisplayNames(cwd) {
   let t = new Map();
-  for (let i of n) t.set(i, z(i) ? i : jsonStringify(mat(i)));
+  for (let i of cwd) t.set(i, isIdentifierName(i) ? i : jsonStringify(sanitizeForDisplay(i)));
   let e = new Map();
   for (let i of t.values()) e.set(i, (e.get(i) ?? 0) + 1);
-  let r = findNfcCollisions(n),
-    o = new Map();
-  for (let i of n) {
-    let s = t.get(i) ?? "",
-      a = (e.get(s) ?? 0) > 1 || r.has(i.normalize("NFC"));
+  let nfcCollisions = findNfcCollisions(cwd);
+  let o = new Map();
+  for (let i of cwd) {
+    let s = t.get(i) ?? "";
+    let a = (e.get(s) ?? 0) > 1 || nfcCollisions.has(i.normalize("NFC"));
     o.set(
       i,
       a
@@ -370,288 +400,355 @@ function uniqueDisplayNames(n) {
 }
 //@ chunk-qvp68pt5.js:4102-4247 placement = setCwdState (1)
 function findNfcCollisions(cwd) {
-  let t = new Map(),
-    e = new Set();
+  let t = new Map();
+  let e = new Set();
   for (let r of cwd) {
-    let normalized = r.normalize("NFC"),
-      i = t.get(normalized);
-    if (i !== void 0 && i !== r) e.add(normalized);
+    let normalized = r.normalize("NFC");
+    let i = t.get(normalized);
+    if (i !== undefined && i !== r) e.add(normalized);
     else t.set(normalized, r);
   }
   return e;
 }
+//@ chunk-qvp68pt5.js:4247-4315 placement
 /**
  * 标签或空串。
  */
-//@ chunk-qvp68pt5.js:4247-4315 placement
 function labelOrEmpty(n) {
-  return typeof n === "string" && $Rt(n) ? "" : String(safeLabel(n));
+  return typeof n === "string" && hasNoVisibleText(n) ? "" : String(safeLabel(n));
 }
+//@ chunk-qvp68pt5.js:4315-4391 placement
 /**
  * 安全的标签文本。
  */
-//@ chunk-qvp68pt5.js:4315-4391 placement
 function safeLabel(n) {
-  let t = typeof n === "string" && !$Rt(n) ? n : y3e;
-  return ple(shortLabel(t));
+  let t = typeof n === "string" && !hasNoVisibleText(n) ? n : INVALID_TOOL_NAME_TEXT;
+  return identityFreeze(shortLabel(t));
 }
 //@ chunk-qvp68pt5.js:4391-4439 placement
-function $Rt(n) {
-  return n === "" || bunStringWidth(truncateToLength(n, HH)) === 0;
+/**
+ * hasNoVisibleText：字符串为空或没有可见宽度。
+ */
+function hasNoVisibleText(n) {
+  return n === "" || bunStringWidth(truncateToLength(n, MAX_RAW_DISPLAY_CHARS)) === 0;
 }
 //@ chunk-qvp68pt5.js:4439-4526 placement
-function B(n) {
+function humanizeSnakeCase(n) {
   return n
     .replace(/_+/g, " ")
     .trim()
     .replace(/\b\w/g, (t) => t.toUpperCase());
 }
+//@ chunk-qvp68pt5.js:4526-4848 placement
 /**
  * MCP 服务器的显示标签。
  */
-//@ chunk-qvp68pt5.js:4526-4848 placement
-function mcpServerLabel(n) {
-  let t = truncateToLength((n.scope === "claudeai" ? n.displayName : void 0) ?? "", HH),
-    e = truncateToLength(n.title ?? "", HH),
-    r = sanitizeDisplayText(truncateToLength(n.serverName, HH)),
-    o = hasVisibleText(t) ? sanitizeDisplayText(t) : isCleanText(r) ? r : "(unnamed server)",
-    i = truncateToLength(n.toolName, HH),
-    s = P5e(B(i)),
-    a = P5e(i),
-    u = hasVisibleText(e)
-      ? sanitizeDisplayText(e)
-      : isCleanText(s)
-        ? s
-        : isCleanText(a)
-          ? a
-          : "(unnamed tool)";
-  return ple(truncateToWidth(`${o} \u2014 ${u}`.replace(/\s+/g, " ").trim(), SHORT_LABEL_WIDTH));
+function mcpServerLabel(mcpInfo) {
+  let t = truncateToLength(
+    (mcpInfo.scope === "claudeai" ? mcpInfo.displayName : undefined) ?? "",
+    MAX_RAW_DISPLAY_CHARS,
+  );
+  let e = truncateToLength(mcpInfo.title ?? "", MAX_RAW_DISPLAY_CHARS);
+  let r = sanitizeDisplayText(truncateToLength(mcpInfo.serverName, MAX_RAW_DISPLAY_CHARS));
+  let o = hasVisibleText(t) ? sanitizeDisplayText(t) : isCleanText(r) ? r : "(unnamed server)";
+  let i = truncateToLength(mcpInfo.toolName, MAX_RAW_DISPLAY_CHARS);
+  let s = renderableText(humanizeSnakeCase(i));
+  let a = renderableText(i);
+  let u = hasVisibleText(e)
+    ? sanitizeDisplayText(e)
+    : isCleanText(s)
+      ? s
+      : isCleanText(a)
+        ? a
+        : "(unnamed tool)";
+  return identityFreeze(truncateToWidth(`${o} \u2014 ${u}`.replace(/\s+/g, " ").trim(), SHORT_LABEL_WIDTH));
 }
 //@ chunk-qvp68pt5.js:4848-4900 placement
-function Uur(n) {
-  return ple(labelOr(n, "(unnamed tool)"));
+/**
+ * displayLabelOrUnnamedTool：标签或 “(unnamed tool)” 回退。
+ */
+function displayLabelOrUnnamedTool(n) {
+  return identityFreeze(labelOr(n, "(unnamed tool)"));
 }
+//@ chunk-qvp68pt5.js:4900-4948 placement
 /**
  * 标签干净时用它，否则用回退值。
  */
-//@ chunk-qvp68pt5.js:4900-4948 placement
 function labelOr(n, t) {
   let e = shortLabel(n);
   return isCleanText(e) ? e : t;
 }
+//@ chunk-qvp68pt5.js:4948-5080 placement
 /**
  * 审批显示字段（文本与是否需边栏）。
  */
-//@ chunk-qvp68pt5.js:4948-5080 placement
 function displayField(n) {
-  if (typeof n !== "string") return { text: ple(""), needsGutter: !1 };
-  let t = h(stripUnsafeChars(pAn(n)));
-  return { text: ple(t), needsGutter: needsGutter(t) };
+  if (typeof n !== "string")
+    return {
+      text: identityFreeze(""),
+      needsGutter: false,
+    };
+  let t = fixBrokenSequences(stripUnsafeChars(truncateForDisplayText(n)));
+  return {
+    text: identityFreeze(t),
+    needsGutter: needsGutter(t),
+  };
 }
+//@ chunk-qvp68pt5.js:5080-5230 placement
 /**
  * 简单文本的显示形式（不安全时 null）。
  */
-//@ chunk-qvp68pt5.js:5080-5230 placement
 function plainDisplay(n) {
   if (typeof n !== "string") return null;
   if (!fitsLabelLimit(n) || n.trim() === "" || bunStringWidth(n) === 0) return null;
   if (markBrokenSequences(n) !== n) return null;
-  return { display: ple(N(n)) };
+  return {
+    display: identityFreeze(makeShortLabel(n)),
+  };
 }
 //@ chunk-qvp68pt5.js:5230-5329 placement
-var g = "(value cannot be shown in full \u2014 approval withheld; one-time options only)",
-  U = 1e4,
-  W = 64;
+var WITHHELD_VALUE_TEXT = "(value cannot be shown in full \u2014 approval withheld; one-time options only)";
+var MAX_PAYLOAD_ELEMENTS = 1e4;
+var MAX_PAYLOAD_DEPTH = 64;
+//@ chunk-qvp68pt5.js:5329-7263 placement
 /**
  * 按预算序列化审批载荷值。
  */
-//@ chunk-qvp68pt5.js:5329-7263 placement
 function serializePayloadValue(n, t, e = 0) {
   if (typeof n === "string") {
     if (n.length + 2 > t.unitsRemaining) throw Error("payload exceeds the serialization budget");
     let i = jsonStringify(n);
-    if (((t.unitsRemaining -= i.length), t.unitsRemaining < 0))
-      throw Error("payload exceeds the serialization budget");
+    t.unitsRemaining -= i.length;
+    if (t.unitsRemaining < 0) throw Error("payload exceeds the serialization budget");
     return i;
   }
   if (typeof n === "number") {
     let i = Number.isFinite(n) ? String(n) : "null";
-    if (((t.unitsRemaining -= i.length), t.unitsRemaining < 0))
-      throw Error("payload exceeds the serialization budget");
+    t.unitsRemaining -= i.length;
+    if (t.unitsRemaining < 0) throw Error("payload exceeds the serialization budget");
     return i;
   }
   if (typeof n === "boolean" || n === null) {
-    if (((t.unitsRemaining -= String(n).length), t.unitsRemaining < 0))
-      throw Error("payload exceeds the serialization budget");
+    t.unitsRemaining -= String(n).length;
+    if (t.unitsRemaining < 0) throw Error("payload exceeds the serialization budget");
     return String(n);
   }
   if (typeof n === "bigint") throw Error("bigint payload cannot be serialized");
   if (typeof n !== "object") return;
-  if (e >= W) throw Error("payload exceeds the serialization depth wall");
+  if (e >= MAX_PAYLOAD_DEPTH) throw Error("payload exceeds the serialization depth wall");
   if (Array.isArray(n)) {
     let i = n.length;
     if (typeof i !== "number" || !Number.isSafeInteger(i) || i < 0)
       throw Error("payload length is not an honest array length");
-    if (((t.elementsRemaining -= i), t.elementsRemaining < 0))
-      throw Error("payload exceeds the element serialization wall");
-    if (((t.unitsRemaining -= 2 + (i > 0 ? i - 1 : 0)), t.unitsRemaining < 0))
-      throw Error("payload exceeds the serialization budget");
+    t.elementsRemaining -= i;
+    if (t.elementsRemaining < 0) throw Error("payload exceeds the element serialization wall");
+    t.unitsRemaining -= 2 + (i > 0 ? i - 1 : 0);
+    if (t.unitsRemaining < 0) throw Error("payload exceeds the serialization budget");
     let s = [];
-    for (let a = 0; a < i; a++) {
-      let u = serializePayloadValue(n[a], t, e + 1);
-      if (u === void 0) {
-        if (((t.unitsRemaining -= 4), t.unitsRemaining < 0))
-          throw Error("payload exceeds the serialization budget");
+    for (let j = 0; j < i; j++) {
+      let u = serializePayloadValue(n[j], t, e + 1);
+      if (u === undefined) {
+        t.unitsRemaining -= 4;
+        if (t.unitsRemaining < 0) throw Error("payload exceeds the serialization budget");
         s.push("null");
       } else s.push(u);
     }
     return `[${s.join(",")}]`;
   }
   let entries = Object.entries(n);
-  if (((t.elementsRemaining -= entries.length), t.elementsRemaining < 0))
-    throw Error("payload exceeds the element serialization wall");
-  if (((t.unitsRemaining -= 2), t.unitsRemaining < 0))
-    throw Error("payload exceeds the serialization budget");
+  t.elementsRemaining -= entries.length;
+  if (t.elementsRemaining < 0) throw Error("payload exceeds the element serialization wall");
+  t.unitsRemaining -= 2;
+  if (t.unitsRemaining < 0) throw Error("payload exceeds the serialization budget");
   let o = [];
   for (let [i, s] of entries) {
     let a = serializePayloadValue(s, t, e + 1);
-    if (a === void 0) continue;
+    if (a === undefined) continue;
     if (i.length + 2 > t.unitsRemaining) throw Error("payload exceeds the serialization budget");
     let u = jsonStringify(i);
-    if (((t.unitsRemaining -= u.length + 1 + (o.length > 0 ? 1 : 0)), t.unitsRemaining < 0))
-      throw Error("payload exceeds the serialization budget");
+    t.unitsRemaining -= u.length + 1 + (o.length > 0 ? 1 : 0);
+    if (t.unitsRemaining < 0) throw Error("payload exceeds the serialization budget");
     o.push(`${u}:${a}`);
   }
   return `{${o.join(",")}}`;
 }
 //@ chunk-qvp68pt5.js:7263-7357 placement
-function iZr(n, t = MAX_DISPLAY_UNITS, e = U) {
+/**
+ * serializePayloadSafely：序列化审批载荷，超限时返回 undefined。
+ */
+function serializePayloadSafely(
+  n,
+  unitsRemaining = MAX_DISPLAY_UNITS,
+  elementsRemaining = MAX_PAYLOAD_ELEMENTS,
+) {
   try {
-    return serializePayloadValue(n, { unitsRemaining: t, elementsRemaining: e });
+    return serializePayloadValue(n, {
+      unitsRemaining,
+      elementsRemaining,
+    });
   } catch {
     return;
   }
 }
+//@ chunk-qvp68pt5.js:7357-7801 placement
 /**
  * 序列化审批载荷（完整/截断/隐藏）。
  */
-//@ chunk-qvp68pt5.js:7357-7801 placement
 function serializeApprovalPayload(n, t) {
-  let e = typeof n === "string" ? n : iZr(n, t?.maxUnits);
-  if (e === void 0) return { kind: "withheld", marker: ple(g) };
-  if (!D(e, t?.maxUnits)) return { kind: "withheld", marker: ple(g) };
-  let r = t?.softWrap ? wrapLongLines(e) : e,
-    replaced = (t?.scrub === "key" ? E(r) : stripUnsafeChars(r)).replace(/\t/g, " "),
-    i = t?.softWrap
-      ? replaced.replaceAll(
-          `
+  let e = typeof n === "string" ? n : serializePayloadSafely(n, t?.maxUnits);
+  if (e === undefined)
+    return {
+      kind: "withheld",
+      marker: identityFreeze(WITHHELD_VALUE_TEXT),
+    };
+  if (!fitsWithinUnits(e, t?.maxUnits))
+    return {
+      kind: "withheld",
+      marker: identityFreeze(WITHHELD_VALUE_TEXT),
+    };
+  let r = t?.softWrap ? wrapLongLines(e) : e;
+  let replaced = (t?.scrub === "key" ? stripAllUnsafeDisplayChars(r) : stripUnsafeChars(r)).replace(
+    /\t/g,
+    " ",
+  );
+  let i = t?.softWrap
+    ? replaced.replaceAll(
+        `
 `,
-          "",
-        )
-      : replaced;
-  if (X1e.test(i)) return { kind: "withheld", marker: ple(g) };
-  if (markBrokenSequences(replaced) !== replaced) return { kind: "withheld", marker: ple(g) };
-  return { kind: "full", text: ple(replaced), needsGutter: needsGutter(replaced) };
+        "",
+      )
+    : replaced;
+  if (GRAPHEME_TRUNCATION_MARKER_RE.test(i))
+    return {
+      kind: "withheld",
+      marker: identityFreeze(WITHHELD_VALUE_TEXT),
+    };
+  if (markBrokenSequences(replaced) !== replaced)
+    return {
+      kind: "withheld",
+      marker: identityFreeze(WITHHELD_VALUE_TEXT),
+    };
+  return {
+    kind: "full",
+    text: identityFreeze(replaced),
+    needsGutter: needsGutter(replaced),
+  };
 }
+//@ chunk-qvp68pt5.js:7801-7853 placement
 /**
  * 文本是否含可疑字符。
  */
-//@ chunk-qvp68pt5.js:7801-7853 placement
 function hasSuspiciousText(n) {
   let t = stripUnsafeChars(n);
-  return X1e.test(t) || k(t);
+  return GRAPHEME_TRUNCATION_MARKER_RE.test(t) || markBrokenSequencesChanged(t);
 }
 //@ chunk-qvp68pt5.js:7853-7885 placement
-function ubi(n) {
-  return k(stripUnsafeChars(n));
+/**
+ * hasBrokenSequences：去掉不安全字符后是否仍有残缺序列。
+ */
+function hasBrokenSequences(n) {
+  return markBrokenSequencesChanged(stripUnsafeChars(n));
 }
 //@ chunk-qvp68pt5.js:7885-7916 placement
-function k(n) {
+function markBrokenSequencesChanged(n) {
   return markBrokenSequences(n) !== n;
 }
+//@ chunk-qvp68pt5.js:7916-8142 placement
 /**
  * 列表类文本的标签。
  */
-//@ chunk-qvp68pt5.js:7916-8142 placement
 function listLabel(n) {
-  let t = P5e(truncateToLength(n, HH)),
-    trimmed = t.replace(/\s+/g, " ").trim();
+  let t = renderableText(truncateToLength(n, MAX_RAW_DISPLAY_CHARS));
+  let trimmed = t.replace(/\s+/g, " ").trim();
   return quoteIfAmbiguous(
     trimmed,
     t,
     trimmed.includes(",") ||
       trimmed.includes(";") ||
-      p(trimmed).includes(" and ") ||
-      p(trimmed).startsWith("and ") ||
-      p(trimmed).endsWith(" and") ||
-      n.length > HH ||
-      markBrokenSequences(truncateToLength(n, HH)) !== truncateToLength(n, HH),
+      stripZeroWidthChars(trimmed).includes(" and ") ||
+      stripZeroWidthChars(trimmed).startsWith("and ") ||
+      stripZeroWidthChars(trimmed).endsWith(" and") ||
+      n.length > MAX_RAW_DISPLAY_CHARS ||
+      markBrokenSequences(truncateToLength(n, MAX_RAW_DISPLAY_CHARS)) !==
+        truncateToLength(n, MAX_RAW_DISPLAY_CHARS),
   );
 }
+//@ chunk-qvp68pt5.js:8142-8194 placement
 /**
  * 消歧后的标签列表。
  */
-//@ chunk-qvp68pt5.js:8142-8194 placement
-function uniqueLabels(n, t = N) {
-  return disambiguateLabels(n, t).map((e) => ple(e));
+function uniqueLabels(n, t = makeShortLabel) {
+  return disambiguateLabels(n, t).map((e) => identityFreeze(e));
 }
+//@ chunk-qvp68pt5.js:8194-8258 placement
 /**
  * 把换行替换为替换字符。
  */
-//@ chunk-qvp68pt5.js:8194-8258 placement
 function replaceLineBreaks(n) {
   return n.replace(/[\n\r\u2028\u2029]/g, "\uFFFD");
 }
+//@ chunk-qvp68pt5.js:8258-8645 placement
 /**
  * 序列化审批列表。
  */
-//@ chunk-qvp68pt5.js:8258-8645 placement
 function serializeApprovalList(n, t) {
-  let mapped = n.map((l) => serializeApprovalPayload(l, t)),
-    r = new Map();
+  let mapped = n.map((l) => serializeApprovalPayload(l, t));
+  let r = new Map();
   n.forEach((l, c) => {
     let y = mapped[c];
     if (y.kind === "full" && !r.has(l)) r.set(l, replaceLineBreaks(y.text).replace(/\s+/g, " ").trim());
   });
-  let filtered = n.filter((l, c) => mapped[c].kind === "full"),
-    i = uniqueLabels(filtered, (l) => r.get(l) ?? ""),
-    s = [],
-    a = 0,
-    u = 0;
+  let filtered = n.filter((l, c) => mapped[c].kind === "full");
+  let i = uniqueLabels(filtered, (l) => r.get(l) ?? "");
+  let s = [];
+  let a = 0;
+  let u = 0;
   for (let l of mapped)
-    if (l.kind === "full") s.push({ text: String(i[a++]), withheld: !1 });
-    else ((u += 1), s.push({ text: `${l.marker} (#${u})`, withheld: !0 }));
+    if (l.kind === "full")
+      s.push({
+        text: String(i[a++]),
+        withheld: false,
+      });
+    else {
+      u += 1;
+      s.push({
+        text: `${l.marker} (#${u})`,
+        withheld: true,
+      });
+    }
   return s;
 }
+//@ chunk-qvp68pt5.js:8645-8717 placement
 /**
  * 显示文本。
  */
-//@ chunk-qvp68pt5.js:8645-8717 placement
 function displayText(n) {
-  if (typeof n !== "string") return Yls("");
-  return Yls(stripUnsafeChars(n));
+  if (typeof n !== "string") return identityFreeze2("");
+  return identityFreeze2(stripUnsafeChars(n));
 }
+//@ chunk-qvp68pt5.js:8717-8880 placement
 /**
  * 把字符串转为审批界面标签：清洗、制表符换空格、首行须干净且无歧义，再截断到 24 字符。
  */
-//@ chunk-qvp68pt5.js:8717-8880 placement
 function toApprovalLabel(n) {
   if (typeof n !== "string") return null;
-  let replaced = sanitizeDisplayText(truncateToLength(n, HH)).replace(/\t/g, " ");
+  let replaced = sanitizeDisplayText(truncateToLength(n, MAX_RAW_DISPLAY_CHARS)).replace(/\t/g, " ");
   if (!isCleanText(getFirstLine(replaced))) return null;
-  if (A(getFirstLine(replaced))) return null;
-  return ple(truncate(replaced, 24, !0));
+  if (endsWithEllipsis(getFirstLine(replaced))) return null;
+  return identityFreeze(truncate(replaced, 24, true));
 }
+//@ chunk-qvp68pt5.js:8880-8983 placement
 /**
  * 模板标签函数：拼接模板片段与插值（空值视为空串）后做规整。
  */
-//@ chunk-qvp68pt5.js:8880-8983 placement
 function approvalLabelTemplate(n, ...t) {
   let e = n[0] ?? "";
-  for (let r = 0; r < t.length; r++) ((e += t[r] ?? ""), (e += n[r + 1] ?? ""));
-  return ple(e);
+  for (let i = 0; i < t.length; i++) {
+    e += t[i] ?? "";
+    e += n[i + 1] ?? "";
+  }
+  return identityFreeze(e);
 }
-
 export {
   fitsLabelLimit,
   hasDisplayUnsafeChar,
@@ -668,30 +765,30 @@ export {
   serializeApprovalPayload,
   replaceLineBreaks,
   toApprovalLabel,
-  mat,
-  P5e,
+  sanitizeForDisplay,
+  renderableText,
   isCleanText,
   stripTrailingEllipsis,
   labelOr,
   labelOrEmpty,
   MAX_PAYLOAD_UNITS,
-  Nur,
+  hostnameLengthAllowance,
   plainDisplay,
-  $Rt,
+  hasNoVisibleText,
   safeLabel,
   hasSuspiciousText,
   displayText,
-  HH,
+  MAX_RAW_DISPLAY_CHARS,
   quoteIfAmbiguous,
   approvalLabelTemplate,
-  iZr,
-  Uur,
+  serializePayloadSafely,
+  displayLabelOrUnnamedTool,
   sanitizeDisplayText,
-  Ons,
+  isCombiningOrZeroWidth,
   MAX_DISPLAY_UNITS,
-  pAn,
+  truncateForDisplayText,
   shortLabel,
   mcpServerLabel,
   serializeApprovalList,
-  ubi,
+  hasBrokenSequences,
 };

@@ -8,407 +8,571 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:355589-361952 cjs-fingerprint
-var Bi = x(function (Sg, Ui) {
-  function Bp(e) {
-    let regex = e.regex,
-      n = /(?![A-Za-z0-9])(?![$])/,
-      combined = regex.concat(/[a-zA-Z_\x7f-\xff][a-zA-Z0-9_\x7f-\xff]*/, n),
-      combined_2 = regex.concat(/(\\?[A-Z][a-z0-9_\x7f-\xff]+|\\?[A-Z]+(?=[A-Z][a-z0-9_\x7f-\xff])){1,}/, n),
-      combined_3 = regex.concat(/[A-Z]+/, n),
-      r = { scope: "variable", match: "\\$+" + combined },
-      i = {
-        scope: "meta",
-        variants: [
-          { begin: /<\?php/, relevance: 10 },
-          { begin: /<\?=/ },
-          { begin: /<\?/, relevance: 0.1 },
-          { begin: /\?>/ },
-        ],
-      },
-      c = { scope: "subst", variants: [{ begin: /\$\w+/ }, { begin: /\{\$/, end: /\}/ }] },
-      inherit = e.inherit(e.APOS_STRING_MODE, { illegal: null }),
-      inherit_2 = e.inherit(e.QUOTE_STRING_MODE, {
-        illegal: null,
-        contains: e.QUOTE_STRING_MODE.contains.concat(c),
-      }),
-      m = {
-        begin: /<<<[ \t]*(?:(\w+)|"(\w+)")\n/,
-        end: /[ \t]*(\w+)\b/,
-        contains: e.QUOTE_STRING_MODE.contains.concat(c),
-        "on:begin": (z, V) => {
-          V.data._beginMatch = z[1] || z[2];
+var require_php = x(function (cjsExports, cjsModule) {
+  function php(hljs) {
+    let regex = hljs.regex;
+    let NOT_PERL_ETC = /(?![A-Za-z0-9])(?![$])/;
+    let IDENT_RE = regex.concat(/[a-zA-Z_\x7f-\xff][a-zA-Z0-9_\x7f-\xff]*/, NOT_PERL_ETC);
+    let PASCAL_CASE_CLASS_NAME_RE = regex.concat(
+      /(\\?[A-Z][a-z0-9_\x7f-\xff]+|\\?[A-Z]+(?=[A-Z][a-z0-9_\x7f-\xff])){1,}/,
+      NOT_PERL_ETC,
+    );
+    let UPCASE_NAME_RE = regex.concat(/[A-Z]+/, NOT_PERL_ETC);
+    let VARIABLE = {
+      scope: "variable",
+      match: "\\$+" + IDENT_RE,
+    };
+    let PREPROCESSOR = {
+      scope: "meta",
+      variants: [
+        {
+          begin: /<\?php/,
+          relevance: 10,
         },
-        "on:end": (z, V) => {
-          if (V.data._beginMatch !== z[1]) V.ignoreMatch();
+        {
+          begin: /<\?=/,
         },
-      },
-      END_SAME_AS_BEGIN = e.END_SAME_AS_BEGIN({ begin: /<<<[ \t]*'(\w+)'\n/, end: /[ \t]*(\w+)\b/ }),
-      _ = `[ 	
-]`,
-      E = { scope: "string", variants: [inherit_2, inherit, m, END_SAME_AS_BEGIN] },
-      u = {
-        scope: "number",
-        variants: [
-          { begin: "\\b0[bB][01]+(?:_[01]+)*\\b" },
-          { begin: "\\b0[oO][0-7]+(?:_[0-7]+)*\\b" },
-          { begin: "\\b0[xX][\\da-fA-F]+(?:_[\\da-fA-F]+)*\\b" },
-          { begin: "(?:\\b\\d+(?:_\\d+)*(\\.(?:\\d+(?:_\\d+)*))?|\\B\\.\\d+)(?:[eE][+-]?\\d+)?" },
-        ],
-        relevance: 0,
-      },
-      b = ["false", "null", "true"],
-      f = [
-        "__CLASS__",
-        "__DIR__",
-        "__FILE__",
-        "__FUNCTION__",
-        "__COMPILER_HALT_OFFSET__",
-        "__LINE__",
-        "__METHOD__",
-        "__NAMESPACE__",
-        "__TRAIT__",
-        "die",
-        "echo",
-        "exit",
-        "include",
-        "include_once",
-        "print",
-        "require",
-        "require_once",
-        "array",
-        "abstract",
-        "and",
-        "as",
-        "binary",
-        "bool",
-        "boolean",
-        "break",
-        "callable",
-        "case",
-        "catch",
-        "class",
-        "clone",
-        "const",
-        "continue",
-        "declare",
-        "default",
-        "do",
-        "double",
-        "else",
-        "elseif",
-        "empty",
-        "enddeclare",
-        "endfor",
-        "endforeach",
-        "endif",
-        "endswitch",
-        "endwhile",
-        "enum",
-        "eval",
-        "extends",
-        "final",
-        "finally",
-        "float",
-        "for",
-        "foreach",
-        "from",
-        "global",
-        "goto",
-        "if",
-        "implements",
-        "instanceof",
-        "insteadof",
-        "int",
-        "integer",
-        "interface",
-        "isset",
-        "iterable",
-        "list",
-        "match|0",
-        "mixed",
-        "new",
-        "never",
-        "object",
-        "or",
-        "private",
-        "protected",
-        "public",
-        "readonly",
-        "real",
-        "return",
-        "string",
-        "switch",
-        "throw",
-        "trait",
-        "try",
-        "unset",
-        "use",
-        "var",
-        "void",
-        "while",
-        "xor",
-        "yield",
+        {
+          begin: /<\?/,
+          relevance: 0.1,
+        },
+        {
+          begin: /\?>/,
+        },
       ],
-      O = [
-        "Error|0",
-        "AppendIterator",
-        "ArgumentCountError",
-        "ArithmeticError",
-        "ArrayIterator",
-        "ArrayObject",
-        "AssertionError",
-        "BadFunctionCallException",
-        "BadMethodCallException",
-        "CachingIterator",
-        "CallbackFilterIterator",
-        "CompileError",
-        "Countable",
-        "DirectoryIterator",
-        "DivisionByZeroError",
-        "DomainException",
-        "EmptyIterator",
-        "ErrorException",
-        "Exception",
-        "FilesystemIterator",
-        "FilterIterator",
-        "GlobIterator",
-        "InfiniteIterator",
-        "InvalidArgumentException",
-        "IteratorIterator",
-        "LengthException",
-        "LimitIterator",
-        "LogicException",
-        "MultipleIterator",
-        "NoRewindIterator",
-        "OutOfBoundsException",
-        "OutOfRangeException",
-        "OuterIterator",
-        "OverflowException",
-        "ParentIterator",
-        "ParseError",
-        "RangeException",
-        "RecursiveArrayIterator",
-        "RecursiveCachingIterator",
-        "RecursiveCallbackFilterIterator",
-        "RecursiveDirectoryIterator",
-        "RecursiveFilterIterator",
-        "RecursiveIterator",
-        "RecursiveIteratorIterator",
-        "RecursiveRegexIterator",
-        "RecursiveTreeIterator",
-        "RegexIterator",
-        "RuntimeException",
-        "SeekableIterator",
-        "SplDoublyLinkedList",
-        "SplFileInfo",
-        "SplFileObject",
-        "SplFixedArray",
-        "SplHeap",
-        "SplMaxHeap",
-        "SplMinHeap",
-        "SplObjectStorage",
-        "SplObserver",
-        "SplPriorityQueue",
-        "SplQueue",
-        "SplStack",
-        "SplSubject",
-        "SplTempFileObject",
-        "TypeError",
-        "UnderflowException",
-        "UnexpectedValueException",
-        "UnhandledMatchError",
-        "ArrayAccess",
-        "BackedEnum",
-        "Closure",
-        "Fiber",
-        "Generator",
-        "Iterator",
-        "IteratorAggregate",
-        "Serializable",
-        "Stringable",
-        "Throwable",
-        "Traversable",
-        "UnitEnum",
-        "WeakReference",
-        "WeakMap",
-        "Directory",
-        "__PHP_Incomplete_Class",
-        "parent",
-        "php_user_filter",
-        "self",
-        "static",
-        "stdClass",
+    };
+    let SUBST = {
+      scope: "subst",
+      variants: [
+        {
+          begin: /\$\w+/,
+        },
+        {
+          begin: /\{\$/,
+          end: /\}/,
+        },
       ],
-      N = {
-        keyword: f,
-        literal: ((z) => {
-          let V = [];
-          return (
-            z.forEach((g) => {
-              if ((V.push(g), g.toLowerCase() === g)) V.push(g.toUpperCase());
-              else V.push(g.toLowerCase());
-            }),
-            V
-          );
-        })(b),
-        built_in: O,
+    };
+    let SINGLE_QUOTED = hljs.inherit(hljs.APOS_STRING_MODE, {
+      illegal: null,
+    });
+    let DOUBLE_QUOTED = hljs.inherit(hljs.QUOTE_STRING_MODE, {
+      illegal: null,
+      contains: hljs.QUOTE_STRING_MODE.contains.concat(SUBST),
+    });
+    let HEREDOC = {
+      begin: /<<<[ \t]*(?:(\w+)|"(\w+)")\n/,
+      end: /[ \t]*(\w+)\b/,
+      contains: hljs.QUOTE_STRING_MODE.contains.concat(SUBST),
+      "on:begin": (m, resp) => {
+        resp.data._beginMatch = m[1] || m[2];
       },
-      A = (z) => z.map((V) => V.replace(/\|\d+$/, "")),
-      C = {
-        variants: [
-          {
-            match: [
-              /new/,
-              regex.concat(
-                `[ 	
+      "on:end": (m, resp) => {
+        if (resp.data._beginMatch !== m[1]) resp.ignoreMatch();
+      },
+    };
+    let NOWDOC = hljs.END_SAME_AS_BEGIN({
+      begin: /<<<[ \t]*'(\w+)'\n/,
+      end: /[ \t]*(\w+)\b/,
+    });
+    let WHITESPACE = `[ 	
+]`;
+    let STRING = {
+      scope: "string",
+      variants: [DOUBLE_QUOTED, SINGLE_QUOTED, HEREDOC, NOWDOC],
+    };
+    let NUMBER = {
+      scope: "number",
+      variants: [
+        {
+          begin: "\\b0[bB][01]+(?:_[01]+)*\\b",
+        },
+        {
+          begin: "\\b0[oO][0-7]+(?:_[0-7]+)*\\b",
+        },
+        {
+          begin: "\\b0[xX][\\da-fA-F]+(?:_[\\da-fA-F]+)*\\b",
+        },
+        {
+          begin: "(?:\\b\\d+(?:_\\d+)*(\\.(?:\\d+(?:_\\d+)*))?|\\B\\.\\d+)(?:[eE][+-]?\\d+)?",
+        },
+      ],
+      relevance: 0,
+    };
+    let LITERALS = ["false", "null", "true"];
+    let KWS = [
+      "__CLASS__",
+      "__DIR__",
+      "__FILE__",
+      "__FUNCTION__",
+      "__COMPILER_HALT_OFFSET__",
+      "__LINE__",
+      "__METHOD__",
+      "__NAMESPACE__",
+      "__TRAIT__",
+      "die",
+      "echo",
+      "exit",
+      "include",
+      "include_once",
+      "print",
+      "require",
+      "require_once",
+      "array",
+      "abstract",
+      "and",
+      "as",
+      "binary",
+      "bool",
+      "boolean",
+      "break",
+      "callable",
+      "case",
+      "catch",
+      "class",
+      "clone",
+      "const",
+      "continue",
+      "declare",
+      "default",
+      "do",
+      "double",
+      "else",
+      "elseif",
+      "empty",
+      "enddeclare",
+      "endfor",
+      "endforeach",
+      "endif",
+      "endswitch",
+      "endwhile",
+      "enum",
+      "eval",
+      "extends",
+      "final",
+      "finally",
+      "float",
+      "for",
+      "foreach",
+      "from",
+      "global",
+      "goto",
+      "if",
+      "implements",
+      "instanceof",
+      "insteadof",
+      "int",
+      "integer",
+      "interface",
+      "isset",
+      "iterable",
+      "list",
+      "match|0",
+      "mixed",
+      "new",
+      "never",
+      "object",
+      "or",
+      "private",
+      "protected",
+      "public",
+      "readonly",
+      "real",
+      "return",
+      "string",
+      "switch",
+      "throw",
+      "trait",
+      "try",
+      "unset",
+      "use",
+      "var",
+      "void",
+      "while",
+      "xor",
+      "yield",
+    ];
+    let BUILT_INS = [
+      "Error|0",
+      "AppendIterator",
+      "ArgumentCountError",
+      "ArithmeticError",
+      "ArrayIterator",
+      "ArrayObject",
+      "AssertionError",
+      "BadFunctionCallException",
+      "BadMethodCallException",
+      "CachingIterator",
+      "CallbackFilterIterator",
+      "CompileError",
+      "Countable",
+      "DirectoryIterator",
+      "DivisionByZeroError",
+      "DomainException",
+      "EmptyIterator",
+      "ErrorException",
+      "Exception",
+      "FilesystemIterator",
+      "FilterIterator",
+      "GlobIterator",
+      "InfiniteIterator",
+      "InvalidArgumentException",
+      "IteratorIterator",
+      "LengthException",
+      "LimitIterator",
+      "LogicException",
+      "MultipleIterator",
+      "NoRewindIterator",
+      "OutOfBoundsException",
+      "OutOfRangeException",
+      "OuterIterator",
+      "OverflowException",
+      "ParentIterator",
+      "ParseError",
+      "RangeException",
+      "RecursiveArrayIterator",
+      "RecursiveCachingIterator",
+      "RecursiveCallbackFilterIterator",
+      "RecursiveDirectoryIterator",
+      "RecursiveFilterIterator",
+      "RecursiveIterator",
+      "RecursiveIteratorIterator",
+      "RecursiveRegexIterator",
+      "RecursiveTreeIterator",
+      "RegexIterator",
+      "RuntimeException",
+      "SeekableIterator",
+      "SplDoublyLinkedList",
+      "SplFileInfo",
+      "SplFileObject",
+      "SplFixedArray",
+      "SplHeap",
+      "SplMaxHeap",
+      "SplMinHeap",
+      "SplObjectStorage",
+      "SplObserver",
+      "SplPriorityQueue",
+      "SplQueue",
+      "SplStack",
+      "SplSubject",
+      "SplTempFileObject",
+      "TypeError",
+      "UnderflowException",
+      "UnexpectedValueException",
+      "UnhandledMatchError",
+      "ArrayAccess",
+      "BackedEnum",
+      "Closure",
+      "Fiber",
+      "Generator",
+      "Iterator",
+      "IteratorAggregate",
+      "Serializable",
+      "Stringable",
+      "Throwable",
+      "Traversable",
+      "UnitEnum",
+      "WeakReference",
+      "WeakMap",
+      "Directory",
+      "__PHP_Incomplete_Class",
+      "parent",
+      "php_user_filter",
+      "self",
+      "static",
+      "stdClass",
+    ];
+    let KEYWORDS = {
+      keyword: KWS,
+      literal: ((items) => {
+        let result = [];
+        items.forEach((item) => {
+          result.push(item);
+          if (item.toLowerCase() === item) result.push(item.toUpperCase());
+          else result.push(item.toLowerCase());
+        });
+        return result;
+      })(LITERALS),
+      built_in: BUILT_INS,
+    };
+    let normalizeKeywords = (items) => items.map((item) => item.replace(/\|\d+$/, ""));
+    let CONSTRUCTOR_CALL = {
+      variants: [
+        {
+          match: [
+            /new/,
+            regex.concat(
+              `[ 	
 ]`,
-                "+",
-              ),
-              regex.concat("(?!", A(O).join("\\b|"), "\\b)"),
-              combined_2,
-            ],
-            scope: { 1: "keyword", 4: "title.class" },
+              "+",
+            ),
+            regex.concat("(?!", normalizeKeywords(BUILT_INS).join("\\b|"), "\\b)"),
+            PASCAL_CASE_CLASS_NAME_RE,
+          ],
+          scope: {
+            1: "keyword",
+            4: "title.class",
           },
-        ],
-      },
-      combined_4 = regex.concat(combined, "\\b(?!\\()"),
-      M = {
-        variants: [
-          {
-            match: [regex.concat(/::/, regex.lookahead(/(?!class\b)/)), combined_4],
-            scope: { 2: "variable.constant" },
+        },
+      ],
+    };
+    let CONSTANT_REFERENCE = regex.concat(IDENT_RE, "\\b(?!\\()");
+    let LEFT_AND_RIGHT_SIDE_OF_DOUBLE_COLON = {
+      variants: [
+        {
+          match: [regex.concat(/::/, regex.lookahead(/(?!class\b)/)), CONSTANT_REFERENCE],
+          scope: {
+            2: "variable.constant",
           },
-          { match: [/::/, /class/], scope: { 2: "variable.language" } },
-          {
-            match: [combined_2, regex.concat(/::/, regex.lookahead(/(?!class\b)/)), combined_4],
-            scope: { 1: "title.class", 3: "variable.constant" },
+        },
+        {
+          match: [/::/, /class/],
+          scope: {
+            2: "variable.language",
           },
-          {
-            match: [combined_2, regex.concat("::", regex.lookahead(/(?!class\b)/))],
-            scope: { 1: "title.class" },
+        },
+        {
+          match: [
+            PASCAL_CASE_CLASS_NAME_RE,
+            regex.concat(/::/, regex.lookahead(/(?!class\b)/)),
+            CONSTANT_REFERENCE,
+          ],
+          scope: {
+            1: "title.class",
+            3: "variable.constant",
           },
-          { match: [combined_2, /::/, /class/], scope: { 1: "title.class", 3: "variable.language" } },
-        ],
-      },
-      P = { scope: "attr", match: regex.concat(combined, regex.lookahead(":"), regex.lookahead(/(?!::)/)) },
-      D = {
-        relevance: 0,
-        begin: /\(/,
-        end: /\)/,
-        keywords: N,
-        contains: [P, r, M, e.C_BLOCK_COMMENT_MODE, E, u, C],
-      },
-      K = {
-        relevance: 0,
-        match: [
-          /\b/,
-          regex.concat("(?!fn\\b|function\\b|", A(f).join("\\b|"), "|", A(O).join("\\b|"), "\\b)"),
-          combined,
-          regex.concat(
-            `[ 	
-]`,
-            "*",
-          ),
-          regex.lookahead(/(?=\()/),
-        ],
-        scope: { 3: "title.function.invoke" },
-        contains: [D],
-      };
-    D.contains.push(K);
-    let W = [P, M, e.C_BLOCK_COMMENT_MODE, E, u, C],
-      J = {
-        begin: regex.concat(/#\[\s*\\?/, regex.either(combined_2, combined_3)),
-        beginScope: "meta",
-        end: /]/,
-        endScope: "meta",
-        keywords: { literal: b, keyword: ["new", "array"] },
-        contains: [
-          {
-            begin: /\[/,
-            end: /]/,
-            keywords: { literal: b, keyword: ["new", "array"] },
-            contains: ["self", ...W],
+        },
+        {
+          match: [PASCAL_CASE_CLASS_NAME_RE, regex.concat("::", regex.lookahead(/(?!class\b)/))],
+          scope: {
+            1: "title.class",
           },
-          ...W,
-          { scope: "meta", variants: [{ match: combined_2 }, { match: combined_3 }] },
-        ],
-      };
-    return {
-      case_insensitive: !1,
-      keywords: N,
+        },
+        {
+          match: [PASCAL_CASE_CLASS_NAME_RE, /::/, /class/],
+          scope: {
+            1: "title.class",
+            3: "variable.language",
+          },
+        },
+      ],
+    };
+    let NAMED_ARGUMENT = {
+      scope: "attr",
+      match: regex.concat(IDENT_RE, regex.lookahead(":"), regex.lookahead(/(?!::)/)),
+    };
+    let PARAMS_MODE = {
+      relevance: 0,
+      begin: /\(/,
+      end: /\)/,
+      keywords: KEYWORDS,
       contains: [
-        J,
-        e.HASH_COMMENT_MODE,
-        e.COMMENT("//", "$"),
-        e.COMMENT("/\\*", "\\*/", { contains: [{ scope: "doctag", match: "@[A-Za-z]+" }] }),
+        NAMED_ARGUMENT,
+        VARIABLE,
+        LEFT_AND_RIGHT_SIDE_OF_DOUBLE_COLON,
+        hljs.C_BLOCK_COMMENT_MODE,
+        STRING,
+        NUMBER,
+        CONSTRUCTOR_CALL,
+      ],
+    };
+    let FUNCTION_INVOKE = {
+      relevance: 0,
+      match: [
+        /\b/,
+        regex.concat(
+          "(?!fn\\b|function\\b|",
+          normalizeKeywords(KWS).join("\\b|"),
+          "|",
+          normalizeKeywords(BUILT_INS).join("\\b|"),
+          "\\b)",
+        ),
+        IDENT_RE,
+        regex.concat(
+          `[ 	
+]`,
+          "*",
+        ),
+        regex.lookahead(/(?=\()/),
+      ],
+      scope: {
+        3: "title.function.invoke",
+      },
+      contains: [PARAMS_MODE],
+    };
+    PARAMS_MODE.contains.push(FUNCTION_INVOKE);
+    let ATTRIBUTE_CONTAINS = [
+      NAMED_ARGUMENT,
+      LEFT_AND_RIGHT_SIDE_OF_DOUBLE_COLON,
+      hljs.C_BLOCK_COMMENT_MODE,
+      STRING,
+      NUMBER,
+      CONSTRUCTOR_CALL,
+    ];
+    let ATTRIBUTES = {
+      begin: regex.concat(/#\[\s*\\?/, regex.either(PASCAL_CASE_CLASS_NAME_RE, UPCASE_NAME_RE)),
+      beginScope: "meta",
+      end: /]/,
+      endScope: "meta",
+      keywords: {
+        literal: LITERALS,
+        keyword: ["new", "array"],
+      },
+      contains: [
+        {
+          begin: /\[/,
+          end: /]/,
+          keywords: {
+            literal: LITERALS,
+            keyword: ["new", "array"],
+          },
+          contains: ["self", ...ATTRIBUTE_CONTAINS],
+        },
+        ...ATTRIBUTE_CONTAINS,
+        {
+          scope: "meta",
+          variants: [
+            {
+              match: PASCAL_CASE_CLASS_NAME_RE,
+            },
+            {
+              match: UPCASE_NAME_RE,
+            },
+          ],
+        },
+      ],
+    };
+    return {
+      case_insensitive: false,
+      keywords: KEYWORDS,
+      contains: [
+        ATTRIBUTES,
+        hljs.HASH_COMMENT_MODE,
+        hljs.COMMENT("//", "$"),
+        hljs.COMMENT("/\\*", "\\*/", {
+          contains: [
+            {
+              scope: "doctag",
+              match: "@[A-Za-z]+",
+            },
+          ],
+        }),
         {
           match: /__halt_compiler\(\);/,
           keywords: "__halt_compiler",
           starts: {
             scope: "comment",
-            end: e.MATCH_NOTHING_RE,
-            contains: [{ match: /\?>/, scope: "meta", endsParent: !0 }],
+            end: hljs.MATCH_NOTHING_RE,
+            contains: [
+              {
+                match: /\?>/,
+                scope: "meta",
+                endsParent: true,
+              },
+            ],
           },
         },
-        i,
-        { scope: "variable.language", match: /\$this\b/ },
-        r,
-        K,
-        M,
-        { match: [/const/, /\s/, combined], scope: { 1: "keyword", 3: "variable.constant" } },
-        C,
+        PREPROCESSOR,
+        {
+          scope: "variable.language",
+          match: /\$this\b/,
+        },
+        VARIABLE,
+        FUNCTION_INVOKE,
+        LEFT_AND_RIGHT_SIDE_OF_DOUBLE_COLON,
+        {
+          match: [/const/, /\s/, IDENT_RE],
+          scope: {
+            1: "keyword",
+            3: "variable.constant",
+          },
+        },
+        CONSTRUCTOR_CALL,
         {
           scope: "function",
           relevance: 0,
           beginKeywords: "fn function",
           end: /[;{]/,
-          excludeEnd: !0,
+          excludeEnd: true,
           illegal: "[$%\\[]",
           contains: [
-            { beginKeywords: "use" },
-            e.UNDERSCORE_TITLE_MODE,
-            { begin: "=>", endsParent: !0 },
+            {
+              beginKeywords: "use",
+            },
+            hljs.UNDERSCORE_TITLE_MODE,
+            {
+              begin: "=>",
+              endsParent: true,
+            },
             {
               scope: "params",
               begin: "\\(",
               end: "\\)",
-              excludeBegin: !0,
-              excludeEnd: !0,
-              keywords: N,
-              contains: ["self", J, r, M, e.C_BLOCK_COMMENT_MODE, E, u],
+              excludeBegin: true,
+              excludeEnd: true,
+              keywords: KEYWORDS,
+              contains: [
+                "self",
+                ATTRIBUTES,
+                VARIABLE,
+                LEFT_AND_RIGHT_SIDE_OF_DOUBLE_COLON,
+                hljs.C_BLOCK_COMMENT_MODE,
+                STRING,
+                NUMBER,
+              ],
             },
           ],
         },
         {
           scope: "class",
           variants: [
-            { beginKeywords: "enum", illegal: /[($"]/ },
-            { beginKeywords: "class interface trait", illegal: /[:($"]/ },
+            {
+              beginKeywords: "enum",
+              illegal: /[($"]/,
+            },
+            {
+              beginKeywords: "class interface trait",
+              illegal: /[:($"]/,
+            },
           ],
           relevance: 0,
           end: /\{/,
-          excludeEnd: !0,
-          contains: [{ beginKeywords: "extends implements" }, e.UNDERSCORE_TITLE_MODE],
+          excludeEnd: true,
+          contains: [
+            {
+              beginKeywords: "extends implements",
+            },
+            hljs.UNDERSCORE_TITLE_MODE,
+          ],
         },
         {
           beginKeywords: "namespace",
           relevance: 0,
           end: ";",
           illegal: /[.']/,
-          contains: [e.inherit(e.UNDERSCORE_TITLE_MODE, { scope: "title.class" })],
+          contains: [
+            hljs.inherit(hljs.UNDERSCORE_TITLE_MODE, {
+              scope: "title.class",
+            }),
+          ],
         },
         {
           beginKeywords: "use",
           relevance: 0,
           end: ";",
-          contains: [{ match: /\b(as|const|function)\b/, scope: "keyword" }, e.UNDERSCORE_TITLE_MODE],
+          contains: [
+            {
+              match: /\b(as|const|function)\b/,
+              scope: "keyword",
+            },
+            hljs.UNDERSCORE_TITLE_MODE,
+          ],
         },
-        E,
-        u,
+        STRING,
+        NUMBER,
       ],
     };
   }
-  Ui.exports = Bp;
+  cjsModule.exports = php;
 });
-
-export { Bi };
+export { require_php };

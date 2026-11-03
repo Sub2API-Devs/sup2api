@@ -10,10 +10,21 @@
  */
 
 //@ chunk-pdtd9ms4.js:191-270 placement
-function Nrn(e) {
-  return { name: e.name, working_dir: e.description?.working_dir ?? "" };
+/**
+ * 取某台机器的租约记录。
+ */
+function leaseOfMachine(host) {
+  return {
+    name: host.name,
+    working_dir: host.description?.working_dir ?? "",
+  };
 }
 //@ chunk-pdtd9ms4.js:270-305 placement
-var p5 = { held: !1, reason: "not_held" };
-
-export { p5, Nrn };
+/**
+ * 表示「未持有租约」的空值。
+ */
+var NOT_HELD_LEASE = {
+  held: false,
+  reason: "not_held",
+};
+export { NOT_HELD_LEASE, leaseOfMachine };

@@ -5,38 +5,47 @@
  * pieces: chunk-m4p5zn6n.js (1)
  * attribution: esm-fingerprint 1
  */
-import pe, { default as re, default as Mr, default as No } from "process";
+import { default as Mr } from "process";
 import { fileURLToPath } from "url";
-import path, { default as path_2 } from "path";
-import { ne } from "../path-key/index.js";
+import path from "path";
+import { pathKey } from "../path-key/index.js";
 
 //@ chunk-m4p5zn6n.js:7660-8136 esm-fingerprint
 var br = ({
-    cwd: e = re.cwd(),
-    path: n = re.env[ne()],
-    preferLocal: r = !0,
-    execPath: o = re.execPath,
-    addExecPath: s = !0,
-  } = {}) => {
-    let u = e instanceof URL ? fileURLToPath(e) : e,
-      resolved = path_2.resolve(u),
-      l = [];
-    if (r) Cr(l, resolved);
-    if (s) Er(l, o, resolved);
-    return [...l, n].join(path_2.delimiter);
-  },
-  Cr = (e, n) => {
-    let r;
-    while (r !== n) (e.push(path_2.join(n, "node_modules/.bin")), (r = n), (n = path_2.resolve(n, "..")));
-  },
-  Er = (e, n, r) => {
-    let o = n instanceof URL ? fileURLToPath(n) : n;
-    e.push(path_2.resolve(r, o, ".."));
-  },
-  Kt = ({ env: e = re.env, ...n } = {}) => {
-    e = { ...e };
-    let r = ne({ env: e });
-    return ((n.path = e[r]), (e[r] = br(n)), e);
+  cwd: e = Mr.cwd(),
+  path: n = Mr.env[pathKey()],
+  preferLocal = true,
+  execPath: o = Mr.execPath,
+  addExecPath = true,
+} = {}) => {
+  let u = e instanceof URL ? fileURLToPath(e) : e;
+  let resolved = path.resolve(u);
+  let result = [];
+  if (preferLocal) Cr(result, resolved);
+  if (addExecPath) Er(result, o, resolved);
+  return [...result, n].join(path.delimiter);
+};
+var Cr = (result, n) => {
+  let r;
+  while (r !== n) {
+    result.push(path.join(n, "node_modules/.bin"));
+    r = n;
+    n = path.resolve(n, "..");
+  }
+};
+var Er = (result, n, r) => {
+  let o = n instanceof URL ? fileURLToPath(n) : n;
+  result.push(path.resolve(r, o, ".."));
+};
+var Kt = ({ env = Mr.env, ...options } = {}) => {
+  env = {
+    ...env,
   };
-
+  let pathName = pathKey({
+    env,
+  });
+  options.path = env[pathName];
+  env[pathName] = br(options);
+  return env;
+};
 export { Kt };

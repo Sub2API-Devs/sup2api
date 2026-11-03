@@ -14,16 +14,20 @@ import { getPlatform } from "../platform.js";
 
 //@ chunk-ama6w91h.js:279-340 placement
 function createDeviceTreeHost(e = {}) {
-  return { fs: fsPromisesModule, path: pathModule, platform: () => getPlatform(), ...e };
+  return {
+    fs: fsPromisesModule,
+    path: pathModule,
+    platform: () => getPlatform(),
+    ...e,
+  };
 }
+//@ chunk-ama6w91h.js:340-516 placement
 /**
  * 解析真实根路径；另提供设备树宿主。
  */
-//@ chunk-ama6w91h.js:340-516 placement
 async function resolvedRoot(e, t) {
-  return t.isRootNameExchangeable === !0
+  return t.isRootNameExchangeable === true
     ? e.path.join(await e.fs.realpath(e.path.dirname(t.realRoot)), e.path.basename(t.realRoot))
     : e.fs.realpath(t.realRoot);
 }
-
 export { createDeviceTreeHost, resolvedRoot };

@@ -11,13 +11,18 @@
 import { isSafeMode, isRestrictedMode } from "./envUtils.js";
 
 //@ chunk-kqfm73k5.js:231-296 placement
-function foldRestricted(n, e) {
-  return e && !n.restricted ? { ...n, restricted: !0 } : n;
+function foldRestricted(options, e) {
+  return e && !options.restricted
+    ? {
+        ...options,
+        restricted: true,
+      }
+    : options;
 }
+//@ chunk-kqfm73k5.js:296-1164 placement
 /**
  * 命令行是否带会话级配置（自定义系统提示、工具白名单、受限设置），分叉时需拒绝。
  */
-//@ chunk-kqfm73k5.js:296-1164 placement
 function cliCarriesSessionConfig(n) {
   return (
     isSafeMode() ||
@@ -43,10 +48,10 @@ function cliCarriesSessionConfig(n) {
       n.permissionPromptTool,
       n.settingSources,
       n.managedSettings,
-    ].some((e) => e !== void 0) ||
+    ].some((e) => e !== undefined) ||
     Boolean(n.disableSlashCommands) ||
     Boolean(n.includeUnsupportedModels) ||
-    n.sessionPersistence === !1 ||
+    n.sessionPersistence === false ||
     Boolean(n.dangerouslySkipPermissions) ||
     Boolean(n.allowDangerouslySkipPermissions) ||
     Boolean(n.allowBypass) ||
@@ -73,13 +78,12 @@ function cliCarriesForkRestrictedConfig(n) {
       n.settingSources,
       n.managedSettings,
       n.projectConfigRoot,
-    ].some((e) => e !== void 0) || (n.tools ?? []).some((e) => e !== "default")
+    ].some((e) => e !== undefined) || (n.tools ?? []).some((e) => e !== "default")
   );
 }
 //@ chunk-kqfm73k5.js:1387-1462 placement
 var FORK_RESTRICTED_LAUNCH_FLAGS_DESCRIPTION =
   "a custom system prompt, a tool allowlist, or restricted settings";
-
 export {
   cliCarriesSessionConfig,
   foldRestricted,

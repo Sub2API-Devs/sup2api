@@ -11,23 +11,28 @@
 
 //@ chunk-q7k80qkg.js:191-293 placement
 class FeatureAvailability {
-  availability = () => !1;
-  register(i) {
-    this.availability = i;
+  availability = () => false;
+  register(availability) {
+    this.availability = availability;
   }
   isAvailable() {
     return this.availability();
   }
 }
 //@ chunk-q7k80qkg.js:293-305 placement
-var e = new FeatureAvailability();
+var featureAvailabilityRegistry = new FeatureAvailability();
 //@ chunk-q7k80qkg.js:305-335 placement
-function fai(i) {
-  e.register(i);
+/**
+ * 注册一个特性可用性判定函数。
+ */
+function registerFeatureAvailability(hasArtifactTypeListGate) {
+  featureAvailabilityRegistry.register(hasArtifactTypeListGate);
 }
 //@ chunk-q7k80qkg.js:335-373 placement
-function l4e() {
-  return e.isAvailable();
+/**
+ * 判断当前是否任一注册的特性能用。
+ */
+function isAnyFeatureAvailable() {
+  return featureAvailabilityRegistry.isAvailable();
 }
-
-export { l4e, fai };
+export { isAnyFeatureAvailable, registerFeatureAvailability };

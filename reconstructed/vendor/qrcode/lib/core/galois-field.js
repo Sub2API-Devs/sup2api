@@ -8,26 +8,29 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-spjgqa4y.js:6599-6966 cjs-fingerprint
-var Wt = x(function (xi) {
-  var uint8Array = new Uint8Array(512),
-    uint8Array_2 = new Uint8Array(256);
+var require_galois_field = x(function (cjsExports) {
+  var EXP_TABLE = new Uint8Array(512);
+  var LOG_TABLE = new Uint8Array(256);
   (function () {
-    let e = 1;
-    for (let r = 0; r < 255; r++)
-      if (((uint8Array[r] = e), (uint8Array_2[e] = r), (e <<= 1), e & 256)) e ^= 285;
-    for (let r = 255; r < 512; r++) uint8Array[r] = uint8Array[r - 255];
+    let x = 1;
+    for (let i = 0; i < 255; i++) {
+      EXP_TABLE[i] = x;
+      LOG_TABLE[x] = i;
+      x <<= 1;
+      if (x & 256) x ^= 285;
+    }
+    for (let i = 255; i < 512; i++) EXP_TABLE[i] = EXP_TABLE[i - 255];
   })();
-  xi.log = function (e) {
-    if (e < 1) throw Error("log(" + e + ")");
-    return uint8Array_2[e];
+  cjsExports.log = function (n) {
+    if (n < 1) throw Error("log(" + n + ")");
+    return LOG_TABLE[n];
   };
-  xi.exp = function (e) {
-    return uint8Array[e];
+  cjsExports.exp = function (n) {
+    return EXP_TABLE[n];
   };
-  xi.mul = function (e, r) {
-    if (e === 0 || r === 0) return 0;
-    return uint8Array[uint8Array_2[e] + uint8Array_2[r]];
+  cjsExports.mul = function (x, y) {
+    if (x === 0 || y === 0) return 0;
+    return EXP_TABLE[LOG_TABLE[x] + LOG_TABLE[y]];
   };
 });
-
-export { Wt };
+export { require_galois_field };

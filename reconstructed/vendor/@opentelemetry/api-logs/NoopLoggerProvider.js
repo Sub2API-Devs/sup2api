@@ -13,5 +13,4 @@ class NoopLoggerProvider {
     return new NoopEmitter();
   }
 }
-
 export { NoopLoggerProvider };

@@ -18,7 +18,7 @@ import { execFileNoThrow } from "./execFileNoThrow.js";
 import { sequential } from "./sequential.js";
 import {
   VSCODE_SCROLL_SENSITIVITY_KEY,
-  We,
+  VSCODE_RECOMMENDED_SCROLL_SENSITIVITY,
   isVSCodeRemoteSSH,
   NEWLINE,
   vscodeUserDirectories,
@@ -29,41 +29,41 @@ import { isPlainObject } from "./isPlainObject.js";
 import { color } from "../components/design-system/color.js";
 import { logForDebugging } from "./debug.js";
 
+//@ chunk-d0x4qj4e.js:416-1116 fingerprint = detectShell (1)
 /**
  * 检测用户 shell（zsh/bash/fish/PowerShell）及对应补全脚本的缓存路径。
  */
-//@ chunk-d0x4qj4e.js:416-1116 fingerprint = detectShell (1)
 function detectShell() {
-  let e = env.SHELL || "",
-    home = homedir(),
-    claudeDir = join(home, ".claude");
-  if (e.endsWith("/zsh") || e.endsWith("/zsh.exe")) {
+  let shell = env.SHELL || "";
+  let home = homedir();
+  let claudeDir = join(home, ".claude");
+  if (shell.endsWith("/zsh") || shell.endsWith("/zsh.exe")) {
     let cacheFile = join(claudeDir, "completion.zsh");
     return {
       name: "zsh",
       rcFile: join(home, ".zshrc"),
-      cacheFile: cacheFile,
+      cacheFile,
       completionLine: `[[ -f "${cacheFile}" ]] && source "${cacheFile}"`,
       shellFlag: "zsh",
     };
   }
-  if (e.endsWith("/bash") || e.endsWith("/bash.exe")) {
+  if (shell.endsWith("/bash") || shell.endsWith("/bash.exe")) {
     let cacheFile = join(claudeDir, "completion.bash");
     return {
       name: "bash",
       rcFile: join(home, ".bashrc"),
-      cacheFile: cacheFile,
+      cacheFile,
       completionLine: `[ -f "${cacheFile}" ] && source "${cacheFile}"`,
       shellFlag: "bash",
     };
   }
-  if (e.endsWith("/fish") || e.endsWith("/fish.exe")) {
-    let o = env.XDG_CONFIG_HOME || join(home, ".config"),
-      cacheFile = join(claudeDir, "completion.fish");
+  if (shell.endsWith("/fish") || shell.endsWith("/fish.exe")) {
+    let xdg = env.XDG_CONFIG_HOME || join(home, ".config");
+    let cacheFile = join(claudeDir, "completion.fish");
     return {
       name: "fish",
-      rcFile: join(o, "fish", "config.fish"),
-      cacheFile: cacheFile,
+      rcFile: join(xdg, "fish", "config.fish"),
+      cacheFile,
       completionLine: `[ -f "${cacheFile}" ] && source "${cacheFile}"`,
       shellFlag: "fish",
     };
@@ -71,61 +71,66 @@ function detectShell() {
   return null;
 }
 //@ chunk-d0x4qj4e.js:1116-1144 layout
-async function $_o() {
+/**
+ * 重新生成 shell 补全缓存的占位函数（当前不做任何事）。
+ */
+async function regenerateCompletionCache() {
   return;
 }
+//@ chunk-d0x4qj4e.js:1144-1255 fingerprint = regenerateCompletionCache (0.766)
 /**
  * 后台运行 claude completion --output 重新生成 shell 补全缓存。
  */
-//@ chunk-d0x4qj4e.js:1144-1255 fingerprint = regenerateCompletionCache (0.766)
-function regenerateCompletionCache(e) {
-  let { cmd: cmd, prefixArgs: prefixArgs } = getLaunchCommand();
+function regenerateCompletionCache_2(e) {
+  let { cmd, prefixArgs } = getLaunchCommand();
   return execFileNoThrow(cmd, [...prefixArgs, "completion", e.shellFlag, "--output", e.cacheFile]);
 }
 //@ chunk-7p2hc4jn.js:7657-8767 callgraph-witnessed = setupShellCompletion (0.201)
 async function setupShellCompletion(e, r, n) {
-  let dim = sequential.dim(
-    `For smoother scrolling, set "${VSCODE_SCROLL_SENSITIVITY_KEY}": ${We} in ${r} settings.`,
+  let s = sequential.dim(
+    `For smoother scrolling, set "${VSCODE_SCROLL_SENSITIVITY_KEY}": ${VSCODE_RECOMMENDED_SCROLL_SENSITIVITY} in ${r} settings.`,
   );
-  if (isVSCodeRemoteSSH()) return `${dim}${NEWLINE}`;
+  if (isVSCodeRemoteSSH()) return `${s}${NEWLINE}`;
   let o = join(await vscodeUserDirectories.of(e).pathFor(r), "settings.json");
   try {
-    let u = "{}",
-      d = !1;
+    let content = "{}";
+    let d = false;
     try {
-      ((u = await readFile(o, { encoding: "utf-8" })), (d = !0));
+      content = await readFile(o, {
+        encoding: "utf-8",
+      });
+      d = true;
     } catch (error) {
       if (!isFsInaccessible(error)) throw error;
     }
-    let configDir = parseJsonc(u);
+    let configDir = parseJsonc(content);
     if (!isPlainObject(configDir))
-      return `${color("warning", n)(`${r} settings.json isn't a JSON object; not modifying it.`)}${NEWLINE}${dim}${NEWLINE}`;
+      return `${color("warning", n)(`${r} settings.json isn't a JSON object; not modifying it.`)}${NEWLINE}${s}${NEWLINE}`;
     if (VSCODE_SCROLL_SENSITIVITY_KEY in configDir)
       return `${color("success", n)(`${r} ${VSCODE_SCROLL_SENSITIVITY_KEY} already set; leaving as-is`)}${NEWLINE}${sequential.dim(`See ${o}`)}${NEWLINE}`;
-    let x = setJsoncProperty(u, VSCODE_SCROLL_SENSITIVITY_KEY, We);
-    if (x === u)
-      return `${color("warning", n)(`Couldn't update ${r} settings.json.`)}${NEWLINE}${dim}${NEWLINE}`;
+    let x = setJsoncProperty(content, VSCODE_SCROLL_SENSITIVITY_KEY, VSCODE_RECOMMENDED_SCROLL_SENSITIVITY);
+    if (x === content)
+      return `${color("warning", n)(`Couldn't update ${r} settings.json.`)}${NEWLINE}${s}${NEWLINE}`;
     if (d) {
       let content = `${o}.${randomBytes(4).toString("hex")}.bak`;
       try {
         await copyFile(o, content);
       } catch {
-        return `${color("warning", n)(`Couldn't back up ${r} settings.json; not modifying it.`)}${NEWLINE}${dim}${NEWLINE}`;
+        return `${color("warning", n)(`Couldn't back up ${r} settings.json; not modifying it.`)}${NEWLINE}${s}${NEWLINE}`;
       }
     }
-    return (
-      await writeFile(o, x, { encoding: "utf-8" }),
-      `${color("success", n)(`Set ${r} terminal scroll sensitivity to ${We}`)}${NEWLINE}${sequential.dim(`See ${o}`)}${NEWLINE}`
-    );
+    await writeFile(o, x, {
+      encoding: "utf-8",
+    });
+    return `${color("success", n)(`Set ${r} terminal scroll sensitivity to ${VSCODE_RECOMMENDED_SCROLL_SENSITIVITY}`)}${NEWLINE}${sequential.dim(`See ${o}`)}${NEWLINE}`;
   } catch (error) {
-    return (
-      logForDebugging(
-        `Couldn't update ${r} settings.json at ${o}: ${error instanceof Error ? error.message : String(error)}`,
-        { level: "error" },
-      ),
-      `${color("warning", n)(`Couldn't update ${r} settings.json.`)}${NEWLINE}${dim}${NEWLINE}`
+    logForDebugging(
+      `Couldn't update ${r} settings.json at ${o}: ${error instanceof Error ? error.message : String(error)}`,
+      {
+        level: "error",
+      },
     );
+    return `${color("warning", n)(`Couldn't update ${r} settings.json.`)}${NEWLINE}${s}${NEWLINE}`;
   }
 }
-
-export { setupShellCompletion, $_o };
+export { setupShellCompletion, regenerateCompletionCache };

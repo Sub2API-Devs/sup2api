@@ -8,15 +8,16 @@
 import { x } from "../../../../../runtime/bun-runtime.js";
 
 //@ chunk-fq0cr76a.js:323867-324123 cjs-require-graph
-var vg = x(function (RN) {
-  Object.defineProperty(RN, "__esModule", { value: !0 });
-  RN.isMessage = oj;
-  function oj(e, n) {
-    if (!(e !== null && typeof e == "object" && "$typeName" in e && typeof e.$typeName == "string"))
-      return !1;
-    if (n === void 0) return !0;
-    return n.typeName === e.$typeName;
+var require_is_message = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.isMessage = isMessage;
+  function isMessage(arg, schema) {
+    if (!(arg !== null && typeof arg == "object" && "$typeName" in arg && typeof arg.$typeName == "string"))
+      return false;
+    if (schema === undefined) return true;
+    return schema.typeName === arg.$typeName;
   }
 });
-
-export { vg };
+export { require_is_message };

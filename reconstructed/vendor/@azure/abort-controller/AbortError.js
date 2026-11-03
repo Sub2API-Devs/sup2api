@@ -8,10 +8,9 @@
 
 //@ chunk-mrx6y2r5.js:55897-55968 placement = AbortError (1)
 class AbortError extends Error {
-  constructor(e) {
-    super(e);
+  constructor(message) {
+    super(message);
     this.name = "AbortError";
   }
 }
-
 export { AbortError };

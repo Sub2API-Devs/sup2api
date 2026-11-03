@@ -10,17 +10,16 @@
  */
 import { env } from "../../utils/env.js";
 
+//@ chunk-e6aww6q8.js:1732051-1732261 fingerprint = installGitHubApp (0.971)
 /**
  * /install-github-app 命令对象（local-jsx）；描述：Set up Claude GitHub Actions for a repository；availability ["claude-ai","console"]；isEnabled: ()=>!i.DISABLE_INSTALL_GITHUB_APP_COMMAND；实现 chunk-4v9zy7gn.js 的 Si。
  */
-//@ chunk-e6aww6q8.js:1732051-1732261 fingerprint = installGitHubApp (0.971)
 var installGithubAppCommandDefinition = {
-    type: "local-jsx",
-    name: "install-github-app",
-    description: "Set up Claude GitHub Actions for a repository",
-    availability: ["claude-ai", "console"],
-    isEnabled: () => !env.DISABLE_INSTALL_GITHUB_APP_COMMAND,
-  },
-  installGithubAppCommand = installGithubAppCommandDefinition;
-
+  type: "local-jsx",
+  name: "install-github-app",
+  description: "Set up Claude GitHub Actions for a repository",
+  availability: ["claude-ai", "console"],
+  isEnabled: () => !env.DISABLE_INSTALL_GITHUB_APP_COMMAND,
+};
+var installGithubAppCommand = installGithubAppCommandDefinition;
 export { installGithubAppCommand };

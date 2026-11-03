@@ -8,20 +8,27 @@
 import { x } from "../../../../../../runtime/bun-runtime.js";
 
 //@ chunk-1r4fv9mg.js:9050-9474 cjs-fingerprint
-var we = x(function (Rr, Nt) {
-  Nt.exports = {
+var require_content = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = {
     $schema: "https://json-schema.org/draft/2020-12/schema",
     $id: "https://json-schema.org/draft/2020-12/meta/content",
-    $vocabulary: { "https://json-schema.org/draft/2020-12/vocab/content": !0 },
+    $vocabulary: {
+      "https://json-schema.org/draft/2020-12/vocab/content": true,
+    },
     $dynamicAnchor: "meta",
     title: "Content vocabulary meta-schema",
     type: ["object", "boolean"],
     properties: {
-      contentEncoding: { type: "string" },
-      contentMediaType: { type: "string" },
-      contentSchema: { $dynamicRef: "#meta" },
+      contentEncoding: {
+        type: "string",
+      },
+      contentMediaType: {
+        type: "string",
+      },
+      contentSchema: {
+        $dynamicRef: "#meta",
+      },
     },
   };
 });
-
-export { we };
+export { require_content };

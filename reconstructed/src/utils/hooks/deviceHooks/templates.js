@@ -9,7 +9,7 @@
  * attribution: placement 5
  */
 import { getRegisteredHooks, clearRegisteredHooks, registerHookCallbacks } from "../../../bootstrap/state.js";
-import { hee } from "../hookEventSets.js";
+import { isMatcherEvent } from "../hookEventSets.js";
 
 //@ chunk-s61vbvea.js:326399-326504 placement
 function isDeviceOwnedHook(e) {
@@ -17,47 +17,57 @@ function isDeviceOwnedHook(e) {
 }
 //@ chunk-s61vbvea.js:326504-326633 placement
 function isDeviceHookOfKind(e, n, r) {
-  if (!isDeviceOwnedHook(e) || e.deviceOwner !== n) return !1;
-  let s = e.deviceTemplate !== void 0;
+  if (!isDeviceOwnedHook(e) || e.deviceOwner !== n) return false;
+  let s = e.deviceTemplate !== undefined;
   return r === "both" || (r === "templates") === s;
 }
 //@ chunk-s61vbvea.js:326633-326871 placement
 function replaceRegisteredHooks(e, n) {
-  let r = getRegisteredHooks() ?? {},
-    s = {};
-  for (let [h, y] of Object.entries(r)) {
-    let filtered = (y ?? []).filter(e);
-    if (filtered.length > 0) s[h] = filtered;
+  let r = getRegisteredHooks() ?? {};
+  let s = {};
+  for (let [key, value] of Object.entries(r)) {
+    let filtered = (value ?? []).filter(e);
+    if (filtered.length > 0) s[key] = filtered;
   }
-  for (let [h, y] of Object.entries(n)) if (y !== void 0 && y.length > 0) s[h] = [...(s[h] ?? []), ...y];
-  if ((clearRegisteredHooks(), Object.keys(s).length > 0)) registerHookCallbacks(s);
+  for (let [key, value] of Object.entries(n))
+    if (value !== undefined && value.length > 0) s[key] = [...(s[key] ?? []), ...value];
+  clearRegisteredHooks();
+  if (Object.keys(s).length > 0) registerHookCallbacks(s);
 }
+//@ chunk-s61vbvea.js:326871-327228 placement
 /**
  * 把来自设备的钩子回调注册为本进程的回调钩子（标记 deviceOwner，模板钩子附 deviceTemplate），先移除该设备同类的旧注册。
  */
-//@ chunk-s61vbvea.js:326871-327228 placement
 function registerDeviceHookCallbacks(e, n, r, s) {
   let h = {};
-  for (let [y, S] of Object.entries(n)) {
-    if (!hee(y)) continue;
-    h[y] = (S ?? []).map((w) => ({
+  for (let [key, value] of Object.entries(n)) {
+    if (!isMatcherEvent(key)) continue;
+    h[key] = (value ?? []).map((w) => ({
       ...{
-        ...(w.matcher !== void 0 && { matcher: w.matcher }),
-        hooks: w.hooks.map(({ callback: callback, timeout: timeout }) => ({
+        ...(w.matcher !== undefined && {
+          matcher: w.matcher,
+        }),
+        hooks: w.hooks.map(({ callback, timeout }) => ({
           type: "callback",
-          callback: callback,
-          ...(timeout !== void 0 && { timeout: timeout }),
+          callback,
+          ...(timeout !== undefined && {
+            timeout,
+          }),
         })),
       },
       deviceOwner: e,
-      ...(r === "templates" && { deviceTemplate: s?.(y, w) ?? "template" }),
+      ...(r === "templates" && {
+        deviceTemplate: s?.(key, w) ?? "template",
+      }),
     }));
   }
   replaceRegisteredHooks((y) => !isDeviceHookOfKind(y, e, r), h);
 }
 //@ chunk-s61vbvea.js:327228-327269 placement
-function der(e, n) {
+/**
+ * 注销设备钩子回调（按类型移除注册）。
+ */
+function unregisterDeviceHookCallbacks(e, n) {
   replaceRegisteredHooks((r) => !isDeviceHookOfKind(r, e, n), {});
 }
-
-export { isDeviceOwnedHook, registerDeviceHookCallbacks, der };
+export { isDeviceOwnedHook, registerDeviceHookCallbacks, unregisterDeviceHookCallbacks };

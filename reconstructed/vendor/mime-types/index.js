@@ -8,7 +8,7 @@
 import { x } from "../../runtime/bun-runtime.js";
 
 //@ chunk-h6b7mazd.js:4742-5269 cjs-require-graph
-var Sn = x(function (vl, _n) {
+var require_mime_types = x(function (cjsExports, cjsModule) {
   var Ze = (e) => () => {
     throw Error(
       "mime-types." +
@@ -16,15 +16,16 @@ var Sn = x(function (vl, _n) {
         "() is stubbed in this build. Do not rely on axios auto-multipart serialization (plain object + Content-Type: multipart/form-data). Use native FormData or hand-roll the multipart body instead. See scripts/build-plugins.ts stubMimeTypes plugin.",
     );
   };
-  _n.exports = {
+  cjsModule.exports = {
     lookup: Ze("lookup"),
     contentType: Ze("contentType"),
     extension: Ze("extension"),
     charset: Ze("charset"),
     extensions: Object.create(null),
     types: Object.create(null),
-    charsets: { lookup: Ze("charsets.lookup") },
+    charsets: {
+      lookup: Ze("charsets.lookup"),
+    },
   };
 });
-
-export { Sn };
+export { require_mime_types };

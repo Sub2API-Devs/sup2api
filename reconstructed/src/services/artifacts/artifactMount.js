@@ -13,40 +13,61 @@ import { getIsNonInteractiveSession } from "../../bootstrap/state.js";
 import { isTopHostSession, isClaudecodeSession } from "../../utils/sessionShape.js";
 import { isDesktopTopSession, isClaudeAiChatCowork } from "../../utils/entrypointKinds.js";
 
+//@ chunk-aepeg2w5.js:345026-345050 placement
 /**
  * artifact 挂载名常量。
  */
-//@ chunk-aepeg2w5.js:345026-345050 placement
 var ARTIFACT_MOUNT = "artifact_mount";
 //@ chunk-aepeg2w5.js:345050-345122 placement
-function Vwi(e, n) {
-  return `${getAgentProxyPath()}/artifact/${encodeURIComponent(e)}${n}`;
+/**
+ * 导出函数 `artifactProxyPath`：参数 e, n，返回 `${getAgentProxyPath()}/artifact/${encodeURIComponent(e)}${n}`。
+ */
+function artifactProxyPath(slug, path) {
+  return `${getAgentProxyPath()}/artifact/${encodeURIComponent(slug)}${path}`;
 }
 //@ chunk-aepeg2w5.js:345122-345170 placement
-function qwi(e) {
-  return { "x-frame-asset-token": e };
+/**
+ * 导出函数 `artifactAssetTokenHeader`：参数 e，返回 { "x-frame-asset-token": e }。
+ */
+function artifactAssetTokenHeader(token) {
+  return {
+    "x-frame-asset-token": token,
+  };
 }
+//@ chunk-aepeg2w5.js:345170-345209 placement
 /**
  * 是否为 artifact 挂载模式。
  */
-//@ chunk-aepeg2w5.js:345170-345209 placement
 function isArtifactMountMode() {
   return getIsNonInteractiveSession() && isTopHostSession() && !isClaudecodeSession();
 }
 //@ chunk-aepeg2w5.js:345209-345244 placement
-function Y3t() {
+/**
+ * 导出函数 `isArtifactMountUsable`：返回 isArtifactMountMode() && !isDesktopTopSession()。
+ */
+function isArtifactMountUsable() {
   return isArtifactMountMode() && !isDesktopTopSession();
 }
 //@ chunk-aepeg2w5.js:345244-345277 placement
-function Xpr() {
+/**
+ * 导出函数 `isArtifactPathMounted`：返回 isArtifactMountMode() || isClaudeAiChatCowork()。
+ */
+function isArtifactPathMounted() {
   return isArtifactMountMode() || isClaudeAiChatCowork();
 }
+//@ chunk-aepeg2w5.js:345277-345319 placement
 /**
  * 非挂载模式下的路径前缀。
  */
-//@ chunk-aepeg2w5.js:345277-345319 placement
 function artifactPathPrefix(e) {
-  return isArtifactMountMode() ? void 0 : `/${e}`;
+  return isArtifactMountMode() ? undefined : `/${e}`;
 }
-
-export { isArtifactMountMode, Xpr, Y3t, artifactPathPrefix, ARTIFACT_MOUNT, Vwi, qwi };
+export {
+  isArtifactMountMode,
+  isArtifactPathMounted,
+  isArtifactMountUsable,
+  artifactPathPrefix,
+  ARTIFACT_MOUNT,
+  artifactProxyPath,
+  artifactAssetTokenHeader,
+};

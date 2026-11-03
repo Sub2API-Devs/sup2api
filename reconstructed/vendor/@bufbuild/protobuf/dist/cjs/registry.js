@@ -6,156 +6,165 @@
  * attribution: cjs-require-graph 1
  */
 import { x } from "../../../../../runtime/bun-runtime.js";
-import { Ns } from "./descriptors.js";
-import { s_ } from "./wire/text-format.js";
-import { Ux } from "./reflect/nested-types.js";
-import { xl } from "./reflect/unsafe.js";
-import { Ec } from "./reflect/names.js";
+import { require_descriptors } from "./descriptors.js";
+import { require_text_format } from "./wire/text-format.js";
+import { require_nested_types } from "./reflect/nested-types.js";
+import { require_unsafe } from "./reflect/unsafe.js";
+import { require_names } from "./reflect/names.js";
 
 //@ chunk-fq0cr76a.js:364098-375937 cjs-require-graph
-var qg = x(function (uD) {
-  Object.defineProperty(uD, "__esModule", { value: !0 });
-  uD.maximumEdition = uD.minimumEdition = void 0;
-  uD.createRegistry = i7;
-  uD.createMutableRegistry = o7;
-  uD.createFileRegistry = a7;
-  var Gu = Ns(),
-    Hg = s_(),
-    rD = Ux(),
-    Al = xl(),
-    ks = Ec();
-  function i7(...e) {
-    return iD(e);
+var require_registry = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.maximumEdition = cjsExports.minimumEdition = undefined;
+  cjsExports.createRegistry = createRegistry;
+  cjsExports.createMutableRegistry = createMutableRegistry;
+  cjsExports.createFileRegistry = createFileRegistry;
+  var descriptors_js_1 = require_descriptors();
+  var text_format_js_1 = require_text_format();
+  var nested_types_js_1 = require_nested_types();
+  var unsafe_js_1 = require_unsafe();
+  var names_js_1 = require_names();
+  function createRegistry(...input) {
+    return initBaseRegistry(input);
   }
-  function o7(...e) {
-    let n = iD(e);
-    return Object.assign(Object.assign({}, n), {
-      remove(r) {
-        var s;
-        if (r.kind == "extension")
-          (s = n.extendees.get(r.extendee.typeName)) === null || s === void 0 || s.delete(r.number);
-        n.types.delete(r.typeName);
+  function createMutableRegistry(...input) {
+    let reg = initBaseRegistry(input);
+    return Object.assign(Object.assign({}, reg), {
+      remove(desc) {
+        var _a;
+        if (desc.kind == "extension") {
+          if (!((_a = reg.extendees.get(desc.extendee.typeName)) === null || _a === undefined))
+            _a.delete(desc.number);
+        }
+        reg.types.delete(desc.typeName);
       },
     });
   }
-  function a7(...e) {
-    let n = sD();
-    if (!e.length) return n;
-    if ("$typeName" in e[0] && e[0].$typeName == "google.protobuf.FileDescriptorSet") {
-      for (let r of e[0].file) eD(r, n);
-      return n;
+  function createFileRegistry(...args) {
+    let registry = createBaseRegistry();
+    if (!args.length) return registry;
+    if ("$typeName" in args[0] && args[0].$typeName == "google.protobuf.FileDescriptorSet") {
+      for (let file of args[0].file) addFile(file, registry);
+      return registry;
     }
-    if ("$typeName" in e[0]) {
-      let y = function (b) {
-          let S = [];
-          for (let w of b.dependency) {
-            if (n.getFile(w) != null) continue;
-            if (h.has(w)) continue;
-            let R = s(w);
-            if (!R) throw Error(`Unable to resolve ${w}, imported by ${b.name}`);
-            if ("kind" in R) n.addFile(R, !1, !0);
-            else (h.add(R.name), S.push(R));
+    if ("$typeName" in args[0]) {
+      let recurseDeps = function (file) {
+        let deps = [];
+        for (let protoFileName of file.dependency) {
+          if (registry.getFile(protoFileName) != null) continue;
+          if (seen.has(protoFileName)) continue;
+          let dep = resolve(protoFileName);
+          if (!dep) throw Error(`Unable to resolve ${protoFileName}, imported by ${file.name}`);
+          if ("kind" in dep) registry.addFile(dep, false, true);
+          else {
+            seen.add(dep.name);
+            deps.push(dep);
           }
-          return S.concat(...S.map(y));
-        },
-        r = e[0],
-        s = e[1],
-        h = new Set();
-      for (let b of [r, ...y(r)].reverse()) eD(b, n);
-    } else for (let r of e) for (let file of r.files) n.addFile(file);
-    return n;
+        }
+        return deps.concat(...deps.map(recurseDeps));
+      };
+      let input = args[0];
+      let resolve = args[1];
+      let seen = new Set();
+      for (let file of [input, ...recurseDeps(input)].reverse()) addFile(file, registry);
+    } else for (let fileReg of args) for (let file of fileReg.files) registry.addFile(file);
+    return registry;
   }
-  function sD() {
-    let e = new Map(),
-      n = new Map(),
-      r = new Map();
+  function createBaseRegistry() {
+    let types = new Map();
+    let extendees = new Map();
+    let files = new Map();
     return {
       kind: "registry",
-      types: e,
-      extendees: n,
+      types,
+      extendees,
       [Symbol.iterator]() {
-        return e.values();
+        return types.values();
       },
       get files() {
-        return r.values();
+        return files.values();
       },
-      addFile(s, h, y) {
-        if ((r.set(s.proto.name, s), !h)) for (let b of rD.nestedTypes(s)) this.add(b);
-        if (y) for (let dependency of s.dependencies) this.addFile(dependency, h, y);
+      addFile(file, skipTypes, withDeps) {
+        files.set(file.proto.name, file);
+        if (!skipTypes) for (let type of nested_types_js_1.nestedTypes(file)) this.add(type);
+        if (withDeps) for (let f of file.dependencies) this.addFile(f, skipTypes, withDeps);
       },
-      add(s) {
-        if (s.kind == "extension") {
-          let h = n.get(s.extendee.typeName);
-          if (!h) n.set(s.extendee.typeName, (h = new Map()));
-          h.set(s.number, s);
+      add(desc) {
+        if (desc.kind == "extension") {
+          let numberToExt = extendees.get(desc.extendee.typeName);
+          if (!numberToExt) extendees.set(desc.extendee.typeName, (numberToExt = new Map()));
+          numberToExt.set(desc.number, desc);
         }
-        e.set(s.typeName, s);
+        types.set(desc.typeName, desc);
       },
-      get(s) {
-        return e.get(s);
+      get(typeName) {
+        return types.get(typeName);
       },
-      getFile(s) {
-        return r.get(s);
+      getFile(fileName) {
+        return files.get(fileName);
       },
-      getMessage(s) {
-        let h = e.get(s);
-        return (h === null || h === void 0 ? void 0 : h.kind) == "message" ? h : void 0;
+      getMessage(typeName) {
+        let t = types.get(typeName);
+        return (t === null || t === undefined ? undefined : t.kind) == "message" ? t : undefined;
       },
-      getEnum(s) {
-        let h = e.get(s);
-        return (h === null || h === void 0 ? void 0 : h.kind) == "enum" ? h : void 0;
+      getEnum(typeName) {
+        let t = types.get(typeName);
+        return (t === null || t === undefined ? undefined : t.kind) == "enum" ? t : undefined;
       },
-      getExtension(s) {
-        let h = e.get(s);
-        return (h === null || h === void 0 ? void 0 : h.kind) == "extension" ? h : void 0;
+      getExtension(typeName) {
+        let t = types.get(typeName);
+        return (t === null || t === undefined ? undefined : t.kind) == "extension" ? t : undefined;
       },
-      getExtensionFor(s, h) {
-        var y;
-        return (y = n.get(s.typeName)) === null || y === void 0 ? void 0 : y.get(h);
+      getExtensionFor(extendee, no) {
+        var _a;
+        return (_a = extendees.get(extendee.typeName)) === null || _a === undefined ? undefined : _a.get(no);
       },
-      getService(s) {
-        let h = e.get(s);
-        return (h === null || h === void 0 ? void 0 : h.kind) == "service" ? h : void 0;
+      getService(typeName) {
+        let t = types.get(typeName);
+        return (t === null || t === undefined ? undefined : t.kind) == "service" ? t : undefined;
       },
     };
   }
-  function iD(e) {
-    let n = sD();
-    for (let r of e)
-      switch (r.kind) {
+  function initBaseRegistry(inputs) {
+    let registry = createBaseRegistry();
+    for (let input of inputs)
+      switch (input.kind) {
         case "registry":
-          for (let s of r) n.add(s);
+          for (let n of input) registry.add(n);
           break;
         case "file":
-          n.addFile(r);
+          registry.addFile(input);
           break;
         default:
-          n.add(r);
+          registry.add(input);
           break;
       }
-    return n;
+    return registry;
   }
-  var l7 = 998,
-    c7 = 999,
-    u7 = 9999,
-    d7 = 9,
-    pp = 10,
-    fp = 11,
-    f7 = 12,
-    Xk = 14,
-    c_ = 3,
-    p7 = 2,
-    Jk = 1,
-    h7 = 0,
-    i_ = 1,
-    Qk = 2,
-    m7 = 3,
-    g7 = 1,
-    y7 = 2,
-    b7 = 1,
-    S7 = 2;
-  ((uD.minimumEdition = 998), (uD.maximumEdition = 1001));
-  var aD = {
+  var EDITION_PROTO2 = 998;
+  var EDITION_PROTO3 = 999;
+  var EDITION_UNSTABLE = 9999;
+  var TYPE_STRING = 9;
+  var TYPE_GROUP = 10;
+  var TYPE_MESSAGE = 11;
+  var TYPE_BYTES = 12;
+  var TYPE_ENUM = 14;
+  var LABEL_REPEATED = 3;
+  var LABEL_REQUIRED = 2;
+  var JS_STRING = 1;
+  var IDEMPOTENCY_UNKNOWN = 0;
+  var EXPLICIT = 1;
+  var IMPLICIT = 2;
+  var LEGACY_REQUIRED = 3;
+  var PACKED = 1;
+  var DELIMITED = 2;
+  var OPEN = 1;
+  var VERIFY = 2;
+  cjsExports.minimumEdition = 998;
+  cjsExports.maximumEdition = 1001;
+  var featureDefaults = {
     998: {
       fieldPresence: 1,
       enumType: 2,
@@ -197,134 +206,164 @@ var qg = x(function (uD) {
       defaultSymbolVisibility: 2,
     },
   };
-  function eD(e, n) {
-    var r, s;
-    let h = {
-        kind: "file",
-        proto: e,
-        deprecated:
-          (s = (r = e.options) === null || r === void 0 ? void 0 : r.deprecated) !== null && s !== void 0
-            ? s
-            : !1,
-        edition: v7(e),
-        name: e.name.replace(/\.proto$/, ""),
-        dependencies: w7(e, n),
-        enums: [],
-        messages: [],
-        extensions: [],
-        services: [],
-        toString() {
-          return `file ${e.name}`;
-        },
+  function addFile(proto, reg) {
+    var _a;
+    var _b;
+    let file = {
+      kind: "file",
+      proto,
+      deprecated:
+        (_b = (_a = proto.options) === null || _a === undefined ? undefined : _a.deprecated) !== null &&
+        _b !== undefined
+          ? _b
+          : false,
+      edition: getFileEdition(proto),
+      name: proto.name.replace(/\.proto$/, ""),
+      dependencies: findFileDependencies(proto, reg),
+      enums: [],
+      messages: [],
+      extensions: [],
+      services: [],
+      toString() {
+        return `file ${proto.name}`;
       },
-      y = new Map(),
-      b = {
-        get(S) {
-          return y.get(S);
-        },
-        add(S) {
-          var w;
-          (so(((w = S.proto.options) === null || w === void 0 ? void 0 : w.mapEntry) === !0),
-            y.set(S.typeName, S));
-        },
-      };
-    for (let S of e.enumType) lD(S, h, void 0, n);
-    for (let S of e.messageType) cD(S, h, void 0, n, b);
-    for (let S of e.service) E7(S, h, n);
-    o_(h, n);
-    for (let S of y.values()) a_(S, n, b);
-    for (let message of h.messages) (a_(message, n, b), o_(message, n));
-    n.addFile(h, !0);
+    };
+    let mapEntriesStore = new Map();
+    let mapEntries = {
+      get(typeName) {
+        return mapEntriesStore.get(typeName);
+      },
+      add(desc) {
+        var _a;
+        assert(((_a = desc.proto.options) === null || _a === undefined ? undefined : _a.mapEntry) === true);
+        mapEntriesStore.set(desc.typeName, desc);
+      },
+    };
+    for (let enumProto of proto.enumType) addEnum(enumProto, file, undefined, reg);
+    for (let messageProto of proto.messageType) addMessage(messageProto, file, undefined, reg, mapEntries);
+    for (let serviceProto of proto.service) addService(serviceProto, file, reg);
+    addExtensions(file, reg);
+    for (let mapEntry of mapEntriesStore.values()) addFields(mapEntry, reg, mapEntries);
+    for (let message of file.messages) {
+      addFields(message, reg, mapEntries);
+      addExtensions(message, reg);
+    }
+    reg.addFile(file, true);
   }
-  function o_(e, n) {
-    switch (e.kind) {
+  function addExtensions(desc, reg) {
+    switch (desc.kind) {
       case "file":
-        for (let r of e.proto.extension) {
-          let s = l_(r, e, n);
-          (e.extensions.push(s), n.add(s));
+        for (let proto of desc.proto.extension) {
+          let ext = newField(proto, desc, reg);
+          desc.extensions.push(ext);
+          reg.add(ext);
         }
         break;
       case "message":
-        for (let r of e.proto.extension) {
-          let s = l_(r, e, n);
-          (e.nestedExtensions.push(s), n.add(s));
+        for (let proto of desc.proto.extension) {
+          let ext = newField(proto, desc, reg);
+          desc.nestedExtensions.push(ext);
+          reg.add(ext);
         }
-        for (let nestedMessage of e.nestedMessages) o_(nestedMessage, n);
+        for (let message of desc.nestedMessages) addExtensions(message, reg);
         break;
     }
   }
-  function a_(e, n, r) {
-    let mapped = e.proto.oneofDecl.map((y) => _7(y, e)),
-      h = new Set();
-    for (let y of e.proto.field) {
-      let b = C7(y, mapped),
-        S = l_(y, e, n, b, r);
-      if ((e.fields.push(S), (e.field[S.localName] = S), b === void 0)) e.members.push(S);
-      else if ((b.fields.push(S), !h.has(b))) (h.add(b), e.members.push(b));
+  function addFields(message, reg, mapEntries) {
+    let allOneofs = message.proto.oneofDecl.map((proto) => newOneof(proto, message));
+    let oneofsSeen = new Set();
+    for (let proto of message.proto.field) {
+      let oneof = findOneof(proto, allOneofs);
+      let field = newField(proto, message, reg, oneof, mapEntries);
+      message.fields.push(field);
+      message.field[field.localName] = field;
+      if (oneof === undefined) message.members.push(field);
+      else {
+        oneof.fields.push(field);
+        if (!oneofsSeen.has(oneof)) {
+          oneofsSeen.add(oneof);
+          message.members.push(oneof);
+        }
+      }
     }
-    for (let y of mapped.filter((b) => h.has(b))) e.oneofs.push(y);
-    for (let nestedMessage of e.nestedMessages) a_(nestedMessage, n, r);
+    for (let oneof of allOneofs.filter((o) => oneofsSeen.has(o))) message.oneofs.push(oneof);
+    for (let child of message.nestedMessages) addFields(child, reg, mapEntries);
   }
-  function lD(e, n, r, s) {
-    var h, y, b, S, w;
-    let R = T7(e.name, e.value),
-      D = {
-        kind: "enum",
-        proto: e,
-        deprecated:
-          (y = (h = e.options) === null || h === void 0 ? void 0 : h.deprecated) !== null && y !== void 0
-            ? y
-            : !1,
-        file: n,
-        parent: r,
-        open: !0,
-        name: e.name,
-        typeName: Kg(e, r, n),
-        value: {},
-        values: [],
-        sharedPrefix: R,
-        toString() {
-          return `enum ${this.typeName}`;
-        },
-      };
-    ((D.open = k7(D)), s.add(D));
-    for (let O of e.value) {
-      let L = O.name;
-      D.values.push(
-        (D.value[O.number] = {
+  function addEnum(proto, file, parent, reg) {
+    var _a;
+    var _b;
+    var _c;
+    var _d;
+    var _e;
+    let sharedPrefix = findEnumSharedPrefix(proto.name, proto.value);
+    let desc = {
+      kind: "enum",
+      proto,
+      deprecated:
+        (_b = (_a = proto.options) === null || _a === undefined ? undefined : _a.deprecated) !== null &&
+        _b !== undefined
+          ? _b
+          : false,
+      file,
+      parent,
+      open: true,
+      name: proto.name,
+      typeName: makeTypeName(proto, parent, file),
+      value: {},
+      values: [],
+      sharedPrefix,
+      toString() {
+        return `enum ${this.typeName}`;
+      },
+    };
+    desc.open = isEnumOpen(desc);
+    reg.add(desc);
+    for (let p of proto.value) {
+      let name = p.name;
+      desc.values.push(
+        (desc.value[p.number] = {
           kind: "enum_value",
-          proto: O,
+          proto: p,
           deprecated:
-            (S = (b = O.options) === null || b === void 0 ? void 0 : b.deprecated) !== null && S !== void 0
-              ? S
-              : !1,
-          parent: D,
-          name: L,
-          localName: ks.safeObjectProperty(R == null ? L : L.substring(R.length)),
-          number: O.number,
+            (_d = (_c = p.options) === null || _c === undefined ? undefined : _c.deprecated) !== null &&
+            _d !== undefined
+              ? _d
+              : false,
+          parent: desc,
+          name,
+          localName: names_js_1.safeObjectProperty(
+            sharedPrefix == null ? name : name.substring(sharedPrefix.length),
+          ),
+          number: p.number,
           toString() {
-            return `enum value ${D.typeName}.${L}`;
+            return `enum value ${desc.typeName}.${name}`;
           },
         }),
       );
     }
-    ((w = r === null || r === void 0 ? void 0 : r.nestedEnums) !== null && w !== void 0 ? w : n.enums).push(
-      D,
-    );
+    ((_e = parent === null || parent === undefined ? undefined : parent.nestedEnums) !== null &&
+    _e !== undefined
+      ? _e
+      : file.enums
+    ).push(desc);
   }
-  function cD(e, n, r, s, h) {
-    var y, b, S, w;
-    let R = {
+  function addMessage(proto, file, parent, reg, mapEntries) {
+    var _a;
+    var _b;
+    var _c;
+    var _d;
+    let desc = {
       kind: "message",
-      proto: e,
+      proto,
       deprecated:
-        (b = (y = e.options) === null || y === void 0 ? void 0 : y.deprecated) !== null && b !== void 0
-          ? b
-          : !1,
-      file: n,
-      parent: r,
-      name: e.name,
-      typeName: Kg(e, r, n),
+        (_b = (_a = proto.options) === null || _a === undefined ? undefined : _a.deprecated) !== null &&
+        _b !== undefined
+          ? _b
+          : false,
+      file,
+      parent,
+      name: proto.name,
+      typeName: makeTypeName(proto, parent, file),
       fields: [],
       field: {},
       oneofs: [],
@@ -336,330 +375,387 @@ var qg = x(function (uD) {
         return `message ${this.typeName}`;
       },
     };
-    if (((S = e.options) === null || S === void 0 ? void 0 : S.mapEntry) === !0) h.add(R);
-    else
-      (((w = r === null || r === void 0 ? void 0 : r.nestedMessages) !== null && w !== void 0
-        ? w
-        : n.messages
-      ).push(R),
-        s.add(R));
-    for (let D of e.enumType) lD(D, n, R, s);
-    for (let D of e.nestedType) cD(D, n, R, s, h);
+    if (((_c = proto.options) === null || _c === undefined ? undefined : _c.mapEntry) === true)
+      mapEntries.add(desc);
+    else {
+      ((_d = parent === null || parent === undefined ? undefined : parent.nestedMessages) !== null &&
+      _d !== undefined
+        ? _d
+        : file.messages
+      ).push(desc);
+      reg.add(desc);
+    }
+    for (let enumProto of proto.enumType) addEnum(enumProto, file, desc, reg);
+    for (let messageProto of proto.nestedType) addMessage(messageProto, file, desc, reg, mapEntries);
   }
-  function E7(e, n, r) {
-    var s, h;
-    let y = {
+  function addService(proto, file, reg) {
+    var _a;
+    var _b;
+    let desc = {
       kind: "service",
-      proto: e,
+      proto,
       deprecated:
-        (h = (s = e.options) === null || s === void 0 ? void 0 : s.deprecated) !== null && h !== void 0
-          ? h
-          : !1,
-      file: n,
-      name: e.name,
-      typeName: Kg(e, void 0, n),
+        (_b = (_a = proto.options) === null || _a === undefined ? undefined : _a.deprecated) !== null &&
+        _b !== undefined
+          ? _b
+          : false,
+      file,
+      name: proto.name,
+      typeName: makeTypeName(proto, undefined, file),
       methods: [],
       method: {},
       toString() {
         return `service ${this.typeName}`;
       },
     };
-    (n.services.push(y), r.add(y));
-    for (let b of e.method) {
-      let S = x7(b, y, r);
-      (y.methods.push(S), (y.method[S.localName] = S));
+    file.services.push(desc);
+    reg.add(desc);
+    for (let methodProto of proto.method) {
+      let method = newMethod(methodProto, desc, reg);
+      desc.methods.push(method);
+      desc.method[method.localName] = method;
     }
   }
-  function x7(e, n, r) {
-    var s, h, y, b;
-    let S;
-    if (e.clientStreaming && e.serverStreaming) S = "bidi_streaming";
-    else if (e.clientStreaming) S = "client_streaming";
-    else if (e.serverStreaming) S = "server_streaming";
-    else S = "unary";
-    let message = r.getMessage(Sa(e.inputType)),
-      message_2 = r.getMessage(Sa(e.outputType));
-    (so(message, `invalid MethodDescriptorProto: input_type ${e.inputType} not found`),
-      so(message_2, `invalid MethodDescriptorProto: output_type ${e.inputType} not found`));
-    let D = e.name;
+  function newMethod(proto, parent, reg) {
+    var _a;
+    var _b;
+    var _c;
+    var _d;
+    let methodKind;
+    if (proto.clientStreaming && proto.serverStreaming) methodKind = "bidi_streaming";
+    else if (proto.clientStreaming) methodKind = "client_streaming";
+    else if (proto.serverStreaming) methodKind = "server_streaming";
+    else methodKind = "unary";
+    let input = reg.getMessage(trimLeadingDot(proto.inputType));
+    let output = reg.getMessage(trimLeadingDot(proto.outputType));
+    assert(input, `invalid MethodDescriptorProto: input_type ${proto.inputType} not found`);
+    assert(output, `invalid MethodDescriptorProto: output_type ${proto.inputType} not found`);
+    let name = proto.name;
     return {
       kind: "rpc",
-      proto: e,
+      proto,
       deprecated:
-        (h = (s = e.options) === null || s === void 0 ? void 0 : s.deprecated) !== null && h !== void 0
-          ? h
-          : !1,
-      parent: n,
-      name: D,
-      localName: ks.safeObjectProperty(
-        D.length ? ks.safeObjectProperty(D[0].toLowerCase() + D.substring(1)) : D,
+        (_b = (_a = proto.options) === null || _a === undefined ? undefined : _a.deprecated) !== null &&
+        _b !== undefined
+          ? _b
+          : false,
+      parent,
+      name,
+      localName: names_js_1.safeObjectProperty(
+        name.length ? names_js_1.safeObjectProperty(name[0].toLowerCase() + name.substring(1)) : name,
       ),
-      methodKind: S,
-      input: message,
-      output: message_2,
+      methodKind,
+      input,
+      output,
       idempotency:
-        (b = (y = e.options) === null || y === void 0 ? void 0 : y.idempotencyLevel) !== null && b !== void 0
-          ? b
-          : h7,
+        (_d = (_c = proto.options) === null || _c === undefined ? undefined : _c.idempotencyLevel) !== null &&
+        _d !== undefined
+          ? _d
+          : IDEMPOTENCY_UNKNOWN,
       toString() {
-        return `rpc ${n.typeName}.${D}`;
+        return `rpc ${parent.typeName}.${name}`;
       },
     };
   }
-  function _7(e, n) {
+  function newOneof(proto, parent) {
     return {
       kind: "oneof",
-      proto: e,
-      deprecated: !1,
-      parent: n,
+      proto,
+      deprecated: false,
+      parent,
       fields: [],
-      name: e.name,
-      localName: ks.safeObjectProperty(ks.protoCamelCase(e.name)),
+      name: proto.name,
+      localName: names_js_1.safeObjectProperty(names_js_1.protoCamelCase(proto.name)),
       toString() {
-        return `oneof ${n.typeName}.${this.name}`;
+        return `oneof ${parent.typeName}.${this.name}`;
       },
     };
   }
-  function l_(e, n, r, s, h) {
-    var y, b, S;
-    let w = h === void 0,
-      R = {
-        kind: "field",
-        proto: e,
-        deprecated:
-          (b = (y = e.options) === null || y === void 0 ? void 0 : y.deprecated) !== null && b !== void 0
-            ? b
-            : !1,
-        name: e.name,
-        number: e.number,
-        scalar: void 0,
-        message: void 0,
-        enum: void 0,
-        presence: R7(e, s, w, n),
-        utf8Validation: D7(e, n),
-        listKind: void 0,
-        mapKind: void 0,
-        mapKey: void 0,
-        delimitedEncoding: void 0,
-        packed: void 0,
-        longAsString: !1,
-        getDefaultValue: void 0,
-      };
-    if (w) {
-      let V = n.kind == "file" ? n : n.file,
-        K = n.kind == "file" ? void 0 : n,
-        q = Kg(e, K, V);
-      ((R.kind = "extension"),
-        (R.file = V),
-        (R.parent = K),
-        (R.oneof = void 0),
-        (R.typeName = q),
-        (R.jsonName = `[${q}]`),
-        (R.toString = () => `extension ${q}`));
-      let message = r.getMessage(Sa(e.extendee));
-      (so(message, `invalid FieldDescriptorProto: extendee ${e.extendee} not found`), (R.extendee = message));
+  function newField(proto, parentOrFile, reg, oneof, mapEntries) {
+    var _a;
+    var _b;
+    var _c;
+    let isExtension = mapEntries === undefined;
+    let field = {
+      kind: "field",
+      proto,
+      deprecated:
+        (_b = (_a = proto.options) === null || _a === undefined ? undefined : _a.deprecated) !== null &&
+        _b !== undefined
+          ? _b
+          : false,
+      name: proto.name,
+      number: proto.number,
+      scalar: undefined,
+      message: undefined,
+      enum: undefined,
+      presence: getFieldPresence(proto, oneof, isExtension, parentOrFile),
+      utf8Validation: isUtf8Validated(proto, parentOrFile),
+      listKind: undefined,
+      mapKind: undefined,
+      mapKey: undefined,
+      delimitedEncoding: undefined,
+      packed: undefined,
+      longAsString: false,
+      getDefaultValue: undefined,
+    };
+    if (isExtension) {
+      let file = parentOrFile.kind == "file" ? parentOrFile : parentOrFile.file;
+      let parent = parentOrFile.kind == "file" ? undefined : parentOrFile;
+      let typeName = makeTypeName(proto, parent, file);
+      field.kind = "extension";
+      field.file = file;
+      field.parent = parent;
+      field.oneof = undefined;
+      field.typeName = typeName;
+      field.jsonName = `[${typeName}]`;
+      field.toString = () => `extension ${typeName}`;
+      let extendee = reg.getMessage(trimLeadingDot(proto.extendee));
+      assert(extendee, `invalid FieldDescriptorProto: extendee ${proto.extendee} not found`);
+      field.extendee = extendee;
     } else {
-      let V = n;
-      (so(V.kind == "message"),
-        (R.parent = V),
-        (R.oneof = s),
-        (R.localName = s ? ks.protoCamelCase(e.name) : ks.safeObjectProperty(ks.protoCamelCase(e.name))),
-        (R.jsonName = e.jsonName),
-        (R.toString = () => `field ${V.typeName}.${e.name}`));
+      let parent = parentOrFile;
+      assert(parent.kind == "message");
+      field.parent = parent;
+      field.oneof = oneof;
+      field.localName = oneof
+        ? names_js_1.protoCamelCase(proto.name)
+        : names_js_1.safeObjectProperty(names_js_1.protoCamelCase(proto.name));
+      field.jsonName = proto.jsonName;
+      field.toString = () => `field ${parent.typeName}.${proto.name}`;
     }
-    let { label: label, type: O } = e,
-      L = (S = e.options) === null || S === void 0 ? void 0 : S.jstype;
-    if (label === c_) {
-      let V = O == fp ? (h === null || h === void 0 ? void 0 : h.get(Sa(e.typeName))) : void 0;
-      if (V) {
-        R.fieldKind = "map";
-        let { key: key, value: q } = N7(V);
-        return (
-          (R.mapKey = key.scalar),
-          (R.mapKind = q.fieldKind),
-          (R.message = q.message),
-          (R.delimitedEncoding = !1),
-          (R.enum = q.enum),
-          (R.scalar = q.scalar),
-          R
-        );
+    let { label, type } = proto;
+    let jstype = (_c = proto.options) === null || _c === undefined ? undefined : _c.jstype;
+    if (label === LABEL_REPEATED) {
+      let mapEntry =
+        type == TYPE_MESSAGE
+          ? mapEntries === null || mapEntries === undefined
+            ? undefined
+            : mapEntries.get(trimLeadingDot(proto.typeName))
+          : undefined;
+      if (mapEntry) {
+        field.fieldKind = "map";
+        let { key, value } = findMapEntryFields(mapEntry);
+        field.mapKey = key.scalar;
+        field.mapKind = value.fieldKind;
+        field.message = value.message;
+        field.delimitedEncoding = false;
+        field.enum = value.enum;
+        field.scalar = value.scalar;
+        return field;
       }
-      switch (((R.fieldKind = "list"), O)) {
-        case fp:
-        case pp:
-          ((R.listKind = "message"),
-            (R.message = r.getMessage(Sa(e.typeName))),
-            so(R.message),
-            (R.delimitedEncoding = nD(e, n)));
+      switch (((field.fieldKind = "list"), type)) {
+        case TYPE_MESSAGE:
+        case TYPE_GROUP:
+          field.listKind = "message";
+          field.message = reg.getMessage(trimLeadingDot(proto.typeName));
+          assert(field.message);
+          field.delimitedEncoding = isDelimitedEncoding(proto, parentOrFile);
           break;
-        case Xk:
-          ((R.listKind = "enum"), (R.enum = r.getEnum(Sa(e.typeName))), so(R.enum));
+        case TYPE_ENUM:
+          field.listKind = "enum";
+          field.enum = reg.getEnum(trimLeadingDot(proto.typeName));
+          assert(field.enum);
           break;
         default:
-          ((R.listKind = "scalar"), (R.scalar = O), (R.longAsString = L == Jk));
+          field.listKind = "scalar";
+          field.scalar = type;
+          field.longAsString = jstype == JS_STRING;
           break;
       }
-      return ((R.packed = I7(e, n)), R);
+      field.packed = isPackedField(proto, parentOrFile);
+      return field;
     }
-    switch (O) {
-      case fp:
-      case pp:
-        ((R.fieldKind = "message"),
-          (R.message = r.getMessage(Sa(e.typeName))),
-          so(R.message, `invalid FieldDescriptorProto: type_name ${e.typeName} not found`),
-          (R.delimitedEncoding = nD(e, n)),
-          (R.getDefaultValue = () => {
-            return;
-          }));
+    switch (type) {
+      case TYPE_MESSAGE:
+      case TYPE_GROUP:
+        field.fieldKind = "message";
+        field.message = reg.getMessage(trimLeadingDot(proto.typeName));
+        assert(field.message, `invalid FieldDescriptorProto: type_name ${proto.typeName} not found`);
+        field.delimitedEncoding = isDelimitedEncoding(proto, parentOrFile);
+        field.getDefaultValue = () => {
+          return;
+        };
         break;
-      case Xk: {
-        let V = r.getEnum(Sa(e.typeName));
-        (so(V !== void 0, `invalid FieldDescriptorProto: type_name ${e.typeName} not found`),
-          (R.fieldKind = "enum"),
-          (R.enum = r.getEnum(Sa(e.typeName))),
-          (R.getDefaultValue = () =>
-            Al.unsafeIsSetExplicit(e, "defaultValue")
-              ? Hg.parseTextFormatEnumValue(V, e.defaultValue)
-              : void 0));
+      case TYPE_ENUM: {
+        let enumeration = reg.getEnum(trimLeadingDot(proto.typeName));
+        assert(
+          enumeration !== undefined,
+          `invalid FieldDescriptorProto: type_name ${proto.typeName} not found`,
+        );
+        field.fieldKind = "enum";
+        field.enum = reg.getEnum(trimLeadingDot(proto.typeName));
+        field.getDefaultValue = () =>
+          unsafe_js_1.unsafeIsSetExplicit(proto, "defaultValue")
+            ? text_format_js_1.parseTextFormatEnumValue(enumeration, proto.defaultValue)
+            : undefined;
         break;
       }
       default: {
-        ((R.fieldKind = "scalar"),
-          (R.scalar = O),
-          (R.longAsString = L == Jk),
-          (R.getDefaultValue = () =>
-            Al.unsafeIsSetExplicit(e, "defaultValue")
-              ? Hg.parseTextFormatScalarValue(O, e.defaultValue)
-              : void 0));
+        field.fieldKind = "scalar";
+        field.scalar = type;
+        field.longAsString = jstype == JS_STRING;
+        field.getDefaultValue = () =>
+          unsafe_js_1.unsafeIsSetExplicit(proto, "defaultValue")
+            ? text_format_js_1.parseTextFormatScalarValue(type, proto.defaultValue)
+            : undefined;
         break;
       }
     }
-    return R;
+    return field;
   }
-  function v7(e) {
-    switch (e.syntax) {
+  function getFileEdition(proto) {
+    switch (proto.syntax) {
       case "":
       case "proto2":
-        return l7;
+        return EDITION_PROTO2;
       case "proto3":
-        return c7;
+        return EDITION_PROTO3;
       case "editions":
-        if (e.edition === u7) return uD.maximumEdition;
-        if (e.edition in aD) return e.edition;
-        throw Error(`${e.name}: unsupported edition`);
+        if (proto.edition === EDITION_UNSTABLE) return cjsExports.maximumEdition;
+        if (proto.edition in featureDefaults) return proto.edition;
+        throw Error(`${proto.name}: unsupported edition`);
       default:
-        throw Error(`${e.name}: unsupported syntax "${e.syntax}"`);
+        throw Error(`${proto.name}: unsupported syntax "${proto.syntax}"`);
     }
   }
-  function w7(e, n) {
-    return e.dependency.map((r) => {
-      let file = n.getFile(r);
-      if (!file) throw Error(`Cannot find ${r}, imported by ${e.name}`);
-      return file;
+  function findFileDependencies(proto, reg) {
+    return proto.dependency.map((wantName) => {
+      let dep = reg.getFile(wantName);
+      if (!dep) throw Error(`Cannot find ${wantName}, imported by ${proto.name}`);
+      return dep;
     });
   }
-  function T7(e, n) {
-    let r = A7(e) + "_";
-    for (let s of n) {
-      if (!s.name.toLowerCase().startsWith(r)) return;
-      let substring = s.name.substring(r.length);
-      if (substring.length == 0) return;
-      if (/^\d/.test(substring)) return;
+  function findEnumSharedPrefix(enumName, values) {
+    let prefix = camelToSnakeCase(enumName) + "_";
+    for (let value of values) {
+      if (!value.name.toLowerCase().startsWith(prefix)) return;
+      let shortName = value.name.substring(prefix.length);
+      if (shortName.length == 0) return;
+      if (/^\d/.test(shortName)) return;
     }
-    return r;
+    return prefix;
   }
-  function A7(e) {
-    return (e.substring(0, 1) + e.substring(1).replace(/[A-Z]/g, (n) => "_" + n)).toLowerCase();
+  function camelToSnakeCase(camel) {
+    return (camel.substring(0, 1) + camel.substring(1).replace(/[A-Z]/g, (c) => "_" + c)).toLowerCase();
   }
-  function Kg(e, n, r) {
-    let s;
-    if (n) s = `${n.typeName}.${e.name}`;
-    else if (r.proto.package.length > 0) s = `${r.proto.package}.${e.name}`;
-    else s = `${e.name}`;
-    return s;
+  function makeTypeName(proto, parent, file) {
+    let typeName;
+    if (parent) typeName = `${parent.typeName}.${proto.name}`;
+    else if (file.proto.package.length > 0) typeName = `${file.proto.package}.${proto.name}`;
+    else typeName = `${proto.name}`;
+    return typeName;
   }
-  function Sa(e) {
-    return e.startsWith(".") ? e.substring(1) : e;
+  function trimLeadingDot(typeName) {
+    return typeName.startsWith(".") ? typeName.substring(1) : typeName;
   }
-  function C7(e, n) {
-    if (!Al.unsafeIsSetExplicit(e, "oneofIndex")) return;
-    if (e.proto3Optional) return;
-    let r = n[e.oneofIndex];
+  function findOneof(proto, allOneofs) {
+    if (!unsafe_js_1.unsafeIsSetExplicit(proto, "oneofIndex")) return;
+    if (proto.proto3Optional) return;
+    let oneof = allOneofs[proto.oneofIndex];
+    assert(
+      oneof,
+      `invalid FieldDescriptorProto: oneof #${proto.oneofIndex} for field #${proto.number} not found`,
+    );
+    return oneof;
+  }
+  function getFieldPresence(proto, oneof, isExtension, parent) {
+    if (proto.label == LABEL_REQUIRED) return LEGACY_REQUIRED;
+    if (proto.label == LABEL_REPEATED) return IMPLICIT;
+    if (!!oneof || proto.proto3Optional) return EXPLICIT;
+    if (isExtension) return EXPLICIT;
+    let resolved = resolveFeature("fieldPresence", {
+      proto,
+      parent,
+    });
+    if (resolved == IMPLICIT && (proto.type == TYPE_MESSAGE || proto.type == TYPE_GROUP)) return EXPLICIT;
+    return resolved;
+  }
+  function isPackedField(proto, parent) {
+    if (proto.label != LABEL_REPEATED) return false;
+    switch (proto.type) {
+      case TYPE_STRING:
+      case TYPE_BYTES:
+      case TYPE_GROUP:
+      case TYPE_MESSAGE:
+        return false;
+    }
+    let o = proto.options;
+    if (o && unsafe_js_1.unsafeIsSetExplicit(o, "packed")) return o.packed;
     return (
-      so(r, `invalid FieldDescriptorProto: oneof #${e.oneofIndex} for field #${e.number} not found`),
-      r
+      PACKED ==
+      resolveFeature("repeatedFieldEncoding", {
+        proto,
+        parent,
+      })
     );
   }
-  function R7(e, n, r, s) {
-    if (e.label == p7) return m7;
-    if (e.label == c_) return Qk;
-    if (!!n || e.proto3Optional) return i_;
-    if (r) return i_;
-    let h = vc("fieldPresence", { proto: e, parent: s });
-    if (h == Qk && (e.type == fp || e.type == pp)) return i_;
-    return h;
+  function findMapEntryFields(mapEntry) {
+    let key = mapEntry.fields.find((f) => f.number === 1);
+    let value = mapEntry.fields.find((f) => f.number === 2);
+    assert(
+      key &&
+        key.fieldKind == "scalar" &&
+        key.scalar != descriptors_js_1.ScalarType.BYTES &&
+        key.scalar != descriptors_js_1.ScalarType.FLOAT &&
+        key.scalar != descriptors_js_1.ScalarType.DOUBLE &&
+        value &&
+        value.fieldKind != "list" &&
+        value.fieldKind != "map",
+    );
+    return {
+      key,
+      value,
+    };
   }
-  function I7(e, n) {
-    if (e.label != c_) return !1;
-    switch (e.type) {
-      case d7:
-      case f7:
-      case pp:
-      case fp:
-        return !1;
-    }
-    let options = e.options;
-    if (options && Al.unsafeIsSetExplicit(options, "packed")) return options.packed;
-    return g7 == vc("repeatedFieldEncoding", { proto: e, parent: n });
-  }
-  function N7(e) {
-    let found = e.fields.find((field) => field.number === 1),
-      found_2 = e.fields.find((field) => field.number === 2);
+  function isEnumOpen(desc) {
+    var _a;
     return (
-      so(
-        found &&
-          found.fieldKind == "scalar" &&
-          found.scalar != Gu.ScalarType.BYTES &&
-          found.scalar != Gu.ScalarType.FLOAT &&
-          found.scalar != Gu.ScalarType.DOUBLE &&
-          found_2 &&
-          found_2.fieldKind != "list" &&
-          found_2.fieldKind != "map",
-      ),
-      { key: found, value: found_2 }
+      OPEN ==
+      resolveFeature("enumType", {
+        proto: desc.proto,
+        parent: (_a = desc.parent) !== null && _a !== undefined ? _a : desc.file,
+      })
     );
   }
-  function k7(e) {
-    var n;
+  function isDelimitedEncoding(proto, parent) {
+    if (proto.type == TYPE_GROUP) return true;
     return (
-      b7 == vc("enumType", { proto: e.proto, parent: (n = e.parent) !== null && n !== void 0 ? n : e.file })
+      DELIMITED ==
+      resolveFeature("messageEncoding", {
+        proto,
+        parent,
+      })
     );
   }
-  function nD(e, n) {
-    if (e.type == pp) return !0;
-    return y7 == vc("messageEncoding", { proto: e, parent: n });
+  function isUtf8Validated(proto, parent) {
+    return (
+      VERIFY ==
+      resolveFeature("utf8Validation", {
+        proto,
+        parent,
+      })
+    );
   }
-  function D7(e, n) {
-    return S7 == vc("utf8Validation", { proto: e, parent: n });
-  }
-  function vc(e, n) {
-    var r, s;
-    let h = (r = n.proto.options) === null || r === void 0 ? void 0 : r.features;
-    if (h) {
-      let y = h[e];
-      if (y != 0) return y;
+  function resolveFeature(name, ref) {
+    var _a;
+    var _b;
+    let featureSet = (_a = ref.proto.options) === null || _a === undefined ? undefined : _a.features;
+    if (featureSet) {
+      let val = featureSet[name];
+      if (val != 0) return val;
     }
-    if ("kind" in n) {
-      if (n.kind == "message") return vc(e, (s = n.parent) !== null && s !== void 0 ? s : n.file);
-      let y = aD[n.edition];
-      if (!y) throw Error(`feature default for edition ${n.edition} not found`);
-      return y[e];
+    if ("kind" in ref) {
+      if (ref.kind == "message")
+        return resolveFeature(name, (_b = ref.parent) !== null && _b !== undefined ? _b : ref.file);
+      let editionDefaults = featureDefaults[ref.edition];
+      if (!editionDefaults) throw Error(`feature default for edition ${ref.edition} not found`);
+      return editionDefaults[name];
     }
-    return vc(e, n.parent);
+    return resolveFeature(name, ref.parent);
   }
-  function so(e, n) {
-    if (!e) throw Error(n);
+  function assert(condition, msg) {
+    if (!condition) throw Error(msg);
   }
 });
-
-export { qg };
+export { require_registry };

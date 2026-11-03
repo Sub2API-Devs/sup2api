@@ -10,29 +10,38 @@
  */
 
 //@ chunk-m8rdsjv5.js:191-219 placement
-var t = ["team", "enterprise"];
+/**
+ * 视为组织级套餐的取值（team、enterprise）。
+ */
+var ORG_CONFIG_PLANS = ["team", "enterprise"];
 //@ chunk-m8rdsjv5.js:219-277 placement
-function GPt(e) {
-  return typeof e === "string" && t.includes(e);
+/**
+ * 该字符串是否属于组织级套餐。
+ */
+function isOrgConfigPlan(tier) {
+  return typeof tier === "string" && ORG_CONFIG_PLANS.includes(tier);
 }
 //@ chunk-m8rdsjv5.js:277-431 placement
-var TENGU_ORG_CONFIG_REQUIRED = "tengu_org_config_required",
-  hQ = {
-    enabled: !1,
-    plans: [],
-    percent: 0,
-    graceTtlHours: 96,
-    budgetMs: 6000,
-    hostTokens: !1,
-    exemptReasons: [],
-    refuseNotEntitled: !1,
-  };
+/**
+ * 组织要求必须提供配置时的默认标记。
+ */
+var TENGU_ORG_CONFIG_REQUIRED = "tengu_org_config_required";
+var DEFAULT_ORG_CONFIG_REQUIRED_FLAG = {
+  enabled: false,
+  plans: [],
+  percent: 0,
+  graceTtlHours: 96,
+  budgetMs: 6000,
+  hostTokens: false,
+  exemptReasons: [],
+  refuseNotEntitled: false,
+};
+//@ chunk-m8rdsjv5.js:431-994 placement
 /**
  * 托管配置结果原因归类（fetched/refused/intermediary/unavailable/client/not_attempted）。
  */
-//@ chunk-m8rdsjv5.js:431-994 placement
-function classifyManagedConfigOutcome(e) {
-  switch (e) {
+function classifyManagedConfigOutcome(reason) {
+  switch (reason) {
     case "ok":
     case "none_configured":
     case "not_required":
@@ -58,5 +67,9 @@ function classifyManagedConfigOutcome(e) {
       return "not_attempted";
   }
 }
-
-export { hQ, TENGU_ORG_CONFIG_REQUIRED, GPt, classifyManagedConfigOutcome };
+export {
+  DEFAULT_ORG_CONFIG_REQUIRED_FLAG,
+  TENGU_ORG_CONFIG_REQUIRED,
+  isOrgConfigPlan,
+  classifyManagedConfigOutcome,
+};

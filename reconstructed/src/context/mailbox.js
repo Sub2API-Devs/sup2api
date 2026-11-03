@@ -12,34 +12,40 @@ import { qt, Se } from "../../vendor/react/cjs/react.production.js";
 import { w } from "../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 import { Mailbox } from "../utils/mailbox.js";
-import { e } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { jsxProd_default } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 
 //@ chunk-xe7zq1p4.js:12161-12179 placement
-var fe = qt(void 0);
+var mailboxContext = qt(undefined);
 //@ chunk-xe7zq1p4.js:12179-12357 placement
-function MailboxProvider(t0) {
-  let i = w(3),
-    { children: children } = t0,
-    o;
-  if (i[0] === MEMO_CACHE_SENTINEL) ((o = new Mailbox()), (i[0] = o));
-  else o = i[0];
-  let mailbox = o,
-    c;
-  if (i[1] !== children)
-    ((c = e(fe.Provider, { value: mailbox, children: children })), (i[1] = children), (i[2] = c));
-  else c = i[2];
-  return c;
+function MailboxProvider(props) {
+  let $ = w(3);
+  let { children } = props;
+  let t1;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    t1 = new Mailbox();
+    $[0] = t1;
+  } else t1 = $[0];
+  let mailbox = t1;
+  let t2;
+  if ($[1] !== children) {
+    t2 = jsxProd_default(mailboxContext.Provider, {
+      value: mailbox,
+      children,
+    });
+    $[1] = children;
+    $[2] = t2;
+  } else t2 = $[2];
+  return t2;
 }
+//@ chunk-xe7zq1p4.js:12357-12465 fingerprint = useMailbox (1)
 /**
  * 读取 Mailbox 上下文，不在 MailboxProvider 内时抛错。
  */
-//@ chunk-xe7zq1p4.js:12357-12465 fingerprint = useMailbox (1)
 function useMailbox() {
-  let mailbox = Se(fe);
+  let mailbox = Se(mailboxContext);
   if (!mailbox) {
     throw Error("useMailbox must be used within a MailboxProvider");
   }
   return mailbox;
 }
-
 export { useMailbox, MailboxProvider };

@@ -12,12 +12,15 @@ import { stripVTControlCharacters } from "util";
 import { w } from "../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { y, Oo, P, R } from "../../../vendor/react/cjs/react.production.js";
-import { e, r } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Ratchet } from "../design-system/Ratchet.js";
-import { Me } from "../design-system/ThemeProvider.js";
+import { useTheme_2 } from "../design-system/ThemeProvider.js";
 import {
   useRecentInputGuard as useRecentInputGuard_2,
-  RECENT_INPUT_GUARD_MS,
+  RECENT_INPUT_GUARD_MS_2,
 } from "../../hooks/useRecentInputGuard.js";
 import {
   isBusyCreditsStep,
@@ -33,7 +36,7 @@ import {
 } from "./BuyCreditsFlow.js";
 import { useTimeout } from "../../ink/hooks/useTerminalHooks.js";
 import { getLspManager } from "../../services/lsp/manager.js";
-import { fetchUtilization, HEt } from "../../services/api/usage.js";
+import { fetchUtilization, isLimitEnabled } from "../../services/api/usage.js";
 import {
   fetchPrepaidBalance,
   fetchPaymentMethod,
@@ -49,7 +52,7 @@ import {
   parseDiscountTiers,
   getLocalCurrencyRate,
   USAGE_SETTINGS_LINK,
-  Xit,
+  applyEffortOverride,
 } from "./creditOffers.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import { logFeatureOk, logFeatureBad } from "../../services/analytics/featureTelemetry.js";
@@ -57,11 +60,11 @@ import { logEvent } from "../../services/analytics/index.js";
 import { lit as lit_2, fromEnum } from "../../services/analytics/safeMetadata.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { saveGlobalConfig } from "../../utils/config.js";
-import { fi } from "../../utils/browser.js";
-import { hBe } from "../../services/analytics/metadata.js";
+import { openValidatedUrlSucceeded } from "../../utils/browser.js";
+import { localeOrNonconforming } from "../../services/analytics/metadata.js";
 import {
   getOfferAnalytics,
-  b_e,
+  isOfferDriftError,
   getCreditsValidityNote,
   UsageCreditsOverview,
   CreditBundlePicker,
@@ -83,25 +86,23 @@ import {
   useMountTime,
   settleKey,
 } from "../CustomSelect/selectTypeahead.js";
-import { PCn } from "../../services/claudeAiLimits.js";
+import { EXTRA_USAGE_HELP_URL } from "../../services/claudeAiLimits.js";
 import { ConfirmSelect } from "../design-system/ConfirmSelect.js";
 import { replaceControlChars } from "../../utils/resultError.js";
 
 //@ chunk-18hwfzwa.js:1134082-1134549 placement
-function ExtraUsageDialogEntry(h) {
-  let $ = w(8),
-    {
-      onDone: onDone,
-      initialStep: initialStep,
-      entryReason: entryReason,
-      onBeforePurchase: onBeforePurchase,
-      onPurchaseSuccess: onPurchaseSuccess,
-    } = h,
-    Be;
-  if ($[0] === MEMO_CACHE_SENTINEL) ((Be = { s: "loading" }), ($[0] = Be));
-  else Be = $[0];
-  let [He, We] = y(Be),
-    ze;
+function ExtraUsageDialogEntry(props) {
+  let $ = w(8);
+  let { onDone, initialStep, entryReason, onBeforePurchase, onPurchaseSuccess } = props;
+  let Be;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    Be = {
+      s: "loading",
+    };
+    $[0] = Be;
+  } else Be = $[0];
+  let [He, We] = y(Be);
+  let ze;
   if (
     $[1] !== entryReason ||
     $[2] !== initialStep ||
@@ -109,104 +110,120 @@ function ExtraUsageDialogEntry(h) {
     $[4] !== onDone ||
     $[5] !== onPurchaseSuccess ||
     $[6] !== He
-  )
-    ((ze = e(Ratchet, {
-      children: e(ExtraUsageDialog, {
-        onDone: onDone,
+  ) {
+    ze = jsxProd_default(Ratchet, {
+      children: jsxProd_default(ExtraUsageDialog, {
+        onDone,
         step: He,
         setStep: We,
-        initialStep: initialStep,
-        entryReason: entryReason,
-        onBeforePurchase: onBeforePurchase,
-        onPurchaseSuccess: onPurchaseSuccess,
+        initialStep,
+        entryReason,
+        onBeforePurchase,
+        onPurchaseSuccess,
       }),
-    })),
-      ($[1] = entryReason),
-      ($[2] = initialStep),
-      ($[3] = onBeforePurchase),
-      ($[4] = onDone),
-      ($[5] = onPurchaseSuccess),
-      ($[6] = He),
-      ($[7] = ze));
-  else ze = $[7];
+    });
+    $[1] = entryReason;
+    $[2] = initialStep;
+    $[3] = onBeforePurchase;
+    $[4] = onDone;
+    $[5] = onPurchaseSuccess;
+    $[6] = He;
+    $[7] = ze;
+  } else ze = $[7];
   return ze;
 }
+//@ chunk-18hwfzwa.js:1134549-1143182 placement
 /**
  * /extra-usage 内联对话框：加载账户余额与支付方式，支持购买预设/自定义额度、设置月上限、自动充值、无卡时回退浏览器（tengu_extra_usage_inline_dialog_fallback_browser）。
  */
-//@ chunk-18hwfzwa.js:1134549-1143182 placement
 function ExtraUsageDialog({
-  onDone: onDone,
-  step: step,
-  setStep: setStep,
-  initialStep: initialStep,
-  entryReason: entryReason,
-  onBeforePurchase: onBeforePurchase,
-  onPurchaseSuccess: onPurchaseSuccess,
+  onDone,
+  step,
+  setStep,
+  initialStep,
+  entryReason,
+  onBeforePurchase,
+  onPurchaseSuccess,
 }) {
-  let { storageV5: storageV5, credentials: credentials } = Me(),
-    We = useRecentInputGuard_2(step.s),
-    [ze, Xe] = y(step.s),
-    [rt, kt] = y(!1);
-  if (ze !== step.s) (kt(isBusyCreditsStep(ze)), Xe(step.s));
-  let At = useTimeout(RECENT_INPUT_GUARD_MS, ze),
-    It = rt && !At && We(),
-    [Ot, Et] = y("USD"),
-    [Dt, Lt] = y([]),
-    [oo, Xt] = y(null),
-    [io, so] = y(null),
-    [po, ao] = y([]),
-    [co, bo] = y(null),
-    [Ao, Bo] = y(),
-    [Ro, Ho] = y(null);
-  async function Io(Xo = !0) {
-    if (Xo) setStep({ s: "loading" });
+  let { storageV5, credentials } = useTheme_2();
+  let recentInputGuard = useRecentInputGuard_2(step.s);
+  let [ze, Xe] = y(step.s);
+  let [rt, kt] = y(false);
+  if (ze !== step.s) {
+    kt(isBusyCreditsStep(ze));
+    Xe(step.s);
+  }
+  let timeout = useTimeout(RECENT_INPUT_GUARD_MS_2, ze);
+  let It = rt && !timeout && recentInputGuard();
+  let [currency, Et] = y("USD");
+  let [Dt, Lt] = y([]);
+  let [oo, Xt] = y(null);
+  let [io, so] = y(null);
+  let [po, ao] = y([]);
+  let [co, bo] = y(null);
+  let [Ao, Bo] = y();
+  let [Ro, Ho] = y(null);
+  async function Io(Xo = true) {
+    if (Xo)
+      setStep({
+        s: "loading",
+      });
     try {
-      let Sn = getLspManager(),
-        $n;
-      if (Sn)
+      let lspManager = getLspManager();
+      let $n;
+      if (lspManager)
         $n = {
-          is_enabled: Sn.isEnabled,
-          monthly_limit: Sn.spendLimitCents,
-          used_credits: Sn.usedCents,
-          currency: Sn.currency,
+          is_enabled: lspManager.isEnabled,
+          monthly_limit: lspManager.spendLimitCents,
+          used_credits: lspManager.usedCents,
+          currency: lspManager.currency,
           utilization:
-            Sn.spendLimitCents && Sn.spendLimitCents > 0 ? (Sn.usedCents / Sn.spendLimitCents) * 100 : 0,
+            lspManager.spendLimitCents && lspManager.spendLimitCents > 0
+              ? (lspManager.usedCents / lspManager.spendLimitCents) * 100
+              : 0,
         };
-      let [on, _o, cn, Dn] = await Promise.all([
-          $n || initialStep === "buy_select" ? Promise.resolve(null) : fetchUtilization(credentials),
-          fetchPrepaidBalance(credentials),
-          fetchPaymentMethod(credentials),
-          fetchPrepaidBundles(credentials),
-        ]),
-        upper = (Dn?.currency ?? _o?.currency ?? "USD").toUpperCase();
+      let [on, prepaidBalance, paymentMethod, prepaidBundles] = await Promise.all([
+        $n || initialStep === "buy_select" ? Promise.resolve(null) : fetchUtilization(credentials),
+        fetchPrepaidBalance(credentials),
+        fetchPaymentMethod(credentials),
+        fetchPrepaidBundles(credentials),
+      ]);
+      let upper = (prepaidBundles?.currency ?? prepaidBalance?.currency ?? "USD").toUpperCase();
       Et(upper);
-      let mr = Dn?.bundles ?? [];
-      (Lt(mr.length > 0 ? mr : upper === "USD" ? mapped_3 : []),
-        Bo(Dn?.stripe_product_id),
-        Xt(mr.length > 0 ? parseCreditBundlesOffer(Dn?.offer) : null),
-        so(
-          Dn?.bundle_monthly_cap_minor_units !== null && Dn?.bundle_monthly_cap_minor_units !== void 0
-            ? Math.max(0, Dn.bundle_monthly_cap_minor_units - Dn.bundle_paid_this_month_minor_units)
-            : null,
-        ),
-        ao(mr.length > 0 ? parseDiscountTiers(Dn?.custom_discount_tiers) : []),
-        bo(getLocalCurrencyRate(mr, upper)));
-      let Kn = Dn?.expiry_policy_months ?? _o?.expiry_policy_months ?? null;
-      if ((Ho(Kn), getFeatureValue_CACHED_MAY_BE_STALE("tengu_satchel_banjo", !1))) {
+      let bundles = prepaidBundles?.bundles ?? [];
+      Lt(bundles.length > 0 ? bundles : upper === "USD" ? mapped_3 : []);
+      Bo(prepaidBundles?.stripe_product_id);
+      Xt(bundles.length > 0 ? parseCreditBundlesOffer(prepaidBundles?.offer) : null);
+      so(
+        prepaidBundles?.bundle_monthly_cap_minor_units !== null &&
+          prepaidBundles?.bundle_monthly_cap_minor_units !== undefined
+          ? Math.max(
+              0,
+              prepaidBundles.bundle_monthly_cap_minor_units -
+                prepaidBundles.bundle_paid_this_month_minor_units,
+            )
+          : null,
+      );
+      ao(bundles.length > 0 ? parseDiscountTiers(prepaidBundles?.custom_discount_tiers) : []);
+      bo(getLocalCurrencyRate(bundles, upper));
+      let Kn = prepaidBundles?.expiry_policy_months ?? prepaidBalance?.expiry_policy_months ?? null;
+      Ho(Kn);
+      if (getFeatureValue_CACHED_MAY_BE_STALE("tengu_satchel_banjo", false)) {
         if (Kn !== null)
           if (Number.isInteger(Kn) && Kn > 0) logFeatureOk("extra_usage_expiry_notice");
           else logFeatureBad("extra_usage_expiry_notice", "invalid_months");
       }
       if (initialStep === "buy_select") {
-        if (!cn)
-          return (
-            logEvent("tengu_extra_usage_inline_dialog_fallback_browser", {
-              reason: lit_2("no_payment_method"),
-            }),
-            `No card on file \u2014 add a payment method at ${USAGE_SETTINGS_LINK}`
-          );
-        setStep({ s: "buy_select", pm: cn });
+        if (!paymentMethod) {
+          logEvent("tengu_extra_usage_inline_dialog_fallback_browser", {
+            reason: lit_2("no_payment_method"),
+          });
+          return `No card on file \u2014 add a payment method at ${USAGE_SETTINGS_LINK}`;
+        }
+        setStep({
+          s: "buy_select",
+          pm: paymentMethod,
+        });
         return;
       }
       if (!$n && on === null) {
@@ -216,84 +233,127 @@ function ExtraUsageDialog({
         });
         return;
       }
-      if (
-        (($n ??= on?.extra_usage ?? {
-          is_enabled: !1,
-          monthly_limit: null,
-          used_credits: null,
-          utilization: null,
-        }),
-        !HEt($n))
-      ) {
-        setStep({ s: "not_enabled", pm: cn });
+      $n ??= on?.extra_usage ?? {
+        is_enabled: false,
+        monthly_limit: null,
+        used_credits: null,
+        utilization: null,
+      };
+      if (!isLimitEnabled($n)) {
+        setStep({
+          s: "not_enabled",
+          pm: paymentMethod,
+        });
         return;
       }
-      setStep({ s: "enabled", usage: $n, balance: _o, pm: cn });
+      setStep({
+        s: "enabled",
+        usage: $n,
+        balance: prepaidBalance,
+        pm: paymentMethod,
+      });
     } catch (error) {
-      (logForDebugging(`Failed to load extra usage status: ${error}`, { level: "error" }),
-        setStep({ s: "error", msg: "Couldn't load usage credit status" }));
+      logForDebugging(`Failed to load extra usage status: ${error}`, {
+        level: "error",
+      });
+      setStep({
+        s: "error",
+        msg: "Couldn't load usage credit status",
+      });
     }
   }
-  let Wo = Oo(Io),
-    mn = Oo((Xo) => onDone(Xo));
+  let Wo = Oo(Io);
+  let mn = Oo((Xo) => onDone(Xo));
   P(() => {
-    (logEvent("tengu_extra_usage_inline_dialog_shown", {
-      entry_reason: entryReason ? lit_2(entryReason) : void 0,
-    }),
-      Wo().then((Xo) => {
-        if (Xo !== void 0) mn(Xo);
-      }));
+    logEvent("tengu_extra_usage_inline_dialog_shown", {
+      entry_reason: entryReason ? lit_2(entryReason) : undefined,
+    });
+    Wo().then((Xo) => {
+      if (Xo !== undefined) mn(Xo);
+    });
   }, [entryReason]);
   function Cn(Xo) {
-    (logEvent("tengu_extra_usage_inline_dialog_cancel", { from_step: fromEnum(Xo) }),
-      onDone(void 0, { display: "skip" }));
+    logEvent("tengu_extra_usage_inline_dialog_cancel", {
+      from_step: fromEnum(Xo),
+    });
+    onDone(undefined, {
+      display: "skip",
+    });
   }
   function No() {
-    (logEvent("tengu_extra_usage_inline_dialog_enable_confirm", {}),
-      setStep({
-        s: "enabling",
-        work: enableOverageBilling(credentials).then(async (Xo) => {
-          if ((logEvent("tengu_extra_usage_inline_dialog_enable_result", { success: Xo }), !Xo)) return !1;
-          if (!getLspManager())
-            (Xit(storageV5),
-              await saveGlobalConfig((Sn) => {
-                if (!Sn.oauthAccount) return Sn;
-                if (Sn.oauthAccount.hasExtraUsageEnabled === !0) return Sn;
-                return { ...Sn, oauthAccount: { ...Sn.oauthAccount, hasExtraUsageEnabled: !0 } };
-              }, storageV5));
-          return (await Io(!1), !0);
-        }),
-      }));
+    logEvent("tengu_extra_usage_inline_dialog_enable_confirm", {});
+    setStep({
+      s: "enabling",
+      work: enableOverageBilling(credentials).then(async (Xo) => {
+        logEvent("tengu_extra_usage_inline_dialog_enable_result", {
+          success: Xo,
+        });
+        if (!Xo) return false;
+        if (!getLspManager()) {
+          applyEffortOverride(storageV5);
+          await saveGlobalConfig((Sn) => {
+            if (!Sn.oauthAccount) return Sn;
+            if (Sn.oauthAccount.hasExtraUsageEnabled === true) return Sn;
+            return {
+              ...Sn,
+              oauthAccount: {
+                ...Sn.oauthAccount,
+                hasExtraUsageEnabled: true,
+              },
+            };
+          }, storageV5);
+        }
+        await Io(false);
+        return true;
+      }),
+    });
   }
   function vo(Xo) {
-    if (!Xo) setStep({ s: "error", msg: "Couldn't turn on usage credits" });
+    if (!Xo)
+      setStep({
+        s: "error",
+        msg: "Couldn't turn on usage credits",
+      });
   }
-  function Yo(Xo, Sn) {
+  function Yo(Xo, step) {
     switch (Xo) {
       case "continue":
         onDone("Continuing with usage credits");
         break;
       case "buy":
-        if (!Sn.pm)
-          (logEvent("tengu_extra_usage_inline_dialog_fallback_browser", {
+        if (!step.pm) {
+          logEvent("tengu_extra_usage_inline_dialog_fallback_browser", {
             reason: lit_2("no_payment_method"),
-          }),
-            onDone(`No card on file \u2014 add a payment method at ${USAGE_SETTINGS_LINK}`));
-        else setStep({ s: "buy_select", pm: Sn.pm });
+          });
+          onDone(`No card on file \u2014 add a payment method at ${USAGE_SETTINGS_LINK}`);
+        } else
+          setStep({
+            s: "buy_select",
+            pm: step.pm,
+          });
         break;
       case "adjust":
-        setStep({ s: "adjust_limit", current: Sn.usage.monthly_limit });
+        setStep({
+          s: "adjust_limit",
+          current: step.usage.monthly_limit,
+        });
         break;
       case "auto_reload":
-        if (!Sn.pm)
-          (logEvent("tengu_extra_usage_inline_dialog_fallback_browser", {
+        if (!step.pm) {
+          logEvent("tengu_extra_usage_inline_dialog_fallback_browser", {
             reason: lit_2("no_payment_method"),
-          }),
-            onDone(`No card on file \u2014 add a payment method at ${USAGE_SETTINGS_LINK}`));
-        else setStep({ s: "auto_reload_config", current: Sn.balance?.auto_reload_settings, pm: Sn.pm });
+          });
+          onDone(`No card on file \u2014 add a payment method at ${USAGE_SETTINGS_LINK}`);
+        } else
+          setStep({
+            s: "auto_reload_config",
+            current: step.balance?.auto_reload_settings,
+            pm: step.pm,
+          });
         break;
       case "manage":
-        (fi(USAGE_SETTINGS_LINK), onDone(`Opening ${USAGE_SETTINGS_LINK}`));
+        openValidatedUrlSucceeded(USAGE_SETTINGS_LINK);
+        onDone(`Opening ${USAGE_SETTINGS_LINK}`);
         break;
     }
   }
@@ -302,16 +362,20 @@ function ExtraUsageDialog({
       enabled: Xo,
       threshold_cents: Sn,
       reload_to_cents: $n,
-      currency: hBe(Ot),
+      currency: localeOrNonconforming(currency),
     });
-    let on = updateAutoReloadSettings(Xo, Sn, $n, Ot, credentials),
-      _o = Xo
-        ? on.then(async (cn) => {
-            if (cn.ok) await Io(!1);
-            return cn;
-          })
-        : on;
-    setStep({ s: "auto_reload_saving", enabled: Xo, work: _o });
+    let on = updateAutoReloadSettings(Xo, Sn, $n, currency, credentials);
+    let work = Xo
+      ? on.then(async (cn) => {
+          if (cn.ok) await Io(false);
+          return cn;
+        })
+      : on;
+    setStep({
+      s: "auto_reload_saving",
+      enabled: Xo,
+      work,
+    });
   }
   function Fn(Xo, Sn) {
     if (!Xo.ok) {
@@ -323,93 +387,116 @@ function ExtraUsageDialog({
     }
     if (!Sn) Io();
   }
-  async function bn(Xo, Sn, $n) {
-    if (
-      (logEvent("tengu_extra_usage_inline_dialog_buy_confirm", {
-        amount_cents: Xo,
-        preset: !!Sn,
-        currency: hBe(Ot),
-        ...getOfferAnalytics(oo),
-        custom_kind: $n ? fromEnum($n.kind) : void 0,
-        custom_pct: $n?.pct,
-      }),
-      setStep({ s: "buy_purchasing" }),
-      onBeforePurchase)
-    ) {
-      if (!(await onBeforePurchase().catch(() => !1))) {
-        setStep({ s: "error", msg: "Couldn't turn on usage credits \u2014 no charge was made." });
+  async function bn(cents, bundle, custom) {
+    logEvent("tengu_extra_usage_inline_dialog_buy_confirm", {
+      amount_cents: cents,
+      preset: !!bundle,
+      currency: localeOrNonconforming(currency),
+      ...getOfferAnalytics(oo),
+      custom_kind: custom ? fromEnum(custom.kind) : undefined,
+      custom_pct: custom?.pct,
+    });
+    setStep({
+      s: "buy_purchasing",
+    });
+    if (onBeforePurchase) {
+      if (!(await onBeforePurchase().catch(() => false))) {
+        setStep({
+          s: "error",
+          msg: "Couldn't turn on usage credits \u2014 no charge was made.",
+        });
         return;
       }
     }
-    let on = Sn?.local_credit_minor_units ?? $n?.creditMinor ?? Xo;
+    let credit = bundle?.local_credit_minor_units ?? custom?.creditMinor ?? cents;
     try {
       let _o = await purchaseApiCredits(
-          Sn?.id
-            ? { kind: "bundle", bundle: Sn }
-            : {
-                kind: "custom",
-                amountCents: $n?.amountMinor ?? Xo,
-                ...($n?.expectedCreditMinor !== void 0 && {
-                  expectedCreditMinorUnits: $n.expectedCreditMinor,
-                }),
-                ...($n?.expectedPriceMinor !== void 0 && { expectedPriceMinorUnits: $n.expectedPriceMinor }),
-              },
-          credentials,
-        ),
-        cn = oo !== null && (Sn?.id ? !0 : (_o.discount_minor_units ?? ($n?.pct ? 1 : 0)) > 0);
+        bundle?.id
+          ? {
+              kind: "bundle",
+              bundle,
+            }
+          : {
+              kind: "custom",
+              amountCents: custom?.amountMinor ?? cents,
+              ...(custom?.expectedCreditMinor !== undefined && {
+                expectedCreditMinorUnits: custom.expectedCreditMinor,
+              }),
+              ...(custom?.expectedPriceMinor !== undefined && {
+                expectedPriceMinorUnits: custom.expectedPriceMinor,
+              }),
+            },
+        credentials,
+      );
+      let usedOffer =
+        oo !== null && (bundle?.id ? true : (_o.discount_minor_units ?? (custom?.pct ? 1 : 0)) > 0);
       if (_o.payment_status === "success") {
-        if (
-          (logEvent("tengu_extra_usage_inline_dialog_buy_result", {
-            status: lit_2("success"),
-            ...getOfferAnalytics(oo),
-          }),
-          oo !== null)
-        )
-          markOfferRedeemed({ usedOffer: cn });
-        setStep({ s: "buy_success", credit: on });
+        logEvent("tengu_extra_usage_inline_dialog_buy_result", {
+          status: lit_2("success"),
+          ...getOfferAnalytics(oo),
+        });
+        if (oo !== null)
+          markOfferRedeemed({
+            usedOffer,
+          });
+        setStep({
+          s: "buy_success",
+          credit,
+        });
       } else if (_o.payment_status === "pending_invoice" && _o.purchase_id)
-        setStep({ s: "buy_polling", purchaseId: _o.purchase_id, credit: on, usedOffer: cn });
-      else if (_o.payment_status === "requires_action")
-        (logEvent("tengu_extra_usage_inline_dialog_buy_result", {
+        setStep({
+          s: "buy_polling",
+          purchaseId: _o.purchase_id,
+          credit,
+          usedOffer,
+        });
+      else if (_o.payment_status === "requires_action") {
+        logEvent("tengu_extra_usage_inline_dialog_buy_result", {
           status: lit_2("3ds_fallback"),
           ...getOfferAnalytics(oo),
-        }),
-          setStep({
-            s: "error",
-            msg: `Your card requires additional verification \u2014 this purchase was not completed. Try again at ${USAGE_SETTINGS_LINK}`,
-          }));
-      else setStep({ s: "error", msg: "Unexpected purchase state" });
+        });
+        setStep({
+          s: "error",
+          msg: `Your card requires additional verification \u2014 this purchase was not completed. Try again at ${USAGE_SETTINGS_LINK}`,
+        });
+      } else
+        setStep({
+          s: "error",
+          msg: "Unexpected purchase state",
+        });
     } catch (error) {
       let cn = verificationErrorMessage(error);
-      if (isExpectedApiError(error, (Dn) => verificationErrorMessage(Dn) !== null || b_e(Dn)))
+      if (isExpectedApiError(error, (Dn) => verificationErrorMessage(Dn) !== null || isOfferDriftError(Dn)))
         logForDebugging(`Extra usage credit purchase failed: ${cn ?? errorMessage(error)}`, {
           level: "error",
         });
       else logError(error);
-      (logEvent("tengu_extra_usage_inline_dialog_buy_result", {
+      logEvent("tengu_extra_usage_inline_dialog_buy_result", {
         status: lit_2("failed"),
         ...getOfferAnalytics(oo),
-        drift: b_e(error),
-      }),
-        setStep({
-          s: "error",
-          msg: b_e(error)
-            ? "Prices changed while this was open, so nothing was charged. Run /usage-credits again to see the current prices."
-            : cn
-              ? `Purchase failed: ${cn}`
-              : "Purchase failed",
-        }));
+        drift: isOfferDriftError(error),
+      });
+      setStep({
+        s: "error",
+        msg: isOfferDriftError(error)
+          ? "Prices changed while this was open, so nothing was charged. Run /usage-credits again to see the current prices."
+          : cn
+            ? `Purchase failed: ${cn}`
+            : "Purchase failed",
+      });
     }
   }
   async function Go(Xo, Sn) {
-    (logEvent("tengu_extra_usage_inline_dialog_adjust_limit", {
-      old_cents: Sn ?? void 0,
-      new_cents: Xo ?? void 0,
+    logEvent("tengu_extra_usage_inline_dialog_adjust_limit", {
+      old_cents: Sn ?? undefined,
+      new_cents: Xo ?? undefined,
       unlimited: Xo === null,
-      currency: hBe(Ot),
-    }),
-      setStep({ s: "adjusting" }));
-    let $n = await updateOverageSpendLimit(Xo, Ot, credentials);
+      currency: localeOrNonconforming(currency),
+    });
+    setStep({
+      s: "adjusting",
+    });
+    let $n = await updateOverageSpendLimit(Xo, currency, credentials);
     if (!$n.ok) {
       setStep({
         s: "error",
@@ -420,240 +507,320 @@ function ExtraUsageDialog({
     onDone(
       Xo === null
         ? "Monthly limit set to unlimited"
-        : `Monthly limit updated to ${formatCurrency(Xo, Ot, "fit")}`,
+        : `Monthly limit updated to ${formatCurrency(Xo, currency, "fit")}`,
     );
   }
-  let hn = getCreditsValidityNote(Ro),
-    Mn = hn !== null ? Ro : null;
+  let creditsValidityNote = getCreditsValidityNote(Ro);
+  let expiryMonths = creditsValidityNote !== null ? Ro : null;
   if (It)
-    return e(Box, {
+    return jsxProd_default(Box, {
       paddingTop: 1,
-      children: e(WorkerBadge, { message: "Loading usage credit status\u2026" }),
+      children: jsxProd_default(WorkerBadge, {
+        message: "Loading usage credit status\u2026",
+      }),
     });
   switch (step.s) {
     case "loading":
-      return e(Box, {
+      return jsxProd_default(Box, {
         paddingTop: 1,
-        children: e(WorkerBadge, { message: "Loading usage credit status\u2026" }),
+        children: jsxProd_default(WorkerBadge, {
+          message: "Loading usage credit status\u2026",
+        }),
       });
     case "enabling":
-      return e(CelebrationMessage, {
+      return jsxProd_default(CelebrationMessage, {
         message: "Turning on usage credits\u2026",
         work: step.work,
-        failure: !1,
+        failure: false,
         onDone: vo,
       });
     case "adjusting":
-      return e(Box, { paddingTop: 1, children: e(WorkerBadge, { message: "Updating spend limit\u2026" }) });
+      return jsxProd_default(Box, {
+        paddingTop: 1,
+        children: jsxProd_default(WorkerBadge, {
+          message: "Updating spend limit\u2026",
+        }),
+      });
     case "auto_reload_saving":
       return step.enabled
-        ? e(CelebrationMessage, {
+        ? jsxProd_default(CelebrationMessage, {
             message: "Turning on auto-reload\u2026",
             work: step.work,
-            failure: { ok: !1, reason: null },
-            onDone: (Xo) => Fn(Xo, !0),
+            failure: {
+              ok: false,
+              reason: null,
+            },
+            onDone: (Xo) => Fn(Xo, true),
           })
-        : e(AwaitWork, {
+        : jsxProd_default(AwaitWork, {
             message: "Turning off auto-reload\u2026",
             work: step.work,
-            failure: { ok: !1, reason: null },
-            onDone: (Xo) => Fn(Xo, !1),
+            failure: {
+              ok: false,
+              reason: null,
+            },
+            onDone: (Xo) => Fn(Xo, false),
           });
     case "buy_purchasing":
-      return e(ClawdLoadingRow, { message: "Processing payment\u2026 (may take a few seconds)" });
+      return jsxProd_default(ClawdLoadingRow, {
+        message: "Processing payment\u2026 (may take a few seconds)",
+      });
     case "buy_success": {
-      let Xo = `Added ${formatCurrency(step.credit, Ot)} of usage credits`;
-      return e(ClawdSuccessRow, {
+      let Xo = `Added ${formatCurrency(step.credit, currency)} of usage credits`;
+      return jsxProd_default(ClawdSuccessRow, {
         message: Xo,
         onDone: () => {
           if (onPurchaseSuccess) return onPurchaseSuccess(Xo);
-          return (Xit(storageV5), onDone(Xo));
+          applyEffortOverride(storageV5);
+          return onDone(Xo);
         },
       });
     }
     case "buy_polling":
-      return e(PurchasePoller, {
+      return jsxProd_default(PurchasePoller, {
         purchaseId: step.purchaseId,
         onSuccess: () => {
-          if (oo !== null) markOfferRedeemed({ usedOffer: step.usedOffer });
-          setStep({ s: "buy_success", credit: step.credit });
+          if (oo !== null)
+            markOfferRedeemed({
+              usedOffer: step.usedOffer,
+            });
+          setStep({
+            s: "buy_success",
+            credit: step.credit,
+          });
         },
-        onError: (Xo) => setStep({ s: "error", msg: Xo }),
+        onError: (msg) =>
+          setStep({
+            s: "error",
+            msg,
+          }),
       });
     case "not_enabled":
-      return e(TurnOnUsageCreditsStep, { pm: step.pm, onConfirm: No, onCancel: () => Cn("not_enabled") });
+      return jsxProd_default(TurnOnUsageCreditsStep, {
+        pm: step.pm,
+        onConfirm: No,
+        onCancel: () => Cn("not_enabled"),
+      });
     case "enabled":
-      return e(UsageCreditsOverview, {
-        step: step,
-        currency: Ot,
+      return jsxProd_default(UsageCreditsOverview, {
+        step,
+        currency,
         onAction: (Xo) => Yo(Xo, step),
         onCancel: () => Cn("enabled"),
       });
     case "buy_select":
-      return e(CreditBundlePicker, {
+      return jsxProd_default(CreditBundlePicker, {
         pm: step.pm,
         presets: Dt,
         offer: oo,
         customPreviewable: co !== null,
-        currency: Ot,
-        expiryNotice: hn,
+        currency,
+        expiryNotice: creditsValidityNote,
         onConfirm: (Xo) =>
-          setStep({ s: "buy_confirm", pm: step.pm, cents: Xo.local_price_minor_units, bundle: Xo }),
-        onCustom: () => setStep({ s: "buy_custom", pm: step.pm }),
+          setStep({
+            s: "buy_confirm",
+            pm: step.pm,
+            cents: Xo.local_price_minor_units,
+            bundle: Xo,
+          }),
+        onCustom: () =>
+          setStep({
+            s: "buy_custom",
+            pm: step.pm,
+          }),
         onCancel: () => (initialStep === "buy_select" ? Cn("buy_select") : void Io()),
       });
     case "buy_custom":
-      return e(CustomAmountStep, {
+      return jsxProd_default(CustomAmountStep, {
         pm: step.pm,
         initialCents: step.cents,
-        currency: Ot,
+        currency,
         offer: oo,
         discountTiers: po,
         usdRate: co,
         capRemaining: io,
-        onConfirm: (Xo, Sn) => setStep({ s: "buy_confirm", pm: step.pm, cents: Xo, custom: Sn }),
-        onCancel: () => setStep({ s: "buy_select", pm: step.pm }),
+        onConfirm: (cents, custom) =>
+          setStep({
+            s: "buy_confirm",
+            pm: step.pm,
+            cents,
+            custom,
+          }),
+        onCancel: () =>
+          setStep({
+            s: "buy_select",
+            pm: step.pm,
+          }),
       });
     case "buy_confirm":
-      return e(ConfirmPurchaseStep, {
+      return jsxProd_default(ConfirmPurchaseStep, {
         pm: step.pm,
         cents: step.cents,
         bundle: step.bundle,
         custom: step.custom,
         capRemaining: io,
         offerKind: oo?.kind ?? null,
-        currency: Ot,
+        currency,
         stripeProductId: Ao,
-        expiryMonths: Mn,
+        expiryMonths,
         onConfirm: () => bn(step.cents, step.bundle, step.custom),
         onCancel: () =>
           setStep(
             step.bundle
-              ? { s: "buy_select", pm: step.pm }
-              : { s: "buy_custom", pm: step.pm, cents: step.cents },
+              ? {
+                  s: "buy_select",
+                  pm: step.pm,
+                }
+              : {
+                  s: "buy_custom",
+                  pm: step.pm,
+                  cents: step.cents,
+                },
           ),
       });
     case "adjust_limit":
-      return e(SpendLimitStep, {
+      return jsxProd_default(SpendLimitStep, {
         current: step.current,
-        currency: Ot,
+        currency,
         onConfirm: (Xo) => Go(Xo, step.current),
         onCancel: () => void Io(),
       });
     case "auto_reload_config":
-      return e(AutoReloadStep, {
+      return jsxProd_default(AutoReloadStep, {
         current: step.current,
         pm: step.pm,
-        currency: Ot,
-        onSave: (Xo, Sn) => kn(!0, Xo, Sn),
-        onTurnOff: () => kn(!1),
+        currency,
+        onSave: (Xo, Sn) => kn(true, Xo, Sn),
+        onTurnOff: () => kn(false),
         onCancel: () => void Io(),
       });
     case "error":
-      return e(UsageCreditsErrorDialog, { msg: step.msg, onClose: () => Cn("error") });
+      return jsxProd_default(UsageCreditsErrorDialog, {
+        msg: step.msg,
+        onClose: () => Cn("error"),
+      });
   }
 }
+//@ chunk-18hwfzwa.js:1143182-1143814 placement
 /**
  * 额度错误对话框：显示错误并提示回车打开用量设置页。
  */
-//@ chunk-18hwfzwa.js:1143182-1143814 placement
-function UsageCreditsErrorDialog(h) {
-  let $ = w(9),
-    { msg: msg, onClose: onClose } = h,
-    ee;
-  if ($[0] !== onClose)
-    ((ee = {
+function UsageCreditsErrorDialog(props) {
+  let $ = w(9);
+  let { msg, onClose } = props;
+  let ee;
+  if ($[0] !== onClose) {
+    ee = {
       "confirm:yes": () => {
-        (fi(USAGE_SETTINGS_LINK), onClose());
+        openValidatedUrlSucceeded(USAGE_SETTINGS_LINK);
+        onClose();
       },
-    }),
-      ($[0] = onClose),
-      ($[1] = ee));
-  else ee = $[1];
+    };
+    $[0] = onClose;
+    $[1] = ee;
+  } else ee = $[1];
   let ke;
-  if ($[2] === MEMO_CACHE_SENTINEL) ((ke = { context: "Confirmation" }), ($[2] = ke));
-  else ke = $[2];
+  if ($[2] === MEMO_CACHE_SENTINEL) {
+    ke = {
+      context: "Confirmation",
+    };
+    $[2] = ke;
+  } else ke = $[2];
   MessageActionsKeybindings(ee, ke);
-  let Re;
-  if ($[3] === MEMO_CACHE_SENTINEL)
-    ((Re = r(Byline, {
+  let inputGuide;
+  if ($[3] === MEMO_CACHE_SENTINEL) {
+    inputGuide = jsxProd_default_2(Byline, {
       children: [
-        e(KeyboardShortcutHint, { chord: "enter", action: `open ${USAGE_SETTINGS_LINK}` }),
-        e(KeyboardShortcutHint, { chord: "escape", action: "cancel" }),
+        jsxProd_default(KeyboardShortcutHint, {
+          chord: "enter",
+          action: `open ${USAGE_SETTINGS_LINK}`,
+        }),
+        jsxProd_default(KeyboardShortcutHint, {
+          chord: "escape",
+          action: "cancel",
+        }),
       ],
-    })),
-      ($[3] = Re));
-  else Re = $[3];
-  let Be;
-  if ($[4] !== msg)
-    ((Be = e(Box, { flexDirection: "column", gap: 1, children: e(Text, { color: "error", children: msg }) })),
-      ($[4] = msg),
-      ($[5] = Be));
-  else Be = $[5];
+    });
+    $[3] = inputGuide;
+  } else inputGuide = $[3];
+  let children;
+  if ($[4] !== msg) {
+    children = jsxProd_default(Box, {
+      flexDirection: "column",
+      gap: 1,
+      children: jsxProd_default(Text, {
+        color: "error",
+        children: msg,
+      }),
+    });
+    $[4] = msg;
+    $[5] = children;
+  } else children = $[5];
   let He;
-  if ($[6] !== onClose || $[7] !== Be)
-    ((He = e(Dialog, {
+  if ($[6] !== onClose || $[7] !== children) {
+    He = jsxProd_default(Dialog, {
       title: "Usage credits",
       onCancel: onClose,
       color: "error",
-      inputGuide: Re,
-      children: Be,
-    })),
-      ($[6] = onClose),
-      ($[7] = Be),
-      ($[8] = He));
-  else He = $[8];
+      inputGuide,
+      children,
+    });
+    $[6] = onClose;
+    $[7] = children;
+    $[8] = He;
+  } else He = $[8];
   return He;
 }
 //@ chunk-18hwfzwa.js:1143814-1143887 placement
-function _h(h) {
+function formatCardOnFile(h) {
   return `${h.brand ?? h.type} \xB7\xB7\xB7\xB7${h.last4 ?? ""}`;
 }
 //@ chunk-18hwfzwa.js:1143887-1146495 placement
-function TurnOnUsageCreditsStep(h) {
-  let $ = w(64),
-    { pm: pm, onConfirm: onConfirm, onCancel: onCancel } = h,
-    ee = useInputRefusalWindow(),
-    { refusedWithin: refusedWithin, noteRefused: noteRefused, epoch: epoch } = useRefusalTracker(),
-    We;
-  if ($[0] !== ee || $[1] !== noteRefused || $[2] !== refusedWithin)
-    ((We = function ze() {
-      if (ee() || refusedWithin()) {
-        return (noteRefused(), !0);
+function TurnOnUsageCreditsStep(props) {
+  let $ = w(64);
+  let { pm, onConfirm, onCancel } = props;
+  let inputRefusalWindow = useInputRefusalWindow();
+  let { refusedWithin, noteRefused, epoch } = useRefusalTracker();
+  let We;
+  if ($[0] !== inputRefusalWindow || $[1] !== noteRefused || $[2] !== refusedWithin) {
+    We = function ze() {
+      if (inputRefusalWindow() || refusedWithin()) {
+        noteRefused();
+        return true;
       }
-      return !1;
-    }),
-      ($[0] = ee),
-      ($[1] = noteRefused),
-      ($[2] = refusedWithin),
-      ($[3] = We));
-  else We = $[3];
-  let ze = We,
-    Xe = useMountTime(),
-    rt = settleKey(epoch),
-    kt = R(!1),
-    At,
-    It,
-    Ot,
-    Et,
-    Dt,
-    Lt,
-    oo,
-    Xt,
-    io,
-    so,
-    po,
-    ao,
-    co,
-    bo,
-    Ao,
-    Bo,
-    Ro,
-    Ho,
-    Io,
-    Wo;
+      return false;
+    };
+    $[0] = inputRefusalWindow;
+    $[1] = noteRefused;
+    $[2] = refusedWithin;
+    $[3] = We;
+  } else We = $[3];
+  let ze = We;
+  let mountTime = useMountTime();
+  let rt = settleKey(epoch);
+  let kt = R(false);
+  let At;
+  let It;
+  let Ot;
+  let onCancel_2;
+  let flexDirection;
+  let gap;
+  let oo;
+  let Xt;
+  let io;
+  let title;
+  let onCancel_3;
+  let color;
+  let co;
+  let refuseInput;
+  let openedAt;
+  let hideIndexes;
+  let confirmLabel;
+  let cancelLabel;
+  let focus;
+  let onConfirm_2;
   if (
-    $[4] !== ee ||
+    $[4] !== inputRefusalWindow ||
     $[5] !== rt.remountKey ||
     $[6] !== noteRefused ||
     $[7] !== onCancel ||
@@ -661,186 +828,205 @@ function TurnOnUsageCreditsStep(h) {
     $[9] !== pm ||
     $[10] !== ze ||
     $[11] !== refusedWithin ||
-    $[12] !== Xe
+    $[12] !== mountTime
   ) {
     let Cn = function Cn(mn) {
       return () => {
         if (kt.current) {
           return;
         }
-        if (ee() || refusedWithin()) {
+        if (inputRefusalWindow() || refusedWithin()) {
           noteRefused();
           return;
         }
-        ((kt.current = !0), mn());
+        kt.current = true;
+        mn();
       };
     };
     Ot = Dialog;
-    so = "Turn on usage credits";
-    po = Cn(onCancel);
-    ao = "suggestion";
+    title = "Turn on usage credits";
+    onCancel_3 = Cn(onCancel);
+    color = "suggestion";
     It = Box;
-    Dt = "column";
-    Lt = 1;
-    if ($[33] === MEMO_CACHE_SENTINEL)
-      ((oo = e(Text, { children: "Keep using Claude when you hit a limit." })), ($[33] = oo));
-    else oo = $[33];
-    let No;
-    if ($[34] !== pm)
-      ((No = pm
-        ? `Card on file: ${_h(pm)}`
-        : `No card on file \u2014 add one at ${USAGE_SETTINGS_LINK} before buying.`),
-        ($[34] = pm),
-        ($[35] = No));
-    else No = $[35];
-    if ($[36] !== No) ((Xt = e(Text, { dimColor: !0, children: No })), ($[36] = No), ($[37] = Xt));
-    else Xt = $[37];
-    if ($[38] === MEMO_CACHE_SENTINEL)
-      ((io = r(Text, {
-        dimColor: !0,
+    flexDirection = "column";
+    gap = 1;
+    if ($[33] === MEMO_CACHE_SENTINEL) {
+      oo = jsxProd_default(Text, {
+        children: "Keep using Claude when you hit a limit.",
+      });
+      $[33] = oo;
+    } else oo = $[33];
+    let children;
+    if ($[34] !== pm) {
+      children = pm
+        ? `Card on file: ${formatCardOnFile(pm)}`
+        : `No card on file \u2014 add one at ${USAGE_SETTINGS_LINK} before buying.`;
+      $[34] = pm;
+      $[35] = children;
+    } else children = $[35];
+    if ($[36] !== children) {
+      Xt = jsxProd_default(Text, {
+        dimColor: true,
+        children,
+      });
+      $[36] = children;
+      $[37] = Xt;
+    } else Xt = $[37];
+    if ($[38] === MEMO_CACHE_SENTINEL) {
+      io = jsxProd_default_2(Text, {
+        dimColor: true,
         children: [
           "By turning on, you agree to turn on usage credits as defined in our Help Center article:",
           `
 `,
-          PCn,
+          EXTRA_USAGE_HELP_URL,
         ],
-      })),
-        ($[38] = io));
-    else io = $[38];
+      });
+      $[38] = io;
+    } else io = $[38];
     At = ConfirmSelect;
     co = rt.remountKey;
-    bo = ze;
-    Ao = Xe;
-    Bo = !0;
-    Ro = "Turn on";
-    Ho = "Cancel";
-    Io = "cancel";
-    Wo = Cn(onConfirm);
-    Et = Cn(onCancel);
-    (($[4] = ee),
-      ($[5] = rt.remountKey),
-      ($[6] = noteRefused),
-      ($[7] = onCancel),
-      ($[8] = onConfirm),
-      ($[9] = pm),
-      ($[10] = ze),
-      ($[11] = refusedWithin),
-      ($[12] = Xe),
-      ($[13] = At),
-      ($[14] = It),
-      ($[15] = Ot),
-      ($[16] = Et),
-      ($[17] = Dt),
-      ($[18] = Lt),
-      ($[19] = oo),
-      ($[20] = Xt),
-      ($[21] = io),
-      ($[22] = so),
-      ($[23] = po),
-      ($[24] = ao),
-      ($[25] = co),
-      ($[26] = bo),
-      ($[27] = Ao),
-      ($[28] = Bo),
-      ($[29] = Ro),
-      ($[30] = Ho),
-      ($[31] = Io),
-      ($[32] = Wo));
-  } else
-    ((At = $[13]),
-      (It = $[14]),
-      (Ot = $[15]),
-      (Et = $[16]),
-      (Dt = $[17]),
-      (Lt = $[18]),
-      (oo = $[19]),
-      (Xt = $[20]),
-      (io = $[21]),
-      (so = $[22]),
-      (po = $[23]),
-      (ao = $[24]),
-      (co = $[25]),
-      (bo = $[26]),
-      (Ao = $[27]),
-      (Bo = $[28]),
-      (Ro = $[29]),
-      (Ho = $[30]),
-      (Io = $[31]),
-      (Wo = $[32]));
+    refuseInput = ze;
+    openedAt = mountTime;
+    hideIndexes = true;
+    confirmLabel = "Turn on";
+    cancelLabel = "Cancel";
+    focus = "cancel";
+    onConfirm_2 = Cn(onConfirm);
+    onCancel_2 = Cn(onCancel);
+    $[4] = inputRefusalWindow;
+    $[5] = rt.remountKey;
+    $[6] = noteRefused;
+    $[7] = onCancel;
+    $[8] = onConfirm;
+    $[9] = pm;
+    $[10] = ze;
+    $[11] = refusedWithin;
+    $[12] = mountTime;
+    $[13] = At;
+    $[14] = It;
+    $[15] = Ot;
+    $[16] = onCancel_2;
+    $[17] = flexDirection;
+    $[18] = gap;
+    $[19] = oo;
+    $[20] = Xt;
+    $[21] = io;
+    $[22] = title;
+    $[23] = onCancel_3;
+    $[24] = color;
+    $[25] = co;
+    $[26] = refuseInput;
+    $[27] = openedAt;
+    $[28] = hideIndexes;
+    $[29] = confirmLabel;
+    $[30] = cancelLabel;
+    $[31] = focus;
+    $[32] = onConfirm_2;
+  } else {
+    At = $[13];
+    It = $[14];
+    Ot = $[15];
+    onCancel_2 = $[16];
+    flexDirection = $[17];
+    gap = $[18];
+    oo = $[19];
+    Xt = $[20];
+    io = $[21];
+    title = $[22];
+    onCancel_3 = $[23];
+    color = $[24];
+    co = $[25];
+    refuseInput = $[26];
+    openedAt = $[27];
+    hideIndexes = $[28];
+    confirmLabel = $[29];
+    cancelLabel = $[30];
+    focus = $[31];
+    onConfirm_2 = $[32];
+  }
   let No;
   if (
     $[39] !== At ||
-    $[40] !== Et ||
+    $[40] !== onCancel_2 ||
     $[41] !== co ||
-    $[42] !== bo ||
-    $[43] !== Ao ||
-    $[44] !== Bo ||
-    $[45] !== Ro ||
-    $[46] !== Ho ||
-    $[47] !== Io ||
-    $[48] !== Wo
-  )
-    ((No = e(
+    $[42] !== refuseInput ||
+    $[43] !== openedAt ||
+    $[44] !== hideIndexes ||
+    $[45] !== confirmLabel ||
+    $[46] !== cancelLabel ||
+    $[47] !== focus ||
+    $[48] !== onConfirm_2
+  ) {
+    No = jsxProd_default(
       At,
       {
-        refuseInput: bo,
-        openedAt: Ao,
-        hideIndexes: Bo,
-        confirmLabel: Ro,
-        cancelLabel: Ho,
-        focus: Io,
-        onConfirm: Wo,
-        onCancel: Et,
+        refuseInput,
+        openedAt,
+        hideIndexes,
+        confirmLabel,
+        cancelLabel,
+        focus,
+        onConfirm: onConfirm_2,
+        onCancel: onCancel_2,
       },
       co,
-    )),
-      ($[39] = At),
-      ($[40] = Et),
-      ($[41] = co),
-      ($[42] = bo),
-      ($[43] = Ao),
-      ($[44] = Bo),
-      ($[45] = Ro),
-      ($[46] = Ho),
-      ($[47] = Io),
-      ($[48] = Wo),
-      ($[49] = No));
-  else No = $[49];
-  let vo;
+    );
+    $[39] = At;
+    $[40] = onCancel_2;
+    $[41] = co;
+    $[42] = refuseInput;
+    $[43] = openedAt;
+    $[44] = hideIndexes;
+    $[45] = confirmLabel;
+    $[46] = cancelLabel;
+    $[47] = focus;
+    $[48] = onConfirm_2;
+    $[49] = No;
+  } else No = $[49];
+  let children;
   if (
     $[50] !== It ||
-    $[51] !== Dt ||
-    $[52] !== Lt ||
+    $[51] !== flexDirection ||
+    $[52] !== gap ||
     $[53] !== oo ||
     $[54] !== Xt ||
     $[55] !== io ||
     $[56] !== No
-  )
-    ((vo = r(It, { flexDirection: Dt, gap: Lt, children: [oo, Xt, io, No] })),
-      ($[50] = It),
-      ($[51] = Dt),
-      ($[52] = Lt),
-      ($[53] = oo),
-      ($[54] = Xt),
-      ($[55] = io),
-      ($[56] = No),
-      ($[57] = vo));
-  else vo = $[57];
+  ) {
+    children = jsxProd_default_2(It, {
+      flexDirection,
+      gap,
+      children: [oo, Xt, io, No],
+    });
+    $[50] = It;
+    $[51] = flexDirection;
+    $[52] = gap;
+    $[53] = oo;
+    $[54] = Xt;
+    $[55] = io;
+    $[56] = No;
+    $[57] = children;
+  } else children = $[57];
   let Yo;
-  if ($[58] !== Ot || $[59] !== so || $[60] !== po || $[61] !== ao || $[62] !== vo)
-    ((Yo = e(Ot, { title: so, onCancel: po, color: ao, children: vo })),
-      ($[58] = Ot),
-      ($[59] = so),
-      ($[60] = po),
-      ($[61] = ao),
-      ($[62] = vo),
-      ($[63] = Yo));
-  else Yo = $[63];
+  if ($[58] !== Ot || $[59] !== title || $[60] !== onCancel_3 || $[61] !== color || $[62] !== children) {
+    Yo = jsxProd_default(Ot, {
+      title,
+      onCancel: onCancel_3,
+      color,
+      children,
+    });
+    $[58] = Ot;
+    $[59] = title;
+    $[60] = onCancel_3;
+    $[61] = color;
+    $[62] = children;
+    $[63] = Yo;
+  } else Yo = $[63];
   return Yo;
 }
 //@ chunk-18hwfzwa.js:1146495-1146536 placement
-function Cat(h) {
-  return replaceControlChars(stripVTControlCharacters(h)).trim();
+function sanitizeUserText(name) {
+  return replaceControlChars(stripVTControlCharacters(name)).trim();
 }
-
-export { Cat, _h, ExtraUsageDialogEntry };
+export { sanitizeUserText, formatCardOnFile, ExtraUsageDialogEntry };

@@ -9,33 +9,32 @@
  * attribution: fingerprint 1
  */
 
+//@ chunk-e6aww6q8.js:1750424-1750738 fingerprint = createMovedToPluginCommand (0.828)
 /**
  * createMovedToPluginCommand：同旧版。
  */
-//@ chunk-e6aww6q8.js:1750424-1750738 fingerprint = createMovedToPluginCommand (0.828)
 function createMovedToPluginCommand({
-  name: e,
-  description: description,
-  progressMessage: progressMessage,
-  pluginName: pluginName,
-  pluginCommand: pluginCommand,
-  getPromptWhileMarketplaceIsPrivate: getPromptWhileMarketplaceIsPrivate,
+  name,
+  description,
+  progressMessage,
+  pluginName,
+  pluginCommand,
+  getPromptWhileMarketplaceIsPrivate,
 }) {
   return {
     type: "prompt",
-    name: e,
-    description: description,
-    progressMessage: progressMessage,
+    name,
+    description,
+    progressMessage,
     contentLength: 0,
     userFacingName() {
-      return e;
+      return name;
     },
     source: "builtin",
-    disableModelInvocation: !1,
+    disableModelInvocation: false,
     async getPromptForCommand(args, context) {
       return getPromptWhileMarketplaceIsPrivate(args, context);
     },
   };
 }
-
 export { createMovedToPluginCommand };

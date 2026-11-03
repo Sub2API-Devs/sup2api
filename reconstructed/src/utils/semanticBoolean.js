@@ -11,5 +11,4 @@
 
 //@ chunk-ca06bv0t.js:5288-5312 fingerprint = semanticBoolean (0.73)
 var semanticBoolean = ["true", "false"];
-
 export { semanticBoolean };

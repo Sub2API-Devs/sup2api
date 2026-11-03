@@ -10,15 +10,14 @@
  */
 import { isEnvTruthy } from "../utils/envUtils.js";
 
+//@ chunk-bbtre4r8.js:14503-14747 placement
 /**
  * 识别因 DISABLE_TELEMETRY / DO_NOT_TRACK / 非必要流量开关而关闭远程控制的原因
  */
-//@ chunk-bbtre4r8.js:14503-14747 placement
 function diagnoseBridgeDisabledByEnv() {
   if (process.env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC) return "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC";
   if (process.env.DISABLE_TELEMETRY) return "DISABLE_TELEMETRY";
   if (isEnvTruthy(process.env.DO_NOT_TRACK)) return "DO_NOT_TRACK";
   return null;
 }
-
 export { diagnoseBridgeDisabledByEnv };

@@ -6,27 +6,35 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../runtime/bun-runtime.js";
-import { ew } from "../../compile/util.js";
+import { require_util_2 } from "../../compile/util.js";
 
 //@ chunk-s82q9s4x.js:104197-104592 cjs-fingerprint
-var Li = x(function (Fi) {
-  Object.defineProperty(Fi, "__esModule", { value: !0 });
-  var Ki = ew(),
-    Tp = {
-      keyword: "allOf",
-      schemaType: "array",
-      code(e) {
-        let { gen: gen, schema: schema, it: it } = e;
-        if (!Array.isArray(schema)) throw Error("ajv implementation error");
-        let n = gen.name("valid");
-        schema.forEach((o, i) => {
-          if (Ki.alwaysValidSchema(it, o)) return;
-          let subschema = e.subschema({ keyword: "allOf", schemaProp: i }, n);
-          (e.ok(n), e.mergeEvaluated(subschema));
-        });
-      },
-    };
-  Fi.default = Tp;
+var require_allOf = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  var util_1 = require_util_2();
+  var def = {
+    keyword: "allOf",
+    schemaType: "array",
+    code(cxt) {
+      let { gen, schema, it } = cxt;
+      if (!Array.isArray(schema)) throw Error("ajv implementation error");
+      let valid = gen.name("valid");
+      schema.forEach((sch, schemaProp) => {
+        if (util_1.alwaysValidSchema(it, sch)) return;
+        let schCxt = cxt.subschema(
+          {
+            keyword: "allOf",
+            schemaProp,
+          },
+          valid,
+        );
+        cxt.ok(valid);
+        cxt.mergeEvaluated(schCxt);
+      });
+    },
+  };
+  cjsExports.default = def;
 });
-
-export { Li };
+export { require_allOf };

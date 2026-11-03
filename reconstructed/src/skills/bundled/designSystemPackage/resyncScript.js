@@ -9,9 +9,12 @@
  * attribution: placement 2
  */
 import __cc_resource_0 from "../../../../assets/resync.mjs-4ec2827e.txt.zst" with { type: "file" };
-import { Et } from "../../../utils/embeddedAssets.js";
+import { readEmbeddedTextSync } from "../../../utils/embeddedAssets.js";
 
 //@ chunk-g16b0bhz.js:309-331 placement
-var i = __cc_resource_0;
+var resyncPath = __cc_resource_0;
 //@ chunk-g16b0bhz.js:331-363 placement
-var d = Et(i, import.meta.dirname);
+/**
+ * design-system 打包技能附带的 resync 脚本文本。
+ */
+var resync = readEmbeddedTextSync(resyncPath, import.meta.dirname);

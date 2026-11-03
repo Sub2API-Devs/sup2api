@@ -11,14 +11,25 @@
 import { formatFileSize } from "../format.js";
 import { plural } from "../stringUtils.js";
 import { printableName } from "../printableName.js";
-import { doe } from "../../tools/PublishPluginTool/constants.js";
+import { MAX_PUBLISH_META_CHARS } from "../../tools/PublishPluginTool/constants.js";
 
 //@ chunk-bs59k3zm.js:335-377 placement
-var Y0s = (t) => `${t.path} (${formatFileSize(t.bytes)})`;
+/**
+ * 上传清单里的一行：路径与大小。
+ */
+var fileEntryLine = (t) => `${t.path} (${formatFileSize(t.bytes)})`;
 //@ chunk-bs59k3zm.js:377-464 placement
-var cTo = (t, r) => [t].filter((e) => e > 0).map((e) => `and ${e} more ${plural(e, r)} not named here`);
+/**
+ * 「另有 N 个未列出的文件」提示。
+ */
+var moreFilesNote = (t, r) =>
+  [t].filter((e) => e > 0).map((e) => `and ${e} more ${plural(e, r)} not named here`);
 //@ chunk-bs59k3zm.js:464-512 placement
-var IOr = (t) => (/^ */.exec(t)?.[0] ?? "") + printableName(t, doe);
+/**
+ * 保留缩进的清单名称行。
+ */
+var indentedPrintableName = (title) =>
+  (/^ */.exec(title)?.[0] ?? "") + printableName(title, MAX_PUBLISH_META_CHARS);
 //@ chunk-bs59k3zm.js:512-648 placement
 var staysOnMachineLines = (t) =>
   [t]
@@ -35,14 +46,20 @@ var manifestWriteLines = (t) =>
 `),
   ]);
 //@ chunk-bs59k3zm.js:767-815 placement
-var a = (t) => `stays here: ${t.path} (${t.words})`;
+var staysEntryLine = (t) => `stays here: ${t.path} (${t.words})`;
 //@ chunk-bs59k3zm.js:815-948 placement
 var manifestEntryLines = (t) =>
   [
-    ...t.files.map(Y0s),
-    ...cTo(t.unnamed?.files ?? 0, "file"),
-    ...t.stays.map(a),
-    ...cTo(t.unnamed?.stays ?? 0, "entry"),
-  ].map(IOr);
-
-export { IOr, staysOnMachineLines, manifestWriteLines, Y0s, cTo, manifestEntryLines };
+    ...t.files.map(fileEntryLine),
+    ...moreFilesNote(t.unnamed?.files ?? 0, "file"),
+    ...t.stays.map(staysEntryLine),
+    ...moreFilesNote(t.unnamed?.stays ?? 0, "entry"),
+  ].map(indentedPrintableName);
+export {
+  indentedPrintableName,
+  staysOnMachineLines,
+  manifestWriteLines,
+  fileEntryLine,
+  moreFilesNote,
+  manifestEntryLines,
+};

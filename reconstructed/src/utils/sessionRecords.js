@@ -9,7 +9,7 @@
  * attribution: placement 13
  */
 import { join } from "path";
-import { readFile, readFile as readFile_2 } from "fs/promises";
+import { readFile } from "fs/promises";
 import { timingSafeEqual } from "crypto";
 import { jsonParse } from "./slowOperations.js";
 
@@ -17,68 +17,78 @@ import { jsonParse } from "./slowOperations.js";
 function getSessionsDir(n) {
   return join(n, "sessions");
 }
+//@ chunk-g4mgfvqt.js:448-463 placement
 /**
  * 会话记录文件大小上限。
  */
-//@ chunk-g4mgfvqt.js:448-463 placement
 var MAX_SESSION_RECORD_BYTES = 262144;
+//@ chunk-g4mgfvqt.js:463-588 placement
 /**
  * 从 <pid>.json 文件名取 pid 及是否规范。
  */
-//@ chunk-g4mgfvqt.js:463-588 placement
 function parseSessionRecordName(n) {
-  let replaced = n.replace(/\.json$/, ""),
-    e = parseInt(replaced, 10);
+  let replaced = n.replace(/\.json$/, "");
+  let e = parseInt(replaced, 10);
   if (isNaN(e)) return null;
-  return { pid: e, canonical: String(e) === replaced };
+  return {
+    pid: e,
+    canonical: String(e) === replaced,
+  };
 }
 //@ chunk-g4mgfvqt.js:588-640 placement
-var p = ["interactive", "bg", "daemon", "daemon-worker"];
+var SESSION_KINDS = ["interactive", "bg", "daemon", "daemon-worker"];
 //@ chunk-g4mgfvqt.js:640-684 placement
-function c(n) {
-  return p.includes(n) ? n : void 0;
+function normalizeSessionKind(kind) {
+  return SESSION_KINDS.includes(kind) ? kind : undefined;
 }
 //@ chunk-g4mgfvqt.js:684-724 placement
-var f = ["busy", "shell", "idle", "waiting"];
+var SESSION_STATUSES = ["busy", "shell", "idle", "waiting"];
 //@ chunk-g4mgfvqt.js:724-768 placement
-function m(n) {
-  return f.includes(n) ? n : void 0;
+function normalizeSessionStatus(status) {
+  return SESSION_STATUSES.includes(status) ? status : undefined;
 }
 //@ chunk-g4mgfvqt.js:768-791 placement
-var l = 4000000000000000;
+var MAX_SANE_EPOCH_MS = 4000000000000000;
 //@ chunk-g4mgfvqt.js:791-866 placement
 function isSaneEpochMs(n) {
-  return typeof n === "number" && Number.isFinite(n) && n >= 0 && n <= l;
+  return typeof n === "number" && Number.isFinite(n) && n >= 0 && n <= MAX_SANE_EPOCH_MS;
 }
 //@ chunk-g4mgfvqt.js:866-905 placement
-function lPn(n) {
-  return isSaneEpochMs(n) ? n : void 0;
+/**
+ * saneEpochMsOrUndefined：合理时间戳否则 undefined。
+ */
+function saneEpochMsOrUndefined(n) {
+  return isSaneEpochMs(n) ? n : undefined;
 }
+//@ chunk-g4mgfvqt.js:905-1374 placement
 /**
  * 规范化会话记录字段。
  */
-//@ chunk-g4mgfvqt.js:905-1374 placement
 function normalizeSessionRecord(n) {
   let t = typeof n === "object" && n !== null ? n : {};
   return {
     cwd: typeof t.cwd === "string" ? t.cwd : "?",
-    startedAt: lPn(t.startedAt) ?? 0,
-    procStart: typeof t.procStart === "string" ? t.procStart : void 0,
-    ...(typeof t.procStartFt === "string" && { procStartFt: t.procStartFt }),
-    kind: c(t.kind),
-    sessionId: typeof t.sessionId === "string" ? t.sessionId : void 0,
-    status: m(t.status),
-    entrypoint: typeof t.entrypoint === "string" ? t.entrypoint : void 0,
-    ...(typeof t.pidDomain === "string" && { pidDomain: t.pidDomain }),
+    startedAt: saneEpochMsOrUndefined(t.startedAt) ?? 0,
+    procStart: typeof t.procStart === "string" ? t.procStart : undefined,
+    ...(typeof t.procStartFt === "string" && {
+      procStartFt: t.procStartFt,
+    }),
+    kind: normalizeSessionKind(t.kind),
+    sessionId: typeof t.sessionId === "string" ? t.sessionId : undefined,
+    status: normalizeSessionStatus(t.status),
+    entrypoint: typeof t.entrypoint === "string" ? t.entrypoint : undefined,
+    ...(typeof t.pidDomain === "string" && {
+      pidDomain: t.pidDomain,
+    }),
   };
 }
+//@ chunk-g4mgfvqt.js:2218-2546 placement
 /**
  * 读取会话认证记录文件。
  */
-//@ chunk-g4mgfvqt.js:2218-2546 placement
 async function readSessionAuthFile(n) {
   try {
-    let t = jsonParse(await readFile_2(n, "utf8"));
+    let t = jsonParse(await readFile(n, "utf8"));
     if (t === null || typeof t !== "object") return;
     let e = {};
     if ("rvAuth" in t && typeof t.rvAuth === "string") e.rvAuth = t.rvAuth;
@@ -89,24 +99,23 @@ async function readSessionAuthFile(n) {
     return;
   }
 }
+//@ chunk-g4mgfvqt.js:2546-2697 placement
 /**
  * 常量时间比较字符串。
  */
-//@ chunk-g4mgfvqt.js:2546-2697 placement
-function timingSafeEqualStrings(n, t) {
-  if (typeof n !== "string" || !t || n.length === 0) return !1;
-  let buffer = Buffer.from(n),
-    buffer_2 = Buffer.from(t);
-  if (buffer.length !== buffer_2.length) return !1;
+function timingSafeEqualStrings(auth, t) {
+  if (typeof auth !== "string" || !t || auth.length === 0) return false;
+  let buffer = Buffer.from(auth);
+  let buffer_2 = Buffer.from(t);
+  if (buffer.length !== buffer_2.length) return false;
   return timingSafeEqual(buffer, buffer_2);
 }
-
 export {
   isSaneEpochMs,
   parseSessionRecordName,
   MAX_SESSION_RECORD_BYTES,
   normalizeSessionRecord,
-  lPn,
+  saneEpochMsOrUndefined,
   readSessionAuthFile,
   getSessionsDir,
   timingSafeEqualStrings,

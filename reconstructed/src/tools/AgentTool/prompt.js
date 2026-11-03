@@ -12,13 +12,18 @@ import { getSubscriptionType } from "../../utils/auth.js";
 import { env } from "../../utils/env.js";
 import { isCoworkAny } from "../../utils/entrypointKinds.js";
 import { logHostCostSteerApplied, getSubagentSteer } from "../../utils/model/subagentSteer.js";
-import { isRemoteAgentIsolationAvailable, KZe, GKe } from "./agentLaunch.js";
+import { isRemoteAgentIsolationAvailable, isTwinklingBooleOn, canRunAgentInWorktree } from "./agentLaunch.js";
 import { isPersonalConfigRestricted } from "../../utils/personalConfigRestriction.js";
 import { isForkSubagentEnabled, forkGateForcesBackground } from "./forkSubagent.js";
-import { nK, gD } from "../../utils/model/promptBundles.js";
+import { leanRewriteOf, leanPromptOf } from "../../utils/model/promptBundles.js";
 import { isRelativeEffortDisabled } from "./agentEffort.js";
-import { ecr, AGENT, Xdr } from "./constants.js";
-import { isBackgroundLaunchOptIn, C4, VTn, b5e } from "./backgroundGates.js";
+import { SUBAGENT_TYPE_REQUIRED, AGENT, AGENT_TOOL_DESCRIPTION } from "./constants.js";
+import {
+  isBackgroundLaunchOptIn,
+  isForegroundAgentMoveOff,
+  isBackgroundLaunchByDefault,
+  canLaunchBackgroundAgent,
+} from "./backgroundGates.js";
 import { isInProcessTeammate, isTeammate } from "../../utils/teammate.js";
 import { BASH_TOOL_NAME } from "../BashTool/toolName.js";
 import { getMaxBashTimeoutMs } from "../../utils/timeouts.js";
@@ -41,10 +46,10 @@ import { GREP_TOOL_NAME } from "../GrepTool/prompt.js";
 import { FILE_READ_TOOL_NAME } from "../FileReadTool/constants.js";
 import { SENDMESSAGE } from "../SendMessageTool/constants.js";
 
+//@ chunk-e6aww6q8.js:1424505-1426182 placement
 /**
  * Agent 工具提示词中“何时使用子代理”的指导文本。
  */
-//@ chunk-e6aww6q8.js:1424505-1426182 placement
 var WHEN_TO_USE_AGENT_GUIDANCE = `A fresh agent costs more than it looks. It knows only what you put in the prompt, and you see only the summary it sends back \u2014 both handoffs drop detail, and neither of you can tell what the other missed. You can't watch it work, only wait or cancel. Its mistakes come back in the same confident register as its findings, and an agent handed your hypothesis tends to return it confirmed. Several at once spend tokens in a burst the user didn't ask for. Weigh those tokens against the accuracy they buy: the user pays for agents you did not need, and pays again for work you redo because you skipped one.
 
 Reach for this when you have independent work to run in parallel, when the user asks for a side quest that shouldn't block your main thread, or when answering would mean reading across several files \u2014 delegate that and you keep the conclusion, not the file dumps.
@@ -53,79 +58,86 @@ Do the work yourself when it is a handful of tool calls or a lookup whose target
 
 When you do spawn one, brief it like the peer it is: state the goal and what you have already ruled out, point it at the files and docs worth reading instead of retyping them, and keep the scope explicit and narrow. That brief is the only context it will have, so it is your first lever on every cost above \u2014 and if you cannot write a clear one, you do not understand the task well enough to hand it off.`;
 //@ chunk-e6aww6q8.js:3261557-3261661 placement
-function uAe() {
-  if (getSubscriptionType() === "pro") return !0;
-  if (!env.CLAUDE_CODE_WITTY_DEWDROP || !isCoworkAny()) return !1;
-  return (logHostCostSteerApplied(), !0);
+/**
+ * 判断是否对宿主做成本引导（pro 订阅，或 cowork 开关打开）。
+ */
+function shouldSteerCostToHost() {
+  if (getSubscriptionType() === "pro") return true;
+  if (!env.CLAUDE_CODE_WITTY_DEWDROP || !isCoworkAny()) return false;
+  logHostCostSteerApplied();
+  return true;
 }
+//@ chunk-e6aww6q8.js:3265270-3265305 sole-consumer
 /**
  * 代理列表是否改由 system-reminder 注入（远程隔离可用且非受限配置）。
  */
-//@ chunk-e6aww6q8.js:3265270-3265305 sole-consumer
-function ERn() {
+function shouldInjectAgentListViaReminder() {
   return isRemoteAgentIsolationAvailable() && !isPersonalConfigRestricted();
 }
+//@ chunk-e6aww6q8.js:3265305-3265587 fingerprint = getToolsDescription (1)
 /**
  * 把代理的 tools/disallowedTools 描述为 "All tools" / "All tools except …" / 列表 / "None"。
  */
-//@ chunk-e6aww6q8.js:3265305-3265587 fingerprint = getToolsDescription (1)
 function getToolsDescription(agent) {
-  let { tools: tools, disallowedTools: disallowedTools } = agent,
-    s = tools && tools.length > 0,
-    h = disallowedTools && disallowedTools.length > 0;
-  if (s && h) {
-    let denySet = new Set(disallowedTools),
-      effectiveTools = tools.filter((w) => !denySet.has(w));
+  let { tools, disallowedTools } = agent;
+  let hasAllowlist = tools && tools.length > 0;
+  let hasDenylist = disallowedTools && disallowedTools.length > 0;
+  if (hasAllowlist && hasDenylist) {
+    let denySet = new Set(disallowedTools);
+    let effectiveTools = tools.filter((t) => !denySet.has(t));
     if (effectiveTools.length === 0) return "None";
     return effectiveTools.join(", ");
-  } else if (s) return tools.join(", ");
-  else if (h) return `All tools except ${disallowedTools.join(", ")}`;
+  } else if (hasAllowlist) return tools.join(", ");
+  else if (hasDenylist) return `All tools except ${disallowedTools.join(", ")}`;
   return "All tools";
 }
+//@ chunk-e6aww6q8.js:3265587-3265697 fingerprint = formatAgentLine (0.863)
 /**
  * 格式化一行代理说明："- 类型: whenToUse (Tools: …)"。
  */
-//@ chunk-e6aww6q8.js:3265587-3265697 fingerprint = formatAgentLine (0.863)
-function formatAgentLine(e, n) {
-  let toolsDescription = getToolsDescription(e),
-    s = (n && e.whenToUseLean) || e.whenToUse;
-  return `- ${e.agentType}: ${s} (Tools: ${toolsDescription})`;
+function formatAgentLine(agent, n) {
+  let toolsDescription = getToolsDescription(agent);
+  let s = (n && agent.whenToUseLean) || agent.whenToUse;
+  return `- ${agent.agentType}: ${s} (Tools: ${toolsDescription})`;
 }
+//@ chunk-e6aww6q8.js:3265697-3265791 layout
 /**
  * 提示词中"可用代理类型在 system-reminder 中列出"的句子。
  */
-//@ chunk-e6aww6q8.js:3265697-3265791 layout
 var AGENT_LIST_IN_REMINDER_NOTE =
   "Available agent types are listed in <system-reminder> messages in the conversation.";
+//@ chunk-e6aww6q8.js:3265791-3286110 callgraph-witnessed = getPrompt (0.176)
 /**
  * Agent 工具提示词生成：按 fork 可用、coordinator、lean 提示、后台默认、worktree 隔离建议、模型混用、预算说明等拼装"何时 fork / 如何写 prompt / 示例 / 不该用的情况"各段。
  */
-//@ chunk-e6aww6q8.js:3265791-3286110 callgraph-witnessed = getPrompt (0.176)
 async function getPrompt({
-  model: model,
-  isCoordinator: isCoordinator,
-  forkAvailable: forkAvailable,
-  generalPurposeAvailable: generalPurposeAvailable,
-  continueAvailable: continueAvailable,
-  leanPrompt: leanPrompt,
-  leanRewrite: leanRewrite,
-  subagentBudgetNote: subagentBudgetNote,
-  modelMix: modelMix,
+  model,
+  isCoordinator,
+  forkAvailable,
+  generalPurposeAvailable,
+  continueAvailable,
+  leanPrompt,
+  leanRewrite,
+  subagentBudgetNote,
+  modelMix,
 }) {
-  let G = isForkSubagentEnabled(),
-    q = nK({ model: model, leanRewrite: leanRewrite }),
-    Z = G && forkAvailable,
-    Se = forkGateForcesBackground(),
-    ke = isRelativeEffortDisabled()
-      ? '\n- When you fan work out in parallel, give each independent lookup `effort: "lower"` \u2014 that is where the step cheaper pays most. More generally, pass `"lower"` for any mechanical, self-checking brief (find-and-report, grep across named files, a pattern you spelled out); pass `"higher"` for a well-specified piece that needs more reasoning than the work around it.'
-      : "",
-    we = `${ecr}, so choose ${Z ? '`"fork"` or ' : ""}one of the listed agent types.`,
-    Ee =
-      KZe() && GKe()
-        ? 'When dispatching two or more agents that will write or edit files in the same repository, give EACH `isolation: "worktree"` \u2014 parallel agents sharing a working directory overwrite each other\'s work.'
-        : "",
-    Ae = Z
-      ? `
+  let G = isForkSubagentEnabled();
+  let q = leanRewriteOf({
+    model,
+    leanRewrite,
+  });
+  let Z = G && forkAvailable;
+  let Se = forkGateForcesBackground();
+  let ke = isRelativeEffortDisabled()
+    ? '\n- When you fan work out in parallel, give each independent lookup `effort: "lower"` \u2014 that is where the step cheaper pays most. More generally, pass `"lower"` for any mechanical, self-checking brief (find-and-report, grep across named files, a pattern you spelled out); pass `"higher"` for a well-specified piece that needs more reasoning than the work around it.'
+    : "";
+  let we = `${SUBAGENT_TYPE_REQUIRED}, so choose ${Z ? '`"fork"` or ' : ""}one of the listed agent types.`;
+  let Ee =
+    isTwinklingBooleOn() && canRunAgentInWorktree()
+      ? 'When dispatching two or more agents that will write or edit files in the same repository, give EACH `isolation: "worktree"` \u2014 parallel agents sharing a working directory overwrite each other\'s work.'
+      : "";
+  let Ae = Z
+    ? `
 
 ## When to fork
 
@@ -139,8 +151,8 @@ Forks are cheap because they share your prompt cache.
 
 **Writing a fork prompt.** Since the fork inherits your context, the prompt is a *directive* \u2014 what to do, not what the situation is. Be specific about scope: what's in, what's out, what another agent is handling. Don't re-explain background.
 `
-      : "",
-    writingThePromptSection = `
+    : "";
+  let writingThePromptSection = `
 
 ## Writing the prompt
 
@@ -153,8 +165,8 @@ ${Z ? "Any agent other than a fork starts with zero context. " : ""}Brief the ag
 
 ${Z ? "For fresh agents, terse" : "Terse"} command-style prompts produce shallow, generic work.
 
-**Never delegate understanding.** Don't write "based on your findings, fix the bug" or "based on the research, implement it." Those phrases push synthesis onto the agent instead of doing it yourself. Write prompts that prove you understood: include file paths, line numbers, what specifically to change.`,
-    forkExamples = `Example usage:
+**Never delegate understanding.** Don't write "based on your findings, fix the bug" or "based on the research, implement it." Those phrases push synthesis onto the agent instead of doing it yourself. Write prompts that prove you understood: include file paths, line numbers, what specifically to change.`;
+  let forkExamples = `Example usage:
 
 <example>
 user: "What's left on this branch before we can ship?"
@@ -194,15 +206,15 @@ ${AGENT}({
   prompt: "Review migration 0042_user_schema.sql for safety. Context: we're adding a NOT NULL column to a 50M-row table. Existing rows get a backfill default. I want a second opinion on whether the backfill approach is safe under concurrent writes \u2014 I've checked locking behavior but want independent verification. Report: is this safe, and if not, what specifically breaks?"
 })
 </example>
-`,
-    We = isBackgroundLaunchOptIn() && !Se && !isInProcessTeammate(),
-    ze = (!C4() || VTn()) && !isInProcessTeammate(),
-    lt =
-      (ze || We) && b5e()
-        ? `
+`;
+  let We = isBackgroundLaunchOptIn() && !Se && !isInProcessTeammate();
+  let ze = (!isForegroundAgentMoveOff() || isBackgroundLaunchByDefault()) && !isInProcessTeammate();
+  let lt =
+    (ze || We) && canLaunchBackgroundAgent()
+      ? `
 - Work that must go on after your reply can run in a background agent. After your reply, this session keeps running only while a background agent is waiting for a model response or running a foreground tool call; a few minutes after no agent is doing either, the session is likely stopped, with every agent and background command in it. An agent waiting on the user (a permission answer, or a connector's link or approval) or on a background command does not count. So tell the agent not to use ${BASH_TOOL_NAME}'s \`run_in_background\`, and to give each command a \`timeout\` long enough for it, at most ${getMaxBashTimeoutMs()} ms, since a command still running at its timeout is moved to the background. It should split work longer than that into such commands, and wait for a condition with a foreground \`until <check>; do sleep 5; done\` loop, bounded so it ends within its timeout, not with ${MONITOR} or a leading \`sleep\`. A background agent's MCP tool calls always run in the foreground, so each keeps the session running until it returns, unless it waits on the user. If you are yourself a background agent, do such work here in the foreground instead of starting another agent.`
-        : "",
-    currentExamples = `<example>
+      : "";
+  let currentExamples = `<example>
 user: "Can you get a second opinion on whether this migration is safe?"
 assistant: <thinking>I'll ask the code-reviewer agent \u2014 it won't see my analysis, so it can give an independent read.</thinking>
 ${AGENT}({
@@ -214,8 +226,8 @@ ${AGENT}({
 The agent starts with no context from this conversation, so the prompt briefs it: what to assess, the relevant background, and what form the answer should take.
 </commentary>
 </example>
-`,
-    pt = `Example usage:
+`;
+  let pt = `Example usage:
 
 ${
   !generalPurposeAvailable
@@ -258,83 +270,84 @@ The prompt is self-contained: it states the goal, lists what to check, and caps 
 </example>
 
 `
-}${currentExamples}`,
-    Et = gD({ model: model, leanPrompt: leanPrompt }),
-    yt = getSubagentSteer() === "default",
-    gt = uAe()
-      ? `
+}${currentExamples}`;
+  let Et = leanPromptOf({
+    model,
+    leanPrompt,
+  });
+  let yt = getSubagentSteer() === "default";
+  let gt = shouldSteerCostToHost()
+    ? `
 
 **Do not spawn agents unless the user asks.** Each spawn starts cold and re-derives context you already have \u2014 it's the expensive path on this plan. A task with "multiple angles," "thorough," or several parts is not a request to spawn; handle it inline with your own tools. Only use this tool when the user explicitly says to use a subagent, or names one of the available agent types.${isWebFetchAgentEnabled() ? ` This does not cover the \`${WEB_FETCH_AGENT}\` agent type where it is listed and you have no ${WEBFETCH} tool of your own: it stands in for that tool, so calling it to read a page is ordinary tool use.` : ""}`
-      : "",
-    At = q
-      ? `${agentTypesParagraph(gt, Z, generalPurposeAvailable, we)}${
-          subagentBudgetNote === void 0
-            ? ""
-            : `
+    : "";
+  let At = q
+    ? `${agentTypesParagraph(gt, Z, generalPurposeAvailable, we)}${
+        subagentBudgetNote === undefined
+          ? ""
+          : `
 
 ${subagentBudgetNote}`
-        }`
-      : `${Xdr}. Each agent type has specific capabilities and tools available to it.
+      }`
+    : `${AGENT_TOOL_DESCRIPTION}. Each agent type has specific capabilities and tools available to it.
 
 ${AGENT_LIST_IN_REMINDER_NOTE}${gt}
 
 ${Z ? `When using the ${AGENT} tool, specify a subagent_type to select an agent: \`"fork"\` forks yourself (the fork inherits your full conversation context and always runs on your model \u2014 a \`model\` override is ignored); ${generalPurposeAvailable ? "any other type \u2014 or omitting it \u2014 starts a fresh agent (general-purpose by default)." : `any other type starts a fresh agent. ${we}`}` : `When using the ${AGENT} tool, specify a subagent_type parameter to select which agent type to use. ${generalPurposeAvailable ? "If omitted, the general-purpose agent is used." : we}`}${
-          subagentBudgetNote === void 0
-            ? ""
-            : `
+        subagentBudgetNote === undefined
+          ? ""
+          : `
 
 ${subagentBudgetNote}`
-        }`;
+      }`;
   if (isCoordinator) return At;
   let It =
-      hasEmbeddedSearchTools() && isBashAvailable()
-        ? "`grep` via the Bash tool"
-        : `the ${GREP_TOOL_NAME} tool`,
-    Yt = Z
-      ? ""
-      : `
+    hasEmbeddedSearchTools() && isBashAvailable() ? "`grep` via the Bash tool" : `the ${GREP_TOOL_NAME} tool`;
+  let Yt = Z
+    ? ""
+    : `
 ## When not to use
 
 If the target is already known, use the direct tool: ${FILE_READ_TOOL_NAME} for a known path, ${It} for a specific symbol or string. Reserve this tool for open-ended questions that span the codebase, or tasks that match an available agent type.
 `;
   if (Et) {
     let qt =
-        ze && !Se
-          ? "\n- Subagents run in the background by default; you'll be notified when one completes. Pass `run_in_background: false` only when your very next action depends on the result and nothing else could usefully happen while it runs \u2014 otherwise background it so the user can interject. Never fabricate or predict a pending agent's results \u2014 the notification is never something you write yourself; if the user asks before it arrives, say it's still running."
-          : ze && !Z
-            ? `
+      ze && !Se
+        ? "\n- Subagents run in the background by default; you'll be notified when one completes. Pass `run_in_background: false` only when your very next action depends on the result and nothing else could usefully happen while it runs \u2014 otherwise background it so the user can interject. Never fabricate or predict a pending agent's results \u2014 the notification is never something you write yourself; if the user asks before it arrives, say it's still running."
+        : ze && !Z
+          ? `
 - Subagents run in the background; you'll be notified when one completes. Never fabricate or predict a pending agent's results \u2014 the notification is never something you write yourself; if the user asks before it arrives, say it's still running.`
-            : We
-              ? "\n- A subagent runs in the background only if you pass `run_in_background: true`; even then it may run in the foreground or be refused. When one does run in the background, you'll be notified when it completes. Never fabricate or predict a pending agent's results \u2014 the notification is never something you write yourself; if the user asks before it arrives, say it's still running."
-              : "",
-      Zt = isInProcessTeammate()
-        ? "\n- `run_in_background` and `name` are unavailable here \u2014 only synchronous subagents."
-        : isTeammate()
-          ? "\n- `name` is unavailable here \u2014 teammates cannot spawn teammates."
-          : "",
-      rn = ERn()
-        ? '\n- `isolation: "remote"` runs the agent in a remote CCR sandbox (always background).'
-        : "",
-      shared = `A previously spawned agent cannot be continued from here; every ${AGENT} call starts fresh`,
-      no = Z ? ' (except subagent_type: "fork", which inherits your context)' : "",
-      hn = Ee ? ` ${Ee} Each result comes back with a branch and worktree path to merge.` : "";
+          : We
+            ? "\n- A subagent runs in the background only if you pass `run_in_background: true`; even then it may run in the foreground or be refused. When one does run in the background, you'll be notified when it completes. Never fabricate or predict a pending agent's results \u2014 the notification is never something you write yourself; if the user asks before it arrives, say it's still running."
+            : "";
+    let Zt = isInProcessTeammate()
+      ? "\n- `run_in_background` and `name` are unavailable here \u2014 only synchronous subagents."
+      : isTeammate()
+        ? "\n- `name` is unavailable here \u2014 teammates cannot spawn teammates."
+        : "";
+    let rn = shouldInjectAgentListViaReminder()
+      ? '\n- `isolation: "remote"` runs the agent in a remote CCR sandbox (always background).'
+      : "";
+    let shared = `A previously spawned agent cannot be continued from here; every ${AGENT} call starts fresh`;
+    let no = Z ? ' (except subagent_type: "fork", which inherits your context)' : "";
+    let hn = Ee ? ` ${Ee} Each result comes back with a branch and worktree path to merge.` : "";
     if (q) {
-      let Xn = ze && Z && Se ? BACKGROUND_SUBAGENTS_NOTE : "",
-        fo = modelMix?.whenToUse ?? delegatingToSubagentsSection(Z),
-        To =
-          gt || fo === ""
-            ? ""
-            : `
+      let Xn = ze && Z && Se ? BACKGROUND_SUBAGENTS_NOTE : "";
+      let fo = modelMix?.whenToUse ?? delegatingToSubagentsSection(Z);
+      let To =
+        gt || fo === ""
+          ? ""
+          : `
 
-${fo}`,
-        bo =
-          gt || modelMix?.whenToUse !== void 0
-            ? ""
-            : `
+${fo}`;
+      let bo =
+        gt || modelMix?.whenToUse !== undefined
+          ? ""
+          : `
 
-${SUBAGENT_CONCLUSION_TEXT}`,
-        vn = continueAvailable ? continueAgentHint(Z) : `${shared}${no}.`,
-        co = `${ke}${rn}${qt}${lt}${Zt}`;
+${SUBAGENT_CONCLUSION_TEXT}`;
+      let vn = continueAvailable ? continueAgentHint(Z) : `${shared}${no}.`;
+      let co = `${ke}${rn}${qt}${lt}${Zt}`;
       return `${At}${To}
 
 ${subagentObservabilityParagraph(Xn)}
@@ -349,24 +362,24 @@ ${co}`
       }`;
     }
     let ho = Z
-        ? Se
-          ? `
+      ? Se
+        ? `
 
 A fork runs in the background and keeps its tool output out of your context. If you are the fork, execute directly \u2014 don't re-delegate. Subagents run in the background; you'll be notified when one completes. Never fabricate or predict a pending agent's results \u2014 the notification is never something you write yourself; if the user asks before it arrives, say it's still running.`
-          : `
+        : `
 
 A fork keeps its tool output out of your context. If you are the fork, execute directly \u2014 don't re-delegate.`
-        : "",
-      yn =
-        modelMix?.whenToUse ??
-        WHEN_TO_USE_AGENT_GUIDANCE +
-          (isRelativeEffortDisabled()
-            ? ' Several at once is also where `effort: "lower"` pays: if you have decomposed to independent lookups, run each one step cheaper.'
-            : ""),
-      Kn =
-        gt || yn === ""
-          ? ""
-          : `
+      : "";
+    let yn =
+      modelMix?.whenToUse ??
+      WHEN_TO_USE_AGENT_GUIDANCE +
+        (isRelativeEffortDisabled()
+          ? ' Several at once is also where `effort: "lower"` pays: if you have decomposed to independent lookups, run each one step cheaper.'
+          : "");
+    let Kn =
+      gt || yn === ""
+        ? ""
+        : `
 
 ## When to use
 
@@ -410,7 +423,7 @@ ${Yt}
       ? `
 - ${Ee}`
       : ""
-  }${ERn() ? '\n- You can set `isolation: "remote"` to run the agent in a remote CCR environment. This is always a background task; you\'ll be notified when it completes. Use for long-running tasks that need a fresh sandbox.' : ""}${
+  }${shouldInjectAgentListViaReminder() ? '\n- You can set `isolation: "remote"` to run the agent in a remote CCR environment. This is always a background task; you\'ll be notified when it completes. Use for long-running tasks that need a fresh sandbox.' : ""}${
     isInProcessTeammate()
       ? `
 - The run_in_background and name parameters are not available in this context. Only synchronous subagents are supported.`
@@ -422,5 +435,4 @@ ${Yt}
 
 ${Z ? forkExamples : pt}`;
 }
-
-export { getPrompt, formatAgentLine, AGENT_LIST_IN_REMINDER_NOTE, uAe };
+export { getPrompt, formatAgentLine, AGENT_LIST_IN_REMINDER_NOTE, shouldSteerCostToHost };

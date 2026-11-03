@@ -8,7 +8,7 @@
  * pieces: chunk-18hwfzwa.js (4)
  * attribution: placement 4
  */
-import { j, R } from "../../../vendor/react/cjs/react.production.js";
+import { init_react_production, R } from "../../../vendor/react/cjs/react.production.js";
 import { w } from "../../../vendor/react/compiler-runtime.js";
 import { useAppState } from "../../state/AppState.js";
 import { useMainLoopBusy } from "../LogoV2/Notices.js";
@@ -16,12 +16,18 @@ import { stripNonPrintable } from "../../utils/truncateGraphemes.js";
 import { useInputClock } from "../../ink/components/Input.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { useRefusalTracker, useMountTime, settleKey } from "../CustomSelect/selectTypeahead.js";
-import { isWithinRecentInput, So } from "../../hooks/useRecentInputGuard.js";
+import {
+  isWithinRecentInput,
+  RECENT_INPUT_GUARD_MS as RECENT_INPUT_GUARD_MS_3,
+} from "../../hooks/useRecentInputGuard.js";
 import { useExitOnCtrlCD } from "../../hooks/useExitOnCtrlCD.js";
 import { MessageActionsKeybindings } from "../messageActions.js";
 import { Pane } from "../design-system/Pane.js";
 import { Box, Text } from "../../ink/components/Text.js";
-import { e, r } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { DiffFrame } from "../FileEditToolDiff.js";
 import { Blockquote } from "../Blockquote.js";
 import { needsGutter } from "../../utils/permissions/approvalPayloadSerialization.js";
@@ -30,225 +36,305 @@ import { getFirstLine } from "../../utils/stringUtils.js";
 import { ConfirmSelect } from "../design-system/ConfirmSelect.js";
 
 //@ chunk-18hwfzwa.js:1386191-1386195 placement
-j();
+init_react_production();
 //@ chunk-18hwfzwa.js:1386195-1386233 placement
 function selectActiveGoal(Kn) {
   return Kn.activeGoal;
 }
+//@ chunk-18hwfzwa.js:1386233-1389938 placement
 /**
  * GoalProposalPermissionRequest：模型提出目标（goal）时的确认界面。
  */
-//@ chunk-18hwfzwa.js:1386233-1389938 placement
-function GoalProposalPermissionRequest(h) {
-  let $ = w(64),
-    { payload: payload, answer: answer } = h,
-    L = useAppState(selectActiveGoal),
-    ee = useMainLoopBusy(),
-    ke = stripNonPrintable(payload.condition),
-    Re = useInputClock(),
-    He;
-  if ($[0] === MEMO_CACHE_SENTINEL) ((He = Date.now()), ($[0] = He));
-  else He = $[0];
-  let We = R(He),
-    { refusedWithin: refusedWithin, noteRefused: noteRefused, epoch: epoch } = useRefusalTracker(),
-    kt = useMountTime(),
-    At;
-  if ($[1] !== Re || $[2] !== noteRefused || $[3] !== refusedWithin)
-    ((At = function It() {
-      if (isWithinRecentInput(Re, We.current, So) || refusedWithin(So)) {
-        return (noteRefused(), !0);
+function GoalProposalPermissionRequest(props) {
+  let $ = w(64);
+  let { payload, answer } = props;
+  let appState = useAppState(selectActiveGoal);
+  let mainLoopBusy = useMainLoopBusy();
+  let ke = stripNonPrintable(payload.condition);
+  let inputClock = useInputClock();
+  let He;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    He = Date.now();
+    $[0] = He;
+  } else He = $[0];
+  let We = R(He);
+  let { refusedWithin, noteRefused, epoch } = useRefusalTracker();
+  let openedAt = useMountTime();
+  let At;
+  if ($[1] !== inputClock || $[2] !== noteRefused || $[3] !== refusedWithin) {
+    At = function It() {
+      if (
+        isWithinRecentInput(inputClock, We.current, RECENT_INPUT_GUARD_MS_3) ||
+        refusedWithin(RECENT_INPUT_GUARD_MS_3)
+      ) {
+        noteRefused();
+        return true;
       }
-      return !1;
-    }),
-      ($[1] = Re),
-      ($[2] = noteRefused),
-      ($[3] = refusedWithin),
-      ($[4] = At));
-  else At = $[4];
-  let It = At,
-    Ot;
-  if ($[5] !== answer || $[6] !== It)
-    ((Ot = function Dt(Et) {
+      return false;
+    };
+    $[1] = inputClock;
+    $[2] = noteRefused;
+    $[3] = refusedWithin;
+    $[4] = At;
+  } else At = $[4];
+  let It = At;
+  let Ot;
+  if ($[5] !== answer || $[6] !== It) {
+    Ot = function Dt(Et) {
       if (!It()) answer(Et);
-    }),
-      ($[5] = answer),
-      ($[6] = It),
-      ($[7] = Ot));
-  else Ot = $[7];
-  let Dt = Ot,
-    Lt;
-  if ($[8] !== answer) ((Lt = () => answer({ approved: !1, explicit: !0 })), ($[8] = answer), ($[9] = Lt));
-  else Lt = $[9];
-  let {
-      handleInterrupt: handleInterrupt,
-      handleExit: handleExit,
-      exitState: exitState,
-    } = useExitOnCtrlCD(void 0, Lt),
-    so;
-  if ($[10] !== handleInterrupt || $[11] !== It)
-    ((so = () => {
+    };
+    $[5] = answer;
+    $[6] = It;
+    $[7] = Ot;
+  } else Ot = $[7];
+  let Dt = Ot;
+  let Lt;
+  if ($[8] !== answer) {
+    Lt = () =>
+      answer({
+        approved: false,
+        explicit: true,
+      });
+    $[8] = answer;
+    $[9] = Lt;
+  } else Lt = $[9];
+  let { handleInterrupt, handleExit, exitState } = useExitOnCtrlCD(undefined, Lt);
+  let so;
+  if ($[10] !== handleInterrupt || $[11] !== It) {
+    so = () => {
       if (!It()) handleInterrupt();
-    }),
-      ($[10] = handleInterrupt),
-      ($[11] = It),
-      ($[12] = so));
-  else so = $[12];
+    };
+    $[10] = handleInterrupt;
+    $[11] = It;
+    $[12] = so;
+  } else so = $[12];
   let po;
-  if ($[13] !== handleExit || $[14] !== It)
-    ((po = () => {
+  if ($[13] !== handleExit || $[14] !== It) {
+    po = () => {
       if (!It()) handleExit();
-    }),
-      ($[13] = handleExit),
-      ($[14] = It),
-      ($[15] = po));
-  else po = $[15];
+    };
+    $[13] = handleExit;
+    $[14] = It;
+    $[15] = po;
+  } else po = $[15];
   let ao;
-  if ($[16] !== so || $[17] !== po)
-    ((ao = { "app:interrupt": so, "app:exit": po }), ($[16] = so), ($[17] = po), ($[18] = ao));
-  else ao = $[18];
+  if ($[16] !== so || $[17] !== po) {
+    ao = {
+      "app:interrupt": so,
+      "app:exit": po,
+    };
+    $[16] = so;
+    $[17] = po;
+    $[18] = ao;
+  } else ao = $[18];
   let co;
-  if ($[19] === MEMO_CACHE_SENTINEL) ((co = { context: "Global" }), ($[19] = co));
-  else co = $[19];
+  if ($[19] === MEMO_CACHE_SENTINEL) {
+    co = {
+      context: "Global",
+    };
+    $[19] = co;
+  } else co = $[19];
   MessageActionsKeybindings(ao, co);
-  let bo = settleKey(epoch, So);
-  const Ao = Pane,
-    Bo = "permission",
-    Ro = Box,
-    Ho = "column",
-    Io = 1,
-    Wo = Box,
-    mn = "column";
+  let bo = settleKey(epoch, RECENT_INPUT_GUARD_MS_3);
+  const Ao = Pane;
+  const color = "permission";
+  const Ro = Box;
+  const flexDirection = "column";
+  const gap = 1;
+  const Wo = Box;
+  const flexDirection_2 = "column";
   let Cn;
-  if ($[20] === MEMO_CACHE_SENTINEL)
-    ((Cn = e(Text, { bold: !0, color: "permission", children: "Claude proposes a goal" })), ($[20] = Cn));
-  else Cn = $[20];
-  const No = DiffFrame,
-    vo = Blockquote,
-    Yo = needsGutter(ke);
-  let kn;
-  if ($[21] !== ke) ((kn = e(Text, { children: ke })), ($[21] = ke), ($[22] = kn));
-  else kn = $[22];
-  let Fn;
-  if ($[23] !== vo || $[24] !== Yo || $[25] !== kn)
-    ((Fn = e(vo, { multiline: Yo, children: kn })), ($[23] = vo), ($[24] = Yo), ($[25] = kn), ($[26] = Fn));
-  else Fn = $[26];
+  if ($[20] === MEMO_CACHE_SENTINEL) {
+    Cn = jsxProd_default(Text, {
+      bold: true,
+      color: "permission",
+      children: "Claude proposes a goal",
+    });
+    $[20] = Cn;
+  } else Cn = $[20];
+  const No = DiffFrame;
+  const vo = Blockquote;
+  const multiline = needsGutter(ke);
+  let children;
+  if ($[21] !== ke) {
+    children = jsxProd_default(Text, {
+      children: ke,
+    });
+    $[21] = ke;
+    $[22] = children;
+  } else children = $[22];
+  let children_2;
+  if ($[23] !== vo || $[24] !== multiline || $[25] !== children) {
+    children_2 = jsxProd_default(vo, {
+      multiline,
+      children,
+    });
+    $[23] = vo;
+    $[24] = multiline;
+    $[25] = children;
+    $[26] = children_2;
+  } else children_2 = $[26];
   let bn;
-  if ($[27] !== No || $[28] !== Fn)
-    ((bn = e(No, { children: Fn })), ($[27] = No), ($[28] = Fn), ($[29] = bn));
-  else bn = $[29];
+  if ($[27] !== No || $[28] !== children_2) {
+    bn = jsxProd_default(No, {
+      children: children_2,
+    });
+    $[27] = No;
+    $[28] = children_2;
+    $[29] = bn;
+  } else bn = $[29];
   let Go;
-  if ($[30] !== Wo || $[31] !== Cn || $[32] !== bn)
-    ((Go = r(Wo, { flexDirection: mn, children: [Cn, bn] })),
-      ($[30] = Wo),
-      ($[31] = Cn),
-      ($[32] = bn),
-      ($[33] = Go));
-  else Go = $[33];
-  const hn = ee
+  if ($[30] !== Wo || $[31] !== Cn || $[32] !== bn) {
+    Go = jsxProd_default_2(Wo, {
+      flexDirection: flexDirection_2,
+      children: [Cn, bn],
+    });
+    $[30] = Wo;
+    $[31] = Cn;
+    $[32] = bn;
+    $[33] = Go;
+  } else Go = $[33];
+  const hn = mainLoopBusy
     ? "Claude continues with the current work while you decide."
     : "Claude has finished its current work \u2014 approving starts it working again, toward this goal. Esc dismisses without setting it.";
   let Mn;
-  if ($[34] !== hn)
-    ((Mn = r(Text, {
-      dimColor: !0,
+  if ($[34] !== hn) {
+    Mn = jsxProd_default_2(Text, {
+      dimColor: true,
       children: [
         "Approving sets this as the session goal, like running /goal: after each turn a separate check decides whether the condition is met, and Claude keeps working until it is.",
         " ",
         hn,
       ],
-    })),
-      ($[34] = hn),
-      ($[35] = Mn));
-  else Mn = $[35];
+    });
+    $[34] = hn;
+    $[35] = Mn;
+  } else Mn = $[35];
   let Xo;
-  if ($[36] !== L)
-    ((Xo =
-      L !== void 0 &&
-      r(Text, {
-        dimColor: !0,
+  if ($[36] !== appState) {
+    Xo =
+      appState !== undefined &&
+      jsxProd_default_2(Text, {
+        dimColor: true,
         children: [
           "Approving replaces the current goal:",
           " ",
-          truncateWithNotice(getFirstLine(L.condition), 200),
+          truncateWithNotice(getFirstLine(appState.condition), 200),
         ],
-      })),
-      ($[36] = L),
-      ($[37] = Xo));
-  else Xo = $[37];
-  let Sn, $n;
-  if ($[38] !== Dt)
-    ((Sn = () => Dt({ approved: !0, explicit: !0 })),
-      ($n = () => Dt({ approved: !1, explicit: !0 })),
-      ($[38] = Dt),
-      ($[39] = Sn),
-      ($[40] = $n));
-  else ((Sn = $[39]), ($n = $[40]));
+      });
+    $[36] = appState;
+    $[37] = Xo;
+  } else Xo = $[37];
+  let onConfirm;
+  let onCancel;
+  if ($[38] !== Dt) {
+    onConfirm = () =>
+      Dt({
+        approved: true,
+        explicit: true,
+      });
+    onCancel = () =>
+      Dt({
+        approved: false,
+        explicit: true,
+      });
+    $[38] = Dt;
+    $[39] = onConfirm;
+    $[40] = onCancel;
+  } else {
+    onConfirm = $[39];
+    onCancel = $[40];
+  }
   let on;
-  if ($[41] !== bo.remountKey || $[42] !== It || $[43] !== kt || $[44] !== Sn || $[45] !== $n)
-    ((on = e(
+  if (
+    $[41] !== bo.remountKey ||
+    $[42] !== It ||
+    $[43] !== openedAt ||
+    $[44] !== onConfirm ||
+    $[45] !== onCancel
+  ) {
+    on = jsxProd_default(
       ConfirmSelect,
       {
         refuseInput: It,
-        openedAt: kt,
+        openedAt,
         confirmLabel: "Set this goal",
         cancelLabel: "Not now",
-        hideIndexes: !0,
-        disablePrintableKeybindings: !0,
-        cancelFirst: !0,
+        hideIndexes: true,
+        disablePrintableKeybindings: true,
+        cancelFirst: true,
         focus: "cancel",
-        onConfirm: Sn,
-        onCancel: $n,
-        windowMs: So,
+        onConfirm,
+        onCancel,
+        windowMs: RECENT_INPUT_GUARD_MS_3,
       },
       bo.remountKey,
-    )),
-      ($[41] = bo.remountKey),
-      ($[42] = It),
-      ($[43] = kt),
-      ($[44] = Sn),
-      ($[45] = $n),
-      ($[46] = on));
-  else on = $[46];
-  let _o;
-  if ($[47] !== exitState.keyName || $[48] !== exitState.pending)
-    ((_o =
+    );
+    $[41] = bo.remountKey;
+    $[42] = It;
+    $[43] = openedAt;
+    $[44] = onConfirm;
+    $[45] = onCancel;
+    $[46] = on;
+  } else on = $[46];
+  let children_3;
+  if ($[47] !== exitState.keyName || $[48] !== exitState.pending) {
+    children_3 =
       exitState.pending &&
-      r(Text, {
-        dimColor: !0,
+      jsxProd_default_2(Text, {
+        dimColor: true,
         wrap: "truncate",
         children: ["Press ", exitState.keyName, " again to dismiss this goal"],
-      })),
-      ($[47] = exitState.keyName),
-      ($[48] = exitState.pending),
-      ($[49] = _o));
-  else _o = $[49];
+      });
+    $[47] = exitState.keyName;
+    $[48] = exitState.pending;
+    $[49] = children_3;
+  } else children_3 = $[49];
   let cn;
-  if ($[50] !== _o) ((cn = e(Box, { height: 1, children: _o })), ($[50] = _o), ($[51] = cn));
-  else cn = $[51];
+  if ($[50] !== children_3) {
+    cn = jsxProd_default(Box, {
+      height: 1,
+      children: children_3,
+    });
+    $[50] = children_3;
+    $[51] = cn;
+  } else cn = $[51];
   let Dn;
-  if ($[52] !== on || $[53] !== cn)
-    ((Dn = r(Box, { flexDirection: "column", children: [on, cn] })),
-      ($[52] = on),
-      ($[53] = cn),
-      ($[54] = Dn));
-  else Dn = $[54];
-  let wn;
-  if ($[55] !== Ro || $[56] !== Go || $[57] !== Mn || $[58] !== Xo || $[59] !== Dn)
-    ((wn = r(Ro, { flexDirection: Ho, gap: Io, children: [Go, Mn, Xo, Dn] })),
-      ($[55] = Ro),
-      ($[56] = Go),
-      ($[57] = Mn),
-      ($[58] = Xo),
-      ($[59] = Dn),
-      ($[60] = wn));
-  else wn = $[60];
+  if ($[52] !== on || $[53] !== cn) {
+    Dn = jsxProd_default_2(Box, {
+      flexDirection: "column",
+      children: [on, cn],
+    });
+    $[52] = on;
+    $[53] = cn;
+    $[54] = Dn;
+  } else Dn = $[54];
+  let children_4;
+  if ($[55] !== Ro || $[56] !== Go || $[57] !== Mn || $[58] !== Xo || $[59] !== Dn) {
+    children_4 = jsxProd_default_2(Ro, {
+      flexDirection,
+      gap,
+      children: [Go, Mn, Xo, Dn],
+    });
+    $[55] = Ro;
+    $[56] = Go;
+    $[57] = Mn;
+    $[58] = Xo;
+    $[59] = Dn;
+    $[60] = children_4;
+  } else children_4 = $[60];
   let mr;
-  if ($[61] !== Ao || $[62] !== wn)
-    ((mr = e(Ao, { color: Bo, children: wn })), ($[61] = Ao), ($[62] = wn), ($[63] = mr));
-  else mr = $[63];
+  if ($[61] !== Ao || $[62] !== children_4) {
+    mr = jsxProd_default(Ao, {
+      color,
+      children: children_4,
+    });
+    $[61] = Ao;
+    $[62] = children_4;
+    $[63] = mr;
+  } else mr = $[63];
   return mr;
 }
 //@ chunk-18hwfzwa.js:1389938-1389942 placement
-j();
-
+init_react_production();
 export { GoalProposalPermissionRequest };

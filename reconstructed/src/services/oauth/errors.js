@@ -25,5 +25,4 @@ class OAuthRefreshLockTimeoutError extends Error {
     this.name = "OAuthRefreshLockTimeoutError";
   }
 }
-
 export { OAuthRefreshDeadError, OAuthRefreshLockTimeoutError };

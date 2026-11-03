@@ -19,13 +19,13 @@ function orgConfigGateFlagOnHand(n, r) {
     Array.isArray(cachedGrowthBookFeatures) ||
     Object.keys(cachedGrowthBookFeatures).length === 0
   )
-    return !0;
+    return true;
   let growthBookOverrides = n.growthBookOverrides;
   return (
     TENGU_ORG_CONFIG_REQUIRED in cachedGrowthBookFeatures ||
     (typeof growthBookOverrides === "object" &&
       growthBookOverrides !== null &&
       TENGU_ORG_CONFIG_REQUIRED in growthBookOverrides) ||
-    (r !== void 0 && r.includes(TENGU_ORG_CONFIG_REQUIRED))
+    (r !== undefined && r.includes(TENGU_ORG_CONFIG_REQUIRED))
   );
 }

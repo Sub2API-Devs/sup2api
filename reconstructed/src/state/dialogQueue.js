@@ -8,7 +8,7 @@
  * pieces: chunk-1m6hq5zz.js (20)
  * attribution: placement 20
  */
-import { j, qt, Se, yt } from "../../vendor/react/cjs/react.production.js";
+import { init_react_production, qt, Se, yt } from "../../vendor/react/cjs/react.production.js";
 import { createStore } from "./store.js";
 import { endAnnouncementHold } from "../utils/accessibility/screenReader.js";
 import { createSignal } from "../utils/signal.js";
@@ -16,177 +16,225 @@ import { CountedAskQueue } from "../utils/countedAsk.js";
 import { isWithinRecentInput } from "../hooks/useRecentInputGuard.js";
 
 //@ chunk-1m6hq5zz.js:417-421 placement
-j();
+init_react_production();
+//@ chunk-1m6hq5zz.js:421-486 placement
 /**
  * 最上层的非用户唤起对话框。
  */
-//@ chunk-1m6hq5zz.js:421-486 placement
 function topAutoDialog(o) {
   return o.open.findLast((e) => !e.userInvoked) ?? null;
 }
+//@ chunk-1m6hq5zz.js:486-556 placement
 /**
  * 最上层的用户唤起对话框。
  */
-//@ chunk-1m6hq5zz.js:486-556 placement
-function topUserDialog(o) {
-  return o.open.findLast((e) => e.userInvoked === !0) ?? null;
+function topUserDialog(state) {
+  return state.open.findLast((e) => e.userInvoked === true) ?? null;
 }
 //@ chunk-1m6hq5zz.js:556-610 placement
-function C0t(o, e) {
-  return o.open.some((s) => s.kind === e);
+/**
+ * 队列里是否有该类型的打开对话框。
+ */
+function hasOpenDialogOfKind(state, kind) {
+  return state.open.some((s) => s.kind === kind);
 }
 //@ chunk-1m6hq5zz.js:610-649 placement
-function Unn(o) {
-  return o.open.length > 0;
+/**
+ * 是否有打开中的对话框。
+ */
+function hasOpenDialogs(state) {
+  return state.open.length > 0;
 }
+//@ chunk-1m6hq5zz.js:649-2296 placement
 /**
  * 创建对话框队列存储（排队、插入顺序、隐藏条件、事件）。
  */
-//@ chunk-1m6hq5zz.js:649-2296 placement
-function createDialogStore(o = () => Date.now()) {
-  let e = createStore({ open: [] }),
-    s = [topAutoDialog(e.getState()), topUserDialog(e.getState())];
-  e.subscribe(() => {
-    let t = [topAutoDialog(e.getState()), topUserDialog(e.getState())];
+function createDialogStore(inputClock = () => Date.now()) {
+  let store = createStore({
+    open: [],
+  });
+  let s = [topAutoDialog(store.getState()), topUserDialog(store.getState())];
+  store.subscribe(() => {
+    let t = [topAutoDialog(store.getState()), topUserDialog(store.getState())];
     if (t.some((n, a) => n !== null && n !== s[a])) endAnnouncementHold();
     s = t;
   });
-  let l = createSignal(),
-    d = new CountedAskQueue(),
-    NEGATIVE_INFINITY = Number.NEGATIVE_INFINITY,
-    i = new Set(),
-    g = (t, n) => `${t}:${n}`,
-    p = (t) => {
-      for (let n of i) if (n.startsWith(`${t}:`)) i.delete(n);
+  let signal = createSignal();
+  let d = new CountedAskQueue();
+  let NEGATIVE_INFINITY = Number.NEGATIVE_INFINITY;
+  let i = new Set();
+  let g = (t, n) => `${t}:${n}`;
+  let p = (t) => {
+    for (let n of i) if (n.startsWith(`${t}:`)) i.delete(n);
+  };
+  let r = (t) => {
+    let { removed, closedBlockingTopBare } = closeDialog(store, t);
+    if (!removed) return false;
+    if (closedBlockingTopBare) NEGATIVE_INFINITY = Date.now();
+    p(t);
+    return true;
+  };
+  let u = {
+    getState: store.getState,
+    subscribe: store.subscribe,
+    onClosed: signal.subscribe,
+    askTally: d,
+    open(t) {
+      if (t.countedAsk !== undefined) d.join(t.countedAsk);
+      store.setState((n) => {
+        let a = t.place === "queue" ? insertDialog(n.open, t) : undefined;
+        if (a !== undefined)
+          return {
+            open: [...n.open.slice(0, a), t, ...n.open.slice(a)],
+          };
+        let f = topAutoDialog(n);
+        let k = f?.holdsTop === true && sameUserInvoked(f, t) && t.succeeds !== true;
+        if ((t.place === "under" || k) && n.open.some((S) => S.userInvoked !== true))
+          return {
+            open: [t, ...n.open],
+          };
+        let D =
+          n.open.some((S) => sameUserInvoked(S, t)) ||
+          (t.userInvoked !== true && n.open.some((S) => S.userInvoked === true));
+        let m = t.userInvoked !== true && isWithinRecentInput(inputClock, NEGATIVE_INFINITY);
+        let y =
+          D || m
+            ? {
+                ...t,
+                shownAt: Date.now(),
+              }
+            : t;
+        return {
+          open: [...n.open, y],
+        };
+      });
     },
-    r = (t) => {
-      let { removed: removed, closedBlockingTopBare: closedBlockingTopBare } = closeDialog(e, t);
-      if (!removed) return !1;
-      if (closedBlockingTopBare) NEGATIVE_INFINITY = Date.now();
-      return (p(t), !0);
+    update(t, payload) {
+      store.setState((a) => {
+        let index = a.open.findIndex((D) => D.id === t);
+        if (index === -1) return a;
+        let sliced = a.open.slice();
+        sliced[index] = {
+          ...a.open[index],
+          payload,
+          shownAt: Date.now(),
+        };
+        return {
+          open: sliced,
+        };
+      });
     },
-    u = {
-      getState: e.getState,
-      subscribe: e.subscribe,
-      onClosed: l.subscribe,
-      askTally: d,
-      open(t) {
-        if (t.countedAsk !== void 0) d.join(t.countedAsk);
-        e.setState((n) => {
-          let a = t.place === "queue" ? insertDialog(n.open, t) : void 0;
-          if (a !== void 0) return { open: [...n.open.slice(0, a), t, ...n.open.slice(a)] };
-          let f = topAutoDialog(n),
-            k = f?.holdsTop === !0 && b(f, t) && t.succeeds !== !0;
-          if ((t.place === "under" || k) && n.open.some((S) => S.userInvoked !== !0))
-            return { open: [t, ...n.open] };
-          let D =
-              n.open.some((S) => b(S, t)) ||
-              (t.userInvoked !== !0 && n.open.some((S) => S.userInvoked === !0)),
-            m = t.userInvoked !== !0 && isWithinRecentInput(o, NEGATIVE_INFINITY),
-            y = D || m ? { ...t, shownAt: Date.now() } : t;
-          return { open: [...n.open, y] };
-        });
-      },
-      update(t, n) {
-        e.setState((a) => {
-          let index = a.open.findIndex((D) => D.id === t);
-          if (index === -1) return a;
-          let sliced = a.open.slice();
-          return ((sliced[index] = { ...a.open[index], payload: n, shownAt: Date.now() }), { open: sliced });
-        });
-      },
-      answer(t, n) {
-        if (
-          (e
-            .getState()
-            .open.find((a) => a.id === t)
-            ?.countedAsk?.settle(),
-          !r(t))
-        )
-          return;
-        l.emit({ id: t, type: "answered", result: n });
-      },
-      dismiss(t) {
-        if (!r(t)) return;
-        l.emit({ id: t, type: "dismissed" });
-      },
-      firstReveal(t, n) {
-        if (!e.getState().open.some((f) => f.id === t)) return !1;
-        let a = g(t, n);
-        if (i.has(a)) return !1;
-        return (i.add(a), !0);
-      },
-      hasRevealed(t, n) {
-        return i.has(g(t, n));
-      },
-      dismissKind(t) {
-        for (let n of e.getState().open) if (n.kind === t) u.dismiss(n.id);
-      },
-    };
+    answer(t, result) {
+      store
+        .getState()
+        .open.find((a) => a.id === t)
+        ?.countedAsk?.settle();
+      if (!r(t)) return;
+      signal.emit({
+        id: t,
+        type: "answered",
+        result,
+      });
+    },
+    dismiss(t) {
+      if (!r(t)) return;
+      signal.emit({
+        id: t,
+        type: "dismissed",
+      });
+    },
+    firstReveal(t, n) {
+      if (!store.getState().open.some((f) => f.id === t)) return false;
+      let a = g(t, n);
+      if (i.has(a)) return false;
+      i.add(a);
+      return true;
+    },
+    hasRevealed(t, n) {
+      return i.has(g(t, n));
+    },
+    dismissKind(t) {
+      for (let n of store.getState().open) if (n.kind === t) u.dismiss(n.id);
+    },
+  };
   return u;
 }
+//@ chunk-1m6hq5zz.js:2296-2669 placement
 /**
  * 关闭对话框并决定是否恢复下一个。
  */
-//@ chunk-1m6hq5zz.js:2296-2669 placement
-function closeDialog(o, e) {
-  let s = !1,
-    l = !1;
-  return (
-    o.setState((d) => {
-      let found = d.open.find((u) => u.id === e);
-      if (!found) return d;
-      s = !0;
-      let filtered = d.open.filter((u) => u !== found),
-        filtered_2 = d.open.filter((u) => b(u, found)),
-        p = filtered_2.at(-1) === found,
-        at = filtered_2.at(-2);
-      if (((l = p && !at && found.userInvoked !== !0), !p || !at)) return { open: filtered };
+function closeDialog(store, e) {
+  let removed = false;
+  let closedBlockingTopBare = false;
+  store.setState((d) => {
+    let found = d.open.find((u) => u.id === e);
+    if (!found) return d;
+    removed = true;
+    let filtered = d.open.filter((u) => u !== found);
+    let filtered_2 = d.open.filter((u) => sameUserInvoked(u, found));
+    let p = filtered_2.at(-1) === found;
+    let r = filtered_2.at(-2);
+    closedBlockingTopBare = p && !r && found.userInvoked !== true;
+    if (!p || !r)
       return {
-        open: filtered.map((u) =>
-          u === at ? { ...at, shownAt: Date.now(), revealSeq: (at.revealSeq ?? 0) + 1 } : u,
-        ),
+        open: filtered,
       };
-    }),
-    { removed: s, closedBlockingTopBare: l }
-  );
+    return {
+      open: filtered.map((u) =>
+        u === r
+          ? {
+              ...r,
+              shownAt: Date.now(),
+              revealSeq: (r.revealSeq ?? 0) + 1,
+            }
+          : u,
+      ),
+    };
+  });
+  return {
+    removed,
+    closedBlockingTopBare,
+  };
 }
+//@ chunk-1m6hq5zz.js:2669-3252 placement
 /**
  * 按询问顺序插入对话框。
  */
-//@ chunk-1m6hq5zz.js:2669-3252 placement
-function insertDialog(o, e) {
-  let s = e.askOrder ?? Number.POSITIVE_INFINITY,
-    index = o.findIndex((i) => i.place !== void 0 && i.askOrder !== void 0 && i.askOrder <= s);
+function insertDialog(open, e) {
+  let s = e.askOrder ?? Number.POSITIVE_INFINITY;
+  let index = open.findIndex((i) => i.place !== undefined && i.askOrder !== undefined && i.askOrder <= s);
   if (index === -1) {
-    let lastIndex = o.findLastIndex((r) => r.place === "queue" && r.askOrder !== void 0),
-      lastIndex_2 = o.findLastIndex((r) => r.place !== void 0 && r.askOrder !== void 0),
-      any = o
-        .slice(lastIndex_2 + 1)
-        .some((r) => r.askOrder === void 0 && r.holdsTop !== !0 && r.userInvoked !== !0);
+    let lastIndex = open.findLastIndex((r) => r.place === "queue" && r.askOrder !== undefined);
+    let lastIndex_2 = open.findLastIndex((r) => r.place !== undefined && r.askOrder !== undefined);
+    let any = open
+      .slice(lastIndex_2 + 1)
+      .some((r) => r.askOrder === undefined && r.holdsTop !== true && r.userInvoked !== true);
     index =
       lastIndex !== -1 && !any
         ? lastIndex_2 + 1
-        : o.findIndex((r) => r.place === void 0 && r.askOrder !== void 0);
+        : open.findIndex((r) => r.place === undefined && r.askOrder !== undefined);
   }
   if (index === -1) return;
-  let index_2 = o.findIndex((i) => i.place === void 0 && i.askOrder !== void 0);
+  let index_2 = open.findIndex((i) => i.place === undefined && i.askOrder !== undefined);
   if (index_2 !== -1 && index_2 < index) index = index_2;
-  return o.slice(index).some((i) => i.userInvoked !== !0) ? index : void 0;
+  return open.slice(index).some((i) => i.userInvoked !== true) ? index : undefined;
 }
 //@ chunk-1m6hq5zz.js:3252-3317 placement
-function b(o, e) {
-  return (o.userInvoked === !0) === (e.userInvoked === !0);
+/**
+ * 两个对话框的 userInvoked 标记是否相同。
+ */
+function sameUserInvoked(o, e) {
+  return (o.userInvoked === true) === (e.userInvoked === true);
 }
+//@ chunk-1m6hq5zz.js:3317-3333 placement
 /**
  * 对话框存储的 React 上下文。
  */
-//@ chunk-1m6hq5zz.js:3317-3333 placement
 var DialogStoreContext = qt(null);
+//@ chunk-1m6hq5zz.js:3333-3506 placement
 /**
  * 取对话框存储（必须在 Provider 内）。
  */
-//@ chunk-1m6hq5zz.js:3333-3506 placement
 function useDialogStore() {
   let o = Se(DialogStoreContext);
   if (!o)
@@ -195,92 +243,100 @@ function useDialogStore() {
     );
   return o;
 }
+//@ chunk-1m6hq5zz.js:3506-3583 placement
 /**
  * 是否有打开的对话框。
  */
-//@ chunk-1m6hq5zz.js:3506-3583 placement
 function useHasOpenDialog() {
-  let o = useDialogStore(),
-    e = () => Unn(o.getState());
-  return yt(o.subscribe, e, e);
+  let dialogStore = useDialogStore();
+  let e = () => hasOpenDialogs(dialogStore.getState());
+  return yt(dialogStore.subscribe, e, e);
 }
+//@ chunk-1m6hq5zz.js:3583-3665 placement
 /**
  * 是否有自动对话框。
  */
-//@ chunk-1m6hq5zz.js:3583-3665 placement
 function useHasAutoDialog() {
-  let o = useDialogStore(),
-    e = () => topAutoDialog(o.getState()) !== null;
-  return yt(o.subscribe, e, e);
+  let dialogStore = useDialogStore();
+  let e = () => topAutoDialog(dialogStore.getState()) !== null;
+  return yt(dialogStore.subscribe, e, e);
 }
+//@ chunk-1m6hq5zz.js:3665-3744 placement
 /**
  * 是否打开了某种对话框。
  */
-//@ chunk-1m6hq5zz.js:3665-3744 placement
-function useDialogOfKind(o) {
-  let e = useDialogStore(),
-    s = () => C0t(e.getState(), o);
-  return yt(e.subscribe, s, s);
+function useDialogOfKind(kind) {
+  let dialogStore = useDialogStore();
+  let s = () => hasOpenDialogOfKind(dialogStore.getState(), kind);
+  return yt(dialogStore.subscribe, s, s);
 }
+//@ chunk-1m6hq5zz.js:3744-3821 placement
 /**
  * 最上层的用户对话框。
  */
-//@ chunk-1m6hq5zz.js:3744-3821 placement
 function useTopUserDialog() {
-  let o = useDialogStore(),
-    e = () => topUserDialog(o.getState());
-  return yt(o.subscribe, e, e);
+  let dialogStore = useDialogStore();
+  let e = () => topUserDialog(dialogStore.getState());
+  return yt(dialogStore.subscribe, e, e);
 }
 //@ chunk-1m6hq5zz.js:3821-3897 placement
-function ZPs() {
-  let o = useDialogStore(),
-    e = () => topAutoDialog(o.getState());
-  return yt(o.subscribe, e, e);
+/**
+ * 订阅当前最上层的自动对话框。
+ */
+function useTopAutoDialog() {
+  let dialogStore = useDialogStore();
+  let e = () => topAutoDialog(dialogStore.getState());
+  return yt(dialogStore.subscribe, e, e);
 }
 //@ chunk-1m6hq5zz.js:3897-3981 placement
-function O_o(o) {
-  let e = useDialogStore(),
-    s = () => isDialogHiddenWhile(topAutoDialog(e.getState()), o);
-  return yt(e.subscribe, s, s);
+/**
+ * 订阅「最上层自动对话框在给定状态下是否被隐藏」。
+ */
+function useTopAutoDialogHidden(o) {
+  let dialogStore = useDialogStore();
+  let s = () => isDialogHiddenWhile(topAutoDialog(dialogStore.getState()), o);
+  return yt(dialogStore.subscribe, s, s);
 }
+//@ chunk-1m6hq5zz.js:3981-4037 placement
 /**
  * 对话框在某状态下是否隐藏。
  */
-//@ chunk-1m6hq5zz.js:3981-4037 placement
 function isDialogHiddenWhile(o, e) {
-  return o?.hideWhile?.includes(e) === !0;
+  return o?.hideWhile?.includes(e) === true;
 }
 //@ chunk-1m6hq5zz.js:4037-4119 placement
-function bUn() {
-  let o = useDialogStore(),
-    e = () => topAutoDialog(o.getState())?.kind;
-  return yt(o.subscribe, e, e);
+/**
+ * 订阅最上层自动对话框的种类。
+ */
+function useTopAutoDialogKind() {
+  let dialogStore = useDialogStore();
+  let e = () => topAutoDialog(dialogStore.getState())?.kind;
+  return yt(dialogStore.subscribe, e, e);
 }
+//@ chunk-1m6hq5zz.js:4119-4194 placement
 /**
  * 订阅对话框存储的选择器。
  */
-//@ chunk-1m6hq5zz.js:4119-4194 placement
 function useDialogSelector(o) {
-  let e = useDialogStore(),
-    s = () => o(e.getState());
-  return yt(e.subscribe, s, s);
+  let dialogStore = useDialogStore();
+  let s = () => o(dialogStore.getState());
+  return yt(dialogStore.subscribe, s, s);
 }
-
 export {
   useDialogOfKind,
   useDialogStore,
   useHasOpenDialog,
-  Unn,
+  hasOpenDialogs,
   useHasAutoDialog,
   useDialogSelector,
   topAutoDialog,
-  bUn,
-  O_o,
-  ZPs,
+  useTopAutoDialogKind,
+  useTopAutoDialogHidden,
+  useTopAutoDialog,
   topUserDialog,
   isDialogHiddenWhile,
   useTopUserDialog,
-  C0t,
+  hasOpenDialogOfKind,
   DialogStoreContext,
   createDialogStore,
 };

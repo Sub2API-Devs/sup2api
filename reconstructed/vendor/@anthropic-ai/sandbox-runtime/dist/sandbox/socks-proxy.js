@@ -5,200 +5,277 @@
  * pieces: chunk-fq0cr76a.js (9)
  * attribution: esm-layout 3, esm-fingerprint 6
  */
-import { yR } from "../../../../@pondwader/socks5-server/dist/index.mjs";
-import { SRT, Iwn } from "./sandbox-utils.js";
-import { At } from "../utils/debug.js";
-import { Twn, JF, rsr, osr, D3r, ssr } from "./parent-proxy.js";
+import { createServer } from "../../../../@pondwader/socks5-server/dist/index.mjs";
+import { PROXY_AUTH_USER, encodedCommandFromProxyUser } from "./sandbox-utils.js";
+import { logForDebugging as logForDebugging_2 } from "../utils/debug.js";
+import {
+  isValidHost,
+  canonicalizeHost,
+  shouldBypassParentProxy,
+  selectParentProxyUrl,
+  connectViaParentProxy,
+  dialDirect,
+} from "./parent-proxy.js";
 import { ol } from "./resolved-address-guard.js";
 
 //@ chunk-fq0cr76a.js:698926-698968 esm-layout
-var buffer = Buffer.from([5, 1, 0, 1, 0, 0, 0, 0, 0, 0]);
+var SOCKS_REPLY_GENERAL_FAILURE = Buffer.from([5, 1, 0, 1, 0, 0, 0, 0, 0, 0]);
 //@ chunk-fq0cr76a.js:698968-700805 esm-fingerprint
-function bR(e) {
-  let n = yR();
-  if (e.proxyAuthToken)
-    n.setAuthHandler((h, y, b) => {
-      if ((h.username === SRT || h.username.startsWith(`${SRT}.`)) && h.password === e.proxyAuthToken) y();
-      else (At("SOCKS auth rejected", { level: "error" }), b());
+function createSocksProxyServer(options) {
+  let socksServer = createServer();
+  if (options.proxyAuthToken)
+    socksServer.setAuthHandler((conn, accept, deny) => {
+      if (
+        (conn.username === PROXY_AUTH_USER || conn.username.startsWith(`${PROXY_AUTH_USER}.`)) &&
+        conn.password === options.proxyAuthToken
+      )
+        accept();
+      else {
+        logForDebugging_2("SOCKS auth rejected", {
+          level: "error",
+        });
+        deny();
+      }
     });
-  n.setRulesetValidator((h) => {
-    if (e.refuseOpaqueTunnels) {
-      (At(`SOCKS CONNECT to ${JSON.stringify(h.destAddress)}:${h.destPort} refused (refuseOpaqueTunnels)`),
-        e.onTunnelRefused?.(h.destPort, h.destAddress, Iwn(h.username)),
-        h.socket.end(buffer, () => h.socket.destroy()));
+  socksServer.setRulesetValidator((conn) => {
+    if (options.refuseOpaqueTunnels) {
+      logForDebugging_2(
+        `SOCKS CONNECT to ${JSON.stringify(conn.destAddress)}:${conn.destPort} refused (refuseOpaqueTunnels)`,
+      );
+      options.onTunnelRefused?.(conn.destPort, conn.destAddress, encodedCommandFromProxyUser(conn.username));
+      conn.socket.end(SOCKS_REPLY_GENERAL_FAILURE, () => conn.socket.destroy());
       return;
     }
-    return r(h);
+    return validateDestination(conn);
   });
-  async function r(h) {
+  async function validateDestination(conn) {
     try {
-      let { destAddress: destAddress, destPort: destPort } = h;
-      if (!Twn(destAddress))
-        return (At(`Rejecting malformed SOCKS host: ${JSON.stringify(destAddress)}`, { level: "error" }), !1);
-      if (
-        (At(`Connection request to ${destAddress}:${destPort}`),
-        !(await e.filter(destPort, destAddress, Iwn(h.username))))
-      )
-        return (At(`Connection blocked to ${destAddress}:${destPort}`, { level: "error" }), !1);
-      return (At(`Connection allowed to ${destAddress}:${destPort}`), !0);
+      let { destAddress: hostname, destPort: port } = conn;
+      if (!isValidHost(hostname)) {
+        logForDebugging_2(`Rejecting malformed SOCKS host: ${JSON.stringify(hostname)}`, {
+          level: "error",
+        });
+        return false;
+      }
+      logForDebugging_2(`Connection request to ${hostname}:${port}`);
+      if (!(await options.filter(port, hostname, encodedCommandFromProxyUser(conn.username)))) {
+        logForDebugging_2(`Connection blocked to ${hostname}:${port}`, {
+          level: "error",
+        });
+        return false;
+      }
+      logForDebugging_2(`Connection allowed to ${hostname}:${port}`);
+      return true;
     } catch (error) {
-      return (At(`Error validating connection: ${error}`, { level: "error" }), !1);
+      logForDebugging_2(`Error validating connection: ${error}`, {
+        level: "error",
+      });
+      return false;
     }
   }
-  n.setConnectionHandler((h, y) => {
-    let b = JF(h.destAddress) ?? h.destAddress,
-      destPort = h.destPort,
-      w = !1,
-      R;
-    (h.socket.once("close", () => {
-      ((w = !0), R?.destroy());
-    }),
-      h.socket.on("error", () => R?.destroy()));
-    let D = e.parentProxy && !rsr(e.parentProxy, b) ? osr(e.parentProxy, { isHttps: !0 }) : void 0;
-    (D ? D3r(D, b, destPort) : ssr(b, destPort, e.lookupFor?.(destPort, Iwn(h.username))))
-      .then((L) => {
-        if (((R = L), L.on("error", () => h.socket.destroy()), w)) {
-          L.destroy();
+  socksServer.setConnectionHandler((conn, sendStatus) => {
+    let host = canonicalizeHost(conn.destAddress) ?? conn.destAddress;
+    let port = conn.destPort;
+    let clientGone = false;
+    let upstreamRef;
+    conn.socket.once("close", () => {
+      clientGone = true;
+      upstreamRef?.destroy();
+    });
+    conn.socket.on("error", () => upstreamRef?.destroy());
+    let parentUrl =
+      options.parentProxy && !shouldBypassParentProxy(options.parentProxy, host)
+        ? selectParentProxyUrl(options.parentProxy, {
+            isHttps: true,
+          })
+        : undefined;
+    (parentUrl
+      ? connectViaParentProxy(parentUrl, host, port)
+      : dialDirect(host, port, options.lookupFor?.(port, encodedCommandFromProxyUser(conn.username)))
+    )
+      .then((upstream) => {
+        upstreamRef = upstream;
+        upstream.on("error", () => conn.socket.destroy());
+        if (clientGone) {
+          upstream.destroy();
           return;
         }
-        (y("REQUEST_GRANTED"), L.pipe(h.socket), h.socket.pipe(L), L.on("close", () => h.socket.destroy()));
+        sendStatus("REQUEST_GRANTED");
+        upstream.pipe(conn.socket);
+        conn.socket.pipe(upstream);
+        upstream.on("close", () => conn.socket.destroy());
       })
-      .catch((L) => {
-        if ((At(`SOCKS connect to ${b}:${destPort} failed: ${L.message}`, { level: "error" }), !w))
+      .catch((err) => {
+        logForDebugging_2(`SOCKS connect to ${host}:${port} failed: ${err.message}`, {
+          level: "error",
+        });
+        if (!clientGone)
           try {
-            y(ol(L) ? "CONNECTION_NOT_ALLOWED" : "HOST_UNREACHABLE");
+            sendStatus(ol(err) ? "CONNECTION_NOT_ALLOWED" : "HOST_UNREACHABLE");
           } catch {}
       });
   });
-  let s = new Set();
+  let openSockets = new Set();
   return {
-    handleConnection(h) {
-      if ((h.setNoDelay(), s.add(h), h.once("close", () => s.delete(h)), !e.proxyAuthToken)) {
-        n._handleConnection(h);
+    handleConnection(socket) {
+      socket.setNoDelay();
+      openSockets.add(socket);
+      socket.once("close", () => openSockets.delete(socket));
+      if (!options.proxyAuthToken) {
+        socksServer._handleConnection(socket);
         return;
       }
-      RH(h, (y) => {
-        if (y) {
-          n._handleConnection(h);
+      readSocksGreeting(socket, (canAuthenticate) => {
+        if (canAuthenticate) {
+          socksServer._handleConnection(socket);
           return;
         }
-        IH(h, e).catch(() => h.destroy());
+        refuseUnauthenticated(socket, options).catch(() => socket.destroy());
       });
     },
     async close() {
-      for (let h of s) h.destroy();
-      s.clear();
+      for (let socket of openSockets) socket.destroy();
+      openSockets.clear();
     },
   };
 }
 //@ chunk-fq0cr76a.js:700805-700819 esm-layout
-var AH = 0,
-  CH = 2;
+var SOCKS_METHOD_NO_AUTH = 0;
+var SOCKS_METHOD_USERPASS = 2;
 //@ chunk-fq0cr76a.js:700819-701161 esm-fingerprint
-function RH(e, n) {
-  let alloc = Buffer.alloc(0),
-    s = (h) => {
-      if (((alloc = Buffer.concat([alloc, h])), alloc.length < 2)) return;
-      if (alloc[0] !== 5) {
-        (e.off("data", s), e.destroy());
-        return;
-      }
-      let y = alloc[1];
-      if (alloc.length < 2 + y) return;
-      (e.off("data", s), e.pause());
-      let included = alloc.subarray(2, 2 + y).includes(CH),
-        w = included ? alloc : alloc.subarray(2 + y);
-      if (w.length > 0) e.unshift(w);
-      n(included);
-    };
-  (e.on("data", s), e.once("error", () => e.off("data", s)));
+function readSocksGreeting(socket, done) {
+  let buf = Buffer.alloc(0);
+  let onData = (chunk) => {
+    buf = Buffer.concat([buf, chunk]);
+    if (buf.length < 2) return;
+    if (buf[0] !== 5) {
+      socket.off("data", onData);
+      socket.destroy();
+      return;
+    }
+    let nMethods = buf[1];
+    if (buf.length < 2 + nMethods) return;
+    socket.off("data", onData);
+    socket.pause();
+    let canAuthenticate = buf.subarray(2, 2 + nMethods).includes(SOCKS_METHOD_USERPASS);
+    let pushBack = canAuthenticate ? buf : buf.subarray(2 + nMethods);
+    if (pushBack.length > 0) socket.unshift(pushBack);
+    done(canAuthenticate);
+  };
+  socket.on("data", onData);
+  socket.once("error", () => socket.off("data", onData));
 }
 //@ chunk-fq0cr76a.js:701161-701748 esm-fingerprint
-async function IH(e, n) {
-  e.write(Buffer.from([5, AH]));
-  let r = await NH(e);
-  if (r === void 0) {
-    e.destroy();
+async function refuseUnauthenticated(socket, options) {
+  socket.write(Buffer.from([5, SOCKS_METHOD_NO_AUTH]));
+  let request = await readSocksConnect(socket);
+  if (request === undefined) {
+    socket.destroy();
     return;
   }
-  let { host: host, port: port } = r;
-  if (!Twn(host)) {
-    e.end(CE(2));
+  let { host, port } = request;
+  if (!isValidHost(host)) {
+    socket.end(socksReply(2));
     return;
   }
-  let y = n.probeUnauthenticated ? await n.probeUnauthenticated(port, host) : {};
-  if (
-    (At(
-      `SOCKS unauthenticated client refused for ${host}:${port}` +
-        (y.deniedReason !== void 0 ? " (denied by policy)" : ""),
-    ),
-    port !== 22)
-  ) {
-    e.end(CE(2));
+  let probe = options.probeUnauthenticated ? await options.probeUnauthenticated(port, host) : {};
+  logForDebugging_2(
+    `SOCKS unauthenticated client refused for ${host}:${port}` +
+      (probe.deniedReason !== undefined ? " (denied by policy)" : ""),
+  );
+  if (port !== 22) {
+    socket.end(socksReply(2));
     return;
   }
-  let b =
-    y.deniedReason ??
+  let reason =
+    probe.deniedReason ??
     "This proxy requires authentication, and this client did not offer an authentication method, so the connection was refused.";
-  (e.write(CE(0)),
-    e.write(
-      Buffer.from(`SSH-2.0-policy_refusal\r
+  socket.write(socksReply(0));
+  socket.write(
+    Buffer.from(`SSH-2.0-policy_refusal\r
 `),
-    ),
-    e.end(kH(b)));
+  );
+  socket.end(sshDisconnectPacket(reason));
 }
 //@ chunk-fq0cr76a.js:701748-701805 esm-layout
-function CE(e) {
-  return Buffer.from([5, e, 0, 1, 0, 0, 0, 0, 0, 0]);
+function socksReply(status) {
+  return Buffer.from([5, status, 0, 1, 0, 0, 0, 0, 0, 0]);
 }
 //@ chunk-fq0cr76a.js:701805-702561 esm-fingerprint
-function NH(e) {
-  return new Promise((n) => {
-    let alloc = Buffer.alloc(0),
-      s = (b) => {
-        (e.off("data", y), clearTimeout(h), n(b));
-      },
-      h = setTimeout(() => s(void 0), 5000),
-      y = (b) => {
-        if (((alloc = Buffer.concat([alloc, b])), alloc.length < 4)) return;
-        if (alloc[0] !== 5 || alloc[1] !== 1) {
-          s(void 0);
-          return;
-        }
-        let S = alloc[3];
-        if (S === 1) {
-          if (alloc.length < 10) return;
-          let joined = Array.from(alloc.subarray(4, 8)).join(".");
-          s({ host: joined, port: alloc.readUInt16BE(8) });
-        } else if (S === 3) {
-          if (alloc.length < 5) return;
-          let w = alloc[4];
-          if (alloc.length < 5 + w + 2) return;
-          s({ host: alloc.subarray(5, 5 + w).toString("utf8"), port: alloc.readUInt16BE(5 + w) });
-        } else if (S === 4) {
-          if (alloc.length < 22) return;
-          let w = [];
-          for (let R = 0; R < 16; R += 2) w.push(alloc.readUInt16BE(4 + R).toString(16));
-          s({ host: w.join(":"), port: alloc.readUInt16BE(20) });
-        } else s(void 0);
-      };
-    (e.on("data", y), e.resume(), e.once("error", () => s(void 0)), e.once("close", () => s(void 0)));
+function readSocksConnect(socket) {
+  return new Promise((resolve) => {
+    let buf = Buffer.alloc(0);
+    let finish = (value) => {
+      socket.off("data", onData);
+      clearTimeout(timer);
+      resolve(value);
+    };
+    let timer = setTimeout(() => finish(undefined), 5000);
+    let onData = (chunk) => {
+      buf = Buffer.concat([buf, chunk]);
+      if (buf.length < 4) return;
+      if (buf[0] !== 5 || buf[1] !== 1) {
+        finish(undefined);
+        return;
+      }
+      let atyp = buf[3];
+      if (atyp === 1) {
+        if (buf.length < 10) return;
+        let host = Array.from(buf.subarray(4, 8)).join(".");
+        finish({
+          host,
+          port: buf.readUInt16BE(8),
+        });
+      } else if (atyp === 3) {
+        if (buf.length < 5) return;
+        let len = buf[4];
+        if (buf.length < 5 + len + 2) return;
+        finish({
+          host: buf.subarray(5, 5 + len).toString("utf8"),
+          port: buf.readUInt16BE(5 + len),
+        });
+      } else if (atyp === 4) {
+        if (buf.length < 22) return;
+        let parts = [];
+        for (let i = 0; i < 16; i += 2) parts.push(buf.readUInt16BE(4 + i).toString(16));
+        finish({
+          host: parts.join(":"),
+          port: buf.readUInt16BE(20),
+        });
+      } else finish(undefined);
+    };
+    socket.on("data", onData);
+    socket.resume();
+    socket.once("error", () => finish(undefined));
+    socket.once("close", () => finish(undefined));
   });
 }
 //@ chunk-fq0cr76a.js:702561-702857 esm-fingerprint
-function kH(e) {
-  let sliced = e.replace(/[\x00-\x1f\x7f-\x9f]+/g, " ").slice(0, 1000),
-    buffer = Buffer.from(sliced, "utf8"),
-    alloc = Buffer.alloc(0),
-    buffer_2 = Buffer.concat([Buffer.from([1]), Fm(1), Fm(buffer.length), buffer, Fm(alloc.length), alloc]),
-    y = 8 - ((5 + buffer_2.length) % 8);
-  if (y < 4) y += 8;
-  return Buffer.concat([Fm(1 + buffer_2.length + y), Buffer.from([y]), buffer_2, Buffer.alloc(y)]);
+function sshDisconnectPacket(description) {
+  let text = description.replace(/[\x00-\x1f\x7f-\x9f]+/g, " ").slice(0, 1000);
+  let desc = Buffer.from(text, "utf8");
+  let lang = Buffer.alloc(0);
+  let payload = Buffer.concat([
+    Buffer.from([1]),
+    uint32(1),
+    uint32(desc.length),
+    desc,
+    uint32(lang.length),
+    lang,
+  ]);
+  let padding = 8 - ((5 + payload.length) % 8);
+  if (padding < 4) padding += 8;
+  return Buffer.concat([
+    uint32(1 + payload.length + padding),
+    Buffer.from([padding]),
+    payload,
+    Buffer.alloc(padding),
+  ]);
 }
 //@ chunk-fq0cr76a.js:702857-702924 esm-fingerprint
-function Fm(e) {
-  let alloc = Buffer.alloc(4);
-  return (alloc.writeUInt32BE(e, 0), alloc);
+function uint32(n_2) {
+  let b = Buffer.alloc(4);
+  b.writeUInt32BE(n_2, 0);
+  return b;
 }
-
-export { bR };
+export { createSocksProxyServer };

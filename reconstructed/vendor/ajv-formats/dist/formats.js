@@ -6,2507 +6,3084 @@
  * attribution: cjs-fingerprint 2
  */
 import { J, Eo } from "../../@modelcontextprotocol/core/(bundler runtime of a pre-bundled dist file).js";
-import { ao, De, te, Le, va, ne, Li, Sa, so, Di, ya } from "../../ajv/dist/core.js";
+import {
+  require_ref_error,
+  require_code_2,
+  require_codegen,
+  require_names,
+  require_compile,
+  require_util,
+  require_fast_deep_equal,
+  require_dataType,
+  require_validate,
+  require_core,
+  require_validation_error,
+} from "../../ajv/dist/core.js";
 import { x } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-r1g76qsy.js:197840-255842 cjs-fingerprint
-var Eu = J((e) => {
-    Object.defineProperty(e, "__esModule", { value: !0 });
-    let t = {
-      keyword: "id",
-      code() {
-        throw Error('NOT SUPPORTED: keyword "id", use "$id" for schema ID');
-      },
-    };
-    e.default = t;
-  }),
-  _n = J((e) => {
-    (Object.defineProperty(e, "__esModule", { value: !0 }), (e.callRef = e.getValidate = void 0));
-    let t = ao(),
-      r = De(),
-      s = te(),
-      a = Le(),
-      n = va(),
-      i = ne(),
-      l = {
-        keyword: "$ref",
-        schemaType: "string",
-        code(m) {
-          let { gen: gen, schema: schema, it: it } = m,
-            { baseId: baseId, schemaEnv: schemaEnv, validateName: validateName, opts: opts, self: S } = it,
-            { root: root } = schemaEnv;
-          if ((schema === "#" || schema === "#/") && baseId === root.baseId) return C();
-          let R = n.resolveRef.call(S, root, baseId, schema);
-          if (R === void 0) throw new t.default(it.opts.uriResolver, baseId, schema);
-          if (R instanceof n.SchemaEnv) return b(R);
-          return g(R);
-          function C() {
-            if (schemaEnv === root) return d(m, validateName, schemaEnv, schemaEnv.$async);
-            let scopeValue = gen.scopeValue("root", { ref: root });
-            return d(m, s._`${scopeValue}.validate`, root, root.$async);
-          }
-          function b(k) {
-            d(m, c(m, k), k, k.$async);
-          }
-          function g(k) {
-            let scopeValue = gen.scopeValue(
-                "schema",
-                opts.code.source === !0 ? { ref: k, code: (0, s.stringify)(k) } : { ref: k },
-              ),
-              H = gen.name("valid"),
-              subschema = m.subschema(
-                {
-                  schema: k,
-                  dataTypes: [],
-                  schemaPath: s.nil,
-                  topSchemaRef: scopeValue,
-                  errSchemaPath: schema,
-                },
-                H,
-              );
-            (m.mergeEvaluated(subschema), m.ok(H));
-          }
-        },
-      };
-    function c(m, _) {
-      let { gen: gen } = m;
-      return _.validate
-        ? gen.scopeValue("validate", { ref: _.validate })
-        : s._`${gen.scopeValue("wrapper", { ref: _ })}.validate`;
-    }
-    e.getValidate = c;
-    function d(m, _, w, P) {
-      let { gen: gen, it: it } = m,
-        { allErrors: allErrors, schemaEnv: schemaEnv, opts: opts } = it,
-        f = opts.passContext ? a.default.this : s.nil;
-      if (P) R();
-      else C();
-      function R() {
-        if (!schemaEnv.$async) throw Error("async schema referenced by sync schema");
-        let k = gen.let("valid");
-        (gen.try(
-          () => {
-            if ((gen.code(s._`await ${(0, r.callValidateCode)(m, _, f)}`), g(_), !allErrors))
-              gen.assign(k, !0);
-          },
-          (V) => {
-            if ((gen.if(s._`!(${V} instanceof ${it.ValidationError})`, () => gen.throw(V)), b(V), !allErrors))
-              gen.assign(k, !1);
-          },
-        ),
-          m.ok(k));
+var require_id = J((cjsExports) => {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  let def = {
+    keyword: "id",
+    code() {
+      throw Error('NOT SUPPORTED: keyword "id", use "$id" for schema ID');
+    },
+  };
+  cjsExports.default = def;
+});
+var require_ref = J((cjsExports) => {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.callRef = cjsExports.getValidate = undefined;
+  let ref_error_1 = require_ref_error();
+  let code_1 = require_code_2();
+  let codegen_1 = require_codegen();
+  let names_1 = require_names();
+  let compile_1 = require_compile();
+  let util_1 = require_util();
+  let def = {
+    keyword: "$ref",
+    schemaType: "string",
+    code(cxt) {
+      let { gen, schema: $ref, it } = cxt;
+      let { baseId, schemaEnv: env, validateName, opts, self: S } = it;
+      let { root } = env;
+      if (($ref === "#" || $ref === "#/") && baseId === root.baseId) return callRootRef();
+      let schOrEnv = compile_1.resolveRef.call(S, root, baseId, $ref);
+      if (schOrEnv === undefined) throw new ref_error_1.default(it.opts.uriResolver, baseId, $ref);
+      if (schOrEnv instanceof compile_1.SchemaEnv) return callValidate(schOrEnv);
+      return inlineRefSchema(schOrEnv);
+      function callRootRef() {
+        if (env === root) return callRef(cxt, validateName, env, env.$async);
+        let rootName = gen.scopeValue("root", {
+          ref: root,
+        });
+        return callRef(cxt, codegen_1._`${rootName}.validate`, root, root.$async);
       }
-      function C() {
-        m.result(
-          (0, r.callValidateCode)(m, _, f),
-          () => g(_),
-          () => b(_),
+      function callValidate(sch) {
+        callRef(cxt, getValidate(cxt, sch), sch, sch.$async);
+      }
+      function inlineRefSchema(sch) {
+        let schName = gen.scopeValue(
+          "schema",
+          opts.code.source === true
+            ? {
+                ref: sch,
+                code: (0, codegen_1.stringify)(sch),
+              }
+            : {
+                ref: sch,
+              },
+        );
+        let valid = gen.name("valid");
+        let schCxt = cxt.subschema(
+          {
+            schema: sch,
+            dataTypes: [],
+            schemaPath: codegen_1.nil,
+            topSchemaRef: schName,
+            errSchemaPath: $ref,
+          },
+          valid,
+        );
+        cxt.mergeEvaluated(schCxt);
+        cxt.ok(valid);
+      }
+    },
+  };
+  function getValidate(cxt, sch) {
+    let { gen } = cxt;
+    return sch.validate
+      ? gen.scopeValue("validate", {
+          ref: sch.validate,
+        })
+      : codegen_1._`${gen.scopeValue("wrapper", {
+          ref: sch,
+        })}.validate`;
+  }
+  cjsExports.getValidate = getValidate;
+  function callRef(cxt, v_2, sch, $async) {
+    let { gen, it } = cxt;
+    let { allErrors, schemaEnv: env, opts } = it;
+    let passCxt = opts.passContext ? names_1.default.this : codegen_1.nil;
+    if ($async) callAsyncRef();
+    else callSyncRef();
+    function callAsyncRef() {
+      if (!env.$async) throw Error("async schema referenced by sync schema");
+      let valid = gen.let("valid");
+      gen.try(
+        () => {
+          gen.code(codegen_1._`await ${(0, code_1.callValidateCode)(cxt, v_2, passCxt)}`);
+          addEvaluatedFrom(v_2);
+          if (!allErrors) gen.assign(valid, true);
+        },
+        (e) => {
+          gen.if(codegen_1._`!(${e} instanceof ${it.ValidationError})`, () => gen.throw(e));
+          addErrorsFrom(e);
+          if (!allErrors) gen.assign(valid, false);
+        },
+      );
+      cxt.ok(valid);
+    }
+    function callSyncRef() {
+      cxt.result(
+        (0, code_1.callValidateCode)(cxt, v_2, passCxt),
+        () => addEvaluatedFrom(v_2),
+        () => addErrorsFrom(v_2),
+      );
+    }
+    function addErrorsFrom(source) {
+      let errs = codegen_1._`${source}.errors`;
+      gen.assign(
+        names_1.default.vErrors,
+        codegen_1._`${names_1.default.vErrors} === null ? ${errs} : ${names_1.default.vErrors}.concat(${errs})`,
+      );
+      gen.assign(names_1.default.errors, codegen_1._`${names_1.default.vErrors}.length`);
+    }
+    function addEvaluatedFrom(source) {
+      var _a;
+      if (!it.opts.unevaluated) return;
+      let schEvaluated =
+        (_a = sch === null || sch === undefined ? undefined : sch.validate) === null || _a === undefined
+          ? undefined
+          : _a.evaluated;
+      if (it.props !== true)
+        if (schEvaluated && !schEvaluated.dynamicProps) {
+          if (schEvaluated.props !== undefined)
+            it.props = util_1.mergeEvaluated.props(gen, schEvaluated.props, it.props);
+        } else {
+          let props = gen.var("props", codegen_1._`${source}.evaluated.props`);
+          it.props = util_1.mergeEvaluated.props(gen, props, it.props, codegen_1.Name);
+        }
+      if (it.items !== true)
+        if (schEvaluated && !schEvaluated.dynamicItems) {
+          if (schEvaluated.items !== undefined)
+            it.items = util_1.mergeEvaluated.items(gen, schEvaluated.items, it.items);
+        } else {
+          let items = gen.var("items", codegen_1._`${source}.evaluated.items`);
+          it.items = util_1.mergeEvaluated.items(gen, items, it.items, codegen_1.Name);
+        }
+    }
+  }
+  cjsExports.callRef = callRef;
+  cjsExports.default = def;
+});
+var require_core_3 = J((cjsExports) => {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  let id_1 = require_id();
+  let ref_1 = require_ref();
+  let core = [
+    "$schema",
+    "$id",
+    "$defs",
+    "$vocabulary",
+    {
+      keyword: "$comment",
+    },
+    "definitions",
+    id_1.default,
+    ref_1.default,
+  ];
+  cjsExports.default = core;
+});
+var require_limitNumber = J((cjsExports) => {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  let codegen_1 = require_codegen();
+  let ops = codegen_1.operators;
+  let KWDs = {
+    maximum: {
+      okStr: "<=",
+      ok: ops.LTE,
+      fail: ops.GT,
+    },
+    minimum: {
+      okStr: ">=",
+      ok: ops.GTE,
+      fail: ops.LT,
+    },
+    exclusiveMaximum: {
+      okStr: "<",
+      ok: ops.LT,
+      fail: ops.GTE,
+    },
+    exclusiveMinimum: {
+      okStr: ">",
+      ok: ops.GT,
+      fail: ops.LTE,
+    },
+  };
+  let def = {
+    keyword: Object.keys(KWDs),
+    type: "number",
+    schemaType: "number",
+    $data: true,
+    error: {
+      message: ({ keyword, schemaCode }) => codegen_1.str`must be ${KWDs[keyword].okStr} ${schemaCode}`,
+      params: ({ keyword, schemaCode }) =>
+        codegen_1._`{comparison: ${KWDs[keyword].okStr}, limit: ${schemaCode}}`,
+    },
+    code(cxt) {
+      let { keyword, data, schemaCode } = cxt;
+      cxt.fail$data(codegen_1._`${data} ${KWDs[keyword].fail} ${schemaCode} || isNaN(${data})`);
+    },
+  };
+  cjsExports.default = def;
+});
+var require_multipleOf = J((cjsExports) => {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  let codegen_1 = require_codegen();
+  let def = {
+    keyword: "multipleOf",
+    type: "number",
+    schemaType: "number",
+    $data: true,
+    error: {
+      message: ({ schemaCode }) => codegen_1.str`must be multiple of ${schemaCode}`,
+      params: ({ schemaCode }) => codegen_1._`{multipleOf: ${schemaCode}}`,
+    },
+    code(cxt) {
+      let { gen, data, schemaCode, it } = cxt;
+      let prec = it.opts.multipleOfPrecision;
+      let res = gen.let("res");
+      let invalid = prec
+        ? codegen_1._`Math.abs(Math.round(${res}) - ${res}) > 1e-${prec}`
+        : codegen_1._`${res} !== parseInt(${res})`;
+      cxt.fail$data(codegen_1._`(${schemaCode} === 0 || (${res} = ${data}/${schemaCode}, ${invalid}))`);
+    },
+  };
+  cjsExports.default = def;
+});
+var require_ucs2length = J((cjsExports) => {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  function ucs2length(str) {
+    let len = str.length;
+    let length = 0;
+    let pos = 0;
+    let value;
+    while (pos < len) {
+      length++;
+      value = str.charCodeAt(pos++);
+      if (value >= 55296 && value <= 56319 && pos < len) {
+        value = str.charCodeAt(pos);
+        if ((value & 64512) === 56320) pos++;
+      }
+    }
+    return length;
+  }
+  cjsExports.default = ucs2length;
+  ucs2length.code = 'require("ajv/dist/runtime/ucs2length").default';
+});
+var require_limitLength = J((cjsExports) => {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  let codegen_1 = require_codegen();
+  let util_1 = require_util();
+  let ucs2length_1 = require_ucs2length();
+  let def = {
+    keyword: ["maxLength", "minLength"],
+    type: "string",
+    schemaType: "number",
+    $data: true,
+    error: {
+      message({ keyword, schemaCode }) {
+        let comp = keyword === "maxLength" ? "more" : "fewer";
+        return codegen_1.str`must NOT have ${comp} than ${schemaCode} characters`;
+      },
+      params: ({ schemaCode }) => codegen_1._`{limit: ${schemaCode}}`,
+    },
+    code(cxt) {
+      let { keyword, data, schemaCode, it } = cxt;
+      let op = keyword === "maxLength" ? codegen_1.operators.GT : codegen_1.operators.LT;
+      let len =
+        it.opts.unicode === false
+          ? codegen_1._`${data}.length`
+          : codegen_1._`${(0, util_1.useFunc)(cxt.gen, ucs2length_1.default)}(${data})`;
+      cxt.fail$data(codegen_1._`${len} ${op} ${schemaCode}`);
+    },
+  };
+  cjsExports.default = def;
+});
+var require_pattern = J((cjsExports) => {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  let code_1 = require_code_2();
+  let util_1 = require_util();
+  let codegen_1 = require_codegen();
+  let def = {
+    keyword: "pattern",
+    type: "string",
+    schemaType: "string",
+    $data: true,
+    error: {
+      message: ({ schemaCode }) => codegen_1.str`must match pattern "${schemaCode}"`,
+      params: ({ schemaCode }) => codegen_1._`{pattern: ${schemaCode}}`,
+    },
+    code(cxt) {
+      let { gen, data, $data, schema, schemaCode, it } = cxt;
+      let u = it.opts.unicodeRegExp ? "u" : "";
+      if ($data) {
+        let { regExp } = it.opts.code;
+        let regExpCode =
+          regExp.code === "new RegExp" ? codegen_1._`new RegExp` : (0, util_1.useFunc)(gen, regExp);
+        let valid = gen.let("valid");
+        gen.try(
+          () => gen.assign(valid, codegen_1._`${regExpCode}(${schemaCode}, ${u}).test(${data})`),
+          () => gen.assign(valid, false),
+        );
+        cxt.fail$data(codegen_1._`!${valid}`);
+      } else {
+        let regExp = (0, code_1.usePattern)(cxt, schema);
+        cxt.fail$data(codegen_1._`!${regExp}.test(${data})`);
+      }
+    },
+  };
+  cjsExports.default = def;
+});
+var require_limitProperties = J((cjsExports) => {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  let codegen_1 = require_codegen();
+  let r = {
+    keyword: ["maxProperties", "minProperties"],
+    type: "object",
+    schemaType: "number",
+    $data: true,
+    error: {
+      message({ keyword, schemaCode }) {
+        let comp = keyword === "maxProperties" ? "more" : "fewer";
+        return codegen_1.str`must NOT have ${comp} than ${schemaCode} properties`;
+      },
+      params: ({ schemaCode }) => codegen_1._`{limit: ${schemaCode}}`,
+    },
+    code(cxt) {
+      let { keyword, data, schemaCode } = cxt;
+      let op = keyword === "maxProperties" ? codegen_1.operators.GT : codegen_1.operators.LT;
+      cxt.fail$data(codegen_1._`Object.keys(${data}).length ${op} ${schemaCode}`);
+    },
+  };
+  cjsExports.default = r;
+});
+var require_required = J((cjsExports) => {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  let code_1 = require_code_2();
+  let codegen_1 = require_codegen();
+  let util_1 = require_util();
+  let def = {
+    keyword: "required",
+    type: "object",
+    schemaType: "array",
+    $data: true,
+    error: {
+      message: ({ params: { missingProperty } }) =>
+        codegen_1.str`must have required property '${missingProperty}'`,
+      params: ({ params: { missingProperty } }) => codegen_1._`{missingProperty: ${missingProperty}}`,
+    },
+    code(cxt) {
+      let { gen, schema, schemaCode, data, $data, it } = cxt;
+      let { opts } = it;
+      if (!$data && schema.length === 0) return;
+      let useLoop = schema.length >= opts.loopRequired;
+      if (it.allErrors) allErrorsMode();
+      else exitOnErrorMode();
+      if (opts.strictRequired) {
+        let props = cxt.parentSchema.properties;
+        let { definedProperties } = cxt.it;
+        for (let requiredKey of schema)
+          if (
+            (props === null || props === undefined ? undefined : props[requiredKey]) === undefined &&
+            !definedProperties.has(requiredKey)
+          ) {
+            let C = `required property "${requiredKey}" is not defined at "${it.schemaEnv.baseId + it.errSchemaPath}" (strictRequired)`;
+            (0, util_1.checkStrictMode)(it, C, it.opts.strictRequired);
+          }
+      }
+      function allErrorsMode() {
+        if (useLoop || $data) cxt.block$data(codegen_1.nil, loopAllRequired);
+        else for (let prop of schema) (0, code_1.checkReportMissingProp)(cxt, prop);
+      }
+      function exitOnErrorMode() {
+        let missing = gen.let("missing");
+        if (useLoop || $data) {
+          let valid = gen.let("valid", true);
+          cxt.block$data(valid, () => loopUntilMissing(missing, valid));
+          cxt.ok(valid);
+        } else {
+          gen.if((0, code_1.checkMissingProp)(cxt, schema, missing));
+          (0, code_1.reportMissingProp)(cxt, missing);
+          gen.else();
+        }
+      }
+      function loopAllRequired() {
+        gen.forOf("prop", schemaCode, (prop) => {
+          cxt.setParams({
+            missingProperty: prop,
+          });
+          gen.if((0, code_1.noPropertyInData)(gen, data, prop, opts.ownProperties), () => cxt.error());
+        });
+      }
+      function loopUntilMissing(missing, valid) {
+        cxt.setParams({
+          missingProperty: missing,
+        });
+        gen.forOf(
+          missing,
+          schemaCode,
+          () => {
+            gen.assign(valid, (0, code_1.propertyInData)(gen, data, missing, opts.ownProperties));
+            gen.if((0, codegen_1.not)(valid), () => {
+              cxt.error();
+              gen.break();
+            });
+          },
+          codegen_1.nil,
         );
       }
-      function b(k) {
-        let V = s._`${k}.errors`;
-        (gen.assign(
-          a.default.vErrors,
-          s._`${a.default.vErrors} === null ? ${V} : ${a.default.vErrors}.concat(${V})`,
-        ),
-          gen.assign(a.default.errors, s._`${a.default.vErrors}.length`));
-      }
-      function g(k) {
-        var V;
-        if (!it.opts.unevaluated) return;
-        let H =
-          (V = w === null || w === void 0 ? void 0 : w.validate) === null || V === void 0
-            ? void 0
-            : V.evaluated;
-        if (it.props !== !0)
-          if (H && !H.dynamicProps) {
-            if (H.props !== void 0) it.props = i.mergeEvaluated.props(gen, H.props, it.props);
-          } else {
-            let N = gen.var("props", s._`${k}.evaluated.props`);
-            it.props = i.mergeEvaluated.props(gen, N, it.props, s.Name);
-          }
-        if (it.items !== !0)
-          if (H && !H.dynamicItems) {
-            if (H.items !== void 0) it.items = i.mergeEvaluated.items(gen, H.items, it.items);
-          } else {
-            let N = gen.var("items", s._`${k}.evaluated.items`);
-            it.items = i.mergeEvaluated.items(gen, N, it.items, s.Name);
-          }
-      }
-    }
-    ((e.callRef = d), (e.default = l));
-  }),
-  Vi = J((e) => {
-    Object.defineProperty(e, "__esModule", { value: !0 });
-    let t = Eu(),
-      r = _n(),
-      s = [
-        "$schema",
-        "$id",
-        "$defs",
-        "$vocabulary",
-        { keyword: "$comment" },
-        "definitions",
-        t.default,
-        r.default,
-      ];
-    e.default = s;
-  }),
-  Pu = J((e) => {
-    Object.defineProperty(e, "__esModule", { value: !0 });
-    let t = te(),
-      operators = t.operators,
-      s = {
-        maximum: { okStr: "<=", ok: operators.LTE, fail: operators.GT },
-        minimum: { okStr: ">=", ok: operators.GTE, fail: operators.LT },
-        exclusiveMaximum: { okStr: "<", ok: operators.LT, fail: operators.GTE },
-        exclusiveMinimum: { okStr: ">", ok: operators.GT, fail: operators.LTE },
+    },
+  };
+  cjsExports.default = def;
+});
+var require_limitItems = J((cjsExports) => {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  let codegen_1 = require_codegen();
+  let r = {
+    keyword: ["maxItems", "minItems"],
+    type: "array",
+    schemaType: "number",
+    $data: true,
+    error: {
+      message({ keyword, schemaCode }) {
+        let comp = keyword === "maxItems" ? "more" : "fewer";
+        return codegen_1.str`must NOT have ${comp} than ${schemaCode} items`;
       },
-      a = {
-        keyword: Object.keys(s),
-        type: "number",
-        schemaType: "number",
-        $data: !0,
-        error: {
-          message: ({ keyword: keyword, schemaCode: schemaCode }) =>
-            t.str`must be ${s[keyword].okStr} ${schemaCode}`,
-          params: ({ keyword: keyword, schemaCode: schemaCode }) =>
-            t._`{comparison: ${s[keyword].okStr}, limit: ${schemaCode}}`,
-        },
-        code(n) {
-          let { keyword: keyword, data: l, schemaCode: schemaCode } = n;
-          n.fail$data(t._`${l} ${s[keyword].fail} ${schemaCode} || isNaN(${l})`);
-        },
-      };
-    e.default = a;
-  }),
-  Tu = J((e) => {
-    Object.defineProperty(e, "__esModule", { value: !0 });
-    let t = te(),
-      r = {
-        keyword: "multipleOf",
-        type: "number",
-        schemaType: "number",
-        $data: !0,
-        error: {
-          message: ({ schemaCode: schemaCode }) => t.str`must be multiple of ${schemaCode}`,
-          params: ({ schemaCode: schemaCode }) => t._`{multipleOf: ${schemaCode}}`,
-        },
-        code(s) {
-          let { gen: gen, data: n, schemaCode: schemaCode, it: it } = s,
-            multipleOfPrecision = it.opts.multipleOfPrecision,
-            d = gen.let("res"),
-            m = multipleOfPrecision
-              ? t._`Math.abs(Math.round(${d}) - ${d}) > 1e-${multipleOfPrecision}`
-              : t._`${d} !== parseInt(${d})`;
-          s.fail$data(t._`(${schemaCode} === 0 || (${d} = ${n}/${schemaCode}, ${m}))`);
-        },
-      };
-    e.default = r;
-  }),
-  Cu = J((e) => {
-    Object.defineProperty(e, "__esModule", { value: !0 });
-    function t(r) {
-      let s = r.length,
-        a = 0,
-        n = 0,
-        i;
-      while (n < s)
-        if ((a++, (i = r.charCodeAt(n++)), i >= 55296 && i <= 56319 && n < s)) {
-          if (((i = r.charCodeAt(n)), (i & 64512) === 56320)) n++;
-        }
-      return a;
-    }
-    ((e.default = t), (t.code = 'require("ajv/dist/runtime/ucs2length").default'));
-  }),
-  ku = J((e) => {
-    Object.defineProperty(e, "__esModule", { value: !0 });
-    let t = te(),
-      r = ne(),
-      s = Cu(),
-      a = {
-        keyword: ["maxLength", "minLength"],
-        type: "string",
-        schemaType: "number",
-        $data: !0,
-        error: {
-          message({ keyword: n, schemaCode: i }) {
-            let l = n === "maxLength" ? "more" : "fewer";
-            return t.str`must NOT have ${l} than ${i} characters`;
-          },
-          params: ({ schemaCode: schemaCode }) => t._`{limit: ${schemaCode}}`,
-        },
-        code(n) {
-          let { keyword: keyword, data: l, schemaCode: schemaCode, it: it } = n,
-            m = keyword === "maxLength" ? t.operators.GT : t.operators.LT,
-            _ = it.opts.unicode === !1 ? t._`${l}.length` : t._`${(0, r.useFunc)(n.gen, s.default)}(${l})`;
-          n.fail$data(t._`${_} ${m} ${schemaCode}`);
-        },
-      };
-    e.default = a;
-  }),
-  qu = J((e) => {
-    Object.defineProperty(e, "__esModule", { value: !0 });
-    let t = De(),
-      r = ne(),
-      s = te(),
-      a = {
-        keyword: "pattern",
-        type: "string",
-        schemaType: "string",
-        $data: !0,
-        error: {
-          message: ({ schemaCode: schemaCode }) => s.str`must match pattern "${schemaCode}"`,
-          params: ({ schemaCode: schemaCode }) => s._`{pattern: ${schemaCode}}`,
-        },
-        code(n) {
-          let { gen: gen, data: l, $data: $data, schema: schema, schemaCode: schemaCode, it: it } = n,
-            w = it.opts.unicodeRegExp ? "u" : "";
-          if ($data) {
-            let { regExp: regExp } = it.opts.code,
-              y = regExp.code === "new RegExp" ? s._`new RegExp` : (0, r.useFunc)(gen, regExp),
-              v = gen.let("valid");
-            (gen.try(
-              () => gen.assign(v, s._`${y}(${schemaCode}, ${w}).test(${l})`),
-              () => gen.assign(v, !1),
-            ),
-              n.fail$data(s._`!${v}`));
-          } else {
-            let P = (0, t.usePattern)(n, schema);
-            n.fail$data(s._`!${P}.test(${l})`);
-          }
-        },
-      };
-    e.default = a;
-  }),
-  Iu = J((e) => {
-    Object.defineProperty(e, "__esModule", { value: !0 });
-    let t = te(),
-      r = {
-        keyword: ["maxProperties", "minProperties"],
-        type: "object",
-        schemaType: "number",
-        $data: !0,
-        error: {
-          message({ keyword: s, schemaCode: a }) {
-            let n = s === "maxProperties" ? "more" : "fewer";
-            return t.str`must NOT have ${n} than ${a} properties`;
-          },
-          params: ({ schemaCode: schemaCode }) => t._`{limit: ${schemaCode}}`,
-        },
-        code(s) {
-          let { keyword: keyword, data: n, schemaCode: schemaCode } = s,
-            l = keyword === "maxProperties" ? t.operators.GT : t.operators.LT;
-          s.fail$data(t._`Object.keys(${n}).length ${l} ${schemaCode}`);
-        },
-      };
-    e.default = r;
-  }),
-  Ou = J((e) => {
-    Object.defineProperty(e, "__esModule", { value: !0 });
-    let t = De(),
-      r = te(),
-      s = ne(),
-      a = {
-        keyword: "required",
-        type: "object",
-        schemaType: "array",
-        $data: !0,
-        error: {
-          message: ({ params: { missingProperty: n } }) => r.str`must have required property '${n}'`,
-          params: ({ params: { missingProperty: n } }) => r._`{missingProperty: ${n}}`,
-        },
-        code(n) {
-          let { gen: gen, schema: schema, schemaCode: schemaCode, data: d, $data: $data, it: it } = n,
-            { opts: opts } = it;
-          if (!$data && schema.length === 0) return;
-          let P = schema.length >= opts.loopRequired;
-          if (it.allErrors) y();
-          else v();
-          if (opts.strictRequired) {
-            let properties = n.parentSchema.properties,
-              { definedProperties: definedProperties } = n.it;
-            for (let R of schema)
-              if (
-                (properties === null || properties === void 0 ? void 0 : properties[R]) === void 0 &&
-                !definedProperties.has(R)
-              ) {
-                let C = `required property "${R}" is not defined at "${it.schemaEnv.baseId + it.errSchemaPath}" (strictRequired)`;
-                (0, s.checkStrictMode)(it, C, it.opts.strictRequired);
-              }
-          }
-          function y() {
-            if (P || $data) n.block$data(r.nil, p);
-            else for (let S of schema) (0, t.checkReportMissingProp)(n, S);
-          }
-          function v() {
-            let S = gen.let("missing");
-            if (P || $data) {
-              let f = gen.let("valid", !0);
-              (n.block$data(f, () => h(S, f)), n.ok(f));
-            } else
-              (gen.if((0, t.checkMissingProp)(n, schema, S)), (0, t.reportMissingProp)(n, S), gen.else());
-          }
-          function p() {
-            gen.forOf("prop", schemaCode, (S) => {
-              (n.setParams({ missingProperty: S }),
-                gen.if((0, t.noPropertyInData)(gen, d, S, opts.ownProperties), () => n.error()));
-            });
-          }
-          function h(S, f) {
-            (n.setParams({ missingProperty: S }),
-              gen.forOf(
-                S,
-                schemaCode,
-                () => {
-                  (gen.assign(f, (0, t.propertyInData)(gen, d, S, opts.ownProperties)),
-                    gen.if((0, r.not)(f), () => {
-                      (n.error(), gen.break());
-                    }));
-                },
-                r.nil,
-              ));
-          }
-        },
-      };
-    e.default = a;
-  }),
-  Nu = J((e) => {
-    Object.defineProperty(e, "__esModule", { value: !0 });
-    let t = te(),
-      r = {
-        keyword: ["maxItems", "minItems"],
-        type: "array",
-        schemaType: "number",
-        $data: !0,
-        error: {
-          message({ keyword: s, schemaCode: a }) {
-            let n = s === "maxItems" ? "more" : "fewer";
-            return t.str`must NOT have ${n} than ${a} items`;
-          },
-          params: ({ schemaCode: schemaCode }) => t._`{limit: ${schemaCode}}`,
-        },
-        code(s) {
-          let { keyword: keyword, data: n, schemaCode: schemaCode } = s,
-            l = keyword === "maxItems" ? t.operators.GT : t.operators.LT;
-          s.fail$data(t._`${n}.length ${l} ${schemaCode}`);
-        },
-      };
-    e.default = r;
-  }),
-  yn = J((e) => {
-    Object.defineProperty(e, "__esModule", { value: !0 });
-    let t = Li();
-    ((t.code = 'require("ajv/dist/runtime/equal").default'), (e.default = t));
-  }),
-  Mu = J((e) => {
-    Object.defineProperty(e, "__esModule", { value: !0 });
-    let t = Sa(),
-      r = te(),
-      s = ne(),
-      a = yn(),
-      n = {
-        keyword: "uniqueItems",
-        type: "array",
-        schemaType: "boolean",
-        $data: !0,
-        error: {
-          message: ({ params: { i, j: l } }) =>
-            r.str`must NOT have duplicate items (items ## ${l} and ${i} are identical)`,
-          params: ({ params: { i, j: l } }) => r._`{i: ${i}, j: ${l}}`,
-        },
-        code(i) {
-          let {
-            gen: gen,
-            data: c,
-            $data: $data,
-            schema: schema,
-            parentSchema: parentSchema,
-            schemaCode: schemaCode,
-            it: it,
-          } = i;
-          if (!$data && !schema) return;
-          let y = gen.let("valid"),
-            v = parentSchema.items ? (0, t.getSchemaTypes)(parentSchema.items) : [];
-          (i.block$data(y, p, r._`${schemaCode} === false`), i.ok(y));
-          function p() {
-            let R = gen.let("i", r._`${c}.length`),
-              C = gen.let("j");
-            (i.setParams({ i: R, j: C }),
-              gen.assign(y, !0),
-              gen.if(r._`${R} > 1`, () => (h() ? S : f)(R, C)));
-          }
-          function h() {
-            return v.length > 0 && !v.some((R) => R === "object" || R === "array");
-          }
-          function S(R, C) {
-            let b = gen.name("item"),
-              g = (0, t.checkDataTypes)(v, b, it.opts.strictNumbers, t.DataType.Wrong),
-              k = gen.const("indices", r._`{}`);
-            gen.for(r._`;${R}--;`, () => {
-              if ((gen.let(b, r._`${c}[${R}]`), gen.if(g, r._`continue`), v.length > 1))
-                gen.if(r._`typeof ${b} == "string"`, r._`${b} += "_"`);
-              gen
-                .if(r._`typeof ${k}[${b}] == "number"`, () => {
-                  (gen.assign(C, r._`${k}[${b}]`), i.error(), gen.assign(y, !1).break());
-                })
-                .code(r._`${k}[${b}] = ${R}`);
-            });
-          }
-          function f(R, C) {
-            let b = (0, s.useFunc)(gen, a.default),
-              g = gen.name("outer");
-            gen.label(g).for(r._`;${R}--;`, () =>
-              gen.for(r._`${C} = ${R}; ${C}--;`, () =>
-                gen.if(r._`${b}(${c}[${R}], ${c}[${C}])`, () => {
-                  (i.error(), gen.assign(y, !1).break(g));
-                }),
-              ),
-            );
-          }
-        },
-      };
-    e.default = n;
-  }),
-  ju = J((e) => {
-    Object.defineProperty(e, "__esModule", { value: !0 });
-    let t = te(),
-      r = ne(),
-      s = yn(),
-      a = {
-        keyword: "const",
-        $data: !0,
-        error: {
-          message: "must be equal to constant",
-          params: ({ schemaCode: schemaCode }) => t._`{allowedValue: ${schemaCode}}`,
-        },
-        code(n) {
-          let { gen: gen, data: l, $data: $data, schemaCode: schemaCode, schema: schema } = n;
-          if ($data || (schema && typeof schema == "object"))
-            n.fail$data(t._`!${(0, r.useFunc)(gen, s.default)}(${l}, ${schemaCode})`);
-          else n.fail(t._`${schema} !== ${l}`);
-        },
-      };
-    e.default = a;
-  }),
-  Au = J((e) => {
-    Object.defineProperty(e, "__esModule", { value: !0 });
-    let t = te(),
-      r = ne(),
-      s = yn(),
-      a = {
-        keyword: "enum",
-        schemaType: "array",
-        $data: !0,
-        error: {
-          message: "must be equal to one of the allowed values",
-          params: ({ schemaCode: schemaCode }) => t._`{allowedValues: ${schemaCode}}`,
-        },
-        code(n) {
-          let { gen: gen, data: l, $data: $data, schema: schema, schemaCode: schemaCode, it: it } = n;
-          if (!$data && schema.length === 0) throw Error("enum must have non-empty array");
-          let w = schema.length >= it.opts.loopEnum,
-            P,
-            y = () => (P !== null && P !== void 0 ? P : (P = (0, r.useFunc)(gen, s.default))),
-            v;
-          if (w || $data) ((v = gen.let("valid")), n.block$data(v, p));
-          else {
-            if (!Array.isArray(schema)) throw Error("ajv implementation error");
-            let S = gen.const("vSchema", schemaCode);
-            v = (0, t.or)(...schema.map((f, R) => h(S, R)));
-          }
-          n.pass(v);
-          function p() {
-            (gen.assign(v, !1),
-              gen.forOf("v", schemaCode, (S) =>
-                gen.if(t._`${y()}(${l}, ${S})`, () => gen.assign(v, !0).break()),
-              ));
-          }
-          function h(S, f) {
-            let R = schema[f];
-            return typeof R === "object" && R !== null ? t._`${y()}(${l}, ${S}[${f}])` : t._`${l} === ${R}`;
-          }
-        },
-      };
-    e.default = a;
-  }),
-  xi = J((e) => {
-    Object.defineProperty(e, "__esModule", { value: !0 });
-    let t = Pu(),
-      r = Tu(),
-      s = ku(),
-      a = qu(),
-      n = Iu(),
-      i = Ou(),
-      l = Nu(),
-      c = Mu(),
-      d = ju(),
-      m = Au(),
-      _ = [
-        t.default,
-        r.default,
-        s.default,
-        a.default,
-        n.default,
-        i.default,
-        l.default,
-        c.default,
-        { keyword: "type", schemaType: ["string", "array"] },
-        { keyword: "nullable", schemaType: "boolean" },
-        d.default,
-        m.default,
-      ];
-    e.default = _;
-  }),
-  Fi = J((e) => {
-    (Object.defineProperty(e, "__esModule", { value: !0 }), (e.validateAdditionalItems = void 0));
-    let t = te(),
-      r = ne(),
-      s = {
-        keyword: "additionalItems",
-        type: "array",
-        schemaType: ["boolean", "object"],
-        before: "uniqueItems",
-        error: {
-          message: ({ params: { len: n } }) => t.str`must NOT have more than ${n} items`,
-          params: ({ params: { len: n } }) => t._`{limit: ${n}}`,
-        },
-        code(n) {
-          let { parentSchema: parentSchema, it: it } = n,
-            { items: items } = parentSchema;
-          if (!Array.isArray(items)) {
-            (0, r.checkStrictMode)(
-              it,
-              '"additionalItems" is ignored when "items" is not an array of schemas',
-            );
-            return;
-          }
-          a(n, items);
-        },
-      };
-    function a(n, i) {
-      let { gen: gen, schema: schema, data: d, keyword: keyword, it: it } = n;
-      it.items = !0;
-      let w = gen.const("len", t._`${d}.length`);
-      if (schema === !1) (n.setParams({ len: i.length }), n.pass(t._`${w} <= ${i.length}`));
-      else if (typeof schema == "object" && !(0, r.alwaysValidSchema)(it, schema)) {
-        let y = gen.var("valid", t._`${w} <= ${i.length}`);
-        (gen.if((0, t.not)(y), () => P(y)), n.ok(y));
+      params: ({ schemaCode }) => codegen_1._`{limit: ${schemaCode}}`,
+    },
+    code(cxt) {
+      let { keyword, data, schemaCode } = cxt;
+      let op = keyword === "maxItems" ? codegen_1.operators.GT : codegen_1.operators.LT;
+      cxt.fail$data(codegen_1._`${data}.length ${op} ${schemaCode}`);
+    },
+  };
+  cjsExports.default = r;
+});
+var require_equal = J((cjsExports) => {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  let equal = require_fast_deep_equal();
+  equal.code = 'require("ajv/dist/runtime/equal").default';
+  cjsExports.default = equal;
+});
+var require_uniqueItems = J((cjsExports) => {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  let dataType_1 = require_dataType();
+  let codegen_1 = require_codegen();
+  let util_1 = require_util();
+  let equal_1 = require_equal();
+  let def = {
+    keyword: "uniqueItems",
+    type: "array",
+    schemaType: "boolean",
+    $data: true,
+    error: {
+      message: ({ params: { i, j } }) =>
+        codegen_1.str`must NOT have duplicate items (items ## ${j} and ${i} are identical)`,
+      params: ({ params: { i, j } }) => codegen_1._`{i: ${i}, j: ${j}}`,
+    },
+    code(cxt) {
+      let { gen, data, $data, schema, parentSchema, schemaCode, it } = cxt;
+      if (!$data && !schema) return;
+      let valid = gen.let("valid");
+      let itemTypes = parentSchema.items ? (0, dataType_1.getSchemaTypes)(parentSchema.items) : [];
+      cxt.block$data(valid, validateUniqueItems, codegen_1._`${schemaCode} === false`);
+      cxt.ok(valid);
+      function validateUniqueItems() {
+        let i = gen.let("i", codegen_1._`${data}.length`);
+        let j = gen.let("j");
+        cxt.setParams({
+          i,
+          j,
+        });
+        gen.assign(valid, true);
+        gen.if(codegen_1._`${i} > 1`, () => (canOptimize() ? loopN : loopN2)(i, j));
       }
-      function P(y) {
-        gen.forRange("i", i.length, w, (v) => {
-          if ((n.subschema({ keyword: keyword, dataProp: v, dataPropType: r.Type.Num }, y), !it.allErrors))
-            gen.if((0, t.not)(y), () => gen.break());
+      function canOptimize() {
+        return itemTypes.length > 0 && !itemTypes.some((t) => t === "object" || t === "array");
+      }
+      function loopN(i, j) {
+        let item = gen.name("item");
+        let wrongType = (0, dataType_1.checkDataTypes)(
+          itemTypes,
+          item,
+          it.opts.strictNumbers,
+          dataType_1.DataType.Wrong,
+        );
+        let indices = gen.const("indices", codegen_1._`{}`);
+        gen.for(codegen_1._`;${i}--;`, () => {
+          gen.let(item, codegen_1._`${data}[${i}]`);
+          gen.if(wrongType, codegen_1._`continue`);
+          if (itemTypes.length > 1)
+            gen.if(codegen_1._`typeof ${item} == "string"`, codegen_1._`${item} += "_"`);
+          gen
+            .if(codegen_1._`typeof ${indices}[${item}] == "number"`, () => {
+              gen.assign(j, codegen_1._`${indices}[${item}]`);
+              cxt.error();
+              gen.assign(valid, false).break();
+            })
+            .code(codegen_1._`${indices}[${item}] = ${i}`);
         });
       }
-    }
-    ((e.validateAdditionalItems = a), (e.default = s));
-  }),
-  Ki = J((e) => {
-    (Object.defineProperty(e, "__esModule", { value: !0 }), (e.validateTuple = void 0));
-    let t = te(),
-      r = ne(),
-      s = De(),
-      a = {
-        keyword: "items",
-        type: "array",
-        schemaType: ["object", "array", "boolean"],
-        before: "uniqueItems",
-        code(i) {
-          let { schema: schema, it: it } = i;
-          if (Array.isArray(schema)) return n(i, "additionalItems", schema);
-          if (((it.items = !0), (0, r.alwaysValidSchema)(it, schema))) return;
-          i.ok((0, s.validateArray)(i));
-        },
-      };
-    function n(i, l, c = i.schema) {
-      let { gen: gen, parentSchema: parentSchema, data: _, keyword: keyword, it: it } = i;
-      if ((p(parentSchema), it.opts.unevaluated && c.length && it.items !== !0))
-        it.items = r.mergeEvaluated.items(gen, c.length, it.items);
-      let y = gen.name("valid"),
-        v = gen.const("len", t._`${_}.length`);
-      c.forEach((h, S) => {
-        if ((0, r.alwaysValidSchema)(it, h)) return;
-        (gen.if(t._`${v} > ${S}`, () => i.subschema({ keyword: keyword, schemaProp: S, dataProp: S }, y)),
-          i.ok(y));
-      });
-      function p(h) {
-        let { opts: opts, errSchemaPath: errSchemaPath } = it,
-          R = c.length,
-          C = R === h.minItems && (R === h.maxItems || h[l] === !1);
-        if (opts.strictTuples && !C) {
-          let b = `"${keyword}" is ${R}-tuple, but minItems or maxItems/${l} are not specified or different at path "${errSchemaPath}"`;
-          (0, r.checkStrictMode)(it, b, opts.strictTuples);
-        }
-      }
-    }
-    ((e.validateTuple = n), (e.default = a));
-  }),
-  Lu = J((e) => {
-    Object.defineProperty(e, "__esModule", { value: !0 });
-    let t = Ki(),
-      r = {
-        keyword: "prefixItems",
-        type: "array",
-        schemaType: ["array"],
-        before: "uniqueItems",
-        code: (s) => (0, t.validateTuple)(s, "items"),
-      };
-    e.default = r;
-  }),
-  Uu = J((e) => {
-    Object.defineProperty(e, "__esModule", { value: !0 });
-    let t = te(),
-      r = ne(),
-      s = De(),
-      a = Fi(),
-      n = {
-        keyword: "items",
-        type: "array",
-        schemaType: ["object", "boolean"],
-        before: "uniqueItems",
-        error: {
-          message: ({ params: { len: i } }) => t.str`must NOT have more than ${i} items`,
-          params: ({ params: { len: i } }) => t._`{limit: ${i}}`,
-        },
-        code(i) {
-          let { schema: schema, parentSchema: parentSchema, it: it } = i,
-            { prefixItems: prefixItems } = parentSchema;
-          if (((it.items = !0), (0, r.alwaysValidSchema)(it, schema))) return;
-          if (prefixItems) (0, a.validateAdditionalItems)(i, prefixItems);
-          else i.ok((0, s.validateArray)(i));
-        },
-      };
-    e.default = n;
-  }),
-  Du = J((e) => {
-    Object.defineProperty(e, "__esModule", { value: !0 });
-    let t = te(),
-      r = ne(),
-      s = {
-        keyword: "contains",
-        type: "array",
-        schemaType: ["object", "boolean"],
-        before: "uniqueItems",
-        trackErrors: !0,
-        error: {
-          message: ({ params: { min: a, max: n } }) =>
-            n === void 0
-              ? t.str`must contain at least ${a} valid item(s)`
-              : t.str`must contain at least ${a} and no more than ${n} valid item(s)`,
-          params: ({ params: { min: a, max: n } }) =>
-            n === void 0 ? t._`{minContains: ${a}}` : t._`{minContains: ${a}, maxContains: ${n}}`,
-        },
-        code(a) {
-          let { gen: gen, schema: schema, parentSchema: parentSchema, data: c, it: it } = a,
-            m,
-            _,
-            { minContains: minContains, maxContains: maxContains } = parentSchema;
-          if (it.opts.next) ((m = minContains === void 0 ? 1 : minContains), (_ = maxContains));
-          else m = 1;
-          let y = gen.const("len", t._`${c}.length`);
-          if ((a.setParams({ min: m, max: _ }), _ === void 0 && m === 0)) {
-            (0, r.checkStrictMode)(
-              it,
-              '"minContains" == 0 without "maxContains": "contains" keyword ignored',
-            );
-            return;
-          }
-          if (_ !== void 0 && m > _) {
-            ((0, r.checkStrictMode)(it, '"minContains" > "maxContains" is always invalid'), a.fail());
-            return;
-          }
-          if ((0, r.alwaysValidSchema)(it, schema)) {
-            let f = t._`${y} >= ${m}`;
-            if (_ !== void 0) f = t._`${f} && ${y} <= ${_}`;
-            a.pass(f);
-            return;
-          }
-          it.items = !0;
-          let v = gen.name("valid");
-          if (_ === void 0 && m === 1) h(v, () => gen.if(v, () => gen.break()));
-          else if (m === 0) {
-            if ((gen.let(v, !0), _ !== void 0)) gen.if(t._`${c}.length > 0`, p);
-          } else (gen.let(v, !1), p());
-          a.result(v, () => a.reset());
-          function p() {
-            let f = gen.name("_valid"),
-              R = gen.let("count", 0);
-            h(f, () => gen.if(f, () => S(R)));
-          }
-          function h(f, R) {
-            gen.forRange("i", 0, y, (C) => {
-              (a.subschema(
-                { keyword: "contains", dataProp: C, dataPropType: r.Type.Num, compositeRule: !0 },
-                f,
-              ),
-                R());
-            });
-          }
-          function S(f) {
-            if ((gen.code(t._`${f}++`), _ === void 0))
-              gen.if(t._`${f} >= ${m}`, () => gen.assign(v, !0).break());
-            else if ((gen.if(t._`${f} > ${_}`, () => gen.assign(v, !1).break()), m === 1)) gen.assign(v, !0);
-            else gen.if(t._`${f} >= ${m}`, () => gen.assign(v, !0));
-          }
-        },
-      };
-    e.default = s;
-  }),
-  vn = J((e) => {
-    (Object.defineProperty(e, "__esModule", { value: !0 }),
-      (e.validateSchemaDeps = e.validatePropertyDeps = e.error = void 0));
-    let t = te(),
-      r = ne(),
-      s = De();
-    e.error = {
-      message: ({ params: { property: c, depsCount: d, deps: m } }) => {
-        let _ = d === 1 ? "property" : "properties";
-        return t.str`must have ${_} ${m} when property ${c} is present`;
-      },
-      params: ({ params: { property: c, depsCount: d, deps: m, missingProperty: _ } }) => t._`{property: ${c},
-    missingProperty: ${_},
-    depsCount: ${d},
-    deps: ${m}}`,
-    };
-    let a = {
-      keyword: "dependencies",
-      type: "object",
-      schemaType: "object",
-      error: e.error,
-      code(c) {
-        let [d, m] = n(c);
-        (i(c, d), l(c, m));
-      },
-    };
-    function n({ schema: schema }) {
-      let d = {},
-        m = {};
-      for (let key in schema) {
-        if (key === "__proto__") continue;
-        let w = Array.isArray(schema[key]) ? d : m;
-        w[key] = schema[key];
-      }
-      return [d, m];
-    }
-    function i(c, d = c.schema) {
-      let { gen: gen, data: _, it: it } = c;
-      if (Object.keys(d).length === 0) return;
-      let P = gen.let("missing");
-      for (let key in d) {
-        let v = d[key];
-        if (v.length === 0) continue;
-        let p = (0, s.propertyInData)(gen, _, key, it.opts.ownProperties);
-        if ((c.setParams({ property: key, depsCount: v.length, deps: v.join(", ") }), it.allErrors))
-          gen.if(p, () => {
-            for (let h of v) (0, s.checkReportMissingProp)(c, h);
-          });
-        else
-          (gen.if(t._`${p} && (${(0, s.checkMissingProp)(c, v, P)})`),
-            (0, s.reportMissingProp)(c, P),
-            gen.else());
-      }
-    }
-    e.validatePropertyDeps = i;
-    function l(c, d = c.schema) {
-      let { gen: gen, data: _, keyword: keyword, it: it } = c,
-        y = gen.name("valid");
-      for (let key in d) {
-        if ((0, r.alwaysValidSchema)(it, d[key])) continue;
-        (gen.if(
-          (0, s.propertyInData)(gen, _, key, it.opts.ownProperties),
-          () => {
-            let subschema = c.subschema({ keyword: keyword, schemaProp: key }, y);
-            c.mergeValidEvaluated(subschema, y);
-          },
-          () => gen.var(y, !0),
-        ),
-          c.ok(y));
-      }
-    }
-    ((e.validateSchemaDeps = l), (e.default = a));
-  }),
-  Vu = J((e) => {
-    Object.defineProperty(e, "__esModule", { value: !0 });
-    let t = te(),
-      r = ne(),
-      s = {
-        keyword: "propertyNames",
-        type: "object",
-        schemaType: ["object", "boolean"],
-        error: {
-          message: "property name must be valid",
-          params: ({ params: params }) => t._`{propertyName: ${params.propertyName}}`,
-        },
-        code(a) {
-          let { gen: gen, schema: schema, data: l, it: it } = a;
-          if ((0, r.alwaysValidSchema)(it, schema)) return;
-          let d = gen.name("valid");
-          (gen.forIn("key", l, (m) => {
-            (a.setParams({ propertyName: m }),
-              a.subschema(
-                {
-                  keyword: "propertyNames",
-                  data: m,
-                  dataTypes: ["string"],
-                  propertyName: m,
-                  compositeRule: !0,
-                },
-                d,
-              ),
-              gen.if((0, t.not)(d), () => {
-                if ((a.error(!0), !it.allErrors)) gen.break();
-              }));
-          }),
-            a.ok(d));
-        },
-      };
-    e.default = s;
-  }),
-  Ji = J((e) => {
-    Object.defineProperty(e, "__esModule", { value: !0 });
-    let t = De(),
-      r = te(),
-      s = Le(),
-      a = ne(),
-      n = {
-        keyword: "additionalProperties",
-        type: ["object"],
-        schemaType: ["boolean", "object"],
-        allowUndefined: !0,
-        trackErrors: !0,
-        error: {
-          message: "must NOT have additional properties",
-          params: ({ params: params }) => r._`{additionalProperty: ${params.additionalProperty}}`,
-        },
-        code(i) {
-          let {
-            gen: gen,
-            schema: schema,
-            parentSchema: parentSchema,
-            data: m,
-            errsCount: errsCount,
-            it: it,
-          } = i;
-          if (!errsCount) throw Error("ajv implementation error");
-          let { allErrors: allErrors, opts: opts } = it;
-          if (((it.props = !0), opts.removeAdditional !== "all" && (0, a.alwaysValidSchema)(it, schema)))
-            return;
-          let v = (0, t.allSchemaProperties)(parentSchema.properties),
-            p = (0, t.allSchemaProperties)(parentSchema.patternProperties);
-          (h(), i.ok(r._`${errsCount} === ${s.default.errors}`));
-          function h() {
-            gen.forIn("key", m, (b) => {
-              if (!v.length && !p.length) R(b);
-              else gen.if(S(b), () => R(b));
-            });
-          }
-          function S(b) {
-            let g;
-            if (v.length > 8) {
-              let k = (0, a.schemaRefOrVal)(it, parentSchema.properties, "properties");
-              g = (0, t.isOwnProperty)(gen, k, b);
-            } else if (v.length) g = (0, r.or)(...v.map((k) => r._`${b} === ${k}`));
-            else g = r.nil;
-            if (p.length) g = (0, r.or)(g, ...p.map((k) => r._`${(0, t.usePattern)(i, k)}.test(${b})`));
-            return (0, r.not)(g);
-          }
-          function f(b) {
-            gen.code(r._`delete ${m}[${b}]`);
-          }
-          function R(b) {
-            if (opts.removeAdditional === "all" || (opts.removeAdditional && schema === !1)) {
-              f(b);
-              return;
-            }
-            if (schema === !1) {
-              if ((i.setParams({ additionalProperty: b }), i.error(), !allErrors)) gen.break();
-              return;
-            }
-            if (typeof schema == "object" && !(0, a.alwaysValidSchema)(it, schema)) {
-              let g = gen.name("valid");
-              if (opts.removeAdditional === "failing")
-                (C(b, g, !1),
-                  gen.if((0, r.not)(g), () => {
-                    (i.reset(), f(b));
-                  }));
-              else if ((C(b, g), !allErrors)) gen.if((0, r.not)(g), () => gen.break());
-            }
-          }
-          function C(b, g, k) {
-            let V = { keyword: "additionalProperties", dataProp: b, dataPropType: a.Type.Str };
-            if (k === !1) Object.assign(V, { compositeRule: !0, createErrors: !1, allErrors: !1 });
-            i.subschema(V, g);
-          }
-        },
-      };
-    e.default = n;
-  }),
-  xu = J((e) => {
-    Object.defineProperty(e, "__esModule", { value: !0 });
-    let t = so(),
-      r = De(),
-      s = ne(),
-      a = Ji(),
-      n = {
-        keyword: "properties",
-        type: "object",
-        schemaType: "object",
-        code(i) {
-          let { gen: gen, schema: schema, parentSchema: parentSchema, data: m, it: it } = i;
-          if (it.opts.removeAdditional === "all" && parentSchema.additionalProperties === void 0)
-            a.default.code(new t.KeywordCxt(it, a.default, "additionalProperties"));
-          let w = (0, r.allSchemaProperties)(schema);
-          for (let h of w) it.definedProperties.add(h);
-          if (it.opts.unevaluated && w.length && it.props !== !0)
-            it.props = s.mergeEvaluated.props(gen, (0, s.toHash)(w), it.props);
-          let filtered = w.filter((h) => !(0, s.alwaysValidSchema)(it, schema[h]));
-          if (filtered.length === 0) return;
-          let y = gen.name("valid");
-          for (let h of filtered) {
-            if (v(h)) p(h);
-            else {
-              if ((gen.if((0, r.propertyInData)(gen, m, h, it.opts.ownProperties)), p(h), !it.allErrors))
-                gen.else().var(y, !0);
-              gen.endIf();
-            }
-            (i.it.definedProperties.add(h), i.ok(y));
-          }
-          function v(h) {
-            return it.opts.useDefaults && !it.compositeRule && schema[h].default !== void 0;
-          }
-          function p(h) {
-            i.subschema({ keyword: "properties", schemaProp: h, dataProp: h }, y);
-          }
-        },
-      };
-    e.default = n;
-  }),
-  Fu = J((e) => {
-    Object.defineProperty(e, "__esModule", { value: !0 });
-    let t = De(),
-      r = te(),
-      s = ne(),
-      a = ne(),
-      n = {
-        keyword: "patternProperties",
-        type: "object",
-        schemaType: "object",
-        code(i) {
-          let { gen: gen, schema: schema, data: d, parentSchema: parentSchema, it: it } = i,
-            { opts: opts } = it,
-            P = (0, t.allSchemaProperties)(schema),
-            filtered = P.filter((C) => (0, s.alwaysValidSchema)(it, schema[C]));
-          if (P.length === 0 || (filtered.length === P.length && (!it.opts.unevaluated || it.props === !0)))
-            return;
-          let v = opts.strictSchema && !opts.allowMatchingProperties && parentSchema.properties,
-            p = gen.name("valid");
-          if (it.props !== !0 && !(it.props instanceof r.Name))
-            it.props = (0, a.evaluatedPropsToName)(gen, it.props);
-          let { props: props } = it;
-          S();
-          function S() {
-            for (let C of P) {
-              if (v) f(C);
-              if (it.allErrors) R(C);
-              else (gen.var(p, !0), R(C), gen.if(p));
-            }
-          }
-          function f(C) {
-            for (let key in v)
-              if (new RegExp(C).test(key))
-                (0, s.checkStrictMode)(
-                  it,
-                  `property ${key} matches pattern ${C} (use allowMatchingProperties)`,
-                );
-          }
-          function R(C) {
-            gen.forIn("key", d, (b) => {
-              gen.if(r._`${(0, t.usePattern)(i, C)}.test(${b})`, () => {
-                let included = filtered.includes(C);
-                if (!included)
-                  i.subschema(
-                    { keyword: "patternProperties", schemaProp: C, dataProp: b, dataPropType: a.Type.Str },
-                    p,
-                  );
-                if (it.opts.unevaluated && props !== !0) gen.assign(r._`${props}[${b}]`, !0);
-                else if (!included && !it.allErrors) gen.if((0, r.not)(p), () => gen.break());
-              });
-            });
-          }
-        },
-      };
-    e.default = n;
-  }),
-  Hu = J((e) => {
-    Object.defineProperty(e, "__esModule", { value: !0 });
-    let t = ne(),
-      r = {
-        keyword: "not",
-        schemaType: ["object", "boolean"],
-        trackErrors: !0,
-        code(s) {
-          let { gen: gen, schema: schema, it: it } = s;
-          if ((0, t.alwaysValidSchema)(it, schema)) {
-            s.fail();
-            return;
-          }
-          let l = gen.name("valid");
-          (s.subschema({ keyword: "not", compositeRule: !0, createErrors: !1, allErrors: !1 }, l),
-            s.failResult(
-              l,
-              () => s.reset(),
-              () => s.error(),
-            ));
-        },
-        error: { message: "must NOT be valid" },
-      };
-    e.default = r;
-  }),
-  Ku = J((e) => {
-    Object.defineProperty(e, "__esModule", { value: !0 });
-    let t = {
-      keyword: "anyOf",
-      schemaType: "array",
-      trackErrors: !0,
-      code: De().validateUnion,
-      error: { message: "must match a schema in anyOf" },
-    };
-    e.default = t;
-  }),
-  Ju = J((e) => {
-    Object.defineProperty(e, "__esModule", { value: !0 });
-    let t = te(),
-      r = ne(),
-      s = {
-        keyword: "oneOf",
-        schemaType: "array",
-        trackErrors: !0,
-        error: {
-          message: "must match exactly one schema in oneOf",
-          params: ({ params: params }) => t._`{passingSchemas: ${params.passing}}`,
-        },
-        code(a) {
-          let { gen: gen, schema: schema, parentSchema: parentSchema, it: it } = a;
-          if (!Array.isArray(schema)) throw Error("ajv implementation error");
-          if (it.opts.discriminator && parentSchema.discriminator) return;
-          let d = schema,
-            m = gen.let("valid", !1),
-            _ = gen.let("passing", null),
-            w = gen.name("_valid");
-          (a.setParams({ passing: _ }),
-            gen.block(P),
-            a.result(
-              m,
-              () => a.reset(),
-              () => a.error(!0),
-            ));
-          function P() {
-            d.forEach((y, v) => {
-              let p;
-              if ((0, r.alwaysValidSchema)(it, y)) gen.var(w, !0);
-              else p = a.subschema({ keyword: "oneOf", schemaProp: v, compositeRule: !0 }, w);
-              if (v > 0)
-                gen
-                  .if(t._`${w} && ${m}`)
-                  .assign(m, !1)
-                  .assign(_, t._`[${_}, ${v}]`)
-                  .else();
-              gen.if(w, () => {
-                if ((gen.assign(m, !0), gen.assign(_, v), p)) a.mergeEvaluated(p, t.Name);
-              });
-            });
-          }
-        },
-      };
-    e.default = s;
-  }),
-  Gu = J((e) => {
-    Object.defineProperty(e, "__esModule", { value: !0 });
-    let t = ne(),
-      r = {
-        keyword: "allOf",
-        schemaType: "array",
-        code(s) {
-          let { gen: gen, schema: schema, it: it } = s;
-          if (!Array.isArray(schema)) throw Error("ajv implementation error");
-          let l = gen.name("valid");
-          schema.forEach((c, d) => {
-            if ((0, t.alwaysValidSchema)(it, c)) return;
-            let subschema = s.subschema({ keyword: "allOf", schemaProp: d }, l);
-            (s.ok(l), s.mergeEvaluated(subschema));
-          });
-        },
-      };
-    e.default = r;
-  }),
-  Bu = J((e) => {
-    Object.defineProperty(e, "__esModule", { value: !0 });
-    let t = te(),
-      r = ne(),
-      s = {
-        keyword: "if",
-        schemaType: ["object", "boolean"],
-        trackErrors: !0,
-        error: {
-          message: ({ params: params }) => t.str`must match "${params.ifClause}" schema`,
-          params: ({ params: params }) => t._`{failingKeyword: ${params.ifClause}}`,
-        },
-        code(n) {
-          let { gen: gen, parentSchema: parentSchema, it: it } = n;
-          if (parentSchema.then === void 0 && parentSchema.else === void 0)
-            (0, r.checkStrictMode)(it, '"if" without "then" and "else" is ignored');
-          let d = a(it, "then"),
-            m = a(it, "else");
-          if (!d && !m) return;
-          let _ = gen.let("valid", !0),
-            w = gen.name("_valid");
-          if ((P(), n.reset(), d && m)) {
-            let v = gen.let("ifClause");
-            (n.setParams({ ifClause: v }), gen.if(w, y("then", v), y("else", v)));
-          } else if (d) gen.if(w, y("then"));
-          else gen.if((0, t.not)(w), y("else"));
-          n.pass(_, () => n.error(!0));
-          function P() {
-            let subschema = n.subschema(
-              { keyword: "if", compositeRule: !0, createErrors: !1, allErrors: !1 },
-              w,
-            );
-            n.mergeEvaluated(subschema);
-          }
-          function y(v, p) {
-            return () => {
-              let subschema = n.subschema({ keyword: v }, w);
-              if ((gen.assign(_, w), n.mergeValidEvaluated(subschema, _), p)) gen.assign(p, t._`${v}`);
-              else n.setParams({ ifClause: v });
-            };
-          }
-        },
-      };
-    function a(n, i) {
-      let l = n.schema[i];
-      return l !== void 0 && !(0, r.alwaysValidSchema)(n, l);
-    }
-    e.default = s;
-  }),
-  Wu = J((e) => {
-    Object.defineProperty(e, "__esModule", { value: !0 });
-    let t = ne(),
-      r = {
-        keyword: ["then", "else"],
-        schemaType: ["object", "boolean"],
-        code({ keyword: s, parentSchema: a, it: n }) {
-          if (a.if === void 0) (0, t.checkStrictMode)(n, `"${s}" without "if" is ignored`);
-        },
-      };
-    e.default = r;
-  }),
-  Gi = J((e) => {
-    Object.defineProperty(e, "__esModule", { value: !0 });
-    let t = Fi(),
-      r = Lu(),
-      s = Ki(),
-      a = Uu(),
-      n = Du(),
-      i = vn(),
-      l = Vu(),
-      c = Ji(),
-      d = xu(),
-      m = Fu(),
-      _ = Hu(),
-      w = Ku(),
-      P = Ju(),
-      y = Gu(),
-      v = Bu(),
-      p = Wu();
-    function h(S = !1) {
-      let f = [
-        _.default,
-        w.default,
-        P.default,
-        y.default,
-        v.default,
-        p.default,
-        l.default,
-        c.default,
-        i.default,
-        d.default,
-        m.default,
-      ];
-      if (S) f.push(r.default, a.default);
-      else f.push(t.default, s.default);
-      return (f.push(n.default), f);
-    }
-    e.default = h;
-  }),
-  Yu = J((e) => {
-    Object.defineProperty(e, "__esModule", { value: !0 });
-    let t = te(),
-      r = {
-        keyword: "format",
-        type: ["number", "string"],
-        schemaType: "string",
-        $data: !0,
-        error: {
-          message: ({ schemaCode: schemaCode }) => t.str`must match format "${schemaCode}"`,
-          params: ({ schemaCode: schemaCode }) => t._`{format: ${schemaCode}}`,
-        },
-        code(s, a) {
-          let { gen: gen, data: i, $data: $data, schema: schema, schemaCode: schemaCode, it: it } = s,
-            { opts: opts, errSchemaPath: errSchemaPath, schemaEnv: schemaEnv, self: y } = it;
-          if (!opts.validateFormats) return;
-          if ($data) v();
-          else p();
-          function v() {
-            let scopeValue = gen.scopeValue("formats", { ref: y.formats, code: opts.code.formats }),
-              S = gen.const("fDef", t._`${scopeValue}[${schemaCode}]`),
-              f = gen.let("fType"),
-              R = gen.let("format");
-            (gen.if(
-              t._`typeof ${S} == "object" && !(${S} instanceof RegExp)`,
-              () => gen.assign(f, t._`${S}.type || "string"`).assign(R, t._`${S}.validate`),
-              () => gen.assign(f, t._`"string"`).assign(R, S),
-            ),
-              s.fail$data((0, t.or)(C(), b())));
-            function C() {
-              if (opts.strictSchema === !1) return t.nil;
-              return t._`${schemaCode} && !${R}`;
-            }
-            function b() {
-              let g = schemaEnv.$async ? t._`(${S}.async ? await ${R}(${i}) : ${R}(${i}))` : t._`${R}(${i})`,
-                k = t._`(typeof ${R} == "function" ? ${g} : ${R}.test(${i}))`;
-              return t._`${R} && ${R} !== true && ${f} === ${a} && !${k}`;
-            }
-          }
-          function p() {
-            let h = y.formats[schema];
-            if (!h) {
-              C();
-              return;
-            }
-            if (h === !0) return;
-            let [S, f, R] = b(h);
-            if (S === a) s.pass(g());
-            function C() {
-              if (opts.strictSchema === !1) {
-                y.logger.warn(k());
-                return;
-              }
-              throw Error(k());
-              function k() {
-                return `unknown format "${schema}" ignored in schema at path "${errSchemaPath}"`;
-              }
-            }
-            function b(k) {
-              let V =
-                  k instanceof RegExp
-                    ? (0, t.regexpCode)(k)
-                    : opts.code.formats
-                      ? t._`${opts.code.formats}${(0, t.getProperty)(schema)}`
-                      : void 0,
-                scopeValue = gen.scopeValue("formats", { key: schema, ref: k, code: V });
-              if (typeof k == "object" && !(k instanceof RegExp))
-                return [k.type || "string", k.validate, t._`${scopeValue}.validate`];
-              return ["string", k, scopeValue];
-            }
-            function g() {
-              if (typeof h == "object" && !(h instanceof RegExp) && h.async) {
-                if (!schemaEnv.$async) throw Error("async format in sync schema");
-                return t._`await ${R}(${i})`;
-              }
-              return typeof f == "function" ? t._`${R}(${i})` : t._`${R}.test(${i})`;
-            }
-          }
-        },
-      };
-    e.default = r;
-  }),
-  Bi = J((e) => {
-    Object.defineProperty(e, "__esModule", { value: !0 });
-    let t = [Yu().default];
-    e.default = t;
-  }),
-  Wi = J((e) => {
-    (Object.defineProperty(e, "__esModule", { value: !0 }),
-      (e.contentVocabulary = e.metadataVocabulary = void 0),
-      (e.metadataVocabulary = [
-        "title",
-        "description",
-        "default",
-        "deprecated",
-        "readOnly",
-        "writeOnly",
-        "examples",
-      ]),
-      (e.contentVocabulary = ["contentMediaType", "contentEncoding", "contentSchema"]));
-  }),
-  Xu = J((e) => {
-    Object.defineProperty(e, "__esModule", { value: !0 });
-    let t = Vi(),
-      r = xi(),
-      s = Gi(),
-      a = Bi(),
-      n = Wi(),
-      i = [t.default, r.default, (0, s.default)(), a.default, n.metadataVocabulary, n.contentVocabulary];
-    e.default = i;
-  }),
-  Zu = J((e) => {
-    (Object.defineProperty(e, "__esModule", { value: !0 }), (e.DiscrError = void 0));
-    var t;
-    (function (r) {
-      ((r.Tag = "tag"), (r.Mapping = "mapping"));
-    })(t || (e.DiscrError = t = {}));
-  }),
-  Yi = J((e) => {
-    Object.defineProperty(e, "__esModule", { value: !0 });
-    let t = te(),
-      r = Zu(),
-      s = va(),
-      a = ao(),
-      n = ne(),
-      i = {
-        keyword: "discriminator",
-        type: "object",
-        schemaType: "object",
-        error: {
-          message: ({ params: { discrError: l, tagName: c } }) =>
-            l === r.DiscrError.Tag ? `tag "${c}" must be string` : `value of tag "${c}" must be in oneOf`,
-          params: ({ params: { discrError: l, tag: c, tagName: d } }) =>
-            t._`{error: ${l}, tag: ${d}, tagValue: ${c}}`,
-        },
-        code(l) {
-          let { gen: gen, data: d, schema: schema, parentSchema: parentSchema, it: it } = l,
-            { oneOf: oneOf } = parentSchema;
-          if (!it.opts.discriminator) throw Error("discriminator: requires discriminator option");
-          let propertyName = schema.propertyName;
-          if (typeof propertyName != "string") throw Error("discriminator: requires propertyName");
-          if (schema.mapping) throw Error("discriminator: mapping is not supported");
-          if (!oneOf) throw Error("discriminator: requires oneOf keyword");
-          let v = gen.let("valid", !1),
-            p = gen.const("tag", t._`${d}${(0, t.getProperty)(propertyName)}`);
-          (gen.if(
-            t._`typeof ${p} == "string"`,
-            () => h(),
-            () => l.error(!1, { discrError: r.DiscrError.Tag, tag: p, tagName: propertyName }),
+      function loopN2(i, j) {
+        let eql = (0, util_1.useFunc)(gen, equal_1.default);
+        let outer = gen.name("outer");
+        gen.label(outer).for(codegen_1._`;${i}--;`, () =>
+          gen.for(codegen_1._`${j} = ${i}; ${j}--;`, () =>
+            gen.if(codegen_1._`${eql}(${data}[${i}], ${data}[${j}])`, () => {
+              cxt.error();
+              gen.assign(valid, false).break(outer);
+            }),
           ),
-            l.ok(v));
-          function h() {
-            let R = f();
-            gen.if(!1);
-            for (let key in R) (gen.elseIf(t._`${p} === ${key}`), gen.assign(v, S(R[key])));
-            (gen.else(),
-              l.error(!1, { discrError: r.DiscrError.Mapping, tag: p, tagName: propertyName }),
-              gen.endIf());
-          }
-          function S(R) {
-            let C = gen.name("valid"),
-              subschema = l.subschema({ keyword: "oneOf", schemaProp: R }, C);
-            return (l.mergeEvaluated(subschema, t.Name), C);
-          }
-          function f() {
-            var R;
-            let C = {},
-              b = k(parentSchema),
-              g = !0;
-            for (let N = 0; N < oneOf.length; N++) {
-              let x = oneOf[N];
-              if (
-                (x === null || x === void 0 ? void 0 : x.$ref) &&
-                !(0, n.schemaHasRulesButRef)(x, it.self.RULES)
-              ) {
-                let $ref = x.$ref;
-                if (
-                  ((x = s.resolveRef.call(it.self, it.schemaEnv.root, it.baseId, $ref)),
-                  x instanceof s.SchemaEnv)
-                )
-                  x = x.schema;
-                if (x === void 0) throw new a.default(it.opts.uriResolver, it.baseId, $ref);
-              }
-              let W =
-                (R = x === null || x === void 0 ? void 0 : x.properties) === null || R === void 0
-                  ? void 0
-                  : R[propertyName];
-              if (typeof W != "object")
-                throw Error(
-                  `discriminator: oneOf subschemas (or referenced schemas) must have "properties/${propertyName}"`,
-                );
-              ((g = g && (b || k(x))), V(W, N));
-            }
-            if (!g) throw Error(`discriminator: "${propertyName}" must be required`);
-            return C;
-            function k({ required: required }) {
-              return Array.isArray(required) && required.includes(propertyName);
-            }
-            function V(N, x) {
-              if (N.const) H(N.const, x);
-              else if (N.enum) for (let W of N.enum) H(W, x);
-              else throw Error(`discriminator: "properties/${propertyName}" must have "const" or "enum"`);
-            }
-            function H(N, x) {
-              if (typeof N != "string" || N in C)
-                throw Error(`discriminator: "${propertyName}" values must be unique strings`);
-              C[N] = x;
-            }
-          }
-        },
-      };
-    e.default = i;
-  }),
-  Qu = J((e, t) => {
-    t.exports = {
-      $schema: "http://json-schema.org/draft-07/schema#",
-      $id: "http://json-schema.org/draft-07/schema#",
-      title: "Core schema meta-schema",
-      definitions: {
-        schemaArray: { type: "array", minItems: 1, items: { $ref: "#" } },
-        nonNegativeInteger: { type: "integer", minimum: 0 },
-        nonNegativeIntegerDefault0: { allOf: [{ $ref: "#/definitions/nonNegativeInteger" }, { default: 0 }] },
-        simpleTypes: { enum: ["array", "boolean", "integer", "null", "number", "object", "string"] },
-        stringArray: { type: "array", items: { type: "string" }, uniqueItems: !0, default: [] },
-      },
-      type: ["object", "boolean"],
-      properties: {
-        $id: { type: "string", format: "uri-reference" },
-        $schema: { type: "string", format: "uri" },
-        $ref: { type: "string", format: "uri-reference" },
-        $comment: { type: "string" },
-        title: { type: "string" },
-        description: { type: "string" },
-        default: !0,
-        readOnly: { type: "boolean", default: !1 },
-        examples: { type: "array", items: !0 },
-        multipleOf: { type: "number", exclusiveMinimum: 0 },
-        maximum: { type: "number" },
-        exclusiveMaximum: { type: "number" },
-        minimum: { type: "number" },
-        exclusiveMinimum: { type: "number" },
-        maxLength: { $ref: "#/definitions/nonNegativeInteger" },
-        minLength: { $ref: "#/definitions/nonNegativeIntegerDefault0" },
-        pattern: { type: "string", format: "regex" },
-        additionalItems: { $ref: "#" },
-        items: { anyOf: [{ $ref: "#" }, { $ref: "#/definitions/schemaArray" }], default: !0 },
-        maxItems: { $ref: "#/definitions/nonNegativeInteger" },
-        minItems: { $ref: "#/definitions/nonNegativeIntegerDefault0" },
-        uniqueItems: { type: "boolean", default: !1 },
-        contains: { $ref: "#" },
-        maxProperties: { $ref: "#/definitions/nonNegativeInteger" },
-        minProperties: { $ref: "#/definitions/nonNegativeIntegerDefault0" },
-        required: { $ref: "#/definitions/stringArray" },
-        additionalProperties: { $ref: "#" },
-        definitions: { type: "object", additionalProperties: { $ref: "#" }, default: {} },
-        properties: { type: "object", additionalProperties: { $ref: "#" }, default: {} },
-        patternProperties: {
-          type: "object",
-          additionalProperties: { $ref: "#" },
-          propertyNames: { format: "regex" },
-          default: {},
-        },
-        dependencies: {
-          type: "object",
-          additionalProperties: { anyOf: [{ $ref: "#" }, { $ref: "#/definitions/stringArray" }] },
-        },
-        propertyNames: { $ref: "#" },
-        const: !0,
-        enum: { type: "array", items: !0, minItems: 1, uniqueItems: !0 },
-        type: {
-          anyOf: [
-            { $ref: "#/definitions/simpleTypes" },
-            { type: "array", items: { $ref: "#/definitions/simpleTypes" }, minItems: 1, uniqueItems: !0 },
-          ],
-        },
-        format: { type: "string" },
-        contentMediaType: { type: "string" },
-        contentEncoding: { type: "string" },
-        if: { $ref: "#" },
-        then: { $ref: "#" },
-        else: { $ref: "#" },
-        allOf: { $ref: "#/definitions/schemaArray" },
-        anyOf: { $ref: "#/definitions/schemaArray" },
-        oneOf: { $ref: "#/definitions/schemaArray" },
-        not: { $ref: "#" },
-      },
-      default: !0,
-    };
-  }),
-  Xi = J((e, t) => {
-    (Object.defineProperty(e, "__esModule", { value: !0 }),
-      (e.MissingRefError =
-        e.ValidationError =
-        e.CodeGen =
-        e.Name =
-        e.nil =
-        e.stringify =
-        e.str =
-        e._ =
-        e.KeywordCxt =
-        e.Ajv =
-          void 0));
-    let r = Di(),
-      s = Xu(),
-      a = Yi(),
-      n = Qu(),
-      i = ["/properties"],
-      l = "http://json-schema.org/draft-07/schema";
-    var c = class extends r.default {
-      _addVocabularies() {
-        if (
-          (super._addVocabularies(), s.default.forEach((P) => this.addVocabulary(P)), this.opts.discriminator)
-        )
-          this.addKeyword(a.default);
+        );
       }
-      _addDefaultMetaSchema() {
-        if ((super._addDefaultMetaSchema(), !this.opts.meta)) return;
-        let P = this.opts.$data ? this.$dataMetaSchema(n, i) : n;
-        (this.addMetaSchema(P, l, !1), (this.refs["http://json-schema.org/schema"] = l));
+    },
+  };
+  cjsExports.default = def;
+});
+var require_const = J((cjsExports) => {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  let codegen_1 = require_codegen();
+  let util_1 = require_util();
+  let equal_1 = require_equal();
+  let def = {
+    keyword: "const",
+    $data: true,
+    error: {
+      message: "must be equal to constant",
+      params: ({ schemaCode }) => codegen_1._`{allowedValue: ${schemaCode}}`,
+    },
+    code(cxt) {
+      let { gen, data, $data, schemaCode, schema } = cxt;
+      if ($data || (schema && typeof schema == "object"))
+        cxt.fail$data(codegen_1._`!${(0, util_1.useFunc)(gen, equal_1.default)}(${data}, ${schemaCode})`);
+      else cxt.fail(codegen_1._`${schema} !== ${data}`);
+    },
+  };
+  cjsExports.default = def;
+});
+var require_enum = J((cjsExports) => {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  let codegen_1 = require_codegen();
+  let util_1 = require_util();
+  let equal_1 = require_equal();
+  let def = {
+    keyword: "enum",
+    schemaType: "array",
+    $data: true,
+    error: {
+      message: "must be equal to one of the allowed values",
+      params: ({ schemaCode }) => codegen_1._`{allowedValues: ${schemaCode}}`,
+    },
+    code(cxt) {
+      let { gen, data, $data, schema, schemaCode, it } = cxt;
+      if (!$data && schema.length === 0) throw Error("enum must have non-empty array");
+      let useLoop = schema.length >= it.opts.loopEnum;
+      let eql;
+      let getEql = () =>
+        eql !== null && eql !== undefined ? eql : (eql = (0, util_1.useFunc)(gen, equal_1.default));
+      let valid;
+      if (useLoop || $data) {
+        valid = gen.let("valid");
+        cxt.block$data(valid, loopEnum);
+      } else {
+        if (!Array.isArray(schema)) throw Error("ajv implementation error");
+        let vSchema = gen.const("vSchema", schemaCode);
+        valid = (0, codegen_1.or)(...schema.map((_x, i) => equalCode(vSchema, i)));
       }
-      defaultMeta() {
-        return (this.opts.defaultMeta = super.defaultMeta() || (this.getSchema(l) ? l : void 0));
+      cxt.pass(valid);
+      function loopEnum() {
+        gen.assign(valid, false);
+        gen.forOf("v", schemaCode, (v) =>
+          gen.if(codegen_1._`${getEql()}(${data}, ${v})`, () => gen.assign(valid, true).break()),
+        );
       }
-    };
-    ((e.Ajv = c),
-      (t.exports = e = c),
-      (t.exports.Ajv = c),
-      Object.defineProperty(e, "__esModule", { value: !0 }),
-      (e.default = c));
-    var d = so();
-    Object.defineProperty(e, "KeywordCxt", {
-      enumerable: !0,
-      get: function () {
-        return d.KeywordCxt;
-      },
-    });
-    var m = te();
-    (Object.defineProperty(e, "_", {
-      enumerable: !0,
-      get: function () {
-        return m._;
-      },
-    }),
-      Object.defineProperty(e, "str", {
-        enumerable: !0,
-        get: function () {
-          return m.str;
-        },
-      }),
-      Object.defineProperty(e, "stringify", {
-        enumerable: !0,
-        get: function () {
-          return m.stringify;
-        },
-      }),
-      Object.defineProperty(e, "nil", {
-        enumerable: !0,
-        get: function () {
-          return m.nil;
-        },
-      }),
-      Object.defineProperty(e, "Name", {
-        enumerable: !0,
-        get: function () {
-          return m.Name;
-        },
-      }),
-      Object.defineProperty(e, "CodeGen", {
-        enumerable: !0,
-        get: function () {
-          return m.CodeGen;
-        },
-      }));
-    var _ = ya();
-    Object.defineProperty(e, "ValidationError", {
-      enumerable: !0,
-      get: function () {
-        return _.default;
-      },
-    });
-    var w = ao();
-    Object.defineProperty(e, "MissingRefError", {
-      enumerable: !0,
-      get: function () {
-        return w.default;
-      },
-    });
-  }),
-  Zi = J((e) => {
-    (Object.defineProperty(e, "__esModule", { value: !0 }), (e.dynamicAnchor = void 0));
-    let t = te(),
-      r = Le(),
-      s = va(),
-      a = _n(),
-      n = { keyword: "$dynamicAnchor", schemaType: "string", code: (c) => i(c, c.schema) };
-    function i(c, d) {
-      let { gen: gen, it: it } = c;
-      it.schemaEnv.root.dynamicAnchors[d] = !0;
-      let w = t._`${r.default.dynamicAnchors}${(0, t.getProperty)(d)}`,
-        P = it.errSchemaPath === "#" ? it.validateName : l(c);
-      gen.if(t._`!${w}`, () => gen.assign(w, P));
+      function equalCode(vSchema, i) {
+        let sch = schema[i];
+        return typeof sch === "object" && sch !== null
+          ? codegen_1._`${getEql()}(${data}, ${vSchema}[${i}])`
+          : codegen_1._`${data} === ${sch}`;
+      }
+    },
+  };
+  cjsExports.default = def;
+});
+var require_validation_2 = J((cjsExports) => {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  let limitNumber_1 = require_limitNumber();
+  let multipleOf_1 = require_multipleOf();
+  let limitLength_1 = require_limitLength();
+  let pattern_1 = require_pattern();
+  let limitProperties_1 = require_limitProperties();
+  let required_1 = require_required();
+  let limitItems_1 = require_limitItems();
+  let uniqueItems_1 = require_uniqueItems();
+  let const_1 = require_const();
+  let enum_1 = require_enum();
+  let validation = [
+    limitNumber_1.default,
+    multipleOf_1.default,
+    limitLength_1.default,
+    pattern_1.default,
+    limitProperties_1.default,
+    required_1.default,
+    limitItems_1.default,
+    uniqueItems_1.default,
+    {
+      keyword: "type",
+      schemaType: ["string", "array"],
+    },
+    {
+      keyword: "nullable",
+      schemaType: "boolean",
+    },
+    const_1.default,
+    enum_1.default,
+  ];
+  cjsExports.default = validation;
+});
+var require_additionalItems = J((cjsExports) => {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.validateAdditionalItems = undefined;
+  let codegen_1 = require_codegen();
+  let util_1 = require_util();
+  let def = {
+    keyword: "additionalItems",
+    type: "array",
+    schemaType: ["boolean", "object"],
+    before: "uniqueItems",
+    error: {
+      message: ({ params: { len } }) => codegen_1.str`must NOT have more than ${len} items`,
+      params: ({ params: { len } }) => codegen_1._`{limit: ${len}}`,
+    },
+    code(cxt) {
+      let { parentSchema, it } = cxt;
+      let { items } = parentSchema;
+      if (!Array.isArray(items)) {
+        (0, util_1.checkStrictMode)(
+          it,
+          '"additionalItems" is ignored when "items" is not an array of schemas',
+        );
+        return;
+      }
+      validateAdditionalItems(cxt, items);
+    },
+  };
+  function validateAdditionalItems(cxt, items) {
+    let { gen, schema, data, keyword, it } = cxt;
+    it.items = true;
+    let len = gen.const("len", codegen_1._`${data}.length`);
+    if (schema === false) {
+      cxt.setParams({
+        len: items.length,
+      });
+      cxt.pass(codegen_1._`${len} <= ${items.length}`);
+    } else if (typeof schema == "object" && !(0, util_1.alwaysValidSchema)(it, schema)) {
+      let valid = gen.var("valid", codegen_1._`${len} <= ${items.length}`);
+      gen.if((0, codegen_1.not)(valid), () => validateItems(valid));
+      cxt.ok(valid);
     }
-    e.dynamicAnchor = i;
-    function l(c) {
-      let { schemaEnv: schemaEnv, schema: schema, self: _ } = c.it,
-        { root: root, baseId: baseId, localRefs: localRefs, meta: meta } = schemaEnv.root,
-        { schemaId: schemaId } = _.opts,
-        h = new s.SchemaEnv({
-          schema: schema,
-          schemaId: schemaId,
-          root: root,
-          baseId: baseId,
-          localRefs: localRefs,
-          meta: meta,
-        });
-      return (s.compileSchema.call(_, h), (0, a.getValidate)(c, h));
-    }
-    e.default = n;
-  }),
-  Qi = J((e) => {
-    (Object.defineProperty(e, "__esModule", { value: !0 }), (e.dynamicRef = void 0));
-    let t = te(),
-      r = Le(),
-      s = _n(),
-      a = { keyword: "$dynamicRef", schemaType: "string", code: (i) => n(i, i.schema) };
-    function n(i, l) {
-      let { gen: gen, keyword: keyword, it: it } = i;
-      if (l[0] !== "#") throw Error(`"${keyword}" only supports hash fragment reference`);
-      let sliced = l.slice(1);
-      if (it.allErrors) w();
-      else {
-        let y = gen.let("valid", !1);
-        (w(y), i.ok(y));
-      }
-      function w(y) {
-        if (it.schemaEnv.root.dynamicAnchors[sliced]) {
-          let v = gen.let("_v", t._`${r.default.dynamicAnchors}${(0, t.getProperty)(sliced)}`);
-          gen.if(v, P(v, y), P(it.validateName, y));
-        } else P(it.validateName, y)();
-      }
-      function P(y, v) {
-        return v
-          ? () =>
-              gen.block(() => {
-                ((0, s.callRef)(i, y), gen.let(v, !0));
-              })
-          : () => (0, s.callRef)(i, y);
-      }
-    }
-    ((e.dynamicRef = n), (e.default = a));
-  }),
-  ed = J((e) => {
-    Object.defineProperty(e, "__esModule", { value: !0 });
-    let t = Zi(),
-      r = ne(),
-      s = {
-        keyword: "$recursiveAnchor",
-        schemaType: "boolean",
-        code(a) {
-          if (a.schema) (0, t.dynamicAnchor)(a, "");
-          else (0, r.checkStrictMode)(a.it, "$recursiveAnchor: false is ignored");
-        },
-      };
-    e.default = s;
-  }),
-  td = J((e) => {
-    Object.defineProperty(e, "__esModule", { value: !0 });
-    let t = Qi(),
-      r = { keyword: "$recursiveRef", schemaType: "string", code: (s) => (0, t.dynamicRef)(s, s.schema) };
-    e.default = r;
-  }),
-  rd = J((e) => {
-    Object.defineProperty(e, "__esModule", { value: !0 });
-    let t = Zi(),
-      r = Qi(),
-      s = ed(),
-      a = td(),
-      n = [t.default, r.default, s.default, a.default];
-    e.default = n;
-  }),
-  od = J((e) => {
-    Object.defineProperty(e, "__esModule", { value: !0 });
-    let t = vn(),
-      r = {
-        keyword: "dependentRequired",
-        type: "object",
-        schemaType: "object",
-        error: t.error,
-        code: (s) => (0, t.validatePropertyDeps)(s),
-      };
-    e.default = r;
-  }),
-  sd = J((e) => {
-    Object.defineProperty(e, "__esModule", { value: !0 });
-    let t = vn(),
-      r = {
-        keyword: "dependentSchemas",
-        type: "object",
-        schemaType: "object",
-        code: (s) => (0, t.validateSchemaDeps)(s),
-      };
-    e.default = r;
-  }),
-  ad = J((e) => {
-    Object.defineProperty(e, "__esModule", { value: !0 });
-    let t = ne(),
-      r = {
-        keyword: ["maxContains", "minContains"],
-        type: "array",
-        schemaType: "number",
-        code({ keyword: s, parentSchema: a, it: n }) {
-          if (a.contains === void 0) (0, t.checkStrictMode)(n, `"${s}" without "contains" is ignored`);
-        },
-      };
-    e.default = r;
-  }),
-  nd = J((e) => {
-    Object.defineProperty(e, "__esModule", { value: !0 });
-    let t = od(),
-      r = sd(),
-      s = ad(),
-      a = [t.default, r.default, s.default];
-    e.default = a;
-  }),
-  id = J((e) => {
-    Object.defineProperty(e, "__esModule", { value: !0 });
-    let t = te(),
-      r = ne(),
-      s = Le(),
-      a = {
-        keyword: "unevaluatedProperties",
-        type: "object",
-        schemaType: ["boolean", "object"],
-        trackErrors: !0,
-        error: {
-          message: "must NOT have unevaluated properties",
-          params: ({ params: params }) => t._`{unevaluatedProperty: ${params.unevaluatedProperty}}`,
-        },
-        code(n) {
-          let { gen: gen, schema: schema, data: c, errsCount: errsCount, it: it } = n;
-          if (!errsCount) throw Error("ajv implementation error");
-          let { allErrors: allErrors, props: props } = it;
-          if (props instanceof t.Name)
-            gen.if(t._`${props} !== true`, () => gen.forIn("key", c, (p) => gen.if(y(props, p), () => P(p))));
-          else if (props !== !0)
-            gen.forIn("key", c, (p) => (props === void 0 ? P(p) : gen.if(v(props, p), () => P(p))));
-          ((it.props = !0), n.ok(t._`${errsCount} === ${s.default.errors}`));
-          function P(p) {
-            if (schema === !1) {
-              if ((n.setParams({ unevaluatedProperty: p }), n.error(), !allErrors)) gen.break();
-              return;
-            }
-            if (!(0, r.alwaysValidSchema)(it, schema)) {
-              let h = gen.name("valid");
-              if (
-                (n.subschema({ keyword: "unevaluatedProperties", dataProp: p, dataPropType: r.Type.Str }, h),
-                !allErrors)
-              )
-                gen.if((0, t.not)(h), () => gen.break());
-            }
-          }
-          function y(p, h) {
-            return t._`!${p} || !${p}[${h}]`;
-          }
-          function v(p, h) {
-            let S = [];
-            for (let key in p) if (p[key] === !0) S.push(t._`${h} !== ${key}`);
-            return (0, t.and)(...S);
-          }
-        },
-      };
-    e.default = a;
-  }),
-  cd = J((e) => {
-    Object.defineProperty(e, "__esModule", { value: !0 });
-    let t = te(),
-      r = ne(),
-      s = {
-        keyword: "unevaluatedItems",
-        type: "array",
-        schemaType: ["boolean", "object"],
-        error: {
-          message: ({ params: { len: a } }) => t.str`must NOT have more than ${a} items`,
-          params: ({ params: { len: a } }) => t._`{limit: ${a}}`,
-        },
-        code(a) {
-          let { gen: gen, schema: schema, data: l, it: it } = a,
-            d = it.items || 0;
-          if (d === !0) return;
-          let m = gen.const("len", t._`${l}.length`);
-          if (schema === !1) (a.setParams({ len: d }), a.fail(t._`${m} > ${d}`));
-          else if (typeof schema == "object" && !(0, r.alwaysValidSchema)(it, schema)) {
-            let w = gen.var("valid", t._`${m} <= ${d}`);
-            (gen.if((0, t.not)(w), () => _(w, d)), a.ok(w));
-          }
-          it.items = !0;
-          function _(w, P) {
-            gen.forRange("i", P, m, (y) => {
-              if (
-                (a.subschema({ keyword: "unevaluatedItems", dataProp: y, dataPropType: r.Type.Num }, w),
-                !it.allErrors)
-              )
-                gen.if((0, t.not)(w), () => gen.break());
-            });
-          }
-        },
-      };
-    e.default = s;
-  }),
-  ld = J((e) => {
-    Object.defineProperty(e, "__esModule", { value: !0 });
-    let t = id(),
-      r = cd(),
-      s = [t.default, r.default];
-    e.default = s;
-  }),
-  ud = J((e) => {
-    Object.defineProperty(e, "__esModule", { value: !0 });
-    let t = Vi(),
-      r = xi(),
-      s = Gi(),
-      a = rd(),
-      n = nd(),
-      i = ld(),
-      l = Bi(),
-      c = Wi(),
-      d = [
-        a.default,
-        t.default,
-        r.default,
-        (0, s.default)(!0),
-        l.default,
-        c.metadataVocabulary,
-        c.contentVocabulary,
-        n.default,
-        i.default,
-      ];
-    e.default = d;
-  }),
-  dd = J((e, t) => {
-    t.exports = {
-      $schema: "https://json-schema.org/draft/2020-12/schema",
-      $id: "https://json-schema.org/draft/2020-12/schema",
-      $vocabulary: {
-        "https://json-schema.org/draft/2020-12/vocab/core": !0,
-        "https://json-schema.org/draft/2020-12/vocab/applicator": !0,
-        "https://json-schema.org/draft/2020-12/vocab/unevaluated": !0,
-        "https://json-schema.org/draft/2020-12/vocab/validation": !0,
-        "https://json-schema.org/draft/2020-12/vocab/meta-data": !0,
-        "https://json-schema.org/draft/2020-12/vocab/format-annotation": !0,
-        "https://json-schema.org/draft/2020-12/vocab/content": !0,
-      },
-      $dynamicAnchor: "meta",
-      title: "Core and Validation specifications meta-schema",
-      allOf: [
-        { $ref: "meta/core" },
-        { $ref: "meta/applicator" },
-        { $ref: "meta/unevaluated" },
-        { $ref: "meta/validation" },
-        { $ref: "meta/meta-data" },
-        { $ref: "meta/format-annotation" },
-        { $ref: "meta/content" },
-      ],
-      type: ["object", "boolean"],
-      $comment:
-        "This meta-schema also defines keywords that have appeared in previous drafts in order to prevent incompatible extensions as they remain in common use.",
-      properties: {
-        definitions: {
-          $comment: '"definitions" has been replaced by "$defs".',
-          type: "object",
-          additionalProperties: { $dynamicRef: "#meta" },
-          deprecated: !0,
-          default: {},
-        },
-        dependencies: {
-          $comment:
-            '"dependencies" has been split and replaced by "dependentSchemas" and "dependentRequired" in order to serve their differing semantics.',
-          type: "object",
-          additionalProperties: {
-            anyOf: [{ $dynamicRef: "#meta" }, { $ref: "meta/validation#/$defs/stringArray" }],
+    function validateItems(valid) {
+      gen.forRange("i", items.length, len, (i) => {
+        cxt.subschema(
+          {
+            keyword,
+            dataProp: i,
+            dataPropType: util_1.Type.Num,
           },
-          deprecated: !0,
-          default: {},
+          valid,
+        );
+        if (!it.allErrors) gen.if((0, codegen_1.not)(valid), () => gen.break());
+      });
+    }
+  }
+  cjsExports.validateAdditionalItems = validateAdditionalItems;
+  cjsExports.default = def;
+});
+var require_items = J((cjsExports) => {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.validateTuple = undefined;
+  let codegen_1 = require_codegen();
+  let util_1 = require_util();
+  let code_1 = require_code_2();
+  let def = {
+    keyword: "items",
+    type: "array",
+    schemaType: ["object", "array", "boolean"],
+    before: "uniqueItems",
+    code(cxt) {
+      let { schema, it } = cxt;
+      if (Array.isArray(schema)) return validateTuple(cxt, "additionalItems", schema);
+      it.items = true;
+      if ((0, util_1.alwaysValidSchema)(it, schema)) return;
+      cxt.ok((0, code_1.validateArray)(cxt));
+    },
+  };
+  function validateTuple(cxt, extraItems, schArr = cxt.schema) {
+    let { gen, parentSchema, data, keyword, it } = cxt;
+    checkStrictTuple(parentSchema);
+    if (it.opts.unevaluated && schArr.length && it.items !== true)
+      it.items = util_1.mergeEvaluated.items(gen, schArr.length, it.items);
+    let valid = gen.name("valid");
+    let len = gen.const("len", codegen_1._`${data}.length`);
+    schArr.forEach((sch, i) => {
+      if ((0, util_1.alwaysValidSchema)(it, sch)) return;
+      gen.if(codegen_1._`${len} > ${i}`, () =>
+        cxt.subschema(
+          {
+            keyword,
+            schemaProp: i,
+            dataProp: i,
+          },
+          valid,
+        ),
+      );
+      cxt.ok(valid);
+    });
+    function checkStrictTuple(sch) {
+      let { opts, errSchemaPath } = it;
+      let l = schArr.length;
+      let fullTuple = l === sch.minItems && (l === sch.maxItems || sch[extraItems] === false);
+      if (opts.strictTuples && !fullTuple) {
+        let msg = `"${keyword}" is ${l}-tuple, but minItems or maxItems/${extraItems} are not specified or different at path "${errSchemaPath}"`;
+        (0, util_1.checkStrictMode)(it, msg, opts.strictTuples);
+      }
+    }
+  }
+  cjsExports.validateTuple = validateTuple;
+  cjsExports.default = def;
+});
+var require_prefixItems = J((cjsExports) => {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  let items_1 = require_items();
+  let def = {
+    keyword: "prefixItems",
+    type: "array",
+    schemaType: ["array"],
+    before: "uniqueItems",
+    code: (cxt) => (0, items_1.validateTuple)(cxt, "items"),
+  };
+  cjsExports.default = def;
+});
+var require_items2020 = J((cjsExports) => {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  let codegen_1 = require_codegen();
+  let r = require_util();
+  let s = require_code_2();
+  let a = require_additionalItems();
+  let n = {
+    keyword: "items",
+    type: "array",
+    schemaType: ["object", "boolean"],
+    before: "uniqueItems",
+    error: {
+      message: ({ params: { len } }) => codegen_1.str`must NOT have more than ${len} items`,
+      params: ({ params: { len } }) => codegen_1._`{limit: ${len}}`,
+    },
+    code(cxt) {
+      let { schema, parentSchema, it } = cxt;
+      let { prefixItems } = parentSchema;
+      it.items = true;
+      if ((0, r.alwaysValidSchema)(it, schema)) return;
+      if (prefixItems) (0, a.validateAdditionalItems)(cxt, prefixItems);
+      else cxt.ok((0, s.validateArray)(cxt));
+    },
+  };
+  cjsExports.default = n;
+});
+var require_contains = J((cjsExports) => {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  let codegen_1 = require_codegen();
+  let util_1 = require_util();
+  let def = {
+    keyword: "contains",
+    type: "array",
+    schemaType: ["object", "boolean"],
+    before: "uniqueItems",
+    trackErrors: true,
+    error: {
+      message: ({ params: { min, max } }) =>
+        max === undefined
+          ? codegen_1.str`must contain at least ${min} valid item(s)`
+          : codegen_1.str`must contain at least ${min} and no more than ${max} valid item(s)`,
+      params: ({ params: { min, max } }) =>
+        max === undefined
+          ? codegen_1._`{minContains: ${min}}`
+          : codegen_1._`{minContains: ${min}, maxContains: ${max}}`,
+    },
+    code(cxt) {
+      let { gen, schema, parentSchema, data, it } = cxt;
+      let min;
+      let max;
+      let { minContains, maxContains } = parentSchema;
+      if (it.opts.next) {
+        min = minContains === undefined ? 1 : minContains;
+        max = maxContains;
+      } else min = 1;
+      let len = gen.const("len", codegen_1._`${data}.length`);
+      cxt.setParams({
+        min,
+        max,
+      });
+      if (max === undefined && min === 0) {
+        (0, util_1.checkStrictMode)(
+          it,
+          '"minContains" == 0 without "maxContains": "contains" keyword ignored',
+        );
+        return;
+      }
+      if (max !== undefined && min > max) {
+        (0, util_1.checkStrictMode)(it, '"minContains" > "maxContains" is always invalid');
+        cxt.fail();
+        return;
+      }
+      if ((0, util_1.alwaysValidSchema)(it, schema)) {
+        let cond = codegen_1._`${len} >= ${min}`;
+        if (max !== undefined) cond = codegen_1._`${cond} && ${len} <= ${max}`;
+        cxt.pass(cond);
+        return;
+      }
+      it.items = true;
+      let valid = gen.name("valid");
+      if (max === undefined && min === 1) validateItems(valid, () => gen.if(valid, () => gen.break()));
+      else if (min === 0) {
+        gen.let(valid, true);
+        if (max !== undefined) gen.if(codegen_1._`${data}.length > 0`, validateItemsWithCount);
+      } else {
+        gen.let(valid, false);
+        validateItemsWithCount();
+      }
+      cxt.result(valid, () => cxt.reset());
+      function validateItemsWithCount() {
+        let schValid = gen.name("_valid");
+        let count = gen.let("count", 0);
+        validateItems(schValid, () => gen.if(schValid, () => checkLimits(count)));
+      }
+      function validateItems(_valid, block) {
+        gen.forRange("i", 0, len, (i) => {
+          cxt.subschema(
+            {
+              keyword: "contains",
+              dataProp: i,
+              dataPropType: util_1.Type.Num,
+              compositeRule: true,
+            },
+            _valid,
+          );
+          block();
+        });
+      }
+      function checkLimits(count) {
+        gen.code(codegen_1._`${count}++`);
+        if (max === undefined) gen.if(codegen_1._`${count} >= ${min}`, () => gen.assign(valid, true).break());
+        else {
+          gen.if(codegen_1._`${count} > ${max}`, () => gen.assign(valid, false).break());
+          if (min === 1) gen.assign(valid, true);
+          else gen.if(codegen_1._`${count} >= ${min}`, () => gen.assign(valid, true));
+        }
+      }
+    },
+  };
+  cjsExports.default = def;
+});
+var require_dependencies = J((cjsExports) => {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.validateSchemaDeps = cjsExports.validatePropertyDeps = cjsExports.error = undefined;
+  let codegen_1 = require_codegen();
+  let util_1 = require_util();
+  let code_1 = require_code_2();
+  cjsExports.error = {
+    message: ({ params: { property, depsCount, deps } }) => {
+      let property_ies = depsCount === 1 ? "property" : "properties";
+      return codegen_1.str`must have ${property_ies} ${deps} when property ${property} is present`;
+    },
+    params: ({
+      params: { property, depsCount, deps, missingProperty },
+    }) => codegen_1._`{property: ${property},
+    missingProperty: ${missingProperty},
+    depsCount: ${depsCount},
+    deps: ${deps}}`,
+  };
+  let def = {
+    keyword: "dependencies",
+    type: "object",
+    schemaType: "object",
+    error: cjsExports.error,
+    code(cxt) {
+      let [propDeps, schDeps] = splitDependencies(cxt);
+      validatePropertyDeps(cxt, propDeps);
+      validateSchemaDeps(cxt, schDeps);
+    },
+  };
+  function splitDependencies({ schema }) {
+    let propertyDeps = {};
+    let schemaDeps = {};
+    for (let key in schema) {
+      if (key === "__proto__") continue;
+      let deps = Array.isArray(schema[key]) ? propertyDeps : schemaDeps;
+      deps[key] = schema[key];
+    }
+    return [propertyDeps, schemaDeps];
+  }
+  function validatePropertyDeps(cxt, propertyDeps = cxt.schema) {
+    let { gen, data, it } = cxt;
+    if (Object.keys(propertyDeps).length === 0) return;
+    let missing = gen.let("missing");
+    for (let prop in propertyDeps) {
+      let deps = propertyDeps[prop];
+      if (deps.length === 0) continue;
+      let hasProperty = (0, code_1.propertyInData)(gen, data, prop, it.opts.ownProperties);
+      cxt.setParams({
+        property: prop,
+        depsCount: deps.length,
+        deps: deps.join(", "),
+      });
+      if (it.allErrors)
+        gen.if(hasProperty, () => {
+          for (let depProp of deps) (0, code_1.checkReportMissingProp)(cxt, depProp);
+        });
+      else {
+        gen.if(codegen_1._`${hasProperty} && (${(0, code_1.checkMissingProp)(cxt, deps, missing)})`);
+        (0, code_1.reportMissingProp)(cxt, missing);
+        gen.else();
+      }
+    }
+  }
+  cjsExports.validatePropertyDeps = validatePropertyDeps;
+  function validateSchemaDeps(cxt, schemaDeps = cxt.schema) {
+    let { gen, data, keyword, it } = cxt;
+    let valid = gen.name("valid");
+    for (let prop in schemaDeps) {
+      if ((0, util_1.alwaysValidSchema)(it, schemaDeps[prop])) continue;
+      gen.if(
+        (0, code_1.propertyInData)(gen, data, prop, it.opts.ownProperties),
+        () => {
+          let schCxt = cxt.subschema(
+            {
+              keyword,
+              schemaProp: prop,
+            },
+            valid,
+          );
+          cxt.mergeValidEvaluated(schCxt, valid);
         },
-        $recursiveAnchor: {
-          $comment: '"$recursiveAnchor" has been replaced by "$dynamicAnchor".',
-          $ref: "meta/core#/$defs/anchorString",
-          deprecated: !0,
+        () => gen.var(valid, true),
+      );
+      cxt.ok(valid);
+    }
+  }
+  cjsExports.validateSchemaDeps = validateSchemaDeps;
+  cjsExports.default = def;
+});
+var require_propertyNames = J((cjsExports) => {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  let codegen_1 = require_codegen();
+  let util_1 = require_util();
+  let def = {
+    keyword: "propertyNames",
+    type: "object",
+    schemaType: ["object", "boolean"],
+    error: {
+      message: "property name must be valid",
+      params: ({ params }) => codegen_1._`{propertyName: ${params.propertyName}}`,
+    },
+    code(cxt) {
+      let { gen, schema, data, it } = cxt;
+      if ((0, util_1.alwaysValidSchema)(it, schema)) return;
+      let valid = gen.name("valid");
+      gen.forIn("key", data, (key) => {
+        cxt.setParams({
+          propertyName: key,
+        });
+        cxt.subschema(
+          {
+            keyword: "propertyNames",
+            data: key,
+            dataTypes: ["string"],
+            propertyName: key,
+            compositeRule: true,
+          },
+          valid,
+        );
+        gen.if((0, codegen_1.not)(valid), () => {
+          cxt.error(true);
+          if (!it.allErrors) gen.break();
+        });
+      });
+      cxt.ok(valid);
+    },
+  };
+  cjsExports.default = def;
+});
+var require_additionalProperties = J((cjsExports) => {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  let code_1 = require_code_2();
+  let codegen_1 = require_codegen();
+  let names_1 = require_names();
+  let util_1 = require_util();
+  let def = {
+    keyword: "additionalProperties",
+    type: ["object"],
+    schemaType: ["boolean", "object"],
+    allowUndefined: true,
+    trackErrors: true,
+    error: {
+      message: "must NOT have additional properties",
+      params: ({ params }) => codegen_1._`{additionalProperty: ${params.additionalProperty}}`,
+    },
+    code(cxt) {
+      let { gen, schema, parentSchema, data, errsCount, it } = cxt;
+      if (!errsCount) throw Error("ajv implementation error");
+      let { allErrors, opts } = it;
+      it.props = true;
+      if (opts.removeAdditional !== "all" && (0, util_1.alwaysValidSchema)(it, schema)) return;
+      let props = (0, code_1.allSchemaProperties)(parentSchema.properties);
+      let patProps = (0, code_1.allSchemaProperties)(parentSchema.patternProperties);
+      checkAdditionalProperties();
+      cxt.ok(codegen_1._`${errsCount} === ${names_1.default.errors}`);
+      function checkAdditionalProperties() {
+        gen.forIn("key", data, (key) => {
+          if (!props.length && !patProps.length) additionalPropertyCode(key);
+          else gen.if(isAdditional(key), () => additionalPropertyCode(key));
+        });
+      }
+      function isAdditional(key) {
+        let definedProp;
+        if (props.length > 8) {
+          let propsSchema = (0, util_1.schemaRefOrVal)(it, parentSchema.properties, "properties");
+          definedProp = (0, code_1.isOwnProperty)(gen, propsSchema, key);
+        } else if (props.length)
+          definedProp = (0, codegen_1.or)(...props.map((p) => codegen_1._`${key} === ${p}`));
+        else definedProp = codegen_1.nil;
+        if (patProps.length)
+          definedProp = (0, codegen_1.or)(
+            definedProp,
+            ...patProps.map((p) => codegen_1._`${(0, code_1.usePattern)(cxt, p)}.test(${key})`),
+          );
+        return (0, codegen_1.not)(definedProp);
+      }
+      function deleteAdditional(key) {
+        gen.code(codegen_1._`delete ${data}[${key}]`);
+      }
+      function additionalPropertyCode(key) {
+        if (opts.removeAdditional === "all" || (opts.removeAdditional && schema === false)) {
+          deleteAdditional(key);
+          return;
+        }
+        if (schema === false) {
+          cxt.setParams({
+            additionalProperty: key,
+          });
+          cxt.error();
+          if (!allErrors) gen.break();
+          return;
+        }
+        if (typeof schema == "object" && !(0, util_1.alwaysValidSchema)(it, schema)) {
+          let valid = gen.name("valid");
+          if (opts.removeAdditional === "failing") {
+            applyAdditionalSchema(key, valid, false);
+            gen.if((0, codegen_1.not)(valid), () => {
+              cxt.reset();
+              deleteAdditional(key);
+            });
+          } else {
+            applyAdditionalSchema(key, valid);
+            if (!allErrors) gen.if((0, codegen_1.not)(valid), () => gen.break());
+          }
+        }
+      }
+      function applyAdditionalSchema(key, valid, errors) {
+        let subschema = {
+          keyword: "additionalProperties",
+          dataProp: key,
+          dataPropType: util_1.Type.Str,
+        };
+        if (errors === false)
+          Object.assign(subschema, {
+            compositeRule: true,
+            createErrors: false,
+            allErrors: false,
+          });
+        cxt.subschema(subschema, valid);
+      }
+    },
+  };
+  cjsExports.default = def;
+});
+var require_properties = J((cjsExports) => {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  let validate_1 = require_validate();
+  let code_1 = require_code_2();
+  let util_1 = require_util();
+  let additionalProperties_1 = require_additionalProperties();
+  let def = {
+    keyword: "properties",
+    type: "object",
+    schemaType: "object",
+    code(cxt) {
+      let { gen, schema, parentSchema, data, it } = cxt;
+      if (it.opts.removeAdditional === "all" && parentSchema.additionalProperties === undefined)
+        additionalProperties_1.default.code(
+          new validate_1.KeywordCxt(it, additionalProperties_1.default, "additionalProperties"),
+        );
+      let allProps = (0, code_1.allSchemaProperties)(schema);
+      for (let prop of allProps) it.definedProperties.add(prop);
+      if (it.opts.unevaluated && allProps.length && it.props !== true)
+        it.props = util_1.mergeEvaluated.props(gen, (0, util_1.toHash)(allProps), it.props);
+      let properties = allProps.filter((p) => !(0, util_1.alwaysValidSchema)(it, schema[p]));
+      if (properties.length === 0) return;
+      let valid = gen.name("valid");
+      for (let prop of properties) {
+        if (hasDefault(prop)) applyPropertySchema(prop);
+        else {
+          gen.if((0, code_1.propertyInData)(gen, data, prop, it.opts.ownProperties));
+          applyPropertySchema(prop);
+          if (!it.allErrors) gen.else().var(valid, true);
+          gen.endIf();
+        }
+        cxt.it.definedProperties.add(prop);
+        cxt.ok(valid);
+      }
+      function hasDefault(prop) {
+        return it.opts.useDefaults && !it.compositeRule && schema[prop].default !== undefined;
+      }
+      function applyPropertySchema(prop) {
+        cxt.subschema(
+          {
+            keyword: "properties",
+            schemaProp: prop,
+            dataProp: prop,
+          },
+          valid,
+        );
+      }
+    },
+  };
+  cjsExports.default = def;
+});
+var require_patternProperties = J((cjsExports) => {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  let code_1 = require_code_2();
+  let codegen_1 = require_codegen();
+  let util_1 = require_util();
+  let util_2 = require_util();
+  let def = {
+    keyword: "patternProperties",
+    type: "object",
+    schemaType: "object",
+    code(cxt) {
+      let { gen, schema, data, parentSchema, it } = cxt;
+      let { opts } = it;
+      let patterns = (0, code_1.allSchemaProperties)(schema);
+      let alwaysValidPatterns = patterns.filter((p) => (0, util_1.alwaysValidSchema)(it, schema[p]));
+      if (
+        patterns.length === 0 ||
+        (alwaysValidPatterns.length === patterns.length && (!it.opts.unevaluated || it.props === true))
+      )
+        return;
+      let checkProperties = opts.strictSchema && !opts.allowMatchingProperties && parentSchema.properties;
+      let valid = gen.name("valid");
+      if (it.props !== true && !(it.props instanceof codegen_1.Name))
+        it.props = (0, util_2.evaluatedPropsToName)(gen, it.props);
+      let { props } = it;
+      validatePatternProperties();
+      function validatePatternProperties() {
+        for (let pat of patterns) {
+          if (checkProperties) checkMatchingProperties(pat);
+          if (it.allErrors) validateProperties(pat);
+          else {
+            gen.var(valid, true);
+            validateProperties(pat);
+            gen.if(valid);
+          }
+        }
+      }
+      function checkMatchingProperties(pat) {
+        for (let prop in checkProperties)
+          if (new RegExp(pat).test(prop))
+            (0, util_1.checkStrictMode)(
+              it,
+              `property ${prop} matches pattern ${pat} (use allowMatchingProperties)`,
+            );
+      }
+      function validateProperties(pat) {
+        gen.forIn("key", data, (key) => {
+          gen.if(codegen_1._`${(0, code_1.usePattern)(cxt, pat)}.test(${key})`, () => {
+            let alwaysValid = alwaysValidPatterns.includes(pat);
+            if (!alwaysValid)
+              cxt.subschema(
+                {
+                  keyword: "patternProperties",
+                  schemaProp: pat,
+                  dataProp: key,
+                  dataPropType: util_2.Type.Str,
+                },
+                valid,
+              );
+            if (it.opts.unevaluated && props !== true) gen.assign(codegen_1._`${props}[${key}]`, true);
+            else if (!alwaysValid && !it.allErrors) gen.if((0, codegen_1.not)(valid), () => gen.break());
+          });
+        });
+      }
+    },
+  };
+  cjsExports.default = def;
+});
+var require_not = J((cjsExports) => {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  let util_1 = require_util();
+  let def = {
+    keyword: "not",
+    schemaType: ["object", "boolean"],
+    trackErrors: true,
+    code(cxt) {
+      let { gen, schema, it } = cxt;
+      if ((0, util_1.alwaysValidSchema)(it, schema)) {
+        cxt.fail();
+        return;
+      }
+      let valid = gen.name("valid");
+      cxt.subschema(
+        {
+          keyword: "not",
+          compositeRule: true,
+          createErrors: false,
+          allErrors: false,
         },
-        $recursiveRef: {
-          $comment: '"$recursiveRef" has been replaced by "$dynamicRef".',
-          $ref: "meta/core#/$defs/uriReferenceString",
-          deprecated: !0,
+        valid,
+      );
+      cxt.failResult(
+        valid,
+        () => cxt.reset(),
+        () => cxt.error(),
+      );
+    },
+    error: {
+      message: "must NOT be valid",
+    },
+  };
+  cjsExports.default = def;
+});
+var require_anyOf = J((cjsExports) => {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  let def = {
+    keyword: "anyOf",
+    schemaType: "array",
+    trackErrors: true,
+    code: require_code_2().validateUnion,
+    error: {
+      message: "must match a schema in anyOf",
+    },
+  };
+  cjsExports.default = def;
+});
+var require_oneOf = J((cjsExports) => {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  let codegen_1 = require_codegen();
+  let util_1 = require_util();
+  let def = {
+    keyword: "oneOf",
+    schemaType: "array",
+    trackErrors: true,
+    error: {
+      message: "must match exactly one schema in oneOf",
+      params: ({ params }) => codegen_1._`{passingSchemas: ${params.passing}}`,
+    },
+    code(cxt) {
+      let { gen, schema, parentSchema, it } = cxt;
+      if (!Array.isArray(schema)) throw Error("ajv implementation error");
+      if (it.opts.discriminator && parentSchema.discriminator) return;
+      let schArr = schema;
+      let valid = gen.let("valid", false);
+      let passing = gen.let("passing", null);
+      let schValid = gen.name("_valid");
+      cxt.setParams({
+        passing,
+      });
+      gen.block(validateOneOf);
+      cxt.result(
+        valid,
+        () => cxt.reset(),
+        () => cxt.error(true),
+      );
+      function validateOneOf() {
+        schArr.forEach((sch, i) => {
+          let schCxt;
+          if ((0, util_1.alwaysValidSchema)(it, sch)) gen.var(schValid, true);
+          else
+            schCxt = cxt.subschema(
+              {
+                keyword: "oneOf",
+                schemaProp: i,
+                compositeRule: true,
+              },
+              schValid,
+            );
+          if (i > 0)
+            gen
+              .if(codegen_1._`${schValid} && ${valid}`)
+              .assign(valid, false)
+              .assign(passing, codegen_1._`[${passing}, ${i}]`)
+              .else();
+          gen.if(schValid, () => {
+            gen.assign(valid, true);
+            gen.assign(passing, i);
+            if (schCxt) cxt.mergeEvaluated(schCxt, codegen_1.Name);
+          });
+        });
+      }
+    },
+  };
+  cjsExports.default = def;
+});
+var require_allOf = J((cjsExports) => {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  let util_1 = require_util();
+  let def = {
+    keyword: "allOf",
+    schemaType: "array",
+    code(cxt) {
+      let { gen, schema, it } = cxt;
+      if (!Array.isArray(schema)) throw Error("ajv implementation error");
+      let valid = gen.name("valid");
+      schema.forEach((sch, i) => {
+        if ((0, util_1.alwaysValidSchema)(it, sch)) return;
+        let schCxt = cxt.subschema(
+          {
+            keyword: "allOf",
+            schemaProp: i,
+          },
+          valid,
+        );
+        cxt.ok(valid);
+        cxt.mergeEvaluated(schCxt);
+      });
+    },
+  };
+  cjsExports.default = def;
+});
+var require_if = J((cjsExports) => {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  let codegen_1 = require_codegen();
+  let util_1 = require_util();
+  let def = {
+    keyword: "if",
+    schemaType: ["object", "boolean"],
+    trackErrors: true,
+    error: {
+      message: ({ params }) => codegen_1.str`must match "${params.ifClause}" schema`,
+      params: ({ params }) => codegen_1._`{failingKeyword: ${params.ifClause}}`,
+    },
+    code(cxt) {
+      let { gen, parentSchema, it } = cxt;
+      if (parentSchema.then === undefined && parentSchema.else === undefined)
+        (0, util_1.checkStrictMode)(it, '"if" without "then" and "else" is ignored');
+      let hasThen = hasSchema(it, "then");
+      let hasElse = hasSchema(it, "else");
+      if (!hasThen && !hasElse) return;
+      let valid = gen.let("valid", true);
+      let schValid = gen.name("_valid");
+      validateIf();
+      cxt.reset();
+      if (hasThen && hasElse) {
+        let ifClause = gen.let("ifClause");
+        cxt.setParams({
+          ifClause,
+        });
+        gen.if(schValid, validateClause("then", ifClause), validateClause("else", ifClause));
+      } else if (hasThen) gen.if(schValid, validateClause("then"));
+      else gen.if((0, codegen_1.not)(schValid), validateClause("else"));
+      cxt.pass(valid, () => cxt.error(true));
+      function validateIf() {
+        let schCxt = cxt.subschema(
+          {
+            keyword: "if",
+            compositeRule: true,
+            createErrors: false,
+            allErrors: false,
+          },
+          schValid,
+        );
+        cxt.mergeEvaluated(schCxt);
+      }
+      function validateClause(keyword, ifClause) {
+        return () => {
+          let schCxt = cxt.subschema(
+            {
+              keyword,
+            },
+            schValid,
+          );
+          gen.assign(valid, schValid);
+          cxt.mergeValidEvaluated(schCxt, valid);
+          if (ifClause) gen.assign(ifClause, codegen_1._`${keyword}`);
+          else
+            cxt.setParams({
+              ifClause: keyword,
+            });
+        };
+      }
+    },
+  };
+  function hasSchema(it, keyword) {
+    let schema = it.schema[keyword];
+    return schema !== undefined && !(0, util_1.alwaysValidSchema)(it, schema);
+  }
+  cjsExports.default = def;
+});
+var require_thenElse = J((cjsExports) => {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  let util_1 = require_util();
+  let def = {
+    keyword: ["then", "else"],
+    schemaType: ["object", "boolean"],
+    code({ keyword, parentSchema, it }) {
+      if (parentSchema.if === undefined)
+        (0, util_1.checkStrictMode)(it, `"${keyword}" without "if" is ignored`);
+    },
+  };
+  cjsExports.default = def;
+});
+var require_format_6 = J((cjsExports) => {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  let t = require_additionalItems();
+  let r = require_prefixItems();
+  let s = require_items();
+  let a = require_items2020();
+  let n = require_contains();
+  let i = require_dependencies();
+  let l = require_propertyNames();
+  let c = require_additionalProperties();
+  let d = require_properties();
+  let m = require_patternProperties();
+  let _ = require_not();
+  let w = require_anyOf();
+  let P = require_oneOf();
+  let y = require_allOf();
+  let v = require_if();
+  let p = require_thenElse();
+  function h(S = false) {
+    let f = [
+      _.default,
+      w.default,
+      P.default,
+      y.default,
+      v.default,
+      p.default,
+      l.default,
+      c.default,
+      i.default,
+      d.default,
+      m.default,
+    ];
+    if (S) f.push(r.default, a.default);
+    else f.push(t.default, s.default);
+    f.push(n.default);
+    return f;
+  }
+  cjsExports.default = h;
+});
+var require_format = J((cjsExports) => {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  let codegen_1 = require_codegen();
+  let def = {
+    keyword: "format",
+    type: ["number", "string"],
+    schemaType: "string",
+    $data: true,
+    error: {
+      message: ({ schemaCode }) => codegen_1.str`must match format "${schemaCode}"`,
+      params: ({ schemaCode }) => codegen_1._`{format: ${schemaCode}}`,
+    },
+    code(cxt, ruleType) {
+      let { gen, data, $data, schema, schemaCode, it } = cxt;
+      let { opts, errSchemaPath, schemaEnv, self: y } = it;
+      if (!opts.validateFormats) return;
+      if ($data) validate$DataFormat();
+      else validateFormat();
+      function validate$DataFormat() {
+        let fmts = gen.scopeValue("formats", {
+          ref: y.formats,
+          code: opts.code.formats,
+        });
+        let fDef = gen.const("fDef", codegen_1._`${fmts}[${schemaCode}]`);
+        let fType = gen.let("fType");
+        let format = gen.let("format");
+        gen.if(
+          codegen_1._`typeof ${fDef} == "object" && !(${fDef} instanceof RegExp)`,
+          () =>
+            gen
+              .assign(fType, codegen_1._`${fDef}.type || "string"`)
+              .assign(format, codegen_1._`${fDef}.validate`),
+          () => gen.assign(fType, codegen_1._`"string"`).assign(format, fDef),
+        );
+        cxt.fail$data((0, codegen_1.or)(unknownFmt(), invalidFmt()));
+        function unknownFmt() {
+          if (opts.strictSchema === false) return codegen_1.nil;
+          return codegen_1._`${schemaCode} && !${format}`;
+        }
+        function invalidFmt() {
+          let callFormat = schemaEnv.$async
+            ? codegen_1._`(${fDef}.async ? await ${format}(${data}) : ${format}(${data}))`
+            : codegen_1._`${format}(${data})`;
+          let validData = codegen_1._`(typeof ${format} == "function" ? ${callFormat} : ${format}.test(${data}))`;
+          return codegen_1._`${format} && ${format} !== true && ${fType} === ${ruleType} && !${validData}`;
+        }
+      }
+      function validateFormat() {
+        let formatDef = y.formats[schema];
+        if (!formatDef) {
+          unknownFormat();
+          return;
+        }
+        if (formatDef === true) return;
+        let [fmtType, format, fmtRef] = getFormat(formatDef);
+        if (fmtType === ruleType) cxt.pass(validCondition());
+        function unknownFormat() {
+          if (opts.strictSchema === false) {
+            y.logger.warn(unknownMsg());
+            return;
+          }
+          throw Error(unknownMsg());
+          function unknownMsg() {
+            return `unknown format "${schema}" ignored in schema at path "${errSchemaPath}"`;
+          }
+        }
+        function getFormat(fmtDef) {
+          let code =
+            fmtDef instanceof RegExp
+              ? (0, codegen_1.regexpCode)(fmtDef)
+              : opts.code.formats
+                ? codegen_1._`${opts.code.formats}${(0, codegen_1.getProperty)(schema)}`
+                : undefined;
+          let fmt = gen.scopeValue("formats", {
+            key: schema,
+            ref: fmtDef,
+            code,
+          });
+          if (typeof fmtDef == "object" && !(fmtDef instanceof RegExp))
+            return [fmtDef.type || "string", fmtDef.validate, codegen_1._`${fmt}.validate`];
+          return ["string", fmtDef, fmt];
+        }
+        function validCondition() {
+          if (typeof formatDef == "object" && !(formatDef instanceof RegExp) && formatDef.async) {
+            if (!schemaEnv.$async) throw Error("async format in sync schema");
+            return codegen_1._`await ${fmtRef}(${data})`;
+          }
+          return typeof format == "function"
+            ? codegen_1._`${fmtRef}(${data})`
+            : codegen_1._`${fmtRef}.test(${data})`;
+        }
+      }
+    },
+  };
+  cjsExports.default = def;
+});
+var require_format_2 = J((cjsExports) => {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  let t = [require_format().default];
+  cjsExports.default = t;
+});
+var require_metadata = J((cjsExports) => {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.contentVocabulary = cjsExports.metadataVocabulary = undefined;
+  cjsExports.metadataVocabulary = [
+    "title",
+    "description",
+    "default",
+    "deprecated",
+    "readOnly",
+    "writeOnly",
+    "examples",
+  ];
+  cjsExports.contentVocabulary = ["contentMediaType", "contentEncoding", "contentSchema"];
+});
+var require_draft7 = J((cjsExports) => {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  let core_1 = require_core_3();
+  let validation_1 = require_validation_2();
+  let applicator_1 = require_format_6();
+  let format_1 = require_format_2();
+  let metadata_1 = require_metadata();
+  let draft7Vocabularies = [
+    core_1.default,
+    validation_1.default,
+    (0, applicator_1.default)(),
+    format_1.default,
+    metadata_1.metadataVocabulary,
+    metadata_1.contentVocabulary,
+  ];
+  cjsExports.default = draft7Vocabularies;
+});
+var require_types = J((cjsExports) => {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.DiscrError = undefined;
+  var DiscrError;
+  (function (DiscrError) {
+    DiscrError.Tag = "tag";
+    DiscrError.Mapping = "mapping";
+  })(DiscrError || (cjsExports.DiscrError = DiscrError = {}));
+});
+var require_discriminator = J((cjsExports) => {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  let codegen_1 = require_codegen();
+  let types_1 = require_types();
+  let compile_1 = require_compile();
+  let a = require_ref_error();
+  let util_1 = require_util();
+  let def = {
+    keyword: "discriminator",
+    type: "object",
+    schemaType: "object",
+    error: {
+      message: ({ params: { discrError, tagName } }) =>
+        discrError === types_1.DiscrError.Tag
+          ? `tag "${tagName}" must be string`
+          : `value of tag "${tagName}" must be in oneOf`,
+      params: ({ params: { discrError, tag, tagName } }) =>
+        codegen_1._`{error: ${discrError}, tag: ${tagName}, tagValue: ${tag}}`,
+    },
+    code(cxt) {
+      let { gen, data, schema, parentSchema, it } = cxt;
+      let { oneOf } = parentSchema;
+      if (!it.opts.discriminator) throw Error("discriminator: requires discriminator option");
+      let tagName = schema.propertyName;
+      if (typeof tagName != "string") throw Error("discriminator: requires propertyName");
+      if (schema.mapping) throw Error("discriminator: mapping is not supported");
+      if (!oneOf) throw Error("discriminator: requires oneOf keyword");
+      let valid = gen.let("valid", false);
+      let tag = gen.const("tag", codegen_1._`${data}${(0, codegen_1.getProperty)(tagName)}`);
+      gen.if(
+        codegen_1._`typeof ${tag} == "string"`,
+        () => validateMapping(),
+        () =>
+          cxt.error(false, {
+            discrError: types_1.DiscrError.Tag,
+            tag,
+            tagName,
+          }),
+      );
+      cxt.ok(valid);
+      function validateMapping() {
+        let mapping = getMapping();
+        gen.if(false);
+        for (let tagValue in mapping) {
+          gen.elseIf(codegen_1._`${tag} === ${tagValue}`);
+          gen.assign(valid, applyTagSchema(mapping[tagValue]));
+        }
+        gen.else();
+        cxt.error(false, {
+          discrError: types_1.DiscrError.Mapping,
+          tag,
+          tagName,
+        });
+        gen.endIf();
+      }
+      function applyTagSchema(schemaProp) {
+        let _valid = gen.name("valid");
+        let schCxt = cxt.subschema(
+          {
+            keyword: "oneOf",
+            schemaProp,
+          },
+          _valid,
+        );
+        cxt.mergeEvaluated(schCxt, codegen_1.Name);
+        return _valid;
+      }
+      function getMapping() {
+        var _a;
+        let oneOfMapping = {};
+        let topRequired = hasRequired(parentSchema);
+        let tagRequired = true;
+        for (let i = 0; i < oneOf.length; i++) {
+          let sch = oneOf[i];
+          if (
+            (sch === null || sch === undefined ? undefined : sch.$ref) &&
+            !(0, util_1.schemaHasRulesButRef)(sch, it.self.RULES)
+          ) {
+            let $ref = sch.$ref;
+            sch = compile_1.resolveRef.call(it.self, it.schemaEnv.root, it.baseId, $ref);
+            if (sch instanceof compile_1.SchemaEnv) sch = sch.schema;
+            if (sch === undefined) throw new a.default(it.opts.uriResolver, it.baseId, $ref);
+          }
+          let propSch =
+            (_a = sch === null || sch === undefined ? undefined : sch.properties) === null || _a === undefined
+              ? undefined
+              : _a[tagName];
+          if (typeof propSch != "object")
+            throw Error(
+              `discriminator: oneOf subschemas (or referenced schemas) must have "properties/${tagName}"`,
+            );
+          tagRequired = tagRequired && (topRequired || hasRequired(sch));
+          addMappings(propSch, i);
+        }
+        if (!tagRequired) throw Error(`discriminator: "${tagName}" must be required`);
+        return oneOfMapping;
+        function hasRequired({ required }) {
+          return Array.isArray(required) && required.includes(tagName);
+        }
+        function addMappings(sch, i) {
+          if (sch.const) addMapping(sch.const, i);
+          else if (sch.enum) for (let tagValue of sch.enum) addMapping(tagValue, i);
+          else throw Error(`discriminator: "properties/${tagName}" must have "const" or "enum"`);
+        }
+        function addMapping(tagValue, i) {
+          if (typeof tagValue != "string" || tagValue in oneOfMapping)
+            throw Error(`discriminator: "${tagName}" values must be unique strings`);
+          oneOfMapping[tagValue] = i;
+        }
+      }
+    },
+  };
+  cjsExports.default = def;
+});
+var require_json_schema_draft_07 = J((cjsExports, cjsModule) => {
+  cjsModule.exports = {
+    $schema: "http://json-schema.org/draft-07/schema#",
+    $id: "http://json-schema.org/draft-07/schema#",
+    title: "Core schema meta-schema",
+    definitions: {
+      schemaArray: {
+        type: "array",
+        minItems: 1,
+        items: {
+          $ref: "#",
         },
       },
-    };
-  }),
-  hd = J((e, t) => {
-    t.exports = {
-      $schema: "https://json-schema.org/draft/2020-12/schema",
-      $id: "https://json-schema.org/draft/2020-12/meta/applicator",
-      $vocabulary: { "https://json-schema.org/draft/2020-12/vocab/applicator": !0 },
-      $dynamicAnchor: "meta",
-      title: "Applicator vocabulary meta-schema",
-      type: ["object", "boolean"],
-      properties: {
-        prefixItems: { $ref: "#/$defs/schemaArray" },
-        items: { $dynamicRef: "#meta" },
-        contains: { $dynamicRef: "#meta" },
-        additionalProperties: { $dynamicRef: "#meta" },
-        properties: { type: "object", additionalProperties: { $dynamicRef: "#meta" }, default: {} },
-        patternProperties: {
-          type: "object",
-          additionalProperties: { $dynamicRef: "#meta" },
-          propertyNames: { format: "regex" },
-          default: {},
+      nonNegativeInteger: {
+        type: "integer",
+        minimum: 0,
+      },
+      nonNegativeIntegerDefault0: {
+        allOf: [
+          {
+            $ref: "#/definitions/nonNegativeInteger",
+          },
+          {
+            default: 0,
+          },
+        ],
+      },
+      simpleTypes: {
+        enum: ["array", "boolean", "integer", "null", "number", "object", "string"],
+      },
+      stringArray: {
+        type: "array",
+        items: {
+          type: "string",
         },
-        dependentSchemas: { type: "object", additionalProperties: { $dynamicRef: "#meta" }, default: {} },
-        propertyNames: { $dynamicRef: "#meta" },
-        if: { $dynamicRef: "#meta" },
-        then: { $dynamicRef: "#meta" },
-        else: { $dynamicRef: "#meta" },
-        allOf: { $ref: "#/$defs/schemaArray" },
-        anyOf: { $ref: "#/$defs/schemaArray" },
-        oneOf: { $ref: "#/$defs/schemaArray" },
-        not: { $dynamicRef: "#meta" },
+        uniqueItems: true,
+        default: [],
       },
-      $defs: { schemaArray: { type: "array", minItems: 1, items: { $dynamicRef: "#meta" } } },
-    };
-  }),
-  md = J((e, t) => {
-    t.exports = {
-      $schema: "https://json-schema.org/draft/2020-12/schema",
-      $id: "https://json-schema.org/draft/2020-12/meta/unevaluated",
-      $vocabulary: { "https://json-schema.org/draft/2020-12/vocab/unevaluated": !0 },
-      $dynamicAnchor: "meta",
-      title: "Unevaluated applicator vocabulary meta-schema",
-      type: ["object", "boolean"],
-      properties: {
-        unevaluatedItems: { $dynamicRef: "#meta" },
-        unevaluatedProperties: { $dynamicRef: "#meta" },
+    },
+    type: ["object", "boolean"],
+    properties: {
+      $id: {
+        type: "string",
+        format: "uri-reference",
       },
-    };
-  }),
-  pd = J((e, t) => {
-    t.exports = {
-      $schema: "https://json-schema.org/draft/2020-12/schema",
-      $id: "https://json-schema.org/draft/2020-12/meta/content",
-      $vocabulary: { "https://json-schema.org/draft/2020-12/vocab/content": !0 },
-      $dynamicAnchor: "meta",
-      title: "Content vocabulary meta-schema",
-      type: ["object", "boolean"],
-      properties: {
-        contentEncoding: { type: "string" },
-        contentMediaType: { type: "string" },
-        contentSchema: { $dynamicRef: "#meta" },
+      $schema: {
+        type: "string",
+        format: "uri",
       },
-    };
-  }),
-  fd = J((e, t) => {
-    t.exports = {
-      $schema: "https://json-schema.org/draft/2020-12/schema",
-      $id: "https://json-schema.org/draft/2020-12/meta/core",
-      $vocabulary: { "https://json-schema.org/draft/2020-12/vocab/core": !0 },
-      $dynamicAnchor: "meta",
-      title: "Core vocabulary meta-schema",
-      type: ["object", "boolean"],
-      properties: {
-        $id: {
-          $ref: "#/$defs/uriReferenceString",
-          $comment: "Non-empty fragments not allowed.",
-          pattern: "^[^#]*#?$",
+      $ref: {
+        type: "string",
+        format: "uri-reference",
+      },
+      $comment: {
+        type: "string",
+      },
+      title: {
+        type: "string",
+      },
+      description: {
+        type: "string",
+      },
+      default: true,
+      readOnly: {
+        type: "boolean",
+        default: false,
+      },
+      examples: {
+        type: "array",
+        items: true,
+      },
+      multipleOf: {
+        type: "number",
+        exclusiveMinimum: 0,
+      },
+      maximum: {
+        type: "number",
+      },
+      exclusiveMaximum: {
+        type: "number",
+      },
+      minimum: {
+        type: "number",
+      },
+      exclusiveMinimum: {
+        type: "number",
+      },
+      maxLength: {
+        $ref: "#/definitions/nonNegativeInteger",
+      },
+      minLength: {
+        $ref: "#/definitions/nonNegativeIntegerDefault0",
+      },
+      pattern: {
+        type: "string",
+        format: "regex",
+      },
+      additionalItems: {
+        $ref: "#",
+      },
+      items: {
+        anyOf: [
+          {
+            $ref: "#",
+          },
+          {
+            $ref: "#/definitions/schemaArray",
+          },
+        ],
+        default: true,
+      },
+      maxItems: {
+        $ref: "#/definitions/nonNegativeInteger",
+      },
+      minItems: {
+        $ref: "#/definitions/nonNegativeIntegerDefault0",
+      },
+      uniqueItems: {
+        type: "boolean",
+        default: false,
+      },
+      contains: {
+        $ref: "#",
+      },
+      maxProperties: {
+        $ref: "#/definitions/nonNegativeInteger",
+      },
+      minProperties: {
+        $ref: "#/definitions/nonNegativeIntegerDefault0",
+      },
+      required: {
+        $ref: "#/definitions/stringArray",
+      },
+      additionalProperties: {
+        $ref: "#",
+      },
+      definitions: {
+        type: "object",
+        additionalProperties: {
+          $ref: "#",
         },
-        $schema: { $ref: "#/$defs/uriString" },
-        $ref: { $ref: "#/$defs/uriReferenceString" },
-        $anchor: { $ref: "#/$defs/anchorString" },
-        $dynamicRef: { $ref: "#/$defs/uriReferenceString" },
-        $dynamicAnchor: { $ref: "#/$defs/anchorString" },
-        $vocabulary: {
-          type: "object",
-          propertyNames: { $ref: "#/$defs/uriString" },
-          additionalProperties: { type: "boolean" },
+        default: {},
+      },
+      properties: {
+        type: "object",
+        additionalProperties: {
+          $ref: "#",
         },
-        $comment: { type: "string" },
-        $defs: { type: "object", additionalProperties: { $dynamicRef: "#meta" } },
+        default: {},
       },
-      $defs: {
-        anchorString: { type: "string", pattern: "^[A-Za-z_][-A-Za-z0-9._]*$" },
-        uriString: { type: "string", format: "uri" },
-        uriReferenceString: { type: "string", format: "uri-reference" },
+      patternProperties: {
+        type: "object",
+        additionalProperties: {
+          $ref: "#",
+        },
+        propertyNames: {
+          format: "regex",
+        },
+        default: {},
       },
-    };
-  }),
-  Sd = J((e, t) => {
-    t.exports = {
-      $schema: "https://json-schema.org/draft/2020-12/schema",
-      $id: "https://json-schema.org/draft/2020-12/meta/format-annotation",
-      $vocabulary: { "https://json-schema.org/draft/2020-12/vocab/format-annotation": !0 },
-      $dynamicAnchor: "meta",
-      title: "Format vocabulary meta-schema for annotation results",
-      type: ["object", "boolean"],
-      properties: { format: { type: "string" } },
-    };
-  }),
-  gd = J((e, t) => {
-    t.exports = {
-      $schema: "https://json-schema.org/draft/2020-12/schema",
-      $id: "https://json-schema.org/draft/2020-12/meta/meta-data",
-      $vocabulary: { "https://json-schema.org/draft/2020-12/vocab/meta-data": !0 },
-      $dynamicAnchor: "meta",
-      title: "Meta-data vocabulary meta-schema",
-      type: ["object", "boolean"],
-      properties: {
-        title: { type: "string" },
-        description: { type: "string" },
-        default: !0,
-        deprecated: { type: "boolean", default: !1 },
-        readOnly: { type: "boolean", default: !1 },
-        writeOnly: { type: "boolean", default: !1 },
-        examples: { type: "array", items: !0 },
-      },
-    };
-  }),
-  _d = J((e, t) => {
-    t.exports = {
-      $schema: "https://json-schema.org/draft/2020-12/schema",
-      $id: "https://json-schema.org/draft/2020-12/meta/validation",
-      $vocabulary: { "https://json-schema.org/draft/2020-12/vocab/validation": !0 },
-      $dynamicAnchor: "meta",
-      title: "Validation vocabulary meta-schema",
-      type: ["object", "boolean"],
-      properties: {
-        type: {
+      dependencies: {
+        type: "object",
+        additionalProperties: {
           anyOf: [
-            { $ref: "#/$defs/simpleTypes" },
-            { type: "array", items: { $ref: "#/$defs/simpleTypes" }, minItems: 1, uniqueItems: !0 },
+            {
+              $ref: "#",
+            },
+            {
+              $ref: "#/definitions/stringArray",
+            },
           ],
         },
-        const: !0,
-        enum: { type: "array", items: !0 },
-        multipleOf: { type: "number", exclusiveMinimum: 0 },
-        maximum: { type: "number" },
-        exclusiveMaximum: { type: "number" },
-        minimum: { type: "number" },
-        exclusiveMinimum: { type: "number" },
-        maxLength: { $ref: "#/$defs/nonNegativeInteger" },
-        minLength: { $ref: "#/$defs/nonNegativeIntegerDefault0" },
-        pattern: { type: "string", format: "regex" },
-        maxItems: { $ref: "#/$defs/nonNegativeInteger" },
-        minItems: { $ref: "#/$defs/nonNegativeIntegerDefault0" },
-        uniqueItems: { type: "boolean", default: !1 },
-        maxContains: { $ref: "#/$defs/nonNegativeInteger" },
-        minContains: { $ref: "#/$defs/nonNegativeInteger", default: 1 },
-        maxProperties: { $ref: "#/$defs/nonNegativeInteger" },
-        minProperties: { $ref: "#/$defs/nonNegativeIntegerDefault0" },
-        required: { $ref: "#/$defs/stringArray" },
-        dependentRequired: { type: "object", additionalProperties: { $ref: "#/$defs/stringArray" } },
+      },
+      propertyNames: {
+        $ref: "#",
+      },
+      const: true,
+      enum: {
+        type: "array",
+        items: true,
+        minItems: 1,
+        uniqueItems: true,
+      },
+      type: {
+        anyOf: [
+          {
+            $ref: "#/definitions/simpleTypes",
+          },
+          {
+            type: "array",
+            items: {
+              $ref: "#/definitions/simpleTypes",
+            },
+            minItems: 1,
+            uniqueItems: true,
+          },
+        ],
+      },
+      format: {
+        type: "string",
+      },
+      contentMediaType: {
+        type: "string",
+      },
+      contentEncoding: {
+        type: "string",
+      },
+      if: {
+        $ref: "#",
+      },
+      then: {
+        $ref: "#",
+      },
+      else: {
+        $ref: "#",
+      },
+      allOf: {
+        $ref: "#/definitions/schemaArray",
+      },
+      anyOf: {
+        $ref: "#/definitions/schemaArray",
+      },
+      oneOf: {
+        $ref: "#/definitions/schemaArray",
+      },
+      not: {
+        $ref: "#",
+      },
+    },
+    default: true,
+  };
+});
+var require_ajv = J((cjsExports, cjsModule) => {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.MissingRefError =
+    cjsExports.ValidationError =
+    cjsExports.CodeGen =
+    cjsExports.Name =
+    cjsExports.nil =
+    cjsExports.stringify =
+    cjsExports.str =
+    cjsExports._ =
+    cjsExports.KeywordCxt =
+    cjsExports.Ajv =
+      undefined;
+  let core_1 = require_core();
+  let draft7_1 = require_draft7();
+  let discriminator_1 = require_discriminator();
+  let draft7MetaSchema = require_json_schema_draft_07();
+  let META_SUPPORT_DATA = ["/properties"];
+  let META_SCHEMA_ID = "http://json-schema.org/draft-07/schema";
+  var Ajv = class extends core_1.default {
+    _addVocabularies() {
+      super._addVocabularies();
+      draft7_1.default.forEach((v) => this.addVocabulary(v));
+      if (this.opts.discriminator) this.addKeyword(discriminator_1.default);
+    }
+    _addDefaultMetaSchema() {
+      super._addDefaultMetaSchema();
+      if (!this.opts.meta) return;
+      let metaSchema = this.opts.$data
+        ? this.$dataMetaSchema(draft7MetaSchema, META_SUPPORT_DATA)
+        : draft7MetaSchema;
+      this.addMetaSchema(metaSchema, META_SCHEMA_ID, false);
+      this.refs["http://json-schema.org/schema"] = META_SCHEMA_ID;
+    }
+    defaultMeta() {
+      return (this.opts.defaultMeta =
+        super.defaultMeta() || (this.getSchema(META_SCHEMA_ID) ? META_SCHEMA_ID : undefined));
+    }
+  };
+  cjsExports.Ajv = Ajv;
+  cjsModule.exports = cjsExports = Ajv;
+  cjsModule.exports.Ajv = Ajv;
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.default = Ajv;
+  var validate_1 = require_validate();
+  Object.defineProperty(cjsExports, "KeywordCxt", {
+    enumerable: true,
+    get: function () {
+      return validate_1.KeywordCxt;
+    },
+  });
+  var codegen_1 = require_codegen();
+  Object.defineProperty(cjsExports, "_", {
+    enumerable: true,
+    get: function () {
+      return codegen_1._;
+    },
+  });
+  Object.defineProperty(cjsExports, "str", {
+    enumerable: true,
+    get: function () {
+      return codegen_1.str;
+    },
+  });
+  Object.defineProperty(cjsExports, "stringify", {
+    enumerable: true,
+    get: function () {
+      return codegen_1.stringify;
+    },
+  });
+  Object.defineProperty(cjsExports, "nil", {
+    enumerable: true,
+    get: function () {
+      return codegen_1.nil;
+    },
+  });
+  Object.defineProperty(cjsExports, "Name", {
+    enumerable: true,
+    get: function () {
+      return codegen_1.Name;
+    },
+  });
+  Object.defineProperty(cjsExports, "CodeGen", {
+    enumerable: true,
+    get: function () {
+      return codegen_1.CodeGen;
+    },
+  });
+  var validation_error_1 = require_validation_error();
+  Object.defineProperty(cjsExports, "ValidationError", {
+    enumerable: true,
+    get: function () {
+      return validation_error_1.default;
+    },
+  });
+  var ref_error_1 = require_ref_error();
+  Object.defineProperty(cjsExports, "MissingRefError", {
+    enumerable: true,
+    get: function () {
+      return ref_error_1.default;
+    },
+  });
+});
+var require_dynamicAnchor = J((cjsExports) => {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.dynamicAnchor = undefined;
+  let codegen_1 = require_codegen();
+  let names_1 = require_names();
+  let compile_1 = require_compile();
+  let ref_1 = require_ref();
+  let def = {
+    keyword: "$dynamicAnchor",
+    schemaType: "string",
+    code: (cxt) => dynamicAnchor(cxt, cxt.schema),
+  };
+  function dynamicAnchor(cxt, anchor) {
+    let { gen, it } = cxt;
+    it.schemaEnv.root.dynamicAnchors[anchor] = true;
+    let v = codegen_1._`${names_1.default.dynamicAnchors}${(0, codegen_1.getProperty)(anchor)}`;
+    let validate = it.errSchemaPath === "#" ? it.validateName : _getValidate(cxt);
+    gen.if(codegen_1._`!${v}`, () => gen.assign(v, validate));
+  }
+  cjsExports.dynamicAnchor = dynamicAnchor;
+  function _getValidate(cxt) {
+    let { schemaEnv, schema, self: _ } = cxt.it;
+    let { root, baseId, localRefs, meta } = schemaEnv.root;
+    let { schemaId } = _.opts;
+    let sch = new compile_1.SchemaEnv({
+      schema,
+      schemaId,
+      root,
+      baseId,
+      localRefs,
+      meta,
+    });
+    compile_1.compileSchema.call(_, sch);
+    return (0, ref_1.getValidate)(cxt, sch);
+  }
+  cjsExports.default = def;
+});
+var require_dynamicRef = J((cjsExports) => {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.dynamicRef = undefined;
+  let codegen_1 = require_codegen();
+  let names_1 = require_names();
+  let ref_1 = require_ref();
+  let def = {
+    keyword: "$dynamicRef",
+    schemaType: "string",
+    code: (cxt) => dynamicRef(cxt, cxt.schema),
+  };
+  function dynamicRef(cxt, ref) {
+    let { gen, keyword, it } = cxt;
+    if (ref[0] !== "#") throw Error(`"${keyword}" only supports hash fragment reference`);
+    let anchor = ref.slice(1);
+    if (it.allErrors) _dynamicRef();
+    else {
+      let valid = gen.let("valid", false);
+      _dynamicRef(valid);
+      cxt.ok(valid);
+    }
+    function _dynamicRef(valid) {
+      if (it.schemaEnv.root.dynamicAnchors[anchor]) {
+        let validate = gen.let(
+          "_v",
+          codegen_1._`${names_1.default.dynamicAnchors}${(0, codegen_1.getProperty)(anchor)}`,
+        );
+        gen.if(validate, _callRef(validate, valid), _callRef(it.validateName, valid));
+      } else _callRef(it.validateName, valid)();
+    }
+    function _callRef(validate, valid) {
+      return valid
+        ? () =>
+            gen.block(() => {
+              (0, ref_1.callRef)(cxt, validate);
+              gen.let(valid, true);
+            })
+        : () => (0, ref_1.callRef)(cxt, validate);
+    }
+  }
+  cjsExports.dynamicRef = dynamicRef;
+  cjsExports.default = def;
+});
+var require_recursiveAnchor = J((cjsExports) => {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  let dynamicAnchor_1 = require_dynamicAnchor();
+  let util_1 = require_util();
+  let def = {
+    keyword: "$recursiveAnchor",
+    schemaType: "boolean",
+    code(cxt) {
+      if (cxt.schema) (0, dynamicAnchor_1.dynamicAnchor)(cxt, "");
+      else (0, util_1.checkStrictMode)(cxt.it, "$recursiveAnchor: false is ignored");
+    },
+  };
+  cjsExports.default = def;
+});
+var require_recursiveRef = J((cjsExports) => {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  let dynamicRef_1 = require_dynamicRef();
+  let def = {
+    keyword: "$recursiveRef",
+    schemaType: "string",
+    code: (cxt) => (0, dynamicRef_1.dynamicRef)(cxt, cxt.schema),
+  };
+  cjsExports.default = def;
+});
+var require_format_3 = J((cjsExports) => {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  let format_1 = require_dynamicAnchor();
+  let r = require_dynamicRef();
+  let s = require_recursiveAnchor();
+  let a = require_recursiveRef();
+  let format = [format_1.default, r.default, s.default, a.default];
+  cjsExports.default = format;
+});
+var require_dependentRequired = J((cjsExports) => {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  let dependencies_1 = require_dependencies();
+  let def = {
+    keyword: "dependentRequired",
+    type: "object",
+    schemaType: "object",
+    error: dependencies_1.error,
+    code: (cxt) => (0, dependencies_1.validatePropertyDeps)(cxt),
+  };
+  cjsExports.default = def;
+});
+var require_dependentSchemas = J((cjsExports) => {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  let dependencies_1 = require_dependencies();
+  let def = {
+    keyword: "dependentSchemas",
+    type: "object",
+    schemaType: "object",
+    code: (cxt) => (0, dependencies_1.validateSchemaDeps)(cxt),
+  };
+  cjsExports.default = def;
+});
+var require_limitContains = J((cjsExports) => {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  let util_1 = require_util();
+  let def = {
+    keyword: ["maxContains", "minContains"],
+    type: "array",
+    schemaType: "number",
+    code({ keyword, parentSchema, it }) {
+      if (parentSchema.contains === undefined)
+        (0, util_1.checkStrictMode)(it, `"${keyword}" without "contains" is ignored`);
+    },
+  };
+  cjsExports.default = def;
+});
+var require_format_4 = J((cjsExports) => {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  let format_1 = require_dependentRequired();
+  let r = require_dependentSchemas();
+  let s = require_limitContains();
+  let format = [format_1.default, r.default, s.default];
+  cjsExports.default = format;
+});
+var require_unevaluatedProperties = J((cjsExports) => {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  let codegen_1 = require_codegen();
+  let util_1 = require_util();
+  let names_1 = require_names();
+  let def = {
+    keyword: "unevaluatedProperties",
+    type: "object",
+    schemaType: ["boolean", "object"],
+    trackErrors: true,
+    error: {
+      message: "must NOT have unevaluated properties",
+      params: ({ params }) => codegen_1._`{unevaluatedProperty: ${params.unevaluatedProperty}}`,
+    },
+    code(cxt) {
+      let { gen, schema, data, errsCount, it } = cxt;
+      if (!errsCount) throw Error("ajv implementation error");
+      let { allErrors, props } = it;
+      if (props instanceof codegen_1.Name)
+        gen.if(codegen_1._`${props} !== true`, () =>
+          gen.forIn("key", data, (key) =>
+            gen.if(unevaluatedDynamic(props, key), () => unevaluatedPropCode(key)),
+          ),
+        );
+      else if (props !== true)
+        gen.forIn("key", data, (key) =>
+          props === undefined
+            ? unevaluatedPropCode(key)
+            : gen.if(unevaluatedStatic(props, key), () => unevaluatedPropCode(key)),
+        );
+      it.props = true;
+      cxt.ok(codegen_1._`${errsCount} === ${names_1.default.errors}`);
+      function unevaluatedPropCode(key) {
+        if (schema === false) {
+          cxt.setParams({
+            unevaluatedProperty: key,
+          });
+          cxt.error();
+          if (!allErrors) gen.break();
+          return;
+        }
+        if (!(0, util_1.alwaysValidSchema)(it, schema)) {
+          let valid = gen.name("valid");
+          cxt.subschema(
+            {
+              keyword: "unevaluatedProperties",
+              dataProp: key,
+              dataPropType: util_1.Type.Str,
+            },
+            valid,
+          );
+          if (!allErrors) gen.if((0, codegen_1.not)(valid), () => gen.break());
+        }
+      }
+      function unevaluatedDynamic(evaluatedProps, key) {
+        return codegen_1._`!${evaluatedProps} || !${evaluatedProps}[${key}]`;
+      }
+      function unevaluatedStatic(evaluatedProps, key) {
+        let ps = [];
+        for (let p in evaluatedProps) if (evaluatedProps[p] === true) ps.push(codegen_1._`${key} !== ${p}`);
+        return (0, codegen_1.and)(...ps);
+      }
+    },
+  };
+  cjsExports.default = def;
+});
+var require_unevaluatedItems = J((cjsExports) => {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  let codegen_1 = require_codegen();
+  let util_1 = require_util();
+  let def = {
+    keyword: "unevaluatedItems",
+    type: "array",
+    schemaType: ["boolean", "object"],
+    error: {
+      message: ({ params: { len } }) => codegen_1.str`must NOT have more than ${len} items`,
+      params: ({ params: { len } }) => codegen_1._`{limit: ${len}}`,
+    },
+    code(cxt) {
+      let { gen, schema, data, it } = cxt;
+      let items = it.items || 0;
+      if (items === true) return;
+      let len = gen.const("len", codegen_1._`${data}.length`);
+      if (schema === false) {
+        cxt.setParams({
+          len: items,
+        });
+        cxt.fail(codegen_1._`${len} > ${items}`);
+      } else if (typeof schema == "object" && !(0, util_1.alwaysValidSchema)(it, schema)) {
+        let valid = gen.var("valid", codegen_1._`${len} <= ${items}`);
+        gen.if((0, codegen_1.not)(valid), () => validateItems(valid, items));
+        cxt.ok(valid);
+      }
+      it.items = true;
+      function validateItems(valid, from) {
+        gen.forRange("i", from, len, (i) => {
+          cxt.subschema(
+            {
+              keyword: "unevaluatedItems",
+              dataProp: i,
+              dataPropType: util_1.Type.Num,
+            },
+            valid,
+          );
+          if (!it.allErrors) gen.if((0, codegen_1.not)(valid), () => gen.break());
+        });
+      }
+    },
+  };
+  cjsExports.default = def;
+});
+var require_format_5 = J((cjsExports) => {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  let format_1 = require_unevaluatedProperties();
+  let r = require_unevaluatedItems();
+  let format = [format_1.default, r.default];
+  cjsExports.default = format;
+});
+var require_draft7_2 = J((cjsExports) => {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  let validation_1 = require_core_3();
+  let r = require_validation_2();
+  let applicator_1 = require_format_6();
+  let core_1 = require_format_3();
+  let n = require_format_4();
+  let i = require_format_5();
+  let format_1 = require_format_2();
+  let metadata_1 = require_metadata();
+  let draft7Vocabularies = [
+    core_1.default,
+    validation_1.default,
+    r.default,
+    (0, applicator_1.default)(true),
+    format_1.default,
+    metadata_1.metadataVocabulary,
+    metadata_1.contentVocabulary,
+    n.default,
+    i.default,
+  ];
+  cjsExports.default = draft7Vocabularies;
+});
+var require_schema = J((cjsExports, cjsModule) => {
+  cjsModule.exports = {
+    $schema: "https://json-schema.org/draft/2020-12/schema",
+    $id: "https://json-schema.org/draft/2020-12/schema",
+    $vocabulary: {
+      "https://json-schema.org/draft/2020-12/vocab/core": true,
+      "https://json-schema.org/draft/2020-12/vocab/applicator": true,
+      "https://json-schema.org/draft/2020-12/vocab/unevaluated": true,
+      "https://json-schema.org/draft/2020-12/vocab/validation": true,
+      "https://json-schema.org/draft/2020-12/vocab/meta-data": true,
+      "https://json-schema.org/draft/2020-12/vocab/format-annotation": true,
+      "https://json-schema.org/draft/2020-12/vocab/content": true,
+    },
+    $dynamicAnchor: "meta",
+    title: "Core and Validation specifications meta-schema",
+    allOf: [
+      {
+        $ref: "meta/core",
+      },
+      {
+        $ref: "meta/applicator",
+      },
+      {
+        $ref: "meta/unevaluated",
+      },
+      {
+        $ref: "meta/validation",
+      },
+      {
+        $ref: "meta/meta-data",
+      },
+      {
+        $ref: "meta/format-annotation",
+      },
+      {
+        $ref: "meta/content",
+      },
+    ],
+    type: ["object", "boolean"],
+    $comment:
+      "This meta-schema also defines keywords that have appeared in previous drafts in order to prevent incompatible extensions as they remain in common use.",
+    properties: {
+      definitions: {
+        $comment: '"definitions" has been replaced by "$defs".',
+        type: "object",
+        additionalProperties: {
+          $dynamicRef: "#meta",
+        },
+        deprecated: true,
+        default: {},
+      },
+      dependencies: {
+        $comment:
+          '"dependencies" has been split and replaced by "dependentSchemas" and "dependentRequired" in order to serve their differing semantics.',
+        type: "object",
+        additionalProperties: {
+          anyOf: [
+            {
+              $dynamicRef: "#meta",
+            },
+            {
+              $ref: "meta/validation#/$defs/stringArray",
+            },
+          ],
+        },
+        deprecated: true,
+        default: {},
+      },
+      $recursiveAnchor: {
+        $comment: '"$recursiveAnchor" has been replaced by "$dynamicAnchor".',
+        $ref: "meta/core#/$defs/anchorString",
+        deprecated: true,
+      },
+      $recursiveRef: {
+        $comment: '"$recursiveRef" has been replaced by "$dynamicRef".',
+        $ref: "meta/core#/$defs/uriReferenceString",
+        deprecated: true,
+      },
+    },
+  };
+});
+var require_applicator = J((cjsExports, cjsModule) => {
+  cjsModule.exports = {
+    $schema: "https://json-schema.org/draft/2020-12/schema",
+    $id: "https://json-schema.org/draft/2020-12/meta/applicator",
+    $vocabulary: {
+      "https://json-schema.org/draft/2020-12/vocab/applicator": true,
+    },
+    $dynamicAnchor: "meta",
+    title: "Applicator vocabulary meta-schema",
+    type: ["object", "boolean"],
+    properties: {
+      prefixItems: {
+        $ref: "#/$defs/schemaArray",
+      },
+      items: {
+        $dynamicRef: "#meta",
+      },
+      contains: {
+        $dynamicRef: "#meta",
+      },
+      additionalProperties: {
+        $dynamicRef: "#meta",
+      },
+      properties: {
+        type: "object",
+        additionalProperties: {
+          $dynamicRef: "#meta",
+        },
+        default: {},
+      },
+      patternProperties: {
+        type: "object",
+        additionalProperties: {
+          $dynamicRef: "#meta",
+        },
+        propertyNames: {
+          format: "regex",
+        },
+        default: {},
+      },
+      dependentSchemas: {
+        type: "object",
+        additionalProperties: {
+          $dynamicRef: "#meta",
+        },
+        default: {},
+      },
+      propertyNames: {
+        $dynamicRef: "#meta",
+      },
+      if: {
+        $dynamicRef: "#meta",
+      },
+      then: {
+        $dynamicRef: "#meta",
+      },
+      else: {
+        $dynamicRef: "#meta",
+      },
+      allOf: {
+        $ref: "#/$defs/schemaArray",
+      },
+      anyOf: {
+        $ref: "#/$defs/schemaArray",
+      },
+      oneOf: {
+        $ref: "#/$defs/schemaArray",
+      },
+      not: {
+        $dynamicRef: "#meta",
+      },
+    },
+    $defs: {
+      schemaArray: {
+        type: "array",
+        minItems: 1,
+        items: {
+          $dynamicRef: "#meta",
+        },
+      },
+    },
+  };
+});
+var require_unevaluated = J((cjsExports, cjsModule) => {
+  cjsModule.exports = {
+    $schema: "https://json-schema.org/draft/2020-12/schema",
+    $id: "https://json-schema.org/draft/2020-12/meta/unevaluated",
+    $vocabulary: {
+      "https://json-schema.org/draft/2020-12/vocab/unevaluated": true,
+    },
+    $dynamicAnchor: "meta",
+    title: "Unevaluated applicator vocabulary meta-schema",
+    type: ["object", "boolean"],
+    properties: {
+      unevaluatedItems: {
+        $dynamicRef: "#meta",
+      },
+      unevaluatedProperties: {
+        $dynamicRef: "#meta",
+      },
+    },
+  };
+});
+var require_content = J((cjsExports, cjsModule) => {
+  cjsModule.exports = {
+    $schema: "https://json-schema.org/draft/2020-12/schema",
+    $id: "https://json-schema.org/draft/2020-12/meta/content",
+    $vocabulary: {
+      "https://json-schema.org/draft/2020-12/vocab/content": true,
+    },
+    $dynamicAnchor: "meta",
+    title: "Content vocabulary meta-schema",
+    type: ["object", "boolean"],
+    properties: {
+      contentEncoding: {
+        type: "string",
+      },
+      contentMediaType: {
+        type: "string",
+      },
+      contentSchema: {
+        $dynamicRef: "#meta",
+      },
+    },
+  };
+});
+var require_core_2 = J((cjsExports, cjsModule) => {
+  cjsModule.exports = {
+    $schema: "https://json-schema.org/draft/2020-12/schema",
+    $id: "https://json-schema.org/draft/2020-12/meta/core",
+    $vocabulary: {
+      "https://json-schema.org/draft/2020-12/vocab/core": true,
+    },
+    $dynamicAnchor: "meta",
+    title: "Core vocabulary meta-schema",
+    type: ["object", "boolean"],
+    properties: {
+      $id: {
+        $ref: "#/$defs/uriReferenceString",
+        $comment: "Non-empty fragments not allowed.",
+        pattern: "^[^#]*#?$",
+      },
+      $schema: {
+        $ref: "#/$defs/uriString",
+      },
+      $ref: {
+        $ref: "#/$defs/uriReferenceString",
+      },
+      $anchor: {
+        $ref: "#/$defs/anchorString",
+      },
+      $dynamicRef: {
+        $ref: "#/$defs/uriReferenceString",
+      },
+      $dynamicAnchor: {
+        $ref: "#/$defs/anchorString",
+      },
+      $vocabulary: {
+        type: "object",
+        propertyNames: {
+          $ref: "#/$defs/uriString",
+        },
+        additionalProperties: {
+          type: "boolean",
+        },
+      },
+      $comment: {
+        type: "string",
       },
       $defs: {
-        nonNegativeInteger: { type: "integer", minimum: 0 },
-        nonNegativeIntegerDefault0: { $ref: "#/$defs/nonNegativeInteger", default: 0 },
-        simpleTypes: { enum: ["array", "boolean", "integer", "null", "number", "object", "string"] },
-        stringArray: { type: "array", items: { type: "string" }, uniqueItems: !0, default: [] },
-      },
-    };
-  }),
-  yd = J((e) => {
-    Object.defineProperty(e, "__esModule", { value: !0 });
-    let t = dd(),
-      r = hd(),
-      s = md(),
-      a = pd(),
-      n = fd(),
-      i = Sd(),
-      l = gd(),
-      c = _d(),
-      d = ["/properties"];
-    function m(_) {
-      return (
-        [t, r, s, a, n, w(this, i), l, w(this, c)].forEach((P) => this.addMetaSchema(P, void 0, !1)),
-        this
-      );
-      function w(P, y) {
-        return _ ? P.$dataMetaSchema(y, d) : y;
-      }
-    }
-    e.default = m;
-  }),
-  vd = J((e, t) => {
-    (Object.defineProperty(e, "__esModule", { value: !0 }),
-      (e.MissingRefError =
-        e.ValidationError =
-        e.CodeGen =
-        e.Name =
-        e.nil =
-        e.stringify =
-        e.str =
-        e._ =
-        e.KeywordCxt =
-        e.Ajv2020 =
-          void 0));
-    let r = Di(),
-      s = ud(),
-      a = Yi(),
-      n = yd(),
-      i = "https://json-schema.org/draft/2020-12/schema";
-    var l = class extends r.default {
-      constructor(w = {}) {
-        super({ ...w, dynamicRef: !0, next: !0, unevaluated: !0 });
-      }
-      _addVocabularies() {
-        if (
-          (super._addVocabularies(), s.default.forEach((w) => this.addVocabulary(w)), this.opts.discriminator)
-        )
-          this.addKeyword(a.default);
-      }
-      _addDefaultMetaSchema() {
-        super._addDefaultMetaSchema();
-        let { $data: $data, meta: meta } = this.opts;
-        if (!meta) return;
-        (n.default.call(this, $data), (this.refs["http://json-schema.org/schema"] = i));
-      }
-      defaultMeta() {
-        return (this.opts.defaultMeta = super.defaultMeta() || (this.getSchema(i) ? i : void 0));
-      }
-    };
-    ((e.Ajv2020 = l),
-      (t.exports = e = l),
-      (t.exports.Ajv2020 = l),
-      Object.defineProperty(e, "__esModule", { value: !0 }),
-      (e.default = l));
-    var c = so();
-    Object.defineProperty(e, "KeywordCxt", {
-      enumerable: !0,
-      get: function () {
-        return c.KeywordCxt;
-      },
-    });
-    var d = te();
-    (Object.defineProperty(e, "_", {
-      enumerable: !0,
-      get: function () {
-        return d._;
-      },
-    }),
-      Object.defineProperty(e, "str", {
-        enumerable: !0,
-        get: function () {
-          return d.str;
+        type: "object",
+        additionalProperties: {
+          $dynamicRef: "#meta",
         },
-      }),
-      Object.defineProperty(e, "stringify", {
-        enumerable: !0,
-        get: function () {
-          return d.stringify;
-        },
-      }),
-      Object.defineProperty(e, "nil", {
-        enumerable: !0,
-        get: function () {
-          return d.nil;
-        },
-      }),
-      Object.defineProperty(e, "Name", {
-        enumerable: !0,
-        get: function () {
-          return d.Name;
-        },
-      }),
-      Object.defineProperty(e, "CodeGen", {
-        enumerable: !0,
-        get: function () {
-          return d.CodeGen;
-        },
-      }));
-    var m = ya();
-    Object.defineProperty(e, "ValidationError", {
-      enumerable: !0,
-      get: function () {
-        return m.default;
       },
-    });
-    var _ = ao();
-    Object.defineProperty(e, "MissingRefError", {
-      enumerable: !0,
-      get: function () {
-        return _.default;
+    },
+    $defs: {
+      anchorString: {
+        type: "string",
+        pattern: "^[A-Za-z_][-A-Za-z0-9._]*$",
       },
-    });
-  }),
-  bd = J((e) => {
-    (Object.defineProperty(e, "__esModule", { value: !0 }),
-      (e.formatNames = e.fastFormats = e.fullFormats = void 0));
-    function t(N, x) {
-      return { validate: N, compare: x };
-    }
-    ((e.fullFormats = {
-      date: t(n, i),
-      time: t(c(!0), d),
-      "date-time": t(w(!0), P),
-      "iso-time": t(c(), m),
-      "iso-date-time": t(w(), y),
-      duration: /^P(?!$)((\d+Y)?(\d+M)?(\d+D)?(T(?=\d)(\d+H)?(\d+M)?(\d+S)?)?|(\d+W)?)$/,
-      uri: h,
-      "uri-reference":
-        /^(?:[a-z][a-z0-9+\-.]*:)?(?:\/?\/(?:(?:[a-z0-9\-._~!$&'()*+,;=:]|%[0-9a-f]{2})*@)?(?:\[(?:(?:(?:(?:[0-9a-f]{1,4}:){6}|::(?:[0-9a-f]{1,4}:){5}|(?:[0-9a-f]{1,4})?::(?:[0-9a-f]{1,4}:){4}|(?:(?:[0-9a-f]{1,4}:){0,1}[0-9a-f]{1,4})?::(?:[0-9a-f]{1,4}:){3}|(?:(?:[0-9a-f]{1,4}:){0,2}[0-9a-f]{1,4})?::(?:[0-9a-f]{1,4}:){2}|(?:(?:[0-9a-f]{1,4}:){0,3}[0-9a-f]{1,4})?::[0-9a-f]{1,4}:|(?:(?:[0-9a-f]{1,4}:){0,4}[0-9a-f]{1,4})?::)(?:[0-9a-f]{1,4}:[0-9a-f]{1,4}|(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?))|(?:(?:[0-9a-f]{1,4}:){0,5}[0-9a-f]{1,4})?::[0-9a-f]{1,4}|(?:(?:[0-9a-f]{1,4}:){0,6}[0-9a-f]{1,4})?::)|[Vv][0-9a-f]+\.[a-z0-9\-._~!$&'()*+,;=:]+)\]|(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)|(?:[a-z0-9\-._~!$&'"()*+,;=]|%[0-9a-f]{2})*)(?::\d*)?(?:\/(?:[a-z0-9\-._~!$&'"()*+,;=:@]|%[0-9a-f]{2})*)*|\/(?:(?:[a-z0-9\-._~!$&'"()*+,;=:@]|%[0-9a-f]{2})+(?:\/(?:[a-z0-9\-._~!$&'"()*+,;=:@]|%[0-9a-f]{2})*)*)?|(?:[a-z0-9\-._~!$&'"()*+,;=:@]|%[0-9a-f]{2})+(?:\/(?:[a-z0-9\-._~!$&'"()*+,;=:@]|%[0-9a-f]{2})*)*)?(?:\?(?:[a-z0-9\-._~!$&'"()*+,;=:@/?]|%[0-9a-f]{2})*)?(?:#(?:[a-z0-9\-._~!$&'"()*+,;=:@/?]|%[0-9a-f]{2})*)?$/i,
-      "uri-template":
-        /^(?:(?:[^\x00-\x20"'<>%\\^`{|}]|%[0-9a-f]{2})|\{[+#./;?&=,!@|]?(?:[a-z0-9_]|%[0-9a-f]{2})+(?::[1-9][0-9]{0,3}|\*)?(?:,(?:[a-z0-9_]|%[0-9a-f]{2})+(?::[1-9][0-9]{0,3}|\*)?)*\})*$/i,
-      url: /^(?:https?|ftp):\/\/(?:\S+(?::\S*)?@)?(?:(?!(?:10|127)(?:\.\d{1,3}){3})(?!(?:169\.254|192\.168)(?:\.\d{1,3}){2})(?!172\.(?:1[6-9]|2\d|3[0-1])(?:\.\d{1,3}){2})(?:[1-9]\d?|1\d\d|2[01]\d|22[0-3])(?:\.(?:1?\d{1,2}|2[0-4]\d|25[0-5])){2}(?:\.(?:[1-9]\d?|1\d\d|2[0-4]\d|25[0-4]))|(?:(?:[a-z0-9\u{00a1}-\u{ffff}]+-)*[a-z0-9\u{00a1}-\u{ffff}]+)(?:\.(?:[a-z0-9\u{00a1}-\u{ffff}]+-)*[a-z0-9\u{00a1}-\u{ffff}]+)*(?:\.(?:[a-z\u{00a1}-\u{ffff}]{2,})))(?::\d{2,5})?(?:\/[^\s]*)?$/iu,
-      email:
-        /^[a-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[a-z0-9!#$%&'*+/=?^_`{|}~-]+)*@(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/i,
-      hostname:
-        /^(?=.{1,253}\.?$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[-0-9a-z]{0,61}[0-9a-z])?)*\.?$/i,
-      ipv4: /^(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)$/,
-      ipv6: /^((([0-9a-f]{1,4}:){7}([0-9a-f]{1,4}|:))|(([0-9a-f]{1,4}:){6}(:[0-9a-f]{1,4}|((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})|:))|(([0-9a-f]{1,4}:){5}(((:[0-9a-f]{1,4}){1,2})|:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})|:))|(([0-9a-f]{1,4}:){4}(((:[0-9a-f]{1,4}){1,3})|((:[0-9a-f]{1,4})?:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9a-f]{1,4}:){3}(((:[0-9a-f]{1,4}){1,4})|((:[0-9a-f]{1,4}){0,2}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9a-f]{1,4}:){2}(((:[0-9a-f]{1,4}){1,5})|((:[0-9a-f]{1,4}){0,3}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9a-f]{1,4}:){1}(((:[0-9a-f]{1,4}){1,6})|((:[0-9a-f]{1,4}){0,4}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(:(((:[0-9a-f]{1,4}){1,7})|((:[0-9a-f]{1,4}){0,5}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:)))$/i,
-      regex: H,
-      uuid: /^(?:urn:uuid:)?[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i,
-      "json-pointer": /^(?:\/(?:[^~/]|~0|~1)*)*$/,
-      "json-pointer-uri-fragment": /^#(?:\/(?:[a-z0-9_\-.!$&'()*+,;:=@]|%[0-9a-f]{2}|~0|~1)*)*$/i,
-      "relative-json-pointer": /^(?:0|[1-9][0-9]*)(?:#|(?:\/(?:[^~/]|~0|~1)*)*)$/,
-      byte: f,
-      int32: { type: "number", validate: b },
-      int64: { type: "number", validate: g },
-      float: { type: "number", validate: k },
-      double: { type: "number", validate: k },
-      password: !0,
-      binary: !0,
-    }),
-      (e.fastFormats = {
-        ...e.fullFormats,
-        date: t(/^\d\d\d\d-[0-1]\d-[0-3]\d$/, i),
-        time: t(/^(?:[0-2]\d:[0-5]\d:[0-5]\d|23:59:60)(?:\.\d+)?(?:z|[+-]\d\d(?::?\d\d)?)$/i, d),
-        "date-time": t(
-          /^\d\d\d\d-[0-1]\d-[0-3]\dt(?:[0-2]\d:[0-5]\d:[0-5]\d|23:59:60)(?:\.\d+)?(?:z|[+-]\d\d(?::?\d\d)?)$/i,
-          P,
-        ),
-        "iso-time": t(/^(?:[0-2]\d:[0-5]\d:[0-5]\d|23:59:60)(?:\.\d+)?(?:z|[+-]\d\d(?::?\d\d)?)?$/i, m),
-        "iso-date-time": t(
-          /^\d\d\d\d-[0-1]\d-[0-3]\d[t\s](?:[0-2]\d:[0-5]\d:[0-5]\d|23:59:60)(?:\.\d+)?(?:z|[+-]\d\d(?::?\d\d)?)?$/i,
-          y,
-        ),
-        uri: /^(?:[a-z][a-z0-9+\-.]*:)(?:\/?\/)?[^\s]*$/i,
-        "uri-reference": /^(?:(?:[a-z][a-z0-9+\-.]*:)?\/?\/)?(?:[^\\\s#][^\s#]*)?(?:#[^\\\s]*)?$/i,
-        email:
-          /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$/i,
-      }),
-      (e.formatNames = Object.keys(e.fullFormats)));
-    function r(N) {
-      return N % 4 === 0 && (N % 100 !== 0 || N % 400 === 0);
-    }
-    let s = /^(\d\d\d\d)-(\d\d)-(\d\d)$/,
-      a = [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-    function n(N) {
-      let match = s.exec(N);
-      if (!match) return !1;
-      let W = +match[1],
-        B = +match[2],
-        se = +match[3];
-      return B >= 1 && B <= 12 && se >= 1 && se <= (B === 2 && r(W) ? 29 : a[B]);
-    }
-    function i(N, x) {
-      if (!(N && x)) return;
-      if (N > x) return 1;
-      if (N < x) return -1;
-      return 0;
-    }
-    let l = /^(\d\d):(\d\d):(\d\d(?:\.\d+)?)(z|([+-])(\d\d)(?::?(\d\d))?)?$/i;
-    function c(N) {
-      return function (W) {
-        let match = l.exec(W);
-        if (!match) return !1;
-        let se = +match[1],
-          le = +match[2],
-          ie = +match[3],
-          Se = match[4],
-          ae = match[5] === "-" ? -1 : 1,
-          O = +(match[6] || 0),
-          L = +(match[7] || 0);
-        if (O > 23 || L > 59 || (N && !Se)) return !1;
-        if (se <= 23 && le <= 59 && ie < 60) return !0;
-        let K = le - L * ae,
-          z = se - O * ae - (K < 0 ? 1 : 0);
-        return (z === 23 || z === -1) && (K === 59 || K === -1) && ie < 61;
-      };
-    }
-    function d(N, x) {
-      if (!(N && x)) return;
-      let W = new Date("2020-01-01T" + N).valueOf(),
-        B = new Date("2020-01-01T" + x).valueOf();
-      if (!(W && B)) return;
-      return W - B;
-    }
-    function m(N, x) {
-      if (!(N && x)) return;
-      let match = l.exec(N),
-        match_2 = l.exec(x);
-      if (!(match && match_2)) return;
-      if (((N = match[1] + match[2] + match[3]), (x = match_2[1] + match_2[2] + match_2[3]), N > x)) return 1;
-      if (N < x) return -1;
-      return 0;
-    }
-    let _ = /t|\s/i;
-    function w(N) {
-      let x = c(N);
-      return function (B) {
-        let parts = B.split(_);
-        return parts.length === 2 && n(parts[0]) && x(parts[1]);
-      };
-    }
-    function P(N, x) {
-      if (!(N && x)) return;
-      let W = new Date(N).valueOf(),
-        B = new Date(x).valueOf();
-      if (!(W && B)) return;
-      return W - B;
-    }
-    function y(N, x) {
-      if (!(N && x)) return;
-      let [W, B] = N.split(_),
-        [se, le] = x.split(_),
-        ie = i(W, se);
-      if (ie === void 0) return;
-      return ie || d(B, le);
-    }
-    let v = /\/|:/,
-      p =
-        /^(?:[a-z][a-z0-9+\-.]*:)(?:\/?\/(?:(?:[a-z0-9\-._~!$&'()*+,;=:]|%[0-9a-f]{2})*@)?(?:\[(?:(?:(?:(?:[0-9a-f]{1,4}:){6}|::(?:[0-9a-f]{1,4}:){5}|(?:[0-9a-f]{1,4})?::(?:[0-9a-f]{1,4}:){4}|(?:(?:[0-9a-f]{1,4}:){0,1}[0-9a-f]{1,4})?::(?:[0-9a-f]{1,4}:){3}|(?:(?:[0-9a-f]{1,4}:){0,2}[0-9a-f]{1,4})?::(?:[0-9a-f]{1,4}:){2}|(?:(?:[0-9a-f]{1,4}:){0,3}[0-9a-f]{1,4})?::[0-9a-f]{1,4}:|(?:(?:[0-9a-f]{1,4}:){0,4}[0-9a-f]{1,4})?::)(?:[0-9a-f]{1,4}:[0-9a-f]{1,4}|(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?))|(?:(?:[0-9a-f]{1,4}:){0,5}[0-9a-f]{1,4})?::[0-9a-f]{1,4}|(?:(?:[0-9a-f]{1,4}:){0,6}[0-9a-f]{1,4})?::)|[Vv][0-9a-f]+\.[a-z0-9\-._~!$&'()*+,;=:]+)\]|(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)|(?:[a-z0-9\-._~!$&'()*+,;=]|%[0-9a-f]{2})*)(?::\d*)?(?:\/(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[0-9a-f]{2})*)*|\/(?:(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[0-9a-f]{2})+(?:\/(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[0-9a-f]{2})*)*)?|(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[0-9a-f]{2})+(?:\/(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[0-9a-f]{2})*)*)(?:\?(?:[a-z0-9\-._~!$&'()*+,;=:@/?]|%[0-9a-f]{2})*)?(?:#(?:[a-z0-9\-._~!$&'()*+,;=:@/?]|%[0-9a-f]{2})*)?$/i;
-    function h(N) {
-      return v.test(N) && p.test(N);
-    }
-    let S = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/gm;
-    function f(N) {
-      return ((S.lastIndex = 0), S.test(N));
-    }
-    let R = -2147483648,
-      C = 2147483647;
-    function b(N) {
-      return Number.isInteger(N) && N <= C && N >= R;
-    }
-    function g(N) {
-      return Number.isInteger(N);
-    }
-    function k() {
-      return !0;
-    }
-    let V = /[^\\]\\Z/;
-    function H(N) {
-      if (V.test(N)) return !1;
-      try {
-        return (new RegExp(N), !0);
-      } catch (error) {
-        return !1;
-      }
-    }
-  }),
-  Rd = J((e) => {
-    (Object.defineProperty(e, "__esModule", { value: !0 }), (e.formatLimitDefinition = void 0));
-    let t = Xi(),
-      r = te(),
-      operators = r.operators,
-      a = {
-        formatMaximum: { okStr: "<=", ok: operators.LTE, fail: operators.GT },
-        formatMinimum: { okStr: ">=", ok: operators.GTE, fail: operators.LT },
-        formatExclusiveMaximum: { okStr: "<", ok: operators.LT, fail: operators.GTE },
-        formatExclusiveMinimum: { okStr: ">", ok: operators.GT, fail: operators.LTE },
+      uriString: {
+        type: "string",
+        format: "uri",
       },
-      n = {
-        message: ({ keyword: keyword, schemaCode: schemaCode }) =>
-          r.str`should be ${a[keyword].okStr} ${schemaCode}`,
-        params: ({ keyword: keyword, schemaCode: schemaCode }) =>
-          r._`{comparison: ${a[keyword].okStr}, limit: ${schemaCode}}`,
-      };
-    e.formatLimitDefinition = {
-      keyword: Object.keys(a),
-      type: "string",
-      schemaType: "string",
-      $data: !0,
-      error: n,
-      code(l) {
-        let { gen: gen, data: d, schemaCode: schemaCode, keyword: keyword, it: it } = l,
-          { opts: opts, self: y } = it;
-        if (!opts.validateFormats) return;
-        let v = new t.KeywordCxt(it, y.RULES.all.format.definition, "format");
-        if (v.$data) p();
-        else h();
-        function p() {
-          let scopeValue = gen.scopeValue("formats", { ref: y.formats, code: opts.code.formats }),
-            R = gen.const("fmt", r._`${scopeValue}[${v.schemaCode}]`);
-          l.fail$data(
-            (0, r.or)(
-              r._`typeof ${R} != "object"`,
-              r._`${R} instanceof RegExp`,
-              r._`typeof ${R}.compare != "function"`,
-              S(R),
-            ),
-          );
-        }
-        function h() {
-          let schema = v.schema,
-            R = y.formats[schema];
-          if (!R || R === !0) return;
-          if (typeof R != "object" || R instanceof RegExp || typeof R.compare != "function")
-            throw Error(`"${keyword}": format "${schema}" does not define "compare" function`);
-          let scopeValue = gen.scopeValue("formats", {
-            key: schema,
-            ref: R,
-            code: opts.code.formats ? r._`${opts.code.formats}${(0, r.getProperty)(schema)}` : void 0,
-          });
-          l.fail$data(S(scopeValue));
-        }
-        function S(f) {
-          return r._`${f}.compare(${d}, ${schemaCode}) ${a[keyword].fail} 0`;
-        }
+      uriReferenceString: {
+        type: "string",
+        format: "uri-reference",
       },
-      dependencies: ["format"],
-    };
-    let i = (l) => (l.addKeyword(e.formatLimitDefinition), l);
-    e.default = i;
-  }),
-  zd = J((e, t) => {
-    Object.defineProperty(e, "__esModule", { value: !0 });
-    let r = bd(),
-      s = Rd(),
-      a = te(),
-      n = new a.Name("fullFormats"),
-      i = new a.Name("fastFormats"),
-      l = (d, m = { keywords: !0 }) => {
-        if (Array.isArray(m)) return (c(d, m, r.fullFormats, n), d);
-        let [_, w] = m.mode === "fast" ? [r.fastFormats, i] : [r.fullFormats, n];
-        if ((c(d, m.formats || r.formatNames, _, w), m.keywords)) (0, s.default)(d);
-        return d;
-      };
-    l.get = (d, m = "full") => {
-      let _ = (m === "fast" ? r.fastFormats : r.fullFormats)[d];
-      if (!_) throw Error(`Unknown format "${d}"`);
-      return _;
-    };
-    function c(d, m, _, w) {
-      var P, y;
-      ((P = (y = d.opts.code).formats) !== null && P !== void 0) ||
-        (y.formats = a._`require("ajv-formats/dist/formats").${w}`);
-      for (let v of m) d.addFormat(v, _[v]);
+    },
+  };
+});
+var require_format_annotation = J((cjsExports, cjsModule) => {
+  cjsModule.exports = {
+    $schema: "https://json-schema.org/draft/2020-12/schema",
+    $id: "https://json-schema.org/draft/2020-12/meta/format-annotation",
+    $vocabulary: {
+      "https://json-schema.org/draft/2020-12/vocab/format-annotation": true,
+    },
+    $dynamicAnchor: "meta",
+    title: "Format vocabulary meta-schema for annotation results",
+    type: ["object", "boolean"],
+    properties: {
+      format: {
+        type: "string",
+      },
+    },
+  };
+});
+var require_meta_data = J((cjsExports, cjsModule) => {
+  cjsModule.exports = {
+    $schema: "https://json-schema.org/draft/2020-12/schema",
+    $id: "https://json-schema.org/draft/2020-12/meta/meta-data",
+    $vocabulary: {
+      "https://json-schema.org/draft/2020-12/vocab/meta-data": true,
+    },
+    $dynamicAnchor: "meta",
+    title: "Meta-data vocabulary meta-schema",
+    type: ["object", "boolean"],
+    properties: {
+      title: {
+        type: "string",
+      },
+      description: {
+        type: "string",
+      },
+      default: true,
+      deprecated: {
+        type: "boolean",
+        default: false,
+      },
+      readOnly: {
+        type: "boolean",
+        default: false,
+      },
+      writeOnly: {
+        type: "boolean",
+        default: false,
+      },
+      examples: {
+        type: "array",
+        items: true,
+      },
+    },
+  };
+});
+var require_validation = J((cjsExports, cjsModule) => {
+  cjsModule.exports = {
+    $schema: "https://json-schema.org/draft/2020-12/schema",
+    $id: "https://json-schema.org/draft/2020-12/meta/validation",
+    $vocabulary: {
+      "https://json-schema.org/draft/2020-12/vocab/validation": true,
+    },
+    $dynamicAnchor: "meta",
+    title: "Validation vocabulary meta-schema",
+    type: ["object", "boolean"],
+    properties: {
+      type: {
+        anyOf: [
+          {
+            $ref: "#/$defs/simpleTypes",
+          },
+          {
+            type: "array",
+            items: {
+              $ref: "#/$defs/simpleTypes",
+            },
+            minItems: 1,
+            uniqueItems: true,
+          },
+        ],
+      },
+      const: true,
+      enum: {
+        type: "array",
+        items: true,
+      },
+      multipleOf: {
+        type: "number",
+        exclusiveMinimum: 0,
+      },
+      maximum: {
+        type: "number",
+      },
+      exclusiveMaximum: {
+        type: "number",
+      },
+      minimum: {
+        type: "number",
+      },
+      exclusiveMinimum: {
+        type: "number",
+      },
+      maxLength: {
+        $ref: "#/$defs/nonNegativeInteger",
+      },
+      minLength: {
+        $ref: "#/$defs/nonNegativeIntegerDefault0",
+      },
+      pattern: {
+        type: "string",
+        format: "regex",
+      },
+      maxItems: {
+        $ref: "#/$defs/nonNegativeInteger",
+      },
+      minItems: {
+        $ref: "#/$defs/nonNegativeIntegerDefault0",
+      },
+      uniqueItems: {
+        type: "boolean",
+        default: false,
+      },
+      maxContains: {
+        $ref: "#/$defs/nonNegativeInteger",
+      },
+      minContains: {
+        $ref: "#/$defs/nonNegativeInteger",
+        default: 1,
+      },
+      maxProperties: {
+        $ref: "#/$defs/nonNegativeInteger",
+      },
+      minProperties: {
+        $ref: "#/$defs/nonNegativeIntegerDefault0",
+      },
+      required: {
+        $ref: "#/$defs/stringArray",
+      },
+      dependentRequired: {
+        type: "object",
+        additionalProperties: {
+          $ref: "#/$defs/stringArray",
+        },
+      },
+    },
+    $defs: {
+      nonNegativeInteger: {
+        type: "integer",
+        minimum: 0,
+      },
+      nonNegativeIntegerDefault0: {
+        $ref: "#/$defs/nonNegativeInteger",
+        default: 0,
+      },
+      simpleTypes: {
+        enum: ["array", "boolean", "integer", "null", "number", "object", "string"],
+      },
+      stringArray: {
+        type: "array",
+        items: {
+          type: "string",
+        },
+        uniqueItems: true,
+        default: [],
+      },
+    },
+  };
+});
+var require_json_schema_2020_12 = J((cjsExports) => {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  let metaSchema = require_schema();
+  let applicator = require_applicator();
+  let unevaluated = require_unevaluated();
+  let content = require_content();
+  let core = require_core_2();
+  let format = require_format_annotation();
+  let metadata = require_meta_data();
+  let validation = require_validation();
+  let META_SUPPORT_DATA = ["/properties"];
+  function addMetaSchema2020($data) {
+    [
+      metaSchema,
+      applicator,
+      unevaluated,
+      content,
+      core,
+      with$data(this, format),
+      metadata,
+      with$data(this, validation),
+    ].forEach((sch) => this.addMetaSchema(sch, undefined, false));
+    return this;
+    function with$data(ajv, sch) {
+      return $data ? ajv.$dataMetaSchema(sch, META_SUPPORT_DATA) : sch;
     }
-    ((t.exports = e = l), Object.defineProperty(e, "__esModule", { value: !0 }), (e.default = l));
-  }),
-  wd = Xi(),
-  $d = vd(),
-  Ed = Eo(zd(), 1),
-  Pd = new Set([
-    "https://json-schema.org/draft/2020-12/schema",
-    "http://json-schema.org/draft/2020-12/schema",
-  ]),
-  Td = Ed.default;
-//@ chunk-zykv69v4.js:416-8167 cjs-fingerprint
-var X = x(function (W) {
-  Object.defineProperty(W, "__esModule", { value: !0 });
-  W.formatNames = W.fastFormats = W.fullFormats = void 0;
-  function k(e, t) {
-    return { validate: e, compare: t };
   }
-  W.fullFormats = {
-    date: k(Q, O),
-    time: k(M(!0), j),
-    "date-time": k(U(!0), K),
-    "iso-time": k(M(), B),
-    "iso-date-time": k(U(), G),
+  cjsExports.default = addMetaSchema2020;
+});
+var require_2020 = J((cjsExports, cjsModule) => {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.MissingRefError =
+    cjsExports.ValidationError =
+    cjsExports.CodeGen =
+    cjsExports.Name =
+    cjsExports.nil =
+    cjsExports.stringify =
+    cjsExports.str =
+    cjsExports._ =
+    cjsExports.KeywordCxt =
+    cjsExports.Ajv2020 =
+      undefined;
+  let core_1 = require_core();
+  let draft2020_1 = require_draft7_2();
+  let discriminator_1 = require_discriminator();
+  let json_schema_2020_12_1 = require_json_schema_2020_12();
+  let META_SCHEMA_ID = "https://json-schema.org/draft/2020-12/schema";
+  var Ajv2020 = class extends core_1.default {
+    constructor(opts = {}) {
+      super({
+        ...opts,
+        dynamicRef: true,
+        next: true,
+        unevaluated: true,
+      });
+    }
+    _addVocabularies() {
+      super._addVocabularies();
+      draft2020_1.default.forEach((v) => this.addVocabulary(v));
+      if (this.opts.discriminator) this.addKeyword(discriminator_1.default);
+    }
+    _addDefaultMetaSchema() {
+      super._addDefaultMetaSchema();
+      let { $data, meta } = this.opts;
+      if (!meta) return;
+      json_schema_2020_12_1.default.call(this, $data);
+      this.refs["http://json-schema.org/schema"] = META_SCHEMA_ID;
+    }
+    defaultMeta() {
+      return (this.opts.defaultMeta =
+        super.defaultMeta() || (this.getSchema(META_SCHEMA_ID) ? META_SCHEMA_ID : undefined));
+    }
+  };
+  cjsExports.Ajv2020 = Ajv2020;
+  cjsModule.exports = cjsExports = Ajv2020;
+  cjsModule.exports.Ajv2020 = Ajv2020;
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.default = Ajv2020;
+  var validate_1 = require_validate();
+  Object.defineProperty(cjsExports, "KeywordCxt", {
+    enumerable: true,
+    get: function () {
+      return validate_1.KeywordCxt;
+    },
+  });
+  var codegen_1 = require_codegen();
+  Object.defineProperty(cjsExports, "_", {
+    enumerable: true,
+    get: function () {
+      return codegen_1._;
+    },
+  });
+  Object.defineProperty(cjsExports, "str", {
+    enumerable: true,
+    get: function () {
+      return codegen_1.str;
+    },
+  });
+  Object.defineProperty(cjsExports, "stringify", {
+    enumerable: true,
+    get: function () {
+      return codegen_1.stringify;
+    },
+  });
+  Object.defineProperty(cjsExports, "nil", {
+    enumerable: true,
+    get: function () {
+      return codegen_1.nil;
+    },
+  });
+  Object.defineProperty(cjsExports, "Name", {
+    enumerable: true,
+    get: function () {
+      return codegen_1.Name;
+    },
+  });
+  Object.defineProperty(cjsExports, "CodeGen", {
+    enumerable: true,
+    get: function () {
+      return codegen_1.CodeGen;
+    },
+  });
+  var validation_error_1 = require_validation_error();
+  Object.defineProperty(cjsExports, "ValidationError", {
+    enumerable: true,
+    get: function () {
+      return validation_error_1.default;
+    },
+  });
+  var ref_error_1 = require_ref_error();
+  Object.defineProperty(cjsExports, "MissingRefError", {
+    enumerable: true,
+    get: function () {
+      return ref_error_1.default;
+    },
+  });
+});
+var require_formats = J((cjsExports) => {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.formatNames = cjsExports.fastFormats = cjsExports.fullFormats = undefined;
+  function fmtDef(validate, compare) {
+    return {
+      validate,
+      compare,
+    };
+  }
+  cjsExports.fullFormats = {
+    date: fmtDef(date, compareDate),
+    time: fmtDef(getTime(true), compareTime),
+    "date-time": fmtDef(getDateTime(true), compareDateTime),
+    "iso-time": fmtDef(getTime(), compareIsoTime),
+    "iso-date-time": fmtDef(getDateTime(), compareIsoDateTime),
     duration: /^P(?!$)((\d+Y)?(\d+M)?(\d+D)?(T(?=\d)(\d+H)?(\d+M)?(\d+S)?)?|(\d+W)?)$/,
-    uri: we,
+    uri,
     "uri-reference":
       /^(?:[a-z][a-z0-9+\-.]*:)?(?:\/?\/(?:(?:[a-z0-9\-._~!$&'()*+,;=:]|%[0-9a-f]{2})*@)?(?:\[(?:(?:(?:(?:[0-9a-f]{1,4}:){6}|::(?:[0-9a-f]{1,4}:){5}|(?:[0-9a-f]{1,4})?::(?:[0-9a-f]{1,4}:){4}|(?:(?:[0-9a-f]{1,4}:){0,1}[0-9a-f]{1,4})?::(?:[0-9a-f]{1,4}:){3}|(?:(?:[0-9a-f]{1,4}:){0,2}[0-9a-f]{1,4})?::(?:[0-9a-f]{1,4}:){2}|(?:(?:[0-9a-f]{1,4}:){0,3}[0-9a-f]{1,4})?::[0-9a-f]{1,4}:|(?:(?:[0-9a-f]{1,4}:){0,4}[0-9a-f]{1,4})?::)(?:[0-9a-f]{1,4}:[0-9a-f]{1,4}|(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?))|(?:(?:[0-9a-f]{1,4}:){0,5}[0-9a-f]{1,4})?::[0-9a-f]{1,4}|(?:(?:[0-9a-f]{1,4}:){0,6}[0-9a-f]{1,4})?::)|[Vv][0-9a-f]+\.[a-z0-9\-._~!$&'()*+,;=:]+)\]|(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)|(?:[a-z0-9\-._~!$&'"()*+,;=]|%[0-9a-f]{2})*)(?::\d*)?(?:\/(?:[a-z0-9\-._~!$&'"()*+,;=:@]|%[0-9a-f]{2})*)*|\/(?:(?:[a-z0-9\-._~!$&'"()*+,;=:@]|%[0-9a-f]{2})+(?:\/(?:[a-z0-9\-._~!$&'"()*+,;=:@]|%[0-9a-f]{2})*)*)?|(?:[a-z0-9\-._~!$&'"()*+,;=:@]|%[0-9a-f]{2})+(?:\/(?:[a-z0-9\-._~!$&'"()*+,;=:@]|%[0-9a-f]{2})*)*)?(?:\?(?:[a-z0-9\-._~!$&'"()*+,;=:@/?]|%[0-9a-f]{2})*)?(?:#(?:[a-z0-9\-._~!$&'"()*+,;=:@/?]|%[0-9a-f]{2})*)?$/i,
     "uri-template":
@@ -2518,145 +3095,498 @@ var X = x(function (W) {
       /^(?=.{1,253}\.?$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[-0-9a-z]{0,61}[0-9a-z])?)*\.?$/i,
     ipv4: /^(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)$/,
     ipv6: /^((([0-9a-f]{1,4}:){7}([0-9a-f]{1,4}|:))|(([0-9a-f]{1,4}:){6}(:[0-9a-f]{1,4}|((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})|:))|(([0-9a-f]{1,4}:){5}(((:[0-9a-f]{1,4}){1,2})|:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})|:))|(([0-9a-f]{1,4}:){4}(((:[0-9a-f]{1,4}){1,3})|((:[0-9a-f]{1,4})?:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9a-f]{1,4}:){3}(((:[0-9a-f]{1,4}){1,4})|((:[0-9a-f]{1,4}){0,2}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9a-f]{1,4}:){2}(((:[0-9a-f]{1,4}){1,5})|((:[0-9a-f]{1,4}){0,3}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9a-f]{1,4}:){1}(((:[0-9a-f]{1,4}){1,6})|((:[0-9a-f]{1,4}){0,4}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(:(((:[0-9a-f]{1,4}){1,7})|((:[0-9a-f]{1,4}){0,5}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:)))$/i,
-    regex: Ie,
+    regex,
     uuid: /^(?:urn:uuid:)?[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i,
     "json-pointer": /^(?:\/(?:[^~/]|~0|~1)*)*$/,
     "json-pointer-uri-fragment": /^#(?:\/(?:[a-z0-9_\-.!$&'()*+,;:=@]|%[0-9a-f]{2}|~0|~1)*)*$/i,
     "relative-json-pointer": /^(?:0|[1-9][0-9]*)(?:#|(?:\/(?:[^~/]|~0|~1)*)*)$/,
-    byte: Se,
-    int32: { type: "number", validate: Ae },
-    int64: { type: "number", validate: $e },
-    float: { type: "number", validate: J },
-    double: { type: "number", validate: J },
-    password: !0,
-    binary: !0,
+    byte,
+    int32: {
+      type: "number",
+      validate: validateInt32,
+    },
+    int64: {
+      type: "number",
+      validate: validateInt64,
+    },
+    float: {
+      type: "number",
+      validate: validateNumber,
+    },
+    double: {
+      type: "number",
+      validate: validateNumber,
+    },
+    password: true,
+    binary: true,
   };
-  W.fastFormats = {
-    ...W.fullFormats,
-    date: k(/^\d\d\d\d-[0-1]\d-[0-3]\d$/, O),
-    time: k(/^(?:[0-2]\d:[0-5]\d:[0-5]\d|23:59:60)(?:\.\d+)?(?:z|[+-]\d\d(?::?\d\d)?)$/i, j),
-    "date-time": k(
+  cjsExports.fastFormats = {
+    ...cjsExports.fullFormats,
+    date: fmtDef(/^\d\d\d\d-[0-1]\d-[0-3]\d$/, compareDate),
+    time: fmtDef(/^(?:[0-2]\d:[0-5]\d:[0-5]\d|23:59:60)(?:\.\d+)?(?:z|[+-]\d\d(?::?\d\d)?)$/i, compareTime),
+    "date-time": fmtDef(
       /^\d\d\d\d-[0-1]\d-[0-3]\dt(?:[0-2]\d:[0-5]\d:[0-5]\d|23:59:60)(?:\.\d+)?(?:z|[+-]\d\d(?::?\d\d)?)$/i,
-      K,
+      compareDateTime,
     ),
-    "iso-time": k(/^(?:[0-2]\d:[0-5]\d:[0-5]\d|23:59:60)(?:\.\d+)?(?:z|[+-]\d\d(?::?\d\d)?)?$/i, B),
-    "iso-date-time": k(
+    "iso-time": fmtDef(
+      /^(?:[0-2]\d:[0-5]\d:[0-5]\d|23:59:60)(?:\.\d+)?(?:z|[+-]\d\d(?::?\d\d)?)?$/i,
+      compareIsoTime,
+    ),
+    "iso-date-time": fmtDef(
       /^\d\d\d\d-[0-1]\d-[0-3]\d[t\s](?:[0-2]\d:[0-5]\d:[0-5]\d|23:59:60)(?:\.\d+)?(?:z|[+-]\d\d(?::?\d\d)?)?$/i,
-      G,
+      compareIsoDateTime,
     ),
     uri: /^(?:[a-z][a-z0-9+\-.]*:)(?:\/?\/)?[^\s]*$/i,
     "uri-reference": /^(?:(?:[a-z][a-z0-9+\-.]*:)?\/?\/)?(?:[^\\\s#][^\s#]*)?(?:#[^\\\s]*)?$/i,
     email:
       /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$/i,
   };
-  W.formatNames = Object.keys(W.fullFormats);
-  function _e(e) {
-    return e % 4 === 0 && (e % 100 !== 0 || e % 400 === 0);
+  cjsExports.formatNames = Object.keys(cjsExports.fullFormats);
+  function isLeapYear(year) {
+    return year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
   }
-  var ke = /^(\d\d\d\d)-(\d\d)-(\d\d)$/,
-    ve = [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-  function Q(e) {
-    let match = ke.exec(e);
-    if (!match) return !1;
-    let r = +match[1],
-      a = +match[2],
-      n = +match[3];
-    return a >= 1 && a <= 12 && n >= 1 && n <= (a === 2 && _e(r) ? 29 : ve[a]);
+  let DATE = /^(\d\d\d\d)-(\d\d)-(\d\d)$/;
+  let DAYS = [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  function date(str) {
+    let matches = DATE.exec(str);
+    if (!matches) return false;
+    let year = +matches[1];
+    let month = +matches[2];
+    let day = +matches[3];
+    return (
+      month >= 1 && month <= 12 && day >= 1 && day <= (month === 2 && isLeapYear(year) ? 29 : DAYS[month])
+    );
   }
-  function O(e, t) {
-    if (!(e && t)) return;
-    if (e > t) return 1;
-    if (e < t) return -1;
+  function compareDate(d1, d2) {
+    if (!(d1 && d2)) return;
+    if (d1 > d2) return 1;
+    if (d1 < d2) return -1;
     return 0;
   }
-  var E = /^(\d\d):(\d\d):(\d\d(?:\.\d+)?)(z|([+-])(\d\d)(?::?(\d\d))?)?$/i;
-  function M(e) {
-    return function (r) {
-      let match = E.exec(r);
-      if (!match) return !1;
-      let n = +match[1],
-        s = +match[2],
-        o = +match[3],
-        u = match[4],
-        p = match[5] === "-" ? -1 : 1,
-        i = +(match[6] || 0),
-        c = +(match[7] || 0);
-      if (i > 23 || c > 59 || (e && !u)) return !1;
-      if (n <= 23 && s <= 59 && o < 60) return !0;
-      let d = s - c * p,
-        f = n - i * p - (d < 0 ? 1 : 0);
-      return (f === 23 || f === -1) && (d === 59 || d === -1) && o < 61;
+  let TIME = /^(\d\d):(\d\d):(\d\d(?:\.\d+)?)(z|([+-])(\d\d)(?::?(\d\d))?)?$/i;
+  function getTime(strictTimeZone) {
+    return function (str) {
+      let matches = TIME.exec(str);
+      if (!matches) return false;
+      let hr = +matches[1];
+      let min = +matches[2];
+      let sec = +matches[3];
+      let tz = matches[4];
+      let tzSign = matches[5] === "-" ? -1 : 1;
+      let tzH = +(matches[6] || 0);
+      let tzM = +(matches[7] || 0);
+      if (tzH > 23 || tzM > 59 || (strictTimeZone && !tz)) return false;
+      if (hr <= 23 && min <= 59 && sec < 60) return true;
+      let utcMin = min - tzM * tzSign;
+      let utcHr = hr - tzH * tzSign - (utcMin < 0 ? 1 : 0);
+      return (utcHr === 23 || utcHr === -1) && (utcMin === 59 || utcMin === -1) && sec < 61;
     };
   }
-  function j(e, t) {
-    if (!(e && t)) return;
-    let r = new Date("2020-01-01T" + e).valueOf(),
-      a = new Date("2020-01-01T" + t).valueOf();
-    if (!(r && a)) return;
-    return r - a;
+  function compareTime(s1, s2) {
+    if (!(s1 && s2)) return;
+    let t1 = new Date("2020-01-01T" + s1).valueOf();
+    let t2 = new Date("2020-01-01T" + s2).valueOf();
+    if (!(t1 && t2)) return;
+    return t1 - t2;
   }
-  function B(e, t) {
-    if (!(e && t)) return;
-    let match = E.exec(e),
-      match_2 = E.exec(t);
-    if (!(match && match_2)) return;
-    if (((e = match[1] + match[2] + match[3]), (t = match_2[1] + match_2[2] + match_2[3]), e > t)) return 1;
-    if (e < t) return -1;
+  function compareIsoTime(t1, t2) {
+    if (!(t1 && t2)) return;
+    let a1 = TIME.exec(t1);
+    let a2 = TIME.exec(t2);
+    if (!(a1 && a2)) return;
+    t1 = a1[1] + a1[2] + a1[3];
+    t2 = a2[1] + a2[2] + a2[3];
+    if (t1 > t2) return 1;
+    if (t1 < t2) return -1;
     return 0;
   }
-  var N = /t|\s/i;
-  function U(e) {
-    let t = M(e);
-    return function (a) {
-      let parts = a.split(N);
-      return parts.length === 2 && Q(parts[0]) && t(parts[1]);
+  let DATE_TIME_SEPARATOR = /t|\s/i;
+  function getDateTime(strictTimeZone) {
+    let time = getTime(strictTimeZone);
+    return function (str) {
+      let dateTime = str.split(DATE_TIME_SEPARATOR);
+      return dateTime.length === 2 && date(dateTime[0]) && time(dateTime[1]);
     };
   }
-  function K(e, t) {
-    if (!(e && t)) return;
-    let r = new Date(e).valueOf(),
-      a = new Date(t).valueOf();
-    if (!(r && a)) return;
-    return r - a;
+  function compareDateTime(dt1, dt2) {
+    if (!(dt1 && dt2)) return;
+    let d1 = new Date(dt1).valueOf();
+    let d2 = new Date(dt2).valueOf();
+    if (!(d1 && d2)) return;
+    return d1 - d2;
   }
-  function G(e, t) {
-    if (!(e && t)) return;
-    let [r, a] = e.split(N),
-      [n, s] = t.split(N),
-      o = O(r, n);
-    if (o === void 0) return;
-    return o || j(a, s);
+  function compareIsoDateTime(dt1, dt2) {
+    if (!(dt1 && dt2)) return;
+    let [d1, t1] = dt1.split(DATE_TIME_SEPARATOR);
+    let [d2, t2] = dt2.split(DATE_TIME_SEPARATOR);
+    let res = compareDate(d1, d2);
+    if (res === undefined) return;
+    return res || compareTime(t1, t2);
   }
-  var Te = /\/|:/,
-    be =
-      /^(?:[a-z][a-z0-9+\-.]*:)(?:\/?\/(?:(?:[a-z0-9\-._~!$&'()*+,;=:]|%[0-9a-f]{2})*@)?(?:\[(?:(?:(?:(?:[0-9a-f]{1,4}:){6}|::(?:[0-9a-f]{1,4}:){5}|(?:[0-9a-f]{1,4})?::(?:[0-9a-f]{1,4}:){4}|(?:(?:[0-9a-f]{1,4}:){0,1}[0-9a-f]{1,4})?::(?:[0-9a-f]{1,4}:){3}|(?:(?:[0-9a-f]{1,4}:){0,2}[0-9a-f]{1,4})?::(?:[0-9a-f]{1,4}:){2}|(?:(?:[0-9a-f]{1,4}:){0,3}[0-9a-f]{1,4})?::[0-9a-f]{1,4}:|(?:(?:[0-9a-f]{1,4}:){0,4}[0-9a-f]{1,4})?::)(?:[0-9a-f]{1,4}:[0-9a-f]{1,4}|(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?))|(?:(?:[0-9a-f]{1,4}:){0,5}[0-9a-f]{1,4})?::[0-9a-f]{1,4}|(?:(?:[0-9a-f]{1,4}:){0,6}[0-9a-f]{1,4})?::)|[Vv][0-9a-f]+\.[a-z0-9\-._~!$&'()*+,;=:]+)\]|(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)|(?:[a-z0-9\-._~!$&'()*+,;=]|%[0-9a-f]{2})*)(?::\d*)?(?:\/(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[0-9a-f]{2})*)*|\/(?:(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[0-9a-f]{2})+(?:\/(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[0-9a-f]{2})*)*)?|(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[0-9a-f]{2})+(?:\/(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[0-9a-f]{2})*)*)(?:\?(?:[a-z0-9\-._~!$&'()*+,;=:@/?]|%[0-9a-f]{2})*)?(?:#(?:[a-z0-9\-._~!$&'()*+,;=:@/?]|%[0-9a-f]{2})*)?$/i;
-  function we(e) {
-    return Te.test(e) && be.test(e);
+  let NOT_URI_FRAGMENT = /\/|:/;
+  let URI =
+    /^(?:[a-z][a-z0-9+\-.]*:)(?:\/?\/(?:(?:[a-z0-9\-._~!$&'()*+,;=:]|%[0-9a-f]{2})*@)?(?:\[(?:(?:(?:(?:[0-9a-f]{1,4}:){6}|::(?:[0-9a-f]{1,4}:){5}|(?:[0-9a-f]{1,4})?::(?:[0-9a-f]{1,4}:){4}|(?:(?:[0-9a-f]{1,4}:){0,1}[0-9a-f]{1,4})?::(?:[0-9a-f]{1,4}:){3}|(?:(?:[0-9a-f]{1,4}:){0,2}[0-9a-f]{1,4})?::(?:[0-9a-f]{1,4}:){2}|(?:(?:[0-9a-f]{1,4}:){0,3}[0-9a-f]{1,4})?::[0-9a-f]{1,4}:|(?:(?:[0-9a-f]{1,4}:){0,4}[0-9a-f]{1,4})?::)(?:[0-9a-f]{1,4}:[0-9a-f]{1,4}|(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?))|(?:(?:[0-9a-f]{1,4}:){0,5}[0-9a-f]{1,4})?::[0-9a-f]{1,4}|(?:(?:[0-9a-f]{1,4}:){0,6}[0-9a-f]{1,4})?::)|[Vv][0-9a-f]+\.[a-z0-9\-._~!$&'()*+,;=:]+)\]|(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)|(?:[a-z0-9\-._~!$&'()*+,;=]|%[0-9a-f]{2})*)(?::\d*)?(?:\/(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[0-9a-f]{2})*)*|\/(?:(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[0-9a-f]{2})+(?:\/(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[0-9a-f]{2})*)*)?|(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[0-9a-f]{2})+(?:\/(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[0-9a-f]{2})*)*)(?:\?(?:[a-z0-9\-._~!$&'()*+,;=:@/?]|%[0-9a-f]{2})*)?(?:#(?:[a-z0-9\-._~!$&'()*+,;=:@/?]|%[0-9a-f]{2})*)?$/i;
+  function uri(str) {
+    return NOT_URI_FRAGMENT.test(str) && URI.test(str);
   }
-  var V = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/gm;
-  function Se(e) {
-    return ((V.lastIndex = 0), V.test(e));
+  let BYTE = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/gm;
+  function byte(str) {
+    BYTE.lastIndex = 0;
+    return BYTE.test(str);
   }
-  var Pe = -2147483648,
-    xe = 2147483647;
-  function Ae(e) {
-    return Number.isInteger(e) && e <= xe && e >= Pe;
+  let MIN_INT32 = -2147483648;
+  let MAX_INT32 = 2147483647;
+  function validateInt32(value) {
+    return Number.isInteger(value) && value <= MAX_INT32 && value >= MIN_INT32;
   }
-  function $e(e) {
-    return Number.isInteger(e);
+  function validateInt64(value) {
+    return Number.isInteger(value);
   }
-  function J() {
-    return !0;
+  function validateNumber() {
+    return true;
   }
-  var De = /[^\\]\\Z/;
-  function Ie(e) {
-    if (De.test(e)) return !1;
+  let Z_ANCHOR = /[^\\]\\Z/;
+  function regex(str) {
+    if (Z_ANCHOR.test(str)) return false;
     try {
-      return (new RegExp(e), !0);
-    } catch (error) {
-      return !1;
+      new RegExp(str);
+      return true;
+    } catch (e) {
+      return false;
     }
   }
 });
-
-export { $d, Td, Pd, wd, X };
+var require_limit = J((cjsExports) => {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.formatLimitDefinition = undefined;
+  let ajv_1 = require_ajv();
+  let codegen_1 = require_codegen();
+  let ops = codegen_1.operators;
+  let KWDs = {
+    formatMaximum: {
+      okStr: "<=",
+      ok: ops.LTE,
+      fail: ops.GT,
+    },
+    formatMinimum: {
+      okStr: ">=",
+      ok: ops.GTE,
+      fail: ops.LT,
+    },
+    formatExclusiveMaximum: {
+      okStr: "<",
+      ok: ops.LT,
+      fail: ops.GTE,
+    },
+    formatExclusiveMinimum: {
+      okStr: ">",
+      ok: ops.GT,
+      fail: ops.LTE,
+    },
+  };
+  let error = {
+    message: ({ keyword, schemaCode }) => codegen_1.str`should be ${KWDs[keyword].okStr} ${schemaCode}`,
+    params: ({ keyword, schemaCode }) =>
+      codegen_1._`{comparison: ${KWDs[keyword].okStr}, limit: ${schemaCode}}`,
+  };
+  cjsExports.formatLimitDefinition = {
+    keyword: Object.keys(KWDs),
+    type: "string",
+    schemaType: "string",
+    $data: true,
+    error,
+    code(cxt) {
+      let { gen, data, schemaCode, keyword, it } = cxt;
+      let { opts, self: y } = it;
+      if (!opts.validateFormats) return;
+      let fCxt = new ajv_1.KeywordCxt(it, y.RULES.all.format.definition, "format");
+      if (fCxt.$data) validate$DataFormat();
+      else validateFormat();
+      function validate$DataFormat() {
+        let fmts = gen.scopeValue("formats", {
+          ref: y.formats,
+          code: opts.code.formats,
+        });
+        let fmt = gen.const("fmt", codegen_1._`${fmts}[${fCxt.schemaCode}]`);
+        cxt.fail$data(
+          (0, codegen_1.or)(
+            codegen_1._`typeof ${fmt} != "object"`,
+            codegen_1._`${fmt} instanceof RegExp`,
+            codegen_1._`typeof ${fmt}.compare != "function"`,
+            compareCode(fmt),
+          ),
+        );
+      }
+      function validateFormat() {
+        let format = fCxt.schema;
+        let fmtDef = y.formats[format];
+        if (!fmtDef || fmtDef === true) return;
+        if (typeof fmtDef != "object" || fmtDef instanceof RegExp || typeof fmtDef.compare != "function")
+          throw Error(`"${keyword}": format "${format}" does not define "compare" function`);
+        let fmt = gen.scopeValue("formats", {
+          key: format,
+          ref: fmtDef,
+          code: opts.code.formats
+            ? codegen_1._`${opts.code.formats}${(0, codegen_1.getProperty)(format)}`
+            : undefined,
+        });
+        cxt.fail$data(compareCode(fmt));
+      }
+      function compareCode(fmt) {
+        return codegen_1._`${fmt}.compare(${data}, ${schemaCode}) ${KWDs[keyword].fail} 0`;
+      }
+    },
+    dependencies: ["format"],
+  };
+  let formatLimitPlugin = (ajv) => {
+    ajv.addKeyword(cjsExports.formatLimitDefinition);
+    return ajv;
+  };
+  cjsExports.default = formatLimitPlugin;
+});
+var require_ajv_formats = J((cjsExports, cjsModule) => {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  let formats_1 = require_formats();
+  let limit_1 = require_limit();
+  let codegen_1 = require_codegen();
+  let fullName = new codegen_1.Name("fullFormats");
+  let fastName = new codegen_1.Name("fastFormats");
+  let formatsPlugin = (
+    ajv,
+    opts = {
+      keywords: true,
+    },
+  ) => {
+    if (Array.isArray(opts)) {
+      addFormats(ajv, opts, formats_1.fullFormats, fullName);
+      return ajv;
+    }
+    let [_, exportName] =
+      opts.mode === "fast" ? [formats_1.fastFormats, fastName] : [formats_1.fullFormats, fullName];
+    addFormats(ajv, opts.formats || formats_1.formatNames, _, exportName);
+    if (opts.keywords) (0, limit_1.default)(ajv);
+    return ajv;
+  };
+  formatsPlugin.get = (name, mode = "full") => {
+    let f = (mode === "fast" ? formats_1.fastFormats : formats_1.fullFormats)[name];
+    if (!f) throw Error(`Unknown format "${name}"`);
+    return f;
+  };
+  function addFormats(ajv, list, fs, exportName) {
+    var _a;
+    var _b;
+    if (!((_a = (_b = ajv.opts.code).formats) !== null && _a !== undefined))
+      _b.formats = codegen_1._`require("ajv-formats/dist/formats").${exportName}`;
+    for (let f of list) ajv.addFormat(f, fs[f]);
+  }
+  cjsModule.exports = cjsExports = formatsPlugin;
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.default = formatsPlugin;
+});
+var wd = require_ajv();
+var $d = require_2020();
+var import_ajv_formats = Eo(require_ajv_formats(), 1);
+var DRAFT_2020_12_URIS = new Set([
+  "https://json-schema.org/draft/2020-12/schema",
+  "http://json-schema.org/draft/2020-12/schema",
+]);
+var Td = import_ajv_formats.default;
+//@ chunk-zykv69v4.js:416-8167 cjs-fingerprint
+var require_formats_2 = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.formatNames = cjsExports.fastFormats = cjsExports.fullFormats = undefined;
+  function fmtDef(validate, compare) {
+    return {
+      validate,
+      compare,
+    };
+  }
+  cjsExports.fullFormats = {
+    date: fmtDef(date, compareDate),
+    time: fmtDef(getTime(true), compareTime),
+    "date-time": fmtDef(getDateTime(true), compareDateTime),
+    "iso-time": fmtDef(getTime(), compareIsoTime),
+    "iso-date-time": fmtDef(getDateTime(), compareIsoDateTime),
+    duration: /^P(?!$)((\d+Y)?(\d+M)?(\d+D)?(T(?=\d)(\d+H)?(\d+M)?(\d+S)?)?|(\d+W)?)$/,
+    uri,
+    "uri-reference":
+      /^(?:[a-z][a-z0-9+\-.]*:)?(?:\/?\/(?:(?:[a-z0-9\-._~!$&'()*+,;=:]|%[0-9a-f]{2})*@)?(?:\[(?:(?:(?:(?:[0-9a-f]{1,4}:){6}|::(?:[0-9a-f]{1,4}:){5}|(?:[0-9a-f]{1,4})?::(?:[0-9a-f]{1,4}:){4}|(?:(?:[0-9a-f]{1,4}:){0,1}[0-9a-f]{1,4})?::(?:[0-9a-f]{1,4}:){3}|(?:(?:[0-9a-f]{1,4}:){0,2}[0-9a-f]{1,4})?::(?:[0-9a-f]{1,4}:){2}|(?:(?:[0-9a-f]{1,4}:){0,3}[0-9a-f]{1,4})?::[0-9a-f]{1,4}:|(?:(?:[0-9a-f]{1,4}:){0,4}[0-9a-f]{1,4})?::)(?:[0-9a-f]{1,4}:[0-9a-f]{1,4}|(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?))|(?:(?:[0-9a-f]{1,4}:){0,5}[0-9a-f]{1,4})?::[0-9a-f]{1,4}|(?:(?:[0-9a-f]{1,4}:){0,6}[0-9a-f]{1,4})?::)|[Vv][0-9a-f]+\.[a-z0-9\-._~!$&'()*+,;=:]+)\]|(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)|(?:[a-z0-9\-._~!$&'"()*+,;=]|%[0-9a-f]{2})*)(?::\d*)?(?:\/(?:[a-z0-9\-._~!$&'"()*+,;=:@]|%[0-9a-f]{2})*)*|\/(?:(?:[a-z0-9\-._~!$&'"()*+,;=:@]|%[0-9a-f]{2})+(?:\/(?:[a-z0-9\-._~!$&'"()*+,;=:@]|%[0-9a-f]{2})*)*)?|(?:[a-z0-9\-._~!$&'"()*+,;=:@]|%[0-9a-f]{2})+(?:\/(?:[a-z0-9\-._~!$&'"()*+,;=:@]|%[0-9a-f]{2})*)*)?(?:\?(?:[a-z0-9\-._~!$&'"()*+,;=:@/?]|%[0-9a-f]{2})*)?(?:#(?:[a-z0-9\-._~!$&'"()*+,;=:@/?]|%[0-9a-f]{2})*)?$/i,
+    "uri-template":
+      /^(?:(?:[^\x00-\x20"'<>%\\^`{|}]|%[0-9a-f]{2})|\{[+#./;?&=,!@|]?(?:[a-z0-9_]|%[0-9a-f]{2})+(?::[1-9][0-9]{0,3}|\*)?(?:,(?:[a-z0-9_]|%[0-9a-f]{2})+(?::[1-9][0-9]{0,3}|\*)?)*\})*$/i,
+    url: /^(?:https?|ftp):\/\/(?:\S+(?::\S*)?@)?(?:(?!(?:10|127)(?:\.\d{1,3}){3})(?!(?:169\.254|192\.168)(?:\.\d{1,3}){2})(?!172\.(?:1[6-9]|2\d|3[0-1])(?:\.\d{1,3}){2})(?:[1-9]\d?|1\d\d|2[01]\d|22[0-3])(?:\.(?:1?\d{1,2}|2[0-4]\d|25[0-5])){2}(?:\.(?:[1-9]\d?|1\d\d|2[0-4]\d|25[0-4]))|(?:(?:[a-z0-9\u{00a1}-\u{ffff}]+-)*[a-z0-9\u{00a1}-\u{ffff}]+)(?:\.(?:[a-z0-9\u{00a1}-\u{ffff}]+-)*[a-z0-9\u{00a1}-\u{ffff}]+)*(?:\.(?:[a-z\u{00a1}-\u{ffff}]{2,})))(?::\d{2,5})?(?:\/[^\s]*)?$/iu,
+    email:
+      /^[a-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[a-z0-9!#$%&'*+/=?^_`{|}~-]+)*@(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/i,
+    hostname:
+      /^(?=.{1,253}\.?$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[-0-9a-z]{0,61}[0-9a-z])?)*\.?$/i,
+    ipv4: /^(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)$/,
+    ipv6: /^((([0-9a-f]{1,4}:){7}([0-9a-f]{1,4}|:))|(([0-9a-f]{1,4}:){6}(:[0-9a-f]{1,4}|((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})|:))|(([0-9a-f]{1,4}:){5}(((:[0-9a-f]{1,4}){1,2})|:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})|:))|(([0-9a-f]{1,4}:){4}(((:[0-9a-f]{1,4}){1,3})|((:[0-9a-f]{1,4})?:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9a-f]{1,4}:){3}(((:[0-9a-f]{1,4}){1,4})|((:[0-9a-f]{1,4}){0,2}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9a-f]{1,4}:){2}(((:[0-9a-f]{1,4}){1,5})|((:[0-9a-f]{1,4}){0,3}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9a-f]{1,4}:){1}(((:[0-9a-f]{1,4}){1,6})|((:[0-9a-f]{1,4}){0,4}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(:(((:[0-9a-f]{1,4}){1,7})|((:[0-9a-f]{1,4}){0,5}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:)))$/i,
+    regex,
+    uuid: /^(?:urn:uuid:)?[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i,
+    "json-pointer": /^(?:\/(?:[^~/]|~0|~1)*)*$/,
+    "json-pointer-uri-fragment": /^#(?:\/(?:[a-z0-9_\-.!$&'()*+,;:=@]|%[0-9a-f]{2}|~0|~1)*)*$/i,
+    "relative-json-pointer": /^(?:0|[1-9][0-9]*)(?:#|(?:\/(?:[^~/]|~0|~1)*)*)$/,
+    byte,
+    int32: {
+      type: "number",
+      validate: validateInt32,
+    },
+    int64: {
+      type: "number",
+      validate: validateInt64,
+    },
+    float: {
+      type: "number",
+      validate: validateNumber,
+    },
+    double: {
+      type: "number",
+      validate: validateNumber,
+    },
+    password: true,
+    binary: true,
+  };
+  cjsExports.fastFormats = {
+    ...cjsExports.fullFormats,
+    date: fmtDef(/^\d\d\d\d-[0-1]\d-[0-3]\d$/, compareDate),
+    time: fmtDef(/^(?:[0-2]\d:[0-5]\d:[0-5]\d|23:59:60)(?:\.\d+)?(?:z|[+-]\d\d(?::?\d\d)?)$/i, compareTime),
+    "date-time": fmtDef(
+      /^\d\d\d\d-[0-1]\d-[0-3]\dt(?:[0-2]\d:[0-5]\d:[0-5]\d|23:59:60)(?:\.\d+)?(?:z|[+-]\d\d(?::?\d\d)?)$/i,
+      compareDateTime,
+    ),
+    "iso-time": fmtDef(
+      /^(?:[0-2]\d:[0-5]\d:[0-5]\d|23:59:60)(?:\.\d+)?(?:z|[+-]\d\d(?::?\d\d)?)?$/i,
+      compareIsoTime,
+    ),
+    "iso-date-time": fmtDef(
+      /^\d\d\d\d-[0-1]\d-[0-3]\d[t\s](?:[0-2]\d:[0-5]\d:[0-5]\d|23:59:60)(?:\.\d+)?(?:z|[+-]\d\d(?::?\d\d)?)?$/i,
+      compareIsoDateTime,
+    ),
+    uri: /^(?:[a-z][a-z0-9+\-.]*:)(?:\/?\/)?[^\s]*$/i,
+    "uri-reference": /^(?:(?:[a-z][a-z0-9+\-.]*:)?\/?\/)?(?:[^\\\s#][^\s#]*)?(?:#[^\\\s]*)?$/i,
+    email:
+      /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$/i,
+  };
+  cjsExports.formatNames = Object.keys(cjsExports.fullFormats);
+  function isLeapYear(year) {
+    return year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  }
+  var DATE = /^(\d\d\d\d)-(\d\d)-(\d\d)$/;
+  var DAYS = [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  function date(str) {
+    let matches = DATE.exec(str);
+    if (!matches) return false;
+    let year = +matches[1];
+    let month = +matches[2];
+    let day = +matches[3];
+    return (
+      month >= 1 && month <= 12 && day >= 1 && day <= (month === 2 && isLeapYear(year) ? 29 : DAYS[month])
+    );
+  }
+  function compareDate(d1, d2) {
+    if (!(d1 && d2)) return;
+    if (d1 > d2) return 1;
+    if (d1 < d2) return -1;
+    return 0;
+  }
+  var TIME = /^(\d\d):(\d\d):(\d\d(?:\.\d+)?)(z|([+-])(\d\d)(?::?(\d\d))?)?$/i;
+  function getTime(strictTimeZone) {
+    return function (str) {
+      let matches = TIME.exec(str);
+      if (!matches) return false;
+      let hr = +matches[1];
+      let min = +matches[2];
+      let sec = +matches[3];
+      let tz = matches[4];
+      let tzSign = matches[5] === "-" ? -1 : 1;
+      let tzH = +(matches[6] || 0);
+      let tzM = +(matches[7] || 0);
+      if (tzH > 23 || tzM > 59 || (strictTimeZone && !tz)) return false;
+      if (hr <= 23 && min <= 59 && sec < 60) return true;
+      let utcMin = min - tzM * tzSign;
+      let utcHr = hr - tzH * tzSign - (utcMin < 0 ? 1 : 0);
+      return (utcHr === 23 || utcHr === -1) && (utcMin === 59 || utcMin === -1) && sec < 61;
+    };
+  }
+  function compareTime(s1, s2) {
+    if (!(s1 && s2)) return;
+    let t1 = new Date("2020-01-01T" + s1).valueOf();
+    let t2 = new Date("2020-01-01T" + s2).valueOf();
+    if (!(t1 && t2)) return;
+    return t1 - t2;
+  }
+  function compareIsoTime(t1, t2) {
+    if (!(t1 && t2)) return;
+    let a1 = TIME.exec(t1);
+    let a2 = TIME.exec(t2);
+    if (!(a1 && a2)) return;
+    t1 = a1[1] + a1[2] + a1[3];
+    t2 = a2[1] + a2[2] + a2[3];
+    if (t1 > t2) return 1;
+    if (t1 < t2) return -1;
+    return 0;
+  }
+  var DATE_TIME_SEPARATOR = /t|\s/i;
+  function getDateTime(strictTimeZone) {
+    let time = getTime(strictTimeZone);
+    return function (str) {
+      let dateTime = str.split(DATE_TIME_SEPARATOR);
+      return dateTime.length === 2 && date(dateTime[0]) && time(dateTime[1]);
+    };
+  }
+  function compareDateTime(dt1, dt2) {
+    if (!(dt1 && dt2)) return;
+    let d1 = new Date(dt1).valueOf();
+    let d2 = new Date(dt2).valueOf();
+    if (!(d1 && d2)) return;
+    return d1 - d2;
+  }
+  function compareIsoDateTime(dt1, dt2) {
+    if (!(dt1 && dt2)) return;
+    let [d1, t1] = dt1.split(DATE_TIME_SEPARATOR);
+    let [d2, t2] = dt2.split(DATE_TIME_SEPARATOR);
+    let res = compareDate(d1, d2);
+    if (res === undefined) return;
+    return res || compareTime(t1, t2);
+  }
+  var NOT_URI_FRAGMENT = /\/|:/;
+  var URI =
+    /^(?:[a-z][a-z0-9+\-.]*:)(?:\/?\/(?:(?:[a-z0-9\-._~!$&'()*+,;=:]|%[0-9a-f]{2})*@)?(?:\[(?:(?:(?:(?:[0-9a-f]{1,4}:){6}|::(?:[0-9a-f]{1,4}:){5}|(?:[0-9a-f]{1,4})?::(?:[0-9a-f]{1,4}:){4}|(?:(?:[0-9a-f]{1,4}:){0,1}[0-9a-f]{1,4})?::(?:[0-9a-f]{1,4}:){3}|(?:(?:[0-9a-f]{1,4}:){0,2}[0-9a-f]{1,4})?::(?:[0-9a-f]{1,4}:){2}|(?:(?:[0-9a-f]{1,4}:){0,3}[0-9a-f]{1,4})?::[0-9a-f]{1,4}:|(?:(?:[0-9a-f]{1,4}:){0,4}[0-9a-f]{1,4})?::)(?:[0-9a-f]{1,4}:[0-9a-f]{1,4}|(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?))|(?:(?:[0-9a-f]{1,4}:){0,5}[0-9a-f]{1,4})?::[0-9a-f]{1,4}|(?:(?:[0-9a-f]{1,4}:){0,6}[0-9a-f]{1,4})?::)|[Vv][0-9a-f]+\.[a-z0-9\-._~!$&'()*+,;=:]+)\]|(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)|(?:[a-z0-9\-._~!$&'()*+,;=]|%[0-9a-f]{2})*)(?::\d*)?(?:\/(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[0-9a-f]{2})*)*|\/(?:(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[0-9a-f]{2})+(?:\/(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[0-9a-f]{2})*)*)?|(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[0-9a-f]{2})+(?:\/(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[0-9a-f]{2})*)*)(?:\?(?:[a-z0-9\-._~!$&'()*+,;=:@/?]|%[0-9a-f]{2})*)?(?:#(?:[a-z0-9\-._~!$&'()*+,;=:@/?]|%[0-9a-f]{2})*)?$/i;
+  function uri(str) {
+    return NOT_URI_FRAGMENT.test(str) && URI.test(str);
+  }
+  var BYTE = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/gm;
+  function byte(str) {
+    BYTE.lastIndex = 0;
+    return BYTE.test(str);
+  }
+  var MIN_INT32 = -2147483648;
+  var MAX_INT32 = 2147483647;
+  function validateInt32(value) {
+    return Number.isInteger(value) && value <= MAX_INT32 && value >= MIN_INT32;
+  }
+  function validateInt64(value) {
+    return Number.isInteger(value);
+  }
+  function validateNumber() {
+    return true;
+  }
+  var Z_ANCHOR = /[^\\]\\Z/;
+  function regex(str) {
+    if (Z_ANCHOR.test(str)) return false;
+    try {
+      new RegExp(str);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+});
+export { $d, Td, DRAFT_2020_12_URIS, wd, require_formats_2 };

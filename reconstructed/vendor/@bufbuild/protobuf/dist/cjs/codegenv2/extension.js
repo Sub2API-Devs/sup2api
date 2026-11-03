@@ -8,14 +8,15 @@
 import { x } from "../../../../../../runtime/bun-runtime.js";
 
 //@ chunk-fq0cr76a.js:426472-426713 cjs-require-graph
-var hp = x(function (o2) {
-  Object.defineProperty(o2, "__esModule", { value: !0 });
-  o2.extDesc = dX;
-  function dX(e, n, ...r) {
-    if (r.length == 0) return e.extensions[n];
-    let s = r.pop();
-    return r.reduce((h, y) => h.nestedMessages[y], e.messages[n]).nestedExtensions[s];
+var require_extension = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.extDesc = extDesc;
+  function extDesc(file, path, ...paths) {
+    if (paths.length == 0) return file.extensions[path];
+    let e = paths.pop();
+    return paths.reduce((acc, cur) => acc.nestedMessages[cur], file.messages[path]).nestedExtensions[e];
   }
 });
-
-export { hp };
+export { require_extension };

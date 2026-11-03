@@ -26,7 +26,7 @@ import {
   classifyPortableRule,
   PATH_RULE_TOOLS,
   ATTRIBUTION_KEYS,
-  AAe,
+  looksLikeCredentialIncludingNul,
   MAX_STRING_SETTING_LENGTH,
   CONTROL_CHAR_RE,
   MAX_ATTRIBUTION_LENGTH,
@@ -37,139 +37,139 @@ import { isPlainObject } from "../../utils/isPlainObject.js";
 import { uniq, count } from "../../utils/collections.js";
 import { getSettingsFieldSchema } from "../../utils/settings/types.js";
 
+//@ chunk-bwpc82tt.js:12011-13248 placement
 /**
  * 设备规则过滤用到的安全参数记号、网络/数据库客户端命令、命令包装器（sudo、env、timeout 等）与公共 git 主机集合。
  */
-//@ chunk-bwpc82tt.js:12011-13248 placement
-var SAFE_ARG_TOKEN = "[A-Za-z0-9_.@*+][A-Za-z0-9_.@*+:~-]*",
-  SAFE_ARG_RE = new RegExp(
-    `^(?:(?:\\./)?${SAFE_ARG_TOKEN}(?:/${SAFE_ARG_TOKEN})*/?|-{1,2}(?:[A-Za-z0-9][A-Za-z0-9_.-]*)?)$`,
-  ),
-  NETWORK_COMMANDS = new Set([
-    "curl",
-    "wget",
-    "nc",
-    "ncat",
-    "netcat",
-    "telnet",
-    "ssh",
-    "scp",
-    "sftp",
-    "rsync",
-    "ping",
-    "ping6",
-    "traceroute",
-    "dig",
-    "nslookup",
-    "host",
-    "socat",
-    "psql",
-    "mysql",
-    "redis-cli",
-    "mongosh",
-    "ftp",
-    "http",
-    "https",
-    "xh",
-    "nmap",
-    "mtr",
-    "mosh",
-    "grpcurl",
-    "websocat",
-    "aria2c",
-    "w3m",
-    "lynx",
-    "whois",
-    "iwr",
-    "irm",
-    "invoke-webrequest",
-    "invoke-restmethod",
-    "test-netconnection",
-    "tnc",
-    "test-connection",
-    "resolve-dnsname",
-    "pg_dump",
-    "pg_dumpall",
-    "pg_restore",
-    "pg_isready",
-    "createdb",
-    "dropdb",
-    "mysqldump",
-    "mysqladmin",
-    "mariadb",
-    "mariadb-dump",
-    "mongo",
-    "mongodump",
-    "mongorestore",
-    "mongoexport",
-    "mongoimport",
-    "redis-benchmark",
-    "pgcli",
-    "mycli",
-    "mysqlsh",
-    "clickhouse-client",
-    "mongostat",
-    "mongotop",
-    "mongofiles",
-  ]),
-  COMMAND_WRAPPERS = new Set([
-    "sudo",
-    "doas",
-    "env",
-    "time",
-    "timeout",
-    "gtimeout",
-    "watch",
-    "xargs",
-    "command",
-    "builtin",
-    "exec",
-    "nohup",
-    "nice",
-    "caffeinate",
-    "setsid",
-    "stdbuf",
-    "ionice",
-    "chrt",
-    "strace",
-    "unbuffer",
-    "sshpass",
-    "proxychains",
-    "proxychains4",
-    "torsocks",
-    "tsocks",
-    "taskset",
-    "numactl",
-    "setpriv",
-    "flock",
-    "runuser",
-  ]),
-  PUBLIC_GIT_HOSTS = new Set([
-    GITHUB_HOST,
-    "gitlab.com",
-    "bitbucket.org",
-    "ssh.dev.azure.com",
-    `ssh.${GITHUB_HOST}`,
-    "altssh.gitlab.com",
-    "altssh.bitbucket.org",
-    "codeberg.org",
-  ]);
+var SAFE_ARG_TOKEN = "[A-Za-z0-9_.@*+][A-Za-z0-9_.@*+:~-]*";
+var SAFE_ARG_RE = new RegExp(
+  `^(?:(?:\\./)?${SAFE_ARG_TOKEN}(?:/${SAFE_ARG_TOKEN})*/?|-{1,2}(?:[A-Za-z0-9][A-Za-z0-9_.-]*)?)$`,
+);
+var NETWORK_COMMANDS = new Set([
+  "curl",
+  "wget",
+  "nc",
+  "ncat",
+  "netcat",
+  "telnet",
+  "ssh",
+  "scp",
+  "sftp",
+  "rsync",
+  "ping",
+  "ping6",
+  "traceroute",
+  "dig",
+  "nslookup",
+  "host",
+  "socat",
+  "psql",
+  "mysql",
+  "redis-cli",
+  "mongosh",
+  "ftp",
+  "http",
+  "https",
+  "xh",
+  "nmap",
+  "mtr",
+  "mosh",
+  "grpcurl",
+  "websocat",
+  "aria2c",
+  "w3m",
+  "lynx",
+  "whois",
+  "iwr",
+  "irm",
+  "invoke-webrequest",
+  "invoke-restmethod",
+  "test-netconnection",
+  "tnc",
+  "test-connection",
+  "resolve-dnsname",
+  "pg_dump",
+  "pg_dumpall",
+  "pg_restore",
+  "pg_isready",
+  "createdb",
+  "dropdb",
+  "mysqldump",
+  "mysqladmin",
+  "mariadb",
+  "mariadb-dump",
+  "mongo",
+  "mongodump",
+  "mongorestore",
+  "mongoexport",
+  "mongoimport",
+  "redis-benchmark",
+  "pgcli",
+  "mycli",
+  "mysqlsh",
+  "clickhouse-client",
+  "mongostat",
+  "mongotop",
+  "mongofiles",
+]);
+var COMMAND_WRAPPERS = new Set([
+  "sudo",
+  "doas",
+  "env",
+  "time",
+  "timeout",
+  "gtimeout",
+  "watch",
+  "xargs",
+  "command",
+  "builtin",
+  "exec",
+  "nohup",
+  "nice",
+  "caffeinate",
+  "setsid",
+  "stdbuf",
+  "ionice",
+  "chrt",
+  "strace",
+  "unbuffer",
+  "sshpass",
+  "proxychains",
+  "proxychains4",
+  "torsocks",
+  "tsocks",
+  "taskset",
+  "numactl",
+  "setpriv",
+  "flock",
+  "runuser",
+]);
+var PUBLIC_GIT_HOSTS = new Set([
+  GITHUB_HOST,
+  "gitlab.com",
+  "bitbucket.org",
+  "ssh.dev.azure.com",
+  `ssh.${GITHUB_HOST}`,
+  "altssh.gitlab.com",
+  "altssh.bitbucket.org",
+  "codeberg.org",
+]);
+//@ chunk-bwpc82tt.js:13248-13829 placement
 /**
  * shell 允许规则能否在云端安全复用：所有参数都是安全记号，不含主机/IP、端口、盘符、~ 或上级路径等机器相关成分（绑定 localhost 的参数例外）。
  */
-//@ chunk-bwpc82tt.js:13248-13829 placement
-function isPortableShellAllowRule(e, t) {
-  if (/(?:^|[\s:=])\d{4,}:\*$/.test(e.trim())) return !1;
-  let filtered = e
-      .trim()
-      .replace(/(?::\*|\s+\*)$/, "")
-      .split(/\s+/)
-      .filter((i) => i !== ""),
-    networkCommandIndex = findNetworkCommandIndex(filtered),
-    isBindOnlyCommand =
-      networkCommandIndex === null &&
-      skipCommandWrappers(filtered, 0) !== null &&
-      !filtered.some((i) => w(i) || /[*/\\]/.test(i));
+function isPortableShellAllowRule(ruleContent, toolName) {
+  if (/(?:^|[\s:=])\d{4,}:\*$/.test(ruleContent.trim())) return false;
+  let filtered = ruleContent
+    .trim()
+    .replace(/(?::\*|\s+\*)$/, "")
+    .split(/\s+/)
+    .filter((i) => i !== "");
+  let networkCommandIndex = findNetworkCommandIndex(filtered);
+  let isBindOnlyCommand =
+    networkCommandIndex === null &&
+    skipCommandWrappers(filtered, 0) !== null &&
+    !filtered.some((i) => isNetworkCommand(i) || /[*/\\]/.test(i));
   return (
     filtered.length > 0 &&
     filtered.every(
@@ -177,14 +177,14 @@ function isPortableShellAllowRule(e, t) {
         (isBindOnlyCommand && isLocalBindArg(filtered, c)) ||
         (SAFE_ARG_RE.test(i) &&
           !i.endsWith(":") &&
-          !i.split(/[/:@]/).some(dt) &&
+          !i.split(/[/:@]/).some(isWildcardOnlyToken) &&
           !(i.startsWith("-") && i.includes("..")) &&
           !/\*[A-Za-z]*\.\./.test(i) &&
           !/^\*+-[A-Za-z]*\.\.(?:\/|$)/.test(i) &&
           !/^~|:\**~/.test(i) &&
           !/^[A-Za-z]:(?!:)/.test(i) &&
           !/[:@]\//.test(i) &&
-          !(t === POWERSHELL_TOOL_NAME && /^\**[A-Za-z][\w*]*:/.test(i)) &&
+          !(toolName === POWERSHELL_TOOL_NAME && /^\**[A-Za-z][\w*]*:/.test(i)) &&
           !hasHostLikeToken(
             i,
             networkCommandIndex !== null && c > networkCommandIndex && !i.startsWith("-"),
@@ -194,20 +194,20 @@ function isPortableShellAllowRule(e, t) {
 }
 //@ chunk-bwpc82tt.js:13829-13985 placement
 var BIND_HOST_FLAGS = new Set([
-    "--host",
-    "--hostname",
-    "--bind",
-    "--listen",
-    "--addr",
-    "--address",
-    "-H",
-    "-b",
-  ]),
-  BIND_HOST_ENV_VARS = new Set(["HOST", "HOSTNAME", "BIND", "BIND_ADDR", "BIND_ADDRESS"]);
+  "--host",
+  "--hostname",
+  "--bind",
+  "--listen",
+  "--addr",
+  "--address",
+  "-H",
+  "-b",
+]);
+var BIND_HOST_ENV_VARS = new Set(["HOST", "HOSTNAME", "BIND", "BIND_ADDR", "BIND_ADDRESS"]);
 //@ chunk-bwpc82tt.js:13985-14214 placement
 function isLocalBindArg(e, t) {
-  let n = e[t] ?? "",
-    match = /^(--[a-z-]+)=(.+)$/.exec(n);
+  let n = e[t] ?? "";
+  let match = /^(--[a-z-]+)=(.+)$/.exec(n);
   if (match !== null) return BIND_HOST_FLAGS.has(match[1] ?? "") && isLoopbackHost(match[2] ?? "");
   let match_2 = /^([A-Z_]+)=(.+)$/.exec(n);
   if (match_2 !== null) return BIND_HOST_ENV_VARS.has(match_2[1] ?? "") && isLoopbackHost(match_2[2] ?? "");
@@ -231,25 +231,28 @@ function isLoopbackHost(e) {
 //@ chunk-bwpc82tt.js:14452-14661 placement
 function findNetworkCommandIndex(e) {
   let t = skipCommandWrappers(e, 0);
-  if (t !== null && w(e[t] ?? "")) return t;
+  if (t !== null && isNetworkCommand(e[t] ?? "")) return t;
   let index = e.findIndex((r, s) => s > (t ?? 0) && /^-(?:exec|execdir|ok|okdir)$/.test(r));
   if (index >= 0) {
     let r = skipCommandWrappers(e, index + 1);
-    return r !== null && w(e[r] ?? "") ? r : null;
+    return r !== null && isNetworkCommand(e[r] ?? "") ? r : null;
   }
   return null;
 }
 //@ chunk-bwpc82tt.js:14661-14743 placement
-function w(e) {
+/**
+ * 判断命令名是否属于网络类命令（curl、wget 等，忽略 .exe/.cmd 后缀）。
+ */
+function isNetworkCommand(e) {
   return NETWORK_COMMANDS.has(e.toLowerCase().replace(/\.(?:exe|cmd|bat|ps1)$/, ""));
 }
+//@ chunk-bwpc82tt.js:14743-15276 placement
 /**
  * 跳过环境变量赋值与命令包装器（及其参数、时长），返回真正命令所在的下标。
  */
-//@ chunk-bwpc82tt.js:14743-15276 placement
 function skipCommandWrappers(argv, index) {
   let n = argv[index];
-  if (n === void 0) return null;
+  if (n === undefined) return null;
   if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(n)) return skipCommandWrappers(argv, index + 1);
   let replaced = n.toLowerCase().replace(/\.exe$/, "");
   if (!COMMAND_WRAPPERS.has(replaced)) return index;
@@ -261,7 +264,7 @@ function skipCommandWrappers(argv, index) {
         (/^(?:-[A-Za-z]|--[A-Za-z][A-Za-z-]*)$/.test(arg) ||
           ((replaced === "sudo" || replaced === "doas") && /^-[A-Za-z]+[ugUCDrtTph]$/.test(arg))) &&
         !(argv[next + 1] ?? "").startsWith("-") &&
-        !w(argv[next + 1] ?? "") &&
+        !isNetworkCommand(argv[next + 1] ?? "") &&
         !COMMAND_WRAPPERS.has((argv[next + 1] ?? "").toLowerCase().replace(/\.exe$/, ""));
       next += takesValue ? 2 : 1;
     } else if (/^\d[\d.]*[smhd]?$/.test(arg)) next += 1;
@@ -270,30 +273,38 @@ function skipCommandWrappers(argv, index) {
   return skipCommandWrappers(argv, next);
 }
 //@ chunk-bwpc82tt.js:15276-15358 placement
-function dt(e) {
+/**
+ * 判断 token 是否只由 . 与 * 组成（通配写法）。
+ */
+function isWildcardOnlyToken(e) {
   return /^[.*]+$/.test(e) && !/^(?:\.|\.{3,}|\*{1,2}|\*\.\*)$/.test(e);
 }
+//@ chunk-bwpc82tt.js:15358-16569 placement
 /**
  * 参数记号是否含主机/地址成分：端口号、IPv6、user@host 域名、本地主机名、IP 形式或带 * 的地址等。
  */
-//@ chunk-bwpc82tt.js:15358-16569 placement
-function hasHostLikeToken(e, t = !1) {
+function hasHostLikeToken(e, t = false) {
   let flagValueVariants = /^-[A-Za-z][A-Za-z0-9_.-]+$/.test(e)
-      ? Array.from({ length: e.length - 2 }, (a, l) => l + 2)
-          .filter((a) => /^[A-Za-z]+$/.test(e.slice(1, a)))
-          .map((a) => e.slice(a))
-      : [],
-    firstFlagValue = flagValueVariants[0],
-    hostContext = t || /[:@]/.test(e) || firstFlagValue !== void 0,
-    segments = e.startsWith("--")
-      ? e
-          .replace(/^--[^=]*=|^--/, "")
-          .split(/[/:@]/)
-          .filter((a) => a !== "")
-      : e.startsWith("-")
-        ? flagValueVariants
-        : e.split(/[/:@]/).filter((a) => a !== ""),
-    sliced = e.split("@").slice(e.startsWith("@") ? 2 : 1);
+    ? Array.from(
+        {
+          length: e.length - 2,
+        },
+        (a, l) => l + 2,
+      )
+        .filter((a) => /^[A-Za-z]+$/.test(e.slice(1, a)))
+        .map((a) => e.slice(a))
+    : [];
+  let firstFlagValue = flagValueVariants[0];
+  let hostContext = t || /[:@]/.test(e) || firstFlagValue !== undefined;
+  let segments = e.startsWith("--")
+    ? e
+        .replace(/^--[^=]*=|^--/, "")
+        .split(/[/:@]/)
+        .filter((a) => a !== "")
+    : e.startsWith("-")
+      ? flagValueVariants
+      : e.split(/[/:@]/).filter((a) => a !== "");
+  let sliced = e.split("@").slice(e.startsWith("@") ? 2 : 1);
   return (
     (t && e.includes("*")) ||
     e.split("/").some((a) => {
@@ -309,7 +320,7 @@ function hasHostLikeToken(e, t = !1) {
       ) ||
     sliced.some((a) => {
       let lower = a.replace(/[/:].*$/, "").toLowerCase();
-      if (PUBLIC_GIT_HOSTS.has(lower)) return !1;
+      if (PUBLIC_GIT_HOSTS.has(lower)) return false;
       return (
         /^[a-z0-9*-]+(?:\.[a-z0-9*-]+)*\.[a-z*][a-z0-9*-]*$/.test(lower) ||
         isLocalHostname(lower.replace(/\*/g, "")) ||
@@ -320,34 +331,37 @@ function hasHostLikeToken(e, t = !1) {
     /^0+\//.test(e) ||
     (t && /^0+:/.test(e)) ||
     segments.some(
-      (a, l) =>
-        looksLikeIpAddress(a) ||
-        ((t || (firstFlagValue !== void 0 && l === 0)) &&
+      (segment, l) =>
+        looksLikeIpAddress(segment) ||
+        ((t || (firstFlagValue !== undefined && l === 0)) &&
           !e.startsWith("--") &&
-          /^(?:0+|0x[0-9a-f]*|[0-9a-fx]*\.[0-9a-fx.]*)$/i.test(a) &&
-          /\d/.test(a)),
+          /^(?:0+|0x[0-9a-f]*|[0-9a-fx]*\.[0-9a-fx.]*)$/i.test(segment) &&
+          /\d/.test(segment)),
     ) ||
     (e.includes("*") &&
       (e.includes(":") ||
-        segments.some((a) => /^[0-9a-fx.*]+$/i.test(a) && /\d/.test(a) && a.includes("*")))) ||
-    segments.some((a) =>
-      hostContext ? isLocalHostname(a.replace(/\*/g, "")) : isLocalhostName(a.replace(/\*/g, "")),
+        segments.some(
+          (segment) => /^[0-9a-fx.*]+$/i.test(segment) && /\d/.test(segment) && segment.includes("*"),
+        ))) ||
+    segments.some((segment) =>
+      hostContext ? isLocalHostname(segment.replace(/\*/g, "")) : isLocalhostName(segment.replace(/\*/g, "")),
     )
   );
 }
 //@ chunk-bwpc82tt.js:16569-16684 placement
 function stripSchemePrefixes(e) {
-  let t = [e],
-    n = e;
+  let t = [e];
+  let n = e;
   for (;;) {
     let replaced = n.replace(/^[a-z][\w-]*:/i, "");
     if (replaced === n || replaced === "") return t;
-    (t.push(replaced), (n = replaced));
+    t.push(replaced);
+    n = replaced;
   }
 }
 //@ chunk-bwpc82tt.js:16684-16895 placement
-function looksLikeIpAddress(e) {
-  let replaced = e.replace(/\.+$/, "");
+function looksLikeIpAddress(segment) {
+  let replaced = segment.replace(/\.+$/, "");
   return (
     /^(?:(?:\d+|0x[0-9a-f]+)\.){3}(?:\d+|0x[0-9a-f]+)$/i.test(replaced) ||
     /^(?:127\.|0\d+\.|0x[0-9a-f]*\.)[0-9a-fx.]*$/i.test(replaced) ||
@@ -355,20 +369,20 @@ function looksLikeIpAddress(e) {
     /^\d{8,}$/.test(replaced)
   );
 }
+//@ chunk-bwpc82tt.js:16895-17238 placement
 /**
  * WebFetch 规则内容是否指向本地或私有主机（本地主机名、IP、通配域名等）。
  */
-//@ chunk-bwpc82tt.js:16895-17238 placement
-function isLocalWebDomainRule(e) {
-  let replaced = e
-      .replace(/^domain:/i, "")
-      .trim()
-      .toLowerCase()
-      .replace(/%.*$/, ""),
-    replaced_2 = replaced
-      .replace(/\.+(?=(?::(?:\d+|\*))*$)/, "")
-      .replace(/(?::(?:\d+|\*))+$/, "")
-      .replace(/\.+$/, "");
+function isLocalWebDomainRule(ruleContent) {
+  let replaced = ruleContent
+    .replace(/^domain:/i, "")
+    .trim()
+    .toLowerCase()
+    .replace(/%.*$/, "");
+  let replaced_2 = replaced
+    .replace(/\.+(?=(?::(?:\d+|\*))*$)/, "")
+    .replace(/(?::(?:\d+|\*))+$/, "")
+    .replace(/\.+$/, "");
   return (
     isLocalHostname(replaced_2) ||
     (replaced_2 === "*" && replaced_2 !== replaced) ||
@@ -384,61 +398,79 @@ function isWindowsRootedPath(e) {
   );
 }
 //@ chunk-bwpc82tt.js:17351-17390 placement
-function _t(e) {
-  return hasWildcard(e) && matchRulePattern(e, DEVICE_SERVER_ID);
+/**
+ * 规则是否命中远程设备服务器 id。
+ */
+function matchesDeviceServerId(toolName) {
+  return hasWildcard(toolName) && matchRulePattern(toolName, DEVICE_SERVER_ID);
 }
 //@ chunk-bwpc82tt.js:17390-17621 placement
-function classifyRulePathRoot(e) {
-  let trimmed = e.replace(/^\s+/, "").replace(/^[!#]/, "").trim();
+function classifyRulePathRoot(ruleContent) {
+  let trimmed = ruleContent.replace(/^\s+/, "").replace(/^[!#]/, "").trim();
   if (trimmed.split("/").includes("..") || isWindowsRootedPath(trimmed) || /^~[^/]/.test(trimmed))
     return "machine";
   if (trimmed === "~" || trimmed.startsWith("~/")) return "home";
   return patternWithRootFor(trimmed, POSIX_ROOT).root !== null ? "machine" : "none";
 }
 //@ chunk-bwpc82tt.js:17621-17716 placement
-function NOo(e) {
-  let t = isPlainObject(e) ? g(e, "PreToolUse") : void 0;
+/**
+ * 设置里是否存在非空的 PreToolUse 钩子。
+ */
+function hasPreToolUseHooks(e) {
+  let t = isPlainObject(e) ? getOwn(e, "PreToolUse") : undefined;
   return Array.isArray(t) ? t.length > 0 : t != null;
 }
+//@ chunk-bwpc82tt.js:17716-18166 placement
 /**
  * 按 allow/deny/ask 逐类筛选规则；allow 规则还要去掉被 PreToolUse 钩子覆盖的工具，必要时整体放弃 allow；返回筛选结果与合并计数。
  */
-//@ chunk-bwpc82tt.js:17716-18166 placement
-function filterPermissionRules(e, t, n) {
-  if (!isPlainObject(e)) return { value: void 0, counts: emptyRuleCounts() };
+function filterPermissionRules(e, preToolUseHookActiveHere, hasLostAnAllowEntryAtParse) {
+  if (!isPlainObject(e))
+    return {
+      value: undefined,
+      counts: emptyRuleCounts(),
+    };
   let mapped = PERMISSION_BEHAVIORS.map((a) => {
-      let l = filterBehaviorRules(g(e, a), a);
-      return a === "allow" && typeof t === "function" ? dropHookGuardedRules(l, t) : l;
-    }),
-    dropAllAllow =
-      t === !0 ||
-      n ||
-      mapped.some(({ behavior: behavior, counts: counts, carveOutLost: carveOutLost }) =>
-        behavior === "allow" ? carveOutLost : countDroppedRules(counts) > 0,
-      ),
-    mapped_2 = mapped.map((a) => (a.behavior === "allow" && dropAllAllow ? dropAllRules(a) : a)),
-    reduced = mapped_2.reduce((a, { behavior: behavior, rules: rules }) => {
-      if (rules.length > 0) a[behavior] = rules;
-      return a;
-    }, {});
+    let l = filterBehaviorRules(getOwn(e, a), a);
+    return a === "allow" && typeof preToolUseHookActiveHere === "function"
+      ? dropHookGuardedRules(l, preToolUseHookActiveHere)
+      : l;
+  });
+  let dropAllAllow =
+    preToolUseHookActiveHere === true ||
+    hasLostAnAllowEntryAtParse ||
+    mapped.some(({ behavior, counts, carveOutLost }) =>
+      behavior === "allow" ? carveOutLost : countDroppedRules(counts) > 0,
+    );
+  let mapped_2 = mapped.map((a) => (a.behavior === "allow" && dropAllAllow ? dropAllRules(a) : a));
+  let reduced = mapped_2.reduce((acc, { behavior, rules }) => {
+    if (rules.length > 0) acc[behavior] = rules;
+    return acc;
+  }, {});
   return {
-    value: mapped_2.some(({ rules: rules }) => rules.length > 0) ? reduced : void 0,
-    counts: mapped_2.map(({ counts: counts }) => counts).reduce(addRuleCounts),
+    value: mapped_2.some(({ rules }) => rules.length > 0) ? reduced : undefined,
+    counts: mapped_2.map(({ counts }) => counts).reduce(addRuleCounts),
   };
 }
 //@ chunk-bwpc82tt.js:18166-18274 placement
-function countDroppedRules(e) {
-  return e.droppedRooted + e.droppedDevice + e.droppedInvalid + e.droppedOverCap + e.droppedCredential;
+function countDroppedRules(counts) {
+  return (
+    counts.droppedRooted +
+    counts.droppedDevice +
+    counts.droppedInvalid +
+    counts.droppedOverCap +
+    counts.droppedCredential
+  );
 }
 //@ chunk-bwpc82tt.js:18274-18557 placement
 function dropHookGuardedRules(e, t) {
-  let n = (s) => getRuleToolFamily(permissionRuleValueFromString(s).toolName).some(t),
-    filtered = e.rules.filter(n);
+  let n = (rule) => getRuleToolFamily(permissionRuleValueFromString(rule).toolName).some(t);
+  let filtered = e.rules.filter(n);
   if (filtered.length === 0) return e;
   return {
     ...e,
     rules: e.rules.filter((rule) => !n(rule)),
-    carveOutLost: e.carveOutLost || filtered.some(le),
+    carveOutLost: e.carveOutLost || filtered.some(isNegatedRuleContent),
     counts: {
       ...e.counts,
       kept: e.counts.kept - filtered.length,
@@ -460,58 +492,74 @@ function dropAllRules(e) {
     },
   };
 }
+//@ chunk-bwpc82tt.js:18741-19523 placement
 /**
  * 筛选一类规则：截断到上限、去重、逐条判定，统计保留数与各丢弃原因，并标记 allow 中是否丢失了例外规则。
  */
-//@ chunk-bwpc82tt.js:18741-19523 placement
-function filterBehaviorRules(e, t) {
-  let list = Array.isArray(e) ? e : [],
-    sliced = list.slice(0, MAX_RULES_PER_BEHAVIOR),
-    filtered = sliced.filter((d) => typeof d === "string"),
-    uniqueRules = uniq(filtered),
-    c = new Set(uniqueRules),
-    overCapCount = count(list.slice(MAX_RULES_PER_BEHAVIOR), (d) => typeof d !== "string" || !c.has(d)),
-    mapped = uniqueRules.map((d) => ({ rule: d, verdict: classifyPortableRule(d, t) })),
-    filtered_2 = mapped.filter(({ verdict: verdict }) => ee(verdict));
+function filterBehaviorRules(e, behavior) {
+  let list = Array.isArray(e) ? e : [];
+  let sliced = list.slice(0, MAX_RULES_PER_BEHAVIOR);
+  let filtered = sliced.filter((d) => typeof d === "string");
+  let uniqueRules = uniq(filtered);
+  let c = new Set(uniqueRules);
+  let overCapCount = count(list.slice(MAX_RULES_PER_BEHAVIOR), (d) => typeof d !== "string" || !c.has(d));
+  let mapped = uniqueRules.map((uniqueRule) => ({
+    rule: uniqueRule,
+    verdict: classifyPortableRule(uniqueRule, behavior),
+  }));
+  let filtered_2 = mapped.filter(({ verdict }) => isKeepVerdict(verdict));
   return {
-    behavior: t,
-    rules: filtered_2.map(({ rule: rule }) => rule),
+    behavior,
+    rules: filtered_2.map(({ rule }) => rule),
     carveOutLost:
-      t === "allow" &&
-      (overCapCount > 0 || mapped.some(({ rule: rule, verdict: verdict }) => !ee(verdict) && le(rule))),
+      behavior === "allow" &&
+      (overCapCount > 0 ||
+        mapped.some(({ rule, verdict }) => !isKeepVerdict(verdict) && isNegatedRuleContent(rule))),
     counts: {
       kept: filtered_2.length,
       duplicates: filtered.length - uniqueRules.length + (list.length - sliced.length - overCapCount),
-      droppedRooted: y(mapped, "rooted"),
-      droppedDevice: y(mapped, "device"),
+      droppedRooted: countVerdict(mapped, "rooted"),
+      droppedDevice: countVerdict(mapped, "device"),
       droppedInvalid:
-        y(mapped, "invalid") +
+        countVerdict(mapped, "invalid") +
         (sliced.length - filtered.length) +
-        (e !== void 0 && !Array.isArray(e) ? 1 : 0),
-      droppedOverCap: y(mapped, "over_cap") + overCapCount,
-      droppedCredential: y(mapped, "credential"),
-      droppedCredentialRestrictions: t === "allow" ? 0 : y(mapped, "credential"),
+        (e !== undefined && !Array.isArray(e) ? 1 : 0),
+      droppedOverCap: countVerdict(mapped, "over_cap") + overCapCount,
+      droppedCredential: countVerdict(mapped, "credential"),
+      droppedCredentialRestrictions: behavior === "allow" ? 0 : countVerdict(mapped, "credential"),
       droppedGuarded: 0,
-      coveringDeviceTools: y(filtered_2, "keep_covers_device_tools"),
+      coveringDeviceTools: countVerdict(filtered_2, "keep_covers_device_tools"),
     },
   };
 }
 //@ chunk-bwpc82tt.js:19523-19588 placement
-function ee(e) {
-  return e === "keep" || e === "keep_covers_device_tools";
+/**
+ * 判断规则的处理结论是否为保留。
+ */
+function isKeepVerdict(verdict) {
+  return verdict === "keep" || verdict === "keep_covers_device_tools";
 }
 //@ chunk-bwpc82tt.js:19588-19649 placement
-function le(e) {
-  return Tt(e)?.trimStart().startsWith("!") ?? !1;
+/**
+ * 规则内容是否以 !（否定）开头。
+ */
+function isNegatedRuleContent(rule) {
+  return ruleContentForPathTool(rule)?.trimStart().startsWith("!") ?? false;
 }
 //@ chunk-bwpc82tt.js:19649-19733 placement
-function Tt(e) {
-  let { toolName: toolName, ruleContent: ruleContent } = permissionRuleValueFromString(e);
-  return PATH_RULE_TOOLS.has(toolName) || hasWildcard(toolName) ? ruleContent : void 0;
+/**
+ * 取路径类工具规则的规则内容。
+ */
+function ruleContentForPathTool(e) {
+  let { toolName, ruleContent } = permissionRuleValueFromString(e);
+  return PATH_RULE_TOOLS.has(toolName) || hasWildcard(toolName) ? ruleContent : undefined;
 }
 //@ chunk-bwpc82tt.js:19733-19782 placement
-function y(e, t) {
-  return count(e, ({ verdict: verdict }) => verdict === t);
+/**
+ * 统计某结论的规则条数。
+ */
+function countVerdict(e, t) {
+  return count(e, ({ verdict }) => verdict === t);
 }
 //@ chunk-bwpc82tt.js:19782-19980 placement
 function emptyRuleCounts() {
@@ -528,10 +576,10 @@ function emptyRuleCounts() {
     coveringDeviceTools: 0,
   };
 }
+//@ chunk-bwpc82tt.js:19980-20516 placement
 /**
  * 合并两份规则过滤统计（保留、重复与各类丢弃计数）。
  */
-//@ chunk-bwpc82tt.js:19980-20516 placement
 function addRuleCounts(left, right) {
   return {
     kept: left.kept + right.kept,
@@ -547,66 +595,110 @@ function addRuleCounts(left, right) {
   };
 }
 //@ chunk-bwpc82tt.js:20516-20571 placement
-var Ot = { commit: re, pr: re, sessionUrl: k, commitTrailers: k };
+/**
+ * 各 attribution 字段的校验函数表。
+ */
+var ATTRIBUTION_VALIDATORS = {
+  commit: isValidAttributionText,
+  pr: isValidAttributionText,
+  sessionUrl: isBoolean,
+  commitTrailers: isBoolean,
+};
 //@ chunk-bwpc82tt.js:20571-20679 placement
 function pickAttribution(e) {
   if (!isPlainObject(e)) return;
-  let reduced = ATTRIBUTION_KEYS.reduce((n, r) => vt(n, e, r), {});
-  return Object.keys(reduced).length > 0 ? reduced : void 0;
+  let reduced = ATTRIBUTION_KEYS.reduce((acc, r) => pickAttributionField(acc, e, r), {});
+  return Object.keys(reduced).length > 0 ? reduced : undefined;
 }
+//@ chunk-bwpc82tt.js:20679-21102 placement
 /**
  * 递归去掉值或键像凭证的条目，返回保留的值与被去掉的数量。
  */
-//@ chunk-bwpc82tt.js:20679-21102 placement
 function scrubCredentialValues(e) {
-  if (typeof e === "string") return AAe(e) ? { kept: void 0, withheld: 1 } : { kept: e, withheld: 0 };
-  if (typeof e !== "object" || e === null) return { kept: e, withheld: 0 };
-  let mapped = Object.entries(e).map(([r, s]) => [
-      r,
-      AAe(r) ? { kept: void 0, withheld: 1 } : scrubCredentialValues(s),
-    ]),
-    flattened = mapped.flatMap(([r, s]) => (s.kept === void 0 ? [] : [[r, s.kept]]));
+  if (typeof e === "string")
+    return looksLikeCredentialIncludingNul(e)
+      ? {
+          kept: undefined,
+          withheld: 1,
+        }
+      : {
+          kept: e,
+          withheld: 0,
+        };
+  if (typeof e !== "object" || e === null)
+    return {
+      kept: e,
+      withheld: 0,
+    };
+  let mapped = Object.entries(e).map(([key, value]) => [
+    key,
+    looksLikeCredentialIncludingNul(key)
+      ? {
+          kept: undefined,
+          withheld: 1,
+        }
+      : scrubCredentialValues(value),
+  ]);
+  let flattened = mapped.flatMap(([r, s]) => (s.kept === undefined ? [] : [[r, s.kept]]));
   return {
     kept:
       flattened.length === 0
-        ? void 0
+        ? undefined
         : Array.isArray(e)
           ? flattened.map(([, r]) => r)
           : Object.fromEntries(flattened),
-    withheld: mapped.reduce((r, [, s]) => r + s.withheld, 0),
+    withheld: mapped.reduce((acc, [, s]) => acc + s.withheld, 0),
   };
 }
 //@ chunk-bwpc82tt.js:21102-21162 placement
-function vt(e, t, n) {
-  let r = g(t, n);
-  if (Ot[n](r)) e[n] = r;
+/**
+ * 按字段名取 attribution 值（校验通过才保留）。
+ */
+function pickAttributionField(e, t, n) {
+  let r = getOwn(t, n);
+  if (ATTRIBUTION_VALIDATORS[n](r)) e[n] = r;
   return e;
 }
 //@ chunk-bwpc82tt.js:21162-21250 placement
-function kt(e, t, n) {
-  let r = t[n];
-  if (r !== void 0 && getSettingsFieldSchema(n).safeParse(r).success) e[n] = r;
+/**
+ * 按设置字段 schema 校验后取该设置项。
+ */
+function pickSchemaValidSetting(e, picked, n) {
+  let r = picked[n];
+  if (r !== undefined && getSettingsFieldSchema(n).safeParse(r).success) e[n] = r;
   return e;
 }
 //@ chunk-bwpc82tt.js:21250-21343 placement
-function ne(e) {
+/**
+ * 取非空且不含控制字符的字符串设置。
+ */
+function pickNonEmptyString(e) {
   return typeof e === "string" &&
     e.trim() !== "" &&
     e.length <= MAX_STRING_SETTING_LENGTH &&
     !CONTROL_CHAR_RE.test(e)
     ? e
-    : void 0;
+    : undefined;
 }
 //@ chunk-bwpc82tt.js:21343-21378 placement
-function E(e) {
-  return k(e) ? e : void 0;
+/**
+ * 布尔设置原样返回，否则 undefined。
+ */
+function asBooleanOrUndefined(e) {
+  return isBoolean(e) ? e : undefined;
 }
 //@ chunk-bwpc82tt.js:21378-21420 placement
-function k(e) {
+/**
+ * 判断是否为布尔值。
+ */
+function isBoolean(e) {
   return typeof e === "boolean";
 }
 //@ chunk-bwpc82tt.js:21420-21508 placement
-function re(e) {
+/**
+ * 校验 attribution 文本（字节数不超限且不含不安全字符）。
+ */
+function isValidAttributionText(e) {
   return (
     typeof e === "string" &&
     Buffer.byteLength(e, "utf8") <= MAX_ATTRIBUTION_LENGTH &&
@@ -614,22 +706,24 @@ function re(e) {
   );
 }
 //@ chunk-bwpc82tt.js:21508-21562 placement
-function g(e, t) {
-  return Object.hasOwn(e, t) ? e[t] : void 0;
+/**
+ * 取对象自有属性（不存在返回 undefined）。
+ */
+function getOwn(userSettings, t) {
+  return Object.hasOwn(userSettings, t) ? userSettings[t] : undefined;
 }
-
 export {
-  NOo,
+  hasPreToolUseHooks,
   emptyRuleCounts,
   filterPermissionRules,
-  g,
-  ne,
+  getOwn,
+  pickNonEmptyString,
   pickAttribution,
-  E,
+  asBooleanOrUndefined,
   scrubCredentialValues,
-  kt,
+  pickSchemaValidSetting,
   classifyRulePathRoot,
   isPortableShellAllowRule,
   isLocalWebDomainRule,
-  _t,
+  matchesDeviceServerId,
 };

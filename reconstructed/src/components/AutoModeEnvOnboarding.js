@@ -30,65 +30,89 @@ import { env } from "../utils/env.js";
 import { w } from "../../vendor/react/compiler-runtime.js";
 import { useClock } from "../ink/components/ClockContext.js";
 import { R, P } from "../../vendor/react/cjs/react.production.js";
-import { Me } from "./design-system/ThemeProvider.js";
+import { useTheme_2 } from "./design-system/ThemeProvider.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
-import { e, r } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+} from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Box, Text } from "../ink/components/Text.js";
 import { ModelSelector } from "./agents/ModelSelector.js";
 import { Dialog } from "./design-system/Dialog.js";
 
 //@ chunk-18hwfzwa.js:149072-149150 placement
 function logAutoModeEnvOnboardingShown() {
-  if (!getAutoModeEnvOnboardingShownLogged())
-    (setAutoModeEnvOnboardingShownLogged(!0), logEvent("tengu_auto_mode_env_onboarding_shown", {}));
+  if (!getAutoModeEnvOnboardingShownLogged()) {
+    setAutoModeEnvOnboardingShownLogged(true);
+    logEvent("tengu_auto_mode_env_onboarding_shown", {});
+  }
 }
 //@ chunk-18hwfzwa.js:149150-149205 placement
-function QOt(io) {
-  return { ...io, autoModeEnvSetup: void 0 };
+function clearAutoModeEnvPrompt(io) {
+  return {
+    ...io,
+    autoModeEnvSetup: undefined,
+  };
 }
 //@ chunk-18hwfzwa.js:149205-149301 placement
-function zOt(so) {
-  return { ...so, autoModeEnvSetup: { ...so.autoModeEnvSetup, dismissedAt: Date.now() } };
+function dismissAutoModeEnvPrompt(so) {
+  return {
+    ...so,
+    autoModeEnvSetup: {
+      ...so.autoModeEnvSetup,
+      dismissedAt: Date.now(),
+    },
+  };
 }
 //@ chunk-18hwfzwa.js:149301-149387 placement
-function YOt(po) {
-  return { ...po, autoModeEnvSetup: { ...po.autoModeEnvSetup, dismissed: !0 } };
+function markAutoModeEnvPromptDismissed(po) {
+  return {
+    ...po,
+    autoModeEnvSetup: {
+      ...po.autoModeEnvSetup,
+      dismissed: true,
+    },
+  };
 }
 //@ chunk-18hwfzwa.js:149387-149417 placement
-var HOt = 604800000,
-  UOt = 5,
-  Kse = 5;
+var AUTO_MODE_ENV_DISMISS_TTL_MS = 604800000;
+var MIN_STARTUPS_TO_PROMPT = 5;
+var MIN_DENIALS_TO_PROMPT = 5;
 //@ chunk-18hwfzwa.js:149417-149719 placement
 function shouldOfferAutoModeEnvOnboarding() {
-  if (!isAutoModeSetupNotOverridden()) return !1;
-  if ((getAutoModeConfig()?.environment?.length ?? 0) > 0) return !1;
-  let h = getGlobalConfig();
-  if (h.numStartups < UOt) return !1;
-  if ((h.autoModeEnvSetup?.denials ?? 0) < Kse) return !1;
-  if (getStartupAutoModeOffer()) return !1;
-  let autoModeEnvSetup = h.autoModeEnvSetup;
-  if (autoModeEnvSetup?.dismissed) return !1;
-  if (autoModeEnvSetup?.dismissedAt && Date.now() - autoModeEnvSetup.dismissedAt < HOt) return !1;
-  return !0;
+  if (!isAutoModeSetupNotOverridden()) return false;
+  if ((getAutoModeConfig()?.environment?.length ?? 0) > 0) return false;
+  let globalConfig = getGlobalConfig();
+  if (globalConfig.numStartups < MIN_STARTUPS_TO_PROMPT) return false;
+  if ((globalConfig.autoModeEnvSetup?.denials ?? 0) < MIN_DENIALS_TO_PROMPT) return false;
+  if (getStartupAutoModeOffer()) return false;
+  let autoModeEnvSetup = globalConfig.autoModeEnvSetup;
+  if (autoModeEnvSetup?.dismissed) return false;
+  if (
+    autoModeEnvSetup?.dismissedAt &&
+    Date.now() - autoModeEnvSetup.dismissedAt < AUTO_MODE_ENV_DISMISS_TTL_MS
+  )
+    return false;
+  return true;
 }
+//@ chunk-18hwfzwa.js:149719-149784 placement = INTERNAL_PERMISSION_MODES (1)
 /**
  * 启动时是否提供 auto 模式选项：来自回退时看 atn("auto") 或 nAr，否则看 qgo（UI 层逻辑，误归入 types/permissions）。
  */
-//@ chunk-18hwfzwa.js:149719-149784 placement = INTERNAL_PERMISSION_MODES (1)
 function getStartupAutoModeOffer() {
   if (isAutoModeFromFallback())
     return shouldShowAutoDefaultNotice("auto") || hasNoticeImpression(AUTO_MODE_DEFAULT);
   return shouldShowAutoModeEntryWarning();
 }
+//@ chunk-18hwfzwa.js:149784-149935 placement
 /**
  * 判断是否该显示 auto 模式环境引导：符合资格、当前权限模式是 auto、不在查看子代理、不是后台任务/远程模式/桥接重连会话，且服务端建议显示。
  */
-//@ chunk-18hwfzwa.js:149784-149935 placement
-function shouldShowAutoModeEnvOnboarding(h) {
+function shouldShowAutoModeEnvOnboarding(state) {
   return (
-    getAutoModeEnvOnboardingEligible() === !0 &&
-    h.toolPermissionContext.mode === "auto" &&
-    !h.viewingAgentTaskId &&
+    getAutoModeEnvOnboardingEligible() === true &&
+    state.toolPermissionContext.mode === "auto" &&
+    !state.viewingAgentTaskId &&
     !isActingAsBgJob() &&
     !getIsRemoteMode() &&
     !env.CLAUDE_BRIDGE_REATTACH_SESSION &&
@@ -96,101 +120,131 @@ function shouldShowAutoModeEnvOnboarding(h) {
   );
 }
 //@ chunk-18hwfzwa.js:149935-149947 placement
-var CBe = 500;
+var AUTO_MODE_ENV_NOTICE_DEBOUNCE_MS = 500;
 //@ chunk-18hwfzwa.js:149947-151490 placement
-function AutoModeEnvOnboardingDialog(h) {
-  let $ = w(21),
-    { onAccept: onAccept, onLater: onLater, onDismiss: onDismiss } = h,
-    ee = useClock(),
-    Re;
-  if ($[0] !== ee) ((Re = ee.now()), ($[0] = ee), ($[1] = Re));
-  else Re = $[1];
-  let Be = R(Re),
-    { storageV5: storageV5 } = Me(),
-    We;
-  if ($[2] === MEMO_CACHE_SENTINEL) ((We = []), ($[2] = We));
-  else We = $[2];
+function AutoModeEnvOnboardingDialog(props) {
+  let $ = w(21);
+  let { onAccept, onLater, onDismiss } = props;
+  let clock = useClock();
+  let Re;
+  if ($[0] !== clock) {
+    Re = clock.now();
+    $[0] = clock;
+    $[1] = Re;
+  } else Re = $[1];
+  let Be = R(Re);
+  let { storageV5 } = useTheme_2();
+  let We;
+  if ($[2] === MEMO_CACHE_SENTINEL) {
+    We = [];
+    $[2] = We;
+  } else We = $[2];
   P(logAutoModeEnvOnboardingShown, We);
   let ze;
-  if ($[3] !== ee || $[4] !== onAccept || $[5] !== onDismiss || $[6] !== onLater || $[7] !== storageV5)
-    ((ze = function It(Xe) {
-      let now = ee.now();
+  if ($[3] !== clock || $[4] !== onAccept || $[5] !== onDismiss || $[6] !== onLater || $[7] !== storageV5) {
+    ze = function It(Xe) {
+      let rt = clock.now();
       let kt = Be.current;
-      if (((Be.current = Math.max(now, kt)), now - kt < CBe)) {
+      Be.current = Math.max(rt, kt);
+      if (rt - kt < AUTO_MODE_ENV_NOTICE_DEBOUNCE_MS) {
         return;
       }
       At: switch (Xe) {
         case "accept": {
-          if ((logEvent("tengu_auto_mode_env_onboarding_accept", {}), getGlobalConfig().autoModeEnvSetup))
-            saveGlobalConfig(QOt, storageV5);
+          logEvent("tengu_auto_mode_env_onboarding_accept", {});
+          if (getGlobalConfig().autoModeEnvSetup) saveGlobalConfig(clearAutoModeEnvPrompt, storageV5);
           onAccept();
           break At;
         }
         case "later": {
-          (logEvent("tengu_auto_mode_env_onboarding_later", {}), saveGlobalConfig(zOt, storageV5), onLater());
+          logEvent("tengu_auto_mode_env_onboarding_later", {});
+          saveGlobalConfig(dismissAutoModeEnvPrompt, storageV5);
+          onLater();
           break At;
         }
         case "dismiss": {
-          (logEvent("tengu_auto_mode_env_onboarding_dismiss", {}),
-            saveGlobalConfig(YOt, storageV5),
-            onDismiss());
+          logEvent("tengu_auto_mode_env_onboarding_dismiss", {});
+          saveGlobalConfig(markAutoModeEnvPromptDismissed, storageV5);
+          onDismiss();
         }
       }
-    }),
-      ($[3] = ee),
-      ($[4] = onAccept),
-      ($[5] = onDismiss),
-      ($[6] = onLater),
-      ($[7] = storageV5),
-      ($[8] = ze));
-  else ze = $[8];
-  let It = ze,
-    Ot;
-  if ($[9] !== It) ((Ot = () => It("later")), ($[9] = It), ($[10] = Ot));
-  else Ot = $[10];
+    };
+    $[3] = clock;
+    $[4] = onAccept;
+    $[5] = onDismiss;
+    $[6] = onLater;
+    $[7] = storageV5;
+    $[8] = ze;
+  } else ze = $[8];
+  let It = ze;
+  let onCancel;
+  if ($[9] !== It) {
+    onCancel = () => It("later");
+    $[9] = It;
+    $[10] = onCancel;
+  } else onCancel = $[10];
   let Et;
-  if ($[11] === MEMO_CACHE_SENTINEL)
-    ((Et = e(Box, {
+  if ($[11] === MEMO_CACHE_SENTINEL) {
+    Et = jsxProd_default(Box, {
       flexDirection: "column",
       gap: 1,
-      children: e(Text, {
+      children: jsxProd_default(Text, {
         children: "Auto mode works better when it knows your environment. Takes about a minute.",
       }),
-    })),
-      ($[11] = Et));
-  else Et = $[11];
-  let Dt;
-  if ($[12] === MEMO_CACHE_SENTINEL)
-    ((Dt = [
-      { label: "Yes", value: "accept" },
-      { label: "Not now", value: "later" },
-      { label: "Don't show again", value: "dismiss" },
-    ]),
-      ($[12] = Dt));
-  else Dt = $[12];
-  let Lt;
-  if ($[13] !== It) ((Lt = () => It("later")), ($[13] = It), ($[14] = Lt));
-  else Lt = $[14];
+    });
+    $[11] = Et;
+  } else Et = $[11];
+  let options;
+  if ($[12] === MEMO_CACHE_SENTINEL) {
+    options = [
+      {
+        label: "Yes",
+        value: "accept",
+      },
+      {
+        label: "Not now",
+        value: "later",
+      },
+      {
+        label: "Don't show again",
+        value: "dismiss",
+      },
+    ];
+    $[12] = options;
+  } else options = $[12];
+  let onCancel_2;
+  if ($[13] !== It) {
+    onCancel_2 = () => It("later");
+    $[13] = It;
+    $[14] = onCancel_2;
+  } else onCancel_2 = $[14];
   let oo;
-  if ($[15] !== It || $[16] !== Lt)
-    ((oo = e(ModelSelector, { options: Dt, onChange: It, onCancel: Lt })),
-      ($[15] = It),
-      ($[16] = Lt),
-      ($[17] = oo));
-  else oo = $[17];
+  if ($[15] !== It || $[16] !== onCancel_2) {
+    oo = jsxProd_default(ModelSelector, {
+      options,
+      onChange: It,
+      onCancel: onCancel_2,
+    });
+    $[15] = It;
+    $[16] = onCancel_2;
+    $[17] = oo;
+  } else oo = $[17];
   let Xt;
-  if ($[18] !== Ot || $[19] !== oo)
-    ((Xt = r(Dialog, { title: "Teach auto mode about your environment?", onCancel: Ot, children: [Et, oo] })),
-      ($[18] = Ot),
-      ($[19] = oo),
-      ($[20] = Xt));
-  else Xt = $[20];
+  if ($[18] !== onCancel || $[19] !== oo) {
+    Xt = jsxProd_default_2(Dialog, {
+      title: "Teach auto mode about your environment?",
+      onCancel,
+      children: [Et, oo],
+    });
+    $[18] = onCancel;
+    $[19] = oo;
+    $[20] = Xt;
+  } else Xt = $[20];
   return Xt;
 }
-
 export {
   shouldOfferAutoModeEnvOnboarding,
   AutoModeEnvOnboardingDialog,
   shouldShowAutoModeEnvOnboarding,
-  Kse,
+  MIN_DENIALS_TO_PROMPT,
 };

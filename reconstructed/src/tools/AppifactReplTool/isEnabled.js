@@ -8,7 +8,7 @@
  * pieces: chunk-djnrvf1b.js (3)
  * attribution: placement 3
  */
-import { Ao } from "../../bootstrap/sessionFeatureValues.js";
+import { getSessionFeatureValues } from "../../bootstrap/sessionFeatureValues.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import { isRemoteCowork } from "../../utils/entrypointKinds.js";
 
@@ -16,19 +16,19 @@ import { isRemoteCowork } from "../../utils/entrypointKinds.js";
 var TENGU_BUZZING_LIGHTNING = "tengu_buzzing_lightning";
 //@ chunk-djnrvf1b.js:330-432 placement
 function isArtifactReplPathEnabled() {
-  let t = Ao(),
-    o = void 0;
-  return (
-    (t.artifactReplPathEnabled ??= getFeatureValue_CACHED_MAY_BE_STALE(TENGU_BUZZING_LIGHTNING, !1)),
-    t.artifactReplPathEnabled
+  let sessionFeatureValues = getSessionFeatureValues();
+  let o = undefined;
+  sessionFeatureValues.artifactReplPathEnabled ??= getFeatureValue_CACHED_MAY_BE_STALE(
+    TENGU_BUZZING_LIGHTNING,
+    false,
   );
+  return sessionFeatureValues.artifactReplPathEnabled;
 }
+//@ chunk-djnrvf1b.js:432-464 placement
 /**
  * AppifactRepl 工具开关（tengu_buzzing_lightning）。
  */
-//@ chunk-djnrvf1b.js:432-464 placement
 function isAppifactReplToolEnabled() {
   return isRemoteCowork() && isArtifactReplPathEnabled();
 }
-
 export { isAppifactReplToolEnabled };

@@ -11,67 +11,74 @@ import { Cr } from "./types.js";
 import { de } from "./util.js";
 
 //@ chunk-pwh5dx3n.js:128334-129796 cjs-fingerprint
-var Ka = x(function (SA, zd) {
-  zd.exports = BE;
-  var UE = nt(),
-    io = Cr(),
-    so = de();
-  function Bd(e, t, r, i) {
-    return t.delimited
-      ? e(
+var Ka = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = encoder;
+  var Enum = nt();
+  var types = Cr();
+  var util = de();
+  function genTypePartial(gen, field, fieldIndex, ref) {
+    return field.delimited
+      ? gen(
           "types[%i].encode(%s,w.uint32(%i)).uint32(%i)",
-          r,
-          i,
-          ((t.id << 3) | 3) >>> 0,
-          ((t.id << 3) | 4) >>> 0,
+          fieldIndex,
+          ref,
+          ((field.id << 3) | 3) >>> 0,
+          ((field.id << 3) | 4) >>> 0,
         )
-      : e("types[%i].encode(%s,w.uint32(%i).fork()).ldelim()", r, i, ((t.id << 3) | 2) >>> 0);
+      : gen(
+          "types[%i].encode(%s,w.uint32(%i).fork()).ldelim()",
+          fieldIndex,
+          ref,
+          ((field.id << 3) | 2) >>> 0,
+        );
   }
-  function BE(e) {
-    var t = so.codegen(["m", "w"], e.name + "$encode")("if(!w)")("w=Writer.create()"),
-      r,
-      i,
-      sorted = e.fieldsArray.slice().sort(so.compareFieldsById);
-    for (var r = 0; r < sorted.length; ++r) {
-      var resolved = sorted[r].resolve(),
-        index = e._fieldsArray.indexOf(resolved),
-        o = resolved.resolvedType instanceof UE ? "int32" : resolved.type,
-        l = io.basic[o];
-      if (((i = "m" + so.safeProp(resolved.name)), resolved.map)) {
-        if (
-          (t(
-            "if(%s!=null&&Object.hasOwnProperty.call(m,%j)){",
-            i,
-            resolved.name,
-          )("for(var ks=Object.keys(%s),i=0;i<ks.length;++i){", i)(
-            "w.uint32(%i).fork().uint32(%i).%s(ks[i])",
-            ((resolved.id << 3) | 2) >>> 0,
-            8 | io.mapKey[resolved.keyType],
-            resolved.keyType,
-          ),
-          l === void 0)
-        )
-          t("types[%i].encode(%s[ks[i]],w.uint32(18).fork()).ldelim().ldelim()", index, i);
-        else t(".uint32(%i).%s(%s[ks[i]]).ldelim()", 16 | l, o, i);
-        t("}")("}");
-      } else if (resolved.repeated) {
-        if ((t("if(%s!=null&&%s.length){", i, i), resolved.packed && io.packed[o] !== void 0))
-          t("w.uint32(%i).fork()", ((resolved.id << 3) | 2) >>> 0)("for(var i=0;i<%s.length;++i)", i)(
+  function encoder(mtype) {
+    var gen = util.codegen(["m", "w"], mtype.name + "$encode")("if(!w)")("w=Writer.create()");
+    var j;
+    var ref;
+    var fields = mtype.fieldsArray.slice().sort(util.compareFieldsById);
+    for (var j = 0; j < fields.length; ++j) {
+      var field = fields[j].resolve();
+      var index = mtype._fieldsArray.indexOf(field);
+      var type = field.resolvedType instanceof Enum ? "int32" : field.type;
+      var wireType = types.basic[type];
+      ref = "m" + util.safeProp(field.name);
+      if (field.map) {
+        gen(
+          "if(%s!=null&&Object.hasOwnProperty.call(m,%j)){",
+          ref,
+          field.name,
+        )("for(var ks=Object.keys(%s),i=0;i<ks.length;++i){", ref)(
+          "w.uint32(%i).fork().uint32(%i).%s(ks[i])",
+          ((field.id << 3) | 2) >>> 0,
+          8 | types.mapKey[field.keyType],
+          field.keyType,
+        );
+        if (wireType === undefined)
+          gen("types[%i].encode(%s[ks[i]],w.uint32(18).fork()).ldelim().ldelim()", index, ref);
+        else gen(".uint32(%i).%s(%s[ks[i]]).ldelim()", 16 | wireType, type, ref);
+        gen("}")("}");
+      } else if (field.repeated) {
+        gen("if(%s!=null&&%s.length){", ref, ref);
+        if (field.packed && types.packed[type] !== undefined)
+          gen("w.uint32(%i).fork()", ((field.id << 3) | 2) >>> 0)("for(var i=0;i<%s.length;++i)", ref)(
             "w.%s(%s[i])",
-            o,
-            i,
+            type,
+            ref,
           )("w.ldelim()");
-        else if ((t("for(var i=0;i<%s.length;++i)", i), l === void 0)) Bd(t, resolved, index, i + "[i]");
-        else t("w.uint32(%i).%s(%s[i])", ((resolved.id << 3) | l) >>> 0, o, i);
-        t("}");
+        else {
+          gen("for(var i=0;i<%s.length;++i)", ref);
+          if (wireType === undefined) genTypePartial(gen, field, index, ref + "[i]");
+          else gen("w.uint32(%i).%s(%s[i])", ((field.id << 3) | wireType) >>> 0, type, ref);
+        }
+        gen("}");
       } else {
-        if (resolved.optional) t("if(%s!=null&&Object.hasOwnProperty.call(m,%j))", i, resolved.name);
-        if (l === void 0) Bd(t, resolved, index, i);
-        else t("w.uint32(%i).%s(%s)", ((resolved.id << 3) | l) >>> 0, o, i);
+        if (field.optional) gen("if(%s!=null&&Object.hasOwnProperty.call(m,%j))", ref, field.name);
+        if (wireType === undefined) genTypePartial(gen, field, index, ref);
+        else gen("w.uint32(%i).%s(%s)", ((field.id << 3) | wireType) >>> 0, type, ref);
       }
     }
-    return t("return w");
+    return gen("return w");
   }
 });
-
 export { Ka };

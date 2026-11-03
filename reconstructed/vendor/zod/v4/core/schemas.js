@@ -5,604 +5,745 @@
  * pieces: chunk-7vp249v4.js (58)
  * attribution: esm-fingerprint 55, esm-layout 3
  */
-import { Fr, x8e, Xne, __zod_globalConfig, ZodEncodeError } from "./core.js";
-import { Qr } from "./versions.js";
+import { Fr, $ZodAsyncError, config, globalConfig, $ZodEncodeError } from "./core.js";
+import { version } from "./versions.js";
 import {
-  cMe,
-  PIi,
-  ohs,
+  aborted,
+  explicitlyAborted,
+  attachSchema,
   shs,
-  rut,
-  R8e,
-  j1e,
-  RIi,
-  lSr,
-  PE,
-  She,
-  fMn,
-  kIi,
-  AIi,
-  cMn,
-  dSr,
-  qJt,
+  own,
+  finalizeIssue,
+  prefixIssues,
+  optionalKeys,
+  cached,
+  defineLazyInternal,
+  assignProp,
+  isObject,
+  cloneDef,
+  allowsEval,
+  cleanRegex,
+  rawShape,
+  isPlainObject,
   iSr,
   CIi,
-  _Mt,
-  uMn,
-  YJt,
+  escapeRegex,
+  defineLazy,
+  issue,
 } from "./util.js";
 import {
-  Tr,
-  gr,
-  Ee,
-  xr,
-  wr,
+  anyString,
+  guid,
+  uuid,
+  email,
+  httpProtocol,
   vr,
-  mr,
+  nanoid,
   hr,
   ar,
-  lr,
-  pr,
-  fr,
-  dr,
-  Er,
+  cuid2,
+  ulid,
+  xid,
+  ksuid,
+  datetime,
   Or,
   Ar,
-  _r,
-  yr,
-  $r,
-  zr,
-  br,
-  Pr,
-  V,
-  Nr,
-  Rr,
-  Cr,
+  duration,
+  ipv4,
+  ipv6,
+  cidrv4,
+  cidrv6,
+  e164,
+  number,
+  boolean,
+  _undefined,
+  _null,
 } from "./regexes.js";
-import { W, Mr, JK } from "./checks.js";
-import { je } from "./doc.js";
+import { $ZodCheckStringFormat, $ZodCheckNumberFormat, $ZodCheck } from "./checks.js";
+import { Doc } from "./doc.js";
 
 //@ chunk-7vp249v4.js:14398-15969 esm-fingerprint
-var Qk = Fr(
-    "$ZodType",
-    (e, t) => {
-      var r;
-      (e ?? (e = {}), (e._zod.def = t), (e._zod.bag = e._zod.bag || {}), (e._zod.version = Qr));
-      let checks = e._zod.def.checks,
-        i = e._zod.traits.has("$ZodCheck") ? [e, ...(checks ?? [])] : checks?.length ? [...checks] : [];
-      for (let s of i) for (let c of s._zod.onattach) c(e);
-      if (i.length === 0)
-        ((r = e._zod).deferred ?? (r.deferred = []),
-          e._zod.deferred?.push(() => {
-            e._zod.run = e._zod.parse;
-          }));
-      else {
-        let s = (a, l, p) => {
-            if (a.memo) return a;
-            let f = cMe(a),
-              d;
-            for (let _ of l) {
-              if (_._zod.def.when) {
-                if (PIi(a)) continue;
-                if (!_._zod.def.when(a)) continue;
-              } else if (f) continue;
-              let m = a.issues.length,
-                check = _._zod.check(a);
-              if (check instanceof Promise && p?.async === !1) throw new x8e();
-              if (d || check instanceof Promise)
-                d = (d ?? Promise.resolve()).then(async () => {
-                  if ((await check, a.issues.length === m)) return;
-                  if ((ohs(a.issues, m, e), !f)) f = cMe(a, m);
-                });
-              else {
-                if (a.issues.length === m) continue;
-                if ((ohs(a.issues, m, e), !f)) f = cMe(a, m);
-              }
-            }
-            if (d) return d.then(() => a);
-            return a;
-          },
-          c = (a, l, p) => {
-            if (cMe(a)) return ((a.aborted = !0), a);
-            let f = s(l, i, p);
-            if (f instanceof Promise) {
-              if (p.async === !1) throw new x8e();
-              return f.then((d) => e._zod.parse(d, p));
-            }
-            return e._zod.parse(f, p);
-          };
-        e._zod.run = (a, l) => {
-          if (l.skipChecks) return e._zod.parse(a, l);
-          if (l.direction === "backward") {
-            let parse = e._zod.parse({ value: a.value, issues: [] }, { ...l, skipChecks: !0 });
-            if (parse instanceof Promise) return parse.then((d) => c(d, a, l));
-            return c(parse, a, l);
+var $ZodType = Fr(
+  "$ZodType",
+  (inst, def) => {
+    var _a;
+    inst ?? (inst = {});
+    inst._zod.def = def;
+    inst._zod.bag = inst._zod.bag || {};
+    inst._zod.version = version;
+    let defChecks = inst._zod.def.checks;
+    let checks = inst._zod.traits.has("$ZodCheck")
+      ? [inst, ...(defChecks ?? [])]
+      : defChecks?.length
+        ? [...defChecks]
+        : [];
+    for (let ch of checks) for (let fn of ch._zod.onattach) fn(inst);
+    if (checks.length === 0) {
+      (_a = inst._zod).deferred ?? (_a.deferred = []);
+      inst._zod.deferred?.push(() => {
+        inst._zod.run = inst._zod.parse;
+      });
+    } else {
+      let runChecks = (payload, checks, ctx) => {
+        if (payload.memo) return payload;
+        let isAborted = aborted(payload);
+        let asyncResult;
+        for (let ch of checks) {
+          if (ch._zod.def.when) {
+            if (explicitlyAborted(payload)) continue;
+            if (!ch._zod.def.when(payload)) continue;
+          } else if (isAborted) continue;
+          let currLen = payload.issues.length;
+          let _ = ch._zod.check(payload);
+          if (_ instanceof Promise && ctx?.async === false) throw new $ZodAsyncError();
+          if (asyncResult || _ instanceof Promise)
+            asyncResult = (asyncResult ?? Promise.resolve()).then(async () => {
+              await _;
+              if (payload.issues.length === currLen) return;
+              attachSchema(payload.issues, currLen, inst);
+              if (!isAborted) isAborted = aborted(payload, currLen);
+            });
+          else {
+            if (payload.issues.length === currLen) continue;
+            attachSchema(payload.issues, currLen, inst);
+            if (!isAborted) isAborted = aborted(payload, currLen);
           }
-          let parse = e._zod.parse(a, l);
-          if (parse instanceof Promise) {
-            if (l.async === !1) throw new x8e();
-            return parse.then((f) => s(f, i, l));
-          }
-          return s(parse, i, l);
-        };
+        }
+        if (asyncResult) return asyncResult.then(() => payload);
+        return payload;
+      };
+      let handleCanaryResult = (canary, payload, ctx) => {
+        if (aborted(canary)) {
+          canary.aborted = true;
+          return canary;
+        }
+        let checkResult = runChecks(payload, checks, ctx);
+        if (checkResult instanceof Promise) {
+          if (ctx.async === false) throw new $ZodAsyncError();
+          return checkResult.then((checkResult) => inst._zod.parse(checkResult, ctx));
+        }
+        return inst._zod.parse(checkResult, ctx);
+      };
+      inst._zod.run = (payload, ctx) => {
+        if (ctx.skipChecks) return inst._zod.parse(payload, ctx);
+        if (ctx.direction === "backward") {
+          let canary = inst._zod.parse(
+            {
+              value: payload.value,
+              issues: [],
+            },
+            {
+              ...ctx,
+              skipChecks: true,
+            },
+          );
+          if (canary instanceof Promise)
+            return canary.then((canary) => handleCanaryResult(canary, payload, ctx));
+          return handleCanaryResult(canary, payload, ctx);
+        }
+        let result = inst._zod.parse(payload, ctx);
+        if (result instanceof Promise) {
+          if (ctx.async === false) throw new $ZodAsyncError();
+          return result.then((result) => runChecks(result, checks, ctx));
+        }
+        return runChecks(result, checks, ctx);
+      };
+    }
+  },
+  {
+    get "~standard"() {
+      return shs(this, "~standard", standardProps(this));
+    },
+    set "~standard"(value) {
+      own(this, "~standard", value);
+    },
+  },
+);
+var toStandardResult = (r, ctx) =>
+  r.issues.length
+    ? {
+        issues: r.issues.map((iss) => finalizeIssue(iss, ctx, config())),
       }
-    },
-    {
-      get "~standard"() {
-        return shs(this, "~standard", Fe(this));
-      },
-      set "~standard"(e) {
-        rut(this, "~standard", e);
-      },
-    },
-  ),
-  mo = (e, t) =>
-    e.issues.length ? { issues: e.issues.map((issue) => R8e(issue, t, Xne())) } : { value: e.value };
+    : {
+        value: r.value,
+      };
 //@ chunk-7vp249v4.js:15969-16062 esm-fingerprint
-async function _s(e, t) {
-  let r = { async: !0 };
-  return mo(await e._zod.run({ value: t, issues: [] }, r), r);
+async function validateAsync_2(inst, value) {
+  let ctx = {
+    async: true,
+  };
+  return toStandardResult(
+    await inst._zod.run(
+      {
+        value,
+        issues: [],
+      },
+      ctx,
+    ),
+    ctx,
+  );
 }
 //@ chunk-7vp249v4.js:16062-16252 esm-fingerprint
-function Fe(e) {
+function standardProps(inst) {
   return {
-    validate: (t) => {
-      let r = { async: !1 };
+    validate: (value) => {
+      let ctx = {
+        async: false,
+      };
       try {
-        let run = e._zod.run({ value: t, issues: [] }, r);
-        if (!(run instanceof Promise)) return mo(run, r);
-      } catch (error) {}
-      return _s(e, t);
+        let r = inst._zod.run(
+          {
+            value,
+            issues: [],
+          },
+          ctx,
+        );
+        if (!(r instanceof Promise)) return toStandardResult(r, ctx);
+      } catch (_) {}
+      return validateAsync_2(inst, value);
     },
     vendor: "zod",
     version: 1,
   };
 }
 //@ chunk-7vp249v4.js:16252-16962 esm-fingerprint
-var me = Fr("$ZodString", (e, t) => {
-    (Qk.init(e, t),
-      (e._zod.pattern = t.pattern ?? Tr),
-      (e._zod.parse = (r, n) => {
-        if (t.coerce)
-          try {
-            r.value = String(r.value);
-          } catch (error) {}
-        if (typeof r.value === "string") return r;
-        return (r.issues.push({ expected: "string", code: "invalid_type", input: r.value, inst: e }), r);
-      }));
-  }),
-  z = Fr("$ZodStringFormat", (e, t) => {
-    (W.init(e, t), me.init(e, t));
-  }),
-  ho = Fr("$ZodGUID", (e, t) => {
-    (t.pattern ?? (t.pattern = gr), z.init(e, t));
-  }),
-  _o = Fr("$ZodUUID", (e, t) => {
-    if (t.version) {
-      let n = { v1: 1, v2: 2, v3: 3, v4: 4, v5: 5, v6: 6, v7: 7, v8: 8 }[t.version];
-      if (n === void 0) throw Error(`Invalid UUID version: "${t.version}"`);
-      t.pattern ?? (t.pattern = Ee(n));
-    } else t.pattern ?? (t.pattern = Ee());
-    z.init(e, t);
-  }),
-  go = Fr("$ZodEmail", (e, t) => {
-    (t.pattern ?? (t.pattern = xr), z.init(e, t));
-  }),
-  xo = 1,
-  vo = 2;
+var $ZodString = Fr("$ZodString", (inst, def) => {
+  $ZodType.init(inst, def);
+  inst._zod.pattern = def.pattern ?? anyString;
+  inst._zod.parse = (payload, _) => {
+    if (def.coerce)
+      try {
+        payload.value = String(payload.value);
+      } catch (_) {}
+    if (typeof payload.value === "string") return payload;
+    payload.issues.push({
+      expected: "string",
+      code: "invalid_type",
+      input: payload.value,
+      inst,
+    });
+    return payload;
+  };
+});
+var $ZodStringFormat = Fr("$ZodStringFormat", (inst, def) => {
+  $ZodCheckStringFormat.init(inst, def);
+  $ZodString.init(inst, def);
+});
+var $ZodGUID = Fr("$ZodGUID", (inst, def) => {
+  def.pattern ?? (def.pattern = guid);
+  $ZodStringFormat.init(inst, def);
+});
+var $ZodUUID = Fr("$ZodUUID", (inst, def) => {
+  if (def.version) {
+    let v = {
+      v1: 1,
+      v2: 2,
+      v3: 3,
+      v4: 4,
+      v5: 5,
+      v6: 6,
+      v7: 7,
+      v8: 8,
+    }[def.version];
+    if (v === undefined) throw Error(`Invalid UUID version: "${def.version}"`);
+    def.pattern ?? (def.pattern = uuid(v));
+  } else def.pattern ?? (def.pattern = uuid());
+  $ZodStringFormat.init(inst, def);
+});
+var $ZodEmail = Fr("$ZodEmail", (inst, def) => {
+  def.pattern ?? (def.pattern = email);
+  $ZodStringFormat.init(inst, def);
+});
+var URL_BAD_FORMAT = 1;
+var URL_UNPARSEABLE = 2;
 //@ chunk-7vp249v4.js:16962-17102 esm-fingerprint
-function gs(e, t) {
-  if (!t.normalize && t.protocol?.source === wr.source && !/^https?:\/\//i.test(e)) return xo;
+function parseURLObject(trimmed, def) {
+  if (!def.normalize && def.protocol?.source === httpProtocol.source && !/^https?:\/\//i.test(trimmed))
+    return URL_BAD_FORMAT;
   try {
-    return new URL(e);
+    return new URL(trimmed);
   } catch {
-    return vo;
+    return URL_UNPARSEABLE;
   }
 }
 //@ chunk-7vp249v4.js:17102-17121 esm-fingerprint
-var xs = /[\t\n\r]/g;
+var asciiTabOrNewline = /[\t\n\r]/g;
 //@ chunk-7vp249v4.js:17121-17160 esm-layout
-function vs(e) {
-  return e.replace(xs, "");
+function stripTabAndNewline(value) {
+  return value.replace(asciiTabOrNewline, "");
 }
 //@ chunk-7vp249v4.js:17160-17217 esm-fingerprint
-function ys(e, t) {
-  return ((t.lastIndex = 0), t.test(e.hostname));
+function urlHostnameOk(url, hostname) {
+  hostname.lastIndex = 0;
+  return hostname.test(url.hostname);
 }
 //@ chunk-7vp249v4.js:17217-17322 esm-fingerprint
-function $s(e, t) {
-  return ((t.lastIndex = 0), t.test(e.protocol.endsWith(":") ? e.protocol.slice(0, -1) : e.protocol));
+function urlProtocolOk(url, protocol) {
+  protocol.lastIndex = 0;
+  return protocol.test(url.protocol.endsWith(":") ? url.protocol.slice(0, -1) : url.protocol);
 }
 //@ chunk-7vp249v4.js:17322-19131 esm-fingerprint
-var yo = Fr("$ZodURL", (e, t) => {
-    (z.init(e, t),
-      (e._zod.check = (r) => {
-        try {
-          let trimmed = r.value.trim(),
-            i = gs(trimmed, t);
-          if (i === xo) {
-            r.issues.push({
-              code: "invalid_format",
-              format: "url",
-              note: "Invalid URL format",
-              input: r.value,
-              inst: e,
-              continue: !t.abort,
-            });
-            return;
-          }
-          if (i === vo) {
-            r.issues.push({
-              code: "invalid_format",
-              format: "url",
-              input: r.value,
-              inst: e,
-              continue: !t.abort,
-            });
-            return;
-          }
-          if (t.hostname && !ys(i, t.hostname))
-            r.issues.push({
-              code: "invalid_format",
-              format: "url",
-              note: "Invalid hostname",
-              pattern: t.hostname.source,
-              input: r.value,
-              inst: e,
-              continue: !t.abort,
-            });
-          if (t.protocol && !$s(i, t.protocol))
-            r.issues.push({
-              code: "invalid_format",
-              format: "url",
-              note: "Invalid protocol",
-              pattern: t.protocol.source,
-              input: r.value,
-              inst: e,
-              continue: !t.abort,
-            });
-          r.value = t.normalize ? i.href : vs(trimmed);
-          return;
-        } catch (error) {
-          r.issues.push({
-            code: "invalid_format",
-            format: "url",
-            input: r.value,
-            inst: e,
-            continue: !t.abort,
-          });
-        }
-      }));
-  }),
-  $o = Fr("$ZodEmoji", (e, t) => {
-    (t.pattern ?? (t.pattern = vr()), z.init(e, t));
-  }),
-  zo = Fr("$ZodNanoID", (e, t) => {
-    if (t.length !== void 0 && (!Number.isInteger(t.length) || t.length < 1))
-      throw Error(`Invalid nanoid length: ${t.length}`);
-    (t.pattern ?? (t.pattern = t.length === void 0 ? mr : hr(t.length)), z.init(e, t));
-  }),
-  bo = Fr("$ZodCUID", (e, t) => {
-    (t.pattern ?? (t.pattern = ar), z.init(e, t));
-  }),
-  ko = Fr("$ZodCUID2", (e, t) => {
-    (t.pattern ?? (t.pattern = lr), z.init(e, t));
-  }),
-  Zo = Fr("$ZodULID", (e, t) => {
-    (t.pattern ?? (t.pattern = pr), z.init(e, t));
-  }),
-  wo = Fr("$ZodXID", (e, t) => {
-    (t.pattern ?? (t.pattern = fr), z.init(e, t));
-  }),
-  Po = Fr("$ZodKSUID", (e, t) => {
-    (t.pattern ?? (t.pattern = dr), z.init(e, t));
-  }),
-  So = Fr("$ZodISODateTime", (e, t) => {
-    (t.pattern ?? (t.pattern = Er(t)), z.init(e, t));
-  }),
-  Io = Fr("$ZodISODate", (e, t) => {
-    (t.pattern ?? (t.pattern = Or), z.init(e, t));
-  }),
-  Oo = Fr("$ZodISOTime", (e, t) => {
-    (t.pattern ?? (t.pattern = Ar(t)), z.init(e, t));
-  }),
-  Ao = Fr("$ZodISODuration", (e, t) => {
-    (t.pattern ?? (t.pattern = _r), z.init(e, t));
-  }),
-  Eo = Fr("$ZodIPv4", (e, t) => {
-    (t.pattern ?? (t.pattern = yr), z.init(e, t));
-  }),
-  zs = /^[0-9a-fA-F:.]+$/;
+var $ZodURL = Fr("$ZodURL", (inst, def) => {
+  $ZodStringFormat.init(inst, def);
+  inst._zod.check = (payload) => {
+    try {
+      let trimmed = payload.value.trim();
+      let url = parseURLObject(trimmed, def);
+      if (url === URL_BAD_FORMAT) {
+        payload.issues.push({
+          code: "invalid_format",
+          format: "url",
+          note: "Invalid URL format",
+          input: payload.value,
+          inst,
+          continue: !def.abort,
+        });
+        return;
+      }
+      if (url === URL_UNPARSEABLE) {
+        payload.issues.push({
+          code: "invalid_format",
+          format: "url",
+          input: payload.value,
+          inst,
+          continue: !def.abort,
+        });
+        return;
+      }
+      if (def.hostname && !urlHostnameOk(url, def.hostname))
+        payload.issues.push({
+          code: "invalid_format",
+          format: "url",
+          note: "Invalid hostname",
+          pattern: def.hostname.source,
+          input: payload.value,
+          inst,
+          continue: !def.abort,
+        });
+      if (def.protocol && !urlProtocolOk(url, def.protocol))
+        payload.issues.push({
+          code: "invalid_format",
+          format: "url",
+          note: "Invalid protocol",
+          pattern: def.protocol.source,
+          input: payload.value,
+          inst,
+          continue: !def.abort,
+        });
+      payload.value = def.normalize ? url.href : stripTabAndNewline(trimmed);
+      return;
+    } catch (_) {
+      payload.issues.push({
+        code: "invalid_format",
+        format: "url",
+        input: payload.value,
+        inst,
+        continue: !def.abort,
+      });
+    }
+  };
+});
+var $ZodEmoji = Fr("$ZodEmoji", (inst, def) => {
+  def.pattern ?? (def.pattern = vr());
+  $ZodStringFormat.init(inst, def);
+});
+var $ZodNanoID = Fr("$ZodNanoID", (inst, def) => {
+  if (def.length !== undefined && (!Number.isInteger(def.length) || def.length < 1))
+    throw Error(`Invalid nanoid length: ${def.length}`);
+  def.pattern ?? (def.pattern = def.length === undefined ? nanoid : hr(def.length));
+  $ZodStringFormat.init(inst, def);
+});
+var $ZodCUID = Fr("$ZodCUID", (inst, def) => {
+  def.pattern ?? (def.pattern = ar);
+  $ZodStringFormat.init(inst, def);
+});
+var $ZodCUID2 = Fr("$ZodCUID2", (inst, def) => {
+  def.pattern ?? (def.pattern = cuid2);
+  $ZodStringFormat.init(inst, def);
+});
+var $ZodULID = Fr("$ZodULID", (inst, def) => {
+  def.pattern ?? (def.pattern = ulid);
+  $ZodStringFormat.init(inst, def);
+});
+var $ZodXID = Fr("$ZodXID", (inst, def) => {
+  def.pattern ?? (def.pattern = xid);
+  $ZodStringFormat.init(inst, def);
+});
+var $ZodKSUID = Fr("$ZodKSUID", (inst, def) => {
+  def.pattern ?? (def.pattern = ksuid);
+  $ZodStringFormat.init(inst, def);
+});
+var $ZodISODateTime = Fr("$ZodISODateTime", (inst, def) => {
+  def.pattern ?? (def.pattern = datetime(def));
+  $ZodStringFormat.init(inst, def);
+});
+var $ZodISODate = Fr("$ZodISODate", (inst, def) => {
+  def.pattern ?? (def.pattern = Or);
+  $ZodStringFormat.init(inst, def);
+});
+var $ZodISOTime = Fr("$ZodISOTime", (inst, def) => {
+  def.pattern ?? (def.pattern = Ar(def));
+  $ZodStringFormat.init(inst, def);
+});
+var $ZodISODuration = Fr("$ZodISODuration", (inst, def) => {
+  def.pattern ?? (def.pattern = duration);
+  $ZodStringFormat.init(inst, def);
+});
+var $ZodIPv4 = Fr("$ZodIPv4", (inst, def) => {
+  def.pattern ?? (def.pattern = ipv4);
+  $ZodStringFormat.init(inst, def);
+});
+var ipv6Alphabet = /^[0-9a-fA-F:.]+$/;
 //@ chunk-7vp249v4.js:19131-19225 esm-fingerprint
-function To(e) {
-  if (!zs.test(e)) return !1;
+function isValidIPv6(value) {
+  if (!ipv6Alphabet.test(value)) return false;
   try {
-    return (new URL(`http://[${e}]`), !0);
+    new URL(`http://[${value}]`);
+    return true;
   } catch {
-    return !1;
+    return false;
   }
 }
 //@ chunk-7vp249v4.js:19225-19422 esm-fingerprint
-var No = Fr("$ZodIPv6", (e, t) => {
-  (t.pattern ?? (t.pattern = $r),
-    z.init(e, t),
-    (e._zod.check = (r) => {
-      if (!To(r.value))
-        r.issues.push({
-          code: "invalid_format",
-          format: "ipv6",
-          input: r.value,
-          inst: e,
-          continue: !t.abort,
-        });
-    }));
+var $ZodIPv6 = Fr("$ZodIPv6", (inst, def) => {
+  def.pattern ?? (def.pattern = ipv6);
+  $ZodStringFormat.init(inst, def);
+  inst._zod.check = (payload) => {
+    if (!isValidIPv6(payload.value))
+      payload.issues.push({
+        code: "invalid_format",
+        format: "ipv6",
+        input: payload.value,
+        inst,
+        continue: !def.abort,
+      });
+  };
 });
 //@ chunk-7vp249v4.js:19422-19493 esm-fingerprint
-var Co = Fr("$ZodCIDRv4", (e, t) => {
-  (t.pattern ?? (t.pattern = zr), z.init(e, t));
+var Co = Fr("$ZodCIDRv4", (inst, def) => {
+  def.pattern ?? (def.pattern = cidrv4);
+  $ZodStringFormat.init(inst, def);
 });
 //@ chunk-7vp249v4.js:19493-19653 esm-layout
-function bs(e) {
-  let parts = e.split("/");
-  if (parts.length !== 2) return !1;
-  let [r, n] = parts;
-  if (!n) return !1;
-  let i = Number(n);
-  if (`${i}` !== n) return !1;
-  if (i < 0 || i > 128) return !1;
-  return To(r);
+function isValidCIDRv6(value) {
+  let parts = value.split("/");
+  if (parts.length !== 2) return false;
+  let [address, prefix] = parts;
+  if (!prefix) return false;
+  let prefixNum = Number(prefix);
+  if (`${prefixNum}` !== prefix) return false;
+  if (prefixNum < 0 || prefixNum > 128) return false;
+  return isValidIPv6(address);
 }
 //@ chunk-7vp249v4.js:19653-19854 esm-fingerprint
-var Ro = Fr("$ZodCIDRv6", (e, t) => {
-  (t.pattern ?? (t.pattern = br),
-    z.init(e, t),
-    (e._zod.check = (r) => {
-      if (!bs(r.value))
-        r.issues.push({
-          code: "invalid_format",
-          format: "cidrv6",
-          input: r.value,
-          inst: e,
-          continue: !t.abort,
-        });
-    }));
+var $ZodCIDRv6 = Fr("$ZodCIDRv6", (inst, def) => {
+  def.pattern ?? (def.pattern = cidrv6);
+  $ZodStringFormat.init(inst, def);
+  inst._zod.check = (payload) => {
+    if (!isValidCIDRv6(payload.value))
+      payload.issues.push({
+        code: "invalid_format",
+        format: "cidrv6",
+        input: payload.value,
+        inst,
+        continue: !def.abort,
+      });
+  };
 });
 //@ chunk-7vp249v4.js:19854-19978 esm-fingerprint
-function Do(e) {
-  if (e === "") return !0;
-  if (/\s/.test(e)) return !1;
-  if (e.length % 4 !== 0) return !1;
+function isValidBase64(data) {
+  if (data === "") return true;
+  if (/\s/.test(data)) return false;
+  if (data.length % 4 !== 0) return false;
   try {
-    return (atob(e), !0);
+    atob(data);
+    return true;
   } catch {
-    return !1;
+    return false;
   }
 }
 //@ chunk-7vp249v4.js:19978-20235 esm-fingerprint
-var Me = /^[0-9a-zA-Z+/]*={0,2}$/,
-  jo = Fr("$ZodBase64", (e, t) => {
-    (t.pattern ?? (t.pattern = Me),
-      z.init(e, t),
-      (e._zod.check = (r) => {
-        if (Do(r.value)) return;
-        r.issues.push({
-          code: "invalid_format",
-          format: "base64",
-          input: r.value,
-          inst: e,
-          continue: !t.abort,
-        });
-      }));
-  }),
-  he = /^[A-Za-z0-9_-]*$/;
+var base64Charset = /^[0-9a-zA-Z+/]*={0,2}$/;
+var $ZodBase64 = Fr("$ZodBase64", (inst, def) => {
+  def.pattern ?? (def.pattern = base64Charset);
+  $ZodStringFormat.init(inst, def);
+  inst._zod.check = (payload) => {
+    if (isValidBase64(payload.value)) return;
+    payload.issues.push({
+      code: "invalid_format",
+      format: "base64",
+      input: payload.value,
+      inst,
+      continue: !def.abort,
+    });
+  };
+});
+var base64urlCharset = /^[A-Za-z0-9_-]*$/;
 //@ chunk-7vp249v4.js:20235-20373 esm-fingerprint
-function ks(e) {
-  if (!he.test(e)) return !1;
-  let replaced = e.replace(/[-_]/g, (n) => (n === "-" ? "+" : "/")),
-    padded = replaced.padEnd(Math.ceil(replaced.length / 4) * 4, "=");
-  return Do(padded);
+function isValidBase64URL(data) {
+  if (!base64urlCharset.test(data)) return false;
+  let base64 = data.replace(/[-_]/g, (c) => (c === "-" ? "+" : "/"));
+  let padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, "=");
+  return isValidBase64(padded);
 }
 //@ chunk-7vp249v4.js:20373-20651 esm-fingerprint
-var Lo = Fr("$ZodBase64URL", (e, t) => {
-    (t.pattern ?? (t.pattern = he),
-      z.init(e, t),
-      (e._zod.check = (r) => {
-        if (ks(r.value)) return;
-        r.issues.push({
-          code: "invalid_format",
-          format: "base64url",
-          input: r.value,
-          inst: e,
-          continue: !t.abort,
-        });
-      }));
-  }),
-  Fo = Fr("$ZodE164", (e, t) => {
-    (t.pattern ?? (t.pattern = Pr), z.init(e, t));
-  });
+var $ZodBase64URL = Fr("$ZodBase64URL", (inst, def) => {
+  def.pattern ?? (def.pattern = base64urlCharset);
+  $ZodStringFormat.init(inst, def);
+  inst._zod.check = (payload) => {
+    if (isValidBase64URL(payload.value)) return;
+    payload.issues.push({
+      code: "invalid_format",
+      format: "base64url",
+      input: payload.value,
+      inst,
+      continue: !def.abort,
+    });
+  };
+});
+var $ZodE164 = Fr("$ZodE164", (inst, def) => {
+  def.pattern ?? (def.pattern = e164);
+  $ZodStringFormat.init(inst, def);
+});
 //@ chunk-7vp249v4.js:20651-20894 esm-fingerprint
-function Zs(e, t = null) {
+function isValidJWT(token, algorithm = null) {
   try {
-    let parts = e.split(".");
-    if (parts.length !== 3) return !1;
-    let [n] = parts;
-    if (!n) return !1;
-    let parsed = JSON.parse(atob(n));
-    if ("typ" in parsed && parsed?.typ !== "JWT") return !1;
-    if (!parsed.alg) return !1;
-    if (t && (!("alg" in parsed) || parsed.alg !== t)) return !1;
-    return !0;
+    let tokensParts = token.split(".");
+    if (tokensParts.length !== 3) return false;
+    let [header] = tokensParts;
+    if (!header) return false;
+    let parsedHeader = JSON.parse(atob(header));
+    if ("typ" in parsedHeader && parsedHeader?.typ !== "JWT") return false;
+    if (!parsedHeader.alg) return false;
+    if (algorithm && (!("alg" in parsedHeader) || parsedHeader.alg !== algorithm)) return false;
+    return true;
   } catch {
-    return !1;
+    return false;
   }
 }
 //@ chunk-7vp249v4.js:20894-21075 esm-fingerprint
-var Mo = Fr("$ZodJWT", (e, t) => {
-  (z.init(e, t),
-    (e._zod.check = (r) => {
-      if (Zs(r.value, t.alg)) return;
-      r.issues.push({ code: "invalid_format", format: "jwt", input: r.value, inst: e, continue: !t.abort });
-    }));
+var $ZodJWT = Fr("$ZodJWT", (inst, def) => {
+  $ZodStringFormat.init(inst, def);
+  inst._zod.check = (payload) => {
+    if (isValidJWT(payload.value, def.alg)) return;
+    payload.issues.push({
+      code: "invalid_format",
+      format: "jwt",
+      input: payload.value,
+      inst,
+      continue: !def.abort,
+    });
+  };
 });
 //@ chunk-7vp249v4.js:21075-21808 esm-fingerprint
-var Je = Fr("$ZodNumber", (e, t) => {
-    (Qk.init(e, t),
-      (e._zod.pattern = V),
-      (e._zod.parse = (r, n) => {
-        if (t.coerce)
-          try {
-            r.value = Number(r.value);
-          } catch (error) {}
-        let i = r.value;
-        if (typeof i === "number" && !Number.isNaN(i) && Number.isFinite(i)) return r;
-        let s =
-          typeof i === "number"
-            ? Number.isNaN(i)
-              ? "NaN"
-              : !Number.isFinite(i)
-                ? String(i)
-                : void 0
-            : void 0;
-        return (
-          r.issues.push({
-            expected: "number",
-            code: "invalid_type",
-            input: i,
-            inst: e,
-            ...(s ? { received: s } : {}),
-          }),
-          r
-        );
-      }));
-  }),
-  Uo = Fr("$ZodNumberFormat", (e, t) => {
-    (Mr.init(e, t), Je.init(e, t));
-  }),
-  Jo = Fr("$ZodBoolean", (e, t) => {
-    (Qk.init(e, t),
-      (e._zod.pattern = Nr),
-      (e._zod.parse = (r, n) => {
-        if (t.coerce)
-          try {
-            r.value = Boolean(r.value);
-          } catch (error) {}
-        let i = r.value;
-        if (typeof i === "boolean") return r;
-        return (r.issues.push({ expected: "boolean", code: "invalid_type", input: i, inst: e }), r);
-      }));
-  });
+var $ZodNumber = Fr("$ZodNumber", (inst, def) => {
+  $ZodType.init(inst, def);
+  inst._zod.pattern = number;
+  inst._zod.parse = (payload, _ctx) => {
+    if (def.coerce)
+      try {
+        payload.value = Number(payload.value);
+      } catch (_) {}
+    let input = payload.value;
+    if (typeof input === "number" && !Number.isNaN(input) && Number.isFinite(input)) return payload;
+    let received =
+      typeof input === "number"
+        ? Number.isNaN(input)
+          ? "NaN"
+          : !Number.isFinite(input)
+            ? String(input)
+            : undefined
+        : undefined;
+    payload.issues.push({
+      expected: "number",
+      code: "invalid_type",
+      input,
+      inst,
+      ...(received
+        ? {
+            received,
+          }
+        : {}),
+    });
+    return payload;
+  };
+});
+var $ZodNumberFormat = Fr("$ZodNumberFormat", (inst, def) => {
+  $ZodCheckNumberFormat.init(inst, def);
+  $ZodNumber.init(inst, def);
+});
+var $ZodBoolean = Fr("$ZodBoolean", (inst, def) => {
+  $ZodType.init(inst, def);
+  inst._zod.pattern = boolean;
+  inst._zod.parse = (payload, _ctx) => {
+    if (def.coerce)
+      try {
+        payload.value = Boolean(payload.value);
+      } catch (_) {}
+    let input = payload.value;
+    if (typeof input === "boolean") return payload;
+    payload.issues.push({
+      expected: "boolean",
+      code: "invalid_type",
+      input,
+      inst,
+    });
+    return payload;
+  };
+});
 //@ chunk-7vp249v4.js:21808-22534 esm-fingerprint
-var Bo = Fr("$ZodUndefined", (e, t) => {
-    (Qk.init(e, t),
-      (e._zod.pattern = Rr),
-      (e._zod.values = new Set([void 0])),
-      (e._zod.parse = (r, n) => {
-        let i = r.value;
-        if (typeof i > "u") return r;
-        return (r.issues.push({ expected: "undefined", code: "invalid_type", input: i, inst: e }), r);
-      }));
-  }),
-  Vo = Fr("$ZodNull", (e, t) => {
-    (Qk.init(e, t),
-      (e._zod.pattern = Cr),
-      (e._zod.values = new Set([null])),
-      (e._zod.parse = (r, n) => {
-        let i = r.value;
-        if (i === null) return r;
-        return (r.issues.push({ expected: "null", code: "invalid_type", input: i, inst: e }), r);
-      }));
-  }),
-  Ko = Fr("$ZodAny", (e, t) => {
-    (Qk.init(e, t), (e._zod.parse = (r) => r));
-  }),
-  Wo = Fr("$ZodUnknown", (e, t) => {
-    (Qk.init(e, t), (e._zod.parse = (r) => r));
-  }),
-  Go = Fr("$ZodNever", (e, t) => {
-    (Qk.init(e, t),
-      (e._zod.parse = (r, n) => (
-        r.issues.push({ expected: "never", code: "invalid_type", input: r.value, inst: e }),
-        r
-      )));
-  });
+var Bo = Fr("$ZodUndefined", (inst, def) => {
+  $ZodType.init(inst, def);
+  inst._zod.pattern = _undefined;
+  inst._zod.values = new Set([undefined]);
+  inst._zod.parse = (payload, _ctx) => {
+    let input = payload.value;
+    if (typeof input === "undefined") return payload;
+    payload.issues.push({
+      expected: "undefined",
+      code: "invalid_type",
+      input,
+      inst,
+    });
+    return payload;
+  };
+});
+var $ZodNull = Fr("$ZodNull", (inst, def) => {
+  $ZodType.init(inst, def);
+  inst._zod.pattern = _null;
+  inst._zod.values = new Set([null]);
+  inst._zod.parse = (payload, _ctx) => {
+    let input = payload.value;
+    if (input === null) return payload;
+    payload.issues.push({
+      expected: "null",
+      code: "invalid_type",
+      input,
+      inst,
+    });
+    return payload;
+  };
+});
+var $ZodAny = Fr("$ZodAny", (inst, def) => {
+  $ZodType.init(inst, def);
+  inst._zod.parse = (payload) => payload;
+});
+var $ZodUnknown = Fr("$ZodUnknown", (inst, def) => {
+  $ZodType.init(inst, def);
+  inst._zod.parse = (payload) => payload;
+});
+var $ZodNever = Fr("$ZodNever", (inst, def) => {
+  $ZodType.init(inst, def);
+  inst._zod.parse = (payload, _ctx) => {
+    payload.issues.push({
+      expected: "never",
+      code: "invalid_type",
+      input: payload.value,
+      inst,
+    });
+    return payload;
+  };
+});
 //@ chunk-7vp249v4.js:22534-22625 esm-fingerprint
-function eo(e, t, r) {
-  if (e.issues.length) t.issues.push(...j1e(r, e.issues));
-  t.value[r] = e.value;
+function handleArrayResult(result, final, index) {
+  if (result.issues.length) final.issues.push(...prefixIssues(index, result.issues));
+  final.value[index] = result.value;
 }
 //@ chunk-7vp249v4.js:22625-23167 esm-fingerprint
-var qo = Fr("$ZodArray", (e, t) => {
-  Qk.init(e, t);
-  let memoizer = __zod_globalConfig.memoizer;
-  (memoizer?.attach(e),
-    (e._zod.parse = (n, i) => {
-      let s = n.value;
-      if (!Array.isArray(s))
-        return (n.issues.push({ expected: "array", code: "invalid_type", input: s, inst: e }), n);
-      n.value = memoizer ? memoizer.alloc(e, n, Array(s.length), i) : Array(s.length);
-      let c = [],
-        a = i?.abortEarly;
-      for (let l = 0; l < s.length; l++) {
-        let p = s[l],
-          run = t.element._zod.run({ value: p, issues: [] }, i);
-        if (run instanceof Promise) c.push(run.then((d) => eo(d, n, l)));
-        else if ((eo(run, n, l), a && run.issues.length !== 0 && cMe(run))) break;
+var $ZodArray = Fr("$ZodArray", (inst, def) => {
+  $ZodType.init(inst, def);
+  let memo = globalConfig.memoizer;
+  memo?.attach(inst);
+  inst._zod.parse = (payload, ctx) => {
+    let input = payload.value;
+    if (!Array.isArray(input)) {
+      payload.issues.push({
+        expected: "array",
+        code: "invalid_type",
+        input,
+        inst,
+      });
+      return payload;
+    }
+    payload.value = memo ? memo.alloc(inst, payload, Array(input.length), ctx) : Array(input.length);
+    let proms = [];
+    let abortEarly = ctx?.abortEarly;
+    for (let i = 0; i < input.length; i++) {
+      let item = input[i];
+      let result = def.element._zod.run(
+        {
+          value: item,
+          issues: [],
+        },
+        ctx,
+      );
+      if (result instanceof Promise)
+        proms.push(result.then((result) => handleArrayResult(result, payload, i)));
+      else {
+        handleArrayResult(result, payload, i);
+        if (abortEarly && result.issues.length !== 0 && aborted(result)) break;
       }
-      if (c.length) return Promise.all(c).then(() => n);
-      return n;
-    }));
+    }
+    if (proms.length) return Promise.all(proms).then(() => payload);
+    return payload;
+  };
 });
 //@ chunk-7vp249v4.js:23167-23553 esm-fingerprint
-function de(e, t, r, n, i, s) {
-  let c = r in n,
-    a = s === "optional";
-  if (!c && a && i === "optional") return;
-  if (e.issues.length) {
-    if (i !== void 0 && a && !c) return;
-    t.issues.push(...j1e(r, e.issues));
+function handlePropertyResult(result, final, key, input, optin, optout) {
+  let isPresent = key in input;
+  let isOptionalOut = optout === "optional";
+  if (!isPresent && isOptionalOut && optin === "optional") return;
+  if (result.issues.length) {
+    if (optin !== undefined && isOptionalOut && !isPresent) return;
+    final.issues.push(...prefixIssues(key, result.issues));
   }
-  if (!c && i === void 0) {
-    if (!e.issues.length)
-      t.issues.push({ code: "invalid_type", expected: "nonoptional", input: void 0, path: [r] });
+  if (!isPresent && optin === undefined) {
+    if (!result.issues.length)
+      final.issues.push({
+        code: "invalid_type",
+        expected: "nonoptional",
+        input: undefined,
+        path: [key],
+      });
     return;
   }
-  if (e.value === void 0) {
-    if (c || (i === "defaulted" && !a)) t.value[r] = void 0;
-  } else t.value[r] = e.value;
+  if (result.value === undefined) {
+    if (isPresent || (optin === "defaulted" && !isOptionalOut)) final.value[key] = undefined;
+  } else final.value[key] = result.value;
 }
 //@ chunk-7vp249v4.js:23553-23563 esm-layout
-var ws = [];
+var NO_SYMBOL_KEYS = [];
 //@ chunk-7vp249v4.js:23563-23939 esm-fingerprint
-function Yo(e) {
-  let keys = Object.keys(e.shape),
-    ownPropertySymbols = Object.getOwnPropertySymbols(e.shape),
-    n = ownPropertySymbols.length ? ownPropertySymbols : ws,
-    i = n.length ? [...keys, ...n] : keys;
-  for (let c of i)
-    if (!e.shape?.[c]?._zod?.traits?.has("$ZodType"))
-      throw Error(`Invalid element at key "${String(c)}": expected a Zod schema`);
-  let s = RIi(e.shape);
+function normalizeDef(def) {
+  let keys = Object.keys(def.shape);
+  let ownSymbols = Object.getOwnPropertySymbols(def.shape);
+  let symbolKeys = ownSymbols.length ? ownSymbols : NO_SYMBOL_KEYS;
+  let allKeys = symbolKeys.length ? [...keys, ...symbolKeys] : keys;
+  for (let k of allKeys)
+    if (!def.shape?.[k]?._zod?.traits?.has("$ZodType"))
+      throw Error(`Invalid element at key "${String(k)}": expected a Zod schema`);
+  let okeys = optionalKeys(def.shape);
   return {
-    ...e,
-    allKeys: i,
-    symbolKeys: n,
+    ...def,
+    allKeys,
+    symbolKeys,
     keySet: new Set(keys),
     numKeys: keys.length,
-    optionalKeys: new Set(s),
+    optionalKeys: new Set(okeys),
   };
 }
 //@ chunk-7vp249v4.js:23939-24495 esm-fingerprint
-function Xo(e, t, r, n, i, s, c) {
-  let a = [],
-    keySet = i.keySet,
-    _zod = i.catchall._zod,
-    f = _zod.def.type,
-    { optin: optin, optout: optout } = _zod,
-    m = 0;
+function Xo(e, t, payload, ctx, i, inst, c) {
+  let a = [];
+  let keySet = i.keySet;
+  let _zod = i.catchall._zod;
+  let f = _zod.def.type;
+  let { optin, optout } = _zod;
+  let m = 0;
   for (let key in t) {
-    if (c && r.issues.length !== m) {
-      if (cMe(r, m)) break;
-      m = r.issues.length;
+    if (c && payload.issues.length !== m) {
+      if (aborted(payload, m)) break;
+      m = payload.issues.length;
     }
     if (keySet.has(key)) continue;
     if (key === "__proto__") {
@@ -613,132 +754,175 @@ function Xo(e, t, r, n, i, s, c) {
       a.push(key);
       continue;
     }
-    let run = _zod.run({ value: t[key], issues: [] }, n);
-    if (run instanceof Promise) e.push(run.then((x) => de(x, r, key, t, optin, optout)));
-    else de(run, r, key, t, optin, optout);
+    let g = _zod.run(
+      {
+        value: t[key],
+        issues: [],
+      },
+      ctx,
+    );
+    if (g instanceof Promise) e.push(g.then((x) => handlePropertyResult(x, payload, key, t, optin, optout)));
+    else handlePropertyResult(g, payload, key, t, optin, optout);
   }
-  if (a.length) r.issues.push({ code: "unrecognized_keys", keys: a, input: t, inst: s, continue: !0 });
-  if (!e.length) return r;
-  return Promise.all(e).then(() => r);
+  if (a.length)
+    payload.issues.push({
+      code: "unrecognized_keys",
+      keys: a,
+      input: t,
+      inst,
+      continue: true,
+    });
+  if (!e.length) return payload;
+  return Promise.all(e).then(() => payload);
 }
 //@ chunk-7vp249v4.js:24495-28381 esm-fingerprint
-var Ps = Fr("$ZodObject", (e, t) => {
-    Qk.init(e, t);
-    let ownPropertyDescriptor = Object.getOwnPropertyDescriptor(t, "shape"),
-      n = ownPropertyDescriptor?.get ? ownPropertyDescriptor.get.raw : (t.shape ?? {});
-    if (n) {
-      let p = () => {
-        let f = { ...n };
-        return (Object.defineProperty(t, "shape", { value: f }), (p.raw = f), f);
+var $ZodObject = Fr("$ZodObject", (inst, def) => {
+  $ZodType.init(inst, def);
+  let desc = Object.getOwnPropertyDescriptor(def, "shape");
+  let sh = desc?.get ? desc.get.raw : (def.shape ?? {});
+  if (sh) {
+    let get = () => {
+      let newSh = {
+        ...sh,
       };
-      ((p.raw = n), Object.defineProperty(t, "shape", { get: p }));
-    }
-    let i = lSr(() => Yo(t));
-    PE(e, "propValues", (p) => {
-      let shape = p.def.shape,
-        d = {};
-      for (let key in shape) {
-        let _zod = shape[key]._zod;
-        if (_zod.values) {
-          if (!Object.prototype.hasOwnProperty.call(d, key)) She(d, key, new Set());
-          for (let h of _zod.values) d[key].add(h);
-          if (_zod.optin !== void 0) d[key].add(void 0);
-        }
-      }
-      return d;
+      Object.defineProperty(def, "shape", {
+        value: newSh,
+      });
+      get.raw = newSh;
+      return newSh;
+    };
+    get.raw = sh;
+    Object.defineProperty(def, "shape", {
+      get,
     });
-    let s = fMn,
-      catchall = t.catchall,
-      a,
-      memoizer = __zod_globalConfig.memoizer;
-    (memoizer?.attach(e),
-      (e._zod.parse = (p, f) => {
-        a ?? (a = i.value);
-        let d = p.value;
-        if (!s(d)) return (p.issues.push({ expected: "object", code: "invalid_type", input: d, inst: e }), p);
-        p.value = memoizer ? memoizer.alloc(e, p, {}, f) : {};
-        let _ = [],
-          shape = a.shape,
-          h = f?.abortEarly,
-          g = p.issues.length;
-        for (let allKey of a.allKeys) {
-          if (h && p.issues.length !== g) {
-            if (cMe(p, g)) break;
-            g = p.issues.length;
-          }
-          if (allKey === "__proto__") continue;
-          let v = shape[allKey],
-            optin = v._zod.optin,
-            optout = v._zod.optout,
-            run = v._zod.run({ value: d[allKey], issues: [] }, f);
-          if (run instanceof Promise) _.push(run.then((Z) => de(Z, p, allKey, d, optin, optout)));
-          else de(run, p, allKey, d, optin, optout);
-        }
-        if (!catchall) return _.length ? Promise.all(_).then(() => p) : p;
-        return Xo(_, d, p, f, i.value, e, h === !0);
-      }));
-  }),
-  Ho = Fr("$ZodObjectJIT", (e, t) => {
-    Ps.init(e, t);
-    let parse = e._zod.parse,
-      n = lSr(() => Yo(t)),
-      memoizer = __zod_globalConfig.memoizer,
-      s = (m) => {
-        let h = n.value,
-          symbolKeys = h.symbolKeys,
-          x = new je(["payload", "ctx"], { shape: m, inst: e, memo: memoizer, syms: symbolKeys }),
-          v = (Z) => `shape[${Z}]._zod.run({ value: input[${Z}], issues: [] }, ctx)`,
-          I = (Z, y) => `
-          let ${Z}_ab = false;
-          for (let i = 0; i < ${Z}.issues.length; i++) {
-            const iss = ${Z}.issues[i];
-            iss.path = iss.path ? [${y}, ...iss.path] : [${y}];
+  }
+  let _normalized = cached(() => normalizeDef(def));
+  defineLazyInternal(inst, "propValues", (zod) => {
+    let shape = zod.def.shape;
+    let propValues = {};
+    for (let key in shape) {
+      let field = shape[key]._zod;
+      if (field.values) {
+        if (!Object.prototype.hasOwnProperty.call(propValues, key)) assignProp(propValues, key, new Set());
+        for (let v of field.values) propValues[key].add(v);
+        if (field.optin !== undefined) propValues[key].add(undefined);
+      }
+    }
+    return propValues;
+  });
+  let isObject_2 = isObject;
+  let catchall = def.catchall;
+  let value;
+  let memo = globalConfig.memoizer;
+  memo?.attach(inst);
+  inst._zod.parse = (payload, ctx) => {
+    value ?? (value = _normalized.value);
+    let input = payload.value;
+    if (!isObject_2(input)) {
+      payload.issues.push({
+        expected: "object",
+        code: "invalid_type",
+        input,
+        inst,
+      });
+      return payload;
+    }
+    payload.value = memo ? memo.alloc(inst, payload, {}, ctx) : {};
+    let proms = [];
+    let shape = value.shape;
+    let abortEarly = ctx?.abortEarly;
+    let seen = payload.issues.length;
+    for (let key of value.allKeys) {
+      if (abortEarly && payload.issues.length !== seen) {
+        if (aborted(payload, seen)) break;
+        seen = payload.issues.length;
+      }
+      if (key === "__proto__") continue;
+      let el = shape[key];
+      let optin = el._zod.optin;
+      let optout = el._zod.optout;
+      let r = el._zod.run(
+        {
+          value: input[key],
+          issues: [],
+        },
+        ctx,
+      );
+      if (r instanceof Promise)
+        proms.push(r.then((r) => handlePropertyResult(r, payload, key, input, optin, optout)));
+      else handlePropertyResult(r, payload, key, input, optin, optout);
+    }
+    if (!catchall) return proms.length ? Promise.all(proms).then(() => payload) : payload;
+    return Xo(proms, input, payload, ctx, _normalized.value, inst, abortEarly === true);
+  };
+});
+var $ZodObjectJIT = Fr("$ZodObjectJIT", (inst, def) => {
+  $ZodObject.init(inst, def);
+  let superParse = inst._zod.parse;
+  let _normalized = cached(() => normalizeDef(def));
+  let memo = globalConfig.memoizer;
+  let generateFastpass = (shape) => {
+    let normalized = _normalized.value;
+    let syms = normalized.symbolKeys;
+    let doc = new Doc(["payload", "ctx"], {
+      shape,
+      inst,
+      memo,
+      syms,
+    });
+    let parseStr = (k) => `shape[${k}]._zod.run({ value: input[${k}], issues: [] }, ctx)`;
+    let prefixStr = (id, k) => `
+          let ${id}_ab = false;
+          for (let i = 0; i < ${id}.issues.length; i++) {
+            const iss = ${id}.issues[i];
+            iss.path = iss.path ? [${k}, ...iss.path] : [${k}];
             payload.issues.push(iss);
-            if (iss.continue !== true) ${Z}_ab = true;
+            if (iss.continue !== true) ${id}_ab = true;
           }
-          if (${Z}_ab && ctx && ctx.abortEarly) {
+          if (${id}_ab && ctx && ctx.abortEarly) {
             payload.value = newResult;
             return payload;
           }`;
-        x.write("const input = payload.value;");
-        let create = Object.create(null),
-          J = 0;
-        for (let allKey of h.allKeys) create[allKey] = `key_${J++}`;
-        x.write(memoizer ? "const newResult = memo.alloc(inst, payload, {}, ctx);" : "const newResult = {};");
-        for (let allKey of h.allKeys) {
-          if (allKey === "__proto__") continue;
-          let y = create[allKey],
-            O = typeof allKey === "symbol" ? `syms[${symbolKeys.indexOf(allKey)}]` : kIi(allKey),
-            we = `${O} in input`,
-            Vt = m[allKey],
-            Pe = Vt?._zod?.optin,
-            Kt = Pe !== void 0,
-            os = Vt?._zod?.optout === "optional";
-          if ((x.write(`const ${y} = ${v(O)};`), Kt && os)) {
-            let ns = Pe === "optional" ? `${y}_present` : `${y}.value !== undefined || ${y}_present`;
-            x.write(`
-        const ${y}_present = ${we};
-        if (!${y}.issues.length || ${y}_present) {
-          if (${y}.issues.length) {${I(y, O)}
+    doc.write("const input = payload.value;");
+    let ids = Object.create(null);
+    let counter = 0;
+    for (let key of normalized.allKeys) ids[key] = `key_${counter++}`;
+    doc.write(memo ? "const newResult = memo.alloc(inst, payload, {}, ctx);" : "const newResult = {};");
+    for (let key of normalized.allKeys) {
+      if (key === "__proto__") continue;
+      let id = ids[key];
+      let k = typeof key === "symbol" ? `syms[${syms.indexOf(key)}]` : cloneDef(key);
+      let isPresent = `${k} in input`;
+      let schema = shape[key];
+      let optin = schema?._zod?.optin;
+      let isOptionalIn = optin !== undefined;
+      let isOptionalOut = schema?._zod?.optout === "optional";
+      doc.write(`const ${id} = ${parseStr(k)};`);
+      if (isOptionalIn && isOptionalOut) {
+        let assign = optin === "optional" ? `${id}_present` : `${id}.value !== undefined || ${id}_present`;
+        doc.write(`
+        const ${id}_present = ${isPresent};
+        if (!${id}.issues.length || ${id}_present) {
+          if (${id}.issues.length) {${prefixStr(id, k)}
           }
 
-          if (${ns}) {
-            newResult[${O}] = ${y}.value;
+          if (${assign}) {
+            newResult[${k}] = ${id}.value;
           }
         }
 
       `);
-          } else if (!Kt)
-            x.write(`
-        const ${y}_present = ${we};
-        if (${y}.issues.length) {${I(y, O)}
+      } else if (!isOptionalIn)
+        doc.write(`
+        const ${id}_present = ${isPresent};
+        if (${id}.issues.length) {${prefixStr(id, k)}
         }
-        if (!${y}_present && !${y}.issues.length) {
+        if (!${id}_present && !${id}.issues.length) {
           payload.issues.push({
             code: "invalid_type",
             expected: "nonoptional",
             input: undefined,
-            path: [${O}]
+            path: [${k}]
           });
           if (ctx && ctx.abortEarly) {
             payload.value = newResult;
@@ -746,751 +930,995 @@ var Ps = Fr("$ZodObject", (e, t) => {
           }
         }
 
-        if (${y}_present) {
-          newResult[${O}] = ${y}.value;
+        if (${id}_present) {
+          newResult[${k}] = ${id}.value;
         }
 
       `);
-          else if (
-            (x.write(`
-        if (${y}.issues.length) {${I(y, O)}
-        }
-      `),
-            Pe === "defaulted")
-          )
-            x.write(`newResult[${O}] = ${y}.value;`);
-          else
-            x.write(`
-        if (${y}.value !== undefined || ${we}) {
-          newResult[${O}] = ${y}.value;
+      else {
+        doc.write(`
+        if (${id}.issues.length) {${prefixStr(id, k)}
         }
       `);
+        if (optin === "defaulted") doc.write(`newResult[${k}] = ${id}.value;`);
+        else
+          doc.write(`
+        if (${id}.value !== undefined || ${isPresent}) {
+          newResult[${k}] = ${id}.value;
         }
-        return (x.write("payload.value = newResult;"), x.write("return payload;"), x.compile());
-      },
-      c,
-      a = fMn,
-      l = !__zod_globalConfig.jitless,
-      f = l && AIi.value,
-      catchall = t.catchall,
-      _;
-    e._zod.parse = (m, h) => {
-      _ ?? (_ = n.value);
-      let g = m.value;
-      if (!a(g)) return (m.issues.push({ expected: "object", code: "invalid_type", input: g, inst: e }), m);
-      if (l && f && h?.async === !1 && h.jitless !== !0) {
-        if (!c) c = s(t.shape);
-        if (((m = c(m, h)), !catchall)) return m;
-        return Xo([], g, m, h, _, e, h?.abortEarly === !0);
-      }
-      return parse(m, h);
-    };
-  });
-//@ chunk-7vp249v4.js:28381-28662 esm-fingerprint
-function to(e, t, r, n) {
-  for (let s of e) if (s.issues.length === 0) return ((t.value = s.value), t);
-  let filtered = e.filter((s) => !cMe(s));
-  if (filtered.length === 1) return ((t.value = filtered[0].value), filtered[0]);
-  return (
-    t.issues.push({
-      code: "invalid_union",
-      input: t.value,
-      inst: r,
-      errors: e.map((s) => s.issues.map((issue) => R8e(issue, n, Xne()))),
-    }),
-    t
-  );
-}
-//@ chunk-7vp249v4.js:28662-29607 esm-fingerprint
-var Be = Fr("$ZodUnion", (e, t) => {
-  (Qk.init(e, t),
-    PE(e, "optin", (n) =>
-      n.def.options.some((option) => option._zod.optin === "defaulted")
-        ? "defaulted"
-        : n.def.options.some((option) => option._zod.optin !== void 0)
-          ? "optional"
-          : void 0,
-    ),
-    PE(e, "optout", (n) =>
-      n.def.options.some((option) => option._zod.optout === "optional") ? "optional" : void 0,
-    ),
-    PE(e, "values", (n) => {
-      if (n.def.options.every((option) => option._zod.values))
-        return new Set(n.def.options.flatMap((option) => Array.from(option._zod.values)));
-      return;
-    }),
-    PE(e, "pattern", (n) => {
-      if (n.def.options.every((option) => option._zod.pattern)) {
-        let mapped = n.def.options.map((option) => option._zod.pattern);
-        return new RegExp(`^(${mapped.map((s) => cMn(s.source)).join("|")})$`);
-      }
-      return;
-    }));
-  let r = t.options.length === 1 ? t.options[0]._zod.run : null;
-  e._zod.parse = (n, i) => {
-    if (r) return r(n, i);
-    let s = !1,
-      c = [];
-    for (let option of t.options) {
-      let run = option._zod.run({ value: n.value, issues: [] }, i);
-      if (run instanceof Promise) (c.push(run), (s = !0));
-      else {
-        if (run.issues.length === 0) return run;
-        c.push(run);
+      `);
       }
     }
-    if (!s) return to(c, n, e, i);
-    return Promise.all(c).then((a) => to(a, n, e, i));
+    doc.write("payload.value = newResult;");
+    doc.write("return payload;");
+    return doc.compile();
+  };
+  let fastpass;
+  let isObject_2 = isObject;
+  let jit = !globalConfig.jitless;
+  let fastEnabled = jit && allowsEval.value;
+  let catchall = def.catchall;
+  let value;
+  inst._zod.parse = (payload, ctx) => {
+    value ?? (value = _normalized.value);
+    let input = payload.value;
+    if (!isObject_2(input)) {
+      payload.issues.push({
+        expected: "object",
+        code: "invalid_type",
+        input,
+        inst,
+      });
+      return payload;
+    }
+    if (jit && fastEnabled && ctx?.async === false && ctx.jitless !== true) {
+      if (!fastpass) fastpass = generateFastpass(def.shape);
+      payload = fastpass(payload, ctx);
+      if (!catchall) return payload;
+      return Xo([], input, payload, ctx, value, inst, ctx?.abortEarly === true);
+    }
+    return superParse(payload, ctx);
+  };
+});
+//@ chunk-7vp249v4.js:28381-28662 esm-fingerprint
+function to(results, payload, inst, ctx) {
+  for (let s of results)
+    if (s.issues.length === 0) {
+      payload.value = s.value;
+      return payload;
+    }
+  let filtered = results.filter((r) => !aborted(r));
+  if (filtered.length === 1) {
+    payload.value = filtered[0].value;
+    return filtered[0];
+  }
+  payload.issues.push({
+    code: "invalid_union",
+    input: payload.value,
+    inst,
+    errors: results.map((result) => result.issues.map((iss) => finalizeIssue(iss, ctx, config()))),
+  });
+  return payload;
+}
+//@ chunk-7vp249v4.js:28662-29607 esm-fingerprint
+var $ZodUnion = Fr("$ZodUnion", (inst, def) => {
+  $ZodType.init(inst, def);
+  defineLazyInternal(inst, "optin", (zod) =>
+    zod.def.options.some((o) => o._zod.optin === "defaulted")
+      ? "defaulted"
+      : zod.def.options.some((o) => o._zod.optin !== undefined)
+        ? "optional"
+        : undefined,
+  );
+  defineLazyInternal(inst, "optout", (zod) =>
+    zod.def.options.some((o) => o._zod.optout === "optional") ? "optional" : undefined,
+  );
+  defineLazyInternal(inst, "values", (zod) => {
+    if (zod.def.options.every((o) => o._zod.values))
+      return new Set(zod.def.options.flatMap((option) => Array.from(option._zod.values)));
+    return;
+  });
+  defineLazyInternal(inst, "pattern", (zod) => {
+    if (zod.def.options.every((o) => o._zod.pattern)) {
+      let patterns = zod.def.options.map((o) => o._zod.pattern);
+      return new RegExp(`^(${patterns.map((p) => cleanRegex(p.source)).join("|")})$`);
+    }
+    return;
+  });
+  let first = def.options.length === 1 ? def.options[0]._zod.run : null;
+  inst._zod.parse = (payload, ctx) => {
+    if (first) return first(payload, ctx);
+    let async = false;
+    let results = [];
+    for (let option of def.options) {
+      let result = option._zod.run(
+        {
+          value: payload.value,
+          issues: [],
+        },
+        ctx,
+      );
+      if (result instanceof Promise) {
+        results.push(result);
+        async = true;
+      } else {
+        if (result.issues.length === 0) return result;
+        results.push(result);
+      }
+    }
+    if (!async) return to(results, payload, inst, ctx);
+    return Promise.all(results).then((results) => to(results, payload, inst, ctx));
   };
 });
 //@ chunk-7vp249v4.js:29607-29947 esm-fingerprint
-function Ss(e) {
-  let t = new Map();
-  for (let option of e.options) {
-    let n = option._zod.propValues?.[e.discriminator];
-    if (!n || n.size === 0)
-      throw Error(`Invalid discriminated union option at index "${e.options.indexOf(option)}"`);
-    for (let i of n)
-      if (t.has(i)) {
-        if (i !== void 0) throw Error(`Duplicate discriminator value "${String(i)}"`);
-        t.set(i, null);
-      } else t.set(i, option);
+function discriminatorMap(def) {
+  let map = new Map();
+  for (let option of def.options) {
+    let values = option._zod.propValues?.[def.discriminator];
+    if (!values || values.size === 0)
+      throw Error(`Invalid discriminated union option at index "${def.options.indexOf(option)}"`);
+    for (let value of values)
+      if (map.has(value)) {
+        if (value !== undefined) throw Error(`Duplicate discriminator value "${String(value)}"`);
+        map.set(value, null);
+      } else map.set(value, option);
   }
-  return t;
+  return map;
 }
 //@ chunk-7vp249v4.js:29947-31503 esm-fingerprint
-var Qo = Fr("$ZodDiscriminatedUnion", (e, t) => {
-    ((t.inclusive = !1), Be.init(e, t));
-    let parse = e._zod.parse;
-    (PE(e, "propValues", (i) => {
-      let s = {},
-        c = 0;
-      for (let option of i.def.options) {
-        let propValues = option._zod.propValues;
-        if (!propValues || Object.keys(propValues).length === 0)
-          throw Error(`Invalid discriminated union option at index "${i.def.options.indexOf(option)}"`);
-        if (propValues[i.def.discriminator]?.has(void 0)) c++;
-        for (let [p, f] of Object.entries(propValues)) {
-          if (!Object.prototype.hasOwnProperty.call(s, p)) She(s, p, new Set());
-          for (let d of f) s[p].add(d);
-        }
+var $ZodDiscriminatedUnion = Fr("$ZodDiscriminatedUnion", (inst, def) => {
+  def.inclusive = false;
+  $ZodUnion.init(inst, def);
+  let _super = inst._zod.parse;
+  defineLazyInternal(inst, "propValues", (zod) => {
+    let propValues = {};
+    let undefinedCount = 0;
+    for (let option of zod.def.options) {
+      let pv = option._zod.propValues;
+      if (!pv || Object.keys(pv).length === 0)
+        throw Error(`Invalid discriminated union option at index "${zod.def.options.indexOf(option)}"`);
+      if (pv[zod.def.discriminator]?.has(undefined)) undefinedCount++;
+      for (let [k, v] of Object.entries(pv)) {
+        if (!Object.prototype.hasOwnProperty.call(propValues, k)) assignProp(propValues, k, new Set());
+        for (let val of v) propValues[k].add(val);
       }
-      if (!i.def.unionFallback && c > 1) s[i.def.discriminator]?.delete(void 0);
-      return s;
-    }),
-      t.options.forEach((option, s) => {
-        let c = dSr(option._zod.def);
-        if (c && !Object.prototype.hasOwnProperty.call(c, t.discriminator))
-          throw Error(`Invalid discriminated union option at index "${s}"`);
-      }));
-    let n = lSr(() => Ss(t));
-    e._zod.parse = (i, s) => {
-      let c = i.value;
-      if (!fMn(c)) return (i.issues.push({ code: "invalid_type", expected: "object", input: c, inst: e }), i);
-      let a = c?.[t.discriminator],
-        l = n.value.get(a);
-      if (l && (a !== void 0 || s.direction !== "backward")) return l._zod.run(i, s);
-      if (t.unionFallback || s.direction === "backward") return parse(i, s);
-      return (
-        i.issues.push({
-          code: "invalid_union",
-          errors: [],
-          note: "No matching discriminator",
-          discriminator: t.discriminator,
-          options: Array.from(n.value.keys()).filter((p) => n.value.get(p) !== null),
-          input: c,
-          path: [t.discriminator],
-          inst: e,
-        }),
-        i
-      );
-    };
-  }),
-  en = Fr("$ZodIntersection", (e, t) => {
-    (Qk.init(e, t),
-      (e._zod.parse = (r, n) => {
-        let i = r.value,
-          run = t.left._zod.run({ value: i, issues: [] }, n),
-          run_2 = t.right._zod.run({ value: i, issues: [] }, n);
-        if (run instanceof Promise || run_2 instanceof Promise)
-          return Promise.all([run, run_2]).then(([l, p]) => ro(r, l, p));
-        return ro(r, run, run_2);
-      }));
+    }
+    if (!zod.def.unionFallback && undefinedCount > 1) propValues[zod.def.discriminator]?.delete(undefined);
+    return propValues;
   });
+  def.options.forEach((option, i) => {
+    let propShape = rawShape(option._zod.def);
+    if (propShape && !Object.prototype.hasOwnProperty.call(propShape, def.discriminator))
+      throw Error(`Invalid discriminated union option at index "${i}"`);
+  });
+  let disc = cached(() => discriminatorMap(def));
+  inst._zod.parse = (payload, ctx) => {
+    let input = payload.value;
+    if (!isObject(input)) {
+      payload.issues.push({
+        code: "invalid_type",
+        expected: "object",
+        input,
+        inst,
+      });
+      return payload;
+    }
+    let value = input?.[def.discriminator];
+    let opt = disc.value.get(value);
+    if (opt && (value !== undefined || ctx.direction !== "backward")) return opt._zod.run(payload, ctx);
+    if (def.unionFallback || ctx.direction === "backward") return _super(payload, ctx);
+    payload.issues.push({
+      code: "invalid_union",
+      errors: [],
+      note: "No matching discriminator",
+      discriminator: def.discriminator,
+      options: Array.from(disc.value.keys()).filter((value) => disc.value.get(value) !== null),
+      input,
+      path: [def.discriminator],
+      inst,
+    });
+    return payload;
+  };
+});
+var $ZodIntersection = Fr("$ZodIntersection", (inst, def) => {
+  $ZodType.init(inst, def);
+  inst._zod.parse = (payload, ctx) => {
+    let input = payload.value;
+    let left = def.left._zod.run(
+      {
+        value: input,
+        issues: [],
+      },
+      ctx,
+    );
+    let right = def.right._zod.run(
+      {
+        value: input,
+        issues: [],
+      },
+      ctx,
+    );
+    if (left instanceof Promise || right instanceof Promise)
+      return Promise.all([left, right]).then(([left, right]) =>
+        handleIntersectionResults(payload, left, right),
+      );
+    return handleIntersectionResults(payload, left, right);
+  };
+});
 //@ chunk-7vp249v4.js:31503-32274 esm-fingerprint
-function Le(e, t) {
-  if (e === t) return { valid: !0, data: e };
-  if (e instanceof Date && t instanceof Date && +e === +t) return { valid: !0, data: e };
-  if (qJt(e) && qJt(t)) {
-    let keys = Object.keys(t),
-      filtered = Object.keys(e).filter((s) => keys.indexOf(s) !== -1),
-      i = { ...e, ...t };
-    if (Object.prototype.hasOwnProperty.call(i, "__proto__")) delete i.__proto__;
-    for (let s of filtered) {
-      if (s === "__proto__") continue;
-      let c = Le(e[s], t[s]);
-      if (!c.valid) return { valid: !1, mergeErrorPath: [s, ...c.mergeErrorPath] };
-      i[s] = c.data;
+function mergeValues(a, b) {
+  if (a === b)
+    return {
+      valid: true,
+      data: a,
+    };
+  if (a instanceof Date && b instanceof Date && +a === +b)
+    return {
+      valid: true,
+      data: a,
+    };
+  if (isPlainObject(a) && isPlainObject(b)) {
+    let bKeys = Object.keys(b);
+    let sharedKeys = Object.keys(a).filter((key) => bKeys.indexOf(key) !== -1);
+    let newObj = {
+      ...a,
+      ...b,
+    };
+    if (Object.prototype.hasOwnProperty.call(newObj, "__proto__")) delete newObj.__proto__;
+    for (let key of sharedKeys) {
+      if (key === "__proto__") continue;
+      let sharedValue = mergeValues(a[key], b[key]);
+      if (!sharedValue.valid)
+        return {
+          valid: false,
+          mergeErrorPath: [key, ...sharedValue.mergeErrorPath],
+        };
+      newObj[key] = sharedValue.data;
     }
-    return { valid: !0, data: i };
+    return {
+      valid: true,
+      data: newObj,
+    };
   }
-  if (Array.isArray(e) && Array.isArray(t)) {
-    if (e.length !== t.length) return { valid: !1, mergeErrorPath: [] };
-    let r = [];
-    for (let n = 0; n < e.length; n++) {
-      let i = e[n],
-        s = t[n],
-        c = Le(i, s);
-      if (!c.valid) return { valid: !1, mergeErrorPath: [n, ...c.mergeErrorPath] };
-      r.push(c.data);
+  if (Array.isArray(a) && Array.isArray(b)) {
+    if (a.length !== b.length)
+      return {
+        valid: false,
+        mergeErrorPath: [],
+      };
+    let newArray = [];
+    for (let index = 0; index < a.length; index++) {
+      let itemA = a[index];
+      let itemB = b[index];
+      let sharedValue = mergeValues(itemA, itemB);
+      if (!sharedValue.valid)
+        return {
+          valid: false,
+          mergeErrorPath: [index, ...sharedValue.mergeErrorPath],
+        };
+      newArray.push(sharedValue.data);
     }
-    return { valid: !0, data: r };
+    return {
+      valid: true,
+      data: newArray,
+    };
   }
-  return { valid: !1, mergeErrorPath: [] };
+  return {
+    valid: false,
+    mergeErrorPath: [],
+  };
 }
 //@ chunk-7vp249v4.js:32274-33101 esm-fingerprint
-function ro(e, t, r) {
-  let n = new Map(),
-    i,
-    s = new Map(),
-    c = (p, f) => {
-      let d;
-      if (p.code === "unrecognized_keys" && !p.path?.length) (i ?? (i = p), (d = p.keys));
-      else if (p.code === "invalid_key" && p.origin === "record" && p.path?.length === 1) {
-        let _ = String(p.path[0]);
-        if (!s.has(_)) s.set(_, p);
-        d = [_];
-      } else return !1;
-      for (let _ of d) {
-        if (!n.has(_)) n.set(_, {});
-        n.get(_)[f] = !0;
-      }
-      return !0;
-    };
-  for (let issue of t.issues) if (!c(issue, "l")) e.issues.push(issue);
-  for (let issue of r.issues) if (!c(issue, "r")) e.issues.push(issue);
-  let mapped = [...n].filter(([, p]) => p.l && p.r).map(([p]) => p);
-  if (mapped.length) {
-    let p = i ? mapped.filter((f) => i.keys.includes(f)) : [];
-    if (p.length) e.issues.push({ ...i, keys: p });
-    for (let f of mapped) if (!p.includes(f) && s.has(f)) e.issues.push(s.get(f));
+function handleIntersectionResults(result, left, right) {
+  let unrecKeys = new Map();
+  let unrecIssue;
+  let keyIssues = new Map();
+  let collect = (iss, side) => {
+    let keys;
+    if (iss.code === "unrecognized_keys" && !iss.path?.length) {
+      unrecIssue ?? (unrecIssue = iss);
+      keys = iss.keys;
+    } else if (iss.code === "invalid_key" && iss.origin === "record" && iss.path?.length === 1) {
+      let k = String(iss.path[0]);
+      if (!keyIssues.has(k)) keyIssues.set(k, iss);
+      keys = [k];
+    } else return false;
+    for (let k of keys) {
+      if (!unrecKeys.has(k)) unrecKeys.set(k, {});
+      unrecKeys.get(k)[side] = true;
+    }
+    return true;
+  };
+  for (let iss of left.issues) if (!collect(iss, "l")) result.issues.push(iss);
+  for (let iss of right.issues) if (!collect(iss, "r")) result.issues.push(iss);
+  let bothKeys = [...unrecKeys].filter(([, f]) => f.l && f.r).map(([k]) => k);
+  if (bothKeys.length) {
+    let aggregated = unrecIssue ? bothKeys.filter((k) => unrecIssue.keys.includes(k)) : [];
+    if (aggregated.length)
+      result.issues.push({
+        ...unrecIssue,
+        keys: aggregated,
+      });
+    for (let k of bothKeys)
+      if (!aggregated.includes(k) && keyIssues.has(k)) result.issues.push(keyIssues.get(k));
   }
-  let l = Le(t.value, r.value);
-  if (!l.valid) {
-    if (cMe(e)) return e;
-    throw Error(`Unmergable intersection. Error path: ${JSON.stringify(l.mergeErrorPath)}`);
+  let merged = mergeValues(left.value, right.value);
+  if (!merged.valid) {
+    if (aborted(result)) return result;
+    throw Error(`Unmergable intersection. Error path: ${JSON.stringify(merged.mergeErrorPath)}`);
   }
-  return ((e.value = l.data), e);
+  result.value = merged.data;
+  return result;
 }
 //@ chunk-7vp249v4.js:33101-34211 esm-fingerprint
-var tn = Fr("$ZodTuple", (e, t) => {
-  Qk.init(e, t);
-  let items = t.items,
-    memoizer = __zod_globalConfig.memoizer;
-  (memoizer?.attach(e),
-    (e._zod.parse = (i, s) => {
-      let c = i.value;
-      if (!Array.isArray(c))
-        return (i.issues.push({ input: c, inst: e, expected: "tuple", code: "invalid_type" }), i);
-      i.value = memoizer ? memoizer.alloc(e, i, [], s) : [];
-      let a = [],
-        l = oo(items, "optin"),
-        p = oo(items, "optout");
-      if (!t.rest) {
-        if (c.length < l)
-          return (
-            i.issues.push({
-              code: "too_small",
-              minimum: l,
-              inclusive: !0,
-              input: c,
-              inst: e,
-              origin: "array",
-            }),
-            i
-          );
-        if (c.length > items.length)
-          i.issues.push({
-            code: "too_big",
-            maximum: items.length,
-            inclusive: !0,
-            input: c,
-            inst: e,
-            origin: "array",
-          });
+var $ZodTuple = Fr("$ZodTuple", (inst, def) => {
+  $ZodType.init(inst, def);
+  let items = def.items;
+  let memo = globalConfig.memoizer;
+  memo?.attach(inst);
+  inst._zod.parse = (payload, ctx) => {
+    let input = payload.value;
+    if (!Array.isArray(input)) {
+      payload.issues.push({
+        input,
+        inst,
+        expected: "tuple",
+        code: "invalid_type",
+      });
+      return payload;
+    }
+    payload.value = memo ? memo.alloc(inst, payload, [], ctx) : [];
+    let proms = [];
+    let optinStart = getTupleOptStart(items, "optin");
+    let optoutStart = getTupleOptStart(items, "optout");
+    if (!def.rest) {
+      if (input.length < optinStart) {
+        payload.issues.push({
+          code: "too_small",
+          minimum: optinStart,
+          inclusive: true,
+          input,
+          inst,
+          origin: "array",
+        });
+        return payload;
       }
-      let f = Array(items.length),
-        d = t.rest ? s?.abortEarly : void 0,
-        _ = !1;
-      for (let m = 0; m < items.length; m++) {
-        let run = items[m]._zod.run({ value: c[m], issues: [] }, s);
-        if (run instanceof Promise)
-          a.push(
-            run.then((g) => {
-              f[m] = g;
-            }),
-          );
-        else if (((f[m] = run), d && !_ && run.issues.length)) _ = cMe(run);
+      if (input.length > items.length)
+        payload.issues.push({
+          code: "too_big",
+          maximum: items.length,
+          inclusive: true,
+          input,
+          inst,
+          origin: "array",
+        });
+    }
+    let itemResults = Array(items.length);
+    let abortEarly = def.rest ? ctx?.abortEarly : undefined;
+    let itemAborted = false;
+    for (let i = 0; i < items.length; i++) {
+      let r = items[i]._zod.run(
+        {
+          value: input[i],
+          issues: [],
+        },
+        ctx,
+      );
+      if (r instanceof Promise)
+        proms.push(
+          r.then((rr) => {
+            itemResults[i] = rr;
+          }),
+        );
+      else {
+        itemResults[i] = r;
+        if (abortEarly && !itemAborted && r.issues.length) itemAborted = aborted(r);
       }
-      if (t.rest && !_) {
-        let m = items.length - 1,
-          sliced = c.slice(items.length),
-          g = i.issues.length;
-        for (let x of sliced) {
-          if (d && i.issues.length !== g) {
-            if (cMe(i, g)) break;
-            g = i.issues.length;
-          }
-          m++;
-          let run = t.rest._zod.run({ value: x, issues: [] }, s);
-          if (run instanceof Promise) a.push(run.then((I) => no(I, i, m)));
-          else no(run, i, m);
+    }
+    if (def.rest && !itemAborted) {
+      let i = items.length - 1;
+      let rest = input.slice(items.length);
+      let seen = payload.issues.length;
+      for (let el of rest) {
+        if (abortEarly && payload.issues.length !== seen) {
+          if (aborted(payload, seen)) break;
+          seen = payload.issues.length;
         }
+        i++;
+        let result = def.rest._zod.run(
+          {
+            value: el,
+            issues: [],
+          },
+          ctx,
+        );
+        if (result instanceof Promise) proms.push(result.then((r) => handleTupleResult(r, payload, i)));
+        else handleTupleResult(result, payload, i);
       }
-      if (a.length) return Promise.all(a).then(() => io(f, i, items, c, p));
-      return io(f, i, items, c, p);
-    }));
+    }
+    if (proms.length)
+      return Promise.all(proms).then(() =>
+        handleTupleResults(itemResults, payload, items, input, optoutStart),
+      );
+    return handleTupleResults(itemResults, payload, items, input, optoutStart);
+  };
 });
 //@ chunk-7vp249v4.js:34211-34351 esm-fingerprint
-function oo(e, t) {
-  for (let r = e.length - 1; r >= 0; r--)
-    if (!(t === "optin" ? e[r]._zod.optin !== void 0 : e[r]._zod.optout === "optional")) return r + 1;
+function getTupleOptStart(items, key) {
+  for (let i = items.length - 1; i >= 0; i--)
+    if (!(key === "optin" ? items[i]._zod.optin !== undefined : items[i]._zod.optout === "optional"))
+      return i + 1;
   return 0;
 }
 //@ chunk-7vp249v4.js:34351-34442 esm-fingerprint
-function no(e, t, r) {
-  if (e.issues.length) t.issues.push(...j1e(r, e.issues));
-  t.value[r] = e.value;
+function handleTupleResult(result, final, index) {
+  if (result.issues.length) final.issues.push(...prefixIssues(index, result.issues));
+  final.value[index] = result.value;
 }
 //@ chunk-7vp249v4.js:34442-34826 esm-fingerprint
-function io(e, t, r, n, i) {
-  for (let s = 0; s < r.length; s++) {
-    let c = e[s],
-      a = s < n.length;
-    if (!a && s >= i && r[s]._zod.optin === "optional") {
-      t.value.length = s;
+function handleTupleResults(itemResults, final, items, input, optoutStart) {
+  for (let i = 0; i < items.length; i++) {
+    let r = itemResults[i];
+    let isPresent = i < input.length;
+    if (!isPresent && i >= optoutStart && items[i]._zod.optin === "optional") {
+      final.value.length = i;
       break;
     }
-    if (c.issues.length) {
-      if (!a && s >= i) {
-        t.value.length = s;
+    if (r.issues.length) {
+      if (!isPresent && i >= optoutStart) {
+        final.value.length = i;
         break;
       }
-      t.issues.push(...j1e(s, c.issues));
+      final.issues.push(...prefixIssues(i, r.issues));
     }
-    t.value[s] = c.value;
+    final.value[i] = r.value;
   }
-  for (let s = t.value.length - 1; s >= n.length; s--)
-    if (r[s]._zod.optout === "optional" && t.value[s] === void 0) t.value.length = s;
+  for (let i = final.value.length - 1; i >= input.length; i--)
+    if (items[i]._zod.optout === "optional" && final.value[i] === undefined) final.value.length = i;
     else break;
-  return t;
+  return final;
 }
 //@ chunk-7vp249v4.js:34826-37256 esm-fingerprint
-var rn = Fr("$ZodRecord", (e, t) => {
-  Qk.init(e, t);
-  let memoizer = __zod_globalConfig.memoizer;
-  (memoizer?.attach(e),
-    (e._zod.parse = (n, i) => {
-      let s = n.value;
-      if (!qJt(s)) return (n.issues.push({ expected: "record", code: "invalid_type", input: s, inst: e }), n);
-      let c = [],
-        values = t.keyType._zod.values;
-      if (values && !t.partial) {
-        n.value = memoizer ? memoizer.alloc(e, n, {}, i) : {};
-        let l = new Set();
-        for (let f of values)
-          if (typeof f === "string" || typeof f === "number" || typeof f === "symbol") {
-            if ((l.add(typeof f === "number" ? f.toString() : f), f === "__proto__")) continue;
-            let run = t.keyType._zod.run({ value: f, issues: [] }, i);
-            if (run instanceof Promise) throw Error("Async schemas not supported in object keys currently");
-            if (run.issues.length) {
-              n.issues.push({
-                code: "invalid_key",
-                origin: "record",
-                issues: run.issues.map((issue) => R8e(issue, i, Xne())),
-                input: f,
-                path: [f],
-                inst: e,
-              });
-              continue;
-            }
-            let _ = run.value;
-            if (_ === "__proto__") continue;
-            let run_2 = t.valueType._zod.run({ value: s[f], issues: [] }, i);
-            if (run_2 instanceof Promise)
-              c.push(
-                run_2.then((h) => {
-                  if (h.issues.length) n.issues.push(...j1e(f, h.issues));
-                  n.value[_] = h.value;
-                }),
-              );
-            else {
-              if (run_2.issues.length) n.issues.push(...j1e(f, run_2.issues));
-              n.value[_] = run_2.value;
-            }
-          }
-        let p;
-        for (let key in s)
-          if (!l.has(key))
-            if (t.mode === "loose") {
-              if (key === "__proto__") continue;
-              n.value[key] = s[key];
-            } else ((p = p ?? []), p.push(key));
-        if (p && p.length > 0)
-          n.issues.push({ code: "unrecognized_keys", input: s, inst: e, keys: p, continue: !0 });
-      } else {
-        n.value = memoizer ? memoizer.alloc(e, n, {}, i) : {};
-        let l;
-        for (let p of Reflect.ownKeys(s)) {
-          if (p === "__proto__") continue;
-          if (!Object.prototype.propertyIsEnumerable.call(s, p)) continue;
-          let run = t.keyType._zod.run({ value: p, issues: [] }, i);
-          if (run instanceof Promise) throw Error("Async schemas not supported in object keys currently");
-          if (typeof p === "string" && V.test(p) && run.issues.length) {
-            let run_2 = t.keyType._zod.run({ value: Number(p), issues: [] }, i);
-            if (run_2 instanceof Promise) throw Error("Async schemas not supported in object keys currently");
-            if (run_2.issues.length === 0) run = run_2;
-          }
-          if (run.issues.length) {
-            if (t.mode === "loose") n.value[p] = s[p];
-            else if (values) ((l = l ?? []), l.push(p));
-            else
-              n.issues.push({
-                code: "invalid_key",
-                origin: "record",
-                issues: run.issues.map((issue) => R8e(issue, i, Xne())),
-                input: p,
-                path: [p],
-                inst: e,
-              });
+var $ZodRecord = Fr("$ZodRecord", (inst, def) => {
+  $ZodType.init(inst, def);
+  let memo = globalConfig.memoizer;
+  memo?.attach(inst);
+  inst._zod.parse = (payload, ctx) => {
+    let input = payload.value;
+    if (!isPlainObject(input)) {
+      payload.issues.push({
+        expected: "record",
+        code: "invalid_type",
+        input,
+        inst,
+      });
+      return payload;
+    }
+    let proms = [];
+    let values = def.keyType._zod.values;
+    if (values && !def.partial) {
+      payload.value = memo ? memo.alloc(inst, payload, {}, ctx) : {};
+      let recordKeys = new Set();
+      for (let key of values)
+        if (typeof key === "string" || typeof key === "number" || typeof key === "symbol") {
+          recordKeys.add(typeof key === "number" ? key.toString() : key);
+          if (key === "__proto__") continue;
+          let keyResult = def.keyType._zod.run(
+            {
+              value: key,
+              issues: [],
+            },
+            ctx,
+          );
+          if (keyResult instanceof Promise)
+            throw Error("Async schemas not supported in object keys currently");
+          if (keyResult.issues.length) {
+            payload.issues.push({
+              code: "invalid_key",
+              origin: "record",
+              issues: keyResult.issues.map((iss) => finalizeIssue(iss, ctx, config())),
+              input: key,
+              path: [key],
+              inst,
+            });
             continue;
           }
-          let _ = run.value;
-          if (_ === "__proto__") continue;
-          let run_2 = t.valueType._zod.run({ value: s[p], issues: [] }, i);
-          if (run_2 instanceof Promise)
-            c.push(
-              run_2.then((h) => {
-                if (h.issues.length) n.issues.push(...j1e(p, h.issues));
-                n.value[_] = h.value;
+          let outKey = keyResult.value;
+          if (outKey === "__proto__") continue;
+          let result = def.valueType._zod.run(
+            {
+              value: input[key],
+              issues: [],
+            },
+            ctx,
+          );
+          if (result instanceof Promise)
+            proms.push(
+              result.then((result) => {
+                if (result.issues.length) payload.issues.push(...prefixIssues(key, result.issues));
+                payload.value[outKey] = result.value;
               }),
             );
           else {
-            if (run_2.issues.length) n.issues.push(...j1e(p, run_2.issues));
-            n.value[_] = run_2.value;
+            if (result.issues.length) payload.issues.push(...prefixIssues(key, result.issues));
+            payload.value[outKey] = result.value;
           }
         }
-        if (l && l.length > 0)
-          n.issues.push({ code: "unrecognized_keys", input: s, inst: e, keys: l, continue: !0 });
+      let unrecognized;
+      for (let key in input)
+        if (!recordKeys.has(key))
+          if (def.mode === "loose") {
+            if (key === "__proto__") continue;
+            payload.value[key] = input[key];
+          } else {
+            unrecognized = unrecognized ?? [];
+            unrecognized.push(key);
+          }
+      if (unrecognized && unrecognized.length > 0)
+        payload.issues.push({
+          code: "unrecognized_keys",
+          input,
+          inst,
+          keys: unrecognized,
+          continue: true,
+        });
+    } else {
+      payload.value = memo ? memo.alloc(inst, payload, {}, ctx) : {};
+      let unrecognized;
+      for (let key of Reflect.ownKeys(input)) {
+        if (key === "__proto__") continue;
+        if (!Object.prototype.propertyIsEnumerable.call(input, key)) continue;
+        let keyResult = def.keyType._zod.run(
+          {
+            value: key,
+            issues: [],
+          },
+          ctx,
+        );
+        if (keyResult instanceof Promise) throw Error("Async schemas not supported in object keys currently");
+        if (typeof key === "string" && number.test(key) && keyResult.issues.length) {
+          let retryResult = def.keyType._zod.run(
+            {
+              value: Number(key),
+              issues: [],
+            },
+            ctx,
+          );
+          if (retryResult instanceof Promise)
+            throw Error("Async schemas not supported in object keys currently");
+          if (retryResult.issues.length === 0) keyResult = retryResult;
+        }
+        if (keyResult.issues.length) {
+          if (def.mode === "loose") payload.value[key] = input[key];
+          else if (values) {
+            unrecognized = unrecognized ?? [];
+            unrecognized.push(key);
+          } else
+            payload.issues.push({
+              code: "invalid_key",
+              origin: "record",
+              issues: keyResult.issues.map((iss) => finalizeIssue(iss, ctx, config())),
+              input: key,
+              path: [key],
+              inst,
+            });
+          continue;
+        }
+        let outKey = keyResult.value;
+        if (outKey === "__proto__") continue;
+        let result = def.valueType._zod.run(
+          {
+            value: input[key],
+            issues: [],
+          },
+          ctx,
+        );
+        if (result instanceof Promise)
+          proms.push(
+            result.then((result) => {
+              if (result.issues.length) payload.issues.push(...prefixIssues(key, result.issues));
+              payload.value[outKey] = result.value;
+            }),
+          );
+        else {
+          if (result.issues.length) payload.issues.push(...prefixIssues(key, result.issues));
+          payload.value[outKey] = result.value;
+        }
       }
-      if (c.length) return Promise.all(c).then(() => n);
-      return n;
-    }));
+      if (unrecognized && unrecognized.length > 0)
+        payload.issues.push({
+          code: "unrecognized_keys",
+          input,
+          inst,
+          keys: unrecognized,
+          continue: true,
+        });
+    }
+    if (proms.length) return Promise.all(proms).then(() => payload);
+    return payload;
+  };
 });
 //@ chunk-7vp249v4.js:37256-38038 esm-fingerprint
-var on = Fr("$ZodEnum", (e, t) => {
-    Qk.init(e, t);
-    let r = iSr(t.entries),
-      n = new Set(r);
-    ((e._zod.values = n),
-      PE(e, "pattern", (i) => {
-        let filtered = iSr(i.def.entries).filter((c) => CIi.has(typeof c));
-        return new RegExp(
-          filtered.length ? `^(${filtered.map((c) => _Mt(c.toString())).join("|")})$` : "^[^\\s\\S]$",
-        );
-      }),
-      (e._zod.parse = (i, s) => {
-        let c = i.value;
-        if (n.has(c)) return i;
-        return (i.issues.push({ code: "invalid_value", values: r, input: c, inst: e }), i);
-      }));
-  }),
-  nn = Fr("$ZodLiteral", (e, t) => {
-    Qk.init(e, t);
-    let r = new Set(t.values);
-    ((e._zod.values = r),
-      PE(e, "pattern", (n) => {
-        let values = n.def.values;
-        return new RegExp(
-          values.length
-            ? `^(${values.map((s) => (typeof s === "string" ? _Mt(s) : s ? _Mt(s.toString()) : String(s))).join("|")})$`
-            : "^[^\\s\\S]$",
-        );
-      }),
-      (e._zod.parse = (n, i) => {
-        let s = n.value;
-        if (r.has(s)) return n;
-        return (n.issues.push({ code: "invalid_value", values: t.values, input: s, inst: e }), n);
-      }));
+var on = Fr("$ZodEnum", (inst, def) => {
+  $ZodType.init(inst, def);
+  let values = iSr(def.entries);
+  let valuesSet = new Set(values);
+  inst._zod.values = valuesSet;
+  defineLazyInternal(inst, "pattern", (zod) => {
+    let patternValues = iSr(zod.def.entries).filter((k) => CIi.has(typeof k));
+    return new RegExp(
+      patternValues.length
+        ? `^(${patternValues.map((o) => escapeRegex(o.toString())).join("|")})$`
+        : "^[^\\s\\S]$",
+    );
   });
+  inst._zod.parse = (payload, _ctx) => {
+    let input = payload.value;
+    if (valuesSet.has(input)) return payload;
+    payload.issues.push({
+      code: "invalid_value",
+      values,
+      input,
+      inst,
+    });
+    return payload;
+  };
+});
+var $ZodLiteral = Fr("$ZodLiteral", (inst, def) => {
+  $ZodType.init(inst, def);
+  let values = new Set(def.values);
+  inst._zod.values = values;
+  defineLazyInternal(inst, "pattern", (zod) => {
+    let vals = zod.def.values;
+    return new RegExp(
+      vals.length
+        ? `^(${vals.map((o) => (typeof o === "string" ? escapeRegex(o) : o ? escapeRegex(o.toString()) : String(o))).join("|")})$`
+        : "^[^\\s\\S]$",
+    );
+  });
+  inst._zod.parse = (payload, _ctx) => {
+    let input = payload.value;
+    if (values.has(input)) return payload;
+    payload.issues.push({
+      code: "invalid_value",
+      values: def.values,
+      input,
+      inst,
+    });
+    return payload;
+  };
+});
 //@ chunk-7vp249v4.js:38038-38390 esm-fingerprint
-var sn = Fr("$ZodTransform", (e, t) => {
-  (Qk.init(e, t),
-    (e._zod.optin = "optional"),
-    __zod_globalConfig.memoizer?.guard(e),
-    (e._zod.parse = (r, n) => {
-      if (n.direction === "backward") throw new ZodEncodeError(e.constructor.name);
-      let transform = t.transform(r.value, r);
-      if (n.async)
-        return (transform instanceof Promise ? transform : Promise.resolve(transform)).then(
-          (c) => ((r.value = c), r),
-        );
-      if (transform instanceof Promise) throw new x8e();
-      return ((r.value = transform), r);
-    }));
+var sn = Fr("$ZodTransform", (inst, def) => {
+  $ZodType.init(inst, def);
+  inst._zod.optin = "optional";
+  globalConfig.memoizer?.guard(inst);
+  inst._zod.parse = (payload, ctx) => {
+    if (ctx.direction === "backward") throw new $ZodEncodeError(inst.constructor.name);
+    let _out = def.transform(payload.value, payload);
+    if (ctx.async)
+      return (_out instanceof Promise ? _out : Promise.resolve(_out)).then((output) => {
+        payload.value = output;
+        return payload;
+      });
+    if (_out instanceof Promise) throw new $ZodAsyncError();
+    payload.value = _out;
+    return payload;
+  };
 });
 //@ chunk-7vp249v4.js:38390-38455 esm-fingerprint
-function so(e, t) {
-  return ((e.value = t.issues.length ? void 0 : t.value), e);
+function handleOptionalResult(payload, result) {
+  payload.value = result.issues.length ? undefined : result.value;
+  return payload;
 }
 //@ chunk-7vp249v4.js:38455-40043 esm-fingerprint
-var Ve = Fr("$ZodOptional", (e, t) => {
-    (Qk.init(e, t),
-      PE(e, "optin", (r) => (r.def.innerType._zod.optin === "defaulted" ? "defaulted" : "optional")),
-      (e._zod.optout = "optional"),
-      PE(e, "values", (r) => {
-        let values = r.def.innerType._zod.values;
-        return values ? new Set([...values, void 0]) : void 0;
-      }),
-      PE(e, "pattern", (r) => {
-        let pattern = r.def.innerType._zod.pattern;
-        return pattern ? new RegExp(`^(${cMn(pattern.source)})?$`) : void 0;
-      }),
-      (e._zod.parse = (r, n) => {
-        if (r.value === void 0) {
-          if (t.innerType._zod.optin !== "defaulted") return r;
-          let run = t.innerType._zod.run({ value: r.value, issues: [] }, n);
-          if (run instanceof Promise) return run.then((s) => so(r, s));
-          return so(r, run);
-        }
-        return t.innerType._zod.run(r, n);
-      }));
-  }),
-  cn = Fr("$ZodExactOptional", (e, t) => {
-    (Ve.init(e, t),
-      PE(e, "values", (r) => r.def.innerType._zod.values),
-      PE(e, "pattern", (r) => r.def.innerType._zod.pattern),
-      (e._zod.parse = (r, n) => t.innerType._zod.run(r, n)));
-  }),
-  un = Fr("$ZodNullable", (e, t) => {
-    (Qk.init(e, t),
-      PE(e, "optin", (r) => r.def.innerType._zod.optin),
-      PE(e, "optout", (r) => r.def.innerType._zod.optout),
-      PE(e, "pattern", (r) => {
-        let pattern = r.def.innerType._zod.pattern;
-        return pattern ? new RegExp(`^(${cMn(pattern.source)}|null)$`) : void 0;
-      }),
-      PE(e, "values", (r) =>
-        r.def.innerType._zod.values ? new Set([...r.def.innerType._zod.values, null]) : void 0,
-      ),
-      (e._zod.parse = (r, n) => {
-        if (r.value === null) return r;
-        return t.innerType._zod.run(r, n);
-      }));
-  }),
-  an = Fr("$ZodDefault", (e, t) => {
-    (Qk.init(e, t),
-      (e._zod.optin = "defaulted"),
-      PE(e, "values", (r) => r.def.innerType._zod.values),
-      (e._zod.parse = (r, n) => {
-        if (n.direction === "backward") return t.innerType._zod.run(r, n);
-        if (r.value === void 0) return ((r.value = t.defaultValue), r);
-        let run = t.innerType._zod.run(r, n);
-        if (run instanceof Promise) return run.then((s) => co(s, t));
-        return co(run, t);
-      }));
+var $ZodOptional = Fr("$ZodOptional", (inst, def) => {
+  $ZodType.init(inst, def);
+  defineLazyInternal(inst, "optin", (zod) =>
+    zod.def.innerType._zod.optin === "defaulted" ? "defaulted" : "optional",
+  );
+  inst._zod.optout = "optional";
+  defineLazyInternal(inst, "values", (zod) => {
+    let values = zod.def.innerType._zod.values;
+    return values ? new Set([...values, undefined]) : undefined;
   });
+  defineLazyInternal(inst, "pattern", (zod) => {
+    let pattern = zod.def.innerType._zod.pattern;
+    return pattern ? new RegExp(`^(${cleanRegex(pattern.source)})?$`) : undefined;
+  });
+  inst._zod.parse = (payload, ctx) => {
+    if (payload.value === undefined) {
+      if (def.innerType._zod.optin !== "defaulted") return payload;
+      let result = def.innerType._zod.run(
+        {
+          value: payload.value,
+          issues: [],
+        },
+        ctx,
+      );
+      if (result instanceof Promise) return result.then((result) => handleOptionalResult(payload, result));
+      return handleOptionalResult(payload, result);
+    }
+    return def.innerType._zod.run(payload, ctx);
+  };
+});
+var $ZodExactOptional = Fr("$ZodExactOptional", (inst, def) => {
+  $ZodOptional.init(inst, def);
+  defineLazyInternal(inst, "values", (zod) => zod.def.innerType._zod.values);
+  defineLazyInternal(inst, "pattern", (zod) => zod.def.innerType._zod.pattern);
+  inst._zod.parse = (payload, ctx) => def.innerType._zod.run(payload, ctx);
+});
+var $ZodNullable = Fr("$ZodNullable", (inst, def) => {
+  $ZodType.init(inst, def);
+  defineLazyInternal(inst, "optin", (zod) => zod.def.innerType._zod.optin);
+  defineLazyInternal(inst, "optout", (zod) => zod.def.innerType._zod.optout);
+  defineLazyInternal(inst, "pattern", (zod) => {
+    let pattern = zod.def.innerType._zod.pattern;
+    return pattern ? new RegExp(`^(${cleanRegex(pattern.source)}|null)$`) : undefined;
+  });
+  defineLazyInternal(inst, "values", (zod) =>
+    zod.def.innerType._zod.values ? new Set([...zod.def.innerType._zod.values, null]) : undefined,
+  );
+  inst._zod.parse = (payload, ctx) => {
+    if (payload.value === null) return payload;
+    return def.innerType._zod.run(payload, ctx);
+  };
+});
+var $ZodDefault = Fr("$ZodDefault", (inst, def) => {
+  $ZodType.init(inst, def);
+  inst._zod.optin = "defaulted";
+  defineLazyInternal(inst, "values", (zod) => zod.def.innerType._zod.values);
+  inst._zod.parse = (payload, ctx) => {
+    if (ctx.direction === "backward") return def.innerType._zod.run(payload, ctx);
+    if (payload.value === undefined) {
+      payload.value = def.defaultValue;
+      return payload;
+    }
+    let result = def.innerType._zod.run(payload, ctx);
+    if (result instanceof Promise) return result.then((result) => handleDefaultResult(result, def));
+    return handleDefaultResult(result, def);
+  };
+});
 //@ chunk-7vp249v4.js:40043-40112 esm-fingerprint
-function co(e, t) {
-  if (e.value === void 0) e.value = t.defaultValue;
-  return e;
+function handleDefaultResult(payload, def) {
+  if (payload.value === undefined) payload.value = def.defaultValue;
+  return payload;
 }
 //@ chunk-7vp249v4.js:40112-40672 esm-fingerprint
-var ln = Fr("$ZodPrefault", (e, t) => {
-    (Qk.init(e, t),
-      (e._zod.optin = "defaulted"),
-      PE(e, "values", (r) => r.def.innerType._zod.values),
-      (e._zod.parse = (r, n) => {
-        if (n.direction === "backward") return t.innerType._zod.run(r, n);
-        if (r.value === void 0) r.value = t.defaultValue;
-        return t.innerType._zod.run(r, n);
-      }));
-  }),
-  pn = Fr("$ZodNonOptional", (e, t) => {
-    (Qk.init(e, t),
-      PE(e, "values", (r) => {
-        let values = r.def.innerType._zod.values;
-        return values ? new Set([...values].filter((i) => i !== void 0)) : void 0;
-      }),
-      (e._zod.parse = (r, n) => {
-        let run = t.innerType._zod.run(r, n);
-        if (run instanceof Promise) return run.then((s) => uo(s, e));
-        return uo(run, e);
-      }));
+var $ZodPrefault = Fr("$ZodPrefault", (inst, def) => {
+  $ZodType.init(inst, def);
+  inst._zod.optin = "defaulted";
+  defineLazyInternal(inst, "values", (zod) => zod.def.innerType._zod.values);
+  inst._zod.parse = (payload, ctx) => {
+    if (ctx.direction === "backward") return def.innerType._zod.run(payload, ctx);
+    if (payload.value === undefined) payload.value = def.defaultValue;
+    return def.innerType._zod.run(payload, ctx);
+  };
+});
+var $ZodNonOptional = Fr("$ZodNonOptional", (inst, def) => {
+  $ZodType.init(inst, def);
+  defineLazyInternal(inst, "values", (zod) => {
+    let v = zod.def.innerType._zod.values;
+    return v ? new Set([...v].filter((x) => x !== undefined)) : undefined;
   });
+  inst._zod.parse = (payload, ctx) => {
+    let result = def.innerType._zod.run(payload, ctx);
+    if (result instanceof Promise) return result.then((result) => handleNonOptionalResult(result, inst));
+    return handleNonOptionalResult(result, inst);
+  };
+});
 //@ chunk-7vp249v4.js:40672-40817 esm-fingerprint
-function uo(e, t) {
-  if (!e.issues.length && e.value === void 0)
-    e.issues.push({ code: "invalid_type", expected: "nonoptional", input: e.value, inst: t });
-  return e;
+function handleNonOptionalResult(payload, inst) {
+  if (!payload.issues.length && payload.value === undefined)
+    payload.issues.push({
+      code: "invalid_type",
+      expected: "nonoptional",
+      input: payload.value,
+      inst,
+    });
+  return payload;
 }
 //@ chunk-7vp249v4.js:40817-41019 esm-fingerprint
-function ao(e, t, r, n) {
-  if (!t.issues.length) {
-    if (((e.value = t.value), t.memo)) e.memo = !0;
-    return e;
+function handleCatchResult(payload, result, def, ctx) {
+  if (!result.issues.length) {
+    payload.value = result.value;
+    if (result.memo) payload.memo = true;
+    return payload;
   }
-  return (
-    (e.value = r.catchValue({
-      ...t,
-      value: e.value,
-      error: { issues: t.issues.map((issue) => R8e(issue, n, Xne())) },
-      input: e.value,
-    })),
-    e
-  );
+  payload.value = def.catchValue({
+    ...result,
+    value: payload.value,
+    error: {
+      issues: result.issues.map((iss) => finalizeIssue(iss, ctx, config())),
+    },
+    input: payload.value,
+  });
+  return payload;
 }
 //@ chunk-7vp249v4.js:41019-41457 esm-fingerprint
-var fn = Fr("$ZodCatch", (e, t) => {
-  (Qk.init(e, t),
-    PE(e, "optin", (r) => (r.def.innerType._zod.optin === "defaulted" ? "defaulted" : "optional")),
-    PE(e, "optout", (r) => r.def.innerType._zod.optout),
-    PE(e, "values", (r) => r.def.innerType._zod.values),
-    (e._zod.parse = (r, n) => {
-      if (n.direction === "backward") return t.innerType._zod.run(r, n);
-      let run = t.innerType._zod.run({ value: r.value, issues: [] }, n);
-      if (run instanceof Promise) return run.then((s) => ao(r, s, t, n));
-      return ao(r, run, t, n);
-    }));
+var $ZodCatch = Fr("$ZodCatch", (inst, def) => {
+  $ZodType.init(inst, def);
+  defineLazyInternal(inst, "optin", (zod) =>
+    zod.def.innerType._zod.optin === "defaulted" ? "defaulted" : "optional",
+  );
+  defineLazyInternal(inst, "optout", (zod) => zod.def.innerType._zod.optout);
+  defineLazyInternal(inst, "values", (zod) => zod.def.innerType._zod.values);
+  inst._zod.parse = (payload, ctx) => {
+    if (ctx.direction === "backward") return def.innerType._zod.run(payload, ctx);
+    let result = def.innerType._zod.run(
+      {
+        value: payload.value,
+        issues: [],
+      },
+      ctx,
+    );
+    if (result instanceof Promise)
+      return result.then((result) => handleCatchResult(payload, result, def, ctx));
+    return handleCatchResult(payload, result, def, ctx);
+  };
 });
 //@ chunk-7vp249v4.js:41457-41930 esm-fingerprint
-var Ke = Fr("$ZodPipe", (e, t) => {
-  (Qk.init(e, t),
-    PE(e, "values", (r) => r.def.in._zod.values),
-    PE(e, "optin", (r) => r.def.in._zod.optin),
-    PE(e, "optout", (r) => r.def.out._zod.optout),
-    PE(e, "propValues", (r) => r.def.in._zod.propValues),
-    (e._zod.parse = (r, n) => {
-      if (n.direction === "backward") {
-        let run = t.out._zod.run(r, n);
-        if (run instanceof Promise) return run.then((c) => fe(c, t.in, n));
-        return fe(run, t.in, n);
-      }
-      let run = t.in._zod.run(r, n);
-      if (run instanceof Promise) return run.then((s) => fe(s, t.out, n));
-      return fe(run, t.out, n);
-    }));
+var $ZodPipe = Fr("$ZodPipe", (inst, def) => {
+  $ZodType.init(inst, def);
+  defineLazyInternal(inst, "values", (zod) => zod.def.in._zod.values);
+  defineLazyInternal(inst, "optin", (zod) => zod.def.in._zod.optin);
+  defineLazyInternal(inst, "optout", (zod) => zod.def.out._zod.optout);
+  defineLazyInternal(inst, "propValues", (zod) => zod.def.in._zod.propValues);
+  inst._zod.parse = (payload, ctx) => {
+    if (ctx.direction === "backward") {
+      let right = def.out._zod.run(payload, ctx);
+      if (right instanceof Promise) return right.then((right) => handlePipeResult(right, def.in, ctx));
+      return handlePipeResult(right, def.in, ctx);
+    }
+    let left = def.in._zod.run(payload, ctx);
+    if (left instanceof Promise) return left.then((left) => handlePipeResult(left, def.out, ctx));
+    return handlePipeResult(left, def.out, ctx);
+  };
 });
 //@ chunk-7vp249v4.js:41930-42076 esm-fingerprint
-function fe(e, t, r) {
-  if (e.issues.some((issue) => issue.code !== "unrecognized_keys")) return ((e.aborted = !0), e);
-  return t._zod.run({ value: e.value, issues: e.issues }, r);
+function handlePipeResult(left, next, ctx) {
+  if (left.issues.some((iss) => iss.code !== "unrecognized_keys")) {
+    left.aborted = true;
+    return left;
+  }
+  return next._zod.run(
+    {
+      value: left.value,
+      issues: left.issues,
+    },
+    ctx,
+  );
 }
 //@ chunk-7vp249v4.js:42076-42542 esm-fingerprint
-var dn = Fr("$ZodPreprocess", (e, t) => {
-    Ke.init(e, t);
-  }),
-  mn = Fr("$ZodReadonly", (e, t) => {
-    (Qk.init(e, t),
-      PE(e, "propValues", (r) => r.def.innerType._zod.propValues),
-      PE(e, "values", (r) => r.def.innerType._zod.values),
-      PE(e, "optin", (r) => r.def.innerType?._zod?.optin),
-      PE(e, "optout", (r) => r.def.innerType?._zod?.optout),
-      (e._zod.parse = (r, n) => {
-        if (n.direction === "backward") return t.innerType._zod.run(r, n);
-        let run = t.innerType._zod.run(r, n);
-        if (run instanceof Promise) return run.then(freezeZodValue);
-        return freezeZodValue(run);
-      }));
-  });
+var dn = Fr("$ZodPreprocess", (inst, def) => {
+  $ZodPipe.init(inst, def);
+});
+var $ZodReadonly = Fr("$ZodReadonly", (inst, def) => {
+  $ZodType.init(inst, def);
+  defineLazyInternal(inst, "propValues", (zod) => zod.def.innerType._zod.propValues);
+  defineLazyInternal(inst, "values", (zod) => zod.def.innerType._zod.values);
+  defineLazyInternal(inst, "optin", (zod) => zod.def.innerType?._zod?.optin);
+  defineLazyInternal(inst, "optout", (zod) => zod.def.innerType?._zod?.optout);
+  inst._zod.parse = (payload, ctx) => {
+    if (ctx.direction === "backward") return def.innerType._zod.run(payload, ctx);
+    let result = def.innerType._zod.run(payload, ctx);
+    if (result instanceof Promise) return result.then(freezeZodValue);
+    return freezeZodValue(result);
+  };
+});
 //@ chunk-7vp249v4.js:42542-42608 esm-fingerprint
-function freezeZodValue(e) {
-  if (!e.memo) e.value = Object.freeze(e.value);
-  return e;
+function freezeZodValue(payload) {
+  if (!payload.memo) payload.value = Object.freeze(payload.value);
+  return payload;
 }
 //@ chunk-7vp249v4.js:42608-43213 esm-fingerprint
-var nlo = Fr("$ZodLazy", (e, t) => {
-    (Qk.init(e, t),
-      uMn(e._zod, "innerType", () => {
-        let r = t;
-        if (!r._cachedInner) r._cachedInner = t.getter();
-        return r._cachedInner;
-      }),
-      PE(e, "pattern", (r) => r.innerType?._zod?.pattern),
-      PE(e, "propValues", (r) => r.innerType?._zod?.propValues),
-      PE(e, "optin", (r) => r.innerType?._zod?.optin ?? void 0),
-      PE(e, "optout", (r) => r.innerType?._zod?.optout ?? void 0),
-      (e._zod.parse = (r, n) => e._zod.innerType._zod.run(r, n)));
-  }),
-  hn = Fr("$ZodCustom", (e, t) => {
-    (JK.init(e, t),
-      Qk.init(e, t),
-      (e._zod.parse = (r, n) => r),
-      (e._zod.check = (r) => {
-        let n = r.value,
-          fn = t.fn(n);
-        if (fn instanceof Promise) return fn.then((s) => po(s, r, n, e));
-        po(fn, r, n, e);
-        return;
-      }));
+var nlo = Fr("$ZodLazy", (inst, def) => {
+  $ZodType.init(inst, def);
+  defineLazy(inst._zod, "innerType", () => {
+    let d = def;
+    if (!d._cachedInner) d._cachedInner = def.getter();
+    return d._cachedInner;
   });
+  defineLazyInternal(inst, "pattern", (r) => r.innerType?._zod?.pattern);
+  defineLazyInternal(inst, "propValues", (r) => r.innerType?._zod?.propValues);
+  defineLazyInternal(inst, "optin", (r) => r.innerType?._zod?.optin ?? undefined);
+  defineLazyInternal(inst, "optout", (r) => r.innerType?._zod?.optout ?? undefined);
+  inst._zod.parse = (payload, ctx) => inst._zod.innerType._zod.run(payload, ctx);
+});
+var hn = Fr("$ZodCustom", (inst, def) => {
+  $ZodCheck.init(inst, def);
+  $ZodType.init(inst, def);
+  inst._zod.parse = (payload, _) => payload;
+  inst._zod.check = (payload) => {
+    let input = payload.value;
+    let r = def.fn(input);
+    if (r instanceof Promise) return r.then((r) => handleRefineResult(r, payload, input, inst));
+    handleRefineResult(r, payload, input, inst);
+    return;
+  };
+});
 //@ chunk-7vp249v4.js:43213-43406 esm-fingerprint
-function po(e, t, r, n) {
-  if (!e) {
-    let i = {
+function handleRefineResult(result, payload, input, inst) {
+  if (!result) {
+    let _iss = {
       code: "custom",
-      input: r,
-      inst: n,
-      path: [...(n._zod.def.path ?? [])],
-      continue: !n._zod.def.abort,
+      input,
+      inst,
+      path: [...(inst._zod.def.path ?? [])],
+      continue: !inst._zod.def.abort,
     };
-    if (n._zod.def.params) i.params = n._zod.def.params;
-    t.issues.push(YJt(i));
+    if (inst._zod.def.params) _iss.params = inst._zod.def.params;
+    payload.issues.push(issue(_iss));
   }
 }
 //@ chunk-7vp249v4.js:43406-43478 esm-fingerprint
-function fo(e, t, r) {
-  if (e.issues.length) t.issues.push(...j1e(r, e.issues));
+function handlePropertiesResult(result, payload, key) {
+  if (result.issues.length) payload.issues.push(...prefixIssues(key, result.issues));
 }
 //@ chunk-7vp249v4.js:43478-44335 esm-fingerprint
-var Is = Fr(
+var $ZodProperties = Fr(
   "$ZodProperties",
-  (e, t) => {
-    (Qk.init(e, t), JK.init(e, t));
-    let memoizer = __zod_globalConfig.memoizer;
-    memoizer?.attach(e);
-    let n,
-      i = (s, c) => {
-        n ?? (n = Reflect.ownKeys(t.shape).map((p) => [p, t.shape[p]]));
-        let a = s.value,
-          l;
-        for (let [p, f] of n) {
-          let run = f._zod.run({ value: a[p], issues: [] }, c);
-          if (run instanceof Promise) (l ?? (l = []), l.push(run.then((_) => fo(_, s, p))));
-          else fo(run, s, p);
-        }
-        if (l)
-          return Promise.all(l).then(() => {
-            return;
-          });
-        return;
-      };
-    ((e._zod.parse = (s, c) => {
-      let a = s.value;
-      if (a === null || (typeof a !== "object" && typeof a !== "function"))
-        return (s.issues.push({ expected: "object", code: "invalid_type", input: a, inst: e }), s);
-      if (c.direction === "backward") c = { ...c, direction: "forward" };
-      if (memoizer) memoizer.alloc(e, s, a, c);
-      let l = i(s, c);
-      return l instanceof Promise ? l.then(() => s) : s;
-    }),
-      (e._zod.check = (s) => {
-        if (s.value == null) {
-          s.issues.push({ expected: "object", code: "invalid_type", input: s.value, inst: e });
+  (inst, def) => {
+    $ZodType.init(inst, def);
+    $ZodCheck.init(inst, def);
+    let memo = globalConfig.memoizer;
+    memo?.attach(inst);
+    let entries;
+    let runShape = (payload, ctx) => {
+      entries ?? (entries = Reflect.ownKeys(def.shape).map((key) => [key, def.shape[key]]));
+      let input = payload.value;
+      let proms;
+      for (let [key, schema] of entries) {
+        let result = schema._zod.run(
+          {
+            value: input[key],
+            issues: [],
+          },
+          ctx,
+        );
+        if (result instanceof Promise) {
+          proms ?? (proms = []);
+          proms.push(result.then((result) => handlePropertiesResult(result, payload, key)));
+        } else handlePropertiesResult(result, payload, key);
+      }
+      if (proms)
+        return Promise.all(proms).then(() => {
           return;
-        }
-        return i(s, {});
-      }));
+        });
+      return;
+    };
+    inst._zod.parse = (payload, ctx) => {
+      let input = payload.value;
+      if (input === null || (typeof input !== "object" && typeof input !== "function")) {
+        payload.issues.push({
+          expected: "object",
+          code: "invalid_type",
+          input,
+          inst,
+        });
+        return payload;
+      }
+      if (ctx.direction === "backward")
+        ctx = {
+          ...ctx,
+          direction: "forward",
+        };
+      if (memo) memo.alloc(inst, payload, input, ctx);
+      let result = runShape(payload, ctx);
+      return result instanceof Promise ? result.then(() => payload) : payload;
+    };
+    inst._zod.check = (payload) => {
+      if (payload.value == null) {
+        payload.issues.push({
+          expected: "object",
+          code: "invalid_type",
+          input: payload.value,
+          inst,
+        });
+        return;
+      }
+      return runShape(payload, {});
+    };
   },
   {
     *[Symbol.iterator]() {
@@ -1498,65 +1926,64 @@ var Is = Fr(
     },
   },
 );
-
 export {
-  Qk,
-  Fe,
-  me,
-  z,
-  So,
-  Io,
-  Oo,
-  Ao,
-  go,
-  ho,
-  _o,
-  yo,
-  $o,
-  zo,
-  bo,
-  ko,
-  Zo,
-  wo,
-  Po,
-  Eo,
-  No,
+  $ZodType,
+  standardProps,
+  $ZodString,
+  $ZodStringFormat,
+  $ZodISODateTime,
+  $ZodISODate,
+  $ZodISOTime,
+  $ZodISODuration,
+  $ZodEmail,
+  $ZodGUID,
+  $ZodUUID,
+  $ZodURL,
+  $ZodEmoji,
+  $ZodNanoID,
+  $ZodCUID,
+  $ZodCUID2,
+  $ZodULID,
+  $ZodXID,
+  $ZodKSUID,
+  $ZodIPv4,
+  $ZodIPv6,
   Co,
-  Ro,
-  jo,
-  Lo,
-  Fo,
-  Mo,
-  Je,
-  Uo,
-  Jo,
+  $ZodCIDRv6,
+  $ZodBase64,
+  $ZodBase64URL,
+  $ZodE164,
+  $ZodJWT,
+  $ZodNumber,
+  $ZodNumberFormat,
+  $ZodBoolean,
   Bo,
-  Vo,
-  Ko,
-  Wo,
-  Go,
-  qo,
-  Ho,
-  Be,
-  Qo,
-  en,
-  tn,
-  rn,
+  $ZodNull,
+  $ZodAny,
+  $ZodUnknown,
+  $ZodNever,
+  $ZodArray,
+  $ZodObjectJIT,
+  $ZodUnion,
+  $ZodDiscriminatedUnion,
+  $ZodIntersection,
+  $ZodTuple,
+  $ZodRecord,
   on,
-  nn,
+  $ZodLiteral,
   sn,
-  Ve,
-  cn,
-  un,
-  an,
-  ln,
-  pn,
-  fn,
-  Ke,
+  $ZodOptional,
+  $ZodExactOptional,
+  $ZodNullable,
+  $ZodDefault,
+  $ZodPrefault,
+  $ZodNonOptional,
+  $ZodCatch,
+  $ZodPipe,
   dn,
-  mn,
+  $ZodReadonly,
   nlo,
   hn,
-  Me,
-  he,
+  base64Charset,
+  base64urlCharset,
 };

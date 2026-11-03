@@ -8,50 +8,105 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:198166-199129 cjs-fingerprint
-var Xa = x(function (ME, Ya) {
-  function hd(e) {
-    let regex = e.regex,
-      n = {
-        className: "number",
-        relevance: 0,
-        variants: [{ begin: /([+-]+)?[\d]+_[\d_]+/ }, { begin: e.NUMBER_RE }],
+var require_ini = x(function (cjsExports, cjsModule) {
+  function ini(hljs) {
+    let regex = hljs.regex;
+    let NUMBERS = {
+      className: "number",
+      relevance: 0,
+      variants: [
+        {
+          begin: /([+-]+)?[\d]+_[\d_]+/,
+        },
+        {
+          begin: hljs.NUMBER_RE,
+        },
+      ],
+    };
+    let COMMENTS = hljs.COMMENT();
+    COMMENTS.variants = [
+      {
+        begin: /;/,
+        end: /$/,
       },
-      COMMENT = e.COMMENT();
-    COMMENT.variants = [
-      { begin: /;/, end: /$/ },
-      { begin: /#/, end: /$/ },
+      {
+        begin: /#/,
+        end: /$/,
+      },
     ];
-    let s = { className: "variable", variants: [{ begin: /\$[\w\d"][\w\d_]*/ }, { begin: /\$\{(.*?)\}/ }] },
-      o = { className: "literal", begin: /\bon|off|true|false|yes|no\b/ },
-      r = {
-        className: "string",
-        contains: [e.BACKSLASH_ESCAPE],
-        variants: [
-          { begin: "'''", end: "'''", relevance: 10 },
-          { begin: '"""', end: '"""', relevance: 10 },
-          { begin: '"', end: '"' },
-          { begin: "'", end: "'" },
-        ],
-      },
-      i = { begin: /\[/, end: /\]/, contains: [COMMENT, o, s, r, n, "self"], relevance: 0 },
-      c = /[A-Za-z0-9_-]+/,
-      l = /"(\\"|[^"])*"/,
-      d = /'[^']*'/,
-      either = regex.either(c, l, d),
-      combined = regex.concat(either, "(\\s*\\.\\s*", either, ")*", regex.lookahead(/\s*=\s*[^#\s]/));
+    let VARIABLES = {
+      className: "variable",
+      variants: [
+        {
+          begin: /\$[\w\d"][\w\d_]*/,
+        },
+        {
+          begin: /\$\{(.*?)\}/,
+        },
+      ],
+    };
+    let LITERALS = {
+      className: "literal",
+      begin: /\bon|off|true|false|yes|no\b/,
+    };
+    let STRINGS = {
+      className: "string",
+      contains: [hljs.BACKSLASH_ESCAPE],
+      variants: [
+        {
+          begin: "'''",
+          end: "'''",
+          relevance: 10,
+        },
+        {
+          begin: '"""',
+          end: '"""',
+          relevance: 10,
+        },
+        {
+          begin: '"',
+          end: '"',
+        },
+        {
+          begin: "'",
+          end: "'",
+        },
+      ],
+    };
+    let ARRAY = {
+      begin: /\[/,
+      end: /\]/,
+      contains: [COMMENTS, LITERALS, VARIABLES, STRINGS, NUMBERS, "self"],
+      relevance: 0,
+    };
+    let BARE_KEY = /[A-Za-z0-9_-]+/;
+    let QUOTED_KEY_DOUBLE_QUOTE = /"(\\"|[^"])*"/;
+    let QUOTED_KEY_SINGLE_QUOTE = /'[^']*'/;
+    let ANY_KEY = regex.either(BARE_KEY, QUOTED_KEY_DOUBLE_QUOTE, QUOTED_KEY_SINGLE_QUOTE);
+    let DOTTED_KEY = regex.concat(ANY_KEY, "(\\s*\\.\\s*", ANY_KEY, ")*", regex.lookahead(/\s*=\s*[^#\s]/));
     return {
       name: "TOML, also INI",
       aliases: ["toml"],
-      case_insensitive: !0,
+      case_insensitive: true,
       illegal: /\S/,
       contains: [
-        COMMENT,
-        { className: "section", begin: /\[+/, end: /\]+/ },
-        { begin: combined, className: "attr", starts: { end: /$/, contains: [COMMENT, i, o, s, r, n] } },
+        COMMENTS,
+        {
+          className: "section",
+          begin: /\[+/,
+          end: /\]+/,
+        },
+        {
+          begin: DOTTED_KEY,
+          className: "attr",
+          starts: {
+            end: /$/,
+            contains: [COMMENTS, ARRAY, LITERALS, VARIABLES, STRINGS, NUMBERS],
+          },
+        },
       ],
     };
   }
-  Ya.exports = hd;
+  cjsModule.exports = ini;
 });
-
-export { Xa };
+export { require_ini };

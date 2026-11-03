@@ -8,18 +8,18 @@
  * pieces: chunk-e6aww6q8.js (1)
  * attribution: fingerprint 1
  */
-
+//@ chunk-e6aww6q8.js:2027141-2027306 fingerprint = plan (0.874)
 /**
  * /plan 命令对象（local-jsx）；描述：Enable plan mode or view the current session plan；实现 chunk-ve85yyeb.js 的 le。
  */
-//@ chunk-e6aww6q8.js:2027141-2027306 fingerprint = plan (0.874)
 var planCommandDefinition = {
-    type: "local-jsx",
-    name: "plan",
-    description: "Enable plan mode or view the current session plan",
-    argumentHint: "[open|<description>]",
-    requires: { ink: !0 },
+  type: "local-jsx",
+  name: "plan",
+  description: "Enable plan mode or view the current session plan",
+  argumentHint: "[open|<description>]",
+  requires: {
+    ink: true,
   },
-  planCommand = planCommandDefinition;
-
+};
+var planCommand = planCommandDefinition;
 export { planCommand };

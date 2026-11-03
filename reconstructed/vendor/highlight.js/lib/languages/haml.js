@@ -8,26 +8,43 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:182575-183653 cjs-fingerprint
-var wa = x(function (AE, La) {
-  function Sd(e) {
+var require_haml = x(function (cjsExports, cjsModule) {
+  function haml(hljs) {
     return {
       name: "HAML",
-      case_insensitive: !0,
+      case_insensitive: true,
       contains: [
         {
           className: "meta",
           begin: "^!!!( (5|1\\.1|Strict|Frameset|Basic|Mobile|RDFa|XML\\b.*))?$",
           relevance: 10,
         },
-        e.COMMENT("^\\s*(!=#|=#|-#|/).*$", null, { relevance: 0 }),
-        { begin: "^\\s*(-|=|!=)(?!#)", end: /$/, subLanguage: "ruby", excludeBegin: !0, excludeEnd: !0 },
+        hljs.COMMENT("^\\s*(!=#|=#|-#|/).*$", null, {
+          relevance: 0,
+        }),
+        {
+          begin: "^\\s*(-|=|!=)(?!#)",
+          end: /$/,
+          subLanguage: "ruby",
+          excludeBegin: true,
+          excludeEnd: true,
+        },
         {
           className: "tag",
           begin: "^\\s*%",
           contains: [
-            { className: "selector-tag", begin: "\\w+" },
-            { className: "selector-id", begin: "#[\\w-]+" },
-            { className: "selector-class", begin: "\\.[\\w-]+" },
+            {
+              className: "selector-tag",
+              begin: "\\w+",
+            },
+            {
+              className: "selector-id",
+              begin: "#[\\w-]+",
+            },
+            {
+              className: "selector-class",
+              begin: "\\.[\\w-]+",
+            },
             {
               begin: /\{\s*/,
               end: /\s*\}/,
@@ -35,13 +52,19 @@ var wa = x(function (AE, La) {
                 {
                   begin: ":\\w+\\s*=>",
                   end: ",\\s+",
-                  returnBegin: !0,
-                  endsWithParent: !0,
+                  returnBegin: true,
+                  endsWithParent: true,
                   contains: [
-                    { className: "attr", begin: ":\\w+" },
-                    e.APOS_STRING_MODE,
-                    e.QUOTE_STRING_MODE,
-                    { begin: "\\w+", relevance: 0 },
+                    {
+                      className: "attr",
+                      begin: ":\\w+",
+                    },
+                    hljs.APOS_STRING_MODE,
+                    hljs.QUOTE_STRING_MODE,
+                    {
+                      begin: "\\w+",
+                      relevance: 0,
+                    },
                   ],
                 },
               ],
@@ -49,30 +72,44 @@ var wa = x(function (AE, La) {
             {
               begin: "\\(\\s*",
               end: "\\s*\\)",
-              excludeEnd: !0,
+              excludeEnd: true,
               contains: [
                 {
                   begin: "\\w+\\s*=",
                   end: "\\s+",
-                  returnBegin: !0,
-                  endsWithParent: !0,
+                  returnBegin: true,
+                  endsWithParent: true,
                   contains: [
-                    { className: "attr", begin: "\\w+", relevance: 0 },
-                    e.APOS_STRING_MODE,
-                    e.QUOTE_STRING_MODE,
-                    { begin: "\\w+", relevance: 0 },
+                    {
+                      className: "attr",
+                      begin: "\\w+",
+                      relevance: 0,
+                    },
+                    hljs.APOS_STRING_MODE,
+                    hljs.QUOTE_STRING_MODE,
+                    {
+                      begin: "\\w+",
+                      relevance: 0,
+                    },
                   ],
                 },
               ],
             },
           ],
         },
-        { begin: "^\\s*[=~]\\s*" },
-        { begin: /#\{/, end: /\}/, subLanguage: "ruby", excludeBegin: !0, excludeEnd: !0 },
+        {
+          begin: "^\\s*[=~]\\s*",
+        },
+        {
+          begin: /#\{/,
+          end: /\}/,
+          subLanguage: "ruby",
+          excludeBegin: true,
+          excludeEnd: true,
+        },
       ],
     };
   }
-  La.exports = Sd;
+  cjsModule.exports = haml;
 });
-
-export { wa };
+export { require_haml };

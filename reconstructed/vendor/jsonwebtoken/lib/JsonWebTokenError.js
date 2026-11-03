@@ -8,14 +8,16 @@
 import { x } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-mrx6y2r5.js:3839-4130 cjs-fingerprint
-var vo = x(function (Z0, Dh) {
-  var cs = function (e, t) {
-    if ((Error.call(this, e), Error.captureStackTrace)) Error.captureStackTrace(this, this.constructor);
-    if (((this.name = "JsonWebTokenError"), (this.message = e), t)) this.inner = t;
+var require_JsonWebTokenError = x(function (cjsExports, cjsModule) {
+  var JsonWebTokenError = function (message, error) {
+    Error.call(this, message);
+    if (Error.captureStackTrace) Error.captureStackTrace(this, this.constructor);
+    this.name = "JsonWebTokenError";
+    this.message = message;
+    if (error) this.inner = error;
   };
-  cs.prototype = Object.create(Error.prototype);
-  cs.prototype.constructor = cs;
-  Dh.exports = cs;
+  JsonWebTokenError.prototype = Object.create(Error.prototype);
+  JsonWebTokenError.prototype.constructor = JsonWebTokenError;
+  cjsModule.exports = JsonWebTokenError;
 });
-
-export { vo };
+export { require_JsonWebTokenError };

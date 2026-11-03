@@ -16,19 +16,21 @@ import { isHipaaOrg, isAfkModeBeta } from "../../utils/betas.js";
 function hasCustomApiKeyHeader() {
   return hasCustomHeader("x-api-key");
 }
+//@ chunk-bwbq4xvm.js:156645-156815 placement
 /**
  * ANTHROPIC_API_KEY 存在且自定义头/调用方都没给 x-api-key 时返回 {"X-Api-Key": key}。
  */
-//@ chunk-bwbq4xvm.js:156645-156815 placement
 function apiKeyHeaderFromEnv(e = {}) {
   let ANTHROPIC_API_KEY = env.ANTHROPIC_API_KEY;
   if (
-    ANTHROPIC_API_KEY === void 0 ||
+    ANTHROPIC_API_KEY === undefined ||
     hasCustomApiKeyHeader() ||
-    Object.entries(e).some(([n, r]) => n.toLowerCase() === "x-api-key" && r !== void 0)
+    Object.entries(e).some(([key, value]) => key.toLowerCase() === "x-api-key" && value !== undefined)
   )
     return;
-  return { "X-Api-Key": ANTHROPIC_API_KEY };
+  return {
+    "X-Api-Key": ANTHROPIC_API_KEY,
+  };
 }
 //@ chunk-bwbq4xvm.js:156815-156857 placement
 function hasCustomAuthorizationHeader() {
@@ -44,48 +46,55 @@ function hasCustomHeader(e) {
 }
 //@ chunk-bwbq4xvm.js:156958-157078 placement
 function clearAuthorizationHeaders() {
-  let e = { Authorization: void 0 };
-  for (let [s] of getCustomHeaders()) if (s.toLowerCase() === "authorization") e[s] = void 0;
+  let e = {
+    Authorization: undefined,
+  };
+  for (let [s] of getCustomHeaders()) if (s.toLowerCase() === "authorization") e[s] = undefined;
   return e;
 }
+//@ chunk-bwbq4xvm.js:157078-157362 placement
 /**
  * 从 ANTHROPIC_CUSTOM_HEADERS 中挑出 anthropic-beta 头，去掉 afk-mode 项；在特定模式下整头置 undefined。
  */
-//@ chunk-bwbq4xvm.js:157078-157362 placement
 function filteredCustomBetaHeaders() {
-  let e = {},
-    s = isHipaaOrg();
+  let e = {};
+  let s = isHipaaOrg();
   for (let [n, r] of getCustomHeaders()) {
     if (n.toLowerCase() !== "anthropic-beta") continue;
     let filtered = r
-        .split(",")
-        .map((c) => c.trim())
-        .filter(Boolean),
-      filtered_2 = filtered.filter((c) => !isAfkModeBeta(c));
-    if (s) e[n] = void 0;
+      .split(",")
+      .map((c) => c.trim())
+      .filter(Boolean);
+    let filtered_2 = filtered.filter((c) => !isAfkModeBeta(c));
+    if (s) e[n] = undefined;
     else if (filtered_2.length !== filtered.length)
-      e[n] = filtered_2.length > 0 ? filtered_2.join(",") : void 0;
+      e[n] = filtered_2.length > 0 ? filtered_2.join(",") : undefined;
     else delete e[n];
   }
   return e;
 }
 //@ chunk-bwbq4xvm.js:157416-157507 placement
 var CLOUD_AUTH_SLOT = {
-  __auth: { provider: null, tokenCache: null, resolution: null, error: null, extraHeaders: {} },
+  __auth: {
+    provider: null,
+    tokenCache: null,
+    resolution: null,
+    error: null,
+    extraHeaders: {},
+  },
 };
+//@ chunk-bwbq4xvm.js:157507-157701 placement
 /**
  * 优先 ANTHROPIC_AUTH_TOKEN（加 Bearer 前缀），否则取自定义头里的 Authorization。
  */
-//@ chunk-bwbq4xvm.js:157507-157701 placement
 function bearerFromEnvOrHeaders() {
   let ANTHROPIC_AUTH_TOKEN = env.ANTHROPIC_AUTH_TOKEN;
   if (ANTHROPIC_AUTH_TOKEN) return `Bearer ${ANTHROPIC_AUTH_TOKEN}`;
-  let s,
-    fromEntries = Object.fromEntries(getCustomHeaders());
-  for (let [r, a] of Object.entries(fromEntries)) if (r.toLowerCase() === "authorization") s = a;
-  return s || void 0;
+  let s;
+  let n = Object.fromEntries(getCustomHeaders());
+  for (let [key, value] of Object.entries(n)) if (key.toLowerCase() === "authorization") s = value;
+  return s || undefined;
 }
-
 export {
   hasCustomApiKeyHeader,
   clearAuthorizationHeaders,

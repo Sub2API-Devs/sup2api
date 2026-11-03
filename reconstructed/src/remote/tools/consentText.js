@@ -9,10 +9,10 @@
  * attribution: placement 1
  */
 
+//@ chunk-s61vbvea.js:537057-549986 placement
 /**
  * 让云会话在本机运行命令的同意文案表（无人值守、自动模式等）
  */
-//@ chunk-s61vbvea.js:537057-549986 placement
 var REMOTE_TOOLS_CONSENT_TEXT = {
   "consent.unattended.title": "Let cloud sessions run commands on this computer in auto mode?",
   "consent.unattended.body": `${"This computer is serving tools to your cloud session. In auto mode, the cloud session decides which commands to run here without asking you each time \u2014 the same way auto mode works locally. Your deny rules and hooks on this computer still apply. Answer once per computer;"} change it later in /config.`,
@@ -137,5 +137,4 @@ var REMOTE_TOOLS_CONSENT_TEXT = {
     return `The cloud session did not accept the device proof on this machine's requests, so commands meant for this machine are not routed here and the session uses its own environment instead \u2014 ${e}.`;
   },
 };
-
 export { REMOTE_TOOLS_CONSENT_TEXT };

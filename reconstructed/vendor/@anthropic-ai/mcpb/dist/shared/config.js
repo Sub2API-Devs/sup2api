@@ -7,90 +7,101 @@
  */
 
 //@ chunk-64s30qnv.js:2213-2869 esm-fingerprint
-function z(t, i) {
-  if (typeof t === "string") {
-    let n = t;
-    for (let [e, r] of Object.entries(i)) {
-      let regExp = new RegExp(`\\$\\{${e}\\}`, "g");
-      if (n.match(regExp))
-        if (Array.isArray(r))
-          console.warn(`Cannot replace ${e} with array value in string context: "${t}"`, {
-            key: e,
-            replacement: r,
+function replaceVariables(value, variables) {
+  if (typeof value === "string") {
+    let result = value;
+    for (let [key, replacement] of Object.entries(variables)) {
+      let pattern = new RegExp(`\\$\\{${key}\\}`, "g");
+      if (result.match(pattern))
+        if (Array.isArray(replacement))
+          console.warn(`Cannot replace ${key} with array value in string context: "${value}"`, {
+            key,
+            replacement,
           });
-        else n = n.replace(regExp, r);
+        else result = result.replace(pattern, replacement);
     }
-    return n;
-  } else if (Array.isArray(t)) {
-    let n = [];
-    for (let e of t)
-      if (typeof e === "string" && e.match(/^\$\{user_config\.[^}]+\}$/)) {
-        let r = e.match(/^\$\{([^}]+)\}$/)?.[1];
-        if (r && i[r]) {
-          let o = i[r];
-          if (Array.isArray(o)) n.push(...o);
-          else n.push(o);
-        } else n.push(e);
-      } else n.push(z(e, i));
-    return n;
-  } else if (t && typeof t === "object") {
-    let n = {};
-    for (let [e, r] of Object.entries(t)) n[e] = z(r, i);
-    return n;
+    return result;
+  } else if (Array.isArray(value)) {
+    let result = [];
+    for (let item of value)
+      if (typeof item === "string" && item.match(/^\$\{user_config\.[^}]+\}$/)) {
+        let varName = item.match(/^\$\{([^}]+)\}$/)?.[1];
+        if (varName && variables[varName]) {
+          let replacement = variables[varName];
+          if (Array.isArray(replacement)) result.push(...replacement);
+          else result.push(replacement);
+        } else result.push(item);
+      } else result.push(replaceVariables(item, variables));
+    return result;
+  } else if (value && typeof value === "object") {
+    let result = {};
+    for (let [key, val] of Object.entries(value)) result[key] = replaceVariables(val, variables);
+    return result;
   }
-  return t;
+  return value;
 }
 //@ chunk-64s30qnv.js:2869-3679 esm-fingerprint
-async function R(t) {
-  let {
-      manifest: manifest,
-      extensionPath: extensionPath,
-      systemDirs: systemDirs,
-      userConfig: userConfig,
-      pathSeparator: pathSeparator,
-      logger: logger,
-    } = t,
-    c = manifest.server?.mcp_config;
-  if (!c) return;
-  let s = { ...c };
-  if (c.platform_overrides) {
-    if ("linux" in c.platform_overrides) {
-      let linux = c.platform_overrides.linux;
-      ((s.command = linux.command || s.command),
-        (s.args = linux.args || s.args),
-        (s.env = linux.env || s.env));
+async function getMcpConfigForManifest(options) {
+  let { manifest, extensionPath, systemDirs, userConfig, pathSeparator, logger } = options;
+  let baseConfig = manifest.server?.mcp_config;
+  if (!baseConfig) return;
+  let result = {
+    ...baseConfig,
+  };
+  if (baseConfig.platform_overrides) {
+    if ("linux" in baseConfig.platform_overrides) {
+      let platformConfig = baseConfig.platform_overrides.linux;
+      result.command = platformConfig.command || result.command;
+      result.args = platformConfig.args || result.args;
+      result.env = platformConfig.env || result.env;
     }
   }
-  if (j({ manifest: manifest, userConfig: userConfig })) {
+  if (
+    hasRequiredConfigMissing({
+      manifest,
+      userConfig,
+    })
+  ) {
     logger?.warn(`Extension ${manifest.name} has missing required configuration, skipping MCP config`);
     return;
   }
-  let l = { __dirname: extensionPath, pathSeparator: pathSeparator, "/": pathSeparator, ...systemDirs },
-    f = {};
+  let variables = {
+    __dirname: extensionPath,
+    pathSeparator,
+    "/": pathSeparator,
+    ...systemDirs,
+  };
+  let mergedConfig = {};
   if (manifest.user_config) {
-    for (let [p, a] of Object.entries(manifest.user_config)) if (a.default !== void 0) f[p] = a.default;
+    for (let [key, configOption] of Object.entries(manifest.user_config))
+      if (configOption.default !== undefined) mergedConfig[key] = configOption.default;
   }
-  if (userConfig) Object.assign(f, userConfig);
-  for (let [p, a] of Object.entries(f)) {
-    let g = `user_config.${p}`;
-    if (Array.isArray(a)) l[g] = a.map(String);
-    else if (typeof a === "boolean") l[g] = a ? "true" : "false";
-    else l[g] = String(a);
+  if (userConfig) Object.assign(mergedConfig, userConfig);
+  for (let [key, value] of Object.entries(mergedConfig)) {
+    let userConfigKey = `user_config.${key}`;
+    if (Array.isArray(value)) variables[userConfigKey] = value.map(String);
+    else if (typeof value === "boolean") variables[userConfigKey] = value ? "true" : "false";
+    else variables[userConfigKey] = String(value);
   }
-  return ((s = z(s, l)), s);
+  result = replaceVariables(result, variables);
+  return result;
 }
 //@ chunk-64s30qnv.js:3679-3729 esm-layout
-function u(t) {
-  return t === void 0 || t === null || t === "";
+function isInvalidSingleValue(value) {
+  return value === undefined || value === null || value === "";
 }
 //@ chunk-64s30qnv.js:3729-3948 esm-fingerprint
-function j({ manifest: manifest, userConfig: userConfig }) {
-  if (!manifest.user_config) return !1;
-  let n = userConfig || {};
-  for (let [e, r] of Object.entries(manifest.user_config))
-    if (r.required) {
-      let o = n[e];
-      if (u(o) || (Array.isArray(o) && (o.length === 0 || o.some(u)))) return !0;
+function hasRequiredConfigMissing({ manifest, userConfig }) {
+  if (!manifest.user_config) return false;
+  let config = userConfig || {};
+  for (let [key, configOption] of Object.entries(manifest.user_config))
+    if (configOption.required) {
+      let value = config[key];
+      if (
+        isInvalidSingleValue(value) ||
+        (Array.isArray(value) && (value.length === 0 || value.some(isInvalidSingleValue)))
+      )
+        return true;
     }
-  return !1;
+  return false;
 }

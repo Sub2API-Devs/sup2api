@@ -6,37 +6,33 @@
  * attribution: esm-layout 1, esm-fingerprint 1
  */
 import { Re } from "../../../../runtime/bun-runtime.js";
-import { SD } from "../../core/dist-cjs/submodules/client/index.js";
-import { $h } from "../../../@smithy/property-provider/dist-cjs/index.js";
-import { hU } from "../../../@smithy/shared-ini-file-loader/dist-cjs/index.js";
+import { require_client } from "../../core/dist-cjs/submodules/client/index.js";
+import { require_property_provider } from "../../../@smithy/property-provider/dist-cjs/index.js";
+import { require_shared_ini_file_loader } from "../../../@smithy/shared-ini-file-loader/dist-cjs/index.js";
 
 //@ chunk-2pe5kgjj.js:335-372 esm-layout
-var d = Re(SD()),
-  a = Re($h()),
-  m = Re(hU());
+var import_client = Re(require_client());
+var import_property_provider = Re(require_property_provider());
+var import_shared_ini_file_loader = Re(require_shared_ini_file_loader());
 //@ chunk-2pe5kgjj.js:406-1050 esm-fingerprint
-var l = (e) => async (t) => {
-  e.logger?.debug("@aws-sdk/credential-provider-web-identity - fromWebToken");
-  let {
-      roleArn: roleArn,
-      roleSessionName: roleSessionName,
-      webIdentityToken: webIdentityToken,
-      providerId: providerId,
-      policyArns: policyArns,
-      policy: policy,
-      durationSeconds: durationSeconds,
-    } = e,
-    { roleAssumerWithWebIdentity: roleAssumerWithWebIdentity } = e;
+var fromWebToken = (init) => async (awsIdentityProperties) => {
+  init.logger?.debug("@aws-sdk/credential-provider-web-identity - fromWebToken");
+  let { roleArn, roleSessionName, webIdentityToken, providerId, policyArns, policy, durationSeconds } = init;
+  let { roleAssumerWithWebIdentity } = init;
   if (!roleAssumerWithWebIdentity) {
-    let { getDefaultRoleAssumerWithWebIdentity: getDefaultRoleAssumerWithWebIdentity } =
-      await import("./chunk-my7fcfze.js").then((m) => Re(m.default));
+    let { getDefaultRoleAssumerWithWebIdentity } = await import("./chunk-my7fcfze.js").then((m) =>
+      Re(m.default),
+    );
     roleAssumerWithWebIdentity = getDefaultRoleAssumerWithWebIdentity(
       {
-        ...e.clientConfig,
-        credentialProviderLogger: e.logger,
-        parentClientConfig: { ...t?.callerClientConfig, ...e.parentClientConfig },
+        ...init.clientConfig,
+        credentialProviderLogger: init.logger,
+        parentClientConfig: {
+          ...awsIdentityProperties?.callerClientConfig,
+          ...init.parentClientConfig,
+        },
       },
-      e.clientPlugins,
+      init.clientPlugins,
     );
   }
   return roleAssumerWithWebIdentity({
@@ -49,5 +45,4 @@ var l = (e) => async (t) => {
     DurationSeconds: durationSeconds,
   });
 };
-
-export { a, l, m, d };
+export { import_property_provider, fromWebToken, import_shared_ini_file_loader, import_client };

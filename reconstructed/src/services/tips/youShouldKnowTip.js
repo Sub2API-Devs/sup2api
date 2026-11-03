@@ -18,7 +18,7 @@ var CC_PLUGIN_YOU_SHOULD_KNOW = "cc-plugin-you-should-know";
 //@ chunk-y448vcf1.js:343-717 placement
 var YOU_SHOULD_KNOW_PLUGIN_TIP = {
   id: "you-should-know-plugin",
-  providerAgnostic: !0,
+  providerAgnostic: true,
   advertisedCommand: "plugin",
   cooldownSessions: 10,
   maxLifetimeShows: 3,
@@ -26,8 +26,7 @@ var YOU_SHOULD_KNOW_PLUGIN_TIP = {
 ${color("suggestion", o.theme)(`/plugin enable ${CC_PLUGIN_YOU_SHOULD_KNOW}@${BUILTIN}`)}`,
   isRelevant: async () =>
     isBuiltinPluginAvailable(CC_PLUGIN_YOU_SHOULD_KNOW) &&
-    getBuiltinPlugin(CC_PLUGIN_YOU_SHOULD_KNOW)?.defaultEnabled === !1 &&
-    findEnabledSettingForPlugin(`${CC_PLUGIN_YOU_SHOULD_KNOW}@${BUILTIN}`) === void 0,
+    getBuiltinPlugin(CC_PLUGIN_YOU_SHOULD_KNOW)?.defaultEnabled === false &&
+    findEnabledSettingForPlugin(`${CC_PLUGIN_YOU_SHOULD_KNOW}@${BUILTIN}`) === undefined,
 };
-
 export { YOU_SHOULD_KNOW_PLUGIN_TIP, CC_PLUGIN_YOU_SHOULD_KNOW };

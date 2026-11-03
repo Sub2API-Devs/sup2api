@@ -5,169 +5,192 @@
  * pieces: chunk-j2t139r9.js (13)
  * attribution: esm-layout 5, esm-fingerprint 8
  */
-import { ZodError, arrayToEnum_2 } from "../v3/ZodError.js";
-import { arrayToEnum, g } from "../v3/helpers/util.js";
+import { ZodError, ZodIssueCode } from "../v3/ZodError.js";
+import { ZodParsedType, util } from "../v3/helpers/util.js";
 import {
-  T,
-  D,
-  le,
-  z,
-  G,
-  W,
-  ce,
-  Q,
-  X,
-  B,
-  V,
-  j,
-  oe,
-  C,
-  y,
-  K,
-  ve,
-  Z,
-  I,
-  ue,
-  de,
-  U,
-  H,
-  ee,
-  te,
-  P,
-  re,
-  q,
-  A,
-  S,
-  E,
-  fe,
+  ZodString,
+  ZodNumber,
+  ZodNaN,
+  ZodBigInt,
+  ZodBoolean,
+  ZodDate,
+  ZodSymbol,
+  ZodUndefined,
+  ZodNull,
+  ZodAny,
+  ZodUnknown,
+  ZodNever,
+  ZodVoid,
+  ZodArray,
+  ZodObject,
+  ZodUnion,
+  ZodDiscriminatedUnion,
+  ZodIntersection,
+  ZodTuple,
+  ZodRecord,
+  ZodMap,
+  ZodSet,
+  ZodFunction,
+  ZodLazy,
+  ZodLiteral,
+  ZodEnum,
+  ZodNativeEnum,
+  ZodPromise,
+  ZodEffects,
+  ZodOptional,
+  ZodNullable,
+  ZodPipeline,
 } from "../v3/types.js";
 
 //@ chunk-j2t139r9.js:3800-3823 esm-layout
-ZodError.create = (e) => new ZodError(e);
+ZodError.create = (issues) => new ZodError(issues);
 //@ chunk-j2t139r9.js:3823-6990 esm-fingerprint
-var Oe = (e, t) => {
-    let r;
-    switch (e.code) {
-      case arrayToEnum_2.invalid_type:
-        if (e.received === arrayToEnum.undefined) r = "Required";
-        else r = `Expected ${e.expected}, received ${e.received}`;
-        break;
-      case arrayToEnum_2.invalid_literal:
-        r = `Invalid literal value, expected ${JSON.stringify(e.expected, g.jsonStringifyReplacer)}`;
-        break;
-      case arrayToEnum_2.unrecognized_keys:
-        r = `Unrecognized key(s) in object: ${g.joinValues(e.keys, ", ")}`;
-        break;
-      case arrayToEnum_2.invalid_union:
-        r = "Invalid input";
-        break;
-      case arrayToEnum_2.invalid_union_discriminator:
-        r = `Invalid discriminator value. Expected ${g.joinValues(e.options)}`;
-        break;
-      case arrayToEnum_2.invalid_enum_value:
-        r = `Invalid enum value. Expected ${g.joinValues(e.options)}, received '${e.received}'`;
-        break;
-      case arrayToEnum_2.invalid_arguments:
-        r = "Invalid function arguments";
-        break;
-      case arrayToEnum_2.invalid_return_type:
-        r = "Invalid function return type";
-        break;
-      case arrayToEnum_2.invalid_date:
-        r = "Invalid date";
-        break;
-      case arrayToEnum_2.invalid_string:
-        if (typeof e.validation === "object")
-          if ("includes" in e.validation) {
-            if (
-              ((r = `Invalid input: must include "${e.validation.includes}"`),
-              typeof e.validation.position === "number")
-            )
-              r = `${r} at one or more positions greater than or equal to ${e.validation.position}`;
-          } else if ("startsWith" in e.validation)
-            r = `Invalid input: must start with "${e.validation.startsWith}"`;
-          else if ("endsWith" in e.validation) r = `Invalid input: must end with "${e.validation.endsWith}"`;
-          else g.assertNever(e.validation);
-        else if (e.validation !== "regex") r = `Invalid ${e.validation}`;
-        else r = "Invalid";
-        break;
-      case arrayToEnum_2.too_small:
-        if (e.type === "array")
-          r = `Array must contain ${e.exact ? "exactly" : e.inclusive ? "at least" : "more than"} ${e.minimum} element(s)`;
-        else if (e.type === "string")
-          r = `String must contain ${e.exact ? "exactly" : e.inclusive ? "at least" : "over"} ${e.minimum} character(s)`;
-        else if (e.type === "number")
-          r = `Number must be ${e.exact ? "exactly equal to " : e.inclusive ? "greater than or equal to " : "greater than "}${e.minimum}`;
-        else if (e.type === "bigint")
-          r = `Number must be ${e.exact ? "exactly equal to " : e.inclusive ? "greater than or equal to " : "greater than "}${e.minimum}`;
-        else if (e.type === "date")
-          r = `Date must be ${e.exact ? "exactly equal to " : e.inclusive ? "greater than or equal to " : "greater than "}${new Date(Number(e.minimum))}`;
-        else r = "Invalid input";
-        break;
-      case arrayToEnum_2.too_big:
-        if (e.type === "array")
-          r = `Array must contain ${e.exact ? "exactly" : e.inclusive ? "at most" : "less than"} ${e.maximum} element(s)`;
-        else if (e.type === "string")
-          r = `String must contain ${e.exact ? "exactly" : e.inclusive ? "at most" : "under"} ${e.maximum} character(s)`;
-        else if (e.type === "number")
-          r = `Number must be ${e.exact ? "exactly" : e.inclusive ? "less than or equal to" : "less than"} ${e.maximum}`;
-        else if (e.type === "bigint")
-          r = `BigInt must be ${e.exact ? "exactly" : e.inclusive ? "less than or equal to" : "less than"} ${e.maximum}`;
-        else if (e.type === "date")
-          r = `Date must be ${e.exact ? "exactly" : e.inclusive ? "smaller than or equal to" : "smaller than"} ${new Date(Number(e.maximum))}`;
-        else r = "Invalid input";
-        break;
-      case arrayToEnum_2.custom:
-        r = "Invalid input";
-        break;
-      case arrayToEnum_2.invalid_intersection_types:
-        r = "Intersection results could not be merged";
-        break;
-      case arrayToEnum_2.not_multiple_of:
-        r = `Number must be a multiple of ${e.multipleOf}`;
-        break;
-      case arrayToEnum_2.not_finite:
-        r = "Number must be finite";
-        break;
-      default:
-        ((r = t.defaultError), g.assertNever(e));
-    }
-    return { message: r };
-  },
-  N = Oe;
+var errorMap = (issue, _ctx) => {
+  let message;
+  switch (issue.code) {
+    case ZodIssueCode.invalid_type:
+      if (issue.received === ZodParsedType.undefined) message = "Required";
+      else message = `Expected ${issue.expected}, received ${issue.received}`;
+      break;
+    case ZodIssueCode.invalid_literal:
+      message = `Invalid literal value, expected ${JSON.stringify(issue.expected, util.jsonStringifyReplacer)}`;
+      break;
+    case ZodIssueCode.unrecognized_keys:
+      message = `Unrecognized key(s) in object: ${util.joinValues(issue.keys, ", ")}`;
+      break;
+    case ZodIssueCode.invalid_union:
+      message = "Invalid input";
+      break;
+    case ZodIssueCode.invalid_union_discriminator:
+      message = `Invalid discriminator value. Expected ${util.joinValues(issue.options)}`;
+      break;
+    case ZodIssueCode.invalid_enum_value:
+      message = `Invalid enum value. Expected ${util.joinValues(issue.options)}, received '${issue.received}'`;
+      break;
+    case ZodIssueCode.invalid_arguments:
+      message = "Invalid function arguments";
+      break;
+    case ZodIssueCode.invalid_return_type:
+      message = "Invalid function return type";
+      break;
+    case ZodIssueCode.invalid_date:
+      message = "Invalid date";
+      break;
+    case ZodIssueCode.invalid_string:
+      if (typeof issue.validation === "object") {
+        if ("includes" in issue.validation) {
+          message = `Invalid input: must include "${issue.validation.includes}"`;
+          if (typeof issue.validation.position === "number")
+            message = `${message} at one or more positions greater than or equal to ${issue.validation.position}`;
+        } else if ("startsWith" in issue.validation)
+          message = `Invalid input: must start with "${issue.validation.startsWith}"`;
+        else if ("endsWith" in issue.validation)
+          message = `Invalid input: must end with "${issue.validation.endsWith}"`;
+        else util.assertNever(issue.validation);
+      } else if (issue.validation !== "regex") message = `Invalid ${issue.validation}`;
+      else message = "Invalid";
+      break;
+    case ZodIssueCode.too_small:
+      if (issue.type === "array")
+        message = `Array must contain ${issue.exact ? "exactly" : issue.inclusive ? "at least" : "more than"} ${issue.minimum} element(s)`;
+      else if (issue.type === "string")
+        message = `String must contain ${issue.exact ? "exactly" : issue.inclusive ? "at least" : "over"} ${issue.minimum} character(s)`;
+      else if (issue.type === "number")
+        message = `Number must be ${issue.exact ? "exactly equal to " : issue.inclusive ? "greater than or equal to " : "greater than "}${issue.minimum}`;
+      else if (issue.type === "bigint")
+        message = `Number must be ${issue.exact ? "exactly equal to " : issue.inclusive ? "greater than or equal to " : "greater than "}${issue.minimum}`;
+      else if (issue.type === "date")
+        message = `Date must be ${issue.exact ? "exactly equal to " : issue.inclusive ? "greater than or equal to " : "greater than "}${new Date(Number(issue.minimum))}`;
+      else message = "Invalid input";
+      break;
+    case ZodIssueCode.too_big:
+      if (issue.type === "array")
+        message = `Array must contain ${issue.exact ? "exactly" : issue.inclusive ? "at most" : "less than"} ${issue.maximum} element(s)`;
+      else if (issue.type === "string")
+        message = `String must contain ${issue.exact ? "exactly" : issue.inclusive ? "at most" : "under"} ${issue.maximum} character(s)`;
+      else if (issue.type === "number")
+        message = `Number must be ${issue.exact ? "exactly" : issue.inclusive ? "less than or equal to" : "less than"} ${issue.maximum}`;
+      else if (issue.type === "bigint")
+        message = `BigInt must be ${issue.exact ? "exactly" : issue.inclusive ? "less than or equal to" : "less than"} ${issue.maximum}`;
+      else if (issue.type === "date")
+        message = `Date must be ${issue.exact ? "exactly" : issue.inclusive ? "smaller than or equal to" : "smaller than"} ${new Date(Number(issue.maximum))}`;
+      else message = "Invalid input";
+      break;
+    case ZodIssueCode.custom:
+      message = "Invalid input";
+      break;
+    case ZodIssueCode.invalid_intersection_types:
+      message = "Intersection results could not be merged";
+      break;
+    case ZodIssueCode.not_multiple_of:
+      message = `Number must be a multiple of ${issue.multipleOf}`;
+      break;
+    case ZodIssueCode.not_finite:
+      message = "Number must be finite";
+      break;
+    default:
+      message = _ctx.defaultError;
+      util.assertNever(issue);
+  }
+  return {
+    message,
+  };
+};
+var errorMap_2 = errorMap;
 //@ chunk-j2t139r9.js:6990-6999 esm-layout
-var Re = N;
+var errorMap_default = errorMap_2;
 //@ chunk-j2t139r9.js:6999-7022 esm-layout
-function J() {
-  return Re;
+function getErrorMap() {
+  return errorMap_default;
 }
 //@ chunk-j2t139r9.js:7022-7312 esm-fingerprint
-var ie = (e) => {
-  let { data: t, path: path, errorMaps: errorMaps, issueData: issueData } = e,
-    i = [...path, ...(issueData.path || [])],
-    n = { ...issueData, path: i };
-  if (issueData.message !== void 0) return { ...issueData, path: i, message: issueData.message };
-  let c = "",
-    reverse = errorMaps
-      .filter((p) => !!p)
-      .slice()
-      .reverse();
-  for (let p of reverse) c = p(n, { data: t, defaultError: c }).message;
-  return { ...issueData, path: i, message: c };
+var makeIssue = (e) => {
+  let { data, path, errorMaps, issueData } = e;
+  let fullPath = [...path, ...(issueData.path || [])];
+  let fullIssue = {
+    ...issueData,
+    path: fullPath,
+  };
+  if (issueData.message !== undefined)
+    return {
+      ...issueData,
+      path: fullPath,
+      message: issueData.message,
+    };
+  let errorMessage = "";
+  let maps = errorMaps
+    .filter((m) => !!m)
+    .slice()
+    .reverse();
+  for (let map of maps)
+    errorMessage = map(fullIssue, {
+      data,
+      defaultError: errorMessage,
+    }).message;
+  return {
+    ...issueData,
+    path: fullPath,
+    message: errorMessage,
+  };
 };
 //@ chunk-j2t139r9.js:7312-7497 esm-fingerprint
-function u(e, t) {
-  let r = J(),
-    a = ie({
-      issueData: t,
-      data: e.data,
-      path: e.path,
-      errorMaps: [e.common.contextualErrorMap, e.schemaErrorMap, r, r === N ? void 0 : N].filter((s) => !!s),
-    });
-  e.common.issues.push(a);
+function addIssueToContext(ctx, issueData) {
+  let overrideMap = getErrorMap();
+  let issue = makeIssue({
+    issueData,
+    data: ctx.data,
+    path: ctx.path,
+    errorMaps: [
+      ctx.common.contextualErrorMap,
+      ctx.schemaErrorMap,
+      overrideMap,
+      overrideMap === errorMap_2 ? undefined : errorMap_2,
+    ].filter((x) => !!x),
+  });
+  ctx.common.issues.push(issue);
 }
 //@ chunk-j2t139r9.js:7497-8267 esm-fingerprint
-class v {
+class ParseStatus {
   constructor() {
     this.value = "valid";
   }
@@ -177,100 +200,142 @@ class v {
   abort() {
     if (this.value !== "aborted") this.value = "aborted";
   }
-  static mergeArray(e, t) {
-    let r = [];
-    for (let a of t) {
-      if (a.status === "aborted") return freeze;
-      if (a.status === "dirty") e.dirty();
-      r.push(a.value);
+  static mergeArray(status, results) {
+    let arrayValue = [];
+    for (let s of results) {
+      if (s.status === "aborted") return INVALID;
+      if (s.status === "dirty") status.dirty();
+      arrayValue.push(s.value);
     }
-    return { status: e.value, value: r };
+    return {
+      status: status.value,
+      value: arrayValue,
+    };
   }
-  static async mergeObjectAsync(e, t) {
-    let r = [];
-    for (let a of t) {
-      let key = await a.key,
-        i = await a.value;
-      r.push({ key: key, value: i });
+  static async mergeObjectAsync(status, pairs) {
+    let syncPairs = [];
+    for (let pair of pairs) {
+      let key = await pair.key;
+      let value = await pair.value;
+      syncPairs.push({
+        key,
+        value,
+      });
     }
-    return v.mergeObjectSync(e, r);
+    return ParseStatus.mergeObjectSync(status, syncPairs);
   }
-  static mergeObjectSync(e, t) {
-    let r = {};
-    for (let a of t) {
-      let { key: key, value: i } = a;
-      if (key.status === "aborted") return freeze;
-      if (i.status === "aborted") return freeze;
-      if (key.status === "dirty") e.dirty();
-      if (i.status === "dirty") e.dirty();
-      if (key.value !== "__proto__" && (typeof i.value < "u" || a.alwaysSet)) r[key.value] = i.value;
+  static mergeObjectSync(status, pairs) {
+    let finalObject = {};
+    for (let pair of pairs) {
+      let { key, value } = pair;
+      if (key.status === "aborted") return INVALID;
+      if (value.status === "aborted") return INVALID;
+      if (key.status === "dirty") status.dirty();
+      if (value.status === "dirty") status.dirty();
+      if (key.value !== "__proto__" && (typeof value.value !== "undefined" || pair.alwaysSet))
+        finalObject[key.value] = value.value;
     }
-    return { status: e.value, value: r };
+    return {
+      status: status.value,
+      value: finalObject,
+    };
   }
 }
 //@ chunk-j2t139r9.js:8267-8505 esm-fingerprint
-var freeze = Object.freeze({ status: "aborted" }),
-  L = (e) => ({ status: "dirty", value: e }),
-  x = (e) => ({ status: "valid", value: e }),
-  pe = (e) => e.status === "aborted",
-  _e = (e) => e.status === "dirty",
-  M = (e) => e.status === "valid",
-  Y = (e) => typeof Promise < "u" && e instanceof Promise;
+var INVALID = Object.freeze({
+  status: "aborted",
+});
+var DIRTY = (value) => ({
+  status: "dirty",
+  value,
+});
+var OK = (value) => ({
+  status: "valid",
+  value,
+});
+var isAborted = (x) => x.status === "aborted";
+var isDirty = (x) => x.status === "dirty";
+var isValid = (x) => x.status === "valid";
+var Y = (result) => typeof Promise !== "undefined" && result instanceof Promise;
 //@ chunk-j2t139r9.js:8505-8511 esm-layout
-var l;
+var errorUtil;
 //@ chunk-j2t139r9.js:8511-8640 esm-fingerprint
-(function (e) {
-  ((e.errToObj = (t) => (typeof t === "string" ? { message: t } : t || {})),
-    (e.toString = (t) => (typeof t === "string" ? t : t?.message)));
-})(l || (l = {}));
+(function (errorUtil) {
+  errorUtil.errToObj = (message) =>
+    typeof message === "string"
+      ? {
+          message,
+        }
+      : message || {};
+  errorUtil.toString = (message) => (typeof message === "string" ? message : message?.message);
+})(errorUtil || (errorUtil = {}));
 //@ chunk-j2t139r9.js:58896-59342 esm-fingerprint
-var create_2 = T.create,
-  create_3 = D.create,
-  create_4 = le.create,
-  create_5 = z.create,
-  create_6 = G.create,
-  create_7 = W.create,
-  create_8 = ce.create,
-  create_9 = Q.create,
-  create_10 = X.create,
-  create_11 = B.create,
-  create_12 = V.create,
-  create_13 = j.create,
-  create_14 = oe.create,
-  create_15 = C.create,
-  { create: create, strictCreate: strictCreate } = y,
-  create_16 = K.create,
-  create_17 = ve.create,
-  create_18 = Z.create,
-  create_19 = I.create,
-  create_20 = ue.create,
-  create_21 = de.create,
-  create_22 = U.create,
-  create_23 = H.create,
-  create_24 = ee.create,
-  create_25 = te.create,
-  create_26 = P.create,
-  create_27 = re.create,
-  create_28 = q.create,
-  create_29 = A.create,
-  create_30 = S.create,
-  create_31 = E.create,
-  createWithPreprocess = A.createWithPreprocess,
-  create_32 = fe.create;
+var create_2 = ZodString.create;
+var create_3 = ZodNumber.create;
+var create_4 = ZodNaN.create;
+var create_5 = ZodBigInt.create;
+var create_6 = ZodBoolean.create;
+var create_7 = ZodDate.create;
+var create_8 = ZodSymbol.create;
+var create_9 = ZodUndefined.create;
+var create_10 = ZodNull.create;
+var create_11 = ZodAny.create;
+var create_12 = ZodUnknown.create;
+var create_13 = ZodNever.create;
+var create_14 = ZodVoid.create;
+var create_15 = ZodArray.create;
+var { create, strictCreate } = ZodObject;
+var create_16 = ZodUnion.create;
+var create_17 = ZodDiscriminatedUnion.create;
+var create_18 = ZodIntersection.create;
+var create_19 = ZodTuple.create;
+var create_20 = ZodRecord.create;
+var create_21 = ZodMap.create;
+var create_22 = ZodSet.create;
+var create_23 = ZodFunction.create;
+var create_24 = ZodLazy.create;
+var create_25 = ZodLiteral.create;
+var create_26 = ZodEnum.create;
+var create_27 = ZodNativeEnum.create;
+var create_28 = ZodPromise.create;
+var create_29 = ZodEffects.create;
+var create_30 = ZodOptional.create;
+var create_31 = ZodNullable.create;
+var createWithPreprocess = ZodEffects.createWithPreprocess;
+var create_32 = ZodPipeline.create;
+//@ chunk-j2t139r9.js:59342-59545 esm-fingerprint
 /**
  * zod 的 coerce 构造器表（string/number/boolean/bigint/date）。属于第三方 zod，不是 SDK schema。
  */
-//@ chunk-j2t139r9.js:59342-59545 esm-fingerprint
 var zodCoerce = {
-  string: (e) => T.create({ ...e, coerce: !0 }),
-  number: (e) => D.create({ ...e, coerce: !0 }),
-  boolean: (e) => G.create({ ...e, coerce: !0 }),
-  bigint: (e) => z.create({ ...e, coerce: !0 }),
-  date: (e) => W.create({ ...e, coerce: !0 }),
+  string: (e) =>
+    ZodString.create({
+      ...e,
+      coerce: true,
+    }),
+  number: (e) =>
+    ZodNumber.create({
+      ...e,
+      coerce: true,
+    }),
+  boolean: (e) =>
+    ZodBoolean.create({
+      ...e,
+      coerce: true,
+    }),
+  bigint: (arg) =>
+    ZodBigInt.create({
+      ...arg,
+      coerce: true,
+    }),
+  date: (arg) =>
+    ZodDate.create({
+      ...arg,
+      coerce: true,
+    }),
 };
 //@ chunk-j2t139r9.js:59545-59555 esm-layout
-var r1i = freeze;
-
+var INVALID_default = INVALID;
 export {
   create,
   create_2,
@@ -282,24 +347,24 @@ export {
   create_20,
   create_25,
   create_9,
-  r1i,
+  INVALID_default,
   create_17,
   strictCreate,
   create_16,
   zodCoerce,
   create_19,
-  M,
-  v,
+  isValid,
+  ParseStatus,
   Y,
-  u,
-  freeze,
-  l,
-  x,
-  pe,
-  _e,
-  ie,
-  J,
-  N,
-  L,
+  addIssueToContext,
+  INVALID,
+  errorUtil,
+  OK,
+  isAborted,
+  isDirty,
+  makeIssue,
+  getErrorMap,
+  errorMap_2,
+  DIRTY,
   create_10,
 };

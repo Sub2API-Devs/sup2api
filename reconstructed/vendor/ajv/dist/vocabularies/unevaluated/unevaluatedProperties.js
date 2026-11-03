@@ -6,60 +6,78 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../runtime/bun-runtime.js";
-import { uh } from "../../compile/codegen/index.js";
-import { ew } from "../../compile/util.js";
-import { DPe } from "../../compile/names.js";
+import { require_codegen_2 as require_codegen } from "../../compile/codegen/index.js";
+import { require_util_2 as require_util } from "../../compile/util.js";
+import { require_names } from "../../compile/names.js";
 
 //@ chunk-1r4fv9mg.js:3452-4567 cjs-fingerprint
-var ge = x(function ($e) {
-  Object.defineProperty($e, "__esModule", { value: !0 });
-  var y = uh(),
-    N = ew(),
-    mt = DPe(),
-    lt = {
-      message: "must NOT have unevaluated properties",
-      params: ({ params: params }) => y._`{unevaluatedProperty: ${params.unevaluatedProperty}}`,
+var require_unevaluatedProperties = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  var codegen_1 = require_codegen();
+  var util_1 = require_util();
+  var names_1 = require_names();
+  var error = {
+    message: "must NOT have unevaluated properties",
+    params: ({ params }) => codegen_1._`{unevaluatedProperty: ${params.unevaluatedProperty}}`,
+  };
+  var def = {
+    keyword: "unevaluatedProperties",
+    type: "object",
+    schemaType: ["boolean", "object"],
+    trackErrors: true,
+    error,
+    code(cxt) {
+      let { gen, schema, data, errsCount, it } = cxt;
+      if (!errsCount) throw Error("ajv implementation error");
+      let { allErrors, props } = it;
+      if (props instanceof codegen_1.Name)
+        gen.if(codegen_1._`${props} !== true`, () =>
+          gen.forIn("key", data, (key) =>
+            gen.if(unevaluatedDynamic(props, key), () => unevaluatedPropCode(key)),
+          ),
+        );
+      else if (props !== true)
+        gen.forIn("key", data, (key) =>
+          props === undefined
+            ? unevaluatedPropCode(key)
+            : gen.if(unevaluatedStatic(props, key), () => unevaluatedPropCode(key)),
+        );
+      it.props = true;
+      cxt.ok(codegen_1._`${errsCount} === ${names_1.default.errors}`);
+      function unevaluatedPropCode(key) {
+        if (schema === false) {
+          cxt.setParams({
+            unevaluatedProperty: key,
+          });
+          cxt.error();
+          if (!allErrors) gen.break();
+          return;
+        }
+        if (!util_1.alwaysValidSchema(it, schema)) {
+          let valid = gen.name("valid");
+          cxt.subschema(
+            {
+              keyword: "unevaluatedProperties",
+              dataProp: key,
+              dataPropType: util_1.Type.Str,
+            },
+            valid,
+          );
+          if (!allErrors) gen.if(codegen_1.not(valid), () => gen.break());
+        }
+      }
+      function unevaluatedDynamic(evaluatedProps, key) {
+        return codegen_1._`!${evaluatedProps} || !${evaluatedProps}[${key}]`;
+      }
+      function unevaluatedStatic(evaluatedProps, key) {
+        let ps = [];
+        for (let p in evaluatedProps) if (evaluatedProps[p] === true) ps.push(codegen_1._`${key} !== ${p}`);
+        return codegen_1.and(...ps);
+      }
     },
-    ft = {
-      keyword: "unevaluatedProperties",
-      type: "object",
-      schemaType: ["boolean", "object"],
-      trackErrors: !0,
-      error: lt,
-      code(e) {
-        let { gen: gen, schema: schema, data: n, errsCount: errsCount, it: it } = e;
-        if (!errsCount) throw Error("ajv implementation error");
-        let { allErrors: allErrors, props: props } = it;
-        if (props instanceof y.Name)
-          gen.if(y._`${props} !== true`, () => gen.forIn("key", n, (h) => gen.if(p(props, h), () => s(h))));
-        else if (props !== !0)
-          gen.forIn("key", n, (h) => (props === void 0 ? s(h) : gen.if(g(props, h), () => s(h))));
-        ((it.props = !0), e.ok(y._`${errsCount} === ${mt.default.errors}`));
-        function s(h) {
-          if (schema === !1) {
-            if ((e.setParams({ unevaluatedProperty: h }), e.error(), !allErrors)) gen.break();
-            return;
-          }
-          if (!N.alwaysValidSchema(it, schema)) {
-            let P = gen.name("valid");
-            if (
-              (e.subschema({ keyword: "unevaluatedProperties", dataProp: h, dataPropType: N.Type.Str }, P),
-              !allErrors)
-            )
-              gen.if(y.not(P), () => gen.break());
-          }
-        }
-        function p(h, P) {
-          return y._`!${h} || !${h}[${P}]`;
-        }
-        function g(h, P) {
-          let c = [];
-          for (let key in h) if (h[key] === !0) c.push(y._`${P} !== ${key}`);
-          return y.and(...c);
-        }
-      },
-    };
-  $e.default = ft;
+  };
+  cjsExports.default = def;
 });
-
-export { ge };
+export { require_unevaluatedProperties };

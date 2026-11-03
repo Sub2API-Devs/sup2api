@@ -21,7 +21,7 @@ import { sequential } from "../utils/sequential.js";
 import { inverseText } from "../ink/screen.js";
 import { color } from "./design-system/color.js";
 import { useTextInput } from "../hooks/useTextInput.js";
-import { e } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { jsxProd_default } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { BaseTextInput } from "./BaseTextInput.js";
 import { Box } from "../ink/components/Text.js";
 
@@ -37,74 +37,82 @@ function identity(ot) {
 function identity_2(ce) {
   return ce;
 }
+//@ chunk-81qqq1aq.js:7116-10954 fingerprint = TextInput (0.667)
 /**
  * 普通输入框：调用 useTextInput，渲染 BaseTextInput；语音录音时显示电平条。
  */
-//@ chunk-81qqq1aq.js:7116-10954 fingerprint = TextInput (0.667)
 function TextInput(props) {
-  let $ = w(59),
-    [h] = useTheme(),
-    isTerminalFocused = useTerminalFocus(),
-    d;
-  if ($[0] === MEMO_CACHE_SENTINEL) ((d = isNativeCursorEnabled()), ($[0] = d));
-  else d = $[0];
-  let m = d,
-    settings = useIsScreenReaderEnabled(),
-    g = useAppState_2(selectVoiceState) === "recording",
-    [u, b] = useVoiceLevelIndicator();
-  const N = !!props.onImagePaste;
+  let $ = w(59);
+  let [h] = useTheme();
+  let isTerminalFocused = useTerminalFocus();
+  let d;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    d = isNativeCursorEnabled();
+    $[0] = d;
+  } else d = $[0];
+  let m = d;
+  let settings = useIsScreenReaderEnabled();
+  let hidePlaceholderText = useAppState_2(selectVoiceState) === "recording";
+  let [u, b] = useVoiceLevelIndicator();
+  const canPasteImages = !!props.onImagePaste;
   let E;
-  if ($[1] !== isTerminalFocused || $[2] !== N)
-    ((E = { isTerminalFocused: isTerminalFocused, canPasteImages: N }),
-      ($[1] = isTerminalFocused),
-      ($[2] = N),
-      ($[3] = E));
-  else E = $[3];
+  if ($[1] !== isTerminalFocused || $[2] !== canPasteImages) {
+    E = {
+      isTerminalFocused,
+      canPasteImages,
+    };
+    $[1] = isTerminalFocused;
+    $[2] = canPasteImages;
+    $[3] = E;
+  } else E = $[3];
   useTextInputEffects(E);
   let H;
-  if ($[4] !== b || $[5] !== isTerminalFocused)
-    ((H = !isTerminalFocused
+  if ($[4] !== b || $[5] !== isTerminalFocused) {
+    H = !isTerminalFocused
       ? identity
       : b
         ? () => sequential.hex(b.hex)(b.char)
         : m
           ? identity_2
-          : inverseText),
-      ($[4] = b),
-      ($[5] = isTerminalFocused),
-      ($[6] = H));
-  else H = $[6];
-  let v = H;
+          : inverseText;
+    $[4] = b;
+    $[5] = isTerminalFocused;
+    $[6] = H;
+  } else H = $[6];
+  let invert = H;
   const {
-      value: M,
-      onChange: onChange,
-      onSubmit: onSubmit,
-      onExit: onExit,
-      onExitMessage: onExitMessage,
-      onEscapeMessage: onEscapeMessage,
-      historyOnClear: historyOnClear,
-      onLeftArrowOnEmpty: onLeftArrowOnEmpty,
-      leftArrowConfirmHint: leftArrowConfirmHint,
-      onHistoryReset: onHistoryReset,
-      onHistoryUp: onHistoryUp,
-      onHistoryDown: onHistoryDown,
-      focus: focus,
-      mask: mask,
-      maskWhole: maskWhole,
-      multiline: multiline,
-      disableBackslashReturn: disableBackslashReturn,
-      clearOnSubmit: clearOnSubmit,
-      disableCtrlCClear: disableCtrlCClear,
-    } = props,
-    A = props.showCursor && !settings ? " " : "",
-    highlightPastedText = props.highlightPastedText;
-  let T;
-  if ($[7] !== h) ((T = color("text", h)), ($[7] = h), ($[8] = T));
-  else T = $[8];
-  const _ = settings ? void 0 : props.virtualTexts;
+    value: M,
+    onChange,
+    onSubmit,
+    onExit,
+    onExitMessage,
+    onEscapeMessage,
+    historyOnClear,
+    onLeftArrowOnEmpty,
+    leftArrowConfirmHint,
+    onHistoryReset,
+    onHistoryUp,
+    onHistoryDown,
+    focus,
+    mask,
+    maskWhole,
+    multiline,
+    disableBackslashReturn,
+    clearOnSubmit,
+    disableCtrlCClear,
+  } = props;
+  const cursorChar = props.showCursor && !settings ? " " : "";
+  const highlightPastedText = props.highlightPastedText;
+  let themeText;
+  if ($[7] !== h) {
+    themeText = color("text", h);
+    $[7] = h;
+    $[8] = themeText;
+  } else themeText = $[8];
+  const virtualTexts = settings ? undefined : props.virtualTexts;
   let ae;
   if (
-    $[9] !== v ||
+    $[9] !== invert ||
     $[10] !== settings ||
     $[11] !== props.clearOnSubmit ||
     $[12] !== props.columns ||
@@ -140,35 +148,35 @@ function TextInput(props) {
     $[42] !== props.onLeftArrowOnEmpty ||
     $[43] !== props.onSubmit ||
     $[44] !== props.value ||
-    $[45] !== A ||
-    $[46] !== T ||
-    $[47] !== _
-  )
-    ((ae = {
+    $[45] !== cursorChar ||
+    $[46] !== themeText ||
+    $[47] !== virtualTexts
+  ) {
+    ae = {
       value: M,
-      onChange: onChange,
-      onSubmit: onSubmit,
-      onExit: onExit,
-      onExitMessage: onExitMessage,
-      onEscapeMessage: onEscapeMessage,
-      historyOnClear: historyOnClear,
-      onLeftArrowOnEmpty: onLeftArrowOnEmpty,
-      leftArrowConfirmHint: leftArrowConfirmHint,
-      onHistoryReset: onHistoryReset,
-      onHistoryUp: onHistoryUp,
-      onHistoryDown: onHistoryDown,
-      focus: focus,
-      mask: mask,
-      maskWhole: maskWhole,
-      multiline: multiline,
-      disableBackslashReturn: disableBackslashReturn,
-      clearOnSubmit: clearOnSubmit,
-      disableCtrlCClear: disableCtrlCClear,
-      cursorChar: A,
+      onChange,
+      onSubmit,
+      onExit,
+      onExitMessage,
+      onEscapeMessage,
+      historyOnClear,
+      onLeftArrowOnEmpty,
+      leftArrowConfirmHint,
+      onHistoryReset,
+      onHistoryUp,
+      onHistoryDown,
+      focus,
+      mask,
+      maskWhole,
+      multiline,
+      disableBackslashReturn,
+      clearOnSubmit,
+      disableCtrlCClear,
+      cursorChar,
       preserveTrailingWhitespace: settings,
-      highlightPastedText: highlightPastedText,
-      invert: v,
-      themeText: T,
+      highlightPastedText,
+      invert,
+      themeText,
       columns: props.columns,
       leadingPill: props.leadingPill,
       maxVisibleLines: props.maxVisibleLines,
@@ -184,87 +192,92 @@ function TextInput(props) {
       getInputMode: props.getInputMode,
       inlineGhostText: props.inlineGhostText,
       dim: sequential.dim,
-      virtualTexts: _,
-    }),
-      ($[9] = v),
-      ($[10] = settings),
-      ($[11] = props.clearOnSubmit),
-      ($[12] = props.columns),
-      ($[13] = props.commitEdit),
-      ($[14] = props.cursorOffset),
-      ($[15] = props.disableBackslashReturn),
-      ($[16] = props.disableCtrlCClear),
-      ($[17] = props.disableCursorMovementForUpDownKeys),
-      ($[18] = props.disableEscapeDoublePress),
-      ($[19] = props.editRelay),
-      ($[20] = props.focus),
-      ($[21] = props.getInputMode),
-      ($[22] = props.getPastedContents),
-      ($[23] = props.highlightPastedText),
-      ($[24] = props.historyOnClear),
-      ($[25] = props.inlineGhostText),
-      ($[26] = props.inputFilter),
-      ($[27] = props.leadingPill),
-      ($[28] = props.leftArrowConfirmHint),
-      ($[29] = props.mask),
-      ($[30] = props.maskWhole),
-      ($[31] = props.maxVisibleLines),
-      ($[32] = props.multiline),
-      ($[33] = props.onChange),
-      ($[34] = props.onChangeCursorOffset),
-      ($[35] = props.onEscapeMessage),
-      ($[36] = props.onExit),
-      ($[37] = props.onExitMessage),
-      ($[38] = props.onHistoryDown),
-      ($[39] = props.onHistoryReset),
-      ($[40] = props.onHistoryUp),
-      ($[41] = props.onImagePaste),
-      ($[42] = props.onLeftArrowOnEmpty),
-      ($[43] = props.onSubmit),
-      ($[44] = props.value),
-      ($[45] = A),
-      ($[46] = T),
-      ($[47] = _),
-      ($[48] = ae));
-  else ae = $[48];
-  let K = useTextInput(ae);
-  const G = b != null;
-  let pe;
+      virtualTexts,
+    };
+    $[9] = invert;
+    $[10] = settings;
+    $[11] = props.clearOnSubmit;
+    $[12] = props.columns;
+    $[13] = props.commitEdit;
+    $[14] = props.cursorOffset;
+    $[15] = props.disableBackslashReturn;
+    $[16] = props.disableCtrlCClear;
+    $[17] = props.disableCursorMovementForUpDownKeys;
+    $[18] = props.disableEscapeDoublePress;
+    $[19] = props.editRelay;
+    $[20] = props.focus;
+    $[21] = props.getInputMode;
+    $[22] = props.getPastedContents;
+    $[23] = props.highlightPastedText;
+    $[24] = props.historyOnClear;
+    $[25] = props.inlineGhostText;
+    $[26] = props.inputFilter;
+    $[27] = props.leadingPill;
+    $[28] = props.leftArrowConfirmHint;
+    $[29] = props.mask;
+    $[30] = props.maskWhole;
+    $[31] = props.maxVisibleLines;
+    $[32] = props.multiline;
+    $[33] = props.onChange;
+    $[34] = props.onChangeCursorOffset;
+    $[35] = props.onEscapeMessage;
+    $[36] = props.onExit;
+    $[37] = props.onExitMessage;
+    $[38] = props.onHistoryDown;
+    $[39] = props.onHistoryReset;
+    $[40] = props.onHistoryUp;
+    $[41] = props.onImagePaste;
+    $[42] = props.onLeftArrowOnEmpty;
+    $[43] = props.onSubmit;
+    $[44] = props.value;
+    $[45] = cursorChar;
+    $[46] = themeText;
+    $[47] = virtualTexts;
+    $[48] = ae;
+  } else ae = $[48];
+  let inputState = useTextInput(ae);
+  const cursorCellPainted = b != null;
+  let children;
   if (
-    $[49] !== v ||
+    $[49] !== invert ||
     $[50] !== isTerminalFocused ||
-    $[51] !== g ||
+    $[51] !== hidePlaceholderText ||
     $[52] !== props ||
-    $[53] !== G ||
-    $[54] !== K
-  )
-    ((pe = e(BaseTextInput, {
-      inputState: K,
+    $[53] !== cursorCellPainted ||
+    $[54] !== inputState
+  ) {
+    children = jsxProd_default(BaseTextInput, {
+      inputState,
       terminalFocus: isTerminalFocused,
       highlights: props.highlights,
-      invert: v,
-      hidePlaceholderText: g,
-      cursorCellPainted: G,
+      invert,
+      hidePlaceholderText,
+      cursorCellPainted,
       ...props,
-    })),
-      ($[49] = v),
-      ($[50] = isTerminalFocused),
-      ($[51] = g),
-      ($[52] = props),
-      ($[53] = G),
-      ($[54] = K),
-      ($[55] = pe));
-  else pe = $[55];
+    });
+    $[49] = invert;
+    $[50] = isTerminalFocused;
+    $[51] = hidePlaceholderText;
+    $[52] = props;
+    $[53] = cursorCellPainted;
+    $[54] = inputState;
+    $[55] = children;
+  } else children = $[55];
   let Y;
-  if ($[56] !== u || $[57] !== pe)
-    ((Y = e(Box, { ref: u, children: pe })), ($[56] = u), ($[57] = pe), ($[58] = Y));
-  else Y = $[58];
+  if ($[56] !== u || $[57] !== children) {
+    Y = jsxProd_default(Box, {
+      ref: u,
+      children,
+    });
+    $[56] = u;
+    $[57] = children;
+    $[58] = Y;
+  } else Y = $[58];
   return Y;
 }
 //@ chunk-7p2hc4jn.js:50977-51058 fingerprint = BARS (1)
-var VOICE_LEVEL_BARS = " \u2581\u2582\u2583\u2584\u2585\u2586\u2587\u2588",
-  Lr = 0.7,
-  kr = 1.8,
-  _r = 0.15;
-
-export { TextInput, kr, Lr, VOICE_LEVEL_BARS, _r };
+var VOICE_LEVEL_BARS = " \u2581\u2582\u2583\u2584\u2585\u2586\u2587\u2588";
+var CURSOR_BLINK_ON_RATIO = 0.7;
+var CURSOR_BLINK_PERIOD = 1.8;
+var CURSOR_FADE_RATIO = 0.15;
+export { TextInput, CURSOR_BLINK_PERIOD, CURSOR_BLINK_ON_RATIO, VOICE_LEVEL_BARS, CURSOR_FADE_RATIO };

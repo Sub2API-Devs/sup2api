@@ -8,33 +8,63 @@
  * pieces: chunk-x87ys2v1.js (6)
  * attribution: placement 6
  */
-import { ht } from "./cliOwnedClients.js";
+import { getCliOwnedState } from "./cliOwnedClients.js";
 
 //@ chunk-x87ys2v1.js:227-264 placement
-function Iyt() {
-  return ht().reconnect;
+/**
+ * 取当前的重连函数句柄。
+ */
+function getReconnectHandle() {
+  return getCliOwnedState().reconnect;
 }
 //@ chunk-x87ys2v1.js:264-298 placement
-function q1s() {
-  return ht().toggle;
+/**
+ * 取当前的启用/禁用切换句柄。
+ */
+function getToggleHandle() {
+  return getCliOwnedState().toggle;
 }
 //@ chunk-x87ys2v1.js:298-336 placement
-function hAe() {
-  return ht().isDisabled;
+/**
+ * 取当前的 isDisabled 判断句柄。
+ */
+function getIsDisabledHandle() {
+  return getCliOwnedState().isDisabled;
 }
 //@ chunk-x87ys2v1.js:336-378 placement
-function Y1s() {
-  return ht().dialBlockCause;
+/**
+ * 取当前的拨号阻止原因判断句柄。
+ */
+function getDialBlockCauseHandle() {
+  return getCliOwnedState().dialBlockCause;
 }
 //@ chunk-x87ys2v1.js:378-470 placement
-function KPo(e, n, r, c) {
-  let o = ht();
-  ((o.reconnect = e), (o.toggle = n), (o.isDisabled = r), (o.dialBlockCause = c));
+/**
+ * 一次性设置四个重连相关句柄。
+ */
+function setReconnectHandles(reconnect, toggle, isDisabled, dialBlockCause) {
+  let cliOwnedState = getCliOwnedState();
+  cliOwnedState.reconnect = reconnect;
+  cliOwnedState.toggle = toggle;
+  cliOwnedState.isDisabled = isDisabled;
+  cliOwnedState.dialBlockCause = dialBlockCause;
 }
 //@ chunk-x87ys2v1.js:470-567 placement
-function VPo() {
-  let e = ht();
-  ((e.reconnect = null), (e.toggle = null), (e.isDisabled = null), (e.dialBlockCause = null));
+/**
+ * 清空四个重连相关句柄。
+ */
+function clearReconnectHandles() {
+  let cliOwnedState = getCliOwnedState();
+  cliOwnedState.reconnect = null;
+  cliOwnedState.toggle = null;
+  cliOwnedState.isDisabled = null;
+  cliOwnedState.dialBlockCause = null;
 }
-
-export { Iyt, hAe, Y1s, VPo, KPo, q1s };
+export {
+  getReconnectHandle,
+  getIsDisabledHandle,
+  getDialBlockCauseHandle,
+  clearReconnectHandles,
+  setReconnectHandles,
+  getToggleHandle,
+};

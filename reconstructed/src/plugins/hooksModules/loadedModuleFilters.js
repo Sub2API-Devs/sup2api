@@ -13,34 +13,49 @@ import { hasLink } from "../../utils/hasLink.js";
 import { getPluginRegistry } from "../../utils/plugins/pluginLoadState.js";
 import { isModuleAdmitted } from "../../utils/plugins/functionHooks/admission.js";
 import { lookupPathTable } from "../../utils/pathTable.js";
-import { opr } from "../../utils/hooks/functionHookMatchers.js";
+import { matchesFields } from "../../utils/hooks/functionHookMatchers.js";
 
 //@ chunk-hde26vvz.js:300-333 placement
-var vie = (o) => o.name === SEC_DEFAULT_PLUGIN_NAME && hasLink(o);
+/**
+ * 是否 sec-default 模块
+ */
+var isSecDefaultModule = (loadedModule) =>
+  loadedModule.name === SEC_DEFAULT_PLUGIN_NAME && hasLink(loadedModule);
+//@ chunk-hde26vvz.js:333-486 placement
 /**
  * 返回给定钩子位置可用的已加载模块；classic.* 与 tool.describe/call/check 位置会排除特定类别的模块。
  */
-//@ chunk-hde26vvz.js:333-486 placement
 var getLoadedModulesForSite = (o) => {
   let e = o.startsWith("classic.") || o === "tool.describe" || o === "tool.call" || o === "tool.check";
-  return getPluginRegistry().loadedModules.filter((loadedModule) => !(e && vie(loadedModule)));
+  return getPluginRegistry().loadedModules.filter((loadedModule) => !(e && isSecDefaultModule(loadedModule)));
 };
 //@ chunk-jahwkg2g.js:263-324 placement
-var QNe = (o) =>
+/**
+ * 按名字找已加载模块
+ */
+var findLoadedModule = (o) =>
   getPluginRegistry().loadedModules.find(
     (loadedModule) => loadedModule.name === o && isModuleAdmitted(loadedModule),
   );
 //@ chunk-jahwkg2g.js:324-349 placement
-var IT = (o) => QNe(o)?.args;
+/**
+ * 取模块参数
+ */
+var loadedModuleArgs = (o) => findLoadedModule(o)?.args;
+//@ chunk-57kgd85y.js:337-471 placement
 /**
  * 判断是否有已加载的函数钩子模块挂接了指定位置（且模块处于启用状态）；给出匹配目标时还需该模块的匹配器命中。被大量钩子点用作快速短路检查。
  */
-//@ chunk-57kgd85y.js:337-471 placement
-function hasModuleHookingSite(o, e, s) {
+function hasModuleHookingSite(o, e, loadedModulesForSite) {
   let t = e && lookupPathTable(o);
-  return (s ?? getPluginRegistry().loadedModules).some(
-    (r) => r.hooks(o) && isModuleAdmitted(r) && (e === void 0 || opr(r.matcherFor(o), e, t)),
+  return (loadedModulesForSite ?? getPluginRegistry().loadedModules).some(
+    (r) => r.hooks(o) && isModuleAdmitted(r) && (e === undefined || matchesFields(r.matcherFor(o), e, t)),
   );
 }
-
-export { hasModuleHookingSite, getLoadedModulesForSite, IT, QNe, vie };
+export {
+  hasModuleHookingSite,
+  getLoadedModulesForSite,
+  loadedModuleArgs,
+  findLoadedModule,
+  isSecDefaultModule,
+};

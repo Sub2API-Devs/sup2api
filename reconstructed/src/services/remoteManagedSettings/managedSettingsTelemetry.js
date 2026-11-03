@@ -43,7 +43,7 @@ import { settingsChangeDetector } from "../../utils/settings/changeDetector.js";
 //@ chunk-151tygw9.js:7062-7386 placement
 function unwrapZodSchema(e) {
   let n = e;
-  for (let r = 0; n && r < 32; r++) {
+  for (let idx = 0; n && idx < 32; idx++) {
     let def = n._zod.def;
     switch (def.type) {
       case "optional":
@@ -71,42 +71,51 @@ function unwrapZodSchema(e) {
 function resolveUnionBranch(e, n) {
   let r = unwrapZodSchema(e);
   if (r?._zod.def.type !== "union") return r;
-  let s = r._zod.def.options?.find((a) => a.safeParse(n).success);
-  return s && resolveUnionBranch(s, n);
+  let found = r._zod.def.options?.find((option) => option.safeParse(n).success);
+  return found && resolveUnionBranch(found, n);
 }
 //@ chunk-151tygw9.js:7529-7611 placement
-function ie(e) {
+/**
+ * 判断 zod schema 是否有具体类型（不是 unknown/any），遥测里才值得展开。
+ */
+function hasConcreteZodType(e) {
   let n = e?._zod.def.type;
-  return n !== void 0 && n !== "unknown" && n !== "any";
+  return n !== undefined && n !== "unknown" && n !== "any";
 }
 //@ chunk-151tygw9.js:7611-7693 placement
-function re(e, n) {
-  let r = resolveUnionBranch(e, n)?._zod.def;
-  return r?.type === "array" ? r.element : void 0;
+/**
+ * 取联合类型分支中数组的 element schema（遥测按元素脱敏用）。
+ */
+function unionArrayElementSchema(e, n) {
+  let def = resolveUnionBranch(e, n)?._zod.def;
+  return def?.type === "array" ? def.element : undefined;
 }
 //@ chunk-151tygw9.js:7693-8004 placement
 function matchesSchemaType(e, n) {
-  let r = unwrapZodSchema(e)?._zod.def;
-  switch (r?.type) {
+  let def = unwrapZodSchema(e)?._zod.def;
+  switch (def?.type) {
     case "boolean":
       return typeof n === "boolean";
     case "number":
       return typeof n === "number";
     case "enum":
-      return Object.values(r.entries ?? {}).includes(n);
+      return Object.values(def.entries ?? {}).includes(n);
     case "literal":
-      return r.values?.includes(n) ?? !1;
+      return def.values?.includes(n) ?? false;
     case "union":
-      return r.options?.some((s) => matchesSchemaType(s, n)) ?? !1;
+      return def.options?.some((option) => matchesSchemaType(option, n)) ?? false;
     default:
-      return !1;
+      return false;
   }
 }
 //@ chunk-151tygw9.js:8004-8118 placement
-var PERMISSION_RULE_PATHS = new Set(["permissions.allow", "permissions.deny", "permissions.ask"]),
-  MCP_TOOL_NAME_RE = /^mcp__[\w-]+(?:__(?:[\w.-]+|\*))?$/;
+var PERMISSION_RULE_PATHS = new Set(["permissions.allow", "permissions.deny", "permissions.ask"]);
+var MCP_TOOL_NAME_RE = /^mcp__[\w-]+(?:__(?:[\w.-]+|\*))?$/;
 //@ chunk-151tygw9.js:8118-8216 placement
-function ae() {
+/**
+ * 当前所有注册工具名与别名的集合（遥测里识别工具名用）。
+ */
+function knownToolNameSet() {
   return new Set([
     ...(getAllBaseToolsFromRegistry() ?? []).flatMap((e) => [e.name, ...(e.aliases ?? [])]),
     BASH_TOOL_NAME,
@@ -118,30 +127,33 @@ function ae() {
 //@ chunk-151tygw9.js:8216-8370 placement
 function redactPermissionRule(e, n) {
   if (typeof e !== "string") return REDACTED_PLACEHOLDER;
-  let { toolName: toolName, ruleContent: ruleContent } = permissionRuleValueFromString(e);
+  let { toolName, ruleContent } = permissionRuleValueFromString(e);
   if (!(n.has(toolName) || MCP_TOOL_NAME_RE.test(toolName))) return REDACTED_PLACEHOLDER;
-  return ruleContent === void 0 ? toolName : `${toolName}(${REDACTED_PLACEHOLDER})`;
+  return ruleContent === undefined ? toolName : `${toolName}(${REDACTED_PLACEHOLDER})`;
 }
 //@ chunk-151tygw9.js:8370-8404 placement
 var SANDBOX_IGNOREVIOLATIONS = "sandbox.ignoreViolations";
 //@ chunk-151tygw9.js:8404-8716 placement
 function schemaKeysOf(e, n) {
-  let r = resolveUnionBranch(n, e)?._zod.def;
-  if (r?.type === "object" && r.shape) {
-    let { shape: shape } = r;
+  let def = resolveUnionBranch(n, e)?._zod.def;
+  if (def?.type === "object" && def.shape) {
+    let { shape } = def;
     return Object.keys(e)
-      .filter((c) => Object.hasOwn(shape, c))
-      .map((c) => [c, shape[c]]);
+      .filter((key) => Object.hasOwn(shape, key))
+      .map((key) => [key, shape[key]]);
   }
-  let { keyType: keyType, valueType: valueType } = r ?? {};
-  if (r?.type === "record" && keyType && valueType && ie(unwrapZodSchema(valueType)))
+  let { keyType, valueType } = def ?? {};
+  if (def?.type === "record" && keyType && valueType && hasConcreteZodType(unwrapZodSchema(valueType)))
     return Object.keys(e)
-      .filter((o) => keyType.safeParse(o).success)
-      .map((o) => [o, valueType]);
+      .filter((key) => keyType.safeParse(key).success)
+      .map((key) => [key, valueType]);
   return;
 }
 //@ chunk-151tygw9.js:8716-8799 placement
-var ue = new Set(["sandbox.network.httpProxyPort", "sandbox.network.socksProxyPort"]);
+var SENSITIVE_NUMERIC_SETTING_PATHS = new Set([
+  "sandbox.network.httpProxyPort",
+  "sandbox.network.socksProxyPort",
+]);
 //@ chunk-151tygw9.js:8799-9295 placement = isInBundledMode (0.822)
 function telemetrySafeValue(e, n, r, s) {
   switch (typeof e) {
@@ -149,7 +161,7 @@ function telemetrySafeValue(e, n, r, s) {
     case "boolean":
       return matchesSchemaType(n, e) ? e : REDACTED_PLACEHOLDER;
     case "number":
-      return matchesSchemaType(n, e) && !ue.has(r) ? e : REDACTED_PLACEHOLDER;
+      return matchesSchemaType(n, e) && !SENSITIVE_NUMERIC_SETTING_PATHS.has(r) ? e : REDACTED_PLACEHOLDER;
     case "undefined":
       return;
     case "object":
@@ -160,7 +172,7 @@ function telemetrySafeValue(e, n, r, s) {
   if (e === null) return null;
   if (Array.isArray(e)) {
     if (PERMISSION_RULE_PATHS.has(r)) return e.map((h) => redactPermissionRule(h, s));
-    let c = re(n, e);
+    let c = unionArrayElementSchema(n, e);
     return c ? e.map((h) => telemetrySafeValue(h, c, r, s)) : REDACTED_PLACEHOLDER;
   }
   if (PERMISSION_RULE_PATHS.has(r)) return REDACTED_PLACEHOLDER;
@@ -171,53 +183,68 @@ function telemetrySafeValue(e, n, r, s) {
   return Object.fromEntries(a.map(([c, h]) => [c, telemetrySafeValue(o[c], h, r ? `${r}.${c}` : c, s)]));
 }
 //@ chunk-151tygw9.js:9295-9306 placement
-var q = 8192;
+var MAX_TELEMETRY_CONTENT_BYTES = 8192;
 //@ chunk-151tygw9.js:9306-9527 placement
-function safeSettingsContent(e) {
-  let n = jsonStringify(telemetrySafeValue(e, getSettingsSchemaForDocument(e), "", ae()));
-  if (Buffer.byteLength(n) <= q) return { content: n, truncated: !1 };
-  let r = 0,
-    s = 0;
+function safeSettingsContent(settingsForSource) {
+  let n = jsonStringify(
+    telemetrySafeValue(
+      settingsForSource,
+      getSettingsSchemaForDocument(settingsForSource),
+      "",
+      knownToolNameSet(),
+    ),
+  );
+  if (Buffer.byteLength(n) <= MAX_TELEMETRY_CONTENT_BYTES)
+    return {
+      content: n,
+      truncated: false,
+    };
+  let r = 0;
+  let s = 0;
   for (let a of n) {
-    if (((r += Buffer.byteLength(a)), r > q)) break;
+    r += Buffer.byteLength(a);
+    if (r > MAX_TELEMETRY_CONTENT_BYTES) break;
     s += a.length;
   }
-  return { content: n.slice(0, s), truncated: !0 };
+  return {
+    content: n.slice(0, s),
+    truncated: true,
+  };
 }
+//@ chunk-151tygw9.js:9527-10142 placement
 /**
  * 汇总当前生效的托管设置来源与键值（只记录安全的值）用于遥测。
  */
-//@ chunk-151tygw9.js:9527-10142 placement
 function managedSettingsSummary(e) {
-  let { sources: sources, behavior: behavior } = getManagedSourcesInEffect(),
-    s = policyHelperConsentState(),
-    entry = s.entry,
-    o =
-      s.state === "none" &&
-      entry?.path === void 0 &&
-      entry?.script === void 0 &&
-      getBasePolicySettingsOrigin() === "remote" &&
-      parseRemoteManagedSettings().errors.some((error) =>
-        platformSettingsChain().chain.some((L) => error.path === `policyHelpers.${L}`),
-      ),
-    c = {
-      "managed_settings.trigger": e,
-      "managed_settings.sources": sources,
-      "managed_settings.source_behavior": behavior,
-      "managed_settings.helper.state": o ? "entry_invalid" : s.state,
-      "managed_settings.helper.applied": s.applied,
-    };
+  let { sources, behavior } = getManagedSourcesInEffect();
+  let s = policyHelperConsentState();
+  let entry = s.entry;
+  let o =
+    s.state === "none" &&
+    entry?.path === undefined &&
+    entry?.script === undefined &&
+    getBasePolicySettingsOrigin() === "remote" &&
+    parseRemoteManagedSettings().errors.some((error) =>
+      platformSettingsChain().chain.some((L) => error.path === `policyHelpers.${L}`),
+    );
+  let c = {
+    "managed_settings.trigger": e,
+    "managed_settings.sources": sources,
+    "managed_settings.source_behavior": behavior,
+    "managed_settings.helper.state": o ? "entry_invalid" : s.state,
+    "managed_settings.helper.applied": s.applied,
+  };
   if (entry) {
-    if (((c["managed_settings.helper.entry"] = entry.key), entry.path !== void 0))
-      c["managed_settings.helper.path"] = entry.path;
-    else if (entry.script !== void 0)
+    c["managed_settings.helper.entry"] = entry.key;
+    if (entry.path !== undefined) c["managed_settings.helper.path"] = entry.path;
+    else if (entry.script !== undefined)
       c["managed_settings.helper.script_sha256"] = computeContentHash(entry.script);
   }
   return c;
 }
 //@ chunk-151tygw9.js:10142-10306 placement
-function logEmitFailure(e) {
-  let n = e instanceof Error ? e.constructor.name : typeof e;
+function logEmitFailure(error) {
+  let n = error instanceof Error ? error.constructor.name : typeof error;
   logError(
     new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
       `managed_settings_resolved emit failed (${n})`,
@@ -227,56 +254,74 @@ function logEmitFailure(e) {
 }
 //@ chunk-151tygw9.js:10306-10532 placement
 function isManagedSettingsLoggingEnabled() {
-  let e = getAppliedGlobalConfigEnv()?.OTEL_LOG_MANAGED_SETTINGS;
+  let OTEL_LOG_MANAGED_SETTINGS = getAppliedGlobalConfigEnv()?.OTEL_LOG_MANAGED_SETTINGS;
   for (let r of getEnabledSettingSources()) {
     if (REPO_DIR_SETTING_SOURCES.has(r)) continue;
-    e = filterPolicyPredicateEnv(getSettingsForSource(r)?.env, r).OTEL_LOG_MANAGED_SETTINGS ?? e;
+    OTEL_LOG_MANAGED_SETTINGS =
+      filterPolicyPredicateEnv(getSettingsForSource(r)?.env, r).OTEL_LOG_MANAGED_SETTINGS ??
+      OTEL_LOG_MANAGED_SETTINGS;
   }
-  let n = getLatchedPreSettingsEnvSnapshot();
-  return isEnvTruthy(e ?? (n ? n.OTEL_LOG_MANAGED_SETTINGS : env.OTEL_LOG_MANAGED_SETTINGS));
+  let latchedPreSettingsEnvSnapshot = getLatchedPreSettingsEnvSnapshot();
+  return isEnvTruthy(
+    OTEL_LOG_MANAGED_SETTINGS ??
+      (latchedPreSettingsEnvSnapshot
+        ? latchedPreSettingsEnvSnapshot.OTEL_LOG_MANAGED_SETTINGS
+        : env.OTEL_LOG_MANAGED_SETTINGS),
+  );
 }
 //@ chunk-151tygw9.js:10532-10649 placement
 function dropHashFields(e, n) {
-  if (!n) (delete e["managed_settings.resolved_sha256"], delete e["managed_settings.helper.script_sha256"]);
+  if (!n) {
+    delete e["managed_settings.resolved_sha256"];
+    delete e["managed_settings.helper.script_sha256"];
+  }
 }
 //@ chunk-151tygw9.js:10649-11133 placement
 function createManagedSettingsReporter() {
-  let e = !1,
-    n = null,
-    r = (a) => {
-      try {
-        let o = managedSettingsSummary(a),
-          c = getSettingsForSource("policySettings");
-        if (c) o["managed_settings.resolved_sha256"] = computeContentHash(jsonStringify(sortKeysDeep(c)));
-        let { "managed_settings.trigger": h, ...L } = o,
-          I = jsonStringify(L);
-        if (I === n) return;
-        n = I;
-        let M = isManagedSettingsLoggingEnabled();
-        if ((dropHashFields(o, M), c && M)) {
-          let { content: content, truncated: truncated } = safeSettingsContent(c);
-          ((o["managed_settings.settings"] = content),
-            (o["managed_settings.settings_truncated"] = truncated));
-        }
-        logOTelEvent("managed_settings_resolved", o).catch(logEmitFailure);
-      } catch (error) {
-        logEmitFailure(error);
+  let e = false;
+  let n = null;
+  let r = (a) => {
+    try {
+      let o = managedSettingsSummary(a);
+      let settingsForSource = getSettingsForSource("policySettings");
+      if (settingsForSource)
+        o["managed_settings.resolved_sha256"] = computeContentHash(
+          jsonStringify(sortKeysDeep(settingsForSource)),
+        );
+      let { "managed_settings.trigger": h, ...L } = o;
+      let I = jsonStringify(L);
+      if (I === n) return;
+      n = I;
+      let M = isManagedSettingsLoggingEnabled();
+      dropHashFields(o, M);
+      if (settingsForSource && M) {
+        let { content, truncated } = safeSettingsContent(settingsForSource);
+        o["managed_settings.settings"] = content;
+        o["managed_settings.settings_truncated"] = truncated;
       }
-    },
-    subscribe = settingsChangeDetector.subscribe((a) => {
-      if (a === "policySettings" && e) r("change");
-    });
-  return (r("startup"), (e = !0), subscribe);
+      logOTelEvent("managed_settings_resolved", o).catch(logEmitFailure);
+    } catch (error) {
+      logEmitFailure(error);
+    }
+  };
+  let s = settingsChangeDetector.subscribe((a) => {
+    if (a === "policySettings" && e) r("change");
+  });
+  r("startup");
+  e = true;
+  return s;
 }
 //@ chunk-151tygw9.js:11133-11259 placement
 function logManagedSettingsRefused(e) {
   try {
     let n = managedSettingsSummary("refused");
-    (dropHashFields(n, isManagedSettingsLoggingEnabled()),
-      logOTelEvent("managed_settings_resolved", { ...n, "error.type": e }).catch(logEmitFailure));
+    dropHashFields(n, isManagedSettingsLoggingEnabled());
+    logOTelEvent("managed_settings_resolved", {
+      ...n,
+      "error.type": e,
+    }).catch(logEmitFailure);
   } catch (error) {
     logEmitFailure(error);
   }
 }
-
 export { createManagedSettingsReporter, logManagedSettingsRefused };

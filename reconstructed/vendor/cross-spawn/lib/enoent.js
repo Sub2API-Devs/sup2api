@@ -8,26 +8,30 @@
 import { x } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-m4p5zn6n.js:5816-6175 cjs-fingerprint
-var Dt = x(function (Ci, Mt) {
-  function hr(e, n) {
-    return Object.assign(Error(`${n} ${e.command} ENOENT`), {
+var require_enoent = x(function (cjsExports, cjsModule) {
+  function notFoundError(original, syscall) {
+    return Object.assign(Error(`${syscall} ${original.command} ENOENT`), {
       code: "ENOENT",
       errno: "ENOENT",
-      syscall: `${n} ${e.command}`,
-      path: e.command,
-      spawnargs: e.args,
+      syscall: `${syscall} ${original.command}`,
+      path: original.command,
+      spawnargs: original.args,
     });
   }
-  function yr(e, n) {
+  function hookChildProcess(cp, parsed) {
     return;
   }
-  function jt(e, n) {
+  function verifyENOENT(status, parsed) {
     return null;
   }
-  function Sr(e, n) {
+  function verifyENOENTSync(status, parsed) {
     return null;
   }
-  Mt.exports = { hookChildProcess: yr, verifyENOENT: jt, verifyENOENTSync: Sr, notFoundError: hr };
+  cjsModule.exports = {
+    hookChildProcess,
+    verifyENOENT,
+    verifyENOENTSync,
+    notFoundError,
+  };
 });
-
-export { Dt };
+export { require_enoent };

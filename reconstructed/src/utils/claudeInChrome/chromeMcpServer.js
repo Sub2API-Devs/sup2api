@@ -25,67 +25,72 @@ import {
 
 //@ chunk-w2264jxg.js:426-541 placement
 var SCREENSHOT_EXT_BY_MIME = {
-    "image/png": "png",
-    "image/jpeg": "jpg",
-    "image/webp": "webp",
-    "image/gif": "gif",
-  },
-  SCREENSHOT_SAVED_PREFIX = "Screenshot saved to: ",
-  screenshotCounter = 0,
-  cachedScreenshotDir;
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/webp": "webp",
+  "image/gif": "gif",
+};
+var SCREENSHOT_SAVED_PREFIX = "Screenshot saved to: ";
+var screenshotCounter = 0;
+var cachedScreenshotDir;
 //@ chunk-w2264jxg.js:541-637 placement
-function S() {
-  return (
-    (cachedScreenshotDir ??= mkdtemp(join(tmpdir(), "claude-chrome-screenshots-")).catch((e) => {
-      throw ((cachedScreenshotDir = void 0), e);
-    })),
-    cachedScreenshotDir
-  );
+/**
+ * 确定截图保存目录：宿主提供时用它（0700），否则用缓存的私有临时目录。
+ */
+function screenshotSaveDir() {
+  cachedScreenshotDir ??= mkdtemp(join(tmpdir(), "claude-chrome-screenshots-")).catch((error) => {
+    cachedScreenshotDir = undefined;
+    throw error;
+  });
+  return cachedScreenshotDir;
 }
+//@ chunk-w2264jxg.js:637-936 placement
 /**
  * 确定截图保存目录：宿主提供 getScreenshotSaveDir 时用它（建目录 0700）；否则用缓存的私有临时目录，属主或权限不对时重新创建。
  */
-//@ chunk-w2264jxg.js:637-936 placement
 async function resolveScreenshotSaveDir(e) {
   if (e.getScreenshotSaveDir) {
     let screenshotSaveDir = e.getScreenshotSaveDir();
-    if (screenshotSaveDir === void 0) return;
-    return (await mkdir(screenshotSaveDir, { recursive: !0, mode: 448 }), screenshotSaveDir);
+    if (screenshotSaveDir === undefined) return;
+    await mkdir(screenshotSaveDir, {
+      recursive: true,
+      mode: 448,
+    });
+    return screenshotSaveDir;
   }
-  let t = await S();
+  let t = await screenshotSaveDir();
   try {
-    let n = await lstat(t),
-      getuid = process.getuid;
-    if (n.isDirectory() && (getuid === void 0 || (n.uid === getuid() && (n.mode & 511) === 448))) return t;
+    let n = await lstat(t);
+    let getuid = process.getuid;
+    if (n.isDirectory() && (getuid === undefined || (n.uid === getuid() && (n.mode & 511) === 448))) return t;
   } catch {}
-  return ((cachedScreenshotDir = void 0), S());
+  cachedScreenshotDir = undefined;
+  return screenshotSaveDir();
 }
 //@ chunk-w2264jxg.js:936-2348 placement
-async function saveScreenshotsToDisk(e, t) {
+async function saveScreenshotsToDisk(e, host) {
   if (e.isError || !e.content.some((o) => o.type === "image")) return e;
   let n;
   try {
-    n = await resolveScreenshotSaveDir(t);
+    n = await resolveScreenshotSaveDir(host);
   } catch (error) {
-    return (
-      t.logger.warn(
-        `[${t.serverName}] save_to_disk: could not prepare screenshot directory: ${error instanceof Error ? error.message : String(error)}`,
-      ),
-      {
-        ...e,
-        content: [
-          ...e.content,
-          {
-            type: "text",
-            text:
-              "Note: save_to_disk failed \u2014 the screenshot directory could not " +
-              "be created. The image is included inline above.",
-          },
-        ],
-      }
+    host.logger.warn(
+      `[${host.serverName}] save_to_disk: could not prepare screenshot directory: ${error instanceof Error ? error.message : String(error)}`,
     );
+    return {
+      ...e,
+      content: [
+        ...e.content,
+        {
+          type: "text",
+          text:
+            "Note: save_to_disk failed \u2014 the screenshot directory could not " +
+            "be created. The image is included inline above.",
+        },
+      ],
+    };
   }
-  if (n === void 0)
+  if (n === undefined)
     return {
       ...e,
       content: [
@@ -98,22 +103,29 @@ async function saveScreenshotsToDisk(e, t) {
         },
       ],
     };
-  let r = [],
-    u = !1,
-    s = !1;
+  let r = [];
+  let u = false;
+  let s = false;
   for (let o of e.content) {
-    if ((r.push(o), o.type !== "image")) continue;
-    let a = Object.hasOwn(SCREENSHOT_EXT_BY_MIME, o.mimeType) ? SCREENSHOT_EXT_BY_MIME[o.mimeType] : "png",
-      i = join(n, `screenshot-${Date.now()}-${screenshotCounter++}.${a}`);
+    r.push(o);
+    if (o.type !== "image") continue;
+    let a = Object.hasOwn(SCREENSHOT_EXT_BY_MIME, o.mimeType) ? SCREENSHOT_EXT_BY_MIME[o.mimeType] : "png";
+    let i = join(n, `screenshot-${Date.now()}-${screenshotCounter++}.${a}`);
     try {
-      (await writeFile(i, Buffer.from(o.data, "base64"), { flag: "wx", mode: 384 }),
-        (u = !0),
-        r.push({ type: "text", text: `${SCREENSHOT_SAVED_PREFIX}${i}` }));
+      await writeFile(i, Buffer.from(o.data, "base64"), {
+        flag: "wx",
+        mode: 384,
+      });
+      u = true;
+      r.push({
+        type: "text",
+        text: `${SCREENSHOT_SAVED_PREFIX}${i}`,
+      });
     } catch (error) {
-      ((s = !0),
-        t.logger.warn(
-          `[${t.serverName}] save_to_disk: failed to write screenshot: ${error instanceof Error ? error.message : String(error)}`,
-        ));
+      s = true;
+      host.logger.warn(
+        `[${host.serverName}] save_to_disk: failed to write screenshot: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
   if (u)
@@ -128,18 +140,25 @@ async function saveScreenshotsToDisk(e, t) {
         "Note: save_to_disk failed for at least one screenshot \u2014 it could " +
         "not be written to disk. The image is included inline above.",
     });
-  return { ...e, content: r };
+  return {
+    ...e,
+    content: r,
+  };
 }
 //@ chunk-w2264jxg.js:2348-2366 placement
 var weakMap = new WeakMap();
 //@ chunk-w2264jxg.js:2366-2415 placement
-function W$r(e) {
-  (weakMap.delete(e), e.clearSelection?.());
+/**
+ * 清除浏览器选择记录并收起选择界面。
+ */
+function releaseBrowserSelection(socketClient) {
+  weakMap.delete(socketClient);
+  socketClient.clearSelection?.();
 }
+//@ chunk-w2264jxg.js:2415-2665 placement
 /**
  * 生成给模型看的浏览器名称：去控制/格式字符、统一引号、折叠空白，把 "this computer" 替换为 [?]，为空时用 "Browser N"。
  */
-//@ chunk-w2264jxg.js:2415-2665 placement
 function sanitizeBrowserLabel(e, t) {
   return (
     browserDisplayName(e, t)
@@ -172,31 +191,40 @@ var OS_DISPLAY_NAMES = new Map([
   ["Linux armv8l", "Linux"],
 ]);
 //@ chunk-w2264jxg.js:3104-3160 placement
-function z(e) {
-  return (e !== void 0 && OS_DISPLAY_NAMES.get(e)) || "unknown OS";
+/**
+ * 把 OS 平台代码转成展示名（未知返回 unknown OS）。
+ */
+function osDisplayName(osPlatform) {
+  return (osPlatform !== undefined && OS_DISPLAY_NAMES.get(osPlatform)) || "unknown OS";
 }
+//@ chunk-w2264jxg.js:3160-4418 placement
 /**
  * 工具调用前检查是否需要先让用户选浏览器：连接了多个扩展且未选定时，返回列出本机与其他设备浏览器（最多 8 个）的提示；已选或不需询问时返回 null 并记入 WeakMap。
  */
-//@ chunk-w2264jxg.js:3160-4418 placement
 async function browserSelectionPreflight(host, bridge) {
-  if (!bridge.listConnectedExtensions) return (weakMap.set(bridge, !0), null);
+  if (!bridge.listConnectedExtensions) {
+    weakMap.set(bridge, true);
+    return null;
+  }
   if (weakMap.get(bridge) && bridge.hasActiveSelection?.()) return null;
   weakMap.delete(bridge);
-  let listConnectedExtensions = await bridge.listConnectedExtensions();
-  if (listConnectedExtensions.length === 0) return null;
-  let r = listConnectedExtensions.length > 1 ? await safeCallPromise(host.getLocalDeviceIds) : void 0,
-    u = pickBrowserDevice(listConnectedExtensions, bridge.getSelectedDeviceId?.(), r);
-  if (u.kind !== "ask") return (weakMap.set(bridge, !0), null);
-  let { candidates: candidates, localCount: localCount } = u,
-    sliced = candidates.slice(0, 8),
-    i = (d, m) =>
-      `${m + 1}. "${sanitizeBrowserLabel(d, m)}" (${z(d.osPlatform)})${r?.get(d.deviceId) === "remembered" ? " \u2014 seen recently, not answering right now" : ""} \u2014 deviceId: ${d.deviceId}`,
-    mapped = sliced.slice(0, localCount).map(i),
-    mapped_2 = sliced.slice(localCount).map((d, m) => i(d, m + mapped.length)),
-    f =
-      localCount > 0
-        ? `Browsers on this computer:
+  let n = await bridge.listConnectedExtensions();
+  if (n.length === 0) return null;
+  let r = n.length > 1 ? await safeCallPromise(host.getLocalDeviceIds) : undefined;
+  let u = pickBrowserDevice(n, bridge.getSelectedDeviceId?.(), r);
+  if (u.kind !== "ask") {
+    weakMap.set(bridge, true);
+    return null;
+  }
+  let { candidates, localCount } = u;
+  let sliced = candidates.slice(0, 8);
+  let i = (d, m) =>
+    `${m + 1}. "${sanitizeBrowserLabel(d, m)}" (${osDisplayName(d.osPlatform)})${r?.get(d.deviceId) === "remembered" ? " \u2014 seen recently, not answering right now" : ""} \u2014 deviceId: ${d.deviceId}`;
+  let mapped = sliced.slice(0, localCount).map(i);
+  let mapped_2 = sliced.slice(localCount).map((d, m) => i(d, m + mapped.length));
+  let f =
+    localCount > 0
+      ? `Browsers on this computer:
 ${mapped.join(`
 `)}
 
@@ -205,14 +233,14 @@ ${
   mapped_2.join(`
 `) || (candidates.length === localCount ? "(none)" : "")
 }`
-        : `Connected browsers:
+      : `Connected browsers:
 ${mapped_2.join(`
-`)}`,
-    p =
-      candidates.length > sliced.length
-        ? `
+`)}`;
+  let p =
+    candidates.length > sliced.length
+      ? `
 \u2026and ${candidates.length - sliced.length} more not shown`
-        : "";
+      : "";
   return {
     content: [
       {
@@ -222,7 +250,7 @@ ${mapped_2.join(`
 ${f}${p}`,
       },
     ],
-    isError: !0,
+    isError: true,
   };
 }
 //@ chunk-w2264jxg.js:4418-4529 placement
@@ -232,46 +260,69 @@ function jsonForLog(e) {
   );
 }
 //@ chunk-w2264jxg.js:4529-4552 placement
-class k extends Error {}
+/**
+ * 工具被禁用时抛出的错误类型。
+ */
+class ChromeToolDisabledError extends Error {}
 //@ chunk-w2264jxg.js:4552-4675 placement
-function callBridgeTool(e, t, n, r, u) {
-  if (e.isDisabled?.()) return Promise.reject(new k(`disabled: ${n} not sent`));
-  return t.callTool(n, r, u);
+function callBridgeTool(host, bridge, n, r, u) {
+  if (host.isDisabled?.()) return Promise.reject(new ChromeToolDisabledError(`disabled: ${n} not sent`));
+  return bridge.callTool(n, r, u);
 }
 //@ chunk-w2264jxg.js:4675-5485 placement
 async function fetchActiveTab(e, t, n) {
   if (e.isDisabled?.()) return;
   try {
     if (!(await t.ensureConnected())) return;
-    let u = (await callBridgeTool(e, t, "tabs_context_mcp", {}, n ? { ...n, permissionMode: "ask" } : void 0))
-      ?.result?.content;
-    if (!Array.isArray(u)) return;
+    let content = (
+      await callBridgeTool(
+        e,
+        t,
+        "tabs_context_mcp",
+        {},
+        n
+          ? {
+              ...n,
+              permissionMode: "ask",
+            }
+          : undefined,
+      )
+    )?.result?.content;
+    if (!Array.isArray(content)) return;
     let s;
-    for (let i of u) {
+    for (let i of content) {
       if (typeof i !== "object" || i === null || i.type !== "text" || typeof i.text !== "string") continue;
       try {
         let parsed = JSON.parse(i.text);
         if (Array.isArray(parsed.availableTabs)) {
-          s = { ...parsed, availableTabs: parsed.availableTabs };
+          s = {
+            ...parsed,
+            availableTabs: parsed.availableTabs,
+          };
           break;
         }
       } catch {}
     }
     if (!s) return;
     let filtered = s.availableTabs.filter(
-        (availableTab) =>
-          typeof availableTab === "object" &&
-          availableTab !== null &&
-          typeof availableTab.tabId === "number" &&
-          typeof availableTab.url === "string",
-      ),
-      a =
-        typeof s.selectedTabId === "number"
-          ? filtered.find((i) => i.tabId === s.selectedTabId)
-          : filtered.length === 1
-            ? filtered[0]
-            : void 0;
-    return a ? { tabId: a.tabId, origin: new URL(a.url).origin } : void 0;
+      (availableTab) =>
+        typeof availableTab === "object" &&
+        availableTab !== null &&
+        typeof availableTab.tabId === "number" &&
+        typeof availableTab.url === "string",
+    );
+    let a =
+      typeof s.selectedTabId === "number"
+        ? filtered.find((i) => i.tabId === s.selectedTabId)
+        : filtered.length === 1
+          ? filtered[0]
+          : undefined;
+    return a
+      ? {
+          tabId: a.tabId,
+          origin: new URL(a.url).origin,
+        }
+      : undefined;
   } catch (error) {
     e.logger.debug(`[${e.serverName}] fetchActiveTab failed`, error);
     return;
@@ -280,83 +331,126 @@ async function fetchActiveTab(e, t, n) {
 //@ chunk-w2264jxg.js:5485-5614 placement
 function errorContentOf(e) {
   if (typeof e !== "object" || e === null) return "";
-  let n = e.error?.content;
-  return typeof n === "string" || Array.isArray(n) ? n : "";
+  let content = e.error?.content;
+  return typeof content === "string" || Array.isArray(content) ? content : "";
 }
+//@ chunk-w2264jxg.js:5614-6397 placement
 /**
  * 通过扩展的 computer 工具向指定标签页输入文字（跳过权限检查），可带 expected_origin；返回 {ok} 或失败原因（disabled/disconnected/origin_mismatch/tool_error/transport）。
  */
-//@ chunk-w2264jxg.js:5614-6397 placement
 async function typeIntoTabViaBridge(host, bridge, callOptions, tabId, text, expectedOrigin) {
-  if (host.isDisabled?.()) return { ok: !1, reason: "disabled" };
+  if (host.isDisabled?.())
+    return {
+      ok: false,
+      reason: "disabled",
+    };
   try {
-    if (!(await bridge.ensureConnected())) return { ok: !1, reason: "disconnected" };
+    if (!(await bridge.ensureConnected()))
+      return {
+        ok: false,
+        reason: "disconnected",
+      };
     let o = await callBridgeTool(
-        host,
-        bridge,
-        "computer",
-        {
-          action: "type",
-          text: text,
-          tabId: tabId,
-          ...(expectedOrigin !== void 0 ? { expected_origin: expectedOrigin } : {}),
-        },
-        { ...callOptions, permissionMode: "skip_all_permission_checks", onPermissionRequest: void 0 },
-      ),
-      a = typeof o === "object" && o !== null && !("error" in o) ? o.result : void 0,
-      i = typeof a === "object" && a !== null && (a.isError === !0 || a.is_error === !0);
-    if (a !== void 0 && a !== null && a !== !1 && !i) return { ok: !0 };
+      host,
+      bridge,
+      "computer",
+      {
+        action: "type",
+        text,
+        tabId,
+        ...(expectedOrigin !== undefined
+          ? {
+              expected_origin: expectedOrigin,
+            }
+          : {}),
+      },
+      {
+        ...callOptions,
+        permissionMode: "skip_all_permission_checks",
+        onPermissionRequest: undefined,
+      },
+    );
+    let a = typeof o === "object" && o !== null && !("error" in o) ? o.result : undefined;
+    let i = typeof a === "object" && a !== null && (a.isError === true || a.is_error === true);
+    if (a !== undefined && a !== null && a !== false && !i)
+      return {
+        ok: true,
+      };
     let c = i ? (a.content ?? "") : "";
     if ((contentText(errorContentOf(o)) || contentText(c)).startsWith("Origin mismatch"))
-      return { ok: !1, reason: "origin_mismatch" };
-    return { ok: !1, reason: "tool_error" };
+      return {
+        ok: false,
+        reason: "origin_mismatch",
+      };
+    return {
+      ok: false,
+      reason: "tool_error",
+    };
   } catch (error) {
-    return (
-      host.logger.debug(`[${host.serverName}] typeIntoTab failed`, error),
-      { ok: !1, reason: error instanceof k ? "disabled" : "transport" }
-    );
+    host.logger.debug(`[${host.serverName}] typeIntoTab failed`, error);
+    return {
+      ok: false,
+      reason: error instanceof ChromeToolDisabledError ? "disabled" : "transport",
+    };
   }
 }
 //@ chunk-w2264jxg.js:6397-6552 placement
-function hostToolContext(e, t, n, r) {
+function hostToolContext(host, bridge, callOptions, sessionId) {
   return {
-    sessionId: r,
-    getActiveTabOrigin: async () => (await fetchActiveTab(e, t, n))?.origin,
-    getActiveTab: () => fetchActiveTab(e, t, n),
-    typeIntoTab: (u, s, o) => typeIntoTabViaBridge(e, t, n, u, s, o),
+    sessionId,
+    getActiveTabOrigin: async () => (await fetchActiveTab(host, bridge, callOptions))?.origin,
+    getActiveTab: () => fetchActiveTab(host, bridge, callOptions),
+    typeIntoTab: (tabId, text, expectedOrigin) =>
+      typeIntoTabViaBridge(host, bridge, callOptions, tabId, text, expectedOrigin),
   };
 }
+//@ chunk-w2264jxg.js:6552-7042 placement
 /**
  * 从参数（含 browser_batch 内每个动作）中去掉 save_to_disk，并返回是否需要把截图落盘。
  */
-//@ chunk-w2264jxg.js:6552-7042 placement
-function stripSaveToDiskArgs(e, t) {
-  if (e === "browser_batch" && Array.isArray(t.actions)) {
-    let { save_to_disk: save_to_disk, ...s } = t,
-      o = save_to_disk === !0,
-      mapped = t.actions.map((action) => {
-        if (typeof action !== "object" || action === null) return action;
-        let l = action;
-        if (typeof l.input !== "object" || l.input === null) return action;
-        let { save_to_disk: save_to_disk, ...f } = l.input;
-        if (save_to_disk === !0 && l.name === "computer") o = !0;
-        return { ...l, input: f };
-      });
-    return { args: { ...s, actions: mapped }, wantsSave: o };
+function stripSaveToDiskArgs(toolName, rawArgs) {
+  if (toolName === "browser_batch" && Array.isArray(rawArgs.actions)) {
+    let { save_to_disk: saveToDisk, ...s } = rawArgs;
+    let wantsSave = saveToDisk === true;
+    let actions = rawArgs.actions.map((action) => {
+      if (typeof action !== "object" || action === null) return action;
+      let l = action;
+      if (typeof l.input !== "object" || l.input === null) return action;
+      let { save_to_disk: saveToDisk, ...f } = l.input;
+      if (saveToDisk === true && l.name === "computer") wantsSave = true;
+      return {
+        ...l,
+        input: f,
+      };
+    });
+    return {
+      args: {
+        ...s,
+        actions,
+      },
+      wantsSave,
+    };
   }
-  if (!("save_to_disk" in t)) return { args: t, wantsSave: !1 };
-  let { save_to_disk: save_to_disk, ...r } = t;
-  return { args: r, wantsSave: e === "computer" && save_to_disk === !0 };
+  if (!("save_to_disk" in rawArgs))
+    return {
+      args: rawArgs,
+      wantsSave: false,
+    };
+  let { save_to_disk: saveToDisk, ...r } = rawArgs;
+  return {
+    args: r,
+    wantsSave: toolName === "computer" && saveToDisk === true,
+  };
 }
+//@ chunk-w2264jxg.js:7042-7455 placement
 /**
  * 被宿主排除的工具（含 browser_batch 内的动作）返回 "Unknown tool" 错误；batch 内动作缺名或嵌套 batch 也报错。
  */
-//@ chunk-w2264jxg.js:7042-7455 placement
-function excludedToolError(e, t, n) {
-  let excludedTools = e.excludedTools;
+function excludedToolError(host, toolName, n) {
+  let excludedTools = host.excludedTools;
   if (!excludedTools) return;
-  if (excludedTools.has(t)) return `Unknown tool: ${t}`;
-  if (t !== "browser_batch") return;
+  if (excludedTools.has(toolName)) return `Unknown tool: ${toolName}`;
+  if (toolName !== "browser_batch") return;
   if (!Array.isArray(n.actions)) return "browser_batch: actions must be an array";
   for (let action of n.actions) {
     let s = action?.name;
@@ -367,193 +461,276 @@ function excludedToolError(e, t, n) {
   return;
 }
 //@ chunk-w2264jxg.js:7455-7604 placement
-function guardPermissionRequests(e, t) {
-  let n = t?.onPermissionRequest,
-    isDisabled = e.isDisabled;
-  if (!t || !n || !isDisabled) return t;
-  return { ...t, onPermissionRequest: async (u) => !isDisabled() && (await n(u)) && !isDisabled() };
+function guardPermissionRequests(host, callOptions) {
+  let onPermissionRequest = callOptions?.onPermissionRequest;
+  let isDisabled = host.isDisabled;
+  if (!callOptions || !onPermissionRequest || !isDisabled) return callOptions;
+  return {
+    ...callOptions,
+    onPermissionRequest: async (u) => !isDisabled() && (await onPermissionRequest(u)) && !isDisabled(),
+  };
 }
+//@ chunk-w2264jxg.js:7604-8608 placement
 /**
  * Claude in Chrome MCP 的工具调用入口：去 save_to_disk、排除检查，本地处理 switch_browser / list_connected_browsers / select_browser 与宿主工具，
  * 其余确保连接后经 socket 桥转发（navigate 前补 tabs_context），出错交给 chromeToolErrorResult。
  */
-//@ chunk-w2264jxg.js:7604-8608 placement
 var handleChromeToolCall = async (host, bridge, toolName, rawArgs, callOptions) => {
-  let { args: args, wantsSave: wantsSave } = stripSaveToDiskArgs(toolName, rawArgs);
-  if (host.isDisabled?.()) return h(`Unknown tool: ${toolName}`);
-  let a = guardPermissionRequests(host, callOptions),
-    i = excludedToolError(host, toolName, args);
-  if (i !== void 0) return h(i);
+  let { args, wantsSave } = stripSaveToDiskArgs(toolName, rawArgs);
+  if (host.isDisabled?.()) return chromeToolErrorResult(`Unknown tool: ${toolName}`);
+  let callOptions_2 = guardPermissionRequests(host, callOptions);
+  let text = excludedToolError(host, toolName, args);
+  if (text !== undefined) return chromeToolErrorResult(text);
   if (toolName === "switch_browser") return switchBrowser(host, bridge);
   if (toolName === "list_connected_browsers") return listConnectedBrowsers(host, bridge);
   if (toolName === "select_browser") return selectBrowser(host, bridge, args);
-  let l = a?.sessionScope?.sessionId ?? "";
+  let sessionId = callOptions_2?.sessionScope?.sessionId ?? "";
   if (host.handleHostTool && host.hostToolBypassesBrowser?.(toolName, args)) {
-    let handleHostTool = await host.handleHostTool(toolName, args, hostToolContext(host, bridge, a, l));
-    if (handleHostTool !== void 0) return handleHostTool;
+    let f = await host.handleHostTool(
+      toolName,
+      args,
+      hostToolContext(host, bridge, callOptions_2, sessionId),
+    );
+    if (f !== undefined) return f;
   }
-  let c = { args: args };
+  let state = {
+    args,
+  };
   try {
-    let ensureConnected = await bridge.ensureConnected();
-    if (
-      (host.logger.silly(
-        `[${host.serverName}] Server is connected: ${ensureConnected}. Received tool call: ${quoteTruncated(toolName)} with args: ${jsonForLog(args)}.`,
-      ),
-      ensureConnected)
-    ) {
-      if (host.isDisabled?.()) return h(`Unknown tool: ${toolName}`);
+    let f = await bridge.ensureConnected();
+    host.logger.silly(
+      `[${host.serverName}] Server is connected: ${f}. Received tool call: ${quoteTruncated(toolName)} with args: ${jsonForLog(args)}.`,
+    );
+    if (f) {
+      if (host.isDisabled?.()) return chromeToolErrorResult(`Unknown tool: ${toolName}`);
       let p = await browserSelectionPreflight(host, bridge);
       if (p) return p;
-      if (host.isDisabled?.()) return h(`Unknown tool: ${toolName}`);
+      if (host.isDisabled?.()) return chromeToolErrorResult(`Unknown tool: ${toolName}`);
       if (host.handleHostTool) {
-        let handleHostTool = await host.handleHostTool(toolName, args, hostToolContext(host, bridge, a, l));
-        if (handleHostTool !== void 0) return handleHostTool;
+        let d = await host.handleHostTool(
+          toolName,
+          args,
+          hostToolContext(host, bridge, callOptions_2, sessionId),
+        );
+        if (d !== undefined) return d;
       }
-      if (((c = await frontLoadTabContext(host, bridge, toolName, args, a)), c.error))
-        return appendTabContext(c, c.error);
-      let g = await forwardToolCall(host, bridge, toolName, c.args, a);
-      if (wantsSave) g = await saveScreenshotsToDisk(g, host);
-      return appendTabContext(c, g);
+      state = await frontLoadTabContext(host, bridge, toolName, args, callOptions_2);
+      if (state.error) return appendTabContext(state, state.error);
+      let result = await forwardToolCall(host, bridge, toolName, state.args, callOptions_2);
+      if (wantsSave) result = await saveScreenshotsToDisk(result, host);
+      return appendTabContext(state, result);
     }
-    return b(host);
+    return disconnectedResult(host);
   } catch (error) {
-    return appendTabContext(c, chromeToolErrorResult(error, toolName, host));
+    return appendTabContext(state, chromeToolErrorResult_2(error, toolName, host));
   }
 };
 //@ chunk-w2264jxg.js:8608-8690 placement
-function h(e, t) {
-  return { content: [{ type: "text", text: e }], isError: !0, ...(t && { _meta: t }) };
+/**
+ * 构造给模型的 Chrome 工具错误结果（文本 + isError）。
+ */
+function chromeToolErrorResult(text, t) {
+  return {
+    content: [
+      {
+        type: "text",
+        text,
+      },
+    ],
+    isError: true,
+    ...(t && {
+      _meta: t,
+    }),
+  };
 }
+//@ chunk-w2264jxg.js:8690-10253 placement
 /**
  * 把工具调用异常映射为给模型的错误结果：禁用、未连接扩展、路由未确认/超时、被取代、发送失败等，各给出不同指引。
  */
-//@ chunk-w2264jxg.js:8690-10253 placement
-function chromeToolErrorResult(error, toolName, host) {
-  if ((host.logger.info(`[${host.serverName}] Error calling tool:`, error), error instanceof k))
-    return h(`Unknown tool: ${toolName}`);
-  if (error instanceof SocketConnectionError || error instanceof NoExtensionConnectedError) return b(host);
-  if (error instanceof ToolCallTimeoutError && error.routingAckReceived === !1)
-    return h(
+function chromeToolErrorResult_2(error, toolName, host) {
+  host.logger.info(`[${host.serverName}] Error calling tool:`, error);
+  if (error instanceof ChromeToolDisabledError) return chromeToolErrorResult(`Unknown tool: ${toolName}`);
+  if (error instanceof SocketConnectionError || error instanceof NoExtensionConnectedError)
+    return disconnectedResult(host);
+  if (error instanceof ToolCallTimeoutError && error.routingAckReceived === false)
+    return chromeToolErrorResult(
       `The "${toolName}" call was never delivered to the Chrome extension: the computer running that browser appears to be offline or asleep, or Chrome is not running there. This is a connection problem, not a permission or site-access issue. Ask the user to make sure that computer is awake and Chrome is open with the Claude extension, then retry.`,
-      { isBridgeTimeout: !0 },
+      {
+        isBridgeTimeout: true,
+      },
     );
   if (error instanceof ToolCallTimeoutError)
-    return h(toolTimeoutMessage(toolName, error), { isBridgeTimeout: !0 });
+    return chromeToolErrorResult(toolTimeoutMessage(toolName, error), {
+      isBridgeTimeout: true,
+    });
   if (error instanceof ToolCallSupersededError)
-    return h(
+    return chromeToolErrorResult(
       `The "${toolName}" tool call was displaced by a newer call on the same browser connection before its result arrived. ` +
         'The action may already have executed \u2014 check the page state (e.g. "get_page_text") before repeating it.',
     );
   if (error instanceof ExtensionDisconnectedMidCallError)
-    return h(
+    return chromeToolErrorResult(
       `The "${toolName}" tool call failed because the Chrome extension disconnected mid-operation. This is usually transient (Chrome service worker restart, tab closed, network blip) and the extension often reconnects automatically. Retry the same tool call in a few seconds. If it keeps failing, ask the user to switch to Chrome (which wakes the extension) or check that the extension is still logged in.`,
     );
   if (error instanceof RequestTooLargeError)
-    return h(`The "${toolName}" tool call was not sent: ${error.message} Do not retry the identical call.`);
-  return h(
+    return chromeToolErrorResult(
+      `The "${toolName}" tool call was not sent: ${error.message} Do not retry the identical call.`,
+    );
+  return chromeToolErrorResult(
     `The "${toolName}" tool call failed unexpectedly. This is usually transient \u2014 retry the same call in a few seconds.`,
   );
 }
 //@ chunk-w2264jxg.js:10253-11036 placement
-function toolTimeoutMessage(e, t) {
-  let n = `The "${e}" tool did not respond in time.`,
-    r = 'a lighter operation (e.g., "get_page_text" instead of a screenshot)';
-  if (t.routingAckReceived === void 0)
+function toolTimeoutMessage(toolName, error) {
+  let n = `The "${toolName}" tool did not respond in time.`;
+  let r = 'a lighter operation (e.g., "get_page_text" instead of a screenshot)';
+  if (error.routingAckReceived === undefined)
     return `${n} The page or Chrome may be unresponsive, or Chrome may be waiting for the user. Try a lighter operation (e.g., "get_page_text" instead of a screenshot), or ask the user to check Chrome.`;
   return `${n} If Chrome is on another computer, that computer may be closed or asleep. The page may also be loading or unresponsive, or Chrome may be waiting for the user. Try a lighter operation (e.g., "get_page_text" instead of a screenshot) once. If that also gets no response, ask the user to check that the computer running Chrome is awake, that Chrome is open, and that nothing in Chrome is waiting for them.`;
 }
+//@ chunk-w2264jxg.js:11036-11462 placement
 /**
  * 从 tabs_context_mcp 结果文本中解析出第一个 tabId、tabGroupId 和原始 JSON。
  */
-//@ chunk-w2264jxg.js:11036-11462 placement
 function parseTabsContextResult(e) {
-  let t = e?.result?.content;
-  if (!Array.isArray(t)) return {};
-  for (let n of t) {
+  let content = e?.result?.content;
+  if (!Array.isArray(content)) return {};
+  for (let n of content) {
     if (typeof n !== "object" || n === null || n.type !== "text" || typeof n.text !== "string") continue;
     let text = n.text;
     try {
       let parsed = JSON.parse(text);
       if (!Array.isArray(parsed.availableTabs)) continue;
-      let s = parsed.availableTabs.find((availableTab) => typeof availableTab?.tabId === "number")?.tabId,
-        o = typeof parsed.tabGroupId === "number" ? parsed.tabGroupId : void 0;
-      return { tabId: s, tabGroupId: o, json: text };
+      let tabId = parsed.availableTabs.find((availableTab) => typeof availableTab?.tabId === "number")?.tabId;
+      let tabGroupId = typeof parsed.tabGroupId === "number" ? parsed.tabGroupId : undefined;
+      return {
+        tabId,
+        tabGroupId,
+        json: text,
+      };
     } catch {}
   }
   return {};
 }
 //@ chunk-w2264jxg.js:11462-11488 placement
-var F = Symbol("timed-out");
+/**
+ * 表示“超时”的特殊标记值。
+ */
+var TIMED_OUT_SENTINEL = Symbol("timed-out");
 //@ chunk-w2264jxg.js:11488-11636 placement
 async function raceTimeoutSentinel(e, t) {
   let n;
   try {
     return await Promise.race([
       e,
-      new Promise((r) => {
-        n = setTimeout(() => r(F), t);
+      new Promise((resolve) => {
+        n = setTimeout(() => resolve(TIMED_OUT_SENTINEL), t);
       }),
     ]);
   } finally {
-    if (n !== void 0) clearTimeout(n);
+    if (n !== undefined) clearTimeout(n);
   }
 }
 //@ chunk-w2264jxg.js:11636-11661 placement
-var weakMap_2 = new WeakMap(),
-  O = 8000;
+/**
+ * 隐式取标签页的超时（8 秒）。
+ */
+var weakMap_2 = new WeakMap();
+var MAX_IMPLICIT_TABS_TIMEOUT_MS = 8000;
+//@ chunk-w2264jxg.js:11661-12885 placement
 /**
  * navigate 未带 tabId 时，按会话先隐式调用 tabs_context_mcp（同会话复用进行中的请求、带超时）取得标签页，再补到参数里；back/forward 必须显式给 tabId。
  */
-//@ chunk-w2264jxg.js:11661-12885 placement
 async function frontLoadTabContext(host, bridge, toolName, args, callOptions) {
-  if (toolName !== "navigate" || (args.tabId !== null && args.tabId !== void 0)) return { args: args };
+  if (toolName !== "navigate" || (args.tabId !== null && args.tabId !== undefined))
+    return {
+      args,
+    };
   let s = typeof args.url === "string" ? args.url.trim().toLowerCase() : "";
   if (s === "back" || s === "forward")
     return {
-      args: args,
-      error: h('tabId is required for url:"back"/"forward". Call tabs_context_mcp first to get a tab ID.'),
+      args,
+      error: chromeToolErrorResult(
+        'tabId is required for url:"back"/"forward". Call tabs_context_mcp first to get a tab ID.',
+      ),
     };
-  let o = callOptions?.sessionScope?.sessionId;
-  if (!s || !o) return { args: args };
+  let sessionId = callOptions?.sessionScope?.sessionId;
+  if (!s || !sessionId)
+    return {
+      args,
+    };
   let a = weakMap_2.get(bridge);
-  if (!a) ((a = new Map()), weakMap_2.set(bridge, a));
-  let i = a.get(o);
-  if (!i)
-    ((i = callBridgeTool(
+  if (!a) {
+    a = new Map();
+    weakMap_2.set(bridge, a);
+  }
+  let i = a.get(sessionId);
+  if (!i) {
+    i = callBridgeTool(
       host,
       bridge,
       "tabs_context_mcp",
-      { createIfEmpty: !0 },
-      { ...callOptions, permissionMode: "ask" },
+      {
+        createIfEmpty: true,
+      },
+      {
+        ...callOptions,
+        permissionMode: "ask",
+      },
     ).finally(() => {
-      if (a.get(o) === i) a.delete(o);
-    })),
-      a.set(o, i));
-  let l = await raceTimeoutSentinel(i, O);
-  if (l === F)
+      if (a.get(sessionId) === i) a.delete(sessionId);
+    });
+    a.set(sessionId, i);
+  }
+  let l = await raceTimeoutSentinel(i, MAX_IMPLICIT_TABS_TIMEOUT_MS);
+  if (l === TIMED_OUT_SENTINEL)
     return {
-      args: args,
-      error: h(
-        `The hidden tabs_context_mcp lookup did not respond within ${O / 1000}s. The Chrome extension may be slow to start, or the computer running that browser may be offline or asleep. Retry navigate, or call tabs_context_mcp explicitly to get a tabId first.`,
-        { isFrontLoadBoundExceeded: !0 },
+      args,
+      error: chromeToolErrorResult(
+        `The hidden tabs_context_mcp lookup did not respond within ${MAX_IMPLICIT_TABS_TIMEOUT_MS / 1000}s. The Chrome extension may be slow to start, or the computer running that browser may be offline or asleep. Retry navigate, or call tabs_context_mcp explicitly to get a tabId first.`,
+        {
+          isFrontLoadBoundExceeded: true,
+        },
       ),
     };
-  let c = l?.error;
-  if (c) {
-    let d = Array.isArray(c.content)
-      ? c.content
-      : [{ type: "text", text: "tabs_context_mcp returned an error." }];
-    if (j(d)) host.onAuthenticationError();
-    return { args: args, error: { content: d, isError: !0 } };
+  let error = l?.error;
+  if (error) {
+    let d = Array.isArray(error.content)
+      ? error.content
+      : [
+          {
+            type: "text",
+            text: "tabs_context_mcp returned an error.",
+          },
+        ];
+    if (isReauthenticatedText(d)) host.onAuthenticationError();
+    return {
+      args,
+      error: {
+        content: d,
+        isError: true,
+      },
+    };
   }
-  let { tabId: tabId, tabGroupId: tabGroupId, json: json } = parseTabsContextResult(l);
-  if (tabId === void 0) return { args: args, tabGroupId: tabGroupId };
-  return { args: { ...args, tabId: tabId }, tabContextJson: json, tabGroupId: tabGroupId };
+  let { tabId, tabGroupId, json } = parseTabsContextResult(l);
+  if (tabId === undefined)
+    return {
+      args,
+      tabGroupId,
+    };
+  return {
+    args: {
+      ...args,
+      tabId,
+    },
+    tabContextJson: json,
+    tabGroupId,
+  };
 }
+//@ chunk-w2264jxg.js:12885-13397 placement
 /**
  * 给 Chrome 工具结果附上预载的标签页上下文（并提醒任务结束前关闭本组标签页），以及在 _meta 中记录预载标签组 id。
  */
-//@ chunk-w2264jxg.js:12885-13397 placement
 function appendTabContext(state, result) {
   let augmented = result;
   if (state.tabContextJson && !augmented.isError)
@@ -570,37 +747,69 @@ Tabs in this group were opened for this task and are yours to clean up: close ea
         },
       ],
     };
-  if (state.tabGroupId !== void 0)
-    augmented = { ...augmented, _meta: { ...augmented._meta, frontLoadedTabGroupId: state.tabGroupId } };
+  if (state.tabGroupId !== undefined)
+    augmented = {
+      ...augmented,
+      _meta: {
+        ...augmented._meta,
+        frontLoadedTabGroupId: state.tabGroupId,
+      },
+    };
   return augmented;
 }
+//@ chunk-w2264jxg.js:13397-14705 placement
 /**
  * 经 socket 桥调用扩展工具并把结果规范成 MCP 内容：处理错误内容、认证失效回调、图片/文本内容与 notices 元数据。
  */
-//@ chunk-w2264jxg.js:13397-14705 placement
 async function forwardToolCall(host, bridge, toolName, args, callOptions) {
   let s = await callBridgeTool(host, bridge, toolName, args, callOptions);
-  if (
-    (host.logger.silly(`[${host.serverName}] Received result from socket bridge: ${jsonForLog(s)}`),
-    s === null || s === void 0)
-  )
-    return { content: [{ type: "text", text: "Tool execution completed" }] };
-  let { result: o, error: error, notices: notices } = s,
-    l = Array.isArray(notices) && notices.length > 0 ? { notices: notices } : void 0,
-    c = error || o,
-    f = !!error;
-  if (!c) return { content: [{ type: "text", text: "Tool execution completed" }], ...(l && { _meta: l }) };
-  if (f && j(c.content)) host.onAuthenticationError();
-  let { content: content } = c;
+  host.logger.silly(`[${host.serverName}] Received result from socket bridge: ${jsonForLog(s)}`);
+  if (s === null || s === undefined)
+    return {
+      content: [
+        {
+          type: "text",
+          text: "Tool execution completed",
+        },
+      ],
+    };
+  let { result: o, error, notices } = s;
+  let l =
+    Array.isArray(notices) && notices.length > 0
+      ? {
+          notices,
+        }
+      : undefined;
+  let c = error || o;
+  let f = !!error;
+  if (!c)
+    return {
+      content: [
+        {
+          type: "text",
+          text: "Tool execution completed",
+        },
+      ],
+      ...(l && {
+        _meta: l,
+      }),
+    };
+  if (f && isReauthenticatedText(c.content)) host.onAuthenticationError();
+  let { content } = c;
   if (content && Array.isArray(content)) {
     if (f)
       return {
         content: content.map((d) => {
           if (typeof d === "object" && d !== null && "type" in d) return d;
-          return { type: "text", text: String(d) };
+          return {
+            type: "text",
+            text: String(d),
+          };
         }),
-        isError: !0,
-        ...(l && { _meta: l }),
+        isError: true,
+        ...(l && {
+          _meta: l,
+        }),
       };
     return {
       content: content.map((d) => {
@@ -614,33 +823,73 @@ async function forwardToolCall(host, bridge, toolName, args, callOptions) {
             };
         }
         if (typeof d === "object" && d !== null && "type" in d) return d;
-        return { type: "text", text: String(d) };
+        return {
+          type: "text",
+          text: String(d),
+        };
       }),
       isError: f,
-      ...(l && { _meta: l }),
+      ...(l && {
+        _meta: l,
+      }),
     };
   }
   if (typeof content === "string")
-    return { content: [{ type: "text", text: content }], isError: f, ...(l && { _meta: l }) };
-  return (
-    host.logger.warn(`[${host.serverName}] Unexpected result format from socket bridge`, s),
-    { content: [{ type: "text", text: JSON.stringify(s) }], isError: f, ...(l && { _meta: l }) }
-  );
+    return {
+      content: [
+        {
+          type: "text",
+          text: content,
+        },
+      ],
+      isError: f,
+      ...(l && {
+        _meta: l,
+      }),
+    };
+  host.logger.warn(`[${host.serverName}] Unexpected result format from socket bridge`, s);
+  return {
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify(s),
+      },
+    ],
+    isError: f,
+    ...(l && {
+      _meta: l,
+    }),
+  };
 }
 //@ chunk-w2264jxg.js:14705-14783 placement
-function b(e) {
-  return { content: [{ type: "text", text: e.onToolCallDisconnected() }] };
+/**
+ * 扩展未连接时的结果文本。
+ */
+function disconnectedResult(e) {
+  return {
+    content: [
+      {
+        type: "text",
+        text: e.onToolCallDisconnected(),
+      },
+    ],
+  };
 }
 //@ chunk-w2264jxg.js:14783-15520 placement
-async function switchBrowser(e, t) {
-  if (!e.bridgeConfig)
+async function switchBrowser(host, bridge) {
+  if (!host.bridgeConfig)
     return {
-      content: [{ type: "text", text: "Browser switching is only available with bridge connections." }],
-      isError: !0,
+      content: [
+        {
+          type: "text",
+          text: "Browser switching is only available with bridge connections.",
+        },
+      ],
+      isError: true,
     };
-  if (!(await t.ensureConnected())) return b(e);
-  if (e.isDisabled?.()) return h("Unknown tool: switch_browser");
-  let r = (await t.switchBrowser?.()) ?? null;
+  if (!(await bridge.ensureConnected())) return disconnectedResult(host);
+  if (host.isDisabled?.()) return chromeToolErrorResult("Unknown tool: switch_browser");
+  let r = (await bridge.switchBrowser?.()) ?? null;
   if (r === "no_other_browsers")
     return {
       content: [
@@ -649,13 +898,19 @@ async function switchBrowser(e, t) {
           text: "No other browsers available to switch to. Open Chrome with the Claude extension in another browser to switch.",
         },
       ],
-      isError: !1,
+      isError: false,
     };
-  if (r)
-    return (
-      weakMap.set(t, !0),
-      { content: [{ type: "text", text: `Selected browser "${sanitizeBrowserLabel(r, 0)}".` }] }
-    );
+  if (r) {
+    weakMap.set(bridge, true);
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Selected browser "${sanitizeBrowserLabel(r, 0)}".`,
+        },
+      ],
+    };
+  }
   return {
     content: [
       {
@@ -663,40 +918,57 @@ async function switchBrowser(e, t) {
         text: "No browser responded within the timeout. Make sure Chrome is open with the Claude extension installed, then try again.",
       },
     ],
-    isError: !0,
+    isError: true,
   };
 }
 //@ chunk-w2264jxg.js:15520-16223 placement
-async function listConnectedBrowsers(e, t) {
-  if (!e.bridgeConfig || !t.listConnectedExtensions)
+async function listConnectedBrowsers(options, selector) {
+  if (!options.bridgeConfig || !selector.listConnectedExtensions)
     return {
-      content: [{ type: "text", text: "Listing browsers is only available with bridge connections." }],
-      isError: !0,
+      content: [
+        {
+          type: "text",
+          text: "Listing browsers is only available with bridge connections.",
+        },
+      ],
+      isError: true,
     };
-  if (!(await t.ensureConnected())) return b(e);
-  if (e.isDisabled?.()) return h("Unknown tool: list_connected_browsers");
-  let listConnectedExtensions = await t.listConnectedExtensions(),
-    u = pickBrowserDevice(
-      listConnectedExtensions,
-      t.getSelectedDeviceId?.(),
-      listConnectedExtensions.length > 1 ? await safeCallPromise(e.getLocalDeviceIds) : void 0,
-    ),
-    s = u.kind === "select" ? u.extension.deviceId : void 0,
-    mapped = listConnectedExtensions.map((i, l) => ({
-      ...i,
-      name: browserDisplayName(i, l),
-      osPlatform: i.osPlatform === void 0 ? void 0 : OS_DISPLAY_NAMES.get(i.osPlatform),
-      ...(i.deviceId === s && { inUse: !0 }),
-    })),
-    a = [{ type: "text", text: JSON.stringify(mapped) }];
-  if (listConnectedExtensions.length > 1)
-    a.push({ type: "text", text: describeBrowserSelection(e, t, mapped, u) });
-  return { content: a };
+  if (!(await selector.ensureConnected())) return disconnectedResult(options);
+  if (options.isDisabled?.()) return chromeToolErrorResult("Unknown tool: list_connected_browsers");
+  let r = await selector.listConnectedExtensions();
+  let decision = pickBrowserDevice(
+    r,
+    selector.getSelectedDeviceId?.(),
+    r.length > 1 ? await safeCallPromise(options.getLocalDeviceIds) : undefined,
+  );
+  let deviceId = decision.kind === "select" ? decision.extension.deviceId : undefined;
+  let browsers = r.map((i, l) => ({
+    ...i,
+    name: browserDisplayName(i, l),
+    osPlatform: i.osPlatform === undefined ? undefined : OS_DISPLAY_NAMES.get(i.osPlatform),
+    ...(i.deviceId === deviceId && {
+      inUse: true,
+    }),
+  }));
+  let a = [
+    {
+      type: "text",
+      text: JSON.stringify(browsers),
+    },
+  ];
+  if (r.length > 1)
+    a.push({
+      type: "text",
+      text: describeBrowserSelection(options, selector, browsers, decision),
+    });
+  return {
+    content: a,
+  };
 }
+//@ chunk-w2264jxg.js:16223-17098 placement
 /**
  * 描述多浏览器连接时的选择情况：已选定（本机唯一、本会话正在用或上次选的）时说明无需询问；需询问时提示先列出本机浏览器，再按预检说明让用户选择。
  */
-//@ chunk-w2264jxg.js:16223-17098 placement
 function describeBrowserSelection(options, selector, browsers, decision) {
   if (decision.kind === "select") {
     let selectionClause = "is the one on this computer and will be used";
@@ -704,7 +976,7 @@ function describeBrowserSelection(options, selector, browsers, decision) {
       selectionClause = selector.hasActiveSelection?.()
         ? "is the one in use for this session"
         : "is the one picked last and will be used";
-    let index = browsers.findIndex((o) => o.deviceId === decision.extension.deviceId);
+    let index = browsers.findIndex((browser) => browser.deviceId === decision.extension.deviceId);
     return `${browsers.length} browsers are connected; "${sanitizeBrowserLabel(decision.extension, index)}" (deviceId ${decision.extension.deviceId}) ${selectionClause}. No question is needed unless the user wants a different browser (then select_browser with its deviceId, or switch_browser).`;
   }
   if (decision.kind === "ask" && decision.localCount > 0)
@@ -712,35 +984,43 @@ function describeBrowserSelection(options, selector, browsers, decision) {
   return `${browsers.length} browsers are connected and none is selected for this session. ${browserPreflightInstruction(options.askUserToolName)}`;
 }
 //@ chunk-w2264jxg.js:17098-17836 placement
-async function selectBrowser(e, t, n) {
-  let r = typeof n.deviceId === "string" ? n.deviceId : "";
-  if (!e.bridgeConfig || !t.selectExtensionById || !t.listConnectedExtensions || !r)
+async function selectBrowser(host, bridge, n) {
+  let deviceId = typeof n.deviceId === "string" ? n.deviceId : "";
+  if (!host.bridgeConfig || !bridge.selectExtensionById || !bridge.listConnectedExtensions || !deviceId)
     return {
       content: [
-        { type: "text", text: "select_browser requires a bridge connection and a deviceId argument." },
+        {
+          type: "text",
+          text: "select_browser requires a bridge connection and a deviceId argument.",
+        },
       ],
-      isError: !0,
+      isError: true,
     };
-  if (!(await t.ensureConnected())) return b(e);
-  let listConnectedExtensions = await t.listConnectedExtensions(),
-    found = listConnectedExtensions.find((i) => i.deviceId === r);
+  if (!(await bridge.ensureConnected())) return disconnectedResult(host);
+  let s = await bridge.listConnectedExtensions();
+  let found = s.find((i) => i.deviceId === deviceId);
   if (!found)
     return {
       content: [
         {
           type: "text",
-          text: `No connected browser has deviceId "${r}". Call list_connected_browsers to see currently connected browsers.`,
+          text: `No connected browser has deviceId "${deviceId}". Call list_connected_browsers to see currently connected browsers.`,
         },
       ],
-      isError: !0,
+      isError: true,
     };
-  if (e.isDisabled?.()) return h("Unknown tool: select_browser");
-  let index = listConnectedExtensions.indexOf(found);
-  return (
-    t.selectExtensionById(r, browserDisplayName(found, index)),
-    weakMap.set(t, !0),
-    { content: [{ type: "text", text: `Selected browser "${sanitizeBrowserLabel(found, index)}".` }] }
-  );
+  if (host.isDisabled?.()) return chromeToolErrorResult("Unknown tool: select_browser");
+  let index = s.indexOf(found);
+  bridge.selectExtensionById(deviceId, browserDisplayName(found, index));
+  weakMap.set(bridge, true);
+  return {
+    content: [
+      {
+        type: "text",
+        text: `Selected browser "${sanitizeBrowserLabel(found, index)}".`,
+      },
+    ],
+  };
 }
 //@ chunk-w2264jxg.js:17836-18045 placement
 function contentText(e) {
@@ -754,8 +1034,10 @@ function contentText(e) {
     .join(" ");
 }
 //@ chunk-w2264jxg.js:18045-18114 placement
-function j(e) {
+/**
+ * 判断结果文本是否提示已重新认证。
+ */
+function isReauthenticatedText(e) {
   return contentText(e).toLowerCase().includes("re-authenticated");
 }
-
-export { W$r, handleChromeToolCall, parseTabsContextResult };
+export { releaseBrowserSelection, handleChromeToolCall, parseTabsContextResult };

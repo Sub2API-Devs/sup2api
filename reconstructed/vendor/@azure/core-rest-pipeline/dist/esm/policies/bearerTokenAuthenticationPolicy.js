@@ -7,182 +7,182 @@
  */
 import { Xn } from "./tracingPolicy.js";
 import { ut } from "../../../../../@typespec/ts-http-runtime/dist/esm/policies/agentPolicy.js";
-import { gd } from "../util/tokenCycler.js";
+import { createTokenCycler } from "../util/tokenCycler.js";
 
 //@ chunk-mrx6y2r5.js:64307-64348 esm-fingerprint
-var BEARERTOKENAUTHENTICATIONPOLICY = "bearerTokenAuthenticationPolicy";
+var bearerTokenAuthenticationPolicyName = "bearerTokenAuthenticationPolicy";
 //@ chunk-mrx6y2r5.js:64348-64466 esm-fingerprint
-async function Zo(e, t) {
+async function trySendRequest(request, next) {
   try {
-    return [await t(e), void 0];
-  } catch (error) {
-    if (Xn(error) && error.response) return [error.response, error];
-    else throw error;
+    return [await next(request), undefined];
+  } catch (e) {
+    if (Xn(e) && e.response) return [e.response, e];
+    else throw e;
   }
 }
 //@ chunk-mrx6y2r5.js:64466-64684 esm-fingerprint
-async function Fp(e) {
-  let { scopes: scopes, getAccessToken: getAccessToken, request: request } = e,
-    o = { abortSignal: request.abortSignal, tracingOptions: request.tracingOptions, enableCae: !0 },
-    i = await getAccessToken(scopes, o);
-  if (i) e.request.headers.set("Authorization", `Bearer ${i.token}`);
+async function defaultAuthorizeRequest(options) {
+  let { scopes, getAccessToken, request } = options;
+  let getTokenOptions = {
+    abortSignal: request.abortSignal,
+    tracingOptions: request.tracingOptions,
+    enableCae: true,
+  };
+  let accessToken = await getAccessToken(scopes, getTokenOptions);
+  if (accessToken) options.request.headers.set("Authorization", `Bearer ${accessToken.token}`);
 }
 //@ chunk-mrx6y2r5.js:64684-64756 esm-fingerprint
-function yd(e) {
-  return e.status === 401 && e.headers.has("WWW-Authenticate");
+function isChallengeResponse(response) {
+  return response.status === 401 && response.headers.has("WWW-Authenticate");
 }
 //@ chunk-mrx6y2r5.js:64756-64979 esm-fingerprint
-async function Td(e, t) {
-  var r;
-  let { scopes: scopes } = e,
-    accessToken = await e.getAccessToken(scopes, { enableCae: !0, claims: t });
-  if (!accessToken) return !1;
-  return (
-    e.request.headers.set(
-      "Authorization",
-      `${(r = accessToken.tokenType) !== null && r !== void 0 ? r : "Bearer"} ${accessToken.token}`,
-    ),
-    !0
+async function authorizeRequestOnCaeChallenge(onChallengeOptions, caeClaims) {
+  var _a;
+  let { scopes } = onChallengeOptions;
+  let accessToken = await onChallengeOptions.getAccessToken(scopes, {
+    enableCae: true,
+    claims: caeClaims,
+  });
+  if (!accessToken) return false;
+  onChallengeOptions.request.headers.set(
+    "Authorization",
+    `${(_a = accessToken.tokenType) !== null && _a !== undefined ? _a : "Bearer"} ${accessToken.token}`,
   );
+  return true;
 }
 //@ chunk-mrx6y2r5.js:64979-66674 esm-fingerprint
-function Zn(e) {
-  var t, r, n;
-  let { credential: credential, scopes: scopes, challengeCallbacks: challengeCallbacks } = e,
-    a = e.logger || ut,
-    c = {
-      authorizeRequest:
-        (r =
-          (t =
-            challengeCallbacks === null || challengeCallbacks === void 0
-              ? void 0
-              : challengeCallbacks.authorizeRequest) === null || t === void 0
-            ? void 0
-            : t.bind(challengeCallbacks)) !== null && r !== void 0
-          ? r
-          : Fp,
-      authorizeRequestOnChallenge:
-        (n =
-          challengeCallbacks === null || challengeCallbacks === void 0
-            ? void 0
-            : challengeCallbacks.authorizeRequestOnChallenge) === null || n === void 0
-          ? void 0
-          : n.bind(challengeCallbacks),
-    },
-    l = credential ? gd(credential) : () => Promise.resolve(null);
+function bearerTokenAuthenticationPolicy(options) {
+  var _a;
+  var _b;
+  var _c;
+  let { credential, scopes, challengeCallbacks } = options;
+  let logger = options.logger || ut;
+  let callbacks = {
+    authorizeRequest:
+      (_b =
+        (_a =
+          challengeCallbacks === null || challengeCallbacks === undefined
+            ? undefined
+            : challengeCallbacks.authorizeRequest) === null || _a === undefined
+          ? undefined
+          : _a.bind(challengeCallbacks)) !== null && _b !== undefined
+        ? _b
+        : defaultAuthorizeRequest,
+    authorizeRequestOnChallenge:
+      (_c =
+        challengeCallbacks === null || challengeCallbacks === undefined
+          ? undefined
+          : challengeCallbacks.authorizeRequestOnChallenge) === null || _c === undefined
+        ? undefined
+        : _c.bind(challengeCallbacks),
+  };
+  let getAccessToken = credential ? createTokenCycler(credential) : () => Promise.resolve(null);
   return {
-    name: BEARERTOKENAUTHENTICATIONPOLICY,
-    async sendRequest(d, u) {
-      if (!d.url.toLowerCase().startsWith("https://"))
+    name: bearerTokenAuthenticationPolicyName,
+    async sendRequest(request, next) {
+      if (!request.url.toLowerCase().startsWith("https://"))
         throw Error("Bearer token authentication is not permitted for non-TLS protected (non-https) URLs.");
-      await c.authorizeRequest({
+      await callbacks.authorizeRequest({
         scopes: Array.isArray(scopes) ? scopes : [scopes],
-        request: d,
-        getAccessToken: l,
-        logger: a,
+        request,
+        getAccessToken,
+        logger,
       });
-      let m, p, y;
-      if ((([m, p] = await Zo(d, u)), yd(m))) {
-        let T = Ed(m.headers.get("WWW-Authenticate"));
-        if (T) {
-          let I;
+      let response;
+      let error;
+      let shouldSendRequest;
+      [response, error] = await trySendRequest(request, next);
+      if (isChallengeResponse(response)) {
+        let claims = getCaeChallengeClaims(response.headers.get("WWW-Authenticate"));
+        if (claims) {
+          let parsedClaim;
           try {
-            I = atob(T);
-          } catch (error) {
-            return (
-              a.warning(
-                `The WWW-Authenticate header contains "claims" that cannot be parsed. Unable to perform the Continuous Access Evaluation authentication flow. Unparsable claims: ${T}`,
-              ),
-              m
+            parsedClaim = atob(claims);
+          } catch (e) {
+            logger.warning(
+              `The WWW-Authenticate header contains "claims" that cannot be parsed. Unable to perform the Continuous Access Evaluation authentication flow. Unparsable claims: ${claims}`,
             );
+            return response;
           }
-          if (
-            ((y = await Td(
-              {
-                scopes: Array.isArray(scopes) ? scopes : [scopes],
-                response: m,
-                request: d,
-                getAccessToken: l,
-                logger: a,
-              },
-              I,
-            )),
-            y)
-          )
-            [m, p] = await Zo(d, u);
-        } else if (c.authorizeRequestOnChallenge) {
-          if (
-            ((y = await c.authorizeRequestOnChallenge({
+          shouldSendRequest = await authorizeRequestOnCaeChallenge(
+            {
               scopes: Array.isArray(scopes) ? scopes : [scopes],
-              request: d,
-              response: m,
-              getAccessToken: l,
-              logger: a,
-            })),
-            y)
-          )
-            [m, p] = await Zo(d, u);
-          if (yd(m)) {
-            if (((T = Ed(m.headers.get("WWW-Authenticate"))), T)) {
-              let I;
+              response,
+              request,
+              getAccessToken,
+              logger,
+            },
+            parsedClaim,
+          );
+          if (shouldSendRequest) [response, error] = await trySendRequest(request, next);
+        } else if (callbacks.authorizeRequestOnChallenge) {
+          shouldSendRequest = await callbacks.authorizeRequestOnChallenge({
+            scopes: Array.isArray(scopes) ? scopes : [scopes],
+            request,
+            response,
+            getAccessToken,
+            logger,
+          });
+          if (shouldSendRequest) [response, error] = await trySendRequest(request, next);
+          if (isChallengeResponse(response)) {
+            claims = getCaeChallengeClaims(response.headers.get("WWW-Authenticate"));
+            if (claims) {
+              let parsedClaim;
               try {
-                I = atob(T);
-              } catch (error) {
-                return (
-                  a.warning(
-                    `The WWW-Authenticate header contains "claims" that cannot be parsed. Unable to perform the Continuous Access Evaluation authentication flow. Unparsable claims: ${T}`,
-                  ),
-                  m
+                parsedClaim = atob(claims);
+              } catch (e) {
+                logger.warning(
+                  `The WWW-Authenticate header contains "claims" that cannot be parsed. Unable to perform the Continuous Access Evaluation authentication flow. Unparsable claims: ${claims}`,
                 );
+                return response;
               }
-              if (
-                ((y = await Td(
-                  {
-                    scopes: Array.isArray(scopes) ? scopes : [scopes],
-                    response: m,
-                    request: d,
-                    getAccessToken: l,
-                    logger: a,
-                  },
-                  I,
-                )),
-                y)
-              )
-                [m, p] = await Zo(d, u);
+              shouldSendRequest = await authorizeRequestOnCaeChallenge(
+                {
+                  scopes: Array.isArray(scopes) ? scopes : [scopes],
+                  response,
+                  request,
+                  getAccessToken,
+                  logger,
+                },
+                parsedClaim,
+              );
+              if (shouldSendRequest) [response, error] = await trySendRequest(request, next);
             }
           }
         }
       }
-      if (p) throw p;
-      else return m;
+      if (error) throw error;
+      else return response;
     },
   };
 }
 //@ chunk-mrx6y2r5.js:66674-66898 esm-fingerprint
-function $p(e) {
-  let t = /(\w+)\s+((?:\w+=(?:"[^"]*"|[^,]*),?\s*)+)/g,
-    r = /(\w+)="([^"]*)"/g,
-    n = [],
-    o;
-  while ((o = t.exec(e)) !== null) {
-    let i = o[1],
-      s = o[2],
-      a = {},
-      c;
-    while ((c = r.exec(s)) !== null) a[c[1]] = c[2];
-    n.push({ scheme: i, params: a });
+function parseChallenges(challenges) {
+  let challengeRegex = /(\w+)\s+((?:\w+=(?:"[^"]*"|[^,]*),?\s*)+)/g;
+  let paramRegex = /(\w+)="([^"]*)"/g;
+  let parsedChallenges = [];
+  let match;
+  while ((match = challengeRegex.exec(challenges)) !== null) {
+    let scheme = match[1];
+    let paramsString = match[2];
+    let params = {};
+    let paramMatch;
+    while ((paramMatch = paramRegex.exec(paramsString)) !== null) params[paramMatch[1]] = paramMatch[2];
+    parsedChallenges.push({
+      scheme,
+      params,
+    });
   }
-  return n;
+  return parsedChallenges;
 }
 //@ chunk-mrx6y2r5.js:66898-67078 esm-fingerprint
-function Ed(e) {
-  var t;
-  if (!e) return;
-  return (t = $p(e).find(
-    (n) => n.scheme === "Bearer" && n.params.claims && n.params.error === "insufficient_claims",
-  )) === null || t === void 0
-    ? void 0
-    : t.params.claims;
+function getCaeChallengeClaims(challenges) {
+  var _a;
+  if (!challenges) return;
+  return (_a = parseChallenges(challenges).find(
+    (x) => x.scheme === "Bearer" && x.params.claims && x.params.error === "insufficient_claims",
+  )) === null || _a === undefined
+    ? undefined
+    : _a.params.claims;
 }
-
-export { Zn };
+export { bearerTokenAuthenticationPolicy };

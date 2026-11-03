@@ -16,11 +16,14 @@ import {
 import { createAcceptedSettingsStore } from "../../services/remoteTools/acceptedSettings.js";
 
 //@ chunk-xnr5zsa8.js:5206-5288 placement
-function o(e) {
+function freezeServedAndRecord(e) {
   try {
     let t = freezeServedSettings(e);
-    return { end: () => t?.end() };
+    return {
+      end: () => t?.end(),
+    };
   } finally {
-    (recordServedUserRulesAtAttach(createAcceptedSettingsStore()), getHeldServedOwnerSettings());
+    recordServedUserRulesAtAttach(createAcceptedSettingsStore());
+    getHeldServedOwnerSettings();
   }
 }

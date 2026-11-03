@@ -6,146 +6,161 @@
  * attribution: cjs-fingerprint 1
  */
 import { x, importMetaRequire } from "../../../runtime/bun-runtime.js";
-import { Qt } from "./helpers.js";
+import { require_helpers } from "./helpers.js";
 
 //@ chunk-hq88884p.js:18297-20967 cjs-fingerprint
-var yhs = x(function (M) {
-  var Zt =
-      (M && M.__createBinding) ||
-      (Object.create
-        ? function (e, r, n, o) {
-            if (o === void 0) o = n;
-            var ownPropertyDescriptor = Object.getOwnPropertyDescriptor(r, n);
-            if (
-              !ownPropertyDescriptor ||
-              ("get" in ownPropertyDescriptor
-                ? !r.__esModule
-                : ownPropertyDescriptor.writable || ownPropertyDescriptor.configurable)
-            )
-              ownPropertyDescriptor = {
-                enumerable: !0,
-                get: function () {
-                  return r[n];
-                },
-              };
-            Object.defineProperty(e, o, ownPropertyDescriptor);
-          }
-        : function (e, r, n, o) {
-            if (o === void 0) o = n;
-            e[o] = r[n];
-          }),
-    so =
-      (M && M.__setModuleDefault) ||
-      (Object.create
-        ? function (e, r) {
-            Object.defineProperty(e, "default", { enumerable: !0, value: r });
-          }
-        : function (e, r) {
-            e.default = r;
-          }),
-    er =
-      (M && M.__importStar) ||
-      function (e) {
-        if (e && e.__esModule) return e;
-        var r = {};
-        if (e != null) {
-          for (var key in e)
-            if (key !== "default" && Object.prototype.hasOwnProperty.call(e, key)) Zt(r, e, key);
+var require_agent_base = x(function (cjsExports) {
+  var __createBinding =
+    (cjsExports && cjsExports.__createBinding) ||
+    (Object.create
+      ? function (o_2, m, k, k2) {
+          if (k2 === undefined) k2 = k;
+          var desc = Object.getOwnPropertyDescriptor(m, k);
+          if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable))
+            desc = {
+              enumerable: true,
+              get: function () {
+                return m[k];
+              },
+            };
+          Object.defineProperty(o_2, k2, desc);
         }
-        return (so(r, e), r);
-      },
-    co =
-      (M && M.__exportStar) ||
-      function (e, r) {
-        for (var key in e)
-          if (key !== "default" && !Object.prototype.hasOwnProperty.call(r, key)) Zt(r, e, key);
-      };
-  Object.defineProperty(M, "__esModule", { value: !0 });
-  M.Agent = void 0;
-  var ao = er(importMetaRequire("net")),
-    Jt = er(importMetaRequire("http")),
-    tr = importMetaRequire("https");
-  co(Qt(), M);
-  var K = Symbol("AgentBaseInternalState");
-  class rr extends Jt.Agent {
-    constructor(e) {
-      super(e);
-      this[K] = {};
-    }
-    isSecureEndpoint(e) {
-      if (e) {
-        if (typeof e.secureEndpoint === "boolean") return e.secureEndpoint;
-        if (typeof e.protocol === "string") return e.protocol === "https:";
+      : function (o_2, m, k, k2) {
+          if (k2 === undefined) k2 = k;
+          o_2[k2] = m[k];
+        });
+  var __setModuleDefault =
+    (cjsExports && cjsExports.__setModuleDefault) ||
+    (Object.create
+      ? function (o, v) {
+          Object.defineProperty(o, "default", {
+            enumerable: true,
+            value: v,
+          });
+        }
+      : function (o, v) {
+          o.default = v;
+        });
+  var __importStar =
+    (cjsExports && cjsExports.__importStar) ||
+    function (mod) {
+      if (mod && mod.__esModule) return mod;
+      var result = {};
+      if (mod != null) {
+        for (var k in mod)
+          if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k))
+            __createBinding(result, mod, k);
       }
-      let { stack: stack } = Error();
-      if (typeof stack !== "string") return !1;
+      __setModuleDefault(result, mod);
+      return result;
+    };
+  var __exportStar =
+    (cjsExports && cjsExports.__exportStar) ||
+    function (m, r) {
+      for (var p in m)
+        if (p !== "default" && !Object.prototype.hasOwnProperty.call(r, p)) __createBinding(r, m, p);
+    };
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.Agent = undefined;
+  var net = __importStar(importMetaRequire("net"));
+  var http = __importStar(importMetaRequire("http"));
+  var https_1 = importMetaRequire("https");
+  __exportStar(require_helpers(), cjsExports);
+  var INTERNAL = Symbol("AgentBaseInternalState");
+  class Agent extends http.Agent {
+    constructor(opts) {
+      super(opts);
+      this[INTERNAL] = {};
+    }
+    isSecureEndpoint(options) {
+      if (options) {
+        if (typeof options.secureEndpoint === "boolean") return options.secureEndpoint;
+        if (typeof options.protocol === "string") return options.protocol === "https:";
+      }
+      let { stack } = Error();
+      if (typeof stack !== "string") return false;
       return stack
         .split(
           `
 `,
         )
-        .some((n) => n.indexOf("(https.js:") !== -1 || n.indexOf("node:https:") !== -1);
+        .some((l) => l.indexOf("(https.js:") !== -1 || l.indexOf("node:https:") !== -1);
     }
-    incrementSockets(e) {
+    incrementSockets(name) {
       if (this.maxSockets === 1 / 0 && this.maxTotalSockets === 1 / 0) return null;
-      if (!this.sockets[e]) this.sockets[e] = [];
-      let r = new ao.Socket({ writable: !1 });
-      return (this.sockets[e].push(r), this.totalSocketCount++, r);
+      if (!this.sockets[name]) this.sockets[name] = [];
+      let fakeSocket = new net.Socket({
+        writable: false,
+      });
+      this.sockets[name].push(fakeSocket);
+      this.totalSocketCount++;
+      return fakeSocket;
     }
-    decrementSockets(e, r) {
-      if (!this.sockets[e] || r === null) return;
-      let n = this.sockets[e],
-        index = n.indexOf(r);
+    decrementSockets(name, socket) {
+      if (!this.sockets[name] || socket === null) return;
+      let sockets = this.sockets[name];
+      let index = sockets.indexOf(socket);
       if (index !== -1) {
-        if ((n.splice(index, 1), this.totalSocketCount--, n.length === 0)) delete this.sockets[e];
+        sockets.splice(index, 1);
+        this.totalSocketCount--;
+        if (sockets.length === 0) delete this.sockets[name];
       }
     }
-    getName(e) {
-      if (typeof e.secureEndpoint === "boolean" ? e.secureEndpoint : this.isSecureEndpoint(e))
-        return tr.Agent.prototype.getName.call(this, e);
-      return super.getName(e);
+    getName(options) {
+      if (
+        typeof options.secureEndpoint === "boolean" ? options.secureEndpoint : this.isSecureEndpoint(options)
+      )
+        return https_1.Agent.prototype.getName.call(this, options);
+      return super.getName(options);
     }
-    createSocket(e, r, n) {
-      let o = { ...r, secureEndpoint: this.isSecureEndpoint(r) },
-        s = this.getName(o),
-        incrementSockets = this.incrementSockets(s);
+    createSocket(req, options, cb) {
+      let connectOpts = {
+        ...options,
+        secureEndpoint: this.isSecureEndpoint(options),
+      };
+      let name = this.getName(connectOpts);
+      let fakeSocket = this.incrementSockets(name);
       Promise.resolve()
-        .then(() => this.connect(e, o))
+        .then(() => this.connect(req, connectOpts))
         .then(
-          (a) => {
-            if ((this.decrementSockets(s, incrementSockets), a instanceof Jt.Agent))
+          (socket) => {
+            this.decrementSockets(name, fakeSocket);
+            if (socket instanceof http.Agent)
               try {
-                return a.addRequest(e, o);
-              } catch (error) {
-                return n(error);
+                return socket.addRequest(req, connectOpts);
+              } catch (err) {
+                return cb(err);
               }
-            ((this[K].currentSocket = a), super.createSocket(e, r, n));
+            this[INTERNAL].currentSocket = socket;
+            super.createSocket(req, options, cb);
           },
-          (a) => {
-            (this.decrementSockets(s, incrementSockets), n(a));
+          (err) => {
+            this.decrementSockets(name, fakeSocket);
+            cb(err);
           },
         );
     }
     createConnection() {
-      let currentSocket = this[K].currentSocket;
-      if (((this[K].currentSocket = void 0), !currentSocket))
-        throw Error("No socket was returned in the `connect()` function");
-      return currentSocket;
+      let socket = this[INTERNAL].currentSocket;
+      this[INTERNAL].currentSocket = undefined;
+      if (!socket) throw Error("No socket was returned in the `connect()` function");
+      return socket;
     }
     get defaultPort() {
-      return this[K].defaultPort ?? (this.protocol === "https:" ? 443 : 80);
+      return this[INTERNAL].defaultPort ?? (this.protocol === "https:" ? 443 : 80);
     }
-    set defaultPort(e) {
-      if (this[K]) this[K].defaultPort = e;
+    set defaultPort(v) {
+      if (this[INTERNAL]) this[INTERNAL].defaultPort = v;
     }
     get protocol() {
-      return this[K].protocol ?? (this.isSecureEndpoint() ? "https:" : "http:");
+      return this[INTERNAL].protocol ?? (this.isSecureEndpoint() ? "https:" : "http:");
     }
-    set protocol(e) {
-      if (this[K]) this[K].protocol = e;
+    set protocol(v) {
+      if (this[INTERNAL]) this[INTERNAL].protocol = v;
     }
   }
-  M.Agent = rr;
+  cjsExports.Agent = Agent;
 });
-
-export { yhs };
+export { require_agent_base };

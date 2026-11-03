@@ -11,10 +11,9 @@
 
 //@ chunk-8wvtd8sr.js:382724-382848 fingerprint = _temp (0.589)
 function formatQuotedNameList(toolNames) {
-  let mapped = toolNames.map((s) => `"${s}"`);
+  let mapped = toolNames.map((toolName) => `"${toolName}"`);
   return mapped.length <= 2
     ? mapped.join(" and ")
     : `${mapped.slice(0, -1).join(", ")}, and ${mapped.at(-1)}`;
 }
-
 export { formatQuotedNameList };

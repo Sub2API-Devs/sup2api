@@ -6,177 +6,197 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../../runtime/bun-runtime.js";
-import { Ec } from "../../cjs/reflect/names.js";
-import { E_ } from "../fields.js";
-import { dp } from "../../cjs/wire/base64-encoding.js";
-import { qu } from "../../cjs/to-binary.js";
-import { n_ } from "../clone.js";
-import { Rl } from "../wkt/gen/google/protobuf/descriptor_pb.js";
+import { require_names } from "../../cjs/reflect/names.js";
+import { require_fields } from "../fields.js";
+import { require_base64_encoding } from "../../cjs/wire/base64-encoding.js";
+import { require_to_binary } from "../../cjs/to-binary.js";
+import { require_clone } from "../clone.js";
+import { require_descriptor_pb } from "../wkt/gen/google/protobuf/descriptor_pb.js";
 
 //@ chunk-fq0cr76a.js:510775-515173 cjs-fingerprint
-var eU = x(function (QB) {
-  Object.defineProperty(QB, "__esModule", { value: !0 });
-  QB.embedFileDesc = nie;
-  QB.pathInFileDesc = rie;
-  QB.createFileDescriptorProtoBoot = zB;
-  var jy = Ec(),
-    fn = E_(),
-    qB = dp(),
-    jB = qu(),
-    YB = n_(),
-    Yt = Rl();
-  function nie(e) {
-    let n = {
-      bootable: !1,
+var require_embed = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.embedFileDesc = embedFileDesc;
+  cjsExports.pathInFileDesc = pathInFileDesc;
+  cjsExports.createFileDescriptorProtoBoot = createFileDescriptorProtoBoot;
+  var names_js_1 = require_names();
+  var fields_js_1 = require_fields();
+  var base64_encoding_js_1 = require_base64_encoding();
+  var to_binary_js_1 = require_to_binary();
+  var clone_js_1 = require_clone();
+  var descriptor_pb_js_1 = require_descriptor_pb();
+  function embedFileDesc(file) {
+    let embed = {
+      bootable: false,
       proto() {
-        let clone = YB.clone(Yt.FileDescriptorProtoSchema, e);
-        return (
-          fn.clearField(clone, Yt.FileDescriptorProtoSchema.field.dependency),
-          fn.clearField(clone, Yt.FileDescriptorProtoSchema.field.sourceCodeInfo),
-          clone.messageType.map(ZB),
-          clone
-        );
+        let stripped = clone_js_1.clone(descriptor_pb_js_1.FileDescriptorProtoSchema, file);
+        fields_js_1.clearField(stripped, descriptor_pb_js_1.FileDescriptorProtoSchema.field.dependency);
+        fields_js_1.clearField(stripped, descriptor_pb_js_1.FileDescriptorProtoSchema.field.sourceCodeInfo);
+        stripped.messageType.map(stripJsonNames);
+        return stripped;
       },
       base64() {
-        let toBinary = jB.toBinary(Yt.FileDescriptorProtoSchema, this.proto());
-        return qB.base64Encode(toBinary, "std_raw");
+        let bytes = to_binary_js_1.toBinary(descriptor_pb_js_1.FileDescriptorProtoSchema, this.proto());
+        return base64_encoding_js_1.base64Encode(bytes, "std_raw");
       },
     };
-    return e.name == "google/protobuf/descriptor.proto"
-      ? Object.assign(Object.assign({}, n), {
-          bootable: !0,
+    return file.name == "google/protobuf/descriptor.proto"
+      ? Object.assign(Object.assign({}, embed), {
+          bootable: true,
           boot() {
-            return zB(this.proto());
+            return createFileDescriptorProtoBoot(this.proto());
           },
         })
-      : n;
+      : embed;
   }
-  function ZB(e) {
-    for (let n of e.field)
-      if (n.jsonName === jy.protoCamelCase(n.name))
-        fn.clearField(n, Yt.FieldDescriptorProtoSchema.field.jsonName);
-    for (let n of e.nestedType) ZB(n);
+  function stripJsonNames(d) {
+    for (let f of d.field)
+      if (f.jsonName === names_js_1.protoCamelCase(f.name))
+        fields_js_1.clearField(f, descriptor_pb_js_1.FieldDescriptorProtoSchema.field.jsonName);
+    for (let n of d.nestedType) stripJsonNames(n);
   }
-  function rie(e) {
-    if (e.kind == "service") return [e.file.services.indexOf(e)];
-    let parent = e.parent;
+  function pathInFileDesc(desc) {
+    if (desc.kind == "service") return [desc.file.services.indexOf(desc)];
+    let parent = desc.parent;
     if (parent == null)
-      switch (e.kind) {
+      switch (desc.kind) {
         case "enum":
-          return [e.file.enums.indexOf(e)];
+          return [desc.file.enums.indexOf(desc)];
         case "message":
-          return [e.file.messages.indexOf(e)];
+          return [desc.file.messages.indexOf(desc)];
         case "extension":
-          return [e.file.extensions.indexOf(e)];
+          return [desc.file.extensions.indexOf(desc)];
       }
-    function r(h) {
-      let y = [];
-      for (let parent = h.parent; parent;) {
-        let index = parent.nestedMessages.indexOf(h);
-        (y.unshift(index), (h = parent), (parent = h.parent));
+    function findPath(cur) {
+      let nested = [];
+      for (let parent = cur.parent; parent;) {
+        let idx = parent.nestedMessages.indexOf(cur);
+        nested.unshift(idx);
+        cur = parent;
+        parent = cur.parent;
       }
-      return (y.unshift(h.file.messages.indexOf(h)), y);
+      nested.unshift(cur.file.messages.indexOf(cur));
+      return nested;
     }
-    let s = r(parent);
-    switch (e.kind) {
+    let path = findPath(parent);
+    switch (desc.kind) {
       case "extension":
-        return [...s, parent.nestedExtensions.indexOf(e)];
+        return [...path, parent.nestedExtensions.indexOf(desc)];
       case "message":
-        return [...s, parent.nestedMessages.indexOf(e)];
+        return [...path, parent.nestedMessages.indexOf(desc)];
       case "enum":
-        return [...s, parent.nestedEnums.indexOf(e)];
+        return [...path, parent.nestedEnums.indexOf(desc)];
     }
   }
-  function zB(e) {
-    var n;
-    return (
-      Xn(e.name == "google/protobuf/descriptor.proto"),
-      Xn(e.package == "google.protobuf"),
-      Xn(!e.dependency.length),
-      Xn(!e.publicDependency.length),
-      Xn(!e.weakDependency.length),
-      Xn(!e.optionDependency.length),
-      Xn(!e.service.length),
-      Xn(!e.extension.length),
-      Xn(e.sourceCodeInfo === void 0),
-      Xn(e.syntax == "" || e.syntax == "proto2"),
-      Xn(!((n = e.options) === null || n === void 0 ? void 0 : n.features)),
-      Xn(e.edition === Yt.Edition.EDITION_UNKNOWN),
-      { name: e.name, package: e.package, messageType: e.messageType.map(XB), enumType: e.enumType.map(JB) }
+  function createFileDescriptorProtoBoot(proto) {
+    var _a;
+    assert(proto.name == "google/protobuf/descriptor.proto");
+    assert(proto.package == "google.protobuf");
+    assert(!proto.dependency.length);
+    assert(!proto.publicDependency.length);
+    assert(!proto.weakDependency.length);
+    assert(!proto.optionDependency.length);
+    assert(!proto.service.length);
+    assert(!proto.extension.length);
+    assert(proto.sourceCodeInfo === undefined);
+    assert(proto.syntax == "" || proto.syntax == "proto2");
+    assert(!((_a = proto.options) === null || _a === undefined ? undefined : _a.features));
+    assert(proto.edition === descriptor_pb_js_1.Edition.EDITION_UNKNOWN);
+    return {
+      name: proto.name,
+      package: proto.package,
+      messageType: proto.messageType.map(createDescriptorBoot),
+      enumType: proto.enumType.map(createEnumDescriptorBoot),
+    };
+  }
+  function createDescriptorBoot(proto) {
+    assert(proto.extension.length == 0);
+    assert(!proto.oneofDecl.length);
+    assert(!proto.options);
+    assert(!fields_js_1.isFieldSet(proto, descriptor_pb_js_1.DescriptorProtoSchema.field.visibility));
+    let b = {
+      name: proto.name,
+    };
+    if (proto.field.length) b.field = proto.field.map(createFieldDescriptorBoot);
+    if (proto.nestedType.length) b.nestedType = proto.nestedType.map(createDescriptorBoot);
+    if (proto.enumType.length) b.enumType = proto.enumType.map(createEnumDescriptorBoot);
+    if (proto.extensionRange.length)
+      b.extensionRange = proto.extensionRange.map((r) => {
+        assert(!r.options);
+        return {
+          start: r.start,
+          end: r.end,
+        };
+      });
+    return b;
+  }
+  function createFieldDescriptorBoot(proto) {
+    assert(fields_js_1.isFieldSet(proto, descriptor_pb_js_1.FieldDescriptorProtoSchema.field.name));
+    assert(fields_js_1.isFieldSet(proto, descriptor_pb_js_1.FieldDescriptorProtoSchema.field.number));
+    assert(fields_js_1.isFieldSet(proto, descriptor_pb_js_1.FieldDescriptorProtoSchema.field.type));
+    assert(!fields_js_1.isFieldSet(proto, descriptor_pb_js_1.FieldDescriptorProtoSchema.field.oneofIndex));
+    assert(
+      !fields_js_1.isFieldSet(proto, descriptor_pb_js_1.FieldDescriptorProtoSchema.field.jsonName) ||
+        proto.jsonName === names_js_1.protoCamelCase(proto.name),
     );
+    let b = {
+      name: proto.name,
+      number: proto.number,
+      type: proto.type,
+    };
+    if (fields_js_1.isFieldSet(proto, descriptor_pb_js_1.FieldDescriptorProtoSchema.field.label))
+      b.label = proto.label;
+    if (fields_js_1.isFieldSet(proto, descriptor_pb_js_1.FieldDescriptorProtoSchema.field.typeName))
+      b.typeName = proto.typeName;
+    if (fields_js_1.isFieldSet(proto, descriptor_pb_js_1.FieldDescriptorProtoSchema.field.extendee))
+      b.extendee = proto.extendee;
+    if (fields_js_1.isFieldSet(proto, descriptor_pb_js_1.FieldDescriptorProtoSchema.field.defaultValue))
+      b.defaultValue = proto.defaultValue;
+    if (proto.options) b.options = createFieldOptionsBoot(proto.options);
+    return b;
   }
-  function XB(e) {
-    (Xn(e.extension.length == 0),
-      Xn(!e.oneofDecl.length),
-      Xn(!e.options),
-      Xn(!fn.isFieldSet(e, Yt.DescriptorProtoSchema.field.visibility)));
-    let n = { name: e.name };
-    if (e.field.length) n.field = e.field.map(sie);
-    if (e.nestedType.length) n.nestedType = e.nestedType.map(XB);
-    if (e.enumType.length) n.enumType = e.enumType.map(JB);
-    if (e.extensionRange.length)
-      n.extensionRange = e.extensionRange.map((r) => (Xn(!r.options), { start: r.start, end: r.end }));
-    return n;
-  }
-  function sie(e) {
-    (Xn(fn.isFieldSet(e, Yt.FieldDescriptorProtoSchema.field.name)),
-      Xn(fn.isFieldSet(e, Yt.FieldDescriptorProtoSchema.field.number)),
-      Xn(fn.isFieldSet(e, Yt.FieldDescriptorProtoSchema.field.type)),
-      Xn(!fn.isFieldSet(e, Yt.FieldDescriptorProtoSchema.field.oneofIndex)),
-      Xn(
-        !fn.isFieldSet(e, Yt.FieldDescriptorProtoSchema.field.jsonName) ||
-          e.jsonName === jy.protoCamelCase(e.name),
-      ));
-    let n = { name: e.name, number: e.number, type: e.type };
-    if (fn.isFieldSet(e, Yt.FieldDescriptorProtoSchema.field.label)) n.label = e.label;
-    if (fn.isFieldSet(e, Yt.FieldDescriptorProtoSchema.field.typeName)) n.typeName = e.typeName;
-    if (fn.isFieldSet(e, Yt.FieldDescriptorProtoSchema.field.extendee)) n.extendee = e.extendee;
-    if (fn.isFieldSet(e, Yt.FieldDescriptorProtoSchema.field.defaultValue)) n.defaultValue = e.defaultValue;
-    if (e.options) n.options = iie(e.options);
-    return n;
-  }
-  function iie(e) {
-    let n = {};
-    if (
-      (Xn(!fn.isFieldSet(e, Yt.FieldOptionsSchema.field.ctype)),
-      fn.isFieldSet(e, Yt.FieldOptionsSchema.field.packed))
-    )
-      n.packed = e.packed;
-    if (
-      (Xn(!fn.isFieldSet(e, Yt.FieldOptionsSchema.field.jstype)),
-      Xn(!fn.isFieldSet(e, Yt.FieldOptionsSchema.field.lazy)),
-      Xn(!fn.isFieldSet(e, Yt.FieldOptionsSchema.field.unverifiedLazy)),
-      fn.isFieldSet(e, Yt.FieldOptionsSchema.field.deprecated))
-    )
-      n.deprecated = e.deprecated;
-    if (
-      (Xn(!fn.isFieldSet(e, Yt.FieldOptionsSchema.field.weak)),
-      Xn(!fn.isFieldSet(e, Yt.FieldOptionsSchema.field.debugRedact)),
-      fn.isFieldSet(e, Yt.FieldOptionsSchema.field.retention))
-    )
-      n.retention = e.retention;
-    if (e.targets.length) n.targets = e.targets;
-    if (e.editionDefaults.length)
-      n.editionDefaults = e.editionDefaults.map((editionDefault) => ({
-        value: editionDefault.value,
-        edition: editionDefault.edition,
+  function createFieldOptionsBoot(proto) {
+    let b = {};
+    assert(!fields_js_1.isFieldSet(proto, descriptor_pb_js_1.FieldOptionsSchema.field.ctype));
+    if (fields_js_1.isFieldSet(proto, descriptor_pb_js_1.FieldOptionsSchema.field.packed))
+      b.packed = proto.packed;
+    assert(!fields_js_1.isFieldSet(proto, descriptor_pb_js_1.FieldOptionsSchema.field.jstype));
+    assert(!fields_js_1.isFieldSet(proto, descriptor_pb_js_1.FieldOptionsSchema.field.lazy));
+    assert(!fields_js_1.isFieldSet(proto, descriptor_pb_js_1.FieldOptionsSchema.field.unverifiedLazy));
+    if (fields_js_1.isFieldSet(proto, descriptor_pb_js_1.FieldOptionsSchema.field.deprecated))
+      b.deprecated = proto.deprecated;
+    assert(!fields_js_1.isFieldSet(proto, descriptor_pb_js_1.FieldOptionsSchema.field.weak));
+    assert(!fields_js_1.isFieldSet(proto, descriptor_pb_js_1.FieldOptionsSchema.field.debugRedact));
+    if (fields_js_1.isFieldSet(proto, descriptor_pb_js_1.FieldOptionsSchema.field.retention))
+      b.retention = proto.retention;
+    if (proto.targets.length) b.targets = proto.targets;
+    if (proto.editionDefaults.length)
+      b.editionDefaults = proto.editionDefaults.map((d) => ({
+        value: d.value,
+        edition: d.edition,
       }));
-    return (
-      Xn(!fn.isFieldSet(e, Yt.FieldOptionsSchema.field.features)),
-      Xn(!fn.isFieldSet(e, Yt.FieldOptionsSchema.field.uninterpretedOption)),
-      n
-    );
+    assert(!fields_js_1.isFieldSet(proto, descriptor_pb_js_1.FieldOptionsSchema.field.features));
+    assert(!fields_js_1.isFieldSet(proto, descriptor_pb_js_1.FieldOptionsSchema.field.uninterpretedOption));
+    return b;
   }
-  function JB(e) {
-    return (
-      Xn(!e.options),
-      Xn(!fn.isFieldSet(e, Yt.EnumDescriptorProtoSchema.field.visibility)),
-      { name: e.name, value: e.value.map((n) => (Xn(!n.options), { name: n.name, number: n.number })) }
-    );
+  function createEnumDescriptorBoot(proto) {
+    assert(!proto.options);
+    assert(!fields_js_1.isFieldSet(proto, descriptor_pb_js_1.EnumDescriptorProtoSchema.field.visibility));
+    return {
+      name: proto.name,
+      value: proto.value.map((v) => {
+        assert(!v.options);
+        return {
+          name: v.name,
+          number: v.number,
+        };
+      }),
+    };
   }
-  function Xn(e) {
-    if (!e) throw Error();
+  function assert(condition) {
+    if (!condition) throw Error();
   }
 });
-
-export { eU };
+export { require_embed };

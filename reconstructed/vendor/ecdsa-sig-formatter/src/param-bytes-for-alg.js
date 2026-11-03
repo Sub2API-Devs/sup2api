@@ -8,18 +8,21 @@
 import { x } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-82d8c88w.js:1109-1328 cjs-fingerprint
-var Q = x(function (_r, Z) {
-  function K(e) {
-    var r = ((e / 8) | 0) + (e % 8 === 0 ? 0 : 1);
-    return r;
+var require_param_bytes_for_alg = x(function (cjsExports, cjsModule) {
+  function getParamSize(keySize) {
+    var result = ((keySize / 8) | 0) + (keySize % 8 === 0 ? 0 : 1);
+    return result;
   }
-  var De = { ES256: K(256), ES384: K(384), ES512: K(521) };
-  function Ve(e) {
-    var r = De[e];
-    if (r) return r;
-    throw Error('Unknown algorithm "' + e + '"');
+  var paramBytesForAlg = {
+    ES256: getParamSize(256),
+    ES384: getParamSize(384),
+    ES512: getParamSize(521),
+  };
+  function getParamBytesForAlg(alg) {
+    var paramBytes = paramBytesForAlg[alg];
+    if (paramBytes) return paramBytes;
+    throw Error('Unknown algorithm "' + alg + '"');
   }
-  Z.exports = Ve;
+  cjsModule.exports = getParamBytesForAlg;
 });
-
-export { Q };
+export { require_param_bytes_for_alg };

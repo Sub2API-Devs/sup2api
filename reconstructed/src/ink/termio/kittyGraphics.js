@@ -14,20 +14,24 @@ import { COMBINING_MARK_CODES } from "../../utils/unicode/combiningMarks.js";
 import { SGR_DEFAULT_FG } from "./sgr.js";
 import { ST } from "./osc.js";
 
+//@ chunk-m1vyn8g1.js:3511-3675 placement
 /**
  * Kitty 图形协议常量：APC 前缀与 G 命令头、分块大小 4096、占位码点 U+10EEEE、颜色/尺寸上限、路径字节上限。
  */
-//@ chunk-m1vyn8g1.js:3511-3675 placement
-var KITTY_APC = ESC + String.fromCharCode(ESC_TYPE.APC),
-  KITTY_GRAPHICS_PREFIX = `${KITTY_APC}G`,
-  KITTY_CHUNK_SIZE = 4096,
-  KITTY_PLACEHOLDER_CODE_POINT = 1109742,
-  KITTY_PLACEHOLDER_CHAR = String.fromCodePoint(KITTY_PLACEHOLDER_CODE_POINT),
-  ANSI_256_LIMIT = 256,
-  MAX_UINT32 = 4294967295,
-  MAX_PIXEL_SIZE = 1e4,
-  RGB_SHIFTS = { mask: 255, redShift: 16, greenShift: 8 },
-  MAX_PATH_BYTES = (KITTY_CHUNK_SIZE / 4) * 3;
+var KITTY_APC = ESC + String.fromCharCode(ESC_TYPE.APC);
+var KITTY_GRAPHICS_PREFIX = `${KITTY_APC}G`;
+var KITTY_CHUNK_SIZE = 4096;
+var KITTY_PLACEHOLDER_CODE_POINT = 1109742;
+var KITTY_PLACEHOLDER_CHAR = String.fromCodePoint(KITTY_PLACEHOLDER_CODE_POINT);
+var ANSI_256_LIMIT = 256;
+var MAX_UINT32 = 4294967295;
+var MAX_PIXEL_SIZE = 1e4;
+var RGB_SHIFTS = {
+  mask: 255,
+  redShift: 16,
+  greenShift: 8,
+};
+var MAX_PATH_BYTES = (KITTY_CHUNK_SIZE / 4) * 3;
 //@ chunk-m1vyn8g1.js:3675-3836 placement
 function assertIntInRange(e, n) {
   if (!Number.isInteger(e) || e < 1 || e > n)
@@ -57,81 +61,120 @@ var base64URLEncode = (buffer) => Buffer.from(buffer, "utf8").toString("base64")
 //@ chunk-m1vyn8g1.js:4274-4417 placement
 function imageIdColorSgr(e) {
   assertIntInRange(e, MAX_UINT32);
-  let n = e < ANSI_256_LIMIT,
-    o = (e >>> RGB_SHIFTS.redShift) & RGB_SHIFTS.mask,
-    t = (e >>> RGB_SHIFTS.greenShift) & RGB_SHIFTS.mask,
-    i = e & RGB_SHIFTS.mask;
+  let n = e < ANSI_256_LIMIT;
+  let o = (e >>> RGB_SHIFTS.redShift) & RGB_SHIFTS.mask;
+  let t = (e >>> RGB_SHIFTS.greenShift) & RGB_SHIFTS.mask;
+  let i = e & RGB_SHIFTS.mask;
   return csi(n ? `38;5;${e}m` : `38;2;${o};${t};${i}m`);
 }
 //@ chunk-m1vyn8g1.js:4417-4477 placement
-var R = (e) => COMBINING_MARK_CODES.slice(0, e).map((n) => String.fromCodePoint(n));
+/**
+ * 按行生成组合标记字符
+ */
+var buildPlaceholderColumnMarks = (e) => COMBINING_MARK_CODES.slice(0, e).map((n) => String.fromCodePoint(n));
+//@ chunk-m1vyn8g1.js:4477-4612 placement
 /**
  * 生成 Kitty 图形协议的 Unicode 占位符网格（按行列附加组合标记与图像 id 颜色）。
  */
-//@ chunk-m1vyn8g1.js:4477-4612 placement
-function buildKittyPlaceholderGrid(e, n, o) {
-  (assertIntInRange(n, COMBINING_MARK_CODES.length), assertIntInRange(o, COMBINING_MARK_CODES.length));
-  let t = imageIdColorSgr(e),
-    i = R(n);
-  return R(o).map((s) => t + i.map((r) => KITTY_PLACEHOLDER_CHAR + s + r).join("") + SGR_DEFAULT_FG).join(`
+function buildKittyPlaceholderGrid(id, columns, rows) {
+  assertIntInRange(columns, COMBINING_MARK_CODES.length);
+  assertIntInRange(rows, COMBINING_MARK_CODES.length);
+  let t = imageIdColorSgr(id);
+  let placeholderColumnMarks = buildPlaceholderColumnMarks(columns);
+  return buildPlaceholderColumnMarks(rows).map(
+    (s) =>
+      t +
+      placeholderColumnMarks
+        .map((placeholderColumnMark) => KITTY_PLACEHOLDER_CHAR + s + placeholderColumnMark)
+        .join("") +
+      SGR_DEFAULT_FG,
+  ).join(`
 `);
 }
 //@ chunk-m1vyn8g1.js:4612-4683 placement
-function c(e, n) {
-  let o = n === void 0 ? "" : `;${n}`;
+/**
+ * 拼接 kitty 图形协议的 APC 序列（payload 与可选的 base64 元数据）。
+ */
+function kittyGraphicsSequence(e, n) {
+  let o = n === undefined ? "" : `;${n}`;
   return `${KITTY_GRAPHICS_PREFIX}${e}${o}${ST}`;
 }
 //@ chunk-m1vyn8g1.js:4683-4751 placement
-var O = { png: "f=100", rgba: "f=32", rgb: "f=24" },
-  Y = { file: "t=f", shm: "t=s" };
+/**
+ * 格式码映射
+ */
+var KITTY_FORMAT_CODES = {
+  png: "f=100",
+  rgba: "f=32",
+  rgb: "f=24",
+};
+var KITTY_MEDIUM_CODES = {
+  file: "t=f",
+  shm: "t=s",
+};
+//@ chunk-m1vyn8g1.js:4751-5320 placement
 /**
  * 生成 Kitty 图形传输并放置序列：校验 id/行列/尺寸，文件或共享内存介质传路径，否则把 base64 按 4096 分块（m=1/m=0）。
  */
-//@ chunk-m1vyn8g1.js:4751-5320 placement
 function buildKittyTransmitSequence(e) {
-  let { id: id, source: source, columns: columns, rows: rows } = e;
-  if (
-    (assertIntInRange(id, MAX_UINT32),
-    assertIntInRange(columns, COMBINING_MARK_CODES.length),
-    assertIntInRange(rows, COMBINING_MARK_CODES.length),
-    source.format !== "png")
-  )
-    (assertIntInRange(source.width, MAX_PIXEL_SIZE), assertIntInRange(source.height, MAX_PIXEL_SIZE));
-  let r = source.format !== "png" ? `,s=${source.width},v=${source.height}` : "",
-    u = `${O[source.format]}${r}`,
-    m = `i=${id},c=${columns},r=${rows}`;
+  let { id, source, columns, rows } = e;
+  assertIntInRange(id, MAX_UINT32);
+  assertIntInRange(columns, COMBINING_MARK_CODES.length);
+  assertIntInRange(rows, COMBINING_MARK_CODES.length);
+  if (source.format !== "png") {
+    assertIntInRange(source.width, MAX_PIXEL_SIZE);
+    assertIntInRange(source.height, MAX_PIXEL_SIZE);
+  }
+  let r = source.format !== "png" ? `,s=${source.width},v=${source.height}` : "";
+  let u = `${KITTY_FORMAT_CODES[source.format]}${r}`;
+  let m = `i=${id},c=${columns},r=${rows}`;
   if ("medium" in source) {
     assertMediumName(source.name);
-    let l = Y[source.medium];
-    return c(`a=T,U=1,q=1,${u},${l},${m}`, base64URLEncode(source.name));
+    let l = KITTY_MEDIUM_CODES[source.medium];
+    return kittyGraphicsSequence(`a=T,U=1,q=1,${u},${l},${m}`, base64URLEncode(source.name));
   }
   assertBase64(source.base64);
-  let p = `a=T,U=1,q=2,${u},${m}`,
-    { base64: base64 } = source;
-  if (base64.length <= KITTY_CHUNK_SIZE) return c(p, base64);
+  let p = `a=T,U=1,q=2,${u},${m}`;
+  let { base64 } = source;
+  if (base64.length <= KITTY_CHUNK_SIZE) return kittyGraphicsSequence(p, base64);
   let g = [];
   for (let l = 0; l < base64.length; l += KITTY_CHUNK_SIZE) {
-    let T = l + KITTY_CHUNK_SIZE >= base64.length ? "m=0" : "m=1",
-      C = l === 0 ? `${p},${T}` : `${T},q=2`;
-    g.push(c(C, base64.slice(l, l + KITTY_CHUNK_SIZE)));
+    let T = l + KITTY_CHUNK_SIZE >= base64.length ? "m=0" : "m=1";
+    let C = l === 0 ? `${p},${T}` : `${T},q=2`;
+    g.push(kittyGraphicsSequence(C, base64.slice(l, l + KITTY_CHUNK_SIZE)));
   }
   return g.join("");
 }
 //@ chunk-m1vyn8g1.js:5320-5374 placement
-function RIs(e) {
-  return (assertIntInRange(e, MAX_UINT32), c(`a=d,d=I,i=${e},q=2`));
+/**
+ * 生成按 id 删除 kitty 图像的序列。
+ */
+function deleteKittyImage(pendingDelete) {
+  assertIntInRange(pendingDelete, MAX_UINT32);
+  return kittyGraphicsSequence(`a=d,d=I,i=${pendingDelete},q=2`);
 }
 //@ chunk-m1vyn8g1.js:5374-5442 placement
-function v(e) {
-  return (assertIntInRange(e, MAX_UINT32), c(`i=${e},s=1,v=1,a=q,t=d,f=24`, "AAAA"));
+/**
+ * 生成传输并立即显示的 kitty 图像序列（1×1 占位）。
+ */
+function transmitKittyImage(e) {
+  assertIntInRange(e, MAX_UINT32);
+  return kittyGraphicsSequence(`i=${e},s=1,v=1,a=q,t=d,f=24`, "AAAA");
 }
 //@ chunk-m1vyn8g1.js:5442-5517 placement
-function xIs(e, n) {
-  return (
-    assertIntInRange(e, MAX_UINT32),
-    assertMediumName(n),
-    c(`i=${e},s=1,v=1,a=q,t=f,f=32`, base64URLEncode(n))
-  );
+/**
+ * 以 32 位 RGBA（f=32）传输给定数据并放置图像。
+ */
+function transmitKittyRgba(e, buffer) {
+  assertIntInRange(e, MAX_UINT32);
+  assertMediumName(buffer);
+  return kittyGraphicsSequence(`i=${e},s=1,v=1,a=q,t=f,f=32`, base64URLEncode(buffer));
 }
-
-export { xIs, buildKittyTransmitSequence, buildKittyPlaceholderGrid, ANSI_256_LIMIT, RIs, v };
+export {
+  transmitKittyRgba,
+  buildKittyTransmitSequence,
+  buildKittyPlaceholderGrid,
+  ANSI_256_LIMIT,
+  deleteKittyImage,
+  transmitKittyImage,
+};

@@ -8,44 +8,40 @@
  * pieces: chunk-s61vbvea.js (8)
  * attribution: placement 8
  */
-import {
-  isAbsolute,
-  isAbsolute as isAbsolute_2,
-  isAbsolute as isAbsolute_3,
-  isAbsolute as isAbsolute_4,
-  isAbsolute as isAbsolute_5,
-  isAbsolute as isAbsolute_6,
-  isAbsolute as isAbsolute_7,
-  isAbsolute as isAbsolute_8,
-  isAbsolute as isAbsolute_9,
-  isAbsolute as isAbsolute_10,
-  isAbsolute as isAbsolute_11,
-  isAbsolute as isAbsolute_12,
-  isAbsolute as isAbsolute_13,
-  isAbsolute as isAbsolute_14,
-  isAbsolute as isAbsolute_15,
-} from "path";
+import { isAbsolute } from "path";
 import { escapeXmlControlChars } from "../../utils/permissions/checkRegistry.js";
 import { partiallySanitizeUnicode } from "../../utils/sanitization.js";
 
+//@ chunk-s61vbvea.js:90403-90574 placement
 /**
  * 构造 frontmatter 解析结果（原样内容、可选问题与绝对路径），以及只有问题的结果。
  */
-//@ chunk-s61vbvea.js:90403-90574 placement
-var buildFrontmatterResult = (e, n, r) => ({
-    frontmatterAsWritten: e,
-    ...(r !== void 0 && { frontmatterProblem: r }),
-    ...(n !== void 0 && isAbsolute_3(n) && { path: n }),
+var buildFrontmatterResult = (frontmatterAsWritten, n, asWrittenProblem) => ({
+  frontmatterAsWritten,
+  ...(asWrittenProblem !== undefined && {
+    frontmatterProblem: asWrittenProblem,
   }),
-  frontmatterProblemResult = (e) => ({ frontmatterAsWritten: {}, frontmatterProblem: e });
+  ...(n !== undefined &&
+    isAbsolute(n) && {
+      path: n,
+    }),
+});
+var frontmatterProblemResult = (frontmatterProblem) => ({
+  frontmatterAsWritten: {},
+  frontmatterProblem,
+});
 //@ chunk-s61vbvea.js:90574-90842 placement
-function scrubMemoryKeys(e, n) {
-  let r = { copies: new Map(), hasCollided: !1 },
-    { frontmatterAsWritten: frontmatterAsWritten, asWrittenProblem: asWrittenProblem } = e,
-    y,
-    S;
+function scrubMemoryKeys(frontmatter, n) {
+  let r = {
+    copies: new Map(),
+    hasCollided: false,
+  };
+  let { frontmatterAsWritten, asWrittenProblem } = frontmatter;
+  let y;
+  let S;
   try {
-    ((y = scrubObjectPaths(frontmatterAsWritten, r)), (S = asWrittenProblem && cu(asWrittenProblem)));
+    y = scrubObjectPaths(frontmatterAsWritten, r);
+    S = asWrittenProblem && scrubString(asWrittenProblem);
   } catch {
     return buildFrontmatterResult({}, n, "could not be scrubbed");
   }
@@ -54,13 +50,16 @@ function scrubMemoryKeys(e, n) {
     : buildFrontmatterResult(y, n, S);
 }
 //@ chunk-s61vbvea.js:90842-90896 placement
-var cu = (e) => escapeXmlControlChars(partiallySanitizeUnicode(e).replace(/[\u2028\u2029]/g, ""));
+/**
+ * 清洗字符串里的 U+2028/2029 并做 Unicode 部分清洗。
+ */
+var scrubString = (e) => escapeXmlControlChars(partiallySanitizeUnicode(e).replace(/[\u2028\u2029]/g, ""));
 //@ chunk-s61vbvea.js:90896-91139 placement
 function scrubValuePaths(e, n) {
-  if (typeof e === "string") return cu(e);
+  if (typeof e === "string") return scrubString(e);
   if (typeof e !== "object" || e === null) return e;
   let r = n.copies.get(e);
-  if (r !== void 0) return r;
+  if (r !== undefined) return r;
   if (!Array.isArray(e)) return scrubObjectPaths(e, n);
   let s = [];
   n.copies.set(e, s);
@@ -71,28 +70,43 @@ function scrubValuePaths(e, n) {
 function scrubObjectPaths(e, n) {
   let r = {};
   n.copies.set(e, r);
-  for (let [s, h] of Object.entries(e)) {
-    let y = cu(s);
-    ((n.hasCollided ||= Object.hasOwn(r, y)),
-      Object.defineProperty(r, y, {
-        value: scrubValuePaths(h, n),
-        enumerable: !0,
-        writable: !0,
-        configurable: !0,
-      }));
+  for (let [key, value] of Object.entries(e)) {
+    let y = scrubString(key);
+    n.hasCollided ||= Object.hasOwn(r, y);
+    Object.defineProperty(r, y, {
+      value: scrubValuePaths(value, n),
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    });
   }
   return r;
 }
 //@ chunk-s61vbvea.js:91656-91706 placement
-var Ev = ["ELOOP", "ENXIO", "EISDIR"],
-  JKo = new Set(Ev);
+/**
+ * 上述错误码集合。
+ */
+var NON_REGULAR_ERRORS = ["ELOOP", "ENXIO", "EISDIR"];
+var nonRegularErrorSet = new Set(NON_REGULAR_ERRORS);
 //@ chunk-s61vbvea.js:91706-91751 placement
-function FX(e) {
-  return e !== void 0 && JKo.has(e);
+/**
+ * 判断错误码是否属于非普通文件错误。
+ */
+function isNonRegularError(telemetryCode) {
+  return telemetryCode !== undefined && nonRegularErrorSet.has(telemetryCode);
 }
 //@ chunk-s61vbvea.js:91751-91813 placement
-function $Zn(e) {
-  return e.code === "Failed" && FX(e.telemetryCode);
+/**
+ * 判断失败是否由非普通文件错误引起。
+ */
+function isNonRegularFailure(error) {
+  return error.code === "Failed" && isNonRegularError(error.telemetryCode);
 }
-
-export { JKo, FX, $Zn, scrubMemoryKeys, buildFrontmatterResult, frontmatterProblemResult };
+export {
+  nonRegularErrorSet,
+  isNonRegularError,
+  isNonRegularFailure,
+  scrubMemoryKeys,
+  buildFrontmatterResult,
+  frontmatterProblemResult,
+};

@@ -10,7 +10,7 @@
  */
 import { isBuiltinTheme } from "../../utils/theme.js";
 import { useResolvedTheme } from "./ThemeProvider.js";
-import { e } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { BaseBox } from "../../ink/components/Box.js";
 
 //@ chunk-x6v6jz2y.js:5808-5964 fingerprint = resolveColor (1)
@@ -23,20 +23,19 @@ function resolveColor(color, theme) {
     color.startsWith("ansi:")
   )
     return color;
-  return isBuiltinTheme(color) ? theme[color] : void 0;
+  return isBuiltinTheme(color) ? theme[color] : undefined;
 }
 //@ chunk-x6v6jz2y.js:5964-6240 fingerprint = ThemedBox (0.952)
 function ThemedBox(t0) {
-  let r = useResolvedTheme();
-  return e(BaseBox, {
+  let resolvedTheme = useResolvedTheme();
+  return jsxProd_default(BaseBox, {
     ...t0,
-    borderColor: resolveColor(t0.borderColor, r),
-    borderTopColor: resolveColor(t0.borderTopColor, r),
-    borderBottomColor: resolveColor(t0.borderBottomColor, r),
-    borderLeftColor: resolveColor(t0.borderLeftColor, r),
-    borderRightColor: resolveColor(t0.borderRightColor, r),
-    backgroundColor: resolveColor(t0.backgroundColor, r),
+    borderColor: resolveColor(t0.borderColor, resolvedTheme),
+    borderTopColor: resolveColor(t0.borderTopColor, resolvedTheme),
+    borderBottomColor: resolveColor(t0.borderBottomColor, resolvedTheme),
+    borderLeftColor: resolveColor(t0.borderLeftColor, resolvedTheme),
+    borderRightColor: resolveColor(t0.borderRightColor, resolvedTheme),
+    backgroundColor: resolveColor(t0.backgroundColor, resolvedTheme),
   });
 }
-
 export { ThemedBox };

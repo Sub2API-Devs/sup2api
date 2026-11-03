@@ -16,10 +16,10 @@ import {
 import { modelHasNative1MContext } from "./contextWindow1m.js";
 import { getDefaultOpusModel, getDefaultSonnetModel } from "./model.js";
 
+//@ chunk-z21je308.js:242-457 fingerprint = getAvailableUpgrade (1)
 /**
  * 当前设置为 opus/sonnet、1M 可用且未在用 1M 时返回 {alias:"opus[1m]" 或 "sonnet[1m]", name, multiplier:5}。
  */
-//@ chunk-z21je308.js:242-457 fingerprint = getAvailableUpgrade (1)
 function getAvailableUpgrade() {
   let currentModelSetting = getUserSpecifiedModelSetting();
   if (
@@ -27,19 +27,27 @@ function getAvailableUpgrade() {
     shouldProbeThirdPartyDefaults() &&
     !modelHasNative1MContext(getDefaultOpusModel())
   )
-    return { alias: "opus[1m]", name: "Opus 1M", multiplier: 5 };
+    return {
+      alias: "opus[1m]",
+      name: "Opus 1M",
+      multiplier: 5,
+    };
   else if (
     currentModelSetting === "sonnet" &&
     shouldProbeThirdPartyDefaultsAlt() &&
     !modelHasNative1MContext(getDefaultSonnetModel())
   )
-    return { alias: "sonnet[1m]", name: "Sonnet 1M", multiplier: 5 };
+    return {
+      alias: "sonnet[1m]",
+      name: "Sonnet 1M",
+      multiplier: 5,
+    };
   return null;
 }
+//@ chunk-z21je308.js:457-659 fingerprint = getUpgradeMessage (1)
 /**
  * warning 场景返回 "/model <alias>"，tip 场景返回 "Tip: You have access to … with 5x more context"。
  */
-//@ chunk-z21je308.js:457-659 fingerprint = getUpgradeMessage (1)
 function getUpgradeMessage(context) {
   let upgrade = getAvailableUpgrade();
   if (!upgrade) return null;
@@ -52,5 +60,4 @@ function getUpgradeMessage(context) {
       return null;
   }
 }
-
 export { getUpgradeMessage };

@@ -8,43 +8,44 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-vwj6ccer.js:67604-68270 cjs-fingerprint
-var On = x(function (kd, r0) {
-  var Dd = (r0.exports = {
-    nextSkippingChildren: ux,
-    nextAncestorSibling: In,
-    next: lx,
-    previous: xx,
-    deepLastChild: t0,
+var require_NodeTraversal = x(function (cjsExports, cjsModule) {
+  var NodeTraversal = (cjsModule.exports = {
+    nextSkippingChildren,
+    nextAncestorSibling,
+    next,
+    previous,
+    deepLastChild,
   });
-  function ux(e, t) {
-    if (e === t) return null;
-    if (e.nextSibling !== null) return e.nextSibling;
-    return In(e, t);
+  function nextSkippingChildren(node, stayWithin) {
+    if (node === stayWithin) return null;
+    if (node.nextSibling !== null) return node.nextSibling;
+    return nextAncestorSibling(node, stayWithin);
   }
-  function In(e, t) {
-    for (e = e.parentNode; e !== null; e = e.parentNode) {
-      if (e === t) return null;
-      if (e.nextSibling !== null) return e.nextSibling;
+  function nextAncestorSibling(node, stayWithin) {
+    for (node = node.parentNode; node !== null; node = node.parentNode) {
+      if (node === stayWithin) return null;
+      if (node.nextSibling !== null) return node.nextSibling;
     }
     return null;
   }
-  function lx(e, t) {
-    var firstChild = e.firstChild;
-    if (firstChild !== null) return firstChild;
-    if (e === t) return null;
-    if (((firstChild = e.nextSibling), firstChild !== null)) return firstChild;
-    return In(e, t);
+  function next(node, stayWithin) {
+    var n = node.firstChild;
+    if (n !== null) return n;
+    if (node === stayWithin) return null;
+    n = node.nextSibling;
+    if (n !== null) return n;
+    return nextAncestorSibling(node, stayWithin);
   }
-  function t0(e) {
-    while (e.lastChild) e = e.lastChild;
-    return e;
+  function deepLastChild(node) {
+    while (node.lastChild) node = node.lastChild;
+    return node;
   }
-  function xx(e, t) {
-    var previousSibling = e.previousSibling;
-    if (previousSibling !== null) return t0(previousSibling);
-    if (((previousSibling = e.parentNode), previousSibling === t)) return null;
-    return previousSibling;
+  function previous(node, stayWithin) {
+    var p = node.previousSibling;
+    if (p !== null) return deepLastChild(p);
+    p = node.parentNode;
+    if (p === stayWithin) return null;
+    return p;
   }
 });
-
-export { On };
+export { require_NodeTraversal };

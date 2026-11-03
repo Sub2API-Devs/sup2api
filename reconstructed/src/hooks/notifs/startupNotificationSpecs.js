@@ -5,27 +5,31 @@
  *
  * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
  * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-18hwfzwa.js (13)
- * attribution: placement 13
+ * pieces: chunk-18hwfzwa.js (15), chunk-6vnxsn99.js (1)
+ * attribution: placement 16
  */
 import { COMPUTED_NOTICE_SPECS, installIssuesNoticeSpec } from "./specs/installNotices.js";
 import { useNotifications } from "../../context/notifications.js";
 import { useSession } from "../../context/session.js";
-import { Me } from "../../components/design-system/ThemeProvider.js";
-import { R, P, j, Q, yt } from "../../../vendor/react/cjs/react.production.js";
+import { useTheme_2 } from "../../components/design-system/ThemeProvider.js";
+import { R, P, init_react_production, Q, yt } from "../../../vendor/react/cjs/react.production.js";
 import { getIsRemoteMode, onAttacherCapsChange, getAttacherCaps } from "../../bootstrap/state.js";
 import { getGlobalConfig, saveGlobalConfig } from "../../utils/config.js";
 import { logError } from "../../utils/log.js";
 import { withTelemetryMessage, toError } from "../../utils/errors.js";
+import { useStartupNotification } from "./useStartupNotification.js";
+import { getRemoteCaps } from "../../remote/remoteMode.js";
+import { isInProcessTeammateTask } from "../../tasks/InProcessTeammateTask/types.js";
+import { makeSpawnNotif, makeShutdownNotif } from "./useTeammateShutdownNotification.js";
 import {
   replMountLogNoticeSpec,
-  JTt,
+  dialogWaitingTranscriptNoticeSpec,
   repoMemoryImportNoticeSpec,
   antOrgAuthCheckNoticeSpec,
   subscriptionSwitchCheckNoticeSpec,
   advisorToolNoticeSpec,
   wellbeingNoticeSpec,
-  YTt,
+  dialogWaitingInTranscriptNoticeSpec,
   autoModeEntryWarningSpec,
   worktreeSparseTipSpec,
   autocompactOfferNoticeSpec,
@@ -36,13 +40,13 @@ import {
   chromeExtensionCheckNoticeSpec,
   signinOfferNoticeSpec,
   complianceTaintNoticeSpec,
-  rTt,
+  complianceTaintNoticeSpec_2,
   costThresholdNoticeSpec,
 } from "./specs/environmentNotices.js";
 import {
   managedSettingsNoticeNoticeSpec,
   officialMarketplaceCheckNoticeSpec,
-  _Tt,
+  otelHeadersHelperFailedNoticeSpec,
   planModeBypassNoticeSpec,
 } from "./specs/settingsNotices.js";
 import {
@@ -58,47 +62,61 @@ import { IDE_DISCONNECTED_NOTICE_SPEC, IDE_INSTALL_ERROR_NOTICE_SPEC } from "./u
 import { useAutoModeUnavailableNotification } from "./useAutoModeUnavailableNotification.js";
 import { usePluginAutoupdateNotification } from "./usePluginAutoupdateNotification.js";
 import { SETTINGS_ERRORS_NOTIFICATION_KEY } from "./useSettingsErrors.js";
-import { sandboxDeniesOnAnotherHostNoticeSpec, ZTt } from "./specs/sandboxNotices.js";
+import {
+  sandboxDeniesOnAnotherHostNoticeSpec,
+  sessionModelRestrictedNoticeSpec,
+} from "./specs/sandboxNotices.js";
 import {
   LIMIT_REACHED_NOTICE_SPEC,
   RATE_LIMIT_WARNING_NOTICE_SPEC,
 } from "./useRateLimitWarningNotification.js";
-import { uTt, OVERAGE_REJECTED_KEY, fTt, pTt } from "./useFastModeNotification.js";
+import {
+  fastModeOrgChangedNoticeSpec,
+  OVERAGE_REJECTED_KEY,
+  fastModeCooldownNoticeSpec,
+  fastModeFallbackRejectedNoticeSpec,
+} from "./useFastModeNotification.js";
 import { useDeprecationWarningNotification } from "./useDeprecationWarningNotification.js";
 import { lspInitializationNoticeSpec } from "./useLspInitializationNotification.js";
-import { TEAMMATE_LIFECYCLE_NOTICE_SPEC } from "./_new/TEAMMATE_LIFECYCLE_NOTICE_SPEC.js";
-import { ROLLOUT_COHORT_NOTICE_SPEC } from "./_new/ROLLOUT_COHORT_NOTICE_SPEC.js";
 import { issueFlagNotification } from "../useIssueFlagBanner.js";
-import { KTt, rcLongTurnNudgeNoticeSpec, jTt } from "./specs/remoteControlNudges.js";
+import {
+  remoteControlUpsellNoticeSpec,
+  rcLongTurnNudgeNoticeSpec,
+  rcPermissionNudgeNoticeSpec,
+} from "./specs/remoteControlNudges.js";
 import { useStoreSelector } from "../useStoreSelector.js";
-import { Cr, useAppStateSession, useAppState } from "../../state/AppState.js";
+import { useAppStoreDirect, useAppStateSession, useAppState } from "../../state/AppState.js";
 import { useClock } from "../../ink/components/ClockContext.js";
 import { useTerminalSize } from "../useTerminalSize.js";
 import { useForceRender } from "../useForceRender.js";
-import { qd } from "../useSettings.js";
+import { useSettingsState } from "../useSettings.js";
 import { useRateLimitState } from "../../components/rateLimit/quotaAutoResume.js";
 import { useCommandQueue } from "../../components/Messages.js";
-import { dg } from "../../context/QueuedMessageContext.js";
-import { teammateStatusSignature } from "./_new/teammateStatusSignature.js";
+import { useQueuedMessageText } from "../../context/QueuedMessageContext.js";
 
 //@ chunk-18hwfzwa.js:1751044-1751835 placement
 function runStartupNotificationSpecs(h = COMPUTED_NOTICE_SPECS) {
-  let { addNotification: addNotification } = useNotifications(),
-    D = useSession(),
-    { storageV5: storageV5, credentials: credentials } = Me(),
-    ke = R(!1);
+  let { addNotification } = useNotifications();
+  let session = useSession();
+  let { storageV5, credentials } = useTheme_2();
+  let ke = R(false);
   P(() => {
     if (getIsRemoteMode() || ke.current) return;
-    ke.current = !0;
-    let Re = getGlobalConfig().seenNotifications ?? {},
-      Be = [];
+    ke.current = true;
+    let seenNotifications = getGlobalConfig().seenNotifications ?? {};
+    let Be = [];
     Promise.allSettled(
       h.map(async (He) => {
-        if (He.maxImpressions !== void 0 && (Re[He.id] ?? 0) >= He.maxImpressions) return;
-        let compute = await He.compute({ session: D, storageV5: storageV5, credentials: credentials });
-        if (!compute || (Array.isArray(compute) && compute.length === 0)) return;
-        for (let ze of Array.isArray(compute) ? compute : [compute]) addNotification(ze);
-        if ((He.onShown?.(), He.maxImpressions !== void 0)) Be.push(He.id);
+        if (He.maxImpressions !== undefined && (seenNotifications[He.id] ?? 0) >= He.maxImpressions) return;
+        let We = await He.compute({
+          session,
+          storageV5,
+          credentials,
+        });
+        if (!We || (Array.isArray(We) && We.length === 0)) return;
+        for (let ze of Array.isArray(We) ? We : [We]) addNotification(ze);
+        He.onShown?.();
+        if (He.maxImpressions !== undefined) Be.push(He.id);
       }),
     ).then((He) => {
       for (let We of He)
@@ -106,19 +124,56 @@ function runStartupNotificationSpecs(h = COMPUTED_NOTICE_SPECS) {
           logError(withTelemetryMessage(toError(We.reason), "startup notification spec failed"));
       if (Be.length === 0) return;
       saveGlobalConfig((We) => {
-        let ze = { ...(We.seenNotifications ?? {}) };
+        let ze = {
+          ...(We.seenNotifications ?? {}),
+        };
         for (let Xe of Be) ze[Xe] = (ze[Xe] ?? 0) + 1;
-        return { ...We, seenNotifications: ze };
+        return {
+          ...We,
+          seenNotifications: ze,
+        };
       }, storageV5);
     });
-  }, [addNotification, D, h, storageV5, credentials]);
+  }, [addNotification, session, h, storageV5, credentials]);
 }
 //@ chunk-18hwfzwa.js:1751835-1751839 placement
-j();
+init_react_production();
+//@ chunk-18hwfzwa.js:1785931-1786045 placement
+var ROLLOUT_COHORT_NOTICE_SPEC = {
+  id: "rollout-cohort-notice",
+  deps: (h) => [h.addNotification, h.removeNotification, h.storageV5],
+  setup: () => useStartupNotification,
+};
+//@ chunk-18hwfzwa.js:1788457-1788831 placement
+/**
+ * 启动通知规格：进程内队友任务开始运行或完成时各提示一次。
+ */
+var TEAMMATE_LIFECYCLE_NOTICE_SPEC = {
+  id: "teammate-lifecycle",
+  deps: (h) => [h.teammateStatusSignature, h.addNotification],
+  setup() {
+    let h = new Set();
+    let x = new Set();
+    return ({ addNotification, store }) => {
+      if (getRemoteCaps() !== null) return;
+      for (let [key, value] of Object.entries(store.getState().tasks)) {
+        if (!isInProcessTeammateTask(value)) continue;
+        if (value.status === "running" && !h.has(key)) {
+          h.add(key);
+          addNotification(makeSpawnNotif(1));
+        }
+        if (value.status === "completed" && !x.has(key)) {
+          x.add(key);
+          addNotification(makeShutdownNotif(1));
+        }
+      }
+    };
+  },
+};
 //@ chunk-18hwfzwa.js:1789557-1789771 placement
 var STARTUP_NOTIFICATION_SPECS = [
   replMountLogNoticeSpec,
-  JTt,
+  dialogWaitingTranscriptNoticeSpec,
   deviceToolNoticesNoticeSpec,
   repoMemoryImportNoticeSpec,
   managedSettingsNoticeNoticeSpec,
@@ -135,31 +190,31 @@ var STARTUP_NOTIFICATION_SPECS = [
   usePluginAutoupdateNotification,
   SETTINGS_ERRORS_NOTIFICATION_KEY,
   sandboxDeniesOnAnotherHostNoticeSpec,
-  _Tt,
+  otelHeadersHelperFailedNoticeSpec,
   projectTelemetryEnvNoticeSpec,
   projectChromeEnvNoticeSpec,
   projectSignInEnvNoticeSpec,
   complianceTaintNoticeSpec,
-  rTt,
+  complianceTaintNoticeSpec_2,
   fableUsageCreditsNoticeSpec,
   LIMIT_REACHED_NOTICE_SPEC,
   RATE_LIMIT_WARNING_NOTICE_SPEC,
-  uTt,
+  fastModeOrgChangedNoticeSpec,
   OVERAGE_REJECTED_KEY,
-  fTt,
-  pTt,
+  fastModeCooldownNoticeSpec,
+  fastModeFallbackRejectedNoticeSpec,
   advisorToolNoticeSpec,
   useDeprecationWarningNotification,
-  ZTt,
+  sessionModelRestrictedNoticeSpec,
   lspInitializationNoticeSpec,
   TEAMMATE_LIFECYCLE_NOTICE_SPEC,
   ROLLOUT_COHORT_NOTICE_SPEC,
   wellbeingNoticeSpec,
   issueFlagNotification,
-  KTt,
+  remoteControlUpsellNoticeSpec,
   rcLongTurnNudgeNoticeSpec,
-  jTt,
-  YTt,
+  rcPermissionNudgeNoticeSpec,
+  dialogWaitingInTranscriptNoticeSpec,
   autoModeEntryWarningSpec,
   planModeBypassNoticeSpec,
   worktreeSparseTipSpec,
@@ -170,85 +225,90 @@ var STARTUP_NOTIFICATION_SPECS = [
   slackFooterOfferNoticeSpec,
 ];
 //@ chunk-18hwfzwa.js:1789771-1789775 placement
-j();
+init_react_production();
 //@ chunk-18hwfzwa.js:1789775-1791674 placement
 function useStartupNotifications({
-  mainLoopModel: mainLoopModel,
-  mcpClients: mcpClients,
-  ideInstallationStatus: ideInstallationStatus,
-  dynamicMcpConfig: dynamicMcpConfig,
-  turn: turn,
-  transcript: transcript,
-  requestDialog: requestDialog,
-  dialogStore: dialogStore,
-  hasOpenDialog: hasOpenDialog,
-  submitPrompt: submitPrompt,
-  screen: screen,
-  disabled: disabled,
-  isRemoteSession: isRemoteSession,
-  isTranscriptAtBottom: isTranscriptAtBottom,
+  mainLoopModel,
+  mcpClients,
+  ideInstallationStatus,
+  dynamicMcpConfig,
+  turn,
+  transcript,
+  requestDialog,
+  dialogStore,
+  hasOpenDialog,
+  submitPrompt,
+  screen,
+  disabled,
+  isRemoteSession,
+  isTranscriptAtBottom,
 }) {
-  let At = useStoreSelector(turn, selectIsLoading6),
-    It = useStoreSelector(turn, selectLastQueryCompletionTime),
-    Ot = useStoreSelector(turn, selectLastTurnEnd2),
-    Et = useStoreSelector(turn, selectSubmitCount3);
+  let storeSelector = useStoreSelector(turn, selectIsLoading6);
+  let storeSelector_2 = useStoreSelector(turn, selectLastQueryCompletionTime);
+  let storeSelector_3 = useStoreSelector(turn, selectLastTurnEnd2);
+  let storeSelector_4 = useStoreSelector(turn, selectSubmitCount3);
   useStoreSelector(transcript);
   let Dt = Q(
-      () => ({ isLoading: At, lastQueryCompletionTime: It, lastTurnEnd: Ot, submitCount: Et }),
-      [At, It, Ot, Et],
-    ),
-    { addNotification: addNotification, removeNotification: removeNotification } = useNotifications(),
-    Xt = Cr(),
-    io = useAppStateSession(),
-    { storageV5: storageV5, credentials: credentials } = Me(),
-    ao = useClock(),
-    co = useTerminalSize(),
-    bo = useForceRender(),
-    Ao = yt(onAttacherCapsChange, () => getAttacherCaps() !== null),
-    Bo = qd(),
-    Ro = useRateLimitState(),
-    Ho = useAppState((Mn) => Mn.toolPermissionContext.mode),
-    Io = useAppState((Mn) => Mn.toolPermissionContext.isAutoModeAvailable),
-    Wo = useAppState((Mn) => Mn.toolPermissionContext.isBypassPermissionsModeAvailable),
-    mn = useAppState((Mn) => Mn.attribution.permissionPromptCount),
-    Cn = useAppState((Mn) => Mn.replBridgeConnected && !Mn.replBridgeOutboundOnly),
-    No = useAppState((Mn) => Mn.replBridgeSessionUrl),
-    vo = useAppState((Mn) => Mn.fastMode),
-    Yo = useAppState((Mn) => Mn.advisorModel),
-    kn = useAppState(gGo),
-    Fn = useAppState((Mn) => Mn.initialMessage),
-    bn = useCommandQueue().length,
-    Go = useAppState((Mn) => Mn.mainLoopModelForSession ?? Mn.mainLoopModel),
-    hn = dg();
+    () => ({
+      isLoading: storeSelector,
+      lastQueryCompletionTime: storeSelector_2,
+      lastTurnEnd: storeSelector_3,
+      submitCount: storeSelector_4,
+    }),
+    [storeSelector, storeSelector_2, storeSelector_3, storeSelector_4],
+  );
+  let { addNotification, removeNotification } = useNotifications();
+  let appStoreDirect = useAppStoreDirect();
+  let appStateSession = useAppStateSession();
+  let { storageV5, credentials } = useTheme_2();
+  let clock = useClock();
+  let terminalSize = useTerminalSize();
+  let forceRender = useForceRender();
+  let Ao = yt(onAttacherCapsChange, () => getAttacherCaps() !== null);
+  let settingsState = useSettingsState();
+  let rateLimitState = useRateLimitState();
+  let Ho = useAppState((Mn) => Mn.toolPermissionContext.mode);
+  let Io = useAppState((Mn) => Mn.toolPermissionContext.isAutoModeAvailable);
+  let Wo = useAppState((Mn) => Mn.toolPermissionContext.isBypassPermissionsModeAvailable);
+  let mn = useAppState((Mn) => Mn.attribution.permissionPromptCount);
+  let Cn = useAppState((Mn) => Mn.replBridgeConnected && !Mn.replBridgeOutboundOnly);
+  let No = useAppState((Mn) => Mn.replBridgeSessionUrl);
+  let vo = useAppState((Mn) => Mn.fastMode);
+  let Yo = useAppState((Mn) => Mn.advisorModel);
+  let appState = useAppState(selectTeammateStatusSignature);
+  let Fn = useAppState((Mn) => Mn.initialMessage);
+  let bn = useCommandQueue().length;
+  let Go = useAppState((Mn) => Mn.mainLoopModelForSession ?? Mn.mainLoopModel);
+  let queuedMessageText = useQueuedMessageText();
   return Q(
     () => ({
-      mainLoopModel: mainLoopModel,
-      mcpClients: mcpClients,
-      ideInstallationStatus: ideInstallationStatus,
-      dynamicMcpConfig: dynamicMcpConfig,
-      turn: turn,
+      mainLoopModel,
+      mcpClients,
+      ideInstallationStatus,
+      dynamicMcpConfig,
+      turn,
       turnAtRender: Dt,
-      transcript: transcript,
-      requestDialog: requestDialog,
-      submitPrompt: submitPrompt,
-      screen: screen,
-      disabled: disabled,
-      isRemoteSession: isRemoteSession,
-      isTranscriptAtBottom: isTranscriptAtBottom,
-      addNotification: addNotification,
-      removeNotification: removeNotification,
-      store: Xt,
-      dialogStore: dialogStore,
-      hasOpenDialog: hasOpenDialog,
-      session: io,
-      storageV5: storageV5,
-      credentials: credentials,
-      clock: ao,
-      terminalSize: co,
-      growthBookVersion: bo,
+      transcript,
+      requestDialog,
+      submitPrompt,
+      screen,
+      disabled,
+      isRemoteSession,
+      isTranscriptAtBottom,
+      addNotification,
+      removeNotification,
+      store: appStoreDirect,
+      dialogStore,
+      hasOpenDialog,
+      session: appStateSession,
+      storageV5,
+      credentials,
+      clock,
+      terminalSize,
+      growthBookVersion: forceRender,
       hasBgAttacher: Ao,
-      settings: Bo,
-      claudeAiLimits: Ro,
+      settings: settingsState,
+      claudeAiLimits: rateLimitState,
       permissionMode: Ho,
       isAutoModeAvailable: Io,
       isBypassPermissionsModeAvailable: Wo,
@@ -257,11 +317,11 @@ function useStartupNotifications({
       replBridgeSessionUrl: No,
       fastMode: vo,
       advisorModel: Yo,
-      teammateStatusSignature: kn,
+      teammateStatusSignature: appState,
       initialMessage: Fn,
       queuedCommandCount: bn,
       userSpecifiedModel: Go,
-      effortValue: hn,
+      effortValue: queuedMessageText,
     }),
     [
       mainLoopModel,
@@ -279,18 +339,18 @@ function useStartupNotifications({
       isTranscriptAtBottom,
       addNotification,
       removeNotification,
-      Xt,
+      appStoreDirect,
       dialogStore,
       hasOpenDialog,
-      io,
+      appStateSession,
       storageV5,
       credentials,
-      ao,
-      co,
-      bo,
+      clock,
+      terminalSize,
+      forceRender,
       Ao,
-      Bo,
-      Ro,
+      settingsState,
+      rateLimitState,
       Ho,
       Io,
       Wo,
@@ -299,16 +359,16 @@ function useStartupNotifications({
       No,
       vo,
       Yo,
-      kn,
+      appState,
       Fn,
       bn,
       Go,
-      hn,
+      queuedMessageText,
     ],
   );
 }
 //@ chunk-18hwfzwa.js:1791674-1791710 placement
-function gGo(h) {
+function selectTeammateStatusSignature(h) {
   return teammateStatusSignature(h.tasks);
 }
 //@ chunk-18hwfzwa.js:1791710-1791745 placement
@@ -328,36 +388,44 @@ function selectSubmitCount3(h) {
   return h.submitCount;
 }
 //@ chunk-18hwfzwa.js:1791868-1791872 placement
-j();
+init_react_production();
 //@ chunk-18hwfzwa.js:1791941-1792030 placement
-var mRt = 180000,
-  vGo = 30000,
-  CGo = 3600000,
-  _Go = 300000,
-  pRt = 500,
-  TGo = 2000,
-  RGo = 3,
-  xGo = 3,
-  AGo = 2,
-  MGo = 3;
+var STARTUP_FLAG_TTL_MS = 180000;
+var STARTUP_MIN_INTERVAL_MS = 30000;
+var STARTUP_MAX_INTERVAL_MS = 3600000;
+var STARTUP_SESSION_BUDGET_MS = 300000;
+var STARTUP_CHECK_STEP_MS = 500;
+var STARTUP_BACKOFF_MS = 2000;
+var MAX_STARTUP_NOTICES = 3;
+var STARTUP_GRACE_TURNS = 3;
+var STARTUP_GRACE_TURNS_MIN = 2;
+var STARTUP_GRACE_TURNS_MAX = 3;
 //@ chunk-18hwfzwa.js:1792030-1792115 placement
-function noe(h) {
+function isRealUserMessage(h) {
   return h.type === "user" && !h.isMeta && !h.isCompactSummary && !h.isVirtual;
 }
-
+//@ chunk-6vnxsn99.js:22755-22854 placement
+/**
+ * teammate 任务状态签名串（id:status;…），用于判断是否变化。
+ */
+function teammateStatusSignature(tasks) {
+  let n = "";
+  for (let r of Object.values(tasks)) if (isInProcessTeammateTask(r)) n += `${r.id}:${r.status};`;
+  return n;
+}
 export {
   runStartupNotificationSpecs,
   useStartupNotifications,
   STARTUP_NOTIFICATION_SPECS,
-  noe,
-  xGo,
-  AGo,
-  mRt,
-  vGo,
-  RGo,
-  MGo,
-  CGo,
-  TGo,
-  _Go,
-  pRt,
+  isRealUserMessage,
+  STARTUP_GRACE_TURNS,
+  STARTUP_GRACE_TURNS_MIN,
+  STARTUP_FLAG_TTL_MS,
+  STARTUP_MIN_INTERVAL_MS,
+  MAX_STARTUP_NOTICES,
+  STARTUP_GRACE_TURNS_MAX,
+  STARTUP_MAX_INTERVAL_MS,
+  STARTUP_BACKOFF_MS,
+  STARTUP_SESSION_BUDGET_MS,
+  STARTUP_CHECK_STEP_MS,
 };

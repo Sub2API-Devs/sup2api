@@ -8,85 +8,48 @@
  * pieces: chunk-82kqcve8.js (17)
  * attribution: placement 17
  */
-import {
-  join,
-  join as join_2,
-  join as join_3,
-  join as join_4,
-  join as join_5,
-  join as join_6,
-  join as join_7,
-  join as join_8,
-  join as join_9,
-  join as join_10,
-  join as join_11,
-  join as join_12,
-  relative,
-  sep,
-  sep as sep_2,
-  sep as sep_3,
-  sep as sep_4,
-  sep as sep_5,
-  sep as sep_6,
-  sep as sep_7,
-  sep as sep_8,
-  isAbsolute,
-  isAbsolute as isAbsolute_2,
-  posix,
-  posix as posix_2,
-  posix as posix_3,
-  posix as posix_4,
-  posix as posix_5,
-  resolve,
-  resolve as resolve_2,
-  resolve as resolve_3,
-  resolve as resolve_4,
-  resolve as resolve_5,
-  resolve as resolve_6,
-  dirname,
-  dirname as dirname_2,
-  dirname as dirname_3,
-  dirname as dirname_4,
-  dirname as dirname_5,
-  dirname as dirname_6,
-} from "path";
-import { homedir, homedir as homedir_2 } from "os";
-import { opendir, open, open as open_2, open as open_3 } from "fs/promises";
-import { Mn } from "./pathClassification.js";
+import { join, relative, sep, isAbsolute, posix, resolve, dirname } from "path";
+import { homedir } from "os";
+import { opendir, open } from "fs/promises";
+import { identity } from "./pathClassification.js";
 import { getPlatform } from "./platform.js";
 import { findGitRootRecheckingNegative, findGitRoot, findCanonicalGitRoot } from "./git.js";
 import { getGitRepoCache } from "./git/gitRepoCache.js";
-import { foldCaseSimple, YEr, xuo } from "./windowsProfileFolders.js";
-import { Cp } from "./pathIdentity.js";
-import { driveMountsForPath, car } from "./wslMounts.js";
+import {
+  foldCaseSimple,
+  isDosShortNameFolded,
+  segmentsMatchCaseInsensitive,
+} from "./windowsProfileFolders.js";
+import { foldCaseBasic } from "./pathIdentity.js";
+import { driveMountsForPath, normalizedVolumePaths } from "./wslMounts.js";
 import { getFsImplementation } from "./fsOperations.js";
 import { isSadFsErrno } from "./errors.js";
 import { logError } from "./log.js";
 import { readPositionIsUnsafe, pointerFileIsSuspect, rawPointerPathIsUnsafe } from "./git/gitFilesystem.js";
-import { yl, isOnForeignMount } from "./networkPaths.js";
+import { isNetworkMountRoot, isOnForeignMount } from "./networkPaths.js";
 
 //@ chunk-82kqcve8.js:174786-174804 placement
-var Mg = 32,
-  ci = 4096;
+var MAX_DIR_ENTRIES = 32;
+var MAX_GITDIR_READ_BYTES = 4096;
 //@ chunk-82kqcve8.js:174804-175416 placement
-async function resolveWslGitDir(e) {
-  let n = join_11(e, ".git", "worktrees"),
-    r = await readDirNamesBounded(n, join_11(e, ".git"));
-  if (r.length === 0) return [];
-  let s = await rr(e);
+async function resolveWslGitDir(canonicalGitRoot) {
+  let n = join(canonicalGitRoot, ".git", "worktrees");
+  let dirNamesBounded = await readDirNamesBounded(n, join(canonicalGitRoot, ".git"));
+  if (dirNamesBounded.length === 0) return [];
+  let s = await realpathOrNull(canonicalGitRoot);
   if (s === null) return [];
-  let h = await rr(n);
+  let h = await realpathOrNull(n);
   if (h === null) return [];
-  let y = Tg();
+  let y = homeDirOrNull();
   if (y === null) return [];
-  let w = Mn(y),
-    S = await rr(w),
-    R = S === null || S === w ? [w] : [w, S],
-    results = await Promise.all(r.map((L) => readGitdirFile(join_11(n, L), join_11(h, L)))),
-    P = [];
+  let w = identity(y);
+  let S = await realpathOrNull(w);
+  let R = S === null || S === w ? [w] : [w, S];
+  let results = await Promise.all(dirNamesBounded.map((L) => readGitdirFile(join(n, L), join(h, L))));
+  let P = [];
   for (let L of results) {
-    if (L === null || !Cg(L)) continue;
-    let j = await rr(L);
+    if (L === null || !isCanonicalGitRoot(L)) continue;
+    let j = await realpathOrNull(L);
     if (j === null) continue;
     if (
       isUnderSensitiveProfileDir(L, R) ||
@@ -95,46 +58,54 @@ async function resolveWslGitDir(e) {
         (isAncestorOfSensitiveProfileDir(L, R) || isAncestorOfSensitiveProfileDir(j, R)))
     )
       continue;
-    if (isPathInside(L, e) || isPathInside(L, s) || isPathInside(j, e) || isPathInside(j, s)) continue;
+    if (
+      isPathInside(L, canonicalGitRoot) ||
+      isPathInside(L, s) ||
+      isPathInside(j, canonicalGitRoot) ||
+      isPathInside(j, s)
+    )
+      continue;
     let G = canonicalGitRootFresh(L);
     if (G === null || G === L) continue;
-    if (G === e || (await rr(G)) === s) P.push(L);
+    if (G === canonicalGitRoot || (await realpathOrNull(G)) === s) P.push(L);
   }
   return P;
 }
 //@ chunk-82kqcve8.js:175416-175496 placement
-function Cg(e) {
-  if (findGitRootRecheckingNegative(e) === e) return !0;
-  return (getGitRepoCache().rootByPath.delete(e), findGitRoot(e) === e);
+function isCanonicalGitRoot(e) {
+  if (findGitRootRecheckingNegative(e) === e) return true;
+  getGitRepoCache().rootByPath.delete(e);
+  return findGitRoot(e) === e;
 }
 //@ chunk-82kqcve8.js:175496-175599 placement
 function canonicalGitRootFresh(e) {
-  let n = findCanonicalGitRoot(e);
-  if (n !== null && n !== e) return n;
-  return (getGitRepoCache().canonicalRootByRoot.delete(e), findCanonicalGitRoot(e));
+  let canonicalGitRoot = findCanonicalGitRoot(e);
+  if (canonicalGitRoot !== null && canonicalGitRoot !== e) return canonicalGitRoot;
+  getGitRepoCache().canonicalRootByRoot.delete(e);
+  return findCanonicalGitRoot(e);
 }
 //@ chunk-82kqcve8.js:175599-175622 placement
-function di() {
-  return !1;
+function isCaseFoldingActive() {
+  return false;
 }
 //@ chunk-82kqcve8.js:175622-175694 placement
-function xg(e) {
+function foldForPlatform(e) {
   if (e === "windows_on_wsl") return foldCaseSimple;
-  return di() ? Cp : (n) => n;
+  return isCaseFoldingActive() ? foldCaseBasic : (n) => n;
 }
 //@ chunk-82kqcve8.js:175694-175836 placement
 function isPathInside(e, n) {
-  let r = di(),
-    s = r ? Cp(e) : e,
-    h = r ? Cp(n) : n;
-  if (s === h) return !0;
+  let r = isCaseFoldingActive();
+  let s = r ? foldCaseBasic(e) : e;
+  let h = r ? foldCaseBasic(n) : n;
+  if (s === h) return true;
   let y = relative(s, h);
-  return y !== "" && y !== ".." && !y.startsWith(`..${sep_7}`) && !isAbsolute_2(y);
+  return y !== "" && y !== ".." && !y.startsWith(`..${sep}`) && !isAbsolute(y);
 }
+//@ chunk-82kqcve8.js:175836-176222 placement
 /**
  * 用户目录下不应作为挂载或同步目标的敏感子目录（Library、AppData、开始菜单、PowerShell 配置目录、bin 等，支持 OneDrive* 通配）。
  */
-//@ chunk-82kqcve8.js:175836-176222 placement
 var PROFILE_SENSITIVE_DIRS = [
   ["Library"],
   ["Applications"],
@@ -155,82 +126,83 @@ var PROFILE_SENSITIVE_DIRS = [
   ["OneDrive*", "Documents", "WindowsPowerShell"],
   ["bin"],
 ];
+//@ chunk-82kqcve8.js:176222-176433 placement
 /**
  * 判断路径是否位于用户目录本身或其敏感子目录（含点开头目录）之内。
  */
-//@ chunk-82kqcve8.js:176222-176433 placement
 function isUnderSensitiveProfileDir(e, n, r = "platform") {
-  return ql(e, n, r, (s) => {
-    if (s.length === 0) return !0;
-    if (s[0].startsWith(".") || (r === "windows_on_wsl" && YEr(s[0]))) return !0;
+  return segmentsUnderAnyRoot(e, n, r, (s) => {
+    if (s.length === 0) return true;
+    if (s[0].startsWith(".") || (r === "windows_on_wsl" && isDosShortNameFolded(s[0]))) return true;
     return PROFILE_SENSITIVE_DIRS.some((h) =>
-      h.every((y, w) => s[w] !== void 0 && matchesProfileSegment(s[w], y, r)),
+      h.every((y, w) => s[w] !== undefined && matchesProfileSegment(s[w], y, r)),
     );
   });
 }
+//@ chunk-82kqcve8.js:176433-176582 placement
 /**
  * 判断路径是否是用户目录下某个敏感子目录的上级。
  */
-//@ chunk-82kqcve8.js:176433-176582 placement
 function isAncestorOfSensitiveProfileDir(e, n, r = "platform") {
-  return ql(e, n, r, (s) => {
-    if (s.length === 0) return !1;
+  return segmentsUnderAnyRoot(e, n, r, (s) => {
+    if (s.length === 0) return false;
     return PROFILE_SENSITIVE_DIRS.some(
       (h) => s.length < h.length && s.every((y, w) => matchesProfileSegment(y, h[w], r)),
     );
   });
 }
 //@ chunk-82kqcve8.js:176582-176641 placement
-function ql(e, n, r, s) {
+function segmentsUnderAnyRoot(e, n, r, s) {
   return n.some((h) => relativeSegmentsUnder(e, h, r).some(s));
 }
+//@ chunk-82kqcve8.js:176641-177068 placement
 /**
  * 计算路径相对用户目录的各种分段形式（WSL 访问 Windows 时兼顾 /mnt 与盘符写法），不在其下时为空。
  */
-//@ chunk-82kqcve8.js:176641-177068 placement
 function relativeSegmentsUnder(e, n, r) {
   if (r === "windows_on_wsl") {
-    let y = driveMountsForPath(posix_2.normalize(e)),
-      w = driveMountsForPath(posix_2.normalize(n));
+    let y = driveMountsForPath(posix.normalize(e));
+    let w = driveMountsForPath(posix.normalize(n));
     if (y.length === 0 || w.length === 0) {
-      let filtered = foldCaseSimple(posix_2.normalize(e)).split("/").filter(Boolean),
-        filtered_2 = foldCaseSimple(posix_2.normalize(n)).split("/").filter(Boolean);
+      let filtered = foldCaseSimple(posix.normalize(e)).split("/").filter(Boolean);
+      let filtered_2 = foldCaseSimple(posix.normalize(n)).split("/").filter(Boolean);
       return [
-        ...car(e, n),
-        ...(filtered_2.length <= filtered.length && filtered_2.every((O, P) => xuo(O, filtered[P]))
+        ...normalizedVolumePaths(e, n),
+        ...(filtered_2.length <= filtered.length &&
+        filtered_2.every((O, P) => segmentsMatchCaseInsensitive(O, filtered[P]))
           ? [filtered.slice(filtered_2.length)]
           : []),
       ];
     }
-    return car(e, n);
+    return normalizedVolumePaths(e, n);
   }
   if (!isPathInside(n, e)) return [];
-  let s = di(),
-    h = relative(s ? Cp(n) : n, s ? Cp(e) : e);
-  return [h === "" ? [] : h.split(sep_7)];
+  let s = isCaseFoldingActive();
+  let h = relative(s ? foldCaseBasic(n) : n, s ? foldCaseBasic(e) : e);
+  return [h === "" ? [] : h.split(sep)];
 }
 //@ chunk-82kqcve8.js:177068-177247 placement
 function matchesProfileSegment(e, n, r) {
-  if (r === "windows_on_wsl" && YEr(e)) return !0;
-  let s = xg(r);
+  if (r === "windows_on_wsl" && isDosShortNameFolded(e)) return true;
+  let s = foldForPlatform(r);
   if (!n.endsWith("*")) return s(e) === s(n);
-  let h = s(n.slice(0, -1)),
-    y = s(e);
+  let h = s(n.slice(0, -1));
+  let y = s(e);
   return y === h || y.startsWith(`${h} - `);
 }
 //@ chunk-82kqcve8.js:177247-177316 placement
-function Tg() {
+function homeDirOrNull() {
   try {
-    let e = homedir_2();
+    let e = homedir();
     return e === "" ? null : e;
   } catch {
     return null;
   }
 }
 //@ chunk-82kqcve8.js:177316-177412 placement
-async function rr(e) {
+async function realpathOrNull(e) {
   try {
-    return Mn(await getFsImplementation().realpath(e));
+    return identity(await getFsImplementation().realpath(e));
   } catch (error) {
     if (!isSadFsErrno(error)) logError(error);
     return null;
@@ -243,9 +215,9 @@ async function readDirNamesBounded(e, n) {
     let r = await opendir(e);
     try {
       let s = [];
-      for (let read = await r.read(); read !== null; read = await r.read()) {
-        if (s.length === Mg) return [];
-        s.push(read.name);
+      for (let h = await r.read(); h !== null; h = await r.read()) {
+        if (s.length === MAX_DIR_ENTRIES) return [];
+        s.push(h.name);
       }
       return s;
     } finally {
@@ -258,16 +230,16 @@ async function readDirNamesBounded(e, n) {
 }
 //@ chunk-82kqcve8.js:177665-178073 placement
 async function readGitdirFile(e, n) {
-  let r = join_11(e, "gitdir");
+  let r = join(e, "gitdir");
   if (pointerFileIsSuspect(r, e)) return null;
   let s;
   try {
-    let h = await open_3(r, "r");
+    let h = await open(r, "r");
     try {
-      let alloc = Buffer.alloc(ci),
-        { bytesRead: bytesRead } = await h.read(alloc, 0, ci, 0);
-      if (bytesRead === ci) return null;
-      s = alloc.toString("utf-8", 0, bytesRead).trim();
+      let y = Buffer.alloc(MAX_GITDIR_READ_BYTES);
+      let { bytesRead } = await h.read(y, 0, MAX_GITDIR_READ_BYTES, 0);
+      if (bytesRead === MAX_GITDIR_READ_BYTES) return null;
+      s = y.toString("utf-8", 0, bytesRead).trim();
     } finally {
       await h.close();
     }
@@ -276,15 +248,14 @@ async function readGitdirFile(e, n) {
     return null;
   }
   if (
-    yl(s) ||
-    yl(resolve_5(e, s)) ||
-    yl(resolve_5(n, s)) ||
+    isNetworkMountRoot(s) ||
+    isNetworkMountRoot(resolve(e, s)) ||
+    isNetworkMountRoot(resolve(n, s)) ||
     isOnForeignMount(s, e) ||
     rawPointerPathIsUnsafe(s, e)
   )
     return null;
   if (e !== n && (isOnForeignMount(s, n) || rawPointerPathIsUnsafe(s, n))) return null;
-  return Mn(dirname_5(resolve_5(n, s)));
+  return identity(dirname(resolve(n, s)));
 }
-
 export { resolveWslGitDir, isUnderSensitiveProfileDir, isAncestorOfSensitiveProfileDir };

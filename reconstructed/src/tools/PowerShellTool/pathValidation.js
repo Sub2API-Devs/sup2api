@@ -8,25 +8,19 @@
  * pieces: chunk-v0yfsee9.js (45)
  * attribution: sole-consumer 5, affinity 2, fingerprint 8, file-local 4, layout 26
  */
-import { homedir, homedir as homedir_2 } from "os";
-import {
-  isAbsolute,
-  isAbsolute as isAbsolute_2,
-  normalize,
-  resolve,
-  resolve as resolve_2,
-  resolve as resolve_3,
-  win32,
-  dirname,
-  dirname as dirname_2,
-  dirname as dirname_3,
-} from "path";
+import { homedir } from "os";
+import { isAbsolute, normalize, resolve, win32, dirname } from "path";
 import { env } from "../../utils/env.js";
 import { getFeatureValueWithSource_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import { COMMON_SWITCHES, COMMON_VALUE_PARAMS } from "./commonParameters.js";
 import { getPlatform } from "../../utils/platform.js";
 import { stripTrailingDotsSpaces } from "../../utils/ignorePatterns.js";
-import { skipLeadingWhitespaceAndComments, lW, oZ, gP } from "./powershellParsing.js";
+import {
+  skipLeadingWhitespaceAndComments,
+  stripPsParameterPrefix,
+  stripFileSystemProviderPrefix,
+  unescapePsDoubleQuoted,
+} from "./powershellParsing.js";
 import { createSingleEditDiffConfig } from "../../components/permissions/FilePermissionDialog/ideDiffConfig.js";
 import {
   isDangerousRemovalPath as isDangerousRemovalPath_2,
@@ -38,7 +32,7 @@ import {
   getFsImplementation,
   getPathsForPermissionCheck,
 } from "../../utils/fsOperations.js";
-import { normalizeDosDevicePath, Qn } from "../../utils/pathClassification.js";
+import { normalizeDosDevicePath, isUncOrDevicePath } from "../../utils/pathClassification.js";
 import { subprocessEnv } from "../../utils/subprocessEnv.js";
 import {
   matchingRuleForInput,
@@ -65,19 +59,22 @@ import { createReadRuleSuggestion } from "../../utils/permissions/PermissionUpda
 var TENGU_CURIOUS_LAKE = "tengu_curious_lake";
 //@ chunk-v0yfsee9.js:21856-21987 sole-consumer
 function isCmdRmDenyEnabled() {
-  if (env.CLAUDE_CODE_DISABLE_POWERSHELL_CMD_RM_DENY) return !1;
-  let e = getFeatureValueWithSource_CACHED_MAY_BE_STALE(TENGU_CURIOUS_LAKE, !0);
-  return !(e.value === !1 && e.source === "payload");
+  if (env.CLAUDE_CODE_DISABLE_POWERSHELL_CMD_RM_DENY) return false;
+  let e = getFeatureValueWithSource_CACHED_MAY_BE_STALE(TENGU_CURIOUS_LAKE, true);
+  return !(e.value === false && e.source === "payload");
 }
 //@ chunk-v0yfsee9.js:21987-22151 sole-consumer
-var CMD_RUN_SWITCH_RE = /^\/[ckr](?:$|\s)/i,
-  CMD_REMOVE_VERB_RE = /^(rd|rmdir|del|erase)(?=$|[.:\\/+[\]",;=])/i,
-  CMD_CD_VERB_RE = /^(?:(?:cd|chdir|pushd|popd)(?=$|[.:\\/+[\]",;=])|[a-z]:$)/i,
-  Ln = /[^\S\uFEFF]|\u0085/;
+/**
+ * 匹配除普通空格与 BOM 之外的空白字符。
+ */
+var CMD_RUN_SWITCH_RE = /^\/[ckr](?:$|\s)/i;
+var CMD_REMOVE_VERB_RE = /^(rd|rmdir|del|erase)(?=$|[.:\\/+[\]",;=])/i;
+var CMD_CD_VERB_RE = /^(?:(?:cd|chdir|pushd|popd)(?=$|[.:\\/+[\]",;=])|[a-z]:$)/i;
+var NON_PRINTING_SPACE_RE = /[^\S\uFEFF]|\u0085/;
+//@ chunk-v0yfsee9.js:22151-22330 affinity
 /**
  * 参数是否是 cmd / cmd.exe（去掉路径与尾随点空格）。
  */
-//@ chunk-v0yfsee9.js:22151-22330 affinity
 function isCmdExecutableName(e) {
   let n = e.length;
   while (n > 0 && (e[n - 1] === "." || e[n - 1] === " ")) n--;
@@ -86,97 +83,125 @@ function isCmdExecutableName(e) {
 }
 //@ chunk-v0yfsee9.js:22330-22447 fingerprint = SAFE_PATH_ELEMENT_TYPES (0.33)
 function classifyElementType(e) {
-  if (e === void 0 || e === "StringConstant") return "literal";
+  if (e === undefined || e === "StringConstant") return "literal";
   return e === "ExpandableString" ? "expands" : "unknown";
 }
 //@ chunk-v0yfsee9.js:22447-22582 file-local
 function hasUnquotedWhitespace(e) {
-  let n = !1;
-  for (let r = 0; r < e.length; r++) {
-    let s = e[r];
-    if (s === '"' && e[r - 1] !== "\\") n = !n;
-    else if (!n && Ln.test(s)) return !0;
+  let n = false;
+  for (let j = 0; j < e.length; j++) {
+    let s = e[j];
+    if (s === '"' && e[j - 1] !== "\\") n = !n;
+    else if (!n && NON_PRINTING_SPACE_RE.test(s)) return true;
   }
-  return !1;
+  return false;
 }
 //@ chunk-v0yfsee9.js:22582-22703 layout
-function combineElementKinds(e, n) {
-  if (e === "unknown" || n === "unknown") return "unknown";
-  return e === "expands" || n === "expands" ? "expands" : "literal";
+function combineElementKinds(e, kind) {
+  if (e === "unknown" || kind === "unknown") return "unknown";
+  return e === "expands" || kind === "expands" ? "expands" : "literal";
 }
 //@ chunk-v0yfsee9.js:22703-23207 layout
 function tokenizeCmdLine(e) {
-  let n = [],
-    r = "",
-    s = "literal",
-    m = !1,
-    g = 0,
-    y = () => {
-      if (r !== "") n.push({ text: r, kind: s, separator: !1 });
-      ((r = ""), (s = "literal"));
-    };
-  for (let w = 0; w < e.length; w++) {
-    let { ch: ch, kind: kind } = e[w];
+  let n = [];
+  let r = "";
+  let s = "literal";
+  let m = false;
+  let g = 0;
+  let y = () => {
+    if (r !== "")
+      n.push({
+        text: r,
+        kind: s,
+        separator: false,
+      });
+    r = "";
+    s = "literal";
+  };
+  for (let j = 0; j < e.length; j++) {
+    let { ch, kind } = e[j];
     if (m) {
-      ((r += ch), (s = combineElementKinds(s, kind)), (m = ch !== '"'));
+      r += ch;
+      s = combineElementKinds(s, kind);
+      m = ch !== '"';
       continue;
     }
-    if (ch === "^" && w + 1 < e.length) {
-      (w++, (r += e[w].ch), (s = combineElementKinds(s, combineElementKinds(kind, e[w].kind))));
+    if (ch === "^" && j + 1 < e.length) {
+      j++;
+      r += e[j].ch;
+      s = combineElementKinds(s, combineElementKinds(kind, e[j].kind));
       continue;
     }
     if ("&|<>".includes(ch) || (ch === "(" && r === "") || (ch === ")" && g > 0)) {
-      (y(), (g += ch === "(" ? 1 : ch === ")" ? -1 : 0), n.push({ text: ch, kind: kind, separator: !0 }));
+      y();
+      g += ch === "(" ? 1 : ch === ")" ? -1 : 0;
+      n.push({
+        text: ch,
+        kind,
+        separator: true,
+      });
       continue;
     }
     if (/[ \t\r\n\v\f,;=]/.test(ch)) {
       y();
       continue;
     }
-    if (ch === '"') m = !0;
-    ((r += ch), (s = combineElementKinds(s, kind)));
+    if (ch === '"') m = true;
+    r += ch;
+    s = combineElementKinds(s, kind);
   }
-  return (y(), n);
+  y();
+  return n;
 }
 //@ chunk-v0yfsee9.js:23207-23472 layout
-function findStopParsingToken(e) {
+function findStopParsingToken(text) {
   let n = null;
-  for (let r = 0; r < e.length; r++) {
-    let s = e[r];
-    if (s === "`" && n !== "'") r++;
+  for (let j = 0; j < text.length; j++) {
+    let s = text[j];
+    if (s === "`" && n !== "'") j++;
     else if (n !== null) {
       if (s === n) n = null;
     } else if (s === '"' || s === "'") n = s;
     else if (
-      e.startsWith("--%", r) &&
-      (r === 0 || /\s/.test(e[r - 1])) &&
-      (r + 3 === e.length || /\s/.test(e[r + 3]))
+      text.startsWith("--%", j) &&
+      (j === 0 || /\s/.test(text[j - 1])) &&
+      (j + 3 === text.length || /\s/.test(text[j + 3]))
     )
-      return r;
+      return j;
   }
   return -1;
 }
+//@ chunk-v0yfsee9.js:23472-24434 layout
 /**
  * 从 PowerShell 调用 cmd.exe /c|/k 的命令里还原出 cmd 实际要执行的命令字符（处理 --% 停止解析、引号、元素是否可展开）。
  */
-//@ chunk-v0yfsee9.js:23472-24434 layout
 function getCmdInlineCommandChars(e) {
   if (classifyElementType(e.elementTypes?.[0]) !== "literal" || !isCmdExecutableName(e.name)) return null;
-  let n = findStopParsingToken(e.text),
-    r = n === -1 ? void 0 : e.text.slice(n + 3).trimStart(),
-    s = (S) => n !== -1 && /^--%(?:$|\s)/.test(S),
-    any = e.args.some(s),
-    g = [],
-    y = !1;
-  for (let S = 0; S < e.args.length; S++) {
-    let v = e.args[S],
-      x = classifyElementType(e.elementTypes?.[S + 1]);
-    if (!y && r !== void 0 && !any && S === e.args.length - 1) ((y = !0), (v = r));
-    if (!y && s(v)) {
-      if (((y = !0), (v = v.slice(3).trimStart()), v === "")) continue;
+  let stopParsingToken = findStopParsingToken(e.text);
+  let r = stopParsingToken === -1 ? undefined : e.text.slice(stopParsingToken + 3).trimStart();
+  let s = (S) => stopParsingToken !== -1 && /^--%(?:$|\s)/.test(S);
+  let any = e.args.some(s);
+  let g = [];
+  let y = false;
+  for (let j = 0; j < e.args.length; j++) {
+    let v = e.args[j];
+    let kind = classifyElementType(e.elementTypes?.[j + 1]);
+    if (!y && r !== undefined && !any && j === e.args.length - 1) {
+      y = true;
+      v = r;
     }
-    if (y) x = "literal";
-    if (v !== "" || y) g.push({ text: v, kind: x, verbatim: y });
+    if (!y && s(v)) {
+      y = true;
+      v = v.slice(3).trimStart();
+      if (v === "") continue;
+    }
+    if (y) kind = "literal";
+    if (v !== "" || y)
+      g.push({
+        text: v,
+        kind,
+        verbatim: y,
+      });
   }
   let index = g.findIndex((S) => S.kind !== "unknown" && CMD_RUN_SWITCH_RE.test(S.text));
   if (index === -1) return null;
@@ -185,76 +210,100 @@ function getCmdInlineCommandChars(e) {
     if (v < index) return;
     let x = v === index ? S.text.slice(2).trimStart() : S.text;
     if (v === index && x === "") return;
-    if (h.length > 0) h.push({ ch: " ", kind: "literal" });
+    if (h.length > 0)
+      h.push({
+        ch: " ",
+        kind: "literal",
+      });
     let _ = !S.verbatim && v > index && hasUnquotedWhitespace(x);
-    for (let P of _ ? `"${x}"` : x) h.push({ ch: P, kind: S.kind });
+    for (let ch of _ ? `"${x}"` : x)
+      h.push({
+        ch,
+        kind: S.kind,
+      });
   });
   let index_2 = h.findIndex((S) => !/\s/.test(S.ch));
   if (index_2 !== -1 && h[index_2].ch === '"') {
     let S = -1;
-    for (let v = h.length - 1; v > index_2; v--)
-      if (h[v].ch === '"') {
-        S = v;
+    for (let j = h.length - 1; j > index_2; j--)
+      if (h[j].ch === '"') {
+        S = j;
         break;
       }
     h = h.filter((v, x) => x !== index_2 && x !== S);
   }
   return h;
 }
+//@ chunk-v0yfsee9.js:24434-24999 layout
 /**
  * 解析 cmd /c 命令行，收集其中 rd/rmdir/del/erase 的操作数（含 start、if exist、嵌套 cmd、cd 之后的状态）。
  */
-//@ chunk-v0yfsee9.js:24434-24999 layout
 function extractCmdRemovalOperands(e) {
-  let n = getCmdInlineCommandChars(e);
-  if (n === null) return [];
-  let r = new Map(),
-    s = (w) => {
-      let h = r.get(w);
-      if (h !== void 0) return h;
-      let matches = /^\$[\p{L}\p{Nd}_:]+$/u.test(w),
-        S = { copies: 0, escaped: 0 };
-      for (let index = e.text.indexOf(w); index !== -1; index = e.text.indexOf(w, index + 1)) {
-        if (matches && /[\p{L}\p{Nd}_:]/u.test(e.text[index + w.length] ?? "")) continue;
-        let x = 0;
-        while (index - x > 0 && e.text[index - x - 1] === "`") x++;
-        (S.copies++, (S.escaped += x % 2));
-      }
-      return (r.set(w, S), S);
+  let cmdInlineCommandChars = getCmdInlineCommandChars(e);
+  if (cmdInlineCommandChars === null) return [];
+  let r = new Map();
+  let s = (w) => {
+    let h = r.get(w);
+    if (h !== undefined) return h;
+    let matches = /^\$[\p{L}\p{Nd}_:]+$/u.test(w);
+    let S = {
+      copies: 0,
+      escaped: 0,
+    };
+    for (let index = e.text.indexOf(w); index !== -1; index = e.text.indexOf(w, index + 1)) {
+      if (matches && /[\p{L}\p{Nd}_:]/u.test(e.text[index + w.length] ?? "")) continue;
+      let x = 0;
+      while (index - x > 0 && e.text[index - x - 1] === "`") x++;
+      S.copies++;
+      S.escaped += x % 2;
+    }
+    r.set(w, S);
+    return S;
+  };
+  let everyCopyEscaped = (w) => {
+    let { copies, escaped } = s(w);
+    return copies > 0 && escaped === copies;
+  };
+  let someCopyEscaped = (w) => s(w).escaped > 0;
+  let y = [];
+  walkCmdRemovalCommands(
+    tokenizeCmdLine(cmdInlineCommandChars),
+    {
+      cdSeen: false,
+      cdTarget: null,
     },
-    m = (w) => {
-      let { copies: copies, escaped: escaped } = s(w);
-      return copies > 0 && escaped === copies;
-    },
-    g = (w) => s(w).escaped > 0,
-    y = [];
-  return (
-    walkCmdRemovalCommands(tokenizeCmdLine(n), { cdSeen: !1, cdTarget: null }, !1, {
+    false,
+    {
       operands: y,
-      everyCopyEscaped: m,
-      someCopyEscaped: g,
-    }),
-    y
+      everyCopyEscaped,
+      someCopyEscaped,
+    },
   );
+  return y;
 }
 //@ chunk-v0yfsee9.js:24999-25008 layout
 var MAX_CMD_NESTING_DEPTH = 8;
+//@ chunk-v0yfsee9.js:25008-27204 layout
 /**
  * 遍历 cmd /c 命令行 token，收集 rd/rmdir/del/erase 的操作数：跟踪 cd 状态、if exist/defined 条件、start（含 /d）、嵌套 cmd /c /k 递归（有深度上限）与重定向。
  */
-//@ chunk-v0yfsee9.js:25008-27204 layout
 function walkCmdRemovalCommands(tokens, cdState, inStart, sink, depth = 0) {
-  let g = !0,
-    y = "none",
-    w = !1;
-  for (let h = 0; h < tokens.length; h++) {
-    let O = tokens[h];
+  let g = true;
+  let y = "none";
+  let w = false;
+  for (let j = 0; j < tokens.length; j++) {
+    let O = tokens[j];
     if (O.separator) {
-      if (O.text === "<" || O.text === ">") h = skipRedirection(tokens, h);
-      else if (((g = !0), (y = "none"), (w = O.text === "|"), w)) cdState.cdTarget = null;
+      if (O.text === "<" || O.text === ">") j = skipRedirection(tokens, j);
+      else {
+        g = true;
+        y = "none";
+        w = O.text === "|";
+        if (w) cdState.cdTarget = null;
+      }
       continue;
     }
-    if (/^\d$/.test(O.text) && ["<", ">"].includes(tokens[h + 1]?.text ?? "")) continue;
+    if (/^\d$/.test(O.text) && ["<", ">"].includes(tokens[j + 1]?.text ?? "")) continue;
     if (y === "condition") {
       let lower = O.text.toLowerCase();
       if (lower === "/i" || lower === "not") continue;
@@ -262,39 +311,61 @@ function walkCmdRemovalCommands(tokens, cdState, inStart, sink, depth = 0) {
       continue;
     }
     if (y === "operand") {
-      ((y = "none"), (g = !0));
+      y = "none";
+      g = true;
       continue;
     }
     if (!g) continue;
     let replaced = O.text.replace(/^@+/, "");
-    if (!inStart && (O.kind === "unknown" || CMD_CD_VERB_RE.test(replaced)))
-      ((cdState.cdSeen = !0),
-        (cdState.cdTarget =
-          w || O.kind === "unknown" ? null : parseCmdCdTarget({ ...O, text: replaced }, tokens, h + 1)));
+    if (!inStart && (O.kind === "unknown" || CMD_CD_VERB_RE.test(replaced))) {
+      cdState.cdSeen = true;
+      cdState.cdTarget =
+        w || O.kind === "unknown"
+          ? null
+          : parseCmdCdTarget(
+              {
+                ...O,
+                text: replaced,
+              },
+              tokens,
+              j + 1,
+            );
+    }
     if (O.kind !== "unknown") {
       let lower = replaced.toLowerCase();
       if (lower === "call" || lower === "") continue;
       if (/^start(?=$|\/)/.test(lower) && depth < MAX_CMD_NESTING_DEPTH) {
-        let k = nextSeparatorIndex(tokens, h + 1),
-          matches = /\/d/.test(lower.slice(5));
-        (walkCmdRemovalCommands(
-          tokens.slice(h + 1, k),
-          matches ? { cdSeen: !0, cdTarget: null } : { ...cdState },
-          !0,
+        let k = nextSeparatorIndex(tokens, j + 1);
+        let matches = /\/d/.test(lower.slice(5));
+        walkCmdRemovalCommands(
+          tokens.slice(j + 1, k),
+          matches
+            ? {
+                cdSeen: true,
+                cdTarget: null,
+              }
+            : {
+                ...cdState,
+              },
+          true,
           sink,
           depth + 1,
-        ),
-          (h = k - 1),
-          (g = !1));
+        );
+        j = k - 1;
+        g = false;
         continue;
       }
-      if (inStart && lower.startsWith("/d")) ((cdState.cdSeen = !0), (cdState.cdTarget = null));
+      if (inStart && lower.startsWith("/d")) {
+        cdState.cdSeen = true;
+        cdState.cdTarget = null;
+      }
       if (lower === "if") {
-        ((y = "condition"), (g = !1));
+        y = "condition";
+        g = false;
         continue;
       }
       if (isCmdExecutableName(replaced.replaceAll('"', ""))) {
-        let k = h + 1;
+        let k = j + 1;
         while (k < tokens.length && !/^\/[ckr]$/i.test(tokens[k].text)) {
           let z = nextSeparatorIndex(tokens, k, k + 1);
           if (z === k) break;
@@ -302,40 +373,61 @@ function walkCmdRemovalCommands(tokens, cdState, inStart, sink, depth = 0) {
         }
         let D = k < tokens.length && !tokens[k].separator;
         if (D && depth >= MAX_CMD_NESTING_DEPTH) {
-          ((h = k), (g = !0));
+          j = k;
+          g = true;
           continue;
         }
         let V = nextSeparatorIndex(tokens, k);
         if (D && k + 1 < V) {
-          let sliced = tokens.slice(k + 1, V);
-          if (sliced[0].text.startsWith('"')) {
-            let flattened = sliced.flatMap((R) => [...` ${R.text}`].map((G) => ({ ch: G, kind: R.kind })));
+          let tokens_2 = tokens.slice(k + 1, V);
+          if (tokens_2[0].text.startsWith('"')) {
+            let flattened = tokens_2.flatMap((R) =>
+              [...` ${R.text}`].map((ch) => ({
+                ch,
+                kind: R.kind,
+              })),
+            );
             flattened.splice(0, 2);
             let lastIndex = flattened.findLastIndex((R) => R.ch === '"');
             if (lastIndex !== -1) flattened.splice(lastIndex, 1);
-            sliced = tokenizeCmdLine(flattened);
+            tokens_2 = tokenizeCmdLine(flattened);
           }
-          walkCmdRemovalCommands(sliced, { ...cdState }, !1, sink, depth + 1);
+          walkCmdRemovalCommands(
+            tokens_2,
+            {
+              ...cdState,
+            },
+            false,
+            sink,
+            depth + 1,
+          );
         }
-        ((h = V - 1), (g = !1));
+        j = V - 1;
+        g = false;
         continue;
       }
     }
     g = inStart;
     let v = O.kind === "unknown" ? null : CMD_REMOVE_VERB_RE.exec(replaced);
     if (v === null) continue;
-    let x = [],
-      sliced = replaced.slice(v[0].length);
-    if (sliced !== "") x.push({ ...O, text: sliced });
-    for (let P = h + 1; P < tokens.length; P++) {
-      let k = tokens[P];
+    let x = [];
+    let sliced = replaced.slice(v[0].length);
+    if (sliced !== "")
+      x.push({
+        ...O,
+        text: sliced,
+      });
+    for (let j_2 = j + 1; j_2 < tokens.length; j_2++) {
+      let k = tokens[j_2];
       if (!k.separator) {
-        (x.push(k), (h = P));
+        x.push(k);
+        j = j_2;
         continue;
       }
       if (k.text !== "<" && k.text !== ">") break;
       if (/^\d$/.test(x.at(-1)?.text ?? "")) x.pop();
-      ((P = skipRedirection(tokens, P)), (h = P));
+      j_2 = skipRedirection(tokens, j_2);
+      j = j_2;
     }
     for (let P of x) {
       if (P.kind === "unknown" || P.text.startsWith("/")) continue;
@@ -344,79 +436,101 @@ function walkCmdRemovalCommands(tokens, cdState, inStart, sink, depth = 0) {
       let D =
         P.kind === "expands"
           ? [sink.everyCopyEscaped, sink.someCopyEscaped].map((V) => stripPsVariables(trimmed, V))
-          : [{ view: trimmed, literalPrefix: null }];
+          : [
+              {
+                view: trimmed,
+                literalPrefix: null,
+              },
+            ];
       for (let [V, { view: z, literalPrefix: W }] of D.entries()) {
         if (V > 0 && z === D[0].view) continue;
         sink.operands.push({
           verb: v[1].toLowerCase(),
           text: trimmed,
-          emptied: W === null ? null : { view: z, literalPrefix: W },
+          emptied:
+            W === null
+              ? null
+              : {
+                  view: z,
+                  literalPrefix: W,
+                },
           afterCd: cdState.cdSeen,
-          ...(cdState.cdTarget !== null && { cdTarget: cdState.cdTarget }),
+          ...(cdState.cdTarget !== null && {
+            cdTarget: cdState.cdTarget,
+          }),
         });
       }
     }
   }
 }
+//@ chunk-v0yfsee9.js:27204-27382 layout
 /**
  * 用给定环境展开 cmd 的 %NAME% 变量（大小写不敏感）。
  */
-//@ chunk-v0yfsee9.js:27204-27382 layout
 function expandCmdPercentVars(e, n) {
   if (!e.includes("%")) return e;
-  let r = new Map(Object.entries(n).map(([s, m]) => [s.toLowerCase(), m]));
+  let r = new Map(Object.entries(n).map(([key, value]) => [key.toLowerCase(), value]));
   return e.replace(/%([^%:]+)%/g, (s, m) => r.get(m.toLowerCase()) ?? s);
 }
 //@ chunk-v0yfsee9.js:27382-27947 layout
-function parseCmdCdTarget(e, n, r) {
+function parseCmdCdTarget(e, tokens, r) {
   let match = /^(cd|chdir|pushd)(?![a-z])/i.exec(e.text);
   if (match === null) return null;
   let m = r;
-  while (m < n.length && !n[m].separator) m++;
-  let filtered = [{ ...e, text: e.text.slice(match[0].length) }, ...n.slice(r, m)].filter(
-    (h) => h.text !== "",
-  );
-  if (["<", ">"].includes(n[m]?.text ?? "") && /^\d$/.test(filtered.at(-1)?.text ?? "")) filtered.pop();
+  while (m < tokens.length && !tokens[m].separator) m++;
+  let filtered = [
+    {
+      ...e,
+      text: e.text.slice(match[0].length),
+    },
+    ...tokens.slice(r, m),
+  ].filter((h) => h.text !== "");
+  if (["<", ">"].includes(tokens[m]?.text ?? "") && /^\d$/.test(filtered.at(-1)?.text ?? "")) filtered.pop();
   if (filtered.some((h) => h.kind !== "literal")) return null;
-  let y = match[1].toLowerCase() === "pushd" || filtered.some((h) => /^\/d$/i.test(h.text)),
-    trimmed = filtered
-      .filter((h) => !h.text.startsWith("/"))
-      .map((h) => h.text.replaceAll('"', ""))
-      .join(" ")
-      .trim();
+  let y = match[1].toLowerCase() === "pushd" || filtered.some((h) => /^\/d$/i.test(h.text));
+  let trimmed = filtered
+    .filter((h) => !h.text.startsWith("/"))
+    .map((h) => h.text.replaceAll('"', ""))
+    .join(" ")
+    .trim();
   return y && /^(?:[A-Za-z]:[\\/]|%)/.test(trimmed) ? trimmed : null;
 }
 //@ chunk-v0yfsee9.js:27947-28092 layout
-function nextSeparatorIndex(e, n, r = e.length) {
+function nextSeparatorIndex(tokens, n, r = tokens.length) {
   let s = n;
   while (s < r) {
-    let m = e[s];
+    let m = tokens[s];
     if (!m.separator) s++;
-    else if (m.text === "<" || m.text === ">") s = skipRedirection(e, s) + 1;
+    else if (m.text === "<" || m.text === ">") s = skipRedirection(tokens, s) + 1;
     else break;
   }
   return s;
 }
 //@ chunk-v0yfsee9.js:28092-28230 layout
-function skipRedirection(e, n) {
+function skipRedirection(tokens, n) {
   let r = n;
-  while (e[r + 1]?.separator && ["<", ">", "&"].includes(e[r + 1].text)) r++;
-  return e[r + 1] !== void 0 && !e[r + 1].separator ? r + 1 : r;
+  while (tokens[r + 1]?.separator && ["<", ">", "&"].includes(tokens[r + 1].text)) r++;
+  return tokens[r + 1] !== undefined && !tokens[r + 1].separator ? r + 1 : r;
 }
 //@ chunk-v0yfsee9.js:28230-28444 layout
-function stripPsVariables(e, n = () => !1) {
-  let r = "",
-    s = null,
-    m = 0;
+function stripPsVariables(e, n = () => false) {
+  let r = "";
+  let literalPrefix = null;
+  let m = 0;
   while (m < e.length) {
     let g = e[m] === "$" ? scanPsVariableEnd(e, m) : m;
     if (g === m || n(e.slice(m, g))) {
-      ((r += e.slice(m, Math.max(g, m + 1))), (m = Math.max(g, m + 1)));
+      r += e.slice(m, Math.max(g, m + 1));
+      m = Math.max(g, m + 1);
       continue;
     }
-    ((s ??= r), (m = g));
+    literalPrefix ??= r;
+    m = g;
   }
-  return { view: r, literalPrefix: s };
+  return {
+    view: r,
+    literalPrefix,
+  };
 }
 //@ chunk-v0yfsee9.js:28444-28781 layout
 function scanPsVariableEnd(e, n) {
@@ -427,9 +541,9 @@ function scanPsVariableEnd(e, n) {
   }
   if (r === "(") {
     let m = 0;
-    for (let g = n + 1; g < e.length; g++)
-      if (e[g] === "(") m++;
-      else if (e[g] === ")" && --m === 0) return g + 1;
+    for (let j = n + 1; j < e.length; j++)
+      if (e[j] === "(") m++;
+      else if (e[j] === ")" && --m === 0) return j + 1;
     return e.length;
   }
   if (r === "$" || r === "^" || r === "?") return n + 2;
@@ -437,479 +551,479 @@ function scanPsVariableEnd(e, n) {
   while (s < e.length && /[\p{L}\p{Nd}_:]/u.test(e[s])) s++;
   return s === n + 1 ? n : s;
 }
+//@ chunk-v0yfsee9.js:28781-39050 fingerprint = CMDLET_PATH_CONFIG (0.974)
 /**
  * 每个 cmdlet 的路径参数配置 CMDLET_PATH_CONFIG：操作类型（read/write/create）、路径参数、仅叶名参数、已知开关和带值参数、位置参数跳过数，覆盖 Set/Add/Get-Content、Copy/Move/Remove/New-Item、Out-File、Export-*、Compress/Expand-Archive、Invoke-WebRequest 等。
  */
-//@ chunk-v0yfsee9.js:28781-39050 fingerprint = CMDLET_PATH_CONFIG (0.974)
-var MAX_DIRS_TO_LIST = 5,
-  CMDLET_PATH_CONFIG = {
-    "set-content": {
-      operationType: "write",
-      pathParams: ["-path", "-literalpath", "-pspath", "-lp"],
-      knownSwitches: [
-        "-passthru",
-        "-force",
-        "-whatif",
-        "-confirm",
-        "-usetransaction",
-        "-nonewline",
-        "-asbytestream",
-      ],
-      knownValueParams: ["-value", "-filter", "-include", "-exclude", "-credential", "-encoding", "-stream"],
-    },
-    "add-content": {
-      operationType: "write",
-      pathParams: ["-path", "-literalpath", "-pspath", "-lp"],
-      knownSwitches: [
-        "-passthru",
-        "-force",
-        "-whatif",
-        "-confirm",
-        "-usetransaction",
-        "-nonewline",
-        "-asbytestream",
-      ],
-      knownValueParams: ["-value", "-filter", "-include", "-exclude", "-credential", "-encoding", "-stream"],
-    },
-    "remove-item": {
-      operationType: "write",
-      pathParams: ["-path", "-literalpath", "-pspath", "-lp"],
-      knownSwitches: ["-recurse", "-force", "-whatif", "-confirm", "-usetransaction"],
-      knownValueParams: ["-filter", "-include", "-exclude", "-credential", "-stream"],
-    },
-    "clear-content": {
-      operationType: "write",
-      pathParams: ["-path", "-literalpath", "-pspath", "-lp"],
-      knownSwitches: ["-force", "-whatif", "-confirm", "-usetransaction"],
-      knownValueParams: ["-filter", "-include", "-exclude", "-credential", "-stream"],
-    },
-    "out-file": {
-      operationType: "write",
-      pathParams: ["-filepath", "-path", "-literalpath", "-pspath", "-lp"],
-      knownSwitches: ["-append", "-force", "-noclobber", "-nonewline", "-whatif", "-confirm"],
-      knownValueParams: ["-inputobject", "-encoding", "-width"],
-    },
-    "tee-object": {
-      operationType: "write",
-      pathParams: ["-filepath", "-path", "-literalpath", "-pspath", "-lp"],
-      knownSwitches: ["-append"],
-      knownValueParams: ["-inputobject", "-variable", "-encoding"],
-    },
-    "export-csv": {
-      operationType: "write",
-      pathParams: ["-path", "-literalpath", "-pspath", "-lp"],
-      knownSwitches: [
-        "-append",
-        "-force",
-        "-noclobber",
-        "-notypeinformation",
-        "-includetypeinformation",
-        "-useculture",
-        "-noheader",
-        "-whatif",
-        "-confirm",
-      ],
-      knownValueParams: ["-inputobject", "-delimiter", "-encoding", "-quotefields", "-usequotes"],
-    },
-    "export-clixml": {
-      operationType: "write",
-      pathParams: ["-path", "-literalpath", "-pspath", "-lp"],
-      knownSwitches: ["-force", "-noclobber", "-whatif", "-confirm"],
-      knownValueParams: ["-inputobject", "-depth", "-encoding"],
-    },
-    "new-item": {
-      operationType: "write",
-      pathParams: ["-path", "-literalpath", "-pspath", "-lp", "-target"],
-      leafOnlyPathParams: ["-name"],
-      knownSwitches: ["-force", "-whatif", "-confirm", "-usetransaction"],
-      knownValueParams: ["-itemtype", "-value", "-credential", "-type"],
-    },
-    "copy-item": {
-      operationType: "write",
-      pathParams: ["-path", "-literalpath", "-pspath", "-lp", "-destination"],
-      knownSwitches: [
-        "-container",
-        "-force",
-        "-passthru",
-        "-recurse",
-        "-whatif",
-        "-confirm",
-        "-usetransaction",
-      ],
-      knownValueParams: ["-filter", "-include", "-exclude", "-credential", "-fromsession", "-tosession"],
-    },
-    "move-item": {
-      operationType: "write",
-      pathParams: ["-path", "-literalpath", "-pspath", "-lp", "-destination"],
-      knownSwitches: ["-force", "-passthru", "-whatif", "-confirm", "-usetransaction"],
-      knownValueParams: ["-filter", "-include", "-exclude", "-credential"],
-    },
-    "rename-item": {
-      operationType: "write",
-      pathParams: ["-path", "-literalpath", "-pspath", "-lp"],
-      knownSwitches: ["-force", "-passthru", "-whatif", "-confirm", "-usetransaction"],
-      knownValueParams: ["-newname", "-credential", "-filter", "-include", "-exclude"],
-    },
-    "set-item": {
-      operationType: "write",
-      pathParams: ["-path", "-literalpath", "-pspath", "-lp"],
-      knownSwitches: ["-force", "-passthru", "-whatif", "-confirm", "-usetransaction"],
-      knownValueParams: ["-value", "-credential", "-filter", "-include", "-exclude"],
-    },
-    "get-content": {
-      operationType: "read",
-      pathParams: ["-path", "-literalpath", "-pspath", "-lp"],
-      knownSwitches: ["-force", "-usetransaction", "-wait", "-raw", "-asbytestream"],
-      knownValueParams: [
-        "-readcount",
-        "-totalcount",
-        "-tail",
-        "-first",
-        "-head",
-        "-last",
-        "-filter",
-        "-include",
-        "-exclude",
-        "-credential",
-        "-delimiter",
-        "-encoding",
-        "-stream",
-      ],
-    },
-    "get-childitem": {
-      operationType: "read",
-      pathParams: ["-path", "-literalpath", "-pspath", "-lp"],
-      knownSwitches: [
-        "-recurse",
-        "-force",
-        "-name",
-        "-usetransaction",
-        "-followsymlink",
-        "-directory",
-        "-file",
-        "-hidden",
-        "-readonly",
-        "-system",
-      ],
-      knownValueParams: ["-filter", "-include", "-exclude", "-depth", "-attributes", "-credential"],
-    },
-    "get-item": {
-      operationType: "read",
-      pathParams: ["-path", "-literalpath", "-pspath", "-lp"],
-      knownSwitches: ["-force", "-usetransaction"],
-      knownValueParams: ["-filter", "-include", "-exclude", "-credential", "-stream"],
-    },
-    "get-itemproperty": {
-      operationType: "read",
-      pathParams: ["-path", "-literalpath", "-pspath", "-lp"],
-      knownSwitches: ["-usetransaction"],
-      knownValueParams: ["-name", "-filter", "-include", "-exclude", "-credential"],
-    },
-    "get-itempropertyvalue": {
-      operationType: "read",
-      pathParams: ["-path", "-literalpath", "-pspath", "-lp"],
-      knownSwitches: ["-usetransaction"],
-      knownValueParams: ["-name", "-filter", "-include", "-exclude", "-credential"],
-    },
-    "get-filehash": {
-      operationType: "read",
-      pathParams: ["-path", "-literalpath", "-pspath", "-lp"],
-      knownSwitches: [],
-      knownValueParams: ["-algorithm", "-inputstream"],
-    },
-    "get-acl": {
-      operationType: "read",
-      pathParams: ["-path", "-literalpath", "-pspath", "-lp"],
-      knownSwitches: ["-audit", "-allcentralaccesspolicies", "-usetransaction"],
-      knownValueParams: ["-inputobject", "-filter", "-include", "-exclude"],
-    },
-    "get-module": {
-      operationType: "read",
-      pathParams: ["-name", "-fullyqualifiedname"],
-      knownSwitches: ["-listavailable", "-all", "-refresh", "-skipeditioncheck"],
-      knownValueParams: ["-psedition", "-pssession", "-cimsession"],
-    },
-    "format-hex": {
-      operationType: "read",
-      pathParams: ["-path", "-literalpath", "-pspath", "-lp"],
-      knownSwitches: ["-raw"],
-      knownValueParams: ["-inputobject", "-encoding", "-count", "-offset"],
-    },
-    "test-path": {
-      operationType: "read",
-      pathParams: ["-path", "-literalpath", "-pspath", "-lp"],
-      knownSwitches: ["-isvalid", "-usetransaction"],
-      knownValueParams: [
-        "-filter",
-        "-include",
-        "-exclude",
-        "-pathtype",
-        "-credential",
-        "-olderthan",
-        "-newerthan",
-      ],
-    },
-    "resolve-path": {
-      operationType: "read",
-      pathParams: ["-path", "-literalpath", "-pspath", "-lp"],
-      knownSwitches: ["-relative", "-usetransaction", "-force"],
-      knownValueParams: ["-credential", "-relativebasepath"],
-    },
-    "convert-path": {
-      operationType: "read",
-      pathParams: ["-path", "-literalpath", "-pspath", "-lp"],
-      knownSwitches: ["-usetransaction"],
-      knownValueParams: [],
-    },
-    "select-string": {
-      operationType: "read",
-      pathParams: ["-path", "-literalpath", "-pspath", "-lp"],
-      knownSwitches: [
-        "-simplematch",
-        "-casesensitive",
-        "-quiet",
-        "-list",
-        "-notmatch",
-        "-allmatches",
-        "-noemphasis",
-        "-raw",
-      ],
-      knownValueParams: [
-        "-inputobject",
-        "-pattern",
-        "-include",
-        "-exclude",
-        "-encoding",
-        "-context",
-        "-culture",
-      ],
-    },
-    "set-location": {
-      operationType: "read",
-      pathParams: ["-path", "-literalpath", "-pspath", "-lp"],
-      knownSwitches: ["-passthru", "-usetransaction"],
-      knownValueParams: ["-stackname"],
-    },
-    "push-location": {
-      operationType: "read",
-      pathParams: ["-path", "-literalpath", "-pspath", "-lp"],
-      knownSwitches: ["-passthru", "-usetransaction"],
-      knownValueParams: ["-stackname"],
-    },
-    "pop-location": {
-      operationType: "read",
-      pathParams: [],
-      knownSwitches: ["-passthru", "-usetransaction"],
-      knownValueParams: ["-stackname"],
-    },
-    "select-xml": {
-      operationType: "read",
-      pathParams: ["-path", "-literalpath", "-pspath", "-lp"],
-      knownSwitches: [],
-      knownValueParams: ["-xml", "-content", "-xpath", "-namespace"],
-    },
-    "get-winevent": {
-      operationType: "read",
-      pathParams: ["-path"],
-      knownSwitches: ["-force", "-oldest"],
-      knownValueParams: [
-        "-listlog",
-        "-logname",
-        "-listprovider",
-        "-providername",
-        "-maxevents",
-        "-computername",
-        "-credential",
-        "-filterxpath",
-        "-filterxml",
-        "-filterhashtable",
-      ],
-    },
-    "invoke-webrequest": {
-      operationType: "write",
-      pathParams: ["-outfile", "-infile"],
-      positionalSkip: 1,
-      optionalWrite: !0,
-      knownSwitches: [
-        "-allowinsecureredirect",
-        "-allowunencryptedauthentication",
-        "-disablekeepalive",
-        "-nobodyprogress",
-        "-passthru",
-        "-preservefileauthorizationmetadata",
-        "-resume",
-        "-skipcertificatecheck",
-        "-skipheadervalidation",
-        "-skiphttperrorcheck",
-        "-usebasicparsing",
-        "-usedefaultcredentials",
-      ],
-      knownValueParams: [
-        "-uri",
-        "-method",
-        "-body",
-        "-contenttype",
-        "-headers",
-        "-maximumredirection",
-        "-maximumretrycount",
-        "-proxy",
-        "-proxycredential",
-        "-retryintervalsec",
-        "-sessionvariable",
-        "-timeoutsec",
-        "-token",
-        "-transferencoding",
-        "-useragent",
-        "-websession",
-        "-credential",
-        "-authentication",
-        "-certificate",
-        "-certificatethumbprint",
-        "-form",
-        "-httpversion",
-      ],
-    },
-    "invoke-restmethod": {
-      operationType: "write",
-      pathParams: ["-outfile", "-infile"],
-      positionalSkip: 1,
-      optionalWrite: !0,
-      knownSwitches: [
-        "-allowinsecureredirect",
-        "-allowunencryptedauthentication",
-        "-disablekeepalive",
-        "-followrellink",
-        "-nobodyprogress",
-        "-passthru",
-        "-preservefileauthorizationmetadata",
-        "-resume",
-        "-skipcertificatecheck",
-        "-skipheadervalidation",
-        "-skiphttperrorcheck",
-        "-usebasicparsing",
-        "-usedefaultcredentials",
-      ],
-      knownValueParams: [
-        "-uri",
-        "-method",
-        "-body",
-        "-contenttype",
-        "-headers",
-        "-maximumfollowrellink",
-        "-maximumredirection",
-        "-maximumretrycount",
-        "-proxy",
-        "-proxycredential",
-        "-responseheaderstvariable",
-        "-retryintervalsec",
-        "-sessionvariable",
-        "-statuscodevariable",
-        "-timeoutsec",
-        "-token",
-        "-transferencoding",
-        "-useragent",
-        "-websession",
-        "-credential",
-        "-authentication",
-        "-certificate",
-        "-certificatethumbprint",
-        "-form",
-        "-httpversion",
-      ],
-    },
-    "expand-archive": {
-      operationType: "write",
-      pathParams: ["-path", "-literalpath", "-pspath", "-lp", "-destinationpath"],
-      knownSwitches: ["-force", "-passthru", "-whatif", "-confirm"],
-      knownValueParams: [],
-    },
-    "compress-archive": {
-      operationType: "write",
-      pathParams: ["-path", "-literalpath", "-pspath", "-lp", "-destinationpath"],
-      knownSwitches: ["-force", "-update", "-passthru", "-whatif", "-confirm"],
-      knownValueParams: ["-compressionlevel"],
-    },
-    "set-itemproperty": {
-      operationType: "write",
-      pathParams: ["-path", "-literalpath", "-pspath", "-lp"],
-      knownSwitches: ["-passthru", "-force", "-whatif", "-confirm", "-usetransaction"],
-      knownValueParams: [
-        "-name",
-        "-value",
-        "-type",
-        "-filter",
-        "-include",
-        "-exclude",
-        "-credential",
-        "-inputobject",
-      ],
-    },
-    "new-itemproperty": {
-      operationType: "write",
-      pathParams: ["-path", "-literalpath", "-pspath", "-lp"],
-      knownSwitches: ["-force", "-whatif", "-confirm", "-usetransaction"],
-      knownValueParams: [
-        "-name",
-        "-value",
-        "-propertytype",
-        "-type",
-        "-filter",
-        "-include",
-        "-exclude",
-        "-credential",
-      ],
-    },
-    "remove-itemproperty": {
-      operationType: "write",
-      pathParams: ["-path", "-literalpath", "-pspath", "-lp"],
-      knownSwitches: ["-force", "-whatif", "-confirm", "-usetransaction"],
-      knownValueParams: ["-name", "-filter", "-include", "-exclude", "-credential"],
-    },
-    "clear-item": {
-      operationType: "write",
-      pathParams: ["-path", "-literalpath", "-pspath", "-lp"],
-      knownSwitches: ["-force", "-whatif", "-confirm", "-usetransaction"],
-      knownValueParams: ["-filter", "-include", "-exclude", "-credential"],
-    },
-    "export-alias": {
-      operationType: "write",
-      pathParams: ["-path", "-literalpath", "-pspath", "-lp"],
-      knownSwitches: ["-append", "-force", "-noclobber", "-passthru", "-whatif", "-confirm"],
-      knownValueParams: ["-name", "-description", "-scope", "-as"],
-    },
-  };
+var MAX_DIRS_TO_LIST = 5;
+var CMDLET_PATH_CONFIG = {
+  "set-content": {
+    operationType: "write",
+    pathParams: ["-path", "-literalpath", "-pspath", "-lp"],
+    knownSwitches: [
+      "-passthru",
+      "-force",
+      "-whatif",
+      "-confirm",
+      "-usetransaction",
+      "-nonewline",
+      "-asbytestream",
+    ],
+    knownValueParams: ["-value", "-filter", "-include", "-exclude", "-credential", "-encoding", "-stream"],
+  },
+  "add-content": {
+    operationType: "write",
+    pathParams: ["-path", "-literalpath", "-pspath", "-lp"],
+    knownSwitches: [
+      "-passthru",
+      "-force",
+      "-whatif",
+      "-confirm",
+      "-usetransaction",
+      "-nonewline",
+      "-asbytestream",
+    ],
+    knownValueParams: ["-value", "-filter", "-include", "-exclude", "-credential", "-encoding", "-stream"],
+  },
+  "remove-item": {
+    operationType: "write",
+    pathParams: ["-path", "-literalpath", "-pspath", "-lp"],
+    knownSwitches: ["-recurse", "-force", "-whatif", "-confirm", "-usetransaction"],
+    knownValueParams: ["-filter", "-include", "-exclude", "-credential", "-stream"],
+  },
+  "clear-content": {
+    operationType: "write",
+    pathParams: ["-path", "-literalpath", "-pspath", "-lp"],
+    knownSwitches: ["-force", "-whatif", "-confirm", "-usetransaction"],
+    knownValueParams: ["-filter", "-include", "-exclude", "-credential", "-stream"],
+  },
+  "out-file": {
+    operationType: "write",
+    pathParams: ["-filepath", "-path", "-literalpath", "-pspath", "-lp"],
+    knownSwitches: ["-append", "-force", "-noclobber", "-nonewline", "-whatif", "-confirm"],
+    knownValueParams: ["-inputobject", "-encoding", "-width"],
+  },
+  "tee-object": {
+    operationType: "write",
+    pathParams: ["-filepath", "-path", "-literalpath", "-pspath", "-lp"],
+    knownSwitches: ["-append"],
+    knownValueParams: ["-inputobject", "-variable", "-encoding"],
+  },
+  "export-csv": {
+    operationType: "write",
+    pathParams: ["-path", "-literalpath", "-pspath", "-lp"],
+    knownSwitches: [
+      "-append",
+      "-force",
+      "-noclobber",
+      "-notypeinformation",
+      "-includetypeinformation",
+      "-useculture",
+      "-noheader",
+      "-whatif",
+      "-confirm",
+    ],
+    knownValueParams: ["-inputobject", "-delimiter", "-encoding", "-quotefields", "-usequotes"],
+  },
+  "export-clixml": {
+    operationType: "write",
+    pathParams: ["-path", "-literalpath", "-pspath", "-lp"],
+    knownSwitches: ["-force", "-noclobber", "-whatif", "-confirm"],
+    knownValueParams: ["-inputobject", "-depth", "-encoding"],
+  },
+  "new-item": {
+    operationType: "write",
+    pathParams: ["-path", "-literalpath", "-pspath", "-lp", "-target"],
+    leafOnlyPathParams: ["-name"],
+    knownSwitches: ["-force", "-whatif", "-confirm", "-usetransaction"],
+    knownValueParams: ["-itemtype", "-value", "-credential", "-type"],
+  },
+  "copy-item": {
+    operationType: "write",
+    pathParams: ["-path", "-literalpath", "-pspath", "-lp", "-destination"],
+    knownSwitches: [
+      "-container",
+      "-force",
+      "-passthru",
+      "-recurse",
+      "-whatif",
+      "-confirm",
+      "-usetransaction",
+    ],
+    knownValueParams: ["-filter", "-include", "-exclude", "-credential", "-fromsession", "-tosession"],
+  },
+  "move-item": {
+    operationType: "write",
+    pathParams: ["-path", "-literalpath", "-pspath", "-lp", "-destination"],
+    knownSwitches: ["-force", "-passthru", "-whatif", "-confirm", "-usetransaction"],
+    knownValueParams: ["-filter", "-include", "-exclude", "-credential"],
+  },
+  "rename-item": {
+    operationType: "write",
+    pathParams: ["-path", "-literalpath", "-pspath", "-lp"],
+    knownSwitches: ["-force", "-passthru", "-whatif", "-confirm", "-usetransaction"],
+    knownValueParams: ["-newname", "-credential", "-filter", "-include", "-exclude"],
+  },
+  "set-item": {
+    operationType: "write",
+    pathParams: ["-path", "-literalpath", "-pspath", "-lp"],
+    knownSwitches: ["-force", "-passthru", "-whatif", "-confirm", "-usetransaction"],
+    knownValueParams: ["-value", "-credential", "-filter", "-include", "-exclude"],
+  },
+  "get-content": {
+    operationType: "read",
+    pathParams: ["-path", "-literalpath", "-pspath", "-lp"],
+    knownSwitches: ["-force", "-usetransaction", "-wait", "-raw", "-asbytestream"],
+    knownValueParams: [
+      "-readcount",
+      "-totalcount",
+      "-tail",
+      "-first",
+      "-head",
+      "-last",
+      "-filter",
+      "-include",
+      "-exclude",
+      "-credential",
+      "-delimiter",
+      "-encoding",
+      "-stream",
+    ],
+  },
+  "get-childitem": {
+    operationType: "read",
+    pathParams: ["-path", "-literalpath", "-pspath", "-lp"],
+    knownSwitches: [
+      "-recurse",
+      "-force",
+      "-name",
+      "-usetransaction",
+      "-followsymlink",
+      "-directory",
+      "-file",
+      "-hidden",
+      "-readonly",
+      "-system",
+    ],
+    knownValueParams: ["-filter", "-include", "-exclude", "-depth", "-attributes", "-credential"],
+  },
+  "get-item": {
+    operationType: "read",
+    pathParams: ["-path", "-literalpath", "-pspath", "-lp"],
+    knownSwitches: ["-force", "-usetransaction"],
+    knownValueParams: ["-filter", "-include", "-exclude", "-credential", "-stream"],
+  },
+  "get-itemproperty": {
+    operationType: "read",
+    pathParams: ["-path", "-literalpath", "-pspath", "-lp"],
+    knownSwitches: ["-usetransaction"],
+    knownValueParams: ["-name", "-filter", "-include", "-exclude", "-credential"],
+  },
+  "get-itempropertyvalue": {
+    operationType: "read",
+    pathParams: ["-path", "-literalpath", "-pspath", "-lp"],
+    knownSwitches: ["-usetransaction"],
+    knownValueParams: ["-name", "-filter", "-include", "-exclude", "-credential"],
+  },
+  "get-filehash": {
+    operationType: "read",
+    pathParams: ["-path", "-literalpath", "-pspath", "-lp"],
+    knownSwitches: [],
+    knownValueParams: ["-algorithm", "-inputstream"],
+  },
+  "get-acl": {
+    operationType: "read",
+    pathParams: ["-path", "-literalpath", "-pspath", "-lp"],
+    knownSwitches: ["-audit", "-allcentralaccesspolicies", "-usetransaction"],
+    knownValueParams: ["-inputobject", "-filter", "-include", "-exclude"],
+  },
+  "get-module": {
+    operationType: "read",
+    pathParams: ["-name", "-fullyqualifiedname"],
+    knownSwitches: ["-listavailable", "-all", "-refresh", "-skipeditioncheck"],
+    knownValueParams: ["-psedition", "-pssession", "-cimsession"],
+  },
+  "format-hex": {
+    operationType: "read",
+    pathParams: ["-path", "-literalpath", "-pspath", "-lp"],
+    knownSwitches: ["-raw"],
+    knownValueParams: ["-inputobject", "-encoding", "-count", "-offset"],
+  },
+  "test-path": {
+    operationType: "read",
+    pathParams: ["-path", "-literalpath", "-pspath", "-lp"],
+    knownSwitches: ["-isvalid", "-usetransaction"],
+    knownValueParams: [
+      "-filter",
+      "-include",
+      "-exclude",
+      "-pathtype",
+      "-credential",
+      "-olderthan",
+      "-newerthan",
+    ],
+  },
+  "resolve-path": {
+    operationType: "read",
+    pathParams: ["-path", "-literalpath", "-pspath", "-lp"],
+    knownSwitches: ["-relative", "-usetransaction", "-force"],
+    knownValueParams: ["-credential", "-relativebasepath"],
+  },
+  "convert-path": {
+    operationType: "read",
+    pathParams: ["-path", "-literalpath", "-pspath", "-lp"],
+    knownSwitches: ["-usetransaction"],
+    knownValueParams: [],
+  },
+  "select-string": {
+    operationType: "read",
+    pathParams: ["-path", "-literalpath", "-pspath", "-lp"],
+    knownSwitches: [
+      "-simplematch",
+      "-casesensitive",
+      "-quiet",
+      "-list",
+      "-notmatch",
+      "-allmatches",
+      "-noemphasis",
+      "-raw",
+    ],
+    knownValueParams: [
+      "-inputobject",
+      "-pattern",
+      "-include",
+      "-exclude",
+      "-encoding",
+      "-context",
+      "-culture",
+    ],
+  },
+  "set-location": {
+    operationType: "read",
+    pathParams: ["-path", "-literalpath", "-pspath", "-lp"],
+    knownSwitches: ["-passthru", "-usetransaction"],
+    knownValueParams: ["-stackname"],
+  },
+  "push-location": {
+    operationType: "read",
+    pathParams: ["-path", "-literalpath", "-pspath", "-lp"],
+    knownSwitches: ["-passthru", "-usetransaction"],
+    knownValueParams: ["-stackname"],
+  },
+  "pop-location": {
+    operationType: "read",
+    pathParams: [],
+    knownSwitches: ["-passthru", "-usetransaction"],
+    knownValueParams: ["-stackname"],
+  },
+  "select-xml": {
+    operationType: "read",
+    pathParams: ["-path", "-literalpath", "-pspath", "-lp"],
+    knownSwitches: [],
+    knownValueParams: ["-xml", "-content", "-xpath", "-namespace"],
+  },
+  "get-winevent": {
+    operationType: "read",
+    pathParams: ["-path"],
+    knownSwitches: ["-force", "-oldest"],
+    knownValueParams: [
+      "-listlog",
+      "-logname",
+      "-listprovider",
+      "-providername",
+      "-maxevents",
+      "-computername",
+      "-credential",
+      "-filterxpath",
+      "-filterxml",
+      "-filterhashtable",
+    ],
+  },
+  "invoke-webrequest": {
+    operationType: "write",
+    pathParams: ["-outfile", "-infile"],
+    positionalSkip: 1,
+    optionalWrite: true,
+    knownSwitches: [
+      "-allowinsecureredirect",
+      "-allowunencryptedauthentication",
+      "-disablekeepalive",
+      "-nobodyprogress",
+      "-passthru",
+      "-preservefileauthorizationmetadata",
+      "-resume",
+      "-skipcertificatecheck",
+      "-skipheadervalidation",
+      "-skiphttperrorcheck",
+      "-usebasicparsing",
+      "-usedefaultcredentials",
+    ],
+    knownValueParams: [
+      "-uri",
+      "-method",
+      "-body",
+      "-contenttype",
+      "-headers",
+      "-maximumredirection",
+      "-maximumretrycount",
+      "-proxy",
+      "-proxycredential",
+      "-retryintervalsec",
+      "-sessionvariable",
+      "-timeoutsec",
+      "-token",
+      "-transferencoding",
+      "-useragent",
+      "-websession",
+      "-credential",
+      "-authentication",
+      "-certificate",
+      "-certificatethumbprint",
+      "-form",
+      "-httpversion",
+    ],
+  },
+  "invoke-restmethod": {
+    operationType: "write",
+    pathParams: ["-outfile", "-infile"],
+    positionalSkip: 1,
+    optionalWrite: true,
+    knownSwitches: [
+      "-allowinsecureredirect",
+      "-allowunencryptedauthentication",
+      "-disablekeepalive",
+      "-followrellink",
+      "-nobodyprogress",
+      "-passthru",
+      "-preservefileauthorizationmetadata",
+      "-resume",
+      "-skipcertificatecheck",
+      "-skipheadervalidation",
+      "-skiphttperrorcheck",
+      "-usebasicparsing",
+      "-usedefaultcredentials",
+    ],
+    knownValueParams: [
+      "-uri",
+      "-method",
+      "-body",
+      "-contenttype",
+      "-headers",
+      "-maximumfollowrellink",
+      "-maximumredirection",
+      "-maximumretrycount",
+      "-proxy",
+      "-proxycredential",
+      "-responseheaderstvariable",
+      "-retryintervalsec",
+      "-sessionvariable",
+      "-statuscodevariable",
+      "-timeoutsec",
+      "-token",
+      "-transferencoding",
+      "-useragent",
+      "-websession",
+      "-credential",
+      "-authentication",
+      "-certificate",
+      "-certificatethumbprint",
+      "-form",
+      "-httpversion",
+    ],
+  },
+  "expand-archive": {
+    operationType: "write",
+    pathParams: ["-path", "-literalpath", "-pspath", "-lp", "-destinationpath"],
+    knownSwitches: ["-force", "-passthru", "-whatif", "-confirm"],
+    knownValueParams: [],
+  },
+  "compress-archive": {
+    operationType: "write",
+    pathParams: ["-path", "-literalpath", "-pspath", "-lp", "-destinationpath"],
+    knownSwitches: ["-force", "-update", "-passthru", "-whatif", "-confirm"],
+    knownValueParams: ["-compressionlevel"],
+  },
+  "set-itemproperty": {
+    operationType: "write",
+    pathParams: ["-path", "-literalpath", "-pspath", "-lp"],
+    knownSwitches: ["-passthru", "-force", "-whatif", "-confirm", "-usetransaction"],
+    knownValueParams: [
+      "-name",
+      "-value",
+      "-type",
+      "-filter",
+      "-include",
+      "-exclude",
+      "-credential",
+      "-inputobject",
+    ],
+  },
+  "new-itemproperty": {
+    operationType: "write",
+    pathParams: ["-path", "-literalpath", "-pspath", "-lp"],
+    knownSwitches: ["-force", "-whatif", "-confirm", "-usetransaction"],
+    knownValueParams: [
+      "-name",
+      "-value",
+      "-propertytype",
+      "-type",
+      "-filter",
+      "-include",
+      "-exclude",
+      "-credential",
+    ],
+  },
+  "remove-itemproperty": {
+    operationType: "write",
+    pathParams: ["-path", "-literalpath", "-pspath", "-lp"],
+    knownSwitches: ["-force", "-whatif", "-confirm", "-usetransaction"],
+    knownValueParams: ["-name", "-filter", "-include", "-exclude", "-credential"],
+  },
+  "clear-item": {
+    operationType: "write",
+    pathParams: ["-path", "-literalpath", "-pspath", "-lp"],
+    knownSwitches: ["-force", "-whatif", "-confirm", "-usetransaction"],
+    knownValueParams: ["-filter", "-include", "-exclude", "-credential"],
+  },
+  "export-alias": {
+    operationType: "write",
+    pathParams: ["-path", "-literalpath", "-pspath", "-lp"],
+    knownSwitches: ["-append", "-force", "-noclobber", "-passthru", "-whatif", "-confirm"],
+    knownValueParams: ["-name", "-description", "-scope", "-as"],
+  },
+};
 //@ chunk-v0yfsee9.js:39050-39213 layout
-function getParamCategories(e) {
+function getParamCategories(config) {
   return [
-    ["path", e.pathParams],
-    ["leafOnly", e.leafOnlyPathParams ?? []],
-    ["switch", [...e.knownSwitches, ...COMMON_SWITCHES]],
-    ["value", [...e.knownValueParams, ...COMMON_VALUE_PARAMS]],
+    ["path", config.pathParams],
+    ["leafOnly", config.leafOnlyPathParams ?? []],
+    ["switch", [...config.knownSwitches, ...COMMON_SWITCHES]],
+    ["value", [...config.knownValueParams, ...COMMON_VALUE_PARAMS]],
   ];
 }
+//@ chunk-v0yfsee9.js:39213-39633 layout
 /**
  * 把参数缩写解析到 path/leafOnly/switch/value 类别；匹配多个类别时为 ambiguous，未知为 unknown。
  */
-//@ chunk-v0yfsee9.js:39213-39633 layout
-function classifyParamAbbreviation(e, n) {
-  let r = new Set(),
-    s = new Map(),
-    m = !1;
-  for (let [w, h] of n)
+function classifyParamAbbreviation(paramLower, paramCategories) {
+  let r = new Set();
+  let s = new Map();
+  let m = false;
+  for (let [w, h] of paramCategories)
     for (let O of h)
-      if (O === e) r.add(w);
-      else if (e.length > 1 && O.startsWith(e)) {
+      if (O === paramLower) r.add(w);
+      else if (paramLower.length > 1 && O.startsWith(paramLower)) {
         let S = s.get(O);
-        if (S !== void 0 && S !== w) m = !0;
+        if (S !== undefined && S !== w) m = true;
         s.set(O, w);
       }
   if (r.size > 1) return "ambiguous";
   let g = [...r][0];
-  if (g !== void 0)
+  if (g !== undefined)
     return g === "value" && (m || [...s.values()].some((h) => h !== "value")) ? "ambiguous" : g;
   if (m || s.size > 1) return "ambiguous";
   let y = [...s.values()][0];
-  if (y !== void 0) return y;
+  if (y !== undefined) return y;
   return "unknown";
 }
 //@ chunk-v0yfsee9.js:39633-39758 layout
@@ -924,25 +1038,28 @@ function normalizeWindowsPathCase(e) {
     .join("");
 }
 //@ chunk-v0yfsee9.js:39758-39786 layout
-function ot(e) {
-  return skipLeadingWhitespaceAndComments(e);
+/**
+ * 跳过 PowerShell 文本开头的空白与注释。
+ */
+function skipPsLeadingSpaceAndComments(rawValue) {
+  return skipLeadingWhitespaceAndComments(rawValue);
 }
+//@ chunk-v0yfsee9.js:39786-40018 file-local
 /**
  * 冒号绑定参数的值是否复杂（引号、逗号、括号、反引号、@、$），复杂值无法静态验证。
  */
-//@ chunk-v0yfsee9.js:39786-40018 file-local
 function hasComplexColonValue(rawValue) {
-  if (/['"\u2018-\u201F]/.test(rawValue)) return !0;
-  if (rawValue.includes("\u180E")) return !0;
-  let n = ot(rawValue);
+  if (/['"\u2018-\u201F]/.test(rawValue)) return true;
+  if (rawValue.includes("\u180E")) return true;
+  let rawValue_2 = skipPsLeadingSpaceAndComments(rawValue);
   return (
-    n.includes(",") ||
-    n.startsWith("(") ||
-    n.startsWith("[") ||
-    n.includes("`") ||
-    n.includes("@(") ||
-    n.startsWith("@") ||
-    n.includes("$")
+    rawValue_2.includes(",") ||
+    rawValue_2.startsWith("(") ||
+    rawValue_2.startsWith("[") ||
+    rawValue_2.includes("`") ||
+    rawValue_2.includes("@(") ||
+    rawValue_2.startsWith("@") ||
+    rawValue_2.includes("$")
   );
 }
 //@ chunk-v0yfsee9.js:40018-40169 layout = formatDirectoryList (1)
@@ -957,67 +1074,75 @@ function formatDirectoryList(directories) {
 //@ chunk-v0yfsee9.js:40169-40268 file-local
 function expandTilde(filePath) {
   if (filePath === "~" || filePath.startsWith("~/") || filePath.startsWith("~\\"))
-    return homedir_2() + filePath.slice(1);
+    return homedir() + filePath.slice(1);
   return filePath;
 }
+//@ chunk-v0yfsee9.js:40268-40408 layout
 /**
  * 路径（去提供程序前缀、各种拼写）是否是禁止删除的系统路径（盘根、盘根下一级、home 等）。
  */
-//@ chunk-v0yfsee9.js:40268-40408 layout
 function isDangerousRemovalPath(e) {
-  let n = new Set([lW(e), oZ(e), createSingleEditDiffConfig(e)]);
+  let n = new Set([
+    stripPsParameterPrefix(e),
+    stripFileSystemProviderPrefix(e),
+    createSingleEditDiffConfig(e),
+  ]);
   for (let r of n) {
     let index = r.indexOf("::");
     if ((index >= 0 && isDangerousRemovalRawPath(r.slice(index + 2))) || isDangerousRemovalRawPath(r))
-      return !0;
+      return true;
   }
-  return !1;
+  return false;
 }
 //@ chunk-v0yfsee9.js:40408-40501 file-local
 function isDangerousRemovalRawPath(filePath) {
-  let expanded = expandTilde(filePath).replace(/\\/g, "/"),
-    r = normalizeWindowsPathCase(expanded);
-  if (isAbsolute_2(r)) r = normalize(r);
+  let expanded = expandTilde(filePath).replace(/\\/g, "/");
+  let r = normalizeWindowsPathCase(expanded);
+  if (isAbsolute(r)) r = normalize(r);
   return isDangerousRemovalPath_2(r) || isDangerousRemovalPath_2(expanded);
 }
 //@ chunk-v0yfsee9.js:40501-40849 layout
-function resolveDangerousRemovalPath(e, n) {
-  let r = new Set([e, oZ(e), createSingleEditDiffConfig(e)]);
+function resolveDangerousRemovalPath(e, cwd) {
+  let r = new Set([e, stripFileSystemProviderPrefix(e), createSingleEditDiffConfig(e)]);
   for (let s of [...r]) {
-    if (s.includes("`")) r.add(gP(s));
+    if (s.includes("`")) r.add(unescapePsDoubleQuoted(s));
     if (s.includes("::")) {
       let sliced = s.slice(s.indexOf("::") + 2);
-      if ((r.add(sliced), sliced.includes("`"))) r.add(gP(sliced));
+      r.add(sliced);
+      if (sliced.includes("`")) r.add(unescapePsDoubleQuoted(sliced));
     }
   }
   for (let s of r) {
     let m = normalizeWindowsPathCase(expandTilde(s).replace(/\\/g, "/"));
     if (m === "") continue;
-    let g = isAbsolute_2(m) ? m : resolve_3(n, m),
-      { resolvedPath: resolvedPath } = safeResolvePath(getFsImplementation(), g);
+    let g = isAbsolute(m) ? m : resolve(cwd, m);
+    let { resolvedPath } = safeResolvePath(getFsImplementation(), g);
     if (isDangerousRemovalPath_2(resolvedPath)) return resolvedPath;
   }
   return null;
 }
 //@ chunk-v0yfsee9.js:40849-40881 layout
-function ce(e) {
-  return lW(e) === e;
+/**
+ * 判断基础规范化后与原值相同（表示路径未改写）。
+ */
+function isUnchangedByBasicNormalize(e) {
+  return stripPsParameterPrefix(e) === e;
 }
+//@ chunk-v0yfsee9.js:40881-41126 fingerprint = dangerousRemovalDeny (0.879)
 /**
  * 构造"删除受保护系统路径"的 deny 结果（safetyCheck，分类器不可批准）。
  */
-//@ chunk-v0yfsee9.js:40881-41126 fingerprint = dangerousRemovalDeny (0.879)
 function dangerousRemovalDeny(
   e,
-  n = `Remove-Item on system path '${e}' is blocked. This path is protected from removal.`,
+  message = `Remove-Item on system path '${e}' is blocked. This path is protected from removal.`,
 ) {
   return {
     behavior: "deny",
-    message: n,
+    message,
     decisionReason: {
       type: "safetyCheck",
       reason: "Removal targets a protected system path",
-      classifierApprovable: !1,
+      classifierApprovable: false,
     },
   };
 }
@@ -1032,134 +1157,171 @@ function stripTrailingWildcardSegment(e) {
   return r === 0 ? "." : e.slice(0, r);
 }
 //@ chunk-v0yfsee9.js:41363-41743 layout
-function findProtectedRemovalTarget(e, n, r, s, m) {
+function findProtectedRemovalTarget(e, n, r, cdTarget, m) {
   let g = stripTrailingWildcardSegment(normalizeDosDevicePath(e));
-  if (isDangerousRemovalPath(g)) return { path: g, quotable: !0 };
+  if (isDangerousRemovalPath(g))
+    return {
+      path: g,
+      quotable: true,
+    };
   let y = r && !/^(?:[A-Za-z]:)?[\\/]/.test(g);
-  if (!Qn(g) && !y) {
-    let w = resolveDangerousRemovalPath(g, n);
-    if (w !== null) return { path: w, quotable: !0 };
+  if (!isUncOrDevicePath(g) && !y) {
+    let dangerousRemovalPath = resolveDangerousRemovalPath(g, n);
+    if (dangerousRemovalPath !== null)
+      return {
+        path: dangerousRemovalPath,
+        quotable: true,
+      };
   }
-  if (y && s !== void 0 && !/^[A-Za-z]:/.test(g))
-    for (let w of new Set([s, expandCmdPercentVars(s, m)])) {
+  if (y && cdTarget !== undefined && !/^[A-Za-z]:/.test(g))
+    for (let w of new Set([cdTarget, expandCmdPercentVars(cdTarget, m)])) {
       if (!/^[A-Za-z]:[\\/]/.test(w)) continue;
       let resolved = win32.resolve(w, g);
-      if (isDangerousRemovalPath(resolved)) return { path: resolved, quotable: w === s, viaCd: s };
+      if (isDangerousRemovalPath(resolved))
+        return {
+          path: resolved,
+          quotable: w === cdTarget,
+          viaCd: cdTarget,
+        };
     }
   return null;
 }
+//@ chunk-v0yfsee9.js:41743-42674 layout
 /**
  * 开关 tengu_curious_lake（可用 CLAUDE_CODE_DISABLE_POWERSHELL_CMD_RM_DENY 关闭）打开时，检查 PowerShell 里通过 cmd /c 执行的 rd/del 是否删除受保护路径（考虑 %VAR%、$变量为空、cd 之后的相对路径），命中则 deny。
  */
-//@ chunk-v0yfsee9.js:41743-42674 layout
-function checkCmdRemovalOfProtectedPath(e, n, r) {
+function checkCmdRemovalOfProtectedPath(cmd, cwd, compoundCommandHasCd) {
   if (!isCmdRmDenyEnabled()) return;
-  let s = extractCmdRemovalOperands(e);
-  if (s.length === 0) return;
+  let cmdRemovalOperands = extractCmdRemovalOperands(cmd);
+  if (cmdRemovalOperands.length === 0) return;
   let m = subprocessEnv();
-  for (let { verb: verb, text: text, emptied: emptied, afterCd: afterCd, cdTarget: cdTarget } of s) {
+  for (let { verb, text, emptied, afterCd, cdTarget } of cmdRemovalOperands) {
     if (emptied?.literalPrefix === "") continue;
-    let S = emptied?.view ?? text;
-    for (let v of new Set([S, expandCmdPercentVars(S, m)])) {
-      let x = findProtectedRemovalTarget(v, n, r || afterCd, cdTarget, m);
-      if (x === null) continue;
-      let _ = x.quotable && v === S,
-        P = x.viaCd === void 0 ? null : `after this line's cd to '${x.viaCd}'`,
-        joined = (
-          _
-            ? [P, emptied !== null ? "if its variables are empty" : null]
-            : [
-                P,
-                `with cmd's %NAME% variables replaced${emptied !== null ? " and PowerShell's $ variables empty" : ""}`,
-              ]
-        )
-          .filter((V) => V !== null)
-          .join(" and ");
+    let view = emptied?.view ?? text;
+    for (let v of new Set([view, expandCmdPercentVars(view, m)])) {
+      let protectedRemovalTarget = findProtectedRemovalTarget(
+        v,
+        cwd,
+        compoundCommandHasCd || afterCd,
+        cdTarget,
+        m,
+      );
+      if (protectedRemovalTarget === null) continue;
+      let _ = protectedRemovalTarget.quotable && v === view;
+      let P =
+        protectedRemovalTarget.viaCd === undefined
+          ? null
+          : `after this line's cd to '${protectedRemovalTarget.viaCd}'`;
+      let joined = (
+        _
+          ? [P, emptied !== null ? "if its variables are empty" : null]
+          : [
+              P,
+              `with cmd's %NAME% variables replaced${emptied !== null ? " and PowerShell's $ variables empty" : ""}`,
+            ]
+      )
+        .filter((V) => V !== null)
+        .join(" and ");
       return dangerousRemovalDeny(
         text,
         !_
           ? `cmd's ${verb} on '${text}' is blocked because, ${joined}, it targets a path that no command may remove: a drive root, a folder directly under one, or the home folder.`
-          : text === x.path
-            ? `cmd's ${verb} on '${x.path}' is blocked because no command may remove that path.`
-            : `cmd's ${verb} on '${text}' is blocked because${joined === "" ? "" : `, ${joined},`} it targets '${x.path}', which no command may remove.`,
+          : text === protectedRemovalTarget.path
+            ? `cmd's ${verb} on '${protectedRemovalTarget.path}' is blocked because no command may remove that path.`
+            : `cmd's ${verb} on '${text}' is blocked because${joined === "" ? "" : `, ${joined},`} it targets '${protectedRemovalTarget.path}', which no command may remove.`,
       );
     }
   }
   return;
 }
+//@ chunk-v0yfsee9.js:42674-42919 fingerprint = checkDenyRuleForGuessedPath (1)
 /**
  * 对猜测出的路径拼写检查 read/edit deny 规则，返回命中的规则。
  */
-//@ chunk-v0yfsee9.js:42674-42919 fingerprint = checkDenyRuleForGuessedPath (1)
 function checkDenyRuleForGuessedPath(strippedPath, cwd, toolPermissionContext, operationType) {
   if (!strippedPath || strippedPath.includes("\x00")) return null;
-  let tildeExpanded = expandTilde(normalizeWindowsPathCase(strippedPath)),
-    g = isAbsolute_2(tildeExpanded) ? tildeExpanded : resolve_3(cwd, tildeExpanded),
-    { resolvedPath: resolvedPath } = safeResolvePath(getFsImplementation(), g),
-    w = operationType === "read" ? "read" : "edit";
+  let tildeExpanded = expandTilde(normalizeWindowsPathCase(strippedPath));
+  let abs = isAbsolute(tildeExpanded) ? tildeExpanded : resolve(cwd, tildeExpanded);
+  let { resolvedPath } = safeResolvePath(getFsImplementation(), abs);
+  let permissionType = operationType === "read" ? "read" : "edit";
   for (let h of getPathsForPermissionCheck(resolvedPath)) {
-    let denyRule = matchingRuleForInput(h, toolPermissionContext, w, "deny");
-    if (denyRule !== null) return { resolvedPath: resolvedPath, rule: denyRule };
+    let denyRule = matchingRuleForInput(h, toolPermissionContext, permissionType, "deny");
+    if (denyRule !== null)
+      return {
+        resolvedPath,
+        rule: denyRule,
+      };
   }
   return null;
 }
+//@ chunk-v0yfsee9.js:42919-46978 fingerprint = validatePath (0.794)
 /**
  * PowerShell 路径校验：对提供程序路径、反引号转义、:: 前缀等多种拼写先查 deny 规则；再按操作类型判断是否在允许的工作目录内（含读封锁、UNC、设备路径等）。
  */
-//@ chunk-v0yfsee9.js:42919-46978 fingerprint = validatePath (0.794)
 function validatePath(filePath, cwd, toolPermissionContext, operationType) {
-  let cleanPath = lW(filePath),
-    g = cleanPath !== filePath;
+  let cleanPath = stripPsParameterPrefix(filePath);
+  let g = cleanPath !== filePath;
   if (g) {
     let _ = new Set();
     for (let P of [
       filePath.replaceAll("\\", "/"),
-      oZ(filePath).replaceAll("\\", "/"),
+      stripFileSystemProviderPrefix(filePath).replaceAll("\\", "/"),
       createSingleEditDiffConfig(filePath).replaceAll("\\", "/"),
     ]) {
-      if ((_.add(P), P.includes("`"))) _.add(gP(P));
+      _.add(P);
+      if (P.includes("`")) _.add(unescapePsDoubleQuoted(P));
       if (P.includes("::")) {
         let sliced = P.slice(P.indexOf("::") + 2);
-        if ((_.add(sliced), sliced.includes("`"))) _.add(gP(sliced));
+        _.add(sliced);
+        if (sliced.includes("`")) _.add(unescapePsDoubleQuoted(sliced));
       }
     }
     for (let P of _) {
       let k = checkDenyRuleForGuessedPath(P, cwd, toolPermissionContext, operationType);
       if (k)
-        return { allowed: !1, resolvedPath: k.resolvedPath, decisionReason: { type: "rule", rule: k.rule } };
+        return {
+          allowed: false,
+          resolvedPath: k.resolvedPath,
+          decisionReason: {
+            type: "rule",
+            rule: k.rule,
+          },
+        };
     }
   }
-  let y = (_) => ({
-      allowed: !1,
-      resolvedPath: _,
-      decisionReason: {
-        type: "other",
-        reason:
-          "Paths containing quote characters cannot be statically validated and require manual approval",
-      },
-    }),
-    replaced = expandTilde(cleanPath).replaceAll("\\", "/");
-  if (/^~[^/]/.test(replaced))
+  let y = (resolvedPath) => ({
+    allowed: false,
+    resolvedPath,
+    decisionReason: {
+      type: "other",
+      reason: "Paths containing quote characters cannot be statically validated and require manual approval",
+    },
+  });
+  let normalizedPath = expandTilde(cleanPath).replaceAll("\\", "/");
+  if (/^~[^/]/.test(normalizedPath))
     return {
-      allowed: !1,
-      resolvedPath: replaced,
+      allowed: false,
+      resolvedPath: normalizedPath,
       decisionReason: {
         type: "other",
         reason: "Paths beginning with ~user cannot be statically validated and require manual approval",
       },
     };
-  if (replaced.includes("`")) {
-    let _ = gP(replaced),
-      denyHit = checkDenyRuleForGuessedPath(_, cwd, toolPermissionContext, operationType);
+  if (normalizedPath.includes("`")) {
+    let backtickStripped = unescapePsDoubleQuoted(normalizedPath);
+    let denyHit = checkDenyRuleForGuessedPath(backtickStripped, cwd, toolPermissionContext, operationType);
     if (denyHit)
       return {
-        allowed: !1,
+        allowed: false,
         resolvedPath: denyHit.resolvedPath,
-        decisionReason: { type: "rule", rule: denyHit.rule },
+        decisionReason: {
+          type: "rule",
+          rule: denyHit.rule,
+        },
       };
     return {
-      allowed: !1,
-      resolvedPath: replaced,
+      allowed: false,
+      resolvedPath: normalizedPath,
       decisionReason: {
         type: "other",
         reason:
@@ -1167,18 +1329,21 @@ function validatePath(filePath, cwd, toolPermissionContext, operationType) {
       },
     };
   }
-  if (replaced.includes("::")) {
-    let afterProvider = replaced.slice(replaced.indexOf("::") + 2),
-      denyHit = checkDenyRuleForGuessedPath(afterProvider, cwd, toolPermissionContext, operationType);
+  if (normalizedPath.includes("::")) {
+    let afterProvider = normalizedPath.slice(normalizedPath.indexOf("::") + 2);
+    let denyHit = checkDenyRuleForGuessedPath(afterProvider, cwd, toolPermissionContext, operationType);
     if (denyHit)
       return {
-        allowed: !1,
+        allowed: false,
         resolvedPath: denyHit.resolvedPath,
-        decisionReason: { type: "rule", rule: denyHit.rule },
+        decisionReason: {
+          type: "rule",
+          rule: denyHit.rule,
+        },
       };
     return {
-      allowed: !1,
-      resolvedPath: replaced,
+      allowed: false,
+      resolvedPath: normalizedPath,
       decisionReason: {
         type: "other",
         reason:
@@ -1186,52 +1351,61 @@ function validatePath(filePath, cwd, toolPermissionContext, operationType) {
       },
     };
   }
-  if (getPlatform() === "windows" && /^[a-z]:(?![/\\])/i.test(replaced))
+  if (getPlatform() === "windows" && /^[a-z]:(?![/\\])/i.test(normalizedPath))
     return {
-      allowed: !1,
-      resolvedPath: replaced,
+      allowed: false,
+      resolvedPath: normalizedPath,
       decisionReason: {
         type: "other",
-        reason: `Path '${g ? filePath : replaced}' is drive-relative (resolves against the per-drive current directory, which cannot be statically validated) and requires manual approval`,
+        reason: `Path '${g ? filePath : normalizedPath}' is drive-relative (resolves against the per-drive current directory, which cannot be statically validated) and requires manual approval`,
       },
     };
+  normalizedPath = normalizeWindowsPathCase(normalizedPath);
   if (
-    ((replaced = normalizeWindowsPathCase(replaced)),
-    Qn(replaced) || /DavWWWRoot/i.test(replaced) || /@SSL@/i.test(replaced))
+    isUncOrDevicePath(normalizedPath) ||
+    /DavWWWRoot/i.test(normalizedPath) ||
+    /@SSL@/i.test(normalizedPath)
   )
     return {
-      allowed: !1,
-      resolvedPath: replaced,
+      allowed: false,
+      resolvedPath: normalizedPath,
       decisionReason: {
         type: "other",
         reason: "UNC paths are blocked because they can trigger network requests and credential leakage",
       },
     };
-  if (replaced.includes("$") || replaced.includes("%"))
+  if (normalizedPath.includes("$") || normalizedPath.includes("%"))
     return {
-      allowed: !1,
-      resolvedPath: replaced,
+      allowed: false,
+      resolvedPath: normalizedPath,
       decisionReason: {
         type: "other",
         reason: "Variable expansion syntax in paths requires manual approval",
       },
     };
-  if ((getPlatform() === "windows" ? /^[a-z0-9]{2,}:/i : /^[a-z0-9]+:/i).test(replaced))
+  if ((getPlatform() === "windows" ? /^[a-z0-9]{2,}:/i : /^[a-z0-9]+:/i).test(normalizedPath))
     return {
-      allowed: !1,
-      resolvedPath: replaced,
+      allowed: false,
+      resolvedPath: normalizedPath,
       decisionReason: {
         type: "other",
-        reason: `Path '${g ? filePath : replaced}' uses a non-filesystem provider and requires manual approval`,
+        reason: `Path '${g ? filePath : normalizedPath}' uses a non-filesystem provider and requires manual approval`,
       },
     };
-  if (hasInteriorDotDot(replaced)) {
-    let _ = checkDenyRuleForGuessedPath(replaced, cwd, toolPermissionContext, operationType);
+  if (hasInteriorDotDot(normalizedPath)) {
+    let _ = checkDenyRuleForGuessedPath(normalizedPath, cwd, toolPermissionContext, operationType);
     if (_)
-      return { allowed: !1, resolvedPath: _.resolvedPath, decisionReason: { type: "rule", rule: _.rule } };
+      return {
+        allowed: false,
+        resolvedPath: _.resolvedPath,
+        decisionReason: {
+          type: "rule",
+          rule: _.rule,
+        },
+      };
     return {
-      allowed: !1,
-      resolvedPath: resolve_3(cwd, replaced),
+      allowed: false,
+      resolvedPath: resolve(cwd, normalizedPath),
       decisionReason: {
         type: "other",
         reason:
@@ -1239,29 +1413,36 @@ function validatePath(filePath, cwd, toolPermissionContext, operationType) {
       },
     };
   }
-  if (firstGlobCharIndex(replaced) !== -1) {
+  if (firstGlobCharIndex(normalizedPath) !== -1) {
     if (operationType === "write" || operationType === "create")
       return {
-        allowed: !1,
-        resolvedPath: replaced,
+        allowed: false,
+        resolvedPath: normalizedPath,
         decisionReason: {
           type: "other",
           reason: "Glob patterns are not allowed in write operations. Please specify an exact file path.",
         },
       };
-    if (containsPathTraversal(replaced)) {
-      let z = isAbsolute_2(replaced) ? replaced : resolve_3(cwd, replaced),
-        { resolvedPath: resolvedPath } = safeResolvePath(getFsImplementation(), z),
-        H = operationType === "read" ? "read" : "edit";
+    if (containsPathTraversal(normalizedPath)) {
+      let absolutePath = isAbsolute(normalizedPath) ? normalizedPath : resolve(cwd, normalizedPath);
+      let { resolvedPath } = safeResolvePath(getFsImplementation(), absolutePath);
+      let H = operationType === "read" ? "read" : "edit";
       for (let R of getPathsForPermissionCheck(resolvedPath)) {
         let G = matchingRuleForInput(R, toolPermissionContext, H, "deny");
         if (G !== null)
-          return { allowed: !1, resolvedPath: resolvedPath, decisionReason: { type: "rule", rule: G } };
+          return {
+            allowed: false,
+            resolvedPath,
+            decisionReason: {
+              type: "rule",
+              rule: G,
+            },
+          };
       }
       if (g) return y(resolvedPath);
       return {
-        allowed: !1,
-        resolvedPath: resolvedPath,
+        allowed: false,
+        resolvedPath,
         decisionReason: {
           type: "other",
           reason:
@@ -1269,20 +1450,27 @@ function validatePath(filePath, cwd, toolPermissionContext, operationType) {
         },
       };
     }
-    let basePath = getGlobBaseDirectory(replaced),
-      P = isAbsolute_2(basePath) ? basePath : resolve_3(cwd, basePath),
-      { resolvedPath: resolvedPath } = safeResolvePath(getFsImplementation(), P),
-      denyRule = matchingRuleForInput(
-        resolvedPath,
-        toolPermissionContext,
-        operationType === "read" ? "read" : "edit",
-        "deny",
-      );
+    let basePath = getGlobBaseDirectory(normalizedPath);
+    let absoluteBasePath = isAbsolute(basePath) ? basePath : resolve(cwd, basePath);
+    let { resolvedPath } = safeResolvePath(getFsImplementation(), absoluteBasePath);
+    let denyRule = matchingRuleForInput(
+      resolvedPath,
+      toolPermissionContext,
+      operationType === "read" ? "read" : "edit",
+      "deny",
+    );
     if (denyRule !== null)
-      return { allowed: !1, resolvedPath: resolvedPath, decisionReason: { type: "rule", rule: denyRule } };
+      return {
+        allowed: false,
+        resolvedPath,
+        decisionReason: {
+          type: "rule",
+          rule: denyRule,
+        },
+      };
     return {
-      allowed: !1,
-      resolvedPath: resolvedPath,
+      allowed: false,
+      resolvedPath,
       decisionReason: {
         type: "other",
         reason:
@@ -1290,164 +1478,201 @@ function validatePath(filePath, cwd, toolPermissionContext, operationType) {
       },
     };
   }
-  let S = isAbsolute_2(replaced) ? replaced : resolve_3(cwd, replaced),
-    { resolvedPath: resolvedPath, ...x } = validateResolvedOperand(S, toolPermissionContext, operationType);
+  let S = isAbsolute(normalizedPath) ? normalizedPath : resolve(cwd, normalizedPath);
+  let { resolvedPath, ...x } = validateResolvedOperand(S, toolPermissionContext, operationType);
   if (g && x.allowed) return y(resolvedPath);
   if (g && !x.allowed && x.decisionReason?.type === "safetyCheck")
     return {
-      allowed: !1,
-      resolvedPath: resolvedPath,
+      allowed: false,
+      resolvedPath,
       decisionReason: {
         type: "safetyCheck",
         reason: `Path '${filePath}' resolves near a sensitive file under quote-stripping and cannot be statically validated; requires manual approval`,
-        classifierApprovable: !1,
+        classifierApprovable: false,
       },
     };
-  return { ...x, resolvedPath: resolvedPath };
+  return {
+    ...x,
+    resolvedPath,
+  };
 }
 //@ chunk-v0yfsee9.js:46978-47149 layout = getGlobBaseDirectory (1)
 function getGlobBaseDirectory(filePath) {
-  let n = firstGlobCharIndex(filePath);
-  if (n === -1) return filePath;
-  let beforeGlob = filePath.substring(0, n),
-    lastSepIndex = Math.max(beforeGlob.lastIndexOf("/"), beforeGlob.lastIndexOf("\\"));
+  let globMatch = firstGlobCharIndex(filePath);
+  if (globMatch === -1) return filePath;
+  let beforeGlob = filePath.substring(0, globMatch);
+  let lastSepIndex = Math.max(beforeGlob.lastIndexOf("/"), beforeGlob.lastIndexOf("\\"));
   if (lastSepIndex === -1) return ".";
   return beforeGlob.substring(0, lastSepIndex + 1) || "/";
 }
 //@ chunk-v0yfsee9.js:47149-47323 layout
-var VALIDATABLE_ELEMENT_TYPES = new Set(["StringConstant", "Parameter"]),
-  Xn = new Set([
-    "get-childitem",
-    "get-item",
-    "get-itemproperty",
-    "resolve-path",
-    "convert-path",
-    "get-filehash",
-    "get-acl",
-    "test-path",
-  ]);
+/**
+ * 只读类路径 cmdlet 集合（get-childitem、resolve-path、test-path 等）。
+ */
+var VALIDATABLE_ELEMENT_TYPES = new Set(["StringConstant", "Parameter"]);
+var READ_ONLY_PATH_CMDLETS = new Set([
+  "get-childitem",
+  "get-item",
+  "get-itemproperty",
+  "resolve-path",
+  "convert-path",
+  "get-filehash",
+  "get-acl",
+  "test-path",
+]);
+//@ chunk-v0yfsee9.js:47323-48577 fingerprint = extractPathsFromCommand (0.595)
 /**
  * 按 CMDLET_PATH_CONFIG 从 cmdlet 参数中提取路径：识别参数缩写、冒号绑定值、位置参数，标记无法验证的参数（变量、表达式）与可选写入。
  */
-//@ chunk-v0yfsee9.js:47323-48577 fingerprint = extractPathsFromCommand (0.595)
 function extractPathsFromCommand(cmd) {
-  let canonical = resolveToCanonical(cmd.name),
-    r = getOwn(CMDLET_PATH_CONFIG, canonical);
-  if (!r) return { paths: [], operationType: "read", hasUnvalidatablePathArg: !1, optionalWrite: !1 };
-  let s = getParamCategories(r),
-    paths = [],
-    { args: args, elementTypes: elementTypes } = cmd,
-    w = !1,
-    h = 0,
-    positionalSkip = r.positionalSkip ?? 0;
+  let canonical = resolveToCanonical(cmd.name);
+  let config = getOwn(CMDLET_PATH_CONFIG, canonical);
+  if (!config)
+    return {
+      paths: [],
+      operationType: "read",
+      hasUnvalidatablePathArg: false,
+      optionalWrite: false,
+    };
+  let paramCategories = getParamCategories(config);
+  let paths = [];
+  let { args, elementTypes } = cmd;
+  let hasUnvalidatablePathArg = false;
+  let positionalsSeen = 0;
+  let positionalSkip = config.positionalSkip ?? 0;
   function checkArgElementType(argIdx) {
     if (!elementTypes) return;
     let x = elementTypes[argIdx + 1];
-    if (x && !VALIDATABLE_ELEMENT_TYPES.has(x)) w = !0;
+    if (x && !VALIDATABLE_ELEMENT_TYPES.has(x)) hasUnvalidatablePathArg = true;
   }
-  for (let v = 0; v < args.length; v++) {
-    let x = args[v];
-    if (!x) continue;
-    let _ = elementTypes ? elementTypes[v + 1] : void 0;
-    if (isPowerShellParameter(x, _)) {
-      let normalized = "-" + x.slice(1),
-        colonIdx = normalized.indexOf(":", 1),
-        paramLower = (colonIdx > 0 ? normalized.substring(0, colonIdx) : normalized).toLowerCase(),
-        z = classifyParamAbbreviation(paramLower, s);
+  for (let i = 0; i < args.length; i++) {
+    let arg = args[i];
+    if (!arg) continue;
+    let argElementType = elementTypes ? elementTypes[i + 1] : undefined;
+    if (isPowerShellParameter(arg, argElementType)) {
+      let normalized = "-" + arg.slice(1);
+      let colonIdx = normalized.indexOf(":", 1);
+      let paramLower = (colonIdx > 0 ? normalized.substring(0, colonIdx) : normalized).toLowerCase();
+      let z = classifyParamAbbreviation(paramLower, paramCategories);
       if (z === "path") {
-        let W;
+        let value;
         if (colonIdx > 0) {
-          let rawValue = x.substring(colonIdx + 1);
-          if (hasComplexColonValue(rawValue)) w = !0;
-          W = ot(rawValue);
+          let rawValue = arg.substring(colonIdx + 1);
+          if (hasComplexColonValue(rawValue)) hasUnvalidatablePathArg = true;
+          value = skipPsLeadingSpaceAndComments(rawValue);
         } else {
-          let H = args[v + 1],
-            R = elementTypes ? elementTypes[v + 2] : void 0;
-          if (H && !isPowerShellParameter(H, R)) ((W = H), checkArgElementType(v + 1), v++);
+          let nextVal = args[i + 1];
+          let nextType = elementTypes ? elementTypes[i + 2] : undefined;
+          if (nextVal && !isPowerShellParameter(nextVal, nextType)) {
+            value = nextVal;
+            checkArgElementType(i + 1);
+            i++;
+          }
         }
-        if (W) paths.push(W);
+        if (value) paths.push(value);
       } else if (z === "leafOnly") {
-        let W;
+        let value;
         if (colonIdx > 0) {
-          let rawValue = x.substring(colonIdx + 1);
-          if (hasComplexColonValue(rawValue)) w = !0;
-          W = ot(rawValue);
+          let rawValue = arg.substring(colonIdx + 1);
+          if (hasComplexColonValue(rawValue)) hasUnvalidatablePathArg = true;
+          value = skipPsLeadingSpaceAndComments(rawValue);
         } else {
-          let H = args[v + 1],
-            R = elementTypes ? elementTypes[v + 2] : void 0;
-          if (H && !isPowerShellParameter(H, R)) ((W = H), checkArgElementType(v + 1), v++);
+          let nextVal = args[i + 1];
+          let nextType = elementTypes ? elementTypes[i + 2] : undefined;
+          if (nextVal && !isPowerShellParameter(nextVal, nextType)) {
+            value = nextVal;
+            checkArgElementType(i + 1);
+            i++;
+          }
         }
-        if (W !== void 0)
-          if (W.includes("/") || W.includes("\\") || W === "." || W === "..") w = !0;
-          else paths.push(W);
+        if (value !== undefined)
+          if (value.includes("/") || value.includes("\\") || value === "." || value === "..")
+            hasUnvalidatablePathArg = true;
+          else paths.push(value);
       } else if (z === "switch");
-      else if (z === "value")
+      else if (z === "value") {
         if (colonIdx > 0) {
-          if (hasComplexColonValue(x.substring(colonIdx + 1))) w = !0;
+          if (hasComplexColonValue(arg.substring(colonIdx + 1))) hasUnvalidatablePathArg = true;
         } else {
-          let W = args[v + 1],
-            H = elementTypes ? elementTypes[v + 2] : void 0;
-          if (W && !isPowerShellParameter(W, H)) (checkArgElementType(v + 1), v++);
+          let nextArg = args[i + 1];
+          let nextArgType = elementTypes ? elementTypes[i + 2] : undefined;
+          if (nextArg && !isPowerShellParameter(nextArg, nextArgType)) {
+            checkArgElementType(i + 1);
+            i++;
+          }
         }
-      else {
-        w = !0;
+      } else {
+        hasUnvalidatablePathArg = true;
         {
-          let W = args[v + 1],
-            H = elementTypes ? elementTypes[v + 2] : void 0;
+          let W = args[i + 1];
+          let H = elementTypes ? elementTypes[i + 2] : undefined;
           if (W && !isPowerShellParameter(W, H)) paths.push(W);
         }
         if (colonIdx > 0) {
-          let rawValue = x.substring(colonIdx + 1);
-          paths.push(ot(rawValue));
+          let rawValue = arg.substring(colonIdx + 1);
+          paths.push(skipPsLeadingSpaceAndComments(rawValue));
         }
       }
       continue;
     }
-    if (h < positionalSkip) {
-      h++;
+    if (positionalsSeen < positionalSkip) {
+      positionalsSeen++;
       continue;
     }
-    (h++, checkArgElementType(v), paths.push(x));
+    positionalsSeen++;
+    checkArgElementType(i);
+    paths.push(arg);
   }
   return {
-    paths: paths,
-    operationType: r.operationType,
-    hasUnvalidatablePathArg: w,
-    optionalWrite: r.optionalWrite ?? !1,
+    paths,
+    operationType: config.operationType,
+    hasUnvalidatablePathArg,
+    optionalWrite: config.optionalWrite ?? false,
   };
 }
+//@ chunk-v0yfsee9.js:48577-48932 fingerprint = checkPathConstraints (0.962)
 /**
  * PowerShell 路径约束：逐条语句检查，deny 立即返回，优先返回安全检查类 ask。
  */
-//@ chunk-v0yfsee9.js:48577-48932 fingerprint = checkPathConstraints (0.962)
-function checkPathConstraints(input, parsed, toolPermissionContext, compoundCommandHasCd = !1) {
+function checkPathConstraints(input, parsed, toolPermissionContext, compoundCommandHasCd = false) {
   if (!parsed.valid)
-    return { behavior: "passthrough", message: "Cannot validate paths for unparsed command" };
-  let m, g;
+    return {
+      behavior: "passthrough",
+      message: "Cannot validate paths for unparsed command",
+    };
+  let firstAsk;
+  let g;
   for (let statement of parsed.statements) {
     let result = checkPathConstraintsForStatement(statement, toolPermissionContext, compoundCommandHasCd);
     if (result.behavior === "deny") return result;
     if (result.behavior === "ask") {
-      if (((m ??= result), isOutsideReadsBlockedAsk(result.decisionReason))) g ??= result;
+      firstAsk ??= result;
+      if (isOutsideReadsBlockedAsk(result.decisionReason)) g ??= result;
     }
   }
-  return g ?? m ?? { behavior: "passthrough", message: "All path constraints validated successfully" };
+  return (
+    g ??
+    firstAsk ?? {
+      behavior: "passthrough",
+      message: "All path constraints validated successfully",
+    }
+  );
 }
+//@ chunk-v0yfsee9.js:48932-50520 sole-consumer
 /**
  * 读封锁开启时检查外部程序（含内联代码解释器、cmd /c）的参数路径：内联代码直接拒绝，变量/表达式参数要求确认，路径命中 deny 规则拒绝，读出工作目录则 ask。
  */
-//@ chunk-v0yfsee9.js:48932-50520 sole-consumer
 function checkNativeCommandReads(command, cwd, permissionContext, hasCd) {
-  let m = resolveToCanonical(command.name),
-    elementTypes = command.elementTypes,
-    replaced = command.name
-      .slice(Math.max(command.name.lastIndexOf("\\"), command.name.lastIndexOf("/")) + 1)
-      .replace(/\.exe$/i, "")
-      .replace(/[\d.]+$/, ""),
-    w =
-      INLINE_CODE_FLAGS.get(replaced) ?? (replaced.toLowerCase() === "cmd" ? new Set(["/c", "/k"]) : void 0);
+  let m = resolveToCanonical(command.name);
+  let elementTypes = command.elementTypes;
+  let replaced = command.name
+    .slice(Math.max(command.name.lastIndexOf("\\"), command.name.lastIndexOf("/")) + 1)
+    .replace(/\.exe$/i, "")
+    .replace(/[\d.]+$/, "");
+  let w =
+    INLINE_CODE_FLAGS.get(replaced) ?? (replaced.toLowerCase() === "cmd" ? new Set(["/c", "/k"]) : undefined);
   if (
-    w !== void 0 &&
+    w !== undefined &&
     command.args.some((arg) => {
       let lower = arg.toLowerCase();
       return [...w].some((v) => lower === v.toLowerCase() || lower.startsWith(v.toLowerCase() + "="));
@@ -1455,54 +1680,54 @@ function checkNativeCommandReads(command, cwd, permissionContext, hasCd) {
   )
     return outsideReadsTooComplexAsk(`${m} runs inline code, which cannot be checked against the read block`);
   let runtimeAsk;
-  for (let O = 0; O < command.args.length; O++) {
-    let S = command.args[O],
-      v = elementTypes ? elementTypes[O + 1] : void 0;
-    if (v !== void 0 && v !== "StringConstant" && v !== "Parameter") {
+  for (let j = 0; j < command.args.length; j++) {
+    let S = command.args[j];
+    let v = elementTypes ? elementTypes[j + 1] : undefined;
+    if (v !== undefined && v !== "StringConstant" && v !== "Parameter") {
       runtimeAsk ??= outsideReadsRuntimePathAsk(m);
       continue;
     }
     if (S === "") continue;
-    let index = S.indexOf(":"),
-      index_2 = S.indexOf("="),
-      P =
-        index > 0 && /^[-/][A-Za-z]+$/.test(S.slice(0, index))
-          ? S.slice(index + 1)
-          : index_2 > 0 && /^--?[A-Za-z][A-Za-z-]*$/.test(S.slice(0, index_2))
-            ? S.slice(index_2 + 1)
-            : void 0;
-    if (P !== void 0 && P.includes("$")) {
+    let index = S.indexOf(":");
+    let index_2 = S.indexOf("=");
+    let P =
+      index > 0 && /^[-/][A-Za-z]+$/.test(S.slice(0, index))
+        ? S.slice(index + 1)
+        : index_2 > 0 && /^--?[A-Za-z][A-Za-z-]*$/.test(S.slice(0, index_2))
+          ? S.slice(index_2 + 1)
+          : undefined;
+    if (P !== undefined && P.includes("$")) {
       runtimeAsk ??= outsideReadsRuntimePathAsk(m);
       continue;
     }
-    if (Qn(S)) {
+    if (isUncOrDevicePath(S)) {
       runtimeAsk ??= outsideReadsRuntimePathAsk(m);
       continue;
     }
-    if (P === void 0 && isPowerShellParameter(S, v)) continue;
-    for (let k of P !== void 0 ? [P] : [S]) {
+    if (P === undefined && isPowerShellParameter(S, v)) continue;
+    for (let k of P !== undefined ? [P] : [S]) {
       if (k === "") continue;
       if (k.startsWith("~") && k !== "~" && !/^~[\\/]/.test(k)) {
         runtimeAsk ??= outsideReadsRuntimePathAsk(m);
         continue;
       }
       let D = expandTilde(k);
-      if (hasCd && !isAbsolute_2(D)) {
+      if (hasCd && !isAbsolute(D)) {
         runtimeAsk ??= outsideReadsRuntimePathAsk(m);
         continue;
       }
-      let V = k,
-        z = firstGlobCharIndex(D);
+      let V = k;
+      let z = firstGlobCharIndex(D);
       if (z !== -1) {
         let sliced = D.slice(0, z);
-        V = /[\\/]$/.test(sliced) ? sliced : dirname_3(sliced);
+        V = /[\\/]$/.test(sliced) ? sliced : dirname(sliced);
       }
       let W = expandTilde(V);
-      if (Qn(W)) {
+      if (isUncOrDevicePath(W)) {
         runtimeAsk ??= outsideReadsRuntimePathAsk(m);
         continue;
       }
-      let H = isAbsolute_2(W) ? W : resolve_3(cwd, W);
+      let H = isAbsolute(W) ? W : resolve(cwd, W);
       if (!hasInteriorDotDot(W.replaceAll("\\", "/")) && !getFsImplementation().existsSync(H)) continue;
       let R = validatePath(V, cwd, permissionContext, "read");
       if (R.allowed) continue;
@@ -1513,7 +1738,11 @@ function checkNativeCommandReads(command, cwd, permissionContext, hasCd) {
           decisionReason: R.decisionReason,
         };
       if (isOutsideReadsBlockedAsk(R.decisionReason)) {
-        runtimeAsk ??= askOutsideReadBlock(m, R.decisionReason, ce(V) ? R.resolvedPath : void 0);
+        runtimeAsk ??= askOutsideReadBlock(
+          m,
+          R.decisionReason,
+          isUnchangedByBasicNormalize(V) ? R.resolvedPath : undefined,
+        );
         continue;
       }
       runtimeAsk ??= outsideReadsRuntimePathAsk(m);
@@ -1521,45 +1750,46 @@ function checkNativeCommandReads(command, cwd, permissionContext, hasCd) {
   }
   return runtimeAsk;
 }
+//@ chunk-v0yfsee9.js:50520-50839 sole-consumer = isItemTypeParamAbbrev (0.791)
 /**
  * New-Item 参数中是否同时有 -ItemType *link/junction 与 -Value（创建链接到指定目标）。
  */
-//@ chunk-v0yfsee9.js:50520-50839 sole-consumer = isItemTypeParamAbbrev (0.791)
-function isItemTypeParamAbbrev_2(p) {
-  let n = !1,
-    r = !1;
-  for (let s = 0; s < p.length; s++) {
-    let lower = p[s].toLowerCase(),
-      index = lower.indexOf(":"),
-      w = index > 0 ? lower.slice(0, index) : lower,
-      h = index > 0 ? lower.slice(index + 1) : (p[s + 1] ?? "").toLowerCase();
+function isItemTypeParamAbbrev_2(cmd) {
+  let n = false;
+  let r = false;
+  for (let i = 0; i < cmd.length; i++) {
+    let lower = cmd[i].toLowerCase();
+    let colonIdx = lower.indexOf(":");
+    let w = colonIdx > 0 ? lower.slice(0, colonIdx) : lower;
+    let h = colonIdx > 0 ? lower.slice(colonIdx + 1) : (cmd[i + 1] ?? "").toLowerCase();
     if (w.length >= 2 && ("-itemtype".startsWith(w) || "-type".startsWith(w)) && /link|junction/.test(h))
-      n = !0;
-    if (w.length >= 2 && "-value".startsWith(w)) r = !0;
+      n = true;
+    if (w.length >= 2 && "-value".startsWith(w)) r = true;
   }
   return n && r;
 }
 //@ chunk-v0yfsee9.js:50968-51261 affinity
-function askOutsideReadBlock(e, n, r) {
+function askOutsideReadBlock(canonical, decisionReason, blockedPath) {
   return {
     behavior: "ask",
-    message: `${e} names a path outside the working directories, which the read block does not allow without asking (permissions.blockReadsOutsideWorkingDirectories). Add the directory with /add-dir, or remove that setting.`,
-    blockedPath: r,
-    decisionReason: n,
+    message: `${canonical} names a path outside the working directories, which the read block does not allow without asking (permissions.blockReadsOutsideWorkingDirectories). Add the directory with /add-dir, or remove that setting.`,
+    blockedPath,
+    decisionReason,
   };
 }
+//@ chunk-v0yfsee9.js:51261-58675 fingerprint = checkPathConstraintsForStatement (0.91)
 /**
  * 单条 PowerShell 语句的路径约束：cd 复合命令要询问；对每个命令提取路径并校验（读封锁、git 安全相关写 cmdlet、受保护删除路径、cmd /c 删除、管道/嵌套命令、重定向目标），返回 deny/ask/passthrough。
  */
-//@ chunk-v0yfsee9.js:51261-58675 fingerprint = checkPathConstraintsForStatement (0.91)
-function checkPathConstraintsForStatement(statement, toolPermissionContext, compoundCommandHasCd = !1) {
-  let cwd = getCwd(),
-    m,
-    g,
-    y = toolPermissionContext.blockReadsOutsideWorkingDirectories === !0,
-    w = (v, x) => y && (x === "read" || GIT_SAFETY_WRITE_CMDLETS.has(v));
+function checkPathConstraintsForStatement(statement, toolPermissionContext, compoundCommandHasCd = false) {
+  let cwd = getCwd();
+  let firstAsk;
+  let g;
+  let y = toolPermissionContext.blockReadsOutsideWorkingDirectories === true;
+  let w = (canonical, operationType) =>
+    y && (operationType === "read" || GIT_SAFETY_WRITE_CMDLETS.has(canonical));
   if (compoundCommandHasCd)
-    m = {
+    firstAsk = {
       behavior: "ask",
       message:
         "Compound command changes working directory (Set-Location/Push-Location/Pop-Location/New-PSDrive) \u2014 relative paths cannot be validated against the original cwd and require manual approval",
@@ -1569,24 +1799,20 @@ function checkPathConstraintsForStatement(statement, toolPermissionContext, comp
           "Compound command contains cd with path operation \u2014 manual approval required to prevent path resolution bypass",
       },
     };
-  let h = !1,
-    O,
-    S = !1;
+  let hasExpressionPipelineSource = false;
+  let O;
+  let S = false;
   for (let cmd of statement.commands) {
     if (cmd.elementType !== "CommandAst") {
-      ((h = !0), (O = cmd.text));
+      hasExpressionPipelineSource = true;
+      O = cmd.text;
       continue;
     }
-    let {
-        paths: paths,
-        operationType: operationType,
-        hasUnvalidatablePathArg: hasUnvalidatablePathArg,
-        optionalWrite: optionalWrite,
-      } = extractPathsFromCommand(cmd),
-      canonical = resolveToCanonical(cmd.name),
-      V = getOwn(CMDLET_PATH_CONFIG, canonical) !== void 0,
-      z = checkCmdRemovalOfProtectedPath(cmd, cwd, compoundCommandHasCd);
-    if (z !== void 0) return z;
+    let { paths, operationType, hasUnvalidatablePathArg, optionalWrite } = extractPathsFromCommand(cmd);
+    let canonical = resolveToCanonical(cmd.name);
+    let V = getOwn(CMDLET_PATH_CONFIG, canonical) !== undefined;
+    let z = checkCmdRemovalOfProtectedPath(cmd, cwd, compoundCommandHasCd);
+    if (z !== undefined) return z;
     if (y && !V) {
       let denyHit = checkNativeCommandReads(cmd, cwd, toolPermissionContext, compoundCommandHasCd);
       if (denyHit?.behavior === "deny") return denyHit;
@@ -1595,82 +1821,83 @@ function checkPathConstraintsForStatement(statement, toolPermissionContext, comp
     if (y && canonical === "new-item" && isItemTypeParamAbbrev_2(cmd.args))
       g ??= outsideReadsRuntimePathAsk(canonical);
     let W = S;
-    if (!Xn.has(canonical)) S = !0;
-    if (h) {
+    if (!READ_ONLY_PATH_CMDLETS.has(canonical)) S = true;
+    if (hasExpressionPipelineSource) {
       let canonical_2 = resolveToCanonical(cmd.name);
-      if (O !== void 0) {
+      if (O !== undefined) {
         let G = new Set();
-        for (let B of [O, lW(O), oZ(O), createSingleEditDiffConfig(O)]) {
-          if ((G.add(B), B.includes("`"))) G.add(gP(B));
+        for (let B of [
+          O,
+          stripPsParameterPrefix(O),
+          stripFileSystemProviderPrefix(O),
+          createSingleEditDiffConfig(O),
+        ]) {
+          G.add(B);
+          if (B.includes("`")) G.add(unescapePsDoubleQuoted(B));
           if (B.includes("::")) {
             let sliced = B.slice(B.indexOf("::") + 2);
-            if ((G.add(sliced), sliced.includes("`"))) G.add(gP(sliced));
+            G.add(sliced);
+            if (sliced.includes("`")) G.add(unescapePsDoubleQuoted(sliced));
           }
         }
         for (let B of G) {
-          let q = checkDenyRuleForGuessedPath(B, cwd, toolPermissionContext, operationType);
-          if (q)
+          let denyHit = checkDenyRuleForGuessedPath(B, cwd, toolPermissionContext, operationType);
+          if (denyHit)
             return {
               behavior: "deny",
-              message: `${canonical_2} targeting '${q.resolvedPath}' was blocked by a deny rule`,
-              decisionReason: { type: "rule", rule: q.rule },
+              message: `${canonical_2} targeting '${denyHit.resolvedPath}' was blocked by a deny rule`,
+              decisionReason: {
+                type: "rule",
+                rule: denyHit.rule,
+              },
             };
         }
       }
-      if (
-        ((m ??= {
-          behavior: "ask",
-          message: `${canonical_2} receives its path from a pipeline expression source that cannot be statically validated and requires manual approval`,
-        }),
-        w(canonical, operationType))
-      )
-        g ??= outsideReadsRuntimePathAsk(canonical);
+      firstAsk ??= {
+        behavior: "ask",
+        message: `${canonical_2} receives its path from a pipeline expression source that cannot be statically validated and requires manual approval`,
+      };
+      if (w(canonical, operationType)) g ??= outsideReadsRuntimePathAsk(canonical);
     }
     if (hasUnvalidatablePathArg) {
       let canonical_2 = resolveToCanonical(cmd.name);
-      if (
-        ((m ??= {
-          behavior: "ask",
-          message: `${canonical_2} uses a parameter or complex path expression (array literal, subexpression, unknown parameter, etc.) that cannot be statically validated and requires manual approval`,
-        }),
-        w(canonical, operationType))
-      )
-        g ??= outsideReadsRuntimePathAsk(canonical);
+      firstAsk ??= {
+        behavior: "ask",
+        message: `${canonical_2} uses a parameter or complex path expression (array literal, subexpression, unknown parameter, etc.) that cannot be statically validated and requires manual approval`,
+      };
+      if (w(canonical, operationType)) g ??= outsideReadsRuntimePathAsk(canonical);
     }
     if (operationType !== "read" && !optionalWrite && paths.length === 0 && V) {
-      m ??= {
+      firstAsk ??= {
         behavior: "ask",
         message: `${canonical} is a write operation but no target path could be determined; requires manual approval`,
       };
       continue;
     }
     if (W && V) {
-      if (
-        ((m ??= {
-          behavior: "ask",
-          message: `${canonical} may receive a path from an upstream pipeline command whose output cannot be statically validated and requires manual approval`,
-        }),
-        w(canonical, operationType))
-      )
-        g ??= outsideReadsRuntimePathAsk(canonical);
+      firstAsk ??= {
+        behavior: "ask",
+        message: `${canonical} may receive a path from an upstream pipeline command whose output cannot be statically validated and requires manual approval`,
+      };
+      if (w(canonical, operationType)) g ??= outsideReadsRuntimePathAsk(canonical);
     }
     let H = resolveToCanonical(cmd.name) === "remove-item";
     if (H) {
       if (
         cmd.args.some((arg) => {
-          let lower = (arg.length > 0 ? "-" + arg.slice(1) : arg).toLowerCase(),
-            index = lower.indexOf(":"),
-            X = index > 0 ? lower.slice(0, index) : lower;
+          let lower = (arg.length > 0 ? "-" + arg.slice(1) : arg).toLowerCase();
+          let index = lower.indexOf(":");
+          let X = index > 0 ? lower.slice(0, index) : lower;
           return X.length >= 2 && "-recurse".startsWith(X);
         })
       ) {
         let G = normalizeCaseForComparison(cwd);
         for (let filePath of paths) {
-          let replaced = expandTilde(normalizeWindowsPathCase(filePath)).replace(/\\/g, "/"),
-            X = isAbsolute_2(replaced) ? resolve_3(replaced) : resolve_3(cwd, replaced),
-            te = normalizeCaseForComparison(X);
+          let replaced = expandTilde(normalizeWindowsPathCase(filePath)).replace(/\\/g, "/");
+          let X = isAbsolute(replaced) ? resolve(replaced) : resolve(cwd, replaced);
+          let te = normalizeCaseForComparison(X);
           if (te === G || G.startsWith(te + "/") || G.startsWith(te + "\\")) {
-            m ??= {
+            firstAsk ??= {
               behavior: "ask",
               message: `Remove-Item -Recurse targeting '${filePath}' would delete the working directory including .git and .claude \u2014 requires manual approval`,
             };
@@ -1682,18 +1909,19 @@ function checkPathConstraintsForStatement(statement, toolPermissionContext, comp
     if (
       compoundCommandHasCd &&
       w(canonical, operationType) &&
-      paths.some((R) => !isAbsolute_2(expandTilde(R)))
+      paths.some((path) => !isAbsolute(expandTilde(path)))
     )
       g ??= outsideReadsRuntimePathAsk(canonical);
-    for (let R of paths) {
-      if (H && isDangerousRemovalPath(R)) return dangerousRemovalDeny(R);
-      let {
-        allowed: allowed,
-        resolvedPath: resolvedPath,
-        decisionReason: decisionReason,
-      } = validatePath(R, cwd, toolPermissionContext, operationType);
+    for (let path of paths) {
+      if (H && isDangerousRemovalPath(path)) return dangerousRemovalDeny(path);
+      let { allowed, resolvedPath, decisionReason } = validatePath(
+        path,
+        cwd,
+        toolPermissionContext,
+        operationType,
+      );
       if (operationType !== "read" && w(canonical, operationType)) {
-        let X = validatePath(R, cwd, toolPermissionContext, "read");
+        let X = validatePath(path, cwd, toolPermissionContext, "read");
         if (!X.allowed && X.decisionReason?.type === "rule")
           return {
             behavior: "deny",
@@ -1701,79 +1929,84 @@ function checkPathConstraintsForStatement(statement, toolPermissionContext, comp
             decisionReason: X.decisionReason,
           };
         if (!X.allowed && isOutsideReadsBlockedAsk(X.decisionReason))
-          g ??= askOutsideReadBlock(canonical, X.decisionReason, ce(R) ? X.resolvedPath : void 0);
+          g ??= askOutsideReadBlock(
+            canonical,
+            X.decisionReason,
+            isUnchangedByBasicNormalize(path) ? X.resolvedPath : undefined,
+          );
       }
       if (H && isDangerousRemovalPath_2(resolvedPath)) return dangerousRemovalDeny(resolvedPath);
       if (H) {
-        let X = resolveDangerousRemovalPath(R, cwd);
-        if (X !== null) return dangerousRemovalDeny(X);
+        let dangerousRemovalPath = resolveDangerousRemovalPath(path, cwd);
+        if (dangerousRemovalPath !== null) return dangerousRemovalDeny(dangerousRemovalPath);
       }
       if (!allowed) {
-        let canonical = resolveToCanonical(cmd.name),
-          workingDirs = Array.from(allWorkingDirectories(toolPermissionContext)),
-          dirListStr = formatDirectoryList(workingDirs),
-          de =
-            decisionReason?.type === "other" || decisionReason?.type === "safetyCheck"
-              ? decisionReason.reason
-              : `${canonical} targeting '${ce(R) ? resolvedPath : R}' was blocked. For security, Claude Code may only access files in the allowed working directories for this session: ${dirListStr}.`;
+        let canonical = resolveToCanonical(cmd.name);
+        let workingDirs = Array.from(allWorkingDirectories(toolPermissionContext));
+        let dirListStr = formatDirectoryList(workingDirs);
+        let message =
+          decisionReason?.type === "other" || decisionReason?.type === "safetyCheck"
+            ? decisionReason.reason
+            : `${canonical} targeting '${isUnchangedByBasicNormalize(path) ? resolvedPath : path}' was blocked. For security, Claude Code may only access files in the allowed working directories for this session: ${dirListStr}.`;
         if (decisionReason?.type === "rule")
-          return { behavior: "deny", message: de, decisionReason: decisionReason };
-        let oe = [];
-        if (resolvedPath && ce(R))
+          return {
+            behavior: "deny",
+            message,
+            decisionReason,
+          };
+        let suggestions = [];
+        if (resolvedPath && isUnchangedByBasicNormalize(path))
           if (operationType === "read") {
             let suggestion = createReadRuleSuggestion(getDirectoryForPath(resolvedPath), "session");
-            if (suggestion) oe.push(suggestion);
+            if (suggestion) suggestions.push(suggestion);
           } else
-            oe.push({
+            suggestions.push({
               type: "addDirectories",
               directories: [getDirectoryForPath(resolvedPath)],
               destination: "session",
             });
         if (
-          ce(R) &&
+          isUnchangedByBasicNormalize(path) &&
           (operationType === "write" || operationType === "create") &&
           acceptEditsSuggestionApplies(toolPermissionContext)
         )
-          oe.push({ type: "setMode", mode: "acceptEdits", destination: "session" });
+          suggestions.push({
+            type: "setMode",
+            mode: "acceptEdits",
+            destination: "session",
+          });
         let he = {
           behavior: "ask",
-          message: de,
-          blockedPath: ce(R) ? resolvedPath : void 0,
-          decisionReason: decisionReason,
-          suggestions: oe,
+          message,
+          blockedPath: isUnchangedByBasicNormalize(path) ? resolvedPath : undefined,
+          decisionReason,
+          suggestions,
         };
-        if (((m ??= he), isOutsideReadsBlockedAsk(decisionReason))) g ??= he;
+        firstAsk ??= he;
+        if (isOutsideReadsBlockedAsk(decisionReason)) g ??= he;
       }
     }
   }
   if (statement.nestedCommands)
     for (let cmd of statement.nestedCommands) {
-      let {
-          paths: paths,
-          operationType: operationType,
-          hasUnvalidatablePathArg: hasUnvalidatablePathArg,
-          optionalWrite: optionalWrite,
-        } = extractPathsFromCommand(cmd),
-        canonical = resolveToCanonical(cmd.name),
-        V = checkCmdRemovalOfProtectedPath(cmd, cwd, compoundCommandHasCd);
-      if (V !== void 0) return V;
+      let { paths, operationType, hasUnvalidatablePathArg, optionalWrite } = extractPathsFromCommand(cmd);
+      let canonical = resolveToCanonical(cmd.name);
+      let V = checkCmdRemovalOfProtectedPath(cmd, cwd, compoundCommandHasCd);
+      if (V !== undefined) return V;
       if (hasUnvalidatablePathArg) {
-        if (
-          ((m ??= {
-            behavior: "ask",
-            message: `${canonical} uses a parameter or complex path expression (array literal, subexpression, unknown parameter, etc.) that cannot be statically validated and requires manual approval`,
-          }),
-          w(canonical, operationType))
-        )
-          g ??= outsideReadsRuntimePathAsk(canonical);
+        firstAsk ??= {
+          behavior: "ask",
+          message: `${canonical} uses a parameter or complex path expression (array literal, subexpression, unknown parameter, etc.) that cannot be statically validated and requires manual approval`,
+        };
+        if (w(canonical, operationType)) g ??= outsideReadsRuntimePathAsk(canonical);
       }
       if (
         operationType !== "read" &&
         !optionalWrite &&
         paths.length === 0 &&
-        getOwn(CMDLET_PATH_CONFIG, canonical) !== void 0
+        getOwn(CMDLET_PATH_CONFIG, canonical) !== undefined
       ) {
-        m ??= {
+        firstAsk ??= {
           behavior: "ask",
           message: `${canonical} is a write operation but no target path could be determined; requires manual approval`,
         };
@@ -1782,11 +2015,12 @@ function checkPathConstraintsForStatement(statement, toolPermissionContext, comp
       let z = resolveToCanonical(cmd.name) === "remove-item";
       for (let filePath of paths) {
         if (z && isDangerousRemovalPath(filePath)) return dangerousRemovalDeny(filePath);
-        let {
-          allowed: allowed,
-          resolvedPath: resolvedPath,
-          decisionReason: decisionReason,
-        } = validatePath(filePath, cwd, toolPermissionContext, operationType);
+        let { allowed, resolvedPath, decisionReason } = validatePath(
+          filePath,
+          cwd,
+          toolPermissionContext,
+          operationType,
+        );
         if (operationType !== "read" && w(canonical, operationType)) {
           let B = validatePath(filePath, cwd, toolPermissionContext, "read");
           if (!B.allowed && B.decisionReason?.type === "rule")
@@ -1796,52 +2030,65 @@ function checkPathConstraintsForStatement(statement, toolPermissionContext, comp
               decisionReason: B.decisionReason,
             };
           if (!B.allowed && isOutsideReadsBlockedAsk(B.decisionReason))
-            g ??= askOutsideReadBlock(canonical, B.decisionReason, ce(filePath) ? B.resolvedPath : void 0);
+            g ??= askOutsideReadBlock(
+              canonical,
+              B.decisionReason,
+              isUnchangedByBasicNormalize(filePath) ? B.resolvedPath : undefined,
+            );
         }
         if (z && isDangerousRemovalPath_2(resolvedPath)) return dangerousRemovalDeny(resolvedPath);
         if (z) {
-          let B = resolveDangerousRemovalPath(filePath, cwd);
-          if (B !== null) return dangerousRemovalDeny(B);
+          let dangerousRemovalPath = resolveDangerousRemovalPath(filePath, cwd);
+          if (dangerousRemovalPath !== null) return dangerousRemovalDeny(dangerousRemovalPath);
         }
         if (!allowed) {
-          let canonical = resolveToCanonical(cmd.name),
-            workingDirs = Array.from(allWorkingDirectories(toolPermissionContext)),
-            dirListStr = formatDirectoryList(workingDirs),
-            te =
-              decisionReason?.type === "other" || decisionReason?.type === "safetyCheck"
-                ? decisionReason.reason
-                : `${canonical} targeting '${ce(filePath) ? resolvedPath : filePath}' was blocked. For security, Claude Code may only access files in the allowed working directories for this session: ${dirListStr}.`;
+          let canonical = resolveToCanonical(cmd.name);
+          let workingDirs = Array.from(allWorkingDirectories(toolPermissionContext));
+          let dirListStr = formatDirectoryList(workingDirs);
+          let message =
+            decisionReason?.type === "other" || decisionReason?.type === "safetyCheck"
+              ? decisionReason.reason
+              : `${canonical} targeting '${isUnchangedByBasicNormalize(filePath) ? resolvedPath : filePath}' was blocked. For security, Claude Code may only access files in the allowed working directories for this session: ${dirListStr}.`;
           if (decisionReason?.type === "rule")
-            return { behavior: "deny", message: te, decisionReason: decisionReason };
-          let ne = [];
-          if (resolvedPath && ce(filePath))
+            return {
+              behavior: "deny",
+              message,
+              decisionReason,
+            };
+          let suggestions = [];
+          if (resolvedPath && isUnchangedByBasicNormalize(filePath))
             if (operationType === "read") {
               let suggestion = createReadRuleSuggestion(getDirectoryForPath(resolvedPath), "session");
-              if (suggestion) ne.push(suggestion);
+              if (suggestion) suggestions.push(suggestion);
             } else
-              ne.push({
+              suggestions.push({
                 type: "addDirectories",
                 directories: [getDirectoryForPath(resolvedPath)],
                 destination: "session",
               });
           if (
-            ce(filePath) &&
+            isUnchangedByBasicNormalize(filePath) &&
             (operationType === "write" || operationType === "create") &&
             acceptEditsSuggestionApplies(toolPermissionContext)
           )
-            ne.push({ type: "setMode", mode: "acceptEdits", destination: "session" });
+            suggestions.push({
+              type: "setMode",
+              mode: "acceptEdits",
+              destination: "session",
+            });
           let de = {
             behavior: "ask",
-            message: te,
-            blockedPath: ce(filePath) ? resolvedPath : void 0,
-            decisionReason: decisionReason,
-            suggestions: ne,
+            message,
+            blockedPath: isUnchangedByBasicNormalize(filePath) ? resolvedPath : undefined,
+            decisionReason,
+            suggestions,
           };
-          if (((m ??= de), isOutsideReadsBlockedAsk(decisionReason))) g ??= de;
+          firstAsk ??= de;
+          if (isOutsideReadsBlockedAsk(decisionReason)) g ??= de;
         }
       }
-      if (h)
-        m ??= {
+      if (hasExpressionPipelineSource)
+        firstAsk ??= {
           behavior: "ask",
           message: `${resolveToCanonical(cmd.name)} appears inside a control-flow or chain statement where piped expression sources cannot be statically validated and requires manual approval`,
         };
@@ -1853,26 +2100,31 @@ function checkPathConstraintsForStatement(statement, toolPermissionContext, comp
           if (redir.isMerging) continue;
           if (!redir.target) continue;
           if (isNullRedirectionTarget(redir.target)) continue;
-          let {
-            allowed: allowed,
-            resolvedPath: resolvedPath,
-            decisionReason: decisionReason,
-          } = validatePath(redir.target, cwd, toolPermissionContext, "create");
+          let { allowed, resolvedPath, decisionReason } = validatePath(
+            redir.target,
+            cwd,
+            toolPermissionContext,
+            "create",
+          );
           if (!allowed) {
-            let workingDirs = Array.from(allWorkingDirectories(toolPermissionContext)),
-              dirListStr = formatDirectoryList(workingDirs),
-              z =
-                decisionReason?.type === "other" || decisionReason?.type === "safetyCheck"
-                  ? decisionReason.reason
-                  : `Output redirection to '${ce(redir.target) ? resolvedPath : redir.target}' was blocked. For security, Claude Code may only write to files in the allowed working directories for this session: ${dirListStr}.`;
+            let workingDirs = Array.from(allWorkingDirectories(toolPermissionContext));
+            let dirListStr = formatDirectoryList(workingDirs);
+            let message =
+              decisionReason?.type === "other" || decisionReason?.type === "safetyCheck"
+                ? decisionReason.reason
+                : `Output redirection to '${isUnchangedByBasicNormalize(redir.target) ? resolvedPath : redir.target}' was blocked. For security, Claude Code may only write to files in the allowed working directories for this session: ${dirListStr}.`;
             if (decisionReason?.type === "rule")
-              return { behavior: "deny", message: z, decisionReason: decisionReason };
-            m ??= {
+              return {
+                behavior: "deny",
+                message,
+                decisionReason,
+              };
+            firstAsk ??= {
               behavior: "ask",
-              message: z,
-              blockedPath: ce(redir.target) ? resolvedPath : void 0,
-              decisionReason: decisionReason,
-              suggestions: ce(redir.target)
+              message,
+              blockedPath: isUnchangedByBasicNormalize(redir.target) ? resolvedPath : undefined,
+              decisionReason,
+              suggestions: isUnchangedByBasicNormalize(redir.target)
                 ? [
                     {
                       type: "addDirectories",
@@ -1890,26 +2142,31 @@ function checkPathConstraintsForStatement(statement, toolPermissionContext, comp
       if (redir.isMerging) continue;
       if (!redir.target) continue;
       if (isNullRedirectionTarget(redir.target)) continue;
-      let {
-        allowed: allowed,
-        resolvedPath: resolvedPath,
-        decisionReason: decisionReason,
-      } = validatePath(redir.target, cwd, toolPermissionContext, "create");
+      let { allowed, resolvedPath, decisionReason } = validatePath(
+        redir.target,
+        cwd,
+        toolPermissionContext,
+        "create",
+      );
       if (!allowed) {
-        let workingDirs = Array.from(allWorkingDirectories(toolPermissionContext)),
-          dirListStr = formatDirectoryList(workingDirs),
-          V =
-            decisionReason?.type === "other" || decisionReason?.type === "safetyCheck"
-              ? decisionReason.reason
-              : `Output redirection to '${ce(redir.target) ? resolvedPath : redir.target}' was blocked. For security, Claude Code may only write to files in the allowed working directories for this session: ${dirListStr}.`;
+        let workingDirs = Array.from(allWorkingDirectories(toolPermissionContext));
+        let dirListStr = formatDirectoryList(workingDirs);
+        let message =
+          decisionReason?.type === "other" || decisionReason?.type === "safetyCheck"
+            ? decisionReason.reason
+            : `Output redirection to '${isUnchangedByBasicNormalize(redir.target) ? resolvedPath : redir.target}' was blocked. For security, Claude Code may only write to files in the allowed working directories for this session: ${dirListStr}.`;
         if (decisionReason?.type === "rule")
-          return { behavior: "deny", message: V, decisionReason: decisionReason };
-        m ??= {
+          return {
+            behavior: "deny",
+            message,
+            decisionReason,
+          };
+        firstAsk ??= {
           behavior: "ask",
-          message: V,
-          blockedPath: ce(redir.target) ? resolvedPath : void 0,
-          decisionReason: decisionReason,
-          suggestions: ce(redir.target)
+          message,
+          blockedPath: isUnchangedByBasicNormalize(redir.target) ? resolvedPath : undefined,
+          decisionReason,
+          suggestions: isUnchangedByBasicNormalize(redir.target)
             ? [
                 {
                   type: "addDirectories",
@@ -1921,7 +2178,12 @@ function checkPathConstraintsForStatement(statement, toolPermissionContext, comp
         };
       }
     }
-  return g ?? m ?? { behavior: "passthrough", message: "All path constraints validated successfully" };
+  return (
+    g ??
+    firstAsk ?? {
+      behavior: "passthrough",
+      message: "All path constraints validated successfully",
+    }
+  );
 }
-
 export { isDangerousRemovalPath, dangerousRemovalDeny, checkPathConstraints };

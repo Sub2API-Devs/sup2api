@@ -11,11 +11,14 @@
 import { supportsShiftEnter, hasUsedBackslashReturn } from "../../commands/terminalSetup/terminalSetup.js";
 
 //@ chunk-q8cyy466.js:17186-17242 affinity
-var a = { vim: "Editor mode", "output-style": "Output style" };
+var MODE_LABELS = {
+  vim: "Editor mode",
+  "output-style": "Output style",
+};
 //@ chunk-q8cyy466.js:17242-17324 fingerprint = isVimModeEnabled (0.406)
 function isVimModeEnabled(o) {
-  let t = o && a[o] ? o : "vim";
-  return `/${t} moved \u2192 ${a[t]} in /config`;
+  let t = o && MODE_LABELS[o] ? o : "vim";
+  return `/${t} moved \u2192 ${MODE_LABELS[t]} in /config`;
 }
 //@ chunk-18hwfzwa.js:50897-51162 fingerprint = isNonSpacePrintable (0.892)
 function isNonSpacePrintable(input, key) {
@@ -47,5 +50,4 @@ function getNewlineInstructions() {
   if (supportsShiftEnter()) return "shift + \u23CE for newline";
   return hasUsedBackslashReturn() ? "\\\u23CE for newline" : "backslash (\\) + return (\u23CE) for newline";
 }
-
 export { isNonSpacePrintable, getNewlineInstructions, isVimModeEnabled };

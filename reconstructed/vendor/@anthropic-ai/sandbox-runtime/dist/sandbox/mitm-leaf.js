@@ -6,72 +6,127 @@
  * attribution: esm-fingerprint 6, esm-layout 1
  */
 import { createSecureContext } from "tls";
-import { isIP, isIP as isIP_2, isIP as isIP_3, isIP as isIP_4, isIP as isIP_5 } from "net";
-import { No, lE, kf, nE, rE } from "./mitm-ca.js";
-import { At } from "../utils/debug.js";
+import { isIP } from "net";
+import { No, randomSerial, daysFromNow, caSubjectKeyId, signCertificateNative } from "./mitm-ca.js";
+import { logForDebugging as logForDebugging_2 } from "../utils/debug.js";
 
 //@ chunk-fq0cr76a.js:665429-666350 esm-fingerprint
-function L5(e, n) {
-  let { pki: pki } = No(),
-    s = HC(e.leafCerts, n);
-  if (s) return s;
-  let h = e.leafKeyPair ?? (e.leafKeyPair = pki.rsa.generateKeyPair(2048)),
-    certificate = pki.createCertificate();
-  ((certificate.publicKey = h.publicKey), (certificate.serialNumber = lE()));
-  let b = kf(-1);
-  ((certificate.validity.notBefore = b),
-    (certificate.validity.notAfter = U5(e.cert, b)),
-    certificate.setSubject([{ name: "commonName", value: n }]),
-    certificate.setIssuer(e.cert.subject.attributes),
-    certificate.setExtensions([
-      { name: "basicConstraints", cA: !1, critical: !0 },
-      { name: "keyUsage", critical: !0, digitalSignature: !0, keyEncipherment: !0 },
-      { name: "extKeyUsage", serverAuth: !0 },
-      { name: "subjectAltName", altNames: [B5(n)] },
-      { name: "subjectKeyIdentifier" },
-      { name: "authorityKeyIdentifier", keyIdentifier: nE(e.cert) },
-      ...(e.crlUrl ? [{ name: "cRLDistributionPoints", altNames: [{ type: 6, value: e.crlUrl }] }] : []),
-    ]),
-    rE(certificate, e.keyPem));
-  let S = {
-    certPem: pki.certificateToPem(certificate) + e.certPem,
-    keyPem: pki.privateKeyToPem(h.privateKey),
+function mintLeafCert(ca, hostname) {
+  let { pki } = No();
+  let cached = cacheGet(ca.leafCerts, hostname);
+  if (cached) return cached;
+  let keys = ca.leafKeyPair ?? (ca.leafKeyPair = pki.rsa.generateKeyPair(2048));
+  let cert = pki.createCertificate();
+  cert.publicKey = keys.publicKey;
+  cert.serialNumber = randomSerial();
+  let notBefore = daysFromNow(-1);
+  cert.validity.notBefore = notBefore;
+  cert.validity.notAfter = clampValidity(ca.cert, notBefore);
+  cert.setSubject([
+    {
+      name: "commonName",
+      value: hostname,
+    },
+  ]);
+  cert.setIssuer(ca.cert.subject.attributes);
+  cert.setExtensions([
+    {
+      name: "basicConstraints",
+      cA: false,
+      critical: true,
+    },
+    {
+      name: "keyUsage",
+      critical: true,
+      digitalSignature: true,
+      keyEncipherment: true,
+    },
+    {
+      name: "extKeyUsage",
+      serverAuth: true,
+    },
+    {
+      name: "subjectAltName",
+      altNames: [sanFor(hostname)],
+    },
+    {
+      name: "subjectKeyIdentifier",
+    },
+    {
+      name: "authorityKeyIdentifier",
+      keyIdentifier: caSubjectKeyId(ca.cert),
+    },
+    ...(ca.crlUrl
+      ? [
+          {
+            name: "cRLDistributionPoints",
+            altNames: [
+              {
+                type: 6,
+                value: ca.crlUrl,
+              },
+            ],
+          },
+        ]
+      : []),
+  ]);
+  signCertificateNative(cert, ca.keyPem);
+  let leaf = {
+    certPem: pki.certificateToPem(cert) + ca.certPem,
+    keyPem: pki.privateKeyToPem(keys.privateKey),
   };
-  return (KC(e.leafCerts, n, S, e.cacheLimit ?? GC), At(`[mitm-leaf] minted RSA leaf for ${n}`), S);
+  cacheSet(ca.leafCerts, hostname, leaf, ca.cacheLimit ?? LEAF_CACHE_LIMIT);
+  logForDebugging_2(`[mitm-leaf] minted RSA leaf for ${hostname}`);
+  return leaf;
 }
 //@ chunk-fq0cr76a.js:666350-666514 esm-fingerprint
-function WC(e, n) {
-  let r = HC(e.secureContexts, n);
-  if (r) return r;
-  let { certPem: certPem, keyPem: keyPem } = L5(e, n),
-    y = createSecureContext({ cert: certPem, key: keyPem });
-  return (KC(e.secureContexts, n, y, e.cacheLimit ?? GC), y);
+function secureContextFor(ca, hostname) {
+  let cached = cacheGet(ca.secureContexts, hostname);
+  if (cached) return cached;
+  let { certPem, keyPem } = mintLeafCert(ca, hostname);
+  let ctx = createSecureContext({
+    cert: certPem,
+    key: keyPem,
+  });
+  cacheSet(ca.secureContexts, hostname, ctx, ca.cacheLimit ?? LEAF_CACHE_LIMIT);
+  return ctx;
 }
 //@ chunk-fq0cr76a.js:666514-666577 esm-fingerprint
-function B5(e) {
-  return isIP_4(e) !== 0 ? { type: 7, ip: e } : { type: 2, value: e };
+function sanFor(hostname) {
+  return isIP(hostname) !== 0
+    ? {
+        type: 7,
+        ip: hostname,
+      }
+    : {
+        type: 2,
+        value: hostname,
+      };
 }
 //@ chunk-fq0cr76a.js:666577-666685 esm-fingerprint
-function U5(e, n) {
-  let notAfter = e.validity.notAfter,
-    date = new Date(n);
-  return (date.setDate(date.getDate() + 99), notAfter < date ? new Date(notAfter) : date);
+function clampValidity(caCert, notBefore) {
+  let caEnd = caCert.validity.notAfter;
+  let max = new Date(notBefore);
+  max.setDate(max.getDate() + 99);
+  return caEnd < max ? new Date(caEnd) : max;
 }
 //@ chunk-fq0cr76a.js:666685-666696 esm-layout
-var GC = 256;
+var LEAF_CACHE_LIMIT = 256;
 //@ chunk-fq0cr76a.js:666696-666774 esm-fingerprint
-function HC(e, n) {
-  let r = e.get(n);
-  if (r !== void 0) (e.delete(n), e.set(n, r));
-  return r;
+function cacheGet(cache, key) {
+  let value = cache.get(key);
+  if (value !== undefined) {
+    cache.delete(key);
+    cache.set(key, value);
+  }
+  return value;
 }
 //@ chunk-fq0cr76a.js:666774-666861 esm-fingerprint
-function KC(e, n, r, s) {
-  e.set(n, r);
-  for (let h of e.keys()) {
-    if (e.size <= s) break;
-    e.delete(h);
+function cacheSet(cache, key, value, limit) {
+  cache.set(key, value);
+  for (let oldest of cache.keys()) {
+    if (cache.size <= limit) break;
+    cache.delete(oldest);
   }
 }
-
-export { WC };
+export { secureContextFor };

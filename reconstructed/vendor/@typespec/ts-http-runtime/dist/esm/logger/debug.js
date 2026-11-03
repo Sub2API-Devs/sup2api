@@ -5,67 +5,85 @@
  * pieces: chunk-mrx6y2r5.js (10)
  * attribution: esm-layout 3, esm-fingerprint 7
  */
-import * as processModule from "process";
+import "process";
 import * as processModule_2 from "process";
 import util from "util";
 import { EOL } from "os";
 
 //@ chunk-mrx6y2r5.js:24430-24495 esm-layout
 function Jc(e, ...t) {
-  processModule.stderr.write(`${util.format(e, ...t)}${EOL}`);
+  processModule_2.stderr.write(`${util.format(e, ...t)}${EOL}`);
 }
 //@ chunk-mrx6y2r5.js:24495-24582 esm-fingerprint
-var Xc = (typeof process < "u" && process.env && process.env.DEBUG) || void 0,
-  Zc,
-  Ns = [],
-  xs = [],
-  Mo = [];
+var debugEnvVariable = (typeof process !== "undefined" && process.env && process.env.DEBUG) || undefined;
+var enabledString;
+var enabledNamespaces = [];
+var skippedNamespaces = [];
+var debuggers = [];
 //@ chunk-mrx6y2r5.js:24582-24595 esm-layout
-if (Xc) Ms(Xc);
+if (debugEnvVariable) enable(debugEnvVariable);
 //@ chunk-mrx6y2r5.js:24595-24669 esm-fingerprint
-var merged = Object.assign((e) => tl(e), { enable: Ms, enabled: Ds, disable: pm, log: Jc });
+var debugObj = Object.assign((namespace) => createDebugger(namespace), {
+  enable,
+  enabled,
+  disable,
+  log: Jc,
+});
 //@ chunk-mrx6y2r5.js:24669-24917 esm-fingerprint
-function Ms(e) {
-  ((Zc = e), (Ns = []), (xs = []));
-  let t = /\*/g,
-    mapped = e.split(",").map((n) => n.trim().replace(t, ".*?"));
-  for (let n of mapped)
-    if (n.startsWith("-")) xs.push(new RegExp(`^${n.substr(1)}$`));
-    else Ns.push(new RegExp(`^${n}$`));
-  for (let n of Mo) n.enabled = Ds(n.namespace);
+function enable(namespaces) {
+  enabledString = namespaces;
+  enabledNamespaces = [];
+  skippedNamespaces = [];
+  let wildcard = /\*/g;
+  let namespaceList = namespaces.split(",").map((ns) => ns.trim().replace(wildcard, ".*?"));
+  for (let ns of namespaceList)
+    if (ns.startsWith("-")) skippedNamespaces.push(new RegExp(`^${ns.substr(1)}$`));
+    else enabledNamespaces.push(new RegExp(`^${ns}$`));
+  for (let instance of debuggers) instance.enabled = enabled(instance.namespace);
 }
 //@ chunk-mrx6y2r5.js:24917-25045 esm-fingerprint
-function Ds(e) {
-  if (e.endsWith("*")) return !0;
-  for (let t of xs) if (t.test(e)) return !1;
-  for (let t of Ns) if (t.test(e)) return !0;
-  return !1;
+function enabled(namespace) {
+  if (namespace.endsWith("*")) return true;
+  for (let skipped of skippedNamespaces) if (skipped.test(namespace)) return false;
+  for (let enabledNamespace of enabledNamespaces) if (enabledNamespace.test(namespace)) return true;
+  return false;
 }
 //@ chunk-mrx6y2r5.js:25045-25088 esm-layout
-function pm() {
-  let e = Zc || "";
-  return (Ms(""), e);
+function disable() {
+  let result = enabledString || "";
+  enable("");
+  return result;
 }
 //@ chunk-mrx6y2r5.js:25088-25290 esm-fingerprint
-function tl(e) {
-  let merged_2 = Object.assign(r, { enabled: Ds(e), destroy: gm, log: merged.log, namespace: e, extend: ym });
-  function r(...n) {
-    if (!merged_2.enabled) return;
-    if (n.length > 0) n[0] = `${e} ${n[0]}`;
-    merged_2.log(...n);
+function createDebugger(namespace) {
+  let newDebugger = Object.assign(debug, {
+    enabled: enabled(namespace),
+    destroy,
+    log: debugObj.log,
+    namespace,
+    extend,
+  });
+  function debug(...args) {
+    if (!newDebugger.enabled) return;
+    if (args.length > 0) args[0] = `${namespace} ${args[0]}`;
+    newDebugger.log(...args);
   }
-  return (Mo.push(merged_2), merged_2);
+  debuggers.push(newDebugger);
+  return newDebugger;
 }
 //@ chunk-mrx6y2r5.js:25290-25369 esm-fingerprint
-function gm() {
-  let index = Mo.indexOf(this);
-  if (index >= 0) return (Mo.splice(index, 1), !0);
-  return !1;
+function destroy() {
+  let index = debuggers.indexOf(this);
+  if (index >= 0) {
+    debuggers.splice(index, 1);
+    return true;
+  }
+  return false;
 }
 //@ chunk-mrx6y2r5.js:25369-25443 esm-fingerprint
-function ym(e) {
-  let t = tl(`${this.namespace}:${e}`);
-  return ((t.log = this.log), t);
+function extend(namespace) {
+  let newDebugger = createDebugger(`${this.namespace}:${namespace}`);
+  newDebugger.log = this.log;
+  return newDebugger;
 }
-
-export { merged };
+export { debugObj };

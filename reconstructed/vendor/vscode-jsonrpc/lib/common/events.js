@@ -6,93 +6,107 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { de } from "./ral.js";
+import { require_ral } from "./ral.js";
 
 //@ chunk-t4ksmxzx.js:13641-15429 cjs-fingerprint
-var _e = x(function (Or) {
-  Object.defineProperty(Or, "__esModule", { value: !0 });
-  Or.Emitter = Or.Event = void 0;
-  var zi = de(),
-    Lr;
+var require_events = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.Emitter = cjsExports.Event = undefined;
+  var ral_1 = require_ral();
+  var Lr;
   (function (e) {
-    let r = { dispose() {} };
-    e.None = function () {
-      return r;
+    let _disposable = {
+      dispose() {},
     };
-  })(Lr || (Or.Event = Lr = {}));
-  class Nr {
-    add(e, r = null, n) {
-      if (!this._callbacks) ((this._callbacks = []), (this._contexts = []));
-      if ((this._callbacks.push(e), this._contexts.push(r), Array.isArray(n)))
-        n.push({ dispose: () => this.remove(e, r) });
+    e.None = function () {
+      return _disposable;
+    };
+  })(Lr || (cjsExports.Event = Lr = {}));
+  class CallbackList {
+    add(callback, context = null, bucket) {
+      if (!this._callbacks) {
+        this._callbacks = [];
+        this._contexts = [];
+      }
+      this._callbacks.push(callback);
+      this._contexts.push(context);
+      if (Array.isArray(bucket))
+        bucket.push({
+          dispose: () => this.remove(callback, context),
+        });
     }
-    remove(e, r = null) {
+    remove(callback, context = null) {
       if (!this._callbacks) return;
-      let n = !1;
-      for (let s = 0, c = this._callbacks.length; s < c; s++)
-        if (this._callbacks[s] === e)
-          if (this._contexts[s] === r) {
-            (this._callbacks.splice(s, 1), this._contexts.splice(s, 1));
+      let foundCallbackWithDifferentContext = false;
+      for (let i = 0, len = this._callbacks.length; i < len; i++)
+        if (this._callbacks[i] === callback)
+          if (this._contexts[i] === context) {
+            this._callbacks.splice(i, 1);
+            this._contexts.splice(i, 1);
             return;
-          } else n = !0;
-      if (n) throw Error("When adding a listener with a context, you should remove it with the same context");
+          } else foundCallbackWithDifferentContext = true;
+      if (foundCallbackWithDifferentContext)
+        throw Error("When adding a listener with a context, you should remove it with the same context");
     }
-    invoke(...e) {
+    invoke(...args) {
       if (!this._callbacks) return [];
-      let r = [],
-        sliced = this._callbacks.slice(0),
-        sliced_2 = this._contexts.slice(0);
-      for (let c = 0, h = sliced.length; c < h; c++)
+      let ret = [];
+      let callbacks = this._callbacks.slice(0);
+      let contexts = this._contexts.slice(0);
+      for (let i = 0, len = callbacks.length; i < len; i++)
         try {
-          r.push(sliced[c].apply(sliced_2[c], e));
-        } catch (error) {
-          (0, zi.default)().console.error(error);
+          ret.push(callbacks[i].apply(contexts[i], args));
+        } catch (e) {
+          (0, ral_1.default)().console.error(e);
         }
-      return r;
+      return ret;
     }
     isEmpty() {
       return !this._callbacks || this._callbacks.length === 0;
     }
     dispose() {
-      ((this._callbacks = void 0), (this._contexts = void 0));
+      this._callbacks = undefined;
+      this._contexts = undefined;
     }
   }
-  class He {
-    constructor(e) {
-      this._options = e;
+  class Emitter {
+    constructor(_options) {
+      this._options = _options;
     }
     get event() {
       if (!this._event)
-        this._event = (e, r, n) => {
-          if (!this._callbacks) this._callbacks = new Nr();
+        this._event = (listener, thisArgs, disposables) => {
+          if (!this._callbacks) this._callbacks = new CallbackList();
           if (this._options && this._options.onFirstListenerAdd && this._callbacks.isEmpty())
             this._options.onFirstListenerAdd(this);
-          this._callbacks.add(e, r);
-          let s = {
+          this._callbacks.add(listener, thisArgs);
+          let result = {
             dispose: () => {
               if (!this._callbacks) return;
-              if (
-                (this._callbacks.remove(e, r),
-                (s.dispose = He._noop),
-                this._options && this._options.onLastListenerRemove && this._callbacks.isEmpty())
-              )
+              this._callbacks.remove(listener, thisArgs);
+              result.dispose = Emitter._noop;
+              if (this._options && this._options.onLastListenerRemove && this._callbacks.isEmpty())
                 this._options.onLastListenerRemove(this);
             },
           };
-          if (Array.isArray(n)) n.push(s);
-          return s;
+          if (Array.isArray(disposables)) disposables.push(result);
+          return result;
         };
       return this._event;
     }
-    fire(e) {
-      if (this._callbacks) this._callbacks.invoke.call(this._callbacks, e);
+    fire(event) {
+      if (this._callbacks) this._callbacks.invoke.call(this._callbacks, event);
     }
     dispose() {
-      if (this._callbacks) (this._callbacks.dispose(), (this._callbacks = void 0));
+      if (this._callbacks) {
+        this._callbacks.dispose();
+        this._callbacks = undefined;
+      }
     }
   }
-  Or.Emitter = He;
-  He._noop = function () {};
+  cjsExports.Emitter = Emitter;
+  Emitter._noop = function () {};
 });
-
-export { _e };
+export { require_events };

@@ -6,12 +6,13 @@
  * attribution: cjs-require-graph 1
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { yf } from "../../lru-cache/index.js";
+import { require_lru_cache } from "../../lru-cache/index.js";
 
 //@ chunk-1ny7cxrt.js:68879-68948 cjs-require-graph
-var nk = x(function (Xve, tk) {
-  var mB = yf();
-  tk.exports = new mB({ max: 100 });
+var require_issuer_registry = x(function (cjsExports, cjsModule) {
+  var LRU = require_lru_cache();
+  cjsModule.exports = new LRU({
+    max: 100,
+  });
 });
-
-export { nk };
+export { require_issuer_registry };

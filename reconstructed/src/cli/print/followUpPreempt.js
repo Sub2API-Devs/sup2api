@@ -12,7 +12,7 @@ import { toExternalPermissionMode } from "../../utils/permissions/PermissionMode
 import { emitStatusMessage } from "../../entrypoints/sdk/coreSchemas.js";
 import { getSdkRapidFollowupPreempt } from "../../bootstrap/state.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
-import { im, filterQueuedCommandsForThread } from "../../utils/messageQueueManager.js";
+import { isActiveMainAgentCommand, filterQueuedCommandsForThread } from "../../utils/messageQueueManager.js";
 import { isTerminalShutdown } from "../../utils/terminalShutdown.js";
 import { logFeatureOk, logFeatureBad } from "../../services/analytics/featureTelemetry.js";
 import { userAbortReason } from "../../utils/abortController.js";
@@ -21,8 +21,11 @@ import { isHumanOrigin } from "../../utils/turnOrigin.js";
 import { logError } from "../../utils/log.js";
 import { looksLikeSlashInput } from "../../commands.js";
 import { env } from "../../utils/env.js";
-import { uf, isForegroundAgentMoveDisabled } from "../../tools/AgentTool/backgroundGates.js";
-import { Ghn, fQs } from "../../tasks/taskKinds.js";
+import {
+  isBackgroundTasksOff,
+  isForegroundAgentMoveDisabled,
+} from "../../tools/AgentTool/backgroundGates.js";
+import { isMainThreadForegroundAgent, isArmedDirectForegroundAgent } from "../../tasks/taskKinds.js";
 import { isMainThreadForegroundShell } from "../../tasks/LocalShellTask/LocalShellTask.js";
 import { count } from "../../utils/collections.js";
 import { isAutoBackgroundHeld, tryAutoBackgroundAgent } from "../../tasks/LocalAgentTask/LocalAgentTask.js";
@@ -34,9 +37,9 @@ import { flagKey } from "../structuredIOProtocol.js";
 //@ chunk-tyg7f3ek.js:89213-89308 placement
 function installPermissionModeReporter(e, n) {
   e.io.sessionState.onPermissionModeChanged = (r) => {
-    let s = toExternalPermissionMode(r),
-      h = emitStatusMessage(e, s);
-    n(s, h);
+    let permissionMode = toExternalPermissionMode(r);
+    let h = emitStatusMessage(e, permissionMode);
+    n(permissionMode, h);
   };
 }
 //@ chunk-tyg7f3ek.js:89308-89756 placement
@@ -44,31 +47,36 @@ class SparedWindowReporter {
   drain;
   io;
   stopping;
-  sparedWindowWiped = !1;
-  constructor({ drain: e, io: n, stopping: r }) {
-    ((this.drain = e), (this.io = n), (this.stopping = r));
+  sparedWindowWiped = false;
+  constructor({ drain, io, stopping }) {
+    this.drain = drain;
+    this.io = io;
+    this.stopping = stopping;
   }
   runEntered() {
-    this.sparedWindowWiped = !1;
+    this.sparedWindowWiped = false;
   }
   report() {
     if (this.drain.runningReported || this.stopping()) return;
     if (this.io.hasStandingPrompt()) {
-      if (!this.sparedWindowWiped)
-        ((this.sparedWindowWiped = !0), this.io.sessionState.wipeTurnScopedMetadata());
+      if (!this.sparedWindowWiped) {
+        this.sparedWindowWiped = true;
+        this.io.sessionState.wipeTurnScopedMetadata();
+      }
       return;
     }
-    ((this.drain.runningReported = !0), this.io.sessionState.notifyStateChanged("running"));
+    this.drain.runningReported = true;
+    this.io.sessionState.notifyStateChanged("running");
   }
 }
 //@ chunk-tyg7f3ek.js:89756-89812 placement
 function isRapidFollowupPreemptEnabled() {
-  return getSdkRapidFollowupPreempt() && getFeatureValue_CACHED_MAY_BE_STALE("tengu_zippy_spindle", !1);
+  return getSdkRapidFollowupPreempt() && getFeatureValue_CACHED_MAY_BE_STALE("tengu_zippy_spindle", false);
 }
+//@ chunk-tyg7f3ek.js:89812-92166 placement
 /**
  * print 模式快速追问抢占：人在模型回复期间连续发消息时，打断当前轮次让新消息尽快生效（tengu_zippy_spindle）。
  */
-//@ chunk-tyg7f3ek.js:89812-92166 placement
 class RapidFollowupPreempter {
   messageQueue;
   drain;
@@ -76,45 +84,48 @@ class RapidFollowupPreempter {
   isSentNow;
   emit;
   judged = new WeakSet();
-  turnRunning = !1;
+  turnRunning = false;
   turn;
   held;
   preemptedBy;
-  constructor({ messageQueue: e, drain: n, enabled: r, isSentNow: s, emit: h }) {
-    ((this.messageQueue = e), (this.drain = n), (this.enabled = r), (this.isSentNow = s), (this.emit = h));
+  constructor({ messageQueue, drain, enabled, isSentNow, emit }) {
+    this.messageQueue = messageQueue;
+    this.drain = drain;
+    this.enabled = enabled;
+    this.isSentNow = isSentNow;
+    this.emit = emit;
   }
   install() {
-    return (
-      this.takeArrivingFollowup(),
-      this.messageQueue.subscribe(() => runSafely(() => this.onQueueChanged()))
-    );
+    this.takeArrivingFollowup();
+    return this.messageQueue.subscribe(() => runSafely(() => this.onQueueChanged()));
   }
-  noteTurnStart({ command: e, members: n }) {
-    let preemptedBy = this.preemptedBy,
-      s = preemptedBy !== void 0 && n.some((h) => h.uuid === preemptedBy);
+  noteTurnStart({ command, members }) {
+    let preemptedBy = this.preemptedBy;
+    let s = preemptedBy !== undefined && members.some((member) => member.uuid === preemptedBy);
     if (
-      preemptedBy !== void 0 &&
+      preemptedBy !== undefined &&
       (s || !this.messageQueue.getCommandQueueSnapshot().some((h) => h.uuid === preemptedBy))
     )
-      this.preemptedBy = void 0;
-    if (
-      ((this.turnRunning = !0),
-      (this.turn =
-        e.mode === "prompt" &&
-        !e.isMeta &&
-        e.shouldQuery !== !1 &&
-        !isSlashLikeCommand(e) &&
-        !n.some((h) => h.priority === "now" || h.bridgeOrigin === !0) &&
-        !s
-          ? { messageUuids: n.map((h) => h.uuid).filter((h) => h !== void 0), compacting: !1, open: !1 }
-          : void 0),
-      this.turn === void 0)
-    )
-      this.held = void 0;
+      this.preemptedBy = undefined;
+    this.turnRunning = true;
+    this.turn =
+      command.mode === "prompt" &&
+      !command.isMeta &&
+      command.shouldQuery !== false &&
+      !isSlashLikeCommand(command) &&
+      !members.some((member) => member.priority === "now" || member.bridgeOrigin === true) &&
+      !s
+        ? {
+            messageUuids: members.map((member) => member.uuid).filter((h) => h !== undefined),
+            compacting: false,
+            open: false,
+          }
+        : undefined;
+    if (this.turn === undefined) this.held = undefined;
   }
   noteFrame(e) {
     let turn = this.turn;
-    if (turn === void 0) return;
+    if (turn === undefined) return;
     if (e.type === "system" && e.subtype === "status") {
       if (e.status !== "requesting") turn.compacting = e.status === "compacting";
     } else if (
@@ -124,68 +135,72 @@ class RapidFollowupPreempter {
         (e.type === "stream_event" &&
           (e.event.type === "content_block_start" || e.event.type === "content_block_delta"))) &&
         e.parent_tool_use_id === null)
-    )
-      ((this.turn = void 0), (this.held = void 0));
-    else if (e.type === "system" && e.subtype === "init") {
-      turn.open = !0;
+    ) {
+      this.turn = undefined;
+      this.held = undefined;
+    } else if (e.type === "system" && e.subtype === "init") {
+      turn.open = true;
       let held = this.held;
-      if (((this.held = void 0), held === void 0)) return;
+      this.held = undefined;
+      if (held === undefined) return;
       let commandQueueSnapshot = this.messageQueue.getCommandQueueSnapshot();
       if (
         firstDispatchableCommand(commandQueueSnapshot) === held &&
-        !commandQueueSnapshot.some((h) => h.priority === "now" && im(h))
+        !commandQueueSnapshot.some((h) => h.priority === "now" && isActiveMainAgentCommand(h))
       )
         runSafely(() => this.preempt(held));
     }
   }
   noteTurnEnd() {
-    ((this.turnRunning = !1), (this.turn = void 0), (this.held = void 0));
+    this.turnRunning = false;
+    this.turn = undefined;
+    this.held = undefined;
   }
   onQueueChanged() {
-    let takeArrivingFollowup = this.takeArrivingFollowup();
+    let e = this.takeArrivingFollowup();
     if (
-      takeArrivingFollowup === void 0 ||
-      takeArrivingFollowup.uuid === void 0 ||
+      e === undefined ||
+      e.uuid === undefined ||
       !this.enabled() ||
-      !isPreemptingFollowup(takeArrivingFollowup) ||
-      this.isSentNow(takeArrivingFollowup)
+      !isPreemptingFollowup(e) ||
+      this.isSentNow(e)
     )
       return;
-    if (this.turn?.open) this.preempt(takeArrivingFollowup);
-    else if (this.turn !== void 0 || !this.turnRunning) this.held = takeArrivingFollowup;
+    if (this.turn?.open) this.preempt(e);
+    else if (this.turn !== undefined || !this.turnRunning) this.held = e;
   }
   preempt(e) {
-    let uuid = e.uuid,
-      turn = this.turn,
-      abortController = this.drain.abortController;
+    let uuid = e.uuid;
+    let turn = this.turn;
+    let abortController = this.drain.abortController;
     if (
-      uuid === void 0 ||
-      turn === void 0 ||
+      uuid === undefined ||
+      turn === undefined ||
       !turn.open ||
       turn.compacting ||
-      abortController === void 0 ||
+      abortController === undefined ||
       abortController.signal.aborted ||
       this.drain.endSessionRequested ||
       isTerminalShutdown()
     )
       return;
-    (this.emit({
+    this.emit({
       type: "system",
       subtype: "turn_preempted",
       reason: "rapid_followup",
       preempted_by_uuid: uuid,
       preempted_message_uuids: turn.messageUuids,
-    }),
-      (this.preemptedBy = uuid),
-      logFeatureOk("print_rapid_followup_preempt"),
-      abortController.abort(userAbortReason("interrupt")));
+    });
+    this.preemptedBy = uuid;
+    logFeatureOk("print_rapid_followup_preempt");
+    abortController.abort(userAbortReason("interrupt"));
   }
   takeArrivingFollowup() {
-    let commandQueueSnapshot = this.messageQueue.getCommandQueueSnapshot(),
-      n = firstDispatchableCommand(commandQueueSnapshot),
-      r = n !== void 0 && !this.judged.has(n);
+    let commandQueueSnapshot = this.messageQueue.getCommandQueueSnapshot();
+    let n = firstDispatchableCommand(commandQueueSnapshot);
+    let r = n !== undefined && !this.judged.has(n);
     for (let s of commandQueueSnapshot) this.judged.add(s);
-    return r ? n : void 0;
+    return r ? n : undefined;
   }
 }
 //@ chunk-tyg7f3ek.js:92166-92299 placement
@@ -193,17 +208,17 @@ function isPreemptingFollowup(e) {
   return (
     canBatchWith(e) &&
     isHumanOrigin(e.origin) &&
-    e.verifiedSlackHumanTurn !== !0 &&
-    e.bridgeOrigin !== !0 &&
+    e.verifiedSlackHumanTurn !== true &&
+    e.bridgeOrigin !== true &&
     e.priority === "next" &&
     !e.wait &&
     !isSlashLikeCommand(e)
   );
 }
 //@ chunk-tyg7f3ek.js:92299-92337 placement
-function runSafely(e) {
+function runSafely(applyBridgeChildCliEntrypoint) {
   try {
-    e();
+    applyBridgeChildCliEntrypoint();
   } catch (error) {
     logError(error);
   }
@@ -211,7 +226,9 @@ function runSafely(e) {
 //@ chunk-tyg7f3ek.js:92337-92453 placement
 function firstDispatchableCommand(e) {
   return e.find(
-    (n) => im(n) && (n.mode === "prompt" || n.mode === "orphaned-permission" || n.priority !== "later"),
+    (n) =>
+      isActiveMainAgentCommand(n) &&
+      (n.mode === "prompt" || n.mode === "orphaned-permission" || n.priority !== "later"),
   );
 }
 //@ chunk-tyg7f3ek.js:92453-92487 placement
@@ -222,44 +239,48 @@ function isSlashLikeCommand(e) {
 var PREEMPT_DEBOUNCE_MS = 200;
 //@ chunk-tyg7f3ek.js:92498-92550 placement
 function isFollowupBackgroundsSubagentEnabled() {
-  return getFeatureValue_CACHED_MAY_BE_STALE("tengu_valiant_crescent", !1);
+  return getFeatureValue_CACHED_MAY_BE_STALE("tengu_valiant_crescent", false);
 }
+//@ chunk-tyg7f3ek.js:92550-95036 placement
 /**
  * 人发来排队消息时把前台子代理移到后台，让主线程先处理新消息（tengu_valiant_crescent）。
  */
-//@ chunk-tyg7f3ek.js:92550-95036 placement
 class FollowupBackgroundsSubagent {
   host;
-  uninstalled = !1;
-  watching = !1;
+  uninstalled = false;
+  watching = false;
   timer;
   responseId;
   queuedAtToolResult = new Set();
   passedOver = new Set();
-  constructor(e) {
-    this.host = e;
+  constructor(host) {
+    this.host = host;
   }
   install() {
-    let subscribe = this.host.messageQueue.subscribe(() => this.look());
+    let e = this.host.messageQueue.subscribe(() => this.look());
     return () => {
-      (subscribe(), (this.uninstalled = !0), this.forgetTurn());
+      e();
+      this.uninstalled = true;
+      this.forgetTurn();
     };
   }
   noteTurnStart() {
-    (this.forgetTurn(), (this.watching = !this.uninstalled && env.CLAUDE_AUTO_BACKGROUND_TASKS), this.look());
+    this.forgetTurn();
+    this.watching = !this.uninstalled && env.CLAUDE_AUTO_BACKGROUND_TASKS;
+    this.look();
   }
   noteFrame(e) {
     if (!this.watching || (e.type !== "user" && e.type !== "assistant") || e.parent_tool_use_id !== null)
       return;
     this.contained(() => {
       if (e.type === "user") {
-        let { content: content } = e.message;
+        let { content } = e.message;
         if (!("isReplay" in e) && Array.isArray(content) && content.some((r) => r.type === "tool_result"))
           for (let r of this.waitingMessages()) this.queuedAtToolResult.add(r);
       } else if (e.message.id !== this.responseId) {
         this.responseId = e.message.id;
-        let waitingMessages = this.waitingMessages();
-        for (let r of this.queuedAtToolResult) if (waitingMessages.has(r)) this.passedOver.add(r);
+        let n = this.waitingMessages();
+        for (let r of this.queuedAtToolResult) if (n.has(r)) this.passedOver.add(r);
         this.queuedAtToolResult.clear();
       }
     });
@@ -268,34 +289,37 @@ class FollowupBackgroundsSubagent {
     this.forgetTurn();
   }
   forgetTurn() {
-    ((this.watching = !1),
-      clearTimeout(this.timer),
-      (this.timer = void 0),
-      (this.responseId = void 0),
-      this.queuedAtToolResult.clear(),
-      this.passedOver.clear());
+    this.watching = false;
+    clearTimeout(this.timer);
+    this.timer = undefined;
+    this.responseId = undefined;
+    this.queuedAtToolResult.clear();
+    this.passedOver.clear();
   }
   look() {
     if (!this.watching) return;
     this.contained(() => {
-      (clearTimeout(this.timer), (this.timer = void 0));
-      let { drain: drain, messageQueue: messageQueue, taskRegistry: taskRegistry } = this.host;
+      clearTimeout(this.timer);
+      this.timer = undefined;
+      let { drain, messageQueue, taskRegistry } = this.host;
       if (
-        drain.abortController === void 0 ||
+        drain.abortController === undefined ||
         drain.abortController.signal.aborted ||
         !drain.turnUnderWay ||
         drain.endSessionRequested ||
         messageQueue.isMidTurnFoldSuspended() ||
-        (uf() && isForegroundAgentMoveDisabled()) ||
+        (isBackgroundTasksOff() && isForegroundAgentMoveDisabled()) ||
         this.waitingMessages().size === 0
       )
         return;
-      let values = Object.values(taskRegistry.all()),
-        filtered = values.filter(Ghn).filter((S) => S.abortController?.signal.aborted !== !0);
+      let values = Object.values(taskRegistry.all());
+      let filtered = values
+        .filter(isMainThreadForegroundAgent)
+        .filter((S) => S.abortController?.signal.aborted !== true);
       if (
         filtered.length === 0 ||
         this.host.isHumanDecisionPending() ||
-        !filtered.every(fQs) ||
+        !filtered.every(isArmedDirectForegroundAgent) ||
         values.some((S) => isMainThreadForegroundShell(S) && S.status === "running") ||
         this.host.hasListedForegroundToolCall() ||
         count(filtered, isAutoBackgroundHeld) > 0
@@ -305,33 +329,33 @@ class FollowupBackgroundsSubagent {
       }
       if (!this.host.enabled()) return;
       let y = count(filtered, (S) => tryAutoBackgroundAgent(S.id, taskRegistry, "follow_up"));
-      if (
-        (logForDebugging(
-          `[followup-backgrounds-subagent] moved ${y} of ${filtered.length} foreground subagents to the background for a person's queued message`,
-        ),
-        y > 0)
-      )
-        (logFeatureOk("print_followup_backgrounds_subagent"), this.lookAgainSoon());
+      logForDebugging(
+        `[followup-backgrounds-subagent] moved ${y} of ${filtered.length} foreground subagents to the background for a person's queued message`,
+      );
+      if (y > 0) {
+        logFeatureOk("print_followup_backgrounds_subagent");
+        this.lookAgainSoon();
+      }
     });
   }
   lookAgainSoon() {
-    (clearTimeout(this.timer),
-      (this.timer = setTimeout(() => this.look(), PREEMPT_DEBOUNCE_MS)),
-      this.timer.unref?.());
+    clearTimeout(this.timer);
+    this.timer = setTimeout(() => this.look(), PREEMPT_DEBOUNCE_MS);
+    this.timer.unref?.();
   }
   waitingMessages() {
     let e = new Set();
     for (let n of filterQueuedCommandsForThread(this.host.messageQueue.getCommandsByMaxPriority("next"), {
-      isMainThread: !0,
-      currentAgentId: void 0,
+      isMainThread: true,
+      currentAgentId: undefined,
     })) {
       if (
-        n.drainOnly === !0 ||
-        n.screeningPending === !0 ||
-        (n.uuid !== void 0 && this.passedOver.has(n.uuid))
+        n.drainOnly === true ||
+        n.screeningPending === true ||
+        (n.uuid !== undefined && this.passedOver.has(n.uuid))
       )
         break;
-      if (n.uuid !== void 0 && isPreemptingFollowup(n) && !this.host.isSentNow(n)) e.add(n.uuid);
+      if (n.uuid !== undefined && isPreemptingFollowup(n) && !this.host.isSentNow(n)) e.add(n.uuid);
     }
     return e;
   }
@@ -339,19 +363,21 @@ class FollowupBackgroundsSubagent {
     try {
       e();
     } catch (error) {
-      (this.forgetTurn(), logError(error), logFeatureBad("print_followup_backgrounds_subagent", "threw"));
+      this.forgetTurn();
+      logError(error);
+      logFeatureBad("print_followup_backgrounds_subagent", "threw");
     }
   }
 }
 //@ chunk-tyg7f3ek.js:95036-95418 placement
 function reportRedeliveredFollowupClosed(e, n, r) {
   try {
-    let s = foldedFollowUpEnd(e, n),
-      h = r === "cancelled" ? "cancelled_with_continuation" : s?.badEnd;
-    if (s === void 0 || h === void 0) return;
+    let s = foldedFollowUpEnd(e, n);
+    let badEnd = r === "cancelled" ? "cancelled_with_continuation" : s?.badEnd;
+    if (s === undefined || badEnd === undefined) return;
     logForDiagnosticsNoPII("info", "cli_redelivered_follow_up_closed_unrun", {
-      reason: h,
-      ...flagKey("reason", h),
+      reason: badEnd,
+      ...flagKey("reason", badEnd),
       closed_on_arrival: r === "on_arrival",
       error_was_transient: s.failedTransiently,
       claude_row_after_it: s.claudesRowBehind,
@@ -363,11 +389,23 @@ function reportRedeliveredFollowupClosed(e, n, r) {
   }
 }
 //@ chunk-tyg7f3ek.js:95418-95577 placement
-var FOLD_END_NO_MORE_ROWS = { end: "no_more_rows", modelWrote: !1, modelEndedTheTurn: void 0 },
-  e_ = { ...FOLD_END_NO_MORE_ROWS, end: "something_follows" },
-  FB = { ...FOLD_END_NO_MORE_ROWS, end: "stopped" },
-  xB = { ...e_, modelEndedTheTurn: !1 };
-
+var FOLD_END_NO_MORE_ROWS = {
+  end: "no_more_rows",
+  modelWrote: false,
+  modelEndedTheTurn: undefined,
+};
+var FOLD_END_SOMETHING_FOLLOWS = {
+  ...FOLD_END_NO_MORE_ROWS,
+  end: "something_follows",
+};
+var FOLD_END_STOPPED = {
+  ...FOLD_END_NO_MORE_ROWS,
+  end: "stopped",
+};
+var FOLD_END_SOMETHING_FOLLOWS_MODEL_KEPT = {
+  ...FOLD_END_SOMETHING_FOLLOWS,
+  modelEndedTheTurn: false,
+};
 export {
   reportRedeliveredFollowupClosed,
   installPermissionModeReporter,
@@ -378,7 +416,7 @@ export {
   SparedWindowReporter,
   runSafely,
   FOLD_END_NO_MORE_ROWS,
-  xB,
-  e_,
-  FB,
+  FOLD_END_SOMETHING_FOLLOWS_MODEL_KEPT,
+  FOLD_END_SOMETHING_FOLLOWS,
+  FOLD_END_STOPPED,
 };

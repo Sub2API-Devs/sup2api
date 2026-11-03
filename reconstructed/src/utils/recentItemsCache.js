@@ -9,17 +9,20 @@
  * attribution: placement 1
  */
 
+//@ chunk-tm91gg77.js:191-409 placement
 /**
  * 按 id 记住最近条目的 LRU 缓存，最多保留 512 条。
  */
-//@ chunk-tm91gg77.js:191-409 placement
 class RecentItemsCache {
   #e = new Map();
   remember(i) {
-    for (let e of i) (this.#e.delete(e.id), this.#e.set(e.id, e));
-    for (let e of this.#e.keys()) {
+    for (let e of i) {
+      this.#e.delete(e.id);
+      this.#e.set(e.id, e);
+    }
+    for (let key of this.#e.keys()) {
       if (this.#e.size <= 512) break;
-      this.#e.delete(e);
+      this.#e.delete(key);
     }
   }
   get(i) {
@@ -29,5 +32,4 @@ class RecentItemsCache {
     this.#e.clear();
   }
 }
-
 export { RecentItemsCache };

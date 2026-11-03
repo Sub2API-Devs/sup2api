@@ -11,13 +11,18 @@
 import { Ar } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-bkss02w7.js:227-238 placement
-var qwo = {};
+/**
+ * plugin test 报告标记模块的导出容器（REPORT_MARK）。
+ */
+var PLUGIN_TEST_REPORT_MARK_EXPORTS = {};
 //@ chunk-bkss02w7.js:238-284 placement
-Ar(qwo, { REPORT_MARK: () => REPORT_MARK, default: () => qwo });
+Ar(PLUGIN_TEST_REPORT_MARK_EXPORTS, {
+  REPORT_MARK: () => REPORT_MARK,
+  default: () => PLUGIN_TEST_REPORT_MARK_EXPORTS,
+});
+//@ chunk-bkss02w7.js:284-321 placement
 /**
  * plugin test 报告行前缀。
  */
-//@ chunk-bkss02w7.js:284-321 placement
 var REPORT_MARK = "claude-plugin-test-report ";
-
 export { REPORT_MARK };

@@ -8,128 +8,171 @@
  * pieces: chunk-qh0448cn.js (4)
  * attribution: placement 2, fingerprint 1, affinity 1
  */
-import { j, y, P } from "../../vendor/react/cjs/react.production.js";
+import { init_react_production, y, P } from "../../vendor/react/cjs/react.production.js";
 import { userCheckoutSpawnTerms, stashToCleanState } from "../utils/teleport.js";
 import { getFileStatus } from "../utils/git.js";
 import { buildGitEnvForRepo } from "../utils/git/gitDirResolution.js";
 import { logForDebugging } from "../utils/debug.js";
 import { TeleportOperationError } from "../utils/errors.js";
-import { e, r } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+} from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Box, Text } from "../ink/components/Text.js";
 import { Spinner } from "./Spinner.js";
-import { re } from "../../vendor/@inquirer/figures/dist/esm/index.js";
+import { figures_default } from "../../vendor/@inquirer/figures/dist/esm/index.js";
 import { KeyboardShortcutHint } from "./design-system/KeyboardShortcutHint.js";
 import { Dialog } from "./design-system/Dialog.js";
 import { HintText } from "./design-system/HintText.js";
 import { ConfirmSelect } from "./design-system/ConfirmSelect.js";
 
 //@ chunk-qh0448cn.js:1233-1237 placement
-j();
+init_react_production();
 //@ chunk-qh0448cn.js:1237-1241 placement
-j();
+init_react_production();
 //@ chunk-qh0448cn.js:1241-3194 fingerprint = TeleportStash (0.597)
-function TeleportStash({
-  onStashAndContinue: onStashAndContinue,
-  onCancel: onCancel,
-  cancelQuits: cancelQuits,
-}) {
-  let [d, f] = y(null),
-    u = d !== null ? [...d.tracked, ...d.untracked] : [],
-    [E, D] = y(!0),
-    [h, x] = y(!1),
-    [C, L] = y(null);
+function TeleportStash({ onStashAndContinue, onCancel, cancelQuits }) {
+  let [gitFileStatus, setGitFileStatus] = y(null);
+  let changedFiles = gitFileStatus !== null ? [...gitFileStatus.tracked, ...gitFileStatus.untracked] : [];
+  let [loading, setLoading] = y(true);
+  let [stashing, setStashing] = y(false);
+  let [error, setError] = y(null);
   P(() => {
     (async () => {
       try {
-        let { cwd: cwd } = userCheckoutSpawnTerms(),
-          v = await getFileStatus(cwd, buildGitEnvForRepo(cwd, void 0, { userLocale: !0 }));
-        f(v);
+        let { cwd } = userCheckoutSpawnTerms();
+        let fileStatus = await getFileStatus(
+          cwd,
+          buildGitEnvForRepo(cwd, undefined, {
+            userLocale: true,
+          }),
+        );
+        setGitFileStatus(fileStatus);
       } catch (err) {
-        let v = err instanceof Error ? err.message : String(err);
-        (logForDebugging(`Error getting changed files: ${v}`, { level: "error" }),
-          L(err instanceof TeleportOperationError ? err.message : "Failed to get changed files"));
+        let errorMessage = err instanceof Error ? err.message : String(err);
+        logForDebugging(`Error getting changed files: ${errorMessage}`, {
+          level: "error",
+        });
+        setError(err instanceof TeleportOperationError ? err.message : "Failed to get changed files");
       } finally {
-        D(!1);
+        setLoading(false);
       }
     })();
   }, []);
   let handleStash = async () => {
-    x(!0);
+    setStashing(true);
     try {
-      if (
-        (logForDebugging("Stashing changes before teleport..."),
-        !(await stashToCleanState("Teleport auto-stash", userCheckoutSpawnTerms())))
-      ) {
-        (L("Failed to stash changes"), x(!1));
+      logForDebugging("Stashing changes before teleport...");
+      if (!(await stashToCleanState("Teleport auto-stash", userCheckoutSpawnTerms()))) {
+        setError("Failed to stash changes");
+        setStashing(false);
         return;
       }
       logForDebugging("Successfully stashed changes");
-    } catch (err_0) {
-      let l = err_0 instanceof Error ? err_0.message : String(err_0);
-      (logForDebugging(`Error stashing changes: ${l}`, { level: "error" }),
-        L(err_0 instanceof TeleportOperationError ? err_0.message : "Failed to stash changes"),
-        x(!1));
+    } catch (err) {
+      let errorMessage = err instanceof Error ? err.message : String(err);
+      logForDebugging(`Error stashing changes: ${errorMessage}`, {
+        level: "error",
+      });
+      setError(err instanceof TeleportOperationError ? err.message : "Failed to stash changes");
+      setStashing(false);
       return;
     }
     try {
       await onStashAndContinue();
     } finally {
-      x(!1);
+      setStashing(false);
     }
   };
-  if (E)
-    return e(Box, {
+  if (loading)
+    return jsxProd_default(Box, {
       flexDirection: "column",
       padding: 1,
-      children: r(Box, {
+      children: jsxProd_default_2(Box, {
         marginBottom: 1,
-        children: [e(Spinner, {}), r(Text, { children: [" Checking git status", re.ellipsis] })],
+        children: [
+          jsxProd_default(Spinner, {}),
+          jsxProd_default_2(Text, {
+            children: [" Checking git status", figures_default.ellipsis],
+          }),
+        ],
       }),
     });
-  if (C)
-    return r(Box, {
+  if (error)
+    return jsxProd_default_2(Box, {
       flexDirection: "column",
       padding: 1,
       children: [
-        r(Text, { bold: !0, color: "error", children: ["Error: ", C] }),
-        e(Box, {
+        jsxProd_default_2(Text, {
+          bold: true,
+          color: "error",
+          children: ["Error: ", error],
+        }),
+        jsxProd_default(Box, {
           marginTop: 1,
-          children: e(Text, {
-            dimColor: !0,
-            children: e(KeyboardShortcutHint, { chord: "escape", action: "cancel", bold: !0 }),
+          children: jsxProd_default(Text, {
+            dimColor: true,
+            children: jsxProd_default(KeyboardShortcutHint, {
+              chord: "escape",
+              action: "cancel",
+              bold: true,
+            }),
           }),
         }),
       ],
     });
-  let showFileCount = u.length > 8,
-    g = h && !cancelQuits;
-  return r(
+  let showFileCount = changedFiles.length > 8;
+  let g = stashing && !cancelQuits;
+  return jsxProd_default_2(
     Dialog,
     {
       title: "Working directory has changes",
       onCancel: g ? noop : onCancel,
       exitOnCtrlCD: cancelQuits || g,
-      inputGuide: g ? "Teleport continues when the stash finishes\u2026" : void 0,
+      inputGuide: g ? "Teleport continues when the stash finishes\u2026" : undefined,
       children: [
-        e(Text, { children: "Teleport will switch git branches. The following changes were found:" }),
-        e(Box, {
+        jsxProd_default(Text, {
+          children: "Teleport will switch git branches. The following changes were found:",
+        }),
+        jsxProd_default(Box, {
           flexDirection: "column",
           paddingLeft: 2,
           children:
-            u.length > 0
+            changedFiles.length > 0
               ? showFileCount
-                ? r(Text, { children: [u.length, " files changed"] })
-                : u.map((file, index) => e(Text, { children: file }, index))
-              : e(HintText, { children: "No changes detected" }),
+                ? jsxProd_default_2(Text, {
+                    children: [changedFiles.length, " files changed"],
+                  })
+                : changedFiles.map((file, index) =>
+                    jsxProd_default(
+                      Text,
+                      {
+                        children: file,
+                      },
+                      index,
+                    ),
+                  )
+              : jsxProd_default(HintText, {
+                  children: "No changes detected",
+                }),
         }),
-        e(Text, { children: "Would you like to stash these changes and continue with teleport?" }),
-        h
-          ? r(Box, { children: [e(Spinner, {}), e(Text, { children: " Stashing changes..." })] })
-          : e(ConfirmSelect, {
+        jsxProd_default(Text, {
+          children: "Would you like to stash these changes and continue with teleport?",
+        }),
+        stashing
+          ? jsxProd_default_2(Box, {
+              children: [
+                jsxProd_default(Spinner, {}),
+                jsxProd_default(Text, {
+                  children: " Stashing changes...",
+                }),
+              ],
+            })
+          : jsxProd_default(ConfirmSelect, {
               confirmLabel: "Stash changes and continue",
               cancelLabel: cancelQuits ? "Exit" : "Cancel",
               onConfirm: () => void handleStash(),
-              onCancel: onCancel,
+              onCancel,
             }),
       ],
     },
@@ -138,5 +181,4 @@ function TeleportStash({
 }
 //@ chunk-qh0448cn.js:3194-3209 affinity
 function noop() {}
-
 export { TeleportStash };

@@ -10,39 +10,43 @@
  */
 import { w } from "../../vendor/react/compiler-runtime.js";
 import { useIsScreenReaderEnabled } from "../ink/components/ErrorBoundary.js";
-import { e } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { jsxProd_default } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Box } from "../ink/components/Text.js";
 
 //@ chunk-w1b4bxwt.js:299-659 placement
-function Blockquote(d) {
-  let l = w(4),
-    { multiline: multiline, children: children } = d;
+function Blockquote(props) {
+  let l = w(4);
+  let { multiline, children } = props;
   if (useIsScreenReaderEnabled()) {
     let o;
-    if (l[0] !== children)
-      ((o = e(Box, { "aria-role": "blockquote", children: children })), (l[0] = children), (l[1] = o));
-    else o = l[1];
+    if (l[0] !== children) {
+      o = jsxProd_default(Box, {
+        "aria-role": "blockquote",
+        children,
+      });
+      l[0] = children;
+      l[1] = o;
+    } else o = l[1];
     return o;
   }
   if (!multiline) {
     return children;
   }
   let o;
-  if (l[2] !== children)
-    ((o = e(Box, {
+  if (l[2] !== children) {
+    o = jsxProd_default(Box, {
       borderStyle: "single",
-      borderLeft: !0,
-      borderRight: !1,
-      borderTop: !1,
-      borderBottom: !1,
-      borderDimColor: !0,
+      borderLeft: true,
+      borderRight: false,
+      borderTop: false,
+      borderBottom: false,
+      borderDimColor: true,
       paddingLeft: 1,
-      children: children,
-    })),
-      (l[2] = children),
-      (l[3] = o));
-  else o = l[3];
+      children,
+    });
+    l[2] = children;
+    l[3] = o;
+  } else o = l[3];
   return o;
 }
-
 export { Blockquote };

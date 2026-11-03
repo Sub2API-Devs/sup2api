@@ -21,18 +21,48 @@ import {
   getAncestorPidsLinuxSync,
 } from "./processIdentity.js";
 import { getRootSession, getSessionId, mainAgentId } from "../bootstrap/state.js";
-import { don, messagingSocketUnavailableReason, LPr } from "./messagingSocket/setup.js";
+import {
+  messagingSocketServerSlot,
+  messagingSocketUnavailableReason,
+  MESSAGING_SOCKET_TIMEOUT_MS,
+} from "./messagingSocket/setup.js";
 import { isUuid } from "./udsMessaging/messageEnvelope.js";
-import { Q3o, jy, redactFragmentForLog, tli, getPeerPid, ywn, Z3o } from "./udsMessaging/peerGuard.js";
+import {
+  MAX_PENDING_DROP_IDS,
+  fragmentForLog,
+  redactFragmentForLog,
+  normalizePeerDropReason,
+  getPeerPid,
+  MAX_PEER_MESSAGE_BYTES,
+  setOwnUdsHopToken,
+} from "./udsMessaging/peerGuard.js";
 import { logForDebugging } from "./debug.js";
-import { a$t, logInboundRefused, Mon, isBypassDefaultHold, s$t } from "./crossSessionInbound/inboundGate.js";
-import { SHs, settleHeldInboundOnShutdown, wvo, Evo, r$t } from "./crossSessionInbound/inboundMode.js";
-import { Jvt } from "./messages/messagePredicates.js";
-import { IKs } from "./messages/pluginTags.js";
+import {
+  inboundRefuseCause,
+  logInboundRefused,
+  gatedPolicyFor,
+  isBypassDefaultHold,
+  modeClass_2 as modeClass,
+} from "./crossSessionInbound/inboundGate.js";
+import {
+  sendPromptReceipt,
+  settleHeldInboundOnShutdown,
+  setSendPeerReceipt,
+  setRecordCorrespondent,
+  isModeEmitFlagOn,
+} from "./crossSessionInbound/inboundMode.js";
+import { queuePriorityOrUndefined } from "./messages/messagePredicates.js";
+import { escapeTagStringStrict } from "./messages/pluginTags.js";
 import { sanitizeAddressPart } from "./swarm/teammateIds.js";
 import { dispatchSessionReceiveHooks } from "../plugins/functionHooks/sessionReceive.js";
-import { y2e } from "./peerFileTransfer.js";
-import { SQ, peerMessageInfo, $ge, u8, FAi } from "./peerMessageHeaders.js";
+import { isPeerSendFileEnabled } from "./peerFileTransfer.js";
+import {
+  stripPeerMessageBody,
+  peerMessageInfo,
+  isPeerAddress,
+  udsAddressFromPath,
+  isPeerFromMode,
+} from "./peerMessageHeaders.js";
 import { enqueueCommand, flushPeerDropReceipts } from "./messageQueueManager.js";
 import { noteVettedCorrespondent, getSessionNamingState } from "./sessionNameUniqueness.js";
 import { parseAddress, isTrustedSocketPath, isValidPipeOrPath } from "./peerAddress.js";
@@ -60,14 +90,14 @@ import {
 import { logFeatureSad, logFeatureBad, logFeatureOk } from "../services/analytics/featureTelemetry.js";
 import { canonicalSocketPath } from "./udsPaths.js";
 import {
-  TUs,
+  yieldRequestSchema,
   answerYieldRequest,
-  CUs,
+  unyieldRequestSchema,
   handleUnyield,
-  AUs,
-  IUs,
+  yieldedResponseSchema,
+  hasOutstanding,
   handleYieldRequest,
-  $Ro,
+  setSendAnswer,
 } from "../services/artifacts/replyYield.js";
 import { sleep, withDeadline } from "./sleep.js";
 import { isAuthItem, tokenRole, deleteSessionRecord, writeSessionPeerRecord } from "./sessionAddresses.js";
@@ -77,85 +107,83 @@ import { tmpdir } from "./tempDir.js";
 import { getErrnoCode, errorMessage, isENOENT, CliUserError } from "./errors.js";
 import { printableName } from "./printableName.js";
 import { shellQuoteArgs } from "./bash/bashPipeCommand.js";
-import { inspectUserNamespace, _li, getHostUid } from "./sandbox/userNamespace.js";
-import { Br } from "./startupTiming.js";
+import { inspectUserNamespace, sharedSystemDirs, getHostUid } from "./sandbox/userNamespace.js";
+import { recordPhase } from "./startupTiming.js";
 import { profileCheckpoint } from "./startupProfiler.js";
-import { Ohr, AAi } from "./sessionPeers.js";
+import { isWindowsPlatform, createPeerTokens } from "./sessionPeers.js";
 import { registerCleanup } from "./cleanupRegistry.js";
 import { isRegistrySweepPermitted } from "./concurrentSessions.js";
-import { ci } from "./swarm/hostState.js";
+import { swarmHostState } from "./swarm/hostState.js";
 import { getPlatform } from "./platform.js";
 
 //@ chunk-0kp6eg01.js:1869-1886 placement
-var Fe = 500,
-  Pe = 32;
+var MAX_CACHED_VERDICTS = 500;
+var MAX_ANCESTOR_HOPS = 32;
+//@ chunk-0kp6eg01.js:1886-2162 placement
 /**
  * 判定缓存
  */
-//@ chunk-0kp6eg01.js:1886-2162 placement
 class VerdictCache {
   verdicts = new Map();
   lookup(e) {
     let n = this.verdicts.get(e);
-    if (n !== void 0) (this.verdicts.delete(e), this.verdicts.set(e, n));
+    if (n !== undefined) {
+      this.verdicts.delete(e);
+      this.verdicts.set(e, n);
+    }
     return n;
   }
   remember(e, n) {
-    if (this.verdicts.size >= Fe) {
+    if (this.verdicts.size >= MAX_CACHED_VERDICTS) {
       let s = this.verdicts.keys().next().value;
-      if (s !== void 0) this.verdicts.delete(s);
+      if (s !== undefined) this.verdicts.delete(s);
     }
     this.verdicts.set(e, n);
   }
 }
-/**
- * 祖先进程判定缓存与读取器
- */
 //@ chunk-0kp6eg01.js:2162-2557 placement
-var ancestryVerdicts = new HostScoped(() => new VerdictCache()),
-  Le = {
-    readAncestors: async (e) => {
-      let {
-        ancestors: ancestors,
-        readFailed: readFailed,
-        truncated: truncated,
-      } = await getAncestorPidsCheckedAsync(e);
-      if (truncated && !readFailed && !ancestors.includes(process.pid))
-        ({
-          ancestors: ancestors,
-          readFailed: readFailed,
-          truncated: truncated,
-        } = await getAncestorPidsCheckedAsync(e, Pe));
-      if (!ancestors.includes(process.pid)) {
-        if (readFailed) throw Error("ancestry walk failed");
-        if (truncated) throw Error("ancestry walk truncated (maxDepth) above the prefix");
-      }
-      return ancestors;
-    },
-    readStartToken: (e) => getProcessStartTimeAsync(e, { skipCache: !0 }),
-  };
+/**
+ * 按宿主缓存的祖先进程判定缓存。
+ */
+var ancestryVerdicts = new HostScoped(() => new VerdictCache());
+var ancestryDeps = {
+  readAncestors: async (pid) => {
+    let { ancestors, readFailed, truncated } = await getAncestorPidsCheckedAsync(pid);
+    if (truncated && !readFailed && !ancestors.includes(process.pid))
+      ({ ancestors, readFailed, truncated } = await getAncestorPidsCheckedAsync(pid, MAX_ANCESTOR_HOPS));
+    if (!ancestors.includes(process.pid)) {
+      if (readFailed) throw Error("ancestry walk failed");
+      if (truncated) throw Error("ancestry walk truncated (maxDepth) above the prefix");
+    }
+    return ancestors;
+  },
+  readStartToken: (e) =>
+    getProcessStartTimeAsync(e, {
+      skipCache: true,
+    }),
+};
 //@ chunk-0kp6eg01.js:2557-2643 placement
-function Ke(e, n = process.pid) {
-  if (n === 1) return !1;
-  return Array.isArray(e) && e.includes(n);
+function ancestryIncludesPid(selfSentAncestry, n = process.pid) {
+  if (n === 1) return false;
+  return Array.isArray(selfSentAncestry) && selfSentAncestry.includes(n);
 }
+//@ chunk-0kp6eg01.js:2643-3144 placement
 /**
  * 判定是否为自身
  */
-//@ chunk-0kp6eg01.js:2643-3144 placement
-async function classifyAncestry(e, n = Le) {
-  if (e === void 0 || !Number.isInteger(e) || e <= 0) return "no-evidence";
+async function classifyAncestry(e, n = ancestryDeps) {
+  if (e === undefined || !Number.isInteger(e) || e <= 0) return "no-evidence";
   let s;
   try {
     s = await n.readStartToken(e);
   } catch {
-    s = void 0;
+    s = undefined;
   }
-  if (s === void 0) return "no-evidence";
-  let o = `${e}:${s}`,
-    of = ancestryVerdicts.of(getRootSession().host),
-    lookup = of.lookup(o);
-  if (lookup !== void 0) return lookup ? "self" : "not-self";
+  if (s === undefined) return "no-evidence";
+  let o = `${e}:${s}`;
+  let a = ancestryVerdicts.of(getRootSession().host);
+  let r = a.lookup(o);
+  if (r !== undefined) return r ? "self" : "not-self";
   let p;
   try {
     p = await n.readAncestors(e);
@@ -166,225 +194,253 @@ async function classifyAncestry(e, n = Le) {
   try {
     _ = await n.readStartToken(e);
   } catch {
-    _ = void 0;
+    _ = undefined;
   }
   if (_ !== s) return "no-evidence";
   let w = process.pid !== 1 && p.includes(process.pid);
-  return (of.remember(o, w), w ? "self" : "not-self");
+  a.remember(o, w);
+  return w ? "self" : "not-self";
 }
+//@ chunk-0kp6eg01.js:3144-3495 placement
 /**
  * 是否为自己发送
  */
-//@ chunk-0kp6eg01.js:3144-3495 placement
 async function isSelfSent(e) {
   let n = e.selfPid ?? process.pid;
-  if (e.selfSentAncestry !== void 0 && n !== 1) return Ke(e.selfSentAncestry, n);
-  if (!e.needsVerdict) return !1;
+  if (e.selfSentAncestry !== undefined && n !== 1) return ancestryIncludesPid(e.selfSentAncestry, n);
+  if (!e.needsVerdict) return false;
   if (n === 1 || e.platform === "windows") return e.childTokenPresented;
-  if (e.platform !== "macos") return !1;
+  if (e.platform !== "macos") return false;
   let s = await (e.verdictOf ?? classifyAncestry)(e.verifiedPeerPid);
   return s === "self" || (s === "no-evidence" && e.childTokenPresented);
 }
 //@ chunk-0kp6eg01.js:3495-3532 placement
-function u() {
-  return don.of(getRootSession().host);
+function udsMessagingState() {
+  return messagingSocketServerSlot.of(getRootSession().host);
 }
 //@ chunk-0kp6eg01.js:3532-3580 placement
 function getUdsStartFailureCause() {
-  return u().lastStartFailureCause;
+  return udsMessagingState().lastStartFailureCause;
 }
 //@ chunk-0kp6eg01.js:3580-3629 placement
 function getUdsStartDegradedCause() {
-  return u().lastStartDegradedCause;
+  return udsMessagingState().lastStartDegradedCause;
 }
 //@ chunk-0kp6eg01.js:3629-3776 placement
 function recordDegradedCause(e) {
-  let n = u();
+  let n = udsMessagingState();
   if (e === "key_publish_failed" && n.lastStartDegradedCause === "primary_dir_refused_fell_back") return;
   n.lastStartDegradedCause = e;
 }
 //@ chunk-0kp6eg01.js:3776-3807 placement
 function getUdsInboxUnavailableReason() {
-  return messagingSocketUnavailableReason(u());
+  return messagingSocketUnavailableReason(udsMessagingState());
 }
 //@ chunk-0kp6eg01.js:3807-3922 placement = extractErrorTypeFromData (1)
 function hasStringType_2(data) {
-  if (typeof data !== "object" || data === null) return !1;
-  if (!("type" in data)) return !1;
+  if (typeof data !== "object" || data === null) return false;
+  if (!("type" in data)) return false;
   return typeof data.type === "string";
 }
 //@ chunk-0kp6eg01.js:3922-3953 placement
-function setOnRename(e) {
-  u().onRename = e;
+function setOnRename(onRename) {
+  udsMessagingState().onRename = onRename;
 }
 //@ chunk-0kp6eg01.js:3953-3997 placement
-function setOnEnableRemoteControl(e) {
-  u().onEnableRemoteControl = e;
+function setOnEnableRemoteControl(onEnableRemoteControl) {
+  udsMessagingState().onEnableRemoteControl = onEnableRemoteControl;
 }
 //@ chunk-0kp6eg01.js:3997-4062 placement
-function Se(e) {
-  return isUuid(e) ? e : e === void 0 ? "(none)" : "(malformed)";
+function describeMessageId(origMsgId) {
+  return isUuid(origMsgId) ? origMsgId : origMsgId === undefined ? "(none)" : "(malformed)";
 }
 //@ chunk-0kp6eg01.js:4062-4184 placement
-function pickUuids(e) {
-  if (!Array.isArray(e)) return [];
+function pickUuids(droppedMsgIds) {
+  if (!Array.isArray(droppedMsgIds)) return [];
   let n = [];
-  for (let s of e) {
-    if (n.length >= Q3o) break;
+  for (let s of droppedMsgIds) {
+    if (n.length >= MAX_PENDING_DROP_IDS) break;
     if (isUuid(s)) n.push(s);
   }
   return n;
 }
 //@ chunk-0kp6eg01.js:4184-4226 placement
-function setOnPeerMessageStatus(e) {
-  u().onPeerMessageStatus = e;
+function setOnPeerMessageStatus(onPeerMessageStatus) {
+  udsMessagingState().onPeerMessageStatus = onPeerMessageStatus;
 }
 //@ chunk-0kp6eg01.js:4226-4258 placement
-function setOnEnqueue(e) {
-  u().onEnqueue = e;
+function setOnEnqueue(onEnqueue) {
+  udsMessagingState().onEnqueue = onEnqueue;
 }
+//@ chunk-0kp6eg01.js:4258-4480 placement
 /**
  * 消息 session_id 是否匹配
  */
-//@ chunk-0kp6eg01.js:4258-4480 placement
 function sessionIdMatches(e) {
-  if (e.session_id !== void 0 && e.session_id !== getSessionId())
-    return (
-      logForDebugging(
-        `[uds-messaging] Dropping ${jy(e.type)} message: session_id mismatch (got "${jy(String(e.session_id))}", expected "${getSessionId()}")`,
-        { level: "warn" },
-      ),
-      !1
+  if (e.session_id !== undefined && e.session_id !== getSessionId()) {
+    logForDebugging(
+      `[uds-messaging] Dropping ${fragmentForLog(e.type)} message: session_id mismatch (got "${fragmentForLog(String(e.session_id))}", expected "${getSessionId()}")`,
+      {
+        level: "warn",
+      },
     );
-  return !0;
+    return false;
+  }
+  return true;
 }
+//@ chunk-0kp6eg01.js:4480-6032 placement
 /**
  * 处理入站用户消息
  */
-//@ chunk-0kp6eg01.js:4480-6032 placement
-async function handleInboundUserMessage(e, n, s, o, a) {
-  let r = e.message?.content;
-  if (typeof r !== "string" || r.length === 0) {
+async function handleInboundUserMessage(e, verifiedPeerPid, s, selfSentAncestry, a) {
+  let content = e.message?.content;
+  if (typeof content !== "string" || content.length === 0) {
     logForDebugging("[uds-messaging] Ignoring user message with missing or non-string content", {
       level: "warn",
     });
     return;
   }
   if (!sessionIdMatches(e)) return;
-  let p = typeof e.uuid === "string" ? e.uuid : randomUUID(),
-    _ = a$t();
-  if (_ !== void 0) {
-    (logInboundRefused("uds: dropped before attachment materialization", _),
-      SHs(
-        {
-          kind: "peer",
-          from: e.from ?? "unknown",
-          ...(n !== void 0 && { verifiedPeerPid: n }),
-          ...(isUuid(e.msg_id) && { msg_id: e.msg_id }),
-        },
-        "refused",
-      ));
-    return;
-  }
-  let w = Jvt(e.priority) ?? "next",
-    h = IKs(r),
-    l = sanitizeAddressPart(e.from_plugin),
-    D = await dispatchSessionReceiveHooks({
-      origin: { kind: "peer", ...(l !== void 0 && { plugin: l }) },
-      content: h,
-    });
-  if (D.consumed !== void 0) return;
-  using queueing = D.queueing;
-  let c = typeof D.content === "string" ? D.content : h,
-    S = c;
-  if (e.file_attachments !== void 0 && y2e())
-    try {
-      let {
-          emitPeerFileReceiveTelemetry: emitPeerFileReceiveTelemetry,
-          injectPeerFilePrefix: injectPeerFilePrefix,
-          materializeLocalPeerFiles: materializeLocalPeerFiles,
-        } = await import("./chunk-3rcnr5ex.js"),
-        A = await materializeLocalPeerFiles(e.file_attachments);
-      if (A.received > 0)
-        ((S = injectPeerFilePrefix(c, A.prefix)),
-          emitPeerFileReceiveTelemetry("uds", A.received, A.verified));
-    } catch (error) {
-      logForDebugging(
-        `[uds-messaging] Failed to materialize file_attachments: ${redactFragmentForLog(String(error))}`,
-        { level: "warn" },
-      );
-    }
-  let v = await isSelfSentMessage(n, o, a),
-    b = SQ(
+  let uuid = typeof e.uuid === "string" ? e.uuid : randomUUID();
+  let _ = inboundRefuseCause();
+  if (_ !== undefined) {
+    logInboundRefused("uds: dropped before attachment materialization", _);
+    sendPromptReceipt(
       {
         kind: "peer",
         from: e.from ?? "unknown",
-        ...(n !== void 0 && { verifiedPeerPid: n }),
-        ...(s !== void 0 && { verifiedPeerProcStart: s }),
-        ...(v && { selfSent: v }),
-        ...(isUuid(e.msg_id) && { msg_id: e.msg_id }),
-        ...(l !== void 0 && { plugin: l }),
-        ...peerMessageInfo(r),
+        ...(verifiedPeerPid !== undefined && {
+          verifiedPeerPid,
+        }),
+        ...(isUuid(e.msg_id) && {
+          msg_id: e.msg_id,
+        }),
       },
-      S,
-      r,
-    ),
-    R = {
-      mode: "prompt",
-      agentId: mainAgentId(),
-      value: S,
-      uuid: p,
-      priority: w,
-      origin: b,
-      skipSlashCommands: !0,
-      isMeta: !0,
-      skipAttachments: !0,
-    };
-  if (Mon(R) !== "accept") return;
-  (enqueueCommand(R),
-    queueing.queued(),
-    logForDebugging(`[uds-messaging] Routed user message to queue (priority=${w}): ${jy(S, 80)}`),
-    u().onEnqueue?.(),
-    notePeerReplyTarget(R));
+      "refused",
+    );
+    return;
+  }
+  let w = queuePriorityOrUndefined(e.priority) ?? "next";
+  let h = escapeTagStringStrict(content);
+  let l = sanitizeAddressPart(e.from_plugin);
+  let D = await dispatchSessionReceiveHooks({
+    origin: {
+      kind: "peer",
+      ...(l !== undefined && {
+        plugin: l,
+      }),
+    },
+    content: h,
+  });
+  if (D.consumed !== undefined) return;
+  using queueing = D.queueing;
+  let c = typeof D.content === "string" ? D.content : h;
+  let S = c;
+  if (e.file_attachments !== undefined && isPeerSendFileEnabled())
+    try {
+      let { emitPeerFileReceiveTelemetry, injectPeerFilePrefix, materializeLocalPeerFiles } =
+        await import("./chunk-3rcnr5ex.js");
+      let A = await materializeLocalPeerFiles(e.file_attachments);
+      if (A.received > 0) {
+        S = injectPeerFilePrefix(c, A.prefix);
+        emitPeerFileReceiveTelemetry("uds", A.received, A.verified);
+      }
+    } catch (error) {
+      logForDebugging(
+        `[uds-messaging] Failed to materialize file_attachments: ${redactFragmentForLog(String(error))}`,
+        {
+          level: "warn",
+        },
+      );
+    }
+  let v = await isSelfSentMessage(verifiedPeerPid, selfSentAncestry, a);
+  let origin = stripPeerMessageBody(
+    {
+      kind: "peer",
+      from: e.from ?? "unknown",
+      ...(verifiedPeerPid !== undefined && {
+        verifiedPeerPid,
+      }),
+      ...(s !== undefined && {
+        verifiedPeerProcStart: s,
+      }),
+      ...(v && {
+        selfSent: v,
+      }),
+      ...(isUuid(e.msg_id) && {
+        msg_id: e.msg_id,
+      }),
+      ...(l !== undefined && {
+        plugin: l,
+      }),
+      ...peerMessageInfo(content),
+    },
+    S,
+    content,
+  );
+  let R = {
+    mode: "prompt",
+    agentId: mainAgentId(),
+    value: S,
+    uuid,
+    priority: w,
+    origin,
+    skipSlashCommands: true,
+    isMeta: true,
+    skipAttachments: true,
+  };
+  if (gatedPolicyFor(R) !== "accept") return;
+  enqueueCommand(R);
+  queueing.queued();
+  logForDebugging(`[uds-messaging] Routed user message to queue (priority=${w}): ${fragmentForLog(S, 80)}`);
+  udsMessagingState().onEnqueue?.();
+  notePeerReplyTarget(R);
 }
+//@ chunk-0kp6eg01.js:6032-6309 placement
 /**
  * 记录对端回复目标
  */
-//@ chunk-0kp6eg01.js:6032-6309 placement
 function notePeerReplyTarget(e) {
-  let n = e.origin?.kind === "peer" ? e.origin : void 0,
-    activeSocketPath = u().activeSocketPath;
+  let origin = e.origin?.kind === "peer" ? e.origin : undefined;
+  let activeSocketPath = udsMessagingState().activeSocketPath;
   if (
-    n !== void 0 &&
-    n.selfSent !== !0 &&
-    n.verifiedPeerPid !== void 0 &&
-    typeof n.from === "string" &&
-    activeSocketPath !== void 0 &&
-    vettedPeerReplyTarget(n.from, activeSocketPath, n.verifiedPeerPid) !== void 0
+    origin !== undefined &&
+    origin.selfSent !== true &&
+    origin.verifiedPeerPid !== undefined &&
+    typeof origin.from === "string" &&
+    activeSocketPath !== undefined &&
+    vettedPeerReplyTarget(origin.from, activeSocketPath, origin.verifiedPeerPid) !== undefined
   )
-    noteVettedCorrespondent(n.from, n.verifiedPeerPid, n.verifiedPeerProcStart);
+    noteVettedCorrespondent(origin.from, origin.verifiedPeerPid, origin.verifiedPeerProcStart);
 }
 //@ chunk-0kp6eg01.js:6309-6468 placement
-function vettedPeerReplyTarget(e, n, s) {
-  if (!e.startsWith("uds:") || !$ge(e)) return;
-  let target = parseAddress(e).target;
-  return target && isTrustedSocketPath(target, n, { verifiedPeerPid: s, ownerUids: u().peerDirOwnerUids })
+function vettedPeerReplyTarget(from, activeSocketPath, verifiedPeerPid) {
+  if (!from.startsWith("uds:") || !isPeerAddress(from)) return;
+  let target = parseAddress(from).target;
+  return target &&
+    isTrustedSocketPath(target, activeSocketPath, {
+      verifiedPeerPid,
+      ownerUids: udsMessagingState().peerDirOwnerUids,
+    })
     ? target
-    : void 0;
+    : undefined;
 }
+//@ chunk-0kp6eg01.js:6468-11170 placement
 /**
  * 处理入站消息
  */
-//@ chunk-0kp6eg01.js:6468-11170 placement
-async function handleInboundMessage(e, n, s, o, a) {
+async function handleInboundMessage(e, verifiedPeerPid, verifiedPeerProcStart, selfSentAncestry, a) {
   if (!hasStringType_2(e)) {
-    logForDebugging("[uds-messaging] Ignoring message without valid type field", { level: "warn" });
+    logForDebugging("[uds-messaging] Ignoring message without valid type field", {
+      level: "warn",
+    });
     return;
   }
-  if (e.type === "user") await handleInboundUserMessage(e, n, s, o, a);
+  if (e.type === "user")
+    await handleInboundUserMessage(e, verifiedPeerPid, verifiedPeerProcStart, selfSentAncestry, a);
   else if (e.type === "control") {
     if (!sessionIdMatches(e)) return;
-    if (e.action === "rename" && typeof e.name === "string") u().onRename?.(e.name);
+    if (e.action === "rename" && typeof e.name === "string") udsMessagingState().onRename?.(e.name);
     else if (
       e.action === "peer_message_status" &&
       (e.status === "held" ||
@@ -394,115 +450,130 @@ async function handleInboundMessage(e, n, s, o, a) {
         e.status === "refused" ||
         e.status === "dropped")
     ) {
-      let r = e.status === "expired" && e.status_detail === "refused" ? "refused" : e.status,
-        p = admitReceiptForOutstandingSend(e.orig_msg_id, r);
-      if (r === "dropped") {
-        let _ = tli(e.drop_reason),
-          w = admitDroppedIdsByDestination(pickUuids(e.dropped_msg_ids));
-        if (p !== void 0) {
-          let h = w.get(p.sent.to) ?? { sends: [], wereHeld: 0 };
-          if ((h.sends.push(p.sent), p.wasHeld)) h.wereHeld++;
+      let status = e.status === "expired" && e.status_detail === "refused" ? "refused" : e.status;
+      let p = admitReceiptForOutstandingSend(e.orig_msg_id, status);
+      if (status === "dropped") {
+        let _ = normalizePeerDropReason(e.drop_reason);
+        let w = admitDroppedIdsByDestination(pickUuids(e.dropped_msg_ids));
+        if (p !== undefined) {
+          let h = w.get(p.sent.to) ?? {
+            sends: [],
+            wereHeld: 0,
+          };
+          h.sends.push(p.sent);
+          if (p.wasHeld) h.wereHeld++;
           w.set(p.sent.to, h);
         }
         if (_ === "queue-full")
-          for (let [h, { wereHeld: l }] of w) for (let D = 0; D < l; D++) debitPacerForReleasedSend(h);
+          for (let [h, { wereHeld: l }] of w) for (let idx = 0; idx < l; idx++) debitPacerForReleasedSend(h);
         if (w.size === 0)
           logForDebugging(
-            `[uds-messaging] peer_message_status dropped: neither orig_msg_id=${Se(e.orig_msg_id)} nor any named id matches an outstanding send`,
+            `[uds-messaging] peer_message_status dropped: neither orig_msg_id=${describeMessageId(e.orig_msg_id)} nor any named id matches an outstanding send`,
           );
-        for (let { sends: sends } of w.values())
-          u().onPeerMessageStatus?.({ status: r, sends: sends, dropReason: _ });
-      } else if (p === void 0)
+        for (let { sends } of w.values())
+          udsMessagingState().onPeerMessageStatus?.({
+            status,
+            sends,
+            dropReason: _,
+          });
+      } else if (p === undefined)
         logForDebugging(
-          `[uds-messaging] peer_message_status dropped: no outstanding send matches orig_msg_id=${Se(e.orig_msg_id)}`,
+          `[uds-messaging] peer_message_status dropped: no outstanding send matches orig_msg_id=${describeMessageId(e.orig_msg_id)}`,
         );
       else {
-        if (r === "held") creditPacerForHeldSend(p.sent.to);
-        else if (r === "delivered" && p.wasHeld) debitPacerForReleasedSend(p.sent.to);
-        u().onPeerMessageStatus?.({ status: r, sent: p.sent });
+        if (status === "held") creditPacerForHeldSend(p.sent.to);
+        else if (status === "delivered" && p.wasHeld) debitPacerForReleasedSend(p.sent.to);
+        udsMessagingState().onPeerMessageStatus?.({
+          status,
+          sent: p.sent,
+        });
       }
     } else if (e.action === "notify_when_idle") {
-      let safeParse = notifyWhenIdleFrameSchema().safeParse(e);
-      if (!safeParse.success) {
-        (logForDebugging("[uds-messaging] notify_when_idle dropped: malformed frame"),
-          logFeatureSad("cross_session_notify_idle", "malformed_frame"));
+      let r = notifyWhenIdleFrameSchema().safeParse(e);
+      if (!r.success) {
+        logForDebugging("[uds-messaging] notify_when_idle dropped: malformed frame");
+        logFeatureSad("cross_session_notify_idle", "malformed_frame");
         return;
       }
-      let activeSocketPath = u().activeSocketPath,
-        from = safeParse.data.from,
-        w = activeSocketPath !== void 0 ? vettedPeerReplyTarget(from, activeSocketPath, n) : void 0;
-      if (activeSocketPath === void 0)
-        (logForDebugging("[uds-messaging] notify_when_idle dropped: own inbox not bound (shutting down)"),
-          logFeatureSad("cross_session_notify_idle", "own_inbox_unbound"));
-      else if (w === void 0)
-        (logForDebugging(
-          `[uds-messaging] notify_when_idle dropped: reply address unshaped or outside our socket namespace (${jy(from)})`,
-        ),
-          logFeatureSad("cross_session_notify_idle", "unvettable_reply_target"));
-      else if (canonicalSocketPath(w) === canonicalSocketPath(activeSocketPath))
-        (logForDebugging(
+      let activeSocketPath = udsMessagingState().activeSocketPath;
+      let from = r.data.from;
+      let w =
+        activeSocketPath !== undefined
+          ? vettedPeerReplyTarget(from, activeSocketPath, verifiedPeerPid)
+          : undefined;
+      if (activeSocketPath === undefined) {
+        logForDebugging("[uds-messaging] notify_when_idle dropped: own inbox not bound (shutting down)");
+        logFeatureSad("cross_session_notify_idle", "own_inbox_unbound");
+      } else if (w === undefined) {
+        logForDebugging(
+          `[uds-messaging] notify_when_idle dropped: reply address unshaped or outside our socket namespace (${fragmentForLog(from)})`,
+        );
+        logFeatureSad("cross_session_notify_idle", "unvettable_reply_target");
+      } else if (canonicalSocketPath(w) === canonicalSocketPath(activeSocketPath)) {
+        logForDebugging(
           "[uds-messaging] notify_when_idle dropped: reply target is this session (self-target)",
-        ),
-          logFeatureSad("cross_session_notify_idle", "self_target_frame"));
-      else {
-        let h = await isSelfSentMessage(n, o, a),
-          l = recordIdleSubscription(
-            from,
-            w,
-            safeParse.data.msg_id,
-            n,
-            s,
-            a === "peer",
-            Ae(safeParse.data.from_mode),
-            h,
-          );
-        if ((logForDebugging(`[uds-messaging] notify_when_idle from ${jy(from)}: ${l}`), l === "full"))
-          sendUnavailableNotice(w, safeParse.data.msg_id, n, a === "peer", s);
+        );
+        logFeatureSad("cross_session_notify_idle", "self_target_frame");
+      } else {
+        let selfSent = await isSelfSentMessage(verifiedPeerPid, selfSentAncestry, a);
+        let l = recordIdleSubscription(
+          from,
+          w,
+          r.data.msg_id,
+          verifiedPeerPid,
+          verifiedPeerProcStart,
+          a === "peer",
+          senderClassOf(r.data.from_mode),
+          selfSent,
+        );
+        logForDebugging(`[uds-messaging] notify_when_idle from ${fragmentForLog(from)}: ${l}`);
+        if (l === "full")
+          sendUnavailableNotice(w, r.data.msg_id, verifiedPeerPid, a === "peer", verifiedPeerProcStart);
       }
     } else if (e.action === "peer_idle_notice") {
-      let safeParse = peerIdleNoticeFrameSchema().safeParse(e);
-      if (!safeParse.success) {
-        (logForDebugging("[uds-messaging] peer_idle_notice dropped: malformed frame"),
-          logFeatureSad("cross_session_notify_idle", "malformed_notice"));
+      let r = peerIdleNoticeFrameSchema().safeParse(e);
+      if (!r.success) {
+        logForDebugging("[uds-messaging] peer_idle_notice dropped: malformed frame");
+        logFeatureSad("cross_session_notify_idle", "malformed_notice");
         return;
       }
-      if (!hasOutstandingIdleSubscription(safeParse.data.orig_msg_id)) {
+      if (!hasOutstandingIdleSubscription(r.data.orig_msg_id)) {
         logForDebugging(
           "[uds-messaging] peer_idle_notice: dropped (uncorrelated / already delivered / expired)",
         );
         return;
       }
-      let p = await isSelfSentMessage(n, o, a);
+      let selfSent = await isSelfSentMessage(verifiedPeerPid, selfSentAncestry, a);
       if (
         !admitIdleNotice(
-          safeParse.data.orig_msg_id,
-          safeParse.data.state,
-          safeParse.data.finished_at,
-          safeParse.data.detail,
-          Ae(safeParse.data.from_mode),
-          p,
+          r.data.orig_msg_id,
+          r.data.state,
+          r.data.finished_at,
+          r.data.detail,
+          senderClassOf(r.data.from_mode),
+          selfSent,
         )
       )
         logForDebugging(
-          `[uds-messaging] peer_idle_notice not admitted: subscription for orig_msg_id=${jy(safeParse.data.orig_msg_id)} was already consumed`,
+          `[uds-messaging] peer_idle_notice not admitted: subscription for orig_msg_id=${fragmentForLog(r.data.orig_msg_id)} was already consumed`,
         );
     } else if (e.action === "yield_artifact_replies") {
-      let safeParse = TUs().safeParse(e);
-      if (!safeParse.success) {
-        (logForDebugging("[uds-messaging] yield_artifact_replies dropped: malformed frame"),
-          logFeatureSad("artifact_comments_autoreact", "yield_malformed_frame"));
+      let r = yieldRequestSchema().safeParse(e);
+      if (!r.success) {
+        logForDebugging("[uds-messaging] yield_artifact_replies dropped: malformed frame");
+        logFeatureSad("artifact_comments_autoreact", "yield_malformed_frame");
         return;
       }
-      let activeSocketPath = u().activeSocketPath,
-        _ =
-          activeSocketPath !== void 0
-            ? vettedPeerReplyTarget(safeParse.data.from, activeSocketPath, n)
-            : void 0;
-      if (activeSocketPath === void 0 || _ === void 0) {
-        (logForDebugging(
-          `[uds-messaging] yield_artifact_replies dropped: ${activeSocketPath === void 0 ? "own inbox not bound" : "reply address unshaped or outside our socket namespace"} (${jy(safeParse.data.from)})`,
-        ),
-          logFeatureSad("artifact_comments_autoreact", "yield_unvettable_target"));
+      let activeSocketPath = udsMessagingState().activeSocketPath;
+      let _ =
+        activeSocketPath !== undefined
+          ? vettedPeerReplyTarget(r.data.from, activeSocketPath, verifiedPeerPid)
+          : undefined;
+      if (activeSocketPath === undefined || _ === undefined) {
+        logForDebugging(
+          `[uds-messaging] yield_artifact_replies dropped: ${activeSocketPath === undefined ? "own inbox not bound" : "reply address unshaped or outside our socket namespace"} (${fragmentForLog(r.data.from)})`,
+        );
+        logFeatureSad("artifact_comments_autoreact", "yield_unvettable_target");
         return;
       }
       if (canonicalSocketPath(_) === canonicalSocketPath(activeSocketPath)) {
@@ -510,178 +581,215 @@ async function handleInboundMessage(e, n, s, o, a) {
         return;
       }
       let w = await registeredLivePeerForSocket(_);
-      if (w === void 0 || w.sessionId !== getSessionId() || (n !== void 0 && w.pid !== n)) {
-        (logForDebugging(
-          `[uds-messaging] yield_artifact_replies refused: requester is not a verified live session of this conversation (${jy(safeParse.data.from)})`,
-        ),
-          logFeatureSad("artifact_comments_autoreact", "yield_requester_unverified"),
-          answerYieldRequest(
-            safeParse.data,
-            _,
-            n === void 0 ? void 0 : { pid: n, writeToken: s },
-            Date.now(),
-            { refuse: !0 },
-          ));
+      if (
+        w === undefined ||
+        w.sessionId !== getSessionId() ||
+        (verifiedPeerPid !== undefined && w.pid !== verifiedPeerPid)
+      ) {
+        logForDebugging(
+          `[uds-messaging] yield_artifact_replies refused: requester is not a verified live session of this conversation (${fragmentForLog(r.data.from)})`,
+        );
+        logFeatureSad("artifact_comments_autoreact", "yield_requester_unverified");
+        answerYieldRequest(
+          r.data,
+          _,
+          verifiedPeerPid === undefined
+            ? undefined
+            : {
+                pid: verifiedPeerPid,
+                writeToken: verifiedPeerProcStart,
+              },
+          Date.now(),
+          {
+            refuse: true,
+          },
+        );
         return;
       }
       answerYieldRequest(
-        safeParse.data,
+        r.data,
         _,
         {
-          pid: n ?? w.pid,
-          procStart: s ?? (n === void 0 || n === w.pid ? w.procStart : void 0),
-          writeToken: s,
+          pid: verifiedPeerPid ?? w.pid,
+          procStart:
+            verifiedPeerProcStart ??
+            (verifiedPeerPid === undefined || verifiedPeerPid === w.pid ? w.procStart : undefined),
+          writeToken: verifiedPeerProcStart,
         },
         Date.now(),
       );
     } else if (e.action === "unyield_artifact_replies") {
-      let safeParse = CUs().safeParse(e);
-      if (!safeParse.success || !handleUnyield(safeParse.data, n))
+      let r = unyieldRequestSchema().safeParse(e);
+      if (!r.success || !handleUnyield(r.data, verifiedPeerPid))
         logForDebugging(
           "[uds-messaging] unyield_artifact_replies dropped: malformed, uncorrelated or already handed back",
         );
     } else if (e.action === "artifact_replies_yielded") {
-      let safeParse = AUs().safeParse(e);
-      if (!safeParse.success) {
-        (logForDebugging("[uds-messaging] artifact_replies_yielded dropped: malformed frame"),
-          logFeatureSad("artifact_live_subscribe", "yield_malformed_answer"));
+      let r = yieldedResponseSchema().safeParse(e);
+      if (!r.success) {
+        logForDebugging("[uds-messaging] artifact_replies_yielded dropped: malformed frame");
+        logFeatureSad("artifact_live_subscribe", "yield_malformed_answer");
         return;
       }
-      if (!IUs(safeParse.data.orig_msg_id)) {
+      if (!hasOutstanding(r.data.orig_msg_id)) {
         logForDebugging("[uds-messaging] artifact_replies_yielded dropped: uncorrelated or already settled");
         return;
       }
-      handleYieldRequest(safeParse.data, n);
-    } else logForDebugging(`[uds-messaging] Unhandled control action: ${jy(String(e.action))}`);
-  } else logForDebugging(`[uds-messaging] Received unhandled message type: ${jy(e.type)}`);
+      handleYieldRequest(r.data, verifiedPeerPid);
+    } else logForDebugging(`[uds-messaging] Unhandled control action: ${fragmentForLog(String(e.action))}`);
+  } else logForDebugging(`[uds-messaging] Received unhandled message type: ${fragmentForLog(e.type)}`);
 }
+//@ chunk-0kp6eg01.js:11170-11571 placement
 /**
  * 分派入站消息
  */
-//@ chunk-0kp6eg01.js:11170-11571 placement
 function routeInboundMessage(e, n, s, o, a) {
   if (
     hasStringType_2(e) &&
     ((e.type === "control" && e.action !== "notify_when_idle") ||
-      (e.type === "user" && e.priority === "now" && e.file_attachments === void 0))
+      (e.type === "user" && e.priority === "now" && e.file_attachments === undefined))
   ) {
-    handleInboundMessage(e, n, s, o, a).catch((r) => {
-      logForDebugging(`[uds-messaging] Failed to process message: ${r}`, { level: "warn" });
+    handleInboundMessage(e, n, s, o, a).catch((error) => {
+      logForDebugging(`[uds-messaging] Failed to process message: ${error}`, {
+        level: "warn",
+      });
     });
     return;
   }
-  u().processingChain = u()
+  udsMessagingState().processingChain = udsMessagingState()
     .processingChain.then(() => handleInboundMessage(e, n, s, o, a))
-    .catch((r) => {
-      logForDebugging(`[uds-messaging] Failed to process message: ${r}`, { level: "warn" });
+    .catch((error) => {
+      logForDebugging(`[uds-messaging] Failed to process message: ${error}`, {
+        level: "warn",
+      });
     });
 }
 //@ chunk-0kp6eg01.js:11571-11583 placement
-var Je = 3000;
+var IDLE_FLUSH_TIMEOUT_MS = 3000;
 //@ chunk-0kp6eg01.js:11583-11669 placement
-function Ze(e = 3000) {
-  return Promise.race([u().processingChain, sleep(e, void 0, { unref: !0 })]);
+function awaitProcessingChain(e = 3000) {
+  return Promise.race([
+    udsMessagingState().processingChain,
+    sleep(e, undefined, {
+      unref: true,
+    }),
+  ]);
 }
+//@ chunk-0kp6eg01.js:11669-13953 placement
 /**
  * 处理 UDS 连接
  */
-//@ chunk-0kp6eg01.js:11669-13953 placement
 function handleConnection(e) {
   e.setEncoding("utf8");
-  let firstLineDeadlineMs = u().firstLineDeadlineMs,
-    s = setTimeout(() => {
-      s = void 0;
-      try {
-        if (
-          (logForDebugging(
-            `[uds-messaging] Closing a connection that sent no complete line within ${firstLineDeadlineMs} ms`,
-          ),
-          !u().silentDropReported)
-        )
-          ((u().silentDropReported = !0),
-            logFeatureSad("cross_session_inbox_auth", "silent_connection_deadline"));
-        e.destroy();
-      } catch (error) {
-        logForDebugging(`[uds-messaging] Failed to close a silent connection: ${error}`, { level: "warn" });
+  let firstLineDeadlineMs = udsMessagingState().firstLineDeadlineMs;
+  let timer = setTimeout(() => {
+    timer = undefined;
+    try {
+      logForDebugging(
+        `[uds-messaging] Closing a connection that sent no complete line within ${firstLineDeadlineMs} ms`,
+      );
+      if (!udsMessagingState().silentDropReported) {
+        udsMessagingState().silentDropReported = true;
+        logFeatureSad("cross_session_inbox_auth", "silent_connection_deadline");
       }
-    }, firstLineDeadlineMs);
-  s.unref();
-  let o = () => {
-    if (s !== void 0) (clearTimeout(s), (s = void 0));
-  };
-  (e.once("close", o), e.once("error", o));
-  let a,
-    r,
-    p = !1,
-    _,
-    w,
-    h = process.pid !== 1 && isBypassDefaultHold();
-  if (h) {
-    let b = getPeerPid(e),
-      R = b !== void 0 ? getProcessStartTokenLinuxSync(b) : void 0;
-    if (b !== void 0 && R !== void 0) w = { pid: b, token: R };
-  }
-  let l = "",
-    D,
-    E = !1,
-    c = (b) => {
-      if (
-        (logForDebugging(
-          `[uds-messaging] Dropped ${b} from a connection that did not authenticate; closing it`,
-          { level: "warn" },
-        ),
-        !u().authDropReported)
-      )
-        ((u().authDropReported = !0), logFeatureBad("cross_session_inbox_auth", "unauthed_drop"));
       e.destroy();
-    },
-    S = (b) => {
-      let R = !E;
-      if (((E = !0), isAuthItem(b))) {
-        if (R) {
-          if (((D = tokenRole(b.token, u().activeTokens)), D !== void 0 && !u().authOkReported))
-            ((u().authOkReported = !0), logFeatureOk("cross_session_inbox_auth"));
-          if (D === void 0 && u().authRequired) c("a bad auth frame");
+    } catch (error) {
+      logForDebugging(`[uds-messaging] Failed to close a silent connection: ${error}`, {
+        level: "warn",
+      });
+    }
+  }, firstLineDeadlineMs);
+  timer.unref();
+  let o = () => {
+    if (timer !== undefined) {
+      clearTimeout(timer);
+      timer = undefined;
+    }
+  };
+  e.once("close", o);
+  e.once("error", o);
+  let a;
+  let r;
+  let p = false;
+  let _;
+  let w;
+  let h = process.pid !== 1 && isBypassDefaultHold();
+  if (h) {
+    let peerPid = getPeerPid(e);
+    let R = peerPid !== undefined ? getProcessStartTokenLinuxSync(peerPid) : undefined;
+    if (peerPid !== undefined && R !== undefined)
+      w = {
+        pid: peerPid,
+        token: R,
+      };
+  }
+  let l = "";
+  let D;
+  let E = false;
+  let c = (b) => {
+    logForDebugging(`[uds-messaging] Dropped ${b} from a connection that did not authenticate; closing it`, {
+      level: "warn",
+    });
+    if (!udsMessagingState().authDropReported) {
+      udsMessagingState().authDropReported = true;
+      logFeatureBad("cross_session_inbox_auth", "unauthed_drop");
+    }
+    e.destroy();
+  };
+  let S = (b) => {
+    let R = !E;
+    E = true;
+    if (isAuthItem(b)) {
+      if (R) {
+        D = tokenRole(b.token, udsMessagingState().activeTokens);
+        if (D !== undefined && !udsMessagingState().authOkReported) {
+          udsMessagingState().authOkReported = true;
+          logFeatureOk("cross_session_inbox_auth");
         }
-        return;
+        if (D === undefined && udsMessagingState().authRequired) c("a bad auth frame");
       }
-      if (u().authRequired && D === void 0) {
-        c(hasStringType_2(b) ? `a '${jy(b.type)}' line` : "a line");
-        return;
-      }
-      if (!p) {
-        if (
-          ((a = getPeerPid(e)),
-          (r =
-            a === void 0
-              ? void 0
-              : w !== void 0
-                ? w.pid === a
-                  ? w.token
-                  : void 0
-                : getProcessStartTokenLinuxSync(a)),
-          (p = !0),
-          a !== void 0 && h)
-        )
-          _ =
-            w !== void 0 && w.pid === a && getProcessStartTokenLinuxSync(a) === w.token
-              ? getAncestorPidsLinuxSync(a)
-              : [];
-      }
-      routeInboundMessage(b, a, r, _, D);
-    },
-    v = (b) => {
-      try {
-        S(b);
-      } catch (error) {
-        logForDebugging(`[uds-messaging] Failed to handle line: ${error}`, { level: "warn" });
-      }
-    };
-  (e.on("data", (b) => {
-    if (((l += b), l.length > ywn)) {
-      (logForDebugging(`[uds-messaging] Line exceeded ${ywn} chars; dropping connection`, { level: "warn" }),
-        e.destroy(),
-        (l = ""));
+      return;
+    }
+    if (udsMessagingState().authRequired && D === undefined) {
+      c(hasStringType_2(b) ? `a '${fragmentForLog(b.type)}' line` : "a line");
+      return;
+    }
+    if (!p) {
+      a = getPeerPid(e);
+      r =
+        a === undefined
+          ? undefined
+          : w !== undefined
+            ? w.pid === a
+              ? w.token
+              : undefined
+            : getProcessStartTokenLinuxSync(a);
+      p = true;
+      if (a !== undefined && h)
+        _ =
+          w !== undefined && w.pid === a && getProcessStartTokenLinuxSync(a) === w.token
+            ? getAncestorPidsLinuxSync(a)
+            : [];
+    }
+    routeInboundMessage(b, a, r, _, D);
+  };
+  let v = (b) => {
+    try {
+      S(b);
+    } catch (error) {
+      logForDebugging(`[uds-messaging] Failed to handle line: ${error}`, {
+        level: "warn",
+      });
+    }
+  };
+  e.on("data", (b) => {
+    l += b;
+    if (l.length > MAX_PEER_MESSAGE_BYTES) {
+      logForDebugging(`[uds-messaging] Line exceeded ${MAX_PEER_MESSAGE_BYTES} chars; dropping connection`, {
+        level: "warn",
+      });
+      e.destroy();
+      l = "";
       return;
     }
     let R;
@@ -690,9 +798,13 @@ function handleConnection(e) {
 `)) !== -1
     ) {
       let sliced = l.slice(0, R);
-      if (((l = l.slice(R + 1)), o(), !sliced.trim())) {
-        if (u().authRequired && D === void 0) {
-          ((E = !0), c("a blank line"), (l = ""));
+      l = l.slice(R + 1);
+      o();
+      if (!sliced.trim()) {
+        if (udsMessagingState().authRequired && D === undefined) {
+          E = true;
+          c("a blank line");
+          l = "";
           return;
         }
         continue;
@@ -701,156 +813,169 @@ function handleConnection(e) {
       try {
         F = jsonParseRaw(sliced);
       } catch {
-        if (
-          (logForDebugging(`[uds-messaging] Failed to parse JSON line: ${redactFragmentForLog(sliced)}`, {
-            level: "warn",
-          }),
-          u().authRequired && D === void 0)
-        ) {
-          ((E = !0), c("an unparseable line"), (l = ""));
+        logForDebugging(`[uds-messaging] Failed to parse JSON line: ${redactFragmentForLog(sliced)}`, {
+          level: "warn",
+        });
+        if (udsMessagingState().authRequired && D === undefined) {
+          E = true;
+          c("an unparseable line");
+          l = "";
           return;
         }
         continue;
       }
-      if ((v(F), e.destroyed)) {
+      v(F);
+      if (e.destroyed) {
         l = "";
         return;
       }
     }
-  }),
-    e.on("end", () => {
-      if (l.trim() && !e.destroyed) {
-        let b,
-          R = !1;
-        try {
-          ((b = jsonParseRaw(l)), (R = !0));
-        } catch {
-          if (
-            (logForDebugging(`[uds-messaging] Failed to parse final buffer: ${redactFragmentForLog(l)}`, {
-              level: "warn",
-            }),
-            u().authRequired && D === void 0)
-          )
-            c("an unparseable final fragment");
-        }
-        if (R) v(b);
+  });
+  e.on("end", () => {
+    if (l.trim() && !e.destroyed) {
+      let b;
+      let R = false;
+      try {
+        b = jsonParseRaw(l);
+        R = true;
+      } catch {
+        logForDebugging(`[uds-messaging] Failed to parse final buffer: ${redactFragmentForLog(l)}`, {
+          level: "warn",
+        });
+        if (udsMessagingState().authRequired && D === undefined) c("an unparseable final fragment");
       }
-      e.end();
-    }),
-    e.on("error", (b) => {
-      logForDebugging(`[uds-messaging] Connection error: ${b.message}`, { level: "warn" });
-    }));
+      if (R) v(b);
+    }
+    e.end();
+  });
+  e.on("error", (b) => {
+    logForDebugging(`[uds-messaging] Connection error: ${b.message}`, {
+      level: "warn",
+    });
+  });
 }
 //@ chunk-0kp6eg01.js:13953-13996 placement
 function getUdsMessagingSocketPath() {
-  return u().activeSocketPath;
+  return udsMessagingState().activeSocketPath;
 }
 //@ chunk-0kp6eg01.js:13996-14006 placement
-var Y = 103;
+var MAX_SOCKET_PATH_BYTES = 103;
 //@ chunk-0kp6eg01.js:14006-14144 placement
 function getDefaultUdsSocketPath() {
-  let e = env.XDG_RUNTIME_DIR || tmpdir(),
-    n = resolve(join(e, "cc-socks", `${process.pid}.sock`));
-  if (Buffer.byteLength(n) <= Y) return n;
+  let e = env.XDG_RUNTIME_DIR || tmpdir();
+  let n = resolve(join(e, "cc-socks", `${process.pid}.sock`));
+  if (Buffer.byteLength(n) <= MAX_SOCKET_PATH_BYTES) return n;
   return getPerUidFallbackUdsSocketPath();
 }
 //@ chunk-0kp6eg01.js:14144-14293 placement
 function getPerUidFallbackUdsSocketPath(e = process.getuid?.() ?? 0) {
-  let n = env.TERMUX_VERSION ? env.PREFIX : void 0,
-    s = n ? join(n, "tmp") : "/tmp";
+  let PREFIX = env.TERMUX_VERSION ? env.PREFIX : undefined;
+  let s = PREFIX ? join(PREFIX, "tmp") : "/tmp";
   return join(s, `cc-socks-${e}`, `${process.pid}.sock`);
 }
+//@ chunk-0kp6eg01.js:14293-14652 placement
 /**
  * 关闭 UDS 服务
  */
-//@ chunk-0kp6eg01.js:14293-14652 placement
-async function stopUdsServer(e, n, s, { settleHeld: o = !0 } = {}) {
-  for (let connectedClient of u().connectedClients) connectedClient.destroy();
-  if ((u().connectedClients.clear(), e.close(), o)) noteParkedAtShutdown();
-  let a = o ? settleHeldInboundOnShutdown() : void 0;
-  await Ze();
-  let r = o ? withDeadline(flushIdleSubscribers("exited"), Je) : void 0;
-  if ((await a, await r, o)) await flushPeerDropReceipts();
+async function stopUdsServer(e, n, s, { settleHeld: o = true } = {}) {
+  for (let connectedClient of udsMessagingState().connectedClients) connectedClient.destroy();
+  udsMessagingState().connectedClients.clear();
+  e.close();
+  if (o) noteParkedAtShutdown();
+  let a = o ? settleHeldInboundOnShutdown() : undefined;
+  await awaitProcessingChain();
+  let r = o ? withDeadline(flushIdleSubscribers("exited"), IDLE_FLUSH_TIMEOUT_MS) : undefined;
+  await a;
+  await r;
+  if (o) await flushPeerDropReceipts();
   try {
     await unlink(n);
   } catch {}
-  let p = u();
-  if (p.activeKeyFile !== void 0) (await deleteSessionRecord(p.activeKeyFile, s), (p.activeKeyFile = void 0));
+  let p = udsMessagingState();
+  if (p.activeKeyFile !== undefined) {
+    await deleteSessionRecord(p.activeKeyFile, s);
+    p.activeKeyFile = undefined;
+  }
   clearActiveSocket();
 }
+//@ chunk-0kp6eg01.js:14652-14888 placement
 /**
  * 清除活动 socket 状态
  */
-//@ chunk-0kp6eg01.js:14652-14888 placement
 function clearActiveSocket() {
-  ((u().activeSocketPath = void 0),
-    (u().activeTokens = void 0),
-    delete process.env.CLAUDE_CODE_MESSAGING_SOCKET,
-    udsEnv.unset("CLAUDE_CODE_MESSAGING_TOKEN"),
-    Z3o(void 0),
-    wvo(null),
-    Evo(null),
-    setIdleNoticeSender(null),
-    $Ro(null),
-    setRegisteredInboxOfPidReader(null),
-    (getSessionNamingState().senderMode = null));
+  udsMessagingState().activeSocketPath = undefined;
+  udsMessagingState().activeTokens = undefined;
+  delete process.env.CLAUDE_CODE_MESSAGING_SOCKET;
+  udsEnv.unset("CLAUDE_CODE_MESSAGING_TOKEN");
+  setOwnUdsHopToken(undefined);
+  setSendPeerReceipt(null);
+  setRecordCorrespondent(null);
+  setIdleNoticeSender(null);
+  setSendAnswer(null);
+  setRegisteredInboxOfPidReader(null);
+  getSessionNamingState().senderMode = null;
 }
 //@ chunk-0kp6eg01.js:14888-14946 placement
-function nn(e, n, s, o) {
+function stopAndCleanup(e, n, s, o) {
   return async () => {
-    (await stopUdsServer(e, n, s), o());
+    await stopUdsServer(e, n, s);
+    o();
   };
 }
+//@ chunk-0kp6eg01.js:14946-15137 placement
 /**
  * 探测 socket 是否存活
  */
-//@ chunk-0kp6eg01.js:14946-15137 placement
-function probeSocket(e) {
-  return new Promise((n) => {
-    let s = new Socket(),
-      o = (a) => {
-        (s.destroy(), n(a));
-      };
-    (s.on("connect", () => o("live")),
-      s.on("error", () => o("dead")),
-      s.setTimeout(250, () => o("dead")),
-      s.connect({ path: e }));
+function probeSocket(path) {
+  return new Promise((resolve) => {
+    let s = new Socket();
+    let o = (a) => {
+      s.destroy();
+      resolve(a);
+    };
+    s.on("connect", () => o("live"));
+    s.on("error", () => o("dead"));
+    s.setTimeout(250, () => o("dead"));
+    s.connect({
+      path,
+    });
   });
 }
+//@ chunk-0kp6eg01.js:15137-15306 placement
 /**
  * 尝试监听
  */
-//@ chunk-0kp6eg01.js:15137-15306 placement
 function tryListen(e, n) {
-  return new Promise((s, o) => {
+  return new Promise((resolve, reject) => {
     function a(r) {
-      if (getErrnoCode(r) === "EADDRINUSE") s(!1);
-      else o(r);
+      if (getErrnoCode(r) === "EADDRINUSE") resolve(false);
+      else reject(r);
     }
-    (e.once("error", a),
-      e.listen(n, () => {
-        (e.removeListener("error", a), s(!0));
-      }));
+    e.once("error", a);
+    e.listen(n, () => {
+      e.removeListener("error", a);
+      resolve(true);
+    });
   });
 }
+//@ chunk-0kp6eg01.js:15306-15541 placement
 /**
  * 生成兄弟 socket 路径
  */
-//@ chunk-0kp6eg01.js:15306-15541 placement
 function siblingSocketPath(e) {
   let n = `${e.replace(/\.sock$/, "")}-${randomBytes(4).toString("hex")}.sock`;
-  if (Buffer.byteLength(n) <= Y) return n;
-  let s = join(e, ".."),
-    o = Y - Buffer.byteLength(join(s, ".sock"));
+  if (Buffer.byteLength(n) <= MAX_SOCKET_PATH_BYTES) return n;
+  let s = join(e, "..");
+  let o = MAX_SOCKET_PATH_BYTES - Buffer.byteLength(join(s, ".sock"));
   return join(s, `${randomBytes(8).toString("hex").slice(0, Math.max(1, o))}.sock`);
 }
+//@ chunk-0kp6eg01.js:15541-15863 placement
 /**
  * 清理陈旧的兄弟 socket
  */
-//@ chunk-0kp6eg01.js:15541-15863 placement
 async function sweepStaleSiblingSockets(e) {
-  let n = `${basename(e).replace(/\.sock$/, "")}-`,
-    s;
+  let n = `${basename(e).replace(/\.sock$/, "")}-`;
+  let s;
   try {
     s = await readdir(dirname(e));
   } catch {
@@ -858,48 +983,50 @@ async function sweepStaleSiblingSockets(e) {
   }
   for (let o of s) {
     if (!o.startsWith(n) || !/^[0-9a-f]{8}\.sock$/.test(o.slice(n.length))) continue;
-    let a = join(dirname(e), o);
-    if ((await probeSocket(a)) === "live") continue;
+    let path = join(dirname(e), o);
+    if ((await probeSocket(path)) === "live") continue;
     try {
-      (await unlink(a), logForDebugging(`[uds-messaging] Reaped stale moved-aside socket ${a}`));
+      await unlink(path);
+      logForDebugging(`[uds-messaging] Reaped stale moved-aside socket ${path}`);
     } catch {}
   }
 }
+//@ chunk-0kp6eg01.js:15863-16284 placement
 /**
  * 绑定自动 socket 路径
  */
-//@ chunk-0kp6eg01.js:15863-16284 placement
-async function bindAutoSocketPath(e, n) {
-  if ((await sweepStaleSiblingSockets(n), await tryListen(e, n))) return n;
-  if ((await probeSocket(n)) !== "live") {
+async function bindAutoSocketPath(e, path) {
+  await sweepStaleSiblingSockets(path);
+  if (await tryListen(e, path)) return path;
+  if ((await probeSocket(path)) !== "live") {
     try {
-      await unlink(n);
+      await unlink(path);
     } catch {}
-    if (await tryListen(e, n)) return n;
+    if (await tryListen(e, path)) return path;
   }
-  for (let s = 0; s < 3; s++) {
-    let o = siblingSocketPath(n);
-    if (
-      (logForDebugging(
-        `[uds-messaging] Auto socket path ${n} is another session's live socket (sibling pid namespace?); binding at ${o} instead`,
-        { level: "warn" },
-      ),
-      await tryListen(e, o))
-    )
-      return o;
+  for (let idx = 0; idx < 3; idx++) {
+    let o = siblingSocketPath(path);
+    logForDebugging(
+      `[uds-messaging] Auto socket path ${path} is another session's live socket (sibling pid namespace?); binding at ${o} instead`,
+      {
+        level: "warn",
+      },
+    );
+    if (await tryListen(e, o)) return o;
   }
   throw Error("listen EADDRINUSE on the auto socket path and its moved-aside siblings");
 }
 //@ chunk-0kp6eg01.js:16284-16386 placement
 function startCrossSessionInbox(e, n, s = {}) {
   return startUdsMessaging(e ?? getDefaultUdsSocketPath(), n, {
-    isExplicit: e !== void 0,
+    isExplicit: e !== undefined,
     profileStartup: s.profileStartup,
   });
 }
 //@ chunk-0kp6eg01.js:16386-16480 placement
-function q() {
-  (udsEnv.unset("CLAUDE_CODE_MESSAGING_SOCKET"), udsEnv.unset("CLAUDE_CODE_MESSAGING_TOKEN"));
+function clearMessagingEnv() {
+  udsEnv.unset("CLAUDE_CODE_MESSAGING_SOCKET");
+  udsEnv.unset("CLAUDE_CODE_MESSAGING_TOKEN");
 }
 //@ chunk-0kp6eg01.js:16480-16616 placement
 var SOCKET_DIR_VET_KINDS = [
@@ -914,13 +1041,18 @@ var SOCKET_DIR_VET_KINDS = [
   "internal",
 ];
 //@ chunk-0kp6eg01.js:16616-16707 placement
-function M(e, n, s) {
-  return Object.assign(n, { socketsDirVetKind: e, ...(s && { refusedComponent: s }) });
+function socketDirRefusalError(socketsDirVetKind, n, s) {
+  return Object.assign(n, {
+    socketsDirVetKind,
+    ...(s && {
+      refusedComponent: s,
+    }),
+  });
 }
+//@ chunk-0kp6eg01.js:16707-17133 placement
 /**
  * 取被拒的路径组件
  */
-//@ chunk-0kp6eg01.js:16707-17133 placement
 function refusedComponentOf(e) {
   if (!(e instanceof Error) || !("refusedComponent" in e)) return;
   let refusedComponent = e.refusedComponent;
@@ -942,40 +1074,49 @@ function refusedComponentOf(e) {
         ownerRefused:
           "ownerRefused" in refusedComponent && typeof refusedComponent.ownerRefused === "boolean"
             ? refusedComponent.ownerRefused
-            : void 0,
+            : undefined,
       }
-    : void 0;
+    : undefined;
 }
 //@ chunk-0kp6eg01.js:17133-17235 placement
-function socketDirFacts(e, n, s) {
-  return { path: e, uid: n.uid, gid: n.gid, mode: n.mode & 4095, ...(s !== void 0 && { ownerRefused: s }) };
+function socketDirFacts(path, n, s) {
+  return {
+    path,
+    uid: n.uid,
+    gid: n.gid,
+    mode: n.mode & 4095,
+    ...(s !== undefined && {
+      ownerRefused: s,
+    }),
+  };
 }
+//@ chunk-0kp6eg01.js:17235-18789 placement
 /**
  * 描述 sockets 目录拒绝原因
  */
-//@ chunk-0kp6eg01.js:17235-18789 placement
 function describeSocketDirRefusal(e) {
   if (socketDirVetKind(e) === "uid_collapse")
     return "this process runs in a user namespace without a uid mapping, so file ownership cannot be verified \u2014 start it with a uid map (e.g. unshare -Ur), or pass --messaging-socket-path";
   let n = refusedComponentOf(e);
-  if (n === void 0) return;
-  let padded = n.mode.toString(8).padStart(4, "0"),
-    o = `(owner ${n.uid}:${n.gid}, mode ${padded})`,
-    a = "or pass --messaging-socket-path",
-    r = printableName(n.path),
-    p = r === n.path,
-    _ = `'${Array.from(r, (l) => {
-      if (SAFE_PATH_CHAR_PATTERN.test(l)) return l;
-      return ((p = !1), "?");
-    }).join("")}'`,
-    w = p,
-    h = (l, D) =>
-      w
-        ? `chmod ${l} ${shellQuoteArgs([n.path])}${D}`
-        : `clear its ${l === "o-w" ? "other" : "group"}-write bit${D}`;
+  if (n === undefined) return;
+  let padded = n.mode.toString(8).padStart(4, "0");
+  let o = `(owner ${n.uid}:${n.gid}, mode ${padded})`;
+  let a = "or pass --messaging-socket-path";
+  let r = printableName(n.path);
+  let p = r === n.path;
+  let _ = `'${Array.from(r, (l) => {
+    if (SAFE_PATH_CHAR_PATTERN.test(l)) return l;
+    p = false;
+    return "?";
+  }).join("")}'`;
+  let w = p;
+  let h = (l, D) =>
+    w
+      ? `chmod ${l} ${shellQuoteArgs([n.path])}${D}`
+      : `clear its ${l === "o-w" ? "other" : "group"}-write bit${D}`;
   switch (socketDirVetKind(e)) {
     case "directory_rule": {
-      if (n.ownerRefused === !0)
+      if (n.ownerRefused === true)
         return `${_} is not owned by you or root ${o} \u2014 use a private directory (XDG_RUNTIME_DIR / CLAUDE_CODE_TMPDIR), ${a}`;
       let l = (n.mode & 512) !== 0;
       if (!l && (n.mode & 2) !== 0)
@@ -994,35 +1135,35 @@ function describeSocketDirRefusal(e) {
     case "symlink_loop":
     case "uid_collapse":
     case "internal":
-    case void 0:
+    case undefined:
       return;
   }
 }
 //@ chunk-0kp6eg01.js:18789-18893 placement
-var SAFE_PATH_CHAR_PATTERN = /^[A-Za-z0-9._\/ ~+=:@,#%-]$/,
-  PERMANENT_SOCKET_ERRNOS = new Set(["EACCES", "EPERM", "EROFS", "ENOSPC", "EDQUOT", "ENOTDIR"]);
+var SAFE_PATH_CHAR_PATTERN = /^[A-Za-z0-9._\/ ~+=:@,#%-]$/;
+var PERMANENT_SOCKET_ERRNOS = new Set(["EACCES", "EPERM", "EROFS", "ENOSPC", "EDQUOT", "ENOTDIR"]);
+//@ chunk-0kp6eg01.js:18893-19161 placement
 /**
  * 是否永久拒绝
  */
-//@ chunk-0kp6eg01.js:18893-19161 placement
-function isPermanentSocketRefusal(e) {
-  switch (socketDirVetKind(e)) {
+function isPermanentSocketRefusal(error) {
+  switch (socketDirVetKind(error)) {
     case "directory_rule":
     case "foreign_owner":
     case "leaf_shape":
     case "not_directory":
-      return !0;
+      return true;
     case "dangling_link":
     case "symlink_loop":
     case "raced":
     case "uid_collapse":
     case "internal":
-      return !1;
-    case void 0:
+      return false;
+    case undefined:
       break;
   }
-  let n = getErrnoCode(e);
-  return n !== void 0 && PERMANENT_SOCKET_ERRNOS.has(n);
+  let errnoCode = getErrnoCode(error);
+  return errnoCode !== undefined && PERMANENT_SOCKET_ERRNOS.has(errnoCode);
 }
 //@ chunk-0kp6eg01.js:19161-19289 placement
 function socketDirVetKind(e) {
@@ -1030,57 +1171,57 @@ function socketDirVetKind(e) {
   let socketsDirVetKind = e.socketsDirVetKind;
   return SOCKET_DIR_VET_KINDS.find((s) => s === socketsDirVetKind);
 }
+//@ chunk-0kp6eg01.js:19289-19463 placement
 /**
  * 悬空链接错误
  */
-//@ chunk-0kp6eg01.js:19289-19463 placement
 function danglingLinkError() {
-  return M(
+  return socketDirRefusalError(
     "dangling_link",
     Error(
       "a component of the sockets path is a symlink whose target does not exist \u2014 create the target (0700) or repoint the link",
     ),
   );
 }
-/**
- * sockets 目录提示文案
- */
 //@ chunk-0kp6eg01.js:19463-19984 placement
+/**
+ * sockets 目录被拒时的建议：把 XDG_RUNTIME_DIR 或 CLAUDE_CODE_TMPDIR 指向私有目录。
+ */
 var SOCKET_DIR_HINTS =
-    "Point XDG_RUNTIME_DIR or CLAUDE_CODE_TMPDIR at a private (0700) directory you own to use a different location.",
-  ke = `A component of the sockets path is not a directory (a regular file is in the way). ${SOCKET_DIR_HINTS}`,
-  ve = `The sockets path runs through a symlink loop. ${SOCKET_DIR_HINTS}`,
-  fn =
-    "This process runs in a user namespace without a uid mapping (its own uid reads as the kernel overflow uid), so file ownership cannot be verified. Start it with a uid map (e.g. `unshare -Ur` / `--map-current-user`), or pass --messaging-socket-path.";
+  "Point XDG_RUNTIME_DIR or CLAUDE_CODE_TMPDIR at a private (0700) directory you own to use a different location.";
+var SOCKET_DIR_COMPONENT_REFUSAL_HINT = `A component of the sockets path is not a directory (a regular file is in the way). ${SOCKET_DIR_HINTS}`;
+var SOCKET_DIR_LOOP_REFUSAL_HINT = `The sockets path runs through a symlink loop. ${SOCKET_DIR_HINTS}`;
+var SOCKET_DIR_USERNS_REFUSAL_HINT =
+  "This process runs in a user namespace without a uid mapping (its own uid reads as the kernel overflow uid), so file ownership cannot be verified. Start it with a uid map (e.g. `unshare -Ur` / `--map-current-user`), or pass --messaging-socket-path.";
+//@ chunk-0kp6eg01.js:19984-20725 placement
 /**
  * sockets 目录拒绝提示
  */
-//@ chunk-0kp6eg01.js:19984-20725 placement
-function socketDirRefusalHint(e) {
-  switch (socketDirVetKind(e)) {
+function socketDirRefusalHint(error) {
+  switch (socketDirVetKind(error)) {
     case "directory_rule":
       return `A directory on the sockets path is shared (world- or group-writable without the sticky bit, e.g. a container volume mounted at /tmp) or not owned by you or root. ${SOCKET_DIR_HINTS}`;
     case "foreign_owner":
     case "leaf_shape":
       return SOCKET_DIR_HINTS;
     case "not_directory":
-      return ke;
+      return SOCKET_DIR_COMPONENT_REFUSAL_HINT;
     case "symlink_loop":
-      return ve;
+      return SOCKET_DIR_LOOP_REFUSAL_HINT;
     case "uid_collapse":
-      return fn;
+      return SOCKET_DIR_USERNS_REFUSAL_HINT;
     case "dangling_link":
     case "raced":
     case "internal":
       return "";
-    case void 0:
+    case undefined:
       break;
   }
-  switch (getErrnoCode(e)) {
+  switch (getErrnoCode(error)) {
     case "ENOTDIR":
-      return ke;
+      return SOCKET_DIR_COMPONENT_REFUSAL_HINT;
     case "ELOOP":
-      return ve;
+      return SOCKET_DIR_LOOP_REFUSAL_HINT;
     case "EACCES":
     case "EPERM":
       return `This user lacks permission on part of the sockets path (an ancestor is not searchable, or the parent is not writable). ${SOCKET_DIR_HINTS}`;
@@ -1090,141 +1231,154 @@ function socketDirRefusalHint(e) {
       return "";
   }
 }
+//@ chunk-0kp6eg01.js:20725-21058 placement
 /**
  * 拒绝使用 sockets 目录
  */
-//@ chunk-0kp6eg01.js:20725-21058 placement
-function refuseSocketDir(e, n, s) {
-  u().lastStartFailureCause = "socket_dir_refused";
-  let o = describeSocketDirRefusal(n);
-  ((u().lastStartFailureDetail = o),
-    clearActiveSocket(),
-    logForDebugging(
-      `[uds-messaging] Failed to set up sockets directory ${e} (refusing to bind \u2014 cross-session messaging is OFF for this session): ${errorMessage(n)}.${o ? ` Refused component: ${o}.` : ""}${s ? ` ${s}` : ""}`,
-      { level: "error" },
-    ),
-    q());
+function refuseSocketDir(e, error, s) {
+  udsMessagingState().lastStartFailureCause = "socket_dir_refused";
+  let o = describeSocketDirRefusal(error);
+  udsMessagingState().lastStartFailureDetail = o;
+  clearActiveSocket();
+  logForDebugging(
+    `[uds-messaging] Failed to set up sockets directory ${e} (refusing to bind \u2014 cross-session messaging is OFF for this session): ${errorMessage(error)}.${o ? ` Refused component: ${o}.` : ""}${s ? ` ${s}` : ""}`,
+    {
+      level: "error",
+    },
+  );
+  clearMessagingEnv();
   return;
 }
+//@ chunk-0kp6eg01.js:21058-24275 placement
 /**
  * 检查 sockets 目录
  */
-//@ chunk-0kp6eg01.js:21058-24275 placement
 async function vetSocketsDir(e) {
-  if (!isAbsolute(e)) throw M("internal", Error("sockets directory must be absolute here"));
-  let n = process.getuid?.(),
-    s = (y) => {
-      if (y.isSymbolicLink())
-        throw M(
-          "leaf_shape",
-          Error("sockets directory is a symlink \u2014 refusing to use it"),
-          socketDirFacts(e, y),
-        );
-      if (!y.isDirectory())
-        throw M("leaf_shape", Error("sockets directory exists but is not a directory"), socketDirFacts(e, y));
-      if (n !== void 0 && !o(y.uid))
-        throw M(
-          "foreign_owner",
-          Error("sockets directory is owned by another user \u2014 refusing to use it"),
-          socketDirFacts(e, y),
-        );
-    },
-    o = (y) => y === n,
-    a = process.getgid?.(),
-    r = await inspectUserNamespace();
+  if (!isAbsolute(e))
+    throw socketDirRefusalError("internal", Error("sockets directory must be absolute here"));
+  let n = process.getuid?.();
+  let s = (y) => {
+    if (y.isSymbolicLink())
+      throw socketDirRefusalError(
+        "leaf_shape",
+        Error("sockets directory is a symlink \u2014 refusing to use it"),
+        socketDirFacts(e, y),
+      );
+    if (!y.isDirectory())
+      throw socketDirRefusalError(
+        "leaf_shape",
+        Error("sockets directory exists but is not a directory"),
+        socketDirFacts(e, y),
+      );
+    if (n !== undefined && !o(y.uid))
+      throw socketDirRefusalError(
+        "foreign_owner",
+        Error("sockets directory is owned by another user \u2014 refusing to use it"),
+        socketDirFacts(e, y),
+      );
+  };
+  let o = (uid) => uid === n;
+  let a = process.getgid?.();
+  let r = await inspectUserNamespace();
   if (r?.uidCollapses)
-    throw M(
+    throw socketDirRefusalError(
       "uid_collapse",
       Error(
         "this process reads as the kernel overflow uid (user namespace without a uid mapping) \u2014 ownership cannot be verified; refusing to use the sockets directory",
       ),
     );
   o = (y) => y === n && !r?.uidCollapses;
-  let p = _li(),
-    _ = async (y, A) => {
+  let p = sharedSystemDirs();
+  let _ = async (y, A) => {
+    try {
+      let C = A.isSymbolicLink() ? join(await realpath(dirname(y)), basename(y)) : await realpath(y);
+      let P = await lstat(C);
+      return P.dev === A.dev && P.ino === A.ino ? C : undefined;
+    } catch {
+      return;
+    }
+  };
+  let w = (y) =>
+    r !== undefined &&
+    ((r.unmappedOwnerUid !== undefined && y === r.unmappedOwnerUid) || (y === 0 && r.rootUidAmbiguous));
+  let h = w;
+  let l = (y) => y !== undefined && p.has(y);
+  let D = (uid, A, C) => n === undefined || o(uid) || (!A && (w(uid) ? l(C) : uid === 0));
+  let E = (y, A, C) => {
+    if (!D(y.uid, A, C)) return false;
+    if ((y.mode & 512) !== 0) return true;
+    if ((y.mode & 2) !== 0) return false;
+    if ((y.mode & 16) !== 0) return o(y.uid) && a !== undefined && y.gid === a && a === n;
+    return true;
+  };
+  let c = env.TERMUX_VERSION && env.PREFIX ? dirname(dirname(env.PREFIX)) : undefined;
+  let S = (y) => dirname(y) === y || y === c;
+  let v = async (y, A, C = 0) => {
+    if (C > 16)
+      throw socketDirRefusalError(
+        "symlink_loop",
+        Error("sockets-directory chain: too many levels of symlinks"),
+      );
+    let P = false;
+    let deepestExisting;
+    let sawSymlink = false;
+    for (let U = y, Q = true; ; U = dirname(U), Q = false) {
+      let T;
       try {
-        let C = A.isSymbolicLink() ? join(await realpath(dirname(y)), basename(y)) : await realpath(y),
-          P = await lstat(C);
-        return P.dev === A.dev && P.ino === A.ino ? C : void 0;
-      } catch {
-        return;
+        T = await lstat(U);
+      } catch (error) {
+        if (!isENOENT(error)) throw error;
       }
-    },
-    w = (y) =>
-      r !== void 0 &&
-      ((r.unmappedOwnerUid !== void 0 && y === r.unmappedOwnerUid) || (y === 0 && r.rootUidAmbiguous)),
-    h = w,
-    l = (y) => y !== void 0 && p.has(y),
-    D = (y, A, C) => n === void 0 || o(y) || (!A && (w(y) ? l(C) : y === 0)),
-    E = (y, A, C) => {
-      if (!D(y.uid, A, C)) return !1;
-      if ((y.mode & 512) !== 0) return !0;
-      if ((y.mode & 2) !== 0) return !1;
-      if ((y.mode & 16) !== 0) return o(y.uid) && a !== void 0 && y.gid === a && a === n;
-      return !0;
-    },
-    c = env.TERMUX_VERSION && env.PREFIX ? dirname(dirname(env.PREFIX)) : void 0,
-    S = (y) => dirname(y) === y || y === c,
-    v = async (y, A, C = 0) => {
-      if (C > 16) throw M("symlink_loop", Error("sockets-directory chain: too many levels of symlinks"));
-      let P = !1,
-        pe,
-        ge = !1;
-      for (let U = y, Q = !0; ; U = dirname(U), Q = !1) {
-        let T;
-        try {
-          T = await lstat(U);
-        } catch (error) {
-          if (!isENOENT(error)) throw error;
+      if (T !== undefined) {
+        deepestExisting ??= U;
+        let G = Q && A;
+        if (T.isSymbolicLink()) {
+          sawSymlink = true;
+          let Z = h(T.uid) ? await _(U, T) : undefined;
+          if (!D(T.uid, false, Z))
+            throw socketDirRefusalError(
+              "foreign_owner",
+              Error(
+                "a sockets-directory component is a symlink owned by another user \u2014 refusing to use it",
+              ),
+              socketDirFacts(U, T),
+            );
+          let replaced = (await readlink(U)).replace(/\/{2,}/g, "/");
+          let oe = replaced.length > 1 && replaced.endsWith("/") ? replaced.slice(0, -1) : replaced;
+          let Ue = isAbsolute(oe) ? oe : `${await realpath(dirname(U))}/${oe}`;
+          let { startExists } = await v(Ue, G, C + 1);
+          if (Q) P = startExists;
+        } else {
+          if (!T.isDirectory())
+            throw socketDirRefusalError(
+              "not_directory",
+              Error("a sockets-directory component exists but is not a directory \u2014 refusing to use it"),
+              socketDirFacts(U, T),
+            );
+          let Z = h(T.uid) ? await _(U, T) : undefined;
+          if (!E(T, G, Z))
+            throw socketDirRefusalError(
+              "directory_rule",
+              Error(
+                "a sockets-directory component is not a private-or-sticky directory owned by us or root \u2014 refusing to use it",
+              ),
+              socketDirFacts(U, T, !D(T.uid, G, Z)),
+            );
+          if (Q) P = true;
         }
-        if (T !== void 0) {
-          pe ??= U;
-          let G = Q && A;
-          if (T.isSymbolicLink()) {
-            ge = !0;
-            let Z = h(T.uid) ? await _(U, T) : void 0;
-            if (!D(T.uid, !1, Z))
-              throw M(
-                "foreign_owner",
-                Error(
-                  "a sockets-directory component is a symlink owned by another user \u2014 refusing to use it",
-                ),
-                socketDirFacts(U, T),
-              );
-            let replaced = (await readlink(U)).replace(/\/{2,}/g, "/"),
-              oe = replaced.length > 1 && replaced.endsWith("/") ? replaced.slice(0, -1) : replaced,
-              Ue = isAbsolute(oe) ? oe : `${await realpath(dirname(U))}/${oe}`,
-              { startExists: startExists } = await v(Ue, G, C + 1);
-            if (Q) P = startExists;
-          } else {
-            if (!T.isDirectory())
-              throw M(
-                "not_directory",
-                Error(
-                  "a sockets-directory component exists but is not a directory \u2014 refusing to use it",
-                ),
-                socketDirFacts(U, T),
-              );
-            let Z = h(T.uid) ? await _(U, T) : void 0;
-            if (!E(T, G, Z))
-              throw M(
-                "directory_rule",
-                Error(
-                  "a sockets-directory component is not a private-or-sticky directory owned by us or root \u2014 refusing to use it",
-                ),
-                socketDirFacts(U, T, !D(T.uid, G, Z)),
-              );
-            if (Q) P = !0;
-          }
-        }
-        if (S(U)) break;
       }
-      return { startExists: P, deepestExisting: pe, sawSymlink: ge };
-    },
-    b = dirname(e),
-    R = await v(b, !1),
-    x = !R.startExists,
-    F;
+      if (S(U)) break;
+    }
+    return {
+      startExists: P,
+      deepestExisting,
+      sawSymlink,
+    };
+  };
+  let b = dirname(e);
+  let R = await v(b, false);
+  let x = !R.startExists;
+  let F;
   try {
     F = await lstat(e);
   } catch (error) {
@@ -1232,42 +1386,47 @@ async function vetSocketsDir(e) {
   }
   if (x && R.deepestExisting === b) throw danglingLinkError();
   if (x) {
-    let y = [],
-      A = (C) => {
-        if (!C.isDirectory() || (n !== void 0 && !o(C.uid)))
-          throw M(
-            "raced",
-            Error(
-              "a sockets-directory component appeared while being created and is not our directory \u2014 refusing to use it",
-            ),
-          );
-      };
+    let y = [];
+    let A = (C) => {
+      if (!C.isDirectory() || (n !== undefined && !o(C.uid)))
+        throw socketDirRefusalError(
+          "raced",
+          Error(
+            "a sockets-directory component appeared while being created and is not our directory \u2014 refusing to use it",
+          ),
+        );
+    };
     for (let C = b; C !== R.deepestExisting && !S(C); C = dirname(C)) y.unshift(C);
     for (let C of y)
       try {
-        await mkdir(C, { mode: 448 });
+        await mkdir(C, {
+          mode: 448,
+        });
       } catch (error) {
         if (isENOENT(error) && R.sawSymlink) throw danglingLinkError();
         if (getErrnoCode(error) !== "EEXIST") throw error;
         A(await lstat(C));
       }
-    if (!(await v(b, !0)).startExists)
-      throw M("raced", Error("sockets base directory vanished while being set up"));
+    if (!(await v(b, true)).startExists)
+      throw socketDirRefusalError("raced", Error("sockets base directory vanished while being set up"));
   }
-  if (F === void 0) {
+  if (F === undefined) {
     try {
-      await mkdir(e, { mode: 448 });
+      await mkdir(e, {
+        mode: 448,
+      });
     } catch (error) {
       if (getErrnoCode(error) !== "EEXIST") throw error;
     }
     F = await lstat(e);
   }
-  if ((s(F), (F.mode & 511) !== 448)) await chmod(e, 448);
+  s(F);
+  if ((F.mode & 511) !== 448) await chmod(e, 448);
 }
+//@ chunk-0kp6eg01.js:24275-27546 placement
 /**
  * 校验 --messaging-socket-path 显式指定的 UDS 路径（目录所有者、权限、符号链接），不合格时拒绝绑定。本模块整体是跨会话 UDS 消息服务：建 socket 目录、绑定、接收 user/control 消息、祖先进程判定自发消息。
  */
-//@ chunk-0kp6eg01.js:24275-27546 placement
 async function validateExplicitMessagingSocketPath(e) {
   if (!isAbsolute(e))
     throw new CliUserError(
@@ -1277,57 +1436,64 @@ async function validateExplicitMessagingSocketPath(e) {
     );
   if (e.split("/").includes(".."))
     throw new CliUserError(`--messaging-socket-path must not contain '..' segments, got: ${e}`);
-  let at = e.split("/").at(-1);
-  if (at === "" || at === ".")
+  let last = e.split("/").at(-1);
+  if (last === "" || last === ".")
     throw new CliUserError(`--messaging-socket-path must name a socket file inside a directory, got: ${e}`);
   let replaced = normalize(e).replace(/\/+$/, "");
   if (replaced === "" || !replaced.startsWith("/") || basename(replaced) === "")
     throw new CliUserError(`--messaging-socket-path must name a socket file inside a directory, got: ${e}`);
   if (!isValidPipeOrPath(replaced) || !isValidPipeOrPath(e))
     throw new CliUserError(`--messaging-socket-path must be a local socket path, got: ${e}`);
-  if (Buffer.byteLength(replaced) > Y)
+  if (Buffer.byteLength(replaced) > MAX_SOCKET_PATH_BYTES)
     throw new CliUserError(
-      `--messaging-socket-path is too long for a Unix socket (${Buffer.byteLength(replaced)} bytes, max ${Y}): ${replaced}. Choose a shorter path, e.g. under $XDG_RUNTIME_DIR or /tmp/<private-dir>.`,
+      `--messaging-socket-path is too long for a Unix socket (${Buffer.byteLength(replaced)} bytes, max ${MAX_SOCKET_PATH_BYTES}): ${replaced}. Choose a shorter path, e.g. under $XDG_RUNTIME_DIR or /tmp/<private-dir>.`,
     );
-  let a = dirname(replaced),
-    r =
-      "Use a private directory you own that only you use, e.g. mkdir -m 700 <dir> (or chmod 700 an existing one).",
-    p = (c) => {
-      if (c.isSymbolicLink())
+  let a = dirname(replaced);
+  let r =
+    "Use a private directory you own that only you use, e.g. mkdir -m 700 <dir> (or chmod 700 an existing one).";
+  let p = (c) => {
+    if (c.isSymbolicLink())
+      throw new CliUserError(
+        `--messaging-socket-path directory must be a real directory, not a symlink: ${a}. ${r}`,
+      );
+    if (!c.isDirectory()) throw new CliUserError(`--messaging-socket-path parent is not a directory: ${a}.`);
+    let S = process.getuid?.();
+    if (S !== undefined && c.uid !== S)
+      throw new CliUserError(
+        `--messaging-socket-path directory ${a} is not owned by you (uid ${c.uid}). ${r}`,
+      );
+    if ((c.mode & 63) !== 0)
+      throw new CliUserError(
+        `--messaging-socket-path directory ${a} is not private (mode ${(c.mode & 4095).toString(8)}); the socket directory must be mode 0700 so no other user or group can reach or replace the socket. ${r}`,
+      );
+  };
+  let _ = async () => {
+    try {
+      return await lstat(a);
+    } catch (error) {
+      let errnoCode = getErrnoCode(error);
+      if (isENOENT(error)) return;
+      if (
+        errnoCode === "ENOTDIR" ||
+        errnoCode === "EACCES" ||
+        errnoCode === "ELOOP" ||
+        errnoCode === "ENAMETOOLONG"
+      )
         throw new CliUserError(
-          `--messaging-socket-path directory must be a real directory, not a symlink: ${a}. ${r}`,
+          `--messaging-socket-path directory is not usable: ${a} (${errnoCode}). Fix the path or its permissions, or choose another path. ${r}`,
         );
-      if (!c.isDirectory())
-        throw new CliUserError(`--messaging-socket-path parent is not a directory: ${a}.`);
-      let S = process.getuid?.();
-      if (S !== void 0 && c.uid !== S)
-        throw new CliUserError(
-          `--messaging-socket-path directory ${a} is not owned by you (uid ${c.uid}). ${r}`,
-        );
-      if ((c.mode & 63) !== 0)
-        throw new CliUserError(
-          `--messaging-socket-path directory ${a} is not private (mode ${(c.mode & 4095).toString(8)}); the socket directory must be mode 0700 so no other user or group can reach or replace the socket. ${r}`,
-        );
-    },
-    _ = async () => {
-      try {
-        return await lstat(a);
-      } catch (error) {
-        let S = getErrnoCode(error);
-        if (isENOENT(error)) return;
-        if (S === "ENOTDIR" || S === "EACCES" || S === "ELOOP" || S === "ENAMETOOLONG")
-          throw new CliUserError(
-            `--messaging-socket-path directory is not usable: ${a} (${S}). Fix the path or its permissions, or choose another path. ${r}`,
-          );
-        throw new CliUserError(
-          `--messaging-socket-path directory could not be examined: ${a} (${S ?? String(error)}). ${r}`,
-        );
-      }
-    },
-    w = await _();
-  if (w !== void 0) return (p(w), replaced);
-  let h = process.getuid?.(),
-    l = [];
+      throw new CliUserError(
+        `--messaging-socket-path directory could not be examined: ${a} (${errnoCode ?? String(error)}). ${r}`,
+      );
+    }
+  };
+  let w = await _();
+  if (w !== undefined) {
+    p(w);
+    return replaced;
+  }
+  let h = process.getuid?.();
+  let l = [];
   for (let c = dirname(a); ; c = dirname(c)) {
     let S;
     try {
@@ -1339,8 +1505,8 @@ async function validateExplicitMessagingSocketPath(e) {
         );
       l.unshift(c);
     }
-    if (S !== void 0) {
-      if (h !== void 0 && S.uid !== h && S.uid !== 0)
+    if (S !== undefined) {
+      if (h !== undefined && S.uid !== h && S.uid !== 0)
         throw new CliUserError(
           `--messaging-socket-path: ${c} ${S.isSymbolicLink() ? "is a symlink" : "is a directory"} owned by another user \u2014 refusing to create your sockets directory ${S.isSymbolicLink() ? "through" : "inside"} it. ${r}`,
         );
@@ -1348,21 +1514,26 @@ async function validateExplicitMessagingSocketPath(e) {
     }
     if (dirname(c) === c) break;
   }
-  let D = !1;
+  let D = false;
   try {
     for (let c of l)
       try {
-        await mkdir(c, { mode: 448 });
+        await mkdir(c, {
+          mode: 448,
+        });
       } catch (error) {
         if (getErrnoCode(error) !== "EEXIST") throw error;
         let v = await lstat(c);
-        if (!v.isDirectory() || (h !== void 0 && v.uid !== h))
+        if (!v.isDirectory() || (h !== undefined && v.uid !== h))
           throw new CliUserError(
             `--messaging-socket-path: ${c} appeared while your sockets directory was being created and is not a directory you own \u2014 refusing to use it. ${r}`,
           );
       }
     try {
-      (await mkdir(a, { mode: 448 }), (D = !0));
+      await mkdir(a, {
+        mode: 448,
+      });
+      D = true;
     } catch (error) {
       if (getErrnoCode(error) !== "EEXIST") throw error;
     }
@@ -1373,275 +1544,356 @@ async function validateExplicitMessagingSocketPath(e) {
     );
   }
   let E = await _();
-  if (E === void 0)
+  if (E === undefined)
     throw new CliUserError(`--messaging-socket-path directory ${a} vanished while being set up. ${r}`);
-  if (!D) return (p(E), replaced);
-  return (p(E), replaced);
+  if (!D) {
+    p(E);
+    return replaced;
+  }
+  p(E);
+  return replaced;
 }
 //@ chunk-0kp6eg01.js:27546-27653 placement
 async function startUdsMessaging(e, n, s = {}) {
-  u().startInFlight = !0;
+  udsMessagingState().startInFlight = true;
   try {
     return await startUdsMessagingUnchecked(e, n, s);
   } finally {
-    u().startInFlight = !1;
+    udsMessagingState().startInFlight = false;
   }
 }
+//@ chunk-0kp6eg01.js:27653-34045 placement
 /**
  * 启动 UDS 消息服务
  */
-//@ chunk-0kp6eg01.js:27653-34045 placement
-async function startUdsMessagingUnchecked(e, n, s = {}) {
-  let a = s.profileStartup ? performance.now() : void 0,
-    r = (h) => {
-      if (a === void 0) return;
-      let startTime = performance.now();
-      (Br(h, startTime - a, a), (a = startTime));
-    };
-  if (
-    ((u().lastStartFailureCause = "bind_failed"),
-    (u().lastStartDegradedCause = void 0),
-    !isValidPipeOrPath(e))
-  ) {
-    if (
-      (logForDebugging(
-        `[uds-messaging] Refusing socket path \u2014 ${"not a usable local socket address (a remote/UNC path, or a pipe name with extra segments or a trailing dot/space)"}: ${e}`,
-        { level: "error" },
-      ),
-      q(),
-      (u().lastStartFailureCause = "path_refused"),
-      s.isExplicit)
-    )
+async function startUdsMessagingUnchecked(path, n, s = {}) {
+  let a = s.profileStartup ? performance.now() : undefined;
+  let r = (h) => {
+    if (a === undefined) return;
+    let startTime = performance.now();
+    recordPhase(h, startTime - a, a);
+    a = startTime;
+  };
+  udsMessagingState().lastStartFailureCause = "bind_failed";
+  udsMessagingState().lastStartDegradedCause = undefined;
+  if (!isValidPipeOrPath(path)) {
+    logForDebugging(
+      `[uds-messaging] Refusing socket path \u2014 ${"not a usable local socket address (a remote/UNC path, or a pipe name with extra segments or a trailing dot/space)"}: ${path}`,
+      {
+        level: "error",
+      },
+    );
+    clearMessagingEnv();
+    udsMessagingState().lastStartFailureCause = "path_refused";
+    if (s.isExplicit)
       throw new CliUserError(
-        `--messaging-socket-path ${e} is not a usable local socket address (a remote/UNC path, or a pipe name with extra segments or a trailing dot/space).`,
+        `--messaging-socket-path ${path} is not a usable local socket address (a remote/UNC path, or a pipe name with extra segments or a trailing dot/space).`,
       );
     return;
   }
-  if (!s.isExplicit && !0 && !isAbsolute(e)) e = resolve(e);
+  if (!s.isExplicit && true && !isAbsolute(path)) path = resolve(path);
   if (s.isExplicit) {
-    if (((e = await validateExplicitMessagingSocketPath(e)), (await probeSocket(e)) === "live"))
+    path = await validateExplicitMessagingSocketPath(path);
+    if ((await probeSocket(path)) === "live")
       throw new CliUserError(
-        `--messaging-socket-path points to a live socket: ${e}. Another process is listening there. Remove it or choose a different path.`,
+        `--messaging-socket-path points to a live socket: ${path}. Another process is listening there. Remove it or choose a different path.`,
       );
   } else {
-    let h = dirname(e);
+    let h = dirname(path);
     try {
       await vetSocketsDir(h);
     } catch (error) {
-      let D = isPermanentSocketRefusal(error) ? await getHostUid() : void 0,
-        E = D === void 0 ? void 0 : resolve(getPerUidFallbackUdsSocketPath(D)),
-        c = E === void 0 ? void 0 : join(E, "..");
-      if (E === void 0 || c === void 0 || c === h)
+      let D = isPermanentSocketRefusal(error) ? await getHostUid() : undefined;
+      let E = D === undefined ? undefined : resolve(getPerUidFallbackUdsSocketPath(D));
+      let c = E === undefined ? undefined : join(E, "..");
+      if (E === undefined || c === undefined || c === h)
         return refuseSocketDir(h, error, socketDirRefusalHint(error));
       let S = describeSocketDirRefusal(error);
       logForDebugging(
         `[uds-messaging] sockets directory ${h} refused (${errorMessage(error)}${S ? `; refused component: ${S}` : ""}); trying the per-uid fallback ${c}`,
-        { level: "warn" },
+        {
+          level: "warn",
+        },
       );
       try {
         await vetSocketsDir(c);
       } catch (error) {
         return refuseSocketDir(c, error, socketDirRefusalHint(error));
       }
-      ((e = E), recordDegradedCause("primary_dir_refused_fell_back"));
+      path = E;
+      recordDegradedCause("primary_dir_refused_fell_back");
     }
   }
   if (s.isExplicit)
     try {
-      await unlink(e);
+      await unlink(path);
     } catch {}
-  if (((u().activeSocketPath = e), s.profileStartup)) profileCheckpoint("uds_inbox_dir_ready");
+  udsMessagingState().activeSocketPath = path;
+  if (s.profileStartup) profileCheckpoint("uds_inbox_dir_ready");
   r("setup_uds_dir_ms");
-  let p, _;
+  let p;
+  let _;
   try {
-    p = createServer({ allowHalfOpen: !0 }, (h) => {
-      (u().connectedClients.add(h),
-        logForDebugging("[uds-messaging] Client connected"),
-        handleConnection(h),
+    p = createServer(
+      {
+        allowHalfOpen: true,
+      },
+      (h) => {
+        udsMessagingState().connectedClients.add(h);
+        logForDebugging("[uds-messaging] Client connected");
+        handleConnection(h);
         h.on("close", () => {
-          (u().connectedClients.delete(h), logForDebugging("[uds-messaging] Client disconnected"));
-        }));
-    });
+          udsMessagingState().connectedClients.delete(h);
+          logForDebugging("[uds-messaging] Client disconnected");
+        });
+      },
+    );
   } catch (error) {
-    (clearActiveSocket(),
-      logForDebugging(`[uds-messaging] Failed to create server: ${String(error)}`, { level: "error" }),
-      q());
+    clearActiveSocket();
+    logForDebugging(`[uds-messaging] Failed to create server: ${String(error)}`, {
+      level: "error",
+    });
+    clearMessagingEnv();
     return;
   }
-  (p.on("error", (h) => {
-    logForDebugging(`[uds-messaging] Server error: ${h.message}`, { level: "error" });
-  }),
-    (u().authRequired = s.requireAuth ?? Ohr()),
-    (u().firstLineDeadlineMs = s.firstLineDeadlineMs ?? LPr));
-  let w = AAi();
-  u().activeTokens = w;
+  p.on("error", (h) => {
+    logForDebugging(`[uds-messaging] Server error: ${h.message}`, {
+      level: "error",
+    });
+  });
+  udsMessagingState().authRequired = s.requireAuth ?? isWindowsPlatform();
+  udsMessagingState().firstLineDeadlineMs = s.firstLineDeadlineMs ?? MESSAGING_SOCKET_TIMEOUT_MS;
+  let peerTokens = createPeerTokens();
+  udsMessagingState().activeTokens = peerTokens;
   try {
     if (s.isExplicit) {
-      if (!(await tryListen(p, e))) throw Error("listen EADDRINUSE on the requested socket path");
-    } else ((e = await bindAutoSocketPath(p, e)), (u().activeSocketPath = e));
+      if (!(await tryListen(p, path))) throw Error("listen EADDRINUSE on the requested socket path");
+    } else {
+      path = await bindAutoSocketPath(p, path);
+      udsMessagingState().activeSocketPath = path;
+    }
     if (s.profileStartup) profileCheckpoint("uds_inbox_listening");
     r("setup_uds_listen_ms");
     {
-      let E = await getHostUid(),
-        c = process.getuid?.();
-      u().peerDirOwnerUids = [...(c !== void 0 ? [c] : []), ...(E !== void 0 && E !== c ? [E] : [])];
+      let hostUid = await getHostUid();
+      let c = process.getuid?.();
+      udsMessagingState().peerDirOwnerUids = [
+        ...(c !== undefined ? [c] : []),
+        ...(hostUid !== undefined && hostUid !== c ? [hostUid] : []),
+      ];
     }
     p.unref();
     let h = registerCleanup(async () => {
-      (logForDebugging("[uds-messaging] Shutting down"), await stopUdsServer(p, e, n));
+      logForDebugging("[uds-messaging] Shutting down");
+      await stopUdsServer(p, path, n);
     });
-    ((_ = h), await chmod(e, 384));
+    _ = h;
+    await chmod(path, 384);
     try {
-      ((u().activeKeyFile = await writeSessionPeerRecord(e, w.peerToken, n, {
+      udsMessagingState().activeKeyFile = await writeSessionPeerRecord(path, peerTokens.peerToken, n, {
         sweepPermitted: await isRegistrySweepPermitted(),
-      })),
-        registerActiveKeyFileCleanupOnExit());
+      });
+      registerActiveKeyFileCleanupOnExit();
     } catch (error) {
-      if (u().authRequired) {
-        if (
-          (logForDebugging(
-            `[uds-messaging] Failed to publish the inbox auth key (refusing to run an inbox no peer can authenticate to): ${error}`,
-            { level: "error" },
-          ),
-          (u().lastStartFailureCause = "key_publish_failed"),
-          await stopUdsServer(p, e, n, { settleHeld: !1 }),
-          h(),
-          q(),
-          s.isExplicit)
-        )
+      if (udsMessagingState().authRequired) {
+        logForDebugging(
+          `[uds-messaging] Failed to publish the inbox auth key (refusing to run an inbox no peer can authenticate to): ${error}`,
+          {
+            level: "error",
+          },
+        );
+        udsMessagingState().lastStartFailureCause = "key_publish_failed";
+        await stopUdsServer(p, path, n, {
+          settleHeld: false,
+        });
+        h();
+        clearMessagingEnv();
+        if (s.isExplicit)
           throw new CliUserError(
-            `--messaging-socket-path: bound ${e} but could not publish its auth key (${getErrnoCode(error) ?? error}); peers could not authenticate, so the inbox was closed. Check that the session registry directory is writable by you.`,
+            `--messaging-socket-path: bound ${path} but could not publish its auth key (${getErrnoCode(error) ?? error}); peers could not authenticate, so the inbox was closed. Check that the session registry directory is writable by you.`,
           );
         return;
       }
-      (logForDebugging(
+      logForDebugging(
         `[uds-messaging] Failed to publish the inbox auth key; peers will send unauthenticated (accepted: auth is optional on this platform): ${error}`,
-        { level: "warn" },
-      ),
-        recordDegradedCause("key_publish_failed"));
+        {
+          level: "warn",
+        },
+      );
+      recordDegradedCause("key_publish_failed");
     }
     if (s.profileStartup) profileCheckpoint("uds_inbox_key_published");
-    (r("setup_uds_publish_ms"),
-      (process.env.CLAUDE_CODE_MESSAGING_SOCKET = e),
-      udsEnv.set("CLAUDE_CODE_MESSAGING_TOKEN", w.childToken),
-      Z3o(u8(e)));
-    let l = u8(e);
-    return (
-      Evo(notePeerReplyTarget),
-      (getSessionNamingState().senderMode = currentSenderClass),
-      setIdleNoticeSender((E, c, S, v, b) =>
+    r("setup_uds_publish_ms");
+    process.env.CLAUDE_CODE_MESSAGING_SOCKET = path;
+    udsEnv.set("CLAUDE_CODE_MESSAGING_TOKEN", peerTokens.childToken);
+    setOwnUdsHopToken(udsAddressFromPath(path));
+    let ownAddress = udsAddressFromPath(path);
+    setRecordCorrespondent(notePeerReplyTarget);
+    getSessionNamingState().senderMode = currentSenderClass;
+    setIdleNoticeSender((E, c, S, v, b) =>
+      sendControlToUdsSocket(
+        E,
+        {
+          action: "peer_idle_notice",
+          ...c,
+          from: ownAddress,
+          ...(v ? senderClassFields() : {}),
+        },
+        {
+          ...(S !== undefined && {
+            expectPeerPid: S,
+          }),
+          ...(b !== undefined && {
+            expectPeerProcStart: b,
+          }),
+          storageV5: n,
+        },
+      ),
+    );
+    setSendAnswer(
+      (E, c, S, v) =>
         sendControlToUdsSocket(
           E,
-          { action: "peer_idle_notice", ...c, from: l, ...(v ? pn() : {}) },
           {
-            ...(S !== void 0 && { expectPeerPid: S }),
-            ...(b !== void 0 && { expectPeerProcStart: b }),
+            action: "artifact_replies_yielded",
+            ...c,
+            from: ownAddress,
+          },
+          {
+            ...(S !== undefined && {
+              expectPeerPid: S,
+            }),
+            ...(v !== undefined && {
+              expectPeerProcStart: v,
+            }),
             storageV5: n,
           },
         ),
-      ),
-      $Ro(
-        (E, c, S, v) =>
-          sendControlToUdsSocket(
-            E,
-            { action: "artifact_replies_yielded", ...c, from: l },
-            {
-              ...(S !== void 0 && { expectPeerPid: S }),
-              ...(v !== void 0 && { expectPeerProcStart: v }),
-              storageV5: n,
-            },
-          ),
-        l,
-      ),
-      setRegisteredInboxOfPidReader((E) => registeredInboxesOfPids(E)),
-      wvo((E, c, S) => {
-        let v = E.origin?.kind === "peer" ? E.origin : void 0,
-          b = v?.from;
-        if (typeof b !== "string") return;
-        let R = vettedPeerReplyTarget(b, e, v?.verifiedPeerPid);
-        if (R === void 0) {
-          logForDebugging(
-            `[uds-messaging] hold-receipt skipped: reply address unshaped or outside our socket namespace (${jy(b)})`,
-          );
-          return;
-        }
-        return sendControlToUdsSocket(
-          R,
-          {
-            action: "peer_message_status",
-            ...(c === "refused" ? { status: "expired", status_detail: "refused" } : { status: c }),
-            reason: holdOutcomeExplanation(c),
-            from: l,
-            ...(typeof v?.msg_id === "string" && { orig_msg_id: v.msg_id }),
-            ...(c === "dropped" &&
-              S !== void 0 && { drop_reason: S.dropReason, dropped_msg_ids: S.droppedMsgIds }),
-          },
-          {
-            ...(v?.verifiedPeerPid !== void 0 && { expectPeerPid: v.verifiedPeerPid }),
-            ...(v?.verifiedPeerProcStart !== void 0 && { expectPeerProcStart: v.verifiedPeerProcStart }),
-            storageV5: n,
-          },
-        ).catch((x) =>
-          logForDebugging(
-            `[uds-messaging] hold-receipt send failed to ${jy(b)}: ${redactFragmentForLog(String(x))}`,
-          ),
-        );
-      }),
-      logForDebugging(`[uds-messaging] Listening: ${e}`, { level: "info" }),
-      logForDebugging(
-        `[uds-messaging] Inject messages (auth line ${u().authRequired ? "REQUIRED" : "optional"} here): { echo '{"type":"auth","token":"'"$CLAUDE_CODE_MESSAGING_TOKEN"'"}'; echo '{"type":"user","message":{"role":"user","content":"hello"}}'; } | socat - UNIX-CONNECT:${e}`,
-        { level: "info" },
-      ),
-      logForDebugging(
-        `[uds-messaging] Connect when the data is ready (e.g. out=$(cmd); printf '%s\\n' "$out" | ${"nc -N -U"} "$CLAUDE_CODE_MESSAGING_SOCKET" \u2014 or the socat form above): a connection that sends no complete line within ${u().firstLineDeadlineMs} ms is closed`,
-        { level: "info" },
-      ),
-      (u().lastStartFailureCause = void 0),
-      nn(p, e, n, h)
+      ownAddress,
     );
+    setRegisteredInboxOfPidReader((E) => registeredInboxesOfPids(E));
+    setSendPeerReceipt((E, c, S) => {
+      let origin = E.origin?.kind === "peer" ? E.origin : undefined;
+      let from = origin?.from;
+      if (typeof from !== "string") return;
+      let R = vettedPeerReplyTarget(from, path, origin?.verifiedPeerPid);
+      if (R === undefined) {
+        logForDebugging(
+          `[uds-messaging] hold-receipt skipped: reply address unshaped or outside our socket namespace (${fragmentForLog(from)})`,
+        );
+        return;
+      }
+      return sendControlToUdsSocket(
+        R,
+        {
+          action: "peer_message_status",
+          ...(c === "refused"
+            ? {
+                status: "expired",
+                status_detail: "refused",
+              }
+            : {
+                status: c,
+              }),
+          reason: holdOutcomeExplanation(c),
+          from: ownAddress,
+          ...(typeof origin?.msg_id === "string" && {
+            orig_msg_id: origin.msg_id,
+          }),
+          ...(c === "dropped" &&
+            S !== undefined && {
+              drop_reason: S.dropReason,
+              dropped_msg_ids: S.droppedMsgIds,
+            }),
+        },
+        {
+          ...(origin?.verifiedPeerPid !== undefined && {
+            expectPeerPid: origin.verifiedPeerPid,
+          }),
+          ...(origin?.verifiedPeerProcStart !== undefined && {
+            expectPeerProcStart: origin.verifiedPeerProcStart,
+          }),
+          storageV5: n,
+        },
+      ).catch((error) =>
+        logForDebugging(
+          `[uds-messaging] hold-receipt send failed to ${fragmentForLog(from)}: ${redactFragmentForLog(String(error))}`,
+        ),
+      );
+    });
+    logForDebugging(`[uds-messaging] Listening: ${path}`, {
+      level: "info",
+    });
+    logForDebugging(
+      `[uds-messaging] Inject messages (auth line ${udsMessagingState().authRequired ? "REQUIRED" : "optional"} here): { echo '{"type":"auth","token":"'"$CLAUDE_CODE_MESSAGING_TOKEN"'"}'; echo '{"type":"user","message":{"role":"user","content":"hello"}}'; } | socat - UNIX-CONNECT:${path}`,
+      {
+        level: "info",
+      },
+    );
+    logForDebugging(
+      `[uds-messaging] Connect when the data is ready (e.g. out=$(cmd); printf '%s\\n' "$out" | ${"nc -N -U"} "$CLAUDE_CODE_MESSAGING_SOCKET" \u2014 or the socat form above): a connection that sends no complete line within ${udsMessagingState().firstLineDeadlineMs} ms is closed`,
+      {
+        level: "info",
+      },
+    );
+    udsMessagingState().lastStartFailureCause = undefined;
+    return stopAndCleanup(p, path, n, h);
   } catch (error) {
     if (error instanceof CliUserError) throw error;
     if (s.isExplicit) {
-      let l = getErrnoCode(error);
-      if (_ !== void 0)
-        throw (
-          await stopUdsServer(p, e, n, { settleHeld: !1 }),
-          _(),
-          q(),
-          (u().lastStartFailureCause = "post_bind_setup_failed"),
-          new CliUserError(
-            `--messaging-socket-path: bound ${e} but could not finish setting the socket up (${l ?? String(error)}); the inbox was closed. The filesystem there may not support socket permissions \u2014 choose another directory.`,
-          )
+      let errnoCode = getErrnoCode(error);
+      if (_ !== undefined) {
+        await stopUdsServer(p, path, n, {
+          settleHeld: false,
+        });
+        _();
+        clearMessagingEnv();
+        udsMessagingState().lastStartFailureCause = "post_bind_setup_failed";
+        throw new CliUserError(
+          `--messaging-socket-path: bound ${path} but could not finish setting the socket up (${errnoCode ?? String(error)}); the inbox was closed. The filesystem there may not support socket permissions \u2014 choose another directory.`,
         );
-      (clearActiveSocket(), q());
+      }
+      clearActiveSocket();
+      clearMessagingEnv();
       let D =
-        l === "ENAMETOOLONG"
+        errnoCode === "ENAMETOOLONG"
           ? "the path is too long for a Unix socket (max ~104 bytes); choose a shorter one"
-          : l === "EADDRINUSE"
+          : errnoCode === "EADDRINUSE"
             ? "something already exists at that path and could not be replaced; remove it or choose another path"
-            : l === "EACCES" || l === "EPERM"
+            : errnoCode === "EACCES" || errnoCode === "EPERM"
               ? "permission denied in that directory"
               : "the socket could not be created there";
-      throw new CliUserError(`--messaging-socket-path: cannot bind at ${e} (${l ?? String(error)}): ${D}.`);
+      throw new CliUserError(
+        `--messaging-socket-path: cannot bind at ${path} (${errnoCode ?? String(error)}): ${D}.`,
+      );
     }
-    if (_ !== void 0)
-      (await stopUdsServer(p, e, n, { settleHeld: !1 }),
-        _(),
-        (u().lastStartFailureCause = "post_bind_setup_failed"));
+    if (_ !== undefined) {
+      await stopUdsServer(p, path, n, {
+        settleHeld: false,
+      });
+      _();
+      udsMessagingState().lastStartFailureCause = "post_bind_setup_failed";
+    }
     if (getErrnoCode(error) === "ENAMETOOLONG")
       logForDebugging(
-        `[uds-messaging] Socket path too long (${e.length} bytes, max ~104): ${e}. Try a shorter --messaging-socket-path, or set CLAUDE_CODE_TMPDIR or $XDG_RUNTIME_DIR to a shorter directory.`,
-        { level: "error" },
+        `[uds-messaging] Socket path too long (${path.length} bytes, max ~104): ${path}. Try a shorter --messaging-socket-path, or set CLAUDE_CODE_TMPDIR or $XDG_RUNTIME_DIR to a shorter directory.`,
+        {
+          level: "error",
+        },
       );
-    else logForDebugging(`[uds-messaging] Failed to start: ${error}`, { level: "error" });
-    (clearActiveSocket(), q());
+    else
+      logForDebugging(`[uds-messaging] Failed to start: ${error}`, {
+        level: "error",
+      });
+    clearActiveSocket();
+    clearMessagingEnv();
     return;
   }
 }
+//@ chunk-0kp6eg01.js:34045-34926 placement
 /**
  * 暂扣结果解释
  */
-//@ chunk-0kp6eg01.js:34045-34926 placement
 function holdOutcomeExplanation(e) {
   switch (e) {
     case "held":
@@ -1659,41 +1911,45 @@ function holdOutcomeExplanation(e) {
   }
 }
 //@ chunk-0kp6eg01.js:34926-34987 placement
-function pn() {
+function senderClassFields() {
   let e = currentSenderClass();
-  return e === void 0 ? {} : { from_mode: e };
+  return e === undefined
+    ? {}
+    : {
+        from_mode: e,
+      };
 }
 //@ chunk-0kp6eg01.js:34987-35155 placement
 function currentSenderClass() {
-  if (!r$t()) return;
-  let getCurrentMode = ci().inbound.getCurrentMode;
+  if (!isModeEmitFlagOn()) return;
+  let getCurrentMode = swarmHostState().inbound.getCurrentMode;
   if (getCurrentMode)
     try {
-      return s$t(getCurrentMode());
+      return modeClass(getCurrentMode());
     } catch {
       return;
     }
-  let modeAtUnwire = ci().inbound.modeAtUnwire;
-  return modeAtUnwire !== void 0 ? s$t(modeAtUnwire) : void 0;
+  let modeAtUnwire = swarmHostState().inbound.modeAtUnwire;
+  return modeAtUnwire !== undefined ? modeClass(modeAtUnwire) : undefined;
 }
 //@ chunk-0kp6eg01.js:35155-35193 placement
-function Ae(e) {
-  return FAi(e) ? e : void 0;
+function senderClassOf(fromMode) {
+  return isPeerFromMode(fromMode) ? fromMode : undefined;
 }
 //@ chunk-0kp6eg01.js:35193-35326 placement
-function isSelfSentMessage(e, n, s) {
+function isSelfSentMessage(verifiedPeerPid, selfSentAncestry, s) {
   return isSelfSent({
-    selfSentAncestry: n,
-    verifiedPeerPid: e,
+    selfSentAncestry,
+    verifiedPeerPid,
     childTokenPresented: s === "child",
     needsVerdict: isBypassDefaultHold(),
     platform: getPlatform(),
   });
 }
+//@ chunk-0kp6eg01.js:35326-35407 placement = useCostSummary (0.695)
 /**
  * 只注册一次 process exit 监听，退出时删除 activeKeyFile。旧版名 useCostSummary 为错配。
  */
-//@ chunk-0kp6eg01.js:35326-35407 placement = useCostSummary (0.695)
 function registerActiveKeyFileCleanupOnExit() {
   if (!process.listeners("exit").includes(unlinkActiveKeyFileSync))
     process.on("exit", unlinkActiveKeyFileSync);
@@ -1701,10 +1957,9 @@ function registerActiveKeyFileCleanupOnExit() {
 //@ chunk-0kp6eg01.js:35407-35485 placement
 function unlinkActiveKeyFileSync() {
   try {
-    let activeKeyFile = u().activeKeyFile;
-    if (activeKeyFile === void 0) return;
+    let activeKeyFile = udsMessagingState().activeKeyFile;
+    if (activeKeyFile === undefined) return;
     unlinkSync(activeKeyFile);
   } catch {}
 }
-
 export { setOnRename, getUdsInboxUnavailableReason, setOnPeerMessageStatus };

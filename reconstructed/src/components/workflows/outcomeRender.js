@@ -10,89 +10,150 @@
  */
 import { jsonParse, jsonStringifyRaw } from "../../utils/slowOperations.js";
 import { truncateToWidth, splitByDisplayWidth } from "../../utils/format.js";
-import { Che } from "../../ink/wrapAnsi.js";
+import { expandTabsInText } from "../../ink/wrapAnsi.js";
 import { bunStringWidth } from "../../ink/stringWidth.js";
 
 //@ chunk-axsvbsqv.js:5872-5983 placement
-var OUTCOME_INDENT = "  ",
-  MAX_OUTCOME_KEY_WIDTH = 40,
-  MIN_JSON_RENDER_WIDTH = 8,
-  UNSAFE_OUTCOME_CHAR_RE = /[\x00-\x08\x0a-\x1f\x7f-\x9f\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/g,
-  KEY_SEPARATOR = ": ";
+var OUTCOME_INDENT = "  ";
+var MAX_OUTCOME_KEY_WIDTH = 40;
+var MIN_JSON_RENDER_WIDTH = 8;
+var UNSAFE_OUTCOME_CHAR_RE = /[\x00-\x08\x0a-\x1f\x7f-\x9f\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/g;
+var KEY_SEPARATOR = ": ";
 //@ chunk-axsvbsqv.js:5983-6142 placement
 function renderJsonOutcomeLines(o, i) {
   let trimmed = o.trim();
   if (i < MIN_JSON_RENDER_WIDTH || (!trimmed.startsWith("{") && !trimmed.startsWith("["))) return null;
   try {
     let u = [];
-    return (renderJsonOutcome(u, jsonParse(trimmed), 0, void 0, !1, i), u);
+    renderJsonOutcome(u, jsonParse(trimmed), 0, undefined, false, i);
+    return u;
   } catch {
     return null;
   }
 }
 //@ chunk-axsvbsqv.js:6142-6236 placement
-function Tn(o, i) {
+function progressBar(o, i) {
   let floored = Math.floor(Math.max(0, i - MIN_JSON_RENDER_WIDTH) / OUTCOME_INDENT.length);
   return OUTCOME_INDENT.repeat(Math.min(o, floored));
 }
 //@ chunk-axsvbsqv.js:6236-6330 placement
-function gs(o) {
+function escapeControlChars(o) {
   return o.replace(UNSAFE_OUTCOME_CHAR_RE, (i) => `\\u${i.charCodeAt(0).toString(16).padStart(4, "0")}`);
 }
 //@ chunk-axsvbsqv.js:6330-6362 placement
-function us(o) {
-  return gs(jsonStringifyRaw(o));
+function escapeRenderedText(o) {
+  return escapeControlChars(jsonStringifyRaw(o));
 }
 //@ chunk-axsvbsqv.js:6362-6459 placement
-function yn(o, i) {
-  return o === void 0
+function withEllipsisSuffix(o, i) {
+  return o === undefined
     ? []
     : [
-        { ...o, text: truncateToWidth(o.text, i - KEY_SEPARATOR.length) },
-        { text: KEY_SEPARATOR, dimColor: !0 },
+        {
+          ...o,
+          text: truncateToWidth(o.text, i - KEY_SEPARATOR.length),
+        },
+        {
+          text: KEY_SEPARATOR,
+          dimColor: true,
+        },
       ];
 }
 //@ chunk-axsvbsqv.js:6459-6736 placement
 function pushWrappedOutcome(o, i, l, u, d, p) {
   if (l) {
-    let x = Tn(i, d);
+    let x = progressBar(i, d);
     o.push([
-      { text: x },
-      { ...l, text: truncateToWidth(l.text, d - x.length - 1) },
-      { text: ":", dimColor: !0 },
+      {
+        text: x,
+      },
+      {
+        ...l,
+        text: truncateToWidth(l.text, d - x.length - 1),
+      },
+      {
+        text: ":",
+        dimColor: true,
+      },
     ]);
   }
-  let h = Tn(l ? i + 1 : i, d),
-    b = d - h.length;
+  let h = progressBar(l ? i + 1 : i, d);
+  let b = d - h.length;
   for (let x of u) {
     if (x === "") {
-      o.push([{ text: "" }]);
+      o.push([
+        {
+          text: "",
+        },
+      ]);
       continue;
     }
-    for (let A of splitByDisplayWidth(x, b)) o.push([p ? { text: h + A, color: p } : { text: h + A }]);
+    for (let A of splitByDisplayWidth(x, b))
+      o.push([
+        p
+          ? {
+              text: h + A,
+              color: p,
+            }
+          : {
+              text: h + A,
+            },
+      ]);
   }
 }
 //@ chunk-axsvbsqv.js:6736-7923 placement
 function renderJsonOutcome(o, i, l, u, d, p) {
-  let h = Tn(l, p),
-    b = p - h.length,
-    x = d ? "," : "",
-    A = typeof u === "string" ? { text: us(u), color: "permission" } : void 0;
+  let h = progressBar(l, p);
+  let b = p - h.length;
+  let x = d ? "," : "";
+  let A =
+    typeof u === "string"
+      ? {
+          text: escapeRenderedText(u),
+          color: "permission",
+        }
+      : undefined;
   if (typeof i === "object" && i !== null) {
     if (l >= MAX_OUTCOME_KEY_WIDTH) throw RangeError("JSON outcome nested past MAX_DEPTH");
-    let I = Array.isArray(i) ? i.map((V, J) => [J, V]) : Object.entries(i),
-      [N, E] = Array.isArray(i) ? ["[", "]"] : ["{", "}"];
+    let I = Array.isArray(i) ? i.map((V, J) => [J, V]) : Object.entries(i);
+    let [N, E] = Array.isArray(i) ? ["[", "]"] : ["{", "}"];
     if (I.length === 0) {
       let V = N + E + x;
-      o.push([{ text: h }, ...yn(A, b - V.length), { text: V, dimColor: !0 }]);
+      o.push([
+        {
+          text: h,
+        },
+        ...withEllipsisSuffix(A, b - V.length),
+        {
+          text: V,
+          dimColor: true,
+        },
+      ]);
       return;
     }
-    o.push([{ text: h }, ...yn(A, b - N.length), { text: N, dimColor: !0 }]);
-    for (let V = 0; V < I.length; V++) {
-      let [J, z] = I[V];
-      renderJsonOutcome(o, z, l + 1, J, V < I.length - 1, p);
+    o.push([
+      {
+        text: h,
+      },
+      ...withEllipsisSuffix(A, b - N.length),
+      {
+        text: N,
+        dimColor: true,
+      },
+    ]);
+    for (let idx = 0; idx < I.length; idx++) {
+      let [J, z] = I[idx];
+      renderJsonOutcome(o, z, l + 1, J, idx < I.length - 1, p);
     }
-    o.push([{ text: h }, { text: E + x, dimColor: !0 }]);
+    o.push([
+      {
+        text: h,
+      },
+      {
+        text: E + x,
+        dimColor: true,
+      },
+    ]);
     return;
   }
   if (typeof i === "number" && (Number.isInteger(i) ? !Number.isSafeInteger(i) : !Number.isFinite(i)))
@@ -105,26 +166,48 @@ function renderJsonOutcome(o, i, l, u, d, p) {
     pushWrappedOutcome(
       o,
       l,
-      A ?? (typeof u === "number" ? { text: `[${u}]`, dimColor: !0 } : void 0),
+      A ??
+        (typeof u === "number"
+          ? {
+              text: `[${u}]`,
+              dimColor: true,
+            }
+          : undefined),
       i
         .replace(/(?:\r?\n)+$/, "")
         .split(/\r?\n/)
-        .map((I) => Che(gs(I))),
+        .map((line) => expandTabsInText(escapeControlChars(line))),
       p,
-      void 0,
+      undefined,
     );
     return;
   }
-  let v = typeof i === "string" ? us(i) : String(i),
-    T = typeof i === "string" ? "success" : "warning";
+  let v = typeof i === "string" ? escapeRenderedText(i) : String(i);
+  let T = typeof i === "string" ? "success" : "warning";
   if (
-    (A === void 0 ? 0 : bunStringWidth(A.text) + KEY_SEPARATOR.length) + bunStringWidth(v) + x.length <=
+    (A === undefined ? 0 : bunStringWidth(A.text) + KEY_SEPARATOR.length) + bunStringWidth(v) + x.length <=
     b
   ) {
-    o.push([{ text: h }, ...yn(A, b), { text: v, color: T }, ...(x ? [{ text: x, dimColor: !0 }] : [])]);
+    o.push([
+      {
+        text: h,
+      },
+      ...withEllipsisSuffix(A, b),
+      {
+        text: v,
+        color: T,
+      },
+      ...(x
+        ? [
+            {
+              text: x,
+              dimColor: true,
+            },
+          ]
+        : []),
+    ]);
     return;
   }
   pushWrappedOutcome(o, l, A, [v + x], p, T);
 }
-
 export { renderJsonOutcomeLines };

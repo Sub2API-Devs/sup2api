@@ -8,31 +8,39 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:3199-5450 cjs-fingerprint
-var it = x(function (lu, rt) {
-  function Kc(e) {
-    let n = "[eE][-+]?\\d(_|\\d)*",
-      a = "\\d(_|\\d)*(\\.\\d(_|\\d)*)?(" + n + ")?",
-      s = "\\w+",
-      r = "\\b(" + ("\\d(_|\\d)*#\\w+(\\.\\w+)?#(" + n + ")?") + "|" + a + ")",
-      i = "[A-Za-z](_?[A-Za-z0-9.])*",
-      c = `[]\\{\\}%#'"`,
-      COMMENT = e.COMMENT("--", "$"),
-      d = {
-        begin: "\\s+:\\s+",
-        end: "\\s*(:=|;|\\)|=>|$)",
-        illegal: `[]\\{\\}%#'"`,
-        contains: [
-          { beginKeywords: "loop for declare others", endsParent: !0 },
-          {
-            className: "keyword",
-            beginKeywords: "not null constant access function procedure in out aliased exception",
-          },
-          { className: "type", begin: "[A-Za-z](_?[A-Za-z0-9.])*", endsParent: !0, relevance: 0 },
-        ],
-      };
+var require_ada = x(function (cjsExports, cjsModule) {
+  function ada(hljs) {
+    let INTEGER_RE = "[eE][-+]?\\d(_|\\d)*";
+    let a = "\\d(_|\\d)*(\\.\\d(_|\\d)*)?(" + INTEGER_RE + ")?";
+    let s = "\\w+";
+    let begin = "\\b(" + ("\\d(_|\\d)*#\\w+(\\.\\w+)?#(" + INTEGER_RE + ")?") + "|" + a + ")";
+    let ID_REGEX = "[A-Za-z](_?[A-Za-z0-9.])*";
+    let BAD_CHARS = `[]\\{\\}%#'"`;
+    let COMMENTS = hljs.COMMENT("--", "$");
+    let VAR_DECLS = {
+      begin: "\\s+:\\s+",
+      end: "\\s*(:=|;|\\)|=>|$)",
+      illegal: `[]\\{\\}%#'"`,
+      contains: [
+        {
+          beginKeywords: "loop for declare others",
+          endsParent: true,
+        },
+        {
+          className: "keyword",
+          beginKeywords: "not null constant access function procedure in out aliased exception",
+        },
+        {
+          className: "type",
+          begin: "[A-Za-z](_?[A-Za-z0-9.])*",
+          endsParent: true,
+          relevance: 0,
+        },
+      ],
+    };
     return {
       name: "Ada",
-      case_insensitive: !0,
+      case_insensitive: true,
       keywords: {
         keyword: [
           "abort",
@@ -110,44 +118,64 @@ var it = x(function (lu, rt) {
         literal: ["True", "False"],
       },
       contains: [
-        COMMENT,
-        { className: "string", begin: /"/, end: /"/, contains: [{ begin: /""/, relevance: 0 }] },
-        { className: "string", begin: /'.'/ },
-        { className: "number", begin: r, relevance: 0 },
-        { className: "symbol", begin: "'[A-Za-z](_?[A-Za-z0-9.])*" },
+        COMMENTS,
+        {
+          className: "string",
+          begin: /"/,
+          end: /"/,
+          contains: [
+            {
+              begin: /""/,
+              relevance: 0,
+            },
+          ],
+        },
+        {
+          className: "string",
+          begin: /'.'/,
+        },
+        {
+          className: "number",
+          begin,
+          relevance: 0,
+        },
+        {
+          className: "symbol",
+          begin: "'[A-Za-z](_?[A-Za-z0-9.])*",
+        },
         {
           className: "title",
           begin: "(\\bwith\\s+)?(\\bprivate\\s+)?\\bpackage\\s+(\\bbody\\s+)?",
           end: "(is|$)",
           keywords: "package body",
-          excludeBegin: !0,
-          excludeEnd: !0,
+          excludeBegin: true,
+          excludeEnd: true,
           illegal: `[]\\{\\}%#'"`,
         },
         {
           begin: "(\\b(with|overriding)\\s+)?\\b(function|procedure)\\s+",
           end: "(\\bis|\\bwith|\\brenames|\\)\\s*;)",
           keywords: "overriding function procedure with is renames return",
-          returnBegin: !0,
+          returnBegin: true,
           contains: [
-            COMMENT,
+            COMMENTS,
             {
               className: "title",
               begin: "(\\bwith\\s+)?\\b(function|procedure)\\s+",
               end: "(\\(|\\s+|$)",
-              excludeBegin: !0,
-              excludeEnd: !0,
+              excludeBegin: true,
+              excludeEnd: true,
               illegal: `[]\\{\\}%#'"`,
             },
-            d,
+            VAR_DECLS,
             {
               className: "type",
               begin: "\\breturn\\s+",
               end: "(\\s+|;|$)",
               keywords: "return",
-              excludeBegin: !0,
-              excludeEnd: !0,
-              endsParent: !0,
+              excludeBegin: true,
+              excludeEnd: true,
+              endsParent: true,
               illegal: `[]\\{\\}%#'"`,
             },
           ],
@@ -157,14 +185,13 @@ var it = x(function (lu, rt) {
           begin: "\\b(sub)?type\\s+",
           end: "\\s+",
           keywords: "type",
-          excludeBegin: !0,
+          excludeBegin: true,
           illegal: `[]\\{\\}%#'"`,
         },
-        d,
+        VAR_DECLS,
       ],
     };
   }
-  rt.exports = Kc;
+  cjsModule.exports = ada;
 });
-
-export { it };
+export { require_ada };

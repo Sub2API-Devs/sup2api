@@ -16,11 +16,11 @@ import {
 import { toPowerShellRules } from "../utils/git.js";
 import {
   bashAndPowerShellRules,
-  PMn,
+  GIT_ADD_FORCE_RULES,
   GIT_COMMIT_FILE_ARG_RULES,
 } from "../utils/permissions/gitCommandRules.js";
-import { CSt } from "../utils/attribution.js";
-import { xM, executeShellCommandsInPrompt } from "../utils/promptShellExecution.js";
+import { buildSessionAttributionTexts } from "../utils/attribution.js";
+import { escapeShellBangs, executeShellCommandsInPrompt } from "../utils/promptShellExecution.js";
 import { commitMessageGuidance } from "../utils/gitCommitGuidance.js";
 import { isBashAvailable } from "../utils/shell/shellToolUtils.js";
 import { registerBundledSkill } from "../skills/bundledSkills.js";
@@ -28,30 +28,33 @@ import { COMMIT } from "../skills/bundled/bundledSkillNames.js";
 import { isCommitSkillRolloutOn } from "../services/projectsRelay/relayGates.js";
 
 //@ chunk-hantmvxa.js:95240-95355 placement
-var COMMIT_GIT_COMMANDS = ["git add *", "git status *", "git commit -m *"],
-  COMMIT_ALLOWED_TOOLS = [
-    `Bash(${CERTIFIED_GIT_ADD})`,
-    `Bash(${CERTIFIED_GIT_STATUS})`,
-    `Bash(${CERTIFIED_GIT_COMMIT})`,
-    ...toPowerShellRules(COMMIT_GIT_COMMANDS),
-  ];
+var COMMIT_GIT_COMMANDS = ["git add *", "git status *", "git commit -m *"];
+var COMMIT_ALLOWED_TOOLS = [
+  `Bash(${CERTIFIED_GIT_ADD})`,
+  `Bash(${CERTIFIED_GIT_STATUS})`,
+  `Bash(${CERTIFIED_GIT_COMMIT})`,
+  ...toPowerShellRules(COMMIT_GIT_COMMANDS),
+];
+//@ chunk-hantmvxa.js:95355-95378 layout
 /**
  * getExtraCommitTools：构建期返回 []。
  */
-//@ chunk-hantmvxa.js:95355-95378 layout
-function at() {
+function emptyList() {
   return [];
 }
 //@ chunk-hantmvxa.js:95378-95419 layout
-var COMMIT_ALLOWED_TOOLS_2 = [...bashAndPowerShellRules([...PMn, ...GIT_COMMIT_FILE_ARG_RULES]), ...at()];
+var COMMIT_ALLOWED_TOOLS_2 = [
+  ...bashAndPowerShellRules([...GIT_ADD_FORCE_RULES, ...GIT_COMMIT_FILE_ARG_RULES]),
+  ...emptyList(),
+];
+//@ chunk-hantmvxa.js:95419-98758 layout
 /**
  * getCommitPromptContent：/commit 内建技能提示词。
  */
-//@ chunk-hantmvxa.js:95419-98758 layout
 async function getCommitPromptContent(e) {
-  let { commit: commit } = await CSt(),
-    s = xM(commit),
-    r = xM(e.trim());
+  let { commit } = await buildSessionAttributionTexts();
+  let s = escapeShellBangs(commit);
+  let r = escapeShellBangs(e.trim());
   return `## Context
 
 - Current git status: !\`git status\`
@@ -133,21 +136,24 @@ function command() {
     argumentHint: "[guidance]",
     allowedTools: COMMIT_ALLOWED_TOOLS,
     disallowedTools: COMMIT_ALLOWED_TOOLS_2,
-    userInvocable: !0,
+    userInvocable: true,
     isEnabled: () => isCommitSkillRolloutOn(),
     progressMessage: "creating commit",
     async getPromptForCommand(e, n) {
-      let s = await getCommitPromptContent(e);
+      let commitPromptContent = await getCommitPromptContent(e);
       return [
         {
           type: "text",
           text: await executeShellCommandsInPrompt(
-            s,
+            commitPromptContent,
             {
               ...n,
               permissionLayers: [
                 ...(n.permissionLayers ?? []),
-                { kind: "allowed_tools", allowedTools: COMMIT_ALLOWED_TOOLS },
+                {
+                  kind: "allowed_tools",
+                  allowedTools: COMMIT_ALLOWED_TOOLS,
+                },
               ],
             },
             `/${COMMIT}`,
@@ -159,7 +165,6 @@ function command() {
 }
 //@ chunk-dcmhvw5a.js:422424-422494 fingerprint = getPromptContent (0.303)
 function getPromptContent(e) {
-  return e !== void 0 && (e.commit !== void 0 || e.pr !== void 0);
+  return e !== undefined && (e.commit !== undefined || e.pr !== undefined);
 }
-
-export { getPromptContent, command, at };
+export { getPromptContent, command, emptyList };

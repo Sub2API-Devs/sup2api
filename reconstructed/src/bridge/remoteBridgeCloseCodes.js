@@ -8,18 +8,18 @@
  * pieces: chunk-4cm44bmp.js (4)
  * attribution: placement 4
  */
-import { v5e, describeNonOriginRefusal } from "../services/api/requestIdSource.js";
+import { isNonOriginSource, describeNonOriginRefusal } from "../services/api/requestIdSource.js";
 import { plural } from "../utils/stringUtils.js";
 import { CLEANUP_TIMEOUT_MS } from "../utils/cleanupRegistry.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../services/analytics/growthbook.js";
 
+//@ chunk-4cm44bmp.js:28000-29580 placement
 /**
  * 把 WebSocket 关闭码（4090–4094、401 等）和原因翻译成给用户看的断线说明。
  */
-//@ chunk-4cm44bmp.js:28000-29580 placement
 function describeBridgeCloseCode(n, h, w) {
   switch (n) {
-    case void 0:
+    case undefined:
       return "no close code received";
     case 4090:
       switch (h) {
@@ -45,9 +45,9 @@ function describeBridgeCloseCode(n, h, w) {
     case 401:
       return "auth token expired (code 401)";
     case 403: {
-      if (!v5e(w?.rejectSource)) return "server rejected connection (code 403)";
+      if (!isNonOriginSource(w?.rejectSource)) return "server rejected connection (code 403)";
       let C = describeNonOriginRefusal(w.rejectSource);
-      if (w.streak === void 0) return C;
+      if (w.streak === undefined) return C;
       let max = Math.max(1, Math.round(w.streak.streakMs / 60000));
       return `${C}, and kept refusing for ${max} ${plural(max, "minute")}`;
     }
@@ -64,26 +64,45 @@ function describeBridgeCloseCode(n, h, w) {
   }
 }
 //@ chunk-4cm44bmp.js:29580-29592 placement
-var Ud = 5000;
+var REFRESH_MIN_INTERVAL_MS = 5000;
 //@ chunk-4cm44bmp.js:29592-29738 placement
-var Ls = 300,
-  Fd = 200,
-  Xs = 300,
-  Hd = 600,
-  xd = CLEANUP_TIMEOUT_MS - Xs - Hd,
-  zo = 2000,
-  Ld = 3000,
-  Yo = 100,
-  Wd = 5000,
-  $s = 200,
-  Ws = 20000,
-  qd = 8,
-  Gd = 1048576,
-  Kd = 30000,
-  TENGU_ENCAPSULATED_DUSK = "tengu_encapsulated_dusk";
+var FLUSH_TIMEOUT_MS = 300;
+var ARCHIVE_AUTH_RETRY_MIN_REMAINING_MS = 200;
+var CLEANUP_FLUSH_RESERVE_MS = 300;
+var CLEANUP_EXIT_RESERVE_MS = 600;
+var PREFLUSH_TIMEOUT_MS = CLEANUP_TIMEOUT_MS - CLEANUP_FLUSH_RESERVE_MS - CLEANUP_EXIT_RESERVE_MS;
+var TEARDOWN_FLUSH_TIMEOUT_MS = 2000;
+var SUBSCRIBERS_REPORTED_TIMEOUT_MS = 3000;
+var BACKFILL_BATCH_SIZE = 100;
+var BACKFILL_BATCH_FLUSH_TIMEOUT_MS = 5000;
+var MAX_QUEUED_SUBAGENT_FRAMES = 200;
+var UPLOAD_BUDGET_MS = 20000;
+var MAX_CONSECUTIVE_UPLOAD_FAILURES = 8;
+var MAX_UPLOAD_BATCH_BYTES = 1048576;
+var UPLOAD_REQUEST_TIMEOUT_MS = 30000;
+var TENGU_ENCAPSULATED_DUSK = "tengu_encapsulated_dusk";
 //@ chunk-4cm44bmp.js:29738-29785 placement
-function HNo() {
-  return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_ENCAPSULATED_DUSK, !1) ? "drop" : "redact";
+/**
+ * 决定未签名事件的处理方式：tengu_encapsulated_dusk 开则 "drop"，否则 "redact"。
+ */
+function strayDropMode() {
+  return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_ENCAPSULATED_DUSK, false) ? "drop" : "redact";
 }
-
-export { HNo, qd, Gd, Kd, Ud, Ls, xd, zo, describeBridgeCloseCode, Ld, Yo, Wd, Xs, Fd, Ws, $s };
+export {
+  strayDropMode,
+  MAX_CONSECUTIVE_UPLOAD_FAILURES,
+  MAX_UPLOAD_BATCH_BYTES,
+  UPLOAD_REQUEST_TIMEOUT_MS,
+  REFRESH_MIN_INTERVAL_MS,
+  FLUSH_TIMEOUT_MS,
+  PREFLUSH_TIMEOUT_MS,
+  TEARDOWN_FLUSH_TIMEOUT_MS,
+  describeBridgeCloseCode,
+  SUBSCRIBERS_REPORTED_TIMEOUT_MS,
+  BACKFILL_BATCH_SIZE,
+  BACKFILL_BATCH_FLUSH_TIMEOUT_MS,
+  CLEANUP_FLUSH_RESERVE_MS,
+  ARCHIVE_AUTH_RETRY_MIN_REMAINING_MS,
+  UPLOAD_BUDGET_MS,
+  MAX_QUEUED_SUBAGENT_FRAMES,
+};

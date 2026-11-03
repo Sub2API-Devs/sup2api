@@ -8,8 +8,7 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-1ny7cxrt.js:8029-8101 cjs-require-graph
-var wu = x(function ($ve, AO) {
-  AO.exports = (e) => !!e && e.constructor === Object;
+var require_is_plain_object = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = (a) => !!a && a.constructor === Object;
 });
-
-export { wu };
+export { require_is_plain_object };

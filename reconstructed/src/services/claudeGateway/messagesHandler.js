@@ -9,7 +9,12 @@
  * attribution: placement 4
  */
 import { jsonParse, jsonStringify } from "../../utils/slowOperations.js";
-import { jsonErrorResponse, weakMap, KH, Bf } from "./upstreamErrors.js";
+import {
+  jsonErrorResponse,
+  weakMap,
+  INVALID_MODEL_ID_MESSAGE,
+  copyDiagnosticHeaders,
+} from "./upstreamErrors.js";
 import {
   getRoleModelRestrictionMessage,
   findModelEntryById,
@@ -25,17 +30,30 @@ import { errorMessage } from "../../utils/errors.js";
 import { forwardViaSdk } from "./upstreams/stream.js";
 import { isAwsCredentialError } from "../../utils/aws.js";
 import { UPSTREAM_REQUEST_ID_HEADERS } from "./proxyRequest.js";
-import { Uf } from "./upstreams/aws.js";
+import { redactAwsSessionName } from "./upstreams/aws.js";
 import { normalizeFullWidthSpace } from "../../utils/stringUtils.js";
 
+//@ chunk-1ny7cxrt.js:1363661-1369477 placement
 /**
  * 网关 /v1/messages 处理：读取并解析请求体、校验、按策略选择上游、计量与转发。
  */
-//@ chunk-1ny7cxrt.js:1363661-1369477 placement
-async function handleGatewayMessagesRequest(e, t, n, o, r = !0, s, a = 120000, l, c) {
-  let u, f;
-  if (c?.body) ((u = c.body.buf), (f = c.body.parsed));
-  else {
+async function handleGatewayMessagesRequest(
+  e,
+  pathname,
+  n,
+  models,
+  autoIncludeBuiltinModels = true,
+  role,
+  upstreamTtfbMs = 120000,
+  l,
+  c,
+) {
+  let u;
+  let f;
+  if (c?.body) {
+    u = c.body.buf;
+    f = c.body.parsed;
+  } else {
     u = await e.arrayBuffer();
     try {
       f = jsonParse(Buffer.from(u).toString("utf8"));
@@ -49,9 +67,10 @@ async function handleGatewayMessagesRequest(e, t, n, o, r = !0, s, a = 120000, l
     return jsonErrorResponse(400, "invalid_request_error", "model is required", l);
   if (typeof f.model !== "string")
     return jsonErrorResponse(400, "invalid_request_error", "model must be a string", l);
-  let model = f.model,
-    m = getRoleModelRestrictionMessage(model, s, o);
-  if (m) return jsonErrorResponse(400, "invalid_request_error", m, l);
+  let model = f.model;
+  let roleModelRestrictionMessage = getRoleModelRestrictionMessage(model, role, models);
+  if (roleModelRestrictionMessage)
+    return jsonErrorResponse(400, "invalid_request_error", roleModelRestrictionMessage, l);
   if (n.length === 0)
     return jsonErrorResponse(
       400,
@@ -59,108 +78,125 @@ async function handleGatewayMessagesRequest(e, t, n, o, r = !0, s, a = 120000, l
       "you aren't in a group that can use this gateway. Ask your administrator to add you to one",
       l,
     );
-  if (s?.availableModels || s?.deniedModels || !r) {
-    let be = findDisallowedNestedModel(
+  if (role?.availableModels || role?.deniedModels || !autoIncludeBuiltinModels) {
+    let disallowedNestedModel = findDisallowedNestedModel(
       f,
-      (ve) =>
-        getRoleModelRestrictionMessage(ve, s, o) ??
-        (r || findModelEntryById(ve, o) ? void 0 : operatorModelNotAllowedMessage(ve)),
+      (modelId) =>
+        getRoleModelRestrictionMessage(modelId, role, models) ??
+        (autoIncludeBuiltinModels || findModelEntryById(modelId, models)
+          ? undefined
+          : operatorModelNotAllowedMessage(modelId)),
     );
-    if (be)
+    if (disallowedNestedModel)
       return jsonErrorResponse(
         400,
         "invalid_request_error",
-        `${sanitizeModelIdForMessage(be.path)}: ${be.reason}`,
+        `${sanitizeModelIdForMessage(disallowedNestedModel.path)}: ${disallowedNestedModel.reason}`,
         l,
       );
   }
-  let y = [],
-    b = !1,
-    w = [],
-    S = () => {
-      let mapped = w.filter((ve) => !b || !ve.listSkip).map((ve) => ve.text);
-      if (mapped.length === 0) return;
-      gatewayLog("warn", `inference: model resolution failed request_id=${l ?? "-"}: ${mapped.join("; ")}`);
-    },
-    j = null,
-    M = null,
-    N = null,
-    Z = null,
-    F = null,
-    X = e.headers.get("anthropic-beta") ?? void 0,
-    he = {};
+  let y = [];
+  let b = false;
+  let w = [];
+  let S = () => {
+    let mapped = w.filter((ve) => !b || !ve.listSkip).map((ve) => ve.text);
+    if (mapped.length === 0) return;
+    gatewayLog("warn", `inference: model resolution failed request_id=${l ?? "-"}: ${mapped.join("; ")}`);
+  };
+  let j = null;
+  let M = null;
+  let N = null;
+  let Z = null;
+  let F = null;
+  let X = e.headers.get("anthropic-beta") ?? undefined;
+  let he = {};
   e.headers.forEach((header, ve) => {
     if (ve.toLowerCase().startsWith("x-stainless-")) he[ve] = header;
   });
-  let Me = c?.criPrincipal === !0,
-    ce = c?.ttfbOnSdkLegs ? a : void 0;
+  let Me = c?.criPrincipal === true;
+  let ce = c?.ttfbOnSdkLegs ? upstreamTtfbMs : undefined;
   for (let be of n) {
     if (e.signal.aborted) break;
-    let ve = resolveUpstreamModel(model, be, o, r, Me);
-    if (!ve.ok) {
-      (y.push(ve.error), w.push({ text: `${be.name}: ${ve.error}`, listSkip: ve.listSkip === !0 }));
+    let upstreamModel = resolveUpstreamModel(model, be, models, autoIncludeBuiltinModels, Me);
+    if (!upstreamModel.ok) {
+      y.push(upstreamModel.error);
+      w.push({
+        text: `${be.name}: ${upstreamModel.error}`,
+        listSkip: upstreamModel.listSkip === true,
+      });
       continue;
     }
-    let model_2 = ve.model,
-      kt = model_2 === model ? f : { ...f, model: model_2 };
-    b = !0;
+    let model_2 = upstreamModel.model;
+    let kt =
+      model_2 === model
+        ? f
+        : {
+            ...f,
+            model: model_2,
+          };
+    b = true;
     try {
       let je;
       if (be.kind === "raw") {
-        let An = kt === f ? u : new TextEncoder().encode(jsonStringify(kt));
-        if (
-          ((je = await forwardRawRequest(e, t, An, be, a, c?.user)), je.status === 401 && be.invalidateAuth)
-        )
-          (be.invalidateAuth(),
-            gatewayLog(
-              "warn",
-              `401 from ${be.name}; invalidated WIF bearer cache, retrying request_id=${l ?? "-"}`,
-            ),
-            je.body?.cancel().catch(() => {}),
-            (je = await forwardRawRequest(e, t, An, be, a, c?.user)));
+        let body = kt === f ? u : new TextEncoder().encode(jsonStringify(kt));
+        je = await forwardRawRequest(e, pathname, body, be, upstreamTtfbMs, c?.user);
+        if (je.status === 401 && be.invalidateAuth) {
+          be.invalidateAuth();
+          gatewayLog(
+            "warn",
+            `401 from ${be.name}; invalidated WIF bearer cache, retrying request_id=${l ?? "-"}`,
+          );
+          je.body?.cancel().catch(() => {});
+          je = await forwardRawRequest(e, pathname, body, be, upstreamTtfbMs, c?.user);
+        }
       } else {
         let An =
-            (be.guardrail || be.guardrailTrace) && t === "/v1/messages"
-              ? Object.keys(f).find((vr) => /^amazon-bedrock-/i.test(vr))
-              : void 0,
-          xe = kt;
-        if (An === void 0 && be.inputTagging && t === "/v1/messages")
+          (be.guardrail || be.guardrailTrace) && pathname === "/v1/messages"
+            ? Object.keys(f).find((key) => /^amazon-bedrock-/i.test(key))
+            : undefined;
+        let xe = kt;
+        if (An === undefined && be.inputTagging && pathname === "/v1/messages")
           try {
             xe = applyBedrockGuardrails(kt, be.inputTagging);
           } catch (error) {
-            ((xe = void 0),
-              gatewayLog(
-                "warn",
-                `upstream '${be.name}': input_tagging failed, answered 400 request_id=${l ?? "-"}: ${errorMessage(error)}`,
-              ));
+            xe = undefined;
+            gatewayLog(
+              "warn",
+              `upstream '${be.name}': input_tagging failed, answered 400 request_id=${l ?? "-"}: ${errorMessage(error)}`,
+            );
           }
-        if (An !== void 0 || xe === void 0) {
+        if (An !== undefined || xe === undefined) {
           for (let vr of [j, M, N, Z]) vr?.body?.cancel().catch(() => {});
-          return (
-            S(),
-            jsonErrorResponse(
-              400,
-              "invalid_request_error",
-              An === void 0
-                ? Me
-                  ? "the request could not be processed on this upstream"
-                  : "the request could not be prepared for the guardrail this gateway applies to Bedrock requests, so it was not sent"
-                : Me
-                  ? `${An} is not permitted on this upstream`
-                  : `${An} is not permitted: this gateway applies a guardrail to Bedrock requests`,
-              l,
-            )
+          S();
+          return jsonErrorResponse(
+            400,
+            "invalid_request_error",
+            An === undefined
+              ? Me
+                ? "the request could not be processed on this upstream"
+                : "the request could not be prepared for the guardrail this gateway applies to Bedrock requests, so it was not sent"
+              : Me
+                ? `${An} is not permitted on this upstream`
+                : `${An} is not permitted: this gateway applies a guardrail to Bedrock requests`,
+            l,
           );
         }
-        let rn = Me ? model : void 0,
-          Hr = c?.user,
-          Cs = be.guardrailTrace
-            ? { request_id: l, sub: Hr?.sub, email: Hr?.email, upstream: be.name }
-            : void 0,
-          cr =
-            be.assumeRole && t !== "/v1/messages/count_tokens" ? await be.assumeRole.clientFor(Hr) : void 0;
+        let rn = Me ? model : undefined;
+        let user = c?.user;
+        let Cs = be.guardrailTrace
+          ? {
+              request_id: l,
+              sub: user?.sub,
+              email: user?.email,
+              upstream: be.name,
+            }
+          : undefined;
+        let cr =
+          be.assumeRole && pathname !== "/v1/messages/count_tokens"
+            ? await be.assumeRole.clientFor(user)
+            : undefined;
         je = await forwardViaSdk(
-          t,
+          pathname,
           xe,
           be.provider,
           cr?.client ?? be.client,
@@ -173,23 +209,21 @@ async function handleGatewayMessagesRequest(e, t, n, o, r = !0, s, a = 120000, l
           be.countTokens,
           Cs,
         );
-        let Ua = weakMap.get(je),
-          Qt = je.status === 401 || je.status === 403 ? (cr ? cr.invalidate : be.invalidateAuth) : void 0,
-          Vd = Ua !== void 0 && isAwsCredentialError(Ua.errorType, Ua.message);
+        let Ua = weakMap.get(je);
+        let Qt =
+          je.status === 401 || je.status === 403 ? (cr ? cr.invalidate : be.invalidateAuth) : undefined;
+        let Vd = Ua !== undefined && isAwsCredentialError(Ua.errorType, Ua.message);
         if (Qt && !Vd) Qt();
         if (Qt && Vd) {
           let vr = Qt();
-          if (
-            (gatewayLog(
-              "warn",
-              `${je.status} from ${be.name}; ${vr ? "invalidated credential cache" : "credential invalidation debounced"}, retrying request_id=${l ?? "-"}`,
-            ),
-            je.body?.cancel().catch(() => {}),
-            cr && be.assumeRole)
-          )
-            cr = await be.assumeRole.clientFor(Hr);
+          gatewayLog(
+            "warn",
+            `${je.status} from ${be.name}; ${vr ? "invalidated credential cache" : "credential invalidation debounced"}, retrying request_id=${l ?? "-"}`,
+          );
+          je.body?.cancel().catch(() => {});
+          if (cr && be.assumeRole) cr = await be.assumeRole.clientFor(user);
           je = await forwardViaSdk(
-            t,
+            pathname,
             xe,
             be.provider,
             cr?.client ?? be.client,
@@ -203,9 +237,11 @@ async function handleGatewayMessagesRequest(e, t, n, o, r = !0, s, a = 120000, l
             Cs,
           );
         }
-        let Kr = weakMap.get(je),
-          Bi = Kr?.message.startsWith(`400 Invocation of model ID ${model_2} with on-demand throughput isn`);
-        if (Kr && be.provider === "bedrock" && (Bi || Kr.message === KH)) {
+        let Kr = weakMap.get(je);
+        let Bi = Kr?.message.startsWith(
+          `400 Invocation of model ID ${model_2} with on-demand throughput isn`,
+        );
+        if (Kr && be.provider === "bedrock" && (Bi || Kr.message === INVALID_MODEL_ID_MESSAGE)) {
           let vr = sanitizeModelIdForMessage(model);
           gatewayLog(
             "warn",
@@ -217,27 +253,26 @@ async function handleGatewayMessagesRequest(e, t, n, o, r = !0, s, a = 120000, l
             `model ${vr} is not available on bedrock`,
             l,
           );
-          (Bf(je.headers, qd.headers), (je = qd), weakMap.set(je, Kr));
+          copyDiagnosticHeaders(je.headers, qd.headers);
+          je = qd;
+          weakMap.set(je, Kr);
         }
       }
+      je.headers.set("x-gateway-upstream", be.name);
+      je.headers.set("x-gateway-upstream-kind", "operator");
+      je.headers.set("x-gateway-model", model);
+      je.headers.set("x-gateway-upstream-model", model_2);
       if (
-        (je.headers.set("x-gateway-upstream", be.name),
-        je.headers.set("x-gateway-upstream-kind", "operator"),
-        je.headers.set("x-gateway-model", model),
-        je.headers.set("x-gateway-upstream-model", model_2),
         !(
           je.status === 429 &&
           be.kind === "raw" &&
           be.forwardUserIdentity &&
-          encodeHeaderValue(c?.user?.email) !== void 0
+          encodeHeaderValue(c?.user?.email) !== undefined
         ) &&
-          (je.status >= 500 ||
-            je.status === 429 ||
-            je.status === 401 ||
-            je.status === 403 ||
-            je.status === 404))
+        (je.status >= 500 || je.status === 429 || je.status === 401 || je.status === 403 || je.status === 404)
       ) {
-        if ((y.push(`${je.status} ${je.statusText}`), je.status === 501)) {
+        y.push(`${je.status} ${je.statusText}`);
+        if (je.status === 501) {
           if (j) j.body?.cancel().catch(() => {});
           j = je;
         } else if (je.status === 429) {
@@ -249,18 +284,19 @@ async function handleGatewayMessagesRequest(e, t, n, o, r = !0, s, a = 120000, l
         } else if (je.status === 404) {
           if (Z) Z.body?.cancel().catch(() => {});
           Z = je;
-        } else if (
-          (je.body?.cancel().catch(() => {}), UPSTREAM_REQUEST_ID_HEADERS.some((An) => je.headers.has(An)))
-        )
-          F = je;
+        } else {
+          je.body?.cancel().catch(() => {});
+          if (UPSTREAM_REQUEST_ID_HEADERS.some((An) => je.headers.has(An))) F = je;
+        }
         continue;
       }
       for (let An of [j, M, N, Z]) An?.body?.cancel().catch(() => {});
       if (je.status >= 300) S();
       return je;
     } catch (error) {
-      let Ur = Uf(errorMessage(error));
-      (y.push(Ur), gatewayLog("warn", `upstream failed, trying next request_id=${l ?? "-"}: ${Ur}`));
+      let Ur = redactAwsSessionName(errorMessage(error));
+      y.push(Ur);
+      gatewayLog("warn", `upstream failed, trying next request_id=${l ?? "-"}: ${Ur}`);
     }
   }
   if (e.signal.aborted) {
@@ -269,7 +305,8 @@ async function handleGatewayMessagesRequest(e, t, n, o, r = !0, s, a = 120000, l
       "x-gateway-model": sanitizeModelIdForMessage(model),
     });
   }
-  if ((S(), !b)) return jsonErrorResponse(400, "invalid_request_error", y.join("; "), l);
+  S();
+  if (!b) return jsonErrorResponse(400, "invalid_request_error", y.join("; "), l);
   if (M) {
     for (let be of [j, N, Z]) be?.body?.cancel().catch(() => {});
     return M;
@@ -278,7 +315,10 @@ async function handleGatewayMessagesRequest(e, t, n, o, r = !0, s, a = 120000, l
     for (let be of [j, Z]) be?.body?.cancel().catch(() => {});
     return N;
   }
-  if (Z) return (j?.body?.cancel().catch(() => {}), Z);
+  if (Z) {
+    j?.body?.cancel().catch(() => {});
+    return Z;
+  }
   if (j) return j;
   gatewayLog("warn", `all upstreams failed request_id=${l ?? "-"}: ${y.join("; ")}`);
   let Ne = jsonErrorResponse(502, "api_error", `all upstreams failed (${n.length} attempted)`, l, {
@@ -290,33 +330,36 @@ async function handleGatewayMessagesRequest(e, t, n, o, r = !0, s, a = 120000, l
   }
   return Ne;
 }
+//@ chunk-1ny7cxrt.js:1369477-1369593 placement
 /**
  * 头部值规范化：去空白、全角空格转换，非可打印 ASCII 与 % 做 URL 编码。
  */
-//@ chunk-1ny7cxrt.js:1369477-1369593 placement
-function encodeHeaderValue(e) {
-  return e === void 0
-    ? void 0
-    : normalizeFullWidthSpace(e.trim()).replace(/[^\x21-\x7e]|%/gu, (t) => encodeURIComponent(t)) || void 0;
+function encodeHeaderValue(email) {
+  return email === undefined
+    ? undefined
+    : normalizeFullWidthSpace(email.trim()).replace(/[^\x21-\x7e]|%/gu, (t) => encodeURIComponent(t)) ||
+        undefined;
 }
 //@ chunk-1ny7cxrt.js:1369593-1369666 placement
-function wE(e, t) {
-  for (let [n, o] of Object.entries(t.headers ?? {})) e.set(n, o);
+/**
+ * 把来源对象的 headers 逐项 set 到目标 Headers 上。
+ */
+function copyHeadersInto(headers, t) {
+  for (let [key, value] of Object.entries(t.headers ?? {})) headers.set(key, value);
 }
+//@ chunk-1ny7cxrt.js:1369666-1369882 placement
 /**
  * 开启身份转发时设置 x-litellm-end-user-id、x-claude-gateway-user-id/email 头。
  */
-//@ chunk-1ny7cxrt.js:1369666-1369882 placement
-function setUserIdentityHeaders(e, t, n) {
+function setUserIdentityHeaders(headers, t, n) {
   if (!t.forwardUserIdentity || !n) return;
-  let o = encodeHeaderValue(n.email),
-    r = encodeHeaderValue(n.sub),
-    s = [
-      ["x-litellm-end-user-id", o],
-      ["x-claude-gateway-user-id", r],
-      ["x-claude-gateway-user-email", o],
-    ];
-  for (let [a, l] of s) if (l) e.set(a, l);
+  let o = encodeHeaderValue(n.email);
+  let r = encodeHeaderValue(n.sub);
+  let s = [
+    ["x-litellm-end-user-id", o],
+    ["x-claude-gateway-user-id", r],
+    ["x-claude-gateway-user-email", o],
+  ];
+  for (let [a, l] of s) if (l) headers.set(a, l);
 }
-
-export { wE, setUserIdentityHeaders, handleGatewayMessagesRequest };
+export { copyHeadersInto, setUserIdentityHeaders, handleGatewayMessagesRequest };

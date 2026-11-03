@@ -5,16 +5,14 @@
  * pieces: chunk-a16kyqj3.js (3)
  * attribution: placement 3
  */
-
 //@ chunk-a16kyqj3.js:191-267 placement
-var c = typeof global == "object" && global && global.Object === Object && global,
-  Mdo = c;
+var c = typeof global == "object" && global && global.Object === Object && global;
+var Mdo = c;
 //@ chunk-a16kyqj3.js:267-370 placement
-var g = typeof self == "object" && self && self.Object === Object && self,
-  p = Mdo || g || Function("return this")(),
-  xj = p;
+var freeSelf = typeof self == "object" && self && self.Object === Object && self;
+var p = Mdo || freeSelf || Function("return this")();
+var xj = p;
 //@ chunk-a16kyqj3.js:370-391 placement
-var d = xj.Symbol,
-  dV = d;
-
+var d = xj.Symbol;
+var dV = d;
 export { dV, xj, Mdo };

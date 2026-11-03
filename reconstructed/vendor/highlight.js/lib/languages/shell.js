@@ -8,8 +8,8 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:435514-435762 cjs-fingerprint
-var zs = x(function (Qg, $s) {
-  function Am(e) {
+var require_shell = x(function (cjsExports, cjsModule) {
+  function shell(hljs) {
     return {
       name: "Shell Session",
       aliases: ["console", "shellsession"],
@@ -17,12 +17,14 @@ var zs = x(function (Qg, $s) {
         {
           className: "meta.prompt",
           begin: /^\s{0,3}[/~\w\d[\]()@-]*[>%$#][ ]?/,
-          starts: { end: /[^\\](?=\s*$)/, subLanguage: "bash" },
+          starts: {
+            end: /[^\\](?=\s*$)/,
+            subLanguage: "bash",
+          },
         },
       ],
     };
   }
-  $s.exports = Am;
+  cjsModule.exports = shell;
 });
-
-export { zs };
+export { require_shell };

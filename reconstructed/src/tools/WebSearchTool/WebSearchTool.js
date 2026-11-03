@@ -9,11 +9,25 @@
  * attribution: fingerprint 4, placement 1, layout 1
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { zodStrictObject, o, A, U, u, Ue, E } from "../../../vendor/zod/v4/classic/schemas.js";
-import { getWebSearchFastMode, WEBSEARCH, ALLOW_WEB_SEARCH, getWebSearchPrompt, _Qo } from "./prompt.js";
+import {
+  zodStrictObject,
+  string,
+  array,
+  _enum,
+  u,
+  union,
+  E,
+} from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  getWebSearchFastMode,
+  WEBSEARCH,
+  ALLOW_WEB_SEARCH,
+  getWebSearchPrompt,
+  isStandardSearchMode,
+} from "./prompt.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { truncate } from "../../utils/format.js";
-import { JT } from "../../constants/outputLimits.js";
+import { MAX_DESCRIPTION_CHARS } from "../../constants/outputLimits.js";
 import { buildTool } from "../../services/tools/permissionCheckGuard.js";
 import { isPolicyAllowed } from "../../services/policyLimits/policyEvidence.js";
 import { getAPIProvider, isClaudePlatformProvider } from "../../utils/model/providers.js";
@@ -39,122 +53,138 @@ import { asSystemPrompt } from "../../utils/systemPromptType.js";
 import { forkStickyBetaLatches } from "../../bootstrap/stateSlices.js";
 import { env } from "../../utils/env.js";
 
+//@ chunk-kxyd0g16.js:40238-40942 fingerprint = inputSchema (0.49)
 /**
  * WebSearch 输入 schema：query（≥2 字符）、allowed_domains、blocked_domains；Ts 在快搜实验开启时追加 mode（standard/extended，默认 extended，描述取远程配置）；bs 为单条搜索结果块 schema。
  */
-//@ chunk-kxyd0g16.js:40238-40942 fingerprint = inputSchema (0.49)
 var webSearchInputSchema = DoctorLazy(() =>
-    zodStrictObject({
-      query: o().min(2).describe("The search query to use"),
-      allowed_domains: A(o()).optional().describe("Only include search results from these domains"),
-      blocked_domains: A(o()).optional().describe("Never include search results from these domains"),
-    }),
-  ),
-  webSearchInputSchemaWithMode = DoctorLazy(() =>
-    webSearchInputSchema().extend({
-      mode: U(["standard", "extended"])
-        .describe(getWebSearchFastMode()?.mode_description ?? "")
-        .prefault("extended"),
-    }),
-  ),
-  searchResultBlockSchema = DoctorLazy(() => {
-    let e = u({
-      title: o().describe("The title of the search result"),
-      url: o().describe("The URL of the search result"),
-      snippet: o().optional().describe("Page text. PostToolUse hooks get it; tool_use_result does not."),
-    });
-    return u({
-      tool_use_id: o().describe("ID of the tool use"),
-      content: A(e).describe("Array of search hits"),
-    });
+  zodStrictObject({
+    query: string().min(2).describe("The search query to use"),
+    allowed_domains: array(string()).optional().describe("Only include search results from these domains"),
+    blocked_domains: array(string()).optional().describe("Never include search results from these domains"),
+  }),
+);
+var webSearchInputSchemaWithMode = DoctorLazy(() =>
+  webSearchInputSchema().extend({
+    mode: _enum(["standard", "extended"])
+      .describe(getWebSearchFastMode()?.mode_description ?? "")
+      .prefault("extended"),
+  }),
+);
+var searchResultBlockSchema = DoctorLazy(() => {
+  let searchHitSchema = u({
+    title: string().describe("The title of the search result"),
+    url: string().describe("The URL of the search result"),
+    snippet: string().optional().describe("Page text. PostToolUse hooks get it; tool_use_result does not."),
   });
+  return u({
+    tool_use_id: string().describe("ID of the tool use"),
+    content: array(searchHitSchema).describe("Array of search hits"),
+  });
+});
+//@ chunk-kxyd0g16.js:40942-40981 placement = getSnippet (0.688)
 /**
  * 返回去掉 snippet 字段的对象（归属疑似错误）。
  */
-//@ chunk-kxyd0g16.js:40942-40981 placement = getSnippet (0.688)
-function omitSnippet({ snippet: snippet, ...r }) {
+function omitSnippet({ snippet, ...r }) {
   return r;
 }
+//@ chunk-kxyd0g16.js:40981-41296 fingerprint = outputSchema (0.735)
 /**
  * WebSearch 输出 schema：query、results（结果块或模型文字混排）、durationSeconds、searchCount。
  */
-//@ chunk-kxyd0g16.js:40981-41296 fingerprint = outputSchema (0.735)
 var outputSchema = DoctorLazy(() =>
   u({
-    query: o().describe("The search query that was executed"),
-    results: A(Ue([searchResultBlockSchema(), o()])).describe(
+    query: string().describe("The search query that was executed"),
+    results: array(union([searchResultBlockSchema(), string()])).describe(
       "Search results and/or text commentary from the model",
     ),
     durationSeconds: E().describe("Time taken to complete the search operation"),
     searchCount: E().optional().describe("Number of web searches performed"),
   }),
 );
+//@ chunk-kxyd0g16.js:41296-41839 fingerprint = makeOutputFromSearchResponse (0.949)
 /**
  * 把次级查询的 content 块整理成输出：server_tool_use 处切分文字段，web_search_tool_result 转成 {tool_use_id, content:[{title,url}]}，错误块转成 "Web search error: <code>"；searchCount 取两类块计数的最大值。
  */
-//@ chunk-kxyd0g16.js:41296-41839 fingerprint = makeOutputFromSearchResponse (0.949)
 function makeOutputFromSearchResponse(result, query, durationSeconds) {
-  let results = [],
-    textAcc = "",
-    h = 0,
-    y = 0;
+  let results = [];
+  let textAcc = "";
+  let h = 0;
+  let y = 0;
   for (let block of result) {
     if (block.type === "server_tool_use") {
-      if ((h++, textAcc.trim().length > 0)) results.push(textAcc.trim());
+      h++;
+      if (textAcc.trim().length > 0) results.push(textAcc.trim());
       textAcc = "";
       continue;
     }
     if (block.type === "web_search_tool_result") {
-      if ((y++, !Array.isArray(block.content))) {
+      y++;
+      if (!Array.isArray(block.content)) {
         let errorMessage = `Web search error: ${block.content.error_code}`;
-        (logForDebugging(errorMessage, { level: "error" }), results.push(errorMessage));
+        logForDebugging(errorMessage, {
+          level: "error",
+        });
+        results.push(errorMessage);
         continue;
       }
-      let hits = block.content.map((S) => ({ title: S.title, url: S.url }));
-      results.push({ tool_use_id: block.tool_use_id, content: hits });
+      let hits = block.content.map((S) => ({
+        title: S.title,
+        url: S.url,
+      }));
+      results.push({
+        tool_use_id: block.tool_use_id,
+        content: hits,
+      });
     }
     if (block.type === "text") textAcc += block.text;
   }
   if (textAcc.trim().length > 0) results.push(textAcc.trim());
-  return { query: query, results: results, durationSeconds: durationSeconds, searchCount: Math.max(h, y) };
+  return {
+    query,
+    results,
+    durationSeconds,
+    searchCount: Math.max(h, y),
+  };
 }
+//@ chunk-kxyd0g16.js:41839-41901 layout
 /**
  * 工具使用摘要：截断后的 query。
  */
-//@ chunk-kxyd0g16.js:41839-41901 layout
 function getWebSearchToolUseSummary(e) {
   if (!e?.query) return null;
-  return truncate(e.query, JT);
+  return truncate(e.query, MAX_DESCRIPTION_CHARS);
 }
+//@ chunk-kxyd0g16.js:41901-49449 fingerprint = WebSearchTool (0.584)
 /**
  * WebSearch 工具定义（name "WebSearch"，shouldDefer，只读可并发，maxResultSizeChars 100000）。isEnabled：需要 allow_web_search 开关，且 API 提供方为 firstParty（或 gI 判定的兼容方）/foundry，vertex 看模型是否支持，gateway 一律关。call：先扣会话/轮次搜索预算（用尽时返回不搜索的说明，禁止用 curl/浏览器绕开）；有 CCR 代理时走代理；否则用 web_search_20250305 服务端工具（max_uses 8，强制 toolChoice）发起一次次级流式查询，从流里解析 query 增量与结果数做进度。checkPermissions 返回 passthrough + localSettings allow 建议。
  */
-//@ chunk-kxyd0g16.js:41901-49449 fingerprint = WebSearchTool (0.584)
 var WebSearchTool = buildTool({
   name: WEBSEARCH,
   searchHint: "search the web for current information",
   backgrounding: "detach",
   maxResultSizeChars: 1e5,
-  shouldDefer: !0,
-  async description(e) {
-    return `Claude wants to search the web for: ${e.query}`;
+  shouldDefer: true,
+  async description(input) {
+    return `Claude wants to search the web for: ${input.query}`;
   },
   userFacingName() {
     return "Web Search";
   },
   getToolUseSummary: getWebSearchToolUseSummary,
-  getActivityDescription(e) {
-    let r = getWebSearchToolUseSummary(e);
-    return r ? `Searching for ${r}` : "Searching the web";
+  getActivityDescription(input) {
+    let summary = getWebSearchToolUseSummary(input);
+    return summary ? `Searching for ${summary}` : "Searching the web";
   },
   isEnabled() {
-    if (!isPolicyAllowed(ALLOW_WEB_SEARCH)) return !1;
-    let e = getAPIProvider();
-    if (e === "firstParty" || isClaudePlatformProvider(e)) return !0;
-    if (e === "gateway") return !1;
-    if (e === "vertex") return vertexModelSupportsWebSearch(getCanonicalName(getMainLoopModel()));
-    if (e === "foundry") return !0;
-    return !1;
+    if (!isPolicyAllowed(ALLOW_WEB_SEARCH)) return false;
+    let provider = getAPIProvider();
+    if (provider === "firstParty" || isClaudePlatformProvider(provider)) return true;
+    if (provider === "gateway") return false;
+    if (provider === "vertex") return vertexModelSupportsWebSearch(getCanonicalName(getMainLoopModel()));
+    if (provider === "foundry") return true;
+    return false;
   },
   get inputSchema() {
     return getWebSearchFastMode() ? webSearchInputSchemaWithMode() : webSearchInputSchema();
@@ -163,36 +193,44 @@ var WebSearchTool = buildTool({
     return outputSchema();
   },
   isConcurrencySafe() {
-    return !0;
+    return true;
   },
   isReadOnly() {
-    return !0;
+    return true;
   },
   coerceInput(e) {
     if (getWebSearchFastMode() || !isPlainObject(e) || !("mode" in e)) return null;
-    let { mode: mode, ...n } = e;
-    return { input: n, shapeClass: "mode_while_off" };
+    let { mode, ...n } = e;
+    return {
+      input: n,
+      shapeClass: "mode_while_off",
+    };
   },
-  toAutoClassifierInput(e) {
-    return e.query;
+  toAutoClassifierInput(input) {
+    return input.query;
   },
-  async prompt({ model: e, leanPrompt: r }) {
-    let n = getWebSearchPrompt(e, r),
-      s = getWebSearchFastMode()?.web_search_addendum;
-    return s
-      ? `${n.trimEnd()}
+  async prompt({ model, leanPrompt }) {
+    let webSearchPrompt = getWebSearchPrompt(model, leanPrompt);
+    let webSearchAddendum = getWebSearchFastMode()?.web_search_addendum;
+    return webSearchAddendum
+      ? `${webSearchPrompt.trimEnd()}
 
-${s}
+${webSearchAddendum}
 `
-      : n;
+      : webSearchPrompt;
   },
-  renderToolUseMessage({ query: e, allowed_domains: r, blocked_domains: n }, { verbose: s }) {
-    if (!e) return null;
+  renderToolUseMessage(
+    { query, allowed_domains: allowedDomains, blocked_domains: blockedDomains },
+    { verbose },
+  ) {
+    if (!query) return null;
     let f = "";
-    if (e) f += `"${e}"`;
-    if (s) {
-      if (r && r.length > 0) f += `, only allowing domains: ${r.join(", ")}`;
-      if (n && n.length > 0) f += `, blocking domains: ${n.join(", ")}`;
+    if (query) f += `"${query}"`;
+    if (verbose) {
+      if (allowedDomains && allowedDomains.length > 0)
+        f += `, only allowing domains: ${allowedDomains.join(", ")}`;
+      if (blockedDomains && blockedDomains.length > 0)
+        f += `, blocking domains: ${blockedDomains.join(", ")}`;
     }
     return f;
   },
@@ -201,75 +239,88 @@ ${s}
   },
   create(e) {
     return {
-      async checkPermissions(r) {
+      async checkPermissions(_input) {
         return {
           behavior: "passthrough",
           message: "WebSearchTool requires permission.",
           suggestions: [
             {
               type: "addRules",
-              rules: [{ toolName: WEBSEARCH }],
+              rules: [
+                {
+                  toolName: WEBSEARCH,
+                },
+              ],
               behavior: "allow",
               destination: "localSettings",
             },
           ],
         };
       },
-      async validateInput(r) {
-        let { query: query, allowed_domains: allowed_domains, blocked_domains: blocked_domains } = r;
-        if (!query.length) return { result: !1, message: "Error: Missing query", errorCode: 1 };
+      async validateInput(input) {
+        let { query, allowed_domains, blocked_domains } = input;
+        if (!query.length)
+          return {
+            result: false,
+            message: "Error: Missing query",
+            errorCode: 1,
+          };
         if (allowed_domains?.length && blocked_domains?.length)
           return {
-            result: !1,
+            result: false,
             message: "Error: Cannot specify both allowed_domains and blocked_domains in the same request",
             errorCode: 2,
           };
-        return { result: !0 };
+        return {
+          result: true,
+        };
       },
-      async call(r, { signal: n, onProgress: s, timing: f }) {
-        let ctx = e,
-          startTime = performance.now(),
-          { query: query } = r,
-          searchProfile = _Qo(r) ? "fast" : void 0,
-          webSearchBudget = ctx.taskRegistry.getWebSearchBudget();
+      async call(r, { signal, onProgress, timing }) {
+        let ctx = e;
+        let startTime = performance.now();
+        let { query } = r;
+        let searchProfile = isStandardSearchMode(r) ? "fast" : undefined;
+        let webSearchBudget = ctx.taskRegistry.getWebSearchBudget();
         if (!webSearchBudget.tryConsume()) {
-          let maxSearches = maxWebSearchesPerSession(),
-            refillsPerHour = webSearchBudget.refillsPerHour(),
-            msUntilNextCall = webSearchBudget.msUntilNextCall();
+          let maxSearches = maxWebSearchesPerSession();
+          let re = webSearchBudget.refillsPerHour();
+          let se = webSearchBudget.msUntilNextCall();
           logFeatureBad("tool_web_search", "web_search_session_cap", {
             max_web_searches_per_session: maxSearches,
-            web_search_refills_per_hour: refillsPerHour,
-            ...(Number.isFinite(msUntilNextCall) && { ms_until_next_web_search: msUntilNextCall }),
+            web_search_refills_per_hour: re,
+            ...(Number.isFinite(se) && {
+              ms_until_next_web_search: se,
+            }),
           });
-          let budgetScope = getIsNonInteractiveSession() ? "turn" : "session",
-            Se = `${maxSearches} ${WEBSEARCH} ${plural(maxSearches, "call")}`,
-            we = refillsPerHour > 0,
-            Cn =
-              budgetScope === "turn"
-                ? `limit: ${Se} per turn, shared by every agent in it`
-                : `limit: ${Se}, shared by every agent in this session; it does not refill`,
-            vn = we
-              ? `limit: ${Se} shared by every agent in this ${budgetScope}; the budget refills at about ${refillsPerHour} ${plural(refillsPerHour, "call")} per hour, so searching becomes possible again later in the ${budgetScope}`
-              : Cn,
-            En = we
-              ? "Do not pause or wait for the refill: continue with the information already gathered and say so in your answer"
-              : "Continue with the information already gathered instead of searching again, and say so in your answer",
-            jt = [
-              ...(budgetScope === "turn"
-                ? ["tell the user they can send a follow-up message after this reply to continue the search"]
-                : []),
-              ...(showSettingsHint()
-                ? [
-                    budgetScope === "turn"
-                      ? "ask them to raise CLAUDE_CODE_MAX_WEB_SEARCHES_PER_SESSION"
-                      : "ask the user to raise CLAUDE_CODE_MAX_WEB_SEARCHES_PER_SESSION",
-                  ]
-                : []),
-            ],
-            On = jt.length > 0 ? ` If more searches are genuinely needed, ${jt.join(", or ")}.` : "";
+          let budgetScope = getIsNonInteractiveSession() ? "turn" : "session";
+          let Se = `${maxSearches} ${WEBSEARCH} ${plural(maxSearches, "call")}`;
+          let we = re > 0;
+          let Cn =
+            budgetScope === "turn"
+              ? `limit: ${Se} per turn, shared by every agent in it`
+              : `limit: ${Se}, shared by every agent in this session; it does not refill`;
+          let vn = we
+            ? `limit: ${Se} shared by every agent in this ${budgetScope}; the budget refills at about ${re} ${plural(re, "call")} per hour, so searching becomes possible again later in the ${budgetScope}`
+            : Cn;
+          let En = we
+            ? "Do not pause or wait for the refill: continue with the information already gathered and say so in your answer"
+            : "Continue with the information already gathered instead of searching again, and say so in your answer";
+          let jt = [
+            ...(budgetScope === "turn"
+              ? ["tell the user they can send a follow-up message after this reply to continue the search"]
+              : []),
+            ...(showSettingsHint()
+              ? [
+                  budgetScope === "turn"
+                    ? "ask them to raise CLAUDE_CODE_MAX_WEB_SEARCHES_PER_SESSION"
+                    : "ask the user to raise CLAUDE_CODE_MAX_WEB_SEARCHES_PER_SESSION",
+                ]
+              : []),
+          ];
+          let On = jt.length > 0 ? ` If more searches are genuinely needed, ${jt.join(", or ")}.` : "";
           return {
             data: {
-              query: query,
+              query,
               results: [
                 `Web search was not performed: this ${budgetScope}'s web search budget is used up (${vn}). ${En}; do not work around the limit by querying search engines with curl or wget from ${BASH_TOOL_NAME}, by querying them in a browser or through a computer-use tool, or by searching or fetching through a third-party reader, proxy or archive service.${On}`,
               ],
@@ -279,15 +330,18 @@ ${s}
           };
         }
         if (shouldUseCcrWebSearchProxy(ctx.session)) {
-          let ee = f?.mark("external"),
-            proxyResult = await ccrProxyWebSearch(
-              ctx.session,
-              query,
-              n,
-              { allowed_domains: r.allowed_domains, blocked_domains: r.blocked_domains },
-              searchProfile,
-            ).finally(ee),
-            se = (performance.now() - startTime) / 1000;
+          let ee = timing?.mark("external");
+          let proxyResult = await ccrProxyWebSearch(
+            ctx.session,
+            query,
+            signal,
+            {
+              allowed_domains: r.allowed_domains,
+              blocked_domains: r.blocked_domains,
+            },
+            searchProfile,
+          ).finally(ee);
+          let durationSeconds = (performance.now() - startTime) / 1000;
           if (!proxyResult.ok)
             throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
               jsonStringify({
@@ -297,81 +351,91 @@ ${s}
               }),
               "web-search-ccr-proxy",
             );
-          if (s)
-            s({
+          if (onProgress)
+            onProgress({
               type: "progress",
               toolUseID: "ccr-proxy-search-1",
               data: {
                 type: "search_results_received",
                 resultCount: proxyResult.results.length,
-                query: query,
+                query,
               },
             });
           return {
             data: {
-              query: query,
+              query,
               results: [
                 {
                   tool_use_id: "ccr-proxy-search-1",
                   content:
-                    ctx.agentId === void 0 ? proxyResult.results : proxyResult.results.map(omitSnippet),
+                    ctx.agentId === undefined ? proxyResult.results : proxyResult.results.map(omitSnippet),
                 },
               ],
-              durationSeconds: se,
+              durationSeconds,
               searchCount: 1,
             },
           };
         }
-        let R = createUserMessage({ content: "Perform a web search for the query: " + query }),
-          I = {
-            type: "web_search_20250305",
-            name: "web_search",
-            allowed_domains: r.allowed_domains,
-            blocked_domains: r.blocked_domains,
-            max_uses: 8,
-            ...(searchProfile && { search_profile: searchProfile }),
-          },
-          searchModel = getFeatureValue_CACHED_MAY_BE_STALE("tengu_plum_vx3", !1)
-            ? getSmallFastModel()
-            : ctx.mainLoopModel();
+        let userMessage = createUserMessage({
+          content: "Perform a web search for the query: " + query,
+        });
+        let toolSchema = {
+          type: "web_search_20250305",
+          name: "web_search",
+          allowed_domains: r.allowed_domains,
+          blocked_domains: r.blocked_domains,
+          max_uses: 8,
+          ...(searchProfile && {
+            search_profile: searchProfile,
+          }),
+        };
+        let searchModel = getFeatureValue_CACHED_MAY_BE_STALE("tengu_plum_vx3", false)
+          ? getSmallFastModel()
+          : ctx.mainLoopModel();
         if (getAPIProvider() === "foundry" && !foundrySupportsCapability(searchModel, "web_search"))
           throw Error("Web search is not available on this Foundry deployment.");
-        let B = f?.mark("model"),
-          V = queryModelWithStreaming({
-            messages: [R],
-            systemPrompt: asSystemPrompt([
-              "You run a web search for another Claude model, which is waiting on the result and can search again. Search once, then reply with a brief summary of the results.",
-            ]),
-            thinkingConfig: { type: "disabled", mechanical: !0 },
-            tools: [],
-            signal: n,
-            options: {
-              getToolPermissionContext: async () => ctx.permissions(),
-              model: searchModel,
-              toolChoice: { type: "tool", name: "web_search" },
-              isNonInteractiveSession: ctx.isNonInteractiveSession,
-              hasAppendSystemPrompt: !!ctx.appendSystemPrompt,
-              extraToolSchemas: [I],
-              querySource: "web_search_tool",
-              enablePromptCaching: !1,
-              agents: ctx.agentDefinitions.activeAgents,
-              mcpTools: [],
-              agentId: ctx.agentId,
-              agentContext: ctx.agentContext,
-              credentials: ctx.credentials,
-              storageV5: ctx.storageV5,
-              stickyBetas: forkStickyBetaLatches(getStickyBetas()),
-              proactivityLevel: ctx.proactivityLevel(),
-              ...ctx.helperEffortFor(searchModel),
+        let B = timing?.mark("model");
+        let queryStream = queryModelWithStreaming({
+          messages: [userMessage],
+          systemPrompt: asSystemPrompt([
+            "You run a web search for another Claude model, which is waiting on the result and can search again. Search once, then reply with a brief summary of the results.",
+          ]),
+          thinkingConfig: {
+            type: "disabled",
+            mechanical: true,
+          },
+          tools: [],
+          signal,
+          options: {
+            getToolPermissionContext: async () => ctx.permissions(),
+            model: searchModel,
+            toolChoice: {
+              type: "tool",
+              name: "web_search",
             },
-          }),
-          q = [],
-          currentServerToolUseId = null,
-          partialInputJson = "",
-          progressCounter = 0,
-          queryByToolUseId = new Map(),
-          apiErrorText = null;
-        for await (let streamEvent of V) {
+            isNonInteractiveSession: ctx.isNonInteractiveSession,
+            hasAppendSystemPrompt: !!ctx.appendSystemPrompt,
+            extraToolSchemas: [toolSchema],
+            querySource: "web_search_tool",
+            enablePromptCaching: false,
+            agents: ctx.agentDefinitions.activeAgents,
+            mcpTools: [],
+            agentId: ctx.agentId,
+            agentContext: ctx.agentContext,
+            credentials: ctx.credentials,
+            storageV5: ctx.storageV5,
+            stickyBetas: forkStickyBetaLatches(getStickyBetas()),
+            proactivityLevel: ctx.proactivityLevel(),
+            ...ctx.helperEffortFor(searchModel),
+          },
+        });
+        let result = [];
+        let currentServerToolUseId = null;
+        let partialInputJson = "";
+        let progressCounter = 0;
+        let queryByToolUseId = new Map();
+        let apiErrorText = null;
+        for await (let streamEvent of queryStream) {
           if (streamEvent.type === "assistant") {
             if (streamEvent.isApiErrorMessage) {
               apiErrorText = streamEvent.truncatedAfterOutput
@@ -379,28 +443,30 @@ ${s}
                 : extractTextContent_2(streamEvent.message.content);
               continue;
             }
-            q.push(...streamEvent.message.content);
+            result.push(...streamEvent.message.content);
             continue;
           }
           if (streamEvent.type !== "stream_event") continue;
           if (streamEvent.event?.type === "content_block_start") {
             let contentBlock = streamEvent.event.content_block;
             if (contentBlock?.type === "server_tool_use") {
-              ((currentServerToolUseId = contentBlock.id), (partialInputJson = ""));
+              currentServerToolUseId = contentBlock.id;
+              partialInputJson = "";
               continue;
             }
             if (contentBlock?.type === "web_search_tool_result") {
-              let tool_use_id = contentBlock.tool_use_id,
-                Se = queryByToolUseId.get(tool_use_id) || query,
-                content = contentBlock.content;
-              if ((progressCounter++, s))
-                s({
+              let toolUseId = contentBlock.tool_use_id;
+              let query_2 = queryByToolUseId.get(toolUseId) || query;
+              let content = contentBlock.content;
+              progressCounter++;
+              if (onProgress)
+                onProgress({
                   type: "progress",
-                  toolUseID: tool_use_id || `search-progress-${progressCounter}`,
+                  toolUseID: toolUseId || `search-progress-${progressCounter}`,
                   data: {
                     type: "search_results_received",
                     resultCount: Array.isArray(content) ? content.length : 0,
-                    query: Se,
+                    query: query_2,
                   },
                 });
             }
@@ -411,84 +477,105 @@ ${s}
           if (delta?.type !== "input_json_delta" || !delta.partial_json) continue;
           partialInputJson += delta.partial_json;
           try {
-            let match = partialInputJson.match(/"query"\s*:\s*"((?:[^"\\]|\\.)*)"/);
-            if (!match?.[1]) continue;
-            let ie = jsonParse('"' + match[1] + '"');
+            let queryMatch = partialInputJson.match(/"query"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+            if (!queryMatch?.[1]) continue;
+            let query = jsonParse('"' + queryMatch[1] + '"');
             if (
               queryByToolUseId.has(currentServerToolUseId) &&
-              queryByToolUseId.get(currentServerToolUseId) === ie
+              queryByToolUseId.get(currentServerToolUseId) === query
             )
               continue;
-            if ((queryByToolUseId.set(currentServerToolUseId, ie), progressCounter++, s))
-              s({
+            queryByToolUseId.set(currentServerToolUseId, query);
+            progressCounter++;
+            if (onProgress)
+              onProgress({
                 type: "progress",
                 toolUseID: `search-progress-${progressCounter}`,
-                data: { type: "query_update", query: ie },
+                data: {
+                  type: "query_update",
+                  query,
+                },
               });
           } catch {}
         }
-        if ((B?.(), getAPIProvider() === "foundry" && !foundrySupportsCapability(searchModel, "web_search")))
+        B?.();
+        if (getAPIProvider() === "foundry" && !foundrySupportsCapability(searchModel, "web_search"))
           throw Error("Web search is not available on this Foundry deployment.");
-        let he = (performance.now() - startTime) / 1000,
-          lt = makeOutputFromSearchResponse(q, query, he);
-        if (apiErrorText !== null && lt.results.length === 0)
+        let durationSeconds = (performance.now() - startTime) / 1000;
+        let data = makeOutputFromSearchResponse(result, query, durationSeconds);
+        if (apiErrorText !== null && data.results.length === 0)
           throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
             apiErrorText,
             "web-search-side-query-api-error",
           );
-        return { data: lt };
+        return {
+          data,
+        };
       },
     };
   },
   stripForCreation: (e) => ({
     ...e,
     results: e.results?.map((r) =>
-      r == null || typeof r === "string" ? r : { ...r, content: r.content?.map(omitSnippet) },
+      r == null || typeof r === "string"
+        ? r
+        : {
+            ...r,
+            content: r.content?.map(omitSnippet),
+          },
     ),
   }),
-  mapToolResultToToolResultBlockParam(e, r) {
-    let { query: query, results: results } = e,
-      flattened = (results ?? []).flatMap((y) =>
-        y == null || typeof y === "string" ? [] : (y.content ?? []),
-      );
+  mapToolResultToToolResultBlockParam(output, toolUseID) {
+    let { query, results } = output;
+    let flattened = (results ?? []).flatMap((y) =>
+      y == null || typeof y === "string" ? [] : (y.content ?? []),
+    );
     if (env.CLAUDE_CODE_WEBSEARCH_CITATIONS && flattened.some((y) => y.snippet))
       return {
-        tool_use_id: r,
+        tool_use_id: toolUseID,
         type: "tool_result",
         content: flattened.map((y) => ({
           type: "search_result",
           source: y.url,
           title: y.title || y.url,
-          content: [{ type: "text", text: y.snippet || y.title || y.url }],
-          citations: { enabled: !0 },
+          content: [
+            {
+              type: "text",
+              text: y.snippet || y.title || y.url,
+            },
+          ],
+          citations: {
+            enabled: true,
+          },
         })),
       };
     let resultText = `Web search results for query: "${query}"
 
 `;
-    return (
-      (results ?? []).forEach((y) => {
-        if (y == null) return;
-        if (typeof y === "string")
-          resultText +=
-            y +
-            `
+    (results ?? []).forEach((result) => {
+      if (result == null) return;
+      if (typeof result === "string")
+        resultText +=
+          result +
+          `
 
 `;
-        else if (y.content?.length > 0)
-          resultText += `Links: ${jsonStringify(y.content)}
+      else if (result.content?.length > 0)
+        resultText += `Links: ${jsonStringify(result.content)}
 
 `;
-        else
-          resultText += `No links found.
+      else
+        resultText += `No links found.
 
 `;
-      }),
-      (resultText += `
-REMINDER: You MUST include the sources above in your response to the user using markdown hyperlinks.`),
-      { tool_use_id: r, type: "tool_result", content: resultText.trim() }
-    );
+    });
+    resultText += `
+REMINDER: You MUST include the sources above in your response to the user using markdown hyperlinks.`;
+    return {
+      tool_use_id: toolUseID,
+      type: "tool_result",
+      content: resultText.trim(),
+    };
   },
 });
-
 export { WebSearchTool };

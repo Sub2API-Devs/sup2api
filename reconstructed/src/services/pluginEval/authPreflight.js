@@ -14,8 +14,8 @@ import { env } from "../../utils/env.js";
 import { getWIFTokenCache } from "../oauth/wifCredentials.js";
 import { errorMessage } from "../../utils/errors.js";
 import { withTimeout } from "../../utils/sleep.js";
-import { Ga } from "./safeFiles.js";
-import { rp } from "../../../vendor/@anthropic-ai/sdk/lib/credentials/types.mjs";
+import { FILE_IDENTITY_TIMEOUT_MS } from "./safeFiles.js";
+import { WorkloadIdentityError } from "../../../vendor/@anthropic-ai/sdk/lib/credentials/types.mjs";
 import { hasCustomAuthorizationHeader, getCustomHeaderMap } from "../api/client.js";
 import { getGatewayAuth } from "../../bootstrap/state.js";
 import { refreshGatewayToken } from "../gateway/gatewayAuth.js";
@@ -30,14 +30,22 @@ import {
   checkAndRefreshOAuthTokenIfNeeded,
   clearOAuthTokenCache,
 } from "../../utils/auth.js";
-import { getApiKeyFromFileDescriptor, v$ } from "../../utils/authFileDescriptor.js";
+import {
+  getApiKeyFromFileDescriptor,
+  hasPossibleCredentialFromDescriptor,
+} from "../../utils/authFileDescriptor.js";
 import { loginToHandOn } from "../../utils/auth/launcherHostLogin.js";
 
 //@ chunk-qchp9vrd.js:112515-112606 placement = logEventTo1P (1)
 async function logEventTo1P() {
-  if (getAPIProvider() !== "firstParty") return { ok: !0 };
+  if (getAPIProvider() !== "firstParty")
+    return {
+      ok: true,
+    };
   if (isEnvQuadAuthWithoutKey()) return setupWorkloadIdentityForEval();
-  return { ok: !0 };
+  return {
+    ok: true,
+  };
 }
 //@ chunk-qchp9vrd.js:112606-112718 placement
 function isEnvQuadAuthWithoutKey() {
@@ -48,37 +56,47 @@ function isEnvQuadAuthWithoutKey() {
     !env.ANTHROPIC_UNIX_SOCKET
   );
 }
+//@ chunk-qchp9vrd.js:112718-113543 placement
 /**
  * 配置工作负载身份联邦（WIF）时预先换取令牌，失败给出说明。
  */
-//@ chunk-qchp9vrd.js:112718-113543 placement
 async function setupWorkloadIdentityForEval() {
   let e;
   try {
     e = await getWIFTokenCache();
   } catch (error) {
     return {
-      ok: !1,
+      ok: false,
       message: `workload identity federation is configured (${getWIFStatusLine()}) but could not be set up: ${errorMessage(error)}`,
     };
   }
-  if (e === null) return { ok: !0 };
-  try {
-    return (
-      await withTimeout(e.getToken(), Ga, `no answer from the token exchange within ${Ga / 1000}s`),
-      { ok: !0 }
-    );
-  } catch (error) {
-    let r = error instanceof rp ? error.statusCode : null,
-      a = `workload identity federation could not obtain an access token (${getWIFStatusLine()})${r === null ? "" : ` [HTTP ${r}]`}: ${errorMessage(error)}`;
-    if (
-      (r !== null && (r >= 500 || r === 429 || r === 408)) ||
-      (r === null && TRANSIENT_AUTH_ERROR_RE.test(errorMessage(error)))
-    )
-      return { ok: !0, warning: `${a}; continuing \u2014 if every run fails the same way, that is why` };
+  if (e === null)
     return {
-      ok: !1,
-      message: `${a}${r === 401 || r === 403 ? " \u2014 the identity token was rejected: check the federation rule and organization ids, and for a rule spanning several workspaces set ANTHROPIC_WORKSPACE_ID" : ""}`,
+      ok: true,
+    };
+  try {
+    await withTimeout(
+      e.getToken(),
+      FILE_IDENTITY_TIMEOUT_MS,
+      `no answer from the token exchange within ${FILE_IDENTITY_TIMEOUT_MS / 1000}s`,
+    );
+    return {
+      ok: true,
+    };
+  } catch (error) {
+    let statusCode = error instanceof WorkloadIdentityError ? error.statusCode : null;
+    let a = `workload identity federation could not obtain an access token (${getWIFStatusLine()})${statusCode === null ? "" : ` [HTTP ${statusCode}]`}: ${errorMessage(error)}`;
+    if (
+      (statusCode !== null && (statusCode >= 500 || statusCode === 429 || statusCode === 408)) ||
+      (statusCode === null && TRANSIENT_AUTH_ERROR_RE.test(errorMessage(error)))
+    )
+      return {
+        ok: true,
+        warning: `${a}; continuing \u2014 if every run fails the same way, that is why`,
+      };
+    return {
+      ok: false,
+      message: `${a}${statusCode === 401 || statusCode === 403 ? " \u2014 the identity token was rejected: check the federation rule and organization ids, and for a rule spanning several workspaces set ANTHROPIC_WORKSPACE_ID" : ""}`,
     };
   }
 }
@@ -86,76 +104,104 @@ async function setupWorkloadIdentityForEval() {
 var TRANSIENT_AUTH_ERROR_RE =
   /Failed to reach token endpoint|Unable to connect|timed out|TimeoutError|^no answer |ENOTFOUND|EAI_AGAIN|ECONNRESET|ECONNREFUSED|ETIMEDOUT|socket hang up|fetch failed/i;
 //@ chunk-qchp9vrd.js:113854-113868 placement
-var Kd = 300000;
+/**
+ * 认证预检的过期余量（300000 毫秒）。
+ */
+var AUTH_EXPIRY_MARGIN_MS = 300000;
+//@ chunk-qchp9vrd.js:113868-115552 placement
 /**
  * 预检本次运行的认证：网关会话是否会在超时前过期、是否需要 /login。
  */
-//@ chunk-qchp9vrd.js:113868-115552 placement
-async function checkEvalAuthPreflight(e, n, r) {
-  let a = () => Date.now() + n * 1000 + Kd,
-    s = hasCustomAuthorizationHeader();
+async function checkEvalAuthPreflight(credentials, timeoutSeconds, r) {
+  let a = () => Date.now() + timeoutSeconds * 1000 + AUTH_EXPIRY_MARGIN_MS;
+  let s = hasCustomAuthorizationHeader();
   {
-    let y = getGatewayAuth();
-    if (y) {
-      if (y.idpRefreshToken && y.expiresAt < a())
-        await r(
-          y.expiresAt,
-          a(),
-          async () => (await refreshGatewayToken(e, { force: !0 }), getGatewayAuth()?.expiresAt ?? null),
-        );
-      else await refreshGatewayToken(e, { force: !1 });
-      let R = getGatewayAuth() ?? y,
-        S;
-      if (R.expiresAt < a())
-        ((S = `gateway session expires in ~${Math.max(0, Math.floor((R.expiresAt - Date.now()) / 60000))} min, before this run's ${n}s timeout; a long run may lose auth part-way${R.idpRefreshToken ? "" : " (run /login to renew)"}`),
-          logForDebugging(`[eval] ${S}`, { level: "warn" }));
+    let gatewayAuth = getGatewayAuth();
+    if (gatewayAuth) {
+      if (gatewayAuth.idpRefreshToken && gatewayAuth.expiresAt < a())
+        await r(gatewayAuth.expiresAt, a(), async () => {
+          await refreshGatewayToken(credentials, {
+            force: true,
+          });
+          return getGatewayAuth()?.expiresAt ?? null;
+        });
+      else
+        await refreshGatewayToken(credentials, {
+          force: false,
+        });
+      let R = getGatewayAuth() ?? gatewayAuth;
+      let S;
+      if (R.expiresAt < a()) {
+        S = `gateway session expires in ~${Math.max(0, Math.floor((R.expiresAt - Date.now()) / 60000))} min, before this run's ${timeoutSeconds}s timeout; a long run may lose auth part-way${R.idpRefreshToken ? "" : " (run /login to renew)"}`;
+        logForDebugging(`[eval] ${S}`, {
+          level: "warn",
+        });
+      }
       return {
         kind: "gateway",
         url: R.url,
         jwt: R.jwt,
         authorizationHeaderIsCredential: s,
-        ...(S !== void 0 && { warning: S }),
+        ...(S !== undefined && {
+          warning: S,
+        }),
       };
     }
   }
   if (s) return null;
   if (
     !isFirstPartyProvider() ||
-    (isAntBuild() ? void 0 : env.ANTHROPIC_API_KEY) ||
+    (isAntBuild() ? undefined : env.ANTHROPIC_API_KEY) ||
     effectiveAuthTokenEnv() ||
     env.ANTHROPIC_UNIX_SOCKET ||
     getConfiguredApiKeyHelper() ||
-    Object.keys(getCustomHeaderMap()).some((y) => y.toLowerCase() === "x-api-key") ||
+    Object.keys(getCustomHeaderMap()).some((key) => key.toLowerCase() === "x-api-key") ||
     shouldUseWIFAuth()
   )
     return null;
-  let h = getApiKeyFromFileDescriptor();
-  if (h && !isClaudeAISubscriber()) return { kind: "apiKey", apiKey: h };
-  if (!h && v$("CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR")) return null;
-  let w = loginToHandOn(await getClaudeAIOAuthTokensAsync(e));
-  if (!w?.accessToken) return h ? { kind: "apiKey", apiKey: h } : null;
+  let apiKeyFromFileDescriptor = getApiKeyFromFileDescriptor();
+  if (apiKeyFromFileDescriptor && !isClaudeAISubscriber())
+    return {
+      kind: "apiKey",
+      apiKey: apiKeyFromFileDescriptor,
+    };
+  if (!apiKeyFromFileDescriptor && hasPossibleCredentialFromDescriptor("CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR"))
+    return null;
+  let w = loginToHandOn(await getClaudeAIOAuthTokensAsync(credentials));
+  if (!w?.accessToken)
+    return apiKeyFromFileDescriptor
+      ? {
+          kind: "apiKey",
+          apiKey: apiKeyFromFileDescriptor,
+        }
+      : null;
   let b;
   if (w.expiresAt !== null && w.expiresAt < a()) {
     if (w.refreshToken) {
-      if (
-        (await r(
-          w.expiresAt,
-          a(),
-          async () => (
-            await checkAndRefreshOAuthTokenIfNeeded({ credentials: e, force: !0 }),
-            clearOAuthTokenCache(),
-            (await getClaudeAIOAuthTokensAsync(e))?.expiresAt ?? null
-          ),
-        ),
-        clearOAuthTokenCache(),
-        (w = loginToHandOn(await getClaudeAIOAuthTokensAsync(e))),
-        !w?.accessToken)
-      )
-        return h ? { kind: "apiKey", apiKey: h } : null;
+      await r(w.expiresAt, a(), async () => {
+        await checkAndRefreshOAuthTokenIfNeeded({
+          credentials,
+          force: true,
+        });
+        clearOAuthTokenCache();
+        return (await getClaudeAIOAuthTokensAsync(credentials))?.expiresAt ?? null;
+      });
+      clearOAuthTokenCache();
+      w = loginToHandOn(await getClaudeAIOAuthTokensAsync(credentials));
+      if (!w?.accessToken)
+        return apiKeyFromFileDescriptor
+          ? {
+              kind: "apiKey",
+              apiKey: apiKeyFromFileDescriptor,
+            }
+          : null;
     }
-    if (w.expiresAt !== null && w.expiresAt < a())
-      ((b = `login token expires in ~${Math.max(0, Math.floor((w.expiresAt - Date.now()) / 60000))} min, before this run's ${n}s timeout; a long run may lose auth part-way (run /login to renew)`),
-        logForDebugging(`[eval] ${b}`, { level: "warn" }));
+    if (w.expiresAt !== null && w.expiresAt < a()) {
+      b = `login token expires in ~${Math.max(0, Math.floor((w.expiresAt - Date.now()) / 60000))} min, before this run's ${timeoutSeconds}s timeout; a long run may lose auth part-way (run /login to renew)`;
+      logForDebugging(`[eval] ${b}`, {
+        level: "warn",
+      });
+    }
   }
   return {
     kind: "oauth",
@@ -163,8 +209,9 @@ async function checkEvalAuthPreflight(e, n, r) {
     scopes: Array.isArray(w.scopes) ? w.scopes : [],
     subscriptionType: w.subscriptionType ?? null,
     rateLimitTier: w.rateLimitTier ?? null,
-    ...(b !== void 0 && { warning: b }),
+    ...(b !== undefined && {
+      warning: b,
+    }),
   };
 }
-
 export { checkEvalAuthPreflight, logEventTo1P };

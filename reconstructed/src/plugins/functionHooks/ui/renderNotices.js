@@ -8,15 +8,15 @@
  * pieces: chunk-s61vbvea.js (2)
  * attribution: placement 2
  */
-import { ge } from "../../../utils/identity.js";
+import { identity as identity_2 } from "../../../utils/identity.js";
 import { hasUiLogSink, reportPluginProblem } from "../hooksWorkerClient.js";
 
 //@ chunk-s61vbvea.js:305803-305837 placement
-var toldRefusals = ge(new Set(), (e) => e.clear());
+var toldRefusals = identity_2(new Set(), (e) => e.clear());
 //@ chunk-s61vbvea.js:305837-305918 placement
-function tellOnce({ key: key, lead: lead, text: text }) {
+function tellOnce({ key, lead, text }) {
   if (!hasUiLogSink() || toldRefusals.has(key)) return;
-  (toldRefusals.add(key), reportPluginProblem(lead, text));
+  toldRefusals.add(key);
+  reportPluginProblem(lead, text);
 }
-
 export { tellOnce, toldRefusals };

@@ -8,46 +8,43 @@
  * pieces: chunk-7p2hc4jn.js (3)
  * attribution: placement 3
  */
-import { j, P } from "../../vendor/react/cjs/react.production.js";
+import { init_react_production, P } from "../../vendor/react/cjs/react.production.js";
 import { getFocusManager } from "../ink/focus.js";
 
 //@ chunk-7p2hc4jn.js:1920-1924 placement
-j();
+init_react_production();
+//@ chunk-7p2hc4jn.js:1924-2265 placement
 /**
  * 激活时让元素获得焦点，并在焦点被移到别处（不是其子孙）时抢回；不激活且 blurWhenInactive 时失焦。
  */
-//@ chunk-7p2hc4jn.js:1924-2265 placement
-function useFocusOnMount(ref, active, blurWhenInactive = !1) {
+function useFocusOnMount(ref, active, blurWhenInactive = false) {
   P(() => {
     let s = ref.current;
     if (!s) return;
-    let o = getFocusManager(s);
+    let focusManager = getFocusManager(s);
     if (!active) {
-      if (blurWhenInactive && o.activeElement === s) o.blur();
+      if (blurWhenInactive && focusManager.activeElement === s) focusManager.blur();
       return;
     }
-    return (
-      o.focus(s),
-      o.subscribe(() => {
-        let u = ref.current;
-        if (!u || o.activeElement === u) return;
-        if (!o.activeElement) {
-          o.focus(u);
+    focusManager.focus(s);
+    return focusManager.subscribe(() => {
+      let u = ref.current;
+      if (!u || focusManager.activeElement === u) return;
+      if (!focusManager.activeElement) {
+        focusManager.focus(u);
+        return;
+      }
+      let parentNode = u.parentNode;
+      while (parentNode) {
+        if (parentNode === focusManager.activeElement) {
+          focusManager.focus(u);
           return;
         }
-        let parentNode = u.parentNode;
-        while (parentNode) {
-          if (parentNode === o.activeElement) {
-            o.focus(u);
-            return;
-          }
-          parentNode = parentNode.parentNode;
-        }
-      })
-    );
+        parentNode = parentNode.parentNode;
+      }
+    });
   }, [active, ref, blurWhenInactive]);
 }
 //@ chunk-7p2hc4jn.js:2265-2269 placement
-j();
-
+init_react_production();
 export { useFocusOnMount };

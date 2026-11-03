@@ -6,132 +6,146 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { ew } from "./util.js";
-import { SZo } from "../../../fast-deep-equal/index.js";
-import { un } from "../../../json-schema-traverse/index.js";
+import { require_util_2 } from "./util.js";
+import { require_fast_deep_equal } from "../../../fast-deep-equal/index.js";
+import { require_json_schema_traverse } from "../../../json-schema-traverse/index.js";
 
 //@ chunk-s82q9s4x.js:39807-41944 cjs-fingerprint
-var lt = x(function (hn) {
-  Object.defineProperty(hn, "__esModule", { value: !0 });
-  hn.getSchemaRefs =
-    hn.resolveUrl =
-    hn.normalizeId =
-    hn._getFullPath =
-    hn.getFullPath =
-    hn.inlineRef =
-      void 0;
-  var ln = ew(),
-    Ku = SZo(),
-    Fu = un(),
-    Lu = new Set([
-      "type",
-      "format",
-      "pattern",
-      "maxLength",
-      "minLength",
-      "maxProperties",
-      "minProperties",
-      "maxItems",
-      "minItems",
-      "maximum",
-      "minimum",
-      "uniqueItems",
-      "multipleOf",
-      "required",
-      "enum",
-      "const",
-    ]);
-  function Hu(e, t = !0) {
-    if (typeof e == "boolean") return !0;
-    if (t === !0) return !vr(e);
-    if (!t) return !1;
-    return dn(e) <= t;
+var require_resolve_2 = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.getSchemaRefs =
+    cjsExports.resolveUrl =
+    cjsExports.normalizeId =
+    cjsExports._getFullPath =
+    cjsExports.getFullPath =
+    cjsExports.inlineRef =
+      undefined;
+  var util_1 = require_util_2();
+  var equal = require_fast_deep_equal();
+  var traverse = require_json_schema_traverse();
+  var SIMPLE_INLINED = new Set([
+    "type",
+    "format",
+    "pattern",
+    "maxLength",
+    "minLength",
+    "maxProperties",
+    "minProperties",
+    "maxItems",
+    "minItems",
+    "maximum",
+    "minimum",
+    "uniqueItems",
+    "multipleOf",
+    "required",
+    "enum",
+    "const",
+  ]);
+  function inlineRef(schema, limit = true) {
+    if (typeof schema == "boolean") return true;
+    if (limit === true) return !hasRef(schema);
+    if (!limit) return false;
+    return countKeys(schema) <= limit;
   }
-  hn.inlineRef = Hu;
-  var Gu = new Set(["$ref", "$recursiveRef", "$recursiveAnchor", "$dynamicRef", "$dynamicAnchor"]);
-  function vr(e) {
-    for (let key in e) {
-      if (Gu.has(key)) return !0;
-      let r = e[key];
-      if (Array.isArray(r) && r.some(vr)) return !0;
-      if (typeof r == "object" && vr(r)) return !0;
+  cjsExports.inlineRef = inlineRef;
+  var REF_KEYWORDS = new Set(["$ref", "$recursiveRef", "$recursiveAnchor", "$dynamicRef", "$dynamicAnchor"]);
+  function hasRef(schema) {
+    for (let key in schema) {
+      if (REF_KEYWORDS.has(key)) return true;
+      let sch = schema[key];
+      if (Array.isArray(sch) && sch.some(hasRef)) return true;
+      if (typeof sch == "object" && hasRef(sch)) return true;
     }
-    return !1;
+    return false;
   }
-  function dn(e) {
-    let t = 0;
-    for (let key in e) {
+  function countKeys(schema) {
+    let count = 0;
+    for (let key in schema) {
       if (key === "$ref") return 1 / 0;
-      if ((t++, Lu.has(key))) continue;
-      if (typeof e[key] == "object") ln.eachItem(e[key], (s) => (t += dn(s)));
-      if (t === 1 / 0) return 1 / 0;
+      count++;
+      if (SIMPLE_INLINED.has(key)) continue;
+      if (typeof schema[key] == "object") util_1.eachItem(schema[key], (sch) => (count += countKeys(sch)));
+      if (count === 1 / 0) return 1 / 0;
     }
-    return t;
+    return count;
   }
-  function fn(e, t = "", r) {
-    if (r !== !1) t = Fe(t);
-    let parse = e.parse(t);
-    return pn(e, parse);
+  function getFullPath(resolver, id = "", normalize) {
+    if (normalize !== false) id = normalizeId(id);
+    let p = resolver.parse(id);
+    return _getFullPath(resolver, p);
   }
-  hn.getFullPath = fn;
-  function pn(e, t) {
-    return e.serialize(t).split("#")[0] + "#";
+  cjsExports.getFullPath = getFullPath;
+  function _getFullPath(resolver, p) {
+    return resolver.serialize(p).split("#")[0] + "#";
   }
-  hn._getFullPath = pn;
-  var Ju = /#\/?$/;
-  function Fe(e) {
-    return e ? e.replace(Ju, "") : "";
+  cjsExports._getFullPath = _getFullPath;
+  var TRAILING_SLASH_HASH = /#\/?$/;
+  function normalizeId(id) {
+    return id ? id.replace(TRAILING_SLASH_HASH, "") : "";
   }
-  hn.normalizeId = Fe;
-  function Wu(e, t, r) {
-    return ((r = Fe(r)), e.resolve(t, r));
+  cjsExports.normalizeId = normalizeId;
+  function resolveUrl(resolver, baseId, id) {
+    id = normalizeId(id);
+    return resolver.resolve(baseId, id);
   }
-  hn.resolveUrl = Wu;
-  var Bu = /^[a-z_][-a-z0-9._]*$/i;
-  function Qu(e, t) {
-    if (typeof e == "boolean") return {};
-    let { schemaId: schemaId, uriResolver: uriResolver } = this.opts,
-      n = Fe(e[schemaId] || t),
-      o = { "": n },
-      i = fn(uriResolver, n, !1),
-      a = {},
-      c = new Set();
-    return (
-      Fu(e, { allKeys: !0 }, (f, b, _, h) => {
-        if (h === void 0) return;
-        let p = i + b,
-          y = o[h];
-        if (typeof f[schemaId] == "string") y = v.call(this, f[schemaId]);
-        (O.call(this, f.$anchor), O.call(this, f.$dynamicAnchor), (o[b] = y));
-        function v(q) {
-          let resolve = this.opts.uriResolver.resolve;
-          if (((q = Fe(y ? resolve(y, q) : q)), c.has(q))) throw l(q);
-          c.add(q);
-          let N = this.refs[q];
-          if (typeof N == "string") N = this.refs[N];
-          if (typeof N == "object") u(f, N.schema, q);
-          else if (q !== Fe(p))
-            if (q[0] === "#") (u(f, a[q], q), (a[q] = f));
-            else this.refs[q] = p;
-          return q;
+  cjsExports.resolveUrl = resolveUrl;
+  var ANCHOR = /^[a-z_][-a-z0-9._]*$/i;
+  function getSchemaRefs(schema, baseId) {
+    if (typeof schema == "boolean") return {};
+    let { schemaId, uriResolver } = this.opts;
+    let schId = normalizeId(schema[schemaId] || baseId);
+    let baseIds = {
+      "": schId,
+    };
+    let pathPrefix = getFullPath(uriResolver, schId, false);
+    let localRefs = {};
+    let schemaRefs = new Set();
+    traverse(
+      schema,
+      {
+        allKeys: true,
+      },
+      (sch, jsonPtr, _, parentJsonPtr) => {
+        if (parentJsonPtr === undefined) return;
+        let fullPath = pathPrefix + jsonPtr;
+        let innerBaseId = baseIds[parentJsonPtr];
+        if (typeof sch[schemaId] == "string") innerBaseId = addRef.call(this, sch[schemaId]);
+        addAnchor.call(this, sch.$anchor);
+        addAnchor.call(this, sch.$dynamicAnchor);
+        baseIds[jsonPtr] = innerBaseId;
+        function addRef(ref) {
+          let _resolve = this.opts.uriResolver.resolve;
+          ref = normalizeId(innerBaseId ? _resolve(innerBaseId, ref) : ref);
+          if (schemaRefs.has(ref)) throw ambiguos(ref);
+          schemaRefs.add(ref);
+          let schOrRef = this.refs[ref];
+          if (typeof schOrRef == "string") schOrRef = this.refs[schOrRef];
+          if (typeof schOrRef == "object") checkAmbiguosRef(sch, schOrRef.schema, ref);
+          else if (ref !== normalizeId(fullPath))
+            if (ref[0] === "#") {
+              checkAmbiguosRef(sch, localRefs[ref], ref);
+              localRefs[ref] = sch;
+            } else this.refs[ref] = fullPath;
+          return ref;
         }
-        function O(q) {
-          if (typeof q == "string") {
-            if (!Bu.test(q)) throw Error(`invalid anchor "${q}"`);
-            v.call(this, `#${q}`);
+        function addAnchor(anchor) {
+          if (typeof anchor == "string") {
+            if (!ANCHOR.test(anchor)) throw Error(`invalid anchor "${anchor}"`);
+            addRef.call(this, `#${anchor}`);
           }
         }
-      }),
-      a
+      },
     );
-    function u(f, b, _) {
-      if (b !== void 0 && !Ku(f, b)) throw l(_);
+    return localRefs;
+    function checkAmbiguosRef(sch1, sch2, ref) {
+      if (sch2 !== undefined && !equal(sch1, sch2)) throw ambiguos(ref);
     }
-    function l(f) {
-      return Error(`reference "${f}" resolves to more than one schema`);
+    function ambiguos(ref) {
+      return Error(`reference "${ref}" resolves to more than one schema`);
     }
   }
-  hn.getSchemaRefs = Qu;
+  cjsExports.getSchemaRefs = getSchemaRefs;
 });
-
-export { lt };
+export { require_resolve_2 };

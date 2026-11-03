@@ -10,10 +10,10 @@
  */
 import { getCachedReferrerReward, checkCachedPassesEligibility } from "../../services/api/referral.js";
 
+//@ chunk-e6aww6q8.js:2027748-2028028 fingerprint = default (0.786)
 /**
  * /passes 命令对象（local-jsx）；描述：{if(drt())return"Share a free week of Claude Code with friends and earn usage credits";return"Share a free week of Claude Code with friends"；isHidden: {let{eligible:e,hasCache:n}=qvt();return!e||!n}；实现 chunk-aa3cndeh.js 的 Da。
  */
-//@ chunk-e6aww6q8.js:2027748-2028028 fingerprint = default (0.786)
 var passesCommand = {
   type: "local-jsx",
   name: "passes",
@@ -23,10 +23,11 @@ var passesCommand = {
     return "Share a free week of Claude Code with friends";
   },
   get isHidden() {
-    let { eligible: eligible, hasCache: hasCache } = checkCachedPassesEligibility();
+    let { eligible, hasCache } = checkCachedPassesEligibility();
     return !eligible || !hasCache;
   },
-  requires: { ink: !0 },
+  requires: {
+    ink: true,
+  },
 };
-
 export { passesCommand };

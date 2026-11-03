@@ -8,15 +8,23 @@
  * pieces: chunk-03eraja6.js (10)
  * attribution: placement 10
  */
-import { UK, nve, escapeXml_2 as escapeXml, bv } from "../confusables.js";
+import {
+  TAG_BRACKET_CLASSES,
+  lookaheadCapture,
+  escapeXml_2 as escapeXml,
+  foldLookalikeChars,
+} from "../confusables.js";
 import { urlPatternToRegex } from "../stringUtils.js";
 
 //@ chunk-03eraja6.js:273-342 placement
-function j6o(t) {
+/**
+ * 把转发文本换行统一并每行缩进两格。
+ */
+function indentForwardedText(t) {
   return (
     "  " +
     t.replace(
-      e4e,
+      LINE_BREAK_RE,
       `
 `,
     ).split(`
@@ -25,70 +33,93 @@ function j6o(t) {
   );
 }
 //@ chunk-03eraja6.js:342-404 placement
-var W6o = VF,
-  e4e = /\r\n?|[\u001c-\u001e\u2028\u2029\u0085\v\f]/g;
+/**
+ * 转发回合缩进的别名，并定义换行/分隔符正则。
+ */
+var indentForwardedTurn = indentTurn;
+var LINE_BREAK_RE = /\r\n?|[\u001c-\u001e\u2028\u2029\u0085\v\f]/g;
 //@ chunk-03eraja6.js:404-446 placement
-function t4e(t) {
+/**
+ * 把各种换行与分页符统一为 \n。
+ */
+function normalizeLineBreaks(t) {
   return t.replace(
-    e4e,
+    LINE_BREAK_RE,
     `
 `,
   );
 }
 //@ chunk-03eraja6.js:446-527 placement
-var Nxe = /[\p{Cf}\p{Default_Ignorable_Code_Point}]/gu,
-  { open: open, close: close, slash: slash } = UK;
+/**
+ * 不可见格式字符正则（Cf 与 Default_Ignorable）。
+ */
+var INVISIBLE_FORMAT_CHARS_RE = /[\p{Cf}\p{Default_Ignorable_Code_Point}]/gu;
+var { open, close, slash } = TAG_BRACKET_CLASSES;
+//@ chunk-03eraja6.js:527-674 placement
 /**
  * 中和转发回合中的链接：去掉特殊字符，并把指向指定地址的括号链接改写为普通方括号，避免被当成可点击链接。
  */
-//@ chunk-03eraja6.js:527-674 placement
-function neutralizeForwardedLinks(t, r) {
+function neutralizeForwardedLinks_2(t, r) {
   return r
-    .replace(Nxe, "")
+    .replace(INVISIBLE_FORMAT_CHARS_RE, "")
     .replace(
       new RegExp(
-        `[${open}]([\\s${slash}]*${urlPatternToRegex(t)}\\b(?:${nve(`^${open}${close}`, 2)}[${close}])?)`,
+        `[${open}]([\\s${slash}]*${urlPatternToRegex(t)}\\b(?:${lookaheadCapture(`^${open}${close}`, 2)}[${close}])?)`,
         "giu",
       ),
       (n, o) => "[" + o,
     );
 }
 //@ chunk-03eraja6.js:674-751 placement
-var FORWARDED_USER_TURNS = "forwarded_user_turns",
-  FORWARDED_TURN = "forwarded_turn",
-  p = ["transcript", FORWARDED_USER_TURNS, FORWARDED_TURN];
+var FORWARDED_USER_TURNS = "forwarded_user_turns";
+var FORWARDED_TURN = "forwarded_turn";
+var FORWARDED_TRANSCRIPT_PATH = ["transcript", FORWARDED_USER_TURNS, FORWARDED_TURN];
 //@ chunk-03eraja6.js:751-810 placement
-function yot(t) {
+/**
+ * 逐层中和转发内容中的链接（避免被渲染为可点击）。
+ */
+function neutralizeForwardedLinks(t) {
   let r = t;
-  for (let n of p) r = neutralizeForwardedLinks(n, r);
+  for (let n of FORWARDED_TRANSCRIPT_PATH) r = neutralizeForwardedLinks_2(n, r);
   return r;
 }
 //@ chunk-03eraja6.js:810-871 placement
-function VF(t) {
+/**
+ * 统一换行、去链接后每行缩进两格。
+ */
+function indentTurn(t) {
   return (
     "  " +
-    yot(t4e(t)).split(`
+    neutralizeForwardedLinks(normalizeLineBreaks(t)).split(`
 `).join(`
   `)
   );
 }
 //@ chunk-03eraja6.js:871-910 placement
-var a = /[\x00-\x08\x0b-\x1f\x7f-\x9f]/g;
+var CONTROL_CHARS_RE = /[\x00-\x08\x0b-\x1f\x7f-\x9f]/g;
 //@ chunk-03eraja6.js:910-983 placement
-function b6r(t) {
-  return j6o(escapeXml(bv(t4e(t).replace(Nxe, "").replace(a, ""))));
+/**
+ * 生成转义 XML 的转发回合文本块。
+ */
+function formatForwardedTurnXML(text) {
+  return indentForwardedText(
+    escapeXml(
+      foldLookalikeChars(
+        normalizeLineBreaks(text).replace(INVISIBLE_FORMAT_CHARS_RE, "").replace(CONTROL_CHARS_RE, ""),
+      ),
+    ),
+  );
 }
-
 export {
-  b6r,
-  yot,
-  VF,
-  Nxe,
+  formatForwardedTurnXML,
   neutralizeForwardedLinks,
+  indentTurn,
+  INVISIBLE_FORMAT_CHARS_RE,
+  neutralizeForwardedLinks_2,
   FORWARDED_TURN,
   FORWARDED_USER_TURNS,
-  t4e,
-  e4e,
-  j6o,
-  W6o,
+  normalizeLineBreaks,
+  LINE_BREAK_RE,
+  indentForwardedText,
+  indentForwardedTurn,
 };

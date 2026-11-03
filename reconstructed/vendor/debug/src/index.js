@@ -6,13 +6,13 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { Is } from "./browser.js";
-import { Vs } from "./node.js";
+import { require_browser } from "./browser.js";
+import { require_node } from "./node.js";
 
 //@ chunk-h6b7mazd.js:37209-37343 cjs-fingerprint
-var pMn = x(function (Bd, Lr) {
-  if (typeof process > "u" || process.type === "renderer" || !1 || process.__nwjs) Lr.exports = Is();
-  else Lr.exports = Vs();
+var require_debug_2 = x(function (cjsExports, cjsModule) {
+  if (typeof process === "undefined" || process.type === "renderer" || false || process.__nwjs)
+    cjsModule.exports = require_browser();
+  else cjsModule.exports = require_node();
 });
-
-export { pMn };
+export { require_debug_2 };

@@ -9,14 +9,14 @@
  * attribution: placement 40
  */
 import { lstatSync, realpathSync } from "fs";
-import { join, join as join_2, posix } from "path";
-import { homedir, homedir as homedir_2 } from "os";
+import { join, posix } from "path";
+import { homedir } from "os";
 import {
   isViolinWoodEnabled,
   isViolinWoodEnabledCached,
   isViolinWoodServedOff,
 } from "../analytics/violinGates.js";
-import { Z2 } from "../../bridge/deviceRegistration.js";
+import { isRemoteToolsForwardEnabled } from "../../bridge/deviceRegistration.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE, onGrowthBookRefresh } from "../analytics/growthbook.js";
 import { logError } from "../../utils/log.js";
 import { toError } from "../../utils/errors.js";
@@ -55,16 +55,17 @@ function isRemoteToolForwardingEnabledCached() {
 }
 //@ chunk-e2fknt7w.js:15281-15307 placement
 function isRemoteToolForwardingSwitchOn() {
-  return Z2();
+  return isRemoteToolsForwardEnabled();
 }
 //@ chunk-e2fknt7w.js:15307-15339 placement
 var TENGU_VIOLIN_TAILPIECE = "tengu_violin_tailpiece";
 //@ chunk-e2fknt7w.js:15339-15407 placement
 function isForwardingOffNoticeOn() {
   try {
-    return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_VIOLIN_TAILPIECE, !0) !== !1;
+    return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_VIOLIN_TAILPIECE, true) !== false;
   } catch (error) {
-    return (logError(toError(error)), !1);
+    logError(toError(error));
+    return false;
   }
 }
 //@ chunk-e2fknt7w.js:15407-15470 placement
@@ -79,26 +80,27 @@ function forwardingOffReasonNow() {
 }
 //@ chunk-e2fknt7w.js:15584-15608 placement
 function remoteToolVmRequired() {
-  return !1;
+  return false;
 }
 //@ chunk-e2fknt7w.js:15608-15678 placement
 function isSessionChannelDisabled() {
-  return antEnv.CLAUDE_CODE_REMOTE_TOOLS_SESSION_CHANNEL === !1;
+  return antEnv.CLAUDE_CODE_REMOTE_TOOLS_SESSION_CHANNEL === false;
 }
 //@ chunk-e2fknt7w.js:15678-15804 placement
 function servedCallRequestsJumpQueueOn() {
   try {
     return (
       antEnv.CLAUDE_CODE_REMOTE_TOOLS_JUMP_QUEUE ??
-      getFeatureValue_CACHED_MAY_BE_STALE("tengu_valiant_rain", !1) === !0
+      getFeatureValue_CACHED_MAY_BE_STALE("tengu_valiant_rain", false) === true
     );
   } catch (error) {
-    return (logError(toError(error)), !1);
+    logError(toError(error));
+    return false;
   }
 }
 //@ chunk-e2fknt7w.js:15804-15840 placement
 function isRemoteToolServingSwitchOn() {
-  return remoteToolServingOffReason() === void 0;
+  return remoteToolServingOffReason() === undefined;
 }
 //@ chunk-e2fknt7w.js:15840-15874 placement
 function isRemoteToolServingOnForSettings() {
@@ -109,16 +111,16 @@ function isPersonFixableOffReason(e) {
   return e === "launched_from_home";
 }
 //@ chunk-e2fknt7w.js:15922-16035 placement
-var TENGU_VIOLIN_MUTE = "tengu_violin_mute",
-  SERVING_MUTED_NOTICE_KEY = "served-tools-muted",
-  SERVING_UNMUTED_NOTICE_KEY = "served-tools-unmuted",
-  TENGU_VIOLIN_PLAN_CLASSIFIER = "tengu_violin_plan_classifier";
+var TENGU_VIOLIN_MUTE = "tengu_violin_mute";
+var SERVING_MUTED_NOTICE_KEY = "served-tools-muted";
+var SERVING_UNMUTED_NOTICE_KEY = "served-tools-unmuted";
+var TENGU_VIOLIN_PLAN_CLASSIFIER = "tengu_violin_plan_classifier";
 //@ chunk-e2fknt7w.js:16035-16091 placement
 function isPlanClassifierArmOn() {
   try {
-    return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_VIOLIN_PLAN_CLASSIFIER, !0) !== !1;
+    return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_VIOLIN_PLAN_CLASSIFIER, true) !== false;
   } catch {
-    return !1;
+    return false;
   }
 }
 //@ chunk-e2fknt7w.js:16091-16124 placement
@@ -126,11 +128,12 @@ var TENGU_UNIFIED_WATERFALL = "tengu_unified_waterfall";
 //@ chunk-e2fknt7w.js:16124-16259 placement
 function areAskSeatsOn() {
   let CLAUDE_CODE_REMOTE_TOOLS_ASK_SEATS = antEnv.CLAUDE_CODE_REMOTE_TOOLS_ASK_SEATS;
-  if (CLAUDE_CODE_REMOTE_TOOLS_ASK_SEATS !== void 0) return CLAUDE_CODE_REMOTE_TOOLS_ASK_SEATS;
+  if (CLAUDE_CODE_REMOTE_TOOLS_ASK_SEATS !== undefined) return CLAUDE_CODE_REMOTE_TOOLS_ASK_SEATS;
   try {
-    return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_UNIFIED_WATERFALL, !0) !== !1;
+    return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_UNIFIED_WATERFALL, true) !== false;
   } catch (error) {
-    return (logError(toError(error)), !1);
+    logError(toError(error));
+    return false;
   }
 }
 //@ chunk-e2fknt7w.js:16259-16289 placement
@@ -138,9 +141,10 @@ var TENGU_EVENTUAL_HAVEN = "tengu_eventual_haven";
 //@ chunk-e2fknt7w.js:16289-16357 placement
 function isAttachAnnounceWaitOn() {
   try {
-    return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_EVENTUAL_HAVEN, !0) !== !1;
+    return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_EVENTUAL_HAVEN, true) !== false;
   } catch (error) {
-    return (logError(toError(error)), !1);
+    logError(toError(error));
+    return false;
   }
 }
 //@ chunk-e2fknt7w.js:16357-16387 placement
@@ -148,38 +152,40 @@ var TENGU_VIOLIN_BASSBAR = "tengu_violin_bassbar";
 //@ chunk-e2fknt7w.js:16387-16455 placement
 function isLinkPreparationOverlapOn() {
   try {
-    return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_VIOLIN_BASSBAR, !0) !== !1;
+    return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_VIOLIN_BASSBAR, true) !== false;
   } catch (error) {
-    return (logError(toError(error)), !1);
+    logError(toError(error));
+    return false;
   }
 }
 //@ chunk-e2fknt7w.js:16455-16500 placement
 var TENGU_VIOLIN_SPECULATIVE_CLASSIFIER = "tengu_violin_speculative_classifier";
 //@ chunk-e2fknt7w.js:16500-16638 placement
-function isSpeculativeClassifierOn(e) {
+function isSpeculativeClassifierOn(name) {
   try {
     if (!(
       antEnv.CLAUDE_CODE_REMOTE_TOOLS_SPECULATIVE_CLASSIFIER ??
-      getFeatureValue_CACHED_MAY_BE_STALE(TENGU_VIOLIN_SPECULATIVE_CLASSIFIER, !1) === !0
+      getFeatureValue_CACHED_MAY_BE_STALE(TENGU_VIOLIN_SPECULATIVE_CLASSIFIER, false) === true
     ))
-      return !1;
-    return !1;
+      return false;
+    return false;
   } catch (error) {
-    return (logError(toError(error)), !1);
+    logError(toError(error));
+    return false;
   }
 }
 //@ chunk-e2fknt7w.js:16638-16694 placement
 function isRemoteToolServingMuted() {
   try {
-    return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_VIOLIN_MUTE, !1) === !0;
+    return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_VIOLIN_MUTE, false) === true;
   } catch {
-    return !1;
+    return false;
   }
 }
 //@ chunk-e2fknt7w.js:16694-16708 placement
-var gn = 300000;
+var SERVING_MUTE_RECHECK_INTERVAL_MS = 300000;
 //@ chunk-e2fknt7w.js:16708-16749 placement
-function wn(e) {
+function logErrorSwallowed(e) {
   try {
     e();
   } catch (error) {
@@ -188,40 +194,43 @@ function wn(e) {
 }
 //@ chunk-e2fknt7w.js:16749-16880 placement
 function onServingMuteRecheck(e) {
-  let n = onGrowthBookRefresh(e),
-    o = setInterval(wn, Math.round(gn * (0.8 + Math.random() * 0.4)), e);
-  return (
-    o.unref(),
-    () => {
-      (clearInterval(o), n());
-    }
+  let n = onGrowthBookRefresh(e);
+  let interval = setInterval(
+    logErrorSwallowed,
+    Math.round(SERVING_MUTE_RECHECK_INTERVAL_MS * (0.8 + Math.random() * 0.4)),
+    e,
   );
+  interval.unref();
+  return () => {
+    clearInterval(interval);
+    n();
+  };
 }
 //@ chunk-e2fknt7w.js:16880-17194 placement
 function remoteToolServingOffReason(e = getOriginalCwd(), n = {}) {
   if (getPlatform() === "windows") return "windows";
   if (!n.ignoringMute && isRemoteToolServingMuted()) return "muted";
-  if (!Rn()) return "switch_off";
+  if (!isRemoteToolsServingEnvOn()) return "switch_off";
   let o = isWslMountInfoUnreadable();
   if (launchedFromHome(e)) return "launched_from_home";
   if (o || isWslMountInfoUnreadable()) return "mount_table_unreadable";
   if (windowsProfileDirsUnread()) return "profile_dirs_unread";
-  if (windowsProfileDirsReadFailure() !== void 0) return "profile_dirs_unreadable";
+  if (windowsProfileDirsReadFailure() !== undefined) return "profile_dirs_unreadable";
   return;
 }
 //@ chunk-e2fknt7w.js:17194-17278 placement
 function adoptMcpOverChannelSwitchOn() {
   let CLAUDE_CODE_REMOTE_TOOLS_ADOPT_MCP = antEnv.CLAUDE_CODE_REMOTE_TOOLS_ADOPT_MCP;
-  return CLAUDE_CODE_REMOTE_TOOLS_ADOPT_MCP === void 0 || isEnvTruthy(CLAUDE_CODE_REMOTE_TOOLS_ADOPT_MCP);
+  return CLAUDE_CODE_REMOTE_TOOLS_ADOPT_MCP === undefined || isEnvTruthy(CLAUDE_CODE_REMOTE_TOOLS_ADOPT_MCP);
 }
 //@ chunk-e2fknt7w.js:17278-17357 placement
-function Rn() {
+function isRemoteToolsServingEnvOn() {
   let CLAUDE_CODE_REMOTE_TOOLS_SERVE = antEnv.CLAUDE_CODE_REMOTE_TOOLS_SERVE;
-  return CLAUDE_CODE_REMOTE_TOOLS_SERVE === void 0 || isEnvTruthy(CLAUDE_CODE_REMOTE_TOOLS_SERVE);
+  return CLAUDE_CODE_REMOTE_TOOLS_SERVE === undefined || isEnvTruthy(CLAUDE_CODE_REMOTE_TOOLS_SERVE);
 }
 //@ chunk-e2fknt7w.js:17357-17396 placement
-function launchedFromHome(e = getOriginalCwd()) {
-  return classifyMountForServing(e, "all");
+function launchedFromHome(path = getOriginalCwd()) {
+  return classifyMountForServing(path, "all");
 }
 //@ chunk-e2fknt7w.js:17396-17469 placement
 function refusedOnlyAsProfileOnMountWithoutDrive(e = getOriginalCwd()) {
@@ -229,27 +238,27 @@ function refusedOnlyAsProfileOnMountWithoutDrive(e = getOriginalCwd()) {
     getPlatform() === "wsl" && classifyMountForServing(e, "all") && !classifyMountForServing(e, "drives_only")
   );
 }
+//@ chunk-e2fknt7w.js:17469-17843 placement
 /**
  * 计算远程工具服务目录的基础路径集合（目录本身、规范化路径、所在 git 根与规范 git 根）；.git 是符号链接或 Windows 上落在远程 UNC 主机时直接拒绝。
  */
-//@ chunk-e2fknt7w.js:17469-17843 placement
 function servingBasesFor(dir) {
-  let n = b(dir),
-    o = dir === n ? [dir] : [dir, n],
-    filtered = o.map((a) => findGitRootUncached(a)).filter((a) => a !== null);
+  let n = realpathOrSpelling_2(dir);
+  let o = dir === n ? [dir] : [dir, n];
+  let filtered = o.map((a) => findGitRootUncached(a)).filter((a) => a !== null);
   if (
     filtered.some((a) => {
       try {
         return lstatSync(join(a, ".git")).isSymbolicLink();
       } catch {
-        return !1;
+        return false;
       }
     })
   )
     return "refused_outright";
-  let filtered_2 = filtered.flatMap((a) => [a, findCanonicalGitRootUncached(a)]).filter((a) => a !== null),
-    mapped = filtered_2.map((a) => b(a)),
-    d = [...filtered_2, ...mapped];
+  let filtered_2 = filtered.flatMap((a) => [a, findCanonicalGitRootUncached(a)]).filter((a) => a !== null);
+  let mapped = filtered_2.map((a) => realpathOrSpelling_2(a));
+  let d = [...filtered_2, ...mapped];
   if (
     getPlatform() === "windows" &&
     [n, ...mapped].some((a) => isRemoteUncHost(normalizeCommandForPlatform(a)))
@@ -258,15 +267,15 @@ function servingBasesFor(dir) {
   return uniq([...o, ...d]);
 }
 //@ chunk-e2fknt7w.js:17843-18105 placement
-function wslServingFacts(e) {
-  let n = getPlatform() === "wsl" ? servingBasesFor(e) : void 0;
-  if (n === void 0 || n === "refused_outright") return;
+function wslServingFacts(dir) {
+  let n = getPlatform() === "wsl" ? servingBasesFor(dir) : undefined;
+  if (n === undefined || n === "refused_outright") return;
   return {
     bases: n.map((o) => posix.normalize(o)),
     mountPoints: [
       ...[...n, ...withPathAliases(getClaudeConfigDirs())].flatMap((o) => pathWithMountAliases(o).slice(1)),
-      ...profileMountPointsUnder([homedir(), b(homedir())], "all"),
-      ...windowsRootMountPoints("all").map(({ mountPoint: mountPoint }) => mountPoint),
+      ...profileMountPointsUnder([homedir(), realpathOrSpelling_2(homedir())], "all"),
+      ...windowsRootMountPoints("all").map(({ mountPoint }) => mountPoint),
     ],
   };
 }
@@ -274,7 +283,7 @@ function wslServingFacts(e) {
 function launchTouchesWindowsVolumeMountedTwice(e = getOriginalCwd()) {
   let n = wslServingFacts(e);
   return (
-    n !== void 0 &&
+    n !== undefined &&
     (n.bases.some((base) => listWslDrvfsMounts(base, "except_two_drive_mounts")) ||
       n.mountPoints.some((mountPoint) => listWslDrvfsMounts(mountPoint, "all")))
   );
@@ -282,7 +291,7 @@ function launchTouchesWindowsVolumeMountedTwice(e = getOriginalCwd()) {
 //@ chunk-e2fknt7w.js:18250-18342 placement
 function launchTouchesWindowsVolumeBesideUnreadMount(e = getOriginalCwd()) {
   let n = wslServingFacts(e);
-  return n !== void 0 && [...n.bases, ...n.mountPoints].some(touchesVolumeBesideUnreadMount);
+  return n !== undefined && [...n.bases, ...n.mountPoints].some(touchesVolumeBesideUnreadMount);
 }
 //@ chunk-e2fknt7w.js:21869-21918 placement
 function realpathOrSpelling(e) {
@@ -293,7 +302,7 @@ function realpathOrSpelling(e) {
   }
 }
 //@ chunk-e2fknt7w.js:21918-22010 placement
-function b(e) {
+function realpathOrSpelling_2(e) {
   if (getPlatform() !== "windows") return realpathOrSpelling(e);
   try {
     return realpathSync.native(e);
@@ -304,7 +313,7 @@ function b(e) {
 //@ chunk-e2fknt7w.js:22010-22117 placement
 function remoteToolServingPolicyName() {
   let CLAUDE_CODE_REMOTE_TOOLS_POLICY = antEnv.CLAUDE_CODE_REMOTE_TOOLS_POLICY;
-  return CLAUDE_CODE_REMOTE_TOOLS_POLICY === void 0 || CLAUDE_CODE_REMOTE_TOOLS_POLICY === "parity"
+  return CLAUDE_CODE_REMOTE_TOOLS_POLICY === undefined || CLAUDE_CODE_REMOTE_TOOLS_POLICY === "parity"
     ? "parity"
     : "interim";
 }
@@ -312,7 +321,6 @@ function remoteToolServingPolicyName() {
 function callerSessionsLimit() {
   return antEnv.CLAUDE_CODE_REMOTE_TOOLS_CALLER_SESSIONS_MAX;
 }
-
 export {
   remoteToolServingOffReason,
   isPersonFixableOffReason,
@@ -336,7 +344,7 @@ export {
   isSpeculativeClassifierOn,
   isPlanClassifierArmOn,
   servingBasesFor,
-  b,
+  realpathOrSpelling_2,
   isAttachAnnounceWaitOn,
   launchedFromHome,
   isLinkPreparationOverlapOn,

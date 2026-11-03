@@ -8,21 +8,19 @@
  * pieces: chunk-e6aww6q8.js (1)
  * attribution: fingerprint 1
  */
-
+//@ chunk-e6aww6q8.js:2030075-2030344 fingerprint = reloadPlugins (0.611)
 /**
  * /reload-plugins 命令对象（local）；描述：Activate pending plugin changes in the current session；实现 chunk-8vqp1nqq.js 的 qr。
  */
-//@ chunk-e6aww6q8.js:2030075-2030344 fingerprint = reloadPlugins (0.611)
 var reloadPluginsCommandDefinition = {
-    type: "local",
-    name: "reload-plugins",
-    description: "Activate pending plugin changes in the current session",
-    argumentHint: "[--force]",
-    supportsNonInteractive: !0,
-    terminalOriented: !0,
-    thinClientDispatch: "control-request",
-    load: () => import("./chunk-8vqp1nqq.js"),
-  },
-  reloadPluginsCommand = reloadPluginsCommandDefinition;
-
+  type: "local",
+  name: "reload-plugins",
+  description: "Activate pending plugin changes in the current session",
+  argumentHint: "[--force]",
+  supportsNonInteractive: true,
+  terminalOriented: true,
+  thinClientDispatch: "control-request",
+  load: () => import("./chunk-8vqp1nqq.js"),
+};
+var reloadPluginsCommand = reloadPluginsCommandDefinition;
 export { reloadPluginsCommand };

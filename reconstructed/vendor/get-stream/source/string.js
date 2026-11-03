@@ -5,30 +5,42 @@
  * pieces: chunk-m4p5zn6n.js (2)
  * attribution: esm-layout 1, esm-fingerprint 1
  */
-import { D } from "./contents.js";
-import { ke, ue, ce, Ne } from "./utils.js";
+import { getStreamContents } from "./contents.js";
+import { ke, throwObjectStream, getLengthProp, getContentsProp } from "./utils.js";
 
 //@ chunk-m4p5zn6n.js:24141-24181 esm-layout
-async function Le(e, n) {
-  return D(e, yo, n);
+async function Le(stream, options) {
+  return getStreamContents(stream, stringMethods, options);
 }
 //@ chunk-m4p5zn6n.js:24181-24564 esm-fingerprint
-var po = () => ({ contents: "", textDecoder: new TextDecoder() }),
-  le = (e, { textDecoder: textDecoder }) => textDecoder.decode(e, { stream: !0 }),
-  mo = (e, { contents: contents }) => contents + e,
-  go = (e, n) => e.slice(0, n),
-  ho = ({ textDecoder: textDecoder }) => {
-    let decode = textDecoder.decode();
-    return decode === "" ? void 0 : decode;
+var initString = () => ({
+  contents: "",
+  textDecoder: new TextDecoder(),
+});
+var useTextDecoder = (chunk, { textDecoder }) =>
+  textDecoder.decode(chunk, {
+    stream: true,
+  });
+var addStringChunk = (convertedChunk, { contents }) => contents + convertedChunk;
+var truncateStringChunk = (convertedChunk, chunkSize) => convertedChunk.slice(0, chunkSize);
+var getFinalStringChunk = ({ textDecoder }) => {
+  let finalChunk = textDecoder.decode();
+  return finalChunk === "" ? undefined : finalChunk;
+};
+var stringMethods = {
+  init: initString,
+  convertChunk: {
+    string: ke,
+    buffer: useTextDecoder,
+    arrayBuffer: useTextDecoder,
+    dataView: useTextDecoder,
+    typedArray: useTextDecoder,
+    others: throwObjectStream,
   },
-  yo = {
-    init: po,
-    convertChunk: { string: ke, buffer: le, arrayBuffer: le, dataView: le, typedArray: le, others: ue },
-    getSize: ce,
-    truncateChunk: go,
-    addChunk: mo,
-    getFinalChunk: ho,
-    finalize: Ne,
-  };
-
+  getSize: getLengthProp,
+  truncateChunk: truncateStringChunk,
+  addChunk: addStringChunk,
+  getFinalChunk: getFinalStringChunk,
+  finalize: getContentsProp,
+};
 export { Le };

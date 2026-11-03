@@ -8,16 +8,16 @@
  * pieces: chunk-409rw9nn.js (4)
  * attribution: fingerprint 1, callgraph-witnessed 1, placement 2
  */
-import { UPi } from "../config.js";
-import { BJt } from "../../services/oauth/oauthErrors.js";
-import { SESSION_END_REASONS, HOOK_EVENTS } from "../../entrypoints/sdk/coreSchemas.js";
+import { NOTIFICATION_EVENT_KINDS } from "../config.js";
+import { isRestrictedLinksEnabled } from "../../services/oauth/oauthErrors.js";
+import { SESSION_END_REASONS_2, HOOK_EVENTS } from "../../entrypoints/sdk/coreSchemas.js";
 import { getAllHooks, sortMatchersByPriority } from "./hooksSettings.js";
 import { getRegisteredHooks } from "../../bootstrap/state.js";
 
+//@ chunk-409rw9nn.js:382-13560 fingerprint = getHookEventMetadata (0.846)
 /**
  * /hooks 界面用的事件元数据：每个事件的摘要、退出码语义说明和 matcher 字段（tool_name、notification_type、source、trigger、agent_type、error、reason、mcp_server_name、load_reason、to_model、command_name 等）及候选值。
  */
-//@ chunk-409rw9nn.js:382-13560 fingerprint = getHookEventMetadata (0.846)
 function getHookEventMetadata(toolNames) {
   return {
     PreToolUse: {
@@ -26,7 +26,10 @@ function getHookEventMetadata(toolNames) {
 Exit code 0 - stdout/stderr not shown
 Exit code 2 - show stderr to model and block tool call
 Other exit codes - show stderr to user only but continue with tool call`,
-      matcherMetadata: { fieldToMatch: "tool_name", values: toolNames },
+      matcherMetadata: {
+        fieldToMatch: "tool_name",
+        values: toolNames,
+      },
     },
     PostToolUse: {
       summary: "After tool execution",
@@ -34,7 +37,10 @@ Other exit codes - show stderr to user only but continue with tool call`,
 Exit code 0 - stdout shown in transcript mode (ctrl+o)
 Exit code 2 - show stderr to model immediately
 Other exit codes - show stderr to user only`,
-      matcherMetadata: { fieldToMatch: "tool_name", values: toolNames },
+      matcherMetadata: {
+        fieldToMatch: "tool_name",
+        values: toolNames,
+      },
     },
     PostToolUseFailure: {
       summary: "After tool execution fails",
@@ -42,7 +48,10 @@ Other exit codes - show stderr to user only`,
 Exit code 0 - stdout shown in transcript mode (ctrl+o)
 Exit code 2 - show stderr to model immediately
 Other exit codes - show stderr to user only`,
-      matcherMetadata: { fieldToMatch: "tool_name", values: toolNames },
+      matcherMetadata: {
+        fieldToMatch: "tool_name",
+        values: toolNames,
+      },
     },
     PostToolBatch: {
       summary: "After a batch of tool calls resolves",
@@ -57,7 +66,10 @@ Other exit codes - show stderr to user only`,
 Return {"hookSpecificOutput":{"hookEventName":"PermissionDenied","retry":true}} to tell the model it may retry.
 Exit code 0 - stdout shown in transcript mode (ctrl+o)
 Other exit codes - show stderr to user only`,
-      matcherMetadata: { fieldToMatch: "tool_name", values: toolNames },
+      matcherMetadata: {
+        fieldToMatch: "tool_name",
+        values: toolNames,
+      },
     },
     Notification: {
       summary: "When notifications are sent",
@@ -66,7 +78,7 @@ Exit code 0 - stdout/stderr not shown
 Other exit codes - show stderr to user only`,
       matcherMetadata: {
         fieldToMatch: "notification_type",
-        values: [...UPi, "elicitation_complete", "elicitation_response"],
+        values: [...NOTIFICATION_EVENT_KINDS, "elicitation_complete", "elicitation_response"],
       },
     },
     UserPromptSubmit: {
@@ -82,7 +94,10 @@ Other exit codes - show stderr to user only`,
 Exit code 0 - stdout shown to Claude
 Exit code 2 - block expansion and show stderr to user only
 Other exit codes - show stderr to user only`,
-      matcherMetadata: { fieldToMatch: "command_name", values: [] },
+      matcherMetadata: {
+        fieldToMatch: "command_name",
+        values: [],
+      },
     },
     SessionStart: {
       summary: "When a new session is started",
@@ -90,7 +105,10 @@ Other exit codes - show stderr to user only`,
 Exit code 0 - stdout shown to Claude
 Exit code 2 - show stderr to user only
 Other exit codes - show stderr to user only`,
-      matcherMetadata: { fieldToMatch: "source", values: ["startup", "resume", "clear", "compact", "fork"] },
+      matcherMetadata: {
+        fieldToMatch: "source",
+        values: ["startup", "resume", "clear", "compact", "fork"],
+      },
     },
     Stop: {
       summary: "Right before Claude concludes its response",
@@ -109,7 +127,7 @@ Other exit codes - show stderr to user only`,
           "overloaded",
           "authentication_failed",
           "oauth_org_not_allowed",
-          ...(BJt() ? ["account_on_hold"] : []),
+          ...(isRestrictedLinksEnabled() ? ["account_on_hold"] : []),
           "verification_required",
           "billing_error",
           "invalid_request",
@@ -127,7 +145,10 @@ Other exit codes - show stderr to user only`,
 Exit code 0 - JSON additionalContext shown to subagent
 Exit code 2 - show stderr to user only
 Other exit codes - show stderr to user only`,
-      matcherMetadata: { fieldToMatch: "agent_type", values: [] },
+      matcherMetadata: {
+        fieldToMatch: "agent_type",
+        values: [],
+      },
     },
     SubagentStop: {
       summary: "Right before a subagent (Agent tool call) concludes its response",
@@ -135,7 +156,10 @@ Other exit codes - show stderr to user only`,
 Exit code 0 - stdout/stderr not shown
 Exit code 2 - show stderr to subagent and continue having it run
 Other exit codes - show stderr to user only`,
-      matcherMetadata: { fieldToMatch: "agent_type", values: [] },
+      matcherMetadata: {
+        fieldToMatch: "agent_type",
+        values: [],
+      },
     },
     PreCompact: {
       summary: "Before conversation compaction",
@@ -143,14 +167,20 @@ Other exit codes - show stderr to user only`,
 Exit code 0 - stdout appended as custom compact instructions
 Exit code 2 - block compaction
 Other exit codes - show stderr to user only but continue with compaction`,
-      matcherMetadata: { fieldToMatch: "trigger", values: ["manual", "auto"] },
+      matcherMetadata: {
+        fieldToMatch: "trigger",
+        values: ["manual", "auto"],
+      },
     },
     PostCompact: {
       summary: "After conversation compaction",
       description: `Input to command is JSON with compaction details and the summary.
 Exit code 0 - stdout shown to user
 Other exit codes - show stderr to user only`,
-      matcherMetadata: { fieldToMatch: "trigger", values: ["manual", "auto"] },
+      matcherMetadata: {
+        fieldToMatch: "trigger",
+        values: ["manual", "auto"],
+      },
     },
     PreModelSwitch: {
       summary: "Before a requested model switch (/model, model picker, set_model)",
@@ -158,21 +188,30 @@ Other exit codes - show stderr to user only`,
 Exit code 0 - switch proceeds; JSON permissionDecision allow/deny/ask as for PreToolUse
 Exit code 2 - block the switch and show stderr to user
 Other exit codes - show stderr to user only and continue`,
-      matcherMetadata: { fieldToMatch: "to_model", values: [] },
+      matcherMetadata: {
+        fieldToMatch: "to_model",
+        values: [],
+      },
     },
     PostModelSwitch: {
       summary: "After the session model changes (any cause)",
       description: `Input to command is JSON with from_model, to_model, requested_model, source, context_tokens and the estimated re-cache cost.
 Exit code 0 - stdout shown to Claude on the next request
 Other exit codes - show stderr to user only`,
-      matcherMetadata: { fieldToMatch: "to_model", values: [] },
+      matcherMetadata: {
+        fieldToMatch: "to_model",
+        values: [],
+      },
     },
     SessionEnd: {
       summary: "When a session is ending",
       description: `Input to command is JSON with session end reason.
 Exit code 0 - command completes successfully
 Other exit codes - show stderr to user only`,
-      matcherMetadata: { fieldToMatch: "reason", values: [...SESSION_END_REASONS] },
+      matcherMetadata: {
+        fieldToMatch: "reason",
+        values: [...SESSION_END_REASONS_2],
+      },
     },
     PermissionRequest: {
       summary: "When a permission dialog is displayed",
@@ -180,7 +219,10 @@ Other exit codes - show stderr to user only`,
 Output JSON with hookSpecificOutput containing decision to allow or deny.
 Exit code 0 - use hook decision if provided
 Other exit codes - show stderr to user only`,
-      matcherMetadata: { fieldToMatch: "tool_name", values: toolNames },
+      matcherMetadata: {
+        fieldToMatch: "tool_name",
+        values: toolNames,
+      },
     },
     Setup: {
       summary: "Repo setup hooks for init and maintenance",
@@ -188,7 +230,10 @@ Other exit codes - show stderr to user only`,
 Exit code 0 - JSON additionalContext shown to Claude
 Exit code 2 - show stderr to user only
 Other exit codes - show stderr to user only`,
-      matcherMetadata: { fieldToMatch: "trigger", values: ["init", "maintenance"] },
+      matcherMetadata: {
+        fieldToMatch: "trigger",
+        values: ["init", "maintenance"],
+      },
     },
     TeammateIdle: {
       summary: "When a teammate is about to go idle",
@@ -218,7 +263,10 @@ Output JSON with hookSpecificOutput containing action (accept/decline/cancel) an
 Exit code 0 - use hook response if provided
 Exit code 2 - deny the elicitation
 Other exit codes - show stderr to user only`,
-      matcherMetadata: { fieldToMatch: "mcp_server_name", values: [] },
+      matcherMetadata: {
+        fieldToMatch: "mcp_server_name",
+        values: [],
+      },
     },
     ElicitationResult: {
       summary: "After a user responds to an MCP elicitation",
@@ -227,7 +275,10 @@ Output JSON with hookSpecificOutput containing optional action and content to ov
 Exit code 0 - use hook response if provided
 Exit code 2 - block the response (action becomes decline)
 Other exit codes - show stderr to user only`,
-      matcherMetadata: { fieldToMatch: "mcp_server_name", values: [] },
+      matcherMetadata: {
+        fieldToMatch: "mcp_server_name",
+        values: [],
+      },
     },
     ConfigChange: {
       summary: "When configuration files change during a session",
@@ -287,7 +338,10 @@ Other exit codes - show stderr to user only`,
 Input to command is JSON with directory (absolute path) and source ("slash_command" or "register_repo_root").
 Exit code 0 - command completes successfully
 Other exit codes - stderr is debug-logged on both paths; for /add-dir, a failure count is summarized to Claude and hook systemMessage output reaches Claude as bounded context; for register_repo_root, everything is debug-logged only`,
-      matcherMetadata: { fieldToMatch: "source", values: ["slash_command", "register_repo_root"] },
+      matcherMetadata: {
+        fieldToMatch: "source",
+        values: ["slash_command", "register_repo_root"],
+      },
     },
     MessageDisplay: {
       summary: "While assistant message text is displayed",
@@ -299,34 +353,34 @@ Other exit codes - display the original delta`,
     },
   };
 }
+//@ chunk-409rw9nn.js:13560-14063 callgraph-witnessed = groupHooksByEventAndMatcher (0.297)
 /**
  * 把所有钩子（各 settings、会话、插件注册）按事件和 matcher 分组，供 /hooks 界面展示。
  */
-//@ chunk-409rw9nn.js:13560-14063 callgraph-witnessed = groupHooksByEventAndMatcher (0.297)
 function groupHooksByEventAndMatcher(appState, toolNames) {
-  let create = Object.create(null);
-  for (let o of HOOK_EVENTS) create[o] = Object.create(null);
+  let grouped = Object.create(null);
+  for (let o of HOOK_EVENTS) grouped[o] = Object.create(null);
   let metadata = getHookEventMetadata(toolNames);
   getAllHooks(appState).forEach((hook) => {
-    let s = create[hook.event];
-    if (s) {
-      let matcherKey = metadata[hook.event].matcherMetadata !== void 0 ? hook.matcher || "" : "";
-      if (!s[matcherKey]) s[matcherKey] = [];
-      s[matcherKey].push(hook);
+    let eventGroup = grouped[hook.event];
+    if (eventGroup) {
+      let matcherKey = metadata[hook.event].matcherMetadata !== undefined ? hook.matcher || "" : "";
+      if (!eventGroup[matcherKey]) eventGroup[matcherKey] = [];
+      eventGroup[matcherKey].push(hook);
     }
   });
   let registeredHooks = getRegisteredHooks();
   if (registeredHooks)
-    for (let [o, s] of Object.entries(registeredHooks)) {
-      let hookEvent = o,
-        d = create[hookEvent];
-      if (!d) continue;
-      for (let matcher of s) {
+    for (let [event, matchers] of Object.entries(registeredHooks)) {
+      let hookEvent = event;
+      let eventGroup = grouped[hookEvent];
+      if (!eventGroup) continue;
+      for (let matcher of matchers) {
         let matcherKey = matcher.matcher || "";
         if ("pluginRoot" in matcher) {
-          d[matcherKey] ??= [];
+          eventGroup[matcherKey] ??= [];
           for (let hook of matcher.hooks)
-            d[matcherKey].push({
+            eventGroup[matcherKey].push({
               event: hookEvent,
               config: hook,
               matcher: matcher.matcher,
@@ -336,7 +390,7 @@ function groupHooksByEventAndMatcher(appState, toolNames) {
         }
       }
     }
-  return create;
+  return grouped;
 }
 //@ chunk-409rw9nn.js:14063-14127 placement
 function getSortedMatchersForEvent(hooksByEventAndMatcher, event) {
@@ -344,9 +398,16 @@ function getSortedMatchersForEvent(hooksByEventAndMatcher, event) {
   return sortMatchersByPriority(matchers, hooksByEventAndMatcher, event);
 }
 //@ chunk-409rw9nn.js:14127-14180 placement
-function Dyo(e, n, t) {
-  let i = t ?? "";
-  return e[n]?.[i] ?? [];
+/**
+ * 取某来源某事件（可选 matcher）下配置的钩子列表。
+ */
+function hooksForSourceAndEvent(hooksByEventAndMatcher, selectedEvent, selectedMatcher) {
+  let i = selectedMatcher ?? "";
+  return hooksByEventAndMatcher[selectedEvent]?.[i] ?? [];
 }
-
-export { getSortedMatchersForEvent, getHookEventMetadata, groupHooksByEventAndMatcher, Dyo };
+export {
+  getSortedMatchersForEvent,
+  getHookEventMetadata,
+  groupHooksByEventAndMatcher,
+  hooksForSourceAndEvent,
+};

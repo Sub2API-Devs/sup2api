@@ -120,503 +120,541 @@ import __cc_resource_2_2 from "../../../assets/plugin-eval-8fcbd81e.md.zst" with
 import __cc_resource_3_2 from "../../../assets/recent-changes-g7ehqj27.md" with { type: "text" };
 import __cc_resource_4 from "../../../assets/SKILL-0vb5xk0r.md" with { type: "text" };
 import __cc_resource_0_3 from "../../../assets/plugin-eval-quickref-e95bcd1b.md.zst" with { type: "file" };
-import { Et } from "../../utils/embeddedAssets.js";
+import { readEmbeddedTextSync } from "../../utils/embeddedAssets.js";
 
 //@ chunk-7wwf2tct.js:9317-9339 placement
-var e_7wwf = __cc_resource_0;
+var claudeApiBatches = __cc_resource_0;
 //@ chunk-7wwf2tct.js:9339-9361 placement
-var t_7wwf = __cc_resource_1;
+var claudeApiFilesApi = __cc_resource_1;
 //@ chunk-7wwf2tct.js:9361-9383 placement
-var a_7wwf = __cc_resource_2;
+var claudeApiOpentelemetry = __cc_resource_2;
 //@ chunk-7wwf2tct.js:9383-9405 placement
-var s_7wwf = __cc_resource_3;
+var readmePath = __cc_resource_3;
 //@ chunk-7wwf2tct.js:9405-9437 placement
-var r = Et(s_7wwf, import.meta.dirname);
+var claudeApiReadme = readEmbeddedTextSync(readmePath, import.meta.dirname);
 //@ chunk-7wwf2tct.js:9437-9459 placement
-var o_7wwf = __cc_resource_4_2;
+var claudeApiStreaming = __cc_resource_4_2;
 //@ chunk-7wwf2tct.js:9459-9481 placement
-var n_7wwf = __cc_resource_5;
+var claudeApiToolUse = __cc_resource_5;
 //@ chunk-7wwf2tct.js:9481-9503 placement
-var i = __cc_resource_6;
+var examplesPath = __cc_resource_6;
 //@ chunk-7wwf2tct.js:9503-9535 placement
-var l = Et(i, import.meta.dirname);
+var curlExamples = readEmbeddedTextSync(examplesPath, import.meta.dirname);
 //@ chunk-7wwf2tct.js:9535-9557 placement
-var d = __cc_resource_7;
+var managedAgentsPath = __cc_resource_7;
 //@ chunk-7wwf2tct.js:9557-9589 placement
-var c = Et(d, import.meta.dirname);
+var curlManagedAgents = readEmbeddedTextSync(managedAgentsPath, import.meta.dirname);
 //@ chunk-7wwf2tct.js:9589-9611 placement
-var p = __cc_resource_8;
+var claudeApiFilesApi2 = __cc_resource_8;
 //@ chunk-7wwf2tct.js:9611-9633 placement
-var m = __cc_resource_9;
+var claudeApiOpentelemetry2 = __cc_resource_9;
 //@ chunk-7wwf2tct.js:9633-9656 placement
-var h = __cc_resource_10;
+var readmePath2 = __cc_resource_10;
 //@ chunk-7wwf2tct.js:9656-9688 placement
-var u = Et(h, import.meta.dirname);
+var claudeApiReadme2 = readEmbeddedTextSync(readmePath2, import.meta.dirname);
 //@ chunk-7wwf2tct.js:9688-9711 placement
-var f = __cc_resource_11;
+var claudeApiStreaming2 = __cc_resource_11;
 //@ chunk-7wwf2tct.js:9711-9734 placement
-var g = __cc_resource_12;
+var toolUsePath = __cc_resource_12;
 //@ chunk-7wwf2tct.js:9734-9766 placement
-var y = Et(g, import.meta.dirname);
+var claudeApiToolUse2 = readEmbeddedTextSync(toolUsePath, import.meta.dirname);
 //@ chunk-7wwf2tct.js:9766-9789 placement
-var w = __cc_resource_13;
+var readmePath3 = __cc_resource_13;
 //@ chunk-7wwf2tct.js:9789-9821 placement
-var b = Et(w, import.meta.dirname);
+var managedAgentsReadme = readEmbeddedTextSync(readmePath3, import.meta.dirname);
 //@ chunk-7wwf2tct.js:9821-9844 placement
-var v = __cc_resource_14;
+var claudeApiFilesApi3 = __cc_resource_14;
 //@ chunk-7wwf2tct.js:9844-9867 placement
-var k = __cc_resource_15;
+var claudeApiOpentelemetry3 = __cc_resource_15;
 //@ chunk-7wwf2tct.js:9867-9890 placement
-var S = __cc_resource_16;
+var readmePath4 = __cc_resource_16;
 //@ chunk-7wwf2tct.js:9890-9922 placement
-var A = Et(S, import.meta.dirname);
+var claudeApiReadme3 = readEmbeddedTextSync(readmePath4, import.meta.dirname);
 //@ chunk-7wwf2tct.js:9922-9945 placement
-var P = __cc_resource_17;
+var claudeApiStreaming3 = __cc_resource_17;
 //@ chunk-7wwf2tct.js:9945-9968 placement
-var T = __cc_resource_18;
+var toolUsePath2 = __cc_resource_18;
 //@ chunk-7wwf2tct.js:9968-10000 placement
-var x = Et(T, import.meta.dirname);
+var claudeApiToolUse3 = readEmbeddedTextSync(toolUsePath2, import.meta.dirname);
 //@ chunk-7wwf2tct.js:10000-10023 placement
-var D = __cc_resource_19;
+var readmePath5 = __cc_resource_19;
 //@ chunk-7wwf2tct.js:10023-10055 placement
-var _ = Et(D, import.meta.dirname);
+var _ = readEmbeddedTextSync(readmePath5, import.meta.dirname);
 //@ chunk-7wwf2tct.js:10055-10078 placement
-var E = __cc_resource_20;
+var claudeApiBatches2 = __cc_resource_20;
 //@ chunk-7wwf2tct.js:10078-10101 placement
-var I = __cc_resource_21;
+var claudeApiFilesApi4 = __cc_resource_21;
 //@ chunk-7wwf2tct.js:10101-10124 placement
-var R = __cc_resource_22;
+var claudeApiOpentelemetry4 = __cc_resource_22;
 //@ chunk-7wwf2tct.js:10124-10147 placement
-var F = __cc_resource_23;
+var claudeApiReadme4 = __cc_resource_23;
 //@ chunk-7wwf2tct.js:10147-10170 placement
-var B = __cc_resource_24;
+var claudeApiStreaming4 = __cc_resource_24;
 //@ chunk-7wwf2tct.js:10170-10193 placement
-var H = __cc_resource_25;
+var toolUsePath3 = __cc_resource_25;
 //@ chunk-7wwf2tct.js:10193-10225 placement
-var C = Et(H, import.meta.dirname);
+var claudeApiToolUse4 = readEmbeddedTextSync(toolUsePath3, import.meta.dirname);
 //@ chunk-7wwf2tct.js:10225-10248 placement
-var N = __cc_resource_26;
+var readmePath6 = __cc_resource_26;
 //@ chunk-7wwf2tct.js:10248-10280 placement
-var O = Et(N, import.meta.dirname);
+var managedAgentsReadme2 = readEmbeddedTextSync(readmePath6, import.meta.dirname);
 //@ chunk-7wwf2tct.js:10280-10303 placement
-var j = __cc_resource_27;
+var claudeApiBatches3 = __cc_resource_27;
 //@ chunk-7wwf2tct.js:10303-10326 placement
-var M = __cc_resource_28;
+var claudeApiFilesApi5 = __cc_resource_28;
 //@ chunk-7wwf2tct.js:10326-10349 placement
-var q = __cc_resource_29;
+var claudeApiOpentelemetry5 = __cc_resource_29;
 //@ chunk-7wwf2tct.js:10349-10372 placement
-var L = __cc_resource_30;
+var readmePath7 = __cc_resource_30;
 //@ chunk-7wwf2tct.js:10372-10404 placement
-var J = Et(L, import.meta.dirname);
+var claudeApiReadme5 = readEmbeddedTextSync(readmePath7, import.meta.dirname);
 //@ chunk-7wwf2tct.js:10404-10427 placement
-var Q = __cc_resource_31;
+var sdkUpgradePath = __cc_resource_31;
 //@ chunk-7wwf2tct.js:10427-10459 placement
-var V = Et(Q, import.meta.dirname);
+var claudeApiSdkUpgrade = readEmbeddedTextSync(sdkUpgradePath, import.meta.dirname);
 //@ chunk-7wwf2tct.js:10459-10482 placement
-var W = __cc_resource_32;
+var streamingPath = __cc_resource_32;
 //@ chunk-7wwf2tct.js:10482-10514 placement
-var Z = Et(W, import.meta.dirname);
+var claudeApiStreaming5 = readEmbeddedTextSync(streamingPath, import.meta.dirname);
 //@ chunk-7wwf2tct.js:10514-10537 placement
-var z = __cc_resource_33;
+var toolUsePath4 = __cc_resource_33;
 //@ chunk-7wwf2tct.js:10537-10569 placement
-var K = Et(z, import.meta.dirname);
+var claudeApiToolUse5 = readEmbeddedTextSync(toolUsePath4, import.meta.dirname);
 //@ chunk-7wwf2tct.js:10569-10592 placement
-var U = __cc_resource_34;
+var readmePath8 = __cc_resource_34;
 //@ chunk-7wwf2tct.js:10592-10624 placement
-var X = Et(U, import.meta.dirname);
+var managedAgentsReadme3 = readEmbeddedTextSync(readmePath8, import.meta.dirname);
 //@ chunk-7wwf2tct.js:10624-10647 placement
-var G = __cc_resource_35;
+var claudeApiOpentelemetry6 = __cc_resource_35;
 //@ chunk-7wwf2tct.js:10647-10670 placement
-var Y = __cc_resource_36;
+var claudeApiReadme6 = __cc_resource_36;
 //@ chunk-7wwf2tct.js:10670-10694 placement
-var ee = __cc_resource_37;
+var claudeApiStreaming6 = __cc_resource_37;
 //@ chunk-7wwf2tct.js:10694-10718 placement
-var te = __cc_resource_38;
+var claudeApiToolUse6 = __cc_resource_38;
 //@ chunk-7wwf2tct.js:10718-10742 placement
-var ae = __cc_resource_39;
+var readmePath9 = __cc_resource_39;
 //@ chunk-7wwf2tct.js:10742-10776 placement
-var se = Et(ae, import.meta.dirname);
+var managedAgentsReadme4 = readEmbeddedTextSync(readmePath9, import.meta.dirname);
 //@ chunk-7wwf2tct.js:10776-10800 placement
-var re = __cc_resource_40;
+var skillPath = __cc_resource_40;
 //@ chunk-7wwf2tct.js:10800-10834 placement
-var oe = Et(re, import.meta.dirname);
+var skill = readEmbeddedTextSync(skillPath, import.meta.dirname);
 //@ chunk-7wwf2tct.js:10834-10858 placement
-var ne = __cc_resource_41;
+var adminApiPath = __cc_resource_41;
 //@ chunk-7wwf2tct.js:10858-10892 placement
-var ie = Et(ne, import.meta.dirname);
+var sharedAdminApi = readEmbeddedTextSync(adminApiPath, import.meta.dirname);
 //@ chunk-7wwf2tct.js:10892-10916 placement
-var le = __cc_resource_42;
+var agentDesignPath = __cc_resource_42;
 //@ chunk-7wwf2tct.js:10916-10950 placement
-var de = Et(le, import.meta.dirname);
+var sharedAgentDesign = readEmbeddedTextSync(agentDesignPath, import.meta.dirname);
 //@ chunk-7wwf2tct.js:10950-10974 placement
-var ce = __cc_resource_43;
+var anthropicCliPath = __cc_resource_43;
 //@ chunk-7wwf2tct.js:10974-11008 placement
-var pe = Et(ce, import.meta.dirname);
+var sharedAnthropicCli = readEmbeddedTextSync(anthropicCliPath, import.meta.dirname);
 //@ chunk-7wwf2tct.js:11008-11032 placement
-var me = __cc_resource_44;
+var apiVersionMigrationPath = __cc_resource_44;
 //@ chunk-7wwf2tct.js:11032-11066 placement
-var he = Et(me, import.meta.dirname);
+var sharedApiVersionMigration = readEmbeddedTextSync(apiVersionMigrationPath, import.meta.dirname);
 //@ chunk-7wwf2tct.js:11066-11090 placement
-var ue = __cc_resource_45;
+var sharedClaudePlatformOnAws = __cc_resource_45;
 //@ chunk-7wwf2tct.js:11090-11114 placement
-var fe = __cc_resource_46;
+var costOptimizationPath = __cc_resource_46;
 //@ chunk-7wwf2tct.js:11114-11148 placement
-var ge = Et(fe, import.meta.dirname);
+var sharedCostOptimization = readEmbeddedTextSync(costOptimizationPath, import.meta.dirname);
 //@ chunk-7wwf2tct.js:11148-11172 placement
-var ye = __cc_resource_47;
+var errorCodesPath = __cc_resource_47;
 //@ chunk-7wwf2tct.js:11172-11206 placement
-var we = Et(ye, import.meta.dirname);
+var sharedErrorCodes = readEmbeddedTextSync(errorCodesPath, import.meta.dirname);
 //@ chunk-7wwf2tct.js:11206-11230 placement
-var be = __cc_resource_48;
+var buildEvalPath = __cc_resource_48;
 //@ chunk-7wwf2tct.js:11230-11264 placement
-var ve = Et(be, import.meta.dirname);
+var evalsBuildEval = readEmbeddedTextSync(buildEvalPath, import.meta.dirname);
 //@ chunk-7wwf2tct.js:11264-11288 placement
-var ke = __cc_resource_49;
+var evalAuditPath = __cc_resource_49;
 //@ chunk-7wwf2tct.js:11288-11322 placement
-var Se = Et(ke, import.meta.dirname);
+var evalsEvalAudit = readEmbeddedTextSync(evalAuditPath, import.meta.dirname);
 //@ chunk-7wwf2tct.js:11322-11346 placement
-var Ae = __cc_resource_50;
+var costHillclimbPath = __cc_resource_50;
 //@ chunk-7wwf2tct.js:11346-11380 placement
-var Pe = Et(Ae, import.meta.dirname);
+var evalsCostHillclimb = readEmbeddedTextSync(costHillclimbPath, import.meta.dirname);
 //@ chunk-7wwf2tct.js:11380-11404 placement
-var Te = __cc_resource_51;
+var evalHillclimbPath = __cc_resource_51;
 //@ chunk-7wwf2tct.js:11404-11438 placement
-var xe = Et(Te, import.meta.dirname);
+var evalsEvalHillclimb = readEmbeddedTextSync(evalHillclimbPath, import.meta.dirname);
 //@ chunk-7wwf2tct.js:11438-11462 placement
-var De = __cc_resource_52;
+var reportRunnerScaffold = __cc_resource_52;
 //@ chunk-7wwf2tct.js:11462-11486 placement
-var _e = __cc_resource_53;
+var reportBuildReportLite = __cc_resource_53;
 //@ chunk-7wwf2tct.js:11486-11510 placement
-var Ee = __cc_resource_54;
+var schemaPath = __cc_resource_54;
 //@ chunk-7wwf2tct.js:11510-11544 placement
-var Ie = Et(Ee, import.meta.dirname);
+var reportSchema = readEmbeddedTextSync(schemaPath, import.meta.dirname);
 //@ chunk-7wwf2tct.js:11544-11568 placement
-var $e = __cc_resource_55;
+var googleCloudAnthropicManagedPath = __cc_resource_55;
 //@ chunk-7wwf2tct.js:11568-11602 placement
-var Re = Et($e, import.meta.dirname);
+var sharedGoogleCloudAnthropicManaged = readEmbeddedTextSync(
+  googleCloudAnthropicManagedPath,
+  import.meta.dirname,
+);
 //@ chunk-7wwf2tct.js:11602-11626 placement
-var Fe = __cc_resource_56;
+var liveSourcesPath = __cc_resource_56;
 //@ chunk-7wwf2tct.js:11626-11660 placement
-var He = Et(Fe, import.meta.dirname);
+var sharedLiveSources = readEmbeddedTextSync(liveSourcesPath, import.meta.dirname);
 //@ chunk-7wwf2tct.js:11660-11684 placement
-var Ce = __cc_resource_57;
+var managedAgentsApiReferencePath = __cc_resource_57;
 //@ chunk-7wwf2tct.js:11684-11718 placement
-var Ne = Et(Ce, import.meta.dirname);
+var sharedManagedAgentsApiReference = readEmbeddedTextSync(
+  managedAgentsApiReferencePath,
+  import.meta.dirname,
+);
 //@ chunk-7wwf2tct.js:11718-11742 placement
-var Oe = __cc_resource_58;
+var managedAgentsClientPatternsPath = __cc_resource_58;
 //@ chunk-7wwf2tct.js:11742-11776 placement
-var je = Et(Oe, import.meta.dirname);
+var sharedManagedAgentsClientPatterns = readEmbeddedTextSync(
+  managedAgentsClientPatternsPath,
+  import.meta.dirname,
+);
 //@ chunk-7wwf2tct.js:11776-11800 placement
-var Me = __cc_resource_59;
+var managedAgentsCorePath = __cc_resource_59;
 //@ chunk-7wwf2tct.js:11800-11834 placement
-var qe = Et(Me, import.meta.dirname);
+var sharedManagedAgentsCore = readEmbeddedTextSync(managedAgentsCorePath, import.meta.dirname);
 //@ chunk-7wwf2tct.js:11834-11858 placement
-var Le = __cc_resource_60;
+var managedAgentsEnvironmentsPath = __cc_resource_60;
 //@ chunk-7wwf2tct.js:11858-11892 placement
-var Je = Et(Le, import.meta.dirname);
+var sharedManagedAgentsEnvironments = readEmbeddedTextSync(
+  managedAgentsEnvironmentsPath,
+  import.meta.dirname,
+);
 //@ chunk-7wwf2tct.js:11892-11916 placement
-var Qe = __cc_resource_61;
+var managedAgentsEventsPath = __cc_resource_61;
 //@ chunk-7wwf2tct.js:11916-11950 placement
-var Ve = Et(Qe, import.meta.dirname);
+var sharedManagedAgentsEvents = readEmbeddedTextSync(managedAgentsEventsPath, import.meta.dirname);
 //@ chunk-7wwf2tct.js:11950-11974 placement
-var We = __cc_resource_62;
+var managedAgentsMemoryPath = __cc_resource_62;
 //@ chunk-7wwf2tct.js:11974-12008 placement
-var Ze = Et(We, import.meta.dirname);
+var sharedManagedAgentsMemory = readEmbeddedTextSync(managedAgentsMemoryPath, import.meta.dirname);
 //@ chunk-7wwf2tct.js:12008-12032 placement
-var ze = __cc_resource_63;
+var managedAgentsMultiagentPath = __cc_resource_63;
 //@ chunk-7wwf2tct.js:12032-12066 placement
-var Ke = Et(ze, import.meta.dirname);
+var sharedManagedAgentsMultiagent = readEmbeddedTextSync(managedAgentsMultiagentPath, import.meta.dirname);
 //@ chunk-7wwf2tct.js:12066-12090 placement
-var Ue = __cc_resource_64;
+var managedAgentsOnboardingPath = __cc_resource_64;
 //@ chunk-7wwf2tct.js:12090-12124 placement
-var Xe = Et(Ue, import.meta.dirname);
+var sharedManagedAgentsOnboarding = readEmbeddedTextSync(managedAgentsOnboardingPath, import.meta.dirname);
 //@ chunk-7wwf2tct.js:12124-12148 placement
-var Ge = __cc_resource_65;
+var managedAgentsOnboardingFromQuickstartPath = __cc_resource_65;
 //@ chunk-7wwf2tct.js:12148-12182 placement
-var Ye = Et(Ge, import.meta.dirname);
+var sharedManagedAgentsOnboardingFromQuickstart = readEmbeddedTextSync(
+  managedAgentsOnboardingFromQuickstartPath,
+  import.meta.dirname,
+);
 //@ chunk-7wwf2tct.js:12182-12206 placement
-var et = __cc_resource_66;
+var managedAgentsOnboardingFromUrlPath = __cc_resource_66;
 //@ chunk-7wwf2tct.js:12206-12240 placement
-var tt = Et(et, import.meta.dirname);
+var sharedManagedAgentsOnboardingFromUrl = readEmbeddedTextSync(
+  managedAgentsOnboardingFromUrlPath,
+  import.meta.dirname,
+);
 //@ chunk-7wwf2tct.js:12240-12264 placement
-var at = __cc_resource_67;
+var managedAgentsOutcomesPath = __cc_resource_67;
 //@ chunk-7wwf2tct.js:12264-12298 placement
-var st = Et(at, import.meta.dirname);
+var sharedManagedAgentsOutcomes = readEmbeddedTextSync(managedAgentsOutcomesPath, import.meta.dirname);
 //@ chunk-7wwf2tct.js:12298-12322 placement
-var rt = __cc_resource_68;
+var managedAgentsOverviewPath = __cc_resource_68;
 //@ chunk-7wwf2tct.js:12322-12356 placement
-var ot = Et(rt, import.meta.dirname);
+var sharedManagedAgentsOverview = readEmbeddedTextSync(managedAgentsOverviewPath, import.meta.dirname);
 //@ chunk-7wwf2tct.js:12356-12380 placement
-var nt = __cc_resource_69;
+var managedAgentsScheduledDeploymentsPath = __cc_resource_69;
 //@ chunk-7wwf2tct.js:12380-12414 placement
-var it = Et(nt, import.meta.dirname);
+var sharedManagedAgentsScheduledDeployments = readEmbeddedTextSync(
+  managedAgentsScheduledDeploymentsPath,
+  import.meta.dirname,
+);
 //@ chunk-7wwf2tct.js:12414-12438 placement
-var lt = __cc_resource_70;
+var managedAgentsSecurePath = __cc_resource_70;
 //@ chunk-7wwf2tct.js:12438-12472 placement
-var dt = Et(lt, import.meta.dirname);
+var sharedManagedAgentsSecure = readEmbeddedTextSync(managedAgentsSecurePath, import.meta.dirname);
 //@ chunk-7wwf2tct.js:12472-12496 placement
-var ct = __cc_resource_71;
+var managedAgentsSelfHostedSandboxesPath = __cc_resource_71;
 //@ chunk-7wwf2tct.js:12496-12530 placement
-var pt = Et(ct, import.meta.dirname);
+var sharedManagedAgentsSelfHostedSandboxes = readEmbeddedTextSync(
+  managedAgentsSelfHostedSandboxesPath,
+  import.meta.dirname,
+);
 //@ chunk-7wwf2tct.js:12530-12554 placement
-var mt = __cc_resource_72;
+var managedAgentsToolsPath = __cc_resource_72;
 //@ chunk-7wwf2tct.js:12554-12588 placement
-var ht = Et(mt, import.meta.dirname);
+var sharedManagedAgentsTools = readEmbeddedTextSync(managedAgentsToolsPath, import.meta.dirname);
 //@ chunk-7wwf2tct.js:12588-12612 placement
-var ut = __cc_resource_73;
+var managedAgentsWebhooksPath = __cc_resource_73;
 //@ chunk-7wwf2tct.js:12612-12646 placement
-var ft = Et(ut, import.meta.dirname);
+var sharedManagedAgentsWebhooks = readEmbeddedTextSync(managedAgentsWebhooksPath, import.meta.dirname);
 //@ chunk-7wwf2tct.js:12646-12670 placement
-var gt = __cc_resource_74;
+var modelMigrationPath = __cc_resource_74;
 //@ chunk-7wwf2tct.js:12670-12704 placement
-var yt = Et(gt, import.meta.dirname);
+var sharedModelMigration = readEmbeddedTextSync(modelMigrationPath, import.meta.dirname);
 //@ chunk-7wwf2tct.js:12704-12728 placement
-var wt = __cc_resource_75;
+var modelsPath = __cc_resource_75;
 //@ chunk-7wwf2tct.js:12728-12762 placement
-var bt = Et(wt, import.meta.dirname);
+var sharedModels = readEmbeddedTextSync(modelsPath, import.meta.dirname);
 //@ chunk-7wwf2tct.js:12762-12786 placement
-var vt = __cc_resource_76;
+var opentelemetryPath = __cc_resource_76;
 //@ chunk-7wwf2tct.js:12786-12820 placement
-var kt = Et(vt, import.meta.dirname);
+var sharedOpentelemetry = readEmbeddedTextSync(opentelemetryPath, import.meta.dirname);
 //@ chunk-7wwf2tct.js:12820-12844 placement
-var St = __cc_resource_77;
+var platformAvailabilityPath = __cc_resource_77;
 //@ chunk-7wwf2tct.js:12844-12878 placement
-var At = Et(St, import.meta.dirname);
+var sharedPlatformAvailability = readEmbeddedTextSync(platformAvailabilityPath, import.meta.dirname);
 //@ chunk-7wwf2tct.js:12878-12902 placement
-var Pt = __cc_resource_78;
+var preservedThinkingMigrationPath = __cc_resource_78;
 //@ chunk-7wwf2tct.js:12902-12936 placement
-var Tt = Et(Pt, import.meta.dirname);
+var sharedPreservedThinkingMigration = readEmbeddedTextSync(
+  preservedThinkingMigrationPath,
+  import.meta.dirname,
+);
 //@ chunk-7wwf2tct.js:12936-12960 placement
-var xt = __cc_resource_79;
+var causesPath = __cc_resource_79;
 //@ chunk-7wwf2tct.js:12960-12994 placement
-var Dt = Et(xt, import.meta.dirname);
+var preservedThinkingMigrationCauses = readEmbeddedTextSync(causesPath, import.meta.dirname);
 //@ chunk-7wwf2tct.js:12994-13018 placement
-var _t = __cc_resource_80;
+var prefixDiffPath = __cc_resource_80;
 //@ chunk-7wwf2tct.js:13018-13052 placement
-var It = Et(_t, import.meta.dirname);
+var preservedThinkingMigrationPrefixDiff = readEmbeddedTextSync(prefixDiffPath, import.meta.dirname);
 //@ chunk-7wwf2tct.js:13052-13076 placement
-var $t = __cc_resource_81;
+var dropBlockProbePath = __cc_resource_81;
 //@ chunk-7wwf2tct.js:13076-13110 placement
-var Rt = Et($t, import.meta.dirname);
+var preservedThinkingMigrationDropBlockProbe = readEmbeddedTextSync(dropBlockProbePath, import.meta.dirname);
 //@ chunk-7wwf2tct.js:13110-13134 placement
-var Ft = __cc_resource_82;
+var promptAuditPath = __cc_resource_82;
 //@ chunk-7wwf2tct.js:13134-13168 placement
-var Bt = Et(Ft, import.meta.dirname);
+var sharedPromptAudit = readEmbeddedTextSync(promptAuditPath, import.meta.dirname);
 //@ chunk-7wwf2tct.js:13168-13192 placement
-var Ht = __cc_resource_83;
+var promptCachingPath = __cc_resource_83;
 //@ chunk-7wwf2tct.js:13192-13226 placement
-var Ct = Et(Ht, import.meta.dirname);
+var sharedPromptCaching = readEmbeddedTextSync(promptCachingPath, import.meta.dirname);
 //@ chunk-7wwf2tct.js:13226-13250 placement
-var Nt = __cc_resource_84;
+var sharedTokenCounting = __cc_resource_84;
 //@ chunk-7wwf2tct.js:13250-13274 placement
-var Ot = __cc_resource_85;
+var toolUseConceptsPath = __cc_resource_85;
 //@ chunk-7wwf2tct.js:13274-13308 placement
-var jt = Et(Ot, import.meta.dirname);
+var sharedToolUseConcepts = readEmbeddedTextSync(toolUseConceptsPath, import.meta.dirname);
 //@ chunk-7wwf2tct.js:13308-13332 placement
-var Mt = __cc_resource_86;
+var claudeApiBatches4 = __cc_resource_86;
 //@ chunk-7wwf2tct.js:13332-13356 placement
-var qt = __cc_resource_87;
+var claudeApiFilesApi6 = __cc_resource_87;
 //@ chunk-7wwf2tct.js:13356-13380 placement
-var Lt = __cc_resource_88;
+var claudeApiOpentelemetry7 = __cc_resource_88;
 //@ chunk-7wwf2tct.js:13380-13404 placement
-var Jt = __cc_resource_89;
+var readmePath10 = __cc_resource_89;
 //@ chunk-7wwf2tct.js:13404-13438 placement
-var Qt = Et(Jt, import.meta.dirname);
+var claudeApiReadme7 = readEmbeddedTextSync(readmePath10, import.meta.dirname);
 //@ chunk-7wwf2tct.js:13438-13462 placement
-var Vt = __cc_resource_90;
+var streamingPath2 = __cc_resource_90;
 //@ chunk-7wwf2tct.js:13462-13496 placement
-var Wt = Et(Vt, import.meta.dirname);
+var claudeApiStreaming7 = readEmbeddedTextSync(streamingPath2, import.meta.dirname);
 //@ chunk-7wwf2tct.js:13496-13520 placement
-var Zt = __cc_resource_91;
+var toolUsePath5 = __cc_resource_91;
 //@ chunk-7wwf2tct.js:13520-13554 placement
-var zt = Et(Zt, import.meta.dirname);
+var claudeApiToolUse7 = readEmbeddedTextSync(toolUsePath5, import.meta.dirname);
 //@ chunk-7wwf2tct.js:13554-13578 placement
-var Kt = __cc_resource_92;
+var readmePath11 = __cc_resource_92;
 //@ chunk-7wwf2tct.js:13578-13612 placement
-var Ut = Et(Kt, import.meta.dirname);
+var managedAgentsReadme5 = readEmbeddedTextSync(readmePath11, import.meta.dirname);
 //@ chunk-7wwf2tct.js:13612-13636 placement
-var Xt = __cc_resource_93;
+var managedAgentsQuickstartsBugHunter = __cc_resource_93;
 //@ chunk-7wwf2tct.js:13636-13660 placement
-var Gt = __cc_resource_94;
+var managedAgentsQuickstartsContractTracker = __cc_resource_94;
 //@ chunk-7wwf2tct.js:13660-13684 placement
-var Yt = __cc_resource_95;
+var managedAgentsQuickstartsDataAnalyst = __cc_resource_95;
 //@ chunk-7wwf2tct.js:13684-13708 placement
-var ea = __cc_resource_96;
+var managedAgentsQuickstartsDeepResearcher = __cc_resource_96;
 //@ chunk-7wwf2tct.js:13708-13732 placement
-var ta = __cc_resource_97;
+var managedAgentsQuickstartsExplainerVideoMaker = __cc_resource_97;
 //@ chunk-7wwf2tct.js:13732-13756 placement
-var aa = __cc_resource_98;
+var managedAgentsQuickstartsFieldMonitor = __cc_resource_98;
 //@ chunk-7wwf2tct.js:13756-13780 placement
-var sa = __cc_resource_99;
+var managedAgentsQuickstartsIncidentCommander = __cc_resource_99;
 //@ chunk-7wwf2tct.js:13780-13805 placement
-var ra = __cc_resource_100;
+var performanceTunerPath = __cc_resource_100;
 //@ chunk-7wwf2tct.js:13805-13839 placement
-var oa = Et(ra, import.meta.dirname);
+var managedAgentsQuickstartsPerformanceTuner = readEmbeddedTextSync(
+  performanceTunerPath,
+  import.meta.dirname,
+);
 //@ chunk-7wwf2tct.js:13839-13864 placement
-var na = __cc_resource_101;
+var managedAgentsQuickstartsSprintRetroFacilitator = __cc_resource_101;
 //@ chunk-7wwf2tct.js:13864-13889 placement
-var ia = __cc_resource_102;
+var managedAgentsQuickstartsStructuredExtractor = __cc_resource_102;
 //@ chunk-7wwf2tct.js:13889-13914 placement
-var la = __cc_resource_103;
+var managedAgentsQuickstartsSupportAgent = __cc_resource_103;
 //@ chunk-7wwf2tct.js:13914-13939 placement
-var da = __cc_resource_104;
+var managedAgentsQuickstartsSupportToEngEscalator = __cc_resource_104;
 //@ chunk-7wwf2tct.js:13939-13964 placement
-var ca = __cc_resource_105;
+var managedAgentsQuickstartsWatchlistScanner = __cc_resource_105;
 //@ chunk-7wwf2tct.js:13964-14752 placement
 var SKILL_FILES = {
-  "shared/managed-agents-quickstarts/bug-hunter.md": Xt,
-  "shared/managed-agents-quickstarts/contract-tracker.md": Gt,
-  "shared/managed-agents-quickstarts/data-analyst.md": Yt,
-  "shared/managed-agents-quickstarts/deep-researcher.md": ea,
-  "shared/managed-agents-quickstarts/explainer-video-maker.md": ta,
-  "shared/managed-agents-quickstarts/field-monitor.md": aa,
-  "shared/managed-agents-quickstarts/incident-commander.md": sa,
-  "shared/managed-agents-quickstarts/performance-tuner.md": oa,
-  "shared/managed-agents-quickstarts/sprint-retro-facilitator.md": na,
-  "shared/managed-agents-quickstarts/structured-extractor.md": ia,
-  "shared/managed-agents-quickstarts/support-agent.md": la,
-  "shared/managed-agents-quickstarts/support-to-eng-escalator.md": da,
-  "shared/managed-agents-quickstarts/watchlist-scanner.md": ca,
+  "shared/managed-agents-quickstarts/bug-hunter.md": managedAgentsQuickstartsBugHunter,
+  "shared/managed-agents-quickstarts/contract-tracker.md": managedAgentsQuickstartsContractTracker,
+  "shared/managed-agents-quickstarts/data-analyst.md": managedAgentsQuickstartsDataAnalyst,
+  "shared/managed-agents-quickstarts/deep-researcher.md": managedAgentsQuickstartsDeepResearcher,
+  "shared/managed-agents-quickstarts/explainer-video-maker.md": managedAgentsQuickstartsExplainerVideoMaker,
+  "shared/managed-agents-quickstarts/field-monitor.md": managedAgentsQuickstartsFieldMonitor,
+  "shared/managed-agents-quickstarts/incident-commander.md": managedAgentsQuickstartsIncidentCommander,
+  "shared/managed-agents-quickstarts/performance-tuner.md": managedAgentsQuickstartsPerformanceTuner,
+  "shared/managed-agents-quickstarts/sprint-retro-facilitator.md":
+    managedAgentsQuickstartsSprintRetroFacilitator,
+  "shared/managed-agents-quickstarts/structured-extractor.md": managedAgentsQuickstartsStructuredExtractor,
+  "shared/managed-agents-quickstarts/support-agent.md": managedAgentsQuickstartsSupportAgent,
+  "shared/managed-agents-quickstarts/support-to-eng-escalator.md":
+    managedAgentsQuickstartsSupportToEngEscalator,
+  "shared/managed-agents-quickstarts/watchlist-scanner.md": managedAgentsQuickstartsWatchlistScanner,
 };
 //@ chunk-7wwf2tct.js:14752-18657 placement
+/**
+ * claude-api 技能：正文文本与「路径 → 参考文件」路由表。
+ */
 var SKILL_MODEL_VARS = {
-    FABLE_ID: "claude-fable-5-1",
-    FABLE_NAME: "Claude Fable 5.1",
-    MYTHOS_ID: "claude-mythos-5-1",
-    MYTHOS_NAME: "Claude Mythos 5.1",
-    PREV_FABLE_ID: "claude-fable-5",
-    PREV_FABLE_NAME: "Claude Fable 5",
-    PREV_MYTHOS_ID: "claude-mythos-5",
-    PREV_MYTHOS_NAME: "Claude Mythos 5",
-    OPUS_ID: "claude-opus-5-5",
-    OPUS_NAME: "Claude Opus 5.5",
-    PREV_OPUS_ID: "claude-opus-5",
-    PREV_OPUS_NAME: "Claude Opus 5",
-    SONNET_ID: "claude-sonnet-5-5",
-    SONNET_NAME: "Claude Sonnet 5.5",
-    HAIKU_ID: "claude-haiku-5-5",
-    HAIKU_NAME: "Claude Haiku 5.5",
-    PREV_SONNET_ID: "claude-sonnet-5",
-    PREV_SONNET_NAME: "Claude Sonnet 5",
-  },
-  qp = oe,
-  Lp = {
-    "csharp/claude-api/README.md": r,
-    "csharp/claude-api/batches.md": e_7wwf,
-    "csharp/claude-api/files-api.md": t_7wwf,
-    "csharp/claude-api/opentelemetry.md": a_7wwf,
-    "csharp/claude-api/streaming.md": o_7wwf,
-    "csharp/claude-api/tool-use.md": n_7wwf,
-    "curl/examples.md": l,
-    "curl/managed-agents.md": c,
-    "go/claude-api/README.md": u,
-    "go/claude-api/files-api.md": p,
-    "go/claude-api/opentelemetry.md": m,
-    "go/claude-api/streaming.md": f,
-    "go/claude-api/tool-use.md": y,
-    "go/managed-agents/README.md": b,
-    "java/claude-api/README.md": A,
-    "java/claude-api/files-api.md": v,
-    "java/claude-api/opentelemetry.md": k,
-    "java/claude-api/streaming.md": P,
-    "java/claude-api/tool-use.md": x,
-    "java/managed-agents/README.md": _,
-    "php/claude-api/README.md": F,
-    "php/claude-api/batches.md": E,
-    "php/claude-api/files-api.md": I,
-    "php/claude-api/opentelemetry.md": R,
-    "php/claude-api/streaming.md": B,
-    "php/claude-api/tool-use.md": C,
-    "php/managed-agents/README.md": O,
-    "python/claude-api/README.md": J,
-    "python/claude-api/batches.md": j,
-    "python/claude-api/files-api.md": M,
-    "python/claude-api/opentelemetry.md": q,
-    "python/claude-api/sdk-upgrade.md": V,
-    "python/claude-api/streaming.md": Z,
-    "python/claude-api/tool-use.md": K,
-    "python/managed-agents/README.md": X,
-    "ruby/claude-api/README.md": Y,
-    "ruby/claude-api/opentelemetry.md": G,
-    "ruby/claude-api/streaming.md": ee,
-    "ruby/claude-api/tool-use.md": te,
-    "ruby/managed-agents/README.md": se,
-    "shared/admin-api.md": ie,
-    "shared/agent-design.md": de,
-    "shared/anthropic-cli.md": pe,
-    "shared/api-version-migration.md": he,
-    "shared/claude-platform-on-aws.md": ue,
-    "shared/cost-optimization.md": ge,
-    "shared/error-codes.md": we,
-    "shared/evals/build-eval.md": ve,
-    "shared/evals/eval-audit.md": Se,
-    "shared/evals/cost-hillclimb.md": Pe,
-    "shared/evals/eval-hillclimb.md": xe,
-    "shared/evals/report/runner-scaffold.mjs": De,
-    "shared/evals/report/build-report-lite.mjs": _e,
-    "shared/evals/report/SCHEMA.md": Ie,
-    "shared/google-cloud-anthropic-managed.md": Re,
-    "shared/live-sources.md": He,
-    "shared/managed-agents-api-reference.md": Ne,
-    "shared/managed-agents-client-patterns.md": je,
-    "shared/managed-agents-core.md": qe,
-    "shared/managed-agents-environments.md": Je,
-    "shared/managed-agents-events.md": Ve,
-    "shared/managed-agents-memory.md": Ze,
-    "shared/managed-agents-multiagent.md": Ke,
-    ...SKILL_FILES,
-    "shared/managed-agents-onboarding.md": Xe,
-    "shared/managed-agents-onboarding-from-quickstart.md": Ye,
-    "shared/managed-agents-onboarding-from-url.md": tt,
-    "shared/managed-agents-outcomes.md": st,
-    "shared/managed-agents-overview.md": ot,
-    "shared/managed-agents-scheduled-deployments.md": it,
-    "shared/managed-agents-secure.md": dt,
-    "shared/managed-agents-self-hosted-sandboxes.md": pt,
-    "shared/managed-agents-tools.md": ht,
-    "shared/managed-agents-webhooks.md": ft,
-    "shared/model-migration.md": yt,
-    "shared/models.md": bt,
-    "shared/opentelemetry.md": kt,
-    "shared/platform-availability.md": At,
-    "shared/preserved-thinking-migration.md": Tt,
-    "shared/preserved-thinking-migration/causes.md": Dt,
-    "shared/preserved-thinking-migration/prefix_diff.py": It,
-    "shared/preserved-thinking-migration/drop_block_probe.py": Rt,
-    "shared/prompt-audit.md": Bt,
-    "shared/prompt-caching.md": Ct,
-    "shared/token-counting.md": Nt,
-    "shared/tool-use-concepts.md": jt,
-    "typescript/claude-api/README.md": Qt,
-    "typescript/claude-api/batches.md": Mt,
-    "typescript/claude-api/files-api.md": qt,
-    "typescript/claude-api/opentelemetry.md": Lt,
-    "typescript/claude-api/streaming.md": Wt,
-    "typescript/claude-api/tool-use.md": zt,
-    "typescript/managed-agents/README.md": Ut,
-  };
+  FABLE_ID: "claude-fable-5-1",
+  FABLE_NAME: "Claude Fable 5.1",
+  MYTHOS_ID: "claude-mythos-5-1",
+  MYTHOS_NAME: "Claude Mythos 5.1",
+  PREV_FABLE_ID: "claude-fable-5",
+  PREV_FABLE_NAME: "Claude Fable 5",
+  PREV_MYTHOS_ID: "claude-mythos-5",
+  PREV_MYTHOS_NAME: "Claude Mythos 5",
+  OPUS_ID: "claude-opus-5-5",
+  OPUS_NAME: "Claude Opus 5.5",
+  PREV_OPUS_ID: "claude-opus-5",
+  PREV_OPUS_NAME: "Claude Opus 5",
+  SONNET_ID: "claude-sonnet-5-5",
+  SONNET_NAME: "Claude Sonnet 5.5",
+  HAIKU_ID: "claude-haiku-5-5",
+  HAIKU_NAME: "Claude Haiku 5.5",
+  PREV_SONNET_ID: "claude-sonnet-5",
+  PREV_SONNET_NAME: "Claude Sonnet 5",
+};
+var API_SKILL_PROMPT_TEXT = skill;
+var API_SKILL_FILES = {
+  "csharp/claude-api/README.md": claudeApiReadme,
+  "csharp/claude-api/batches.md": claudeApiBatches,
+  "csharp/claude-api/files-api.md": claudeApiFilesApi,
+  "csharp/claude-api/opentelemetry.md": claudeApiOpentelemetry,
+  "csharp/claude-api/streaming.md": claudeApiStreaming,
+  "csharp/claude-api/tool-use.md": claudeApiToolUse,
+  "curl/examples.md": curlExamples,
+  "curl/managed-agents.md": curlManagedAgents,
+  "go/claude-api/README.md": claudeApiReadme2,
+  "go/claude-api/files-api.md": claudeApiFilesApi2,
+  "go/claude-api/opentelemetry.md": claudeApiOpentelemetry2,
+  "go/claude-api/streaming.md": claudeApiStreaming2,
+  "go/claude-api/tool-use.md": claudeApiToolUse2,
+  "go/managed-agents/README.md": managedAgentsReadme,
+  "java/claude-api/README.md": claudeApiReadme3,
+  "java/claude-api/files-api.md": claudeApiFilesApi3,
+  "java/claude-api/opentelemetry.md": claudeApiOpentelemetry3,
+  "java/claude-api/streaming.md": claudeApiStreaming3,
+  "java/claude-api/tool-use.md": claudeApiToolUse3,
+  "java/managed-agents/README.md": _,
+  "php/claude-api/README.md": claudeApiReadme4,
+  "php/claude-api/batches.md": claudeApiBatches2,
+  "php/claude-api/files-api.md": claudeApiFilesApi4,
+  "php/claude-api/opentelemetry.md": claudeApiOpentelemetry4,
+  "php/claude-api/streaming.md": claudeApiStreaming4,
+  "php/claude-api/tool-use.md": claudeApiToolUse4,
+  "php/managed-agents/README.md": managedAgentsReadme2,
+  "python/claude-api/README.md": claudeApiReadme5,
+  "python/claude-api/batches.md": claudeApiBatches3,
+  "python/claude-api/files-api.md": claudeApiFilesApi5,
+  "python/claude-api/opentelemetry.md": claudeApiOpentelemetry5,
+  "python/claude-api/sdk-upgrade.md": claudeApiSdkUpgrade,
+  "python/claude-api/streaming.md": claudeApiStreaming5,
+  "python/claude-api/tool-use.md": claudeApiToolUse5,
+  "python/managed-agents/README.md": managedAgentsReadme3,
+  "ruby/claude-api/README.md": claudeApiReadme6,
+  "ruby/claude-api/opentelemetry.md": claudeApiOpentelemetry6,
+  "ruby/claude-api/streaming.md": claudeApiStreaming6,
+  "ruby/claude-api/tool-use.md": claudeApiToolUse6,
+  "ruby/managed-agents/README.md": managedAgentsReadme4,
+  "shared/admin-api.md": sharedAdminApi,
+  "shared/agent-design.md": sharedAgentDesign,
+  "shared/anthropic-cli.md": sharedAnthropicCli,
+  "shared/api-version-migration.md": sharedApiVersionMigration,
+  "shared/claude-platform-on-aws.md": sharedClaudePlatformOnAws,
+  "shared/cost-optimization.md": sharedCostOptimization,
+  "shared/error-codes.md": sharedErrorCodes,
+  "shared/evals/build-eval.md": evalsBuildEval,
+  "shared/evals/eval-audit.md": evalsEvalAudit,
+  "shared/evals/cost-hillclimb.md": evalsCostHillclimb,
+  "shared/evals/eval-hillclimb.md": evalsEvalHillclimb,
+  "shared/evals/report/runner-scaffold.mjs": reportRunnerScaffold,
+  "shared/evals/report/build-report-lite.mjs": reportBuildReportLite,
+  "shared/evals/report/SCHEMA.md": reportSchema,
+  "shared/google-cloud-anthropic-managed.md": sharedGoogleCloudAnthropicManaged,
+  "shared/live-sources.md": sharedLiveSources,
+  "shared/managed-agents-api-reference.md": sharedManagedAgentsApiReference,
+  "shared/managed-agents-client-patterns.md": sharedManagedAgentsClientPatterns,
+  "shared/managed-agents-core.md": sharedManagedAgentsCore,
+  "shared/managed-agents-environments.md": sharedManagedAgentsEnvironments,
+  "shared/managed-agents-events.md": sharedManagedAgentsEvents,
+  "shared/managed-agents-memory.md": sharedManagedAgentsMemory,
+  "shared/managed-agents-multiagent.md": sharedManagedAgentsMultiagent,
+  ...SKILL_FILES,
+  "shared/managed-agents-onboarding.md": sharedManagedAgentsOnboarding,
+  "shared/managed-agents-onboarding-from-quickstart.md": sharedManagedAgentsOnboardingFromQuickstart,
+  "shared/managed-agents-onboarding-from-url.md": sharedManagedAgentsOnboardingFromUrl,
+  "shared/managed-agents-outcomes.md": sharedManagedAgentsOutcomes,
+  "shared/managed-agents-overview.md": sharedManagedAgentsOverview,
+  "shared/managed-agents-scheduled-deployments.md": sharedManagedAgentsScheduledDeployments,
+  "shared/managed-agents-secure.md": sharedManagedAgentsSecure,
+  "shared/managed-agents-self-hosted-sandboxes.md": sharedManagedAgentsSelfHostedSandboxes,
+  "shared/managed-agents-tools.md": sharedManagedAgentsTools,
+  "shared/managed-agents-webhooks.md": sharedManagedAgentsWebhooks,
+  "shared/model-migration.md": sharedModelMigration,
+  "shared/models.md": sharedModels,
+  "shared/opentelemetry.md": sharedOpentelemetry,
+  "shared/platform-availability.md": sharedPlatformAvailability,
+  "shared/preserved-thinking-migration.md": sharedPreservedThinkingMigration,
+  "shared/preserved-thinking-migration/causes.md": preservedThinkingMigrationCauses,
+  "shared/preserved-thinking-migration/prefix_diff.py": preservedThinkingMigrationPrefixDiff,
+  "shared/preserved-thinking-migration/drop_block_probe.py": preservedThinkingMigrationDropBlockProbe,
+  "shared/prompt-audit.md": sharedPromptAudit,
+  "shared/prompt-caching.md": sharedPromptCaching,
+  "shared/token-counting.md": sharedTokenCounting,
+  "shared/tool-use-concepts.md": sharedToolUseConcepts,
+  "typescript/claude-api/README.md": claudeApiReadme7,
+  "typescript/claude-api/batches.md": claudeApiBatches4,
+  "typescript/claude-api/files-api.md": claudeApiFilesApi6,
+  "typescript/claude-api/opentelemetry.md": claudeApiOpentelemetry7,
+  "typescript/claude-api/streaming.md": claudeApiStreaming7,
+  "typescript/claude-api/tool-use.md": claudeApiToolUse7,
+  "typescript/managed-agents/README.md": managedAgentsReadme5,
+};
 //@ chunk-6z63wjt0.js:695-717 placement
-var e = __cc_resource_0_2;
+var referencesClaudeTag = __cc_resource_0_2;
 //@ chunk-6z63wjt0.js:717-739 placement
-var t = __cc_resource_1_2;
+var referencesLiveSources = __cc_resource_1_2;
 //@ chunk-6z63wjt0.js:739-761 placement
-var a = __cc_resource_2_2;
+var pluginEvalPath = __cc_resource_2_2;
 //@ chunk-6z63wjt0.js:761-793 placement
-var n = Et(a, import.meta.dirname);
+var referencesPluginEval = readEmbeddedTextSync(pluginEvalPath, import.meta.dirname);
 //@ chunk-6z63wjt0.js:793-815 placement
-var o = __cc_resource_3_2;
+var referencesRecentChanges = __cc_resource_3_2;
 //@ chunk-6z63wjt0.js:815-837 placement
-var s = __cc_resource_4;
+var skillText = __cc_resource_4;
 //@ chunk-6z63wjt0.js:837-1013 placement
-var SKILL_PROMPT_CONTENT = s,
-  CLAUDE_CODE_DOCS_REFERENCE_FILES = {
-    "references/claude-tag.md": e,
-    "references/live-sources.md": t,
-    "references/plugin-eval-quickref.md": gMo,
-    "references/plugin-eval.md": n,
-    "references/recent-changes.md": o,
-  };
+var SKILL_PROMPT_CONTENT = skillText;
+var CLAUDE_CODE_DOCS_REFERENCE_FILES = {
+  "references/claude-tag.md": referencesClaudeTag,
+  "references/live-sources.md": referencesLiveSources,
+  "references/plugin-eval-quickref.md": referencesPluginEvalQuickref,
+  "references/plugin-eval.md": referencesPluginEval,
+  "references/recent-changes.md": referencesRecentChanges,
+};
 //@ chunk-g13xw617.js:318-340 placement
-var d_g13x = __cc_resource_0_3;
+var pluginEvalQuickrefPath = __cc_resource_0_3;
 //@ chunk-g13xw617.js:340-374 placement
-var gMo = Et(d_g13x, import.meta.dirname);
+/**
+ * claude-api 技能附带的 plugin-eval 速查参考文本。
+ */
+var referencesPluginEvalQuickref = readEmbeddedTextSync(pluginEvalQuickrefPath, import.meta.dirname);

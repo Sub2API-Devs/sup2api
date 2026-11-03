@@ -6,20 +6,21 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../runtime/bun-runtime.js";
-import { bXr } from "../applicator/dependencies.js";
+import { require_dependencies } from "../applicator/dependencies.js";
 
 //@ chunk-1r4fv9mg.js:2580-2797 cjs-fingerprint
-var ce = x(function (ie) {
-  Object.defineProperty(ie, "__esModule", { value: !0 });
-  var I = bXr(),
-    et = {
-      keyword: "dependentRequired",
-      type: "object",
-      schemaType: "object",
-      error: I.error,
-      code: (e) => I.validatePropertyDeps(e),
-    };
-  ie.default = et;
+var require_dependentRequired = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  var dependencies_1 = require_dependencies();
+  var def = {
+    keyword: "dependentRequired",
+    type: "object",
+    schemaType: "object",
+    error: dependencies_1.error,
+    code: (cxt) => dependencies_1.validatePropertyDeps(cxt),
+  };
+  cjsExports.default = def;
 });
-
-export { ce };
+export { require_dependentRequired };

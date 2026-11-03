@@ -5,17 +5,16 @@
  * pieces: chunk-hwmsct5x.js (2)
  * attribution: esm-fingerprint 2
  */
-import { pr } from "../../core/error.mjs";
+import { AnthropicError } from "../../core/error.mjs";
 
 //@ chunk-hwmsct5x.js:71076-71098 esm-fingerprint
-var gXo = 15000,
-  td = 5000;
+var DEFAULT_MEMORY_SYNC_INTERVAL_MS = 15000;
+var MIN_MEMORY_SYNC_INTERVAL_MS = 5000;
 //@ chunk-hwmsct5x.js:71098-71272 esm-fingerprint
-function M8r(e, n) {
-  if (!(e >= td))
-    throw new pr(
-      `${n} must be at least ${td}ms (got ${e}); to run without memory sync, pass \`memorySyncIntervalMs: null\` to the worker instead`,
+function M8r(ms, option) {
+  if (!(ms >= MIN_MEMORY_SYNC_INTERVAL_MS))
+    throw new AnthropicError(
+      `${option} must be at least ${MIN_MEMORY_SYNC_INTERVAL_MS}ms (got ${ms}); to run without memory sync, pass \`memorySyncIntervalMs: null\` to the worker instead`,
     );
 }
-
-export { gXo, M8r };
+export { DEFAULT_MEMORY_SYNC_INTERVAL_MS, M8r };

@@ -12,7 +12,7 @@ import { Ar } from "../../../../runtime/bun-runtime.js";
 import { CC_PLUGIN_DIFF } from "../diff/index.js";
 import { STORE_ID } from "./DiffPane.js";
 import { availabilityFlag, diffPaneHooks } from "./hooks.js";
-import { qKt, markPaneAsked, L_n } from "../../functionHooks/panes.js";
+import { storeEventQueued, markPaneAsked, paneKey } from "../../functionHooks/panes.js";
 import { STORE_OPEN_KEY, PANE_ID } from "./constants.js";
 import { logForDebugging } from "../../../utils/debug.js";
 import { getIsNonInteractiveSession } from "../../../bootstrap/state.js";
@@ -31,7 +31,7 @@ import {
   getBuiltinPlugins,
 } from "../../builtinPlugins.js";
 import { diffPaneManifest } from "./manifest.js";
-import { wt } from "../../../remote/remoteMode.js";
+import { isRemoteSessionAvailable } from "../../../remote/remoteMode.js";
 import { isBundledModLive } from "../../../components/permissions/AskUserQuestionPermissionRequest/uiRenderHook.js";
 
 //@ chunk-wyqg6m3h.js:5213-5223 placement
@@ -51,19 +51,33 @@ Ar(diffPaneModule, {
   isPaneDrawable: () => isPaneDrawable,
   registerPlugin: () => registerPlugin,
 });
+//@ chunk-wyqg6m3h.js:64119-64346 placement = outputSchema (0.36)
 /**
  * 读取 diff 面板的已保存开关（缺省时把内置面板的旧偏好迁过来），开启时注册 diff 插件面板。与 ConfigTool 无关。
  */
-//@ chunk-wyqg6m3h.js:64119-64346 placement = outputSchema (0.36)
-async function carryPanelPreference(e) {
-  let o = await qKt({ event: "get", key: STORE_OPEN_KEY }, STORE_ID);
-  if (o === void 0 && e !== void 0)
-    (await qKt({ event: "set", key: STORE_OPEN_KEY, value: e }, STORE_ID),
-      logForDebugging(`diff: carried the built-in panel's saved preference (${e})`));
-  if ((o ?? e) === !0) markPaneAsked(L_n(CC_PLUGIN_DIFF, PANE_ID));
+async function carryPanelPreference(diffSidebarOpen) {
+  let o = await storeEventQueued(
+    {
+      event: "get",
+      key: STORE_OPEN_KEY,
+    },
+    STORE_ID,
+  );
+  if (o === undefined && diffSidebarOpen !== undefined) {
+    await storeEventQueued(
+      {
+        event: "set",
+        key: STORE_OPEN_KEY,
+        value: diffSidebarOpen,
+      },
+      STORE_ID,
+    );
+    logForDebugging(`diff: carried the built-in panel's saved preference (${diffSidebarOpen})`);
+  }
+  if ((o ?? diffSidebarOpen) === true) markPaneAsked(paneKey(CC_PLUGIN_DIFF, PANE_ID));
 }
 //@ chunk-wyqg6m3h.js:64346-64356 placement
-var isOnByDefault = !0;
+var isOnByDefault = true;
 //@ chunk-wyqg6m3h.js:64356-64404 placement
 var isPaneDrawable = () =>
   !getIsNonInteractiveSession() || (getSessionEntrypoint() === "claude-desktop" && isDesktopNonClaudecode());
@@ -80,13 +94,13 @@ var PLUGIN_DESCRIPTION =
 //@ chunk-wyqg6m3h.js:64607-64799 placement
 function registerPlugin() {
   if (isOfferedNow())
-    carryPanelPreference(getGlobalConfig().diffSidebarOpen).catch((e) =>
-      logForDebugging(`diff: the panel preference did not carry: ${e}`),
+    carryPanelPreference(getGlobalConfig().diffSidebarOpen).catch((error) =>
+      logForDebugging(`diff: the panel preference did not carry: ${error}`),
     );
   registerBuiltinPlugin({
     name: CC_PLUGIN_DIFF,
     description: PLUGIN_DESCRIPTION,
-    isAvailable: isAvailable,
+    isAvailable,
     hooksModule: builtinHooksModuleRef(getModsFolderPath(MOD_FOLDER), diffPaneHooks, () =>
       diffPaneManifest(),
     ),
@@ -95,11 +109,10 @@ function registerPlugin() {
 //@ chunk-6vnxsn99.js:62167-62273 placement
 function isDiffPaneAvailable() {
   return (
-    !wt() &&
-    getBuiltinPlugin(CC_PLUGIN_DIFF)?.isAvailable?.() === !0 &&
+    !isRemoteSessionAvailable() &&
+    getBuiltinPlugin(CC_PLUGIN_DIFF)?.isAvailable?.() === true &&
     getBuiltinPlugins().enabled.some((e) => e.name === CC_PLUGIN_DIFF) &&
     isBundledModLive(CC_PLUGIN_DIFF)
   );
 }
-
 export { isDiffPaneAvailable };

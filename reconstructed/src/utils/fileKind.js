@@ -10,10 +10,10 @@
  */
 import { lstat } from "fs/promises";
 
+//@ chunk-enbs5qcy.js:227-553 placement
 /**
  * 由 Dirent/Stats 判断文件类型（dir、symlink、file、other）；类型未知时再 lstat 一次，失败返回给定默认值。
  */
-//@ chunk-enbs5qcy.js:227-553 placement
 async function getFileKind(i, e, t) {
   if (i.isDirectory()) return "dir";
   if (i.isSymbolicLink()) return "symlink";
@@ -26,5 +26,4 @@ async function getFileKind(i, e, t) {
     return t;
   }
 }
-
 export { getFileKind };

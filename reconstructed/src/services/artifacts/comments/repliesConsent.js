@@ -10,10 +10,17 @@
  */
 
 //@ chunk-tq1fsmqn.js:191-260 placement
-function B9(e) {
-  return e === "interactive" || e === "sdk" || e === "bg_session";
+/**
+ * 导出函数 `isConsentUiKind`：参数 e，返回 e === "interactive" || e === "sdk" || e === "bg_session"。
+ */
+function isConsentUiKind(publishContext) {
+  return publishContext === "interactive" || publishContext === "sdk" || publishContext === "bg_session";
 }
 //@ chunk-tq1fsmqn.js:260-298 placement
-var cGs = { kind: "repliesConsentWriter" };
-
-export { B9, cGs };
+/**
+ * 评论回复同意写入器的标识（interactive/sdk/bg_session 三种界面）。
+ */
+var REPLIES_CONSENT_WRITER = {
+  kind: "repliesConsentWriter",
+};
+export { isConsentUiKind, REPLIES_CONSENT_WRITER };

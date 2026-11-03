@@ -9,15 +9,15 @@
  * attribution: placement 12
  */
 import { logForDebugging } from "../debug.js";
-import { o } from "../../../vendor/zod/v4/classic/schemas.js";
+import { string } from "../../../vendor/zod/v4/classic/schemas.js";
 import { subprocessEnv } from "../subprocessEnv.js";
 import { HostScoped } from "../hostScoped.js";
 import { getRootSession } from "../../bootstrap/state.js";
 
+//@ chunk-e6aww6q8.js:1015407-1015747 placement
 /**
  * Claude Code 启动 shell 时总会设置的环境变量名（SHELL、GIT_EDITOR、CLAUDECODE、会话 id、TMPDIR、BUN_OPTIONS 等）。
  */
-//@ chunk-e6aww6q8.js:1015407-1015747 placement
 var ALWAYS_SPAWN_ENV_KEYS = [
   "SHELL",
   "GIT_EDITOR",
@@ -41,13 +41,13 @@ var ALWAYS_SPAWN_ENV_KEYS = [
   "CLAUDE_CODE_INVOKED_SKILLS",
   ...[],
 ];
+//@ chunk-e6aww6q8.js:1015747-1016473 placement
 /**
  * shell 环境快照状态：快照是否可用/已落定、最近检查的会话环境变量键、探测到的启动环境键、shell 导出的变量，以及据此计算 spawn 时会出现的环境键集合。
  */
-//@ chunk-e6aww6q8.js:1015747-1016473 placement
 class ShellEnvSnapshotState {
-  #e = !1;
-  #t = !1;
+  #e = false;
+  #t = false;
   #n = new Set();
   #o = null;
   #r;
@@ -67,15 +67,16 @@ class ShellEnvSnapshotState {
     return this.#r;
   }
   spawnEnvKeys(sessionKeys) {
-    if (!this.#e || this.#o === null || sessionKeys === void 0) return null;
+    if (!this.#e || this.#o === null || sessionKeys === undefined) return null;
     let keys = new Set(Object.keys(subprocessEnv(this.#r)));
     for (let r of ALWAYS_SPAWN_ENV_KEYS) keys.add(r);
-    for (let r of sessionKeys) keys.add(r);
+    for (let sessionKey of sessionKeys) keys.add(sessionKey);
     for (let r of this.#o) keys.add(r);
     return keys;
   }
   markSnapshotAvailable(e) {
-    ((this.#e = e), (this.#t = !0));
+    this.#e = e;
+    this.#t = true;
   }
   replaceLastCheckedSessionEnvVarKeys(e) {
     this.#n = new Set(e);
@@ -87,46 +88,59 @@ class ShellEnvSnapshotState {
     this.#r ??= Object.fromEntries(e);
   }
   reset() {
-    ((this.#e = !1), (this.#t = !1), (this.#n = new Set()), (this.#o = null), (this.#r = void 0));
+    this.#e = false;
+    this.#t = false;
+    this.#n = new Set();
+    this.#o = null;
+    this.#r = undefined;
   }
 }
 //@ chunk-e6aww6q8.js:1016473-1016500 placement
-var YPo = new HostScoped(() => new ShellEnvSnapshotState());
+var shellEnvSnapshotByHost = new HostScoped(() => new ShellEnvSnapshotState());
 //@ chunk-e6aww6q8.js:1016500-1016538 placement
-function bR() {
-  return YPo.of(getRootSession().host);
+function shellEnvSnapshot() {
+  return shellEnvSnapshotByHost.of(getRootSession().host);
 }
 //@ chunk-e6aww6q8.js:1016538-1016584 placement
-function Ghe(e) {
-  bR().markSnapshotAvailable(e);
+function markSnapshotAvailable(e) {
+  shellEnvSnapshot().markSnapshotAvailable(e);
 }
 //@ chunk-e6aww6q8.js:1016584-1016644 placement
-function mqt(e) {
-  bR().replaceLastCheckedSessionEnvVarKeys(e);
+function setLastCheckedSessionEnvVarKeys(e) {
+  shellEnvSnapshot().replaceLastCheckedSessionEnvVarKeys(e);
 }
 //@ chunk-e6aww6q8.js:1016644-1016700 placement
-function yqt() {
-  return bR().lastCheckedSessionEnvVarKeys;
+function getLastCheckedSessionEnvVarKeys() {
+  return shellEnvSnapshot().lastCheckedSessionEnvVarKeys;
 }
 //@ chunk-e6aww6q8.js:1016700-1016745 placement
-function zhe(e) {
-  bR().replaceProbedEnvKeys(e);
+function setProbedEnvKeys(keys) {
+  shellEnvSnapshot().replaceProbedEnvKeys(keys);
 }
 //@ chunk-e6aww6q8.js:1016745-1016788 placement
-function _qt(e) {
-  bR().reportShellExports(e);
+function reportShellExports(shellExports) {
+  shellEnvSnapshot().reportShellExports(shellExports);
 }
 //@ chunk-e6aww6q8.js:1016788-1016850 placement
-function Sqt(e) {
-  return Object.hasOwn(bR().shellExports ?? {}, e);
+function wasShellExportReported(e) {
+  return Object.hasOwn(shellEnvSnapshot().shellExports ?? {}, e);
 }
 //@ chunk-e6aww6q8.js:1016850-1016906 placement
-function RA(e) {
+function sessionEnvVarNameSet(e) {
   return new Set(e.sessionEnvVars?.keys());
 }
 //@ chunk-e6aww6q8.js:1016906-1016950 placement
-function qhe(e) {
-  return bR().spawnEnvKeys(e);
+function spawnEnvKeysForSession(e) {
+  return shellEnvSnapshot().spawnEnvKeys(e);
 }
-
-export { bR, qhe, RA, Sqt, mqt, yqt, Ghe, _qt, zhe };
+export {
+  shellEnvSnapshot,
+  spawnEnvKeysForSession,
+  sessionEnvVarNameSet,
+  wasShellExportReported,
+  setLastCheckedSessionEnvVarKeys,
+  getLastCheckedSessionEnvVarKeys,
+  setProbedEnvKeys,
+  markSnapshotAvailable,
+  reportShellExports,
+};

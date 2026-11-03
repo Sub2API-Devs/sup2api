@@ -9,27 +9,39 @@
  * attribution: placement 4
  */
 import { truncateToLength } from "../../utils/stringUtils.js";
-import { tUn } from "../../utils/cliHighlightLanguages.js";
+import { highlightCore } from "../../utils/cliHighlightLanguages.js";
 
 //@ chunk-cwwxybjc.js:692-705 placement
-var XFn = 2000;
+/**
+ * 导出值：MAX_CODE_CHARS（2000：代码字符上限）。
+ */
+var MAX_CODE_CHARS = 2000;
+//@ chunk-cwwxybjc.js:705-872 placement
 /**
  * 截断过长代码并返回截掉字符数。
  */
-//@ chunk-cwwxybjc.js:705-872 placement
 function truncateCode(e, n = 0) {
-  if (e.length - n <= XFn) return { code: e.slice(n), truncatedChars: 0 };
-  let sliced = e.slice(n, n + XFn + 1),
-    c = truncateToLength(sliced, XFn);
-  return { code: c, truncatedChars: e.length - n - c.length };
+  if (e.length - n <= MAX_CODE_CHARS)
+    return {
+      code: e.slice(n),
+      truncatedChars: 0,
+    };
+  let sliced = e.slice(n, n + MAX_CODE_CHARS + 1);
+  let c = truncateToLength(sliced, MAX_CODE_CHARS);
+  return {
+    code: c,
+    truncatedChars: e.length - n - c.length,
+  };
 }
 //@ chunk-cwwxybjc.js:872-918 placement
-function bJe(e) {
-  return ` \u2026 [+${e} chars]`;
+/**
+ * 函数 truncatedCharsSuffix（" … [+N chars]"）。
+ */
+function truncatedCharsSuffix(truncatedChars) {
+  return ` \u2026 [+${truncatedChars} chars]`;
 }
 //@ chunk-cwwxybjc.js:965-991 placement
-function j() {
-  return tUn();
+function getMaxCodeChars() {
+  return highlightCore();
 }
-
-export { XFn, truncateCode, bJe, j };
+export { MAX_CODE_CHARS, truncateCode, truncatedCharsSuffix, getMaxCodeChars };

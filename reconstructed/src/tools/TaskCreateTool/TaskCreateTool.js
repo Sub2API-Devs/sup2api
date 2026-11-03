@@ -8,140 +8,161 @@
  * pieces: chunk-e6aww6q8.js (1), chunk-kxyd0g16.js (1)
  * attribution: fingerprint 2
  */
-import { isPlainObject as isPlainObject_4 } from "../../utils/isPlainObject.js";
-import { Mwe, Owe, Dv, coerceTaskCreateInput } from "./inputAliases.js";
+import { isPlainObject as isPlainObject_5 } from "../../utils/isPlainObject.js";
+import {
+  isTodoListInput,
+  isSubagentTaskInput,
+  isNonEmptyString,
+  coerceTaskCreateInput,
+} from "./inputAliases.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { zodStrictObject, o, pe, oe, u } from "../../../vendor/zod/v4/classic/schemas.js";
+import { zodStrictObject, string, record, unknown, u } from "../../../vendor/zod/v4/classic/schemas.js";
 import { buildTool } from "../../services/tools/permissionCheckGuard.js";
 import { TASK_CREATE_TOOL_NAME } from "./constants.js";
 import { DESCRIPTION, getPrompt_2 } from "./prompt.js";
-import { Wue, createTask, getTaskListId, deleteTask } from "../../utils/tasks.js";
+import { areTaskToolsEnabled, createTask, getTaskListId, deleteTask } from "../../utils/tasks.js";
 import { executeTaskCreatedHooks, getTaskCreatedHookMessage } from "../../utils/hooks.js";
 import { getAgentName, getTeamName } from "../../utils/teammate.js";
 import { StreamClosedAbortError } from "../../utils/errors.js";
 import { logForDebugging } from "../../utils/debug.js";
 
+//@ chunk-e6aww6q8.js:1778329-1778957 fingerprint = outputSchema (0.334)
 /**
  * TaskCreate 校验失败时的纠正提示：一次只建一个任务；误用 Agent 参数（prompt/subagent_type）时提示改用 Agent。
  */
-//@ chunk-e6aww6q8.js:1778329-1778957 fingerprint = outputSchema (0.334)
 function getTaskCreateValidationSteer(rawInput) {
-  if (!isPlainObject_4(rawInput)) return null;
-  let n = isPlainObject_4(rawInput.task) ? rawInput.task : null;
-  if (Mwe(rawInput) || (n !== null && Mwe(n)))
+  if (!isPlainObject_5(rawInput)) return null;
+  let task = isPlainObject_5(rawInput.task) ? rawInput.task : null;
+  if (isTodoListInput(rawInput) || (task !== null && isTodoListInput(task)))
     return "TaskCreate creates ONE task per call and has no `tasks` or `todos` parameter. Call TaskCreate once per task, passing `subject` (a brief title) and `description` (what needs to be done) as top-level string parameters.";
-  if ((Owe(rawInput) || (n !== null && Owe(n))) && !(Dv(rawInput.subject) && Dv(rawInput.description)))
+  if (
+    (isSubagentTaskInput(rawInput) || (task !== null && isSubagentTaskInput(task))) &&
+    !(isNonEmptyString(rawInput.subject) && isNonEmptyString(rawInput.description))
+  )
     return "This call used Agent-tool parameters (`prompt`/`subagent_type`). TaskCreate adds an item to the task list and takes `subject` and `description` string parameters. To delegate work to a subagent, use the Agent tool instead.";
   return null;
 }
+//@ chunk-kxyd0g16.js:140086-141693 fingerprint = TaskCreateTool (0.715)
 /**
  * TaskCreate 工具（shouldDefer，isEnabled=任务工具启用且 todo 类工具可用）：在当前任务列表创建一条 pending 任务，运行 TaskCreated 钩子，钩子阻塞时删除刚建任务并报错；结果 "Task #id created successfully: subject"。isConcurrencySafe=false。
  */
-//@ chunk-kxyd0g16.js:140086-141693 fingerprint = TaskCreateTool (0.715)
 var taskCreateInputSchema = DoctorLazy(() =>
-    zodStrictObject({
-      subject: o().describe("A brief title for the task"),
-      description: o().describe("What needs to be done"),
-      activeForm: o()
-        .optional()
-        .describe('Present continuous form shown in spinner when in_progress (e.g., "Running tests")'),
-      metadata: pe(o(), oe()).optional().describe("Arbitrary metadata to attach to the task"),
+  zodStrictObject({
+    subject: string().describe("A brief title for the task"),
+    description: string().describe("What needs to be done"),
+    activeForm: string()
+      .optional()
+      .describe('Present continuous form shown in spinner when in_progress (e.g., "Running tests")'),
+    metadata: record(string(), unknown()).optional().describe("Arbitrary metadata to attach to the task"),
+  }),
+);
+var taskCreateOutputSchema = DoctorLazy(() =>
+  u({
+    task: u({
+      id: string(),
+      subject: string(),
     }),
-  ),
-  taskCreateOutputSchema = DoctorLazy(() => u({ task: u({ id: o(), subject: o() }) })),
-  TaskCreateTool = buildTool({
-    name: TASK_CREATE_TOOL_NAME,
-    searchHint: "create a task in the task list",
-    backgrounding: "never",
-    maxResultSizeChars: 1e5,
-    async description() {
-      return DESCRIPTION;
-    },
-    async prompt() {
-      return getPrompt_2();
-    },
-    get inputSchema() {
-      return taskCreateInputSchema();
-    },
-    get outputSchema() {
-      return taskCreateOutputSchema();
-    },
-    userFacingName() {
-      return "TaskCreate";
-    },
-    shouldDefer: !0,
-    coerceInput: coerceTaskCreateInput,
-    validationErrorSteer: getTaskCreateValidationSteer,
-    isEnabled() {
-      return Wue();
-    },
-    isConcurrencySafe() {
-      return !1;
-    },
-    toAutoClassifierInput(e) {
-      return e.subject;
-    },
-    renderToolUseMessage() {
-      return null;
-    },
-    create(e) {
-      return {
-        async call({ subject: r, description: n, activeForm: s, metadata: f }, { signal: h, onProgress: y }) {
-          let k = await createTask(
-              getTaskListId(),
-              {
-                subject: r,
-                description: n,
-                activeForm: s,
-                status: "pending",
-                owner: void 0,
-                blocks: [],
-                blockedBy: [],
-                metadata: f,
-              },
-              e.storageV5,
-            ),
-            w = [],
-            runTaskHooks = e.runTaskHooks(
-              executeTaskCreatedHooks,
-              k,
-              r,
-              n,
-              getAgentName(),
-              getTeamName(),
-              void 0,
-              h,
-            );
-          try {
-            for await (let R of runTaskHooks)
-              if (R.blockingError) w.push(getTaskCreatedHookMessage(R.blockingError));
-          } catch (error) {
-            if (!(error instanceof StreamClosedAbortError)) throw error;
-            logForDebugging("TaskCreated hooks cancelled (control stream closed)");
-          }
-          if (w.length > 0)
-            throw (
-              await deleteTask(getTaskListId(), k, e.storageV5),
-              Error(
-                w.join(`
+  }),
+);
+var TaskCreateTool = buildTool({
+  name: TASK_CREATE_TOOL_NAME,
+  searchHint: "create a task in the task list",
+  backgrounding: "never",
+  maxResultSizeChars: 1e5,
+  async description() {
+    return DESCRIPTION;
+  },
+  async prompt() {
+    return getPrompt_2();
+  },
+  get inputSchema() {
+    return taskCreateInputSchema();
+  },
+  get outputSchema() {
+    return taskCreateOutputSchema();
+  },
+  userFacingName() {
+    return "TaskCreate";
+  },
+  shouldDefer: true,
+  coerceInput: coerceTaskCreateInput,
+  validationErrorSteer: getTaskCreateValidationSteer,
+  isEnabled() {
+    return areTaskToolsEnabled();
+  },
+  isConcurrencySafe() {
+    return false;
+  },
+  toAutoClassifierInput(input) {
+    return input.subject;
+  },
+  renderToolUseMessage() {
+    return null;
+  },
+  create(e) {
+    return {
+      async call({ subject, description, activeForm, metadata }, { signal, onProgress }) {
+        let taskId = await createTask(
+          getTaskListId(),
+          {
+            subject,
+            description,
+            activeForm,
+            status: "pending",
+            owner: undefined,
+            blocks: [],
+            blockedBy: [],
+            metadata,
+          },
+          e.storageV5,
+        );
+        let blockingErrors = [];
+        let generator = e.runTaskHooks(
+          executeTaskCreatedHooks,
+          taskId,
+          subject,
+          description,
+          getAgentName(),
+          getTeamName(),
+          undefined,
+          signal,
+        );
+        try {
+          for await (let result of generator)
+            if (result.blockingError) blockingErrors.push(getTaskCreatedHookMessage(result.blockingError));
+        } catch (error) {
+          if (!(error instanceof StreamClosedAbortError)) throw error;
+          logForDebugging("TaskCreated hooks cancelled (control stream closed)");
+        }
+        if (blockingErrors.length > 0) {
+          await deleteTask(getTaskListId(), taskId, e.storageV5);
+          throw Error(
+            blockingErrors.join(`
 `),
-              )
-            );
-          return (
-            y?.({ type: "set_expanded_view", expandedView: "tasks" }),
-            { data: { task: { id: k, subject: r } } }
           );
-        },
-      };
-    },
-    mapToolResultToToolResultBlockParam(e, r) {
-      let { task: task } = e;
-      return {
-        tool_use_id: r,
-        type: "tool_result",
-        content: `Task #${task.id} created successfully: ${task.subject}`,
-      };
-    },
-  });
-
+        }
+        onProgress?.({
+          type: "set_expanded_view",
+          expandedView: "tasks",
+        });
+        return {
+          data: {
+            task: {
+              id: taskId,
+              subject,
+            },
+          },
+        };
+      },
+    };
+  },
+  mapToolResultToToolResultBlockParam(content, toolUseID) {
+    let { task } = content;
+    return {
+      tool_use_id: toolUseID,
+      type: "tool_result",
+      content: `Task #${task.id} created successfully: ${task.subject}`,
+    };
+  },
+});
 export { TaskCreateTool };

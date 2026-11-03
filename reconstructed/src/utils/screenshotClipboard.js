@@ -18,55 +18,60 @@ import { execFileNoThrowWithCwd } from "./execFileNoThrow.js";
 import { quotePowerShellSingleQuoted } from "./powershell/quoting.js";
 import { moveKeeperPid } from "./toolCgroup.js";
 
+//@ chunk-9h8dr0qb.js:70640-71227 fingerprint = copyAnsiToClipboard (0.559)
 /**
  * 把 ANSI 文本渲染成 PNG 截图并复制到剪贴板（临时文件放 screenshots 目录）。
  */
-//@ chunk-9h8dr0qb.js:70640-71227 fingerprint = copyAnsiToClipboard (0.559)
 async function copyAnsiToClipboard(ansiText, options) {
   try {
-    let { ansiToPng: ansiToPng } = await import("./chunk-t6e3jxy0.js"),
-      pngPath = ansiToPng(ansiText, options),
-      D = await writeTempFile("screenshot-", ".png", pngPath, "screenshots"),
-      E;
+    let { ansiToPng } = await import("./chunk-t6e3jxy0.js");
+    let pngPath = ansiToPng(ansiText, options);
+    let pngPath_2 = await writeTempFile("screenshot-", ".png", pngPath, "screenshots");
+    let E;
     try {
-      E = await copyPngToClipboard(D);
+      E = await copyPngToClipboard(pngPath_2);
     } catch (error) {
-      return (
-        logError(error),
-        logFeatureBad("clipboard_write", "copy_failed"),
-        {
-          success: !1,
-          message: `Failed to copy screenshot: ${error instanceof Error ? error.message : "Unknown error"}`,
-        }
-      );
+      logError(error);
+      logFeatureBad("clipboard_write", "copy_failed");
+      return {
+        success: false,
+        message: `Failed to copy screenshot: ${error instanceof Error ? error.message : "Unknown error"}`,
+      };
     } finally {
-      await unlink(D).catch(() => {});
+      await unlink(pngPath_2).catch(() => {});
     }
     if (E.success) logFeatureOk("clipboard_write");
     else logFeatureBad("clipboard_write", "copy_failed");
     return E;
   } catch (error) {
-    return (
-      logError(error),
-      logFeatureBad("clipboard_write", "render_failed"),
-      {
-        success: !1,
-        message: `Failed to copy screenshot: ${error instanceof Error ? error.message : "Unknown error"}`,
-      }
-    );
+    logError(error);
+    logFeatureBad("clipboard_write", "render_failed");
+    return {
+      success: false,
+      message: `Failed to copy screenshot: ${error instanceof Error ? error.message : "Unknown error"}`,
+    };
   }
 }
+//@ chunk-9h8dr0qb.js:71227-72357 fingerprint = copyPngToClipboard (0.791)
 /**
  * 按平台把 PNG 写入剪贴板：macOS osascript、Linux xclip/wl-copy、Windows PowerShell。
  */
-//@ chunk-9h8dr0qb.js:71227-72357 fingerprint = copyPngToClipboard (0.791)
 async function copyPngToClipboard(pngPath) {
   let platform = getPlatform();
   if (platform === "macos") {
-    let script = `set the clipboard to (read (POSIX file "${pngPath.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}") as \xABclass PNGf\xBB)`,
-      result = await execFileNoThrowWithCwd("osascript", ["-e", script], { timeout: 5000 });
-    if (result.code === 0) return { success: !0, message: "Screenshot copied to clipboard" };
-    return { success: !1, message: `Failed to copy to clipboard: ${result.stderr}` };
+    let script = `set the clipboard to (read (POSIX file "${pngPath.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}") as \xABclass PNGf\xBB)`;
+    let result = await execFileNoThrowWithCwd("osascript", ["-e", script], {
+      timeout: 5000,
+    });
+    if (result.code === 0)
+      return {
+        success: true,
+        message: "Screenshot copied to clipboard",
+      };
+    return {
+      success: false,
+      message: `Failed to copy to clipboard: ${result.stderr}`,
+    };
   }
   if (platform === "linux") {
     if (
@@ -79,43 +84,65 @@ async function copyPngToClipboard(pngPath) {
         pngPath,
       ])) === 0
     )
-      return { success: !0, message: "Screenshot copied to clipboard" };
+      return {
+        success: true,
+        message: "Screenshot copied to clipboard",
+      };
     return {
-      success: !1,
+      success: false,
       message: "Failed to copy to clipboard. Please install xclip: sudo apt install xclip",
     };
   }
   if (platform === "windows") {
-    let psScript = `Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.Clipboard]::SetImage([System.Drawing.Image]::FromFile(${quotePowerShellSingleQuoted(pngPath, "the screenshot temp path (override with CLAUDE_CODE_TMPDIR)")}))`,
-      result = await execFileNoThrowWithCwd("powershell", ["-NoProfile", "-Command", psScript], {
-        timeout: 5000,
-      });
-    if (result.code === 0) return { success: !0, message: "Screenshot copied to clipboard" };
-    return { success: !1, message: `Failed to copy to clipboard: ${result.stderr}` };
+    let psScript = `Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.Clipboard]::SetImage([System.Drawing.Image]::FromFile(${quotePowerShellSingleQuoted(pngPath, "the screenshot temp path (override with CLAUDE_CODE_TMPDIR)")}))`;
+    let result = await execFileNoThrowWithCwd("powershell", ["-NoProfile", "-Command", psScript], {
+      timeout: 5000,
+    });
+    if (result.code === 0)
+      return {
+        success: true,
+        message: "Screenshot copied to clipboard",
+      };
+    return {
+      success: false,
+      message: `Failed to copy to clipboard: ${result.stderr}`,
+    };
   }
-  return { success: !1, message: `Screenshot to clipboard is not supported on ${platform}` };
+  return {
+    success: false,
+    message: `Screenshot to clipboard is not supported on ${platform}`,
+  };
 }
 //@ chunk-9h8dr0qb.js:72357-72690 sole-consumer
 function spawnDetachedWithTimeout(o, u, p = 5000) {
-  return new Promise((h) => {
+  return new Promise((resolve) => {
     let D;
     try {
-      D = spawn(o, u, { cwd: void 0, detached: !0, stdio: "ignore", windowsHide: !0 });
+      D = spawn(o, u, {
+        cwd: undefined,
+        detached: true,
+        stdio: "ignore",
+        windowsHide: true,
+      });
     } catch {
-      h(null);
+      resolve(null);
       return;
     }
     moveKeeperPid(D.pid);
-    let E = !1;
+    let E = false;
     function T(v) {
       if (E) return;
-      ((E = !0), clearTimeout(A), h(v));
+      E = true;
+      clearTimeout(timer);
+      resolve(v);
     }
-    let A = setTimeout(() => {
-      (D.kill("SIGKILL"), T(null));
+    let timer = setTimeout(() => {
+      D.kill("SIGKILL");
+      T(null);
     }, p);
-    (D.once("exit", (v) => T(v)), D.once("error", () => T(null)), D.unref());
+    D.once("exit", (v) => T(v));
+    D.once("error", () => T(null));
+    D.unref();
   });
 }
-
 export { copyAnsiToClipboard };

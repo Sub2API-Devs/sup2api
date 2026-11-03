@@ -8,13 +8,18 @@
  * pieces: chunk-14ezrfvp.js (1)
  * attribution: callgraph-fingerprint 1
  */
-import { e } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { jsxProd_default } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { MessageResponse } from "./MessageResponse.js";
 import { Text } from "../ink/components/Text.js";
 
 //@ chunk-14ezrfvp.js:372-465 callgraph-fingerprint = FallbackToolUseRejectedMessage (0.196)
 function FallbackToolUseRejectedMessage() {
-  return e(MessageResponse, { height: 1, children: e(Text, { dimColor: !0, children: "Fetching\u2026" }) });
+  return jsxProd_default(MessageResponse, {
+    height: 1,
+    children: jsxProd_default(Text, {
+      dimColor: true,
+      children: "Fetching\u2026",
+    }),
+  });
 }
-
 export { FallbackToolUseRejectedMessage };

@@ -6,12 +6,11 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { Vy } from "../../semver/index.js";
+import { require_semver_3 } from "../../semver/index.js";
 
 //@ chunk-mrx6y2r5.js:4860-4951 cjs-fingerprint
-var Vh = x(function (oL, Kh) {
-  var qh = Vy();
-  Kh.exports = qh.satisfies(process.version, ">=16.9.0");
+var require_rsaPssKeyDetailsSupported = x(function (cjsExports, cjsModule) {
+  var semver = require_semver_3();
+  cjsModule.exports = semver.satisfies(process.version, ">=16.9.0");
 });
-
-export { Vh };
+export { require_rsaPssKeyDetailsSupported };

@@ -8,21 +8,12 @@
  * pieces: chunk-e6aww6q8.js (9)
  * attribution: placement 9
  */
-import {
-  AsyncLocalStorage,
-  AsyncLocalStorage as AsyncLocalStorage_2,
-  AsyncLocalStorage as AsyncLocalStorage_3,
-  AsyncLocalStorage as AsyncLocalStorage_4,
-  AsyncLocalStorage as AsyncLocalStorage_5,
-  AsyncLocalStorage as AsyncLocalStorage_6,
-  AsyncLocalStorage as AsyncLocalStorage_7,
-  AsyncLocalStorage as AsyncLocalStorage_8,
-} from "async_hooks";
+import { AsyncLocalStorage } from "async_hooks";
 import { getDefaultSubagentModel } from "../../utils/model/agent.js";
 import { env } from "../../utils/env.js";
 import { getSubagentEffortOverride, getEffortEnvOverride } from "../../utils/effort.js";
 import { getFeatureValue_SESSION_PINNED } from "../../services/analytics/growthbook.js";
-import { isPlainObject as isPlainObject_4 } from "../../utils/isPlainObject.js";
+import { isPlainObject as isPlainObject_5 } from "../../utils/isPlainObject.js";
 import { isDiskless } from "../../bootstrap/state.js";
 import { toolMatchesName } from "../../Tool.js";
 import { SENDMESSAGE } from "../SendMessageTool/constants.js";
@@ -30,48 +21,90 @@ import { ENTER_PLAN_MODE_TOOL_NAME } from "../EnterPlanModeTool/constants.js";
 import { EXITPLANMODE_2 } from "../ExitPlanModeTool/constants.js";
 
 //@ chunk-e6aww6q8.js:1428917-1428944 placement
-var fYs = ["lower", "higher"];
+/**
+ * 相对 effort 的取值（lower、higher）。
+ */
+var RELATIVE_EFFORT_VALUES = ["lower", "higher"];
 //@ chunk-e6aww6q8.js:1428944-1429151 placement
 function isRelativeEffortDisabled() {
   if (
     getDefaultSubagentModel() !== "inherit" ||
     env.CLAUDE_CODE_SUBAGENT_MODEL_FORCE ||
-    getSubagentEffortOverride() !== void 0 ||
-    getEffortEnvOverride() !== void 0
+    getSubagentEffortOverride() !== undefined ||
+    getEffortEnvOverride() !== undefined
   )
-    return !1;
+    return false;
   let CLAUDE_CODE_SNAPPY_PELICAN = env.CLAUDE_CODE_SNAPPY_PELICAN;
-  if (CLAUDE_CODE_SNAPPY_PELICAN !== void 0) return CLAUDE_CODE_SNAPPY_PELICAN;
-  return getFeatureValue_SESSION_PINNED("tengu_snappy_pelican", !1);
+  if (CLAUDE_CODE_SNAPPY_PELICAN !== undefined) return CLAUDE_CODE_SNAPPY_PELICAN;
+  return getFeatureValue_SESSION_PINNED("tengu_snappy_pelican", false);
 }
 //@ chunk-e6aww6q8.js:1429151-1429316 placement
 function dropRelativeEffortInput(e) {
-  if (isRelativeEffortDisabled() || !isPlainObject_4(e) || (e.effort !== "lower" && e.effort !== "higher"))
+  if (isRelativeEffortDisabled() || !isPlainObject_5(e) || (e.effort !== "lower" && e.effort !== "higher"))
     return null;
-  let n = { ...e };
-  return (delete n.effort, { input: n, shapeClass: "drop_relative_effort" });
+  let n = {
+    ...e,
+  };
+  delete n.effort;
+  return {
+    input: n,
+    shapeClass: "drop_relative_effort",
+  };
 }
 //@ chunk-e6aww6q8.js:1429316-1429382 placement
-function o8n(e, n) {
-  return isDiskless() && (n === void 0 || !n.some((r) => toolMatchesName(r, e)));
+/**
+ * 无盘会话里且工具表未显式包含该工具。
+ */
+function toolMissingInDiskless(e, n) {
+  return isDiskless() && (n === undefined || !n.some((r) => toolMatchesName(r, e)));
 }
 //@ chunk-e6aww6q8.js:1429382-1429412 placement
-function y1r() {
-  return o8n(SENDMESSAGE);
+/**
+ * 无盘会话里 SendMessage 不可用。
+ */
+function isSendMessageUnavailable() {
+  return toolMissingInDiskless(SENDMESSAGE);
 }
 //@ chunk-e6aww6q8.js:1429412-1429456 placement
-function _1r(e) {
-  return o8n(ENTER_PLAN_MODE_TOOL_NAME, e) || o8n(EXITPLANMODE_2, e);
+/**
+ * 无盘会话里进入/退出计划模式的工具不可用。
+ */
+function isPlanModeToolUnavailable(tools) {
+  return (
+    toolMissingInDiskless(ENTER_PLAN_MODE_TOOL_NAME, tools) || toolMissingInDiskless(EXITPLANMODE_2, tools)
+  );
 }
 //@ chunk-e6aww6q8.js:1429559-1429575 placement
-var f9t = new AsyncLocalStorage_3();
+/**
+ * 保存当前远程会话 id 的 AsyncLocalStorage。
+ */
+var remoteSessionContext = new AsyncLocalStorage();
 //@ chunk-e6aww6q8.js:1429575-1429629 placement
-function p9t() {
-  return f9t.getStore()?.remoteSessionId;
+/**
+ * 取当前远程会话 id。
+ */
+function currentRemoteSessionId() {
+  return remoteSessionContext.getStore()?.remoteSessionId;
 }
 //@ chunk-e6aww6q8.js:1429629-1429685 placement
-function EYs(e, n) {
-  return f9t.run({ remoteSessionId: e }, n);
+/**
+ * 在指定远程会话 id 下执行函数。
+ */
+function runWithRemoteSessionId(remoteSessionId, n) {
+  return remoteSessionContext.run(
+    {
+      remoteSessionId,
+    },
+    n,
+  );
 }
-
-export { y1r, fYs, isRelativeEffortDisabled, dropRelativeEffortInput, EYs, _1r, p9t, o8n };
+export {
+  isSendMessageUnavailable,
+  RELATIVE_EFFORT_VALUES,
+  isRelativeEffortDisabled,
+  dropRelativeEffortInput,
+  runWithRemoteSessionId,
+  isPlanModeToolUnavailable,
+  currentRemoteSessionId,
+  toolMissingInDiskless,
+};

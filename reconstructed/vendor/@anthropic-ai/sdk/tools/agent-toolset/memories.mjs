@@ -7,633 +7,936 @@
  */
 import * as BRt from "crypto";
 import * as zp from "path";
-import { pr } from "../../core/error.mjs";
-import { Kn, ke } from "../../internal/tslib.mjs";
-import { gXo, M8r } from "./sync-interval.mjs";
-import { Tb } from "../../internal/utils/log.mjs";
-import { Fe, m, Se } from "../../internal/file-store.mjs";
-import { hJ } from "../../internal/utils/backoff.mjs";
+import { AnthropicError } from "../../core/error.mjs";
+import { __classPrivateFieldSet, __classPrivateFieldGet } from "../../internal/tslib.mjs";
+import { DEFAULT_MEMORY_SYNC_INTERVAL_MS, M8r } from "./sync-interval.mjs";
+import { loggerFor } from "../../internal/utils/log.mjs";
+import { FileStore_default, FileStoreError, isPathLegal } from "../../internal/file-store.mjs";
+import { isStatus } from "../../internal/utils/backoff.mjs";
 import { decodeUtf8 } from "../../internal/utils/bytes.mjs";
 
 //@ chunk-2cw52qnf.js:13458-13570 esm-layout
-var u,
-  I,
-  ae,
-  H,
-  ce,
-  d,
-  U,
-  oe,
-  k,
-  ze,
-  se,
-  Ge,
-  He,
-  Ee,
-  Oe,
-  Pe,
-  We,
-  be,
-  Ue,
-  je,
-  ie,
-  ne,
-  Be,
-  Ye,
-  xt = 30000,
-  j = ".anthropic-memory-store",
-  Ke = 1;
+var _SessionMemoryStores_instances;
+var _SessionMemoryStores_client;
+var _SessionMemoryStores_workdir;
+var _SessionMemoryStores_syncIntervalMs;
+var _SessionMemoryStores_syncDeletions;
+var _SessionMemoryStores_log;
+var _SessionMemoryStores_lastSyncAt;
+var _SessionMemoryStores_finished;
+var _SessionMemoryStores_stores;
+var _SessionMemoryStores_storeRoot;
+var _SessionMemoryStores_scanMarker;
+var _SessionMemoryStores_syncStore;
+var _SessionMemoryStores_flushStore;
+var _SessionMemoryStores_recover;
+var _SessionMemoryStores_stampAndPull;
+var _SessionMemoryStores_syncPath;
+var _SessionMemoryStores_removeLocal;
+var _SessionMemoryStores_write;
+var _SessionMemoryStores_pullAll;
+var _SessionMemoryStores_uploadAll;
+var _SessionMemoryStores_listMemories;
+var _SessionMemoryStores_upload;
+var _SessionMemoryStores_corroboratedDelete;
+var _SessionMemoryStores_deleteRemote;
+var MEMORY_FLUSH_TIMEOUT_MS = 30000;
+var MARKER_PATH = ".anthropic-memory-store";
+var MARKER_VERSION = 1;
 //@ chunk-2cw52qnf.js:13570-13668 esm-fingerprint
-function qe(r) {
+function markerSha(memoryStoreId) {
   return BRt.createHash("sha256")
     .update(
-      `version ${Ke}
-${r}`,
+      `version ${MARKER_VERSION}
+${memoryStoreId}`,
       "utf-8",
     )
     .digest("hex");
 }
 //@ chunk-2cw52qnf.js:13668-13717 esm-fingerprint
-var Dt = 30000,
-  Ct = 100,
-  Ft = 20,
-  Pt = 16,
-  Wt = 32,
-  Ut = 8,
-  jt = 50;
+var DELETE_CORROBORATION_MS = 30000;
+var LIST_PAGE_SIZE = 100;
+var FULL_LIST_PAGE_SIZE = 20;
+var FETCH_CONCURRENCY = 16;
+var UPLOAD_CONCURRENCY = 32;
+var DELETE_CAP_FLOOR = 8;
+var DELETE_CAP_CEILING = 50;
 //@ chunk-2cw52qnf.js:13717-13821 esm-fingerprint
-class SessionMemoryError extends pr {
-  constructor(r, e) {
-    super(r);
-    if (((this.name = "SessionMemoryError"), e !== void 0)) this.cause = e;
+class SessionMemoryError extends AnthropicError {
+  constructor(message, cause) {
+    super(message);
+    this.name = "SessionMemoryError";
+    if (cause !== undefined) this.cause = cause;
   }
 }
 //@ chunk-2cw52qnf.js:13821-14031 esm-fingerprint
-class Ve {
-  constructor(r, e, t) {
-    ((this.mode = r),
-      (this.cap = e),
-      (this.waiveWindow = t),
-      (this.attempted = 0),
-      (this.capped = 0),
-      (this.suppressed = 0));
+class DeletePass {
+  constructor(mode, cap, waiveWindow) {
+    this.mode = mode;
+    this.cap = cap;
+    this.waiveWindow = waiveWindow;
+    this.attempted = 0;
+    this.capped = 0;
+    this.suppressed = 0;
   }
   takeSlot() {
-    if (this.attempted >= this.cap) return (this.capped++, !1);
-    return (this.attempted++, !0);
+    if (this.attempted >= this.cap) {
+      this.capped++;
+      return false;
+    }
+    this.attempted++;
+    return true;
   }
 }
 //@ chunk-2cw52qnf.js:14031-16765 esm-fingerprint
-class Xe {
-  constructor(r, e) {
-    (u.add(this),
-      I.set(this, void 0),
-      ae.set(this, void 0),
-      H.set(this, void 0),
-      ce.set(this, void 0),
-      d.set(this, void 0),
-      U.set(this, void 0),
-      oe.set(this, !1),
-      k.set(this, []),
-      Kn(this, I, r, "f"),
-      Kn(this, ae, e.workdir, "f"),
-      Kn(this, H, e.syncIntervalMs ?? gXo, "f"),
-      M8r(ke(this, H, "f"), "syncIntervalMs"),
-      Kn(this, ce, e.syncDeletions ?? "enabled", "f"),
-      Kn(this, d, Tb(r), "f"),
-      Kn(this, U, Date.now(), "f"));
+class SessionMemoryStores {
+  constructor(client, opts) {
+    _SessionMemoryStores_instances.add(this);
+    _SessionMemoryStores_client.set(this, undefined);
+    _SessionMemoryStores_workdir.set(this, undefined);
+    _SessionMemoryStores_syncIntervalMs.set(this, undefined);
+    _SessionMemoryStores_syncDeletions.set(this, undefined);
+    _SessionMemoryStores_log.set(this, undefined);
+    _SessionMemoryStores_lastSyncAt.set(this, undefined);
+    _SessionMemoryStores_finished.set(this, false);
+    _SessionMemoryStores_stores.set(this, []);
+    __classPrivateFieldSet(this, _SessionMemoryStores_client, client, "f");
+    __classPrivateFieldSet(this, _SessionMemoryStores_workdir, opts.workdir, "f");
+    __classPrivateFieldSet(
+      this,
+      _SessionMemoryStores_syncIntervalMs,
+      opts.syncIntervalMs ?? DEFAULT_MEMORY_SYNC_INTERVAL_MS,
+      "f",
+    );
+    M8r(__classPrivateFieldGet(this, _SessionMemoryStores_syncIntervalMs, "f"), "syncIntervalMs");
+    __classPrivateFieldSet(this, _SessionMemoryStores_syncDeletions, opts.syncDeletions ?? "enabled", "f");
+    __classPrivateFieldSet(this, _SessionMemoryStores_log, loggerFor(client), "f");
+    __classPrivateFieldSet(this, _SessionMemoryStores_lastSyncAt, Date.now(), "f");
   }
   get roots() {
-    return ke(this, k, "f").map((r) => r.files.root().path);
+    return __classPrivateFieldGet(this, _SessionMemoryStores_stores, "f").map((s) => s.files.root().path);
   }
   get readOnlyRoots() {
-    return ke(this, k, "f")
-      .filter((r) => r.readOnly)
-      .map((r) => r.files.root().path);
+    return __classPrivateFieldGet(this, _SessionMemoryStores_stores, "f")
+      .filter((s) => s.readOnly)
+      .map((s) => s.files.root().path);
   }
-  async download(r) {
-    for (let resource of r.resources) {
+  async download(session) {
+    for (let resource of session.resources) {
       if (resource.type !== "memory_store") continue;
-      let t = ke(this, u, "m", ze).call(this, resource),
-        n;
+      let root = __classPrivateFieldGet(
+        this,
+        _SessionMemoryStores_instances,
+        "m",
+        _SessionMemoryStores_storeRoot,
+      ).call(this, resource);
+      let store;
       try {
-        if (
-          ((n = {
-            memoryStoreId: resource.memory_store_id,
-            files: await Fe.open(t, { utf8: !0 }),
-            readOnly: resource.access === "read_only",
-            baseline: new Map(),
-            refusedShas: new Map(),
-            pendingDeletes: new Map(),
+        store = {
+          memoryStoreId: resource.memory_store_id,
+          files: await FileStore_default.open(root, {
+            utf8: true,
           }),
-          !n.files.root().removedOnDispose)
-        )
+          readOnly: resource.access === "read_only",
+          baseline: new Map(),
+          refusedShas: new Map(),
+          pendingDeletes: new Map(),
+        };
+        if (!store.files.root().removedOnDispose)
           throw new SessionMemoryError(
-            `something already exists at the memory store's path: ${t} (memory_store_id=${resource.memory_store_id}); it must not exist when the session starts`,
+            `something already exists at the memory store's path: ${root} (memory_store_id=${resource.memory_store_id}); it must not exist when the session starts`,
           );
         try {
-          await n.files.createRoot();
-        } catch (error) {
-          if (!B(error)) throw error;
+          await store.files.createRoot();
+        } catch (e) {
+          if (!isErrno(e)) throw e;
           throw new SessionMemoryError(
-            `cannot create the memory store's folder: ${t} (memory_store_id=${resource.memory_store_id}): ${error}; the worker host must make this mount path writable`,
-            error,
+            `cannot create the memory store's folder: ${root} (memory_store_id=${resource.memory_store_id}): ${e}; the worker host must make this mount path writable`,
+            e,
           );
         }
-        (await ke(this, u, "m", Oe).call(this, n),
-          ke(this, d, "f").info("downloaded memories", {
-            count: n.baseline.size,
-            memory_store_id: n.memoryStoreId,
-            dest: n.files.root().path,
-          }),
-          ke(this, k, "f").push(n));
-      } catch (error) {
-        if (n) await n.files.dispose().catch(() => {});
-        if (error instanceof SessionMemoryError) throw error;
+        await __classPrivateFieldGet(
+          this,
+          _SessionMemoryStores_instances,
+          "m",
+          _SessionMemoryStores_stampAndPull,
+        ).call(this, store);
+        __classPrivateFieldGet(this, _SessionMemoryStores_log, "f").info("downloaded memories", {
+          count: store.baseline.size,
+          memory_store_id: store.memoryStoreId,
+          dest: store.files.root().path,
+        });
+        __classPrivateFieldGet(this, _SessionMemoryStores_stores, "f").push(store);
+      } catch (e) {
+        if (store) await store.files.dispose().catch(() => {});
+        if (e instanceof SessionMemoryError) throw e;
         throw new SessionMemoryError(
-          `failed to download memory store memory_store_id=${resource.memory_store_id}: ${error}`,
-          error,
+          `failed to download memory store memory_store_id=${resource.memory_store_id}: ${e}`,
+          e,
         );
       }
     }
-    Kn(this, U, Date.now(), "f");
+    __classPrivateFieldSet(this, _SessionMemoryStores_lastSyncAt, Date.now(), "f");
   }
   async finish() {
-    if (ke(this, oe, "f"))
-      throw new pr("finish() was already called: it is the session's last sync and runs once");
-    (Kn(this, oe, !0, "f"), await this.syncAll(!0));
+    if (__classPrivateFieldGet(this, _SessionMemoryStores_finished, "f"))
+      throw new AnthropicError("finish() was already called: it is the session's last sync and runs once");
+    __classPrivateFieldSet(this, _SessionMemoryStores_finished, true, "f");
+    await this.syncAll(true);
   }
-  async syncAll(r) {
-    (await Promise.all(ke(this, k, "f").map((e) => ke(this, u, "m", Ge).call(this, e, r))),
-      Kn(this, U, Date.now(), "f"));
+  async syncAll(final) {
+    await Promise.all(
+      __classPrivateFieldGet(this, _SessionMemoryStores_stores, "f").map((store) =>
+        __classPrivateFieldGet(
+          this,
+          _SessionMemoryStores_instances,
+          "m",
+          _SessionMemoryStores_syncStore,
+        ).call(this, store, final),
+      ),
+    );
+    __classPrivateFieldSet(this, _SessionMemoryStores_lastSyncAt, Date.now(), "f");
   }
   async syncIfDue() {
-    if (Date.now() - ke(this, U, "f") < ke(this, H, "f")) return;
-    await this.syncAll(!1);
+    if (
+      Date.now() - __classPrivateFieldGet(this, _SessionMemoryStores_lastSyncAt, "f") <
+      __classPrivateFieldGet(this, _SessionMemoryStores_syncIntervalMs, "f")
+    )
+      return;
+    await this.syncAll(false);
   }
-  async flushWrites(r) {
-    await Promise.all(ke(this, k, "f").map((e) => ke(this, u, "m", He).call(this, e, r)));
+  async flushWrites(signal) {
+    await Promise.all(
+      __classPrivateFieldGet(this, _SessionMemoryStores_stores, "f").map((store) =>
+        __classPrivateFieldGet(
+          this,
+          _SessionMemoryStores_instances,
+          "m",
+          _SessionMemoryStores_flushStore,
+        ).call(this, store, signal),
+      ),
+    );
   }
   async dispose() {
-    for (let r of ke(this, k, "f")) {
-      let root = r.files.root();
+    for (let store of __classPrivateFieldGet(this, _SessionMemoryStores_stores, "f")) {
+      let root = store.files.root();
       try {
-        let t = await ke(this, u, "m", se).call(this, r);
-        if (!t.markerOk && Object.keys(t.files).length > 0) {
-          ke(this, d, "f").warn(`${t.distrustReason}; leaving the memory store folder on disk`, {
-            root: root.path,
-            memory_store_id: r.memoryStoreId,
-          });
+        let scan = await __classPrivateFieldGet(
+          this,
+          _SessionMemoryStores_instances,
+          "m",
+          _SessionMemoryStores_scanMarker,
+        ).call(this, store);
+        if (!scan.markerOk && Object.keys(scan.files).length > 0) {
+          __classPrivateFieldGet(this, _SessionMemoryStores_log, "f").warn(
+            `${scan.distrustReason}; leaving the memory store folder on disk`,
+            {
+              root: root.path,
+              memory_store_id: store.memoryStoreId,
+            },
+          );
           continue;
         }
-        await r.files.dispose();
-      } catch (error) {
-        if (!(error instanceof m) && !B(error)) throw error;
-        ke(this, d, "f").warn("failed to remove the memory store folder", {
-          root: r.files.root().path,
-          memory_store_id: r.memoryStoreId,
-          error: String(error),
-        });
+        await store.files.dispose();
+      } catch (e) {
+        if (!(e instanceof FileStoreError) && !isErrno(e)) throw e;
+        __classPrivateFieldGet(this, _SessionMemoryStores_log, "f").warn(
+          "failed to remove the memory store folder",
+          {
+            root: store.files.root().path,
+            memory_store_id: store.memoryStoreId,
+            error: String(e),
+          },
+        );
         continue;
       }
       if (root.removedOnDispose)
-        ke(this, d, "f").info("removed memory store dir", {
+        __classPrivateFieldGet(this, _SessionMemoryStores_log, "f").info("removed memory store dir", {
           dest: root.path,
-          memory_store_id: r.memoryStoreId,
+          memory_store_id: store.memoryStoreId,
         });
     }
   }
 }
 //@ chunk-2cw52qnf.js:16765-26148 esm-fingerprint
-((I = new WeakMap()),
-  (ae = new WeakMap()),
-  (H = new WeakMap()),
-  (ce = new WeakMap()),
-  (d = new WeakMap()),
-  (U = new WeakMap()),
-  (oe = new WeakMap()),
-  (k = new WeakMap()),
-  (u = new WeakSet()),
-  (ze = function (e) {
-    if (e.mount_path) {
-      if (!Se(e.mount_path))
-        throw new SessionMemoryError(
-          `memory store mount_path is not a clean absolute path: ${JSON.stringify(e.mount_path)} (memory_store_id=${e.memory_store_id})`,
-        );
-      return e.mount_path;
-    }
-    return zp.join(ke(this, ae, "f"), "memory", e.name || e.memory_store_id);
-  }),
-  (se = async function (e) {
-    let hashtree = await e.files.hashtree(),
-      n = hashtree[j];
-    if ((delete hashtree[j], n === qe(e.memoryStoreId)))
-      return { files: hashtree, markerOk: !0, distrustReason: null };
+_SessionMemoryStores_client = new WeakMap();
+_SessionMemoryStores_workdir = new WeakMap();
+_SessionMemoryStores_syncIntervalMs = new WeakMap();
+_SessionMemoryStores_syncDeletions = new WeakMap();
+_SessionMemoryStores_log = new WeakMap();
+_SessionMemoryStores_lastSyncAt = new WeakMap();
+_SessionMemoryStores_finished = new WeakMap();
+_SessionMemoryStores_stores = new WeakMap();
+_SessionMemoryStores_instances = new WeakSet();
+_SessionMemoryStores_storeRoot = function (resource) {
+  if (resource.mount_path) {
+    if (!isPathLegal(resource.mount_path))
+      throw new SessionMemoryError(
+        `memory store mount_path is not a clean absolute path: ${JSON.stringify(resource.mount_path)} (memory_store_id=${resource.memory_store_id})`,
+      );
+    return resource.mount_path;
+  }
+  return zp.join(
+    __classPrivateFieldGet(this, _SessionMemoryStores_workdir, "f"),
+    "memory",
+    resource.name || resource.memory_store_id,
+  );
+};
+_SessionMemoryStores_scanMarker = async function (store) {
+  let local = await store.files.hashtree();
+  let marker = local[MARKER_PATH];
+  delete local[MARKER_PATH];
+  if (marker === markerSha(store.memoryStoreId))
     return {
-      files: hashtree,
-      markerOk: !1,
-      distrustReason: n !== void 0 ? "the marker file does not match this store" : "the marker file is gone",
+      files: local,
+      markerOk: true,
+      distrustReason: null,
     };
-  }),
-  (Ge = async function (e, t) {
-    try {
-      let n = await ke(this, u, "m", se).call(this, e),
-        files = n.files;
-      if (!n.markerOk) {
-        if (Object.keys(files).length > 0) {
-          ke(this, d, "f").warn(
-            `${n.distrustReason}; leaving the memory store folder as found and not syncing`,
-            { root: e.files.root().path, memory_store_id: e.memoryStoreId },
-          );
-          return;
-        }
-        await ke(this, u, "m", Ee).call(this, e, "the folder or its marker is gone");
+  return {
+    files: local,
+    markerOk: false,
+    distrustReason:
+      marker !== undefined ? "the marker file does not match this store" : "the marker file is gone",
+  };
+};
+_SessionMemoryStores_syncStore = async function (store, final) {
+  try {
+    let scan = await __classPrivateFieldGet(
+      this,
+      _SessionMemoryStores_instances,
+      "m",
+      _SessionMemoryStores_scanMarker,
+    ).call(this, store);
+    let local = scan.files;
+    if (!scan.markerOk) {
+      if (Object.keys(local).length > 0) {
+        __classPrivateFieldGet(this, _SessionMemoryStores_log, "f").warn(
+          `${scan.distrustReason}; leaving the memory store folder as found and not syncing`,
+          {
+            root: store.files.root().path,
+            memory_store_id: store.memoryStoreId,
+          },
+        );
         return;
       }
-      if (Object.keys(files).length === 0 && e.baseline.size > 1) {
-        await ke(this, u, "m", Ee).call(this, e, "every memory file is gone at once");
-        return;
-      }
-      let o = new Map();
-      for await (let [c, h] of ke(this, u, "m", ie).call(this, e.memoryStoreId)) o.set(c, h);
-      let s = new Ve(ke(this, ce, "f"), Math.max(Ut, Math.min(jt, Math.floor(e.baseline.size / 4))), t),
-        a = [],
-        l = new Map(),
-        sorted = [...new Set([...o.keys(), ...Object.keys(files), ...e.baseline.keys()])].sort();
-      for (let c of sorted) {
-        let h = o.get(c),
-          y = files[c],
-          O = e.baseline.get(c),
-          v;
-        if (y === void 0 && O !== void 0 && h !== void 0 && h.content_sha256 === O && !e.readOnly)
-          v = await ke(this, u, "m", Be).call(this, e, c, h, O, s);
-        else v = await ke(this, u, "m", Pe).call(this, e, c, h, y, a);
-        if (v !== void 0) l.set(c, v);
-      }
-      if (((e.baseline = l), await ke(this, u, "m", Ue).call(this, e, a), s.suppressed > 0))
-        ke(this, d, "f").debug("remote deletes are disabled; locally deleted memories stay on the server", {
-          count: s.suppressed,
-          memory_store_id: e.memoryStoreId,
-        });
-      if (s.capped > 0)
-        ke(this, d, "f").warn(
-          `delete cap reached: ${s.mode === "log_only" ? "would send" : "sent"} ${s.attempted} deletes, held ${s.capped} for later syncs`,
-          { memory_store_id: e.memoryStoreId },
-        );
-    } catch (error) {
-      ke(this, d, "f").warn("memory sync failed", { memory_store_id: e.memoryStoreId, error: String(error) });
-    }
-  }),
-  (He = async function (e, t) {
-    let n = new Map(),
-      i = new Set(),
-      o = async () => {
-        if (e.readOnly) return;
-        let s = await ke(this, u, "m", se).call(this, e);
-        if (!s.markerOk) {
-          ke(this, d, "f").warn(`${s.distrustReason}; not uploading anything from the memory store folder`, {
-            root: e.files.root().path,
-            memory_store_id: e.memoryStoreId,
-          });
-          return;
-        }
-        for (let [f, c] of Object.entries(s.files))
-          if (c !== e.baseline.get(f) && e.refusedShas.get(f) !== c) (n.set(f, c), i.add(f));
-        if (n.size === 0 || t?.aborted) return;
-        let a = new Map();
-        for await (let [f, c] of ke(this, u, "m", ie).call(this, e.memoryStoreId)) {
-          if (t?.aborted) return;
-          a.set(f, c);
-        }
-        let l = [];
-        for (let f of [...n.keys()].sort()) {
-          let c = n.get(f),
-            h = e.baseline.get(f),
-            y = a.get(f);
-          if (y !== void 0 && y.content_sha256 === c) {
-            (e.baseline.set(f, y.content_sha256), i.delete(f));
-            continue;
-          }
-          if (y !== void 0 && y.content_sha256 !== h) {
-            (ke(this, d, "f").warn(
-              "memory changed both locally and remotely; the flush leaves the remote version",
-              { path: f, memory_store_id: e.memoryStoreId },
-            ),
-              i.delete(f));
-            continue;
-          }
-          l.push([f, c, y]);
-        }
-        await ke(this, u, "m", je).call(this, e, l, i, t);
-      };
-    try {
-      if ((await Bt(o(), t), t?.aborted && i.size > 0))
-        ke(this, d, "f").warn(
-          `memory flush cut off part-way; ${i.size} of ${n.size} changed files had not finished uploading`,
-          { memory_store_id: e.memoryStoreId },
-        );
-    } catch (error) {
-      ke(this, d, "f").warn("memory flush failed", {
-        memory_store_id: e.memoryStoreId,
-        error: String(error),
-      });
-    }
-  }),
-  (Ee = async function (e, t) {
-    (ke(this, d, "f").warn(`${t}; re-downloading the memory store folder instead of syncing`, {
-      root: e.files.root().path,
-      memory_store_id: e.memoryStoreId,
-    }),
-      await e.files.createRoot(),
-      await ke(this, u, "m", Oe).call(this, e));
-  }),
-  (Oe = async function (e) {
-    ((e.baseline = new Map()),
-      e.pendingDeletes.clear(),
-      await e.files.put(
-        j,
-        `version ${Ke}
-${e.memoryStoreId}`,
-      ));
-    for await (let [t, n] of ke(this, u, "m", ie).call(this, e.memoryStoreId, "full"))
-      if (await ke(this, u, "m", be).call(this, e, t, n.content ?? "")) e.baseline.set(t, n.content_sha256);
-  }),
-  (Pe = async function (e, t, n, i, o) {
-    let s = e.baseline.get(t);
-    if (i !== void 0) e.pendingDeletes.delete(t);
-    if (!n) {
-      if (i === void 0) {
-        e.pendingDeletes.delete(t);
-        return;
-      }
-      if (s !== void 0) {
-        if (i === s) {
-          let h = await ke(this, u, "m", We).call(this, e, t, s);
-          if (h === void 0) return;
-          if (h === s) return s;
-          i = h;
-        }
-        if (e.readOnly)
-          ke(this, d, "f").warn(
-            "memory deleted remotely but edited locally; keeping the file, which a read-only store cannot push",
-            { path: t, memory_store_id: e.memoryStoreId },
-          );
-        else if (e.refusedShas.get(t) !== i)
-          ke(this, d, "f").info("memory deleted remotely but edited locally; re-creating it from the file", {
-            path: t,
-            memory_store_id: e.memoryStoreId,
-          });
-      }
-      if (e.readOnly) return;
-      if (e.refusedShas.get(t) === i) return;
-      return await ke(this, u, "m", ne).call(this, e, t, i, void 0);
-    }
-    let content_sha256 = n.content_sha256,
-      l = content_sha256 !== s,
-      f = i !== void 0 && i !== s && i !== content_sha256,
-      c = !e.readOnly && f;
-    if (i === void 0 && s !== void 0) {
-      if (l)
-        (ke(this, d, "f").warn("memory deleted locally but changed remotely; restoring the remote version", {
-          path: t,
-          memory_store_id: e.memoryStoreId,
-        }),
-          e.pendingDeletes.delete(t),
-          o.push([t, n]));
-      return s;
-    }
-    if (l) {
-      if (i === content_sha256) return content_sha256;
-      if (f)
-        ke(this, d, "f").warn("memory changed both locally and remotely; keeping the remote version", {
-          path: t,
-          memory_store_id: e.memoryStoreId,
-        });
-      return (o.push([t, n]), s);
-    }
-    if (c) {
-      if (e.refusedShas.get(t) === i) return content_sha256;
-      return (await ke(this, u, "m", ne).call(this, e, t, i, n)) ?? content_sha256;
-    }
-    return content_sha256;
-  }),
-  (We = async function (e, t, n) {
-    let i;
-    try {
-      i = await e.files.hashFile(t);
-    } catch (error) {
-      if (!(error instanceof m) && !B(error)) throw error;
-      return n;
-    }
-    if (i === null) return;
-    if (i !== n) return i;
-    try {
-      await e.files.remove(t);
-    } catch (error) {
-      if (!(error instanceof m) && !B(error)) throw error;
-      return (
-        ke(this, d, "f").warn("failed to remove memory deleted remotely", {
-          path: t,
-          memory_store_id: e.memoryStoreId,
-          error: String(error),
-        }),
-        n
-      );
-    }
-    return;
-  }),
-  (be = async function (e, t, n) {
-    try {
-      await e.files.put(t, n);
-    } catch (error) {
-      if (!(error instanceof m) && !B(error)) throw error;
-      return (
-        ke(this, d, "f").warn("failed to write memory", {
-          path: t,
-          memory_store_id: e.memoryStoreId,
-          error: String(error),
-        }),
-        !1
-      );
-    }
-    return !0;
-  }),
-  (Ue = async function (e, t) {
-    if (t.length === 0) return;
-    let n = async (s, a) => {
-        let l;
-        try {
-          l = await ke(this, I, "f").beta.memoryStores.memories.retrieve(a.id, {
-            memory_store_id: e.memoryStoreId,
-            view: "full",
-          });
-        } catch (error) {
-          if (hJ(error, 404)) return;
-          ke(this, d, "f").warn("failed to fetch memory content", {
-            path: s,
-            memory_store_id: e.memoryStoreId,
-            error: String(error),
-          });
-          return;
-        }
-        if (await ke(this, u, "m", be).call(this, e, s, l.content ?? "")) e.baseline.set(s, l.content_sha256);
-      },
-      i = t[Symbol.iterator](),
-      o = async () => {
-        for (let [s, a] of i) await n(s, a);
-      };
-    await Promise.all(Array.from({ length: Math.min(Pt, t.length) }, o));
-  }),
-  (je = async function (e, t, n, i) {
-    let o = t[Symbol.iterator](),
-      s = async () => {
-        for (let [a, l, f] of o) {
-          if (i?.aborted) return;
-          let c = await ke(this, u, "m", ne).call(this, e, a, l, f);
-          if ((n.delete(a), c !== void 0)) e.baseline.set(a, c);
-        }
-      };
-    await Promise.all(Array.from({ length: Math.min(Wt, t.length) }, s));
-  }),
-  (ie = async function* (e, t = "basic") {
-    let n = t === "basic" ? Ct : Ft;
-    for await (let i of ke(this, I, "f").beta.memoryStores.memories.list(e, { view: t, limit: n })) {
-      if (i.type !== "memory") continue;
-      let replaced = i.path.replace(/^\/+/, "");
-      if (replaced === j) {
-        ke(this, d, "f").warn("the server listed the reserved marker path; skipping", {
-          path: i.path,
-          memory_store_id: e,
-        });
-        continue;
-      }
-      yield [replaced, i];
-    }
-  }),
-  (ne = async function r(e, t, n, i) {
-    try {
-      let o = await e.files.get(t);
-      if (o === null) return;
-      let s = decodeUtf8(o),
-        a = i
-          ? await ke(this, I, "f").beta.memoryStores.memories.update(i.id, {
-              memory_store_id: e.memoryStoreId,
-              content: s,
-              precondition: { type: "content_sha256", content_sha256: i.content_sha256 },
-            })
-          : await ke(this, I, "f").beta.memoryStores.memories.create(e.memoryStoreId, {
-              path: "/" + t,
-              content: s,
-            });
-      return (e.refusedShas.delete(t), a.content_sha256);
-    } catch (error) {
-      if (i && hJ(error, 404)) return await ke(this, u, "m", r).call(this, e, t, n, void 0);
-      let s = error instanceof m || hJ(error, 400) || hJ(error, 413);
-      if (i && hJ(error, 409))
-        ke(this, d, "f").warn(
-          "memory changed both locally and remotely; the upload was refused and the local edit loses",
-          { path: t, memory_store_id: e.memoryStoreId },
-        );
-      else if (s && n !== void 0)
-        (e.refusedShas.set(t, n),
-          ke(this, d, "f").warn(
-            "the server rejected this memory file, so it stays un-synced until its content changes",
-            { path: t, memory_store_id: e.memoryStoreId, rejection: String(error) },
-          ));
-      else
-        ke(this, d, "f").warn("failed to upload memory", {
-          path: t,
-          memory_store_id: e.memoryStoreId,
-          error: String(error),
-        });
+      await __classPrivateFieldGet(
+        this,
+        _SessionMemoryStores_instances,
+        "m",
+        _SessionMemoryStores_recover,
+      ).call(this, store, "the folder or its marker is gone");
       return;
     }
-  }),
-  (Be = async function (e, t, n, i, o) {
-    if (o.mode === "disabled") return (o.suppressed++, i);
-    let s = e.pendingDeletes.get(t);
-    if (s === void 0) ((s = Date.now()), e.pendingDeletes.set(t, s));
-    if (!o.waiveWindow && Date.now() - s < Dt) return i;
-    let a, l;
-    try {
-      ((a = (await e.files.hashFile(j)) === qe(e.memoryStoreId)), (l = (await e.files.hashFile(t)) === null));
-    } catch (error) {
-      if (!(error instanceof m) && !B(error)) throw error;
-      a = l = !1;
+    if (Object.keys(local).length === 0 && store.baseline.size > 1) {
+      await __classPrivateFieldGet(
+        this,
+        _SessionMemoryStores_instances,
+        "m",
+        _SessionMemoryStores_recover,
+      ).call(this, store, "every memory file is gone at once");
+      return;
     }
-    if (!a) return i;
-    if (!l) return (e.pendingDeletes.delete(t), i);
-    if (!o.takeSlot()) return i;
-    if (o.mode === "log_only")
-      return (
-        ke(this, d, "f").info("log-only: sync would delete this memory on the server", {
-          path: t,
-          memory_store_id: e.memoryStoreId,
-        }),
-        i
-      );
-    let f = await ke(this, u, "m", Ye).call(this, e, t, n, i);
-    if (f === void 0) e.pendingDeletes.delete(t);
-    return f;
-  }),
-  (Ye = async function (e, t, n, i) {
-    try {
-      await ke(this, I, "f").beta.memoryStores.memories.delete(n.id, {
-        memory_store_id: e.memoryStoreId,
-        expected_content_sha256: i,
-      });
-    } catch (error) {
-      if (hJ(error, 404)) return;
-      if (hJ(error, 409) || hJ(error, 412))
-        ke(this, d, "f").warn("memory deleted locally but changed remotely; keeping the remote version", {
-          path: t,
-          memory_store_id: e.memoryStoreId,
-        });
+    let remote = new Map();
+    for await (let [rel, item] of __classPrivateFieldGet(
+      this,
+      _SessionMemoryStores_instances,
+      "m",
+      _SessionMemoryStores_listMemories,
+    ).call(this, store.memoryStoreId))
+      remote.set(rel, item);
+    let deletes = new DeletePass(
+      __classPrivateFieldGet(this, _SessionMemoryStores_syncDeletions, "f"),
+      Math.max(DELETE_CAP_FLOOR, Math.min(DELETE_CAP_CEILING, Math.floor(store.baseline.size / 4))),
+      final,
+    );
+    let pulls = [];
+    let baseline = new Map();
+    let paths = [...new Set([...remote.keys(), ...Object.keys(local), ...store.baseline.keys()])].sort();
+    for (let rel of paths) {
+      let remoteItem = remote.get(rel);
+      let localSha = local[rel];
+      let baseSha = store.baseline.get(rel);
+      let sha;
+      if (
+        localSha === undefined &&
+        baseSha !== undefined &&
+        remoteItem !== undefined &&
+        remoteItem.content_sha256 === baseSha &&
+        !store.readOnly
+      )
+        sha = await __classPrivateFieldGet(
+          this,
+          _SessionMemoryStores_instances,
+          "m",
+          _SessionMemoryStores_corroboratedDelete,
+        ).call(this, store, rel, remoteItem, baseSha, deletes);
       else
-        ke(this, d, "f").warn("failed to delete memory", {
-          path: t,
-          memory_store_id: e.memoryStoreId,
-          error: String(error),
-        });
-      return i;
+        sha = await __classPrivateFieldGet(
+          this,
+          _SessionMemoryStores_instances,
+          "m",
+          _SessionMemoryStores_syncPath,
+        ).call(this, store, rel, remoteItem, localSha, pulls);
+      if (sha !== undefined) baseline.set(rel, sha);
     }
-    ke(this, d, "f").info("propagated local deletion", { path: t, memory_store_id: e.memoryStoreId });
-    return;
-  }));
-//@ chunk-2cw52qnf.js:26148-26225 esm-fingerprint
-function B(r) {
-  return typeof r === "object" && r !== null && typeof r.code === "string";
-}
-//@ chunk-2cw52qnf.js:26225-26431 esm-fingerprint
-async function Bt(r, e) {
-  if (!e) {
-    await r;
+    store.baseline = baseline;
+    await __classPrivateFieldGet(
+      this,
+      _SessionMemoryStores_instances,
+      "m",
+      _SessionMemoryStores_pullAll,
+    ).call(this, store, pulls);
+    if (deletes.suppressed > 0)
+      __classPrivateFieldGet(this, _SessionMemoryStores_log, "f").debug(
+        "remote deletes are disabled; locally deleted memories stay on the server",
+        {
+          count: deletes.suppressed,
+          memory_store_id: store.memoryStoreId,
+        },
+      );
+    if (deletes.capped > 0)
+      __classPrivateFieldGet(this, _SessionMemoryStores_log, "f").warn(
+        `delete cap reached: ${deletes.mode === "log_only" ? "would send" : "sent"} ${deletes.attempted} deletes, held ${deletes.capped} for later syncs`,
+        {
+          memory_store_id: store.memoryStoreId,
+        },
+      );
+  } catch (e) {
+    __classPrivateFieldGet(this, _SessionMemoryStores_log, "f").warn("memory sync failed", {
+      memory_store_id: store.memoryStoreId,
+      error: String(e),
+    });
+  }
+};
+_SessionMemoryStores_flushStore = async function (store, signal) {
+  let dirty = new Map();
+  let unsent = new Set();
+  let push = async () => {
+    if (store.readOnly) return;
+    let scan = await __classPrivateFieldGet(
+      this,
+      _SessionMemoryStores_instances,
+      "m",
+      _SessionMemoryStores_scanMarker,
+    ).call(this, store);
+    if (!scan.markerOk) {
+      __classPrivateFieldGet(this, _SessionMemoryStores_log, "f").warn(
+        `${scan.distrustReason}; not uploading anything from the memory store folder`,
+        {
+          root: store.files.root().path,
+          memory_store_id: store.memoryStoreId,
+        },
+      );
+      return;
+    }
+    for (let [rel, sha] of Object.entries(scan.files))
+      if (sha !== store.baseline.get(rel) && store.refusedShas.get(rel) !== sha) {
+        dirty.set(rel, sha);
+        unsent.add(rel);
+      }
+    if (dirty.size === 0 || signal?.aborted) return;
+    let remote = new Map();
+    for await (let [rel, item] of __classPrivateFieldGet(
+      this,
+      _SessionMemoryStores_instances,
+      "m",
+      _SessionMemoryStores_listMemories,
+    ).call(this, store.memoryStoreId)) {
+      if (signal?.aborted) return;
+      remote.set(rel, item);
+    }
+    let uploads = [];
+    for (let rel of [...dirty.keys()].sort()) {
+      let localSha = dirty.get(rel);
+      let baseSha = store.baseline.get(rel);
+      let existing = remote.get(rel);
+      if (existing !== undefined && existing.content_sha256 === localSha) {
+        store.baseline.set(rel, existing.content_sha256);
+        unsent.delete(rel);
+        continue;
+      }
+      if (existing !== undefined && existing.content_sha256 !== baseSha) {
+        __classPrivateFieldGet(this, _SessionMemoryStores_log, "f").warn(
+          "memory changed both locally and remotely; the flush leaves the remote version",
+          {
+            path: rel,
+            memory_store_id: store.memoryStoreId,
+          },
+        );
+        unsent.delete(rel);
+        continue;
+      }
+      uploads.push([rel, localSha, existing]);
+    }
+    await __classPrivateFieldGet(
+      this,
+      _SessionMemoryStores_instances,
+      "m",
+      _SessionMemoryStores_uploadAll,
+    ).call(this, store, uploads, unsent, signal);
+  };
+  try {
+    await settledOrAborted(push(), signal);
+    if (signal?.aborted && unsent.size > 0)
+      __classPrivateFieldGet(this, _SessionMemoryStores_log, "f").warn(
+        `memory flush cut off part-way; ${unsent.size} of ${dirty.size} changed files had not finished uploading`,
+        {
+          memory_store_id: store.memoryStoreId,
+        },
+      );
+  } catch (e) {
+    __classPrivateFieldGet(this, _SessionMemoryStores_log, "f").warn("memory flush failed", {
+      memory_store_id: store.memoryStoreId,
+      error: String(e),
+    });
+  }
+};
+_SessionMemoryStores_recover = async function (store, reason) {
+  __classPrivateFieldGet(this, _SessionMemoryStores_log, "f").warn(
+    `${reason}; re-downloading the memory store folder instead of syncing`,
+    {
+      root: store.files.root().path,
+      memory_store_id: store.memoryStoreId,
+    },
+  );
+  await store.files.createRoot();
+  await __classPrivateFieldGet(
+    this,
+    _SessionMemoryStores_instances,
+    "m",
+    _SessionMemoryStores_stampAndPull,
+  ).call(this, store);
+};
+_SessionMemoryStores_stampAndPull = async function (store) {
+  store.baseline = new Map();
+  store.pendingDeletes.clear();
+  await store.files.put(
+    MARKER_PATH,
+    `version ${MARKER_VERSION}
+${store.memoryStoreId}`,
+  );
+  for await (let [rel, item] of __classPrivateFieldGet(
+    this,
+    _SessionMemoryStores_instances,
+    "m",
+    _SessionMemoryStores_listMemories,
+  ).call(this, store.memoryStoreId, "full"))
+    if (
+      await __classPrivateFieldGet(
+        this,
+        _SessionMemoryStores_instances,
+        "m",
+        _SessionMemoryStores_write,
+      ).call(this, store, rel, item.content ?? "")
+    )
+      store.baseline.set(rel, item.content_sha256);
+};
+_SessionMemoryStores_syncPath = async function (store, rel, remote, localSha, pulls) {
+  let baseSha = store.baseline.get(rel);
+  if (localSha !== undefined) store.pendingDeletes.delete(rel);
+  if (!remote) {
+    if (localSha === undefined) {
+      store.pendingDeletes.delete(rel);
+      return;
+    }
+    if (baseSha !== undefined) {
+      if (localSha === baseSha) {
+        let fresh = await __classPrivateFieldGet(
+          this,
+          _SessionMemoryStores_instances,
+          "m",
+          _SessionMemoryStores_removeLocal,
+        ).call(this, store, rel, baseSha);
+        if (fresh === undefined) return;
+        if (fresh === baseSha) return baseSha;
+        localSha = fresh;
+      }
+      if (store.readOnly)
+        __classPrivateFieldGet(this, _SessionMemoryStores_log, "f").warn(
+          "memory deleted remotely but edited locally; keeping the file, which a read-only store cannot push",
+          {
+            path: rel,
+            memory_store_id: store.memoryStoreId,
+          },
+        );
+      else if (store.refusedShas.get(rel) !== localSha)
+        __classPrivateFieldGet(this, _SessionMemoryStores_log, "f").info(
+          "memory deleted remotely but edited locally; re-creating it from the file",
+          {
+            path: rel,
+            memory_store_id: store.memoryStoreId,
+          },
+        );
+    }
+    if (store.readOnly) return;
+    if (store.refusedShas.get(rel) === localSha) return;
+    return await __classPrivateFieldGet(
+      this,
+      _SessionMemoryStores_instances,
+      "m",
+      _SessionMemoryStores_upload,
+    ).call(this, store, rel, localSha, undefined);
+  }
+  let remoteSha = remote.content_sha256;
+  let remoteChanged = remoteSha !== baseSha;
+  let locallyEdited = localSha !== undefined && localSha !== baseSha && localSha !== remoteSha;
+  let localChanged = !store.readOnly && locallyEdited;
+  if (localSha === undefined && baseSha !== undefined) {
+    if (remoteChanged) {
+      __classPrivateFieldGet(this, _SessionMemoryStores_log, "f").warn(
+        "memory deleted locally but changed remotely; restoring the remote version",
+        {
+          path: rel,
+          memory_store_id: store.memoryStoreId,
+        },
+      );
+      store.pendingDeletes.delete(rel);
+      pulls.push([rel, remote]);
+    }
+    return baseSha;
+  }
+  if (remoteChanged) {
+    if (localSha === remoteSha) return remoteSha;
+    if (locallyEdited)
+      __classPrivateFieldGet(this, _SessionMemoryStores_log, "f").warn(
+        "memory changed both locally and remotely; keeping the remote version",
+        {
+          path: rel,
+          memory_store_id: store.memoryStoreId,
+        },
+      );
+    pulls.push([rel, remote]);
+    return baseSha;
+  }
+  if (localChanged) {
+    if (store.refusedShas.get(rel) === localSha) return remoteSha;
+    return (
+      (await __classPrivateFieldGet(
+        this,
+        _SessionMemoryStores_instances,
+        "m",
+        _SessionMemoryStores_upload,
+      ).call(this, store, rel, localSha, remote)) ?? remoteSha
+    );
+  }
+  return remoteSha;
+};
+_SessionMemoryStores_removeLocal = async function (store, rel, expectSha) {
+  let freshSha;
+  try {
+    freshSha = await store.files.hashFile(rel);
+  } catch (e) {
+    if (!(e instanceof FileStoreError) && !isErrno(e)) throw e;
+    return expectSha;
+  }
+  if (freshSha === null) return;
+  if (freshSha !== expectSha) return freshSha;
+  try {
+    await store.files.remove(rel);
+  } catch (e) {
+    if (!(e instanceof FileStoreError) && !isErrno(e)) throw e;
+    __classPrivateFieldGet(this, _SessionMemoryStores_log, "f").warn(
+      "failed to remove memory deleted remotely",
+      {
+        path: rel,
+        memory_store_id: store.memoryStoreId,
+        error: String(e),
+      },
+    );
+    return expectSha;
+  }
+  return;
+};
+_SessionMemoryStores_write = async function (store, rel, content) {
+  try {
+    await store.files.put(rel, content);
+  } catch (e) {
+    if (!(e instanceof FileStoreError) && !isErrno(e)) throw e;
+    __classPrivateFieldGet(this, _SessionMemoryStores_log, "f").warn("failed to write memory", {
+      path: rel,
+      memory_store_id: store.memoryStoreId,
+      error: String(e),
+    });
+    return false;
+  }
+  return true;
+};
+_SessionMemoryStores_pullAll = async function (store, pulls) {
+  if (pulls.length === 0) return;
+  let pullOne = async (rel, listed) => {
+    let item;
+    try {
+      item = await __classPrivateFieldGet(
+        this,
+        _SessionMemoryStores_client,
+        "f",
+      ).beta.memoryStores.memories.retrieve(listed.id, {
+        memory_store_id: store.memoryStoreId,
+        view: "full",
+      });
+    } catch (e) {
+      if (isStatus(e, 404)) return;
+      __classPrivateFieldGet(this, _SessionMemoryStores_log, "f").warn("failed to fetch memory content", {
+        path: rel,
+        memory_store_id: store.memoryStoreId,
+        error: String(e),
+      });
+      return;
+    }
+    if (
+      await __classPrivateFieldGet(
+        this,
+        _SessionMemoryStores_instances,
+        "m",
+        _SessionMemoryStores_write,
+      ).call(this, store, rel, item.content ?? "")
+    )
+      store.baseline.set(rel, item.content_sha256);
+  };
+  let queue = pulls[Symbol.iterator]();
+  let worker = async () => {
+    for (let [rel, listed] of queue) await pullOne(rel, listed);
+  };
+  await Promise.all(
+    Array.from(
+      {
+        length: Math.min(FETCH_CONCURRENCY, pulls.length),
+      },
+      worker,
+    ),
+  );
+};
+_SessionMemoryStores_uploadAll = async function (store, uploads, unsent, signal) {
+  let queue = uploads[Symbol.iterator]();
+  let worker = async () => {
+    for (let [rel, localSha, existing] of queue) {
+      if (signal?.aborted) return;
+      let sha = await __classPrivateFieldGet(
+        this,
+        _SessionMemoryStores_instances,
+        "m",
+        _SessionMemoryStores_upload,
+      ).call(this, store, rel, localSha, existing);
+      unsent.delete(rel);
+      if (sha !== undefined) store.baseline.set(rel, sha);
+    }
+  };
+  await Promise.all(
+    Array.from(
+      {
+        length: Math.min(UPLOAD_CONCURRENCY, uploads.length),
+      },
+      worker,
+    ),
+  );
+};
+_SessionMemoryStores_listMemories = async function* (memoryStoreId, view = "basic") {
+  let limit = view === "basic" ? LIST_PAGE_SIZE : FULL_LIST_PAGE_SIZE;
+  for await (let item of __classPrivateFieldGet(
+    this,
+    _SessionMemoryStores_client,
+    "f",
+  ).beta.memoryStores.memories.list(memoryStoreId, {
+    view,
+    limit,
+  })) {
+    if (item.type !== "memory") continue;
+    let rel = item.path.replace(/^\/+/, "");
+    if (rel === MARKER_PATH) {
+      __classPrivateFieldGet(this, _SessionMemoryStores_log, "f").warn(
+        "the server listed the reserved marker path; skipping",
+        {
+          path: item.path,
+          memory_store_id: memoryStoreId,
+        },
+      );
+      continue;
+    }
+    yield [rel, item];
+  }
+};
+_SessionMemoryStores_upload = async function _SessionMemoryStores_upload(store, rel, localSha, existing) {
+  try {
+    let data = await store.files.get(rel);
+    if (data === null) return;
+    let content = decodeUtf8(data);
+    let item = existing
+      ? await __classPrivateFieldGet(
+          this,
+          _SessionMemoryStores_client,
+          "f",
+        ).beta.memoryStores.memories.update(existing.id, {
+          memory_store_id: store.memoryStoreId,
+          content,
+          precondition: {
+            type: "content_sha256",
+            content_sha256: existing.content_sha256,
+          },
+        })
+      : await __classPrivateFieldGet(
+          this,
+          _SessionMemoryStores_client,
+          "f",
+        ).beta.memoryStores.memories.create(store.memoryStoreId, {
+          path: "/" + rel,
+          content,
+        });
+    store.refusedShas.delete(rel);
+    return item.content_sha256;
+  } catch (e) {
+    if (existing && isStatus(e, 404))
+      return await __classPrivateFieldGet(
+        this,
+        _SessionMemoryStores_instances,
+        "m",
+        _SessionMemoryStores_upload,
+      ).call(this, store, rel, localSha, undefined);
+    let permanent = e instanceof FileStoreError || isStatus(e, 400) || isStatus(e, 413);
+    if (existing && isStatus(e, 409))
+      __classPrivateFieldGet(this, _SessionMemoryStores_log, "f").warn(
+        "memory changed both locally and remotely; the upload was refused and the local edit loses",
+        {
+          path: rel,
+          memory_store_id: store.memoryStoreId,
+        },
+      );
+    else if (permanent && localSha !== undefined) {
+      store.refusedShas.set(rel, localSha);
+      __classPrivateFieldGet(this, _SessionMemoryStores_log, "f").warn(
+        "the server rejected this memory file, so it stays un-synced until its content changes",
+        {
+          path: rel,
+          memory_store_id: store.memoryStoreId,
+          rejection: String(e),
+        },
+      );
+    } else
+      __classPrivateFieldGet(this, _SessionMemoryStores_log, "f").warn("failed to upload memory", {
+        path: rel,
+        memory_store_id: store.memoryStoreId,
+        error: String(e),
+      });
     return;
   }
-  let t,
-    promise = new Promise((i) => {
-      if (((t = i), e.aborted)) i();
-    });
-  e.addEventListener("abort", t, { once: !0 });
+};
+_SessionMemoryStores_corroboratedDelete = async function (store, rel, remote, baseSha, deletes) {
+  if (deletes.mode === "disabled") {
+    deletes.suppressed++;
+    return baseSha;
+  }
+  let firstAbsent = store.pendingDeletes.get(rel);
+  if (firstAbsent === undefined) {
+    firstAbsent = Date.now();
+    store.pendingDeletes.set(rel, firstAbsent);
+  }
+  if (!deletes.waiveWindow && Date.now() - firstAbsent < DELETE_CORROBORATION_MS) return baseSha;
+  let markerOk;
+  let stillAbsent;
   try {
-    await Promise.race([r, promise]);
+    markerOk = (await store.files.hashFile(MARKER_PATH)) === markerSha(store.memoryStoreId);
+    stillAbsent = (await store.files.hashFile(rel)) === null;
+  } catch (e) {
+    if (!(e instanceof FileStoreError) && !isErrno(e)) throw e;
+    markerOk = stillAbsent = false;
+  }
+  if (!markerOk) return baseSha;
+  if (!stillAbsent) {
+    store.pendingDeletes.delete(rel);
+    return baseSha;
+  }
+  if (!deletes.takeSlot()) return baseSha;
+  if (deletes.mode === "log_only") {
+    __classPrivateFieldGet(this, _SessionMemoryStores_log, "f").info(
+      "log-only: sync would delete this memory on the server",
+      {
+        path: rel,
+        memory_store_id: store.memoryStoreId,
+      },
+    );
+    return baseSha;
+  }
+  let sha = await __classPrivateFieldGet(
+    this,
+    _SessionMemoryStores_instances,
+    "m",
+    _SessionMemoryStores_deleteRemote,
+  ).call(this, store, rel, remote, baseSha);
+  if (sha === undefined) store.pendingDeletes.delete(rel);
+  return sha;
+};
+_SessionMemoryStores_deleteRemote = async function (store, rel, remote, baseSha) {
+  try {
+    await __classPrivateFieldGet(this, _SessionMemoryStores_client, "f").beta.memoryStores.memories.delete(
+      remote.id,
+      {
+        memory_store_id: store.memoryStoreId,
+        expected_content_sha256: baseSha,
+      },
+    );
+  } catch (e) {
+    if (isStatus(e, 404)) return;
+    if (isStatus(e, 409) || isStatus(e, 412))
+      __classPrivateFieldGet(this, _SessionMemoryStores_log, "f").warn(
+        "memory deleted locally but changed remotely; keeping the remote version",
+        {
+          path: rel,
+          memory_store_id: store.memoryStoreId,
+        },
+      );
+    else
+      __classPrivateFieldGet(this, _SessionMemoryStores_log, "f").warn("failed to delete memory", {
+        path: rel,
+        memory_store_id: store.memoryStoreId,
+        error: String(e),
+      });
+    return baseSha;
+  }
+  __classPrivateFieldGet(this, _SessionMemoryStores_log, "f").info("propagated local deletion", {
+    path: rel,
+    memory_store_id: store.memoryStoreId,
+  });
+  return;
+};
+//@ chunk-2cw52qnf.js:26148-26225 esm-fingerprint
+function isErrno(e) {
+  return typeof e === "object" && e !== null && typeof e.code === "string";
+}
+//@ chunk-2cw52qnf.js:26225-26431 esm-fingerprint
+async function settledOrAborted(p, signal) {
+  if (!signal) {
+    await p;
+    return;
+  }
+  let onAbort;
+  let aborted = new Promise((resolve) => {
+    onAbort = resolve;
+    if (signal.aborted) resolve();
+  });
+  signal.addEventListener("abort", onAbort, {
+    once: true,
+  });
+  try {
+    await Promise.race([p, aborted]);
   } finally {
-    e.removeEventListener("abort", t);
+    signal.removeEventListener("abort", onAbort);
   }
 }
 //@ chunk-hwmsct5x.js:17254-17270 esm-layout
-function Bt_hwms(e) {}
+function Bt(delta) {}
 //@ chunk-hwmsct5x.js:17270-17462 esm-fingerprint
 var sleepUnlessAborted = (ms, signal) =>
-  new Promise((r) => {
-    if (signal?.aborted) return r();
+  new Promise((resolve) => {
+    if (signal?.aborted) return resolve();
     let s = () => {
-        (clearTimeout(h), r());
-      },
-      h = setTimeout(() => {
-        (signal?.removeEventListener("abort", s), r());
-      }, ms);
-    signal?.addEventListener("abort", s, { once: !0 });
+      clearTimeout(timer);
+      resolve();
+    };
+    let timer = setTimeout(() => {
+      signal?.removeEventListener("abort", s);
+      resolve();
+    }, ms);
+    signal?.addEventListener("abort", s, {
+      once: true,
+    });
   });
-
-export { sleepUnlessAborted, Bt_hwms };
+export { sleepUnlessAborted, Bt };

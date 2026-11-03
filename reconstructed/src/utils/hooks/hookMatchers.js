@@ -13,15 +13,21 @@ import { MONITOR } from "../../tools/MonitorTool/constants.js";
 import { BASH_TOOL_NAME } from "../../tools/BashTool/toolName.js";
 
 //@ chunk-e6aww6q8.js:823360-823418 placement
-function PBr(e) {
-  return Object.hasOwn(SPLIT_TOOL_PARENT, e) ? SPLIT_TOOL_PARENT[e] : void 0;
+/**
+ * 查工具名的父工具映射（如 MCP 子工具归到父工具）。
+ */
+function splitToolParentOf(e) {
+  return Object.hasOwn(SPLIT_TOOL_PARENT, e) ? SPLIT_TOOL_PARENT[e] : undefined;
 }
 //@ chunk-e6aww6q8.js:823418-823552 placement
-function J0t(e, n) {
+/**
+ * 按 action 把工具名映射到具体动作工具。
+ */
+function splitToolByAction(e, n) {
   if (!Object.hasOwn(SPLIT_TOOL_BY_ACTION, e)) return;
-  let r = n?.action,
-    s = SPLIT_TOOL_BY_ACTION[e];
-  return typeof r === "string" && Object.hasOwn(s, r) ? s[r] : void 0;
+  let action = n?.action;
+  let s = SPLIT_TOOL_BY_ACTION[e];
+  return typeof action === "string" && Object.hasOwn(s, action) ? s[action] : undefined;
 }
 //@ chunk-e6aww6q8.js:823552-823682 placement
 function getCommandField(e) {
@@ -31,19 +37,35 @@ function getCommandField(e) {
     typeof e.command === "string" &&
     e.command !== ""
     ? e.command
-    : void 0;
+    : undefined;
 }
 //@ chunk-e6aww6q8.js:823682-823871 placement
-function getCommandAndDescription(e) {
-  let n = getCommandField(e);
-  if (n === void 0) return;
-  return typeof e === "object" && e !== null && "description" in e && typeof e.description === "string"
-    ? { command: n, description: e.description }
-    : { command: n };
+function getCommandAndDescription(toolInput) {
+  let commandField = getCommandField(toolInput);
+  if (commandField === undefined) return;
+  return typeof toolInput === "object" &&
+    toolInput !== null &&
+    "description" in toolInput &&
+    typeof toolInput.description === "string"
+    ? {
+        command: commandField,
+        description: toolInput.description,
+      }
+    : {
+        command: commandField,
+      };
 }
 //@ chunk-e6aww6q8.js:823871-823929 placement
-function Pz(e, n) {
-  return e === MONITOR && getCommandField(n) !== void 0 ? BASH_TOOL_NAME : void 0;
+/**
+ * Monitor 工具带命令字段时视为 Bash 工具名。
+ */
+function monitorCommandAsBash(e, hookToolInput) {
+  return e === MONITOR && getCommandField(hookToolInput) !== undefined ? BASH_TOOL_NAME : undefined;
 }
-
-export { PBr, Pz, getCommandAndDescription, J0t, getCommandField };
+export {
+  splitToolParentOf,
+  monitorCommandAsBash,
+  getCommandAndDescription,
+  splitToolByAction,
+  getCommandField,
+};

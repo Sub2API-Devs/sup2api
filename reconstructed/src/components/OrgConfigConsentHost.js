@@ -8,64 +8,82 @@
  * pieces: chunk-3bfra2hw.js (3)
  * attribution: placement 3
  */
-import { j, y, R, P } from "../../vendor/react/cjs/react.production.js";
+import { init_react_production, y, R, P } from "../../vendor/react/cjs/react.production.js";
 import { setSecurityDialogRequester } from "../services/remoteManagedSettings/securityCheck.js";
 import { logError } from "../utils/log.js";
-import { e } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { jsxProd_default } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { useInputClock } from "../ink/components/Input.js";
-import { isWithinRecentInput, So } from "../hooks/useRecentInputGuard.js";
+import { isWithinRecentInput, RECENT_INPUT_GUARD_MS } from "../hooks/useRecentInputGuard.js";
 import { ManagedSettingsSecurityDialogHost } from "./ManagedSettingsSecurityDialog/ManagedSettingsSecurityDialog.js";
 
 //@ chunk-3bfra2hw.js:451-455 placement
-j();
+init_react_production();
 //@ chunk-3bfra2hw.js:455-1150 placement
-function OrgConfigConsentHost({ children: children }) {
-  let [t, u] = y(null),
-    [i, c] = y(!1),
-    r = R({ current: 0, revealedAt: null });
-  if (
-    (P(() => {
-      let s = null;
-      return (
-        setSecurityDialogRequester(
-          (f, d, v) =>
-            new Promise((a) => {
-              ((s = a), (r.current = { current: 0, revealedAt: null }));
-              function p(o, m) {
-                if (s !== a || m !== r.current.current) return !1;
-                return ((s = null), u(null), c(o === "rejected"), a(o), !0);
-              }
-              (u({ settings: f, baseline: d, version: 0, answer: p }),
-                (async () => {
-                  for await (let o of v) {
-                    if (s !== a) return;
-                    ((r.current = { current: r.current.current + 1, revealedAt: null }),
-                      u({
-                        settings: o.settings,
-                        baseline: o.baseline,
-                        version: r.current.current,
-                        answer: p,
-                      }));
-                  }
-                })().catch((o) => logError(o)));
-            }),
-        ),
-        () => {
-          setSecurityDialogRequester(null);
-          let f = s;
-          ((s = null), f?.("deferred_no_consent_surface"));
-        }
-      );
-    }, []),
-    i)
-  )
-    return null;
+function OrgConfigConsentHost({ children }) {
+  let [t, u] = y(null);
+  let [i, c] = y(false);
+  let r = R({
+    current: 0,
+    revealedAt: null,
+  });
+  P(() => {
+    let s = null;
+    setSecurityDialogRequester(
+      (settings, baseline, v) =>
+        new Promise((resolve) => {
+          s = resolve;
+          r.current = {
+            current: 0,
+            revealedAt: null,
+          };
+          function p(o, m) {
+            if (s !== resolve || m !== r.current.current) return false;
+            s = null;
+            u(null);
+            c(o === "rejected");
+            resolve(o);
+            return true;
+          }
+          u({
+            settings,
+            baseline,
+            version: 0,
+            answer: p,
+          });
+          (async () => {
+            for await (let o of v) {
+              if (s !== resolve) return;
+              r.current = {
+                current: r.current.current + 1,
+                revealedAt: null,
+              };
+              u({
+                settings: o.settings,
+                baseline: o.baseline,
+                version: r.current.current,
+                answer: p,
+              });
+            }
+          })().catch((error) => logError(error));
+        }),
+    );
+    return () => {
+      setSecurityDialogRequester(null);
+      let f = s;
+      s = null;
+      f?.("deferred_no_consent_surface");
+    };
+  }, []);
+  if (i) return null;
   if (t === null) return children;
-  return e(OrgConfigConsentHost_2, { review: t, gate: r.current });
+  return jsxProd_default(OrgConfigConsentHost_2, {
+    review: t,
+    gate: r.current,
+  });
 }
 //@ chunk-3bfra2hw.js:1150-1633 placement
-function OrgConfigConsentHost_2({ review: review, gate: gate }) {
-  let u = useInputClock();
+function OrgConfigConsentHost_2({ review, gate }) {
+  let inputClock = useInputClock();
   P(() => {
     if (gate.current === review.version) gate.revealedAt = Date.now();
   }, [gate, review.version, review.settings, review.baseline]);
@@ -73,17 +91,17 @@ function OrgConfigConsentHost_2({ review: review, gate: gate }) {
     return (
       gate.current === review.version &&
       gate.revealedAt !== null &&
-      !isWithinRecentInput(u, gate.revealedAt, So)
+      !isWithinRecentInput(inputClock, gate.revealedAt, RECENT_INPUT_GUARD_MS)
     );
   }
   function c(r) {
     if (!i()) {
       if (gate.revealedAt !== null) gate.revealedAt = Date.now();
-      return !1;
+      return false;
     }
     return review.answer(r, review.version);
   }
-  return e(ManagedSettingsSecurityDialogHost, {
+  return jsxProd_default(ManagedSettingsSecurityDialogHost, {
     settings: review.settings,
     baseline: review.baseline,
     reveal: "org_config_hold",
@@ -92,5 +110,4 @@ function OrgConfigConsentHost_2({ review: review, gate: gate }) {
     onReject: () => c("rejected"),
   });
 }
-
 export { OrgConfigConsentHost };

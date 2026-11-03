@@ -8,73 +8,107 @@
  * pieces: chunk-e6aww6q8.js (5)
  * attribution: placement 5
  */
-import { tUo } from "../../utils/promptTextSanitize.js";
+import { sanitizePromptText } from "../../utils/promptTextSanitize.js";
 import { mapNormalizedOffsets } from "../../components/PromptInput/inputDecorations.js";
-import { V$, gh } from "./coreHandlers.js";
-import { G3 } from "./surfaceBinding.js";
+import { clampPositive, makeCoreEvent } from "./coreHandlers.js";
+import { surfaceComposer } from "./surfaceBinding.js";
 import { NO_CORE_AT_CHAIN_BOTTOM } from "./eventCatalog.js";
 import { logForDebugging } from "../../utils/debug.js";
 
 //@ chunk-e6aww6q8.js:69575-69807 placement
-function sanitizeFillText(e, n) {
-  let r = n === void 0,
-    s = tUo()(e);
-  if (r) return { text: s };
-  if (s === e) return { text: s, decorations: n };
-  let y = mapNormalizedOffsets(e, s),
-    S = (w) => y[V$(w, e.length)] ?? s.length;
-  return { text: s, decorations: n.map((w) => ({ ...w, start: S(w.start), end: S(w.end) })) };
+function sanitizeFillText(text, decorations) {
+  let r = decorations === undefined;
+  let s = sanitizePromptText()(text);
+  if (r)
+    return {
+      text: s,
+    };
+  if (s === text)
+    return {
+      text: s,
+      decorations,
+    };
+  let y = mapNormalizedOffsets(text, s);
+  let S = (w) => y[clampPositive(w, text.length)] ?? s.length;
+  return {
+    text: s,
+    decorations: decorations.map((w) => ({
+      ...w,
+      start: S(w.start),
+      end: S(w.end),
+    })),
+  };
 }
+//@ chunk-e6aww6q8.js:69807-70070 placement
 /**
  * prompt.fill 核心：把文本写入当前输入框（清洗后、重映射装饰段），可经 attribute 标记来源；无输入框时拒绝。
  */
-//@ chunk-e6aww6q8.js:69807-70070 placement
-async function fillPromptBox(e, n) {
-  let r = G3();
-  if (r === void 0) return { isFilled: !1, refusal: "no_composer" };
-  let s = sanitizeFillText(e.text, e.decorations),
-    h = () => r.write(s.text, e.mode, { decorations: s.decorations, cursor: e.cursor, answersPress: n }),
-    { attribute: attribute } = r;
-  return attribute === void 0 ? h() : attribute(e.origin, h);
+async function fillPromptBox(e, answersPress) {
+  let r = surfaceComposer();
+  if (r === undefined)
+    return {
+      isFilled: false,
+      refusal: "no_composer",
+    };
+  let s = sanitizeFillText(e.text, e.decorations);
+  let h = () =>
+    r.write(s.text, e.mode, {
+      decorations: s.decorations,
+      cursor: e.cursor,
+      answersPress,
+    });
+  let { attribute } = r;
+  return attribute === undefined ? h() : attribute(e.origin, h);
 }
 //@ chunk-e6aww6q8.js:70070-70154 placement
-var e_t = (e, n, r) =>
-  gh("prompt.fill", (s) => fillPromptBox(s, s.text === e && s.mode === n ? r : void 0)).core;
+/**
+ * prompt.fill 核心
+ */
+var PROMPT_FILL_CORE = (text, mode, answersPress) =>
+  makeCoreEvent("prompt.fill", (s) =>
+    fillPromptBox(s, s.text === text && s.mode === mode ? answersPress : undefined),
+  ).core;
+//@ chunk-e6aww6q8.js:70154-70614 placement
 /**
  * $.prompt.fill 实现：经 prompt.fill 钩子链填入输入框（默认 replace 模式），记录结果。
  */
-//@ chunk-e6aww6q8.js:70154-70614 placement
 async function promptFillOp(e) {
-  let {
-      text: text,
-      mode: mode = "replace",
-      decorations: decorations,
-      cursor: cursor,
-      origin: origin,
-      hookOrigin: hookOrigin,
-      signal: signal,
-      answersPress: answersPress,
-    } = e,
-    { isFilled: isFilled, refusal: refusal } = await NO_CORE_AT_CHAIN_BOTTOM("prompt.fill", {
-      origin: hookOrigin,
-      signal: signal,
-      ...(answersPress !== void 0 && { core: { "prompt.fill": e_t(text, mode, answersPress) } }),
-    })({
-      text: text,
-      mode: mode,
-      origin: origin,
-      ...(decorations !== void 0 && { decorations: decorations }),
-      ...(cursor !== void 0 && { cursor: cursor }),
-    });
-  return (
-    logForDebugging(
-      `prompt.fill (${origin.kind}, ${mode}): ${text.length} chars, ` +
-        (isFilled ? "filled" : (refusal ?? "not filled")),
-    ),
-    refusal === void 0 ? { isFilled: isFilled } : { isFilled: isFilled, refusal: refusal }
+  let { text, mode = "replace", decorations, cursor, origin, hookOrigin, signal, answersPress } = e;
+  let { isFilled, refusal } = await NO_CORE_AT_CHAIN_BOTTOM("prompt.fill", {
+    origin: hookOrigin,
+    signal,
+    ...(answersPress !== undefined && {
+      core: {
+        "prompt.fill": PROMPT_FILL_CORE(text, mode, answersPress),
+      },
+    }),
+  })({
+    text,
+    mode,
+    origin,
+    ...(decorations !== undefined && {
+      decorations,
+    }),
+    ...(cursor !== undefined && {
+      cursor,
+    }),
+  });
+  logForDebugging(
+    `prompt.fill (${origin.kind}, ${mode}): ${text.length} chars, ` +
+      (isFilled ? "filled" : (refusal ?? "not filled")),
   );
+  return refusal === undefined
+    ? {
+        isFilled,
+      }
+    : {
+        isFilled,
+        refusal,
+      };
 }
 //@ chunk-e6aww6q8.js:70614-70644 placement
-var zle = gh("prompt.fill", fillPromptBox);
-
-export { zle, promptFillOp };
+/**
+ * prompt.fill 事件
+ */
+var promptFillEvent = makeCoreEvent("prompt.fill", fillPromptBox);
+export { promptFillEvent, promptFillOp };

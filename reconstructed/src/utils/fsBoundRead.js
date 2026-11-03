@@ -8,31 +8,16 @@
  * pieces: chunk-9mf2agcn.js (31)
  * attribution: placement 31
  */
-import {
-  constants,
-  constants as constants_2,
-  constants as constants_3,
-  statSync,
-  fstatSync,
-  fstatSync as fstatSync_2,
-  closeSync,
-  closeSync as closeSync_2,
-  lstatSync,
-  lstatSync as lstatSync_2,
-  openSync,
-  openSync as openSync_2,
-  readSync,
-  readlinkSync,
-} from "fs";
+import { constants, statSync, fstatSync, closeSync, lstatSync, openSync, readSync, readlinkSync } from "fs";
 import { dirname, resolve } from "path";
 import { open } from "fs/promises";
 import { normalizeHost, isGithubDotCom, GITHUB_HOST, hasBackslashInUrlAuthority } from "./git/githubUrl.js";
 import { decodePercentRuns, parseUrlScheme } from "./redaction/urlParsing.js";
 import { tryParseUrl } from "./resultError.js";
-import { ge } from "./identity.js";
+import { identity } from "./identity.js";
 import { getErrnoCode } from "./errors.js";
-import { Qn } from "./pathClassification.js";
-import { isWslUncPath, Ya, ai } from "./networkPaths.js";
+import { isUncOrDevicePath as isUncOrDevicePath_2 } from "./pathClassification.js";
+import { isWslUncPath, isNetworkMountPath, isNonWslUncPath } from "./networkPaths.js";
 import { isWindowsDevicePath } from "./windowsUncPaths.js";
 import {
   getFsImplementation,
@@ -44,8 +29,8 @@ import { assertReadableFile, decodeTextBuffer, assertWithinMaxBytes } from "./fi
 import { logForDebugging } from "./debug.js";
 
 //@ chunk-9mf2agcn.js:608-654 placement
-function normalizeGitHost(e) {
-  let n = normalizeHost(e);
+function normalizeGitHost(hostname) {
+  let n = normalizeHost(hostname);
   return isGithubDotCom(n) ? GITHUB_HOST : n;
 }
 //@ chunk-9mf2agcn.js:654-781 placement
@@ -57,46 +42,61 @@ function hasEncodedPathChars(e) {
 }
 //@ chunk-9mf2agcn.js:781-958 placement
 function nonHttpsScheme(e) {
-  let trimStart = e.trimStart(),
-    match = /^([A-Za-z][A-Za-z0-9+.-]*):\/\//.exec(trimStart);
-  if (match === null || /^https?$/i.test(match[1] ?? "")) return tryParseUrl(trimStart);
-  return tryParseUrl(match[0] + decodePercentRuns(trimStart.slice(match[0].length)));
+  let n = e.trimStart();
+  let match = /^([A-Za-z][A-Za-z0-9+.-]*):\/\//.exec(n);
+  if (match === null || /^https?$/i.test(match[1] ?? "")) return tryParseUrl(n);
+  return tryParseUrl(match[0] + decodePercentRuns(n.slice(match[0].length)));
 }
 //@ chunk-9mf2agcn.js:958-1253 placement
 function isSuspiciousUrl(e) {
-  if (e.includes("%00") || e.includes("\x00")) return !0;
-  if (hasBackslashInUrlAuthority(e)) return !0;
-  let n = [parseUrlScheme(e)?.host, parseUrlScheme(e, { asRewritten: !0 })?.host];
+  if (e.includes("%00") || e.includes("\x00")) return true;
+  if (hasBackslashInUrlAuthority(e)) return true;
+  let n = [
+    parseUrlScheme(e)?.host,
+    parseUrlScheme(e, {
+      asRewritten: true,
+    })?.host,
+  ];
   if (e.includes("://"))
-    n.push(tryParseUrl(e.trimStart())?.hostname || void 0, nonHttpsScheme(e)?.hostname || void 0);
-  let mapped = n.map((o) => (o === void 0 ? null : normalizeGitHost(o)));
+    n.push(tryParseUrl(e.trimStart())?.hostname || undefined, nonHttpsScheme(e)?.hostname || undefined);
+  let mapped = n.map((o) => (o === undefined ? null : normalizeGitHost(o)));
   return mapped.some((o) => o !== mapped[0]);
 }
 //@ chunk-9mf2agcn.js:1284-1334 placement
-var READ_LIMITS = 524288,
-  mMe = 0,
-  tz = 2097152,
-  _Oi = constants.O_NOATIME ?? 0;
+/**
+ * 边界读取使用的打开标志常量（含 O_NOFOLLOW 等）与配套上限。
+ */
+var READ_LIMITS = 524288;
+var O_NOFOLLOW_FLAG = 0;
+var O_NOFOLLOW_ANY = 2097152;
+var O_NOATIME_FLAG = constants.O_NOATIME ?? 0;
 //@ chunk-9mf2agcn.js:1550-1703 placement
-var MAX_BOUND_READ_BYTES = 536870912,
-  f = ge({ noFollowAny: "untried", localVolumes: void 0 }, (e) => {
-    ((e.noFollowAny = "untried"), (e.localVolumes = void 0));
-  }),
-  ne = ["/", "/System/Volumes/Data"];
+var MAX_BOUND_READ_BYTES = 536870912;
+var boundReadProbeState = identity(
+  {
+    noFollowAny: "untried",
+    localVolumes: undefined,
+  },
+  (e) => {
+    e.noFollowAny = "untried";
+    e.localVolumes = undefined;
+  },
+);
+var LOCAL_VOLUME_ROOTS = ["/", "/System/Volumes/Data"];
 //@ chunk-9mf2agcn.js:1703-1903 placement
 function getLocalVolumeDevices() {
-  if (f.localVolumes !== void 0) return f.localVolumes;
-  let e = !0,
-    flattened = ne.flatMap((o) => {
-      try {
-        return [statSync(o).dev];
-      } catch (error) {
-        if (getErrnoCode(error) !== "ENOENT") e = !1;
-        return [];
-      }
-    }),
-    r = new Set(flattened);
-  if (e) f.localVolumes = r;
+  if (boundReadProbeState.localVolumes !== undefined) return boundReadProbeState.localVolumes;
+  let e = true;
+  let flattened = LOCAL_VOLUME_ROOTS.flatMap((o) => {
+    try {
+      return [statSync(o).dev];
+    } catch (error) {
+      if (getErrnoCode(error) !== "ENOENT") e = false;
+      return [];
+    }
+  });
+  let r = new Set(flattened);
+  if (e) boundReadProbeState.localVolumes = r;
   return r;
 }
 //@ chunk-9mf2agcn.js:1903-2175 placement
@@ -104,12 +104,12 @@ function linkStateOf(e) {
   if (probeNoFollowAny_2() === "rejected") return "unsupported";
   let n;
   try {
-    n = R(dirname(e));
+    n = openDirNoFollow(dirname(e));
   } catch (error) {
-    let o = getErrnoCode(error);
-    if (o === "ELOOP") return "link";
-    if (o === "EINVAL") return "elsewhere";
-    if (o === "EACCES" || o === "EPERM") return resolvedElsewhere(dirname(e));
+    let errnoCode = getErrnoCode(error);
+    if (errnoCode === "ELOOP") return "link";
+    if (errnoCode === "EINVAL") return "elsewhere";
+    if (errnoCode === "EACCES" || errnoCode === "EPERM") return resolvedElsewhere(dirname(e));
     throw error;
   }
   try {
@@ -120,31 +120,31 @@ function linkStateOf(e) {
 }
 //@ chunk-9mf2agcn.js:2175-2510 placement
 function resolvedElsewhere(e) {
-  let n = getLocalVolumeDevices(),
-    r = dirname(e);
+  let localVolumeDevices = getLocalVolumeDevices();
+  let r = dirname(e);
   if (r === e) return "elsewhere";
   let o;
   try {
-    o = R(r);
+    o = openDirNoFollow(r);
   } catch (error) {
-    let c = getErrnoCode(error);
-    if (c === "ELOOP") return "link";
-    if (c === "EACCES" || c === "EPERM") {
+    let errnoCode = getErrnoCode(error);
+    if (errnoCode === "ELOOP") return "link";
+    if (errnoCode === "EACCES" || errnoCode === "EPERM") {
       let u = resolvedElsewhere(r);
-      return u === "local" && !n.has(I(e)) ? "elsewhere" : u;
+      return u === "local" && !localVolumeDevices.has(deviceIdOrNaN(e)) ? "elsewhere" : u;
     }
-    if (c === "EINVAL") return "elsewhere";
+    if (errnoCode === "EINVAL") return "elsewhere";
     throw error;
   }
   try {
     let dev = fstatSync(o).dev;
-    return n.has(dev) && n.has(I(e)) ? "local" : "elsewhere";
+    return localVolumeDevices.has(dev) && localVolumeDevices.has(deviceIdOrNaN(e)) ? "local" : "elsewhere";
   } finally {
     closeSync(o);
   }
 }
 //@ chunk-9mf2agcn.js:2510-2569 placement
-function I(e) {
+function deviceIdOrNaN(e) {
   try {
     return lstatSync(e).dev;
   } catch {
@@ -152,65 +152,62 @@ function I(e) {
   }
 }
 //@ chunk-9mf2agcn.js:2569-2640 placement
-function R(e) {
+function openDirNoFollow(e) {
   return openSync(
     e,
-    constants_2.O_RDONLY |
-      constants_2.O_DIRECTORY |
-      constants_2.O_NONBLOCK |
-      MAX_BOUND_READ_BYTES |
-      READ_LIMITS,
+    constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NONBLOCK | MAX_BOUND_READ_BYTES | READ_LIMITS,
   );
 }
 //@ chunk-9mf2agcn.js:2640-2881 placement
 async function probeNoFollowAny() {
-  if (f.noFollowAny === "untried")
+  if (boundReadProbeState.noFollowAny === "untried")
     try {
-      (await (
+      await (
         await open(
           "/",
-          constants_2.O_RDONLY |
-            constants_2.O_DIRECTORY |
-            constants_2.O_NONBLOCK |
+          constants.O_RDONLY |
+            constants.O_DIRECTORY |
+            constants.O_NONBLOCK |
             MAX_BOUND_READ_BYTES |
             READ_LIMITS,
         )
-      ).close(),
-        (f.noFollowAny = "works"));
+      ).close();
+      boundReadProbeState.noFollowAny = "works";
     } catch (error) {
-      f.noFollowAny = getErrnoCode(error) === "EINVAL" ? "rejected" : "works";
+      boundReadProbeState.noFollowAny = getErrnoCode(error) === "EINVAL" ? "rejected" : "works";
     }
-  return f.noFollowAny === "rejected";
+  return boundReadProbeState.noFollowAny === "rejected";
 }
 //@ chunk-9mf2agcn.js:2881-3071 placement
 function probeNoFollowAny_2() {
-  if (f.noFollowAny === "untried")
+  if (boundReadProbeState.noFollowAny === "untried")
     try {
-      (closeSync(R("/")), (f.noFollowAny = "works"));
+      closeSync(openDirNoFollow("/"));
+      boundReadProbeState.noFollowAny = "works";
     } catch (error) {
-      f.noFollowAny = getErrnoCode(error) === "EINVAL" ? "rejected" : "works";
+      boundReadProbeState.noFollowAny = getErrnoCode(error) === "EINVAL" ? "rejected" : "works";
     }
-  return f.noFollowAny === "rejected" ? "rejected" : "works";
+  return boundReadProbeState.noFollowAny === "rejected" ? "rejected" : "works";
 }
 //@ chunk-9mf2agcn.js:3071-3132 placement
-function isUncOrDevicePath(e, n) {
-  return (n === "windows" && Qn(e) && !isWslUncPath(e)) || Ya(e);
+function isUncOrDevicePath(e, platform) {
+  return (platform === "windows" && isUncOrDevicePath_2(e) && !isWslUncPath(e)) || isNetworkMountPath(e);
 }
 //@ chunk-9mf2agcn.js:3132-3168 placement
-function isSpecialPath(e) {
-  return isWindowsDevicePath(e) || Ya(e);
+function isSpecialPath(resolvedPath) {
+  return isWindowsDevicePath(resolvedPath) || isNetworkMountPath(resolvedPath);
 }
 //@ chunk-9mf2agcn.js:3168-3309 placement
 function isLocalNonUncPath(e) {
-  let n = getFsImplementation();
+  let fsImplementation = getFsImplementation();
   return (
-    !ai(e) &&
-    !Ya(e) &&
-    findIntermediateUncJunction(n, e, {
+    !isNonWslUncPath(e) &&
+    !isNetworkMountPath(e) &&
+    findIntermediateUncJunction(fsImplementation, e, {
       unreadableAncestry: "unverified",
-      surfaceNetworkRaw: !0,
-      launchAncestry: vouchedLaunchAncestry(n),
-    }) === void 0
+      surfaceNetworkRaw: true,
+      launchAncestry: vouchedLaunchAncestry(fsImplementation),
+    }) === undefined
   );
 }
 //@ chunk-9mf2agcn.js:3309-3337 placement = chordToDisplayString (1)
@@ -218,28 +215,41 @@ function getPlatform() {
   return "linux";
 }
 //@ chunk-9mf2agcn.js:3337-3350 placement
-var oe = 65536;
+var READ_CHUNK_BYTES = 65536;
+//@ chunk-9mf2agcn.js:3350-3844 placement
 /**
  * 在路径边界内安全打开文件读取（非阻塞、不跟随链接、平台差异处理）。
  */
-//@ chunk-9mf2agcn.js:3350-3844 placement
-function openBoundRead(e, n, r, o, s) {
-  let c = getPlatform(),
-    u =
-      READ_LIMITS |
-      (c === "windows"
-        ? constants_2.O_RDONLY
-        : constants_2.O_RDONLY | constants_2.O_NONBLOCK | constants_2.O_NOCTTY),
-    l = !n && isUncOrDevicePath(e, c) ? macLinkProblem(e, u, c, r) : routeProblem(e, n, o, u, c, r);
+function openBoundRead(e, isCanonical, r, isSymlink, identity) {
+  let platform = getPlatform();
+  let u =
+    READ_LIMITS |
+    (platform === "windows"
+      ? constants.O_RDONLY
+      : constants.O_RDONLY | constants.O_NONBLOCK | constants.O_NOCTTY);
+  let l =
+    !isCanonical && isUncOrDevicePath(e, platform)
+      ? macLinkProblem(e, u, platform, r)
+      : routeProblem(e, isCanonical, isSymlink, u, platform, r);
   if (l === null) return null;
   try {
-    if (s === void 0) assertReadableFile(fstatSync(l), e, r);
+    if (identity === undefined) assertReadableFile(fstatSync(l), e, r);
     else {
-      let a = fstatSync(l, { bigint: !0 });
-      if (a.ino !== s.ino || a.ctimeNs !== s.ctimeNs || (c !== "windows" && a.dev !== s.dev))
-        return p(e, "the file was replaced or changed after its path was checked");
+      let a = fstatSync(l, {
+        bigint: true,
+      });
+      if (
+        a.ino !== identity.ino ||
+        a.ctimeNs !== identity.ctimeNs ||
+        (platform !== "windows" && a.dev !== identity.dev)
+      )
+        return logBoundReadRefusal(e, "the file was replaced or changed after its path was checked");
       assertReadableFile(
-        { isDirectory: () => a.isDirectory(), isFile: () => a.isFile(), size: Number(a.size) },
+        {
+          isDirectory: () => a.isDirectory(),
+          isFile: () => a.isFile(),
+          size: Number(a.size),
+        },
         e,
         r,
       );
@@ -250,97 +260,113 @@ function openBoundRead(e, n, r, o, s) {
   }
 }
 //@ chunk-9mf2agcn.js:3844-4036 placement
-function readBoundedFromFd(e, n, r) {
-  let o = [],
-    s = 0;
+function readBoundedFromFd(e, path, r) {
+  let o = [];
+  let s = 0;
   while (s <= r) {
-    let allocUnsafe = Buffer.allocUnsafe(Math.min(oe, r + 1 - s)),
-      u = readSync(e, allocUnsafe, 0, allocUnsafe.length, s);
+    let c = Buffer.allocUnsafe(Math.min(READ_CHUNK_BYTES, r + 1 - s));
+    let u = readSync(e, c, 0, c.length, s);
     if (u === 0) break;
-    (o.push(allocUnsafe.subarray(0, u)), (s += u));
+    o.push(c.subarray(0, u));
+    s += u;
   }
-  return (assertWithinMaxBytes(s, n, r), Buffer.concat(o, s));
+  assertWithinMaxBytes(s, path, r);
+  return Buffer.concat(o, s);
 }
+//@ chunk-9mf2agcn.js:4036-4202 placement
 /**
  * 以不跟随符号链接的方式打开文件：macOS 支持时用"任一路径分量都不跟随"标志，其他平台用 O_NOFOLLOW（Windows 不加）；返回 fd 与是否检查了每个分量。
  */
-//@ chunk-9mf2agcn.js:4036-4202 placement
 function openNoFollow(e, n, r) {
-  if (r === "macos" && f.noFollowAny !== "rejected")
-    return { fd: openSync(e, n | MAX_BOUND_READ_BYTES), everyComponent: !0 };
-  return { fd: openSync(e, r === "windows" ? n : n | constants_2.O_NOFOLLOW), everyComponent: !1 };
+  if (r === "macos" && boundReadProbeState.noFollowAny !== "rejected")
+    return {
+      fd: openSync(e, n | MAX_BOUND_READ_BYTES),
+      everyComponent: true,
+    };
+  return {
+    fd: openSync(e, r === "windows" ? n : n | constants.O_NOFOLLOW),
+    everyComponent: false,
+  };
 }
 //@ chunk-9mf2agcn.js:4202-4268 placement
-var b = Symbol("no procfs"),
-  se = Symbol("descriptor path unreadable");
+var NO_PROCFS_SENTINEL = Symbol("no procfs");
+var DESCRIPTOR_PATH_UNREADABLE = Symbol("descriptor path unreadable");
 //@ chunk-9mf2agcn.js:4268-4398 placement
 function readFdPath(e, n) {
-  if (n !== "linux") return b;
+  if (n !== "linux") return NO_PROCFS_SENTINEL;
   try {
     return readlinkSync(`/proc/self/fd/${e}`);
   } catch {
     try {
       lstatSync("/proc/self/fd");
     } catch {
-      return b;
+      return NO_PROCFS_SENTINEL;
     }
-    return se;
+    return DESCRIPTOR_PATH_UNREADABLE;
   }
 }
 //@ chunk-9mf2agcn.js:4398-4783 placement
-function macLinkProblem(e, n, r, o) {
-  if (r === "macos" && linkStateOf(e) === "link") return p(e, "a link stands above the spelled name");
-  let s = lstatSync(e);
-  if (s.isSymbolicLink()) return (isRealPathWithinTeamDir(e), p(e, "a link stands at the spelled name"));
-  assertReadableFile(s, e, o);
+function macLinkProblem(realCandidate, n, platform, o) {
+  if (platform === "macos" && linkStateOf(realCandidate) === "link")
+    return logBoundReadRefusal(realCandidate, "a link stands above the spelled name");
+  let s = lstatSync(realCandidate);
+  if (s.isSymbolicLink()) {
+    isRealPathWithinTeamDir(realCandidate);
+    return logBoundReadRefusal(realCandidate, "a link stands at the spelled name");
+  }
+  assertReadableFile(s, realCandidate, o);
   let c;
   try {
-    c = openNoFollow(e, n, r).fd;
+    c = openNoFollow(realCandidate, n, platform).fd;
   } catch (error) {
     if (getErrnoCode(error) !== "ELOOP") throw error;
-    return p(e, "a link stands on the spelled route");
+    return logBoundReadRefusal(realCandidate, "a link stands on the spelled route");
   }
-  let u = readFdPath(c, r);
-  return u === b || u === e ? c : w(c, e, `the descriptor is on ${String(u)}`);
+  let fdPath = readFdPath(c, platform);
+  return fdPath === NO_PROCFS_SENTINEL || fdPath === realCandidate
+    ? c
+    : closeFdAndRefuse(c, realCandidate, `the descriptor is on ${String(fdPath)}`);
 }
 //@ chunk-9mf2agcn.js:4783-5414 placement
-function routeProblem(e, n, r, o, s, c) {
-  if (!n && !isLocalNonUncPath(e)) return p(e, "its route could not be examined");
-  let u = !1;
-  if (s === "macos") {
+function routeProblem(e, n, r, o, platform, c) {
+  if (!n && !isLocalNonUncPath(e)) return logBoundReadRefusal(e, "its route could not be examined");
+  let u = false;
+  if (platform === "macos") {
     let d = linkStateOf(e);
-    if (d === "link") return L(e, n);
+    if (d === "link") return refuseLinkOnRoute(e, n);
     u = d === "local" && !r;
   }
   if (!u) {
     let d = lstatSync(e);
     if (!d.isSymbolicLink()) assertReadableFile(d, e, c);
-    else if (s === "windows") return L(e, n);
+    else if (platform === "windows") return refuseLinkOnRoute(e, n);
   }
   let l;
   try {
-    l = openNoFollow(e, o, s);
+    l = openNoFollow(e, o, platform);
   } catch (error) {
     if (getErrnoCode(error) !== "ELOOP") throw error;
-    return L(e, n);
+    return refuseLinkOnRoute(e, n);
   }
-  let { fd: fd, everyComponent: everyComponent } = l;
+  let { fd, everyComponent } = l;
   try {
     if (everyComponent) return fd;
-    let d = readFdPath(fd, s);
-    if (d !== b) return d === e ? fd : w(fd, e, `the descriptor is on ${String(d)}`);
+    let fdPath = readFdPath(fd, platform);
+    if (fdPath !== NO_PROCFS_SENTINEL)
+      return fdPath === e ? fd : closeFdAndRefuse(fd, e, `the descriptor is on ${String(fdPath)}`);
     let D = safeResolvePath(getFsImplementation(), e);
     return !D.isSymlink && D.resolvedPath === e && (D.isCanonical || (!n && isLocalNonUncPath(e)))
       ? fd
-      : w(fd, e, "the route no longer resolves to it");
+      : closeFdAndRefuse(fd, e, "the route no longer resolves to it");
   } catch (error) {
-    throw (w(fd, e, "the binding check threw"), error);
+    closeFdAndRefuse(fd, e, "the binding check threw");
+    throw error;
   }
 }
 //@ chunk-9mf2agcn.js:5414-5490 placement
-function L(e, n) {
-  if (!n && isLocalNonUncPath(e)) isRealPathWithinTeamDir(e);
-  return p(e, "a link appeared on the route");
+function refuseLinkOnRoute(realCandidate, n) {
+  if (!n && isLocalNonUncPath(realCandidate)) isRealPathWithinTeamDir(realCandidate);
+  return logBoundReadRefusal(realCandidate, "a link appeared on the route");
 }
 //@ chunk-9mf2agcn.js:5490-5713 placement = isRealPathWithinTeamDir (0.785)
 function isRealPathWithinTeamDir(realCandidate) {
@@ -352,37 +378,42 @@ function isRealPathWithinTeamDir(realCandidate) {
   } catch (error) {
     let code = getErrnoCode(error);
     if ((code === "ENOENT" || code === "ENOTDIR") && typeof error === "object" && error !== null)
-      Object.defineProperty(error, G, { value: !0 });
+      Object.defineProperty(error, LINK_TO_NOTHING, {
+        value: true,
+      });
     throw error;
   }
 }
 //@ chunk-9mf2agcn.js:5713-5753 placement
-var G = Symbol("boundRead.linkToNothing");
+var LINK_TO_NOTHING = Symbol("boundRead.linkToNothing");
 //@ chunk-9mf2agcn.js:5753-5814 placement
-function isBoundReadError(e) {
-  return typeof e === "object" && e !== null && G in e;
+function isBoundReadError(error) {
+  return typeof error === "object" && error !== null && LINK_TO_NOTHING in error;
 }
 //@ chunk-9mf2agcn.js:5814-5851 placement
-function w(e, n, r) {
-  return (closeSync(e), p(n, r));
+function closeFdAndRefuse(e, n, r) {
+  closeSync(e);
+  return logBoundReadRefusal(n, r);
 }
 //@ chunk-9mf2agcn.js:5851-5933 placement
-function p(e, n) {
-  return (logForDebugging(`boundRead: not reading ${e}: ${n}`, { level: "warn" }), null);
+function logBoundReadRefusal(e, n) {
+  logForDebugging(`boundRead: not reading ${e}: ${n}`, {
+    level: "warn",
+  });
+  return null;
 }
-
 export {
   READ_LIMITS,
   isSuspiciousUrl,
   hasEncodedPathChars,
-  tz,
-  mMe,
+  O_NOFOLLOW_ANY,
+  O_NOFOLLOW_FLAG,
   isSpecialPath,
   normalizeGitHost,
   nonHttpsScheme,
   openBoundRead,
   isBoundReadError,
-  _Oi,
+  O_NOATIME_FLAG,
   probeNoFollowAny,
   MAX_BOUND_READ_BYTES,
   isUncOrDevicePath,

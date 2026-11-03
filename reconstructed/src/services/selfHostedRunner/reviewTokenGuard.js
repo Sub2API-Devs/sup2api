@@ -10,10 +10,10 @@
  */
 import { disableCoreDumps } from "../../utils/processHardening.js";
 
+//@ chunk-dbe4a9af.js:227-427 placement
 /**
  * 自托管 BYOC 环境中的审阅会话禁用核心转储。
  */
-//@ chunk-dbe4a9af.js:227-427 placement
 function disableCoreDumpsForReview() {
   if (
     process.env.CLAUDE_CODE_REMOTE_SESSION_ORIGIN === "review" &&

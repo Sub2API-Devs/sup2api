@@ -8,54 +8,8 @@
  * pieces: chunk-qchp9vrd.js (3)
  * attribution: placement 3
  */
-import path, {
-  default as path_2,
-  default as path_3,
-  default as path_4,
-  default as path_5,
-  default as path_6,
-  default as path_7,
-  default as path_8,
-  default as path_9,
-  default as path_10,
-  default as path_11,
-  default as path_12,
-  default as path_13,
-  default as path_14,
-  default as path_15,
-  default as path_16,
-  default as path_17,
-  default as path_18,
-} from "path";
-import {
-  lstat,
-  lstat as lstat_2,
-  lstat as lstat_3,
-  lstat as lstat_4,
-  lstat as lstat_5,
-  lstat as lstat_6,
-  lstat as lstat_7,
-  lstat as lstat_8,
-  lstat as lstat_9,
-  lstat as lstat_10,
-  lstat as lstat_11,
-  lstat as lstat_12,
-  rm as rm_2,
-  rm as rm_2_2,
-  rm as rm_3,
-  rm as rm_4,
-  rm as rm_5,
-  readdir,
-  readdir as readdir_2,
-  readdir as readdir_3,
-  readdir as readdir_4,
-  readdir as readdir_5,
-  readdir as readdir_6,
-  readdir as readdir_7,
-  readdir as readdir_8,
-  readdir as readdir_9,
-  readdir as readdir_10,
-} from "fs/promises";
+import path from "path";
+import { lstat, rm as rm_2, readdir } from "fs/promises";
 import {
   isENOENT,
   TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
@@ -67,66 +21,85 @@ import { detectPlatformFlavor } from "./caseDiscovery.js";
 import { readStubPublishDir, readStubPublishesJson } from "./runTrace.js";
 
 //@ chunk-qchp9vrd.js:120803-120840 placement
-var MAX_STUB_PUBLISH_BYTES = 67108864,
-  Kt = ".eval-artifacts";
+/**
+ * 评测产物桩目录名 .eval-artifacts。
+ */
+var MAX_STUB_PUBLISH_BYTES = 67108864;
+var EVAL_ARTIFACTS_DIR = ".eval-artifacts";
 //@ chunk-qchp9vrd.js:120840-120896 placement
-function Gr(e) {
-  return path_15.join(e.outDir, "stub-publishes");
+/**
+ * 发布桩记录的目录。
+ */
+function stubPublishDir(evalTempDir) {
+  return path.join(evalTempDir.outDir, "stub-publishes");
 }
+//@ chunk-qchp9vrd.js:120896-122550 placement
 /**
  * 检查发布桩目录未消失/被替换/改动后收集本次运行的发布记录。
  */
-//@ chunk-qchp9vrd.js:120896-122550 placement
-async function collectStubPublishes(e, n) {
-  let r = Gr(e),
-    a = await lstat_11(r).catch((s) => {
-      if (isENOENT(s) && n.size === 0) return null;
-      if (isENOENT(s))
-        throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          `the run's artifact-publish staging directory is gone although the run published (${n.size} corroborated) \u2014 its publishes cannot be vouched for`,
-          "eval: stub publish staging dir missing",
-        );
-      throw (
-        logForDebugging(`eval: cannot examine ${r}: ${errorMessage(s)}`, { level: "warn" }),
-        new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          `the run's artifact-publish staging directory could not be examined (${getErrnoCode(s) ?? "unknown error"})`,
-          "eval: stub publish staging dir unreadable",
-        )
+async function collectStubPublishes(sandbox, stubArtifactSlugs) {
+  let r = stubPublishDir(sandbox);
+  let a = await lstat(r).catch((error) => {
+    if (isENOENT(error) && stubArtifactSlugs.size === 0) return null;
+    if (isENOENT(error))
+      throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
+        `the run's artifact-publish staging directory is gone although the run published (${stubArtifactSlugs.size} corroborated) \u2014 its publishes cannot be vouched for`,
+        "eval: stub publish staging dir missing",
       );
+    logForDebugging(`eval: cannot examine ${r}: ${errorMessage(error)}`, {
+      level: "warn",
     });
-  if (a === null) return [];
-  if (!a.isDirectory() || a.isSymbolicLink())
-    throw (
-      await detectPlatformFlavor(r, { harnessOwned: !0 }),
-      await rm_4(r, { recursive: !0, force: !0 }),
-      new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        "the run's artifact-publish staging directory was replaced by something that is not a directory, so its publishes (and their absence) cannot be trusted \u2014 discarded, and the run is an error",
-        "eval: stub publish staging dir replaced",
-      )
+    throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
+      `the run's artifact-publish staging directory could not be examined (${getErrnoCode(error) ?? "unknown error"})`,
+      "eval: stub publish staging dir unreadable",
     );
+  });
+  if (a === null) return [];
+  if (!a.isDirectory() || a.isSymbolicLink()) {
+    await detectPlatformFlavor(r, {
+      harnessOwned: true,
+    });
+    await rm_2(r, {
+      recursive: true,
+      force: true,
+    });
+    throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
+      "the run's artifact-publish staging directory was replaced by something that is not a directory, so its publishes (and their absence) cannot be trusted \u2014 discarded, and the run is an error",
+      "eval: stub publish staging dir replaced",
+    );
+  }
   try {
-    let s = await readStubPublishDir(r, n),
-      h = new Set(s.flatMap((b) => (b.env === "stub" ? [path_15.basename(b.payloadDir)] : []))),
-      w = await lstat_11(r);
+    let stubPublishDir = await readStubPublishDir(r, stubArtifactSlugs);
+    let h = new Set(stubPublishDir.flatMap((b) => (b.env === "stub" ? [path.basename(b.payloadDir)] : [])));
+    let w = await lstat(r);
     if (!w.isDirectory() || w.isSymbolicLink() || w.ino !== a.ino || w.dev !== a.dev)
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
         "the run's artifact-publish staging directory changed while it was being indexed",
         "eval: stub publish staging dir changed",
       );
-    for (let b of await readdir_10(r))
-      if (!h.has(b)) await rm_4(path_15.join(r, b), { recursive: !0, force: !0 });
-    return (await readStubPublishesJson(r, s), s);
+    for (let b of await readdir(r))
+      if (!h.has(b))
+        await rm_2(path.join(r, b), {
+          recursive: true,
+          force: true,
+        });
+    await readStubPublishesJson(r, stubPublishDir);
+    return stubPublishDir;
   } catch (error) {
-    throw (
-      await detectPlatformFlavor(r, { harnessOwned: !0 }),
-      await rm_4(r, { recursive: !0, force: !0 }),
-      logForDebugging(`eval: stub publish index failed: ${errorMessage(error)}`, { level: "warn" }),
-      new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `the run's artifact publishes could not be indexed (${error instanceof TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS ? error.message : (getErrnoCode(error) ?? "unexpected error")}), so they were discarded and the run is an error`,
-        "eval: stub publish index failed",
-      )
+    await detectPlatformFlavor(r, {
+      harnessOwned: true,
+    });
+    await rm_2(r, {
+      recursive: true,
+      force: true,
+    });
+    logForDebugging(`eval: stub publish index failed: ${errorMessage(error)}`, {
+      level: "warn",
+    });
+    throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
+      `the run's artifact publishes could not be indexed (${error instanceof TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS ? error.message : (getErrnoCode(error) ?? "unexpected error")}), so they were discarded and the run is an error`,
+      "eval: stub publish index failed",
     );
   }
 }
-
-export { MAX_STUB_PUBLISH_BYTES, collectStubPublishes, Kt, Gr };
+export { MAX_STUB_PUBLISH_BYTES, collectStubPublishes, EVAL_ARTIFACTS_DIR, stubPublishDir };

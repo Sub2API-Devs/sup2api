@@ -8,28 +8,27 @@
  * pieces: chunk-1eqzjhyp.js (1)
  * attribution: placement 1
  */
-
+//@ chunk-1eqzjhyp.js:191-12748 placement
 /**
  * /setup-cowork 命令的提示词，引导模型为 cowork 环境做初始化配置。
  */
-//@ chunk-1eqzjhyp.js:191-12748 placement
 var SETUP_COWORK_PROMPT = [
-    "Product management",
-    "Engineering",
-    "Human resources",
-    "Finance",
-    "Marketing",
-    "Sales",
-    "Operations",
-    "Data science",
-    "Design",
-    "Scientist",
-    "Legal",
-    "Student",
-    "Founder",
-    "Healthcare",
-  ],
-  s = `## Step 1 \u2014 Role
+  "Product management",
+  "Engineering",
+  "Human resources",
+  "Finance",
+  "Marketing",
+  "Sales",
+  "Operations",
+  "Data science",
+  "Design",
+  "Scientist",
+  "Legal",
+  "Student",
+  "Founder",
+  "Healthcare",
+];
+var SETUP_COWORK_STEP1_ROLE = `## Step 1 \u2014 Role
 
 Your initial message should frame what Claude does here: it autonomously handles tasks like reading your email, searching your docs, drafting reports, etc. Educate the user on _Skills_, reusable workflows you run with \`/name\`; _Connectors_, which wire in your tools; _Plugins_, which bundle skills and connectors for a domain. Two or three sentences. Hit the beats: multi-step and autonomous, uses your real tools, skills/plugins/connectors defined.
 
@@ -40,8 +39,8 @@ If the ShowOnboardingRolePicker tool is not available in this session, ask in pl
 ${SETUP_COWORK_PROMPT.map((e) => `- ${e}`).join(`
 `)}
 
-In the plain-text case, end your turn after asking. Their reply \u2014 one of the options or a free-form answer \u2014 is their role for the rest of setup.`,
-  o = `# Guided setup
+In the plain-text case, end your turn after asking. Their reply \u2014 one of the options or a free-form answer \u2014 is their role for the rest of setup.`;
+var SETUP_COWORK_GUIDED_PROMPT = `# Guided setup
 
 Help the user get Claude set up for their work. Six steps \u2014 role, plugins, connectors, try a skill, writing voice, wrap.
 
@@ -58,7 +57,7 @@ Before your first user-facing message, create a TODO list with these items so th
 
 Mark each one complete as you finish it. Keep it to these six \u2014 don't add sub-items.
 
-${s}
+${SETUP_COWORK_STEP1_ROLE}
 
 ## Step 2 \u2014 Suggest plugins
 

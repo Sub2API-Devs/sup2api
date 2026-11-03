@@ -12,7 +12,7 @@ import {
   gateBlockReasonCode,
   settlePendingGateWork,
   orgConfigGateQuick,
-  isFlagFetchHeld,
+  isFlagFetchHeld_2 as isFlagFetchHeld,
   isFlagSourceUntrusted,
   initGrowthBookWithDeadline,
   logOrgConfigGate,
@@ -31,162 +31,202 @@ import { currentSettingsOutcome } from "./orgConfigGateMessages.js";
 import { isUnattendedInteractiveSession } from "../../utils/concurrentSessions.js";
 import { withDeadline } from "../../utils/sleep.js";
 
+//@ chunk-r2x77faw.js:463-735 placement
 /**
  * 因组织配置拒绝退出
  */
-//@ chunk-r2x77faw.js:463-735 placement
-async function exitForOrgConfig(e, t) {
-  let { exitRefusingManagedConfig: exitRefusingManagedConfig } = await import("./chunk-jpd29r7p.js");
+async function exitForOrgConfig(e, print) {
+  let { exitRefusingManagedConfig } = await import("./chunk-jpd29r7p.js");
   return exitRefusingManagedConfig({
     message:
       e.message ??
       "Claude Code couldn't load your organization's settings, which it requires before a session can start.",
     reason: gateBlockReasonCode(e.decision),
-    print: t,
+    print,
     beforeExit: settlePendingGateWork,
   });
 }
+//@ chunk-r2x77faw.js:735-1045 placement
 /**
  * 组织配置闸门选项
  */
-//@ chunk-r2x77faw.js:735-1045 placement
 function orgConfigGateOptions(e, t) {
   return {
     surface: e ? "startup" : "noninteractive",
-    authRecoveryCommand: !1,
-    ...(t.afterSignIn === !0 && { afterSignIn: !0 }),
-    ...(t.fetchFlag !== void 0 && { fetchFlag: t.fetchFlag }),
-    ...(t.isFlagFetchHeld !== void 0 && { isFlagFetchHeld: t.isFlagFetchHeld }),
-    ...(t.isFlagCacheEmpty !== void 0 && { isFlagCacheEmpty: t.isFlagCacheEmpty }),
+    authRecoveryCommand: false,
+    ...(t.afterSignIn === true && {
+      afterSignIn: true,
+    }),
+    ...(t.fetchFlag !== undefined && {
+      fetchFlag: t.fetchFlag,
+    }),
+    ...(t.isFlagFetchHeld !== undefined && {
+      isFlagFetchHeld: t.isFlagFetchHeld,
+    }),
+    ...(t.isFlagCacheEmpty !== undefined && {
+      isFlagCacheEmpty: t.isFlagCacheEmpty,
+    }),
   };
 }
+//@ chunk-r2x77faw.js:1045-1469 placement
 /**
  * 启动早期执行组织配置闸门，不满足时拒绝启动。
  */
-//@ chunk-r2x77faw.js:1045-1469 placement
 async function refuseOrgConfigEarlyAtStartup(e = {}) {
-  let t = e.interactive ?? !getIsNonInteractiveSession(),
-    r = orgConfigGateOptions(t, e),
-    a = e.peek ?? orgConfigGateQuick,
-    n = a(r);
-  if ((profileCheckpoint("org_config_gate_phase_one"), n.decision.verdict !== "refused")) return;
+  let t = e.interactive ?? !getIsNonInteractiveSession();
+  let r = orgConfigGateOptions(t, e);
+  let peek = e.peek ?? orgConfigGateQuick;
+  let n = peek(r);
+  profileCheckpoint("org_config_gate_phase_one");
+  if (n.decision.verdict !== "refused") return;
   if (n.flagSource === "disk" || n.flagSource === "fallback") {
-    let i = e.isFlagFetchHeld ?? isFlagFetchHeld;
-    if (i()) return;
-    if (isFlagSourceUntrusted(n.flagSource, i, e.isFlagCacheEmpty)) {
-      if (
-        (await initGrowthBookWithDeadline(n.flag.budgetMs, e.fetchFlag),
-        (n = a(r)),
-        n.decision.verdict !== "refused")
-      )
-        return;
+    let isFlagFetchHeld_2 = e.isFlagFetchHeld ?? isFlagFetchHeld;
+    if (isFlagFetchHeld_2()) return;
+    if (isFlagSourceUntrusted(n.flagSource, isFlagFetchHeld_2, e.isFlagCacheEmpty)) {
+      await initGrowthBookWithDeadline(n.flag.budgetMs, e.fetchFlag);
+      n = peek(r);
+      if (n.decision.verdict !== "refused") return;
     }
   }
-  return (await logOrgConfigGate(n, n.outcomes), enforceOrgConfigGate(n, r, t, e));
+  await logOrgConfigGate(n, n.outcomes);
+  return enforceOrgConfigGate(n, r, t, e);
 }
 //@ chunk-r2x77faw.js:1469-1634 placement
 async function enforceOrgConfigGateAtStartup(e = {}) {
-  let t = e.interactive ?? !getIsNonInteractiveSession(),
-    r = orgConfigGateOptions(t, e),
-    a = await (e.evaluate ?? awaitOrgConfigGate)(r);
-  if ((profileCheckpoint("org_config_gate_phase_two"), !isGateBlocking(a.decision))) return;
+  let t = e.interactive ?? !getIsNonInteractiveSession();
+  let r = orgConfigGateOptions(t, e);
+  let a = await (e.evaluate ?? awaitOrgConfigGate)(r);
+  profileCheckpoint("org_config_gate_phase_two");
+  if (!isGateBlocking(a.decision)) return;
   return enforceOrgConfigGate(a, r, t, e);
 }
 //@ chunk-r2x77faw.js:1634-1938 placement
 async function enforceOrgConfigGateHeadless(e, t = {}) {
-  let r = orgConfigGateOptions(!1, t),
-    { armed: armed } = await readOrgConfigDecision(r, t);
-  if ((profileCheckpoint("org_config_gate_headless"), !armed)) return;
-  let n = t.readPolicySlot ?? (() => getSettingsForSource("policySettings")),
-    i = n(),
-    o = await e();
+  let r = orgConfigGateOptions(false, t);
+  let { armed } = await readOrgConfigDecision(r, t);
+  profileCheckpoint("org_config_gate_headless");
+  if (!armed) return;
+  let n = t.readPolicySlot ?? (() => getSettingsForSource("policySettings"));
+  let i = n();
+  let o = await e();
   if (!o.valid) return o;
-  return (
-    await enforceOrgConfigGateAtStartup({ ...t, interactive: !1 }),
-    (t.settingsInHand ?? (() => currentSettingsOutcome().reason === "ok"))() && n() === i ? o : void 0
-  );
+  await enforceOrgConfigGateAtStartup({
+    ...t,
+    interactive: false,
+  });
+  return (t.settingsInHand ?? (() => currentSettingsOutcome().reason === "ok"))() && n() === i
+    ? o
+    : undefined;
 }
 //@ chunk-r2x77faw.js:1938-2269 placement
 async function enforceOrgConfigGateOnLaunchLane(e = {}) {
-  let t = orgConfigGateOptions(!0, e),
-    r = await readOrgConfigDecision(t, e);
-  if ((profileCheckpoint("org_config_gate_launch_lane"), !r.armed)) return;
-  if (!isGateBlocking(r.decision)) {
-    logOrgConfigGate(r, r.outcomes);
+  let t = orgConfigGateOptions(true, e);
+  let orgConfigDecision = await readOrgConfigDecision(t, e);
+  profileCheckpoint("org_config_gate_launch_lane");
+  if (!orgConfigDecision.armed) return;
+  if (!isGateBlocking(orgConfigDecision.decision)) {
+    logOrgConfigGate(orgConfigDecision, orgConfigDecision.outcomes);
     return;
   }
-  if (!(e.attended ?? !isUnattendedInteractiveSession()) || e.showBlockedScreen === void 0)
-    return (
-      await (e.retryFetches ?? reevaluateSettingsGate)(),
-      enforceOrgConfigGateAtStartup({ ...e, interactive: !0 })
-    );
-  return (await logOrgConfigGate(r, r.outcomes), enforceOrgConfigGate(r, t, !0, { ...e, retryFirst: !0 }));
+  if (!(e.attended ?? !isUnattendedInteractiveSession()) || e.showBlockedScreen === undefined) {
+    await (e.retryFetches ?? reevaluateSettingsGate)();
+    return enforceOrgConfigGateAtStartup({
+      ...e,
+      interactive: true,
+    });
+  }
+  await logOrgConfigGate(orgConfigDecision, orgConfigDecision.outcomes);
+  return enforceOrgConfigGate(orgConfigDecision, t, true, {
+    ...e,
+    retryFirst: true,
+  });
 }
+//@ chunk-r2x77faw.js:2269-2440 placement
 /**
  * 读组织配置闸门判定
  */
-//@ chunk-r2x77faw.js:2269-2440 placement
 async function readOrgConfigDecision(e, t) {
-  let r = t.peek ?? orgConfigGateQuick,
-    a = r(e);
-  if (isUnarmedFallback(a, t.isFlagFetchHeld, t.isFlagCacheEmpty))
-    (await growthBookReady(t.fetchFlag), (a = r(e)));
-  return retryGateAfterOutcomes(a, () => r(e), t.primeSettingsCacheAge);
+  let peek = t.peek ?? orgConfigGateQuick;
+  let a = peek(e);
+  if (isUnarmedFallback(a, t.isFlagFetchHeld, t.isFlagCacheEmpty)) {
+    await growthBookReady(t.fetchFlag);
+    a = peek(e);
+  }
+  return retryGateAfterOutcomes(a, () => peek(e), t.primeSettingsCacheAge);
 }
+//@ chunk-r2x77faw.js:2440-3227 placement
 /**
  * 执行组织配置闸门
  */
-//@ chunk-r2x77faw.js:2440-3227 placement
 async function enforceOrgConfigGate(e, t, r, a) {
-  let n = a.exit ?? ((s) => exitForOrgConfig(s, a.printMessage)),
-    i = a.reportFinal ?? logOrgConfigGate;
+  let n = a.exit ?? ((s) => exitForOrgConfig(s, a.printMessage));
+  let reportFinal = a.reportFinal ?? logOrgConfigGate;
   if (!r || !(a.attended ?? !isUnattendedInteractiveSession())) {
     let s = e;
     if (!r) {
       let f = await retryAfterCredentialRefresh(e, t, a);
-      if (f !== void 0) {
+      if (f !== undefined) {
         if (!isGateBlocking(f.decision)) {
-          await i(f, void 0, { outcome: "passed", recoveredAfterMs: f.decision.blockedMs });
+          await reportFinal(f, undefined, {
+            outcome: "passed",
+            recoveredAfterMs: f.decision.blockedMs,
+          });
           return;
         }
         s = f;
       }
     }
-    return (await i(s, void 0, { outcome: "exit" }), n(s));
+    await reportFinal(s, undefined, {
+      outcome: "exit",
+    });
+    return n(s);
   }
   let o = await a.showBlockedScreen?.();
-  if (o === void 0) return (await i(e, void 0, { outcome: "exit" }), n(e));
-  let g = a.now ?? (() => performance.now()),
-    u = g() - e.decision.blockedMs,
-    c = e,
-    O = 0,
-    m = await o(
-      e,
-      async () => (
-        await (a.retryFetches ?? reevaluateSettingsGate)(),
-        (O += 1),
-        (c = (a.reevaluate ?? orgConfigGateSync)(t, Math.max(0, Math.round(g() - u)), O)),
-        c
-      ),
-      { retryNow: a.retryFirst === !0 },
-    );
+  if (o === undefined) {
+    await reportFinal(e, undefined, {
+      outcome: "exit",
+    });
+    return n(e);
+  }
+  let g = a.now ?? (() => performance.now());
+  let u = g() - e.decision.blockedMs;
+  let c = e;
+  let O = 0;
+  let m = await o(
+    e,
+    async () => {
+      await (a.retryFetches ?? reevaluateSettingsGate)();
+      O += 1;
+      c = (a.reevaluate ?? orgConfigGateSync)(t, Math.max(0, Math.round(g() - u)), O);
+      return c;
+    },
+    {
+      retryNow: a.retryFirst === true,
+    },
+  );
   if (m === "passed") {
-    await i(c, void 0, { outcome: "passed", recoveredAfterMs: Math.max(0, Math.round(g() - u)) });
+    await reportFinal(c, undefined, {
+      outcome: "passed",
+      recoveredAfterMs: Math.max(0, Math.round(g() - u)),
+    });
     return;
   }
-  return (await i(c, void 0, { outcome: m }), n(c));
+  await reportFinal(c, undefined, {
+    outcome: m,
+  });
+  return n(c);
 }
+//@ chunk-r2x77faw.js:3227-3571 placement
 /**
  * 凭据刷新导致不可用时重试
  */
-//@ chunk-r2x77faw.js:3227-3571 placement
 async function retryAfterCredentialRefresh(e, t, r) {
-  let { decision: decision, flag: flag } = e;
+  let { decision, flag } = e;
   if (decision.verdict !== "blocked" || decision.reason !== "unavailable_credential_refresh") return;
   let i = flag.budgetMs - decision.blockedMs;
   if (i <= 0) return;
-  let o = r.now ?? (() => performance.now()),
-    g = o();
+  let o = r.now ?? (() => performance.now());
+  let g = o();
   await withDeadline(
     (r.retryFetches ?? reevaluateSettingsGate)().catch(() => {}),
     i,
@@ -194,5 +234,4 @@ async function retryAfterCredentialRefresh(e, t, r) {
   let max = Math.max(0, Math.round(o() - g));
   return (r.reevaluate ?? orgConfigGateSync)(t, decision.blockedMs + max, 1);
 }
-
 export { refuseOrgConfigEarlyAtStartup, enforceOrgConfigGateHeadless, enforceOrgConfigGateAtStartup };

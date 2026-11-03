@@ -13,31 +13,31 @@ import { toolMatchesName } from "../../Tool.js";
 import { REPORTFINDINGS } from "../../tools/ReportFindingsTool/constants.js";
 import { env } from "../../utils/env.js";
 import { isCoworkAny } from "../../utils/entrypointKinds.js";
-import { vS } from "../../utils/remoteEnvironment.js";
+import { isBridgeEnvironment } from "../../utils/remoteEnvironment.js";
 import { getFeatureValue_SESSION_PINNED } from "../../services/analytics/growthbook.js";
 import { glabMrId, glabMrProjectUrl } from "../../utils/detectRepository.js";
 import { VERIFY } from "../../skills/bundled/bundledSkillNames.js";
 
 //@ chunk-hantmvxa.js:79524-79601 placement
-var Ns = new Set(["remote", "remote_desktop", "remote_mobile", "remote_trigger"]);
+var REMOTE_ENTRYPOINTS = new Set(["remote", "remote_desktop", "remote_mobile", "remote_trigger"]);
 //@ chunk-hantmvxa.js:79601-80043 placement
 function getReportFindingsMode(e) {
-  if (e.options?.isSkillPreload || e.agentId !== void 0) return;
-  let n = getPrintOutputFormat();
-  if (n === "text" || n === "json") return;
-  if (!e.options?.tools?.some((h) => toolMatchesName(h, REPORTFINDINGS))) return;
+  if (e.options?.isSkillPreload || e.agentId !== undefined) return;
+  let printOutputFormat = getPrintOutputFormat();
+  if (printOutputFormat === "text" || printOutputFormat === "json") return;
+  if (!e.options?.tools?.some((tool) => toolMatchesName(tool, REPORTFINDINGS))) return;
   if (env.CLAUDE_CODE_REPORT_FINDINGS) return "spawn";
-  let s = e.options?.messageClientPlatform,
-    CLAUDE_CODE_ENTRYPOINT = env.CLAUDE_CODE_ENTRYPOINT;
-  return (s === "desktop_app" || s === "web_claude_ai") &&
+  let messageClientPlatform = e.options?.messageClientPlatform;
+  let CLAUDE_CODE_ENTRYPOINT = env.CLAUDE_CODE_ENTRYPOINT;
+  return (messageClientPlatform === "desktop_app" || messageClientPlatform === "web_claude_ai") &&
     !isCoworkAny() &&
-    (vS() ||
+    (isBridgeEnvironment() ||
       (Boolean(env.CLAUDE_CODE_REMOTE) &&
-        CLAUDE_CODE_ENTRYPOINT !== void 0 &&
-        Ns.has(CLAUDE_CODE_ENTRYPOINT))) &&
-    getFeatureValue_SESSION_PINNED("tengu_purring_micali", !0)
+        CLAUDE_CODE_ENTRYPOINT !== undefined &&
+        REMOTE_ENTRYPOINTS.has(CLAUDE_CODE_ENTRYPOINT))) &&
+    getFeatureValue_SESSION_PINNED("tengu_purring_micali", true)
     ? "message"
-    : void 0;
+    : undefined;
 }
 //@ chunk-hantmvxa.js:80043-80631 placement
 var GITHUB_COMMENT_SECTION = `
@@ -54,9 +54,9 @@ to the terminal and note that \`--comment\` was ignored.
 `;
 //@ chunk-hantmvxa.js:80631-81428 placement
 function buildGitLabCommentSection(e) {
-  let n = glabMrId(e),
-    s = glabMrProjectUrl(e),
-    r = s ? ` -R ${s}` : "";
+  let n = glabMrId(e);
+  let s = glabMrProjectUrl(e);
+  let r = s ? ` -R ${s}` : "";
   return `
 
 ## Posting to GitLab (--comment)
@@ -73,11 +73,14 @@ ignored.
 `;
 }
 //@ chunk-hantmvxa.js:81428-82172 placement
+/**
+ * "若之后修复了发现"的提示段与逐行结果说明（报告工具再次调用带 outcome）。
+ */
 var REPORT_OUTCOMES_SECTION = `call ${REPORTFINDINGS} again with the same findings, each
 carrying an \`outcome\`: \`fixed\`, \`no_change_needed\` (the finding was wrong or
 already handled), or \`skipped\` (real but not applied). Do not repeat the
-findings as text`,
-  Us = `
+findings as text`;
+var REPORT_OUTCOMES_LATER_SECTION = `
 
 ## If findings are fixed later
 
@@ -86,8 +89,8 @@ to fix them, or later work fixes them incidentally - you MUST ${REPORT_OUTCOMES_
 Make that call immediately after the fixes land, before any prose summary; the
 host UI's per-finding status updates only from it, and without it the findings
 stay marked unresolved.
-`,
-  js = `After the call, give one line per finding with its outcome: this session can
+`;
+var REPORT_OUTCOMES_LINE_TEXT = `After the call, give one line per finding with its outcome: this session can
 also be read from a client that does not show the tool call.
 `;
 //@ chunk-hantmvxa.js:82172-82812 placement
@@ -116,13 +119,12 @@ var AFTER_REVIEW_SECTION = `
 
 After the findings are reported (and applied, when --fix was passed): if \`/${VERIFY}\` has not run this session and the diff has a runtime surface (not test-only or docs-only per the pre-ship exemptions), invoke \`/${VERIFY}\` now \u2014 this review checks that the diff reads right; \`/${VERIFY}\` checks that it runs right.
 `;
-
 export {
   AFTER_REVIEW_SECTION,
   getReportFindingsMode,
   buildGitLabCommentSection,
   GITHUB_COMMENT_SECTION,
   buildFixSection,
-  Us,
-  js,
+  REPORT_OUTCOMES_LATER_SECTION,
+  REPORT_OUTCOMES_LINE_TEXT,
 };

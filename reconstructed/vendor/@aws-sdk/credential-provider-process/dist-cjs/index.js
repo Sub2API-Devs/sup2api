@@ -8,69 +8,96 @@
 import { promisify } from "util";
 import { exec } from "child_process";
 import { Re } from "../../../../runtime/bun-runtime.js";
-import { hU } from "../../../@smithy/shared-ini-file-loader/dist-cjs/index.js";
-import { $h } from "../../../@smithy/property-provider/dist-cjs/index.js";
-import { SD } from "../../core/dist-cjs/submodules/client/index.js";
+import { require_shared_ini_file_loader } from "../../../@smithy/shared-ini-file-loader/dist-cjs/index.js";
+import { require_property_provider } from "../../../@smithy/property-provider/dist-cjs/index.js";
+import { require_client } from "../../core/dist-cjs/submodules/client/index.js";
 
 //@ chunk-skhq176t.js:335-350 esm-layout
-var i = Re(hU());
+var import_shared_ini_file_loader = Re(require_shared_ini_file_loader());
 //@ chunk-skhq176t.js:350-376 esm-layout
-var c = Re($h()),
-  f = Re(hU());
+var import_property_provider = Re(require_property_provider());
+var import_shared_ini_file_loader_2 = Re(require_shared_ini_file_loader());
 //@ chunk-skhq176t.js:446-1211 esm-layout
-var p = Re(SD()),
-  a = (r, e, o) => {
-    if (e.Version !== 1) throw Error(`Profile ${r} credential_process did not return Version 1.`);
-    if (e.AccessKeyId === void 0 || e.SecretAccessKey === void 0)
-      throw Error(`Profile ${r} credential_process returned invalid credentials.`);
-    if (e.Expiration) {
-      let date = new Date();
-      if (new Date(e.Expiration) < date)
-        throw Error(`Profile ${r} credential_process returned expired credentials.`);
-    }
-    let AccountId = e.AccountId;
-    if (!AccountId && o?.[r]?.aws_account_id) AccountId = o[r].aws_account_id;
-    let t = {
-      accessKeyId: e.AccessKeyId,
-      secretAccessKey: e.SecretAccessKey,
-      ...(e.SessionToken && { sessionToken: e.SessionToken }),
-      ...(e.Expiration && { expiration: new Date(e.Expiration) }),
-      ...(e.CredentialScope && { credentialScope: e.CredentialScope }),
-      ...(AccountId && { accountId: AccountId }),
-    };
-    return (p.setCredentialFeature(t, "CREDENTIALS_PROCESS", "w"), t);
+var client = Re(require_client());
+var getValidatedProcessCredentials = (profileName, data, profiles) => {
+  if (data.Version !== 1) throw Error(`Profile ${profileName} credential_process did not return Version 1.`);
+  if (data.AccessKeyId === undefined || data.SecretAccessKey === undefined)
+    throw Error(`Profile ${profileName} credential_process returned invalid credentials.`);
+  if (data.Expiration) {
+    let currentTime = new Date();
+    if (new Date(data.Expiration) < currentTime)
+      throw Error(`Profile ${profileName} credential_process returned expired credentials.`);
+  }
+  let accountId = data.AccountId;
+  if (!accountId && profiles?.[profileName]?.aws_account_id) accountId = profiles[profileName].aws_account_id;
+  let credentials = {
+    accessKeyId: data.AccessKeyId,
+    secretAccessKey: data.SecretAccessKey,
+    ...(data.SessionToken && {
+      sessionToken: data.SessionToken,
+    }),
+    ...(data.Expiration && {
+      expiration: new Date(data.Expiration),
+    }),
+    ...(data.CredentialScope && {
+      credentialScope: data.CredentialScope,
+    }),
+    ...(accountId && {
+      accountId,
+    }),
   };
+  client.setCredentialFeature(credentials, "CREDENTIALS_PROCESS", "w");
+  return credentials;
+};
 //@ chunk-skhq176t.js:1211-1798 esm-fingerprint
-var u = async (r, e, o) => {
-  let s = e[r];
-  if (e[r]) {
-    let credential_process = s.credential_process;
-    if (credential_process !== void 0) {
-      let d = promisify(f.externalDataInterceptor?.getTokenRecord?.().exec ?? exec);
+var resolveProcessCredentials = async (profileName, profiles, logger) => {
+  let profile = profiles[profileName];
+  if (profiles[profileName]) {
+    let credentialProcess = profile.credential_process;
+    if (credentialProcess !== undefined) {
+      let execPromise = promisify(
+        import_shared_ini_file_loader_2.externalDataInterceptor?.getTokenRecord?.().exec ?? exec,
+      );
       try {
-        let { stdout: stdout } = await d(credential_process),
-          l;
+        let { stdout } = await execPromise(credentialProcess);
+        let data;
         try {
-          l = JSON.parse(stdout.trim());
+          data = JSON.parse(stdout.trim());
         } catch {
-          throw Error(`Profile ${r} credential_process returned invalid JSON.`);
+          throw Error(`Profile ${profileName} credential_process returned invalid JSON.`);
         }
-        return a(r, l, e);
+        return getValidatedProcessCredentials(profileName, data, profiles);
       } catch (error) {
-        throw new c.CredentialsProviderError(error.message, { logger: o });
+        throw new import_property_provider.CredentialsProviderError(error.message, {
+          logger,
+        });
       }
     } else
-      throw new c.CredentialsProviderError(`Profile ${r} did not contain credential_process.`, { logger: o });
+      throw new import_property_provider.CredentialsProviderError(
+        `Profile ${profileName} did not contain credential_process.`,
+        {
+          logger,
+        },
+      );
   } else
-    throw new c.CredentialsProviderError(`Profile ${r} could not be found in shared credentials file.`, {
-      logger: o,
-    });
+    throw new import_property_provider.CredentialsProviderError(
+      `Profile ${profileName} could not be found in shared credentials file.`,
+      {
+        logger,
+      },
+    );
 };
 //@ chunk-skhq176t.js:1798-2022 esm-fingerprint
-var h =
-  (r = {}) =>
-  async ({ callerClientConfig: e } = {}) => {
-    r.logger?.debug("@aws-sdk/credential-provider-process - fromProcess");
-    let knownFiles = await i.parseKnownFiles(r);
-    return u(i.getProfileName({ profile: r.profile ?? e?.profile }), knownFiles, r.logger);
+var fromProcess =
+  (init = {}) =>
+  async ({ callerClientConfig } = {}) => {
+    init.logger?.debug("@aws-sdk/credential-provider-process - fromProcess");
+    let profiles = await import_shared_ini_file_loader.parseKnownFiles(init);
+    return resolveProcessCredentials(
+      import_shared_ini_file_loader.getProfileName({
+        profile: init.profile ?? callerClientConfig?.profile,
+      }),
+      profiles,
+      init.logger,
+    );
   };

@@ -6,42 +6,81 @@
  * attribution: esm-fingerprint 1
  */
 import { K } from "../../../webapi/lib/validate.js";
-import { Pe } from "../../../webapi/lib/jwt_claims_set.js";
+import { epoch_2 } from "../../../webapi/lib/jwt_claims_set.js";
 import { ct } from "../lib/secs.js";
 
 //@ chunk-2tyrgda4.js:39526-40328 esm-fingerprint
-class pt {
-  constructor(e) {
-    if (!K(e)) throw TypeError("JWT Claims Set MUST be an object");
-    this._payload = e;
+class ProduceJWT {
+  constructor(payload) {
+    if (!K(payload)) throw TypeError("JWT Claims Set MUST be an object");
+    this._payload = payload;
   }
-  setIssuer(e) {
-    return ((this._payload = { ...this._payload, iss: e }), this);
-  }
-  setSubject(e) {
-    return ((this._payload = { ...this._payload, sub: e }), this);
-  }
-  setAudience(e) {
-    return ((this._payload = { ...this._payload, aud: e }), this);
-  }
-  setJti(e) {
-    return ((this._payload = { ...this._payload, jti: e }), this);
-  }
-  setNotBefore(e) {
-    if (typeof e === "number") this._payload = { ...this._payload, nbf: e };
-    else this._payload = { ...this._payload, nbf: Pe(new Date()) + ct(e) };
+  setIssuer(issuer) {
+    this._payload = {
+      ...this._payload,
+      iss: issuer,
+    };
     return this;
   }
-  setExpirationTime(e) {
-    if (typeof e === "number") this._payload = { ...this._payload, exp: e };
-    else this._payload = { ...this._payload, exp: Pe(new Date()) + ct(e) };
+  setSubject(subject) {
+    this._payload = {
+      ...this._payload,
+      sub: subject,
+    };
     return this;
   }
-  setIssuedAt(e) {
-    if (typeof e > "u") this._payload = { ...this._payload, iat: Pe(new Date()) };
-    else this._payload = { ...this._payload, iat: e };
+  setAudience(audience) {
+    this._payload = {
+      ...this._payload,
+      aud: audience,
+    };
+    return this;
+  }
+  setJti(jwtId) {
+    this._payload = {
+      ...this._payload,
+      jti: jwtId,
+    };
+    return this;
+  }
+  setNotBefore(input) {
+    if (typeof input === "number")
+      this._payload = {
+        ...this._payload,
+        nbf: input,
+      };
+    else
+      this._payload = {
+        ...this._payload,
+        nbf: epoch_2(new Date()) + ct(input),
+      };
+    return this;
+  }
+  setExpirationTime(input) {
+    if (typeof input === "number")
+      this._payload = {
+        ...this._payload,
+        exp: input,
+      };
+    else
+      this._payload = {
+        ...this._payload,
+        exp: epoch_2(new Date()) + ct(input),
+      };
+    return this;
+  }
+  setIssuedAt(input) {
+    if (typeof input === "undefined")
+      this._payload = {
+        ...this._payload,
+        iat: epoch_2(new Date()),
+      };
+    else
+      this._payload = {
+        ...this._payload,
+        iat: input,
+      };
     return this;
   }
 }
-
-export { pt };
+export { ProduceJWT };

@@ -6,31 +6,30 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { U } from "../../../@smithy/util-base64/dist-cjs/fromBase64.js";
-import { H } from "../../../@smithy/util-base64/dist-cjs/toBase64.js";
+import { require_fromBase64 } from "../../../@smithy/util-base64/dist-cjs/fromBase64.js";
+import { require_toBase64 } from "../../../@smithy/util-base64/dist-cjs/toBase64.js";
 
 //@ chunk-wr8v03d0.js:2388-2765 cjs-fingerprint
-var base64Module = x(function (h) {
-  var C = U(),
-    k = H();
-  Object.keys(C).forEach(function (e) {
-    if (e !== "default" && !Object.prototype.hasOwnProperty.call(h, e))
-      Object.defineProperty(h, e, {
-        enumerable: !0,
+var base64Module = x(function (cjsExports) {
+  var fromTokenFile = require_fromBase64();
+  var fromWebToken = require_toBase64();
+  Object.keys(fromTokenFile).forEach(function (k) {
+    if (k !== "default" && !Object.prototype.hasOwnProperty.call(cjsExports, k))
+      Object.defineProperty(cjsExports, k, {
+        enumerable: true,
         get: function () {
-          return C[e];
+          return fromTokenFile[k];
         },
       });
   });
-  Object.keys(k).forEach(function (e) {
-    if (e !== "default" && !Object.prototype.hasOwnProperty.call(h, e))
-      Object.defineProperty(h, e, {
-        enumerable: !0,
+  Object.keys(fromWebToken).forEach(function (k) {
+    if (k !== "default" && !Object.prototype.hasOwnProperty.call(cjsExports, k))
+      Object.defineProperty(cjsExports, k, {
+        enumerable: true,
         get: function () {
-          return k[e];
+          return fromWebToken[k];
         },
       });
   });
 });
-
 export { base64Module };

@@ -16,17 +16,20 @@ import {
   toError,
 } from "../../../src/utils/errors.js";
 import { sleep, withDeadline } from "../../../src/utils/sleep.js";
-import { STARTUP_MARK, OMi } from "../../../src/utils/startupMarks.js";
+import { STARTUP_MARK, MAX_MARK_NAME_CHARS } from "../../../src/utils/startupMarks.js";
 import { HookConfigError } from "../../../src/schemas/hooks.js";
 import { le, SDK_MANIFEST_CAPTURE, Ft, Nt } from "./transport.js";
 import { jsonStringify, jsonParse } from "../../../src/utils/slowOperations.js";
-import { _Ce } from "../../../src/services/remoteTools/remoteToolsDebug.js";
-import { R4n, SdkControlServerTransport } from "../../../src/services/mcp/SdkControlTransport.js";
+import { REMOTE_TOOLS_LOG_EVENTS } from "../../../src/services/remoteTools/remoteToolsDebug.js";
+import {
+  isJsonRpcRequest,
+  SdkControlServerTransport,
+} from "../../../src/services/mcp/SdkControlTransport.js";
 import { logEvent } from "../../../src/services/analytics/index.js";
 import { fromEnum } from "../../../src/services/analytics/safeMetadata.js";
-import { ARi } from "../../../src/utils/auth/launcherHostLogin.js";
+import { isLauncherEndReason } from "../../../src/utils/auth/launcherHostLogin.js";
 import { MCP_PROTOCOL_LATEST } from "../../../src/services/mcp/mcpCallConstants.js";
-import { freeze, freeze_2 } from "../../../src/services/mcp/client.js";
+import { T_t, A_t } from "../../../src/services/mcp/client.js";
 import {
   logFeatureSad,
   logFeatureOk,
@@ -34,13 +37,13 @@ import {
 } from "../../../src/services/analytics/featureTelemetry.js";
 import { sr } from "./index.js";
 import { parseMcpServerSettings, sameToolPolicies } from "../../../src/services/mcp/serverIdentity.js";
-import { ec } from "../../../src/utils/timerDelayClamp.js";
-import { yBn } from "../../../src/services/mcp/toolsListChanged.js";
+import { MAX_TIMER_DELAY_MS } from "../../../src/utils/timerDelayClamp.js";
+import { isToolListChangedNotification } from "../../../src/services/mcp/toolsListChanged.js";
 
+//@ chunk-y805ph4h.js:25477-62908 placement
 /**
  * Agent SDK 的 Query 对象：包装子进程传输，按消息流产出 SDK 消息，并提供 interrupt、setPermissionMode、setModel、MCP 控制等控制请求以及清理逻辑（[Query.cleanup]）。
  */
-//@ chunk-y805ph4h.js:25477-62908 placement
 class Query {
   transport;
   isSingleUserTurn;
@@ -58,7 +61,7 @@ class Query {
   pendingControlResponses = new Map();
   unmatchedControlResponses = new Map();
   static UNMATCHED_CONTROL_RESPONSES_MAX = 1024;
-  cleanupPerformed = !1;
+  cleanupPerformed = false;
   cleanupCause;
   sdkMessages;
   inputStream = new Stream();
@@ -69,38 +72,38 @@ class Query {
   initHooksPayload;
   sdkMcpServers = new Map();
   initializeWritten;
-  initializeHasBeenWritten = !1;
+  initializeHasBeenWritten = false;
   markInitializeWritten;
-  writingFirstInitialize = !1;
+  writingFirstInitialize = false;
   stopSdkMcpManifestCapture;
   sdkMcpToolsChangedDuringCapture = new Set();
   pendingMcpResponses = new Map();
   runEndedResolve;
-  runEnded = !1;
-  resultReceived = !1;
+  runEnded = false;
+  resultReceived = false;
   startupMark;
   runEndCeilingTimer;
   sessionState;
   lastErrorResultText;
   lastStartupFailureReason;
   errorTextBeforeModelLessTurns;
-  modelLessTurnEnded = !1;
+  modelLessTurnEnded = false;
   latestCommands;
   frameObserver;
   transcriptMirrorBatcher;
   cleanupCallbacks = [];
   cleanupPromise;
-  setIsSingleUserTurn(e) {
-    this.isSingleUserTurn = e;
+  setIsSingleUserTurn(isSingleUserTurn) {
+    this.isSingleUserTurn = isSingleUserTurn;
   }
-  setTranscriptMirrorBatcher(e) {
-    this.transcriptMirrorBatcher = e;
+  setTranscriptMirrorBatcher(transcriptMirrorBatcher) {
+    this.transcriptMirrorBatcher = transcriptMirrorBatcher;
   }
-  reportMirrorError(e, s) {
+  reportMirrorError(e, error) {
     let r = {
       type: "system",
       subtype: "mirror_error",
-      error: s,
+      error,
       key: e,
       uuid: randomUUID(),
       session_id: e.sessionId,
@@ -117,96 +120,130 @@ class Query {
   hasBidirectionalNeeds() {
     return (
       this.sdkMcpServers.size > 0 ||
-      (this.hooks !== void 0 && Object.keys(this.hooks).length > 0) ||
-      this.canUseTool !== void 0 ||
-      this.onElicitation !== void 0 ||
-      this.onUserDialog !== void 0 ||
-      this.getOAuthToken !== void 0 ||
-      this.getHostAuthToken !== void 0 ||
-      this.workSecretAnswerer !== void 0
+      (this.hooks !== undefined && Object.keys(this.hooks).length > 0) ||
+      this.canUseTool !== undefined ||
+      this.onElicitation !== undefined ||
+      this.onUserDialog !== undefined ||
+      this.getOAuthToken !== undefined ||
+      this.getHostAuthToken !== undefined ||
+      this.workSecretAnswerer !== undefined
     );
   }
   remoteControlCallGeneration = 0;
   uiHost;
   workSecretAnswerer;
-  constructor(e, s, r, n, i, m = new Map(), l, h, S, y, w, b, R = !1, T = DEFAULT_PRINT_BG_WAIT_CEILING_MS) {
-    this.transport = e;
-    this.isSingleUserTurn = s;
-    this.canUseTool = r;
-    this.hooks = n;
-    this.abortController = i;
-    this.jsonSchema = l;
-    this.initConfig = h;
-    this.onElicitation = S;
-    this.getOAuthToken = y;
-    this.getHostAuthToken = w;
-    this.onUserDialog = b;
-    this.verbatimPrompts = R;
-    this.runEndCeilingMs = T;
+  constructor(
+    transport,
+    isSingleUserTurn,
+    canUseTool,
+    hooks,
+    abortController,
+    m = new Map(),
+    jsonSchema,
+    initConfig,
+    onElicitation,
+    getOAuthToken,
+    getHostAuthToken,
+    onUserDialog,
+    verbatimPrompts = false,
+    runEndCeilingMs = DEFAULT_PRINT_BG_WAIT_CEILING_MS,
+  ) {
+    this.transport = transport;
+    this.isSingleUserTurn = isSingleUserTurn;
+    this.canUseTool = canUseTool;
+    this.hooks = hooks;
+    this.abortController = abortController;
+    this.jsonSchema = jsonSchema;
+    this.initConfig = initConfig;
+    this.onElicitation = onElicitation;
+    this.getOAuthToken = getOAuthToken;
+    this.getHostAuthToken = getHostAuthToken;
+    this.onUserDialog = onUserDialog;
+    this.verbatimPrompts = verbatimPrompts;
+    this.runEndCeilingMs = runEndCeilingMs;
     for (let [E, P] of m) this.connectSdkMcpServer(E, P);
-    ((this.sdkMessages = this.readSdkMessages()),
-      this.readMessages(),
-      (this.initializeWritten = new Promise((E) => {
-        this.markInitializeWritten = () => {
-          ((this.initializeHasBeenWritten = !0), E());
-        };
-      })),
-      (this.initialization = this.initialize({ first: !0 })),
-      this.initialization.catch(() => {}));
+    this.sdkMessages = this.readSdkMessages();
+    this.readMessages();
+    this.initializeWritten = new Promise((resolve) => {
+      this.markInitializeWritten = () => {
+        this.initializeHasBeenWritten = true;
+        resolve();
+      };
+    });
+    this.initialization = this.initialize({
+      first: true,
+    });
+    this.initialization.catch(() => {});
   }
   setError(e) {
     this.inputStream.error(e);
   }
-  setFrameObserver(e) {
-    this.frameObserver = e;
+  setFrameObserver(frameObserver) {
+    this.frameObserver = frameObserver;
   }
   dropUnreadHookProgress(e) {
     this.inputStream.dropNewestQueued(
       (s) => s.type === "system" && s.subtype === "hook_progress" && s.hook_id === e,
     );
   }
-  async stopTask(e) {
-    await this.request({ subtype: "stop_task", task_id: e });
+  async stopTask(taskId) {
+    await this.request({
+      subtype: "stop_task",
+      task_id: taskId,
+    });
   }
-  async backgroundTasks(e) {
-    return (await this.request({ subtype: "background_tasks", tool_use_id: e })).response.backgrounded ?? !0;
+  async backgroundTasks(toolUseId) {
+    return (
+      (
+        await this.request({
+          subtype: "background_tasks",
+          tool_use_id: toolUseId,
+        })
+      ).response.backgrounded ?? true
+    );
   }
   close() {
     this.cleanup();
   }
   cleanup(e) {
-    if ((this.clearRunEndCeiling(), this.cleanupPromise)) return this.cleanupPromise;
-    return (
-      (this.cleanupPerformed = !0),
-      (this.cleanupCause = e),
-      this.stopSdkMcpManifestCapture?.(),
-      (this.cleanupPromise = this.performCleanup(e)),
-      this.cleanupPromise
-    );
+    this.clearRunEndCeiling();
+    if (this.cleanupPromise) return this.cleanupPromise;
+    this.cleanupPerformed = true;
+    this.cleanupCause = e;
+    this.stopSdkMcpManifestCapture?.();
+    this.cleanupPromise = this.performCleanup(e);
+    return this.cleanupPromise;
   }
   async performCleanup(e) {
     for (let cleanupCallback of this.cleanupCallbacks)
       try {
         cleanupCallback();
       } catch {}
-    if (((this.cleanupCallbacks = []), this.transcriptMirrorBatcher))
+    this.cleanupCallbacks = [];
+    if (this.transcriptMirrorBatcher)
       try {
         await this.transcriptMirrorBatcher.flush();
       } catch {}
     try {
-      for (let s of this.cancelControllers.values()) s.abort();
-      (this.cancelControllers.clear(), this.transport.close());
+      for (let cancelController of this.cancelControllers.values()) cancelController.abort();
+      this.cancelControllers.clear();
+      this.transport.close();
     } catch (error) {
-      logForDebugging(`[Query.cleanup] transport.close() failed: ${errorMessage(error)}`, { level: "error" });
+      logForDebugging(`[Query.cleanup] transport.close() failed: ${errorMessage(error)}`, {
+        level: "error",
+      });
     }
     try {
       let s = e ?? st();
-      for (let { reject: reject } of this.pendingControlResponses.values()) reject(s);
-      (this.pendingControlResponses.clear(), this.unmatchedControlResponses.clear());
-      for (let { reject: reject } of this.pendingMcpResponses.values()) reject(s);
-      (this.pendingMcpResponses.clear(), this.hookCallbacks.clear());
-      for (let { transport: transport } of this.sdkMcpServers.values()) transport.close().catch(() => {});
-      if ((this.sdkMcpServers.clear(), e)) this.inputStream.error(e);
+      for (let { reject } of this.pendingControlResponses.values()) reject(s);
+      this.pendingControlResponses.clear();
+      this.unmatchedControlResponses.clear();
+      for (let { reject } of this.pendingMcpResponses.values()) reject(s);
+      this.pendingMcpResponses.clear();
+      this.hookCallbacks.clear();
+      for (let { transport } of this.sdkMcpServers.values()) transport.close().catch(() => {});
+      this.sdkMcpServers.clear();
+      if (e) this.inputStream.error(e);
       else this.inputStream.done();
     } catch (error) {}
     if (this.transport.waitForExit) {
@@ -223,10 +260,12 @@ class Query {
     return this.sdkMessages.next(...[e]);
   }
   async return(e) {
-    return (await this.cleanup(), this.sdkMessages.return(e));
+    await this.cleanup();
+    return this.sdkMessages.return(e);
   }
   async throw(e) {
-    return (await this.cleanup(), this.sdkMessages.throw(e));
+    await this.cleanup();
+    return this.sdkMessages.throw(e);
   }
   [Symbol.asyncIterator]() {
     return this.sdkMessages;
@@ -243,7 +282,7 @@ class Query {
           else {
             if (this.unmatchedControlResponses.size >= Query.UNMATCHED_CONTROL_RESPONSES_MAX) {
               let r = this.unmatchedControlResponses.keys().next().value;
-              if (r !== void 0) this.unmatchedControlResponses.delete(r);
+              if (r !== undefined) this.unmatchedControlResponses.delete(r);
             }
             this.unmatchedControlResponses.set(e.response.request_id, e.response);
           }
@@ -257,7 +296,11 @@ class Query {
         } else if (e.type === "keep_alive") {
           if (STARTUP_MARK in e) {
             let s = e[STARTUP_MARK];
-            if (typeof s === "string" && s.length <= OMi) this.startupMark = { mark: s, atMs: Date.now() };
+            if (typeof s === "string" && s.length <= MAX_MARK_NAME_CHARS)
+              this.startupMark = {
+                mark: s,
+                atMs: Date.now(),
+              };
           }
           continue;
         } else if (e.type === "transcript_mirror") {
@@ -292,47 +335,49 @@ class Query {
                   .map((error) => error.trim())
                   .filter(Boolean)
                   .join("; ")
-            : void 0;
+            : undefined;
+          this.lastErrorResultText = s || undefined;
+          this.lastStartupFailureReason =
+            e.is_error && "startup_failure_reason" in e && typeof e.startup_failure_reason === "string"
+              ? e.startup_failure_reason
+              : undefined;
+          this.modelLessTurnEnded =
+            e.subtype === "success" && !e.is_error && e.num_turns === 0 && e.result === "";
+          if (!this.modelLessTurnEnded) this.errorTextBeforeModelLessTurns = this.lastErrorResultText;
+          this.resultReceived = true;
           if (
-            ((this.lastErrorResultText = s || void 0),
-            (this.lastStartupFailureReason =
-              e.is_error && "startup_failure_reason" in e && typeof e.startup_failure_reason === "string"
-                ? e.startup_failure_reason
-                : void 0),
-            (this.modelLessTurnEnded =
-              e.subtype === "success" && !e.is_error && e.num_turns === 0 && e.result === ""),
-            !this.modelLessTurnEnded)
-          )
-            this.errorTextBeforeModelLessTurns = this.lastErrorResultText;
-          if (
-            ((this.resultReceived = !0),
-            this.sessionState === void 0 || this.sessionState === "idle" || !this.hasBidirectionalNeeds())
+            this.sessionState === undefined ||
+            this.sessionState === "idle" ||
+            !this.hasBidirectionalNeeds()
           )
             this.endRun();
           else this.armRunEndCeiling();
         } else if (e.type === "system" && e.subtype === "session_state_changed") {
-          if (((this.sessionState = e.state), e.state === "idle")) {
+          this.sessionState = e.state;
+          if (e.state === "idle") {
             if (this.resultReceived) this.endRun();
           } else if (!(this.isSingleUserTurn && this.runEnded)) {
-            if (((this.runEnded = !1), e.state === "requires_action")) this.clearRunEndCeiling();
+            this.runEnded = false;
+            if (e.state === "requires_action") this.clearRunEndCeiling();
             else if (this.resultReceived) this.armRunEndCeiling();
           }
-          if ("sdk_host_only" in e && e.sdk_host_only === !0) continue;
+          if ("sdk_host_only" in e && e.sdk_host_only === true) continue;
         } else {
-          if (
-            ((this.lastErrorResultText = void 0),
-            (this.lastStartupFailureReason = void 0),
-            e.type === "system" && e.subtype === "init")
-          )
-            this.modelLessTurnEnded = !1;
-          else if (e.type !== "system" || e.subtype === "compact_boundary")
-            ((this.errorTextBeforeModelLessTurns = void 0), (this.modelLessTurnEnded = !1));
+          this.lastErrorResultText = undefined;
+          this.lastStartupFailureReason = undefined;
+          if (e.type === "system" && e.subtype === "init") this.modelLessTurnEnded = false;
+          else if (e.type !== "system" || e.subtype === "compact_boundary") {
+            this.errorTextBeforeModelLessTurns = undefined;
+            this.modelLessTurnEnded = false;
+          }
           if (
             (e.type === "assistant" || e.type === "stream_event") &&
             e.parent_tool_use_id === null &&
             !(this.isSingleUserTurn && this.runEnded)
-          )
-            ((this.runEnded = !1), this.clearRunEndCeiling());
+          ) {
+            this.runEnded = false;
+            this.clearRunEndCeiling();
+          }
         }
         try {
           this.frameObserver?.(e);
@@ -344,25 +389,28 @@ class Query {
         this.inputStream.enqueue(e);
       }
       if (this.transcriptMirrorBatcher) await this.transcriptMirrorBatcher.flush();
-      (this.inputStream.done(), this.cleanup());
+      this.inputStream.done();
+      this.cleanup();
     } catch (error) {
       if (this.transcriptMirrorBatcher) await this.transcriptMirrorBatcher.flush();
       let s =
-        this.lastErrorResultText ?? (this.modelLessTurnEnded ? this.errorTextBeforeModelLessTurns : void 0);
-      if (s !== void 0 && !(error instanceof HookConfigError) && error?.name !== "SSEHttpError") {
+        this.lastErrorResultText ??
+        (this.modelLessTurnEnded ? this.errorTextBeforeModelLessTurns : undefined);
+      if (s !== undefined && !(error instanceof HookConfigError) && error?.name !== "SSEHttpError") {
         let r = withTelemetryFacts(Error(`Claude Code returned an error result: ${s}`), {
           telemetryMessage: "Claude Code returned an error result",
           errorClass: "error_result",
           startupFailureReason: this.lastStartupFailureReason,
         });
-        (logForDebugging(
+        logForDebugging(
           `[Query.readMessages] Replacing exit error with result text. Original: ${errorMessage(error)}`,
-        ),
-          this.inputStream.error(r),
-          this.cleanup(r));
+        );
+        this.inputStream.error(r);
+        this.cleanup(r);
         return;
       }
-      (this.inputStream.error(error), this.cleanup(error));
+      this.inputStream.error(error);
+      this.cleanup(error);
     }
   }
   async handleControlRequest(e) {
@@ -383,12 +431,16 @@ class Query {
     try {
       let r;
       try {
-        let processControlRequest = await this.processControlRequest(e, abortController.signal);
+        let n = await this.processControlRequest(e, abortController.signal);
         if (this.cleanupPerformed) return;
-        if (processControlRequest === le) return;
+        if (n === le) return;
         let i = {
           type: "control_response",
-          response: { subtype: "success", request_id: e.request_id, response: processControlRequest },
+          response: {
+            subtype: "success",
+            request_id: e.request_id,
+            response: n,
+          },
         };
         r =
           jsonStringify(i) +
@@ -398,7 +450,11 @@ class Query {
         if (this.cleanupPerformed) return;
         let i = {
           type: "control_response",
-          response: { subtype: "error", request_id: e.request_id, error: errorMessage(error) },
+          response: {
+            subtype: "error",
+            request_id: e.request_id,
+            error: errorMessage(error),
+          },
         };
         r =
           jsonStringify(i) +
@@ -419,85 +475,108 @@ class Query {
   }
   handleControlCancelRequest(e) {
     let s = this.cancelControllers.get(e.request_id);
-    if (s) (s.abort(), this.cancelControllers.delete(e.request_id));
+    if (s) {
+      s.abort();
+      this.cancelControllers.delete(e.request_id);
+    }
   }
   async processControlRequest(e, s) {
-    if (_Ce.some((r) => r === e.request.subtype))
-      return (
-        logForDebugging(
-          `[Query.processControlRequest] ${e.request.subtype} ${e.request_id} is for the machine serving this session's tools \u2014 leaving it unanswered`,
-        ),
-        le
+    if (REMOTE_TOOLS_LOG_EVENTS.some((r) => r === e.request.subtype)) {
+      logForDebugging(
+        `[Query.processControlRequest] ${e.request.subtype} ${e.request_id} is for the machine serving this session's tools \u2014 leaving it unanswered`,
       );
+      return le;
+    }
     if (e.request.subtype === "can_use_tool") {
       if (!this.canUseTool) throw Error("canUseTool callback is not provided.");
-      let computer_folder = e.request.computer_folder,
-        canUseTool = await this.canUseTool(e.request.tool_name, e.request.input, {
-          signal: s,
-          suggestions: e.request.permission_suggestions,
-          blockedPath: e.request.blocked_path,
-          ...(e.request.mcp_server && {
-            mcpServer: { name: e.request.mcp_server.name, source: e.request.mcp_server.source },
-          }),
-          decisionReason: e.request.decision_reason,
-          ...(typeof e.request.decision_reason_type === "string" && {
-            decisionReasonType: e.request.decision_reason_type,
-          }),
-          ...(typeof e.request.decision_reason_code === "string" && {
-            decisionReasonCode: e.request.decision_reason_code,
-          }),
-          ...(typeof e.request.server_policy_ask_only === "boolean" && {
-            serverPolicyAskOnly: e.request.server_policy_ask_only,
-          }),
-          title: e.request.title,
-          displayName: e.request.display_name,
-          description: e.request.description,
-          defaultToNo: e.request.default_to_no,
-          suppressAlwaysAllowRule: e.request.suppress_always_allow_rule,
-          toolUseID: e.request.tool_use_id,
-          agentID: e.request.agent_id,
-          ...(typeof e.request.plugin === "string" && { plugin: e.request.plugin }),
-          requestId: e.request_id,
-          ...(typeof e.request.requires_user_interaction === "boolean" && {
-            requiresUserInteraction: e.request.requires_user_interaction,
-          }),
-          ...(typeof e.request.server_prompt === "string" && { serverPrompt: e.request.server_prompt }),
-          ...(typeof computer_folder === "object" &&
-            computer_folder !== null &&
-            "path" in computer_folder &&
-            typeof computer_folder.path === "string" &&
-            "computer_name" in computer_folder &&
-            typeof computer_folder.computer_name === "string" && {
-              computerFolder: { path: computer_folder.path, computer_name: computer_folder.computer_name },
-            }),
-          ...(e.request.matched_ask_rule && {
-            matchedAskRule: {
-              source: e.request.matched_ask_rule.source,
-              toolName: e.request.matched_ask_rule.tool_name,
-              ...(e.request.matched_ask_rule.rule_content !== void 0 && {
-                ruleContent: e.request.matched_ask_rule.rule_content,
-              }),
+      let computerFolder = e.request.computer_folder;
+      let n = await this.canUseTool(e.request.tool_name, e.request.input, {
+        signal: s,
+        suggestions: e.request.permission_suggestions,
+        blockedPath: e.request.blocked_path,
+        ...(e.request.mcp_server && {
+          mcpServer: {
+            name: e.request.mcp_server.name,
+            source: e.request.mcp_server.source,
+          },
+        }),
+        decisionReason: e.request.decision_reason,
+        ...(typeof e.request.decision_reason_type === "string" && {
+          decisionReasonType: e.request.decision_reason_type,
+        }),
+        ...(typeof e.request.decision_reason_code === "string" && {
+          decisionReasonCode: e.request.decision_reason_code,
+        }),
+        ...(typeof e.request.server_policy_ask_only === "boolean" && {
+          serverPolicyAskOnly: e.request.server_policy_ask_only,
+        }),
+        title: e.request.title,
+        displayName: e.request.display_name,
+        description: e.request.description,
+        defaultToNo: e.request.default_to_no,
+        suppressAlwaysAllowRule: e.request.suppress_always_allow_rule,
+        toolUseID: e.request.tool_use_id,
+        agentID: e.request.agent_id,
+        ...(typeof e.request.plugin === "string" && {
+          plugin: e.request.plugin,
+        }),
+        requestId: e.request_id,
+        ...(typeof e.request.requires_user_interaction === "boolean" && {
+          requiresUserInteraction: e.request.requires_user_interaction,
+        }),
+        ...(typeof e.request.server_prompt === "string" && {
+          serverPrompt: e.request.server_prompt,
+        }),
+        ...(typeof computerFolder === "object" &&
+          computerFolder !== null &&
+          "path" in computerFolder &&
+          typeof computerFolder.path === "string" &&
+          "computer_name" in computerFolder &&
+          typeof computerFolder.computer_name === "string" && {
+            computerFolder: {
+              path: computerFolder.path,
+              computer_name: computerFolder.computer_name,
             },
           }),
-        });
-      if (canUseTool === null) return le;
-      return { ...canUseTool, toolUseID: e.request.tool_use_id };
+        ...(e.request.matched_ask_rule && {
+          matchedAskRule: {
+            source: e.request.matched_ask_rule.source,
+            toolName: e.request.matched_ask_rule.tool_name,
+            ...(e.request.matched_ask_rule.rule_content !== undefined && {
+              ruleContent: e.request.matched_ask_rule.rule_content,
+            }),
+          },
+        }),
+      });
+      if (n === null) return le;
+      return {
+        ...n,
+        toolUseID: e.request.tool_use_id,
+      };
     } else if (e.request.subtype === "hook_callback")
       return await this.handleHookCallbacks(e.request.callback_id, e.request.input, e.request.tool_use_id, s);
     else if (e.request.subtype === "mcp_message") {
-      let request = e.request,
-        n = this.sdkMcpServers.get(request.server_name)?.transport;
-      if (!n) throw Error(`SDK MCP server not found: ${request.server_name}`);
-      if (R4n(request.message))
-        return { mcp_response: await this.handleMcpControlRequest(request.server_name, request, n) };
+      let request = e.request;
+      let transport = this.sdkMcpServers.get(request.server_name)?.transport;
+      if (!transport) throw Error(`SDK MCP server not found: ${request.server_name}`);
+      if (isJsonRpcRequest(request.message))
+        return {
+          mcp_response: await this.handleMcpControlRequest(request.server_name, request, transport),
+        };
       else {
-        if (n.onmessage) n.onmessage(request.message);
-        return { mcp_response: { jsonrpc: "2.0", result: {}, id: 0 } };
+        if (transport.onmessage) transport.onmessage(request.message);
+        return {
+          mcp_response: {
+            jsonrpc: "2.0",
+            result: {},
+            id: 0,
+          },
+        };
       }
     } else if (e.request.subtype === "elicitation") {
       let request = e.request;
       if (this.onElicitation) {
-        let onElicitation = await this.onElicitation(
+        let n = await this.onElicitation(
           {
             serverName: request.mcp_server_name,
             message: request.message,
@@ -509,95 +588,149 @@ class Query {
             displayName: request.display_name,
             description: request.description,
           },
-          { signal: s, requestId: e.request_id },
+          {
+            signal: s,
+            requestId: e.request_id,
+          },
         );
-        if (onElicitation === null) return le;
-        return onElicitation;
+        if (n === null) return le;
+        return n;
       }
-      return { action: "decline" };
+      return {
+        action: "decline",
+      };
     } else if (e.request.subtype === "request_user_dialog") {
       if (this.onUserDialog) {
-        let onUserDialog = await this.onUserDialog(
-          { dialogKind: e.request.dialog_kind, payload: e.request.payload, toolUseID: e.request.tool_use_id },
-          { signal: s, requestId: e.request_id },
+        let r = await this.onUserDialog(
+          {
+            dialogKind: e.request.dialog_kind,
+            payload: e.request.payload,
+            toolUseID: e.request.tool_use_id,
+          },
+          {
+            signal: s,
+            requestId: e.request_id,
+          },
         );
-        if (onUserDialog === null) return le;
-        return onUserDialog;
+        if (r === null) return le;
+        return r;
       }
-      return (
-        logForDebugging(
-          `[Query] No onUserDialog handler for request_user_dialog (kind=${e.request.dialog_kind}) \u2014 staying silent so a capable client (or the worker's park deadline) settles it`,
-        ),
-        logEvent("tengu_request_user_dialog_response_ignored", { shape: fromEnum("auto_cancel") }),
-        le
+      logForDebugging(
+        `[Query] No onUserDialog handler for request_user_dialog (kind=${e.request.dialog_kind}) \u2014 staying silent so a capable client (or the worker's park deadline) settles it`,
       );
+      logEvent("tengu_request_user_dialog_response_ignored", {
+        shape: fromEnum("auto_cancel"),
+      });
+      return le;
     } else if (e.request.subtype === "oauth_token_refresh") {
       if (!this.getOAuthToken) throw Error("getOAuthToken callback is not provided.");
-      let r,
-        n =
-          (await this.getOAuthToken({
-            signal: s,
-            onDecline: (i) => {
-              if (ARi(i)) r = i;
-            },
-            ...(e.request.kind !== void 0 && { kind: e.request.kind }),
-          })) ?? null;
-      return n === null && r !== void 0 ? { accessToken: n, reason: r } : { accessToken: n };
+      let r;
+      let n =
+        (await this.getOAuthToken({
+          signal: s,
+          onDecline: (i) => {
+            if (isLauncherEndReason(i)) r = i;
+          },
+          ...(e.request.kind !== undefined && {
+            kind: e.request.kind,
+          }),
+        })) ?? null;
+      return n === null && r !== undefined
+        ? {
+            accessToken: n,
+            reason: r,
+          }
+        : {
+            accessToken: n,
+          };
     } else if (e.request.subtype === "host_auth_token_refresh") {
       if (!this.getHostAuthToken) throw Error("getHostAuthToken callback is not provided.");
-      let r = (await this.getHostAuthToken({ signal: s })) ?? null;
-      return typeof r === "string" || r === null ? { authToken: r } : r;
+      let r =
+        (await this.getHostAuthToken({
+          signal: s,
+        })) ?? null;
+      return typeof r === "string" || r === null
+        ? {
+            authToken: r,
+          }
+        : r;
     } else if (e.request.subtype === "remote_control_work_secret") {
       let workSecretAnswerer = this.workSecretAnswerer;
       if (!workSecretAnswerer) throw Error("refreshWorkSecret callback is not provided.");
       if (!Kt(workSecretAnswerer.sessionId, e.request.session_id))
         throw Error("remote_control_work_secret names a session this host did not attach.");
       return {
-        work_secret: (await workSecretAnswerer.refresh(workSecretAnswerer.sessionId, { signal: s })) || null,
+        work_secret:
+          (await workSecretAnswerer.refresh(workSecretAnswerer.sessionId, {
+            signal: s,
+          })) || null,
       };
     }
     if (e.request.subtype === "ui_copy" && this.uiHost?.copy) {
-      let { subtype: subtype, ...n } = e.request;
-      return this.uiHost.copy(n, { signal: s });
+      let { subtype, ...n } = e.request;
+      return this.uiHost.copy(n, {
+        signal: s,
+      });
     }
     if (e.request.subtype === "ui_prompt_read" && this.uiHost?.promptRead) {
-      let { subtype: subtype, ...n } = e.request;
-      return this.uiHost.promptRead(n, { signal: s });
+      let { subtype, ...n } = e.request;
+      return this.uiHost.promptRead(n, {
+        signal: s,
+      });
     }
     if (e.request.subtype === "ui_prompt_fill" && this.uiHost?.promptFill) {
-      let { subtype: subtype, ...n } = e.request;
-      return this.uiHost.promptFill(n, { signal: s });
+      let { subtype, ...n } = e.request;
+      return this.uiHost.promptFill(n, {
+        signal: s,
+      });
     }
     if (e.request.subtype === "ui_prompt_paint" && this.uiHost?.promptPaint) {
-      let { subtype: subtype, ...n } = e.request;
-      return this.uiHost.promptPaint(n, { signal: s });
+      let { subtype, ...n } = e.request;
+      return this.uiHost.promptPaint(n, {
+        signal: s,
+      });
     }
     if (e.request.subtype === "ui_prompt_suggest" && this.uiHost?.promptSuggest) {
-      let { subtype: subtype, ...n } = e.request;
-      return this.uiHost.promptSuggest(n, { signal: s });
+      let { subtype, ...n } = e.request;
+      return this.uiHost.promptSuggest(n, {
+        signal: s,
+      });
     }
     if (e.request.subtype === "ui_read_selection" && this.uiHost?.readSelection) {
-      let { subtype: subtype, ...n } = e.request;
-      return this.uiHost.readSelection(n, { signal: s });
+      let { subtype, ...n } = e.request;
+      return this.uiHost.readSelection(n, {
+        signal: s,
+      });
     }
     throw Error("Unsupported control request subtype: " + e.request.subtype);
   }
   async *readSdkMessages() {
     try {
-      for await (let e of this.inputStream) (this.transport.markDelivered?.(e), yield e);
+      for await (let e of this.inputStream) {
+        this.transport.markDelivered?.(e);
+        yield e;
+      }
     } finally {
       await this.cleanup();
     }
   }
-  async initialize({ first: e } = { first: !1 }) {
+  async initialize(
+    { first: e } = {
+      first: false,
+    },
+  ) {
     if (!e && !this.initializeHasBeenWritten) await this.initializeWritten;
-    let s, r;
+    let s;
+    let r;
     try {
-      if (e && this.initConfig?.captureSdkMcpManifests === !0 && this.sdkMcpServers.size > 0) {
+      if (e && this.initConfig?.captureSdkMcpManifests === true && this.sdkMcpServers.size > 0) {
         s = await this.captureSdkMcpServerManifests();
         for (let l of this.sdkMcpToolsChangedDuringCapture) {
-          let h = s !== void 0 && Object.hasOwn(s, l) ? s[l] : void 0;
-          if (h?.toolsListResult !== void 0) s[l] = { initializeResult: h.initializeResult };
+          let h = s !== undefined && Object.hasOwn(s, l) ? s[l] : undefined;
+          if (h?.toolsListResult !== undefined)
+            s[l] = {
+              initializeResult: h.initializeResult,
+            };
         }
       }
       this.sdkMcpToolsChangedDuringCapture.clear();
@@ -607,48 +740,55 @@ class Query {
       try {
         r = this.request(initializeRequest);
       } finally {
-        this.writingFirstInitialize = !1;
+        this.writingFirstInitialize = false;
       }
     } finally {
       if (e) this.markInitializeWritten();
     }
     let response = (await r).response;
     if (
-      this.initConfig?.plugins !== void 0 &&
+      this.initConfig?.plugins !== undefined &&
       this.initConfig.plugins.length > 0 &&
-      response.plugins_applied !== !0
+      response.plugins_applied !== true
     )
       logForDebugging(
         `[Query.initialize] Claude Code reported plugins_applied=${String(response.plugins_applied)} for ${this.initConfig.plugins.length} plugins sent with pluginDelivery 'initialize'; the process is running with the plugins it was launched with.`,
-        { level: "warn" },
+        {
+          level: "warn",
+        },
       );
     return response;
   }
-  buildInitializeRequest(e) {
+  buildInitializeRequest(sdkMcpServerManifests) {
     if (this.hooks && !this.initHooksPayload) {
       this.initHooksPayload = {};
-      for (let [m, l] of Object.entries(this.hooks))
-        if (l.length > 0)
-          this.initHooksPayload[m] = l.map((h) => {
+      for (let [key, value] of Object.entries(this.hooks))
+        if (value.length > 0)
+          this.initHooksPayload[key] = value.map((h) => {
             let S = [];
             for (let hook of h.hooks) {
               let w = `hook_${this.nextCallbackId++}`;
-              (this.hookCallbacks.set(w, hook), S.push(w));
+              this.hookCallbacks.set(w, hook);
+              S.push(w);
             }
-            return { matcher: h.matcher, hookCallbackIds: S, timeout: h.timeout };
+            return {
+              matcher: h.matcher,
+              hookCallbackIds: S,
+              timeout: h.timeout,
+            };
           });
     }
-    let s = this.sdkMcpServers.size > 0 ? Array.from(this.sdkMcpServers.keys()) : void 0,
-      flattened = Array.from(this.sdkMcpServers).flatMap(([m, { settings: l }]) =>
-        Object.keys(l).length > 0 ? [[m, l]] : [],
-      ),
-      n = flattened.length > 0 ? Object.fromEntries(flattened) : void 0;
+    let sdkMcpServers = this.sdkMcpServers.size > 0 ? Array.from(this.sdkMcpServers.keys()) : undefined;
+    let flattened = Array.from(this.sdkMcpServers).flatMap(([m, { settings: l }]) =>
+      Object.keys(l).length > 0 ? [[m, l]] : [],
+    );
+    let sdkMcpServerConfigs = flattened.length > 0 ? Object.fromEntries(flattened) : undefined;
     return {
       subtype: "initialize",
       hooks: this.initHooksPayload,
-      sdkMcpServers: s,
-      sdkMcpServerConfigs: n,
-      sdkMcpServerManifests: e,
+      sdkMcpServers,
+      sdkMcpServerConfigs,
+      sdkMcpServerManifests,
       jsonSchema: this.jsonSchema,
       systemPrompt:
         typeof this.initConfig?.systemPrompt === "string"
@@ -663,7 +803,7 @@ class Query {
       excludeDynamicSections: this.initConfig?.excludeDynamicSections,
       agents: this.initConfig?.agents,
       title: this.initConfig?.title,
-      skills: Array.isArray(this.initConfig?.skills) ? this.initConfig.skills : void 0,
+      skills: Array.isArray(this.initConfig?.skills) ? this.initConfig.skills : undefined,
       webSearchIsolationExemptMcpServers: this.initConfig?.webSearchIsolationExemptMcpServers,
       promptSuggestions: this.initConfig?.promptSuggestions,
       agentProgressSummaries: this.initConfig?.agentProgressSummaries,
@@ -677,325 +817,429 @@ class Query {
     };
   }
   async captureSdkMcpServerManifests() {
-    let startTime = performance.now(),
-      s = new Map(),
-      r = !1,
-      n = async (b, R) => {
-        try {
-          if ((await this.sdkMcpServers.get(b)?.connection, r)) return;
-          let handleMcpControlRequest = await this.handleMcpControlRequest(
+    let startTime = performance.now();
+    let s = new Map();
+    let r = false;
+    let n = async (b, R) => {
+      try {
+        await this.sdkMcpServers.get(b)?.connection;
+        if (r) return;
+        let T = await this.handleMcpControlRequest(
+          b,
+          {
+            server_name: b,
+            message: {
+              jsonrpc: "2.0",
+              id: SDK_MANIFEST_CAPTURE + "initialize",
+              method: "initialize",
+              params: {
+                protocolVersion: MCP_PROTOCOL_LATEST,
+                capabilities: T_t,
+                clientInfo: {
+                  ...A_t,
+                  version:
+                    {
+                      ISSUES_EXPLAINER:
+                        "report the issue at https://github.com/anthropics/claude-code/issues",
+                      PACKAGE_URL: "@anthropic-ai/claude-code",
+                      README_URL: "https://code.claude.com/docs/en/overview",
+                      VERSION: "2.1.316",
+                      FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
+                      BUILD_TIME: "2026-10-30T23:28:13Z",
+                      GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+                      HOOKS_WORKER_URL:
+                        import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
+                      DD_SOURCEMAP_GROUP: "default",
+                    }.VERSION ?? "unknown",
+                },
+              },
+            },
+          },
+          R,
+        );
+        if (r) return;
+        if (!("result" in T)) {
+          logForDebugging(
+            `[Query.captureSdkMcpServerManifests] '${b}' answered initialize with an error; leaving it to the CLI: ${jsonStringify(T)}`,
+            {
+              level: "warn",
+            },
+          );
+          return;
+        }
+        let E = T.result;
+        R.onmessage?.({
+          jsonrpc: "2.0",
+          method: "notifications/initialized",
+        });
+        let capabilities = E.capabilities;
+        let D =
+          typeof capabilities === "object" &&
+          capabilities !== null &&
+          "tools" in capabilities &&
+          capabilities.tools !== undefined &&
+          capabilities.tools !== null;
+        let F;
+        if (D) {
+          let G = await this.handleMcpControlRequest(
             b,
             {
               server_name: b,
               message: {
                 jsonrpc: "2.0",
-                id: SDK_MANIFEST_CAPTURE + "initialize",
-                method: "initialize",
-                params: {
-                  protocolVersion: MCP_PROTOCOL_LATEST,
-                  capabilities: freeze,
-                  clientInfo: {
-                    ...freeze_2,
-                    version:
-                      {
-                        ISSUES_EXPLAINER:
-                          "report the issue at https://github.com/anthropics/claude-code/issues",
-                        PACKAGE_URL: "@anthropic-ai/claude-code",
-                        README_URL: "https://code.claude.com/docs/en/overview",
-                        VERSION: "2.1.316",
-                        FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-                        BUILD_TIME: "2026-10-30T23:28:13Z",
-                        GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
-                        HOOKS_WORKER_URL:
-                          import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
-                        DD_SOURCEMAP_GROUP: "default",
-                      }.VERSION ?? "unknown",
-                  },
-                },
+                id: SDK_MANIFEST_CAPTURE + "tools-list",
+                method: "tools/list",
               },
             },
             R,
           );
           if (r) return;
-          if (!("result" in handleMcpControlRequest)) {
+          if (!("result" in G)) {
             logForDebugging(
-              `[Query.captureSdkMcpServerManifests] '${b}' answered initialize with an error; leaving it to the CLI: ${jsonStringify(handleMcpControlRequest)}`,
-              { level: "warn" },
+              `[Query.captureSdkMcpServerManifests] '${b}' answered tools/list with an error; leaving it to the CLI: ${jsonStringify(G)}`,
+              {
+                level: "warn",
+              },
             );
             return;
           }
-          let E = handleMcpControlRequest.result;
-          R.onmessage?.({ jsonrpc: "2.0", method: "notifications/initialized" });
-          let capabilities = E.capabilities,
-            D =
-              typeof capabilities === "object" &&
-              capabilities !== null &&
-              "tools" in capabilities &&
-              capabilities.tools !== void 0 &&
-              capabilities.tools !== null,
-            F;
-          if (D) {
-            let handleMcpControlRequest = await this.handleMcpControlRequest(
-              b,
-              {
-                server_name: b,
-                message: { jsonrpc: "2.0", id: SDK_MANIFEST_CAPTURE + "tools-list", method: "tools/list" },
-              },
-              R,
-            );
-            if (r) return;
-            if (!("result" in handleMcpControlRequest)) {
-              logForDebugging(
-                `[Query.captureSdkMcpServerManifests] '${b}' answered tools/list with an error; leaving it to the CLI: ${jsonStringify(handleMcpControlRequest)}`,
-                { level: "warn" },
-              );
-              return;
-            }
-            if (handleMcpControlRequest.result.nextCursor === void 0) F = handleMcpControlRequest.result;
-          }
-          let Q = jsonParse(
-            jsonStringify(
-              F === void 0 ? { initializeResult: E } : { initializeResult: E, toolsListResult: F },
-            ),
-          );
-          s.set(b, { transport: R, manifest: Q });
-        } catch (error) {
-          if (!r)
-            logForDebugging(
-              `[Query.captureSdkMcpServerManifests] '${b}': ${error}; the CLI will handshake it over the control channel`,
-              { level: "warn" },
-            );
+          if (G.result.nextCursor === undefined) F = G.result;
         }
-      },
-      list = Array.from(this.sdkMcpServers, ([b, { transport: R }]) => n(b, R)),
-      m = Promise.all(list).then(() => "settled"),
-      promise = new Promise((b) => {
-        this.stopSdkMcpManifestCapture = () => b("closed");
-      }),
-      h = await withDeadline(Promise.race([m, promise]), Ft);
-    ((r = !0), (this.stopSdkMcpManifestCapture = void 0));
-    let rounded = Math.round(performance.now() - startTime),
-      y = { servers: list.length, captured: s.size, elapsed_ms: rounded };
+        let manifest = jsonParse(
+          jsonStringify(
+            F === undefined
+              ? {
+                  initializeResult: E,
+                }
+              : {
+                  initializeResult: E,
+                  toolsListResult: F,
+                },
+          ),
+        );
+        s.set(b, {
+          transport: R,
+          manifest,
+        });
+      } catch (error) {
+        if (!r)
+          logForDebugging(
+            `[Query.captureSdkMcpServerManifests] '${b}': ${error}; the CLI will handshake it over the control channel`,
+            {
+              level: "warn",
+            },
+          );
+      }
+    };
+    let list = Array.from(this.sdkMcpServers, ([b, { transport: R }]) => n(b, R));
+    let m = Promise.all(list).then(() => "settled");
+    let promise = new Promise((resolve) => {
+      this.stopSdkMcpManifestCapture = () => resolve("closed");
+    });
+    let h = await withDeadline(Promise.race([m, promise]), Ft);
+    r = true;
+    this.stopSdkMcpManifestCapture = undefined;
+    let rounded = Math.round(performance.now() - startTime);
+    let y = {
+      servers: list.length,
+      captured: s.size,
+      elapsed_ms: rounded,
+    };
     if (h === "closed") {
       logFeatureSad("sdk_mcp_manifest_capture", "closed", y);
       return;
     }
-    if (h === void 0)
-      (logForDebugging(
+    if (h === undefined) {
+      logForDebugging(
         `[Query.captureSdkMcpServerManifests] ${s.size}/${list.length} in-process MCP servers captured within ${Ft} ms; the rest will handshake over the control channel`,
-        { level: "warn" },
-      ),
-        logFeatureSad("sdk_mcp_manifest_capture", "deadline", y));
-    else if (s.size < list.length) logFeatureSad("sdk_mcp_manifest_capture", "partial", y);
+        {
+          level: "warn",
+        },
+      );
+      logFeatureSad("sdk_mcp_manifest_capture", "deadline", y);
+    } else if (s.size < list.length) logFeatureSad("sdk_mcp_manifest_capture", "partial", y);
     else logFeatureOk("sdk_mcp_manifest_capture", y);
     if (s.size === 0) return;
-    let fromEntries = Object.fromEntries(
+    let w = Object.fromEntries(
       Array.from(this.sdkMcpServers).flatMap(([b, R]) => {
         let T = s.get(b);
-        return T !== void 0 && T.transport === R.transport ? [[b, T.manifest]] : [];
+        return T !== undefined && T.transport === R.transport ? [[b, T.manifest]] : [];
       }),
     );
-    if (Object.keys(fromEntries).length === 0) return;
-    return (
-      logForDebugging(
-        `[Query.captureSdkMcpServerManifests] manifests for [${Object.keys(fromEntries).join(", ")}] captured in ${rounded} ms`,
-      ),
-      fromEntries
+    if (Object.keys(w).length === 0) return;
+    logForDebugging(
+      `[Query.captureSdkMcpServerManifests] manifests for [${Object.keys(w).join(", ")}] captured in ${rounded} ms`,
     );
+    return w;
   }
   async interrupt(e) {
     return withFeatureTelemetry("sdk_interrupt", async () => {
-      let request = await this.request({
-          subtype: "interrupt",
-          ...(e?.cancelQueued === !0 && { cancel_queued: !0 }),
+      let s = await this.request({
+        subtype: "interrupt",
+        ...(e?.cancelQueued === true && {
+          cancel_queued: true,
         }),
-        r = request.response?.still_queued;
-      if (!Array.isArray(r)) return;
-      let n = request.response?.cancelled;
+      });
+      let stillQueued = s.response?.still_queued;
+      if (!Array.isArray(stillQueued)) return;
+      let cancelled = s.response?.cancelled;
       return {
-        still_queued: r.filter((i) => typeof i === "string"),
-        ...(Array.isArray(n) && { cancelled: n.filter((i) => typeof i === "string") }),
+        still_queued: stillQueued.filter((i) => typeof i === "string"),
+        ...(Array.isArray(cancelled) && {
+          cancelled: cancelled.filter((i) => typeof i === "string"),
+        }),
       };
     });
   }
-  async setPermissionMode(e) {
-    await this.request({ subtype: "set_permission_mode", mode: e });
+  async setPermissionMode(mode) {
+    await this.request({
+      subtype: "set_permission_mode",
+      mode,
+    });
   }
   startupMarkReached() {
     let startupMark = this.startupMark;
     return (
-      startupMark && { mark: startupMark.mark, ageMs: Math.max(0, Math.round(Date.now() - startupMark.atMs)) }
+      startupMark && {
+        mark: startupMark.mark,
+        ageMs: Math.max(0, Math.round(Date.now() - startupMark.atMs)),
+      }
     );
   }
-  setUiHost(e) {
-    this.uiHost = e;
+  setUiHost(uiHost) {
+    this.uiHost = uiHost;
   }
-  async setMcpPermissionModeOverride(e, s) {
+  async setMcpPermissionModeOverride(serverName, mode) {
     return (
-      (await this.request({ subtype: "set_mcp_permission_mode_override", serverName: e, mode: s }))
-        .response ?? {}
+      (
+        await this.request({
+          subtype: "set_mcp_permission_mode_override",
+          serverName,
+          mode,
+        })
+      ).response ?? {}
     );
   }
   async setChromeBrowserHints(e) {
-    await this.request({ subtype: "set_chrome_browser_hints", ...e });
+    await this.request({
+      subtype: "set_chrome_browser_hints",
+      ...e,
+    });
   }
-  async setPromptSuggestionsPaused(e) {
-    await this.request({ subtype: "set_prompt_suggestions_paused", paused: e });
+  async setPromptSuggestionsPaused(paused) {
+    await this.request({
+      subtype: "set_prompt_suggestions_paused",
+      paused,
+    });
   }
   awaitControlResponse(e) {
-    return (
-      this.transport.expectControlResponse?.(e),
-      new Promise((s, r) => {
-        let n = (m) => {
-          if (m.subtype === "success") {
-            let {
-              pending_permission_requests: pending_permission_requests,
-              pending_user_dialog_requests: pending_user_dialog_requests,
-              pending_elicitation_requests: pending_elicitation_requests,
-              ...y
-            } = m;
-            s(y);
-          } else
-            r(
-              new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-                m.error,
-                "awaitControlResponse: CLI error verdict",
-              ),
-            );
-          if (
-            m.pending_permission_requests ||
-            m.pending_user_dialog_requests ||
-            m.pending_elicitation_requests
-          )
-            logForDebugging("[Query] Ignoring prompt-redelivery fields on awaitControlResponse response");
-        };
-        if (this.cleanupPerformed) {
-          r(st());
-          return;
-        }
-        let i = this.unmatchedControlResponses.get(e);
-        if (i) {
-          (this.unmatchedControlResponses.delete(e), n(i));
-          return;
-        }
-        this.pendingControlResponses.set(e, {
-          handler: (m) => {
-            (this.pendingControlResponses.delete(e), n(m));
-          },
-          reject: r,
-        });
-      })
-    );
+    this.transport.expectControlResponse?.(e);
+    return new Promise((resolve, reject) => {
+      let n = (m) => {
+        if (m.subtype === "success") {
+          let {
+            pending_permission_requests: pendingPermissionRequests,
+            pending_user_dialog_requests: pendingUserDialogRequests,
+            pending_elicitation_requests: pendingElicitationRequests,
+            ...y
+          } = m;
+          resolve(y);
+        } else
+          reject(
+            new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
+              m.error,
+              "awaitControlResponse: CLI error verdict",
+            ),
+          );
+        if (m.pending_permission_requests || m.pending_user_dialog_requests || m.pending_elicitation_requests)
+          logForDebugging("[Query] Ignoring prompt-redelivery fields on awaitControlResponse response");
+      };
+      if (this.cleanupPerformed) {
+        reject(st());
+        return;
+      }
+      let i = this.unmatchedControlResponses.get(e);
+      if (i) {
+        this.unmatchedControlResponses.delete(e);
+        n(i);
+        return;
+      }
+      this.pendingControlResponses.set(e, {
+        handler: (m) => {
+          this.pendingControlResponses.delete(e);
+          n(m);
+        },
+        reject,
+      });
+    });
   }
-  async setModel(e) {
-    await this.request({ subtype: "set_model", model: e });
+  async setModel(model) {
+    await this.request({
+      subtype: "set_model",
+      model,
+    });
   }
-  async setMaxThinkingTokens(e, s) {
-    await this.request({ subtype: "set_max_thinking_tokens", max_thinking_tokens: e, thinking_display: s });
+  async setMaxThinkingTokens(maxThinkingTokens, thinkingDisplay) {
+    await this.request({
+      subtype: "set_max_thinking_tokens",
+      max_thinking_tokens: maxThinkingTokens,
+      thinking_display: thinkingDisplay,
+    });
   }
-  async applyFlagSettings(e) {
+  async applyFlagSettings(settings) {
     return withFeatureTelemetry("sdk_apply_flag_settings", async () => {
-      await this.request({ subtype: "apply_flag_settings", settings: e });
+      await this.request({
+        subtype: "apply_flag_settings",
+        settings,
+      });
     });
   }
   async getSettings() {
-    return (await this.request({ subtype: "get_settings" })).response;
+    return (
+      await this.request({
+        subtype: "get_settings",
+      })
+    ).response;
   }
   async getHooksListing() {
-    return (await this.request({ subtype: "get_hooks_listing" })).response;
+    return (
+      await this.request({
+        subtype: "get_hooks_listing",
+      })
+    ).response;
   }
-  async getTaskOutput(e) {
-    return (await this.request({ subtype: "get_task_output", task_id: e })).response;
+  async getTaskOutput(taskId) {
+    return (
+      await this.request({
+        subtype: "get_task_output",
+        task_id: taskId,
+      })
+    ).response;
   }
   async listPermissionRules() {
-    return (await this.request({ subtype: "list_permission_rules" })).response;
+    return (
+      await this.request({
+        subtype: "list_permission_rules",
+      })
+    ).response;
   }
-  async updateSettings(e, s) {
+  async updateSettings(source, settings) {
     return withFeatureTelemetry("sdk_update_settings", async () => {
-      await this.request({ subtype: "update_settings", source: e, settings: s });
+      await this.request({
+        subtype: "update_settings",
+        source,
+        settings,
+      });
     });
   }
-  async rewindFiles(e, s) {
+  async rewindFiles(userMessageId, s) {
     return withFeatureTelemetry(
       "sdk_rewind_files",
       async () =>
-        (await this.request({ subtype: "rewind_files", user_message_id: e, dry_run: s?.dryRun })).response,
+        (
+          await this.request({
+            subtype: "rewind_files",
+            user_message_id: userMessageId,
+            dry_run: s?.dryRun,
+          })
+        ).response,
     );
   }
-  async cancelAsyncMessage(e) {
-    return (await this.request({ subtype: "cancel_async_message", message_uuid: e })).response.cancelled;
+  async cancelAsyncMessage(messageUuid) {
+    return (
+      await this.request({
+        subtype: "cancel_async_message",
+        message_uuid: messageUuid,
+      })
+    ).response.cancelled;
   }
-  async seedReadState(e, s) {
-    await this.request({ subtype: "seed_read_state", path: e, mtime: s });
+  async seedReadState(path, mtime) {
+    await this.request({
+      subtype: "seed_read_state",
+      path,
+      mtime,
+    });
   }
-  async setCwd(e, s) {
+  async setCwd(path, s) {
     return withFeatureTelemetry(
       "sdk_set_cwd",
       async () =>
         (
           await this.request({
             subtype: "set_cwd",
-            path: e,
-            ...(s?.trustAccepted !== void 0 && { trust_accepted: s.trustAccepted }),
-            ...(s?.trustedDirectory !== void 0 && { trusted_directory: s.trustedDirectory }),
+            path,
+            ...(s?.trustAccepted !== undefined && {
+              trust_accepted: s.trustAccepted,
+            }),
+            ...(s?.trustedDirectory !== undefined && {
+              trusted_directory: s.trustedDirectory,
+            }),
           })
         ).response,
     );
   }
   async claimSession(e) {
     let s = withFeatureTelemetry(
-        "sdk_claim_session",
-        async () =>
-          (
-            await this.request({
-              subtype: "claim_session",
-              ...e,
-              include_initialize: e.include_initialize ?? !0,
-            })
-          ).response,
-      ),
-      initialization = this.initialization;
-    return (
-      (this.initialization = s.then(
-        async (n) => {
-          if (n?.initialize === void 0) return initialization;
-          let initialize = n.initialize,
-            m = await initialization.then(
-              (y) => ({
-                hooks_applied: y.hooks_applied,
-                plugins_applied: y.plugins_applied,
-                code_running_mcp_tools_applied: y.code_running_mcp_tools_applied,
-              }),
-              () => ({
-                hooks_applied: void 0,
-                plugins_applied: void 0,
-                code_running_mcp_tools_applied: void 0,
-              }),
-            ),
-            l = initialize.hooks_applied ?? m.hooks_applied,
-            h = initialize.plugins_applied ?? m.plugins_applied,
-            S = initialize.code_running_mcp_tools_applied ?? m.code_running_mcp_tools_applied;
-          return {
-            ...initialize,
-            ...(l !== void 0 && { hooks_applied: l }),
-            ...(h !== void 0 && { plugins_applied: h }),
-            ...(S !== void 0 && { code_running_mcp_tools_applied: S }),
-          };
-        },
-        () => initialization,
-      )),
-      this.initialization.catch(() => {}),
-      s
+      "sdk_claim_session",
+      async () =>
+        (
+          await this.request({
+            subtype: "claim_session",
+            ...e,
+            include_initialize: e.include_initialize ?? true,
+          })
+        ).response,
     );
+    let initialization = this.initialization;
+    this.initialization = s.then(
+      async (n) => {
+        if (n?.initialize === undefined) return initialization;
+        let initialize = n.initialize;
+        let m = await initialization.then(
+          (y) => ({
+            hooks_applied: y.hooks_applied,
+            plugins_applied: y.plugins_applied,
+            code_running_mcp_tools_applied: y.code_running_mcp_tools_applied,
+          }),
+          () => ({
+            hooks_applied: undefined,
+            plugins_applied: undefined,
+            code_running_mcp_tools_applied: undefined,
+          }),
+        );
+        let hooksApplied = initialize.hooks_applied ?? m.hooks_applied;
+        let pluginsApplied = initialize.plugins_applied ?? m.plugins_applied;
+        let codeRunningMcpToolsApplied =
+          initialize.code_running_mcp_tools_applied ?? m.code_running_mcp_tools_applied;
+        return {
+          ...initialize,
+          ...(hooksApplied !== undefined && {
+            hooks_applied: hooksApplied,
+          }),
+          ...(pluginsApplied !== undefined && {
+            plugins_applied: pluginsApplied,
+          }),
+          ...(codeRunningMcpToolsApplied !== undefined && {
+            code_running_mcp_tools_applied: codeRunningMcpToolsApplied,
+          }),
+        };
+      },
+      () => initialization,
+    );
+    this.initialization.catch(() => {});
+    return s;
   }
   async enableRemoteControl(e, s, r) {
-    let n = ++this.remoteControlCallGeneration,
-      workSecretAnswerer = this.workSecretAnswerer,
-      m = r?.reattachSessionId || (r?.workSecret === void 0 ? void 0 : sr(r.workSecret)),
-      l =
-        e && r?.workSecret !== void 0 && r.refreshWorkSecret && m !== void 0
-          ? { sessionId: m, refresh: r.refreshWorkSecret }
-          : void 0;
+    let n = ++this.remoteControlCallGeneration;
+    let workSecretAnswerer = this.workSecretAnswerer;
+    let m = r?.reattachSessionId || (r?.workSecret === undefined ? undefined : sr(r.workSecret));
+    let l =
+      e && r?.workSecret !== undefined && r.refreshWorkSecret && m !== undefined
+        ? {
+            sessionId: m,
+            refresh: r.refreshWorkSecret,
+          }
+        : undefined;
     this.workSecretAnswerer = l;
     let h;
     try {
@@ -1003,31 +1247,33 @@ class Query {
         await this.request({
           subtype: "remote_control",
           enabled: e,
-          ...(s !== void 0 && { name: s }),
+          ...(s !== undefined && {
+            name: s,
+          }),
           reattach_session_id: r?.reattachSessionId,
           keep_session_on_exit: r?.keepSessionOnExit,
           work_secret: r?.workSecret,
         })
       ).response;
     } catch (error) {
-      if (n === this.remoteControlCallGeneration) this.workSecretAnswerer = void 0;
+      if (n === this.remoteControlCallGeneration) this.workSecretAnswerer = undefined;
       throw error;
     }
     if (e && n === this.remoteControlCallGeneration) {
-      let bridge_session_id = h.bridge_session_id,
-        y = [l, workSecretAnswerer];
+      let bridgeSessionId = h.bridge_session_id;
+      let y = [l, workSecretAnswerer];
       this.workSecretAnswerer =
-        typeof bridge_session_id === "string"
-          ? y.find((w) => w !== void 0 && Kt(w.sessionId, bridge_session_id))
-          : void 0;
+        typeof bridgeSessionId === "string"
+          ? y.find((w) => w !== undefined && Kt(w.sessionId, bridgeSessionId))
+          : undefined;
     }
     return h;
   }
-  async submitFeedback(e, s) {
+  async submitFeedback(description, s) {
     return (
       await this.request({
         subtype: "submit_feedback",
-        description: e,
+        description,
         surface: s?.surface,
         draft_id: s?.draft_id,
         type: s?.type,
@@ -1039,26 +1285,47 @@ class Query {
     ).response;
   }
   async submitSurveyFeedback(e) {
-    return (await this.request({ subtype: "submit_survey_feedback", ...e })).response;
+    return (
+      await this.request({
+        subtype: "submit_survey_feedback",
+        ...e,
+      })
+    ).response;
   }
-  async renameSession(e, s) {
-    await this.request({ subtype: "rename_session", title: e, source: "host", session_id: s });
+  async renameSession(title, sessionId) {
+    await this.request({
+      subtype: "rename_session",
+      title,
+      source: "host",
+      session_id: sessionId,
+    });
   }
-  async generateSessionTitle(e, s) {
+  async generateSessionTitle(description, s) {
     return withFeatureTelemetry(
       "sdk_session_title_generate",
       async () =>
-        (await this.request({ subtype: "generate_session_title", description: e, persist: s?.persist }))
-          .response.title,
+        (
+          await this.request({
+            subtype: "generate_session_title",
+            description,
+            persist: s?.persist,
+          })
+        ).response.title,
     );
   }
-  async askSideQuestion(e, s) {
+  async askSideQuestion(question, s) {
     return withFeatureTelemetry(
       "sdk_side_question",
       async () => {
         let response = (
           await this.request(
-            { subtype: "side_question", question: e, ...(s?.history?.length && { history: [...s.history] }) },
+            {
+              subtype: "side_question",
+              question,
+              ...(s?.history?.length && {
+                history: [...s.history],
+              }),
+            },
             s,
           )
         ).response;
@@ -1066,7 +1333,7 @@ class Query {
           ? null
           : {
               response: response.response,
-              synthetic: response.synthetic ?? !1,
+              synthetic: response.synthetic ?? false,
               ...(response.refusal_fallback && {
                 refusalFallback: {
                   originalModel: response.refusal_fallback.original_model,
@@ -1079,9 +1346,14 @@ class Query {
       () => (s?.signal?.aborted ? "cancelled" : "error"),
     );
   }
-  async launchUltrareview(e, s) {
-    return (await this.request({ subtype: "ultrareview_launch", args: e, confirm: s?.confirm ?? !1 }))
-      .response;
+  async launchUltrareview(args, s) {
+    return (
+      await this.request({
+        subtype: "ultrareview_launch",
+        args,
+        confirm: s?.confirm ?? false,
+      })
+    ).response;
   }
   async messageRated(e) {
     await this.request({
@@ -1089,56 +1361,74 @@ class Query {
       messageUuid: e.messageUuid,
       sentiment: e.sentiment,
       surface: e.surface,
-      cleared: e.cleared ?? !1,
+      cleared: e.cleared ?? false,
     });
   }
   processPendingPermissionRequests(e) {
     for (let s of e)
       if (s.request.subtype === "can_use_tool")
-        this.handleControlRequest({ ...s, request: { ...s.request, server_policy_ask_only: void 0 } }).catch(
-          () => {},
-        );
+        this.handleControlRequest({
+          ...s,
+          request: {
+            ...s.request,
+            server_policy_ask_only: undefined,
+          },
+        }).catch(() => {});
   }
   processPendingUserDialogRequests(e) {
     for (let s of e)
       if (s.request.subtype === "request_user_dialog") this.handleControlRequest(s).catch(() => {});
   }
   request(e, s) {
-    let r = s?.signal;
-    if (r?.aborted) return Promise.reject(toError(r.reason ?? "Control request aborted"));
+    let signal = s?.signal;
+    if (signal?.aborted) return Promise.reject(toError(signal.reason ?? "Control request aborted"));
     if (this.cleanupPerformed) return Promise.reject(st());
-    let substring = Math.random().toString(36).substring(2, 15);
-    this.transport.expectControlResponse?.(substring);
-    let i = { request_id: substring, type: "control_request", request: e },
-      m = e.subtype === "initialize";
-    return new Promise((l, h) => {
-      let S,
-        y = !1,
-        w = (E) => {
-          (this.pendingControlResponses.delete(substring), S?.(), l(E));
-        },
-        b = (E) => {
-          (this.pendingControlResponses.delete(substring), S?.(), h(E));
-        };
-      if (r) {
+    let n = Math.random().toString(36).substring(2, 15);
+    this.transport.expectControlResponse?.(n);
+    let i = {
+      request_id: n,
+      type: "control_request",
+      request: e,
+    };
+    let m = e.subtype === "initialize";
+    return new Promise((resolve, reject) => {
+      let S;
+      let y = false;
+      let w = (E) => {
+        this.pendingControlResponses.delete(n);
+        S?.();
+        resolve(E);
+      };
+      let b = (error) => {
+        this.pendingControlResponses.delete(n);
+        S?.();
+        reject(error);
+      };
+      if (signal) {
         let E = () => {
-          if ((b(toError(r.reason ?? "Control request aborted")), !y)) return;
+          b(toError(signal.reason ?? "Control request aborted"));
+          if (!y) return;
           try {
             Promise.resolve(
               this.transport.write(
-                jsonStringify({ type: "control_cancel_request", request_id: substring }) +
+                jsonStringify({
+                  type: "control_cancel_request",
+                  request_id: n,
+                }) +
                   `
 `,
               ),
             ).catch(() => {});
           } catch {}
         };
-        (r.addEventListener("abort", E, { once: !0 }),
-          (S = () => {
-            r.removeEventListener("abort", E);
-          }));
+        signal.addEventListener("abort", E, {
+          once: true,
+        });
+        S = () => {
+          signal.removeEventListener("abort", E);
+        };
       }
-      this.pendingControlResponses.set(substring, {
+      this.pendingControlResponses.set(n, {
         handler: (E) => {
           if (E.subtype === "success") w(E);
           else
@@ -1146,7 +1436,8 @@ class Query {
               withTelemetryFacts(Error(E.error), {
                 telemetryMessage: `Claude Code control request failed (${e.subtype})`,
                 errorClass: "control_request_failed",
-                errorCode: typeof E.error_code === "string" && tr.test(E.error_code) ? E.error_code : void 0,
+                errorCode:
+                  typeof E.error_code === "string" && tr.test(E.error_code) ? E.error_code : undefined,
               }),
             );
           if (
@@ -1168,13 +1459,14 @@ class Query {
         reject: b,
       });
       let R =
-          jsonStringify(i) +
-          `
-`,
-        T = () => {
-          if (r?.aborted) return;
-          return ((y = !0), this.transport.write(R));
-        };
+        jsonStringify(i) +
+        `
+`;
+      let T = () => {
+        if (signal?.aborted) return;
+        y = true;
+        return this.transport.write(R);
+      };
       try {
         (this.initializeHasBeenWritten || this.writingFirstInitialize
           ? Promise.resolve(T())
@@ -1193,10 +1485,14 @@ class Query {
     return this.initializeWritten.then(() => this.transport.write(e));
   }
   reinitialize() {
-    return withFeatureTelemetry("sdk_reinitialize", () => this.initialize({ first: !1 }));
+    return withFeatureTelemetry("sdk_reinitialize", () =>
+      this.initialize({
+        first: false,
+      }),
+    );
   }
   async supportedCommands() {
-    let { commands: commands } = await this.initialization;
+    let { commands } = await this.initialization;
     return this.latestCommands ?? commands;
   }
   async supportedModels() {
@@ -1205,90 +1501,193 @@ class Query {
   async supportedAgents() {
     return (await this.initialization).agents;
   }
-  async reconnectMcpServer(e) {
-    await this.request({ subtype: "mcp_reconnect", serverName: e });
+  async reconnectMcpServer(serverName) {
+    await this.request({
+      subtype: "mcp_reconnect",
+      serverName,
+    });
   }
-  async toggleMcpServer(e, s) {
+  async toggleMcpServer(serverName, enabled) {
     return withFeatureTelemetry("sdk_mcp_toggle_server", async () => {
-      await this.request({ subtype: "mcp_toggle", serverName: e, enabled: s });
+      await this.request({
+        subtype: "mcp_toggle",
+        serverName,
+        enabled,
+      });
     });
   }
-  async readMcpResource(e, s) {
-    return (await this.request({ subtype: "mcp_read_resource", serverName: e, uri: s })).response;
+  async readMcpResource(serverName, uri) {
+    return (
+      await this.request({
+        subtype: "mcp_read_resource",
+        serverName,
+        uri,
+      })
+    ).response;
   }
-  async enableChannel(e) {
+  async enableChannel(serverName) {
     return withFeatureTelemetry("sdk_mcp_enable_channel", async () => {
-      await this.request({ subtype: "channel_enable", serverName: e });
+      await this.request({
+        subtype: "channel_enable",
+        serverName,
+      });
     });
   }
-  async mcpAuthenticate(e, s) {
-    return (await this.request({ subtype: "mcp_authenticate", serverName: e, redirectUri: s })).response;
+  async mcpAuthenticate(serverName, redirectUri) {
+    return (
+      await this.request({
+        subtype: "mcp_authenticate",
+        serverName,
+        redirectUri,
+      })
+    ).response;
   }
-  async mcpClearAuth(e) {
-    return (await this.request({ subtype: "mcp_clear_auth", serverName: e })).response;
+  async mcpClearAuth(serverName) {
+    return (
+      await this.request({
+        subtype: "mcp_clear_auth",
+        serverName,
+      })
+    ).response;
   }
-  async mcpSubmitOAuthCallbackUrl(e, s) {
-    return (await this.request({ subtype: "mcp_oauth_callback_url", serverName: e, callbackUrl: s }))
-      .response;
+  async mcpSubmitOAuthCallbackUrl(serverName, callbackUrl) {
+    return (
+      await this.request({
+        subtype: "mcp_oauth_callback_url",
+        serverName,
+        callbackUrl,
+      })
+    ).response;
   }
-  async claudeAuthenticate(e) {
-    return (await this.request({ subtype: "claude_authenticate", loginWithClaudeAi: e })).response;
+  async claudeAuthenticate(loginWithClaudeAi) {
+    return (
+      await this.request({
+        subtype: "claude_authenticate",
+        loginWithClaudeAi,
+      })
+    ).response;
   }
-  async claudeOAuthCallback(e, s) {
-    return (await this.request({ subtype: "claude_oauth_callback", authorizationCode: e, state: s }))
-      .response;
+  async claudeOAuthCallback(authorizationCode, state) {
+    return (
+      await this.request({
+        subtype: "claude_oauth_callback",
+        authorizationCode,
+        state,
+      })
+    ).response;
   }
   async claudeOAuthWaitForCompletion() {
-    return (await this.request({ subtype: "claude_oauth_wait_for_completion" })).response;
+    return (
+      await this.request({
+        subtype: "claude_oauth_wait_for_completion",
+      })
+    ).response;
   }
   async mcpServerStatus() {
-    return (await this.request({ subtype: "mcp_status" })).response.mcpServers;
+    return (
+      await this.request({
+        subtype: "mcp_status",
+      })
+    ).response.mcpServers;
   }
   async getContextUsage(e) {
-    return (await this.request({ subtype: "get_context_usage", ...e })).response;
+    return (
+      await this.request({
+        subtype: "get_context_usage",
+        ...e,
+      })
+    ).response;
   }
   async usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET(e) {
-    return (await this.request({ subtype: "get_usage", ...(e?.skipBehaviors && { skip_behaviors: !0 }) }))
-      .response;
+    return (
+      await this.request({
+        subtype: "get_usage",
+        ...(e?.skipBehaviors && {
+          skip_behaviors: true,
+        }),
+      })
+    ).response;
   }
   async getMemoryDialog() {
-    return (await this.request({ subtype: "get_memory_dialog" })).response;
+    return (
+      await this.request({
+        subtype: "get_memory_dialog",
+      })
+    ).response;
   }
   async getSkillsDialog() {
-    return (await this.request({ subtype: "get_skills_dialog" })).response;
+    return (
+      await this.request({
+        subtype: "get_skills_dialog",
+      })
+    ).response;
   }
   async getStatus() {
-    return (await this.request({ subtype: "get_status" })).response;
+    return (
+      await this.request({
+        subtype: "get_status",
+      })
+    ).response;
   }
   async exportConversation() {
-    return (await this.request({ subtype: "export_conversation" })).response;
+    return (
+      await this.request({
+        subtype: "export_conversation",
+      })
+    ).response;
   }
   async readCloudSessions(e, s) {
     return (await this.request(e, s)).response;
   }
   async getChromeDialog() {
-    return (await this.request({ subtype: "get_chrome_dialog" })).response;
+    return (
+      await this.request({
+        subtype: "get_chrome_dialog",
+      })
+    ).response;
   }
   async getChromeBrowsers() {
-    return (await this.request({ subtype: "get_chrome_browsers" })).response;
+    return (
+      await this.request({
+        subtype: "get_chrome_browsers",
+      })
+    ).response;
   }
-  async selectChromeBrowser(e) {
-    return (await this.request({ subtype: "select_chrome_browser", device_id: e })).response;
+  async selectChromeBrowser(deviceId) {
+    return (
+      await this.request({
+        subtype: "select_chrome_browser",
+        device_id: deviceId,
+      })
+    ).response;
   }
   async getSandboxDialog() {
-    return (await this.request({ subtype: "get_sandbox_dialog" })).response;
+    return (
+      await this.request({
+        subtype: "get_sandbox_dialog",
+      })
+    ).response;
   }
-  async readFile(e, s) {
+  async readFile(path, s) {
     try {
       return (
-        await this.request({ subtype: "read_file", path: e, max_bytes: s?.maxBytes, encoding: s?.encoding })
+        await this.request({
+          subtype: "read_file",
+          path,
+          max_bytes: s?.maxBytes,
+          encoding: s?.encoding,
+        })
       ).response;
     } catch {
       return null;
     }
   }
   async getPlan() {
-    return (await this.request({ subtype: "get_plan" })).response;
+    return (
+      await this.request({
+        subtype: "get_plan",
+      })
+    ).response;
   }
   async reloadPlugins(e) {
     return withFeatureTelemetry(
@@ -1297,8 +1696,13 @@ class Query {
         (
           await this.request({
             subtype: "reload_plugins",
-            ...(e?.holdOnCacheImpact && { hold_on_cache_impact: !0 }),
-            ...(e?.addPlugins && e.addPlugins.length > 0 && { add_plugins: e.addPlugins }),
+            ...(e?.holdOnCacheImpact && {
+              hold_on_cache_impact: true,
+            }),
+            ...(e?.addPlugins &&
+              e.addPlugins.length > 0 && {
+                add_plugins: e.addPlugins,
+              }),
           })
         ).response,
     );
@@ -1306,52 +1710,79 @@ class Query {
   async reloadSkills() {
     return withFeatureTelemetry(
       "sdk_reload_skills",
-      async () => (await this.request({ subtype: "reload_skills" })).response,
+      async () =>
+        (
+          await this.request({
+            subtype: "reload_skills",
+          })
+        ).response,
     );
   }
   async reloadOutputStyles() {
     return withFeatureTelemetry(
       "sdk_reload_output_styles",
-      async () => (await this.request({ subtype: "reload_output_styles" })).response,
+      async () =>
+        (
+          await this.request({
+            subtype: "reload_output_styles",
+          })
+        ).response,
     );
   }
   async setMcpServers(e) {
     return withFeatureTelemetry("sdk_mcp_set_servers", async () => {
-      let s = {},
-        r = {};
-      for (let [h, S] of Object.entries(e))
-        if (S.type === "sdk" && "instance" in S) s[h] = S;
-        else r[h] = S;
-      let n = new Set(this.sdkMcpServers.keys()),
-        i = new Set(Object.keys(s));
+      let s = {};
+      let r = {};
+      for (let [key, value] of Object.entries(e))
+        if (value.type === "sdk" && "instance" in value) s[key] = value;
+        else r[key] = value;
+      let n = new Set(this.sdkMcpServers.keys());
+      let i = new Set(Object.keys(s));
       for (let h of n) if (!i.has(h)) await this.disconnectSdkMcpServer(h);
-      for (let [h, S] of Object.entries(s)) {
-        let y = this.sdkMcpServers.get(h);
+      for (let [key, value] of Object.entries(s)) {
+        let y = this.sdkMcpServers.get(key);
         if (!y) {
-          this.connectSdkMcpServer(h, S);
+          this.connectSdkMcpServer(key, value);
           continue;
         }
-        let { settings: settings, ignored: ignored } = parseMcpServerSettings(S);
+        let { settings, ignored } = parseMcpServerSettings(value);
+        Nt(key, value, ignored);
         if (
-          (Nt(h, S, ignored),
           settings.timeout !== y.settings.timeout ||
-            settings.disableAutoBackground !== y.settings.disableAutoBackground ||
-            settings.connectorId !== y.settings.connectorId)
+          settings.disableAutoBackground !== y.settings.disableAutoBackground ||
+          settings.connectorId !== y.settings.connectorId
         )
           logForDebugging(
-            `[Query.setMcpServers] MCP server '${h}' is already registered, so the different timeout, disableAutoBackground or connectorId passed to setMcpServers is ignored; remove and re-add the server to change it`,
+            `[Query.setMcpServers] MCP server '${key}' is already registered, so the different timeout, disableAutoBackground or connectorId passed to setMcpServers is ignored; remove and re-add the server to change it`,
           );
-        if (settings.tools !== void 0 && !sameToolPolicies(settings.tools, y.settings.tools))
-          (logForDebugging(
+        if (settings.tools !== undefined && !sameToolPolicies(settings.tools, y.settings.tools)) {
+          logForDebugging(
             settings.tools.length === 0
-              ? `[Query.setMcpServers] MCP server '${h}': per-tool policy cleared`
-              : `[Query.setMcpServers] MCP server '${h}': per-tool policy replaced (${settings.tools.length} ${settings.tools.length === 1 ? "entry" : "entries"})`,
-          ),
-            (y.settings = { ...y.settings, tools: settings.tools }));
+              ? `[Query.setMcpServers] MCP server '${key}': per-tool policy cleared`
+              : `[Query.setMcpServers] MCP server '${key}': per-tool policy replaced (${settings.tools.length} ${settings.tools.length === 1 ? "entry" : "entries"})`,
+          );
+          y.settings = {
+            ...y.settings,
+            tools: settings.tools,
+          };
+        }
       }
       let m = {};
-      for (let h of Object.keys(s)) m[h] = { type: "sdk", name: h, ...this.sdkMcpServers.get(h)?.settings };
-      return (await this.request({ subtype: "mcp_set_servers", servers: { ...r, ...m } })).response;
+      for (let key of Object.keys(s))
+        m[key] = {
+          type: "sdk",
+          name: key,
+          ...this.sdkMcpServers.get(key)?.settings,
+        };
+      return (
+        await this.request({
+          subtype: "mcp_set_servers",
+          servers: {
+            ...r,
+            ...m,
+          },
+        })
+      ).response;
     });
   }
   async accountInfo() {
@@ -1363,113 +1794,134 @@ class Query {
       if (!this.initializeHasBeenWritten) await this.initializeWritten;
       let s = 0;
       for await (let r of e) {
-        if (
-          (s++,
-          logForDebugging(`[Query.streamInput] Processing message ${s}: ${r.type}`),
-          this.abortController?.signal.aborted)
-        )
-          break;
-        ((this.runEnded = !1),
-          (this.resultReceived = !1),
-          this.clearRunEndCeiling(),
-          await Promise.resolve(
-            this.transport.write(
-              jsonStringify(this.verbatimPrompts ? { ...r, client_composed: !0 } : r) +
-                `
+        s++;
+        logForDebugging(`[Query.streamInput] Processing message ${s}: ${r.type}`);
+        if (this.abortController?.signal.aborted) break;
+        this.runEnded = false;
+        this.resultReceived = false;
+        this.clearRunEndCeiling();
+        await Promise.resolve(
+          this.transport.write(
+            jsonStringify(
+              this.verbatimPrompts
+                ? {
+                    ...r,
+                    client_composed: true,
+                  }
+                : r,
+            ) +
+              `
 `,
-            ),
-          ));
+          ),
+        );
       }
-      if (
-        (logForDebugging(`[Query.streamInput] Finished processing ${s} messages from input stream`),
-        s > 0 && this.hasBidirectionalNeeds())
-      )
-        (logForDebugging("[Query.streamInput] Has bidirectional needs, waiting for the run to end"),
-          await this.waitForRunEnd());
-      (logForDebugging("[Query] Calling transport.endInput() to close stdin to CLI process"),
-        this.transport.endInput());
+      logForDebugging(`[Query.streamInput] Finished processing ${s} messages from input stream`);
+      if (s > 0 && this.hasBidirectionalNeeds()) {
+        logForDebugging("[Query.streamInput] Has bidirectional needs, waiting for the run to end");
+        await this.waitForRunEnd();
+      }
+      logForDebugging("[Query] Calling transport.endInput() to close stdin to CLI process");
+      this.transport.endInput();
     } catch (error) {
       if (!(error instanceof HookConfigError)) throw error;
     }
   }
   endRun() {
     if (this.runEnded) return;
-    if (((this.runEnded = !0), this.clearRunEndCeiling(), this.runEndedResolve?.(), this.isSingleUserTurn))
-      (logForDebugging("[Query.readMessages] Run ended for single-turn query, closing stdin"),
-        this.transport.endInput());
+    this.runEnded = true;
+    this.clearRunEndCeiling();
+    this.runEndedResolve?.();
+    if (this.isSingleUserTurn) {
+      logForDebugging("[Query.readMessages] Run ended for single-turn query, closing stdin");
+      this.transport.endInput();
+    }
   }
   armRunEndCeiling() {
-    if ((this.clearRunEndCeiling(), this.runEnded || this.cleanupPerformed || this.runEndCeilingMs <= 0))
-      return;
-    ((this.runEndCeilingTimer = setTimeout(
+    this.clearRunEndCeiling();
+    if (this.runEnded || this.cleanupPerformed || this.runEndCeilingMs <= 0) return;
+    this.runEndCeilingTimer = setTimeout(
       () => {
-        (logForDebugging(
+        logForDebugging(
           `[Query.readMessages] No 'idle' ${this.runEndCeilingMs}ms after the last result, ending the run`,
-        ),
-          this.endRun());
+        );
+        this.endRun();
       },
-      Math.min(this.runEndCeilingMs, ec),
-    )),
-      this.runEndCeilingTimer.unref?.());
+      Math.min(this.runEndCeilingMs, MAX_TIMER_DELAY_MS),
+    );
+    this.runEndCeilingTimer.unref?.();
   }
   clearRunEndCeiling() {
-    (clearTimeout(this.runEndCeilingTimer), (this.runEndCeilingTimer = void 0));
+    clearTimeout(this.runEndCeilingTimer);
+    this.runEndCeilingTimer = undefined;
   }
   waitForRunEnd() {
-    if (this.runEnded)
-      return (
-        logForDebugging("[Query.waitForRunEnd] Run already ended, returning immediately"),
-        Promise.resolve()
-      );
-    return new Promise((e) => {
-      let s = this.abortController?.signal;
-      if (this.cleanupPerformed || s?.aborted) {
-        e();
+    if (this.runEnded) {
+      logForDebugging("[Query.waitForRunEnd] Run already ended, returning immediately");
+      return Promise.resolve();
+    }
+    return new Promise((resolve) => {
+      let signal = this.abortController?.signal;
+      if (this.cleanupPerformed || signal?.aborted) {
+        resolve();
         return;
       }
-      let r = () => e();
-      (s?.addEventListener("abort", r, { once: !0 }),
-        this.addCleanupCallback(() => {
-          (s?.removeEventListener("abort", r), e());
-        }),
-        (this.runEndedResolve = () => {
-          (s?.removeEventListener("abort", r), e());
-        }));
+      let r = () => resolve();
+      signal?.addEventListener("abort", r, {
+        once: true,
+      });
+      this.addCleanupCallback(() => {
+        signal?.removeEventListener("abort", r);
+        resolve();
+      });
+      this.runEndedResolve = () => {
+        signal?.removeEventListener("abort", r);
+        resolve();
+      };
     });
   }
-  handleHookCallbacks(e, s, r, n) {
+  handleHookCallbacks(e, s, r, signal) {
     let i = this.hookCallbacks.get(e);
     if (!i) throw Error(`No hook callback found for ID: ${e}`);
-    return i(s, r, { signal: n });
+    return i(s, r, {
+      signal,
+    });
   }
   connectSdkMcpServer(e, s) {
-    let r = new SdkControlServerTransport((l) => this.sendMcpServerMessageToCli(e, l)),
-      n = s.instance.connect(r).catch((l) => {
-        if (this.sdkMcpServers.get(e)?.transport === r) this.sdkMcpServers.delete(e);
-        logForDebugging(`[Query.connectSdkMcpServer] Failed to connect MCP server '${e}': ${l}`, {
-          level: "error",
-        });
-      }),
-      { settings: settings, ignored: ignored } = parseMcpServerSettings(s);
-    (Nt(e, s, ignored), this.sdkMcpServers.set(e, { transport: r, settings: settings, connection: n }));
+    let r = new SdkControlServerTransport((l) => this.sendMcpServerMessageToCli(e, l));
+    let connection = s.instance.connect(r).catch((error) => {
+      if (this.sdkMcpServers.get(e)?.transport === r) this.sdkMcpServers.delete(e);
+      logForDebugging(`[Query.connectSdkMcpServer] Failed to connect MCP server '${e}': ${error}`, {
+        level: "error",
+      });
+    });
+    let { settings, ignored } = parseMcpServerSettings(s);
+    Nt(e, s, ignored);
+    this.sdkMcpServers.set(e, {
+      transport: r,
+      settings,
+      connection,
+    });
   }
   async disconnectSdkMcpServer(e) {
     let s = this.sdkMcpServers.get(e);
     if (s) {
       let r = `${e}:${SDK_MANIFEST_CAPTURE}`;
       for (let [n, i] of this.pendingMcpResponses)
-        if (n.startsWith(r))
-          (this.pendingMcpResponses.delete(n),
-            i.reject(Error("MCP server was removed during the manifest capture")));
-      if ((await s.transport.close(), this.sdkMcpServers.get(e) === s)) this.sdkMcpServers.delete(e);
+        if (n.startsWith(r)) {
+          this.pendingMcpResponses.delete(n);
+          i.reject(Error("MCP server was removed during the manifest capture"));
+        }
+      await s.transport.close();
+      if (this.sdkMcpServers.get(e) === s) this.sdkMcpServers.delete(e);
     }
   }
   sendMcpServerMessageToCli(e, s) {
-    if ("id" in s && s.id !== null && s.id !== void 0) {
-      let n = `${e}:${s.id}`,
-        i = this.pendingMcpResponses.get(n);
+    if ("id" in s && s.id !== null && s.id !== undefined) {
+      let n = `${e}:${s.id}`;
+      let i = this.pendingMcpResponses.get(n);
       if (i) {
-        (i.resolve(s), this.pendingMcpResponses.delete(n));
+        i.resolve(s);
+        this.pendingMcpResponses.delete(n);
         return;
       }
       if (typeof s.id === "string" && s.id.startsWith(SDK_MANIFEST_CAPTURE)) {
@@ -1482,33 +1934,47 @@ class Query {
     let r = {
       type: "control_request",
       request_id: randomUUID(),
-      request: { subtype: "mcp_message", server_name: e, message: s },
+      request: {
+        subtype: "mcp_message",
+        server_name: e,
+        message: s,
+      },
     };
-    if (!this.initializeHasBeenWritten && yBn(s)) this.sdkMcpToolsChangedDuringCapture.add(e);
+    if (!this.initializeHasBeenWritten && isToolListChangedNotification(s))
+      this.sdkMcpToolsChangedDuringCapture.add(e);
     this.writeAfterInitialize(
       jsonStringify(r) +
         `
 `,
-    ).catch((n) => {
-      logForDebugging(`[Query.sendMcpServerMessageToCli] Transport write failed: ${n}`, { level: "error" });
+    ).catch((error) => {
+      logForDebugging(`[Query.sendMcpServerMessageToCli] Transport write failed: ${error}`, {
+        level: "error",
+      });
     });
   }
   handleMcpControlRequest(e, s, r) {
-    let n = "id" in s.message ? s.message.id : null,
-      i = `${e}:${n}`;
-    return new Promise((m, l) => {
+    let id = "id" in s.message ? s.message.id : null;
+    let i = `${e}:${id}`;
+    return new Promise((resolve, reject) => {
       let h = () => {
-          this.pendingMcpResponses.delete(i);
-        },
-        S = (w) => {
-          (h(), m(w));
-        },
-        y = (w) => {
-          (h(), l(w));
-        };
-      if ((this.pendingMcpResponses.set(i, { resolve: S, reject: y }), r.onmessage)) r.onmessage(s.message);
+        this.pendingMcpResponses.delete(i);
+      };
+      let resolve_2 = (w) => {
+        h();
+        resolve(w);
+      };
+      let reject_2 = (w) => {
+        h();
+        reject(w);
+      };
+      this.pendingMcpResponses.set(i, {
+        resolve: resolve_2,
+        reject: reject_2,
+      });
+      if (r.onmessage) r.onmessage(s.message);
       else {
-        (h(), l(Error("No message handler registered")));
+        h();
+        reject(Error("No message handler registered"));
         return;
       }
     });
@@ -1521,11 +1987,10 @@ function st() {
 //@ chunk-y805ph4h.js:62976-63008 placement
 var tr = /^[a-z][a-z0-9_]{0,63}$/;
 //@ chunk-y805ph4h.js:63008-63137 placement
-function Kt(e, s) {
-  if (e === s) return !0;
-  let sliced = e.slice(e.lastIndexOf("_") + 1),
-    sliced_2 = s.slice(s.lastIndexOf("_") + 1);
+function Kt(sessionId, s) {
+  if (sessionId === s) return true;
+  let sliced = sessionId.slice(sessionId.lastIndexOf("_") + 1);
+  let sliced_2 = s.slice(s.lastIndexOf("_") + 1);
   return sliced.length >= 4 && sliced === sliced_2;
 }
-
 export { Query };

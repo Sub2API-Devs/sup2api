@@ -28,15 +28,23 @@ var JOB_STATE_NAMES = new Set([
   "waiting",
 ]);
 //@ chunk-ex2reyb6.js:374-440 placement
-function m5(e) {
-  if (e === void 0) return;
-  return fromSanitizer_SANITIZER_OUTPUT_ONLY(JOB_STATE_NAMES.has(e) ? e : "other");
+/**
+ * 把作业状态名规范成已知枚举，未知归 other。
+ */
+function daemonSessionStateLabel(state) {
+  if (state === undefined) return;
+  return fromSanitizer_SANITIZER_OUTPUT_ONLY(JOB_STATE_NAMES.has(state) ? state : "other");
 }
 //@ chunk-ex2reyb6.js:440-482 placement
-var t = new Set(["cold", "spare", "adopted"]);
+/**
+ * 守护进程会话的三个状态（cold、spare、adopted）。
+ */
+var DAEMON_SESSION_STATES = new Set(["cold", "spare", "adopted"]);
 //@ chunk-ex2reyb6.js:482-544 placement
-function ENt(e) {
-  return typeof e === "string" && t.has(e) ? e : void 0;
+/**
+ * 只保留已知会话状态，其他返回 undefined。
+ */
+function normalizeDaemonSessionState(e) {
+  return typeof e === "string" && DAEMON_SESSION_STATES.has(e) ? e : undefined;
 }
-
-export { m5, ENt };
+export { daemonSessionStateLabel, normalizeDaemonSessionState };

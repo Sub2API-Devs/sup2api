@@ -41,7 +41,7 @@ import { artifactHostUnreachable } from "./hostEgressProbe.js";
 import { isFramePublicReadEnabled } from "./frameFlags.js";
 import { PERSON } from "./consentClasses.js";
 import { getShareEntry } from "./shareEntries.js";
-import { nUe, r6t } from "../../utils/gatewayCredential.js";
+import { hasAnyGatewayCredential, isApiKeyGatewaySession } from "../../utils/gatewayCredential.js";
 import { getAPIProvider } from "../../utils/model/providers.js";
 import { isEssentialTrafficOnly } from "../../utils/privacyLevel.js";
 import {
@@ -65,33 +65,43 @@ import {
   isPolicyAllowed,
 } from "../policyLimits/policyEvidence.js";
 import { getLiveState, hasLiveState } from "../liveReplica/liveReplica.js";
-import { DU } from "../../utils/settings/commandSyncNames.js";
+import { mergedCommandNames } from "../../utils/settings/commandSyncNames.js";
 import { fromEnum, lit, fromEnumOpt } from "../analytics/safeMetadata.js";
 import { getIsNonInteractiveSession } from "../../bootstrap/state.js";
-import { S } from "../policyLimits/policyFetchStatus.js";
+import { policyCacheStatus } from "../policyLimits/policyFetchStatus.js";
 import { logEvent } from "../analytics/index.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { A, u, o, E } from "../../../vendor/zod/v4/classic/schemas.js";
+import { array, u, string, E } from "../../../vendor/zod/v4/classic/schemas.js";
 import { LIVE_DOC, INDEX_HTML } from "./textSanitize.js";
 import { TOOL_SEARCH_TOOL_NAME } from "../../tools/ToolSearchTool/prompt.js";
 import { fromParentArtifactInput } from "./artifactToolActions.js";
 
+//@ chunk-4xpk3fhh.js:11176-11814 placement
 /**
  * 逐层（env/用户/项目/本地/策略设置）解析 Artifact 开关，返回是否启用、关闭来源与用户是否可控。
  */
-//@ chunk-4xpk3fhh.js:11176-11814 placement
 function resolveArtifactSetting(e) {
   let n = [];
-  if (e.envDisableVar !== void 0 && isEnvSetAnywhere(e.envDisableVar))
-    n.push({ layer: "env", via: "envVar" });
+  if (e.envDisableVar !== undefined && isEnvSetAnywhere(e.envDisableVar))
+    n.push({
+      layer: "env",
+      via: "envVar",
+    });
   let r;
   for (let l of TRUSTED_SETTING_SOURCES) {
-    let u = getSettingsLayersForGate(l, e);
+    let settingsLayersForGate = getSettingsLayersForGate(l, e);
+    collectGateDisables(
+      n,
+      l,
+      l === "policySettings"
+        ? [...settingsLayersForGate, ...getDurablePolicyTierSettings()]
+        : settingsLayersForGate,
+      e,
+    );
     if (
-      (collectGateDisables(n, l, l === "policySettings" ? [...u, ...getDurablePolicyTierSettings()] : u, e),
-      r === void 0 &&
-        u.some((h) => h?.[e.enableKey] === !0) &&
-        (l !== "policySettings" || isPolicySlotAdminOrParentComposed()))
+      r === undefined &&
+      settingsLayersForGate.some((h) => h?.[e.enableKey] === true) &&
+      (l !== "policySettings" || isPolicySlotAdminOrParentComposed())
     )
       r = l;
   }
@@ -99,66 +109,79 @@ function resolveArtifactSetting(e) {
   for (let l of REPO_SETTING_SOURCES) collectGateDisables(n, l, getSettingsLayersForGate(l, e), e);
   let any_2 = n.some((l) => l.layer === "localSettings" || l.layer === "projectSettings");
   return {
-    enabled: n.length === 0 && (e.defaultOn || r !== void 0),
+    enabled: n.length === 0 && (e.defaultOn || r !== undefined),
     decidedBy: n[0]?.layer ?? r ?? "default",
     offSources: n,
     lockedAboveUser: any,
     userControllable: !any && !any_2 && isSettingSourceEnabled("userSettings"),
   };
 }
+//@ chunk-4xpk3fhh.js:11814-12044 placement
 /**
  * 取某个设置来源用于开关判定的设置对象列表：policy 含全部策略层；local 含旧版本地覆盖；项目设置只是用户设置别名且自身声明了开关时跳过（避免重复）。
  */
-//@ chunk-4xpk3fhh.js:11814-12044 placement
 function getSettingsLayersForGate(e, n) {
   if (e === "policySettings") return [...getAllPolicyTierSettings(), getSettingsForSource("policySettings")];
   if (!isSettingSourceEnabled(e)) return [];
   if (e === "localSettings") return [getSettingsForSource(e), getLegacyLocalSettingsOverlay()];
-  let r = getSettingsForSource(e);
+  let settingsForSource = getSettingsForSource(e);
   if (
     e === "projectSettings" &&
-    declaresGateKey(r, n) &&
+    declaresGateKey(settingsForSource, n) &&
     isSettingSourceEnabled("userSettings") &&
     projectSettingsAliasesUserSettings()
   )
     return [];
-  return [r];
+  return [settingsForSource];
 }
 //@ chunk-4xpk3fhh.js:12044-12157 placement
-function declaresGateKey(e, n) {
-  return e?.[n.enableKey] !== void 0 || (n.legacyDisableKey !== void 0 && e?.[n.legacyDisableKey] !== void 0);
+function declaresGateKey(settingsForSource, n) {
+  return (
+    settingsForSource?.[n.enableKey] !== undefined ||
+    (n.legacyDisableKey !== undefined && settingsForSource?.[n.legacyDisableKey] !== undefined)
+  );
 }
 //@ chunk-4xpk3fhh.js:12157-12355 placement
-function collectGateDisables(e, n, r, o) {
-  if (r.some((f) => f?.[o.enableKey] === !1)) e.push({ layer: n, via: "enableKey" });
+function collectGateDisables(e, layer, r, o) {
+  if (r.some((f) => f?.[o.enableKey] === false))
+    e.push({
+      layer,
+      via: "enableKey",
+    });
   let legacyDisableKey = o.legacyDisableKey;
-  if (legacyDisableKey !== void 0 && r.some((f) => f?.[legacyDisableKey] === !0))
-    e.push({ layer: n, via: "legacyDisableKey" });
+  if (legacyDisableKey !== undefined && r.some((f) => f?.[legacyDisableKey] === true))
+    e.push({
+      layer,
+      via: "legacyDisableKey",
+    });
 }
+//@ chunk-4xpk3fhh.js:12355-12522 placement
 /**
  * 判断某个环境变量在任何地方被设为真：进程 env、设置加载前快照、管理员层、全局配置 env，或启用的 flag/user 设置 env。
  */
-//@ chunk-4xpk3fhh.js:12355-12522 placement
-function isEnvSetAnywhere(e) {
+function isEnvSetAnywhere(envDisableVar) {
   if (
-    env[e] ||
-    isEnvTruthy(getEnvCaseInsensitive(getLatchedPreSettingsEnvSnapshot(), e)) ||
-    isEnvTruthy(getAdminTierEnvValue(e)) ||
-    isEnvTruthy(getEnvCaseInsensitive(getAppliedGlobalConfigEnv(), e))
+    env[envDisableVar] ||
+    isEnvTruthy(getEnvCaseInsensitive(getLatchedPreSettingsEnvSnapshot(), envDisableVar)) ||
+    isEnvTruthy(getAdminTierEnvValue(envDisableVar)) ||
+    isEnvTruthy(getEnvCaseInsensitive(getAppliedGlobalConfigEnv(), envDisableVar))
   )
-    return !0;
+    return true;
   for (let n of ["flagSettings", "userSettings"])
-    if (isSettingSourceEnabled(n) && isEnvTruthy(getEnvCaseInsensitive(getSettingsForSource(n)?.env, e)))
-      return !0;
-  return !1;
+    if (
+      isSettingSourceEnabled(n) &&
+      isEnvTruthy(getEnvCaseInsensitive(getSettingsForSource(n)?.env, envDisableVar))
+    )
+      return true;
+  return false;
 }
 //@ chunk-4xpk3fhh.js:12522-12765 placement
 function getEnvCaseInsensitive(e, n) {
-  if (e === void 0) return;
+  if (e === undefined) return;
   if (n in e) return e[n];
   let r = weakMap.get(e);
   if (r?.has(n)) return r.get(n);
-  let o = Object.entries(e).find(([s]) => s.toUpperCase() === n)?.[1];
+  let o = Object.entries(e).find(([key]) => key.toUpperCase() === n)?.[1];
   if (Object.isFrozen(e))
     if (r) r.set(n, o);
     else weakMap.set(e, new Map([[n, o]]));
@@ -167,14 +190,24 @@ function getEnvCaseInsensitive(e, n) {
 //@ chunk-4xpk3fhh.js:12765-12783 placement
 var weakMap = new WeakMap();
 //@ chunk-4xpk3fhh.js:12783-12920 placement
-var ARTIFACT_GATE_KEYS = { enableKey: "enableArtifact", legacyDisableKey: "disableArtifact", defaultOn: !0 },
-  ARTIFACT_GATE_SPEC = { ...ARTIFACT_GATE_KEYS, envDisableVar: "CLAUDE_CODE_DISABLE_ARTIFACT" };
+var ARTIFACT_GATE_KEYS = {
+  enableKey: "enableArtifact",
+  legacyDisableKey: "disableArtifact",
+  defaultOn: true,
+};
+var ARTIFACT_GATE_SPEC = {
+  ...ARTIFACT_GATE_KEYS,
+  envDisableVar: "CLAUDE_CODE_DISABLE_ARTIFACT",
+};
 //@ chunk-4xpk3fhh.js:12920-12947 placement
 function resolveArtifactEnableSetting() {
   return resolveArtifactSetting(ARTIFACT_GATE_SPEC);
 }
 //@ chunk-4xpk3fhh.js:12947-12981 placement
-function y() {
+/**
+ * 判断 Artifact 总开关（用户设置）是否关闭。
+ */
+function isArtifactSwitchedOff() {
   return !resolveArtifactEnableSetting().enabled;
 }
 //@ chunk-4xpk3fhh.js:12981-13057 placement
@@ -194,8 +227,8 @@ function isArtifactSdkDefaultOff() {
   );
 }
 //@ chunk-4xpk3fhh.js:13159-13237 placement
-function W(e) {
-  return e === "local-agent" || e?.startsWith("claude-coworker") === !0;
+function isCoworkerEntrypoint(e) {
+  return e === "local-agent" || e?.startsWith("claude-coworker") === true;
 }
 //@ chunk-4xpk3fhh.js:13237-13299 placement
 function isCoworkFramePublishSession() {
@@ -216,59 +249,59 @@ function othersArtifactReadConsentSurface() {
 }
 //@ chunk-4xpk3fhh.js:13365-13413 placement
 function othersArtifactReadIsUserOnly(e) {
-  return e !== void 0 && othersArtifactReadConsentSurface() && artifactHostUnreachable(e);
+  return e !== undefined && othersArtifactReadConsentSurface() && artifactHostUnreachable(e);
 }
 //@ chunk-4xpk3fhh.js:13413-13462 placement
 function othersReadIsUserOnly(e, n) {
   return !e && (othersArtifactReadIsUserOnly(n) || outsideOrgReadIsUserOnly(n.slug));
 }
 //@ chunk-4xpk3fhh.js:13462-13526 placement
-function outsideOrgRead(e) {
-  return e !== void 0 && e.outsideOrgReader === !0 && isFramePublicReadEnabled();
+function outsideOrgRead(shareEntry) {
+  return shareEntry !== undefined && shareEntry.outsideOrgReader === true && isFramePublicReadEnabled();
 }
 //@ chunk-4xpk3fhh.js:13526-13573 placement
-function outsideOrgReadIsUserOnly(e) {
-  return PERSON === "person" && outsideOrgRead(getShareEntry(e));
+function outsideOrgReadIsUserOnly(slug) {
+  return PERSON === "person" && outsideOrgRead(getShareEntry(slug));
 }
 //@ chunk-4xpk3fhh.js:13573-13609 placement
-function otherOrgCopySource(e) {
-  return outsideOrgRead(e) || invitedCopySource(e);
+function otherOrgCopySource(shareEntry) {
+  return outsideOrgRead(shareEntry) || invitedCopySource(shareEntry);
 }
 //@ chunk-4xpk3fhh.js:13609-13666 placement
 function invitedCopySource(e) {
-  return e !== void 0 && e.external === !0 && isFramePublicReadEnabled();
+  return e !== undefined && e.external === true && isFramePublicReadEnabled();
 }
 //@ chunk-4xpk3fhh.js:13666-13782 placement
-function placedInOwnOrg(e) {
+function placedInOwnOrg(shareEntry) {
   return (
-    e !== void 0 &&
-    e.probeFailed !== !0 &&
-    e.external !== !0 &&
-    (e.outsideOrgReader === !1 || e.role === "owner")
+    shareEntry !== undefined &&
+    shareEntry.probeFailed !== true &&
+    shareEntry.external !== true &&
+    (shareEntry.outsideOrgReader === false || shareEntry.role === "owner")
   );
 }
 //@ chunk-4xpk3fhh.js:13782-13875 placement = isAnalyticsToolDetailsLoggingEnabled (0.772)
 function isAnalyticsToolDetailsLoggingEnabled() {
   let CLAUDE_CODE_ENTRYPOINT = env.CLAUDE_CODE_ENTRYPOINT;
-  if (CLAUDE_CODE_ENTRYPOINT === "local-agent" && isCoworkFramePublishSession()) return !1;
-  return W(CLAUDE_CODE_ENTRYPOINT);
+  if (CLAUDE_CODE_ENTRYPOINT === "local-agent" && isCoworkFramePublishSession()) return false;
+  return isCoworkerEntrypoint(CLAUDE_CODE_ENTRYPOINT);
 }
 //@ chunk-4xpk3fhh.js:13875-13912 placement
 function isArtifactReadOnlySurface() {
-  return W(getSessionEntrypoint()) && !isCoworkFramePublishSession();
+  return isCoworkerEntrypoint(getSessionEntrypoint()) && !isCoworkFramePublishSession();
 }
 //@ chunk-4xpk3fhh.js:13912-13945 placement
-function fe() {
-  return nUe() && pe();
+function isArtifactToolsReady() {
+  return hasAnyGatewayCredential() && isArtifactProviderAvailable();
 }
 //@ chunk-4xpk3fhh.js:13945-13977 placement
-function pe() {
+function isArtifactProviderAvailable() {
   return getArtifactProviderBlockReason() === null;
 }
+//@ chunk-4xpk3fhh.js:13977-14252 placement
 /**
  * 返回 Artifact 因环境不可用的原因：第三方提供商、仅必要流量、CLAUDE_CODE_ARTIFACT 显式关闭、SDK 默认关闭（且未显式开启）；可用时返回 null。
  */
-//@ chunk-4xpk3fhh.js:13977-14252 placement
 function getArtifactProviderBlockReason() {
   if (getAPIProvider() !== "firstParty") return "third_party_provider";
   if (isEssentialTrafficOnly()) return "essential_traffic_only";
@@ -282,72 +315,92 @@ function getArtifactProviderBlockReason() {
   return null;
 }
 //@ chunk-4xpk3fhh.js:14252-14283 placement
-function K() {
-  return nUe() && R();
+function isArtifactEnvEnabled() {
+  return hasAnyGatewayCredential() && isArtifactProviderUnblocked();
 }
 //@ chunk-4xpk3fhh.js:14283-14314 placement
-function R() {
-  return B() === null;
+function isArtifactProviderUnblocked() {
+  return artifactProviderBlockReason() === null;
 }
 //@ chunk-4xpk3fhh.js:14314-14371 placement
-function B() {
+function artifactProviderBlockReason() {
   if (isAnalyticsToolDetailsLoggingEnabled()) return "surface_excluded";
   return getArtifactProviderBlockReason();
 }
 //@ chunk-4xpk3fhh.js:14371-14413 placement
 function isArtifactToolEligible() {
-  if (y()) return !1;
-  return K();
+  if (isArtifactSwitchedOff()) return false;
+  return isArtifactEnvEnabled();
 }
 //@ chunk-4xpk3fhh.js:14413-14516 placement
 function shouldRefreshArtifactRoster() {
   return (
-    env.CLAUDE_CODE_ARTIFACT_ASSETS === void 0 &&
+    env.CLAUDE_CODE_ARTIFACT_ASSETS === undefined &&
     isArtifactToolEnabled() &&
     getArtifactPublishStubDir() === null &&
     !env.CLAUDE_CODE_REMOTE
   );
 }
 //@ chunk-4xpk3fhh.js:14516-14596 placement
-function ge() {
-  let e = getPolicyLimitsIneligibleReason();
-  return e === void 0 || e === "prosumer_oauth" || e === "no_auth";
+function isPolicyEligibleForArtifacts() {
+  let policyLimitsIneligibleReason = getPolicyLimitsIneligibleReason();
+  return (
+    policyLimitsIneligibleReason === undefined ||
+    policyLimitsIneligibleReason === "prosumer_oauth" ||
+    policyLimitsIneligibleReason === "no_auth"
+  );
 }
 //@ chunk-4xpk3fhh.js:14596-14678 placement
-function M() {
+function isArtifactGrowthbookOn() {
   return (
-    (isEnvTruthy(env.CLAUDE_CODE_ARTIFACT) && !1) ||
-    getFeatureValue_CACHED_MAY_BE_STALE("tengu_cobalt_plinth", ge())
+    (isEnvTruthy(env.CLAUDE_CODE_ARTIFACT) && false) ||
+    getFeatureValue_CACHED_MAY_BE_STALE("tengu_cobalt_plinth", isPolicyEligibleForArtifacts())
   );
 }
 //@ chunk-4xpk3fhh.js:14678-14709 placement
-function Y() {
-  return M() && isArtifactAdminAllowed();
+function isArtifactAdminAllowedEnough() {
+  return isArtifactGrowthbookOn() && isArtifactAdminAllowed();
 }
 //@ chunk-4xpk3fhh.js:14709-14741 placement
-function he() {
+function isArtifactGrowthbookUnblocked() {
   return getArtifactGrowthbookBlockReason() === null;
 }
 //@ chunk-4xpk3fhh.js:14741-14866 placement
 function getArtifactGrowthbookBlockReason() {
-  if (!M()) return "growthbook_off";
-  if (r6t() || isArtifactAdminAllowed()) return (G(), null);
+  if (!isArtifactGrowthbookOn()) return "growthbook_off";
+  if (isApiKeyGatewaySession() || isArtifactAdminAllowed()) {
+    clearArtifactPolicyFetchAnswer();
+    return null;
+  }
   if (artifactPolicyUnobtained() !== null) return null;
   return "admin_policy";
 }
 //@ chunk-4xpk3fhh.js:14866-15280 placement
 function artifactPolicyUnobtained() {
-  if (r6t()) return null;
+  if (isApiKeyGatewaySession()) return null;
   if (!hasOpusAccess_2(getSubscriptionType())) return null;
   let e = policyDenyKind("allow_cobalt_plinth");
-  if (e !== "cache_miss" && e !== "route_missing") return (G(), null);
+  if (e !== "cache_miss" && e !== "route_missing") {
+    clearArtifactPolicyFetchAnswer();
+    return null;
+  }
   if (isPolicyDeniedByRefusedCacheHint("allow_cobalt_plinth")) return null;
-  let n = e === "route_missing" ? "policy_route_missing" : "policy_fetch_failed",
-    r = getLastFetchOutcome();
-  if (r !== null && !r.success && shouldReportFetchFailure(r))
-    return ((getLiveState().artifactPolicyFetchAnswer = r), { cause: n, outcome: r });
+  let cause = e === "route_missing" ? "policy_route_missing" : "policy_fetch_failed";
+  let lastFetchOutcome = getLastFetchOutcome();
+  if (lastFetchOutcome !== null && !lastFetchOutcome.success && shouldReportFetchFailure(lastFetchOutcome)) {
+    getLiveState().artifactPolicyFetchAnswer = lastFetchOutcome;
+    return {
+      cause,
+      outcome: lastFetchOutcome,
+    };
+  }
   let o = heldArtifactPolicyFetchAnswer();
-  return o === null ? null : { cause: n, outcome: o };
+  return o === null
+    ? null
+    : {
+        cause,
+        outcome: o,
+      };
 }
 //@ chunk-4xpk3fhh.js:15280-15343 placement
 function heldArtifactPolicyFetchAnswer() {
@@ -360,19 +413,23 @@ function artifactHeldPolicyDenyCause() {
   return e === "org_denied" || e === "latched" ? e : null;
 }
 //@ chunk-4xpk3fhh.js:15485-15628 placement
-function shouldReportFetchFailure(e) {
-  if (!e.retrying) return !0;
-  if ((e.errorCode === "auth_failed" && e.httpStatus === 401) || e.errorCode === "spurious_304") return !1;
-  return !isTransientFetchFailure(e);
+function shouldReportFetchFailure(lastFetchOutcome) {
+  if (!lastFetchOutcome.retrying) return true;
+  if (
+    (lastFetchOutcome.errorCode === "auth_failed" && lastFetchOutcome.httpStatus === 401) ||
+    lastFetchOutcome.errorCode === "spurious_304"
+  )
+    return false;
+  return !isTransientFetchFailure(lastFetchOutcome);
 }
 //@ chunk-4xpk3fhh.js:15628-15685 placement
-function G() {
+function clearArtifactPolicyFetchAnswer() {
   if (hasLiveState()) getLiveState().artifactPolicyFetchAnswer = null;
 }
 //@ chunk-4xpk3fhh.js:15685-15752 placement
 function isArtifactToolEnabled() {
   if (getArtifactPublishStubDir() !== null) return isArtifactToolRegistered();
-  return nUe() && isArtifactToolRegistered() && isArtifactAdminAllowed();
+  return hasAnyGatewayCredential() && isArtifactToolRegistered() && isArtifactAdminAllowed();
 }
 //@ chunk-4xpk3fhh.js:15752-15786 placement
 function isArtifactToolRegistered() {
@@ -380,21 +437,21 @@ function isArtifactToolRegistered() {
 }
 //@ chunk-4xpk3fhh.js:15786-15872 placement
 function artifactToolWithholdingGate() {
-  if (y()) return "switched_off";
+  if (isArtifactSwitchedOff()) return "switched_off";
   if (getArtifactPublishStubDir() !== null) return null;
-  return B() ?? getArtifactGrowthbookBlockReason();
+  return artifactProviderBlockReason() ?? getArtifactGrowthbookBlockReason();
 }
 //@ chunk-4xpk3fhh.js:15872-15932 placement
 function isArtifactReadEnabled() {
-  if (y()) return !1;
-  if (!fe()) return !1;
-  return Y();
+  if (isArtifactSwitchedOff()) return false;
+  if (!isArtifactToolsReady()) return false;
+  return isArtifactAdminAllowedEnough();
 }
 //@ chunk-4xpk3fhh.js:15932-16374 placement
 function collectArtifactOffMechanisms() {
-  let e = new Set(),
-    n = !1,
-    r = !1;
+  let e = new Set();
+  let n = false;
+  let r = false;
   for (let offSource of resolveArtifactEnableSetting().offSources)
     switch (offSource.layer) {
       case "env":
@@ -405,33 +462,37 @@ function collectArtifactOffMechanisms() {
         break;
       case "policySettings":
       case "flagSettings":
-        n = !0;
+        n = true;
         break;
       case "localSettings":
       case "projectSettings":
-        r = !0;
+        r = true;
         break;
     }
-  if (n) (e.delete("setting"), e.delete("config_pref"));
+  if (n) {
+    e.delete("setting");
+    e.delete("config_pref");
+  }
   if (e.size > 1) return "multiple";
   let [o] = e;
-  if (o !== void 0) return o;
+  if (o !== undefined) return o;
   return n || r ? "admin_managed" : null;
 }
 //@ chunk-4xpk3fhh.js:16374-16416 placement
-function Ae() {
-  return collectArtifactOffMechanisms() !== null && K() && Y();
+function isArtifactFullyAvailable() {
+  return collectArtifactOffMechanisms() !== null && isArtifactEnvEnabled() && isArtifactAdminAllowedEnough();
 }
 //@ chunk-4xpk3fhh.js:16416-16741 placement
 function maybeLogArtifactDisabledSession() {
-  let e = getLiveState();
-  if (e.artifactDisabledSessionEvaluated) return;
-  if (DU() === null) return;
-  if (((e.artifactDisabledSessionEvaluated = !0), !Ae())) return;
-  let n = collectArtifactOffMechanisms();
-  if (n === null) return;
-  k("tengu_artifact_disabled_session", {
-    mechanism: fromEnum(n),
+  let liveState = getLiveState();
+  if (liveState.artifactDisabledSessionEvaluated) return;
+  if (mergedCommandNames() === null) return;
+  liveState.artifactDisabledSessionEvaluated = true;
+  if (!isArtifactFullyAvailable()) return;
+  let artifactOffMechanisms = collectArtifactOffMechanisms();
+  if (artifactOffMechanisms === null) return;
+  logArtifactTelemetry("tengu_artifact_disabled_session", {
+    mechanism: fromEnum(artifactOffMechanisms),
     session_interactivity:
       !getIsNonInteractiveSession() || getEntrypointKind() === "claude-vscode" || isHostEntrypoint()
         ? lit("interactive")
@@ -441,29 +502,36 @@ function maybeLogArtifactDisabledSession() {
 //@ chunk-4xpk3fhh.js:16741-17498 placement
 function maybeLogArtifactToolWithheld(e) {
   if (!coworkFrameArtifacts() || getSessionEntrypoint() !== "local-agent" || isClaudecodeSession()) return;
-  let n = getLiveState(),
-    r = e === null && !r6t() && !isArtifactAdminAllowed() && artifactPolicyUnobtained() !== null,
-    o = r ? "admin_policy" : e;
+  let liveState = getLiveState();
+  let r =
+    e === null &&
+    !isApiKeyGatewaySession() &&
+    !isArtifactAdminAllowed() &&
+    artifactPolicyUnobtained() !== null;
+  let o = r ? "admin_policy" : e;
   if (o === null) {
-    n.artifactRegisteredSeen = !0;
-    let at = n.artifactWithheldReasonsLogged.at(-1);
-    if (at === void 0 || n.artifactWithheldRecoveryLogged) return;
-    ((n.artifactWithheldRecoveryLogged = !0),
-      k("tengu_artifact_tool_recovered", { withheld_reason: fromEnum(at), ...describePolicyFetchState(at) }));
+    liveState.artifactRegisteredSeen = true;
+    let last = liveState.artifactWithheldReasonsLogged.at(-1);
+    if (last === undefined || liveState.artifactWithheldRecoveryLogged) return;
+    liveState.artifactWithheldRecoveryLogged = true;
+    logArtifactTelemetry("tengu_artifact_tool_recovered", {
+      withheld_reason: fromEnum(last),
+      ...describePolicyFetchState(last),
+    });
     return;
   }
-  if (DU() === null) return;
-  let s = resolveWithheldReason(o),
-    included = n.artifactWithheldReasonsLogged.includes(s);
-  if (included && (!r || n.artifactWithheldListedLogged)) return;
-  if (!included) n.artifactWithheldReasonsLogged.push(s);
-  if (r) n.artifactWithheldListedLogged = !0;
-  k("tengu_artifact_tool_withheld", {
-    reason: fromEnum(s),
-    off_mechanism: fromEnumOpt(s === "switched_off" ? collectArtifactOffMechanisms() : null),
-    after_registered: n.artifactRegisteredSeen,
+  if (mergedCommandNames() === null) return;
+  let withheldReason = resolveWithheldReason(o);
+  let included = liveState.artifactWithheldReasonsLogged.includes(withheldReason);
+  if (included && (!r || liveState.artifactWithheldListedLogged)) return;
+  if (!included) liveState.artifactWithheldReasonsLogged.push(withheldReason);
+  if (r) liveState.artifactWithheldListedLogged = true;
+  logArtifactTelemetry("tengu_artifact_tool_withheld", {
+    reason: fromEnum(withheldReason),
+    off_mechanism: fromEnumOpt(withheldReason === "switched_off" ? collectArtifactOffMechanisms() : null),
+    after_registered: liveState.artifactRegisteredSeen,
     tool_listed: r,
-    ...describePolicyFetchState(s),
+    ...describePolicyFetchState(withheldReason),
   });
 }
 //@ chunk-4xpk3fhh.js:17498-17858 placement
@@ -475,30 +543,41 @@ function describePolicyFetchState(e) {
     e !== "policy_route_missing"
   )
     return {};
-  let n = getLastFetchOutcome(),
-    r = S(),
-    o = r === "nothing" ? "none" : r === "unrestricted" ? "fail_open" : n?.success ? "network" : "disk",
-    s = !isPolicyLimitsEligible()
-      ? "ineligible"
-      : n === null || (!n.success && n.retrying)
-        ? "pending"
-        : n.success
-          ? "ok"
-          : "failed";
-  return { policy_source: fromEnum(o), policy_fetch: fromEnum(s) };
+  let lastFetchOutcome = getLastFetchOutcome();
+  let r = policyCacheStatus();
+  let o =
+    r === "nothing"
+      ? "none"
+      : r === "unrestricted"
+        ? "fail_open"
+        : lastFetchOutcome?.success
+          ? "network"
+          : "disk";
+  let s = !isPolicyLimitsEligible()
+    ? "ineligible"
+    : lastFetchOutcome === null || (!lastFetchOutcome.success && lastFetchOutcome.retrying)
+      ? "pending"
+      : lastFetchOutcome.success
+        ? "ok"
+        : "failed";
+  return {
+    policy_source: fromEnum(o),
+    policy_fetch: fromEnum(s),
+  };
 }
 //@ chunk-4xpk3fhh.js:17858-17940 placement
 function holdArtifactStartupTelemetry() {
-  return (
-    (getLiveState().heldStartupTelemetry ??= []),
-    { flush: flushHeldStartupTelemetry, [Symbol.dispose]: flushHeldStartupTelemetry }
-  );
+  getLiveState().heldStartupTelemetry ??= [];
+  return {
+    flush: flushHeldStartupTelemetry,
+    [Symbol.dispose]: flushHeldStartupTelemetry,
+  };
 }
 //@ chunk-4xpk3fhh.js:17940-18040 placement
 function flushHeldStartupTelemetry() {
-  let e = getLiveState(),
-    heldStartupTelemetry = e.heldStartupTelemetry;
-  e.heldStartupTelemetry = null;
+  let liveState = getLiveState();
+  let heldStartupTelemetry = liveState.heldStartupTelemetry;
+  liveState.heldStartupTelemetry = null;
   for (let r of heldStartupTelemetry ?? []) r();
 }
 //@ chunk-4xpk3fhh.js:18040-18122 placement
@@ -511,7 +590,7 @@ function emitArtifactStartupTelemetry(e) {
   heldStartupTelemetry.push(e);
 }
 //@ chunk-4xpk3fhh.js:18122-18156 placement
-function k(...e) {
+function logArtifactTelemetry(...e) {
   emitArtifactStartupTelemetry(() => logEvent(...e));
 }
 //@ chunk-4xpk3fhh.js:18156-18509 placement
@@ -521,9 +600,12 @@ function resolveWithheldReason(e) {
       return isTopHostSession() ? "surface_excluded" : "nested_child_session";
     case "admin_policy": {
       if (!hasOpusAccess_2(getSubscriptionType())) return "subscription_ineligible";
-      let n = getResponseFromCache();
-      if (n === null) return isPolicyRouteMissing() ? "policy_route_missing" : "policy_cache_miss";
-      return n.restrictions.allow_cobalt_plinth === void 0 ? "compliance_taint" : "org_policy_denied";
+      let responseFromCache = getResponseFromCache();
+      if (responseFromCache === null)
+        return isPolicyRouteMissing() ? "policy_route_missing" : "policy_cache_miss";
+      return responseFromCache.restrictions.allow_cobalt_plinth === undefined
+        ? "compliance_taint"
+        : "org_policy_denied";
     }
     default:
       return e;
@@ -534,12 +616,12 @@ function getArtifactDefaultOn() {
   return ARTIFACT_GATE_SPEC.defaultOn;
 }
 //@ chunk-4xpk3fhh.js:18543-18574 placement
-function Se() {
-  return R() && he();
+function canUserControlArtifactSetting() {
+  return isArtifactProviderUnblocked() && isArtifactGrowthbookUnblocked();
 }
 //@ chunk-4xpk3fhh.js:18574-18625 placement
 function isArtifactConfigToggleable() {
-  return Se() && resolveArtifactEnableSetting().userControllable;
+  return canUserControlArtifactSetting() && resolveArtifactEnableSetting().userControllable;
 }
 //@ chunk-4xpk3fhh.js:18625-18653 placement
 function isArtifactAdminAllowed() {
@@ -547,8 +629,8 @@ function isArtifactAdminAllowed() {
 }
 //@ chunk-4xpk3fhh.js:18653-18749 placement
 function isArtifactAccountAllowed() {
-  if (r6t()) return getAdminRefusalReason() === null;
-  if (!hasOpusAccess_2(getSubscriptionType())) return !1;
+  if (isApiKeyGatewaySession()) return getAdminRefusalReason() === null;
+  if (!hasOpusAccess_2(getSubscriptionType())) return false;
   return isPolicyAllowed("allow_cobalt_plinth");
 }
 //@ chunk-4xpk3fhh.js:18830-18856 placement
@@ -557,10 +639,11 @@ function artifactYieldAdminRefusal() {
 }
 //@ chunk-4xpk3fhh.js:18856-19235 placement
 function getAdminRefusalReason() {
-  if (!r6t()) return null;
-  let e = getStoredOAuthSubscriptionType();
-  if (e === null) return "plan_unreadable";
-  if (e !== "pro" && e !== "max") return "org_policy_unverifiable";
+  if (!isApiKeyGatewaySession()) return null;
+  let storedOAuthSubscriptionType = getStoredOAuthSubscriptionType();
+  if (storedOAuthSubscriptionType === null) return "plan_unreadable";
+  if (storedOAuthSubscriptionType !== "pro" && storedOAuthSubscriptionType !== "max")
+    return "org_policy_unverifiable";
   if (!isPolicyLimitsEligible()) return "policy_unavailable";
   if (isPolicyAllowed("allow_cobalt_plinth")) return null;
   let n = policyDenyKind("allow_cobalt_plinth") ?? "org_denied";
@@ -575,7 +658,7 @@ function getAdminRefusalReason() {
 }
 //@ chunk-4xpk3fhh.js:19235-19297 placement
 function isRepublishInlinePromptEnabled() {
-  return getFeatureValue_CACHED_MAY_BE_STALE("tengu_cobalt_plinth_thrift", !1) === !0;
+  return getFeatureValue_CACHED_MAY_BE_STALE("tengu_cobalt_plinth_thrift", false) === true;
 }
 //@ chunk-4xpk3fhh.js:19297-19324 placement
 function isPublishToolEnabled() {
@@ -583,46 +666,45 @@ function isPublishToolEnabled() {
 }
 //@ chunk-4xpk3fhh.js:19324-19355 placement
 function isResumeFrameSeedEligible() {
-  return !y() && R();
+  return !isArtifactSwitchedOff() && isArtifactProviderUnblocked();
 }
 //@ chunk-06y4szbn.js:35741-36119 placement
-var ARTIFACT_DOC_LIMITS = 4096,
-  eKs =
-    /^(?!\/)(?!.*\/\/)(?!.*\/$)(?!(?:^|.*\/)\.\.?(?:\/|$))[^\p{Cc}\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069\u2028\u2029\\?#%:;]{1,512}$/u,
-  ln = /^[^\p{Cc}\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069\u2028\u2029]{1,1024}$/u,
-  ds = DoctorLazy(() =>
-    A(
-      u({
-        path: o().regex(ln),
-        doc: o()
-          .max(64)
-          .optional()
-          .catch(void 0),
-        headSeq: E()
-          .int()
-          .nonnegative()
-          .optional()
-          .catch(void 0),
-      }),
-    ).max(ARTIFACT_DOC_LIMITS),
-  );
+/**
+ * artifact 文档清单的限额：最多 4096 项、路径 ≤512 字符且不得以 / 开头或含 .. 与转义控制字符，doc 名 ≤64。
+ */
+var ARTIFACT_DOC_LIMITS = 4096;
+var SAFE_ARTIFACT_PATH_RE =
+  /^(?!\/)(?!.*\/\/)(?!.*\/$)(?!(?:^|.*\/)\.\.?(?:\/|$))[^\p{Cc}\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069\u2028\u2029\\?#%:;]{1,512}$/u;
+var ARTIFACT_DOC_PATH_RE = /^[^\p{Cc}\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069\u2028\u2029]{1,1024}$/u;
+var artifactDocsSchema = DoctorLazy(() =>
+  array(
+    u({
+      path: string().regex(ARTIFACT_DOC_PATH_RE),
+      doc: string().max(64).optional().catch(undefined),
+      headSeq: E().int().nonnegative().optional().catch(undefined),
+    }),
+  ).max(ARTIFACT_DOC_LIMITS),
+);
 //@ chunk-06y4szbn.js:36119-36244 placement
 function artifactDocsOrFiles(e) {
-  if (e.docs !== void 0) return ds().safeParse(e.docs).success ? artifactDocs(e) : void 0;
-  return e.files !== void 0 ? artifactDocs(e) : void 0;
+  if (e.docs !== undefined)
+    return artifactDocsSchema().safeParse(e.docs).success ? artifactDocs(e) : undefined;
+  return e.files !== undefined ? artifactDocs(e) : undefined;
 }
 //@ chunk-06y4szbn.js:36244-36544 placement
 function artifactDocs(e) {
-  let n = e.docs === void 0 ? void 0 : ds().safeParse(e.docs);
+  let n = e.docs === undefined ? undefined : artifactDocsSchema().safeParse(e.docs);
   if (n?.success && n.data.length > 0) return n.data;
   if (e.artifactKind !== LIVE_DOC) return [];
-  if (e.files !== void 0 && !hasHeadSubscription(e)) return [];
+  if (e.files !== undefined && !hasHeadSubscription(e)) return [];
   return [
     {
       path: INDEX_HTML,
       ...(typeof e.headSeq === "number" &&
         Number.isSafeInteger(e.headSeq) &&
-        e.headSeq >= 0 && { headSeq: e.headSeq }),
+        e.headSeq >= 0 && {
+          headSeq: e.headSeq,
+        }),
     },
   ];
 }
@@ -635,51 +717,52 @@ function hasHeadSubscription(e) {
 }
 //@ chunk-06y4szbn.js:36714-36914 placement
 var ARTIFACT_DOC_LIST_SCHEMA = DoctorLazy(() =>
-  A(
+  array(
     u({
-      path: o().regex(ln),
-      sha256: o()
+      path: string().regex(ARTIFACT_DOC_PATH_RE),
+      sha256: string()
         .regex(/^[0-9a-f]{64}$/)
         .optional()
-        .catch(void 0),
-      contentType: o()
-        .max(255)
-        .optional()
-        .catch(void 0),
-      doc: o()
-        .max(64)
-        .optional()
-        .catch(void 0),
+        .catch(undefined),
+      contentType: string().max(255).optional().catch(undefined),
+      doc: string().max(64).optional().catch(undefined),
     }),
   ).max(ARTIFACT_DOC_LIMITS),
 );
 //@ chunk-06y4szbn.js:36914-37244 placement
 function artifactFileManifest(e) {
-  if (e.files === void 0) return;
-  let safeParse = ARTIFACT_DOC_LIST_SCHEMA().safeParse(e.files);
-  if (!safeParse.success) return;
-  let r = new Set(artifactDocs(e).map((h) => h.path)),
-    s = new Map();
-  for (let h of safeParse.data)
+  if (e.files === undefined) return;
+  let n = ARTIFACT_DOC_LIST_SCHEMA().safeParse(e.files);
+  if (!n.success) return;
+  let r = new Set(artifactDocs(e).map((h) => h.path));
+  let s = new Map();
+  for (let h of n.data)
     s.set(h.path, {
-      ...(h.sha256 !== void 0 && { sha256: h.sha256 }),
-      ...(h.contentType !== void 0 && { contentType: h.contentType }),
-      live: (h.doc !== void 0 && h.doc !== "") || r.has(h.path),
+      ...(h.sha256 !== undefined && {
+        sha256: h.sha256,
+      }),
+      ...(h.contentType !== undefined && {
+        contentType: h.contentType,
+      }),
+      live: (h.doc !== undefined && h.doc !== "") || r.has(h.path),
     });
   return s;
 }
+//@ chunk-06y4szbn.js:37244-37451 placement
 /**
  * Artifact 工具集是否拆分为独立的评论工具（CLAUDE_CODE_ARTIFACT_TOOLSET / tengu_artifact_toolset）。
  */
-//@ chunk-06y4szbn.js:37244-37451 placement
 function isArtifactToolsetSplit() {
-  let e = getLiveState();
-  if (e.toolsetLatch === null)
-    ((e.toolsetLatch =
+  let liveState = getLiveState();
+  if (liveState.toolsetLatch === null) {
+    liveState.toolsetLatch =
       env.CLAUDE_CODE_ARTIFACT_TOOLSET ??
-      getFeatureValue_CACHED_MAY_BE_STALE("tengu_cobalt_plinth_damson", !1) === !0),
-      logEvent("tengu_artifact_toolset", { on: e.toolsetLatch }));
-  return e.toolsetLatch;
+      getFeatureValue_CACHED_MAY_BE_STALE("tengu_cobalt_plinth_damson", false) === true;
+    logEvent("tengu_artifact_toolset", {
+      on: liveState.toolsetLatch,
+    });
+  }
+  return liveState.toolsetLatch;
 }
 //@ chunk-06y4szbn.js:37451-37484 placement
 function commentsToolName() {
@@ -700,15 +783,20 @@ function pickByToolset(e, n) {
   return isArtifactToolsetSplit() ? n() : e;
 }
 //@ chunk-06y4szbn.js:37717-37798 placement
-function commentsToolCall(e, n) {
+function commentsToolCall(name, n) {
   return isArtifactToolsetSplit()
-    ? { name: ARTIFACT_COMMENTS_TOOL_NAME, input: fromParentArtifactInput("comments", n) }
-    : { name: e, input: n };
+    ? {
+        name: ARTIFACT_COMMENTS_TOOL_NAME,
+        input: fromParentArtifactInput("comments", n),
+      }
+    : {
+        name,
+        input: n,
+      };
 }
-
 export {
   artifactDocsOrFiles,
-  ln,
+  ARTIFACT_DOC_PATH_RE,
   isArtifactToolRegistered,
   isArtifactReadOnlySurface,
   isCoworkFramePublishSession,
@@ -727,7 +815,7 @@ export {
   invitedCopySource,
   otherOrgCopySource,
   othersArtifactReadConsentSurface,
-  eKs,
+  SAFE_ARTIFACT_PATH_RE,
   artifactYieldAdminRefusal,
   artifactPolicyUnobtained,
   artifactHeldPolicyDenyCause,

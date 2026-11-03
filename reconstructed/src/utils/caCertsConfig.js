@@ -21,21 +21,22 @@ import { isSettingSourceEnabled } from "./settings/constants.js";
 import { getSettingsForSource } from "./settings/settings.js";
 import { logFeatureSad } from "../services/analytics/featureTelemetry.js";
 
+//@ chunk-v772wxfr.js:556-728 fingerprint = applyExtraCACertsFromConfig (1)
 /**
  * 未设置 NODE_EXTRA_CA_CERTS 时，从 settings.env 或 ~/.claude.json env 读取并写入 process.env。
  */
-//@ chunk-v772wxfr.js:556-728 fingerprint = applyExtraCACertsFromConfig (1)
 function applyExtraCACertsFromConfig() {
   if (env.NODE_EXTRA_CA_CERTS) return;
   let configPath = getExtraCertsPathFromConfig();
-  if (configPath)
-    ((process.env.NODE_EXTRA_CA_CERTS = configPath),
-      logForDebugging(`CA certs: Applied NODE_EXTRA_CA_CERTS from config to process.env: ${configPath}`));
+  if (configPath) {
+    process.env.NODE_EXTRA_CA_CERTS = configPath;
+    logForDebugging(`CA certs: Applied NODE_EXTRA_CA_CERTS from config to process.env: ${configPath}`);
+  }
 }
+//@ chunk-v772wxfr.js:728-1463 fingerprint = getExtraCertsPathFromConfig (0.675)
 /**
  * 从用户设置或全局配置的 env 中找 NODE_EXTRA_CA_CERTS；宿主托管提供方、远程、diskless 时跳过。
  */
-//@ chunk-v772wxfr.js:728-1463 fingerprint = getExtraCertsPathFromConfig (0.675)
 function getExtraCertsPathFromConfig() {
   try {
     if (
@@ -48,21 +49,22 @@ function getExtraCertsPathFromConfig() {
     }
     if (hasManagedSettings()) return;
     if (isStoredLoginPinned() || isHttpMcpServeInvocation()) return;
-    let globalConfig = getGlobalConfig(),
-      e = withoutInvalidSettingsEnv(globalConfig?.env, "globalConfig"),
-      s = isSettingSourceEnabled("userSettings") ? getSettingsForSource("userSettings") : void 0,
-      n = withoutInvalidSettingsEnv(s?.env, "userSettings");
+    let globalConfig = getGlobalConfig();
+    let globalEnv = withoutInvalidSettingsEnv(globalConfig?.env, "globalConfig");
+    let settings = isSettingSourceEnabled("userSettings") ? getSettingsForSource("userSettings") : undefined;
+    let settingsEnv = withoutInvalidSettingsEnv(settings?.env, "userSettings");
     logForDebugging(
-      `CA certs: Config fallback - globalEnv keys: ${e ? Object.keys(e).join(",") : "none"}, settingsEnv keys: ${n ? Object.keys(n).join(",") : "none"}`,
+      `CA certs: Config fallback - globalEnv keys: ${globalEnv ? Object.keys(globalEnv).join(",") : "none"}, settingsEnv keys: ${settingsEnv ? Object.keys(settingsEnv).join(",") : "none"}`,
     );
-    let path = n?.NODE_EXTRA_CA_CERTS || e?.NODE_EXTRA_CA_CERTS;
+    let path = settingsEnv?.NODE_EXTRA_CA_CERTS || globalEnv?.NODE_EXTRA_CA_CERTS;
     if (path) logForDebugging(`CA certs: Found NODE_EXTRA_CA_CERTS in config/settings: ${path}`);
     return path;
   } catch (error) {
-    (logForDebugging(`CA certs: Config fallback failed: ${error}`, { level: "error" }),
-      logFeatureSad("ca_certs_load", "config_read_failed"));
+    logForDebugging(`CA certs: Config fallback failed: ${error}`, {
+      level: "error",
+    });
+    logFeatureSad("ca_certs_load", "config_read_failed");
     return;
   }
 }
-
 export { applyExtraCACertsFromConfig };

@@ -11,7 +11,7 @@
 import { isPlainObject } from "../utils/isPlainObject.js";
 import { Re } from "../../runtime/bun-runtime.js";
 import { cliBoxesModule } from "../../vendor/unresolved-cjs/index.js";
-import { QWe } from "./layout/node.js";
+import { squashSingleText } from "./layout/node.js";
 import { bunStringWidth } from "./stringWidth.js";
 import { sliceAnsiToWidth } from "./styles.js";
 import { repeatString } from "../utils/stringUtils.js";
@@ -24,10 +24,10 @@ var BOX_KEYS = ["top", "left", "right", "bottom", "topLeft", "topRight", "bottom
 var isBoxStyle = (t) => isPlainObject(t) && BOX_KEYS.every((o) => typeof t[o] === "string");
 //@ chunk-zxbmtfmw.js:1619-1635 sole-consumer
 var cliBoxes = Re(cliBoxesModule(), 1);
+//@ chunk-zxbmtfmw.js:1635-1873 fingerprint = CUSTOM_BORDER_STYLES (0.948)
 /**
  * 在 cli-boxes 之外新增的边框样式：dashed（虚线）、quote（只有左侧竖条 ▎，用于引用块）。
  */
-//@ chunk-zxbmtfmw.js:1635-1873 fingerprint = CUSTOM_BORDER_STYLES (0.948)
 var CUSTOM_BORDER_STYLES = {
   dashed: {
     top: "\u254C",
@@ -51,148 +51,172 @@ var CUSTOM_BORDER_STYLES = {
   },
 };
 //@ chunk-zxbmtfmw.js:1873-1899 layout
-var BORDER_STYLES = { ...cliBoxes.default, ...CUSTOM_BORDER_STYLES };
+var BORDER_STYLES = {
+  ...cliBoxes.default,
+  ...CUSTOM_BORDER_STYLES,
+};
+//@ chunk-zxbmtfmw.js:1899-1989 layout
 /**
  * borderStyle 名或自定义字符集 → 八个方向的边框字符；不合法返回 undefined。
  */
-//@ chunk-zxbmtfmw.js:1899-1989 layout
 function resolveBorderStyle(borderStyle) {
   let i =
     typeof borderStyle === "string" && Object.hasOwn(BORDER_STYLES, borderStyle)
       ? BORDER_STYLES[borderStyle]
       : borderStyle;
-  return isBoxStyle(i) ? i : void 0;
+  return isBoxStyle(i) ? i : undefined;
 }
 //@ chunk-zxbmtfmw.js:1989-2041 layout
-var BORDER_STYLE_NAMES = Object.keys(BORDER_STYLES).filter((t) => resolveBorderStyle(t) !== void 0);
+var BORDER_STYLE_NAMES = Object.keys(BORDER_STYLES).filter((key) => resolveBorderStyle(key) !== undefined);
 //@ chunk-zxbmtfmw.js:2041-2225 placement
 var BIDI_CONTROL_RANGES = Object.freeze([
-    [1564, 1564],
-    [8234, 8238],
-    [8294, 8297],
-  ]),
-  joined = BIDI_CONTROL_RANGES.map(
-    ([t, o]) => `\\u{${t.toString(16)}}` + (o > t ? `-\\u{${o.toString(16)}}` : ""),
-  ).join(""),
-  regExp = new RegExp(`[${joined}]`, "gu");
+  [1564, 1564],
+  [8234, 8238],
+  [8294, 8297],
+]);
+var joined = BIDI_CONTROL_RANGES.map(
+  ([t, o]) => `\\u{${t.toString(16)}}` + (o > t ? `-\\u{${o.toString(16)}}` : ""),
+).join("");
+var regExp = new RegExp(`[${joined}]`, "gu");
+//@ chunk-bzr73sfg.js:288217-288545 fingerprint = embedTextInBorder (1)
 /**
  * 把标题文字嵌进一条边框线：按 start/center/end 与 offset 定位，太长则截断；返回 [左段, 文字, 右段]。
  */
-//@ chunk-bzr73sfg.js:288217-288545 fingerprint = embedTextInBorder (1)
 function embedTextInBorder(borderLine, text, align, offset = 0, borderChar) {
-  text = QWe(text);
-  let textLength = bunStringWidth(text),
-    borderLength = borderLine.length;
+  text = squashSingleText(text);
+  let textLength = bunStringWidth(text);
+  let borderLength = borderLine.length;
   if (textLength >= borderLength - 2) {
-    let O = sliceAnsiToWidth(text, 0, borderLength),
-      repeat = borderChar.repeat(Math.max(0, borderLength - bunStringWidth(O)));
-    return ["", O, repeat];
+    let O = sliceAnsiToWidth(text, 0, borderLength);
+    let _ = borderChar.repeat(Math.max(0, borderLength - bunStringWidth(O)));
+    return ["", O, _];
   }
   let position;
   if (align === "center") position = Math.floor((borderLength - textLength) / 2);
   else if (align === "start") position = offset + 1;
   else position = borderLength - textLength - offset - 1;
   position = Math.max(1, Math.min(position, borderLength - textLength - 1));
-  let A = borderLine.substring(0, 1) + repeatString(borderChar, position - 1),
-    D =
-      repeatString(borderChar, borderLength - position - textLength - 1) +
-      borderLine.substring(borderLength - 1);
-  return [A, text, D];
+  let before = borderLine.substring(0, 1) + repeatString(borderChar, position - 1);
+  let after =
+    repeatString(borderChar, borderLength - position - textLength - 1) +
+    borderLine.substring(borderLength - 1);
+  return [before, text, after];
 }
 //@ chunk-bzr73sfg.js:288545-288605 layout
 function colorBorderSegment(text, color, dim) {
-  let m = applyColor(text, color);
-  if (dim) m = sequential.dim(m);
-  return m;
+  let styled = applyColor(text, color);
+  if (dim) styled = sequential.dim(styled);
+  return styled;
 }
 //@ chunk-bzr73sfg.js:288605-288660 layout
 function withBorderBackground(text, backgroundColor) {
-  return backgroundColor ? applyTextStyles(text, { backgroundColor: backgroundColor }) : text;
+  return backgroundColor
+    ? applyTextStyles(text, {
+        backgroundColor,
+      })
+    : text;
 }
+//@ chunk-bzr73sfg.js:288660-290208 fingerprint = renderBorder (1)
 /**
  * 画 ink-box 的边框：按 borderStyle 取字符集，四边可单独关闭、单独着色/变暗；borderText 可把文字嵌进上或下边框；继承的背景色也涂到边框上。
  */
-//@ chunk-bzr73sfg.js:288660-290208 fingerprint = renderBorder (1)
 var renderBorder = (x, y, node, output, backgroundColor) => {
-    let box = resolveBorderStyle(node.style.borderStyle);
-    if (box !== void 0) {
-      let width = Math.floor(node.yogaNode.getComputedWidth()),
-        height = Math.floor(node.yogaNode.getComputedHeight()),
-        A = node.style.borderTopColor ?? node.style.borderColor,
-        D = node.style.borderBottomColor ?? node.style.borderColor,
-        O = node.style.borderLeftColor ?? node.style.borderColor,
-        _ = node.style.borderRightColor ?? node.style.borderColor,
-        U = node.style.borderTopDimColor ?? node.style.borderDimColor,
-        L = node.style.borderBottomDimColor ?? node.style.borderDimColor,
-        P = node.style.borderLeftDimColor ?? node.style.borderDimColor,
-        z = node.style.borderRightDimColor ?? node.style.borderDimColor,
-        G = node.style.borderTop !== !1,
-        X = node.style.borderBottom !== !1,
-        K = node.style.borderLeft !== !1,
-        q = node.style.borderRight !== !1,
-        innerWidth = Math.max(0, width - (K ? 1 : 0) - (q ? 1 : 0)),
-        topLine = G ? (K ? box.topLeft : "") + box.top.repeat(innerWidth) + (q ? box.topRight : "") : "",
-        styledTop;
-      if (G && node.style.borderText?.position === "top") {
-        let [ue, ce, pe] = embedTextInBorder(
-          topLine,
-          node.style.borderText.content,
-          node.style.borderText.align,
-          node.style.borderText.offset,
-          box.top,
-        );
-        styledTop = colorBorderSegment(ue, A, U) + ce + colorBorderSegment(pe, A, U);
-      } else if (G) styledTop = colorBorderSegment(topLine, A, U);
-      let sideHeight = height;
-      if (G) sideHeight -= 1;
-      if (X) sideHeight -= 1;
-      sideHeight = Math.max(0, sideHeight);
-      let leftColumn = (
-        applyColor(box.left, O) +
-        `
+  let box = resolveBorderStyle(node.style.borderStyle);
+  if (box !== undefined) {
+    let width = Math.floor(node.yogaNode.getComputedWidth());
+    let height = Math.floor(node.yogaNode.getComputedHeight());
+    let topBorderColor = node.style.borderTopColor ?? node.style.borderColor;
+    let bottomBorderColor = node.style.borderBottomColor ?? node.style.borderColor;
+    let leftBorderColor = node.style.borderLeftColor ?? node.style.borderColor;
+    let rightBorderColor = node.style.borderRightColor ?? node.style.borderColor;
+    let dimTopBorderColor = node.style.borderTopDimColor ?? node.style.borderDimColor;
+    let dimBottomBorderColor = node.style.borderBottomDimColor ?? node.style.borderDimColor;
+    let dimLeftBorderColor = node.style.borderLeftDimColor ?? node.style.borderDimColor;
+    let dimRightBorderColor = node.style.borderRightDimColor ?? node.style.borderDimColor;
+    let showTopBorder = node.style.borderTop !== false;
+    let showBottomBorder = node.style.borderBottom !== false;
+    let showLeftBorder = node.style.borderLeft !== false;
+    let showRightBorder = node.style.borderRight !== false;
+    let innerWidth = Math.max(0, width - (showLeftBorder ? 1 : 0) - (showRightBorder ? 1 : 0));
+    let topLine = showTopBorder
+      ? (showLeftBorder ? box.topLeft : "") +
+        box.top.repeat(innerWidth) +
+        (showRightBorder ? box.topRight : "")
+      : "";
+    let styledTop;
+    if (showTopBorder && node.style.borderText?.position === "top") {
+      let [before, text, after] = embedTextInBorder(
+        topLine,
+        node.style.borderText.content,
+        node.style.borderText.align,
+        node.style.borderText.offset,
+        box.top,
+      );
+      styledTop =
+        colorBorderSegment(before, topBorderColor, dimTopBorderColor) +
+        text +
+        colorBorderSegment(after, topBorderColor, dimTopBorderColor);
+    } else if (showTopBorder) styledTop = colorBorderSegment(topLine, topBorderColor, dimTopBorderColor);
+    let sideHeight = height;
+    if (showTopBorder) sideHeight -= 1;
+    if (showBottomBorder) sideHeight -= 1;
+    sideHeight = Math.max(0, sideHeight);
+    let leftColumn = (
+      applyColor(box.left, leftBorderColor) +
+      `
 `
-      ).repeat(sideHeight);
-      if (P) leftColumn = sequential.dim(leftColumn);
-      let rightColumn = (
-        applyColor(box.right, _) +
-        `
+    ).repeat(sideHeight);
+    if (dimLeftBorderColor) leftColumn = sequential.dim(leftColumn);
+    let rightColumn = (
+      applyColor(box.right, rightBorderColor) +
+      `
 `
-      ).repeat(sideHeight);
-      if (z) rightColumn = sequential.dim(rightColumn);
-      let bottomLine = X
-          ? (K ? box.bottomLeft : "") + box.bottom.repeat(innerWidth) + (q ? box.bottomRight : "")
-          : "",
-        styledBottom;
-      if (X && node.style.borderText?.position === "bottom") {
-        let [ue, ce, pe] = embedTextInBorder(
-          bottomLine,
-          node.style.borderText.content,
-          node.style.borderText.align,
-          node.style.borderText.offset,
-          box.bottom,
-        );
-        styledBottom = colorBorderSegment(ue, D, L) + ce + colorBorderSegment(pe, D, L);
-      } else if (X) styledBottom = colorBorderSegment(bottomLine, D, L);
-      let ye = G ? 1 : 0;
-      if (styledTop) output.write(x, y, withBorderBackground(styledTop, backgroundColor));
-      if (K) output.write(x, y + ye, withBorderBackground(leftColumn, backgroundColor));
-      if (q) output.write(x + width - 1, y + ye, withBorderBackground(rightColumn, backgroundColor));
-      if (styledBottom) output.write(x, y + height - 1, withBorderBackground(styledBottom, backgroundColor));
-    }
-  },
-  renderBorderAlias = renderBorder;
+    ).repeat(sideHeight);
+    if (dimRightBorderColor) rightColumn = sequential.dim(rightColumn);
+    let bottomLine = showBottomBorder
+      ? (showLeftBorder ? box.bottomLeft : "") +
+        box.bottom.repeat(innerWidth) +
+        (showRightBorder ? box.bottomRight : "")
+      : "";
+    let styledBottom;
+    if (showBottomBorder && node.style.borderText?.position === "bottom") {
+      let [before, text, after] = embedTextInBorder(
+        bottomLine,
+        node.style.borderText.content,
+        node.style.borderText.align,
+        node.style.borderText.offset,
+        box.bottom,
+      );
+      styledBottom =
+        colorBorderSegment(before, bottomBorderColor, dimBottomBorderColor) +
+        text +
+        colorBorderSegment(after, bottomBorderColor, dimBottomBorderColor);
+    } else if (showBottomBorder)
+      styledBottom = colorBorderSegment(bottomLine, bottomBorderColor, dimBottomBorderColor);
+    let offsetY = showTopBorder ? 1 : 0;
+    if (styledTop) output.write(x, y, withBorderBackground(styledTop, backgroundColor));
+    if (showLeftBorder) output.write(x, y + offsetY, withBorderBackground(leftColumn, backgroundColor));
+    if (showRightBorder)
+      output.write(x + width - 1, y + offsetY, withBorderBackground(rightColumn, backgroundColor));
+    if (styledBottom) output.write(x, y + height - 1, withBorderBackground(styledBottom, backgroundColor));
+  }
+};
+var renderBorderAlias = renderBorder;
 //@ chunk-wj577vf9.js:7263-7311 placement
 function joinRawSegments(e) {
   return e.map((t) => t.raw).join("");
 }
 //@ chunk-wj577vf9.js:7311-7357 placement
-var Rt = /^[ \t>]+/gm,
-  St = /[ \t]+/g,
-  _t = /\n{3,}/g;
+/**
+ * 行首引用标记
+ */
+var BLOCKQUOTE_PREFIX_RE = /^[ \t>]+/gm;
+var INNER_SPACES_RE = /[ \t]+/g;
+var EXCESS_NEWLINES_RE = /\n{3,}/g;
 //@ chunk-wj577vf9.js:7357-7539 placement
 function createNestingGuard() {
-  let weakMap = new WeakMap(),
-    t = (n) => (weakMap.get(n) ?? 0) >= 100;
+  let weakMap = new WeakMap();
+  let t = (n) => (weakMap.get(n) ?? 0) >= 100;
   return {
     isAtMaxNesting: t,
     lexLevel: (n, r) => {
@@ -208,18 +232,20 @@ function createNestingGuard() {
   };
 }
 //@ chunk-wj577vf9.js:7539-7634 placement
-var F = createNestingGuard(),
-  Ie = (e) =>
-    e
-      .replace(Rt, (t) => t.replace(St, " ").trimStart())
-      .replace(
-        _t,
-        `
+/**
+ * 渲染嵌套深度守卫
+ */
+var nestingGuard = createNestingGuard();
+var normalizeBlockText = (e) =>
+  e
+    .replace(BLOCKQUOTE_PREFIX_RE, (t) => t.replace(INNER_SPACES_RE, " ").trimStart())
+    .replace(
+      EXCESS_NEWLINES_RE,
+      `
 
 `,
-      )
-      .trimEnd();
-
+    )
+    .trimEnd();
 export {
   joined,
   regExp,
@@ -228,6 +254,6 @@ export {
   BIDI_CONTROL_RANGES,
   resolveBorderStyle,
   renderBorderAlias,
-  F,
-  Ie,
+  nestingGuard,
+  normalizeBlockText,
 };

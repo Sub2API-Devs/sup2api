@@ -11,13 +11,27 @@
 
 //@ chunk-e6aww6q8.js:3247040-3247357 fingerprint = useIdeConnectionStatus (1)
 function useIdeConnectionStatus(mcpClients) {
-  let found = mcpClients.find((client) => client.name === "ide");
-  if (!found) return { status: null, ideName: null };
-  let config = found.config,
-    ideName = config.type === "sse-ide" || config.type === "ws-ide" ? config.ideName : null;
-  if (found.type === "connected") return { status: "connected", ideName: ideName };
-  if (found.type === "pending") return { status: "pending", ideName: ideName };
-  return { status: "disconnected", ideName: ideName };
+  let ideClient = mcpClients.find((client) => client.name === "ide");
+  if (!ideClient)
+    return {
+      status: null,
+      ideName: null,
+    };
+  let config = ideClient.config;
+  let ideName = config.type === "sse-ide" || config.type === "ws-ide" ? config.ideName : null;
+  if (ideClient.type === "connected")
+    return {
+      status: "connected",
+      ideName,
+    };
+  if (ideClient.type === "pending")
+    return {
+      status: "pending",
+      ideName,
+    };
+  return {
+    status: "disconnected",
+    ideName,
+  };
 }
-
 export { useIdeConnectionStatus };

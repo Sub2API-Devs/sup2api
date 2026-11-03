@@ -8,18 +8,23 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:130149-130357 cjs-fingerprint
-var Zn = x(function (rE, Xn) {
-  function td(e) {
+var require_erb = x(function (cjsExports, cjsModule) {
+  function erb(hljs) {
     return {
       name: "ERB",
       subLanguage: "xml",
       contains: [
-        e.COMMENT("<%#", "%>"),
-        { begin: "<%[%=-]?", end: "[%-]?%>", subLanguage: "ruby", excludeBegin: !0, excludeEnd: !0 },
+        hljs.COMMENT("<%#", "%>"),
+        {
+          begin: "<%[%=-]?",
+          end: "[%-]?%>",
+          subLanguage: "ruby",
+          excludeBegin: true,
+          excludeEnd: true,
+        },
       ],
     };
   }
-  Xn.exports = td;
+  cjsModule.exports = erb;
 });
-
-export { Zn };
+export { require_erb };

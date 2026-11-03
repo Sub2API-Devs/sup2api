@@ -6,16 +6,16 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { xs } from "./xml-parser.js";
+import { require_xml_parser } from "./xml-parser.js";
 
 //@ chunk-edce4vxq.js:74087-75638 cjs-fingerprint
-var jt = x(function (bs) {
-  var Aa = xs();
-  function Ra(e) {
-    return e.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+var require_xml_builder = x(function (cjsExports) {
+  var xmlParser = require_xml_parser();
+  function escapeAttribute(value) {
+    return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
-  function Ia(e) {
-    return e
+  function escapeElement(value) {
+    return value
       .replace(/&/g, "&amp;")
       .replace(/"/g, "&quot;")
       .replace(/'/g, "&apos;")
@@ -26,91 +26,100 @@ var jt = x(function (bs) {
       .replace(/\u0085/g, "&#x85;")
       .replace(/\u2028/, "&#x2028;");
   }
-  class Ft {
+  class XmlText {
     value;
-    constructor(e) {
-      this.value = e;
+    constructor(value) {
+      this.value = value;
     }
     toString() {
-      return Ia("" + this.value);
+      return escapeElement("" + this.value);
     }
   }
-  class Ue {
+  class XmlNode {
     name;
     children;
     attributes = {};
-    static of(e, t, r) {
-      let s = new Ue(e);
-      if (t !== void 0) s.addChildNode(new Ft(t));
-      if (r !== void 0) s.withName(r);
-      return s;
+    static of(name, childText, withName) {
+      let node = new XmlNode(name);
+      if (childText !== undefined) node.addChildNode(new XmlText(childText));
+      if (withName !== undefined) node.withName(withName);
+      return node;
     }
-    constructor(e, t = []) {
-      ((this.name = e), (this.children = t));
+    constructor(name, children = []) {
+      this.name = name;
+      this.children = children;
     }
-    withName(e) {
-      return ((this.name = e), this);
-    }
-    addAttribute(e, t) {
-      return ((this.attributes[e] = t), this);
-    }
-    addChildNode(e) {
-      return (this.children.push(e), this);
-    }
-    removeAttribute(e) {
-      return (delete this.attributes[e], this);
-    }
-    n(e) {
-      return ((this.name = e), this);
-    }
-    c(e) {
-      return (this.children.push(e), this);
-    }
-    a(e, t) {
-      if (t != null) this.attributes[e] = t;
+    withName(name) {
+      this.name = name;
       return this;
     }
-    cc(e, t, r = t) {
-      if (e[t] != null) {
-        let withName = Ue.of(t, e[t]).withName(r);
-        this.c(withName);
+    addAttribute(name, value) {
+      this.attributes[name] = value;
+      return this;
+    }
+    addChildNode(child) {
+      this.children.push(child);
+      return this;
+    }
+    removeAttribute(name) {
+      delete this.attributes[name];
+      return this;
+    }
+    n(name) {
+      this.name = name;
+      return this;
+    }
+    c(child) {
+      this.children.push(child);
+      return this;
+    }
+    a(name, value) {
+      if (value != null) this.attributes[name] = value;
+      return this;
+    }
+    cc(input, field, withName = field) {
+      if (input[field] != null) {
+        let node = XmlNode.of(field, input[field]).withName(withName);
+        this.c(node);
       }
     }
-    l(e, t, r, s) {
-      if (e[t] != null)
-        s().map((a) => {
-          (a.withName(r), this.c(a));
+    l(input, listName, memberName, s) {
+      if (input[listName] != null)
+        s().map((node) => {
+          node.withName(memberName);
+          this.c(node);
         });
     }
-    lc(e, t, r, s) {
-      if (e[t] != null) {
-        let o = s(),
-          a = new Ue(r);
-        (o.map((c) => {
-          a.c(c);
-        }),
-          this.c(a));
+    lc(input, listName, memberName, valueProvider) {
+      if (input[listName] != null) {
+        let nodes = valueProvider();
+        let containerNode = new XmlNode(memberName);
+        nodes.map((node) => {
+          containerNode.c(node);
+        });
+        this.c(containerNode);
       }
     }
     toString() {
-      let e = Boolean(this.children.length),
-        t = `<${this.name}`,
-        attributes = this.attributes;
-      for (let s of Object.keys(attributes)) {
-        let o = attributes[s];
-        if (o != null) t += ` ${s}="${Ra("" + o)}"`;
+      let hasChildren = Boolean(this.children.length);
+      let xmlText = `<${this.name}`;
+      let attributes = this.attributes;
+      for (let attributeName of Object.keys(attributes)) {
+        let attribute = attributes[attributeName];
+        if (attribute != null) xmlText += ` ${attributeName}="${escapeAttribute("" + attribute)}"`;
       }
-      return (t += !e ? "/>" : `>${this.children.map((s) => s.toString()).join("")}</${this.name}>`);
+      return (xmlText += !hasChildren
+        ? "/>"
+        : `>${this.children.map((c) => c.toString()).join("")}</${this.name}>`);
     }
   }
-  Object.defineProperty(bs, "parseXML", {
-    enumerable: !0,
+  Object.defineProperty(cjsExports, "parseXML", {
+    enumerable: true,
     get: function () {
-      return Aa.parseXML;
+      return xmlParser.parseXML;
     },
   });
-  bs.XmlNode = Ue;
-  bs.XmlText = Ft;
+  cjsExports.XmlNode = XmlNode;
+  cjsExports.XmlText = XmlText;
 });
-
-export { jt };
+export { require_xml_builder };

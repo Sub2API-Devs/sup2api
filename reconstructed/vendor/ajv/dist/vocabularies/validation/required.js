@@ -6,80 +6,92 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../runtime/bun-runtime.js";
-import { Q } from "../code.js";
-import { uh } from "../../compile/codegen/index.js";
-import { ew } from "../../compile/util.js";
+import { require_code_2 } from "../code.js";
+import { require_codegen_2 } from "../../compile/codegen/index.js";
+import { require_util_2 } from "../../compile/util.js";
 
 //@ chunk-s82q9s4x.js:87116-88514 cjs-fingerprint
-var Uo = x(function (zo) {
-  Object.defineProperty(zo, "__esModule", { value: !0 });
-  var ae = Q(),
-    ce = uh(),
-    Vo = ew(),
-    Ef = {
-      message: ({ params: { missingProperty: e } }) => ce.str`must have required property '${e}'`,
-      params: ({ params: { missingProperty: e } }) => ce._`{missingProperty: ${e}}`,
-    },
-    Sf = {
-      keyword: "required",
-      type: "object",
-      schemaType: "array",
-      $data: !0,
-      error: Ef,
-      code(e) {
-        let { gen: gen, schema: schema, schemaCode: schemaCode, data: n, $data: $data, it: it } = e,
-          { opts: opts } = it;
-        if (!$data && schema.length === 0) return;
-        let c = schema.length >= opts.loopRequired;
-        if (it.allErrors) u();
-        else l();
-        if (opts.strictRequired) {
-          let properties = e.parentSchema.properties,
-            { definedProperties: definedProperties } = e.it;
-          for (let p of schema)
-            if (
-              (properties === null || properties === void 0 ? void 0 : properties[p]) === void 0 &&
-              !definedProperties.has(p)
-            ) {
-              let y = it.schemaEnv.baseId + it.errSchemaPath,
-                v = `required property "${p}" is not defined at "${y}" (strictRequired)`;
-              Vo.checkStrictMode(it, v, it.opts.strictRequired);
-            }
+var require_required = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  var code_1 = require_code_2();
+  var codegen_1 = require_codegen_2();
+  var util_1 = require_util_2();
+  var error = {
+    message: ({ params: { missingProperty } }) =>
+      codegen_1.str`must have required property '${missingProperty}'`,
+    params: ({ params: { missingProperty } }) => codegen_1._`{missingProperty: ${missingProperty}}`,
+  };
+  var def = {
+    keyword: "required",
+    type: "object",
+    schemaType: "array",
+    $data: true,
+    error,
+    code(cxt) {
+      let { gen, schema, schemaCode, data, $data, it } = cxt;
+      let { opts } = it;
+      if (!$data && schema.length === 0) return;
+      let useLoop = schema.length >= opts.loopRequired;
+      if (it.allErrors) allErrorsMode();
+      else exitOnErrorMode();
+      if (opts.strictRequired) {
+        let props = cxt.parentSchema.properties;
+        let { definedProperties } = cxt.it;
+        for (let requiredKey of schema)
+          if (
+            (props === null || props === undefined ? undefined : props[requiredKey]) === undefined &&
+            !definedProperties.has(requiredKey)
+          ) {
+            let schemaPath = it.schemaEnv.baseId + it.errSchemaPath;
+            let msg = `required property "${requiredKey}" is not defined at "${schemaPath}" (strictRequired)`;
+            util_1.checkStrictMode(it, msg, it.opts.strictRequired);
+          }
+      }
+      function allErrorsMode() {
+        if (useLoop || $data) cxt.block$data(codegen_1.nil, loopAllRequired);
+        else for (let prop of schema) code_1.checkReportMissingProp(cxt, prop);
+      }
+      function exitOnErrorMode() {
+        let missing = gen.let("missing");
+        if (useLoop || $data) {
+          let valid = gen.let("valid", true);
+          cxt.block$data(valid, () => loopUntilMissing(missing, valid));
+          cxt.ok(valid);
+        } else {
+          gen.if(code_1.checkMissingProp(cxt, schema, missing));
+          code_1.reportMissingProp(cxt, missing);
+          gen.else();
         }
-        function u() {
-          if (c || $data) e.block$data(ce.nil, f);
-          else for (let _ of schema) ae.checkReportMissingProp(e, _);
-        }
-        function l() {
-          let _ = gen.let("missing");
-          if (c || $data) {
-            let h = gen.let("valid", !0);
-            (e.block$data(h, () => b(_, h)), e.ok(h));
-          } else (gen.if(ae.checkMissingProp(e, schema, _)), ae.reportMissingProp(e, _), gen.else());
-        }
-        function f() {
-          gen.forOf("prop", schemaCode, (_) => {
-            (e.setParams({ missingProperty: _ }),
-              gen.if(ae.noPropertyInData(gen, n, _, opts.ownProperties), () => e.error()));
+      }
+      function loopAllRequired() {
+        gen.forOf("prop", schemaCode, (prop) => {
+          cxt.setParams({
+            missingProperty: prop,
           });
-        }
-        function b(_, h) {
-          (e.setParams({ missingProperty: _ }),
-            gen.forOf(
-              _,
-              schemaCode,
-              () => {
-                (gen.assign(h, ae.propertyInData(gen, n, _, opts.ownProperties)),
-                  gen.if(ce.not(h), () => {
-                    (e.error(), gen.break());
-                  }));
-              },
-              ce.nil,
-            ));
-        }
-      },
-    };
-  zo.default = Sf;
+          gen.if(code_1.noPropertyInData(gen, data, prop, opts.ownProperties), () => cxt.error());
+        });
+      }
+      function loopUntilMissing(missing, valid) {
+        cxt.setParams({
+          missingProperty: missing,
+        });
+        gen.forOf(
+          missing,
+          schemaCode,
+          () => {
+            gen.assign(valid, code_1.propertyInData(gen, data, missing, opts.ownProperties));
+            gen.if(codegen_1.not(valid), () => {
+              cxt.error();
+              gen.break();
+            });
+          },
+          codegen_1.nil,
+        );
+      }
+    },
+  };
+  cjsExports.default = def;
 });
-
-export { Uo };
+export { require_required };

@@ -12,28 +12,31 @@ import { plural } from "../../utils/stringUtils.js";
 import { REPORTFINDINGS } from "../../tools/ReportFindingsTool/constants.js";
 import { STAGES } from "../../components/tasks/RemoteSessionDetailDialog.js";
 import {
-  Ht,
-  Gt,
-  Z,
-  oe,
-  ne,
-  ce,
+  REVIEW_BUG_ANGLES_A_TO_C,
+  REVIEW_ANGLE_REUSE,
+  REVIEW_ANGLE_SIMPLIFY,
+  REVIEW_ANGLE_CONVENTIONS,
+  REVIEW_ANGLE_TESTS,
+  REVIEW_ANGLE_EFFICIENCY,
   REVIEW_PHASE0_GATHER_DIFF,
-  le,
-  Ke,
-  Wt,
-  Es,
-  ks,
-  qt,
-  Ss,
+  REVIEW_CLEANUP_OUTPUT_FIELDS,
+  REPORT_FINDINGS_FALLBACK_NOTE,
+  REVIEW_PHASE2_VERIFY_THREE_STATE,
+  REVIEW_PHASE2_VERIFY_RECALL_BIASED,
+  REVIEW_BUG_ANGLES_A_TO_E,
+  REVIEW_ANGLE_DROPPED_GUARD_HINT,
+  REVIEW_PHASE3_GAP_SWEEP,
 } from "./reviewAngles.js";
 import { AGENT } from "../../tools/AgentTool/constants.js";
 
 //@ chunk-hantmvxa.js:58017-58106 placement
-function ge(e) {
+function findingCapPhrase(e) {
   return e === "all" ? "**every finding**" : `at most **${e} ${plural(e, "finding")}**`;
 }
 //@ chunk-hantmvxa.js:58106-63982 placement
+/**
+ * 低 effort 评审提示词：输出段落、低 effort 单次 diff、报告工具不可用时的说明与单次扫描提示。
+ */
 var buildReviewOutputSection = (e) => `## Output
 
 Return findings as a JSON array ${e === "all" ? "with one object for every finding that survives, no maximum" : `of at most ${e} ${plural(e, "object")}`}:
@@ -50,15 +53,15 @@ Return findings as a JSON array ${e === "all" ? "with one object for every findi
 \`\`\`
 
 Ranked most-severe first. ${
-    e === "all"
-      ? "Keep every finding that survives. There is no maximum."
-      : `If more than ${e} survive, keep the ${e} most
+  e === "all"
+    ? "Keep every finding that survives. There is no maximum."
+    : `If more than ${e} survive, keep the ${e} most
 severe.`
-  } If nothing survives verification, return \`[]\`. Do not call the
+} If nothing survives verification, return \`[]\`. Do not call the
 ${REPORTFINDINGS} tool even if it is available - this review's
 output contract is the JSON block above.
-`,
-  zt = (e) => `## Output
+`;
+var buildReportFindingsOutputSection = (e) => `## Output
 
 Call the ${REPORTFINDINGS} tool once to report this review's results
 with \`{level, findings}\`. \`findings\` is ${e === "all" ? "every finding that survives, no maximum," : `at most ${e} ${plural(e, "entry", "entries")}`} ranked
@@ -72,8 +75,11 @@ produced one. ${e === "all" ? "Keep every finding that survives. There is no max
 nothing survives verification, call it with an empty array. Do not also print
 the findings as text, and do not create or publish an artifact of the review -
 the tool call is the report.
-`,
-  Vt = (e, n = 4) => `\`low effort \u2192 1 diff pass \u2192 no verify \u2192 ${STAGES(n)}\`
+`;
+var buildLowEffortPrompt = (
+  e,
+  n = 4,
+) => `\`low effort \u2192 1 diff pass \u2192 no verify \u2192 ${STAGES(n)}\`
 
 ## Turn 1 \u2014 read
 
@@ -98,19 +104,21 @@ hunk.
 
 ${
   e
-    ? `Report ${ge(n)}, most-severe first, in one
+    ? `Report ${findingCapPhrase(n)}, most-severe first, in one
 ${REPORTFINDINGS} call with \`{level, findings}\` \u2014 each entry has
 \`file\`, \`line\`, \`summary\`, \`short_summary\` (\u226460 characters), and
 \`failure_scenario\`. If nothing qualifies, call it with an empty findings
 array. Do not also print the findings as text.
 `
-    : `Output ${ge(n)}, most-severe first, one line each:
+    : `Output ${findingCapPhrase(n)}, most-severe first, one line each:
 \`path/to/file.ext:123 \u2014 what's wrong and the concrete failure\`. If nothing
 qualifies, output exactly \`(none)\`. Do not call the
 ${REPORTFINDINGS} tool even if it is available.
 `
-}`,
-  Kt = (e) => `\`low effort \u2192 1 diff pass \u2192 no verify \u2192 \u2265min(files,4) findings\`
+}`;
+var buildLowEffortInlinePrompt = (
+  e,
+) => `\`low effort \u2192 1 diff pass \u2192 no verify \u2192 \u2265min(files,4) findings\`
 
 ## Turn 1 \u2014 read
 
@@ -149,34 +157,26 @@ If you have fewer, do one more pass focused on the largest changed file
 and on any **removed** code blocks. Output \`(none)\` only if the diff is
 trivially correct after that pass.
 `
-}`,
-  Se = `${Ht}
-${Gt}
-${Z}
-${oe}
-${ne}
-${ce}`,
-  Ts = `The ${AGENT} tool isn't available in this context, so the usual
+}`;
+var REVIEW_ANGLES_BLOCK = `${REVIEW_BUG_ANGLES_A_TO_C}
+${REVIEW_ANGLE_REUSE}
+${REVIEW_ANGLE_SIMPLIFY}
+${REVIEW_ANGLE_CONVENTIONS}
+${REVIEW_ANGLE_TESTS}
+${REVIEW_ANGLE_EFFICIENCY}`;
+var REPORT_FINDINGS_UNAVAILABLE_NOTE = `The ${AGENT} tool isn't available in this context, so the usual
 multi-agent fan-out and subagent verify pass can't run. Work through every
 angle below yourself, in this same context, in one pass \u2014 do not skip angles
 for lack of fan-out. Re-check each candidate against the diff before keeping
 it; drop anything you can't back up with a concrete failure scenario.
-`,
-  As = `
+`;
+var SINGLE_PASS_NOTICE = `
 State clearly in your summary that this was a single-pass review done without
 the ${AGENT} tool, not the full multi-agent fan-out, so whoever reads
 it isn't misled about what actually ran.
 `;
 //@ chunk-hantmvxa.js:63982-64879 placement
-function composeReviewPhases({
-  tag: tag,
-  leadIn: leadIn,
-  angleCount: angleCount,
-  angles: angles,
-  cap: cap,
-  output: output,
-  sweepFocus: sweepFocus,
-}) {
+function composeReviewPhases({ tag, leadIn, angleCount, angles, cap, output, sweepFocus }) {
   let b = sweepFocus
     ? `
 ## Phase 3 \u2014 Sweep for gaps
@@ -190,7 +190,7 @@ looking ONLY for defects not already listed: ${sweepFocus}
 
 ${leadIn}
 
-${Ts}
+${REPORT_FINDINGS_UNAVAILABLE_NOTE}
 ${REVIEW_PHASE0_GATHER_DIFF}## Phase 1 \u2014 Find candidates (${angleCount} angles, single pass)
 
 Work through **${angleCount} angles** yourself, in sequence, in this same
@@ -198,27 +198,30 @@ context \u2014 do not spawn subagents. Each surfaces candidate findings with
 \`file\`, \`line\`, a one-line \`summary\`, and a concrete \`failure_scenario\`.
 
 ${angles}
-${le}
+${REVIEW_CLEANUP_OUTPUT_FIELDS}
 ## Phase 2 \u2014 Dedup and self-check (no subagent verify)
 
 Dedup near-duplicates (same defect, same location, same reason \u2192 keep one).
 Re-check each remaining candidate yourself against the diff before keeping it.
 ${b}
-${output(cap)}${As}`;
+${output(cap)}${SINGLE_PASS_NOTICE}`;
 }
 //@ chunk-hantmvxa.js:64879-68578 placement
-var buildMediumReviewPrompt = (e, n = !0, s = 8) => {
-    if (!n)
-      return composeReviewPhases({
-        tag: `medium effort \u2192 ${AGENT} tool unavailable \u2192 single-pass inline \u2192 ${STAGES(s)}`,
-        leadIn: `You are reviewing for **precision** at medium effort: every finding you surface
+/**
+ * 高/xhigh/max effort 评审提示词构造器与报告工具不可用时的说明。
+ */
+var buildMediumReviewPrompt = (e, n = true, s = 8) => {
+  if (!n)
+    return composeReviewPhases({
+      tag: `medium effort \u2192 ${AGENT} tool unavailable \u2192 single-pass inline \u2192 ${STAGES(s)}`,
+      leadIn: `You are reviewing for **precision** at medium effort: every finding you surface
 should be one a maintainer would act on.`,
-        angleCount: 8,
-        angles: Se,
-        cap: s,
-        output: e,
-      });
-    return `\`medium effort \u2192 3+5 angles \xD7 6 candidates \u2192 1-vote verify \u2192 ${STAGES(s)}\`
+      angleCount: 8,
+      angles: REVIEW_ANGLES_BLOCK,
+      cap: s,
+      output: e,
+    });
+  return `\`medium effort \u2192 3+5 angles \xD7 6 candidates \u2192 1-vote verify \u2192 ${STAGES(s)}\`
 
 You are reviewing for **precision** at medium effort: every finding you surface
 should be one a maintainer would act on.
@@ -228,30 +231,30 @@ ${REVIEW_PHASE0_GATHER_DIFF}
 
 Run **8 independent finder angles** via the ${AGENT} tool. Each
 surfaces **up to 6 candidate findings** with \`file\`, \`line\`, a one-line
-\`summary\`, and a concrete \`failure_scenario\`. ${Ke}
+\`summary\`, and a concrete \`failure_scenario\`. ${REPORT_FINDINGS_FALLBACK_NOTE}
 
-${Se}
-${le}
+${REVIEW_ANGLES_BLOCK}
+${REVIEW_CLEANUP_OUTPUT_FIELDS}
 Pass every candidate with a nameable failure scenario through \u2014 finders that
 silently drop half-believed candidates bypass the verify step and are the
 dominant cause of misses.
 
-${Wt}
+${REVIEW_PHASE2_VERIFY_THREE_STATE}
 ${e(s)}`;
-  },
-  Jt = (e, n = !0, s = 10) => {
-    if (!n)
-      return composeReviewPhases({
-        tag: `high effort \u2192 ${AGENT} tool unavailable \u2192 single-pass inline \u2192 ${STAGES(s)}`,
-        leadIn: `You are reviewing for **recall** at high effort: catch every real bug a careful
+};
+var buildHighEffortPrompt = (e, n = true, s = 10) => {
+  if (!n)
+    return composeReviewPhases({
+      tag: `high effort \u2192 ${AGENT} tool unavailable \u2192 single-pass inline \u2192 ${STAGES(s)}`,
+      leadIn: `You are reviewing for **recall** at high effort: catch every real bug a careful
 reviewer would catch in one sitting. At this level, catching real bugs matters
 more than avoiding false positives. Err on the side of surfacing.`,
-        angleCount: 8,
-        angles: Se,
-        cap: s,
-        output: e,
-      });
-    return `\`high effort \u2192 3+5 angles \xD7 6 candidates \u2192 1-vote verify (recall-biased) \u2192 ${STAGES(s)}\`
+      angleCount: 8,
+      angles: REVIEW_ANGLES_BLOCK,
+      cap: s,
+      output: e,
+    });
+  return `\`high effort \u2192 3+5 angles \xD7 6 candidates \u2192 1-vote verify (recall-biased) \u2192 ${STAGES(s)}\`
 
 You are reviewing for **recall** at high effort: catch every real bug a careful
 reviewer would catch in one sitting. At this level, catching real bugs matters
@@ -262,39 +265,39 @@ ${REVIEW_PHASE0_GATHER_DIFF}
 
 Run **8 independent finder angles** via the ${AGENT} tool. Each
 surfaces **up to 6 candidate findings** with \`file\`, \`line\`, a one-line
-\`summary\`, and a concrete \`failure_scenario\`. ${Ke}
+\`summary\`, and a concrete \`failure_scenario\`. ${REPORT_FINDINGS_FALLBACK_NOTE}
 
-${Se}
-${le}
+${REVIEW_ANGLES_BLOCK}
+${REVIEW_CLEANUP_OUTPUT_FIELDS}
 Pass every candidate with a nameable failure scenario through \u2014 finders that
 silently drop half-believed candidates bypass the verify step and are the
 dominant cause of misses.
 
-${Es}
+${REVIEW_PHASE2_VERIFY_RECALL_BIASED}
 ${e(s)}`;
-  },
-  Bt = `${ks}
-${Gt}
-${Z}
-${oe}
-${ne}
-${ce}`,
-  Qt =
-    (e) =>
-    (n, s = !0, r = 15) => {
-      if (!s)
-        return composeReviewPhases({
-          tag: `${e} effort \u2192 ${AGENT} tool unavailable \u2192 single-pass inline \u2192 ${STAGES(r)}`,
-          leadIn: `You are reviewing for **recall** at ${e === "max" ? "maximum" : "extra-high"} effort: catch every real bug. At
+};
+var REVIEW_ANGLES_BLOCK_HIGH = `${REVIEW_BUG_ANGLES_A_TO_E}
+${REVIEW_ANGLE_REUSE}
+${REVIEW_ANGLE_SIMPLIFY}
+${REVIEW_ANGLE_CONVENTIONS}
+${REVIEW_ANGLE_TESTS}
+${REVIEW_ANGLE_EFFICIENCY}`;
+var makeEffortPromptBuilder =
+  (e) =>
+  (n, s = true, r = 15) => {
+    if (!s)
+      return composeReviewPhases({
+        tag: `${e} effort \u2192 ${AGENT} tool unavailable \u2192 single-pass inline \u2192 ${STAGES(r)}`,
+        leadIn: `You are reviewing for **recall** at ${e === "max" ? "maximum" : "extra-high"} effort: catch every real bug. At
 this level, catching real bugs matters more than avoiding false positives \u2014 a
 missed bug ships. Err on the side of surfacing.`,
-          angleCount: 10,
-          angles: Bt,
-          cap: r,
-          output: n,
-          sweepFocus: qt,
-        });
-      return `\`${e} effort \u2192 5+5 angles \xD7 8 candidates \u2192 1-vote verify \u2192 sweep \u2192 ${STAGES(r)}\`
+        angleCount: 10,
+        angles: REVIEW_ANGLES_BLOCK_HIGH,
+        cap: r,
+        output: n,
+        sweepFocus: REVIEW_ANGLE_DROPPED_GUARD_HINT,
+      });
+    return `\`${e} effort \u2192 5+5 angles \xD7 8 candidates \u2192 1-vote verify \u2192 sweep \u2192 ${STAGES(r)}\`
 
 You are reviewing for **recall** at ${e === "max" ? "maximum" : "extra-high"} effort: catch every real bug. At
 this level, catching real bugs matters more than avoiding false positives \u2014 a
@@ -306,18 +309,27 @@ ${REVIEW_PHASE0_GATHER_DIFF}
 Run **10 independent finder angles** via the ${AGENT} tool. Each
 surfaces **up to 8 candidate findings**. Do NOT let one angle's conclusions
 suppress another's \u2014 if two angles flag the same line for different reasons,
-record both. ${Ke}
+record both. ${REPORT_FINDINGS_FALLBACK_NOTE}
 
-${Bt}
-${le}
-${Wt}
+${REVIEW_ANGLES_BLOCK_HIGH}
+${REVIEW_CLEANUP_OUTPUT_FIELDS}
+${REVIEW_PHASE2_VERIFY_THREE_STATE}
 This is recall mode \u2014 a single non-REFUTED vote carries the finding. Do NOT
 drop on uncertainty.
 
-${Ss}
+${REVIEW_PHASE3_GAP_SWEEP}
 ${n(r)}`;
-    },
-  Zt = Qt("xhigh"),
-  to = Qt("max");
-
-export { ge, Vt, Kt, buildMediumReviewPrompt, Jt, Zt, to, zt, buildReviewOutputSection };
+  };
+var buildXhighEffortPrompt = makeEffortPromptBuilder("xhigh");
+var buildMaxEffortPrompt = makeEffortPromptBuilder("max");
+export {
+  findingCapPhrase,
+  buildLowEffortPrompt,
+  buildLowEffortInlinePrompt,
+  buildMediumReviewPrompt,
+  buildHighEffortPrompt,
+  buildXhighEffortPrompt,
+  buildMaxEffortPrompt,
+  buildReportFindingsOutputSection,
+  buildReviewOutputSection,
+};

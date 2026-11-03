@@ -7,182 +7,234 @@
  */
 
 //@ chunk-kndsyy4v.js:481-3493 esm-fingerprint
-function U(e, s = !1) {
-  let r = e.length,
-    n = 0,
-    i = "",
-    o = 0,
-    c = 16,
-    f = 0,
-    u = 0,
-    h = 0,
-    p = 0,
-    k = 0;
-  function y(g, b) {
-    let a = 0,
-      d = 0;
-    while (a < g || !b) {
-      let code = e.charCodeAt(n);
-      if (code >= 48 && code <= 57) d = d * 16 + code - 48;
-      else if (code >= 65 && code <= 70) d = d * 16 + code - 65 + 10;
-      else if (code >= 97 && code <= 102) d = d * 16 + code - 97 + 10;
+function createScanner(text, ignoreTrivia = false) {
+  let len = text.length;
+  let pos = 0;
+  let value = "";
+  let tokenOffset = 0;
+  let token = 16;
+  let lineNumber = 0;
+  let lineStartOffset = 0;
+  let tokenLineStartOffset = 0;
+  let prevTokenLineStartOffset = 0;
+  let scanError = 0;
+  function scanHexDigits(count, exact) {
+    let digits = 0;
+    let value = 0;
+    while (digits < count || !exact) {
+      let ch = text.charCodeAt(pos);
+      if (ch >= 48 && ch <= 57) value = value * 16 + ch - 48;
+      else if (ch >= 65 && ch <= 70) value = value * 16 + ch - 65 + 10;
+      else if (ch >= 97 && ch <= 102) value = value * 16 + ch - 97 + 10;
       else break;
-      (n++, a++);
+      pos++;
+      digits++;
     }
-    if (a < g) d = -1;
-    return d;
+    if (digits < count) value = -1;
+    return value;
   }
-  function T(g) {
-    ((n = g), (i = ""), (o = 0), (c = 16), (k = 0));
+  function setPosition(newPosition) {
+    pos = newPosition;
+    value = "";
+    tokenOffset = 0;
+    token = 16;
+    scanError = 0;
   }
-  function w() {
-    let g = n;
-    if (e.charCodeAt(n) === 48) n++;
+  function scanNumber() {
+    let start = pos;
+    if (text.charCodeAt(pos) === 48) pos++;
     else {
-      n++;
-      while (n < e.length && I(e.charCodeAt(n))) n++;
+      pos++;
+      while (pos < text.length && isDigit(text.charCodeAt(pos))) pos++;
     }
-    if (n < e.length && e.charCodeAt(n) === 46)
-      if ((n++, n < e.length && I(e.charCodeAt(n)))) {
-        n++;
-        while (n < e.length && I(e.charCodeAt(n))) n++;
-      } else return ((k = 3), e.substring(g, n));
-    let b = n;
-    if (n < e.length && (e.charCodeAt(n) === 69 || e.charCodeAt(n) === 101)) {
-      if ((n++, (n < e.length && e.charCodeAt(n) === 43) || e.charCodeAt(n) === 45)) n++;
-      if (n < e.length && I(e.charCodeAt(n))) {
-        n++;
-        while (n < e.length && I(e.charCodeAt(n))) n++;
-        b = n;
-      } else k = 3;
+    if (pos < text.length && text.charCodeAt(pos) === 46) {
+      pos++;
+      if (pos < text.length && isDigit(text.charCodeAt(pos))) {
+        pos++;
+        while (pos < text.length && isDigit(text.charCodeAt(pos))) pos++;
+      } else {
+        scanError = 3;
+        return text.substring(start, pos);
+      }
     }
-    return e.substring(g, b);
+    let end = pos;
+    if (pos < text.length && (text.charCodeAt(pos) === 69 || text.charCodeAt(pos) === 101)) {
+      pos++;
+      if ((pos < text.length && text.charCodeAt(pos) === 43) || text.charCodeAt(pos) === 45) pos++;
+      if (pos < text.length && isDigit(text.charCodeAt(pos))) {
+        pos++;
+        while (pos < text.length && isDigit(text.charCodeAt(pos))) pos++;
+        end = pos;
+      } else scanError = 3;
+    }
+    return text.substring(start, end);
   }
-  function v() {
-    let g = "",
-      b = n;
-    while (!0) {
-      if (n >= r) {
-        ((g += e.substring(b, n)), (k = 2));
+  function scanString() {
+    let result = "";
+    let start = pos;
+    while (true) {
+      if (pos >= len) {
+        result += text.substring(start, pos);
+        scanError = 2;
         break;
       }
-      let code = e.charCodeAt(n);
-      if (code === 34) {
-        ((g += e.substring(b, n)), n++);
+      let ch = text.charCodeAt(pos);
+      if (ch === 34) {
+        result += text.substring(start, pos);
+        pos++;
         break;
       }
-      if (code === 92) {
-        if (((g += e.substring(b, n)), n++, n >= r)) {
-          k = 2;
+      if (ch === 92) {
+        result += text.substring(start, pos);
+        pos++;
+        if (pos >= len) {
+          scanError = 2;
           break;
         }
-        switch (e.charCodeAt(n++)) {
+        switch (text.charCodeAt(pos++)) {
           case 34:
-            g += '"';
+            result += '"';
             break;
           case 92:
-            g += "\\";
+            result += "\\";
             break;
           case 47:
-            g += "/";
+            result += "/";
             break;
           case 98:
-            g += "\b";
+            result += "\b";
             break;
           case 102:
-            g += "\f";
+            result += "\f";
             break;
           case 110:
-            g += `
+            result += `
 `;
             break;
           case 114:
-            g += "\r";
+            result += "\r";
             break;
           case 116:
-            g += "\t";
+            result += "\t";
             break;
           case 117:
-            let m = y(4, !0);
-            if (m >= 0) g += String.fromCharCode(m);
-            else k = 4;
+            let ch3 = scanHexDigits(4, true);
+            if (ch3 >= 0) result += String.fromCharCode(ch3);
+            else scanError = 4;
             break;
           default:
-            k = 5;
+            scanError = 5;
         }
-        b = n;
+        start = pos;
         continue;
       }
-      if (code >= 0 && code <= 31)
-        if (J(code)) {
-          ((g += e.substring(b, n)), (k = 2));
+      if (ch >= 0 && ch <= 31)
+        if (isLineBreak(ch)) {
+          result += text.substring(start, pos);
+          scanError = 2;
           break;
-        } else k = 6;
-      n++;
+        } else scanError = 6;
+      pos++;
     }
-    return g;
+    return result;
   }
-  function N() {
-    if (((i = ""), (k = 0), (o = n), (u = f), (p = h), n >= r)) return ((o = r), (c = 17));
-    let code = e.charCodeAt(n);
-    if (Y(code)) {
-      do (n++, (i += String.fromCharCode(code)), (code = e.charCodeAt(n)));
-      while (Y(code));
-      return (c = 15);
+  function scanNext() {
+    value = "";
+    scanError = 0;
+    tokenOffset = pos;
+    lineStartOffset = lineNumber;
+    prevTokenLineStartOffset = tokenLineStartOffset;
+    if (pos >= len) {
+      tokenOffset = len;
+      return (token = 17);
     }
-    if (J(code)) {
-      if ((n++, (i += String.fromCharCode(code)), code === 13 && e.charCodeAt(n) === 10))
-        (n++,
-          (i += `
-`));
-      return (f++, (h = n), (c = 14));
+    let code = text.charCodeAt(pos);
+    if (isWhiteSpace(code)) {
+      do {
+        pos++;
+        value += String.fromCharCode(code);
+        code = text.charCodeAt(pos);
+      } while (isWhiteSpace(code));
+      return (token = 15);
+    }
+    if (isLineBreak(code)) {
+      pos++;
+      value += String.fromCharCode(code);
+      if (code === 13 && text.charCodeAt(pos) === 10) {
+        pos++;
+        value += `
+`;
+      }
+      lineNumber++;
+      tokenLineStartOffset = pos;
+      return (token = 14);
     }
     switch (code) {
       case 123:
-        return (n++, (c = 1));
+        pos++;
+        return (token = 1);
       case 125:
-        return (n++, (c = 2));
+        pos++;
+        return (token = 2);
       case 91:
-        return (n++, (c = 3));
+        pos++;
+        return (token = 3);
       case 93:
-        return (n++, (c = 4));
+        pos++;
+        return (token = 4);
       case 58:
-        return (n++, (c = 6));
+        pos++;
+        return (token = 6);
       case 44:
-        return (n++, (c = 5));
+        pos++;
+        return (token = 5);
       case 34:
-        return (n++, (i = v()), (c = 10));
+        pos++;
+        value = scanString();
+        return (token = 10);
       case 47:
-        let b = n - 1;
-        if (e.charCodeAt(n + 1) === 47) {
-          n += 2;
-          while (n < r) {
-            if (J(e.charCodeAt(n))) break;
-            n++;
+        let start = pos - 1;
+        if (text.charCodeAt(pos + 1) === 47) {
+          pos += 2;
+          while (pos < len) {
+            if (isLineBreak(text.charCodeAt(pos))) break;
+            pos++;
           }
-          return ((i = e.substring(b, n)), (c = 12));
+          value = text.substring(start, pos);
+          return (token = 12);
         }
-        if (e.charCodeAt(n + 1) === 42) {
-          n += 2;
-          let a = r - 1,
-            d = !1;
-          while (n < a) {
-            let code = e.charCodeAt(n);
-            if (code === 42 && e.charCodeAt(n + 1) === 47) {
-              ((n += 2), (d = !0));
+        if (text.charCodeAt(pos + 1) === 42) {
+          pos += 2;
+          let safeLength = len - 1;
+          let commentClosed = false;
+          while (pos < safeLength) {
+            let ch = text.charCodeAt(pos);
+            if (ch === 42 && text.charCodeAt(pos + 1) === 47) {
+              pos += 2;
+              commentClosed = true;
               break;
             }
-            if ((n++, J(code))) {
-              if (code === 13 && e.charCodeAt(n) === 10) n++;
-              (f++, (h = n));
+            pos++;
+            if (isLineBreak(ch)) {
+              if (ch === 13 && text.charCodeAt(pos) === 10) pos++;
+              lineNumber++;
+              tokenLineStartOffset = pos;
             }
           }
-          if (!d) (n++, (k = 1));
-          return ((i = e.substring(b, n)), (c = 13));
+          if (!commentClosed) {
+            pos++;
+            scanError = 1;
+          }
+          value = text.substring(start, pos);
+          return (token = 13);
         }
-        return ((i += String.fromCharCode(code)), n++, (c = 16));
+        value += String.fromCharCode(code);
+        pos++;
+        return (token = 16);
       case 45:
-        if (((i += String.fromCharCode(code)), n++, n === r || !I(e.charCodeAt(n)))) return (c = 16);
+        value += String.fromCharCode(code);
+        pos++;
+        if (pos === len || !isDigit(text.charCodeAt(pos))) return (token = 16);
       case 48:
       case 49:
       case 50:
@@ -193,26 +245,32 @@ function U(e, s = !1) {
       case 55:
       case 56:
       case 57:
-        return ((i += w()), (c = 11));
+        value += scanNumber();
+        return (token = 11);
       default:
-        while (n < r && S(code)) (n++, (code = e.charCodeAt(n)));
-        if (o !== n) {
-          switch (((i = e.substring(o, n)), i)) {
-            case "true":
-              return (c = 8);
-            case "false":
-              return (c = 9);
-            case "null":
-              return (c = 7);
-          }
-          return (c = 16);
+        while (pos < len && isUnknownContentCharacter(code)) {
+          pos++;
+          code = text.charCodeAt(pos);
         }
-        return ((i += String.fromCharCode(code)), n++, (c = 16));
+        if (tokenOffset !== pos) {
+          switch (((value = text.substring(tokenOffset, pos)), value)) {
+            case "true":
+              return (token = 8);
+            case "false":
+              return (token = 9);
+            case "null":
+              return (token = 7);
+          }
+          return (token = 16);
+        }
+        value += String.fromCharCode(code);
+        pos++;
+        return (token = 16);
     }
   }
-  function S(g) {
-    if (Y(g) || J(g)) return !1;
-    switch (g) {
+  function isUnknownContentCharacter(code) {
+    if (isWhiteSpace(code) || isLineBreak(code)) return false;
+    switch (code) {
       case 125:
       case 93:
       case 123:
@@ -221,125 +279,124 @@ function U(e, s = !1) {
       case 58:
       case 44:
       case 47:
-        return !1;
+        return false;
     }
-    return !0;
+    return true;
   }
-  function B() {
-    let g;
-    do g = N();
-    while (g >= 12 && g <= 15);
-    return g;
+  function scanNextNonTrivia() {
+    let result;
+    do result = scanNext();
+    while (result >= 12 && result <= 15);
+    return result;
   }
   return {
-    setPosition: T,
-    getPosition: () => n,
-    scan: s ? B : N,
-    getToken: () => c,
-    getTokenValue: () => i,
-    getTokenOffset: () => o,
-    getTokenLength: () => n - o,
-    getTokenStartLine: () => u,
-    getTokenStartCharacter: () => o - p,
-    getTokenError: () => k,
+    setPosition,
+    getPosition: () => pos,
+    scan: ignoreTrivia ? scanNextNonTrivia : scanNext,
+    getToken: () => token,
+    getTokenValue: () => value,
+    getTokenOffset: () => tokenOffset,
+    getTokenLength: () => pos - tokenOffset,
+    getTokenStartLine: () => lineStartOffset,
+    getTokenStartCharacter: () => tokenOffset - prevTokenLineStartOffset,
+    getTokenError: () => scanError,
   };
 }
 //@ chunk-kndsyy4v.js:3493-3528 esm-layout
-function Y(e) {
-  return e === 32 || e === 9;
+function isWhiteSpace(ch) {
+  return ch === 32 || ch === 9;
 }
 //@ chunk-kndsyy4v.js:3528-3564 esm-layout
-function J(e) {
-  return e === 10 || e === 13;
+function isLineBreak(ch) {
+  return ch === 10 || ch === 13;
 }
 //@ chunk-kndsyy4v.js:3564-3598 esm-layout
-function I(e) {
-  return e >= 48 && e <= 57;
+function isDigit(ch) {
+  return ch >= 48 && ch <= 57;
 }
 //@ chunk-kndsyy4v.js:3598-3604 esm-layout
-var G;
+var CharacterCodes;
 //@ chunk-kndsyy4v.js:3604-5028 esm-fingerprint
-(function (e) {
-  ((e[(e.lineFeed = 10)] = "lineFeed"),
-    (e[(e.carriageReturn = 13)] = "carriageReturn"),
-    (e[(e.space = 32)] = "space"),
-    (e[(e._0 = 48)] = "_0"),
-    (e[(e._1 = 49)] = "_1"),
-    (e[(e._2 = 50)] = "_2"),
-    (e[(e._3 = 51)] = "_3"),
-    (e[(e._4 = 52)] = "_4"),
-    (e[(e._5 = 53)] = "_5"),
-    (e[(e._6 = 54)] = "_6"),
-    (e[(e._7 = 55)] = "_7"),
-    (e[(e._8 = 56)] = "_8"),
-    (e[(e._9 = 57)] = "_9"),
-    (e[(e.a = 97)] = "a"),
-    (e[(e.b = 98)] = "b"),
-    (e[(e.c = 99)] = "c"),
-    (e[(e.d = 100)] = "d"),
-    (e[(e.e = 101)] = "e"),
-    (e[(e.f = 102)] = "f"),
-    (e[(e.g = 103)] = "g"),
-    (e[(e.h = 104)] = "h"),
-    (e[(e.i = 105)] = "i"),
-    (e[(e.j = 106)] = "j"),
-    (e[(e.k = 107)] = "k"),
-    (e[(e.l = 108)] = "l"),
-    (e[(e.m = 109)] = "m"),
-    (e[(e.n = 110)] = "n"),
-    (e[(e.o = 111)] = "o"),
-    (e[(e.p = 112)] = "p"),
-    (e[(e.q = 113)] = "q"),
-    (e[(e.r = 114)] = "r"),
-    (e[(e.s = 115)] = "s"),
-    (e[(e.t = 116)] = "t"),
-    (e[(e.u = 117)] = "u"),
-    (e[(e.v = 118)] = "v"),
-    (e[(e.w = 119)] = "w"),
-    (e[(e.x = 120)] = "x"),
-    (e[(e.y = 121)] = "y"),
-    (e[(e.z = 122)] = "z"),
-    (e[(e.A = 65)] = "A"),
-    (e[(e.B = 66)] = "B"),
-    (e[(e.C = 67)] = "C"),
-    (e[(e.D = 68)] = "D"),
-    (e[(e.E = 69)] = "E"),
-    (e[(e.F = 70)] = "F"),
-    (e[(e.G = 71)] = "G"),
-    (e[(e.H = 72)] = "H"),
-    (e[(e.I = 73)] = "I"),
-    (e[(e.J = 74)] = "J"),
-    (e[(e.K = 75)] = "K"),
-    (e[(e.L = 76)] = "L"),
-    (e[(e.M = 77)] = "M"),
-    (e[(e.N = 78)] = "N"),
-    (e[(e.O = 79)] = "O"),
-    (e[(e.P = 80)] = "P"),
-    (e[(e.Q = 81)] = "Q"),
-    (e[(e.R = 82)] = "R"),
-    (e[(e.S = 83)] = "S"),
-    (e[(e.T = 84)] = "T"),
-    (e[(e.U = 85)] = "U"),
-    (e[(e.V = 86)] = "V"),
-    (e[(e.W = 87)] = "W"),
-    (e[(e.X = 88)] = "X"),
-    (e[(e.Y = 89)] = "Y"),
-    (e[(e.Z = 90)] = "Z"),
-    (e[(e.asterisk = 42)] = "asterisk"),
-    (e[(e.backslash = 92)] = "backslash"),
-    (e[(e.closeBrace = 125)] = "closeBrace"),
-    (e[(e.closeBracket = 93)] = "closeBracket"),
-    (e[(e.colon = 58)] = "colon"),
-    (e[(e.comma = 44)] = "comma"),
-    (e[(e.dot = 46)] = "dot"),
-    (e[(e.doubleQuote = 34)] = "doubleQuote"),
-    (e[(e.minus = 45)] = "minus"),
-    (e[(e.openBrace = 123)] = "openBrace"),
-    (e[(e.openBracket = 91)] = "openBracket"),
-    (e[(e.plus = 43)] = "plus"),
-    (e[(e.slash = 47)] = "slash"),
-    (e[(e.formFeed = 12)] = "formFeed"),
-    (e[(e.tab = 9)] = "tab"));
-})(G || (G = {}));
-
-export { U };
+(function (CharacterCodes) {
+  CharacterCodes[(CharacterCodes.lineFeed = 10)] = "lineFeed";
+  CharacterCodes[(CharacterCodes.carriageReturn = 13)] = "carriageReturn";
+  CharacterCodes[(CharacterCodes.space = 32)] = "space";
+  CharacterCodes[(CharacterCodes._0 = 48)] = "_0";
+  CharacterCodes[(CharacterCodes._1 = 49)] = "_1";
+  CharacterCodes[(CharacterCodes._2 = 50)] = "_2";
+  CharacterCodes[(CharacterCodes._3 = 51)] = "_3";
+  CharacterCodes[(CharacterCodes._4 = 52)] = "_4";
+  CharacterCodes[(CharacterCodes._5 = 53)] = "_5";
+  CharacterCodes[(CharacterCodes._6 = 54)] = "_6";
+  CharacterCodes[(CharacterCodes._7 = 55)] = "_7";
+  CharacterCodes[(CharacterCodes._8 = 56)] = "_8";
+  CharacterCodes[(CharacterCodes._9 = 57)] = "_9";
+  CharacterCodes[(CharacterCodes.a = 97)] = "a";
+  CharacterCodes[(CharacterCodes.b = 98)] = "b";
+  CharacterCodes[(CharacterCodes.c = 99)] = "c";
+  CharacterCodes[(CharacterCodes.d = 100)] = "d";
+  CharacterCodes[(CharacterCodes.e = 101)] = "e";
+  CharacterCodes[(CharacterCodes.f = 102)] = "f";
+  CharacterCodes[(CharacterCodes.g = 103)] = "g";
+  CharacterCodes[(CharacterCodes.h = 104)] = "h";
+  CharacterCodes[(CharacterCodes.i = 105)] = "i";
+  CharacterCodes[(CharacterCodes.j = 106)] = "j";
+  CharacterCodes[(CharacterCodes.k = 107)] = "k";
+  CharacterCodes[(CharacterCodes.l = 108)] = "l";
+  CharacterCodes[(CharacterCodes.m = 109)] = "m";
+  CharacterCodes[(CharacterCodes.n = 110)] = "n";
+  CharacterCodes[(CharacterCodes.o = 111)] = "o";
+  CharacterCodes[(CharacterCodes.p = 112)] = "p";
+  CharacterCodes[(CharacterCodes.q = 113)] = "q";
+  CharacterCodes[(CharacterCodes.r = 114)] = "r";
+  CharacterCodes[(CharacterCodes.s = 115)] = "s";
+  CharacterCodes[(CharacterCodes.t = 116)] = "t";
+  CharacterCodes[(CharacterCodes.u = 117)] = "u";
+  CharacterCodes[(CharacterCodes.v = 118)] = "v";
+  CharacterCodes[(CharacterCodes.w = 119)] = "w";
+  CharacterCodes[(CharacterCodes.x = 120)] = "x";
+  CharacterCodes[(CharacterCodes.y = 121)] = "y";
+  CharacterCodes[(CharacterCodes.z = 122)] = "z";
+  CharacterCodes[(CharacterCodes.A = 65)] = "A";
+  CharacterCodes[(CharacterCodes.B = 66)] = "B";
+  CharacterCodes[(CharacterCodes.C = 67)] = "C";
+  CharacterCodes[(CharacterCodes.D = 68)] = "D";
+  CharacterCodes[(CharacterCodes.E = 69)] = "E";
+  CharacterCodes[(CharacterCodes.F = 70)] = "F";
+  CharacterCodes[(CharacterCodes.G = 71)] = "G";
+  CharacterCodes[(CharacterCodes.H = 72)] = "H";
+  CharacterCodes[(CharacterCodes.I = 73)] = "I";
+  CharacterCodes[(CharacterCodes.J = 74)] = "J";
+  CharacterCodes[(CharacterCodes.K = 75)] = "K";
+  CharacterCodes[(CharacterCodes.L = 76)] = "L";
+  CharacterCodes[(CharacterCodes.M = 77)] = "M";
+  CharacterCodes[(CharacterCodes.N = 78)] = "N";
+  CharacterCodes[(CharacterCodes.O = 79)] = "O";
+  CharacterCodes[(CharacterCodes.P = 80)] = "P";
+  CharacterCodes[(CharacterCodes.Q = 81)] = "Q";
+  CharacterCodes[(CharacterCodes.R = 82)] = "R";
+  CharacterCodes[(CharacterCodes.S = 83)] = "S";
+  CharacterCodes[(CharacterCodes.T = 84)] = "T";
+  CharacterCodes[(CharacterCodes.U = 85)] = "U";
+  CharacterCodes[(CharacterCodes.V = 86)] = "V";
+  CharacterCodes[(CharacterCodes.W = 87)] = "W";
+  CharacterCodes[(CharacterCodes.X = 88)] = "X";
+  CharacterCodes[(CharacterCodes.Y = 89)] = "Y";
+  CharacterCodes[(CharacterCodes.Z = 90)] = "Z";
+  CharacterCodes[(CharacterCodes.asterisk = 42)] = "asterisk";
+  CharacterCodes[(CharacterCodes.backslash = 92)] = "backslash";
+  CharacterCodes[(CharacterCodes.closeBrace = 125)] = "closeBrace";
+  CharacterCodes[(CharacterCodes.closeBracket = 93)] = "closeBracket";
+  CharacterCodes[(CharacterCodes.colon = 58)] = "colon";
+  CharacterCodes[(CharacterCodes.comma = 44)] = "comma";
+  CharacterCodes[(CharacterCodes.dot = 46)] = "dot";
+  CharacterCodes[(CharacterCodes.doubleQuote = 34)] = "doubleQuote";
+  CharacterCodes[(CharacterCodes.minus = 45)] = "minus";
+  CharacterCodes[(CharacterCodes.openBrace = 123)] = "openBrace";
+  CharacterCodes[(CharacterCodes.openBracket = 91)] = "openBracket";
+  CharacterCodes[(CharacterCodes.plus = 43)] = "plus";
+  CharacterCodes[(CharacterCodes.slash = 47)] = "slash";
+  CharacterCodes[(CharacterCodes.formFeed = 12)] = "formFeed";
+  CharacterCodes[(CharacterCodes.tab = 9)] = "tab";
+})(CharacterCodes || (CharacterCodes = {}));
+export { createScanner };

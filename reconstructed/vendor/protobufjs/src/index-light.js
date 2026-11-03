@@ -6,7 +6,7 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { tIo } from "./index-minimal.js";
+import { require_index_minimal as tIo } from "./index-minimal.js";
 import { Ka } from "./encoder.js";
 import { qa } from "./decoder.js";
 import { za } from "./verifier.js";
@@ -27,42 +27,43 @@ import { Cr } from "./types.js";
 import { de } from "./util.js";
 
 //@ chunk-pwh5dx3n.js:129796-130453 cjs-fingerprint
-var Wd = x(function (CA, Hd) {
-  var z = (Hd.exports = tIo());
-  z.build = "light";
-  function zE(e, t, r) {
-    if (typeof t === "function") ((r = t), (t = new z.Root()));
-    else if (!t) t = new z.Root();
-    return t.load(e, r);
+var Wd = x(function (cjsExports, cjsModule) {
+  var protobuf = (cjsModule.exports = tIo());
+  protobuf.build = "light";
+  function load(filename, root, callback) {
+    if (typeof root === "function") {
+      callback = root;
+      root = new protobuf.Root();
+    } else if (!root) root = new protobuf.Root();
+    return root.load(filename, callback);
   }
-  z.load = zE;
-  function HE(e, t) {
-    if (!t) t = new z.Root();
-    return t.loadSync(e);
+  protobuf.load = load;
+  function loadSync(filename, root) {
+    if (!root) root = new protobuf.Root();
+    return root.loadSync(filename);
   }
-  z.loadSync = HE;
-  z.encoder = Ka();
-  z.decoder = qa();
-  z.verifier = za();
-  z.converter = ja();
-  z.ReflectionObject = Kt();
-  z.Namespace = zr();
-  z.Root = xs();
-  z.Enum = nt();
-  z.Type = Ps();
-  z.Field = Yt();
-  z.OneOf = Sr();
-  z.MapField = Ts();
-  z.Service = bs();
-  z.Method = Rs();
-  z.Message = Os();
-  z.wrappers = Ga();
-  z.types = Cr();
-  z.util = de();
-  z.ReflectionObject._configure(z.Root);
-  z.Namespace._configure(z.Type, z.Service, z.Enum);
-  z.Root._configure(z.Type);
-  z.Field._configure(z.Type);
+  protobuf.loadSync = loadSync;
+  protobuf.encoder = Ka();
+  protobuf.decoder = qa();
+  protobuf.verifier = za();
+  protobuf.converter = ja();
+  protobuf.ReflectionObject = Kt();
+  protobuf.Namespace = zr();
+  protobuf.Root = xs();
+  protobuf.Enum = nt();
+  protobuf.Type = Ps();
+  protobuf.Field = Yt();
+  protobuf.OneOf = Sr();
+  protobuf.MapField = Ts();
+  protobuf.Service = bs();
+  protobuf.Method = Rs();
+  protobuf.Message = Os();
+  protobuf.wrappers = Ga();
+  protobuf.types = Cr();
+  protobuf.util = de();
+  protobuf.ReflectionObject._configure(protobuf.Root);
+  protobuf.Namespace._configure(protobuf.Type, protobuf.Service, protobuf.Enum);
+  protobuf.Root._configure(protobuf.Type);
+  protobuf.Field._configure(protobuf.Type);
 });
-
 export { Wd };

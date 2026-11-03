@@ -8,8 +8,8 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:361952-362383 cjs-fingerprint
-var Fi = x(function (Ag, Gi) {
-  function Gp(e) {
+var require_php_template = x(function (cjsExports, cjsModule) {
+  function phpTemplate(hljs) {
     return {
       name: "PHP template",
       subLanguage: "xml",
@@ -19,17 +19,38 @@ var Fi = x(function (Ag, Gi) {
           end: /\?>/,
           subLanguage: "php",
           contains: [
-            { begin: "/\\*", end: "\\*/", skip: !0 },
-            { begin: 'b"', end: '"', skip: !0 },
-            { begin: "b'", end: "'", skip: !0 },
-            e.inherit(e.APOS_STRING_MODE, { illegal: null, className: null, contains: null, skip: !0 }),
-            e.inherit(e.QUOTE_STRING_MODE, { illegal: null, className: null, contains: null, skip: !0 }),
+            {
+              begin: "/\\*",
+              end: "\\*/",
+              skip: true,
+            },
+            {
+              begin: 'b"',
+              end: '"',
+              skip: true,
+            },
+            {
+              begin: "b'",
+              end: "'",
+              skip: true,
+            },
+            hljs.inherit(hljs.APOS_STRING_MODE, {
+              illegal: null,
+              className: null,
+              contains: null,
+              skip: true,
+            }),
+            hljs.inherit(hljs.QUOTE_STRING_MODE, {
+              illegal: null,
+              className: null,
+              contains: null,
+              skip: true,
+            }),
           ],
         },
       ],
     };
   }
-  Gi.exports = Gp;
+  cjsModule.exports = phpTemplate;
 });
-
-export { Fi };
+export { require_php_template };

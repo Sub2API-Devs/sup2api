@@ -11,29 +11,38 @@
 import { LOOPBACK_HOSTS, malformedError } from "./pairingErrors.js";
 
 //@ chunk-p7xf186d.js:6058-6487 placement
-function normalizeApiOrigin(e, t = !1) {
+function normalizeApiOrigin(apiOrigin, allowLoopbackHttp = false) {
   let n;
   try {
-    n = new URL(e);
+    n = new URL(apiOrigin);
   } catch {
-    throw TypeError(`pairing apiOrigin is not a URL: ${e}`);
+    throw TypeError(`pairing apiOrigin is not a URL: ${apiOrigin}`);
   }
   if (
-    !(n.protocol === "https:" || (t && n.protocol === "http:" && LOOPBACK_HOSTS.has(n.hostname))) ||
+    !(
+      n.protocol === "https:" ||
+      (allowLoopbackHttp && n.protocol === "http:" && LOOPBACK_HOSTS.has(n.hostname))
+    ) ||
     n.username ||
     n.password ||
     (n.pathname !== "/" && n.pathname !== "") ||
     n.search ||
     n.hash
   )
-    throw TypeError(`pairing apiOrigin must be a bare https origin: ${e}`);
+    throw TypeError(`pairing apiOrigin must be a bare https origin: ${apiOrigin}`);
   let i = `${n.origin}/api/oauth/local_pairing`;
-  return { issuer: i, attest: `${i}/attest`, jwks: `${i}/jwks.json` };
+  return {
+    issuer: i,
+    attest: `${i}/attest`,
+    jwks: `${i}/jwks.json`,
+  };
 }
 //@ chunk-p7xf186d.js:6487-6577 placement
-var PAIRING_PROTOCOL = "claude-local-pairing/v1",
-  textEncoder = new TextEncoder(),
-  textDecoder = new TextDecoder("utf-8", { fatal: !0 });
+var PAIRING_PROTOCOL = "claude-local-pairing/v1";
+var textEncoder = new TextEncoder();
+var textDecoder = new TextDecoder("utf-8", {
+  fatal: true,
+});
 //@ chunk-p7xf186d.js:6577-6611 placement
 function utf8Encode(e) {
   return textEncoder.encode(e);
@@ -50,16 +59,21 @@ function concatBytesArgs(...e) {
 function concatBytes(e) {
   let t = 0;
   for (let i of e) t += i.length;
-  let uint8Array = new Uint8Array(t),
-    r = 0;
-  for (let i of e) (uint8Array.set(i, r), (r += i.length));
+  let uint8Array = new Uint8Array(t);
+  let r = 0;
+  for (let i of e) {
+    uint8Array.set(i, r);
+    r += i.length;
+  }
   return uint8Array;
 }
 //@ chunk-p7xf186d.js:6798-6942 placement
 function lengthPrefixed(e) {
-  let t = typeof e === "string" ? utf8Encode(e) : e,
-    uint8Array = new Uint8Array(4 + t.length);
-  return (new DataView(uint8Array.buffer).setUint32(0, t.length, !1), uint8Array.set(t, 4), uint8Array);
+  let t = typeof e === "string" ? utf8Encode(e) : e;
+  let uint8Array = new Uint8Array(4 + t.length);
+  new DataView(uint8Array.buffer).setUint32(0, t.length, false);
+  uint8Array.set(t, 4);
+  return uint8Array;
 }
 //@ chunk-p7xf186d.js:6942-7014 placement
 function isNonNegativeSafeInt(e) {
@@ -69,23 +83,27 @@ function isNonNegativeSafeInt(e) {
 function u64be(e) {
   if (!isNonNegativeSafeInt(e)) throw RangeError("u64be: not a non-negative safe integer");
   let uint8Array = new Uint8Array(8);
-  return (new DataView(uint8Array.buffer).setBigUint64(0, BigInt(e), !1), uint8Array);
+  new DataView(uint8Array.buffer).setBigUint64(0, BigInt(e), false);
+  return uint8Array;
 }
 //@ chunk-p7xf186d.js:7181-7277 placement
-var ht = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_",
-  gt = /^[A-Za-z0-9_-]*$/;
+/**
+ * base64url 的字母表。
+ */
+var BASE64URL_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+var BASE64URL_RE = /^[A-Za-z0-9_-]*$/;
 //@ chunk-p7xf186d.js:7277-7650 placement
 function base64UrlDecode(e) {
   let t = e.length % 4;
-  if (!gt.test(e) || t === 1) throw SyntaxError("not unpadded base64url");
+  if (!BASE64URL_RE.test(e) || t === 1) throw SyntaxError("not unpadded base64url");
   if (t !== 0) {
-    if ((ht.indexOf(e.charAt(e.length - 1)) & (t === 2 ? 15 : 3)) !== 0)
+    if ((BASE64URL_ALPHABET.indexOf(e.charAt(e.length - 1)) & (t === 2 ? 15 : 3)) !== 0)
       throw SyntaxError("non-canonical base64url");
   }
-  let n = e.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((e.length + 3) % 4),
-    r = atob(n),
-    uint8Array = new Uint8Array(r.length);
-  for (let s = 0; s < r.length; s++) uint8Array[s] = r.charCodeAt(s);
+  let n = e.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((e.length + 3) % 4);
+  let r = atob(n);
+  let uint8Array = new Uint8Array(r.length);
+  for (let idx = 0; idx < r.length; idx++) uint8Array[idx] = r.charCodeAt(idx);
   return uint8Array;
 }
 //@ chunk-p7xf186d.js:7650-7833 placement
@@ -96,15 +114,16 @@ function bytesToBinaryString(e) {
 }
 //@ chunk-p7xf186d.js:7833-7953 placement
 function constantTimeEqual(e, t) {
-  if (e.length !== t.length) return !1;
+  if (e.length !== t.length) return false;
   let n = 0;
-  for (let r = 0; r < e.length; r++) n |= (e[r] ?? 0) ^ (t[r] ?? 0);
+  for (let i = 0; i < e.length; i++) n |= (e[i] ?? 0) ^ (t[i] ?? 0);
   return n === 0;
 }
 //@ chunk-p7xf186d.js:7953-8038 placement
 function randomBytes(e) {
   let uint8Array = new Uint8Array(e);
-  return (globalThis.crypto.getRandomValues(uint8Array), uint8Array);
+  globalThis.crypto.getRandomValues(uint8Array);
+  return uint8Array;
 }
 //@ chunk-p7xf186d.js:8038-8114 placement
 function toArrayBuffer(e) {
@@ -115,10 +134,14 @@ async function sha256(e) {
   return new Uint8Array(await globalThis.crypto.subtle.digest("SHA-256", toArrayBuffer(e)));
 }
 //@ chunk-p7xf186d.js:8211-8221 placement
-var mt = 87;
+/**
+ * P-256 公钥的 base64url 长度（87）。
+ */
+var P256_PUBLIC_KEY_CHARS = 87;
 //@ chunk-p7xf186d.js:8221-8479 placement
 function parsePublicKey(e) {
-  if (typeof e !== "string" || e.length !== mt) throw malformedError("public_key must be 87 base64url chars");
+  if (typeof e !== "string" || e.length !== P256_PUBLIC_KEY_CHARS)
+    throw malformedError("public_key must be 87 base64url chars");
   let t;
   try {
     t = base64UrlDecode(e);
@@ -130,8 +153,8 @@ function parsePublicKey(e) {
 }
 //@ chunk-p7xf186d.js:8479-8600 placement
 function p256PointToJwkJson(e) {
-  let t = bytesToBinaryString(e.subarray(1, 33)),
-    n = bytesToBinaryString(e.subarray(33, 65));
+  let t = bytesToBinaryString(e.subarray(1, 33));
+  let n = bytesToBinaryString(e.subarray(33, 65));
   return `{"crv":"P-256","kty":"EC","x":"${t}","y":"${n}"}`;
 }
 //@ chunk-p7xf186d.js:8600-8648 placement
@@ -139,13 +162,16 @@ async function sha256Base64Url(e) {
   return bytesToBinaryString(await sha256(utf8Encode(p256PointToJwkJson(e))));
 }
 //@ chunk-p7xf186d.js:8648-8825 placement
-async function importEcdhPublicKey(e) {
+async function importEcdhPublicKey(peerRaw) {
   try {
     return await globalThis.crypto.subtle.importKey(
       "raw",
-      toArrayBuffer(e),
-      { name: "ECDH", namedCurve: "P-256" },
-      !1,
+      toArrayBuffer(peerRaw),
+      {
+        name: "ECDH",
+        namedCurve: "P-256",
+      },
+      false,
       [],
     );
   } catch {
@@ -156,20 +182,34 @@ async function importEcdhPublicKey(e) {
 async function importEcdhJwk(e, t) {
   return globalThis.crypto.subtle.importKey(
     "jwk",
-    { kty: "EC", crv: "P-256", x: e, y: t, ext: !0 },
-    { name: "ECDSA", namedCurve: "P-256" },
-    !1,
+    {
+      kty: "EC",
+      crv: "P-256",
+      x: e,
+      y: t,
+      ext: true,
+    },
+    {
+      name: "ECDSA",
+      namedCurve: "P-256",
+    },
+    false,
     ["verify"],
   );
 }
 //@ chunk-p7xf186d.js:8983-9230 placement
 async function generateEcdhKeyPair() {
-  let generateKey = await globalThis.crypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, !1, [
-      "deriveBits",
-    ]),
-    uint8Array = new Uint8Array(await globalThis.crypto.subtle.exportKey("raw", generateKey.publicKey));
+  let e = await globalThis.crypto.subtle.generateKey(
+    {
+      name: "ECDH",
+      namedCurve: "P-256",
+    },
+    false,
+    ["deriveBits"],
+  );
+  let uint8Array = new Uint8Array(await globalThis.crypto.subtle.exportKey("raw", e.publicKey));
   return {
-    keyPair: generateKey,
+    keyPair: e,
     publicKey: bytesToBinaryString(uint8Array),
     jkt: await sha256Base64Url(uint8Array),
   };
@@ -177,14 +217,16 @@ async function generateEcdhKeyPair() {
 //@ chunk-p7xf186d.js:9230-9239 placement
 var MAX_TAG_FAILURES = 10;
 //@ chunk-p7xf186d.js:9387-9412 placement
-var wt = 60,
-  pe = 300,
-  fe = 3600;
-
+/**
+ * JWKS 缓存的最小存活秒数（60）。
+ */
+var MIN_CACHE_MAX_AGE_S = 60;
+var DEFAULT_CACHE_MAX_AGE_S = 300;
+var DEFAULT_STALE_IF_ERROR_S = 3600;
 export {
-  pe,
-  fe,
-  wt,
+  DEFAULT_CACHE_MAX_AGE_S,
+  DEFAULT_STALE_IF_ERROR_S,
+  MIN_CACHE_MAX_AGE_S,
   MAX_TAG_FAILURES,
   normalizeApiOrigin,
   importEcdhJwk,

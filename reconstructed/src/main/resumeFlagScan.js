@@ -27,5 +27,4 @@ function hasResumeFlag(e) {
   if (t.includes("-c") || t.includes("--continue")) return "continue";
   return "fresh";
 }
-
 export { hasResumeFlag, argsBeforeDoubleDash };

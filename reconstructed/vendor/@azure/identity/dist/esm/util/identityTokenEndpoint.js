@@ -7,9 +7,8 @@
  */
 
 //@ chunk-mrx6y2r5.js:82206-82287 esm-fingerprint
-function Dd(e) {
-  if (e === "adfs") return "oauth2/token";
+function getIdentityTokenEndpointSuffix(tenantId) {
+  if (tenantId === "adfs") return "oauth2/token";
   else return "oauth2/v2.0/token";
 }
-
-export { Dd };
+export { getIdentityTokenEndpointSuffix };

@@ -11,8 +11,7 @@
 import { isBridgeStateFramesEnabled } from "../../bridge/bridgeGates.js";
 
 //@ chunk-tbfde207.js:1482-1529 fingerprint = useShimmerAnimation (1)
-function useShimmerAnimation(e) {
-  return e !== "requesting" && isBridgeStateFramesEnabled();
+function useShimmerAnimation(status) {
+  return status !== "requesting" && isBridgeStateFramesEnabled();
 }
-
 export { useShimmerAnimation };

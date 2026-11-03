@@ -5,507 +5,752 @@
  * pieces: chunk-hwmsct5x.js (7)
  * attribution: esm-layout 2, esm-fingerprint 5
  */
-import { Kn, ke } from "../../internal/tslib.mjs";
-import { Wu } from "../../internal/utils/async-queue.mjs";
-import { Tb } from "../../internal/utils/log.mjs";
-import { la, zu } from "./BetaRunnableTool.mjs";
-import { qt } from "../../internal/utils/abort.mjs";
-import { pr } from "../../core/error.mjs";
-import { T } from "../../internal/headers.mjs";
+import { __classPrivateFieldSet, __classPrivateFieldGet } from "../../internal/tslib.mjs";
+import { AsyncQueue } from "../../internal/utils/async-queue.mjs";
+import { loggerFor } from "../../internal/utils/log.mjs";
+import { toolName, runRunnableTool } from "./BetaRunnableTool.mjs";
+import { linkAbort } from "../../internal/utils/abort.mjs";
+import { AnthropicError } from "../../core/error.mjs";
+import { buildHeaders } from "../../internal/headers.mjs";
 import { wr } from "../../internal/stainless-helper-header.mjs";
-import { on, fs, cs } from "../../internal/utils/backoff.mjs";
+import { isFatal4xx, applyJitter, cs } from "../../internal/utils/backoff.mjs";
 import { sleepUnlessAborted } from "../../tools/agent-toolset/memories.mjs";
 
 //@ chunk-hwmsct5x.js:61240-61343 esm-layout
-var Dr,
-  ys,
-  Cn,
-  sn,
-  gt,
-  ve,
-  ws,
-  qe,
-  Ss,
-  Ur,
-  As,
-  Ie,
-  Ln,
-  rt,
-  Fn,
-  zt,
-  In,
-  Mt,
-  ks,
-  Nr,
-  ct,
-  Es,
-  Qu,
-  Gu,
-  Yu,
-  ju,
-  da,
-  Ku,
-  vs,
-  Rs,
-  ca,
-  Xu,
-  Zu;
+var _IdleClock_maxIdleMs;
+var _IdleClock_onExpire;
+var _IdleClock_blockers;
+var _IdleClock_armPending;
+var _IdleClock_timer;
+var _SessionToolRunner_instances;
+var _SessionToolRunner_consumed;
+var _SessionToolRunner_controller;
+var _SessionToolRunner_detachExternal;
+var _SessionToolRunner_requestOpts;
+var _SessionToolRunner_toolByName;
+var _SessionToolRunner_logger;
+var _SessionToolRunner_seen;
+var _SessionToolRunner_answered;
+var _SessionToolRunner_confirmationVerdicts;
+var _SessionToolRunner_awaitingConfirmation;
+var _SessionToolRunner_results;
+var _SessionToolRunner_inFlightCount;
+var _SessionToolRunner_sendRetryWindowMs;
+var _SessionToolRunner_onIdle;
+var _SessionToolRunner_idleClock;
+var _SessionToolRunner_requestOptions;
+var _SessionToolRunner_streamLoop;
+var _SessionToolRunner_reconcile;
+var _SessionToolRunner_ingestHistory;
+var _SessionToolRunner_handleStreamEvent;
+var _SessionToolRunner_routeToolEvent;
+var _SessionToolRunner_noteConfirmation;
+var _SessionToolRunner_applyVerdict;
+var _SessionToolRunner_surfaceCall;
+var _SessionToolRunner_execute;
+var _SessionToolRunner_sendResult;
+var _SessionToolRunner_drain;
 //@ chunk-hwmsct5x.js:61343-61416 esm-layout
-var Ju = 500,
-  Rm = 1e4,
-  Am = 120000,
-  km = 30000,
-  xm = 1000,
-  Tm = 30000,
-  Mm = 300000,
-  Om = 60000;
+var STREAM_BACKOFF_START_MS = 500;
+var STREAM_BACKOFF_CAP_MS = 1e4;
+var TOOL_TIMEOUT_MS = 120000;
+var DRAIN_TIMEOUT_MS = 30000;
+var SEND_BACKOFF_START_MS = 1000;
+var SEND_BACKOFF_CAP_MS = 30000;
+var IDLE_REPORT_INTERVAL_MS_2 = 300000;
+var DEFAULT_MAX_IDLE_MS = 60000;
 //@ chunk-hwmsct5x.js:61416-61503 esm-fingerprint
-function ed(e) {
-  return e.type === "session.status_idle" && e.stop_reason?.type === "end_turn";
+function isEndTurnIdle(ev) {
+  return ev.type === "session.status_idle" && ev.stop_reason?.type === "end_turn";
 }
 //@ chunk-hwmsct5x.js:61503-64562 esm-fingerprint
-var Pm = (() => {
-    class e {
-      constructor(n, r) {
-        (Dr.set(this, void 0),
-          ys.set(this, void 0),
-          Cn.set(this, new Set()),
-          sn.set(this, !1),
-          gt.set(this, void 0),
-          Kn(this, Dr, n, "f"),
-          Kn(this, ys, r, "f"));
-      }
-      noteEvent(n) {
-        if (n.type === "user.tool_confirmation") return;
-        if (ed(n)) this.arm();
-        else this.disarm();
-      }
-      block(n) {
-        if ((ke(this, Cn, "f").add(n), ke(this, gt, "f") !== void 0))
-          (Kn(this, sn, !0, "f"), clearTimeout(ke(this, gt, "f")), Kn(this, gt, void 0, "f"));
-      }
-      unblock(n) {
-        if ((ke(this, Cn, "f").delete(n), ke(this, Cn, "f").size === 0 && ke(this, sn, "f"))) this.arm();
-      }
-      arm() {
-        if (ke(this, Dr, "f") <= 0) return;
-        if (ke(this, Cn, "f").size > 0) {
-          Kn(this, sn, !0, "f");
-          return;
-        }
-        if ((Kn(this, sn, !1, "f"), ke(this, gt, "f") !== void 0)) clearTimeout(ke(this, gt, "f"));
-        Kn(this, gt, setTimeout(ke(this, ys, "f"), ke(this, Dr, "f")), "f");
-      }
-      disarm() {
-        if ((Kn(this, sn, !1, "f"), ke(this, gt, "f") !== void 0))
-          (clearTimeout(ke(this, gt, "f")), Kn(this, gt, void 0, "f"));
+var IdleClock = (() => {
+  class IdleClock {
+    constructor(maxIdleMs, onExpire) {
+      _IdleClock_maxIdleMs.set(this, undefined);
+      _IdleClock_onExpire.set(this, undefined);
+      _IdleClock_blockers.set(this, new Set());
+      _IdleClock_armPending.set(this, false);
+      _IdleClock_timer.set(this, undefined);
+      __classPrivateFieldSet(this, _IdleClock_maxIdleMs, maxIdleMs, "f");
+      __classPrivateFieldSet(this, _IdleClock_onExpire, onExpire, "f");
+    }
+    noteEvent(ev) {
+      if (ev.type === "user.tool_confirmation") return;
+      if (isEndTurnIdle(ev)) this.arm();
+      else this.disarm();
+    }
+    block(toolUseId) {
+      __classPrivateFieldGet(this, _IdleClock_blockers, "f").add(toolUseId);
+      if (__classPrivateFieldGet(this, _IdleClock_timer, "f") !== undefined) {
+        __classPrivateFieldSet(this, _IdleClock_armPending, true, "f");
+        clearTimeout(__classPrivateFieldGet(this, _IdleClock_timer, "f"));
+        __classPrivateFieldSet(this, _IdleClock_timer, undefined, "f");
       }
     }
-    return (
-      (Dr = new WeakMap()),
-      (ys = new WeakMap()),
-      (Cn = new WeakMap()),
-      (sn = new WeakMap()),
-      (gt = new WeakMap()),
-      e
-    );
-  })(),
-  Br = (() => {
-    class e {
-      constructor(n, r) {
-        (ve.add(this),
-          ws.set(this, !1),
-          qe.set(this, void 0),
-          Ss.set(this, void 0),
-          Ur.set(this, void 0),
-          As.set(this, void 0),
-          Ie.set(this, void 0),
-          Ln.set(this, new Set()),
-          rt.set(this, new Set()),
-          Fn.set(this, new Map()),
-          zt.set(this, new Map()),
-          In.set(this, new Wu()),
-          Mt.set(this, 0),
-          ks.set(this, Mm),
-          Nr.set(this, null),
-          ct.set(this, void 0),
-          (this.client = r.client),
-          (this.sessionId = n),
-          (this.tools = r.tools),
-          (this.maxIdleMs = r.maxIdleMs ?? Om),
-          Kn(this, Ie, Tb(r.client), "f"),
-          Kn(this, As, new Map(r.tools.map((tool) => [la(tool), tool])), "f"),
-          Kn(this, qe, new AbortController(), "f"),
-          Kn(this, Ss, qt(r.signal, ke(this, qe, "f")), "f"),
-          Kn(this, Ur, r.requestOptions, "f"),
-          Kn(
-            this,
-            ct,
-            new Pm(this.maxIdleMs, () => {
-              (ke(this, Ie, "f").info("session idle after end_turn; stopping", {
-                component: "session-tool-runner",
-                session_id: this.sessionId,
-                max_idle_ms: this.maxIdleMs,
-              }),
-                ke(this, qe, "f").abort());
-            }),
-            "f",
-          ));
-      }
-      get signal() {
-        return ke(this, qe, "f").signal;
-      }
-      abort() {
-        ke(this, qe, "f").abort();
-      }
-      _setSendRetryWindow(n) {
-        Kn(this, ks, n, "f");
-      }
-      async *[((ws = new WeakMap()),
-      (qe = new WeakMap()),
-      (Ss = new WeakMap()),
-      (Ur = new WeakMap()),
-      (As = new WeakMap()),
-      (Ie = new WeakMap()),
-      (Ln = new WeakMap()),
-      (rt = new WeakMap()),
-      (Fn = new WeakMap()),
-      (zt = new WeakMap()),
-      (In = new WeakMap()),
-      (Mt = new WeakMap()),
-      (ks = new WeakMap()),
-      (Nr = new WeakMap()),
-      (ct = new WeakMap()),
-      (ve = new WeakSet()),
-      Symbol.asyncIterator)]() {
-        if (ke(this, ws, "f")) throw new pr("Cannot iterate over a consumed SessionToolRunner");
-        (Kn(this, ws, !0, "f"),
-          ke(this, Ie, "f").info("session tool runner starting", {
-            component: "session-tool-runner",
-            session_id: this.sessionId,
-          }));
-        let n = ke(this, ve, "m", Qu)
-          .call(this)
-          .catch((r) => {
-            if (!ke(this, qe, "f").signal.aborted)
-              ke(this, Ie, "f").error("stream loop failed", { error: String(r) });
-            ke(this, qe, "f").abort();
-          });
-        try {
-          while (!0) {
-            let s = await ke(this, In, "f").next(ke(this, qe, "f").signal);
-            if (s.done) break;
-            yield s.value;
-          }
-          await n;
-          let r;
-          while ((r = ke(this, In, "f").tryShift()) !== void 0) yield r;
-        } finally {
-          (ke(this, qe, "f").abort(), ke(this, ct, "f").disarm(), await n);
-          try {
-            await ke(this, ve, "m", Zu).call(this);
-          } catch (error) {
-            ke(this, Ie, "f").warn("drain failed", { error: String(error) });
-          }
-          ke(this, In, "f").close();
-          for (let tool of this.tools)
-            try {
-              await tool.close?.();
-            } catch (error) {
-              ke(this, Ie, "f").warn("tool.close failed", { tool: la(tool), error: String(error) });
-            }
-          ke(this, Ss, "f").call(this);
-        }
-      }
-    }
-    return e;
-  })();
-//@ chunk-hwmsct5x.js:64562-70363 esm-fingerprint
-((Es = function () {
-  return {
-    ...ke(this, Ur, "f"),
-    headers: T([wr("session-tool-runner"), ke(this, Ur, "f")?.headers]),
-    signal: ke(this, qe, "f").signal,
-  };
-}),
-  (Qu = async function () {
-    let n = ke(this, qe, "f"),
-      r = Ju;
-    while (!n.signal.aborted) {
-      try {
-        let stream = await this.client.beta.sessions.events.stream(
-          this.sessionId,
-          {},
-          ke(this, ve, "m", Es).call(this),
-        );
-        await ke(this, ve, "m", Gu).call(this);
-        for await (let h of stream) if (((r = Ju), await ke(this, ve, "m", ju).call(this, h))) return;
-      } catch (error) {
-        if ((n.signal.throwIfAborted(), on(error)))
-          throw (
-            ke(this, Ie, "f").error("permanent stream failure, shutting down", { error: String(error) }),
-            n.abort(),
-            error
-          );
-        ke(this, Ie, "f").warn("stream disconnected, reconnecting", { error: String(error), backoff_ms: r });
-      }
-      (n.signal.throwIfAborted(), await sleepUnlessAborted(r, n.signal), (r = Math.min(r * 2, Rm)));
-    }
-  }),
-  (Gu = async function () {
-    let n = ke(this, qe, "f"),
-      r = [],
-      s = !1;
-    try {
-      for await (let w of this.client.beta.sessions.events.list(
-        this.sessionId,
-        { limit: 1000 },
-        ke(this, ve, "m", Es).call(this),
-      ))
-        (ke(this, ve, "m", Yu).call(this, w, r), (s = ed(w)));
-    } catch (error) {
-      (n.signal.throwIfAborted(), ke(this, Ie, "f").warn("reconcile list failed", { error: String(error) }));
-      for (let S of r) ke(this, Ln, "f").delete(S.id);
-      return;
-    }
-    let filtered = r.filter((w) => !ke(this, rt, "f").has(w.id));
-    ke(this, ct, "f").disarm();
-    for (let w of filtered) await ke(this, ve, "m", da).call(this, w);
-    for (let w of [...ke(this, zt, "f").values()]) {
-      let S = ke(this, Fn, "f").get(w.id);
-      if (S !== void 0) await ke(this, ve, "m", vs).call(this, w, S);
-    }
-    let filtered_2 = filtered.filter((w) => !ke(this, rt, "f").has(w.id) && !ke(this, zt, "f").has(w.id));
-    if (s && filtered_2.length === 0) ke(this, ct, "f").arm();
-    else ke(this, ct, "f").disarm();
-  }),
-  (Yu = function (n, r) {
-    if (n.type === "agent.tool_use" || n.type === "agent.custom_tool_use") {
-      if ((ke(this, Ln, "f").add(n.id), !ke(this, rt, "f").has(n.id))) r.push(n);
-    } else if (n.type === "user.tool_result") ke(this, rt, "f").add(n.tool_use_id);
-    else if (n.type === "user.custom_tool_result") ke(this, rt, "f").add(n.custom_tool_use_id);
-    else if (n.type === "user.tool_confirmation") {
-      if (!ke(this, rt, "f").has(n.tool_use_id)) ke(this, Fn, "f").set(n.tool_use_id, n.result);
-    }
-  }),
-  (ju = async function (n) {
-    switch ((ke(this, ct, "f").noteEvent(n), n.type)) {
-      case "agent.tool_use":
-      case "agent.custom_tool_use":
-        if (!ke(this, Ln, "f").has(n.id))
-          (ke(this, Ln, "f").add(n.id), await ke(this, ve, "m", da).call(this, n));
-        return !1;
-      case "user.tool_confirmation":
-        return (await ke(this, ve, "m", Ku).call(this, n), !1);
-      case "user.tool_result":
-        return (ke(this, rt, "f").add(n.tool_use_id), !1);
-      case "user.custom_tool_result":
-        return (ke(this, rt, "f").add(n.custom_tool_use_id), !1);
-      case "session.status_terminated":
-      case "session.deleted":
-        return (
-          ke(this, Ie, "f").info("session terminated", {
-            component: "session-tool-runner",
-            session_id: this.sessionId,
-          }),
-          ke(this, qe, "f").abort(),
-          !0
-        );
-      default:
-        return !1;
-    }
-  }),
-  (da = async function (n) {
-    let evaluated_permission = n.evaluated_permission,
-      s = evaluated_permission === "deny" ? "deny" : ke(this, Fn, "f").get(n.id);
-    if (s === void 0) {
-      if (evaluated_permission === void 0 || evaluated_permission === "allow")
-        await ke(this, ve, "m", ca).call(this, n, void 0);
-      else if (!ke(this, zt, "f").has(n.id))
-        (ke(this, Ie, "f").info("tool call awaiting confirmation; holding", {
-          component: "session-tool-runner",
-          session_id: this.sessionId,
-          tool: n.name,
-          tool_use_id: n.id,
-        }),
-          ke(this, zt, "f").set(n.id, n),
-          ke(this, ct, "f").block(n.id));
-      return;
-    }
-    await ke(this, ve, "m", vs).call(this, n, s);
-  }),
-  (Ku = async function (n) {
-    ke(this, Fn, "f").set(n.tool_use_id, n.result);
-    let r = ke(this, zt, "f").get(n.tool_use_id);
-    if (r === void 0) return;
-    await ke(this, ve, "m", vs).call(this, r, n.result);
-  }),
-  (vs = async function (n, r) {
-    let s = ke(this, zt, "f").delete(n.id);
-    if (r === "allow") {
+    unblock(toolUseId) {
+      __classPrivateFieldGet(this, _IdleClock_blockers, "f").delete(toolUseId);
       if (
-        (ke(this, Ie, "f").info("tool call confirmed", {
-          component: "session-tool-runner",
-          session_id: this.sessionId,
-          tool: n.name,
-          tool_use_id: n.id,
-        }),
-        !s)
+        __classPrivateFieldGet(this, _IdleClock_blockers, "f").size === 0 &&
+        __classPrivateFieldGet(this, _IdleClock_armPending, "f")
       )
-        ke(this, ct, "f").block(n.id);
-      try {
-        await ke(this, ve, "m", ca).call(this, n, "allow");
-      } finally {
-        ke(this, ct, "f").unblock(n.id);
-      }
-      return;
+        this.arm();
     }
-    if (s) ke(this, ct, "f").unblock(n.id);
-    (ke(this, rt, "f").add(n.id),
-      ke(this, Ie, "f").info("tool call denied; not executing", {
-        component: "session-tool-runner",
-        session_id: this.sessionId,
-        tool: n.name,
-        tool_use_id: n.id,
-      }),
-      ke(this, ve, "m", Rs).call(this, {
-        event: n,
-        toolUseId: n.id,
-        name: n.name,
-        isError: !1,
-        posted: !1,
-        confirmation: "deny",
-      }));
-  }),
-  (Rs = function (n) {
-    ke(this, In, "f").push(n);
-  }),
-  (ca = async function (n, r) {
-    var s, h;
-    if (ke(this, rt, "f").has(n.id)) return;
-    (ke(this, Ie, "f").info("executing tool", {
-      component: "session-tool-runner",
-      session_id: this.sessionId,
-      tool: n.name,
-      tool_use_id: n.id,
-    }),
-      Kn(this, Mt, ((s = ke(this, Mt, "f")), s++, s), "f"));
-    try {
-      let y = ke(this, As, "f").get(n.name);
-      if (!y) {
-        (ke(this, Ie, "f").info(
-          "tool not owned by this runner; leaving the tool_use_id pending for its owner",
-          { component: "session-tool-runner", session_id: this.sessionId, tool: n.name, tool_use_id: n.id },
-        ),
-          ke(this, ve, "m", Rs).call(this, {
-            event: n,
-            toolUseId: n.id,
-            name: n.name,
-            isError: !1,
-            posted: !1,
-            confirmation: r,
-          }));
+    arm() {
+      if (__classPrivateFieldGet(this, _IdleClock_maxIdleMs, "f") <= 0) return;
+      if (__classPrivateFieldGet(this, _IdleClock_blockers, "f").size > 0) {
+        __classPrivateFieldSet(this, _IdleClock_armPending, true, "f");
         return;
       }
-      let w,
-        S,
-        abortController = new AbortController(),
-        R = qt(ke(this, qe, "f").signal, abortController),
-        L = setTimeout(() => abortController.abort(), Am);
-      try {
-        let P = await zu(y, n.input, { toolUse: n, toolUseBlock: n, signal: abortController.signal });
-        ((w = P.content), (S = P.isError));
-      } finally {
-        (clearTimeout(L), R());
-      }
-      let O = Cm(n, S, Im(w)),
-        M = await ke(this, ve, "m", Xu).call(this, O, n.id);
-      ke(this, ve, "m", Rs).call(this, {
-        event: n,
-        result: O,
-        toolUseId: n.id,
-        name: n.name,
-        isError: S,
-        posted: M,
-        confirmation: r,
-      });
-    } finally {
-      if ((Kn(this, Mt, ((h = ke(this, Mt, "f")), h--, h), "f"), ke(this, Mt, "f") === 0))
-        ke(this, Nr, "f")?.call(this);
+      __classPrivateFieldSet(this, _IdleClock_armPending, false, "f");
+      if (__classPrivateFieldGet(this, _IdleClock_timer, "f") !== undefined)
+        clearTimeout(__classPrivateFieldGet(this, _IdleClock_timer, "f"));
+      __classPrivateFieldSet(
+        this,
+        _IdleClock_timer,
+        setTimeout(
+          __classPrivateFieldGet(this, _IdleClock_onExpire, "f"),
+          __classPrivateFieldGet(this, _IdleClock_maxIdleMs, "f"),
+        ),
+        "f",
+      );
     }
-  }),
-  (Xu = async function (n, r) {
-    let s = ke(this, qe, "f"),
-      now = Date.now(),
-      y,
-      w = 0;
-    while (!0) {
-      (w++, s.signal.throwIfAborted());
-      try {
-        return (
-          await this.client.beta.sessions.events.send(
-            this.sessionId,
-            { events: [n] },
-            ke(this, ve, "m", Es).call(this),
-          ),
-          ke(this, rt, "f").add(r),
-          !0
-        );
-      } catch (error) {
-        if (((y = error), on(error))) break;
-        let E = ke(this, ks, "f") - (Date.now() - now);
-        if (E <= 0) break;
-        let min = Math.min(fs(cs(w - 1, xm, Tm)), E);
-        (ke(this, Ie, "f").warn("tool result send failed; retrying", {
-          tool_use_id: r,
-          attempt: w,
-          backoff_ms: min,
-          error: String(error),
+    disarm() {
+      __classPrivateFieldSet(this, _IdleClock_armPending, false, "f");
+      if (__classPrivateFieldGet(this, _IdleClock_timer, "f") !== undefined) {
+        clearTimeout(__classPrivateFieldGet(this, _IdleClock_timer, "f"));
+        __classPrivateFieldSet(this, _IdleClock_timer, undefined, "f");
+      }
+    }
+  }
+  _IdleClock_maxIdleMs = new WeakMap();
+  _IdleClock_onExpire = new WeakMap();
+  _IdleClock_blockers = new WeakMap();
+  _IdleClock_armPending = new WeakMap();
+  _IdleClock_timer = new WeakMap();
+  return IdleClock;
+})();
+var SessionToolRunner = (() => {
+  class SessionToolRunner {
+    constructor(sessionId, opts) {
+      _SessionToolRunner_instances.add(this);
+      _SessionToolRunner_consumed.set(this, false);
+      _SessionToolRunner_controller.set(this, undefined);
+      _SessionToolRunner_detachExternal.set(this, undefined);
+      _SessionToolRunner_requestOpts.set(this, undefined);
+      _SessionToolRunner_toolByName.set(this, undefined);
+      _SessionToolRunner_logger.set(this, undefined);
+      _SessionToolRunner_seen.set(this, new Set());
+      _SessionToolRunner_answered.set(this, new Set());
+      _SessionToolRunner_confirmationVerdicts.set(this, new Map());
+      _SessionToolRunner_awaitingConfirmation.set(this, new Map());
+      _SessionToolRunner_results.set(this, new AsyncQueue());
+      _SessionToolRunner_inFlightCount.set(this, 0);
+      _SessionToolRunner_sendRetryWindowMs.set(this, IDLE_REPORT_INTERVAL_MS_2);
+      _SessionToolRunner_onIdle.set(this, null);
+      _SessionToolRunner_idleClock.set(this, undefined);
+      this.client = opts.client;
+      this.sessionId = sessionId;
+      this.tools = opts.tools;
+      this.maxIdleMs = opts.maxIdleMs ?? DEFAULT_MAX_IDLE_MS;
+      __classPrivateFieldSet(this, _SessionToolRunner_logger, loggerFor(opts.client), "f");
+      __classPrivateFieldSet(
+        this,
+        _SessionToolRunner_toolByName,
+        new Map(opts.tools.map((t) => [toolName(t), t])),
+        "f",
+      );
+      __classPrivateFieldSet(this, _SessionToolRunner_controller, new AbortController(), "f");
+      __classPrivateFieldSet(
+        this,
+        _SessionToolRunner_detachExternal,
+        linkAbort(opts.signal, __classPrivateFieldGet(this, _SessionToolRunner_controller, "f")),
+        "f",
+      );
+      __classPrivateFieldSet(this, _SessionToolRunner_requestOpts, opts.requestOptions, "f");
+      __classPrivateFieldSet(
+        this,
+        _SessionToolRunner_idleClock,
+        new IdleClock(this.maxIdleMs, () => {
+          __classPrivateFieldGet(this, _SessionToolRunner_logger, "f").info(
+            "session idle after end_turn; stopping",
+            {
+              component: "session-tool-runner",
+              session_id: this.sessionId,
+              max_idle_ms: this.maxIdleMs,
+            },
+          );
+          __classPrivateFieldGet(this, _SessionToolRunner_controller, "f").abort();
         }),
-          await sleepUnlessAborted(min, s.signal));
+        "f",
+      );
+    }
+    get signal() {
+      return __classPrivateFieldGet(this, _SessionToolRunner_controller, "f").signal;
+    }
+    abort() {
+      __classPrivateFieldGet(this, _SessionToolRunner_controller, "f").abort();
+    }
+    _setSendRetryWindow(ms) {
+      __classPrivateFieldSet(this, _SessionToolRunner_sendRetryWindowMs, ms, "f");
+    }
+    async *[((_SessionToolRunner_consumed = new WeakMap()),
+    (_SessionToolRunner_controller = new WeakMap()),
+    (_SessionToolRunner_detachExternal = new WeakMap()),
+    (_SessionToolRunner_requestOpts = new WeakMap()),
+    (_SessionToolRunner_toolByName = new WeakMap()),
+    (_SessionToolRunner_logger = new WeakMap()),
+    (_SessionToolRunner_seen = new WeakMap()),
+    (_SessionToolRunner_answered = new WeakMap()),
+    (_SessionToolRunner_confirmationVerdicts = new WeakMap()),
+    (_SessionToolRunner_awaitingConfirmation = new WeakMap()),
+    (_SessionToolRunner_results = new WeakMap()),
+    (_SessionToolRunner_inFlightCount = new WeakMap()),
+    (_SessionToolRunner_sendRetryWindowMs = new WeakMap()),
+    (_SessionToolRunner_onIdle = new WeakMap()),
+    (_SessionToolRunner_idleClock = new WeakMap()),
+    (_SessionToolRunner_instances = new WeakSet()),
+    Symbol.asyncIterator)]() {
+      if (__classPrivateFieldGet(this, _SessionToolRunner_consumed, "f"))
+        throw new AnthropicError("Cannot iterate over a consumed SessionToolRunner");
+      __classPrivateFieldSet(this, _SessionToolRunner_consumed, true, "f");
+      __classPrivateFieldGet(this, _SessionToolRunner_logger, "f").info("session tool runner starting", {
+        component: "session-tool-runner",
+        session_id: this.sessionId,
+      });
+      let streamPromise = __classPrivateFieldGet(
+        this,
+        _SessionToolRunner_instances,
+        "m",
+        _SessionToolRunner_streamLoop,
+      )
+        .call(this)
+        .catch((e) => {
+          if (!__classPrivateFieldGet(this, _SessionToolRunner_controller, "f").signal.aborted)
+            __classPrivateFieldGet(this, _SessionToolRunner_logger, "f").error("stream loop failed", {
+              error: String(e),
+            });
+          __classPrivateFieldGet(this, _SessionToolRunner_controller, "f").abort();
+        });
+      try {
+        while (true) {
+          let next = await __classPrivateFieldGet(this, _SessionToolRunner_results, "f").next(
+            __classPrivateFieldGet(this, _SessionToolRunner_controller, "f").signal,
+          );
+          if (next.done) break;
+          yield next.value;
+        }
+        await streamPromise;
+        let pending;
+        while (
+          (pending = __classPrivateFieldGet(this, _SessionToolRunner_results, "f").tryShift()) !== undefined
+        )
+          yield pending;
+      } finally {
+        __classPrivateFieldGet(this, _SessionToolRunner_controller, "f").abort();
+        __classPrivateFieldGet(this, _SessionToolRunner_idleClock, "f").disarm();
+        await streamPromise;
+        try {
+          await __classPrivateFieldGet(
+            this,
+            _SessionToolRunner_instances,
+            "m",
+            _SessionToolRunner_drain,
+          ).call(this);
+        } catch (e) {
+          __classPrivateFieldGet(this, _SessionToolRunner_logger, "f").warn("drain failed", {
+            error: String(e),
+          });
+        }
+        __classPrivateFieldGet(this, _SessionToolRunner_results, "f").close();
+        for (let t of this.tools)
+          try {
+            await t.close?.();
+          } catch (e) {
+            __classPrivateFieldGet(this, _SessionToolRunner_logger, "f").warn("tool.close failed", {
+              tool: toolName(t),
+              error: String(e),
+            });
+          }
+        __classPrivateFieldGet(this, _SessionToolRunner_detachExternal, "f").call(this);
       }
     }
-    return (
-      ke(this, Ie, "f").error("failed to send tool result", {
-        tool_use_id: r,
-        attempts: w,
-        error: String(y),
-      }),
-      !1
+  }
+  return SessionToolRunner;
+})();
+//@ chunk-hwmsct5x.js:64562-70363 esm-fingerprint
+_SessionToolRunner_requestOptions = function () {
+  return {
+    ...__classPrivateFieldGet(this, _SessionToolRunner_requestOpts, "f"),
+    headers: buildHeaders([
+      wr("session-tool-runner"),
+      __classPrivateFieldGet(this, _SessionToolRunner_requestOpts, "f")?.headers,
+    ]),
+    signal: __classPrivateFieldGet(this, _SessionToolRunner_controller, "f").signal,
+  };
+};
+_SessionToolRunner_streamLoop = async function () {
+  let ctrl = __classPrivateFieldGet(this, _SessionToolRunner_controller, "f");
+  let backoff = STREAM_BACKOFF_START_MS;
+  while (!ctrl.signal.aborted) {
+    try {
+      let stream = await this.client.beta.sessions.events.stream(
+        this.sessionId,
+        {},
+        __classPrivateFieldGet(
+          this,
+          _SessionToolRunner_instances,
+          "m",
+          _SessionToolRunner_requestOptions,
+        ).call(this),
+      );
+      await __classPrivateFieldGet(
+        this,
+        _SessionToolRunner_instances,
+        "m",
+        _SessionToolRunner_reconcile,
+      ).call(this);
+      for await (let ev of stream) {
+        backoff = STREAM_BACKOFF_START_MS;
+        if (
+          await __classPrivateFieldGet(
+            this,
+            _SessionToolRunner_instances,
+            "m",
+            _SessionToolRunner_handleStreamEvent,
+          ).call(this, ev)
+        )
+          return;
+      }
+    } catch (e) {
+      ctrl.signal.throwIfAborted();
+      if (isFatal4xx(e)) {
+        __classPrivateFieldGet(this, _SessionToolRunner_logger, "f").error(
+          "permanent stream failure, shutting down",
+          {
+            error: String(e),
+          },
+        );
+        ctrl.abort();
+        throw e;
+      }
+      __classPrivateFieldGet(this, _SessionToolRunner_logger, "f").warn("stream disconnected, reconnecting", {
+        error: String(e),
+        backoff_ms: backoff,
+      });
+    }
+    ctrl.signal.throwIfAborted();
+    await sleepUnlessAborted(backoff, ctrl.signal);
+    backoff = Math.min(backoff * 2, STREAM_BACKOFF_CAP_MS);
+  }
+};
+_SessionToolRunner_reconcile = async function () {
+  let ctrl = __classPrivateFieldGet(this, _SessionToolRunner_controller, "f");
+  let pending = [];
+  let lastWasEndTurn = false;
+  try {
+    for await (let ev of this.client.beta.sessions.events.list(
+      this.sessionId,
+      {
+        limit: 1000,
+      },
+      __classPrivateFieldGet(this, _SessionToolRunner_instances, "m", _SessionToolRunner_requestOptions).call(
+        this,
+      ),
+    )) {
+      __classPrivateFieldGet(this, _SessionToolRunner_instances, "m", _SessionToolRunner_ingestHistory).call(
+        this,
+        ev,
+        pending,
+      );
+      lastWasEndTurn = isEndTurnIdle(ev);
+    }
+  } catch (e) {
+    ctrl.signal.throwIfAborted();
+    __classPrivateFieldGet(this, _SessionToolRunner_logger, "f").warn("reconcile list failed", {
+      error: String(e),
+    });
+    for (let ev of pending) __classPrivateFieldGet(this, _SessionToolRunner_seen, "f").delete(ev.id);
+    return;
+  }
+  let unanswered = pending.filter(
+    (ev) => !__classPrivateFieldGet(this, _SessionToolRunner_answered, "f").has(ev.id),
+  );
+  __classPrivateFieldGet(this, _SessionToolRunner_idleClock, "f").disarm();
+  for (let ev of unanswered)
+    await __classPrivateFieldGet(
+      this,
+      _SessionToolRunner_instances,
+      "m",
+      _SessionToolRunner_routeToolEvent,
+    ).call(this, ev);
+  for (let held of [...__classPrivateFieldGet(this, _SessionToolRunner_awaitingConfirmation, "f").values()]) {
+    let verdict = __classPrivateFieldGet(this, _SessionToolRunner_confirmationVerdicts, "f").get(held.id);
+    if (verdict !== undefined)
+      await __classPrivateFieldGet(
+        this,
+        _SessionToolRunner_instances,
+        "m",
+        _SessionToolRunner_applyVerdict,
+      ).call(this, held, verdict);
+  }
+  let outstanding = unanswered.filter(
+    (ev) =>
+      !__classPrivateFieldGet(this, _SessionToolRunner_answered, "f").has(ev.id) &&
+      !__classPrivateFieldGet(this, _SessionToolRunner_awaitingConfirmation, "f").has(ev.id),
+  );
+  if (lastWasEndTurn && outstanding.length === 0)
+    __classPrivateFieldGet(this, _SessionToolRunner_idleClock, "f").arm();
+  else __classPrivateFieldGet(this, _SessionToolRunner_idleClock, "f").disarm();
+};
+_SessionToolRunner_ingestHistory = function (ev, pending) {
+  if (ev.type === "agent.tool_use" || ev.type === "agent.custom_tool_use") {
+    __classPrivateFieldGet(this, _SessionToolRunner_seen, "f").add(ev.id);
+    if (!__classPrivateFieldGet(this, _SessionToolRunner_answered, "f").has(ev.id)) pending.push(ev);
+  } else if (ev.type === "user.tool_result")
+    __classPrivateFieldGet(this, _SessionToolRunner_answered, "f").add(ev.tool_use_id);
+  else if (ev.type === "user.custom_tool_result")
+    __classPrivateFieldGet(this, _SessionToolRunner_answered, "f").add(ev.custom_tool_use_id);
+  else if (ev.type === "user.tool_confirmation") {
+    if (!__classPrivateFieldGet(this, _SessionToolRunner_answered, "f").has(ev.tool_use_id))
+      __classPrivateFieldGet(this, _SessionToolRunner_confirmationVerdicts, "f").set(
+        ev.tool_use_id,
+        ev.result,
+      );
+  }
+};
+_SessionToolRunner_handleStreamEvent = async function (ev) {
+  switch ((__classPrivateFieldGet(this, _SessionToolRunner_idleClock, "f").noteEvent(ev), ev.type)) {
+    case "agent.tool_use":
+    case "agent.custom_tool_use":
+      if (!__classPrivateFieldGet(this, _SessionToolRunner_seen, "f").has(ev.id)) {
+        __classPrivateFieldGet(this, _SessionToolRunner_seen, "f").add(ev.id);
+        await __classPrivateFieldGet(
+          this,
+          _SessionToolRunner_instances,
+          "m",
+          _SessionToolRunner_routeToolEvent,
+        ).call(this, ev);
+      }
+      return false;
+    case "user.tool_confirmation":
+      await __classPrivateFieldGet(
+        this,
+        _SessionToolRunner_instances,
+        "m",
+        _SessionToolRunner_noteConfirmation,
+      ).call(this, ev);
+      return false;
+    case "user.tool_result":
+      __classPrivateFieldGet(this, _SessionToolRunner_answered, "f").add(ev.tool_use_id);
+      return false;
+    case "user.custom_tool_result":
+      __classPrivateFieldGet(this, _SessionToolRunner_answered, "f").add(ev.custom_tool_use_id);
+      return false;
+    case "session.status_terminated":
+    case "session.deleted":
+      __classPrivateFieldGet(this, _SessionToolRunner_logger, "f").info("session terminated", {
+        component: "session-tool-runner",
+        session_id: this.sessionId,
+      });
+      __classPrivateFieldGet(this, _SessionToolRunner_controller, "f").abort();
+      return true;
+    default:
+      return false;
+  }
+};
+_SessionToolRunner_routeToolEvent = async function (ev) {
+  let permission = ev.evaluated_permission;
+  let verdict =
+    permission === "deny"
+      ? "deny"
+      : __classPrivateFieldGet(this, _SessionToolRunner_confirmationVerdicts, "f").get(ev.id);
+  if (verdict === undefined) {
+    if (permission === undefined || permission === "allow")
+      await __classPrivateFieldGet(this, _SessionToolRunner_instances, "m", _SessionToolRunner_execute).call(
+        this,
+        ev,
+        undefined,
+      );
+    else if (!__classPrivateFieldGet(this, _SessionToolRunner_awaitingConfirmation, "f").has(ev.id)) {
+      __classPrivateFieldGet(this, _SessionToolRunner_logger, "f").info(
+        "tool call awaiting confirmation; holding",
+        {
+          component: "session-tool-runner",
+          session_id: this.sessionId,
+          tool: ev.name,
+          tool_use_id: ev.id,
+        },
+      );
+      __classPrivateFieldGet(this, _SessionToolRunner_awaitingConfirmation, "f").set(ev.id, ev);
+      __classPrivateFieldGet(this, _SessionToolRunner_idleClock, "f").block(ev.id);
+    }
+    return;
+  }
+  await __classPrivateFieldGet(this, _SessionToolRunner_instances, "m", _SessionToolRunner_applyVerdict).call(
+    this,
+    ev,
+    verdict,
+  );
+};
+_SessionToolRunner_noteConfirmation = async function (ev) {
+  __classPrivateFieldGet(this, _SessionToolRunner_confirmationVerdicts, "f").set(ev.tool_use_id, ev.result);
+  let held = __classPrivateFieldGet(this, _SessionToolRunner_awaitingConfirmation, "f").get(ev.tool_use_id);
+  if (held === undefined) return;
+  await __classPrivateFieldGet(this, _SessionToolRunner_instances, "m", _SessionToolRunner_applyVerdict).call(
+    this,
+    held,
+    ev.result,
+  );
+};
+_SessionToolRunner_applyVerdict = async function (ev, verdict) {
+  let wasHeld = __classPrivateFieldGet(this, _SessionToolRunner_awaitingConfirmation, "f").delete(ev.id);
+  if (verdict === "allow") {
+    __classPrivateFieldGet(this, _SessionToolRunner_logger, "f").info("tool call confirmed", {
+      component: "session-tool-runner",
+      session_id: this.sessionId,
+      tool: ev.name,
+      tool_use_id: ev.id,
+    });
+    if (!wasHeld) __classPrivateFieldGet(this, _SessionToolRunner_idleClock, "f").block(ev.id);
+    try {
+      await __classPrivateFieldGet(this, _SessionToolRunner_instances, "m", _SessionToolRunner_execute).call(
+        this,
+        ev,
+        "allow",
+      );
+    } finally {
+      __classPrivateFieldGet(this, _SessionToolRunner_idleClock, "f").unblock(ev.id);
+    }
+    return;
+  }
+  if (wasHeld) __classPrivateFieldGet(this, _SessionToolRunner_idleClock, "f").unblock(ev.id);
+  __classPrivateFieldGet(this, _SessionToolRunner_answered, "f").add(ev.id);
+  __classPrivateFieldGet(this, _SessionToolRunner_logger, "f").info("tool call denied; not executing", {
+    component: "session-tool-runner",
+    session_id: this.sessionId,
+    tool: ev.name,
+    tool_use_id: ev.id,
+  });
+  __classPrivateFieldGet(this, _SessionToolRunner_instances, "m", _SessionToolRunner_surfaceCall).call(this, {
+    event: ev,
+    toolUseId: ev.id,
+    name: ev.name,
+    isError: false,
+    posted: false,
+    confirmation: "deny",
+  });
+};
+_SessionToolRunner_surfaceCall = function (call) {
+  __classPrivateFieldGet(this, _SessionToolRunner_results, "f").push(call);
+};
+_SessionToolRunner_execute = async function (ev, confirmation) {
+  var _a;
+  var _b;
+  if (__classPrivateFieldGet(this, _SessionToolRunner_answered, "f").has(ev.id)) return;
+  __classPrivateFieldGet(this, _SessionToolRunner_logger, "f").info("executing tool", {
+    component: "session-tool-runner",
+    session_id: this.sessionId,
+    tool: ev.name,
+    tool_use_id: ev.id,
+  });
+  __classPrivateFieldSet(
+    this,
+    _SessionToolRunner_inFlightCount,
+    ((_a = __classPrivateFieldGet(this, _SessionToolRunner_inFlightCount, "f")), _a++, _a),
+    "f",
+  );
+  try {
+    let tool = __classPrivateFieldGet(this, _SessionToolRunner_toolByName, "f").get(ev.name);
+    if (!tool) {
+      __classPrivateFieldGet(this, _SessionToolRunner_logger, "f").info(
+        "tool not owned by this runner; leaving the tool_use_id pending for its owner",
+        {
+          component: "session-tool-runner",
+          session_id: this.sessionId,
+          tool: ev.name,
+          tool_use_id: ev.id,
+        },
+      );
+      __classPrivateFieldGet(this, _SessionToolRunner_instances, "m", _SessionToolRunner_surfaceCall).call(
+        this,
+        {
+          event: ev,
+          toolUseId: ev.id,
+          name: ev.name,
+          isError: false,
+          posted: false,
+          confirmation,
+        },
+      );
+      return;
+    }
+    let content;
+    let isError;
+    let toolCtrl = new AbortController();
+    let detachTool = linkAbort(
+      __classPrivateFieldGet(this, _SessionToolRunner_controller, "f").signal,
+      toolCtrl,
     );
-  }),
-  (Zu = async function () {
-    if (ke(this, Mt, "f") === 0) return;
-    if (
-      (await Promise.race([new Promise((n) => Kn(this, Nr, n, "f")), sleepUnlessAborted(km)]),
-      Kn(this, Nr, null, "f"),
-      ke(this, Mt, "f") > 0)
-    )
-      ke(this, Ie, "f").warn("drain timeout exceeded");
-  }));
+    let timer = setTimeout(() => toolCtrl.abort(), TOOL_TIMEOUT_MS);
+    try {
+      let outcome = await runRunnableTool(tool, ev.input, {
+        toolUse: ev,
+        toolUseBlock: ev,
+        signal: toolCtrl.signal,
+      });
+      content = outcome.content;
+      isError = outcome.isError;
+    } finally {
+      clearTimeout(timer);
+      detachTool();
+    }
+    let result = buildResultEvent(ev, isError, toSessionContent(content));
+    let posted = await __classPrivateFieldGet(
+      this,
+      _SessionToolRunner_instances,
+      "m",
+      _SessionToolRunner_sendResult,
+    ).call(this, result, ev.id);
+    __classPrivateFieldGet(this, _SessionToolRunner_instances, "m", _SessionToolRunner_surfaceCall).call(
+      this,
+      {
+        event: ev,
+        result,
+        toolUseId: ev.id,
+        name: ev.name,
+        isError,
+        posted,
+        confirmation,
+      },
+    );
+  } finally {
+    __classPrivateFieldSet(
+      this,
+      _SessionToolRunner_inFlightCount,
+      ((_b = __classPrivateFieldGet(this, _SessionToolRunner_inFlightCount, "f")), _b--, _b),
+      "f",
+    );
+    if (__classPrivateFieldGet(this, _SessionToolRunner_inFlightCount, "f") === 0)
+      __classPrivateFieldGet(this, _SessionToolRunner_onIdle, "f")?.call(this);
+  }
+};
+_SessionToolRunner_sendResult = async function (result, toolUseId) {
+  let ctrl = __classPrivateFieldGet(this, _SessionToolRunner_controller, "f");
+  let start = Date.now();
+  let lastErr;
+  let attempt = 0;
+  while (true) {
+    attempt++;
+    ctrl.signal.throwIfAborted();
+    try {
+      await this.client.beta.sessions.events.send(
+        this.sessionId,
+        {
+          events: [result],
+        },
+        __classPrivateFieldGet(
+          this,
+          _SessionToolRunner_instances,
+          "m",
+          _SessionToolRunner_requestOptions,
+        ).call(this),
+      );
+      __classPrivateFieldGet(this, _SessionToolRunner_answered, "f").add(toolUseId);
+      return true;
+    } catch (e) {
+      lastErr = e;
+      if (isFatal4xx(e)) break;
+      let remainingMs =
+        __classPrivateFieldGet(this, _SessionToolRunner_sendRetryWindowMs, "f") - (Date.now() - start);
+      if (remainingMs <= 0) break;
+      let waitMs = Math.min(
+        applyJitter(cs(attempt - 1, SEND_BACKOFF_START_MS, SEND_BACKOFF_CAP_MS)),
+        remainingMs,
+      );
+      __classPrivateFieldGet(this, _SessionToolRunner_logger, "f").warn("tool result send failed; retrying", {
+        tool_use_id: toolUseId,
+        attempt,
+        backoff_ms: waitMs,
+        error: String(e),
+      });
+      await sleepUnlessAborted(waitMs, ctrl.signal);
+    }
+  }
+  __classPrivateFieldGet(this, _SessionToolRunner_logger, "f").error("failed to send tool result", {
+    tool_use_id: toolUseId,
+    attempts: attempt,
+    error: String(lastErr),
+  });
+  return false;
+};
+_SessionToolRunner_drain = async function () {
+  if (__classPrivateFieldGet(this, _SessionToolRunner_inFlightCount, "f") === 0) return;
+  await Promise.race([
+    new Promise((r) => __classPrivateFieldSet(this, _SessionToolRunner_onIdle, r, "f")),
+    sleepUnlessAborted(DRAIN_TIMEOUT_MS),
+  ]);
+  __classPrivateFieldSet(this, _SessionToolRunner_onIdle, null, "f");
+  if (__classPrivateFieldGet(this, _SessionToolRunner_inFlightCount, "f") > 0)
+    __classPrivateFieldGet(this, _SessionToolRunner_logger, "f").warn("drain timeout exceeded");
+};
 //@ chunk-hwmsct5x.js:70363-70572 esm-fingerprint
-function Cm(e, n, r) {
-  if (e.type === "agent.custom_tool_use")
-    return { type: "user.custom_tool_result", custom_tool_use_id: e.id, is_error: n, content: r };
-  return { type: "user.tool_result", tool_use_id: e.id, is_error: n, content: r };
+function buildResultEvent(ev, isError, content) {
+  if (ev.type === "agent.custom_tool_use")
+    return {
+      type: "user.custom_tool_result",
+      custom_tool_use_id: ev.id,
+      is_error: isError,
+      content,
+    };
+  return {
+    type: "user.tool_result",
+    tool_use_id: ev.id,
+    is_error: isError,
+    content,
+  };
 }
 //@ chunk-hwmsct5x.js:70572-71076 esm-fingerprint
-function Im(e) {
-  if (typeof e === "string") return [{ type: "text", text: e || "(no output)" }];
-  let mapped = e.map((r) => {
-    if (r.type === "text") return { type: "text", text: r.text || "(no output)" };
-    if (r.type === "image" || r.type === "document") return r;
-    if (r.type === "search_result")
+function toSessionContent(content) {
+  if (typeof content === "string")
+    return [
+      {
+        type: "text",
+        text: content || "(no output)",
+      },
+    ];
+  let out = content.map((b) => {
+    if (b.type === "text")
+      return {
+        type: "text",
+        text: b.text || "(no output)",
+      };
+    if (b.type === "image" || b.type === "document") return b;
+    if (b.type === "search_result")
       return {
         type: "search_result",
-        source: r.source,
-        title: r.title,
-        content: r.content.map((s) => ({ type: "text", text: s.text })),
-        citations: { enabled: r.citations?.enabled ?? !1 },
+        source: b.source,
+        title: b.title,
+        content: b.content.map((c) => ({
+          type: "text",
+          text: c.text,
+        })),
+        citations: {
+          enabled: b.citations?.enabled ?? false,
+        },
       };
-    return { type: "text", text: JSON.stringify(r) };
+    return {
+      type: "text",
+      text: JSON.stringify(b),
+    };
   });
-  return mapped.length > 0 ? mapped : [{ type: "text", text: "(no output)" }];
+  return out.length > 0
+    ? out
+    : [
+        {
+          type: "text",
+          text: "(no output)",
+        },
+      ];
 }
-
-export { Br };
+export { SessionToolRunner };

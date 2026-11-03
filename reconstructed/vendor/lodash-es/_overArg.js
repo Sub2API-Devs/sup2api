@@ -7,12 +7,11 @@
  */
 
 //@ chunk-z0q4jgnc.js:580-632 placement
-function overArg(r, t) {
-  return function (e) {
-    return r(t(e));
+function overArg(func, transform) {
+  return function (arg) {
+    return func(transform(arg));
   };
 }
 //@ chunk-z0q4jgnc.js:632-643 placement
-var sdo = overArg;
-
-export { sdo };
+var overArg_default = overArg;
+export { overArg_default };

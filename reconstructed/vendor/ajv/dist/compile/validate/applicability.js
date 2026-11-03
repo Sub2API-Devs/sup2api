@@ -8,26 +8,29 @@
 import { x } from "../../../../../runtime/bun-runtime.js";
 
 //@ chunk-s82q9s4x.js:25637-26116 cjs-fingerprint
-var hr = x(function (Rs) {
-  Object.defineProperty(Rs, "__esModule", { value: !0 });
-  Rs.shouldUseRule = Rs.shouldUseGroup = Rs.schemaHasRulesForType = void 0;
-  function Kc({ schema: schema, self: t }, r) {
-    let s = t.RULES.types[r];
-    return s && s !== !0 && js(schema, s);
+var require_applicability = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.shouldUseRule = cjsExports.shouldUseGroup = cjsExports.schemaHasRulesForType = undefined;
+  function schemaHasRulesForType({ schema, self: t }, type) {
+    let group = t.RULES.types[type];
+    return group && group !== true && shouldUseGroup(schema, group);
   }
-  Rs.schemaHasRulesForType = Kc;
-  function js(e, t) {
-    return t.rules.some((rule) => xs(e, rule));
+  cjsExports.schemaHasRulesForType = schemaHasRulesForType;
+  function shouldUseGroup(schema, group) {
+    return group.rules.some((rule) => shouldUseRule(schema, rule));
   }
-  Rs.shouldUseGroup = js;
-  function xs(e, t) {
-    var r;
+  cjsExports.shouldUseGroup = shouldUseGroup;
+  function shouldUseRule(schema, rule) {
+    var _a;
     return (
-      e[t.keyword] !== void 0 ||
-      ((r = t.definition.implements) === null || r === void 0 ? void 0 : r.some((s) => e[s] !== void 0))
+      schema[rule.keyword] !== undefined ||
+      ((_a = rule.definition.implements) === null || _a === undefined
+        ? undefined
+        : _a.some((kwd) => schema[kwd] !== undefined))
     );
   }
-  Rs.shouldUseRule = xs;
+  cjsExports.shouldUseRule = shouldUseRule;
 });
-
-export { hr };
+export { require_applicability };

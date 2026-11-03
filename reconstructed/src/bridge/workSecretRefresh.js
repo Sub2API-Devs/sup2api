@@ -25,168 +25,200 @@ import {
 import { decodeJwtExpiry, getJwtSessionId } from "./jwtUtils.js";
 import { toSDKMessages } from "../utils/messages/mappers.js";
 
+//@ chunk-cg2r2hy6.js:24718-25015 placement
 /**
  * 把转录消息逐条转发给桥接端（记录已发送 uuid），最后一条压缩边界附带保留的消息 id，子代理消息附带 agentId。
  */
-//@ chunk-cg2r2hy6.js:24718-25015 placement
-function forwardTranscriptMessages(s, u, p, o) {
+function forwardTranscriptMessages(uploadRows, u, serverUuids, agentId) {
   let lastIndex = u.findLastIndex((S) => isCompactBoundaryMessage_2(S));
-  for (let [S, w] of u.entries())
-    (p.add(w.uuid),
-      s("transcript", w, {
-        ...(S === lastIndex &&
-          isCompactBoundaryMessage_2(w) && {
-            isCompaction: !0,
-            preservedEventIds: w.compactMetadata?.preservedMessages?.uuids,
-          }),
-        ...(o !== void 0 && { agentId: o }),
-      }).catch((B) => {
-        logForDebugging(`[persistence-sync] Write failed: ${B}`);
-      }));
+  for (let [S, w] of u.entries()) {
+    serverUuids.add(w.uuid);
+    uploadRows("transcript", w, {
+      ...(S === lastIndex &&
+        isCompactBoundaryMessage_2(w) && {
+          isCompaction: true,
+          preservedEventIds: w.compactMetadata?.preservedMessages?.uuids,
+        }),
+      ...(agentId !== undefined && {
+        agentId,
+      }),
+    }).catch((error) => {
+      logForDebugging(`[persistence-sync] Write failed: ${error}`);
+    });
+  }
 }
 //@ chunk-cg2r2hy6.js:25015-25131 placement = isCompactBoundaryMessage (0.824)
 function isCompactBoundaryMessage(message) {
   return new Set(
-    nt(message.filter((u) => u.payload.type === "system" && u.payload.subtype === "compact_boundary")),
+    compactBoundaryUuids(
+      message.filter((u) => u.payload.type === "system" && u.payload.subtype === "compact_boundary"),
+    ),
   );
 }
 //@ chunk-cg2r2hy6.js:25131-25218 placement
-function nt(s) {
-  return (s ?? []).map((u) => u.payload.uuid).filter((u) => typeof u === "string");
+function compactBoundaryUuids(events) {
+  return (events ?? []).map((u) => u.payload.uuid).filter((u) => typeof u === "string");
 }
 //@ chunk-cg2r2hy6.js:25218-25230 placement
-var fr = 2100;
+var WORK_SECRET_REFRESH_LEAD_SEC = 2100;
+//@ chunk-cg2r2hy6.js:25230-27254 placement
 /**
  * 远程工作密钥被拒时尝试刷新；宿主无刷新途径时报告
  */
-//@ chunk-cg2r2hy6.js:25230-27254 placement
 function refreshWorkSecret(s) {
-  let { sessionId: sessionId, apiBaseUrl: apiBaseUrl, requestFreshSecret: requestFreshSecret } = s,
-    y = validateWorkSecretSession(s.secret, sessionId);
+  let { sessionId, apiBaseUrl, requestFreshSecret } = s;
+  let y = validateWorkSecretSession(s.secret, sessionId);
   if (typeof y === "string")
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
       `work secret rejected: ${y}`,
       "work secret rejected",
     );
-  let S = buildCCRv2SdkUrl(apiBaseUrl, sessionId),
-    w = null,
-    B = !1;
+  let sessionUrl = buildCCRv2SdkUrl(apiBaseUrl, sessionId);
+  let w = null;
+  let B = false;
   async function _() {
-    if (!requestFreshSecret)
-      return (logForDebugging("[bridge:work-secret] the host offers no refresh path"), null);
+    if (!requestFreshSecret) {
+      logForDebugging("[bridge:work-secret] the host offers no refresh path");
+      return null;
+    }
     let E;
     try {
       E = await requestFreshSecret(sessionId);
     } catch (error) {
-      return (
-        logForDebugging(`[bridge:work-secret] host refresh request failed: ${errorMessage(error)}`, {
-          level: "warn",
-        }),
-        null
-      );
+      logForDebugging(`[bridge:work-secret] host refresh request failed: ${errorMessage(error)}`, {
+        level: "warn",
+      });
+      return null;
     }
-    if (!E) return (logForDebugging("[bridge:work-secret] host has no fresh secret yet"), null);
+    if (!E) {
+      logForDebugging("[bridge:work-secret] host has no fresh secret yet");
+      return null;
+    }
     let A = validateWorkSecretSession(E, sessionId);
-    if (typeof A === "string")
-      return (logForDebugging(`[bridge:work-secret] fresh secret rejected: ${A}`, { level: "warn" }), null);
+    if (typeof A === "string") {
+      logForDebugging(`[bridge:work-secret] fresh secret rejected: ${A}`, {
+        level: "warn",
+      });
+      return null;
+    }
     let T = decodeJwtExpiry(A.session_ingress_token);
     if (
       w &&
       (A.session_ingress_token === w.secret.session_ingress_token ||
         (w.exp !== null && T !== null && T <= w.exp))
-    )
-      return (
-        logForDebugging("[bridge:work-secret] host returned a secret no fresher than the registered one"),
-        null
-      );
+    ) {
+      logForDebugging("[bridge:work-secret] host returned a secret no fresher than the registered one");
+      return null;
+    }
     return A;
   }
-  async function b(E, A = !1) {
-    let session_ingress_token = E.session_ingress_token,
-      v;
+  async function b(E, A = false) {
+    let sessionIngressToken = E.session_ingress_token;
+    let v;
     try {
-      v = await registerWorker(S, session_ingress_token);
+      v = await registerWorker(sessionUrl, sessionIngressToken);
     } catch (error) {
-      let { kind: kind, status: status } = classifyAxiosError(error);
-      if (
-        (logForDebugging(
-          `[bridge:work-secret] /worker/register failed kind=${kind} status=${status ?? "none"}: ${errorMessage(error)}`,
-          { level: "warn" },
-        ),
-        kind === "other")
-      )
-        return { terminal: !0, reason: "malformed_response", status: 200 };
-      if (status === void 0 || status === 408 || status === 429 || status >= 500) return null;
-      if (A && (status === 401 || status === 403)) return ((B = !0), null);
-      return { terminal: !0, reason: "request_rejected", status: status };
+      let { kind, status } = classifyAxiosError(error);
+      logForDebugging(
+        `[bridge:work-secret] /worker/register failed kind=${kind} status=${status ?? "none"}: ${errorMessage(error)}`,
+        {
+          level: "warn",
+        },
+      );
+      if (kind === "other")
+        return {
+          terminal: true,
+          reason: "malformed_response",
+          status: 200,
+        };
+      if (status === undefined || status === 408 || status === 429 || status >= 500) return null;
+      if (A && (status === 401 || status === 403)) {
+        B = true;
+        return null;
+      }
+      return {
+        terminal: true,
+        reason: "request_rejected",
+        status,
+      };
     }
-    let F = decodeJwtExpiry(session_ingress_token);
-    ((w = { secret: E, exp: F }), (B = !1));
-    let I = F === null ? fr : Math.max(0, F - Math.floor(Date.now() / 1000));
-    return (
-      logForDebugging(`[bridge:work-secret] registered worker epoch=${v} expires_in=${I}s`),
-      { worker_jwt: session_ingress_token, api_base_url: apiBaseUrl, expires_in: I, worker_epoch: v }
-    );
+    let F = decodeJwtExpiry(sessionIngressToken);
+    w = {
+      secret: E,
+      exp: F,
+    };
+    B = false;
+    let I = F === null ? WORK_SECRET_REFRESH_LEAD_SEC : Math.max(0, F - Math.floor(Date.now() / 1000));
+    logForDebugging(`[bridge:work-secret] registered worker epoch=${v} expires_in=${I}s`);
+    return {
+      worker_jwt: sessionIngressToken,
+      api_base_url: apiBaseUrl,
+      expires_in: I,
+      worker_epoch: v,
+    };
   }
   return {
     async register(E, A) {
       if (E === "initial") return b(y);
       let T = await _();
-      if (A?.stillWanted && !A.stillWanted())
-        return (
-          logForDebugging(
-            "[bridge:work-secret] bridge torn down or superseded while the host was asked; not registering",
-          ),
-          null
+      if (A?.stillWanted && !A.stillWanted()) {
+        logForDebugging(
+          "[bridge:work-secret] bridge torn down or superseded while the host was asked; not registering",
         );
+        return null;
+      }
       if (T) return b(T);
       let v = w !== null && w.exp !== null ? w.exp - Math.floor(Date.now() / 1000) : 0;
-      if (w !== null && !B && A?.reuseHeldAboveS !== void 0 && v > A.reuseHeldAboveS)
-        return (
-          logForDebugging(
-            `[bridge:work-secret] nothing fresher from the host; re-registering the held secret (${v}s left)`,
-          ),
-          b(w.secret, !0)
+      if (w !== null && !B && A?.reuseHeldAboveS !== undefined && v > A.reuseHeldAboveS) {
+        logForDebugging(
+          `[bridge:work-secret] nothing fresher from the host; re-registering the held secret (${v}s left)`,
         );
+        return b(w.secret, true);
+      }
       return null;
     },
   };
 }
 //@ chunk-cg2r2hy6.js:27254-27501 placement
-function validateWorkSecretSession(s, u) {
+function validateWorkSecretSession(s, sessionId) {
   let p;
   try {
     p = decodeWorkSecret(s);
   } catch (error) {
     return error instanceof WorkSecretShapeError ? error.message : "undecodable";
   }
-  let o = getJwtSessionId(p.session_ingress_token);
-  if (o === void 0) return "token carries no session_id claim";
-  if (!sameSessionId(o, u)) return "token is for a different session";
+  let jwtSessionId = getJwtSessionId(p.session_ingress_token);
+  if (jwtSessionId === undefined) return "token carries no session_id claim";
+  if (!sameSessionId(jwtSessionId, sessionId)) return "token is for a different session";
   return p;
 }
+//@ chunk-cg2r2hy6.js:27501-27641 placement
 /**
  * 工作密钥刷新相关常量：快速/耐心两档读取预算（单文件与总时长）、刷新时间窗口，以及视为功能开关不可用的原因集合。
  */
-//@ chunk-cg2r2hy6.js:27501-27641 placement
-var QUICK_READ_BUDGET = { perFileMs: 400, totalMs: 1500 },
-  PATIENT_READ_BUDGET = { perFileMs: 2000, totalMs: 6000 },
-  WORK_SECRET_REFRESH_WINDOW_MS = 60000,
-  FLAG_UNAVAILABLE_CAUSES = new Set(["flags_disabled", "flags_unreachable", "gate_off"]);
+var QUICK_READ_BUDGET = {
+  perFileMs: 400,
+  totalMs: 1500,
+};
+var PATIENT_READ_BUDGET = {
+  perFileMs: 2000,
+  totalMs: 6000,
+};
+var WORK_SECRET_REFRESH_WINDOW_MS = 60000;
+var FLAG_UNAVAILABLE_CAUSES = new Set(["flags_disabled", "flags_unreachable", "gate_off"]);
 //@ chunk-cg2r2hy6.js:27641-27697 placement
-function mr(s) {
-  return (u) => {
-    let p = s?.();
-    return toSDKMessages(u, p);
+function transcriptForwarder(getTools) {
+  return (messages) => {
+    let p = getTools?.();
+    return toSDKMessages(messages, p);
   };
 }
-
 export {
-  nt,
+  compactBoundaryUuids,
   isCompactBoundaryMessage,
   forwardTranscriptMessages,
   FLAG_UNAVAILABLE_CAUSES,
   refreshWorkSecret,
-  mr,
+  transcriptForwarder,
   WORK_SECRET_REFRESH_WINDOW_MS,
 };

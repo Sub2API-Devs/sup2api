@@ -7,341 +7,493 @@
  */
 import { decodeUtf8 } from "../../internal/utils/bytes.mjs";
 import { du } from "../../internal/utils/base64.mjs";
-import { pr, Ot } from "../../core/error.mjs";
+import { AnthropicError, APIError } from "../../core/error.mjs";
 import { M8r } from "../../tools/agent-toolset/sync-interval.mjs";
-import { Kn, ke } from "../../internal/tslib.mjs";
-import { Fr } from "./poller.mjs";
-import { Tb } from "../../internal/utils/log.mjs";
-import { cS } from "../../internal/utils/env.mjs";
-import { ps } from "../helper-client.mjs";
-import { qt } from "../../internal/utils/abort.mjs";
-import { Br } from "../tools/SessionToolRunner.mjs";
-import { T } from "../../internal/headers.mjs";
-import { hJ, on } from "../../internal/utils/backoff.mjs";
-import { Ni } from "../../internal/utils/values.mjs";
+import { __classPrivateFieldSet, __classPrivateFieldGet } from "../../internal/tslib.mjs";
+import { WorkPoller } from "./poller.mjs";
+import { loggerFor } from "../../internal/utils/log.mjs";
+import { readEnv } from "../../internal/utils/env.mjs";
+import { copyClientForHelper } from "../helper-client.mjs";
+import { linkAbort } from "../../internal/utils/abort.mjs";
+import { SessionToolRunner } from "../tools/SessionToolRunner.mjs";
+import { buildHeaders } from "../../internal/headers.mjs";
+import { isStatus, isFatal4xx } from "../../internal/utils/backoff.mjs";
+import { isObj } from "../../internal/utils/values.mjs";
 import { sleepUnlessAborted } from "../../tools/agent-toolset/memories.mjs";
 
 //@ chunk-hwmsct5x.js:71272-71327 esm-layout
-var xs,
-  Hr,
-  fa,
-  $r,
-  Dn,
-  nd = 30000,
-  Fm = 90000,
-  NO_HEARTBEAT = "NO_HEARTBEAT";
+var _EnvironmentWorker_instances;
+var _EnvironmentWorker_signal;
+var _EnvironmentWorker_handleItem;
+var _Lease_ctrl;
+var _Lease_endReason;
+var HEARTBEAT_DEFAULT_MS = 30000;
+var HEARTBEAT_TTL_DEFAULT_MS = 90000;
+var NO_HEARTBEAT_SENTINEL = "NO_HEARTBEAT";
 //@ chunk-hwmsct5x.js:71327-71396 esm-fingerprint
-function Um(e) {
-  return e.resources.some((resource) => resource.type === "memory_store");
+function hasMemoryStore(session) {
+  return session.resources.some((r) => r.type === "memory_store");
 }
 //@ chunk-hwmsct5x.js:71396-71694 esm-fingerprint
-function Nm(e) {
-  if (!e) return null;
-  let n;
+function sessionsTokenFromSecret(secret) {
+  if (!secret) return null;
+  let parsed;
   try {
-    let replaced = e.replace(/-/g, "+").replace(/_/g, "/"),
-      padded = replaced.padEnd(Math.ceil(replaced.length / 4) * 4, "=");
-    n = JSON.parse(decodeUtf8(du(padded)));
+    let normalized = secret.replace(/-/g, "+").replace(/_/g, "/");
+    let padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+    parsed = JSON.parse(decodeUtf8(du(padded)));
   } catch {
     return null;
   }
-  if (n === null || typeof n !== "object" || Array.isArray(n)) return null;
-  let sessions_token = n.sessions_token;
-  return typeof sessions_token === "string" && sessions_token !== "" ? sessions_token : null;
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+  let token = parsed.sessions_token;
+  return typeof token === "string" && token !== "" ? token : null;
 }
 //@ chunk-hwmsct5x.js:71694-77525 esm-fingerprint
-var pa = (() => {
-  class e {
-    constructor(n) {
-      if ((xs.add(this), Hr.set(this, void 0), n.unrestrictedPaths !== void 0))
-        throw new pr(
+var EnvironmentWorker = (() => {
+  class EnvironmentWorker {
+    constructor(opts) {
+      _EnvironmentWorker_instances.add(this);
+      _EnvironmentWorker_signal.set(this, undefined);
+      if (opts.unrestrictedPaths !== undefined)
+        throw new AnthropicError(
           "The `unrestrictedPaths` option you passed to EnvironmentWorker (or client.beta.environments.work.worker()) is no longer supported. The worker's file tools (read, write, edit, glob, grep) are now always confined to `workdir` plus the session's memory folders. Remove `unrestrictedPaths` from your options; to let the file tools reach any other directory, add it to `AgentToolContext.allowedRoots` from a `tools` factory.",
         );
-      if (
-        ((this.client = n.client),
-        (this.environmentId = n.environmentId),
-        (this.environmentKey = n.environmentKey),
-        (this.tools = n.tools),
-        (this.workdir = n.workdir ?? process.cwd()),
-        (this.maxFileBytes = n.maxFileBytes),
-        (this.maxIdleMs = n.maxIdleMs),
-        n.memorySyncIntervalMs != null)
-      )
-        M8r(n.memorySyncIntervalMs, "memorySyncIntervalMs");
-      ((this.memorySyncIntervalMs = n.memorySyncIntervalMs),
-        (this.memorySyncDeletions = n.memorySyncDeletions ?? "enabled"),
-        (this.workerId = n.workerId),
-        (this.requestOptions = n.requestOptions),
-        Kn(this, Hr, n.signal, "f"));
+      this.client = opts.client;
+      this.environmentId = opts.environmentId;
+      this.environmentKey = opts.environmentKey;
+      this.tools = opts.tools;
+      this.workdir = opts.workdir ?? process.cwd();
+      this.maxFileBytes = opts.maxFileBytes;
+      this.maxIdleMs = opts.maxIdleMs;
+      if (opts.memorySyncIntervalMs != null) M8r(opts.memorySyncIntervalMs, "memorySyncIntervalMs");
+      this.memorySyncIntervalMs = opts.memorySyncIntervalMs;
+      this.memorySyncDeletions = opts.memorySyncDeletions ?? "enabled";
+      this.workerId = opts.workerId;
+      this.requestOptions = opts.requestOptions;
+      __classPrivateFieldSet(this, _EnvironmentWorker_signal, opts.signal, "f");
     }
-    async run(n) {
-      let { environmentId: environmentId, environmentKey: environmentKey } = this;
-      if (environmentId === void 0 || environmentKey === void 0)
-        throw new pr("EnvironmentWorker.run: environmentId and environmentKey are required to poll for work");
-      let h = n ?? ke(this, Hr, "f"),
-        y = new Fr({
-          client: this.client,
-          environmentId: environmentId,
-          environmentKey: environmentKey,
-          ...(this.workerId !== void 0 ? { workerId: this.workerId } : {}),
-          ...(h ? { signal: h } : {}),
-          ...(this.requestOptions !== void 0 ? { requestOptions: this.requestOptions } : {}),
-          autoStop: !1,
-        });
-      for await (let w of y)
+    async run(signal) {
+      let { environmentId, environmentKey } = this;
+      if (environmentId === undefined || environmentKey === undefined)
+        throw new AnthropicError(
+          "EnvironmentWorker.run: environmentId and environmentKey are required to poll for work",
+        );
+      let externalSignal = signal ?? __classPrivateFieldGet(this, _EnvironmentWorker_signal, "f");
+      let poller = new WorkPoller({
+        client: this.client,
+        environmentId,
+        environmentKey,
+        ...(this.workerId !== undefined
+          ? {
+              workerId: this.workerId,
+            }
+          : {}),
+        ...(externalSignal
+          ? {
+              signal: externalSignal,
+            }
+          : {}),
+        ...(this.requestOptions !== undefined
+          ? {
+              requestOptions: this.requestOptions,
+            }
+          : {}),
+        autoStop: false,
+      });
+      for await (let work of poller)
         try {
-          await ke(this, xs, "m", fa).call(this, w, environmentKey, y.signal);
-        } catch (error) {
-          if (y.signal?.aborted) throw error;
-          Tb(this.client).error("work item failed", { work_id: w.id, error: String(error) });
+          await __classPrivateFieldGet(
+            this,
+            _EnvironmentWorker_instances,
+            "m",
+            _EnvironmentWorker_handleItem,
+          ).call(this, work, environmentKey, poller.signal);
+        } catch (e) {
+          if (poller.signal?.aborted) throw e;
+          loggerFor(this.client).error("work item failed", {
+            work_id: work.id,
+            error: String(e),
+          });
         }
     }
-    async handleItem(n) {
-      let r = n?.workId ?? cS("ANTHROPIC_WORK_ID"),
-        s = n?.environmentId ?? cS("ANTHROPIC_ENVIRONMENT_ID"),
-        h = n?.sessionId ?? cS("ANTHROPIC_SESSION_ID"),
-        y = (n?.environmentKey ?? this.environmentKey ?? cS("ANTHROPIC_ENVIRONMENT_KEY")) || void 0,
-        w = n?.workSecret || cS("ANTHROPIC_WORK_SECRET") || null;
-      if (!r) throw new pr("handleItem: workId is required \u2014 pass it or set ANTHROPIC_WORK_ID");
-      if (!s)
-        throw new pr("handleItem: environmentId is required \u2014 pass it or set ANTHROPIC_ENVIRONMENT_ID");
-      if (!h) throw new pr("handleItem: sessionId is required \u2014 pass it or set ANTHROPIC_SESSION_ID");
-      if (!y && !w)
-        throw new pr(
+    async handleItem(opts) {
+      let workId = opts?.workId ?? readEnv("ANTHROPIC_WORK_ID");
+      let environmentId = opts?.environmentId ?? readEnv("ANTHROPIC_ENVIRONMENT_ID");
+      let sessionId = opts?.sessionId ?? readEnv("ANTHROPIC_SESSION_ID");
+      let environmentKey =
+        (opts?.environmentKey ?? this.environmentKey ?? readEnv("ANTHROPIC_ENVIRONMENT_KEY")) || undefined;
+      let workSecret = opts?.workSecret || readEnv("ANTHROPIC_WORK_SECRET") || null;
+      if (!workId)
+        throw new AnthropicError("handleItem: workId is required \u2014 pass it or set ANTHROPIC_WORK_ID");
+      if (!environmentId)
+        throw new AnthropicError(
+          "handleItem: environmentId is required \u2014 pass it or set ANTHROPIC_ENVIRONMENT_ID",
+        );
+      if (!sessionId)
+        throw new AnthropicError(
+          "handleItem: sessionId is required \u2014 pass it or set ANTHROPIC_SESSION_ID",
+        );
+      if (!environmentKey && !workSecret)
+        throw new AnthropicError(
           "handleItem: environmentKey is required when there is no work secret \u2014 pass it, construct the worker with it, or set ANTHROPIC_ENVIRONMENT_KEY",
         );
-      let S = { id: r, environment_id: s, secret: w, data: { type: "session", id: h } };
-      await ke(this, xs, "m", fa).call(this, S, y, n?.signal ?? ke(this, Hr, "f"));
+      let work = {
+        id: workId,
+        environment_id: environmentId,
+        secret: workSecret,
+        data: {
+          type: "session",
+          id: sessionId,
+        },
+      };
+      await __classPrivateFieldGet(
+        this,
+        _EnvironmentWorker_instances,
+        "m",
+        _EnvironmentWorker_handleItem,
+      ).call(
+        this,
+        work,
+        environmentKey,
+        opts?.signal ?? __classPrivateFieldGet(this, _EnvironmentWorker_signal, "f"),
+      );
     }
   }
-  return (
-    (Hr = new WeakMap()),
-    (xs = new WeakSet()),
-    (fa = async function (r, s, h) {
-      let y = Tb(this.client),
-        w = Nm(r.secret),
-        S = w ?? s;
-      if (S === void 0)
-        throw new pr(
-          "handleItem: the work item carried a secret payload but no sessions token could be extracted, and there is no environment key to fall back to; the poller must issue a secret whose payload carries `sessions_token`, or provide the environment key (pass it, construct the worker with it, or set ANTHROPIC_ENVIRONMENT_KEY)",
-        );
-      if (r.secret && w === null)
-        y.warn(
-          "work item carried a secret payload but no sessions token could be extracted; falling back to the environment key",
-          { work_id: r.id },
-        );
-      let E = ps(this.client, { authToken: S, helper: "environments-worker" }),
-        id = r.data.id,
-        abortController = new AbortController(),
-        O = qt(h, abortController),
-        M = new Hm(abortController),
-        P = await import("./chunk-2cw52qnf.js"),
-        H,
-        j,
-        z = qm(E, r, M, y, this.requestOptions, (Z) => {
-          ((H = Z), j?._setSendRetryWindow(Z));
-        }).catch((Z) => {
-          if (!abortController.signal.aborted)
-            y.error("heartbeat loop failed", { work_id: r.id, error: String(Z) });
-          abortController.abort();
-        }),
-        G = async () => {},
-        q,
-        J = !1;
-      try {
-        if (r.data.type !== "session") {
-          y.debug("skipping non-session work item", { work_id: r.id, type: r.data.type });
-          return;
-        }
-        let retrieve = await E.beta.sessions.retrieve(id);
-        if (w === null && this.memorySyncIntervalMs !== null && Um(retrieve))
-          throw new P.SessionMemoryError(
-            `cannot mount the session's memories: the work item carried no sessions token (work_id=${r.id}, session_id=${id}); the memory endpoints reject the environment key, so the poller must issue a per-item \`secret\` carrying \`sessions_token\`, or set \`memorySyncIntervalMs: null\` to run without memory`,
-          );
-        let Q = {
-          workdir: this.workdir,
-          client: E,
-          session: retrieve,
-          ...(this.maxFileBytes !== void 0 ? { maxFileBytes: this.maxFileBytes } : {}),
-        };
-        try {
-          G = await P.setupSkills(Q);
-        } catch (error) {
-          y.warn("skill setup failed", { session_id: id, work_id: r.id, error: String(error) });
-        }
-        if (w !== null && this.memorySyncIntervalMs !== null)
-          ((q = new P.SessionMemoryStores(E, {
-            workdir: this.workdir,
-            ...(this.memorySyncIntervalMs !== void 0 ? { syncIntervalMs: this.memorySyncIntervalMs } : {}),
-            syncDeletions: this.memorySyncDeletions,
-          })),
-            await q.download(retrieve),
-            (Q.allowedRoots = q.roots),
-            (Q.readOnlyRoots = q.readOnlyRoots));
-        else y.debug("memory stores disabled for this item", { work_id: r.id });
-        let ne =
-          typeof this.tools === "function" ? this.tools(Q) : (this.tools ?? P.betaAgentToolset20260401(Q));
-        if (
-          ((j = new Br(id, {
-            client: E,
-            tools: ne,
-            ...(this.maxIdleMs !== void 0 ? { maxIdleMs: this.maxIdleMs } : {}),
-            ...(this.requestOptions !== void 0 ? { requestOptions: this.requestOptions } : {}),
-            signal: abortController.signal,
-          })),
-          H !== void 0)
-        )
-          j._setSendRetryWindow(H);
-        for await (let te of j) if (q) await q.syncIfDue();
-        J = !abortController.signal.aborted;
-      } finally {
-        try {
-          await G().catch((Z) => {
-            y.warn("skill cleanup failed", { session_id: id, work_id: r.id, error: String(Z) });
-          });
-        } finally {
-          if (q) {
-            let MEMORY_FLUSH_TIMEOUT_MS = P.MEMORY_FLUSH_TIMEOUT_MS;
-            if (J) {
-              if (await rd(q.finish(), MEMORY_FLUSH_TIMEOUT_MS))
-                y.warn(
-                  `final memory sync cut off after ${MEMORY_FLUSH_TIMEOUT_MS}ms; the flush that follows still uploads changed files`,
-                  { session_id: id, work_id: r.id },
-                );
-            }
-            let abortController = new AbortController();
-            if (await rd(q.flushWrites(abortController.signal), MEMORY_FLUSH_TIMEOUT_MS))
-              (abortController.abort(),
-                y.warn(
-                  `memory flush cut off after ${MEMORY_FLUSH_TIMEOUT_MS}ms; changed files it had not uploaded yet are not saved`,
-                  { session_id: id, work_id: r.id },
-                ));
-            await q.dispose().catch((te) => {
-              y.warn("memory store cleanup failed", { session_id: id, work_id: r.id, error: String(te) });
-            });
-          }
-        }
-        if ((M.finish("runner_done"), O(), await z, M.lost))
-          y.info("lease lost; released without stopping it", { session_id: id, work_id: r.id });
-        else await Bm(E, r, y, this.requestOptions);
+  _EnvironmentWorker_signal = new WeakMap();
+  _EnvironmentWorker_instances = new WeakSet();
+  _EnvironmentWorker_handleItem = async function (work, environmentKey, externalSignal) {
+    let log = loggerFor(this.client);
+    let sessionsToken = sessionsTokenFromSecret(work.secret);
+    let itemCredential = sessionsToken ?? environmentKey;
+    if (itemCredential === undefined)
+      throw new AnthropicError(
+        "handleItem: the work item carried a secret payload but no sessions token could be extracted, and there is no environment key to fall back to; the poller must issue a secret whose payload carries `sessions_token`, or provide the environment key (pass it, construct the worker with it, or set ANTHROPIC_ENVIRONMENT_KEY)",
+      );
+    if (work.secret && sessionsToken === null)
+      log.warn(
+        "work item carried a secret payload but no sessions token could be extracted; falling back to the environment key",
+        {
+          work_id: work.id,
+        },
+      );
+    let sessionClient = copyClientForHelper(this.client, {
+      authToken: itemCredential,
+      helper: "environments-worker",
+    });
+    let sessionId = work.data.id;
+    let ctrl = new AbortController();
+    let detachExternal = linkAbort(externalSignal, ctrl);
+    let lease = new Lease(ctrl);
+    let agentToolset = await import("./chunk-2cw52qnf.js");
+    let leaseTtlMs;
+    let runner;
+    let heartbeatPromise = heartbeatLoop(sessionClient, work, lease, log, this.requestOptions, (ttlMs) => {
+      leaseTtlMs = ttlMs;
+      runner?._setSendRetryWindow(ttlMs);
+    }).catch((e) => {
+      if (!ctrl.signal.aborted)
+        log.error("heartbeat loop failed", {
+          work_id: work.id,
+          error: String(e),
+        });
+      ctrl.abort();
+    });
+    let cleanupSkills = async () => {};
+    let stores;
+    let cleanEnd = false;
+    try {
+      if (work.data.type !== "session") {
+        log.debug("skipping non-session work item", {
+          work_id: work.id,
+          type: work.data.type,
+        });
+        return;
       }
-    }),
-    e
-  );
+      let session = await sessionClient.beta.sessions.retrieve(sessionId);
+      if (sessionsToken === null && this.memorySyncIntervalMs !== null && hasMemoryStore(session))
+        throw new agentToolset.SessionMemoryError(
+          `cannot mount the session's memories: the work item carried no sessions token (work_id=${work.id}, session_id=${sessionId}); the memory endpoints reject the environment key, so the poller must issue a per-item \`secret\` carrying \`sessions_token\`, or set \`memorySyncIntervalMs: null\` to run without memory`,
+        );
+      let ctx = {
+        workdir: this.workdir,
+        client: sessionClient,
+        session,
+        ...(this.maxFileBytes !== undefined
+          ? {
+              maxFileBytes: this.maxFileBytes,
+            }
+          : {}),
+      };
+      try {
+        cleanupSkills = await agentToolset.setupSkills(ctx);
+      } catch (e) {
+        log.warn("skill setup failed", {
+          session_id: sessionId,
+          work_id: work.id,
+          error: String(e),
+        });
+      }
+      if (sessionsToken !== null && this.memorySyncIntervalMs !== null) {
+        stores = new agentToolset.SessionMemoryStores(sessionClient, {
+          workdir: this.workdir,
+          ...(this.memorySyncIntervalMs !== undefined
+            ? {
+                syncIntervalMs: this.memorySyncIntervalMs,
+              }
+            : {}),
+          syncDeletions: this.memorySyncDeletions,
+        });
+        await stores.download(session);
+        ctx.allowedRoots = stores.roots;
+        ctx.readOnlyRoots = stores.readOnlyRoots;
+      } else
+        log.debug("memory stores disabled for this item", {
+          work_id: work.id,
+        });
+      let tools =
+        typeof this.tools === "function"
+          ? this.tools(ctx)
+          : (this.tools ?? agentToolset.betaAgentToolset20260401(ctx));
+      runner = new SessionToolRunner(sessionId, {
+        client: sessionClient,
+        tools,
+        ...(this.maxIdleMs !== undefined
+          ? {
+              maxIdleMs: this.maxIdleMs,
+            }
+          : {}),
+        ...(this.requestOptions !== undefined
+          ? {
+              requestOptions: this.requestOptions,
+            }
+          : {}),
+        signal: ctrl.signal,
+      });
+      if (leaseTtlMs !== undefined) runner._setSendRetryWindow(leaseTtlMs);
+      for await (let _ of runner) if (stores) await stores.syncIfDue();
+      cleanEnd = !ctrl.signal.aborted;
+    } finally {
+      try {
+        await cleanupSkills().catch((e) => {
+          log.warn("skill cleanup failed", {
+            session_id: sessionId,
+            work_id: work.id,
+            error: String(e),
+          });
+        });
+      } finally {
+        if (stores) {
+          let boundMs = agentToolset.MEMORY_FLUSH_TIMEOUT_MS;
+          if (cleanEnd) {
+            if (await withTimeout(stores.finish(), boundMs))
+              log.warn(
+                `final memory sync cut off after ${boundMs}ms; the flush that follows still uploads changed files`,
+                {
+                  session_id: sessionId,
+                  work_id: work.id,
+                },
+              );
+          }
+          let flushBound = new AbortController();
+          if (await withTimeout(stores.flushWrites(flushBound.signal), boundMs)) {
+            flushBound.abort();
+            log.warn(
+              `memory flush cut off after ${boundMs}ms; changed files it had not uploaded yet are not saved`,
+              {
+                session_id: sessionId,
+                work_id: work.id,
+              },
+            );
+          }
+          await stores.dispose().catch((e) => {
+            log.warn("memory store cleanup failed", {
+              session_id: sessionId,
+              work_id: work.id,
+              error: String(e),
+            });
+          });
+        }
+      }
+      lease.finish("runner_done");
+      detachExternal();
+      await heartbeatPromise;
+      if (lease.lost)
+        log.info("lease lost; released without stopping it", {
+          session_id: sessionId,
+          work_id: work.id,
+        });
+      else await forceStop(sessionClient, work, log, this.requestOptions);
+    }
+  };
+  return EnvironmentWorker;
 })();
 //@ chunk-hwmsct5x.js:77525-77694 esm-fingerprint
-async function rd(e, n) {
-  let r;
+async function withTimeout(p, ms) {
+  let timer;
   try {
     return await Promise.race([
-      e.then(
-        () => !1,
-        () => !1,
+      p.then(
+        () => false,
+        () => false,
       ),
-      new Promise((s) => {
-        r = setTimeout(() => s(!0), n);
+      new Promise((resolve) => {
+        timer = setTimeout(() => resolve(true), ms);
       }),
     ]);
   } finally {
-    if (r !== void 0) clearTimeout(r);
+    if (timer !== undefined) clearTimeout(timer);
   }
 }
 //@ chunk-hwmsct5x.js:77694-77933 esm-fingerprint
-async function Bm(e, n, r, s) {
+async function forceStop(client, work, log, requestOptions) {
   try {
-    await e.beta.environments.work.stop(
-      n.id,
-      { environment_id: n.environment_id, force: !0 },
-      { ...s, headers: T([s?.headers]) },
+    await client.beta.environments.work.stop(
+      work.id,
+      {
+        environment_id: work.environment_id,
+        force: true,
+      },
+      {
+        ...requestOptions,
+        headers: buildHeaders([requestOptions?.headers]),
+      },
     );
-  } catch (error) {
-    if (!hJ(error, 409)) r.error("force-stop on exit failed", { work_id: n.id, error: String(error) });
+  } catch (e) {
+    if (!isStatus(e, 409))
+      log.error("force-stop on exit failed", {
+        work_id: work.id,
+        error: String(e),
+      });
   }
 }
 //@ chunk-hwmsct5x.js:77933-78266 esm-fingerprint
-var Hm = (() => {
-  class e {
-    constructor(n) {
-      ($r.set(this, void 0), Dn.set(this, void 0), Kn(this, $r, n, "f"));
+var Lease = (() => {
+  class Lease {
+    constructor(ctrl) {
+      _Lease_ctrl.set(this, undefined);
+      _Lease_endReason.set(this, undefined);
+      __classPrivateFieldSet(this, _Lease_ctrl, ctrl, "f");
     }
     get signal() {
-      return ke(this, $r, "f").signal;
+      return __classPrivateFieldGet(this, _Lease_ctrl, "f").signal;
     }
-    finish(n) {
-      (Kn(this, Dn, ke(this, Dn, "f") ?? n, "f"), ke(this, $r, "f").abort());
+    finish(reason) {
+      __classPrivateFieldSet(
+        this,
+        _Lease_endReason,
+        __classPrivateFieldGet(this, _Lease_endReason, "f") ?? reason,
+        "f",
+      );
+      __classPrivateFieldGet(this, _Lease_ctrl, "f").abort();
     }
     get lost() {
-      return ke(this, Dn, "f") === "lease_lost" || ke(this, Dn, "f") === "assumed_lost";
+      return (
+        __classPrivateFieldGet(this, _Lease_endReason, "f") === "lease_lost" ||
+        __classPrivateFieldGet(this, _Lease_endReason, "f") === "assumed_lost"
+      );
     }
   }
-  return (($r = new WeakMap()), (Dn = new WeakMap()), e);
+  _Lease_ctrl = new WeakMap();
+  _Lease_endReason = new WeakMap();
+  return Lease;
 })();
 //@ chunk-hwmsct5x.js:78266-78411 esm-fingerprint
-function $m(e) {
-  let n = e instanceof Ot ? e.error : void 0;
-  for (let r of ["error", "details", "current_state"]) {
-    if (!Ni(n)) return {};
-    n = n[r];
+function serverLeaseState(e) {
+  let node = e instanceof APIError ? e.error : undefined;
+  for (let key of ["error", "details", "current_state"]) {
+    if (!isObj(node)) return {};
+    node = node[key];
   }
-  return Ni(n) ? n : {};
+  return isObj(node) ? node : {};
 }
 //@ chunk-hwmsct5x.js:78411-79802 esm-fingerprint
-async function qm(e, n, r, s, h, y) {
-  let w = nd,
-    S = Fm,
-    now = Date.now(),
-    R = NO_HEARTBEAT,
-    L = async () => {
-      let abortController = new AbortController(),
-        M = qt(r.signal, abortController),
-        P = setTimeout(() => abortController.abort(), w);
-      try {
-        let heartbeat = await e.beta.environments.work.heartbeat(
-          n.id,
-          { environment_id: n.environment_id, expected_last_heartbeat: R },
-          { ...h, headers: T([h?.headers]), signal: abortController.signal },
-        );
-        if (((now = Date.now()), (R = heartbeat.last_heartbeat), heartbeat.ttl_seconds > 0))
-          ((S = heartbeat.ttl_seconds * 1000), (w = Math.max(1000, Math.min(S / 2, nd))), y?.(S));
-        if (heartbeat.state === "stopping" || heartbeat.state === "stopped")
-          (s.info("heartbeat signals shutdown", { work_id: n.id, state: heartbeat.state }),
-            r.finish("control_plane_stop"));
-        if (!heartbeat.lease_extended)
-          (s.warn("lease not extended, shutting down", { work_id: n.id }), r.finish("control_plane_stop"));
-      } catch (error) {
-        if ((r.signal.throwIfAborted(), hJ(error, 412))) {
-          let j = $m(error);
-          (s.error("lease lost: heartbeat precondition failed", {
-            work_id: n.id,
-            server_state: j.state,
-            server_ttl_seconds: j.ttl_seconds,
-            server_last_heartbeat: j.last_heartbeat,
-          }),
-            r.finish("lease_lost"));
-          return;
-        }
-        if (on(error))
-          throw (
-            s.error("permanent heartbeat failure", { work_id: n.id, error: String(error) }),
-            r.finish("heartbeat_rejected"),
-            error
-          );
-        if (Date.now() - now > S) {
-          (s.error("lease assumed lost: no successful heartbeat in ttl", {
-            work_id: n.id,
-            ttl_ms: S,
-            error: String(error),
-          }),
-            r.finish("assumed_lost"));
-          return;
-        }
-        s.warn("transient heartbeat failure", { work_id: n.id, error: String(error) });
-      } finally {
-        (clearTimeout(P), M());
+async function heartbeatLoop(client, work, lease, logger, requestOptions, onLeaseTtl) {
+  let intervalMs = HEARTBEAT_DEFAULT_MS;
+  let ttlMs = HEARTBEAT_TTL_DEFAULT_MS;
+  let lastSuccessMs = Date.now();
+  let last = NO_HEARTBEAT_SENTINEL;
+  let beat = async () => {
+    let beatCtrl = new AbortController();
+    let detach = linkAbort(lease.signal, beatCtrl);
+    let cutoff = setTimeout(() => beatCtrl.abort(), intervalMs);
+    try {
+      let resp = await client.beta.environments.work.heartbeat(
+        work.id,
+        {
+          environment_id: work.environment_id,
+          expected_last_heartbeat: last,
+        },
+        {
+          ...requestOptions,
+          headers: buildHeaders([requestOptions?.headers]),
+          signal: beatCtrl.signal,
+        },
+      );
+      lastSuccessMs = Date.now();
+      last = resp.last_heartbeat;
+      if (resp.ttl_seconds > 0) {
+        ttlMs = resp.ttl_seconds * 1000;
+        intervalMs = Math.max(1000, Math.min(ttlMs / 2, HEARTBEAT_DEFAULT_MS));
+        onLeaseTtl?.(ttlMs);
       }
-    };
-  await L();
-  while (!r.signal.aborted) (await sleepUnlessAborted(w, r.signal), r.signal.throwIfAborted(), await L());
+      if (resp.state === "stopping" || resp.state === "stopped") {
+        logger.info("heartbeat signals shutdown", {
+          work_id: work.id,
+          state: resp.state,
+        });
+        lease.finish("control_plane_stop");
+      }
+      if (!resp.lease_extended) {
+        logger.warn("lease not extended, shutting down", {
+          work_id: work.id,
+        });
+        lease.finish("control_plane_stop");
+      }
+    } catch (e) {
+      lease.signal.throwIfAborted();
+      if (isStatus(e, 412)) {
+        let server = serverLeaseState(e);
+        logger.error("lease lost: heartbeat precondition failed", {
+          work_id: work.id,
+          server_state: server.state,
+          server_ttl_seconds: server.ttl_seconds,
+          server_last_heartbeat: server.last_heartbeat,
+        });
+        lease.finish("lease_lost");
+        return;
+      }
+      if (isFatal4xx(e)) {
+        logger.error("permanent heartbeat failure", {
+          work_id: work.id,
+          error: String(e),
+        });
+        lease.finish("heartbeat_rejected");
+        throw e;
+      }
+      if (Date.now() - lastSuccessMs > ttlMs) {
+        logger.error("lease assumed lost: no successful heartbeat in ttl", {
+          work_id: work.id,
+          ttl_ms: ttlMs,
+          error: String(e),
+        });
+        lease.finish("assumed_lost");
+        return;
+      }
+      logger.warn("transient heartbeat failure", {
+        work_id: work.id,
+        error: String(e),
+      });
+    } finally {
+      clearTimeout(cutoff);
+      detach();
+    }
+  };
+  await beat();
+  while (!lease.signal.aborted) {
+    await sleepUnlessAborted(intervalMs, lease.signal);
+    lease.signal.throwIfAborted();
+    await beat();
+  }
 }
-
-export { pa };
+export { EnvironmentWorker };

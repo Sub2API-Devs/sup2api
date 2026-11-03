@@ -8,71 +8,79 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-1ny7cxrt.js:133068-134129 cjs-fingerprint
-var tp = x(function (zl) {
-  Object.defineProperty(zl, "__esModule", { value: !0 });
-  zl.Doc = void 0;
-  class pP {
-    constructor(e = [], t = {}) {
-      ((this.content = []), (this.indent = 0), (this.args = e), (this.closed = t));
+var require_doc = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.Doc = undefined;
+  class Doc {
+    constructor(args = [], closed = {}) {
+      this.content = [];
+      this.indent = 0;
+      this.args = args;
+      this.closed = closed;
     }
-    indented(e) {
+    indented(fn) {
       this.indent += 1;
       try {
-        e(this);
+        fn(this);
       } finally {
         this.indent -= 1;
       }
     }
-    write(e) {
-      if (typeof e === "function") {
-        (e(this, { execution: "sync" }), e(this, { execution: "async" }));
+    write(arg) {
+      if (typeof arg === "function") {
+        arg(this, {
+          execution: "sync",
+        });
+        arg(this, {
+          execution: "async",
+        });
         return;
       }
-      let filtered = e
-          .split(
-            `
+      let lines = arg
+        .split(
+          `
 `,
-          )
-          .filter((s) => s),
-        min = Math.min(...filtered.map((s) => s.length - s.trimStart().length)),
-        mapped = filtered.map((s) => s.slice(min)).map((s) => " ".repeat(this.indent * 2) + s);
-      for (let s of mapped) this.content.push(s);
+        )
+        .filter((x) => x);
+      let minIndent = Math.min(...lines.map((x) => x.length - x.trimStart().length));
+      let dedented = lines.map((x) => x.slice(minIndent)).map((x) => " ".repeat(this.indent * 2) + x);
+      for (let line of dedented) this.content.push(line);
     }
     compile() {
-      let e = Function,
-        t = this?.content ?? [""];
-      return new e(
+      let F = Function;
+      let content = this?.content ?? [""];
+      return new F(
         ...Object.keys(this.closed),
         `return function (${this.args.join(", ")}) {
-${t.join(`
+${content.join(`
 `)}
 };`,
       )(...Object.values(this.closed));
     }
   }
-  zl.Doc = pP;
+  cjsExports.Doc = Doc;
   (function () {
-    var ownPropertyNames = Object.getOwnPropertyNames(zl);
-    for (var t = 0; t < ownPropertyNames.length; t++) {
-      var ownPropertyDescriptor = Object.getOwnPropertyDescriptor(zl, ownPropertyNames[t]);
-      if (!ownPropertyDescriptor || !ownPropertyDescriptor.get || !ownPropertyDescriptor.configurable)
-        continue;
-      var o;
+    var keys = Object.getOwnPropertyNames(cjsExports);
+    for (var i = 0; i < keys.length; i++) {
+      var desc = Object.getOwnPropertyDescriptor(cjsExports, keys[i]);
+      if (!desc || !desc.get || !desc.configurable) continue;
+      var value;
       try {
-        o = ownPropertyDescriptor.get();
-      } catch (error) {
+        value = desc.get();
+      } catch (e) {
         continue;
       }
-      if (o === void 0) continue;
-      Object.defineProperty(zl, ownPropertyNames[t], {
-        value: o,
-        writable: !1,
-        enumerable: ownPropertyDescriptor.enumerable,
-        configurable: !1,
+      if (value === undefined) continue;
+      Object.defineProperty(cjsExports, keys[i], {
+        value,
+        writable: false,
+        enumerable: desc.enumerable,
+        configurable: false,
       });
     }
-    Object.freeze(zl);
+    Object.freeze(cjsExports);
   })();
 });
-
-export { tp };
+export { require_doc };

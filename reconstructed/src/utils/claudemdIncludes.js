@@ -10,7 +10,7 @@
  */
 import { lexMarkdown } from "./claudemd.js";
 import { uniq } from "./collections.js";
-import { me, oe, He } from "../services/homeSeed/workingFiles.js";
+import { referenceSpelling, allowAllIncludes, AT_REFERENCE_RE } from "../services/homeSeed/workingFiles.js";
 
 //@ chunk-axmbhcjg.js:5490-5551 placement
 function escapeAtSigns(e) {
@@ -23,21 +23,28 @@ function isBackslashEscaped(e, n) {
   return r % 2 === 1;
 }
 //@ chunk-axmbhcjg.js:5617-5638 placement
-var UNVETTABLE = { vettable: !1 };
+var UNVETTABLE = {
+  vettable: false,
+};
 //@ chunk-axmbhcjg.js:5638-5934 placement
 function collectAtReferenceSpellings(e, n) {
-  let r = lexMarkdown(n),
-    i = [
-      ...uniq(uniq([n, e]).flatMap((u) => [u, u.replace(/\\([[\]])/g, "$1")])).map((u) =>
-        scanAtReferences(u, "as_loader"),
-      ),
-      ...extractIncludePathsFromTokens(r).map((u) => scanAtReferences(u, "every_at")),
-    ],
-    s = uniq([...extractIncludePathsFromTokens_2(r), ...i.flatMap((u) => (u.vettable ? u.spellings : []))]);
-  return i.every((u) => u.vettable) && s.length <= Sn ? { vettable: !0, spellings: s } : UNVETTABLE;
+  let r = lexMarkdown(n);
+  let i = [
+    ...uniq(uniq([n, e]).flatMap((u) => [u, u.replace(/\\([[\]])/g, "$1")])).map((u) =>
+      scanAtReferences(u, "as_loader"),
+    ),
+    ...extractIncludePathsFromTokens(r).map((u) => scanAtReferences(u, "every_at")),
+  ];
+  let s = uniq([...extractIncludePathsFromTokens_2(r), ...i.flatMap((u) => (u.vettable ? u.spellings : []))]);
+  return i.every((u) => u.vettable) && s.length <= MAX_VETTABLE_TEXT_CHARS
+    ? {
+        vettable: true,
+        spellings: s,
+      }
+    : UNVETTABLE;
 }
 //@ chunk-axmbhcjg.js:5934-6215 placement = extractIncludePathsFromTokens (0.968)
-function extractIncludePathsFromTokens(e) {
+function extractIncludePathsFromTokens(textContent) {
   let n = (textContent) =>
     textContent.flatMap((elements) => {
       if (elements.type === "code" || elements.type === "codespan") return [];
@@ -49,51 +56,74 @@ function extractIncludePathsFromTokens(e) {
       }
       return n([...(elements.tokens ?? []), ...(elements.items ?? [])]);
     });
-  return n(e);
+  return n(textContent);
 }
 //@ chunk-axmbhcjg.js:6215-6374 placement
-var MAX_AT_RUN_LENGTH = 4096,
-  yn = 64,
-  Sn = 4096,
-  _n = 1048576,
-  kn = /@(?!@)(?=[^\s\\]|\\ )/g,
-  regExp = new RegExp(String.raw`(?:[^\s\\]|\\ ){1,${MAX_AT_RUN_LENGTH + 1}}`, "y"),
-  Re = /[\p{L}\p{N}]/u,
-  wn = /[*_[\]!<`]/g;
+/**
+ * 可校验的 @ 引用数量上限（64）。
+ */
+var MAX_AT_RUN_LENGTH = 4096;
+var MAX_VETTED_REFERENCES = 64;
+var MAX_VETTABLE_TEXT_CHARS = 4096;
+var MAX_TOTAL_AT_RUN_CHARS = 1048576;
+var AT_SIGN_RE = /@(?!@)(?=[^\s\\]|\\ )/g;
+var regExp = new RegExp(String.raw`(?:[^\s\\]|\\ ){1,${MAX_AT_RUN_LENGTH + 1}}`, "y");
+var WORD_CHAR_CLASS_RE = /[\p{L}\p{N}]/u;
+var UNDERSCORE_AT_RE = /[*_[\]!<`]/g;
 //@ chunk-axmbhcjg.js:6374-6840 placement
 function scanAtReferences(e, n) {
-  let r = [],
-    o = 0,
-    regExp_2 = new RegExp(regExp);
-  for (let s of e.matchAll(kn)) {
-    if (n === "as_loader" && (Re.test(e[s.index - 1] ?? "") || isBackslashEscaped(e, s.index))) continue;
+  let r = [];
+  let o = 0;
+  let regExp_2 = new RegExp(regExp);
+  for (let s of e.matchAll(AT_SIGN_RE)) {
+    if (
+      n === "as_loader" &&
+      (WORD_CHAR_CLASS_RE.test(e[s.index - 1] ?? "") || isBackslashEscaped(e, s.index))
+    )
+      continue;
     regExp_2.lastIndex = s.index + 1;
     let u = regExp_2.exec(e)?.[0] ?? "";
-    if (((o += u.length), u.length > MAX_AT_RUN_LENGTH || o > _n)) return UNVETTABLE;
-    let d = Rn(u);
-    if (d.length > yn) return UNVETTABLE;
-    r.push({ run: u, closers: d });
+    o += u.length;
+    if (u.length > MAX_AT_RUN_LENGTH || o > MAX_TOTAL_AT_RUN_CHARS) return UNVETTABLE;
+    let atReferenceIndexes = collectAtReferenceIndexes(u);
+    if (atReferenceIndexes.length > MAX_VETTED_REFERENCES) return UNVETTABLE;
+    r.push({
+      run: u,
+      closers: atReferenceIndexes,
+    });
   }
   return {
-    vettable: !0,
-    spellings: r.flatMap(({ run: run, closers: closers }) =>
-      uniq([run, ...closers.map((d) => run.slice(0, d))]).flatMap((d) => {
-        let f = me(d);
+    vettable: true,
+    spellings: r.flatMap(({ run, closers }) =>
+      uniq([run, ...closers.map((closer) => run.slice(0, closer))]).flatMap((d) => {
+        let f = referenceSpelling(d);
         return f === "" || f.startsWith("@") ? [] : [f];
       }),
     ),
   };
 }
 //@ chunk-axmbhcjg.js:6840-6932 placement
-function Rn(e) {
-  return [...e.matchAll(wn)].filter((n) => n.index > 0 && !vn(e, n)).map((n) => n.index);
+/**
+ * 收集文档里所有有效 @ 引用的位置。
+ */
+function collectAtReferenceIndexes(e) {
+  return [...e.matchAll(UNDERSCORE_AT_RE)]
+    .filter((n) => n.index > 0 && !isUnderscoreBoundary(e, n))
+    .map((n) => n.index);
 }
 //@ chunk-axmbhcjg.js:6932-7021 placement
-function vn(e, n) {
-  return n[0] === "_" && Re.test(e[n.index - 1] ?? "") && Re.test(e[n.index + 1] ?? "");
+/**
+ * 判断 @ 两侧都是词字符（属于标识符而不是引用）。
+ */
+function isUnderscoreBoundary(e, n) {
+  return (
+    n[0] === "_" &&
+    WORD_CHAR_CLASS_RE.test(e[n.index - 1] ?? "") &&
+    WORD_CHAR_CLASS_RE.test(e[n.index + 1] ?? "")
+  );
 }
 //@ chunk-axmbhcjg.js:7021-7071 placement
-function hasUnvettedInclude(e, n = oe) {
+function hasUnvettedInclude(e, n = allowAllIncludes) {
   return extractIncludePathsFromText(e).some((r) => !n(r));
 }
 //@ chunk-axmbhcjg.js:7071-7104 placement
@@ -101,7 +131,7 @@ function extractIncludePathsFromText(e) {
   return extractIncludePathsFromTokens_2(lexMarkdown(e));
 }
 //@ chunk-axmbhcjg.js:7104-7431 placement = extractIncludePathsFromTokens (0.968)
-function extractIncludePathsFromTokens_2(e) {
+function extractIncludePathsFromTokens_2(textContent) {
   let n = (textContent) =>
     textContent.flatMap((elements) => {
       if (elements.type === "code" || elements.type === "codespan") return [];
@@ -116,12 +146,12 @@ function extractIncludePathsFromTokens_2(e) {
         ...n([...(elements.tokens ?? []), ...(elements.items ?? [])]),
       ];
     });
-  return n(e);
+  return n(textContent);
 }
 //@ chunk-axmbhcjg.js:7431-7659 placement
 function matchIncludePathsInText(e) {
-  return [...e.matchAll(He)].flatMap((n) => {
-    let r = me(n[2] ?? "");
+  return [...e.matchAll(AT_REFERENCE_RE)].flatMap((n) => {
+    let r = referenceSpelling(n[2] ?? "");
     return r.startsWith("./") ||
       r.startsWith("~/") ||
       (r.startsWith("/") && r !== "/") ||
@@ -131,28 +161,30 @@ function matchIncludePathsInText(e) {
   });
 }
 //@ chunk-axmbhcjg.js:7659-7818 placement
-function endsInsideOpenBlock(e) {
-  let last = lexMarkdown(`${e}
+function endsInsideOpenBlock(body) {
+  let last = lexMarkdown(`${body}
 
 <!-- ccr-home-probe -->
 `).findLast((i) => i.type !== "space");
   return !(last?.type === "html" && last.raw.trim() === "<!-- ccr-home-probe -->");
 }
 //@ chunk-axmbhcjg.js:7818-7886 placement
-function mt(e) {
+/**
+ * 生成“内联导入”的注释标记文本。
+ */
+function inlinedImportMarker(e) {
   return `
 
 <!-- inlined import: ${encodeURI(e)} -->
 
 `;
 }
-
 export {
   hasUnvettedInclude,
   escapeAtSigns,
   isBackslashEscaped,
   collectAtReferenceSpellings,
   endsInsideOpenBlock,
-  mt,
+  inlinedImportMarker,
   extractIncludePathsFromText,
 };

@@ -8,54 +8,63 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:8101-10611 cjs-fingerprint
-var pt = x(function (mu, dt) {
-  function Yc(e) {
-    let regex = e.regex,
-      inherit = e.inherit(e.QUOTE_STRING_MODE, { illegal: null }),
-      a = { className: "params", begin: /\(/, end: /\)/, contains: ["self", e.C_NUMBER_MODE, inherit] },
-      COMMENT = e.COMMENT(/--/, /$/),
-      COMMENT_2 = e.COMMENT(/\(\*/, /\*\)/, { contains: ["self", COMMENT] }),
-      r = [COMMENT, COMMENT_2, e.HASH_COMMENT_MODE],
-      i = [
-        /apart from/,
-        /aside from/,
-        /instead of/,
-        /out of/,
-        /greater than/,
-        /isn't|(doesn't|does not) (equal|come before|come after|contain)/,
-        /(greater|less) than( or equal)?/,
-        /(starts?|ends|begins?) with/,
-        /contained by/,
-        /comes (before|after)/,
-        /a (ref|reference)/,
-        /POSIX (file|path)/,
-        /(date|time) string/,
-        /quoted form/,
-      ],
-      c = [
-        /clipboard info/,
-        /the clipboard/,
-        /info for/,
-        /list (disks|folder)/,
-        /mount volume/,
-        /path to/,
-        /(close|open for) access/,
-        /(get|set) eof/,
-        /current date/,
-        /do shell script/,
-        /get volume settings/,
-        /random number/,
-        /set volume/,
-        /system attribute/,
-        /system info/,
-        /time to GMT/,
-        /(load|run|store) script/,
-        /scripting components/,
-        /ASCII (character|number)/,
-        /localized string/,
-        /choose (application|color|file|file name|folder|from list|remote application|URL)/,
-        /display (alert|dialog)/,
-      ];
+var require_applescript = x(function (cjsExports, cjsModule) {
+  function applescript(hljs) {
+    let regex = hljs.regex;
+    let STRING = hljs.inherit(hljs.QUOTE_STRING_MODE, {
+      illegal: null,
+    });
+    let PARAMS = {
+      className: "params",
+      begin: /\(/,
+      end: /\)/,
+      contains: ["self", hljs.C_NUMBER_MODE, STRING],
+    };
+    let COMMENT_MODE_1 = hljs.COMMENT(/--/, /$/);
+    let COMMENT_MODE_2 = hljs.COMMENT(/\(\*/, /\*\)/, {
+      contains: ["self", COMMENT_MODE_1],
+    });
+    let COMMENTS = [COMMENT_MODE_1, COMMENT_MODE_2, hljs.HASH_COMMENT_MODE];
+    let KEYWORD_PATTERNS = [
+      /apart from/,
+      /aside from/,
+      /instead of/,
+      /out of/,
+      /greater than/,
+      /isn't|(doesn't|does not) (equal|come before|come after|contain)/,
+      /(greater|less) than( or equal)?/,
+      /(starts?|ends|begins?) with/,
+      /contained by/,
+      /comes (before|after)/,
+      /a (ref|reference)/,
+      /POSIX (file|path)/,
+      /(date|time) string/,
+      /quoted form/,
+    ];
+    let BUILT_IN_PATTERNS = [
+      /clipboard info/,
+      /the clipboard/,
+      /info for/,
+      /list (disks|folder)/,
+      /mount volume/,
+      /path to/,
+      /(close|open for) access/,
+      /(get|set) eof/,
+      /current date/,
+      /do shell script/,
+      /get volume settings/,
+      /random number/,
+      /set volume/,
+      /system attribute/,
+      /system info/,
+      /time to GMT/,
+      /(load|run|store) script/,
+      /scripting components/,
+      /ASCII (character|number)/,
+      /localized string/,
+      /choose (application|color|file|file name|folder|from list|remote application|URL)/,
+      /display (alert|dialog)/,
+    ];
     return {
       name: "AppleScript",
       aliases: ["osascript"],
@@ -67,19 +76,34 @@ var pt = x(function (mu, dt) {
           "alias application boolean class constant date file integer list number real record string text activate beep count delay launch log offset read round run say summarize write character characters contents day frontmost id item length month name|0 paragraph paragraphs rest reverse running time version weekday word words year",
       },
       contains: [
-        inherit,
-        e.C_NUMBER_MODE,
-        { className: "built_in", begin: regex.concat(/\b/, regex.either(...c), /\b/) },
-        { className: "built_in", begin: /^\s*return\b/ },
-        { className: "literal", begin: /\b(text item delimiters|current application|missing value)\b/ },
-        { className: "keyword", begin: regex.concat(/\b/, regex.either(...i), /\b/) },
-        { beginKeywords: "on", illegal: /[${=;\n]/, contains: [e.UNDERSCORE_TITLE_MODE, a] },
-        ...r,
+        STRING,
+        hljs.C_NUMBER_MODE,
+        {
+          className: "built_in",
+          begin: regex.concat(/\b/, regex.either(...BUILT_IN_PATTERNS), /\b/),
+        },
+        {
+          className: "built_in",
+          begin: /^\s*return\b/,
+        },
+        {
+          className: "literal",
+          begin: /\b(text item delimiters|current application|missing value)\b/,
+        },
+        {
+          className: "keyword",
+          begin: regex.concat(/\b/, regex.either(...KEYWORD_PATTERNS), /\b/),
+        },
+        {
+          beginKeywords: "on",
+          illegal: /[${=;\n]/,
+          contains: [hljs.UNDERSCORE_TITLE_MODE, PARAMS],
+        },
+        ...COMMENTS,
       ],
       illegal: /\/\/|->|=>|\[\[/,
     };
   }
-  dt.exports = Yc;
+  cjsModule.exports = applescript;
 });
-
-export { pt };
+export { require_applescript };

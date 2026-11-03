@@ -18,104 +18,114 @@ import { formatModelRestrictedNotice } from "./validateModel.js";
 import { enqueueTaskNotification } from "../task/taskNotifications.js";
 
 //@ chunk-aepeg2w5.js:408194-408238 placement
-var Tk = 60000,
-  SESSION_MODEL_RESTRICTED = "session-model-restricted";
+var SESSION_MODEL_DENY_TTL_MS = 60000;
+var SESSION_MODEL_RESTRICTED = "session-model-restricted";
 //@ chunk-aepeg2w5.js:408238-408293 placement
-function GEi(e) {
-  getProviderState().sessionModelDenyReprobe.reprobe = e;
+/**
+ * 设置会话模型拒绝的复查函数。
+ */
+function setSessionModelReprobe(reprobe) {
+  getProviderState().sessionModelDenyReprobe.reprobe = reprobe;
 }
+//@ chunk-aepeg2w5.js:408293-408569 placement
 /**
  * 运行中的会话模型被缓存的拒绝规则命中时，标记争议并向服务端复查。
  */
-//@ chunk-aepeg2w5.js:408293-408569 placement
-function reprobeDeniedSessionModel({
-  model: model,
-  rowDenyKeys: rowDenyKeys,
-  describeFallbackModel: describeFallbackModel,
-}) {
+function reprobeDeniedSessionModel({ model, rowDenyKeys, describeFallbackModel }) {
   try {
     let sessionModelDenyReprobe = getProviderState().sessionModelDenyReprobe;
-    if (sessionModelDenyReprobe.reprobe === void 0 || sessionModelDenyReprobe.refusedModels.has(model))
-      return !1;
-    for (let h of rowDenyKeys) sessionModelDenyReprobe.contestedDenies.set(h, Number.POSITIVE_INFINITY);
-    return (
-      recheckDeniedRunningModel(sessionModelDenyReprobe, model, rowDenyKeys, describeFallbackModel).catch(
-        logError,
-      ),
-      !0
+    if (sessionModelDenyReprobe.reprobe === undefined || sessionModelDenyReprobe.refusedModels.has(model))
+      return false;
+    for (let rowDenyKey of rowDenyKeys)
+      sessionModelDenyReprobe.contestedDenies.set(rowDenyKey, Number.POSITIVE_INFINITY);
+    recheckDeniedRunningModel(sessionModelDenyReprobe, model, rowDenyKeys, describeFallbackModel).catch(
+      logError,
     );
+    return true;
   } catch (error) {
-    return (logError(error), !1);
+    logError(error);
+    return false;
   }
 }
+//@ chunk-aepeg2w5.js:408569-409538 placement
 /**
  * 运行中模型被缓存拒绝时重新询问服务端后再降级。
  */
-//@ chunk-aepeg2w5.js:408569-409538 placement
-async function recheckDeniedRunningModel(e, n, r, s) {
-  let generation = e.generation;
+async function recheckDeniedRunningModel(sessionModelDenyReprobe, model, rowDenyKeys, describeFallbackModel) {
+  let generation = sessionModelDenyReprobe.generation;
   try {
     logForDebugging(
       "[model-access] cached deny appeared under the running model; re-asking the server before demoting",
     );
-    let y = (await e.reprobe?.(n)) ?? "probe_failed";
-    if ((logEvent("tengu_session_model_cached_deny_reprobe", { outcome: fromEnum(y) }), y === "probe_failed"))
-      logFeatureSad("model_cached_deny_reprobe", "probe_failed");
-    else logFeatureOk("model_cached_deny_reprobe", { outcome: fromEnum(y) });
-    if (e.generation !== generation) return;
+    let y = (await sessionModelDenyReprobe.reprobe?.(model)) ?? "probe_failed";
+    logEvent("tengu_session_model_cached_deny_reprobe", {
+      outcome: fromEnum(y),
+    });
+    if (y === "probe_failed") logFeatureSad("model_cached_deny_reprobe", "probe_failed");
+    else
+      logFeatureOk("model_cached_deny_reprobe", {
+        outcome: fromEnum(y),
+      });
+    if (sessionModelDenyReprobe.generation !== generation) return;
     switch (y) {
       case "probe_failed": {
-        let S = Date.now() + Tk;
-        for (let w of r) e.contestedDenies.set(w, S);
+        let S = Date.now() + SESSION_MODEL_DENY_TTL_MS;
+        for (let w of rowDenyKeys) sessionModelDenyReprobe.contestedDenies.set(w, S);
         return;
       }
       case "overturned":
-        for (let S of r) e.contestedDenies.delete(S);
+        for (let S of rowDenyKeys) sessionModelDenyReprobe.contestedDenies.delete(S);
         return;
       case "denied_by_server":
       case "denied_by_policy": {
-        for (let w of r) e.contestedDenies.delete(w);
-        e.refusedModels.add(n);
-        let S = formatModelRestrictedNotice(n, s());
-        (enqueueTaskNotification({
+        for (let w of rowDenyKeys) sessionModelDenyReprobe.contestedDenies.delete(w);
+        sessionModelDenyReprobe.refusedModels.add(model);
+        let S = formatModelRestrictedNotice(model, describeFallbackModel());
+        enqueueTaskNotification({
           type: "system",
           subtype: "notification",
           key: SESSION_MODEL_RESTRICTED,
           text: S,
           priority: "high",
           color: "warning",
-        }),
-          e.restricted.emit(S));
+        });
+        sessionModelDenyReprobe.restricted.emit(S);
         return;
       }
     }
   } catch (error) {
-    if (
-      (logError(error),
-      logFeatureBad("model_cached_deny_reprobe", "internal_error"),
-      e.generation !== generation)
-    )
-      return;
-    let S = Date.now() + Tk;
-    for (let w of r) e.contestedDenies.set(w, S);
+    logError(error);
+    logFeatureBad("model_cached_deny_reprobe", "internal_error");
+    if (sessionModelDenyReprobe.generation !== generation) return;
+    let S = Date.now() + SESSION_MODEL_DENY_TTL_MS;
+    for (let w of rowDenyKeys) sessionModelDenyReprobe.contestedDenies.set(w, S);
   }
 }
+//@ chunk-aepeg2w5.js:409538-409789 placement
 /**
  * 清除权益拒绝缓存与会话模型复查状态（登录变化时）。
  */
-//@ chunk-aepeg2w5.js:409538-409789 placement
 function resetEntitlementDenies() {
-  let e = getProviderState();
-  (e.providerCache.confirmedEntitlementDenies.clear(), e.providerCache.overturnedEntitlementDenies.clear());
-  let sessionModelDenyReprobe = e.sessionModelDenyReprobe;
-  (sessionModelDenyReprobe.honoredModels.clear(),
-    sessionModelDenyReprobe.contestedDenies.clear(),
-    sessionModelDenyReprobe.refusedModels.clear(),
-    (sessionModelDenyReprobe.generation += 1));
+  let providerState = getProviderState();
+  providerState.providerCache.confirmedEntitlementDenies.clear();
+  providerState.providerCache.overturnedEntitlementDenies.clear();
+  let sessionModelDenyReprobe = providerState.sessionModelDenyReprobe;
+  sessionModelDenyReprobe.honoredModels.clear();
+  sessionModelDenyReprobe.contestedDenies.clear();
+  sessionModelDenyReprobe.refusedModels.clear();
+  sessionModelDenyReprobe.generation += 1;
 }
 //@ chunk-aepeg2w5.js:409789-409865 placement
-function KEi(e) {
+/**
+ * 订阅会话模型受限状态。
+ */
+function subscribeSessionModelRestriction(e) {
   return getProviderState().sessionModelDenyReprobe.restricted.subscribe(e);
 }
-
-export { SESSION_MODEL_RESTRICTED, KEi, GEi, resetEntitlementDenies, reprobeDeniedSessionModel };
+export {
+  SESSION_MODEL_RESTRICTED,
+  subscribeSessionModelRestriction,
+  setSessionModelReprobe,
+  resetEntitlementDenies,
+  reprobeDeniedSessionModel,
+};

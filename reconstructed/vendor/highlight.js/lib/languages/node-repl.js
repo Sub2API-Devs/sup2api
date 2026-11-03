@@ -8,20 +8,32 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:316237-316476 cjs-fingerprint
-var fi = x(function (pg, bi) {
-  function yp(e) {
+var require_node_repl = x(function (cjsExports, cjsModule) {
+  function nodeRepl(hljs) {
     return {
       name: "Node REPL",
       contains: [
         {
           className: "meta.prompt",
-          starts: { end: / |$/, starts: { end: "$", subLanguage: "javascript" } },
-          variants: [{ begin: /^>(?=[ ]|$)/ }, { begin: /^\.\.\.(?=[ ]|$)/ }],
+          starts: {
+            end: / |$/,
+            starts: {
+              end: "$",
+              subLanguage: "javascript",
+            },
+          },
+          variants: [
+            {
+              begin: /^>(?=[ ]|$)/,
+            },
+            {
+              begin: /^\.\.\.(?=[ ]|$)/,
+            },
+          ],
         },
       ],
     };
   }
-  bi.exports = yp;
+  cjsModule.exports = nodeRepl;
 });
-
-export { fi };
+export { require_node_repl };

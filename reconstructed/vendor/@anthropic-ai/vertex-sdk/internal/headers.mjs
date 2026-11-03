@@ -5,70 +5,92 @@
  * pieces: chunk-xa96axyz.js (3)
  * attribution: esm-fingerprint 2, esm-layout 1
  */
-import { f } from "./utils/values.mjs";
+import { isArray_default } from "./utils/values.mjs";
 
 //@ chunk-xa96axyz.js:1139-1188 esm-fingerprint
-var y = Symbol.for("brand.privateNullableHeaders");
+var brand_privateNullableHeaders = Symbol.for("brand.privateNullableHeaders");
 //@ chunk-xa96axyz.js:1188-1617 esm-fingerprint
-function* O(e) {
-  if (!e) return;
-  if (y in e) {
-    let { values: values, nulls: nulls } = e;
+function* iterateHeaders(headers) {
+  if (!headers) return;
+  if (brand_privateNullableHeaders in headers) {
+    let { values, nulls } = headers;
     yield* values.entries();
-    for (let i of nulls) yield [i, null];
+    for (let name of nulls) yield [name, null];
     return;
   }
-  let t = !1,
-    r;
-  if (e instanceof Headers) r = e.entries();
-  else if (f(e)) r = e;
-  else ((t = !0), (r = Object.entries(e ?? {})));
-  for (let o of r) {
-    let a = o[0];
-    if (typeof a !== "string") throw TypeError("expected header name to be a string");
-    let i = f(o[1]) ? o[1] : [o[1]],
-      n = !1;
-    for (let s of i) {
-      if (s === void 0) continue;
-      if (t && !n) ((n = !0), yield [a, u]);
-      yield [a, s];
+  let shouldClear = false;
+  let iter;
+  if (headers instanceof Headers) iter = headers.entries();
+  else if (isArray_default(headers)) iter = headers;
+  else {
+    shouldClear = true;
+    iter = Object.entries(headers ?? {});
+  }
+  for (let row of iter) {
+    let name = row[0];
+    if (typeof name !== "string") throw TypeError("expected header name to be a string");
+    let values = isArray_default(row[1]) ? row[1] : [row[1]];
+    let didClear = false;
+    for (let value of values) {
+      if (value === undefined) continue;
+      if (shouldClear && !didClear) {
+        didClear = true;
+        yield [name, clearSentinel];
+      }
+      yield [name, value];
     }
   }
 }
 //@ chunk-xa96axyz.js:1617-2219 esm-layout
-var u = Symbol("clear"),
-  C = new Set(["x-stainless-helper"]),
-  P = (e, t) => {
-    let r = e
-      ? e
-          .split(",")
-          .map((o) => o.trim())
-          .filter(Boolean)
-      : [];
-    for (let o of t.split(",").map((a) => a.trim())) if (o && !r.includes(o)) r.push(o);
-    return r.join(", ");
-  },
-  E = (e) => {
-    let headers = new Headers(),
-      r = new Set();
-    for (let o of e) {
-      let a = new Set();
-      for (let [i, n] of O(o)) {
-        let lower = i.toLowerCase();
-        if (C.has(lower)) {
-          if (n === u) continue;
-          if (n === null) (headers.delete(i), r.add(lower));
-          else (headers.set(i, P(headers.get(i), n)), r.delete(lower));
-          continue;
+var clearSentinel = Symbol("clear");
+var APPEND_HEADERS = new Set(["x-stainless-helper"]);
+var appendHeaderValue = (existing, addition) => {
+  let tokens = existing
+    ? existing
+        .split(",")
+        .map((t) => t.trim())
+        .filter(Boolean)
+    : [];
+  for (let tok of addition.split(",").map((t) => t.trim()))
+    if (tok && !tokens.includes(tok)) tokens.push(tok);
+  return tokens.join(", ");
+};
+var buildHeaders = (newHeaders) => {
+  let targetHeaders = new Headers();
+  let nullHeaders = new Set();
+  for (let headers of newHeaders) {
+    let seenHeaders = new Set();
+    for (let [name, value] of iterateHeaders(headers)) {
+      let lowerName = name.toLowerCase();
+      if (APPEND_HEADERS.has(lowerName)) {
+        if (value === clearSentinel) continue;
+        if (value === null) {
+          targetHeaders.delete(name);
+          nullHeaders.add(lowerName);
+        } else {
+          targetHeaders.set(name, appendHeaderValue(targetHeaders.get(name), value));
+          nullHeaders.delete(lowerName);
         }
-        if (n === u || !a.has(lower)) {
-          if ((headers.delete(i), a.add(lower), n === u)) continue;
-        }
-        if (n === null) (headers.delete(i), r.add(lower));
-        else (headers.append(i, n), r.delete(lower));
+        continue;
+      }
+      if (value === clearSentinel || !seenHeaders.has(lowerName)) {
+        targetHeaders.delete(name);
+        seenHeaders.add(lowerName);
+        if (value === clearSentinel) continue;
+      }
+      if (value === null) {
+        targetHeaders.delete(name);
+        nullHeaders.add(lowerName);
+      } else {
+        targetHeaders.append(name, value);
+        nullHeaders.delete(lowerName);
       }
     }
-    return { [y]: !0, values: headers, nulls: r };
+  }
+  return {
+    [brand_privateNullableHeaders]: true,
+    values: targetHeaders,
+    nulls: nullHeaders,
   };
-
-export { E };
+};
+export { buildHeaders };

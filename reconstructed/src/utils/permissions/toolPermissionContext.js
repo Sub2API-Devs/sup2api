@@ -17,15 +17,18 @@ import { launchSnapshotUpdateDialog } from "../../dialogLaunchers.js";
 import { isPlanBypass } from "./browserToolNames.js";
 import { SKILL, SKILL_2 } from "../../tools/SkillTool/skillToolNames.js";
 import { isBypassPermissionsModeDisabled } from "./permissionSetup.js";
-import { resolveEffortLevel, pcr, Ehi } from "../effort.js";
+import { resolveEffortLevel, isSameModelSettings, resolveEffortWithoutHold } from "../effort.js";
 import { isMainConversationContext } from "../agentContext.js";
 
 //@ chunk-agvbmc7h.js:528-675 placement
-function addCommandAllowRules(e, o) {
-  if (o.length === 0) return e;
+function addCommandAllowRules(toolPermissionContext, o) {
+  if (o.length === 0) return toolPermissionContext;
   return {
-    ...e,
-    alwaysAllowRules: { ...e.alwaysAllowRules, command: uniq([...(e.alwaysAllowRules.command || []), ...o]) },
+    ...toolPermissionContext,
+    alwaysAllowRules: {
+      ...toolPermissionContext.alwaysAllowRules,
+      command: uniq([...(toolPermissionContext.alwaysAllowRules.command || []), ...o]),
+    },
   };
 }
 //@ chunk-agvbmc7h.js:675-819 placement
@@ -33,80 +36,96 @@ function addCommandDenyRules(e, o) {
   if (o.length === 0) return e;
   return {
     ...e,
-    alwaysDenyRules: { ...e.alwaysDenyRules, command: uniq([...(e.alwaysDenyRules.command || []), ...o]) },
+    alwaysDenyRules: {
+      ...e.alwaysDenyRules,
+      command: uniq([...(e.alwaysDenyRules.command || []), ...o]),
+    },
   };
 }
+//@ chunk-agvbmc7h.js:819-1524 placement
 /**
  * 包装 getAppState，在返回的权限上下文里叠加命令级 allow/deny 规则：可整体替换或追加，冻结的命令 deny 优先，轮次禁用工具并入 deny；pollEventDeliveryGuard 时不改 allow。
  */
-//@ chunk-agvbmc7h.js:819-1524 placement
 function withCommandRuleOverrides(getAppState, allowRules, denyRules, options) {
   if (
     !options?.replaceCommandRules &&
     !options?.replaceDenyRules &&
-    options?.frozenCommandDenies === void 0 &&
+    options?.frozenCommandDenies === undefined &&
     allowRules.length === 0 &&
     denyRules.length === 0
   )
     return getAppState;
   return () => {
-    let state = getAppState(),
-      withAllow =
-        state.toolPermissionContext.pollEventDeliveryGuard === !0
-          ? state.toolPermissionContext
-          : options?.replaceCommandRules
-            ? {
-                ...state.toolPermissionContext,
-                alwaysAllowRules: { ...state.toolPermissionContext.alwaysAllowRules, command: allowRules },
-              }
-            : addCommandAllowRules(state.toolPermissionContext, allowRules),
-      withDeny = options?.replaceDenyRules
+    let state = getAppState();
+    let withAllow =
+      state.toolPermissionContext.pollEventDeliveryGuard === true
+        ? state.toolPermissionContext
+        : options?.replaceCommandRules
+          ? {
+              ...state.toolPermissionContext,
+              alwaysAllowRules: {
+                ...state.toolPermissionContext.alwaysAllowRules,
+                command: allowRules,
+              },
+            }
+          : addCommandAllowRules(state.toolPermissionContext, allowRules);
+    let withDeny = options?.replaceDenyRules
+      ? {
+          ...withAllow,
+          alwaysDenyRules: {
+            ...withAllow.alwaysDenyRules,
+            command: [...denyRules, ...(withAllow.turnDisallowedTools ?? [])],
+          },
+        }
+      : options?.frozenCommandDenies !== undefined
         ? {
             ...withAllow,
             alwaysDenyRules: {
               ...withAllow.alwaysDenyRules,
-              command: [...denyRules, ...(withAllow.turnDisallowedTools ?? [])],
+              command: uniq([
+                ...options.frozenCommandDenies,
+                ...(withAllow.alwaysDenyRules.command ?? []),
+                ...denyRules,
+              ]),
             },
           }
-        : options?.frozenCommandDenies !== void 0
-          ? {
-              ...withAllow,
-              alwaysDenyRules: {
-                ...withAllow.alwaysDenyRules,
-                command: uniq([
-                  ...options.frozenCommandDenies,
-                  ...(withAllow.alwaysDenyRules.command ?? []),
-                  ...denyRules,
-                ]),
-              },
-            }
-          : addCommandDenyRules(withAllow, denyRules);
-    return { ...state, toolPermissionContext: withDeny };
+        : addCommandDenyRules(withAllow, denyRules);
+    return {
+      ...state,
+      toolPermissionContext: withDeny,
+    };
   };
 }
 //@ chunk-agvbmc7h.js:1524-1632 placement
 class ModeAtRequest {
   mode;
   autoClassifierActive;
-  constructor(e, o) {
-    ((this.mode = e), (this.autoClassifierActive = o));
+  constructor(mode, autoClassifierActive) {
+    this.mode = mode;
+    this.autoClassifierActive = autoClassifierActive;
   }
   toJSON() {
     return;
   }
 }
 //@ chunk-agvbmc7h.js:1632-1670 placement
-function Nmi(e) {
-  return new ModeAtRequest(e, isAutoClassifierActive(e));
+/**
+ * modeAtRequestFor：按当前上下文构造模式的按请求快照。
+ */
+function modeAtRequestFor(mode) {
+  return new ModeAtRequest(mode, isAutoClassifierActive(mode));
 }
 //@ chunk-agvbmc7h.js:1670-1733 placement
-function B7o(e) {
+/**
+ * isPlainModeAtRequest：模式快照且未启用分类器。
+ */
+function isPlainModeAtRequest(e) {
   return e instanceof ModeAtRequest && !e.autoClassifierActive;
 }
 //@ chunk-agvbmc7h.js:1733-1951 placement
-function getFallbackModeForRequest(e) {
-  if (!B7o(e)) return;
-  let mode = e.mode;
+function getFallbackModeForRequest(permissionModeAtRequest) {
+  if (!isPlainModeAtRequest(permissionModeAtRequest)) return;
+  let mode = permissionModeAtRequest.mode;
   switch (mode) {
     case "default":
     case "acceptEdits":
@@ -125,46 +144,58 @@ function getFallbackModeForRequest(e) {
   }
 }
 //@ chunk-agvbmc7h.js:1951-1965 placement
-var R = new Set();
+var EMPTY_RULE_SET = new Set();
 //@ chunk-agvbmc7h.js:1965-1998 placement
-function j7o(e) {
+/**
+ * canonicalRuleString：规则的规范字符串。
+ */
+function canonicalRuleString(e) {
   return formatPermissionRule(permissionRuleValueFromString(e));
 }
+//@ chunk-agvbmc7h.js:1998-2112 placement
 /**
  * 取远程浏览器卡片回答生成的会话规则集合；只在它仍对应当前 session allow 列表时有效。
  */
-//@ chunk-agvbmc7h.js:1998-2112 placement
 function getRemoteBrowserCardRules(e) {
   let remoteBrowserCardAnswers = e.remoteBrowserCardAnswers;
-  return remoteBrowserCardAnswers !== void 0 && remoteBrowserCardAnswers.list === e.alwaysAllowRules.session
+  return remoteBrowserCardAnswers !== undefined &&
+    remoteBrowserCardAnswers.list === e.alwaysAllowRules.session
     ? remoteBrowserCardAnswers.rules
-    : R;
+    : EMPTY_RULE_SET;
 }
+//@ chunk-agvbmc7h.js:2112-2409 placement
 /**
  * 会话 allow 列表变化后，重算远程浏览器卡片回答：只保留仍在新列表中的规则，为空时清除。
  */
-//@ chunk-agvbmc7h.js:2112-2409 placement
 function syncRemoteBrowserCardAnswers(e, o) {
   let session = o.alwaysAllowRules.session;
-  if (e.remoteBrowserCardAnswers === void 0 || session === e.alwaysAllowRules.session) return o;
-  let r = getRemoteBrowserCardRules(e),
-    s = new Set((session ?? []).map(j7o)),
-    t = new Set([...r].filter((i) => s.has(i)));
+  if (e.remoteBrowserCardAnswers === undefined || session === e.alwaysAllowRules.session) return o;
+  let remoteBrowserCardRules = getRemoteBrowserCardRules(e);
+  let s = new Set((session ?? []).map(canonicalRuleString));
+  let t = new Set(
+    [...remoteBrowserCardRules].filter((remoteBrowserCardRule) => s.has(remoteBrowserCardRule)),
+  );
   return {
     ...o,
-    remoteBrowserCardAnswers: session === void 0 || t.size === 0 ? void 0 : { rules: t, list: session },
+    remoteBrowserCardAnswers:
+      session === undefined || t.size === 0
+        ? undefined
+        : {
+            rules: t,
+            list: session,
+          },
   };
 }
 //@ chunk-agvbmc7h.js:2742-2903 placement
-function contextAfterTurn(e) {
+function contextAfterTurn(toolUseContext) {
   return {
-    ...e,
+    ...toolUseContext,
     abortController: createAbortController(),
-    toolUseId: void 0,
-    permissionPhase: void 0,
-    autoModeClassified: void 0,
-    ...!1,
-    permissionLayers: launchSnapshotUpdateDialog(e.permissionLayers),
+    toolUseId: undefined,
+    permissionPhase: undefined,
+    autoModeClassified: undefined,
+    ...false,
+    permissionLayers: launchSnapshotUpdateDialog(toolUseContext.permissionLayers),
   };
 }
 //@ chunk-agvbmc7h.js:2903-2982 placement
@@ -173,12 +204,15 @@ function getSuppressedClaudeAiConnectors(e) {
 }
 //@ chunk-agvbmc7h.js:2982-3093 placement
 function consentAskCanReachUser(e) {
-  let o = getToolPermissionContext(e);
-  return o.mode !== "bypassPermissions" && !isPlanBypass(o.mode, o.isBypassPermissionsModeAvailable);
+  let toolPermissionContext = getToolPermissionContext(e);
+  return (
+    toolPermissionContext.mode !== "bypassPermissions" &&
+    !isPlanBypass(toolPermissionContext.mode, toolPermissionContext.isBypassPermissionsModeAvailable)
+  );
 }
 //@ chunk-agvbmc7h.js:3093-3153 placement
 function planConsentMustDeny(e) {
-  if (getToolPermissionContext(e).mode !== "plan") return !1;
+  if (getToolPermissionContext(e).mode !== "plan") return false;
   return consentMustDeny(e);
 }
 //@ chunk-agvbmc7h.js:3153-3192 placement
@@ -187,88 +221,116 @@ function artifactFilesConsentSlugs(e) {
 }
 //@ chunk-agvbmc7h.js:3192-3261 placement
 function consentMustDeny(e) {
-  return !consentAskCanReachUser(e) || getToolPermissionContext(e).shouldAvoidPermissionPrompts === !0;
+  return !consentAskCanReachUser(e) || getToolPermissionContext(e).shouldAvoidPermissionPrompts === true;
 }
 //@ chunk-agvbmc7h.js:3261-3331 placement
-function w(e) {
+function isSkillRule(e) {
   return e === SKILL || e.startsWith(`${SKILL}(`) || e.startsWith(SKILL_2);
 }
+//@ chunk-agvbmc7h.js:3331-3740 placement
 /**
  * 把 allow 规则中被判定为危险的移入 strippedDangerousRules（按来源去重），并同步远程浏览器卡片回答；无变化返回原上下文。
  */
-//@ chunk-agvbmc7h.js:3331-3740 placement
-function stripDangerousAllowRules(e) {
-  let o = w,
-    n = !1,
-    r = {},
-    s = {};
-  for (let [t, i] of Object.entries(e.strippedDangerousRules ?? {})) if (i !== void 0) s[t] = [...i];
-  for (let [t, i] of Object.entries(e.alwaysAllowRules)) {
-    if (i === void 0) continue;
-    let filtered = i.filter((l) => !o(l));
-    if (filtered.length !== i.length) {
-      n = !0;
-      for (let l of i)
+function stripDangerousAllowRules(toolPermissionContext) {
+  let o = isSkillRule;
+  let n = false;
+  let r = {};
+  let s = {};
+  for (let [key, value] of Object.entries(toolPermissionContext.strippedDangerousRules ?? {}))
+    if (value !== undefined) s[key] = [...value];
+  for (let [key, value] of Object.entries(toolPermissionContext.alwaysAllowRules)) {
+    if (value === undefined) continue;
+    let filtered = value.filter((l) => !o(l));
+    if (filtered.length !== value.length) {
+      n = true;
+      for (let l of value)
         if (o(l)) {
-          let c = (s[t] ??= []);
+          let c = (s[key] ??= []);
           if (!c.includes(l)) c.push(l);
         }
     }
-    r[t] = filtered;
+    r[key] = filtered;
   }
-  if (!n) return e;
-  return syncRemoteBrowserCardAnswers(e, { ...e, alwaysAllowRules: r, strippedDangerousRules: s });
+  if (!n) return toolPermissionContext;
+  return syncRemoteBrowserCardAnswers(toolPermissionContext, {
+    ...toolPermissionContext,
+    alwaysAllowRules: r,
+    strippedDangerousRules: s,
+  });
 }
 //@ chunk-agvbmc7h.js:3740-3801 placement = call (0.777)
-function storedToolPermissionContext(e) {
-  return e.getAppState().toolPermissionContext;
+function storedToolPermissionContext(toolUseContext) {
+  return toolUseContext.getAppState().toolPermissionContext;
 }
 //@ chunk-agvbmc7h.js:3801-4915 placement
 function getToolPermissionContext(e) {
-  let toolPermissionContext = e.getAppState().toolPermissionContext,
-    n = toolPermissionContext !== void 0 && toolPermissionContext.pollEventDeliveryGuard === !0;
+  let toolPermissionContext = e.getAppState().toolPermissionContext;
+  let n = toolPermissionContext !== undefined && toolPermissionContext.pollEventDeliveryGuard === true;
   if (n) toolPermissionContext = stripDangerousAllowRules(toolPermissionContext);
   let permissionLayers = e.permissionLayers;
-  if (!permissionLayers) return y(e, toolPermissionContext);
-  let last = permissionLayers.findLast((t) => t.kind === "working_directory");
-  for (let t of permissionLayers)
-    switch (t.kind) {
+  if (!permissionLayers) return relaxContextForExecution(e, toolPermissionContext);
+  let last = permissionLayers.findLast((permissionLayer) => permissionLayer.kind === "working_directory");
+  for (let permissionLayer of permissionLayers)
+    switch (permissionLayer.kind) {
       case "allowed_tools":
-        if (!n) toolPermissionContext = addCommandAllowRules(toolPermissionContext, [...t.allowedTools]);
+        if (!n)
+          toolPermissionContext = addCommandAllowRules(toolPermissionContext, [
+            ...permissionLayer.allowedTools,
+          ]);
         break;
       case "disallowed_tools":
-        toolPermissionContext = addCommandDenyRules(toolPermissionContext, [...t.disallowedTools]);
+        toolPermissionContext = addCommandDenyRules(toolPermissionContext, [
+          ...permissionLayer.disallowedTools,
+        ]);
         break;
       case "bash_command_clamp":
         toolPermissionContext = {
           ...toolPermissionContext,
-          bashCommandClamps: [...(toolPermissionContext.bashCommandClamps ?? []), t.rules],
+          bashCommandClamps: [...(toolPermissionContext.bashCommandClamps ?? []), permissionLayer.rules],
         };
         break;
       case "avoid_prompts":
         if (!toolPermissionContext.shouldAvoidPermissionPrompts)
-          toolPermissionContext = { ...toolPermissionContext, shouldAvoidPermissionPrompts: !0 };
+          toolPermissionContext = {
+            ...toolPermissionContext,
+            shouldAvoidPermissionPrompts: true,
+          };
         break;
       case "sandbox_auto_allow_suspended":
         if (!toolPermissionContext.sandboxAutoAllowSuspended)
-          toolPermissionContext = { ...toolPermissionContext, sandboxAutoAllowSuspended: !0 };
+          toolPermissionContext = {
+            ...toolPermissionContext,
+            sandboxAutoAllowSuspended: true,
+          };
         break;
       case "permission_mode": {
         if (
-          t.mode === "bypassPermissions" &&
+          permissionLayer.mode === "bypassPermissions" &&
           (isBypassPermissionsModeDisabled() || !toolPermissionContext.isBypassPermissionsModeAvailable)
         )
           break;
-        toolPermissionContext = { ...toolPermissionContext, mode: t.mode };
+        toolPermissionContext = {
+          ...toolPermissionContext,
+          mode: permissionLayer.mode,
+        };
         break;
       }
       case "working_directory":
-        if (t === last && !toolPermissionContext.additionalWorkingDirectories.has(t.directory))
+        if (
+          permissionLayer === last &&
+          !toolPermissionContext.additionalWorkingDirectories.has(permissionLayer.directory)
+        )
           toolPermissionContext = {
             ...toolPermissionContext,
             additionalWorkingDirectories: new Map([
               ...toolPermissionContext.additionalWorkingDirectories,
-              [t.directory, { path: t.directory, source: "session" }],
+              [
+                permissionLayer.directory,
+                {
+                  path: permissionLayer.directory,
+                  source: "session",
+                },
+              ],
             ]),
           };
         break;
@@ -278,80 +340,98 @@ function getToolPermissionContext(e) {
       case "flag_settings":
         break;
     }
-  return y(e, toolPermissionContext);
+  return relaxContextForExecution(e, toolPermissionContext);
 }
 //@ chunk-agvbmc7h.js:4915-4955 placement
-function y(e, o) {
-  return downgradeAutoForPromptShell(e, relaxForRemoteExecution(e, downgradeAutoModeForRequest(e, o)));
+function relaxContextForExecution(e, toolPermissionContext) {
+  return downgradeAutoForPromptShell(
+    e,
+    relaxForRemoteExecution(e, downgradeAutoModeForRequest(e, toolPermissionContext)),
+  );
 }
 //@ chunk-agvbmc7h.js:4955-5130 placement
 function downgradeAutoModeForRequest(e, o) {
-  if (o === void 0 || o.mode !== "auto" || e.forPromptShellCommand === !0 || e.forRemoteExecution === !0)
+  if (
+    o === undefined ||
+    o.mode !== "auto" ||
+    e.forPromptShellCommand === true ||
+    e.forRemoteExecution === true
+  )
     return o;
-  let n = getFallbackModeForRequest(e.permissionModeAtRequest);
-  return n === void 0 ? o : m(n, o);
+  let mode = getFallbackModeForRequest(e.permissionModeAtRequest);
+  return mode === undefined ? o : withModeAtRequest(mode, o);
 }
 //@ chunk-agvbmc7h.js:5130-5239 placement
 function downgradeAutoForPromptShell(e, o) {
-  if (e.forPromptShellCommand !== !0 || o === void 0) return o;
-  return o.mode === "auto" ? m("default", o) : o;
+  if (e.forPromptShellCommand !== true || o === undefined) return o;
+  return o.mode === "auto" ? withModeAtRequest("default", o) : o;
 }
 //@ chunk-agvbmc7h.js:5239-5321 placement
-function m(e, o) {
-  return { ...o, mode: e, modeBeforeRewrite: o.modeBeforeRewrite ?? o.mode };
+function withModeAtRequest(mode, o) {
+  return {
+    ...o,
+    mode,
+    modeBeforeRewrite: o.modeBeforeRewrite ?? o.mode,
+  };
 }
 //@ chunk-agvbmc7h.js:5321-5553 placement
 function relaxForRemoteExecution(e, o) {
-  if (e.forRemoteExecution !== !0 || o === void 0) return o;
-  let {
-    blockReadsOutsideWorkingDirectories: blockReadsOutsideWorkingDirectories,
-    blockWritesOutsideWorkingDirectories: blockWritesOutsideWorkingDirectories,
-    ...s
-  } = o;
-  return o.mode === "acceptEdits" || o.mode === "bypassPermissions" ? m("default", s) : s;
+  if (e.forRemoteExecution !== true || o === undefined) return o;
+  let { blockReadsOutsideWorkingDirectories, blockWritesOutsideWorkingDirectories, ...s } = o;
+  return o.mode === "acceptEdits" || o.mode === "bypassPermissions" ? withModeAtRequest("default", s) : s;
 }
+//@ chunk-agvbmc7h.js:5553-5645 placement = configureEffortParams (0.608)
 /**
  * 在权限层列表里取最后一个 kind=effort 的 effort 值（本轮 effort 覆盖）。旧版名 configureEffortParams 为错配。
  */
-//@ chunk-agvbmc7h.js:5553-5645 placement = configureEffortParams (0.608)
-function getEffortLayerOverride(e) {
+function getEffortLayerOverride(permissionLayers) {
   let o;
-  if (!e) return o;
-  for (let n of e) if (n.kind === "effort") o = n.effort;
+  if (!permissionLayers) return o;
+  for (let n of permissionLayers) if (n.kind === "effort") o = n.effort;
   return o;
 }
 //@ chunk-agvbmc7h.js:5645-5734 placement
 function getEffortValue(e) {
   return (
     getEffortLayerOverride(e.permissionLayers) ??
-    resolveEffortLevel(e.getAppState(), getEffectiveMainLoopModel(e), { withHold: isSessionHoldFor(e) })
+    resolveEffortLevel(e.getAppState(), getEffectiveMainLoopModel(e), {
+      withHold: isSessionHoldFor(e),
+    })
   );
 }
 //@ chunk-agvbmc7h.js:5734-5881 placement = _temp (0.427)
 function getHelperEffort(e, o) {
-  return pcr(o, getMainLoopModel(e))
-    ? { effortValue: getEffortValue(e), turnEffort: getEffortLayerOverride(e.permissionLayers) }
-    : { effortValue: Ehi(e.getAppState(), o), turnEffort: void 0 };
+  return isSameModelSettings(o, getMainLoopModel(e))
+    ? {
+        effortValue: getEffortValue(e),
+        turnEffort: getEffortLayerOverride(e.permissionLayers),
+      }
+    : {
+        effortValue: resolveEffortWithoutHold(e.getAppState(), o),
+        turnEffort: undefined,
+      };
 }
 //@ chunk-agvbmc7h.js:5881-5948 placement
 function isSessionHoldFor(e) {
-  return e.agentContext === void 0 || isMainConversationContext(e.agentContext);
+  return e.agentContext === undefined || isMainConversationContext(e.agentContext);
 }
 //@ chunk-agvbmc7h.js:5948-6032 placement
 function getEffortSetAsideByHold(e) {
-  return getEffortValue(e) === void 0
-    ? resolveEffortLevel(e.getAppState(), getEffectiveMainLoopModel(e), { withHold: !1 })
-    : void 0;
+  return getEffortValue(e) === undefined
+    ? resolveEffortLevel(e.getAppState(), getEffectiveMainLoopModel(e), {
+        withHold: false,
+      })
+    : undefined;
 }
 //@ chunk-agvbmc7h.js:6032-6160 placement
 function getEffectiveMainLoopModel(e) {
-  let o = e.options?.mainLoopModel;
-  for (let n of e.permissionLayers ?? []) if (n.kind === "model") o = n.mainLoopModel;
-  return o;
+  let mainLoopModel = e.options?.mainLoopModel;
+  for (let n of e.permissionLayers ?? []) if (n.kind === "model") mainLoopModel = n.mainLoopModel;
+  return mainLoopModel;
 }
 //@ chunk-agvbmc7h.js:6160-6213 placement
-function getSessionEffort(e) {
-  return e.getAppState().sessionEffort;
+function getSessionEffort(context) {
+  return context.getAppState().sessionEffort;
 }
 //@ chunk-agvbmc7h.js:6213-6265 placement
 function getMainLoopModel(e) {
@@ -361,22 +441,29 @@ function getMainLoopModel(e) {
 function getThinkingConfig(e) {
   let thinkingConfig = e.options.thinkingConfig;
   for (let n of e.permissionLayers ?? [])
-    if (n.kind === "max_thinking_tokens") thinkingConfig = C(n.maxThinkingTokens);
+    if (n.kind === "max_thinking_tokens") thinkingConfig = thinkingBudgetConfig(n.maxThinkingTokens);
   return thinkingConfig;
 }
 //@ chunk-agvbmc7h.js:6416-6493 placement
-function C(e) {
-  return e === 0 ? { type: "disabled" } : { type: "enabled", budgetTokens: e };
+function thinkingBudgetConfig(maxThinkingTokens) {
+  return maxThinkingTokens === 0
+    ? {
+        type: "disabled",
+      }
+    : {
+        type: "enabled",
+        budgetTokens: maxThinkingTokens,
+      };
 }
 //@ chunk-agvbmc7h.js:6493-6547 placement = getNestedMemoryAttachments (0.431)
 function getUltracodeRequested(toolUseContext) {
-  return toolUseContext.getAppState().ultracode === !0;
+  return toolUseContext.getAppState().ultracode === true;
 }
 //@ chunk-agvbmc7h.js:6547-7009 placement
 function applyContextLayers(e, o) {
   if (o.length === 0) return e;
-  let n = e.permissionLayers ? [...e.permissionLayers, ...o] : [...o],
-    r;
+  let permissionLayers = e.permissionLayers ? [...e.permissionLayers, ...o] : [...o];
+  let r;
   for (let i = o.length - 1; i >= 0; i--) {
     let a = o[i];
     if (a.kind === "model") {
@@ -388,23 +475,26 @@ function applyContextLayers(e, o) {
   for (let i = o.length - 1; i >= 0; i--) {
     let a = o[i];
     if (a.kind === "max_thinking_tokens") {
-      s = C(a.maxThinkingTokens);
+      s = thinkingBudgetConfig(a.maxThinkingTokens);
       break;
     }
   }
   return {
     ...e,
-    permissionLayers: n,
-    ...((r !== void 0 || s !== void 0) && {
+    permissionLayers,
+    ...((r !== undefined || s !== undefined) && {
       options: {
         ...e.options,
-        ...(r !== void 0 && { mainLoopModel: r }),
-        ...(s !== void 0 && { thinkingConfig: s }),
+        ...(r !== undefined && {
+          mainLoopModel: r,
+        }),
+        ...(s !== undefined && {
+          thinkingConfig: s,
+        }),
       },
     }),
   };
 }
-
 export {
   getToolPermissionContext,
   getMainLoopModel,
@@ -426,8 +516,8 @@ export {
   consentMustDeny,
   getUltracodeRequested,
   getRemoteBrowserCardRules,
-  j7o,
-  B7o,
-  Nmi,
+  canonicalRuleString,
+  isPlainModeAtRequest,
+  modeAtRequestFor,
   artifactFilesConsentSlugs,
 };

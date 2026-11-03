@@ -8,34 +8,54 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:436855-437512 cjs-fingerprint
-var Ys = x(function (jg, Ws) {
-  function Om(e) {
-    let n = { className: "string", begin: "\\$.{1}" },
-      a = { className: "symbol", begin: "#" + e.UNDERSCORE_IDENT_RE };
+var require_smalltalk = x(function (cjsExports, cjsModule) {
+  function smalltalk(hljs) {
+    let CHAR = {
+      className: "string",
+      begin: "\\$.{1}",
+    };
+    let SYMBOL = {
+      className: "symbol",
+      begin: "#" + hljs.UNDERSCORE_IDENT_RE,
+    };
     return {
       name: "Smalltalk",
       aliases: ["st"],
       keywords: ["self", "super", "nil", "true", "false", "thisContext"],
       contains: [
-        e.COMMENT('"', '"'),
-        e.APOS_STRING_MODE,
-        { className: "type", begin: "\\b[A-Z][A-Za-z0-9_]*", relevance: 0 },
-        { begin: "[a-z][a-zA-Z0-9_]*:", relevance: 0 },
-        e.C_NUMBER_MODE,
-        a,
-        n,
+        hljs.COMMENT('"', '"'),
+        hljs.APOS_STRING_MODE,
+        {
+          className: "type",
+          begin: "\\b[A-Z][A-Za-z0-9_]*",
+          relevance: 0,
+        },
+        {
+          begin: "[a-z][a-zA-Z0-9_]*:",
+          relevance: 0,
+        },
+        hljs.C_NUMBER_MODE,
+        SYMBOL,
+        CHAR,
         {
           begin: "\\|[ ]*[a-z][a-zA-Z0-9_]*([ ]+[a-z][a-zA-Z0-9_]*)*[ ]*\\|",
-          returnBegin: !0,
+          returnBegin: true,
           end: /\|/,
           illegal: /\S/,
-          contains: [{ begin: "(\\|[ ]*)?[a-z][a-zA-Z0-9_]*" }],
+          contains: [
+            {
+              begin: "(\\|[ ]*)?[a-z][a-zA-Z0-9_]*",
+            },
+          ],
         },
-        { begin: "#\\(", end: "\\)", contains: [e.APOS_STRING_MODE, n, e.C_NUMBER_MODE, a] },
+        {
+          begin: "#\\(",
+          end: "\\)",
+          contains: [hljs.APOS_STRING_MODE, CHAR, hljs.C_NUMBER_MODE, SYMBOL],
+        },
       ],
     };
   }
-  Ws.exports = Om;
+  cjsModule.exports = smalltalk;
 });
-
-export { Ys };
+export { require_smalltalk };

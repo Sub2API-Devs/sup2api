@@ -8,104 +8,138 @@
  * pieces: chunk-e6aww6q8.js (8)
  * attribution: placement 8
  */
-import { fVt } from "../../services/api/toolDefinitionShape.js";
+import { ownValue } from "../../services/api/toolDefinitionShape.js";
 import { createStepRecorder } from "../../plugins/functionHooks/dispatch/chain.js";
 import { getPluginRegistry } from "../plugins/pluginLoadState.js";
 
+//@ chunk-e6aww6q8.js:5043450-5043949 placement
 /**
  * 把工具增删应用到工具变更记录：新增项抵消之前的删除；删除时按值删除需在已宣告列表内才记录（否则只撤销对应新增）；新增时附上工具定义。
  */
-//@ chunk-e6aww6q8.js:5043450-5043949 placement
 function applyToolDeltas(e, n, r, s = new Map(), h = new Set()) {
   for (let y of n)
     if (e.toolRemovals?.includes(y)) recordToolDelta(e, "add", y);
     else e.toolAdditions = [...(e.toolAdditions ?? []), y];
-  for (let { op: op, name: S, byValue: byValue } of r) {
+  for (let { op, name: S, byValue } of r) {
     if (op === "remove" && byValue) {
-      let G = fVt(e.toolDefinitions, S) !== void 0;
+      let G = ownValue(e.toolDefinitions, S) !== undefined;
       if (!h.has(S)) {
         if (G) dropToolAddition(e, S);
         continue;
       }
-      if ((recordToolDelta(e, "remove", S), !(e.byValueRemovals ?? []).includes(S)))
-        e.byValueRemovals = [...(e.byValueRemovals ?? []), S];
+      recordToolDelta(e, "remove", S);
+      if (!(e.byValueRemovals ?? []).includes(S)) e.byValueRemovals = [...(e.byValueRemovals ?? []), S];
       continue;
     }
     recordToolDelta(e, op, S);
     let L = s.get(S);
-    if (op === "add" && L !== void 0) e.toolDefinitions = { ...(e.toolDefinitions ?? {}), [S]: L };
+    if (op === "add" && L !== undefined)
+      e.toolDefinitions = {
+        ...(e.toolDefinitions ?? {}),
+        [S]: L,
+      };
   }
 }
 //@ chunk-e6aww6q8.js:5043949-5044228 placement
 function dropToolAddition(e, n) {
-  let r = e.toolAdditions?.filter((s) => s !== n);
-  if (r === void 0 || r.length === 0) delete e.toolAdditions;
-  else e.toolAdditions = r;
-  if (e.toolDefinitions !== void 0) {
+  let filtered = e.toolAdditions?.filter((toolAddition) => toolAddition !== n);
+  if (filtered === undefined || filtered.length === 0) delete e.toolAdditions;
+  else e.toolAdditions = filtered;
+  if (e.toolDefinitions !== undefined) {
     let { [n]: s, ...h } = e.toolDefinitions;
     if (Object.keys(h).length === 0) delete e.toolDefinitions;
     else e.toolDefinitions = h;
   }
 }
+//@ chunk-e6aww6q8.js:5044228-5044339 placement
 /**
  * 从工具增量记录中挑出指定名称的工具定义。
  */
-//@ chunk-e6aww6q8.js:5044228-5044339 placement
-function pickToolDefinitions(e, n) {
+function pickToolDefinitions(e, inlineToolDefinitions) {
   let r = new Map();
-  for (let [s, { definition: h }] of e ?? []) if (n.has(s)) r.set(s, h);
-  return { definitions: r };
+  for (let [s, { definition: h }] of e ?? []) if (inlineToolDefinitions.has(s)) r.set(s, h);
+  return {
+    definitions: r,
+  };
 }
+//@ chunk-e6aww6q8.js:5044339-5044736 placement
 /**
  * 记录一次工具增或删：删除时移除对应新增；新增时撤销对应删除与按值删除，并加入新增列表。
  */
-//@ chunk-e6aww6q8.js:5044339-5044736 placement
 function recordToolDelta(e, n, r) {
-  let s = n === "add" ? "toolAdditions" : "toolRemovals",
-    h = n === "add" ? "toolRemovals" : "toolAdditions";
+  let s = n === "add" ? "toolAdditions" : "toolRemovals";
+  let h = n === "add" ? "toolRemovals" : "toolAdditions";
   if (n === "remove") dropToolAddition(e, r);
   else {
-    let y = e[h]?.filter((w) => w !== r);
-    if (y !== void 0)
-      if (y.length === 0) delete e[h];
-      else e[h] = y;
-    let S = e.byValueRemovals?.filter((w) => w !== r);
-    if (S !== void 0)
-      if (S.length === 0) delete e.byValueRemovals;
-      else e.byValueRemovals = S;
+    let filtered = e[h]?.filter((w) => w !== r);
+    if (filtered !== undefined)
+      if (filtered.length === 0) delete e[h];
+      else e[h] = filtered;
+    let filtered_2 = e.byValueRemovals?.filter((byValueRemoval) => byValueRemoval !== r);
+    if (filtered_2 !== undefined)
+      if (filtered_2.length === 0) delete e.byValueRemovals;
+      else e.byValueRemovals = filtered_2;
   }
   if (!(e[s] ?? []).includes(r)) e[s] = [...(e[s] ?? []), r];
 }
 //@ chunk-e6aww6q8.js:5044736-5044945 placement
-var makeCoreHookRunner = (e, n) => ({
+var makeCoreHookRunner = (e, stepRecorder) => ({
   name: "core",
-  isCore: !0,
+  isCore: true,
   budgetMs: 0,
   async run(r) {
-    let run = await e.run(r.args),
-      textOf = e.textOf(run),
-      contextOf = e.contextOf(run);
+    let s = await e.run(r.args);
+    let text = e.textOf(s);
+    let y = e.contextOf(s);
     return {
-      ref: n.keep(r.args, { ran: run, text: textOf, context: contextOf }),
-      text: textOf,
-      ...(contextOf !== void 0 && { context: contextOf }),
+      ref: stepRecorder.keep(r.args, {
+        ran: s,
+        text,
+        context: y,
+      }),
+      text,
+      ...(y !== undefined && {
+        context: y,
+      }),
     };
   },
 });
 //@ chunk-e6aww6q8.js:5044945-5045002 placement
-function o5n(e) {
-  let n = createStepRecorder();
-  return { core: makeCoreHookRunner(e, n), runs: n };
+/**
+ * 创建带步骤记录器的工具差量执行核心。
+ */
+function createDeltaStepRecorder(engine) {
+  let stepRecorder = createStepRecorder();
+  return {
+    core: makeCoreHookRunner(engine, stepRecorder),
+    runs: stepRecorder,
+  };
 }
+//@ chunk-e6aww6q8.js:5045002-5045109 placement
 /**
  * 判断给定的模块是否都已作为内置模块加载。
  */
-//@ chunk-e6aww6q8.js:5045002-5045109 placement
 function areBuiltinModulesLoaded(e) {
-  let { loadedModules: loadedModules } = getPluginRegistry();
-  return e.every((r) => loadedModules.some((s) => s.name === r && s.tier === "builtin"));
+  let { loadedModules } = getPluginRegistry();
+  return e.every((r) =>
+    loadedModules.some((loadedModule) => loadedModule.name === r && loadedModule.tier === "builtin"),
+  );
 }
 //@ chunk-e6aww6q8.js:5045109-5045155 placement
-var mgt = (e, n) => (n === void 0 ? e : { ...e, exitCode: n });
-
-export { applyToolDeltas, pickToolDefinitions, o5n, areBuiltinModulesLoaded, mgt };
+/**
+ * 有退出码时附加到结果对象上。
+ */
+var withExitCode = (e, exitCode) =>
+  exitCode === undefined
+    ? e
+    : {
+        ...e,
+        exitCode,
+      };
+export {
+  applyToolDeltas,
+  pickToolDefinitions,
+  createDeltaStepRecorder,
+  areBuiltinModulesLoaded,
+  withExitCode,
+};

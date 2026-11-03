@@ -6,36 +6,37 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { Es } from "../../../fast-xml-parser/lib/fxp.cjs";
+import { require_fxp } from "../../../fast-xml-parser/lib/fxp.cjs";
 
 //@ chunk-edce4vxq.js:73699-74087 cjs-fingerprint
-var xs = x(function (ws) {
-  Object.defineProperty(ws, "__esModule", { value: !0 });
-  ws.parseXML = _a;
-  var Ss = Es(),
-    Vt = new Ss.XMLParser({
-      attributeNamePrefix: "",
-      htmlEntities: !0,
-      ignoreAttributes: !1,
-      ignoreDeclaration: !0,
-      parseTagValue: !1,
-      trimValues: !1,
-      tagValueProcessor: (e, t) =>
-        t.trim() === "" &&
-        t.includes(`
+var require_xml_parser = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.parseXML = parseXML;
+  var fast_xml_parser_1 = require_fxp();
+  var parser = new fast_xml_parser_1.XMLParser({
+    attributeNamePrefix: "",
+    htmlEntities: true,
+    ignoreAttributes: false,
+    ignoreDeclaration: true,
+    parseTagValue: false,
+    trimValues: false,
+    tagValueProcessor: (_, val) =>
+      val.trim() === "" &&
+      val.includes(`
 `)
-          ? ""
-          : void 0,
-    });
-  Vt.addEntity("#xD", "\r");
-  Vt.addEntity(
+        ? ""
+        : undefined,
+  });
+  parser.addEntity("#xD", "\r");
+  parser.addEntity(
     "#10",
     `
 `,
   );
-  function _a(e) {
-    return Vt.parse(e, !0);
+  function parseXML(xmlString) {
+    return parser.parse(xmlString, true);
   }
 });
-
-export { xs };
+export { require_xml_parser };

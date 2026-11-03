@@ -8,15 +8,15 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-1ny7cxrt.js:8430-8617 cjs-fingerprint
-var cy = x(function (Dve, IO) {
-  var cF = /(\w+)=("[^"]*")/g;
-  IO.exports = (e) => {
-    let t = {};
+var require_www_authenticate_parser = x(function (cjsExports, cjsModule) {
+  var REGEXP = /(\w+)=("[^"]*")/g;
+  cjsModule.exports = (wwwAuthenticate) => {
+    let params = {};
     try {
-      while (cF.exec(e) !== null) if (RegExp.$1 && RegExp.$2) t[RegExp.$1] = RegExp.$2.slice(1, -1);
-    } catch (error) {}
-    return t;
+      while (REGEXP.exec(wwwAuthenticate) !== null)
+        if (RegExp.$1 && RegExp.$2) params[RegExp.$1] = RegExp.$2.slice(1, -1);
+    } catch (err) {}
+    return params;
   };
 });
-
-export { cy };
+export { require_www_authenticate_parser };

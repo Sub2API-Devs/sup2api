@@ -8,8 +8,8 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:75369-79658 cjs-fingerprint
-var sn = x(function (Pu, rn) {
-  function vl(e) {
+var require_coq = x(function (cjsExports, cjsModule) {
+  function coq(hljs) {
     return {
       name: "Coq",
       keywords: {
@@ -428,15 +428,21 @@ var sn = x(function (Pu, rn) {
         ],
       },
       contains: [
-        e.QUOTE_STRING_MODE,
-        e.COMMENT("\\(\\*", "\\*\\)"),
-        e.C_NUMBER_MODE,
-        { className: "type", excludeBegin: !0, begin: "\\|\\s*", end: "\\w+" },
-        { begin: /[-=]>/ },
+        hljs.QUOTE_STRING_MODE,
+        hljs.COMMENT("\\(\\*", "\\*\\)"),
+        hljs.C_NUMBER_MODE,
+        {
+          className: "type",
+          excludeBegin: true,
+          begin: "\\|\\s*",
+          end: "\\w+",
+        },
+        {
+          begin: /[-=]>/,
+        },
       ],
     };
   }
-  rn.exports = vl;
+  cjsModule.exports = coq;
 });
-
-export { sn };
+export { require_coq };

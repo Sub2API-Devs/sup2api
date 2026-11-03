@@ -6,143 +6,159 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../runtime/bun-runtime.js";
-import { El } from "./reflect/scalar.js";
-import { Po } from "../cjs/reflect/reflect.js";
-import { Ns } from "../cjs/descriptors.js";
-import { Os } from "../../../../@anthropic-ai/bedrock-sdk/core/error.js";
-import { gp } from "./extensions.js";
+import { require_scalar } from "./reflect/scalar.js";
+import { require_reflect } from "../cjs/reflect/reflect.js";
+import { require_descriptors } from "../cjs/descriptors.js";
+import { require_error_4 } from "../../../../@anthropic-ai/bedrock-sdk/core/error.js";
+import { require_extensions } from "./extensions.js";
 
 //@ chunk-fq0cr76a.js:443249-445879 cjs-fingerprint
-var xP = x(function (EP) {
-  Object.defineProperty(EP, "__esModule", { value: !0 });
-  EP.equals = bP;
-  var Fo = El(),
-    ly = Po(),
-    dy = Ns(),
-    cy = Os(),
-    kl = gp();
-  function bP(e, n, r, s) {
-    if (n.$typeName != e.typeName || r.$typeName != e.typeName) return !1;
-    if (n === r) return !0;
-    return ay(ly.reflect(e, n), ly.reflect(e, r), s);
+var require_equals = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.equals = equals;
+  var scalar_js_1 = require_scalar();
+  var reflect_js_1 = require_reflect();
+  var descriptors_js_1 = require_descriptors();
+  var index_js_1 = require_error_4();
+  var extensions_js_1 = require_extensions();
+  function equals(schema, a, b, options) {
+    if (a.$typeName != schema.typeName || b.$typeName != schema.typeName) return false;
+    if (a === b) return true;
+    return reflectEquals(reflect_js_1.reflect(schema, a), reflect_js_1.reflect(schema, b), options);
   }
-  function ay(e, n, r) {
+  function reflectEquals(a, b, opts) {
     if (
-      e.desc.typeName === "google.protobuf.Any" &&
-      (r === null || r === void 0 ? void 0 : r.unpackAny) == !0
+      a.desc.typeName === "google.protobuf.Any" &&
+      (opts === null || opts === undefined ? undefined : opts.unpackAny) == true
     )
-      return oJ(e.message, n.message, r);
-    for (let field of e.fields) if (!SP(field, e, n, r)) return !1;
-    if ((r === null || r === void 0 ? void 0 : r.unknown) == !0 && !aJ(e, n, r.registry)) return !1;
-    if ((r === null || r === void 0 ? void 0 : r.extensions) == !0 && !lJ(e, n, r)) return !1;
-    return !0;
+      return anyUnpackedEquals(a.message, b.message, opts);
+    for (let f of a.fields) if (!fieldEquals(f, a, b, opts)) return false;
+    if (
+      (opts === null || opts === undefined ? undefined : opts.unknown) == true &&
+      !unknownEquals(a, b, opts.registry)
+    )
+      return false;
+    if (
+      (opts === null || opts === undefined ? undefined : opts.extensions) == true &&
+      !extensionsEquals(a, b, opts)
+    )
+      return false;
+    return true;
   }
-  function SP(e, n, r, s) {
-    if (!n.isSet(e) && !r.isSet(e)) return !0;
-    if (!n.isSet(e) || !r.isSet(e)) return !1;
-    switch (e.fieldKind) {
+  function fieldEquals(f, a, b_2, opts) {
+    if (!a.isSet(f) && !b_2.isSet(f)) return true;
+    if (!a.isSet(f) || !b_2.isSet(f)) return false;
+    switch (f.fieldKind) {
       case "scalar":
-        return Fo.scalarEquals(e.scalar, n.get(e), r.get(e));
+        return scalar_js_1.scalarEquals(f.scalar, a.get(f), b_2.get(f));
       case "enum":
-        return n.get(e) === r.get(e);
+        return a.get(f) === b_2.get(f);
       case "message":
-        return ay(n.get(e), r.get(e), s);
+        return reflectEquals(a.get(f), b_2.get(f), opts);
       case "map": {
-        let h = n.get(e),
-          y = r.get(e),
-          b = [];
-        for (let S of h.keys()) {
-          if (!y.has(S)) return !1;
-          b.push(S);
+        let mapA = a.get(f);
+        let mapB = b_2.get(f);
+        let keys = [];
+        for (let k of mapA.keys()) {
+          if (!mapB.has(k)) return false;
+          keys.push(k);
         }
-        for (let S of y.keys()) if (!h.has(S)) return !1;
-        for (let S of b) {
-          let w = h.get(S),
-            R = y.get(S);
-          if (w === R) continue;
-          switch (e.mapKind) {
+        for (let k of mapB.keys()) if (!mapA.has(k)) return false;
+        for (let key of keys) {
+          let va = mapA.get(key);
+          let vb = mapB.get(key);
+          if (va === vb) continue;
+          switch (f.mapKind) {
             case "enum":
-              return !1;
+              return false;
             case "message":
-              if (!ay(w, R, s)) return !1;
+              if (!reflectEquals(va, vb, opts)) return false;
               break;
             case "scalar":
-              if (!Fo.scalarEquals(e.scalar, w, R)) return !1;
+              if (!scalar_js_1.scalarEquals(f.scalar, va, vb)) return false;
               break;
           }
         }
         break;
       }
       case "list": {
-        let h = n.get(e),
-          y = r.get(e);
-        if (h.size != y.size) return !1;
-        for (let b = 0; b < h.size; b++) {
-          let S = h.get(b),
-            w = y.get(b);
-          if (S === w) continue;
-          switch (e.listKind) {
+        let listA = a.get(f);
+        let listB = b_2.get(f);
+        if (listA.size != listB.size) return false;
+        for (let i = 0; i < listA.size; i++) {
+          let va = listA.get(i);
+          let vb = listB.get(i);
+          if (va === vb) continue;
+          switch (f.listKind) {
             case "enum":
-              return !1;
+              return false;
             case "message":
-              if (!ay(S, w, s)) return !1;
+              if (!reflectEquals(va, vb, opts)) return false;
               break;
             case "scalar":
-              if (!Fo.scalarEquals(e.scalar, S, w)) return !1;
+              if (!scalar_js_1.scalarEquals(f.scalar, va, vb)) return false;
               break;
           }
         }
         break;
       }
     }
-    return !0;
+    return true;
   }
-  function oJ(e, n, r) {
-    if (e.typeUrl !== n.typeUrl) return !1;
-    let anyUnpack = cy.anyUnpack(e, r.registry),
-      anyUnpack_2 = cy.anyUnpack(n, r.registry);
-    if (anyUnpack && anyUnpack_2) {
-      let message = r.registry.getMessage(anyUnpack.$typeName);
-      if (message) return bP(message, anyUnpack, anyUnpack_2, r);
+  function anyUnpackedEquals(a, b, opts) {
+    if (a.typeUrl !== b.typeUrl) return false;
+    let unpackedA = index_js_1.anyUnpack(a, opts.registry);
+    let unpackedB = index_js_1.anyUnpack(b, opts.registry);
+    if (unpackedA && unpackedB) {
+      let schema = opts.registry.getMessage(unpackedA.$typeName);
+      if (schema) return equals(schema, unpackedA, unpackedB, opts);
     }
-    return Fo.scalarEquals(dy.ScalarType.BYTES, e.value, n.value);
+    return scalar_js_1.scalarEquals(descriptors_js_1.ScalarType.BYTES, a.value, b.value);
   }
-  function aJ(e, n, r) {
-    function s(b, S) {
-      var w;
-      let R = (w = b.getUnknown()) !== null && w !== void 0 ? w : [];
-      return S ? R.filter((D) => !S.getExtensionFor(b.desc, D.no)) : R;
+  function unknownEquals(a, b, registry) {
+    function getTrulyUnknown(msg, registry) {
+      var _a;
+      let u = (_a = msg.getUnknown()) !== null && _a !== undefined ? _a : [];
+      return registry ? u.filter((uf) => !registry.getExtensionFor(msg.desc, uf.no)) : u;
     }
-    let h = s(e, r),
-      y = s(n, r);
-    if (h.length != y.length) return !1;
-    for (let b = 0; b < h.length; b++) {
-      let S = h[b],
-        w = y[b];
-      if (S.no != w.no) return !1;
-      if (S.wireType != w.wireType) return !1;
-      if (!Fo.scalarEquals(dy.ScalarType.BYTES, S.data, w.data)) return !1;
+    let unknownA = getTrulyUnknown(a, registry);
+    let unknownB = getTrulyUnknown(b, registry);
+    if (unknownA.length != unknownB.length) return false;
+    for (let i = 0; i < unknownA.length; i++) {
+      let a = unknownA[i];
+      let b = unknownB[i];
+      if (a.no != b.no) return false;
+      if (a.wireType != b.wireType) return false;
+      if (!scalar_js_1.scalarEquals(descriptors_js_1.ScalarType.BYTES, a.data, b.data)) return false;
     }
-    return !0;
+    return true;
   }
-  function lJ(e, n, r) {
-    function s(b, S) {
-      var w;
-      return ((w = b.getUnknown()) !== null && w !== void 0 ? w : [])
-        .map((R) => S.getExtensionFor(b.desc, R.no))
-        .filter((R) => R != null)
-        .filter((R, D, O) => O.indexOf(R) === D);
+  function extensionsEquals(a, b_2, opts) {
+    function getSetExtensions(msg, registry) {
+      var _a;
+      return ((_a = msg.getUnknown()) !== null && _a !== undefined ? _a : [])
+        .map((uf) => registry.getExtensionFor(msg.desc, uf.no))
+        .filter((e) => e != null)
+        .filter((e, index, arr) => arr.indexOf(e) === index);
     }
-    let h = s(e, r.registry),
-      y = s(n, r.registry);
-    if (h.length != y.length || h.some((b) => !y.includes(b))) return !1;
-    for (let b of h) {
-      let [S, w] = kl.createExtensionContainer(b, kl.getExtension(e.message, b)),
-        [R] = kl.createExtensionContainer(b, kl.getExtension(n.message, b));
-      if (!SP(w, S, R, r)) return !1;
+    let extensionsA = getSetExtensions(a, opts.registry);
+    let extensionsB = getSetExtensions(b_2, opts.registry);
+    if (extensionsA.length != extensionsB.length || extensionsA.some((e) => !extensionsB.includes(e)))
+      return false;
+    for (let extension of extensionsA) {
+      let [containerA, field] = extensions_js_1.createExtensionContainer(
+        extension,
+        extensions_js_1.getExtension(a.message, extension),
+      );
+      let [containerB] = extensions_js_1.createExtensionContainer(
+        extension,
+        extensions_js_1.getExtension(b_2.message, extension),
+      );
+      if (!fieldEquals(field, containerA, containerB, opts)) return false;
     }
-    return !0;
+    return true;
   }
 });
-
-export { xP };
+export { require_equals };

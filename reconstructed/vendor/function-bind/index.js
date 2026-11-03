@@ -6,12 +6,11 @@
  * attribution: cjs-require-graph 1
  */
 import { x } from "../../runtime/bun-runtime.js";
-import { Lo } from "./implementation.js";
+import { require_implementation } from "./implementation.js";
 
 //@ chunk-h6b7mazd.js:10856-10934 cjs-require-graph
-var Ee = x(function (cp, Bo) {
-  var su = Lo();
-  Bo.exports = Function.prototype.bind || su;
+var require_function_bind = x(function (cjsExports, cjsModule) {
+  var implementation = require_implementation();
+  cjsModule.exports = Function.prototype.bind || implementation;
 });
-
-export { Ee };
+export { require_function_bind };

@@ -9,9 +9,9 @@
  * attribution: placement 26
  */
 import { isPlainObject } from "../../../utils/isPlainObject.js";
-import { ct } from "../sites/promptContextSites.js";
+import { everyIndex } from "../sites/promptContextSites.js";
 import { HooksError } from "../hooksErrors.js";
-import { checkDecorations, MAn } from "../sites/promptSites.js";
+import { checkDecorations, checkCursorInteger } from "../sites/promptSites.js";
 import { isPromptSectionMode, PROMPT_SECTION_MODES } from "../hookApiSurface.js";
 import { checkedListLength } from "../dispatch/valueSizing.js";
 import { freezeApiObject } from "../dispatch/chain.js";
@@ -21,239 +21,324 @@ import { errorMessage } from "../../../utils/errors.js";
 //@ chunk-4121qate.js:282438-282572 placement
 var SESSION_APPEND_USAGE =
   'takes { message: { type: "user" | "system", content } } (content an array of text blocks) and an optional agentId (a string)';
+//@ chunk-4121qate.js:282572-282800 placement
 /**
  * 校验 $.session.append 参数：message.type 为 user/system 且 content 为对象数组，agentId 可选非空；不合法返回用法说明。
  */
-//@ chunk-4121qate.js:282572-282800 placement
 function checkSessionAppendArgs(e) {
-  let o = isPlainObject(e) ? e.message : void 0,
-    r =
-      isPlainObject(o) &&
-      (o.type === "user" || o.type === "system") &&
-      Array.isArray(o.content) &&
-      ct(o.content, isPlainObject),
-    n = isPlainObject(e) && (e.agentId === void 0 || (typeof e.agentId === "string" && e.agentId !== ""));
-  return r && n ? void 0 : SESSION_APPEND_USAGE;
+  let message = isPlainObject(e) ? e.message : undefined;
+  let r =
+    isPlainObject(message) &&
+    (message.type === "user" || message.type === "system") &&
+    Array.isArray(message.content) &&
+    everyIndex(message.content, isPlainObject);
+  let n =
+    isPlainObject(e) && (e.agentId === undefined || (typeof e.agentId === "string" && e.agentId !== ""));
+  return r && n ? undefined : SESSION_APPEND_USAGE;
 }
 //@ chunk-4121qate.js:282800-282916 placement
 var withArgCheck = (e) => (o) => {
-  let problemOf = e.problemOf(o);
-  return problemOf !== void 0 || !isPlainObject(o)
-    ? Promise.reject(new HooksError(`${e.name} ${problemOf}`))
-    : e.host(o);
+  let r = e.problemOf(o);
+  return r !== undefined || !isPlainObject(o) ? Promise.reject(new HooksError(`${e.name} ${r}`)) : e.host(o);
 };
 //@ chunk-4121qate.js:282916-282944 placement
-var _n = (e) => checkDecorations(e) === void 0;
+/**
+ * 装饰段合法（光标整数）
+ */
+var hasValidDecorations = (decorations) => checkDecorations(decorations) === undefined;
 //@ chunk-4121qate.js:282944-283099 placement
 function requireTextArg(e, o, r) {
-  let n = isPlainObject(e) ? e.text : void 0;
-  return typeof n === "string"
-    ? Promise.resolve(n)
+  let text = isPlainObject(e) ? e.text : undefined;
+  return typeof text === "string"
+    ? Promise.resolve(text)
     : Promise.reject(new HooksError(`${o}: $.${r} takes { text } (a string)`));
 }
 //@ chunk-4121qate.js:283099-283507 placement
 var PROMPT_FILL_OP = (e, o) =>
-  requireTextArg(e, o, "prompt.fill").then((r) => {
-    let n = isPlainObject(e) ? e.mode : void 0,
-      s = isPlainObject(e) ? e.decorations : void 0,
-      i = isPlainObject(e) ? e.cursor : void 0,
-      p = n !== void 0 && !isPromptSectionMode(n);
-    return !p && _n(s) && MAn(i) === void 0
+  requireTextArg(e, o, "prompt.fill").then((text) => {
+    let mode = isPlainObject(e) ? e.mode : undefined;
+    let decorations = isPlainObject(e) ? e.decorations : undefined;
+    let cursor = isPlainObject(e) ? e.cursor : undefined;
+    let p = mode !== undefined && !isPromptSectionMode(mode);
+    return !p && hasValidDecorations(decorations) && checkCursorInteger(cursor) === undefined
       ? {
-          text: r,
-          ...(n !== void 0 && { mode: n }),
-          ...(s !== void 0 && { decorations: s }),
-          ...(typeof i === "number" && { cursor: i }),
+          text,
+          ...(mode !== undefined && {
+            mode,
+          }),
+          ...(decorations !== undefined && {
+            decorations,
+          }),
+          ...(typeof cursor === "number" && {
+            cursor,
+          }),
         }
       : Promise.reject(
           new HooksError(
             `${o}: $.prompt.fill ` +
               (p
                 ? `takes { mode } of ${PROMPT_SECTION_MODES.join(", ")}`
-                : (checkDecorations(s) ?? MAn(i) ?? "takes { decorations }")),
+                : (checkDecorations(decorations) ?? checkCursorInteger(cursor) ?? "takes { decorations }")),
           ),
         );
   });
 //@ chunk-4121qate.js:283507-283632 placement
 function pickTranscriptReadOptions(e) {
-  let o = isPlainObject(e) ? e : {},
-    { agentId: agentId } = o,
-    n = typeof agentId === "string",
-    s = o.as === "api";
-  return { ...(n && { agentId: agentId }), ...(s && { as: "api" }) };
+  let o = isPlainObject(e) ? e : {};
+  let { agentId } = o;
+  let n = typeof agentId === "string";
+  let s = o.as === "api";
+  return {
+    ...(n && {
+      agentId,
+    }),
+    ...(s && {
+      as: "api",
+    }),
+  };
 }
+//@ chunk-4121qate.js:283632-284070 placement
 /**
  * 校验读取会话记录的参数：只允许 agentId 与 as 两个键（或不传）。
  */
-//@ chunk-4121qate.js:283632-284070 placement
 function checkTranscriptReadArgs(e) {
-  if (e === void 0) return;
+  if (e === undefined) return;
   if (!isPlainObject(e)) return "takes { agentId, as } or nothing";
-  let filtered = Object.keys(e).filter((p) => p !== "agentId" && p !== "as");
+  let filtered = Object.keys(e).filter((key) => key !== "agentId" && key !== "as");
   if (filtered.length > 0) return `takes { agentId, as } or nothing (not ${filtered.join(", ")})`;
-  let { agentId: agentId } = e,
-    as = e.as,
-    s = agentId === void 0 || (typeof agentId === "string" && agentId !== ""),
-    i = as === void 0 || as === "api";
+  let { agentId } = e;
+  let as = e.as;
+  let s = agentId === undefined || (typeof agentId === "string" && agentId !== "");
+  let i = as === undefined || as === "api";
   if (!s) return `takes agentId, a non-empty string (got ${String(agentId)})`;
-  return i ? void 0 : `takes as "api" or none (got ${String(as)})`;
+  return i ? undefined : `takes as "api" or none (got ${String(as)})`;
 }
+//@ chunk-4121qate.js:284070-284295 placement
 /**
  * 校验 $.prompt.paint 的 decorations：必须为数组，且有 text（或无文本时为空数组）后再检查各 run。
  */
-//@ chunk-4121qate.js:284070-284295 placement
-function checkDecorationsArgs(e, o) {
-  if (!Array.isArray(o)) return "takes { decorations } (an array of { start, end } runs)";
-  return typeof e === "string" || (e === void 0 && checkedListLength(o) === 0)
-    ? checkDecorations(o)
+function checkDecorationsArgs(text, decorations) {
+  if (!Array.isArray(decorations)) return "takes { decorations } (an array of { start, end } runs)";
+  return typeof text === "string" || (text === undefined && checkedListLength(decorations) === 0)
+    ? checkDecorations(decorations)
     : "takes { text } (a string, the draft the runs were computed for)";
 }
 //@ chunk-4121qate.js:284295-284518 placement
 async function normalizePaintArgs(e, o) {
-  let r = isPlainObject(e) ? e.text : void 0,
-    n = isPlainObject(e) ? e.decorations : void 0;
-  if (!(n !== void 0 && checkDecorationsArgs(r, n) === void 0 && _n(n)))
-    throw new HooksError(`${o}: $.prompt.paint ${checkDecorationsArgs(r, n)}`);
-  return { ...(typeof r === "string" && { text: r }), decorations: n };
+  let text = isPlainObject(e) ? e.text : undefined;
+  let decorations = isPlainObject(e) ? e.decorations : undefined;
+  if (!(
+    decorations !== undefined &&
+    checkDecorationsArgs(text, decorations) === undefined &&
+    hasValidDecorations(decorations)
+  ))
+    throw new HooksError(`${o}: $.prompt.paint ${checkDecorationsArgs(text, decorations)}`);
+  return {
+    ...(typeof text === "string" && {
+      text,
+    }),
+    decorations,
+  };
 }
 //@ chunk-4121qate.js:284518-285298 placement
-var PROMPT_SUBMIT_OP = (e, o) =>
+var PROMPT_SUBMIT_OP = (pluginName, host) =>
   freezeApiObject({
     submit: (r) =>
-      requireTextArg(r, e, "prompt.submit").then((n) => {
-        let s = n.trim() === "",
-          i = isPlainObject(r) ? r.asUser : void 0;
+      requireTextArg(r, pluginName, "prompt.submit").then((n) => {
+        let s = n.trim() === "";
+        let asUser = isPlainObject(r) ? r.asUser : undefined;
         return s
-          ? Promise.reject(new HooksError(`${e}: $.prompt.submit takes { text } (a non-empty prompt)`))
-          : i !== void 0 && typeof i !== "boolean"
-            ? Promise.reject(new HooksError(`${e}: $.prompt.submit takes { asUser } as a boolean`))
-            : o("prompt.submit", i === !0 ? { text: n, asUser: !0 } : { text: n });
+          ? Promise.reject(
+              new HooksError(`${pluginName}: $.prompt.submit takes { text } (a non-empty prompt)`),
+            )
+          : asUser !== undefined && typeof asUser !== "boolean"
+            ? Promise.reject(new HooksError(`${pluginName}: $.prompt.submit takes { asUser } as a boolean`))
+            : host(
+                "prompt.submit",
+                asUser === true
+                  ? {
+                      text: n,
+                      asUser: true,
+                    }
+                  : {
+                      text: n,
+                    },
+              );
       }),
-    read: () => o("prompt.read", {}),
-    media: (r) => o("prompt.media", r),
-    fill: (r) => PROMPT_FILL_OP(r, e).then((n) => o("prompt.fill", n)),
-    paint: (r) => normalizePaintArgs(r, e).then((n) => o("prompt.paint", n)),
-    suggest: (r) => requireTextArg(r, e, "prompt.suggest").then((n) => o("prompt.suggest", { text: n })),
+    read: () => host("prompt.read", {}),
+    media: (r) => host("prompt.media", r),
+    fill: (r) => PROMPT_FILL_OP(r, pluginName).then((n) => host("prompt.fill", n)),
+    paint: (r) => normalizePaintArgs(r, pluginName).then((n) => host("prompt.paint", n)),
+    suggest: (r) =>
+      requireTextArg(r, pluginName, "prompt.suggest").then((text) =>
+        host("prompt.suggest", {
+          text,
+        }),
+      ),
     compose: (r) =>
-      r === void 0 || isPlainObject(r)
-        ? o("prompt.compose", { ...r })
+      r === undefined || isPlainObject(r)
+        ? host("prompt.compose", {
+            ...r,
+          })
         : Promise.reject(
             new HooksError(
-              `${e}: $.prompt.compose takes the facts to compose for ({ tools, traits, ... }), or nothing`,
+              `${pluginName}: $.prompt.compose takes the facts to compose for ({ tools, traits, ... }), or nothing`,
             ),
           ),
   });
 //@ chunk-4121qate.js:285298-285453 placement
 function normalizeSendArgs(e) {
-  let { to: to, text: text } = e;
-  if (typeof to === "string") return { to: to, text: text };
-  return { to: "sessionId" in to ? { sessionId: to.sessionId } : { agentId: to.agentId }, text: text };
+  let { to, text } = e;
+  if (typeof to === "string")
+    return {
+      to,
+      text,
+    };
+  return {
+    to:
+      "sessionId" in to
+        ? {
+            sessionId: to.sessionId,
+          }
+        : {
+            agentId: to.agentId,
+          },
+    text,
+  };
 }
 //@ chunk-4121qate.js:285453-285569 placement
 function pickSendTargetId(e) {
   return isPlainObject(e) && Object.hasOwn(e, "sessionId") !== Object.hasOwn(e, "agentId")
     ? (e.sessionId ?? e.agentId)
-    : void 0;
+    : undefined;
 }
 //@ chunk-4121qate.js:285569-285711 placement
 var SESSION_SEND_USAGE =
   "takes { to, text }: to a name, an agent id or an address (a non-empty string), { sessionId } or { agentId }; text a non-empty string";
+//@ chunk-4121qate.js:285711-285891 placement
 /**
  * 校验 $.session.send 参数：to 为非空字符串或 {sessionId}/{agentId} 之一，text 非空。
  */
-//@ chunk-4121qate.js:285711-285891 placement
 function checkSessionSendArgs(e) {
   if (!isPlainObject(e)) return SESSION_SEND_USAGE;
-  let { to: to, text: text } = e,
-    n = typeof text === "string" && text.trim() !== "",
-    s = typeof to === "string" ? to : pickSendTargetId(to),
-    i = typeof s === "string" && s.trim() !== "";
-  return n && i ? void 0 : SESSION_SEND_USAGE;
+  let { to, text } = e;
+  let n = typeof text === "string" && text.trim() !== "";
+  let s = typeof to === "string" ? to : pickSendTargetId(to);
+  let i = typeof s === "string" && s.trim() !== "";
+  return n && i ? undefined : SESSION_SEND_USAGE;
 }
 //@ chunk-4121qate.js:285891-285999 placement
 function pickUsageOptions(e) {
-  let { breakdown: breakdown, columns: columns } = e;
+  let { breakdown, columns } = e;
   return {
-    ...(breakdown !== void 0 && { breakdown: breakdown }),
-    ...(columns !== void 0 && { columns: columns }),
+    ...(breakdown !== undefined && {
+      breakdown,
+    }),
+    ...(columns !== undefined && {
+      columns,
+    }),
   };
 }
 //@ chunk-4121qate.js:285999-286224 placement
 function checkUsageArgs(e) {
-  if (e === void 0) return;
-  let o = isPlainObject(e) ? Object.keys(e).filter((n) => n !== "breakdown" && n !== "columns") : [];
+  if (e === undefined) return;
+  let o = isPlainObject(e) ? Object.keys(e).filter((key) => key !== "breakdown" && key !== "columns") : [];
   return isPlainObject(e) && o.length === 0
-    ? void 0
+    ? undefined
     : "takes { breakdown, columns } or nothing" + (o.length > 0 ? ` (not ${o.join(", ")})` : "");
 }
 //@ chunk-4121qate.js:286224-287313 placement
-var SESSION_OPS = (e, o) =>
+var SESSION_OPS = (pluginName, host) =>
   freezeApiObject({
     messages: (r) => {
       let n = checkTranscriptReadArgs(r);
-      return n !== void 0
-        ? Promise.reject(new HooksError(`${e}: $.session.messages ${n}`))
-        : o("session.messages", pickTranscriptReadOptions(r));
+      return n !== undefined
+        ? Promise.reject(new HooksError(`${pluginName}: $.session.messages ${n}`))
+        : host("session.messages", pickTranscriptReadOptions(r));
     },
-    cwd: () => o("session.cwd", {}),
-    root: () => o("session.root", {}),
-    model: () => o("session.model", {}),
-    turns: () => o("session.turns", {}),
-    id: () => o("session.id", {}),
-    repo: () => o("session.repo", {}),
-    surface: () => o("session.surface", {}),
-    surfaces: () => o("session.surfaces", {}),
-    authorize: () => o("session.authorize", {}),
-    identity: () => o("session.identity", {}),
+    cwd: () => host("session.cwd", {}),
+    root: () => host("session.root", {}),
+    model: () => host("session.model", {}),
+    turns: () => host("session.turns", {}),
+    id: () => host("session.id", {}),
+    repo: () => host("session.repo", {}),
+    surface: () => host("session.surface", {}),
+    surfaces: () => host("session.surfaces", {}),
+    authorize: () => host("session.authorize", {}),
+    identity: () => host("session.identity", {}),
     usage: (r) => {
       let n = checkUsageArgs(r);
-      return n !== void 0
-        ? Promise.reject(new HooksError(`${e}: $.session.usage ${n}`))
-        : o("session.usage", isPlainObject(r) ? pickUsageOptions(r) : {});
+      return n !== undefined
+        ? Promise.reject(new HooksError(`${pluginName}: $.session.usage ${n}`))
+        : host("session.usage", isPlainObject(r) ? pickUsageOptions(r) : {});
     },
-    version: () => o("session.version", {}),
+    version: () => host("session.version", {}),
     send: withArgCheck({
-      name: `${e}: $.session.send`,
+      name: `${pluginName}: $.session.send`,
       problemOf: checkSessionSendArgs,
-      host: (r) => o("session.send", normalizeSendArgs(r)),
+      host: (r) => host("session.send", normalizeSendArgs(r)),
     }),
     append: withArgCheck({
-      name: `${e}: $.session.append`,
+      name: `${pluginName}: $.session.append`,
       problemOf: checkSessionAppendArgs,
-      host: (r) => o("session.append", toSlimTranscriptMessage(r)),
+      host: (r) => host("session.append", toSlimTranscriptMessage(r)),
     }),
     compact: (r) => {
-      let n = isPlainObject(r) ? r.instructions : void 0;
-      return r !== void 0 && (!isPlainObject(r) || (n !== void 0 && typeof n !== "string"))
+      let instructions = isPlainObject(r) ? r.instructions : undefined;
+      return r !== undefined &&
+        (!isPlainObject(r) || (instructions !== undefined && typeof instructions !== "string"))
         ? Promise.reject(
-            new HooksError(`${e}: $.session.compact takes { instructions } (a string) or nothing`),
+            new HooksError(`${pluginName}: $.session.compact takes { instructions } (a string) or nothing`),
           )
-        : o("session.compact", typeof n === "string" ? { instructions: n } : {});
-    },
-  });
-/**
- * $.settings 命名空间：read（可按 source 或 key 读取设置）。
- */
-//@ chunk-4121qate.js:287313-287678 placement
-var SETTINGS_OPS = (e, o) =>
-  freezeApiObject({
-    read: (r) => {
-      let { source: source, key: key } = isPlainObject(r)
-        ? { source: r.source, key: r.key }
-        : { source: void 0, key: void 0 };
-      return (r !== void 0 && !isPlainObject(r)) || (key !== void 0 && typeof key !== "string")
-        ? Promise.reject(new HooksError(`${e}: $.settings.read takes { source }, { key } or nothing`))
-        : o("settings.read", source === void 0 ? {} : { source: source }).then((p) =>
-            key === void 0 ? p : Object.entries(p).find(([f]) => f === key)?.[1],
+        : host(
+            "session.compact",
+            typeof instructions === "string"
+              ? {
+                  instructions,
+                }
+              : {},
           );
     },
   });
+//@ chunk-4121qate.js:287313-287678 placement
+/**
+ * $.settings 命名空间：read（可按 source 或 key 读取设置）。
+ */
+var SETTINGS_OPS = (pluginName, host) =>
+  freezeApiObject({
+    read: (r) => {
+      let { source, key } = isPlainObject(r)
+        ? {
+            source: r.source,
+            key: r.key,
+          }
+        : {
+            source: undefined,
+            key: undefined,
+          };
+      return (r !== undefined && !isPlainObject(r)) || (key !== undefined && typeof key !== "string")
+        ? Promise.reject(
+            new HooksError(`${pluginName}: $.settings.read takes { source }, { key } or nothing`),
+          )
+        : host(
+            "settings.read",
+            source === undefined
+              ? {}
+              : {
+                  source,
+                },
+          ).then((p) => (key === undefined ? p : Object.entries(p).find(([key_2]) => key_2 === key)?.[1]));
+    },
+  });
 //@ chunk-4121qate.js:287678-287694 placement
-var uEe = 4194304;
+/**
+ * 接口调用返回值的字符上限 4194304，超出的值按错误拒绝。
+ */
+var MAX_CALL_VALUE_CHARS = 4194304;
+//@ chunk-4121qate.js:287694-288073 placement
 /**
  * 把值序列化为 JSON 再解析回来，确保是 JSON 数据且不超过 4M 字符，否则抛 HooksError。
  */
-//@ chunk-4121qate.js:287694-288073 placement
 function toStoredJson(e, o, r = "store.set") {
   let n;
   try {
@@ -263,90 +348,122 @@ function toStoredJson(e, o, r = "store.set") {
   }
   if (typeof n !== "string")
     throw new HooksError(
-      `${o}: $.${r}: value is not JSON data (${e === void 0 ? "undefined" : `a ${typeof e}`})`,
+      `${o}: $.${r}: value is not JSON data (${e === undefined ? "undefined" : `a ${typeof e}`})`,
     );
-  if (n.length > uEe)
-    throw new HooksError(`${o}: $.${r}: the value is ${n.length} characters, over the ${uEe} limit`);
+  if (n.length > MAX_CALL_VALUE_CHARS)
+    throw new HooksError(
+      `${o}: $.${r}: the value is ${n.length} characters, over the ${MAX_CALL_VALUE_CHARS} limit`,
+    );
   return JSON.parse(n);
 }
+//@ chunk-4121qate.js:288073-288430 placement
 /**
  * $.store 命名空间：get/set/delete/keys，键为非空字符串，值须为 JSON 数据。
  */
-//@ chunk-4121qate.js:288073-288430 placement
-function STORE_OPS(e, o) {
+function STORE_OPS(pluginName, host) {
   function r(n, s) {
     if (typeof n !== "string" || n === "")
-      throw new HooksError(`${e}: $.store.${s} takes a non-empty string key`);
+      throw new HooksError(`${pluginName}: $.store.${s} takes a non-empty string key`);
     return n;
   }
   return freezeApiObject({
-    get: async (n) => o("store.get", { key: r(n, "get") }),
+    get: async (n) =>
+      host("store.get", {
+        key: r(n, "get"),
+      }),
     set: async (n, s) => {
-      await o("store.set", { value: toStoredJson(s, e), key: r(n, "set") });
+      await host("store.set", {
+        value: toStoredJson(s, pluginName),
+        key: r(n, "set"),
+      });
     },
     delete: async (n) => {
-      await o("store.delete", { key: r(n, "delete") });
+      await host("store.delete", {
+        key: r(n, "delete"),
+      });
     },
-    keys: () => o("store.keys", {}),
+    keys: () => host("store.keys", {}),
   });
 }
 //@ chunk-4121qate.js:288430-288946 placement
-function STATE_OPS(e, o) {
+function STATE_OPS(pluginName, host) {
   function r(n, s) {
-    let i = isPlainObject(n) ? n.plugin : void 0,
-      p = isPlainObject(n) ? n.key : void 0,
-      f = isPlainObject(n) ? n.id : void 0;
-    if (!(typeof i === "string" && typeof p === "string" && (f === void 0 || typeof f === "string")))
+    let plugin = isPlainObject(n) ? n.plugin : undefined;
+    let key = isPlainObject(n) ? n.key : undefined;
+    let id = isPlainObject(n) ? n.id : undefined;
+    if (!(
+      typeof plugin === "string" &&
+      typeof key === "string" &&
+      (id === undefined || typeof id === "string")
+    ))
       throw new HooksError(
-        `${e}: $.state.${s} takes a reference { plugin, key } (and id for a family's member)`,
+        `${pluginName}: $.state.${s} takes a reference { plugin, key } (and id for a family's member)`,
       );
-    return f === void 0 ? { plugin: i, key: p } : { plugin: i, key: p, id: f };
+    return id === undefined
+      ? {
+          plugin,
+          key,
+        }
+      : {
+          plugin,
+          key,
+          id,
+        };
   }
   return freezeApiObject({
-    get: async (n) => o("state.get", r(n, "get")),
+    get: async (n) => host("state.get", r(n, "get")),
     set: async (n, s, i) =>
-      o("state.set", {
+      host("state.set", {
         ...r(n, "set"),
-        value: toStoredJson(s, e, "state.set"),
-        ...(i?.ifVersion !== void 0 && { ifVersion: i.ifVersion }),
+        value: toStoredJson(s, pluginName, "state.set"),
+        ...(i?.ifVersion !== undefined && {
+          ifVersion: i.ifVersion,
+        }),
       }),
   });
 }
 //@ chunk-4121qate.js:288946-289029 placement
-function jp(e, o) {
+/**
+ * 只取存在的字段
+ */
+function pickFields(e, o) {
   let r = {};
   for (let n of o) {
     let s = e[n];
-    if (s !== void 0) r[n] = s;
+    if (s !== undefined) r[n] = s;
   }
   return r;
 }
 //@ chunk-4121qate.js:289029-289430 placement
-var TELEMETRY_OPS = (e, o) =>
+var TELEMETRY_OPS = (pluginName, host) =>
   freezeApiObject({
     log: (r) =>
       isPlainObject(r)
-        ? o("telemetry.log", jp(r, ["to", "event", "props", "attributes", "loggedAt", "span"]))
+        ? host("telemetry.log", pickFields(r, ["to", "event", "props", "attributes", "loggedAt", "span"]))
         : Promise.reject(
             new HooksError(
-              `${e}: $.telemetry.log takes an entry ({ to?, event, props? } or a collector record)`,
+              `${pluginName}: $.telemetry.log takes an entry ({ to?, event, props? } or a collector record)`,
             ),
           ),
     mark: (r) =>
       isPlainObject(r)
-        ? o("telemetry.mark", jp(r, ["feature", "kind", "reason", "props"]))
+        ? host("telemetry.mark", pickFields(r, ["feature", "kind", "reason", "props"]))
         : Promise.reject(
-            new HooksError(`${e}: $.telemetry.mark takes an entry ({ feature, kind, reason?, props? })`),
+            new HooksError(
+              `${pluginName}: $.telemetry.mark takes an entry ({ feature, kind, reason?, props? })`,
+            ),
           ),
   });
 //@ chunk-4121qate.js:289430-289509 placement
-function Id(e) {
-  let o = isPlainObject(e) ? e.agentId : void 0;
-  return typeof o === "string" ? o : void 0;
+/**
+ * 取参数里的 agentId
+ */
+function agentIdFromArg(result) {
+  let agentId = isPlainObject(result) ? result.agentId : undefined;
+  return typeof agentId === "string" ? agentId : undefined;
 }
-
 export {
-  Id,
+  agentIdFromArg,
   SESSION_OPS,
   PROMPT_SUBMIT_OP,
   TELEMETRY_OPS,
@@ -356,5 +473,5 @@ export {
   checkSessionSendArgs,
   checkSessionAppendArgs,
   checkDecorationsArgs,
-  uEe,
+  MAX_CALL_VALUE_CHARS,
 };

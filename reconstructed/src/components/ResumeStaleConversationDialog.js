@@ -8,15 +8,19 @@
  * pieces: chunk-975mts6d.js (18)
  * attribution: placement 18
  */
-import { j, y, R, Se, zt, ce, yt } from "../../vendor/react/cjs/react.production.js";
-import { iP } from "../context/session.js";
+import { init_react_production, y, R, Se, zt, ce, yt } from "../../vendor/react/cjs/react.production.js";
+import { useSessionOrUndefined } from "../context/session.js";
 import { usePreDispatchKeyHandler } from "../keybindings/useActionHandlers.js";
 import { useInputClock } from "../ink/components/Input.js";
 import { kp } from "../../vendor/convert-to-spaces/dist/index.js";
-import { isWithinRecentInput, So } from "../hooks/useRecentInputGuard.js";
+import { isWithinRecentInput, RECENT_INPUT_GUARD_MS } from "../hooks/useRecentInputGuard.js";
 import { useRefusalTracker } from "./CustomSelect/selectTypeahead.js";
-import { M1s, f7e, bM } from "../state/promptInputStore.js";
-import { r, e, Fragment } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { setPromptStash, promptInputValue, promptInputStoreFor } from "../state/promptInputStore.js";
+import {
+  jsxProd_default_2,
+  jsxProd_default,
+  Fragment,
+} from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Dialog } from "./design-system/Dialog.js";
 import { Byline } from "./design-system/Byline.js";
 import { KeyboardShortcutHint } from "./design-system/KeyboardShortcutHint.js";
@@ -33,203 +37,259 @@ var weakMap = new WeakMap();
 //@ chunk-975mts6d.js:792-914 placement
 function getPasteHintState(o, t = "") {
   let i = weakMap.get(o);
-  if (i === void 0) ((i = { needsArrow: t.trim() !== "", pastes: 0, pastesAtArrow: 0 }), weakMap.set(o, i));
+  if (i === undefined) {
+    i = {
+      needsArrow: t.trim() !== "",
+      pastes: 0,
+      pastesAtArrow: 0,
+    };
+    weakMap.set(o, i);
+  }
   return i;
 }
 //@ chunk-975mts6d.js:914-960 placement
-function x(o, t) {
+function markNeedsArrow(o, t) {
   getPasteHintState(o).needsArrow = t.trim() !== "";
 }
 //@ chunk-975mts6d.js:960-1026 placement
-function k(o) {
-  let t = getPasteHintState(o);
-  ((t.needsArrow = !1), (t.pastesAtArrow = t.pastes));
+function clearNeedsArrow(o) {
+  let pasteHintState = getPasteHintState(o);
+  pasteHintState.needsArrow = false;
+  pasteHintState.pastesAtArrow = pasteHintState.pastes;
 }
 //@ chunk-975mts6d.js:1026-1055 placement
-function P(o) {
+function bumpPasteCount(o) {
   getPasteHintState(o).pastes += 1;
 }
 //@ chunk-975mts6d.js:1055-1132 placement
 function needsArrowHint(o, t) {
-  let i = getPasteHintState(o, t);
-  return i.needsArrow || i.pastes > i.pastesAtArrow;
+  let pasteHintState = getPasteHintState(o, t);
+  return pasteHintState.needsArrow || pasteHintState.pastes > pasteHintState.pastesAtArrow;
 }
 //@ chunk-975mts6d.js:1132-1136 placement
-j();
+init_react_production();
 //@ chunk-975mts6d.js:1136-1154 placement
 var weakMap_2 = new WeakMap();
 //@ chunk-975mts6d.js:1154-1181 placement
-function G(o, t) {
+function setBaseline(o, t) {
   weakMap_2.set(o, t);
 }
 //@ chunk-975mts6d.js:1181-1211 placement
-function O(o) {
+function getBaseline(o) {
   return weakMap_2.get(o);
 }
 //@ chunk-975mts6d.js:1211-1226 placement
-function ie() {}
+function noopHandler() {}
 //@ chunk-975mts6d.js:1226-1252 placement
-function ae(A) {
+function increment(A) {
   return A + 1;
 }
 //@ chunk-975mts6d.js:1252-1273 placement
-var STALE_TICK_MS = 60000,
-  aWe = 1000;
+/**
+ * 导出值：DECAY_TICK_MS（1000）。
+ */
+var STALE_TICK_MS = 60000;
+var DECAY_TICK_MS = 1000;
+//@ chunk-975mts6d.js:1273-3260 placement
 /**
  * 恢复长时间未活动的对话时询问继续、压缩或新建，显示上下文大小与 5 小时额度占比。
  */
-//@ chunk-975mts6d.js:1273-3260 placement
 function ResumeStaleConversationDialog({
-  inactiveSince: inactiveSince,
-  contextTokens: contextTokens,
-  percentOfFiveHourLimit: percentOfFiveHourLimit,
-  trigger: trigger,
-  focusedAction: focusedAction,
-  offersLookUp: offersLookUp,
-  ask: ask,
-  onDone: onDone,
+  inactiveSince,
+  contextTokens,
+  percentOfFiveHourLimit,
+  trigger,
+  focusedAction,
+  offersLookUp,
+  ask,
+  onDone,
 }) {
-  let h = useRelativeTimeText(inactiveSince, trigger === "idle"),
-    d = iP(),
-    m = trigger === "idle",
-    [, v] = y(0),
-    A = TokenCountText(d, m ? ask : null, v);
-  (y(() => {
-    if (m) x(ask, A);
-  }),
-    usePreDispatchKeyHandler(
-      (l, g) => {
-        if (g.upArrow || g.downArrow) (k(ask), v((oe) => oe + 1));
-      },
-      { isActive: m },
-    ));
-  let K = m && A.trim() !== "",
-    U = m && needsArrowHint(ask, A),
-    Y = useInputClock(),
-    F = R(Date.now()),
-    { subscribeFrames: subscribeFrames } = Se(kp);
+  let relativeTimeText = useRelativeTimeText(inactiveSince, trigger === "idle");
+  let sessionOrUndefined = useSessionOrUndefined();
+  let m = trigger === "idle";
+  let [, v] = y(0);
+  let A = TokenCountText(sessionOrUndefined, m ? ask : null, v);
+  y(() => {
+    if (m) markNeedsArrow(ask, A);
+  });
+  usePreDispatchKeyHandler(
+    (input, key) => {
+      if (key.upArrow || key.downArrow) {
+        clearNeedsArrow(ask);
+        v((oe) => oe + 1);
+      }
+    },
+    {
+      isActive: m,
+    },
+  );
+  let K = m && A.trim() !== "";
+  let U = m && needsArrowHint(ask, A);
+  let inputClock = useInputClock();
+  let F = R(Date.now());
+  let { subscribeFrames } = Se(kp);
   zt(() => {
     let l = subscribeFrames(() => {
-      ((F.current = Date.now()), l());
+      F.current = Date.now();
+      l();
     });
     return l;
   }, [subscribeFrames]);
-  let z = () => isWithinRecentInput(Y, F.current, aWe),
-    { refusedWithin: refusedWithin, noteRefused: noteRefused } = useRefusalTracker(),
-    ee = (l) => {
-      if (focusedAction === "new_conversation" && l === "new_conversation" && (z() || refusedWithin(So)))
-        return (noteRefused(), !1);
-      return onDone(l);
-    },
-    E =
-      trigger === "idle" && d !== void 0
-        ? (l) => {
-            (P(ask),
-              v((g) => g + 1),
-              M1s(
-                d,
-                f7e(d) +
-                  l.text.replace(
-                    /\r\n?/g,
-                    `
+  let z = () => isWithinRecentInput(inputClock, F.current, DECAY_TICK_MS);
+  let { refusedWithin, noteRefused } = useRefusalTracker();
+  let onChange = (l) => {
+    if (
+      focusedAction === "new_conversation" &&
+      l === "new_conversation" &&
+      (z() || refusedWithin(RECENT_INPUT_GUARD_MS))
+    ) {
+      noteRefused();
+      return false;
+    }
+    return onDone(l);
+  };
+  let E =
+    trigger === "idle" && sessionOrUndefined !== undefined
+      ? (l) => {
+          bumpPasteCount(ask);
+          v((g) => g + 1);
+          setPromptStash(
+            sessionOrUndefined,
+            promptInputValue(sessionOrUndefined) +
+              l.text.replace(
+                /\r\n?/g,
+                `
 `,
-                  ),
-              ));
-          }
-        : void 0,
-    I = r(Dialog, {
-      title: "Resume this conversation?",
-      color: "warning",
-      onCancel: () => onDone("dismiss"),
-      inputGuide: r(Byline, {
-        children: [
-          U ? e(KeyboardShortcutHint, { chord: ["up", "down"], action: "pick a row first" }) : null,
-          e(KeyboardShortcutHint, { chord: "enter", action: "confirm" }),
-          e(ConfigurableShortcutHint, {
-            action: "confirm:no",
-            context: "Confirmation",
-            fallback: "Esc",
-            description: m ? "dismiss" : "resume",
-          }),
-        ],
-      }),
+              ),
+          );
+        }
+      : undefined;
+  let I = jsxProd_default_2(Dialog, {
+    title: "Resume this conversation?",
+    color: "warning",
+    onCancel: () => onDone("dismiss"),
+    inputGuide: jsxProd_default_2(Byline, {
       children: [
-        r(Box, {
-          flexDirection: "column",
-          children: [
-            r(Text, {
-              children: [
-                "This conversation has been inactive for ",
-                h,
-                " and is",
-                " ",
-                formatTokens(contextTokens),
-                " tokens long.",
-                " ",
-                percentOfFiveHourLimit >= 100
-                  ? r(Fragment, {
-                      children: [
-                        "Resuming it will use ",
-                        e(Text, { bold: !0, children: "all" }),
-                        " of your 5-hour usage limit.",
-                      ],
-                    })
-                  : r(Fragment, {
-                      children: [
-                        "Resuming it will use about",
-                        " ",
-                        r(Text, { bold: !0, children: [percentOfFiveHourLimit, "%"] }),
-                        " of your 5-hour usage limit.",
-                      ],
-                    }),
-              ],
-            }),
-            K &&
-              e(Text, {
-                dimColor: !0,
-                children: "Your unsent message will still be there after you answer.",
-              }),
-          ],
+        U
+          ? jsxProd_default(KeyboardShortcutHint, {
+              chord: ["up", "down"],
+              action: "pick a row first",
+            })
+          : null,
+        jsxProd_default(KeyboardShortcutHint, {
+          chord: "enter",
+          action: "confirm",
         }),
-        e(ModelSelector, {
-          options: [
-            { value: "resume", label: "Resume" },
-            {
-              value: "new_conversation",
-              label: "Start a new conversation",
-              ...(offersLookUp && { description: "Claude can look this one up if you refer to it later" }),
-            },
-          ],
-          hideIndexes: trigger === "idle",
-          onUpFromFirstItem: trigger === "idle" ? L : void 0,
-          ...(focusedAction === "new_conversation" && {
-            defaultFocusValue: O(ask) ?? "new_conversation",
-            onDownFromLastItem: trigger === "idle" ? L : void 0,
-            selectedValue: NO_COMMITTED_ROW,
-            onFocus: (l) => {
-              if (l !== "dismiss") G(ask, l);
-            },
-          }),
-          onChange: ee,
+        jsxProd_default(ConfigurableShortcutHint, {
+          action: "confirm:no",
+          context: "Confirmation",
+          fallback: "Esc",
+          description: m ? "dismiss" : "resume",
         }),
       ],
-    });
-  return E === void 0 ? I : e(Box, { flexDirection: "column", onPaste: E, children: I });
+    }),
+    children: [
+      jsxProd_default_2(Box, {
+        flexDirection: "column",
+        children: [
+          jsxProd_default_2(Text, {
+            children: [
+              "This conversation has been inactive for ",
+              relativeTimeText,
+              " and is",
+              " ",
+              formatTokens(contextTokens),
+              " tokens long.",
+              " ",
+              percentOfFiveHourLimit >= 100
+                ? jsxProd_default_2(Fragment, {
+                    children: [
+                      "Resuming it will use ",
+                      jsxProd_default(Text, {
+                        bold: true,
+                        children: "all",
+                      }),
+                      " of your 5-hour usage limit.",
+                    ],
+                  })
+                : jsxProd_default_2(Fragment, {
+                    children: [
+                      "Resuming it will use about",
+                      " ",
+                      jsxProd_default_2(Text, {
+                        bold: true,
+                        children: [percentOfFiveHourLimit, "%"],
+                      }),
+                      " of your 5-hour usage limit.",
+                    ],
+                  }),
+            ],
+          }),
+          K &&
+            jsxProd_default(Text, {
+              dimColor: true,
+              children: "Your unsent message will still be there after you answer.",
+            }),
+        ],
+      }),
+      jsxProd_default(ModelSelector, {
+        options: [
+          {
+            value: "resume",
+            label: "Resume",
+          },
+          {
+            value: "new_conversation",
+            label: "Start a new conversation",
+            ...(offersLookUp && {
+              description: "Claude can look this one up if you refer to it later",
+            }),
+          },
+        ],
+        hideIndexes: trigger === "idle",
+        onUpFromFirstItem: trigger === "idle" ? noopCallback : undefined,
+        ...(focusedAction === "new_conversation" && {
+          defaultFocusValue: getBaseline(ask) ?? "new_conversation",
+          onDownFromLastItem: trigger === "idle" ? noopCallback : undefined,
+          selectedValue: NO_COMMITTED_ROW,
+          onFocus: (l) => {
+            if (l !== "dismiss") setBaseline(ask, l);
+          },
+        }),
+        onChange,
+      }),
+    ],
+  });
+  return E === undefined
+    ? I
+    : jsxProd_default(Box, {
+        flexDirection: "column",
+        onPaste: E,
+        children: I,
+      });
 }
 //@ chunk-975mts6d.js:3260-3529 placement
-function useRelativeTimeText(o, t) {
-  let i = useClock(),
-    [a] = y(() => ({ since: o, text: Q(o) }));
-  if (a.since !== o) ((a.since = o), (a.text = Q(o)));
+function useRelativeTimeText(inactiveSince, t) {
+  let clock = useClock();
+  let [a] = y(() => ({
+    since: inactiveSince,
+    text: friendlyElapsed(inactiveSince),
+  }));
+  if (a.since !== inactiveSince) {
+    a.since = inactiveSince;
+    a.text = friendlyElapsed(inactiveSince);
+  }
   let p = ce(
     (u) => {
       if (!t) return () => {};
-      let c = i.setTimeout(function b() {
-        ((a.text = Q(a.since)), u(), (c = i.setTimeout(b, STALE_TICK_MS)));
+      let c = clock.setTimeout(function b() {
+        a.text = friendlyElapsed(a.since);
+        u();
+        c = clock.setTimeout(b, STALE_TICK_MS);
       }, STALE_TICK_MS);
       return () => c();
     },
-    [i, a, t],
+    [clock, a, t],
   );
   return yt(
     p,
@@ -238,41 +298,50 @@ function useRelativeTimeText(o, t) {
   );
 }
 //@ chunk-975mts6d.js:3529-3579 placement
-function Q(o) {
+function friendlyElapsed(o) {
   return formatDurationCoarse(Math.max(0, Date.now() - o));
 }
 //@ chunk-975mts6d.js:3579-3999 placement
-function TokenCountText(o, t, i) {
-  let a = w(8),
-    p;
-  if (a[0] !== o) ((p = o === void 0 ? null : bM(o)), (a[0] = o), (a[1] = p));
-  else p = a[1];
-  let u = p,
-    c;
-  if (a[2] !== t || a[3] !== i || a[4] !== u)
-    ((c = (b) =>
+function TokenCountText(sessionOrUndefined, t, i) {
+  let a = w(8);
+  let p;
+  if (a[0] !== sessionOrUndefined) {
+    p = sessionOrUndefined === undefined ? null : promptInputStoreFor(sessionOrUndefined);
+    a[0] = sessionOrUndefined;
+    a[1] = p;
+  } else p = a[1];
+  let u = p;
+  let c;
+  if (a[2] !== t || a[3] !== i || a[4] !== u) {
+    c = (b) =>
       u === null
-        ? ie
+        ? noopHandler
         : (() => {
             let h = u.getState().value;
             return u.subscribe(() => {
               let d = u.getState().value;
-              if (t !== null && d !== h) (x(t, d), i(ae));
-              ((h = d), b());
+              if (t !== null && d !== h) {
+                markNeedsArrow(t, d);
+                i(increment);
+              }
+              h = d;
+              b();
             });
-          })()),
-      (a[2] = t),
-      (a[3] = i),
-      (a[4] = u),
-      (a[5] = c));
-  else c = a[5];
-  let m = c,
-    v;
-  if (a[6] !== u) ((v = () => (u === null ? "" : u.getState().value)), (a[6] = u), (a[7] = v));
-  else v = a[7];
+          })();
+    a[2] = t;
+    a[3] = i;
+    a[4] = u;
+    a[5] = c;
+  } else c = a[5];
+  let m = c;
+  let v;
+  if (a[6] !== u) {
+    v = () => (u === null ? "" : u.getState().value);
+    a[6] = u;
+    a[7] = v;
+  } else v = a[7];
   return yt(m, v);
 }
 //@ chunk-975mts6d.js:3999-4013 placement
-function L() {}
-
-export { needsArrowHint, ResumeStaleConversationDialog, aWe };
+function noopCallback() {}
+export { needsArrowHint, ResumeStaleConversationDialog, DECAY_TICK_MS };

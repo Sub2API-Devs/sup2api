@@ -9,19 +9,23 @@
  * attribution: placement 1
  */
 
+//@ chunk-zks0j6kf.js:191-392 placement
 /**
  * 复制对象并去掉 undefined 值，__proto__ 键以自有属性写入（防原型污染）。
  */
-//@ chunk-zks0j6kf.js:191-392 placement
 function compactEnvObject(t) {
   let e = {};
-  for (let [n, r] of Object.entries(t)) {
-    if (r === void 0) continue;
-    if (n === "__proto__")
-      Object.defineProperty(e, n, { value: r, writable: !0, enumerable: !0, configurable: !0 });
-    else e[n] = r;
+  for (let [key, value] of Object.entries(t)) {
+    if (value === undefined) continue;
+    if (key === "__proto__")
+      Object.defineProperty(e, key, {
+        value,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+    else e[key] = value;
   }
   return e;
 }
-
 export { compactEnvObject };

@@ -8,250 +8,280 @@
 
 //@ chunk-ccwj2pkk.js:191-335 esm-fingerprint
 class ParseError extends Error {
-  constructor(n, o) {
-    (super(n),
-      (this.name = "ParseError"),
-      (this.type = o.type),
-      (this.field = o.field),
-      (this.value = o.value),
-      (this.line = o.line));
+  constructor(message, options) {
+    super(message);
+    this.name = "ParseError";
+    this.type = options.type;
+    this.field = options.field;
+    this.value = options.value;
+    this.line = options.line;
   }
 }
 //@ chunk-ccwj2pkk.js:335-354 esm-layout
-var I = 10,
-  _ = 13,
-  A = 32;
+var LF = 10;
+var CR = 13;
+var SPACE = 32;
 //@ chunk-ccwj2pkk.js:354-369 esm-layout
-function y(n) {}
+function noop(n) {}
 //@ chunk-ccwj2pkk.js:369-2857 esm-fingerprint
-function wTt(n) {
-  if (typeof n == "function")
+function createParser(callbacks) {
+  if (typeof callbacks == "function")
     throw TypeError("`callbacks` must be an object, got a function instead. Did you mean `{onEvent: fn}`?");
-  let { onEvent: onEvent = y, onError: onError = y, onRetry: onRetry = y, onComment: onComment } = n,
-    a = [],
-    x = !0,
-    c,
-    f = "",
-    s = 0,
-    l;
-  function j(t) {
-    if (
-      (x &&
-        ((x = !1),
-        t.charCodeAt(0) === 239 && t.charCodeAt(1) === 187 && t.charCodeAt(2) === 191 && (t = t.slice(3))),
-      a.length === 0)
-    ) {
-      let d = m(t);
-      d !== "" && a.push(d);
+  let { onEvent = noop, onError = noop, onRetry = noop, onComment } = callbacks;
+  let pendingFragments = [];
+  let isFirstChunk = true;
+  let id;
+  let data = "";
+  let dataLines = 0;
+  let eventType;
+  function feed(chunk) {
+    if (isFirstChunk) {
+      isFirstChunk = false;
+      if (chunk.charCodeAt(0) === 239 && chunk.charCodeAt(1) === 187 && chunk.charCodeAt(2) === 191)
+        chunk = chunk.slice(3);
+    }
+    if (pendingFragments.length === 0) {
+      let trailing2 = processLines(chunk);
+      if (trailing2 !== "") pendingFragments.push(trailing2);
       return;
     }
     if (
-      t.indexOf(`
+      chunk.indexOf(`
 `) === -1 &&
-      t.indexOf("\r") === -1
+      chunk.indexOf("\r") === -1
     ) {
-      a.push(t);
+      pendingFragments.push(chunk);
       return;
     }
-    a.push(t);
-    let joined = a.join("");
-    a.length = 0;
-    let i = m(joined);
-    i !== "" && a.push(i);
+    pendingFragments.push(chunk);
+    let input = pendingFragments.join("");
+    pendingFragments.length = 0;
+    let trailing = processLines(input);
+    if (trailing !== "") pendingFragments.push(trailing);
   }
-  function m(t) {
-    let e = 0;
-    if (t.indexOf("\r") === -1) {
-      let index = t.indexOf(
+  function processLines(chunk) {
+    let searchIndex = 0;
+    if (chunk.indexOf("\r") === -1) {
+      let lfIndex = chunk.indexOf(
         `
 `,
-        e,
+        searchIndex,
       );
-      for (; index !== -1;) {
-        if (e === index) {
-          (s > 0 && onEvent({ id: c, event: l, data: f }),
-            (c = void 0),
-            (f = ""),
-            (s = 0),
-            (l = void 0),
-            (e = index + 1),
-            (index = t.indexOf(
-              `
-`,
-              e,
-            )));
-          continue;
-        }
-        let code = t.charCodeAt(e);
-        if (L(t, e, code)) {
-          let r = t.charCodeAt(e + 5) === A ? e + 6 : e + 5,
-            sliced = t.slice(r, index);
-          if (s === 0 && t.charCodeAt(index + 1) === I) {
-            (onEvent({ id: c, event: l, data: sliced }),
-              (c = void 0),
-              (f = ""),
-              (l = void 0),
-              (e = index + 2),
-              (index = t.indexOf(
-                `
-`,
-                e,
-              )));
-            continue;
-          }
-          ((f =
-            s === 0
-              ? sliced
-              : `${f}
-${sliced}`),
-            s++);
-        } else
-          F(t, e, code)
-            ? (l = t.slice(t.charCodeAt(e + 6) === A ? e + 7 : e + 6, index) || void 0)
-            : g(t, e, index);
-        ((e = index + 1),
-          (index = t.indexOf(
+      for (; lfIndex !== -1;) {
+        if (searchIndex === lfIndex) {
+          if (dataLines > 0)
+            onEvent({
+              id,
+              event: eventType,
+              data,
+            });
+          id = undefined;
+          data = "";
+          dataLines = 0;
+          eventType = undefined;
+          searchIndex = lfIndex + 1;
+          lfIndex = chunk.indexOf(
             `
 `,
-            e,
-          )));
-      }
-      return t.slice(e);
-    }
-    for (; e < t.length;) {
-      let index = t.indexOf("\r", e),
-        index_2 = t.indexOf(
+            searchIndex,
+          );
+          continue;
+        }
+        let firstCharCode = chunk.charCodeAt(searchIndex);
+        if (isDataPrefix(chunk, searchIndex, firstCharCode)) {
+          let valueStart = chunk.charCodeAt(searchIndex + 5) === SPACE ? searchIndex + 6 : searchIndex + 5;
+          let value = chunk.slice(valueStart, lfIndex);
+          if (dataLines === 0 && chunk.charCodeAt(lfIndex + 1) === LF) {
+            onEvent({
+              id,
+              event: eventType,
+              data: value,
+            });
+            id = undefined;
+            data = "";
+            eventType = undefined;
+            searchIndex = lfIndex + 2;
+            lfIndex = chunk.indexOf(
+              `
+`,
+              searchIndex,
+            );
+            continue;
+          }
+          data =
+            dataLines === 0
+              ? value
+              : `${data}
+${value}`;
+          dataLines++;
+        } else if (isEventPrefix(chunk, searchIndex, firstCharCode))
+          eventType =
+            chunk.slice(
+              chunk.charCodeAt(searchIndex + 6) === SPACE ? searchIndex + 7 : searchIndex + 6,
+              lfIndex,
+            ) || undefined;
+        else parseLine(chunk, searchIndex, lfIndex);
+        searchIndex = lfIndex + 1;
+        lfIndex = chunk.indexOf(
           `
 `,
-          e,
-        ),
-        r = -1;
-      if (
-        (index !== -1 && index_2 !== -1
-          ? (r = index < index_2 ? index : index_2)
-          : index !== -1
-            ? index === t.length - 1
-              ? (r = -1)
-              : (r = index)
-            : index_2 !== -1 && (r = index_2),
-        r === -1)
-      )
-        break;
-      (g(t, e, r), (e = r + 1), t.charCodeAt(e - 1) === _ && t.charCodeAt(e) === I && e++);
+          searchIndex,
+        );
+      }
+      return chunk.slice(searchIndex);
     }
-    return t.slice(e);
+    for (; searchIndex < chunk.length;) {
+      let crIndex = chunk.indexOf("\r", searchIndex);
+      let lfIndex = chunk.indexOf(
+        `
+`,
+        searchIndex,
+      );
+      let lineEnd = -1;
+      if (crIndex !== -1 && lfIndex !== -1) lineEnd = crIndex < lfIndex ? crIndex : lfIndex;
+      else if (crIndex !== -1) {
+        if (crIndex === chunk.length - 1) lineEnd = -1;
+        else lineEnd = crIndex;
+      } else if (lfIndex !== -1) lineEnd = lfIndex;
+      if (lineEnd === -1) break;
+      parseLine(chunk, searchIndex, lineEnd);
+      searchIndex = lineEnd + 1;
+      if (chunk.charCodeAt(searchIndex - 1) === CR && chunk.charCodeAt(searchIndex) === LF) searchIndex++;
+    }
+    return chunk.slice(searchIndex);
   }
-  function g(t, e, i) {
-    if (e === i) {
-      P();
+  function parseLine(chunk, start, end) {
+    if (start === end) {
+      dispatchEvent();
       return;
     }
-    let code = t.charCodeAt(e);
-    if (L(t, e, code)) {
-      let p = t.charCodeAt(e + 5) === A ? e + 6 : e + 5,
-        sliced = t.slice(p, i);
-      ((f =
-        s === 0
-          ? sliced
-          : `${f}
-${sliced}`),
-        s++);
+    let firstCharCode = chunk.charCodeAt(start);
+    if (isDataPrefix(chunk, start, firstCharCode)) {
+      let valueStart = chunk.charCodeAt(start + 5) === SPACE ? start + 6 : start + 5;
+      let value2 = chunk.slice(valueStart, end);
+      data =
+        dataLines === 0
+          ? value2
+          : `${data}
+${value2}`;
+      dataLines++;
       return;
     }
-    if (F(t, e, code)) {
-      l = t.slice(t.charCodeAt(e + 6) === A ? e + 7 : e + 6, i) || void 0;
+    if (isEventPrefix(chunk, start, firstCharCode)) {
+      eventType =
+        chunk.slice(chunk.charCodeAt(start + 6) === SPACE ? start + 7 : start + 6, end) || undefined;
       return;
     }
-    if (code === 105 && t.charCodeAt(e + 1) === 100 && t.charCodeAt(e + 2) === 58) {
-      let sliced = t.slice(t.charCodeAt(e + 3) === A ? e + 4 : e + 3, i);
-      c = sliced.includes("\x00") ? void 0 : sliced;
+    if (firstCharCode === 105 && chunk.charCodeAt(start + 1) === 100 && chunk.charCodeAt(start + 2) === 58) {
+      let value2 = chunk.slice(chunk.charCodeAt(start + 3) === SPACE ? start + 4 : start + 3, end);
+      id = value2.includes("\x00") ? undefined : value2;
       return;
     }
-    if (code === 58) {
+    if (firstCharCode === 58) {
       if (onComment) {
-        let sliced = t.slice(e, i);
-        onComment(sliced.slice(t.charCodeAt(e + 1) === A ? 2 : 1));
+        let line2 = chunk.slice(start, end);
+        onComment(line2.slice(chunk.charCodeAt(start + 1) === SPACE ? 2 : 1));
       }
       return;
     }
-    let sliced = t.slice(e, i),
-      index = sliced.indexOf(":");
-    if (index === -1) {
-      E(sliced, "", sliced);
+    let line = chunk.slice(start, end);
+    let fieldSeparatorIndex = line.indexOf(":");
+    if (fieldSeparatorIndex === -1) {
+      processField(line, "", line);
       return;
     }
-    let sliced_2 = sliced.slice(0, index),
-      T = sliced.charCodeAt(index + 1) === A ? 2 : 1,
-      sliced_3 = sliced.slice(index + T);
-    E(sliced_2, sliced_3, sliced);
+    let field = line.slice(0, fieldSeparatorIndex);
+    let offset = line.charCodeAt(fieldSeparatorIndex + 1) === SPACE ? 2 : 1;
+    let value = line.slice(fieldSeparatorIndex + offset);
+    processField(field, value, line);
   }
-  function E(t, e, i) {
-    switch (t) {
+  function processField(field, value, line) {
+    switch (field) {
       case "event":
-        l = e || void 0;
+        eventType = value || undefined;
         break;
       case "data":
-        ((f =
-          s === 0
-            ? e
-            : `${f}
-${e}`),
-          s++);
+        data =
+          dataLines === 0
+            ? value
+            : `${data}
+${value}`;
+        dataLines++;
         break;
       case "id":
-        c = e.includes("\x00") ? void 0 : e;
+        id = value.includes("\x00") ? undefined : value;
         break;
       case "retry":
-        /^\d+$/.test(e)
-          ? onRetry(parseInt(e, 10))
-          : onError(
-              new ParseError(`Invalid \`retry\` value: "${e}"`, { type: "invalid-retry", value: e, line: i }),
-            );
+        if (/^\d+$/.test(value)) onRetry(parseInt(value, 10));
+        else
+          onError(
+            new ParseError(`Invalid \`retry\` value: "${value}"`, {
+              type: "invalid-retry",
+              value,
+              line,
+            }),
+          );
         break;
       default:
         onError(
-          new ParseError(`Unknown field "${t.length > 20 ? `${t.slice(0, 20)}\u2026` : t}"`, {
+          new ParseError(`Unknown field "${field.length > 20 ? `${field.slice(0, 20)}\u2026` : field}"`, {
             type: "unknown-field",
-            field: t,
-            value: e,
-            line: i,
+            field,
+            value,
+            line,
           }),
         );
         break;
     }
   }
-  function P() {
-    (s > 0 && onEvent({ id: c, event: l, data: f }), (c = void 0), (f = ""), (s = 0), (l = void 0));
+  function dispatchEvent() {
+    if (dataLines > 0)
+      onEvent({
+        id,
+        event: eventType,
+        data,
+      });
+    id = undefined;
+    data = "";
+    dataLines = 0;
+    eventType = undefined;
   }
-  function D(t = {}) {
-    if (t.consume && a.length > 0) {
-      let joined = a.join("");
-      g(joined, 0, joined.length);
+  function reset(options = {}) {
+    if (options.consume && pendingFragments.length > 0) {
+      let incompleteLine = pendingFragments.join("");
+      parseLine(incompleteLine, 0, incompleteLine.length);
     }
-    ((x = !0), (c = void 0), (f = ""), (s = 0), (l = void 0), (a.length = 0));
+    isFirstChunk = true;
+    id = undefined;
+    data = "";
+    dataLines = 0;
+    eventType = undefined;
+    pendingFragments.length = 0;
   }
-  return { feed: j, reset: D };
+  return {
+    feed,
+    reset,
+  };
 }
 //@ chunk-ccwj2pkk.js:2857-2987 esm-layout
-function L(n, o, v) {
+function isDataPrefix(chunk, i, firstCharCode) {
   return (
-    v === 100 &&
-    n.charCodeAt(o + 1) === 97 &&
-    n.charCodeAt(o + 2) === 116 &&
-    n.charCodeAt(o + 3) === 97 &&
-    n.charCodeAt(o + 4) === 58
+    firstCharCode === 100 &&
+    chunk.charCodeAt(i + 1) === 97 &&
+    chunk.charCodeAt(i + 2) === 116 &&
+    chunk.charCodeAt(i + 3) === 97 &&
+    chunk.charCodeAt(i + 4) === 58
   );
 }
 //@ chunk-ccwj2pkk.js:2987-3144 esm-layout
-function F(n, o, v) {
+function isEventPrefix(chunk, i, firstCharCode) {
   return (
-    v === 101 &&
-    n.charCodeAt(o + 1) === 118 &&
-    n.charCodeAt(o + 2) === 101 &&
-    n.charCodeAt(o + 3) === 110 &&
-    n.charCodeAt(o + 4) === 116 &&
-    n.charCodeAt(o + 5) === 58
+    firstCharCode === 101 &&
+    chunk.charCodeAt(i + 1) === 118 &&
+    chunk.charCodeAt(i + 2) === 101 &&
+    chunk.charCodeAt(i + 3) === 110 &&
+    chunk.charCodeAt(i + 4) === 116 &&
+    chunk.charCodeAt(i + 5) === 58
   );
 }
-
-export { wTt };
+export { createParser };

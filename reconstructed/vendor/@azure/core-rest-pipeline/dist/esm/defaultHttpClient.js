@@ -6,21 +6,21 @@
  * attribution: esm-fingerprint 1
  */
 import { Vs } from "../../../../@typespec/ts-http-runtime/dist/esm/policies/agentPolicy.js";
-import { Xo } from "./util/wrapAbortSignal.js";
+import { wrapAbortSignalLike } from "./util/wrapAbortSignal.js";
 
 //@ chunk-mrx6y2r5.js:62693-62897 esm-fingerprint
-function Ta() {
-  let e = Vs();
+function createDefaultHttpClient() {
+  let client = Vs();
   return {
-    async sendRequest(t) {
-      let { abortSignal: abortSignal, cleanup: cleanup } = t.abortSignal ? Xo(t.abortSignal) : {};
+    async sendRequest(request) {
+      let { abortSignal, cleanup } = request.abortSignal ? wrapAbortSignalLike(request.abortSignal) : {};
       try {
-        return ((t.abortSignal = abortSignal), await e.sendRequest(t));
+        request.abortSignal = abortSignal;
+        return await client.sendRequest(request);
       } finally {
-        cleanup === null || cleanup === void 0 || cleanup();
+        if (!(cleanup === null || cleanup === undefined)) cleanup();
       }
     },
   };
 }
-
-export { Ta };
+export { createDefaultHttpClient };

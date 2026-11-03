@@ -10,14 +10,15 @@
  */
 import { logForDebugging } from "../utils/debug.js";
 
+//@ chunk-24t3dkzb.js:6596-6720 fingerprint = ifNotInteger (1)
 /**
  * 值不是整数时记一条警告（Box 的 margin/padding/gap 等）。
  */
-//@ chunk-24t3dkzb.js:6596-6720 fingerprint = ifNotInteger (1)
 function ifNotInteger(value, name) {
-  if (value === void 0) return;
+  if (value === undefined) return;
   if (Number.isInteger(value)) return;
-  logForDebugging(`${name} should be an integer, got ${value}`, { level: "warn" });
+  logForDebugging(`${name} should be an integer, got ${value}`, {
+    level: "warn",
+  });
 }
-
 export { ifNotInteger };

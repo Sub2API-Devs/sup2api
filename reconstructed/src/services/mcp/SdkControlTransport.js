@@ -8,24 +8,27 @@
  * pieces: chunk-mdk8a5r0.js (5)
  * attribution: placement 1, fingerprint 2, layout 2
  */
-import { n_mdk8 } from "./client.js";
+import { SWALLOW_SYMBOL } from "./client.js";
 import { isPlainObject } from "../../utils/isPlainObject.js";
 
 //@ chunk-mdk8a5r0.js:226-284 placement
-function R4n(e) {
+/**
+ * 判断消息是否为带非空 id 的 JSON-RPC 请求。
+ */
+function isJsonRpcRequest(e) {
   return "method" in e && "id" in e && e.id !== null;
 }
+//@ chunk-mdk8a5r0.js:480-2760 fingerprint = SdkControlClientTransport (0.329)
 /**
  * SdkControlClientTransport：CLI 侧连接 SDK 宿主进程内 MCP 服务器的传输，消息经 control 通道 sendMcpMessage 转发。可带 manifest（initializeResult/toolsListResult）在本地重放 initialize 与首个 tools/list，不匹配时 dropManifest 并记录原因（outcome）。
  */
-//@ chunk-mdk8a5r0.js:480-2760 fingerprint = SdkControlClientTransport (0.329)
 class SdkControlClientTransport {
   serverName;
   sendMcpMessage;
-  isClosed = !1;
+  isClosed = false;
   manifestInitializeResult;
   manifestToolsListResult;
-  swallowNextInitializedNotification = !1;
+  swallowNextInitializedNotification = false;
   outcome;
   onclose;
   onerror;
@@ -33,33 +36,34 @@ class SdkControlClientTransport {
   constructor(serverName, sendMcpMessage, manifest) {
     this.serverName = serverName;
     this.sendMcpMessage = sendMcpMessage;
-    ((this.manifestInitializeResult = manifest?.initializeResult),
-      (this.manifestToolsListResult = manifest?.toolsListResult),
-      (this.outcome = manifest === void 0 ? "none" : "pending"));
+    this.manifestInitializeResult = manifest?.initializeResult;
+    this.manifestToolsListResult = manifest?.toolsListResult;
+    this.outcome = manifest === undefined ? "none" : "pending";
   }
   get manifestOutcome() {
     return this.outcome;
   }
   async start() {}
-  async send(e) {
+  async send(message) {
     if (this.isClosed) throw Error("Transport is closed");
-    let answerFromManifest = this.answerFromManifest(e);
-    if (answerFromManifest === n_mdk8) return;
-    if (answerFromManifest !== void 0) {
-      queueMicrotask(() => this.onmessage?.(answerFromManifest));
+    let t = this.answerFromManifest(message);
+    if (t === SWALLOW_SYMBOL) return;
+    if (t !== undefined) {
+      queueMicrotask(() => this.onmessage?.(t));
       return;
     }
-    let sendMcpMessage = await this.sendMcpMessage(this.serverName, e);
-    if (this.onmessage) this.onmessage(sendMcpMessage);
+    let response = await this.sendMcpMessage(this.serverName, message);
+    if (this.onmessage) this.onmessage(response);
   }
   async close() {
     if (this.isClosed) return;
-    ((this.isClosed = !0), this.onclose?.());
+    this.isClosed = true;
+    this.onclose?.();
   }
   answerFromManifest(e) {
     if (
-      this.manifestInitializeResult === void 0 &&
-      this.manifestToolsListResult === void 0 &&
+      this.manifestInitializeResult === undefined &&
+      this.manifestToolsListResult === undefined &&
       !this.swallowNextInitializedNotification
     )
       return;
@@ -70,14 +74,14 @@ class SdkControlClientTransport {
     switch (e.method) {
       case "initialize": {
         let manifestInitializeResult = this.manifestInitializeResult;
-        if (manifestInitializeResult === void 0 || !("id" in e)) {
+        if (manifestInitializeResult === undefined || !("id" in e)) {
           this.dropManifest("unexpected_message");
           return;
         }
-        this.manifestInitializeResult = void 0;
+        this.manifestInitializeResult = undefined;
         let params = e.params;
         if (
-          params === void 0 ||
+          params === undefined ||
           typeof params.protocolVersion !== "string" ||
           params.protocolVersion !== manifestInitializeResult.protocolVersion
         ) {
@@ -92,32 +96,40 @@ class SdkControlClientTransport {
           this.dropManifest("malformed_result");
           return;
         }
-        return (
-          (this.swallowNextInitializedNotification = !0),
-          (this.outcome = "replayed"),
-          { jsonrpc: "2.0", id: e.id, result: manifestInitializeResult }
-        );
+        this.swallowNextInitializedNotification = true;
+        this.outcome = "replayed";
+        return {
+          jsonrpc: "2.0",
+          id: e.id,
+          result: manifestInitializeResult,
+        };
       }
       case "notifications/initialized": {
         if (!this.swallowNextInitializedNotification) {
           this.dropManifest("unexpected_message");
           return;
         }
-        return ((this.swallowNextInitializedNotification = !1), n_mdk8);
+        this.swallowNextInitializedNotification = false;
+        return SWALLOW_SYMBOL;
       }
       case "tools/list": {
         let manifestToolsListResult = this.manifestToolsListResult;
         if (
-          manifestToolsListResult === void 0 ||
+          manifestToolsListResult === undefined ||
           !("id" in e) ||
           this.swallowNextInitializedNotification ||
-          (e.params !== void 0 && e.params.cursor !== void 0)
+          (e.params !== undefined && e.params.cursor !== undefined)
         ) {
           this.dropManifest("unexpected_message");
           return;
         }
-        if (((this.manifestToolsListResult = void 0), !isValidResultMeta(manifestToolsListResult))) return;
-        return { jsonrpc: "2.0", id: e.id, result: manifestToolsListResult };
+        this.manifestToolsListResult = undefined;
+        if (!isValidResultMeta(manifestToolsListResult)) return;
+        return {
+          jsonrpc: "2.0",
+          id: e.id,
+          result: manifestToolsListResult,
+        };
       }
       default: {
         this.dropManifest("unexpected_message");
@@ -125,56 +137,53 @@ class SdkControlClientTransport {
       }
     }
   }
-  dropManifest(e) {
-    if (
-      ((this.manifestInitializeResult = void 0),
-      (this.manifestToolsListResult = void 0),
-      (this.swallowNextInitializedNotification = !1),
-      this.outcome === "pending")
-    )
-      this.outcome = e;
+  dropManifest(outcome) {
+    this.manifestInitializeResult = undefined;
+    this.manifestToolsListResult = undefined;
+    this.swallowNextInitializedNotification = false;
+    if (this.outcome === "pending") this.outcome = outcome;
   }
 }
 //@ chunk-mdk8a5r0.js:2760-2813 layout
-function isEmptyCapabilities(e) {
-  return isPlainObject(e) && Object.keys(e).length === 0;
+function isEmptyCapabilities(capabilities) {
+  return isPlainObject(capabilities) && Object.keys(capabilities).length === 0;
 }
+//@ chunk-mdk8a5r0.js:2813-3070 layout
 /**
  * isValidResultMeta：校验结果 _meta（progressToken 类型、io.modelcontextprotocol/related-task.taskId）以决定 manifest 结果能否直接重放。
  */
-//@ chunk-mdk8a5r0.js:2813-3070 layout
 function isValidResultMeta(e) {
   let _meta = e._meta;
-  if (_meta === void 0) return !0;
-  if (!isPlainObject(_meta)) return !1;
-  let { progressToken: progressToken } = _meta;
-  if (progressToken !== void 0 && typeof progressToken !== "string" && typeof progressToken !== "number")
-    return !1;
+  if (_meta === undefined) return true;
+  if (!isPlainObject(_meta)) return false;
+  let { progressToken } = _meta;
+  if (progressToken !== undefined && typeof progressToken !== "string" && typeof progressToken !== "number")
+    return false;
   let s = _meta["io.modelcontextprotocol/related-task"];
-  return s === void 0 || (isPlainObject(s) && typeof s.taskId === "string");
+  return s === undefined || (isPlainObject(s) && typeof s.taskId === "string");
 }
+//@ chunk-mdk8a5r0.js:3070-3347 fingerprint = SdkControlServerTransport (1)
 /**
  * SdkControlServerTransport：SDK 宿主侧的服务器传输，send 直接调用 sendMcpMessage。
  */
-//@ chunk-mdk8a5r0.js:3070-3347 fingerprint = SdkControlServerTransport (1)
 class SdkControlServerTransport {
   sendMcpMessage;
-  isClosed = !1;
-  constructor(e) {
-    this.sendMcpMessage = e;
+  isClosed = false;
+  constructor(sendMcpMessage) {
+    this.sendMcpMessage = sendMcpMessage;
   }
   onclose;
   onerror;
   onmessage;
   async start() {}
-  async send(e) {
+  async send(message) {
     if (this.isClosed) throw Error("Transport is closed");
-    this.sendMcpMessage(e);
+    this.sendMcpMessage(message);
   }
   async close() {
     if (this.isClosed) return;
-    ((this.isClosed = !0), this.onclose?.());
+    this.isClosed = true;
+    this.onclose?.();
   }
 }
-
-export { SdkControlClientTransport, R4n, SdkControlServerTransport };
+export { SdkControlClientTransport, isJsonRpcRequest, SdkControlServerTransport };

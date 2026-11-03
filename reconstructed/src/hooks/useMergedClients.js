@@ -16,5 +16,4 @@ function mergeClients(initialClients, mcpClients) {
     return Ji([...initialClients, ...mcpClients], "name");
   return initialClients || [];
 }
-
 export { mergeClients };

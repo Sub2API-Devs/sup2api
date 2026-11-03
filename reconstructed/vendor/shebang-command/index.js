@@ -6,19 +6,18 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../runtime/bun-runtime.js";
-import { At } from "../shebang-regex/index.js";
+import { require_shebang_regex } from "../shebang-regex/index.js";
 
 //@ chunk-m4p5zn6n.js:4922-5128 cjs-fingerprint
-var _t = x(function (Si, Rt) {
-  var sr = At();
-  Rt.exports = (e = "") => {
-    let match = e.match(sr);
+var require_shebang_command = x(function (cjsExports, cjsModule) {
+  var shebangRegex = require_shebang_regex();
+  cjsModule.exports = (string = "") => {
+    let match = string.match(shebangRegex);
     if (!match) return null;
-    let [r, o] = match[0].replace(/#! ?/, "").split(" "),
-      s = r.split("/").pop();
-    if (s === "env") return o;
-    return o ? `${s} ${o}` : s;
+    let [path, argument] = match[0].replace(/#! ?/, "").split(" ");
+    let binary = path.split("/").pop();
+    if (binary === "env") return argument;
+    return argument ? `${binary} ${argument}` : binary;
   };
 });
-
-export { _t };
+export { require_shebang_command };

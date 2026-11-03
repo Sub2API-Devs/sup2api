@@ -12,20 +12,43 @@ import { Ar } from "../../../runtime/bun-runtime.js";
 import { CHROME_ROWS, LIST_CHROME_ROWS, LIST_GUTTER, MIN_LIST_ROWS } from "./permissionCardKinds.js";
 
 //@ chunk-s4bxxzsw.js:3715-3726 placement
-var iWn = {};
+/**
+ * 导出值：DIALOG_LAYOUT_EMPTY_1（空布局选项（占位））。
+ */
+var DIALOG_LAYOUT_EMPTY_1 = {};
 //@ chunk-s4bxxzsw.js:3726-3772 placement
-Ar(iWn, { CHROME_ROWS: () => CHROME_ROWS, default: () => iWn });
+Ar(DIALOG_LAYOUT_EMPTY_1, {
+  CHROME_ROWS: () => CHROME_ROWS,
+  default: () => DIALOG_LAYOUT_EMPTY_1,
+});
 //@ chunk-s4bxxzsw.js:3772-3783 placement
-var aWn = {};
+/**
+ * 导出值：DIALOG_LAYOUT_EMPTY_2（空布局选项（占位））。
+ */
+var DIALOG_LAYOUT_EMPTY_2 = {};
 //@ chunk-s4bxxzsw.js:3783-3834 placement
-Ar(aWn, { LIST_CHROME_ROWS: () => LIST_CHROME_ROWS, default: () => aWn });
+Ar(DIALOG_LAYOUT_EMPTY_2, {
+  LIST_CHROME_ROWS: () => LIST_CHROME_ROWS,
+  default: () => DIALOG_LAYOUT_EMPTY_2,
+});
 //@ chunk-s4bxxzsw.js:3834-3845 placement
-var lWn = {};
+/**
+ * 导出值：DIALOG_LAYOUT_EMPTY_3（空布局选项（占位））。
+ */
+var DIALOG_LAYOUT_EMPTY_3 = {};
 //@ chunk-s4bxxzsw.js:3845-3891 placement
-Ar(lWn, { LIST_GUTTER: () => LIST_GUTTER, default: () => lWn });
+Ar(DIALOG_LAYOUT_EMPTY_3, {
+  LIST_GUTTER: () => LIST_GUTTER,
+  default: () => DIALOG_LAYOUT_EMPTY_3,
+});
 //@ chunk-s4bxxzsw.js:3891-3902 placement
-var dWn = {};
+/**
+ * 导出值：DIALOG_LAYOUT_EMPTY_4（空布局选项（占位））。
+ */
+var DIALOG_LAYOUT_EMPTY_4 = {};
 //@ chunk-s4bxxzsw.js:3902-3950 placement
-Ar(dWn, { MIN_LIST_ROWS: () => MIN_LIST_ROWS, default: () => dWn });
-
-export { iWn, dWn, aWn, lWn };
+Ar(DIALOG_LAYOUT_EMPTY_4, {
+  MIN_LIST_ROWS: () => MIN_LIST_ROWS,
+  default: () => DIALOG_LAYOUT_EMPTY_4,
+});
+export { DIALOG_LAYOUT_EMPTY_1, DIALOG_LAYOUT_EMPTY_4, DIALOG_LAYOUT_EMPTY_2, DIALOG_LAYOUT_EMPTY_3 };

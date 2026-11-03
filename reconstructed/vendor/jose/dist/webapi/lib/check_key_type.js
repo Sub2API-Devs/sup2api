@@ -5,112 +5,120 @@
  * pieces: chunk-5h78gfwc.js (2)
  * attribution: esm-layout 2
  */
-import { te, rt, et, tt } from "./type_checks.js";
+import { isJWK, isSecretJWK, isPrivateJWK, tt } from "./type_checks.js";
 import { We } from "./key.js";
-import { Pe } from "../../node/esm/lib/invalid_key_input.js";
+import { withAlg } from "../../node/esm/lib/invalid_key_input.js";
 
 //@ chunk-5h78gfwc.js:28225-30586 esm-layout
-var Z = (e) => e?.[Symbol.toStringTag],
-  Te = (e, t, r) => {
-    if (t.use !== void 0) {
-      let n;
-      switch (r) {
-        case "sign":
-        case "verify":
-          n = "sig";
-          break;
-        case "encrypt":
-        case "decrypt":
-          n = "enc";
-          break;
-      }
-      if (t.use !== n)
-        throw TypeError(`Invalid key for this operation, its "use" must be "${n}" when present`);
+var tag_2 = (key) => key?.[Symbol.toStringTag];
+var jwkMatchesOp = (alg, key, usage) => {
+  if (key.use !== undefined) {
+    let expected;
+    switch (usage) {
+      case "sign":
+      case "verify":
+        expected = "sig";
+        break;
+      case "encrypt":
+      case "decrypt":
+        expected = "enc";
+        break;
     }
-    if (t.alg !== void 0 && t.alg !== e)
-      throw TypeError(`Invalid key for this operation, its "alg" must be "${e}" when present`);
-    if (Array.isArray(t.key_ops)) {
-      let n;
-      switch (!0) {
-        case r === "sign" || r === "verify":
-        case e === "dir":
-        case e.includes("CBC-HS"):
-          n = r;
-          break;
-        case e.startsWith("PBES2"):
-          n = "deriveBits";
-          break;
-        case /^A\d{3}(?:GCM)?(?:KW)?$/.test(e):
-          if (!e.includes("GCM") && e.endsWith("KW")) n = r === "encrypt" ? "wrapKey" : "unwrapKey";
-          else n = r;
-          break;
-        case r === "encrypt" && e.startsWith("RSA"):
-          n = "wrapKey";
-          break;
-        case r === "decrypt":
-          n = e.startsWith("RSA") ? "unwrapKey" : "deriveBits";
-          break;
-      }
-      if (n && t.key_ops?.includes?.(n) === !1)
-        throw TypeError(`Invalid key for this operation, its "key_ops" must include "${n}" when present`);
+    if (key.use !== expected)
+      throw TypeError(`Invalid key for this operation, its "use" must be "${expected}" when present`);
+  }
+  if (key.alg !== undefined && key.alg !== alg)
+    throw TypeError(`Invalid key for this operation, its "alg" must be "${alg}" when present`);
+  if (Array.isArray(key.key_ops)) {
+    let expectedKeyOp;
+    switch (true) {
+      case usage === "sign" || usage === "verify":
+      case alg === "dir":
+      case alg.includes("CBC-HS"):
+        expectedKeyOp = usage;
+        break;
+      case alg.startsWith("PBES2"):
+        expectedKeyOp = "deriveBits";
+        break;
+      case /^A\d{3}(?:GCM)?(?:KW)?$/.test(alg):
+        if (!alg.includes("GCM") && alg.endsWith("KW"))
+          expectedKeyOp = usage === "encrypt" ? "wrapKey" : "unwrapKey";
+        else expectedKeyOp = usage;
+        break;
+      case usage === "encrypt" && alg.startsWith("RSA"):
+        expectedKeyOp = "wrapKey";
+        break;
+      case usage === "decrypt":
+        expectedKeyOp = alg.startsWith("RSA") ? "unwrapKey" : "deriveBits";
+        break;
     }
-    return !0;
-  },
-  sr = (e, t, r) => {
-    if (t instanceof Uint8Array) return;
-    if (te(t)) {
-      if (rt(t) && Te(e, t, r)) return;
+    if (expectedKeyOp && key.key_ops?.includes?.(expectedKeyOp) === false)
       throw TypeError(
-        'JSON Web Key for symmetric algorithms must have JWK "kty" (Key Type) equal to "oct" and the JWK "k" (Key Value) present',
+        `Invalid key for this operation, its "key_ops" must include "${expectedKeyOp}" when present`,
       );
+  }
+  return true;
+};
+var symmetricTypeCheck = (alg, key, usage) => {
+  if (key instanceof Uint8Array) return;
+  if (isJWK(key)) {
+    if (isSecretJWK(key) && jwkMatchesOp(alg, key, usage)) return;
+    throw TypeError(
+      'JSON Web Key for symmetric algorithms must have JWK "kty" (Key Type) equal to "oct" and the JWK "k" (Key Value) present',
+    );
+  }
+  if (!We(key)) throw TypeError(withAlg(alg, key, "CryptoKey", "KeyObject", "JSON Web Key", "Uint8Array"));
+  if (key.type !== "secret")
+    throw TypeError(`${tag_2(key)} instances for symmetric algorithms must be of type "secret"`);
+};
+var asymmetricTypeCheck = (alg, key, usage) => {
+  if (isJWK(key))
+    switch (usage) {
+      case "decrypt":
+      case "sign":
+        if (isPrivateJWK(key) && jwkMatchesOp(alg, key, usage)) return;
+        throw TypeError("JSON Web Key for this operation must be a private JWK");
+      case "encrypt":
+      case "verify":
+        if (tt(key) && jwkMatchesOp(alg, key, usage)) return;
+        throw TypeError("JSON Web Key for this operation must be a public JWK");
     }
-    if (!We(t)) throw TypeError(Pe(e, t, "CryptoKey", "KeyObject", "JSON Web Key", "Uint8Array"));
-    if (t.type !== "secret")
-      throw TypeError(`${Z(t)} instances for symmetric algorithms must be of type "secret"`);
-  },
-  cr = (e, t, r) => {
-    if (te(t))
-      switch (r) {
-        case "decrypt":
-        case "sign":
-          if (et(t) && Te(e, t, r)) return;
-          throw TypeError("JSON Web Key for this operation must be a private JWK");
-        case "encrypt":
-        case "verify":
-          if (tt(t) && Te(e, t, r)) return;
-          throw TypeError("JSON Web Key for this operation must be a public JWK");
-      }
-    if (!We(t)) throw TypeError(Pe(e, t, "CryptoKey", "KeyObject", "JSON Web Key"));
-    if (t.type === "secret")
-      throw TypeError(`${Z(t)} instances for asymmetric algorithms must not be of type "secret"`);
-    if (t.type === "public")
-      switch (r) {
-        case "sign":
-          throw TypeError(`${Z(t)} instances for asymmetric algorithm signing must be of type "private"`);
-        case "decrypt":
-          throw TypeError(`${Z(t)} instances for asymmetric algorithm decryption must be of type "private"`);
-      }
-    if (t.type === "private")
-      switch (r) {
-        case "verify":
-          throw TypeError(`${Z(t)} instances for asymmetric algorithm verifying must be of type "public"`);
-        case "encrypt":
-          throw TypeError(`${Z(t)} instances for asymmetric algorithm encryption must be of type "public"`);
-      }
-  };
+  if (!We(key)) throw TypeError(withAlg(alg, key, "CryptoKey", "KeyObject", "JSON Web Key"));
+  if (key.type === "secret")
+    throw TypeError(`${tag_2(key)} instances for asymmetric algorithms must not be of type "secret"`);
+  if (key.type === "public")
+    switch (usage) {
+      case "sign":
+        throw TypeError(`${tag_2(key)} instances for asymmetric algorithm signing must be of type "private"`);
+      case "decrypt":
+        throw TypeError(
+          `${tag_2(key)} instances for asymmetric algorithm decryption must be of type "private"`,
+        );
+    }
+  if (key.type === "private")
+    switch (usage) {
+      case "verify":
+        throw TypeError(
+          `${tag_2(key)} instances for asymmetric algorithm verifying must be of type "public"`,
+        );
+      case "encrypt":
+        throw TypeError(
+          `${tag_2(key)} instances for asymmetric algorithm encryption must be of type "public"`,
+        );
+    }
+};
 //@ chunk-5h78gfwc.js:30586-30709 esm-layout
-function B(e, t, r) {
-  switch (e.substring(0, 2)) {
+function checkKeyType(alg, key, usage) {
+  switch (alg.substring(0, 2)) {
     case "A1":
     case "A2":
     case "di":
     case "HS":
     case "PB":
-      sr(e, t, r);
+      symmetricTypeCheck(alg, key, usage);
       break;
     default:
-      cr(e, t, r);
+      asymmetricTypeCheck(alg, key, usage);
   }
 }
-
-export { B };
+export { checkKeyType };

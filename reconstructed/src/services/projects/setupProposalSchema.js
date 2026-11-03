@@ -8,222 +8,233 @@
  * pieces: chunk-dz3q485w.js (10)
  * attribution: placement 10
  */
-import { o, zodStrictObject, U, A, E } from "../../../vendor/zod/v4/classic/schemas.js";
+import { string, zodStrictObject, _enum, array, E } from "../../../vendor/zod/v4/classic/schemas.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import { plural } from "../../utils/stringUtils.js";
 import { isNetworkPath } from "../../utils/fsSafety/networkPathCheck.js";
 
+//@ chunk-dz3q485w.js:36455-37532 placement
 /**
  * 设置提案的大小上限常量（摘要、说明、例行任务与线程各字段的字节数、条目数、证据计数、整体字节），以及可选颜色、颜色值与图标列表。
  */
-//@ chunk-dz3q485w.js:36455-37532 placement
-var MAX_SUMMARY_BYTES = 1024,
-  MAX_INSTRUCTIONS_CHARS = 8000,
-  MAX_ROUTINES = 3,
-  MAX_ROUTINE_NAME_BYTES = 200,
-  MAX_ROUTINE_DESCRIPTION_BYTES = 300,
-  MAX_CRON_BYTES = 128,
-  MAX_ROUTINE_PROMPT_BYTES = 2048,
-  MAX_THREADS = 4,
-  MAX_THREAD_TITLE_BYTES = 200,
-  MAX_THREAD_PROMPT_BYTES = 2048,
-  MAX_THREAD_DESCRIPTION_BYTES = 300,
-  MAX_THREAD_BASIS_BYTES = 200,
-  MAX_PROJECT_NAME_BYTES = 200,
-  MAX_SESSIONS_COUNTED = 1000,
-  MAX_WINDOW_DAYS = 365,
-  MAX_PROPOSAL_BYTES = 16384,
-  PROJECT_COLORS = ["red", "orange", "green", "aqua", "blue", "violet", "magenta"],
-  PROJECT_COLOR_HEX = {
-    red: "#e66767",
-    orange: "#eb6834",
-    green: "#35b231",
-    aqua: "#1baf7a",
-    blue: "#5598e7",
-    violet: "#9085e9",
-    magenta: "#e46191",
-  },
-  PROJECT_ICONS = [
-    "Projects",
-    "Folder",
-    "Code",
-    "Database",
-    "HandHeart",
-    "Beaker",
-    "Wrench",
-    "Activity",
-    "Chart",
-    "Team",
-    "Users",
-    "Book",
-    "Box",
-    "Note",
-    "File",
-    "Lightbulb",
-    "Palette",
-    "Star",
-    "Flag",
-    "Home",
-    "Sun",
-    "Clock",
-    "Calendar",
-    "Scroll",
-    "Moon",
-    "MoonStars",
-    "SunHorizon",
-    "Owl",
-    "Atom",
-    "DNA",
-    "Orbit",
-    "Globe",
-    "Cloud",
-    "Hammer",
-    "Key",
-    "Lock",
-    "Camera",
-    "Microphone",
-    "CoffeeCup",
-    "Gift",
-    "Ghost",
-    "GraduationCap",
-    "Library",
-    "Spreadsheet",
-    "Slides",
-    "Checklist",
-    "Clipboard",
-    "Image",
-    "Bookmark",
-    "Bank",
-    "Signpost",
-    "MapPin",
-    "Mailbox",
-    "Heart",
-    "Lightning",
-    "Shapes",
-    "Goal",
-    "Scale",
-    "Eye",
-    "Binoculars",
-    "Bullhorn",
-    "PaperPlane",
-    "ChartLine",
-    "Timer",
-  ],
-  PROJECT_ICONS_HINT =
-    "Projects, Folder, Code, Database, HandHeart, Beaker, Wrench, Activity, Chart, Team, Users, Book, Box, Note, File, Lightbulb, Palette, Star, Flag, Home, Sun, Clock, Calendar, Scroll";
+var MAX_SUMMARY_BYTES = 1024;
+var MAX_INSTRUCTIONS_CHARS = 8000;
+var MAX_ROUTINES = 3;
+var MAX_ROUTINE_NAME_BYTES = 200;
+var MAX_ROUTINE_DESCRIPTION_BYTES = 300;
+var MAX_CRON_BYTES = 128;
+var MAX_ROUTINE_PROMPT_BYTES = 2048;
+var MAX_THREADS = 4;
+var MAX_THREAD_TITLE_BYTES = 200;
+var MAX_THREAD_PROMPT_BYTES = 2048;
+var MAX_THREAD_DESCRIPTION_BYTES = 300;
+var MAX_THREAD_BASIS_BYTES = 200;
+var MAX_PROJECT_NAME_BYTES = 200;
+var MAX_SESSIONS_COUNTED = 1000;
+var MAX_WINDOW_DAYS = 365;
+var MAX_PROPOSAL_BYTES = 16384;
+var PROJECT_COLORS = ["red", "orange", "green", "aqua", "blue", "violet", "magenta"];
+var PROJECT_COLOR_HEX = {
+  red: "#e66767",
+  orange: "#eb6834",
+  green: "#35b231",
+  aqua: "#1baf7a",
+  blue: "#5598e7",
+  violet: "#9085e9",
+  magenta: "#e46191",
+};
+var PROJECT_ICONS = [
+  "Projects",
+  "Folder",
+  "Code",
+  "Database",
+  "HandHeart",
+  "Beaker",
+  "Wrench",
+  "Activity",
+  "Chart",
+  "Team",
+  "Users",
+  "Book",
+  "Box",
+  "Note",
+  "File",
+  "Lightbulb",
+  "Palette",
+  "Star",
+  "Flag",
+  "Home",
+  "Sun",
+  "Clock",
+  "Calendar",
+  "Scroll",
+  "Moon",
+  "MoonStars",
+  "SunHorizon",
+  "Owl",
+  "Atom",
+  "DNA",
+  "Orbit",
+  "Globe",
+  "Cloud",
+  "Hammer",
+  "Key",
+  "Lock",
+  "Camera",
+  "Microphone",
+  "CoffeeCup",
+  "Gift",
+  "Ghost",
+  "GraduationCap",
+  "Library",
+  "Spreadsheet",
+  "Slides",
+  "Checklist",
+  "Clipboard",
+  "Image",
+  "Bookmark",
+  "Bank",
+  "Signpost",
+  "MapPin",
+  "Mailbox",
+  "Heart",
+  "Lightning",
+  "Shapes",
+  "Goal",
+  "Scale",
+  "Eye",
+  "Binoculars",
+  "Bullhorn",
+  "PaperPlane",
+  "ChartLine",
+  "Timer",
+];
+var PROJECT_ICONS_HINT =
+  "Projects, Folder, Code, Database, HandHeart, Beaker, Wrench, Activity, Chart, Team, Users, Book, Box, Note, File, Lightbulb, Palette, Star, Flag, Home, Sun, Clock, Calendar, Scroll";
 //@ chunk-dz3q485w.js:37532-37658 placement
 function boundedText(e, n = 1) {
-  return o()
+  return string()
     .min(n)
     .max(e)
-    .refine((s) => Buffer.byteLength(s, "utf8") <= e, { message: `must be at most ${e} bytes` });
+    .refine((s) => Buffer.byteLength(s, "utf8") <= e, {
+      message: `must be at most ${e} bytes`,
+    });
 }
+//@ chunk-dz3q485w.js:37658-38370 placement
 /**
  * 设置提案的 zod schema：例行任务、建议线程、整体提案（名称/图标/颜色/摘要/说明/证据），以及线程负责人与产出类型的显示文案。
  */
-//@ chunk-dz3q485w.js:37658-38370 placement
 var routineSchema = DoctorLazy(() =>
-    zodStrictObject({
-      name: boundedText(MAX_ROUTINE_NAME_BYTES),
-      cron_expression: boundedText(MAX_CRON_BYTES),
-      prompt: boundedText(MAX_ROUTINE_PROMPT_BYTES),
-      description: boundedText(MAX_ROUTINE_DESCRIPTION_BYTES, 0).optional(),
-    }),
-  ),
-  threadSuggestionSchema = DoctorLazy(() =>
-    zodStrictObject({
-      title: boundedText(MAX_THREAD_TITLE_BYTES),
-      prompt: boundedText(MAX_THREAD_PROMPT_BYTES),
-      description: boundedText(MAX_THREAD_DESCRIPTION_BYTES),
-      basis: boundedText(MAX_THREAD_BASIS_BYTES),
-      who: U(["claude", "you"]),
-      produces: U(["pr", "doc", "decision"]),
-    }),
-  ),
-  setupProposalSchema = DoctorLazy(() =>
-    zodStrictObject({
-      name: boundedText(MAX_PROJECT_NAME_BYTES).optional(),
-      icon: U(PROJECT_ICONS).optional(),
-      color: U(PROJECT_COLORS).optional(),
-      summary: boundedText(MAX_SUMMARY_BYTES, 0).optional(),
-      instructions: o().max(MAX_INSTRUCTIONS_CHARS).optional(),
-      routines: A(routineSchema()).max(MAX_ROUTINES).optional(),
-      sessions: A(threadSuggestionSchema()).max(MAX_THREADS).optional(),
-      evidence: zodStrictObject({
-        sessions_matched: E().int().min(0).max(MAX_SESSIONS_COUNTED).optional(),
-        sessions_considered: E().int().min(0).max(MAX_SESSIONS_COUNTED).optional(),
-        window_days: E().int().min(0).max(MAX_WINDOW_DAYS).optional(),
-      }).optional(),
-    }),
-  ),
-  THREAD_WHO_LABELS = { claude: "Claude", you: "Needs you" },
-  THREAD_PRODUCES_LABELS = { pr: "PR", doc: "Doc", decision: "Decision" };
+  zodStrictObject({
+    name: boundedText(MAX_ROUTINE_NAME_BYTES),
+    cron_expression: boundedText(MAX_CRON_BYTES),
+    prompt: boundedText(MAX_ROUTINE_PROMPT_BYTES),
+    description: boundedText(MAX_ROUTINE_DESCRIPTION_BYTES, 0).optional(),
+  }),
+);
+var threadSuggestionSchema = DoctorLazy(() =>
+  zodStrictObject({
+    title: boundedText(MAX_THREAD_TITLE_BYTES),
+    prompt: boundedText(MAX_THREAD_PROMPT_BYTES),
+    description: boundedText(MAX_THREAD_DESCRIPTION_BYTES),
+    basis: boundedText(MAX_THREAD_BASIS_BYTES),
+    who: _enum(["claude", "you"]),
+    produces: _enum(["pr", "doc", "decision"]),
+  }),
+);
+var setupProposalSchema = DoctorLazy(() =>
+  zodStrictObject({
+    name: boundedText(MAX_PROJECT_NAME_BYTES).optional(),
+    icon: _enum(PROJECT_ICONS).optional(),
+    color: _enum(PROJECT_COLORS).optional(),
+    summary: boundedText(MAX_SUMMARY_BYTES, 0).optional(),
+    instructions: string().max(MAX_INSTRUCTIONS_CHARS).optional(),
+    routines: array(routineSchema()).max(MAX_ROUTINES).optional(),
+    sessions: array(threadSuggestionSchema()).max(MAX_THREADS).optional(),
+    evidence: zodStrictObject({
+      sessions_matched: E().int().min(0).max(MAX_SESSIONS_COUNTED).optional(),
+      sessions_considered: E().int().min(0).max(MAX_SESSIONS_COUNTED).optional(),
+      window_days: E().int().min(0).max(MAX_WINDOW_DAYS).optional(),
+    }).optional(),
+  }),
+);
+var THREAD_WHO_LABELS = {
+  claude: "Claude",
+  you: "Needs you",
+};
+var THREAD_PRODUCES_LABELS = {
+  pr: "PR",
+  doc: "Doc",
+  decision: "Decision",
+};
+//@ chunk-dz3q485w.js:38370-40009 placement
 /**
  * 把设置提案格式化为给用户确认的纯文本：名称/图标/颜色、摘要、建议线程（负责人与产出）、例行任务（cron UTC）、项目说明、各线程与例行任务的起始指令，以及证据计数。
  */
-//@ chunk-dz3q485w.js:38370-40009 placement
 function formatProposalForReview(proposal, opts = {}) {
-  let lines = [],
-    section = (c) => {
-      if (lines.length > 0) lines.push("");
-      lines.push(c);
-    };
-  if (proposal.name !== void 0 || proposal.icon !== void 0 || proposal.color !== void 0) {
+  let lines = [];
+  let section = (c) => {
+    if (lines.length > 0) lines.push("");
+    lines.push(c);
+  };
+  if (proposal.name !== undefined || proposal.icon !== undefined || proposal.color !== undefined) {
     let filtered = [
-      proposal.name !== void 0 ? `name \u201C${proposal.name}\u201D` : null,
-      proposal.icon !== void 0 ? `icon ${proposal.icon}` : null,
-      proposal.color !== void 0 ? `color ${proposal.color}` : null,
+      proposal.name !== undefined ? `name \u201C${proposal.name}\u201D` : null,
+      proposal.icon !== undefined ? `icon ${proposal.icon}` : null,
+      proposal.color !== undefined ? `color ${proposal.color}` : null,
     ].filter((h) => h !== null);
     lines.push(`Name, icon and color: ${filtered.join(" \xB7 ")}`);
   }
-  if (proposal.summary !== void 0 && proposal.summary.trim() !== "")
+  if (proposal.summary !== undefined && proposal.summary.trim() !== "")
     lines.push(`Summary: ${proposal.summary.trim()}`);
   let threads = proposal.sessions ?? [];
-  if (threads.length > 0)
-    (section(`Threads (${threads.length}):`),
-      threads.forEach((c, h) => {
-        lines.push(
-          `  ${h + 1}. ${c.title}  [${THREAD_WHO_LABELS[c.who]} \xB7 ${THREAD_PRODUCES_LABELS[c.produces]}]`,
-          `     ${c.description}`,
-          `     from: ${c.basis}`,
-        );
-      }));
+  if (threads.length > 0) {
+    section(`Threads (${threads.length}):`);
+    threads.forEach((thread, h) => {
+      lines.push(
+        `  ${h + 1}. ${thread.title}  [${THREAD_WHO_LABELS[thread.who]} \xB7 ${THREAD_PRODUCES_LABELS[thread.produces]}]`,
+        `     ${thread.description}`,
+        `     from: ${thread.basis}`,
+      );
+    });
+  }
   let routines = proposal.routines ?? [];
   if (routines.length > 0) {
     section(`Routines (${routines.length}; off until you turn one on):`);
-    for (let c of routines)
+    for (let routine of routines)
       lines.push(
-        `  \xB7 ${c.name} \u2014 ${c.cron_expression} UTC${c.description !== void 0 && c.description !== "" ? ` \u2014 ${c.description}` : ""}`,
+        `  \xB7 ${routine.name} \u2014 ${routine.cron_expression} UTC${routine.description !== undefined && routine.description !== "" ? ` \u2014 ${routine.description}` : ""}`,
       );
   }
-  if (proposal.instructions !== void 0 && proposal.instructions.trim() !== "") {
+  if (proposal.instructions !== undefined && proposal.instructions.trim() !== "") {
     section(
-      opts.existingProject === !0
+      opts.existingProject === true
         ? "Project instructions (replace the project\u2019s current ones when applied):"
         : "Project instructions (set on the project on Yes):",
     );
-    for (let c of proposal.instructions.trim().split(`
+    for (let line of proposal.instructions.trim().split(`
 `))
-      lines.push(`  ${c}`);
+      lines.push(`  ${line}`);
   }
-  if (threads.length > 0)
-    (section("Thread instructions (what each thread starts with):"),
-      threads.forEach((c, h) => {
-        lines.push(`  ${h + 1}. ${c.title}`);
-        for (let b of c.prompt.trim().split(`
+  if (threads.length > 0) {
+    section("Thread instructions (what each thread starts with):");
+    threads.forEach((thread, h) => {
+      lines.push(`  ${h + 1}. ${thread.title}`);
+      for (let line of thread.prompt.trim().split(`
 `))
-          lines.push(`     ${b}`);
-      }));
+        lines.push(`     ${line}`);
+    });
+  }
   if (routines.length > 0) {
     section("Routine instructions:");
-    for (let c of routines) {
-      lines.push(`  \xB7 ${c.name}`);
-      for (let h of c.prompt.trim().split(`
+    for (let routine of routines) {
+      lines.push(`  \xB7 ${routine.name}`);
+      for (let line of routine.prompt.trim().split(`
 `))
-        lines.push(`     ${h}`);
+        lines.push(`     ${line}`);
     }
   }
-  if (proposal.evidence?.sessions_matched !== void 0)
+  if (proposal.evidence?.sessions_matched !== undefined)
     section(
       `The draft counts ${proposal.evidence.sessions_matched} of this folder\u2019s sessions as this stream of work.`,
     );
@@ -232,27 +243,28 @@ function formatProposalForReview(proposal, opts = {}) {
 }
 //@ chunk-dz3q485w.js:40009-40301 placement
 function proposalContentsSummary(e) {
-  let n = [],
-    s = e.sessions?.length ?? 0;
+  let n = [];
+  let s = e.sessions?.length ?? 0;
   if (s > 0) n.push(`${s} ${plural(s, "thread")}`);
   let r = e.routines?.length ?? 0;
   if (r > 0) n.push(`${r} ${plural(r, "routine")}`);
-  if (e.instructions !== void 0 && e.instructions.trim() !== "") n.push("instructions");
+  if (e.instructions !== undefined && e.instructions.trim() !== "") n.push("instructions");
   if (n.length === 0) n.push("summary only");
   return n.join(", ");
 }
+//@ chunk-dz3q485w.js:40301-41182 placement
 /**
  * 把设置提案渲染为 Markdown 简报：标题、摘要、说明（无项目名时注明只是提议）、待开启线程与例行任务，指令以引用块形式列出。
  */
-//@ chunk-dz3q485w.js:40301-41182 placement
 function proposalToMarkdown(proposal, projectName) {
   let lines = [
     projectName === null
       ? BRIEF_HEADING
       : `# ${(proposal.name ?? projectName).replace(/[^\p{L}\p{M}\p{N} ._-]+/gu, " ").trim() || "Project"} \u2014 project setup`,
   ];
-  if (proposal.summary !== void 0 && proposal.summary.trim() !== "") lines.push("", proposal.summary.trim());
-  if (proposal.instructions !== void 0 && proposal.instructions.trim() !== "")
+  if (proposal.summary !== undefined && proposal.summary.trim() !== "")
+    lines.push("", proposal.summary.trim());
+  if (proposal.instructions !== undefined && proposal.instructions.trim() !== "")
     lines.push(
       "",
       ...(projectName === null
@@ -264,39 +276,39 @@ function proposalToMarkdown(proposal, projectName) {
   let threads = proposal.sessions ?? [];
   if (threads.length > 0) {
     lines.push("", "## Threads to start");
-    for (let l of threads)
+    for (let thread of threads)
       lines.push(
         "",
-        `### ${l.title}`,
+        `### ${thread.title}`,
         "",
-        `${THREAD_WHO_LABELS[l.who]} \xB7 ${THREAD_PRODUCES_LABELS[l.produces]} \u2014 ${l.description} _From: ${l.basis}._`,
+        `${THREAD_WHO_LABELS[thread.who]} \xB7 ${THREAD_PRODUCES_LABELS[thread.produces]} \u2014 ${thread.description} _From: ${thread.basis}._`,
         "",
-        ...l.prompt
+        ...thread.prompt
           .trim()
           .split(
             `
 `,
           )
-          .map((c) => `> ${c}`),
+          .map((line) => `> ${line}`),
       );
   }
   let routines = proposal.routines ?? [];
   if (routines.length > 0) {
     lines.push("", "## Routines");
-    for (let l of routines)
+    for (let routine of routines)
       lines.push(
         "",
-        `### ${l.name}`,
+        `### ${routine.name}`,
         "",
-        `\`${l.cron_expression}\` UTC${l.description !== void 0 && l.description !== "" ? ` \u2014 ${l.description}` : ""}`,
+        `\`${routine.cron_expression}\` UTC${routine.description !== undefined && routine.description !== "" ? ` \u2014 ${routine.description}` : ""}`,
         "",
-        ...l.prompt
+        ...routine.prompt
           .trim()
           .split(
             `
 `,
           )
-          .map((c) => `> ${c}`),
+          .map((line) => `> ${line}`),
       );
   }
   return (
@@ -307,10 +319,10 @@ function proposalToMarkdown(proposal, projectName) {
   );
 }
 //@ chunk-dz3q485w.js:41182-41405 placement
-var BRIEF_HEADING = "# Project setup brief",
-  PROPOSED_INSTRUCTIONS_HEADING = "## Proposed instructions",
-  PROPOSAL_ONLY_NOTE =
-    "A proposal only. Saving this brief set no instructions on the project: the user applies them from the project\u2019s setup card, where the card offers them.";
+var BRIEF_HEADING = "# Project setup brief";
+var PROPOSED_INSTRUCTIONS_HEADING = "## Proposed instructions";
+var PROPOSAL_ONLY_NOTE =
+  "A proposal only. Saving this brief set no instructions on the project: the user applies them from the project\u2019s setup card, where the card offers them.";
 //@ chunk-dz3q485w.js:41405-41507 placement
 function normalizeInlineText(e) {
   return isNetworkPath(e.normalize("NFKC").replace(/[\s\u2800]+/gu, " "))
@@ -330,7 +342,7 @@ function normalizeMultilineText(e) {
       `
 `,
     )
-    .map((n) => isNetworkPath(n).trimEnd())
+    .map((line) => isNetworkPath(line).trimEnd())
     .join(
       `
 `,
@@ -338,19 +350,19 @@ function normalizeMultilineText(e) {
     .trim()
     .replace(/\uFF20/g, "@");
 }
+//@ chunk-dz3q485w.js:41672-42510 placement
 /**
  * 规范化设置提案：单行字段压缩空白，多行字段统一换行并去除行尾空白，cron 表达式只保留合法字符，空字段去掉。
  */
-//@ chunk-dz3q485w.js:41672-42510 placement
 function normalizeProposal(proposal) {
-  let result = {},
-    name = proposal.name !== void 0 ? normalizeInlineText(proposal.name) : "";
+  let result = {};
+  let name = proposal.name !== undefined ? normalizeInlineText(proposal.name) : "";
   if (name !== "") result.name = name;
-  if (proposal.icon !== void 0) result.icon = proposal.icon;
-  if (proposal.color !== void 0) result.color = proposal.color;
-  let summary = proposal.summary !== void 0 ? normalizeMultilineText(proposal.summary) : "";
+  if (proposal.icon !== undefined) result.icon = proposal.icon;
+  if (proposal.color !== undefined) result.color = proposal.color;
+  let summary = proposal.summary !== undefined ? normalizeMultilineText(proposal.summary) : "";
   if (summary !== "") result.summary = summary;
-  let instructions = proposal.instructions !== void 0 ? normalizeMultilineText(proposal.instructions) : "";
+  let instructions = proposal.instructions !== undefined ? normalizeMultilineText(proposal.instructions) : "";
   if (instructions !== "") result.instructions = instructions;
   let routines = (proposal.routines ?? []).map((h) => ({
     name: normalizeInlineText(h.name),
@@ -360,8 +372,10 @@ function normalizeProposal(proposal) {
       .join(" ")
       .replace(/[^0-9*\/,\- ]/g, "?"),
     prompt: normalizeMultilineText(h.prompt),
-    ...(h.description !== void 0 &&
-      normalizeInlineText(h.description) !== "" && { description: normalizeInlineText(h.description) }),
+    ...(h.description !== undefined &&
+      normalizeInlineText(h.description) !== "" && {
+        description: normalizeInlineText(h.description),
+      }),
   }));
   if (routines.length > 0) result.routines = routines;
   let threads = (proposal.sessions ?? []).map((h) => ({
@@ -373,11 +387,12 @@ function normalizeProposal(proposal) {
     produces: h.produces,
   }));
   if (threads.length > 0) result.sessions = threads;
-  if (proposal.evidence !== void 0 && Object.keys(proposal.evidence).length > 0)
-    result.evidence = { ...proposal.evidence };
+  if (proposal.evidence !== undefined && Object.keys(proposal.evidence).length > 0)
+    result.evidence = {
+      ...proposal.evidence,
+    };
   return result;
 }
-
 export {
   setupProposalSchema,
   normalizeProposal,

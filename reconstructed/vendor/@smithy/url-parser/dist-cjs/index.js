@@ -6,25 +6,24 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { a } from "../../querystring-parser/dist-cjs/index.js";
+import { require_querystring_parser } from "../../querystring-parser/dist-cjs/index.js";
 
 //@ chunk-k057sjda.js:515-772 cjs-fingerprint
-var P4 = x(function (y) {
-  var l = a(),
-    i = (t) => {
-      if (typeof t === "string") return i(new URL(t));
-      let { hostname: hostname, pathname: pathname, port: port, protocol: protocol, search: search } = t,
-        p;
-      if (search) p = l.parseQueryString(search);
-      return {
-        hostname: hostname,
-        port: port ? parseInt(port) : void 0,
-        protocol: protocol,
-        path: pathname,
-        query: p,
-      };
+var require_url_parser = x(function (cjsExports) {
+  var import_querystring_parser = require_querystring_parser();
+  var parseUrl = (url) => {
+    if (typeof url === "string") return parseUrl(new URL(url));
+    let { hostname, pathname, port, protocol, search } = url;
+    let query;
+    if (search) query = import_querystring_parser.parseQueryString(search);
+    return {
+      hostname,
+      port: port ? parseInt(port) : undefined,
+      protocol,
+      path: pathname,
+      query,
     };
-  y.parseUrl = i;
+  };
+  cjsExports.parseUrl = parseUrl;
 });
-
-export { P4 };
+export { require_url_parser };

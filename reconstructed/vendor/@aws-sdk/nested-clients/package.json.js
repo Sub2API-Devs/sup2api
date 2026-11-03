@@ -8,8 +8,8 @@
 import { x } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-kjtqtk57.js:226-4128 cjs-fingerprint
-var _An = x(function (e, s) {
-  s.exports = {
+var require_package = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = {
     name: "@aws-sdk/nested-clients",
     version: "3.936.0",
     description: "Nested clients for AWS SDK packages.",
@@ -28,9 +28,14 @@ var _An = x(function (e, s) {
       test: "yarn g:vitest run",
       "test:watch": "yarn g:vitest watch",
     },
-    engines: { node: ">=18.0.0" },
-    sideEffects: !1,
-    author: { name: "AWS SDK for JavaScript Team", url: "https://aws.amazon.com/javascript/" },
+    engines: {
+      node: ">=18.0.0",
+    },
+    sideEffects: false,
+    author: {
+      name: "AWS SDK for JavaScript Team",
+      url: "https://aws.amazon.com/javascript/",
+    },
     license: "Apache-2.0",
     dependencies: {
       "@aws-crypto/sha256-browser": "5.2.0",
@@ -78,7 +83,11 @@ var _An = x(function (e, s) {
       rimraf: "3.0.2",
       typescript: "~5.8.3",
     },
-    typesVersions: { "<4.0": { "dist-types/*": ["dist-types/ts3.4/*"] } },
+    typesVersions: {
+      "<4.0": {
+        "dist-types/*": ["dist-types/ts3.4/*"],
+      },
+    },
     files: [
       "./signin.d.ts",
       "./signin.js",
@@ -126,5 +135,4 @@ var _An = x(function (e, s) {
     },
   };
 });
-
-export { _An };
+export { require_package };

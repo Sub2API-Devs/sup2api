@@ -6,101 +6,125 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { Tn } from "./forge.js";
-import { Zn } from "./util.js";
-import { Ci } from "./random.js";
-import { cu } from "./sha1.js";
+import { require_forge } from "./forge.js";
+import { require_util } from "./util.js";
+import { require_random } from "./random.js";
+import { require_sha1 } from "./sha1.js";
 
 //@ chunk-fq0cr76a.js:115528-117883 cjs-fingerprint
-var SS = x(function (Tfe, nA) {
-  var Ao = Tn();
-  Zn();
-  Ci();
-  cu();
-  var tA = (nA.exports = Ao.pkcs1 = Ao.pkcs1 || {});
-  tA.encode_rsa_oaep = function (e, n, r) {
-    var s, h, y, b;
-    if (typeof r === "string") ((s = r), (h = arguments[3] || void 0), (y = arguments[4] || void 0));
-    else if (r) {
-      if (((s = r.label || void 0), (h = r.seed || void 0), (y = r.md || void 0), r.mgf1 && r.mgf1.md))
-        b = r.mgf1.md;
+var require_pkcs1 = x(function (cjsExports, cjsModule) {
+  var forge = require_forge();
+  require_util();
+  require_random();
+  require_sha1();
+  var pkcs1 = (cjsModule.exports = forge.pkcs1 = forge.pkcs1 || {});
+  pkcs1.encode_rsa_oaep = function (key, message, options) {
+    var label;
+    var seed;
+    var md;
+    var mgf1Md;
+    if (typeof options === "string") {
+      label = options;
+      seed = arguments[3] || undefined;
+      md = arguments[4] || undefined;
+    } else if (options) {
+      label = options.label || undefined;
+      seed = options.seed || undefined;
+      md = options.md || undefined;
+      if (options.mgf1 && options.mgf1.md) mgf1Md = options.mgf1.md;
     }
-    if (!y) y = Ao.md.sha1.create();
-    else y.start();
-    if (!b) b = y;
-    var ceil = Math.ceil(e.n.bitLength() / 8),
-      w = ceil - 2 * y.digestLength - 2;
-    if (n.length > w) {
-      var R = Error("RSAES-OAEP input message length is too long.");
-      throw ((R.length = n.length), (R.maxLength = w), R);
+    if (!md) md = forge.md.sha1.create();
+    else md.start();
+    if (!mgf1Md) mgf1Md = md;
+    var keyLength = Math.ceil(key.n.bitLength() / 8);
+    var maxLength = keyLength - 2 * md.digestLength - 2;
+    if (message.length > maxLength) {
+      var error = Error("RSAES-OAEP input message length is too long.");
+      error.length = message.length;
+      error.maxLength = maxLength;
+      throw error;
     }
-    if (!s) s = "";
-    y.update(s, "raw");
-    var digest = y.digest(),
-      O = "",
-      L = w - n.length;
-    for (var V = 0; V < L; V++) O += "\x00";
-    var K = digest.getBytes() + O + "\x01" + n;
-    if (!h) h = Ao.random.getBytes(y.digestLength);
-    else if (h.length !== y.digestLength) {
-      var R = Error("Invalid RSAES-OAEP seed. The seed length must match the digest length.");
-      throw ((R.seedLength = h.length), (R.digestLength = y.digestLength), R);
+    if (!label) label = "";
+    md.update(label, "raw");
+    var lHash = md.digest();
+    var PS = "";
+    var PS_length = maxLength - message.length;
+    for (var i = 0; i < PS_length; i++) PS += "\x00";
+    var DB = lHash.getBytes() + PS + "\x01" + message;
+    if (!seed) seed = forge.random.getBytes(md.digestLength);
+    else if (seed.length !== md.digestLength) {
+      var error = Error("Invalid RSAES-OAEP seed. The seed length must match the digest length.");
+      error.seedLength = seed.length;
+      error.digestLength = md.digestLength;
+      throw error;
     }
-    var q = tm(h, ceil - y.digestLength - 1, b),
-      xorBytes = Ao.util.xorBytes(K, q, K.length),
-      J = tm(xorBytes, y.digestLength, b),
-      xorBytes_2 = Ao.util.xorBytes(h, J, h.length);
-    return "\x00" + xorBytes_2 + xorBytes;
+    var dbMask = rsa_mgf1(seed, keyLength - md.digestLength - 1, mgf1Md);
+    var maskedDB = forge.util.xorBytes(DB, dbMask, DB.length);
+    var seedMask = rsa_mgf1(maskedDB, md.digestLength, mgf1Md);
+    var maskedSeed = forge.util.xorBytes(seed, seedMask, seed.length);
+    return "\x00" + maskedSeed + maskedDB;
   };
-  tA.decode_rsa_oaep = function (e, n, r) {
-    var s, h, y;
-    if (typeof r === "string") ((s = r), (h = arguments[3] || void 0));
-    else if (r) {
-      if (((s = r.label || void 0), (h = r.md || void 0), r.mgf1 && r.mgf1.md)) y = r.mgf1.md;
+  pkcs1.decode_rsa_oaep = function (key, em, options) {
+    var label;
+    var md;
+    var mgf1Md;
+    if (typeof options === "string") {
+      label = options;
+      md = arguments[3] || undefined;
+    } else if (options) {
+      label = options.label || undefined;
+      md = options.md || undefined;
+      if (options.mgf1 && options.mgf1.md) mgf1Md = options.mgf1.md;
     }
-    var ceil = Math.ceil(e.n.bitLength() / 8);
-    if (n.length !== ceil) {
-      var Z = Error("RSAES-OAEP encoded message length is invalid.");
-      throw ((Z.length = n.length), (Z.expectedLength = ceil), Z);
+    var keyLength = Math.ceil(key.n.bitLength() / 8);
+    if (em.length !== keyLength) {
+      var error = Error("RSAES-OAEP encoded message length is invalid.");
+      error.length = em.length;
+      error.expectedLength = keyLength;
+      throw error;
     }
-    if (h === void 0) h = Ao.md.sha1.create();
-    else h.start();
-    if (!y) y = h;
-    if (ceil < 2 * h.digestLength + 2) throw Error("RSAES-OAEP key is too short for the hash function.");
-    if (!s) s = "";
-    h.update(s, "raw");
-    var bytes = h.digest().getBytes(),
-      charAt = n.charAt(0),
-      substring = n.substring(1, h.digestLength + 1),
-      substring_2 = n.substring(1 + h.digestLength),
-      O = tm(substring_2, h.digestLength, y),
-      xorBytes = Ao.util.xorBytes(substring, O, substring.length),
-      V = tm(xorBytes, ceil - h.digestLength - 1, y),
-      xorBytes_2 = Ao.util.xorBytes(substring_2, V, substring_2.length),
-      substring_3 = xorBytes_2.substring(0, h.digestLength),
-      Z = charAt !== "\x00";
-    for (var J = 0; J < h.digestLength; ++J) Z |= bytes.charAt(J) !== substring_3.charAt(J);
-    var ie = 1,
-      digestLength = h.digestLength;
-    for (var digestLength_2 = h.digestLength; digestLength_2 < xorBytes_2.length; digestLength_2++) {
-      var code = xorBytes_2.charCodeAt(digestLength_2),
-        me = (code & 1) ^ 1,
-        Ne = ie ? 65534 : 0;
-      ((Z |= code & Ne), (ie = ie & me), (digestLength += ie));
+    if (md === undefined) md = forge.md.sha1.create();
+    else md.start();
+    if (!mgf1Md) mgf1Md = md;
+    if (keyLength < 2 * md.digestLength + 2)
+      throw Error("RSAES-OAEP key is too short for the hash function.");
+    if (!label) label = "";
+    md.update(label, "raw");
+    var lHash = md.digest().getBytes();
+    var y = em.charAt(0);
+    var maskedSeed = em.substring(1, md.digestLength + 1);
+    var maskedDB = em.substring(1 + md.digestLength);
+    var seedMask = rsa_mgf1(maskedDB, md.digestLength, mgf1Md);
+    var seed = forge.util.xorBytes(maskedSeed, seedMask, maskedSeed.length);
+    var dbMask = rsa_mgf1(seed, keyLength - md.digestLength - 1, mgf1Md);
+    var db = forge.util.xorBytes(maskedDB, dbMask, maskedDB.length);
+    var lHashPrime = db.substring(0, md.digestLength);
+    var error = y !== "\x00";
+    for (var i = 0; i < md.digestLength; ++i) error |= lHash.charAt(i) !== lHashPrime.charAt(i);
+    var in_ps = 1;
+    var index = md.digestLength;
+    for (var j = md.digestLength; j < db.length; j++) {
+      var code = db.charCodeAt(j);
+      var is_0 = (code & 1) ^ 1;
+      var error_mask = in_ps ? 65534 : 0;
+      error |= code & error_mask;
+      in_ps = in_ps & is_0;
+      index += in_ps;
     }
-    if (Z || xorBytes_2.charCodeAt(digestLength) !== 1) throw Error("Invalid RSAES-OAEP padding.");
-    return xorBytes_2.substring(digestLength + 1);
+    if (error || db.charCodeAt(index) !== 1) throw Error("Invalid RSAES-OAEP padding.");
+    return db.substring(index + 1);
   };
-  function tm(e, n, r) {
-    if (!r) r = Ao.md.sha1.create();
-    var s = "",
-      ceil = Math.ceil(n / r.digestLength);
-    for (var y = 0; y < ceil; ++y) {
-      var fromCharCode = String.fromCharCode((y >> 24) & 255, (y >> 16) & 255, (y >> 8) & 255, y & 255);
-      (r.start(), r.update(e + fromCharCode), (s += r.digest().getBytes()));
+  function rsa_mgf1(seed, maskLength, hash) {
+    if (!hash) hash = forge.md.sha1.create();
+    var t = "";
+    var count = Math.ceil(maskLength / hash.digestLength);
+    for (var i = 0; i < count; ++i) {
+      var c = String.fromCharCode((i >> 24) & 255, (i >> 16) & 255, (i >> 8) & 255, i & 255);
+      hash.start();
+      hash.update(seed + c);
+      t += hash.digest().getBytes();
     }
-    return s.substring(0, n);
+    return t.substring(0, maskLength);
   }
 });
-
-export { SS };
+export { require_pkcs1 };

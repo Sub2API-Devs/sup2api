@@ -8,25 +8,40 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:213926-214804 cjs-fingerprint
-var cr = x(function (xE, or) {
-  function Ud(e) {
+var require_jboss_cli = x(function (cjsExports, cjsModule) {
+  function jbossCli(hljs) {
     let n = {
-        className: "params",
-        begin: /\(/,
-        end: /\)/,
-        contains: [
-          {
-            begin: /[\w-]+ *=/,
-            returnBegin: !0,
-            relevance: 0,
-            contains: [{ className: "attr", begin: /[\w-]+/ }],
-          },
-        ],
-        relevance: 0,
-      },
-      a = { className: "function", begin: /:[\w\-.]+/, relevance: 0 },
-      s = { className: "string", begin: /\B([\/.])[\w\-.\/=]+/ },
-      o = { className: "params", begin: /--[\w\-=\/]+/ };
+      className: "params",
+      begin: /\(/,
+      end: /\)/,
+      contains: [
+        {
+          begin: /[\w-]+ *=/,
+          returnBegin: true,
+          relevance: 0,
+          contains: [
+            {
+              className: "attr",
+              begin: /[\w-]+/,
+            },
+          ],
+        },
+      ],
+      relevance: 0,
+    };
+    let OPERATION = {
+      className: "function",
+      begin: /:[\w\-.]+/,
+      relevance: 0,
+    };
+    let PATH = {
+      className: "string",
+      begin: /\B([\/.])[\w\-.\/=]+/,
+    };
+    let COMMAND_PARAMS = {
+      className: "params",
+      begin: /--[\w\-=\/]+/,
+    };
     return {
       name: "JBoss CLI",
       aliases: ["wildfly-cli"],
@@ -36,10 +51,9 @@ var cr = x(function (xE, or) {
           "alias batch cd clear command connect connection-factory connection-info data-source deploy deployment-info deployment-overlay echo echo-dmr help history if jdbc-driver-info jms-queue|20 jms-topic|20 ls patch pwd quit read-attribute read-operation reload rollout-plan run-batch set shutdown try unalias undeploy unset version xa-data-source",
         literal: "true false",
       },
-      contains: [e.HASH_COMMENT_MODE, e.QUOTE_STRING_MODE, o, a, s, n],
+      contains: [hljs.HASH_COMMENT_MODE, hljs.QUOTE_STRING_MODE, COMMAND_PARAMS, OPERATION, PATH, n],
     };
   }
-  or.exports = Ud;
+  cjsModule.exports = jbossCli;
 });
-
-export { cr };
+export { require_jboss_cli };

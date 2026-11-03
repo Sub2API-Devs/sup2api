@@ -8,86 +8,93 @@
  * pieces: chunk-e6aww6q8.js (5)
  * attribution: placement 5
  */
-import { m2 } from "../../remote/tools/protocolConstants.js";
+import { isRequestComputerFolderTool } from "../../remote/tools/protocolConstants.js";
 import { isAttachAnnounceWaitOn } from "../../services/remoteTools/servingGates.js";
 import { RemoteBackgroundCommands } from "../../services/remoteTools/backgroundCommands.js";
 import { logForDebugging } from "../debug.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { lit as lit_2 } from "../../services/analytics/safeMetadata.js";
-import { r4o } from "../../remote/tools/toolHostsNotice.js";
+import { attachStateSchema } from "../../remote/tools/toolHostsNotice.js";
 import { safeParseJSON } from "../json.js";
 
+//@ chunk-e6aww6q8.js:3753706-3753982 placement
 /**
  * 等待下一次宿主通告、中止或超时。
  */
-//@ chunk-e6aww6q8.js:3753706-3753982 placement
 function waitForAnnounce(e, n, r) {
-  return new Promise((s) => {
+  return new Promise((resolve) => {
     let h = (L) => {
-        (clearTimeout(w), onNextAnnounce(), n.removeEventListener("abort", y), s(L));
-      },
-      y = () => h("aborted"),
-      onNextAnnounce = e.onNextAnnounce(() => h("announced")),
-      w = setTimeout((L) => L("slice"), r, h);
-    if ((n.addEventListener("abort", y, { once: !0 }), n.aborted)) h("aborted");
+      clearTimeout(timer);
+      S();
+      n.removeEventListener("abort", y);
+      resolve(L);
+    };
+    let y = () => h("aborted");
+    let S = e.onNextAnnounce(() => h("announced"));
+    let timer = setTimeout((L) => L("slice"), r, h);
+    n.addEventListener("abort", y, {
+      once: true,
+    });
+    if (n.aborted) h("aborted");
   });
 }
 //@ chunk-e6aww6q8.js:3753982-3753995 placement
-var gUr = 5000;
+var MAX_REMOTE_COMMAND_LISTING_MS = 5000;
 //@ chunk-e6aww6q8.js:3753995-3754675 placement
-async function waitForFolderAttached({
-  toolState: toolState,
-  fullToolName: fullToolName,
-  content: content,
-  signal: signal,
-}) {
+async function waitForFolderAttached({ toolState, fullToolName, content, signal }) {
   try {
     if (
-      !m2(fullToolName) ||
+      !isRequestComputerFolderTool(fullToolName) ||
       signal.aborted ||
       !isAttachAnnounceWaitOn() ||
       !hasAttachedState(content) ||
-      hUr(toolState)
+      hasAttachedRemoteCommands(toolState)
     )
       return;
-    let now = Date.now(),
-      y = await waitForAnnounce(toolState.get(RemoteBackgroundCommands), signal, gUr),
-      S = Date.now() - now;
-    (logForDebugging(
+    let now = Date.now();
+    let y = await waitForAnnounce(
+      toolState.get(RemoteBackgroundCommands),
+      signal,
+      MAX_REMOTE_COMMAND_LISTING_MS,
+    );
+    let S = Date.now() - now;
+    logForDebugging(
       `[remote-tools] held the folder request's "attached" result ${S} ms for the computer's announcement: ${y === "announced" ? "it arrived" : y === "aborted" ? "the call was aborted first" : "none arrived in time"}`,
-    ),
-      logEvent("tengu_remote_tool_targets", {
-        event: lit_2("attach_result_announce_wait"),
-        source: lit_2("session"),
-        announce_arrived: y === "announced",
-        waited_ms: S,
-      }));
+    );
+    logEvent("tengu_remote_tool_targets", {
+      event: lit_2("attach_result_announce_wait"),
+      source: lit_2("session"),
+      announce_arrived: y === "announced",
+      waited_ms: S,
+    });
   } catch (error) {
     logForDebugging(
       `[remote-tools] the wait for the computer's announcement after "attached" failed: ${error instanceof Error ? error.message : String(error)}`,
-      { level: "error" },
+      {
+        level: "error",
+      },
     );
   }
 }
 //@ chunk-e6aww6q8.js:3754675-3754773 placement
-function hUr(e) {
+function hasAttachedRemoteCommands(toolState) {
   try {
-    let entries = e.get(RemoteBackgroundCommands).entries();
+    let entries = toolState.get(RemoteBackgroundCommands).entries();
     return Array.isArray(entries) && entries.length > 0;
   } catch {
-    return !1;
+    return false;
   }
 }
+//@ chunk-e6aww6q8.js:3754773-3755059 placement
 /**
  * 工具结果中是否有 state 为 attached 的 JSON。
  */
-//@ chunk-e6aww6q8.js:3754773-3755059 placement
-function hasAttachedState(e) {
+function hasAttachedState(content) {
   return (
-    typeof e === "string"
-      ? [e]
-      : Array.isArray(e)
-        ? e.flatMap((r) =>
+    typeof content === "string"
+      ? [content]
+      : Array.isArray(content)
+        ? content.flatMap((r) =>
             typeof r === "object" &&
             r !== null &&
             "type" in r &&
@@ -99,9 +106,8 @@ function hasAttachedState(e) {
           )
         : []
   ).some((r) => {
-    let safeParse = r4o().safeParse(safeParseJSON(r, !1));
-    return safeParse.success && safeParse.data.state === "attached";
+    let s = attachStateSchema().safeParse(safeParseJSON(r, false));
+    return s.success && s.data.state === "attached";
   });
 }
-
 export { waitForAnnounce, waitForFolderAttached };

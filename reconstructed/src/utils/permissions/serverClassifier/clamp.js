@@ -9,240 +9,322 @@
  * attribution: placement 6
  */
 import {
-  o$e,
-  Dao,
-  DP,
-  Mao,
-  xao,
-  Pao,
-  Oao,
-  n$e,
-  Iao,
-  pTt,
-  fTt,
-  mTt,
-  Eao,
-  hTt,
-  yTt,
-  JUr,
-  s3n,
+  MAX_SESSION_TITLES,
+  MAX_ARTIFACT_PATH_LENGTH,
+  MAX_CONTEXT_TEXT_LENGTH,
+  MAX_SAVED_RULES,
+  MAX_TURN_TEXT_LENGTH,
+  MAX_TURN_ATTACHMENT_LENGTH,
+  MAX_SESSION_IDS,
+  MAX_FILESYSTEM_PATH_LENGTH,
+  MAX_ARTIFACT_SLUGS,
+  MAX_RULES_PER_LIST,
+  MAX_RULE_PATTERN_LENGTH,
+  MAX_USER_IDENTITY_LENGTH,
+  MAX_TRUSTED_DIR_ENTRIES,
+  MAX_DROPPED_ENTRIES,
+  MAX_PATH_FIELD_LENGTH,
+  MAX_PERMISSION_MODE_LENGTH,
+  MAX_PLATFORM_LENGTH,
 } from "./schemas.js";
-import { w$o } from "./context.js";
+import { fitsContextLimits } from "./context.js";
 import { jsonStringify } from "../../slowOperations.js";
 import { xr } from "../../../../vendor/lodash-es/_inlinedHelpers.js";
 
+//@ chunk-e6aww6q8.js:137136-139612 placement
 /**
  * 收紧发给分类器的 Artifact 状态：截断过长字符串与列表、能力过大时只留键、保留最近的若干 slug/路径条目；整体仍超上限时成半删减，出现截断时标记 truncated。
  */
-//@ chunk-e6aww6q8.js:137136-139612 placement
 function clampArtifactClassifierState(e) {
-  let truncated = e.truncated === !0,
-    clampString = (we, Ee = o$e) => {
-      if (we.length <= Ee) return we;
-      return ((truncated = !0), we.slice(0, Ee));
-    },
-    clampList = (we, Ee) => {
-      if (we.length > Ee) truncated = !0;
-      return we.slice(0, Ee);
-    },
-    filterAndClamp = (we, Ee, Ae, Ie = o$e) => {
-      let filtered = we.filter((We) => Ae(We).length <= Ie);
-      if (filtered.length !== we.length) truncated = !0;
-      return clampList(filtered, Ee);
-    },
-    keepRecentEntries = (we, Ee, Ae) => {
-      let filtered = we.filter(([Me]) => Me.length <= Ae);
-      if (filtered.length !== we.length || filtered.length > Ee) truncated = !0;
-      return filtered.slice(Math.max(0, filtered.length - Ee));
-    },
-    clampCapabilities = (we) => {
-      if (W_e(we) <= Dao) return { capabilities: we };
-      return (
-        (truncated = !0),
-        { capabilities: Object.fromEntries(Object.keys(we).map((Ee) => [Ee, {}])), capabilities_cut: !0 }
-      );
-    },
-    clampConnectors = (we) => {
-      if (we === void 0) return {};
-      if (!w$o(we)) return ((truncated = !0), {});
-      return { endpoint_connectors: [...we] };
-    },
-    clampShare = ({ endpoint_connectors: endpoint_connectors, ...Ee }) => ({
-      ...Ee,
-      ...clampConnectors(endpoint_connectors),
-      mode: clampString(Ee.mode, DP),
-      ...(Ee.role !== void 0 && { role: clampString(Ee.role, DP) }),
-      ...(Ee.artifact_kind !== void 0 && { artifact_kind: clampString(Ee.artifact_kind, DP) }),
-      ...(Ee.live_paths !== void 0 && { live_paths: filterAndClamp(Ee.live_paths, Mao, (Ae) => Ae) }),
-      ...(Ee.capabilities !== void 0 && clampCapabilities(Ee.capabilities)),
+  let truncated = e.truncated === true;
+  let clampString = (we, Ee = MAX_SESSION_TITLES) => {
+    if (we.length <= Ee) return we;
+    truncated = true;
+    return we.slice(0, Ee);
+  };
+  let clampList = (we, Ee) => {
+    if (we.length > Ee) truncated = true;
+    return we.slice(0, Ee);
+  };
+  let filterAndClamp = (we, Ee, Ae, Ie = MAX_SESSION_TITLES) => {
+    let filtered = we.filter((We) => Ae(We).length <= Ie);
+    if (filtered.length !== we.length) truncated = true;
+    return clampList(filtered, Ee);
+  };
+  let keepRecentEntries = (we, Ee, Ae) => {
+    let filtered = we.filter(([Me]) => Me.length <= Ae);
+    if (filtered.length !== we.length || filtered.length > Ee) truncated = true;
+    return filtered.slice(Math.max(0, filtered.length - Ee));
+  };
+  let clampCapabilities = (capabilities) => {
+    if (jsonByteLength(capabilities) <= MAX_ARTIFACT_PATH_LENGTH)
+      return {
+        capabilities,
+      };
+    truncated = true;
+    return {
+      capabilities: Object.fromEntries(Object.keys(capabilities).map((key) => [key, {}])),
+      capabilities_cut: true,
+    };
+  };
+  let clampConnectors = (endpointConnectors) => {
+    if (endpointConnectors === undefined) return {};
+    if (!fitsContextLimits(endpointConnectors)) {
+      truncated = true;
+      return {};
+    }
+    return {
+      endpoint_connectors: [...endpointConnectors],
+    };
+  };
+  let clampShare = ({ endpoint_connectors: endpointConnectors, ...Ee }) => ({
+    ...Ee,
+    ...clampConnectors(endpointConnectors),
+    mode: clampString(Ee.mode, MAX_CONTEXT_TEXT_LENGTH),
+    ...(Ee.role !== undefined && {
+      role: clampString(Ee.role, MAX_CONTEXT_TEXT_LENGTH),
     }),
-    fromEntries = Object.fromEntries(
-      keepRecentEntries(Object.entries(e.by_slug), xao, DP).map(([we, Ee]) => [
+    ...(Ee.artifact_kind !== undefined && {
+      artifact_kind: clampString(Ee.artifact_kind, MAX_CONTEXT_TEXT_LENGTH),
+    }),
+    ...(Ee.live_paths !== undefined && {
+      live_paths: filterAndClamp(Ee.live_paths, MAX_SAVED_RULES, (Ae) => Ae),
+    }),
+    ...(Ee.capabilities !== undefined && clampCapabilities(Ee.capabilities)),
+  });
+  let bySlug = Object.fromEntries(
+    keepRecentEntries(Object.entries(e.by_slug), MAX_TURN_TEXT_LENGTH, MAX_CONTEXT_TEXT_LENGTH).map(
+      ([we, Ee]) => [
         we,
         {
           ...Ee,
-          ...(Ee.share !== void 0 && { share: clampShare(Ee.share) }),
-          ...(Ee.attested !== void 0 && { attested: clampString(Ee.attested, DP) }),
-        },
-      ]),
-    ),
-    fromEntries_2 = Object.fromEntries(
-      keepRecentEntries(Object.entries(e.by_path), Pao, o$e).map(([we, Ee]) => [
-        we,
-        {
-          ...(Ee.slug !== void 0 && Ee.slug.length <= DP && { slug: Ee.slug }),
-          ...(Ee.thumbnail_named !== void 0 && {
-            thumbnail_named: filterAndClamp(Ee.thumbnail_named, Oao, (Ae) => Ae),
+          ...(Ee.share !== undefined && {
+            share: clampShare(Ee.share),
+          }),
+          ...(Ee.attested !== undefined && {
+            attested: clampString(Ee.attested, MAX_CONTEXT_TEXT_LENGTH),
           }),
         },
-      ]),
+      ],
     ),
-    session = e.session,
-    clamped = {
-      by_slug: fromEntries,
-      by_path: fromEntries_2,
-      live_docs: filterAndClamp(
-        filterAndClamp(
-          filterAndClamp(e.live_docs, 1 / 0, (we) => we.slug, DP),
-          1 / 0,
-          (we) => we.live_path,
-        ),
-        n$e,
-        (we) => we.working_copy,
+  );
+  let byPath = Object.fromEntries(
+    keepRecentEntries(Object.entries(e.by_path), MAX_TURN_ATTACHMENT_LENGTH, MAX_SESSION_TITLES).map(
+      ([we, Ee]) => [
+        we,
+        {
+          ...(Ee.slug !== undefined &&
+            Ee.slug.length <= MAX_CONTEXT_TEXT_LENGTH && {
+              slug: Ee.slug,
+            }),
+          ...(Ee.thumbnail_named !== undefined && {
+            thumbnail_named: filterAndClamp(Ee.thumbnail_named, MAX_SESSION_IDS, (Ae) => Ae),
+          }),
+        },
+      ],
+    ),
+  );
+  let session = e.session;
+  let clamped = {
+    by_slug: bySlug,
+    by_path: byPath,
+    live_docs: filterAndClamp(
+      filterAndClamp(
+        filterAndClamp(e.live_docs, 1 / 0, (we) => we.slug, MAX_CONTEXT_TEXT_LENGTH),
+        1 / 0,
+        (we) => we.live_path,
       ),
-      room_armed: filterAndClamp(e.room_armed, n$e, (we) => we),
-      type_reads: Object.fromEntries(keepRecentEntries(Object.entries(e.type_reads), n$e, DP)),
-      ...(e.last_publish !== void 0 && {
-        last_publish: { slug: clampString(e.last_publish.slug, DP), env: e.last_publish.env },
-      }),
-      session: {
-        ...session,
-        viewer_origin: clampString(session.viewer_origin),
-        ...(session.dev_viewer_origin !== void 0 && {
-          dev_viewer_origin: clampString(session.dev_viewer_origin),
-        }),
-        scratchpad_dir: session.scratchpad_dir === null ? null : clampString(session.scratchpad_dir),
-        ...(session.tool_results_dir !== void 0 && {
-          tool_results_dir: clampString(session.tool_results_dir),
-        }),
+      MAX_FILESYSTEM_PATH_LENGTH,
+      (we) => we.working_copy,
+    ),
+    room_armed: filterAndClamp(e.room_armed, MAX_FILESYSTEM_PATH_LENGTH, (we) => we),
+    type_reads: Object.fromEntries(
+      keepRecentEntries(Object.entries(e.type_reads), MAX_FILESYSTEM_PATH_LENGTH, MAX_CONTEXT_TEXT_LENGTH),
+    ),
+    ...(e.last_publish !== undefined && {
+      last_publish: {
+        slug: clampString(e.last_publish.slug, MAX_CONTEXT_TEXT_LENGTH),
+        env: e.last_publish.env,
       },
+    }),
+    session: {
+      ...session,
+      viewer_origin: clampString(session.viewer_origin),
+      ...(session.dev_viewer_origin !== undefined && {
+        dev_viewer_origin: clampString(session.dev_viewer_origin),
+      }),
+      scratchpad_dir: session.scratchpad_dir === null ? null : clampString(session.scratchpad_dir),
+      ...(session.tool_results_dir !== undefined && {
+        tool_results_dir: clampString(session.tool_results_dir),
+      }),
     },
-    dropHalfKeys = (we) => {
-      let keys = Object.keys(we);
-      if (keys.length === 0) return !1;
-      for (let Ae of keys.slice(0, Math.ceil(keys.length / 2))) delete we[Ae];
-      return !0;
-    };
-  while (W_e(clamped) > Iao) {
-    truncated = !0;
+  };
+  let dropHalfKeys = (we) => {
+    let keys = Object.keys(we);
+    if (keys.length === 0) return false;
+    for (let Ae of keys.slice(0, Math.ceil(keys.length / 2))) delete we[Ae];
+    return true;
+  };
+  while (jsonByteLength(clamped) > MAX_ARTIFACT_SLUGS) {
+    truncated = true;
     let [we, Ee] =
-      W_e(clamped.by_slug) >= W_e(clamped.by_path)
+      jsonByteLength(clamped.by_slug) >= jsonByteLength(clamped.by_path)
         ? [clamped.by_slug, clamped.by_path]
         : [clamped.by_path, clamped.by_slug];
     if (dropHalfKeys(we) || dropHalfKeys(Ee)) continue;
     if (clamped.live_docs.length + clamped.room_armed.length > 0) {
-      ((clamped.live_docs = clamped.live_docs.slice(0, clamped.live_docs.length >> 1)),
-        (clamped.room_armed = clamped.room_armed.slice(0, clamped.room_armed.length >> 1)));
+      clamped.live_docs = clamped.live_docs.slice(0, clamped.live_docs.length >> 1);
+      clamped.room_armed = clamped.room_armed.slice(0, clamped.room_armed.length >> 1);
       continue;
     }
     break;
   }
-  return { ...clamped, ...(truncated && { truncated: !0 }) };
+  return {
+    ...clamped,
+    ...(truncated && {
+      truncated: true,
+    }),
+  };
 }
 //@ chunk-e6aww6q8.js:139612-139659 placement
-function W_e(e) {
+/**
+ * jsonByteLength：JSON 字节长度。
+ */
+function jsonByteLength(e) {
   return Buffer.byteLength(jsonStringify(e));
 }
 //@ chunk-e6aww6q8.js:139659-139733 placement
-function _Tt(e, n, r, s) {
+function truncateWithFlag(e, n, r, s) {
   if (e.length <= n) return e;
-  return ((r[s] = !0), e.slice(0, n));
+  r[s] = true;
+  return e.slice(0, n);
 }
 //@ chunk-e6aww6q8.js:139733-139793 placement
-function STt(e, n, r) {
+function addDroppedCount(e, n, r) {
   if (r > 0) e.dropped[n] = (e.dropped[n] ?? 0) + r;
 }
+//@ chunk-e6aww6q8.js:139793-142959 placement
 /**
  * 收紧分类器结论：路径或身份受限时把允许改为询问或拒绝。
  */
-//@ chunk-e6aww6q8.js:139793-142959 placement
 function clampClassifierVerdict(e, n, r) {
-  let s = n,
-    h = 0,
-    y = { bytes: 0, allowDropped: 0 };
+  let s = n;
+  let h = 0;
+  let y = {
+    bytes: 0,
+    allowDropped: 0,
+  };
   for (;;) {
     let S = {
-        pathClamped: !1,
-        identityClamped: !1,
-        listCapped: !1,
-        spellingsShed: !1,
-        dropped: { ...e.dropped },
+      pathClamped: false,
+      identityClamped: false,
+      listCapped: false,
+      spellingsShed: false,
+      dropped: {
+        ...e.dropped,
       },
-      w = (Me) => _Tt(Me, pTt, S, "pathClamped"),
-      L = (Me) => ({
-        rule: Me.rule,
-        ...(Me.canonical !== void 0 && { canonical: Me.canonical }),
-        source: Me.source,
-        ...(Me.root !== void 0 && { root: Me.root === null ? null : w(Me.root) }),
-        ...(Me.pattern !== void 0 && { pattern: Me.pattern }),
+    };
+    let w = (Me) => truncateWithFlag(Me, MAX_RULES_PER_LIST, S, "pathClamped");
+    let L = (Me) => ({
+      rule: Me.rule,
+      ...(Me.canonical !== undefined && {
+        canonical: Me.canonical,
       }),
-      G = (Me, We) => {
-        let ze = Me === "allow" ? fTt : pTt,
-          filtered = We.filter((Je) => Je.rule.length <= ze);
-        if ((STt(S, Me, We.length - filtered.length), Me !== "allow" || filtered.length <= s))
-          return filtered.map(L);
-        return (STt(S, Me, filtered.length - s), filtered.slice(0, s).map(L));
-      },
-      q = () => e.truncated === !0 || S.pathClamped || S.identityClamped || S.listCapped || S.spellingsShed,
-      Z = (Me) => {
-        if (h >= 2 && Me.resolved.length > 0) S.spellingsShed = !0;
-        return { path: w(Me.path), resolved: h >= 2 ? [] : Me.resolved.map(w) };
-      },
-      sliced = e.trusted_directories.additional.slice(0, mTt);
-    if (sliced.length < e.trusted_directories.additional.length) S.listCapped = !0;
-    let mapped = e.trusted_directories.network.slice(0, mTt).map(w);
-    if (mapped.length < e.trusted_directories.network.length) S.listCapped = !0;
+      source: Me.source,
+      ...(Me.root !== undefined && {
+        root: Me.root === null ? null : w(Me.root),
+      }),
+      ...(Me.pattern !== undefined && {
+        pattern: Me.pattern,
+      }),
+    });
+    let G = (Me, We) => {
+      let ze = Me === "allow" ? MAX_RULE_PATTERN_LENGTH : MAX_RULES_PER_LIST;
+      let filtered = We.filter((Je) => Je.rule.length <= ze);
+      addDroppedCount(S, Me, We.length - filtered.length);
+      if (Me !== "allow" || filtered.length <= s) return filtered.map(L);
+      addDroppedCount(S, Me, filtered.length - s);
+      return filtered.slice(0, s).map(L);
+    };
+    let q = () =>
+      e.truncated === true || S.pathClamped || S.identityClamped || S.listCapped || S.spellingsShed;
+    let Z = (Me) => {
+      if (h >= 2 && Me.resolved.length > 0) S.spellingsShed = true;
+      return {
+        path: w(Me.path),
+        resolved: h >= 2 ? [] : Me.resolved.map(w),
+      };
+    };
+    let sliced = e.trusted_directories.additional.slice(0, MAX_USER_IDENTITY_LENGTH);
+    if (sliced.length < e.trusted_directories.additional.length) S.listCapped = true;
+    let mapped = e.trusted_directories.network.slice(0, MAX_USER_IDENTITY_LENGTH).map(w);
+    if (mapped.length < e.trusted_directories.network.length) S.listCapped = true;
     let we = {
-        permission_mode: e.permission_mode,
-        platform: e.platform,
-        ...(e.live_cwd !== void 0 && { live_cwd: w(e.live_cwd) }),
-        ...(e.home_dir !== void 0 && { home_dir: w(e.home_dir) }),
-        rule_roots: xr(e.rule_roots, w),
-        trusted_directories: {
-          ...(e.trusted_directories.primary !== void 0 && { primary: Z(e.trusted_directories.primary) }),
-          additional: sliced.map((Me) => ({ ...Z(Me), source: Me.source })),
-          network: mapped,
-          block_reads_outside_working_directories:
-            e.trusted_directories.block_reads_outside_working_directories,
-        },
-        rules: {
-          allow: G("allow", e.rules.allow),
-          deny: G("deny", e.rules.deny),
-          ask: G("ask", e.rules.ask),
-        },
-        auto_mode: {
-          allow: [...e.auto_mode.allow],
-          soft_deny: [...e.auto_mode.soft_deny],
-          hard_deny: [...e.auto_mode.hard_deny],
-          environment: [...e.auto_mode.environment],
-        },
-        artifact_consent_holdback: e.artifact_consent_holdback,
-        ...(e.chrome_navigation !== void 0 && { chrome_navigation: e.chrome_navigation }),
-        case_insensitive_paths: e.case_insensitive_paths,
-        restricted: e.restricted,
-        is_remote_mode: e.is_remote_mode,
-        classify_all_shell: e.classify_all_shell,
-        ...(e.mcp_allow_rules_exact === !0 && { mcp_allow_rules_exact: !0 }),
-        user_identity: e.user_identity === null ? null : _Tt(e.user_identity, fTt, S, "identityClamped"),
-        ...(Object.keys(S.dropped).length > 0 && { dropped: S.dropped }),
-        ...(q() && { truncated: !0 }),
+      permission_mode: e.permission_mode,
+      platform: e.platform,
+      ...(e.live_cwd !== undefined && {
+        live_cwd: w(e.live_cwd),
+      }),
+      ...(e.home_dir !== undefined && {
+        home_dir: w(e.home_dir),
+      }),
+      rule_roots: xr(e.rule_roots, w),
+      trusted_directories: {
+        ...(e.trusted_directories.primary !== undefined && {
+          primary: Z(e.trusted_directories.primary),
+        }),
+        additional: sliced.map((Me) => ({
+          ...Z(Me),
+          source: Me.source,
+        })),
+        network: mapped,
+        block_reads_outside_working_directories:
+          e.trusted_directories.block_reads_outside_working_directories,
       },
-      Ee = W_e(we);
-    if (h === 0) y = { bytes: Ee, allowDropped: S.dropped.allow ?? 0 };
-    let Ae = Ee > Eao;
+      rules: {
+        allow: G("allow", e.rules.allow),
+        deny: G("deny", e.rules.deny),
+        ask: G("ask", e.rules.ask),
+      },
+      auto_mode: {
+        allow: [...e.auto_mode.allow],
+        soft_deny: [...e.auto_mode.soft_deny],
+        hard_deny: [...e.auto_mode.hard_deny],
+        environment: [...e.auto_mode.environment],
+      },
+      artifact_consent_holdback: e.artifact_consent_holdback,
+      ...(e.chrome_navigation !== undefined && {
+        chrome_navigation: e.chrome_navigation,
+      }),
+      case_insensitive_paths: e.case_insensitive_paths,
+      restricted: e.restricted,
+      is_remote_mode: e.is_remote_mode,
+      classify_all_shell: e.classify_all_shell,
+      ...(e.mcp_allow_rules_exact === true && {
+        mcp_allow_rules_exact: true,
+      }),
+      user_identity:
+        e.user_identity === null
+          ? null
+          : truncateWithFlag(e.user_identity, MAX_RULE_PATTERN_LENGTH, S, "identityClamped"),
+      ...(Object.keys(S.dropped).length > 0 && {
+        dropped: S.dropped,
+      }),
+      ...(q() && {
+        truncated: true,
+      }),
+    };
+    let Ee = jsonByteLength(we);
+    if (h === 0)
+      y = {
+        bytes: Ee,
+        allowDropped: S.dropped.allow ?? 0,
+      };
+    let Ae = Ee > MAX_TRUSTED_DIR_ENTRIES;
     if (Ae) {
       if (h === 0 || (h === 1 && s > 0)) {
-        ((h = 1), (s = Math.floor(s / 2)));
+        h = 1;
+        s = Math.floor(s / 2);
         continue;
       }
       if (h < 2) {
@@ -250,10 +332,15 @@ function clampClassifierVerdict(e, n, r) {
         continue;
       }
     }
-    let Ie = Ae ? { ...we, truncated: !0 } : we;
-    if (Ie.truncated === !0 || Ie.dropped !== void 0)
+    let Ie = Ae
+      ? {
+          ...we,
+          truncated: true,
+        }
+      : we;
+    if (Ie.truncated === true || Ie.dropped !== undefined)
       r({
-        bytes: Ie === we ? Ee : W_e(Ie),
+        bytes: Ie === we ? Ee : jsonByteLength(Ie),
         bytesBeforeShedding: y.bytes,
         overCapBeforeShedding: h > 0,
         overCap: Ae,
@@ -263,8 +350,8 @@ function clampClassifierVerdict(e, n, r) {
         identityClamped: S.identityClamped,
         additionalDirectories: e.trusted_directories.additional.length,
         networkRoots: e.trusted_directories.network.length,
-        arrivedTruncated: e.truncated === !0,
-        truncated: Ie.truncated === !0,
+        arrivedTruncated: e.truncated === true,
+        truncated: Ie.truncated === true,
         dropped: S.dropped,
         denyRules: e.rules.deny.length,
         askRules: e.rules.ask.length,
@@ -278,26 +365,28 @@ function clampClassifierVerdict(e, n, r) {
     return Ie;
   }
 }
+//@ chunk-e6aww6q8.js:142959-143633 placement
 /**
  * 收紧发给分类器的 git 状态：路径/分支与主机名截断，remote 与可见性缓存条数限制，出现截断时标记 truncated。
  */
-//@ chunk-e6aww6q8.js:142959-143633 placement
 function clampGitStateForClassifier(e) {
-  let truncated = e.truncated === !0,
-    clampPath = (w) => {
-      if (w.length <= hTt) return w;
-      return ((truncated = !0), w.slice(0, hTt));
-    },
-    clampNullablePath = (w) => (w === null ? null : clampPath(w)),
-    clampHost = (w) => {
-      if (w.length <= yTt) return w;
-      return ((truncated = !0), w.slice(0, yTt));
-    },
-    clampList = (w, L) => {
-      if (w.length > L) truncated = !0;
-      return w.slice(0, L);
-    },
-    visibility = e.visibility;
+  let truncated = e.truncated === true;
+  let clampPath = (w) => {
+    if (w.length <= MAX_DROPPED_ENTRIES) return w;
+    truncated = true;
+    return w.slice(0, MAX_DROPPED_ENTRIES);
+  };
+  let clampNullablePath = (w) => (w === null ? null : clampPath(w));
+  let clampHost = (host) => {
+    if (host.length <= MAX_PATH_FIELD_LENGTH) return host;
+    truncated = true;
+    return host.slice(0, MAX_PATH_FIELD_LENGTH);
+  };
+  let clampList = (w, L) => {
+    if (w.length > L) truncated = true;
+    return w.slice(0, L);
+  };
+  let visibility = e.visibility;
   return {
     cwd: clampNullablePath(e.cwd),
     root: clampNullablePath(e.root),
@@ -311,17 +400,26 @@ function clampGitStateForClassifier(e) {
             origin:
               visibility.origin === null
                 ? null
-                : { ...visibility.origin, host: clampHost(visibility.origin.host) },
+                : {
+                    ...visibility.origin,
+                    host: clampHost(visibility.origin.host),
+                  },
             push_remote: clampNullablePath(visibility.push_remote),
-            remotes: clampList(visibility.remotes, JUr).map((w) => ({ ...w, host: clampHost(w.host) })),
-            visibility_cache: clampList(visibility.visibility_cache, s3n).map((w) => ({
+            remotes: clampList(visibility.remotes, MAX_PERMISSION_MODE_LENGTH).map((w) => ({
+              ...w,
+              host: clampHost(w.host),
+            })),
+            visibility_cache: clampList(visibility.visibility_cache, MAX_PLATFORM_LENGTH).map((w) => ({
               ...w,
               host: clampHost(w.host),
             })),
           },
-    ...(e.error !== void 0 && { error: e.error }),
-    ...(truncated && { truncated: !0 }),
+    ...(e.error !== undefined && {
+      error: e.error,
+    }),
+    ...(truncated && {
+      truncated: true,
+    }),
   };
 }
-
-export { clampArtifactClassifierState, W_e, clampClassifierVerdict, clampGitStateForClassifier };
+export { clampArtifactClassifierState, jsonByteLength, clampClassifierVerdict, clampGitStateForClassifier };

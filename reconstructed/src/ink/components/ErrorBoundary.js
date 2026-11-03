@@ -9,69 +9,80 @@
  * attribution: placement 14
  */
 import { YOGA_INSTANCE } from "../../native-ts/yoga-layout/index.js";
-import { j, qt, Se } from "../../../vendor/react/cjs/react.production.js";
+import { init_react_production, qt, Se } from "../../../vendor/react/cjs/react.production.js";
 import { sanitizeErrorName, errorMessage } from "../../utils/errors.js";
 import { lit } from "../../services/analytics/safeMetadata.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { logEventAsync } from "../../services/analytics/index.js";
 import { errorTelemetryFields } from "../../utils/accessibility/screenReader.js";
-import { gn } from "../../utils/shortHash.js";
+import { shortHash } from "../../utils/shortHash.js";
 import { shutdown1PEventLogging } from "../../services/analytics/firstPartyEventLogger.js";
 import { shutdownDatadog } from "../../services/analytics/datadog.js";
 import { Button_2 } from "./Button.js";
 
+//@ chunk-bzr73sfg.js:171893-171903 placement
 /**
  * yoga 布局引擎实例（native-ts/yoga-layout 的 YOGA_INSTANCE）；createNode 用 Yoga.Node.create(config) 给元素建布局节点。
  */
-//@ chunk-bzr73sfg.js:171893-171903 placement
 var Yoga = YOGA_INSTANCE;
 //@ chunk-bzr73sfg.js:171934-171938 placement
-j();
+init_react_production();
 //@ chunk-bzr73sfg.js:171938-171952 placement
-var by = qt(!1);
+var errorBoundaryTriggered = qt(false);
 //@ chunk-bzr73sfg.js:171952-171998 placement
-by.displayName = "InternalAccessibilityContext";
+errorBoundaryTriggered.displayName = "InternalAccessibilityContext";
 //@ chunk-bzr73sfg.js:171998-172009 placement
-var GRr = by;
+/**
+ * 导出值：ErrorBoundaryStateRef（错误边界的同一信号）。
+ */
+var ErrorBoundaryStateRef = errorBoundaryTriggered;
 //@ chunk-bzr73sfg.js:172009-172013 placement
-j();
+init_react_production();
+//@ chunk-bzr73sfg.js:172013-172355 placement
 /**
  * React 错误边界捕获渲染错误时记录日志并上报 tengu_uncaught_exception。
  */
-//@ chunk-bzr73sfg.js:172013-172355 placement
 function reportRenderError(n, u) {
   let f = sanitizeErrorName(n) ?? lit("unknown");
   try {
-    logForDebugging(`[reportRenderError] React boundary caught ${f}: ${errorMessage(n)}`, { level: "error" });
+    logForDebugging(`[reportRenderError] React boundary caught ${f}: ${errorMessage(n)}`, {
+      level: "error",
+    });
   } catch {}
-  let m = u?.componentStack;
+  let componentStack = u?.componentStack;
   (async () => {
     try {
-      (await logEventAsync("tengu_uncaught_exception", {
+      await logEventAsync("tengu_uncaught_exception", {
         error_name: f,
         ...errorTelemetryFields(n),
         source: lit("react_render"),
-        ...(m && { error_component_stack_hash: gn(m) }),
-      }),
-        await Promise.all([shutdown1PEventLogging(), shutdownDatadog()]));
+        ...(componentStack && {
+          error_component_stack_hash: shortHash(componentStack),
+        }),
+      });
+      await Promise.all([shutdown1PEventLogging(), shutdownDatadog()]);
     } catch {}
   })();
 }
 //@ chunk-bzr73sfg.js:172355-172404 placement
-var NO_MOUSE_MODS = { shift: !1, alt: !1, ctrl: !1 },
-  DOUBLE_CLICK_MS = 300,
-  MULTI_CLICK_MAX_MS = 500;
+var NO_MOUSE_MODS = {
+  shift: false,
+  alt: false,
+  ctrl: false,
+};
+var DOUBLE_CLICK_MS = 300;
+var MULTI_CLICK_MAX_MS = 500;
 //@ chunk-x6v6jz2y.js:19217-19227 placement
 var Button = Button_2;
 //@ chunk-x6v6jz2y.js:19227-19231 placement
-j();
+init_react_production();
 //@ chunk-x6v6jz2y.js:19231-19260 placement
 function useIsScreenReaderEnabled() {
-  return Se(GRr);
+  return Se(ErrorBoundaryStateRef);
 }
 //@ chunk-x6v6jz2y.js:19260-19326 placement
 function Decorative(o) {
-  let { children: children, fallback: fallback } = o;
+  let { children, fallback } = o;
   return useIsScreenReaderEnabled() ? (fallback ?? null) : children;
 }
 //@ chunk-x6v6jz2y.js:19326-19399 placement
@@ -83,8 +94,7 @@ function assignRef(o, r) {
   if (o) o.current = r;
 }
 //@ chunk-x6v6jz2y.js:19399-19403 placement
-j();
-
+init_react_production();
 export {
   useIsScreenReaderEnabled,
   Button,
@@ -94,6 +104,6 @@ export {
   MULTI_CLICK_MAX_MS,
   NO_MOUSE_MODS,
   reportRenderError,
-  GRr,
+  ErrorBoundaryStateRef,
   assignRef,
 };

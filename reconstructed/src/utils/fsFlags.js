@@ -11,7 +11,9 @@
 import { constants } from "fs";
 
 //@ chunk-q9xx23ay.js:222-263 placement
-var O_NONBLOCK = constants.O_NONBLOCK,
-  ws = constants.O_NOFOLLOW | O_NONBLOCK;
-
-export { ws, O_NONBLOCK };
+/**
+ * O_NONBLOCK 常量；同语句导出 O_NOFOLLOW|O_NONBLOCK 的组合。
+ */
+var O_NONBLOCK = constants.O_NONBLOCK;
+var NOFOLLOW_NONBLOCK_FLAGS = constants.O_NOFOLLOW | O_NONBLOCK;
+export { NOFOLLOW_NONBLOCK_FLAGS, O_NONBLOCK };

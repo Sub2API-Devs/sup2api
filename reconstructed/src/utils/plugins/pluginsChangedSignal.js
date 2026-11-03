@@ -12,6 +12,8 @@ import { createLazySignal } from "../signal.js";
 import { getHostState } from "../hostEnvironment.js";
 
 //@ chunk-e6aww6q8.js:2077220-2077254 placement
-var Jz = createLazySignal(() => getHostState().skillsChanged);
-
-export { Jz };
+/**
+ * skillsChangedSignal：技能变更的惰性信号。
+ */
+var skillsChangedSignal = createLazySignal(() => getHostState().skillsChanged);
+export { skillsChangedSignal };

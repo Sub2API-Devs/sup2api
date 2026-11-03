@@ -10,19 +10,18 @@
  */
 import { Se, yt } from "../../../vendor/react/cjs/react.production.js";
 import { StdinContextAlias } from "../terminalModes.js";
-import { di } from "../terminal.js";
+import { getSecondRootError } from "../terminal.js";
 
 //@ chunk-x6v6jz2y.js:27033-27061 affinity
-var noopSubscribe = () => () => {},
-  alwaysFalse = () => !1;
+var noopSubscribe = () => () => {};
+var alwaysFalse = () => false;
+//@ chunk-x6v6jz2y.js:27061-27197 fingerprint = useHasSelection (1)
 /**
  * 订阅式读取“是否有选区”（useSyncExternalStore）。
  */
-//@ chunk-x6v6jz2y.js:27061-27197 fingerprint = useHasSelection (1)
-function useHasSelection(o = !0) {
+function useHasSelection(enabled = true) {
   Se(StdinContextAlias);
-  let r = o ? di().get(process.stdout) : void 0;
-  return yt(r ? r.subscribeToSelectionChange : noopSubscribe, r ? r.hasTextSelection : alwaysFalse);
+  let ink = enabled ? getSecondRootError().get(process.stdout) : undefined;
+  return yt(ink ? ink.subscribeToSelectionChange : noopSubscribe, ink ? ink.hasTextSelection : alwaysFalse);
 }
-
 export { useHasSelection };

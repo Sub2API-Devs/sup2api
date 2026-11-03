@@ -8,8 +8,8 @@
  * pieces: chunk-22r83hv0.js (24)
  * attribution: placement 24
  */
-import { ge } from "../../utils/identity.js";
-import { Yi } from "../../commands/mobile/mobile.js";
+import { identity } from "../../utils/identity.js";
+import { claudeInChromeSession } from "../../commands/mobile/mobile.js";
 import { markPollEventWiringForRun } from "../../bootstrap/state.js";
 import { FILE_READ_TOOL_NAME } from "../FileReadTool/constants.js";
 import { GLOB_TOOL_NAME } from "../GlobTool/prompt.js";
@@ -23,94 +23,158 @@ import { FILE_EDIT_TOOL_NAME } from "../FileEditTool/constants.js";
 //@ chunk-22r83hv0.js:28949-28964 placement
 var MAIN = "main";
 //@ chunk-22r83hv0.js:28964-29002 placement
-var Mo = ge({ made: !1 }, (e) => {
-  e.made = !1;
-});
+/**
+ * 记录 print 模式轮询接线是否已创建（当前无引用）。
+ */
+var printPollWiringMadeState = identity(
+  {
+    made: false,
+  },
+  (e) => {
+    e.made = false;
+  },
+);
 //@ chunk-22r83hv0.js:29002-29025 placement
-function k1() {
-  return !1;
+/**
+ * 恒返回 false 的能力开关。
+ */
+function alwaysFalseFlag() {
+  return false;
 }
 //@ chunk-22r83hv0.js:29025-29067 placement
-var ko = ge({ logged: !1 }, (e) => {
-  e.logged = !1;
-});
+/**
+ * 记录 print 轮询接线是否已记录（当前无引用）。
+ */
+var printPollWiringLoggedState = identity(
+  {
+    logged: false,
+  },
+  (e) => {
+    e.logged = false;
+  },
+);
 //@ chunk-22r83hv0.js:29067-29114 placement
-function Jar() {
-  return Yi().systemPromptSection;
+/**
+ * 取出当前会话里系统提示段的记录。
+ */
+function getSystemPromptSectionState() {
+  return claudeInChromeSession().systemPromptSection;
 }
 //@ chunk-22r83hv0.js:29114-29138 placement
-function lfi() {
-  return !1;
+/**
+ * 恒返回 false 的能力开关。
+ */
+function alwaysFalseLocal() {
+  return false;
 }
 //@ chunk-22r83hv0.js:29138-29163 placement
-function dCt(e) {
+/**
+ * 恒返回空对象的占位实现。
+ */
+function emptyObjectFactory(runsLocalQueryLoop) {
   return {};
 }
 //@ chunk-22r83hv0.js:29163-29187 placement
-function Qar() {
-  return !1;
+/**
+ * 恒返回 false 的能力开关。
+ */
+function alwaysFalseTool() {
+  return false;
 }
 //@ chunk-22r83hv0.js:29187-29211 placement
-function dfi() {
-  return !1;
+/**
+ * 恒返回 false 的能力开关。
+ */
+function alwaysFalseGateway() {
+  return false;
 }
 //@ chunk-22r83hv0.js:29211-29235 placement
-function un(e) {
-  return !1;
+/**
+ * 恒返回 false 的 print 模式判断（是否只请求自己的事件）。
+ */
+function alwaysFalsePrintMode(permissionMode) {
+  return false;
 }
+//@ chunk-22r83hv0.js:29235-29388 placement
 /**
  * 标记 print 模式下的轮询事件接线配置（流式输入、sdkUrl、是否只要自己的事件）。
  */
-//@ chunk-22r83hv0.js:29235-29388 placement
 function markPrintPollEventWiring(e) {
   markPollEventWiringForRun({
     entrypoint: "print",
     hasStreamingInput: e.hasStreamingInput,
     sdkUrl: e.sdkUrl,
-    ownEventsRequested: un(e.permissionMode),
-    ownEventsOnly: !1,
+    ownEventsRequested: alwaysFalsePrintMode(e.permissionMode),
+    ownEventsOnly: false,
   });
 }
 //@ chunk-22r83hv0.js:29388-29413 placement
-function kYe(e) {
-  return !1;
+/**
+ * 恒返回 false 的能力开关。
+ */
+function alwaysFalseRefresh(mode) {
+  return false;
 }
 //@ chunk-22r83hv0.js:29413-29437 placement
-function TYt() {
-  return !1;
+/**
+ * 恒返回 false 的能力开关。
+ */
+function alwaysFalseDefer() {
+  return false;
 }
 //@ chunk-22r83hv0.js:29437-29461 placement
-function TJ(e) {
+/**
+ * 原样返回输入。
+ */
+function identityValue(e) {
   return e;
 }
 //@ chunk-22r83hv0.js:29461-29485 placement
-function f4(e) {
-  return !1;
+/**
+ * 恒返回 false 的能力开关。
+ */
+function alwaysFalseFeed(tools) {
+  return false;
 }
 //@ chunk-22r83hv0.js:29485-29510 placement
-function Zar(e) {
-  return !1;
+/**
+ * 恒返回 false 的能力开关。
+ */
+function alwaysFalseStream(e) {
+  return false;
 }
 //@ chunk-22r83hv0.js:29510-29535 placement
-function ufi(e) {
-  return !1;
+/**
+ * 恒返回 false 的能力开关。
+ */
+function alwaysFalseEvent(e) {
+  return false;
 }
 //@ chunk-22r83hv0.js:29535-29562 placement
-function DQo(e, n) {
-  return e;
+/**
+ * 原样返回输入。
+ */
+function identityTool(memoryPrompt, n) {
+  return memoryPrompt;
 }
 //@ chunk-22r83hv0.js:29562-29627 placement
-var Uvn = new Set([
-    FILE_READ_TOOL_NAME,
-    GLOB_TOOL_NAME,
-    GREP_TOOL_NAME,
-    BASH_TOOL_NAME,
-    POWERSHELL_TOOL_NAME,
-    NOTEBOOK_EDIT_TOOL_NAME,
-  ]),
-  ffi = new Set([...Uvn, FILE_WRITE_TOOL_NAME, FILE_EDIT_TOOL_NAME]);
+/**
+ * 只读工具名集合（Read/Glob/Grep/Bash/PowerShell/NotebookEdit）。
+ */
+var READ_ONLY_TOOL_NAMES = new Set([
+  FILE_READ_TOOL_NAME,
+  GLOB_TOOL_NAME,
+  GREP_TOOL_NAME,
+  BASH_TOOL_NAME,
+  POWERSHELL_TOOL_NAME,
+  NOTEBOOK_EDIT_TOOL_NAME,
+]);
+var FILE_MUTATING_TOOL_NAMES = new Set([...READ_ONLY_TOOL_NAMES, FILE_WRITE_TOOL_NAME, FILE_EDIT_TOOL_NAME]);
 //@ chunk-22r83hv0.js:29627-29641 placement
-var LQo = 30000;
+/**
+ * print 模式轮询的宽限时间（30 秒）。
+ */
+var PRINT_POLL_GRACE_MS = 30000;
 //@ chunk-22r83hv0.js:29641-29666 placement
 var REFRESH_MCP_TOOLS_TOOL_NAME = "RefreshMcpTools";
 //@ chunk-22r83hv0.js:29666-29778 placement
@@ -133,10 +197,10 @@ Usage:
 - Refresh one server: \`RefreshMcpTools({ server: "myserver" })\`
 `;
 }
+//@ chunk-22r83hv0.js:30707-31290 placement
 /**
  * RefreshMcpTools 工具提示词：重新读取已连接 MCP 服务器的工具列表，返回每个服务器的状态、工具数与增删的工具名；不会建立或重建连接，可指定单个 server。
  */
-//@ chunk-22r83hv0.js:30707-31290 placement
 var REFRESH_MCP_TOOLS_PROMPT = `Re-query the tool lists of connected MCP servers and update the available tools.
 
 Returns one entry per server: the server name, refresh status, current tool count, and which tool names were added or removed relative to what was previously available. Servers that are not currently connected are reported as not_connected (this tool never dials or re-dials connections \u2014 it only re-reads the tool list over the existing connection).
@@ -144,27 +208,26 @@ Returns one entry per server: the server name, refresh status, current tool coun
 Parameters:
 - server (optional): The name of a specific MCP server to refresh. If not provided, all connected servers are refreshed.
 `;
-
 export {
-  DQo,
-  k1,
+  identityTool,
+  alwaysFalseFlag,
   REFRESH_MCP_TOOLS_TOOL_NAME,
-  Qar,
-  ffi,
-  Uvn,
-  dCt,
+  alwaysFalseTool,
+  FILE_MUTATING_TOOL_NAMES,
+  READ_ONLY_TOOL_NAMES,
+  emptyObjectFactory,
   markPrintPollEventWiring,
-  kYe,
-  f4,
-  TJ,
-  TYt,
-  dfi,
+  alwaysFalseRefresh,
+  alwaysFalseFeed,
+  identityValue,
+  alwaysFalseDefer,
+  alwaysFalseGateway,
   MAIN,
-  LQo,
-  Zar,
-  lfi,
-  Jar,
-  ufi,
+  PRINT_POLL_GRACE_MS,
+  alwaysFalseStream,
+  alwaysFalseLocal,
+  getSystemPromptSectionState,
+  alwaysFalseEvent,
   REFRESH_MCP_TOOLS_PROMPT_2,
   REFRESH_MCP_TOOLS_PROMPT,
 };

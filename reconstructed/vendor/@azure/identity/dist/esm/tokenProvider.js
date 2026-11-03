@@ -6,27 +6,43 @@
  * attribution: esm-fingerprint 1
  */
 import { qn } from "../../../../@typespec/ts-http-runtime/dist/esm/policies/agentPolicy.js";
-import { Zn } from "../../../core-rest-pipeline/dist/esm/policies/bearerTokenAuthenticationPolicy.js";
+import { bearerTokenAuthenticationPolicy } from "../../../core-rest-pipeline/dist/esm/policies/bearerTokenAuthenticationPolicy.js";
 import { je } from "../../../core-rest-pipeline/dist/esm/policies/retryPolicy.js";
 
 //@ chunk-mrx6y2r5.js:331737-332181 esm-fingerprint
-function kC(e, t, r) {
-  let { abortSignal: abortSignal, tracingOptions: tracingOptions } = r || {},
-    i = qn();
-  i.addPolicy(Zn({ credential: e, scopes: t }));
-  async function s() {
-    var a;
-    let l =
-      (a = (
-        await i.sendRequest(
-          { sendRequest: (d) => Promise.resolve({ request: d, status: 200, headers: d.headers }) },
-          je({ url: "https://example.com", abortSignal: abortSignal, tracingOptions: tracingOptions }),
+function getBearerTokenProvider(credential, scopes, options) {
+  let { abortSignal, tracingOptions } = options || {};
+  let pipeline = qn();
+  pipeline.addPolicy(
+    bearerTokenAuthenticationPolicy({
+      credential,
+      scopes,
+    }),
+  );
+  async function getRefreshedToken() {
+    var _a;
+    let accessToken =
+      (_a = (
+        await pipeline.sendRequest(
+          {
+            sendRequest: (request) =>
+              Promise.resolve({
+                request,
+                status: 200,
+                headers: request.headers,
+              }),
+          },
+          je({
+            url: "https://example.com",
+            abortSignal,
+            tracingOptions,
+          }),
         )
-      ).headers.get("authorization")) === null || a === void 0
-        ? void 0
-        : a.split(" ")[1];
-    if (!l) throw Error("Failed to get access token");
-    return l;
+      ).headers.get("authorization")) === null || _a === undefined
+        ? undefined
+        : _a.split(" ")[1];
+    if (!accessToken) throw Error("Failed to get access token");
+    return accessToken;
   }
-  return s;
+  return getRefreshedToken;
 }

@@ -8,10 +8,11 @@
  * pieces: chunk-a2g5s7cw.js (1)
  * attribution: placement 1
  */
-
 //@ chunk-a2g5s7cw.js:191-215 placement
-var EXIT_CONFIG_ERROR = 78,
-  the = 75,
-  uOt = 70;
-
-export { EXIT_CONFIG_ERROR, uOt, the };
+/**
+ * 退出码 78（EX_TEMPFAIL，临时失败）。
+ */
+var EXIT_CONFIG_ERROR = 78;
+var EXIT_TEMPFAIL = 75;
+var EX_SOFTWARE = 70;
+export { EXIT_CONFIG_ERROR, EX_SOFTWARE, EXIT_TEMPFAIL };

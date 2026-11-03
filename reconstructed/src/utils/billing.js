@@ -10,28 +10,27 @@
  */
 import { env } from "./env.js";
 import { isClaudeAISubscriber, getAuthTokenSource, hasAnthropicApiKey } from "./auth.js";
-import { lD } from "./planTiers.js";
+import { isUsageBasedBilling } from "./planTiers.js";
 import { getGlobalConfig } from "./config.js";
 
+//@ chunk-hwmsct5x.js:177706-178037 fingerprint = hasConsoleBillingAccess (1)
 /**
  * Console 账单权限（决定是否显示费用提示）：DISABLE_COST_WARNINGS 关闭；API 用户需组织角色 admin/billing 或工作区角色 workspace_admin/workspace_billing。
  */
-//@ chunk-hwmsct5x.js:177706-178037 fingerprint = hasConsoleBillingAccess (1)
 function hasConsoleBillingAccess() {
-  if (env.DISABLE_COST_WARNINGS) return !1;
+  if (env.DISABLE_COST_WARNINGS) return false;
   let isSubscriber = isClaudeAISubscriber();
-  if (isSubscriber && lD()) return !0;
-  if (isSubscriber) return !1;
-  let authSource = getAuthTokenSource(),
-    r = hasAnthropicApiKey();
-  if (!authSource.hasToken && !r) return !1;
-  let config = getGlobalConfig(),
-    orgRole = config.oauthAccount?.organizationRole,
-    workspaceRole = config.oauthAccount?.workspaceRole;
-  if (!orgRole || !workspaceRole) return !1;
+  if (isSubscriber && isUsageBasedBilling()) return true;
+  if (isSubscriber) return false;
+  let authSource = getAuthTokenSource();
+  let hasApiKey = hasAnthropicApiKey();
+  if (!authSource.hasToken && !hasApiKey) return false;
+  let config = getGlobalConfig();
+  let orgRole = config.oauthAccount?.organizationRole;
+  let workspaceRole = config.oauthAccount?.workspaceRole;
+  if (!orgRole || !workspaceRole) return false;
   return (
     ["admin", "billing"].includes(orgRole) || ["workspace_admin", "workspace_billing"].includes(workspaceRole)
   );
 }
-
 export { hasConsoleBillingAccess };

@@ -5,94 +5,121 @@
  * pieces: chunk-hwmsct5x.js (8)
  * attribution: esm-fingerprint 7, esm-layout 1
  */
-import { $o } from "./shims.mjs";
+import { ReadableStreamFrom } from "./shims.mjs";
 
 //@ chunk-hwmsct5x.js:39341-39666 esm-fingerprint
-var ea = () => {
-  if (typeof File > "u") {
-    let { process: e } = globalThis,
-      n = typeof e?.versions?.node === "string" && parseInt(e.versions.node.split(".")) < 20;
+var checkFileSupport = () => {
+  if (typeof File === "undefined") {
+    let { process: e } = globalThis;
+    let isOldNode = typeof e?.versions?.node === "string" && parseInt(e.versions.node.split(".")) < 20;
     throw Error(
       "`File` is not defined as a global, which is required for file uploads." +
-        (n
+        (isOldNode
           ? " Update to Node 20 LTS or newer, or set `globalThis.File` to `import('node:buffer').File`."
           : ""),
     );
   }
 };
 //@ chunk-hwmsct5x.js:39666-39729 esm-fingerprint
-function rn(e, n, r) {
-  return (ea(), new File(e, n ?? "unknown_file", r));
+function makeFile(fileBits, fileName, options) {
+  checkFileSupport();
+  return new File(fileBits, fileName ?? "unknown_file", options);
 }
 //@ chunk-hwmsct5x.js:39729-39991 esm-fingerprint
-function cr(e, n) {
-  let r =
-    (typeof e === "object" &&
-      e !== null &&
-      (("name" in e && e.name && String(e.name)) ||
-        ("url" in e && e.url && String(e.url)) ||
-        ("filename" in e && e.filename && String(e.filename)) ||
-        ("path" in e && e.path && String(e.path)))) ||
+function getName(value, stripPath) {
+  let val =
+    (typeof value === "object" &&
+      value !== null &&
+      (("name" in value && value.name && String(value.name)) ||
+        ("url" in value && value.url && String(value.url)) ||
+        ("filename" in value && value.filename && String(value.filename)) ||
+        ("path" in value && value.path && String(value.path)))) ||
     "";
-  return n ? r.split(/[\\/]/).pop() || void 0 : r;
+  return stripPath ? val.split(/[\\/]/).pop() || undefined : val;
 }
 //@ chunk-hwmsct5x.js:39991-40077 esm-fingerprint
-var ta = (e) => e != null && typeof e === "object" && typeof e[Symbol.asyncIterator] === "function";
+var isAsyncIterable = (value) =>
+  value != null && typeof value === "object" && typeof value[Symbol.asyncIterator] === "function";
 //@ chunk-hwmsct5x.js:40077-40151 esm-layout
-var ut = async (e, n, r = !0) => ({ ...e, body: await Wh(e.body, n, r) }),
-  weakMap_2 = new WeakMap();
+var ut = async (opts, n, stripFilenames = true) => ({
+  ...opts,
+  body: await createForm(opts.body, n, stripFilenames),
+});
+var supportsFormDataMap = new WeakMap();
 //@ chunk-hwmsct5x.js:40151-40429 esm-fingerprint
-function qh(e) {
-  let n = typeof e === "function" ? e : e.fetch,
-    r = weakMap_2.get(n);
-  if (r) return r;
-  let s = (async () => {
+function supportsFormData(fetchObject) {
+  let n = typeof fetchObject === "function" ? fetchObject : fetchObject.fetch;
+  let cached = supportsFormDataMap.get(n);
+  if (cached) return cached;
+  let promise = (async () => {
     try {
-      let h = "Response" in n ? n.Response : (await n("data:,")).constructor,
-        formData = new FormData();
-      if (formData.toString() === (await new h(formData).text())) return !1;
-      return !0;
+      let FetchResponse = "Response" in n ? n.Response : (await n("data:,")).constructor;
+      let data = new FormData();
+      if (data.toString() === (await new FetchResponse(data).text())) return false;
+      return true;
     } catch {
-      return !0;
+      return true;
     }
   })();
-  return (weakMap_2.set(n, s), s);
+  supportsFormDataMap.set(n, promise);
+  return promise;
 }
 //@ chunk-hwmsct5x.js:40429-40683 esm-fingerprint
-var Wh = async (e, n, r = !0) => {
-  if (!(await qh(n)))
+var createForm = async (body, n, stripFilenames = true) => {
+  if (!(await supportsFormData(n)))
     throw TypeError(
       "The provided fetch function does not support file uploads with the current global FormData class.",
     );
-  let formData = new FormData();
-  return (await Promise.all(Object.entries(e || {}).map(([h, y]) => Zi(formData, h, y, r))), formData);
+  let form = new FormData();
+  await Promise.all(
+    Object.entries(body || {}).map(([key, value]) => addFormValue(form, key, value, stripFilenames)),
+  );
+  return form;
 };
 //@ chunk-hwmsct5x.js:40683-41841 esm-fingerprint
-var Zi = async (e, n, r, s) => {
-  if (r === void 0) return;
-  if (r == null)
-    throw TypeError(`Received null for "${n}"; to pass null in FormData, you must use the string 'null'`);
-  if (typeof r === "string" || typeof r === "number" || typeof r === "boolean") e.append(n, String(r));
-  else if (r instanceof Response) {
-    let h = {},
-      y = r.headers.get("Content-Type");
-    if (y) h = { type: y };
-    e.append(n, rn([await r.blob()], cr(r, s), h));
-  } else if (ta(r)) e.append(n, rn([await new Response($o(r)).blob()], cr(r, s)));
-  else if (r instanceof Blob) e.append(n, rn([r], cr(r, s) || void 0, { type: r.type }));
-  else if (Array.isArray(r)) await Promise.all(r.map((h) => Zi(e, n + "[]", h, s)));
-  else if (typeof r.then === "function")
-    throw TypeError(`Received a Promise for "${n}"; await it first, e.g. \`await toFile(...)\``);
-  else if (r instanceof ArrayBuffer || ArrayBuffer.isView(r))
-    throw TypeError(
-      `Received ${r.constructor.name} for "${n}"; to upload raw bytes, wrap them with \`await toFile(bytes, 'filename')\``,
+var addFormValue = async (form, key, value, stripFilenames) => {
+  if (value === undefined) return;
+  if (value == null)
+    throw TypeError(`Received null for "${key}"; to pass null in FormData, you must use the string 'null'`);
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean")
+    form.append(key, String(value));
+  else if (value instanceof Response) {
+    let options = {};
+    let contentType = value.headers.get("Content-Type");
+    if (contentType)
+      options = {
+        type: contentType,
+      };
+    form.append(key, makeFile([await value.blob()], getName(value, stripFilenames), options));
+  } else if (isAsyncIterable(value))
+    form.append(
+      key,
+      makeFile([await new Response(ReadableStreamFrom(value)).blob()], getName(value, stripFilenames)),
     );
-  else if (typeof r === "object")
-    await Promise.all(Object.entries(r).map(([h, y]) => Zi(e, `${n}[${h}]`, y, s)));
+  else if (value instanceof Blob)
+    form.append(
+      key,
+      makeFile([value], getName(value, stripFilenames) || undefined, {
+        type: value.type,
+      }),
+    );
+  else if (Array.isArray(value))
+    await Promise.all(value.map((entry) => addFormValue(form, key + "[]", entry, stripFilenames)));
+  else if (typeof value.then === "function")
+    throw TypeError(`Received a Promise for "${key}"; await it first, e.g. \`await toFile(...)\``);
+  else if (value instanceof ArrayBuffer || ArrayBuffer.isView(value))
+    throw TypeError(
+      `Received ${value.constructor.name} for "${key}"; to upload raw bytes, wrap them with \`await toFile(bytes, 'filename')\``,
+    );
+  else if (typeof value === "object")
+    await Promise.all(
+      Object.entries(value).map(([name, prop]) =>
+        addFormValue(form, `${key}[${name}]`, prop, stripFilenames),
+      ),
+    );
   else
     throw TypeError(
-      `Invalid value given to form, expected a string, number, boolean, object, Array, File or Blob but got ${r} instead`,
+      `Invalid value given to form, expected a string, number, boolean, object, Array, File or Blob but got ${value} instead`,
     );
 };
-
-export { ea, cr, rn, ta, ut };
+export { checkFileSupport, getName, makeFile, isAsyncIterable, ut };

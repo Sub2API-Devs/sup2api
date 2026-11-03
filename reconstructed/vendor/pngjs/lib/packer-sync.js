@@ -6,31 +6,33 @@
  * attribution: cjs-fingerprint 1
  */
 import { x, importMetaRequire } from "../../../runtime/bun-runtime.js";
-import { se } from "./constants.js";
-import { yt } from "./packer.js";
+import { require_constants } from "./constants.js";
+import { require_packer } from "./packer.js";
 
 //@ chunk-spjgqa4y.js:47377-47987 cjs-fingerprint
-var Bn = x(function (nu, xn) {
-  var Cn = !0,
-    ke = importMetaRequire("zlib");
-  if (!ke.deflateSync) Cn = !1;
-  var bn = se(),
-    ys = yt();
-  xn.exports = function (t, e) {
-    if (!Cn)
+var require_packer_sync = x(function (cjsExports, cjsModule) {
+  var hasSyncZlib = true;
+  var zlib = importMetaRequire("zlib");
+  if (!zlib.deflateSync) hasSyncZlib = false;
+  var constants = require_constants();
+  var ys = require_packer();
+  cjsModule.exports = function (metaData, opt) {
+    if (!hasSyncZlib)
       throw Error(
         "To use the sync capability of this library in old node versions, please pin pngjs to v2.3.0",
       );
-    let n = new ys(e || {}),
-      i = [];
-    if ((i.push(Buffer.from(bn.PNG_SIGNATURE)), i.push(n.packIHDR(t.width, t.height)), t.gamma))
-      i.push(n.packGAMA(t.gamma));
-    let filterData = n.filterData(t.data, t.width, t.height),
-      deflateSync = ke.deflateSync(filterData, n.getDeflateOptions());
-    if (((filterData = null), !deflateSync || !deflateSync.length))
-      throw Error("bad png - invalid compressed data response");
-    return (i.push(n.packIDAT(deflateSync)), i.push(n.packIEND()), Buffer.concat(i));
+    let packer = new ys(opt || {});
+    let chunks = [];
+    chunks.push(Buffer.from(constants.PNG_SIGNATURE));
+    chunks.push(packer.packIHDR(metaData.width, metaData.height));
+    if (metaData.gamma) chunks.push(packer.packGAMA(metaData.gamma));
+    let filteredData = packer.filterData(metaData.data, metaData.width, metaData.height);
+    let compressedData = zlib.deflateSync(filteredData, packer.getDeflateOptions());
+    filteredData = null;
+    if (!compressedData || !compressedData.length) throw Error("bad png - invalid compressed data response");
+    chunks.push(packer.packIDAT(compressedData));
+    chunks.push(packer.packIEND());
+    return Buffer.concat(chunks);
   };
 });
-
-export { Bn };
+export { require_packer_sync };

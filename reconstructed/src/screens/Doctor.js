@@ -12,26 +12,44 @@ import { deserializePermissionContext } from "../utils/permissions/permissionCon
 import { holdUnresolvedWorkingDirPathAsNamed } from "../utils/permissions/filesystem.js";
 import { composeRepoDenyAskRules } from "../utils/permissions/repoRules.js";
 import { getModelMaxOutputTokens } from "../utils/context.js";
-import { ge } from "../utils/identity.js";
+import { identity as identity_2 } from "../utils/identity.js";
 
 //@ chunk-1ptrwbb7.js:362-452 fingerprint = _temp7 (0.509)
-function Lgt(error) {
+/**
+ * 导出函数 `isReportableDiagnostic`：参数 error，返回 error.filter((r) => !r.mcpErrorMetadata && !r.statusOnly && !r.startupFatal)。
+ */
+function isReportableDiagnostic(error) {
   return error.filter((r) => !r.mcpErrorMetadata && !r.statusOnly && !r.startupFatal);
 }
 //@ chunk-4kzs0ch0.js:534-684 fingerprint = _temp6 (0.475)
-function buildNativeDoctorDiagnostics(s, e, n, o) {
-  let r = deserializePermissionContext(s);
-  for (let [i, { source: l }] of r.additionalWorkingDirectories)
+function buildNativeDoctorDiagnostics(permissionContext, launchRules, repoRoot, mergeOptions) {
+  let storedRules = deserializePermissionContext(permissionContext);
+  for (let [i, { source: l }] of storedRules.additionalWorkingDirectories)
     if (l !== "cliArg") holdUnresolvedWorkingDirPathAsNamed(i);
-  return { ...r, ...composeRepoDenyAskRules(r, e, n, o, "native") };
+  return {
+    ...storedRules,
+    ...composeRepoDenyAskRules(storedRules, launchRules, repoRoot, mergeOptions, "native"),
+  };
 }
 //@ chunk-aepeg2w5.js:475193-475236 fingerprint = _temp8 (1)
-function mvi(v) {
+/**
+ * 导出函数 `maxOutputTokensMinusOne`：参数 v，返回 getModelMaxOutputTokens(v).upperLimit - 1。
+ */
+function maxOutputTokensMinusOne(v) {
   return getModelMaxOutputTokens(v).upperLimit - 1;
 }
 //@ chunk-e6aww6q8.js:246225-246275 fingerprint = _temp5 (0.614)
-var O9 = ge({ latest: void 0 }, (e) => {
-  e.latest = void 0;
-});
-
-export { mvi, Lgt, buildNativeDoctorDiagnostics, O9 };
+var latestDiagnosticsStore = identity_2(
+  {
+    latest: undefined,
+  },
+  (e) => {
+    e.latest = undefined;
+  },
+);
+export {
+  maxOutputTokensMinusOne,
+  isReportableDiagnostic,
+  buildNativeDoctorDiagnostics,
+  latestDiagnosticsStore,
+};

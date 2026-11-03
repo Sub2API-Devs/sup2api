@@ -8,20 +8,16 @@
  * pieces: chunk-aepeg2w5.js (6)
  * attribution: fingerprint 3, layout 3
  */
-import {
-  AsyncLocalStorage,
-  AsyncLocalStorage as AsyncLocalStorage_2,
-  AsyncLocalStorage as AsyncLocalStorage_3,
-} from "async_hooks";
-import { DRn } from "./http.js";
+import { AsyncLocalStorage } from "async_hooks";
+import { withWorkloadStorage } from "./http.js";
 
 //@ chunk-aepeg2w5.js:592165-592190 fingerprint = WORKLOAD_CRON (1)
-var WORKLOAD_CRON = "cron",
-  workloadStorage = new AsyncLocalStorage();
+var WORKLOAD_CRON = "cron";
+var workloadStorage = new AsyncLocalStorage();
+//@ chunk-aepeg2w5.js:592190-592236 fingerprint = getWorkload (1)
 /**
  * 当前异步上下文的 workload 标签（如 cron），写进 User-Agent。
  */
-//@ chunk-aepeg2w5.js:592190-592236 fingerprint = getWorkload (1)
 function getWorkload() {
   return workloadStorage.getStore()?.workload;
 }
@@ -31,21 +27,26 @@ function getScheduledByPlugin() {
 }
 //@ chunk-aepeg2w5.js:592291-592376 layout
 function getHookCallerOrScheduler(e) {
-  return e?.hookCaller !== void 0 && !e.hookServesModel ? e.hookCaller : getScheduledByPlugin();
+  return e?.hookCaller !== undefined && !e.hookServesModel ? e.hookCaller : getScheduledByPlugin();
 }
 //@ chunk-aepeg2w5.js:592376-592452 layout
 function clearScheduledByPlugin() {
-  let store = workloadStorage.getStore();
-  if (store !== void 0) store.scheduledByPlugin = void 0;
+  let e = workloadStorage.getStore();
+  if (e !== undefined) e.scheduledByPlugin = undefined;
 }
+//@ chunk-aepeg2w5.js:592452-592522 fingerprint = runWithWorkload (0.544)
 /**
  * 在 AsyncLocalStorage 中以给定 workload 运行函数。
  */
-//@ chunk-aepeg2w5.js:592452-592522 fingerprint = runWithWorkload (0.544)
 function runWithWorkload(workload, fn) {
-  return DRn({ workload: workload, scheduledByPlugin: void 0 }, fn);
+  return withWorkloadStorage(
+    {
+      workload,
+      scheduledByPlugin: undefined,
+    },
+    fn,
+  );
 }
-
 export {
   clearScheduledByPlugin,
   WORKLOAD_CRON,

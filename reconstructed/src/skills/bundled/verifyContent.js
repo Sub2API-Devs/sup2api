@@ -11,19 +11,22 @@
 import __cc_resource_0 from "../../../assets/cli-f091jpwx.md" with { type: "text" };
 import __cc_resource_1 from "../../../assets/server-6cyhjq09.md" with { type: "text" };
 import __cc_resource_2 from "../../../assets/SKILL-cf37e4b8.md.zst" with { type: "file" };
-import { Et } from "../../utils/embeddedAssets.js";
+import { readEmbeddedTextSync } from "../../utils/embeddedAssets.js";
 
 //@ chunk-t40rc4mm.js:484-506 sole-consumer
-var e = __cc_resource_0;
+var examplesCli = __cc_resource_0;
 //@ chunk-t40rc4mm.js:506-528 sole-consumer
-var t = __cc_resource_1;
+var examplesServer = __cc_resource_1;
 //@ chunk-t40rc4mm.js:528-550 sole-consumer
-var s = __cc_resource_2;
+var skillPath = __cc_resource_2;
 //@ chunk-t40rc4mm.js:550-582 sole-consumer
-var i = Et(s, import.meta.dirname);
+var skill = readEmbeddedTextSync(skillPath, import.meta.dirname);
+//@ chunk-t40rc4mm.js:582-637 fingerprint = SKILL_FILES (1)
 /**
  * 内置 skill 资源：SKILL.md 与附带示例文件（examples/cli.md、examples/server.md），zst 压缩资源解码。
  */
-//@ chunk-t40rc4mm.js:582-637 fingerprint = SKILL_FILES (1)
-var SKILL_MD = i,
-  SKILL_FILES = { "examples/cli.md": e, "examples/server.md": t };
+var SKILL_MD = skill;
+var SKILL_FILES = {
+  "examples/cli.md": examplesCli,
+  "examples/server.md": examplesServer,
+};

@@ -6,108 +6,89 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../../runtime/bun-runtime.js";
-import { uh } from "../codegen/index.js";
-import { ew } from "../util.js";
+import { require_codegen_2 } from "../codegen/index.js";
+import { require_util_2 } from "../util.js";
 
 //@ chunk-s82q9s4x.js:36663-38567 cjs-fingerprint
-var an = x(function (nn) {
-  Object.defineProperty(nn, "__esModule", { value: !0 });
-  nn.extendSubschemaMode = nn.extendSubschemaData = nn.getSubschema = void 0;
-  var K = uh(),
-    Nt = ew();
-  function Mu(
-    e,
-    {
-      keyword: keyword,
-      schemaProp: schemaProp,
-      schema: schema,
-      schemaPath: schemaPath,
-      errSchemaPath: errSchemaPath,
-      topSchemaRef: topSchemaRef,
-    },
-  ) {
-    if (keyword !== void 0 && schema !== void 0)
+var require_subschema = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.extendSubschemaMode = cjsExports.extendSubschemaData = cjsExports.getSubschema = undefined;
+  var codegen_1 = require_codegen_2();
+  var util_1 = require_util_2();
+  function getSubschema(it, { keyword, schemaProp, schema, schemaPath, errSchemaPath, topSchemaRef }) {
+    if (keyword !== undefined && schema !== undefined)
       throw Error('both "keyword" and "schema" passed, only one allowed');
-    if (keyword !== void 0) {
-      let a = e.schema[keyword];
-      return schemaProp === void 0
+    if (keyword !== undefined) {
+      let sch = it.schema[keyword];
+      return schemaProp === undefined
         ? {
-            schema: a,
-            schemaPath: K._`${e.schemaPath}${K.getProperty(keyword)}`,
-            errSchemaPath: `${e.errSchemaPath}/${keyword}`,
+            schema: sch,
+            schemaPath: codegen_1._`${it.schemaPath}${codegen_1.getProperty(keyword)}`,
+            errSchemaPath: `${it.errSchemaPath}/${keyword}`,
           }
         : {
-            schema: a[schemaProp],
-            schemaPath: K._`${e.schemaPath}${K.getProperty(keyword)}${K.getProperty(schemaProp)}`,
-            errSchemaPath: `${e.errSchemaPath}/${keyword}/${Nt.escapeFragment(schemaProp)}`,
+            schema: sch[schemaProp],
+            schemaPath: codegen_1._`${it.schemaPath}${codegen_1.getProperty(keyword)}${codegen_1.getProperty(schemaProp)}`,
+            errSchemaPath: `${it.errSchemaPath}/${keyword}/${util_1.escapeFragment(schemaProp)}`,
           };
     }
-    if (schema !== void 0) {
-      if (schemaPath === void 0 || errSchemaPath === void 0 || topSchemaRef === void 0)
+    if (schema !== undefined) {
+      if (schemaPath === undefined || errSchemaPath === undefined || topSchemaRef === undefined)
         throw Error('"schemaPath", "errSchemaPath" and "topSchemaRef" are required with "schema"');
       return {
-        schema: schema,
-        schemaPath: schemaPath,
-        topSchemaRef: topSchemaRef,
-        errSchemaPath: errSchemaPath,
+        schema,
+        schemaPath,
+        topSchemaRef,
+        errSchemaPath,
       };
     }
     throw Error('either "keyword" or "schema" must be passed');
   }
-  nn.getSubschema = Mu;
-  function Au(
-    e,
-    t,
-    {
-      dataProp: dataProp,
-      dataPropType: dataPropType,
-      data: n,
-      dataTypes: dataTypes,
-      propertyName: propertyName,
-    },
+  cjsExports.getSubschema = getSubschema;
+  function extendSubschemaData(
+    subschema,
+    it,
+    { dataProp, dataPropType: dpType, data, dataTypes, propertyName },
   ) {
-    if (n !== void 0 && dataProp !== void 0)
+    if (data !== undefined && dataProp !== undefined)
       throw Error('both "data" and "dataProp" passed, only one allowed');
-    let { gen: gen } = t;
-    if (dataProp !== void 0) {
-      let { errorPath: errorPath, dataPathArr: dataPathArr, opts: opts } = t,
-        b = gen.let("data", K._`${t.data}${K.getProperty(dataProp)}`, !0);
-      (c(b),
-        (e.errorPath = K.str`${errorPath}${Nt.getErrorPath(dataProp, dataPropType, opts.jsPropertySyntax)}`),
-        (e.parentDataProperty = K._`${dataProp}`),
-        (e.dataPathArr = [...dataPathArr, e.parentDataProperty]));
+    let { gen } = it;
+    if (dataProp !== undefined) {
+      let { errorPath, dataPathArr, opts } = it;
+      let nextData = gen.let("data", codegen_1._`${it.data}${codegen_1.getProperty(dataProp)}`, true);
+      dataContextProps(nextData);
+      subschema.errorPath = codegen_1.str`${errorPath}${util_1.getErrorPath(dataProp, dpType, opts.jsPropertySyntax)}`;
+      subschema.parentDataProperty = codegen_1._`${dataProp}`;
+      subschema.dataPathArr = [...dataPathArr, subschema.parentDataProperty];
     }
-    if (n !== void 0) {
-      let u = n instanceof K.Name ? n : gen.let("data", n, !0);
-      if ((c(u), propertyName !== void 0)) e.propertyName = propertyName;
+    if (data !== undefined) {
+      let nextData = data instanceof codegen_1.Name ? data : gen.let("data", data, true);
+      dataContextProps(nextData);
+      if (propertyName !== undefined) subschema.propertyName = propertyName;
     }
-    if (dataTypes) e.dataTypes = dataTypes;
-    function c(u) {
-      ((e.data = u),
-        (e.dataLevel = t.dataLevel + 1),
-        (e.dataTypes = []),
-        (t.definedProperties = new Set()),
-        (e.parentData = t.data),
-        (e.dataNames = [...t.dataNames, u]));
+    if (dataTypes) subschema.dataTypes = dataTypes;
+    function dataContextProps(_nextData) {
+      subschema.data = _nextData;
+      subschema.dataLevel = it.dataLevel + 1;
+      subschema.dataTypes = [];
+      it.definedProperties = new Set();
+      subschema.parentData = it.data;
+      subschema.dataNames = [...it.dataNames, _nextData];
     }
   }
-  nn.extendSubschemaData = Au;
-  function Du(
-    e,
-    {
-      jtdDiscriminator: jtdDiscriminator,
-      jtdMetadata: jtdMetadata,
-      compositeRule: compositeRule,
-      createErrors: createErrors,
-      allErrors: allErrors,
-    },
+  cjsExports.extendSubschemaData = extendSubschemaData;
+  function extendSubschemaMode(
+    subschema,
+    { jtdDiscriminator, jtdMetadata, compositeRule, createErrors, allErrors },
   ) {
-    if (compositeRule !== void 0) e.compositeRule = compositeRule;
-    if (createErrors !== void 0) e.createErrors = createErrors;
-    if (allErrors !== void 0) e.allErrors = allErrors;
-    ((e.jtdDiscriminator = jtdDiscriminator), (e.jtdMetadata = jtdMetadata));
+    if (compositeRule !== undefined) subschema.compositeRule = compositeRule;
+    if (createErrors !== undefined) subschema.createErrors = createErrors;
+    if (allErrors !== undefined) subschema.allErrors = allErrors;
+    subschema.jtdDiscriminator = jtdDiscriminator;
+    subschema.jtdMetadata = jtdMetadata;
   }
-  nn.extendSubschemaMode = Du;
+  cjsExports.extendSubschemaMode = extendSubschemaMode;
 });
-
-export { an };
+export { require_subschema };

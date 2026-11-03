@@ -12,10 +12,9 @@ import { getSettingsWithErrors_2 } from "../utils/settings/settings.js";
 import { CROSSSESSIONINBOUND } from "../utils/settings/hooksValidation.js";
 
 //@ chunk-q40vccff.js:3113-3208 fingerprint = _temp2 (0.621)
-function N() {
+function hasKeybindingWarning() {
   return getSettingsWithErrors_2().errors.some(
     (error) => error.path === CROSSSESSIONINBOUND && error.severity === "warning" && !error.statusOnly,
   );
 }
-
-export { N };
+export { hasKeybindingWarning };

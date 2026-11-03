@@ -5,30 +5,38 @@
  * pieces: chunk-m4p5zn6n.js (1)
  * attribution: esm-layout 1
  */
-
 //@ chunk-m4p5zn6n.js:25888-26318 esm-layout
-var Po = (async () => {})().constructor.prototype,
-  mapped = ["then", "catch", "finally"].map((e) => [e, Reflect.getOwnPropertyDescriptor(Po, e)]),
-  De = (e, n) => {
-    for (let [r, o] of mapped) {
-      let s = typeof n === "function" ? (...u) => Reflect.apply(o.value, n(), u) : o.value.bind(n);
-      Reflect.defineProperty(e, r, { ...o, value: s });
-    }
-  },
-  Tn = (e) =>
-    new Promise((n, r) => {
-      if (
-        (e.on("exit", (o, s) => {
-          n({ exitCode: o, signal: s });
-        }),
-        e.on("error", (o) => {
-          r(o);
-        }),
-        e.stdin)
-      )
-        e.stdin.on("error", (o) => {
-          r(o);
-        });
+var nativePromisePrototype = (async () => {})().constructor.prototype;
+var descriptors = ["then", "catch", "finally"].map((property) => [
+  property,
+  Reflect.getOwnPropertyDescriptor(nativePromisePrototype, property),
+]);
+var mergePromise = (spawned, promise) => {
+  for (let [property, descriptor] of descriptors) {
+    let value =
+      typeof promise === "function"
+        ? (...args) => Reflect.apply(descriptor.value, promise(), args)
+        : descriptor.value.bind(promise);
+    Reflect.defineProperty(spawned, property, {
+      ...descriptor,
+      value,
     });
-
-export { De, Tn };
+  }
+};
+var getSpawnedPromise = (spawned) =>
+  new Promise((resolve, reject) => {
+    spawned.on("exit", (exitCode, signal) => {
+      resolve({
+        exitCode,
+        signal,
+      });
+    });
+    spawned.on("error", (error) => {
+      reject(error);
+    });
+    if (spawned.stdin)
+      spawned.stdin.on("error", (error) => {
+        reject(error);
+      });
+  });
+export { mergePromise, getSpawnedPromise };

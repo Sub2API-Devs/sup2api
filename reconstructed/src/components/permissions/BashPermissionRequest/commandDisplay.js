@@ -9,20 +9,20 @@
  * attribution: placement 15
  */
 import { w } from "../../../../vendor/react/compiler-runtime.js";
-import { ox, Oft } from "../AutoModeSetupReview.js";
+import { REVIEW_DIALOG_WIDTH, REVIEW_HEADER_ROWS } from "../AutoModeSetupReview.js";
 import {
-  e,
-  r,
+  jsxProd_default,
+  jsxProd_default_2,
   Fragment,
 } from "../../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Box } from "../../../ink/components/Text.js";
-import { j, y } from "../../../../vendor/react/cjs/react.production.js";
+import { init_react_production, y } from "../../../../vendor/react/cjs/react.production.js";
 import { wrapText } from "../../../ink/wrap-text.js";
 import { hasVisibleText } from "../../../utils/permissions/approvalPayloadSerialization.js";
 import { formatOverflowHint, truncateToWidth, truncateToWidthNoEllipsis } from "../../../utils/format.js";
 import { bunStringWidth } from "../../../ink/stringWidth.js";
 import { ELLIPSIS } from "../../../ink/styles.js";
-import { tE } from "../../../utils/permissions/currentPermissionContext.js";
+import { currentToolPermissionContext } from "../../../utils/permissions/currentPermissionContext.js";
 import { useIsScreenReaderEnabled } from "../../../ink/components/ErrorBoundary.js";
 import { useTerminalSize } from "../../../hooks/useTerminalSize.js";
 import { FittedOfferBody } from "../../AutocompactOfferDialog.js";
@@ -35,89 +35,100 @@ import { Blockquote } from "../../Blockquote.js";
 import { MEMO_CACHE_SENTINEL } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-18hwfzwa.js:1320936-1321702 placement
-function sandboxHostsSummary(h) {
-  let $ = w(10),
-    { hosts: hosts } = h;
-  if (hosts === void 0 || hosts.length === 0) {
+function sandboxHostsSummary(props) {
+  let $ = w(10);
+  let { hosts } = props;
+  if (hosts === undefined || hosts.length === 0) {
     return null;
   }
-  let D = hosts[0],
-    ee;
-  if ($[0] !== D)
-    ((ee = D.length > ox ? `\u2026${D.slice(D.length - (ox - 1))}` : D), ($[0] = D), ($[1] = ee));
-  else ee = $[1];
+  let D = hosts[0];
+  let ee;
+  if ($[0] !== D) {
+    ee = D.length > REVIEW_DIALOG_WIDTH ? `\u2026${D.slice(D.length - (REVIEW_DIALOG_WIDTH - 1))}` : D;
+    $[0] = D;
+    $[1] = ee;
+  } else ee = $[1];
   let ke;
   if ($[2] !== hosts || $[3] !== ee) {
     ke = [ee];
-    let min = Math.min(ke[0].length + 2, ox / 2);
-    for (const Be of hosts.slice(1)) {
-      if (ke.length >= Oft) {
+    let min = Math.min(ke[0].length + 2, REVIEW_DIALOG_WIDTH / 2);
+    for (const host of hosts.slice(1)) {
+      if (ke.length >= REVIEW_HEADER_ROWS) {
         break;
       }
-      if (min + Be.length > ox) {
+      if (min + host.length > REVIEW_DIALOG_WIDTH) {
         continue;
       }
-      (ke.push(Be), (min = min + (Be.length + 2)));
+      ke.push(host);
+      min = min + (host.length + 2);
     }
-    (($[2] = hosts), ($[3] = ee), ($[4] = ke));
+    $[2] = hosts;
+    $[3] = ee;
+    $[4] = ke;
   } else ke = $[4];
   let He = hosts.length - ke.length;
-  const joined = ke.join(", ");
+  const children = ke.join(", ");
   let ze;
-  if ($[5] !== joined) ((ze = e(Text, { bold: !0, children: joined })), ($[5] = joined), ($[6] = ze));
-  else ze = $[6];
+  if ($[5] !== children) {
+    ze = jsxProd_default(Text, {
+      bold: true,
+      children,
+    });
+    $[5] = children;
+    $[6] = ze;
+  } else ze = $[6];
   const Xe = He > 0 ? ` (+${He} more, ${hosts.length} in all)` : "";
   let rt;
-  if ($[7] !== ze || $[8] !== Xe)
-    ((rt = r(Text, {
+  if ($[7] !== ze || $[8] !== Xe) {
+    rt = jsxProd_default_2(Text, {
       children: ["Also lets this command reach, beyond the sandbox allowlist:", " ", ze, Xe],
-    })),
-      ($[7] = ze),
-      ($[8] = Xe),
-      ($[9] = rt));
-  else rt = $[9];
+    });
+    $[7] = ze;
+    $[8] = Xe;
+    $[9] = rt;
+  } else rt = $[9];
   return rt;
 }
 //@ chunk-18hwfzwa.js:1321702-1321706 placement
-j();
+init_react_production();
 //@ chunk-18hwfzwa.js:1321706-1321734 placement
-var Fft = 2,
-  Bft = 8,
-  q7 = 2,
-  lOo = 10;
+var GUTTER_WIDTH = 2;
+var GUTTER_WIDTH_FULL = 8;
+var MAX_COMMAND_LINES = 2;
+var MIN_COMMAND_LINES = 10;
+//@ chunk-18hwfzwa.js:1321734-1322107 placement
 /**
  * 按宽度折行并去掉空行后，把命令限制在固定行数内，最后一行拼上 "+N lines" 提示。
  */
-//@ chunk-18hwfzwa.js:1321734-1322107 placement
-function truncateCommandForDisplay(h, x) {
-  let max = Math.max(lOo, x),
-    filtered = wrapText(
-      h
-        .split(
-          `
-`,
-        )
-        .filter((We) => hasVisibleText(We)).join(`
-`),
-      max,
-      "wrap",
-    )
+function truncateCommandForDisplay(description, x) {
+  let max = Math.max(MIN_COMMAND_LINES, x);
+  let filtered = wrapText(
+    description
       .split(
         `
 `,
       )
-      .map((We) => We.trimEnd())
-      .filter((We) => hasVisibleText(We));
-  if (filtered.length <= q7)
+      .filter((line) => hasVisibleText(line)).join(`
+`),
+    max,
+    "wrap",
+  )
+    .split(
+      `
+`,
+    )
+    .map((line) => line.trimEnd())
+    .filter((We) => hasVisibleText(We));
+  if (filtered.length <= MAX_COMMAND_LINES)
     return filtered.join(`
 `);
-  let ee = filtered.length - q7,
-    ke = formatOverflowHint(ee, "line"),
-    Re = bunStringWidth(ke) <= max ? ke : `${ELLIPSIS} +${ee}`,
-    Be = max - bunStringWidth(Re) - 1,
-    He = filtered[q7 - 1] ?? "";
+  let ee = filtered.length - MAX_COMMAND_LINES;
+  let ke = formatOverflowHint(ee, "line");
+  let Re = bunStringWidth(ke) <= max ? ke : `${ELLIPSIS} +${ee}`;
+  let Be = max - bunStringWidth(Re) - 1;
+  let He = filtered[MAX_COMMAND_LINES - 1] ?? "";
   return [
-    ...filtered.slice(0, q7 - 1),
+    ...filtered.slice(0, MAX_COMMAND_LINES - 1),
     Be < 1
       ? truncateToWidth(Re, max)
       : `${bunStringWidth(He) <= Be ? He : truncateToWidthNoEllipsis(He, Be)} ${Re}`,
@@ -128,261 +139,297 @@ function truncateCommandForDisplay(h, x) {
 function isNotYesNo(text) {
   return text !== "yes" && text !== "no";
 }
+//@ chunk-18hwfzwa.js:1322149-1322474 placement
 /**
  * 已选定答案后把除 yes/no 外的选项置为 disabled；输入型选项把已填内容拼进标签。
  */
-//@ chunk-18hwfzwa.js:1322149-1322474 placement
-function freezeOptionsAfterAnswer(h, x) {
-  return x === void 0
+function freezeOptionsAfterAnswer(h, fieldLeftOpen) {
+  return fieldLeftOpen === undefined
     ? h
     : h.map((D) => {
         if (!isNotYesNo(D.value)) return D;
-        if (D.type !== "input" || D.value === x) return { ...D, disabled: !0 };
-        let L = D.labelValueSeparator ?? ", ",
-          ee = D.initialValue ?? "";
+        if (D.type !== "input" || D.value === fieldLeftOpen)
+          return {
+            ...D,
+            disabled: true,
+          };
+        let labelValueSeparator = D.labelValueSeparator ?? ", ";
+        let initialValue = D.initialValue ?? "";
         return {
           value: D.value,
-          disabled: !0,
+          disabled: true,
           label:
-            ee === ""
+            initialValue === ""
               ? D.label
               : typeof D.label === "string"
-                ? `${D.label}${L}${ee}`
-                : r(Fragment, { children: [D.label, L, ee] }),
+                ? `${D.label}${labelValueSeparator}${initialValue}`
+                : jsxProd_default_2(Fragment, {
+                    children: [D.label, labelValueSeparator, initialValue],
+                  }),
         };
       });
 }
 //@ chunk-18hwfzwa.js:1322474-1323827 placement
-function CommandDisplay(h) {
-  let $ = w(24),
-    { commandDisplay: commandDisplay, description: description, refinedPrefix: refinedPrefix } = h,
-    [ee] = y(tE),
-    ke = useIsScreenReaderEnabled(),
-    columns = useTerminalSize().columns,
-    He;
-  if ($[0] !== commandDisplay || $[1] !== description || $[2] !== refinedPrefix)
-    ((He = { commandDisplay: commandDisplay, description: description, refinedPrefix: refinedPrefix }),
-      ($[0] = commandDisplay),
-      ($[1] = description),
-      ($[2] = refinedPrefix),
-      ($[3] = He));
-  else He = $[3];
-  let We = He,
-    ze = !ke && ee;
-  const Xe = ee && commandDisplay.kind === "full";
+function CommandDisplay(props) {
+  let $ = w(24);
+  let { commandDisplay, description, refinedPrefix } = props;
+  let [ee] = y(currentToolPermissionContext);
+  let isScreenReaderEnabled = useIsScreenReaderEnabled();
+  let columns = useTerminalSize().columns;
+  let He;
+  if ($[0] !== commandDisplay || $[1] !== description || $[2] !== refinedPrefix) {
+    He = {
+      commandDisplay,
+      description,
+      refinedPrefix,
+    };
+    $[0] = commandDisplay;
+    $[1] = description;
+    $[2] = refinedPrefix;
+    $[3] = He;
+  } else He = $[3];
+  let contentKey = He;
+  let ze = !isScreenReaderEnabled && ee;
+  const isActive = ee && commandDisplay.kind === "full";
   let rt;
-  if ($[4] !== We || $[5] !== ze || $[6] !== Xe)
-    ((rt = { isActive: Xe, isCut: ze, contentKey: We }), ($[4] = We), ($[5] = ze), ($[6] = Xe), ($[7] = rt));
-  else rt = $[7];
-  let kt = FittedOfferBody(commandDisplay.kind === "full" ? commandDisplay.text : "", rt),
-    [At, It] = y(),
-    Ot;
-  if ($[8] !== At) ((Ot = At !== void 0 && isNotYesNo(At) ? At : null), ($[8] = At), ($[9] = Ot));
-  else Ot = $[9];
-  let Et = Ot,
-    [Dt, Lt] = y();
-  if (kt.isHeldForGood && Dt === void 0) Lt(Et);
-  let showNextRows = kt.showNextRows,
-    Xt;
-  if ($[10] !== showNextRows)
-    ((Xt = [{ action: "app:toggleTranscript", run: showNextRows }]), ($[10] = showNextRows), ($[11] = Xt));
-  else Xt = $[11];
-  let io = Xt,
-    so;
-  if ($[12] !== kt.columns || $[13] !== description || $[14] !== ze)
-    ((so = ze ? truncateCommandForDisplay(description, kt.columns - 2) : description),
-      ($[12] = kt.columns),
-      ($[13] = description),
-      ($[14] = ze),
-      ($[15] = so));
-  else so = $[15];
-  let po = so,
-    max = Math.max(
-      1,
-      commandDisplay.kind !== "full" ? columns - Bft : kt.columns - (commandDisplay.needsGutter ? 0 : Fft),
-    );
-  const co = !kt.isStandingHeld ? void 0 : Dt !== void 0 ? Dt : Et;
+  if ($[4] !== contentKey || $[5] !== ze || $[6] !== isActive) {
+    rt = {
+      isActive,
+      isCut: ze,
+      contentKey,
+    };
+    $[4] = contentKey;
+    $[5] = ze;
+    $[6] = isActive;
+    $[7] = rt;
+  } else rt = $[7];
+  let kt = FittedOfferBody(commandDisplay.kind === "full" ? commandDisplay.text : "", rt);
+  let [At, It] = y();
+  let Ot;
+  if ($[8] !== At) {
+    Ot = At !== undefined && isNotYesNo(At) ? At : null;
+    $[8] = At;
+    $[9] = Ot;
+  } else Ot = $[9];
+  let Et = Ot;
+  let [Dt, Lt] = y();
+  if (kt.isHeldForGood && Dt === undefined) Lt(Et);
+  let run = kt.showNextRows;
+  let Xt;
+  if ($[10] !== run) {
+    Xt = [
+      {
+        action: "app:toggleTranscript",
+        run,
+      },
+    ];
+    $[10] = run;
+    $[11] = Xt;
+  } else Xt = $[11];
+  let moreBindings = Xt;
+  let so;
+  if ($[12] !== kt.columns || $[13] !== description || $[14] !== ze) {
+    so = ze ? truncateCommandForDisplay(description, kt.columns - 2) : description;
+    $[12] = kt.columns;
+    $[13] = description;
+    $[14] = ze;
+    $[15] = so;
+  } else so = $[15];
+  let description_2 = so;
+  let reasonColumns = Math.max(
+    1,
+    commandDisplay.kind !== "full"
+      ? columns - GUTTER_WIDTH_FULL
+      : kt.columns - (commandDisplay.needsGutter ? 0 : GUTTER_WIDTH),
+  );
+  const fieldLeftOpen = !kt.isStandingHeld ? undefined : Dt !== undefined ? Dt : Et;
   let bo;
   if (
     $[16] !== kt ||
     $[17] !== ze ||
     $[18] !== ee ||
-    $[19] !== io ||
-    $[20] !== max ||
-    $[21] !== po ||
-    $[22] !== co
-  )
-    ((bo = {
+    $[19] !== moreBindings ||
+    $[20] !== reasonColumns ||
+    $[21] !== description_2 ||
+    $[22] !== fieldLeftOpen
+  ) {
+    bo = {
       isFitted: ee,
       isCut: ze,
-      reasonColumns: max,
-      moreBindings: io,
+      reasonColumns,
+      moreBindings,
       body: kt,
-      description: po,
+      description: description_2,
       noteFocus: It,
-      fieldLeftOpen: co,
-    }),
-      ($[16] = kt),
-      ($[17] = ze),
-      ($[18] = ee),
-      ($[19] = io),
-      ($[20] = max),
-      ($[21] = po),
-      ($[22] = co),
-      ($[23] = bo));
-  else bo = $[23];
+      fieldLeftOpen,
+    };
+    $[16] = kt;
+    $[17] = ze;
+    $[18] = ee;
+    $[19] = moreBindings;
+    $[20] = reasonColumns;
+    $[21] = description_2;
+    $[22] = fieldLeftOpen;
+    $[23] = bo;
+  } else bo = $[23];
   return bo;
 }
+//@ chunk-18hwfzwa.js:1323827-1324156 placement
 /**
  * 内容被裁剪时包一层快捷键（展开更多），未裁剪原样返回子节点。
  */
-//@ chunk-18hwfzwa.js:1323827-1324156 placement
-function FittedBodyKeybindings(h) {
-  let $ = w(4),
-    { fitted: fitted, children: children } = h;
+function FittedBodyKeybindings(props) {
+  let $ = w(4);
+  let { fitted, children } = props;
   if (!fitted.isFitted) {
     return children;
   }
-  const L = fitted.body.hiddenRows > 0 || fitted.body.hiddenAbove > 0;
+  const active = fitted.body.hiddenRows > 0 || fitted.body.hiddenAbove > 0;
   let ke;
-  if ($[0] !== children || $[1] !== fitted.moreBindings || $[2] !== L)
-    ((ke = e(useDialogKeybindings, {
+  if ($[0] !== children || $[1] !== fitted.moreBindings || $[2] !== active) {
+    ke = jsxProd_default(useDialogKeybindings, {
       bindings: fitted.moreBindings,
-      active: L,
+      active,
       flexDirection: "column",
-      children: children,
-    })),
-      ($[0] = children),
-      ($[1] = fitted.moreBindings),
-      ($[2] = L),
-      ($[3] = ke));
-  else ke = $[3];
+      children,
+    });
+    $[0] = children;
+    $[1] = fitted.moreBindings;
+    $[2] = active;
+    $[3] = ke;
+  } else ke = $[3];
   return ke;
 }
 //@ chunk-18hwfzwa.js:1324156-1324166 placement
-var wOo = 6;
+var MIN_HINT_GAP = 6;
+//@ chunk-18hwfzwa.js:1324166-1324506 placement
 /**
  * 生成 "+N lines / N above" 隐藏行提示，按可用列宽依次尝试长短版本，剩余宽度够时再拼上操作提示。
  */
-//@ chunk-18hwfzwa.js:1324166-1324506 placement
-function formatHiddenRowsHint({
-  hiddenRows: hiddenRows,
-  hiddenAbove: hiddenAbove,
-  hint: hint,
-  columns: columns,
-}) {
-  let ee = formatOverflowHint(hiddenRows, "line"),
-    ke =
-      hiddenAbove === 0
-        ? [ee]
-        : hiddenRows === 0
-          ? [
-              `${formatOverflowHint(hiddenAbove, "line")} above`,
-              `${ELLIPSIS} +${hiddenAbove} above`,
-              `${UP_ARROW}${hiddenAbove}`,
-            ]
-          : [
-              `${ee}, +${hiddenAbove} above`,
-              `${ELLIPSIS} +${hiddenRows}, +${hiddenAbove} above`,
-              `${UP_ARROW}${hiddenAbove} ${DOWN_ARROW}${hiddenRows}`,
-            ],
-    Re = ke.find((He) => bunStringWidth(He) <= columns) ?? truncateToWidth(ke.at(-1) ?? ee, columns),
-    Be = columns - bunStringWidth(Re) - 1;
-  return Be < wOo || hint === "" ? Re : `${Re} ${truncateToWidth(hint, Be)}`;
+function formatHiddenRowsHint({ hiddenRows, hiddenAbove, hint, columns }) {
+  let ee = formatOverflowHint(hiddenRows, "line");
+  let ke =
+    hiddenAbove === 0
+      ? [ee]
+      : hiddenRows === 0
+        ? [
+            `${formatOverflowHint(hiddenAbove, "line")} above`,
+            `${ELLIPSIS} +${hiddenAbove} above`,
+            `${UP_ARROW}${hiddenAbove}`,
+          ]
+        : [
+            `${ee}, +${hiddenAbove} above`,
+            `${ELLIPSIS} +${hiddenRows}, +${hiddenAbove} above`,
+            `${UP_ARROW}${hiddenAbove} ${DOWN_ARROW}${hiddenRows}`,
+          ];
+  let Re = ke.find((He) => bunStringWidth(He) <= columns) ?? truncateToWidth(ke.at(-1) ?? ee, columns);
+  let Be = columns - bunStringWidth(Re) - 1;
+  return Be < MIN_HINT_GAP || hint === "" ? Re : `${Re} ${truncateToWidth(hint, Be)}`;
 }
 //@ chunk-18hwfzwa.js:1324506-1325050 placement
-function SeeMoreHint(h) {
-  let $ = w(7),
-    { body: body } = h,
-    D = useShortcutDisplay("app:toggleTranscript", "Global", "ctrl+o"),
-    { hiddenRows: hiddenRows, hiddenAbove: hiddenAbove } = body;
+function SeeMoreHint(props) {
+  let $ = w(7);
+  let { body } = props;
+  let chord = useShortcutDisplay("app:toggleTranscript", "Global", "ctrl+o");
+  let { hiddenRows, hiddenAbove } = body;
   if (hiddenRows === 0 && hiddenAbove === 0) {
     return null;
   }
-  let Re;
-  if ($[0] !== body.columns || $[1] !== hiddenAbove || $[2] !== hiddenRows || $[3] !== D)
-    ((Re = formatHiddenRowsHint({
-      hiddenRows: hiddenRows,
-      hiddenAbove: hiddenAbove,
+  let children;
+  if ($[0] !== body.columns || $[1] !== hiddenAbove || $[2] !== hiddenRows || $[3] !== chord) {
+    children = formatHiddenRowsHint({
+      hiddenRows,
+      hiddenAbove,
       hint: formatShortcutHint({
-        chord: D,
+        chord,
         action: hiddenRows > 0 ? "see more" : "see the first lines",
-        parens: !0,
-        format: { keyCase: "lower" },
+        parens: true,
+        format: {
+          keyCase: "lower",
+        },
       }),
       columns: body.columns,
-    })),
-      ($[0] = body.columns),
-      ($[1] = hiddenAbove),
-      ($[2] = hiddenRows),
-      ($[3] = D),
-      ($[4] = Re));
-  else Re = $[4];
+    });
+    $[0] = body.columns;
+    $[1] = hiddenAbove;
+    $[2] = hiddenRows;
+    $[3] = chord;
+    $[4] = children;
+  } else children = $[4];
   let Be;
-  if ($[5] !== Re)
-    ((Be = e(Text, { dimColor: !0, wrap: "truncate-end", children: Re })), ($[5] = Re), ($[6] = Be));
-  else Be = $[6];
+  if ($[5] !== children) {
+    Be = jsxProd_default(Text, {
+      dimColor: true,
+      wrap: "truncate-end",
+      children,
+    });
+    $[5] = children;
+    $[6] = Be;
+  } else Be = $[6];
   return Be;
 }
+//@ chunk-18hwfzwa.js:1325050-1325527 placement
 /**
  * 权限对话框中的命令预览框：未裁剪时直接引用显示（withheld 显示标记），裁剪时绑定测量 ref 并附 "see more" 提示。
  */
-//@ chunk-18hwfzwa.js:1325050-1325527 placement
-function CommandPreviewFrame({ commandDisplay: commandDisplay, fitted: fitted, inset: inset = 1 }) {
+function CommandPreviewFrame({ commandDisplay, fitted, inset = 1 }) {
   if (!fitted.isFitted || commandDisplay.kind !== "full")
-    return e(DiffFrame, {
+    return jsxProd_default(DiffFrame, {
       paddingX: inset,
-      children: e(Blockquote, {
+      children: jsxProd_default(Blockquote, {
         multiline: commandDisplay.kind === "full" && commandDisplay.needsGutter,
-        children: e(Text, {
+        children: jsxProd_default(Text, {
           children: commandDisplay.kind === "withheld" ? commandDisplay.marker : commandDisplay.text,
         }),
       }),
     });
-  return e(DiffFrame, {
+  return jsxProd_default(DiffFrame, {
     paddingX: inset,
-    children: r(Box, {
+    children: jsxProd_default_2(Box, {
       ref: fitted.body.box,
       flexDirection: "column",
       children: [
-        e(Blockquote, {
+        jsxProd_default(Blockquote, {
           multiline: commandDisplay.needsGutter,
-          children: e(Box, {
+          children: jsxProd_default(Box, {
             ref: fitted.body.textBox,
             flexDirection: "column",
             flexGrow: 1,
-            children: e(Text, { children: fitted.body.text }),
+            children: jsxProd_default(Text, {
+              children: fitted.body.text,
+            }),
           }),
         }),
-        e(SeeMoreHint, { body: fitted.body }),
+        jsxProd_default(SeeMoreHint, {
+          body: fitted.body,
+        }),
       ],
     }),
   });
 }
 //@ chunk-18hwfzwa.js:1325527-1325531 placement
-j();
+init_react_production();
 //@ chunk-18hwfzwa.js:1325531-1325586 placement
-var Kft = "\xB7 auto mode handles these prompts for you";
+var AUTO_MODE_TIP_TEXT = "\xB7 auto mode handles these prompts for you";
+//@ chunk-18hwfzwa.js:1325586-1325769 placement
 /**
  * 渲染"自动模式可替你处理这些提示"的粗体提示。
  */
-//@ chunk-18hwfzwa.js:1325586-1325769 placement
 function AutoModeTip() {
-  let $ = w(1),
-    x;
-  if ($[0] === MEMO_CACHE_SENTINEL)
-    ((x = e(Text, {
-      bold: !0,
+  let $ = w(1);
+  let x;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    x = jsxProd_default(Text, {
+      bold: true,
       children: 'Tip: auto mode handles these prompts for you \u2014 choose "switch to auto mode" below',
-    })),
-      ($[0] = x));
-  else x = $[0];
+    });
+    $[0] = x;
+  } else x = $[0];
   return x;
 }
-
 export {
   CommandDisplay,
-  Kft,
+  AUTO_MODE_TIP_TEXT,
   freezeOptionsAfterAnswer,
   isNotYesNo,
   AutoModeTip,

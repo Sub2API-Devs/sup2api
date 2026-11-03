@@ -9,50 +9,55 @@
  * attribution: placement 24
  */
 import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
-import { kCt } from "../../components/permissions/hooks.js";
+import { recordToolUseDecision } from "../../components/permissions/hooks.js";
 import { isFirstPartyToolboxServer } from "./fileReference/fileReferencePolicy.js";
 import { isSameOriginAsCcr } from "./ccrMcpUrls.js";
 import { isDiskless } from "../../bootstrap/state.js";
 
 //@ chunk-fra6697p.js:339-379 placement
-var i = new SessionRootSlot(() => ({ byToolUse: new Map() }));
+/**
+ * 按会话根保存的“工具调用 → 待上传任务文件”表。
+ */
+var taskFilesByToolUse = new SessionRootSlot(() => ({
+  byToolUse: new Map(),
+}));
+//@ chunk-fra6697p.js:379-505 placement
 /**
  * 登记某次工具调用的待上传任务文件，并在调用结束时自动丢弃。
  */
-//@ chunk-fra6697p.js:379-505 placement
 function registerPendingTaskFiles(e, t) {
-  let { byToolUse: byToolUse } = i.of(e);
-  (byToolUse.set(t.toolUseId, [...(byToolUse.get(t.toolUseId) ?? []), t]),
-    kCt(e, t.toolUseId, () => {
-      discardTaskFiles(e, t);
-    }));
+  let { byToolUse } = taskFilesByToolUse.of(e);
+  byToolUse.set(t.toolUseId, [...(byToolUse.get(t.toolUseId) ?? []), t]);
+  recordToolUseDecision(e, t.toolUseId, () => {
+    discardTaskFiles(e, t);
+  });
 }
+//@ chunk-fra6697p.js:505-636 placement
 /**
  * 查找某次工具调用中指定路径表单、仍在上传或待定的任务文件。
  */
-//@ chunk-fra6697p.js:505-636 placement
 function findInFlightTaskFiles(e, t, r) {
-  return i
+  return taskFilesByToolUse
     .peek(e)
     ?.byToolUse.get(t)
     ?.find((s) => s.pathFormKey === r && (s.state === "uploading" || s.state === "pending"));
 }
+//@ chunk-fra6697p.js:636-997 placement
 /**
  * 查找与工具参数中的文件列表（file_id 与 name 完全一致）对应的待定任务文件。
  */
-//@ chunk-fra6697p.js:636-997 placement
-function findPendingTaskFilesForArgs(e, t, r) {
-  if (e === void 0 || t === void 0) return;
-  if (!Array.isArray(r)) return;
-  return i
-    .peek(e)
-    ?.byToolUse.get(t)
+function findPendingTaskFilesForArgs(session, toolUseId, files) {
+  if (session === undefined || toolUseId === undefined) return;
+  if (!Array.isArray(files)) return;
+  return taskFilesByToolUse
+    .peek(session)
+    ?.byToolUse.get(toolUseId)
     ?.find(
       (s) =>
         s.state === "pending" &&
-        s.files.length === r.length &&
+        s.files.length === files.length &&
         s.files.every((file, u) => {
-          let o = r[u];
+          let o = files[u];
           return (
             typeof o === "object" &&
             o !== null &&
@@ -66,132 +71,174 @@ function findPendingTaskFilesForArgs(e, t, r) {
         }),
     );
 }
+//@ chunk-fra6697p.js:997-1143 placement
 /**
  * 丢弃任务文件：从登记中移除，仍在上传或待定时标记删除并调用远端删除。
  */
-//@ chunk-fra6697p.js:997-1143 placement
-async function discardTaskFiles(e, t) {
-  if ((unregisterTaskFiles(e, t), t.state !== "uploading" && t.state !== "pending")) return;
-  ((t.state = "deleted"), await t.remove(t.files.map((file) => file.file_id)));
+async function discardTaskFiles(session, pendingTaskFilesForArgs) {
+  unregisterTaskFiles(session, pendingTaskFilesForArgs);
+  if (pendingTaskFilesForArgs.state !== "uploading" && pendingTaskFilesForArgs.state !== "pending") return;
+  pendingTaskFilesForArgs.state = "deleted";
+  await pendingTaskFilesForArgs.remove(pendingTaskFilesForArgs.files.map((file) => file.file_id));
 }
 //@ chunk-fra6697p.js:1143-1206 placement
-function cYn(e, t) {
-  if ((unregisterTaskFiles(e, t), t.state !== "deleted")) t.state = "sent";
+/**
+ * 把任务文件标记为已发送并注销。
+ */
+function markTaskFilesSent(session, pendingTaskFilesForArgs) {
+  unregisterTaskFiles(session, pendingTaskFilesForArgs);
+  if (pendingTaskFilesForArgs.state !== "deleted") pendingTaskFilesForArgs.state = "sent";
 }
 //@ chunk-fra6697p.js:1206-1357 placement
 function unregisterTaskFiles(e, t) {
-  let { byToolUse: byToolUse } = i.of(e),
-    filtered = (byToolUse.get(t.toolUseId) ?? []).filter((n) => n !== t);
+  let { byToolUse } = taskFilesByToolUse.of(e);
+  let filtered = (byToolUse.get(t.toolUseId) ?? []).filter((n) => n !== t);
   if (filtered.length === 0) byToolUse.delete(t.toolUseId);
   else byToolUse.set(t.toolUseId, filtered);
 }
 //@ chunk-fra6697p.js:1357-1399 placement
 var REFUSEDBYCCRPROXYBEFOREFORWARDING = "refusedByCcrProxyBeforeForwarding";
 //@ chunk-fra6697p.js:1399-1494 placement
-function z9(e) {
-  if (typeof e === "object" && e !== null)
-    Object.defineProperty(e, REFUSEDBYCCRPROXYBEFOREFORWARDING, { value: !0 });
-  return e;
+/**
+ * 给结果打上“被 CCR 代理拒绝”的标记。
+ */
+function markRefusedByCcrProxy(error) {
+  if (typeof error === "object" && error !== null)
+    Object.defineProperty(error, REFUSEDBYCCRPROXYBEFOREFORWARDING, {
+      value: true,
+    });
+  return error;
 }
 //@ chunk-fra6697p.js:1494-1558 placement
-function yZe(e) {
-  return typeof e === "object" && e !== null && e[REFUSEDBYCCRPROXYBEFOREFORWARDING] === !0;
+/**
+ * 判断结果是否带有“被 CCR 代理拒绝”标记。
+ */
+function isRefusedByCcrProxy(error) {
+  return typeof error === "object" && error !== null && error[REFUSEDBYCCRPROXYBEFOREFORWARDING] === true;
 }
 //@ chunk-fra6697p.js:1558-1814 placement
 var APPROVAL_ARGS_MISMATCH_MESSAGE =
-    "This tool call's approval was for different arguments. Ask the user to approve again \u2014 the previous approval cannot be reused.",
-  APPROVAL_WITHOUT_ARGS_MESSAGE =
-    "Nothing ran: the user's approval was stored without this call's arguments, so it could not be tied to the call.";
+  "This tool call's approval was for different arguments. Ask the user to approve again \u2014 the previous approval cannot be reused.";
+var APPROVAL_WITHOUT_ARGS_MESSAGE =
+  "Nothing ran: the user's approval was stored without this call's arguments, so it could not be tied to the call.";
 //@ chunk-fra6697p.js:1814-1866 placement
-function uYn(e) {
-  return e.includes(APPROVAL_ARGS_MISMATCH_MESSAGE) || e.includes(APPROVAL_WITHOUT_ARGS_MESSAGE);
+/**
+ * 判断错误文本是否属于审批参数不一致。
+ */
+function isApprovalMismatchMessage(message) {
+  return message.includes(APPROVAL_ARGS_MISMATCH_MESSAGE) || message.includes(APPROVAL_WITHOUT_ARGS_MESSAGE);
 }
 //@ chunk-fra6697p.js:1866-1906 placement
-var a = new SessionRootSlot(() => ({ byToolUse: new Map() }));
+/**
+ * 按会话根保存的“工具调用 → 丢弃回调”表。
+ */
+var taskFileDiscarders = new SessionRootSlot(() => ({
+  byToolUse: new Map(),
+}));
 //@ chunk-fra6697p.js:1906-1953 placement
-function NBt(e, t, r) {
-  a.of(e).byToolUse.set(t, r);
+/**
+ * 登记某工具调用的丢弃回调。
+ */
+function registerDiscarder(session, toolUseId, r) {
+  taskFileDiscarders.of(session).byToolUse.set(toolUseId, r);
 }
 //@ chunk-fra6697p.js:1953-2002 placement
-function $Bt(e, t) {
-  a.peek(e)?.byToolUse.delete(t);
+/**
+ * 注销某工具调用的丢弃回调。
+ */
+function unregisterDiscarder(session, toolUseId) {
+  taskFileDiscarders.peek(session)?.byToolUse.delete(toolUseId);
 }
 //@ chunk-fra6697p.js:2002-2092 placement
-function fYn(e, t) {
-  if (e === void 0 || t === void 0) return;
-  return a.peek(e)?.byToolUse.get(t)?.();
+/**
+ * 执行并注销某工具调用的丢弃回调。
+ */
+function runDiscarder(session, toolUseId) {
+  if (session === undefined || toolUseId === undefined) return;
+  return taskFileDiscarders.peek(session)?.byToolUse.get(toolUseId)?.();
 }
 //@ chunk-fra6697p.js:2092-2207 placement
-var AGENT_TASKS_MCP_PATH = "/v1/claudeai-agents/mcp",
-  F688F3FC_1D05_5BD1_9C48_9854EC083044 = "f688f3fc-1d05-5bd1-9c48-9854ec083044",
-  gzs = new SessionRootSlot(() => ({})),
-  hzs = new SessionRootSlot(() => ({}));
+/**
+ * 启动时持有的服务器 id 集合。
+ */
+var AGENT_TASKS_MCP_PATH = "/v1/claudeai-agents/mcp";
+var F688F3FC_1D05_5BD1_9C48_9854EC083044 = "f688f3fc-1d05-5bd1-9c48-9854ec083044";
+var bootHeldServers = new SessionRootSlot(() => ({}));
+var bootHeldServerIds = new SessionRootSlot(() => ({}));
+//@ chunk-fra6697p.js:2207-2338 placement
 /**
  * 判断 MCP 服务器是否是启动时就持有、地址未变的 http 服务器。
  */
-//@ chunk-fra6697p.js:2207-2338 placement
-function isBootHeldServer(e, t) {
-  let r = e.servers.get(t.name);
-  return r !== void 0 && t.config.type === "http" && t.config.url === r && e.heldSinceBoot(t.name);
+function isBootHeldServer(host, t) {
+  let r = host.servers.get(t.name);
+  return r !== undefined && t.config.type === "http" && t.config.url === r && host.heldSinceBoot(t.name);
 }
 //@ chunk-fra6697p.js:2338-2391 placement
-var m_e = /^file_[A-Za-z0-9_-]{1,128}$/,
-  GET_TASK = "get_task";
+/**
+ * 任务文件 id 的正则（file_ 前缀）。
+ */
+var FILE_ID_RE = /^file_[A-Za-z0-9_-]{1,128}$/;
+var GET_TASK = "get_task";
 //@ chunk-fra6697p.js:2391-2450 placement
-function FBt(e) {
-  return e === "start_task" || e === "update_task";
+/**
+ * 判断是否为写任务类的 MCP 方法（start_task/update_task）。
+ */
+function isTaskWriteMethod(name) {
+  return name === "start_task" || name === "update_task";
 }
 //@ chunk-fra6697p.js:2450-2500 placement
-function matchesToolboxServer(e) {
-  return isFirstPartyToolboxServer(e, {
+function matchesToolboxServer(connection) {
+  return isFirstPartyToolboxServer(connection, {
     path: AGENT_TASKS_MCP_PATH,
     serverId: F688F3FC_1D05_5BD1_9C48_9854EC083044,
   });
 }
 //@ chunk-fra6697p.js:2500-2595 placement = isHTTPConfig (1)
 function isToolboxMcpServer(config) {
-  if (config.config.type !== "http" || !isSameOriginAsCcr(config.config.url)) return !1;
+  if (config.config.type !== "http" || !isSameOriginAsCcr(config.config.url)) return false;
   return isDiskless() ? hasToolboxServerIdParam(config) : matchesToolboxServer(config);
 }
+//@ chunk-fra6697p.js:2595-2790 placement
 /**
  * hasToolboxServerIdParam：http 配置 URL 的 toolbox_mcp_server_id 参数匹配内置远程设备服务器 ID。
  */
-//@ chunk-fra6697p.js:2595-2790 placement
 function hasToolboxServerIdParam(e) {
-  if (e.config.type !== "http" || !isSameOriginAsCcr(e.config.url)) return !1;
+  if (e.config.type !== "http" || !isSameOriginAsCcr(e.config.url)) return false;
   try {
     return new URL(e.config.url).searchParams
       .getAll("toolbox_mcp_server_id")
       .some((t) => t.toLowerCase() === F688F3FC_1D05_5BD1_9C48_9854EC083044);
   } catch {
-    return !1;
+    return false;
   }
 }
 //@ chunk-fra6697p.js:2790-2833 placement
-function UBt(e) {
-  return matchesToolboxServer(e) || (isDiskless() && hasToolboxServerIdParam(e));
+/**
+ * 判断该服务器是否为 toolbox 服务器（或无盘会话里带 toolbox id 参数）。
+ */
+function isToolboxServer(client) {
+  return matchesToolboxServer(client) || (isDiskless() && hasToolboxServerIdParam(client));
 }
-
 export {
-  z9,
+  markRefusedByCcrProxy,
   GET_TASK,
-  UBt,
-  FBt,
+  isToolboxServer,
+  isTaskWriteMethod,
   findPendingTaskFilesForArgs,
   discardTaskFiles,
-  NBt,
-  yZe,
-  $Bt,
-  cYn,
+  registerDiscarder,
+  isRefusedByCcrProxy,
+  unregisterDiscarder,
+  markTaskFilesSent,
   isToolboxMcpServer,
-  uYn,
-  fYn,
-  m_e,
+  isApprovalMismatchMessage,
+  runDiscarder,
+  FILE_ID_RE,
   matchesToolboxServer,
   hasToolboxServerIdParam,
-  hzs,
+  bootHeldServerIds,
   isBootHeldServer,
-  gzs,
+  bootHeldServers,
   findInFlightTaskFiles,
   registerPendingTaskFiles,
 };

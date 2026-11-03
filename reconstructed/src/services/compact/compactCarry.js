@@ -9,11 +9,11 @@
  * attribution: placement 20
  */
 import { logFeatureSad, logFeatureOk } from "../analytics/featureTelemetry.js";
-import { threadRuleMode, Us } from "../projects/threadRows.js";
+import { threadRuleMode, messagesSinceCompactBoundary } from "../projects/threadRows.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, o, E, M, T } from "../../../vendor/zod/v4/classic/schemas.js";
-import { p$e } from "../../utils/cronTasks.js";
+import { u, string, E, M, literal } from "../../../vendor/zod/v4/classic/schemas.js";
+import { isValidPluginName } from "../../utils/cronTasks.js";
 import { getSessionCronTasks, isDiskless } from "../../bootstrap/state.js";
 import { uniq } from "../../utils/collections.js";
 import {
@@ -25,233 +25,308 @@ import { logForDebugging, createAttachmentMessage_2 as createAttachmentMessage }
 import { toolMatchesName } from "../../Tool.js";
 import { FILE_READ_TOOL_NAME } from "../../tools/FileReadTool/constants.js";
 import { BASH_TOOL_NAME } from "../../tools/BashTool/toolName.js";
-import { $bn } from "../../tools/ReadNotificationsTool/ReadNotificationsTool.js";
+import { isCoordinatorShellVerifiable } from "../../tools/ReadNotificationsTool/ReadNotificationsTool.js";
 import { REPL_TOOL_NAME } from "../../tools/REPLTool/constants.js";
 
 //@ chunk-e6aww6q8.js:2225644-2225674 placement
-var Bin = { classifierSide: null };
+/**
+ * 压缩携带用的分类器侧状态（所在侧）。
+ */
+var classifierCarryState = {
+  classifierSide: null,
+};
 //@ chunk-e6aww6q8.js:2225674-2225711 placement
-function Uin(e) {
-  Bin.classifierSide = e;
+/**
+ * 设置分类器侧状态（compaction 携带时使用）。
+ */
+function setClassifierCarryState(classifierSide) {
+  classifierCarryState.classifierSide = classifierSide;
 }
 //@ chunk-e6aww6q8.js:2225711-2225725 placement
-var plr = 65536;
+/**
+ * 项目线程询问附件允许的最大 JSON 字节数（64 KiB）。
+ */
+var MAX_CARRY_ASK_BYTES = 65536;
+//@ chunk-e6aww6q8.js:2225725-2226699 placement
 /**
  * 压缩时把仍在等待回复的项目线程询问带过边界（分类器已加载、保留的消息是尾部、询问未被回答/编辑、长度合适），返回 projects_thread_ask 附件。
  */
-//@ chunk-e6aww6q8.js:2225725-2226699 placement
 function carryProjectsThreadAsk(e, n, r) {
-  let { classifierSide: classifierSide } = Bin;
-  if (classifierSide === null)
-    return (logFeatureSad("auto_mode_projects_thread_ask_carry", "classifier_not_loaded"), null);
+  let { classifierSide } = classifierCarryState;
+  if (classifierSide === null) {
+    logFeatureSad("auto_mode_projects_thread_ask_carry", "classifier_not_loaded");
+    return null;
+  }
   if (!classifierSide.creditsOwnerRows(r) || threadRuleMode() !== "compact-held") return null;
-  let h = new Set(n.map((Z) => Z.uuid)),
-    index = e.findIndex((Z) => h.has(Z.uuid)),
-    S = index === -1 ? e.length : index,
-    sliced = e.slice(S);
-  if (!sliced.every((Z) => Z.type === "progress" || h.has(Z.uuid)))
-    return (logFeatureSad("auto_mode_projects_thread_ask_carry", "kept_not_the_tail"), null);
-  let standingAsk = classifierSide.standingAsk(
-      [
-        ...e.slice(0, S),
-        ...sliced.filter((Z) => Z.type === "attachment" && Z.attachment.type === "projects_thread_ask"),
-      ],
-      r,
-    ),
-    G = e.at(-1)?.uuid;
-  if (standingAsk === void 0 || G === void 0) return null;
-  if (standingAsk.answered !== void 0 || standingAsk.edited === !0)
-    return (logFeatureSad("auto_mode_projects_thread_ask_carry", "followed_by_words"), null);
+  let h = new Set(n.map((Z) => Z.uuid));
+  let index = e.findIndex((Z) => h.has(Z.uuid));
+  let S = index === -1 ? e.length : index;
+  let sliced = e.slice(S);
+  if (!sliced.every((Z) => Z.type === "progress" || h.has(Z.uuid))) {
+    logFeatureSad("auto_mode_projects_thread_ask_carry", "kept_not_the_tail");
+    return null;
+  }
+  let L = classifierSide.standingAsk(
+    [
+      ...e.slice(0, S),
+      ...sliced.filter((Z) => Z.type === "attachment" && Z.attachment.type === "projects_thread_ask"),
+    ],
+    r,
+  );
+  let uuid = e.at(-1)?.uuid;
+  if (L === undefined || uuid === undefined) return null;
+  if (L.answered !== undefined || L.edited === true) {
+    logFeatureSad("auto_mode_projects_thread_ask_carry", "followed_by_words");
+    return null;
+  }
   let q = {
     type: "projects_thread_ask",
-    call: standingAsk.call,
-    after: G,
-    deliveredAt: standingAsk.at,
-    ...(standingAsk.messageId !== void 0 && { messageId: standingAsk.messageId }),
+    call: L.call,
+    after: uuid,
+    deliveredAt: L.at,
+    ...(L.messageId !== undefined && {
+      messageId: L.messageId,
+    }),
   };
-  if (jsonStringify(q).length > plr)
-    return (logFeatureSad("auto_mode_projects_thread_ask_carry", "reply_too_long"), null);
-  return (logFeatureOk("auto_mode_projects_thread_ask_carry"), q);
+  if (jsonStringify(q).length > MAX_CARRY_ASK_BYTES) {
+    logFeatureSad("auto_mode_projects_thread_ask_carry", "reply_too_long");
+    return null;
+  }
+  logFeatureOk("auto_mode_projects_thread_ask_carry");
+  return q;
 }
+//@ chunk-e6aww6q8.js:2226699-2226908 placement
 /**
  * 跨压缩携带的会话定时任务与唤醒记录 schema。
  */
-//@ chunk-e6aww6q8.js:2226699-2226908 placement
 var CARRIED_CRON_SCHEMA = DoctorLazy(() =>
-    u({
-      id: o().min(1),
-      cron: o(),
-      prompt: o(),
-      createdAt: E(),
-      recurring: M(),
-      plugin: o().refine(p$e).optional(),
-    }),
-  ),
-  CARRIED_WAKEUP_SCHEMA = DoctorLazy(() =>
-    u({ prompt: o(), scheduledFor: E(), reason: o().optional(), keepalive: T(!0).optional() }),
-  );
+  u({
+    id: string().min(1),
+    cron: string(),
+    prompt: string(),
+    createdAt: E(),
+    recurring: M(),
+    plugin: string().refine(isValidPluginName).optional(),
+  }),
+);
+var CARRIED_WAKEUP_SCHEMA = DoctorLazy(() =>
+  u({
+    prompt: string(),
+    scheduledFor: E(),
+    reason: string().optional(),
+    keepalive: literal(true).optional(),
+  }),
+);
 //@ chunk-e6aww6q8.js:2226908-2227681 placement
 function carryLoopCronAcrossCompact(e, n) {
-  let r = scanCronHistory(e),
-    s = !hWr() && !r.recordsHandoff;
+  let r = scanCronHistory(e);
+  let s = !hasCarriableCron() && !r.recordsHandoff;
   if (r.made.size === 0 && r.noted.size === 0 && s) return null;
-  let h = new Set(n.map((ke) => ke.uuid)),
-    y = (ke) => r.made.has(ke.id) || r.noted.has(ke.id),
-    S = scanCronHistory(n),
-    w = buildCronCarryAttachment(y, S, scanCronHistory(e.filter((ke) => !h.has(ke.uuid)))),
-    L = getSessionCronTasks(),
-    mapped = L.filter((ke) => isCarriableCron(ke) && ke.kind === void 0)
-      .filter((ke) => !y(ke))
-      .map((ke) => ({
-        id: ke.id,
-        cron: ke.cron,
-        prompt: ke.prompt,
-        createdAt: ke.createdAt,
-        recurring: ke.recurring === !0,
-      })),
-    found = L.find((ke) => isCarriableCron(ke) && ke.kind === "loop"),
-    Z =
-      found?.scheduledFor === void 0
-        ? void 0
-        : {
-            prompt: found.prompt,
-            scheduledFor: found.scheduledFor,
-            ...(found.reason !== void 0 && { reason: found.reason }),
-            ...(found.keepalive === !0 && { keepalive: !0 }),
-          };
-  return mapped.length > 0 || Z !== void 0 || S.recordsHandoff
+  let h = new Set(n.map((ke) => ke.uuid));
+  let y = (sessionCronTask) => r.made.has(sessionCronTask.id) || r.noted.has(sessionCronTask.id);
+  let S = scanCronHistory(n);
+  let cronCarryAttachment = buildCronCarryAttachment(
+    y,
+    S,
+    scanCronHistory(e.filter((ke) => !h.has(ke.uuid))),
+  );
+  let sessionCronTasks = getSessionCronTasks();
+  let mapped = sessionCronTasks
+    .filter((sessionCronTask) => isCarriableCron(sessionCronTask) && sessionCronTask.kind === undefined)
+    .filter((sessionCronTask) => !y(sessionCronTask))
+    .map((sessionCronTask) => ({
+      id: sessionCronTask.id,
+      cron: sessionCronTask.cron,
+      prompt: sessionCronTask.prompt,
+      createdAt: sessionCronTask.createdAt,
+      recurring: sessionCronTask.recurring === true,
+    }));
+  let found = sessionCronTasks.find(
+    (sessionCronTask) => isCarriableCron(sessionCronTask) && sessionCronTask.kind === "loop",
+  );
+  let Z =
+    found?.scheduledFor === undefined
+      ? undefined
+      : {
+          prompt: found.prompt,
+          scheduledFor: found.scheduledFor,
+          ...(found.reason !== undefined && {
+            reason: found.reason,
+          }),
+          ...(found.keepalive === true && {
+            keepalive: true,
+          }),
+        };
+  return mapped.length > 0 || Z !== undefined || S.recordsHandoff
     ? {
-        ...(w ?? { type: "session_cron_carry", tasks: [] }),
-        ...(mapped.length > 0 && { otherArmed: mapped }),
-        ...(Z !== void 0 && { wakeup: Z }),
+        ...(cronCarryAttachment ?? {
+          type: "session_cron_carry",
+          tasks: [],
+        }),
+        ...(mapped.length > 0 && {
+          otherArmed: mapped,
+        }),
+        ...(Z !== undefined && {
+          wakeup: Z,
+        }),
       }
-    : w;
+    : cronCarryAttachment;
 }
 //@ chunk-e6aww6q8.js:2227681-2227752 placement
-function Z5s(e) {
+/**
+ * 定时任务历史里是否有备注或被删除的条目。
+ */
+function hasCronHistoryChanges(e) {
   let n = scanCronHistory(e);
   return n.lastNote !== null || n.deleted.size > 0;
 }
+//@ chunk-e6aww6q8.js:2227752-2228045 placement
 /**
  * 在压缩失败后的重试中确定仍需携带的定时任务。
  */
-//@ chunk-e6aww6q8.js:2227752-2228045 placement
 function carryCronsAfterRefusal(e, n) {
-  let r = scanCronHistory(n),
-    s = scanCronHistory(e),
-    h = (S) => s.made.has(S) || s.noted.has(S);
+  let r = scanCronHistory(n);
+  let s = scanCronHistory(e);
+  let h = (id) => s.made.has(id) || s.noted.has(id);
   if (r.lastNote === null && ![...r.deleted].some(h)) return null;
   if (missingRecurringCrons(s, [s, r]).length > 0) return null;
-  let parse = Date.parse(n[0]?.timestamp ?? "");
+  let timestamp = Date.parse(n[0]?.timestamp ?? "");
   return buildCronCarryAttachment(
-    (S) => !r.made.has(S.id) && (h(S.id) || (r.noted.has(S.id) && S.createdAt <= parse)),
+    (S) => !r.made.has(S.id) && (h(S.id) || (r.noted.has(S.id) && S.createdAt <= timestamp)),
     s,
     r,
   );
 }
+//@ chunk-e6aww6q8.js:2228045-2228502 placement
 /**
  * 生成 session_cron_carry 附件：当前会话的普通定时任务与已结束的任务 id。
  */
-//@ chunk-e6aww6q8.js:2228045-2228502 placement
 function buildCronCarryAttachment(e, n, r) {
-  let s = getSessionCronTasks(),
-    mapped = s
-      .filter((S) => e(S) && S.agentId === void 0 && S.kind === void 0)
-      .map((S) => ({
-        id: S.id,
-        cron: S.cron,
-        prompt: S.prompt,
-        createdAt: S.createdAt,
-        recurring: S.recurring === !0,
-        ...(S.plugin !== void 0 && { plugin: S.plugin }),
-      })),
-    filtered = uniq([...n.made, ...n.noted]).filter(
-      (S) => (r.deleted.has(S) || n.ended.has(S) || r.ended.has(S)) && !s.some((w) => w.id === S),
-    );
+  let sessionCronTasks = getSessionCronTasks();
+  let mapped = sessionCronTasks
+    .filter(
+      (sessionCronTask) =>
+        e(sessionCronTask) && sessionCronTask.agentId === undefined && sessionCronTask.kind === undefined,
+    )
+    .map((sessionCronTask) => ({
+      id: sessionCronTask.id,
+      cron: sessionCronTask.cron,
+      prompt: sessionCronTask.prompt,
+      createdAt: sessionCronTask.createdAt,
+      recurring: sessionCronTask.recurring === true,
+      ...(sessionCronTask.plugin !== undefined && {
+        plugin: sessionCronTask.plugin,
+      }),
+    }));
+  let filtered = uniq([...n.made, ...n.noted]).filter(
+    (S) =>
+      (r.deleted.has(S) || n.ended.has(S) || r.ended.has(S)) &&
+      !sessionCronTasks.some((sessionCronTask) => sessionCronTask.id === S),
+  );
   return mapped.length > 0 || filtered.length > 0 || n.noted.size > 0
-    ? { type: "session_cron_carry", tasks: mapped, ...(filtered.length > 0 && { ended: filtered }) }
+    ? {
+        type: "session_cron_carry",
+        tasks: mapped,
+        ...(filtered.length > 0 && {
+          ended: filtered,
+        }),
+      }
     : null;
 }
+//@ chunk-e6aww6q8.js:2228502-2228697 placement
 /**
  * 把上次携带记录中仍未恢复的循环任务补进附件。
  */
-//@ chunk-e6aww6q8.js:2228502-2228697 placement
 function addMissingRecurringCrons(e, n) {
-  let r = scanCronHistory(e),
-    s = missingRecurringCrons(r, [r]),
-    h = new Set(n?.tasks.map((S) => S.id)),
-    filtered = s.filter((S) => !h.has(S.id));
+  let r = scanCronHistory(e);
+  let s = missingRecurringCrons(r, [r]);
+  let h = new Set(n?.tasks.map((task) => task.id));
+  let filtered = s.filter((S) => !h.has(S.id));
   return filtered.length === 0
     ? n
-    : { ...(n ?? { type: "session_cron_carry" }), tasks: [...(n?.tasks ?? []), ...filtered] };
+    : {
+        ...(n ?? {
+          type: "session_cron_carry",
+        }),
+        tasks: [...(n?.tasks ?? []), ...filtered],
+      };
 }
 //@ chunk-e6aww6q8.js:2228697-2228734 placement
-function hWr() {
+/**
+ * 当前会话是否有可携带的定时任务。
+ */
+function hasCarriableCron() {
   return getSessionCronTasks().some(isCarriableCron);
 }
+//@ chunk-e6aww6q8.js:2228734-2228890 placement
 /**
  * 上次记录中的循环任务里，当前不存在且未被删除/结束的那些。
  */
-//@ chunk-e6aww6q8.js:2228734-2228890 placement
 function missingRecurringCrons(e, n) {
-  let r = getSessionCronTasks();
+  let sessionCronTasks = getSessionCronTasks();
   return (e.lastNote ?? []).filter(
-    ({ id: id, recurring: recurring }) =>
-      recurring && !r.some((y) => y.id === id) && !n.some((y) => y.deleted.has(id) || y.ended.has(id)),
+    ({ id, recurring }) =>
+      recurring &&
+      !sessionCronTasks.some((sessionCronTask) => sessionCronTask.id === id) &&
+      !n.some((y) => y.deleted.has(id) || y.ended.has(id)),
   );
 }
+//@ chunk-e6aww6q8.js:2228890-2228993 placement
 /**
  * 主线程的普通定时任务或已排期的 loop 任务。
  */
-//@ chunk-e6aww6q8.js:2228890-2228993 placement
-function isCarriableCron(e) {
-  return e.agentId === void 0 && (e.kind === void 0 || (e.kind === "loop" && e.scheduledFor !== void 0));
+function isCarriableCron(sessionCronTask) {
+  return (
+    sessionCronTask.agentId === undefined &&
+    (sessionCronTask.kind === undefined ||
+      (sessionCronTask.kind === "loop" && sessionCronTask.scheduledFor !== undefined))
+  );
 }
+//@ chunk-e6aww6q8.js:2228993-2229243 placement
 /**
  * 读取携带附件中的其他已装配任务与唤醒信息。
  */
-//@ chunk-e6aww6q8.js:2228993-2229243 placement
 function readCronHandoff(e) {
   if (e.type !== "attachment" || e.attachment?.type !== "session_cron_carry") return null;
-  let otherArmed = e.attachment.otherArmed,
-    safeParse = CARRIED_WAKEUP_SCHEMA().safeParse(e.attachment.wakeup);
+  let otherArmed = e.attachment.otherArmed;
+  let r = CARRIED_WAKEUP_SCHEMA().safeParse(e.attachment.wakeup);
   return {
     otherArmed: Array.isArray(otherArmed) ? otherArmed.flatMap(parseCarriedCron) : [],
-    wakeup: safeParse.success ? safeParse.data : void 0,
+    wakeup: r.success ? r.data : undefined,
   };
 }
+//@ chunk-e6aww6q8.js:2229243-2229406 placement
 /**
  * 读取携带附件中的任务列表。
  */
-//@ chunk-e6aww6q8.js:2229243-2229406 placement
 function readCarriedCrons(e) {
   if (e.type !== "attachment" || e.attachment?.type !== "session_cron_carry") return null;
   let tasks = e.attachment.tasks;
   return Array.isArray(tasks) ? tasks.flatMap(parseCarriedCron) : [];
 }
+//@ chunk-e6aww6q8.js:2229406-2229586 placement
 /**
  * 读取携带附件中已结束的任务 id。
  */
-//@ chunk-e6aww6q8.js:2229406-2229586 placement
 function readEndedCronIds(e) {
   if (e.type !== "attachment" || e.attachment?.type !== "session_cron_carry") return [];
   let ended = e.attachment.ended;
   return Array.isArray(ended) ? ended.filter((r) => typeof r === "string") : [];
 }
+//@ chunk-e6aww6q8.js:2229586-2230494 placement
 /**
  * 扫描消息：创建、删除、携带记录中的定时任务 id 与最后一次携带记录。
  */
-//@ chunk-e6aww6q8.js:2229586-2230494 placement
 function scanCronHistory(e) {
-  let n = new Set(),
-    r = {
-      made: new Set(),
-      noted: new Set(),
-      deleted: new Set(),
-      ended: new Set(),
-      lastNote: null,
-      recordsHandoff: !1,
-    };
+  let n = new Set();
+  let r = {
+    made: new Set(),
+    noted: new Set(),
+    deleted: new Set(),
+    ended: new Set(),
+    lastNote: null,
+    recordsHandoff: false,
+  };
   for (let s of e)
     if (s.type === "assistant") {
       let content = s.message.content;
@@ -270,66 +345,69 @@ function scanCronHistory(e) {
           r.deleted.add(input.id);
       }
     } else if (s.type === "user") {
-      let content = s.message.content,
-        toolUseResult = s.toolUseResult;
+      let content = s.message.content;
+      let toolUseResult = s.toolUseResult;
       if (
         Array.isArray(content) &&
         typeof toolUseResult === "object" &&
         toolUseResult !== null &&
         "id" in toolUseResult &&
         typeof toolUseResult.id === "string" &&
-        !("durable" in toolUseResult && toolUseResult.durable === !0) &&
+        !("durable" in toolUseResult && toolUseResult.durable === true) &&
         content.some((S) => S?.type === "tool_result" && !S.is_error && n.has(S.tool_use_id))
       )
         r.made.add(toolUseResult.id);
     } else {
-      let h = readCarriedCrons(s);
-      if (h === null) continue;
-      r.lastNote = h;
-      for (let S of h) r.noted.add(S.id);
+      let carriedCrons = readCarriedCrons(s);
+      if (carriedCrons === null) continue;
+      r.lastNote = carriedCrons;
+      for (let carriedCron of carriedCrons) r.noted.add(carriedCron.id);
       for (let S of readEndedCronIds(s)) r.ended.add(S);
-      let y = readCronHandoff(s);
-      if (y !== null && (y.otherArmed.length > 0 || y.wakeup !== void 0)) r.recordsHandoff = !0;
+      let cronHandoff = readCronHandoff(s);
+      if (cronHandoff !== null && (cronHandoff.otherArmed.length > 0 || cronHandoff.wakeup !== undefined))
+        r.recordsHandoff = true;
     }
   return r;
 }
+//@ chunk-e6aww6q8.js:2230494-2230637 placement
 /**
  * 校验一条携带的定时任务（格式错误时丢弃并记录）。
  */
-//@ chunk-e6aww6q8.js:2230494-2230637 placement
 function parseCarriedCron(e) {
-  let safeParse = CARRIED_CRON_SCHEMA().safeParse(e);
-  if (!safeParse.success) logForDebugging("resume: a carried session cron is left out: malformed");
-  return safeParse.success ? [safeParse.data] : [];
+  let n = CARRIED_CRON_SCHEMA().safeParse(e);
+  if (!n.success) logForDebugging("resume: a carried session cron is left out: malformed");
+  return n.success ? [n.data] : [];
 }
 //@ chunk-e6aww6q8.js:2230637-2230725 placement
-function HM(e) {
-  if (isDiskless()) return !1;
-  return e.some(
+/**
+ * 保留的工具里是否有会因压缩丢失会话状态读取的工具（读文件、Bash、REPL）；无盘会话恒为否。
+ */
+function willToolsLoseSessionState(tools) {
+  if (isDiskless()) return false;
+  return tools.some(
     (n) =>
       toolMatchesName(n, FILE_READ_TOOL_NAME) ||
-      (toolMatchesName(n, BASH_TOOL_NAME) && !$bn()) ||
+      (toolMatchesName(n, BASH_TOOL_NAME) && !isCoordinatorShellVerifiable()) ||
       toolMatchesName(n, REPL_TOOL_NAME),
   );
 }
+//@ chunk-0sfjpx19.js:139745-139858 placement
 /**
  * Kairos 定时任务开启时，为保留的定时任务生成随压缩/回退携带的附件消息。
  */
-//@ chunk-0sfjpx19.js:139745-139858 placement
 function cronCarryAttachment(e, n) {
-  if (e.length === 0 || !Z5s(n) || !isKairosCronEnabled()) return null;
-  let r = carryCronsAfterRefusal(Us([...e]), n);
+  if (e.length === 0 || !hasCronHistoryChanges(n) || !isKairosCronEnabled()) return null;
+  let r = carryCronsAfterRefusal(messagesSinceCompactBoundary([...e]), n);
   return r === null ? null : createAttachmentMessage(r);
 }
-
 export {
-  HM,
+  willToolsLoseSessionState,
   readCarriedCrons,
   readEndedCronIds,
   cronCarryAttachment,
   addMissingRecurringCrons,
   carryLoopCronAcrossCompact,
-  hWr,
-  Uin,
+  hasCarriableCron,
+  setClassifierCarryState,
   carryProjectsThreadAsk,
 };

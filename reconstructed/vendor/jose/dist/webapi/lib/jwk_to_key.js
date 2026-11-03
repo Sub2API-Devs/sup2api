@@ -5,102 +5,141 @@
  * pieces: chunk-5h78gfwc.js (3)
  * attribution: esm-fingerprint 3
  */
-import { f_2 } from "../../node/esm/util/errors.js";
+import { JOSENotSupported } from "../../node/esm/util/errors.js";
 
 //@ chunk-5h78gfwc.js:16138-16208 esm-fingerprint
-var Ee = 'Invalid or unsupported JWK "alg" (Algorithm) Parameter value';
+var unsupportedAlg = 'Invalid or unsupported JWK "alg" (Algorithm) Parameter value';
 //@ chunk-5h78gfwc.js:16208-17603 esm-fingerprint
-function jt(e) {
-  let t, r;
-  switch (e.kty) {
+function subtleMapping(jwk) {
+  let algorithm;
+  let keyUsages;
+  switch (jwk.kty) {
     case "AKP": {
-      switch (e.alg) {
+      switch (jwk.alg) {
         case "ML-DSA-44":
         case "ML-DSA-65":
         case "ML-DSA-87":
-          ((t = { name: e.alg }), (r = e.priv ? ["sign"] : ["verify"]));
+          algorithm = {
+            name: jwk.alg,
+          };
+          keyUsages = jwk.priv ? ["sign"] : ["verify"];
           break;
         default:
-          throw new f_2(Ee);
+          throw new JOSENotSupported(unsupportedAlg);
       }
       break;
     }
     case "RSA": {
-      switch (e.alg) {
+      switch (jwk.alg) {
         case "PS256":
         case "PS384":
         case "PS512":
-          ((t = { name: "RSA-PSS", hash: `SHA-${e.alg.slice(-3)}` }), (r = e.d ? ["sign"] : ["verify"]));
+          algorithm = {
+            name: "RSA-PSS",
+            hash: `SHA-${jwk.alg.slice(-3)}`,
+          };
+          keyUsages = jwk.d ? ["sign"] : ["verify"];
           break;
         case "RS256":
         case "RS384":
         case "RS512":
-          ((t = { name: "RSASSA-PKCS1-v1_5", hash: `SHA-${e.alg.slice(-3)}` }),
-            (r = e.d ? ["sign"] : ["verify"]));
+          algorithm = {
+            name: "RSASSA-PKCS1-v1_5",
+            hash: `SHA-${jwk.alg.slice(-3)}`,
+          };
+          keyUsages = jwk.d ? ["sign"] : ["verify"];
           break;
         case "RSA-OAEP":
         case "RSA-OAEP-256":
         case "RSA-OAEP-384":
         case "RSA-OAEP-512":
-          ((t = { name: "RSA-OAEP", hash: `SHA-${parseInt(e.alg.slice(-3), 10) || 1}` }),
-            (r = e.d ? ["decrypt", "unwrapKey"] : ["encrypt", "wrapKey"]));
+          algorithm = {
+            name: "RSA-OAEP",
+            hash: `SHA-${parseInt(jwk.alg.slice(-3), 10) || 1}`,
+          };
+          keyUsages = jwk.d ? ["decrypt", "unwrapKey"] : ["encrypt", "wrapKey"];
           break;
         default:
-          throw new f_2(Ee);
+          throw new JOSENotSupported(unsupportedAlg);
       }
       break;
     }
     case "EC": {
-      switch (e.alg) {
+      switch (jwk.alg) {
         case "ES256":
         case "ES384":
         case "ES512":
-          ((t = { name: "ECDSA", namedCurve: { ES256: "P-256", ES384: "P-384", ES512: "P-521" }[e.alg] }),
-            (r = e.d ? ["sign"] : ["verify"]));
+          algorithm = {
+            name: "ECDSA",
+            namedCurve: {
+              ES256: "P-256",
+              ES384: "P-384",
+              ES512: "P-521",
+            }[jwk.alg],
+          };
+          keyUsages = jwk.d ? ["sign"] : ["verify"];
           break;
         case "ECDH-ES":
         case "ECDH-ES+A128KW":
         case "ECDH-ES+A192KW":
         case "ECDH-ES+A256KW":
-          ((t = { name: "ECDH", namedCurve: e.crv }), (r = e.d ? ["deriveBits"] : []));
+          algorithm = {
+            name: "ECDH",
+            namedCurve: jwk.crv,
+          };
+          keyUsages = jwk.d ? ["deriveBits"] : [];
           break;
         default:
-          throw new f_2(Ee);
+          throw new JOSENotSupported(unsupportedAlg);
       }
       break;
     }
     case "OKP": {
-      switch (e.alg) {
+      switch (jwk.alg) {
         case "Ed25519":
         case "EdDSA":
-          ((t = { name: "Ed25519" }), (r = e.d ? ["sign"] : ["verify"]));
+          algorithm = {
+            name: "Ed25519",
+          };
+          keyUsages = jwk.d ? ["sign"] : ["verify"];
           break;
         case "ECDH-ES":
         case "ECDH-ES+A128KW":
         case "ECDH-ES+A192KW":
         case "ECDH-ES+A256KW":
-          ((t = { name: e.crv }), (r = e.d ? ["deriveBits"] : []));
+          algorithm = {
+            name: jwk.crv,
+          };
+          keyUsages = jwk.d ? ["deriveBits"] : [];
           break;
         default:
-          throw new f_2(Ee);
+          throw new JOSENotSupported(unsupportedAlg);
       }
       break;
     }
     default:
-      throw new f_2('Invalid or unsupported JWK "kty" (Key Type) Parameter value');
+      throw new JOSENotSupported('Invalid or unsupported JWK "kty" (Key Type) Parameter value');
   }
-  return { algorithm: t, keyUsages: r };
+  return {
+    algorithm,
+    keyUsages,
+  };
 }
 //@ chunk-5h78gfwc.js:17603-17878 esm-fingerprint
-async function Y(e) {
-  if (!e.alg) throw TypeError('"alg" argument is required when "jwk.alg" is not present');
-  let { algorithm: algorithm, keyUsages: keyUsages } = jt(e),
-    n = { ...e };
-  if (n.kty !== "AKP") delete n.alg;
-  return (
-    delete n.use,
-    crypto.subtle.importKey("jwk", n, algorithm, e.ext ?? (e.d || e.priv ? !1 : !0), e.key_ops ?? keyUsages)
+async function jwkToKey(jwk) {
+  if (!jwk.alg) throw TypeError('"alg" argument is required when "jwk.alg" is not present');
+  let { algorithm, keyUsages } = subtleMapping(jwk);
+  let keyData = {
+    ...jwk,
+  };
+  if (keyData.kty !== "AKP") delete keyData.alg;
+  delete keyData.use;
+  return crypto.subtle.importKey(
+    "jwk",
+    keyData,
+    algorithm,
+    jwk.ext ?? (jwk.d || jwk.priv ? false : true),
+    jwk.key_ops ?? keyUsages,
   );
 }
-
-export { Y };
+export { jwkToKey };

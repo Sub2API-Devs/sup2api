@@ -5,30 +5,32 @@
  * pieces: chunk-3cddmtk7.js (1)
  * attribution: esm-fingerprint 1
  */
-import { z } from "../dist-cjs/index.js";
-import { g } from "../../../@aws-crypto/crc32/build/module/index.js";
-import { de } from "./splitMessage.js";
+import { HeaderMarshaller } from "../dist-cjs/index.js";
+import { Crc32 } from "../../../@aws-crypto/crc32/build/module/index.js";
+import { splitMessage } from "./splitMessage.js";
 
 //@ chunk-3cddmtk7.js:9036-10073 esm-fingerprint
-class E_2 {
+class EventStreamCodec {
   headerMarshaller;
   messageBuffer;
   isEndOfStream;
-  constructor(e, t) {
-    ((this.headerMarshaller = new z(e, t)), (this.messageBuffer = []), (this.isEndOfStream = !1));
+  constructor(toUtf8, fromUtf8) {
+    this.headerMarshaller = new HeaderMarshaller(toUtf8, fromUtf8);
+    this.messageBuffer = [];
+    this.isEndOfStream = false;
   }
-  feed(e) {
-    this.messageBuffer.push(this.decode(e));
+  feed(message) {
+    this.messageBuffer.push(this.decode(message));
   }
   endOfStream() {
-    this.isEndOfStream = !0;
+    this.isEndOfStream = true;
   }
   getMessage() {
-    let e = this.messageBuffer.pop(),
-      isEndOfStream = this.isEndOfStream;
+    let message = this.messageBuffer.pop();
+    let isEndOfStream = this.isEndOfStream;
     return {
       getMessage() {
-        return e;
+        return message;
       },
       isEndOfStream() {
         return isEndOfStream;
@@ -36,41 +38,41 @@ class E_2 {
     };
   }
   getAvailableMessages() {
-    let messageBuffer = this.messageBuffer;
+    let messages = this.messageBuffer;
     this.messageBuffer = [];
     let isEndOfStream = this.isEndOfStream;
     return {
       getMessages() {
-        return messageBuffer;
+        return messages;
       },
       isEndOfStream() {
         return isEndOfStream;
       },
     };
   }
-  encode({ headers: e, body: t }) {
-    let format = this.headerMarshaller.format(e),
-      r = format.byteLength + t.byteLength + 16,
-      uint8Array = new Uint8Array(r),
-      dataView = new DataView(uint8Array.buffer, uint8Array.byteOffset, uint8Array.byteLength),
-      a = new g();
-    return (
-      dataView.setUint32(0, r, !1),
-      dataView.setUint32(4, format.byteLength, !1),
-      dataView.setUint32(8, a.update(uint8Array.subarray(0, 8)).digest(), !1),
-      uint8Array.set(format, 12),
-      uint8Array.set(t, format.byteLength + 12),
-      dataView.setUint32(r - 4, a.update(uint8Array.subarray(8, r - 4)).digest(), !1),
-      uint8Array
-    );
+  encode({ headers: rawHeaders, body }) {
+    let headers = this.headerMarshaller.format(rawHeaders);
+    let length = headers.byteLength + body.byteLength + 16;
+    let out = new Uint8Array(length);
+    let view = new DataView(out.buffer, out.byteOffset, out.byteLength);
+    let checksum = new Crc32();
+    view.setUint32(0, length, false);
+    view.setUint32(4, headers.byteLength, false);
+    view.setUint32(8, checksum.update(out.subarray(0, 8)).digest(), false);
+    out.set(headers, 12);
+    out.set(body, headers.byteLength + 12);
+    view.setUint32(length - 4, checksum.update(out.subarray(8, length - 4)).digest(), false);
+    return out;
   }
-  decode(e) {
-    let { headers: headers, body: body } = de(e);
-    return { headers: this.headerMarshaller.parse(headers), body: body };
+  decode(message) {
+    let { headers, body } = splitMessage(message);
+    return {
+      headers: this.headerMarshaller.parse(headers),
+      body,
+    };
   }
-  formatHeaders(e) {
-    return this.headerMarshaller.format(e);
+  formatHeaders(rawHeaders) {
+    return this.headerMarshaller.format(rawHeaders);
   }
 }
-
-export { E_2 };
+export { EventStreamCodec };

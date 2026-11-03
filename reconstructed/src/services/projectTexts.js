@@ -37,53 +37,69 @@ import {
 import { dispatchClassicEvent } from "../plugins/functionHooks/modAdmission.js";
 
 //@ chunk-dtckr4w3.js:808-868 placement
-var TENGU_BREEZY_PELICAN = "tengu_breezy_pelican",
-  T = 0.16666666666666666,
-  k = 200000;
+/**
+ * 判定长行用的比例阈值。
+ */
+var TENGU_BREEZY_PELICAN = "tengu_breezy_pelican";
+var LONG_LINE_NOTE_RATIO = 0.16666666666666666;
+var MAX_PROJECT_TEXT_BYTES = 200000;
+//@ chunk-dtckr4w3.js:868-2511 placement
 /**
  * 说明某行过长时如何用 grep/offset 读取 local_file。
  */
-//@ chunk-dtckr4w3.js:868-2511 placement
-function formatLongLineNote(o, e) {
-  let t = (r) => o.some((a) => toolMatchesName(a, r));
+function formatLongLineNote(tools, e) {
+  let t = (r) => tools.some((a) => toolMatchesName(a, r));
   if (!t(FILE_READ_TOOL_NAME) || !t(BASH_TOOL_NAME)) return;
-  let n = getFeatureValue_CACHED_MAY_BE_STALE(TENGU_BREEZY_PELICAN, null);
-  if (n?.copy_hint !== !0 || (e && (n.long_lines !== !0 || !t(GREP_TOOL_NAME)))) return;
+  let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE(TENGU_BREEZY_PELICAN, null);
+  if (
+    featureValue_CACHED_MAY_BE_STALE?.copy_hint !== true ||
+    (e && (featureValue_CACHED_MAY_BE_STALE.long_lines !== true || !t(GREP_TOOL_NAME)))
+  )
+    return;
   let s = t(GREP_TOOL_NAME) ? GREP_TOOL_NAME : "`grep`";
   return `local_file is for reading only${e ? `. One of its lines is too long for ${FILE_READ_TOOL_NAME} to page through, because ${FILE_READ_TOOL_NAME}'s offset and limit count lines. ${FILE_READ_TOOL_NAME} with no offset or limit gives only the first part of the file. ${FILE_READ_TOOL_NAME} with an offset and limit gives whole lines, or an error if those lines do not fit. The file is too large for project_read to return inline. ${GREP_TOOL_NAME} shows a line or a match of over 500 characters as [Omitted long matching line]. With output_mode \`content\`, \`-o\` true and a pattern such as \`.{0,200}term.{0,200}\`, ${GREP_TOOL_NAME} shows each match of term with up to 200 characters on each side. In ${BASH_TOOL_NAME}, \`grep -ob 'term' /path/of/local_file | head\` gives the byte offset of each match of term, counted from 0. \`tail -c +START /path/of/local_file | head -c 20000\` gives 20000 bytes from byte START, counted from 1: START is an offset plus 1, or any number from 1 to size_bytes.` : `: read the parts you need with ${FILE_READ_TOOL_NAME}'s offset and limit, or search it with ${s}.`} Edits to ${e ? "local_file" : "it"} never reach the project, and project_write rejects it as local_path. To change the document or make a file from it, run \`cat /path/of/local_file > new-name\` in the working directory, where new-name is a name that no file there has, and work on that file. To save a change, call project_write with the document's path and that file as local_path. If the document is an upload such as a PDF, that saves a new text document and leaves the upload as it is.`;
 }
 //@ chunk-dtckr4w3.js:2511-3101 placement
-function shouldCutProjectTexts({
-  model: model,
-  configuredWindow: configuredWindow,
-  messages: messages,
-  room: room,
-}) {
-  let s = getFeatureValue_CACHED_MAY_BE_STALE(TENGU_BREEZY_PELICAN, null);
-  if (s?.mode !== "always" && s?.mode !== "after_compaction") return;
-  let i = getModelContextInfo(model),
-    r = getAutoCompactThresholdTokens(i, configuredWindow);
-  if (!(r > 0)) return;
-  if (r > k) {
-    let step_share = s.step_share;
-    if (room === void 0 || !(typeof step_share === "number" && step_share > 0 && step_share <= 1)) return;
-    let u = i.longContextWindowWithoutOptIn > 0 ? r : Math.min(r, room.threshold);
+function shouldCutProjectTexts({ model, configuredWindow, messages, room }) {
+  let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE(TENGU_BREEZY_PELICAN, null);
+  if (
+    featureValue_CACHED_MAY_BE_STALE?.mode !== "always" &&
+    featureValue_CACHED_MAY_BE_STALE?.mode !== "after_compaction"
+  )
+    return;
+  let modelContextInfo = getModelContextInfo(model);
+  let autoCompactThresholdTokens = getAutoCompactThresholdTokens(modelContextInfo, configuredWindow);
+  if (!(autoCompactThresholdTokens > 0)) return;
+  if (autoCompactThresholdTokens > MAX_PROJECT_TEXT_BYTES) {
+    let stepShare = featureValue_CACHED_MAY_BE_STALE.step_share;
+    if (room === undefined || !(typeof stepShare === "number" && stepShare > 0 && stepShare <= 1)) return;
+    let u =
+      modelContextInfo.longContextWindowWithoutOptIn > 0
+        ? autoCompactThresholdTokens
+        : Math.min(autoCompactThresholdTokens, room.threshold);
     return {
-      maxTokens: Math.max(0, Math.floor(u * step_share) - room.claimed()),
-      bytesPerToken: i.bytesPerToken,
+      maxTokens: Math.max(0, Math.floor(u * stepShare) - room.claimed()),
+      bytesPerToken: modelContextInfo.bytesPerToken,
       claim: room.claim,
     };
   }
-  if (s.mode === "after_compaction" && !hasNoUserPromptSinceCompact(messages)) return;
-  let { fraction: fraction } = s;
+  if (featureValue_CACHED_MAY_BE_STALE.mode === "after_compaction" && !hasNoUserPromptSinceCompact(messages))
+    return;
+  let { fraction } = featureValue_CACHED_MAY_BE_STALE;
   return {
-    maxTokens: Math.round(r * (typeof fraction === "number" && fraction > 0 && fraction <= 1 ? fraction : T)),
-    bytesPerToken: i.bytesPerToken,
+    maxTokens: Math.round(
+      autoCompactThresholdTokens *
+        (typeof fraction === "number" && fraction > 0 && fraction <= 1 ? fraction : LONG_LINE_NOTE_RATIO),
+    ),
+    bytesPerToken: modelContextInfo.bytesPerToken,
   };
 }
 //@ chunk-dtckr4w3.js:3101-3140 placement
-var TENGU_IMPERATIVE_WHISTLE = "tengu_imperative_whistle",
-  h = 200;
+/**
+ * 截断文本时保留的字节数。
+ */
+var TENGU_IMPERATIVE_WHISTLE = "tengu_imperative_whistle";
+var MAX_TRUNCATED_TEXT_BYTES = 200;
 //@ chunk-dtckr4w3.js:3140-3417 placement
 function formatTruncatedTextNote(o, e) {
   return `
@@ -92,65 +108,97 @@ function formatTruncatedTextNote(o, e) {
 }
 //@ chunk-dtckr4w3.js:3417-3983 placement
 function cutProjectText(o, e, t) {
-  let n = getModelContextInfo(e),
-    s = getAutoCompactThresholdTokens(n, t);
-  if (!(s > 0) || s > k || !isAutoCompactEnabled()) return;
-  let i = Math.round(s * T) * n.bytesPerToken,
-    r = o.description ?? "",
-    a = o.prompt_template ?? "",
-    byteLength = Buffer.byteLength(a, "utf8");
-  if (Buffer.byteLength(o.name, "utf8") + Buffer.byteLength(r, "utf8") + byteLength <= i) return;
-  if (!getFeatureValue_SESSION_PINNED(TENGU_IMPERATIVE_WHISTLE, !1)) {
+  let modelContextInfo = getModelContextInfo(e);
+  let autoCompactThresholdTokens = getAutoCompactThresholdTokens(modelContextInfo, t);
+  if (
+    !(autoCompactThresholdTokens > 0) ||
+    autoCompactThresholdTokens > MAX_PROJECT_TEXT_BYTES ||
+    !isAutoCompactEnabled()
+  )
+    return;
+  let i = Math.round(autoCompactThresholdTokens * LONG_LINE_NOTE_RATIO) * modelContextInfo.bytesPerToken;
+  let description = o.description ?? "";
+  let promptTemplate = o.prompt_template ?? "";
+  let c = Buffer.byteLength(promptTemplate, "utf8");
+  if (Buffer.byteLength(o.name, "utf8") + Buffer.byteLength(description, "utf8") + c <= i) return;
+  if (!getFeatureValue_SESSION_PINNED(TENGU_IMPERATIVE_WHISTLE, false)) {
     logFeatureSad("projects_texts_cut", "sent_whole");
     return;
   }
-  let u = Buffer.byteLength(o.name, "utf8") <= h ? o.name : `${truncateUtf8Bytes(o.name, h - 3)}\u2026`,
-    m = i - Buffer.byteLength(u, "utf8"),
-    p = truncateUtf8WithNote(r, Math.max(Math.floor(m / 4), m - byteLength));
-  return (
-    logFeatureOk("projects_texts_cut"),
-    { name: u, description: p, prompt_template: truncateUtf8WithNote(a, m - Buffer.byteLength(p, "utf8")) }
-  );
+  let u =
+    Buffer.byteLength(o.name, "utf8") <= MAX_TRUNCATED_TEXT_BYTES
+      ? o.name
+      : `${truncateUtf8Bytes(o.name, MAX_TRUNCATED_TEXT_BYTES - 3)}\u2026`;
+  let m = i - Buffer.byteLength(u, "utf8");
+  let p = truncateUtf8WithNote(description, Math.max(Math.floor(m / 4), m - c));
+  logFeatureOk("projects_texts_cut");
+  return {
+    name: u,
+    description: p,
+    prompt_template: truncateUtf8WithNote(promptTemplate, m - Buffer.byteLength(p, "utf8")),
+  };
 }
 //@ chunk-dtckr4w3.js:3983-4400 placement
 function logProjectTextCutFailure(o, e) {
   try {
     let t =
-        o.attachedProject === void 0 ? void 0 : builtProjectBlocks.peek(e.session)?.get(o.attachedProject),
-      { mainLoopModel: mainLoopModel } = e.options;
-    if (t === void 0 || mainLoopModel === void 0) return o;
-    let [s, ...i] = t,
-      r = cutProjectText(
-        s,
-        getMainLoopModel({ options: { mainLoopModel: mainLoopModel }, permissionLayers: e.permissionLayers }),
-        e.options.autoCompactWindow,
-      );
-    return r === void 0 ? o : { ...o, attachedProject: formatProjectContext({ ...s, ...r }, ...i) };
+      o.attachedProject === undefined
+        ? undefined
+        : builtProjectBlocks.peek(e.session)?.get(o.attachedProject);
+    let { mainLoopModel } = e.options;
+    if (t === undefined || mainLoopModel === undefined) return o;
+    let [s, ...i] = t;
+    let r = cutProjectText(
+      s,
+      getMainLoopModel({
+        options: {
+          mainLoopModel,
+        },
+        permissionLayers: e.permissionLayers,
+      }),
+      e.options.autoCompactWindow,
+    );
+    return r === undefined
+      ? o
+      : {
+          ...o,
+          attachedProject: formatProjectContext(
+            {
+              ...s,
+              ...r,
+            },
+            ...i,
+          ),
+        };
   } catch (error) {
-    return (logError(withTelemetryMessage(toError(error), "project texts could not be cut")), o);
+    logError(withTelemetryMessage(toError(error), "project texts could not be cut"));
+    return o;
   }
 }
 //@ chunk-dtckr4w3.js:4400-4556 placement
 function truncateUtf8WithNote(o, e) {
-  let byteLength = Buffer.byteLength(o, "utf8");
-  if (byteLength <= e) return o;
-  let n = truncateUtf8Bytes(o, e - Buffer.byteLength(formatTruncatedTextNote(e, byteLength), "utf8"));
-  return n + formatTruncatedTextNote(Buffer.byteLength(n, "utf8"), byteLength);
+  let t = Buffer.byteLength(o, "utf8");
+  if (t <= e) return o;
+  let n = truncateUtf8Bytes(o, e - Buffer.byteLength(formatTruncatedTextNote(e, t), "utf8"));
+  return n + formatTruncatedTextNote(Buffer.byteLength(n, "utf8"), t);
 }
 //@ chunk-dtckr4w3.js:4556-4620 placement
-function w(o) {
+/**
+ * 取项目的工具别名表与权限层的别名表。
+ */
+function projectToolAliasSources(o) {
   return [o.toolAliases, o.permissions().toolAliases];
 }
+//@ chunk-dtckr4w3.js:4620-4801 placement
 /**
  * 列出 Projects 工具的所有名称：本身、工具别名表里与它互为别名的名字，以及这些别名的别名。
  */
-//@ chunk-dtckr4w3.js:4620-4801 placement
 function getProjectsToolAliases(o) {
-  let flattened = w(o).flatMap((n) => Object.entries(n ?? {})),
-    flattened_2 = flattened.flatMap(([n, s]) => [
-      ...(s === PROJECTS_TOOL_NAME ? [n] : []),
-      ...(n === PROJECTS_TOOL_NAME ? [s] : []),
-    ]);
+  let flattened = projectToolAliasSources(o).flatMap((n) => Object.entries(n ?? {}));
+  let flattened_2 = flattened.flatMap(([n, s]) => [
+    ...(s === PROJECTS_TOOL_NAME ? [n] : []),
+    ...(n === PROJECTS_TOOL_NAME ? [s] : []),
+  ]);
   return [
     PROJECTS_TOOL_NAME,
     ...flattened_2,
@@ -159,35 +207,51 @@ function getProjectsToolAliases(o) {
 }
 //@ chunk-dtckr4w3.js:4801-4966 placement
 function hasProjectsPathRule(o) {
-  let permissions = o.permissions(),
-    t = getProjectsToolAliases(o);
-  return [...getDenyRules(permissions), ...getAskRules(permissions)].some(
+  let e = o.permissions();
+  let projectsToolAliases = getProjectsToolAliases(o);
+  return [...getDenyRules(e), ...getAskRules(e)].some(
     (n) =>
       firstLineOf(n.ruleValue.ruleContent ?? "", ":").trim() === "path" &&
-      t.some((s) => toolMatchesRule(permissions, { name: s }, n)),
+      projectsToolAliases.some((name) =>
+        toolMatchesRule(
+          e,
+          {
+            name,
+          },
+          n,
+        ),
+      ),
   );
 }
 //@ chunk-dtckr4w3.js:4966-5145 placement
-function hasProjectsToolHook(o, e, t) {
-  return w(t).some((n) =>
+function hasProjectsToolHook(o, toolInput, t) {
+  return projectToolAliasSources(t).some((toolAliases) =>
     hasToolHookMatching({
       hookEvent: o,
       toolName: PROJECTS_TOOL_NAME,
-      toolInput: e,
+      toolInput,
       tools: t.tools,
-      toolAliases: n,
+      toolAliases,
       sessionHooks: t.sessionHooksRegistry,
       sessionId: registerAgent(t, o, t.session.id),
     }),
   );
 }
 //@ chunk-dtckr4w3.js:5145-5503 placement
-function buildProjectTextHooks(o, e) {
+function buildProjectTextHooks(toolInput, e) {
   if (
     getProjectsToolAliases(e).some(
-      (n) =>
-        hasModuleHookingSite("tool.call", { tool: n }) ||
-        hasModuleHookingSite("tool.check", { tool: n }, getLoadedModulesForSite("tool.check")),
+      (tool) =>
+        hasModuleHookingSite("tool.call", {
+          tool,
+        }) ||
+        hasModuleHookingSite(
+          "tool.check",
+          {
+            tool,
+          },
+          getLoadedModulesForSite("tool.check"),
+        ),
     ) ||
     dispatchClassicEvent("PostToolBatch") ||
     hasSettingsHookForEvent(
@@ -195,25 +259,27 @@ function buildProjectTextHooks(o, e) {
       e.sessionHooksRegistry,
       registerAgent(e, "PostToolBatch", e.session.id),
     ) ||
-    hasProjectsToolHook("PostToolUse", o, e)
+    hasProjectsToolHook("PostToolUse", toolInput, e)
   )
     return "hook";
   let t = hasProjectsPathRule(e);
-  if (hasProjectsToolHook("PreToolUse", o, e))
+  if (hasProjectsToolHook("PreToolUse", toolInput, e))
     return t || getProjectsToolAliases(e).length > 1 ? "hook" : "pre_tool_use_hook";
-  return t ? "path_rule" : void 0;
+  return t ? "path_rule" : undefined;
 }
 //@ chunk-dtckr4w3.js:5503-5576 placement
-function CHs(o, e) {
-  let t = buildProjectTextHooks(o, e);
-  return t === "pre_tool_use_hook" ? "hook" : t;
+/**
+ * 把 pre_tool_use_hook 归一成 hook。
+ */
+function projectTextHooksKind(o, e) {
+  let projectTextHooks = buildProjectTextHooks(o, e);
+  return projectTextHooks === "pre_tool_use_hook" ? "hook" : projectTextHooks;
 }
-
 export {
   shouldCutProjectTexts,
   formatLongLineNote,
   getProjectsToolAliases,
-  CHs,
+  projectTextHooksKind,
   cutProjectText,
   logProjectTextCutFailure,
   buildProjectTextHooks,

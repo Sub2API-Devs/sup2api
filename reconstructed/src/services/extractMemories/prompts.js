@@ -8,37 +8,16 @@
  * pieces: chunk-82kqcve8.js (2), chunk-xr4xc2mq.js (1)
  * attribution: fingerprint 2, callgraph-witnessed 1
  */
+import { join, sep } from "path";
 import {
-  join,
-  join as join_2,
-  join as join_3,
-  join as join_4,
-  join as join_5,
-  join as join_6,
-  join as join_7,
-  join as join_8,
-  join as join_9,
-  join as join_10,
-  join as join_11,
-  join as join_12,
-  sep,
-  sep as sep_2,
-  sep as sep_3,
-  sep as sep_4,
-  sep as sep_5,
-  sep as sep_6,
-  sep as sep_7,
-  sep as sep_8,
-} from "path";
-import {
-  MEMORY_FRONTMATTER_EXAMPLE,
+  MEMORY_FRONTMATTER_EXAMPLE_2,
   MEMORY_TYPES,
   selectMemoryTypesSection,
-  G4t,
+  MEMORY_TYPES_SECTION_TEAM,
   WHAT_NOT_TO_SAVE_SECTION,
   getMemoryLinkingLines,
-  VEn,
-  Pst,
+  STALE_MEMORY_NOTE,
+  BEFORE_RECOMMENDING_SECTION,
   isMemoryLinkingEnabled,
 } from "../../memdir/memoryTypes.js";
 import { formatFileSize } from "../../utils/format.js";
@@ -64,84 +43,92 @@ import { FILE_WRITE_TOOL_NAME } from "../../tools/FileWriteTool/prompt.js";
 import { MEMORY_LIST_TOOL_NAME, MEMORY_READ, MEMORY_WRITE } from "../../tools/MemoryTool/memoryToolNames.js";
 
 //@ chunk-82kqcve8.js:113708-114321 fingerprint = buildExtractAutoOnlyPrompt (0.47)
-var MEMORY_FRONTMATTER_EXAMPLE_TEXT = MEMORY_FRONTMATTER_EXAMPLE(MEMORY_TYPES),
-  Zn = `Keep each memory file under ${formatFileSize(MEMORY_FILE_RECALL_BYTES)} including frontmatter (recall shows only the first ${formatFileSize(MEMORY_FILE_RECALL_BYTES)}) and the description to one specific line; when a file outgrows that, split or summarize it rather than continuing it in a second file.`,
-  Hn = [
-    "- Keep the name, description, and type fields in memory files up-to-date with the content",
-    "- Organize memory semantically by topic, not chronologically",
-    "- Update or remove memories that turn out to be wrong or outdated",
-    "- Do not write duplicate memories. First check if there is an existing memory you can update before writing a new one.",
-  ],
-  Ga = [];
+/**
+ * 团队记忆的附加规则（当前为空）。
+ */
+var MEMORY_FRONTMATTER_EXAMPLE_TEXT = MEMORY_FRONTMATTER_EXAMPLE_2(MEMORY_TYPES);
+var MEMORY_FILE_SIZE_GUIDE = `Keep each memory file under ${formatFileSize(MEMORY_FILE_RECALL_BYTES)} including frontmatter (recall shows only the first ${formatFileSize(MEMORY_FILE_RECALL_BYTES)}) and the description to one specific line; when a file outgrows that, split or summarize it rather than continuing it in a second file.`;
+var MEMORY_MAINTENANCE_RULES = [
+  "- Keep the name, description, and type fields in memory files up-to-date with the content",
+  "- Organize memory semantically by topic, not chronologically",
+  "- Update or remove memories that turn out to be wrong or outdated",
+  "- Do not write duplicate memories. First check if there is an existing memory you can update before writing a new one.",
+];
+var TEAM_MEMORY_RULES = [];
+//@ chunk-82kqcve8.js:135953-141711 callgraph-witnessed = buildExtractCombinedPrompt (0.132)
 /**
  * 提取代理的组合提示（个人 + 团队记忆目录）。
  */
-//@ chunk-82kqcve8.js:135953-141711 callgraph-witnessed = buildExtractCombinedPrompt (0.132)
-function buildExtractCombinedPrompt(e, n, r, s = !1) {
-  let h = getMemoryDirNfc(),
-    y = (ie) => (join_8(h, ie) + sep_5).normalize("NFC"),
-    w = (ie) => {
-      let he = memoryIndexDirPrefix(ie.promptIndex);
-      return he ? join_8(h, ie.mount, he).normalize("NFC") : y(ie.mount);
-    },
-    mapped = e.map(w),
-    mapped_2 = n.map((ie) => y(ie.mount)),
-    O = e.length === 1,
-    P = mapped[0],
-    L = e.length > 0,
-    j = O
-      ? `You have a persistent, file-based team memory directory at \`${P}\`. It is synced at the start of every session and shared with the other users who work in this project. ${DIR_EXISTS_GUIDANCE}`
-      : L
-        ? `You have a persistent, file-based team memory system with ${mapped.length} directories, each synced and shared with the other users in this project:
+function buildExtractCombinedPrompt(e, n, r, autoDir = false) {
+  let memoryDirNfc = getMemoryDirNfc();
+  let y = (mount) => (join(memoryDirNfc, mount) + sep).normalize("NFC");
+  let w = (ie) => {
+    let he = memoryIndexDirPrefix(ie.promptIndex);
+    return he ? join(memoryDirNfc, ie.mount, he).normalize("NFC") : y(ie.mount);
+  };
+  let mapped = e.map(w);
+  let mapped_2 = n.map((ie) => y(ie.mount));
+  let O = e.length === 1;
+  let P = mapped[0];
+  let L = e.length > 0;
+  let j = O
+    ? `You have a persistent, file-based team memory directory at \`${P}\`. It is synced at the start of every session and shared with the other users who work in this project. ${DIR_EXISTS_GUIDANCE}`
+    : L
+      ? `You have a persistent, file-based team memory system with ${mapped.length} directories, each synced and shared with the other users in this project:
 ${mapped.map((ie) => `- \`${ie}\``).join(`
 `)}
 These directories already exist \u2014 write to them directly with the Write tool (do not run mkdir or check for their existence).`
-        : "You have read-only access to team memory synced from your project. You cannot persist new memories in this session.",
-    G =
-      mapped_2.length > 0
-        ? [
-            "",
-            `You also have read-only team memory at ${mapped_2.map((ie) => `\`${ie}\``).join(", ")}. Read from ${mapped_2.length === 1 ? "it" : "these"} when relevant, but do not write there \u2014 changes will not persist.`,
-          ]
-        : [],
-    Z = (ie) => ie.promptIndex ?? MEMORY_INDEX_FILENAME,
-    all = e.every((ie) => ie.promptIndex !== void 0),
-    ee = O ? `\`${P}\`` : `the appropriate team directory (${mapped.map((ie) => `\`${ie}\``).join(" or ")})`,
-    re = (ie) => join_8(h, ie.mount, Z(ie)).normalize("NFC"),
-    ce = O
-      ? re(e[0])
-      : `the index file in that same directory (${e.map((ie) => `\`${re(ie)}\``).join(", ")})`,
-    me = !L
-      ? []
-      : s
-        ? ((ie) => [
-            "",
-            ...HOW_TO_SAVE_MEMORIES_SECTION({ skipIndex: !0, file: `memory to its own file in ${ie}` }),
-          ])(ee)
-        : [
-            "",
-            "## How to save memories",
-            "",
-            "Saving a memory is a two-step process:",
-            "",
-            `**Step 1** \u2014 write the memory to its own file in ${ee} using this frontmatter format:`,
-            "",
-            ...MEMORY_FRONTMATTER_EXAMPLE_TEXT,
-            "",
-            `**Step 2** \u2014 add a pointer to that file in ${O ? `\`${ce}\`` : ce}. Each entry should be one line, under ~150 characters: \`- [Title](file.md) \u2014 one-line hook\`. The index has no frontmatter. Never write memory content directly into the index.`,
-            "",
-            all
-              ? `- The index file is loaded into your conversation context \u2014 lines after ${MAX_ENTRYPOINT_LINES} will be truncated, so keep it concise`
-              : "- Keep the index concise so you can scan it quickly when recalling memories",
-            `- ${Zn}`,
-            ...Hn,
-          ],
-    se = [];
+      : "You have read-only access to team memory synced from your project. You cannot persist new memories in this session.";
+  let G =
+    mapped_2.length > 0
+      ? [
+          "",
+          `You also have read-only team memory at ${mapped_2.map((ie) => `\`${ie}\``).join(", ")}. Read from ${mapped_2.length === 1 ? "it" : "these"} when relevant, but do not write there \u2014 changes will not persist.`,
+        ]
+      : [];
+  let Z = (ie) => ie.promptIndex ?? MEMORY_INDEX_FILENAME;
+  let all = e.every((ie) => ie.promptIndex !== undefined);
+  let ee = O
+    ? `\`${P}\``
+    : `the appropriate team directory (${mapped.map((ie) => `\`${ie}\``).join(" or ")})`;
+  let re = (ie) => join(memoryDirNfc, ie.mount, Z(ie)).normalize("NFC");
+  let ce = O
+    ? re(e[0])
+    : `the index file in that same directory (${e.map((ie) => `\`${re(ie)}\``).join(", ")})`;
+  let me = !L
+    ? []
+    : autoDir
+      ? ((ie) => [
+          "",
+          ...HOW_TO_SAVE_MEMORIES_SECTION({
+            skipIndex: true,
+            file: `memory to its own file in ${ie}`,
+          }),
+        ])(ee)
+      : [
+          "",
+          "## How to save memories",
+          "",
+          "Saving a memory is a two-step process:",
+          "",
+          `**Step 1** \u2014 write the memory to its own file in ${ee} using this frontmatter format:`,
+          "",
+          ...MEMORY_FRONTMATTER_EXAMPLE_TEXT,
+          "",
+          `**Step 2** \u2014 add a pointer to that file in ${O ? `\`${ce}\`` : ce}. Each entry should be one line, under ~150 characters: \`- [Title](file.md) \u2014 one-line hook\`. The index has no frontmatter. Never write memory content directly into the index.`,
+          "",
+          all
+            ? `- The index file is loaded into your conversation context \u2014 lines after ${MAX_ENTRYPOINT_LINES} will be truncated, so keep it concise`
+            : "- Keep the index concise so you can scan it quickly when recalling memories",
+          `- ${MEMORY_FILE_SIZE_GUIDE}`,
+          ...MEMORY_MAINTENANCE_RULES,
+        ];
+  let se = [];
   for (let ie of e) {
-    let he = ie.skillsDirs ?? [],
-      He = he.find((We) => firstLineOf(We, "/") === "channel") ?? he[0];
-    if (He === void 0) continue;
-    se.push(join_8(h, ie.mount, ...He.split("/"), "<skill-name>", "SKILL.md").normalize("NFC"));
+    let skillsDirs = ie.skillsDirs ?? [];
+    let He = skillsDirs.find((skillsDir) => firstLineOf(skillsDir, "/") === "channel") ?? skillsDirs[0];
+    if (He === undefined) continue;
+    se.push(join(memoryDirNfc, ie.mount, ...He.split("/"), "<skill-name>", "SKILL.md").normalize("NFC"));
   }
   let ye =
     se.length > 0
@@ -171,7 +158,7 @@ These directories already exist \u2014 write to them directly with the Write too
           "If the user asks you to remember something, explain that memory is read-only in this session.",
         ]),
     "",
-    ...selectMemoryTypesSection(G4t),
+    ...selectMemoryTypesSection(MEMORY_TYPES_SECTION_TEAM),
     ...(L
       ? [
           "",
@@ -188,9 +175,9 @@ These directories already exist \u2014 write to them directly with the Write too
     "- When memories seem relevant, or the user references prior work with them or others in their organization.",
     "- You MUST access memory when the user explicitly asks you to check, recall, or remember.",
     "- If the user says to *ignore* or *not use* memory: Do not apply remembered facts, cite, compare against, or mention memory content.",
-    VEn,
+    STALE_MEMORY_NOTE,
     "",
-    ...Pst,
+    ...BEFORE_RECOMMENDING_SECTION,
     "",
     ...CITING_MEMORIES_SECTION(),
     "## Memory and other forms of persistence",
@@ -201,38 +188,38 @@ These directories already exist \u2014 write to them directly with the Write too
   ].join(`
 `);
 }
+//@ chunk-xr4xc2mq.js:11072-13452 fingerprint = opener (0.643)
 /**
  * 生成记忆提取代理的提示：现有记忆文件清单、可用的只读命令、如何新建/更新/删除记忆。
  */
-//@ chunk-xr4xc2mq.js:11072-13452 fingerprint = opener (0.643)
-function buildExtractMemoriesPrompt(e, r, n, o, s) {
-  let u = isBashAvailable(),
-    y = u ? BASH_TOOL_NAME : POWERSHELL_TOOL_NAME,
-    h = u
-      ? "ls/find/cat/stat/wc/head/tail and similar"
-      : "Get-ChildItem/Get-Content/Select-Object -First/-Last and similar",
-    x = u ? "rm" : "Remove-Item",
-    z =
-      r.length > 0
-        ? `
+function buildExtractMemoriesPrompt(newMessageCount, writtenPaths, n, o, s) {
+  let u = isBashAvailable();
+  let y = u ? BASH_TOOL_NAME : POWERSHELL_TOOL_NAME;
+  let h = u
+    ? "ls/find/cat/stat/wc/head/tail and similar"
+    : "Get-ChildItem/Get-Content/Select-Object -First/-Last and similar";
+  let x = u ? "rm" : "Remove-Item";
+  let z =
+    writtenPaths.length > 0
+      ? `
 
 ## Existing memory files
 
-${r}
+${writtenPaths}
 
 Check this list before writing \u2014 update an existing file rather than creating a duplicate.`
-        : "",
-    w = n ? "scope guidance, " : "",
-    S = `Available tools: ${FILE_READ_TOOL_NAME}, ${GREP_TOOL_NAME}, ${GLOB_TOOL_NAME}, read-only ${y} (${h}), and ${FILE_EDIT_TOOL_NAME}/${FILE_WRITE_TOOL_NAME} for paths inside the memory directory only, and ${y} ${x} of .md files inside the memory directory only (outside protected subdirectories like .git or agents${u ? "; rm takes no flags except -f" : ""}). All other tools \u2014 MCP, Agent, write-capable ${y}, etc \u2014 will be denied.`,
-    M = `You have a limited turn budget. ${FILE_EDIT_TOOL_NAME} requires a prior ${FILE_READ_TOOL_NAME} of the same file, so the efficient strategy is: turn 1 \u2014 issue all ${FILE_READ_TOOL_NAME} calls in parallel for every file you might update; turn 2 \u2014 issue all ${FILE_WRITE_TOOL_NAME}/${FILE_EDIT_TOOL_NAME} calls in parallel. Do not interleave reads and writes across multiple turns.`;
+      : "";
+  let w = n ? "scope guidance, " : "";
+  let S = `Available tools: ${FILE_READ_TOOL_NAME}, ${GREP_TOOL_NAME}, ${GLOB_TOOL_NAME}, read-only ${y} (${h}), and ${FILE_EDIT_TOOL_NAME}/${FILE_WRITE_TOOL_NAME} for paths inside the memory directory only, and ${y} ${x} of .md files inside the memory directory only (outside protected subdirectories like .git or agents${u ? "; rm takes no flags except -f" : ""}). All other tools \u2014 MCP, Agent, write-capable ${y}, etc \u2014 will be denied.`;
+  let M = `You have a limited turn budget. ${FILE_EDIT_TOOL_NAME} requires a prior ${FILE_READ_TOOL_NAME} of the same file, so the efficient strategy is: turn 1 \u2014 issue all ${FILE_READ_TOOL_NAME} calls in parallel for every file you might update; turn 2 \u2014 issue all ${FILE_WRITE_TOOL_NAME}/${FILE_EDIT_TOOL_NAME} calls in parallel. Do not interleave reads and writes across multiple turns.`;
   return [
-    `You are now acting as the memory extraction subagent. Analyze the most recent ~${e} messages above and use them to update your persistent memory systems.`,
+    `You are now acting as the memory extraction subagent. Analyze the most recent ~${newMessageCount} messages above and use them to update your persistent memory systems.`,
     "",
     S,
     "",
     M,
     "",
-    `You MUST only use content from the last ~${e} messages to update your persistent memories. Do not waste any turns attempting to investigate or verify that content further \u2014 no grepping source files, no reading code to confirm a pattern exists, no git commands.` +
+    `You MUST only use content from the last ~${newMessageCount} messages to update your persistent memories. Do not waste any turns attempting to investigate or verify that content further \u2014 no grepping source files, no reading code to confirm a pattern exists, no git commands.` +
       z,
     "",
     "If nothing is worth saving, output only 'Nothing to save.' Do not explain why.",
@@ -256,12 +243,11 @@ Check this list before writing \u2014 update an existing file rather than creati
   ].join(`
 `);
 }
-
 export {
-  MEMORY_FRONTMATTER_EXAMPLE_TEXT,
-  Zn,
-  Ga,
-  Hn,
-  buildExtractCombinedPrompt,
   buildExtractMemoriesPrompt,
+  MEMORY_FRONTMATTER_EXAMPLE_TEXT,
+  MEMORY_FILE_SIZE_GUIDE,
+  TEAM_MEMORY_RULES,
+  MEMORY_MAINTENANCE_RULES,
+  buildExtractCombinedPrompt,
 };

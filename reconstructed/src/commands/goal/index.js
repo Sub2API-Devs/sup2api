@@ -10,27 +10,27 @@
  */
 import { getIsNonInteractiveSession, getIsRemoteMode } from "../../bootstrap/state.js";
 
+//@ chunk-nn4xbsmj.js:454-850 placement
 /**
  * /goal 命令对象（local-jsx）；描述：Set a goal Claude checks before stopping；实现 chunk-hgfnw8bk.js 的 At。
  */
-//@ chunk-nn4xbsmj.js:454-850 placement
 var goalCommandDefinition = {
-    type: "local-jsx",
-    name: "goal",
-    description: "Set a goal Claude checks before stopping",
-    argumentHint: "[<condition> | clear]",
-    immediate: !0,
+  type: "local-jsx",
+  name: "goal",
+  description: "Set a goal Claude checks before stopping",
+  argumentHint: "[<condition> | clear]",
+  immediate: true,
+};
+var goalNonInteractiveCommand = {
+  type: "local",
+  name: "goal",
+  supportsNonInteractive: true,
+  thinClientDispatch: "post-text",
+  description: "Set a goal \u2014 keep working until the condition is met",
+  get isHidden() {
+    return !getIsNonInteractiveSession();
   },
-  goalNonInteractiveCommand = {
-    type: "local",
-    name: "goal",
-    supportsNonInteractive: !0,
-    thinClientDispatch: "post-text",
-    description: "Set a goal \u2014 keep working until the condition is met",
-    get isHidden() {
-      return !getIsNonInteractiveSession();
-    },
-    isEnabled: () => getIsNonInteractiveSession() || getIsRemoteMode(),
-    load: () => import("./chunk-s4441tej.js"),
-  },
-  goalCommand = goalCommandDefinition;
+  isEnabled: () => getIsNonInteractiveSession() || getIsRemoteMode(),
+  load: () => import("./chunk-s4441tej.js"),
+};
+var goalCommand = goalCommandDefinition;

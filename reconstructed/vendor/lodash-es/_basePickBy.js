@@ -6,19 +6,18 @@
  * attribution: placement 1
  */
 import { Out, Qve } from "../@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
-import { T } from "../../src/utils/git/gitSafeEnv.js";
+import { setValueRaw } from "../../src/utils/git/gitSafeEnv.js";
 
 //@ chunk-3a1caa6f.js:1544-1657 placement
-function basePickBy(e, r, n) {
-  var o = -1,
-    i = r.length,
-    s = {};
-  while (++o < i) {
-    var a = r[o],
-      t = Out(e, a);
-    if (n(t, a)) T(s, Qve(a, e), t);
+function basePickBy(object, paths, predicate) {
+  var index = -1;
+  var length = paths.length;
+  var result = {};
+  while (++index < length) {
+    var path = paths[index];
+    var value = Out(object, path);
+    if (predicate(value, path)) setValueRaw(result, Qve(path, object), value);
   }
-  return s;
+  return result;
 }
-
 export { basePickBy };

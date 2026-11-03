@@ -8,23 +8,30 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:494607-496224 cjs-fingerprint
-var yo = x(function (mb, Co) {
-  function Jm(e) {
-    let t = { className: "number", begin: "[1-9][0-9]*", relevance: 0 },
-      n = { className: "symbol", begin: ":[^\\]]+" },
-      a = {
-        className: "built_in",
-        begin:
-          "(AR|P|PAYLOAD|PR|R|SR|RSR|LBL|VR|UALM|MESSAGE|UTOOL|UFRAME|TIMER|TIMER_OVERFLOW|JOINT_MAX_SPEED|RESUME_PROG|DIAG_REC)\\[",
-        end: "\\]",
-        contains: ["self", t, n],
-      },
-      s = {
-        className: "built_in",
-        begin: "(AI|AO|DI|DO|F|RI|RO|UI|UO|GI|GO|SI|SO)\\[",
-        end: "\\]",
-        contains: ["self", t, e.QUOTE_STRING_MODE, n],
-      };
+var require_tp = x(function (cjsExports, cjsModule) {
+  function tp(hljs) {
+    let TPID = {
+      className: "number",
+      begin: "[1-9][0-9]*",
+      relevance: 0,
+    };
+    let TPLABEL = {
+      className: "symbol",
+      begin: ":[^\\]]+",
+    };
+    let TPDATA = {
+      className: "built_in",
+      begin:
+        "(AR|P|PAYLOAD|PR|R|SR|RSR|LBL|VR|UALM|MESSAGE|UTOOL|UFRAME|TIMER|TIMER_OVERFLOW|JOINT_MAX_SPEED|RESUME_PROG|DIAG_REC)\\[",
+      end: "\\]",
+      contains: ["self", TPID, TPLABEL],
+    };
+    let TPIO = {
+      className: "built_in",
+      begin: "(AI|AO|DI|DO|F|RI|RO|UI|UO|GI|GO|SI|SO)\\[",
+      end: "\\]",
+      contains: ["self", TPID, hljs.QUOTE_STRING_MODE, TPLABEL],
+    };
     return {
       name: "TP",
       keywords: {
@@ -101,27 +108,42 @@ var yo = x(function (mb, Co) {
         literal: ["ON", "OFF", "max_speed", "LPOS", "JPOS", "ENABLE", "DISABLE", "START", "STOP", "RESET"],
       },
       contains: [
-        a,
-        s,
-        { className: "keyword", begin: "/(PROG|ATTR|MN|POS|END)\\b" },
-        { className: "keyword", begin: "(CALL|RUN|POINT_LOGIC|LBL)\\b" },
-        { className: "keyword", begin: "\\b(ACC|CNT|Skip|Offset|PSPD|RT_LD|AP_LD|Tool_Offset)" },
+        TPDATA,
+        TPIO,
+        {
+          className: "keyword",
+          begin: "/(PROG|ATTR|MN|POS|END)\\b",
+        },
+        {
+          className: "keyword",
+          begin: "(CALL|RUN|POINT_LOGIC|LBL)\\b",
+        },
+        {
+          className: "keyword",
+          begin: "\\b(ACC|CNT|Skip|Offset|PSPD|RT_LD|AP_LD|Tool_Offset)",
+        },
         {
           className: "number",
           begin: "\\d+(sec|msec|mm/sec|cm/min|inch/min|deg/sec|mm|in|cm)?\\b",
           relevance: 0,
         },
-        e.COMMENT("//", "[;$]"),
-        e.COMMENT("!", "[;$]"),
-        e.COMMENT("--eg:", "$"),
-        e.QUOTE_STRING_MODE,
-        { className: "string", begin: "'", end: "'" },
-        e.C_NUMBER_MODE,
-        { className: "variable", begin: "\\$[A-Za-z0-9_]+" },
+        hljs.COMMENT("//", "[;$]"),
+        hljs.COMMENT("!", "[;$]"),
+        hljs.COMMENT("--eg:", "$"),
+        hljs.QUOTE_STRING_MODE,
+        {
+          className: "string",
+          begin: "'",
+          end: "'",
+        },
+        hljs.C_NUMBER_MODE,
+        {
+          className: "variable",
+          begin: "\\$[A-Za-z0-9_]+",
+        },
       ],
     };
   }
-  Co.exports = Jm;
+  cjsModule.exports = tp;
 });
-
-export { yo };
+export { require_tp };

@@ -8,41 +8,45 @@
 import { AbortError } from "../../../abort-controller/AbortError.js";
 
 //@ chunk-mrx6y2r5.js:55968-56444 esm-fingerprint
-function Jl(e, t) {
-  let {
-    cleanupBeforeAbort: cleanupBeforeAbort,
-    abortSignal: abortSignal,
-    abortErrorMsg: abortErrorMsg,
-  } = t !== null && t !== void 0 ? t : {};
-  return new Promise((i, s) => {
-    function a() {
-      s(
+function createAbortablePromise(buildPromise, options) {
+  let { cleanupBeforeAbort, abortSignal, abortErrorMsg } =
+    options !== null && options !== undefined ? options : {};
+  return new Promise((resolve, reject) => {
+    function rejectOnAbort() {
+      reject(
         new AbortError(
-          abortErrorMsg !== null && abortErrorMsg !== void 0 ? abortErrorMsg : "The operation was aborted.",
+          abortErrorMsg !== null && abortErrorMsg !== undefined
+            ? abortErrorMsg
+            : "The operation was aborted.",
         ),
       );
     }
-    function c() {
-      abortSignal === null || abortSignal === void 0 || abortSignal.removeEventListener("abort", l);
+    function removeListeners() {
+      if (!(abortSignal === null || abortSignal === undefined))
+        abortSignal.removeEventListener("abort", onAbort);
     }
-    function l() {
-      (cleanupBeforeAbort === null || cleanupBeforeAbort === void 0 || cleanupBeforeAbort(), c(), a());
+    function onAbort() {
+      if (!(cleanupBeforeAbort === null || cleanupBeforeAbort === undefined)) cleanupBeforeAbort();
+      removeListeners();
+      rejectOnAbort();
     }
-    if (abortSignal === null || abortSignal === void 0 ? void 0 : abortSignal.aborted) return a();
+    if (abortSignal === null || abortSignal === undefined ? undefined : abortSignal.aborted)
+      return rejectOnAbort();
     try {
-      e(
-        (d) => {
-          (c(), i(d));
+      buildPromise(
+        (x) => {
+          removeListeners();
+          resolve(x);
         },
-        (d) => {
-          (c(), s(d));
+        (x) => {
+          removeListeners();
+          reject(x);
         },
       );
-    } catch (error) {
-      s(error);
+    } catch (err) {
+      reject(err);
     }
-    abortSignal === null || abortSignal === void 0 || abortSignal.addEventListener("abort", l);
+    if (!(abortSignal === null || abortSignal === undefined)) abortSignal.addEventListener("abort", onAbort);
   });
 }
-
-export { Jl };
+export { createAbortablePromise };

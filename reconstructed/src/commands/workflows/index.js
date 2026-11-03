@@ -10,17 +10,17 @@
  */
 import { isWorkflowsAvailable } from "../../utils/workflows/workflowGates.js";
 
+//@ chunk-g8tswn69.js:3475-3654 placement
 /**
  * /workflows 命令对象（local-jsx）；描述：Browse running and completed workflows；isEnabled: ()=>Sg()；实现 chunk-wnym76ss.js 的 Rn。
  */
-//@ chunk-g8tswn69.js:3475-3654 placement
 var workflowsCommandDefinition = {
-    type: "local-jsx",
-    name: "workflows",
-    aliases: [],
-    description: "Browse running and completed workflows",
-    isEnabled: () => isWorkflowsAvailable(),
-    immediate: !0,
-    thinClientDispatch: "control-request",
-  },
-  workflowsCommand = workflowsCommandDefinition;
+  type: "local-jsx",
+  name: "workflows",
+  aliases: [],
+  description: "Browse running and completed workflows",
+  isEnabled: () => isWorkflowsAvailable(),
+  immediate: true,
+  thinClientDispatch: "control-request",
+};
+var workflowsCommand = workflowsCommandDefinition;

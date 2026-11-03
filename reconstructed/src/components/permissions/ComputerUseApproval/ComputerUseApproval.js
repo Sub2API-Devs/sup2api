@@ -8,204 +8,244 @@
  * pieces: chunk-18hwfzwa.js (16)
  * attribution: placement 4, layout 5, fingerprint 6, file-local 1
  */
-import { j, y } from "../../../../vendor/react/cjs/react.production.js";
-import { r, e } from "../../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { init_react_production, y } from "../../../../vendor/react/cjs/react.production.js";
+import {
+  jsxProd_default_2,
+  jsxProd_default,
+} from "../../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Box } from "../../../ink/components/Text.js";
-import { IO } from "../../dialogs/dialogKinds.js";
+import { EMPTY_SANDBOX_FLAGS } from "../../dialogs/dialogKinds.js";
 import { w } from "../../../../vendor/react/compiler-runtime.js";
 import { useInputRefusalWindow, useRefusalTracker, settleKey } from "../../CustomSelect/selectTypeahead.js";
 import { MEMO_CACHE_SENTINEL } from "../../../../runtime/bun-runtime.js";
 import { requireComputerUseSwift } from "../../../utils/computerUse/swiftLoader.js";
 import { execFileNoThrow } from "../../../utils/execFileNoThrow.js";
-import { re } from "../../../../vendor/@inquirer/figures/dist/esm/index.js";
+import { figures_default } from "../../../../vendor/@inquirer/figures/dist/esm/index.js";
 import { ModelSelector } from "../../agents/ModelSelector.js";
 import { NO_COMMITTED_ROW } from "../../CustomSelect/select.js";
 import { Dialog } from "../../design-system/Dialog.js";
-import { yce } from "../wrapWidth.js";
+import { MAX_VISIBLE_ITEMS } from "../wrapWidth.js";
 import { plural } from "../../../utils/stringUtils.js";
 import { DiffFileList } from "../../diff/DiffFileList.js";
-import { labelOrEmpty } from "../../../utils/permissions/approvalPayloadSerialization.js";
+import { labelOrEmpty as labelOrEmpty_2 } from "../../../utils/permissions/approvalPayloadSerialization.js";
 
 //@ chunk-18hwfzwa.js:1237471-1237535 placement
-function Rxo(h) {
+function pathBasename(h) {
   return h.toLowerCase().split(/[\\/]/).pop() ?? "";
 }
 //@ chunk-18hwfzwa.js:1237535-1238502 placement
 var KNOWN_TERMINAL_BUNDLE_IDS = new Set([
-    "com.apple.Terminal",
-    "com.googlecode.iterm2",
-    "com.microsoft.VSCode",
-    "dev.warp.Warp-Stable",
-    "com.github.wez.wezterm",
-    "org.alacritty",
-    "io.alacritty",
-    "net.kovidgoyal.kitty",
-    "co.zeit.hyper",
-    "com.mitchellh.ghostty",
-    "com.todesktop.230313mzl4w4u92",
-    "com.vscodium",
-    "com.exafunction.windsurf",
-    "dev.zed.Zed",
-    "org.tabby",
-    "com.jetbrains.intellij",
-    "com.jetbrains.pycharm",
-  ]),
-  hct = new Set(["com.apple.finder"]),
-  yct = new Set(["com.apple.systempreferences"]),
-  xxo = new Set([
-    "cmd.exe",
-    "powershell.exe",
-    "pwsh.exe",
-    "wt.exe",
-    "windowsterminal.exe",
-    "code.exe",
-    "cursor.exe",
-    "vscodium.exe",
-    "windsurf.exe",
-    "zed.exe",
-    "alacritty.exe",
-    "wezterm-gui.exe",
-    "warp.exe",
-    "hyper.exe",
-    "tabby.exe",
-    "idea64.exe",
-    "pycharm64.exe",
-    "conemu.exe",
-    "conemu64.exe",
-  ]),
-  Pxo = ["Microsoft.WindowsTerminal_", "Microsoft.WindowsTerminalPreview_", "Microsoft.PowerShell_"],
-  Axo = new Set(["explorer.exe"]),
-  Mxo = new Set(["systemsettings.exe"]),
-  Ixo = ["windows.immersivecontrolpanel_"],
-  kJr = new Set([...KNOWN_TERMINAL_BUNDLE_IDS, ...hct, ...yct]);
+  "com.apple.Terminal",
+  "com.googlecode.iterm2",
+  "com.microsoft.VSCode",
+  "dev.warp.Warp-Stable",
+  "com.github.wez.wezterm",
+  "org.alacritty",
+  "io.alacritty",
+  "net.kovidgoyal.kitty",
+  "co.zeit.hyper",
+  "com.mitchellh.ghostty",
+  "com.todesktop.230313mzl4w4u92",
+  "com.vscodium",
+  "com.exafunction.windsurf",
+  "dev.zed.Zed",
+  "org.tabby",
+  "com.jetbrains.intellij",
+  "com.jetbrains.pycharm",
+]);
+var FINDER_BUNDLE_IDS = new Set(["com.apple.finder"]);
+var SYSTEM_SETTINGS_BUNDLE_IDS = new Set(["com.apple.systempreferences"]);
+var WINDOWS_SHELL_EXECUTABLES = new Set([
+  "cmd.exe",
+  "powershell.exe",
+  "pwsh.exe",
+  "wt.exe",
+  "windowsterminal.exe",
+  "code.exe",
+  "cursor.exe",
+  "vscodium.exe",
+  "windsurf.exe",
+  "zed.exe",
+  "alacritty.exe",
+  "wezterm-gui.exe",
+  "warp.exe",
+  "hyper.exe",
+  "tabby.exe",
+  "idea64.exe",
+  "pycharm64.exe",
+  "conemu.exe",
+  "conemu64.exe",
+]);
+var WINDOWS_TERMINAL_PREFIXES = [
+  "Microsoft.WindowsTerminal_",
+  "Microsoft.WindowsTerminalPreview_",
+  "Microsoft.PowerShell_",
+];
+var SHELL_HOST_EXECUTABLES = new Set(["explorer.exe"]);
+var SYSTEM_SETTINGS_EXECUTABLES = new Set(["systemsettings.exe"]);
+var WINDOWS_SETTINGS_PREFIXES = ["windows.immersivecontrolpanel_"];
+var KNOWN_RISK_BUNDLE_IDS = new Set([
+  ...KNOWN_TERMINAL_BUNDLE_IDS,
+  ...FINDER_BUNDLE_IDS,
+  ...SYSTEM_SETTINGS_BUNDLE_IDS,
+]);
 //@ chunk-18hwfzwa.js:1238502-1238846 placement
-function computerUseRiskCategory(h) {
-  if (KNOWN_TERMINAL_BUNDLE_IDS.has(h)) return "shell";
-  if (hct.has(h)) return "filesystem";
-  if (yct.has(h)) return "system_settings";
-  if (Pxo.some((D) => h.startsWith(D))) return "shell";
-  if (Ixo.some((D) => h.startsWith(D))) return "system_settings";
-  let x = Rxo(h);
-  if (xxo.has(x)) return "shell";
-  if (Axo.has(x)) return "filesystem";
-  if (Mxo.has(x)) return "system_settings";
+function computerUseRiskCategory(bundleId) {
+  if (KNOWN_TERMINAL_BUNDLE_IDS.has(bundleId)) return "shell";
+  if (FINDER_BUNDLE_IDS.has(bundleId)) return "filesystem";
+  if (SYSTEM_SETTINGS_BUNDLE_IDS.has(bundleId)) return "system_settings";
+  if (WINDOWS_TERMINAL_PREFIXES.some((D) => bundleId.startsWith(D))) return "shell";
+  if (WINDOWS_SETTINGS_PREFIXES.some((D) => bundleId.startsWith(D))) return "system_settings";
+  let x = pathBasename(bundleId);
+  if (WINDOWS_SHELL_EXECUTABLES.has(x)) return "shell";
+  if (SHELL_HOST_EXECUTABLES.has(x)) return "filesystem";
+  if (SYSTEM_SETTINGS_EXECUTABLES.has(x)) return "system_settings";
   return null;
 }
 //@ chunk-18hwfzwa.js:1238846-1238850 placement
-j();
+init_react_production();
 //@ chunk-18hwfzwa.js:1238850-1238883 layout
-function gPo(ts, Gn) {
+function sumValues(ts, Gn) {
   return ts + Gn;
 }
 //@ chunk-18hwfzwa.js:1238883-1238913 layout
-function hPo(Ur, Zr) {
+function selectSortValue(Ur, Zr) {
   return Zr;
 }
 //@ chunk-18hwfzwa.js:1238913-1238995 fingerprint = _temp (1)
-function yPo(a) {
+function grantBundleIds(a) {
   return a.resolved && !a.alreadyGranted ? [a.resolved.bundleId] : [];
 }
 //@ chunk-18hwfzwa.js:1238995-1239026 layout
-function SPo(zr) {
-  return [zr, !0];
+function toFlagPair(zr) {
+  return [zr, true];
 }
 //@ chunk-18hwfzwa.js:1239026-1239099 file-local
-function bPo(flag) {
-  return r(Text, { dimColor: !0, children: ["  ", "\xB7 ", flag] }, flag);
+function renderRequestedFlag(flag) {
+  return jsxProd_default_2(
+    Text,
+    {
+      dimColor: true,
+      children: ["  ", "\xB7 ", flag],
+    },
+    flag,
+  );
 }
 //@ chunk-18hwfzwa.js:1239099-1239149 fingerprint = DENY_ALL_RESPONSE (1)
-var E9 = { granted: [], denied: [], flags: IO },
-  _9 = 8,
-  Sct = 8;
+var DENY_ALL_RESPONSE = {
+  granted: [],
+  denied: [],
+  flags: EMPTY_SANDBOX_FLAGS,
+};
+var MIN_APP_LIST_ROWS = 8;
+var MAX_APP_LIST_ROWS = 8;
 //@ chunk-18hwfzwa.js:1239902-1240190 fingerprint = ComputerUseApproval (0.846)
-function ComputerUseApproval(t0) {
-  let $ = w(4),
-    { request: request, onDone: onDone, wouldTakeAnswer: wouldTakeAnswer } = t0,
-    t1;
-  if ($[0] !== onDone || $[1] !== request || $[2] !== wouldTakeAnswer)
-    ((t1 = request.tccState
-      ? e(ComputerUseTccPanel, {
+function ComputerUseApproval(props) {
+  let $ = w(4);
+  let { request, onDone, wouldTakeAnswer } = props;
+  let t1;
+  if ($[0] !== onDone || $[1] !== request || $[2] !== wouldTakeAnswer) {
+    t1 = request.tccState
+      ? jsxProd_default(ComputerUseTccPanel, {
           tccState: request.tccState,
-          onDone: () => onDone(E9),
-          wouldTakeAnswer: wouldTakeAnswer,
+          onDone: () => onDone(DENY_ALL_RESPONSE),
+          wouldTakeAnswer,
         })
-      : e(ComputerUseAppListPanel, { request: request, onDone: onDone, wouldTakeAnswer: wouldTakeAnswer })),
-      ($[0] = onDone),
-      ($[1] = request),
-      ($[2] = wouldTakeAnswer),
-      ($[3] = t1));
-  else t1 = $[3];
+      : jsxProd_default(ComputerUseAppListPanel, {
+          request,
+          onDone,
+          wouldTakeAnswer,
+        });
+    $[0] = onDone;
+    $[1] = request;
+    $[2] = wouldTakeAnswer;
+    $[3] = t1;
+  } else t1 = $[3];
   return t1;
 }
 //@ chunk-18hwfzwa.js:1240190-1243037 fingerprint = ComputerUseTccPanel (0.79)
-function ComputerUseTccPanel(t0) {
-  let $ = w(39),
-    { tccState: tccState, onDone: onDone, wouldTakeAnswer: wouldTakeAnswer } = t0,
-    ee = useInputRefusalWindow(),
-    { refusedWithin: refusedWithin, noteRefused: noteRefused } = useRefusalTracker(),
-    He;
-  if ($[0] !== ee || $[1] !== noteRefused || $[2] !== refusedWithin)
-    ((He = function We() {
-      if (ee() || refusedWithin()) {
-        return (noteRefused(), !0);
+function ComputerUseTccPanel(props) {
+  let $ = w(39);
+  let { tccState, onDone, wouldTakeAnswer } = props;
+  let inputRefusalWindow = useInputRefusalWindow();
+  let { refusedWithin, noteRefused } = useRefusalTracker();
+  let He;
+  if ($[0] !== inputRefusalWindow || $[1] !== noteRefused || $[2] !== refusedWithin) {
+    He = function We() {
+      if (inputRefusalWindow() || refusedWithin()) {
+        noteRefused();
+        return true;
       }
-      return !1;
-    }),
-      ($[0] = ee),
-      ($[1] = noteRefused),
-      ($[2] = refusedWithin),
-      ($[3] = He));
-  else He = $[3];
-  let We = He,
-    ze;
-  if ($[4] !== ee || $[5] !== noteRefused || $[6] !== onDone || $[7] !== refusedWithin)
-    ((ze = function Xe() {
-      if (ee() || refusedWithin()) {
+      return false;
+    };
+    $[0] = inputRefusalWindow;
+    $[1] = noteRefused;
+    $[2] = refusedWithin;
+    $[3] = He;
+  } else He = $[3];
+  let refuseInput = He;
+  let ze;
+  if ($[4] !== inputRefusalWindow || $[5] !== noteRefused || $[6] !== onDone || $[7] !== refusedWithin) {
+    ze = function Xe() {
+      if (inputRefusalWindow() || refusedWithin()) {
         noteRefused();
         return;
       }
       onDone();
-    }),
-      ($[4] = ee),
-      ($[5] = noteRefused),
-      ($[6] = onDone),
-      ($[7] = refusedWithin),
-      ($[8] = ze));
-  else ze = $[8];
-  let Xe = ze,
-    rt;
+    };
+    $[4] = inputRefusalWindow;
+    $[5] = noteRefused;
+    $[6] = onDone;
+    $[7] = refusedWithin;
+    $[8] = ze;
+  } else ze = $[8];
+  let onCancel = ze;
+  let rt;
   if ($[9] !== tccState.accessibility || $[10] !== tccState.screenRecording) {
     let kt = [];
     if (!tccState.accessibility) {
-      let At;
-      if ($[12] === MEMO_CACHE_SENTINEL)
-        ((At = { label: "Open System Settings \u2192 Accessibility", value: "open_accessibility" }),
-          ($[12] = At));
-      else At = $[12];
-      kt.push(At);
+      let t1;
+      if ($[12] === MEMO_CACHE_SENTINEL) {
+        t1 = {
+          label: "Open System Settings \u2192 Accessibility",
+          value: "open_accessibility",
+        };
+        $[12] = t1;
+      } else t1 = $[12];
+      kt.push(t1);
     }
     if (!tccState.screenRecording) {
-      let At;
-      if ($[13] === MEMO_CACHE_SENTINEL)
-        ((At = { label: "Open System Settings \u2192 Screen Recording", value: "open_screen_recording" }),
-          ($[13] = At));
-      else At = $[13];
-      kt.push(At);
+      let t1;
+      if ($[13] === MEMO_CACHE_SENTINEL) {
+        t1 = {
+          label: "Open System Settings \u2192 Screen Recording",
+          value: "open_screen_recording",
+        };
+        $[13] = t1;
+      } else t1 = $[13];
+      kt.push(t1);
     }
-    rt = (kt.push({ label: "Try again", value: "retry" }), kt);
-    (($[9] = tccState.accessibility), ($[10] = tccState.screenRecording), ($[11] = rt));
+    rt =
+      (kt.push({
+        label: "Try again",
+        value: "retry",
+      }),
+      kt);
+    $[9] = tccState.accessibility;
+    $[10] = tccState.screenRecording;
+    $[11] = rt;
   } else rt = $[11];
-  let It = rt,
-    At;
+  let options = rt;
+  let t1;
   if (
-    $[14] !== ee ||
+    $[14] !== inputRefusalWindow ||
     $[15] !== noteRefused ||
     $[16] !== onDone ||
     $[17] !== refusedWithin ||
     $[18] !== wouldTakeAnswer
-  )
-    ((At = function Dt(value) {
-      if (ee() || refusedWithin()) {
+  ) {
+    t1 = function onChange(value) {
+      if (inputRefusalWindow() || refusedWithin()) {
         noteRefused();
         return;
       }
@@ -215,21 +255,25 @@ function ComputerUseTccPanel(t0) {
       let Et = requireComputerUseSwift();
       switch (value) {
         case "open_accessibility": {
-          (Et.tcc.requestAccessibility(),
-            execFileNoThrow(
-              "open",
-              ["x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"],
-              { useCwd: !1 },
-            ));
+          Et.tcc.requestAccessibility();
+          execFileNoThrow(
+            "open",
+            ["x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"],
+            {
+              useCwd: false,
+            },
+          );
           return;
         }
         case "open_screen_recording": {
-          (Et.tcc.requestScreenRecording(),
-            execFileNoThrow(
-              "open",
-              ["x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"],
-              { useCwd: !1 },
-            ));
+          Et.tcc.requestScreenRecording();
+          execFileNoThrow(
+            "open",
+            ["x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"],
+            {
+              useCwd: false,
+            },
+          );
           return;
         }
         case "retry": {
@@ -237,71 +281,97 @@ function ComputerUseTccPanel(t0) {
           return;
         }
       }
-    }),
-      ($[14] = ee),
-      ($[15] = noteRefused),
-      ($[16] = onDone),
-      ($[17] = refusedWithin),
-      ($[18] = wouldTakeAnswer),
-      ($[19] = At));
-  else At = $[19];
-  let Dt = At;
-  const Lt = tccState.accessibility ? `${re.tick} granted` : `${re.cross} not granted`;
-  let oo;
-  if ($[20] !== Lt) ((oo = r(Text, { children: ["Accessibility:", " ", Lt] })), ($[20] = Lt), ($[21] = oo));
-  else oo = $[21];
-  const Xt = tccState.screenRecording ? `${re.tick} granted` : `${re.cross} not granted`;
-  let io;
-  if ($[22] !== Xt)
-    ((io = r(Text, { children: ["Screen Recording:", " ", Xt] })), ($[22] = Xt), ($[23] = io));
-  else io = $[23];
+    };
+    $[14] = inputRefusalWindow;
+    $[15] = noteRefused;
+    $[16] = onDone;
+    $[17] = refusedWithin;
+    $[18] = wouldTakeAnswer;
+    $[19] = t1;
+  } else t1 = $[19];
+  let onChange = t1;
+  const t2 = tccState.accessibility
+    ? `${figures_default.tick} granted`
+    : `${figures_default.cross} not granted`;
+  let t3;
+  if ($[20] !== t2) {
+    t3 = jsxProd_default_2(Text, {
+      children: ["Accessibility:", " ", t2],
+    });
+    $[20] = t2;
+    $[21] = t3;
+  } else t3 = $[21];
+  const t4 = tccState.screenRecording
+    ? `${figures_default.tick} granted`
+    : `${figures_default.cross} not granted`;
+  let t5;
+  if ($[22] !== t4) {
+    t5 = jsxProd_default_2(Text, {
+      children: ["Screen Recording:", " ", t4],
+    });
+    $[22] = t4;
+    $[23] = t5;
+  } else t5 = $[23];
   let so;
-  if ($[24] !== oo || $[25] !== io)
-    ((so = r(Box, { flexDirection: "column", children: [oo, io] })),
-      ($[24] = oo),
-      ($[25] = io),
-      ($[26] = so));
-  else so = $[26];
-  let po;
-  if ($[27] === MEMO_CACHE_SENTINEL)
-    ((po = e(Text, {
-      dimColor: !0,
+  if ($[24] !== t3 || $[25] !== t5) {
+    so = jsxProd_default_2(Box, {
+      flexDirection: "column",
+      children: [t3, t5],
+    });
+    $[24] = t3;
+    $[25] = t5;
+    $[26] = so;
+  } else so = $[26];
+  let t7;
+  if ($[27] === MEMO_CACHE_SENTINEL) {
+    t7 = jsxProd_default(Text, {
+      dimColor: true,
       children:
         'Grant the missing permissions in System Settings, then select "Try again". macOS may require you to restart Claude Code after granting Screen Recording.',
-    })),
-      ($[27] = po));
-  else po = $[27];
+    });
+    $[27] = t7;
+  } else t7 = $[27];
   let ao;
-  if ($[28] !== Xe || $[29] !== Dt || $[30] !== It || $[31] !== We)
-    ((ao = e(ModelSelector, {
-      hideIndexes: !0,
-      refuseInput: We,
+  if ($[28] !== onCancel || $[29] !== onChange || $[30] !== options || $[31] !== refuseInput) {
+    ao = jsxProd_default(ModelSelector, {
+      hideIndexes: true,
+      refuseInput,
       selectedValue: NO_COMMITTED_ROW,
-      options: It,
-      onChange: Dt,
-      onCancel: Xe,
-    })),
-      ($[28] = Xe),
-      ($[29] = Dt),
-      ($[30] = It),
-      ($[31] = We),
-      ($[32] = ao));
-  else ao = $[32];
-  let co;
-  if ($[33] !== ao || $[34] !== so)
-    ((co = r(Box, { flexDirection: "column", paddingX: 1, paddingY: 1, gap: 1, children: [so, po, ao] })),
-      ($[33] = ao),
-      ($[34] = so),
-      ($[35] = co));
-  else co = $[35];
-  let bo;
-  if ($[36] !== Xe || $[37] !== co)
-    ((bo = e(Dialog, { title: "Computer Use needs macOS permissions", onCancel: Xe, children: co })),
-      ($[36] = Xe),
-      ($[37] = co),
-      ($[38] = bo));
-  else bo = $[38];
-  return bo;
+      options,
+      onChange,
+      onCancel,
+    });
+    $[28] = onCancel;
+    $[29] = onChange;
+    $[30] = options;
+    $[31] = refuseInput;
+    $[32] = ao;
+  } else ao = $[32];
+  let children;
+  if ($[33] !== ao || $[34] !== so) {
+    children = jsxProd_default_2(Box, {
+      flexDirection: "column",
+      paddingX: 1,
+      paddingY: 1,
+      gap: 1,
+      children: [so, t7, ao],
+    });
+    $[33] = ao;
+    $[34] = so;
+    $[35] = children;
+  } else children = $[35];
+  let t10;
+  if ($[36] !== onCancel || $[37] !== children) {
+    t10 = jsxProd_default(Dialog, {
+      title: "Computer Use needs macOS permissions",
+      onCancel,
+      children,
+    });
+    $[36] = onCancel;
+    $[37] = children;
+    $[38] = t10;
+  } else t10 = $[38];
+  return t10;
 }
 //@ chunk-18hwfzwa.js:1243037-1243164 fingerprint = SENTINEL_WARNING (1)
 var SENTINEL_WARNING = {
@@ -318,254 +388,354 @@ function dedupeComputerUseApps(a) {
   }
   let D = new Map();
   for (let L of a) {
-    let ee = L.resolved?.bundleId ?? L.requestedName,
-      ke = D.get(ee);
+    let ee = L.resolved?.bundleId ?? L.requestedName;
+    let ke = D.get(ee);
     if (!ke || x(L) > x(ke)) D.set(ee, L);
   }
   return [...D.values()];
 }
 //@ chunk-18hwfzwa.js:1243429-1243511 layout = _temp (1)
-function Pct(a) {
+function riskSortRank(a) {
   return a.resolved && !a.alreadyGranted && computerUseRiskCategory(a.resolved.bundleId) ? 2 : 1;
 }
 //@ chunk-18hwfzwa.js:1243511-1248685 fingerprint = ComputerUseAppListPanel (0.669)
-function ComputerUseAppListPanel(t0) {
-  let $ = w(79),
-    { request: request, onDone: onDone } = t0,
-    ee;
-  if ($[0] !== request.apps) ((ee = dedupeComputerUseApps(request.apps)), ($[0] = request.apps), ($[1] = ee));
-  else ee = $[1];
-  let ke = ee,
-    Re;
+function ComputerUseAppListPanel(props) {
+  let $ = w(79);
+  let { request, onDone } = props;
+  let ee;
+  if ($[0] !== request.apps) {
+    ee = dedupeComputerUseApps(request.apps);
+    $[0] = request.apps;
+    $[1] = ee;
+  } else ee = $[1];
+  let ke = ee;
+  let Re;
   ze: {
-    let Be, He;
-    if ($[2] !== ke) ((Be = ke.map(Pct)), (He = Be.reduce(gPo, 0)), ($[2] = ke), ($[3] = Be), ($[4] = He));
-    else ((Be = $[3]), (He = $[4]));
-    if (He <= yce) {
+    let Be;
+    let He;
+    if ($[2] !== ke) {
+      Be = ke.map(riskSortRank);
+      He = Be.reduce(sumValues, 0);
+      $[2] = ke;
+      $[3] = Be;
+      $[4] = He;
+    } else {
+      Be = $[3];
+      He = $[4];
+    }
+    if (He <= MAX_VISIBLE_ITEMS) {
       let We;
-      if ($[5] !== ke) ((We = { visibleApps: ke, hiddenCount: 0 }), ($[5] = ke), ($[6] = We));
-      else We = $[6];
+      if ($[5] !== ke) {
+        We = {
+          visibleApps: ke,
+          hiddenCount: 0,
+        };
+        $[5] = ke;
+        $[6] = We;
+      } else We = $[6];
       Re = We;
       break ze;
     }
     let Xe;
     if ($[7] !== ke || $[8] !== Be) {
-      const mapped = ke.map(hPo);
+      const mapped = ke.map(selectSortValue);
       let rt;
-      if ($[10] !== Be) ((rt = (kt, At) => Be[At] - Be[kt] || kt - At), ($[10] = Be), ($[11] = rt));
-      else rt = $[11];
+      if ($[10] !== Be) {
+        rt = (kt, At) => Be[At] - Be[kt] || kt - At;
+        $[10] = Be;
+        $[11] = rt;
+      } else rt = $[11];
       let sorted = mapped.sort(rt);
       Xe = new Set();
       let Ot = 0;
       for (const Et of sorted) {
-        if (Ot + Be[Et] > yce - 1) {
+        if (Ot + Be[Et] > MAX_VISIBLE_ITEMS - 1) {
           continue;
         }
-        (Xe.add(Et), (Ot = Ot + Be[Et]));
+        Xe.add(Et);
+        Ot = Ot + Be[Et];
       }
-      (($[7] = ke), ($[8] = Be), ($[9] = Xe));
+      $[7] = ke;
+      $[8] = Be;
+      $[9] = Xe;
     } else Xe = $[9];
-    let We;
+    let visibleApps;
     if ($[12] !== ke || $[13] !== Xe) {
       let rt;
-      if ($[15] !== Xe) ((rt = (Dt, Lt) => Xe.has(Lt)), ($[15] = Xe), ($[16] = rt));
-      else rt = $[16];
-      We = ke.filter(rt);
-      (($[12] = ke), ($[13] = Xe), ($[14] = We));
-    } else We = $[14];
-    const rt = ke.length - Xe.size;
+      if ($[15] !== Xe) {
+        rt = (Dt, Lt) => Xe.has(Lt);
+        $[15] = Xe;
+        $[16] = rt;
+      } else rt = $[16];
+      visibleApps = ke.filter(rt);
+      $[12] = ke;
+      $[13] = Xe;
+      $[14] = visibleApps;
+    } else visibleApps = $[14];
+    const hiddenCount = ke.length - Xe.size;
     let oo;
-    if ($[17] !== We || $[18] !== rt)
-      ((oo = { visibleApps: We, hiddenCount: rt }), ($[17] = We), ($[18] = rt), ($[19] = oo));
-    else oo = $[19];
+    if ($[17] !== visibleApps || $[18] !== hiddenCount) {
+      oo = {
+        visibleApps,
+        hiddenCount,
+      };
+      $[17] = visibleApps;
+      $[18] = hiddenCount;
+      $[19] = oo;
+    } else oo = $[19];
     Re = oo;
   }
-  let { visibleApps: visibleApps, hiddenCount: hiddenCount } = Re,
-    He;
-  if ($[20] !== visibleApps)
-    ((He = () => new Set(visibleApps.flatMap(yPo))), ($[20] = visibleApps), ($[21] = He));
-  else He = $[21];
-  let [so] = y(He),
-    We;
-  if ($[22] === MEMO_CACHE_SENTINEL)
-    ((We = ["clipboardRead", "clipboardWrite", "systemKeyCombos"]), ($[22] = We));
-  else We = $[22];
-  let po = We,
-    rt;
-  if ($[23] !== request.requestedFlags)
-    ((rt = po.filter((ao) => request.requestedFlags[ao])), ($[23] = request.requestedFlags), ($[24] = rt));
-  else rt = $[24];
-  let co = rt,
-    bo = useInputRefusalWindow(),
-    { refusedWithin: refusedWithin, noteRefused: noteRefused, epoch: epoch } = useRefusalTracker(),
-    oo;
-  if ($[25] !== bo || $[26] !== noteRefused || $[27] !== refusedWithin)
-    ((oo = function Ho() {
-      if (bo() || refusedWithin()) {
-        return (noteRefused(), !0);
+  let { visibleApps, hiddenCount } = Re;
+  let He;
+  if ($[20] !== visibleApps) {
+    He = () => new Set(visibleApps.flatMap(grantBundleIds));
+    $[20] = visibleApps;
+    $[21] = He;
+  } else He = $[21];
+  let [checked] = y(He);
+  let t2;
+  if ($[22] === MEMO_CACHE_SENTINEL) {
+    t2 = ["clipboardRead", "clipboardWrite", "systemKeyCombos"];
+    $[22] = t2;
+  } else t2 = $[22];
+  let ALL_FLAG_KEYS = t2;
+  let rt;
+  if ($[23] !== request.requestedFlags) {
+    rt = ALL_FLAG_KEYS.filter((k) => request.requestedFlags[k]);
+    $[23] = request.requestedFlags;
+    $[24] = rt;
+  } else rt = $[24];
+  let co = rt;
+  let inputRefusalWindow = useInputRefusalWindow();
+  let { refusedWithin, noteRefused, epoch } = useRefusalTracker();
+  let oo;
+  if ($[25] !== inputRefusalWindow || $[26] !== noteRefused || $[27] !== refusedWithin) {
+    oo = function Ho() {
+      if (inputRefusalWindow() || refusedWithin()) {
+        noteRefused();
+        return true;
       }
-      return !1;
-    }),
-      ($[25] = bo),
-      ($[26] = noteRefused),
-      ($[27] = refusedWithin),
-      ($[28] = oo));
-  else oo = $[28];
-  let Ho = oo,
-    Io = settleKey(epoch),
-    Wo;
-  if ($[29] === MEMO_CACHE_SENTINEL)
-    ((Wo = {
-      label: r(Text, {
-        children: ["Deny, and tell Claude what to do differently ", e(Text, { bold: !0, children: "(esc)" })],
+      return false;
+    };
+    $[25] = inputRefusalWindow;
+    $[26] = noteRefused;
+    $[27] = refusedWithin;
+    $[28] = oo;
+  } else oo = $[28];
+  let refuseInput = oo;
+  let Io = settleKey(epoch);
+  let Wo;
+  if ($[29] === MEMO_CACHE_SENTINEL) {
+    Wo = {
+      label: jsxProd_default_2(Text, {
+        children: [
+          "Deny, and tell Claude what to do differently ",
+          jsxProd_default(Text, {
+            bold: true,
+            children: "(esc)",
+          }),
+        ],
       }),
       value: "deny",
-    }),
-      ($[29] = Wo));
-  else Wo = $[29];
-  const t4 = so.size;
-  let Cn;
-  if ($[30] !== so.size) ((Cn = plural(so.size, "app")), ($[30] = so.size), ($[31] = Cn));
-  else Cn = $[31];
-  const t6 = `Allow for this session (${t4} ${Cn})`;
+    };
+    $[29] = Wo;
+  } else Wo = $[29];
+  const size = checked.size;
+  let t5;
+  if ($[30] !== checked.size) {
+    t5 = plural(checked.size, "app");
+    $[30] = checked.size;
+    $[31] = t5;
+  } else t5 = $[31];
+  const label = `Allow for this session (${size} ${t5})`;
   let vo;
-  if ($[32] !== t6) ((vo = [Wo, { label: t6, value: "allow_all" }]), ($[32] = t6), ($[33] = vo));
-  else vo = $[33];
-  let Yo = vo,
-    kn;
+  if ($[32] !== label) {
+    vo = [
+      Wo,
+      {
+        label,
+        value: "allow_all",
+      },
+    ];
+    $[32] = label;
+    $[33] = vo;
+  } else vo = $[33];
+  let options = vo;
+  let kn;
   if (
     $[34] !== ke ||
-    $[35] !== so ||
-    $[36] !== bo ||
+    $[35] !== checked ||
+    $[36] !== inputRefusalWindow ||
     $[37] !== noteRefused ||
     $[38] !== onDone ||
     $[39] !== refusedWithin ||
     $[40] !== co ||
     $[41] !== visibleApps
-  )
-    ((kn = function on(allow) {
-      if (bo() || refusedWithin()) {
+  ) {
+    kn = function respond(allow) {
+      if (inputRefusalWindow() || refusedWithin()) {
         noteRefused();
         return;
       }
       if (!allow) {
-        onDone(E9);
+        onDone(DENY_ALL_RESPONSE);
         return;
       }
       let now = Date.now();
       let granted = ke.flatMap((a_0) =>
-        a_0.resolved && so.has(a_0.resolved.bundleId)
-          ? [{ bundleId: a_0.resolved.bundleId, displayName: a_0.resolved.displayName, grantedAt: now }]
+        a_0.resolved && checked.has(a_0.resolved.bundleId)
+          ? [
+              {
+                bundleId: a_0.resolved.bundleId,
+                displayName: a_0.resolved.displayName,
+                grantedAt: now,
+              },
+            ]
           : [],
       );
       let Mn = new Set(visibleApps);
-      let flattened = ke.flatMap((a_1) => {
+      let denied = ke.flatMap((a_1) => {
         if (!a_1.resolved) {
-          return [{ bundleId: a_1.requestedName, reason: "not_installed" }];
+          return [
+            {
+              bundleId: a_1.requestedName,
+              reason: "not_installed",
+            },
+          ];
         }
-        if (so.has(a_1.resolved.bundleId) || !Mn.has(a_1) || a_1.alreadyGranted) {
+        if (checked.has(a_1.resolved.bundleId) || !Mn.has(a_1) || a_1.alreadyGranted) {
           return [];
         }
-        return [{ bundleId: a_1.resolved.bundleId, reason: "user_denied" }];
+        return [
+          {
+            bundleId: a_1.resolved.bundleId,
+            reason: "user_denied",
+          },
+        ];
       });
-      let flags = { ...IO, ...Object.fromEntries(co.map(SPo)) };
-      onDone({ granted: granted, denied: flattened, flags: flags });
-    }),
-      ($[34] = ke),
-      ($[35] = so),
-      ($[36] = bo),
-      ($[37] = noteRefused),
-      ($[38] = onDone),
-      ($[39] = refusedWithin),
-      ($[40] = co),
-      ($[41] = visibleApps),
-      ($[42] = kn));
-  else kn = $[42];
-  let on = kn,
-    _o;
-  if ($[43] !== on) ((_o = () => on(!1)), ($[43] = on), ($[44] = _o));
-  else _o = $[44];
-  let cn;
-  if ($[45] !== request.reason)
-    ((cn = request.reason ? e(DiffFileList, { reason: request.reason }) : null),
-      ($[45] = request.reason),
-      ($[46] = cn));
-  else cn = $[46];
+      let flags = {
+        ...EMPTY_SANDBOX_FLAGS,
+        ...Object.fromEntries(co.map(toFlagPair)),
+      };
+      onDone({
+        granted,
+        denied,
+        flags,
+      });
+    };
+    $[34] = ke;
+    $[35] = checked;
+    $[36] = inputRefusalWindow;
+    $[37] = noteRefused;
+    $[38] = onDone;
+    $[39] = refusedWithin;
+    $[40] = co;
+    $[41] = visibleApps;
+    $[42] = kn;
+  } else kn = $[42];
+  let respond = kn;
+  let onCancel;
+  if ($[43] !== respond) {
+    onCancel = () => respond(false);
+    $[43] = respond;
+    $[44] = onCancel;
+  } else onCancel = $[44];
+  let t12;
+  if ($[45] !== request.reason) {
+    t12 = request.reason
+      ? jsxProd_default(DiffFileList, {
+          reason: request.reason,
+        })
+      : null;
+    $[45] = request.reason;
+    $[46] = t12;
+  } else t12 = $[46];
   let Dn;
-  if ($[47] !== so || $[48] !== visibleApps) {
-    let wn;
-    if ($[50] !== so)
-      ((wn = (a_3) => {
+  if ($[47] !== checked || $[48] !== visibleApps) {
+    let t14;
+    if ($[50] !== checked) {
+      t14 = (a_3) => {
         let resolved = a_3.resolved;
         if (!resolved) {
-          return r(
+          return jsxProd_default_2(
             Text,
             {
-              dimColor: !0,
+              dimColor: true,
               children: [
                 "  ",
-                re.circle,
+                figures_default.circle,
                 " ",
-                labelOrEmpty(a_3.requestedName),
+                labelOrEmpty_2(a_3.requestedName),
                 " ",
-                e(Text, { dimColor: !0, children: "(not installed)" }),
+                jsxProd_default(Text, {
+                  dimColor: true,
+                  children: "(not installed)",
+                }),
               ],
             },
             a_3.requestedName,
           );
         }
         if (a_3.alreadyGranted) {
-          return r(
+          return jsxProd_default_2(
             Text,
             {
-              dimColor: !0,
+              dimColor: true,
               children: [
                 "  ",
-                re.tick,
+                figures_default.tick,
                 " ",
-                labelOrEmpty(resolved.displayName),
+                labelOrEmpty_2(resolved.displayName),
                 " ",
-                e(Text, { dimColor: !0, children: "(already granted)" }),
+                jsxProd_default(Text, {
+                  dimColor: true,
+                  children: "(already granted)",
+                }),
               ],
             },
             resolved.bundleId,
           );
         }
         let sentinel = computerUseRiskCategory(resolved.bundleId);
-        let isChecked = so.has(resolved.bundleId);
-        return r(
+        let isChecked = checked.has(resolved.bundleId);
+        return jsxProd_default_2(
           Box,
           {
             flexDirection: "column",
             children: [
-              r(Text, {
+              jsxProd_default_2(Text, {
                 children: [
                   "  ",
-                  isChecked ? re.circleFilled : re.circle,
+                  isChecked ? figures_default.circleFilled : figures_default.circle,
                   " ",
-                  labelOrEmpty(resolved.displayName),
+                  labelOrEmpty_2(resolved.displayName),
                 ],
               }),
               sentinel
-                ? r(Text, { bold: !0, children: ["    ", re.warning, " ", SENTINEL_WARNING[sentinel]] })
+                ? jsxProd_default_2(Text, {
+                    bold: true,
+                    children: ["    ", figures_default.warning, " ", SENTINEL_WARNING[sentinel]],
+                  })
                 : null,
             ],
           },
           resolved.bundleId,
         );
-      }),
-        ($[50] = so),
-        ($[51] = wn));
-    else wn = $[51];
-    Dn = visibleApps.map(wn);
-    (($[47] = so), ($[48] = visibleApps), ($[49] = Dn));
+      };
+      $[50] = checked;
+      $[51] = t14;
+    } else t14 = $[51];
+    Dn = visibleApps.map(t14);
+    $[47] = checked;
+    $[48] = visibleApps;
+    $[49] = Dn;
   } else Dn = $[49];
   let wn;
-  if ($[52] !== hiddenCount)
-    ((wn =
+  if ($[52] !== hiddenCount) {
+    wn =
       hiddenCount > 0
-        ? r(Text, {
-            bold: !0,
+        ? jsxProd_default_2(Text, {
+            bold: true,
             children: [
               "  ",
               "\u2026 +",
@@ -575,35 +745,44 @@ function ComputerUseAppListPanel(t0) {
               " not shown, and not included in this grant.",
             ],
           })
-        : null),
-      ($[52] = hiddenCount),
-      ($[53] = wn));
-  else wn = $[53];
-  let Zn;
-  if ($[54] !== Dn || $[55] !== wn)
-    ((Zn = r(Box, { flexDirection: "column", children: [Dn, wn] })),
-      ($[54] = Dn),
-      ($[55] = wn),
-      ($[56] = Zn));
-  else Zn = $[56];
-  let Un;
-  if ($[57] !== co)
-    ((Un =
+        : null;
+    $[52] = hiddenCount;
+    $[53] = wn;
+  } else wn = $[53];
+  let t14;
+  if ($[54] !== Dn || $[55] !== wn) {
+    t14 = jsxProd_default_2(Box, {
+      flexDirection: "column",
+      children: [Dn, wn],
+    });
+    $[54] = Dn;
+    $[55] = wn;
+    $[56] = t14;
+  } else t14 = $[56];
+  let t15;
+  if ($[57] !== co) {
+    t15 =
       co.length > 0
-        ? r(Box, {
+        ? jsxProd_default_2(Box, {
             flexDirection: "column",
-            children: [e(Text, { dimColor: !0, children: "Also requested:" }), co.map(bPo)],
+            children: [
+              jsxProd_default(Text, {
+                dimColor: true,
+                children: "Also requested:",
+              }),
+              co.map(renderRequestedFlag),
+            ],
           })
-        : null),
-      ($[57] = co),
-      ($[58] = Un));
-  else Un = $[58];
-  let dr;
-  if ($[59] !== request.willHide)
-    ((dr =
+        : null;
+    $[57] = co;
+    $[58] = t15;
+  } else t15 = $[58];
+  let t16;
+  if ($[59] !== request.willHide) {
+    t16 =
       request.willHide && request.willHide.length > 0
-        ? r(Text, {
-            dimColor: !0,
+        ? jsxProd_default_2(Text, {
+            dimColor: true,
             children: [
               request.willHide.length,
               " other",
@@ -612,61 +791,78 @@ function ComputerUseAppListPanel(t0) {
               " will be hidden while Claude works.",
             ],
           })
-        : null),
-      ($[59] = request.willHide),
-      ($[60] = dr));
-  else dr = $[60];
-  let or, pr;
-  if ($[61] !== on)
-    ((or = (Qn) => on(Qn === "allow_all")), (pr = () => on(!1)), ($[61] = on), ($[62] = or), ($[63] = pr));
-  else ((or = $[62]), (pr = $[63]));
-  let ur;
-  if ($[64] !== Io.remountKey || $[65] !== Yo || $[66] !== Ho || $[67] !== or || $[68] !== pr)
-    ((ur = e(
+        : null;
+    $[59] = request.willHide;
+    $[60] = t16;
+  } else t16 = $[60];
+  let onChange;
+  let onCancel_2;
+  if ($[61] !== respond) {
+    onChange = (v) => respond(v === "allow_all");
+    onCancel_2 = () => respond(false);
+    $[61] = respond;
+    $[62] = onChange;
+    $[63] = onCancel_2;
+  } else {
+    onChange = $[62];
+    onCancel_2 = $[63];
+  }
+  let t19;
+  if (
+    $[64] !== Io.remountKey ||
+    $[65] !== options ||
+    $[66] !== refuseInput ||
+    $[67] !== onChange ||
+    $[68] !== onCancel_2
+  ) {
+    t19 = jsxProd_default(
       ModelSelector,
       {
-        hideIndexes: !0,
-        disablePrintableKeybindings: !0,
+        hideIndexes: true,
+        disablePrintableKeybindings: true,
         selectedValue: NO_COMMITTED_ROW,
-        options: Yo,
-        refuseInput: Ho,
+        options,
+        refuseInput,
         defaultFocusValue: "deny",
-        onChange: or,
-        onCancel: pr,
+        onChange,
+        onCancel: onCancel_2,
       },
       Io.remountKey,
-    )),
-      ($[64] = Io.remountKey),
-      ($[65] = Yo),
-      ($[66] = Ho),
-      ($[67] = or),
-      ($[68] = pr),
-      ($[69] = ur));
-  else ur = $[69];
-  let Ir;
-  if ($[70] !== cn || $[71] !== Zn || $[72] !== Un || $[73] !== dr || $[74] !== ur)
-    ((Ir = r(Box, {
+    );
+    $[64] = Io.remountKey;
+    $[65] = options;
+    $[66] = refuseInput;
+    $[67] = onChange;
+    $[68] = onCancel_2;
+    $[69] = t19;
+  } else t19 = $[69];
+  let children;
+  if ($[70] !== t12 || $[71] !== t14 || $[72] !== t15 || $[73] !== t16 || $[74] !== t19) {
+    children = jsxProd_default_2(Box, {
       flexDirection: "column",
       paddingX: 1,
       paddingY: 1,
       gap: 1,
-      children: [cn, Zn, Un, dr, ur],
-    })),
-      ($[70] = cn),
-      ($[71] = Zn),
-      ($[72] = Un),
-      ($[73] = dr),
-      ($[74] = ur),
-      ($[75] = Ir));
-  else Ir = $[75];
-  let Pr;
-  if ($[76] !== _o || $[77] !== Ir)
-    ((Pr = e(Dialog, { title: "Computer Use wants to control these apps", onCancel: _o, children: Ir })),
-      ($[76] = _o),
-      ($[77] = Ir),
-      ($[78] = Pr));
-  else Pr = $[78];
-  return Pr;
+      children: [t12, t14, t15, t16, t19],
+    });
+    $[70] = t12;
+    $[71] = t14;
+    $[72] = t15;
+    $[73] = t16;
+    $[74] = t19;
+    $[75] = children;
+  } else children = $[75];
+  let t21;
+  if ($[76] !== onCancel || $[77] !== children) {
+    t21 = jsxProd_default(Dialog, {
+      title: "Computer Use wants to control these apps",
+      onCancel,
+      children,
+    });
+    $[76] = onCancel;
+    $[77] = children;
+    $[78] = t21;
+  } else t21 = $[78];
+  return t21;
 }
-
-export { Sct, _9, ComputerUseApproval };
+export { MAX_APP_LIST_ROWS, MIN_APP_LIST_ROWS, ComputerUseApproval };

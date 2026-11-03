@@ -9,40 +9,42 @@
 //@ chunk-333ft0yv.js:191-197 esm-layout
 var r;
 //@ chunk-333ft0yv.js:197-288 esm-fingerprint
-r = globalThis.crypto?.webcrypto ?? globalThis.crypto ?? import("crypto").then((e) => e.webcrypto);
+r = globalThis.crypto?.webcrypto ?? globalThis.crypto ?? import("crypto").then((m) => m.webcrypto);
 //@ chunk-333ft0yv.js:288-359 esm-fingerprint
-async function i(e) {
-  return (await r).getRandomValues(new Uint8Array(e));
+async function getRandomValues(size) {
+  return (await r).getRandomValues(new Uint8Array(size));
 }
 //@ chunk-333ft0yv.js:359-520 esm-fingerprint
-async function l(e) {
-  let t = "",
-    c = await i(e);
-  for (let n = 0; n < e; n++) {
-    let o = c[n] % 66;
+async function random(e) {
+  let t = "";
+  let randomValues = await getRandomValues(e);
+  for (let j = 0; j < e; j++) {
+    let o = randomValues[j] % 66;
     t += "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._~"[o];
   }
   return t;
 }
 //@ chunk-333ft0yv.js:520-558 esm-layout
-async function s(e) {
-  return await l(e);
+async function generateVerifier(length) {
+  return await random(length);
 }
 //@ chunk-333ft0yv.js:558-762 esm-fingerprint
-async function u(e) {
-  let digest = await (await r).subtle.digest("SHA-256", new TextEncoder().encode(e));
-  return btoa(String.fromCharCode(...new Uint8Array(digest)))
+async function generateChallenge(code_verifier) {
+  let buffer = await (await r).subtle.digest("SHA-256", new TextEncoder().encode(code_verifier));
+  return btoa(String.fromCharCode(...new Uint8Array(buffer)))
     .replace(/\//g, "_")
     .replace(/\+/g, "-")
     .replace(/=/g, "");
 }
 //@ chunk-333ft0yv.js:762-941 esm-fingerprint
-async function hcn(e) {
-  if (!e) e = 43;
-  if (e < 43 || e > 128) throw `Expected a length between 43 and 128. Received ${e}.`;
-  let a = await s(e),
-    t = await u(a);
-  return { code_verifier: a, code_challenge: t };
+async function pkceChallenge(length) {
+  if (!length) length = 43;
+  if (length < 43 || length > 128) throw `Expected a length between 43 and 128. Received ${length}.`;
+  let verifier = await generateVerifier(length);
+  let challenge = await generateChallenge(verifier);
+  return {
+    code_verifier: verifier,
+    code_challenge: challenge,
+  };
 }
-
-export { hcn };
+export { pkceChallenge };

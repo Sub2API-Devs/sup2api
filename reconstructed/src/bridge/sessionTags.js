@@ -12,32 +12,39 @@ import { logForDebugging } from "../utils/debug.js";
 import { errorMessage } from "../utils/errors.js";
 
 //@ chunk-pg55apw2.js:261-320 placement
-async function $Je(n, e) {
-  return (await fetchBridgeSessionTags(n, e))?.tags ?? null;
+/**
+ * 读取桥接会话的 tags（v2 接口，可选 access token）；失败只记 debug 日志并返回 null。
+ */
+async function readBridgeSessionTags(sessionId, options) {
+  return (await fetchBridgeSessionTags(sessionId, options))?.tags ?? null;
 }
+//@ chunk-pg55apw2.js:320-839 placement
 /**
  * 读取桥接会话的 tags 与 created_at（v2 接口，可选 access token）；失败记 debug 日志并返回 null。
  */
-//@ chunk-pg55apw2.js:320-839 placement
 async function fetchBridgeSessionTags(sessionId, options) {
   try {
-    let s = options.getAccessToken ? await options.getAccessToken() : void 0,
-      { getBridgeSessionOrStatus: getBridgeSessionOrStatus } = await import("./chunk-3eyvtwsv.js"),
-      { session: session } = await getBridgeSessionOrStatus(sessionId, {
-        baseUrl: options.baseUrl,
-        ...(s && { getAccessToken: () => s }),
-        credentials: options.credentials,
-        useV2: !0,
-      });
+    let s = options.getAccessToken ? await options.getAccessToken() : undefined;
+    let { getBridgeSessionOrStatus } = await import("./chunk-3eyvtwsv.js");
+    let { session } = await getBridgeSessionOrStatus(sessionId, {
+      baseUrl: options.baseUrl,
+      ...(s && {
+        getAccessToken: () => s,
+      }),
+      credentials: options.credentials,
+      useV2: true,
+    });
     if (!session || !Array.isArray(session.tags)) return null;
     let a = typeof session.created_at === "string" ? Date.parse(session.created_at) : Number.NaN;
-    return { tags: session.tags, createdAtMs: Number.isNaN(a) ? void 0 : a };
+    return {
+      tags: session.tags,
+      createdAtMs: Number.isNaN(a) ? undefined : a,
+    };
   } catch (error) {
-    return (
-      logForDebugging(`[bridge:session] session tag read failed: ${errorMessage(error)}`, { level: "warn" }),
-      null
-    );
+    logForDebugging(`[bridge:session] session tag read failed: ${errorMessage(error)}`, {
+      level: "warn",
+    });
+    return null;
   }
 }
-
-export { $Je, fetchBridgeSessionTags };
+export { readBridgeSessionTags, fetchBridgeSessionTags };

@@ -8,81 +8,82 @@
 import { x, importMetaRequire } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-h6b7mazd.js:235-1799 cjs-fingerprint
-var gn = x(function (Ol, bn) {
-  var Stream = importMetaRequire("stream").Stream,
-    Oa = importMetaRequire("util");
-  bn.exports = oe;
-  function oe() {
-    ((this.source = null),
-      (this.dataSize = 0),
-      (this.maxDataSize = 1048576),
-      (this.pauseStream = !0),
-      (this._maxDataSizeExceeded = !1),
-      (this._released = !1),
-      (this._bufferedEvents = []));
+var require_delayed_stream = x(function (cjsExports, cjsModule) {
+  var Stream = importMetaRequire("stream").Stream;
+  var util = importMetaRequire("util");
+  cjsModule.exports = DelayedStream;
+  function DelayedStream() {
+    this.source = null;
+    this.dataSize = 0;
+    this.maxDataSize = 1048576;
+    this.pauseStream = true;
+    this._maxDataSizeExceeded = false;
+    this._released = false;
+    this._bufferedEvents = [];
   }
-  Oa.inherits(oe, Stream);
-  oe.create = function (e, t) {
-    var r = new this();
-    t = t || {};
-    for (var key in t) r[key] = t[key];
-    r.source = e;
-    var emit = e.emit;
-    if (
-      ((e.emit = function () {
-        return (r._handleEmit(arguments), emit.apply(e, arguments));
-      }),
-      e.on("error", function () {}),
-      r.pauseStream)
-    )
-      e.pause();
-    return r;
+  util.inherits(DelayedStream, Stream);
+  DelayedStream.create = function (source, options) {
+    var delayedStream = new this();
+    options = options || {};
+    for (var option in options) delayedStream[option] = options[option];
+    delayedStream.source = source;
+    var realEmit = source.emit;
+    source.emit = function () {
+      delayedStream._handleEmit(arguments);
+      return realEmit.apply(source, arguments);
+    };
+    source.on("error", function () {});
+    if (delayedStream.pauseStream) source.pause();
+    return delayedStream;
   };
-  Object.defineProperty(oe.prototype, "readable", {
-    configurable: !0,
-    enumerable: !0,
+  Object.defineProperty(DelayedStream.prototype, "readable", {
+    configurable: true,
+    enumerable: true,
     get: function () {
       return this.source.readable;
     },
   });
-  oe.prototype.setEncoding = function () {
+  DelayedStream.prototype.setEncoding = function () {
     return this.source.setEncoding.apply(this.source, arguments);
   };
-  oe.prototype.resume = function () {
+  DelayedStream.prototype.resume = function () {
     if (!this._released) this.release();
     this.source.resume();
   };
-  oe.prototype.pause = function () {
+  DelayedStream.prototype.pause = function () {
     this.source.pause();
   };
-  oe.prototype.release = function () {
-    ((this._released = !0),
-      this._bufferedEvents.forEach(
-        function (e) {
-          this.emit.apply(this, e);
-        }.bind(this),
-      ),
-      (this._bufferedEvents = []));
+  DelayedStream.prototype.release = function () {
+    this._released = true;
+    this._bufferedEvents.forEach(
+      function (args) {
+        this.emit.apply(this, args);
+      }.bind(this),
+    );
+    this._bufferedEvents = [];
   };
-  oe.prototype.pipe = function () {
-    var e = Stream.prototype.pipe.apply(this, arguments);
-    return (this.resume(), e);
+  DelayedStream.prototype.pipe = function () {
+    var r = Stream.prototype.pipe.apply(this, arguments);
+    this.resume();
+    return r;
   };
-  oe.prototype._handleEmit = function (e) {
+  DelayedStream.prototype._handleEmit = function (args) {
     if (this._released) {
-      this.emit.apply(this, e);
+      this.emit.apply(this, args);
       return;
     }
-    if (e[0] === "data") ((this.dataSize += e[1].length), this._checkIfMaxDataSizeExceeded());
-    this._bufferedEvents.push(e);
+    if (args[0] === "data") {
+      this.dataSize += args[1].length;
+      this._checkIfMaxDataSizeExceeded();
+    }
+    this._bufferedEvents.push(args);
   };
-  oe.prototype._checkIfMaxDataSizeExceeded = function () {
+  DelayedStream.prototype._checkIfMaxDataSizeExceeded = function () {
     if (this._maxDataSizeExceeded) return;
     if (this.dataSize <= this.maxDataSize) return;
-    this._maxDataSizeExceeded = !0;
-    var e = "DelayedStream#maxDataSize of " + this.maxDataSize + " bytes exceeded.";
-    this.emit("error", Error(e));
+    this._maxDataSizeExceeded = true;
+    var message = "DelayedStream#maxDataSize of " + this.maxDataSize + " bytes exceeded.";
+    this.emit("error", Error(message));
   };
 });
-
-export { gn };
+export { require_delayed_stream };

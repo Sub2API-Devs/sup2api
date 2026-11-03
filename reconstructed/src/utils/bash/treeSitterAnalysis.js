@@ -10,10 +10,10 @@
  */
 import { typeOf, typeUrlOf } from "../../tools/ArtifactTool/permissions/dbWriteInputs.js";
 
+//@ chunk-e6aww6q8.js:1050226-1050740 fingerprint = collectQuoteSpans (1)
 /**
  * 收集 AST 中单引号串、$'…'、双引号串、引号分界的 heredoc 的字节区间。
  */
-//@ chunk-e6aww6q8.js:1050226-1050740 fingerprint = collectQuoteSpans (1)
 function collectQuoteSpans(node, out, inDouble) {
   switch (node.type) {
     case "raw_string":
@@ -24,17 +24,17 @@ function collectQuoteSpans(node, out, inDouble) {
       return;
     case "string":
       if (!inDouble) out.double.push([node.startIndex, node.endIndex]);
-      for (let child of node.children) if (child) collectQuoteSpans(child, out, !0);
+      for (let child of node.children) if (child) collectQuoteSpans(child, out, true);
       return;
     case "heredoc_redirect": {
-      let s = !1;
+      let isQuoted = false;
       for (let child of node.children)
         if (child && child.type === "heredoc_start") {
           let first = child.text[0];
-          s = first === "'" || first === '"' || first === "\\";
+          isQuoted = first === "'" || first === '"' || first === "\\";
           break;
         }
-      if (s) {
+      if (isQuoted) {
         out.heredoc.push([node.startIndex, node.endIndex]);
         return;
       }
@@ -46,94 +46,109 @@ function collectQuoteSpans(node, out, inDouble) {
 //@ chunk-e6aww6q8.js:1050740-1050825 file-local
 function buildPositionSet(spans) {
   let set = new Set();
-  for (let [r, s] of spans) for (let h = r; h < s; h++) set.add(h);
+  for (let [start, end] of spans) for (let i = start; i < end; i++) set.add(i);
   return set;
 }
 //@ chunk-e6aww6q8.js:1050825-1050935 file-local
 function dropContainedSpans(spans) {
   return spans.filter(
-    (n, r) =>
+    (span, i) =>
       !spans.some(
-        (other, h) => h !== r && other[0] <= n[0] && other[1] >= n[1] && (other[0] < n[0] || other[1] > n[1]),
+        (other, j) =>
+          j !== i && other[0] <= span[0] && other[1] >= span[1] && (other[0] < span[0] || other[1] > span[1]),
       ),
   );
 }
 //@ chunk-e6aww6q8.js:1050935-1051070 file-local
 function removeSpans(command, spans) {
   if (spans.length === 0) return command;
-  let sorted = dropContainedSpans(spans).sort((h, y) => y[0] - h[0]),
-    result = command;
-  for (let [h, y] of sorted) result = result.slice(0, h) + result.slice(y);
+  let sorted = dropContainedSpans(spans).sort((h, y) => y[0] - h[0]);
+  let result = command;
+  for (let [start, end] of sorted) result = result.slice(0, start) + result.slice(end);
   return result;
 }
 //@ chunk-e6aww6q8.js:1051070-1051213 file-local
 function replaceSpansKeepQuotes(command, spans) {
   if (spans.length === 0) return command;
-  let sorted = dropContainedSpans(spans).sort((h, y) => y[0] - h[0]),
-    result = command;
-  for (let [h, y, S, w] of sorted) result = result.slice(0, h) + S + w + result.slice(y);
+  let sorted = dropContainedSpans(spans).sort((h, y) => y[0] - h[0]);
+  let result = command;
+  for (let [start, end, open, close] of sorted)
+    result = result.slice(0, start) + open + close + result.slice(end);
   return result;
 }
+//@ chunk-e6aww6q8.js:1051213-1051802 fingerprint = extractQuoteContext (1)
 /**
  * 生成三种去引号视图：withDoubleQuotes（只去单引号内容与双引号定界符）、fullyUnquoted（去掉所有引号区间）、unquotedKeepQuoteChars（清空引号内容但保留引号字符）。供基于文本的危险模式检查。
  */
-//@ chunk-e6aww6q8.js:1051213-1051802 fingerprint = extractQuoteContext (1)
 function extractQuoteContext(rootNode, command) {
-  let spans = { raw: [], ansiC: [], double: [], heredoc: [] };
-  collectQuoteSpans(rootNode, spans, !1);
-  let { raw: raw, ansiC: ansiC, double: double, heredoc: heredoc } = spans,
-    allQuoteSpans = [...raw, ...ansiC, ...double, ...heredoc],
-    singleQuoteSet = buildPositionSet([...raw, ...ansiC, ...heredoc]),
-    doubleQuoteDelimSet = new Set();
-  for (let [we, Ee] of double) (doubleQuoteDelimSet.add(we), doubleQuoteDelimSet.add(Ee - 1));
-  let withDoubleQuotes = "";
-  for (let we = 0; we < command.length; we++) {
-    if (singleQuoteSet.has(we)) continue;
-    if (doubleQuoteDelimSet.has(we)) continue;
-    withDoubleQuotes += command[we];
+  let spans = {
+    raw: [],
+    ansiC: [],
+    double: [],
+    heredoc: [],
+  };
+  collectQuoteSpans(rootNode, spans, false);
+  let {
+    raw: singleQuoteSpans,
+    ansiC: ansiCSpans,
+    double: doubleQuoteSpans,
+    heredoc: quotedHeredocSpans,
+  } = spans;
+  let allQuoteSpans = [...singleQuoteSpans, ...ansiCSpans, ...doubleQuoteSpans, ...quotedHeredocSpans];
+  let singleQuoteSet = buildPositionSet([...singleQuoteSpans, ...ansiCSpans, ...quotedHeredocSpans]);
+  let doubleQuoteDelimSet = new Set();
+  for (let [start, end] of doubleQuoteSpans) {
+    doubleQuoteDelimSet.add(start);
+    doubleQuoteDelimSet.add(end - 1);
   }
-  let fullyUnquoted = removeSpans(command, allQuoteSpans),
-    spansWithQuoteChars = [];
-  for (let [we, Ee] of raw) spansWithQuoteChars.push([we, Ee, "'", "'"]);
-  for (let [we, Ee] of ansiC) spansWithQuoteChars.push([we, Ee, "$'", "'"]);
-  for (let [we, Ee] of double) spansWithQuoteChars.push([we, Ee, '"', '"']);
-  for (let [we, Ee] of heredoc) spansWithQuoteChars.push([we, Ee, "", ""]);
+  let withDoubleQuotes = "";
+  for (let i = 0; i < command.length; i++) {
+    if (singleQuoteSet.has(i)) continue;
+    if (doubleQuoteDelimSet.has(i)) continue;
+    withDoubleQuotes += command[i];
+  }
+  let fullyUnquoted = removeSpans(command, allQuoteSpans);
+  let spansWithQuoteChars = [];
+  for (let [start, end] of singleQuoteSpans) spansWithQuoteChars.push([start, end, "'", "'"]);
+  for (let [start, end] of ansiCSpans) spansWithQuoteChars.push([start, end, "$'", "'"]);
+  for (let [start, end] of doubleQuoteSpans) spansWithQuoteChars.push([start, end, '"', '"']);
+  for (let [start, end] of quotedHeredocSpans) spansWithQuoteChars.push([start, end, "", ""]);
   let unquotedKeepQuoteChars = replaceSpansKeepQuotes(command, spansWithQuoteChars);
   return {
-    withDoubleQuotes: withDoubleQuotes,
-    fullyUnquoted: fullyUnquoted,
-    unquotedKeepQuoteChars: unquotedKeepQuoteChars,
+    withDoubleQuotes,
+    fullyUnquoted,
+    unquotedKeepQuoteChars,
   };
 }
+//@ chunk-e6aww6q8.js:1051802-1053276 fingerprint = extractCompoundStructure (0.888)
 /**
  * 提取顶层复合结构：运算符序列（&& || ;）、各段文本，以及是否有管道、子 shell、命令组。
  */
-//@ chunk-e6aww6q8.js:1051802-1053276 fingerprint = extractCompoundStructure (0.888)
 function extractCompoundStructure(rootNode, command) {
-  let r = rootNode,
-    s = [],
-    h = [],
-    y = !1,
-    S = !1,
-    w = !1,
-    L = new Set([
-      "if_statement",
-      "while_statement",
-      "for_statement",
-      "c_style_for_statement",
-      "case_statement",
-      "function_definition",
-      "do_group",
-      "elif_clause",
-      "else_clause",
-    ]);
+  let n = rootNode;
+  let operators = [];
+  let segments = [];
+  let hasSubshell = false;
+  let hasCommandGroup = false;
+  let hasPipeline = false;
+  let L = new Set([
+    "if_statement",
+    "while_statement",
+    "for_statement",
+    "c_style_for_statement",
+    "case_statement",
+    "function_definition",
+    "do_group",
+    "elif_clause",
+    "else_clause",
+  ]);
   function walkTopLevel(node) {
     for (let child of node.children) {
       if (!child) continue;
       if (child.type === "list")
         for (let listChild of child.children) {
           if (!listChild) continue;
-          if (listChild.type === "&&" || listChild.type === "||") s.push(listChild.type);
+          if (listChild.type === "&&" || listChild.type === "||") operators.push(listChild.type);
           else if (
             listChild.type === "list" ||
             listChild.type === "redirected_statement" ||
@@ -141,106 +156,125 @@ function extractCompoundStructure(rootNode, command) {
             listChild.type === "negated_command" ||
             L.has(listChild.type)
           )
-            walkTopLevel({ ...node, children: [listChild] });
-          else if (listChild.type === "subshell") ((y = !0), h.push(listChild.text));
-          else if (listChild.type === "compound_statement") ((S = !0), h.push(listChild.text));
-          else h.push(listChild.text);
+            walkTopLevel({
+              ...node,
+              children: [listChild],
+            });
+          else if (listChild.type === "subshell") {
+            hasSubshell = true;
+            segments.push(listChild.text);
+          } else if (listChild.type === "compound_statement") {
+            hasCommandGroup = true;
+            segments.push(listChild.text);
+          } else segments.push(listChild.text);
         }
-      else if (child.type === ";") s.push(";");
-      else if (child.type === "pipeline") ((w = !0), h.push(child.text), walkTopLevel(child));
-      else if (child.type === "subshell") ((y = !0), h.push(child.text));
-      else if (child.type === "compound_statement") ((S = !0), h.push(child.text));
-      else if (
+      else if (child.type === ";") operators.push(";");
+      else if (child.type === "pipeline") {
+        hasPipeline = true;
+        segments.push(child.text);
+        walkTopLevel(child);
+      } else if (child.type === "subshell") {
+        hasSubshell = true;
+        segments.push(child.text);
+      } else if (child.type === "compound_statement") {
+        hasCommandGroup = true;
+        segments.push(child.text);
+      } else if (
         child.type === "command" ||
         child.type === "declaration_command" ||
         child.type === "variable_assignment"
       )
-        h.push(child.text);
+        segments.push(child.text);
       else if (child.type === "redirected_statement") {
-        let Se = !1;
+        let foundInner = false;
         for (let inner of child.children) {
           if (!inner || inner.type === "file_redirect") continue;
-          ((Se = !0), walkTopLevel({ ...child, children: [inner] }));
+          foundInner = true;
+          walkTopLevel({
+            ...child,
+            children: [inner],
+          });
         }
-        if (!Se) h.push(child.text);
-      } else if (child.type === "negated_command") (h.push(child.text), walkTopLevel(child));
-      else if (L.has(child.type)) {
+        if (!foundInner) segments.push(child.text);
+      } else if (child.type === "negated_command") {
+        segments.push(child.text);
+        walkTopLevel(child);
+      } else if (L.has(child.type)) {
         if (child.type !== "do_group" && child.type !== "elif_clause" && child.type !== "else_clause")
-          h.push(child.text);
+          segments.push(child.text);
         walkTopLevel(child);
       } else if (child.children.length > 0) walkTopLevel(child);
     }
   }
-  if ((walkTopLevel(r), h.length === 0)) h.push(command);
+  walkTopLevel(n);
+  if (segments.length === 0) segments.push(command);
   return {
-    hasCompoundOperators: s.length > 0,
-    hasPipeline: w,
-    hasSubshell: y,
-    hasCommandGroup: S,
-    operators: s,
-    segments: h,
+    hasCompoundOperators: operators.length > 0,
+    hasPipeline,
+    hasSubshell,
+    hasCommandGroup,
+    operators,
+    segments,
   };
 }
+//@ chunk-e6aww6q8.js:1053276-1053462 layout = hasActualOperatorNodes (1)
 /**
  * AST 中是否有 ; && || 或 list 节点。
  */
-//@ chunk-e6aww6q8.js:1053276-1053462 layout = hasActualOperatorNodes (1)
 function hasActualOperatorNodes(rootNode) {
-  let n = rootNode;
+  let node = rootNode;
   function walk(node) {
-    if (node.type === ";" || node.type === "&&" || node.type === "||") return !0;
-    if (node.type === "list") return !0;
-    for (let child of node.children) if (child && walk(child)) return !0;
-    return !1;
+    if (node.type === ";" || node.type === "&&" || node.type === "||") return true;
+    if (node.type === "list") return true;
+    for (let child of node.children) if (child && walk(child)) return true;
+    return false;
   }
-  return walk(n);
+  return walk(node);
 }
+//@ chunk-e6aww6q8.js:1053462-1053850 fingerprint = extractDangerousPatterns (1)
 /**
  * 统计 AST 中是否出现命令替换、进程替换、参数展开、heredoc、注释。
  */
-//@ chunk-e6aww6q8.js:1053462-1053850 fingerprint = extractDangerousPatterns (1)
 function extractDangerousPatterns(rootNode) {
-  let n = rootNode,
-    r = !1,
-    s = !1,
-    h = !1,
-    y = !1,
-    S = !1;
+  let node = rootNode;
+  let hasCommandSubstitution = false;
+  let hasProcessSubstitution = false;
+  let hasParameterExpansion = false;
+  let hasHeredoc = false;
+  let hasComment = false;
   function walk(node) {
     switch (node.type) {
       case "command_substitution":
-        r = !0;
+        hasCommandSubstitution = true;
         break;
       case "process_substitution":
-        s = !0;
+        hasProcessSubstitution = true;
         break;
       case "expansion":
-        h = !0;
+        hasParameterExpansion = true;
         break;
       case "heredoc_redirect":
-        y = !0;
+        hasHeredoc = true;
         break;
       case "comment":
-        S = !0;
+        hasComment = true;
         break;
     }
     for (let child of node.children) if (child) walk(child);
   }
-  return (
-    walk(n),
-    {
-      hasCommandSubstitution: r,
-      hasProcessSubstitution: s,
-      hasParameterExpansion: h,
-      hasHeredoc: y,
-      hasComment: S,
-    }
-  );
+  walk(node);
+  return {
+    hasCommandSubstitution,
+    hasProcessSubstitution,
+    hasParameterExpansion,
+    hasHeredoc,
+    hasComment,
+  };
 }
+//@ chunk-e6aww6q8.js:1053850-1053980 fingerprint = analyzeCommand (1)
 /**
  * 汇总 AST 分析：quoteContext、compoundStructure、hasActualOperatorNodes、dangerousPatterns。
  */
-//@ chunk-e6aww6q8.js:1053850-1053980 fingerprint = analyzeCommand (1)
 function analyzeCommand(rootNode, command) {
   return {
     quoteContext: extractQuoteContext(rootNode, command),
@@ -249,17 +283,16 @@ function analyzeCommand(rootNode, command) {
     dangerousPatterns: extractDangerousPatterns(rootNode),
   };
 }
+//@ chunk-8wvtd8sr.js:106702-106809 fingerprint = hasActualOperatorNodes (1)
 /**
  * 判断工具输入是否为带过滤条件的 action='list' 调用，某工具的 checkPermissions 据此补默认 scope。旧版名 hasActualOperatorNodes 误配，与 Bash 无关。
  */
-//@ chunk-8wvtd8sr.js:106702-106809 fingerprint = hasActualOperatorNodes (1)
 function isListActionInput(rootNode) {
   return (
     typeof rootNode === "object" &&
     rootNode !== null &&
     rootNode.action === "list" &&
-    (typeOf(rootNode) !== void 0 || typeUrlOf(rootNode) !== void 0)
+    (typeOf(rootNode) !== undefined || typeUrlOf(rootNode) !== undefined)
   );
 }
-
 export { isListActionInput, analyzeCommand };

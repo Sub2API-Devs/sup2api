@@ -8,197 +8,173 @@
  * pieces: chunk-awy329vy.js (13)
  * attribution: placement 13
  */
-import {
-  createHash,
-  createHash as createHash_2,
-  createHash as createHash_3,
-  X509Certificate,
-  X509Certificate as X509Certificate_2,
-  X509Certificate as X509Certificate_3,
-  X509Certificate as X509Certificate_4,
-} from "crypto";
-import {
-  join,
-  join as join_2,
-  join as join_3,
-  join as join_4,
-  basename,
-  basename as basename_2,
-  basename as basename_3,
-} from "path";
-import {
-  readdir,
-  readdir as readdir_2,
-  readdir as readdir_3,
-  readdir as readdir_4,
-  lstat,
-  lstat as lstat_2,
-  unlink,
-  unlink as unlink_2,
-  unlink as unlink_3,
-  unlink as unlink_4,
-  chmod,
-  chmod as chmod_2,
-  rename,
-  rename as rename_2,
-  rename as rename_3,
-  mkdir,
-  mkdir as mkdir_2,
-  mkdir as mkdir_3,
-  open,
-  open as open_2,
-  open as open_3,
-  open as open_4,
-  open as open_5,
-  symlink,
-  stat,
-  stat as stat_2,
-  stat as stat_3,
-  readlink,
-  readlink as readlink_2,
-} from "fs/promises";
-import { constants, constants as constants_2, constants as constants_3 } from "fs";
+import { createHash, X509Certificate } from "crypto";
+import { join, basename } from "path";
+import { readdir, lstat, unlink, chmod, rename, mkdir, open, symlink, stat, readlink } from "fs/promises";
+import { constants } from "fs";
 import { env } from "../utils/env.js";
 import { whichAsync } from "../utils/which.js";
 import { writeIfMissing } from "../utils/atomicPublishWrite.js";
 import { isENOENT, errorMessage } from "../utils/errors.js";
-import { zq } from "../utils/platformTargets.js";
+import { platformNoFollowFlags } from "../utils/platformTargets.js";
 import { logForDebugging } from "../utils/debug.js";
 import { execFileNoThrow } from "../utils/execFileNoThrow.js";
 import { logToolOutput, describeExecOutcome } from "./toolTrust.js";
 import { readFileSyncCached } from "../utils/file.js";
 
 //@ chunk-awy329vy.js:34747-35690 placement
+/**
+ * 表示 dpkg 安装未完成的标记文件。
+ */
 var JAVA_CA_HOOK_PATHS = {
-    hook: "/etc/ca-certificates/update.d/jks-keystore",
-    postinst: "/var/lib/dpkg/info/ca-certificates-java.postinst",
-    jar: "/usr/share/ca-certificates-java/ca-certificates-java.jar",
-    knownSha256: {
-      hook: ["254a87ea1f9fe37751e3ed90a79013f3424c7a5fe26bfe59fac312abff82dbda"],
-      postinst: ["4d76cba4f4a8583c70bb4632e9c2c00a669396500b686c1f32cd2046a9e1e110"],
-      jar: ["42a384eebe60fbe91a40d295fe5f1ff85e3a0db0d3a91016cd83994105d6b5c0"],
-    },
-    defaults: "/etc/default/cacerts",
-    stateDir: "/var/lib/ca-certificates-java",
-    dpkgStatus: "/var/lib/dpkg/status",
-    dpkgUpdates: "/var/lib/dpkg/updates",
-    dpkgUnincorporatedTriggers: "/var/lib/dpkg/triggers/Unincorp",
-    dpkgTriggerInterest: "/var/lib/dpkg/triggers/update-ca-certificates-java",
-    cacerts: "/etc/ssl/certs/java/cacerts",
+  hook: "/etc/ca-certificates/update.d/jks-keystore",
+  postinst: "/var/lib/dpkg/info/ca-certificates-java.postinst",
+  jar: "/usr/share/ca-certificates-java/ca-certificates-java.jar",
+  knownSha256: {
+    hook: ["254a87ea1f9fe37751e3ed90a79013f3424c7a5fe26bfe59fac312abff82dbda"],
+    postinst: ["4d76cba4f4a8583c70bb4632e9c2c00a669396500b686c1f32cd2046a9e1e110"],
+    jar: ["42a384eebe60fbe91a40d295fe5f1ff85e3a0db0d3a91016cd83994105d6b5c0"],
   },
-  CHANGEIT = "changeit",
-  Uo = ["pending", "fresh", "convert_pkcs12_keystore_to_jks"],
-  yn = 262144,
-  Wo = 33554432,
-  jo = 4194304,
-  Yo = 4277010157,
-  Xo = 2,
-  Sn = 2,
-  X_509 = "X.509",
-  Cn = 20,
-  Jo = /^-----(?:BEGIN ([^-\n]*)-----[\s\S]*?^-----END \1-----)?/m;
+  defaults: "/etc/default/cacerts",
+  stateDir: "/var/lib/ca-certificates-java",
+  dpkgStatus: "/var/lib/dpkg/status",
+  dpkgUpdates: "/var/lib/dpkg/updates",
+  dpkgUnincorporatedTriggers: "/var/lib/dpkg/triggers/Unincorp",
+  dpkgTriggerInterest: "/var/lib/dpkg/triggers/update-ca-certificates-java",
+  cacerts: "/etc/ssl/certs/java/cacerts",
+};
+var CHANGEIT = "changeit";
+var DPKG_UNFINISHED_MARKERS = ["pending", "fresh", "convert_pkcs12_keystore_to_jks"];
+var MAX_JAVA_CA_FILE_LINES = 262144;
+var JAVA_CA_POSTINST_MAX_LINES = 33554432;
+var JAVA_CA_CACERTS_MAX_LINES = 4194304;
+var JKS_MAGIC = 4277010157;
+var JKS_VERSION_MAGIC = 2;
+var JKS_ENTRY_TAG = 2;
+var X_509 = "X.509";
+var JKS_TRAILER_BYTES = 20;
+var JAVA_VERSION_RE = /^-----(?:BEGIN ([^-\n]*)-----[\s\S]*?^-----END \1-----)?/m;
 //@ chunk-awy329vy.js:35690-37424 placement
-async function installJavaStoreDirect(n, e, r) {
+async function installJavaStoreDirect(n, link, javaHook) {
   try {
     if (env.CCR_AGENT_PROXY_JAVA_STORE_DIRECT_DISABLED) return "disabled";
     for (let x of ["hook", "postinst", "jar"]) {
-      let b = await readSmallFileWithMeta(r[x], yn);
-      if (b === void 0 || !r.knownSha256[x].includes(createHash_2("sha256").update(b.bytes).digest("hex")))
+      let smallFileWithMeta = await readSmallFileWithMeta(javaHook[x], MAX_JAVA_CA_FILE_LINES);
+      if (
+        smallFileWithMeta === undefined ||
+        !javaHook.knownSha256[x].includes(createHash("sha256").update(smallFileWithMeta.bytes).digest("hex"))
+      )
         return "package";
     }
     if (
-      (await readSmallFileWithMeta(r.dpkgTriggerInterest, 1024))?.bytes.toString("latin1") !==
+      (await readSmallFileWithMeta(javaHook.dpkgTriggerInterest, 1024))?.bytes.toString("latin1") !==
       `ca-certificates-java
 `
     )
       return "package";
-    let s = await readSmallFileWithMeta(r.defaults, yn);
+    let smallFileWithMeta = await readSmallFileWithMeta(javaHook.defaults, MAX_JAVA_CA_FILE_LINES);
     if (
-      s === void 0 ||
+      smallFileWithMeta === undefined ||
       env.CACERT_UPDATES === "disabled" ||
       (env.DPKG_MAINTSCRIPT_PACKAGE ?? "") !== "" ||
-      env.DPKG_ADMINDIR !== void 0 ||
-      env.DPKG_ROOT !== void 0 ||
-      s.bytes
+      env.DPKG_ADMINDIR !== undefined ||
+      env.DPKG_ROOT !== undefined ||
+      smallFileWithMeta.bytes
         .toString("latin1")
         .split(
           `
 `,
         )
-        .filter((x) => !/^[ \t]*(#.*)?$/.test(x)).join(`
+        .filter((line) => !/^[ \t]*(#.*)?$/.test(line)).join(`
 `) !== "cacerts_updates=yes"
     )
       return "settings";
-    for (let x of Uo) if (await _n(join_3(r.stateDir, x))) return "unfinished";
-    let h = await readSmallFileWithMeta(r.dpkgStatus, Wo),
-      l = (await _n(r.dpkgUnincorporatedTriggers))
-        ? await readSmallFileWithMeta(r.dpkgUnincorporatedTriggers, 1)
-        : { bytes: Buffer.alloc(0) };
+    for (let x of DPKG_UNFINISHED_MARKERS)
+      if (await pathExistsAsync(join(javaHook.stateDir, x))) return "unfinished";
+    let smallFileWithMeta_2 = await readSmallFileWithMeta(javaHook.dpkgStatus, JAVA_CA_POSTINST_MAX_LINES);
+    let l = (await pathExistsAsync(javaHook.dpkgUnincorporatedTriggers))
+      ? await readSmallFileWithMeta(javaHook.dpkgUnincorporatedTriggers, 1)
+      : {
+          bytes: Buffer.alloc(0),
+        };
     if (
-      h === void 0 ||
-      h.bytes.includes(`
+      smallFileWithMeta_2 === undefined ||
+      smallFileWithMeta_2.bytes.includes(`
 Triggers-Pending:`) ||
-      h.bytes.includes(`
+      smallFileWithMeta_2.bytes.includes(`
 Triggers-Awaited:`) ||
       l?.bytes.length !== 0 ||
-      (await readdir_3(r.dpkgUpdates)).length !== 0
+      (await readdir(javaHook.dpkgUpdates)).length !== 0
     )
       return "unfinished";
     if ((await whichAsync("java")) === null) return "no_java";
-    let u = n.startsWith("0") ? null : Jo.exec(n),
-      p;
+    let u = n.startsWith("0") ? null : JAVA_VERSION_RE.exec(n);
+    let p;
     try {
-      p = new X509Certificate_3(u?.[1] === "CERTIFICATE" ? u[0] : "").raw;
+      p = new X509Certificate(u?.[1] === "CERTIFICATE" ? u[0] : "").raw;
     } catch {
       return "certificate";
     }
-    let y = `debian:${basename_2(e)}`;
+    let y = `debian:${basename(link)}`;
     if (!/^[\x21-\x40\x5b-\x7e]+$/.test(y)) return "alias";
-    let w = await readSmallFileWithMeta(r.cacerts, jo),
-      T = w && parseJavaKeystoreAliases(w.bytes);
-    if (w === void 0 || T === void 0 || w.nlink !== 1) return "store";
+    let smallFileWithMeta_3 = await readSmallFileWithMeta(javaHook.cacerts, JAVA_CA_CACERTS_MAX_LINES);
+    let T = smallFileWithMeta_3 && parseJavaKeystoreAliases(smallFileWithMeta_3.bytes);
+    if (smallFileWithMeta_3 === undefined || T === undefined || smallFileWithMeta_3.nlink !== 1)
+      return "store";
     if (T.includes(y)) return "alias";
-    let S = appendJavaKeystoreCert(w.bytes, y, p);
+    let S = appendJavaKeystoreCert(smallFileWithMeta_3.bytes, y, p);
     try {
-      let x = await writeIfMissing(r.cacerts, S, w.mode);
+      let x = await writeIfMissing(javaHook.cacerts, S, smallFileWithMeta_3.mode);
       try {
-        let b = await lstat_2(x);
-        if (b.uid !== w.uid || b.gid !== w.gid) return (await unlink_3(x), "store");
-        (await chmod_2(x, w.mode), await rename_2(x, r.cacerts));
+        let b = await lstat(x);
+        if (b.uid !== smallFileWithMeta_3.uid || b.gid !== smallFileWithMeta_3.gid) {
+          await unlink(x);
+          return "store";
+        }
+        await chmod(x, smallFileWithMeta_3.mode);
+        await rename(x, javaHook.cacerts);
       } catch (error) {
-        throw (await unlink_3(x).catch(() => {}), error);
+        await unlink(x).catch(() => {});
+        throw error;
       }
     } catch {
       return "write";
     }
-    return (await mkdir_2(r.stateDir, { recursive: !0 }).catch(() => {}), "added");
+    await mkdir(javaHook.stateDir, {
+      recursive: true,
+    }).catch(() => {});
+    return "added";
   } catch {
     return "error";
   }
 }
+//@ chunk-awy329vy.js:37424-37939 placement
 /**
  * 解析 Java KeyStore（JKS）字节：校验魔数与版本，逐个读取受信证书条目的别名（类型须为 X.509），最后校验整体 SHA-1 摘要；格式不符返回 undefined。
  */
-//@ chunk-awy329vy.js:37424-37939 placement
 function parseJavaKeystoreAliases(buffer) {
-  let e = [],
-    textDecoder = new TextDecoder("utf-8", { fatal: !0, ignoreBOM: !0 });
+  let e = [];
+  let textDecoder = new TextDecoder("utf-8", {
+    fatal: true,
+    ignoreBOM: true,
+  });
   try {
-    if (buffer.readUInt32BE(0) !== Yo || buffer.readUInt32BE(4) !== Xo) return;
+    if (buffer.readUInt32BE(0) !== JKS_MAGIC || buffer.readUInt32BE(4) !== JKS_VERSION_MAGIC) return;
     let offset = 12;
     for (let uInt32BE = buffer.readUInt32BE(8); uInt32BE > 0; uInt32BE--) {
-      if (buffer.readUInt32BE(offset) !== Sn) return;
+      if (buffer.readUInt32BE(offset) !== JKS_ENTRY_TAG) return;
       offset += 4;
-      let h = offset + 2 + buffer.readUInt16BE(offset),
-        chunk = buffer.subarray(offset + 2, h);
+      let h = offset + 2 + buffer.readUInt16BE(offset);
+      let chunk = buffer.subarray(offset + 2, h);
       if (chunk.some((p) => p === 0 || p >= 240)) return;
-      (e.push(textDecoder.decode(chunk)), (offset = h + 8));
+      e.push(textDecoder.decode(chunk));
+      offset = h + 8;
       let u = offset + 2 + buffer.readUInt16BE(offset);
       if (buffer.toString("utf8", offset + 2, u) !== X_509) return;
       offset = u + 4 + buffer.readUInt32BE(u);
     }
     if (
-      offset + Cn !== buffer.length ||
+      offset + JKS_TRAILER_BYTES !== buffer.length ||
       !javaKeystoreDigest(buffer.subarray(0, offset)).equals(buffer.subarray(offset))
     )
       return;
@@ -207,40 +183,41 @@ function parseJavaKeystoreAliases(buffer) {
   }
   return e;
 }
+//@ chunk-awy329vy.js:37939-38336 placement
 /**
  * 向 JKS 字节追加一个受信证书条目（别名、时间戳、X.509 证书），更新条目数并重新计算末尾摘要。
  */
-//@ chunk-awy329vy.js:37939-38336 placement
-function appendJavaKeystoreCert(n, e, r) {
-  let alloc = Buffer.alloc(6 + e.length + 8 + 2 + X_509.length + 4),
-    writeUInt32BE = alloc.writeUInt32BE(Sn, 0);
-  ((writeUInt32BE = alloc.writeUInt16BE(e.length, writeUInt32BE)),
-    (writeUInt32BE += alloc.write(e, writeUInt32BE, "latin1")),
-    (writeUInt32BE = alloc.writeBigUInt64BE(BigInt(Date.now()), writeUInt32BE)),
-    (writeUInt32BE = alloc.writeUInt16BE(X_509.length, writeUInt32BE)),
-    (writeUInt32BE += alloc.write(X_509, writeUInt32BE, "latin1")),
-    alloc.writeUInt32BE(r.length, writeUInt32BE));
-  let buffer = Buffer.concat([n.subarray(0, n.length - Cn), alloc, r]);
-  return (
-    buffer.writeUInt32BE(n.readUInt32BE(8) + 1, 8),
-    Buffer.concat([buffer, javaKeystoreDigest(buffer)])
-  );
+function appendJavaKeystoreCert(bytes, e, r) {
+  let o = Buffer.alloc(6 + e.length + 8 + 2 + X_509.length + 4);
+  let s = o.writeUInt32BE(JKS_ENTRY_TAG, 0);
+  s = o.writeUInt16BE(e.length, s);
+  s += o.write(e, s, "latin1");
+  s = o.writeBigUInt64BE(BigInt(Date.now()), s);
+  s = o.writeUInt16BE(X_509.length, s);
+  s += o.write(X_509, s, "latin1");
+  o.writeUInt32BE(r.length, s);
+  let buffer = Buffer.concat([bytes.subarray(0, bytes.length - JKS_TRAILER_BYTES), o, r]);
+  buffer.writeUInt32BE(bytes.readUInt32BE(8) + 1, 8);
+  return Buffer.concat([buffer, javaKeystoreDigest(buffer)]);
 }
 //@ chunk-awy329vy.js:38336-38465 placement
 function javaKeystoreDigest(n) {
-  return createHash_2("sha1")
+  return createHash("sha1")
     .update(Buffer.from(CHANGEIT, "utf16le").swap16())
     .update("Mighty Aphrodite", "utf8")
     .update(n)
     .digest();
 }
 //@ chunk-awy329vy.js:38465-38544 placement
-async function _n(n) {
-  return lstat_2(n).then(
-    () => !0,
-    (e) => {
-      if (isENOENT(e)) return !1;
-      throw e;
+/**
+ * 异步判断路径是否存在（ENOENT 返回 false，其他错误抛出）。
+ */
+async function pathExistsAsync(n) {
+  return lstat(n).then(
+    () => true,
+    (error) => {
+      if (isENOENT(error)) return false;
+      throw error;
     },
   );
 }
@@ -248,7 +225,7 @@ async function _n(n) {
 async function readSmallFileWithMeta(n, e) {
   let r;
   try {
-    r = await open_4(n, constants_3.O_RDONLY | zq());
+    r = await open(n, constants.O_RDONLY | platformNoFollowFlags());
     let stats = await r.stat();
     if (!stats.isFile() || stats.size > e) return;
     return {
@@ -264,178 +241,208 @@ async function readSmallFileWithMeta(n, e) {
     await r?.close().catch(() => {});
   }
 }
+//@ chunk-awy329vy.js:38797-39477 placement
 /**
  * Debian 系系统 CA 证书相关路径：更新脚本、配置文件、证书目录与证书包等。
  */
-//@ chunk-awy329vy.js:38797-39477 placement
 var DEBIAN_CA_PATHS = {
-    script: "update-ca-certificates",
-    conf: "/etc/ca-certificates.conf",
-    distCertsDir: "/usr/share/ca-certificates",
-    localCertsDir: "/usr/local/share/ca-certificates",
-    certsDir: "/etc/ssl/certs",
-    bundle: "/etc/ssl/certs/ca-certificates.crt",
-    hooksDir: "/etc/ca-certificates/update.d",
-    restorecon: "/sbin/restorecon",
-    rehash: ["openssl", "rehash", "."],
-    listHooks: ["run-parts", "--test", "--", "/etc/ca-certificates/update.d"],
-    javaHook: JAVA_CA_HOOK_PATHS,
-  },
-  UPDATE_CA_CERTIFICATES_MARKERS = [
-    "CERTSCONF=/etc/ca-certificates.conf",
-    "CERTSDIR=/usr/share/ca-certificates",
-    "LOCALCERTSDIR=/usr/local/share/ca-certificates",
-    "ETCCERTSDIR=/etc/ssl/certs",
-    "HOOKSDIR=/etc/ca-certificates/update.d",
-  ],
-  MAX_UPDATE_SCRIPT_BYTES = 65536,
-  MAX_CA_CONF_BYTES = 262144,
-  MAX_CERT_FILE_BYTES = 1048576,
-  MAX_CA_BUNDLE_BYTES = 4194304,
-  MAX_COMMAND_OUTPUT_BYTES = 1048576,
-  MAX_LOGGED_OUTPUT_CHARS = 2048;
+  script: "update-ca-certificates",
+  conf: "/etc/ca-certificates.conf",
+  distCertsDir: "/usr/share/ca-certificates",
+  localCertsDir: "/usr/local/share/ca-certificates",
+  certsDir: "/etc/ssl/certs",
+  bundle: "/etc/ssl/certs/ca-certificates.crt",
+  hooksDir: "/etc/ca-certificates/update.d",
+  restorecon: "/sbin/restorecon",
+  rehash: ["openssl", "rehash", "."],
+  listHooks: ["run-parts", "--test", "--", "/etc/ca-certificates/update.d"],
+  javaHook: JAVA_CA_HOOK_PATHS,
+};
+var UPDATE_CA_CERTIFICATES_MARKERS = [
+  "CERTSCONF=/etc/ca-certificates.conf",
+  "CERTSDIR=/usr/share/ca-certificates",
+  "LOCALCERTSDIR=/usr/local/share/ca-certificates",
+  "ETCCERTSDIR=/etc/ssl/certs",
+  "HOOKSDIR=/etc/ca-certificates/update.d",
+];
+var MAX_UPDATE_SCRIPT_BYTES = 65536;
+var MAX_CA_CONF_BYTES = 262144;
+var MAX_CERT_FILE_BYTES = 1048576;
+var MAX_CA_BUNDLE_BYTES = 4194304;
+var MAX_COMMAND_OUTPUT_BYTES = 1048576;
+var MAX_LOGGED_OUTPUT_CHARS = 2048;
 //@ chunk-awy329vy.js:39477-41785 placement
 async function installSystemCaDirect(n, e) {
-  let {
-      anchorPath: anchorPath,
-      link: link,
-      layout: layout,
-      recordPath: recordPath,
-      timeoutMs: timeoutMs,
-    } = e,
-    buffer = Buffer.from(n, "utf8"),
-    p;
+  let { anchorPath, link, layout, recordPath, timeoutMs } = e;
+  let buffer = Buffer.from(n, "utf8");
+  let p;
   try {
     p = await runUpdateCaCertificates(anchorPath, link, buffer, layout);
   } catch (error) {
-    p = { reason: "layout", detail: errorMessage(error) };
+    p = {
+      reason: "layout",
+      detail: errorMessage(error),
+    };
   }
-  if ("reason" in p)
-    return (
-      logForDebugging(
-        `[agent-proxy] direct CA install not attempted (${p.reason}: ${p.detail}); using ${layout.script}`,
-      ),
-      { outcome: "not_attempted", reason: p.reason }
+  if ("reason" in p) {
+    logForDebugging(
+      `[agent-proxy] direct CA install not attempted (${p.reason}: ${p.detail}); using ${layout.script}`,
     );
-  await unlink_2(recordPath).catch(() => {});
+    return {
+      outcome: "not_attempted",
+      reason: p.reason,
+    };
+  }
+  await unlink(recordPath).catch(() => {});
   let y;
   try {
-    ((y = await open_3(anchorPath, constants_2.O_WRONLY | constants_2.O_CREAT | constants_2.O_EXCL, 420)),
-      await y.writeFile(buffer),
-      await y.chmod(420),
-      await y.close());
+    y = await open(anchorPath, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL, 420);
+    await y.writeFile(buffer);
+    await y.chmod(420);
+    await y.close();
   } catch (error) {
-    if (y) (await y.close().catch(() => {}), await unlink_2(anchorPath).catch(() => {}));
-    return (
-      logForDebugging(
-        `[agent-proxy] direct CA install not attempted (anchor: ${errorMessage(error)}); using ${layout.script}`,
-      ),
-      { outcome: "not_attempted", reason: "anchor_create" }
+    if (y) {
+      await y.close().catch(() => {});
+      await unlink(anchorPath).catch(() => {});
+    }
+    logForDebugging(
+      `[agent-proxy] direct CA install not attempted (anchor: ${errorMessage(error)}); using ${layout.script}`,
     );
-  }
-  let w = !1,
-    T = async (E, A) => {
-      if (
-        (logForDebugging(
-          `[agent-proxy] direct CA install abandoned at ${E} (${A}); running ${layout.script} instead`,
-          { level: "warn" },
-        ),
-        w)
-      )
-        await unlink_2(link).catch(() => {});
-      return { outcome: "abandoned", step: E };
+    return {
+      outcome: "not_attempted",
+      reason: "anchor_create",
     };
+  }
+  let w = false;
+  let T = async (E, A) => {
+    logForDebugging(
+      `[agent-proxy] direct CA install abandoned at ${E} (${A}); running ${layout.script} instead`,
+      {
+        level: "warn",
+      },
+    );
+    if (w) await unlink(link).catch(() => {});
+    return {
+      outcome: "abandoned",
+      step: E,
+    };
+  };
   try {
     let E = await writeIfMissing(layout.bundle, p.bundle);
     try {
-      (await chmod(E, 420), await rename(E, layout.bundle));
+      await chmod(E, 420);
+      await rename(E, layout.bundle);
     } catch (error) {
-      throw (await unlink_2(E).catch(() => {}), error);
+      await unlink(E).catch(() => {});
+      throw error;
     }
   } catch (error) {
     return await T("bundle", errorMessage(error));
   }
   try {
-    (await symlink(anchorPath, link), (w = !0));
+    await symlink(anchorPath, link);
+    w = true;
   } catch (error) {
     return await T("link", errorMessage(error));
   }
-  let S = Date.now() + timeoutMs,
-    x = (E, A) =>
-      execFileNoThrow(E[0], E.slice(1), {
-        timeout: Math.max(1, S - Date.now()),
-        cwd: layout.certsDir,
-        ...(A === void 0 ? { stdin: "ignore" } : { input: A }),
-        maxBuffer: MAX_COMMAND_OUTPUT_BYTES,
-        preserveOutputOnError: !0,
-      }),
-    b = await x(layout.rehash);
-  if ((logToolOutput("openssl rehash", b), b.exitCode !== 0))
-    return await T("rehash", describeExecOutcome(b));
+  let S = Date.now() + timeoutMs;
+  let x = (E, A) =>
+    execFileNoThrow(E[0], E.slice(1), {
+      timeout: Math.max(1, S - Date.now()),
+      cwd: layout.certsDir,
+      ...(A === undefined
+        ? {
+            stdin: "ignore",
+          }
+        : {
+            input: A,
+          }),
+      maxBuffer: MAX_COMMAND_OUTPUT_BYTES,
+      preserveOutputOnError: true,
+    });
+  let b = await x(layout.rehash);
+  logToolOutput("openssl rehash", b);
+  if (b.exitCode !== 0) return await T("rehash", describeExecOutcome(b));
   let C = [];
   if (
     (
-      await stat_2(layout.hooksDir).catch(() => {
+      await stat(layout.hooksDir).catch(() => {
         return;
       })
     )?.isDirectory()
   ) {
     let E = await x(layout.listHooks);
-    if (E.exitCode !== 0) return (logToolOutput("run-parts", E), await T("hooks", describeExecOutcome(E)));
+    if (E.exitCode !== 0) {
+      logToolOutput("run-parts", E);
+      return await T("hooks", describeExecOutcome(E));
+    }
     C = E.stdout
       .split(
         `
 `,
       )
-      .filter((A) => A.length > 0);
+      .filter((line) => line.length > 0);
   }
   let P;
   for (let E of C) {
     if (E === layout.javaHook?.hook) {
-      if (
-        ((P = await installJavaStoreDirect(n, link, layout.javaHook)),
-        logForDebugging(
-          P === "added"
-            ? `[agent-proxy] direct CA install: CA added to ${layout.javaHook.cacerts} without running ${E}`
-            : `[agent-proxy] direct CA install: running ${E}, not adding to the Java store directly (${P})`,
-        ),
-        P === "added")
-      )
-        continue;
+      P = await installJavaStoreDirect(n, link, layout.javaHook);
+      logForDebugging(
+        P === "added"
+          ? `[agent-proxy] direct CA install: CA added to ${layout.javaHook.cacerts} without running ${E}`
+          : `[agent-proxy] direct CA install: running ${E}, not adding to the Java store directly (${P})`,
+      );
+      if (P === "added") continue;
     }
     let A = await x(
       [E],
       `+${link}
 `,
     );
-    if ((logToolOutput(E, A), A.exitCode === void 0))
-      return (
-        logForDebugging(
-          `[agent-proxy] direct CA install: hook ${E} gave no exit status (${describeExecOutcome(A)}); not recording the install, so the next start redoes it`,
-          { level: "warn" },
-        ),
-        { outcome: "hook_incomplete" }
+    logToolOutput(E, A);
+    if (A.exitCode === undefined) {
+      logForDebugging(
+        `[agent-proxy] direct CA install: hook ${E} gave no exit status (${describeExecOutcome(A)}); not recording the install, so the next start redoes it`,
+        {
+          level: "warn",
+        },
       );
+      return {
+        outcome: "hook_incomplete",
+      };
+    }
     if (A.exitCode !== 0)
       logForDebugging(
         `[agent-proxy] direct CA install: hook ${E} exit status ${A.exitCode} ignored, as ${layout.script} ignores it`,
       );
   }
-  return { outcome: "installed", ...(P && { javaStore: P }) };
+  return {
+    outcome: "installed",
+    ...(P && {
+      javaStore: P,
+    }),
+  };
 }
 //@ chunk-awy329vy.js:41785-43516 placement
-async function runUpdateCaCertificates(n, e, r, o) {
-  let s = o.script.includes("/") ? o.script : await whichAsync(o.script),
-    h = s ? await readFileSyncCached(s, MAX_UPDATE_SCRIPT_BYTES) : void 0;
+async function runUpdateCaCertificates(anchorPath, link, r, layout) {
+  let s = layout.script.includes("/") ? layout.script : await whichAsync(layout.script);
+  let h = s ? await readFileSyncCached(s, MAX_UPDATE_SCRIPT_BYTES) : undefined;
   if (
-    h === void 0 ||
+    h === undefined ||
     !h.subarray(0, 9).equals(Buffer.from("#!/bin/sh")) ||
     !UPDATE_CA_CERTIFICATES_MARKERS.every((b) => h.includes(b))
   )
-    return { reason: "script", detail: s ?? o.script };
-  let l = await readFileSyncCached(o.conf, MAX_CA_CONF_BYTES);
-  if (l === void 0 || l.length === 0) return { reason: "conf", detail: o.conf };
-  for (let b of [o.certsDir, o.localCertsDir, o.distCertsDir])
+    return {
+      reason: "script",
+      detail: s ?? layout.script,
+    };
+  let fileSync = await readFileSyncCached(layout.conf, MAX_CA_CONF_BYTES);
+  if (fileSync === undefined || fileSync.length === 0)
+    return {
+      reason: "conf",
+      detail: layout.conf,
+    };
+  for (let b of [layout.certsDir, layout.localCertsDir, layout.distCertsDir])
     if (
       !(
         await lstat(b).catch(() => {
@@ -443,24 +450,42 @@ async function runUpdateCaCertificates(n, e, r, o) {
         })
       )?.isDirectory()
     )
-      return { reason: "layout", detail: b };
+      return {
+        reason: "layout",
+        detail: b,
+      };
   if (
     !(
-      await lstat(o.bundle).catch(() => {
+      await lstat(layout.bundle).catch(() => {
         return;
       })
     )?.isFile()
   )
-    return { reason: "layout", detail: o.bundle };
-  if (await vn(o.restorecon)) return { reason: "layout", detail: o.restorecon };
-  for (let b of [n, e]) if (await vn(b)) return { reason: "anchor_present", detail: `${b} exists` };
-  let u = [],
-    p = (b) => ({ reason: "unsynced", detail: b });
-  for (let b of l.toString("utf8").split(`
+    return {
+      reason: "layout",
+      detail: layout.bundle,
+    };
+  if (await pathExistsOrThrow(layout.restorecon))
+    return {
+      reason: "layout",
+      detail: layout.restorecon,
+    };
+  for (let b of [anchorPath, link])
+    if (await pathExistsOrThrow(b))
+      return {
+        reason: "anchor_present",
+        detail: `${b} exists`,
+      };
+  let u = [];
+  let p = (detail) => ({
+    reason: "unsynced",
+    detail,
+  });
+  for (let line of fileSync.toString("utf8").split(`
 `)) {
-    if (b === "" || b.startsWith("#")) continue;
-    if (b.startsWith("!")) {
-      let P = join_2(o.certsDir, `${basename(b.slice(1), ".crt")}.pem`);
+    if (line === "" || line.startsWith("#")) continue;
+    if (line.startsWith("!")) {
+      let P = join(layout.certsDir, `${basename(line.slice(1), ".crt")}.pem`);
       if (
         (
           await lstat(P).catch(() => {
@@ -471,57 +496,65 @@ async function runUpdateCaCertificates(n, e, r, o) {
         return p(`${P} still linked`);
       continue;
     }
-    let C = join_2(o.distCertsDir, b);
+    let detail = join(layout.distCertsDir, line);
     if (
       !(
-        await stat_2(C).catch(() => {
+        await stat(detail).catch(() => {
           return;
         })
       )?.isFile()
     )
       continue;
-    let v = await readLinkedSystemCert(C, o);
-    if (v === void 0) return p(C);
-    u.push(v);
+    let linkedSystemCert = await readLinkedSystemCert(detail, layout);
+    if (linkedSystemCert === undefined) return p(detail);
+    u.push(linkedSystemCert);
   }
-  let y = basename(n),
-    w = [y];
-  for (let b of await readdir_2(o.localCertsDir, { withFileTypes: !0 })) {
-    let C = await stat_2(join_2(o.localCertsDir, b.name));
+  let y = basename(anchorPath);
+  let w = [y];
+  for (let b of await readdir(layout.localCertsDir, {
+    withFileTypes: true,
+  })) {
+    let C = await stat(join(layout.localCertsDir, b.name));
     if (C.isDirectory()) return p(`${b.name} is a directory`);
     if (C.isFile() && b.name.endsWith(".crt")) w.push(b.name);
   }
   w.sort();
-  let T = Bn(r);
+  let trailingNewline = ensureTrailingNewline(r);
   for (let b of w) {
     if (b === y) {
-      u.push(T);
+      u.push(trailingNewline);
       continue;
     }
-    let C = join_2(o.localCertsDir, b),
-      v = await readLinkedSystemCert(C, o);
-    if (v === void 0) return p(C);
-    u.push(v);
+    let detail = join(layout.localCertsDir, b);
+    let linkedSystemCert = await readLinkedSystemCert(detail, layout);
+    if (linkedSystemCert === undefined) return p(detail);
+    u.push(linkedSystemCert);
   }
-  let S = await readFileSyncCached(o.bundle, MAX_CA_BUNDLE_BYTES),
-    buffer = Buffer.concat(u.filter((b) => b !== T));
-  if (S === void 0 || !S.equals(buffer)) return p("bundle differs from what the script would build");
-  return { bundle: Buffer.concat(u) };
+  let fileSync_2 = await readFileSyncCached(layout.bundle, MAX_CA_BUNDLE_BYTES);
+  let buffer = Buffer.concat(u.filter((b) => b !== trailingNewline));
+  if (fileSync_2 === undefined || !fileSync_2.equals(buffer))
+    return p("bundle differs from what the script would build");
+  return {
+    bundle: Buffer.concat(u),
+  };
 }
 //@ chunk-awy329vy.js:43516-43720 placement
 async function readLinkedSystemCert(n, e) {
   let r = basename(n, ".crt").replace(/ /g, "_").replace(/[()]/g, "=").replace(/,/g, "_") + ".pem";
   if (
-    (await readlink_2(join_2(e.certsDir, r)).catch(() => {
+    (await readlink(join(e.certsDir, r)).catch(() => {
       return;
     })) !== n
   )
     return;
-  let s = await readFileSyncCached(n, MAX_CERT_FILE_BYTES);
-  return s && Bn(s);
+  let fileSync = await readFileSyncCached(n, MAX_CERT_FILE_BYTES);
+  return fileSync && ensureTrailingNewline(fileSync);
 }
 //@ chunk-awy329vy.js:43720-43808 placement
-function Bn(n) {
+/**
+ * 内容末尾没有换行时补一个换行。
+ */
+function ensureTrailingNewline(n) {
   return n.length === 0 || n.at(-1) === 10
     ? n
     : Buffer.concat([
@@ -531,14 +564,16 @@ function Bn(n) {
       ]);
 }
 //@ chunk-awy329vy.js:43808-43887 placement
-async function vn(n) {
+/**
+ * 异步判断路径是否存在（仅把 ENOENT 视为不存在）。
+ */
+async function pathExistsOrThrow(n) {
   return lstat(n).then(
-    () => !0,
-    (e) => {
-      if (isENOENT(e)) return !1;
-      throw e;
+    () => true,
+    (error) => {
+      if (isENOENT(error)) return false;
+      throw error;
     },
   );
 }
-
 export { DEBIAN_CA_PATHS, installSystemCaDirect, MAX_LOGGED_OUTPUT_CHARS };

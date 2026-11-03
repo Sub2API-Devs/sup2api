@@ -6,954 +6,1165 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { ep } from "./checks.cjs";
-import { Xs } from "./core.cjs";
-import { tp } from "./doc.cjs";
-import { A_ } from "./parse.cjs";
-import { Ul } from "./regexes.cjs";
-import { Ee } from "./util.cjs";
-import { M_ } from "./versions.cjs";
+import { require_checks } from "./checks.cjs";
+import { require_core } from "./core.cjs";
+import { require_doc } from "./doc.cjs";
+import { require_parse } from "./parse.cjs";
+import { require_regexes } from "./regexes.cjs";
+import { require_util } from "./util.cjs";
+import { require_versions } from "./versions.cjs";
 
 //@ chunk-1ny7cxrt.js:134598-181402 cjs-fingerprint
-var Bl = x(function (T) {
-  var zZ =
-      (T && T.__createBinding) ||
-      (Object.create
-        ? function (e, t, n, o) {
-            if (o === void 0) o = n;
-            var ownPropertyDescriptor = Object.getOwnPropertyDescriptor(t, n);
-            if (
-              !ownPropertyDescriptor ||
-              ("get" in ownPropertyDescriptor
-                ? !t.__esModule
-                : ownPropertyDescriptor.writable || ownPropertyDescriptor.configurable)
-            )
-              ownPropertyDescriptor = {
-                enumerable: !0,
-                get: function () {
-                  return t[n];
-                },
-              };
-            Object.defineProperty(e, o, ownPropertyDescriptor);
-          }
-        : function (e, t, n, o) {
-            if (o === void 0) o = n;
-            e[o] = t[n];
-          }),
-    FZ =
-      (T && T.__setModuleDefault) ||
-      (Object.create
-        ? function (e, t) {
-            Object.defineProperty(e, "default", { enumerable: !0, value: t });
-          }
-        : function (e, t) {
-            e.default = t;
-          }),
-    ap =
-      (T && T.__importStar) ||
-      function (e) {
-        if (e && e.__esModule) return e;
-        var t = {};
-        if (e != null) {
-          for (var key in e)
-            if (key !== "default" && Object.prototype.hasOwnProperty.call(e, key)) zZ(t, e, key);
+var require_schemas = x(function (cjsExports) {
+  var __createBinding =
+    (cjsExports && cjsExports.__createBinding) ||
+    (Object.create
+      ? function (o_2, m, k, k2) {
+          if (k2 === undefined) k2 = k;
+          var desc = Object.getOwnPropertyDescriptor(m, k);
+          if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable))
+            desc = {
+              enumerable: true,
+              get: function () {
+                return m[k];
+              },
+            };
+          Object.defineProperty(o_2, k2, desc);
         }
-        return (FZ(t, e), t);
-      };
-  Object.defineProperty(T, "__esModule", { value: !0 });
-  T.$ZodObject =
-    T.$ZodArray =
-    T.$ZodDate =
-    T.$ZodVoid =
-    T.$ZodNever =
-    T.$ZodUnknown =
-    T.$ZodAny =
-    T.$ZodNull =
-    T.$ZodUndefined =
-    T.$ZodSymbol =
-    T.$ZodBigIntFormat =
-    T.$ZodBigInt =
-    T.$ZodBoolean =
-    T.$ZodNumberFormat =
-    T.$ZodNumber =
-    T.$ZodCustomStringFormat =
-    T.$ZodJWT =
-    T.$ZodIBAN =
-    T.$ZodCreditCard =
-    T.$ZodE164 =
-    T.$ZodBase64URL =
-    T.base64urlCharset =
-    T.$ZodBase64 =
-    T.base64Charset =
-    T.$ZodCIDRv6 =
-    T.$ZodCIDRv4 =
-    T.$ZodMAC =
-    T.$ZodIPv6 =
-    T.$ZodIPv4 =
-    T.$ZodISODuration =
-    T.$ZodISOTime =
-    T.$ZodISODate =
-    T.$ZodISODateTime =
-    T.$ZodKSUID =
-    T.$ZodXID =
-    T.$ZodULID =
-    T.$ZodCUID2 =
-    T.$ZodCUID =
-    T.$ZodNanoID =
-    T.$ZodEmoji =
-    T.$ZodURL =
-    T.URL_UNPARSEABLE =
-    T.URL_BAD_FORMAT =
-    T.$ZodEmail =
-    T.$ZodUUID =
-    T.$ZodGUID =
-    T.$ZodStringFormat =
-    T.$ZodString =
-    T.clone =
-    T.$ZodType =
-      void 0;
-  T.$ZodProperties =
-    T.$ZodCustom =
-    T.$ZodLazy =
-    T.$ZodPromise =
-    T.$ZodFunction =
-    T.$ZodTemplateLiteral =
-    T.$ZodReadonly =
-    T.$ZodPreprocess =
-    T.$ZodCodec =
-    T.$ZodPipe =
-    T.$ZodNaN =
-    T.$ZodCatch =
-    T.$ZodSuccess =
-    T.$ZodNonOptional =
-    T.$ZodPrefault =
-    T.$ZodDefault =
-    T.$ZodNullable =
-    T.$ZodExactOptional =
-    T.$ZodOptional =
-    T.$ZodTransform =
-    T.$ZodFile =
-    T.$ZodLiteral =
-    T.$ZodEnum =
-    T.$ZodSet =
-    T.$ZodMap =
-    T.$ZodRecord =
-    T.$ZodTuple =
-    T.$ZodIntersection =
-    T.$ZodDiscriminatedUnion =
-    T.$ZodXor =
-    T.$ZodUnion =
-    T.$ZodObjectJIT =
-      void 0;
-  T.standardProps = jP;
-  T.parseURLObject = xP;
-  T.stripTabAndNewline = LP;
-  T.urlHostnameOk = NP;
-  T.urlProtocolOk = UP;
-  T.isValidIPv6 = x_;
-  T.isValidCIDRv6 = zP;
-  T.isValidBase64 = L_;
-  T.isValidBase64URL = FP;
-  T.isValidCreditCard = BP;
-  T.isValidIBAN = HP;
-  T.isValidJWT = KP;
-  T.getDiscriminatedOption = YZ;
-  T.mergeValues = sp;
-  var qu = ap(ep()),
-    se = ap(Xs()),
-    RP = tp(),
-    Qs = A_(),
-    It = ap(Ul()),
-    ee = ap(Ee()),
-    DP = M_();
-  T.$ZodType = se.$constructor(
+      : function (o_2, m, k, k2) {
+          if (k2 === undefined) k2 = k;
+          o_2[k2] = m[k];
+        });
+  var __setModuleDefault =
+    (cjsExports && cjsExports.__setModuleDefault) ||
+    (Object.create
+      ? function (o, v) {
+          Object.defineProperty(o, "default", {
+            enumerable: true,
+            value: v,
+          });
+        }
+      : function (o, v) {
+          o.default = v;
+        });
+  var __importStar =
+    (cjsExports && cjsExports.__importStar) ||
+    function (mod) {
+      if (mod && mod.__esModule) return mod;
+      var result = {};
+      if (mod != null) {
+        for (var k in mod)
+          if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k))
+            __createBinding(result, mod, k);
+      }
+      __setModuleDefault(result, mod);
+      return result;
+    };
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.$ZodObject =
+    cjsExports.$ZodArray =
+    cjsExports.$ZodDate =
+    cjsExports.$ZodVoid =
+    cjsExports.$ZodNever =
+    cjsExports.$ZodUnknown =
+    cjsExports.$ZodAny =
+    cjsExports.$ZodNull =
+    cjsExports.$ZodUndefined =
+    cjsExports.$ZodSymbol =
+    cjsExports.$ZodBigIntFormat =
+    cjsExports.$ZodBigInt =
+    cjsExports.$ZodBoolean =
+    cjsExports.$ZodNumberFormat =
+    cjsExports.$ZodNumber =
+    cjsExports.$ZodCustomStringFormat =
+    cjsExports.$ZodJWT =
+    cjsExports.$ZodIBAN =
+    cjsExports.$ZodCreditCard =
+    cjsExports.$ZodE164 =
+    cjsExports.$ZodBase64URL =
+    cjsExports.base64urlCharset =
+    cjsExports.$ZodBase64 =
+    cjsExports.base64Charset =
+    cjsExports.$ZodCIDRv6 =
+    cjsExports.$ZodCIDRv4 =
+    cjsExports.$ZodMAC =
+    cjsExports.$ZodIPv6 =
+    cjsExports.$ZodIPv4 =
+    cjsExports.$ZodISODuration =
+    cjsExports.$ZodISOTime =
+    cjsExports.$ZodISODate =
+    cjsExports.$ZodISODateTime =
+    cjsExports.$ZodKSUID =
+    cjsExports.$ZodXID =
+    cjsExports.$ZodULID =
+    cjsExports.$ZodCUID2 =
+    cjsExports.$ZodCUID =
+    cjsExports.$ZodNanoID =
+    cjsExports.$ZodEmoji =
+    cjsExports.$ZodURL =
+    cjsExports.URL_UNPARSEABLE =
+    cjsExports.URL_BAD_FORMAT =
+    cjsExports.$ZodEmail =
+    cjsExports.$ZodUUID =
+    cjsExports.$ZodGUID =
+    cjsExports.$ZodStringFormat =
+    cjsExports.$ZodString =
+    cjsExports.clone =
+    cjsExports.$ZodType =
+      undefined;
+  cjsExports.$ZodProperties =
+    cjsExports.$ZodCustom =
+    cjsExports.$ZodLazy =
+    cjsExports.$ZodPromise =
+    cjsExports.$ZodFunction =
+    cjsExports.$ZodTemplateLiteral =
+    cjsExports.$ZodReadonly =
+    cjsExports.$ZodPreprocess =
+    cjsExports.$ZodCodec =
+    cjsExports.$ZodPipe =
+    cjsExports.$ZodNaN =
+    cjsExports.$ZodCatch =
+    cjsExports.$ZodSuccess =
+    cjsExports.$ZodNonOptional =
+    cjsExports.$ZodPrefault =
+    cjsExports.$ZodDefault =
+    cjsExports.$ZodNullable =
+    cjsExports.$ZodExactOptional =
+    cjsExports.$ZodOptional =
+    cjsExports.$ZodTransform =
+    cjsExports.$ZodFile =
+    cjsExports.$ZodLiteral =
+    cjsExports.$ZodEnum =
+    cjsExports.$ZodSet =
+    cjsExports.$ZodMap =
+    cjsExports.$ZodRecord =
+    cjsExports.$ZodTuple =
+    cjsExports.$ZodIntersection =
+    cjsExports.$ZodDiscriminatedUnion =
+    cjsExports.$ZodXor =
+    cjsExports.$ZodUnion =
+    cjsExports.$ZodObjectJIT =
+      undefined;
+  cjsExports.standardProps = standardProps;
+  cjsExports.parseURLObject = parseURLObject;
+  cjsExports.stripTabAndNewline = stripTabAndNewline;
+  cjsExports.urlHostnameOk = urlHostnameOk;
+  cjsExports.urlProtocolOk = urlProtocolOk;
+  cjsExports.isValidIPv6 = isValidIPv6;
+  cjsExports.isValidCIDRv6 = isValidCIDRv6;
+  cjsExports.isValidBase64 = isValidBase64;
+  cjsExports.isValidBase64URL = isValidBase64URL;
+  cjsExports.isValidCreditCard = isValidCreditCard;
+  cjsExports.isValidIBAN = isValidIBAN;
+  cjsExports.isValidJWT = isValidJWT;
+  cjsExports.getDiscriminatedOption = getDiscriminatedOption;
+  cjsExports.mergeValues = mergeValues;
+  var checks = __importStar(require_checks());
+  var core = __importStar(require_core());
+  var doc_js_1 = require_doc();
+  var parse_js_1 = require_parse();
+  var regexes = __importStar(require_regexes());
+  var util = __importStar(require_util());
+  var versions_js_1 = require_versions();
+  cjsExports.$ZodType = core.$constructor(
     "$ZodType",
-    (e, t) => {
-      var n;
-      (e ?? (e = {}), (e._zod.def = t), (e._zod.bag = e._zod.bag || {}), (e._zod.version = DP.version));
-      let checks = e._zod.def.checks,
-        r = e._zod.traits.has("$ZodCheck") ? [e, ...(checks ?? [])] : checks?.length ? [...checks] : [];
-      for (let s of r) for (let a of s._zod.onattach) a(e);
-      if (r.length === 0)
-        ((n = e._zod).deferred ?? (n.deferred = []),
-          e._zod.deferred?.push(() => {
-            e._zod.run = e._zod.parse;
-          }));
-      else {
-        let s = (l, c, u) => {
-            if (l.memo) return l;
-            let aborted = ee.aborted(l),
-              h;
-            for (let m of c) {
-              if (m._zod.def.when) {
-                if (ee.explicitlyAborted(l)) continue;
-                if (!m._zod.def.when(l)) continue;
-              } else if (aborted) continue;
-              let y = l.issues.length,
-                check = m._zod.check(l);
-              if (check instanceof Promise && u?.async === !1) throw new se.$ZodAsyncError();
-              if (h || check instanceof Promise)
-                h = (h ?? Promise.resolve()).then(async () => {
-                  if ((await check, l.issues.length === y)) return;
-                  if ((ee.attachSchema(l.issues, y, e), !aborted)) aborted = ee.aborted(l, y);
-                });
-              else {
-                if (l.issues.length === y) continue;
-                if ((ee.attachSchema(l.issues, y, e), !aborted)) aborted = ee.aborted(l, y);
-              }
+    (inst, def) => {
+      var _a;
+      inst ?? (inst = {});
+      inst._zod.def = def;
+      inst._zod.bag = inst._zod.bag || {};
+      inst._zod.version = versions_js_1.version;
+      let defChecks = inst._zod.def.checks;
+      let checks = inst._zod.traits.has("$ZodCheck")
+        ? [inst, ...(defChecks ?? [])]
+        : defChecks?.length
+          ? [...defChecks]
+          : [];
+      for (let ch of checks) for (let fn of ch._zod.onattach) fn(inst);
+      if (checks.length === 0) {
+        (_a = inst._zod).deferred ?? (_a.deferred = []);
+        inst._zod.deferred?.push(() => {
+          inst._zod.run = inst._zod.parse;
+        });
+      } else {
+        let runChecks = (payload, checks, ctx) => {
+          if (payload.memo) return payload;
+          let isAborted = util.aborted(payload);
+          let asyncResult;
+          for (let ch of checks) {
+            if (ch._zod.def.when) {
+              if (util.explicitlyAborted(payload)) continue;
+              if (!ch._zod.def.when(payload)) continue;
+            } else if (isAborted) continue;
+            let currLen = payload.issues.length;
+            let _ = ch._zod.check(payload);
+            if (_ instanceof Promise && ctx?.async === false) throw new core.$ZodAsyncError();
+            if (asyncResult || _ instanceof Promise)
+              asyncResult = (asyncResult ?? Promise.resolve()).then(async () => {
+                await _;
+                if (payload.issues.length === currLen) return;
+                util.attachSchema(payload.issues, currLen, inst);
+                if (!isAborted) isAborted = util.aborted(payload, currLen);
+              });
+            else {
+              if (payload.issues.length === currLen) continue;
+              util.attachSchema(payload.issues, currLen, inst);
+              if (!isAborted) isAborted = util.aborted(payload, currLen);
             }
-            if (h) return h.then(() => l);
-            return l;
-          },
-          a = (l, c, u) => {
-            if (ee.aborted(l)) return ((l.aborted = !0), l);
-            let f = s(c, r, u);
-            if (f instanceof Promise) {
-              if (u.async === !1) throw new se.$ZodAsyncError();
-              return f.then((h) => e._zod.parse(h, u));
-            }
-            return e._zod.parse(f, u);
-          };
-        e._zod.run = (l, c) => {
-          if (c.skipChecks) return e._zod.parse(l, c);
-          if (c.direction === "backward") {
-            let parse = e._zod.parse({ value: l.value, issues: [] }, { ...c, skipChecks: !0 });
-            if (parse instanceof Promise) return parse.then((h) => a(h, l, c));
-            return a(parse, l, c);
           }
-          let parse = e._zod.parse(l, c);
-          if (parse instanceof Promise) {
-            if (c.async === !1) throw new se.$ZodAsyncError();
-            return parse.then((f) => s(f, r, c));
+          if (asyncResult) return asyncResult.then(() => payload);
+          return payload;
+        };
+        let handleCanaryResult = (canary, payload, ctx) => {
+          if (util.aborted(canary)) {
+            canary.aborted = true;
+            return canary;
           }
-          return s(parse, r, c);
+          let checkResult = runChecks(payload, checks, ctx);
+          if (checkResult instanceof Promise) {
+            if (ctx.async === false) throw new core.$ZodAsyncError();
+            return checkResult.then((checkResult) => inst._zod.parse(checkResult, ctx));
+          }
+          return inst._zod.parse(checkResult, ctx);
+        };
+        inst._zod.run = (payload, ctx) => {
+          if (ctx.skipChecks) return inst._zod.parse(payload, ctx);
+          if (ctx.direction === "backward") {
+            let canary = inst._zod.parse(
+              {
+                value: payload.value,
+                issues: [],
+              },
+              {
+                ...ctx,
+                skipChecks: true,
+              },
+            );
+            if (canary instanceof Promise)
+              return canary.then((canary) => handleCanaryResult(canary, payload, ctx));
+            return handleCanaryResult(canary, payload, ctx);
+          }
+          let result = inst._zod.parse(payload, ctx);
+          if (result instanceof Promise) {
+            if (ctx.async === false) throw new core.$ZodAsyncError();
+            return result.then((result) => runChecks(result, checks, ctx));
+          }
+          return runChecks(result, checks, ctx);
         };
       }
     },
     {
       get "~standard"() {
-        return ee.hide(this, "~standard", jP(this));
+        return util.hide(this, "~standard", standardProps(this));
       },
-      set "~standard"(e) {
-        ee.own(this, "~standard", e);
+      set "~standard"(value) {
+        util.own(this, "~standard", value);
       },
     },
   );
-  var MP = (e, t) =>
-    e.issues.length
-      ? { issues: e.issues.map((issue) => ee.finalizeIssue(issue, t, se.config())) }
-      : { value: e.value };
-  async function BZ(e, t) {
-    let n = { async: !0 };
-    return MP(await e._zod.run({ value: t, issues: [] }, n), n);
+  var toStandardResult = (r, ctx) =>
+    r.issues.length
+      ? {
+          issues: r.issues.map((iss) => util.finalizeIssue(iss, ctx, core.config())),
+        }
+      : {
+          value: r.value,
+        };
+  async function validateAsync(inst, value) {
+    let ctx = {
+      async: true,
+    };
+    return toStandardResult(
+      await inst._zod.run(
+        {
+          value,
+          issues: [],
+        },
+        ctx,
+      ),
+      ctx,
+    );
   }
-  function jP(e) {
+  function standardProps(inst) {
     return {
-      validate: (t) => {
-        let n = { async: !1 };
+      validate: (value) => {
+        let ctx = {
+          async: false,
+        };
         try {
-          let run = e._zod.run({ value: t, issues: [] }, n);
-          if (!(run instanceof Promise)) return MP(run, n);
-        } catch (error) {}
-        return BZ(e, t);
+          let r = inst._zod.run(
+            {
+              value,
+              issues: [],
+            },
+            ctx,
+          );
+          if (!(r instanceof Promise)) return toStandardResult(r, ctx);
+        } catch (_) {}
+        return validateAsync(inst, value);
       },
       vendor: "zod",
       version: 1,
     };
   }
-  var HZ = Ee();
-  Object.defineProperty(T, "clone", {
-    enumerable: !0,
+  var util_js_1 = require_util();
+  Object.defineProperty(cjsExports, "clone", {
+    enumerable: true,
     get: function () {
-      return HZ.clone;
+      return util_js_1.clone;
     },
   });
-  T.$ZodString = se.$constructor("$ZodString", (e, t) => {
-    (T.$ZodType.init(e, t),
-      (e._zod.pattern = t.pattern ?? It.anyString),
-      (e._zod.parse = (n, o) => {
-        if (t.coerce)
-          try {
-            n.value = String(n.value);
-          } catch (error) {}
-        if (typeof n.value === "string") return n;
-        return (n.issues.push({ expected: "string", code: "invalid_type", input: n.value, inst: e }), n);
-      }));
+  cjsExports.$ZodString = core.$constructor("$ZodString", (inst, def) => {
+    cjsExports.$ZodType.init(inst, def);
+    inst._zod.pattern = def.pattern ?? regexes.anyString;
+    inst._zod.parse = (payload, _) => {
+      if (def.coerce)
+        try {
+          payload.value = String(payload.value);
+        } catch (_) {}
+      if (typeof payload.value === "string") return payload;
+      payload.issues.push({
+        expected: "string",
+        code: "invalid_type",
+        input: payload.value,
+        inst,
+      });
+      return payload;
+    };
   });
-  T.$ZodStringFormat = se.$constructor("$ZodStringFormat", (e, t) => {
-    (qu.$ZodCheckStringFormat.init(e, t), T.$ZodString.init(e, t));
+  cjsExports.$ZodStringFormat = core.$constructor("$ZodStringFormat", (inst, def) => {
+    checks.$ZodCheckStringFormat.init(inst, def);
+    cjsExports.$ZodString.init(inst, def);
   });
-  T.$ZodGUID = se.$constructor("$ZodGUID", (e, t) => {
-    (t.pattern ?? (t.pattern = It.guid), T.$ZodStringFormat.init(e, t));
+  cjsExports.$ZodGUID = core.$constructor("$ZodGUID", (inst, def) => {
+    def.pattern ?? (def.pattern = regexes.guid);
+    cjsExports.$ZodStringFormat.init(inst, def);
   });
-  T.$ZodUUID = se.$constructor("$ZodUUID", (e, t) => {
-    if (t.version) {
-      let o = { v1: 1, v2: 2, v3: 3, v4: 4, v5: 5, v6: 6, v7: 7, v8: 8 }[t.version];
-      if (o === void 0) throw Error(`Invalid UUID version: "${t.version}"`);
-      t.pattern ?? (t.pattern = It.uuid(o));
-    } else t.pattern ?? (t.pattern = It.uuid());
-    T.$ZodStringFormat.init(e, t);
+  cjsExports.$ZodUUID = core.$constructor("$ZodUUID", (inst, def) => {
+    if (def.version) {
+      let v = {
+        v1: 1,
+        v2: 2,
+        v3: 3,
+        v4: 4,
+        v5: 5,
+        v6: 6,
+        v7: 7,
+        v8: 8,
+      }[def.version];
+      if (v === undefined) throw Error(`Invalid UUID version: "${def.version}"`);
+      def.pattern ?? (def.pattern = regexes.uuid(v));
+    } else def.pattern ?? (def.pattern = regexes.uuid());
+    cjsExports.$ZodStringFormat.init(inst, def);
   });
-  T.$ZodEmail = se.$constructor("$ZodEmail", (e, t) => {
-    (t.pattern ?? (t.pattern = It.email), T.$ZodStringFormat.init(e, t));
+  cjsExports.$ZodEmail = core.$constructor("$ZodEmail", (inst, def) => {
+    def.pattern ?? (def.pattern = regexes.email);
+    cjsExports.$ZodStringFormat.init(inst, def);
   });
-  T.URL_BAD_FORMAT = 1;
-  T.URL_UNPARSEABLE = 2;
-  function xP(e, t) {
-    if (!t.normalize && t.protocol?.source === It.httpProtocol.source && !/^https?:\/\//i.test(e))
-      return T.URL_BAD_FORMAT;
+  cjsExports.URL_BAD_FORMAT = 1;
+  cjsExports.URL_UNPARSEABLE = 2;
+  function parseURLObject(trimmed, def) {
+    if (
+      !def.normalize &&
+      def.protocol?.source === regexes.httpProtocol.source &&
+      !/^https?:\/\//i.test(trimmed)
+    )
+      return cjsExports.URL_BAD_FORMAT;
     try {
-      return new URL(e);
+      return new URL(trimmed);
     } catch {
-      return T.URL_UNPARSEABLE;
+      return cjsExports.URL_UNPARSEABLE;
     }
   }
-  var KZ = /[\t\n\r]/g;
-  function LP(e) {
-    return e.replace(KZ, "");
+  var asciiTabOrNewline = /[\t\n\r]/g;
+  function stripTabAndNewline(value) {
+    return value.replace(asciiTabOrNewline, "");
   }
-  function NP(e, t) {
-    return ((t.lastIndex = 0), t.test(e.hostname));
+  function urlHostnameOk(url, hostname) {
+    hostname.lastIndex = 0;
+    return hostname.test(url.hostname);
   }
-  function UP(e, t) {
-    return ((t.lastIndex = 0), t.test(e.protocol.endsWith(":") ? e.protocol.slice(0, -1) : e.protocol));
+  function urlProtocolOk(url, protocol) {
+    protocol.lastIndex = 0;
+    return protocol.test(url.protocol.endsWith(":") ? url.protocol.slice(0, -1) : url.protocol);
   }
-  T.$ZodURL = se.$constructor("$ZodURL", (e, t) => {
-    (T.$ZodStringFormat.init(e, t),
-      (e._zod.check = (n) => {
-        try {
-          let trimmed = n.value.trim(),
-            r = xP(trimmed, t);
-          if (r === T.URL_BAD_FORMAT) {
-            n.issues.push({
-              code: "invalid_format",
-              format: "url",
-              note: "Invalid URL format",
-              input: n.value,
-              inst: e,
-              continue: !t.abort,
-            });
-            return;
-          }
-          if (r === T.URL_UNPARSEABLE) {
-            n.issues.push({
-              code: "invalid_format",
-              format: "url",
-              input: n.value,
-              inst: e,
-              continue: !t.abort,
-            });
-            return;
-          }
-          if (t.hostname && !NP(r, t.hostname))
-            n.issues.push({
-              code: "invalid_format",
-              format: "url",
-              note: "Invalid hostname",
-              pattern: t.hostname.source,
-              input: n.value,
-              inst: e,
-              continue: !t.abort,
-            });
-          if (t.protocol && !UP(r, t.protocol))
-            n.issues.push({
-              code: "invalid_format",
-              format: "url",
-              note: "Invalid protocol",
-              pattern: t.protocol.source,
-              input: n.value,
-              inst: e,
-              continue: !t.abort,
-            });
-          n.value = t.normalize ? r.href : LP(trimmed);
-          return;
-        } catch (error) {
-          n.issues.push({
+  cjsExports.$ZodURL = core.$constructor("$ZodURL", (inst, def) => {
+    cjsExports.$ZodStringFormat.init(inst, def);
+    inst._zod.check = (payload) => {
+      try {
+        let trimmed = payload.value.trim();
+        let url = parseURLObject(trimmed, def);
+        if (url === cjsExports.URL_BAD_FORMAT) {
+          payload.issues.push({
             code: "invalid_format",
             format: "url",
-            input: n.value,
-            inst: e,
-            continue: !t.abort,
+            note: "Invalid URL format",
+            input: payload.value,
+            inst,
+            continue: !def.abort,
           });
+          return;
         }
-      }));
-  });
-  T.$ZodEmoji = se.$constructor("$ZodEmoji", (e, t) => {
-    (t.pattern ?? (t.pattern = It.emoji()), T.$ZodStringFormat.init(e, t));
-  });
-  T.$ZodNanoID = se.$constructor("$ZodNanoID", (e, t) => {
-    if (t.length !== void 0 && (!Number.isInteger(t.length) || t.length < 1))
-      throw Error(`Invalid nanoid length: ${t.length}`);
-    (t.pattern ?? (t.pattern = t.length === void 0 ? It.nanoid : It.nanoidOfLength(t.length)),
-      T.$ZodStringFormat.init(e, t));
-  });
-  T.$ZodCUID = se.$constructor("$ZodCUID", (e, t) => {
-    (t.pattern ?? (t.pattern = It.cuid), T.$ZodStringFormat.init(e, t));
-  });
-  T.$ZodCUID2 = se.$constructor("$ZodCUID2", (e, t) => {
-    (t.pattern ?? (t.pattern = It.cuid2), T.$ZodStringFormat.init(e, t));
-  });
-  T.$ZodULID = se.$constructor("$ZodULID", (e, t) => {
-    (t.pattern ?? (t.pattern = It.ulid), T.$ZodStringFormat.init(e, t));
-  });
-  T.$ZodXID = se.$constructor("$ZodXID", (e, t) => {
-    (t.pattern ?? (t.pattern = It.xid), T.$ZodStringFormat.init(e, t));
-  });
-  T.$ZodKSUID = se.$constructor("$ZodKSUID", (e, t) => {
-    (t.pattern ?? (t.pattern = It.ksuid), T.$ZodStringFormat.init(e, t));
-  });
-  T.$ZodISODateTime = se.$constructor("$ZodISODateTime", (e, t) => {
-    (t.pattern ?? (t.pattern = It.datetime(t)), T.$ZodStringFormat.init(e, t));
-  });
-  T.$ZodISODate = se.$constructor("$ZodISODate", (e, t) => {
-    (t.pattern ?? (t.pattern = It.date), T.$ZodStringFormat.init(e, t));
-  });
-  T.$ZodISOTime = se.$constructor("$ZodISOTime", (e, t) => {
-    (t.pattern ?? (t.pattern = It.time(t)), T.$ZodStringFormat.init(e, t));
-  });
-  T.$ZodISODuration = se.$constructor("$ZodISODuration", (e, t) => {
-    (t.pattern ?? (t.pattern = It.duration), T.$ZodStringFormat.init(e, t));
-  });
-  T.$ZodIPv4 = se.$constructor("$ZodIPv4", (e, t) => {
-    (t.pattern ?? (t.pattern = It.ipv4), T.$ZodStringFormat.init(e, t));
-  });
-  var ZZ = /^[0-9a-fA-F:.]+$/;
-  function x_(e) {
-    if (!ZZ.test(e)) return !1;
-    try {
-      return (new URL(`http://[${e}]`), !0);
-    } catch {
-      return !1;
-    }
-  }
-  T.$ZodIPv6 = se.$constructor("$ZodIPv6", (e, t) => {
-    (t.pattern ?? (t.pattern = It.ipv6),
-      T.$ZodStringFormat.init(e, t),
-      (e._zod.check = (n) => {
-        if (!x_(n.value))
-          n.issues.push({
+        if (url === cjsExports.URL_UNPARSEABLE) {
+          payload.issues.push({
             code: "invalid_format",
-            format: "ipv6",
-            input: n.value,
-            inst: e,
-            continue: !t.abort,
+            format: "url",
+            input: payload.value,
+            inst,
+            continue: !def.abort,
           });
-      }));
-  });
-  T.$ZodMAC = se.$constructor("$ZodMAC", (e, t) => {
-    (t.pattern ?? (t.pattern = It.mac(t.delimiter)), T.$ZodStringFormat.init(e, t));
-  });
-  T.$ZodCIDRv4 = se.$constructor("$ZodCIDRv4", (e, t) => {
-    (t.pattern ?? (t.pattern = It.cidrv4), T.$ZodStringFormat.init(e, t));
-  });
-  function zP(e) {
-    let parts = e.split("/");
-    if (parts.length !== 2) return !1;
-    let [n, o] = parts;
-    if (!o) return !1;
-    let r = Number(o);
-    if (`${r}` !== o) return !1;
-    if (r < 0 || r > 128) return !1;
-    return x_(n);
-  }
-  T.$ZodCIDRv6 = se.$constructor("$ZodCIDRv6", (e, t) => {
-    (t.pattern ?? (t.pattern = It.cidrv6),
-      T.$ZodStringFormat.init(e, t),
-      (e._zod.check = (n) => {
-        if (!zP(n.value))
-          n.issues.push({
-            code: "invalid_format",
-            format: "cidrv6",
-            input: n.value,
-            inst: e,
-            continue: !t.abort,
-          });
-      }));
-  });
-  function L_(e) {
-    if (e === "") return !0;
-    if (/\s/.test(e)) return !1;
-    if (e.length % 4 !== 0) return !1;
-    try {
-      return (atob(e), !0);
-    } catch {
-      return !1;
-    }
-  }
-  T.base64Charset = /^[0-9a-zA-Z+/]*={0,2}$/;
-  T.$ZodBase64 = se.$constructor("$ZodBase64", (e, t) => {
-    (t.pattern ?? (t.pattern = T.base64Charset),
-      T.$ZodStringFormat.init(e, t),
-      (e._zod.check = (n) => {
-        if (L_(n.value)) return;
-        n.issues.push({
-          code: "invalid_format",
-          format: "base64",
-          input: n.value,
-          inst: e,
-          continue: !t.abort,
-        });
-      }));
-  });
-  T.base64urlCharset = /^[A-Za-z0-9_-]*$/;
-  function FP(e) {
-    if (!T.base64urlCharset.test(e)) return !1;
-    let replaced = e.replace(/[-_]/g, (o) => (o === "-" ? "+" : "/")),
-      padded = replaced.padEnd(Math.ceil(replaced.length / 4) * 4, "=");
-    return L_(padded);
-  }
-  T.$ZodBase64URL = se.$constructor("$ZodBase64URL", (e, t) => {
-    (t.pattern ?? (t.pattern = T.base64urlCharset),
-      T.$ZodStringFormat.init(e, t),
-      (e._zod.check = (n) => {
-        if (FP(n.value)) return;
-        n.issues.push({
-          code: "invalid_format",
-          format: "base64url",
-          input: n.value,
-          inst: e,
-          continue: !t.abort,
-        });
-      }));
-  });
-  T.$ZodE164 = se.$constructor("$ZodE164", (e, t) => {
-    (t.pattern ?? (t.pattern = It.e164), T.$ZodStringFormat.init(e, t));
-  });
-  var VZ = /[- ]/g;
-  function qZ(e) {
-    let t = e.length,
-      n = 1,
-      o = 0;
-    while (t) {
-      let r = e.charCodeAt(--t) - 48;
-      ((n ^= 1), (o += n ? [0, 2, 4, 6, 8, 1, 3, 5, 7, 9][r] : r));
-    }
-    return o % 10 === 0;
-  }
-  function BP(e) {
-    if (!It.creditCard.test(e)) return !1;
-    return qZ(e.replace(VZ, ""));
-  }
-  T.$ZodCreditCard = se.$constructor("$ZodCreditCard", (e, t) => {
-    (t.pattern ?? (t.pattern = It.creditCard),
-      T.$ZodStringFormat.init(e, t),
-      (e._zod.check = (n) => {
-        if (BP(n.value)) return;
-        n.issues.push({
-          code: "invalid_format",
-          format: "credit_card",
-          input: n.value,
-          inst: e,
-          continue: !t.abort,
-        });
-      }));
-  });
-  function GZ(e) {
-    let t = 0,
-      n = e.length;
-    for (let o = 4; o < n; o++) {
-      let code = e.charCodeAt(o);
-      t = (code >= 65 ? t * 100 + (code - 55) : t * 10 + (code - 48)) % 97;
-    }
-    for (let o = 0; o < 4; o++) {
-      let code = e.charCodeAt(o);
-      t = (code >= 65 ? t * 100 + (code - 55) : t * 10 + (code - 48)) % 97;
-    }
-    return t === 1;
-  }
-  function HP(e) {
-    if (!It.iban.test(e)) return !1;
-    return GZ(e);
-  }
-  T.$ZodIBAN = se.$constructor("$ZodIBAN", (e, t) => {
-    (t.pattern ?? (t.pattern = It.iban),
-      T.$ZodStringFormat.init(e, t),
-      (e._zod.check = (n) => {
-        if (HP(n.value)) return;
-        n.issues.push({
-          code: "invalid_format",
-          format: "iban",
-          input: n.value,
-          inst: e,
-          continue: !t.abort,
-        });
-      }));
-  });
-  function KP(e, t = null) {
-    try {
-      let parts = e.split(".");
-      if (parts.length !== 3) return !1;
-      let [o] = parts;
-      if (!o) return !1;
-      let parsed = JSON.parse(atob(o));
-      if ("typ" in parsed && parsed?.typ !== "JWT") return !1;
-      if (!parsed.alg) return !1;
-      if (t && (!("alg" in parsed) || parsed.alg !== t)) return !1;
-      return !0;
-    } catch {
-      return !1;
-    }
-  }
-  T.$ZodJWT = se.$constructor("$ZodJWT", (e, t) => {
-    (T.$ZodStringFormat.init(e, t),
-      (e._zod.check = (n) => {
-        if (KP(n.value, t.alg)) return;
-        n.issues.push({ code: "invalid_format", format: "jwt", input: n.value, inst: e, continue: !t.abort });
-      }));
-  });
-  T.$ZodCustomStringFormat = se.$constructor("$ZodCustomStringFormat", (e, t) => {
-    (T.$ZodStringFormat.init(e, t),
-      (e._zod.check = (n) => {
-        if (t.fn(n.value)) return;
-        n.issues.push({
-          code: "invalid_format",
-          format: t.format,
-          input: n.value,
-          inst: e,
-          continue: !t.abort,
-        });
-      }));
-  });
-  T.$ZodNumber = se.$constructor("$ZodNumber", (e, t) => {
-    (T.$ZodType.init(e, t),
-      (e._zod.pattern = It.number),
-      (e._zod.parse = (n, o) => {
-        if (t.coerce)
-          try {
-            n.value = Number(n.value);
-          } catch (error) {}
-        let r = n.value;
-        if (typeof r === "number" && !Number.isNaN(r) && Number.isFinite(r)) return n;
-        let s =
-          typeof r === "number"
-            ? Number.isNaN(r)
-              ? "NaN"
-              : !Number.isFinite(r)
-                ? String(r)
-                : void 0
-            : void 0;
-        return (
-          n.issues.push({
-            expected: "number",
-            code: "invalid_type",
-            input: r,
-            inst: e,
-            ...(s ? { received: s } : {}),
-          }),
-          n
-        );
-      }));
-  });
-  T.$ZodNumberFormat = se.$constructor("$ZodNumberFormat", (e, t) => {
-    (qu.$ZodCheckNumberFormat.init(e, t), T.$ZodNumber.init(e, t));
-  });
-  T.$ZodBoolean = se.$constructor("$ZodBoolean", (e, t) => {
-    (T.$ZodType.init(e, t),
-      (e._zod.pattern = It.boolean),
-      (e._zod.parse = (n, o) => {
-        if (t.coerce)
-          try {
-            n.value = Boolean(n.value);
-          } catch (error) {}
-        let r = n.value;
-        if (typeof r === "boolean") return n;
-        return (n.issues.push({ expected: "boolean", code: "invalid_type", input: r, inst: e }), n);
-      }));
-  });
-  T.$ZodBigInt = se.$constructor("$ZodBigInt", (e, t) => {
-    (T.$ZodType.init(e, t),
-      (e._zod.pattern = It.bigint),
-      (e._zod.parse = (n, o) => {
-        if (t.coerce)
-          try {
-            n.value = BigInt(n.value);
-          } catch (error) {}
-        if (typeof n.value === "bigint") return n;
-        return (n.issues.push({ expected: "bigint", code: "invalid_type", input: n.value, inst: e }), n);
-      }));
-  });
-  T.$ZodBigIntFormat = se.$constructor("$ZodBigIntFormat", (e, t) => {
-    (qu.$ZodCheckBigIntFormat.init(e, t), T.$ZodBigInt.init(e, t));
-  });
-  T.$ZodSymbol = se.$constructor("$ZodSymbol", (e, t) => {
-    (T.$ZodType.init(e, t),
-      (e._zod.parse = (n, o) => {
-        let r = n.value;
-        if (typeof r === "symbol") return n;
-        return (n.issues.push({ expected: "symbol", code: "invalid_type", input: r, inst: e }), n);
-      }));
-  });
-  T.$ZodUndefined = se.$constructor("$ZodUndefined", (e, t) => {
-    (T.$ZodType.init(e, t),
-      (e._zod.pattern = It.undefined),
-      (e._zod.values = new Set([void 0])),
-      (e._zod.parse = (n, o) => {
-        let r = n.value;
-        if (typeof r > "u") return n;
-        return (n.issues.push({ expected: "undefined", code: "invalid_type", input: r, inst: e }), n);
-      }));
-  });
-  T.$ZodNull = se.$constructor("$ZodNull", (e, t) => {
-    (T.$ZodType.init(e, t),
-      (e._zod.pattern = It.null),
-      (e._zod.values = new Set([null])),
-      (e._zod.parse = (n, o) => {
-        let r = n.value;
-        if (r === null) return n;
-        return (n.issues.push({ expected: "null", code: "invalid_type", input: r, inst: e }), n);
-      }));
-  });
-  T.$ZodAny = se.$constructor("$ZodAny", (e, t) => {
-    (T.$ZodType.init(e, t), (e._zod.parse = (n) => n));
-  });
-  T.$ZodUnknown = se.$constructor("$ZodUnknown", (e, t) => {
-    (T.$ZodType.init(e, t), (e._zod.parse = (n) => n));
-  });
-  T.$ZodNever = se.$constructor("$ZodNever", (e, t) => {
-    (T.$ZodType.init(e, t),
-      (e._zod.parse = (n, o) => (
-        n.issues.push({ expected: "never", code: "invalid_type", input: n.value, inst: e }),
-        n
-      )));
-  });
-  T.$ZodVoid = se.$constructor("$ZodVoid", (e, t) => {
-    (T.$ZodType.init(e, t),
-      (e._zod.parse = (n, o) => {
-        let r = n.value;
-        if (typeof r > "u") return n;
-        return (n.issues.push({ expected: "void", code: "invalid_type", input: r, inst: e }), n);
-      }));
-  });
-  T.$ZodDate = se.$constructor("$ZodDate", (e, t) => {
-    (T.$ZodType.init(e, t),
-      (e._zod.parse = (n, o) => {
-        if (t.coerce)
-          try {
-            n.value = new Date(n.value);
-          } catch (error) {}
-        let r = n.value,
-          s = r instanceof Date;
-        if (s && !Number.isNaN(r.getTime())) return n;
-        return (
-          n.issues.push({
-            expected: "date",
-            code: "invalid_type",
-            input: r,
-            ...(s ? { received: "Invalid Date" } : {}),
-            inst: e,
-          }),
-          n
-        );
-      }));
-  });
-  function gP(e, t, n) {
-    if (e.issues.length) t.issues.push(...ee.prefixIssues(n, e.issues));
-    t.value[n] = e.value;
-  }
-  T.$ZodArray = se.$constructor("$ZodArray", (e, t) => {
-    T.$ZodType.init(e, t);
-    let memoizer = se.globalConfig.memoizer;
-    (memoizer?.attach(e),
-      (e._zod.parse = (o, r) => {
-        let s = o.value;
-        if (!Array.isArray(s))
-          return (o.issues.push({ expected: "array", code: "invalid_type", input: s, inst: e }), o);
-        o.value = memoizer ? memoizer.alloc(e, o, Array(s.length), r) : Array(s.length);
-        let a = [],
-          l = r?.abortEarly;
-        for (let c = 0; c < s.length; c++) {
-          let u = s[c],
-            run = t.element._zod.run({ value: u, issues: [] }, r);
-          if (run instanceof Promise) a.push(run.then((h) => gP(h, o, c)));
-          else if ((gP(run, o, c), l && run.issues.length !== 0 && ee.aborted(run))) break;
+          return;
         }
-        if (a.length) return Promise.all(a).then(() => o);
-        return o;
-      }));
+        if (def.hostname && !urlHostnameOk(url, def.hostname))
+          payload.issues.push({
+            code: "invalid_format",
+            format: "url",
+            note: "Invalid hostname",
+            pattern: def.hostname.source,
+            input: payload.value,
+            inst,
+            continue: !def.abort,
+          });
+        if (def.protocol && !urlProtocolOk(url, def.protocol))
+          payload.issues.push({
+            code: "invalid_format",
+            format: "url",
+            note: "Invalid protocol",
+            pattern: def.protocol.source,
+            input: payload.value,
+            inst,
+            continue: !def.abort,
+          });
+        payload.value = def.normalize ? url.href : stripTabAndNewline(trimmed);
+        return;
+      } catch (_) {
+        payload.issues.push({
+          code: "invalid_format",
+          format: "url",
+          input: payload.value,
+          inst,
+          continue: !def.abort,
+        });
+      }
+    };
   });
-  function op(e, t, n, o, r, s) {
-    let a = n in o,
-      l = s === "optional";
-    if (!a && l && r === "optional") return;
-    if (e.issues.length) {
-      if (r !== void 0 && l && !a) return;
-      t.issues.push(...ee.prefixIssues(n, e.issues));
+  cjsExports.$ZodEmoji = core.$constructor("$ZodEmoji", (inst, def) => {
+    def.pattern ?? (def.pattern = regexes.emoji());
+    cjsExports.$ZodStringFormat.init(inst, def);
+  });
+  cjsExports.$ZodNanoID = core.$constructor("$ZodNanoID", (inst, def) => {
+    if (def.length !== undefined && (!Number.isInteger(def.length) || def.length < 1))
+      throw Error(`Invalid nanoid length: ${def.length}`);
+    def.pattern ??
+      (def.pattern = def.length === undefined ? regexes.nanoid : regexes.nanoidOfLength(def.length));
+    cjsExports.$ZodStringFormat.init(inst, def);
+  });
+  cjsExports.$ZodCUID = core.$constructor("$ZodCUID", (inst, def) => {
+    def.pattern ?? (def.pattern = regexes.cuid);
+    cjsExports.$ZodStringFormat.init(inst, def);
+  });
+  cjsExports.$ZodCUID2 = core.$constructor("$ZodCUID2", (inst, def) => {
+    def.pattern ?? (def.pattern = regexes.cuid2);
+    cjsExports.$ZodStringFormat.init(inst, def);
+  });
+  cjsExports.$ZodULID = core.$constructor("$ZodULID", (inst, def) => {
+    def.pattern ?? (def.pattern = regexes.ulid);
+    cjsExports.$ZodStringFormat.init(inst, def);
+  });
+  cjsExports.$ZodXID = core.$constructor("$ZodXID", (inst, def) => {
+    def.pattern ?? (def.pattern = regexes.xid);
+    cjsExports.$ZodStringFormat.init(inst, def);
+  });
+  cjsExports.$ZodKSUID = core.$constructor("$ZodKSUID", (inst, def) => {
+    def.pattern ?? (def.pattern = regexes.ksuid);
+    cjsExports.$ZodStringFormat.init(inst, def);
+  });
+  cjsExports.$ZodISODateTime = core.$constructor("$ZodISODateTime", (inst, def) => {
+    def.pattern ?? (def.pattern = regexes.datetime(def));
+    cjsExports.$ZodStringFormat.init(inst, def);
+  });
+  cjsExports.$ZodISODate = core.$constructor("$ZodISODate", (inst, def) => {
+    def.pattern ?? (def.pattern = regexes.date);
+    cjsExports.$ZodStringFormat.init(inst, def);
+  });
+  cjsExports.$ZodISOTime = core.$constructor("$ZodISOTime", (inst, def) => {
+    def.pattern ?? (def.pattern = regexes.time(def));
+    cjsExports.$ZodStringFormat.init(inst, def);
+  });
+  cjsExports.$ZodISODuration = core.$constructor("$ZodISODuration", (inst, def) => {
+    def.pattern ?? (def.pattern = regexes.duration);
+    cjsExports.$ZodStringFormat.init(inst, def);
+  });
+  cjsExports.$ZodIPv4 = core.$constructor("$ZodIPv4", (inst, def) => {
+    def.pattern ?? (def.pattern = regexes.ipv4);
+    cjsExports.$ZodStringFormat.init(inst, def);
+  });
+  var ipv6Alphabet = /^[0-9a-fA-F:.]+$/;
+  function isValidIPv6(value) {
+    if (!ipv6Alphabet.test(value)) return false;
+    try {
+      new URL(`http://[${value}]`);
+      return true;
+    } catch {
+      return false;
     }
-    if (!a && r === void 0) {
-      if (!e.issues.length)
-        t.issues.push({ code: "invalid_type", expected: "nonoptional", input: void 0, path: [n] });
+  }
+  cjsExports.$ZodIPv6 = core.$constructor("$ZodIPv6", (inst, def) => {
+    def.pattern ?? (def.pattern = regexes.ipv6);
+    cjsExports.$ZodStringFormat.init(inst, def);
+    inst._zod.check = (payload) => {
+      if (!isValidIPv6(payload.value))
+        payload.issues.push({
+          code: "invalid_format",
+          format: "ipv6",
+          input: payload.value,
+          inst,
+          continue: !def.abort,
+        });
+    };
+  });
+  cjsExports.$ZodMAC = core.$constructor("$ZodMAC", (inst, def) => {
+    def.pattern ?? (def.pattern = regexes.mac(def.delimiter));
+    cjsExports.$ZodStringFormat.init(inst, def);
+  });
+  cjsExports.$ZodCIDRv4 = core.$constructor("$ZodCIDRv4", (inst, def) => {
+    def.pattern ?? (def.pattern = regexes.cidrv4);
+    cjsExports.$ZodStringFormat.init(inst, def);
+  });
+  function isValidCIDRv6(value) {
+    let parts = value.split("/");
+    if (parts.length !== 2) return false;
+    let [address, prefix] = parts;
+    if (!prefix) return false;
+    let prefixNum = Number(prefix);
+    if (`${prefixNum}` !== prefix) return false;
+    if (prefixNum < 0 || prefixNum > 128) return false;
+    return isValidIPv6(address);
+  }
+  cjsExports.$ZodCIDRv6 = core.$constructor("$ZodCIDRv6", (inst, def) => {
+    def.pattern ?? (def.pattern = regexes.cidrv6);
+    cjsExports.$ZodStringFormat.init(inst, def);
+    inst._zod.check = (payload) => {
+      if (!isValidCIDRv6(payload.value))
+        payload.issues.push({
+          code: "invalid_format",
+          format: "cidrv6",
+          input: payload.value,
+          inst,
+          continue: !def.abort,
+        });
+    };
+  });
+  function isValidBase64(data) {
+    if (data === "") return true;
+    if (/\s/.test(data)) return false;
+    if (data.length % 4 !== 0) return false;
+    try {
+      atob(data);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  cjsExports.base64Charset = /^[0-9a-zA-Z+/]*={0,2}$/;
+  cjsExports.$ZodBase64 = core.$constructor("$ZodBase64", (inst, def) => {
+    def.pattern ?? (def.pattern = cjsExports.base64Charset);
+    cjsExports.$ZodStringFormat.init(inst, def);
+    inst._zod.check = (payload) => {
+      if (isValidBase64(payload.value)) return;
+      payload.issues.push({
+        code: "invalid_format",
+        format: "base64",
+        input: payload.value,
+        inst,
+        continue: !def.abort,
+      });
+    };
+  });
+  cjsExports.base64urlCharset = /^[A-Za-z0-9_-]*$/;
+  function isValidBase64URL(data) {
+    if (!cjsExports.base64urlCharset.test(data)) return false;
+    let base64 = data.replace(/[-_]/g, (c) => (c === "-" ? "+" : "/"));
+    let padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, "=");
+    return isValidBase64(padded);
+  }
+  cjsExports.$ZodBase64URL = core.$constructor("$ZodBase64URL", (inst, def) => {
+    def.pattern ?? (def.pattern = cjsExports.base64urlCharset);
+    cjsExports.$ZodStringFormat.init(inst, def);
+    inst._zod.check = (payload) => {
+      if (isValidBase64URL(payload.value)) return;
+      payload.issues.push({
+        code: "invalid_format",
+        format: "base64url",
+        input: payload.value,
+        inst,
+        continue: !def.abort,
+      });
+    };
+  });
+  cjsExports.$ZodE164 = core.$constructor("$ZodE164", (inst, def) => {
+    def.pattern ?? (def.pattern = regexes.e164);
+    cjsExports.$ZodStringFormat.init(inst, def);
+  });
+  var CC_SANITIZE = /[- ]/g;
+  function isLuhnAlgo(digits) {
+    let length = digits.length;
+    let bit = 1;
+    let sum = 0;
+    while (length) {
+      let value = digits.charCodeAt(--length) - 48;
+      bit ^= 1;
+      sum += bit ? [0, 2, 4, 6, 8, 1, 3, 5, 7, 9][value] : value;
+    }
+    return sum % 10 === 0;
+  }
+  function isValidCreditCard(input) {
+    if (!regexes.creditCard.test(input)) return false;
+    return isLuhnAlgo(input.replace(CC_SANITIZE, ""));
+  }
+  cjsExports.$ZodCreditCard = core.$constructor("$ZodCreditCard", (inst, def) => {
+    def.pattern ?? (def.pattern = regexes.creditCard);
+    cjsExports.$ZodStringFormat.init(inst, def);
+    inst._zod.check = (payload) => {
+      if (isValidCreditCard(payload.value)) return;
+      payload.issues.push({
+        code: "invalid_format",
+        format: "credit_card",
+        input: payload.value,
+        inst,
+        continue: !def.abort,
+      });
+    };
+  });
+  function isIso7064Mod97(iban) {
+    let remainder = 0;
+    let len = iban.length;
+    for (let i = 4; i < len; i++) {
+      let code = iban.charCodeAt(i);
+      remainder = (code >= 65 ? remainder * 100 + (code - 55) : remainder * 10 + (code - 48)) % 97;
+    }
+    for (let i = 0; i < 4; i++) {
+      let code = iban.charCodeAt(i);
+      remainder = (code >= 65 ? remainder * 100 + (code - 55) : remainder * 10 + (code - 48)) % 97;
+    }
+    return remainder === 1;
+  }
+  function isValidIBAN(input) {
+    if (!regexes.iban.test(input)) return false;
+    return isIso7064Mod97(input);
+  }
+  cjsExports.$ZodIBAN = core.$constructor("$ZodIBAN", (inst, def) => {
+    def.pattern ?? (def.pattern = regexes.iban);
+    cjsExports.$ZodStringFormat.init(inst, def);
+    inst._zod.check = (payload) => {
+      if (isValidIBAN(payload.value)) return;
+      payload.issues.push({
+        code: "invalid_format",
+        format: "iban",
+        input: payload.value,
+        inst,
+        continue: !def.abort,
+      });
+    };
+  });
+  function isValidJWT(token, algorithm = null) {
+    try {
+      let tokensParts = token.split(".");
+      if (tokensParts.length !== 3) return false;
+      let [header] = tokensParts;
+      if (!header) return false;
+      let parsedHeader = JSON.parse(atob(header));
+      if ("typ" in parsedHeader && parsedHeader?.typ !== "JWT") return false;
+      if (!parsedHeader.alg) return false;
+      if (algorithm && (!("alg" in parsedHeader) || parsedHeader.alg !== algorithm)) return false;
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  cjsExports.$ZodJWT = core.$constructor("$ZodJWT", (inst, def) => {
+    cjsExports.$ZodStringFormat.init(inst, def);
+    inst._zod.check = (payload) => {
+      if (isValidJWT(payload.value, def.alg)) return;
+      payload.issues.push({
+        code: "invalid_format",
+        format: "jwt",
+        input: payload.value,
+        inst,
+        continue: !def.abort,
+      });
+    };
+  });
+  cjsExports.$ZodCustomStringFormat = core.$constructor("$ZodCustomStringFormat", (inst, def) => {
+    cjsExports.$ZodStringFormat.init(inst, def);
+    inst._zod.check = (payload) => {
+      if (def.fn(payload.value)) return;
+      payload.issues.push({
+        code: "invalid_format",
+        format: def.format,
+        input: payload.value,
+        inst,
+        continue: !def.abort,
+      });
+    };
+  });
+  cjsExports.$ZodNumber = core.$constructor("$ZodNumber", (inst, def) => {
+    cjsExports.$ZodType.init(inst, def);
+    inst._zod.pattern = regexes.number;
+    inst._zod.parse = (payload, _ctx) => {
+      if (def.coerce)
+        try {
+          payload.value = Number(payload.value);
+        } catch (_) {}
+      let input = payload.value;
+      if (typeof input === "number" && !Number.isNaN(input) && Number.isFinite(input)) return payload;
+      let received =
+        typeof input === "number"
+          ? Number.isNaN(input)
+            ? "NaN"
+            : !Number.isFinite(input)
+              ? String(input)
+              : undefined
+          : undefined;
+      payload.issues.push({
+        expected: "number",
+        code: "invalid_type",
+        input,
+        inst,
+        ...(received
+          ? {
+              received,
+            }
+          : {}),
+      });
+      return payload;
+    };
+  });
+  cjsExports.$ZodNumberFormat = core.$constructor("$ZodNumberFormat", (inst, def) => {
+    checks.$ZodCheckNumberFormat.init(inst, def);
+    cjsExports.$ZodNumber.init(inst, def);
+  });
+  cjsExports.$ZodBoolean = core.$constructor("$ZodBoolean", (inst, def) => {
+    cjsExports.$ZodType.init(inst, def);
+    inst._zod.pattern = regexes.boolean;
+    inst._zod.parse = (payload, _ctx) => {
+      if (def.coerce)
+        try {
+          payload.value = Boolean(payload.value);
+        } catch (_) {}
+      let input = payload.value;
+      if (typeof input === "boolean") return payload;
+      payload.issues.push({
+        expected: "boolean",
+        code: "invalid_type",
+        input,
+        inst,
+      });
+      return payload;
+    };
+  });
+  cjsExports.$ZodBigInt = core.$constructor("$ZodBigInt", (inst, def) => {
+    cjsExports.$ZodType.init(inst, def);
+    inst._zod.pattern = regexes.bigint;
+    inst._zod.parse = (payload, _ctx) => {
+      if (def.coerce)
+        try {
+          payload.value = BigInt(payload.value);
+        } catch (_) {}
+      if (typeof payload.value === "bigint") return payload;
+      payload.issues.push({
+        expected: "bigint",
+        code: "invalid_type",
+        input: payload.value,
+        inst,
+      });
+      return payload;
+    };
+  });
+  cjsExports.$ZodBigIntFormat = core.$constructor("$ZodBigIntFormat", (inst, def) => {
+    checks.$ZodCheckBigIntFormat.init(inst, def);
+    cjsExports.$ZodBigInt.init(inst, def);
+  });
+  cjsExports.$ZodSymbol = core.$constructor("$ZodSymbol", (inst, def) => {
+    cjsExports.$ZodType.init(inst, def);
+    inst._zod.parse = (payload, _ctx) => {
+      let input = payload.value;
+      if (typeof input === "symbol") return payload;
+      payload.issues.push({
+        expected: "symbol",
+        code: "invalid_type",
+        input,
+        inst,
+      });
+      return payload;
+    };
+  });
+  cjsExports.$ZodUndefined = core.$constructor("$ZodUndefined", (inst, def) => {
+    cjsExports.$ZodType.init(inst, def);
+    inst._zod.pattern = regexes.undefined;
+    inst._zod.values = new Set([undefined]);
+    inst._zod.parse = (payload, _ctx) => {
+      let input = payload.value;
+      if (typeof input === "undefined") return payload;
+      payload.issues.push({
+        expected: "undefined",
+        code: "invalid_type",
+        input,
+        inst,
+      });
+      return payload;
+    };
+  });
+  cjsExports.$ZodNull = core.$constructor("$ZodNull", (inst, def) => {
+    cjsExports.$ZodType.init(inst, def);
+    inst._zod.pattern = regexes.null;
+    inst._zod.values = new Set([null]);
+    inst._zod.parse = (payload, _ctx) => {
+      let input = payload.value;
+      if (input === null) return payload;
+      payload.issues.push({
+        expected: "null",
+        code: "invalid_type",
+        input,
+        inst,
+      });
+      return payload;
+    };
+  });
+  cjsExports.$ZodAny = core.$constructor("$ZodAny", (inst, def) => {
+    cjsExports.$ZodType.init(inst, def);
+    inst._zod.parse = (payload) => payload;
+  });
+  cjsExports.$ZodUnknown = core.$constructor("$ZodUnknown", (inst, def) => {
+    cjsExports.$ZodType.init(inst, def);
+    inst._zod.parse = (payload) => payload;
+  });
+  cjsExports.$ZodNever = core.$constructor("$ZodNever", (inst, def) => {
+    cjsExports.$ZodType.init(inst, def);
+    inst._zod.parse = (payload, _ctx) => {
+      payload.issues.push({
+        expected: "never",
+        code: "invalid_type",
+        input: payload.value,
+        inst,
+      });
+      return payload;
+    };
+  });
+  cjsExports.$ZodVoid = core.$constructor("$ZodVoid", (inst, def) => {
+    cjsExports.$ZodType.init(inst, def);
+    inst._zod.parse = (payload, _ctx) => {
+      let input = payload.value;
+      if (typeof input === "undefined") return payload;
+      payload.issues.push({
+        expected: "void",
+        code: "invalid_type",
+        input,
+        inst,
+      });
+      return payload;
+    };
+  });
+  cjsExports.$ZodDate = core.$constructor("$ZodDate", (inst, def) => {
+    cjsExports.$ZodType.init(inst, def);
+    inst._zod.parse = (payload, _ctx) => {
+      if (def.coerce)
+        try {
+          payload.value = new Date(payload.value);
+        } catch (_err) {}
+      let input = payload.value;
+      let isDate = input instanceof Date;
+      if (isDate && !Number.isNaN(input.getTime())) return payload;
+      payload.issues.push({
+        expected: "date",
+        code: "invalid_type",
+        input,
+        ...(isDate
+          ? {
+              received: "Invalid Date",
+            }
+          : {}),
+        inst,
+      });
+      return payload;
+    };
+  });
+  function handleArrayResult(result, final, index) {
+    if (result.issues.length) final.issues.push(...util.prefixIssues(index, result.issues));
+    final.value[index] = result.value;
+  }
+  cjsExports.$ZodArray = core.$constructor("$ZodArray", (inst, def) => {
+    cjsExports.$ZodType.init(inst, def);
+    let memo = core.globalConfig.memoizer;
+    memo?.attach(inst);
+    inst._zod.parse = (payload, ctx) => {
+      let input = payload.value;
+      if (!Array.isArray(input)) {
+        payload.issues.push({
+          expected: "array",
+          code: "invalid_type",
+          input,
+          inst,
+        });
+        return payload;
+      }
+      payload.value = memo ? memo.alloc(inst, payload, Array(input.length), ctx) : Array(input.length);
+      let proms = [];
+      let abortEarly = ctx?.abortEarly;
+      for (let i = 0; i < input.length; i++) {
+        let item = input[i];
+        let result = def.element._zod.run(
+          {
+            value: item,
+            issues: [],
+          },
+          ctx,
+        );
+        if (result instanceof Promise)
+          proms.push(result.then((result) => handleArrayResult(result, payload, i)));
+        else {
+          handleArrayResult(result, payload, i);
+          if (abortEarly && result.issues.length !== 0 && util.aborted(result)) break;
+        }
+      }
+      if (proms.length) return Promise.all(proms).then(() => payload);
+      return payload;
+    };
+  });
+  function handlePropertyResult(result, final, key, input, optin, optout) {
+    let isPresent = key in input;
+    let isOptionalOut = optout === "optional";
+    if (!isPresent && isOptionalOut && optin === "optional") return;
+    if (result.issues.length) {
+      if (optin !== undefined && isOptionalOut && !isPresent) return;
+      final.issues.push(...util.prefixIssues(key, result.issues));
+    }
+    if (!isPresent && optin === undefined) {
+      if (!result.issues.length)
+        final.issues.push({
+          code: "invalid_type",
+          expected: "nonoptional",
+          input: undefined,
+          path: [key],
+        });
       return;
     }
-    if (e.value === void 0) {
-      if (a || (r === "defaulted" && !l)) t.value[n] = void 0;
-    } else t.value[n] = e.value;
+    if (result.value === undefined) {
+      if (isPresent || (optin === "defaulted" && !isOptionalOut)) final.value[key] = undefined;
+    } else final.value[key] = result.value;
   }
-  var WZ = [];
-  function ZP(e) {
-    let keys = Object.keys(e.shape),
-      ownPropertySymbols = Object.getOwnPropertySymbols(e.shape),
-      o = ownPropertySymbols.length ? ownPropertySymbols : WZ,
-      r = o.length ? [...keys, ...o] : keys;
-    for (let a of r)
-      if (!e.shape?.[a]?._zod?.traits?.has("$ZodType"))
-        throw Error(`Invalid element at key "${String(a)}": expected a Zod schema`);
-    let optionalKeys = ee.optionalKeys(e.shape);
+  var NO_SYMBOL_KEYS = [];
+  function normalizeDef(def) {
+    let keys = Object.keys(def.shape);
+    let ownSymbols = Object.getOwnPropertySymbols(def.shape);
+    let symbolKeys = ownSymbols.length ? ownSymbols : NO_SYMBOL_KEYS;
+    let allKeys = symbolKeys.length ? [...keys, ...symbolKeys] : keys;
+    for (let k of allKeys)
+      if (!def.shape?.[k]?._zod?.traits?.has("$ZodType"))
+        throw Error(`Invalid element at key "${String(k)}": expected a Zod schema`);
+    let okeys = util.optionalKeys(def.shape);
     return {
-      ...e,
-      allKeys: r,
-      symbolKeys: o,
+      ...def,
+      allKeys,
+      symbolKeys,
       keySet: new Set(keys),
       numKeys: keys.length,
-      optionalKeys: new Set(optionalKeys),
+      optionalKeys: new Set(okeys),
     };
   }
-  function VP(e, t, n, o, r, s, a) {
-    let l = [],
-      keySet = r.keySet,
-      _zod = r.catchall._zod,
-      f = _zod.def.type,
-      { optin: optin, optout: optout } = _zod,
-      y = 0;
-    for (let key in t) {
-      if (a && n.issues.length !== y) {
-        if (ee.aborted(n, y)) break;
-        y = n.issues.length;
+  function handleCatchall(proms, input, payload, ctx, def, inst, abortEarly) {
+    let unrecognized = [];
+    let keySet = def.keySet;
+    let _catchall = def.catchall._zod;
+    let t = _catchall.def.type;
+    let { optin, optout } = _catchall;
+    let seen = 0;
+    for (let key in input) {
+      if (abortEarly && payload.issues.length !== seen) {
+        if (util.aborted(payload, seen)) break;
+        seen = payload.issues.length;
       }
       if (keySet.has(key)) continue;
       if (key === "__proto__") {
-        if (f === "never") l.push(key);
+        if (t === "never") unrecognized.push(key);
         continue;
       }
-      if (f === "never") {
-        l.push(key);
+      if (t === "never") {
+        unrecognized.push(key);
         continue;
       }
-      let run = _zod.run({ value: t[key], issues: [] }, o);
-      if (run instanceof Promise) e.push(run.then((S) => op(S, n, key, t, optin, optout)));
-      else op(run, n, key, t, optin, optout);
+      let r = _catchall.run(
+        {
+          value: input[key],
+          issues: [],
+        },
+        ctx,
+      );
+      if (r instanceof Promise)
+        proms.push(r.then((r) => handlePropertyResult(r, payload, key, input, optin, optout)));
+      else handlePropertyResult(r, payload, key, input, optin, optout);
     }
-    if (l.length) n.issues.push({ code: "unrecognized_keys", keys: l, input: t, inst: s, continue: !0 });
-    if (!e.length) return n;
-    return Promise.all(e).then(() => n);
+    if (unrecognized.length)
+      payload.issues.push({
+        code: "unrecognized_keys",
+        keys: unrecognized,
+        input,
+        inst,
+        continue: true,
+      });
+    if (!proms.length) return payload;
+    return Promise.all(proms).then(() => payload);
   }
-  T.$ZodObject = se.$constructor("$ZodObject", (e, t) => {
-    T.$ZodType.init(e, t);
-    let ownPropertyDescriptor = Object.getOwnPropertyDescriptor(t, "shape"),
-      o = ownPropertyDescriptor?.get ? ownPropertyDescriptor.get.raw : (t.shape ?? {});
-    if (o) {
-      let u = () => {
-        let f = { ...o };
-        return (Object.defineProperty(t, "shape", { value: f }), (u.raw = f), f);
+  cjsExports.$ZodObject = core.$constructor("$ZodObject", (inst, def) => {
+    cjsExports.$ZodType.init(inst, def);
+    let desc = Object.getOwnPropertyDescriptor(def, "shape");
+    let sh = desc?.get ? desc.get.raw : (def.shape ?? {});
+    if (sh) {
+      let get = () => {
+        let newSh = {
+          ...sh,
+        };
+        Object.defineProperty(def, "shape", {
+          value: newSh,
+        });
+        get.raw = newSh;
+        return newSh;
       };
-      ((u.raw = o), Object.defineProperty(t, "shape", { get: u }));
+      get.raw = sh;
+      Object.defineProperty(def, "shape", {
+        get,
+      });
     }
-    let cached = ee.cached(() => ZP(t));
-    ee.defineLazyInternal(e, "propValues", (u) => {
-      let shape = u.def.shape,
-        h = {};
+    let _normalized = util.cached(() => normalizeDef(def));
+    util.defineLazyInternal(inst, "propValues", (zod) => {
+      let shape = zod.def.shape;
+      let propValues = {};
       for (let key in shape) {
-        let _zod = shape[key]._zod;
-        if (_zod.values) {
-          if (!Object.prototype.hasOwnProperty.call(h, key)) ee.assignProp(h, key, new Set());
-          for (let b of _zod.values) h[key].add(b);
-          if (_zod.optin !== void 0) h[key].add(void 0);
+        let field = shape[key]._zod;
+        if (field.values) {
+          if (!Object.prototype.hasOwnProperty.call(propValues, key))
+            util.assignProp(propValues, key, new Set());
+          for (let v of field.values) propValues[key].add(v);
+          if (field.optin !== undefined) propValues[key].add(undefined);
         }
       }
-      return h;
+      return propValues;
     });
-    let isObject = ee.isObject,
-      catchall = t.catchall,
-      l,
-      memoizer = se.globalConfig.memoizer;
-    (memoizer?.attach(e),
-      (e._zod.parse = (u, f) => {
-        l ?? (l = cached.value);
-        let h = u.value;
-        if (!isObject(h))
-          return (u.issues.push({ expected: "object", code: "invalid_type", input: h, inst: e }), u);
-        u.value = memoizer ? memoizer.alloc(e, u, {}, f) : {};
-        let m = [],
-          shape = l.shape,
-          b = f?.abortEarly,
-          w = u.issues.length;
-        for (let allKey of l.allKeys) {
-          if (b && u.issues.length !== w) {
-            if (ee.aborted(u, w)) break;
-            w = u.issues.length;
-          }
-          if (allKey === "__proto__") continue;
-          let j = shape[allKey],
-            optin = j._zod.optin,
-            optout = j._zod.optout,
-            run = j._zod.run({ value: h[allKey], issues: [] }, f);
-          if (run instanceof Promise) m.push(run.then((F) => op(F, u, allKey, h, optin, optout)));
-          else op(run, u, allKey, h, optin, optout);
+    let isObject = util.isObject;
+    let catchall = def.catchall;
+    let value;
+    let memo = core.globalConfig.memoizer;
+    memo?.attach(inst);
+    inst._zod.parse = (payload, ctx) => {
+      value ?? (value = _normalized.value);
+      let input = payload.value;
+      if (!isObject(input)) {
+        payload.issues.push({
+          expected: "object",
+          code: "invalid_type",
+          input,
+          inst,
+        });
+        return payload;
+      }
+      payload.value = memo ? memo.alloc(inst, payload, {}, ctx) : {};
+      let proms = [];
+      let shape = value.shape;
+      let abortEarly = ctx?.abortEarly;
+      let seen = payload.issues.length;
+      for (let key of value.allKeys) {
+        if (abortEarly && payload.issues.length !== seen) {
+          if (util.aborted(payload, seen)) break;
+          seen = payload.issues.length;
         }
-        if (!catchall) return m.length ? Promise.all(m).then(() => u) : u;
-        return VP(m, h, u, f, cached.value, e, b === !0);
-      }));
+        if (key === "__proto__") continue;
+        let el = shape[key];
+        let optin = el._zod.optin;
+        let optout = el._zod.optout;
+        let r = el._zod.run(
+          {
+            value: input[key],
+            issues: [],
+          },
+          ctx,
+        );
+        if (r instanceof Promise)
+          proms.push(r.then((r) => handlePropertyResult(r, payload, key, input, optin, optout)));
+        else handlePropertyResult(r, payload, key, input, optin, optout);
+      }
+      if (!catchall) return proms.length ? Promise.all(proms).then(() => payload) : payload;
+      return handleCatchall(proms, input, payload, ctx, _normalized.value, inst, abortEarly === true);
+    };
   });
-  T.$ZodObjectJIT = se.$constructor("$ZodObjectJIT", (e, t) => {
-    T.$ZodObject.init(e, t);
-    let parse = e._zod.parse,
-      cached = ee.cached(() => ZP(t)),
-      memoizer = se.globalConfig.memoizer,
-      s = (y) => {
-        let b = cached.value,
-          symbolKeys = b.symbolKeys,
-          S = new RP.Doc(["payload", "ctx"], { shape: y, inst: e, memo: memoizer, syms: symbolKeys }),
-          j = (F) => `shape[${F}]._zod.run({ value: input[${F}], issues: [] }, ctx)`,
-          M = (F, X) => `
-          let ${F}_ab = false;
-          for (let i = 0; i < ${F}.issues.length; i++) {
-            const iss = ${F}.issues[i];
-            iss.path = iss.path ? [${X}, ...iss.path] : [${X}];
+  cjsExports.$ZodObjectJIT = core.$constructor("$ZodObjectJIT", (inst, def) => {
+    cjsExports.$ZodObject.init(inst, def);
+    let superParse = inst._zod.parse;
+    let _normalized = util.cached(() => normalizeDef(def));
+    let memo = core.globalConfig.memoizer;
+    let generateFastpass = (shape) => {
+      let normalized = _normalized.value;
+      let syms = normalized.symbolKeys;
+      let doc = new doc_js_1.Doc(["payload", "ctx"], {
+        shape,
+        inst,
+        memo,
+        syms,
+      });
+      let parseStr = (k) => `shape[${k}]._zod.run({ value: input[${k}], issues: [] }, ctx)`;
+      let prefixStr = (id, k) => `
+          let ${id}_ab = false;
+          for (let i = 0; i < ${id}.issues.length; i++) {
+            const iss = ${id}.issues[i];
+            iss.path = iss.path ? [${k}, ...iss.path] : [${k}];
             payload.issues.push(iss);
-            if (iss.continue !== true) ${F}_ab = true;
+            if (iss.continue !== true) ${id}_ab = true;
           }
-          if (${F}_ab && ctx && ctx.abortEarly) {
+          if (${id}_ab && ctx && ctx.abortEarly) {
             payload.value = newResult;
             return payload;
           }`;
-        S.write("const input = payload.value;");
-        let create = Object.create(null),
-          Z = 0;
-        for (let allKey of b.allKeys) create[allKey] = `key_${Z++}`;
-        S.write(memoizer ? "const newResult = memo.alloc(inst, payload, {}, ctx);" : "const newResult = {};");
-        for (let allKey of b.allKeys) {
-          if (allKey === "__proto__") continue;
-          let X = create[allKey],
-            he = typeof allKey === "symbol" ? `syms[${symbolKeys.indexOf(allKey)}]` : ee.esc(allKey),
-            Me = `${he} in input`,
-            ce = y[allKey],
-            Ne = ce?._zod?.optin,
-            be = Ne !== void 0,
-            ve = ce?._zod?.optout === "optional";
-          if ((S.write(`const ${X} = ${j(he)};`), be && ve)) {
-            let Ue = Ne === "optional" ? `${X}_present` : `${X}.value !== undefined || ${X}_present`;
-            S.write(`
-        const ${X}_present = ${Me};
-        if (!${X}.issues.length || ${X}_present) {
-          if (${X}.issues.length) {${M(X, he)}
+      doc.write("const input = payload.value;");
+      let ids = Object.create(null);
+      let counter = 0;
+      for (let key of normalized.allKeys) ids[key] = `key_${counter++}`;
+      doc.write(memo ? "const newResult = memo.alloc(inst, payload, {}, ctx);" : "const newResult = {};");
+      for (let key of normalized.allKeys) {
+        if (key === "__proto__") continue;
+        let id = ids[key];
+        let k = typeof key === "symbol" ? `syms[${syms.indexOf(key)}]` : util.esc(key);
+        let isPresent = `${k} in input`;
+        let schema = shape[key];
+        let optin = schema?._zod?.optin;
+        let isOptionalIn = optin !== undefined;
+        let isOptionalOut = schema?._zod?.optout === "optional";
+        doc.write(`const ${id} = ${parseStr(k)};`);
+        if (isOptionalIn && isOptionalOut) {
+          let assign = optin === "optional" ? `${id}_present` : `${id}.value !== undefined || ${id}_present`;
+          doc.write(`
+        const ${id}_present = ${isPresent};
+        if (!${id}.issues.length || ${id}_present) {
+          if (${id}.issues.length) {${prefixStr(id, k)}
           }
 
-          if (${Ue}) {
-            newResult[${he}] = ${X}.value;
+          if (${assign}) {
+            newResult[${k}] = ${id}.value;
           }
         }
 
       `);
-          } else if (!be)
-            S.write(`
-        const ${X}_present = ${Me};
-        if (${X}.issues.length) {${M(X, he)}
+        } else if (!isOptionalIn)
+          doc.write(`
+        const ${id}_present = ${isPresent};
+        if (${id}.issues.length) {${prefixStr(id, k)}
         }
-        if (!${X}_present && !${X}.issues.length) {
+        if (!${id}_present && !${id}.issues.length) {
           payload.issues.push({
             code: "invalid_type",
             expected: "nonoptional",
             input: undefined,
-            path: [${he}]
+            path: [${k}]
           });
           if (ctx && ctx.abortEarly) {
             payload.value = newResult;
@@ -961,1047 +1172,1416 @@ var Bl = x(function (T) {
           }
         }
 
-        if (${X}_present) {
-          newResult[${he}] = ${X}.value;
+        if (${id}_present) {
+          newResult[${k}] = ${id}.value;
         }
 
       `);
-          else if (
-            (S.write(`
-        if (${X}.issues.length) {${M(X, he)}
+        else {
+          doc.write(`
+        if (${id}.issues.length) {${prefixStr(id, k)}
         }
-      `),
-            Ne === "defaulted")
-          )
-            S.write(`newResult[${he}] = ${X}.value;`);
+      `);
+          if (optin === "defaulted") doc.write(`newResult[${k}] = ${id}.value;`);
           else
-            S.write(`
-        if (${X}.value !== undefined || ${Me}) {
-          newResult[${he}] = ${X}.value;
+            doc.write(`
+        if (${id}.value !== undefined || ${isPresent}) {
+          newResult[${k}] = ${id}.value;
         }
       `);
         }
-        return (S.write("payload.value = newResult;"), S.write("return payload;"), S.compile());
-      },
-      a,
-      isObject = ee.isObject,
-      c = !se.globalConfig.jitless,
-      allowsEval = ee.allowsEval,
-      f = c && allowsEval.value,
-      catchall = t.catchall,
-      m;
-    e._zod.parse = (y, b) => {
-      m ?? (m = cached.value);
-      let w = y.value;
-      if (!isObject(w))
-        return (y.issues.push({ expected: "object", code: "invalid_type", input: w, inst: e }), y);
-      if (c && f && b?.async === !1 && b.jitless !== !0) {
-        if (!a) a = s(t.shape);
-        if (((y = a(y, b)), !catchall)) return y;
-        return VP([], w, y, b, m, e, b?.abortEarly === !0);
       }
-      return parse(y, b);
+      doc.write("payload.value = newResult;");
+      doc.write("return payload;");
+      return doc.compile();
+    };
+    let fastpass;
+    let isObject = util.isObject;
+    let jit = !core.globalConfig.jitless;
+    let allowsEval = util.allowsEval;
+    let fastEnabled = jit && allowsEval.value;
+    let catchall = def.catchall;
+    let value;
+    inst._zod.parse = (payload, ctx) => {
+      value ?? (value = _normalized.value);
+      let input = payload.value;
+      if (!isObject(input)) {
+        payload.issues.push({
+          expected: "object",
+          code: "invalid_type",
+          input,
+          inst,
+        });
+        return payload;
+      }
+      if (jit && fastEnabled && ctx?.async === false && ctx.jitless !== true) {
+        if (!fastpass) fastpass = generateFastpass(def.shape);
+        payload = fastpass(payload, ctx);
+        if (!catchall) return payload;
+        return handleCatchall([], input, payload, ctx, value, inst, ctx?.abortEarly === true);
+      }
+      return superParse(payload, ctx);
     };
   });
-  function yP(e, t, n, o) {
-    for (let s of e) if (s.issues.length === 0) return ((t.value = s.value), t);
-    let filtered = e.filter((s) => !ee.aborted(s));
-    if (filtered.length === 1) return ((t.value = filtered[0].value), filtered[0]);
-    return (
-      t.issues.push({
-        code: "invalid_union",
-        input: t.value,
-        inst: n,
-        errors: e.map((s) => s.issues.map((issue) => ee.finalizeIssue(issue, o, se.config()))),
-      }),
-      t
-    );
+  function handleUnionResults(results, final, inst, ctx) {
+    for (let result of results)
+      if (result.issues.length === 0) {
+        final.value = result.value;
+        return final;
+      }
+    let nonaborted = results.filter((r) => !util.aborted(r));
+    if (nonaborted.length === 1) {
+      final.value = nonaborted[0].value;
+      return nonaborted[0];
+    }
+    final.issues.push({
+      code: "invalid_union",
+      input: final.value,
+      inst,
+      errors: results.map((result) =>
+        result.issues.map((iss) => util.finalizeIssue(iss, ctx, core.config())),
+      ),
+    });
+    return final;
   }
-  T.$ZodUnion = se.$constructor("$ZodUnion", (e, t) => {
-    (T.$ZodType.init(e, t),
-      ee.defineLazyInternal(e, "optin", (o) =>
-        o.def.options.some((option) => option._zod.optin === "defaulted")
-          ? "defaulted"
-          : o.def.options.some((option) => option._zod.optin !== void 0)
-            ? "optional"
-            : void 0,
-      ),
-      ee.defineLazyInternal(e, "optout", (o) =>
-        o.def.options.some((option) => option._zod.optout === "optional") ? "optional" : void 0,
-      ),
-      ee.defineLazyInternal(e, "values", (o) => {
-        if (o.def.options.every((option) => option._zod.values))
-          return new Set(o.def.options.flatMap((option) => Array.from(option._zod.values)));
-        return;
-      }),
-      ee.defineLazyInternal(e, "pattern", (o) => {
-        if (o.def.options.every((option) => option._zod.pattern)) {
-          let mapped = o.def.options.map((option) => option._zod.pattern);
-          return new RegExp(`^(${mapped.map((s) => ee.cleanRegex(s.source)).join("|")})$`);
-        }
-        return;
-      }));
-    let n = t.options.length === 1 ? t.options[0]._zod.run : null;
-    e._zod.parse = (o, r) => {
-      if (n) return n(o, r);
-      let s = !1,
-        a = [];
-      for (let option of t.options) {
-        let run = option._zod.run({ value: o.value, issues: [] }, r);
-        if (run instanceof Promise) (a.push(run), (s = !0));
-        else {
-          if (run.issues.length === 0) return run;
-          a.push(run);
+  cjsExports.$ZodUnion = core.$constructor("$ZodUnion", (inst, def) => {
+    cjsExports.$ZodType.init(inst, def);
+    util.defineLazyInternal(inst, "optin", (zod) =>
+      zod.def.options.some((o) => o._zod.optin === "defaulted")
+        ? "defaulted"
+        : zod.def.options.some((o) => o._zod.optin !== undefined)
+          ? "optional"
+          : undefined,
+    );
+    util.defineLazyInternal(inst, "optout", (zod) =>
+      zod.def.options.some((o) => o._zod.optout === "optional") ? "optional" : undefined,
+    );
+    util.defineLazyInternal(inst, "values", (zod) => {
+      if (zod.def.options.every((o) => o._zod.values))
+        return new Set(zod.def.options.flatMap((option) => Array.from(option._zod.values)));
+      return;
+    });
+    util.defineLazyInternal(inst, "pattern", (zod) => {
+      if (zod.def.options.every((o) => o._zod.pattern)) {
+        let patterns = zod.def.options.map((o) => o._zod.pattern);
+        return new RegExp(`^(${patterns.map((p) => util.cleanRegex(p.source)).join("|")})$`);
+      }
+      return;
+    });
+    let first = def.options.length === 1 ? def.options[0]._zod.run : null;
+    inst._zod.parse = (payload, ctx) => {
+      if (first) return first(payload, ctx);
+      let async = false;
+      let results = [];
+      for (let option of def.options) {
+        let result = option._zod.run(
+          {
+            value: payload.value,
+            issues: [],
+          },
+          ctx,
+        );
+        if (result instanceof Promise) {
+          results.push(result);
+          async = true;
+        } else {
+          if (result.issues.length === 0) return result;
+          results.push(result);
         }
       }
-      if (!s) return yP(a, o, e, r);
-      return Promise.all(a).then((l) => yP(l, o, e, r));
+      if (!async) return handleUnionResults(results, payload, inst, ctx);
+      return Promise.all(results).then((results) => handleUnionResults(results, payload, inst, ctx));
     };
   });
-  function _P(e, t, n, o) {
-    let r = [];
-    for (let s = 0; s < e.length; s++) if (e[s].issues.length === 0) r.push(s);
-    if (r.length === 1) return ((t.value = e[r[0]].value), t);
-    if (r.length === 0)
-      t.issues.push({
+  function handleExclusiveUnionResults(results, final, inst, ctx) {
+    let matches = [];
+    for (let i = 0; i < results.length; i++) if (results[i].issues.length === 0) matches.push(i);
+    if (matches.length === 1) {
+      final.value = results[matches[0]].value;
+      return final;
+    }
+    if (matches.length === 0)
+      final.issues.push({
         code: "invalid_union",
-        input: t.value,
-        inst: n,
-        errors: e.map((s) => s.issues.map((issue) => ee.finalizeIssue(issue, o, se.config()))),
+        input: final.value,
+        inst,
+        errors: results.map((result) =>
+          result.issues.map((iss) => util.finalizeIssue(iss, ctx, core.config())),
+        ),
       });
     else
-      t.issues.push({
+      final.issues.push({
         code: "invalid_union",
-        input: t.value,
-        inst: n,
+        input: final.value,
+        inst,
         errors: [],
-        inclusive: !1,
-        matches: r,
+        inclusive: false,
+        matches,
       });
-    return t;
+    return final;
   }
-  T.$ZodXor = se.$constructor("$ZodXor", (e, t) => {
-    (T.$ZodUnion.init(e, t), (t.inclusive = !1));
-    let n = t.options.length === 1 ? t.options[0]._zod.run : null;
-    e._zod.parse = (o, r) => {
-      if (n) return n(o, r);
-      let s = !1,
-        a = [];
-      for (let option of t.options) {
-        let run = option._zod.run({ value: o.value, issues: [] }, r);
-        if (run instanceof Promise) (a.push(run), (s = !0));
-        else a.push(run);
+  cjsExports.$ZodXor = core.$constructor("$ZodXor", (inst, def) => {
+    cjsExports.$ZodUnion.init(inst, def);
+    def.inclusive = false;
+    let first = def.options.length === 1 ? def.options[0]._zod.run : null;
+    inst._zod.parse = (payload, ctx) => {
+      if (first) return first(payload, ctx);
+      let async = false;
+      let results = [];
+      for (let option of def.options) {
+        let result = option._zod.run(
+          {
+            value: payload.value,
+            issues: [],
+          },
+          ctx,
+        );
+        if (result instanceof Promise) {
+          results.push(result);
+          async = true;
+        } else results.push(result);
       }
-      if (!s) return _P(a, o, e, r);
-      return Promise.all(a).then((l) => _P(l, o, e, r));
+      if (!async) return handleExclusiveUnionResults(results, payload, inst, ctx);
+      return Promise.all(results).then((results) => handleExclusiveUnionResults(results, payload, inst, ctx));
     };
   });
-  function YZ(e, t) {
-    let _zod = e._zod,
-      optionsMap = _zod.bag.optionsMap;
-    if (!optionsMap) ((optionsMap = qP(_zod.def)), (_zod.bag.optionsMap = optionsMap));
-    let r = optionsMap.get(t);
-    if (r === null) throw Error(`Ambiguous discriminator value "${String(t)}"`);
-    return r;
-  }
-  function qP(e) {
-    let t = new Map();
-    for (let option of e.options) {
-      let o = option._zod.propValues?.[e.discriminator];
-      if (!o || o.size === 0)
-        throw Error(`Invalid discriminated union option at index "${e.options.indexOf(option)}"`);
-      for (let r of o)
-        if (t.has(r)) {
-          if (r !== void 0) throw Error(`Duplicate discriminator value "${String(r)}"`);
-          t.set(r, null);
-        } else t.set(r, option);
+  function getDiscriminatedOption(union, value) {
+    let internals = union._zod;
+    let map = internals.bag.optionsMap;
+    if (!map) {
+      map = discriminatorMap(internals.def);
+      internals.bag.optionsMap = map;
     }
-    return t;
+    let option = map.get(value);
+    if (option === null) throw Error(`Ambiguous discriminator value "${String(value)}"`);
+    return option;
   }
-  T.$ZodDiscriminatedUnion = se.$constructor("$ZodDiscriminatedUnion", (e, t) => {
-    ((t.inclusive = !1), T.$ZodUnion.init(e, t));
-    let parse = e._zod.parse;
-    (ee.defineLazyInternal(e, "propValues", (r) => {
-      let s = {},
-        a = 0;
-      for (let option of r.def.options) {
-        let propValues = option._zod.propValues;
-        if (!propValues || Object.keys(propValues).length === 0)
-          throw Error(`Invalid discriminated union option at index "${r.def.options.indexOf(option)}"`);
-        if (propValues[r.def.discriminator]?.has(void 0)) a++;
-        for (let [u, f] of Object.entries(propValues)) {
-          if (!Object.prototype.hasOwnProperty.call(s, u)) ee.assignProp(s, u, new Set());
-          for (let h of f) s[u].add(h);
+  function discriminatorMap(def) {
+    let map = new Map();
+    for (let option of def.options) {
+      let values = option._zod.propValues?.[def.discriminator];
+      if (!values || values.size === 0)
+        throw Error(`Invalid discriminated union option at index "${def.options.indexOf(option)}"`);
+      for (let value of values)
+        if (map.has(value)) {
+          if (value !== undefined) throw Error(`Duplicate discriminator value "${String(value)}"`);
+          map.set(value, null);
+        } else map.set(value, option);
+    }
+    return map;
+  }
+  cjsExports.$ZodDiscriminatedUnion = core.$constructor("$ZodDiscriminatedUnion", (inst, def) => {
+    def.inclusive = false;
+    cjsExports.$ZodUnion.init(inst, def);
+    let _super = inst._zod.parse;
+    util.defineLazyInternal(inst, "propValues", (zod) => {
+      let propValues = {};
+      let undefinedCount = 0;
+      for (let option of zod.def.options) {
+        let pv = option._zod.propValues;
+        if (!pv || Object.keys(pv).length === 0)
+          throw Error(`Invalid discriminated union option at index "${zod.def.options.indexOf(option)}"`);
+        if (pv[zod.def.discriminator]?.has(undefined)) undefinedCount++;
+        for (let [k, v] of Object.entries(pv)) {
+          if (!Object.prototype.hasOwnProperty.call(propValues, k)) util.assignProp(propValues, k, new Set());
+          for (let val of v) propValues[k].add(val);
         }
       }
-      if (!r.def.unionFallback && a > 1) s[r.def.discriminator]?.delete(void 0);
-      return s;
-    }),
-      t.options.forEach((option, s) => {
-        let rawShape = ee.rawShape(option._zod.def);
-        if (rawShape && !Object.prototype.hasOwnProperty.call(rawShape, t.discriminator))
-          throw Error(`Invalid discriminated union option at index "${s}"`);
-      }));
-    let cached = ee.cached(() => qP(t));
-    e._zod.parse = (r, s) => {
-      let a = r.value;
-      if (!ee.isObject(a))
-        return (r.issues.push({ code: "invalid_type", expected: "object", input: a, inst: e }), r);
-      let l = a?.[t.discriminator],
-        c = cached.value.get(l);
-      if (c && (l !== void 0 || s.direction !== "backward")) return c._zod.run(r, s);
-      if (t.unionFallback || s.direction === "backward") return parse(r, s);
-      return (
-        r.issues.push({
-          code: "invalid_union",
-          errors: [],
-          note: "No matching discriminator",
-          discriminator: t.discriminator,
-          options: Array.from(cached.value.keys()).filter((u) => cached.value.get(u) !== null),
-          input: a,
-          path: [t.discriminator],
-          inst: e,
-        }),
-        r
+      if (!zod.def.unionFallback && undefinedCount > 1) propValues[zod.def.discriminator]?.delete(undefined);
+      return propValues;
+    });
+    def.options.forEach((option, i) => {
+      let propShape = util.rawShape(option._zod.def);
+      if (propShape && !Object.prototype.hasOwnProperty.call(propShape, def.discriminator))
+        throw Error(`Invalid discriminated union option at index "${i}"`);
+    });
+    let disc = util.cached(() => discriminatorMap(def));
+    inst._zod.parse = (payload, ctx) => {
+      let input = payload.value;
+      if (!util.isObject(input)) {
+        payload.issues.push({
+          code: "invalid_type",
+          expected: "object",
+          input,
+          inst,
+        });
+        return payload;
+      }
+      let value = input?.[def.discriminator];
+      let opt = disc.value.get(value);
+      if (opt && (value !== undefined || ctx.direction !== "backward")) return opt._zod.run(payload, ctx);
+      if (def.unionFallback || ctx.direction === "backward") return _super(payload, ctx);
+      payload.issues.push({
+        code: "invalid_union",
+        errors: [],
+        note: "No matching discriminator",
+        discriminator: def.discriminator,
+        options: Array.from(disc.value.keys()).filter((value) => disc.value.get(value) !== null),
+        input,
+        path: [def.discriminator],
+        inst,
+      });
+      return payload;
+    };
+  });
+  cjsExports.$ZodIntersection = core.$constructor("$ZodIntersection", (inst, def) => {
+    cjsExports.$ZodType.init(inst, def);
+    inst._zod.parse = (payload, ctx) => {
+      let input = payload.value;
+      let left = def.left._zod.run(
+        {
+          value: input,
+          issues: [],
+        },
+        ctx,
       );
+      let right = def.right._zod.run(
+        {
+          value: input,
+          issues: [],
+        },
+        ctx,
+      );
+      if (left instanceof Promise || right instanceof Promise)
+        return Promise.all([left, right]).then(([left, right]) =>
+          handleIntersectionResults(payload, left, right),
+        );
+      return handleIntersectionResults(payload, left, right);
     };
   });
-  T.$ZodIntersection = se.$constructor("$ZodIntersection", (e, t) => {
-    (T.$ZodType.init(e, t),
-      (e._zod.parse = (n, o) => {
-        let r = n.value,
-          run = t.left._zod.run({ value: r, issues: [] }, o),
-          run_2 = t.right._zod.run({ value: r, issues: [] }, o);
-        if (run instanceof Promise || run_2 instanceof Promise)
-          return Promise.all([run, run_2]).then(([c, u]) => bP(n, c, u));
-        return bP(n, run, run_2);
-      }));
-  });
-  function sp(e, t) {
-    if (e === t) return { valid: !0, data: e };
-    if (e instanceof Date && t instanceof Date && +e === +t) return { valid: !0, data: e };
-    if (ee.isPlainObject(e) && ee.isPlainObject(t)) {
-      let keys = Object.keys(t),
-        filtered = Object.keys(e).filter((s) => keys.indexOf(s) !== -1),
-        r = { ...e, ...t };
-      if (Object.prototype.hasOwnProperty.call(r, "__proto__")) delete r.__proto__;
-      for (let s of filtered) {
-        if (s === "__proto__") continue;
-        let a = sp(e[s], t[s]);
-        if (!a.valid) return { valid: !1, mergeErrorPath: [s, ...a.mergeErrorPath] };
-        r[s] = a.data;
-      }
-      return { valid: !0, data: r };
-    }
-    if (Array.isArray(e) && Array.isArray(t)) {
-      if (e.length !== t.length) return { valid: !1, mergeErrorPath: [] };
-      let n = [];
-      for (let o = 0; o < e.length; o++) {
-        let r = e[o],
-          s = t[o],
-          a = sp(r, s);
-        if (!a.valid) return { valid: !1, mergeErrorPath: [o, ...a.mergeErrorPath] };
-        n.push(a.data);
-      }
-      return { valid: !0, data: n };
-    }
-    return { valid: !1, mergeErrorPath: [] };
-  }
-  function bP(e, t, n) {
-    let o = new Map(),
-      r,
-      s = new Map(),
-      a = (u, f) => {
-        let h;
-        if (u.code === "unrecognized_keys" && !u.path?.length) (r ?? (r = u), (h = u.keys));
-        else if (u.code === "invalid_key" && u.origin === "record" && u.path?.length === 1) {
-          let m = String(u.path[0]);
-          if (!s.has(m)) s.set(m, u);
-          h = [m];
-        } else return !1;
-        for (let m of h) {
-          if (!o.has(m)) o.set(m, {});
-          o.get(m)[f] = !0;
-        }
-        return !0;
+  function mergeValues(a_2, b) {
+    if (a_2 === b)
+      return {
+        valid: true,
+        data: a_2,
       };
-    for (let issue of t.issues) if (!a(issue, "l")) e.issues.push(issue);
-    for (let issue of n.issues) if (!a(issue, "r")) e.issues.push(issue);
-    let mapped = [...o].filter(([, u]) => u.l && u.r).map(([u]) => u);
-    if (mapped.length) {
-      let u = r ? mapped.filter((f) => r.keys.includes(f)) : [];
-      if (u.length) e.issues.push({ ...r, keys: u });
-      for (let f of mapped) if (!u.includes(f) && s.has(f)) e.issues.push(s.get(f));
+    if (a_2 instanceof Date && b instanceof Date && +a_2 === +b)
+      return {
+        valid: true,
+        data: a_2,
+      };
+    if (util.isPlainObject(a_2) && util.isPlainObject(b)) {
+      let bKeys = Object.keys(b);
+      let sharedKeys = Object.keys(a_2).filter((key) => bKeys.indexOf(key) !== -1);
+      let newObj = {
+        ...a_2,
+        ...b,
+      };
+      if (Object.prototype.hasOwnProperty.call(newObj, "__proto__")) delete newObj.__proto__;
+      for (let key of sharedKeys) {
+        if (key === "__proto__") continue;
+        let sharedValue = mergeValues(a_2[key], b[key]);
+        if (!sharedValue.valid)
+          return {
+            valid: false,
+            mergeErrorPath: [key, ...sharedValue.mergeErrorPath],
+          };
+        newObj[key] = sharedValue.data;
+      }
+      return {
+        valid: true,
+        data: newObj,
+      };
     }
-    let c = sp(t.value, n.value);
-    if (!c.valid) {
-      if (ee.aborted(e)) return e;
-      throw Error(`Unmergable intersection. Error path: ${JSON.stringify(c.mergeErrorPath)}`);
+    if (Array.isArray(a_2) && Array.isArray(b)) {
+      if (a_2.length !== b.length)
+        return {
+          valid: false,
+          mergeErrorPath: [],
+        };
+      let newArray = [];
+      for (let index = 0; index < a_2.length; index++) {
+        let itemA = a_2[index];
+        let itemB = b[index];
+        let sharedValue = mergeValues(itemA, itemB);
+        if (!sharedValue.valid)
+          return {
+            valid: false,
+            mergeErrorPath: [index, ...sharedValue.mergeErrorPath],
+          };
+        newArray.push(sharedValue.data);
+      }
+      return {
+        valid: true,
+        data: newArray,
+      };
     }
-    return ((e.value = c.data), e);
+    return {
+      valid: false,
+      mergeErrorPath: [],
+    };
   }
-  T.$ZodTuple = se.$constructor("$ZodTuple", (e, t) => {
-    T.$ZodType.init(e, t);
-    let items = t.items,
-      memoizer = se.globalConfig.memoizer;
-    (memoizer?.attach(e),
-      (e._zod.parse = (r, s) => {
-        let a = r.value;
-        if (!Array.isArray(a))
-          return (r.issues.push({ input: a, inst: e, expected: "tuple", code: "invalid_type" }), r);
-        r.value = memoizer ? memoizer.alloc(e, r, [], s) : [];
-        let l = [],
-          c = vP(items, "optin"),
-          u = vP(items, "optout");
-        if (!t.rest) {
-          if (a.length < c)
-            return (
-              r.issues.push({
-                code: "too_small",
-                minimum: c,
-                inclusive: !0,
-                input: a,
-                inst: e,
-                origin: "array",
-              }),
-              r
-            );
-          if (a.length > items.length)
-            r.issues.push({
-              code: "too_big",
-              maximum: items.length,
-              inclusive: !0,
-              input: a,
-              inst: e,
-              origin: "array",
-            });
+  function handleIntersectionResults(result, left, right) {
+    let unrecKeys = new Map();
+    let unrecIssue;
+    let keyIssues = new Map();
+    let collect = (iss, side) => {
+      let keys;
+      if (iss.code === "unrecognized_keys" && !iss.path?.length) {
+        unrecIssue ?? (unrecIssue = iss);
+        keys = iss.keys;
+      } else if (iss.code === "invalid_key" && iss.origin === "record" && iss.path?.length === 1) {
+        let k = String(iss.path[0]);
+        if (!keyIssues.has(k)) keyIssues.set(k, iss);
+        keys = [k];
+      } else return false;
+      for (let k of keys) {
+        if (!unrecKeys.has(k)) unrecKeys.set(k, {});
+        unrecKeys.get(k)[side] = true;
+      }
+      return true;
+    };
+    for (let iss of left.issues) if (!collect(iss, "l")) result.issues.push(iss);
+    for (let iss of right.issues) if (!collect(iss, "r")) result.issues.push(iss);
+    let bothKeys = [...unrecKeys].filter(([, f]) => f.l && f.r).map(([k]) => k);
+    if (bothKeys.length) {
+      let aggregated = unrecIssue ? bothKeys.filter((k) => unrecIssue.keys.includes(k)) : [];
+      if (aggregated.length)
+        result.issues.push({
+          ...unrecIssue,
+          keys: aggregated,
+        });
+      for (let k of bothKeys)
+        if (!aggregated.includes(k) && keyIssues.has(k)) result.issues.push(keyIssues.get(k));
+    }
+    let merged = mergeValues(left.value, right.value);
+    if (!merged.valid) {
+      if (util.aborted(result)) return result;
+      throw Error(`Unmergable intersection. Error path: ${JSON.stringify(merged.mergeErrorPath)}`);
+    }
+    result.value = merged.data;
+    return result;
+  }
+  cjsExports.$ZodTuple = core.$constructor("$ZodTuple", (inst, def) => {
+    cjsExports.$ZodType.init(inst, def);
+    let items = def.items;
+    let memo = core.globalConfig.memoizer;
+    memo?.attach(inst);
+    inst._zod.parse = (payload, ctx) => {
+      let input = payload.value;
+      if (!Array.isArray(input)) {
+        payload.issues.push({
+          input,
+          inst,
+          expected: "tuple",
+          code: "invalid_type",
+        });
+        return payload;
+      }
+      payload.value = memo ? memo.alloc(inst, payload, [], ctx) : [];
+      let proms = [];
+      let optinStart = getTupleOptStart(items, "optin");
+      let optoutStart = getTupleOptStart(items, "optout");
+      if (!def.rest) {
+        if (input.length < optinStart) {
+          payload.issues.push({
+            code: "too_small",
+            minimum: optinStart,
+            inclusive: true,
+            input,
+            inst,
+            origin: "array",
+          });
+          return payload;
         }
-        let f = Array(items.length),
-          h = t.rest ? s?.abortEarly : void 0,
-          m = !1;
-        for (let y = 0; y < items.length; y++) {
-          let run = items[y]._zod.run({ value: a[y], issues: [] }, s);
-          if (run instanceof Promise)
-            l.push(
-              run.then((w) => {
-                f[y] = w;
-              }),
-            );
-          else if (((f[y] = run), h && !m && run.issues.length)) m = ee.aborted(run);
+        if (input.length > items.length)
+          payload.issues.push({
+            code: "too_big",
+            maximum: items.length,
+            inclusive: true,
+            input,
+            inst,
+            origin: "array",
+          });
+      }
+      let itemResults = Array(items.length);
+      let abortEarly = def.rest ? ctx?.abortEarly : undefined;
+      let itemAborted = false;
+      for (let i = 0; i < items.length; i++) {
+        let r = items[i]._zod.run(
+          {
+            value: input[i],
+            issues: [],
+          },
+          ctx,
+        );
+        if (r instanceof Promise)
+          proms.push(
+            r.then((rr) => {
+              itemResults[i] = rr;
+            }),
+          );
+        else {
+          itemResults[i] = r;
+          if (abortEarly && !itemAborted && r.issues.length) itemAborted = util.aborted(r);
         }
-        if (t.rest && !m) {
-          let y = items.length - 1,
-            sliced = a.slice(items.length),
-            w = r.issues.length;
-          for (let S of sliced) {
-            if (h && r.issues.length !== w) {
-              if (ee.aborted(r, w)) break;
-              w = r.issues.length;
-            }
-            y++;
-            let run = t.rest._zod.run({ value: S, issues: [] }, s);
-            if (run instanceof Promise) l.push(run.then((M) => wP(M, r, y)));
-            else wP(run, r, y);
+      }
+      if (def.rest && !itemAborted) {
+        let i = items.length - 1;
+        let rest = input.slice(items.length);
+        let seen = payload.issues.length;
+        for (let el of rest) {
+          if (abortEarly && payload.issues.length !== seen) {
+            if (util.aborted(payload, seen)) break;
+            seen = payload.issues.length;
           }
+          i++;
+          let result = def.rest._zod.run(
+            {
+              value: el,
+              issues: [],
+            },
+            ctx,
+          );
+          if (result instanceof Promise) proms.push(result.then((r) => handleTupleResult(r, payload, i)));
+          else handleTupleResult(result, payload, i);
         }
-        if (l.length) return Promise.all(l).then(() => OP(f, r, items, a, u));
-        return OP(f, r, items, a, u);
-      }));
+      }
+      if (proms.length)
+        return Promise.all(proms).then(() =>
+          handleTupleResults(itemResults, payload, items, input, optoutStart),
+        );
+      return handleTupleResults(itemResults, payload, items, input, optoutStart);
+    };
   });
-  function vP(e, t) {
-    for (let n = e.length - 1; n >= 0; n--)
-      if (!(t === "optin" ? e[n]._zod.optin !== void 0 : e[n]._zod.optout === "optional")) return n + 1;
+  function getTupleOptStart(items, key) {
+    for (let i = items.length - 1; i >= 0; i--)
+      if (!(key === "optin" ? items[i]._zod.optin !== undefined : items[i]._zod.optout === "optional"))
+        return i + 1;
     return 0;
   }
-  function wP(e, t, n) {
-    if (e.issues.length) t.issues.push(...ee.prefixIssues(n, e.issues));
-    t.value[n] = e.value;
+  function handleTupleResult(result, final, index) {
+    if (result.issues.length) final.issues.push(...util.prefixIssues(index, result.issues));
+    final.value[index] = result.value;
   }
-  function OP(e, t, n, o, r) {
-    for (let s = 0; s < n.length; s++) {
-      let a = e[s],
-        l = s < o.length;
-      if (!l && s >= r && n[s]._zod.optin === "optional") {
-        t.value.length = s;
+  function handleTupleResults(itemResults, final, items, input, optoutStart) {
+    for (let i = 0; i < items.length; i++) {
+      let r = itemResults[i];
+      let isPresent = i < input.length;
+      if (!isPresent && i >= optoutStart && items[i]._zod.optin === "optional") {
+        final.value.length = i;
         break;
       }
-      if (a.issues.length) {
-        if (!l && s >= r) {
-          t.value.length = s;
+      if (r.issues.length) {
+        if (!isPresent && i >= optoutStart) {
+          final.value.length = i;
           break;
         }
-        t.issues.push(...ee.prefixIssues(s, a.issues));
+        final.issues.push(...util.prefixIssues(i, r.issues));
       }
-      t.value[s] = a.value;
+      final.value[i] = r.value;
     }
-    for (let s = t.value.length - 1; s >= o.length; s--)
-      if (n[s]._zod.optout === "optional" && t.value[s] === void 0) t.value.length = s;
+    for (let i = final.value.length - 1; i >= input.length; i--)
+      if (items[i]._zod.optout === "optional" && final.value[i] === undefined) final.value.length = i;
       else break;
-    return t;
+    return final;
   }
-  T.$ZodRecord = se.$constructor("$ZodRecord", (e, t) => {
-    T.$ZodType.init(e, t);
-    let memoizer = se.globalConfig.memoizer;
-    (memoizer?.attach(e),
-      (e._zod.parse = (o, r) => {
-        let s = o.value;
-        if (!ee.isPlainObject(s))
-          return (o.issues.push({ expected: "record", code: "invalid_type", input: s, inst: e }), o);
-        let a = [],
-          values = t.keyType._zod.values;
-        if (values && !t.partial) {
-          o.value = memoizer ? memoizer.alloc(e, o, {}, r) : {};
-          let c = new Set();
-          for (let f of values)
-            if (typeof f === "string" || typeof f === "number" || typeof f === "symbol") {
-              if ((c.add(typeof f === "number" ? f.toString() : f), f === "__proto__")) continue;
-              let run = t.keyType._zod.run({ value: f, issues: [] }, r);
-              if (run instanceof Promise) throw Error("Async schemas not supported in object keys currently");
-              if (run.issues.length) {
-                o.issues.push({
-                  code: "invalid_key",
-                  origin: "record",
-                  issues: run.issues.map((issue) => ee.finalizeIssue(issue, r, se.config())),
-                  input: f,
-                  path: [f],
-                  inst: e,
-                });
-                continue;
-              }
-              let m = run.value;
-              if (m === "__proto__") continue;
-              let run_2 = t.valueType._zod.run({ value: s[f], issues: [] }, r);
-              if (run_2 instanceof Promise)
-                a.push(
-                  run_2.then((b) => {
-                    if (b.issues.length) o.issues.push(...ee.prefixIssues(f, b.issues));
-                    o.value[m] = b.value;
-                  }),
-                );
-              else {
-                if (run_2.issues.length) o.issues.push(...ee.prefixIssues(f, run_2.issues));
-                o.value[m] = run_2.value;
-              }
-            }
-          let u;
-          for (let key in s)
-            if (!c.has(key))
-              if (t.mode === "loose") {
-                if (key === "__proto__") continue;
-                o.value[key] = s[key];
-              } else ((u = u ?? []), u.push(key));
-          if (u && u.length > 0)
-            o.issues.push({ code: "unrecognized_keys", input: s, inst: e, keys: u, continue: !0 });
-        } else {
-          o.value = memoizer ? memoizer.alloc(e, o, {}, r) : {};
-          let c;
-          for (let u of Reflect.ownKeys(s)) {
-            if (u === "__proto__") continue;
-            if (!Object.prototype.propertyIsEnumerable.call(s, u)) continue;
-            let run = t.keyType._zod.run({ value: u, issues: [] }, r);
-            if (run instanceof Promise) throw Error("Async schemas not supported in object keys currently");
-            if (typeof u === "string" && It.number.test(u) && run.issues.length) {
-              let run_2 = t.keyType._zod.run({ value: Number(u), issues: [] }, r);
-              if (run_2 instanceof Promise)
-                throw Error("Async schemas not supported in object keys currently");
-              if (run_2.issues.length === 0) run = run_2;
-            }
-            if (run.issues.length) {
-              if (t.mode === "loose") o.value[u] = s[u];
-              else if (values) ((c = c ?? []), c.push(u));
-              else
-                o.issues.push({
-                  code: "invalid_key",
-                  origin: "record",
-                  issues: run.issues.map((issue) => ee.finalizeIssue(issue, r, se.config())),
-                  input: u,
-                  path: [u],
-                  inst: e,
-                });
+  cjsExports.$ZodRecord = core.$constructor("$ZodRecord", (inst, def) => {
+    cjsExports.$ZodType.init(inst, def);
+    let memo = core.globalConfig.memoizer;
+    memo?.attach(inst);
+    inst._zod.parse = (payload, ctx) => {
+      let input = payload.value;
+      if (!util.isPlainObject(input)) {
+        payload.issues.push({
+          expected: "record",
+          code: "invalid_type",
+          input,
+          inst,
+        });
+        return payload;
+      }
+      let proms = [];
+      let values = def.keyType._zod.values;
+      if (values && !def.partial) {
+        payload.value = memo ? memo.alloc(inst, payload, {}, ctx) : {};
+        let recordKeys = new Set();
+        for (let key of values)
+          if (typeof key === "string" || typeof key === "number" || typeof key === "symbol") {
+            recordKeys.add(typeof key === "number" ? key.toString() : key);
+            if (key === "__proto__") continue;
+            let keyResult = def.keyType._zod.run(
+              {
+                value: key,
+                issues: [],
+              },
+              ctx,
+            );
+            if (keyResult instanceof Promise)
+              throw Error("Async schemas not supported in object keys currently");
+            if (keyResult.issues.length) {
+              payload.issues.push({
+                code: "invalid_key",
+                origin: "record",
+                issues: keyResult.issues.map((iss) => util.finalizeIssue(iss, ctx, core.config())),
+                input: key,
+                path: [key],
+                inst,
+              });
               continue;
             }
-            let m = run.value;
-            if (m === "__proto__") continue;
-            let run_2 = t.valueType._zod.run({ value: s[u], issues: [] }, r);
-            if (run_2 instanceof Promise)
-              a.push(
-                run_2.then((b) => {
-                  if (b.issues.length) o.issues.push(...ee.prefixIssues(u, b.issues));
-                  o.value[m] = b.value;
+            let outKey = keyResult.value;
+            if (outKey === "__proto__") continue;
+            let result = def.valueType._zod.run(
+              {
+                value: input[key],
+                issues: [],
+              },
+              ctx,
+            );
+            if (result instanceof Promise)
+              proms.push(
+                result.then((result) => {
+                  if (result.issues.length) payload.issues.push(...util.prefixIssues(key, result.issues));
+                  payload.value[outKey] = result.value;
                 }),
               );
             else {
-              if (run_2.issues.length) o.issues.push(...ee.prefixIssues(u, run_2.issues));
-              o.value[m] = run_2.value;
+              if (result.issues.length) payload.issues.push(...util.prefixIssues(key, result.issues));
+              payload.value[outKey] = result.value;
             }
           }
-          if (c && c.length > 0)
-            o.issues.push({ code: "unrecognized_keys", input: s, inst: e, keys: c, continue: !0 });
-        }
-        if (a.length) return Promise.all(a).then(() => o);
-        return o;
-      }));
-  });
-  T.$ZodMap = se.$constructor("$ZodMap", (e, t) => {
-    T.$ZodType.init(e, t);
-    let memoizer = se.globalConfig.memoizer;
-    (memoizer?.attach(e),
-      (e._zod.parse = (o, r) => {
-        let s = o.value;
-        if (!(s instanceof Map))
-          return (o.issues.push({ expected: "map", code: "invalid_type", input: s, inst: e }), o);
-        let a = [];
-        o.value = memoizer ? memoizer.alloc(e, o, new Map(), r) : new Map();
-        let l = r?.abortEarly,
-          c = o.issues.length;
-        for (let [u, f] of s) {
-          if (l && o.issues.length !== c) {
-            if (ee.aborted(o, c)) break;
-            c = o.issues.length;
+        let unrecognized;
+        for (let key in input)
+          if (!recordKeys.has(key))
+            if (def.mode === "loose") {
+              if (key === "__proto__") continue;
+              payload.value[key] = input[key];
+            } else {
+              unrecognized = unrecognized ?? [];
+              unrecognized.push(key);
+            }
+        if (unrecognized && unrecognized.length > 0)
+          payload.issues.push({
+            code: "unrecognized_keys",
+            input,
+            inst,
+            keys: unrecognized,
+            continue: true,
+          });
+      } else {
+        payload.value = memo ? memo.alloc(inst, payload, {}, ctx) : {};
+        let unrecognized;
+        for (let key of Reflect.ownKeys(input)) {
+          if (key === "__proto__") continue;
+          if (!Object.prototype.propertyIsEnumerable.call(input, key)) continue;
+          let keyResult = def.keyType._zod.run(
+            {
+              value: key,
+              issues: [],
+            },
+            ctx,
+          );
+          if (keyResult instanceof Promise)
+            throw Error("Async schemas not supported in object keys currently");
+          if (typeof key === "string" && regexes.number.test(key) && keyResult.issues.length) {
+            let retryResult = def.keyType._zod.run(
+              {
+                value: Number(key),
+                issues: [],
+              },
+              ctx,
+            );
+            if (retryResult instanceof Promise)
+              throw Error("Async schemas not supported in object keys currently");
+            if (retryResult.issues.length === 0) keyResult = retryResult;
           }
-          let run = t.keyType._zod.run({ value: u, issues: [] }, r),
-            run_2 = t.valueType._zod.run({ value: f, issues: [] }, r);
-          if (run instanceof Promise || run_2 instanceof Promise)
-            a.push(
-              Promise.all([run, run_2]).then(([y, b]) => {
-                SP(y, b, o, u, s, e, r);
+          if (keyResult.issues.length) {
+            if (def.mode === "loose") payload.value[key] = input[key];
+            else if (values) {
+              unrecognized = unrecognized ?? [];
+              unrecognized.push(key);
+            } else
+              payload.issues.push({
+                code: "invalid_key",
+                origin: "record",
+                issues: keyResult.issues.map((iss) => util.finalizeIssue(iss, ctx, core.config())),
+                input: key,
+                path: [key],
+                inst,
+              });
+            continue;
+          }
+          let outKey = keyResult.value;
+          if (outKey === "__proto__") continue;
+          let result = def.valueType._zod.run(
+            {
+              value: input[key],
+              issues: [],
+            },
+            ctx,
+          );
+          if (result instanceof Promise)
+            proms.push(
+              result.then((result) => {
+                if (result.issues.length) payload.issues.push(...util.prefixIssues(key, result.issues));
+                payload.value[outKey] = result.value;
               }),
             );
-          else SP(run, run_2, o, u, s, e, r);
+          else {
+            if (result.issues.length) payload.issues.push(...util.prefixIssues(key, result.issues));
+            payload.value[outKey] = result.value;
+          }
         }
-        if (a.length) return Promise.all(a).then(() => o);
-        return o;
-      }));
+        if (unrecognized && unrecognized.length > 0)
+          payload.issues.push({
+            code: "unrecognized_keys",
+            input,
+            inst,
+            keys: unrecognized,
+            continue: true,
+          });
+      }
+      if (proms.length) return Promise.all(proms).then(() => payload);
+      return payload;
+    };
   });
-  function SP(e, t, n, o, r, s, a) {
-    if (e.issues.length)
-      if (ee.propertyKeyTypes.has(typeof o)) n.issues.push(...ee.prefixIssues(o, e.issues));
+  cjsExports.$ZodMap = core.$constructor("$ZodMap", (inst, def) => {
+    cjsExports.$ZodType.init(inst, def);
+    let memo = core.globalConfig.memoizer;
+    memo?.attach(inst);
+    inst._zod.parse = (payload, ctx) => {
+      let input = payload.value;
+      if (!(input instanceof Map)) {
+        payload.issues.push({
+          expected: "map",
+          code: "invalid_type",
+          input,
+          inst,
+        });
+        return payload;
+      }
+      let proms = [];
+      payload.value = memo ? memo.alloc(inst, payload, new Map(), ctx) : new Map();
+      let abortEarly = ctx?.abortEarly;
+      let seen = payload.issues.length;
+      for (let [key, value] of input) {
+        if (abortEarly && payload.issues.length !== seen) {
+          if (util.aborted(payload, seen)) break;
+          seen = payload.issues.length;
+        }
+        let keyResult = def.keyType._zod.run(
+          {
+            value: key,
+            issues: [],
+          },
+          ctx,
+        );
+        let valueResult = def.valueType._zod.run(
+          {
+            value,
+            issues: [],
+          },
+          ctx,
+        );
+        if (keyResult instanceof Promise || valueResult instanceof Promise)
+          proms.push(
+            Promise.all([keyResult, valueResult]).then(([keyResult, valueResult]) => {
+              handleMapResult(keyResult, valueResult, payload, key, input, inst, ctx);
+            }),
+          );
+        else handleMapResult(keyResult, valueResult, payload, key, input, inst, ctx);
+      }
+      if (proms.length) return Promise.all(proms).then(() => payload);
+      return payload;
+    };
+  });
+  function handleMapResult(keyResult, valueResult, final, key, input, inst, ctx) {
+    if (keyResult.issues.length)
+      if (util.propertyKeyTypes.has(typeof key))
+        final.issues.push(...util.prefixIssues(key, keyResult.issues));
       else
-        n.issues.push({
+        final.issues.push({
           code: "invalid_key",
           origin: "map",
-          input: r,
-          inst: s,
-          issues: e.issues.map((issue) => ee.finalizeIssue(issue, a, se.config())),
+          input,
+          inst,
+          issues: keyResult.issues.map((iss) => util.finalizeIssue(iss, ctx, core.config())),
         });
-    if (t.issues.length)
-      if (ee.propertyKeyTypes.has(typeof o)) n.issues.push(...ee.prefixIssues(o, t.issues));
+    if (valueResult.issues.length)
+      if (util.propertyKeyTypes.has(typeof key))
+        final.issues.push(...util.prefixIssues(key, valueResult.issues));
       else
-        n.issues.push({
+        final.issues.push({
           origin: "map",
           code: "invalid_element",
-          input: r,
-          inst: s,
-          key: o,
-          issues: t.issues.map((issue) => ee.finalizeIssue(issue, a, se.config())),
+          input,
+          inst,
+          key,
+          issues: valueResult.issues.map((iss) => util.finalizeIssue(iss, ctx, core.config())),
         });
-    n.value.set(e.value, t.value);
+    final.value.set(keyResult.value, valueResult.value);
   }
-  T.$ZodSet = se.$constructor("$ZodSet", (e, t) => {
-    T.$ZodType.init(e, t);
-    let memoizer = se.globalConfig.memoizer;
-    (memoizer?.attach(e),
-      (e._zod.parse = (o, r) => {
-        let s = o.value;
-        if (!(s instanceof Set))
-          return (o.issues.push({ input: s, inst: e, expected: "set", code: "invalid_type" }), o);
-        let a = [];
-        o.value = memoizer ? memoizer.alloc(e, o, new Set(), r) : new Set();
-        let l = r?.abortEarly,
-          c = o.issues.length;
-        for (let u of s) {
-          if (l && o.issues.length !== c) {
-            if (ee.aborted(o, c)) break;
-            c = o.issues.length;
-          }
-          let run = t.valueType._zod.run({ value: u, issues: [] }, r);
-          if (run instanceof Promise) a.push(run.then((h) => kP(h, o)));
-          else kP(run, o);
+  cjsExports.$ZodSet = core.$constructor("$ZodSet", (inst, def) => {
+    cjsExports.$ZodType.init(inst, def);
+    let memo = core.globalConfig.memoizer;
+    memo?.attach(inst);
+    inst._zod.parse = (payload, ctx) => {
+      let input = payload.value;
+      if (!(input instanceof Set)) {
+        payload.issues.push({
+          input,
+          inst,
+          expected: "set",
+          code: "invalid_type",
+        });
+        return payload;
+      }
+      let proms = [];
+      payload.value = memo ? memo.alloc(inst, payload, new Set(), ctx) : new Set();
+      let abortEarly = ctx?.abortEarly;
+      let seen = payload.issues.length;
+      for (let item of input) {
+        if (abortEarly && payload.issues.length !== seen) {
+          if (util.aborted(payload, seen)) break;
+          seen = payload.issues.length;
         }
-        if (a.length) return Promise.all(a).then(() => o);
-        return o;
-      }));
-  });
-  function kP(e, t) {
-    if (e.issues.length) t.issues.push(...e.issues);
-    t.value.add(e.value);
-  }
-  T.$ZodEnum = se.$constructor("$ZodEnum", (e, t) => {
-    T.$ZodType.init(e, t);
-    let enumValues = ee.getEnumValues(t.entries),
-      o = new Set(enumValues);
-    ((e._zod.values = o),
-      ee.defineLazyInternal(e, "pattern", (r) => {
-        let filtered = ee.getEnumValues(r.def.entries).filter((a) => ee.propertyKeyTypes.has(typeof a));
-        return new RegExp(
-          filtered.length
-            ? `^(${filtered.map((a) => ee.escapeRegex(a.toString())).join("|")})$`
-            : "^[^\\s\\S]$",
+        let result = def.valueType._zod.run(
+          {
+            value: item,
+            issues: [],
+          },
+          ctx,
         );
-      }),
-      (e._zod.parse = (r, s) => {
-        let a = r.value;
-        if (o.has(a)) return r;
-        return (r.issues.push({ code: "invalid_value", values: enumValues, input: a, inst: e }), r);
-      }));
+        if (result instanceof Promise) proms.push(result.then((result) => handleSetResult(result, payload)));
+        else handleSetResult(result, payload);
+      }
+      if (proms.length) return Promise.all(proms).then(() => payload);
+      return payload;
+    };
   });
-  T.$ZodLiteral = se.$constructor("$ZodLiteral", (e, t) => {
-    T.$ZodType.init(e, t);
-    let n = new Set(t.values);
-    ((e._zod.values = n),
-      ee.defineLazyInternal(e, "pattern", (o) => {
-        let values = o.def.values;
-        return new RegExp(
-          values.length
-            ? `^(${values.map((s) => (typeof s === "string" ? ee.escapeRegex(s) : s ? ee.escapeRegex(s.toString()) : String(s))).join("|")})$`
-            : "^[^\\s\\S]$",
+  function handleSetResult(result, final) {
+    if (result.issues.length) final.issues.push(...result.issues);
+    final.value.add(result.value);
+  }
+  cjsExports.$ZodEnum = core.$constructor("$ZodEnum", (inst, def) => {
+    cjsExports.$ZodType.init(inst, def);
+    let values = util.getEnumValues(def.entries);
+    let valuesSet = new Set(values);
+    inst._zod.values = valuesSet;
+    util.defineLazyInternal(inst, "pattern", (zod) => {
+      let patternValues = util
+        .getEnumValues(zod.def.entries)
+        .filter((k) => util.propertyKeyTypes.has(typeof k));
+      return new RegExp(
+        patternValues.length
+          ? `^(${patternValues.map((o) => util.escapeRegex(o.toString())).join("|")})$`
+          : "^[^\\s\\S]$",
+      );
+    });
+    inst._zod.parse = (payload, _ctx) => {
+      let input = payload.value;
+      if (valuesSet.has(input)) return payload;
+      payload.issues.push({
+        code: "invalid_value",
+        values,
+        input,
+        inst,
+      });
+      return payload;
+    };
+  });
+  cjsExports.$ZodLiteral = core.$constructor("$ZodLiteral", (inst, def) => {
+    cjsExports.$ZodType.init(inst, def);
+    let values = new Set(def.values);
+    inst._zod.values = values;
+    util.defineLazyInternal(inst, "pattern", (zod) => {
+      let vals = zod.def.values;
+      return new RegExp(
+        vals.length
+          ? `^(${vals.map((o) => (typeof o === "string" ? util.escapeRegex(o) : o ? util.escapeRegex(o.toString()) : String(o))).join("|")})$`
+          : "^[^\\s\\S]$",
+      );
+    });
+    inst._zod.parse = (payload, _ctx) => {
+      let input = payload.value;
+      if (values.has(input)) return payload;
+      payload.issues.push({
+        code: "invalid_value",
+        values: def.values,
+        input,
+        inst,
+      });
+      return payload;
+    };
+  });
+  cjsExports.$ZodFile = core.$constructor("$ZodFile", (inst, def) => {
+    cjsExports.$ZodType.init(inst, def);
+    inst._zod.parse = (payload, _ctx) => {
+      let input = payload.value;
+      if (input instanceof File) return payload;
+      payload.issues.push({
+        expected: "file",
+        code: "invalid_type",
+        input,
+        inst,
+      });
+      return payload;
+    };
+  });
+  cjsExports.$ZodTransform = core.$constructor("$ZodTransform", (inst, def) => {
+    cjsExports.$ZodType.init(inst, def);
+    inst._zod.optin = "optional";
+    core.globalConfig.memoizer?.guard(inst);
+    inst._zod.parse = (payload, ctx) => {
+      if (ctx.direction === "backward") throw new core.$ZodEncodeError(inst.constructor.name);
+      let _out = def.transform(payload.value, payload);
+      if (ctx.async)
+        return (_out instanceof Promise ? _out : Promise.resolve(_out)).then((output) => {
+          payload.value = output;
+          return payload;
+        });
+      if (_out instanceof Promise) throw new core.$ZodAsyncError();
+      payload.value = _out;
+      return payload;
+    };
+  });
+  function handleOptionalResult(payload, result) {
+    payload.value = result.issues.length ? undefined : result.value;
+    return payload;
+  }
+  cjsExports.$ZodOptional = core.$constructor("$ZodOptional", (inst, def) => {
+    cjsExports.$ZodType.init(inst, def);
+    util.defineLazyInternal(inst, "optin", (zod) =>
+      zod.def.innerType._zod.optin === "defaulted" ? "defaulted" : "optional",
+    );
+    inst._zod.optout = "optional";
+    util.defineLazyInternal(inst, "values", (zod) => {
+      let values = zod.def.innerType._zod.values;
+      return values ? new Set([...values, undefined]) : undefined;
+    });
+    util.defineLazyInternal(inst, "pattern", (zod) => {
+      let pattern = zod.def.innerType._zod.pattern;
+      return pattern ? new RegExp(`^(${util.cleanRegex(pattern.source)})?$`) : undefined;
+    });
+    inst._zod.parse = (payload, ctx) => {
+      if (payload.value === undefined) {
+        if (def.innerType._zod.optin !== "defaulted") return payload;
+        let result = def.innerType._zod.run(
+          {
+            value: payload.value,
+            issues: [],
+          },
+          ctx,
         );
-      }),
-      (e._zod.parse = (o, r) => {
-        let s = o.value;
-        if (n.has(s)) return o;
-        return (o.issues.push({ code: "invalid_value", values: t.values, input: s, inst: e }), o);
-      }));
+        if (result instanceof Promise) return result.then((result) => handleOptionalResult(payload, result));
+        return handleOptionalResult(payload, result);
+      }
+      return def.innerType._zod.run(payload, ctx);
+    };
   });
-  T.$ZodFile = se.$constructor("$ZodFile", (e, t) => {
-    (T.$ZodType.init(e, t),
-      (e._zod.parse = (n, o) => {
-        let r = n.value;
-        if (r instanceof File) return n;
-        return (n.issues.push({ expected: "file", code: "invalid_type", input: r, inst: e }), n);
-      }));
+  cjsExports.$ZodExactOptional = core.$constructor("$ZodExactOptional", (inst, def) => {
+    cjsExports.$ZodOptional.init(inst, def);
+    util.defineLazyInternal(inst, "values", (zod) => zod.def.innerType._zod.values);
+    util.defineLazyInternal(inst, "pattern", (zod) => zod.def.innerType._zod.pattern);
+    inst._zod.parse = (payload, ctx) => def.innerType._zod.run(payload, ctx);
   });
-  T.$ZodTransform = se.$constructor("$ZodTransform", (e, t) => {
-    (T.$ZodType.init(e, t),
-      (e._zod.optin = "optional"),
-      se.globalConfig.memoizer?.guard(e),
-      (e._zod.parse = (n, o) => {
-        if (o.direction === "backward") throw new se.$ZodEncodeError(e.constructor.name);
-        let transform = t.transform(n.value, n);
-        if (o.async)
-          return (transform instanceof Promise ? transform : Promise.resolve(transform)).then(
-            (a) => ((n.value = a), n),
-          );
-        if (transform instanceof Promise) throw new se.$ZodAsyncError();
-        return ((n.value = transform), n);
-      }));
+  cjsExports.$ZodNullable = core.$constructor("$ZodNullable", (inst, def) => {
+    cjsExports.$ZodType.init(inst, def);
+    util.defineLazyInternal(inst, "optin", (zod) => zod.def.innerType._zod.optin);
+    util.defineLazyInternal(inst, "optout", (zod) => zod.def.innerType._zod.optout);
+    util.defineLazyInternal(inst, "pattern", (zod) => {
+      let pattern = zod.def.innerType._zod.pattern;
+      return pattern ? new RegExp(`^(${util.cleanRegex(pattern.source)}|null)$`) : undefined;
+    });
+    util.defineLazyInternal(inst, "values", (zod) =>
+      zod.def.innerType._zod.values ? new Set([...zod.def.innerType._zod.values, null]) : undefined,
+    );
+    inst._zod.parse = (payload, ctx) => {
+      if (payload.value === null) return payload;
+      return def.innerType._zod.run(payload, ctx);
+    };
   });
-  function EP(e, t) {
-    return ((e.value = t.issues.length ? void 0 : t.value), e);
+  cjsExports.$ZodDefault = core.$constructor("$ZodDefault", (inst, def) => {
+    cjsExports.$ZodType.init(inst, def);
+    inst._zod.optin = "defaulted";
+    util.defineLazyInternal(inst, "values", (zod) => zod.def.innerType._zod.values);
+    inst._zod.parse = (payload, ctx) => {
+      if (ctx.direction === "backward") return def.innerType._zod.run(payload, ctx);
+      if (payload.value === undefined) {
+        payload.value = def.defaultValue;
+        return payload;
+      }
+      let result = def.innerType._zod.run(payload, ctx);
+      if (result instanceof Promise) return result.then((result) => handleDefaultResult(result, def));
+      return handleDefaultResult(result, def);
+    };
+  });
+  function handleDefaultResult(payload, def) {
+    if (payload.value === undefined) payload.value = def.defaultValue;
+    return payload;
   }
-  T.$ZodOptional = se.$constructor("$ZodOptional", (e, t) => {
-    (T.$ZodType.init(e, t),
-      ee.defineLazyInternal(e, "optin", (n) =>
-        n.def.innerType._zod.optin === "defaulted" ? "defaulted" : "optional",
-      ),
-      (e._zod.optout = "optional"),
-      ee.defineLazyInternal(e, "values", (n) => {
-        let values = n.def.innerType._zod.values;
-        return values ? new Set([...values, void 0]) : void 0;
-      }),
-      ee.defineLazyInternal(e, "pattern", (n) => {
-        let pattern = n.def.innerType._zod.pattern;
-        return pattern ? new RegExp(`^(${ee.cleanRegex(pattern.source)})?$`) : void 0;
-      }),
-      (e._zod.parse = (n, o) => {
-        if (n.value === void 0) {
-          if (t.innerType._zod.optin !== "defaulted") return n;
-          let run = t.innerType._zod.run({ value: n.value, issues: [] }, o);
-          if (run instanceof Promise) return run.then((s) => EP(n, s));
-          return EP(n, run);
-        }
-        return t.innerType._zod.run(n, o);
-      }));
+  cjsExports.$ZodPrefault = core.$constructor("$ZodPrefault", (inst, def) => {
+    cjsExports.$ZodType.init(inst, def);
+    inst._zod.optin = "defaulted";
+    util.defineLazyInternal(inst, "values", (zod) => zod.def.innerType._zod.values);
+    inst._zod.parse = (payload, ctx) => {
+      if (ctx.direction === "backward") return def.innerType._zod.run(payload, ctx);
+      if (payload.value === undefined) payload.value = def.defaultValue;
+      return def.innerType._zod.run(payload, ctx);
+    };
   });
-  T.$ZodExactOptional = se.$constructor("$ZodExactOptional", (e, t) => {
-    (T.$ZodOptional.init(e, t),
-      ee.defineLazyInternal(e, "values", (n) => n.def.innerType._zod.values),
-      ee.defineLazyInternal(e, "pattern", (n) => n.def.innerType._zod.pattern),
-      (e._zod.parse = (n, o) => t.innerType._zod.run(n, o)));
+  cjsExports.$ZodNonOptional = core.$constructor("$ZodNonOptional", (inst, def) => {
+    cjsExports.$ZodType.init(inst, def);
+    util.defineLazyInternal(inst, "values", (zod) => {
+      let v = zod.def.innerType._zod.values;
+      return v ? new Set([...v].filter((x) => x !== undefined)) : undefined;
+    });
+    inst._zod.parse = (payload, ctx) => {
+      let result = def.innerType._zod.run(payload, ctx);
+      if (result instanceof Promise) return result.then((result) => handleNonOptionalResult(result, inst));
+      return handleNonOptionalResult(result, inst);
+    };
   });
-  T.$ZodNullable = se.$constructor("$ZodNullable", (e, t) => {
-    (T.$ZodType.init(e, t),
-      ee.defineLazyInternal(e, "optin", (n) => n.def.innerType._zod.optin),
-      ee.defineLazyInternal(e, "optout", (n) => n.def.innerType._zod.optout),
-      ee.defineLazyInternal(e, "pattern", (n) => {
-        let pattern = n.def.innerType._zod.pattern;
-        return pattern ? new RegExp(`^(${ee.cleanRegex(pattern.source)}|null)$`) : void 0;
-      }),
-      ee.defineLazyInternal(e, "values", (n) =>
-        n.def.innerType._zod.values ? new Set([...n.def.innerType._zod.values, null]) : void 0,
-      ),
-      (e._zod.parse = (n, o) => {
-        if (n.value === null) return n;
-        return t.innerType._zod.run(n, o);
-      }));
-  });
-  T.$ZodDefault = se.$constructor("$ZodDefault", (e, t) => {
-    (T.$ZodType.init(e, t),
-      (e._zod.optin = "defaulted"),
-      ee.defineLazyInternal(e, "values", (n) => n.def.innerType._zod.values),
-      (e._zod.parse = (n, o) => {
-        if (o.direction === "backward") return t.innerType._zod.run(n, o);
-        if (n.value === void 0) return ((n.value = t.defaultValue), n);
-        let run = t.innerType._zod.run(n, o);
-        if (run instanceof Promise) return run.then((s) => PP(s, t));
-        return PP(run, t);
-      }));
-  });
-  function PP(e, t) {
-    if (e.value === void 0) e.value = t.defaultValue;
-    return e;
+  function handleNonOptionalResult(payload, inst) {
+    if (!payload.issues.length && payload.value === undefined)
+      payload.issues.push({
+        code: "invalid_type",
+        expected: "nonoptional",
+        input: payload.value,
+        inst,
+      });
+    return payload;
   }
-  T.$ZodPrefault = se.$constructor("$ZodPrefault", (e, t) => {
-    (T.$ZodType.init(e, t),
-      (e._zod.optin = "defaulted"),
-      ee.defineLazyInternal(e, "values", (n) => n.def.innerType._zod.values),
-      (e._zod.parse = (n, o) => {
-        if (o.direction === "backward") return t.innerType._zod.run(n, o);
-        if (n.value === void 0) n.value = t.defaultValue;
-        return t.innerType._zod.run(n, o);
-      }));
+  cjsExports.$ZodSuccess = core.$constructor("$ZodSuccess", (inst, def) => {
+    cjsExports.$ZodType.init(inst, def);
+    inst._zod.parse = (payload, ctx) => {
+      if (ctx.direction === "backward") throw new core.$ZodEncodeError("ZodSuccess");
+      let result = def.innerType._zod.run(payload, ctx);
+      if (result instanceof Promise)
+        return result.then((result) => {
+          payload.value = result.issues.length === 0;
+          return payload;
+        });
+      payload.value = result.issues.length === 0;
+      return payload;
+    };
   });
-  T.$ZodNonOptional = se.$constructor("$ZodNonOptional", (e, t) => {
-    (T.$ZodType.init(e, t),
-      ee.defineLazyInternal(e, "values", (n) => {
-        let values = n.def.innerType._zod.values;
-        return values ? new Set([...values].filter((r) => r !== void 0)) : void 0;
-      }),
-      (e._zod.parse = (n, o) => {
-        let run = t.innerType._zod.run(n, o);
-        if (run instanceof Promise) return run.then((s) => AP(s, e));
-        return AP(run, e);
-      }));
-  });
-  function AP(e, t) {
-    if (!e.issues.length && e.value === void 0)
-      e.issues.push({ code: "invalid_type", expected: "nonoptional", input: e.value, inst: t });
-    return e;
-  }
-  T.$ZodSuccess = se.$constructor("$ZodSuccess", (e, t) => {
-    (T.$ZodType.init(e, t),
-      (e._zod.parse = (n, o) => {
-        if (o.direction === "backward") throw new se.$ZodEncodeError("ZodSuccess");
-        let run = t.innerType._zod.run(n, o);
-        if (run instanceof Promise) return run.then((s) => ((n.value = s.issues.length === 0), n));
-        return ((n.value = run.issues.length === 0), n);
-      }));
-  });
-  function IP(e, t, n, o) {
-    if (!t.issues.length) {
-      if (((e.value = t.value), t.memo)) e.memo = !0;
-      return e;
+  function handleCatchResult(payload, result, def, ctx) {
+    if (!result.issues.length) {
+      payload.value = result.value;
+      if (result.memo) payload.memo = true;
+      return payload;
     }
-    return (
-      (e.value = n.catchValue({
-        ...t,
-        value: e.value,
-        error: { issues: t.issues.map((issue) => ee.finalizeIssue(issue, o, se.config())) },
-        input: e.value,
-      })),
-      e
+    payload.value = def.catchValue({
+      ...result,
+      value: payload.value,
+      error: {
+        issues: result.issues.map((iss) => util.finalizeIssue(iss, ctx, core.config())),
+      },
+      input: payload.value,
+    });
+    return payload;
+  }
+  cjsExports.$ZodCatch = core.$constructor("$ZodCatch", (inst, def) => {
+    cjsExports.$ZodType.init(inst, def);
+    util.defineLazyInternal(inst, "optin", (zod) =>
+      zod.def.innerType._zod.optin === "defaulted" ? "defaulted" : "optional",
+    );
+    util.defineLazyInternal(inst, "optout", (zod) => zod.def.innerType._zod.optout);
+    util.defineLazyInternal(inst, "values", (zod) => zod.def.innerType._zod.values);
+    inst._zod.parse = (payload, ctx) => {
+      if (ctx.direction === "backward") return def.innerType._zod.run(payload, ctx);
+      let result = def.innerType._zod.run(
+        {
+          value: payload.value,
+          issues: [],
+        },
+        ctx,
+      );
+      if (result instanceof Promise)
+        return result.then((result) => handleCatchResult(payload, result, def, ctx));
+      return handleCatchResult(payload, result, def, ctx);
+    };
+  });
+  cjsExports.$ZodNaN = core.$constructor("$ZodNaN", (inst, def) => {
+    cjsExports.$ZodType.init(inst, def);
+    inst._zod.parse = (payload, _ctx) => {
+      if (typeof payload.value !== "number" || !Number.isNaN(payload.value)) {
+        payload.issues.push({
+          input: payload.value,
+          inst,
+          expected: "nan",
+          code: "invalid_type",
+        });
+        return payload;
+      }
+      return payload;
+    };
+  });
+  cjsExports.$ZodPipe = core.$constructor("$ZodPipe", (inst, def) => {
+    cjsExports.$ZodType.init(inst, def);
+    util.defineLazyInternal(inst, "values", (zod) => zod.def.in._zod.values);
+    util.defineLazyInternal(inst, "optin", (zod) => zod.def.in._zod.optin);
+    util.defineLazyInternal(inst, "optout", (zod) => zod.def.out._zod.optout);
+    util.defineLazyInternal(inst, "propValues", (zod) => zod.def.in._zod.propValues);
+    inst._zod.parse = (payload, ctx) => {
+      if (ctx.direction === "backward") {
+        let right = def.out._zod.run(payload, ctx);
+        if (right instanceof Promise) return right.then((right) => handlePipeResult(right, def.in, ctx));
+        return handlePipeResult(right, def.in, ctx);
+      }
+      let left = def.in._zod.run(payload, ctx);
+      if (left instanceof Promise) return left.then((left) => handlePipeResult(left, def.out, ctx));
+      return handlePipeResult(left, def.out, ctx);
+    };
+  });
+  function handlePipeResult(left, next, ctx) {
+    if (left.issues.some((iss) => iss.code !== "unrecognized_keys")) {
+      left.aborted = true;
+      return left;
+    }
+    return next._zod.run(
+      {
+        value: left.value,
+        issues: left.issues,
+      },
+      ctx,
     );
   }
-  T.$ZodCatch = se.$constructor("$ZodCatch", (e, t) => {
-    (T.$ZodType.init(e, t),
-      ee.defineLazyInternal(e, "optin", (n) =>
-        n.def.innerType._zod.optin === "defaulted" ? "defaulted" : "optional",
-      ),
-      ee.defineLazyInternal(e, "optout", (n) => n.def.innerType._zod.optout),
-      ee.defineLazyInternal(e, "values", (n) => n.def.innerType._zod.values),
-      (e._zod.parse = (n, o) => {
-        if (o.direction === "backward") return t.innerType._zod.run(n, o);
-        let run = t.innerType._zod.run({ value: n.value, issues: [] }, o);
-        if (run instanceof Promise) return run.then((s) => IP(n, s, t, o));
-        return IP(n, run, t, o);
-      }));
+  cjsExports.$ZodCodec = core.$constructor("$ZodCodec", (inst, def) => {
+    cjsExports.$ZodType.init(inst, def);
+    util.defineLazyInternal(inst, "values", (zod) => zod.def.in._zod.values);
+    util.defineLazyInternal(inst, "optin", (zod) => zod.def.in._zod.optin);
+    util.defineLazyInternal(inst, "optout", (zod) => zod.def.out._zod.optout);
+    util.defineLazyInternal(inst, "propValues", (zod) => zod.def.in._zod.propValues);
+    inst._zod.parse = (payload, ctx) => {
+      if ((ctx.direction || "forward") === "forward") {
+        let left = def.in._zod.run(payload, ctx);
+        if (left instanceof Promise) return left.then((left) => handleCodecAResult(left, def, ctx));
+        return handleCodecAResult(left, def, ctx);
+      } else {
+        let right = def.out._zod.run(payload, ctx);
+        if (right instanceof Promise) return right.then((right) => handleCodecAResult(right, def, ctx));
+        return handleCodecAResult(right, def, ctx);
+      }
+    };
   });
-  T.$ZodNaN = se.$constructor("$ZodNaN", (e, t) => {
-    (T.$ZodType.init(e, t),
-      (e._zod.parse = (n, o) => {
-        if (typeof n.value !== "number" || !Number.isNaN(n.value))
-          return (n.issues.push({ input: n.value, inst: e, expected: "nan", code: "invalid_type" }), n);
-        return n;
-      }));
-  });
-  T.$ZodPipe = se.$constructor("$ZodPipe", (e, t) => {
-    (T.$ZodType.init(e, t),
-      ee.defineLazyInternal(e, "values", (n) => n.def.in._zod.values),
-      ee.defineLazyInternal(e, "optin", (n) => n.def.in._zod.optin),
-      ee.defineLazyInternal(e, "optout", (n) => n.def.out._zod.optout),
-      ee.defineLazyInternal(e, "propValues", (n) => n.def.in._zod.propValues),
-      (e._zod.parse = (n, o) => {
-        if (o.direction === "backward") {
-          let run = t.out._zod.run(n, o);
-          if (run instanceof Promise) return run.then((a) => np(a, t.in, o));
-          return np(run, t.in, o);
-        }
-        let run = t.in._zod.run(n, o);
-        if (run instanceof Promise) return run.then((s) => np(s, t.out, o));
-        return np(run, t.out, o);
-      }));
-  });
-  function np(e, t, n) {
-    if (e.issues.some((issue) => issue.code !== "unrecognized_keys")) return ((e.aborted = !0), e);
-    return t._zod.run({ value: e.value, issues: e.issues }, n);
-  }
-  T.$ZodCodec = se.$constructor("$ZodCodec", (e, t) => {
-    (T.$ZodType.init(e, t),
-      ee.defineLazyInternal(e, "values", (n) => n.def.in._zod.values),
-      ee.defineLazyInternal(e, "optin", (n) => n.def.in._zod.optin),
-      ee.defineLazyInternal(e, "optout", (n) => n.def.out._zod.optout),
-      ee.defineLazyInternal(e, "propValues", (n) => n.def.in._zod.propValues),
-      (e._zod.parse = (n, o) => {
-        if ((o.direction || "forward") === "forward") {
-          let run = t.in._zod.run(n, o);
-          if (run instanceof Promise) return run.then((a) => rp(a, t, o));
-          return rp(run, t, o);
-        } else {
-          let run = t.out._zod.run(n, o);
-          if (run instanceof Promise) return run.then((a) => rp(a, t, o));
-          return rp(run, t, o);
-        }
-      }));
-  });
-  function rp(e, t, n) {
-    if (e.issues.length) return ((e.aborted = !0), e);
-    if ((n.direction || "forward") === "forward") {
-      let transform = t.transform(e.value, e);
-      if (transform instanceof Promise) return transform.then((s) => ip(e, s, t.out, n));
-      return ip(e, transform, t.out, n);
+  function handleCodecAResult(result, def, ctx) {
+    if (result.issues.length) {
+      result.aborted = true;
+      return result;
+    }
+    if ((ctx.direction || "forward") === "forward") {
+      let transformed = def.transform(result.value, result);
+      if (transformed instanceof Promise)
+        return transformed.then((value) => handleCodecTxResult(result, value, def.out, ctx));
+      return handleCodecTxResult(result, transformed, def.out, ctx);
     } else {
-      let reverseTransform = t.reverseTransform(e.value, e);
-      if (reverseTransform instanceof Promise) return reverseTransform.then((s) => ip(e, s, t.in, n));
-      return ip(e, reverseTransform, t.in, n);
+      let transformed = def.reverseTransform(result.value, result);
+      if (transformed instanceof Promise)
+        return transformed.then((value) => handleCodecTxResult(result, value, def.in, ctx));
+      return handleCodecTxResult(result, transformed, def.in, ctx);
     }
   }
-  function ip(e, t, n, o) {
-    if (e.issues.length) return ((e.aborted = !0), e);
-    return n._zod.run({ value: t, issues: e.issues }, o);
+  function handleCodecTxResult(left, value, nextSchema, ctx) {
+    if (left.issues.length) {
+      left.aborted = true;
+      return left;
+    }
+    return nextSchema._zod.run(
+      {
+        value,
+        issues: left.issues,
+      },
+      ctx,
+    );
   }
-  T.$ZodPreprocess = se.$constructor("$ZodPreprocess", (e, t) => {
-    T.$ZodPipe.init(e, t);
+  cjsExports.$ZodPreprocess = core.$constructor("$ZodPreprocess", (inst, def) => {
+    cjsExports.$ZodPipe.init(inst, def);
   });
-  T.$ZodReadonly = se.$constructor("$ZodReadonly", (e, t) => {
-    (T.$ZodType.init(e, t),
-      ee.defineLazyInternal(e, "propValues", (n) => n.def.innerType._zod.propValues),
-      ee.defineLazyInternal(e, "values", (n) => n.def.innerType._zod.values),
-      ee.defineLazyInternal(e, "optin", (n) => n.def.innerType?._zod?.optin),
-      ee.defineLazyInternal(e, "optout", (n) => n.def.innerType?._zod?.optout),
-      (e._zod.parse = (n, o) => {
-        if (o.direction === "backward") return t.innerType._zod.run(n, o);
-        let run = t.innerType._zod.run(n, o);
-        if (run instanceof Promise) return run.then(CP);
-        return CP(run);
-      }));
+  cjsExports.$ZodReadonly = core.$constructor("$ZodReadonly", (inst, def) => {
+    cjsExports.$ZodType.init(inst, def);
+    util.defineLazyInternal(inst, "propValues", (zod) => zod.def.innerType._zod.propValues);
+    util.defineLazyInternal(inst, "values", (zod) => zod.def.innerType._zod.values);
+    util.defineLazyInternal(inst, "optin", (zod) => zod.def.innerType?._zod?.optin);
+    util.defineLazyInternal(inst, "optout", (zod) => zod.def.innerType?._zod?.optout);
+    inst._zod.parse = (payload, ctx) => {
+      if (ctx.direction === "backward") return def.innerType._zod.run(payload, ctx);
+      let result = def.innerType._zod.run(payload, ctx);
+      if (result instanceof Promise) return result.then(handleReadonlyResult);
+      return handleReadonlyResult(result);
+    };
   });
-  function CP(e) {
-    if (!e.memo) e.value = Object.freeze(e.value);
-    return e;
+  function handleReadonlyResult(payload) {
+    if (!payload.memo) payload.value = Object.freeze(payload.value);
+    return payload;
   }
-  function JZ(e) {
-    let def = e._zod.def,
-      pattern = def.pattern,
-      o = !!def.format?.includes("int"),
-      r,
-      s;
-    for (let l of def.checks ?? []) {
-      let def = l._zod.def;
-      if (def.pattern) pattern = def.pattern;
-      o || (o = !!def.format?.includes("int"));
-      let u = def.minimum ?? def.length,
-        f = def.maximum ?? def.length;
-      if (u !== void 0 && (r === void 0 || u > r)) r = u;
-      if (f !== void 0 && (s === void 0 || f < s)) s = f;
+  function leafPattern(schema) {
+    let def = schema._zod.def;
+    let pattern = def.pattern;
+    let isInt = !!def.format?.includes("int");
+    let minimum;
+    let maximum;
+    for (let ch of def.checks ?? []) {
+      let d = ch._zod.def;
+      if (d.pattern) pattern = d.pattern;
+      if (!isInt) isInt = !!d.format?.includes("int");
+      let lo = d.minimum ?? d.length;
+      let hi = d.maximum ?? d.length;
+      if (lo !== undefined && (minimum === undefined || lo > minimum)) minimum = lo;
+      if (hi !== undefined && (maximum === undefined || hi < maximum)) maximum = hi;
     }
     if (pattern) return pattern.source;
-    if (r !== void 0 && s !== void 0 && r > s) return "(?!)";
-    if (r !== void 0 || s !== void 0) return It.string({ minimum: r, maximum: s }).source;
-    let pattern_2 = e._zod.pattern;
-    return (o && pattern_2 === It.number ? It.integer : pattern_2)?.source;
+    if (minimum !== undefined && maximum !== undefined && minimum > maximum) return "(?!)";
+    if (minimum !== undefined || maximum !== undefined)
+      return regexes.string({
+        minimum,
+        maximum,
+      }).source;
+    let own = schema._zod.pattern;
+    return (isInt && own === regexes.number ? regexes.integer : own)?.source;
   }
-  function j_(e) {
-    let def = e._zod.def,
-      n = e._zod.pattern?.source,
-      o = def.innerType ?? e._zod.innerType;
-    if (o) {
-      let r = o._zod.pattern?.source,
-        s = j_(o);
-      if (n && r && s && s !== r) return n.replace(ee.cleanRegex(r), () => ee.cleanRegex(s));
-      return n;
+  function partPattern(schema) {
+    let def = schema._zod.def;
+    let own = schema._zod.pattern?.source;
+    let inner = def.innerType ?? schema._zod.innerType;
+    if (inner) {
+      let before = inner._zod.pattern?.source;
+      let after = partPattern(inner);
+      if (own && before && after && after !== before)
+        return own.replace(util.cleanRegex(before), () => util.cleanRegex(after));
+      return own;
     }
     if (def.options) {
-      let mapped = def.options.map(j_);
-      if (mapped.every(Boolean)) return `^(${mapped.map((s) => ee.cleanRegex(s)).join("|")})$`;
+      let sources = def.options.map(partPattern);
+      if (sources.every(Boolean)) return `^(${sources.map((source) => util.cleanRegex(source)).join("|")})$`;
     }
-    return JZ(e);
+    return leafPattern(schema);
   }
-  T.$ZodTemplateLiteral = se.$constructor("$ZodTemplateLiteral", (e, t) => {
-    T.$ZodType.init(e, t);
-    let n = [];
-    for (let part of t.parts)
+  cjsExports.$ZodTemplateLiteral = core.$constructor("$ZodTemplateLiteral", (inst, def) => {
+    cjsExports.$ZodType.init(inst, def);
+    let regexParts = [];
+    for (let part of def.parts)
       if (typeof part === "object" && part !== null) {
-        let r = j_(part);
-        if (!r)
+        let source = partPattern(part);
+        if (!source)
           throw Error(`Invalid template literal part, no pattern found: ${[...part._zod.traits].shift()}`);
-        n.push(ee.cleanRegex(r));
-      } else if (part === null || ee.primitiveTypes.has(typeof part)) n.push(ee.escapeRegex(`${part}`));
+        regexParts.push(util.cleanRegex(source));
+      } else if (part === null || util.primitiveTypes.has(typeof part))
+        regexParts.push(util.escapeRegex(`${part}`));
       else throw Error(`Invalid template literal part: ${part}`);
-    ((e._zod.pattern = new RegExp(`^${n.join("")}$`)),
-      (e._zod.parse = (o, r) => {
-        if (typeof o.value !== "string")
-          return (o.issues.push({ input: o.value, inst: e, expected: "string", code: "invalid_type" }), o);
-        if (((e._zod.pattern.lastIndex = 0), !e._zod.pattern.test(o.value)))
-          return (
-            o.issues.push({
-              input: o.value,
-              inst: e,
-              code: "invalid_format",
-              format: t.format ?? "template_literal",
-              pattern: e._zod.pattern.source,
-            }),
-            o
-          );
-        return o;
-      }));
+    inst._zod.pattern = new RegExp(`^${regexParts.join("")}$`);
+    inst._zod.parse = (payload, _ctx) => {
+      if (typeof payload.value !== "string") {
+        payload.issues.push({
+          input: payload.value,
+          inst,
+          expected: "string",
+          code: "invalid_type",
+        });
+        return payload;
+      }
+      inst._zod.pattern.lastIndex = 0;
+      if (!inst._zod.pattern.test(payload.value)) {
+        payload.issues.push({
+          input: payload.value,
+          inst,
+          code: "invalid_format",
+          format: def.format ?? "template_literal",
+          pattern: inst._zod.pattern.source,
+        });
+        return payload;
+      }
+      return payload;
+    };
   });
-  T.$ZodFunction = se.$constructor(
-    "$ZodFunction",
-    (e, t) => (
-      T.$ZodType.init(e, t),
-      Object.defineProperty(e, "_def", { value: t }),
-      (e._zod.def = t),
-      (e.implement = (n) => {
-        if (typeof n !== "function") throw Error("implement() must be called with a function");
-        return Object.defineProperty(
-          function (...o) {
-            let r = e._def.input ? Qs.parse(e._def.input, o) : o,
-              s = Reflect.apply(n, this, r);
-            if (e._def.output) return Qs.parse(e._def.output, s);
-            return s;
+  cjsExports.$ZodFunction = core.$constructor("$ZodFunction", (inst, def) => {
+    cjsExports.$ZodType.init(inst, def);
+    Object.defineProperty(inst, "_def", {
+      value: def,
+    });
+    inst._zod.def = def;
+    inst.implement = (func) => {
+      if (typeof func !== "function") throw Error("implement() must be called with a function");
+      return Object.defineProperty(
+        function (...args) {
+          let parsedArgs = inst._def.input ? parse_js_1.parse(inst._def.input, args) : args;
+          let result = Reflect.apply(func, this, parsedArgs);
+          if (inst._def.output) return parse_js_1.parse(inst._def.output, result);
+          return result;
+        },
+        "_zod",
+        {
+          value: inst._zod,
+          enumerable: false,
+        },
+      );
+    };
+    inst.implementAsync = (func) => {
+      if (typeof func !== "function") throw Error("implementAsync() must be called with a function");
+      return Object.defineProperty(
+        async function (...args) {
+          let parsedArgs = inst._def.input ? await parse_js_1.parseAsync(inst._def.input, args) : args;
+          let result = await Reflect.apply(func, this, parsedArgs);
+          if (inst._def.output) return await parse_js_1.parseAsync(inst._def.output, result);
+          return result;
+        },
+        "_zod",
+        {
+          value: inst._zod,
+          enumerable: false,
+        },
+      );
+    };
+    inst._zod.parse = (payload, _ctx) => {
+      if (typeof payload.value !== "function") {
+        payload.issues.push({
+          code: "invalid_type",
+          expected: "function",
+          input: payload.value,
+          inst,
+        });
+        return payload;
+      }
+      if (inst._def.output && inst._def.output._zod.def.type === "promise")
+        payload.value = inst.implementAsync(payload.value);
+      else payload.value = inst.implement(payload.value);
+      return payload;
+    };
+    inst.input = (...args) => {
+      let F = inst.constructor;
+      if (Array.isArray(args[0]))
+        return new F({
+          type: "function",
+          input: new cjsExports.$ZodTuple({
+            type: "tuple",
+            items: args[0],
+            rest: args[1],
+          }),
+          output: inst._def.output,
+        });
+      return new F({
+        type: "function",
+        input: args[0],
+        output: inst._def.output,
+      });
+    };
+    inst.output = (output) =>
+      new inst.constructor({
+        type: "function",
+        input: inst._def.input,
+        output,
+      });
+    return inst;
+  });
+  cjsExports.$ZodPromise = core.$constructor("$ZodPromise", (inst, def) => {
+    cjsExports.$ZodType.init(inst, def);
+    inst._zod.parse = (payload, ctx) =>
+      Promise.resolve(payload.value).then((inner) =>
+        def.innerType._zod.run(
+          {
+            value: inner,
+            issues: [],
           },
-          "_zod",
-          { value: e._zod, enumerable: !1 },
-        );
-      }),
-      (e.implementAsync = (n) => {
-        if (typeof n !== "function") throw Error("implementAsync() must be called with a function");
-        return Object.defineProperty(
-          async function (...o) {
-            let r = e._def.input ? await Qs.parseAsync(e._def.input, o) : o,
-              s = await Reflect.apply(n, this, r);
-            if (e._def.output) return await Qs.parseAsync(e._def.output, s);
-            return s;
-          },
-          "_zod",
-          { value: e._zod, enumerable: !1 },
-        );
-      }),
-      (e._zod.parse = (n, o) => {
-        if (typeof n.value !== "function")
-          return (n.issues.push({ code: "invalid_type", expected: "function", input: n.value, inst: e }), n);
-        if (e._def.output && e._def.output._zod.def.type === "promise") n.value = e.implementAsync(n.value);
-        else n.value = e.implement(n.value);
-        return n;
-      }),
-      (e.input = (...n) => {
-        let o = e.constructor;
-        if (Array.isArray(n[0]))
-          return new o({
-            type: "function",
-            input: new T.$ZodTuple({ type: "tuple", items: n[0], rest: n[1] }),
-            output: e._def.output,
-          });
-        return new o({ type: "function", input: n[0], output: e._def.output });
-      }),
-      (e.output = (n) => new e.constructor({ type: "function", input: e._def.input, output: n })),
-      e
-    ),
-  );
-  T.$ZodPromise = se.$constructor("$ZodPromise", (e, t) => {
-    (T.$ZodType.init(e, t),
-      (e._zod.parse = (n, o) =>
-        Promise.resolve(n.value).then((r) => t.innerType._zod.run({ value: r, issues: [] }, o))));
+          ctx,
+        ),
+      );
   });
-  T.$ZodLazy = se.$constructor("$ZodLazy", (e, t) => {
-    (T.$ZodType.init(e, t),
-      ee.defineLazy(e._zod, "innerType", () => {
-        let n = t;
-        if (!n._cachedInner) n._cachedInner = t.getter();
-        return n._cachedInner;
-      }),
-      ee.defineLazyInternal(e, "pattern", (n) => n.innerType?._zod?.pattern),
-      ee.defineLazyInternal(e, "propValues", (n) => n.innerType?._zod?.propValues),
-      ee.defineLazyInternal(e, "optin", (n) => n.innerType?._zod?.optin ?? void 0),
-      ee.defineLazyInternal(e, "optout", (n) => n.innerType?._zod?.optout ?? void 0),
-      (e._zod.parse = (n, o) => e._zod.innerType._zod.run(n, o)));
+  cjsExports.$ZodLazy = core.$constructor("$ZodLazy", (inst, def) => {
+    cjsExports.$ZodType.init(inst, def);
+    util.defineLazy(inst._zod, "innerType", () => {
+      let d = def;
+      if (!d._cachedInner) d._cachedInner = def.getter();
+      return d._cachedInner;
+    });
+    util.defineLazyInternal(inst, "pattern", (zod) => zod.innerType?._zod?.pattern);
+    util.defineLazyInternal(inst, "propValues", (zod) => zod.innerType?._zod?.propValues);
+    util.defineLazyInternal(inst, "optin", (zod) => zod.innerType?._zod?.optin ?? undefined);
+    util.defineLazyInternal(inst, "optout", (zod) => zod.innerType?._zod?.optout ?? undefined);
+    inst._zod.parse = (payload, ctx) => inst._zod.innerType._zod.run(payload, ctx);
   });
-  T.$ZodCustom = se.$constructor("$ZodCustom", (e, t) => {
-    (qu.$ZodCheck.init(e, t),
-      T.$ZodType.init(e, t),
-      (e._zod.parse = (n, o) => n),
-      (e._zod.check = (n) => {
-        let o = n.value,
-          fn = t.fn(o);
-        if (fn instanceof Promise) return fn.then((s) => TP(s, n, o, e));
-        TP(fn, n, o, e);
-        return;
-      }));
+  cjsExports.$ZodCustom = core.$constructor("$ZodCustom", (inst, def) => {
+    checks.$ZodCheck.init(inst, def);
+    cjsExports.$ZodType.init(inst, def);
+    inst._zod.parse = (payload, _) => payload;
+    inst._zod.check = (payload) => {
+      let input = payload.value;
+      let result = def.fn(input);
+      if (result instanceof Promise) return result.then((r) => handleRefineResult(r, payload, input, inst));
+      handleRefineResult(result, payload, input, inst);
+      return;
+    };
   });
-  function TP(e, t, n, o) {
-    if (!e) {
-      let r = {
+  function handleRefineResult(result, payload, input, inst) {
+    if (!result) {
+      let _iss = {
         code: "custom",
-        input: n,
-        inst: o,
-        path: [...(o._zod.def.path ?? [])],
-        continue: !o._zod.def.abort,
+        input,
+        inst,
+        path: [...(inst._zod.def.path ?? [])],
+        continue: !inst._zod.def.abort,
       };
-      if (o._zod.def.params) r.params = o._zod.def.params;
-      t.issues.push(ee.issue(r));
+      if (inst._zod.def.params) _iss.params = inst._zod.def.params;
+      payload.issues.push(util.issue(_iss));
     }
   }
-  function $P(e, t, n) {
-    if (e.issues.length) t.issues.push(...ee.prefixIssues(n, e.issues));
+  function handlePropertiesResult(result, payload, key) {
+    if (result.issues.length) payload.issues.push(...util.prefixIssues(key, result.issues));
   }
-  T.$ZodProperties = se.$constructor(
+  cjsExports.$ZodProperties = core.$constructor(
     "$ZodProperties",
-    (e, t) => {
-      (T.$ZodType.init(e, t), qu.$ZodCheck.init(e, t));
-      let memoizer = se.globalConfig.memoizer;
-      memoizer?.attach(e);
-      let o,
-        r = (s, a) => {
-          o ?? (o = Reflect.ownKeys(t.shape).map((u) => [u, t.shape[u]]));
-          let l = s.value,
-            c;
-          for (let [u, f] of o) {
-            let run = f._zod.run({ value: l[u], issues: [] }, a);
-            if (run instanceof Promise) (c ?? (c = []), c.push(run.then((m) => $P(m, s, u))));
-            else $P(run, s, u);
-          }
-          if (c)
-            return Promise.all(c).then(() => {
-              return;
-            });
-          return;
-        };
-      ((e._zod.parse = (s, a) => {
-        let l = s.value;
-        if (l === null || (typeof l !== "object" && typeof l !== "function"))
-          return (s.issues.push({ expected: "object", code: "invalid_type", input: l, inst: e }), s);
-        if (a.direction === "backward") a = { ...a, direction: "forward" };
-        if (memoizer) memoizer.alloc(e, s, l, a);
-        let c = r(s, a);
-        return c instanceof Promise ? c.then(() => s) : s;
-      }),
-        (e._zod.check = (s) => {
-          if (s.value == null) {
-            s.issues.push({ expected: "object", code: "invalid_type", input: s.value, inst: e });
+    (inst, def) => {
+      cjsExports.$ZodType.init(inst, def);
+      checks.$ZodCheck.init(inst, def);
+      let memo = core.globalConfig.memoizer;
+      memo?.attach(inst);
+      let entries;
+      let runShape = (payload, ctx) => {
+        entries ?? (entries = Reflect.ownKeys(def.shape).map((key) => [key, def.shape[key]]));
+        let input = payload.value;
+        let proms;
+        for (let [key, schema] of entries) {
+          let result = schema._zod.run(
+            {
+              value: input[key],
+              issues: [],
+            },
+            ctx,
+          );
+          if (result instanceof Promise) {
+            proms ?? (proms = []);
+            proms.push(result.then((result) => handlePropertiesResult(result, payload, key)));
+          } else handlePropertiesResult(result, payload, key);
+        }
+        if (proms)
+          return Promise.all(proms).then(() => {
             return;
-          }
-          return r(s, {});
-        }));
+          });
+        return;
+      };
+      inst._zod.parse = (payload, ctx) => {
+        let input = payload.value;
+        if (input === null || (typeof input !== "object" && typeof input !== "function")) {
+          payload.issues.push({
+            expected: "object",
+            code: "invalid_type",
+            input,
+            inst,
+          });
+          return payload;
+        }
+        if (ctx.direction === "backward")
+          ctx = {
+            ...ctx,
+            direction: "forward",
+          };
+        if (memo) memo.alloc(inst, payload, input, ctx);
+        let result = runShape(payload, ctx);
+        return result instanceof Promise ? result.then(() => payload) : payload;
+      };
+      inst._zod.check = (payload) => {
+        if (payload.value == null) {
+          payload.issues.push({
+            expected: "object",
+            code: "invalid_type",
+            input: payload.value,
+            inst,
+          });
+          return;
+        }
+        return runShape(payload, {});
+      };
     },
     {
       *[Symbol.iterator]() {
@@ -2010,27 +2590,25 @@ var Bl = x(function (T) {
     },
   );
   (function () {
-    var ownPropertyNames = Object.getOwnPropertyNames(T);
-    for (var t = 0; t < ownPropertyNames.length; t++) {
-      var ownPropertyDescriptor = Object.getOwnPropertyDescriptor(T, ownPropertyNames[t]);
-      if (!ownPropertyDescriptor || !ownPropertyDescriptor.get || !ownPropertyDescriptor.configurable)
-        continue;
-      var o;
+    var keys = Object.getOwnPropertyNames(cjsExports);
+    for (var i = 0; i < keys.length; i++) {
+      var desc = Object.getOwnPropertyDescriptor(cjsExports, keys[i]);
+      if (!desc || !desc.get || !desc.configurable) continue;
+      var value;
       try {
-        o = ownPropertyDescriptor.get();
-      } catch (error) {
+        value = desc.get();
+      } catch (e) {
         continue;
       }
-      if (o === void 0) continue;
-      Object.defineProperty(T, ownPropertyNames[t], {
-        value: o,
-        writable: !1,
-        enumerable: ownPropertyDescriptor.enumerable,
-        configurable: !1,
+      if (value === undefined) continue;
+      Object.defineProperty(cjsExports, keys[i], {
+        value,
+        writable: false,
+        enumerable: desc.enumerable,
+        configurable: false,
       });
     }
-    Object.freeze(T);
+    Object.freeze(cjsExports);
   })();
 });
-
-export { Bl };
+export { require_schemas };

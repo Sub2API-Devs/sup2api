@@ -5,51 +5,70 @@
  * pieces: chunk-2tyrgda4.js (4)
  * attribution: esm-layout 2, esm-fingerprint 2
  */
-import { k, E, Ee, f } from "../../webapi/lib/content_encryption.js";
-import { ie } from "../../node/esm/lib/cek.js";
+import {
+  k,
+  init_content_encryption_2,
+  init_content_encryption_3,
+  f,
+} from "../../webapi/lib/content_encryption.js";
+import { bitLength } from "../../node/esm/lib/cek.js";
 import { Xa } from "../../../../../runtime/bun-runtime.js";
 import { p } from "../../webapi/lib/buffer_utils.js";
-import { S } from "./base64url.js";
+import { decode } from "./base64url.js";
 
 //@ chunk-2tyrgda4.js:14034-14073 esm-layout
-var V = (e) => k(new Uint8Array(ie(e) >> 3));
+var V = (e) => k(new Uint8Array(bitLength(e) >> 3));
 //@ chunk-2tyrgda4.js:14073-14099 esm-layout
-var We = Xa(() => {
-  E();
-  Ee();
+var init_jwk_to_key = Xa(() => {
+  init_content_encryption_2();
+  init_content_encryption_3();
 });
 //@ chunk-2tyrgda4.js:14099-16294 esm-fingerprint
-function Hr(e) {
-  let t, r;
-  switch (e.kty) {
+function subtleMapping(jwk) {
+  let algorithm;
+  let keyUsages;
+  switch (jwk.kty) {
     case "oct": {
-      switch (e.alg) {
+      switch (jwk.alg) {
         case "HS256":
         case "HS384":
         case "HS512":
-          ((t = { name: "HMAC", hash: `SHA-${e.alg.slice(-3)}` }), (r = ["sign", "verify"]));
+          algorithm = {
+            name: "HMAC",
+            hash: `SHA-${jwk.alg.slice(-3)}`,
+          };
+          keyUsages = ["sign", "verify"];
           break;
         case "A128CBC-HS256":
         case "A192CBC-HS384":
         case "A256CBC-HS512":
-          throw new f(`${e.alg} keys cannot be imported as CryptoKey instances`);
+          throw new f(`${jwk.alg} keys cannot be imported as CryptoKey instances`);
         case "A128GCM":
         case "A192GCM":
         case "A256GCM":
         case "A128GCMKW":
         case "A192GCMKW":
         case "A256GCMKW":
-          ((t = { name: "AES-GCM" }), (r = ["encrypt", "decrypt"]));
+          algorithm = {
+            name: "AES-GCM",
+          };
+          keyUsages = ["encrypt", "decrypt"];
           break;
         case "A128KW":
         case "A192KW":
         case "A256KW":
-          ((t = { name: "AES-KW" }), (r = ["wrapKey", "unwrapKey"]));
+          algorithm = {
+            name: "AES-KW",
+          };
+          keyUsages = ["wrapKey", "unwrapKey"];
           break;
         case "PBES2-HS256+A128KW":
         case "PBES2-HS384+A192KW":
         case "PBES2-HS512+A256KW":
-          ((t = { name: "PBKDF2" }), (r = ["deriveBits"]));
+          algorithm = {
+            name: "PBKDF2",
+          };
+          keyUsages = ["deriveBits"];
           break;
         default:
           throw new f('Invalid or unsupported JWK "alg" (Algorithm) Parameter value');
@@ -57,24 +76,34 @@ function Hr(e) {
       break;
     }
     case "RSA": {
-      switch (e.alg) {
+      switch (jwk.alg) {
         case "PS256":
         case "PS384":
         case "PS512":
-          ((t = { name: "RSA-PSS", hash: `SHA-${e.alg.slice(-3)}` }), (r = e.d ? ["sign"] : ["verify"]));
+          algorithm = {
+            name: "RSA-PSS",
+            hash: `SHA-${jwk.alg.slice(-3)}`,
+          };
+          keyUsages = jwk.d ? ["sign"] : ["verify"];
           break;
         case "RS256":
         case "RS384":
         case "RS512":
-          ((t = { name: "RSASSA-PKCS1-v1_5", hash: `SHA-${e.alg.slice(-3)}` }),
-            (r = e.d ? ["sign"] : ["verify"]));
+          algorithm = {
+            name: "RSASSA-PKCS1-v1_5",
+            hash: `SHA-${jwk.alg.slice(-3)}`,
+          };
+          keyUsages = jwk.d ? ["sign"] : ["verify"];
           break;
         case "RSA-OAEP":
         case "RSA-OAEP-256":
         case "RSA-OAEP-384":
         case "RSA-OAEP-512":
-          ((t = { name: "RSA-OAEP", hash: `SHA-${parseInt(e.alg.slice(-3), 10) || 1}` }),
-            (r = e.d ? ["decrypt", "unwrapKey"] : ["encrypt", "wrapKey"]));
+          algorithm = {
+            name: "RSA-OAEP",
+            hash: `SHA-${parseInt(jwk.alg.slice(-3), 10) || 1}`,
+          };
+          keyUsages = jwk.d ? ["decrypt", "unwrapKey"] : ["encrypt", "wrapKey"];
           break;
         default:
           throw new f('Invalid or unsupported JWK "alg" (Algorithm) Parameter value');
@@ -82,21 +111,37 @@ function Hr(e) {
       break;
     }
     case "EC": {
-      switch (e.alg) {
+      switch (jwk.alg) {
         case "ES256":
-          ((t = { name: "ECDSA", namedCurve: "P-256" }), (r = e.d ? ["sign"] : ["verify"]));
+          algorithm = {
+            name: "ECDSA",
+            namedCurve: "P-256",
+          };
+          keyUsages = jwk.d ? ["sign"] : ["verify"];
           break;
         case "ES384":
-          ((t = { name: "ECDSA", namedCurve: "P-384" }), (r = e.d ? ["sign"] : ["verify"]));
+          algorithm = {
+            name: "ECDSA",
+            namedCurve: "P-384",
+          };
+          keyUsages = jwk.d ? ["sign"] : ["verify"];
           break;
         case "ES512":
-          ((t = { name: "ECDSA", namedCurve: "P-521" }), (r = e.d ? ["sign"] : ["verify"]));
+          algorithm = {
+            name: "ECDSA",
+            namedCurve: "P-521",
+          };
+          keyUsages = jwk.d ? ["sign"] : ["verify"];
           break;
         case "ECDH-ES":
         case "ECDH-ES+A128KW":
         case "ECDH-ES+A192KW":
         case "ECDH-ES+A256KW":
-          ((t = { name: "ECDH", namedCurve: e.crv }), (r = e.d ? ["deriveBits"] : []));
+          algorithm = {
+            name: "ECDH",
+            namedCurve: jwk.crv,
+          };
+          keyUsages = jwk.d ? ["deriveBits"] : [];
           break;
         default:
           throw new f('Invalid or unsupported JWK "alg" (Algorithm) Parameter value');
@@ -104,15 +149,21 @@ function Hr(e) {
       break;
     }
     case "OKP": {
-      switch (e.alg) {
+      switch (jwk.alg) {
         case "EdDSA":
-          ((t = { name: e.crv }), (r = e.d ? ["sign"] : ["verify"]));
+          algorithm = {
+            name: jwk.crv,
+          };
+          keyUsages = jwk.d ? ["sign"] : ["verify"];
           break;
         case "ECDH-ES":
         case "ECDH-ES+A128KW":
         case "ECDH-ES+A192KW":
         case "ECDH-ES+A256KW":
-          ((t = { name: e.crv }), (r = e.d ? ["deriveBits"] : []));
+          algorithm = {
+            name: jwk.crv,
+          };
+          keyUsages = jwk.d ? ["deriveBits"] : [];
           break;
         default:
           throw new f('Invalid or unsupported JWK "alg" (Algorithm) Parameter value');
@@ -122,22 +173,29 @@ function Hr(e) {
     default:
       throw new f('Invalid or unsupported JWK "kty" (Key Type) Parameter value');
   }
-  return { algorithm: t, keyUsages: r };
+  return {
+    algorithm,
+    keyUsages,
+  };
 }
 //@ chunk-2tyrgda4.js:16294-16667 esm-fingerprint
-var Wr = async (e) => {
-    var t, r;
-    if (!e.alg) throw TypeError('"alg" argument is required when "jwk.alg" is not present');
-    let { algorithm: algorithm, keyUsages: keyUsages } = Hr(e),
-      a = [
-        algorithm,
-        (t = e.ext) !== null && t !== void 0 ? t : !1,
-        (r = e.key_ops) !== null && r !== void 0 ? r : keyUsages,
-      ];
-    if (algorithm.name === "PBKDF2") return p.subtle.importKey("raw", S(e.k), ...a);
-    let i = { ...e };
-    return (delete i.alg, delete i.use, p.subtle.importKey("jwk", i, ...a));
-  },
-  qe;
-
-export { qe, Wr, We, V };
+var parse = async (jwk) => {
+  var _a;
+  var _b;
+  if (!jwk.alg) throw TypeError('"alg" argument is required when "jwk.alg" is not present');
+  let { algorithm, keyUsages } = subtleMapping(jwk);
+  let rest = [
+    algorithm,
+    (_a = jwk.ext) !== null && _a !== undefined ? _a : false,
+    (_b = jwk.key_ops) !== null && _b !== undefined ? _b : keyUsages,
+  ];
+  if (algorithm.name === "PBKDF2") return p.subtle.importKey("raw", decode(jwk.k), ...rest);
+  let keyData = {
+    ...jwk,
+  };
+  delete keyData.alg;
+  delete keyData.use;
+  return p.subtle.importKey("jwk", keyData, ...rest);
+};
+var parse_default;
+export { parse_default, parse, init_jwk_to_key, V };

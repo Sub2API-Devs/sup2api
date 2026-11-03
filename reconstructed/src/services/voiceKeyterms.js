@@ -40,5 +40,4 @@ function fileNameWords(filePath) {
   let stem = basename(filePath).replace(/\.[^.]+$/, "");
   return splitIdentifier(stem);
 }
-
 export { splitIdentifier, GLOBAL_KEYTERMS, fileNameWords };

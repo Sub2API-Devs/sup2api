@@ -11,25 +11,30 @@
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../analytics/growthbook.js";
 import { env } from "../../utils/env.js";
 
+//@ chunk-2fgr7cjv.js:261-274 placement
 /**
  * MCP 任务轮询间隔。
  */
-//@ chunk-2fgr7cjv.js:261-274 placement
 var MCP_TASK_POLL_MS = 5000;
+//@ chunk-2fgr7cjv.js:274-322 placement
 /**
  * 开关 tengu_glowing_lark（MCP 任务）。
  */
-//@ chunk-2fgr7cjv.js:274-322 placement
 function isMcpTasksEnabled() {
-  return getFeatureValue_CACHED_MAY_BE_STALE("tengu_glowing_lark", !1);
+  return getFeatureValue_CACHED_MAY_BE_STALE("tengu_glowing_lark", false);
 }
 //@ chunk-2fgr7cjv.js:322-385 placement
-function qSn() {
-  return isMcpTasksEnabled() && getFeatureValue_CACHED_MAY_BE_STALE("tengu_mcp_task_worker_wake", !1);
+/**
+ * 任务 worker 唤醒是否开启（MCP 任务启用且有 tengu_mcp_task_worker_wake）。
+ */
+function isTaskWorkerWakeEnabled() {
+  return isMcpTasksEnabled() && getFeatureValue_CACHED_MAY_BE_STALE("tengu_mcp_task_worker_wake", false);
 }
 //@ chunk-2fgr7cjv.js:385-449 placement
-function u3o() {
+/**
+ * MCP 任务的后台执行是否被环境变量禁用。
+ */
+function isTaskBackgroundDisabled() {
   return env.CLAUDE_CODE_DISABLE_MCP_TASK_BACKGROUND;
 }
-
-export { MCP_TASK_POLL_MS, isMcpTasksEnabled, u3o, qSn };
+export { MCP_TASK_POLL_MS, isMcpTasksEnabled, isTaskBackgroundDisabled, isTaskWorkerWakeEnabled };

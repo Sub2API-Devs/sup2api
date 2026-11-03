@@ -6,20 +6,19 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { ihs } from "../../ms/index.js";
+import { require_ms } from "../../ms/index.js";
 
 //@ chunk-mrx6y2r5.js:4528-4769 cjs-fingerprint
-var cc = x(function (rL, $h) {
-  var my = ihs();
-  $h.exports = function (e, t) {
-    var r = t || Math.floor(Date.now() / 1000);
-    if (typeof e === "string") {
-      var n = my(e);
-      if (typeof n > "u") return;
-      return Math.floor(r + n / 1000);
-    } else if (typeof e === "number") return r + e;
+var require_timespan = x(function (cjsExports, cjsModule) {
+  var ms = require_ms();
+  cjsModule.exports = function (time, iat) {
+    var timestamp = iat || Math.floor(Date.now() / 1000);
+    if (typeof time === "string") {
+      var milliseconds = ms(time);
+      if (typeof milliseconds === "undefined") return;
+      return Math.floor(timestamp + milliseconds / 1000);
+    } else if (typeof time === "number") return timestamp + time;
     else return;
   };
 });
-
-export { cc };
+export { require_timespan };

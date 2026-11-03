@@ -8,14 +8,14 @@
  * pieces: chunk-gbtb0mjv.js (14)
  * attribution: fingerprint 1, placement 13
  */
-import { h$e } from "../../tools/PushNotificationTool/prompt.js";
+import { isAgentPushNotificationEnabled } from "../../tools/PushNotificationTool/prompt.js";
 import { PUSHNOTIFICATION } from "../../tools/PushNotificationTool/constants.js";
 import {
   loopOutcomeInstruction,
   SCHEDULE_WAKEUP_TOOL_NAME,
   wakeupPreArmParagraph,
-  g$e,
-  Krt,
+  AUTONOMOUS_LOOP_DYNAMIC_PROMPT,
+  AUTONOMOUS_LOOP_PROMPT,
 } from "../../tools/ScheduleWakeupTool/prompt.js";
 import { isBriefEnabled } from "../../tools/BriefTool/BriefTool.js";
 import { env } from "../../utils/env.js";
@@ -51,26 +51,31 @@ import { logEvent } from "../../services/analytics/index.js";
 import { resetLoopState } from "../../utils/loop/loopWakeups.js";
 
 //@ chunk-gbtb0mjv.js:5877-5922 fingerprint = DEFAULT_INTERVAL (0.659)
-var h = require("./chunk-w6rm7nhv.js"),
-  A = "10m";
+/**
+ * 延迟 require 的提示词模块。
+ */
+var prompterModule = require("./chunk-w6rm7nhv.js");
+var DEFAULT_LOOP_INTERVAL = "10m";
 //@ chunk-gbtb0mjv.js:5922-6150 placement
 function loopStopNotificationHint() {
-  return h$e()
+  return isAgentPushNotificationEnabled()
     ? ` Before you stop, send a one-line outcome via ${PUSHNOTIFICATION} \u2014 the user may be away and waiting to hear it's done. Skip this if you're stopping because the user just told you to; they're already here.`
     : "";
 }
 //@ chunk-gbtb0mjv.js:6150-6256 placement
 function loopOutcomeHint() {
-  return ` Then ${loopOutcomeInstruction({ briefMode: isBriefEnabled() })} \u2014 a stopped loop has no next tick to surface it.`;
+  return ` Then ${loopOutcomeInstruction({
+    briefMode: isBriefEnabled(),
+  })} \u2014 a stopped loop has no next tick to surface it.`;
 }
 //@ chunk-gbtb0mjv.js:6256-6387 placement
-var INTERVAL_SUFFIX_RE = /^\d+[smhd]$/,
-  EVERY_INTERVAL_RE =
-    /^every\s+(\d+)\s*(s|sec|secs|second|seconds|m|min|mins|minute|minutes|h|hr|hrs|hour|hours|d|day|days)\s*$/i;
+var INTERVAL_SUFFIX_RE = /^\d+[smhd]$/;
+var EVERY_INTERVAL_RE =
+  /^every\s+(\d+)\s*(s|sec|secs|second|seconds|m|min|mins|minute|minutes|h|hr|hrs|hour|hours|d|day|days)\s*$/i;
 //@ chunk-gbtb0mjv.js:6387-6552 placement
 function normalizeEveryInterval(e) {
-  let o = e[1],
-    lower = e[2].toLowerCase();
+  let o = e[1];
+  let lower = e[2].toLowerCase();
   if (lower.startsWith("s")) return `${o}s`;
   if (lower.startsWith("h")) return `${o}h`;
   if (lower.startsWith("d")) return `${o}d`;
@@ -110,10 +115,10 @@ If neither trigger condition was met: continue below.
 `;
   return "";
 }
+//@ chunk-gbtb0mjv.js:9308-9923 placement
 /**
  * 满足条件（第一方订阅、策略允许远程会话与例程等）时返回云端定时任务的提示行。
  */
-//@ chunk-gbtb0mjv.js:9308-9923 placement
 function cloudScheduleOfferLine() {
   if (
     !env.CLAUDE_CODE_REMOTE &&
@@ -135,10 +140,10 @@ function monitorArmInstruction() {
     ? `arm one now with \`timeout_ms: ${monitorMaxTimeoutMs()}\``
     : "arm one now with `persistent: true`";
 }
+//@ chunk-gbtb0mjv.js:10031-10420 placement
 /**
  * 生成监视器过期后如何重新布置的说明。
  */
-//@ chunk-gbtb0mjv.js:10031-10420 placement
 function monitorRearmInstruction(e) {
   if (isMonitorPersistentAllowed())
     return `A monitor expires after at most ${formatMinutes(monitorMaxTimeoutMs())} and tells you; on later ${e} call ${TASK_LIST_TOOL_NAME} first and re-arm only if no monitor for it is still running.`;
@@ -146,15 +151,18 @@ function monitorRearmInstruction(e) {
     ? `Arm once; on later iterations call ${TASK_LIST_TOOL_NAME} first and skip this step if a monitor is already running.`
     : `Arm once; on later ticks call ${TASK_LIST_TOOL_NAME} first and skip if a monitor is already running.`;
 }
+//@ chunk-gbtb0mjv.js:10420-10984 placement
 /**
  * 生成 loop 技能第 3、4 步的说明：布置前状态、确认与决策段落。
  */
-//@ chunk-gbtb0mjv.js:10420-10984 placement
-function buildLoopSteps34({ preArmStatus: preArmStatus, confirmBody: confirmBody, decideBody: decideBody }) {
-  let s = wakeupPreArmParagraph({ preArmStatus: preArmStatus, briefMode: isBriefEnabled() }),
-    r = isBriefEnabled()
-      ? `send the same brief update via ${BRIEF_TOOL_NAME}`
-      : "write the same brief update as visible text";
+function buildLoopSteps34({ preArmStatus, confirmBody, decideBody }) {
+  let s = wakeupPreArmParagraph({
+    preArmStatus,
+    briefMode: isBriefEnabled(),
+  });
+  let r = isBriefEnabled()
+    ? `send the same brief update via ${BRIEF_TOOL_NAME}`
+    : "write the same brief update as visible text";
   if (preArmStatus)
     return {
       steps34: `3. **Briefly confirm**: ${confirmBody} you're about to pick. ${s}
@@ -167,30 +175,32 @@ function buildLoopSteps34({ preArmStatus: preArmStatus, confirmBody: confirmBody
     rearmUpdate: (n) => `${n}, then ${r}`,
   };
 }
+//@ chunk-gbtb0mjv.js:10984-16070 placement
 /**
  * /loop skill 中自定节奏（动态间隔）的循环提示词。
  */
-//@ chunk-gbtb0mjv.js:10984-16070 placement
-function dynamicLoopPrompt(e, o) {
-  let t = buildPrStewardPrompt({ forCloudSession: Boolean(env.CLAUDE_CODE_REMOTE) }),
-    s = t
-      ? `
-${t}
+function dynamicLoopPrompt(e, preArmStatus) {
+  let prStewardPrompt = buildPrStewardPrompt({
+    forCloudSession: Boolean(env.CLAUDE_CODE_REMOTE),
+  });
+  let s = prStewardPrompt
+    ? `
+${prStewardPrompt}
 
 For this /loop, before any scheduling step and before running the prompt: if the prompt would push to or babysit a PR, check the labels of each PR it covers. For a PR with either PR Steward label, schedule and run nothing until the user picks one of the choices above.
 `
-      : "",
-    { steps34: steps34, rearmUpdate: rearmUpdate } = buildLoopSteps34({
-      preArmStatus: o,
-      confirmBody: `that you're self-pacing, whether a ${MONITOR} is the primary wake signal, that you ran the task now, and what fallback delay`,
-      decideBody: `If the task needs another iteration, call ${SCHEDULE_WAKEUP_TOOL_NAME} with:
+    : "";
+  let { steps34, rearmUpdate } = buildLoopSteps34({
+    preArmStatus,
+    confirmBody: `that you're self-pacing, whether a ${MONITOR} is the primary wake signal, that you ran the task now, and what fallback delay`,
+    decideBody: `If the task needs another iteration, call ${SCHEDULE_WAKEUP_TOOL_NAME} with:
    - \`delaySeconds\`: with a ${MONITOR} armed this is the **fallback heartbeat** \u2014 how long to wait if no event fires (lean 1200\u20131800s; idle ticks more frequent than the task needs are pure overhead). Without a ${MONITOR} this is the cadence \u2014 pick based on what you observed. Read the tool's own description for cache-aware delay guidance.
    - \`reason\`: one short sentence on why you picked that delay.
    - \`prompt\`: the full original /loop input verbatim, prefixed with \`/loop \` so the next firing re-enters this skill and continues the loop. For example, if the user typed \`/loop check the deploy\`, pass \`/loop check the deploy\` as the prompt.
    - \`noop\`: \`true\` if this tick changed nothing ("still waiting", "quiet hold"); \`false\` if it did something worth keeping. Consecutive \`noop: true\` ticks collapse in the terminal.
    If it doesn't need another iteration, stop instead (step 6) \u2014 re-arming is a per-turn choice, not a default.`,
-    }),
-    l = `The user wants you to self-pace. Decide what makes the next iteration worth running \u2014 a passage of time, or an observable event.
+  });
+  let l = `The user wants you to self-pace. Decide what makes the next iteration worth running \u2014 a passage of time, or an observable event.
 
 1. **Run the parsed prompt now.** If it's a slash command, invoke it via the Skill tool; otherwise act on it directly.
 2. **If the next run is gated on an event** (CI finishing, a log line matching, a file changing, a PR comment) and no ${MONITOR} is already running for it: ${monitorArmInstruction()}. Its events arrive as \`<task-notification>\` messages and wake this loop immediately \u2014 you do not wait for the ${SCHEDULE_WAKEUP_TOOL_NAME} deadline. ${monitorRearmInstruction("iterations")}
@@ -236,41 +246,44 @@ ${l}
 
 ${e}`;
 }
+//@ chunk-gbtb0mjv.js:16070-21459 placement
 /**
  * /loop skill 中基于文件的循环提示词。
  */
-//@ chunk-gbtb0mjv.js:16070-21459 placement
-function loopFilePrompt(e, o, t, s) {
+function loopFilePrompt(e, o, t, preArmStatus) {
   let r = e
-      ? `## Loop tasks (from ${e.path})`
-      : "## Autonomous-loop instructions (for the immediate execution and every fire)",
-    n;
+    ? `## Loop tasks (from ${e.path})`
+    : "## Autonomous-loop instructions (for the immediate execution and every fire)";
+  let n;
   if (e) n = e.content;
-  else (h.logAutonomousLoopActivation(), (n = h.getAutonomousLoopPreamble()));
+  else {
+    prompterModule.logAutonomousLoopActivation();
+    n = prompterModule.getAutonomousLoopPreamble();
+  }
   let l = e ? "the loop.md tasks" : "the autonomous check";
   if (o) {
-    let p = e ? h.LOOP_FILE_DYNAMIC_SENTINEL : g$e,
-      _ = e
-        ? `# /loop \u2014 loop.md tasks with dynamic pacing
+    let p = e ? prompterModule.LOOP_FILE_DYNAMIC_SENTINEL : AUTONOMOUS_LOOP_DYNAMIC_PROMPT;
+    let _ = e
+      ? `# /loop \u2014 loop.md tasks with dynamic pacing
 
 The user invoked \`/loop\` with no prompt and no interval and has a loop-tasks file at \`${e.path}\`. Run those tasks now, then self-pace the next iteration via ${SCHEDULE_WAKEUP_TOOL_NAME} \u2014 no cron.`
-        : `# /loop \u2014 autonomous default with dynamic pacing
+      : `# /loop \u2014 autonomous default with dynamic pacing
 
-The user invoked \`/loop\` with no prompt and no interval. Run the autonomous check now, then self-pace the next iteration via ${SCHEDULE_WAKEUP_TOOL_NAME} \u2014 no cron.`,
-      E = e
-        ? `that you're running tasks from \`${e.path}\` in dynamic-pacing mode, that you ran the first tick now`
-        : "that this is the autonomous default in dynamic-pacing mode, that you ran the check now",
-      { steps34: steps34, rearmUpdate: rearmUpdate } = buildLoopSteps34({
-        preArmStatus: s,
-        confirmBody: `${E}, whether a ${MONITOR} is the primary wake signal, and what fallback delay`,
-        decideBody: `If the next check is worth running, call ${SCHEDULE_WAKEUP_TOOL_NAME} with:
+The user invoked \`/loop\` with no prompt and no interval. Run the autonomous check now, then self-pace the next iteration via ${SCHEDULE_WAKEUP_TOOL_NAME} \u2014 no cron.`;
+    let E = e
+      ? `that you're running tasks from \`${e.path}\` in dynamic-pacing mode, that you ran the first tick now`
+      : "that this is the autonomous default in dynamic-pacing mode, that you ran the check now";
+    let { steps34, rearmUpdate } = buildLoopSteps34({
+      preArmStatus,
+      confirmBody: `${E}, whether a ${MONITOR} is the primary wake signal, and what fallback delay`,
+      decideBody: `If the next check is worth running, call ${SCHEDULE_WAKEUP_TOOL_NAME} with:
    - \`delaySeconds\`: with a ${MONITOR} armed this is the fallback heartbeat (lean 1200\u20131800s). Without one, pick based on what you observed this turn \u2014 quiet branch? wait longer. Lots in flight? wait shorter. Read the tool's own description for cache-aware delay guidance.
    - \`reason\`: one short sentence on why you picked that delay.
    - \`prompt\`: the literal string \`${p}\` \u2014 the dynamic-mode sentinel expands at fire time to the full instructions (first fire / first fire post-compact / loop.md edited) or a dynamic-pacing-specific short reminder (subsequent fires). Do not pass the full instructions; that is handled automatically.
    - \`noop\`: \`true\` if this tick changed nothing ("still waiting", "quiet hold"); \`false\` if it did something worth keeping. Consecutive \`noop: true\` ticks collapse in the terminal.
    If it isn't, stop instead (step 6) \u2014 re-arming is a per-turn choice, not a default.`,
-      }),
-      I = `1. **Run ${l} now**, following the instructions inlined below.
+    });
+    let I = `1. **Run ${l} now**, following the instructions inlined below.
 2. **If the next tick is gated on an event** (CI finishing, a PR comment, a log line) and no ${MONITOR} is already running for it: ${monitorArmInstruction()}. Its events wake this loop immediately \u2014 you do not wait for the ${SCHEDULE_WAKEUP_TOOL_NAME} deadline. ${monitorRearmInstruction("ticks")}
 ${steps34}
 5. **If woken by a \`<task-notification>\`** rather than this prompt: handle the event, then make the same decision. If the loop should continue, ${rearmUpdate(`call ${SCHEDULE_WAKEUP_TOOL_NAME} again with \`${p}\` and the same 1200\u20131800s \`delaySeconds\` (the ${MONITOR} remains the wake signal; the new wakeup is only the fallback heartbeat)`)}. If the event means the work is finished, stop (step 6).
@@ -285,20 +298,20 @@ ${r}
 
 ${n}`;
   }
-  let c = e ? h.LOOP_FILE_SENTINEL : Krt,
-    d = e
-      ? `# /loop \u2014 schedule loop.md tasks
+  let c = e ? prompterModule.LOOP_FILE_SENTINEL : AUTONOMOUS_LOOP_PROMPT;
+  let d = e
+    ? `# /loop \u2014 schedule loop.md tasks
 
 The user invoked \`/loop\` with no prompt (input was empty or just the interval \`${t}\`) and has a loop-tasks file at \`${e.path}\`. Schedule a recurring cron that runs those tasks each tick, then run the first tick immediately.`
-      : `# /loop \u2014 schedule the autonomous default
+    : `# /loop \u2014 schedule the autonomous default
 
-The user invoked \`/loop\` with no prompt (input was empty or just the interval \`${t}\`). Schedule the autonomous-loop default and then run the first autonomous check immediately.`,
-    u = e
-      ? "it expands at fire time to the full loop.md contents on first delivery (and whenever loop.md has been edited since last fire), and to a short reminder on subsequent unchanged fires. The long instructions stay in the cached message-prefix."
-      : "it expands at fire time to the full autonomous-loop instructions on first delivery, and to a short reminder on subsequent fires (the long instructions stay in the cached message-prefix).",
-    O = e
-      ? `what's scheduled, the cron expression, the human-readable cadence, that it's running tasks from \`${e.path}\`, that recurring tasks auto-expire after ${DEFAULT_MAX_AGE_DAYS} days, and that the user can cancel sooner with ${CRON_DELETE_TOOL_NAME} (include the job ID).`
-      : `what's scheduled, the cron expression, the human-readable cadence, that recurring tasks auto-expire after ${DEFAULT_MAX_AGE_DAYS} days, and that they can cancel sooner with ${CRON_DELETE_TOOL_NAME} (include the job ID). Mention this is the autonomous default and that the autonomous-loop instructions are baked in.`;
+The user invoked \`/loop\` with no prompt (input was empty or just the interval \`${t}\`). Schedule the autonomous-loop default and then run the first autonomous check immediately.`;
+  let u = e
+    ? "it expands at fire time to the full loop.md contents on first delivery (and whenever loop.md has been edited since last fire), and to a short reminder on subsequent unchanged fires. The long instructions stay in the cached message-prefix."
+    : "it expands at fire time to the full autonomous-loop instructions on first delivery, and to a short reminder on subsequent fires (the long instructions stay in the cached message-prefix).";
+  let O = e
+    ? `what's scheduled, the cron expression, the human-readable cadence, that it's running tasks from \`${e.path}\`, that recurring tasks auto-expire after ${DEFAULT_MAX_AGE_DAYS} days, and that the user can cancel sooner with ${CRON_DELETE_TOOL_NAME} (include the job ID).`
+    : `what's scheduled, the cron expression, the human-readable cadence, that recurring tasks auto-expire after ${DEFAULT_MAX_AGE_DAYS} days, and that they can cancel sooner with ${CRON_DELETE_TOOL_NAME} (include the job ID). Mention this is the autonomous default and that the autonomous-loop instructions are baked in.`;
   return `${d}
 
 ## Action
@@ -326,32 +339,48 @@ function registerLoopSkill() {
     whenToUse:
       'When the user wants to set up a recurring task, poll for status, or run something repeatedly on an interval (e.g. "check the deploy every 5 minutes", "keep running /babysit-prs"). Do NOT invoke for one-off tasks.',
     argumentHint: "[interval] [prompt]",
-    userInvocable: !0,
-    argsMayContainSlashCommands: !0,
+    userInvocable: true,
+    argsMayContainSlashCommands: true,
     isEnabled: isKairosCronEnabled,
     async getPromptForCommand(e, o) {
-      let trimmed = e.trim(),
-        s = o.options?.mainLoopModel,
-        r = s !== void 0 && needsFableMitigations(getCanonicalName(s), s);
+      let trimmed = e.trim();
+      let mainLoopModel = o.options?.mainLoopModel;
+      let preArmStatus =
+        mainLoopModel !== undefined && needsFableMitigations(getCanonicalName(mainLoopModel), mainLoopModel);
       if (!o.options?.isSkillPreload && !o.options?.modelScheduledOrigin)
         logEvent("tengu_loop_command", {
           has_args: trimmed.length > 0,
           is_interval_only: INTERVAL_SUFFIX_RE.test(trimmed) || EVERY_INTERVAL_RE.test(trimmed),
         });
-      let match = trimmed.match(EVERY_INTERVAL_RE),
-        l = !trimmed,
-        c = INTERVAL_SUFFIX_RE.test(trimmed) || match !== null;
+      let match = trimmed.match(EVERY_INTERVAL_RE);
+      let l = !trimmed;
+      let c = INTERVAL_SUFFIX_RE.test(trimmed) || match !== null;
       if (l || c) {
-        let d = match ? normalizeEveryInterval(match) : trimmed || A,
-          loopFileAsync = await h.readLoopFileAsync(o.storageV5);
+        let d = match ? normalizeEveryInterval(match) : trimmed || DEFAULT_LOOP_INTERVAL;
+        let loopFileAsync = await prompterModule.readLoopFileAsync(o.storageV5);
         if (l) {
           if (!o.options?.isSkillPreload && !o.options?.modelScheduledOrigin) resetLoopState();
-          return [{ type: "text", text: loopFilePrompt(loopFileAsync, !0, d, r) }];
+          return [
+            {
+              type: "text",
+              text: loopFilePrompt(loopFileAsync, true, d, preArmStatus),
+            },
+          ];
         }
-        return [{ type: "text", text: loopFilePrompt(loopFileAsync, !1, d, r) }];
+        return [
+          {
+            type: "text",
+            text: loopFilePrompt(loopFileAsync, false, d, preArmStatus),
+          },
+        ];
       }
       if (!o.options?.isSkillPreload && !o.options?.modelScheduledOrigin) resetLoopState();
-      return [{ type: "text", text: dynamicLoopPrompt(trimmed, r) }];
+      return [
+        {
+          type: "text",
+          text: dynamicLoopPrompt(trimmed, preArmStatus),
+        },
+      ];
     },
   });
 }

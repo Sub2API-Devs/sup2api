@@ -6,38 +6,38 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { Tn } from "./forge.js";
-import { Xi } from "./asn1.js";
+import { require_forge } from "./forge.js";
+import { require_asn1 } from "./asn1.js";
 
 //@ chunk-fq0cr76a.js:259538-260717 cjs-fingerprint
-var KA = x(function (T6) {
-  var w6 = Tn();
-  Xi();
-  var asn1 = w6.asn1;
-  T6.privateKeyValidator = {
+var require_asn1_validator = x(function (cjsExports) {
+  var forge = require_forge();
+  require_asn1();
+  var asn1 = forge.asn1;
+  cjsExports.privateKeyValidator = {
     name: "PrivateKeyInfo",
     tagClass: asn1.Class.UNIVERSAL,
     type: asn1.Type.SEQUENCE,
-    constructed: !0,
+    constructed: true,
     value: [
       {
         name: "PrivateKeyInfo.version",
         tagClass: asn1.Class.UNIVERSAL,
         type: asn1.Type.INTEGER,
-        constructed: !1,
+        constructed: false,
         capture: "privateKeyVersion",
       },
       {
         name: "PrivateKeyInfo.privateKeyAlgorithm",
         tagClass: asn1.Class.UNIVERSAL,
         type: asn1.Type.SEQUENCE,
-        constructed: !0,
+        constructed: true,
         value: [
           {
             name: "AlgorithmIdentifier.algorithm",
             tagClass: asn1.Class.UNIVERSAL,
             type: asn1.Type.OID,
-            constructed: !1,
+            constructed: false,
             capture: "privateKeyOid",
           },
         ],
@@ -46,29 +46,29 @@ var KA = x(function (T6) {
         name: "PrivateKeyInfo",
         tagClass: asn1.Class.UNIVERSAL,
         type: asn1.Type.OCTETSTRING,
-        constructed: !1,
+        constructed: false,
         capture: "privateKey",
       },
     ],
   };
-  T6.publicKeyValidator = {
+  cjsExports.publicKeyValidator = {
     name: "SubjectPublicKeyInfo",
     tagClass: asn1.Class.UNIVERSAL,
     type: asn1.Type.SEQUENCE,
-    constructed: !0,
+    constructed: true,
     captureAsn1: "subjectPublicKeyInfo",
     value: [
       {
         name: "SubjectPublicKeyInfo.AlgorithmIdentifier",
         tagClass: asn1.Class.UNIVERSAL,
         type: asn1.Type.SEQUENCE,
-        constructed: !0,
+        constructed: true,
         value: [
           {
             name: "AlgorithmIdentifier.algorithm",
             tagClass: asn1.Class.UNIVERSAL,
             type: asn1.Type.OID,
-            constructed: !1,
+            constructed: false,
             capture: "publicKeyOid",
           },
         ],
@@ -76,12 +76,11 @@ var KA = x(function (T6) {
       {
         tagClass: asn1.Class.UNIVERSAL,
         type: asn1.Type.BITSTRING,
-        constructed: !1,
-        composed: !0,
+        constructed: false,
+        composed: true,
         captureBitStringValue: "ed25519PublicKey",
       },
     ],
   };
 });
-
-export { KA };
+export { require_asn1_validator };

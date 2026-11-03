@@ -8,65 +8,14 @@
  * pieces: chunk-7jbxc8kr.js (1), chunk-e6aww6q8.js (13)
  * attribution: fingerprint 1, placement 5, facade-exports 7, layout 1
  */
-import {
-  randomUUID,
-  randomUUID as randomUUID_2,
-  randomUUID as randomUUID_3,
-  randomUUID as randomUUID_4,
-  randomUUID as randomUUID_5,
-  randomUUID as randomUUID_6,
-  randomUUID as randomUUID_7,
-  randomUUID as randomUUID_8,
-  randomUUID as randomUUID_9,
-  randomUUID as randomUUID_10,
-  randomUUID as randomUUID_11,
-  randomUUID as randomUUID_12,
-  randomUUID as randomUUID_13,
-  randomUUID as randomUUID_14,
-  randomUUID as randomUUID_15,
-  randomUUID as randomUUID_16,
-  randomUUID as randomUUID_17,
-  randomUUID as randomUUID_18,
-  randomUUID as randomUUID_19,
-  randomUUID as randomUUID_20,
-  randomUUID as randomUUID_21,
-  randomUUID as randomUUID_22,
-  randomUUID as randomUUID_23,
-  randomUUID as randomUUID_24,
-  randomUUID as randomUUID_25,
-  randomUUID as randomUUID_26,
-  randomUUID as randomUUID_27,
-  randomUUID as randomUUID_28,
-  randomUUID as randomUUID_29,
-  randomUUID as randomUUID_30,
-  randomUUID as randomUUID_31,
-  randomUUID as randomUUID_32,
-  randomUUID as randomUUID_33,
-  randomUUID as randomUUID_34,
-  randomUUID as randomUUID_35,
-  randomUUID as randomUUID_36,
-  randomUUID as randomUUID_37,
-  randomUUID as randomUUID_38,
-  randomUUID as randomUUID_39,
-  randomUUID as randomUUID_40,
-  randomUUID as randomUUID_41,
-  randomUUID as randomUUID_42,
-  randomUUID as randomUUID_43,
-  randomUUID as randomUUID_44,
-  randomUUID as randomUUID_45,
-  randomUUID as randomUUID_46,
-  randomUUID as randomUUID_47,
-  randomUUID as randomUUID_48,
-  randomUUID as randomUUID_49,
-  randomUUID as randomUUID_50,
-} from "crypto";
+import { randomUUID } from "crypto";
 import { getCachedClientData } from "../../utils/config.js";
-import { TENGU_BROOK_HERON, s7e } from "../../utils/userTurnTags.js";
-import { isPlainObject as isPlainObject_3 } from "../../utils/objectUtils.js";
+import { TENGU_BROOK_HERON, trimmedOrNull } from "../../utils/userTurnTags.js";
+import { isPlainObject as isPlainObject_4 } from "../../utils/objectUtils.js";
 import { findModelKeyedEntry, getModelKeyedValue } from "../../utils/attachments/totalTokensReminder.js";
 import { FORK_BOILERPLATE, FORK_DIRECTIVE_PREFIX, isForkBoilerplateMessage } from "../../constants/xml.js";
 import { AGENT, FORK, TASK } from "./constants.js";
-import { Ao } from "../../bootstrap/sessionFeatureValues.js";
+import { getSessionFeatureValues } from "../../bootstrap/sessionFeatureValues.js";
 import { isCoordinatorMode } from "../../coordinator/coordinatorMode.js";
 import { getHostAgentPolicy } from "../../utils/hostAgentPolicy.js";
 import { env } from "../../utils/env.js";
@@ -79,14 +28,14 @@ import { logForDebugging } from "../../utils/debug.js";
 import { createUserMessage } from "../../utils/messages.js";
 
 //@ chunk-e6aww6q8.js:2237624-2237780 placement
-function oan(e, n) {
+function brookHeronModelValue(e, effortLevelIfSupported) {
   let r = getCachedClientData()?.[TENGU_BROOK_HERON];
-  if (!isPlainObject_3(r)) return s7e(r);
-  let s = findModelKeyedEntry(r, e);
-  if (s === void 0) return null;
-  let [, h] = s;
-  if (!isPlainObject_3(h)) return s7e(h);
-  return s7e(getModelKeyedValue(h, n));
+  if (!isPlainObject_4(r)) return trimmedOrNull(r);
+  let modelKeyedEntry = findModelKeyedEntry(r, e);
+  if (modelKeyedEntry === undefined) return null;
+  let [, h] = modelKeyedEntry;
+  if (!isPlainObject_4(h)) return trimmedOrNull(h);
+  return trimmedOrNull(getModelKeyedValue(h, effortLevelIfSupported));
 }
 //@ chunk-e6aww6q8.js:2237818-2238798 placement
 function FORK_WORKER_PREAMBLE(e, n) {
@@ -110,37 +59,38 @@ ${FORK_DIRECTIVE_PREFIX}${e}`;
 function extractForkDirective(e, n) {
   let r = `</${FORK_BOILERPLATE}>
 
-${FORK_DIRECTIVE_PREFIX}`,
-    index = e.indexOf(r);
+${FORK_DIRECTIVE_PREFIX}`;
+  let index = e.indexOf(r);
   if (index === -1) return;
   let sliced = e.slice(index + r.length);
-  return n.some((y) => e === FORK_WORKER_PREAMBLE(sliced, y)) ? sliced : void 0;
+  return n.some((y) => e === FORK_WORKER_PREAMBLE(sliced, y)) ? sliced : undefined;
 }
 //@ chunk-e6aww6q8.js:2238942-2239009 placement
-var TENGU_FORK_SUBAGENT_ENABLED = "tengu_fork_subagent_enabled",
-  TENGU_FEDERATED_ULLMAN = "tengu_federated_ullman";
+var TENGU_FORK_SUBAGENT_ENABLED = "tengu_fork_subagent_enabled";
+var TENGU_FEDERATED_ULLMAN = "tengu_federated_ullman";
+//@ chunk-e6aww6q8.js:2239009-2239421 placement
 /**
  * 判断 fork 子代理是否启用及来源：协调者模式、宿主策略、CLAUDE_CODE_FORK_SUBAGENT=false 时禁用；非交互且 TENGU_FEDERATED_ULLMAN 开时禁用（除非 env 显式开启）；首次决定后缓存并记录 tengu_fork_subagent_enabled。
  */
-//@ chunk-e6aww6q8.js:2239009-2239421 placement
 function getForkSubagentEnabledSource() {
-  let e = Ao();
+  let sessionFeatureValues = getSessionFeatureValues();
   if (isCoordinatorMode()) return "disabled";
   if (getHostAgentPolicy().forkSubagentDisabled) return "disabled";
-  if (env.CLAUDE_CODE_FORK_SUBAGENT === !1) return "disabled";
-  if (e.forkSubagentEnabledSource !== void 0) return e.forkSubagentEnabledSource;
+  if (env.CLAUDE_CODE_FORK_SUBAGENT === false) return "disabled";
+  if (sessionFeatureValues.forkSubagentEnabledSource !== undefined)
+    return sessionFeatureValues.forkSubagentEnabledSource;
   if (
-    env.CLAUDE_CODE_FORK_SUBAGENT !== !0 &&
+    env.CLAUDE_CODE_FORK_SUBAGENT !== true &&
     getIsNonInteractiveSession() &&
-    getFeatureValue_SESSION_PINNED(TENGU_FEDERATED_ULLMAN, !1)
+    getFeatureValue_SESSION_PINNED(TENGU_FEDERATED_ULLMAN, false)
   )
     return "disabled";
-  let n = env.CLAUDE_CODE_FORK_SUBAGENT === !0 ? "env" : "default";
-  return (
-    (e.forkSubagentEnabledSource = n),
-    logEvent(TENGU_FORK_SUBAGENT_ENABLED, { source: fromEnum(n) }),
-    n
-  );
+  let n = env.CLAUDE_CODE_FORK_SUBAGENT === true ? "env" : "default";
+  sessionFeatureValues.forkSubagentEnabledSource = n;
+  logEvent(TENGU_FORK_SUBAGENT_ENABLED, {
+    source: fromEnum(n),
+  });
+  return n;
 }
 //@ chunk-e6aww6q8.js:2239421-2239462 facade-exports
 function isForkSubagentEnabled() {
@@ -148,13 +98,13 @@ function isForkSubagentEnabled() {
 }
 //@ chunk-e6aww6q8.js:2239462-2239524 facade-exports
 function forkGateForcesBackground() {
-  if (!isForkSubagentEnabled()) return !1;
+  if (!isForkSubagentEnabled()) return false;
   return getForkSubagentEnabledSource() === "env" || !isPlainNonInteractive();
 }
+//@ chunk-e6aww6q8.js:2239524-2239822 facade-exports = FORK_AGENT (0.89)
 /**
  * FORK_AGENT 内建定义：agentType "fork"、tools ["*"]、maxTurns 200、model inherit、permissionMode bubble、系统提示词为空（沿用父线程）。
  */
-//@ chunk-e6aww6q8.js:2239524-2239822 facade-exports = FORK_AGENT (0.89)
 var FORK_AGENT = {
   agentType: FORK,
   whenToUse:
@@ -167,77 +117,96 @@ var FORK_AGENT = {
   baseDir: "built-in",
   getSystemPrompt: () => "",
 };
+//@ chunk-e6aww6q8.js:2239822-2239857 facade-exports
 /**
  * 消息中是否已含 fork 样板标记（当前就在 fork 子代理内）。
  */
-//@ chunk-e6aww6q8.js:2239822-2239857 facade-exports
 function isInForkChild(messages) {
   return messages.some(isForkBoilerplateMessage);
 }
 //@ chunk-e6aww6q8.js:2239857-2240122 layout
-var FORK_SELF_TOOL_RESULT = "Fork started \u2014 that fork is you.",
-  FORK_SELF_OTHER_TOOL_RESULT =
-    "This call started a fork, and that fork is you. The call's other work and its result belong to the parent.",
-  FORK_PARENT_CALL_TOOL_RESULT =
-    "This is the parent's call, not yours. It may not have run yet, and its result goes to the parent.";
+var FORK_SELF_TOOL_RESULT = "Fork started \u2014 that fork is you.";
+var FORK_SELF_OTHER_TOOL_RESULT =
+  "This call started a fork, and that fork is you. The call's other work and its result belong to the parent.";
+var FORK_PARENT_CALL_TOOL_RESULT =
+  "This is the parent's call, not yours. It may not have run yet, and its result goes to the parent.";
+//@ chunk-e6aww6q8.js:2240122-2240667 facade-exports = buildForkedMessages (1)
 /**
  * 构造 fork 子代理的初始消息：复制父 assistant 消息，对其中每个 tool_use 生成占位 tool_result（自己那次说明"fork 就是你"，其余说明属于父代理），再附上 fork 指令文本。
  */
-//@ chunk-e6aww6q8.js:2240122-2240667 facade-exports = buildForkedMessages (1)
 function buildForkedMessages(directive, assistantMessage, enclosingToolUseId) {
   let fullAssistantMessage = {
-      ...assistantMessage,
-      uuid: randomUUID_27(),
-      message: { ...assistantMessage.message, content: [...assistantMessage.message.content] },
+    ...assistantMessage,
+    uuid: randomUUID(),
+    message: {
+      ...assistantMessage.message,
+      content: [...assistantMessage.message.content],
     },
-    toolUseBlocks = assistantMessage.message.content.filter((block) => block.type === "tool_use");
-  if (toolUseBlocks.length === 0)
-    return (
-      logForDebugging(
-        `No tool_use blocks found in assistant message for fork directive: ${directive.slice(0, 50)}...`,
-        { level: "error" },
-      ),
-      [createUserMessage({ content: [{ type: "text", text: buildChildMessage(directive) }] })]
+  };
+  let toolUseBlocks = assistantMessage.message.content.filter((block) => block.type === "tool_use");
+  if (toolUseBlocks.length === 0) {
+    logForDebugging(
+      `No tool_use blocks found in assistant message for fork directive: ${directive.slice(0, 50)}...`,
+      {
+        level: "error",
+      },
     );
-  let y = toolUseBlocks.length === 1 ? toolUseBlocks[0]?.id : enclosingToolUseId,
-    toolResultBlocks = toolUseBlocks.map((block) => ({
-      type: "tool_result",
-      tool_use_id: block.id,
-      content: [
-        {
-          type: "text",
-          text:
-            block.id !== y
-              ? FORK_PARENT_CALL_TOOL_RESULT
-              : block.name === AGENT || block.name === TASK
-                ? FORK_SELF_TOOL_RESULT
-                : FORK_SELF_OTHER_TOOL_RESULT,
-        },
-      ],
-    })),
-    toolResultMessage = createUserMessage({
-      content: [...toolResultBlocks, { type: "text", text: buildChildMessage(directive) }],
-    });
+    return [
+      createUserMessage({
+        content: [
+          {
+            type: "text",
+            text: buildChildMessage(directive),
+          },
+        ],
+      }),
+    ];
+  }
+  let y = toolUseBlocks.length === 1 ? toolUseBlocks[0]?.id : enclosingToolUseId;
+  let toolResultBlocks = toolUseBlocks.map((block) => ({
+    type: "tool_result",
+    tool_use_id: block.id,
+    content: [
+      {
+        type: "text",
+        text:
+          block.id !== y
+            ? FORK_PARENT_CALL_TOOL_RESULT
+            : block.name === AGENT || block.name === TASK
+              ? FORK_SELF_TOOL_RESULT
+              : FORK_SELF_OTHER_TOOL_RESULT,
+      },
+    ],
+  }));
+  let toolResultMessage = createUserMessage({
+    content: [
+      ...toolResultBlocks,
+      {
+        type: "text",
+        text: buildChildMessage(directive),
+      },
+    ],
+  });
   return [fullAssistantMessage, toolResultMessage];
 }
+//@ chunk-e6aww6q8.js:2240667-2240700 facade-exports
 /**
  * 用 fork 样板包装指令文本（只执行一条指令、不再派子代理、一次汇报）。
  */
-//@ chunk-e6aww6q8.js:2240667-2240700 facade-exports
 function buildChildMessage(directive) {
   return FORK_WORKER_PREAMBLE(directive, "");
 }
+//@ chunk-e6aww6q8.js:2240700-2241227 facade-exports = buildWorktreeNotice (1)
 /**
  * fork 在 worktree 中运行时追加的说明：继承的路径指向父目录，需要换算到 worktree 根并重新读取文件。
  */
-//@ chunk-e6aww6q8.js:2240700-2241227 facade-exports = buildWorktreeNotice (1)
 function buildWorktreeNotice(parentCwd, worktreeCwd) {
   return `You've inherited the conversation context above from a parent agent working in ${parentCwd}. You are operating in an isolated git worktree at ${worktreeCwd} \u2014 same repository, same relative file structure, separate working copy. Paths in the inherited context refer to the parent's working directory; translate them to your worktree root. Re-read files before editing if the parent may have modified them since they appear in the context. Your changes stay in this worktree and will not affect the parent's files.`;
 }
+//@ chunk-7jbxc8kr.js:3796-3960 fingerprint = FORK_SUBAGENT_TYPE (1)
 /**
  * 把文本前三个词转成 kebab-case 名（≤24 字符，默认 "fork"），用作后台 fork 名字提示。
  */
-//@ chunk-7jbxc8kr.js:3796-3960 fingerprint = FORK_SUBAGENT_TYPE (1)
 function slugifyForkName(text) {
   return (
     text
@@ -252,9 +221,8 @@ function slugifyForkName(text) {
       .slice(0, 24) || "fork"
   );
 }
-
 export {
-  oan,
+  brookHeronModelValue,
   isForkSubagentEnabled,
   forkGateForcesBackground,
   FORK_AGENT,

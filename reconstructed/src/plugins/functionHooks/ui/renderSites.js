@@ -13,9 +13,13 @@ import { isPlainObject } from "../../../utils/isPlainObject.js";
 import { pluginsMatchingEvent } from "../hookDispatch.js";
 
 //@ chunk-4121qate.js:70291-70346 placement
-var W5e = (e) => typeof e === "string" && Object.hasOwn(UI_ELEMENT_TYPES, e);
+/**
+ * 是否已知元素类型名
+ */
+var isUiElementTypeName = (surface) =>
+  typeof surface === "string" && Object.hasOwn(UI_ELEMENT_TYPES, surface);
 //@ chunk-4121qate.js:70346-70385 placement
-var freeze_2 = Object.freeze(Object.keys(UI_ELEMENT_TYPES));
+var je = Object.freeze(Object.keys(UI_ELEMENT_TYPES));
 //@ chunk-4121qate.js:70385-70904 placement
 var RENDER_SITES = {
   AskUserQuestion: "AskUserQuestionPermissionDialog",
@@ -35,25 +39,32 @@ var RENDER_SITES = {
   Pane: "PaneSite",
   Placed: "PlacedSite",
 };
+//@ chunk-4121qate.js:70904-71158 placement
 /**
  * 校验 ui.render 参数：surface 必须是已知界面，component 必须是引擎绘制的组件。
  */
-//@ chunk-4121qate.js:70904-71158 placement
 function checkRenderArgument(e) {
-  if (!(isPlainObject(e) && W5e(e.surface)))
+  if (!(isPlainObject(e) && isUiElementTypeName(e.surface)))
     return "takes a ui.render argument (e.surface names the surface)";
   let r = String(e.component);
   return Object.hasOwn(RENDER_SITES, r)
-    ? void 0
+    ? undefined
     : `takes a ui.render argument (e.component "${r}" is not a component the engine draws)`;
 }
 //@ chunk-4121qate.js:71158-71251 placement
-var freeze_3 = Object.freeze(
-  freeze_2.flatMap((e) => Object.keys(RENDER_SITES).map((o) => ({ surface: e, component: o }))),
+var TUi = Object.freeze(
+  je.flatMap((surface) =>
+    Object.keys(RENDER_SITES).map((component) => ({
+      surface,
+      component,
+    })),
+  ),
 );
 //@ chunk-s61vbvea.js:52501-52520 placement
 var RENDER_EVENT = "ui.render";
 //@ chunk-s61vbvea.js:52520-52554 placement
-var renderPluginsFor = (e) => pluginsMatchingEvent(RENDER_EVENT, { component: e });
-
-export { W5e, RENDER_SITES, freeze_2, checkRenderArgument, RENDER_EVENT, renderPluginsFor, freeze_3 };
+var renderPluginsFor = (component) =>
+  pluginsMatchingEvent(RENDER_EVENT, {
+    component,
+  });
+export { isUiElementTypeName, RENDER_SITES, je, checkRenderArgument, RENDER_EVENT, renderPluginsFor, TUi };

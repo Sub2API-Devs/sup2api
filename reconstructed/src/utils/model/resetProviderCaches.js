@@ -19,23 +19,19 @@ import { clearAwsCredentialsCache, clearGcpCredentialsCache } from "../auth.js";
 import { resetDatadogInit } from "../../services/analytics/datadog.js";
 import { refreshGrowthBookFeatures } from "../../services/analytics/growthbook.js";
 
+//@ chunk-xsm5gfzq.js:360-467 placement
 /**
  * 切换提供商后重置相关缓存。
  */
-//@ chunk-xsm5gfzq.js:360-467 placement
 function resetProviderBoundCaches(o) {
-  if (
-    (resetModelStrings(),
-    clearBetasCaches(),
-    (getProviderState().providerCache = createProviderCache()),
-    clearStructuredOutputsUnsupported(),
-    clearContext1mRefused(),
-    clearAwsCredentialsCache(),
-    clearGcpCredentialsCache(),
-    resetDatadogInit(),
-    o === "firstParty")
-  )
-    refreshGrowthBookFeatures();
+  resetModelStrings();
+  clearBetasCaches();
+  getProviderState().providerCache = createProviderCache();
+  clearStructuredOutputsUnsupported();
+  clearContext1mRefused();
+  clearAwsCredentialsCache();
+  clearGcpCredentialsCache();
+  resetDatadogInit();
+  if (o === "firstParty") refreshGrowthBookFeatures();
 }
-
 export { resetProviderBoundCaches };

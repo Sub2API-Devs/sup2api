@@ -17,17 +17,23 @@ import { apiClient } from "../../services/routines/routinesApi.js";
 import { logEvent } from "../../services/analytics/index.js";
 
 //@ chunk-e6aww6q8.js:1736467-1736547 placement
-var W9o = 1e4,
-  Swe = { auth: "teleport-org", timeout: W9o, headers: { "anthropic-beta": OAUTH_BETA_HEADER } };
+var TEAM_ONBOARDING_TIMEOUT_MS = 1e4;
+var TEAM_ONBOARDING_FETCH_OPTIONS = {
+  auth: "teleport-org",
+  timeout: TEAM_ONBOARDING_TIMEOUT_MS,
+  headers: {
+    "anthropic-beta": OAUTH_BETA_HEADER,
+  },
+};
+//@ chunk-e6aww6q8.js:1736547-1736678 placement
 /**
  * isTeamOnboardingShareEnabled：tengu_flint_harbor_share 且 allow_team_onboarding。
  */
-//@ chunk-e6aww6q8.js:1736547-1736678 placement
 function isTeamOnboardingShareEnabled() {
-  if (isEssentialTrafficOnly()) return !1;
-  if (!isPolicyAllowed_3("allow_team_onboarding")) return !1;
-  if (!hasStoredOAuthToken()) return !1;
-  return getFeatureValue_CACHED_MAY_BE_STALE("tengu_flint_harbor_share", !1);
+  if (isEssentialTrafficOnly()) return false;
+  if (!isPolicyAllowed_3("allow_team_onboarding")) return false;
+  if (!hasStoredOAuthToken()) return false;
+  return getFeatureValue_CACHED_MAY_BE_STALE("tengu_flint_harbor_share", false);
 }
 //@ chunk-e6aww6q8.js:1736678-1736804 placement
 function unwrapOnboardingResult(e) {
@@ -39,60 +45,76 @@ function assertOnboardingAllowed() {
   if (!isPolicyAllowed_3("allow_team_onboarding"))
     throw Error("Onboarding guide unavailable: policy-disabled");
 }
+//@ chunk-e6aww6q8.js:1736912-1737122 placement
 /**
  * 上传团队入门指南（内容与名称），返回服务端结果。
  */
-//@ chunk-e6aww6q8.js:1736912-1737122 placement
-async function createOnboardingGuide(e, n, r) {
+async function createOnboardingGuide(content, name, credentials) {
   assertOnboardingAllowed();
-  let post = await apiClient.post(
-      "/api/organizations/:orgUUID/claude_code/onboarding",
-      { content: e, name: n },
-      { ...Swe, credentials: r },
-    ),
-    h = unwrapOnboardingResult(post);
-  return (logEvent("tengu_team_onboarding_share_created", {}), h);
+  let s = await apiClient.post(
+    "/api/organizations/:orgUUID/claude_code/onboarding",
+    {
+      content,
+      name,
+    },
+    {
+      ...TEAM_ONBOARDING_FETCH_OPTIONS,
+      credentials,
+    },
+  );
+  let h = unwrapOnboardingResult(s);
+  logEvent("tengu_team_onboarding_share_created", {});
+  return h;
 }
+//@ chunk-e6aww6q8.js:1737122-1737349 placement
 /**
  * 更新指定 id 的团队入门指南内容。
  */
-//@ chunk-e6aww6q8.js:1737122-1737349 placement
-async function updateOnboardingGuide(e, n, r) {
+async function updateOnboardingGuide(e, content, credentials) {
   assertOnboardingAllowed();
-  let put = await apiClient.put(
-      `/api/organizations/:orgUUID/claude_code/onboarding/${encodeURIComponent(e)}`,
-      { content: n },
-      { ...Swe, credentials: r },
-    ),
-    h = unwrapOnboardingResult(put);
-  return (logEvent("tengu_team_onboarding_share_updated", {}), h);
+  let s = await apiClient.put(
+    `/api/organizations/:orgUUID/claude_code/onboarding/${encodeURIComponent(e)}`,
+    {
+      content,
+    },
+    {
+      ...TEAM_ONBOARDING_FETCH_OPTIONS,
+      credentials,
+    },
+  );
+  let h = unwrapOnboardingResult(s);
+  logEvent("tengu_team_onboarding_share_updated", {});
+  return h;
 }
+//@ chunk-e6aww6q8.js:1737349-1737561 placement
 /**
  * 删除指定 id 的团队入门指南。
  */
-//@ chunk-e6aww6q8.js:1737349-1737561 placement
-async function deleteOnboardingGuide(e, n) {
+async function deleteOnboardingGuide(e, credentials) {
   assertOnboardingAllowed();
   let r = await apiClient.delete(
     `/api/organizations/:orgUUID/claude_code/onboarding/${encodeURIComponent(e)}`,
-    void 0,
-    { ...Swe, credentials: n },
+    undefined,
+    {
+      ...TEAM_ONBOARDING_FETCH_OPTIONS,
+      credentials,
+    },
   );
-  (unwrapOnboardingResult(r), logEvent("tengu_team_onboarding_share_deleted", {}));
+  unwrapOnboardingResult(r);
+  logEvent("tengu_team_onboarding_share_deleted", {});
 }
+//@ chunk-e6aww6q8.js:1737561-1737706 placement
 /**
  * 列出组织的团队入门指南。
  */
-//@ chunk-e6aww6q8.js:1737561-1737706 placement
-async function listOnboardingGuides(e) {
+async function listOnboardingGuides(credentials) {
   assertOnboardingAllowed();
   let n = await apiClient.get("/api/organizations/:orgUUID/claude_code/onboarding", {
-    ...Swe,
-    credentials: e,
+    ...TEAM_ONBOARDING_FETCH_OPTIONS,
+    credentials,
   });
   return unwrapOnboardingResult(n).guides;
 }
-
 export {
   isTeamOnboardingShareEnabled,
   deleteOnboardingGuide,

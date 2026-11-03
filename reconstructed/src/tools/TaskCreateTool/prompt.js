@@ -10,20 +10,20 @@
  */
 import { isAgentSwarmsEnabled } from "../../utils/agentSwarmsEnabled.js";
 
+//@ chunk-kxyd0g16.js:137578-137622 fingerprint = DESCRIPTION (1)
 /**
  * TaskCreate 描述。
  */
-//@ chunk-kxyd0g16.js:137578-137622 fingerprint = DESCRIPTION (1)
 var DESCRIPTION = "Create a new task in the task list";
+//@ chunk-kxyd0g16.js:137622-140086 fingerprint = getPrompt (0.8)
 /**
  * TaskCreate 提示词（agent swarms 下补充分配给队友的说明）。
  */
-//@ chunk-kxyd0g16.js:137622-140086 fingerprint = getPrompt (0.8)
 function getPrompt_2() {
-  let e = isAgentSwarmsEnabled() ? " and potentially assigned to teammates" : "",
-    r = isAgentSwarmsEnabled()
-      ? "- Include enough detail in the description for another agent to understand and complete the task\n- New tasks are created with status 'pending' and no owner - use TaskUpdate with the `owner` parameter to assign them\n"
-      : "";
+  let teammateContext = isAgentSwarmsEnabled() ? " and potentially assigned to teammates" : "";
+  let teammateTips = isAgentSwarmsEnabled()
+    ? "- Include enough detail in the description for another agent to understand and complete the task\n- New tasks are created with status 'pending' and no owner - use TaskUpdate with the `owner` parameter to assign them\n"
+    : "";
   return `Use this tool to create a structured task list for your current coding session. This helps you track progress, organize complex tasks, and demonstrate thoroughness to the user.
 It also helps the user understand the progress of the task and overall progress of their requests.
 
@@ -32,7 +32,7 @@ It also helps the user understand the progress of the task and overall progress 
 Use this tool proactively in these scenarios:
 
 - Complex multi-step tasks - When a task requires 3 or more distinct steps or actions
-- Non-trivial and complex tasks - Tasks that require careful planning or multiple operations${e}
+- Non-trivial and complex tasks - Tasks that require careful planning or multiple operations${teammateContext}
 - Plan mode - When using plan mode, create a task list to track the work
 - User explicitly requests todo list - When the user directly asks you to use the todo list
 - User provides multiple tasks - When users provide a list of things to be done (numbered or comma-separated)
@@ -62,8 +62,7 @@ All tasks are created with status \`pending\`.
 
 - Create tasks with clear, specific subjects that describe the outcome
 - After creating tasks, use TaskUpdate to set up dependencies (blocks/blockedBy) if needed
-${r}- Check TaskList first to avoid creating duplicate tasks
+${teammateTips}- Check TaskList first to avoid creating duplicate tasks
 `;
 }
-
 export { DESCRIPTION, getPrompt_2 };

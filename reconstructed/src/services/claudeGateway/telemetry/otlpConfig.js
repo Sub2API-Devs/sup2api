@@ -8,15 +8,15 @@
  * pieces: chunk-1ny7cxrt.js (2)
  * attribution: placement 2
  */
-import { Lz } from "./resourceAttributes.js";
+import { envObject } from "./resourceAttributes.js";
 import { readStringListAt } from "../desktopSettings.js";
 
+//@ chunk-1ny7cxrt.js:1385609-1385843 placement
 /**
  * 托管 env 中任一 OTLP 协议为 http/json 时用 http/json，否则 http/protobuf。
  */
-//@ chunk-1ny7cxrt.js:1385609-1385843 placement
-function otlpProtocol(e) {
-  let t = Lz(e);
+function otlpProtocol(settings) {
+  let t = envObject(settings);
   return [
     "OTEL_EXPORTER_OTLP_PROTOCOL",
     "OTEL_EXPORTER_OTLP_METRICS_PROTOCOL",
@@ -26,13 +26,16 @@ function otlpProtocol(e) {
     ? "http/json"
     : "http/protobuf";
 }
+//@ chunk-1ny7cxrt.js:1385843-1385972 placement
 /**
  * 由 sandbox.network.allowedDomains 派生 coworkEgressAllowedHosts。
  */
-//@ chunk-1ny7cxrt.js:1385843-1385972 placement
-function coworkEgressHosts(e) {
-  let t = readStringListAt(e, ["sandbox", "network", "allowedDomains"]);
-  return t !== void 0 && t.length > 0 ? { coworkEgressAllowedHosts: t } : {};
+function coworkEgressHosts(settings) {
+  let stringListAt = readStringListAt(settings, ["sandbox", "network", "allowedDomains"]);
+  return stringListAt !== undefined && stringListAt.length > 0
+    ? {
+        coworkEgressAllowedHosts: stringListAt,
+      }
+    : {};
 }
-
 export { otlpProtocol, coworkEgressHosts };

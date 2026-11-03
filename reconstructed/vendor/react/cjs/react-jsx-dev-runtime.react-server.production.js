@@ -5,25 +5,29 @@
  * pieces: chunk-nn4p932b.js (3)
  * attribution: esm-fingerprint 2, esm-layout 1
  */
-
 //@ chunk-nn4p932b.js:191-269 esm-fingerprint
-var REACT_ELEMENT_TYPE = Symbol.for("react.transitional.element"),
-  x = Symbol.for("react.fragment");
+var REACT_ELEMENT_TYPE = Symbol.for("react.transitional.element");
+var x = Symbol.for("react.fragment");
 //@ chunk-nn4p932b.js:269-485 esm-fingerprint
-function jsx(o, t, s) {
-  var l = null;
-  if ((s !== void 0 && (l = "" + s), t.key !== void 0 && (l = "" + t.key), "key" in t)) {
-    s = {};
-    for (var key in t) key !== "key" && (s[key] = t[key]);
-  } else s = t;
-  return (
-    (t = s.ref),
-    { $$typeof: REACT_ELEMENT_TYPE, type: o, key: l, ref: t !== void 0 ? t : null, props: s }
-  );
+function jsx(type, config, maybeKey) {
+  var key = null;
+  if (maybeKey !== undefined) key = "" + maybeKey;
+  if (config.key !== undefined) key = "" + config.key;
+  if ("key" in config) {
+    maybeKey = {};
+    for (var key_2 in config) if (key_2 !== "key") maybeKey[key_2] = config[key_2];
+  } else maybeKey = config;
+  config = maybeKey.ref;
+  return {
+    $$typeof: REACT_ELEMENT_TYPE,
+    type,
+    key,
+    ref: config !== undefined ? config : null,
+    props: maybeKey,
+  };
 }
 //@ chunk-nn4p932b.js:485-501 esm-layout
-var Fragment = x,
-  e = jsx,
-  r = jsx;
-
-export { r, e, Fragment };
+var Fragment = x;
+var jsxProd_default = jsx;
+var jsxProd_default_2 = jsx;
+export { jsxProd_default_2, jsxProd_default, Fragment };

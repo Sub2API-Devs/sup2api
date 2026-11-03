@@ -5,16 +5,16 @@
  * pieces: chunk-mrx6y2r5.js (5)
  * attribution: esm-layout 2, esm-fingerprint 3
  */
-import { js } from "../../../../@typespec/ts-http-runtime/dist/esm/policies/agentPolicy.js";
-import { fa } from "../../../core-rest-pipeline/dist/esm/policies/tlsPolicy.js";
+import { agentPolicy } from "../../../../@typespec/ts-http-runtime/dist/esm/policies/agentPolicy.js";
+import { tlsPolicy } from "../../../core-rest-pipeline/dist/esm/policies/tlsPolicy.js";
 
 //@ chunk-mrx6y2r5.js:57552-57580 esm-layout
-function ad(e) {
-  return js(e);
+function ad(agent) {
+  return agentPolicy(agent);
 }
 //@ chunk-mrx6y2r5.js:57580-57608 esm-layout
-function cd(e) {
-  return fa(e);
+function cd(tlsSettings) {
+  return tlsPolicy(tlsSettings);
 }
 //@ chunk-mrx6y2r5.js:57608-57715 esm-fingerprint
 var AZURE_TRACING_SYMBOLS = {
@@ -22,28 +22,30 @@ var AZURE_TRACING_SYMBOLS = {
   namespace: Symbol.for("@azure/core-tracing namespace"),
 };
 //@ chunk-mrx6y2r5.js:57715-57865 esm-fingerprint
-function ld(e = {}) {
-  let t = new AzureTracingContext(e.parentContext);
-  if (e.span) t = t.setValue(AZURE_TRACING_SYMBOLS.span, e.span);
-  if (e.namespace) t = t.setValue(AZURE_TRACING_SYMBOLS.namespace, e.namespace);
-  return t;
+function createTracingContext(options = {}) {
+  let context = new AzureTracingContext(options.parentContext);
+  if (options.span) context = context.setValue(AZURE_TRACING_SYMBOLS.span, options.span);
+  if (options.namespace) context = context.setValue(AZURE_TRACING_SYMBOLS.namespace, options.namespace);
+  return context;
 }
 //@ chunk-mrx6y2r5.js:57865-58129 esm-fingerprint
 class AzureTracingContext {
-  constructor(e) {
-    this._contextMap = e instanceof AzureTracingContext ? new Map(e._contextMap) : new Map();
+  constructor(initialContext) {
+    this._contextMap =
+      initialContext instanceof AzureTracingContext ? new Map(initialContext._contextMap) : new Map();
   }
-  setValue(e, t) {
-    let r = new AzureTracingContext(this);
-    return (r._contextMap.set(e, t), r);
+  setValue(key, value) {
+    let newContext = new AzureTracingContext(this);
+    newContext._contextMap.set(key, value);
+    return newContext;
   }
-  getValue(e) {
-    return this._contextMap.get(e);
+  getValue(key) {
+    return this._contextMap.get(key);
   }
-  deleteValue(e) {
-    let t = new AzureTracingContext(this);
-    return (t._contextMap.delete(e), t);
+  deleteValue(key) {
+    let newContext = new AzureTracingContext(this);
+    newContext._contextMap.delete(key);
+    return newContext;
   }
 }
-
-export { ld, AZURE_TRACING_SYMBOLS, ad, cd };
+export { createTracingContext, AZURE_TRACING_SYMBOLS, ad, cd };

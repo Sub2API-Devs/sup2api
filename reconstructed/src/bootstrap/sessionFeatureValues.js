@@ -11,10 +11,10 @@
 import { SessionRootSlot } from "./sessionSlices.js";
 import { getRootSession } from "./state.js";
 
+//@ chunk-vqdc30xc.js:229-1901 placement
 /**
  * 会话级特性取值缓存：按会话固定下来的 GrowthBook/环境开关、探测失败计数、一次性日志标记等字段集合。clear() 把所有字段重置为 undefined。
  */
-//@ chunk-vqdc30xc.js:229-1901 placement
 class SessionFeatureValues {
   pinnedFeatureValues;
   reminderFold;
@@ -84,18 +84,26 @@ class SessionFeatureValues {
   servedOnFacts;
   segmentedTranscript;
   clear() {
-    for (let o of Object.keys(this)) this[o] = void 0;
+    for (let key of Object.keys(this)) this[key] = undefined;
   }
 }
 //@ chunk-vqdc30xc.js:1901-1927 placement
-var K9t = new SessionRootSlot(() => new SessionFeatureValues());
+/**
+ * 按根会话缓存 SessionFeatureValues 的 SessionRootSlot；of() 首次访问时建实例，peek() 只读窥视。
+ */
+var SESSION_FEATURE_VALUES_SLOT = new SessionRootSlot(() => new SessionFeatureValues());
 //@ chunk-vqdc30xc.js:1927-1960 placement
-function Ao() {
-  return K9t.of(getRootSession());
+/**
+ * 取当前根会话的特性取值缓存（getSessionFeatureValues），GrowthBook/环境开关按会话固定下来的入口；全项目 70 多处调用。
+ */
+function getSessionFeatureValues() {
+  return SESSION_FEATURE_VALUES_SLOT.of(getRootSession());
 }
 //@ chunk-vqdc30xc.js:1960-1996 placement
-function kAi() {
-  return K9t.peek(getRootSession());
+/**
+ * 只读窥视会话特性取值缓存：会话尚未建立该槽时返回 undefined，不会创建。
+ */
+function peekSessionFeatureValues() {
+  return SESSION_FEATURE_VALUES_SLOT.peek(getRootSession());
 }
-
-export { Ao, K9t, kAi };
+export { getSessionFeatureValues, SESSION_FEATURE_VALUES_SLOT, peekSessionFeatureValues };

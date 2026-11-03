@@ -11,27 +11,26 @@
 import { env } from "./env.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../services/analytics/growthbook.js";
 
+//@ chunk-t1w43pjj.js:261-320 fingerprint = isAgentTeamsFlagSet (1)
 /**
  * 命令行是否带 --agent-teams。
  */
-//@ chunk-t1w43pjj.js:261-320 fingerprint = isAgentTeamsFlagSet (1)
 function isAgentTeamsFlagSet() {
   return process.argv.includes("--agent-teams");
 }
+//@ chunk-t1w43pjj.js:320-440 facade-exports = isAgentSwarmsEnabled (0.709)
 /**
  * 团队功能是否启用：env CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS 或 --agent-teams 二者之一，并且 tengu_amber_flint（默认 true）未关闭。
  */
-//@ chunk-t1w43pjj.js:320-440 facade-exports = isAgentSwarmsEnabled (0.709)
 function isAgentSwarmsEnabled() {
-  if (!env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS && !isAgentTeamsFlagSet()) return !1;
-  if (!getFeatureValue_CACHED_MAY_BE_STALE("tengu_amber_flint", !0)) return !1;
-  return !0;
+  if (!env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS && !isAgentTeamsFlagSet()) return false;
+  if (!getFeatureValue_CACHED_MAY_BE_STALE("tengu_amber_flint", true)) return false;
+  return true;
 }
 //@ chunk-t1w43pjj.js:440-552 facade-exports
 async function captureTeammateModeSnapshotIfEnabled() {
   if (!isAgentSwarmsEnabled()) return;
-  let { captureTeammateModeSnapshot: captureTeammateModeSnapshot } = await import("./chunk-s90rfvdh.js");
+  let { captureTeammateModeSnapshot } = await import("./chunk-s90rfvdh.js");
   captureTeammateModeSnapshot();
 }
-
 export { isAgentSwarmsEnabled, captureTeammateModeSnapshotIfEnabled };

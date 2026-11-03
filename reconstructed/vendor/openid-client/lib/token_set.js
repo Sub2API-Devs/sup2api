@@ -6,34 +6,33 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../runtime/bun-runtime.js";
-import { vu } from "./helpers/base64url.js";
-import { Ou } from "./helpers/unix_timestamp.js";
+import { require_base64url } from "./helpers/base64url.js";
+import { require_unix_timestamp } from "./helpers/unix_timestamp.js";
 
 //@ chunk-1ny7cxrt.js:10077-10596 cjs-fingerprint
-var dy = x(function (Nve, UO) {
-  var LO = vu(),
-    xO = Ou();
-  class NO {
-    constructor(e) {
-      Object.assign(this, e);
-      let { constructor: t, ...n } = Object.getOwnPropertyDescriptors(this.constructor.prototype);
-      Object.defineProperties(this, n);
+var require_token_set = x(function (cjsExports, cjsModule) {
+  var base64url = require_base64url();
+  var now = require_unix_timestamp();
+  class TokenSet {
+    constructor(values) {
+      Object.assign(this, values);
+      let { constructor, ...properties } = Object.getOwnPropertyDescriptors(this.constructor.prototype);
+      Object.defineProperties(this, properties);
     }
-    set expires_in(e) {
-      this.expires_at = xO() + Number(e);
+    set expires_in(value) {
+      this.expires_at = now() + Number(value);
     }
     get expires_in() {
-      return Math.max.apply(null, [this.expires_at - xO(), 0]);
+      return Math.max.apply(null, [this.expires_at - now(), 0]);
     }
     expired() {
       return this.expires_in === 0;
     }
     claims() {
       if (!this.id_token) throw TypeError("id_token not present in TokenSet");
-      return JSON.parse(LO.decode(this.id_token.split(".")[1]));
+      return JSON.parse(base64url.decode(this.id_token.split(".")[1]));
     }
   }
-  UO.exports = NO;
+  cjsModule.exports = TokenSet;
 });
-
-export { dy };
+export { require_token_set };

@@ -8,21 +8,23 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-798ashq9.js:25666-25873 cjs-require-graph
-var gr = x(function (mc, Sr) {
-  Sr.exports = qi;
-  function qi(l, u, f) {
-    var d = f || 8192,
-      i = d >>> 1,
-      o = null,
-      e = d;
-    return function (r) {
-      if (r < 1 || r > i) return l(r);
-      if (e + r > d) ((o = l(d)), (e = 0));
-      var n = u.call(o, e, (e += r));
-      if (e & 7) e = (e | 7) + 1;
-      return n;
+var require_pool = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = pool;
+  function pool(alloc, slice, size) {
+    var SIZE = size || 8192;
+    var MAX = SIZE >>> 1;
+    var slab = null;
+    var offset = SIZE;
+    return function (size) {
+      if (size < 1 || size > MAX) return alloc(size);
+      if (offset + size > SIZE) {
+        slab = alloc(SIZE);
+        offset = 0;
+      }
+      var buf = slice.call(slab, offset, (offset += size));
+      if (offset & 7) offset = (offset | 7) + 1;
+      return buf;
     };
   }
 });
-
-export { gr };
+export { require_pool };

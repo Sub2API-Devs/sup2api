@@ -8,15 +8,14 @@
 import { x } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-bwbq4xvm.js:1748-1947 cjs-fingerprint
-var St = x(function (W$, di) {
-  var tv =
+var require_debug = x(function (cjsExports, cjsModule) {
+  var debug =
     typeof process === "object" &&
     process.env &&
     process.env.NODE_DEBUG &&
     /\bsemver\b/i.test(process.env.NODE_DEBUG)
-      ? (...e) => console.error("SEMVER", ...e)
+      ? (...args) => console.error("SEMVER", ...args)
       : () => {};
-  di.exports = tv;
+  cjsModule.exports = debug;
 });
-
-export { St };
+export { require_debug };

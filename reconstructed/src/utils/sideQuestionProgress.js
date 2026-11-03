@@ -8,50 +8,62 @@
  * pieces: chunk-mret17z7.js (2)
  * attribution: placement 2
  */
-import { Us } from "../services/projects/threadRows.js";
+import { messagesSinceCompactBoundary } from "../services/projects/threadRows.js";
 import { getLastCacheSafeParams } from "./forkedAgent.js";
 import { createAbortController } from "./abortController.js";
 import { runSideQuestion } from "./sideQuestion.js";
 
 //@ chunk-mret17z7.js:336-463 placement
-function isAwaitingReply(s, o = !0) {
-  let at = s.at(-1),
-    a = o && at?.type === "assistant" && at.message.stop_reason === null;
-  return Us(a ? s.slice(0, -1) : [...s]);
+function isAwaitingReply(s, o = true) {
+  let last = s.at(-1);
+  let a = o && last?.type === "assistant" && last.message.stop_reason === null;
+  return messagesSinceCompactBoundary(a ? s.slice(0, -1) : [...s]);
 }
+//@ chunk-mret17z7.js:463-1563 placement
 /**
  * 运行旁路提问（/btw）：基于历史快照单独请求模型并报告进度。
  */
-//@ chunk-mret17z7.js:463-1563 placement
 async function runSideQuestionWithProgress({
-  question: question,
-  history: history,
-  parentController: parentController,
-  onProgress: onProgress,
-  getLiveMessages: getLiveMessages,
-  isTurnInProgress: isTurnInProgress,
-  buildFallbackParams: buildFallbackParams,
+  question,
+  history,
+  parentController,
+  onProgress,
+  getLiveMessages,
+  isTurnInProgress,
+  buildFallbackParams,
 }) {
-  let u = isTurnInProgress?.() ?? !0,
-    n = getLastCacheSafeParams(),
-    c = n
-      ? {
-          ...n,
-          toolUseContext: { ...n.toolUseContext, abortController: createAbortController() },
-          ...(getLiveMessages && {
-            forkContextMessages: isAwaitingReply(getLiveMessages(), u),
-            advisorModel: n.toolUseContext.getAdvisorSetting(),
-          }),
-        }
-      : buildFallbackParams
-        ? await buildFallbackParams()
-        : null;
-  if (c === null) return { cancelled: !1, response: { response: null, synthetic: !1 } };
-  onProgress({ status: "started" });
+  let u = isTurnInProgress?.() ?? true;
+  let lastCacheSafeParams = getLastCacheSafeParams();
+  let c = lastCacheSafeParams
+    ? {
+        ...lastCacheSafeParams,
+        toolUseContext: {
+          ...lastCacheSafeParams.toolUseContext,
+          abortController: createAbortController(),
+        },
+        ...(getLiveMessages && {
+          forkContextMessages: isAwaitingReply(getLiveMessages(), u),
+          advisorModel: lastCacheSafeParams.toolUseContext.getAdvisorSetting(),
+        }),
+      }
+    : buildFallbackParams
+      ? await buildFallbackParams()
+      : null;
+  if (c === null)
+    return {
+      cancelled: false,
+      response: {
+        response: null,
+        synthetic: false,
+      },
+    };
+  onProgress({
+    status: "started",
+  });
   let t = await runSideQuestion({
-    question: question,
+    question,
     cacheSafeParams: c,
-    parentController: parentController,
+    parentController,
     onRetry: (e) =>
       onProgress({
         status: "api_retry",
@@ -60,19 +72,24 @@ async function runSideQuestionWithProgress({
         retry_delay_ms: e.retryInMs,
         error_status: e.status ?? null,
       }),
-    threadHistory: !1,
+    threadHistory: false,
     turnInProgress: u,
     ...(history?.length && {
       history: history.map((e) => ({
         question: e.question,
         response: e.response,
-        ...(e.fallback_notice && { fallbackNotice: e.fallback_notice }),
+        ...(e.fallback_notice && {
+          fallbackNotice: e.fallback_notice,
+        }),
       })),
     }),
   });
-  if (t.aborted || parentController.signal.aborted) return { cancelled: !0 };
+  if (t.aborted || parentController.signal.aborted)
+    return {
+      cancelled: true,
+    };
   return {
-    cancelled: !1,
+    cancelled: false,
     response: {
       response: t.response,
       synthetic: t.synthetic,
@@ -86,5 +103,4 @@ async function runSideQuestionWithProgress({
     },
   };
 }
-
 export { runSideQuestionWithProgress, isAwaitingReply };

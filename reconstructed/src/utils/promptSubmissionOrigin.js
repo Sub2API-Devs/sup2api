@@ -11,38 +11,72 @@
 import { isHumanOrigin } from "./turnOrigin.js";
 
 //@ chunk-s61vbvea.js:16790-16842 placement
-function yN(e) {
-  return e.getMessages?.() ?? e.messages;
+/**
+ * submittedMessages：取提交消息列表。
+ */
+function submittedMessages(context) {
+  return context.getMessages?.() ?? context.messages;
 }
 //@ chunk-s61vbvea.js:16842-16933 placement
-function _N(e) {
-  return e.dispatchedOverBridge === !0 || e.submissionVerifiedSlackHumanTurn === !0;
+/**
+ * isBridgeOrVerifiedSlackTurn：桥接提交或已验证的 Slack 人类回合。
+ */
+function isBridgeOrVerifiedSlackTurn(e) {
+  return e.dispatchedOverBridge === true || e.submissionVerifiedSlackHumanTurn === true;
 }
 //@ chunk-s61vbvea.js:16933-17042 placement
 function isHumanTypedSubmission(e) {
   return (
-    isHumanOrigin(e.submissionOrigin) && !_N(e) && (e.promptSource === "typed" || e.promptSource === "queued")
+    isHumanOrigin(e.submissionOrigin) &&
+    !isBridgeOrVerifiedSlackTurn(e) &&
+    (e.promptSource === "typed" || e.promptSource === "queued")
   );
 }
 //@ chunk-s61vbvea.js:17042-17102 placement
-function Ant(e) {
-  return e.submittedOnLocalStdin === !0 && !_N(e);
+/**
+ * isLocalStdinSubmission：本地 stdin 提交且非桥接。
+ */
+function isLocalStdinSubmission(e) {
+  return e.submittedOnLocalStdin === true && !isBridgeOrVerifiedSlackTurn(e);
 }
 //@ chunk-s61vbvea.js:17102-17197 placement
-function O7s(e) {
-  return Ant(e) || (isHumanOrigin(e.submissionOrigin) && e.submissionVerifiedSlackHumanTurn !== !0);
+/**
+ * isHumanSubmittedTurn：人类来源的提交回合。
+ */
+function isHumanSubmittedTurn(context) {
+  return (
+    isLocalStdinSubmission(context) ||
+    (isHumanOrigin(context.submissionOrigin) && context.submissionVerifiedSlackHumanTurn !== true)
+  );
 }
 //@ chunk-s61vbvea.js:17197-17267 placement
-function LZn(e) {
-  return e.submittedBySessionChannelPerson === !0 && !_N(e);
+/**
+ * isSessionChannelPerson：由会话频道的人提交。
+ */
+function isSessionChannelPerson(e) {
+  return e.submittedBySessionChannelPerson === true && !isBridgeOrVerifiedSlackTurn(e);
 }
 //@ chunk-s61vbvea.js:17267-17338 placement
-function XRe(e) {
-  return (e.getIsResponseStreaming?.() ?? e.isMidTurn) === !0;
+/**
+ * isMidTurnStreaming：是否处于回合中流式输出。
+ */
+function isMidTurnStreaming(context) {
+  return (context.getIsResponseStreaming?.() ?? context.isMidTurn) === true;
 }
 //@ chunk-s61vbvea.js:17338-17411 placement
-function M7s(e) {
-  return e?.type === "local-jsx" && e.runsBesideTurns?.() === !0;
+/**
+ * runsBesideTurns：local-jsx 提交且在回合旁运行。
+ */
+function runsBesideTurns(e) {
+  return e?.type === "local-jsx" && e.runsBesideTurns?.() === true;
 }
-
-export { yN, XRe, M7s, _N, Ant, LZn, isHumanTypedSubmission, O7s };
+export {
+  submittedMessages,
+  isMidTurnStreaming,
+  runsBesideTurns,
+  isBridgeOrVerifiedSlackTurn,
+  isLocalStdinSubmission,
+  isSessionChannelPerson,
+  isHumanTypedSubmission,
+  isHumanSubmittedTurn,
+};

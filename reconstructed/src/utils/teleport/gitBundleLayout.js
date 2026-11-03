@@ -8,134 +8,228 @@
  * pieces: chunk-gjx0rh1b.js (9)
  * attribution: placement 9
  */
-import { lstat, lstat as lstat_2, lstat as lstat_3 } from "fs/promises";
-import {
-  join,
-  join as join_2,
-  join as join_3,
-  join as join_4,
-  join as join_5,
-  join as join_6,
-  join as join_7,
-} from "path";
+import { lstat } from "fs/promises";
+import { join } from "path";
 import { findGitRoot } from "../git.js";
 import { getCwd } from "../cwd.js";
-import { runGitForAudit, Oqr, nKt, listGitRefs } from "../git/builderGit/gitConfigAudit.js";
-import { freeze, lb } from "../git/gitSafeEnv.js";
-import { mee, Lnt } from "../git/builderGit/gitEnv.js";
-import { splitIndexOffArgs, rKt } from "../git/builderGit/repoCopy.js";
+import {
+  runGitForAudit,
+  auditEnvironment,
+  UNSET_REFERENCE_BACKEND_ENV,
+  listGitRefs,
+} from "../git/builderGit/gitConfigAudit.js";
+import { GIT_SAFE_GLOBAL_ARGS, IGNORE_SUBMODULES_DIRTY_FLAG } from "../git/gitSafeEnv.js";
+import { GIT_READ_CONFIG_ARGS, GIT_LIST_ENV } from "../git/builderGit/gitEnv.js";
+import { splitIndexOffArgs, indexFileEnv } from "../git/builderGit/repoCopy.js";
 import { getRemoteHostSessionCount } from "../../commands/insights.js";
 import { uniq } from "../collections.js";
-import { _H } from "../permissions/sensitivePaths.js";
-import { Ft, isSafeRepoRelativePath, hasDosShortNameSegment } from "./gitBundleVerify.js";
+import { isSensitiveNameOrVariant } from "../permissions/sensitivePaths.js";
+import {
+  isCaseFoldingFileSystem,
+  isSafeRepoRelativePath,
+  hasDosShortNameSegment,
+} from "./gitBundleVerify.js";
 import { isNotPlainDirectory, lstatOrAbsent } from "./wipStash.js";
 import { getErrnoCode } from "../errors.js";
 
-/**
- * git 根位于主目录/上层检出等情况的拒绝上传说明。
- */
 //@ chunk-gjx0rh1b.js:109556-110296 placement
+/**
+ * git 根位置不安全时的拒绝文案（家目录、文件系统根、根含配置等）。
+ */
 var GIT_ROOT_REFUSALS = {
-    folder_is_home:
-      "Not uploading this working tree: this checkout\u2019s git root is your home directory, or a folder above it (a repository rooted there makes every folder under it part of it, so the upload would carry your tracked home files). Start from a project folder that is its own repository, or work on these files from a separate clone.",
-    folder_is_root:
-      "Not uploading this working tree: this checkout\u2019s git root is the filesystem root. Start from a project folder that is its own repository.",
-    folder_holds_config:
-      "Not uploading this working tree: this checkout\u2019s git root holds (or sits inside) Claude Code\u2019s own configuration directory. Start from a project folder that is its own repository.",
-  },
-  Nr = 268435456;
+  folder_is_home:
+    "Not uploading this working tree: this checkout\u2019s git root is your home directory, or a folder above it (a repository rooted there makes every folder under it part of it, so the upload would carry your tracked home files). Start from a project folder that is its own repository, or work on these files from a separate clone.",
+  folder_is_root:
+    "Not uploading this working tree: this checkout\u2019s git root is the filesystem root. Start from a project folder that is its own repository.",
+  folder_holds_config:
+    "Not uploading this working tree: this checkout\u2019s git root holds (or sits inside) Claude Code\u2019s own configuration directory. Start from a project folder that is its own repository.",
+};
+var GIT_PROBE_MAX_BUFFER = 268435456;
 //@ chunk-gjx0rh1b.js:110296-111116 placement
-async function checkGitRootLocation(e, n, r) {
-  let o = findGitRoot(e ?? getCwd());
-  if (!o) return { gitRoot: "", paths: [], added: new Set(), deleted: [], gitlinks: [], unwrittenModes: [] };
+async function checkGitRootLocation(cwd, signal, r) {
+  let gitRoot = findGitRoot(cwd ?? getCwd());
+  if (!gitRoot)
+    return {
+      gitRoot: "",
+      paths: [],
+      added: new Set(),
+      deleted: [],
+      gitlinks: [],
+      unwrittenModes: [],
+    };
   let s = (w) =>
-      runGitForAudit([...freeze, ...mee, ...splitIndexOffArgs(r), ...w], {
-        cwd: o,
-        abortSignal: n,
-        env: { ...getRemoteHostSessionCount({ ...Lnt, ...rKt(r) }, { base: Oqr(), userLocale: !0 }), ...nKt },
-        maxBuffer: Nr,
-      }),
-    [l, h] = await Promise.all([
-      s(["rev-parse", "--verify", "--quiet", "HEAD^{commit}"]),
-      listUnusualIndexModes(o, n, r),
-    ]);
+    runGitForAudit([...GIT_SAFE_GLOBAL_ARGS, ...GIT_READ_CONFIG_ARGS, ...splitIndexOffArgs(r), ...w], {
+      cwd: gitRoot,
+      abortSignal: signal,
+      env: {
+        ...getRemoteHostSessionCount(
+          {
+            ...GIT_LIST_ENV,
+            ...indexFileEnv(r),
+          },
+          {
+            base: auditEnvironment(),
+            userLocale: true,
+          },
+        ),
+        ...UNSET_REFERENCE_BACKEND_ENV,
+      },
+      maxBuffer: GIT_PROBE_MAX_BUFFER,
+    });
+  let [l, h] = await Promise.all([
+    s(["rev-parse", "--verify", "--quiet", "HEAD^{commit}"]),
+    listUnusualIndexModes(gitRoot, signal, r),
+  ]);
   if (h === null) return null;
-  if (h.unwrittenModes.length > 0) return { gitRoot: o, paths: [], added: new Set(), deleted: [], ...h };
-  if (l.exitCode === 1) return { gitRoot: o, paths: [], added: new Set(), deleted: [], ...h };
+  if (h.unwrittenModes.length > 0)
+    return {
+      gitRoot,
+      paths: [],
+      added: new Set(),
+      deleted: [],
+      ...h,
+    };
+  if (l.exitCode === 1)
+    return {
+      gitRoot,
+      paths: [],
+      added: new Set(),
+      deleted: [],
+      ...h,
+    };
   let [u, p] = await Promise.all([
-    s(["diff", "--name-status", "-z", "--no-renames", lb, "HEAD", "--"]),
-    s(["diff", "--cached", "--name-status", "-z", "--no-renames", lb, "HEAD", "--"]),
+    s(["diff", "--name-status", "-z", "--no-renames", IGNORE_SUBMODULES_DIRTY_FLAG, "HEAD", "--"]),
+    s([
+      "diff",
+      "--cached",
+      "--name-status",
+      "-z",
+      "--no-renames",
+      IGNORE_SUBMODULES_DIRTY_FLAG,
+      "HEAD",
+      "--",
+    ]),
   ]);
   if (l.code !== 0 || u.code !== 0 || p.code !== 0) return null;
-  return { ...summarizeStatusEntries(parseNameStatusZ(u.stdout), parseNameStatusZ(p.stdout), o), ...h };
+  return {
+    ...summarizeStatusEntries(parseNameStatusZ(u.stdout), parseNameStatusZ(p.stdout), gitRoot),
+    ...h,
+  };
 }
 //@ chunk-gjx0rh1b.js:111116-111410 placement
-function summarizeStatusEntries(e, n, r) {
-  let o = (h, u) =>
-      h.filter(({ status: status, path: path }) => u(status) && path !== "").map(({ path: path }) => path),
-    s = uniq([...o(e, (h) => h !== "D"), ...o(n, (h) => h !== "D")]),
-    l = new Set(s);
+function summarizeStatusEntries(nameStatusZ, nameStatusZ_2, gitRoot) {
+  let o = (h, u) => h.filter(({ status, path }) => u(status) && path !== "").map(({ path }) => path);
+  let s = uniq([...o(nameStatusZ, (h) => h !== "D"), ...o(nameStatusZ_2, (h) => h !== "D")]);
+  let l = new Set(s);
   return {
-    gitRoot: r,
+    gitRoot,
     paths: s,
-    added: new Set(o(n, (h) => h === "A")),
-    deleted: uniq([...o(e, (h) => h === "D"), ...o(n, (h) => h === "D")]).filter((h) => !l.has(h)),
+    added: new Set(o(nameStatusZ_2, (h) => h === "A")),
+    deleted: uniq([...o(nameStatusZ, (h) => h === "D"), ...o(nameStatusZ_2, (h) => h === "D")]).filter(
+      (h) => !l.has(h),
+    ),
   };
 }
 //@ chunk-gjx0rh1b.js:111410-111537 placement
-function parseNameStatusZ(e) {
-  let parts = e.split("\x00");
-  return Array.from({ length: Math.floor(parts.length / 2) }, (r, o) => ({
-    status: parts[2 * o],
-    path: parts[2 * o + 1],
-  }));
+function parseNameStatusZ(stdout) {
+  let parts = stdout.split("\x00");
+  return Array.from(
+    {
+      length: Math.floor(parts.length / 2),
+    },
+    (r, o) => ({
+      status: parts[2 * o],
+      path: parts[2 * o + 1],
+    }),
+  );
 }
 //@ chunk-gjx0rh1b.js:111537-111597 placement
-var $d = new Set([33188, 33261, 40960, 57344]),
-  Dd = 61440,
-  Pd = 57344;
+var ORDINARY_FILE_MODE_SET = new Set([33188, 33261, 40960, 57344]);
+var INDEX_MODE_TYPE_MASK = 61440;
+var GITLINK_MODE = 57344;
 //@ chunk-gjx0rh1b.js:111597-111869 placement
 function classifyIndexMode(e) {
   let match = /^([0-7]{1,11}) [0-9a-f]+ \d\t(.*)$/s.exec(e);
-  if (match === null) return { kind: "unwritten_mode", path: e.slice(e.indexOf("\t") + 1) };
-  let int = Number.parseInt(match[1], 8),
-    o = match[2];
-  return (int & Dd) === Pd
-    ? { kind: "gitlink", path: o }
-    : { kind: $d.has(int) ? "ordinary" : "unwritten_mode", path: o };
+  if (match === null)
+    return {
+      kind: "unwritten_mode",
+      path: e.slice(e.indexOf("\t") + 1),
+    };
+  let r = Number.parseInt(match[1], 8);
+  let path = match[2];
+  return (r & INDEX_MODE_TYPE_MASK) === GITLINK_MODE
+    ? {
+        kind: "gitlink",
+        path,
+      }
+    : {
+        kind: ORDINARY_FILE_MODE_SET.has(r) ? "ordinary" : "unwritten_mode",
+        path,
+      };
 }
 //@ chunk-gjx0rh1b.js:111869-112214 placement
-async function listUnusualIndexModes(e, n, r) {
-  let o = await listGitRefs(e, [...mee, ...splitIndexOffArgs(r), "ls-files", "-s", "-z"], {
-    hardened: !1,
-    signal: n,
-    env: { ...Lnt, ...rKt(r) },
-    maxBuffer: Nr,
+async function listUnusualIndexModes(e, signal, r) {
+  let o = await listGitRefs(e, [...GIT_READ_CONFIG_ARGS, ...splitIndexOffArgs(r), "ls-files", "-s", "-z"], {
+    hardened: false,
+    signal,
+    env: {
+      ...GIT_LIST_ENV,
+      ...indexFileEnv(r),
+    },
+    maxBuffer: GIT_PROBE_MAX_BUFFER,
   });
   if (o.code !== 0) return null;
   let mapped = o.stdout
-      .split("\x00")
-      .filter((h) => h !== "")
-      .map(classifyIndexMode),
-    l = (h) => uniq(mapped.filter((u) => u.kind === h).map(({ path: path }) => path));
-  return { gitlinks: l("gitlink"), unwrittenModes: l("unwritten_mode") };
+    .split("\x00")
+    .filter((h) => h !== "")
+    .map(classifyIndexMode);
+  let l = (h) => uniq(mapped.filter((u) => u.kind === h).map(({ path }) => path));
+  return {
+    gitlinks: l("gitlink"),
+    unwrittenModes: l("unwritten_mode"),
+  };
 }
 //@ chunk-gjx0rh1b.js:112214-112780 placement
-async function classifyPathIdentity(e, n, r, o, s = []) {
-  let l = (w) => _H(w) || o?.(w) === !0,
-    h = await Ft(e),
-    u = async (w, _) => {
-      if (!isSafeRepoRelativePath(w, h)) return { path: w, why: "forged" };
-      if (hasDosShortNameSegment(w)) return { path: w, why: "alias" };
-      let y = await describeUnexaminedPath(e, w);
-      if (y === "linked") return { path: w, why: "hardlinked" };
-      if (l(w)) {
-        if (_ === "changed") return { path: w, why: r.has(w) ? "added" : "changed" };
-        if (await isNotPlainDirectory(e, w)) return { path: w, why: "resurrected" };
-      }
-      return y === "unexamined" ? { path: w, why: "unexamined" } : null;
-    };
-  return (await Promise.all([...s.map((w) => u(w, "deleted")), ...n.map((w) => u(w, "changed"))]))
+async function classifyPathIdentity(e, paths, added, o, deleted = []) {
+  let l = (w) => isSensitiveNameOrVariant(w) || o?.(w) === true;
+  let h = await isCaseFoldingFileSystem(e);
+  let u = async (w, _) => {
+    if (!isSafeRepoRelativePath(w, h))
+      return {
+        path: w,
+        why: "forged",
+      };
+    if (hasDosShortNameSegment(w))
+      return {
+        path: w,
+        why: "alias",
+      };
+    let y = await describeUnexaminedPath(e, w);
+    if (y === "linked")
+      return {
+        path: w,
+        why: "hardlinked",
+      };
+    if (l(w)) {
+      if (_ === "changed")
+        return {
+          path: w,
+          why: added.has(w) ? "added" : "changed",
+        };
+      if (await isNotPlainDirectory(e, w))
+        return {
+          path: w,
+          why: "resurrected",
+        };
+    }
+    return y === "unexamined"
+      ? {
+          path: w,
+          why: "unexamined",
+        }
+      : null;
+  };
+  return (await Promise.all([...deleted.map((w) => u(w, "deleted")), ...paths.map((w) => u(w, "changed"))]))
     .filter((w) => w !== null)
     .sort((w, _) => w.path.localeCompare(_.path));
 }
@@ -148,13 +242,12 @@ async function describeUnexaminedPath(e, n) {
     let o = await lstat(join(e, n));
     return o.isFile() && o.nlink > 1 ? "linked" : "single";
   } catch (error) {
-    let s = getErrnoCode(error);
-    return s === "ENOENT" || s === "ENOTDIR" ? "single" : "unexamined";
+    let errnoCode = getErrnoCode(error);
+    return errnoCode === "ENOENT" || errnoCode === "ENOTDIR" ? "single" : "unexamined";
   }
 }
-
 export {
-  Nr,
+  GIT_PROBE_MAX_BUFFER,
   summarizeStatusEntries,
   parseNameStatusZ,
   classifyPathIdentity,

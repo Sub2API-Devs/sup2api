@@ -8,130 +8,163 @@
 import { dl } from "./pipelineRequest.js";
 
 //@ chunk-mrx6y2r5.js:32039-32071 esm-layout
-function Bs(e) {
-  return new dl(e);
+function Bs(options) {
+  return new dl(options);
 }
 //@ chunk-mrx6y2r5.js:32071-32130 esm-fingerprint
-var ul = new Set(["Deserialize", "Serialize", "Retry", "Sign"]);
+var ValidPhaseNames = new Set(["Deserialize", "Serialize", "Retry", "Sign"]);
 //@ chunk-mrx6y2r5.js:32130-34701 esm-fingerprint
-class $o {
-  constructor(e) {
-    var t;
-    ((this._policies = []),
-      (this._policies =
-        (t = e === null || e === void 0 ? void 0 : e.slice(0)) !== null && t !== void 0 ? t : []),
-      (this._orderedPolicies = void 0));
+class HttpPipeline {
+  constructor(policies) {
+    var _a;
+    this._policies = [];
+    this._policies =
+      (_a = policies === null || policies === undefined ? undefined : policies.slice(0)) !== null &&
+      _a !== undefined
+        ? _a
+        : [];
+    this._orderedPolicies = undefined;
   }
-  addPolicy(e, t = {}) {
-    if (t.phase && t.afterPhase) throw Error("Policies inside a phase cannot specify afterPhase.");
-    if (t.phase && !ul.has(t.phase)) throw Error(`Invalid phase name: ${t.phase}`);
-    if (t.afterPhase && !ul.has(t.afterPhase)) throw Error(`Invalid afterPhase name: ${t.afterPhase}`);
-    (this._policies.push({ policy: e, options: t }), (this._orderedPolicies = void 0));
+  addPolicy(policy, options = {}) {
+    if (options.phase && options.afterPhase)
+      throw Error("Policies inside a phase cannot specify afterPhase.");
+    if (options.phase && !ValidPhaseNames.has(options.phase))
+      throw Error(`Invalid phase name: ${options.phase}`);
+    if (options.afterPhase && !ValidPhaseNames.has(options.afterPhase))
+      throw Error(`Invalid afterPhase name: ${options.afterPhase}`);
+    this._policies.push({
+      policy,
+      options,
+    });
+    this._orderedPolicies = undefined;
   }
-  removePolicy(e) {
-    let t = [];
-    return (
-      (this._policies = this._policies.filter((_policy) => {
-        if ((e.name && _policy.policy.name === e.name) || (e.phase && _policy.options.phase === e.phase))
-          return (t.push(_policy.policy), !1);
-        else return !0;
-      })),
-      (this._orderedPolicies = void 0),
-      t
-    );
+  removePolicy(options) {
+    let removedPolicies = [];
+    this._policies = this._policies.filter((policyDescriptor) => {
+      if (
+        (options.name && policyDescriptor.policy.name === options.name) ||
+        (options.phase && policyDescriptor.options.phase === options.phase)
+      ) {
+        removedPolicies.push(policyDescriptor.policy);
+        return false;
+      } else return true;
+    });
+    this._orderedPolicies = undefined;
+    return removedPolicies;
   }
-  sendRequest(e, t) {
+  sendRequest(httpClient, request) {
     return this.getOrderedPolicies().reduceRight(
-      (o, i) => (s) => i.sendRequest(s, o),
-      (o) => e.sendRequest(o),
-    )(t);
+      (next, policy) => (req) => policy.sendRequest(req, next),
+      (req) => httpClient.sendRequest(req),
+    )(request);
   }
   getOrderedPolicies() {
     if (!this._orderedPolicies) this._orderedPolicies = this.orderPolicies();
     return this._orderedPolicies;
   }
   clone() {
-    return new $o(this._policies);
+    return new HttpPipeline(this._policies);
   }
   static create() {
-    return new $o();
+    return new HttpPipeline();
   }
   orderPolicies() {
-    let e = [],
-      t = new Map();
-    function r(p) {
-      return { name: p, policies: new Set(), hasRun: !1, hasAfterPolicies: !1 };
+    let result = [];
+    let policyMap = new Map();
+    function createPhase(name) {
+      return {
+        name,
+        policies: new Set(),
+        hasRun: false,
+        hasAfterPolicies: false,
+      };
     }
-    let n = r("Serialize"),
-      o = r("None"),
-      i = r("Deserialize"),
-      s = r("Retry"),
-      a = r("Sign"),
-      c = [n, o, i, s, a];
-    function l(p) {
-      if (p === "Retry") return s;
-      else if (p === "Serialize") return n;
-      else if (p === "Deserialize") return i;
-      else if (p === "Sign") return a;
-      else return o;
-    }
-    for (let _policy of this._policies) {
-      let { policy: policy, options: options } = _policy,
-        I = policy.name;
-      if (t.has(I)) throw Error("Duplicate policy names not allowed in pipeline");
-      let v = { policy: policy, dependsOn: new Set(), dependants: new Set() };
-      if (options.afterPhase) ((v.afterPhase = l(options.afterPhase)), (v.afterPhase.hasAfterPolicies = !0));
-      (t.set(I, v), l(options.phase).policies.add(v));
+    let serializePhase = createPhase("Serialize");
+    let noPhase = createPhase("None");
+    let deserializePhase = createPhase("Deserialize");
+    let retryPhase = createPhase("Retry");
+    let signPhase = createPhase("Sign");
+    let orderedPhases = [serializePhase, noPhase, deserializePhase, retryPhase, signPhase];
+    function getPhase(phase) {
+      if (phase === "Retry") return retryPhase;
+      else if (phase === "Serialize") return serializePhase;
+      else if (phase === "Deserialize") return deserializePhase;
+      else if (phase === "Sign") return signPhase;
+      else return noPhase;
     }
     for (let _policy of this._policies) {
-      let { policy: policy, options: options } = _policy,
-        I = policy.name,
-        v = t.get(I);
-      if (!v) throw Error(`Missing node for policy ${I}`);
+      let { policy, options } = _policy;
+      let policyName = policy.name;
+      if (policyMap.has(policyName)) throw Error("Duplicate policy names not allowed in pipeline");
+      let node = {
+        policy,
+        dependsOn: new Set(),
+        dependants: new Set(),
+      };
+      if (options.afterPhase) {
+        node.afterPhase = getPhase(options.afterPhase);
+        node.afterPhase.hasAfterPolicies = true;
+      }
+      policyMap.set(policyName, node);
+      getPhase(options.phase).policies.add(node);
+    }
+    for (let descriptor of this._policies) {
+      let { policy, options } = descriptor;
+      let policyName = policy.name;
+      let node = policyMap.get(policyName);
+      if (!node) throw Error(`Missing node for policy ${policyName}`);
       if (options.afterPolicies)
-        for (let afterPolicy of options.afterPolicies) {
-          let B = t.get(afterPolicy);
-          if (B) (v.dependsOn.add(B), B.dependants.add(v));
+        for (let afterPolicyName of options.afterPolicies) {
+          let afterNode = policyMap.get(afterPolicyName);
+          if (afterNode) {
+            node.dependsOn.add(afterNode);
+            afterNode.dependants.add(node);
+          }
         }
       if (options.beforePolicies)
-        for (let beforePolicy of options.beforePolicies) {
-          let B = t.get(beforePolicy);
-          if (B) (B.dependsOn.add(v), v.dependants.add(B));
+        for (let beforePolicyName of options.beforePolicies) {
+          let beforeNode = policyMap.get(beforePolicyName);
+          if (beforeNode) {
+            beforeNode.dependsOn.add(node);
+            node.dependants.add(beforeNode);
+          }
         }
     }
-    function d(p) {
-      p.hasRun = !0;
-      for (let policy of p.policies) {
-        if (policy.afterPhase && (!policy.afterPhase.hasRun || policy.afterPhase.policies.size)) continue;
-        if (policy.dependsOn.size === 0) {
-          e.push(policy.policy);
-          for (let dependant of policy.dependants) dependant.dependsOn.delete(policy);
-          (t.delete(policy.policy.name), p.policies.delete(policy));
+    function walkPhase(phase) {
+      phase.hasRun = true;
+      for (let node of phase.policies) {
+        if (node.afterPhase && (!node.afterPhase.hasRun || node.afterPhase.policies.size)) continue;
+        if (node.dependsOn.size === 0) {
+          result.push(node.policy);
+          for (let dependant of node.dependants) dependant.dependsOn.delete(node);
+          policyMap.delete(node.policy.name);
+          phase.policies.delete(node);
         }
       }
     }
-    function u() {
-      for (let p of c) {
-        if ((d(p), p.policies.size > 0 && p !== o)) {
-          if (!o.hasRun) d(o);
+    function walkPhases() {
+      for (let phase of orderedPhases) {
+        walkPhase(phase);
+        if (phase.policies.size > 0 && phase !== noPhase) {
+          if (!noPhase.hasRun) walkPhase(noPhase);
           return;
         }
-        if (p.hasAfterPolicies) d(o);
+        if (phase.hasAfterPolicies) walkPhase(noPhase);
       }
     }
-    let m = 0;
-    while (t.size > 0) {
-      m++;
-      let p = e.length;
-      if ((u(), e.length <= p && m > 1))
+    let iteration = 0;
+    while (policyMap.size > 0) {
+      iteration++;
+      let initialResultLength = result.length;
+      walkPhases();
+      if (result.length <= initialResultLength && iteration > 1)
         throw Error("Cannot satisfy policy dependencies due to requirements cycle.");
     }
-    return e;
+    return result;
   }
 }
 //@ chunk-mrx6y2r5.js:34701-34734 esm-layout
-function zs() {
-  return $o.create();
+function createEmptyPipeline() {
+  return HttpPipeline.create();
 }
-
-export { zs, Bs };
+export { createEmptyPipeline, Bs };

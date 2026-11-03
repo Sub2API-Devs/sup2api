@@ -8,12 +8,15 @@
  * pieces: chunk-18hwfzwa.js (16)
  * attribution: placement 16
  */
-import { j, y, R, Q, yt } from "../../../vendor/react/cjs/react.production.js";
-import { jnn, settleKey, useRefusalTracker } from "../CustomSelect/selectTypeahead.js";
-import { So } from "../../hooks/useRecentInputGuard.js";
+import { init_react_production, y, R, Q, yt } from "../../../vendor/react/cjs/react.production.js";
+import { typeaheadEpochTracker, settleKey, useRefusalTracker } from "../CustomSelect/selectTypeahead.js";
+import { RECENT_INPUT_GUARD_MS as RECENT_INPUT_GUARD_MS_3 } from "../../hooks/useRecentInputGuard.js";
 import { useIsScreenReaderEnabled } from "../../ink/components/ErrorBoundary.js";
 import { uniqueLabels, replaceLineBreaks } from "../../utils/permissions/approvalPayloadSerialization.js";
-import { r, e } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  jsxProd_default_2,
+  jsxProd_default,
+} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Byline } from "../design-system/Byline.js";
 import { Text, Box } from "../../ink/components/Text.js";
 import { KeyboardShortcutHint } from "../design-system/KeyboardShortcutHint.js";
@@ -29,108 +32,149 @@ import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
 import { useSession } from "../../context/session.js";
 
 //@ chunk-18hwfzwa.js:1312910-1312914 placement
-j();
+init_react_production();
 //@ chunk-18hwfzwa.js:1312914-1312918 placement
-j();
+init_react_production();
 //@ chunk-18hwfzwa.js:1312918-1314841 placement
 function AutoModeSetupFlaggedPicker({
-  flagged: flagged,
-  initialPicking: initialPicking,
-  onPickingChange: onPickingChange,
-  initialSelection: initialSelection,
-  onSelectionChange: onSelectionChange,
-  onResolve: onResolve,
-  onCancel: onCancel,
-  hideIndexes: hideIndexes,
+  flagged,
+  initialPicking,
+  onPickingChange,
+  initialSelection,
+  onSelectionChange,
+  onResolve,
+  onCancel,
+  hideIndexes,
 }) {
-  let { epoch: epoch, noteAttempt: noteAttempt } = jnn(),
-    ze = settleKey(epoch, So),
-    [Xe, rt] = y(initialPicking),
-    kt = settleKey(Xe, So),
-    At = useIsScreenReaderEnabled(),
-    { refusedWithin: refusedWithin, noteRefused: noteRefused } = useRefusalTracker();
+  let { epoch, noteAttempt } = typeaheadEpochTracker();
+  let ze = settleKey(epoch, RECENT_INPUT_GUARD_MS_3);
+  let [Xe, rt] = y(initialPicking);
+  let kt = settleKey(Xe, RECENT_INPUT_GUARD_MS_3);
+  let isScreenReaderEnabled = useIsScreenReaderEnabled();
+  let { refusedWithin, noteRefused } = useRefusalTracker();
   function Et() {
-    if (!kt.settled || refusedWithin(So)) return (noteRefused(), !0);
-    return !1;
+    if (!kt.settled || refusedWithin(RECENT_INPUT_GUARD_MS_3)) {
+      noteRefused();
+      return true;
+    }
+    return false;
   }
   function Dt() {
-    if (!ze.settled) return (noteAttempt(), !0);
-    return !1;
+    if (!ze.settled) {
+      noteAttempt();
+      return true;
+    }
+    return false;
   }
-  let Lt = R(initialSelection),
-    oo = Q(() => uniqueLabels(flagged), [flagged]),
-    Xt = r(Byline, {
-      children: [
-        e(Text, { children: "Your setup is saved either way" }),
-        e(KeyboardShortcutHint, { chord: "enter", action: "confirm" }),
-        e(KeyboardShortcutHint, { chord: "escape", action: "skip" }),
-      ],
-    });
+  let initialSelectionRef = R(initialSelection);
+  let oo = Q(() => uniqueLabels(flagged), [flagged]);
+  let inputGuide = jsxProd_default_2(Byline, {
+    children: [
+      jsxProd_default(Text, {
+        children: "Your setup is saved either way",
+      }),
+      jsxProd_default(KeyboardShortcutHint, {
+        chord: "enter",
+        action: "confirm",
+      }),
+      jsxProd_default(KeyboardShortcutHint, {
+        chord: "escape",
+        action: "skip",
+      }),
+    ],
+  });
   function io() {
-    (noteAttempt(), onCancel());
+    noteAttempt();
+    onCancel();
   }
   if (Xe)
-    return e(Dialog, {
+    return jsxProd_default(Dialog, {
       title: "Pick which to remove",
       onCancel: io,
-      exitOnCtrlCD: !0,
-      inputGuide: Xt,
-      children: e(
+      exitOnCtrlCD: true,
+      inputGuide,
+      children: jsxProd_default(
         SelectMultiAccessible,
         {
           refuseInput: Et,
-          hideIndexes: hideIndexes,
-          options: oo.map((so, po) => ({ value: flagged[po], label: String(so) })),
-          defaultValue: Lt.current,
+          hideIndexes,
+          options: oo.map((so, po) => ({
+            value: flagged[po],
+            label: String(so),
+          })),
+          defaultValue: initialSelectionRef.current,
           onChange: (so) => {
             if (!kt.settled) return;
-            ((Lt.current = so), onSelectionChange(so));
+            initialSelectionRef.current = so;
+            onSelectionChange(so);
           },
           submitButtonText: "Remove selected",
           onSubmit: () => {
-            (noteAttempt(), onResolve(Lt.current));
+            noteAttempt();
+            onResolve(initialSelectionRef.current);
           },
           onCancel: io,
         },
-        At ? "screen-reader" : kt.remountKey,
+        isScreenReaderEnabled ? "screen-reader" : kt.remountKey,
       ),
     });
-  return e(Dialog, {
+  return jsxProd_default(Dialog, {
     title: "Review rules that skip checks",
     onCancel: io,
-    exitOnCtrlCD: !0,
-    inputGuide: Xt,
-    children: r(Box, {
+    exitOnCtrlCD: true,
+    inputGuide,
+    children: jsxProd_default_2(Box, {
       flexDirection: "column",
       gap: 1,
       children: [
-        e(Text, {
-          dimColor: !0,
+        jsxProd_default(Text, {
+          dimColor: true,
           children:
             "These permissions.allow entries in your user settings are broad enough that auto mode either ignores them at runtime, or auto-approves destructive commands with no check. Removing one means matching commands prompt again outside auto mode too.",
         }),
-        e(Box, {
+        jsxProd_default(Box, {
           flexDirection: "column",
-          children: oo.map((so, po) => r(Text, { children: [" \xB7 ", String(so)] }, flagged[po])),
+          children: oo.map((so, po) =>
+            jsxProd_default_2(
+              Text,
+              {
+                children: [" \xB7 ", String(so)],
+              },
+              flagged[po],
+            ),
+          ),
         }),
-        e(Text, { dimColor: !0, children: "Removed entries can be restored by re-adding them verbatim." }),
-        e(
+        jsxProd_default(Text, {
+          dimColor: true,
+          children: "Removed entries can be restored by re-adding them verbatim.",
+        }),
+        jsxProd_default(
           ModelSelector,
           {
             refuseInput: Dt,
             selectedValue: NO_COMMITTED_ROW,
             defaultFocusValue: "all",
-            hideIndexes: hideIndexes,
+            hideIndexes,
             options: [
-              { value: "all", label: "Remove them all" },
-              { value: "pick", label: "Pick which to remove" },
-              { value: "leave", label: "Leave them" },
+              {
+                value: "all",
+                label: "Remove them all",
+              },
+              {
+                value: "pick",
+                label: "Pick which to remove",
+              },
+              {
+                value: "leave",
+                label: "Leave them",
+              },
             ],
             onChange: (so) => {
-              if ((noteAttempt(), so === "all")) onResolve(flagged);
+              noteAttempt();
+              if (so === "all") onResolve(flagged);
               else if (so === "pick") {
-                if (onPickingChange(!0) === !1) return;
-                rt(!0);
+                if (onPickingChange(true) === false) return;
+                rt(true);
               } else onResolve([]);
             },
             onCancel: io,
@@ -142,429 +186,535 @@ function AutoModeSetupFlaggedPicker({
   });
 }
 //@ chunk-18hwfzwa.js:1314841-1314845 placement
-j();
+init_react_production();
 //@ chunk-18hwfzwa.js:1314845-1314876 placement
-function QDo(kt) {
+function stripLineBreaks(kt) {
   return replaceLineBreaks(kt);
 }
 //@ chunk-18hwfzwa.js:1314876-1317648 placement
-function AutoModeSetupReview(h) {
-  let $ = w(49),
-    {
-      proposal: proposal,
-      hideIndexes: hideIndexes,
-      defaultFocusValue: defaultFocusValue,
-      onFocus: onFocus,
-      onAccept: onAccept,
-      onDecline: onDecline,
-      onCancel: onCancel,
-    } = h,
-    { epoch: epoch, noteAttempt: noteAttempt } = jnn(),
-    ze = settleKey(epoch, So),
-    rt;
-  if ($[0] !== ze.settled || $[1] !== noteAttempt)
-    ((rt = function kt() {
+function AutoModeSetupReview(props) {
+  let $ = w(49);
+  let { proposal, hideIndexes, defaultFocusValue, onFocus, onAccept, onDecline, onCancel } = props;
+  let { epoch, noteAttempt } = typeaheadEpochTracker();
+  let ze = settleKey(epoch, RECENT_INPUT_GUARD_MS_3);
+  let rt;
+  if ($[0] !== ze.settled || $[1] !== noteAttempt) {
+    rt = function kt() {
       if (!ze.settled) {
-        return (noteAttempt(), !0);
+        noteAttempt();
+        return true;
       }
-      return !1;
-    }),
-      ($[0] = ze.settled),
-      ($[1] = noteAttempt),
-      ($[2] = rt));
-  else rt = $[2];
-  let kt = rt,
-    At = defaultFocusValue === "decline" && !ze.settled,
-    It = R(!1),
-    Ot;
-  if ($[3] === MEMO_CACHE_SENTINEL)
-    ((Ot = r(Byline, {
+      return false;
+    };
+    $[0] = ze.settled;
+    $[1] = noteAttempt;
+    $[2] = rt;
+  } else rt = $[2];
+  let refuseInput = rt;
+  let At = defaultFocusValue === "decline" && !ze.settled;
+  let It = R(false);
+  let inputGuide;
+  if ($[3] === MEMO_CACHE_SENTINEL) {
+    inputGuide = jsxProd_default_2(Byline, {
       children: [
-        e(KeyboardShortcutHint, { chord: "enter", action: "confirm" }),
-        e(KeyboardShortcutHint, { chord: "escape", action: "cancel" }),
+        jsxProd_default(KeyboardShortcutHint, {
+          chord: "enter",
+          action: "confirm",
+        }),
+        jsxProd_default(KeyboardShortcutHint, {
+          chord: "escape",
+          action: "cancel",
+        }),
       ],
-    })),
-      ($[3] = Ot));
-  else Ot = $[3];
+    });
+    $[3] = inputGuide;
+  } else inputGuide = $[3];
   let Et;
-  if ($[4] !== proposal.environment)
-    ((Et = e(ReviewEntrySection, { label: "Environment", entries: proposal.environment, headers: !0 })),
-      ($[4] = proposal.environment),
-      ($[5] = Et));
-  else Et = $[5];
-  let Dt;
-  if ($[6] !== proposal.allow) ((Dt = sF(proposal.allow)), ($[6] = proposal.allow), ($[7] = Dt));
-  else Dt = $[7];
+  if ($[4] !== proposal.environment) {
+    Et = jsxProd_default(ReviewEntrySection, {
+      label: "Environment",
+      entries: proposal.environment,
+      headers: true,
+    });
+    $[4] = proposal.environment;
+    $[5] = Et;
+  } else Et = $[5];
+  let entries;
+  if ($[6] !== proposal.allow) {
+    entries = withoutDefaultsEntry(proposal.allow);
+    $[6] = proposal.allow;
+    $[7] = entries;
+  } else entries = $[7];
   let Lt;
-  if ($[8] !== Dt)
-    ((Lt = e(ReviewEntrySection, {
+  if ($[8] !== entries) {
+    Lt = jsxProd_default(ReviewEntrySection, {
       label: "Allow carve-outs",
-      entries: Dt,
+      entries,
       empty: "none suggested \u2014 defaults look like they cover your usage",
-    })),
-      ($[8] = Dt),
-      ($[9] = Lt));
-  else Lt = $[9];
-  let oo;
-  if ($[10] !== proposal.soft_deny)
-    ((oo = sF(proposal.soft_deny)), ($[10] = proposal.soft_deny), ($[11] = oo));
-  else oo = $[11];
+    });
+    $[8] = entries;
+    $[9] = Lt;
+  } else Lt = $[9];
+  let entries_2;
+  if ($[10] !== proposal.soft_deny) {
+    entries_2 = withoutDefaultsEntry(proposal.soft_deny);
+    $[10] = proposal.soft_deny;
+    $[11] = entries_2;
+  } else entries_2 = $[11];
   let Xt;
-  if ($[12] !== oo)
-    ((Xt = e(ReviewEntrySection, { label: "Extra soft blocks", entries: oo, empty: "none suggested" })),
-      ($[12] = oo),
-      ($[13] = Xt));
-  else Xt = $[13];
-  let io;
-  if ($[14] !== proposal.hard_deny)
-    ((io = sF(proposal.hard_deny)), ($[14] = proposal.hard_deny), ($[15] = io));
-  else io = $[15];
+  if ($[12] !== entries_2) {
+    Xt = jsxProd_default(ReviewEntrySection, {
+      label: "Extra soft blocks",
+      entries: entries_2,
+      empty: "none suggested",
+    });
+    $[12] = entries_2;
+    $[13] = Xt;
+  } else Xt = $[13];
+  let entries_3;
+  if ($[14] !== proposal.hard_deny) {
+    entries_3 = withoutDefaultsEntry(proposal.hard_deny);
+    $[14] = proposal.hard_deny;
+    $[15] = entries_3;
+  } else entries_3 = $[15];
   let so;
-  if ($[16] !== io)
-    ((so = e(ReviewEntrySection, { label: "Extra hard blocks", entries: io, empty: "none suggested" })),
-      ($[16] = io),
-      ($[17] = so));
-  else so = $[17];
+  if ($[16] !== entries_3) {
+    so = jsxProd_default(ReviewEntrySection, {
+      label: "Extra hard blocks",
+      entries: entries_3,
+      empty: "none suggested",
+    });
+    $[16] = entries_3;
+    $[17] = so;
+  } else so = $[17];
   let po;
-  if ($[18] !== proposal.notes)
-    ((po = e(ReviewEntrySection, { label: "Notes", entries: proposal.notes, empty: "none", dim: !0 })),
-      ($[18] = proposal.notes),
-      ($[19] = po));
-  else po = $[19];
+  if ($[18] !== proposal.notes) {
+    po = jsxProd_default(ReviewEntrySection, {
+      label: "Notes",
+      entries: proposal.notes,
+      empty: "none",
+      dim: true,
+    });
+    $[18] = proposal.notes;
+    $[19] = po;
+  } else po = $[19];
   const ao = At ? "held" : "settled";
-  let co;
-  if ($[20] === MEMO_CACHE_SENTINEL)
-    ((co = [
-      { value: "accept", label: "Looks good \u2014 save it" },
-      { value: "decline", label: "Discard and exit" },
-    ]),
-      ($[20] = co));
-  else co = $[20];
-  let bo;
-  if ($[21] !== At || $[22] !== onFocus)
-    ((bo = (Ao) => {
+  let options;
+  if ($[20] === MEMO_CACHE_SENTINEL) {
+    options = [
+      {
+        value: "accept",
+        label: "Looks good \u2014 save it",
+      },
+      {
+        value: "decline",
+        label: "Discard and exit",
+      },
+    ];
+    $[20] = options;
+  } else options = $[20];
+  let onFocus_2;
+  if ($[21] !== At || $[22] !== onFocus) {
+    onFocus_2 = (Ao) => {
       if (At) {
         return;
       }
       if (!It.current) {
-        It.current = !0;
+        It.current = true;
         return;
       }
       onFocus?.(Ao);
-    }),
-      ($[21] = At),
-      ($[22] = onFocus),
-      ($[23] = bo));
-  else bo = $[23];
-  let Bo;
-  if ($[24] !== noteAttempt || $[25] !== onAccept || $[26] !== onDecline)
-    ((Bo = (Ro) => {
-      if ((noteAttempt(), Ro === "accept")) onAccept();
+    };
+    $[21] = At;
+    $[22] = onFocus;
+    $[23] = onFocus_2;
+  } else onFocus_2 = $[23];
+  let onChange;
+  if ($[24] !== noteAttempt || $[25] !== onAccept || $[26] !== onDecline) {
+    onChange = (Ro) => {
+      noteAttempt();
+      if (Ro === "accept") onAccept();
       else onDecline();
-    }),
-      ($[24] = noteAttempt),
-      ($[25] = onAccept),
-      ($[26] = onDecline),
-      ($[27] = Bo));
-  else Bo = $[27];
-  let Ho;
-  if ($[28] !== noteAttempt || $[29] !== onCancel)
-    ((Ho = () => {
-      (noteAttempt(), onCancel());
-    }),
-      ($[28] = noteAttempt),
-      ($[29] = onCancel),
-      ($[30] = Ho));
-  else Ho = $[30];
+    };
+    $[24] = noteAttempt;
+    $[25] = onAccept;
+    $[26] = onDecline;
+    $[27] = onChange;
+  } else onChange = $[27];
+  let onCancel_2;
+  if ($[28] !== noteAttempt || $[29] !== onCancel) {
+    onCancel_2 = () => {
+      noteAttempt();
+      onCancel();
+    };
+    $[28] = noteAttempt;
+    $[29] = onCancel;
+    $[30] = onCancel_2;
+  } else onCancel_2 = $[30];
   let Io;
   if (
     $[31] !== defaultFocusValue ||
     $[32] !== hideIndexes ||
-    $[33] !== kt ||
+    $[33] !== refuseInput ||
     $[34] !== ao ||
-    $[35] !== bo ||
-    $[36] !== Bo ||
-    $[37] !== Ho
-  )
-    ((Io = e(
+    $[35] !== onFocus_2 ||
+    $[36] !== onChange ||
+    $[37] !== onCancel_2
+  ) {
+    Io = jsxProd_default(
       ModelSelector,
       {
-        refuseInput: kt,
+        refuseInput,
         selectedValue: NO_COMMITTED_ROW,
-        options: co,
-        hideIndexes: hideIndexes,
-        defaultFocusValue: defaultFocusValue,
-        onFocus: bo,
-        onChange: Bo,
-        onCancel: Ho,
+        options,
+        hideIndexes,
+        defaultFocusValue,
+        onFocus: onFocus_2,
+        onChange,
+        onCancel: onCancel_2,
       },
       ao,
-    )),
-      ($[31] = defaultFocusValue),
-      ($[32] = hideIndexes),
-      ($[33] = kt),
-      ($[34] = ao),
-      ($[35] = bo),
-      ($[36] = Bo),
-      ($[37] = Ho),
-      ($[38] = Io));
-  else Io = $[38];
-  let Wo;
-  if ($[39] !== po || $[40] !== Io || $[41] !== Et || $[42] !== Lt || $[43] !== Xt || $[44] !== so)
-    ((Wo = r(Box, { flexDirection: "column", gap: 1, children: [Et, Lt, Xt, so, po, Io] })),
-      ($[39] = po),
-      ($[40] = Io),
-      ($[41] = Et),
-      ($[42] = Lt),
-      ($[43] = Xt),
-      ($[44] = so),
-      ($[45] = Wo));
-  else Wo = $[45];
+    );
+    $[31] = defaultFocusValue;
+    $[32] = hideIndexes;
+    $[33] = refuseInput;
+    $[34] = ao;
+    $[35] = onFocus_2;
+    $[36] = onChange;
+    $[37] = onCancel_2;
+    $[38] = Io;
+  } else Io = $[38];
+  let children;
+  if ($[39] !== po || $[40] !== Io || $[41] !== Et || $[42] !== Lt || $[43] !== Xt || $[44] !== so) {
+    children = jsxProd_default_2(Box, {
+      flexDirection: "column",
+      gap: 1,
+      children: [Et, Lt, Xt, so, po, Io],
+    });
+    $[39] = po;
+    $[40] = Io;
+    $[41] = Et;
+    $[42] = Lt;
+    $[43] = Xt;
+    $[44] = so;
+    $[45] = children;
+  } else children = $[45];
   let mn;
-  if ($[46] !== onCancel || $[47] !== Wo)
-    ((mn = e(Dialog, {
+  if ($[46] !== onCancel || $[47] !== children) {
+    mn = jsxProd_default(Dialog, {
       title: "Review proposed auto-mode setup",
-      onCancel: onCancel,
-      inputGuide: Ot,
-      children: Wo,
-    })),
-      ($[46] = onCancel),
-      ($[47] = Wo),
-      ($[48] = mn));
-  else mn = $[48];
+      onCancel,
+      inputGuide,
+      children,
+    });
+    $[46] = onCancel;
+    $[47] = children;
+    $[48] = mn;
+  } else mn = $[48];
   return mn;
 }
+//@ chunk-18hwfzwa.js:1317648-1318281 placement
 /**
  * auto 模式设置审阅中的一节：粗体标题 + 条目列表（### 开头视为小标题），空时显示 "nothing found"。
  */
-//@ chunk-18hwfzwa.js:1317648-1318281 placement
-function ReviewEntrySection(h) {
-  let $ = w(10),
-    { label: label, entries: entries, empty: empty, dim: dim, headers: headers } = h,
-    Be;
-  if ($[0] !== label) ((Be = e(Text, { bold: !0, children: label })), ($[0] = label), ($[1] = Be));
-  else Be = $[1];
+function ReviewEntrySection(props) {
+  let $ = w(10);
+  let { label, entries, empty, dim, headers } = props;
+  let Be;
+  if ($[0] !== label) {
+    Be = jsxProd_default(Text, {
+      bold: true,
+      children: label,
+    });
+    $[0] = label;
+    $[1] = Be;
+  } else Be = $[1];
   let He;
-  if ($[2] !== dim || $[3] !== empty || $[4] !== entries || $[5] !== headers)
-    ((He =
+  if ($[2] !== dim || $[3] !== empty || $[4] !== entries || $[5] !== headers) {
+    He =
       entries.length === 0
-        ? r(Text, { dimColor: !0, children: [" ", empty ?? "nothing found"] })
-        : entries.map((We, ze) => {
-            let Xe = QDo;
-            return headers && We.startsWith("### ")
-              ? r(Text, { dimColor: !0, children: ["  ", Xe(We.slice(4))] }, ze)
-              : r(Text, { dimColor: dim, children: ["  \xB7 ", Xe(We)] }, ze);
-          })),
-      ($[2] = dim),
-      ($[3] = empty),
-      ($[4] = entries),
-      ($[5] = headers),
-      ($[6] = He));
-  else He = $[6];
+        ? jsxProd_default_2(Text, {
+            dimColor: true,
+            children: [" ", empty ?? "nothing found"],
+          })
+        : entries.map((entry, ze) => {
+            let Xe = stripLineBreaks;
+            return headers && entry.startsWith("### ")
+              ? jsxProd_default_2(
+                  Text,
+                  {
+                    dimColor: true,
+                    children: ["  ", Xe(entry.slice(4))],
+                  },
+                  ze,
+                )
+              : jsxProd_default_2(
+                  Text,
+                  {
+                    dimColor: dim,
+                    children: ["  \xB7 ", Xe(entry)],
+                  },
+                  ze,
+                );
+          });
+    $[2] = dim;
+    $[3] = empty;
+    $[4] = entries;
+    $[5] = headers;
+    $[6] = He;
+  } else He = $[6];
   let rt;
-  if ($[7] !== Be || $[8] !== He)
-    ((rt = r(Box, { flexDirection: "column", children: [Be, He] })), ($[7] = Be), ($[8] = He), ($[9] = rt));
-  else rt = $[9];
+  if ($[7] !== Be || $[8] !== He) {
+    rt = jsxProd_default_2(Box, {
+      flexDirection: "column",
+      children: [Be, He],
+    });
+    $[7] = Be;
+    $[8] = He;
+    $[9] = rt;
+  } else rt = $[9];
   return rt;
 }
 //@ chunk-18hwfzwa.js:1318281-1318334 placement
-function sF(h) {
+function withoutDefaultsEntry(h) {
   return h.filter((x) => x !== "$defaults");
 }
 //@ chunk-18hwfzwa.js:1318334-1318361 placement
-function iOo() {
+function resetReviewFocus() {
   return null;
 }
 //@ chunk-18hwfzwa.js:1318361-1318388 placement
-function aOo() {
+function resetFlaggedStash() {
   return null;
 }
 //@ chunk-18hwfzwa.js:1318388-1318640 placement
 function useThrottledRun() {
-  let $ = w(4),
-    h = useClock(),
-    D;
-  if ($[0] !== h) ((D = h.now()), ($[0] = h), ($[1] = D));
-  else D = $[1];
-  let L = R(D),
-    ee;
-  if ($[2] !== h)
-    ((ee = (ke) => {
-      let now = h.now();
+  let $ = w(4);
+  let clock = useClock();
+  let D;
+  if ($[0] !== clock) {
+    D = clock.now();
+    $[0] = clock;
+    $[1] = D;
+  } else D = $[1];
+  let L = R(D);
+  let ee;
+  if ($[2] !== clock) {
+    ee = (ke) => {
+      let Re = clock.now();
       let Be = L.current;
-      if (((L.current = Math.max(now, Be)), now - Be < So)) {
-        return !1;
+      L.current = Math.max(Re, Be);
+      if (Re - Be < RECENT_INPUT_GUARD_MS_3) {
+        return false;
       }
-      return (ke(), !0);
-    }),
-      ($[2] = h),
-      ($[3] = ee));
-  else ee = $[3];
+      ke();
+      return true;
+    };
+    $[2] = clock;
+    $[3] = ee;
+  } else ee = $[3];
   return ee;
 }
 //@ chunk-18hwfzwa.js:1318640-1318693 placement
-class Dft {
+class AutoModeSetupReviewStores {
   reviewFocus = createStore(null);
   flaggedStash = createStore(null);
 }
 //@ chunk-18hwfzwa.js:1318693-1318720 placement
-var W7 = new SessionRootSlot(() => new Dft());
+var autoModeSetupReviewStoresSlot = new SessionRootSlot(() => new AutoModeSetupReviewStores());
 //@ chunk-18hwfzwa.js:1318720-1319583 placement
-function autoModeSetupReviewDialog(h) {
-  let $ = w(18),
-    { payload: payload, answer: answer } = h,
-    L = useThrottledRun(),
-    { reviewFocus: reviewFocus } = W7.of(useSession()),
-    ke = yt(reviewFocus.subscribe, reviewFocus.getState),
-    Be;
-  if ($[0] !== answer || $[1] !== reviewFocus)
-    ((Be = (He) => {
-      if (answer(He) === !1) {
+function autoModeSetupReviewDialog(props) {
+  let $ = w(18);
+  let { payload, answer } = props;
+  let throttledRun = useThrottledRun();
+  let { reviewFocus } = autoModeSetupReviewStoresSlot.of(useSession());
+  let ke = yt(reviewFocus.subscribe, reviewFocus.getState);
+  let Be;
+  if ($[0] !== answer || $[1] !== reviewFocus) {
+    Be = (He) => {
+      if (answer(He) === false) {
         return;
       }
-      reviewFocus.setState(iOo);
-    }),
-      ($[0] = answer),
-      ($[1] = reviewFocus),
-      ($[2] = Be));
-  else Be = $[2];
+      reviewFocus.setState(resetReviewFocus);
+    };
+    $[0] = answer;
+    $[1] = reviewFocus;
+    $[2] = Be;
+  } else Be = $[2];
   let We = Be;
-  const ze = ke ?? void 0;
-  let Xe;
-  if ($[3] !== reviewFocus)
-    ((Xe = (rt) => reviewFocus.setState(() => rt)), ($[3] = reviewFocus), ($[4] = Xe));
-  else Xe = $[4];
-  let kt, At;
-  if ($[5] !== L || $[6] !== We)
-    ((kt = () => L(() => We("accept"))),
-      (At = () => L(() => We("decline"))),
-      ($[5] = L),
-      ($[6] = We),
-      ($[7] = kt),
-      ($[8] = At));
-  else ((kt = $[7]), (At = $[8]));
-  let It;
-  if ($[9] !== We) ((It = () => We("cancelled")), ($[9] = We), ($[10] = It));
-  else It = $[10];
+  const defaultFocusValue = ke ?? undefined;
+  let onFocus;
+  if ($[3] !== reviewFocus) {
+    onFocus = (rt) => reviewFocus.setState(() => rt);
+    $[3] = reviewFocus;
+    $[4] = onFocus;
+  } else onFocus = $[4];
+  let onAccept;
+  let onDecline;
+  if ($[5] !== throttledRun || $[6] !== We) {
+    onAccept = () => throttledRun(() => We("accept"));
+    onDecline = () => throttledRun(() => We("decline"));
+    $[5] = throttledRun;
+    $[6] = We;
+    $[7] = onAccept;
+    $[8] = onDecline;
+  } else {
+    onAccept = $[7];
+    onDecline = $[8];
+  }
+  let onCancel;
+  if ($[9] !== We) {
+    onCancel = () => We("cancelled");
+    $[9] = We;
+    $[10] = onCancel;
+  } else onCancel = $[10];
   let Ot;
-  if ($[11] !== payload || $[12] !== ze || $[13] !== Xe || $[14] !== kt || $[15] !== At || $[16] !== It)
-    ((Ot = e(AutoModeSetupReview, {
+  if (
+    $[11] !== payload ||
+    $[12] !== defaultFocusValue ||
+    $[13] !== onFocus ||
+    $[14] !== onAccept ||
+    $[15] !== onDecline ||
+    $[16] !== onCancel
+  ) {
+    Ot = jsxProd_default(AutoModeSetupReview, {
       proposal: payload,
-      hideIndexes: !0,
-      defaultFocusValue: ze,
-      onFocus: Xe,
-      onAccept: kt,
-      onDecline: At,
-      onCancel: It,
-    })),
-      ($[11] = payload),
-      ($[12] = ze),
-      ($[13] = Xe),
-      ($[14] = kt),
-      ($[15] = At),
-      ($[16] = It),
-      ($[17] = Ot));
-  else Ot = $[17];
+      hideIndexes: true,
+      defaultFocusValue,
+      onFocus,
+      onAccept,
+      onDecline,
+      onCancel,
+    });
+    $[11] = payload;
+    $[12] = defaultFocusValue;
+    $[13] = onFocus;
+    $[14] = onAccept;
+    $[15] = onDecline;
+    $[16] = onCancel;
+    $[17] = Ot;
+  } else Ot = $[17];
   return Ot;
 }
 //@ chunk-18hwfzwa.js:1319583-1320919 placement
-function autoModeSetupFlaggedDialog(h) {
-  let $ = w(27),
-    { payload: payload, answer: answer } = h,
-    L = useThrottledRun(),
-    { flaggedStash: flaggedStash } = W7.of(useSession()),
-    runId = payload.runId,
-    Re = yt(flaggedStash.subscribe, flaggedStash.getState),
-    He;
-  if ($[0] !== runId || $[1] !== Re)
-    ((He = Re?.key === runId ? Re : { key: runId, picking: !1, selection: [] }),
-      ($[0] = runId),
-      ($[1] = Re),
-      ($[2] = He));
-  else He = $[2];
-  let We = He,
-    ze;
-  if ($[3] !== answer || $[4] !== flaggedStash)
-    ((ze = (Xe) => {
-      if (answer(Xe) === !1) {
+function autoModeSetupFlaggedDialog(props) {
+  let $ = w(27);
+  let { payload, answer } = props;
+  let throttledRun = useThrottledRun();
+  let { flaggedStash } = autoModeSetupReviewStoresSlot.of(useSession());
+  let runId = payload.runId;
+  let Re = yt(flaggedStash.subscribe, flaggedStash.getState);
+  let He;
+  if ($[0] !== runId || $[1] !== Re) {
+    He =
+      Re?.key === runId
+        ? Re
+        : {
+            key: runId,
+            picking: false,
+            selection: [],
+          };
+    $[0] = runId;
+    $[1] = Re;
+    $[2] = He;
+  } else He = $[2];
+  let We = He;
+  let ze;
+  if ($[3] !== answer || $[4] !== flaggedStash) {
+    ze = (Xe) => {
+      if (answer(Xe) === false) {
         return;
       }
-      flaggedStash.setState(aOo);
-    }),
-      ($[3] = answer),
-      ($[4] = flaggedStash),
-      ($[5] = ze));
-  else ze = $[5];
-  let rt = ze,
-    kt;
-  if ($[6] !== flaggedStash || $[7] !== L || $[8] !== runId || $[9] !== We)
-    ((kt = (At) =>
-      L(() => {
-        flaggedStash.setState((It) => ({ ...(It?.key === runId ? It : We), picking: At }));
-      })),
-      ($[6] = flaggedStash),
-      ($[7] = L),
-      ($[8] = runId),
-      ($[9] = We),
-      ($[10] = kt));
-  else kt = $[10];
-  let Ot;
-  if ($[11] !== flaggedStash || $[12] !== runId || $[13] !== We)
-    ((Ot = (Et) => {
-      flaggedStash.setState((Dt) => ({ ...(Dt?.key === runId ? Dt : We), selection: Et }));
-    }),
-      ($[11] = flaggedStash),
-      ($[12] = runId),
-      ($[13] = We),
-      ($[14] = Ot));
-  else Ot = $[14];
-  let Lt, oo;
-  if ($[15] !== L || $[16] !== rt)
-    ((Lt = (Xt) => L(() => rt({ toRemove: Xt }))),
-      (oo = () => L(() => rt("cancelled"))),
-      ($[15] = L),
-      ($[16] = rt),
-      ($[17] = Lt),
-      ($[18] = oo));
-  else ((Lt = $[17]), (oo = $[18]));
+      flaggedStash.setState(resetFlaggedStash);
+    };
+    $[3] = answer;
+    $[4] = flaggedStash;
+    $[5] = ze;
+  } else ze = $[5];
+  let rt = ze;
+  let onPickingChange;
+  if ($[6] !== flaggedStash || $[7] !== throttledRun || $[8] !== runId || $[9] !== We) {
+    onPickingChange = (picking) =>
+      throttledRun(() => {
+        flaggedStash.setState((It) => ({
+          ...(It?.key === runId ? It : We),
+          picking,
+        }));
+      });
+    $[6] = flaggedStash;
+    $[7] = throttledRun;
+    $[8] = runId;
+    $[9] = We;
+    $[10] = onPickingChange;
+  } else onPickingChange = $[10];
+  let onSelectionChange;
+  if ($[11] !== flaggedStash || $[12] !== runId || $[13] !== We) {
+    onSelectionChange = (selection) => {
+      flaggedStash.setState((Dt) => ({
+        ...(Dt?.key === runId ? Dt : We),
+        selection,
+      }));
+    };
+    $[11] = flaggedStash;
+    $[12] = runId;
+    $[13] = We;
+    $[14] = onSelectionChange;
+  } else onSelectionChange = $[14];
+  let onResolve;
+  let onCancel;
+  if ($[15] !== throttledRun || $[16] !== rt) {
+    onResolve = (toRemove) =>
+      throttledRun(() =>
+        rt({
+          toRemove,
+        }),
+      );
+    onCancel = () => throttledRun(() => rt("cancelled"));
+    $[15] = throttledRun;
+    $[16] = rt;
+    $[17] = onResolve;
+    $[18] = onCancel;
+  } else {
+    onResolve = $[17];
+    onCancel = $[18];
+  }
   let io;
   if (
     $[19] !== payload.flagged ||
     $[20] !== We.picking ||
     $[21] !== We.selection ||
-    $[22] !== kt ||
-    $[23] !== Ot ||
-    $[24] !== Lt ||
-    $[25] !== oo
-  )
-    ((io = e(AutoModeSetupFlaggedPicker, {
-      hideIndexes: !0,
+    $[22] !== onPickingChange ||
+    $[23] !== onSelectionChange ||
+    $[24] !== onResolve ||
+    $[25] !== onCancel
+  ) {
+    io = jsxProd_default(AutoModeSetupFlaggedPicker, {
+      hideIndexes: true,
       flagged: payload.flagged,
       initialPicking: We.picking,
-      onPickingChange: kt,
+      onPickingChange,
       initialSelection: We.selection,
-      onSelectionChange: Ot,
-      onResolve: Lt,
-      onCancel: oo,
-    })),
-      ($[19] = payload.flagged),
-      ($[20] = We.picking),
-      ($[21] = We.selection),
-      ($[22] = kt),
-      ($[23] = Ot),
-      ($[24] = Lt),
-      ($[25] = oo),
-      ($[26] = io));
-  else io = $[26];
+      onSelectionChange,
+      onResolve,
+      onCancel,
+    });
+    $[19] = payload.flagged;
+    $[20] = We.picking;
+    $[21] = We.selection;
+    $[22] = onPickingChange;
+    $[23] = onSelectionChange;
+    $[24] = onResolve;
+    $[25] = onCancel;
+    $[26] = io;
+  } else io = $[26];
   return io;
 }
 //@ chunk-18hwfzwa.js:1320919-1320936 placement
-var Oft = 8,
-  ox = 160;
-
+var REVIEW_HEADER_ROWS = 8;
+var REVIEW_DIALOG_WIDTH = 160;
 export {
-  ox,
-  Oft,
+  REVIEW_DIALOG_WIDTH,
+  REVIEW_HEADER_ROWS,
   autoModeSetupReviewDialog,
   autoModeSetupFlaggedDialog,
   AutoModeSetupReview,

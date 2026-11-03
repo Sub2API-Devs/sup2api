@@ -12,7 +12,7 @@ import {
   hasSystemdUserSession,
   daemonServiceStatus,
   uninstallDaemonService,
-  vtn,
+  stopDaemonService,
 } from "../../services/daemon/serviceInstall.js";
 import { readLiveServerLock } from "../../utils/daemon/daemonLock.js";
 import {
@@ -30,7 +30,7 @@ import { readDaemonStatus } from "../../daemon/daemonStatus.js";
 import { readScheduledStatus } from "../../daemon/scheduledWorker.js";
 import { readRoster } from "../../services/daemon/roster.js";
 import { getEnabledModelOptions } from "../../utils/model/modelOptions.js";
-import { e } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { y, R } from "../../../vendor/react/cjs/react.production.js";
 import { useClock } from "../../ink/components/ClockContext.js";
 import { useInterval } from "../../ink/components/Input.js";
@@ -42,93 +42,100 @@ import { DaemonServicesView } from "./DaemonServicesView.js";
 import { Dialog } from "../design-system/Dialog.js";
 
 //@ chunk-b7gstm5r.js:21984-22109 placement
-function consentSelectAction(a) {
-  if (a.lockReason !== void 0) return a.canWithdraw ? "withdraw" : "none";
-  return a.choice === "accepted" ? "withdraw" : "ask";
+function consentSelectAction(unattendedServing) {
+  if (unattendedServing.lockReason !== undefined) return unattendedServing.canWithdraw ? "withdraw" : "none";
+  return unattendedServing.choice === "accepted" ? "withdraw" : "ask";
 }
 //@ chunk-b7gstm5r.js:22109-22170 placement
-var ze = "The answer could not be saved. Nothing was changed.";
+var CONSENT_SAVE_FAILED_TEXT = "The answer could not be saved. Nothing was changed.";
 //@ chunk-b7gstm5r.js:22170-22567 placement
-async function loadDaemonOverview(a, t) {
-  let o = await hasSystemdUserSession(),
-    f = readLiveServerLock(1, a).catch(() => null),
-    [i, v, b, N, k, I, u, T] = await Promise.all([
-      f,
-      loadScheduledTaskRuns(a),
-      f.then((p) => readRemoteControlServers(p !== null, a)),
-      readDaemonStatus(a).catch(() => null),
-      readScheduledStatus(a).catch(() => null),
-      readRoster({ silent: !0 }, a),
-      o ? daemonServiceStatus() : Promise.resolve(!1),
-      readServingConsentState(t),
-    ]);
+async function loadDaemonOverview(storageV5, unattendedServing) {
+  let o = await hasSystemdUserSession();
+  let f = readLiveServerLock(1, storageV5).catch(() => null);
+  let [i, scheduledTaskRuns, b, N, k, roster, u, servingConsentState] = await Promise.all([
+    f,
+    loadScheduledTaskRuns(storageV5),
+    f.then((p) => readRemoteControlServers(p !== null, storageV5)),
+    readDaemonStatus(storageV5).catch(() => null),
+    readScheduledStatus(storageV5).catch(() => null),
+    readRoster(
+      {
+        silent: true,
+      },
+      storageV5,
+    ),
+    o ? daemonServiceStatus() : Promise.resolve(false),
+    readServingConsentState(unattendedServing),
+  ]);
   return {
-    tasks: v,
+    tasks: scheduledTaskRuns,
     servers: b,
     lock: i,
     status: N,
     scheduledStatus: k,
-    bgCount: Object.keys(I.workers).length,
+    bgCount: Object.keys(roster.workers).length,
     serviceInstalled: u,
     serviceSupported: o,
-    unattendedServing: T,
+    unattendedServing: servingConsentState,
   };
 }
 //@ chunk-b7gstm5r.js:22567-22668 placement
 function modelSelectOptions() {
-  return getEnabledModelOptions(!1).map((a) => ({
+  return getEnabledModelOptions(false).map((a) => ({
     label: a.label,
     value: a.value ?? "",
     description: a.description,
   }));
 }
+//@ chunk-b7gstm5r.js:22668-22797 placement
 /**
  * 加载守护进程概况后渲染 DaemonSetupFlow（服务类型、无人值守同意与模型选择）。
  */
-//@ chunk-b7gstm5r.js:22668-22797 placement
 async function renderDaemonSetupFlow(onDone, context) {
-  let o = await loadDaemonOverview(context.storageV5);
-  return e(DaemonSetupFlow, {
-    initialData: o,
+  let initialData = await loadDaemonOverview(context.storageV5);
+  return jsxProd_default(DaemonSetupFlow, {
+    initialData,
     modelOptions: modelSelectOptions(),
-    onDone: onDone,
+    onDone,
     storageV5: context.storageV5,
   });
 }
+//@ chunk-b7gstm5r.js:22797-25534 placement
 /**
  * 后台守护进程设置流程：选择服务类型、无人值守同意与模型。
  */
-//@ chunk-b7gstm5r.js:22797-25534 placement
-function DaemonSetupFlow({
-  initialData: initialData,
-  modelOptions: modelOptions,
-  onDone: onDone,
-  storageV5: storageV5,
-}) {
-  let [i, v] = y(initialData),
-    b = useClock(),
-    [N] = y(() => ({ wall: Date.now(), clock: b.now() })),
-    [k, I] = y(N.wall),
-    [u, T] = y({ type: "hub" }),
-    [p, M] = y("scheduled"),
-    [m, D] = y(!1),
-    [C, F] = y(null),
-    [U, B] = y(null),
-    A = R(!1);
+function DaemonSetupFlow({ initialData, modelOptions, onDone, storageV5 }) {
+  let [i, v] = y(initialData);
+  let clock = useClock();
+  let [N] = y(() => ({
+    wall: Date.now(),
+    clock: clock.now(),
+  }));
+  let [wall, setWall] = y(N.wall);
+  let [u, T] = y({
+    type: "hub",
+  });
+  let [p, M] = y("scheduled");
+  let [m, D] = y(false);
+  let [C, F] = y(null);
+  let [U, B] = y(null);
+  let A = R(false);
   async function c() {
-    let h = await loadDaemonOverview(storageV5, i.unattendedServing);
-    v(h);
+    let daemonOverview = await loadDaemonOverview(storageV5, i.unattendedServing);
+    v(daemonOverview);
   }
   let te = R(0);
   useInterval(
     () => {
-      if ((I(N.wall + (b.now() - N.clock)), te.current++ % 2 === 0)) c();
+      setWall(N.wall + (clock.now() - N.clock));
+      if (te.current++ % 2 === 0) c();
     },
     u.type === "hub" ? 1000 : null,
   );
   async function g(h) {
     if (m) return;
-    (D(!0), F(null));
+    D(true);
+    F(null);
     let x;
     try {
       switch (h) {
@@ -136,7 +143,7 @@ function DaemonSetupFlow({
           x = await uninstallDaemonService();
           break;
         case "stop":
-          x = await vtn();
+          x = await stopDaemonService();
           break;
       }
       if (!x.ok) F(`${h} failed: ${x.error}`);
@@ -144,91 +151,114 @@ function DaemonSetupFlow({
       try {
         await c();
       } catch {}
-      D(!1);
+      D(false);
     }
   }
   function L() {
-    (c(), T({ type: "hub" }));
+    c();
+    T({
+      type: "hub",
+    });
   }
   function W(h) {
-    (v((x) => ({
+    v((x) => ({
       ...x,
-      unattendedServing: { ...x.unattendedServing, choice: h, canWithdraw: h === "accepted" },
-    })),
-      c());
+      unattendedServing: {
+        ...x.unattendedServing,
+        choice: h,
+        canWithdraw: h === "accepted",
+      },
+    }));
+    c();
   }
   async function z() {
     if (A.current) return;
     let h = consentSelectAction(i.unattendedServing);
     if (h === "none") return;
-    ((A.current = !0), B(null));
+    A.current = true;
+    B(null);
     try {
-      if (h === "withdraw")
+      if (h === "withdraw") {
         if ((await saveUnattendedServingConsent("declined")) === "saved") W("declined");
-        else B(ze);
-      else {
-        let { UnattendedServingConsentDialog: UnattendedServingConsentDialog } =
-          await import("./chunk-d8vjfv68.js");
-        T({ type: "unattended-consent", dialog: UnattendedServingConsentDialog });
+        else B(CONSENT_SAVE_FAILED_TEXT);
+      } else {
+        let { UnattendedServingConsentDialog } = await import("./chunk-d8vjfv68.js");
+        T({
+          type: "unattended-consent",
+          dialog: UnattendedServingConsentDialog,
+        });
       }
     } catch (error) {
-      (logError(error), B(ze));
+      logError(error);
+      B(CONSENT_SAVE_FAILED_TEXT);
     } finally {
-      A.current = !1;
+      A.current = false;
     }
   }
-  let J = R(!1);
+  let J = R(false);
   function Y(h) {
     let x = J.current;
-    if (((J.current = !1), x)) (B(ze), M("remoteControl"));
+    J.current = false;
+    if (x) {
+      B(CONSENT_SAVE_FAILED_TEXT);
+      M("remoteControl");
+    }
     if (h === "not_now") {
       L();
       return;
     }
-    (W(h), T({ type: "hub" }));
+    W(h);
+    T({
+      type: "hub",
+    });
   }
   switch (u.type) {
     case "detail-scheduled":
-      return e(DaemonScheduledTaskDetail, {
+      return jsxProd_default(DaemonScheduledTaskDetail, {
         task: u.entry,
         onBack: L,
-        onEdit: (h) => T({ type: "new", kind: "scheduled", prefill: h }),
-        onDone: onDone,
+        onEdit: (prefill) =>
+          T({
+            type: "new",
+            kind: "scheduled",
+            prefill,
+          }),
+        onDone,
         refresh: c,
-        storageV5: storageV5,
+        storageV5,
       });
     case "detail-remoteControl":
-      return e(RemoteControlServerDetail, {
+      return jsxProd_default(RemoteControlServerDetail, {
         server: u.entry,
         onBack: L,
-        onDone: onDone,
+        onDone,
         refresh: c,
-        storageV5: storageV5,
+        storageV5,
       });
     case "new":
       if (u.kind === "remoteControl")
-        return e(AddRemoteControlServerForm, {
+        return jsxProd_default(AddRemoteControlServerForm, {
           defaultDir: getOriginalCwd(),
           onCancel: L,
           onAdded: () => L(),
-          storageV5: storageV5,
+          storageV5,
         });
-      return e(DaemonScheduledTaskForm, {
+      return jsxProd_default(DaemonScheduledTaskForm, {
         defaultDir: getOriginalCwd(),
         existingIds: i.tasks.map((task) => task.id),
         prefill: u.prefill,
-        modelOptions: modelOptions,
+        modelOptions,
         onCancel: L,
-        onDone: onDone,
+        onDone,
         onSaved: async () => L(),
-        storageV5: storageV5,
+        storageV5,
       });
     case "unattended-consent": {
       let dialog = u.dialog;
-      return e(dialog, {
-        exitOnCtrlCD: !1,
+      return jsxProd_default(dialog, {
+        exitOnCtrlCD: false,
         onSaveFailed: () => {
-          J.current = !0;
+          J.current = true;
         },
         onDone: Y,
       });
@@ -237,19 +267,27 @@ function DaemonSetupFlow({
       break;
   }
   let ce = [
-    e(
+    jsxProd_default(
       Tab,
       {
         id: "scheduled",
         title: "Scheduled",
-        children: e(DaemonServicesView, {
+        children: jsxProd_default(DaemonServicesView, {
           kind: "scheduled",
           data: i,
-          now: k,
+          now: wall,
           busy: m,
           message: C,
-          onSelect: (h) => T({ type: "detail-scheduled", entry: h }),
-          onAddNew: () => T({ type: "new", kind: "scheduled" }),
+          onSelect: (entry) =>
+            T({
+              type: "detail-scheduled",
+              entry,
+            }),
+          onAddNew: () =>
+            T({
+              type: "new",
+              kind: "scheduled",
+            }),
           onService: (h) => void g(h),
           onUnattendedServing: () => void z(),
           unattendedNotice: U,
@@ -259,46 +297,54 @@ function DaemonSetupFlow({
       "scheduled",
     ),
   ];
-  return (
-    ce.push(
-      e(
-        Tab,
-        {
-          id: "remoteControl",
-          title: "Remote Control",
-          children: e(DaemonServicesView, {
-            kind: "remoteControl",
-            data: i,
-            now: k,
-            busy: m,
-            message: C,
-            onSelect: (h) => T({ type: "detail-remoteControl", entry: h }),
-            onAddNew: () => T({ type: "new", kind: "remoteControl" }),
-            onService: (h) => void g(h),
-            onUnattendedServing: () => void z(),
-            unattendedNotice: U,
-            onCancel: () => onDone(),
-          }),
-        },
-        "remoteControl",
-      ),
+  ce.push(
+    jsxProd_default(
+      Tab,
+      {
+        id: "remoteControl",
+        title: "Remote Control",
+        children: jsxProd_default(DaemonServicesView, {
+          kind: "remoteControl",
+          data: i,
+          now: wall,
+          busy: m,
+          message: C,
+          onSelect: (entry) =>
+            T({
+              type: "detail-remoteControl",
+              entry,
+            }),
+          onAddNew: () =>
+            T({
+              type: "new",
+              kind: "remoteControl",
+            }),
+          onService: (h) => void g(h),
+          onUnattendedServing: () => void z(),
+          unattendedNotice: U,
+          onCancel: () => onDone(),
+        }),
+      },
+      "remoteControl",
     ),
-    e(Dialog, {
-      title: "Claude daemon",
-      onCancel: () => onDone(),
-      hideInputGuide: !0,
-      children: e(Tabs, {
-        title: null,
-        color: "permission",
-        selectedTab: p,
-        onTabChange: (h) => M(h),
-        navFromContent: !0,
-        children: ce,
-      }),
-    })
   );
+  return jsxProd_default(Dialog, {
+    title: "Claude daemon",
+    onCancel: () => onDone(),
+    hideInputGuide: true,
+    children: jsxProd_default(Tabs, {
+      title: null,
+      color: "permission",
+      selectedTab: p,
+      onTabChange: (h) => M(h),
+      navFromContent: true,
+      children: ce,
+    }),
+  });
 }
 //@ chunk-b7gstm5r.js:25534-25608 placement
-var SERVICE_KIND_LABELS = { scheduled: "scheduled task", remoteControl: "remote-control server" };
-
+var SERVICE_KIND_LABELS = {
+  scheduled: "scheduled task",
+  remoteControl: "remote-control server",
+};
 export { consentSelectAction, SERVICE_KIND_LABELS, loadDaemonOverview, DaemonSetupFlow, modelSelectOptions };

@@ -8,43 +8,8 @@
  * pieces: chunk-18hwfzwa.js (11)
  * attribution: placement 11
  */
-import {
-  randomUUID,
-  randomUUID as randomUUID_2,
-  randomUUID as randomUUID_3,
-  randomUUID as randomUUID_4,
-  randomUUID as randomUUID_5,
-  randomUUID as randomUUID_6,
-  randomUUID as randomUUID_7,
-  randomUUID as randomUUID_8,
-  randomUUID as randomUUID_9,
-  randomUUID as randomUUID_10,
-  randomUUID as randomUUID_11,
-  randomUUID as randomUUID_12,
-  randomUUID as randomUUID_13,
-  randomUUID as randomUUID_14,
-  randomUUID as randomUUID_15,
-  randomUUID as randomUUID_16,
-  randomUUID as randomUUID_17,
-} from "crypto";
-import {
-  join,
-  join as join_2,
-  join as join_3,
-  join as join_4,
-  join as join_5,
-  join as join_6,
-  join as join_7,
-  join as join_8,
-  join as join_9,
-  join as join_10,
-  join as join_11,
-  join as join_12,
-  sep,
-  sep as sep_2,
-  sep as sep_3,
-  sep as sep_4,
-} from "path";
+import { randomUUID } from "crypto";
+import { join, sep } from "path";
 import {
   REMOTE_SAFE_COMMANDS,
   filterCommandsForRemoteMode,
@@ -55,9 +20,9 @@ import {
   toSlashCommands,
 } from "../../commands.js";
 import { InstanceRegistry } from "../../utils/instanceRegistry.js";
-import { efe } from "../../memdir/findRelevantMemories.js";
+import { emptyPickerState } from "../../memdir/findRelevantMemories.js";
 import { requestLocalJsxDialog, LocalJsxHost, clearMcpAuthCaches } from "./LocalJsxHost.js";
-import { fAi } from "../../components/dialogs/dialogRequests.js";
+import { requestDialogOnce } from "../../components/dialogs/dialogRequests.js";
 import { ApiKeyVerification } from "../../hooks/useApiKeyVerification.js";
 import { createStore } from "../../state/store.js";
 import { createSignal } from "../../utils/signal.js";
@@ -65,65 +30,71 @@ import { InboxVerdictCache } from "../../utils/inboxClassification.js";
 import { commandNamesForBridge } from "../../cli/print/lowLatencySubmit.js";
 import { withExtraExportTools } from "../../utils/exportRenderer.js";
 import { getTools, assembleToolPool } from "../../tools.js";
-import { nv, ZC } from "../../utils/remoteFileState.js";
-import { _tt } from "../../services/tools/webToolIsolation.js";
+import { createRemoteFileState, READ_FILE_STATE_CACHE_SIZE } from "../../utils/remoteFileState.js";
+import { createIsolationLatch } from "../../services/tools/webToolIsolation.js";
 import { saveIsolationLatch } from "../../utils/sessionStorage.js";
 import {
   provisionContentReplacementState,
   reconstructContentReplacementState,
 } from "../../utils/toolResultStorage.js";
-import { Mwt, extractReadFilesFromMessages } from "../../utils/queryHelpers.js";
-import { waitForAgentTranscriptFlush, B0n } from "../../tasks/LocalAgentTask/transcriptFlush.js";
-import { stackToast } from "../../components/pluginUi/toastStack.js";
-import { Vtt, qtt } from "../../utils/messages/nonUserMessages.js";
+import { runningTurnRegistry, extractReadFilesFromMessages } from "../../utils/queryHelpers.js";
 import {
-  gfn,
+  waitForAgentTranscriptFlush,
+  normalizeAgentMessagesForApi,
+} from "../../tasks/LocalAgentTask/transcriptFlush.js";
+import { stackToast } from "../../components/pluginUi/toastStack.js";
+import { singleLineFieldText, formatSourceLine } from "../../utils/messages/nonUserMessages.js";
+import {
+  TOAST_DEFAULT_MS,
   toastQueueState,
-  NNi,
+  toastKeyFor,
   logToastGaveWay,
   wasToastShown,
   readBarToasts,
   IMMEDIATE,
   enqueueBarToast,
 } from "../../plugins/functionHooks/uiToast.js";
-import { Kj } from "../../context/notifications.js";
+import { holdsToasts as holdsToasts_2 } from "../../context/notifications.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { sendNotification } from "../../services/notifier.js";
-import { kA } from "../../services/policyLimits/coldStartWaiter.js";
+import { awaitPolicyColdStartWaiter } from "../../services/policyLimits/coldStartWaiter.js";
 import { explainPluginServer } from "../../services/mcp/mcpConnectionRefusals.js";
 import {
   awaitMcpServerConnected,
-  _fe,
+  mcpConnectRefusal,
   connectMcpServerForPlugin,
 } from "../../plugins/functionHooks/mcpApi.js";
 import { wi } from "../../../vendor/lodash-es/_inlinedHelpers.js";
-import { Jn, _C } from "../../remote/remoteMode.js";
+import { getRemoteCaps, hasRemoteCap } from "../../remote/remoteMode.js";
 import { requestContextUsage } from "../../entrypoints/sdk/controlSchemas.js";
 import { collectContextData } from "../../commands/context/context-noninteractive.js";
-import { tHi, subscribeToSelectionEvents } from "../../components/VirtualMessageList.js";
+import {
+  selectionPayloadForAltScreen,
+  subscribeToSelectionEvents,
+} from "../../components/VirtualMessageList.js";
 import { showAgentTaskView } from "../../components/CoordinatorAgentStatus.js";
-import { di } from "../../ink/terminal.js";
-import { K$o, release as release_2 } from "../../plugins/functionHooks/surfaceBinding.js";
-import { Yue } from "../../plugins/functionHooks/pluginLifecycle.js";
+import { getSecondRootError } from "../../ink/terminal.js";
+import { bindSurface, release as release_2 } from "../../plugins/functionHooks/surfaceBinding.js";
+import { pendingReloadSlot } from "../../plugins/functionHooks/pluginLifecycle.js";
 import { installDevModsPlaceholderExpander } from "../../services/plugins/devMods/devModsWatcher.js";
-import { kWo } from "../../plugins/functionHooks/modelApi.js";
-import { xBn } from "../../utils/hooks/postSamplingHooks.js";
-import { uqr, U7s } from "../../services/memorySync/memorySkills.js";
+import { registerTurnParamsHook } from "../../plugins/functionHooks/modelApi.js";
+import { registerPostSamplingHook } from "../../utils/hooks/postSamplingHooks.js";
+import { onMemorySkillsChanged, memorySkillNamesSnapshot } from "../../services/memorySync/memorySkills.js";
 import { onPolicyVerdictChanged, policyVerdictRebuildKey } from "../../services/policyLimits/policyState.js";
-import { I6s, ftt } from "../../tools/WaitForMcpServersTool/WaitForMcpServersTool.js";
-import { fue } from "../../utils/skills/skillChangeDetector.js";
+import { onDeclaredChange, isDeclared } from "../../tools/WaitForMcpServersTool/WaitForMcpServersTool.js";
+import { sharedSkillChangeDetector } from "../../utils/skills/skillChangeDetector.js";
 import { onGrowthBookRefresh } from "../../services/analytics/growthbook.js";
 import { settingsChangeDetector } from "../../utils/settings/changeDetector.js";
 import { isCommandSetHooked } from "../../plugins/functionHooks/commandHooks.js";
-import { IGt } from "../../utils/forkedAgent.js";
+import { clearForkCacheSafeParams } from "../../utils/forkedAgent.js";
 import { todoToolsEnabled } from "../../utils/sessionKind.js";
 import { arraysEqual } from "../../utils/collections.js";
 import { logError } from "../../utils/log.js";
 import { getUserMsgOptIn, isWorkspaceRestricted, setReplBridgeActive } from "../../bootstrap/state.js";
-import { k1 } from "../../tools/RefreshMcpToolsTool/RefreshMcpToolsTool.js";
-import { xo } from "../../bootstrap/sessionSlices.js";
+import { alwaysFalseFlag } from "../../tools/RefreshMcpToolsTool/RefreshMcpToolsTool.js";
+import { getSessionProject } from "../../bootstrap/sessionSlices.js";
 import { getManagedFilePath } from "../../utils/settings/managedPath.js";
-import { W1 } from "../../plugins/functionHooks/sites/promptContextSites.js";
+import { managedFolderCondition } from "../../plugins/functionHooks/sites/promptContextSites.js";
 import { managedSettingsAskState } from "../../cli/headlessCloud/attachServe.js";
 import {
   rebuildAgentDefinitions,
@@ -151,7 +122,7 @@ import { getEnabledModelOptions, getUnavailableModelOptions } from "../../utils/
 import { toAccountInfo } from "../../utils/auth.js";
 import { hasCustomOutputStyle } from "../../constants/outputStyles.js";
 import { mcpServerStatusSnapshots } from "../../services/mcp/config.js";
-import { j } from "../../../vendor/react/cjs/react.production.js";
+import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
 
 //@ chunk-18hwfzwa.js:186519-186606 placement
 function activeToolNames(h, x) {
@@ -172,19 +143,19 @@ var SESSION_SCOPE_DEFAULTS = [
 function selectMainLoopModels(h) {
   return [h.mainLoopModel, h.mainLoopModelForSession];
 }
+//@ chunk-18hwfzwa.js:186808-201323 placement
 /**
  * REPL 会话作用域：持有 readFileState、会话环境变量、工具状态、MCP 初始客户端、对话框传输、API key 校验、插件状态 toast 等会话级单例。
  */
-//@ chunk-18hwfzwa.js:186808-201323 placement
 class ReplSessionScope {
   readFileState;
   sessionEnvVars = new Map();
   toolState = new InstanceRegistry();
-  memorySelector = efe();
+  memorySelector = emptyPickerState();
   isolationLatch;
   contentReplacementState;
   dialogTransport = requestLocalJsxDialog();
-  requestDialog = fAi(this.dialogTransport);
+  requestDialog = requestDialogOnce(this.dialogTransport);
   apiKeyVerification = new ApiKeyVerification();
   initialMcpClients;
   localJsx = new LocalJsxHost(this.requestDialog);
@@ -212,8 +183,8 @@ class ReplSessionScope {
   verdicts = new InboxVerdictCache();
   verdictsPermissionContext;
   stops = [];
-  connected = !1;
-  disposed = !1;
+  connected = false;
+  disposed = false;
   seatedHold;
   shedSeat;
   narrowToWorker = memoizeLast(activeToolNames);
@@ -225,184 +196,224 @@ class ReplSessionScope {
   applyCommandFilter = memoizeLast((h, x) => h.filter(x));
   addDisplayOnlyTools = memoizeLast(withExtraExportTools);
   buildCombinedInitialTools = memoizeLast((h, x, D, L, ee, ke, Re, Be, He, We) => [
-    ...getTools(h, { activeAgents: x.activeAgents }),
+    ...getTools(h, {
+      activeAgents: x.activeAgents,
+    }),
     ...this.initialTools,
   ]);
   constructor(h) {
-    ((this.store = h.store),
-      (this.storageV5 = h.storageV5),
-      (this.credentials = h.credentials),
-      (this.session = h.session),
-      (this.initialMcpClients = h.initialMcpClients),
-      (this.initialTools = h.initialTools),
-      (this.disableSlashCommands = h.disableSlashCommands),
-      (this.filterCommands = h.filterCommands),
-      (this.isThinClient = h.isThinClient),
-      (this.onCommandsChange = h.onCommandsChange),
-      (this.localCommands = h.initialCommands),
-      (this.lastModelInputs = selectMainLoopModels(h.store.getState())),
-      (this.dynamicMcp = h.initialDynamicMcpConfig),
-      (this.mainThreadAgent = h.mainThreadAgentDefinition),
-      (this.readFileState = nv(ZC)),
-      (this.isolationLatch = _tt(null, (x) => saveIsolationLatch(x, this.storageV5))),
-      (this.contentReplacementState = provisionContentReplacementState(
-        h.initialMessages,
-        h.initialContentReplacements,
-      )),
-      (this.sessionBinding = {
-        surface: "terminal",
-        model: () => this.requireHost().mainLoopModel,
-        messages: () => this.requireHost().getMessages(),
-        conversation: (x) => (x === void 0 ? this.requireHost().conversation : Mwt.of(x)),
-        tools: () => this.computeTools(),
-        commands: () => this.snapshot.commands,
-        mcpServers: () => this.computeMcpClients().map((x) => x.name),
-        toolContext: (x) => {
-          let requireHost = this.requireHost();
-          return requireHost.buildToolUseContext(requireHost.getMessages(), [], x, requireHost.mainLoopModel);
-        },
-        savedAgentMessages: (x) => waitForAgentTranscriptFlush(x, this.storageV5),
-        requestMessages: (x) => B0n(x, this.computeTools()),
-        canUseTool: (...x) => this.requireHost().canUseTool(...x),
-        toast: (x, D, L) => {
-          if (this.requireHost().stacksToasts) {
-            stackToast({ plugin: x, text: Vtt(D), timeoutMs: L ?? gfn });
-            return;
-          }
-          let state = this.store.getState(),
-            ke = toastQueueState({ ...state.notifications, isHeld: Kj(state) }, x),
-            Re = NNi(x, randomUUID_4());
-          (logToastGaveWay({
-            key: ke.givesWay,
+    this.store = h.store;
+    this.storageV5 = h.storageV5;
+    this.credentials = h.credentials;
+    this.session = h.session;
+    this.initialMcpClients = h.initialMcpClients;
+    this.initialTools = h.initialTools;
+    this.disableSlashCommands = h.disableSlashCommands;
+    this.filterCommands = h.filterCommands;
+    this.isThinClient = h.isThinClient;
+    this.onCommandsChange = h.onCommandsChange;
+    this.localCommands = h.initialCommands;
+    this.lastModelInputs = selectMainLoopModels(h.store.getState());
+    this.dynamicMcp = h.initialDynamicMcpConfig;
+    this.mainThreadAgent = h.mainThreadAgentDefinition;
+    this.readFileState = createRemoteFileState(READ_FILE_STATE_CACHE_SIZE);
+    this.isolationLatch = createIsolationLatch(null, (x) => saveIsolationLatch(x, this.storageV5));
+    this.contentReplacementState = provisionContentReplacementState(
+      h.initialMessages,
+      h.initialContentReplacements,
+    );
+    this.sessionBinding = {
+      surface: "terminal",
+      model: () => this.requireHost().mainLoopModel,
+      messages: () => this.requireHost().getMessages(),
+      conversation: (x) => (x === undefined ? this.requireHost().conversation : runningTurnRegistry.of(x)),
+      tools: () => this.computeTools(),
+      commands: () => this.snapshot.commands,
+      mcpServers: () => this.computeMcpClients().map((x) => x.name),
+      toolContext: (x) => {
+        let D = this.requireHost();
+        return D.buildToolUseContext(D.getMessages(), [], x, D.mainLoopModel);
+      },
+      savedAgentMessages: (x) => waitForAgentTranscriptFlush(x, this.storageV5),
+      requestMessages: (x) => normalizeAgentMessagesForApi(x, this.computeTools()),
+      canUseTool: (...x) => this.requireHost().canUseTool(...x),
+      toast: (x, D, L) => {
+        if (this.requireHost().stacksToasts) {
+          stackToast({
             plugin: x,
-            isCutShort: wasToastShown(readBarToasts(), ke.givesWay, ke.isCutShort),
-          }),
-            this.requireHost().addNotification({
-              key: Re,
-              kind: "event",
-              text: qtt(x, D),
-              priority: IMMEDIATE,
-              waitsItsTurn: ke.isWaiting,
-              invalidates: ke.givesWay === void 0 ? [] : [ke.givesWay],
-              timeoutMs: L ?? gfn,
-            }),
-            enqueueBarToast({ key: Re, plugin: x, text: qtt(x, D), ms: L ?? gfn }));
-          let { current: Be, queue: queue } = this.store.getState().notifications;
-          logForDebugging(`$.ui.toast: shown as ${Be?.key ?? "nothing"} (${queue.length} queued)`);
-        },
-        notify: (x, D) =>
-          sendNotification(x, this.requireHost().terminal, {
-            storageV5: this.storageV5,
-            credentials: this.credentials,
-            hookOrigin: D,
-          }),
-        status: (x, D) => {
-          let requireHost = this.requireHost(),
-            ee = `plugin-status-${x}`;
-          if ((requireHost.removeNotification(ee), D !== void 0))
-            requireHost.addNotification({
-              key: ee,
-              kind: "event",
-              text: qtt(x, D),
-              priority: "low",
-              pinned: !0,
-            });
-        },
-        addMcpServer: async (x, D) => {
-          let L = Symbol(x);
-          if ((this.pendingMcpServerAdds.set(x, L), await kA(), this.pendingMcpServerAdds.get(x) !== L))
-            return;
-          (this.pendingMcpServerAdds.delete(x),
-            this.updateDynamicMcpConfig((ee) => ({ ...(ee ?? {}), [x]: D })));
-        },
-        resolveMcpServer: (x) =>
-          explainPluginServer({
-            ...x,
-            storageV5: this.storageV5,
-            credentials: this.credentials,
-            dynamicServers: this.dynamicMcp ?? {},
-          }),
-        settledMcpServer: (x) =>
-          awaitMcpServerConnected(
-            { rows: () => this.store.getState().mcp.clients, subscribe: (D) => this.store.subscribe(D) },
-            x,
-          ),
-        connectMcpServer: async (x, D) => {
-          let L = Symbol(x);
-          if ((this.pendingMcpServerAdds.set(x, L), await kA(), this.pendingMcpServerAdds.get(x) !== L))
-            return _fe("failed", `The MCP server "${x}" left the session before it connected.`);
-          return (
-            this.pendingMcpServerAdds.delete(x),
-            connectMcpServerForPlugin(
-              {
-                rows: () => this.store.getState().mcp.clients,
-                subscribe: (ee) => this.store.subscribe(ee),
-                add: (ee, ke) => this.updateDynamicMcpConfig((Re) => ({ ...(Re ?? {}), [ee]: ke })),
-                drop: (ee) => this.updateDynamicMcpConfig((ke) => wi(ke ?? {}, (Re, Be) => Be === ee)),
-                holds: (ee) => Object.hasOwn(this.dynamicMcp ?? {}, ee),
-                forget: (ee, ke) => clearMcpAuthCaches(ee, ke, this.storageV5),
-              },
-              x,
-              D,
-            )
-          );
-        },
-        removeMcpServer: async (x) => {
-          (this.pendingMcpServerAdds.delete(x),
-            this.updateDynamicMcpConfig((D) => wi(D ?? {}, (L, ee) => ee === x)));
-        },
-        refreshCommands: () => void this.rereadCommands(),
-        refreshAgents: () => this.rereadAgents(),
-        refreshContext: h.refreshContext,
-        compact: (x) => this.requireHost().compact(x),
-        contextData: async (x) => {
-          let D = Jn();
-          if (D) {
-            if (!_C("controlChannel"))
-              throw Error("the context breakdown isn't available over this remote connection");
-            let ke = await requestContextUsage(D, { detail: x.detail });
-            if (!ke) throw Error("the remote sent a context breakdown this version can't read");
-            return ke;
-          }
-          let requireHost = this.requireHost(),
-            toolUseContext = requireHost.buildToolUseContext(
-              requireHost.getMessages(),
-              [],
-              new AbortController(),
-              requireHost.mainLoopModel,
-            );
-          return collectContextData({
-            session: toolUseContext.session,
-            messages: toolUseContext.messages,
-            getAppState: () => this.store.getState(),
-            getMcp: toolUseContext.getMcp,
-            storageV5: this.storageV5,
-            credentials: this.credentials,
-            options: toolUseContext.options,
-            detail: x.detail,
-            terminalWidth: x.terminalWidth,
+            text: singleLineFieldText(D),
+            timeoutMs: L ?? TOAST_DEFAULT_MS,
           });
-        },
-        composer: {
-          read: () => this.requireHost().readDraft(),
-          write: (x, D, L) => this.requireHost().fillDraft(x, D, L),
-          paint: (x, D, L) => this.requireHost().paintDraft(x, D, L),
-          forget: (x) => this.host?.forgetPaint(x),
-          attribute: (x, D) => this.requireHost().attributeDraft(x, D),
-          propose: (x, D) => this.requireHost().suggestDraft(x, D),
-        },
-        transcript: { reveal: (x, D) => this.requireHost().revealInTranscript(x, D) },
-        selection: { read: () => tHi(this.selectionWatch()) },
-        view: { show: (x) => showAgentTaskView(this.store, x) },
-      }),
-      (this.snapshot = this.derive()),
-      this.onCommandsChange?.(this.snapshot.commands));
+          return;
+        }
+        let state = this.store.getState();
+        let ke = toastQueueState(
+          {
+            ...state.notifications,
+            isHeld: holdsToasts_2(state),
+          },
+          x,
+        );
+        let key = toastKeyFor(x, randomUUID());
+        logToastGaveWay({
+          key: ke.givesWay,
+          plugin: x,
+          isCutShort: wasToastShown(readBarToasts(), ke.givesWay, ke.isCutShort),
+        });
+        this.requireHost().addNotification({
+          key,
+          kind: "event",
+          text: formatSourceLine(x, D),
+          priority: IMMEDIATE,
+          waitsItsTurn: ke.isWaiting,
+          invalidates: ke.givesWay === undefined ? [] : [ke.givesWay],
+          timeoutMs: L ?? TOAST_DEFAULT_MS,
+        });
+        enqueueBarToast({
+          key,
+          plugin: x,
+          text: formatSourceLine(x, D),
+          ms: L ?? TOAST_DEFAULT_MS,
+        });
+        let { current: Be, queue } = this.store.getState().notifications;
+        logForDebugging(`$.ui.toast: shown as ${Be?.key ?? "nothing"} (${queue.length} queued)`);
+      },
+      notify: (notification, hookOrigin) =>
+        sendNotification(notification, this.requireHost().terminal, {
+          storageV5: this.storageV5,
+          credentials: this.credentials,
+          hookOrigin,
+        }),
+      status: (x, D) => {
+        let L = this.requireHost();
+        let ee = `plugin-status-${x}`;
+        L.removeNotification(ee);
+        if (D !== undefined)
+          L.addNotification({
+            key: ee,
+            kind: "event",
+            text: formatSourceLine(x, D),
+            priority: "low",
+            pinned: true,
+          });
+      },
+      addMcpServer: async (x, D) => {
+        let L = Symbol(x);
+        this.pendingMcpServerAdds.set(x, L);
+        await awaitPolicyColdStartWaiter();
+        if (this.pendingMcpServerAdds.get(x) !== L) return;
+        this.pendingMcpServerAdds.delete(x);
+        this.updateDynamicMcpConfig((ee) => ({
+          ...(ee ?? {}),
+          [x]: D,
+        }));
+      },
+      resolveMcpServer: (x) =>
+        explainPluginServer({
+          ...x,
+          storageV5: this.storageV5,
+          credentials: this.credentials,
+          dynamicServers: this.dynamicMcp ?? {},
+        }),
+      settledMcpServer: (x) =>
+        awaitMcpServerConnected(
+          {
+            rows: () => this.store.getState().mcp.clients,
+            subscribe: (D) => this.store.subscribe(D),
+          },
+          x,
+        ),
+      connectMcpServer: async (x, D) => {
+        let L = Symbol(x);
+        this.pendingMcpServerAdds.set(x, L);
+        await awaitPolicyColdStartWaiter();
+        if (this.pendingMcpServerAdds.get(x) !== L)
+          return mcpConnectRefusal("failed", `The MCP server "${x}" left the session before it connected.`);
+        this.pendingMcpServerAdds.delete(x);
+        return connectMcpServerForPlugin(
+          {
+            rows: () => this.store.getState().mcp.clients,
+            subscribe: (ee) => this.store.subscribe(ee),
+            add: (ee, ke) =>
+              this.updateDynamicMcpConfig((Re) => ({
+                ...(Re ?? {}),
+                [ee]: ke,
+              })),
+            drop: (ee) => this.updateDynamicMcpConfig((ke) => wi(ke ?? {}, (Re, Be) => Be === ee)),
+            holds: (ee) => Object.hasOwn(this.dynamicMcp ?? {}, ee),
+            forget: (ee, ke) => clearMcpAuthCaches(ee, ke, this.storageV5),
+          },
+          x,
+          D,
+        );
+      },
+      removeMcpServer: async (x) => {
+        this.pendingMcpServerAdds.delete(x);
+        this.updateDynamicMcpConfig((D) => wi(D ?? {}, (L, ee) => ee === x));
+      },
+      refreshCommands: () => void this.rereadCommands(),
+      refreshAgents: () => this.rereadAgents(),
+      refreshContext: h.refreshContext,
+      compact: (x) => this.requireHost().compact(x),
+      contextData: async (x) => {
+        let controlChannel = getRemoteCaps();
+        if (controlChannel) {
+          if (!hasRemoteCap("controlChannel"))
+            throw Error("the context breakdown isn't available over this remote connection");
+          let ke = await requestContextUsage(controlChannel, {
+            detail: x.detail,
+          });
+          if (!ke) throw Error("the remote sent a context breakdown this version can't read");
+          return ke;
+        }
+        let L = this.requireHost();
+        let toolUseContext = L.buildToolUseContext(
+          L.getMessages(),
+          [],
+          new AbortController(),
+          L.mainLoopModel,
+        );
+        return collectContextData({
+          session: toolUseContext.session,
+          messages: toolUseContext.messages,
+          getAppState: () => this.store.getState(),
+          getMcp: toolUseContext.getMcp,
+          storageV5: this.storageV5,
+          credentials: this.credentials,
+          options: toolUseContext.options,
+          detail: x.detail,
+          terminalWidth: x.terminalWidth,
+        });
+      },
+      composer: {
+        read: () => this.requireHost().readDraft(),
+        write: (x, D, L) => this.requireHost().fillDraft(x, D, L),
+        paint: (x, D, L) => this.requireHost().paintDraft(x, D, L),
+        forget: (x) => this.host?.forgetPaint(x),
+        attribute: (x, D) => this.requireHost().attributeDraft(x, D),
+        propose: (x, D) => this.requireHost().suggestDraft(x, D),
+      },
+      transcript: {
+        reveal: (x, D) => this.requireHost().revealInTranscript(x, D),
+      },
+      selection: {
+        read: () => selectionPayloadForAltScreen(this.selectionWatch()),
+      },
+      view: {
+        show: (x) => showAgentTaskView(this.store, x),
+      },
+    };
+    this.snapshot = this.derive();
+    this.onCommandsChange?.(this.snapshot.commands);
   }
-  bindHost(h) {
-    this.host = h;
+  bindHost(host) {
+    this.host = host;
   }
   selectionWatch() {
-    return { source: di().get(process.stdout), rowHolding: (h) => this.host?.rowHoldingSelection(h) };
+    return {
+      source: getSecondRootError().get(process.stdout),
+      rowHolding: (h) => this.host?.rowHoldingSelection(h),
+    };
   }
   requireHost() {
     if (this.host === null) throw Error("ReplSessionScope: used before its screen bound a host");
@@ -410,51 +421,43 @@ class ReplSessionScope {
   }
   connect() {
     if (this.connected || this.disposed) return;
-    if (
-      ((this.connected = !0),
-      K$o(this.sessionBinding),
-      Yue.set(this.sessionPlugins),
-      installDevModsPlaceholderExpander(),
-      kWo(xBn),
+    this.connected = true;
+    bindSurface(this.sessionBinding);
+    pendingReloadSlot.set(this.sessionPlugins);
+    installDevModsPlaceholderExpander();
+    registerTurnParamsHook(registerPostSamplingHook);
+    this.stops.push(
+      subscribeToSelectionEvents(this.selectionWatch()),
+      this.store.subscribe(this.refreshOnStoreInputs),
+      this.workerCommands.subscribe(this.refresh),
+      onMemorySkillsChanged(this.refresh),
+      onPolicyVerdictChanged(this.refreshOnNextMicrotask),
+      onDeclaredChange(this.refreshOnNextMicrotask),
+    );
+    if (!this.isThinClient) {
       this.stops.push(
-        subscribeToSelectionEvents(this.selectionWatch()),
-        this.store.subscribe(this.refreshOnStoreInputs),
-        this.workerCommands.subscribe(this.refresh),
-        uqr(this.refresh),
-        onPolicyVerdictChanged(this.refreshOnNextMicrotask),
-        I6s(this.refreshOnNextMicrotask),
-      ),
-      !this.isThinClient)
-    ) {
-      if (
-        (this.stops.push(
-          fue.subscribe(this.reloadCommandsAndAgents),
-          onGrowthBookRefresh(this.refilterCommands),
-          settingsChangeDetector.subscribe(this.refilterCommands),
-          settingsChangeDetector.subscribe(() => {
-            if (this.noteHoldMove()) this.rereadAgents();
-          }),
-          this.store.subscribe(() => this.shedHeldManagedAgents()),
-          onPolicyVerdictChanged(this.refilterCommandsOnPolicyVerdict),
-        ),
-        this.noteHoldMove() && this.seatedHold === "asks:")
-      )
-        this.rereadAgents();
+        sharedSkillChangeDetector.subscribe(this.reloadCommandsAndAgents),
+        onGrowthBookRefresh(this.refilterCommands),
+        settingsChangeDetector.subscribe(this.refilterCommands),
+        settingsChangeDetector.subscribe(() => {
+          if (this.noteHoldMove()) this.rereadAgents();
+        }),
+        this.store.subscribe(() => this.shedHeldManagedAgents()),
+        onPolicyVerdictChanged(this.refilterCommandsOnPolicyVerdict),
+      );
+      if (this.noteHoldMove() && this.seatedHold === "asks:") this.rereadAgents();
       if (isCommandSetHooked()) this.rereadCommands();
     }
     this.refresh();
   }
   dispose() {
     if (this.disposed) return;
-    if (
-      ((this.disposed = !0),
-      (this.connected = !1),
-      release_2(this.sessionBinding),
-      Yue.get() === this.sessionPlugins)
-    )
-      Yue.set(void 0);
-    IGt();
-    for (let h of this.stops.splice(0)) h();
+    this.disposed = true;
+    this.connected = false;
+    release_2(this.sessionBinding);
+    if (pendingReloadSlot.get() === this.sessionPlugins) pendingReloadSlot.set(undefined);
+    clearForkCacheSafeParams();
+    for (let stop of this.stops.splice(0)) stop();
   }
   subscribe = (h) => this.changed.subscribe(h);
   getSnapshot = () => this.snapshot;
@@ -465,21 +468,23 @@ class ReplSessionScope {
     return this.mainThreadAgent;
   }
   get combinedInitialTools() {
-    let combinedInitialToolsFor = this.combinedInitialToolsFor(this.store.getState(), todoToolsEnabled());
-    if (combinedInitialToolsFor !== this.snapshot.combinedInitialTools) this.refresh();
-    return combinedInitialToolsFor;
+    let h = this.combinedInitialToolsFor(this.store.getState(), todoToolsEnabled());
+    if (h !== this.snapshot.combinedInitialTools) this.refresh();
+    return h;
   }
   setMainThreadAgentDefinition(h) {
     if (h === this.mainThreadAgent) return;
-    ((this.mainThreadAgent = h), this.refresh());
+    this.mainThreadAgent = h;
+    this.refresh();
   }
   lastStoreInputs = [];
   lastModelInputs;
   refreshOnStoreInputs = () => {
-    let state = this.store.getState(),
-      x = selectMainLoopModels(state);
-    if (!arraysEqual(this.lastModelInputs, x)) {
-      if (((this.lastModelInputs = x), !this.isThinClient)) this.rereadCommands();
+    let state = this.store.getState();
+    let mainLoopModels = selectMainLoopModels(state);
+    if (!arraysEqual(this.lastModelInputs, mainLoopModels)) {
+      this.lastModelInputs = mainLoopModels;
+      if (!this.isThinClient) this.rereadCommands();
     }
     let D = [
       state.plugins.commands,
@@ -491,12 +496,13 @@ class ReplSessionScope {
       state.mainLoopModel,
       state.replBridgeEnabled,
       state.replBridgeOutboundOnly,
-      this.isThinClient && NHe(state),
+      this.isThinClient && alwaysFalseSessionScope(state),
       this.isThinClient && state.workerInventory,
       state.settings,
     ];
     if (arraysEqual(this.lastStoreInputs, D)) return;
-    ((this.lastStoreInputs = D), this.refresh());
+    this.lastStoreInputs = D;
+    this.refresh();
   };
   refresh = () => {
     if (this.disposed) return;
@@ -518,38 +524,34 @@ class ReplSessionScope {
     }
   };
   derive() {
-    let state = this.store.getState(),
-      x = todoToolsEnabled(),
-      D = U7s(),
-      narrowToWorker = this.narrowToWorker(this.localCommands, this.workerCommands.getState()),
-      mergePluginCommands = this.mergePluginCommands(narrowToWorker, state.plugins.commands, D),
-      mergeMcpCommands = this.mergeMcpCommands(mergePluginCommands, state.mcp.commands, D),
-      Re = state.workerInventory?.commands,
-      Be = this.isThinClient
-        ? this.addWorkerOnly(
-            this.filterForThinClient(mergeMcpCommands),
-            Re === void 0 ? null : this.namesOf(Re),
-          )
-        : mergeMcpCommands,
-      He = this.disableSlashCommands
-        ? this.noCommands
-        : this.filterCommands
-          ? this.applyCommandFilter(Be, this.filterCommands)
-          : Be,
-      combinedInitialToolsFor = this.combinedInitialToolsFor(state, x),
-      { tools: tools, allowedAgentTypes: allowedAgentTypes } = this.computeToolPool(
-        state,
-        combinedInitialToolsFor,
-        x,
-      );
+    let state = this.store.getState();
+    let x = todoToolsEnabled();
+    let D = memorySkillNamesSnapshot();
+    let L = this.narrowToWorker(this.localCommands, this.workerCommands.getState());
+    let ee = this.mergePluginCommands(L, state.plugins.commands, D);
+    let ke = this.mergeMcpCommands(ee, state.mcp.commands, D);
+    let commands = state.workerInventory?.commands;
+    let Be = this.isThinClient
+      ? this.addWorkerOnly(
+          this.filterForThinClient(ke),
+          commands === undefined ? null : this.namesOf(commands),
+        )
+      : ke;
+    let commands_2 = this.disableSlashCommands
+      ? this.noCommands
+      : this.filterCommands
+        ? this.applyCommandFilter(Be, this.filterCommands)
+        : Be;
+    let We = this.combinedInitialToolsFor(state, x);
+    let { tools, allowedAgentTypes } = this.computeToolPool(state, We, x);
     return {
-      commands: He,
+      commands: commands_2,
       dynamicMcpConfig: this.dynamicMcp,
-      tools: tools,
-      renderingTools: this.addDisplayOnlyTools(tools, this.isThinClient && NHe(state)),
-      allowedAgentTypes: allowedAgentTypes,
+      tools,
+      renderingTools: this.addDisplayOnlyTools(tools, this.isThinClient && alwaysFalseSessionScope(state)),
+      allowedAgentTypes,
       mainThreadAgentDefinition: this.mainThreadAgent,
-      combinedInitialTools: combinedInitialToolsFor,
+      combinedInitialTools: We,
     };
   }
   combinedInitialToolsFor(h, x) {
@@ -563,7 +565,7 @@ class ReplSessionScope {
       x,
       isWorkspaceRestricted(),
       policyVerdictRebuildKey(),
-      k1(),
+      alwaysFalseFlag(),
     );
   }
   refreshOnNextMicrotask = () => {
@@ -577,35 +579,48 @@ class ReplSessionScope {
     });
   };
   reloadCommandsAndAgents = async () => {
-    let projectRoot = xo(this.session).projectRoot;
+    let projectRoot = getSessionProject(this.session).projectRoot;
     try {
       clearCommandsCache();
-      let x = await getCommands(projectRoot, this.storageV5);
-      (this.replaceLocalCommands(x), await this.rereadAgents());
+      let commands = await getCommands(projectRoot, this.storageV5);
+      this.replaceLocalCommands(commands);
+      await this.rereadAgents();
     } catch (error) {
       if (error instanceof Error) logError(error);
     }
   };
   readHold() {
-    let h = "";
+    let under = "";
     try {
-      h = join_4(getManagedFilePath(), ".claude") + sep;
-      let x = W1();
-      return x === "held:" ? { hold: x, under: h } : { hold: x };
+      under = join(getManagedFilePath(), ".claude") + sep;
+      let x = managedFolderCondition();
+      return x === "held:"
+        ? {
+            hold: x,
+            under,
+          }
+        : {
+            hold: x,
+          };
     } catch (error) {
       if (error instanceof Error) logError(error);
-      return ((this.seatedHold = void 0), managedSettingsAskState.readAs === !1 ? {} : { under: h });
+      this.seatedHold = undefined;
+      return managedSettingsAskState.readAs === false
+        ? {}
+        : {
+            under,
+          };
     }
   }
   shedHeldManagedAgents(h) {
     let agentDefinitions = this.store.getState().agentDefinitions;
-    if (h === void 0 && agentDefinitions === this.shedSeat) return;
+    if (h === undefined && agentDefinitions === this.shedSeat) return;
     this.shedSeat = agentDefinitions;
-    let { under: under } = h ?? this.readHold(),
-      filtered = agentDefinitions.allAgents.filter(
-        (allAgent) =>
-          under === void 0 || allAgent.source !== "policySettings" || !allAgent.baseDir?.startsWith(under),
-      );
+    let { under } = h ?? this.readHold();
+    let filtered = agentDefinitions.allAgents.filter(
+      (agent) =>
+        under === undefined || agent.source !== "policySettings" || !agent.baseDir?.startsWith(under),
+    );
     if (filtered.length !== agentDefinitions.allAgents.length)
       this.store.setState((ee) => ({
         ...ee,
@@ -614,25 +629,26 @@ class ReplSessionScope {
   }
   noteHoldMove() {
     let hold = this.readHold();
-    if (hold.hold !== void 0 && hold.hold === this.seatedHold) return !1;
-    return (
-      (this.seatedHold = hold.hold),
-      this.shedHeldManagedAgents(hold),
-      this.replaceLocalCommands(this.localCommands, hold),
-      !0
-    );
+    if (hold.hold !== undefined && hold.hold === this.seatedHold) return false;
+    this.seatedHold = hold.hold;
+    this.shedHeldManagedAgents(hold);
+    this.replaceLocalCommands(this.localCommands, hold);
+    return true;
   }
   rereadAgents = async () => {
     try {
-      let h = await getAgentDefinitionsWithOverrides(xo(this.session).projectRoot, this.storageV5);
+      let agentDefinitionsWithOverrides = await getAgentDefinitionsWithOverrides(
+        getSessionProject(this.session).projectRoot,
+        this.storageV5,
+      );
       if (this.disposed) return;
       this.store.setState((x) => {
-        let filtered = x.agentDefinitions.allAgents.filter((allAgent) => allAgent.source === "flagSettings");
+        let filtered = x.agentDefinitions.allAgents.filter((agent) => agent.source === "flagSettings");
         return {
           ...x,
           agentDefinitions: rebuildAgentDefinitions(
-            h,
-            withLiveRegisteredAgents([...h.allAgents, ...filtered]),
+            agentDefinitionsWithOverrides,
+            withLiveRegisteredAgents([...agentDefinitionsWithOverrides.allAgents, ...filtered]),
           ),
         };
       });
@@ -650,31 +666,36 @@ class ReplSessionScope {
   };
   refilterCommands = async () => {
     try {
-      (clearCommandMemoizationCaches(),
-        this.replaceLocalCommands(await getCommands(xo(this.session).projectRoot, this.storageV5)));
+      clearCommandMemoizationCaches();
+      this.replaceLocalCommands(
+        await getCommands(getSessionProject(this.session).projectRoot, this.storageV5),
+      );
     } catch (error) {
       if (error instanceof Error) logError(error);
     }
   };
   rereadCommands = async () => {
     try {
-      this.replaceLocalCommands(await getCommands(xo(this.session).projectRoot, this.storageV5));
+      this.replaceLocalCommands(
+        await getCommands(getSessionProject(this.session).projectRoot, this.storageV5),
+      );
     } catch (error) {
       if (error instanceof Error) logError(error);
     }
   };
   replaceLocalCommands(h, x = this.disposed ? {} : this.readHold()) {
-    let { under: under } = x,
-      filtered = h.filter(
-        (ke) =>
-          under === void 0 ||
-          ke.type !== "prompt" ||
-          ke.source !== "policySettings" ||
-          !(ke.skillRoot ?? ke.skillFile?.path)?.startsWith(under),
-      ),
-      ee = filtered.length === h.length ? h : filtered;
+    let { under } = x;
+    let filtered = h.filter(
+      (ke) =>
+        under === undefined ||
+        ke.type !== "prompt" ||
+        ke.source !== "policySettings" ||
+        !(ke.skillRoot ?? ke.skillFile?.path)?.startsWith(under),
+    );
+    let ee = filtered.length === h.length ? h : filtered;
     if (this.disposed || ee === this.localCommands) return;
-    ((this.localCommands = ee), this.refresh());
+    this.localCommands = ee;
+    this.refresh();
   }
   sessionPlugins = {
     reload: () =>
@@ -692,152 +713,185 @@ class ReplSessionScope {
     return this.snapshot.dynamicMcpConfig;
   }
   updateDynamicMcpConfig = (h) => {
-    let dynamicMcp = this.dynamicMcp,
-      D = typeof h === "function" ? h(dynamicMcp) : h;
+    let dynamicMcp = this.dynamicMcp;
+    let D = typeof h === "function" ? h(dynamicMcp) : h;
     if (D === dynamicMcp) return;
-    ((this.dynamicMcp = D), (this.snapshot = { ...this.snapshot, dynamicMcpConfig: D }), this.changed.emit());
+    this.dynamicMcp = D;
+    this.snapshot = {
+      ...this.snapshot,
+      dynamicMcpConfig: D,
+    };
+    this.changed.emit();
   };
-  addAutoConnectedIde = (h) => {
-    this.updateDynamicMcpConfig((x) => (x?.ide ? x : { ...x, ide: h }));
+  addAutoConnectedIde = (ide) => {
+    this.updateDynamicMcpConfig((x) =>
+      x?.ide
+        ? x
+        : {
+            ...x,
+            ide,
+          },
+    );
   };
   computeTools = () => this.computeToolPoolFresh().tools;
   computeToolPoolFresh = () => {
-    let state = this.store.getState(),
-      x = todoToolsEnabled(),
-      toolPool = this.computeToolPool(state, this.combinedInitialToolsFor(state, x), x);
+    let state = this.store.getState();
+    let x = todoToolsEnabled();
+    let toolPool = this.computeToolPool(state, this.combinedInitialToolsFor(state, x), x);
     if (toolPool.tools !== this.snapshot.tools) this.refresh();
     return toolPool;
   };
-  computeToolPool(h, x, D) {
+  computeToolPool(h, initialTools, todoTools) {
     let L = {
-        toolPermissionContext: h.toolPermissionContext,
-        mcpTools: h.mcp.tools,
-        mcpClients: h.mcp.clients,
-        combinedInitialTools: x,
-        mainThreadAgentDefinition: this.mainThreadAgent,
-        replBridgeEnabled: h.replBridgeEnabled,
-        replBridgeOutboundOnly: h.replBridgeOutboundOnly,
-        agentDefinitions: h.agentDefinitions,
-        todoTools: D,
-        slackTagConnected: h.slackTagConnected,
-        githubRepo: isCachedGitHubRepo(),
-        workspaceRestricted: isWorkspaceRestricted(),
-        waitForMcpServersDeclared: ftt(),
-      },
-      toolPoolCache = this.toolPoolCache;
+      toolPermissionContext: h.toolPermissionContext,
+      mcpTools: h.mcp.tools,
+      mcpClients: h.mcp.clients,
+      combinedInitialTools: initialTools,
+      mainThreadAgentDefinition: this.mainThreadAgent,
+      replBridgeEnabled: h.replBridgeEnabled,
+      replBridgeOutboundOnly: h.replBridgeOutboundOnly,
+      agentDefinitions: h.agentDefinitions,
+      todoTools,
+      slackTagConnected: h.slackTagConnected,
+      githubRepo: isCachedGitHubRepo(),
+      workspaceRestricted: isWorkspaceRestricted(),
+      waitForMcpServersDeclared: isDeclared(),
+    };
+    let toolPoolCache = this.toolPoolCache;
     if (toolPoolCache !== null && assembleSessionTools(toolPoolCache.key, L)) return toolPoolCache.result;
     setReplBridgeActive(h.replBridgeEnabled && !h.replBridgeOutboundOnly);
     let found = h.mcp.clients.find(isCommsRoledServer);
-    if (found) this.commsRoledServerSeen = { name: found.name, type: "disabled", config: found.config };
-    let Re = assembleToolPool(h.toolPermissionContext, h.mcp.tools, {
-        activeAgents: h.agentDefinitions.activeAgents,
-      }),
-      Be = mergeAndFilterTools(
-        x,
-        Re,
-        h.toolPermissionContext.mode,
-        [...x, ...h.mcp.tools],
-        createAccountMemoryToolGate(() =>
-          this.commsRoledServerSeen ? [...h.mcp.clients, this.commsRoledServerSeen] : h.mcp.clients,
-        ),
+    if (found)
+      this.commsRoledServerSeen = {
+        name: found.name,
+        type: "disabled",
+        config: found.config,
+      };
+    let assembled = assembleToolPool(h.toolPermissionContext, h.mcp.tools, {
+      activeAgents: h.agentDefinitions.activeAgents,
+    });
+    let Be = mergeAndFilterTools(
+      initialTools,
+      assembled,
+      h.toolPermissionContext.mode,
+      [...initialTools, ...h.mcp.tools],
+      createAccountMemoryToolGate(() =>
+        this.commsRoledServerSeen ? [...h.mcp.clients, this.commsRoledServerSeen] : h.mcp.clients,
       ),
-      mainThreadAgent = this.mainThreadAgent,
-      We = mainThreadAgent
-        ? resolveAgentTools(
-            mainThreadAgent,
-            withWebFetchToolForAgent(mainThreadAgent, Be, h.toolPermissionContext, {
-              activeAgents: h.agentDefinitions.activeAgents,
-            }),
-            !1,
-            !0,
-          )
-        : void 0,
-      ze = stripSoleNonDeniableTool(We ? We.resolvedTools : Be, h.toolPermissionContext),
-      Xe = We?.allowedAgentTypes,
-      rt = mainThreadAgent ? resolveAgentToolNames(mainThreadAgent) : void 0,
-      kt = toolPoolCache !== null && arraysEqual(toolPoolCache.result.tools, ze),
-      At = toolPoolCache !== null && arraysEqual(toolPoolCache.result.allowedAgentTypes, Xe),
-      It = toolPoolCache !== null && hasAnyOf(toolPoolCache.result.primitiveToolGrant, rt),
-      Ot =
-        kt && At && It
-          ? toolPoolCache.result
-          : {
-              tools: kt ? toolPoolCache.result.tools : ze,
-              allowedAgentTypes: At ? toolPoolCache.result.allowedAgentTypes : Xe,
-              primitiveToolGrant: It ? toolPoolCache.result.primitiveToolGrant : rt,
-            };
-    return ((this.toolPoolCache = { key: L, result: Ot }), Ot);
+    );
+    let mainThreadAgent = this.mainThreadAgent;
+    let We = mainThreadAgent
+      ? resolveAgentTools(
+          mainThreadAgent,
+          withWebFetchToolForAgent(mainThreadAgent, Be, h.toolPermissionContext, {
+            activeAgents: h.agentDefinitions.activeAgents,
+          }),
+          false,
+          true,
+        )
+      : undefined;
+    let ze = stripSoleNonDeniableTool(We ? We.resolvedTools : Be, h.toolPermissionContext);
+    let allowedAgentTypes = We?.allowedAgentTypes;
+    let rt = mainThreadAgent ? resolveAgentToolNames(mainThreadAgent) : undefined;
+    let kt = toolPoolCache !== null && arraysEqual(toolPoolCache.result.tools, ze);
+    let At = toolPoolCache !== null && arraysEqual(toolPoolCache.result.allowedAgentTypes, allowedAgentTypes);
+    let It = toolPoolCache !== null && hasAnyOf(toolPoolCache.result.primitiveToolGrant, rt);
+    let Ot =
+      kt && At && It
+        ? toolPoolCache.result
+        : {
+            tools: kt ? toolPoolCache.result.tools : ze,
+            allowedAgentTypes: At ? toolPoolCache.result.allowedAgentTypes : allowedAgentTypes,
+            primitiveToolGrant: It ? toolPoolCache.result.primitiveToolGrant : rt,
+          };
+    this.toolPoolCache = {
+      key: L,
+      result: Ot,
+    };
+    return Ot;
   }
   computeMcpClients = () => mergeClients(this.initialMcpClients, this.store.getState().mcp.clients);
   sandboxClassifierVerdicts() {
     let toolPermissionContext = this.store.getState().toolPermissionContext;
-    if (toolPermissionContext !== this.verdictsPermissionContext)
-      ((this.verdictsPermissionContext = toolPermissionContext), this.verdicts.clear());
+    if (toolPermissionContext !== this.verdictsPermissionContext) {
+      this.verdictsPermissionContext = toolPermissionContext;
+      this.verdicts.clear();
+    }
     return this.verdicts;
   }
-  mergeReadFileStateFrom(h, x) {
-    this.readFileState = mergeFileStateCaches(this.readFileState, extractReadFilesFromMessages(h, x, ZC));
+  mergeReadFileStateFrom(messages, cwd) {
+    this.readFileState = mergeFileStateCaches(
+      this.readFileState,
+      extractReadFilesFromMessages(messages, cwd, READ_FILE_STATE_CACHE_SIZE),
+    );
   }
   reseatIsolationLatch(h) {
-    ((this.isolationLatch.onLatch = void 0),
-      (this.isolationLatch = _tt(h, (x) => saveIsolationLatch(x, this.storageV5))));
+    this.isolationLatch.onLatch = undefined;
+    this.isolationLatch = createIsolationLatch(h, (x) => saveIsolationLatch(x, this.storageV5));
   }
-  reconstructContentReplacementState(h, x) {
+  reconstructContentReplacementState(messages, records) {
     if (!this.contentReplacementState) return;
-    this.contentReplacementState = reconstructContentReplacementState(h, x);
+    this.contentReplacementState = reconstructContentReplacementState(messages, records);
   }
   evictRewoundFileTracking(h) {
     for (let readFilePath of h.readFilePaths) this.readFileState.delete(readFilePath);
     for (let nestedMemoryPath of h.nestedMemoryPaths) this.readFileState.delete(nestedMemoryPath);
   }
   seedMemoryFile(h, x) {
-    this.readFileState.set(h, { ...x, startupMemorySeed: !0 });
+    this.readFileState.set(h, {
+      ...x,
+      startupMemorySeed: true,
+    });
   }
 }
 //@ chunk-18hwfzwa.js:201323-201457 placement
-function hasAnyOf(h, x) {
-  if (h === x) return !0;
-  if (h === void 0 || x === void 0 || h.size !== x.size) return !1;
-  for (let D of h) if (!x.has(D)) return !1;
-  return !0;
+function hasAnyOf(primitiveToolGrant, x) {
+  if (primitiveToolGrant === x) return true;
+  if (primitiveToolGrant === undefined || x === undefined || primitiveToolGrant.size !== x.size) return false;
+  for (let D of primitiveToolGrant) if (!x.has(D)) return false;
+  return true;
 }
 //@ chunk-18hwfzwa.js:201457-202036 placement
-function assembleSessionTools(h, x) {
+function assembleSessionTools(key, x) {
   return (
-    h.toolPermissionContext === x.toolPermissionContext &&
-    h.mcpTools === x.mcpTools &&
-    h.mcpClients === x.mcpClients &&
-    h.combinedInitialTools === x.combinedInitialTools &&
-    h.mainThreadAgentDefinition === x.mainThreadAgentDefinition &&
-    h.replBridgeEnabled === x.replBridgeEnabled &&
-    h.replBridgeOutboundOnly === x.replBridgeOutboundOnly &&
-    h.agentDefinitions === x.agentDefinitions &&
-    h.todoTools === x.todoTools &&
-    h.slackTagConnected === x.slackTagConnected &&
-    h.githubRepo === x.githubRepo &&
-    h.workspaceRestricted === x.workspaceRestricted &&
-    h.waitForMcpServersDeclared === x.waitForMcpServersDeclared
+    key.toolPermissionContext === x.toolPermissionContext &&
+    key.mcpTools === x.mcpTools &&
+    key.mcpClients === x.mcpClients &&
+    key.combinedInitialTools === x.combinedInitialTools &&
+    key.mainThreadAgentDefinition === x.mainThreadAgentDefinition &&
+    key.replBridgeEnabled === x.replBridgeEnabled &&
+    key.replBridgeOutboundOnly === x.replBridgeOutboundOnly &&
+    key.agentDefinitions === x.agentDefinitions &&
+    key.todoTools === x.todoTools &&
+    key.slackTagConnected === x.slackTagConnected &&
+    key.githubRepo === x.githubRepo &&
+    key.workspaceRestricted === x.workspaceRestricted &&
+    key.waitForMcpServersDeclared === x.waitForMcpServersDeclared
   );
 }
 //@ chunk-18hwfzwa.js:202036-202061 placement
-function NHe(h) {
-  return !1;
+function alwaysFalseSessionScope(h) {
+  return false;
 }
+//@ chunk-18hwfzwa.js:202061-202241 placement
 /**
  * 记住上一次参数与结果，参数逐个相同时直接返回缓存结果。
  */
-//@ chunk-18hwfzwa.js:202061-202241 placement
 function memoizeLast(h) {
   let x = null;
   return (...D) => {
     if (x !== null && x.inputs.length === D.length && x.inputs.every((input, ke) => input === D[ke]))
       return x.result;
     let L = h(...D);
-    return ((x = { inputs: D, result: L }), L);
+    x = {
+      inputs: D,
+      result: L,
+    };
+    return L;
   };
 }
 //@ chunk-18hwfzwa.js:202241-202607 placement
-function runWithQueryParams({ store: store, scope: scope, readPendingQueryParams: readPendingQueryParams }) {
+function runWithQueryParams({ store, scope, readPendingQueryParams }) {
   return createQueryEngine({
     run: query,
     queryParams: async (L) => readPendingQueryParams(),
@@ -848,14 +902,13 @@ function runWithQueryParams({ store: store, scope: scope, readPendingQueryParams
     account: toAccountInfo(),
     outputStyle: hasCustomOutputStyle(),
     mcpServers: () => mcpServerStatusSnapshots(store.getState().mcp.clients),
-    hostOwnsPermissionMode: !0,
-    hostOwnsModel: !0,
+    hostOwnsPermissionMode: true,
+    hostOwnsModel: true,
   });
 }
 //@ chunk-18hwfzwa.js:202607-202611 placement
-j();
+init_react_production();
 //@ chunk-18hwfzwa.js:202611-202646 placement
-var rFt = 5000,
-  BHe = [2000, 8000, 30000];
-
-export { ReplSessionScope, runWithQueryParams, rFt, BHe };
+var REMOUNT_SETTLE_MS = 5000;
+var BRIDGE_RETRY_DELAYS_MS = [2000, 8000, 30000];
+export { ReplSessionScope, runWithQueryParams, REMOUNT_SETTLE_MS, BRIDGE_RETRY_DELAYS_MS };

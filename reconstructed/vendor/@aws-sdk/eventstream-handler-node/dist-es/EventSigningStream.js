@@ -7,7 +7,7 @@
  */
 import { Transform } from "stream";
 import { Re } from "../../../../runtime/bun-runtime.js";
-import { Rx } from "../../core/dist-cjs/index.js";
+import { require_core as require_core_2 } from "../../core/dist-cjs/index.js";
 
 //@ chunk-3cddmtk7.js:14802-18139 esm-layout
 var Ee = {
@@ -28,7 +28,7 @@ var Ee = {
   main: "./dist-cjs/index.js",
   types: "./dist-types/index.d.ts",
   module: "./dist-es/index.js",
-  sideEffects: !1,
+  sideEffects: false,
   dependencies: {
     "@aws-crypto/sha256-browser": "5.2.0",
     "@aws-crypto/sha256-js": "5.2.0",
@@ -86,13 +86,26 @@ var Ee = {
     rimraf: "3.0.2",
     typescript: "~5.8.3",
   },
-  engines: { node: ">=18.0.0" },
-  typesVersions: { "<4.0": { "dist-types/*": ["dist-types/ts3.4/*"] } },
+  engines: {
+    node: ">=18.0.0",
+  },
+  typesVersions: {
+    "<4.0": {
+      "dist-types/*": ["dist-types/ts3.4/*"],
+    },
+  },
   files: ["dist-*/**"],
-  author: { name: "AWS SDK for JavaScript Team", url: "https://aws.amazon.com/javascript/" },
+  author: {
+    name: "AWS SDK for JavaScript Team",
+    url: "https://aws.amazon.com/javascript/",
+  },
   license: "Apache-2.0",
-  browser: { "./dist-es/runtimeConfig": "./dist-es/runtimeConfig.browser" },
-  "react-native": { "./dist-es/runtimeConfig": "./dist-es/runtimeConfig.native" },
+  browser: {
+    "./dist-es/runtimeConfig": "./dist-es/runtimeConfig.browser",
+  },
+  "react-native": {
+    "./dist-es/runtimeConfig": "./dist-es/runtimeConfig.native",
+  },
   homepage: "https://github.com/aws/aws-sdk-js-v3/tree/main/clients/client-bedrock-runtime",
   repository: {
     type: "git",
@@ -101,43 +114,67 @@ var Ee = {
   },
 };
 //@ chunk-3cddmtk7.js:18139-18154 esm-layout
-var y = Re(Rx());
+var import_core_4 = Re(require_core_2());
 //@ chunk-3cddmtk7.js:18258-19045 esm-fingerprint
-class te extends Transform {
+class EventSigningStream extends Transform {
   priorSignature;
   messageSigner;
   eventStreamCodec;
   systemClockOffsetProvider;
-  constructor(e) {
-    super({ autoDestroy: !0, readableObjectMode: !0, writableObjectMode: !0, ...e });
-    ((this.priorSignature = e.priorSignature),
-      (this.eventStreamCodec = e.eventStreamCodec),
-      (this.messageSigner = e.messageSigner),
-      (this.systemClockOffsetProvider = e.systemClockOffsetProvider));
+  constructor(options) {
+    super({
+      autoDestroy: true,
+      readableObjectMode: true,
+      writableObjectMode: true,
+      ...options,
+    });
+    this.priorSignature = options.priorSignature;
+    this.eventStreamCodec = options.eventStreamCodec;
+    this.messageSigner = options.messageSigner;
+    this.systemClockOffsetProvider = options.systemClockOffsetProvider;
   }
-  async _transform(e, t, o) {
+  async _transform(chunk, encoding, callback) {
     try {
-      let date = new Date(Date.now() + (await this.systemClockOffsetProvider())),
-        n = { ":date": { type: "timestamp", value: date } },
-        sign = await this.messageSigner.sign(
-          { message: { body: e, headers: n }, priorSignature: this.priorSignature },
-          { signingDate: date },
-        );
-      this.priorSignature = sign.signature;
-      let encode = this.eventStreamCodec.encode({
-        headers: { ...n, ":chunk-signature": { type: "binary", value: Wt(sign.signature) } },
-        body: e,
+      let now = new Date(Date.now() + (await this.systemClockOffsetProvider()));
+      let dateHeader = {
+        ":date": {
+          type: "timestamp",
+          value: now,
+        },
+      };
+      let signedMessage = await this.messageSigner.sign(
+        {
+          message: {
+            body: chunk,
+            headers: dateHeader,
+          },
+          priorSignature: this.priorSignature,
+        },
+        {
+          signingDate: now,
+        },
+      );
+      this.priorSignature = signedMessage.signature;
+      let serializedSigned = this.eventStreamCodec.encode({
+        headers: {
+          ...dateHeader,
+          ":chunk-signature": {
+            type: "binary",
+            value: getSignatureBinary(signedMessage.signature),
+          },
+        },
+        body: chunk,
       });
-      return (this.push(encode), o());
-    } catch (error) {
-      o(error);
+      this.push(serializedSigned);
+      return callback();
+    } catch (err) {
+      callback(err);
     }
   }
 }
 //@ chunk-3cddmtk7.js:19045-19174 esm-fingerprint
-function Wt(e) {
-  let buffer = Buffer.from(e, "hex");
-  return new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength / Uint8Array.BYTES_PER_ELEMENT);
+function getSignatureBinary(signature) {
+  let buf = Buffer.from(signature, "hex");
+  return new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength / Uint8Array.BYTES_PER_ELEMENT);
 }
-
-export { te, y, Ee };
+export { EventSigningStream, import_core_4, Ee };

@@ -22,82 +22,98 @@ import { FILE_WRITE_TOOL_NAME } from "../../tools/FileWriteTool/prompt.js";
 import { HostScoped } from "../../utils/hostScoped.js";
 
 //@ chunk-a76knw89.js:8157-8238 placement
-function On(e) {
+function stripSafeguardsField(e) {
   if (!("safeguards" in e)) return e;
-  let { safeguards: safeguards, ...o } = e;
+  let { safeguards, ...o } = e;
   return o;
 }
 //@ chunk-a76knw89.js:8238-8325 placement
-function lO(e, n) {
-  if (e === void 0) return;
-  return Object.entries(e).find(([o]) => o === n)?.[1];
+/**
+ * 导出函数 `exactKeyValue`：参数 e, n，返回 Object.entries(e).find(([o]) => o === n)?.[1]。
+ */
+function exactKeyValue(e, n) {
+  if (e === undefined) return;
+  return Object.entries(e).find(([key]) => key === n)?.[1];
 }
 //@ chunk-a76knw89.js:8325-8455 placement
 function toolKeyOf(e, n) {
-  let o = lO(e, "name");
+  let o = exactKeyValue(e, "name");
   if (typeof o === "string") return o;
-  let r = lO(e, "type");
+  let r = exactKeyValue(e, "type");
   return typeof r === "string" ? r : `tools[${n}]`;
 }
 //@ chunk-a76knw89.js:8455-8634 placement
 function isDeferredCustomToolDefinition(e) {
-  let n = lO(e, "type");
+  let n = exactKeyValue(e, "type");
   return (
-    typeof lO(e, "name") === "string" &&
-    lO(e, "defer_loading") === !0 &&
-    (n === void 0 || n === "custom") &&
-    hasObjectType(lO(e, "input_schema")) &&
+    typeof exactKeyValue(e, "name") === "string" &&
+    exactKeyValue(e, "defer_loading") === true &&
+    (n === undefined || n === "custom") &&
+    hasObjectType(exactKeyValue(e, "input_schema")) &&
     !("cache_control" in e)
   );
 }
 //@ chunk-a76knw89.js:8634-8870 placement
-function isPlainToolDefinition(e) {
-  let n = lO(e, "type"),
-    o = lO(e, "description");
+function isPlainToolDefinition(schema) {
+  let n = exactKeyValue(schema, "type");
+  let o = exactKeyValue(schema, "description");
   return (
-    typeof lO(e, "name") === "string" &&
-    (o === void 0 || typeof o === "string") &&
-    lO(e, "defer_loading") !== !0 &&
-    (n === void 0 || n === "custom") &&
-    hasObjectType(lO(e, "input_schema")) &&
-    !("cache_control" in e)
+    typeof exactKeyValue(schema, "name") === "string" &&
+    (o === undefined || typeof o === "string") &&
+    exactKeyValue(schema, "defer_loading") !== true &&
+    (n === undefined || n === "custom") &&
+    hasObjectType(exactKeyValue(schema, "input_schema")) &&
+    !("cache_control" in schema)
   );
 }
 //@ chunk-a76knw89.js:8870-8924 placement
-var me = ["strict", "eager_input_streaming", "citations"];
+/**
+ * 工具定义里会出现在 schema 层的布尔字段名（strict/eager_input_streaming/citations）。
+ */
+var TOOL_DEFINITION_BOOLEAN_KEYS = ["strict", "eager_input_streaming", "citations"];
 //@ chunk-a76knw89.js:8924-8994 placement
-function ye(e) {
-  return e.some((n) => lO(n, "eager_input_streaming") === !0);
+function anyEagerInputStreaming(e) {
+  return e.some((n) => exactKeyValue(n, "eager_input_streaming") === true);
 }
 //@ chunk-a76knw89.js:8994-9236 placement
-function TOOL_DEFINITION_FLAG_KEYS(e, { strict: strict, eager: eager, citations: citations }) {
-  let c = { ...e };
+function TOOL_DEFINITION_FLAG_KEYS(schema, { strict, eager, citations }) {
+  let c = {
+    ...schema,
+  };
   if (!strict && "strict" in c) {
-    let { strict: strict, ...u } = c;
+    let { strict, ...u } = c;
     c = u;
   }
   if (!eager && "eager_input_streaming" in c) {
-    let { eager_input_streaming: eager_input_streaming, ...u } = c;
+    let { eager_input_streaming: eagerInputStreaming, ...u } = c;
     c = u;
   }
   if (!citations && "citations" in c) {
-    let { citations: citations, ...u } = c;
+    let { citations, ...u } = c;
     c = u;
   }
   return c;
 }
 //@ chunk-a76knw89.js:9236-9332 placement = extractErrorTypeFromData (1)
 function hasObjectType(data) {
-  return typeof data === "object" && data !== null && !Array.isArray(data) && lO(data, "type") === "object";
+  return (
+    typeof data === "object" &&
+    data !== null &&
+    !Array.isArray(data) &&
+    exactKeyValue(data, "type") === "object"
+  );
 }
 //@ chunk-a76knw89.js:9332-9380 placement
-function Hri(e) {
+/**
+ * 导出函数 `shortContentHash`：参数 e，返回 computeContentHash(jsonStringify(sortKeysDeep(e))).slice(0, 16)。
+ */
+function shortContentHash(e) {
   return computeContentHash(jsonStringify(sortKeysDeep(e))).slice(0, 16);
 }
 //@ chunk-a76knw89.js:9380-9615 placement
-function readDeferredToolsDeltas(e) {
-  if (!Array.isArray(e)) return [];
-  return e.filter(
+function readDeferredToolsDeltas(surfacedDefinitions) {
+  if (!Array.isArray(surfacedDefinitions)) return [];
+  return surfacedDefinitions.filter(
     (n) =>
       typeof n === "object" &&
       n !== null &&
@@ -106,10 +122,10 @@ function readDeferredToolsDeltas(e) {
       ((typeof n.definition === "object" && n.definition !== null) || typeof n.sameAs === "string"),
   );
 }
+//@ chunk-a76knw89.js:9615-10063 placement
 /**
  * 汇总消息中的 deferred_tools_delta 附件（按 uuid 去重）。
  */
-//@ chunk-a76knw89.js:9615-10063 placement
 function collectDeferredToolsDeltas(e, n = new Set()) {
   let o = new Map();
   for (let r of e) {
@@ -123,50 +139,67 @@ function collectDeferredToolsDeltas(e, n = new Set()) {
     let c = new Map();
     for (let s of readDeferredToolsDeltas(r.attachment.surfacedDefinitions)) {
       if ("definition" in s) {
-        c.set(s.name, { definition: s.definition, listing: s.listing, definedIn: r.uuid });
+        c.set(s.name, {
+          definition: s.definition,
+          listing: s.listing,
+          definedIn: r.uuid,
+        });
         continue;
       }
       let u = o.get(s.sameAs)?.get(s.name);
-      if (u !== void 0) c.set(s.name, u);
+      if (u !== undefined) c.set(s.name, u);
     }
     if (c.size > 0) o.set(r.uuid, c);
   }
   return o;
 }
+//@ chunk-a76knw89.js:10063-10174 placement
 /**
  * 汇总消息中延迟工具增量里出现的全部工具名。
  */
-//@ chunk-a76knw89.js:10063-10174 placement
-function deltaToolNames(e, n = new Set()) {
+function deltaToolNames(messages, nameOnlyAnnouncements = new Set()) {
   let o = new Set();
-  for (let r of collectDeferredToolsDeltas(e, n).values()) for (let c of r.keys()) o.add(c);
+  for (let r of collectDeferredToolsDeltas(messages, nameOnlyAnnouncements).values())
+    for (let key of r.keys()) o.add(key);
   return o;
 }
 //@ chunk-a76knw89.js:10174-10559 placement
-function findLatestDeferredToolsDelta(e, n) {
-  let o = collectDeferredToolsDeltas(e, n),
-    r = new Map(),
-    c = new Set();
+function findLatestDeferredToolsDelta(e, nameOnlyAnnouncements) {
+  let deferredToolsDeltas = collectDeferredToolsDeltas(e, nameOnlyAnnouncements);
+  let r = new Map();
+  let c = new Set();
   for (let s of e) {
     if (
       s.type !== "attachment" ||
       s.attachment?.type !== "deferred_tools_delta" ||
-      (typeof s.uuid === "string" && n.has(s.uuid))
+      (typeof s.uuid === "string" && nameOnlyAnnouncements.has(s.uuid))
     )
       continue;
     for (let u of stringArray(s.attachment.removedByBlock)) if (r.has(u)) c.add(u);
     if (typeof s.uuid !== "string") continue;
-    for (let [u, p] of o.get(s.uuid) ?? []) (r.set(u, p), c.delete(u));
+    for (let [u, p] of deferredToolsDeltas.get(s.uuid) ?? []) {
+      r.set(u, p);
+      c.delete(u);
+    }
   }
-  return { definedByValue: r, withdrawn: c };
+  return {
+    definedByValue: r,
+    withdrawn: c,
+  };
 }
 //@ chunk-a76knw89.js:10559-10627 placement
-function fVt(e, n) {
-  return e !== void 0 && Object.hasOwn(e, n) ? e[n] : void 0;
+/**
+ * 导出函数 `ownValue`：参数 e, n，返回 e !== void 0 && Object.hasOwn(e, n) ? e[n] : void 0。
+ */
+function ownValue(toolDefinitions, n) {
+  return toolDefinitions !== undefined && Object.hasOwn(toolDefinitions, n) ? toolDefinitions[n] : undefined;
 }
 //@ chunk-a76knw89.js:10627-10685 placement
-function $ri(e, n = new Set()) {
-  return new Set(collectDeferredToolsDeltas(e, n).keys());
+/**
+ * 导出函数 `deferredToolNames`：参数 e, n = new Set(，返回 new Set(collectDeferredToolsDeltas(e, n).keys())。
+ */
+function deferredToolNames(messages, nameOnlyAnnouncements = new Set()) {
+  return new Set(collectDeferredToolsDeltas(messages, nameOnlyAnnouncements).keys());
 }
 //@ chunk-a76knw89.js:10685-10812 placement
 var TOOL_CATEGORY_LABELS = {
@@ -176,25 +209,25 @@ var TOOL_CATEGORY_LABELS = {
   dynamic: "dynamic_tool",
   unreadable: "unreadable_tool",
 };
+//@ chunk-a76knw89.js:10812-11126 placement
 /**
  * 工具在遥测中的类别：skill、mcp、eval_registered、dynamic 等。
  */
-//@ chunk-a76knw89.js:10812-11126 placement
-function toolCategoryForTelemetry(e) {
+function toolCategoryForTelemetry(tool) {
   try {
-    if (e.name.startsWith(SKILL_2)) return TOOL_CATEGORY_LABELS.skill;
-    let n = String(sanitizeToolNameForAnalytics(e.name));
-    if (n !== e.name) return n;
-    if (e.mcpInfo !== void 0) return TOOL_CATEGORY_LABELS.mcp;
-    if (e.name.startsWith("eval_registered__")) return TOOL_CATEGORY_LABELS.evalRegistered;
-    if (e.uiTableKey !== void 0 || e.name.includes("__")) return TOOL_CATEGORY_LABELS.dynamic;
-    return e.name;
+    if (tool.name.startsWith(SKILL_2)) return TOOL_CATEGORY_LABELS.skill;
+    let n = String(sanitizeToolNameForAnalytics(tool.name));
+    if (n !== tool.name) return n;
+    if (tool.mcpInfo !== undefined) return TOOL_CATEGORY_LABELS.mcp;
+    if (tool.name.startsWith("eval_registered__")) return TOOL_CATEGORY_LABELS.evalRegistered;
+    if (tool.uiTableKey !== undefined || tool.name.includes("__")) return TOOL_CATEGORY_LABELS.dynamic;
+    return tool.name;
   } catch {
     return TOOL_CATEGORY_LABELS.unreadable;
   }
 }
 //@ chunk-a76knw89.js:11126-11170 placement
-var Mn = [
+var TOOL_CATEGORY_NAMES = [
   ...Object.values(TOOL_CATEGORY_LABELS),
   BASH_TOOL_NAME,
   EXITPLANMODE_2,
@@ -203,43 +236,48 @@ var Mn = [
   FILE_WRITE_TOOL_NAME,
 ];
 //@ chunk-a76knw89.js:11170-11239 placement
-function FYr(e) {
+/**
+ * 导出函数 `telemetryToolCategory`：参数 e，返回 Mn.find((o) => o === n) ?? "other_tool"。
+ */
+function telemetryToolCategory(e) {
   let n = toolCategoryForTelemetry(e);
-  return Mn.find((o) => o === n) ?? "other_tool";
+  return TOOL_CATEGORY_NAMES.find((o) => o === n) ?? "other_tool";
 }
 //@ chunk-a76knw89.js:11239-11265 placement
-var An = new HostScoped(() => new Set());
+var unsupportedToolsSeen = new HostScoped(() => new Set());
 //@ chunk-a76knw89.js:11265-11300 placement
-function Ce(e, n) {
-  return `${e}_${n}`;
+function prefixedName(id, n) {
+  return `${id}_${n}`;
 }
 //@ chunk-a76knw89.js:11300-11317 placement
-var $e = /_(\d+)$/;
+var SUFFIX_NUMBER_RE = /_(\d+)$/;
 //@ chunk-a76knw89.js:11317-11390 placement
-function Tqe(e) {
-  let match = $e.exec(e);
-  return match ? e.slice(0, -match[0].length) : void 0;
+/**
+ * 导出函数 `stripSuffixNumber`：参数 e，返回 match ? e.slice(0, -match[0].length) : void 0; } export { toolCategoryForTelemetry, collectDeferredToolsDeltas…。
+ */
+function stripSuffixNumber(e) {
+  let match = SUFFIX_NUMBER_RE.exec(e);
+  return match ? e.slice(0, -match[0].length) : undefined;
 }
-
 export {
   toolCategoryForTelemetry,
   collectDeferredToolsDeltas,
-  fVt,
-  FYr,
+  ownValue,
+  telemetryToolCategory,
   deltaToolNames,
-  $ri,
+  deferredToolNames,
   isDeferredCustomToolDefinition,
   toolKeyOf,
-  On,
-  lO,
-  me,
-  ye,
+  stripSafeguardsField,
+  exactKeyValue,
+  TOOL_DEFINITION_BOOLEAN_KEYS,
+  anyEagerInputStreaming,
   TOOL_DEFINITION_FLAG_KEYS,
-  Ce,
-  Tqe,
-  An,
-  $e,
+  prefixedName,
+  stripSuffixNumber,
+  unsupportedToolsSeen,
+  SUFFIX_NUMBER_RE,
   findLatestDeferredToolsDelta,
   isPlainToolDefinition,
-  Hri,
+  shortContentHash,
 };

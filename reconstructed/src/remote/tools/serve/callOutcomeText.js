@@ -12,19 +12,23 @@ import { failedEnvelope } from "./callStatusQuery.js";
 import { stoppedBeforeStartMessage } from "../../../services/remoteTools/hostRefusals.js";
 import { resultNotes, shapeServedResult, resultSizeLimitsFor } from "./resultShaping.js";
 import { refusedEnvelope } from "./backgroundCommands.js";
-import { xTe } from "../../../tools/shared/textSearchTools.js";
+import { isShellToolName } from "../../../tools/shared/textSearchTools.js";
 import { getDefaultAppState_2 } from "../../../state/AppStateStore.js";
 import { getMainLoopModel } from "../../../utils/model/model.js";
-import { mg } from "../../../utils/messageQueueManager.js";
+import { commandQueueManager } from "../../../utils/messageQueueManager.js";
 import { getRootSession } from "../../../bootstrap/state.js";
 import { makeSaltedName } from "../../../utils/agentId.js";
 import { TOOL_CATALOG } from "../../../tools.js";
 import { query } from "../../../query.js";
-import { u2 } from "../../../tasks/taskLoopRegistry.js";
+import { UNLIMITED_RATE_LIMITER } from "../../../tasks/taskLoopRegistry.js";
 import { NOOP_NOTIFICATION_DRAIN } from "../../../services/queuedNotifications/queuedNotifications.js";
 import { NOOP_FUNCTION_HOOK_REGISTRY } from "../../../utils/hooks/functionHookNoop.js";
 import { artifactReadObservationIn } from "../../../services/artifacts/readObservation.js";
-import { Uht, Bht, freeze_2 } from "../../../services/artifacts/artifactReadConsent.js";
+import {
+  createEmptyArtifactSessionStores,
+  NO_OP_COLOR_ASSIGNER,
+  Jce,
+} from "../../../services/artifacts/artifactReadConsent.js";
 import { NOOP_AGENT_NAME_REGISTRY } from "../../../utils/agentNameRegistry.js";
 import { isUnattendedOwnRecord } from "./servedPermissionDecision.js";
 import { unattendedStanceKind } from "./servedSafetyChecks.js";
@@ -36,44 +40,54 @@ import { hasModuleHookingSite } from "../../../plugins/hooksModules/loadedModule
 import { clipFullOutput } from "./servedShellSettings.js";
 import { unreadableSpillNote } from "./outputSpill.js";
 import { logError } from "../../../utils/log.js";
-import { Aye } from "../../../utils/sandbox/sandboxDefaultPolicy.js";
+import { violinFholeEnabled } from "../../../utils/sandbox/sandboxDefaultPolicy.js";
 
 //@ chunk-ad2e1aj6.js:29729-29810 placement
-function io(e) {
-  return e.timedOut ? "deadline" : e.shuttingDown() ? "shutdown" : "cancel";
+function stoppedBeforeStartReason(clock) {
+  return clock.timedOut ? "deadline" : clock.shuttingDown() ? "shutdown" : "cancel";
 }
 //@ chunk-ad2e1aj6.js:29810-30000 placement
 function timedOutOrCancelled(e) {
-  let { target: target, facts: facts, targetName: targetName, clock: clock, notes: notes } = e;
+  let { target, facts, targetName, clock, notes } = e;
   return {
     ...failedEnvelope(
       target,
       facts,
       clock.timedOut ? "timed_out" : "cancelled",
-      stoppedBeforeStartMessage({ stoppedBy: io(clock), targetName: targetName }),
-      { notes: notes.lines() },
+      stoppedBeforeStartMessage({
+        stoppedBy: stoppedBeforeStartReason(clock),
+        targetName,
+      }),
+      {
+        notes: notes.lines(),
+      },
     ),
-    ranNothing: !0,
+    ranNothing: true,
   };
 }
 //@ chunk-ad2e1aj6.js:30000-30172 placement
 function stoppedBeforeStart(e) {
-  let { target: target, facts: facts, targetName: targetName, clock: clock } = e,
-    i = io(clock);
+  let { target, facts, targetName, clock } = e;
+  let i = stoppedBeforeStartReason(clock);
   return {
     ...failedEnvelope(
       target,
       facts,
       i === "deadline" ? "timed_out" : "cancelled",
-      stoppedBeforeStartMessage({ stoppedBy: i, targetName: targetName }),
+      stoppedBeforeStartMessage({
+        stoppedBy: i,
+        targetName,
+      }),
     ),
-    ranNothing: !0,
+    ranNothing: true,
   };
 }
 //@ chunk-ad2e1aj6.js:30172-31203 placement
 function callNotRunEnvelope(e) {
-  let { target: target, facts: facts, targetName: targetName, clock: clock } = e,
-    i = { notes: e.notes.lines() };
+  let { target, facts, targetName, clock } = e;
+  let i = {
+    notes: e.notes.lines(),
+  };
   if (!isPermissionGranted(e)) {
     let y = clock.timedOut
       ? failedEnvelope(
@@ -92,7 +106,12 @@ function callNotRunEnvelope(e) {
             : `The call was cancelled on ${targetName} before the command started (a hook or an approval was still pending) \u2014 nothing ran.`,
           i,
         );
-    return e.controller.signal.aborted ? { ...y, ranNothing: !0 } : y;
+    return e.controller.signal.aborted
+      ? {
+          ...y,
+          ranNothing: true,
+        }
+      : y;
   }
   return clock.timedOut
     ? failedEnvelope(
@@ -118,18 +137,9 @@ function isPermissionGranted(e) {
 }
 //@ chunk-ad2e1aj6.js:31314-32769 placement
 function callResultEnvelope(e, n) {
-  let {
-    target: target,
-    facts: facts,
-    targetName: targetName,
-    callId: callId,
-    controller: controller,
-    clock: clock,
-    toolVerdict: toolVerdict,
-    notes: notes,
-  } = e;
-  if (n === void 0) return callNotRunEnvelope(e);
-  if (n.result === void 0)
+  let { target, facts, targetName, callId, controller, clock, toolVerdict, notes } = e;
+  if (n === undefined) return callNotRunEnvelope(e);
+  if (n.result === undefined)
     return controller.signal.aborted
       ? callNotRunEnvelope(e)
       : failedEnvelope(
@@ -137,81 +147,112 @@ function callResultEnvelope(e, n) {
           facts,
           "tool_error",
           `The call produced no result on ${targetName} (one of your hooks there deferred it or returned no result) \u2014 it did not run.`,
-          { notes: [...notes.lines(), ...resultNotes(n, targetName)] },
+          {
+            notes: [...notes.lines(), ...resultNotes(n, targetName)],
+          },
         );
-  let C = !n.settledBeforeStop && n.ranToEnd;
-  if (!n.settledBeforeStop && !C) return callNotRunEnvelope(e);
-  if (toolVerdict !== void 0) {
-    let F = { notes: [...notes.lines(), ...resultNotes(n, targetName)] };
+  let ranToEnd = !n.settledBeforeStop && n.ranToEnd;
+  if (!n.settledBeforeStop && !ranToEnd) return callNotRunEnvelope(e);
+  if (toolVerdict !== undefined) {
+    let F = {
+      notes: [...notes.lines(), ...resultNotes(n, targetName)],
+    };
     return toolVerdict.verdict.kind === "refused"
       ? refusedEnvelope(target, facts, toolVerdict.verdict.code, toolVerdict.message, F)
       : failedEnvelope(target, facts, toolVerdict.verdict.code, toolVerdict.message, F);
   }
   let P = clock.timedOut
-      ? "at the call's deadline"
-      : clock.shuttingDown()
-        ? "because Claude Code here is shutting down"
-        : "when the call was cancelled",
-    x = `(output withheld: the command COMPLETED on ${targetName} and was not interrupted. What ran after it here \u2014 a PostToolUse hook, most likely \u2014 was stopped ${P} before it finished, and it may have been meant to check this output, so only the output is withheld. Do not re-run the command just to see the output unless it is safe to repeat.)`,
-    Y = shapeServedResult({
-      run: C
-        ? {
-            ...n,
-            result: { ...n.result, content: x },
-            output: xTe(facts.toolName) ? toBashStyleOutput(n.output, x) : void 0,
-            extra: [],
-            hookExtra: [],
-            notes: [...notes.lines()],
-          }
-        : { ...n, result: n.result, notes: [...notes.lines(), ...n.notes] },
-      toolName: facts.toolName,
-      target: target,
-      callId: callId,
-      targetName: targetName,
-      permissionOutcome: e.permissionOutcome,
-      budget: resultSizeLimitsFor(facts.arrivedOver),
-    });
-  return ((facts.truncated = Y.truncated), { envelope: Y.envelope, content: Y.content });
+    ? "at the call's deadline"
+    : clock.shuttingDown()
+      ? "because Claude Code here is shutting down"
+      : "when the call was cancelled";
+  let x = `(output withheld: the command COMPLETED on ${targetName} and was not interrupted. What ran after it here \u2014 a PostToolUse hook, most likely \u2014 was stopped ${P} before it finished, and it may have been meant to check this output, so only the output is withheld. Do not re-run the command just to see the output unless it is safe to repeat.)`;
+  let Y = shapeServedResult({
+    run: ranToEnd
+      ? {
+          ...n,
+          result: {
+            ...n.result,
+            content: x,
+          },
+          output: isShellToolName(facts.toolName) ? toBashStyleOutput(n.output, x) : undefined,
+          extra: [],
+          hookExtra: [],
+          notes: [...notes.lines()],
+        }
+      : {
+          ...n,
+          result: n.result,
+          notes: [...notes.lines(), ...n.notes],
+        },
+    toolName: facts.toolName,
+    target,
+    callId,
+    targetName,
+    permissionOutcome: e.permissionOutcome,
+    budget: resultSizeLimitsFor(facts.arrivedOver),
+  });
+  facts.truncated = Y.truncated;
+  return {
+    envelope: Y.envelope,
+    content: Y.content,
+  };
 }
 //@ chunk-ad2e1aj6.js:32769-32971 placement
-function toBashStyleOutput(e, n) {
-  if (typeof e !== "object" || e === null) return n;
-  let s = Reflect.get(e, "returnCodeInterpretation");
+function toBashStyleOutput(output, n) {
+  if (typeof output !== "object" || output === null) return n;
+  let s = Reflect.get(output, "returnCodeInterpretation");
   return {
     stdout: n,
     stderr: "",
-    interrupted: !1,
-    ...(typeof s === "string" && { returnCodeInterpretation: s }),
+    interrupted: false,
+    ...(typeof s === "string" && {
+      returnCodeInterpretation: s,
+    }),
   };
 }
 //@ chunk-ad2e1aj6.js:32971-34520 placement
 function servedToolUseContext(e) {
-  let n = { ...getDefaultAppState_2(), toolPermissionContext: e.permissionContext },
-    s = getMainLoopModel();
+  let n = {
+    ...getDefaultAppState_2(),
+    toolPermissionContext: e.permissionContext,
+  };
+  let mainLoopModel = getMainLoopModel();
   return {
-    requestDialog: void 0,
+    requestDialog: undefined,
     abortController: e.abortController,
-    messageQueue: mg(),
-    session: getRootSession().withProject({ cwd: e.cwd }),
-    agentContext: { agentType: "main", agentId: makeSaltedName() },
+    messageQueue: commandQueueManager(),
+    session: getRootSession().withProject({
+      cwd: e.cwd,
+    }),
+    agentContext: {
+      agentType: "main",
+      agentId: makeSaltedName(),
+    },
     options: {
       commands: [],
       tools: e.servedTools,
       toolCatalog: TOOL_CATALOG,
-      mainLoopModel: s,
-      thinkingConfig: { type: "disabled", mechanical: !0 },
+      mainLoopModel,
+      thinkingConfig: {
+        type: "disabled",
+        mechanical: true,
+      },
       mcpClients: [],
       mcpResources: {},
-      isNonInteractiveSession: !0,
+      isNonInteractiveSession: true,
       runQuery: query,
-      debug: !1,
-      verbose: !1,
-      agentDefinitions: { activeAgents: [], allAgents: [] },
+      debug: false,
+      verbose: false,
+      agentDefinitions: {
+        activeAgents: [],
+        allAgents: [],
+      },
     },
     getAppState: () => n,
     setAppState: () => {},
     markPrResolvedThisSession: () => {},
-    isUltrareviewOverageConfirmed: () => !1,
+    isUltrareviewOverageConfirmed: () => false,
     markUltrareviewOverageConfirmed: () => {},
     getAdvisorSetting: () => n.advisorModel,
     getMcp: () => n.mcp,
@@ -219,98 +260,105 @@ function servedToolUseContext(e) {
     getWebBrowser: () => n.webBrowser,
     setToolPermissionContext: () => {},
     setSessionToolPermissionContext: () => {},
-    taskRegistry: u2,
+    taskRegistry: UNLIMITED_RATE_LIMITER,
     queuedNotificationsRegistry: NOOP_NOTIFICATION_DRAIN,
     sessionHooksRegistry: NOOP_FUNCTION_HOOK_REGISTRY,
     setWebBrowserSlice: () => {},
     setArtifactReadVersion: () => {},
     getArtifactReadObservation: artifactReadObservationIn(() => n),
-    artifactRegistries: Uht(),
+    artifactRegistries: createEmptyArtifactSessionStores(),
     setArtifactContractTarget: () => {},
-    getArtifactContractTarget: () => ({ targetSlug: void 0, pins: {} }),
+    getArtifactContractTarget: () => ({
+      targetSlug: undefined,
+      pins: {},
+    }),
     enqueuePendingMemoryUpdate: () => {},
     agentLifecycle: NOOP_AGENT_NAME_REGISTRY,
-    teammateColors: Bht,
-    rootToolSurface: { tools: e.servedTools, mainLoopModel: s },
+    teammateColors: NO_OP_COLOR_ASSIGNER,
+    rootToolSurface: {
+      tools: e.servedTools,
+      mainLoopModel,
+    },
     messages: [],
     turnStartIndex: 0,
     readFileState: e.session.readFileState,
     toolState: e.session.toolState,
     toolDecisions: new Map(),
-    permissionRelays: freeze_2,
+    permissionRelays: Jce,
     getFileHistoryState: () => {
       return;
     },
     applyFileHistoryOp: () => {},
     applyAttributionOp: () => {},
     remoteCall: e.remoteCall,
-    requireCanUseTool: !0,
+    requireCanUseTool: true,
     storageV5: e.storageV5,
   };
 }
 //@ chunk-ad2e1aj6.js:34520-34590 placement
-function servingConsentRequirement(e) {
-  if (!isUnattendedOwnRecord(e)) return unattendedStanceKind(e);
-  return unattendedServingConsented() ? void 0 : "consent";
+function servingConsentRequirement(unattended) {
+  if (!isUnattendedOwnRecord(unattended)) return unattendedStanceKind(unattended);
+  return unattendedServingConsented() ? undefined : "consent";
 }
 //@ chunk-ad2e1aj6.js:34590-34705 placement
 function isServedPostToolHookEnabled() {
   try {
-    let { value: e, source: source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE(
-      "tengu_violin_endpin",
-      !1,
-    );
-    return e === !0 && source !== "override";
+    let { value: e, source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE("tengu_violin_endpin", false);
+    return e === true && source !== "override";
   } catch {
-    return !1;
+    return false;
   }
 }
 //@ chunk-ad2e1aj6.js:34705-35252 placement
-function runServedPostToolHook({
-  toolName: toolName,
-  toolInput: toolInput,
-  toolAliases: toolAliases,
-  targetName: targetName,
-  keep: keep,
-}) {
+function runServedPostToolHook({ toolName, toolInput, toolAliases, targetName, keep }) {
   let i = {
-      session_id: "",
-      transcript_path: "",
-      cwd: "",
-      hook_event_name: "PostToolUse",
-      tool_name: toolName,
-      tool_input: toolInput,
-      tool_response: void 0,
-      tool_use_id: "",
-    },
-    y,
-    O = !1,
-    R = () => {
-      if (O || y === void 0) return;
-      let [w, C] = y;
-      try {
-        return getHooksForEvent("PostToolUse").some(
-          ({ matcher: matcher, hooks: hooks }) =>
-            hooks.some((F) => F.type !== "callback") && hookMatcherMatches(i, matcher, toolAliases),
-        ) ||
-          dispatchClassicEvent("PostToolUse") ||
-          hasModuleHookingSite("tool.call", { tool: toolName })
-          ? void 0
-          : clipFullOutput(w, unreadableSpillNote({ targetName: targetName, shellToolName: toolName, ...C }));
-      } catch (error) {
-        ((O = !0), logError(error));
-        return;
-      }
-    };
-  return (w, C) => {
-    if (O || !Aye()) {
-      y = void 0;
+    session_id: "",
+    transcript_path: "",
+    cwd: "",
+    hook_event_name: "PostToolUse",
+    tool_name: toolName,
+    tool_input: toolInput,
+    tool_response: undefined,
+    tool_use_id: "",
+  };
+  let y;
+  let O = false;
+  let R = () => {
+    if (O || y === undefined) return;
+    let [w, C] = y;
+    try {
+      return getHooksForEvent("PostToolUse").some(
+        ({ matcher, hooks }) =>
+          hooks.some((hook) => hook.type !== "callback") && hookMatcherMatches(i, matcher, toolAliases),
+      ) ||
+        dispatchClassicEvent("PostToolUse") ||
+        hasModuleHookingSite("tool.call", {
+          tool: toolName,
+        })
+        ? undefined
+        : clipFullOutput(
+            w,
+            unreadableSpillNote({
+              targetName,
+              shellToolName: toolName,
+              ...C,
+            }),
+          );
+    } catch (error) {
+      O = true;
+      logError(error);
       return;
     }
-    ((y = [w, C]), keep(R));
+  };
+  return (w, C) => {
+    if (O || !violinFholeEnabled()) {
+      y = undefined;
+      return;
+    }
+    y = [w, C];
+    keep(R);
   };
 }
-
 export {
   servingConsentRequirement,
   callResultEnvelope,

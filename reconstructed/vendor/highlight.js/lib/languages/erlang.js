@@ -8,148 +8,253 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:130357-132930 cjs-fingerprint
-var Jn = x(function (iE, Qn) {
-  function nd(e) {
-    let n = "([a-z'][a-zA-Z0-9_']*:[a-z'][a-zA-Z0-9_']*|[a-z'][a-zA-Z0-9_']*)",
-      a = {
-        keyword:
-          "after and andalso|10 band begin bnot bor bsl bzr bxor case catch cond div end fun if let not of orelse|10 query receive rem try when xor maybe else",
-        literal: "false true",
-      },
-      COMMENT = e.COMMENT("%", "$"),
-      o = {
-        className: "number",
-        begin:
-          "\\b(\\d+(_\\d+)*#[a-fA-F0-9]+(_[a-fA-F0-9]+)*|\\d+(_\\d+)*(\\.\\d+(_\\d+)*)?([eE][-+]?\\d+)?)",
-        relevance: 0,
-      },
-      r = { begin: "fun\\s+[a-z'][a-zA-Z0-9_']*/\\d+" },
-      i = {
-        begin: n + "\\(",
-        end: "\\)",
-        returnBegin: !0,
-        relevance: 0,
-        contains: [
-          { begin: n, relevance: 0 },
-          { begin: "\\(", end: "\\)", endsWithParent: !0, returnEnd: !0, relevance: 0 },
-        ],
-      },
-      c = { begin: /\{/, end: /\}/, relevance: 0 },
-      l = { begin: "\\b_([A-Z][A-Za-z0-9_]*)?", relevance: 0 },
-      d = { begin: "[A-Z][a-zA-Z0-9_]*", relevance: 0 },
-      m = {
-        begin: "#" + e.UNDERSCORE_IDENT_RE,
-        relevance: 0,
-        returnBegin: !0,
-        contains: [
-          { begin: "#" + e.UNDERSCORE_IDENT_RE, relevance: 0 },
-          { begin: /\{/, end: /\}/, relevance: 0 },
-        ],
-      },
-      p = { scope: "string", match: /\$(\\([^0-9]|[0-9]{1,3}|)|.)/ },
-      _ = { scope: "string", match: /"""("*)(?!")[\s\S]*?"""\1/ },
-      E = {
-        scope: "string",
-        contains: [e.BACKSLASH_ESCAPE],
-        variants: [
-          { match: /~\w?"""("*)(?!")[\s\S]*?"""\1/ },
-          { begin: /~\w?\(/, end: /\)/ },
-          { begin: /~\w?\[/, end: /\]/ },
-          { begin: /~\w?{/, end: /}/ },
-          { begin: /~\w?</, end: />/ },
-          { begin: /~\w?\//, end: /\// },
-          { begin: /~\w?\|/, end: /\|/ },
-          { begin: /~\w?'/, end: /'/ },
-          { begin: /~\w?"/, end: /"/ },
-          { begin: /~\w?`/, end: /`/ },
-          { begin: /~\w?#/, end: /#/ },
-        ],
-      },
-      u = { beginKeywords: "fun receive if try case maybe", end: "end", keywords: a };
-    u.contains = [
-      COMMENT,
-      r,
-      e.inherit(e.APOS_STRING_MODE, { className: "" }),
-      u,
-      i,
-      E,
-      _,
-      e.QUOTE_STRING_MODE,
-      o,
-      c,
-      l,
-      d,
-      m,
-      p,
-    ];
-    let b = [COMMENT, r, u, i, E, _, e.QUOTE_STRING_MODE, o, c, l, d, m, p];
-    ((i.contains[1].contains = b), (c.contains = b), (m.contains[1].contains = b));
-    let f = [
-        "-module",
-        "-record",
-        "-undef",
-        "-export",
-        "-ifdef",
-        "-ifndef",
-        "-author",
-        "-copyright",
-        "-doc",
-        "-moduledoc",
-        "-vsn",
-        "-import",
-        "-include",
-        "-include_lib",
-        "-compile",
-        "-define",
-        "-else",
-        "-endif",
-        "-file",
-        "-behaviour",
-        "-behavior",
-        "-spec",
-        "-on_load",
-        "-nifs",
+var require_erlang = x(function (cjsExports, cjsModule) {
+  function erlang(hljs) {
+    let FUNCTION_NAME_RE = "([a-z'][a-zA-Z0-9_']*:[a-z'][a-zA-Z0-9_']*|[a-z'][a-zA-Z0-9_']*)";
+    let ERLANG_RESERVED = {
+      keyword:
+        "after and andalso|10 band begin bnot bor bsl bzr bxor case catch cond div end fun if let not of orelse|10 query receive rem try when xor maybe else",
+      literal: "false true",
+    };
+    let COMMENT = hljs.COMMENT("%", "$");
+    let NUMBER = {
+      className: "number",
+      begin: "\\b(\\d+(_\\d+)*#[a-fA-F0-9]+(_[a-fA-F0-9]+)*|\\d+(_\\d+)*(\\.\\d+(_\\d+)*)?([eE][-+]?\\d+)?)",
+      relevance: 0,
+    };
+    let NAMED_FUN = {
+      begin: "fun\\s+[a-z'][a-zA-Z0-9_']*/\\d+",
+    };
+    let FUNCTION_CALL = {
+      begin: FUNCTION_NAME_RE + "\\(",
+      end: "\\)",
+      returnBegin: true,
+      relevance: 0,
+      contains: [
+        {
+          begin: FUNCTION_NAME_RE,
+          relevance: 0,
+        },
+        {
+          begin: "\\(",
+          end: "\\)",
+          endsWithParent: true,
+          returnEnd: true,
+          relevance: 0,
+        },
       ],
-      O = { className: "params", begin: "\\(", end: "\\)", contains: b };
+    };
+    let TUPLE = {
+      begin: /\{/,
+      end: /\}/,
+      relevance: 0,
+    };
+    let VAR1 = {
+      begin: "\\b_([A-Z][A-Za-z0-9_]*)?",
+      relevance: 0,
+    };
+    let VAR2 = {
+      begin: "[A-Z][a-zA-Z0-9_]*",
+      relevance: 0,
+    };
+    let RECORD_ACCESS = {
+      begin: "#" + hljs.UNDERSCORE_IDENT_RE,
+      relevance: 0,
+      returnBegin: true,
+      contains: [
+        {
+          begin: "#" + hljs.UNDERSCORE_IDENT_RE,
+          relevance: 0,
+        },
+        {
+          begin: /\{/,
+          end: /\}/,
+          relevance: 0,
+        },
+      ],
+    };
+    let CHAR_LITERAL = {
+      scope: "string",
+      match: /\$(\\([^0-9]|[0-9]{1,3}|)|.)/,
+    };
+    let TRIPLE_QUOTE = {
+      scope: "string",
+      match: /"""("*)(?!")[\s\S]*?"""\1/,
+    };
+    let SIGIL = {
+      scope: "string",
+      contains: [hljs.BACKSLASH_ESCAPE],
+      variants: [
+        {
+          match: /~\w?"""("*)(?!")[\s\S]*?"""\1/,
+        },
+        {
+          begin: /~\w?\(/,
+          end: /\)/,
+        },
+        {
+          begin: /~\w?\[/,
+          end: /\]/,
+        },
+        {
+          begin: /~\w?{/,
+          end: /}/,
+        },
+        {
+          begin: /~\w?</,
+          end: />/,
+        },
+        {
+          begin: /~\w?\//,
+          end: /\//,
+        },
+        {
+          begin: /~\w?\|/,
+          end: /\|/,
+        },
+        {
+          begin: /~\w?'/,
+          end: /'/,
+        },
+        {
+          begin: /~\w?"/,
+          end: /"/,
+        },
+        {
+          begin: /~\w?`/,
+          end: /`/,
+        },
+        {
+          begin: /~\w?#/,
+          end: /#/,
+        },
+      ],
+    };
+    let BLOCK_STATEMENTS = {
+      beginKeywords: "fun receive if try case maybe",
+      end: "end",
+      keywords: ERLANG_RESERVED,
+    };
+    BLOCK_STATEMENTS.contains = [
+      COMMENT,
+      NAMED_FUN,
+      hljs.inherit(hljs.APOS_STRING_MODE, {
+        className: "",
+      }),
+      BLOCK_STATEMENTS,
+      FUNCTION_CALL,
+      SIGIL,
+      TRIPLE_QUOTE,
+      hljs.QUOTE_STRING_MODE,
+      NUMBER,
+      TUPLE,
+      VAR1,
+      VAR2,
+      RECORD_ACCESS,
+      CHAR_LITERAL,
+    ];
+    let BASIC_MODES = [
+      COMMENT,
+      NAMED_FUN,
+      BLOCK_STATEMENTS,
+      FUNCTION_CALL,
+      SIGIL,
+      TRIPLE_QUOTE,
+      hljs.QUOTE_STRING_MODE,
+      NUMBER,
+      TUPLE,
+      VAR1,
+      VAR2,
+      RECORD_ACCESS,
+      CHAR_LITERAL,
+    ];
+    FUNCTION_CALL.contains[1].contains = BASIC_MODES;
+    TUPLE.contains = BASIC_MODES;
+    RECORD_ACCESS.contains[1].contains = BASIC_MODES;
+    let DIRECTIVES = [
+      "-module",
+      "-record",
+      "-undef",
+      "-export",
+      "-ifdef",
+      "-ifndef",
+      "-author",
+      "-copyright",
+      "-doc",
+      "-moduledoc",
+      "-vsn",
+      "-import",
+      "-include",
+      "-include_lib",
+      "-compile",
+      "-define",
+      "-else",
+      "-endif",
+      "-file",
+      "-behaviour",
+      "-behavior",
+      "-spec",
+      "-on_load",
+      "-nifs",
+    ];
+    let PARAMS = {
+      className: "params",
+      begin: "\\(",
+      end: "\\)",
+      contains: BASIC_MODES,
+    };
     return {
       name: "Erlang",
       aliases: ["erl"],
-      keywords: a,
+      keywords: ERLANG_RESERVED,
       illegal: "(</|\\*=|\\+=|-=|/\\*|\\*/|\\(\\*|\\*\\))",
       contains: [
         {
           className: "function",
           begin: "^[a-z'][a-zA-Z0-9_']*\\s*\\(",
           end: "->",
-          returnBegin: !0,
+          returnBegin: true,
           illegal: "\\(|#|//|/\\*|\\\\|:|;",
-          contains: [O, e.inherit(e.TITLE_MODE, { begin: "[a-z'][a-zA-Z0-9_']*" })],
-          starts: { end: ";|\\.", keywords: a, contains: b },
+          contains: [
+            PARAMS,
+            hljs.inherit(hljs.TITLE_MODE, {
+              begin: "[a-z'][a-zA-Z0-9_']*",
+            }),
+          ],
+          starts: {
+            end: ";|\\.",
+            keywords: ERLANG_RESERVED,
+            contains: BASIC_MODES,
+          },
         },
         COMMENT,
         {
           begin: "^-",
           end: "\\.",
           relevance: 0,
-          excludeEnd: !0,
-          returnBegin: !0,
-          keywords: { $pattern: "-" + e.IDENT_RE, keyword: f.map((S) => `${S}|1.5`).join(" ") },
-          contains: [O, E, _, e.QUOTE_STRING_MODE],
+          excludeEnd: true,
+          returnBegin: true,
+          keywords: {
+            $pattern: "-" + hljs.IDENT_RE,
+            keyword: DIRECTIVES.map((x) => `${x}|1.5`).join(" "),
+          },
+          contains: [PARAMS, SIGIL, TRIPLE_QUOTE, hljs.QUOTE_STRING_MODE],
         },
-        o,
-        E,
-        _,
-        e.QUOTE_STRING_MODE,
-        m,
-        l,
-        d,
-        c,
-        p,
-        { begin: /\.$/ },
+        NUMBER,
+        SIGIL,
+        TRIPLE_QUOTE,
+        hljs.QUOTE_STRING_MODE,
+        RECORD_ACCESS,
+        VAR1,
+        VAR2,
+        TUPLE,
+        CHAR_LITERAL,
+        {
+          begin: /\.$/,
+        },
       ],
     };
   }
-  Qn.exports = nd;
+  cjsModule.exports = erlang;
 });
-
-export { Jn };
+export { require_erlang };

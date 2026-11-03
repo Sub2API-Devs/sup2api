@@ -8,32 +8,32 @@
 import { x, importMetaRequire } from "../../runtime/bun-runtime.js";
 
 //@ chunk-m4p5zn6n.js:713-1221 cjs-fingerprint
-var ut = x(function (di, at) {
-  at.exports = st;
-  st.sync = Hn;
-  var ot = importMetaRequire("fs");
-  function qn(e, n) {
-    var r = n.pathExt !== void 0 ? n.pathExt : process.env.PATHEXT;
-    if (!r) return !0;
-    if (((r = r.split(";")), r.indexOf("") !== -1)) return !0;
-    for (var o = 0; o < r.length; o++) {
-      var lower = r[o].toLowerCase();
-      if (lower && e.substr(-lower.length).toLowerCase() === lower) return !0;
+var require_windows = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = isexe;
+  isexe.sync = sync;
+  var fs = importMetaRequire("fs");
+  function checkPathExt(path, options) {
+    var pathext = options.pathExt !== undefined ? options.pathExt : process.env.PATHEXT;
+    if (!pathext) return true;
+    pathext = pathext.split(";");
+    if (pathext.indexOf("") !== -1) return true;
+    for (var i = 0; i < pathext.length; i++) {
+      var p = pathext[i].toLowerCase();
+      if (p && path.substr(-p.length).toLowerCase() === p) return true;
     }
-    return !1;
+    return false;
   }
-  function it(e, n, r) {
-    if (!e.isSymbolicLink() && !e.isFile()) return !1;
-    return qn(n, r);
+  function checkStat(stat, path, options) {
+    if (!stat.isSymbolicLink() && !stat.isFile()) return false;
+    return checkPathExt(path, options);
   }
-  function st(e, n, r) {
-    ot.stat(e, function (o, s) {
-      r(o, o ? !1 : it(s, e, n));
+  function isexe(path, options, cb) {
+    fs.stat(path, function (er, stat) {
+      cb(er, er ? false : checkStat(stat, path, options));
     });
   }
-  function Hn(e, n) {
-    return it(ot.statSync(e), e, n);
+  function sync(path, options) {
+    return checkStat(fs.statSync(path), path, options);
   }
 });
-
-export { ut };
+export { require_windows };

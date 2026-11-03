@@ -8,26 +8,45 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:56769-57208 cjs-fingerprint
-var Gt = x(function (Iu, Bt) {
-  function ll(e) {
-    let t = { className: "literal", begin: /[+-]+/, relevance: 0 };
+var require_brainfuck = x(function (cjsExports, cjsModule) {
+  function brainfuck(hljs) {
+    let LITERAL = {
+      className: "literal",
+      begin: /[+-]+/,
+      relevance: 0,
+    };
     return {
       name: "Brainfuck",
       aliases: ["bf"],
       contains: [
-        e.COMMENT(/[^\[\]\.,\+\-<> \r\n]/, /[\[\]\.,\+\-<> \r\n]/, {
-          contains: [{ match: /[ ]+[^\[\]\.,\+\-<> \r\n]/, relevance: 0 }],
-          returnEnd: !0,
+        hljs.COMMENT(/[^\[\]\.,\+\-<> \r\n]/, /[\[\]\.,\+\-<> \r\n]/, {
+          contains: [
+            {
+              match: /[ ]+[^\[\]\.,\+\-<> \r\n]/,
+              relevance: 0,
+            },
+          ],
+          returnEnd: true,
           relevance: 0,
         }),
-        { className: "title", begin: "[\\[\\]]", relevance: 0 },
-        { className: "string", begin: "[\\.,]", relevance: 0 },
-        { begin: /(?=\+\+|--)/, contains: [t] },
-        t,
+        {
+          className: "title",
+          begin: "[\\[\\]]",
+          relevance: 0,
+        },
+        {
+          className: "string",
+          begin: "[\\.,]",
+          relevance: 0,
+        },
+        {
+          begin: /(?=\+\+|--)/,
+          contains: [LITERAL],
+        },
+        LITERAL,
       ],
     };
   }
-  Bt.exports = ll;
+  cjsModule.exports = brainfuck;
 });
-
-export { Gt };
+export { require_brainfuck };

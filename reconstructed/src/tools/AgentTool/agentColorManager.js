@@ -10,39 +10,39 @@
  */
 import { getAgentColorMap } from "../../bootstrap/state.js";
 
+//@ chunk-g86zfxfd.js:228-516 fingerprint = AGENT_COLOR_TO_THEME_COLOR (1)
 /**
  * 代理颜色名到 *_FOR_SUBAGENTS_ONLY 主题色的映射及颜色名列表。
  */
-//@ chunk-g86zfxfd.js:228-516 fingerprint = AGENT_COLOR_TO_THEME_COLOR (1)
 var AGENT_COLOR_TO_THEME_COLOR = {
-    red: "red_FOR_SUBAGENTS_ONLY",
-    blue: "blue_FOR_SUBAGENTS_ONLY",
-    green: "green_FOR_SUBAGENTS_ONLY",
-    yellow: "yellow_FOR_SUBAGENTS_ONLY",
-    purple: "purple_FOR_SUBAGENTS_ONLY",
-    orange: "orange_FOR_SUBAGENTS_ONLY",
-    pink: "pink_FOR_SUBAGENTS_ONLY",
-    cyan: "cyan_FOR_SUBAGENTS_ONLY",
-  },
-  AGENT_COLOR_NAMES = Object.keys(AGENT_COLOR_TO_THEME_COLOR);
+  red: "red_FOR_SUBAGENTS_ONLY",
+  blue: "blue_FOR_SUBAGENTS_ONLY",
+  green: "green_FOR_SUBAGENTS_ONLY",
+  yellow: "yellow_FOR_SUBAGENTS_ONLY",
+  purple: "purple_FOR_SUBAGENTS_ONLY",
+  orange: "orange_FOR_SUBAGENTS_ONLY",
+  pink: "pink_FOR_SUBAGENTS_ONLY",
+  cyan: "cyan_FOR_SUBAGENTS_ONLY",
+};
+var AGENT_COLOR_NAMES = Object.keys(AGENT_COLOR_TO_THEME_COLOR);
+//@ chunk-g86zfxfd.js:516-565 layout
 /**
  * 是否是合法代理颜色名。
  */
-//@ chunk-g86zfxfd.js:516-565 layout
-function isAgentColorName(e) {
-  return e !== void 0 && AGENT_COLOR_NAMES.includes(e);
+function isAgentColorName(color) {
+  return color !== undefined && AGENT_COLOR_NAMES.includes(color);
 }
+//@ chunk-g86zfxfd.js:565-627 layout
 /**
  * 用户覆盖色优先，否则代理定义色。
  */
-//@ chunk-g86zfxfd.js:565-627 layout
 function getEffectiveAgentColor(e) {
   return e.userOverride ?? e.agentDefinitionColor;
 }
+//@ chunk-g86zfxfd.js:627-735 fingerprint = getAgentColor (1)
 /**
  * 从全局颜色表取代理类型的主题色（general-purpose 无色）。
  */
-//@ chunk-g86zfxfd.js:627-735 fingerprint = getAgentColor (1)
 function getAgentColor(agentType) {
   if (agentType === "general-purpose") return;
   let existingColor = getAgentColorMap().get(agentType);
@@ -59,7 +59,6 @@ function setAgentColor(agentType, color) {
   }
   if (AGENT_COLOR_NAMES.includes(color)) agentColorMap.set(agentType, color);
 }
-
 export {
   getAgentColor,
   getEffectiveAgentColor,

@@ -8,9 +8,9 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:493931-494607 cjs-fingerprint
-var Io = x(function (pb, vo) {
-  function Qm(e) {
-    let t = ["bool", "byte", "i16", "i32", "i64", "double", "string", "binary"];
+var require_thrift = x(function (cjsExports, cjsModule) {
+  function thrift(hljs) {
+    let TYPES = ["bool", "byte", "i16", "i32", "i64", "double", "string", "binary"];
     return {
       name: "Thrift",
       keywords: {
@@ -30,31 +30,39 @@ var Io = x(function (pb, vo) {
           "required",
           "optional",
         ],
-        type: t,
+        type: TYPES,
         literal: "true false",
       },
       contains: [
-        e.QUOTE_STRING_MODE,
-        e.NUMBER_MODE,
-        e.C_LINE_COMMENT_MODE,
-        e.C_BLOCK_COMMENT_MODE,
+        hljs.QUOTE_STRING_MODE,
+        hljs.NUMBER_MODE,
+        hljs.C_LINE_COMMENT_MODE,
+        hljs.C_BLOCK_COMMENT_MODE,
         {
           className: "class",
           beginKeywords: "struct enum service exception",
           end: /\{/,
           illegal: /\n/,
-          contains: [e.inherit(e.TITLE_MODE, { starts: { endsWithParent: !0, excludeEnd: !0 } })],
+          contains: [
+            hljs.inherit(hljs.TITLE_MODE, {
+              starts: {
+                endsWithParent: true,
+                excludeEnd: true,
+              },
+            }),
+          ],
         },
         {
           begin: "\\b(set|list|map)\\s*<",
-          keywords: { type: [...t, "set", "list", "map"] },
+          keywords: {
+            type: [...TYPES, "set", "list", "map"],
+          },
           end: ">",
           contains: ["self"],
         },
       ],
     };
   }
-  vo.exports = Qm;
+  cjsModule.exports = thrift;
 });
-
-export { Io };
+export { require_thrift };

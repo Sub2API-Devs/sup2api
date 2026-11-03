@@ -8,7 +8,7 @@
  * pieces: chunk-tzghj6zv.js (7)
  * attribution: affinity 1, fingerprint 4, layout 2
  */
-import { useKillRing, egt, nextYankPop } from "../utils/killRing.js";
+import { useKillRing, topOfKillRing, nextYankPop } from "../utils/killRing.js";
 import { useTerminalSize } from "./useTerminalSize.js";
 import { y, R, Q, ce } from "../../vendor/react/cjs/react.production.js";
 import { useStoreSelector } from "./useStoreSelector.js";
@@ -51,21 +51,24 @@ var NON_TEXT_KEYS = new Set([
   "f12",
 ]);
 //@ chunk-tzghj6zv.js:6203-6304 fingerprint = isYankKey (1)
-function isYankKey(d, h) {
-  if (h.ctrl || h.meta) return !1;
-  if (NON_TEXT_KEYS.has(d)) return !1;
+function isYankKey(d, key) {
+  if (key.ctrl || key.meta) return false;
+  if (NON_TEXT_KEYS.has(d)) return false;
   return d.length > 0 && !/^\s/.test(d);
 }
 //@ chunk-tzghj6zv.js:6304-6372 layout
-function ego(d) {
+/**
+ * 函数 startsWithPunctuation（首字符是标点）；位于「搜索输入 hook：Emacs 风格编辑键（kill/yank）、退出/取消，供 transcript 搜索、选择器等使用」模块。
+ */
+function startsWithPunctuation(d) {
   return d.length > 0 && ".,?!:;)]".includes(d.charAt(0));
 }
 //@ chunk-tzghj6zv.js:6372-6561 fingerprint = isKillKey (1)
 function isKillKey(e) {
-  if (e.ctrl && (e.key === "k" || e.key === "u" || e.key === "w")) return !0;
-  if ((e.meta || e.ctrl) && e.key === "backspace") return !0;
-  if (e.meta && !e.ctrl && e.key.toLowerCase() === "d") return !0;
-  return !1;
+  if (e.ctrl && (e.key === "k" || e.key === "u" || e.key === "w")) return true;
+  if ((e.meta || e.ctrl) && e.key === "backspace") return true;
+  if (e.meta && !e.ctrl && e.key.toLowerCase() === "d") return true;
+  return false;
 }
 //@ chunk-tzghj6zv.js:6561-6612 layout = isYankKey (1)
 function isYankKey_2(e) {
@@ -94,382 +97,444 @@ var UNHANDLED_SPECIAL_KEYS = new Set([
   "f11",
   "f12",
 ]);
+//@ chunk-tzghj6zv.js:6768-11964 fingerprint = useSearchInput (0.606)
 /**
  * 搜索输入：维护 query/cursorOffset，处理字符输入、退格、Emacs kill/yank、左右移动，return 触发 onExit，escape 触发 onCancel；不处理翻页/滚轮等键。
  */
-//@ chunk-tzghj6zv.js:6768-11964 fingerprint = useSearchInput (0.606)
 function useSearchInput({
-  isActive: isActive,
-  onExit: onExit,
-  onCancel: onCancel,
-  onExitUp: onExitUp,
-  onExitDown: onExitDown,
-  columns: columns,
-  passthroughCtrlKeys: passthroughCtrlKeys = [],
-  initialQuery: initialQuery = "",
-  buffer: buffer,
-  backspaceExitsOnEmpty: backspaceExitsOnEmpty = !0,
-  multiline: multiline = !1,
-  onSpaceOnEmpty: onSpaceOnEmpty,
-  onTabOnEmpty: onTabOnEmpty,
-  honorEditorMode: honorEditorMode = !1,
+  isActive,
+  onExit,
+  onCancel,
+  onExitUp,
+  onExitDown,
+  columns,
+  passthroughCtrlKeys = [],
+  initialQuery = "",
+  buffer,
+  backspaceExitsOnEmpty = true,
+  multiline = false,
+  onSpaceOnEmpty,
+  onTabOnEmpty,
+  honorEditorMode = false,
 }) {
-  let ne = useKillRing(),
-    { columns: terminalColumns } = useTerminalSize(),
-    we = columns ?? terminalColumns,
-    [Te, L] = y(initialQuery),
-    [ee, ye] = y(initialQuery.length),
-    setQuery = useStoreSelector(buffer, (_) => _.query),
-    cursorOffset = useStoreSelector(buffer, (_) => _.cursorOffset),
-    ae = setQuery ?? Te,
-    X = cursorOffset ?? ee,
-    F = R(Te),
-    re = R(ee),
-    H = Q(
-      () =>
-        buffer
-          ? {
-              get current() {
-                return buffer.getSnapshot().query;
-              },
-              set current(_) {
-                buffer.setQueryAndCursor(_, buffer.getSnapshot().cursorOffset);
-              },
-            }
-          : F,
-      [buffer],
-    ),
-    D = Q(
-      () =>
-        buffer
-          ? {
-              get current() {
-                return buffer.getSnapshot().cursorOffset;
-              },
-              set current(_) {
-                buffer.setQueryAndCursor(buffer.getSnapshot().query, _);
-              },
-            }
-          : re,
-      [buffer],
-    ),
-    J = ce(
-      (_) => {
-        if (buffer) {
-          buffer.setQueryAndCursor(_, buffer.getSnapshot().cursorOffset);
-          return;
-        }
-        ((F.current = _), L(_));
-      },
-      [buffer],
-    ),
-    K = ce(
-      (_) => {
-        if (buffer) {
-          buffer.setQueryAndCursor(buffer.getSnapshot().query, _);
-          return;
-        }
-        ((re.current = _), ye(_));
-      },
-      [buffer],
-    ),
-    me = ce(
-      (_) => {
-        (J(_), K(_.length));
-      },
-      [J, K],
-    ),
-    se = ce(
-      (_) => {
-        if (!isActive || !multiline || _.name !== "return") return !1;
-        let ge = D.current;
-        return (ge > 0 && H.current[ge - 1] === "\\") || _.shift || _.meta;
-      },
-      [isActive, multiline],
-    ),
-    handleKeyDown = (_) => {
-      if (!isActive) return;
-      let ge = H.current,
-        ke = D.current,
-        cursor = Cursor.fromText(ge, we, ke);
-      if (!isKillKey(_) && !isYankKey_2(_)) ne.dispatch({ type: "interrupt" });
-      if (_.ctrl && passthroughCtrlKeys.includes(_.key.toLowerCase())) return;
-      if (_.name === "return") {
-        if ((_.preventDefault(), se(_))) {
-          if (ge[ke - 1] === "\\") {
-            J(
-              ge.slice(0, ke - 1) +
-                `
-` +
-                ge.slice(ke),
-            );
-            return;
+  let killRing = useKillRing();
+  let { columns: terminalColumns } = useTerminalSize();
+  let we = columns ?? terminalColumns;
+  let [Te, L] = y(initialQuery);
+  let [ee, ye] = y(initialQuery.length);
+  let setQuery = useStoreSelector(buffer, (_) => _.query);
+  let cursorOffset = useStoreSelector(buffer, (_) => _.cursorOffset);
+  let ae = setQuery ?? Te;
+  let X = cursorOffset ?? ee;
+  let F = R(Te);
+  let re = R(ee);
+  let H = Q(
+    () =>
+      buffer
+        ? {
+            get current() {
+              return buffer.getSnapshot().query;
+            },
+            set current(_) {
+              buffer.setQueryAndCursor(_, buffer.getSnapshot().cursorOffset);
+            },
           }
-          (J(
-            ge.slice(0, ke) +
+        : F,
+    [buffer],
+  );
+  let D = Q(
+    () =>
+      buffer
+        ? {
+            get current() {
+              return buffer.getSnapshot().cursorOffset;
+            },
+            set current(_) {
+              buffer.setQueryAndCursor(buffer.getSnapshot().query, _);
+            },
+          }
+        : re,
+    [buffer],
+  );
+  let setQueryState = ce(
+    (_) => {
+      if (buffer) {
+        buffer.setQueryAndCursor(_, buffer.getSnapshot().cursorOffset);
+        return;
+      }
+      F.current = _;
+      L(_);
+    },
+    [buffer],
+  );
+  let setCursorOffset = ce(
+    (_) => {
+      if (buffer) {
+        buffer.setQueryAndCursor(buffer.getSnapshot().query, _);
+        return;
+      }
+      re.current = _;
+      ye(_);
+    },
+    [buffer],
+  );
+  let setQuery_2 = ce(
+    (_) => {
+      setQueryState(_);
+      setCursorOffset(_.length);
+    },
+    [setQueryState, setCursorOffset],
+  );
+  let se = ce(
+    (_) => {
+      if (!isActive || !multiline || _.name !== "return") return false;
+      let ge = D.current;
+      return (ge > 0 && H.current[ge - 1] === "\\") || _.shift || _.meta;
+    },
+    [isActive, multiline],
+  );
+  let handleKeyDown = (e) => {
+    if (!isActive) return;
+    let ge = H.current;
+    let ke = D.current;
+    let cursor = Cursor.fromText(ge, we, ke);
+    if (!isKillKey(e) && !isYankKey_2(e))
+      killRing.dispatch({
+        type: "interrupt",
+      });
+    if (e.ctrl && passthroughCtrlKeys.includes(e.key.toLowerCase())) return;
+    if (e.name === "return") {
+      e.preventDefault();
+      if (se(e)) {
+        if (ge[ke - 1] === "\\") {
+          setQueryState(
+            ge.slice(0, ke - 1) +
               `
 ` +
               ge.slice(ke),
-          ),
-            K(ke + 1));
+          );
           return;
         }
-        onExit();
+        setQueryState(
+          ge.slice(0, ke) +
+            `
+` +
+            ge.slice(ke),
+        );
+        setCursorOffset(ke + 1);
         return;
       }
-      if (multiline && (_.name === "enter" || (_.ctrl && !_.shift && !_.meta && _.name === "j"))) {
-        _.preventDefault();
-        let insert = cursor.insert(`
+      onExit();
+      return;
+    }
+    if (multiline && (e.name === "enter" || (e.ctrl && !e.shift && !e.meta && e.name === "j"))) {
+      e.preventDefault();
+      let U = cursor.insert(`
 `);
-        (J(insert.text), K(insert.offset));
-        return;
-      }
-      if (_.name === "down") {
-        if ((_.preventDefault(), multiline)) {
-          let down = cursor.down();
-          if (!down.equals(cursor)) {
-            K(down.offset);
-            return;
-          }
-        }
-        if (onExitDown) onExitDown();
-        else if (!multiline) onExit();
-        return;
-      }
-      if (_.name === "up") {
-        if ((_.preventDefault(), multiline)) {
-          let up = cursor.up();
-          if (!up.equals(cursor)) {
-            K(up.offset);
-            return;
-          }
-        }
-        if (onExitUp) onExitUp();
-        return;
-      }
-      if (_.name === "escape") {
-        if ((_.preventDefault(), onCancel)) onCancel();
-        else if (ge.length > 0) (J(""), K(0));
-        else onExit();
-        return;
-      }
-      if (_.name === "backspace") {
-        if ((_.preventDefault(), _.meta || _.ctrl)) {
-          let { cursor: cursor_2, killed: killed } = cursor.backwardKillWord();
-          (ne.dispatch({ type: "kill", text: killed, direction: "prepend" }),
-            J(cursor_2.text),
-            K(cursor_2.offset));
+      setQueryState(U.text);
+      setCursorOffset(U.offset);
+      return;
+    }
+    if (e.name === "down") {
+      e.preventDefault();
+      if (multiline) {
+        let U = cursor.down();
+        if (!U.equals(cursor)) {
+          setCursorOffset(U.offset);
           return;
         }
-        if (ge.length === 0) {
-          if (backspaceExitsOnEmpty) (onCancel ?? onExit)();
+      }
+      if (onExitDown) onExitDown();
+      else if (!multiline) onExit();
+      return;
+    }
+    if (e.name === "up") {
+      e.preventDefault();
+      if (multiline) {
+        let U = cursor.up();
+        if (!U.equals(cursor)) {
+          setCursorOffset(U.offset);
           return;
         }
-        let newCursor = cursor.backspace();
-        (J(newCursor.text), K(newCursor.offset));
+      }
+      if (onExitUp) onExitUp();
+      return;
+    }
+    if (e.name === "escape") {
+      e.preventDefault();
+      if (onCancel) onCancel();
+      else if (ge.length > 0) {
+        setQueryState("");
+        setCursorOffset(0);
+      } else onExit();
+      return;
+    }
+    if (e.name === "backspace") {
+      e.preventDefault();
+      if (e.meta || e.ctrl) {
+        let { cursor: newCursor, killed } = cursor.backwardKillWord();
+        killRing.dispatch({
+          type: "kill",
+          text: killed,
+          direction: "prepend",
+        });
+        setQueryState(newCursor.text);
+        setCursorOffset(newCursor.offset);
         return;
       }
-      if (_.name === "delete") {
-        _.preventDefault();
-        let newCursor = cursor.del();
-        (J(newCursor.text), K(newCursor.offset));
+      if (ge.length === 0) {
+        if (backspaceExitsOnEmpty) (onCancel ?? onExit)();
         return;
       }
-      if (_.name === "left" && (_.ctrl || _.meta || _.fn)) {
-        (_.preventDefault(), K(cursor.backwardWord().offset));
-        return;
-      }
-      if (_.name === "right" && (_.ctrl || _.meta || _.fn)) {
-        (_.preventDefault(), K(cursor.forwardWord().offset));
-        return;
-      }
-      if (_.name === "left") {
-        _.preventDefault();
-        let newCursor = cursor.left();
-        K(newCursor.offset);
-        return;
-      }
-      if (_.name === "right") {
-        _.preventDefault();
-        let newCursor = cursor.right();
-        K(newCursor.offset);
-        return;
-      }
-      if (_.name === "home") {
-        (_.preventDefault(), K(cursor.startOfLine().offset));
-        return;
-      }
-      if (_.name === "end") {
-        (_.preventDefault(), K(cursor.endOfLine().offset));
-        return;
-      }
-      if (_.ctrl) {
-        switch ((_.preventDefault(), _.key.toLowerCase())) {
-          case "a":
-            K(cursor.startOfLogicalLine().offset);
-            return;
-          case "e":
-            K(cursor.endOfLogicalLine().offset);
-            return;
-          case "b":
-            K(cursor.left().offset);
-            return;
-          case "f":
-            K(cursor.right().offset);
-            return;
-          case "d": {
-            if (ge.length === 0) {
-              (onCancel ?? onExit)();
-              return;
-            }
-            let newCursor = cursor.del();
-            (J(newCursor.text), K(newCursor.offset));
+      let newCursor = cursor.backspace();
+      setQueryState(newCursor.text);
+      setCursorOffset(newCursor.offset);
+      return;
+    }
+    if (e.name === "delete") {
+      e.preventDefault();
+      let newCursor = cursor.del();
+      setQueryState(newCursor.text);
+      setCursorOffset(newCursor.offset);
+      return;
+    }
+    if (e.name === "left" && (e.ctrl || e.meta || e.fn)) {
+      e.preventDefault();
+      setCursorOffset(cursor.backwardWord().offset);
+      return;
+    }
+    if (e.name === "right" && (e.ctrl || e.meta || e.fn)) {
+      e.preventDefault();
+      setCursorOffset(cursor.forwardWord().offset);
+      return;
+    }
+    if (e.name === "left") {
+      e.preventDefault();
+      let newCursor = cursor.left();
+      setCursorOffset(newCursor.offset);
+      return;
+    }
+    if (e.name === "right") {
+      e.preventDefault();
+      let newCursor = cursor.right();
+      setCursorOffset(newCursor.offset);
+      return;
+    }
+    if (e.name === "home") {
+      e.preventDefault();
+      setCursorOffset(cursor.startOfLine().offset);
+      return;
+    }
+    if (e.name === "end") {
+      e.preventDefault();
+      setCursorOffset(cursor.endOfLine().offset);
+      return;
+    }
+    if (e.ctrl) {
+      switch ((e.preventDefault(), e.key.toLowerCase())) {
+        case "a":
+          setCursorOffset(cursor.startOfLogicalLine().offset);
+          return;
+        case "e":
+          setCursorOffset(cursor.endOfLogicalLine().offset);
+          return;
+        case "b":
+          setCursorOffset(cursor.left().offset);
+          return;
+        case "f":
+          setCursorOffset(cursor.right().offset);
+          return;
+        case "d": {
+          if (ge.length === 0) {
+            (onCancel ?? onExit)();
             return;
           }
-          case "h": {
-            if (ge.length === 0) {
-              if (backspaceExitsOnEmpty) (onCancel ?? onExit)();
-              return;
-            }
-            let newCursor = cursor.backspace();
-            (J(newCursor.text), K(newCursor.offset));
-            return;
-          }
-          case "k": {
-            let { cursor: newCursor, killed: killed } = cursor.deleteToLineEnd();
-            (ne.dispatch({ type: "kill", text: killed, direction: "append" }),
-              J(newCursor.text),
-              K(newCursor.offset));
-            return;
-          }
-          case "u": {
-            let { cursor: newCursor, killed: killed } = cursor.deleteToLineStart();
-            (ne.dispatch({ type: "kill", text: killed, direction: "prepend" }),
-              J(newCursor.text),
-              K(newCursor.offset));
-            return;
-          }
-          case "w": {
-            let { cursor: cursor_2, killed: killed } = cursor.deleteWORDBefore();
-            (ne.dispatch({ type: "kill", text: killed, direction: "prepend" }),
-              J(cursor_2.text),
-              K(cursor_2.offset));
-            return;
-          }
-          case "y": {
-            let U = egt(ne.state);
-            if (U.length > 0) {
-              let startOffset = cursor.offset,
-                newCursor = cursor.insert(U);
-              (ne.dispatch({ type: "yank", start: startOffset, length: U.length }),
-                J(newCursor.text),
-                K(newCursor.offset));
-            }
-            return;
-          }
-          case "g":
-          case "c":
-            if (onCancel) {
-              onCancel();
-              return;
-            }
+          let newCursor = cursor.del();
+          setQueryState(newCursor.text);
+          setCursorOffset(newCursor.offset);
+          return;
         }
-        return;
-      }
-      if (_.meta) {
-        switch ((_.preventDefault(), _.key.toLowerCase())) {
-          case "b":
-            K(cursor.backwardWord().offset);
-            return;
-          case "f":
-            K(cursor.forwardWord().offset);
-            return;
-          case "d": {
-            let { cursor: cursor_2, killed: killed } = cursor.killWord();
-            (ne.dispatch({ type: "kill", text: killed, direction: "append" }),
-              J(cursor_2.text),
-              K(cursor_2.offset));
+        case "h": {
+          if (ge.length === 0) {
+            if (backspaceExitsOnEmpty) (onCancel ?? onExit)();
             return;
           }
-          case "y": {
-            let U = nextYankPop(ne.state);
-            if (U) {
-              let { text: text, start: start, length: length } = U;
-              ne.dispatch({ type: "yankPop" });
-              let before = ge.slice(0, start),
-                after = ge.slice(start + length),
-                Xe = before + text + after,
-                Ne = start + text.length;
-              (ne.dispatch({ type: "updateYankLength", length: text.length }), J(Xe), K(Ne));
-            }
-            return;
-          }
+          let newCursor = cursor.backspace();
+          setQueryState(newCursor.text);
+          setCursorOffset(newCursor.offset);
+          return;
         }
-        return;
+        case "k": {
+          let { cursor: newCursor, killed } = cursor.deleteToLineEnd();
+          killRing.dispatch({
+            type: "kill",
+            text: killed,
+            direction: "append",
+          });
+          setQueryState(newCursor.text);
+          setCursorOffset(newCursor.offset);
+          return;
+        }
+        case "u": {
+          let { cursor: newCursor, killed } = cursor.deleteToLineStart();
+          killRing.dispatch({
+            type: "kill",
+            text: killed,
+            direction: "prepend",
+          });
+          setQueryState(newCursor.text);
+          setCursorOffset(newCursor.offset);
+          return;
+        }
+        case "w": {
+          let { cursor: newCursor, killed } = cursor.deleteWORDBefore();
+          killRing.dispatch({
+            type: "kill",
+            text: killed,
+            direction: "prepend",
+          });
+          setQueryState(newCursor.text);
+          setCursorOffset(newCursor.offset);
+          return;
+        }
+        case "y": {
+          let text = topOfKillRing(killRing.state);
+          if (text.length > 0) {
+            let startOffset = cursor.offset;
+            let newCursor = cursor.insert(text);
+            killRing.dispatch({
+              type: "yank",
+              start: startOffset,
+              length: text.length,
+            });
+            setQueryState(newCursor.text);
+            setCursorOffset(newCursor.offset);
+          }
+          return;
+        }
+        case "g":
+        case "c":
+          if (onCancel) {
+            onCancel();
+            return;
+          }
       }
-      if (_.name === "tab") {
-        if ((_.preventDefault(), onTabOnEmpty && ge === "")) onTabOnEmpty();
-        return;
+      return;
+    }
+    if (e.meta) {
+      switch ((e.preventDefault(), e.key.toLowerCase())) {
+        case "b":
+          setCursorOffset(cursor.backwardWord().offset);
+          return;
+        case "f":
+          setCursorOffset(cursor.forwardWord().offset);
+          return;
+        case "d": {
+          let { cursor: newCursor, killed } = cursor.killWord();
+          killRing.dispatch({
+            type: "kill",
+            text: killed,
+            direction: "append",
+          });
+          setQueryState(newCursor.text);
+          setCursorOffset(newCursor.offset);
+          return;
+        }
+        case "y": {
+          let popResult = nextYankPop(killRing.state);
+          if (popResult) {
+            let { text, start, length } = popResult;
+            killRing.dispatch({
+              type: "yankPop",
+            });
+            let before = ge.slice(0, start);
+            let after = ge.slice(start + length);
+            let newText = before + text + after;
+            let newOffset = start + text.length;
+            killRing.dispatch({
+              type: "updateYankLength",
+              length: text.length,
+            });
+            setQueryState(newText);
+            setCursorOffset(newOffset);
+          }
+          return;
+        }
       }
-      if (onSpaceOnEmpty && _.key === " " && ge === "") {
-        (_.preventDefault(), onSpaceOnEmpty());
-        return;
-      }
-      if (_.key.length >= 1 && !UNHANDLED_SPECIAL_KEYS.has(_.name)) {
-        _.preventDefault();
-        let newCursor = cursor.insert(_.key);
-        (J(newCursor.text), K(newCursor.offset));
-      }
-    },
-    Ce = honorEditorMode && EDITOR_MODES(),
-    de = useVimInput({
-      value: ae,
-      onChange: J,
-      columns: we,
-      onHistoryUp: onExitUp,
-      onHistoryDown: onExitDown,
-      isActive: Ce && isActive,
-    }),
-    _e = { handleKeyDown: handleKeyDown, offset: X, setOffset: K };
+      return;
+    }
+    if (e.name === "tab") {
+      e.preventDefault();
+      if (onTabOnEmpty && ge === "") onTabOnEmpty();
+      return;
+    }
+    if (onSpaceOnEmpty && e.key === " " && ge === "") {
+      e.preventDefault();
+      onSpaceOnEmpty();
+      return;
+    }
+    if (e.key.length >= 1 && !UNHANDLED_SPECIAL_KEYS.has(e.name)) {
+      e.preventDefault();
+      let newCursor = cursor.insert(e.key);
+      setQueryState(newCursor.text);
+      setCursorOffset(newCursor.offset);
+    }
+  };
+  let Ce = honorEditorMode && EDITOR_MODES();
+  let vimInput = useVimInput({
+    value: ae,
+    onChange: setQueryState,
+    columns: we,
+    onHistoryUp: onExitUp,
+    onHistoryDown: onExitDown,
+    isActive: Ce && isActive,
+  });
+  let _e = {
+    handleKeyDown,
+    offset: X,
+    setOffset: setCursorOffset,
+  };
   return {
     query: ae,
     queryRef: H,
-    setQuery: me,
+    setQuery: setQuery_2,
     cursorOffset: X,
     cursorOffsetRef: D,
     willInsertNewline: se,
-    setCursorOffset: K,
+    setCursorOffset,
     handleKeyDown: (_) => {
       if (!Ce) {
         handleKeyDown(_);
         return;
       }
       if (!isActive) return;
-      if (_.name === "escape" && de.mode === "NORMAL") {
-        (de.handleKeyDown(_, _e), handleKeyDown(_));
+      if (_.name === "escape" && vimInput.mode === "NORMAL") {
+        vimInput.handleKeyDown(_, _e);
+        handleKeyDown(_);
         return;
       }
-      de.handleKeyDown(_, _e);
+      vimInput.handleKeyDown(_, _e);
     },
-    handlePaste: (_) => {
-      if (!isActive || _.text.length === 0) return;
-      (_.preventDefault(), de.cancelPendingRemap());
+    handlePaste: (event) => {
+      if (!isActive || event.text.length === 0) return;
+      event.preventDefault();
+      vimInput.cancelPendingRemap();
       let ge = multiline
-        ? _.text.replace(
+        ? event.text.replace(
             /\r\n|\r/g,
             `
 `,
           )
-        : (_.text.split(/\r\n|\r|\n/, 2)[0] ?? "");
+        : (event.text.split(/\r\n|\r|\n/, 2)[0] ?? "");
       if (ge.length === 0) return;
-      let insert = Cursor.fromText(H.current, we, D.current).insert(ge);
-      (J(insert.text), K(insert.offset));
+      let q = Cursor.fromText(H.current, we, D.current).insert(ge);
+      setQueryState(q.text);
+      setCursorOffset(q.offset);
     },
-    vimMode: Ce ? de.mode : void 0,
+    vimMode: Ce ? vimInput.mode : undefined,
     enterInsertMode: () => {
-      if (Ce) de.setMode("INSERT", _e);
+      if (Ce) vimInput.setMode("INSERT", _e);
     },
   };
 }
-
-export { useSearchInput, isYankKey, ego };
+export { useSearchInput, isYankKey, startsWithPunctuation };

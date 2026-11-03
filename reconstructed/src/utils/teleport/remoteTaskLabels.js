@@ -12,37 +12,58 @@ import { getPlatform as getPlatform_2 } from "../platform.js";
 import { foldPathCase } from "../pathCaseFolding.js";
 
 //@ chunk-s61vbvea.js:475422-475466 placement
-var Xer = "Background task",
-  Jer = "Remote task";
+/**
+ * 后台任务与远程任务的默认标题。
+ */
+var BACKGROUND_TASK_TITLE = "Background task";
+var REMOTE_TASK_TITLE = "Remote task";
 //@ chunk-s61vbvea.js:475466-475539 placement = setCwdState (1)
 function nfcLowerNfc(cwd) {
   return cwd.normalize("NFC").toLowerCase().normalize("NFC");
 }
 //@ chunk-s61vbvea.js:475539-475576 placement
-var EF = /[\u017f\u212a\ufb00-\ufb06]/;
+var SPECIAL_LATIN_RE = /[\u017f\u212a\ufb00-\ufb06]/;
 //@ chunk-s61vbvea.js:475576-475637 placement
-var WSL_MNT_DRIVE_PATTERN = /^\/mnt\/[a-z](?:\/|$)/i,
-  xF = /^\/mnt(?:\/[a-z])?\/?$/i;
+var WSL_MNT_DRIVE_PATTERN = /^\/mnt\/[a-z](?:\/|$)/i;
+var WSL_MNT_ROOT_RE = /^\/mnt(?:\/[a-z])?\/?$/i;
 //@ chunk-s61vbvea.js:475637-475683 placement = execTmux (1)
 function isWslMntRoot(e) {
-  return getPlatform_2() === "wsl" && xF.test(e);
+  return getPlatform_2() === "wsl" && WSL_MNT_ROOT_RE.test(e);
 }
 //@ chunk-s61vbvea.js:475804-475838 placement
-function ati(e) {
-  return EF.test(e);
+/**
+ * 是否含特殊拉丁字母（ſ、K、ff 连字）。
+ */
+function hasSpecialLatinLetter(e) {
+  return SPECIAL_LATIN_RE.test(e);
 }
 //@ chunk-s61vbvea.js:475838-475919 placement
-var aw = /\p{Default_Ignorable_Code_Point}/gu,
-  regExp_10 = new RegExp(`(${aw.source}+)`, "u");
+var DEFAULT_IGNORABLE_RE = /\p{Default_Ignorable_Code_Point}/gu;
+var regExp_10 = new RegExp(`(${DEFAULT_IGNORABLE_RE.source}+)`, "u");
 //@ chunk-s61vbvea.js:476087-476185 placement
-function lti(e) {
+/**
+ * 折叠路径大小写但保留默认可忽略字符。
+ */
+function foldPathCaseKeepingIgnorables(e) {
   let parts = e.split(regExp_10);
   return parts.length === 1 ? null : parts.map((r, s) => (s % 2 === 1 ? r : foldPathCase(r))).join("");
 }
 //@ chunk-s61vbvea.js:476185-476278 placement
-function dti(e) {
+/**
+ * 列出路径的各级父目录。
+ */
+function parentDirsOf(e) {
   let parts = e.split("/");
   return parts.slice(0, -1).map((r, s) => parts.slice(0, s + 1).join("/"));
 }
-
-export { Xer, Jer, nfcLowerNfc, dti, ati, lti, WSL_MNT_DRIVE_PATTERN, aw, isWslMntRoot };
+export {
+  BACKGROUND_TASK_TITLE,
+  REMOTE_TASK_TITLE,
+  nfcLowerNfc,
+  parentDirsOf,
+  hasSpecialLatinLetter,
+  foldPathCaseKeepingIgnorables,
+  WSL_MNT_DRIVE_PATTERN,
+  DEFAULT_IGNORABLE_RE,
+  isWslMntRoot,
+};

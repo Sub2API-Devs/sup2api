@@ -5,30 +5,38 @@
  * pieces: chunk-hwmsct5x.js (1)
  * attribution: esm-fingerprint 1
  */
-import { Y } from "../../../core/resource.mjs";
+import { APIResource } from "../../../core/resource.mjs";
 import { I } from "../../../internal/utils/path.mjs";
-import { ee } from "../../../core/pagination.mjs";
+import { TokenPage } from "../../../core/pagination.mjs";
 
 //@ chunk-hwmsct5x.js:119673-120284 esm-fingerprint
-class to extends Y {
-  create(e, n) {
-    return this._client.post("/v1/organizations/external_keys?beta=true", { body: e, ...n });
+class ExternalKeys extends APIResource {
+  create(body, options) {
+    return this._client.post("/v1/organizations/external_keys?beta=true", {
+      body,
+      ...options,
+    });
   }
-  retrieve(e, n) {
-    return this._client.get(I`/v1/organizations/external_keys/${e}?beta=true`, n);
+  retrieve(externalKeyID, options) {
+    return this._client.get(I`/v1/organizations/external_keys/${externalKeyID}?beta=true`, options);
   }
-  update(e, n, r) {
-    return this._client.post(I`/v1/organizations/external_keys/${e}?beta=true`, { body: n, ...r });
+  update(externalKeyID, body, options) {
+    return this._client.post(I`/v1/organizations/external_keys/${externalKeyID}?beta=true`, {
+      body,
+      ...options,
+    });
   }
-  list(e = {}, n) {
-    return this._client.getAPIList("/v1/organizations/external_keys?beta=true", ee, { query: e, ...n });
+  list(query = {}, options) {
+    return this._client.getAPIList("/v1/organizations/external_keys?beta=true", TokenPage, {
+      query,
+      ...options,
+    });
   }
-  delete(e, n) {
-    return this._client.delete(I`/v1/organizations/external_keys/${e}?beta=true`, n);
+  delete(externalKeyID, options) {
+    return this._client.delete(I`/v1/organizations/external_keys/${externalKeyID}?beta=true`, options);
   }
-  validate(e, n) {
-    return this._client.post(I`/v1/organizations/external_keys/${e}/validate?beta=true`, n);
+  validate(externalKeyID, options) {
+    return this._client.post(I`/v1/organizations/external_keys/${externalKeyID}/validate?beta=true`, options);
   }
 }
-
-export { to };
+export { ExternalKeys };

@@ -8,87 +8,106 @@
 import { x, importMetaRequire } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-spjgqa4y.js:43714-45541 cjs-fingerprint
-var dn = x(function (ye, cn) {
-  var ok = importMetaRequire("assert").ok,
-    R = importMetaRequire("zlib"),
-    an = importMetaRequire("util"),
-    kMaxLength = importMetaRequire("buffer").kMaxLength;
-  function v(t) {
-    if (!(this instanceof v)) return new v(t);
-    if (t && t.chunkSize < R.Z_MIN_CHUNK) t.chunkSize = R.Z_MIN_CHUNK;
-    if (
-      (R.Inflate.call(this, t),
-      (this._offset = this._offset === void 0 ? this._outOffset : this._offset),
-      (this._buffer = this._buffer || this._outBuffer),
-      t && t.maxLength != null)
-    )
-      this._maxLength = t.maxLength;
+var require_sync_inflate = x(function (cjsExports, cjsModule) {
+  var assert = importMetaRequire("assert").ok;
+  var zlib = importMetaRequire("zlib");
+  var util = importMetaRequire("util");
+  var kMaxLength = importMetaRequire("buffer").kMaxLength;
+  function Inflate(opts) {
+    if (!(this instanceof Inflate)) return new Inflate(opts);
+    if (opts && opts.chunkSize < zlib.Z_MIN_CHUNK) opts.chunkSize = zlib.Z_MIN_CHUNK;
+    zlib.Inflate.call(this, opts);
+    this._offset = this._offset === undefined ? this._outOffset : this._offset;
+    this._buffer = this._buffer || this._outBuffer;
+    if (opts && opts.maxLength != null) this._maxLength = opts.maxLength;
   }
-  function us(t) {
-    return new v(t);
+  function createInflate(opts) {
+    return new Inflate(opts);
   }
-  function fn(t, e) {
-    if (e) process.nextTick(e);
-    if (!t._handle) return;
-    (t._handle.close(), (t._handle = null));
+  function _close(engine, callback) {
+    if (callback) process.nextTick(callback);
+    if (!engine._handle) return;
+    engine._handle.close();
+    engine._handle = null;
   }
-  v.prototype._processChunk = function (t, e, r) {
-    if (typeof r === "function") return R.Inflate._processChunk.call(this, t, e, r);
-    let n = this,
-      i = t && t.length,
-      o = this._chunkSize - this._offset,
-      _maxLength = this._maxLength,
-      l = 0,
-      u = [],
-      f = 0,
-      a;
-    this.on("error", function (_) {
-      a = _;
+  Inflate.prototype._processChunk = function (chunk, flushFlag, asyncCb) {
+    if (typeof asyncCb === "function")
+      return zlib.Inflate._processChunk.call(this, chunk, flushFlag, asyncCb);
+    let n = this;
+    let availInBefore = chunk && chunk.length;
+    let availOutBefore = this._chunkSize - this._offset;
+    let leftToInflate = this._maxLength;
+    let inOff = 0;
+    let buffers = [];
+    let nread = 0;
+    let error;
+    this.on("error", function (err) {
+      error = err;
     });
-    function h(_, w) {
+    function handleChunk(availInAfter, availOutAfter) {
       if (n._hadError) return;
-      let m = o - w;
-      if ((ok(m >= 0, "have should not go down"), m > 0)) {
-        let sliced = n._buffer.slice(n._offset, n._offset + m);
-        if (((n._offset += m), sliced.length > _maxLength)) sliced = sliced.slice(0, _maxLength);
-        if ((u.push(sliced), (f += sliced.length), (_maxLength -= sliced.length), _maxLength === 0))
-          return !1;
+      let have = availOutBefore - availOutAfter;
+      assert(have >= 0, "have should not go down");
+      if (have > 0) {
+        let out = n._buffer.slice(n._offset, n._offset + have);
+        n._offset += have;
+        if (out.length > leftToInflate) out = out.slice(0, leftToInflate);
+        buffers.push(out);
+        nread += out.length;
+        leftToInflate -= out.length;
+        if (leftToInflate === 0) return false;
       }
-      if (w === 0 || n._offset >= n._chunkSize)
-        ((o = n._chunkSize), (n._offset = 0), (n._buffer = Buffer.allocUnsafe(n._chunkSize)));
-      if (w === 0) return ((l += i - _), (i = _), !0);
-      return !1;
+      if (availOutAfter === 0 || n._offset >= n._chunkSize) {
+        availOutBefore = n._chunkSize;
+        n._offset = 0;
+        n._buffer = Buffer.allocUnsafe(n._chunkSize);
+      }
+      if (availOutAfter === 0) {
+        inOff += availInBefore - availInAfter;
+        availInBefore = availInAfter;
+        return true;
+      }
+      return false;
     }
-    ok(this._handle, "zlib binding closed");
-    let c;
-    do ((c = this._handle.writeSync(e, t, l, i, this._buffer, this._offset, o)), (c = c || this._writeState));
-    while (!this._hadError && h(c[0], c[1]));
-    if (this._hadError) throw a;
-    if (f >= kMaxLength)
-      throw (
-        fn(this),
-        RangeError(
-          "Cannot create final Buffer. It would be larger than 0x" + kMaxLength.toString(16) + " bytes",
-        )
+    assert(this._handle, "zlib binding closed");
+    let res;
+    do {
+      res = this._handle.writeSync(
+        flushFlag,
+        chunk,
+        inOff,
+        availInBefore,
+        this._buffer,
+        this._offset,
+        availOutBefore,
       );
-    let buffer = Buffer.concat(u, f);
-    return (fn(this), buffer);
+      res = res || this._writeState;
+    } while (!this._hadError && handleChunk(res[0], res[1]));
+    if (this._hadError) throw error;
+    if (nread >= kMaxLength) {
+      _close(this);
+      throw RangeError(
+        "Cannot create final Buffer. It would be larger than 0x" + kMaxLength.toString(16) + " bytes",
+      );
+    }
+    let buf = Buffer.concat(buffers, nread);
+    _close(this);
+    return buf;
   };
-  an.inherits(v, R.Inflate);
-  function fs(t, e) {
-    if (typeof e === "string") e = Buffer.from(e);
-    if (!(e instanceof Buffer)) throw TypeError("Not a string or buffer");
-    let _finishFlushFlag = t._finishFlushFlag;
-    if (_finishFlushFlag == null) _finishFlushFlag = R.Z_FINISH;
-    return t._processChunk(e, _finishFlushFlag);
+  util.inherits(Inflate, zlib.Inflate);
+  function zlibBufferSync(engine, buffer) {
+    if (typeof buffer === "string") buffer = Buffer.from(buffer);
+    if (!(buffer instanceof Buffer)) throw TypeError("Not a string or buffer");
+    let flushFlag = engine._finishFlushFlag;
+    if (flushFlag == null) flushFlag = zlib.Z_FINISH;
+    return engine._processChunk(buffer, flushFlag);
   }
-  function hn(t, e) {
-    return fs(new v(e), t);
+  function inflateSync(buffer, opts) {
+    return zlibBufferSync(new Inflate(opts), buffer);
   }
-  cn.exports = ye = hn;
-  ye.Inflate = v;
-  ye.createInflate = us;
-  ye.inflateSync = hn;
+  cjsModule.exports = cjsExports = inflateSync;
+  cjsExports.Inflate = Inflate;
+  cjsExports.createInflate = createInflate;
+  cjsExports.inflateSync = inflateSync;
 });
-
-export { dn };
+export { require_sync_inflate };

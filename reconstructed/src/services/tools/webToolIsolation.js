@@ -18,10 +18,10 @@ import {
 } from "../policyLimits/policyEvidence.js";
 import { normalizeNameForMCP, findServersByName } from "../mcp/normalization.js";
 import {
-  WIt,
+  officeBridgeState,
   mcpServerIdHeader,
   CLAUDE_AI,
-  qPn,
+  MEMORY_SERVER_ID,
   WIDGETS,
   WIDGETS_SERVER_ID,
   REMOTE_DEVICES,
@@ -73,29 +73,43 @@ import { SEARCH_MCP_REGISTRY_TOOL_NAME as SEARCH_MCP_REGISTRY_TOOL_NAME_2 } from
 import { TASKSTOP } from "../../tools/TaskStopTool/prompt.js";
 
 //@ chunk-e6aww6q8.js:3900640-3900692 placement
-var PLACES_SEARCH = "places_search",
-  PLACES_MAP_DISPLAY_V0 = "places_map_display_v0";
+var PLACES_SEARCH = "places_search";
+var PLACES_MAP_DISPLAY_V0 = "places_map_display_v0";
 //@ chunk-e6aww6q8.js:3900692-3900762 placement
-var ENFORCE_WEB_SEARCH_MCP_ISOLATION = "enforce_web_search_mcp_isolation",
-  TENGU_DOORBELL_AGAVE = "tengu_doorbell_agave";
+var ENFORCE_WEB_SEARCH_MCP_ISOLATION = "enforce_web_search_mcp_isolation";
+var TENGU_DOORBELL_AGAVE = "tengu_doorbell_agave";
 //@ chunk-e6aww6q8.js:3900762-3900825 placement
-function _tt(e = null, n) {
+/**
+ * 创建隔离闩锁：当前值与变更回调。
+ */
+function createIsolationLatch(e = null, n) {
   if (e) n?.(e);
-  return { current: e, onLatch: n };
+  return {
+    current: e,
+    onLatch: n,
+  };
 }
 //@ chunk-e6aww6q8.js:3900825-3900894 placement
-function A$n() {
-  let { value: e, source: source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE(TENGU_DOORBELL_AGAVE, !0);
-  return e === !1 && isServedFeatureSource(source);
+/**
+ * 判断开关 tengu_doorbell_agave 是否被服务端强制关闭。
+ */
+function isDoorbellAgaveForcedOff() {
+  let { value: e, source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE(TENGU_DOORBELL_AGAVE, true);
+  return e === false && isServedFeatureSource(source);
 }
 //@ chunk-e6aww6q8.js:3900894-3900932 placement
-function x$n() {
-  return !A$n() && isPolicyEnforcedOrHintedByRefusedCache(ENFORCE_WEB_SEARCH_MCP_ISOLATION);
+/**
+ * 开关未关且策略要求强制隔离 web 搜索/抓取。
+ */
+function isWebSearchIsolationEnforced() {
+  return (
+    !isDoorbellAgaveForcedOff() && isPolicyEnforcedOrHintedByRefusedCache(ENFORCE_WEB_SEARCH_MCP_ISOLATION)
+  );
 }
+//@ chunk-e6aww6q8.js:3900932-3901038 placement
 /**
  * 默认豁免的 MCP 服务器名（cowork、workspace、plugins、ide 等）。
  */
-//@ chunk-e6aww6q8.js:3900932-3901038 placement
 var DEFAULT_EXEMPT_SERVERS = [
   "cowork",
   "workspace",
@@ -106,86 +120,99 @@ var DEFAULT_EXEMPT_SERVERS = [
   "dispatch",
   "ide",
 ];
+//@ chunk-e6aww6q8.js:3901038-3901185 placement
 /**
  * 把额外服务器名（规整后）加入配置的豁免服务器列表（默认列表起步，去重）。
  */
-//@ chunk-e6aww6q8.js:3901038-3901185 placement
-function addExemptServers(e, n) {
-  if (n.length === 0) return;
-  let r = [...(e.exemptServers ?? DEFAULT_EXEMPT_SERVERS)];
-  for (let s of n) {
+function addExemptServers(isolationLatch, webSearchIsolationExemptMcpServers) {
+  if (webSearchIsolationExemptMcpServers.length === 0) return;
+  let r = [...(isolationLatch.exemptServers ?? DEFAULT_EXEMPT_SERVERS)];
+  for (let s of webSearchIsolationExemptMcpServers) {
     let h = normalizeNameForMCP(s);
     if (!r.includes(h)) r.push(h);
   }
-  e.exemptServers = r;
+  isolationLatch.exemptServers = r;
 }
 //@ chunk-e6aww6q8.js:3901185-3902123 placement
-var WEB_TOOL_DISPLAY_TYPES = new Set(["web_fetch", "web_search"]),
-  P$n = [
-    "product_carousel_display_v0",
-    "featured_card_display_v0",
-    "places_list_display_v0",
-    "recipe_display_v0",
-  ],
-  h5r = new Set(["image_search", "web_search", "web_search_fast", "web_fetch", "us_election_info", ...P$n]),
-  y5r = new Set([
-    "image_annotation",
-    "generate_image",
-    "conversation_search",
-    "recent_chats",
-    "read_conversation",
-    "end_conversation",
-    "welfare_tool",
-    "enterprise_analytics",
-    "current_time",
-    "approximate_location",
-    "show_plan_tip",
-    "read_research_report",
-  ]),
-  _5r = new Set(P$n),
-  S5r = new Set([
-    "weather_fetch",
-    PLACES_SEARCH,
-    PLACES_MAP_DISPLAY_V0,
-    "fetch_sports_data",
-    "comparison_card_display_v0",
-    "options_card_display_v0",
-    "step_card_display_v0",
-    "itinerary_display_v0",
-    "link_preview_display_v0",
-    "message_compose_v1",
-    "quiz_display_v0",
-    "translation_display_v0",
-    "chart_display_v0",
-    "offer_next_step_v0",
-    "offer_schedule_v0",
-    "starter_tasks_display_v0",
-    "claude_code_install_display_v0",
-    "approved_connectors_display_v0",
-    "role_select_display_v0",
-  ]);
+/**
+ * 隔离分类用的工具名集合：卡片展示工具、需隔离的 web 工具、非 web 的 Anthropic 工具与其他展示工具。
+ */
+var WEB_TOOL_DISPLAY_TYPES = new Set(["web_fetch", "web_search"]);
+var WEB_CARD_DISPLAY_TOOLS = [
+  "product_carousel_display_v0",
+  "featured_card_display_v0",
+  "places_list_display_v0",
+  "recipe_display_v0",
+];
+var WEB_ISOLATED_TOOL_NAMES = new Set([
+  "image_search",
+  "web_search",
+  "web_search_fast",
+  "web_fetch",
+  "us_election_info",
+  ...WEB_CARD_DISPLAY_TOOLS,
+]);
+var NON_WEB_ANTHROPIC_TOOL_NAMES = new Set([
+  "image_annotation",
+  "generate_image",
+  "conversation_search",
+  "recent_chats",
+  "read_conversation",
+  "end_conversation",
+  "welfare_tool",
+  "enterprise_analytics",
+  "current_time",
+  "approximate_location",
+  "show_plan_tip",
+  "read_research_report",
+]);
+var WEB_CARD_TOOL_SET = new Set(WEB_CARD_DISPLAY_TOOLS);
+var OTHER_DISPLAY_TOOL_NAMES = new Set([
+  "weather_fetch",
+  PLACES_SEARCH,
+  PLACES_MAP_DISPLAY_V0,
+  "fetch_sports_data",
+  "comparison_card_display_v0",
+  "options_card_display_v0",
+  "step_card_display_v0",
+  "itinerary_display_v0",
+  "link_preview_display_v0",
+  "message_compose_v1",
+  "quiz_display_v0",
+  "translation_display_v0",
+  "chart_display_v0",
+  "offer_next_step_v0",
+  "offer_schedule_v0",
+  "starter_tasks_display_v0",
+  "claude_code_install_display_v0",
+  "approved_connectors_display_v0",
+  "role_select_display_v0",
+]);
 //@ chunk-e6aww6q8.js:3902123-3902171 placement
-function M$n(e) {
-  return e && WIt.peek(e)?.read?.();
+/**
+ * 读取会话级隔离闩锁。
+ */
+function readSessionIsolationLatch(e) {
+  return e && officeBridgeState.peek(e)?.read?.();
 }
 //@ chunk-e6aww6q8.js:3902171-3902351 placement
 function isDynamicHttpServerMatch(e, n, r, s, h) {
   return (
     e?.some((y) => {
-      if (y.name !== r || y.config.scope !== "dynamic" || y.config.type !== "http") return !1;
+      if (y.name !== r || y.config.scope !== "dynamic" || y.config.type !== "http") return false;
       let S = mcpServerIdHeader(y.config) ?? n?.[r];
-      return S === void 0 ? h : S === s;
-    }) ?? !1
+      return S === undefined ? h : S === s;
+    }) ?? false
   );
 }
+//@ chunk-e6aww6q8.js:3902351-3902606 placement
 /**
  * 判断各类服务器是否按预期配置：claude.ai 与 widgets 动态 HTTP 服务器、远程浏览器服务器（远程会话且策略允许）。
  */
-//@ chunk-e6aww6q8.js:3902351-3902606 placement
 function getIsolationServerFlags(e, n) {
   return {
-    claudeAi: isDynamicHttpServerMatch(e, n, CLAUDE_AI, qPn, !0),
-    widgets: env.CLAUDE_CODE_REMOTE && isDynamicHttpServerMatch(e, n, WIDGETS, WIDGETS_SERVER_ID, !1),
+    claudeAi: isDynamicHttpServerMatch(e, n, CLAUDE_AI, MEMORY_SERVER_ID, true),
+    widgets: env.CLAUDE_CODE_REMOTE && isDynamicHttpServerMatch(e, n, WIDGETS, WIDGETS_SERVER_ID, false),
     remoteBrowser:
       env.CLAUDE_CODE_REMOTE &&
       (e ?? []).some((r) => r.name === REMOTE_BROWSER_SERVER_NAME) &&
@@ -198,15 +225,15 @@ function getIsolationServerFlags(e, n) {
   };
 }
 //@ chunk-e6aww6q8.js:3902606-3902827 placement
-var CHROME_SERVER_NAME_RE = /^claude[-_](?:for|in)[-_]chrome$/i,
-  BROWSER_MCP_SERVER_NAMES = new Set(["Claude_Preview", "Claude_Browser"]),
-  REMOTE_BROWSER_TOOL_PREFIXES = ["Claude_Browser__", "claude-in-chrome__", "Claude_in_Chrome__"],
-  WEB_WITHOUT_LATCHING = "web-without-latching",
-  LAUNCH_EXTENDED_SEARCH_TASK = "launch_extended_search_task";
+var CHROME_SERVER_NAME_RE = /^claude[-_](?:for|in)[-_]chrome$/i;
+var BROWSER_MCP_SERVER_NAMES = new Set(["Claude_Preview", "Claude_Browser"]);
+var REMOTE_BROWSER_TOOL_PREFIXES = ["Claude_Browser__", "claude-in-chrome__", "Claude_in_Chrome__"];
+var WEB_WITHOUT_LATCHING = "web-without-latching";
+var LAUNCH_EXTENDED_SEARCH_TASK = "launch_extended_search_task";
+//@ chunk-e6aww6q8.js:3902827-3903460 placement
 /**
  * 把工具调用归为 Web 或连接器类别以实现隔离：Web 搜索/抓取、浏览器服务器、claude.ai/widgets 的网页工具为 web；资源读取与非豁免服务器为 connectors；不涉及返回 null。
  */
-//@ chunk-e6aww6q8.js:3902827-3903460 placement
 function classifyIsolationKind(toolName, serverName, exemptServers, flags) {
   if (toolName === WEBSEARCH || toolName === WEBFETCH) return "web";
   if (
@@ -215,11 +242,11 @@ function classifyIsolationKind(toolName, serverName, exemptServers, flags) {
     toolName === LISTMCPRESOURCESTOOL
   )
     return "connectors";
-  if (toolName === REFRESH_MCP_TOOLS_TOOL_NAME && serverName === void 0) return null;
+  if (toolName === REFRESH_MCP_TOOLS_TOOL_NAME && serverName === undefined) return null;
   if (serverName) {
-    let normalizedServer = normalizeNameForMCP(serverName),
-      included = exemptServers.includes(normalizedServer),
-      bareToolName = mcpInfoFromString(toolName)?.toolName ?? toolName;
+    let normalizedServer = normalizeNameForMCP(serverName);
+    let included = exemptServers.includes(normalizedServer);
+    let bareToolName = mcpInfoFromString(toolName)?.toolName ?? toolName;
     if (
       CHROME_SERVER_NAME_RE.test(normalizedServer) ||
       BROWSER_MCP_SERVER_NAMES.has(normalizedServer) ||
@@ -231,14 +258,14 @@ function classifyIsolationKind(toolName, serverName, exemptServers, flags) {
     if (flags.remoteBrowser && normalizedServer === REMOTE_BROWSER_SERVER_NAME) return "web";
     if (flags.claudeAi && normalizedServer === CLAUDE_AI) {
       if (toolName === REFRESH_MCP_TOOLS_TOOL_NAME) return null;
-      if (h5r.has(bareToolName)) return "web";
-      if (y5r.has(bareToolName)) return null;
+      if (WEB_ISOLATED_TOOL_NAMES.has(bareToolName)) return "web";
+      if (NON_WEB_ANTHROPIC_TOOL_NAMES.has(bareToolName)) return null;
       if (bareToolName === LAUNCH_EXTENDED_SEARCH_TASK) return WEB_WITHOUT_LATCHING;
     }
     if (flags.widgets && normalizedServer === WIDGETS) {
       if (toolName === REFRESH_MCP_TOOLS_TOOL_NAME) return null;
-      if (_5r.has(bareToolName)) return "web";
-      if (S5r.has(bareToolName)) return null;
+      if (WEB_CARD_TOOL_SET.has(bareToolName)) return "web";
+      if (OTHER_DISPLAY_TOOL_NAMES.has(bareToolName)) return null;
     }
     if (included && WEB_TOOL_DISPLAY_TYPES.has(bareToolName)) return "web";
     if (!included) return "connectors";
@@ -246,11 +273,22 @@ function classifyIsolationKind(toolName, serverName, exemptServers, flags) {
   return null;
 }
 //@ chunk-e6aww6q8.js:3903460-3903516 placement
-function P5r(e, n = DEFAULT_EXEMPT_SERVERS, r = getMcpClientsFromAccessor(), s) {
-  return O$n(e, n, getIsolationServerFlags(r, s));
+/**
+ * 按默认豁免与 MCP 客户端分类工具的隔离类型。
+ */
+function classifyToolIsolation(
+  e,
+  exemptServers = DEFAULT_EXEMPT_SERVERS,
+  r = getMcpClientsFromAccessor(),
+  sessionIsolationLatch,
+) {
+  return classifyToolIsolationWithFlags(e, exemptServers, getIsolationServerFlags(r, sessionIsolationLatch));
 }
 //@ chunk-e6aww6q8.js:3903516-3903609 placement
-function O$n(e, n, r) {
+/**
+ * 以多入口别名与远端浏览器标志做隔离分类。
+ */
+function classifyToolIsolationWithFlags(e, n, r) {
   return classifyIsolationKind(
     isMultiEntryAliasTool(e) ? e.underlyingV1ToolName : e.name,
     getMcpServerNameOfTool(e),
@@ -259,56 +297,75 @@ function O$n(e, n, r) {
   );
 }
 //@ chunk-e6aww6q8.js:3903609-3903743 placement
-function withRemoteBrowserFlag(e, n) {
+function withRemoteBrowserFlag(e, mcpInfo) {
   return e.remoteBrowser &&
-    !(n?.serverName === REMOTE_BROWSER_SERVER_NAME && n.serverType === "http" && n.scope === "dynamic")
-    ? { ...e, remoteBrowser: !1 }
+    !(
+      mcpInfo?.serverName === REMOTE_BROWSER_SERVER_NAME &&
+      mcpInfo.serverType === "http" &&
+      mcpInfo.scope === "dynamic"
+    )
+    ? {
+        ...e,
+        remoteBrowser: false,
+      }
     : e;
 }
+//@ chunk-e6aww6q8.js:3903743-3904363 placement
 /**
  * 扫描历史助手消息中的工具调用，找出第一个使隔离锁定为 web 或 connectors 的类别；策略未要求隔离时返回 null。
  */
-//@ chunk-e6aww6q8.js:3903743-3904363 placement
-function findIsolationLatchFromHistory(e, n, r = DEFAULT_EXEMPT_SERVERS, s = getMcpClientsFromAccessor(), h) {
+function findIsolationLatchFromHistory(
+  e,
+  combinedInitialTools,
+  r = DEFAULT_EXEMPT_SERVERS,
+  s = getMcpClientsFromAccessor(),
+  session,
+) {
   if (
-    A$n() ||
+    isDoorbellAgaveForcedOff() ||
     !isPolicyLimitsEligible() ||
     (isSessionVerdictFromServerFetch() &&
       !isPolicyEnforcedOrHintedByRefusedCache(ENFORCE_WEB_SEARCH_MCP_ISOLATION))
   )
     return null;
-  let toolsByName = new Map(n.map((L) => [L.name, L])),
-    sessionLatch = M$n(h),
-    flags = { ...getIsolationServerFlags(s, sessionLatch), remoteBrowser: !1 };
+  let toolsByName = new Map(combinedInitialTools.map((L) => [L.name, L]));
+  let sessionLatch = readSessionIsolationLatch(session);
+  let flags = {
+    ...getIsolationServerFlags(s, sessionLatch),
+    remoteBrowser: false,
+  };
   for (let L of e) {
     if (L.type !== "assistant") continue;
-    let G = L.message?.content;
-    if (!Array.isArray(G)) continue;
-    for (let q of G) {
+    let content = L.message?.content;
+    if (!Array.isArray(content)) continue;
+    for (let q of content) {
       if (q === null || typeof q !== "object" || q.type !== "tool_use" || typeof q.name !== "string")
         continue;
-      let Z = toolsByName.get(q.name),
-        Se = q.name === REFRESH_MCP_TOOLS_TOOL_NAME ? parseRefreshToolsInput(q.input) : void 0,
-        ke = void 0,
-        we = ke
-          ? classifyIsolationKind(SKILL, ke, r, flags) === "connectors"
-            ? "connectors"
+      let Z = toolsByName.get(q.name);
+      let Se = q.name === REFRESH_MCP_TOOLS_TOOL_NAME ? parseRefreshToolsInput(q.input) : undefined;
+      let ke = undefined;
+      let we = ke
+        ? classifyIsolationKind(SKILL, ke, r, flags) === "connectors"
+          ? "connectors"
+          : null
+        : Se
+          ? Se.kind === "named"
+            ? classifyIsolationKind(REFRESH_MCP_TOOLS_TOOL_NAME, Se.server, r, flags)
             : null
-          : Se
-            ? Se.kind === "named"
-              ? classifyIsolationKind(REFRESH_MCP_TOOLS_TOOL_NAME, Se.server, r, flags)
-              : null
-            : Z
-              ? O$n(Z, r, flags)
-              : classifyIsolationKind(q.name, F5r(q.name, r), r, flags);
+          : Z
+            ? classifyToolIsolationWithFlags(Z, r, flags)
+            : classifyIsolationKind(q.name, mcpServerNameForTool(q.name, r), r, flags);
       if (we !== null && we !== WEB_WITHOUT_LATCHING) return we;
     }
   }
   return null;
 }
 //@ chunk-e6aww6q8.js:3904363-3904462 placement
-function F5r(e, n) {
-  let mapped = parseMcpToolNameCandidates(e).map((s) => s.serverName);
+/**
+ * 从工具名候选中取未豁免的 MCP 服务器名。
+ */
+function mcpServerNameForTool(name, n) {
+  let mapped = parseMcpToolNameCandidates(name).map((s) => s.serverName);
   return mapped.find((s) => !n.includes(normalizeNameForMCP(s))) ?? mapped[0];
 }
 //@ chunk-e6aww6q8.js:3904462-3905010 placement
@@ -318,114 +375,172 @@ function WEB_TOOLS_UNAVAILABLE_MESSAGES(e) {
     : "Web search, web fetch, and browser tools are unavailable in this session under your organization's web search / connector isolation policy. Do not attempt to reach any external URL via another tool (curl, bash, the browser, or otherwise) \u2014 this policy blocks all outbound web access while connector data is in context. Start a new session to use web tools.";
 }
 //@ chunk-e6aww6q8.js:3905010-3905072 placement
-var I$n = { denyMessage: null, classifiedAs: null, activeLatch: null };
+/**
+ * 无隔离时的默认结果（无拒绝消息、无分类、无闩锁）。
+ */
+var EMPTY_ISOLATION_RESULT = {
+  denyMessage: null,
+  classifiedAs: null,
+  activeLatch: null,
+};
 //@ chunk-e6aww6q8.js:3905072-3905318 placement
 function parseRefreshToolsInput(e) {
-  if (e === null || typeof e !== "object" || Array.isArray(e)) return { kind: "malformed" };
-  let n = "server" in e ? e.server : void 0;
-  if (n === void 0 || n === "") return { kind: "all" };
-  if (typeof n !== "string") return { kind: "malformed" };
-  return { kind: "named", server: n };
+  if (e === null || typeof e !== "object" || Array.isArray(e))
+    return {
+      kind: "malformed",
+    };
+  let server = "server" in e ? e.server : undefined;
+  if (server === undefined || server === "")
+    return {
+      kind: "all",
+    };
+  if (typeof server !== "string")
+    return {
+      kind: "malformed",
+    };
+  return {
+    kind: "named",
+    server,
+  };
 }
+//@ chunk-e6aww6q8.js:3905318-3905745 placement
 /**
  * 判断刷新 MCP 工具调用的隔离类别：指定服务器时按该服务器；刷新全部时任一连接器服务器即为 connectors，否则有网页服务器为 web。
  */
-//@ chunk-e6aww6q8.js:3905318-3905745 placement
-function classifyRefreshToolsCall(e, n, r, s = DEFAULT_EXEMPT_SERVERS) {
-  let h = n ?? getMcpClientsFromAccessor(),
-    y = getIsolationServerFlags(h, r),
-    S = parseRefreshToolsInput(e);
-  if (S.kind === "malformed") return null;
-  if (S.kind === "named") {
-    if (h !== void 0) {
-      if (findServersByName(h, S.server).filter((G) => G.type === "connected").length === 0) return null;
+function classifyRefreshToolsCall(
+  e,
+  mcpClients,
+  sessionIsolationLatch,
+  exemptServers = DEFAULT_EXEMPT_SERVERS,
+) {
+  let h = mcpClients ?? getMcpClientsFromAccessor();
+  let isolationServerFlags = getIsolationServerFlags(h, sessionIsolationLatch);
+  let refreshToolsInput = parseRefreshToolsInput(e);
+  if (refreshToolsInput.kind === "malformed") return null;
+  if (refreshToolsInput.kind === "named") {
+    if (h !== undefined) {
+      if (findServersByName(h, refreshToolsInput.server).filter((G) => G.type === "connected").length === 0)
+        return null;
     }
-    return classifyIsolationKind(REFRESH_MCP_TOOLS_TOOL_NAME, S.server, s, y);
+    return classifyIsolationKind(
+      REFRESH_MCP_TOOLS_TOOL_NAME,
+      refreshToolsInput.server,
+      exemptServers,
+      isolationServerFlags,
+    );
   }
-  if (h === void 0) return "connectors";
-  let w = !1;
+  if (h === undefined) return "connectors";
+  let w = false;
   for (let L of h) {
     if (L.type !== "connected") continue;
-    let G = classifyIsolationKind(REFRESH_MCP_TOOLS_TOOL_NAME, L.name, s, y);
+    let G = classifyIsolationKind(REFRESH_MCP_TOOLS_TOOL_NAME, L.name, exemptServers, isolationServerFlags);
     if (G === "connectors") return "connectors";
-    if (G === "web") w = !0;
+    if (G === "web") w = true;
   }
   return w ? "web" : null;
 }
+//@ chunk-e6aww6q8.js:3905745-3905964 placement
 /**
  * 检查工具调用是否违反 Web/连接器隔离：按工具归类后与当前锁定比较。
  */
-//@ chunk-e6aww6q8.js:3905745-3905964 placement
 function checkWebIsolation(e, n, r) {
   let isolationLatch = n.isolationLatch;
-  if (!isolationLatch || !x$n()) return I$n;
-  let h = M$n(n.session),
-    y =
-      e.name === REFRESH_MCP_TOOLS_TOOL_NAME
-        ? classifyRefreshToolsCall(r, n.options?.mcpClients, h, isolationLatch.exemptServers)
-        : P5r(e, isolationLatch.exemptServers, n.options?.mcpClients ?? getMcpClientsFromAccessor(), h);
+  if (!isolationLatch || !isWebSearchIsolationEnforced()) return EMPTY_ISOLATION_RESULT;
+  let sessionIsolationLatch = readSessionIsolationLatch(n.session);
+  let y =
+    e.name === REFRESH_MCP_TOOLS_TOOL_NAME
+      ? classifyRefreshToolsCall(
+          r,
+          n.options?.mcpClients,
+          sessionIsolationLatch,
+          isolationLatch.exemptServers,
+        )
+      : classifyToolIsolation(
+          e,
+          isolationLatch.exemptServers,
+          n.options?.mcpClients ?? getMcpClientsFromAccessor(),
+          sessionIsolationLatch,
+        );
   return applyIsolationLatch(isolationLatch, y);
 }
+//@ chunk-e6aww6q8.js:3905964-3906205 placement
 /**
  * 与隔离锁比较：已锁定为另一类时拒绝；尚未锁定且需要锁定时设置锁并回调。
  */
-//@ chunk-e6aww6q8.js:3905964-3906205 placement
-function applyIsolationLatch(e, n) {
-  if (!n) return I$n;
-  let r = n === WEB_WITHOUT_LATCHING ? "web" : n,
-    s = e.current;
+function applyIsolationLatch(isolationLatch, n) {
+  if (!n) return EMPTY_ISOLATION_RESULT;
+  let r = n === WEB_WITHOUT_LATCHING ? "web" : n;
+  let s = isolationLatch.current;
   if (s && s !== r)
-    return { denyMessage: WEB_TOOLS_UNAVAILABLE_MESSAGES(s), classifiedAs: r, activeLatch: s };
-  if (!s && n !== WEB_WITHOUT_LATCHING) ((e.current = r), e.onLatch?.(r));
-  return { denyMessage: null, classifiedAs: r, activeLatch: e.current };
+    return {
+      denyMessage: WEB_TOOLS_UNAVAILABLE_MESSAGES(s),
+      classifiedAs: r,
+      activeLatch: s,
+    };
+  if (!s && n !== WEB_WITHOUT_LATCHING) {
+    isolationLatch.current = r;
+    isolationLatch.onLatch?.(r);
+  }
+  return {
+    denyMessage: null,
+    classifiedAs: r,
+    activeLatch: isolationLatch.current,
+  };
 }
 //@ chunk-e6aww6q8.js:3906205-3906233 placement
-function g3s() {
-  return x$n();
+/**
+ * 当前是否启用 web 搜索隔离。
+ */
+function isWebSearchIsolationActive() {
+  return isWebSearchIsolationEnforced();
 }
+//@ chunk-e6aww6q8.js:3906233-3906428 placement
 /**
  * Web 隔离相关常量：外部模块、检查间隔与超时，以及读写文件/Bash、联网工具与只读安全工具的名称集合。
  */
-//@ chunk-e6aww6q8.js:3906233-3906428 placement
-var webIsolationModule = require("./chunk-1cnesc1e.js"),
-  ISOLATION_CHECK_INTERVAL = 500,
-  ISOLATION_TIMEOUT_MS = 2000,
-  CORE_FILE_TOOLS = new Set([FILE_READ_TOOL_NAME, FILE_EDIT_TOOL_NAME, FILE_WRITE_TOOL_NAME, BASH_TOOL_NAME]),
-  WEB_TOOLS = new Set([WEBFETCH, WEBSEARCH]),
-  ISOLATION_NEUTRAL_TOOLS = new Set([
-    FILE_READ_TOOL_NAME,
-    FILE_EDIT_TOOL_NAME,
-    FILE_WRITE_TOOL_NAME,
-    GLOB_TOOL_NAME,
-    GREP_TOOL_NAME,
-    NOTEBOOK_EDIT_TOOL_NAME,
-    TODO_WRITE_TOOL_NAME,
-    TASK_CREATE_TOOL_NAME,
-    TASK_GET_TOOL_NAME,
-    TASK_LIST_TOOL_NAME,
-    TASK_UPDATE_TOOL_NAME,
-    PROJECTS_TOOL_NAME,
-    SEND_USER_FILE_TOOL_NAME,
-    BRIEF_TOOL_NAME_2,
-    TOOL_SEARCH_TOOL_NAME,
-    SKILL,
-    AGENT,
-    ASKUSERQUESTION,
-    ARTIFACT_TOOL_NAME_2,
-    ARTIFACT_DATA_TOOL_NAME,
-    EXITPLANMODE,
-    MONITOR,
-    READNOTIFICATIONS,
-    SEARCH_MCP_REGISTRY_TOOL_NAME_2,
-    TASKSTOP,
-  ]);
-
+var webIsolationModule = require("./chunk-1cnesc1e.js");
+var ISOLATION_CHECK_INTERVAL = 500;
+var ISOLATION_TIMEOUT_MS = 2000;
+var CORE_FILE_TOOLS = new Set([
+  FILE_READ_TOOL_NAME,
+  FILE_EDIT_TOOL_NAME,
+  FILE_WRITE_TOOL_NAME,
+  BASH_TOOL_NAME,
+]);
+var WEB_TOOLS = new Set([WEBFETCH, WEBSEARCH]);
+var ISOLATION_NEUTRAL_TOOLS = new Set([
+  FILE_READ_TOOL_NAME,
+  FILE_EDIT_TOOL_NAME,
+  FILE_WRITE_TOOL_NAME,
+  GLOB_TOOL_NAME,
+  GREP_TOOL_NAME,
+  NOTEBOOK_EDIT_TOOL_NAME,
+  TODO_WRITE_TOOL_NAME,
+  TASK_CREATE_TOOL_NAME,
+  TASK_GET_TOOL_NAME,
+  TASK_LIST_TOOL_NAME,
+  TASK_UPDATE_TOOL_NAME,
+  PROJECTS_TOOL_NAME,
+  SEND_USER_FILE_TOOL_NAME,
+  BRIEF_TOOL_NAME_2,
+  TOOL_SEARCH_TOOL_NAME,
+  SKILL,
+  AGENT,
+  ASKUSERQUESTION,
+  ARTIFACT_TOOL_NAME_2,
+  ARTIFACT_DATA_TOOL_NAME,
+  EXITPLANMODE,
+  MONITOR,
+  READNOTIFICATIONS,
+  SEARCH_MCP_REGISTRY_TOOL_NAME_2,
+  TASKSTOP,
+]);
 export {
-  _tt,
+  createIsolationLatch,
   findIsolationLatchFromHistory,
   DEFAULT_EXEMPT_SERVERS,
   addExemptServers,
-  g3s,
+  isWebSearchIsolationActive,
   ISOLATION_CHECK_INTERVAL,
   checkWebIsolation,
   webIsolationModule,

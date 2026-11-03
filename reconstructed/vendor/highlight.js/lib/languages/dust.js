@@ -8,12 +8,12 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:125540-125988 cjs-fingerprint
-var Hn = x(function (eE, qn) {
-  function Ql(e) {
+var require_dust = x(function (cjsExports, cjsModule) {
+  function dust(hljs) {
     return {
       name: "Dust",
       aliases: ["dst"],
-      case_insensitive: !0,
+      case_insensitive: true,
       subLanguage: "xml",
       contains: [
         {
@@ -25,7 +25,11 @@ var Hn = x(function (eE, qn) {
             {
               className: "name",
               begin: /[a-zA-Z\.-]+/,
-              starts: { endsWithParent: !0, relevance: 0, contains: [e.QUOTE_STRING_MODE] },
+              starts: {
+                endsWithParent: true,
+                relevance: 0,
+                contains: [hljs.QUOTE_STRING_MODE],
+              },
             },
           ],
         },
@@ -39,7 +43,6 @@ var Hn = x(function (eE, qn) {
       ],
     };
   }
-  qn.exports = Ql;
+  cjsModule.exports = dust;
 });
-
-export { Hn };
+export { require_dust };

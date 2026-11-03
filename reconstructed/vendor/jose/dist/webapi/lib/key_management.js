@@ -5,271 +5,332 @@
  * pieces: chunk-2tyrgda4.js (2), chunk-5h78gfwc.js (14)
  * attribution: esm-layout 3, esm-fingerprint 13
  */
-import { H } from "./crypto_key.js";
-import { at } from "./pbes2kw.js";
-import { y } from "../util/base64url.js";
-import { f_2, c } from "../../node/esm/util/errors.js";
-import { ie } from "./signing.js";
-import { Se_5h78, ye, M_2, Ee, P, f } from "./content_encryption.js";
-import { b } from "./type_checks.js";
-import { X } from "./key.js";
-import { Je, He } from "./ecdhes.js";
+import { checkEncCryptoKey } from "./crypto_key.js";
+import { deriveKey_2 } from "./pbes2kw.js";
+import { encode_2 } from "../util/base64url.js";
+import { JOSENotSupported, JWEInvalid } from "../../node/esm/util/errors.js";
+import { checkKeyLength } from "./signing.js";
+import {
+  decrypt,
+  ye,
+  generateCek,
+  init_content_encryption_3,
+  init_content_encryption,
+  f,
+} from "./content_encryption.js";
+import { isObject } from "./type_checks.js";
+import { tag } from "./key.js";
+import { allowed, deriveKey } from "./ecdhes.js";
 import { importJWK } from "../key/import.js";
-import { I } from "./helpers.js";
-import { R } from "./normalize_key.js";
+import { decodeBase64url } from "./helpers.js";
+import { normalizeKey } from "./normalize_key.js";
 import { At, gt } from "../../browser/lib/aesgcmkw.js";
 import { Xa } from "../../../../../runtime/bun-runtime.js";
-import { v } from "../../browser/runtime/base64url.js";
-import { Ce } from "../../browser/runtime/ecdhes.js";
-import { Ct_2 } from "../../browser/runtime/pbes2kw.js";
-import { W } from "./buffer_utils.js";
+import { init_base64url } from "../../browser/runtime/base64url.js";
+import { init_ecdhes } from "../../browser/runtime/ecdhes.js";
+import { init_pbes2kw } from "../../browser/runtime/pbes2kw.js";
+import { init_buffer_utils } from "./buffer_utils.js";
 import { L } from "../../node/esm/lib/invalid_key_input.js";
-import { O, M } from "../../browser/runtime/is_key_like.js";
+import { O, init_is_key_like } from "../../browser/runtime/is_key_like.js";
 
 //@ chunk-5h78gfwc.js:12131-12248 esm-fingerprint
-function nt(e, t) {
-  if (e.algorithm.length !== parseInt(t.slice(1, 4), 10)) throw TypeError(`Invalid key size for alg: ${t}`);
+function checkKeySize(key, alg) {
+  if (key.algorithm.length !== parseInt(alg.slice(1, 4), 10))
+    throw TypeError(`Invalid key size for alg: ${alg}`);
 }
 //@ chunk-5h78gfwc.js:12248-12368 esm-fingerprint
-function it(e, t, r) {
-  if (e instanceof Uint8Array) return crypto.subtle.importKey("raw", e, "AES-KW", !0, [r]);
-  return (H(e, t, r), e);
+function aeskwCryptoKey(key, t, usage) {
+  if (key instanceof Uint8Array) return crypto.subtle.importKey("raw", key, "AES-KW", true, [usage]);
+  checkEncCryptoKey(key, t, usage);
+  return key;
 }
 //@ chunk-5h78gfwc.js:12368-12588 esm-fingerprint
-async function re(e, t, r) {
-  let n = await it(t, e, "wrapKey");
-  nt(n, e);
-  let importKey = await crypto.subtle.importKey("raw", r, { hash: "SHA-256", name: "HMAC" }, !0, ["sign"]);
-  return new Uint8Array(await crypto.subtle.wrapKey("raw", importKey, n, "AES-KW"));
-}
-//@ chunk-5h78gfwc.js:12588-12812 esm-fingerprint
-async function ne(e, t, r) {
-  let n = await it(t, e, "unwrapKey");
-  nt(n, e);
-  let unwrapKey = await crypto.subtle.unwrapKey(
+async function re(alg, key, cek) {
+  let cryptoKey = await aeskwCryptoKey(key, alg, "wrapKey");
+  checkKeySize(cryptoKey, alg);
+  let cryptoKeyCek = await crypto.subtle.importKey(
     "raw",
-    r,
-    n,
-    "AES-KW",
-    { hash: "SHA-256", name: "HMAC" },
-    !0,
+    cek,
+    {
+      hash: "SHA-256",
+      name: "HMAC",
+    },
+    true,
     ["sign"],
   );
-  return new Uint8Array(await crypto.subtle.exportKey("raw", unwrapKey));
+  return new Uint8Array(await crypto.subtle.wrapKey("raw", cryptoKeyCek, cryptoKey, "AES-KW"));
+}
+//@ chunk-5h78gfwc.js:12588-12812 esm-fingerprint
+async function aeskwUnwrap(alg, key, encryptedKey) {
+  let cryptoKey = await aeskwCryptoKey(key, alg, "unwrapKey");
+  checkKeySize(cryptoKey, alg);
+  let cryptoKeyCek = await crypto.subtle.unwrapKey(
+    "raw",
+    encryptedKey,
+    cryptoKey,
+    "AES-KW",
+    {
+      hash: "SHA-256",
+      name: "HMAC",
+    },
+    true,
+    ["sign"],
+  );
+  return new Uint8Array(await crypto.subtle.exportKey("raw", cryptoKeyCek));
 }
 //@ chunk-5h78gfwc.js:14141-14304 esm-fingerprint
-async function st(e, t, r, n = 2048, i = crypto.getRandomValues(new Uint8Array(16))) {
-  let o = await at(i, e, n, t);
-  return { encryptedKey: await re(e.slice(-6), o, r), p2c: n, p2s: y(i) };
+async function st(e, key, r, p2c = 2048, p2s = crypto.getRandomValues(new Uint8Array(16))) {
+  let derived = await deriveKey_2(p2s, e, p2c, key);
+  return {
+    encryptedKey: await re(e.slice(-6), derived, r),
+    p2c,
+    p2s: encode_2(p2s),
+  };
 }
 //@ chunk-5h78gfwc.js:14304-14384 esm-layout
-async function ct(e, t, r, n, i) {
-  let o = await at(i, e, n, t);
-  return ne(e.slice(-6), o, r);
+async function ct(alg, key, encryptedKey, n, joseHeader) {
+  let key_2 = await deriveKey_2(joseHeader, alg, n, key);
+  return aeskwUnwrap(alg.slice(-6), key_2, encryptedKey);
 }
 //@ chunk-5h78gfwc.js:15709-15914 esm-fingerprint
-var ht = (e) => {
-  switch (e) {
+var subtleAlgorithm_2 = (alg) => {
+  switch (alg) {
     case "RSA-OAEP":
     case "RSA-OAEP-256":
     case "RSA-OAEP-384":
     case "RSA-OAEP-512":
       return "RSA-OAEP";
     default:
-      throw new f_2(`alg ${e} is not supported either by JOSE or your javascript runtime`);
+      throw new JOSENotSupported(`alg ${alg} is not supported either by JOSE or your javascript runtime`);
   }
 };
 //@ chunk-5h78gfwc.js:15914-16026 esm-fingerprint
-async function mt(e, t, r) {
-  return (H(t, e, "encrypt"), ie(e, t), new Uint8Array(await crypto.subtle.encrypt(ht(e), t, r)));
+async function rsaesEncrypt(alg, key, cek) {
+  checkEncCryptoKey(key, alg, "encrypt");
+  checkKeyLength(alg, key);
+  return new Uint8Array(await crypto.subtle.encrypt(subtleAlgorithm_2(alg), key, cek));
 }
 //@ chunk-5h78gfwc.js:16026-16138 esm-fingerprint
-async function lt(e, t, r) {
-  return (H(t, e, "decrypt"), ie(e, t), new Uint8Array(await crypto.subtle.decrypt(ht(e), t, r)));
+async function rsaesDecrypt(alg, key, encryptedKey) {
+  checkEncCryptoKey(key, alg, "decrypt");
+  checkKeyLength(alg, key);
+  return new Uint8Array(await crypto.subtle.decrypt(subtleAlgorithm_2(alg), key, encryptedKey));
 }
 //@ chunk-5h78gfwc.js:23984-24068 esm-layout
-async function bt(e, t, r, n, i) {
+async function bt(e, key, ciphertext, n, tag) {
   let sliced = e.slice(0, 7);
-  return Se_5h78(sliced, t, r, n, i, new Uint8Array());
+  return decrypt(sliced, key, ciphertext, n, tag, new Uint8Array());
 }
 //@ chunk-5h78gfwc.js:24068-24135 esm-fingerprint
-var Kt = 'Invalid or unsupported "alg" (JWE Algorithm) header value';
+var unsupportedAlgHeader = 'Invalid or unsupported "alg" (JWE Algorithm) header value';
 //@ chunk-5h78gfwc.js:24135-24205 esm-fingerprint
-function se(e) {
-  if (e === void 0) throw new c("JWE Encrypted Key missing");
+function assertEncryptedKey(encryptedKey) {
+  if (encryptedKey === undefined) throw new JWEInvalid("JWE Encrypted Key missing");
 }
 //@ chunk-5h78gfwc.js:24205-26082 esm-fingerprint
-async function xt(e, t, r, n, i) {
-  switch (e) {
+async function decryptKeyManagement(alg, key, encryptedKey, joseHeader, options) {
+  switch (alg) {
     case "dir": {
-      if (r !== void 0) throw new c("Encountered unexpected JWE Encrypted Key");
-      return t;
+      if (encryptedKey !== undefined) throw new JWEInvalid("Encountered unexpected JWE Encrypted Key");
+      return key;
     }
     case "ECDH-ES":
-      if (r !== void 0) throw new c("Encountered unexpected JWE Encrypted Key");
+      if (encryptedKey !== undefined) throw new JWEInvalid("Encountered unexpected JWE Encrypted Key");
     case "ECDH-ES+A128KW":
     case "ECDH-ES+A192KW":
     case "ECDH-ES+A256KW": {
-      if (!b(n.epk)) throw new c('JOSE Header "epk" (Ephemeral Public Key) missing or invalid');
-      if ((X(t), !Je(t)))
-        throw new f_2(
+      if (!isObject(joseHeader.epk))
+        throw new JWEInvalid('JOSE Header "epk" (Ephemeral Public Key) missing or invalid');
+      tag(key);
+      if (!allowed(key))
+        throw new JOSENotSupported(
           "ECDH with the provided key is not allowed or not supported by your javascript runtime",
         );
-      let o = await importJWK(n.epk, e);
-      X(o);
-      let a, s;
-      if (n.apu !== void 0) {
-        if (typeof n.apu !== "string") throw new c('JOSE Header "apu" (Agreement PartyUInfo) invalid');
-        a = I(n.apu, "apu", c);
+      let epk = await importJWK(joseHeader.epk, alg);
+      tag(epk);
+      let partyUInfo;
+      let partyVInfo;
+      if (joseHeader.apu !== undefined) {
+        if (typeof joseHeader.apu !== "string")
+          throw new JWEInvalid('JOSE Header "apu" (Agreement PartyUInfo) invalid');
+        partyUInfo = decodeBase64url(joseHeader.apu, "apu", JWEInvalid);
       }
-      if (n.apv !== void 0) {
-        if (typeof n.apv !== "string") throw new c('JOSE Header "apv" (Agreement PartyVInfo) invalid');
-        s = I(n.apv, "apv", c);
+      if (joseHeader.apv !== undefined) {
+        if (typeof joseHeader.apv !== "string")
+          throw new JWEInvalid('JOSE Header "apv" (Agreement PartyVInfo) invalid');
+        partyVInfo = decodeBase64url(joseHeader.apv, "apv", JWEInvalid);
       }
-      let p = await He(
-        o,
-        t,
-        e === "ECDH-ES" ? n.enc : e,
-        e === "ECDH-ES" ? ye(n.enc) : parseInt(e.slice(-5, -2), 10),
-        a,
-        s,
+      let sharedSecret = await deriveKey(
+        epk,
+        key,
+        alg === "ECDH-ES" ? joseHeader.enc : alg,
+        alg === "ECDH-ES" ? ye(joseHeader.enc) : parseInt(alg.slice(-5, -2), 10),
+        partyUInfo,
+        partyVInfo,
       );
-      if (e === "ECDH-ES") return p;
-      return (se(r), ne(e.slice(-6), p, r));
+      if (alg === "ECDH-ES") return sharedSecret;
+      assertEncryptedKey(encryptedKey);
+      return aeskwUnwrap(alg.slice(-6), sharedSecret, encryptedKey);
     }
     case "RSA-OAEP":
     case "RSA-OAEP-256":
     case "RSA-OAEP-384":
     case "RSA-OAEP-512":
-      return (se(r), X(t), lt(e, t, r));
+      assertEncryptedKey(encryptedKey);
+      tag(key);
+      return rsaesDecrypt(alg, key, encryptedKey);
     case "PBES2-HS256+A128KW":
     case "PBES2-HS384+A192KW":
     case "PBES2-HS512+A256KW": {
-      if ((se(r), typeof n.p2c !== "number"))
-        throw new c('JOSE Header "p2c" (PBES2 Count) missing or invalid');
-      let o = i?.maxPBES2Count || 1e4;
-      if (n.p2c > o) throw new c('JOSE Header "p2c" (PBES2 Count) out is of acceptable bounds');
-      if (typeof n.p2s !== "string") throw new c('JOSE Header "p2s" (PBES2 Salt) missing or invalid');
-      let a;
-      return ((a = I(n.p2s, "p2s", c)), ct(e, t, r, n.p2c, a));
+      assertEncryptedKey(encryptedKey);
+      if (typeof joseHeader.p2c !== "number")
+        throw new JWEInvalid('JOSE Header "p2c" (PBES2 Count) missing or invalid');
+      let p2cLimit = options?.maxPBES2Count || 1e4;
+      if (joseHeader.p2c > p2cLimit)
+        throw new JWEInvalid('JOSE Header "p2c" (PBES2 Count) out is of acceptable bounds');
+      if (typeof joseHeader.p2s !== "string")
+        throw new JWEInvalid('JOSE Header "p2s" (PBES2 Salt) missing or invalid');
+      let p2s;
+      p2s = decodeBase64url(joseHeader.p2s, "p2s", JWEInvalid);
+      return ct(alg, key, encryptedKey, joseHeader.p2c, p2s);
     }
     case "A128KW":
     case "A192KW":
     case "A256KW":
-      return (se(r), ne(e, t, r));
+      assertEncryptedKey(encryptedKey);
+      return aeskwUnwrap(alg, key, encryptedKey);
     case "A128GCMKW":
     case "A192GCMKW":
     case "A256GCMKW": {
-      if ((se(r), typeof n.iv !== "string"))
-        throw new c('JOSE Header "iv" (Initialization Vector) missing or invalid');
-      if (typeof n.tag !== "string") throw new c('JOSE Header "tag" (Authentication Tag) missing or invalid');
-      let o;
-      o = I(n.iv, "iv", c);
-      let a;
-      return ((a = I(n.tag, "tag", c)), bt(e, t, r, o, a));
+      assertEncryptedKey(encryptedKey);
+      if (typeof joseHeader.iv !== "string")
+        throw new JWEInvalid('JOSE Header "iv" (Initialization Vector) missing or invalid');
+      if (typeof joseHeader.tag !== "string")
+        throw new JWEInvalid('JOSE Header "tag" (Authentication Tag) missing or invalid');
+      let iv;
+      iv = decodeBase64url(joseHeader.iv, "iv", JWEInvalid);
+      let tag;
+      tag = decodeBase64url(joseHeader.tag, "tag", JWEInvalid);
+      return bt(alg, key, encryptedKey, iv, tag);
     }
     default:
-      throw new f_2(Kt);
+      throw new JOSENotSupported(unsupportedAlgHeader);
   }
 }
 //@ chunk-5h78gfwc.js:26082-27290 esm-fingerprint
-async function Ct(e, t, r, n, i = {}) {
-  let o, a, s;
-  switch (e) {
+async function encryptKeyManagement(alg, enc, key, providedCek, providedParameters = {}) {
+  let encryptedKey;
+  let parameters;
+  let cek;
+  switch (alg) {
     case "dir": {
-      s = r;
+      cek = key;
       break;
     }
     case "ECDH-ES":
     case "ECDH-ES+A128KW":
     case "ECDH-ES+A192KW":
     case "ECDH-ES+A256KW": {
-      if ((X(r), !Je(r)))
-        throw new f_2(
+      tag(key);
+      if (!allowed(key))
+        throw new JOSENotSupported(
           "ECDH with the provided key is not allowed or not supported by your javascript runtime",
         );
-      let { apu: apu, apv: apv } = i,
-        u;
-      if (i.epk) u = await R(i.epk, e);
-      else u = (await crypto.subtle.generateKey(r.algorithm, !0, ["deriveBits"])).privateKey;
-      let { x: m, y: w, crv: crv, kty: kty } = await At(u),
-        l = await He(
-          r,
-          u,
-          e === "ECDH-ES" ? t : e,
-          e === "ECDH-ES" ? ye(t) : parseInt(e.slice(-5, -2), 10),
-          apu,
-          apv,
-        );
-      if (((a = { epk: { x: m, crv: crv, kty: kty } }), kty === "EC")) a.epk.y = w;
-      if (apu) a.apu = y(apu);
-      if (apv) a.apv = y(apv);
-      if (e === "ECDH-ES") {
-        s = l;
+      let { apu, apv } = providedParameters;
+      let ephemeralKey;
+      if (providedParameters.epk) ephemeralKey = await normalizeKey(providedParameters.epk, alg);
+      else ephemeralKey = (await crypto.subtle.generateKey(key.algorithm, true, ["deriveBits"])).privateKey;
+      let { x, y, crv, kty } = await At(ephemeralKey);
+      let sharedSecret = await deriveKey(
+        key,
+        ephemeralKey,
+        alg === "ECDH-ES" ? enc : alg,
+        alg === "ECDH-ES" ? ye(enc) : parseInt(alg.slice(-5, -2), 10),
+        apu,
+        apv,
+      );
+      parameters = {
+        epk: {
+          x,
+          crv,
+          kty,
+        },
+      };
+      if (kty === "EC") parameters.epk.y = y;
+      if (apu) parameters.apu = encode_2(apu);
+      if (apv) parameters.apv = encode_2(apv);
+      if (alg === "ECDH-ES") {
+        cek = sharedSecret;
         break;
       }
-      s = n || M_2(t);
-      let sliced = e.slice(-6);
-      o = await re(sliced, l, s);
+      cek = providedCek || generateCek(enc);
+      let kwAlg = alg.slice(-6);
+      encryptedKey = await re(kwAlg, sharedSecret, cek);
       break;
     }
     case "RSA-OAEP":
     case "RSA-OAEP-256":
     case "RSA-OAEP-384":
     case "RSA-OAEP-512": {
-      ((s = n || M_2(t)), X(r), (o = await mt(e, r, s)));
+      cek = providedCek || generateCek(enc);
+      tag(key);
+      encryptedKey = await rsaesEncrypt(alg, key, cek);
       break;
     }
     case "PBES2-HS256+A128KW":
     case "PBES2-HS384+A192KW":
     case "PBES2-HS512+A256KW": {
-      s = n || M_2(t);
-      let { p2c: p2c, p2s: p2s } = i;
-      ({ encryptedKey: o, ...a } = await st(e, r, s, p2c, p2s));
+      cek = providedCek || generateCek(enc);
+      let { p2c, p2s } = providedParameters;
+      ({ encryptedKey, ...parameters } = await st(alg, key, cek, p2c, p2s));
       break;
     }
     case "A128KW":
     case "A192KW":
     case "A256KW": {
-      ((s = n || M_2(t)), (o = await re(e, r, s)));
+      cek = providedCek || generateCek(enc);
+      encryptedKey = await re(alg, key, cek);
       break;
     }
     case "A128GCMKW":
     case "A192GCMKW":
     case "A256GCMKW": {
-      s = n || M_2(t);
-      let { iv: iv } = i;
-      ({ encryptedKey: o, ...a } = await gt(e, r, s, iv));
+      cek = providedCek || generateCek(enc);
+      let { iv } = providedParameters;
+      ({ encryptedKey, ...parameters } = await gt(alg, key, cek, iv));
       break;
     }
     default:
-      throw new f_2(Kt);
+      throw new JOSENotSupported(unsupportedAlgHeader);
   }
-  return { cek: s, encryptedKey: o, parameters: a };
+  return {
+    cek,
+    encryptedKey,
+    parameters,
+  };
 }
 //@ chunk-2tyrgda4.js:12407-12463 esm-layout
-var Xe = Xa(() => {
-  Ee();
-  v();
-  P();
-  Ce();
-  Ct_2();
-  W();
+var init_key_management = Xa(() => {
+  init_content_encryption_3();
+  init_base64url();
+  init_content_encryption();
+  init_ecdhes();
+  init_pbes2kw();
+  init_buffer_utils();
   L();
   O();
-  M();
+  init_is_key_like();
 });
 //@ chunk-2tyrgda4.js:12463-12669 esm-fingerprint
-function te(e) {
-  switch (e) {
+function te(alg) {
+  switch (alg) {
     case "RSA-OAEP":
     case "RSA-OAEP-256":
     case "RSA-OAEP-384":
     case "RSA-OAEP-512":
       return "RSA-OAEP";
     default:
-      throw new f(`alg ${e} is not supported either by JOSE or your javascript runtime`);
+      throw new f(`alg ${alg} is not supported either by JOSE or your javascript runtime`);
   }
 }
-
-export { te, Xe, xt, Ct };
+export { te, init_key_management, decryptKeyManagement, encryptKeyManagement };

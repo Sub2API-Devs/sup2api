@@ -14,15 +14,15 @@ import { getRootSession, getMainQueryRunning } from "../bootstrap/state.js";
 import { logForDiagnosticsNoPII } from "./diagLogs.js";
 import { env } from "./env.js";
 import { registerCleanup } from "./cleanupRegistry.js";
-import { getRemoteFeatureGateState, jSt } from "./permissions/yoloClassifier.js";
-import { P_i } from "../tools/AgentTool/backgroundGates.js";
+import { getRemoteFeatureGateState, needsGrowthBookRefresh } from "./permissions/yoloClassifier.js";
+import { stopNoticeWasSent } from "../tools/AgentTool/backgroundGates.js";
 
 //@ chunk-frha7zp8.js:407-419 sole-consumer
-var u = 30000;
+var IDLE_TIMEOUT_MS = 30000;
+//@ chunk-frha7zp8.js:419-629 sole-consumer
 /**
  * 会话活动状态初始值（引用计数、等待用户数、心跳与空闲计时器）。
  */
-//@ chunk-frha7zp8.js:419-629 sole-consumer
 function createActivityState() {
   return {
     activityCallback: null,
@@ -38,21 +38,21 @@ function createActivityState() {
   };
 }
 //@ chunk-frha7zp8.js:629-648 sole-consumer = getClientSurface (0.78)
-var CLI = "cli",
-  f = 1000;
+var SESSION_ACTIVITY_TICK_MS = "cli";
+var sessionActivityRegistrySlot = 1000;
+//@ chunk-frha7zp8.js:648-1703 sole-consumer
 /**
  * 按活动键保存会话活动状态（淘汰时清理计时器）。
  */
-//@ chunk-frha7zp8.js:648-1703 sole-consumer
 class SessionActivityRegistry {
-  activityKey = () => CLI;
+  activityKey = () => SESSION_ACTIVITY_TICK_MS;
   mainLoopActivityListener = null;
   nestedChainDropListener = null;
   workStarted = createSignal();
   statesByKey = new Map();
   evictedKeys = new Set();
-  setActivityKey(e) {
-    this.activityKey = e;
+  setActivityKey(activityKey) {
+    this.activityKey = activityKey;
   }
   currentKey() {
     return this.activityKey();
@@ -61,135 +61,151 @@ class SessionActivityRegistry {
     return this.statesByKey.size;
   }
   currentStateOrCreate() {
-    let activityKey = this.activityKey();
-    if (this.evictedKeys.has(activityKey)) return null;
-    let t = this.statesByKey.get(activityKey);
-    if (!t) ((t = createActivityState()), this.statesByKey.set(activityKey, t));
+    let e = this.activityKey();
+    if (this.evictedKeys.has(e)) return null;
+    let t = this.statesByKey.get(e);
+    if (!t) {
+      t = createActivityState();
+      this.statesByKey.set(e, t);
+    }
     return t;
   }
   currentStateOrNull() {
     return this.statesByKey.get(this.activityKey()) ?? null;
   }
   reset() {
-    for (let e of [...this.statesByKey.keys()]) this.evictKey(e);
-    (this.evictedKeys.clear(),
-      (this.activityKey = () => CLI),
-      (this.mainLoopActivityListener = null),
-      (this.nestedChainDropListener = null),
-      this.workStarted.clear());
+    for (let key of [...this.statesByKey.keys()]) this.evictKey(key);
+    this.evictedKeys.clear();
+    this.activityKey = () => SESSION_ACTIVITY_TICK_MS;
+    this.mainLoopActivityListener = null;
+    this.nestedChainDropListener = null;
+    this.workStarted.clear();
   }
   evictKey(e) {
-    if ((this.evictedKeys.add(e), this.evictedKeys.size > f)) {
+    this.evictedKeys.add(e);
+    if (this.evictedKeys.size > sessionActivityRegistrySlot) {
       let o = this.evictedKeys.values().next().value;
-      if (o !== void 0) this.evictedKeys.delete(o);
+      if (o !== undefined) this.evictedKeys.delete(o);
     }
     let t = this.statesByKey.get(e);
     if (!t) return;
     if (t.heartbeatTimer !== null) clearInterval(t.heartbeatTimer);
     if (t.idleTimer !== null) clearTimeout(t.idleTimer);
-    (t.cleanupHandle?.(), this.statesByKey.delete(e));
+    t.cleanupHandle?.();
+    this.statesByKey.delete(e);
   }
 }
 //@ chunk-frha7zp8.js:1703-1726 sole-consumer
-var p = new HostScoped(() => new SessionActivityRegistry());
+var sessionActivityRegistry = new HostScoped(() => new SessionActivityRegistry());
 //@ chunk-frha7zp8.js:1726-1761 affinity
 function getSessionActivityState() {
-  return p.of(getRootSession().host);
+  return sessionActivityRegistry.of(getRootSession().host);
 }
+//@ chunk-frha7zp8.js:1761-2142 fingerprint = startHeartbeatTimer (0.498)
 /**
  * 活动期间定时发送会话保活心跳。
  */
-//@ chunk-frha7zp8.js:1761-2142 fingerprint = startHeartbeatTimer (0.498)
 function startHeartbeatTimer(e) {
-  (clearIdleTimer(e),
-    (e.heartbeatTimer = setInterval(
-      (t) => {
-        if (isParkedOnUser(t)) {
-          logForDiagnosticsNoPII("debug", "session_keepalive_parked_on_user", {
-            refcount: t.refcount,
-            parked_on_user: t.parkedOnUser,
-          });
-          return;
-        }
-        if (
-          (logForDiagnosticsNoPII("debug", "session_keepalive_heartbeat", {
-            refcount: t.refcount,
-            main_loop_refcount: t.mainLoopRefcount,
-            active: Object.fromEntries(t.activeReasons),
-          }),
-          env.CLAUDE_CODE_REMOTE_SEND_KEEPALIVES)
-        )
-          t.activityCallback?.();
-      },
-      u,
-      e,
-    )));
+  clearIdleTimer(e);
+  e.heartbeatTimer = setInterval(
+    (t) => {
+      if (isParkedOnUser(t)) {
+        logForDiagnosticsNoPII("debug", "session_keepalive_parked_on_user", {
+          refcount: t.refcount,
+          parked_on_user: t.parkedOnUser,
+        });
+        return;
+      }
+      logForDiagnosticsNoPII("debug", "session_keepalive_heartbeat", {
+        refcount: t.refcount,
+        main_loop_refcount: t.mainLoopRefcount,
+        active: Object.fromEntries(t.activeReasons),
+      });
+      if (env.CLAUDE_CODE_REMOTE_SEND_KEEPALIVES) t.activityCallback?.();
+    },
+    IDLE_TIMEOUT_MS,
+    e,
+  );
 }
+//@ chunk-frha7zp8.js:2142-2278 fingerprint = startIdleTimer (0.764)
 /**
  * 活动结束 30 秒后记录 session_idle_30s。
  */
-//@ chunk-frha7zp8.js:2142-2278 fingerprint = startIdleTimer (0.764)
 function startIdleTimer(e) {
-  if ((clearIdleTimer(e), e.activityCallback === null)) return;
+  clearIdleTimer(e);
+  if (e.activityCallback === null) return;
   e.idleTimer = setTimeout(
     (t) => {
-      (logForDiagnosticsNoPII("info", "session_idle_30s"), (t.idleTimer = null));
+      logForDiagnosticsNoPII("info", "session_idle_30s");
+      t.idleTimer = null;
     },
-    u,
+    IDLE_TIMEOUT_MS,
     e,
   );
 }
 //@ chunk-frha7zp8.js:2278-2357 layout
 function clearIdleTimer(e) {
-  if (e.idleTimer !== null) (clearTimeout(e.idleTimer), (e.idleTimer = null));
+  if (e.idleTimer !== null) {
+    clearTimeout(e.idleTimer);
+    e.idleTimer = null;
+  }
 }
+//@ chunk-frha7zp8.js:2357-2486 layout
 /**
  * 设置活动回调；有活动时启动心跳。
  */
-//@ chunk-frha7zp8.js:2357-2486 layout
-function setActivityCallback(e) {
-  let currentStateOrCreate = getSessionActivityState().currentStateOrCreate();
-  if (!currentStateOrCreate) return;
-  if (
-    ((currentStateOrCreate.activityCallback = e),
-    currentStateOrCreate.refcount > 0 && currentStateOrCreate.heartbeatTimer === null)
-  )
-    startHeartbeatTimer(currentStateOrCreate);
+function setActivityCallback(activityCallback) {
+  let t = getSessionActivityState().currentStateOrCreate();
+  if (!t) return;
+  t.activityCallback = activityCallback;
+  if (t.refcount > 0 && t.heartbeatTimer === null) startHeartbeatTimer(t);
 }
+//@ chunk-frha7zp8.js:2486-2655 layout
 /**
  * 清除活动回调并停止心跳与空闲计时。
  */
-//@ chunk-frha7zp8.js:2486-2655 layout
 function clearActivityCallback() {
-  let currentStateOrNull = getSessionActivityState().currentStateOrNull();
-  if (!currentStateOrNull) return;
-  if (((currentStateOrNull.activityCallback = null), currentStateOrNull.heartbeatTimer !== null))
-    (clearInterval(currentStateOrNull.heartbeatTimer), (currentStateOrNull.heartbeatTimer = null));
-  clearIdleTimer(currentStateOrNull);
+  let e = getSessionActivityState().currentStateOrNull();
+  if (!e) return;
+  e.activityCallback = null;
+  if (e.heartbeatTimer !== null) {
+    clearInterval(e.heartbeatTimer);
+    e.heartbeatTimer = null;
+  }
+  clearIdleTimer(e);
 }
+//@ chunk-frha7zp8.js:2655-2767 layout
 /**
  * 开启远程保活时立即触发一次活动回调。
  */
-//@ chunk-frha7zp8.js:2655-2767 layout
 function sendKeepaliveNow() {
-  let currentStateOrNull = getSessionActivityState().currentStateOrNull();
-  if (currentStateOrNull && env.CLAUDE_CODE_REMOTE_SEND_KEEPALIVES) currentStateOrNull.activityCallback?.();
+  let e = getSessionActivityState().currentStateOrNull();
+  if (e && env.CLAUDE_CODE_REMOTE_SEND_KEEPALIVES) e.activityCallback?.();
 }
 //@ chunk-frha7zp8.js:2767-2846 layout
-function z_i() {
+function activityCallbackActive() {
   return (getSessionActivityState().currentStateOrNull()?.activityCallback ?? null) !== null;
 }
 //@ chunk-frha7zp8.js:2846-2893 layout
-function rns(e) {
-  getSessionActivityState().mainLoopActivityListener = e;
+/**
+ * setMainLoopActivityListener：设置主循环活动监听。
+ */
+function setMainLoopActivityListener(mainLoopActivityListener) {
+  getSessionActivityState().mainLoopActivityListener = mainLoopActivityListener;
 }
 //@ chunk-frha7zp8.js:2893-2939 layout
-function ons(e) {
-  getSessionActivityState().nestedChainDropListener = e;
+/**
+ * setNestedChainDropListener：设置嵌套链丢弃监听。
+ */
+function setNestedChainDropListener(nestedChainDropListener) {
+  getSessionActivityState().nestedChainDropListener = nestedChainDropListener;
 }
 //@ chunk-frha7zp8.js:2939-2988 layout
-function K_i(e) {
-  getSessionActivityState().nestedChainDropListener?.(e);
+/**
+ * notifyNestedChainDropped：通知嵌套链被丢弃。
+ */
+function notifyNestedChainDropped(taskId) {
+  getSessionActivityState().nestedChainDropListener?.(taskId);
 }
 //@ chunk-frha7zp8.js:2988-3064 layout
 function isActivityReasonActive(e) {
@@ -198,8 +214,8 @@ function isActivityReasonActive(e) {
 //@ chunk-frha7zp8.js:3064-3158 layout
 function hasActiveWork() {
   for (let e of getSessionActivityState().statesByKey.values())
-    if (e.refcount > 0 && !isParkedOnUser(e)) return !0;
-  return !1;
+    if (e.refcount > 0 && !isParkedOnUser(e)) return true;
+  return false;
 }
 //@ chunk-frha7zp8.js:3158-3210 layout
 function onWorkStarted(e) {
@@ -213,115 +229,115 @@ function getMainLoopRefcount() {
 function isSessionActive() {
   return getMainQueryRunning() || getMainLoopRefcount() > 0;
 }
+//@ chunk-frha7zp8.js:3315-4008 fingerprint = startSessionActivity (0.504)
 /**
  * 开始会话活动计数，驱动心跳与空闲计时（session_activity_at_shutdown）。
  */
-//@ chunk-frha7zp8.js:3315-4008 fingerprint = startSessionActivity (0.504)
-function startSessionActivity(e, t) {
-  let o = getSessionActivityState(),
-    currentStateOrCreate = o.currentStateOrCreate();
-  if (!currentStateOrCreate) return;
-  if ((currentStateOrCreate.refcount++, t === void 0))
-    (currentStateOrCreate.mainLoopRefcount++,
-      o.mainLoopActivityListener?.(currentStateOrCreate.mainLoopRefcount));
-  if (
-    (currentStateOrCreate.activeReasons.set(e, (currentStateOrCreate.activeReasons.get(e) ?? 0) + 1),
-    currentStateOrCreate.refcount === 1)
-  ) {
-    if (
-      ((currentStateOrCreate.oldestActivityStartedAt = Date.now()),
-      currentStateOrCreate.activityCallback !== null && currentStateOrCreate.heartbeatTimer === null)
-    )
-      startHeartbeatTimer(currentStateOrCreate);
+function startSessionActivity(reason, t) {
+  let sessionActivityState = getSessionActivityState();
+  let n = sessionActivityState.currentStateOrCreate();
+  if (!n) return;
+  n.refcount++;
+  if (t === undefined) {
+    n.mainLoopRefcount++;
+    sessionActivityState.mainLoopActivityListener?.(n.mainLoopRefcount);
   }
-  if (currentStateOrCreate.refcount - currentStateOrCreate.parkedOnUser === 1) o.workStarted.emit();
-  if (currentStateOrCreate.cleanupHandle === null) {
-    let activityKey = o.activityKey();
-    currentStateOrCreate.cleanupHandle = registerCleanup(async () => {
+  n.activeReasons.set(reason, (n.activeReasons.get(reason) ?? 0) + 1);
+  if (n.refcount === 1) {
+    n.oldestActivityStartedAt = Date.now();
+    if (n.activityCallback !== null && n.heartbeatTimer === null) startHeartbeatTimer(n);
+  }
+  if (n.refcount - n.parkedOnUser === 1) sessionActivityState.workStarted.emit();
+  if (n.cleanupHandle === null) {
+    let ownerKey = sessionActivityState.activityKey();
+    n.cleanupHandle = registerCleanup(async () => {
       logForDiagnosticsNoPII("info", "session_activity_at_shutdown", {
-        owner_key: activityKey,
-        refcount: currentStateOrCreate.refcount,
-        active: Object.fromEntries(currentStateOrCreate.activeReasons),
+        owner_key: ownerKey,
+        refcount: n.refcount,
+        active: Object.fromEntries(n.activeReasons),
         oldest_activity_ms:
-          currentStateOrCreate.refcount > 0 && currentStateOrCreate.oldestActivityStartedAt !== null
-            ? Date.now() - currentStateOrCreate.oldestActivityStartedAt
+          n.refcount > 0 && n.oldestActivityStartedAt !== null
+            ? Date.now() - n.oldestActivityStartedAt
             : null,
       });
     });
   }
 }
+//@ chunk-frha7zp8.js:4008-4611 placement
 /**
  * 结束一次活动（减引用计数，归零时停止心跳并开始空闲计时）。
  */
-//@ chunk-frha7zp8.js:4008-4611 placement
 function endActivity(e, t) {
-  let o = getSessionActivityState(),
-    currentStateOrNull = o.currentStateOrNull();
-  if (!currentStateOrNull) return;
-  if (currentStateOrNull.refcount > 0) currentStateOrNull.refcount--;
-  if (t === void 0)
-    if (currentStateOrNull.mainLoopRefcount > 0)
-      (currentStateOrNull.mainLoopRefcount--,
-        o.mainLoopActivityListener?.(currentStateOrNull.mainLoopRefcount));
-    else logForDiagnosticsNoPII("warn", "session_activity_main_loop_underflow", { reason: e });
-  let s = (currentStateOrNull.activeReasons.get(e) ?? 0) - 1;
-  if (s > 0) currentStateOrNull.activeReasons.set(e, s);
-  else currentStateOrNull.activeReasons.delete(e);
-  if (currentStateOrNull.refcount === 0) {
-    if (currentStateOrNull.parkedOnUser > 0)
-      (logForDiagnosticsNoPII("warn", "session_activity_parked_leaked", {
-        parked_on_user: currentStateOrNull.parkedOnUser,
-      }),
-        (currentStateOrNull.parkedOnUser = 0),
-        currentStateOrNull.parkGeneration++);
-    if (currentStateOrNull.heartbeatTimer !== null)
-      (clearInterval(currentStateOrNull.heartbeatTimer),
-        (currentStateOrNull.heartbeatTimer = null),
-        startIdleTimer(currentStateOrNull));
+  let sessionActivityState = getSessionActivityState();
+  let n = sessionActivityState.currentStateOrNull();
+  if (!n) return;
+  if (n.refcount > 0) n.refcount--;
+  if (t === undefined)
+    if (n.mainLoopRefcount > 0) {
+      n.mainLoopRefcount--;
+      sessionActivityState.mainLoopActivityListener?.(n.mainLoopRefcount);
+    } else
+      logForDiagnosticsNoPII("warn", "session_activity_main_loop_underflow", {
+        reason: e,
+      });
+  let s = (n.activeReasons.get(e) ?? 0) - 1;
+  if (s > 0) n.activeReasons.set(e, s);
+  else n.activeReasons.delete(e);
+  if (n.refcount === 0) {
+    if (n.parkedOnUser > 0) {
+      logForDiagnosticsNoPII("warn", "session_activity_parked_leaked", {
+        parked_on_user: n.parkedOnUser,
+      });
+      n.parkedOnUser = 0;
+      n.parkGeneration++;
+    }
+    if (n.heartbeatTimer !== null) {
+      clearInterval(n.heartbeatTimer);
+      n.heartbeatTimer = null;
+      startIdleTimer(n);
+    }
   }
 }
+//@ chunk-frha7zp8.js:4611-5075 placement
 /**
  * 标记正在等待用户（不计入活跃工作），返回释放函数。
  */
-//@ chunk-frha7zp8.js:4611-5075 placement
 function parkOnUser() {
   if (env.CLAUDE_CODE_DISABLE_AWAITING_USER_IDLE) return () => {};
-  let e = getSessionActivityState(),
-    currentStateOrNull = e.currentStateOrNull();
-  if (!currentStateOrNull) return () => {};
-  if (currentStateOrNull.parkedOnUser >= currentStateOrNull.refcount)
-    return (
-      logForDiagnosticsNoPII("warn", "session_activity_parked_exceeds_refcount", {
-        refcount: currentStateOrNull.refcount,
-        parked_on_user: currentStateOrNull.parkedOnUser,
-      }),
-      () => {}
-    );
-  currentStateOrNull.parkedOnUser++;
-  let parkGeneration = currentStateOrNull.parkGeneration,
-    n = !1;
+  let sessionActivityState = getSessionActivityState();
+  let t = sessionActivityState.currentStateOrNull();
+  if (!t) return () => {};
+  if (t.parkedOnUser >= t.refcount) {
+    logForDiagnosticsNoPII("warn", "session_activity_parked_exceeds_refcount", {
+      refcount: t.refcount,
+      parked_on_user: t.parkedOnUser,
+    });
+    return () => {};
+  }
+  t.parkedOnUser++;
+  let parkGeneration = t.parkGeneration;
+  let n = false;
   return () => {
     if (n) return;
-    if (
-      ((n = !0), currentStateOrNull.parkGeneration === parkGeneration && currentStateOrNull.parkedOnUser > 0)
-    ) {
-      if (
-        (currentStateOrNull.parkedOnUser--,
-        currentStateOrNull.refcount - currentStateOrNull.parkedOnUser === 1)
-      )
-        e.workStarted.emit();
+    n = true;
+    if (t.parkGeneration === parkGeneration && t.parkedOnUser > 0) {
+      t.parkedOnUser--;
+      if (t.refcount - t.parkedOnUser === 1) sessionActivityState.workStarted.emit();
     }
   };
 }
 //@ chunk-frha7zp8.js:5075-5143 placement
-function V_i() {
-  let currentStateOrNull = getSessionActivityState().currentStateOrNull();
-  return currentStateOrNull !== null && isParkedOnUser(currentStateOrNull);
+/**
+ * currentActivityState：当前活动状态。
+ */
+function currentActivityState() {
+  let e = getSessionActivityState().currentStateOrNull();
+  return e !== null && isParkedOnUser(e);
 }
+//@ chunk-frha7zp8.js:5143-5253 placement
 /**
  * 全部活动都在等待用户。
  */
-//@ chunk-frha7zp8.js:5143-5253 placement
 function isParkedOnUser(e) {
   return (
     !env.CLAUDE_CODE_DISABLE_AWAITING_USER_IDLE && e.parkedOnUser > 0 && e.refcount - e.parkedOnUser <= 0
@@ -333,7 +349,7 @@ var TENGU_ENCAPSULATED_HONEY = "tengu_encapsulated_honey";
 function sendSessionActivitySignal() {
   return (
     env.CLAUDE_CODE_REMOTE_SEND_KEEPALIVES &&
-    !0 &&
+    true &&
     getRemoteFeatureGateState(TENGU_ENCAPSULATED_HONEY) === "on"
   );
 }
@@ -341,16 +357,15 @@ function sendSessionActivitySignal() {
 function sendSessionActivitySignal_2() {
   return (
     env.CLAUDE_CODE_REMOTE_SEND_KEEPALIVES &&
-    z_i() &&
+    activityCallbackActive() &&
     getRemoteFeatureGateState(TENGU_ENCAPSULATED_HONEY) === "on" &&
-    !jSt() &&
-    P_i()
+    !needsGrowthBookRefresh() &&
+    stopNoticeWasSent()
   );
 }
-
 export {
   sendKeepaliveNow,
-  K_i,
+  notifyNestedChainDropped,
   isActivityReasonActive,
   getMainLoopRefcount,
   parkOnUser,
@@ -363,7 +378,7 @@ export {
   setActivityCallback,
   clearActivityCallback,
   isSessionActive,
-  V_i,
-  rns,
-  ons,
+  currentActivityState,
+  setMainLoopActivityListener,
+  setNestedChainDropListener,
 };

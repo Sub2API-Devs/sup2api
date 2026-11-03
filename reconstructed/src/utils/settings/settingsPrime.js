@@ -33,32 +33,35 @@ import {
   managedSettingsSeedRead,
   listManagedDropIns,
 } from "./settingsSeed.js";
-import { Wre } from "../hostScoped.js";
+import { isDiskless } from "../hostScoped.js";
 import { logError } from "../log.js";
 import { primeRemoteManagedSettingsCache } from "../../services/remoteManagedSettings/remoteSettingsCache.js";
-import { is, or } from "./commandSyncNames.js";
+import { commandSyncNameState, invalidateCommandNames } from "./commandSyncNames.js";
 import { managedFileSettingsDirs } from "./managedFileSettings.js";
-import { Mne } from "./mdm/settings.js";
+import { wslInheritsSettings } from "./mdm/settings.js";
 import { PathSpace } from "../resultError.js";
 
 //@ chunk-5x106wnr.js:598-610 placement
-var b = 3,
-  z = 8;
+var MAX_SETTINGS_PRIME_ATTEMPTS = 3;
+var SETTINGS_PRIME_BACKOFF_FACTOR = 8;
 //@ chunk-5x106wnr.js:610-694 placement = _temp5 (1)
-function v() {
-  let s = getSettingsFilePathForSource("userSettings");
-  return s !== void 0 && basename(s) === USER_SETTINGS_FILE_NAMES.default ? s : void 0;
+function userSettingsFilePath() {
+  let settingsFilePathForSource = getSettingsFilePathForSource("userSettings");
+  return settingsFilePathForSource !== undefined &&
+    basename(settingsFilePathForSource) === USER_SETTINGS_FILE_NAMES.default
+    ? settingsFilePathForSource
+    : undefined;
 }
 //@ chunk-5x106wnr.js:694-878 placement
-async function seedUserSettings(s, e) {
+async function seedUserSettings(backend, e) {
   if (!isStorageV5Enabled()) return;
   let epoch = e.epoch;
-  (await Promise.all([
-    seedUserSettingsUnchecked(s, e),
-    primeRootOwnershipSafely(s, e),
-    trySeed("managed-settings file tier", () => refreshManagedTier(s, e, epoch)),
-  ]),
-    await trySeed("project/local layers", () => primeProjectLayers(s, e, e.epoch)));
+  await Promise.all([
+    seedUserSettingsUnchecked(backend, e),
+    primeRootOwnershipSafely(backend, e),
+    trySeed("managed-settings file tier", () => refreshManagedTier(backend, e, epoch)),
+  ]);
+  await trySeed("project/local layers", () => primeProjectLayers(backend, e, e.epoch));
 }
 //@ chunk-5x106wnr.js:878-1023 placement
 async function trySeed(s, e) {
@@ -67,86 +70,103 @@ async function trySeed(s, e) {
   } catch (error) {
     logForDebugging(
       `settingsPrime: start-up seed of the ${s} failed: ${errorMessage(error)}; the file reads serve`,
-      { level: "warn" },
+      {
+        level: "warn",
+      },
     );
   }
 }
+//@ chunk-5x106wnr.js:1023-1197 placement
 /**
  * 安全预读根所有权
  */
-//@ chunk-5x106wnr.js:1023-1197 placement
 async function primeRootOwnershipSafely(s, e) {
   try {
-    await X(s, e);
+    await primeRootOwnership_2(s, e);
   } catch (error) {
     logForDebugging(
       `settingsPrime: ownership read-ahead for the local settings root failed: ${errorMessage(error)}; the probe runs as today`,
-      { level: "warn" },
+      {
+        level: "warn",
+      },
     );
   }
 }
+//@ chunk-5x106wnr.js:1197-1855 placement
 /**
  * 预读用户设置
  */
-//@ chunk-5x106wnr.js:1197-1855 placement
 async function seedUserSettingsUnchecked(s, e) {
   try {
-    let i = v();
-    if (i === void 0) return;
+    let i = userSettingsFilePath();
+    if (i === undefined) return;
     if (e.parsedFiles.has(i)) {
       logForDebugging("settingsPrime: user settings already read before start-up; seed skipped");
       return;
     }
-    let epoch = e.epoch,
-      r = await readSettingsSeed(s, i);
-    if (r.kind === "absent") {
-      if (
-        (logMissingSettingsFile(i), e.seedParsedFile(i, "userSettings", missingSettingsFileResult(), epoch))
-      )
+    let epoch = e.epoch;
+    let settingsSeed = await readSettingsSeed(s, i);
+    if (settingsSeed.kind === "absent") {
+      logMissingSettingsFile(i);
+      if (e.seedParsedFile(i, "userSettings", missingSettingsFileResult(), epoch))
         logForDebugging("settingsPrime: user settings absent; seeded as none");
       return;
     }
-    if (r.kind !== "seeded") {
-      logForDebugging(`settingsPrime: start-up seed skipped (${seedOutcomeLabel(r)}); the file read serves`);
+    if (settingsSeed.kind !== "seeded") {
+      logForDebugging(
+        `settingsPrime: start-up seed skipped (${seedOutcomeLabel(settingsSeed)}); the file read serves`,
+      );
       return;
     }
-    if (e.seedParsedFile(i, "userSettings", r.parsed, epoch))
-      logForDebugging(`settingsPrime: user settings seeded at start-up (${r.size} bytes)`);
+    if (e.seedParsedFile(i, "userSettings", settingsSeed.parsed, epoch))
+      logForDebugging(`settingsPrime: user settings seeded at start-up (${settingsSeed.size} bytes)`);
   } catch (error) {
     logForDebugging(`settingsPrime: start-up seed failed: ${errorMessage(error)}; the file read serves`, {
       level: "warn",
     });
   }
 }
+//@ chunk-5x106wnr.js:1855-5498 placement
 /**
  * 设置预读器
  */
-//@ chunk-5x106wnr.js:1855-5498 placement
 class SettingsPrimer {
   storageV5;
   store;
   inFlight = null;
-  followUpQueued = !1;
-  disposed = !1;
-  state = { kind: "unprimed" };
+  followUpQueued = false;
+  disposed = false;
+  state = {
+    kind: "unprimed",
+  };
   consecutiveThrows = 0;
   runsInState = 0;
   loggedThrowMessages = new Set();
   loggedOwnershipThrowMessages = new Set();
   loggedHostFilesThrowMessages = new Set();
   unsubscribe;
-  constructor(s, e) {
-    this.storageV5 = s;
+  constructor(storageV5, e) {
+    this.storageV5 = storageV5;
     this.store = e;
-    ((this.unsubscribe = e.onInvalidate(() => {
-      if (!this.disposed) (this.seedAttestedTier(), this.keepUserLayer(), this.schedule());
-    })),
-      this.seedAttestedTier(),
-      this.schedule());
+    this.unsubscribe = e.onInvalidate(() => {
+      if (!this.disposed) {
+        this.seedAttestedTier();
+        this.keepUserLayer();
+        this.schedule();
+      }
+    });
+    this.seedAttestedTier();
+    this.schedule();
   }
   keepUserLayer() {
-    let s = Wre() ? this.store.lastSeededUserLayer : void 0;
-    if (s !== void 0) this.store.seedParsedFile(s.path, "userSettings", s.parsed, this.store.epoch);
+    let lastSeededUserLayer = isDiskless() ? this.store.lastSeededUserLayer : undefined;
+    if (lastSeededUserLayer !== undefined)
+      this.store.seedParsedFile(
+        lastSeededUserLayer.path,
+        "userSettings",
+        lastSeededUserLayer.parsed,
+        this.store.epoch,
+      );
   }
   seedAttestedTier() {
     try {
@@ -157,27 +177,34 @@ class SettingsPrimer {
   }
   schedule() {
     if (this.inFlight !== null) {
-      this.followUpQueued = !0;
+      this.followUpQueued = true;
       return;
     }
     this.inFlight = this.run().finally(() => {
       if (this.disposed) return;
-      if (((this.inFlight = null), this.followUpQueued)) ((this.followUpQueued = !1), this.schedule());
+      this.inFlight = null;
+      if (this.followUpQueued) {
+        this.followUpQueued = false;
+        this.schedule();
+      }
     });
   }
   async run() {
     let s = readRootOwnershipAhead(this.storageV5, this.store).then(
-      (e) => (this.loggedOwnershipThrowMessages.clear(), e),
-      (e) => {
-        if (!this.disposed) this.logThrowOnce(e, this.loggedOwnershipThrowMessages);
+      (rootOwnershipAhead) => {
+        this.loggedOwnershipThrowMessages.clear();
+        return rootOwnershipAhead;
+      },
+      (error) => {
+        if (!this.disposed) this.logThrowOnce(error, this.loggedOwnershipThrowMessages);
         return;
       },
     );
     try {
       let epoch = this.store.epoch;
       try {
-        let r = v();
-        if (r !== void 0) {
+        let r = userSettingsFilePath();
+        if (r !== undefined) {
           if (!(await this.seedFromBackend(r, epoch))) return;
         }
       } catch (error) {
@@ -186,19 +213,20 @@ class SettingsPrimer {
       }
       let i = await s;
       if (this.disposed) return;
+      primeRootOwnership(this.store, i);
       if (
-        (primeRootOwnership(this.store, i),
         (
           await Promise.all([
             this.seedLogged(epoch, primeProjectLayers),
             this.seedLogged(epoch, refreshManagedTier),
           ])
-        ).includes(!1))
+        ).includes(false)
       )
         return;
       this.consecutiveThrows = 0;
       try {
-        (getSettingsWithErrors_2(), this.loggedThrowMessages.clear());
+        getSettingsWithErrors_2();
+        this.loggedThrowMessages.clear();
       } catch (error) {
         if (!this.disposed) this.logThrowOnce(error);
       }
@@ -215,25 +243,25 @@ class SettingsPrimer {
     }
   }
   async seedFromBackend(s, e) {
-    let state = this.state,
-      n = await readSettingsSeed(this.storageV5, s, state.kind === "seeded" ? state : void 0);
-    if (this.store.epoch !== e || this.disposed) return !1;
-    if (n.kind === "seeded") {
-      if (
-        (this.store.seedParsedFile(s, "userSettings", n.parsed, e),
-        state.kind === "seeded" && state.contentHash === n.contentHash)
-      )
-        return !0;
-    } else if (n.kind === "absent")
-      (logMissingSettingsFile(s),
-        this.store.seedParsedFile(s, "userSettings", missingSettingsFileResult(), e));
-    return (this.transition(n), !0);
+    let state = this.state;
+    let settingsSeed = await readSettingsSeed(this.storageV5, s, state.kind === "seeded" ? state : undefined);
+    if (this.store.epoch !== e || this.disposed) return false;
+    if (settingsSeed.kind === "seeded") {
+      this.store.seedParsedFile(s, "userSettings", settingsSeed.parsed, e);
+      if (state.kind === "seeded" && state.contentHash === settingsSeed.contentHash) return true;
+    } else if (settingsSeed.kind === "absent") {
+      logMissingSettingsFile(s);
+      this.store.seedParsedFile(s, "userSettings", missingSettingsFileResult(), e);
+    }
+    this.transition(settingsSeed);
+    return true;
   }
   transition(s) {
     let state = this.state;
+    this.state = s;
     if (
-      ((this.state = s),
-      state.kind === s.kind && (s.kind !== "failing" || (state.kind === "failing" && state.code === s.code)))
+      state.kind === s.kind &&
+      (s.kind !== "failing" || (state.kind === "failing" && state.code === s.code))
     ) {
       this.runsInState++;
       return;
@@ -255,7 +283,9 @@ class SettingsPrimer {
       case "failing":
         logForDebugging(
           `settingsPrime: backend read failed: ${s.code}${s.failureClass ? ` (${s.failureClass})` : ""}; the last seed or the raw path serves`,
-          { level: "warn" },
+          {
+            level: "warn",
+          },
         );
         return;
       case "unprimed":
@@ -264,22 +294,26 @@ class SettingsPrimer {
     }
   }
   onThrow(s) {
-    if (
-      (this.consecutiveThrows++,
-      (this.state = { kind: "broken" }),
-      this.logThrowOnce(s),
-      this.consecutiveThrows >= b)
-    )
-      (logForDebugging(
-        `settingsPrime: disabled after ${b} consecutive failures; the raw path serves from the next reset`,
-        { level: "warn" },
-      ),
-        this.dispose());
+    this.consecutiveThrows++;
+    this.state = {
+      kind: "broken",
+    };
+    this.logThrowOnce(s);
+    if (this.consecutiveThrows >= MAX_SETTINGS_PRIME_ATTEMPTS) {
+      logForDebugging(
+        `settingsPrime: disabled after ${MAX_SETTINGS_PRIME_ATTEMPTS} consecutive failures; the raw path serves from the next reset`,
+        {
+          level: "warn",
+        },
+      );
+      this.dispose();
+    }
   }
   logThrowOnce(s, e = this.loggedThrowMessages) {
     let i = errorMessage(s);
-    if (e.has(i) || e.size >= z) return;
-    (e.add(i), logError(s));
+    if (e.has(i) || e.size >= SETTINGS_PRIME_BACKOFF_FACTOR) return;
+    e.add(i);
+    logError(s);
   }
   primes(s) {
     return this.storageV5 === s;
@@ -288,166 +322,197 @@ class SettingsPrimer {
     while (this.inFlight !== null || this.followUpQueued) await (this.inFlight ?? Promise.resolve());
   }
   dispose() {
-    if (
-      ((this.disposed = !0),
-      this.unsubscribe(),
-      (this.inFlight = null),
-      (this.followUpQueued = !1),
-      this.store.primer === this)
-    )
-      ((this.store.primer = void 0),
-        this.store.managedFileReads.clear(),
-        (this.store.lastSeededUserLayer = void 0));
+    this.disposed = true;
+    this.unsubscribe();
+    this.inFlight = null;
+    this.followUpQueued = false;
+    if (this.store.primer === this) {
+      this.store.primer = undefined;
+      this.store.managedFileReads.clear();
+      this.store.lastSeededUserLayer = undefined;
+    }
   }
 }
+//@ chunk-5x106wnr.js:5498-5750 placement
 /**
  * 启动时通过存储后端预读设置层（用户、项目、本地、托管），之后的设置读取直接用预读结果。
  */
-//@ chunk-5x106wnr.js:5498-5750 placement
-async function primeSettings(s, e) {
-  if (!isStorageV5Enabled() || s === void 0) return;
-  if (e.primer !== void 0) {
-    if (!e.primer.primes(s))
+async function primeSettings(storageV5, e) {
+  if (!isStorageV5Enabled() || storageV5 === undefined) return;
+  if (e.primer !== undefined) {
+    if (!e.primer.primes(storageV5))
       logForDebugging("settingsPrime: store already primed through another backend; second prime ignored");
     return;
   }
-  (primeRemoteManagedSettingsCache(s).catch(logError),
-    (e.primer = new SettingsPrimer(s, e)),
-    await e.primer.whenIdle());
+  primeRemoteManagedSettingsCache(storageV5).catch(logError);
+  e.primer = new SettingsPrimer(storageV5, e);
+  await e.primer.whenIdle();
 }
 //@ chunk-5x106wnr.js:5750-5900 placement
 async function resetSettingsCacheWithBackendRead(s) {
-  let e = is(),
-    backendReadResetTail = e.backendReadResetTail,
-    n;
-  ((e.backendReadResetTail = new Promise((r) => (n = r))), await backendReadResetTail);
+  let e = commandSyncNameState();
+  let backendReadResetTail = e.backendReadResetTail;
+  let n;
+  e.backendReadResetTail = new Promise((resolve) => (n = resolve));
+  await backendReadResetTail;
   try {
     return await primeAllSettings(s, e);
   } finally {
     n();
   }
 }
+//@ chunk-5x106wnr.js:5900-6195 placement
 /**
  * 预读全部设置层
  */
-//@ chunk-5x106wnr.js:5900-6195 placement
 async function primeAllSettings(s, e) {
-  if ((await e.primer?.whenIdle(), e.primer !== void 0)) await primeRootOwnershipSafely(s, e);
+  await e.primer?.whenIdle();
+  if (e.primer !== undefined) await primeRootOwnershipSafely(s, e);
   let i =
-    e.primer === void 0
+    e.primer === undefined
       ? []
-      : (await Promise.all([...W(s).map((n) => seedUserSettings_2(e, n)), primeManagedTier(s, e)]))
+      : (
+          await Promise.all([
+            ...settingsPrimeReads(s).map((n) => seedUserSettings_2(e, n)),
+            primeManagedTier(s, e),
+          ])
+        )
           .flat()
-          .filter((n) => n !== void 0);
-  if ((or(i.length > 0 ? { userLayer: "retain" } : void 0), i.length === 0)) return;
+          .filter((n) => n !== undefined);
+  invalidateCommandNames(
+    i.length > 0
+      ? {
+          userLayer: "retain",
+        }
+      : undefined,
+  );
+  if (i.length === 0) return;
   return () => {
     for (let n of i) n();
   };
 }
 //@ chunk-5x106wnr.js:6195-6263 placement
-function W(s) {
-  let e = v();
-  return [...(e === void 0 ? [] : [userSettingsSeedRead(s, e)]), ...projectSettingsReads(s)];
+function settingsPrimeReads(s) {
+  let e = userSettingsFilePath();
+  return [...(e === undefined ? [] : [userSettingsSeedRead(s, e)]), ...projectSettingsReads(s)];
 }
+//@ chunk-5x106wnr.js:6263-6587 placement
 /**
  * 项目与本地设置读取任务
  */
-//@ chunk-5x106wnr.js:6263-6587 placement
 function projectSettingsReads(s) {
   let e = [];
   for (let i of ["projectSettings", "localSettings"]) {
     if (i === "projectSettings" && projectSettingsAliasesUserSettings()) continue;
-    let n = getSettingsFilePathForSource(i);
-    if (n !== void 0)
+    let settingsFilePathForSource = getSettingsFilePathForSource(i);
+    if (settingsFilePathForSource !== undefined)
       e.push(
-        projectSettingsSeedRead(s, i, n, i === "projectSettings" ? "project settings" : "local settings"),
+        projectSettingsSeedRead(
+          s,
+          i,
+          settingsFilePathForSource,
+          i === "projectSettings" ? "project settings" : "local settings",
+        ),
       );
     if (i === "localSettings") {
-      let r = getLegacyLocalSettingsFilePath();
-      if (r !== void 0 && r !== n) e.push(projectSettingsSeedRead(s, i, r, "legacy local settings"));
+      let legacyLocalSettingsFilePath = getLegacyLocalSettingsFilePath();
+      if (
+        legacyLocalSettingsFilePath !== undefined &&
+        legacyLocalSettingsFilePath !== settingsFilePathForSource
+      )
+        e.push(projectSettingsSeedRead(s, i, legacyLocalSettingsFilePath, "legacy local settings"));
     }
   }
   return e;
 }
+//@ chunk-5x106wnr.js:6587-7783 placement
 /**
  * 读托管设置文件层
  */
-//@ chunk-5x106wnr.js:6587-7783 placement
 async function readManagedTier(s, e) {
   let hostFiles = s.hostFiles;
   if (!hostFiles.serves("system")) {
-    if (!e.systemSpaceServingLogged)
-      ((e.systemSpaceServingLogged = !0),
-        logForDebugging(
-          "settingsPrime: the managed-settings file tier is not read ahead (the backend does not serve 'system'); the policy walk reads the host's files itself",
-        ));
+    if (!e.systemSpaceServingLogged) {
+      e.systemSpaceServingLogged = true;
+      logForDebugging(
+        "settingsPrime: the managed-settings file tier is not read ahead (the backend does not serve 'system'); the policy walk reads the host's files itself",
+      );
+    }
     return;
   }
-  let n = managedFileSettingsDirs(Mne()),
-    policyWalkCount = e.policyWalkCount,
-    mapped = n.map((u) =>
-      managedSettingsSeedRead(s, join(u, "managed-settings.json"), "managed settings", e),
-    ),
-    [g, c] = await Promise.all([
-      Promise.all(n.map((u) => listManagedDropIns(hostFiles, join(u, "managed-settings.d")))),
-      Promise.all(mapped.map((u) => u.read())),
-    ]),
-    o = { listings: [], unlisted: [], layers: [...mapped], walksAtReadStart: policyWalkCount },
-    f = [];
+  let n = managedFileSettingsDirs(wslInheritsSettings());
+  let walksAtReadStart = e.policyWalkCount;
+  let mapped = n.map((u) =>
+    managedSettingsSeedRead(s, join(u, "managed-settings.json"), "managed settings", e),
+  );
+  let [g, c] = await Promise.all([
+    Promise.all(n.map((u) => listManagedDropIns(hostFiles, join(u, "managed-settings.d")))),
+    Promise.all(mapped.map((u) => u.read())),
+  ]);
+  let o = {
+    listings: [],
+    unlisted: [],
+    layers: [...mapped],
+    walksAtReadStart,
+  };
+  let f = [];
   for (let [u, S] of n.entries()) {
-    let p = g[u],
-      m = join(S, "managed-settings.d");
+    let p = g[u];
+    let m = join(S, "managed-settings.d");
     if (p.kind === "failing") {
-      (logForDebugging(
+      logForDebugging(
         `settingsPrime: ${m} not listed through the backend (backend listing failed: ${p.code}${p.failureClass ? ` (${p.failureClass})` : ""}); the folder read serves`,
-      ),
-        o.unlisted.push(m));
+      );
+      o.unlisted.push(m);
       continue;
     }
     if (p.names.length === 0) {
-      (logForDebugging(`settingsPrime: ${m} has no drop-ins to read ahead; the folder read confirms`),
-        o.unlisted.push(m));
+      logForDebugging(`settingsPrime: ${m} has no drop-ins to read ahead; the folder read confirms`);
+      o.unlisted.push(m);
       continue;
     }
-    o.listings.push({ dir: m, names: p.names });
+    o.listings.push({
+      dir: m,
+      names: p.names,
+    });
     for (let j of p.names) f.push(managedSettingsSeedRead(s, join(m, j), "managed settings drop-in", e));
   }
-  return (
-    o.layers.push(...f),
-    { ...o, reads: Promise.all(f.map((u) => u.read())).then((u) => [...c, ...u]) }
-  );
+  o.layers.push(...f);
+  return {
+    ...o,
+    reads: Promise.all(f.map((u) => u.read())).then((u) => [...c, ...u]),
+  };
 }
+//@ chunk-5x106wnr.js:7783-7934 placement
 /**
  * 预读项目层
  */
-//@ chunk-5x106wnr.js:7783-7934 placement
-async function primeProjectLayers(s, e, i) {
+async function primeProjectLayers(s, e, epoch) {
   let n = projectSettingsReads(s);
-  if (n.length === 0) return !0;
+  if (n.length === 0) return true;
   let results = await Promise.all(n.map((a) => a.read()));
-  if (e.epoch !== i) return !1;
-  return (installProjectLayers(e, n, results, i), !0);
+  if (e.epoch !== epoch) return false;
+  installProjectLayers(e, n, results, epoch);
+  return true;
 }
 //@ chunk-5x106wnr.js:7934-7958 placement
-var freeze = Object.freeze([]);
+var L = Object.freeze([]);
+//@ chunk-5x106wnr.js:7958-9054 placement
 /**
  * 已证实的托管层
  */
-//@ chunk-5x106wnr.js:7958-9054 placement
-function attestedManagedLayers(s, e, i) {
+function attestedManagedLayers(s, e, epoch) {
   if (s.hostFiles.serving("system") !== "absent" || e.systemAttestationContradicted) return;
-  let mapped = managedFileSettingsDirs(Mne()).map((r) => ({
+  let mapped = managedFileSettingsDirs(wslInheritsSettings()).map((r) => ({
     dropInDir: join(r, "managed-settings.d"),
     basePath: join(r, "managed-settings.json"),
   }));
-  if (
-    mapped.some(({ basePath: basePath, dropInDir: dropInDir }) =>
-      e.walkReadManagedFileIn(basePath, dropInDir),
-    )
-  ) {
-    e.systemAttestationContradicted = !0;
-    for (let { basePath: basePath, dropInDir: dropInDir } of mapped)
-      (e.clearFolderListing(dropInDir, i), e.unseedParsedFile(basePath, "policySettings", i));
+  if (mapped.some(({ basePath, dropInDir }) => e.walkReadManagedFileIn(basePath, dropInDir))) {
+    e.systemAttestationContradicted = true;
+    for (let { basePath, dropInDir } of mapped) {
+      e.clearFolderListing(dropInDir, epoch);
+      e.unseedParsedFile(basePath, "policySettings", epoch);
+    }
     logError(
       Error(
         "settings: a managed-settings file was read from a folder the host attested absent ('system' space); the attestation is ignored for the rest of this process",
@@ -455,174 +520,216 @@ function attestedManagedLayers(s, e, i) {
     );
     return;
   }
-  if (!e.systemSpaceServingLogged)
-    ((e.systemSpaceServingLogged = !0),
-      logForDebugging(
-        "settingsPrime: the host attests the 'system' space absent, so this machine's policy folder (or the one CLAUDE_CODE_MANAGED_SETTINGS_PATH names) is not read and the session has no managed-settings files",
-      ));
-  for (let { basePath: basePath, dropInDir: dropInDir } of mapped)
-    if ((e.seedFolderListing(dropInDir, freeze, i), !e.walkRead(basePath)))
-      e.seedParsedFile(basePath, "policySettings", missingSettingsFileResult(), i);
+  if (!e.systemSpaceServingLogged) {
+    e.systemSpaceServingLogged = true;
+    logForDebugging(
+      "settingsPrime: the host attests the 'system' space absent, so this machine's policy folder (or the one CLAUDE_CODE_MANAGED_SETTINGS_PATH names) is not read and the session has no managed-settings files",
+    );
+  }
+  for (let { basePath, dropInDir } of mapped) {
+    e.seedFolderListing(dropInDir, L, epoch);
+    if (!e.walkRead(basePath))
+      e.seedParsedFile(basePath, "policySettings", missingSettingsFileResult(), epoch);
+  }
   return {
-    listings: mapped.map(({ dropInDir: dropInDir }) => ({ dir: dropInDir, names: freeze })),
-    layers: mapped.map(({ basePath: basePath }) => ({ path: basePath, parsed: missingSettingsFileResult() })),
+    listings: mapped.map(({ dropInDir }) => ({
+      dir: dropInDir,
+      names: L,
+    })),
+    layers: mapped.map(({ basePath }) => ({
+      path: basePath,
+      parsed: missingSettingsFileResult(),
+    })),
   };
 }
+//@ chunk-5x106wnr.js:9054-9260 placement
 /**
  * 刷新托管层
  */
-//@ chunk-5x106wnr.js:9054-9260 placement
-async function refreshManagedTier(s, e, i) {
-  if (attestedManagedLayers(s, e, i) !== void 0) return e.epoch === i;
-  let n = await readManagedTier(s, e);
-  if (n === void 0) return (clearManagedSeeds(e, i), !0);
-  let reads = await n.reads;
-  if (e.epoch !== i) return !1;
-  let { verdicts: verdicts } = installFolderListings(e, n, i);
-  return (installSeededLayers(e, n, reads, verdicts, i), !0);
+async function refreshManagedTier(s, e, epoch) {
+  if (attestedManagedLayers(s, e, epoch) !== undefined) return e.epoch === epoch;
+  let managedTier = await readManagedTier(s, e);
+  if (managedTier === undefined) {
+    clearManagedSeeds(e, epoch);
+    return true;
+  }
+  let reads = await managedTier.reads;
+  if (e.epoch !== epoch) return false;
+  let { verdicts } = installFolderListings(e, managedTier, epoch);
+  installSeededLayers(e, managedTier, reads, verdicts, epoch);
+  return true;
 }
+//@ chunk-5x106wnr.js:9260-10314 placement
 /**
  * 安装预读的托管设置层
  */
-//@ chunk-5x106wnr.js:9260-10314 placement
-function installSeededLayers(s, e, i, n, r) {
-  let a = [],
-    g = new Set();
-  for (let [c, o] of e.layers.entries()) {
-    let f = i[c];
+function installSeededLayers(s, managedTier, reads, verdicts, r) {
+  let a = [];
+  let g = new Set();
+  for (let [c, o] of managedTier.layers.entries()) {
+    let f = reads[c];
     if (f.kind !== "seeded") {
-      (logForDebugging(`settingsPrime: ${o.label} not seeded (${seedOutcomeLabel(f)}); the file read serves`),
-        s.managedFileReads.delete(o.path),
-        s.unseedParsedFile(o.path, o.source, r));
+      logForDebugging(`settingsPrime: ${o.label} not seeded (${seedOutcomeLabel(f)}); the file read serves`);
+      s.managedFileReads.delete(o.path);
+      s.unseedParsedFile(o.path, o.source, r);
       continue;
     }
-    (g.add(o.path), s.managedFileReads.set(o.path, { contentHash: f.contentHash, parsed: f.parsed }));
-    let u = n.get(dirname(o.path)),
-      S = u !== void 0 && u !== "install" ? u : s.policyInstallVerdict(o.path, f.parsed, e.walksAtReadStart);
+    g.add(o.path);
+    s.managedFileReads.set(o.path, {
+      contentHash: f.contentHash,
+      parsed: f.parsed,
+    });
+    let u = verdicts.get(dirname(o.path));
+    let S =
+      u !== undefined && u !== "install"
+        ? u
+        : s.policyInstallVerdict(o.path, f.parsed, managedTier.walksAtReadStart);
     if (S === "raced") {
-      (s.dropRetainedLayer(o.path),
-        logForDebugging(
-          `settingsPrime: ${o.label} not installed (the walk read different content while this read was in flight); re-verified next generation`,
-        ));
+      s.dropRetainedLayer(o.path);
+      logForDebugging(
+        `settingsPrime: ${o.label} not installed (the walk read different content while this read was in flight); re-verified next generation`,
+      );
       continue;
     }
     if (S === "deferred") {
-      (logForDebugging(
+      logForDebugging(
         `settingsPrime: ${o.label} changed after this generation's policy walk; it applies from the next reset, as today`,
-      ),
-        a.push({ layer: o, parsed: f.parsed }));
+      );
+      a.push({
+        layer: o,
+        parsed: f.parsed,
+      });
       continue;
     }
-    if (s.seedParsedFile(o.path, o.source, f.parsed, r)) a.push({ layer: o, parsed: f.parsed });
+    if (s.seedParsedFile(o.path, o.source, f.parsed, r))
+      a.push({
+        layer: o,
+        parsed: f.parsed,
+      });
   }
-  for (let c of [...s.managedFileReads.keys()])
-    if (!g.has(c)) (s.managedFileReads.delete(c), s.unseedParsedFile(c, "policySettings", r));
+  for (let key of [...s.managedFileReads.keys()])
+    if (!g.has(key)) {
+      s.managedFileReads.delete(key);
+      s.unseedParsedFile(key, "policySettings", r);
+    }
   return a;
 }
+//@ chunk-5x106wnr.js:10314-10517 placement
 /**
  * 清除托管设置预读
  */
-//@ chunk-5x106wnr.js:10314-10517 placement
 function clearManagedSeeds(s, e) {
-  for (let i of [...s.managedFileReads.keys()])
-    (s.managedFileReads.delete(i), s.unseedParsedFile(i, "policySettings", e));
-  for (let i of managedFileSettingsDirs(Mne())) s.clearFolderListing(join(i, "managed-settings.d"), e);
+  for (let key of [...s.managedFileReads.keys()]) {
+    s.managedFileReads.delete(key);
+    s.unseedParsedFile(key, "policySettings", e);
+  }
+  for (let i of managedFileSettingsDirs(wslInheritsSettings()))
+    s.clearFolderListing(join(i, "managed-settings.d"), e);
 }
+//@ chunk-5x106wnr.js:10517-11192 placement
 /**
  * 安装 managed-settings.d 列表
  */
-//@ chunk-5x106wnr.js:10517-11192 placement
-function installFolderListings(s, e, i) {
-  for (let a of e.unlisted) s.clearFolderListing(a, i);
-  let n = [],
-    r = new Map();
-  for (let listing of e.listings) {
-    let folderInstallVerdict = s.folderInstallVerdict(listing.dir, listing.names, e.walksAtReadStart);
-    if ((r.set(listing.dir, folderInstallVerdict), folderInstallVerdict === "raced"))
-      (s.clearFolderListing(listing.dir, i),
-        logForDebugging(
-          `settingsPrime: ${listing.dir} listing not installed (a read this generation went by another membership while it was in flight); the walk's membership or its own folder read serves until the next reset`,
-        ));
-    else if (folderInstallVerdict === "deferred")
-      (logForDebugging(
+function installFolderListings(s, managedTier, i) {
+  for (let a of managedTier.unlisted) s.clearFolderListing(a, i);
+  let n = [];
+  let r = new Map();
+  for (let listing of managedTier.listings) {
+    let g = s.folderInstallVerdict(listing.dir, listing.names, managedTier.walksAtReadStart);
+    r.set(listing.dir, g);
+    if (g === "raced") {
+      s.clearFolderListing(listing.dir, i);
+      logForDebugging(
+        `settingsPrime: ${listing.dir} listing not installed (a read this generation went by another membership while it was in flight); the walk's membership or its own folder read serves until the next reset`,
+      );
+    } else if (g === "deferred") {
+      logForDebugging(
         `settingsPrime: ${listing.dir} membership changed after this generation's policy walk; it applies from the next reset, as today`,
-      ),
-        n.push(listing));
-    else if (s.seedFolderListing(listing.dir, listing.names, i)) n.push(listing);
+      );
+      n.push(listing);
+    } else if (s.seedFolderListing(listing.dir, listing.names, i)) n.push(listing);
   }
-  return { kept: n, verdicts: r };
+  return {
+    kept: n,
+    verdicts: r,
+  };
 }
+//@ chunk-5x106wnr.js:11192-11713 placement
 /**
  * 安装项目层预读
  */
-//@ chunk-5x106wnr.js:11192-11713 placement
 function installProjectLayers(s, e, i, n) {
   for (let [r, a] of e.entries()) {
-    let g = i[r],
-      c =
-        g.kind === "seeded"
-          ? g.parsed
-          : g.kind === "absent" && a.whenAbsent === "seedAbsence"
-            ? missingSettingsFileResult()
-            : void 0;
-    if (c !== void 0 && s.walkReadDiffers(a.path, c))
+    let g = i[r];
+    let c =
+      g.kind === "seeded"
+        ? g.parsed
+        : g.kind === "absent" && a.whenAbsent === "seedAbsence"
+          ? missingSettingsFileResult()
+          : undefined;
+    if (c !== undefined && s.walkReadDiffers(a.path, c))
       logForDebugging(
         `settingsPrime: ${a.label} not installed (the file read already saw different content this generation)`,
       );
     else if (g.kind === "seeded") s.seedParsedFile(a.path, a.source, g.parsed, n);
-    else if (c !== void 0) (logMissingSettingsFile(a.path), s.seedParsedFile(a.path, a.source, c, n));
-    else
+    else if (c !== undefined) {
+      logMissingSettingsFile(a.path);
+      s.seedParsedFile(a.path, a.source, c, n);
+    } else
       logForDebugging(`settingsPrime: ${a.label} not seeded (${seedOutcomeLabel(g)}); the file read serves`);
   }
 }
+//@ chunk-5x106wnr.js:11713-12295 placement
 /**
  * 预读托管层
  */
-//@ chunk-5x106wnr.js:11713-12295 placement
 async function primeManagedTier(s, e) {
   if (!isStorageV5Enabled()) return [];
   let epoch = e.epoch;
   try {
     let n = attestedManagedLayers(s, e, epoch);
-    if (n !== void 0)
+    if (n !== undefined)
       return [
-        ...n.listings.map(({ dir: dir, names: names }) => e.retainFolderListing(dir, names)),
-        ...n.layers.map(({ path: path, parsed: parsed }) => e.retainLayer(path, parsed)),
+        ...n.listings.map(({ dir, names }) => e.retainFolderListing(dir, names)),
+        ...n.layers.map(({ path, parsed }) => e.retainLayer(path, parsed)),
       ];
-    let r = await readManagedTier(s, e);
-    if (r === void 0) return (clearManagedSeeds(e, epoch), []);
-    let reads = await r.reads;
+    let managedTier = await readManagedTier(s, e);
+    if (managedTier === undefined) {
+      clearManagedSeeds(e, epoch);
+      return [];
+    }
+    let reads = await managedTier.reads;
     if (e.epoch !== epoch) return [];
-    let g = installFolderListings(e, r, epoch);
+    let g = installFolderListings(e, managedTier, epoch);
     return [
-      ...g.kept.map(({ dir: dir, names: names }) => e.retainFolderListing(dir, names)),
-      ...installSeededLayers(e, r, reads, g.verdicts, epoch).map(({ layer: layer, parsed: parsed }) =>
+      ...g.kept.map(({ dir, names }) => e.retainFolderListing(dir, names)),
+      ...installSeededLayers(e, managedTier, reads, g.verdicts, epoch).map(({ layer, parsed }) =>
         e.retainLayer(layer.path, parsed),
       ),
     ];
   } catch (error) {
-    return (
-      logForDebugging(
-        `settings: managed settings not re-seeded: ${errorMessage(error)}; the file reads serve`,
-        { level: "warn" },
-      ),
-      []
+    logForDebugging(
+      `settings: managed settings not re-seeded: ${errorMessage(error)}; the file reads serve`,
+      {
+        level: "warn",
+      },
     );
+    return [];
   }
 }
 //@ chunk-5x106wnr.js:12295-12335 placement
-async function X(s, e) {
+async function primeRootOwnership_2(s, e) {
   primeRootOwnership(e, await readRootOwnershipAhead(s, e));
 }
+//@ chunk-5x106wnr.js:12335-13082 placement
 /**
  * 预读根目录所有权
  */
-//@ chunk-5x106wnr.js:12335-13082 placement
 async function readRootOwnershipAhead(s, e) {
   if (!isStorageV5Enabled()) return;
   if (typeof process.getuid !== "function" && typeof process.geteuid !== "function") return;
   let i = localSettingsStoreRootAwaitingOwnershipProbe();
-  if (i === void 0 || e.localStoreProbes.hasCanonicalRootOwnerUids(i)) return;
+  if (i === undefined || e.localStoreProbes.hasCanonicalRootOwnerUids(i)) return;
   let hostFiles = s.hostFiles;
   if (!hostFiles.serves("workspace")) {
     logForDebugging(
@@ -630,73 +737,99 @@ async function readRootOwnershipAhead(s, e) {
     );
     return;
   }
-  let [r, a, g] = await Promise.allSettled([
-      hostFiles.stat(PathSpace.workspace(i)),
-      hostFiles.stat(PathSpace.workspace(join(i, ".git")), { follow: !1 }),
-      hostFiles.stat(PathSpace.workspace(join(i, ".claude")), { follow: !1 }),
-    ]),
-    c = unwrapSettledResult(r),
-    o = unwrapSettledResult(a),
-    f = unwrapSettledResult(g),
-    u = ownerUidsOf(c, o, f);
+  let [error, error_2, error_3] = await Promise.allSettled([
+    hostFiles.stat(PathSpace.workspace(i)),
+    hostFiles.stat(PathSpace.workspace(join(i, ".git")), {
+      follow: false,
+    }),
+    hostFiles.stat(PathSpace.workspace(join(i, ".claude")), {
+      follow: false,
+    }),
+  ]);
+  let c = unwrapSettledResult(error);
+  let o = unwrapSettledResult(error_2);
+  let f = unwrapSettledResult(error_3);
+  let u = ownerUidsOf(c, o, f);
   if ("skipped" in u) {
     logForDebugging(
       `settingsPrime: ownership of the local settings root not read ahead (${u.skipped}); the probe runs as today`,
     );
     return;
   }
-  return { root: i, uids: u.uids };
+  return {
+    root: i,
+    uids: u.uids,
+  };
 }
+//@ chunk-5x106wnr.js:13082-13263 placement
 /**
  * 预读本地设置根所有者
  */
-//@ chunk-5x106wnr.js:13082-13263 placement
 function primeRootOwnership(s, e) {
-  if (e !== void 0 && s.localStoreProbes.primeCanonicalRootOwnerUids(e.root, e.uids))
+  if (e !== undefined && s.localStoreProbes.primeCanonicalRootOwnerUids(e.root, e.uids))
     logForDebugging("settingsPrime: ownership of the local settings root read ahead through the backend");
 }
+//@ chunk-5x106wnr.js:13263-13332 placement = extractQuotaStatusFromError (1)
 /**
  * Promise.allSettled 结果：rejected 抛出原因，否则返回值。旧版名错配；疑似归错文件。
  */
-//@ chunk-5x106wnr.js:13263-13332 placement = extractQuotaStatusFromError (1)
 function unwrapSettledResult(error) {
   if (error.status === "rejected") throw error.reason;
   return error.value;
 }
+//@ chunk-5x106wnr.js:13332-13986 placement
 /**
  * 根、.git、.claude 的所有者 uid
  */
-//@ chunk-5x106wnr.js:13332-13986 placement
 function ownerUidsOf(s, e, i) {
-  if (!s.ok) return { skipped: `stat of the root failed: ${k(s.error)}` };
-  if (!e.ok) return { skipped: `lstat of .git failed: ${k(e.error)}` };
-  if (!i.ok) return { skipped: `lstat of .claude failed: ${k(i.error)}` };
-  let n = w(s.value);
-  if (n === void 0)
-    return { skipped: s.value.kind === "absent" ? "the root is absent" : "no owner uid for the root" };
-  let r = w(e.value);
-  if (r === void 0)
+  if (!s.ok)
+    return {
+      skipped: `stat of the root failed: ${failureCodeForTelemetry(s.error)}`,
+    };
+  if (!e.ok)
+    return {
+      skipped: `lstat of .git failed: ${failureCodeForTelemetry(e.error)}`,
+    };
+  if (!i.ok)
+    return {
+      skipped: `lstat of .claude failed: ${failureCodeForTelemetry(i.error)}`,
+    };
+  let n = ownershipUid(s.value);
+  if (n === undefined)
+    return {
+      skipped: s.value.kind === "absent" ? "the root is absent" : "no owner uid for the root",
+    };
+  let r = ownershipUid(e.value);
+  if (r === undefined)
     return {
       skipped:
         e.value.kind === "absent"
           ? "no .git entry (left to the probe's per-call throw)"
           : "no owner uid for .git",
     };
-  let a = null;
+  let claudeEntryUid = null;
   if (i.value.kind !== "absent") {
-    let g = w(i.value);
-    if (g === void 0) return { skipped: "no owner uid for .claude" };
-    a = g;
+    let g = ownershipUid(i.value);
+    if (g === undefined)
+      return {
+        skipped: "no owner uid for .claude",
+      };
+    claudeEntryUid = g;
   }
-  return { uids: { rootUid: n, gitEntryUid: r, claudeEntryUid: a } };
+  return {
+    uids: {
+      rootUid: n,
+      gitEntryUid: r,
+      claudeEntryUid,
+    },
+  };
 }
 //@ chunk-5x106wnr.js:13986-14038 placement
-function w(s) {
-  return s.kind === "absent" ? void 0 : s.uid;
+function ownershipUid(s) {
+  return s.kind === "absent" ? undefined : s.uid;
 }
 //@ chunk-5x106wnr.js:14038-14116 placement
-function k(s) {
-  return s.code === "Failed" ? (s.telemetryCode ?? s.failureClass) : s.code;
+function failureCodeForTelemetry(error) {
+  return error.code === "Failed" ? (error.telemetryCode ?? error.failureClass) : error.code;
 }
-
 export { resetSettingsCacheWithBackendRead, seedUserSettings, primeSettings };

@@ -8,21 +8,22 @@
 import { x } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-t4ksmxzx.js:13327-13641 cjs-fingerprint
-var de = x(function (kr) {
-  Object.defineProperty(kr, "__esModule", { value: !0 });
-  var gt;
-  function yt() {
-    if (gt === void 0) throw Error("No runtime abstraction layer installed");
-    return gt;
+var require_ral = x(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  var _ral;
+  function RAL() {
+    if (_ral === undefined) throw Error("No runtime abstraction layer installed");
+    return _ral;
   }
-  (function (e) {
-    function r(n) {
-      if (n === void 0) throw Error("No runtime abstraction layer provided");
-      gt = n;
+  (function (RAL) {
+    function install(ral) {
+      if (ral === undefined) throw Error("No runtime abstraction layer provided");
+      _ral = ral;
     }
-    e.install = r;
-  })(yt || (yt = {}));
-  kr.default = yt;
+    RAL.install = install;
+  })(RAL || (RAL = {}));
+  cjsExports.default = RAL;
 });
-
-export { de };
+export { require_ral };

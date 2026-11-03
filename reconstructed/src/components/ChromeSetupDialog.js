@@ -8,11 +8,17 @@
  * pieces: chunk-18hwfzwa.js (7)
  * attribution: placement 7
  */
-import { R, j, P } from "../../vendor/react/cjs/react.production.js";
+import { R, init_react_production, P } from "../../vendor/react/cjs/react.production.js";
 import { useInputClock } from "../ink/components/Input.js";
 import { useRefusalTracker, settleKey } from "./CustomSelect/selectTypeahead.js";
-import { isWithinRecentInput, So } from "../hooks/useRecentInputGuard.js";
-import { e, r } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import {
+  isWithinRecentInput,
+  RECENT_INPUT_GUARD_MS as RECENT_INPUT_GUARD_MS_3,
+} from "../hooks/useRecentInputGuard.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+} from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { PermissionDialog_2 } from "./permissions/PermissionDialog.js";
 import { Box, Text } from "../ink/components/Text.js";
 import { StatusIcon } from "./design-system/StatusIcon.js";
@@ -30,47 +36,56 @@ var CHROME_SETUP_SKIP_OPTION = {
   description: "Finish setup later with /chrome",
 };
 //@ chunk-18hwfzwa.js:1340532-1342499 placement
-function ChromeInstallFlow({ payload: payload, answer: answer }) {
-  let { phase: phase, installPageOpened: installPageOpened } = payload,
-    ee = R(phase),
-    ke = useInputClock(),
-    Re = R(Date.now()),
-    { refusedWithin: refusedWithin, noteRefused: noteRefused } = useRefusalTracker();
-  if (ee.current !== phase) ((ee.current = phase), (Re.current = Date.now()));
+function ChromeInstallFlow({ payload, answer }) {
+  let { phase, installPageOpened } = payload;
+  let phaseRef = R(phase);
+  let inputClock = useInputClock();
+  let Re = R(Date.now());
+  let { refusedWithin, noteRefused } = useRefusalTracker();
+  if (phaseRef.current !== phase) {
+    phaseRef.current = phase;
+    Re.current = Date.now();
+  }
   function We() {
-    if (isWithinRecentInput(ke, Re.current, So) || refusedWithin(So)) return (noteRefused(), !0);
-    return !1;
+    if (
+      isWithinRecentInput(inputClock, Re.current, RECENT_INPUT_GUARD_MS_3) ||
+      refusedWithin(RECENT_INPUT_GUARD_MS_3)
+    ) {
+      noteRefused();
+      return true;
+    }
+    return false;
   }
   function ze(At) {
     if (We()) return;
     answer(At);
   }
-  let Xe = phase !== "waiting_install",
-    rt = phase === "connected" ? "success" : phase === "failed" ? "error" : Xe ? "loading" : "pending",
-    kt =
-      phase === "connected"
+  let Xe = phase !== "waiting_install";
+  let status = phase === "connected" ? "success" : phase === "failed" ? "error" : Xe ? "loading" : "pending";
+  let options =
+    phase === "connected"
+      ? [
+          {
+            value: "continue",
+            label: "Continue with browser tools",
+            description: "Claude picks the task back up in your browser",
+          },
+          CHROME_SETUP_SKIP_OPTION,
+        ]
+      : phase === "stalled"
         ? [
             {
-              value: "continue",
-              label: "Continue with browser tools",
-              description: "Claude picks the task back up in your browser",
+              value: "keep_waiting",
+              label: "Keep waiting",
+              description: "Setup keeps checking for the connection",
             },
             CHROME_SETUP_SKIP_OPTION,
           ]
-        : phase === "stalled"
-          ? [
-              {
-                value: "keep_waiting",
-                label: "Keep waiting",
-                description: "Setup keeps checking for the connection",
-              },
-              CHROME_SETUP_SKIP_OPTION,
-            ]
-          : [CHROME_SETUP_SKIP_OPTION];
-  return e(PermissionDialog_2, {
+        : [CHROME_SETUP_SKIP_OPTION];
+  return jsxProd_default(PermissionDialog_2, {
     color: "permission",
     title: "Setting up Claude in Chrome",
-    children: r(Box, {
+    children: jsxProd_default_2(Box, {
       flexDirection: "column",
       marginTop: 1,
       paddingX: 1,
@@ -78,65 +93,76 @@ function ChromeInstallFlow({ payload: payload, answer: answer }) {
       children: [
         phase !== "connected" &&
           phase !== "failed" &&
-          e(Text, {
-            dimColor: !0,
+          jsxProd_default(Text, {
+            dimColor: true,
             children:
               "Finish setup in Chrome. This screen follows along and updates on its own as each step completes.",
           }),
-        r(Box, {
+        jsxProd_default_2(Box, {
           flexDirection: "column",
           children: [
-            r(Text, {
+            jsxProd_default_2(Text, {
               children: [
-                e(StatusIcon, { status: Xe ? "success" : "loading", withSpace: !0 }),
+                jsxProd_default(StatusIcon, {
+                  status: Xe ? "success" : "loading",
+                  withSpace: true,
+                }),
                 "Install the extension",
               ],
             }),
             !Xe &&
-              e(Box, {
+              jsxProd_default(Box, {
                 paddingLeft: 3,
-                children: e(Text, {
-                  dimColor: !0,
+                children: jsxProd_default(Text, {
+                  dimColor: true,
                   children: installPageOpened
                     ? "Add Claude in Chrome from the page that just opened in Chrome."
                     : `Add Claude in Chrome from ${HTTPS_CLAUDE_AI_CHROME}.`,
                 }),
               }),
-            r(Text, { children: [e(StatusIcon, { status: rt, withSpace: !0 }), "Connect to Chrome"] }),
+            jsxProd_default_2(Text, {
+              children: [
+                jsxProd_default(StatusIcon, {
+                  status,
+                  withSpace: true,
+                }),
+                "Connect to Chrome",
+              ],
+            }),
             phase === "stalled" &&
-              e(Box, {
+              jsxProd_default(Box, {
                 paddingLeft: 3,
-                children: e(Text, {
-                  dimColor: !0,
+                children: jsxProd_default(Text, {
+                  dimColor: true,
                   children:
                     "Taking longer than expected. Check that the extension is added and that you're signed in to it in Chrome.",
                 }),
               }),
             phase === "failed" &&
-              e(Box, {
+              jsxProd_default(Box, {
                 paddingLeft: 3,
-                children: e(Text, {
-                  dimColor: !0,
+                children: jsxProd_default(Text, {
+                  dimColor: true,
                   children: "Couldn't connect to the extension. Finish setup later with /chrome.",
                 }),
               }),
             phase === "connected" &&
-              e(Box, {
+              jsxProd_default(Box, {
                 paddingLeft: 3,
-                children: e(Text, {
-                  dimColor: !0,
+                children: jsxProd_default(Text, {
+                  dimColor: true,
                   children:
                     "Browser tools are ready. Continuing keeps them enabled for future sessions too \u2014 manage anytime with /chrome.",
                 }),
               }),
           ],
         }),
-        e(
+        jsxProd_default(
           ModelSelector,
           {
-            hideIndexes: !0,
+            hideIndexes: true,
             selectedValue: NO_COMMITTED_ROW,
-            options: kt,
+            options,
             refuseInput: We,
             onChange: ze,
             onCancel: () => ze("cancelled"),
@@ -148,109 +174,131 @@ function ChromeInstallFlow({ payload: payload, answer: answer }) {
   });
 }
 //@ chunk-18hwfzwa.js:1342499-1342503 placement
-j();
+init_react_production();
 //@ chunk-18hwfzwa.js:1342503-1342560 placement
-function GOo() {
+function logChromeUpsellShown() {
   logEvent("tengu_chrome_install_upsell_shown", {});
 }
 //@ chunk-18hwfzwa.js:1342560-1342832 placement
 var CHROME_EXTENSION_PROMPT_OPTIONS = [
-  { value: "install", label: "Install extension", description: "Opens the install page in Chrome" },
-  { value: "not_now", label: "Not now", description: "Continue without browser tools" },
-  { value: "dont_ask_again", label: "Don't ask again", description: "Revisit anytime with /chrome" },
+  {
+    value: "install",
+    label: "Install extension",
+    description: "Opens the install page in Chrome",
+  },
+  {
+    value: "not_now",
+    label: "Not now",
+    description: "Continue without browser tools",
+  },
+  {
+    value: "dont_ask_again",
+    label: "Don't ask again",
+    description: "Revisit anytime with /chrome",
+  },
 ];
 //@ chunk-18hwfzwa.js:1342832-1344083 placement
-function ChromeSetupDialog(h) {
-  let $ = w(17),
-    { answer: answer } = h,
-    L;
-  if ($[0] === MEMO_CACHE_SENTINEL) ((L = []), ($[0] = L));
-  else L = $[0];
-  P(GOo, L);
-  let ee = useInputClock(),
-    ke;
-  if ($[1] === MEMO_CACHE_SENTINEL) ((ke = Date.now()), ($[1] = ke));
-  else ke = $[1];
-  let Re = R(ke),
-    { refusedWithin: refusedWithin, noteRefused: noteRefused, epoch: epoch } = useRefusalTracker(),
-    ze;
-  if ($[2] !== ee || $[3] !== noteRefused || $[4] !== refusedWithin)
-    ((ze = function Xe() {
-      if (isWithinRecentInput(ee, Re.current, So) || refusedWithin(So)) {
-        return (noteRefused(), !0);
+function ChromeSetupDialog(props) {
+  let $ = w(17);
+  let { answer } = props;
+  let L;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    L = [];
+    $[0] = L;
+  } else L = $[0];
+  P(logChromeUpsellShown, L);
+  let inputClock = useInputClock();
+  let ke;
+  if ($[1] === MEMO_CACHE_SENTINEL) {
+    ke = Date.now();
+    $[1] = ke;
+  } else ke = $[1];
+  let Re = R(ke);
+  let { refusedWithin, noteRefused, epoch } = useRefusalTracker();
+  let ze;
+  if ($[2] !== inputClock || $[3] !== noteRefused || $[4] !== refusedWithin) {
+    ze = function Xe() {
+      if (
+        isWithinRecentInput(inputClock, Re.current, RECENT_INPUT_GUARD_MS_3) ||
+        refusedWithin(RECENT_INPUT_GUARD_MS_3)
+      ) {
+        noteRefused();
+        return true;
       }
-      return !1;
-    }),
-      ($[2] = ee),
-      ($[3] = noteRefused),
-      ($[4] = refusedWithin),
-      ($[5] = ze));
-  else ze = $[5];
-  let Xe = ze,
-    rt;
-  if ($[6] !== answer || $[7] !== Xe)
-    ((rt = function At(kt) {
+      return false;
+    };
+    $[2] = inputClock;
+    $[3] = noteRefused;
+    $[4] = refusedWithin;
+    $[5] = ze;
+  } else ze = $[5];
+  let Xe = ze;
+  let rt;
+  if ($[6] !== answer || $[7] !== Xe) {
+    rt = function At(kt) {
       if (Xe()) {
         return;
       }
       answer(kt);
-    }),
-      ($[6] = answer),
-      ($[7] = Xe),
-      ($[8] = rt));
-  else rt = $[8];
-  let At = rt,
-    It = settleKey(epoch, So),
-    Ot;
-  if ($[9] === MEMO_CACHE_SENTINEL)
-    ((Ot = e(Text, {
+    };
+    $[6] = answer;
+    $[7] = Xe;
+    $[8] = rt;
+  } else rt = $[8];
+  let At = rt;
+  let It = settleKey(epoch, RECENT_INPUT_GUARD_MS_3);
+  let Ot;
+  if ($[9] === MEMO_CACHE_SENTINEL) {
+    Ot = jsxProd_default(Text, {
       children:
         "This task could use your Chrome browser. The Claude in Chrome extension lets Claude navigate sites, click buttons, and fill forms in your existing session.",
-    })),
-      ($[9] = Ot));
-  else Ot = $[9];
-  let Et;
-  if ($[10] !== At) ((Et = () => At("cancelled")), ($[10] = At), ($[11] = Et));
-  else Et = $[11];
+    });
+    $[9] = Ot;
+  } else Ot = $[9];
+  let onCancel;
+  if ($[10] !== At) {
+    onCancel = () => At("cancelled");
+    $[10] = At;
+    $[11] = onCancel;
+  } else onCancel = $[11];
   let Dt;
-  if ($[12] !== At || $[13] !== It.remountKey || $[14] !== Xe || $[15] !== Et)
-    ((Dt = e(PermissionDialog_2, {
+  if ($[12] !== At || $[13] !== It.remountKey || $[14] !== Xe || $[15] !== onCancel) {
+    Dt = jsxProd_default(PermissionDialog_2, {
       color: "permission",
       title: "Claude wants to use your browser",
-      children: r(Box, {
+      children: jsxProd_default_2(Box, {
         flexDirection: "column",
         marginTop: 1,
         paddingX: 1,
         children: [
           Ot,
-          e(Box, {
+          jsxProd_default(Box, {
             marginTop: 1,
-            children: e(
+            children: jsxProd_default(
               ModelSelector,
               {
-                hideIndexes: !0,
+                hideIndexes: true,
                 selectedValue: NO_COMMITTED_ROW,
                 refuseInput: Xe,
                 defaultFocusValue: "not_now",
                 options: CHROME_EXTENSION_PROMPT_OPTIONS,
                 onChange: At,
-                onCancel: Et,
+                onCancel,
               },
               It.remountKey,
             ),
           }),
         ],
       }),
-    })),
-      ($[12] = At),
-      ($[13] = It.remountKey),
-      ($[14] = Xe),
-      ($[15] = Et),
-      ($[16] = Dt));
-  else Dt = $[16];
+    });
+    $[12] = At;
+    $[13] = It.remountKey;
+    $[14] = Xe;
+    $[15] = onCancel;
+    $[16] = Dt;
+  } else Dt = $[16];
   return Dt;
 }
 //@ chunk-18hwfzwa.js:1344083-1344087 placement
-j();
-
+init_react_production();
 export { ChromeSetupDialog, ChromeInstallFlow };

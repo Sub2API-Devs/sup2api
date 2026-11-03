@@ -15,105 +15,113 @@ import { Timestamp } from "../../../google/protobuf/timestamp.js";
 function createBaseGrowthbookExperimentEvent() {
   return {
     event_id: "",
-    timestamp: void 0,
+    timestamp: undefined,
     experiment_id: "",
     variation_id: 0,
-    variation_key: void 0,
+    variation_key: undefined,
     environment: "",
-    user_attributes: void 0,
-    experiment_metadata: void 0,
+    user_attributes: undefined,
+    experiment_metadata: undefined,
     device_id: "",
-    auth: void 0,
+    auth: undefined,
     session_id: "",
     anonymous_id: "",
-    event_metadata_vars: void 0,
-    server_timestamp: void 0,
-    client_reported_auth: void 0,
-    request_id: void 0,
-    prompt_id: void 0,
+    event_metadata_vars: undefined,
+    server_timestamp: undefined,
+    client_reported_auth: undefined,
+    request_id: undefined,
+    prompt_id: undefined,
   };
 }
 //@ chunk-aepeg2w5.js:679380-682497 fingerprint = GrowthbookExperimentEvent (0.867)
 var GrowthbookExperimentEvent = {
-  fromJSON(e) {
+  fromJSON(object) {
     return {
-      event_id: pt(e.event_id) ? globalThis.String(e.event_id) : "",
-      timestamp: pt(e.timestamp) ? fromJsonTimestamp_2(e.timestamp) : void 0,
-      experiment_id: pt(e.experiment_id) ? globalThis.String(e.experiment_id) : "",
-      variation_id: pt(e.variation_id) ? globalThis.Number(e.variation_id) : 0,
-      variation_key: pt(e.variation_key) ? globalThis.String(e.variation_key) : void 0,
-      environment: pt(e.environment) ? globalThis.String(e.environment) : "",
-      user_attributes: pt(e.user_attributes) ? globalThis.String(e.user_attributes) : void 0,
-      experiment_metadata: pt(e.experiment_metadata) ? globalThis.String(e.experiment_metadata) : void 0,
-      device_id: pt(e.device_id) ? globalThis.String(e.device_id) : "",
-      auth: pt(e.auth) ? PublicApiAuth.fromJSON(e.auth) : void 0,
-      session_id: pt(e.session_id) ? globalThis.String(e.session_id) : "",
-      anonymous_id: pt(e.anonymous_id) ? globalThis.String(e.anonymous_id) : "",
-      event_metadata_vars: pt(e.event_metadata_vars) ? globalThis.String(e.event_metadata_vars) : void 0,
-      server_timestamp: pt(e.server_timestamp) ? fromJsonTimestamp_2(e.server_timestamp) : void 0,
-      client_reported_auth: pt(e.client_reported_auth)
-        ? PublicApiAuth_2.fromJSON(e.client_reported_auth)
-        : void 0,
-      request_id: pt(e.request_id) ? globalThis.String(e.request_id) : void 0,
-      prompt_id: pt(e.prompt_id) ? globalThis.String(e.prompt_id) : void 0,
+      event_id: isPresent(object.event_id) ? globalThis.String(object.event_id) : "",
+      timestamp: isPresent(object.timestamp) ? fromJsonTimestamp_2(object.timestamp) : undefined,
+      experiment_id: isPresent(object.experiment_id) ? globalThis.String(object.experiment_id) : "",
+      variation_id: isPresent(object.variation_id) ? globalThis.Number(object.variation_id) : 0,
+      variation_key: isPresent(object.variation_key) ? globalThis.String(object.variation_key) : undefined,
+      environment: isPresent(object.environment) ? globalThis.String(object.environment) : "",
+      user_attributes: isPresent(object.user_attributes)
+        ? globalThis.String(object.user_attributes)
+        : undefined,
+      experiment_metadata: isPresent(object.experiment_metadata)
+        ? globalThis.String(object.experiment_metadata)
+        : undefined,
+      device_id: isPresent(object.device_id) ? globalThis.String(object.device_id) : "",
+      auth: isPresent(object.auth) ? PublicApiAuth.fromJSON(object.auth) : undefined,
+      session_id: isPresent(object.session_id) ? globalThis.String(object.session_id) : "",
+      anonymous_id: isPresent(object.anonymous_id) ? globalThis.String(object.anonymous_id) : "",
+      event_metadata_vars: isPresent(object.event_metadata_vars)
+        ? globalThis.String(object.event_metadata_vars)
+        : undefined,
+      server_timestamp: isPresent(object.server_timestamp)
+        ? fromJsonTimestamp_2(object.server_timestamp)
+        : undefined,
+      client_reported_auth: isPresent(object.client_reported_auth)
+        ? PublicApiAuth_2.fromJSON(object.client_reported_auth)
+        : undefined,
+      request_id: isPresent(object.request_id) ? globalThis.String(object.request_id) : undefined,
+      prompt_id: isPresent(object.prompt_id) ? globalThis.String(object.prompt_id) : undefined,
     };
   },
-  toJSON(e) {
-    let n = {};
-    if (e.event_id !== void 0) n.event_id = e.event_id;
-    if (e.timestamp !== void 0) n.timestamp = e.timestamp.toISOString();
-    if (e.experiment_id !== void 0) n.experiment_id = e.experiment_id;
-    if (e.variation_id !== void 0) n.variation_id = Math.round(e.variation_id);
-    if (e.variation_key !== void 0) n.variation_key = e.variation_key;
-    if (e.environment !== void 0) n.environment = e.environment;
-    if (e.user_attributes !== void 0) n.user_attributes = e.user_attributes;
-    if (e.experiment_metadata !== void 0) n.experiment_metadata = e.experiment_metadata;
-    if (e.device_id !== void 0) n.device_id = e.device_id;
-    if (e.auth !== void 0) n.auth = PublicApiAuth.toJSON(e.auth);
-    if (e.session_id !== void 0) n.session_id = e.session_id;
-    if (e.anonymous_id !== void 0) n.anonymous_id = e.anonymous_id;
-    if (e.event_metadata_vars !== void 0) n.event_metadata_vars = e.event_metadata_vars;
-    if (e.server_timestamp !== void 0) n.server_timestamp = e.server_timestamp.toISOString();
-    if (e.client_reported_auth !== void 0)
-      n.client_reported_auth = PublicApiAuth_2.toJSON(e.client_reported_auth);
-    if (e.request_id !== void 0) n.request_id = e.request_id;
-    if (e.prompt_id !== void 0) n.prompt_id = e.prompt_id;
-    return n;
+  toJSON(message) {
+    let obj = {};
+    if (message.event_id !== undefined) obj.event_id = message.event_id;
+    if (message.timestamp !== undefined) obj.timestamp = message.timestamp.toISOString();
+    if (message.experiment_id !== undefined) obj.experiment_id = message.experiment_id;
+    if (message.variation_id !== undefined) obj.variation_id = Math.round(message.variation_id);
+    if (message.variation_key !== undefined) obj.variation_key = message.variation_key;
+    if (message.environment !== undefined) obj.environment = message.environment;
+    if (message.user_attributes !== undefined) obj.user_attributes = message.user_attributes;
+    if (message.experiment_metadata !== undefined) obj.experiment_metadata = message.experiment_metadata;
+    if (message.device_id !== undefined) obj.device_id = message.device_id;
+    if (message.auth !== undefined) obj.auth = PublicApiAuth.toJSON(message.auth);
+    if (message.session_id !== undefined) obj.session_id = message.session_id;
+    if (message.anonymous_id !== undefined) obj.anonymous_id = message.anonymous_id;
+    if (message.event_metadata_vars !== undefined) obj.event_metadata_vars = message.event_metadata_vars;
+    if (message.server_timestamp !== undefined) obj.server_timestamp = message.server_timestamp.toISOString();
+    if (message.client_reported_auth !== undefined)
+      obj.client_reported_auth = PublicApiAuth_2.toJSON(message.client_reported_auth);
+    if (message.request_id !== undefined) obj.request_id = message.request_id;
+    if (message.prompt_id !== undefined) obj.prompt_id = message.prompt_id;
+    return obj;
   },
-  create(e) {
-    return GrowthbookExperimentEvent.fromPartial(e ?? {});
+  create(base) {
+    return GrowthbookExperimentEvent.fromPartial(base ?? {});
   },
-  fromPartial(e) {
-    let n = createBaseGrowthbookExperimentEvent();
-    return (
-      (n.event_id = e.event_id ?? ""),
-      (n.timestamp = e.timestamp ?? void 0),
-      (n.experiment_id = e.experiment_id ?? ""),
-      (n.variation_id = e.variation_id ?? 0),
-      (n.variation_key = e.variation_key ?? void 0),
-      (n.environment = e.environment ?? ""),
-      (n.user_attributes = e.user_attributes ?? void 0),
-      (n.experiment_metadata = e.experiment_metadata ?? void 0),
-      (n.device_id = e.device_id ?? ""),
-      (n.auth = e.auth !== void 0 && e.auth !== null ? PublicApiAuth.fromPartial(e.auth) : void 0),
-      (n.session_id = e.session_id ?? ""),
-      (n.anonymous_id = e.anonymous_id ?? ""),
-      (n.event_metadata_vars = e.event_metadata_vars ?? void 0),
-      (n.server_timestamp = e.server_timestamp ?? void 0),
-      (n.client_reported_auth =
-        e.client_reported_auth !== void 0 && e.client_reported_auth !== null
-          ? PublicApiAuth_2.fromPartial(e.client_reported_auth)
-          : void 0),
-      (n.request_id = e.request_id ?? void 0),
-      (n.prompt_id = e.prompt_id ?? void 0),
-      n
-    );
+  fromPartial(object) {
+    let message = createBaseGrowthbookExperimentEvent();
+    message.event_id = object.event_id ?? "";
+    message.timestamp = object.timestamp ?? undefined;
+    message.experiment_id = object.experiment_id ?? "";
+    message.variation_id = object.variation_id ?? 0;
+    message.variation_key = object.variation_key ?? undefined;
+    message.environment = object.environment ?? "";
+    message.user_attributes = object.user_attributes ?? undefined;
+    message.experiment_metadata = object.experiment_metadata ?? undefined;
+    message.device_id = object.device_id ?? "";
+    message.auth =
+      object.auth !== undefined && object.auth !== null ? PublicApiAuth.fromPartial(object.auth) : undefined;
+    message.session_id = object.session_id ?? "";
+    message.anonymous_id = object.anonymous_id ?? "";
+    message.event_metadata_vars = object.event_metadata_vars ?? undefined;
+    message.server_timestamp = object.server_timestamp ?? undefined;
+    message.client_reported_auth =
+      object.client_reported_auth !== undefined && object.client_reported_auth !== null
+        ? PublicApiAuth_2.fromPartial(object.client_reported_auth)
+        : undefined;
+    message.request_id = object.request_id ?? undefined;
+    message.prompt_id = object.prompt_id ?? undefined;
+    return message;
   },
 };
 //@ chunk-aepeg2w5.js:682497-682588 sole-consumer = fromTimestamp (1)
 function fromTimestamp_2(t) {
   let millis = (t.seconds || 0) * 1000;
-  return ((millis += (t.nanos || 0) / 1e6), new globalThis.Date(millis));
+  millis += (t.nanos || 0) / 1e6;
+  return new globalThis.Date(millis);
 }
 //@ chunk-aepeg2w5.js:682588-682733 sole-consumer = fromJsonTimestamp (1)
 function fromJsonTimestamp_2(o) {
@@ -122,8 +130,10 @@ function fromJsonTimestamp_2(o) {
   else return fromTimestamp_2(Timestamp.fromJSON(o));
 }
 //@ chunk-aepeg2w5.js:682733-682776 sole-consumer
-function pt(e) {
-  return e !== null && e !== void 0;
+/**
+ * 判断值既不是 null 也不是 undefined（protobuf 生成代码用）。
+ */
+function isPresent(e) {
+  return e !== null && e !== undefined;
 }
-
 export { GrowthbookExperimentEvent };

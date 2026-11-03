@@ -12,11 +12,19 @@ import { Ar } from "../../../runtime/bun-runtime.js";
 import { ENV_PARSERS } from "../envSchema.js";
 
 //@ chunk-zya51bzb.js:486-495 placement
-var e = {};
+var MESSAGING_ENV_DEFAULTS = {};
 //@ chunk-zya51bzb.js:495-572 placement
-Ar(e, { CLAUDE_CODE_MESSAGING_SOCKET: () => str, CLAUDE_CODE_MESSAGING_TOKEN: () => str_2 });
+Ar(MESSAGING_ENV_DEFAULTS, {
+  CLAUDE_CODE_MESSAGING_SOCKET: () => o,
+  CLAUDE_CODE_MESSAGING_TOKEN: () => r,
+});
 //@ chunk-zya51bzb.js:572-596 placement
-var str = ENV_PARSERS.str(),
-  str_2 = ENV_PARSERS.str();
+var o = ENV_PARSERS.str();
+var r = ENV_PARSERS.str();
 //@ chunk-zya51bzb.js:596-609 placement
-var s = { ...e };
+/**
+ * 跨会话消息环境变量的副本。
+ */
+var MESSAGING_ENV_COPY = {
+  ...MESSAGING_ENV_DEFAULTS,
+};

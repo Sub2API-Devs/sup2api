@@ -10,10 +10,12 @@
  */
 
 //@ chunk-q82f8bc0.js:191-276 placement
-var d = /^\d{4}-\d{2}-\d{2}[Tt ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:[zZ]|[+-]\d{2}:?\d{2})$/;
+var ISO_TIMESTAMP_RE = /^\d{4}-\d{2}-\d{2}[Tt ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:[zZ]|[+-]\d{2}:?\d{2})$/;
 //@ chunk-q82f8bc0.js:276-334 placement
-function L_e(t) {
-  return d.test(t) ? Date.parse(t) : Number.NaN;
+/**
+ * 解析 ISO 时间戳，不合法返回 NaN。
+ */
+function parseIsoTimestamp(t) {
+  return ISO_TIMESTAMP_RE.test(t) ? Date.parse(t) : Number.NaN;
 }
-
-export { L_e };
+export { parseIsoTimestamp };

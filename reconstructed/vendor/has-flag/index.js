@@ -8,13 +8,12 @@
 import { x } from "../../runtime/bun-runtime.js";
 
 //@ chunk-h6b7mazd.js:33381-33555 cjs-fingerprint
-var clo = x(function (Td, ks) {
-  ks.exports = (e, t = process.argv) => {
-    let r = e.startsWith("-") ? "" : e.length === 1 ? "-" : "--",
-      index = t.indexOf(r + e),
-      index_2 = t.indexOf("--");
-    return index !== -1 && (index_2 === -1 || index < index_2);
+var require_has_flag = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = (flag, argv = process.argv) => {
+    let prefix = flag.startsWith("-") ? "" : flag.length === 1 ? "-" : "--";
+    let position = argv.indexOf(prefix + flag);
+    let terminatorPosition = argv.indexOf("--");
+    return position !== -1 && (terminatorPosition === -1 || position < terminatorPosition);
   };
 });
-
-export { clo };
+export { require_has_flag };

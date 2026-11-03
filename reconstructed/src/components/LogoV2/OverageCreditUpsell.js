@@ -8,12 +8,11 @@
  * pieces: chunk-hgfr0vx8.js (1)
  * attribution: fingerprint 1
  */
-import { Scr, l } from "../../utils/workflows/workflowGates.js";
+import { isWorkflowsPolicyAllowed, workflowAvailability } from "../../utils/workflows/workflowGates.js";
 import { env } from "../../utils/env.js";
 
 //@ chunk-hgfr0vx8.js:2388-2465 fingerprint = isEligibleForOverageCreditGrant (0.44)
 function isEligibleForOverageCreditGrant() {
-  return Scr() && !env.CLAUDE_CODE_DISABLE_WORKFLOWS && l().available;
+  return isWorkflowsPolicyAllowed() && !env.CLAUDE_CODE_DISABLE_WORKFLOWS && workflowAvailability().available;
 }
-
 export { isEligibleForOverageCreditGrant };

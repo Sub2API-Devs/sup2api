@@ -10,59 +10,65 @@
  */
 
 //@ chunk-0wqny7vr.js:191-214 placement
-function r(n) {
+/**
+ * 安全元数据的透传函数：原样返回传入值（不做脱敏），另有 lit 作为其别名。
+ */
+function identity(n) {
   return n;
 }
 //@ chunk-0wqny7vr.js:214-240 placement
+/**
+ * 导出函数 `lit`：参数 n，返回 r(n)。
+ */
 function lit(n) {
-  return r(n);
+  return identity(n);
 }
 //@ chunk-0wqny7vr.js:240-266 placement
 function fromEnum(n) {
-  return r(n);
+  return identity(n);
 }
 //@ chunk-0wqny7vr.js:266-308 placement
 function fromEnumOpt(n) {
-  return n == null ? void 0 : r(n);
+  return n == null ? undefined : identity(n);
 }
 //@ chunk-0wqny7vr.js:308-343 placement
 function fromNumber(n) {
-  return r(String(n));
+  return identity(String(n));
 }
 //@ chunk-0wqny7vr.js:343-393 placement
 function fromNumberOpt(n) {
-  return n == null ? void 0 : r(String(n));
+  return n == null ? undefined : identity(String(n));
 }
 //@ chunk-0wqny7vr.js:393-432 placement
 function concatSafe(...n) {
-  return r(n.join(""));
+  return identity(n.join(""));
 }
 //@ chunk-0wqny7vr.js:432-470 placement
 function fromNumberArr(n) {
-  return r(n.join(","));
+  return identity(n.join(","));
 }
 //@ chunk-0wqny7vr.js:470-519 placement
 function fromEnumArr(n) {
-  return r([...n].sort().join(","));
+  return identity([...n].sort().join(","));
 }
 //@ chunk-0wqny7vr.js:519-561 placement
 function joinSafe(n, e) {
-  return r(n.join(e ?? ","));
+  return identity(n.join(e ?? ","));
 }
 //@ chunk-0wqny7vr.js:561-588 placement
 function fromSanitizer_SANITIZER_OUTPUT_ONLY(n) {
-  return r(n);
+  return identity(n);
 }
 //@ chunk-0wqny7vr.js:588-627 placement
 function mcpNameForAnalytics_GATE_EVALUATED(n, e) {
-  return e ? fromSanitizer_SANITIZER_OUTPUT_ONLY(n) : void 0;
+  return e ? fromSanitizer_SANITIZER_OUTPUT_ONLY(n) : undefined;
 }
+//@ chunk-0wqny7vr.js:627-723 placement
 /**
  * 遥测元数据的安全取值工具集（lit/fromEnum/fromNumber/joinSafe 等）与 MCP 名、插件 id、代理类型的脱敏转换，确保只上报构建期已知或经过闸门的值。
  */
-//@ chunk-0wqny7vr.js:627-723 placement
 function bundledFileStemForAnalytics_KNOWN_IS_BUILD_TIME(n, e) {
-  return n !== void 0 && e.includes(n) && /^[a-z0-9-]{1,64}$/.test(n)
+  return n !== undefined && e.includes(n) && /^[a-z0-9-]{1,64}$/.test(n)
     ? fromSanitizer_SANITIZER_OUTPUT_ONLY(n)
     : lit("none");
 }
@@ -74,14 +80,13 @@ function agentTypeForAnalytics_GATE_EVALUATED(n, e) {
 function agentTypeForAnalyticsFromDefinition(n) {
   return agentTypeForAnalytics_GATE_EVALUATED(n.agentType, n.source === "built-in");
 }
+//@ chunk-0wqny7vr.js:830-880 placement = getPluginHookCounts (0.74)
 /**
  * 插件钩子遥测用的插件标识：官方插件用哈希/名，否则 third-party。
  */
-//@ chunk-0wqny7vr.js:830-880 placement = getPluginHookCounts (0.74)
 function pluginIdForAnalytics_GATE_EVALUATED(n, e) {
   return e ? fromSanitizer_SANITIZER_OUTPUT_ONLY(n) : lit("third-party");
 }
-
 export {
   fromEnumOpt,
   fromEnum,

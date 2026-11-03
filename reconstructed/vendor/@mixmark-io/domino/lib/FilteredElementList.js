@@ -6,64 +6,70 @@
  * attribution: cjs-fingerprint 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { xe } from "./Node.js";
+import { require_Node } from "./Node.js";
 
 //@ chunk-vwj6ccer.js:28295-29363 cjs-fingerprint
-var ps = x(function (md, hs) {
-  hs.exports = ds;
-  var Ll = xe();
-  function ds(e, t) {
-    ((this.root = e),
-      (this.filter = t),
-      (this.lastModTime = e.lastModTime),
-      (this.done = !1),
-      (this.cache = []),
-      this.traverse());
+var require_FilteredElementList = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = FilteredElementList;
+  var Node = require_Node();
+  function FilteredElementList(root, filter) {
+    this.root = root;
+    this.filter = filter;
+    this.lastModTime = root.lastModTime;
+    this.done = false;
+    this.cache = [];
+    this.traverse();
   }
-  ds.prototype = Object.create(Object.prototype, {
+  FilteredElementList.prototype = Object.create(Object.prototype, {
     length: {
       get: function () {
-        if ((this.checkcache(), !this.done)) this.traverse();
+        this.checkcache();
+        if (!this.done) this.traverse();
         return this.cache.length;
       },
     },
     item: {
-      value: function (e) {
-        if ((this.checkcache(), !this.done && e >= this.cache.length)) this.traverse();
-        return this.cache[e];
+      value: function (n) {
+        this.checkcache();
+        if (!this.done && n >= this.cache.length) this.traverse();
+        return this.cache[n];
       },
     },
     checkcache: {
       value: function () {
         if (this.lastModTime !== this.root.lastModTime) {
-          for (var e = this.cache.length - 1; e >= 0; e--) this[e] = void 0;
-          ((this.cache.length = 0), (this.done = !1), (this.lastModTime = this.root.lastModTime));
+          for (var i = this.cache.length - 1; i >= 0; i--) this[i] = undefined;
+          this.cache.length = 0;
+          this.done = false;
+          this.lastModTime = this.root.lastModTime;
         }
       },
     },
     traverse: {
-      value: function (e) {
-        if (e !== void 0) e++;
-        var t;
-        while ((t = this.next()) !== null)
-          if (((this[this.cache.length] = t), this.cache.push(t), e && this.cache.length === e)) return;
-        this.done = !0;
+      value: function (n) {
+        if (n !== undefined) n++;
+        var elt;
+        while ((elt = this.next()) !== null) {
+          this[this.cache.length] = elt;
+          this.cache.push(elt);
+          if (n && this.cache.length === n) return;
+        }
+        this.done = true;
       },
     },
     next: {
       value: function () {
-        var e = this.cache.length === 0 ? this.root : this.cache[this.cache.length - 1],
-          t;
-        if (e.nodeType === Ll.DOCUMENT_NODE) t = e.documentElement;
-        else t = e.nextElement(this.root);
-        while (t) {
-          if (this.filter(t)) return t;
-          t = t.nextElement(this.root);
+        var start = this.cache.length === 0 ? this.root : this.cache[this.cache.length - 1];
+        var elt;
+        if (start.nodeType === Node.DOCUMENT_NODE) elt = start.documentElement;
+        else elt = start.nextElement(this.root);
+        while (elt) {
+          if (this.filter(elt)) return elt;
+          elt = elt.nextElement(this.root);
         }
         return null;
       },
     },
   });
 });
-
-export { ps };
+export { require_FilteredElementList };

@@ -17,480 +17,540 @@ import {
 
 //@ chunk-3kpg9vdk.js:250-11789 esm-fingerprint
 class WebStandardStreamableHTTPServerTransport {
-  constructor(e = {}) {
-    ((this._started = !1),
-      (this._hasHandledRequest = !1),
-      (this._streamMapping = new Map()),
-      (this._requestToStreamMapping = new Map()),
-      (this._requestResponseMap = new Map()),
-      (this._initialized = !1),
-      (this._enableJsonResponse = !1),
-      (this._standaloneSseStreamId = "_GET_stream"),
-      (this.sessionIdGenerator = e.sessionIdGenerator),
-      (this._enableJsonResponse = e.enableJsonResponse ?? !1),
-      (this._eventStore = e.eventStore),
-      (this._onsessioninitialized = e.onsessioninitialized),
-      (this._onsessionclosed = e.onsessionclosed),
-      (this._allowedHosts = e.allowedHosts),
-      (this._allowedOrigins = e.allowedOrigins),
-      (this._enableDnsRebindingProtection = e.enableDnsRebindingProtection ?? !1),
-      (this._retryInterval = e.retryInterval));
+  constructor(options = {}) {
+    this._started = false;
+    this._hasHandledRequest = false;
+    this._streamMapping = new Map();
+    this._requestToStreamMapping = new Map();
+    this._requestResponseMap = new Map();
+    this._initialized = false;
+    this._enableJsonResponse = false;
+    this._standaloneSseStreamId = "_GET_stream";
+    this.sessionIdGenerator = options.sessionIdGenerator;
+    this._enableJsonResponse = options.enableJsonResponse ?? false;
+    this._eventStore = options.eventStore;
+    this._onsessioninitialized = options.onsessioninitialized;
+    this._onsessionclosed = options.onsessionclosed;
+    this._allowedHosts = options.allowedHosts;
+    this._allowedOrigins = options.allowedOrigins;
+    this._enableDnsRebindingProtection = options.enableDnsRebindingProtection ?? false;
+    this._retryInterval = options.retryInterval;
   }
   async start() {
     if (this._started) throw Error("Transport already started");
-    this._started = !0;
+    this._started = true;
   }
-  createJsonErrorResponse(e, t, s, i) {
-    let r = { code: t, message: s };
-    if (i?.data !== void 0) r.data = i.data;
-    return new Response(JSON.stringify({ jsonrpc: "2.0", error: r, id: null }), {
-      status: e,
-      headers: { "Content-Type": "application/json", ...i?.headers },
-    });
+  createJsonErrorResponse(status, code, message, options) {
+    let error = {
+      code,
+      message,
+    };
+    if (options?.data !== undefined) error.data = options.data;
+    return new Response(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        error,
+        id: null,
+      }),
+      {
+        status,
+        headers: {
+          "Content-Type": "application/json",
+          ...options?.headers,
+        },
+      },
+    );
   }
-  validateRequestHeaders(e) {
+  validateRequestHeaders(req) {
     if (!this._enableDnsRebindingProtection) return;
     if (this._allowedHosts && this._allowedHosts.length > 0) {
-      let t = e.headers.get("host");
-      if (!t || !this._allowedHosts.includes(t)) {
-        let s = `Invalid Host header: ${t}`;
-        return (this.onerror?.(Error(s)), this.createJsonErrorResponse(403, -32000, s));
+      let hostHeader = req.headers.get("host");
+      if (!hostHeader || !this._allowedHosts.includes(hostHeader)) {
+        let error = `Invalid Host header: ${hostHeader}`;
+        this.onerror?.(Error(error));
+        return this.createJsonErrorResponse(403, -32000, error);
       }
     }
     if (this._allowedOrigins && this._allowedOrigins.length > 0) {
-      let t = e.headers.get("origin");
-      if (t && !this._allowedOrigins.includes(t)) {
-        let s = `Invalid Origin header: ${t}`;
-        return (this.onerror?.(Error(s)), this.createJsonErrorResponse(403, -32000, s));
+      let originHeader = req.headers.get("origin");
+      if (originHeader && !this._allowedOrigins.includes(originHeader)) {
+        let error = `Invalid Origin header: ${originHeader}`;
+        this.onerror?.(Error(error));
+        return this.createJsonErrorResponse(403, -32000, error);
       }
     }
     return;
   }
-  async handleRequest(e, t) {
+  async handleRequest(req, options) {
     if (!this.sessionIdGenerator && this._hasHandledRequest)
       throw Error(
         "Stateless transport cannot be reused across requests. Create a new transport per request.",
       );
-    this._hasHandledRequest = !0;
-    let validateRequestHeaders = this.validateRequestHeaders(e);
-    if (validateRequestHeaders) return validateRequestHeaders;
-    switch (e.method) {
+    this._hasHandledRequest = true;
+    let validationError = this.validateRequestHeaders(req);
+    if (validationError) return validationError;
+    switch (req.method) {
       case "POST":
-        return this.handlePostRequest(e, t);
+        return this.handlePostRequest(req, options);
       case "GET":
-        return this.handleGetRequest(e);
+        return this.handleGetRequest(req);
       case "DELETE":
-        return this.handleDeleteRequest(e);
+        return this.handleDeleteRequest(req);
       default:
         return this.handleUnsupportedRequest();
     }
   }
-  async writePrimingEvent(e, t, s, i) {
+  async writePrimingEvent(controller, encoder, streamId, protocolVersion) {
     if (!this._eventStore) return;
-    if (i < "2025-11-25") return;
-    let storeEvent = await this._eventStore.storeEvent(s, {}),
-      n = `id: ${storeEvent}
+    if (protocolVersion < "2025-11-25") return;
+    let primingEventId = await this._eventStore.storeEvent(streamId, {});
+    let primingEvent = `id: ${primingEventId}
 data: 
 
 `;
-    if (this._retryInterval !== void 0)
-      n = `id: ${storeEvent}
+    if (this._retryInterval !== undefined)
+      primingEvent = `id: ${primingEventId}
 retry: ${this._retryInterval}
 data: 
 
 `;
-    e.enqueue(t.encode(n));
+    controller.enqueue(encoder.encode(primingEvent));
   }
-  async handleGetRequest(e) {
-    if (!e.headers.get("accept")?.includes("text/event-stream"))
-      return (
-        this.onerror?.(Error("Not Acceptable: Client must accept text/event-stream")),
-        this.createJsonErrorResponse(406, -32000, "Not Acceptable: Client must accept text/event-stream")
+  async handleGetRequest(req) {
+    if (!req.headers.get("accept")?.includes("text/event-stream")) {
+      this.onerror?.(Error("Not Acceptable: Client must accept text/event-stream"));
+      return this.createJsonErrorResponse(
+        406,
+        -32000,
+        "Not Acceptable: Client must accept text/event-stream",
       );
-    let validateSession = this.validateSession(e);
-    if (validateSession) return validateSession;
-    let validateProtocolVersion = this.validateProtocolVersion(e);
-    if (validateProtocolVersion) return validateProtocolVersion;
-    if (this._eventStore) {
-      let l = e.headers.get("last-event-id");
-      if (l) return this.replayEvents(l);
     }
-    if (this._streamMapping.get(this._standaloneSseStreamId) !== void 0)
-      return (
-        this.onerror?.(Error("Conflict: Only one SSE stream is allowed per session")),
-        this.createJsonErrorResponse(409, -32000, "Conflict: Only one SSE stream is allowed per session")
+    let sessionError = this.validateSession(req);
+    if (sessionError) return sessionError;
+    let protocolError = this.validateProtocolVersion(req);
+    if (protocolError) return protocolError;
+    if (this._eventStore) {
+      let lastEventId = req.headers.get("last-event-id");
+      if (lastEventId) return this.replayEvents(lastEventId);
+    }
+    if (this._streamMapping.get(this._standaloneSseStreamId) !== undefined) {
+      this.onerror?.(Error("Conflict: Only one SSE stream is allowed per session"));
+      return this.createJsonErrorResponse(
+        409,
+        -32000,
+        "Conflict: Only one SSE stream is allowed per session",
       );
-    let textEncoder = new TextEncoder(),
-      n,
-      readableStream = new ReadableStream({
-        start: (l) => {
-          n = l;
-        },
-        cancel: () => {
-          this._streamMapping.delete(this._standaloneSseStreamId);
-        },
-      }),
-      a = {
+    }
+    let encoder = new TextEncoder();
+    let streamController;
+    let readable = new ReadableStream({
+      start: (controller) => {
+        streamController = controller;
+      },
+      cancel: () => {
+        this._streamMapping.delete(this._standaloneSseStreamId);
+      },
+    });
+    let headers = {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache, no-transform",
+      Connection: "keep-alive",
+    };
+    if (this.sessionId !== undefined) headers["mcp-session-id"] = this.sessionId;
+    this._streamMapping.set(this._standaloneSseStreamId, {
+      controller: streamController,
+      encoder,
+      cleanup: () => {
+        this._streamMapping.delete(this._standaloneSseStreamId);
+        try {
+          streamController.close();
+        } catch {}
+      },
+    });
+    return new Response(readable, {
+      headers,
+    });
+  }
+  async replayEvents(lastEventId) {
+    if (!this._eventStore) {
+      this.onerror?.(Error("Event store not configured"));
+      return this.createJsonErrorResponse(400, -32000, "Event store not configured");
+    }
+    try {
+      let streamId;
+      if (this._eventStore.getStreamIdForEventId) {
+        streamId = await this._eventStore.getStreamIdForEventId(lastEventId);
+        if (!streamId) {
+          this.onerror?.(Error("Invalid event ID format"));
+          return this.createJsonErrorResponse(400, -32000, "Invalid event ID format");
+        }
+        if (this._streamMapping.get(streamId) !== undefined) {
+          this.onerror?.(Error("Conflict: Stream already has an active connection"));
+          return this.createJsonErrorResponse(
+            409,
+            -32000,
+            "Conflict: Stream already has an active connection",
+          );
+        }
+      }
+      let headers = {
         "Content-Type": "text/event-stream",
         "Cache-Control": "no-cache, no-transform",
         Connection: "keep-alive",
       };
-    if (this.sessionId !== void 0) a["mcp-session-id"] = this.sessionId;
-    return (
-      this._streamMapping.set(this._standaloneSseStreamId, {
-        controller: n,
-        encoder: textEncoder,
+      if (this.sessionId !== undefined) headers["mcp-session-id"] = this.sessionId;
+      let encoder = new TextEncoder();
+      let streamController;
+      let readable = new ReadableStream({
+        start: (controller) => {
+          streamController = controller;
+        },
+        cancel: () => {},
+      });
+      let replayedStreamId = await this._eventStore.replayEventsAfter(lastEventId, {
+        send: async (a, message) => {
+          if (!this.writeSSEEvent(streamController, encoder, message, a)) {
+            this.onerror?.(Error("Failed replay events"));
+            try {
+              streamController.close();
+            } catch {}
+          }
+        },
+      });
+      this._streamMapping.set(replayedStreamId, {
+        controller: streamController,
+        encoder,
         cleanup: () => {
-          this._streamMapping.delete(this._standaloneSseStreamId);
+          this._streamMapping.delete(replayedStreamId);
           try {
-            n.close();
+            streamController.close();
           } catch {}
         },
-      }),
-      new Response(readableStream, { headers: a })
-    );
-  }
-  async replayEvents(e) {
-    if (!this._eventStore)
-      return (
-        this.onerror?.(Error("Event store not configured")),
-        this.createJsonErrorResponse(400, -32000, "Event store not configured")
-      );
-    try {
-      let t;
-      if (this._eventStore.getStreamIdForEventId) {
-        if (((t = await this._eventStore.getStreamIdForEventId(e)), !t))
-          return (
-            this.onerror?.(Error("Invalid event ID format")),
-            this.createJsonErrorResponse(400, -32000, "Invalid event ID format")
-          );
-        if (this._streamMapping.get(t) !== void 0)
-          return (
-            this.onerror?.(Error("Conflict: Stream already has an active connection")),
-            this.createJsonErrorResponse(409, -32000, "Conflict: Stream already has an active connection")
-          );
-      }
-      let s = {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache, no-transform",
-        Connection: "keep-alive",
-      };
-      if (this.sessionId !== void 0) s["mcp-session-id"] = this.sessionId;
-      let textEncoder = new TextEncoder(),
-        r,
-        readableStream = new ReadableStream({
-          start: (a) => {
-            r = a;
-          },
-          cancel: () => {},
-        }),
-        replayEventsAfter = await this._eventStore.replayEventsAfter(e, {
-          send: async (a, l) => {
-            if (!this.writeSSEEvent(r, textEncoder, l, a)) {
-              this.onerror?.(Error("Failed replay events"));
-              try {
-                r.close();
-              } catch {}
-            }
-          },
-        });
-      return (
-        this._streamMapping.set(replayEventsAfter, {
-          controller: r,
-          encoder: textEncoder,
-          cleanup: () => {
-            this._streamMapping.delete(replayEventsAfter);
-            try {
-              r.close();
-            } catch {}
-          },
-        }),
-        new Response(readableStream, { headers: s })
-      );
+      });
+      return new Response(readable, {
+        headers,
+      });
     } catch (error) {
-      return (this.onerror?.(error), this.createJsonErrorResponse(500, -32000, "Error replaying events"));
+      this.onerror?.(error);
+      return this.createJsonErrorResponse(500, -32000, "Error replaying events");
     }
   }
-  writeSSEEvent(e, t, s, i) {
+  writeSSEEvent(controller, encoder, message, eventId) {
     try {
-      let r = `event: message
+      let eventData = `event: message
 `;
-      if (i)
-        r += `id: ${i}
+      if (eventId)
+        eventData += `id: ${eventId}
 `;
-      return (
-        (r += `data: ${JSON.stringify(s)}
+      eventData += `data: ${JSON.stringify(message)}
 
-`),
-        e.enqueue(t.encode(r)),
-        !0
-      );
+`;
+      controller.enqueue(encoder.encode(eventData));
+      return true;
     } catch (error) {
-      return (this.onerror?.(error), !1);
+      this.onerror?.(error);
+      return false;
     }
   }
   handleUnsupportedRequest() {
-    return (
-      this.onerror?.(Error("Method not allowed.")),
-      new Response(
-        JSON.stringify({ jsonrpc: "2.0", error: { code: -32000, message: "Method not allowed." }, id: null }),
-        { status: 405, headers: { Allow: "GET, POST, DELETE", "Content-Type": "application/json" } },
-      )
+    this.onerror?.(Error("Method not allowed."));
+    return new Response(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        error: {
+          code: -32000,
+          message: "Method not allowed.",
+        },
+        id: null,
+      }),
+      {
+        status: 405,
+        headers: {
+          Allow: "GET, POST, DELETE",
+          "Content-Type": "application/json",
+        },
+      },
     );
   }
-  async handlePostRequest(e, t) {
+  async handlePostRequest(req, options) {
     try {
-      let s = e.headers.get("accept");
-      if (!s?.includes("application/json") || !s.includes("text/event-stream"))
-        return (
-          this.onerror?.(
-            Error("Not Acceptable: Client must accept both application/json and text/event-stream"),
-          ),
-          this.createJsonErrorResponse(
-            406,
-            -32000,
-            "Not Acceptable: Client must accept both application/json and text/event-stream",
-          )
+      let acceptHeader = req.headers.get("accept");
+      if (!acceptHeader?.includes("application/json") || !acceptHeader.includes("text/event-stream")) {
+        this.onerror?.(
+          Error("Not Acceptable: Client must accept both application/json and text/event-stream"),
         );
-      let i = e.headers.get("content-type");
-      if (!i || !i.includes("application/json"))
-        return (
-          this.onerror?.(Error("Unsupported Media Type: Content-Type must be application/json")),
-          this.createJsonErrorResponse(
-            415,
-            -32000,
-            "Unsupported Media Type: Content-Type must be application/json",
-          )
+        return this.createJsonErrorResponse(
+          406,
+          -32000,
+          "Not Acceptable: Client must accept both application/json and text/event-stream",
         );
-      let r = { headers: Object.fromEntries(e.headers.entries()), url: new URL(e.url) },
-        n;
-      if (t?.parsedBody !== void 0) n = t.parsedBody;
+      }
+      let ct = req.headers.get("content-type");
+      if (!ct || !ct.includes("application/json")) {
+        this.onerror?.(Error("Unsupported Media Type: Content-Type must be application/json"));
+        return this.createJsonErrorResponse(
+          415,
+          -32000,
+          "Unsupported Media Type: Content-Type must be application/json",
+        );
+      }
+      let requestInfo = {
+        headers: Object.fromEntries(req.headers.entries()),
+        url: new URL(req.url),
+      };
+      let rawMessage;
+      if (options?.parsedBody !== undefined) rawMessage = options.parsedBody;
       else
         try {
-          n = await e.json();
+          rawMessage = await req.json();
         } catch {
-          return (
-            this.onerror?.(Error("Parse error: Invalid JSON")),
-            this.createJsonErrorResponse(400, -32700, "Parse error: Invalid JSON")
+          this.onerror?.(Error("Parse error: Invalid JSON"));
+          return this.createJsonErrorResponse(400, -32700, "Parse error: Invalid JSON");
+        }
+      let messages;
+      try {
+        if (Array.isArray(rawMessage)) messages = rawMessage.map((msg) => JSONRPCMessageSchema.parse(msg));
+        else messages = [JSONRPCMessageSchema.parse(rawMessage)];
+      } catch {
+        this.onerror?.(Error("Parse error: Invalid JSON-RPC message"));
+        return this.createJsonErrorResponse(400, -32700, "Parse error: Invalid JSON-RPC message");
+      }
+      let isInitializationRequest = messages.some(isInitializeRequest);
+      if (isInitializationRequest) {
+        if (this._initialized && this.sessionId !== undefined) {
+          this.onerror?.(Error("Invalid Request: Server already initialized"));
+          return this.createJsonErrorResponse(400, -32600, "Invalid Request: Server already initialized");
+        }
+        if (messages.length > 1) {
+          this.onerror?.(Error("Invalid Request: Only one initialization request is allowed"));
+          return this.createJsonErrorResponse(
+            400,
+            -32600,
+            "Invalid Request: Only one initialization request is allowed",
           );
         }
-      let o;
-      try {
-        if (Array.isArray(n)) o = n.map((d) => JSONRPCMessageSchema.parse(d));
-        else o = [JSONRPCMessageSchema.parse(n)];
-      } catch {
-        return (
-          this.onerror?.(Error("Parse error: Invalid JSON-RPC message")),
-          this.createJsonErrorResponse(400, -32700, "Parse error: Invalid JSON-RPC message")
-        );
-      }
-      let any = o.some(isInitializeRequest);
-      if (any) {
-        if (this._initialized && this.sessionId !== void 0)
-          return (
-            this.onerror?.(Error("Invalid Request: Server already initialized")),
-            this.createJsonErrorResponse(400, -32600, "Invalid Request: Server already initialized")
-          );
-        if (o.length > 1)
-          return (
-            this.onerror?.(Error("Invalid Request: Only one initialization request is allowed")),
-            this.createJsonErrorResponse(
-              400,
-              -32600,
-              "Invalid Request: Only one initialization request is allowed",
-            )
-          );
-        if (
-          ((this.sessionId = this.sessionIdGenerator?.()),
-          (this._initialized = !0),
-          this.sessionId && this._onsessioninitialized)
-        )
+        this.sessionId = this.sessionIdGenerator?.();
+        this._initialized = true;
+        if (this.sessionId && this._onsessioninitialized)
           await Promise.resolve(this._onsessioninitialized(this.sessionId));
       }
-      if (!any) {
-        let validateSession = this.validateSession(e);
-        if (validateSession) return validateSession;
-        let validateProtocolVersion = this.validateProtocolVersion(e);
-        if (validateProtocolVersion) return validateProtocolVersion;
+      if (!isInitializationRequest) {
+        let sessionError = this.validateSession(req);
+        if (sessionError) return sessionError;
+        let protocolError = this.validateProtocolVersion(req);
+        if (protocolError) return protocolError;
       }
-      if (!o.some(isJSONRPCRequest)) {
-        for (let d of o) this.onmessage?.(d, { authInfo: t?.authInfo, requestInfo: r });
-        return new Response(null, { status: 202 });
+      if (!messages.some(isJSONRPCRequest)) {
+        for (let message of messages)
+          this.onmessage?.(message, {
+            authInfo: options?.authInfo,
+            requestInfo,
+          });
+        return new Response(null, {
+          status: 202,
+        });
       }
-      let randomUUID = crypto.randomUUID(),
-        found = o.find((d) => isInitializeRequest(d)),
-        f = found
-          ? found.params.protocolVersion
-          : (e.headers.get("mcp-protocol-version") ?? DEFAULT_NEGOTIATED_PROTOCOL_VERSION);
+      let streamId = crypto.randomUUID();
+      let initRequest = messages.find((m) => isInitializeRequest(m));
+      let clientProtocolVersion = initRequest
+        ? initRequest.params.protocolVersion
+        : (req.headers.get("mcp-protocol-version") ?? DEFAULT_NEGOTIATED_PROTOCOL_VERSION);
       if (this._enableJsonResponse)
-        return new Promise((d) => {
-          this._streamMapping.set(randomUUID, {
-            resolveJson: d,
+        return new Promise((resolve) => {
+          this._streamMapping.set(streamId, {
+            resolveJson: resolve,
             cleanup: () => {
-              this._streamMapping.delete(randomUUID);
+              this._streamMapping.delete(streamId);
             },
           });
-          for (let h of o) if (isJSONRPCRequest(h)) this._requestToStreamMapping.set(h.id, randomUUID);
-          for (let h of o) this.onmessage?.(h, { authInfo: t?.authInfo, requestInfo: r });
+          for (let message of messages)
+            if (isJSONRPCRequest(message)) this._requestToStreamMapping.set(message.id, streamId);
+          for (let message of messages)
+            this.onmessage?.(message, {
+              authInfo: options?.authInfo,
+              requestInfo,
+            });
         });
-      let textEncoder = new TextEncoder(),
-        p,
-        readableStream = new ReadableStream({
-          start: (d) => {
-            p = d;
-          },
-          cancel: () => {
-            this._streamMapping.delete(randomUUID);
-          },
-        }),
-        m = { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive" };
-      if (this.sessionId !== void 0) m["mcp-session-id"] = this.sessionId;
-      for (let d of o)
-        if (isJSONRPCRequest(d))
-          (this._streamMapping.set(randomUUID, {
-            controller: p,
-            encoder: textEncoder,
+      let encoder = new TextEncoder();
+      let streamController;
+      let readable = new ReadableStream({
+        start: (controller) => {
+          streamController = controller;
+        },
+        cancel: () => {
+          this._streamMapping.delete(streamId);
+        },
+      });
+      let headers = {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
+      };
+      if (this.sessionId !== undefined) headers["mcp-session-id"] = this.sessionId;
+      for (let message of messages)
+        if (isJSONRPCRequest(message)) {
+          this._streamMapping.set(streamId, {
+            controller: streamController,
+            encoder,
             cleanup: () => {
-              this._streamMapping.delete(randomUUID);
+              this._streamMapping.delete(streamId);
               try {
-                p.close();
+                streamController.close();
               } catch {}
             },
-          }),
-            this._requestToStreamMapping.set(d.id, randomUUID));
-      await this.writePrimingEvent(p, textEncoder, randomUUID, f);
-      for (let d of o) {
-        let h, E;
-        if (isJSONRPCRequest(d) && this._eventStore && f >= "2025-11-25")
-          ((h = () => {
-            this.closeSSEStream(d.id);
-          }),
-            (E = () => {
-              this.closeStandaloneSSEStream();
-            }));
-        this.onmessage?.(d, {
-          authInfo: t?.authInfo,
-          requestInfo: r,
-          closeSSEStream: h,
-          closeStandaloneSSEStream: E,
+          });
+          this._requestToStreamMapping.set(message.id, streamId);
+        }
+      await this.writePrimingEvent(streamController, encoder, streamId, clientProtocolVersion);
+      for (let message of messages) {
+        let closeSSEStream;
+        let closeStandaloneSSEStream;
+        if (isJSONRPCRequest(message) && this._eventStore && clientProtocolVersion >= "2025-11-25") {
+          closeSSEStream = () => {
+            this.closeSSEStream(message.id);
+          };
+          closeStandaloneSSEStream = () => {
+            this.closeStandaloneSSEStream();
+          };
+        }
+        this.onmessage?.(message, {
+          authInfo: options?.authInfo,
+          requestInfo,
+          closeSSEStream,
+          closeStandaloneSSEStream,
         });
       }
-      return new Response(readableStream, { status: 200, headers: m });
+      return new Response(readable, {
+        status: 200,
+        headers,
+      });
     } catch (error) {
-      return (
-        this.onerror?.(error),
-        this.createJsonErrorResponse(400, -32700, "Parse error", { data: String(error) })
-      );
+      this.onerror?.(error);
+      return this.createJsonErrorResponse(400, -32700, "Parse error", {
+        data: String(error),
+      });
     }
   }
-  async handleDeleteRequest(e) {
-    let validateSession = this.validateSession(e);
-    if (validateSession) return validateSession;
-    let validateProtocolVersion = this.validateProtocolVersion(e);
-    if (validateProtocolVersion) return validateProtocolVersion;
-    return (
-      await Promise.resolve(this._onsessionclosed?.(this.sessionId)),
-      await this.close(),
-      new Response(null, { status: 200 })
-    );
+  async handleDeleteRequest(req) {
+    let sessionError = this.validateSession(req);
+    if (sessionError) return sessionError;
+    let protocolError = this.validateProtocolVersion(req);
+    if (protocolError) return protocolError;
+    await Promise.resolve(this._onsessionclosed?.(this.sessionId));
+    await this.close();
+    return new Response(null, {
+      status: 200,
+    });
   }
-  validateSession(e) {
-    if (this.sessionIdGenerator === void 0) return;
-    if (!this._initialized)
-      return (
-        this.onerror?.(Error("Bad Request: Server not initialized")),
-        this.createJsonErrorResponse(400, -32000, "Bad Request: Server not initialized")
-      );
-    let t = e.headers.get("mcp-session-id");
-    if (!t)
-      return (
-        this.onerror?.(Error("Bad Request: Mcp-Session-Id header is required")),
-        this.createJsonErrorResponse(400, -32000, "Bad Request: Mcp-Session-Id header is required")
-      );
-    if (t !== this.sessionId)
-      return (
-        this.onerror?.(Error("Session not found")),
-        this.createJsonErrorResponse(404, -32001, "Session not found")
-      );
+  validateSession(req) {
+    if (this.sessionIdGenerator === undefined) return;
+    if (!this._initialized) {
+      this.onerror?.(Error("Bad Request: Server not initialized"));
+      return this.createJsonErrorResponse(400, -32000, "Bad Request: Server not initialized");
+    }
+    let sessionId = req.headers.get("mcp-session-id");
+    if (!sessionId) {
+      this.onerror?.(Error("Bad Request: Mcp-Session-Id header is required"));
+      return this.createJsonErrorResponse(400, -32000, "Bad Request: Mcp-Session-Id header is required");
+    }
+    if (sessionId !== this.sessionId) {
+      this.onerror?.(Error("Session not found"));
+      return this.createJsonErrorResponse(404, -32001, "Session not found");
+    }
     return;
   }
-  validateProtocolVersion(e) {
-    let t = e.headers.get("mcp-protocol-version");
-    if (t !== null && !SUPPORTED_PROTOCOL_VERSIONS.includes(t))
-      return (
-        this.onerror?.(
-          Error(
-            `Bad Request: Unsupported protocol version: ${t} (supported versions: ${SUPPORTED_PROTOCOL_VERSIONS.join(", ")})`,
-          ),
+  validateProtocolVersion(req) {
+    let protocolVersion = req.headers.get("mcp-protocol-version");
+    if (protocolVersion !== null && !SUPPORTED_PROTOCOL_VERSIONS.includes(protocolVersion)) {
+      this.onerror?.(
+        Error(
+          `Bad Request: Unsupported protocol version: ${protocolVersion} (supported versions: ${SUPPORTED_PROTOCOL_VERSIONS.join(", ")})`,
         ),
-        this.createJsonErrorResponse(
-          400,
-          -32000,
-          `Bad Request: Unsupported protocol version: ${t} (supported versions: ${SUPPORTED_PROTOCOL_VERSIONS.join(", ")})`,
-        )
       );
+      return this.createJsonErrorResponse(
+        400,
+        -32000,
+        `Bad Request: Unsupported protocol version: ${protocolVersion} (supported versions: ${SUPPORTED_PROTOCOL_VERSIONS.join(", ")})`,
+      );
+    }
     return;
   }
   async close() {
-    (this._streamMapping.forEach(({ cleanup: cleanup }) => {
+    this._streamMapping.forEach(({ cleanup }) => {
       cleanup();
-    }),
-      this._streamMapping.clear(),
-      this._requestResponseMap.clear(),
-      this.onclose?.());
+    });
+    this._streamMapping.clear();
+    this._requestResponseMap.clear();
+    this.onclose?.();
   }
-  closeSSEStream(e) {
-    let t = this._requestToStreamMapping.get(e);
-    if (!t) return;
-    let s = this._streamMapping.get(t);
-    if (s) s.cleanup();
+  closeSSEStream(requestId) {
+    let streamId = this._requestToStreamMapping.get(requestId);
+    if (!streamId) return;
+    let stream = this._streamMapping.get(streamId);
+    if (stream) stream.cleanup();
   }
   closeStandaloneSSEStream() {
-    let e = this._streamMapping.get(this._standaloneSseStreamId);
-    if (e) e.cleanup();
+    let stream = this._streamMapping.get(this._standaloneSseStreamId);
+    if (stream) stream.cleanup();
   }
-  async send(e, t) {
-    let s = t?.relatedRequestId;
-    if (isJSONRPCResultResponse(e) || isJSONRPCErrorResponse(e)) s = e.id;
-    if (s === void 0) {
-      if (isJSONRPCResultResponse(e) || isJSONRPCErrorResponse(e))
+  async send(message, options) {
+    let requestId = options?.relatedRequestId;
+    if (isJSONRPCResultResponse(message) || isJSONRPCErrorResponse(message)) requestId = message.id;
+    if (requestId === undefined) {
+      if (isJSONRPCResultResponse(message) || isJSONRPCErrorResponse(message))
         throw Error(
           "Cannot send a response on a standalone SSE stream unless resuming a previous client request",
         );
-      let n;
-      if (this._eventStore) n = await this._eventStore.storeEvent(this._standaloneSseStreamId, e);
-      let o = this._streamMapping.get(this._standaloneSseStreamId);
-      if (o === void 0) return;
-      if (o.controller && o.encoder) this.writeSSEEvent(o.controller, o.encoder, e, n);
+      let eventId;
+      if (this._eventStore) eventId = await this._eventStore.storeEvent(this._standaloneSseStreamId, message);
+      let standaloneSse = this._streamMapping.get(this._standaloneSseStreamId);
+      if (standaloneSse === undefined) return;
+      if (standaloneSse.controller && standaloneSse.encoder)
+        this.writeSSEEvent(standaloneSse.controller, standaloneSse.encoder, message, eventId);
       return;
     }
-    let i = this._requestToStreamMapping.get(s);
-    if (!i) throw Error(`No connection established for request ID: ${String(s)}`);
-    let r = this._streamMapping.get(i);
-    if (!this._enableJsonResponse && r?.controller && r?.encoder) {
-      let n;
-      if (this._eventStore) n = await this._eventStore.storeEvent(i, e);
-      this.writeSSEEvent(r.controller, r.encoder, e, n);
+    let streamId = this._requestToStreamMapping.get(requestId);
+    if (!streamId) throw Error(`No connection established for request ID: ${String(requestId)}`);
+    let stream = this._streamMapping.get(streamId);
+    if (!this._enableJsonResponse && stream?.controller && stream?.encoder) {
+      let eventId;
+      if (this._eventStore) eventId = await this._eventStore.storeEvent(streamId, message);
+      this.writeSSEEvent(stream.controller, stream.encoder, message, eventId);
     }
-    if (isJSONRPCResultResponse(e) || isJSONRPCErrorResponse(e)) {
-      this._requestResponseMap.set(s, e);
-      let mapped = Array.from(this._requestToStreamMapping.entries())
-        .filter(([a, l]) => l === i)
+    if (isJSONRPCResultResponse(message) || isJSONRPCErrorResponse(message)) {
+      this._requestResponseMap.set(requestId, message);
+      let relatedIds = Array.from(this._requestToStreamMapping.entries())
+        .filter(([_, sid]) => sid === streamId)
         .map(([a]) => a);
-      if (mapped.every((a) => this._requestResponseMap.has(a))) {
-        if (!r) throw Error(`No connection established for request ID: ${String(s)}`);
-        if (this._enableJsonResponse && r.resolveJson) {
-          let a = { "Content-Type": "application/json" };
-          if (this.sessionId !== void 0) a["mcp-session-id"] = this.sessionId;
-          let mapped_2 = mapped.map((c) => this._requestResponseMap.get(c));
-          if (mapped_2.length === 1)
-            r.resolveJson(new Response(JSON.stringify(mapped_2[0]), { status: 200, headers: a }));
-          else r.resolveJson(new Response(JSON.stringify(mapped_2), { status: 200, headers: a }));
-        } else r.cleanup();
-        for (let a of mapped) (this._requestResponseMap.delete(a), this._requestToStreamMapping.delete(a));
+      if (relatedIds.every((relatedId) => this._requestResponseMap.has(relatedId))) {
+        if (!stream) throw Error(`No connection established for request ID: ${String(requestId)}`);
+        if (this._enableJsonResponse && stream.resolveJson) {
+          let headers = {
+            "Content-Type": "application/json",
+          };
+          if (this.sessionId !== undefined) headers["mcp-session-id"] = this.sessionId;
+          let responses = relatedIds.map((id) => this._requestResponseMap.get(id));
+          if (responses.length === 1)
+            stream.resolveJson(
+              new Response(JSON.stringify(responses[0]), {
+                status: 200,
+                headers,
+              }),
+            );
+          else
+            stream.resolveJson(
+              new Response(JSON.stringify(responses), {
+                status: 200,
+                headers,
+              }),
+            );
+        } else stream.cleanup();
+        for (let id of relatedIds) {
+          this._requestResponseMap.delete(id);
+          this._requestToStreamMapping.delete(id);
+        }
       }
     }
   }
 }
-
 export { WebStandardStreamableHTTPServerTransport };

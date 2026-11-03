@@ -6,55 +6,52 @@
  * attribution: cjs-fingerprint+context 1
  */
 import { x } from "../../../../runtime/bun-runtime.js";
-import { QPo } from "./aspromise.js";
+import { require_aspromise as QPo } from "./aspromise.js";
 import { td } from "../../../unresolved-cjs/index.js";
 
 //@ chunk-pwh5dx3n.js:78403-79292 cjs-fingerprint+context
-var id = x(function (eA, rd) {
-  rd.exports = wi;
-  var nE = QPo(),
-    aE = td(),
-    Ma = aE("fs");
-  function wi(e, t, r) {
-    if (typeof t === "function") ((r = t), (t = {}));
-    else if (!t) t = {};
-    if (!r) return nE(wi, this, e, t);
-    if (!t.xhr && Ma && Ma.readFile)
-      return Ma.readFile(e, function (s, n) {
-        return s && typeof XMLHttpRequest < "u"
-          ? wi.xhr(e, t, r)
-          : s
-            ? r(s)
-            : r(null, t.binary ? n : n.toString("utf8"));
+var id = x(function (cjsExports, cjsModule) {
+  cjsModule.exports = wi;
+  var asPromise = QPo();
+  var aE = td();
+  var fs = aE("fs");
+  function wi(filename, options, callback) {
+    if (typeof options === "function") {
+      callback = options;
+      options = {};
+    } else if (!options) options = {};
+    if (!callback) return asPromise(wi, this, filename, options);
+    if (!options.xhr && fs && fs.readFile)
+      return fs.readFile(filename, function (err, contents) {
+        return err && typeof XMLHttpRequest !== "undefined"
+          ? wi.xhr(filename, options, callback)
+          : err
+            ? callback(err)
+            : callback(null, options.binary ? contents : contents.toString("utf8"));
       });
-    return wi.xhr(e, t, r);
+    return wi.xhr(filename, options, callback);
   }
-  wi.xhr = function (t, r, i) {
-    var xMLHttpRequest = new XMLHttpRequest();
-    if (
-      ((xMLHttpRequest.onreadystatechange = function () {
-        if (xMLHttpRequest.readyState !== 4) return;
-        if (xMLHttpRequest.status !== 0 && xMLHttpRequest.status !== 200)
-          return i(Error("status " + xMLHttpRequest.status));
-        if (r.binary) {
-          var response = xMLHttpRequest.response;
-          if (!response) {
-            response = [];
-            for (var o = 0; o < xMLHttpRequest.responseText.length; ++o)
-              response.push(xMLHttpRequest.responseText.charCodeAt(o) & 255);
-          }
-          return i(null, typeof Uint8Array < "u" ? new Uint8Array(response) : response);
+  wi.xhr = function (filename, options, callback) {
+    var xhr = new XMLHttpRequest();
+    xhr.onreadystatechange = function () {
+      if (xhr.readyState !== 4) return;
+      if (xhr.status !== 0 && xhr.status !== 200) return callback(Error("status " + xhr.status));
+      if (options.binary) {
+        var buffer = xhr.response;
+        if (!buffer) {
+          buffer = [];
+          for (var i = 0; i < xhr.responseText.length; ++i) buffer.push(xhr.responseText.charCodeAt(i) & 255);
         }
-        return i(null, xMLHttpRequest.responseText);
-      }),
-      r.binary)
-    ) {
-      if ("overrideMimeType" in xMLHttpRequest)
-        xMLHttpRequest.overrideMimeType("text/plain; charset=x-user-defined");
-      xMLHttpRequest.responseType = "arraybuffer";
+        return callback(null, typeof Uint8Array !== "undefined" ? new Uint8Array(buffer) : buffer);
+      }
+      return callback(null, xhr.responseText);
+    };
+    if (options.binary) {
+      if ("overrideMimeType" in xhr) xhr.overrideMimeType("text/plain; charset=x-user-defined");
+      xhr.responseType = "arraybuffer";
     }
-    (xMLHttpRequest.open("GET", t), xMLHttpRequest.send());
+    xhr.open("GET", filename);
+    xhr.send();
   };
 });
-
 export { id };

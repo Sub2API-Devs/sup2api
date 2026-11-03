@@ -5,40 +5,55 @@
  * pieces: chunk-hwmsct5x.js (1)
  * attribution: esm-fingerprint 1
  */
-import { Y } from "../../core/resource.mjs";
+import { APIResource } from "../../core/resource.mjs";
 import { I } from "../../internal/utils/path.mjs";
-import { T } from "../../internal/headers.mjs";
-import { Be } from "../../core/pagination.mjs";
+import { buildHeaders } from "../../internal/headers.mjs";
+import { Page } from "../../core/pagination.mjs";
 
 //@ chunk-hwmsct5x.js:51409-51940 esm-fingerprint
-class Rr extends Y {
-  retrieve(e, n = {}, r) {
-    let { betas: betas, workspace_id: workspace_id } = n ?? {};
-    return this._client.get(I`/v1/models/${e}?beta=true`, {
-      ...r,
-      headers: T([
+class Models extends APIResource {
+  retrieve(modelID, params = {}, options) {
+    let { betas, workspace_id } = params ?? {};
+    return this._client.get(I`/v1/models/${modelID}?beta=true`, {
+      ...options,
+      headers: buildHeaders([
         {
-          ...(betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0),
-          ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0),
+          ...(betas?.toString() != null
+            ? {
+                "anthropic-beta": betas?.toString(),
+              }
+            : undefined),
+          ...(workspace_id != null
+            ? {
+                "anthropic-workspace-id": workspace_id,
+              }
+            : undefined),
         },
-        r?.headers,
+        options?.headers,
       ]),
     });
   }
-  list(e = {}, n) {
-    let { betas: betas, workspace_id: workspace_id, ...h } = e ?? {};
-    return this._client.getAPIList("/v1/models?beta=true", Be, {
-      query: h,
-      ...n,
-      headers: T([
+  list(params = {}, options) {
+    let { betas, workspace_id, ...query } = params ?? {};
+    return this._client.getAPIList("/v1/models?beta=true", Page, {
+      query,
+      ...options,
+      headers: buildHeaders([
         {
-          ...(betas?.toString() != null ? { "anthropic-beta": betas?.toString() } : void 0),
-          ...(workspace_id != null ? { "anthropic-workspace-id": workspace_id } : void 0),
+          ...(betas?.toString() != null
+            ? {
+                "anthropic-beta": betas?.toString(),
+              }
+            : undefined),
+          ...(workspace_id != null
+            ? {
+                "anthropic-workspace-id": workspace_id,
+              }
+            : undefined),
         },
-        n?.headers,
+        options?.headers,
       ]),
     });
   }
 }
-
-export { Rr };
+export { Models };

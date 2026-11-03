@@ -6,126 +6,172 @@
  * attribution: cjs-fingerprint 1
  */
 import { x, importMetaRequire } from "../../../../runtime/bun-runtime.js";
-import { yf } from "../../../lru-cache/index.js";
-import { JO } from "../../package.json.js";
-import { Ki } from "../errors.js";
-import { df } from "./pick.js";
-import { ly } from "./defaults.js";
-import { _f } from "./consts.js";
+import { require_lru_cache } from "../../../lru-cache/index.js";
+import { require_package } from "../../package.json.js";
+import { require_errors } from "../errors.js";
+import { require_pick } from "./pick.js";
+import { require_defaults } from "./defaults.js";
+import { require_consts } from "./consts.js";
 
 //@ chunk-1ny7cxrt.js:21000-23683 cjs-fingerprint
-var Ol = x(function (Zve, my) {
-  var EF = importMetaRequire("assert"),
-    tS = importMetaRequire("querystring"),
-    nS = importMetaRequire("http"),
-    rS = importMetaRequire("https"),
-    { once: once } = importMetaRequire("events"),
-    { URL: PF } = importMetaRequire("url"),
-    AF = yf(),
-    wl = JO(),
-    { RPError: RPError } = Ki(),
-    iS = df(),
-    { deep: deep } = ly(),
-    { HTTP_OPTIONS: HTTP_OPTIONS } = _f(),
-    vf,
-    TF = /^[\x21\x23-\x5B\x5D-\x7E]+$/,
-    oS = ["agent", "ca", "cert", "crl", "headers", "key", "lookup", "passphrase", "pfx", "timeout"],
-    sS = (e, t) => {
-      vf = deep({}, e.length ? iS(t, ...e) : t, vf);
-    };
-  sS([], {
-    headers: { "User-Agent": `${wl.name}/${wl.version} (${wl.homepage})`, "Accept-Encoding": "identity" },
+var require_request = x(function (cjsExports, cjsModule) {
+  var assert = importMetaRequire("assert");
+  var querystring = importMetaRequire("querystring");
+  var http = importMetaRequire("http");
+  var https = importMetaRequire("https");
+  var { once } = importMetaRequire("events");
+  var { URL: PF } = importMetaRequire("url");
+  var LRU = require_lru_cache();
+  var pkg = require_package();
+  var { RPError } = require_errors();
+  var pick = require_pick();
+  var { deep: defaultsDeep } = require_defaults();
+  var { HTTP_OPTIONS } = require_consts();
+  var DEFAULT_HTTP_OPTIONS;
+  var NQCHAR = /^[\x21\x23-\x5B\x5D-\x7E]+$/;
+  var allowed = ["agent", "ca", "cert", "crl", "headers", "key", "lookup", "passphrase", "pfx", "timeout"];
+  var setDefaults = (props, options) => {
+    DEFAULT_HTTP_OPTIONS = defaultsDeep(
+      {},
+      props.length ? pick(options, ...props) : options,
+      DEFAULT_HTTP_OPTIONS,
+    );
+  };
+  setDefaults([], {
+    headers: {
+      "User-Agent": `${pkg.name}/${pkg.version} (${pkg.homepage})`,
+      "Accept-Encoding": "identity",
+    },
     timeout: 3500,
   });
-  function bf(e, t, n) {
-    if (n) (e.removeHeader("content-type"), e.setHeader("content-type", n));
-    if (t)
-      (e.removeHeader("content-length"), e.setHeader("content-length", Buffer.byteLength(t)), e.write(t));
-    e.end();
+  function send(req, body, contentType) {
+    if (contentType) {
+      req.removeHeader("content-type");
+      req.setHeader("content-type", contentType);
+    }
+    if (body) {
+      req.removeHeader("content-length");
+      req.setHeader("content-length", Buffer.byteLength(body));
+      req.write(body);
+    }
+    req.end();
   }
-  var eS = new AF({ max: 100 });
-  my.exports = async function (t, { accessToken: n, mTLS: o = !1, DPoP: r } = {}) {
-    let s;
+  var nonces = new LRU({
+    max: 100,
+  });
+  cjsModule.exports = async function (options, { accessToken, mTLS = false, DPoP } = {}) {
+    let url;
     try {
-      ((s = new PF(t.url)), delete t.url, EF(/^(https?:)$/.test(s.protocol)));
-    } catch (error) {
+      url = new PF(options.url);
+      delete options.url;
+      assert(/^(https?:)$/.test(url.protocol));
+    } catch (err) {
       throw TypeError("only valid absolute URLs can be requested");
     }
-    let a = this[HTTP_OPTIONS],
-      l = t,
-      c = `${s.origin}${s.pathname}`;
-    if (r && "dpopProof" in this)
-      ((l.headers = l.headers || {}),
-        (l.headers.DPoP = await this.dpopProof(
-          { htu: `${s.origin}${s.pathname}`, htm: t.method || "GET", nonce: eS.get(c) },
-          r,
-          n,
-        )));
-    let u;
-    if (a) u = iS(a.call(this, s, deep({}, l, vf)), ...oS);
-    if (((l = deep({}, u, l, vf)), o && !l.pfx && !(l.key && l.cert)))
+    let optsFn = this[HTTP_OPTIONS];
+    let opts = options;
+    let nonceKey = `${url.origin}${url.pathname}`;
+    if (DPoP && "dpopProof" in this) {
+      opts.headers = opts.headers || {};
+      opts.headers.DPoP = await this.dpopProof(
+        {
+          htu: `${url.origin}${url.pathname}`,
+          htm: options.method || "GET",
+          nonce: nonces.get(nonceKey),
+        },
+        DPoP,
+        accessToken,
+      );
+    }
+    let userOptions;
+    if (optsFn)
+      userOptions = pick(optsFn.call(this, url, defaultsDeep({}, opts, DEFAULT_HTTP_OPTIONS)), ...allowed);
+    opts = defaultsDeep({}, userOptions, opts, DEFAULT_HTTP_OPTIONS);
+    if (mTLS && !opts.pfx && !(opts.key && opts.cert))
       throw TypeError("mutual-TLS certificate and key not set");
-    if (l.searchParams)
-      for (let [S, j] of Object.entries(l.searchParams)) (s.searchParams.delete(S), s.searchParams.set(S, j));
-    let f, h, m, y;
-    ({ form: h, responseType: f, json: m, body: y, ...l } = l);
-    for (let [S, j] of Object.entries(l.headers || {})) if (j === void 0) delete l.headers[S];
-    let b,
-      w = (s.protocol === "https:" ? rS.request : nS.request)(s.href, l);
+    if (opts.searchParams)
+      for (let [key, value] of Object.entries(opts.searchParams)) {
+        url.searchParams.delete(key);
+        url.searchParams.set(key, value);
+      }
+    let responseType;
+    let form;
+    let json;
+    let body;
+    ({ form, responseType, json, body, ...opts } = opts);
+    for (let [key, value] of Object.entries(opts.headers || {}))
+      if (value === undefined) delete opts.headers[key];
+    let response;
+    let req = (url.protocol === "https:" ? https.request : http.request)(url.href, opts);
     return (async () => {
-      if (m) bf(w, JSON.stringify(m), "application/json");
-      else if (h) bf(w, tS.stringify(h), "application/x-www-form-urlencoded");
-      else if (y) bf(w, y);
-      else bf(w);
-      if ((([b] = await Promise.race([once(w, "response"), once(w, "timeout")])), !b))
-        throw (w.destroy(), new RPError(`outgoing request timed out after ${l.timeout}ms`));
-      let S = [];
-      for await (let j of b) S.push(j);
-      if (S.length)
-        switch (f) {
+      if (json) send(req, JSON.stringify(json), "application/json");
+      else if (form) send(req, querystring.stringify(form), "application/x-www-form-urlencoded");
+      else if (body) send(req, body);
+      else send(req);
+      [response] = await Promise.race([once(req, "response"), once(req, "timeout")]);
+      if (!response) {
+        req.destroy();
+        throw new RPError(`outgoing request timed out after ${opts.timeout}ms`);
+      }
+      let parts = [];
+      for await (let part of response) parts.push(part);
+      if (parts.length)
+        switch (responseType) {
           case "json": {
-            Object.defineProperty(b, "body", {
+            Object.defineProperty(response, "body", {
               get() {
-                let buffer = Buffer.concat(S);
+                let value = Buffer.concat(parts);
                 try {
-                  buffer = JSON.parse(buffer);
-                } catch (error) {
-                  throw (Object.defineProperty(error, "response", { value: b }), error);
+                  value = JSON.parse(value);
+                } catch (err) {
+                  Object.defineProperty(err, "response", {
+                    value: response,
+                  });
+                  throw err;
                 } finally {
-                  Object.defineProperty(b, "body", { value: buffer, configurable: !0 });
+                  Object.defineProperty(response, "body", {
+                    value,
+                    configurable: true,
+                  });
                 }
-                return buffer;
+                return value;
               },
-              configurable: !0,
+              configurable: true,
             });
             break;
           }
-          case void 0:
+          case undefined:
           case "buffer": {
-            Object.defineProperty(b, "body", {
+            Object.defineProperty(response, "body", {
               get() {
-                let buffer = Buffer.concat(S);
-                return (Object.defineProperty(b, "body", { value: buffer, configurable: !0 }), buffer);
+                let value = Buffer.concat(parts);
+                Object.defineProperty(response, "body", {
+                  value,
+                  configurable: true,
+                });
+                return value;
               },
-              configurable: !0,
+              configurable: true,
             });
             break;
           }
           default:
             throw TypeError("unsupported responseType request option");
         }
-      return b;
+      return response;
     })()
-      .catch((S) => {
-        if (b) Object.defineProperty(S, "response", { value: b });
-        throw S;
+      .catch((err) => {
+        if (response)
+          Object.defineProperty(err, "response", {
+            value: response,
+          });
+        throw err;
       })
       .finally(() => {
-        let S = b && b.headers["dpop-nonce"];
-        if (S && TF.test(S)) eS.set(c, S);
+        let dpopNonce = response && response.headers["dpop-nonce"];
+        if (dpopNonce && NQCHAR.test(dpopNonce)) nonces.set(nonceKey, dpopNonce);
       });
   };
-  my.exports.setDefaults = sS.bind(void 0, oS);
+  cjsModule.exports.setDefaults = setDefaults.bind(undefined, allowed);
 });
-
-export { Ol };
+export { require_request };
